@@ -37,13 +37,19 @@ const SKYWAYS: Readonly<Record<string, DamageClass>> = {
   'skyways-office-wall': 'plaster', 'skyways-floor-office': 'fabric',
 };
 
+/** Task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market's finishes (world/marketArch.ts). */
+const MARKET: Readonly<Record<string, DamageClass>> = {
+  'market-wall': 'steel', 'market-roof': 'steel', 'market-trim': 'steel', 'market-ply': 'wood', 'market-deck': 'wood',
+};
+
 /** Damage class of an arch-owned finish key, or null (not an arch finish this table knows: the station rule applies). */
 export function finishClass(key: string | null | undefined): DamageClass | null {
   if (!key) return null;
   if (key in REACTOR) return REACTOR[key];
   if (key in REACTOR_CORE) return REACTOR_CORE[key]; // task reactor-expansion-20261101 (lane CORE)
   if (key === 'annexWall') return 'concrete';
-  if (key in SKYWAYS) return SKYWAYS[key]; // task studio-skyways-level-20261106-054448 (lane VIEW): world/skywaysArch.ts keys
+  if (key in SKYWAYS) return SKYWAYS[key];
+  if (key in MARKET) return MARKET[key]; // task studio-survivor-market-20261108-005807-01 (lane LEVEL): world/marketArch.ts keys // task studio-skyways-level-20261106-054448 (lane VIEW): world/skywaysArch.ts keys
   // (task studio-skyways-rework-20261107-054512-01) the anchor stores' finishes: skyways-anchor-{wall-<class>|floor-<kind>|ceil-<kind>}@<family>
   const an = /^skyways-anchor-(wall|floor|ceil)-([a-z]+)@/.exec(key);
   if (an) return an[1] === 'wall' ? (an[2] as DamageClass) : an[1] === 'floor' ? OFFICE_FLOOR[an[2]] ?? null : OFFICE_CEIL[an[2]] ?? null;

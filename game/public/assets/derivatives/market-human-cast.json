@@ -1,0 +1,5658 @@
+{
+  "schema": "the-last-line/derivative-manifest@1",
+  "asset": "market-human-cast",
+  "task": "studio-survivor-market-20261108-005807-01",
+  "title": "Friendly market humans: five Meshy T2.5 bases x fitted ordinary wearables, healthy clips (prototype)",
+  "status": {
+    "approved": false,
+    "gameReady": false,
+    "stage": "unapproved prototype derivative (friendly market humans); art / anatomy / deformation / fit not certified",
+    "licenseClearance": "none - evaluation quality does not grant commercial rights; the bases are AI reconstructions (Meshy T2.5) of AI-generated (Codex) concept images"
+  },
+  "honesty": {
+    "sourcesHadSkeleton": false,
+    "rig": "NEW derivative skeleton (the shared 18-joint naming / hierarchy) and automatic skin weights created by this CPU pipeline (zombie autorig libraries)",
+    "animation": "hand-authored procedural HEALTHY clips (tools/asset-pipeline/humans/lib/clips.mjs; same functions for every body, sampled with each body's own joints) - NOT motion capture, NOT the zombie clips",
+    "maps": "the Meshy base colour, metallic-roughness and normal maps are KEPT on the Meshy mesh / UVs (re-encoded JPEG, resized only)",
+    "generation": "no generation, inference, model download or network service was used by this builder"
+  },
+  "outputs": {
+    "glb": {
+      "path": "assets/models/market-human-cast.glb",
+      "bytes": 13729296,
+      "sha256": "a1b3cb9d0d2b6dbc10ed4bbc8b7fdd3224702fb215c410de480ddacd1302ff88",
+      "format": "glTF 2.0 binary (KHR_mesh_quantization int8 normals); JPEG textures; per body: 18 prefixed joints, the skinned body, its fitted wearables on the SAME skin, its clips \"<body>:<Clip>\"; per wearable one shared texture / UV / index set"
+    }
+  },
+  "levelOnly": "market (game/src/assets/levelAssets.ts LEVEL_ONLY_RULES market-*)",
+  "clips": {
+    "Idle": {
+      "loop": true,
+      "durationS": 4
+    },
+    "Walk": {
+      "loop": true,
+      "durationS": "per body (gait)"
+    },
+    "Talk": {
+      "loop": true,
+      "durationS": 5
+    },
+    "Greet": {
+      "loop": false,
+      "durationS": 1.6
+    },
+    "Work": {
+      "loop": true,
+      "durationS": 3.2
+    },
+    "Sit": {
+      "loop": true,
+      "durationS": 4
+    }
+  },
+  "bodies": {
+    "m1": {
+      "label": "Man, about 40, medium build, trimmed beard",
+      "heightM": 1.78,
+      "source": {
+        "file": "reference/tasks/survivor-market-20261108-005807/meshy/raw/human-m1-a1.glb",
+        "sha256Verified": "15ac73a251a39bfd1455f8a759d22d49a9db04bc941c035c423272b27f518a08",
+        "asset": "human:m1",
+        "attempt": "a1",
+        "taskId": "01a1b8b4-b5f9-7557-8d34-46b237f67db9",
+        "provider": "Meshy meshy_image_to_3d (ai_model meshy-t2.5, model_type smart-topology, pose_mode a-pose, 2K PBR textures, target 20k triangles)",
+        "ledger": "reference/tasks/survivor-market-20261108-005807/meshy/LEDGER.jsonl",
+        "raw": "reference/tasks/survivor-market-20261108-005807/meshy/raw/human-m1-a1.glb",
+        "inputImage": "reference/tasks/survivor-market-20261108-005807/concepts/m1-a1.png",
+        "inputImageSha256": "7e590ab9e2f8b2c9a5dfc48cf7e88fe78c353cd19fecd532067c757609566295",
+        "conceptLedger": "reference/tasks/survivor-market-20261108-005807/concepts/CONCEPT-LEDGER.jsonl",
+        "conceptProvider": "Codex native image generation (initial concept, approved in the task)"
+      },
+      "placement": {
+        "scale": 1.874260328707093,
+        "pivot": [
+          -0.007202249951660633,
+          -0.4748539924621582,
+          0.004760751500725746
+        ],
+        "flipFacing": false,
+        "offset": [
+          0,
+          0,
+          0
+        ],
+        "note": "scaled to 1.78 m; source faced +Z: no rotation; feet midpoint (bbox centres of soles below 4 cm) moved to origin"
+      },
+      "facing": {
+        "facing": 1,
+        "margin": 0.0463,
+        "method": "sole bbox z-centre (lowest 3% of height) vs shin centroid (8-12%): toes extend toward the front",
+        "used": 1,
+        "forced": false
+      },
+      "mesh": {
+        "method": "Meshy source mesh kept as the runtime mesh (no simplify / unwrap / bake); skeleton detected on a densified copy",
+        "densify": {
+          "method": "per-edge midpoint split (consistent across shared edges, linear position/UV/normal) until every edge <= maxEdge; surface and texture mapping unchanged",
+          "maxEdge": 0.0042737,
+          "passes": 4,
+          "sourceTriangles": 21013,
+          "sourceVertices": 14122,
+          "triangles": 224344,
+          "vertices": 121192,
+          "longestEdge": 0.0042728,
+          "maxEdgeFractionOfHeight": 0.0045
+        },
+        "sourceTriangles": 21013,
+        "sourceVertices": 14122,
+        "runtimeTriangles": 21013,
+        "droppedDegenerateTriangles": 0,
+        "droppedSliverTriangles": {
+          "count": 0,
+          "maxEdgeM": 0.2
+        },
+        "weldedVertices": 10535,
+        "textures": {
+          "baseColor": [
+            2048,
+            621111
+          ],
+          "normal": [
+            1024,
+            121939
+          ],
+          "metallicRoughness": [
+            512,
+            37261
+          ],
+          "source": {
+            "baseColor": [
+              2048,
+              2048
+            ],
+            "normal": [
+              2048,
+              2048
+            ],
+            "metallicRoughness": [
+              2048,
+              2048
+            ],
+            "normalScale": 1
+          }
+        },
+        "legBridgeTrim": {
+          "removed": 0,
+          "method": "triangles joining the left and right leg regions lower than 0.05 m under the crotch removed"
+        },
+        "shippedTriangles": 21013
+      },
+      "skeleton": {
+        "jointCount": 18,
+        "joints": [
+          {
+            "name": "Root",
+            "parent": null,
+            "bindWorldPosition": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "name": "Hips",
+            "parent": "Root",
+            "bindWorldPosition": [
+              0,
+              0.8722,
+              -0.0333
+            ]
+          },
+          {
+            "name": "Spine",
+            "parent": "Hips",
+            "bindWorldPosition": [
+              0,
+              1.065,
+              -0.0256
+            ]
+          },
+          {
+            "name": "Chest",
+            "parent": "Spine",
+            "bindWorldPosition": [
+              0,
+              1.2964,
+              -0.0346
+            ]
+          },
+          {
+            "name": "Neck",
+            "parent": "Chest",
+            "bindWorldPosition": [
+              0,
+              1.515,
+              0.0008
+            ]
+          },
+          {
+            "name": "Head",
+            "parent": "Neck",
+            "bindWorldPosition": [
+              0,
+              1.621,
+              0.0108
+            ]
+          },
+          {
+            "name": "L_UpperArm",
+            "parent": "Chest",
+            "bindWorldPosition": [
+              0.1593,
+              1.4178,
+              -0.0449
+            ]
+          },
+          {
+            "name": "L_Forearm",
+            "parent": "L_UpperArm",
+            "bindWorldPosition": [
+              0.2346,
+              1.1848,
+              -0.045
+            ]
+          },
+          {
+            "name": "L_Hand",
+            "parent": "L_Forearm",
+            "bindWorldPosition": [
+              0.3007,
+              0.9885,
+              -0.0262
+            ]
+          },
+          {
+            "name": "R_UpperArm",
+            "parent": "Chest",
+            "bindWorldPosition": [
+              -0.1593,
+              1.4178,
+              -0.0449
+            ]
+          },
+          {
+            "name": "R_Forearm",
+            "parent": "R_UpperArm",
+            "bindWorldPosition": [
+              -0.2346,
+              1.1848,
+              -0.045
+            ]
+          },
+          {
+            "name": "R_Hand",
+            "parent": "R_Forearm",
+            "bindWorldPosition": [
+              -0.3007,
+              0.9885,
+              -0.0262
+            ]
+          },
+          {
+            "name": "L_Thigh",
+            "parent": "Hips",
+            "bindWorldPosition": [
+              0.0821,
+              0.8722,
+              -0.0333
+            ]
+          },
+          {
+            "name": "L_Shin",
+            "parent": "L_Thigh",
+            "bindWorldPosition": [
+              0.1294,
+              0.4836,
+              -0.0655
+            ]
+          },
+          {
+            "name": "L_Foot",
+            "parent": "L_Shin",
+            "bindWorldPosition": [
+              0.1517,
+              0.095,
+              -0.0769
+            ]
+          },
+          {
+            "name": "R_Thigh",
+            "parent": "Hips",
+            "bindWorldPosition": [
+              -0.0821,
+              0.8722,
+              -0.0333
+            ]
+          },
+          {
+            "name": "R_Shin",
+            "parent": "R_Thigh",
+            "bindWorldPosition": [
+              -0.1294,
+              0.4836,
+              -0.0655
+            ]
+          },
+          {
+            "name": "R_Foot",
+            "parent": "R_Shin",
+            "bindWorldPosition": [
+              -0.1517,
+              0.095,
+              -0.0769
+            ]
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "options": null
+      },
+      "skinning": {
+        "method": "zombie/lib/autorig.mjs bodySkin (skin.mjs region classification + chain weights + masked Laplacian smoothing)",
+        "regionVertexCounts": {
+          "legR": 1238,
+          "torso": 5370,
+          "armL": 1411,
+          "legL": 1234,
+          "armR": 1282
+        },
+        "armVerticesAdoptedOutsideFlood": {
+          "L": 0,
+          "R": 0
+        },
+        "verticesWithMoreThan4Truncated": 0,
+        "smoothIters": 4,
+        "smoothLambda": 0.5,
+        "armRule": "wall"
+      },
+      "profile": {
+        "heightM": 1.78,
+        "landmarks": {
+          "ankle": 0.095,
+          "knee": 0.4836,
+          "crotch": 0.73,
+          "hip": 0.8722,
+          "spine": 1.065,
+          "chest": 1.2964,
+          "armpit": 1.195,
+          "neck": 1.515,
+          "head": 1.621,
+          "top": 1.78
+        },
+        "limb": {
+          "L_UpperArm": {
+            "length": 0.2449,
+            "radius": 0.0537,
+            "samples": 159
+          },
+          "L_Forearm": {
+            "length": 0.208,
+            "radius": 0.0394,
+            "samples": 76
+          },
+          "R_UpperArm": {
+            "length": 0.2449,
+            "radius": 0.0537,
+            "samples": 110
+          },
+          "R_Forearm": {
+            "length": 0.208,
+            "radius": 0.0394,
+            "samples": 65
+          },
+          "L_Thigh": {
+            "length": 0.3928,
+            "radius": 0.0781,
+            "samples": 126
+          },
+          "L_Shin": {
+            "length": 0.3894,
+            "radius": 0.0509,
+            "samples": 176
+          },
+          "R_Thigh": {
+            "length": 0.3928,
+            "radius": 0.0781,
+            "samples": 125
+          },
+          "R_Shin": {
+            "length": 0.3894,
+            "radius": 0.0509,
+            "samples": 188
+          }
+        },
+        "head": {
+          "halfWidth": 0.0908,
+          "depth": 0.2224
+        },
+        "torso": {
+          "chest": {
+            "w": 0.2379,
+            "d": 0.2379
+          },
+          "waist": {
+            "w": 0.2965,
+            "d": 0.2352
+          },
+          "hips": {
+            "w": 0.3624,
+            "d": 0.1611
+          }
+        },
+        "hit": {
+          "head": 0.101,
+          "torso": 0.1249,
+          "arm": 0.0628,
+          "leg": 0.0903,
+          "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+        }
+      },
+      "noseLandmarkCheck": {
+        "plainY": 1.6263,
+        "robustY": 1.6336,
+        "shift": 0,
+        "tolM": 0.005,
+        "minShiftM": 0.03
+      },
+      "gait": {
+        "T": 1,
+        "beta": 0.62,
+        "center": -0.02,
+        "lift": 0.085,
+        "drop": 0.055,
+        "swing": 17,
+        "stride": 0.81,
+        "maxReach": 0.9891,
+        "groundSpeed": 1.3065
+      },
+      "sit": {
+        "thigh": -102,
+        "knee": 45.78,
+        "hipsY": -0.7627,
+        "hipsZ": -0.04,
+        "lowestSeatM": 0.012,
+        "lowestFootM": 0.002,
+        "method": "thighs -102 deg (from -102, raised while the feet could not reach the floor); pelvis height: lowest Hips / Thigh vertex 0.012 m above the floor; knee flexion: lowest Shin / Foot vertex on the floor (bisection, body mesh skinned)"
+      },
+      "clips": [
+        {
+          "name": "Idle",
+          "durationS": 4,
+          "loop": true,
+          "keyframes": 121,
+          "maxLegReach": 0.9875
+        },
+        {
+          "name": "Walk",
+          "durationS": 1,
+          "loop": true,
+          "keyframes": 31,
+          "maxLegReach": 0.9891
+        },
+        {
+          "name": "Talk",
+          "durationS": 5,
+          "loop": true,
+          "keyframes": 151,
+          "maxLegReach": 0.9949
+        },
+        {
+          "name": "Greet",
+          "durationS": 1.6,
+          "loop": false,
+          "keyframes": 49,
+          "maxLegReach": 0.9872
+        },
+        {
+          "name": "Work",
+          "durationS": 3.2,
+          "loop": true,
+          "keyframes": 97,
+          "maxLegReach": 0.9788
+        },
+        {
+          "name": "Sit",
+          "durationS": 4,
+          "loop": true,
+          "keyframes": 121,
+          "maxLegReach": 0
+        }
+      ],
+      "verification": {
+        "floorLowestSkinnedVertexM": {
+          "Idle": {
+            "body": 0,
+            "flannel": 0.7839,
+            "hoodie": 0.8212,
+            "hivis": 0.9299,
+            "coat": 0.4422,
+            "cargo": 0.0758,
+            "jeans": 0.0739,
+            "cap": 1.6262,
+            "beanie": 1.6556
+          },
+          "Walk": {
+            "body": -0.0021,
+            "flannel": 0.7167,
+            "hoodie": 0.755,
+            "hivis": 0.8796,
+            "coat": 0.3525,
+            "cargo": 0.0721,
+            "jeans": 0.0702,
+            "cap": 1.5615,
+            "beanie": 1.5921
+          },
+          "Talk": {
+            "body": 0,
+            "flannel": 0.7812,
+            "hoodie": 0.8168,
+            "hivis": 0.9331,
+            "coat": 0.4405,
+            "cargo": 0.0756,
+            "jeans": 0.0744,
+            "cap": 1.6188,
+            "beanie": 1.6513
+          },
+          "Greet": {
+            "body": 0,
+            "flannel": 0.7901,
+            "hoodie": 0.8295,
+            "hivis": 0.9388,
+            "coat": 0.4522,
+            "cargo": 0.076,
+            "jeans": 0.0746,
+            "cap": 1.6362,
+            "beanie": 1.6631
+          },
+          "Work": {
+            "body": 0,
+            "flannel": 0.7779,
+            "hoodie": 0.8166,
+            "hivis": 0.9161,
+            "coat": 0.4364,
+            "cargo": 0.0757,
+            "jeans": 0.0733,
+            "cap": 1.4992,
+            "beanie": 1.5574
+          },
+          "Sit": {
+            "body": -0.0042,
+            "flannel": 0.0304,
+            "hoodie": 0.0366,
+            "hivis": 0.1455,
+            "coat": 0.0107,
+            "cargo": 0.0237,
+            "jeans": 0.0261,
+            "cap": 0.8561,
+            "beanie": 0.8892
+          }
+        },
+        "motionStretch": {
+          "triangles": 21013,
+          "p50": 1.002,
+          "p99": 2.402,
+          "max": 7.46,
+          "over2x": 512,
+          "over3x": 55,
+          "fractionOver": 0.0026,
+          "worstClips": {
+            "Sit": 165,
+            "Talk": 15,
+            "Walk": 3,
+            "Greet": 30
+          },
+          "poses": 194
+        }
+      },
+      "wear": {
+        "configured": [
+          "flannel",
+          "hivis",
+          "hoodie",
+          "coat",
+          "cargo",
+          "jeans",
+          "cap",
+          "beanie"
+        ],
+        "shipped": [
+          "flannel",
+          "hoodie",
+          "hivis",
+          "coat",
+          "cargo",
+          "jeans",
+          "cap",
+          "beanie"
+        ]
+      }
+    },
+    "f1": {
+      "label": "Woman, about 30, athletic, braids",
+      "heightM": 1.68,
+      "source": {
+        "file": "reference/tasks/survivor-market-20261108-005807/meshy/raw/human-f1-a1.glb",
+        "sha256Verified": "03d25a83aa34a88f6d7ec4207c2957f007e067d89356d7d229374138ab690fb3",
+        "asset": "human:f1",
+        "attempt": "a1",
+        "taskId": "01a1b8b4-d832-7092-8f22-9307dc91f50e",
+        "provider": "Meshy meshy_image_to_3d (ai_model meshy-t2.5, model_type smart-topology, pose_mode a-pose, 2K PBR textures, target 20k triangles)",
+        "ledger": "reference/tasks/survivor-market-20261108-005807/meshy/LEDGER.jsonl",
+        "raw": "reference/tasks/survivor-market-20261108-005807/meshy/raw/human-f1-a1.glb",
+        "inputImage": "reference/tasks/survivor-market-20261108-005807/concepts/f1-a1.png",
+        "inputImageSha256": "1866b5773abc37a284910bf9111476c251237bfec2be5874baacd64b8077e1fd",
+        "conceptLedger": "reference/tasks/survivor-market-20261108-005807/concepts/CONCEPT-LEDGER.jsonl",
+        "conceptProvider": "Codex native image generation (initial concept, approved in the task)"
+      },
+      "placement": {
+        "scale": 1.7680562785135672,
+        "pivot": [
+          -0.007934749126434326,
+          -0.4753420054912567,
+          0.01171875
+        ],
+        "flipFacing": false,
+        "offset": [
+          0,
+          0,
+          0
+        ],
+        "note": "scaled to 1.68 m; source faced +Z: no rotation; feet midpoint (bbox centres of soles below 4 cm) moved to origin"
+      },
+      "facing": {
+        "facing": 1,
+        "margin": 0.035,
+        "method": "sole bbox z-centre (lowest 3% of height) vs shin centroid (8-12%): toes extend toward the front",
+        "used": 1,
+        "forced": false
+      },
+      "mesh": {
+        "method": "Meshy source mesh kept as the runtime mesh (no simplify / unwrap / bake); skeleton detected on a densified copy",
+        "densify": {
+          "method": "per-edge midpoint split (consistent across shared edges, linear position/UV/normal) until every edge <= maxEdge; surface and texture mapping unchanged",
+          "maxEdge": 0.0042759,
+          "passes": 5,
+          "sourceTriangles": 20720,
+          "sourceVertices": 21031,
+          "triangles": 304447,
+          "vertices": 178840,
+          "longestEdge": 0.0042759,
+          "maxEdgeFractionOfHeight": 0.0045
+        },
+        "sourceTriangles": 20720,
+        "sourceVertices": 21031,
+        "runtimeTriangles": 20720,
+        "droppedDegenerateTriangles": 0,
+        "droppedSliverTriangles": {
+          "count": 0,
+          "maxEdgeM": 0.2
+        },
+        "weldedVertices": 10523,
+        "textures": {
+          "baseColor": [
+            2048,
+            409219
+          ],
+          "normal": [
+            1024,
+            101591
+          ],
+          "metallicRoughness": [
+            512,
+            42051
+          ],
+          "source": {
+            "baseColor": [
+              2048,
+              2048
+            ],
+            "normal": [
+              2048,
+              2048
+            ],
+            "metallicRoughness": [
+              2048,
+              2048
+            ],
+            "normalScale": 1
+          }
+        },
+        "legBridgeTrim": {
+          "removed": 0,
+          "method": "triangles joining the left and right leg regions lower than 0.05 m under the crotch removed"
+        },
+        "shippedTriangles": 20720
+      },
+      "skeleton": {
+        "jointCount": 18,
+        "joints": [
+          {
+            "name": "Root",
+            "parent": null,
+            "bindWorldPosition": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "name": "Hips",
+            "parent": "Root",
+            "bindWorldPosition": [
+              0,
+              0.84,
+              -0.0064
+            ]
+          },
+          {
+            "name": "Spine",
+            "parent": "Hips",
+            "bindWorldPosition": [
+              0,
+              1.0155,
+              -0.0191
+            ]
+          },
+          {
+            "name": "Chest",
+            "parent": "Spine",
+            "bindWorldPosition": [
+              0,
+              1.2261,
+              -0.0135
+            ]
+          },
+          {
+            "name": "Neck",
+            "parent": "Chest",
+            "bindWorldPosition": [
+              0,
+              1.425,
+              0.0072
+            ]
+          },
+          {
+            "name": "Head",
+            "parent": "Neck",
+            "bindWorldPosition": [
+              0,
+              1.527,
+              0.0172
+            ]
+          },
+          {
+            "name": "L_UpperArm",
+            "parent": "Chest",
+            "bindWorldPosition": [
+              0.1303,
+              1.3433,
+              -0.0212
+            ]
+          },
+          {
+            "name": "L_Forearm",
+            "parent": "L_UpperArm",
+            "bindWorldPosition": [
+              0.2366,
+              1.1554,
+              -0.034
+            ]
+          },
+          {
+            "name": "L_Hand",
+            "parent": "L_Forearm",
+            "bindWorldPosition": [
+              0.3336,
+              1.001,
+              -0.0205
+            ]
+          },
+          {
+            "name": "R_UpperArm",
+            "parent": "Chest",
+            "bindWorldPosition": [
+              -0.1303,
+              1.3433,
+              -0.0212
+            ]
+          },
+          {
+            "name": "R_Forearm",
+            "parent": "R_UpperArm",
+            "bindWorldPosition": [
+              -0.2366,
+              1.1554,
+              -0.034
+            ]
+          },
+          {
+            "name": "R_Hand",
+            "parent": "R_Forearm",
+            "bindWorldPosition": [
+              -0.3336,
+              1.001,
+              -0.0205
+            ]
+          },
+          {
+            "name": "L_Thigh",
+            "parent": "Hips",
+            "bindWorldPosition": [
+              0.0774,
+              0.84,
+              -0.0064
+            ]
+          },
+          {
+            "name": "L_Shin",
+            "parent": "L_Thigh",
+            "bindWorldPosition": [
+              0.1203,
+              0.4675,
+              -0.0517
+            ]
+          },
+          {
+            "name": "L_Foot",
+            "parent": "L_Shin",
+            "bindWorldPosition": [
+              0.139,
+              0.095,
+              -0.061
+            ]
+          },
+          {
+            "name": "R_Thigh",
+            "parent": "Hips",
+            "bindWorldPosition": [
+              -0.0774,
+              0.84,
+              -0.0064
+            ]
+          },
+          {
+            "name": "R_Shin",
+            "parent": "R_Thigh",
+            "bindWorldPosition": [
+              -0.1203,
+              0.4675,
+              -0.0517
+            ]
+          },
+          {
+            "name": "R_Foot",
+            "parent": "R_Shin",
+            "bindWorldPosition": [
+              -0.139,
+              0.095,
+              -0.061
+            ]
+          }
+        ],
+        "notes": [
+          "forearm/H=0.109 outside [0.11, 0.19]"
+        ],
+        "fixes": [
+          {
+            "fix": "headZ",
+            "method": "nose tip - 0.105 m",
+            "noseZ": 0.1222,
+            "before": {
+              "Neck": -0.1305,
+              "Head": -0.1205
+            },
+            "after": {
+              "Neck": 0.0072,
+              "Head": 0.0172
+            }
+          }
+        ],
+        "options": null
+      },
+      "skinning": {
+        "method": "zombie/lib/autorig.mjs bodySkin (skin.mjs region classification + chain weights + masked Laplacian smoothing)",
+        "regionVertexCounts": {
+          "legR": 897,
+          "torso": 7053,
+          "armL": 859,
+          "legL": 902,
+          "armR": 812
+        },
+        "armVerticesAdoptedOutsideFlood": {
+          "L": 0,
+          "R": 1
+        },
+        "verticesWithMoreThan4Truncated": 0,
+        "smoothIters": 4,
+        "smoothLambda": 0.5,
+        "armRule": "wall"
+      },
+      "profile": {
+        "heightM": 1.68,
+        "landmarks": {
+          "ankle": 0.095,
+          "knee": 0.4675,
+          "crotch": 0.78,
+          "hip": 0.84,
+          "spine": 1.0155,
+          "chest": 1.2261,
+          "armpit": 1.205,
+          "neck": 1.425,
+          "head": 1.527,
+          "top": 1.68
+        },
+        "limb": {
+          "L_UpperArm": {
+            "length": 0.2163,
+            "radius": 0.0466,
+            "samples": 97
+          },
+          "L_Forearm": {
+            "length": 0.1828,
+            "radius": 0.0384,
+            "samples": 29
+          },
+          "R_UpperArm": {
+            "length": 0.2163,
+            "radius": 0.0466,
+            "samples": 57
+          },
+          "R_Forearm": {
+            "length": 0.1828,
+            "radius": 0.0384,
+            "samples": 26
+          },
+          "L_Thigh": {
+            "length": 0.3777,
+            "radius": 0.0639,
+            "samples": 107
+          },
+          "L_Shin": {
+            "length": 0.3731,
+            "radius": 0.0422,
+            "samples": 176
+          },
+          "R_Thigh": {
+            "length": 0.3777,
+            "radius": 0.0639,
+            "samples": 106
+          },
+          "R_Shin": {
+            "length": 0.3731,
+            "radius": 0.0422,
+            "samples": 157
+          }
+        },
+        "head": {
+          "halfWidth": 0.0853,
+          "depth": 0.2832
+        },
+        "torso": {
+          "chest": {
+            "w": 0.2245,
+            "d": 0.1891
+          },
+          "waist": {
+            "w": 0.2797,
+            "d": 0.215
+          },
+          "hips": {
+            "w": 0.2624,
+            "d": 0.1761
+          }
+        },
+        "hit": {
+          "head": 0.1134,
+          "torso": 0.1034,
+          "arm": 0.0574,
+          "leg": 0.0743,
+          "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+        }
+      },
+      "noseLandmarkCheck": {
+        "plainY": 1.5324,
+        "robustY": 1.5384,
+        "shift": 0,
+        "tolM": 0.005,
+        "minShiftM": 0.03
+      },
+      "gait": {
+        "T": 1,
+        "beta": 0.62,
+        "center": 0,
+        "lift": 0.085,
+        "drop": 0.055,
+        "swing": 17,
+        "stride": 0.79,
+        "maxReach": 0.9889,
+        "groundSpeed": 1.2742
+      },
+      "sit": {
+        "thigh": -102,
+        "knee": 37.934,
+        "hipsY": -0.7706,
+        "hipsZ": -0.04,
+        "lowestSeatM": 0.012,
+        "lowestFootM": 0.002,
+        "method": "thighs -102 deg (from -102, raised while the feet could not reach the floor); pelvis height: lowest Hips / Thigh vertex 0.012 m above the floor; knee flexion: lowest Shin / Foot vertex on the floor (bisection, body mesh skinned)"
+      },
+      "clips": [
+        {
+          "name": "Idle",
+          "durationS": 4,
+          "loop": true,
+          "keyframes": 121,
+          "maxLegReach": 0.9867
+        },
+        {
+          "name": "Walk",
+          "durationS": 1,
+          "loop": true,
+          "keyframes": 31,
+          "maxLegReach": 0.9889
+        },
+        {
+          "name": "Talk",
+          "durationS": 5,
+          "loop": true,
+          "keyframes": 151,
+          "maxLegReach": 0.9958
+        },
+        {
+          "name": "Greet",
+          "durationS": 1.6,
+          "loop": false,
+          "keyframes": 49,
+          "maxLegReach": 0.9863
+        },
+        {
+          "name": "Work",
+          "durationS": 3.2,
+          "loop": true,
+          "keyframes": 97,
+          "maxLegReach": 0.9778
+        },
+        {
+          "name": "Sit",
+          "durationS": 4,
+          "loop": true,
+          "keyframes": 121,
+          "maxLegReach": 0
+        }
+      ],
+      "verification": {
+        "floorLowestSkinnedVertexM": {
+          "Idle": {
+            "body": 0,
+            "flannel": 0.7666,
+            "hoodie": 0.7938,
+            "sweater": 0.8418,
+            "hivis": 0.8949,
+            "cargo": 0.0771,
+            "jeans": 0.0781,
+            "cap": 1.5354,
+            "beanie": 1.5607
+          },
+          "Walk": {
+            "body": 0,
+            "flannel": 0.7043,
+            "hoodie": 0.7235,
+            "sweater": 0.782,
+            "hivis": 0.8416,
+            "cargo": 0.0748,
+            "jeans": 0.0749,
+            "cap": 1.4719,
+            "beanie": 1.4976
+          },
+          "Talk": {
+            "body": 0,
+            "flannel": 0.773,
+            "hoodie": 0.7892,
+            "sweater": 0.8419,
+            "hivis": 0.8941,
+            "cargo": 0.0777,
+            "jeans": 0.0783,
+            "cap": 1.5277,
+            "beanie": 1.5551
+          },
+          "Greet": {
+            "body": 0,
+            "flannel": 0.7767,
+            "hoodie": 0.8026,
+            "sweater": 0.8472,
+            "hivis": 0.8997,
+            "cargo": 0.0774,
+            "jeans": 0.0785,
+            "cap": 1.5448,
+            "beanie": 1.5683
+          },
+          "Work": {
+            "body": 0,
+            "flannel": 0.7658,
+            "hoodie": 0.7871,
+            "sweater": 0.8235,
+            "hivis": 0.8802,
+            "cargo": 0.0768,
+            "jeans": 0.0773,
+            "cap": 1.4148,
+            "beanie": 1.4599
+          },
+          "Sit": {
+            "body": -0.0041,
+            "flannel": 0.0014,
+            "hoodie": -0.0001,
+            "sweater": 0.0469,
+            "hivis": 0.0926,
+            "cargo": 0.0022,
+            "jeans": 0.005,
+            "cap": 0.7552,
+            "beanie": 0.783
+          }
+        },
+        "motionStretch": {
+          "triangles": 20720,
+          "p50": 1.004,
+          "p99": 1.761,
+          "max": 3.73,
+          "over2x": 86,
+          "over3x": 10,
+          "fractionOver": 0.0005,
+          "worstClips": {
+            "Sit": 132,
+            "Work": 50,
+            "Idle": 2,
+            "Greet": 12,
+            "Talk": 7,
+            "Walk": 6
+          },
+          "poses": 194
+        }
+      },
+      "wear": {
+        "configured": [
+          "hoodie",
+          "sweater",
+          "flannel",
+          "hivis",
+          "cargo",
+          "jeans",
+          "cap",
+          "beanie"
+        ],
+        "shipped": [
+          "flannel",
+          "hoodie",
+          "sweater",
+          "hivis",
+          "cargo",
+          "jeans",
+          "cap",
+          "beanie"
+        ]
+      }
+    },
+    "m2": {
+      "label": "Man, about 60, heavy build, grey hair",
+      "heightM": 1.76,
+      "source": {
+        "file": "reference/tasks/survivor-market-20261108-005807/meshy/raw/human-m2-a1.glb",
+        "sha256Verified": "397079b54c637963ad54333ff88314a477d84e68eb0da99a3df7e018b547bfc7",
+        "asset": "human:m2",
+        "attempt": "a1",
+        "taskId": "01a1b8b4-e954-74e4-a594-b815ae92c032",
+        "provider": "Meshy meshy_image_to_3d (ai_model meshy-t2.5, model_type smart-topology, pose_mode a-pose, 2K PBR textures, target 20k triangles)",
+        "ledger": "reference/tasks/survivor-market-20261108-005807/meshy/LEDGER.jsonl",
+        "raw": "reference/tasks/survivor-market-20261108-005807/meshy/raw/human-m2-a1.glb",
+        "inputImage": "reference/tasks/survivor-market-20261108-005807/concepts/m2-a1.png",
+        "inputImageSha256": "97c3d3306b106ded78414e550c7724d72f860e6328395783283eb580a87e50b9",
+        "conceptLedger": "reference/tasks/survivor-market-20261108-005807/concepts/CONCEPT-LEDGER.jsonl",
+        "conceptProvider": "Codex native image generation (initial concept, approved in the task)"
+      },
+      "placement": {
+        "scale": 1.852249434633261,
+        "pivot": [
+          0,
+          -0.4753420054912567,
+          0.007324501872062683
+        ],
+        "flipFacing": false,
+        "offset": [
+          0,
+          0,
+          0
+        ],
+        "note": "scaled to 1.76 m; source faced +Z: no rotation; feet midpoint (bbox centres of soles below 4 cm) moved to origin"
+      },
+      "facing": {
+        "facing": 1,
+        "margin": 0.0435,
+        "method": "sole bbox z-centre (lowest 3% of height) vs shin centroid (8-12%): toes extend toward the front",
+        "used": 1,
+        "forced": false
+      },
+      "mesh": {
+        "method": "Meshy source mesh kept as the runtime mesh (no simplify / unwrap / bake); skeleton detected on a densified copy",
+        "densify": {
+          "method": "per-edge midpoint split (consistent across shared edges, linear position/UV/normal) until every edge <= maxEdge; surface and texture mapping unchanged",
+          "maxEdge": 0.0042759,
+          "passes": 4,
+          "sourceTriangles": 20981,
+          "sourceVertices": 19660,
+          "triangles": 251522,
+          "vertices": 146224,
+          "longestEdge": 0.0042757,
+          "maxEdgeFractionOfHeight": 0.0045
+        },
+        "sourceTriangles": 20981,
+        "sourceVertices": 19660,
+        "runtimeTriangles": 20981,
+        "droppedDegenerateTriangles": 0,
+        "droppedSliverTriangles": {
+          "count": 0,
+          "maxEdgeM": 0.2
+        },
+        "weldedVertices": 10475,
+        "textures": {
+          "baseColor": [
+            2048,
+            608850
+          ],
+          "normal": [
+            1024,
+            137329
+          ],
+          "metallicRoughness": [
+            512,
+            36998
+          ],
+          "source": {
+            "baseColor": [
+              2048,
+              2048
+            ],
+            "normal": [
+              2048,
+              2048
+            ],
+            "metallicRoughness": [
+              2048,
+              2048
+            ],
+            "normalScale": 1
+          }
+        },
+        "legBridgeTrim": {
+          "removed": 0,
+          "method": "triangles joining the left and right leg regions lower than 0.05 m under the crotch removed"
+        },
+        "shippedTriangles": 20981
+      },
+      "skeleton": {
+        "jointCount": 18,
+        "joints": [
+          {
+            "name": "Root",
+            "parent": null,
+            "bindWorldPosition": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "name": "Hips",
+            "parent": "Root",
+            "bindWorldPosition": [
+              0,
+              0.8624,
+              -0.0466
+            ]
+          },
+          {
+            "name": "Spine",
+            "parent": "Hips",
+            "bindWorldPosition": [
+              0,
+              1.0552,
+              -0.0313
+            ]
+          },
+          {
+            "name": "Chest",
+            "parent": "Spine",
+            "bindWorldPosition": [
+              0,
+              1.2865,
+              -0.0574
+            ]
+          },
+          {
+            "name": "Neck",
+            "parent": "Chest",
+            "bindWorldPosition": [
+              0,
+              1.505,
+              -0.019
+            ]
+          },
+          {
+            "name": "Head",
+            "parent": "Neck",
+            "bindWorldPosition": [
+              0,
+              1.607,
+              -0.009
+            ]
+          },
+          {
+            "name": "L_UpperArm",
+            "parent": "Chest",
+            "bindWorldPosition": [
+              0.1691,
+              1.4262,
+              -0.06
+            ]
+          },
+          {
+            "name": "L_Forearm",
+            "parent": "L_UpperArm",
+            "bindWorldPosition": [
+              0.3075,
+              1.2153,
+              -0.0649
+            ]
+          },
+          {
+            "name": "L_Hand",
+            "parent": "L_Forearm",
+            "bindWorldPosition": [
+              0.441,
+              1.0535,
+              -0.0328
+            ]
+          },
+          {
+            "name": "R_UpperArm",
+            "parent": "Chest",
+            "bindWorldPosition": [
+              -0.1691,
+              1.4262,
+              -0.06
+            ]
+          },
+          {
+            "name": "R_Forearm",
+            "parent": "R_UpperArm",
+            "bindWorldPosition": [
+              -0.3075,
+              1.2153,
+              -0.0649
+            ]
+          },
+          {
+            "name": "R_Hand",
+            "parent": "R_Forearm",
+            "bindWorldPosition": [
+              -0.441,
+              1.0535,
+              -0.0328
+            ]
+          },
+          {
+            "name": "L_Thigh",
+            "parent": "Hips",
+            "bindWorldPosition": [
+              0.0929,
+              0.8624,
+              -0.0466
+            ]
+          },
+          {
+            "name": "L_Shin",
+            "parent": "L_Thigh",
+            "bindWorldPosition": [
+              0.1443,
+              0.4687,
+              -0.0669
+            ]
+          },
+          {
+            "name": "L_Foot",
+            "parent": "L_Shin",
+            "bindWorldPosition": [
+              0.1697,
+              0.075,
+              -0.0662
+            ]
+          },
+          {
+            "name": "R_Thigh",
+            "parent": "Hips",
+            "bindWorldPosition": [
+              -0.0929,
+              0.8624,
+              -0.0466
+            ]
+          },
+          {
+            "name": "R_Shin",
+            "parent": "R_Thigh",
+            "bindWorldPosition": [
+              -0.1443,
+              0.4687,
+              -0.0669
+            ]
+          },
+          {
+            "name": "R_Foot",
+            "parent": "R_Shin",
+            "bindWorldPosition": [
+              -0.1697,
+              0.075,
+              -0.0662
+            ]
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "options": null
+      },
+      "skinning": {
+        "method": "zombie/lib/autorig.mjs bodySkin (skin.mjs region classification + chain weights + masked Laplacian smoothing)",
+        "regionVertexCounts": {
+          "legR": 1211,
+          "torso": 4039,
+          "legL": 1220,
+          "armR": 2005,
+          "armL": 2000
+        },
+        "armVerticesAdoptedOutsideFlood": {
+          "L": 0,
+          "R": 0
+        },
+        "verticesWithMoreThan4Truncated": 0,
+        "smoothIters": 4,
+        "smoothLambda": 0.5,
+        "armRule": "wall"
+      },
+      "profile": {
+        "heightM": 1.76,
+        "landmarks": {
+          "ankle": 0.075,
+          "knee": 0.4687,
+          "crotch": 0.71,
+          "hip": 0.8624,
+          "spine": 1.0552,
+          "chest": 1.2865,
+          "armpit": 1.235,
+          "neck": 1.505,
+          "head": 1.607,
+          "top": 1.76
+        },
+        "limb": {
+          "L_UpperArm": {
+            "length": 0.2523,
+            "radius": 0.0634,
+            "samples": 185
+          },
+          "L_Forearm": {
+            "length": 0.2122,
+            "radius": 0.0428,
+            "samples": 103
+          },
+          "R_UpperArm": {
+            "length": 0.2523,
+            "radius": 0.0634,
+            "samples": 184
+          },
+          "R_Forearm": {
+            "length": 0.2122,
+            "radius": 0.0428,
+            "samples": 101
+          },
+          "L_Thigh": {
+            "length": 0.3976,
+            "radius": 0.084,
+            "samples": 141
+          },
+          "L_Shin": {
+            "length": 0.3945,
+            "radius": 0.0597,
+            "samples": 278
+          },
+          "R_Thigh": {
+            "length": 0.3976,
+            "radius": 0.084,
+            "samples": 140
+          },
+          "R_Shin": {
+            "length": 0.3945,
+            "radius": 0.0597,
+            "samples": 273
+          }
+        },
+        "head": {
+          "halfWidth": 0.0846,
+          "depth": 0.2279
+        },
+        "torso": {
+          "chest": {
+            "w": 0.3536,
+            "d": 0.3012
+          },
+          "waist": {
+            "w": 0.3518,
+            "d": 0.2831
+          },
+          "hips": {
+            "w": 0.3988,
+            "d": 0.1031
+          }
+        },
+        "hit": {
+          "head": 0.1,
+          "torso": 0.1601,
+          "arm": 0.0717,
+          "leg": 0.1006,
+          "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+        }
+      },
+      "noseLandmarkCheck": {
+        "plainY": 1.6044,
+        "robustY": 1.618,
+        "shift": 0,
+        "tolM": 0.005,
+        "minShiftM": 0.03
+      },
+      "gait": {
+        "T": 1,
+        "beta": 0.62,
+        "center": -0.04,
+        "lift": 0.085,
+        "drop": 0.055,
+        "swing": 17,
+        "stride": 0.81,
+        "maxReach": 0.9893,
+        "groundSpeed": 1.3065
+      },
+      "sit": {
+        "thigh": -102,
+        "knee": 50.571,
+        "hipsY": -0.763,
+        "hipsZ": -0.04,
+        "lowestSeatM": 0.012,
+        "lowestFootM": 0.002,
+        "method": "thighs -102 deg (from -102, raised while the feet could not reach the floor); pelvis height: lowest Hips / Thigh vertex 0.012 m above the floor; knee flexion: lowest Shin / Foot vertex on the floor (bisection, body mesh skinned)"
+      },
+      "clips": [
+        {
+          "name": "Idle",
+          "durationS": 4,
+          "loop": true,
+          "keyframes": 121,
+          "maxLegReach": 0.9874
+        },
+        {
+          "name": "Walk",
+          "durationS": 1,
+          "loop": true,
+          "keyframes": 31,
+          "maxLegReach": 0.9893
+        },
+        {
+          "name": "Talk",
+          "durationS": 5,
+          "loop": true,
+          "keyframes": 151,
+          "maxLegReach": 0.9938
+        },
+        {
+          "name": "Greet",
+          "durationS": 1.6,
+          "loop": false,
+          "keyframes": 49,
+          "maxLegReach": 0.9873
+        },
+        {
+          "name": "Work",
+          "durationS": 3.2,
+          "loop": true,
+          "keyframes": 97,
+          "maxLegReach": 0.9785
+        },
+        {
+          "name": "Sit",
+          "durationS": 4,
+          "loop": true,
+          "keyframes": 121,
+          "maxLegReach": 0
+        }
+      ],
+      "verification": {
+        "floorLowestSkinnedVertexM": {
+          "Idle": {
+            "body": 0,
+            "flannel": 0.7677,
+            "sweater": 0.8672,
+            "coat": 0.4231,
+            "blazer": 0.7625,
+            "cargo": 0.0472,
+            "slacks": 0.0463,
+            "cap": 1.617,
+            "hardhat": 1.6058
+          },
+          "Walk": {
+            "body": 0,
+            "flannel": 0.6975,
+            "sweater": 0.8089,
+            "coat": 0.3276,
+            "blazer": 0.6566,
+            "cargo": 0.0428,
+            "slacks": 0.0461,
+            "cap": 1.5521,
+            "hardhat": 1.538
+          },
+          "Talk": {
+            "body": 0,
+            "flannel": 0.7659,
+            "sweater": 0.8689,
+            "coat": 0.4207,
+            "blazer": 0.7497,
+            "cargo": 0.0477,
+            "slacks": 0.0464,
+            "cap": 1.6086,
+            "hardhat": 1.5958
+          },
+          "Greet": {
+            "body": 0,
+            "flannel": 0.7733,
+            "sweater": 0.873,
+            "coat": 0.4337,
+            "blazer": 0.7641,
+            "cargo": 0.0476,
+            "slacks": 0.0464,
+            "cap": 1.6276,
+            "hardhat": 1.6177
+          },
+          "Work": {
+            "body": 0,
+            "flannel": 0.7568,
+            "sweater": 0.846,
+            "coat": 0.4152,
+            "blazer": 0.7612,
+            "cargo": 0.047,
+            "slacks": 0.0461,
+            "cap": 1.4839,
+            "hardhat": 1.4624
+          },
+          "Sit": {
+            "body": -0.0041,
+            "flannel": 0.0066,
+            "sweater": 0.0675,
+            "coat": 0.0004,
+            "blazer": 0.0053,
+            "cargo": 0.0133,
+            "slacks": 0.0138,
+            "cap": 0.846,
+            "hardhat": 0.8338
+          }
+        },
+        "motionStretch": {
+          "triangles": 20981,
+          "p50": 1.003,
+          "p99": 2.446,
+          "max": 7.21,
+          "over2x": 421,
+          "over3x": 111,
+          "fractionOver": 0.0053,
+          "worstClips": {
+            "Sit": 141,
+            "Greet": 46,
+            "Walk": 4,
+            "Talk": 20
+          },
+          "poses": 194
+        }
+      },
+      "wear": {
+        "configured": [
+          "coat",
+          "sweater",
+          "flannel",
+          "blazer",
+          "slacks",
+          "cargo",
+          "cap",
+          "hardhat"
+        ],
+        "shipped": [
+          "flannel",
+          "sweater",
+          "coat",
+          "blazer",
+          "cargo",
+          "slacks",
+          "cap",
+          "hardhat"
+        ]
+      }
+    },
+    "f2": {
+      "label": "Woman, about 50, slim, ponytail",
+      "heightM": 1.64,
+      "source": {
+        "file": "reference/tasks/survivor-market-20261108-005807/meshy/raw/human-f2-a1.glb",
+        "sha256Verified": "d0e1d8264473547e98b80b581fbf001361fbb5b83d23a41dfe043a67290251e7",
+        "asset": "human:f2",
+        "attempt": "a1",
+        "taskId": "01a1b8b5-0660-77f7-8b7a-2a36269cc294",
+        "provider": "Meshy meshy_image_to_3d (ai_model meshy-t2.5, model_type smart-topology, pose_mode a-pose, 2K PBR textures, target 20k triangles)",
+        "ledger": "reference/tasks/survivor-market-20261108-005807/meshy/LEDGER.jsonl",
+        "raw": "reference/tasks/survivor-market-20261108-005807/meshy/raw/human-f2-a1.glb",
+        "inputImage": "reference/tasks/survivor-market-20261108-005807/concepts/f2-a1.png",
+        "inputImageSha256": "9f7927bec99cec57248784b4811728432e30a03fa0ef2bdd281eede37f39fa6b",
+        "conceptLedger": "reference/tasks/survivor-market-20261108-005807/concepts/CONCEPT-LEDGER.jsonl",
+        "conceptProvider": "Codex native image generation (initial concept, approved in the task)"
+      },
+      "placement": {
+        "scale": 1.7250737705331727,
+        "pivot": [
+          0.00012200046330690384,
+          -0.47582998871803284,
+          -0.0006102491170167923
+        ],
+        "flipFacing": false,
+        "offset": [
+          0,
+          0,
+          0
+        ],
+        "note": "scaled to 1.64 m; source faced +Z: no rotation; feet midpoint (bbox centres of soles below 4 cm) moved to origin"
+      },
+      "facing": {
+        "facing": 1,
+        "margin": 0.0298,
+        "method": "sole bbox z-centre (lowest 3% of height) vs shin centroid (8-12%): toes extend toward the front",
+        "used": 1,
+        "forced": false
+      },
+      "mesh": {
+        "method": "Meshy source mesh kept as the runtime mesh (no simplify / unwrap / bake); skeleton detected on a densified copy",
+        "densify": {
+          "method": "per-edge midpoint split (consistent across shared edges, linear position/UV/normal) until every edge <= maxEdge; surface and texture mapping unchanged",
+          "maxEdge": 0.0042781,
+          "passes": 4,
+          "sourceTriangles": 19485,
+          "sourceVertices": 22434,
+          "triangles": 217585,
+          "vertices": 133264,
+          "longestEdge": 0.004278,
+          "maxEdgeFractionOfHeight": 0.0045
+        },
+        "sourceTriangles": 19485,
+        "sourceVertices": 22434,
+        "runtimeTriangles": 19485,
+        "droppedDegenerateTriangles": 0,
+        "droppedSliverTriangles": {
+          "count": 0,
+          "maxEdgeM": 0.2
+        },
+        "weldedVertices": 10405,
+        "textures": {
+          "baseColor": [
+            2048,
+            567569
+          ],
+          "normal": [
+            1024,
+            149758
+          ],
+          "metallicRoughness": [
+            512,
+            25820
+          ],
+          "source": {
+            "baseColor": [
+              2048,
+              2048
+            ],
+            "normal": [
+              2048,
+              2048
+            ],
+            "metallicRoughness": [
+              2048,
+              2048
+            ],
+            "normalScale": 1
+          }
+        },
+        "legBridgeTrim": {
+          "removed": 0,
+          "method": "triangles joining the left and right leg regions lower than 0.05 m under the crotch removed"
+        },
+        "shippedTriangles": 19485
+      },
+      "skeleton": {
+        "jointCount": 18,
+        "joints": [
+          {
+            "name": "Root",
+            "parent": null,
+            "bindWorldPosition": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "name": "Hips",
+            "parent": "Root",
+            "bindWorldPosition": [
+              0,
+              0.8036,
+              0.0032
+            ]
+          },
+          {
+            "name": "Spine",
+            "parent": "Hips",
+            "bindWorldPosition": [
+              0,
+              0.978,
+              0.0058
+            ]
+          },
+          {
+            "name": "Chest",
+            "parent": "Spine",
+            "bindWorldPosition": [
+              0,
+              1.1873,
+              0.0189
+            ]
+          },
+          {
+            "name": "Neck",
+            "parent": "Chest",
+            "bindWorldPosition": [
+              0,
+              1.385,
+              0.0047
+            ]
+          },
+          {
+            "name": "Head",
+            "parent": "Neck",
+            "bindWorldPosition": [
+              0,
+              1.487,
+              0.0147
+            ]
+          },
+          {
+            "name": "L_UpperArm",
+            "parent": "Chest",
+            "bindWorldPosition": [
+              0.1201,
+              1.3272,
+              -0.0096
+            ]
+          },
+          {
+            "name": "L_Forearm",
+            "parent": "L_UpperArm",
+            "bindWorldPosition": [
+              0.1693,
+              1.129,
+              -0.0247
+            ]
+          },
+          {
+            "name": "L_Hand",
+            "parent": "L_Forearm",
+            "bindWorldPosition": [
+              0.2399,
+              0.9601,
+              -0.014
+            ]
+          },
+          {
+            "name": "R_UpperArm",
+            "parent": "Chest",
+            "bindWorldPosition": [
+              -0.1201,
+              1.3272,
+              -0.0096
+            ]
+          },
+          {
+            "name": "R_Forearm",
+            "parent": "R_UpperArm",
+            "bindWorldPosition": [
+              -0.1693,
+              1.129,
+              -0.0247
+            ]
+          },
+          {
+            "name": "R_Hand",
+            "parent": "R_Forearm",
+            "bindWorldPosition": [
+              -0.2399,
+              0.9601,
+              -0.014
+            ]
+          },
+          {
+            "name": "L_Thigh",
+            "parent": "Hips",
+            "bindWorldPosition": [
+              0.0739,
+              0.8036,
+              0.0032
+            ]
+          },
+          {
+            "name": "L_Shin",
+            "parent": "L_Thigh",
+            "bindWorldPosition": [
+              0.1152,
+              0.4393,
+              -0.0363
+            ]
+          },
+          {
+            "name": "L_Foot",
+            "parent": "L_Shin",
+            "bindWorldPosition": [
+              0.1322,
+              0.075,
+              -0.0532
+            ]
+          },
+          {
+            "name": "R_Thigh",
+            "parent": "Hips",
+            "bindWorldPosition": [
+              -0.0739,
+              0.8036,
+              0.0032
+            ]
+          },
+          {
+            "name": "R_Shin",
+            "parent": "R_Thigh",
+            "bindWorldPosition": [
+              -0.1152,
+              0.4393,
+              -0.0363
+            ]
+          },
+          {
+            "name": "R_Foot",
+            "parent": "R_Shin",
+            "bindWorldPosition": [
+              -0.1322,
+              0.075,
+              -0.0532
+            ]
+          }
+        ],
+        "notes": [],
+        "fixes": [
+          {
+            "fix": "shoulder",
+            "side": "L",
+            "before": [
+              0.0809,
+              1.3272,
+              -0.0096
+            ],
+            "after": [
+              0.1201,
+              1.3272,
+              -0.0096
+            ],
+            "armpitWallX": 0.1061
+          },
+          {
+            "fix": "shoulder",
+            "side": "R",
+            "before": [
+              -0.0809,
+              1.3272,
+              -0.0096
+            ],
+            "after": [
+              -0.1201,
+              1.3272,
+              -0.0096
+            ],
+            "armpitWallX": 0.1061
+          }
+        ],
+        "options": null
+      },
+      "skinning": {
+        "method": "zombie/lib/autorig.mjs bodySkin (skin.mjs region classification + chain weights + masked Laplacian smoothing)",
+        "regionVertexCounts": {
+          "legR": 1621,
+          "torso": 4799,
+          "legL": 1613,
+          "armR": 1179,
+          "armL": 1193
+        },
+        "armVerticesAdoptedOutsideFlood": {
+          "L": 0,
+          "R": 0
+        },
+        "verticesWithMoreThan4Truncated": 0,
+        "smoothIters": 4,
+        "smoothLambda": 0.5,
+        "armRule": "wall"
+      },
+      "profile": {
+        "heightM": 1.64,
+        "landmarks": {
+          "ankle": 0.075,
+          "knee": 0.4393,
+          "crotch": 0.7,
+          "hip": 0.8036,
+          "spine": 0.978,
+          "chest": 1.1873,
+          "armpit": 1.135,
+          "neck": 1.385,
+          "head": 1.487,
+          "top": 1.64
+        },
+        "limb": {
+          "L_UpperArm": {
+            "length": 0.2048,
+            "radius": 0.0406,
+            "samples": 33
+          },
+          "L_Forearm": {
+            "length": 0.1834,
+            "radius": 0.0344,
+            "samples": 45
+          },
+          "R_UpperArm": {
+            "length": 0.2048,
+            "radius": 0.0406,
+            "samples": 32
+          },
+          "R_Forearm": {
+            "length": 0.1834,
+            "radius": 0.0344,
+            "samples": 45
+          },
+          "L_Thigh": {
+            "length": 0.3688,
+            "radius": 0.058,
+            "samples": 132
+          },
+          "L_Shin": {
+            "length": 0.3651,
+            "radius": 0.0447,
+            "samples": 161
+          },
+          "R_Thigh": {
+            "length": 0.3688,
+            "radius": 0.058,
+            "samples": 123
+          },
+          "R_Shin": {
+            "length": 0.3651,
+            "radius": 0.0447,
+            "samples": 156
+          }
+        },
+        "head": {
+          "halfWidth": 0.0924,
+          "depth": 0.2367
+        },
+        "torso": {
+          "chest": {
+            "w": 0.171,
+            "d": 0.1668
+          },
+          "waist": {
+            "w": 0.2316,
+            "d": 0.2064
+          },
+          "hips": {
+            "w": 0.3007,
+            "d": 0.1474
+          }
+        },
+        "hit": {
+          "head": 0.1054,
+          "torso": 0.1,
+          "arm": 0.0506,
+          "leg": 0.0719,
+          "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+        }
+      },
+      "noseLandmarkCheck": {
+        "plainY": 1.4842,
+        "robustY": 1.4875,
+        "shift": 0,
+        "tolM": 0.005,
+        "minShiftM": 0.03
+      },
+      "gait": {
+        "T": 1,
+        "beta": 0.62,
+        "center": 0,
+        "lift": 0.085,
+        "drop": 0.055,
+        "swing": 17,
+        "stride": 0.75,
+        "maxReach": 0.9897,
+        "groundSpeed": 1.2097
+      },
+      "sit": {
+        "thigh": -102,
+        "knee": 40.112,
+        "hipsY": -0.7372,
+        "hipsZ": -0.04,
+        "lowestSeatM": 0.012,
+        "lowestFootM": 0.002,
+        "method": "thighs -102 deg (from -102, raised while the feet could not reach the floor); pelvis height: lowest Hips / Thigh vertex 0.012 m above the floor; knee flexion: lowest Shin / Foot vertex on the floor (bisection, body mesh skinned)"
+      },
+      "clips": [
+        {
+          "name": "Idle",
+          "durationS": 4,
+          "loop": true,
+          "keyframes": 121,
+          "maxLegReach": 0.9872
+        },
+        {
+          "name": "Walk",
+          "durationS": 1,
+          "loop": true,
+          "keyframes": 31,
+          "maxLegReach": 0.9829
+        },
+        {
+          "name": "Talk",
+          "durationS": 5,
+          "loop": true,
+          "keyframes": 151,
+          "maxLegReach": 0.9968
+        },
+        {
+          "name": "Greet",
+          "durationS": 1.6,
+          "loop": false,
+          "keyframes": 49,
+          "maxLegReach": 0.9868
+        },
+        {
+          "name": "Work",
+          "durationS": 3.2,
+          "loop": true,
+          "keyframes": 97,
+          "maxLegReach": 0.9781
+        },
+        {
+          "name": "Sit",
+          "durationS": 4,
+          "loop": true,
+          "keyframes": 121,
+          "maxLegReach": 0
+        }
+      ],
+      "verification": {
+        "floorLowestSkinnedVertexM": {
+          "Idle": {
+            "body": 0,
+            "coat": 0.4008,
+            "blazer": 0.7046,
+            "jeans": 0.055,
+            "slacks": 0.0574,
+            "cap": 1.4961,
+            "beanie": 1.4971
+          },
+          "Walk": {
+            "body": 0,
+            "coat": 0.3161,
+            "blazer": 0.6231,
+            "jeans": 0.0544,
+            "slacks": 0.0546,
+            "cap": 1.4328,
+            "beanie": 1.4347
+          },
+          "Talk": {
+            "body": 0,
+            "coat": 0.3951,
+            "blazer": 0.698,
+            "jeans": 0.0547,
+            "slacks": 0.0578,
+            "cap": 1.4868,
+            "beanie": 1.4907
+          },
+          "Greet": {
+            "body": 0,
+            "coat": 0.41,
+            "blazer": 0.7061,
+            "jeans": 0.0551,
+            "slacks": 0.0577,
+            "cap": 1.5061,
+            "beanie": 1.5043
+          },
+          "Work": {
+            "body": 0,
+            "coat": 0.3936,
+            "blazer": 0.7043,
+            "jeans": 0.0548,
+            "slacks": 0.0571,
+            "cap": 1.3656,
+            "beanie": 1.4001
+          },
+          "Sit": {
+            "body": -0.004,
+            "coat": -0.0135,
+            "blazer": -0.0089,
+            "jeans": 0.0069,
+            "slacks": 0.0063,
+            "cap": 0.7536,
+            "beanie": 0.7584
+          }
+        },
+        "motionStretch": {
+          "triangles": 19485,
+          "p50": 1,
+          "p99": 1.885,
+          "max": 6.91,
+          "over2x": 138,
+          "over3x": 41,
+          "fractionOver": 0.0021,
+          "worstClips": {
+            "Sit": 134,
+            "Greet": 49,
+            "Talk": 9,
+            "Walk": 5
+          },
+          "poses": 194
+        }
+      },
+      "wear": {
+        "configured": [
+          "sweater",
+          "trench",
+          "coat",
+          "flannel",
+          "hoodie",
+          "blazer",
+          "slacks",
+          "jeans",
+          "beanie",
+          "cap"
+        ],
+        "shipped": [
+          "coat",
+          "blazer",
+          "jeans",
+          "slacks",
+          "cap",
+          "beanie"
+        ]
+      }
+    },
+    "m3": {
+      "label": "Young man, about 22, lean, auburn hair",
+      "heightM": 1.82,
+      "source": {
+        "file": "reference/tasks/survivor-market-20261108-005807/meshy/raw/human-m3-a1.glb",
+        "sha256Verified": "296078cc0fbfa2336274f7bde30cbd72408f28dd1754e8223ea1609fe0b99c34",
+        "asset": "human:m3",
+        "attempt": "a1",
+        "taskId": "01a1b8b5-1704-72f6-80b9-8887c45d933f",
+        "provider": "Meshy meshy_image_to_3d (ai_model meshy-t2.5, model_type smart-topology, pose_mode a-pose, 2K PBR textures, target 20k triangles)",
+        "ledger": "reference/tasks/survivor-market-20261108-005807/meshy/LEDGER.jsonl",
+        "raw": "reference/tasks/survivor-market-20261108-005807/meshy/raw/human-m3-a1.glb",
+        "inputImage": "reference/tasks/survivor-market-20261108-005807/concepts/m3-a1.png",
+        "inputImageSha256": "fcc3828d50b6834157ffe5e28289706efb8d377b98b0a43244f85adad78cca62",
+        "conceptLedger": "reference/tasks/survivor-market-20261108-005807/concepts/CONCEPT-LEDGER.jsonl",
+        "conceptProvider": "Codex native image generation (initial concept, approved in the task)"
+      },
+      "placement": {
+        "scale": 1.9173657735525944,
+        "pivot": [
+          0,
+          -0.4748539924621582,
+          0.00024400092661380768
+        ],
+        "flipFacing": false,
+        "offset": [
+          0,
+          0,
+          0
+        ],
+        "note": "scaled to 1.82 m; source faced +Z: no rotation; feet midpoint (bbox centres of soles below 4 cm) moved to origin"
+      },
+      "facing": {
+        "facing": 1,
+        "margin": 0.028,
+        "method": "sole bbox z-centre (lowest 3% of height) vs shin centroid (8-12%): toes extend toward the front",
+        "used": 1,
+        "forced": false
+      },
+      "mesh": {
+        "method": "Meshy source mesh kept as the runtime mesh (no simplify / unwrap / bake); skeleton detected on a densified copy",
+        "densify": {
+          "method": "per-edge midpoint split (consistent across shared edges, linear position/UV/normal) until every edge <= maxEdge; surface and texture mapping unchanged",
+          "maxEdge": 0.0042715,
+          "passes": 9,
+          "sourceTriangles": 18534,
+          "sourceVertices": 21321,
+          "triangles": 363347,
+          "vertices": 207161,
+          "longestEdge": 0.0042714,
+          "maxEdgeFractionOfHeight": 0.0045
+        },
+        "sourceTriangles": 18534,
+        "sourceVertices": 21321,
+        "runtimeTriangles": 18529,
+        "droppedDegenerateTriangles": 0,
+        "droppedSliverTriangles": {
+          "count": 5,
+          "maxEdgeM": 0.2
+        },
+        "weldedVertices": 10513,
+        "textures": {
+          "baseColor": [
+            2048,
+            580775
+          ],
+          "normal": [
+            1024,
+            183389
+          ],
+          "metallicRoughness": [
+            512,
+            45649
+          ],
+          "source": {
+            "baseColor": [
+              2048,
+              2048
+            ],
+            "normal": [
+              2048,
+              2048
+            ],
+            "metallicRoughness": [
+              2048,
+              2048
+            ],
+            "normalScale": 1
+          }
+        },
+        "legBridgeTrim": {
+          "removed": 0,
+          "method": "triangles joining the left and right leg regions lower than 0.05 m under the crotch removed"
+        },
+        "shippedTriangles": 18529
+      },
+      "skeleton": {
+        "jointCount": 18,
+        "joints": [
+          {
+            "name": "Root",
+            "parent": null,
+            "bindWorldPosition": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "name": "Hips",
+            "parent": "Root",
+            "bindWorldPosition": [
+              0,
+              0.8918,
+              -0.0097
+            ]
+          },
+          {
+            "name": "Spine",
+            "parent": "Hips",
+            "bindWorldPosition": [
+              0,
+              1.0818,
+              -0.0053
+            ]
+          },
+          {
+            "name": "Chest",
+            "parent": "Spine",
+            "bindWorldPosition": [
+              0,
+              1.3097,
+              -0.0101
+            ]
+          },
+          {
+            "name": "Neck",
+            "parent": "Chest",
+            "bindWorldPosition": [
+              0,
+              1.525,
+              -0.003
+            ]
+          },
+          {
+            "name": "Head",
+            "parent": "Neck",
+            "bindWorldPosition": [
+              0,
+              1.643,
+              0.007
+            ]
+          },
+          {
+            "name": "L_UpperArm",
+            "parent": "Chest",
+            "bindWorldPosition": [
+              0.1545,
+              1.4469,
+              -0.0278
+            ]
+          },
+          {
+            "name": "L_Forearm",
+            "parent": "L_UpperArm",
+            "bindWorldPosition": [
+              0.2884,
+              1.2566,
+              -0.0352
+            ]
+          },
+          {
+            "name": "L_Hand",
+            "parent": "L_Forearm",
+            "bindWorldPosition": [
+              0.4105,
+              1.1058,
+              -0.006
+            ]
+          },
+          {
+            "name": "R_UpperArm",
+            "parent": "Chest",
+            "bindWorldPosition": [
+              -0.1545,
+              1.4469,
+              -0.0278
+            ]
+          },
+          {
+            "name": "R_Forearm",
+            "parent": "R_UpperArm",
+            "bindWorldPosition": [
+              -0.2884,
+              1.2566,
+              -0.0352
+            ]
+          },
+          {
+            "name": "R_Hand",
+            "parent": "R_Forearm",
+            "bindWorldPosition": [
+              -0.4105,
+              1.1058,
+              -0.006
+            ]
+          },
+          {
+            "name": "L_Thigh",
+            "parent": "Hips",
+            "bindWorldPosition": [
+              0.0723,
+              0.8918,
+              -0.0097
+            ]
+          },
+          {
+            "name": "L_Shin",
+            "parent": "L_Thigh",
+            "bindWorldPosition": [
+              0.1177,
+              0.4809,
+              -0.0476
+            ]
+          },
+          {
+            "name": "L_Foot",
+            "parent": "L_Shin",
+            "bindWorldPosition": [
+              0.1338,
+              0.07,
+              -0.0687
+            ]
+          },
+          {
+            "name": "R_Thigh",
+            "parent": "Hips",
+            "bindWorldPosition": [
+              -0.0723,
+              0.8918,
+              -0.0097
+            ]
+          },
+          {
+            "name": "R_Shin",
+            "parent": "R_Thigh",
+            "bindWorldPosition": [
+              -0.1177,
+              0.4809,
+              -0.0476
+            ]
+          },
+          {
+            "name": "R_Foot",
+            "parent": "R_Shin",
+            "bindWorldPosition": [
+              -0.1338,
+              0.07,
+              -0.0687
+            ]
+          }
+        ],
+        "notes": [
+          "forearm/H=0.108 outside [0.11, 0.19]"
+        ],
+        "fixes": [],
+        "options": {
+          "crotch": "midline"
+        }
+      },
+      "skinning": {
+        "method": "zombie/lib/autorig.mjs bodySkin (skin.mjs region classification + chain weights + masked Laplacian smoothing)",
+        "regionVertexCounts": {
+          "legR": 1665,
+          "torso": 5130,
+          "legL": 1685,
+          "armR": 1017,
+          "armL": 1016
+        },
+        "armVerticesAdoptedOutsideFlood": {
+          "L": 1,
+          "R": 0
+        },
+        "verticesWithMoreThan4Truncated": 0,
+        "smoothIters": 4,
+        "smoothLambda": 0.5,
+        "armRule": "wall"
+      },
+      "profile": {
+        "heightM": 1.82,
+        "landmarks": {
+          "ankle": 0.07,
+          "knee": 0.4809,
+          "crotch": 0.82,
+          "hip": 0.8918,
+          "spine": 1.0818,
+          "chest": 1.3097,
+          "armpit": 1.305,
+          "neck": 1.525,
+          "head": 1.643,
+          "top": 1.82
+        },
+        "limb": {
+          "L_UpperArm": {
+            "length": 0.2328,
+            "radius": 0.0465,
+            "samples": 135
+          },
+          "L_Forearm": {
+            "length": 0.1962,
+            "radius": 0.0352,
+            "samples": 40
+          },
+          "R_UpperArm": {
+            "length": 0.2328,
+            "radius": 0.0465,
+            "samples": 136
+          },
+          "R_Forearm": {
+            "length": 0.1962,
+            "radius": 0.0352,
+            "samples": 42
+          },
+          "L_Thigh": {
+            "length": 0.4151,
+            "radius": 0.0636,
+            "samples": 113
+          },
+          "L_Shin": {
+            "length": 0.4118,
+            "radius": 0.0464,
+            "samples": 107
+          },
+          "R_Thigh": {
+            "length": 0.4151,
+            "radius": 0.0636,
+            "samples": 110
+          },
+          "R_Shin": {
+            "length": 0.4118,
+            "radius": 0.0464,
+            "samples": 106
+          }
+        },
+        "head": {
+          "halfWidth": 0.0913,
+          "depth": 0.2294
+        },
+        "torso": {
+          "chest": {
+            "w": 0.2809,
+            "d": 0.132
+          },
+          "waist": {
+            "w": 0.2818,
+            "d": 0.1592
+          },
+          "hips": {
+            "w": 0.3239,
+            "d": 0.1648
+          }
+        },
+        "hit": {
+          "head": 0.103,
+          "torso": 0.1103,
+          "arm": 0.0551,
+          "leg": 0.077,
+          "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+        }
+      },
+      "noseLandmarkCheck": {
+        "plainY": 1.6552,
+        "robustY": 1.6655,
+        "shift": 0,
+        "tolM": 0.005,
+        "minShiftM": 0.03
+      },
+      "gait": {
+        "T": 1,
+        "beta": 0.62,
+        "center": 0,
+        "lift": 0.085,
+        "drop": 0.055,
+        "swing": 17,
+        "stride": 0.81,
+        "maxReach": 0.99,
+        "groundSpeed": 1.3065
+      },
+      "sit": {
+        "thigh": -102,
+        "knee": 42.102,
+        "hipsY": -0.8203,
+        "hipsZ": -0.04,
+        "lowestSeatM": 0.012,
+        "lowestFootM": 0.002,
+        "method": "thighs -102 deg (from -102, raised while the feet could not reach the floor); pelvis height: lowest Hips / Thigh vertex 0.012 m above the floor; knee flexion: lowest Shin / Foot vertex on the floor (bisection, body mesh skinned)"
+      },
+      "clips": [
+        {
+          "name": "Idle",
+          "durationS": 4,
+          "loop": true,
+          "keyframes": 121,
+          "maxLegReach": 0.9886
+        },
+        {
+          "name": "Walk",
+          "durationS": 1,
+          "loop": true,
+          "keyframes": 31,
+          "maxLegReach": 0.99
+        },
+        {
+          "name": "Talk",
+          "durationS": 5,
+          "loop": true,
+          "keyframes": 151,
+          "maxLegReach": 0.9959
+        },
+        {
+          "name": "Greet",
+          "durationS": 1.6,
+          "loop": false,
+          "keyframes": 49,
+          "maxLegReach": 0.9883
+        },
+        {
+          "name": "Work",
+          "durationS": 3.2,
+          "loop": true,
+          "keyframes": 97,
+          "maxLegReach": 0.9801
+        },
+        {
+          "name": "Sit",
+          "durationS": 4,
+          "loop": true,
+          "keyframes": 121,
+          "maxLegReach": 0
+        }
+      ],
+      "verification": {
+        "floorLowestSkinnedVertexM": {
+          "Idle": {
+            "body": 0,
+            "flannel": 0.8213,
+            "hoodie": 0.848,
+            "sweater": 0.9001,
+            "hivis": 0.9498,
+            "cargo": 0.0554,
+            "jeans": 0.0048,
+            "beanie": 1.6654,
+            "hardhat": 1.6566
+          },
+          "Walk": {
+            "body": 0,
+            "flannel": 0.751,
+            "hoodie": 0.7775,
+            "sweater": 0.8413,
+            "hivis": 0.8998,
+            "cargo": 0.0476,
+            "jeans": -0.0014,
+            "beanie": 1.6026,
+            "hardhat": 1.5893
+          },
+          "Talk": {
+            "body": 0,
+            "flannel": 0.82,
+            "hoodie": 0.8437,
+            "sweater": 0.9011,
+            "hivis": 0.9507,
+            "cargo": 0.056,
+            "jeans": 0.005,
+            "beanie": 1.6594,
+            "hardhat": 1.6454
+          },
+          "Greet": {
+            "body": 0,
+            "flannel": 0.8245,
+            "hoodie": 0.8562,
+            "sweater": 0.9059,
+            "hivis": 0.9552,
+            "cargo": 0.0556,
+            "jeans": 0.0064,
+            "beanie": 1.673,
+            "hardhat": 1.6683
+          },
+          "Work": {
+            "body": 0,
+            "flannel": 0.8088,
+            "hoodie": 0.8419,
+            "sweater": 0.8809,
+            "hivis": 0.9375,
+            "cargo": 0.0545,
+            "jeans": 0.0054,
+            "beanie": 1.5632,
+            "hardhat": 1.5064
+          },
+          "Sit": {
+            "body": -0.0046,
+            "flannel": -0.0011,
+            "hoodie": -0.0006,
+            "sweater": 0.0625,
+            "hivis": 0.1026,
+            "cargo": 0.003,
+            "jeans": 0.0051,
+            "beanie": 0.8414,
+            "hardhat": 0.8268
+          }
+        },
+        "motionStretch": {
+          "triangles": 18529,
+          "p50": 1.019,
+          "p99": 2.446,
+          "max": 4.85,
+          "over2x": 556,
+          "over3x": 44,
+          "fractionOver": 0.0024,
+          "worstClips": {
+            "Sit": 181,
+            "Greet": 6
+          },
+          "poses": 194
+        }
+      },
+      "wear": {
+        "configured": [
+          "hoodie",
+          "hivis",
+          "flannel",
+          "sweater",
+          "jeans",
+          "cargo",
+          "beanie",
+          "hardhat"
+        ],
+        "shipped": [
+          "flannel",
+          "hoodie",
+          "sweater",
+          "hivis",
+          "cargo",
+          "jeans",
+          "beanie",
+          "hardhat"
+        ]
+      }
+    }
+  },
+  "canonicalGarmentBody": {
+    "id": "lastshift",
+    "note": "the zombie wardrobe's canonical body (its garments are fitted to it first, then retargeted to each human body)"
+  },
+  "wearables": {
+    "flannel": {
+      "label": "Plaid flannel shirt",
+      "slot": "upper",
+      "kind": "garment",
+      "source": {
+        "asset": "garment:flannel",
+        "attempt": "a1",
+        "taskId": "01a189d8-7d94-74f9-bd7b-3c6e2dad0cf6",
+        "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:flannel/a1/native.glb",
+        "sha256Verified": "ccf22d234ff534c7448c1edc6730706d4fa2166df63bae0bd230db53c1cc6638"
+      },
+      "stage": "identical to the zombie wardrobe stage of this wearable (zombie/wardrobe.config.mjs parameters, same canonical fit, same colour-grade policy)",
+      "colourGrade": {
+        "mode": "reference-chroma",
+        "applied": true,
+        "gainLinear": [
+          0.937,
+          1.0579,
+          0.9511
+        ],
+        "luminance": 1,
+        "from": "lossless stage preview (PNG)",
+        "albedoMeanLinearBefore": [
+          0.1203,
+          0.0425,
+          0.0429
+        ],
+        "albedoMeanLinearAfter": [
+          0.1126,
+          0.0452,
+          0.0408
+        ],
+        "coveredTexels": 512929,
+        "albedoRatiosBefore": {
+          "GR": 0.3535,
+          "BR": 0.3564
+        },
+        "albedoRatiosAfter": {
+          "GR": 0.4015,
+          "BR": 0.3629
+        },
+        "referenceMeanLinear": [
+          0.1196,
+          0.0477,
+          0.0433
+        ],
+        "referenceRatios": {
+          "GR": 0.3991,
+          "BR": 0.3618
+        },
+        "referencePixels": 836015,
+        "note": "T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]"
+      },
+      "mesh": {
+        "vertices": 4258,
+        "triangles": 6500
+      },
+      "perBody": {
+        "m1": {
+          "node": "Wear_flannel__m1",
+          "hiddenBodyTriangles": 2660,
+          "bulkM": {
+            "torso": 0.0182,
+            "arm": 0.0209
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0.001,
+              "p95": 0.0092,
+              "max": 0.0451,
+              "skinFieldBindMax": 0.0257,
+              "skinFieldPoseExtraMax": 0.02
+            }
+          },
+          "motionStretch": {
+            "triangles": 6500,
+            "p50": 1.059,
+            "p99": 3.393,
+            "max": 9.56,
+            "over2x": 221,
+            "over3x": 79,
+            "fractionOver": 0.0122,
+            "worstClips": {
+              "Greet": 36,
+              "Talk": 29,
+              "Walk": 1
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "f1": {
+          "node": "Wear_flannel__f1",
+          "hiddenBodyTriangles": 2597,
+          "bulkM": {
+            "torso": 0.0184,
+            "arm": 0.02
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0.0008,
+              "p95": 0.0067,
+              "max": 0.0631,
+              "skinFieldBindMax": 0.0697,
+              "skinFieldPoseExtraMax": 0.0169
+            }
+          },
+          "motionStretch": {
+            "triangles": 6500,
+            "p50": 1.059,
+            "p99": 2.348,
+            "max": 4.55,
+            "over2x": 106,
+            "over3x": 26,
+            "fractionOver": 0.004,
+            "worstClips": {
+              "Greet": 38,
+              "Walk": 5,
+              "Talk": 16,
+              "Sit": 7
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "m2": {
+          "node": "Wear_flannel__m2",
+          "hiddenBodyTriangles": 4000,
+          "bulkM": {
+            "torso": 0.0186,
+            "arm": 0.0201
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0.0006,
+              "p95": 0.0085,
+              "max": 0.0634,
+              "skinFieldBindMax": 0.0471,
+              "skinFieldPoseExtraMax": 0.02
+            }
+          },
+          "motionStretch": {
+            "triangles": 6500,
+            "p50": 1.055,
+            "p99": 2.528,
+            "max": 6.5,
+            "over2x": 171,
+            "over3x": 29,
+            "fractionOver": 0.0045,
+            "worstClips": {
+              "Greet": 37,
+              "Walk": 8,
+              "Talk": 14,
+              "Sit": 7
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "m3": {
+          "node": "Wear_flannel__m3",
+          "hiddenBodyTriangles": 2404,
+          "bulkM": {
+            "torso": 0.0194,
+            "arm": 0.0214
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0.0007,
+              "p95": 0.0075,
+              "max": 0.0419,
+              "skinFieldBindMax": 0.0432,
+              "skinFieldPoseExtraMax": 0.0172
+            }
+          },
+          "motionStretch": {
+            "triangles": 6500,
+            "p50": 1.05,
+            "p99": 2.119,
+            "max": 8.22,
+            "over2x": 82,
+            "over3x": 23,
+            "fractionOver": 0.0035,
+            "worstClips": {
+              "Sit": 8,
+              "Greet": 40,
+              "Talk": 14,
+              "Walk": 3,
+              "Work": 2
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        }
+      }
+    },
+    "hoodie": {
+      "label": "Zip hoodie",
+      "slot": "upper",
+      "kind": "garment",
+      "source": {
+        "asset": "garment:hoodie",
+        "attempt": "a1",
+        "taskId": "01a18990-d5e5-74d2-8462-1019a4e7109f",
+        "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:hoodie/a1/native.glb",
+        "sha256Verified": "fd09ada122a10c8411fbbe9700082845cbfa51a66d520252b81c7c315d0a04b3"
+      },
+      "stage": "identical to the zombie wardrobe stage of this wearable (zombie/wardrobe.config.mjs parameters, same canonical fit, same colour-grade policy)",
+      "colourGrade": {
+        "mode": "reference-chroma",
+        "applied": true,
+        "gainLinear": [
+          0.927,
+          1.0914,
+          0.9576
+        ],
+        "luminance": 1,
+        "from": "lossless stage preview (PNG)",
+        "albedoMeanLinearBefore": [
+          0.1216,
+          0.0306,
+          0.0357
+        ],
+        "albedoMeanLinearAfter": [
+          0.1125,
+          0.0332,
+          0.0344
+        ],
+        "coveredTexels": 569275,
+        "albedoRatiosBefore": {
+          "GR": 0.2513,
+          "BR": 0.2938
+        },
+        "albedoRatiosAfter": {
+          "GR": 0.2951,
+          "BR": 0.3058
+        },
+        "referenceMeanLinear": [
+          0.1311,
+          0.0388,
+          0.0398
+        ],
+        "referenceRatios": {
+          "GR": 0.2959,
+          "BR": 0.3035
+        },
+        "referencePixels": 813721,
+        "note": "albedo chromaticity -> the original reference image mean (alpha-masked garment pixels); mean luminance unchanged (the reference is a lit photo)"
+      },
+      "mesh": {
+        "vertices": 5000,
+        "triangles": 7491
+      },
+      "perBody": {
+        "m1": {
+          "node": "Wear_hoodie__m1",
+          "hiddenBodyTriangles": 2440,
+          "bulkM": {
+            "torso": 0.0248,
+            "arm": 0.0242
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.0065,
+              "max": 0.0525,
+              "skinFieldBindMax": 0.0177,
+              "skinFieldPoseExtraMax": 0.02
+            }
+          },
+          "motionStretch": {
+            "triangles": 7491,
+            "p50": 1.056,
+            "p99": 3.415,
+            "max": 16.51,
+            "over2x": 286,
+            "over3x": 100,
+            "fractionOver": 0.0133,
+            "worstClips": {
+              "Greet": 54,
+              "Talk": 22
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "f1": {
+          "node": "Wear_hoodie__f1",
+          "hiddenBodyTriangles": 2105,
+          "bulkM": {
+            "torso": 0.0248,
+            "arm": 0.0232
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.0033,
+              "max": 0.0303,
+              "skinFieldBindMax": 0.0191,
+              "skinFieldPoseExtraMax": 0.0057
+            }
+          },
+          "motionStretch": {
+            "triangles": 7491,
+            "p50": 1.055,
+            "p99": 2.43,
+            "max": 8.47,
+            "over2x": 133,
+            "over3x": 44,
+            "fractionOver": 0.0059,
+            "worstClips": {
+              "Greet": 48,
+              "Talk": 23,
+              "Walk": 3,
+              "Sit": 3
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "m3": {
+          "node": "Wear_hoodie__m3",
+          "hiddenBodyTriangles": 2249,
+          "bulkM": {
+            "torso": 0.025,
+            "arm": 0.0251
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.0031,
+              "max": 0.0217,
+              "skinFieldBindMax": 0.0037,
+              "skinFieldPoseExtraMax": 0.02
+            }
+          },
+          "motionStretch": {
+            "triangles": 7491,
+            "p50": 1.052,
+            "p99": 2.267,
+            "max": 15.83,
+            "over2x": 125,
+            "over3x": 50,
+            "fractionOver": 0.0067,
+            "worstClips": {
+              "Walk": 10,
+              "Greet": 47,
+              "Talk": 15,
+              "Sit": 4
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        }
+      }
+    },
+    "sweater": {
+      "label": "Cable-knit sweater",
+      "slot": "upper",
+      "kind": "garment",
+      "source": {
+        "asset": "garment:sweater",
+        "attempt": "a1",
+        "taskId": "01a189d8-858d-72e7-97e8-fa35a599c5e8",
+        "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:sweater/a1/native.glb",
+        "sha256Verified": "1a11c7865ed0eea91e5f07efae1e5d61d9a39660d15a84713e69a4c8a59934e0"
+      },
+      "stage": "identical to the zombie wardrobe stage of this wearable (zombie/wardrobe.config.mjs parameters, same canonical fit, same colour-grade policy)",
+      "colourGrade": {
+        "mode": "reference-chroma",
+        "applied": false,
+        "skipped": "chroma deviation 0.032 <= 0.08",
+        "albedoMeanLinear": [
+          0.3113,
+          0.1766,
+          0.0463
+        ],
+        "albedoRatios": {
+          "GR": 0.5673,
+          "BR": 0.1488
+        },
+        "referenceMeanLinear": [
+          0.3504,
+          0.1927,
+          0.052
+        ],
+        "referenceRatios": {
+          "GR": 0.5498,
+          "BR": 0.1484
+        },
+        "note": "T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]"
+      },
+      "mesh": {
+        "vertices": 4253,
+        "triangles": 6488
+      },
+      "perBody": {
+        "f1": {
+          "node": "Wear_sweater__f1",
+          "hiddenBodyTriangles": 2119,
+          "bulkM": {
+            "torso": 0.02,
+            "arm": 0.0191
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0.0002,
+              "p95": 0.0035,
+              "max": 0.0884,
+              "skinFieldBindMax": 0.09,
+              "skinFieldPoseExtraMax": 0.0039
+            }
+          },
+          "motionStretch": {
+            "triangles": 6488,
+            "p50": 1.068,
+            "p99": 2.209,
+            "max": 4.59,
+            "over2x": 95,
+            "over3x": 21,
+            "fractionOver": 0.0032,
+            "worstClips": {
+              "Greet": 47,
+              "Talk": 15,
+              "Walk": 4
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "m2": {
+          "node": "Wear_sweater__m2",
+          "hiddenBodyTriangles": 3947,
+          "bulkM": {
+            "torso": 0.0186,
+            "arm": 0.0206
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0.0002,
+              "p95": 0.0114,
+              "max": 0.0821,
+              "skinFieldBindMax": 0.0579,
+              "skinFieldPoseExtraMax": 0.02
+            }
+          },
+          "motionStretch": {
+            "triangles": 6488,
+            "p50": 1.064,
+            "p99": 2.565,
+            "max": 27.59,
+            "over2x": 147,
+            "over3x": 35,
+            "fractionOver": 0.0054,
+            "worstClips": {
+              "Greet": 43,
+              "Talk": 12,
+              "Walk": 8,
+              "Work": 4
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "m3": {
+          "node": "Wear_sweater__m3",
+          "hiddenBodyTriangles": 2213,
+          "bulkM": {
+            "torso": 0.0175,
+            "arm": 0.021
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0.0001,
+              "p95": 0.0041,
+              "max": 0.0204,
+              "skinFieldBindMax": 0.009,
+              "skinFieldPoseExtraMax": 0.0199
+            }
+          },
+          "motionStretch": {
+            "triangles": 6488,
+            "p50": 1.059,
+            "p99": 2.035,
+            "max": 9.57,
+            "over2x": 69,
+            "over3x": 22,
+            "fractionOver": 0.0034,
+            "worstClips": {
+              "Greet": 41,
+              "Talk": 21,
+              "Walk": 5
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        }
+      }
+    },
+    "hivis": {
+      "label": "Track-worker hi-vis vest",
+      "slot": "upper",
+      "kind": "garment",
+      "source": {
+        "asset": "garment:hivis",
+        "attempt": "a1",
+        "taskId": "01a189d6-f01d-7016-b2ce-c8de2fa32d90",
+        "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:hivis/a1/native.glb",
+        "sha256Verified": "2b706bf354ef481332efeef9c7b6f404227e2a8b28fa559a4e78eb861b909f99"
+      },
+      "stage": "identical to the zombie wardrobe stage of this wearable (zombie/wardrobe.config.mjs parameters, same canonical fit, same colour-grade policy)",
+      "colourGrade": {
+        "mode": "reference-chroma",
+        "applied": true,
+        "gainLinear": [
+          0.8966,
+          1.1254,
+          1.2389
+        ],
+        "luminance": 1,
+        "from": "lossless stage preview (PNG)",
+        "albedoMeanLinearBefore": [
+          0.4644,
+          0.1043,
+          0.0497
+        ],
+        "albedoMeanLinearAfter": [
+          0.4164,
+          0.1174,
+          0.0616
+        ],
+        "coveredTexels": 620930,
+        "albedoRatiosBefore": {
+          "GR": 0.2246,
+          "BR": 0.107
+        },
+        "albedoRatiosAfter": {
+          "GR": 0.2818,
+          "BR": 0.1478
+        },
+        "referenceMeanLinear": [
+          0.4211,
+          0.1187,
+          0.0623
+        ],
+        "referenceRatios": {
+          "GR": 0.2819,
+          "BR": 0.1479
+        },
+        "referencePixels": 824252,
+        "note": "T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]"
+      },
+      "mesh": {
+        "vertices": 3900,
+        "triangles": 4933
+      },
+      "perBody": {
+        "m1": {
+          "node": "Wear_hivis__m1",
+          "hiddenBodyTriangles": 796,
+          "bulkM": {
+            "torso": 0.0243,
+            "arm": 0.017
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0,
+              "max": 0.0158,
+              "skinFieldBindMax": 0.0035,
+              "skinFieldPoseExtraMax": 0
+            }
+          },
+          "motionStretch": {
+            "triangles": 4933,
+            "p50": 1.028,
+            "p99": 2.475,
+            "max": 10.21,
+            "over2x": 95,
+            "over3x": 26,
+            "fractionOver": 0.0053,
+            "worstClips": {
+              "Greet": 38,
+              "Talk": 10,
+              "Walk": 3
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "f1": {
+          "node": "Wear_hivis__f1",
+          "hiddenBodyTriangles": 941,
+          "bulkM": {
+            "torso": 0.0249,
+            "arm": 0.0264
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.0015,
+              "max": 0.0802,
+              "skinFieldBindMax": 0.0242,
+              "skinFieldPoseExtraMax": 0
+            }
+          },
+          "motionStretch": {
+            "triangles": 4933,
+            "p50": 1.036,
+            "p99": 1.773,
+            "max": 2.57,
+            "over2x": 19,
+            "over3x": 0,
+            "fractionOver": 0,
+            "worstClips": {
+              "Greet": 33,
+              "Talk": 19
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "m3": {
+          "node": "Wear_hivis__m3",
+          "hiddenBodyTriangles": 886,
+          "bulkM": {
+            "torso": 0.0241,
+            "arm": 0
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0,
+              "max": 0.0241,
+              "skinFieldBindMax": 0,
+              "skinFieldPoseExtraMax": 0
+            }
+          },
+          "motionStretch": {
+            "triangles": 4933,
+            "p50": 1.026,
+            "p99": 1.58,
+            "max": 2.08,
+            "over2x": 2,
+            "over3x": 0,
+            "fractionOver": 0,
+            "worstClips": {
+              "Greet": 38,
+              "Talk": 9,
+              "Walk": 4
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        }
+      }
+    },
+    "coat": {
+      "label": "Hi-vis parka (long coat)",
+      "slot": "upper",
+      "kind": "garment",
+      "source": {
+        "asset": "garment:coat",
+        "attempt": "a1",
+        "taskId": "01a189d6-e0a6-70fc-91e6-23c46c59cc77",
+        "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:coat/a1/native.glb",
+        "sha256Verified": "8dab13875cc683af3a3eaba4c2ace27436f09c1870458d11e4ee648b5e94a4b0"
+      },
+      "stage": "identical to the zombie wardrobe stage of this wearable (zombie/wardrobe.config.mjs parameters, same canonical fit, same colour-grade policy)",
+      "colourGrade": {
+        "mode": "reference-chroma",
+        "applied": false,
+        "skipped": "chroma deviation 0.057 <= 0.08",
+        "albedoMeanLinear": [
+          0.1573,
+          0.1341,
+          0.1327
+        ],
+        "albedoRatios": {
+          "GR": 0.8521,
+          "BR": 0.8435
+        },
+        "referenceMeanLinear": [
+          0.1369,
+          0.116,
+          0.1224
+        ],
+        "referenceRatios": {
+          "GR": 0.8474,
+          "BR": 0.8946
+        },
+        "note": "T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]"
+      },
+      "mesh": {
+        "vertices": 6021,
+        "triangles": 8988
+      },
+      "perBody": {
+        "m1": {
+          "node": "Wear_coat__m1",
+          "hiddenBodyTriangles": 2702,
+          "bulkM": {
+            "torso": 0.03,
+            "arm": 0.0247
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.0074,
+              "max": 0.049,
+              "skinFieldBindMax": 0.0285,
+              "skinFieldPoseExtraMax": 0.02
+            }
+          },
+          "motionStretch": {
+            "triangles": 8988,
+            "p50": 1.053,
+            "p99": 2.897,
+            "max": 14.55,
+            "over2x": 315,
+            "over3x": 82,
+            "fractionOver": 0.0091,
+            "worstClips": {
+              "Talk": 24,
+              "Greet": 55,
+              "Walk": 8,
+              "Sit": 4
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "m2": {
+          "node": "Wear_coat__m2",
+          "hiddenBodyTriangles": 3780,
+          "bulkM": {
+            "torso": 0.0343,
+            "arm": 0.0251
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.01,
+              "max": 0.0786,
+              "skinFieldBindMax": 0.0526,
+              "skinFieldPoseExtraMax": 0.02
+            }
+          },
+          "motionStretch": {
+            "triangles": 8988,
+            "p50": 1.051,
+            "p99": 2.658,
+            "max": 8.36,
+            "over2x": 293,
+            "over3x": 52,
+            "fractionOver": 0.0058,
+            "worstClips": {
+              "Walk": 21,
+              "Greet": 48,
+              "Talk": 17,
+              "Sit": 4,
+              "Work": 2
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "f2": {
+          "node": "Wear_coat__f2",
+          "hiddenBodyTriangles": 2192,
+          "bulkM": {
+            "torso": 0.0288,
+            "arm": 0.0241
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.0106,
+              "max": 0.104,
+              "skinFieldBindMax": 0.09,
+              "skinFieldPoseExtraMax": 0.006
+            }
+          },
+          "motionStretch": {
+            "triangles": 8988,
+            "p50": 1.054,
+            "p99": 2.908,
+            "max": 11.31,
+            "over2x": 283,
+            "over3x": 85,
+            "fractionOver": 0.0095,
+            "worstClips": {
+              "Talk": 24,
+              "Greet": 60,
+              "Walk": 8
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        }
+      }
+    },
+    "blazer": {
+      "label": "Office blazer",
+      "slot": "upper",
+      "kind": "garment",
+      "source": {
+        "asset": "garment:blazer",
+        "attempt": "a1",
+        "taskId": "01a189d8-75cf-7048-b041-0c01fb4ed71c",
+        "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:blazer/a1/native.glb",
+        "sha256Verified": "05f04056f2abc0dbae09a10a841cf8a9cfd12f7386a519022079524d650f5020"
+      },
+      "stage": "identical to the zombie wardrobe stage of this wearable (zombie/wardrobe.config.mjs parameters, same canonical fit, same colour-grade policy)",
+      "colourGrade": {
+        "mode": "reference-chroma",
+        "applied": true,
+        "gainLinear": [
+          1.0929,
+          0.9814,
+          0.9122
+        ],
+        "luminance": 1,
+        "from": "lossless stage preview (PNG)",
+        "albedoMeanLinearBefore": [
+          0.0634,
+          0.0637,
+          0.0639
+        ],
+        "albedoMeanLinearAfter": [
+          0.0691,
+          0.0619,
+          0.0585
+        ],
+        "coveredTexels": 584646,
+        "albedoRatiosBefore": {
+          "GR": 1.0041,
+          "BR": 1.0072
+        },
+        "albedoRatiosAfter": {
+          "GR": 0.8958,
+          "BR": 0.8462
+        },
+        "referenceMeanLinear": [
+          0.0624,
+          0.0562,
+          0.0524
+        ],
+        "referenceRatios": {
+          "GR": 0.9016,
+          "BR": 0.8407
+        },
+        "referencePixels": 807772,
+        "note": "T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]"
+      },
+      "mesh": {
+        "vertices": 4832,
+        "triangles": 7495
+      },
+      "perBody": {
+        "m2": {
+          "node": "Wear_blazer__m2",
+          "hiddenBodyTriangles": 3552,
+          "bulkM": {
+            "torso": 0.0267,
+            "arm": 0.0287
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.0067,
+              "max": 0.0659,
+              "skinFieldBindMax": 0.0447,
+              "skinFieldPoseExtraMax": 0.02
+            }
+          },
+          "motionStretch": {
+            "triangles": 7495,
+            "p50": 1.078,
+            "p99": 2.963,
+            "max": 10.3,
+            "over2x": 241,
+            "over3x": 67,
+            "fractionOver": 0.0089,
+            "worstClips": {
+              "Greet": 50,
+              "Talk": 19,
+              "Sit": 2,
+              "Walk": 5
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "f2": {
+          "node": "Wear_blazer__f2",
+          "hiddenBodyTriangles": 1720,
+          "bulkM": {
+            "torso": 0.023,
+            "arm": 0.0271
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.0032,
+              "max": 0.039,
+              "skinFieldBindMax": 0.0071,
+              "skinFieldPoseExtraMax": 0.0053
+            }
+          },
+          "motionStretch": {
+            "triangles": 7495,
+            "p50": 1.076,
+            "p99": 3.957,
+            "max": 16.36,
+            "over2x": 323,
+            "over3x": 128,
+            "fractionOver": 0.0171,
+            "worstClips": {
+              "Greet": 59,
+              "Talk": 18
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        }
+      }
+    },
+    "trench": {
+      "label": "Trench coat",
+      "slot": "upper",
+      "kind": "garment",
+      "source": {
+        "asset": "garment:trench",
+        "attempt": "a1",
+        "taskId": "01a189d6-e8ab-7223-acbf-d0f52634332a",
+        "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:trench/a1/native.glb",
+        "sha256Verified": "0745c0388be7f09da591cc9ff685067defaaf9b19544e06629648d89ddc6b9b9"
+      },
+      "stage": "identical to the zombie wardrobe stage of this wearable (zombie/wardrobe.config.mjs parameters, same canonical fit, same colour-grade policy)",
+      "colourGrade": {
+        "mode": "reference-chroma",
+        "applied": true,
+        "gainLinear": [
+          1.0813,
+          0.9769,
+          0.8892
+        ],
+        "luminance": 1,
+        "from": "lossless stage preview (PNG)",
+        "albedoMeanLinearBefore": [
+          0.2826,
+          0.2193,
+          0.1575
+        ],
+        "albedoMeanLinearAfter": [
+          0.3056,
+          0.2148,
+          0.1402
+        ],
+        "coveredTexels": 535565,
+        "albedoRatiosBefore": {
+          "GR": 0.7761,
+          "BR": 0.5573
+        },
+        "albedoRatiosAfter": {
+          "GR": 0.7028,
+          "BR": 0.4589
+        },
+        "referenceMeanLinear": [
+          0.2839,
+          0.1991,
+          0.1301
+        ],
+        "referenceRatios": {
+          "GR": 0.7012,
+          "BR": 0.4583
+        },
+        "referencePixels": 671928,
+        "note": "T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]"
+      },
+      "mesh": {
+        "vertices": 6178,
+        "triangles": 8486
+      },
+      "perBody": {}
+    },
+    "cargo": {
+      "label": "Olive cargo work pants",
+      "slot": "lower",
+      "kind": "pants",
+      "source": {
+        "asset": "garment:cargo",
+        "attempt": "a1",
+        "taskId": "01a189d8-8d1d-7650-8f4a-9961b6b8a9c1",
+        "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:cargo/a1/native.glb",
+        "sha256Verified": "11933bb04879b4dba67c5c2ed44a08efd1a78340d46730500ebb7eb6f7cc845f"
+      },
+      "stage": "identical to the zombie wardrobe stage of this wearable (zombie/wardrobe.config.mjs parameters, same canonical fit, same colour-grade policy)",
+      "colourGrade": {
+        "mode": "reference-chroma",
+        "applied": true,
+        "gainLinear": [
+          1.0842,
+          0.979,
+          0.9085
+        ],
+        "luminance": 1,
+        "from": "stage JPEG",
+        "albedoMeanLinearBefore": [
+          0.1084,
+          0.0981,
+          0.0711
+        ],
+        "albedoMeanLinearAfter": [
+          0.1173,
+          0.0958,
+          0.0647
+        ],
+        "coveredTexels": 479872,
+        "albedoRatiosBefore": {
+          "GR": 0.905,
+          "BR": 0.6563
+        },
+        "albedoRatiosAfter": {
+          "GR": 0.8165,
+          "BR": 0.5517
+        },
+        "referenceMeanLinear": [
+          0.1173,
+          0.0958,
+          0.0645
+        ],
+        "referenceRatios": {
+          "GR": 0.8172,
+          "BR": 0.55
+        },
+        "referencePixels": 465113,
+        "note": "T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]"
+      },
+      "mesh": {
+        "vertices": 3911,
+        "triangles": 5991
+      },
+      "perBody": {
+        "m1": {
+          "node": "Wear_cargo__m1",
+          "hiddenBodyTriangles": 3049,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "leg": 0.0172
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0.0001,
+              "p95": 0.0039,
+              "max": 0.015,
+              "skinFieldBindMax": 0.006,
+              "skinFieldPoseExtraMax": 0.015
+            }
+          },
+          "motionStretch": {
+            "triangles": 5991,
+            "p50": 1.027,
+            "p99": 2.664,
+            "max": 8.87,
+            "over2x": 220,
+            "over3x": 33,
+            "fractionOver": 0.0055,
+            "worstClips": {
+              "Walk": 15,
+              "Sit": 47
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "f1": {
+          "node": "Wear_cargo__f1",
+          "hiddenBodyTriangles": 1882,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "leg": 0.0173
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.0014,
+              "max": 0.0198,
+              "skinFieldBindMax": 0.0105,
+              "skinFieldPoseExtraMax": 0.015
+            }
+          },
+          "motionStretch": {
+            "triangles": 5991,
+            "p50": 1.054,
+            "p99": 2.02,
+            "max": 3.79,
+            "over2x": 61,
+            "over3x": 3,
+            "fractionOver": 0.0005,
+            "worstClips": {
+              "Sit": 28,
+              "Walk": 33
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "m2": {
+          "node": "Wear_cargo__m2",
+          "hiddenBodyTriangles": 3292,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "leg": 0.0177
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.0062,
+              "max": 0.0634,
+              "skinFieldBindMax": 0.0635,
+              "skinFieldPoseExtraMax": 0.015
+            }
+          },
+          "motionStretch": {
+            "triangles": 5991,
+            "p50": 1.036,
+            "p99": 2.63,
+            "max": 4.46,
+            "over2x": 238,
+            "over3x": 33,
+            "fractionOver": 0.0055,
+            "worstClips": {
+              "Sit": 39,
+              "Walk": 23
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "m3": {
+          "node": "Wear_cargo__m3",
+          "hiddenBodyTriangles": 2302,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "leg": 0.0182
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.0022,
+              "max": 0.0279,
+              "skinFieldBindMax": 0.0141,
+              "skinFieldPoseExtraMax": 0.0079
+            }
+          },
+          "motionStretch": {
+            "triangles": 5991,
+            "p50": 1.047,
+            "p99": 1.91,
+            "max": 2.81,
+            "over2x": 34,
+            "over3x": 0,
+            "fractionOver": 0,
+            "worstClips": {
+              "Sit": 41,
+              "Walk": 20
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        }
+      }
+    },
+    "jeans": {
+      "label": "Dark-wash jeans",
+      "slot": "lower",
+      "kind": "pants",
+      "source": {
+        "asset": "garment:jeans",
+        "attempt": "a1",
+        "taskId": "01a189da-0898-7538-bd0b-5c7b54a3249b",
+        "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:jeans/a1/native.glb",
+        "sha256Verified": "23aa400234c5a08dda51919151b297052459f124ea5f3a4e840c04c05ad39adc"
+      },
+      "stage": "identical to the zombie wardrobe stage of this wearable (zombie/wardrobe.config.mjs parameters, same canonical fit, same colour-grade policy)",
+      "colourGrade": {
+        "mode": "reference-chroma",
+        "applied": true,
+        "gainLinear": [
+          1.0506,
+          0.998,
+          0.8936
+        ],
+        "luminance": 1,
+        "from": "stage JPEG",
+        "albedoMeanLinearBefore": [
+          0.0593,
+          0.0636,
+          0.0711
+        ],
+        "albedoMeanLinearAfter": [
+          0.0623,
+          0.0636,
+          0.0635
+        ],
+        "coveredTexels": 607253,
+        "albedoRatiosBefore": {
+          "GR": 1.071,
+          "BR": 1.1974
+        },
+        "albedoRatiosAfter": {
+          "GR": 1.0209,
+          "BR": 1.0199
+        },
+        "referenceMeanLinear": [
+          0.0706,
+          0.0719,
+          0.0719
+        ],
+        "referenceRatios": {
+          "GR": 1.0173,
+          "BR": 1.0185
+        },
+        "referencePixels": 467272,
+        "note": "T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]"
+      },
+      "mesh": {
+        "vertices": 3658,
+        "triangles": 5999
+      },
+      "perBody": {
+        "m1": {
+          "node": "Wear_jeans__m1",
+          "hiddenBodyTriangles": 3503,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "leg": 0.0137
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.0085,
+              "max": 0.0618,
+              "skinFieldBindMax": 0.0593,
+              "skinFieldPoseExtraMax": 0.015
+            }
+          },
+          "motionStretch": {
+            "triangles": 5999,
+            "p50": 1.041,
+            "p99": 2.724,
+            "max": 4.6,
+            "over2x": 275,
+            "over3x": 30,
+            "fractionOver": 0.005,
+            "worstClips": {
+              "Sit": 44,
+              "Walk": 17
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "f1": {
+          "node": "Wear_jeans__f1",
+          "hiddenBodyTriangles": 2245,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "leg": 0.0134
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0.0001,
+              "p95": 0.0051,
+              "max": 0.0221,
+              "skinFieldBindMax": 0.0158,
+              "skinFieldPoseExtraMax": 0.015
+            }
+          },
+          "motionStretch": {
+            "triangles": 5999,
+            "p50": 1.062,
+            "p99": 2.178,
+            "max": 5.89,
+            "over2x": 99,
+            "over3x": 12,
+            "fractionOver": 0.002,
+            "worstClips": {
+              "Sit": 44,
+              "Walk": 17
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "f2": {
+          "node": "Wear_jeans__f2",
+          "hiddenBodyTriangles": 3810,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "leg": 0.0124
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.0057,
+              "max": 0.0295,
+              "skinFieldBindMax": 0.0185,
+              "skinFieldPoseExtraMax": 0.015
+            }
+          },
+          "motionStretch": {
+            "triangles": 5999,
+            "p50": 1.059,
+            "p99": 2.046,
+            "max": 4.59,
+            "over2x": 81,
+            "over3x": 10,
+            "fractionOver": 0.0017,
+            "worstClips": {
+              "Sit": 38,
+              "Walk": 23
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "m3": {
+          "node": "Wear_jeans__m3",
+          "hiddenBodyTriangles": 3558,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "leg": 0.0152
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.006,
+              "max": 0.0728,
+              "skinFieldBindMax": 0.0583,
+              "skinFieldPoseExtraMax": 0.015
+            }
+          },
+          "motionStretch": {
+            "triangles": 5999,
+            "p50": 1.052,
+            "p99": 1.969,
+            "max": 3.72,
+            "over2x": 54,
+            "over3x": 4,
+            "fractionOver": 0.0007,
+            "worstClips": {
+              "Sit": 44,
+              "Walk": 18
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        }
+      }
+    },
+    "slacks": {
+      "label": "Grey office slacks",
+      "slot": "lower",
+      "kind": "pants",
+      "source": {
+        "asset": "garment:slacks",
+        "attempt": "a1",
+        "taskId": "01a189da-1047-77df-9f6a-7ed00e8ee21b",
+        "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:slacks/a1/native.glb",
+        "sha256Verified": "e0a8ac124a8da2368385097ada48df5e7b92a3b85e9ba0a8fb0d283c651c44be"
+      },
+      "stage": "identical to the zombie wardrobe stage of this wearable (zombie/wardrobe.config.mjs parameters, same canonical fit, same colour-grade policy)",
+      "colourGrade": {
+        "mode": "reference-chroma",
+        "applied": true,
+        "gainLinear": [
+          1.0712,
+          0.9832,
+          0.9472
+        ],
+        "luminance": 1,
+        "from": "stage JPEG",
+        "albedoMeanLinearBefore": [
+          0.1092,
+          0.106,
+          0.0991
+        ],
+        "albedoMeanLinearAfter": [
+          0.1168,
+          0.1036,
+          0.0944
+        ],
+        "coveredTexels": 499359,
+        "albedoRatiosBefore": {
+          "GR": 0.9706,
+          "BR": 0.9073
+        },
+        "albedoRatiosAfter": {
+          "GR": 0.8871,
+          "BR": 0.8082
+        },
+        "referenceMeanLinear": [
+          0.1102,
+          0.0982,
+          0.0884
+        ],
+        "referenceRatios": {
+          "GR": 0.8909,
+          "BR": 0.8023
+        },
+        "referencePixels": 435640,
+        "note": "T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]"
+      },
+      "mesh": {
+        "vertices": 3664,
+        "triangles": 5985
+      },
+      "perBody": {
+        "m2": {
+          "node": "Wear_slacks__m2",
+          "hiddenBodyTriangles": 3636,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "leg": 0.0139
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0.0002,
+              "p95": 0.0059,
+              "max": 0.0187,
+              "skinFieldBindMax": 0.0181,
+              "skinFieldPoseExtraMax": 0.015
+            }
+          },
+          "motionStretch": {
+            "triangles": 5985,
+            "p50": 1.053,
+            "p99": 2.654,
+            "max": 4.14,
+            "over2x": 292,
+            "over3x": 22,
+            "fractionOver": 0.0037,
+            "worstClips": {
+              "Walk": 25,
+              "Sit": 36
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "f2": {
+          "node": "Wear_slacks__f2",
+          "hiddenBodyTriangles": 3372,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "leg": 0.0124
+          },
+          "refit": {
+            "offsetM": {
+              "p50": 0,
+              "p95": 0.0028,
+              "max": 0.0286,
+              "skinFieldBindMax": 0.0139,
+              "skinFieldPoseExtraMax": 0.015
+            }
+          },
+          "motionStretch": {
+            "triangles": 5985,
+            "p50": 1.058,
+            "p99": 2.081,
+            "max": 3.11,
+            "over2x": 68,
+            "over3x": 2,
+            "fractionOver": 0.0003,
+            "worstClips": {
+              "Sit": 40,
+              "Walk": 21
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        }
+      }
+    },
+    "cap": {
+      "label": "Faded baseball cap",
+      "slot": "head",
+      "kind": "rigid",
+      "source": {
+        "asset": "garment:cap",
+        "attempt": "a1",
+        "taskId": "01a189da-1fa0-71ae-ad2b-f45aeeb6f2ff",
+        "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:cap/a1/native.glb",
+        "sha256Verified": "4f6009e9dda1e4cd67935aaa2d4335cafd29107fd09b4b1f358a9c8acd7724e8"
+      },
+      "stage": "identical to the zombie wardrobe stage of this wearable (zombie/wardrobe.config.mjs parameters, same canonical fit, same colour-grade policy)",
+      "colourGrade": {
+        "mode": "reference-chroma",
+        "applied": true,
+        "gainLinear": [
+          1.1338,
+          0.9902,
+          0.8395
+        ],
+        "luminance": 1,
+        "from": "stage JPEG",
+        "albedoMeanLinearBefore": [
+          0.0486,
+          0.0567,
+          0.0849
+        ],
+        "albedoMeanLinearAfter": [
+          0.0552,
+          0.0566,
+          0.0713
+        ],
+        "coveredTexels": 160532,
+        "albedoRatiosBefore": {
+          "GR": 1.1657,
+          "BR": 1.7478
+        },
+        "albedoRatiosAfter": {
+          "GR": 1.0264,
+          "BR": 1.2931
+        },
+        "referenceMeanLinear": [
+          0.0728,
+          0.0741,
+          0.0942
+        ],
+        "referenceRatios": {
+          "GR": 1.0181,
+          "BR": 1.2942
+        },
+        "referencePixels": 903437,
+        "note": "T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]"
+      },
+      "mesh": {
+        "vertices": 1345,
+        "triangles": 2200
+      },
+      "perBody": {
+        "m1": {
+          "node": "Wear_cap__m1",
+          "hiddenBodyTriangles": 1717,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "head": 0.0052
+          },
+          "refit": null,
+          "motionStretch": {
+            "triangles": 2200,
+            "p50": 1,
+            "p99": 1,
+            "max": 1,
+            "over2x": 0,
+            "over3x": 0,
+            "fractionOver": 0,
+            "worstClips": {
+              "Work": 6,
+              "Talk": 8,
+              "Idle": 4,
+              "Greet": 4,
+              "Walk": 2
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "f1": {
+          "node": "Wear_cap__f1",
+          "hiddenBodyTriangles": 2644,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "head": 0.0064
+          },
+          "refit": null,
+          "motionStretch": {
+            "triangles": 2200,
+            "p50": 1,
+            "p99": 1,
+            "max": 1,
+            "over2x": 0,
+            "over3x": 0,
+            "fractionOver": 0,
+            "worstClips": {
+              "Work": 6,
+              "Greet": 4,
+              "Idle": 4,
+              "Talk": 10
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "m2": {
+          "node": "Wear_cap__m2",
+          "hiddenBodyTriangles": 704,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "head": 0.0072
+          },
+          "refit": null,
+          "motionStretch": {
+            "triangles": 2200,
+            "p50": 1,
+            "p99": 1,
+            "max": 1,
+            "over2x": 0,
+            "over3x": 0,
+            "fractionOver": 0,
+            "worstClips": {
+              "Idle": 6,
+              "Work": 4,
+              "Talk": 10,
+              "Walk": 4
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "f2": {
+          "node": "Wear_cap__f2",
+          "hiddenBodyTriangles": 1313,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "head": 0.0083
+          },
+          "refit": null,
+          "motionStretch": {
+            "triangles": 2200,
+            "p50": 1,
+            "p99": 1,
+            "max": 1,
+            "over2x": 0,
+            "over3x": 0,
+            "fractionOver": 0,
+            "worstClips": {
+              "Talk": 12,
+              "Work": 6,
+              "Walk": 6
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        }
+      }
+    },
+    "beanie": {
+      "label": "Knit beanie",
+      "slot": "head",
+      "kind": "rigid",
+      "source": {
+        "asset": "garment:beanie",
+        "attempt": "a1",
+        "taskId": "01a189db-ae28-7655-a368-34a5c726f038",
+        "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:beanie/a1/native.glb",
+        "sha256Verified": "266a4e571fccfa1476f28d95df3a3130fd957153f799e8163106bcccc6733b20"
+      },
+      "stage": "identical to the zombie wardrobe stage of this wearable (zombie/wardrobe.config.mjs parameters, same canonical fit, same colour-grade policy)",
+      "colourGrade": {
+        "mode": "reference-chroma",
+        "applied": true,
+        "gainLinear": [
+          1.0378,
+          0.9959,
+          0.9303
+        ],
+        "luminance": 1,
+        "from": "stage JPEG",
+        "albedoMeanLinearBefore": [
+          0.0375,
+          0.0437,
+          0.0344
+        ],
+        "albedoMeanLinearAfter": [
+          0.0388,
+          0.0437,
+          0.0321
+        ],
+        "coveredTexels": 164766,
+        "albedoRatiosBefore": {
+          "GR": 1.167,
+          "BR": 0.9191
+        },
+        "albedoRatiosAfter": {
+          "GR": 1.1275,
+          "BR": 0.827
+        },
+        "referenceMeanLinear": [
+          0.0605,
+          0.0677,
+          0.0498
+        ],
+        "referenceRatios": {
+          "GR": 1.1198,
+          "BR": 0.8239
+        },
+        "referencePixels": 909097,
+        "note": "T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]"
+      },
+      "mesh": {
+        "vertices": 1363,
+        "triangles": 2199
+      },
+      "perBody": {
+        "m1": {
+          "node": "Wear_beanie__m1",
+          "hiddenBodyTriangles": 1977,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "head": 0.0045
+          },
+          "refit": null,
+          "motionStretch": {
+            "triangles": 2199,
+            "p50": 1,
+            "p99": 1,
+            "max": 1,
+            "over2x": 0,
+            "over3x": 0,
+            "fractionOver": 0,
+            "worstClips": {
+              "Talk": 13,
+              "Walk": 8,
+              "Idle": 4,
+              "Greet": 2
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "f1": {
+          "node": "Wear_beanie__f1",
+          "hiddenBodyTriangles": 2717,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "head": 0.0072
+          },
+          "refit": null,
+          "motionStretch": {
+            "triangles": 2199,
+            "p50": 1,
+            "p99": 1,
+            "max": 1,
+            "over2x": 0,
+            "over3x": 0,
+            "fractionOver": 0,
+            "worstClips": {
+              "Talk": 8,
+              "Walk": 6,
+              "Idle": 5,
+              "Greet": 4
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "f2": {
+          "node": "Wear_beanie__f2",
+          "hiddenBodyTriangles": 1343,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "head": 0.0064
+          },
+          "refit": null,
+          "motionStretch": {
+            "triangles": 2199,
+            "p50": 1,
+            "p99": 1,
+            "max": 1,
+            "over2x": 0,
+            "over3x": 0,
+            "fractionOver": 0,
+            "worstClips": {
+              "Work": 2,
+              "Walk": 4,
+              "Idle": 6,
+              "Talk": 10,
+              "Greet": 2
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "m3": {
+          "node": "Wear_beanie__m3",
+          "hiddenBodyTriangles": 2580,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "head": 0.0059
+          },
+          "refit": null,
+          "motionStretch": {
+            "triangles": 2199,
+            "p50": 1,
+            "p99": 1,
+            "max": 1,
+            "over2x": 0,
+            "over3x": 0,
+            "fractionOver": 0,
+            "worstClips": {
+              "Walk": 8,
+              "Talk": 7,
+              "Idle": 6,
+              "Work": 2
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        }
+      }
+    },
+    "hardhat": {
+      "label": "Transit hard hat",
+      "slot": "head",
+      "kind": "rigid",
+      "source": {
+        "asset": "garment:hardhat",
+        "attempt": "a1",
+        "taskId": "01a189da-1858-74cf-9707-905a736892e5",
+        "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:hardhat/a1/native.glb",
+        "sha256Verified": "0dcde4fed2151fe1697ff91b202f144520a753e2890fad3d0ed179185e6751f6"
+      },
+      "stage": "identical to the zombie wardrobe stage of this wearable (zombie/wardrobe.config.mjs parameters, same canonical fit, same colour-grade policy)",
+      "colourGrade": {
+        "mode": "reference-chroma",
+        "applied": false,
+        "skipped": "gains 0.953/1.013/8.118 outside [0.8, 1.25]",
+        "albedoMeanLinear": [
+          0.6101,
+          0.3541,
+          0.0057
+        ],
+        "albedoRatios": {
+          "GR": 0.5804,
+          "BR": 0.0094
+        },
+        "referenceMeanLinear": [
+          0.6614,
+          0.408,
+          0.0527
+        ],
+        "referenceRatios": {
+          "GR": 0.6169,
+          "BR": 0.0797
+        },
+        "note": "T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]"
+      },
+      "mesh": {
+        "vertices": 1387,
+        "triangles": 2198
+      },
+      "perBody": {
+        "m2": {
+          "node": "Wear_hardhat__m2",
+          "hiddenBodyTriangles": 724,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "head": 0.0214
+          },
+          "refit": null,
+          "motionStretch": {
+            "triangles": 2198,
+            "p50": 1,
+            "p99": 1,
+            "max": 1,
+            "over2x": 0,
+            "over3x": 0,
+            "fractionOver": 0,
+            "worstClips": {
+              "Talk": 6,
+              "Walk": 4,
+              "Idle": 9,
+              "Greet": 2,
+              "Work": 2
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        },
+        "m3": {
+          "node": "Wear_hardhat__m3",
+          "hiddenBodyTriangles": 2802,
+          "bulkM": {
+            "torso": 0,
+            "arm": 0,
+            "head": 0.022
+          },
+          "refit": null,
+          "motionStretch": {
+            "triangles": 2198,
+            "p50": 1,
+            "p99": 1,
+            "max": 1,
+            "over2x": 0,
+            "over3x": 0,
+            "fractionOver": 0,
+            "worstClips": {
+              "Idle": 12,
+              "Talk": 6,
+              "Greet": 2,
+              "Walk": 2,
+              "Work": 2
+            },
+            "poses": 194
+          },
+          "incompatibleWear": []
+        }
+      }
+    }
+  },
+  "fitGate": {
+    "limits": {
+      "bind": 0.02,
+      "animated": 0.025,
+      "layerAnimated": 0.015
+    },
+    "variants": [
+      {
+        "body": "m1",
+        "wearable": "flannel",
+        "covered": 1764,
+        "bind": 0.0028,
+        "animated": 0.0125,
+        "perClip": {
+          "Idle": 0.0125,
+          "Walk": 0.0113,
+          "Talk": 0.0091,
+          "Greet": 0.0108,
+          "Work": 0.0057,
+          "Sit": 0.0045
+        },
+        "layers": {
+          "cargo": {
+            "covered": 434,
+            "animated": 0
+          },
+          "jeans": {
+            "covered": 417,
+            "animated": 0
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "f1",
+        "wearable": "flannel",
+        "covered": 1455,
+        "bind": 0.0096,
+        "animated": 0.011,
+        "perClip": {
+          "Idle": 0.011,
+          "Walk": 0.011,
+          "Talk": 0.0103,
+          "Greet": 0.011,
+          "Work": 0.0103,
+          "Sit": 0.0096
+        },
+        "layers": {
+          "cargo": {
+            "covered": 569,
+            "animated": 0
+          },
+          "jeans": {
+            "covered": 525,
+            "animated": 0
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "m2",
+        "wearable": "flannel",
+        "covered": 2675,
+        "bind": 0.0007,
+        "animated": 0.0049,
+        "perClip": {
+          "Idle": 0.0034,
+          "Walk": 0.0034,
+          "Talk": 0.0041,
+          "Greet": 0.0034,
+          "Work": 0.0049,
+          "Sit": 0.0041
+        },
+        "layers": {
+          "cargo": {
+            "covered": 423,
+            "animated": 0
+          },
+          "slacks": {
+            "covered": 452,
+            "animated": 0.0022
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "f2",
+        "wearable": "flannel",
+        "covered": 1819,
+        "bind": 0.0258,
+        "animated": 0.0275,
+        "perClip": {
+          "Idle": 0.0275,
+          "Walk": 0.0264,
+          "Talk": 0.0264,
+          "Greet": 0.0264,
+          "Work": 0.0231,
+          "Sit": 0.0242
+        },
+        "layers": {
+          "jeans": {
+            "covered": 460,
+            "animated": 0.0022
+          },
+          "slacks": {
+            "covered": 522,
+            "animated": 0
+          }
+        },
+        "pass": false
+      },
+      {
+        "body": "m3",
+        "wearable": "flannel",
+        "covered": 1452,
+        "bind": 0.0034,
+        "animated": 0.0083,
+        "perClip": {
+          "Idle": 0.0041,
+          "Walk": 0.0083,
+          "Talk": 0.0076,
+          "Greet": 0.0048,
+          "Work": 0.0055,
+          "Sit": 0.0048
+        },
+        "layers": {
+          "cargo": {
+            "covered": 536,
+            "animated": 0
+          },
+          "jeans": {
+            "covered": 508,
+            "animated": 0
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "m1",
+        "wearable": "hoodie",
+        "covered": 1657,
+        "bind": 0.0042,
+        "animated": 0.0133,
+        "perClip": {
+          "Idle": 0.0084,
+          "Walk": 0.0133,
+          "Talk": 0.0103,
+          "Greet": 0.0066,
+          "Work": 0.0078,
+          "Sit": 0.0066
+        },
+        "layers": {
+          "cargo": {
+            "covered": 365,
+            "animated": 0
+          },
+          "jeans": {
+            "covered": 348,
+            "animated": 0.0029
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "f1",
+        "wearable": "hoodie",
+        "covered": 1409,
+        "bind": 0.0092,
+        "animated": 0.0106,
+        "perClip": {
+          "Idle": 0.0106,
+          "Walk": 0.0106,
+          "Talk": 0.0106,
+          "Greet": 0.0106,
+          "Work": 0.0099,
+          "Sit": 0.0092
+        },
+        "layers": {
+          "cargo": {
+            "covered": 503,
+            "animated": 0
+          },
+          "jeans": {
+            "covered": 461,
+            "animated": 0
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "f2",
+        "wearable": "hoodie",
+        "covered": 1539,
+        "bind": 0.024,
+        "animated": 0.0273,
+        "perClip": {
+          "Idle": 0.0273,
+          "Walk": 0.0247,
+          "Talk": 0.0247,
+          "Greet": 0.0266,
+          "Work": 0.0234,
+          "Sit": 0.0227
+        },
+        "layers": {
+          "jeans": {
+            "covered": 390,
+            "animated": 0
+          },
+          "slacks": {
+            "covered": 447,
+            "animated": 0
+          }
+        },
+        "pass": false
+      },
+      {
+        "body": "m3",
+        "wearable": "hoodie",
+        "covered": 1379,
+        "bind": 0.0029,
+        "animated": 0.0058,
+        "perClip": {
+          "Idle": 0.0044,
+          "Walk": 0.0051,
+          "Talk": 0.0058,
+          "Greet": 0.0051,
+          "Work": 0.0044,
+          "Sit": 0.0036
+        },
+        "layers": {
+          "cargo": {
+            "covered": 465,
+            "animated": 0
+          },
+          "jeans": {
+            "covered": 436,
+            "animated": 0
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "f1",
+        "wearable": "sweater",
+        "covered": 1300,
+        "bind": 0.0169,
+        "animated": 0.0185,
+        "perClip": {
+          "Idle": 0.0185,
+          "Walk": 0.0177,
+          "Talk": 0.0185,
+          "Greet": 0.0185,
+          "Work": 0.0169,
+          "Sit": 0.0169
+        },
+        "layers": {
+          "cargo": {
+            "covered": 387,
+            "animated": 0
+          },
+          "jeans": {
+            "covered": 369,
+            "animated": 0
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "m2",
+        "wearable": "sweater",
+        "covered": 2419,
+        "bind": 0.0025,
+        "animated": 0.0045,
+        "perClip": {
+          "Idle": 0.0029,
+          "Walk": 0.0033,
+          "Talk": 0.0041,
+          "Greet": 0.0033,
+          "Work": 0.0045,
+          "Sit": 0.0033
+        },
+        "layers": {
+          "cargo": {
+            "covered": 244,
+            "animated": 0
+          },
+          "slacks": {
+            "covered": 279,
+            "animated": 0
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "f2",
+        "wearable": "sweater",
+        "covered": 1393,
+        "bind": 0.0266,
+        "animated": 0.0409,
+        "perClip": {
+          "Idle": 0.0409,
+          "Walk": 0.0359,
+          "Talk": 0.0309,
+          "Greet": 0.038,
+          "Work": 0.0258,
+          "Sit": 0.0258
+        },
+        "layers": {
+          "jeans": {
+            "covered": 307,
+            "animated": 0.0033
+          },
+          "slacks": {
+            "covered": 344,
+            "animated": 0
+          }
+        },
+        "pass": false
+      },
+      {
+        "body": "m3",
+        "wearable": "sweater",
+        "covered": 1355,
+        "bind": 0.0177,
+        "animated": 0.0244,
+        "perClip": {
+          "Idle": 0.0221,
+          "Walk": 0.0236,
+          "Talk": 0.0244,
+          "Greet": 0.0214,
+          "Work": 0.0236,
+          "Sit": 0.0236
+        },
+        "layers": {
+          "cargo": {
+            "covered": 337,
+            "animated": 0
+          },
+          "jeans": {
+            "covered": 336,
+            "animated": 0
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "m1",
+        "wearable": "hivis",
+        "covered": 726,
+        "bind": 0.0083,
+        "animated": 0.0083,
+        "perClip": {
+          "Idle": 0.0055,
+          "Walk": 0.0083,
+          "Talk": 0.0028,
+          "Greet": 0.0041,
+          "Work": 0.0014,
+          "Sit": 0.0014
+        },
+        "layers": {
+          "cargo": {
+            "covered": 105,
+            "animated": 0
+          },
+          "jeans": {
+            "covered": 105,
+            "animated": 0
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "f1",
+        "wearable": "hivis",
+        "covered": 867,
+        "bind": 0.0127,
+        "animated": 0.0138,
+        "perClip": {
+          "Idle": 0.0138,
+          "Walk": 0.0127,
+          "Talk": 0.0127,
+          "Greet": 0.0127,
+          "Work": 0.0127,
+          "Sit": 0.0127
+        },
+        "layers": {
+          "cargo": {
+            "covered": 179,
+            "animated": 0
+          },
+          "jeans": {
+            "covered": 178,
+            "animated": 0
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "m3",
+        "wearable": "hivis",
+        "covered": 617,
+        "bind": 0.0032,
+        "animated": 0.0049,
+        "perClip": {
+          "Idle": 0.0032,
+          "Walk": 0.0032,
+          "Talk": 0.0049,
+          "Greet": 0.0032,
+          "Work": 0.0016,
+          "Sit": 0
+        },
+        "layers": {
+          "cargo": {
+            "covered": 145,
+            "animated": 0
+          },
+          "jeans": {
+            "covered": 143,
+            "animated": 0.007
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "m1",
+        "wearable": "coat",
+        "covered": 2392,
+        "bind": 0.0059,
+        "animated": 0.0142,
+        "perClip": {
+          "Idle": 0.0109,
+          "Walk": 0.0142,
+          "Talk": 0.01,
+          "Greet": 0.0096,
+          "Work": 0.0084,
+          "Sit": 0.01
+        },
+        "layers": {
+          "cargo": {
+            "covered": 1202,
+            "animated": 0
+          },
+          "jeans": {
+            "covered": 1106,
+            "animated": 0
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "m2",
+        "wearable": "coat",
+        "covered": 3201,
+        "bind": 0.0037,
+        "animated": 0.0084,
+        "perClip": {
+          "Idle": 0.0075,
+          "Walk": 0.0069,
+          "Talk": 0.0084,
+          "Greet": 0.0081,
+          "Work": 0.0044,
+          "Sit": 0.0066
+        },
+        "layers": {
+          "cargo": {
+            "covered": 1165,
+            "animated": 0
+          },
+          "slacks": {
+            "covered": 1153,
+            "animated": 0
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "f2",
+        "wearable": "coat",
+        "covered": 2293,
+        "bind": 0.0183,
+        "animated": 0.0201,
+        "perClip": {
+          "Idle": 0.0196,
+          "Walk": 0.0196,
+          "Talk": 0.0201,
+          "Greet": 0.0196,
+          "Work": 0.0196,
+          "Sit": 0.0183
+        },
+        "layers": {
+          "jeans": {
+            "covered": 1172,
+            "animated": 0.0009
+          },
+          "slacks": {
+            "covered": 1298,
+            "animated": 0
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "m2",
+        "wearable": "blazer",
+        "covered": 2582,
+        "bind": 0.0008,
+        "animated": 0.0027,
+        "perClip": {
+          "Idle": 0.0008,
+          "Walk": 0.0019,
+          "Talk": 0.0027,
+          "Greet": 0.0012,
+          "Work": 0.0019,
+          "Sit": 0.0008
+        },
+        "layers": {
+          "cargo": {
+            "covered": 422,
+            "animated": 0
+          },
+          "slacks": {
+            "covered": 450,
+            "animated": 0
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "f2",
+        "wearable": "blazer",
+        "covered": 1543,
+        "bind": 0.0097,
+        "animated": 0.0123,
+        "perClip": {
+          "Idle": 0.011,
+          "Walk": 0.0123,
+          "Talk": 0.011,
+          "Greet": 0.011,
+          "Work": 0.0078,
+          "Sit": 0.0097
+        },
+        "layers": {
+          "jeans": {
+            "covered": 463,
+            "animated": 0
+          },
+          "slacks": {
+            "covered": 544,
+            "animated": 0
+          }
+        },
+        "pass": true
+      },
+      {
+        "body": "f2",
+        "wearable": "trench",
+        "covered": 2125,
+        "bind": 0.0254,
+        "animated": 0.0367,
+        "perClip": {
+          "Idle": 0.0367,
+          "Walk": 0.0311,
+          "Talk": 0.0268,
+          "Greet": 0.0296,
+          "Work": 0.0226,
+          "Sit": 0.0339
+        },
+        "layers": {
+          "jeans": {
+            "covered": 1393,
+            "animated": 0
+          },
+          "slacks": {
+            "covered": 1506,
+            "animated": 0
+          }
+        },
+        "pass": false
+      },
+      {
+        "body": "m1",
+        "wearable": "cargo",
+        "covered": 1931,
+        "bind": 0,
+        "animated": 0.0026,
+        "perClip": {
+          "Idle": 0,
+          "Walk": 0,
+          "Talk": 0,
+          "Greet": 0,
+          "Work": 0,
+          "Sit": 0.0026
+        },
+        "layers": {},
+        "pass": true
+      },
+      {
+        "body": "f1",
+        "wearable": "cargo",
+        "covered": 1197,
+        "bind": 0,
+        "animated": 0,
+        "perClip": {
+          "Idle": 0,
+          "Walk": 0,
+          "Talk": 0,
+          "Greet": 0,
+          "Work": 0,
+          "Sit": 0
+        },
+        "layers": {},
+        "pass": true
+      },
+      {
+        "body": "m2",
+        "wearable": "cargo",
+        "covered": 2121,
+        "bind": 0,
+        "animated": 0.0028,
+        "perClip": {
+          "Idle": 0,
+          "Walk": 0,
+          "Talk": 0,
+          "Greet": 0,
+          "Work": 0,
+          "Sit": 0.0028
+        },
+        "layers": {},
+        "pass": true
+      },
+      {
+        "body": "m3",
+        "wearable": "cargo",
+        "covered": 1433,
+        "bind": 0.0007,
+        "animated": 0.0007,
+        "perClip": {
+          "Idle": 0,
+          "Walk": 0.0007,
+          "Talk": 0,
+          "Greet": 0,
+          "Work": 0,
+          "Sit": 0
+        },
+        "layers": {},
+        "pass": true
+      },
+      {
+        "body": "m1",
+        "wearable": "jeans",
+        "covered": 2066,
+        "bind": 0.0015,
+        "animated": 0.0092,
+        "perClip": {
+          "Idle": 0.0039,
+          "Walk": 0.0087,
+          "Talk": 0.0034,
+          "Greet": 0.0039,
+          "Work": 0.0039,
+          "Sit": 0.0092
+        },
+        "layers": {},
+        "pass": true
+      },
+      {
+        "body": "f1",
+        "wearable": "jeans",
+        "covered": 1281,
+        "bind": 0,
+        "animated": 0.0133,
+        "perClip": {
+          "Idle": 0.0023,
+          "Walk": 0.0133,
+          "Talk": 0.0039,
+          "Greet": 0.0016,
+          "Work": 0.0047,
+          "Sit": 0.007
+        },
+        "layers": {},
+        "pass": true
+      },
+      {
+        "body": "f2",
+        "wearable": "jeans",
+        "covered": 2095,
+        "bind": 0.0048,
+        "animated": 0.0143,
+        "perClip": {
+          "Idle": 0.0076,
+          "Walk": 0.0143,
+          "Talk": 0.0072,
+          "Greet": 0.0067,
+          "Work": 0.0081,
+          "Sit": 0.0067
+        },
+        "layers": {},
+        "pass": true
+      },
+      {
+        "body": "m3",
+        "wearable": "jeans",
+        "covered": 1683,
+        "bind": 0.0107,
+        "animated": 0.0166,
+        "perClip": {
+          "Idle": 0.0113,
+          "Walk": 0.0166,
+          "Talk": 0.0095,
+          "Greet": 0.0113,
+          "Work": 0.0119,
+          "Sit": 0.0053
+        },
+        "layers": {},
+        "pass": true
+      },
+      {
+        "body": "m2",
+        "wearable": "slacks",
+        "covered": 2215,
+        "bind": 0,
+        "animated": 0.0023,
+        "perClip": {
+          "Idle": 0,
+          "Walk": 0,
+          "Talk": 0,
+          "Greet": 0,
+          "Work": 0,
+          "Sit": 0.0023
+        },
+        "layers": {},
+        "pass": true
+      },
+      {
+        "body": "f2",
+        "wearable": "slacks",
+        "covered": 2069,
+        "bind": 0.0005,
+        "animated": 0.0039,
+        "perClip": {
+          "Idle": 0.0005,
+          "Walk": 0.001,
+          "Talk": 0.0005,
+          "Greet": 0.0005,
+          "Work": 0.0005,
+          "Sit": 0.0039
+        },
+        "layers": {},
+        "pass": true
+      }
+    ],
+    "layerIncompatible": []
+  },
+  "excluded": [
+    {
+      "body": "f2",
+      "wearable": "flannel",
+      "slot": "upper",
+      "rule": "fit-pose-gate",
+      "reason": "body still visibly pokes through the refitted cloth in the healthy clips: bind 2.58% > 2%, animated 2.75% > 2.5% of 1819 covered vertices",
+      "metrics": {
+        "body": "f2",
+        "wearable": "flannel",
+        "covered": 1819,
+        "bind": 0.0258,
+        "animated": 0.0275,
+        "perClip": {
+          "Idle": 0.0275,
+          "Walk": 0.0264,
+          "Talk": 0.0264,
+          "Greet": 0.0264,
+          "Work": 0.0231,
+          "Sit": 0.0242
+        },
+        "layers": {
+          "jeans": {
+            "covered": 460,
+            "animated": 0.0022
+          },
+          "slacks": {
+            "covered": 522,
+            "animated": 0
+          }
+        },
+        "pass": false
+      }
+    },
+    {
+      "body": "f2",
+      "wearable": "hoodie",
+      "slot": "upper",
+      "rule": "fit-pose-gate",
+      "reason": "body still visibly pokes through the refitted cloth in the healthy clips: bind 2.40% > 2%, animated 2.73% > 2.5% of 1539 covered vertices",
+      "metrics": {
+        "body": "f2",
+        "wearable": "hoodie",
+        "covered": 1539,
+        "bind": 0.024,
+        "animated": 0.0273,
+        "perClip": {
+          "Idle": 0.0273,
+          "Walk": 0.0247,
+          "Talk": 0.0247,
+          "Greet": 0.0266,
+          "Work": 0.0234,
+          "Sit": 0.0227
+        },
+        "layers": {
+          "jeans": {
+            "covered": 390,
+            "animated": 0
+          },
+          "slacks": {
+            "covered": 447,
+            "animated": 0
+          }
+        },
+        "pass": false
+      }
+    },
+    {
+      "body": "f2",
+      "wearable": "sweater",
+      "slot": "upper",
+      "rule": "fit-pose-gate",
+      "reason": "body still visibly pokes through the refitted cloth in the healthy clips: bind 2.66% > 2%, animated 4.09% > 2.5% of 1393 covered vertices",
+      "metrics": {
+        "body": "f2",
+        "wearable": "sweater",
+        "covered": 1393,
+        "bind": 0.0266,
+        "animated": 0.0409,
+        "perClip": {
+          "Idle": 0.0409,
+          "Walk": 0.0359,
+          "Talk": 0.0309,
+          "Greet": 0.038,
+          "Work": 0.0258,
+          "Sit": 0.0258
+        },
+        "layers": {
+          "jeans": {
+            "covered": 307,
+            "animated": 0.0033
+          },
+          "slacks": {
+            "covered": 344,
+            "animated": 0
+          }
+        },
+        "pass": false
+      }
+    },
+    {
+      "body": "f2",
+      "wearable": "trench",
+      "slot": "upper",
+      "rule": "fit-pose-gate",
+      "reason": "body still visibly pokes through the refitted cloth in the healthy clips: bind 2.54% > 2%, animated 3.67% > 2.5% of 2125 covered vertices",
+      "metrics": {
+        "body": "f2",
+        "wearable": "trench",
+        "covered": 2125,
+        "bind": 0.0254,
+        "animated": 0.0367,
+        "perClip": {
+          "Idle": 0.0367,
+          "Walk": 0.0311,
+          "Talk": 0.0268,
+          "Greet": 0.0296,
+          "Work": 0.0226,
+          "Sit": 0.0339
+        },
+        "layers": {
+          "jeans": {
+            "covered": 1393,
+            "animated": 0
+          },
+          "slacks": {
+            "covered": 1506,
+            "animated": 0
+          }
+        },
+        "pass": false
+      }
+    }
+  ],
+  "limitations": [
+    "Automatic approximate skin weights; LBS volume loss at shoulders / elbows / hips in the deeper poses (Sit, Greet).",
+    "Procedural (not mocap) clips; no facial rig, no finger or twist bones (hands stay in their A-pose shape).",
+    "No cloth simulation: wearables are linear-blend skinned with weights transferred from each body; small gaps or pokes can show in strong poses.",
+    "Hidden-side geometry of the Meshy bases is AI-hallucinated; the maps are the Meshy model's own (normal map kept, sampled without tangents).",
+    "Unapproved prototype: appearance, anatomy, deformation, performance and licensing not certified."
+  ],
+  "rebuild": "LL_THREADS=1 node --max-old-space-size=6000 tools/asset-pipeline/humans/build-humans.mjs --reuse && node tools/asset-pipeline/humans/qa/sheets.mjs"
+}

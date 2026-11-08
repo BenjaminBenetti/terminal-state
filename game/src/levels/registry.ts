@@ -16,12 +16,13 @@ import {MALL_GENERIC_NAME, mallNameOf} from '../gen/mall/names'; // task mall-pl
 import {trackExtConfig} from '../gen/trackExt/config'; // Track 2 (lane GEN): tunnels + service annexes per level
 import {generateReactorLevel} from '../gen/reactor/index'; // task reactor-build-20261101 (lane GEN): THE REACTOR
 import {generateSkywaysLevel} from '../gen/skyways/index'; // task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS
+import {MARKET_GENERIC_NAME, generateMarketLevel, marketNameOf, marketStoreyLabel} from '../gen/market/index'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL)
 import {lootProfile} from '../items/lootTables'; // task mall-round3-20261031 (lane SHOPS, R6): the gear placement bias
 import {trainSpawnPose, type TrainPlacement} from '../gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE): start arrivals inside the train
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
 /** Logical levels in tier order (subway 0, office 1, mall 2 — task track3-eaton-centre-20261031, lane GEN). */
-export const LEVEL_IDS: readonly LevelId[] = ['subway', 'office', 'mall', 'skyways', 'reactor']; // (+ reactor, tier 3: task reactor-build-20261101; + skyways: task studio-skyways-level-20261106-054448-01, before the Reactor)
+export const LEVEL_IDS: readonly LevelId[] = ['subway', 'office', 'mall', 'market', 'skyways', 'reactor']; // (+ reactor, tier 3: task reactor-build-20261101; + skyways: task studio-skyways-level-20261106-054448-01, before the Reactor; + market: task studio-survivor-market-20261108-005807-01, before Skyways)
 
 /**
  * Gear of the level-wide roll (lane GEAR), placed once, after generation. Task gasmask-breach-20261030 (mask lane): the roll's
@@ -81,6 +82,25 @@ export const LEVELS: Record<LevelId, LevelDef> = {
     generate: (section, ctx) => {
       if (section !== 'main') throw new Error(`${MALL_GENERIC_NAME} has no section '${section}'`);
       return withGear(generateMallLevel(ctx, {trackExt: LEVELS.mall.trackExtensions}), ctx, 'mall');
+    },
+  },
+  // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET — a compact, calm survivor settlement in a salvaged
+  // railway shed the player's train pulls into for a pit stop (gen/market/index.ts): six trader stalls, housing, a communal kitchen, a
+  // workbench corner (scenery only). No enemies, clean air, no free loot; no track extensions (the bed ends stay closed). ONE continuous
+  // world, section 'main'; an ordinary network node (5 % of the ordinary stations, taken from the Subway's share: campaign/types.ts).
+  market: {
+    id: 'market',
+    tier: 1, // a calm pit stop between the Subway and the deeper levels; metadata only
+    name: MARKET_GENERIC_NAME,
+    blurb: 'A survivor settlement in an old railway shed — trade at six stalls, rest among the people who live here, then ride on.',
+    entry: 'main',
+    sections: () => ['main'],
+    // no Beyond-the-Station tunnels / annexes in a calm settlement (no 'service' spawns): the bed ends stay closed end walls; the car
+    // still parks on the bed (gen/playerTrain.ts) and leaves the way it came
+    trackExtensions: 'none',
+    generate: (section, ctx) => {
+      if (section !== 'main') throw new Error(`${MARKET_GENERIC_NAME} has no section '${section}'`);
+      return withGear(generateMarketLevel(ctx), ctx, 'market');
     },
   },
   // Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS — a connected multi-building public pedway network loosely inspired
@@ -154,17 +174,18 @@ export function travelTargets(level: LevelId): LevelId[] {
  * static LEVELS name ("Shopping Center" for the mall).
  */
 export function levelDisplayName(level: LevelId, levelSeed?: number): string {
-  return level === 'mall' && levelSeed !== undefined && Number.isFinite(levelSeed) ? mallNameOf(levelSeed) : LEVELS[level].name;
+  if (levelSeed === undefined || !Number.isFinite(levelSeed)) return LEVELS[level].name;
+  return level === 'mall' ? mallNameOf(levelSeed) : level === 'market' ? marketNameOf(levelSeed) : LEVELS[level].name; // (+ the market's seeded name: task studio-survivor-market-20261108-005807-01)
 }
 
 /** Short human label of a level's world ("Station", "Station and tower", "Station and mall"). */
 export function sectionLabel(key: SectionKey): string {
-  return key.level === 'office' ? 'Station and tower' : key.level === 'mall' ? 'Station and mall' : key.level === 'reactor' ? 'Station and pit' : key.level === 'skyways' ? 'Station and skyways' : 'Station';
+  return key.level === 'office' ? 'Station and tower' : key.level === 'mall' ? 'Station and mall' : key.level === 'reactor' ? 'Station and pit' : key.level === 'skyways' ? 'Station and skyways' : key.level === 'market' ? 'Station and settlement' : 'Station';
 }
 
 /** What the HUD calls clearing the level. */
 export function clearLabel(key: SectionKey): string {
-  return key.level === 'office' ? 'Tower clear' : key.level === 'mall' ? 'Mall clear' : key.level === 'reactor' ? 'Pit clear' : key.level === 'skyways' ? 'Skyways clear' : 'Station clear';
+  return key.level === 'office' ? 'Tower clear' : key.level === 'mall' ? 'Mall clear' : key.level === 'reactor' ? 'Pit clear' : key.level === 'skyways' ? 'Skyways clear' : key.level === 'market' ? 'Market clear' : 'Station clear';
 }
 
 /**
@@ -179,7 +200,8 @@ export function storeyLabel(layout: StationLayout, level: number): string {
   const r = layout.reactor?.tiers.find(t => t.level === level); // task reactor-build-20261101: 'Rim', 'Tier 1' … 'Core floor'
   if (r) return r.label;
   const k = layout.skyways?.storeys.find(t => t.level === level); // Skyways: 'Concourse', 'Street level', '+15 Skyway'
-  return k ? k.label : '';
+  if (k) return k.label;
+  return layout.market ? marketStoreyLabel(level) : ''; // (task studio-survivor-market-20261108-005807-01: 'Market floor', 'Housing deck')
 }
 
 /** The player pose a level starts at: the office's platform start (layout.office.start), else layout.playerSpawn. */

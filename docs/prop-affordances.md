@@ -144,6 +144,22 @@ tools/asset-pipeline/props/scale-check.mjs --kind <kind>`; the tool now also ren
   `office-physics` / `contact-physics` (the two new dynamic Subway kinds and their masses; on-host by design), `openables`,
   `purpose-shapes`, `damage`, `textures` (the new `lanternGlow` key).
 
+### The Survivor Market (task studio-survivor-market-20261108-005807-01, lane LEVEL)
+The calm settlement (`game/src/gen/market/dress.ts`) is furnished with EXISTING kinds only — no new kind, so no new audit row or scale
+check: stall counters (`shopCounter`), the mall's gun rack / plank shelving / camping tent (level-only mall files the market may load:
+`assets/levelAssets.ts`), shelving, the first-aid cabinet, the iteration-07 workshop / kitchen kit, the kitchen lines, pallet beds,
+bedrolls, fabric screens (`cubiclePartition`), camp tables, chairs, lanterns, fans. Every kind keeps its `OPENABLE_AUDIT` / physics class;
+placement goes through the shared primitive (door clear volumes, access / swing strips, connectivity).
+- **Market rule: storage opens and is empty.** A calm settlement has no free loot and no theft simulation: every loot-holder kind placed
+  there carries the exact empty key `MARKET_EMPTY_KEY` (= `ANNEX_PICKED_KEY`, `{empty: 1, exact: true}`), and the level's loot profile
+  (`items/lootTables.ts` `MARKET_PROFILE`) weighs every category 0 as a second guard. The crates / tool chest still open (their own
+  openables); the traders' goods are the trade stock, never pickups or filler. The one exception is the common station fuel plan
+  (`world/fuelStations.ts`): only the workshop has a fuel affinity, so a market station's plan cans go into its storage like at any station.
+- Scale: the reused deck / workshop pieces were viewed beside the runtime zombie (`scale-check.mjs --kind tentDisplay --kind palletBed
+  --kind repairBench --kind gunRack`): tent 2.20 × 1.15 × 2.14 m, pallet bed 1.99 × 0.36 × 0.80 m, repair bench 1.60 × 2.00 × 0.60 m
+  (bench top 0.90 m), gun rack 2.00 × 1.48 × 0.31 m — all grounded.
+- The ceiling fans and stall awnings are not props: visual-only dressing above every head (`gen/market/art.ts`, `world/marketVisuals.ts`).
+
 ## 3. Movable things move
 Standing user rule (2026-10-30): **every physics object reacts to the player walking into it — no shot needed first** (task
 office-props-physics-scale-20261030, lane PHYS; `tests/contact-physics.test.ts`).

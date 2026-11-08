@@ -127,6 +127,15 @@ describe('profiles: one per logical level, today\'s tables, no overrides', () =>
         expect(p.tables.salvage).toBeDefined();
         continue;
       }
+      // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market = the base tables under the NO-FREE-LOOT overrides
+      // (every economy category 0, every slot 0 lots, no floor finds, an empty gear roll)
+      if (id === 'market') {
+        expect(p.tables).toBe(BASE_TABLES);
+        expect(Object.keys(p.overrides)).toEqual(['categoryWeight', 'slot', 'floor', 'gear']);
+        expect(Object.values(p.overrides.categoryWeight!).every(v => v === 0)).toBe(true);
+        expect(p.overrides.gear).toEqual({mean: 0, cap: 0});
+        continue;
+      }
       // Task reactor-build-20261101: the Reactor = the mall's tables (its per-storey floor program serves the tiers) under explicit
       // category overrides (scarcer ammo / medicine / batteries / materials — tests/reactor-registration.test.ts)
       if (id === 'reactor') {

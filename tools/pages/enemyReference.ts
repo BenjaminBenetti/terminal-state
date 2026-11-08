@@ -38,7 +38,7 @@ import type {Area, StationLayout} from '../../game/src/gen/stationTypes';
 import {OFFICE_FLOORS} from '../../game/src/gen/office/frame';
 import {MALL_RINGS} from '../../game/src/gen/mall/mallTypes'; // task track3-eaton-centre-20261031 (lane PROFILES)
 import {LINGERIE_SPAWN_RULES, LINGERIE_STORES_MAX} from '../../game/src/gen/mall/lingerieSpawns'; // task mall-lingerie-20261102-221554 (lane CONTEXT): the lingerie store's zone
-import {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_REACTOR, TRACK_EXT_SKYWAYS} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs); + the mall's (task mall-playtest-revision-20261031: at most 1)
+import {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_MARKET, TRACK_EXT_REACTOR, TRACK_EXT_SKYWAYS} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs); + the mall's (task mall-playtest-revision-20261031: at most 1)
 import {CELL} from '../../game/src/gen/grid';
 import {ROOM_LABEL} from '../../game/src/gen/stationKit';
 import {purposeById} from '../../game/src/gen/purposes';
@@ -90,7 +90,7 @@ const F = {
   strainer: 'game/src/ai/strainer.ts', // task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY)
   contract: 'game/src/levels/levelContract.ts',
   // task track3-eaton-centre-20261031 (lane PROFILES): the mall (seeded "<Name> Center")
-  mallIndex: 'game/src/gen/mall/index.ts', reactorIndex: 'game/src/gen/reactor/index.ts', skywaysIndex: 'game/src/gen/skyways/index.ts', mallTypes: 'game/src/gen/mall/mallTypes.ts', hordeSpec: 'game/src/ai/hordeSpec.ts',
+  mallIndex: 'game/src/gen/mall/index.ts', reactorIndex: 'game/src/gen/reactor/index.ts', skywaysIndex: 'game/src/gen/skyways/index.ts', marketIndex: 'game/src/gen/market/index.ts', mallTypes: 'game/src/gen/mall/mallTypes.ts', hordeSpec: 'game/src/ai/hordeSpec.ts',
   // Track 2 (lane CONTENT): the service annexes (zone context): their generation config and the content pass that places them
   trackExt: 'game/src/gen/trackExt/config.ts', annexContent: 'game/src/gen/annexContent.ts',
   // task mall-lingerie-20261102-221554 (lane CONTEXT): the mall's optional lingerie store's store-local zone context
@@ -281,6 +281,15 @@ export const ENEMY_LEVEL_ADAPTER: Readonly<Record<LevelId, {
       street: {storeys: 'the street level (every building: lobbies, atrium courts, entrance halls, shops, service rooms)', runs: 1},
       floor: {storeys: 'the skyway level (concourses, bridges, shops, the add-on hall)', runs: 1},
       service: {storeys: 'one seeded service annex off a station track tunnel (its rooms and corridors only)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT_SKYWAYS.annex.max], note: SERVICE_ZONE_NOTE}},
+    },
+  },
+  // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET — a calm settlement: no placement run at all.
+  market: {
+    generator: {fn: 'generateMarketLevel', file: F.marketIndex,
+      note: `ONE continuous level (LevelId 'market'): a calm survivor settlement in a salvaged railway shed where the player's train stops (the platform, six trader stalls, the market square, the housing deck), generated once per level seed. NO enemies: the generator never runs a placement (its one ambient context places [0, 0]), there is no horde pool, no Siren eligibility and no service annex (LEVELS.market.trackExtensions 'none'); its friendly residents are not enemies (never in layout.zombies).`},
+    contexts: {
+      station: {storeys: 'the whole settlement (platform, stalls, square, housing deck)', runs: 0, hook: 'count [0, 0]: a calm settlement, gen/market never asks for a placement run'},
+      service: {storeys: 'none: the market grows no service annex (LEVELS.market.trackExtensions none)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT_MARKET.annex.max], note: SERVICE_ZONE_NOTE}},
     },
   },
 };

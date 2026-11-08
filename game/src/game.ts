@@ -141,10 +141,15 @@ import {applySkywaysStageSupport} from './gen/skyways/stageSupport'; // (lane VE
 import {SKYWAYS_DEST_MODEL_FILES, skywaysDestModelKeysFor} from './gen/skyways/destinations/skywaysDestModels'; // task studio-skyways-destinations-20261106-170011-01 (lane LANDMARKS)
 import {installSkywaysDestinations} from './world/skywaysDestRuntime'; // (destinations, lane LANDMARKS) the posters' / plaques' art atlases
 import {installSkywaysArchTextures} from './world/skywaysArchTextures'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): court / bridge finish textures
+import {installMarketTextures} from './world/marketTextures'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL)
+import {installMarketVisuals} from './world/marketVisuals'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL)
 import {skywaysGardenModelKeysFor} from './world/skywaysGardens'; // (lane ARCH) the planters' foliage model
 import {SKYWAYS_LAYOUT_LANE, skywaysLayoutVersionFor} from './gen/skyways/layoutVersion'; // task studio-skyways-destinations-20261106-170011-01
 import {installSkywaysDestAudio} from './world/skywaysDestAudio'; // task skyways-destinations-20261106 (lane AUDIO): the destinations' location sounds
 import {installSkywaysMapRead} from './world/skywaysMapRead'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the directory boards' close-up read
+import {installMarketTrade, type TradeSystem} from './market/trade/tradeSystem';
+import {MARKET_HUMAN_MODEL_FILES} from './market/humanLooks'; // task studio-survivor-market-20261108-005807-01 (lane HUMANS): the friendly cast file
+import {installMarketPeople, type MarketPeople} from './market/marketPeople'; // (lane HUMANS): the market's residents + stall traders // task studio-survivor-market-20261108-005807-01 (lane TRADE): Rail Ties + the six stalls
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
 import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
@@ -183,6 +188,8 @@ export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory'
 
 /** Task studio-alpha-campaign-foundation-20261102-230708-01: the ordinary station objective (no kill goal). */
 export const SCAVENGE_OBJECTIVE = 'Scavenge fuel and supplies. Return to the train when done.'; // (task train-fuel-system: the train needs a tank of fuel per stop)
+/** Task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market's objective line (a calm pit stop: trade, then ride on). */
+export const MARKET_OBJECTIVE = 'Trade at the stalls. Return to the train when done.';
 
 // (task campaign-foundation-20261102, lane MENU: + renderScale — a linear render-resolution scale over the DPR-capped native buffer;
 // the persisted values live in ui/settingsStore.ts, main.ts copies them in)
@@ -250,7 +257,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES}); // (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES, ...MARKET_HUMAN_MODEL_FILES}); // (survivor market, lane HUMANS: + the friendly cast, level-only market-*) (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
   /** Task track3-eaton-centre-20261031 (lane PACKAGE): textures / GPU resources owned by ONE level, released when the level changes (assets/levelResources.ts). */
   readonly levelResources = new LevelResources();
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
@@ -358,6 +365,10 @@ export class Game {
   trainCargo!: TrainCargoSystem;
   /** Task studio-beta-train-all-cargo-20261107-184244-01: the movable props aboard (world/trainPropCargo.ts). */
   trainPropCargo!: TrainPropCargo;
+  /** Task studio-survivor-market-20261108-005807-01 (lane TRADE): the Rail Ties wallet + market trade (market/trade/tradeSystem.ts). */
+  trade!: TradeSystem;
+  /** Task studio-survivor-market-20261108-005807-01 (lane HUMANS): the market's residents + traders (market/marketPeople.ts). */
+  marketPeople!: MarketPeople;
   /** Task skyways-level-20261106 (lane CAR): the Skyways prize car — while `driving`, update() steps the player through it (world/skywaysCar.ts). */
   skywaysCar!: SkywaysCar;
   /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
@@ -395,7 +406,7 @@ export class Game {
   readonly sirens: SirenSystem;
   // ==== Iteration 16 (lane RUN): the run — logical levels, sections, travel, carryover (lanes/run.notes) ====
   /** The current run (run/runState.ts): level seeds, gear roll, section memories, the Retry-level snapshot. Replaced by NewGame. */
-  run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed(), mall: freshSeed(), skyways: freshSeed(), reactor: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS}); // (+ mall: task track3-eaton-centre-20261031, lane GEN; + reactor: task reactor-build-20261101)
+  run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed(), mall: freshSeed(), market: freshSeed(), skyways: freshSeed(), reactor: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS}); // (+ mall: task track3-eaton-centre-20261031, lane GEN; + reactor: task reactor-build-20261101)
   /** How the player arrived in the current section (lane TOWER: kind 'elevator' starts inside the cab, doors closed). */
   arrival: Arrival = {kind: 'start'};
   /** Run-scoped lane state (INJURY / GEAR): saved at level entry (Retry), restored by Retry level, reset by NewGame — never by travel. */
@@ -603,6 +614,8 @@ export class Game {
     this.skywaysAddon = installSkywaysAddon(this); hookName('skywaysAddon'); // task studio-skyways-level-20261106-054448 (lane ADDON): inert without layout.skyways
     installSkywaysDestinations(this); // task studio-skyways-destinations-20261106-170011-01 (lane LANDMARKS): poster / plaque atlases before the build; inert elsewhere
     installSkywaysArchTextures(this); // task studio-skyways-rework-20261107-054512-01 (lane ARCH): the courts' / bridges' Codex textures before the build (layout v3); inert elsewhere
+    installMarketTextures(this); // task studio-survivor-market-20261108-005807-01 (lane LEVEL): the market's Codex surface textures before the build; inert elsewhere
+    installMarketVisuals(this); hookName('marketVisuals'); // (lane LEVEL) the market's slow ceiling fans (frame hook) and stall awnings; inert elsewhere
     installSkywaysMapRead(this); hookName('skywaysMapRead'); // task studio-skyways-rework-20261107-054512-01 (lane MAPS): E at a directory board reads its face (inert without boards)
     installSkywaysDestAudio(this); // task skyways-destinations-20261106 (lane AUDIO): clock tick / chime, arcade attract, cinema projector emitters per section (inert elsewhere)
     installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
@@ -649,6 +662,15 @@ export class Game {
     hookName('train');
     this.lockbox = installLockbox(this); // task train-lockbox-windows-20261101-232156 (lane BOX): after TRAIN (its onLockboxInteract opens the view)
     hookName('lockbox');
+    // task studio-survivor-market-20261108-005807-01 (lane TRADE): the Rail Ties wallet (run participant 'market.wallet') + the market stalls'
+    // trade view (E at a stall's front; inert where the layout has no market)
+    this.trade = installMarketTrade(this);
+    hookName('marketTrade');
+    // (lane HUMANS) the market's friendly people — traders at their stalls, residents wandering between the market's spots; their own list
+    // (never game.zombies: not hit, counted, alerted or carried); spawned in the section build (before the warm-up); inert elsewhere
+    this.marketPeople = installMarketPeople(this);
+    hookName('marketPeople');
+    this.trade.onTalk = id => this.marketPeople.onTalk(id); // the trader greets the customer who opens its stall
     installSkywaysTrunk(this); hookName('skywaysTrunk'); // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): after the car (its section hook follows the car's) and the Lockbox; inert without the car
     // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
     // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
@@ -982,7 +1004,7 @@ export class Game {
       // task reactor-expansion-20261101 (lane CONTROLS): bullet impacts on an arch-drawn finish (Reactor pit concrete / steel grating /
       // rusted plate, Office drywall / carpet …) take that finish's class and colour (world/finishAt.ts, damage/impactFinish.ts)
       finishAt: this.world.finishAt ?? null,
-      finishMaterial: k => this.world.officeArch?.material(k) ?? this.world.mallArch?.material(k) ?? this.world.reactorArch?.material(k),
+      finishMaterial: k => this.world.officeArch?.material(k) ?? this.world.mallArch?.material(k) ?? this.world.reactorArch?.material(k) ?? this.world.marketArch?.material(k), // (+ the market's: task studio-survivor-market-20261108-005807-01)
       // Iteration 07 (Lane K): shot items move — rigid items / chunks, loot lots lifted off holders (same item / count, never duplicated)
       physics: this.physics,
       lots: (o, d, maxT) => cm.shotLots(o, d, maxT).map(l => ({holder: l.holder, lotId: l.lotId, t: l.t})),
@@ -1083,7 +1105,7 @@ export class Game {
     const obj = document.querySelector('#objective .obj-title');
     // Task studio-alpha-campaign-foundation-20261102-230708-01 (user: "No ordinary clear-all-zombies objective: default objective says
     // scavenge for resources and return to the train when done"): no kill goal anywhere; the Reactor keeps its real endgame chain.
-    if (obj) obj.textContent = key.level === 'reactor' ? 'Restart the reactor' : SCAVENGE_OBJECTIVE;
+    if (obj) obj.textContent = key.level === 'reactor' ? 'Restart the reactor' : key.level === 'market' ? MARKET_OBJECTIVE : SCAVENGE_OBJECTIVE; // (+ the market's: task studio-survivor-market-20261108-005807-01)
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.propModels.sealed = this.levelResources.sealed = true; // lane PACKAGE (track3): the level is built; a later fetch counts as `late`
     this.updateCamera(0);
@@ -1313,6 +1335,9 @@ export class Game {
     const net = generateNetwork(o.networkSeed ?? freshSeed());
     let state = newCampaign(net);
     const devNode = o.dev?.level ? net.nodes.find(n => n.archetype === o.dev!.level) : undefined;
+    // task studio-survivor-market-20261108-005807-01 (lane LEVEL): a dev start of an archetype the network has no node of never starts
+    // silently at another station (every network drawn with ORDINARY_WEIGHTS holds every archetype; this guards any other census)
+    if (o.dev?.level && !devNode) return {ok: false, error: `This network has no ${archetypeLabel(o.dev.level)} station — try again for another network.`};
     if (devNode && devNode.id !== state.current) state = {...state, current: devNode.id, known: [devNode.id], visited: [devNode.id]};
     const w = await this.newGame(net.nodes.find(n => n.id === state.current)!.archetype, {campaign: state, enter: true});
     if (!w) return {ok: false, error: 'The new game could not start.'};
@@ -1684,7 +1709,7 @@ export class Game {
       const startNode = o.campaign?.network.nodes.find(n => n.id === o.campaign!.current);
       if (startNode) level = startNode.archetype;
       const def = LEVELS[level];
-      const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed(), mall: o.seeds?.mall ?? freshSeed(), skyways: o.seeds?.skyways ?? freshSeed(), reactor: o.seeds?.reactor ?? freshSeed()}; // (+ mall: lane GEN; + reactor: task reactor-build-20261101)
+      const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed(), mall: o.seeds?.mall ?? freshSeed(), market: o.seeds?.market ?? freshSeed(), skyways: o.seeds?.skyways ?? freshSeed(), reactor: o.seeds?.reactor ?? freshSeed()}; // (+ mall: lane GEN; + reactor: task reactor-build-20261101)
       const key: SectionKey = startNode ? {level, section: def.entry, station: startNode.id} : {level, section: def.entry};
       const run = createRun({seeds, start: key, levels: LEVELS, rollGear: rollLevelGear, campaign: o.campaign ?? null});
       const shown = startNode ? startNode.name : levelDisplayName(level, seeds[level]); // (task mall-playtest-revision, lane GEN: the seeded mall name)

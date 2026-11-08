@@ -20,8 +20,8 @@ import {BAG_LANE} from '../../src/run/bagStore';
 import {captureRun, deriveMeta, makeSaveFile, type RunFactory, type RunSource, type RunTarget, type SaveFileV1Like, type SavePoint, type TrainLocalPose} from '../../src/save/serialize';
 import type {SaveStorage} from '../../src/save/slots';
 
-export const LEVELS_STUB = {subway: {sections: () => ['main']}, office: {sections: () => ['main']}, mall: {sections: () => ['main']}, skyways: {sections: () => ['main']}, reactor: {sections: () => ['main']}} as Record<LevelId, {sections(s: number): string[]}>;
-export const SEEDS = {subway: 11, office: 22, mall: 33, skyways: 707, reactor: 44};
+export const LEVELS_STUB = {subway: {sections: () => ['main']}, office: {sections: () => ['main']}, mall: {sections: () => ['main']}, market: {sections: () => ['main']}, skyways: {sections: () => ['main']}, reactor: {sections: () => ['main']}} as Record<LevelId, {sections(s: number): string[]}>;
+export const SEEDS = {subway: 11, office: 22, mall: 33, market: 808, skyways: 707, reactor: 44};
 
 const PREFIX = ['Calder', 'Wexford', 'Harrow', 'Bellmere', 'Ashgrove', 'Kingsway', 'Marlow', 'Tidewater'];
 const SUFFIX = ['Park', 'Street', 'Junction', 'Cross', 'Gardens'];

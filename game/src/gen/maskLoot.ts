@@ -46,6 +46,8 @@ export const MASK_LOOT = {
     // Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS keeps the Office's / mall's roll — its glazed bridges start
     // partly breached (gas across some routes) and every pane can be shot out, exactly the Office's window rule; no extra supply.
     skyways: {masks: [1, 2], filters: [2, 5]},
+    // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET — clean air and no free loot: no masks, no filters.
+    market: {masks: [0, 0], filters: [0, 0]},
   } as Readonly<Record<LevelId, MaskLootSpec>>,
   /** A found mask's fitted filter: this fraction range of FILTER_LIFE_S (uniform, seeded per mask). */
   foundFilter: [0.35, 0.75] as const,

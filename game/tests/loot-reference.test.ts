@@ -108,7 +108,12 @@ describe('loot reference: coverage (unknown registrations fail)', () => {
       // task reactor-playtest-round2-20261102 (lane ARRIVAL): + the Reactor's slot overrides (the total-loot hold after the round-2 rooms)
       const slots = Object.entries(P.overrides.slot ?? {}).flatMap(([key, o]) => [
         ...(o?.empty !== undefined ? [{knob: 'slot.empty', key, multiplier: o.empty}] : []), ...(o?.lots !== undefined ? [{knob: 'slot.lots', key, multiplier: o.lots}] : [])]);
-      expect(l.profile.overrides).toEqual(l.id === 'mall' || l.id === 'reactor' ? [...listed('itemWeight'), ...listed('categoryWeight'), ...slots] : []);
+      // task studio-survivor-market-20261108-005807-01: + the Survivor Market's no-free-loot overrides (every category 0, every slot 0 lots,
+      // no floor finds, an empty gear roll) — the floor / gear knobs listed after the slots, as the reference orders them
+      const extra = l.id === 'market' ? [...Object.entries(P.overrides.floor?.chance ?? {}).map(([key, multiplier]) => ({knob: 'floor.chance', key, multiplier})),
+        {knob: 'gear.mean', key: 'mean', multiplier: 0}, {knob: 'gear.cap', key: 'cap (absolute)', multiplier: 0}] : [];
+      expect(l.profile.overrides).toEqual(l.id === 'mall' || l.id === 'reactor' || l.id === 'market' ? [...listed('itemWeight'), ...listed('categoryWeight'), ...slots, ...extra] : []);
+      if (l.id === 'market') expect(Object.keys(P.overrides)).toEqual(['categoryWeight', 'slot', 'floor', 'gear']);
       if (l.id === 'mall') expect(Object.keys(P.overrides).sort()).toEqual(['categoryWeight', 'itemWeight']);
       if (l.id === 'reactor') expect(Object.keys(P.overrides)).toEqual(['categoryWeight', 'slot']); // task reactor-build-20261101: the culminating level's pressure (+ round 2: the total-loot hold)
     }
