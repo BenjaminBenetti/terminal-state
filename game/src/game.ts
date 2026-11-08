@@ -370,7 +370,7 @@ export class Game {
   trainCargo!: TrainCargoSystem;
   /** Task studio-beta-train-all-cargo-20261107-184244-01: the movable props aboard (world/trainPropCargo.ts). */
   trainPropCargo!: TrainPropCargo;
-  /** Task studio-survivor-market-20261108-005807-01 (lane TRADE): the Rail Ties wallet + market trade (market/trade/tradeSystem.ts). */
+  /** Task studio-survivor-market-20261108-005807-01 (lane TRADE): market trade (market/trade/tradeSystem.ts); since the rework Rail Ties are a physical item. */
   trade!: TradeSystem;
   /** Task studio-survivor-market-20261108-005807-01 (lane HUMANS): the market's residents + traders (market/marketPeople.ts). */
   marketPeople!: MarketPeople;
@@ -673,8 +673,8 @@ export class Game {
     hookName('train');
     this.lockbox = installLockbox(this); // task train-lockbox-windows-20261101-232156 (lane BOX): after TRAIN (its onLockboxInteract opens the view)
     hookName('lockbox');
-    // task studio-survivor-market-20261108-005807-01 (lane TRADE): the Rail Ties wallet (run participant 'market.wallet') + the market stalls'
-    // trade view (E at a stall's front; inert where the layout has no market)
+    // task studio-survivor-market-20261108-005807-01 (lane TRADE): the market stalls' trade view (E at a stall's front; inert where the layout
+    // has no market); run participant 'market.wallet' now only settles an old save's balance into physical Rail Ties, once
     this.trade = installMarketTrade(this);
     hookName('marketTrade');
     // task studio-market-rework-20261108-074144-01 (lane WARES): AFTER the trade (its build reads the trade's stock) — every stall's real stock
