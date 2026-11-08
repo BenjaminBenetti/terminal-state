@@ -703,6 +703,21 @@ export const SKYWAYS_SPAWN_PROFILE: SpawnProfile = {
 };
 
 /**
+ * Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET — a CALM settlement (user: "Calm area, no enemies"): no
+ * ambient enemies anywhere (the one 'station' context places [0, 0]: gen/market never asks for a placement run), no horde pool, no
+ * eligibility rules (no Siren), and no annex either (LEVELS.market.trackExtensions 'none': the 'service' context below never runs — it
+ * is declared only so the level keeps the shared annex contract every profile carries). Never a fallback to another level's profile.
+ */
+export const MARKET_SPAWN_PROFILE: SpawnProfile = {
+  id: 'market', label: 'Survivor Market (calm: no enemies)', families: ENEMY_POOL, zombieTypes: ZOMBIE_TYPES,
+  contexts: {
+    station: {label: 'The settlement (platform, stalls, square, housing deck): none — a calm pit stop', count: [0, 0], placement: OFFICE_PLACEMENT, accept: {min: null, max: 'count'}},
+    service: SERVICE_CONTEXT,
+  },
+  rooms: {},
+};
+
+/**
  * THE PER-LEVEL PROFILES. Every level lists every family (familyPool); the Office opts in to the Siren with its eligibility rule.
  * No room modifiers (every room resolves to 1). A new level adds its entry here (Record<LevelId, …> makes that mandatory;
  * levels/levelContract.ts validateLevelRegistry + tests/enemy-spawn-contract.test.ts check coverage and the tier).
@@ -737,6 +752,8 @@ export const SPAWN_PROFILES: Readonly<Record<LevelId, SpawnProfile>> = {
   skyways: SKYWAYS_SPAWN_PROFILE,
   // Task reactor-build-20261101 (primary): THE REACTOR (REACTOR_SPAWN_PROFILE: depth-graded context pools, the deep Siren rule).
   reactor: REACTOR_SPAWN_PROFILE,
+  // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET (MARKET_SPAWN_PROFILE: no enemies).
+  market: MARKET_SPAWN_PROFILE,
 };
 
 /** The spawn profile of a logical level. */

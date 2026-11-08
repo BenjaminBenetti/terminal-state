@@ -25,7 +25,7 @@ export const MARKET = {
   /** The housing deck's floor (m); the soffit under it (deckY - SLAB) is the ceiling of the rooms below. */
   deckY: 3.3,
   /** Stall alcoves: depth (cells), ceiling (m), the opening's head (m); the market gates' ceiling / head (m). */
-  stallDepth: 6,
+  stallDepth: 7,
   stallCeil: 3.0,
   stallHead: 2.6,
   gateCeil: 3.4,

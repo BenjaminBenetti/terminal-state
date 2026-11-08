@@ -78,7 +78,7 @@ describe('mall Sirens', () => {
     // a fresh run spawns every placed index (killed ones only are skipped)
     const live = new Set(enemiesToSpawn(l.zombies.length, createMemory({level: 'mall', section: 'main'})));
     // the game's build loop: sirens.skip (model loaded: false) -> spawnEnemy (createEnemyActor with the lazy models) -> adopt
-    const run = new RunState({seeds: {subway: 1, office: 2, mall: seed, skyways: 707, reactor: 4}, start: {level: 'mall', section: 'main'}});
+    const run = new RunState({seeds: {subway: 1, office: 2, mall: seed, market: 808, skyways: 707, reactor: 4}, start: {level: 'mall', section: 'main'}});
     const host: SirenHost = {
       scene: new THREE.Group(), levels: L, layout: {seed: l.seed, zombies: l.zombies as ZombieSpawn[]}, run, frameHooks: [], sectionHooks: [],
       warmRegistry: {addPool: () => {}}, propModels: {get: k => (k === SIREN_MODEL_KEY ? real : undefined)}, sfx: {sirenHumStop: () => {}} as unknown as Sfx,

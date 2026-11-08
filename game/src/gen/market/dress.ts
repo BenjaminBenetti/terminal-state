@@ -20,6 +20,9 @@ import type {MarketCarve, StallCarve, UnderCarve} from './carve';
 import {STALL_SIGNS} from './names';
 import type {MarketStallId} from './marketTypes';
 
+/** Required pieces that did not fit (QA / tests). */
+export const MARKET_DRESS_FAILS: Record<string, number> = {};
+
 /** The exact empty loot key every market holder carries (the market rule above). */
 export const MARKET_EMPTY_KEY = ANNEX_PICKED_KEY;
 
@@ -88,13 +91,15 @@ export function dressMarket(layout: StationLayout, mc: MarketCarve, rng: Rng, na
     a.noFloorLoot = true;
     const cw = PROP_DEFS.shopCounter.w, cd = PROP_DEFS.shopCounter.d;
     const gapWest = rng.chance(0.5);
-    const runW = 2 * cw, cz = r.z1 - cd / 2 - 0.03;
-    // the trader's way in: a >= 1.2 m gap at one end of the counter run (inside the alcove)
-    const x0 = gapWest ? r.x1 - 0.06 - runW : r.x0 + 0.06;
+    // the counter run stands 0.55 m inside the opening (its doorway approach strip stays clear: gen/doorways.ts DOOR_CLEAR)
+    const runW = 2 * cw, cz = r.z1 - cd / 2 - 0.55;
+    // the trader's way in: a >= 1.2 m gap at one end of the counter run (inside the alcove); the run flush with the other side wall, on
+    // whole cells (two 1.5 m modules = 3 + 3 cells: an offset run would claim a shared cell twice)
+    const x0 = gapWest ? r.x1 - runW : r.x0;
     const counters: PropPlacement[] = [];
     for (let k = 0; k < 2; k++) {
       const p = put(a, 'shopCounter', x0 + cw / 2 + k * cw, cz, 0, {doorOk: true});
-      if (!p) return null;
+      if (!p) { MARKET_DRESS_FAILS[`${s.id} counter`] = (MARKET_DRESS_FAILS[`${s.id} counter`] ?? 0) + 1; return null; }
       counters.push(p);
     }
     const counter = {x0: r3(x0), z0: r3(cz - cd / 2), x1: r3(x0 + runW), z1: r3(cz + cd / 2)};
@@ -118,7 +123,7 @@ export function dressMarket(layout: StationLayout, mc: MarketCarve, rng: Rng, na
     // the painted board over the opening, on the square side
     const o = W(s.opening);
     sign({kind: 'info', text: names[s.id].toUpperCase(), area: mc.square.id, x: (o.x0 + o.x1) / 2, z: o.z1 + 0.02, y: MARKET.stallHead + 0.45, rot: 0, w: Math.min(3.6, (o.x1 - o.x0) + 0.6), style: STALL_SIGNS[s.id].style});
-    return {id: s.id, counter, trader: {x: r3(tx), z: r3(tz)}, front: {x: r3(tx), z: r3(r.z1 + 0.4)}};
+    return {id: s.id, counter, trader: {x: r3(tx), z: r3(tz)}, front: {x: r3(tx), z: r3(counter.z1 + 0.4)}};
   }
 
   // --- 2. Market gates: a lamp each, a MARKET board on the platform side --------------------------------------------------------------
