@@ -74,7 +74,7 @@ export const CUES = [
   'clockTick', 'clockChime', 'arcadeAttract', 'projectorRun',
   // Task studio-market-bar-20261108-225231-01 (lane AUDIO, tools/audio-pipeline/market-audio-build.mjs): the market — the subtle cash register on a
   // successful buy / sell, the crowd murmur loops (the market hall, the bar), the fleeing survivors' panic screams, the fighters' angry grunts,
-  // the player's retch (market/audio/marketAudio.ts).
+  // the player's retch (market/audio/marketSounds.ts).
   'marketCash', 'marketChatter', 'marketBarChatter', 'marketScream', 'marketGrunt', 'marketRetch',
   'casingBrass', 'casingHull', 'bodyFall', 'hurt', 'hitTick', 'hitKill',
   // task studio-general-armor-20261107-231448-01 (tools/audio-pipeline/headhit-build.mjs): the skull crack layered on the hit confirm of a confirmed HEAD hit.

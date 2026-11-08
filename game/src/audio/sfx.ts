@@ -596,7 +596,7 @@ interface LocationChannel { e: LocationEmitter; src: AudioBufferSourceNode; g: G
 /**
  * Task studio-market-bar-20261108-225231-01 (lane AUDIO; user: "Subtle cash-register sound on buy/sell." "Background chatter; screams from
  * fleeing survivors and angry grunts from attackers."): the MARKET's Sound Lab cues (clips market-*.mp3, tools/audio-pipeline/
- * market-audio-build.mjs; provenance derivatives/audio-market-bar.json, levels: its mixCalibration = CUE_GAIN). market/audio/marketAudio.ts
+ * market-audio-build.mjs; provenance derivatives/audio-market-bar.json, levels: its mixCalibration = CUE_GAIN). market/audio/marketSounds.ts
  * decides WHEN and WHERE (the trade's success commit, the people's events, the crowd groups); this section only plays:
  *  - marketCash: ONE register cue at the player (no panner: the counter is right in front of them), a small room send.
  *  - marketVoice: one person's panic scream / angry grunt at a world point (distance, air / occlusion low-pass, HRTF while free, reverb
