@@ -14,7 +14,7 @@ import {LEVELS} from '../src/levels/registry';
 import type {StationLayout} from '../src/gen/stationTypes';
 import type {SkywaysRect} from '../src/gen/skyways/skywaysTypes';
 import {SKYWAYS_EXT, bridgeOuter, buildSkywaysExterior, planSkywaysExterior, type SkywaysExteriorPlan} from '../src/world/skywaysExterior';
-import {FACADE_STYLES, type FacadeBox} from '../src/world/skywaysFacade';
+import {FACADE_PROGRAMME, FACADE_STYLES, type FacadeBox} from '../src/world/skywaysFacade';
 
 installCanvasShim(false);
 const LOG = '/tmp/skyways-facade.log';
@@ -79,8 +79,13 @@ describe('skyways facade relief: the plan', () => {
       }
       const styles = new Set(p.facades.map(f => f.style));
       expect(styles.size).toBeGreaterThanOrEqual(Math.min(3, info.buildings.length));
-      const hubs = p.facades.filter(f => info.buildings.find(b => b.id === f.building)!.role === 'hub');
-      expect(new Set(hubs.map(f => f.style)).size).toBeGreaterThanOrEqual(Math.min(3, hubs.length));
+      // (layout v4) a programme fixes the character (the station building stays civic); the rest rotate, neighbours differing
+      for (const f of p.facades) {
+        const b = info.buildings.find(q => q.id === f.building)!;
+        if (b.role !== 'station' && b.programme && FACADE_PROGRAMME[b.programme]) expect(f.style, `${b.id} ${b.programme}`).toBe(FACADE_PROGRAMME[b.programme]);
+      }
+      const free = p.facades.filter(f => { const b = info.buildings.find(q => q.id === f.building)!; return b.role !== 'station' && !(b.programme ? FACADE_PROGRAMME[b.programme] : b.role === 'tower' || b.role === 'hotel'); });
+      expect(new Set(free.map(f => f.style)).size).toBeGreaterThanOrEqual(Math.min(2, free.length));
       // every building: a base (plinth / piers / band), corners, a cornice and a roof edge (parapet), a real amount of relief
       for (const f of p.facades) {
         const parts = new Set(f.boxes.map(b => b.part));

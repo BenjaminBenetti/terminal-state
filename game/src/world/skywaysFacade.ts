@@ -24,7 +24,7 @@
 
 import {mulberry32} from '../core/rng';
 import type {Side} from '../gen/stationTypes';
-import type {SkywaysBuilding, SkywaysInfo, SkywaysRect} from '../gen/skyways/skywaysTypes';
+import type {SkywaysBuilding, SkywaysInfo, SkywaysProgramme, SkywaysRect} from '../gen/skyways/skywaysTypes';
 import type {PlaneRect} from './skywaysExterior';
 
 type RGB = [number, number, number];
@@ -42,6 +42,8 @@ export const SKYWAYS_FACADE = {
   parapet: {h: 1.1, t: 0.3, cope: 0.1},
   /** Crown frame: height of the verticals over the roof, ring beam depth (m). */
   frame: {h: 3, beam: 0.5},
+  /** A low building's (no shaft) roof-line eave depth, at least (m). */
+  eave: 1.1,
   /** Shortest pier / vertical piece kept (m). */
   minPier: 1.2,
   /** Most boxes per building (a bound: far above today's layouts). */
@@ -127,8 +129,10 @@ export const FACADE_STYLES: Record<FacadeStyle, StyleSpec> = {
   },
 };
 
-/** The rotation over the hub buildings (seeded start): neighbours get different characters. */
+/** The rotation over the buildings without a fixed character (seeded start): neighbours get different characters. */
 const HUB_STYLES: readonly FacadeStyle[] = ['grid', 'ribbon', 'masonry', 'fins'];
+/** (layout version 4) A building programme's character (`classic` joins the rotation). */
+export const FACADE_PROGRAMME: Record<SkywaysProgramme, FacadeStyle | undefined> = {classic: undefined, tower: 'fins', hall: 'masonry', gallery: 'ribbon'};
 
 // ---------------------------------------------------------------------------------------------
 // Walls and keep-clear
@@ -218,17 +222,20 @@ const tint = (c: RGB, k: number): RGB => [c[0] * k, c[1] * k, c[2] * k];
 /** Plans the facade relief of every Skyways building (deterministic per layout seed; runtime only: never touches generation). */
 export function planSkywaysFacades(info: SkywaysInfo, seed: number, ctx: FacadeContext): SkywaysFacadePlan[] {
   const rnd0 = mulberry32((seed ^ 0xfacade5) >>> 0);
-  const ROLE: Partial<Record<SkywaysBuilding['role'], FacadeStyle>> = {station: 'civic', tower: 'fins', hotel: 'masonry'};
-  // the hubs rotate through the characters no role building has taken (all four when that leaves fewer than two)
-  const taken = new Set(info.buildings.map(b => ROLE[b.role]).filter(Boolean));
+  // the character a building's record fixes: the station building civic; a layout v4 programme (the office tower finned, the market
+  // hall brick, the bridge house a glazed ribbon pavilion); before version 4 (no programme) a tower finned, a hotel brick
+  const fixed = (b: SkywaysBuilding): FacadeStyle | undefined => (b.role === 'station' ? 'civic' : b.programme
+    ? FACADE_PROGRAMME[b.programme] : b.role === 'tower' ? 'fins' : b.role === 'hotel' ? 'masonry' : undefined);
+  // the rest rotate through the characters not fixed elsewhere (all four when that leaves fewer than two): neighbours differ
+  const taken = new Set(info.buildings.map(fixed).filter(Boolean));
   const free = HUB_STYLES.filter(s => !taken.has(s));
   const pool = free.length >= 2 ? free : HUB_STYLES;
-  const hubs = info.buildings.filter(b => !ROLE[b.role]).map(b => b.id).sort();
+  const hubs = info.buildings.filter(b => !fixed(b)).map(b => b.id).sort();
   const hubStart = Math.floor(rnd0() * pool.length);
   return info.buildings.map((b, i) => {
     const shell = ctx.shells.find(s => s.building === b.id);
     const rnd = mulberry32((seed ^ Math.imul(i + 1, 0x9e3779b1) ^ 0x5eedfa) >>> 0);
-    const style: FacadeStyle = ROLE[b.role] ?? pool[(hubStart + Math.max(0, hubs.indexOf(b.id))) % pool.length];
+    const style: FacadeStyle = fixed(b) ?? pool[(hubStart + Math.max(0, hubs.indexOf(b.id))) % pool.length];
     return planBuilding(info, b, shell ?? {building: b.id, podiumTop: b.top, tower: null, top: b.top}, ctx.tubes, style, rnd);
   });
 }
@@ -323,7 +330,8 @@ function planBuilding(info: SkywaysInfo, b: SkywaysBuilding, shell: FacadeContex
     vertical(w, 'corner', trim, w.s0 - e, w.s0 + cw, bt0, ct1, cd);
     vertical(w, 'corner', trim, w.s1 - cw, w.s1 + e, bt0, ct1, cd);
     // the base course (a deep band on the base's top storey line) or, on a podium / low building, its cornice
-    if (podium !== null || !upper) run(w, 'cornice', trim, lowTop - S.cornice.h, lowTop, S.cornice.d);
+    // (a low building — a bridge house, a hall's podium — has no shaft: its roof line projects as a deep eave)
+    if (podium !== null || !upper) run(w, 'cornice', trim, lowTop - S.cornice.h, lowTop, upper ? S.cornice.d : Math.max(S.cornice.d, F.eave));
     else run(w, 'course', trim, baseTop - F.bandLo, baseTop + F.bandHi, S.base.band + 0.06);
     // entrance canopies over the street doors (above every head on this storey; some on posts)
     for (const win of windowsOn(w, b, info)) {
