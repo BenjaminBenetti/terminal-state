@@ -24,7 +24,7 @@ import type {StationLayout} from '../src/gen/stationTypes';
 import {PickupManager} from '../src/world/pickups';
 import {PACK_SIZE, type SlotRef} from '../src/items/inventory';
 import {itemDims, type ItemDims} from '../src/items/items';
-import {holderTable} from '../src/items/loot';
+import {holderTable, isLootHolderKind} from '../src/items/loot';
 import {lootProfile} from '../src/items/lootTables';
 import {MARKET_STOCK_LANE, type MarketStockJSON} from '../src/market/trade/stock';
 import {buy, sell, type TradeCtx} from '../src/market/trade/transactions';
@@ -125,6 +125,8 @@ describe('market wares: where they are displayed', () => {
             const p = L.props[i];
             hosts.delete(i);
             expect([p.area, (p.level ?? 0), p.purpose]).toEqual([s.area, s.counter.level, MARKET_EMPTY_KEY]);
+            expect(isLootHolderKind(p.kind), p.kind).toBe(true);
+            if (!isLootHolderKind(p.kind)) continue;
             const t = holderTable(p.kind, p.purpose!, prof);
             expect(t.empty === 1 || t.lots[1] === 0 || !t.rows.length, `${seed} ${p.kind}`).toBe(true); // never rolls loot
             expect(q.y).toBeGreaterThan(p.y);
