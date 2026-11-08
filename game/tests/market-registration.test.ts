@@ -35,9 +35,13 @@ describe('the Survivor Market registration', () => {
   });
 
   it('labels: the seeded settlement name (= layout.name), storeys, section / clear labels, the map / HUD wording', () => {
-    const L = generateMarketLevel({levelSeed: 31337});
+    const L = generateMarketLevel({levelSeed: 31337, layoutVersion: 1}); // (layout version 1's storeys; version 2: below)
     expect(levelDisplayName('market', 31337)).toBe(L.name);
     expect(L.name).toBe(marketNameOf(31337));
+    // (task studio-market-rework-20261108-074144-01) layout version 2 (the default): the same name, its three storeys
+    const L2 = generateMarketLevel({levelSeed: 31337});
+    expect(L2.name).toBe(L.name);
+    expect([0, 1, 2].map(lv => storeyLabel(L2, lv))).toEqual(['Market lanes', 'Catwalks', 'Rooftops']);
     expect(levelDisplayName('market')).toBe(MARKET_GENERIC_NAME);
     expect([storeyLabel(L, 0), storeyLabel(L, 1)]).toEqual(['Market floor', 'Housing deck']);
     expect(sectionLabel({level: 'market', section: 'main'})).toBe('Station and settlement');
@@ -60,7 +64,7 @@ describe('the Survivor Market registration', () => {
       expect(row).toEqual({path: t.url, bytes: buf.length, sha256: crypto.createHash('sha256').update(buf).digest('hex')});
     }
     const prov = JSON.parse(fs.readFileSync(path.join(ROOT, 'game/public/assets/derivatives/market-textures.json'), 'utf8'));
-    expect(Object.keys(prov.textures).sort()).toEqual(['market-corrugated-roof', 'market-corrugated-wall', 'market-plywood', 'market-tarp']);
+    expect(Object.keys(prov.textures).sort()).toEqual(['market-container-rib', 'market-corrugated-roof', 'market-corrugated-wall', 'market-plywood', 'market-tarp']);
     for (const r of Object.values(prov.textures) as {codex: {generator: string; session: string}}[]) expect(r.codex.generator).toMatch(/Codex native image_gen/);
     for (const f of ['mall-gun-wall-rack', 'mall-outdoors-plank-shelving', 'mall-camping-tent-display']) {
       expect(assetAllowedIn('market', `assets/models/${f}.glb`)).toBe(true);

@@ -208,7 +208,7 @@ export class TrainCargo {
   private items: CargoItemJSON[] = [];
   /** Task train-all-cargo: the movable props aboard (stored records). */
   private propRecs: CargoPropJSON[] = [];
-  live: {cargo(): CargoItemJSON[]; restore(items: CargoItemJSON[]): void} | null = null;
+  live: {cargo(): CargoItemJSON[]; restore(items: CargoItemJSON[]): void; add?(item: CargoItemJSON): void} | null = null;
   /** Task train-all-cargo: the live prop cargo (world/trainPropCargo.ts), like `live`. */
   liveProps: {props(): CargoPropJSON[]; restoreProps(props: CargoPropJSON[]): void} | null = null;
 
@@ -220,6 +220,16 @@ export class TrainCargo {
   /** Store records (the live system hands them back when its world goes / a load without a live system). */
   setRecords(items: readonly CargoItemJSON[]): void {
     this.items = items.map(copy);
+  }
+
+  /**
+   * Task studio-market-rework-20261108-074144-01 (lane TRADE): ONE more loose item aboard (the old market balance's overflow as a Rail
+   * Ties pickup lying in the car): through the live system's pending path (spawned in the parked car / riding with it), else the stored
+   * records. The caller keeps the train at most CARGO.maxItems loose items (records().length) and takes the uid from the run's counter.
+   */
+  add(item: CargoItemJSON): void {
+    if (this.live?.add) this.live.add(copy(item));
+    else this.items.push(copy(item));
   }
 
   /** Task train-all-cargo: the props aboard (live when attached, else the stored records). Copies. */

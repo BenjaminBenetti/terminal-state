@@ -52,6 +52,7 @@ export function finishClass(key: string | null | undefined): DamageClass | null 
   if (key === 'annexWall') return 'concrete';
   if (key in SKYWAYS) return SKYWAYS[key]; // task studio-skyways-level-20261106-054448 (lane VIEW): world/skywaysArch.ts keys
   if (key in MARKET) return MARKET[key]; // task studio-survivor-market-20261108-005807-01 (lane LEVEL): world/marketArch.ts keys
+  if (key.startsWith('market-cont-')) return 'steel'; // (task studio-market-rework-20261108-074144-01: version 2's container paints)
   // (task studio-skywalk-variety-20261107-231448-01, lane DRESS) the small shops' palettes: skyways-shop-{wall|floor}|<finish row>
   // (task studio-skywalk-encounters-20261108-074144-01, lane STORES) + the Mall store families' rows under the same keys
   if (key.startsWith('skyways-shop-')) return skywaysMallImpact(key) ?? skywaysShopImpact(key);

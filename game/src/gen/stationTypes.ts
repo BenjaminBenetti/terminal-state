@@ -207,8 +207,12 @@ export interface ZombieSpawn {
    */
   look?: SpawnLook;
 }
-/** Task mall-lingerie-20261102-221554 (lane CONTEXT): store-local look selectors of ZombieSpawn.look. */
-export type SpawnLook = 'lingerie';
+/**
+ * Task mall-lingerie-20261102-221554 (lane CONTEXT): store-local look selectors of ZombieSpawn.look. (Task
+ * studio-skywalk-encounters-20261108-074144-01, lane COSPLAY: + 'cosplay' = a costumed zombie of the Skyways anime convention,
+ * gen/skyways/cosplaySpawns.ts -> ai/cosplay.ts cosplayLook(seed, index).)
+ */
+export type SpawnLook = 'lingerie' | 'cosplay';
 
 /**
  * Iteration 08 (Lane A, Lane G's format; the type lives in gen/levels.ts): a railing along a walkable

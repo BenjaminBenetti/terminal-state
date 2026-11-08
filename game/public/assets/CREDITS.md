@@ -348,6 +348,22 @@ Not reviewed by ear on the build worker. Raw takes are kept outside Git.
 - Raw Meshy outputs and the user references stay private (studio reference task folder plus a local backup). Unapproved
   prototypes; no commercial clearance implied. Ordinary zombie clips only.
 
+## Skyways convention: cosplay zombie costumes (ordinary zombies)
+- `assets/models/outfit-cosplay-{head,upper,lower}.glb` are built only from models already in this repository. No model,
+  image or audio generation (Meshy or Codex) was used. The local CPU builder is `tools/asset-pipeline/zombie/build-cosplay.mjs`.
+- Head pieces are rigid on the Head joint and fitted per body:
+  - The convention mascot statue's bear-ear hat and blue hair (`skyways-mascot-poses.glb`, its supplied figure) are split by
+    base colour and connectivity into a costume hat and wig.
+  - An alternate palette (cream hat, rose wig) is a per-texel hue / value transform of the same map.
+  - The statue's head (hat, hair and face) becomes an oversized costume head.
+  - The ramen counter's sushi mascot figurine (`skyways-sushi-mascot.glb`) becomes a novelty hat.
+  - These keep their sources' status: community-supplied via the user, creator / license links pending, no license or
+    authorship claim.
+- The dyed hoodie, sweater, blazer and slacks reuse the ordinary fitted Meshy garments' geometry, skin weights and masks
+  unchanged. Only the base-colour map has a deterministic, luminance-preserving colour transform.
+- Provenance: `assets/derivatives/outfit-cosplay.json`. Unapproved prototypes; no commercial clearance implied. Ordinary zombie
+  clips only.
+
 <!-- BEGIN paper-map-20261102 (build-paper-map.mjs) -->
 ## Campaign: the paper subway map
 

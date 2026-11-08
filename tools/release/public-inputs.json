@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 59508,
-      "sha256": "e7dd1386cae09df255cdf8443c7cb0c37c6f73a19a85914fe45a0d8567bfd0db"
+      "bytes": 60852,
+      "sha256": "4b9bb0297ec1e3108484432e7da89ef2dc1b6a1af54616aaa052dd9b1db417e7"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1795,8 +1795,8 @@
     },
     {
       "path": "assets/derivatives/market-textures.json",
-      "bytes": 7912,
-      "sha256": "97837f19546629915b8bf5b617e1d69dd83e649a0037637c424e65344224ce58"
+      "bytes": 9778,
+      "sha256": "44aba73f6414919c34e3e4b7fc24b114a17f9748cf90992bc1eca8a17d4bf509"
     },
     {
       "path": "assets/derivatives/meshy-t25-ammo-20261030.json",
@@ -1862,6 +1862,11 @@
       "path": "assets/derivatives/outfit-coat.json",
       "bytes": 139824,
       "sha256": "c17e513cbc56d6381ce96f352b089c830572e74a1953bf7971b5c3420fb6ccf1"
+    },
+    {
+      "path": "assets/derivatives/outfit-cosplay.json",
+      "bytes": 19602,
+      "sha256": "c2576f95c40e3d5caf87048c9ca6926fee7d934c43d4fc341525421b0f245909"
     },
     {
       "path": "assets/derivatives/outfit-flannel.json",
@@ -3354,6 +3359,21 @@
       "sha256": "0f8dd368762e5f7e8bda487e4113451731b8e06a6f1dff7da0f1c8401104c34c"
     },
     {
+      "path": "assets/models/outfit-cosplay-head.glb",
+      "bytes": 2044868,
+      "sha256": "4a6507dc284c1861d35d278cd86105ff54541d07da439359941164d1d28d104e"
+    },
+    {
+      "path": "assets/models/outfit-cosplay-lower.glb",
+      "bytes": 688840,
+      "sha256": "340049eb6efb2f01d2bebc9ad2e77aab31d64231b64f66bfa78b476fd0e31051"
+    },
+    {
+      "path": "assets/models/outfit-cosplay-upper.glb",
+      "bytes": 2253656,
+      "sha256": "3948ab7281b7245ae4616c35755e333b332678630c8433d8a22f4833dbaae29d"
+    },
+    {
       "path": "assets/models/outfit-flannel-t25.glb",
       "bytes": 843464,
       "sha256": "09b7e3f2853e2a40d749b21abdf86d760c1415aabdac02435e14f419c725846c"
@@ -4702,6 +4722,11 @@
       "path": "assets/textures/mall/ads/ad-womenswear.jpg",
       "bytes": 20836,
       "sha256": "5675e080c91abffaf9a7c980afdeb78de9e5029b8c32d45f012a11056cbc1033"
+    },
+    {
+      "path": "assets/textures/market/market-container-rib.jpg",
+      "bytes": 232153,
+      "sha256": "96da2ec6295e8a2ee3211399ae7059b7cff05ba91f820a3d0a2bb0d789b3539c"
     },
     {
       "path": "assets/textures/market/market-corrugated-roof.jpg",

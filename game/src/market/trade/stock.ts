@@ -17,8 +17,9 @@
 //  - gear: 3-4 distinct pieces (GEAR_WEIGHTS + the gas mask), some part-used (a mask's fitted filter, an airtank's air);
 //  - scrap: 3-5 lots of crafting materials (GLOBAL_POOL.material).
 // LOADING never throws: each stall's list goes through the Lockbox's sanitising stack loader (run/trainLockbox.ts — the same serializer
-// every store uses: mag / filter / air / armor wear are kept exactly, clamped like the Lockbox's); a uid already seen in another stall is dropped. A strict check of
-// the saved record is save/validate.ts (marketStock).
+// every store uses: mag / filter / air / armor wear are kept exactly, clamped like the Lockbox's); a uid already seen in another stall is dropped (and, task
+// studio-market-rework-20261108-074144-01, a restart part or Rail Ties: never stock). A strict check of the saved record is save/validate.ts
+// (marketStock).
 import {Rng, hashString} from '../../core/rng';
 import {ITEMS, type ItemDef} from '../../items/items';
 import {WEAPONS} from '../../weapons/weapons';
@@ -159,7 +160,8 @@ export class MarketStock {
       const box = new TrainLockbox(raw.length);
       box.load({v: 1, slots: raw});
       for (const s of box.slots) {
-        if (!s || ITEMS[s.itemId]?.kind === 'part' || stacksIn(s).some(x => seen.has(x.uid))) continue;
+        const kind = s ? ITEMS[s.itemId]?.kind : undefined;
+        if (!s || kind === 'part' || kind === 'currency' || stacksIn(s).some(x => seen.has(x.uid))) continue; // (lane TRADE, market rework: ties are money, never stock)
         for (const x of stacksIn(s)) seen.add(x.uid);
         st.stalls[stall].push(s);
       }

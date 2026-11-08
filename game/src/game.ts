@@ -44,8 +44,9 @@ import {spawnProfile} from './ai/spawnTables'; // lane HORDE: the level's horde 
 import {HOOK_SLOTS, S as SPAN, UpdateProfiler} from './debug/updateProfile'; // Task frame-budget-deferral-20261030 (lane MEASURE): opt-in frame profiler
 import type {ZombieSpawn} from './gen/station';
 import {ZombieLookLibrary} from './ai/outfits';
-import {chooseSpawnLook, lingerieModelKeysFor} from './ai/spawnLook'; // task mall-lingerie-20261102-221554 (lane CONTEXT): ordinary pick, or the lingerie store's variants' set
+import {chooseSpawnLook, cosplayModelKeysFor, lingerieModelKeysFor} from './ai/spawnLook'; // task mall-lingerie-20261102-221554 (lane CONTEXT): ordinary pick, or the lingerie store's variants' set
 import {LINGERIE_MODEL_FILES, createLingerieLibrary} from './ai/lingerie'; // (lane FIT's lazy garments + their separate look library)
+import {COSPLAY_MODEL_FILES, createCosplayLibrary} from './ai/cosplay'; // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): the convention's lazy costumes + their separate look library
 import type {WardrobeLibrary} from './ai/wardrobe';
 import {alertListeners, type BrainWorld} from './ai/brain';
 import {lureWorld} from './ai/lightLure'; // Iteration 12 (AI): light attracts enemies
@@ -148,12 +149,16 @@ import {installMarketTextures} from './world/marketTextures'; // task studio-sur
 import {installMarketVisuals} from './world/marketVisuals'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL)
 import {skywaysGardenModelKeysFor} from './world/skywaysGardens'; // (lane ARCH) the planters' foliage model
 import {SKYWAYS_LAYOUT_LANE, skywaysLayoutVersionFor} from './gen/skyways/layoutVersion'; // task studio-skyways-destinations-20261106-170011-01
+import {MARKET_LAYOUT_LANE, marketLayoutVersionFor} from './gen/market/layoutVersion'; // task studio-market-rework-20261108-074144-01 (lane LAYOUT)
 import {installSkywaysDestAudio} from './world/skywaysDestAudio'; // task skyways-destinations-20261106 (lane AUDIO): the destinations' location sounds
 import {installSubwayMapRead} from './world/subwayMapRead'; // task studio-ui-subway-maps-20261108-074144-01: the station map kiosks' close-up read
 import {installSkywaysMapRead} from './world/skywaysMapRead'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the directory boards' close-up read
 import {installMarketTrade, type TradeSystem} from './market/trade/tradeSystem';
 import {MARKET_HUMAN_MODEL_FILES} from './market/humanLooks'; // task studio-survivor-market-20261108-005807-01 (lane HUMANS): the friendly cast file
 import {installMarketPeople, type MarketPeople} from './market/marketPeople'; // (lane HUMANS): the market's residents + stall traders // task studio-survivor-market-20261108-005807-01 (lane TRADE): Rail Ties + the six stalls
+import {installMarketCombat, playerPelletDamage, type MarketCombat, type MarketCombatant} from './market/combat/marketCombat'; // task studio-market-rework-20261108-074144-01 (lane COMBAT)
+import type {MarketHostilityApi} from './market/hostility';
+import {installMarketWares, type MarketWares} from './market/wares/wares'; // task studio-market-rework-20261108-074144-01 (lane WARES): the stalls' owned stock on display, the red Steal
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
 import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
@@ -261,7 +266,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES, ...MARKET_HUMAN_MODEL_FILES}); // (survivor market, lane HUMANS: + the friendly cast, level-only market-*) (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...COSPLAY_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES, ...MARKET_HUMAN_MODEL_FILES}); // (survivor market, lane HUMANS: + the friendly cast, level-only market-*) (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
   /** Task track3-eaton-centre-20261031 (lane PACKAGE): textures / GPU resources owned by ONE level, released when the level changes (assets/levelResources.ts). */
   readonly levelResources = new LevelResources();
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
@@ -302,6 +307,7 @@ export class Game {
   private zombieLooks: ZombieLookLibrary | null = null;
   /** Task mall-lingerie-20261102-221554 (lane CONTEXT): the separate lingerie look library over the loaded lazy garments (rebuilt when they change). */
   private lingerieLooks: {models: readonly unknown[]; lib: WardrobeLibrary} | null = null;
+  private cosplayLooks: {models: readonly unknown[]; lib: WardrobeLibrary} | null = null; // (lane COSPLAY)
   pickups!: PickupManager;
   readonly fx = new Effects();
   private readonly strainerTrail = new StrainerWetTrail(); // (Strainer wet-shine trail driver; marks live in fx)
@@ -369,10 +375,16 @@ export class Game {
   trainCargo!: TrainCargoSystem;
   /** Task studio-beta-train-all-cargo-20261107-184244-01: the movable props aboard (world/trainPropCargo.ts). */
   trainPropCargo!: TrainPropCargo;
-  /** Task studio-survivor-market-20261108-005807-01 (lane TRADE): the Rail Ties wallet + market trade (market/trade/tradeSystem.ts). */
+  /** Task studio-survivor-market-20261108-005807-01 (lane TRADE): market trade (market/trade/tradeSystem.ts); since the rework Rail Ties are a physical item. */
   trade!: TradeSystem;
   /** Task studio-survivor-market-20261108-005807-01 (lane HUMANS): the market's residents + traders (market/marketPeople.ts). */
   marketPeople!: MarketPeople;
+  /** Task studio-market-rework-20261108-074144-01 (lane COMBAT): attackable market people, the settlement's hostility, their gunfire (market/combat/marketCombat.ts). */
+  marketCombat!: MarketCombat;
+  /** (lane COMBAT) The market hostility seam (market/hostility.ts) the trade / wares lanes call: hostile, provoke, canTrade. */
+  marketHostility!: MarketHostilityApi;
+  /** Task studio-market-rework-20261108-074144-01 (lane WARES): the stalls' real stock displayed as owned world items; theft (market/wares/wares.ts). */
+  marketWares!: MarketWares;
   /** Task skyways-level-20261106 (lane CAR): the Skyways prize car — while `driving`, update() steps the player through it (world/skywaysCar.ts). */
   skywaysCar!: SkywaysCar;
   /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
@@ -438,7 +450,7 @@ export class Game {
   // (round 2, R3) + the generated annex genset model on a layout with a genset record (a shared file: every annex-bearing level)
   // (task mall-lingerie-20261102, lane STORE) + the lingerie store's display sets: lane FIT's outfit files they are cut from (lazy, same keys)
   // (task mall-lingerie-20261102-221554, lane CONTEXT) + the lingerie garments on a layout with lingerie-tagged spawns (the mall's lingerie store only)
-  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys, lingerieModelKeysFor];
+  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys, lingerieModelKeysFor, cosplayModelKeysFor];
   /** One lifecycle operation at a time: travel, new game, retry level. */
   private readonly lifecycle = new SingleFlight();
   /** Live pickups that are (what is left of) a generated layout pickup -> its layout.pickups index. */
@@ -667,15 +679,25 @@ export class Game {
     hookName('train');
     this.lockbox = installLockbox(this); // task train-lockbox-windows-20261101-232156 (lane BOX): after TRAIN (its onLockboxInteract opens the view)
     hookName('lockbox');
-    // task studio-survivor-market-20261108-005807-01 (lane TRADE): the Rail Ties wallet (run participant 'market.wallet') + the market stalls'
-    // trade view (E at a stall's front; inert where the layout has no market)
+    // task studio-survivor-market-20261108-005807-01 (lane TRADE): the market stalls' trade view (E at a stall's front; inert where the layout
+    // has no market); run participant 'market.wallet' now only settles an old save's balance into physical Rail Ties, once
     this.trade = installMarketTrade(this);
     hookName('marketTrade');
+    // task studio-market-rework-20261108-074144-01 (lane WARES): AFTER the trade (its build reads the trade's stock) — every stall's real stock
+    // as owned world items on its display surfaces; its E / prompt go first (unshift): aimed at a ware, a red Steal (inert without a market)
+    this.marketWares = installMarketWares(this);
+    hookName('marketWares');
     // (lane HUMANS) the market's friendly people — traders at their stalls, residents wandering between the market's spots; their own list
     // (never game.zombies: not hit, counted, alerted or carried); spawned in the section build (before the warm-up); inert elsewhere
     this.marketPeople = installMarketPeople(this);
     hookName('marketPeople');
     this.trade.onTalk = id => this.marketPeople.onTalk(id); // the trader greets the customer who opens its stall
+    // task studio-market-rework-20261108-074144-01 (lane COMBAT): after the people (its section build reads them; its frame drives them once
+    // hostile) — their hit volumes for fire() / meleeContact(), the settlement's hostility (Game.marketHostility), the hostile survivors'
+    // gunfire through gunshotPlayer; the lane store 'market.hostility'; inert where the layout has no market
+    this.marketCombat = installMarketCombat(this);
+    this.marketHostility = this.marketCombat;
+    hookName('marketCombat');
     installSkywaysTrunk(this); hookName('skywaysTrunk'); // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): after the car (its section hook follows the car's) and the Lockbox; inert without the car
     // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
     // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
@@ -790,9 +812,12 @@ export class Game {
   generateSection(key: SectionKey, run: RunState = this.run): StationLayout {
     this.lifecycleCounts.generate++;
     // (task studio-skyways-destinations-20261106-170011-01) a Skyways station regenerates with the layout version it was first built with
-    const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : undefined;
+    // (task studio-market-rework-20261108-074144-01, lane LAYOUT) so does a Survivor Market: a market entered under the first market's
+    // build keeps version 1 forever, an unvisited / new one builds the container settlement (gen/market/layoutVersion.ts)
+    const versionLane = key.level === 'skyways' ? SKYWAYS_LAYOUT_LANE : key.level === 'market' ? MARKET_LAYOUT_LANE : null;
+    const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : undefined;
     const layout = LEVELS[key.level].generate(key.section, {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {})}); // (campaign: the node's own seed)
-    if (layoutVersion !== undefined && run.laneStore(SKYWAYS_LAYOUT_LANE, key) === undefined) run.setLaneStore(SKYWAYS_LAYOUT_LANE, {v: layoutVersion}, key);
+    if (layoutVersion !== undefined && versionLane && run.laneStore(versionLane, key) === undefined) run.setLaneStore(versionLane, {v: layoutVersion}, key);
     const node = key.station ? run.node(key.station) : null;
     if (node) adoptStationName(layout, node.name); // campaign: the map's / save's name is the one on the signs and the HUD
     return layout;
@@ -1083,7 +1108,8 @@ export class Game {
     if (this.layout.hordes?.length) {
       const byIndex = new Map<number, EnemyActor>();
       for (const [z, i] of this.enemyIndex) byIndex.set(i, z);
-      this.hordes = new HordeDirector(this.layout, this.levels, i => byIndex.get(i)?.brain, spawnProfile(key.level).horde?.patrol);
+      // (task studio-skywalk-encounters-20261108-074144-01: Skyways version 5 hordes walk the Skyways patrol graph; the Mall's otherwise)
+      this.hordes = new HordeDirector(this.layout, this.levels, i => byIndex.get(i)?.brain, spawnProfile(key.level).horde?.patrol, this.layout.skyways?.patrol);
     } else this.hordes = null;
     // Iteration 16 (RUN): first visit: the generated pickups; afterwards exactly the remembered loose items (dropped ones too)
     const plan = pickupPlan(this.layout.pickups.length, mem);
@@ -2052,6 +2078,21 @@ export class Game {
     return lib;
   }
 
+  /**
+   * Task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): the cosplay look library (ai/cosplay.ts createCosplayLibrary) over the
+   * boot models (the bodies, the reused ordinary slacks) + the loaded lazy costume files; null while none is loaded. Rebuilt only when the
+   * loaded set changes.
+   */
+  private cosplayLookLibrary(models: Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>): WardrobeLibrary | null {
+    const lazy = Object.keys(COSPLAY_MODEL_FILES).sort().map(k => [k, this.propModels.get(k)] as const).filter(([, g]) => g);
+    if (!lazy.length) return null;
+    const c = this.cosplayLooks;
+    if (c && c.models.length === lazy.length && c.models.every((g, k) => g === lazy[k][1])) return c.lib;
+    const lib = createCosplayLibrary({...models, ...Object.fromEntries(lazy)});
+    this.cosplayLooks = {models: lazy.map(([, g]) => g), lib};
+    return lib;
+  }
+
   spawnEnemy(s: ZombieSpawn, i: number): EnemyActor {
     const models = this.assets.models as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>;
     const looks = (this.zombieLooks ??= new ZombieLookLibrary(models));
@@ -2059,8 +2100,10 @@ export class Game {
     const {actor: z, fallback} = createEnemyActor(s, withEnemyModels(models, k => this.propModels.get(k)), this.rand, () => {
       // task mall-lingerie-20261102-221554 (lane CONTEXT): a spawn tagged look 'lingerie' (the mall lingerie store's variants only)
       // wears its fitted set (ai/lingerie.ts lingerieLook(seed, i), when buildable top + bottom); every other spawn the ordinary pick
-      const pick = looks.bodies.length ? chooseSpawnLook(this.currentSeed, i, s, looks, s.look === 'lingerie' ? this.lingerieLookLibrary(models) : null) : null;
-      const source = pick ? (pick.library === 'lingerie' ? this.lingerieLookLibrary(models)! : looks).build(pick.look) : models.zombie;
+      // (lane COSPLAY: + a spawn tagged look 'cosplay' — the Skyways convention's costumed zombies — wears its costume the same way)
+      const special = s.look === 'lingerie' ? this.lingerieLookLibrary(models) : s.look === 'cosplay' ? this.cosplayLookLibrary(models) : null;
+      const pick = looks.bodies.length ? chooseSpawnLook(this.currentSeed, i, s, looks, special) : null;
+      const source = pick ? (pick.library === 'ordinary' ? looks : special!).build(pick.look) : models.zombie;
       if (!source) throw new Error('no zombie body model loaded (registry bodies and legacy zombie-rigged.glb both missing)');
       return new ZombieActor(source, s, this.rand);
     });
@@ -2985,14 +3028,18 @@ export class Game {
       // enemyRay.ts: the old cheap reject mis-projected pitched rays and skipped enemies up / down stairs, atria and the pit)
       const eh = nearestEnemyHit(o, d, bestT, this.zombies);
       if (eh) { bestT = eh.t; bestZ = eh.enemy; bestPart = eh.part; }
+      // task studio-market-rework-20261108-074144-01 (lane COMBAT): a market person nearer still (its own bone volumes, any storey)
+      const mh = this.marketCombat.rayHit(o, d, bestT);
+      let bestP: MarketCombatant | null = null;
+      if (mh) { bestT = mh.t; bestZ = null; bestP = mh.person; bestPart = mh.part; }
       // Lane D: corpses stop (and tear under) bullets too; shots passing close knock loose pickups about.
       const corpse = this.damage.corpseHit(this.zombies, o, d, bestT);
-      if (corpse) { bestT = corpse.t; bestZ = null; }
+      if (corpse) { bestT = corpse.t; bestZ = null; bestP = null; }
       // Iteration 08 (Lane S): a filler stock piece on the pellet line (exact per-piece test; inside a stocked shelf when its box is the
       // world hit) takes the pellet: its impulse at the hit point. Loot items / pickups in front of it still take it first (Lane K path).
-      const fh = this.stock.pelletHit(o, d, bestT, wh, this.layout.props, !!bestZ || !!corpse);
+      const fh = this.stock.pelletHit(o, d, bestT, wh, this.layout.props, !!bestZ || !!corpse || !!bestP);
       prof.end(SPAN.fireRays);
-      if (fh) { bestT = fh.t; bestZ = null; }
+      if (fh) { bestT = fh.t; bestZ = null; bestP = null; }
       const end = origin.clone().addScaledVector(dir, bestT);
       const shot = {damage: def.damage * WeaponController.falloff(def, bestT), pellet: def.pellets > 1, weapon: def.id};
       // Iteration 07 (Lane K): items / lots / light props on the shot line take the bullet's impulse (it passes on through them)
@@ -3011,6 +3058,9 @@ export class Game {
         dmg.set(bestZ, e);
         // Lane D: rest-space flesh / clothing wound + blood + flesh pieces (was fx.bodyHit only)
         this.damage.hitZombie(bestZ, end, dir, bestPart as 'head' | 'torso' | 'limb', {...shot, damage: amount});
+      } else if (bestP) {
+        // (lane COMBAT) the same damage (falloff x the weapon's part multiplier), aggregated per person for this trigger pull
+        this.marketCombat.pellet(bestP, playerPelletDamage(def, bestPart as 'head' | 'torso' | 'limb', bestT), end, dir, bestPart === 'head', def.id);
       } else if (corpse && !fh) {
         this.damage.hitZombie(corpse.z, end, dir, corpse.part, shot, true);
         this.sfx.impact(end.x, end.y, end.z, 'flesh');
@@ -3043,10 +3093,12 @@ export class Game {
         prof.end(SPAN.ragdoll);
       }
     }
-    if (dmg.size) {
+    // (lane COMBAT) each market person this shot reached takes it once: its hit confirm, flinch, the settlement's hostility, a ragdoll
+    const people = this.marketCombat.endShot(def);
+    if (dmg.size || people.hit) {
       this.stats.hits++;
-      this.hud.hitmarker(anyKill);
-      this.sfx.hitTick(anyKill);
+      this.hud.hitmarker(anyKill || people.kill);
+      this.sfx.hitTick(anyKill || people.kill);
     }
     // gunfire alerts zombies; walls muffle it (Lane B, iteration 08: a slab between storeys muffles it more). Task
     // office-seamless-20261029 (ENGINE): 3D distance, x0.35 per slab between the storeys (ai/brain.ts hearingMuffle); no
@@ -3093,16 +3145,23 @@ export class Game {
     const up = new THREE.Vector3().crossVectors(right, fwd).normalize();
     const o: Vec3 = {x: origin.x, y: origin.y, z: origin.z};
     const L = this.levels, props = this.layout.props, trench = this.layout.trench.floorY;
+    // (task studio-market-rework-20261108-074144-01, lane COMBAT: + the market's people, their own volumes)
     const res = resolveMelee(o, meleeRayDirs(fwd, right, up, def.melee.rays), def.range,
-      this.zombies.map(z => ({id: z, alive: z.brain.alive, x: z.brain.x, y: z.brain.y, z: z.brain.z, volumes: z.hitVolumes})),
+      [...this.zombies.map(z => ({id: z as EnemyActor | MarketCombatant, alive: z.brain.alive, x: z.brain.x, y: z.brain.y, z: z.brain.z, volumes: z.hitVolumes})), ...this.marketCombat.meleeTargets()],
       (ro, rd, max) => raycastWorld(L, props, ro, rd, max, trench),
       (ro, rd, maxT) => this.damage.corpseHit(this.zombies, ro, rd, maxT));
     if (!res) { this.logMelee({kind: 'miss'}); return; } // a clean miss: only the swing's rustle
     this.damage.beginShot(); // one wound / tear group per swing
     const point = new THREE.Vector3(res.point.x, res.point.y, res.point.z), dir = new THREE.Vector3(res.dir.x, res.dir.y, res.dir.z);
     const wound = {damage: 24, pellet: false, weapon: def.id}; // wound / gore sizing of one rifle round
-    if (res.kind === 'enemy') {
-      const z = res.target;
+    if (res.kind === 'enemy' && this.marketCombat.isCombatant(res.target)) {
+      // (lane COMBAT) a market person: the blade's damage once (its confirm / flinch / hostility / ragdoll inside)
+      const killed = this.marketCombat.meleeHit(res.target, meleeDamage(def, res.part), res.part, point, dir, def.id);
+      this.hud.hitmarker(killed);
+      this.sfx.hitTick(killed);
+      this.logMelee({kind: 'person', part: res.part, t: +res.t.toFixed(3), damage: meleeDamage(def, res.part), killed, id: res.target.id});
+    } else if (res.kind === 'enemy') {
+      const z = res.target as EnemyActor;
       this.damage.hitZombie(z, point, dir, res.part, wound);
       const killed = z.brain.damage(meleeDamage(def, res.part), this.player.x, this.player.z, this.player.y, {stagger: false});
       z.hitFlash = 1;
@@ -3312,6 +3371,22 @@ export class Game {
     this.sfx.hurt();
     this.cancelUse('hit');
     return resolved;
+  }
+
+  /**
+   * Task studio-market-rework-20261108-074144-01 (lane COMBAT): a hostile survivor's round reaching the player from (fromX, fromZ) — the
+   * ENEMY hit (`hit.enemy`) through the one pipeline like a zombie's claw (the enemy x2 once, armour, the injury save, wear), with the
+   * same directional feedback as any hit from somewhere (HUD direction, shake, hurt cue, an item in use knocked away).
+   */
+  gunshotPlayer(hit: PlayerHit, fromX: number, fromZ: number): ResolvedHit {
+    return this.blastPlayer(hit, fromX, fromZ);
+  }
+
+  /** (lane COMBAT) Someone else's muzzle flash lights the scene (the player's muzzle light, when the player is not firing this instant). */
+  npcMuzzleLight(at: THREE.Vector3): void {
+    if (this.muzzleT > 0.02) return;
+    this.muzzleLight.position.copy(at);
+    this.muzzleT = 0.05;
   }
 
   /** Task track1-siren-blightbelly-20261031 (lane BLIGHT): an enemy killed by a Blightbelly's blast — the normal kill bookkeeping (stats, death cue, ragdoll). */

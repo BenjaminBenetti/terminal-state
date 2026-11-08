@@ -22,6 +22,25 @@ export interface MarketStall {
   front: MarketPoint;
   /** The area index the stall stands in. */
   area: number;
+  /**
+   * Task market-rework: the surfaces its wares are displayed on (layout v2 writes them; a v1 market derives them from its counter,
+   * market/wares). Absent on v1 layouts.
+   */
+  displays?: MarketDisplaySlot[];
+}
+
+/**
+ * Task studio-market-rework-20261108-074144-01: a surface a stall shows its wares on (a counter top, a shelf board, a display table):
+ * the top's centre (y = the surface height), its yaw and its size. The shop's real, owned stock is displayed there (market/wares).
+ */
+export interface MarketDisplaySlot extends MarketPoint {
+  yaw: number;
+  /** Usable width (along yaw's right axis) / depth of the surface (m). */
+  w: number;
+  d: number;
+  /** (lane LAYOUT, layout v2) Free height above the surface (m) and the layout.props index of the fixture it belongs to. */
+  clear?: number;
+  host?: number;
 }
 
 /** A place a resident idles / sits / works at (walkable floor, never the trench, the parked train's footprint or a counter). */
@@ -32,7 +51,11 @@ export interface MarketSpot extends MarketPoint {
 }
 
 export interface MarketLayout {
-  v: 1;
+  /**
+   * 1: the first market (one salvaged shed, stall row); 2 (task studio-market-rework-20261108-074144-01): the dense container settlement.
+   * A station keeps the version it was first built with (its geometry, ids and stock never reroll); unvisited markets build the newest.
+   */
+  v: 1 | 2;
   /** Exactly one stall per MARKET_STALLS id. */
   stalls: MarketStall[];
   /** Resident spots (wander targets / idle posts), at least a dozen, spread over the market's storeys. */
