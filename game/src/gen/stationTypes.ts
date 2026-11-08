@@ -295,6 +295,11 @@ export interface Storefront {
    * renderer turns only its sign band + lettering to the lobby: gen/storefronts.ts storefrontParts `anchorSign`).
    */
   outward?: true;
+  /**
+   * Task studio-skywalk-variety-20261107-231448-01 (layout version 4): a unit dressed by its OWN dresser (the Skyways ramen restaurant,
+   * gen/skyways/ramen.ts): the station dresser's generic storefront fit-out skips it; its front, fascia and sign are drawn as usual.
+   */
+  ownDress?: true;
 }
 
 export interface StationLayout {

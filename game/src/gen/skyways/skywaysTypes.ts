@@ -41,6 +41,21 @@ export interface SkywaysStorey {
 export type SkywaysBuildingRole = 'station' | 'hub' | 'tower' | 'hotel';
 
 /**
+ * (layout version 4, task studio-skywalk-variety-20261107-231448-01; user: "the 2 level layout is very samy … each building [needs] a
+ * real distinct architectural feel, and different layouts, and a little more open. Every time you cross a bridge it should feel like an
+ * adventure") A building's PROGRAMME — what it is, not only its floor-plan family:
+ *  - `classic`: the lobby + skyway court of the earlier versions (shops, anchors, a public stair, sometimes an atrium);
+ *  - `gallery`: a skywalk-only BRIDGE HOUSE — no public street floor at all: a long, wide glazed promenade at the bridge level, lookouts
+ *    over the street on every free facade, shops and arcades along it;
+ *  - `hall`: a MARKET HALL — one tall open hall from the street floor to the glass roof (a gallery ring at the bridge level all round
+ *    it), the stairs / escalators climbing inside the hall, market counters round its floor, no anchor store;
+ *  - `tower`: an office TOWER LOBBY — a tall lobby with a free-standing GRAND STAIR in the middle of it (open all round), a café or two
+ *    and no shop arcade at street level, the tenant's office floor at the bridge level.
+ * Versions 1–3 have no programme (classic).
+ */
+export type SkywaysProgramme = 'classic' | 'gallery' | 'hall' | 'tower';
+
+/**
  * (task studio-skyways-layout-variety-20261106-054448-01) A building's floor-plan family: `court` (a central lobby court, the atrium
  * buildings' plan), `galleria` (a long spine hall through the building with street doors at its ends), `offset` (a court pushed into
  * the corner toward its bridges, with an L-arm out to the far facades), `cross` (a small central court with arms out to the facades).
@@ -67,6 +82,8 @@ export interface SkywaysBuilding {
   atrium?: {rect: SkywaysRect; roofY: number};
   /** Floor-plan family (layout-variety pass). */
   plan?: SkywaysPlan;
+  /** (layout version 4) The building's programme (absent = classic). */
+  programme?: SkywaysProgramme;
   /** The building's FOOD COURT (food counters round a seated court): its storey and the court's area (layout.areas index). */
   foodCourt?: {level: number; area: number};
 }

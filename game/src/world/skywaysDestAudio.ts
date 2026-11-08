@@ -7,8 +7,9 @@
 // gen/skyways/skywaysTypes.ts) and audio/sfx.ts owns the channels. Inert without layout.skyways or without those destinations.
 //  - clock: every landmark of family 'clock' -> clockTick at its centrepiece, `clock.lift` m over the court floor (the movement / faces;
 //    the clock court is an atrium court: no storey gate — it is heard from the gallery above too);
-//  - arcade: every anchor of family 'arcade' -> arcadeAttract at its sales floor's centre, cabinet-speaker height, its range covering the
-//    floor and the lobby in front of its storefront, gated to its storey;
+//  - arcade: SILENT (task studio-skywalk-variety-20261107-231448-01, user: "arcade machines make a strange noise, lets just have no noise
+//    coming from the arcade machines in the arcade store"): no arcade emitter on any layout version (visited stations included: the
+//    emitters are rebuilt from the layout on every section build); the clock and the projector are unchanged;
 //  - cinema: every anchor of family 'cinema' WITH an auditorium (zones[0]; a cinema that fell back to a plain hall stays inert) ->
 //    projectorRun at the auditorium's BACK wall — the wall toward the cinema's lobby (the anchor's `front` side; the projection booth sits
 //    behind the audience, the screen on the far wall) — centred along it, `projector.inset` m into the room, at the booth's port height,
@@ -24,7 +25,6 @@ export const SKYWAYS_DEST_AUDIO = {
   // (task studio-skyways-rework-20261107-054512-01, user: "clock tick too loud / far" -> half the level, heard in its court only:
   // 8 m instead of 26 m, sfx.ts LOCATION_AUDIO.ref.clockTick 2 m; the chime strikes only within the same 8 m)
   clock: {lift: 3, gain: 0.5, range: 8},
-  arcade: {lift: 1.2, gain: 1, rangePad: 8},
   projector: {inset: 0.6, port: 3, ceilGap: 0.5, gain: 1, rangePad: 2},
 } as const;
 
@@ -40,14 +40,6 @@ function floorOf(layout: Pick<StationLayout, 'areas' | 'levels'>, areaId: number
 function clockEmitter(m: SkywaysLandmark): LocationEmitter {
   const C = SKYWAYS_DEST_AUDIO.clock;
   return {x: m.x, y: r3(m.y + C.lift), z: m.z, cue: 'clockTick', gain: C.gain, range: C.range};
-}
-
-function arcadeEmitter(layout: Pick<StationLayout, 'areas' | 'levels'>, an: SkywaysAnchor): LocationEmitter | null {
-  const A = SKYWAYS_DEST_AUDIO.arcade, f = layout.areas[an.floor], y = floorOf(layout, an.floor);
-  if (!f || y === null) return null;
-  const x0 = f.x * CELL, z0 = f.y * CELL, x1 = (f.x + f.w) * CELL, z1 = (f.y + f.h) * CELL;
-  const half = Math.hypot(x1 - x0, z1 - z0) / 2;
-  return {x: r3((x0 + x1) / 2), y: r3(y + A.lift), z: r3((z0 + z1) / 2), cue: 'arcadeAttract', gain: A.gain, range: r3(half + A.rangePad), floorY: y};
 }
 
 function projectorEmitter(layout: Pick<StationLayout, 'areas' | 'levels'>, an: SkywaysAnchor): LocationEmitter | null {
@@ -70,7 +62,7 @@ export function skywaysLocationEmitters(layout: Pick<StationLayout, 'areas' | 'l
   const out: LocationEmitter[] = [];
   for (const m of sk.landmarks ?? []) if (m.family === 'clock') out.push(clockEmitter(m));
   for (const an of sk.anchors ?? []) {
-    const e = an.family === 'arcade' ? arcadeEmitter(layout, an) : an.family === 'cinema' ? projectorEmitter(layout, an) : null;
+    const e = an.family === 'cinema' ? projectorEmitter(layout, an) : null; // (the arcade is silent)
     if (e) out.push(e);
   }
   return out;

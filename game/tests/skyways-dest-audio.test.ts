@@ -51,13 +51,15 @@ describe('Skyways destinations: location emitters from a real generated layout',
     expect(CLIP_MANIFEST_SKYWAYS_DESTINATIONS.clockChime[0].loop).toBeUndefined();
   });
 
-  it('clock -> clockTick at the centrepiece (+3 m), arcade -> arcadeAttract at its floor centre, cinema -> projectorRun at the auditorium back wall', () => {
+  it('clock -> clockTick at the centrepiece (+3 m), the arcade SILENT, cinema -> projectorRun at the auditorium back wall', () => {
     const L = gen(SEED_ALL), sk = L.skyways!;
     const clock = sk.landmarks!.find(m => m.family === 'clock')!, arcade = sk.anchors!.find(a => a.family === 'arcade')!, cinema = sk.anchors!.find(a => a.family === 'cinema')!;
     expect(clock && arcade && cinema).toBeTruthy();
     expect(cinema.format).toBe('multi-zone');
     const em = skywaysLocationEmitters(L);
-    expect(em.map(e => e.cue).sort()).toEqual(['arcadeAttract', 'clockTick', 'projectorRun']);
+    // (task studio-skywalk-variety-20261107-231448-01, user: "no noise coming from the arcade machines in the arcade store")
+    expect(em.map(e => e.cue).sort()).toEqual(['clockTick', 'projectorRun']);
+    expect(em.some(e => e.cue === 'arcadeAttract')).toBe(false);
     // (rework; user: "clock tick too loud / far") half the level, heard in its court only
     const tick = em.find(e => e.cue === 'clockTick')!;
     expect(tick.gain).toBe(0.5);
@@ -72,16 +74,9 @@ describe('Skyways destinations: location emitters from a real generated layout',
     expect(ct.y).toBeCloseTo(clock.y + SKYWAYS_DEST_AUDIO.clock.lift, 6);
     expect(ct.floorY).toBeUndefined();
     expect(ct.range).toBeGreaterThanOrEqual(LOCATION_AUDIO.chime.range);
-    // arcade: the centre of its sales floor (inside the anchor's footprint), speaker height, gated to its storey, range over the floor + the lobby in front
-    const ar = em.find(e => e.cue === 'arcadeAttract')!, fl = L.areas[arcade.floor];
-    const fx0 = fl.x * CELL, fz0 = fl.y * CELL, fx1 = (fl.x + fl.w) * CELL, fz1 = (fl.y + fl.h) * CELL;
-    expect(ar.x).toBeCloseTo((fx0 + fx1) / 2, 3);
-    expect(ar.z).toBeCloseTo((fz0 + fz1) / 2, 3);
-    expect(ar.x).toBeGreaterThan(arcade.rect.x0); expect(ar.x).toBeLessThan(arcade.rect.x1);
-    expect(ar.z).toBeGreaterThan(arcade.rect.z0); expect(ar.z).toBeLessThan(arcade.rect.z1);
-    expect(ar.floorY).toBe(L.levels[fl.level ?? 0].baseY);
-    expect(ar.y).toBeCloseTo(ar.floorY! + SKYWAYS_DEST_AUDIO.arcade.lift, 6);
-    expect(ar.range).toBeGreaterThan(Math.hypot(fx1 - fx0, fz1 - fz0) / 2);
+    // the arcade's sales floor emits nothing (every layout version: emitters are rebuilt from the layout on each section build)
+    const fl = L.areas[arcade.floor];
+    expect(em.some(e => e.floorY !== undefined && e.x > fl.x * CELL && e.x < (fl.x + fl.w) * CELL && e.z > fl.y * CELL && e.z < (fl.y + fl.h) * CELL)).toBe(false);
     // projector: inside the auditorium (zones[0]), 0.6 m from the wall toward the cinema's lobby (its front side), centred along it,
     // under the auditorium ceiling, gated to its storey, range over the whole auditorium
     const pr = em.find(e => e.cue === 'projectorRun')!, au = L.areas[cinema.zones[0]];
@@ -115,7 +110,7 @@ describe('Skyways destinations: location emitters from a real generated layout',
     host.sectionHooks[0].build!(gen(SEED_ALL));
     host.sectionHooks[0].teardown!();
     host.sectionHooks[0].build!(gen(SEED_NONE));
-    expect(got.map(l => l.length)).toEqual([3, 0, 0]);
+    expect(got.map(l => l.length)).toEqual([2, 0, 0]); // (the clock + the projector: the arcade is silent)
   });
 });
 
@@ -248,9 +243,11 @@ describe('Skyways destinations: the location channels (fake WebAudio)', () => {
     const {sfx, ctx} = await setup();
     const em = skywaysLocationEmitters(gen(SEED_ALL));
     sfx.setLocationEmitters(em);
-    const ar = em.find(e => e.cue === 'arcadeAttract')!, pr = em.find(e => e.cue === 'projectorRun')!;
-    step(sfx, ctx, {x: ar.x, y: ar.floorY! + 1.6, z: ar.z});
-    expect(sfx.locationAudioState().sounding).toContain('arcadeAttract');
+    const pr = em.find(e => e.cue === 'projectorRun')!;
+    // (task studio-skywalk-variety-20261107-231448-01) standing in the middle of the arcade's sales floor: nothing from its machines
+    const arcade = gen(SEED_ALL).skyways!.anchors!.find(a => a.family === 'arcade')!, fl = gen(SEED_ALL).areas[arcade.floor];
+    step(sfx, ctx, {x: (fl.x + fl.w / 2) * CELL, y: gen(SEED_ALL).levels[fl.level ?? 0].baseY + 1.6, z: (fl.y + fl.h / 2) * CELL});
+    expect(sfx.locationAudioState().sounding).not.toContain('arcadeAttract');
     step(sfx, ctx, {x: pr.x, y: pr.floorY! + 1.6, z: pr.z});
     expect(sfx.locationAudioState().sounding).toContain('projectorRun');
     sfx.setWorld({occlusion: null});
