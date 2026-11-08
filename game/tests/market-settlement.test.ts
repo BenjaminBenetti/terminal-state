@@ -168,9 +168,10 @@ describe('the Survivor Market, layout version 2 (the container settlement)', () 
           expect(d.clear!, tag).toBeGreaterThan(0.1);
           expect(d.level).toBe(s.front.level);
         }
-        // the wares planner (market/wares) takes them as given and fits a full stall's worth of mixed stock
+        // the wares planner (market/wares) takes them — all but the customer counter tops (task studio-market-bar-20261108-225231-01: the
+        // wares stand on the shelves near the trader) — and fits a full stall's worth of mixed stock
         const surfaces = stallSurfaces(L, s);
-        expect(surfaces.length).toBe(disp.length);
+        expect(surfaces.length).toBe(disp.filter(d => L.props[d.host!].kind !== 'shopCounter').length);
         expect(planStall(mixed, surfaces, id => itemDims(id)).count, tag).toBe(WARES.maxPerStall);
       }
     }

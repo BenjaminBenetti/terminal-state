@@ -3,7 +3,9 @@
 // stalls' OWNED WARES (market/wares/*) on a generated v1 market with the REAL TradeSystem (seeded stock in the station's lane memory),
 // PickupManager and Inventory:
 //  - surfaces: v1 derives them from each stall's own furniture (the counter tops first, the run joined across its seam, the exposed back
-//    tiers), all empty-keyed holders (never loot / salvage), never under the lantern / toolbox; v2 `displays` are used as given;
+//    tiers), all empty-keyed holders (never loot / salvage), never under the lantern / toolbox; v2 `displays` are used as given
+//    (allStallSurfaces; task studio-market-bar-20261108-225231-01: the wares themselves use those minus the customer counter tops, nearest
+//    the trader first — market-wares-shelves.test.ts — so the Steal looks below aim from in front of a ware's shelf);
 //  - the plan: deterministic, inside its surfaces, no overlaps, within the free height, a change never moves the others; a shotgun fits
 //    the v1 gun counter;
 //  - displays = stock: every ware IS its stock stack (the same object), owned, resting on its surface, nothing floating / overlapping;
@@ -29,7 +31,7 @@ import {lootProfile} from '../src/items/lootTables';
 import {MARKET_STOCK_LANE, type MarketStockJSON} from '../src/market/trade/stock';
 import {buy, sell, type TradeCtx} from '../src/market/trade/transactions';
 import type {MarketProvocation} from '../src/market/hostility';
-import {WARES, stallSurfaces, vendorDisplayHosts} from '../src/market/wares/slots';
+import {WARES, allStallSurfaces, stallSurfaces, vendorDisplayHosts} from '../src/market/wares/slots';
 import {planStall, supported, type WarePlace} from '../src/market/wares/plan';
 import {MarketWares, STEAL_RED, WARES_TEXT, wareLabel, type Ware} from '../src/market/wares/wares';
 import {capturePickups} from '../src/run/worldMemory';
@@ -79,6 +81,14 @@ function market(seed = 4242) {
     t.frame();
   };
   const centre = (w: Ware) => new THREE.Box3().setFromObject(w.pickup.obj).getCenter(new THREE.Vector3());
+  /** (task studio-market-bar-20261108-225231-01: the wares stand on the shelves near the trader) an eye 0.7 m in front of a ware's shelf, clear of the trader. */
+  const reachEye = (w: Ware) => {
+    const s = stall(w.stall), q = stallSurfaces(L, s)[w.place.surface];
+    const f = new THREE.Vector3(Math.sin(q.yaw), 0, Math.cos(q.yaw)), side = new THREE.Vector3(Math.cos(q.yaw), 0, -Math.sin(q.yaw));
+    const e = new THREE.Vector3(w.place.x, s.front.y + 1.6, w.place.z).addScaledVector(f, 0.7);
+    if (Math.hypot(e.x - s.trader.x, e.z - s.trader.z) < 0.75) e.addScaledVector(side, (side.dot(new THREE.Vector3(e.x - s.trader.x, 0, e.z - s.trader.z)) >= 0 ? 1 : -1) * 0.8);
+    return e;
+  };
   /** The stall's ware nearest its customer spot (on the counter), optionally of a kind the inventory does not hold yet. */
   const nearest = (id: MarketStallId, ok: (w: Ware) => boolean = () => true) => {
     const s = stall(id);
@@ -86,7 +96,7 @@ function market(seed = 4242) {
   };
   const record = () => t.h.run.laneStore<MarketStockJSON>(MARKET_STOCK_LANE);
   build();
-  return {...t, L, pickups, camera, wares, provoked, hostility, build, stall, shown, look, centre, nearest, record};
+  return {...t, L, pickups, camera, wares, provoked, hostility, build, stall, shown, look, centre, reachEye, nearest, record};
 }
 type Market = ReturnType<typeof market>;
 
@@ -109,14 +119,15 @@ function allUids(m: Market): number[] {
 }
 
 describe('market wares: where they are displayed', () => {
-  it('v1: every stall shows on the real open surfaces of its own empty-keyed furniture — counter tops first, joined across the run\'s seam', () => {
+  it('v1: every stall OFFERS the real open surfaces of its own empty-keyed furniture — counter tops first, joined across the run\'s seam', () => {
     const prof = lootProfile('market');
     for (const seed of SEEDS) {
       const L = layoutOf1(seed);
       expect(L.market!.v).toBe(1);
       const hosts = vendorDisplayHosts(L);
       for (const s of L.market!.stalls) {
-        const ss = stallSurfaces(L, s);
+        // (task studio-market-bar-20261108-225231-01: the wares use stallSurfaces — these minus the customer counter tops)
+        const ss = allStallSurfaces(L, s);
         expect(ss.length, `${seed} ${s.id}`).toBeGreaterThan(0);
         expect(ss[0].hosts.every(i => L.props[i].kind === 'shopCounter'), `${seed} ${s.id}`).toBe(true);
         // the two 1.5 m counter modules' facing ends are one surface (wider than one module's 1.26 m top)
@@ -159,7 +170,7 @@ describe('market wares: where they are displayed', () => {
       {x: 3, z: 2, y: 1.1, level: 0, yaw: 0, w: 0.05, d: 0.4}, // too narrow
       Object.assign({x: 5, z: 6, y: 0.45, level: 0, yaw: Math.PI, w: 0.9, d: 0.3}, {clear: 0.3, host: 7}),
     ]};
-    expect(stallSurfaces(L, st)).toEqual([
+    expect(allStallSurfaces(L, st)).toEqual([
       {x: 1, y: 0.9, z: 2, yaw: 0.5, w: 1.2, d: 0.4, clear: WARES.clear, level: 1, hosts: []},
       {x: 5, y: 0.45, z: 6, yaw: Math.PI, w: 0.9, d: 0.3, clear: 0.3, level: 0, hosts: [7]},
     ]);
@@ -218,7 +229,7 @@ describe('market wares: the display plan', () => {
   it('the v1 gun counter takes a 0.98 m shotgun (the joined top) beside the lantern and the toolbox, plus its ammo', () => {
     const shotgun: ItemDims = {w: 0.98, d: 0.229, h: 0.095, shape: 'flat'}; // world/pickups.ts meshFor's shotgun-user.glb on its side
     for (const seed of SEEDS) {
-      const L = layoutOf1(seed), s = L.market!.stalls.find(x => x.id === 'gun')!, surfaces = stallSurfaces(L, s);
+      const L = layoutOf1(seed), s = L.market!.stalls.find(x => x.id === 'gun')!, surfaces = allStallSurfaces(L, s);
       const pk = planStall([{uid: 1, itemId: 'shotgun'}, {uid: 2, itemId: 'ammo_12ga'}, {uid: 3, itemId: 'ammo_12ga'}, {uid: 4, itemId: 'ammo_9mm'}],
         surfaces, id => (id === 'shotgun' ? shotgun : dims(id)));
       expect(pk.placed.has(1), `${seed}`).toBe(true);
@@ -318,7 +329,7 @@ describe('market wares: ownership and the red Steal', () => {
   it('looking at a ware: the plain Take never targets it, the in-game prompt is a RED "Steal <item>", the ware is highlighted', () => {
     const m = market();
     const w = m.nearest('medical');
-    m.look('medical', m.centre(w));
+    m.look('medical', m.centre(w), m.reachEye(w));
     expect(m.wares.aimed).toBe(w);
     const p = m.prompt();
     expect(p).toBe(WARES_TEXT.steal(wareLabel(w.pickup.stack)));
@@ -340,8 +351,10 @@ describe('market wares: ownership and the red Steal', () => {
   it('a ware knocked off its spot is still owned (Steal, never Take) and re-sits on its spot on the next build', () => {
     const m = market();
     const w = m.nearest('general'), uid = w.uid, home = w.pickup.obj.position.clone();
-    w.pickup.obj.position.set(home.x, 0, home.z + 0.75); // knocked onto the floor in front of the counter
-    w.pickup.x = home.x; w.pickup.y = 0; w.pickup.z = home.z + 0.75;
+    // knocked onto the floor beside the customer spot (task studio-market-bar-20261108-225231-01: it fell off its shelf by the entrance)
+    const s0 = m.stall('general'), out = Math.sign(s0.front.z - s0.trader.z), fx = s0.front.x + 0.35, fz = s0.front.z + out * 0.45;
+    w.pickup.obj.position.set(fx, s0.front.y, fz);
+    w.pickup.x = fx; w.pickup.y = s0.front.y; w.pickup.z = fz;
     w.pickup.obj.updateMatrix();
     m.look('general', m.centre(w));
     expect(m.wares.aimed?.uid).toBe(uid);
@@ -359,7 +372,7 @@ describe('market wares: theft', () => {
     const m = market();
     const w = m.nearest('general', x => m.h.inv.count(x.pickup.stack.itemId) === 0), st = w.pickup.stack, uid = w.uid;
     const c0 = census(m.h.inv, m.sys.stock!);
-    m.look('general', m.centre(w));
+    m.look('general', m.centre(w), m.reachEye(w));
     expect(m.press()).toBe(true);
     expect(m.h.inv.allStacks(true).includes(st)).toBe(true); // the very stack (uid, condition)
     expect(m.sys.stock!.stalls.general.some(s => s.uid === uid)).toBe(false);
@@ -396,7 +409,7 @@ describe('market wares: theft', () => {
     const m = market();
     fillPockets(m);
     const w = m.nearest('general', x => x.pickup.stack.itemId !== 'flare'); // (a flare would take the empty grenade slot)
-    m.look('general', m.centre(w));
+    m.look('general', m.centre(w), m.reachEye(w));
     const snap = () => JSON.stringify({inv: m.h.inv.toJSON(), stock: m.sys.stock!.toJSON(), rec: m.record(), shown: m.wares.qa().stalls});
     const before = snap();
     expect(m.press()).toBe(true);
@@ -408,7 +421,7 @@ describe('market wares: theft', () => {
   it('never twice: rebuild / save -> load show exactly the stock again (the stolen stack once, in the inventory)', () => {
     const m = market();
     const w = m.nearest('general', x => m.h.inv.count(x.pickup.stack.itemId) === 0), uid = w.uid;
-    m.look('general', m.centre(w));
+    m.look('general', m.centre(w), m.reachEye(w));
     expect(m.press()).toBe(true);
     m.teardown();
     m.build();
