@@ -3,10 +3,11 @@
 // the convention's TABLE SNACKS — a modest, finite set of real consumables standing on the event's table tops (layout version 4 only:
 // gen/skyways/addon.ts runs this when skywaysGenVersion(layout) >= 4, on its own rng fork, after the main hall and the venue floor are
 // dressed and lifted):
-//  - the REGISTRATION desks: the badge staff's drink / snack on the staff side of a desk or two (CON_TABLE_SNACK_ROWS);
+//  - the REGISTRATION desks: the badge staff's drink / snack on the staff side of a desk or two (at most half the desks;
+//    CON_TABLE_SNACK_ROWS);
 //  - the PANEL tables: a drink at one or two of the panelists' places (CON_PANEL_DRINK_ROWS: mostly bottled water);
 //  - the VENDOR tables (the main hall's merch rows and the artist alley): a bubble tea, a can, a bag of chips on the vendor's side of
-//    about one table in four, clear of the table's stock.
+//    at most about one table in three, clear of the table's stock.
 // The first snack off a panel table is always a bubble tea (the user's ask); the rest are drawn from the items/lootTables.ts rows. Each is
 // an ORDINARY layout pickup (existing items, models and consumption) standing on the table's real top — y = the table's base + its top
 // height, its footprint (the radius of its w x d at any yaw) wholly over the top and clear of the table's own on-top props (merch,
@@ -26,7 +27,7 @@ import type {ConventionResult} from './addonConvention';
 import type {VenueResult} from './venueDress';
 
 /** Snacks per convention (inclusive target), the share of vendor tables that may hold one, panel drinks per panel room (inclusive). */
-export const CON_SNACKS = {total: [7, 12] as const, vendorShare: 0.3, perPanel: [1, 2] as const, perRegistration: [1, 2] as const};
+export const CON_SNACKS = {total: [7, 12] as const, vendorShare: 0.35, perPanel: [1, 2] as const, perRegistration: [1, 2] as const};
 /** Host-local depth (m, the table's -Z side: the vendor's / staff's / panelists' side) of the snacks on a table top. */
 export const CON_SNACK_LZ = -0.24;
 /** Clearance kept between a snack's footprint and the table edge / its stock / another pickup (m). */
@@ -100,7 +101,7 @@ export function dressConventionSnacks(layout: StationLayout, rng: Rng, src: {con
   const desks = venue?.desks ?? [];
   res.tables.registration = desks.length;
   if (desks.length) {
-    let n = Math.min(rng.int(CON_SNACKS.perRegistration[0], CON_SNACKS.perRegistration[1]), desks.length);
+    let n = Math.min(rng.int(CON_SNACKS.perRegistration[0], CON_SNACKS.perRegistration[1]), Math.ceil(desks.length / 2)); // (most desks stay bare)
     for (const t of rng.shuffle(desks.slice())) {
       if (n <= 0 || left() <= 0) break;
       if (onTable(t, rng.shuffle([0.55, -0.55, 0.3, -0.3, 0.75, -0.75]), CON_TABLE_SNACK_ROWS, 'registration')) n--;
@@ -122,7 +123,7 @@ export function dressConventionSnacks(layout: StationLayout, rng: Rng, src: {con
       if (onTable(s.t, [s.lx, s.lx + 0.12, s.lx - 0.12], CON_PANEL_DRINK_ROWS, 'panel')) n--;
     }
   }
-  // --- the vendors: about one table in four (the main hall's merch rows and the artist alley) -------------------------------------------
+  // --- the vendors: at most about one table in three (the main hall's merch rows and the artist alley) -------------------------------------------
   const vendors = [...(src.convention?.tables ?? []), ...(venue?.tables ?? [])];
   res.tables.vendor = vendors.length;
   let cap = Math.max(1, Math.round(vendors.length * CON_SNACKS.vendorShare));

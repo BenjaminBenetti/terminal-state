@@ -77,7 +77,7 @@ export function dressSkywaysAddon(layout: StationLayout, rng: Rng): AddonDressRe
     if (res.venue && info.addon.convention) info.addon.convention.statues.push(...conventionStatues(res.venue, info.addon.level));
   }
   // (task studio-skywalk-variety-20261107-231448-01, lane DRESS; layout version 4 only, its own fork) a few drinks / snacks on the
-  // event's table tops: the badge desks, the panel tables, about one vendor table in four
+  // event's table tops: the badge desks, the panel tables, at most about one vendor table in three
   if (res.convention && skywaysGenVersion(layout) >= 4) {
     res.snacks = dressConventionSnacks(layout, rng.fork('skyways-con-snacks'), {convention: res.convention, ...(res.venue ? {venue: res.venue} : {})});
     res.skipped.push(...res.snacks.skipped);
