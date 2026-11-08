@@ -70,16 +70,17 @@ describe('the game tooltip: show / content', () => {
 
   it('text only: markup in content is never parsed; tones; setTip on a live element updates what is shown', () => {
     const b = dom.doc.body.appendChild(dom.doc.createElement('button'));
-    setTip(b, {head: '<img src=x onerror=alert(1)>', lines: ['a', 'b'], tone: 'danger'});
+    const be = b as unknown as Element; // (the Node DOM's element as the DOM type the API takes)
+    setTip(be, {head: '<img src=x onerror=alert(1)>', lines: ['a', 'b'], tone: 'danger'});
     over(b);
     const el = tooltipElement()!;
     expect(el.querySelector('.gt-head')!.textContent).toBe('<img src=x onerror=alert(1)>');
     expect(el.querySelector('.gt-head')!.querySelectorAll('img')).toHaveLength(0);
     expect(el.classList.contains('gt-danger')).toBe(true);
-    setTip(b, {head: 'Steal', hint: 'The trader will see you', tone: 'danger'});
+    setTip(be, {head: 'Steal', hint: 'The trader will see you', tone: 'danger'});
     expect(el.querySelector('.gt-head')!.textContent).toBe('Steal');
-    setTip(b, null);
-    expect(tipOf(b)).toBeNull();
+    setTip(be, null);
+    expect(tipOf(be)).toBeNull();
     expect(tooltipState()).toBeNull();
     expect(tipAttrs(null)).toBe('');
   });
