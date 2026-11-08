@@ -39,6 +39,7 @@ import {buildWallDetail} from './wallDetail';
 import {applyStationDecay, archShopMaterial} from './decay';
 import {buildOfficeProp, cutOfficeWindows, isOfficeBuilt} from './officeProps'; // Iteration 16 (WORLD-GEN)
 import {cutSkywaysWindows} from './skywaysWindows'; // task studio-skyways-level-20261106-054448 (lane GAS): the Skyways glazing holes
+import {skywaysOcclusionSee, skywaysWindowSpans} from './skywaysOcclusion'; // task studio-skywalk-variety-20261107-231448-01 (lane PERF): the culler's see-through Skyways structure
 import {buildSkywaysKitchenProp} from './skywaysKitchen'; // task studio-skyways-level-20261106-054448 (lane FOOD): ramen restaurant range / cookware / mascot
 import {isSkywaysKitchenKind} from '../gen/skyways/kitchenKinds';
 import {buildSkywaysAddonProp} from './skywaysAddon'; // task studio-skyways-level-20261106-054448 (lane ADDON): convention / prize-car kinds
@@ -781,8 +782,12 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // Task reactor-build-20261101 (lane ARCH): + the Reactor's pit as the atrium (tiers above / below stay visible through the open pit)
   // Task studio-reactor-submit-roof-fog-20261102 (lane CPU): + the mall's slab / storey occlusion on the Reactor (rooms, side complexes
   // and holders behind the pit's rock / under the slabs are not submitted); the vessel's undrawn column is see-through, no glass shafts
+  // Task studio-skywalk-variety-20261107-231448-01 (lane PERF): + the same slab / storey occlusion on the Skyways (other buildings' shops /
+  // back rooms / holders behind walls were all submitted: "looking in some directions causes lag"); the glazed spans and the street air
+  // are see-through, and a storey seen through a glazed span is a candidate as a whole (world/skywaysOcclusion.ts, levelCulling.ts)
   const culler = new LevelCuller(levels, cols, levelAt, mall ? {atrium: mall.atrium, slabs: {see: (layout.mall?.elevators ?? []).map(e => e.shaft)}}
-    : reactor ? {atrium: reactor.pitMask, slabs: {see: reactor.occlusionSee(), glass: []}} : undefined);
+    : reactor ? {atrium: reactor.pitMask, slabs: {see: reactor.occlusionSee(), glass: []}}
+    : layout.skyways ? {slabs: {see: skywaysOcclusionSee(layout), windows: skywaysWindowSpans(layout)}} : undefined);
   culler.register(group);
   return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler,
     ...(office ? {officeArch: office} : {}), ...(mall ? {mallArch: mall} : {}), ...(trackExt ? {trackExt} : {}), ...(reactor ? {reactorArch: reactor} : {}), ...(sky ? {skywaysArch: sky} : {}),

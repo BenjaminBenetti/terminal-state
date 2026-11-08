@@ -70,6 +70,23 @@
 // allocates per entry (closures, one-element level arrays, per-update tile memo / sets / candidate objects), and the moving lift /
 // loot batches bring their shared parents' matrices up to date once per pass instead of once per mesh. Decisions are identical
 // (tests/rendercpu-culler.test.ts compares every entry's layer against fresh, uncached decisions over mall yaw sweeps and walks).
+//
+// Task studio-skywalk-variety-20261107-231448-01 (lane PERF, user: "looking in some directions causes lag"): THE SKYWAYS takes the same
+// slab + same- / cross-storey occlusion (world/builder.ts; the see-through parts from world/skywaysOcclusion.ts). Its grids hold see-
+// through structure the builder draws as glass or not at all — the glazed window spans cut out of SOLID wall runs and the outdoor air
+// over the streets (solid on every grid) — so a `see` rect may carry a height range [y0, y1] (default: every height, the mall's /
+// Reactor's rects unchanged): it opens its cells for a storey's closed columns only where it overlaps that storey's range, and across a
+// slab plane only where it straddles it (a window opens its own storey, the street air every height above the street, never the
+// street surface over the underground storey). The portal / level rule knew only grid openings (stairs, atria): another storey seen
+// through two panes across a street (a lobby from a bridge, a bridge from a lobby) was culled although visible (lane PERF's depth
+// oracle: 78 visible meshes hidden on 62 Skyways poses). With `slabs.windows` (Skyways: every glazed span, its storey and heights):
+//  - the sight rays (portal tiles, windows) also pass through the see rects' volumes (the glass, the street air);
+//  - WINDOW TILES: a span of a storey the eye is not on, in the frustum, inside the fog and in sight (samples along the span at its
+//    heights, nearest first; kept per eye position), makes its storey AIR-VISIBLE: every mesh of it is a candidate (no margin) and the
+//    slab planes + storey occlusion decide them exactly, as the mall's atrium-visible storeys; air-visible storeys seed the portal hops.
+// `everyStorey` (QA / tests): every storey a candidate, no portal / level rule at all (the upper bound the window rule is checked
+// against). And with occlusion data on a stack of <= LEGACY_STACK storeys (the Skyways' three; the mall / Reactor have more) a mesh
+// spanning several bands registers as an unlevelled entry (fog, slab planes, per-storey slices) instead of never being culled.
 
 import * as THREE from 'three';
 import {CELL, FLOOR, VOID, type Grid} from '../gen/grid';
@@ -143,6 +160,25 @@ const SLAB_DROP = 0.2;
  * beside / behind the exit (walls between) the street is not submitted at all. Untagged meshes (Subway / Office) never reach it.
  */
 export interface ExitAperture { nx: number; nz: number; plane: number; s0: number; s1: number; y0: number; y1: number }
+/**
+ * A see-through rect of the occlusion rules (world m; slabs.see). Task studio-skywalk-variety (lane PERF): an optional height range
+ * [y0, y1] (default -Infinity .. Infinity: open on every storey and across every slab plane, as before).
+ */
+export interface SeeRect { x0: number; z0: number; x1: number; z1: number; y0?: number; y1?: number }
+/** Task studio-skywalk-variety (lane PERF): a glazed span (world m: its wall cells' box) of storey `level` (a level id), open y0 .. y1. */
+export interface WindowSpan { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; level: number }
+/** A window tile: its span, storey and the cell centres along it (sight targets, x z pairs). */
+interface WindowTile extends WindowSpan { pts: Float64Array }
+/** The cells of the rects of `see` that `use` keeps (1 = see-through), on a W x H grid. */
+function seeMaskOf(see: readonly SeeRect[], W: number, H: number, use: (r: SeeRect) => boolean): Uint8Array {
+  const m = new Uint8Array(W * H);
+  for (const r of see) {
+    if (!use(r)) continue;
+    for (let cy = Math.max(0, Math.floor(r.z0 / CELL)); cy < Math.min(H, Math.ceil(r.z1 / CELL)); cy++)
+      for (let cx = Math.max(0, Math.floor(r.x0 / CELL)); cx < Math.min(W, Math.ceil(r.x1 / CELL)); cx++) m[cy * W + cx] = 1;
+  }
+  return m;
+}
 /** An eye this close (m, horizontally) to an exit opening at its height sees it outright. */
 export const EXIT_NEAR = 1.2;
 
@@ -359,34 +395,132 @@ export class LevelCuller {
   /** Tracked objects hidden at the last update (0 unless track() is used: the Reactor's runtime). */
   trackedCulled = 0;
 
+  /**
+   * Task studio-skywalk-variety (lane PERF): every storey's meshes are candidates of the slab / storey occlusion, no portal / level
+   * rule (QA / tests: the upper bound of the window rule; set from `slabs.everyStorey`, off by default).
+   */
+  everyStorey: boolean;
+  /** Task studio-skywalk-variety (lane PERF): the window tiles (Skyways: slabs.windows) and the storeys air-visible at the last update. */
+  private readonly winTiles: WindowTile[] = [];
+  private readonly airLevels = new Set<number>();
+  /** Per window tile: its sight result (1 / 0) for the eye position of stamp winSeeK (LevelCuller.posStamp). */
+  private winSeeK = new Int32Array(0);
+  private winSeeV = new Uint8Array(0);
+  /** See-through volumes of the sight rays (slabs.windows only): per column (CSR) the merged see intervals [y0, y1]. */
+  private seeStart: Int32Array | null = null;
+  private seeY = new Float64Array(0);
+  /** Window tiles tested / seen and the air-visible storeys of the last update (Skyways; zeros elsewhere). */
+  airStats = {tested: 0, seen: 0, levels: [] as number[]};
+  /** The window rule on / off (Skyways only; tests / QA A-B: off = the portal / level rule alone, as before). */
+  windowRule = true;
+
   constructor(private readonly levels: readonly Level[], private readonly cols: LevelColumns, private readonly levelAt: LevelResolver,
-    opts?: {atrium?: Uint8Array; slabs?: {see?: readonly {x0: number; z0: number; x1: number; z1: number}[]; glass?: readonly {x0: number; z0: number; x1: number; z1: number}[]}}) {
+    opts?: {atrium?: Uint8Array; slabs?: {see?: readonly SeeRect[]; glass?: readonly {x0: number; z0: number; x1: number; z1: number}[]; everyStorey?: boolean;
+      windows?: readonly WindowSpan[]}}) {
     this.levelIds = levels.map(l => l.id);
     this.allLevelIds = new Set(this.levelIds);
     if (levels.length > 1) this.buildPortals(opts?.atrium);
     if (levels.length > 1 && opts?.slabs) this.buildSlabs(opts.slabs.see ?? []);
     if (levels.length > 1 && opts?.slabs) this.buildOcclusion(opts.slabs.see ?? []);
+    this.everyStorey = levels.length > 1 && !!opts?.slabs?.everyStorey;
+    if (levels.length > 1 && opts?.slabs?.windows?.length) this.buildWindows(opts.slabs.windows, opts.slabs.see ?? []);
     // (task studio-reactor-submit, lane CPU: `glass` when given — the Reactor's see-through vessel column is no lift shaft — else `see`)
     this.glassShafts = opts?.atrium ? [...(opts.slabs?.glass ?? opts.slabs?.see ?? [])] : [];
+  }
+
+  /**
+   * Task studio-skywalk-variety (lane PERF): the window tiles (spans of known storeys, their cell centres) and the see volumes of the
+   * sight rays: per column (CSR) the [y0, y1] of every `see` rect over it.
+   */
+  private buildWindows(windows: readonly WindowSpan[], see: readonly SeeRect[]): void {
+    const {W, H} = this.cols;
+    const cellsOf = (r: SeeRect, f: (i: number) => void) => {
+      for (let cy = Math.max(0, Math.floor(r.z0 / CELL)); cy < Math.min(H, Math.ceil(r.z1 / CELL)); cy++)
+        for (let cx = Math.max(0, Math.floor(r.x0 / CELL)); cx < Math.min(W, Math.ceil(r.x1 / CELL)); cx++) f(cy * W + cx);
+    };
+    const start = new Int32Array(W * H + 1);
+    for (const r of see) cellsOf(r, i => { start[i + 1]++; });
+    for (let i = 0; i < W * H; i++) start[i + 1] += start[i];
+    const fill = start.slice(0, W * H), ys = new Float64Array(2 * start[W * H]);
+    for (const r of see) cellsOf(r, i => { const k = fill[i]++; ys[2 * k] = r.y0 ?? -Infinity; ys[2 * k + 1] = r.y1 ?? Infinity; });
+    this.seeStart = start;
+    this.seeY = ys;
+    for (const w of windows) {
+      if (!this.levelIds.includes(w.level) || !(w.y1 > w.y0)) continue;
+      const pts: number[] = [];
+      cellsOf(w, i => { const cx = i % W, cy = (i - cx) / W; pts.push((cx + 0.5) * CELL, (cy + 0.5) * CELL); });
+      if (pts.length) this.winTiles.push({...w, pts: Float64Array.from(pts)});
+    }
+  }
+
+  /**
+   * Task studio-skywalk-variety (lane PERF): the storeys seen through glass this update (window tiles of storeys the eye is not on: in
+   * the frustum, nearest point along the view axis inside the fog, a sight ray through the free bands + see volumes to a cell of the
+   * span at its heights). Marks airLevels and adds them to `shown` (the portal hops start from them too).
+   */
+  private updateAir(e: THREE.Vector3, shown: Set<number>, here: ReadonlySet<number>, fx: number, fy: number, fz: number): void {
+    const T = this.winTiles, air = this.airLevels;
+    air.clear();
+    if (this.winSeeK.length !== T.length) { this.winSeeK = new Int32Array(T.length).fill(-1); this.winSeeV = new Uint8Array(T.length); }
+    let tested = 0, seen = 0;
+    for (let k = 0; k < T.length && this.windowRule; k++) {
+      const t = T[k];
+      if (here.has(t.level) || air.has(t.level)) continue;
+      const depth = Math.min(fx * (t.x0 - e.x), fx * (t.x1 - e.x)) + Math.min(fy * (t.y0 - e.y), fy * (t.y1 - e.y)) + Math.min(fz * (t.z0 - e.z), fz * (t.z1 - e.z));
+      if (depth > this.maxDistance) continue;
+      this.box.min.set(t.x0, t.y0, t.z0); this.box.max.set(t.x1, t.y1, t.z1);
+      if (!this.fr.intersectsBox(this.box)) continue;
+      tested++;
+      if (this.winSeeK[k] !== this.posStamp) { this.winSeeV[k] = this.windowSeen(t, e) ? 1 : 0; this.winSeeK[k] = this.posStamp; }
+      if (!this.winSeeV[k]) continue;
+      seen++;
+      air.add(t.level);
+      shown.add(t.level);
+    }
+    this.airStats.tested = tested;
+    this.airStats.seen = seen;
+    this.airStats.levels = [...air].sort((a, b) => a - b);
+  }
+
+  /**
+   * Task studio-skywalk-variety (lane PERF, Skyways only: window tiles): a mesh whose box rises over the top storey's occlusion range
+   * (the stair wells' walls up to the building tops, the atrium vaults) — its upper part stands over the roofs, where the sky through
+   * any glass may show it — is never level-culled (fog, slab planes and its storey slices still decide it).
+   */
+  private overRoofs(en: Entry): boolean {
+    return this.winTiles.length > 0 && en.y1 > this.occlTopHi;
+  }
+
+  /**
+   * A sight ray from the eye to some point of a window span: every cell along it, just inside the wall face(s) toward the eye (both
+   * when the eye is level with the wall), at the eye height clamped into the span, its middle, just over the sill and under the head.
+   */
+  private windowSeen(t: WindowTile, e: THREE.Vector3): boolean {
+    const thinX = t.x1 - t.x0 <= t.z1 - t.z0, ec = thinX ? e.x : e.z, a0 = thinX ? t.x0 : t.z0, a1 = thinX ? t.x1 : t.z1;
+    const faces = ec < a0 ? [a0 + 0.05] : ec > a1 ? [a1 - 0.05] : [a0 + 0.05, a1 - 0.05];
+    const ys = [Math.min(t.y1 - 0.1, Math.max(t.y0 + 0.1, e.y)), (t.y0 + t.y1) / 2, t.y0 + 0.1, t.y1 - 0.1];
+    for (let q = 0; q < t.pts.length; q += 2) for (const f of faces) for (let h = 0; h < ys.length; h++) {
+      if (h > 0 && ys[h] === ys[0]) continue;
+      const tx = thinX ? f : t.pts[q], tz = thinX ? t.pts[q + 1] : f;
+      if (this.ray(e.x, e.y, e.z, tx, ys[h], tz)) return true;
+    }
+    return false;
   }
 
   /**
    * Task mall-round2 (lane PERF): per storey, its closed columns (no free band of any level over the storey's height range; `see`
    * rects open), their summed-area table of OPEN cells and the boundary runs between open and closed columns.
    */
-  private buildOcclusion(see: readonly {x0: number; z0: number; x1: number; z1: number}[]): void {
+  private buildOcclusion(see: readonly SeeRect[]): void {
     const {W, H} = this.cols;
-    const seeMask = new Uint8Array(W * H);
-    for (const r of see) {
-      for (let cy = Math.max(0, Math.floor(r.z0 / CELL)); cy < Math.min(H, Math.ceil(r.z1 / CELL)); cy++)
-        for (let cx = Math.max(0, Math.floor(r.x0 / CELL)); cx < Math.min(W, Math.ceil(r.x1 / CELL)); cx++) seeMask[cy * W + cx] = 1;
-    }
     const minBase = Math.min(...this.levels.map(l => l.baseY));
     for (const L of this.levels) {
       const above = this.levels.filter(o => o.baseY > L.baseY + 1).map(o => o.baseY);
       // (the lowest storey's range is open below — floors / pits enclose everything under it; the top storey's ends OCCL_TOP above
       // its floor, under the roof vault's glass, above which a ray can leave the building over columns nothing is drawn on)
       const lo = L.baseY <= minBase + 1 ? -Infinity : L.baseY - OCCL_BELOW, hi = above.length ? Math.min(...above) - OCCL_GAP : L.baseY + OCCL_TOP;
+      // (task studio-skywalk-variety, lane PERF: a rect with a height range opens only the storeys whose range it overlaps)
+      const seeMask = seeMaskOf(see, W, H, r => (r.y0 ?? -Infinity) < hi && (r.y1 ?? Infinity) > lo);
       const closed = new Uint8Array(W * H);
       for (let i = 0; i < W * H; i++) {
         if (seeMask[i]) continue;
@@ -776,20 +910,17 @@ export class LevelCuller {
   }
 
   /** Task track3 (lane PERF): per storey floor plane, the cells open across it (summed-area table, (W + 1) x (H + 1)). */
-  private buildSlabs(see: readonly {x0: number; z0: number; x1: number; z1: number}[]): void {
+  private buildSlabs(see: readonly SeeRect[]): void {
     const {W, H} = this.cols;
     const base = Math.min(...this.levels.map(l => l.baseY));
     const planes = [...new Set(this.levels.map(l => l.baseY).filter(y => y > base + 1))].sort((a, b) => a - b);
-    const seeMask = new Uint8Array(W * H);
-    for (const r of see) {
-      for (let cy = Math.max(0, Math.floor(r.z0 / CELL)); cy < Math.min(H, Math.ceil(r.z1 / CELL)); cy++)
-        for (let cx = Math.max(0, Math.floor(r.x0 / CELL)); cx < Math.min(W, Math.ceil(r.x1 / CELL)); cx++) seeMask[cy * W + cx] = 1;
-    }
     const lo: number[] = [], hi: number[] = [], ord: number[] = [];
     for (const Y0 of planes) {
       // Task track3 (lane ARCH): the plane lies SLAB_DROP inside the slab under storey floor Y0 (a mesh starting on that floor is
       // strictly above it, so the storey right above the eye can be slab-culled too); a band reaching into it stays open below.
       const Y = Y0 - SLAB_DROP;
+      // (task studio-skywalk-variety, lane PERF: a rect with a height range is open across the planes it straddles only)
+      const seeMask = seeMaskOf(see, W, H, r => (r.y0 ?? -Infinity) < Y && (r.y1 ?? Infinity) > Y);
       const sat = new Int32Array((W + 1) * (H + 1));
       for (let cy = 0; cy < H; cy++) {
         let row = 0;
@@ -989,6 +1120,9 @@ export class LevelCuller {
         if (lo !== hi || b.max.y - b.min.y > 4.5) {
           // Iteration 08: never level-culled. Tall stacks: render with every level whose storey (base .. base + 4.5 m) it spans.
           const span = this.levels.length > LEGACY_STACK ? this.levels.filter(l => l.baseY <= b.max.y + 0.3 && l.baseY + 4.5 >= b.min.y).map(l => l.id) : [];
+          // Task studio-skywalk-variety (lane PERF): a small stack WITH occlusion data (the Skyways) keeps it as an unlevelled entry —
+          // fog, slab planes and per-storey slices decide it (never level-culled, as before)
+          if (!span.length && this.occl.length && this.levels.length <= LEGACY_STACK) { entry.occ = this.occlusionLevel(entry); this.entries.push(entry); return; }
           if (!span.length || span.length === this.levels.length) { this.stats.uncullable++; return; }
           entry.levels = span; this.stats.multi++; if (this.occl.length) entry.occ = this.occlusionLevel(entry); this.entries.push(entry); return;
         }
@@ -1048,6 +1182,11 @@ export class LevelCuller {
       const add = (other: number, t: Tile) => { let list = vis.get(other); if (!list) vis.set(other, (list = [])); list.push(t); };
       // Task track3 (lane ARCH): the atrium first (mall only): its levels join `shown` before the pair-portal hops.
       if (this.atriumTiles.length) this.updateAtrium(e, shown, ov !== null);
+      // Task studio-skywalk-variety (lane PERF): the storeys seen through glass (Skyways only) join `shown` before the hops too
+      if (this.winTiles.length) {
+        const me0 = camera.matrixWorld.elements, f0 = Math.hypot(me0[8], me0[9], me0[10]) || 1;
+        this.updateAir(e, shown, here, -me0[8] / f0, -me0[9] / f0, -me0[10] / f0);
+      }
       // Breadth-first over levels (iteration 12: one extra hop, the lower level down the second run of a stair core seen
       // from the upper landing; task office-seamless-20261029: as many hops as storeys, e.g. up a scissor stair). A hop
       // tests the tiles with exactly one side among the levels shown so far; each tile's test runs at most once.
@@ -1092,10 +1231,13 @@ export class LevelCuller {
       const depth = Math.min(fx * (en.x0 - e.x), fx * (en.x1 - e.x)) + Math.min(fy * (en.y0 - e.y), fy * (en.y1 - e.y)) + Math.min(fz * (en.z0 - e.z), fz * (en.z1 - e.z));
       if (!this.enabled) show = true;
       else if (depth > far) { show = false; fogged++; } // entirely inside opaque fog
-      else if (en.levels) show = anyIn(en.levels, here) || this.nearAnyPortal(en, en.levels, vis) || this.nearAtrium(en, en.levels, NaN);
+      else if (this.everyStorey) show = true; // (task studio-skywalk-variety, lane PERF: QA / tests — the slab / storey occlusion below decides)
+      else if (en.levels) show = anyIn(en.levels, here) || this.nearAnyPortal(en, en.levels, vis) || this.nearAtrium(en, en.levels, NaN) || anyIn(en.levels, this.airLevels) || this.overRoofs(en);
       else if (Number.isNaN(en.level) || here.has(en.level)) show = true;
-      // Another level: only near a portal tile the camera can see (task track3: or near a visible atrium tile of that level).
-      else show = this.nearPortal(en, vis.get(en.level)) || this.nearAtrium(en, null, en.level);
+      // Another level: only near a portal tile the camera can see (task track3: or near a visible atrium tile of that level; task
+      // studio-skywalk-variety, lane PERF: or any mesh of a storey seen through glass, or one rising over the roofs — Skyways only, the
+      // occlusion below decides)
+      else show = this.nearPortal(en, vis.get(en.level)) || this.nearAtrium(en, null, en.level) || this.airLevels.has(en.level) || this.overRoofs(en);
       // Task mall-round2 (lane ARCH, M09): a street exit's doors / street view only while its glazed opening may be seen (mall only)
       if (show && this.enabled && en.aperture && !this.apertureSeen(en.aperture, e, ov !== null)) { show = false; apCulled++; }
       // Task track3 (lane PERF): the mall's slab occlusion (no planes elsewhere: Subway / Office unchanged)
@@ -1405,7 +1547,7 @@ export class LevelCuller {
     return false;
   }
 
-  /** 3D segment free in the union of open bands (2D DDA over columns, height span per column). */
+  /** 3D segment free in the union of open bands (+ the see volumes, slabs.windows only) (2D DDA over columns, height span per column). */
   private ray(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
     const {W, H} = this.cols;
     const dx = bx - ax, dz = bz - az;
@@ -1430,6 +1572,9 @@ export class LevelCuller {
         const f = r ? r[0] : g.floorOf(i), c = r ? r[1] : cellCeil(g, i);
         ok = lo >= f - 0.1 && hi <= c + 0.1;
       }
+      // task studio-skywalk-variety (lane PERF): or inside a see volume over the column (Skyways: glass spans, the street air)
+      const ss = this.seeStart;
+      if (!ok && ss) for (let k = ss[i]; k < ss[i + 1] && !ok; k++) ok = lo >= this.seeY[2 * k] - 0.1 && hi <= this.seeY[2 * k + 1] + 0.1;
       if (!ok) return false;
       if (x === tx && y === ty) return true;
       if (tMaxX < tMaxY) { tIn = tMaxX; tMaxX += tDX; x += stepX; } else { tIn = tMaxY; tMaxY += tDY; y += stepY; }
