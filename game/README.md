@@ -331,7 +331,8 @@ Task studio-general-armor-20261107-231448-01 (`src/player/armor.ts`).
   enemy damage multiplier applies first. Falls, toxic gas and starving or dehydration never meet the armor.
 - **Injury save.** The game rolls an injury from an enemy hit as for an unarmored player. If it would injure you, a second
   roll with the pool as its chance cancels it. Hard landings get no save.
-- **Wear.** An enemy hit the armor reduced wears one worn armor item, chosen at random. The worn value stays with the item: take
+- **Wear.** An enemy hit the armor reduced costs one worn armor item, chosen at random, a quarter pip (0.625 %); two hits
+  cost half a pip. The worn value stays with the item: take
   off, drop, Lockbox, cargo and saves keep it. Old saves load undamaged.
 
 ## Gas mask, filters and breached office windows

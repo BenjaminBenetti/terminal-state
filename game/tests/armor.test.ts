@@ -2,8 +2,8 @@
 // it does now, but not specific to any piece of the body"): ONE armour pool from the WORN gear (player/armor.ts) — pips of 2.5 %, shown in
 // half pips rounded down, ten a row wrapping with a 25 % overlap; it cuts every ENEMY hit by its share on any body part (answer B: "this
 // purely applies to damage applied by enemies, all types of enemies" — not gas, starving, falls), it is the chance an injury the game
-// would give an unarmoured player does not happen (one save roll), and a hit it mitigated wears ONE contributing item (the amount is the
-// user's pending answer A: off until set). Wear lives on the item and survives every inventory / save route.
+// would give an unarmoured player does not happen (one save roll), and a hit it mitigated wears ONE contributing item by a quarter pip
+// (answer A: "zero point six two five" %). Wear lives on the item and survives every inventory / save route.
 import fs from 'node:fs';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {mulberry32} from '../src/core/rng';
@@ -181,13 +181,25 @@ describe('the injury save: one roll against the pool on the UNARMOURED candidate
   });
 });
 
-describe('wear: ONE worn contributing item per mitigating hit (amount = pending answer A)', () => {
-  it('the amount is the user\'s pending answer — a quarter pip or a half pip — never guessed: null = off', () => {
-    expect([null, ARMOR.pip / 4, ARMOR.halfPip]).toContain(ARMOR_WEAR_PER_HIT);
-    const w = kit();
-    expect(armorHit(hit(), w, seq(0), null).wore).toBeNull();
-    expect(wearOne(w, 0, null)).toBeNull();
-    expect(armorPool(w)).toBeCloseTo(0.125, 12);
+describe('wear: ONE worn contributing item per mitigating enemy hit, a quarter pip (answer A)', () => {
+  it('a quarter pip = 0.625 % per hit: two hits cost half a pip; stored exactly, shown in half pips rounded down', () => {
+    expect(ARMOR_WEAR_PER_HIT).toBe(0.00625);
+    expect(ARMOR_WEAR_PER_HIT).toBe(ARMOR.pip / 4);
+    const w = kit(); // 5 pips
+    const shown: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const {resolved, wore} = armorHit(hit(), w, seq(0.9)); // the game's default amount; roll 0.9 = the vest
+      expect(resolved.armor).toBeCloseTo(0.125 - i * 0.00625, 9); // each hit meets the pool from before its own wear
+      expect(wore?.slot).toBe('chest');
+      shown.push(pipsText(armorPool(w)));
+    }
+    expect(w.chest!.armor).toBeCloseTo(0.075, 9);
+    expect(shown).toEqual(['4½', '4½', '4', '4']); // 4.75 -> 4.5 -> 4.25 -> 4 pips, rounded down to half pips
+    // no amount: nothing wears
+    const x = kit();
+    expect(armorHit(hit(), x, seq(0), null).wore).toBeNull();
+    expect(wearOne(x, 0, null)).toBeNull();
+    expect(armorPool(x)).toBeCloseTo(0.125, 12);
   });
 
   for (const amount of [ARMOR.pip / 4, ARMOR.halfPip]) {

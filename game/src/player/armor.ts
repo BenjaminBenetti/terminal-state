@@ -16,8 +16,9 @@
 //    damage, not the armour-reduced damage) is cancelled with probability = the pool of that hit (a 25 % pool: a 25 % chance to stay
 //    unhurt). Hard landings are not enemy damage: no save.
 //  - WEAR: an enemy hit the armour actually mitigated (absorbed > 0) picks ONE worn item that contributed armour (uniformly) and lowers its own
-//    armour by ARMOR_WEAR_PER_HIT (clamped at 0): damaged gear blocks less from the NEXT hit on. The amount is the user's pending answer
-//    A; until it is set wear is off (never guessed). Wear is per item and travels with it (drop / bag / Lockbox / cargo / saves).
+//    armour by ARMOR_WEAR_PER_HIT (clamped at 0): damaged gear blocks less from the NEXT hit on. The user's final answer A: a quarter
+//    pip, 0.625 % ("zero point six two five"), so two hits cost half a pip. Stored exactly; the HUD shows half pips rounded down. Wear
+//    is per item and travels with it (drop / bag / Lockbox / cargo / saves).
 
 import type {ItemStack} from '../items/inventory';
 import {GEAR_SLOTS, gearSpec, type GearSlot} from '../items/gear';
@@ -36,11 +37,8 @@ export const ARMOR = {
   cap: ARMOR_CAP,
 } as const;
 
-/**
- * Armour lost by ONE worn contributing item on each mitigating hit — PENDING user answer A ("1/4 pip" = 0.00625 or "1.25 %" =
- * half a pip = 0.0125). null = wear off until the answer is set (never a guessed default).
- */
-export const ARMOR_WEAR_PER_HIT: number | null = null;
+/** Armour lost by ONE worn contributing item on each mitigating enemy hit: a quarter pip = 0.625 % (the user's final answer A). */
+export const ARMOR_WEAR_PER_HIT = ARMOR.pip / 4;
 
 
 /** An item's current armour fraction (its stack's own `armor`, else its definition's; 0 for anything else). */
