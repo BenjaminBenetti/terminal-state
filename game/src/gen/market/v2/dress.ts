@@ -25,6 +25,7 @@ import {isLootHolderKind} from '../../../items/loot';
 import {makePlaceCtx, mountProp, tryPlaceProp, type PlaceOpts} from '../../placeKit';
 import type {Area, LightPlacement, Rect, Side, SignPlacement, StationLayout} from '../../stationTypes';
 import {MARKET_EMPTY_KEY} from '../dress';
+import {MARKET_WORKSHOP_KEY} from '../../../items/lootTables'; // task studio-base-salvage-20261108-073314-01: the community stores' basic salvage
 import {STALL_SIGNS} from '../names';
 import type {MarketStallId} from '../marketTypes';
 import {SETTLE} from './frame';
@@ -234,6 +235,7 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     return stallRecord(F, a, id, run, vCounter, vTrader, vFront, displays);
   }
   // --- 2. The other containers ----------------------------------------------------------------------------------------------------
+  let storeRoom = false; // (the community store room: the first storage container — communityStores)
   for (const c of sc.containers) {
     if (c.use === 'shop') continue;
     const a = area(c.area), F = frameOf(c, sc.bases);
@@ -263,8 +265,9 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
       case 'storage': {
         a.label = 'Storage';
         const kinds: PropKind[] = rng.shuffle(['crate', 'cartonStack', 'crate', 'shelf', 'footlocker', 'crate']);
-        backRow(F, a, kinds.slice(0, 4), 0.05, F.U - 0.05, 0.1, rng.chance(0.5));
-        sideProp(F, a, 'crate', rng.chance(0.5) ? 'L' : 'R', F.V * 0.35);
+        const stores = backRow(F, a, kinds.slice(0, 4), 0.05, F.U - 0.05, 0.1, rng.chance(0.5));
+        const side = sideProp(F, a, 'crate', rng.chance(0.5) ? 'L' : 'R', F.V * 0.35);
+        if (!storeRoom) { storeRoom = true; a.label = 'Store room'; communityStores([...stores, side]); } // (the first one only: version 1's share)
         break;
       }
       case 'tea': dressTea(F, a); break;
@@ -278,6 +281,17 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
       case 'home': dressHome(F, a, c); break;
     }
     if (c.use !== 'kitchen' && c.use !== 'workshop') light(a, F.x(F.U / 2), F.z(F.V / 2), (c.level ? S.bases[c.level] : 0) + yLamp, {power: c.use === 'home' ? 0.55 : 0.7});
+  }
+
+  /**
+   * Task studio-base-salvage-20261108-073314-01 (the shared base salvage, Original's): the settlement's COMMUNITY stores — the workshop's
+   * tool chest and the one community store room's crates / shelf / footlocker (about version 1's four workshop stores) — carry the market
+   * workshop key, whose own table is empty; its one possible find is the market's additive basic-salvage lot (items/lootTables.ts
+   * MARKET_SALVAGE), like version 1's workshop storage. Never a stall (the traders' goods are trade stock; their display holders keep the
+   * exact empty key), the kitchen, the bunks, a home or any other container.
+   */
+  function communityStores(props: readonly (PropPlacement | null | undefined)[]): void {
+    for (const p of props) if (p && isLootHolderKind(p.kind)) p.purpose = MARKET_WORKSHOP_KEY;
   }
 
   function dressKitchen(F: Frame, a: Area): void {
@@ -305,6 +319,7 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     a.label = 'Workshop';
     const row = backRow(F, a, ['repairBench', 'benchGrinderStand', 'repairBench', 'rollingToolChest'], 0.1, F.U - 0.1, 0.2, rng.chance(0.5));
     for (const p of row) if (p.kind === 'repairBench') use('work', p.x, F.z(F.V - 1.4), a, p.x, p.z);
+    communityStores(row);
     mountProp(ctxOf(a), a, 'W', F.c.rect.y * CELL + F.V * 0.45, 'toolPegboard', 1.05, F.base);
     mountProp(ctxOf(a), a, 'E', F.c.rect.y * CELL + F.V * 0.45, 'partsBinRack', 1.15, F.base);
     // the floor props in the corners by the opening (the middle stays clear: the station's common fuel plan stores its cans here)

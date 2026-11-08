@@ -14,8 +14,8 @@ import {describe, expect, it} from 'vitest';
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
 import {levelDistance} from '../src/gen/levelGen';
 import {levelsOf} from '../src/gen/levels';
-import {isLootHolderKind, holderTable} from '../src/items/loot';
-import {lootProfile} from '../src/items/lootTables';
+import {extraSalvageRule, isLootHolderKind, holderTable} from '../src/items/loot';
+import {MARKET_WORKSHOP_KEY, lootProfile} from '../src/items/lootTables';
 import {itemDims} from '../src/items/items';
 import {rollLevelGear} from '../src/levels/gearAdapter';
 import {LEVELS, arrivalPose, storeyLabel} from '../src/levels/registry';
@@ -199,12 +199,24 @@ describe('the Survivor Market, layout version 2 (the container settlement)', () 
       expect([seed, L.zombies.length, L.hordes?.length ?? 0, L.pickups.length]).toEqual([seed, 0, 0, 0]);
       expect(L.extensions).toBeUndefined();
       expect(L.office ?? L.mall ?? L.reactor ?? L.skyways).toBeUndefined();
+      // (task studio-base-salvage-20261108-073314-01) the ONE exception, as in version 1: the community stores — the workshop's tool chest and
+      // the one store room's holders — carry the workshop key (its own table empty; only the market's additive basic-salvage lot can
+      // appear there); every other holder (stalls and their displays, kitchen, bunks, homes, other containers) keeps the exact empty key
+      let stores = 0;
+      const storeAreas = new Set<number>();
       for (const p of L.props) {
         if (!isLootHolderKind(p.kind)) continue;
-        expect([seed, p.kind, p.purpose]).toEqual([seed, p.kind, MARKET_EMPTY_KEY]);
+        const a = L.areas[p.area], community = a.purpose === 'workshop' || a.label === 'Store room';
+        const store = p.purpose === MARKET_WORKSHOP_KEY;
+        expect([seed, p.kind, p.purpose]).toEqual([seed, p.kind, store ? MARKET_WORKSHOP_KEY : MARKET_EMPTY_KEY]);
+        if (store) { stores++; storeAreas.add(p.area); expect(community, `${seed} ${p.kind} in ${a.label}`).toBe(true); }
         const t = holderTable(p.kind, p.purpose!, P);
         expect(t.empty === 1 || t.lots[1] === 0 || !t.rows.length, `${seed} ${p.kind}`).toBe(true);
+        expect(!!extraSalvageRule(p.kind, p.purpose!, P), `${seed} ${p.kind} salvage`).toBe(store);
       }
+      expect(stores, `${seed} community stores`).toBeGreaterThanOrEqual(2);
+      expect(storeAreas.size, `${seed}`).toBeLessThanOrEqual(2); // the workshop + one store room (version 1's share, not every container)
+      for (const s of L.market!.stalls) for (const d of s.displays ?? []) if (d.host !== undefined) expect(L.props[d.host]?.purpose, `${seed} ${s.id} display`).not.toBe(MARKET_WORKSHOP_KEY);
       const fp = placeStationFuel(L, {units: 4 * FUEL.canUnits, cans: 4, cart: 0}, 'st-07');
       expect(fp.cans.length).toBe(4);
       expect(new Set(fp.cans.map(c => L.areas[c.area].purpose)), `${seed}`).toEqual(new Set(['workshop']));

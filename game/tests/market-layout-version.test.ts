@@ -13,7 +13,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {LEVELS} from '../src/levels/registry';
-import {MARKET_LAYOUT_LANE, MARKET_LAYOUT_VERSION, generateMarketLevel, marketLayoutVersionFor} from '../src/gen/market/index';
+import {MARKET_EMPTY_KEY, MARKET_LAYOUT_LANE, MARKET_LAYOUT_VERSION, generateMarketLevel, marketLayoutVersionFor} from '../src/gen/market/index';
+import {MARKET_WORKSHOP_KEY} from '../src/items/lootTables';
 import {createRun} from '../src/run/runState';
 import type {StationLayout} from '../src/gen/stationTypes';
 
@@ -24,7 +25,10 @@ const V1: Record<number, string> = {
 
 function fingerprint(l: StationLayout): string {
   const g = l.levels.map(L => crypto.createHash('sha256').update(Buffer.from(L.grid.cells)).update(Buffer.from(L.grid.area.buffer)).update(Buffer.from(L.grid.floor.buffer)).update(Buffer.from(L.grid.ceil.buffer)).digest('hex'));
-  const s = JSON.stringify({g, areas: l.areas, doors: l.doors, props: l.props, lights: l.lights, signs: l.signs, market: l.market, rails: l.rails, links: l.levelLinks, spawn: l.playerSpawn, lad: l.traversal.ladders, st: l.traversal.stairs, name: l.name});
+  // (task studio-base-salvage-20261108-073314-01, main after these pins: version 1's workshop storage carries the workshop LOOT key — a
+  // deliberate loot-key change on the same props, no geometry / id / stock change; normalised so the shipped pins still prove the rest)
+  const props = l.props.map(p => (p.purpose === MARKET_WORKSHOP_KEY ? {...p, purpose: MARKET_EMPTY_KEY} : p));
+  const s = JSON.stringify({g, areas: l.areas, doors: l.doors, props, lights: l.lights, signs: l.signs, market: l.market, rails: l.rails, links: l.levelLinks, spawn: l.playerSpawn, lad: l.traversal.ladders, st: l.traversal.stairs, name: l.name});
   return crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
 }
 
