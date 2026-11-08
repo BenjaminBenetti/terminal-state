@@ -27,6 +27,11 @@
 // first (left of 1) by CSS. Only melee weapons go in (drag refused / red outline otherwise). Right-click / double-click / Equip on a
 // melee weapon anywhere puts it into the melee slot (a swap sends the old one back) and draws it; ~ while the inventory is open
 // puts the selected melee weapon there (like 1-5 for quick slots). Dragging it out of the panel drops it, as for every slot.
+//
+// Task studio-cosplay-general-20261108-225231-01 (user: "Ctrl-click in inventory should do the same equip/unequip as double-click."):
+// Ctrl (or Cmd) + click on a slot runs its double-click action (activate: use / wear / take off / grenade slot / melee slot) on the
+// press — one action per physical click: no drag, its click / macOS context menu ignored, never half of a later double-click. Only
+// this panel's slots listen (the Market trade view keeps its own Ctrl+click = buy / sell).
 
 import {itemIconHtml} from './itemIcons';
 import {effectText, itemDef, useButtonLabel} from '../items/items';
@@ -69,6 +74,8 @@ export interface GearUiHooks {
 export type DropTarget = SlotRef | 'out' | null;
 
 const DOUBLE_CLICK_MS = 380;
+/** Task studio-cosplay-general-20261108-225231-01: a Ctrl (or Cmd) + LEFT click — the inventory's one-click double-click action. */
+export const isQuickClick = (e: {button?: number; ctrlKey?: boolean; metaKey?: boolean}): boolean => (e.button ?? 0) === 0 && !!(e.ctrlKey || e.metaKey);
 /** Pointer travel (px) before a press becomes a drag, so clicks and double-clicks still work. */
 export const DRAG_THRESHOLD = 5;
 
@@ -98,6 +105,8 @@ export class InventoryUI {
   private lastClick: {bar: string; index: number; at: number} | null = null;
   private drag: DragState | null = null;
   private suppressClick = false;
+  /** The current physical press was a Ctrl / Cmd + click, already acted on: its click / context menu are ignored. */
+  private quickPress = false;
   private note = '';
   /** Iteration 16: the note is a refusal (shown in red). */
   private noteBad = false;
@@ -113,28 +122,21 @@ export class InventoryUI {
       if (this.suppressClick) return;
       const ref = refOf(e);
       if (!ref) return;
+      // Task studio-cosplay-general-20261108-225231-01: a Ctrl / Cmd + click acted on its press (onDown): its click is ignored.
+      if (this.quickPress || isQuickClick(e)) { this.quickPress = false; e.preventDefault(); return; }
       // Manual double-click (render() replaces the slot elements, so native dblclick is unreliable).
       const now = performance.now();
       const last = this.lastClick;
       this.lastClick = {bar: ref.bar, index: ref.index, at: now};
-      if (last && last.bar === ref.bar && last.index === ref.index && now - last.at < DOUBLE_CLICK_MS) {
-        if (this.isConsumable(ref)) {
-          this.lastClick = null;
-          this.selected = null;
-          this.actions.use(ref);
-          this.render();
-          return;
-        }
-        if (this.isGear(ref)) { this.lastClick = null; this.toggleWear(ref); return; } // Iteration 16: wear / take off
-        if (this.isThrowable(ref) && ref.bar !== 'throw') { this.lastClick = null; this.dropAt(ref, THROW_REF); return; } // INTERACT (#6)
-        if (this.isMelee(ref) && ref.bar !== 'melee') { this.lastClick = null; this.selected = null; this.actions.equip(ref); this.render(); return; } // SLOT
-      }
+      if (last && last.bar === ref.bar && last.index === ref.index && now - last.at < DOUBLE_CLICK_MS && this.activate(ref)) return;
       this.click(ref);
     };
     const onContext = (e: MouseEvent) => {
       const ref = refOf(e);
       if (!ref) return;
       e.preventDefault();
+      // (a Ctrl + click is the context menu on macOS: the press already acted — no right-click action on top)
+      if (this.quickPress) { this.quickPress = false; return; }
       if (this.drag?.active) return;
       const st = this.inv().get(ref);
       if (!st) return;
@@ -147,12 +149,22 @@ export class InventoryUI {
       this.render();
     };
     const onDown = (e: PointerEvent) => {
+      this.quickPress = false; // a new physical press
       if (e.button !== 0) return;
       if (this.drag) this.cancelDrag(); // stale (button released outside the window)
       const ref = refOf(e);
       const st = ref ? this.inv().get(ref) : null;
       if (!ref || !st) return;
       e.preventDefault(); // no text selection / native image drag; click still fires
+      // Task studio-cosplay-general-20261108-225231-01 (user: "Ctrl-click in inventory should do the same equip/unequip as
+      // double-click."): Ctrl / Cmd + press = the slot's double-click action at once (quick): never a drag, one action per press.
+      if (isQuickClick(e)) {
+        e.stopPropagation();
+        if (!this.isOpen()) return;
+        this.quickPress = true;
+        this.quick(ref);
+        return;
+      }
       const count = e.shiftKey && st.count > 1 ? Math.floor(st.count / 2) : st.count;
       this.drag = {from: ref, count, pointerId: e.pointerId, x0: e.clientX, y0: e.clientY, active: false, ghost: null};
     };
@@ -219,6 +231,33 @@ export class InventoryUI {
     wrap.id = 'inv-gear-wrap';
     wrap.innerHTML = '<h3>Gear <span class="gear-sum"></span></h3><div class="slots" id="inv-gear"></div><div id="inv-gear-note"></div>';
     hot.parentElement.insertBefore(wrap, heading && heading.tagName === 'H3' ? heading : hot);
+  }
+
+  /**
+   * The double-click action of a slot — the ONE path for double-click and Ctrl / Cmd + click: use a consumable, wear / take off
+   * gear, a throwable into the grenade slot, a melee weapon into the melee slot. False: the slot has none (a gun, ammo, a part …).
+   */
+  private activate(ref: SlotRef): boolean {
+    if (this.isConsumable(ref)) {
+      this.lastClick = null;
+      this.selected = null;
+      this.actions.use(ref);
+      this.render();
+      return true;
+    }
+    if (this.isGear(ref)) { this.lastClick = null; this.toggleWear(ref); return true; } // Iteration 16: wear / take off
+    if (this.isThrowable(ref) && ref.bar !== 'throw') { this.lastClick = null; this.dropAt(ref, THROW_REF); return true; } // INTERACT (#6)
+    if (this.isMelee(ref) && ref.bar !== 'melee') { this.lastClick = null; this.selected = null; this.actions.equip(ref); this.render(); return true; } // SLOT
+    return false;
+  }
+
+  /**
+   * Task studio-cosplay-general-20261108-225231-01: Ctrl / Cmd + click — the slot's double-click action (activate) at once; a slot
+   * without one is a plain click (select). Never half of a double-click (a following click starts a new one).
+   */
+  quick(ref: SlotRef): void {
+    this.lastClick = null;
+    if (!this.activate(ref)) this.click(ref);
   }
 
   private isConsumable(ref: SlotRef): boolean {
@@ -465,7 +504,7 @@ export class InventoryUI {
         : isFilterMask(def.id) ? `<span class="count">${filterPct(st!.filter)}%</span>` // mask lane: the fitted filter
         : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
       // (task studio-ui-subway-maps-20261108-074144-01) the game's own tooltip (ui/tooltip.ts): no native title, which outlived the closed panel under a still cursor
-      const use = usable ? `Double-click or right-click to ${useButtonLabel(def!).toLowerCase()} · ` : def?.kind === 'gear' ? `Double-click or right-click to ${ref.bar === 'gear' ? 'take it off' : 'wear it'} · ` : '';
+      const use = usable ? `Double-click / Ctrl+click or right-click to ${useButtonLabel(def!).toLowerCase()} · ` : def?.kind === 'gear' ? `Double-click / Ctrl+click or right-click to ${ref.bar === 'gear' ? 'take it off' : 'wear it'} · ` : '';
       let title = st ? tipAttrs(itemTip(st, `${use}Drag to move · Shift-drag to split · drag out of the panel to drop`, {inv})) : '';
       // Iteration 16: gear slots (slot name + empty silhouette); the worn backpack's contents stay hidden
       let lead = ref.bar === 'hotbar' ? `<span class="key">${ref.index + 1}</span>` : '';
@@ -511,10 +550,10 @@ export class InventoryUI {
     if (fx) {
       fx.textContent = this.note || (def?.kind === 'ammo' && def.caliber ? `${CALIBERS[def.caliber].designation} · loads: ${weaponsForCaliber(def.caliber).map(w => itemDef(w.itemId).short).join(', ') || 'no weapon yet'}`
         : wdef?.caliber ? `Takes ${CALIBERS[wdef.caliber].label} (${CALIBERS[wdef.caliber].designation}) · ${reserveFor(wdef, inv)} in reserve`
-        : wdef?.melee ? `Melee · hold click to wind up, release to slash · reach ${wdef.range} m · never needs ammo · ${this.selected?.bar === 'melee' ? 'in the melee slot: ~ draws it' : 'right-click / double-click / Equip puts it in the melee slot (~)'}` // lane KNIFE / SLOT
-        : def?.kind === 'consumable' ? `${effectText(def)} · ${def.useTime ?? 1} s to ${useButtonLabel(def).toLowerCase()} · double-click or right-click to ${useButtonLabel(def).toLowerCase()}`
-        : def?.kind === 'gear' ? `${isFilterMask(def.id) ? `Filter ${filterPct(st!.filter)} % fitted · ${inv.count('gas_filter')} spare · ` : ''}${isAirtank(def.id) ? `${airText(st!.air)} · ` : ''}${gearStatText(def.gear!, st)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / right-click / Take off to remove') : `double-click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}`
-        : def?.kind === 'throwable' ? (this.selected?.bar === 'throw' ? 'In the grenade slot: hold G to ready it, release to throw' : 'Right-click / double-click / Equip puts it in the grenade slot (G)') // INTERACT (#6)
+        : wdef?.melee ? `Melee · hold click to wind up, release to slash · reach ${wdef.range} m · never needs ammo · ${this.selected?.bar === 'melee' ? 'in the melee slot: ~ draws it' : 'right-click / double-click / Ctrl+click / Equip puts it in the melee slot (~)'}` // lane KNIFE / SLOT
+        : def?.kind === 'consumable' ? `${effectText(def)} · ${def.useTime ?? 1} s to ${useButtonLabel(def).toLowerCase()} · double-click / Ctrl+click or right-click to ${useButtonLabel(def).toLowerCase()}`
+        : def?.kind === 'gear' ? `${isFilterMask(def.id) ? `Filter ${filterPct(st!.filter)} % fitted · ${inv.count('gas_filter')} spare · ` : ''}${isAirtank(def.id) ? `${airText(st!.air)} · ` : ''}${gearStatText(def.gear!, st)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / Ctrl+click / right-click / Take off to remove') : `double-click / Ctrl+click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}`
+        : def?.kind === 'throwable' ? (this.selected?.bar === 'throw' ? 'In the grenade slot: hold G to ready it, release to throw' : 'Right-click / double-click / Ctrl+click / Equip puts it in the grenade slot (G)') // INTERACT (#6)
         : def?.kind === 'supply' ? `A worn gas mask fits one by itself when its filter runs out · ${inv.count(def.id)} carried where the mask can reach them (not in a worn backpack)` // mask lane
         : def?.kind === 'material' ? `${MATERIAL_NOTE} · ${inv.count(def.id)} in pockets / quick slots` // lane RACK (office-props-physics-scale-20261030)
         : def?.kind === 'part' ? `Reactor restart part — nothing to use by hand: take it to its control and press E there · ${inv.count(def.id)} in pockets / quick slots` // task reactor-build-20261101 (lane RESTART)
