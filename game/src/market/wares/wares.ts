@@ -67,7 +67,7 @@ export interface WaresHost {
   /** The combat lane's settlement hostility (absent: no one reacts yet; the theft itself still happens). */
   marketHostility?: MarketHostilityApi | null;
   trainRide?: {riding: boolean} | null;
-  gear?: {session?: unknown} | null;
+  gear?: {session?: unknown; readied?: boolean} | null;
   frameHooks: ((dt: number) => void)[];
   sectionHooks: {build?(layout: never): void; teardown?(): void}[];
   interactHandlers: (() => boolean)[];
@@ -249,7 +249,8 @@ export class MarketWares {
   aim(): Ware | null {
     const h = this.host;
     this.aimed = null;
-    if (!this.wares.size || h.state !== 'playing' || !h.player.alive || h.trainRide?.riding || h.trade?.isOpen || h.gear?.session) { this.setHover(null); return null; }
+    // (nothing while a bag view is open or a backpack is readied in the hands: E / the prompt are the gear's then)
+    if (!this.wares.size || h.state !== 'playing' || !h.player.alive || h.trainRide?.riding || h.trade?.isOpen || h.gear?.session || h.gear?.readied) { this.setHover(null); return null; }
     h.camera.getWorldPosition(EYE);
     h.camera.getWorldDirection(DIR);
     let best: Ware | null = null, bt: number = WARES.reach;
