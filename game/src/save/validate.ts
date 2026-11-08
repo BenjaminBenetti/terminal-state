@@ -31,6 +31,7 @@ import {STATION_PROPS_LANE, cargoProblem, stationPropsProblem, type CargoPropJSO
 import {PROP_DEFS} from '../gen/props'; // task train-all-cargo: carried props are of real kinds
 import {MARKET_STALLS} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
 import {MARKET_STOCK_LANE, STOCK_MAX} from '../market/trade/stock';
+import {MARKET_HOSTILITY_LANE, marketHostilityProblem} from '../market/combat/record'; // task studio-market-rework-20261108-074144-01 (lane COMBAT): a market station's hostility
 import {WALLET_PARTICIPANT, walletProblem} from '../market/trade/wallet';
 import {checksumOf, utf8Bytes} from './checksum';
 import {transitRouteProblem} from '../campaign/discovery';
@@ -539,6 +540,7 @@ function lanes(v: unknown, path: string): void {
     if ((car as {v: number}).v === 2) slotList((car as {trunk: unknown}).trunk, `${path}.${SKYWAYS_CAR_LANE}.trunk`, TRUNK_SLOTS, new Set());
   }
   if (has(o, MARKET_STOCK_LANE)) marketStock(o[MARKET_STOCK_LANE], `${path}.${MARKET_STOCK_LANE}`); // lane TRADE: a market station's stall stock
+  if (has(o, MARKET_HOSTILITY_LANE)) { const hp = marketHostilityProblem(o[MARKET_HOSTILITY_LANE]); if (hp) bad(`${path}.${MARKET_HOSTILITY_LANE}`, hp); } // lane COMBAT: the settlement's hostility (people alive / dead / fled)
   if (has(o, STATION_PROPS_LANE)) { // task train-all-cargo: the layout props the station lost to the train + the carried props lying there
     const sp = stationPropsProblem(o[STATION_PROPS_LANE]);
     if (sp) bad(`${path}.${STATION_PROPS_LANE}`, sp);
