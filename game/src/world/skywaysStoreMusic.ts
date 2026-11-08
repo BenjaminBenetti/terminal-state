@@ -46,7 +46,7 @@ export const storeMusicArtLoaded = (atlas: MusicAtlas): boolean => ART.has(atlas
 export function storeMusicAtlases(kinds: Iterable<string>): MusicAtlas[] {
   const out = new Set<MusicAtlas>();
   for (const k of kinds) {
-    if (k === 'skyMuBinRecords' || k === 'skyMuFacedRecords') out.add('covers');
+    if (k === 'skyMuBinRecords' || k === 'skyMuFacedRecords' || k === 'skyMerchFacedLp') out.add('covers'); // (+ lane MERCH: a split faced sleeve)
     if (k === 'skyMuCoverWall' || k === 'skyMuBinLabel' || k === 'skyMuGigPoster' || k === 'skyMuSign') out.add('signs');
   }
   return [...out].sort();
@@ -151,6 +151,19 @@ export function facedRowGeometry(variant: number): THREE.BufferGeometry {
     // bottom edge just inside the lip, the back face's top on the board face (z = -half)
     const z = -half + s * Math.sin(lean) + t / 2 * Math.cos(lean);
     for (const q of facedRow(variant)) sleeve(b, q.x, t / 2 * Math.sin(lean), z, lean, s, t, q.cover, -1);
+    return b.build();
+  });
+}
+
+/**
+ * (task studio-skywalk-variety-20261107-231448-01, lane MERCH) ONE faced-out LP — a sleeve of a ledge row standing on its own (kinds/merch.ts
+ * skyMerchFacedLp: Skyways version 4 splits each row): the row's own sleeve geometry at x 0 (origin: the ledge top, centred between the
+ * board face and the lip, like the row).
+ */
+export function facedSleeveGeometry(cover: number): THREE.BufferGeometry {
+  return cached(`faced-lp-${cover}`, () => {
+    const b = new GeoBuilder(), {s, t} = LP_SLEEVE, lean = facedLean(), half = COVER_WALL.ledgeD / 2;
+    sleeve(b, 0, t / 2 * Math.sin(lean), -half + s * Math.sin(lean) + t / 2 * Math.cos(lean), lean, s, t, ((cover % MUSIC_COVER_COUNT) + MUSIC_COVER_COUNT) % MUSIC_COVER_COUNT, -1);
     return b.build();
   });
 }

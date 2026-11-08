@@ -18,6 +18,7 @@ import {generateReactorLevel} from '../gen/reactor/index'; // task reactor-build
 import {generateSkywaysLevel} from '../gen/skyways/index'; // task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS
 import {MARKET_GENERIC_NAME, generateMarketLevel, marketNameOf, marketStoreyLabel} from '../gen/market/index'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL)
 import {lootProfile} from '../items/lootTables'; // task mall-round3-20261031 (lane SHOPS, R6): the gear placement bias
+import {skywalkText} from '../gen/skyways/skywalkText'; // task studio-skywalk-variety-20261107-231448-01
 import {trainSpawnPose, type TrainPlacement} from '../gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE): start arrivals inside the train
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
@@ -199,8 +200,8 @@ export function storeyLabel(layout: StationLayout, level: number): string {
   if (m) return m.label;
   const r = layout.reactor?.tiers.find(t => t.level === level); // task reactor-build-20261101: 'Rim', 'Tier 1' … 'Core floor'
   if (r) return r.label;
-  const k = layout.skyways?.storeys.find(t => t.level === level); // Skyways: 'Concourse', 'Street level', '+15 Skyway'
-  if (k) return k.label;
+  const k = layout.skyways?.storeys.find(t => t.level === level); // Skyways: 'Concourse', 'Street level', 'Skywalk'
+  if (k) return skywalkText(k.label); // (task studio-skywalk-variety-20261107-231448-01: no '+15' in player text)
   return layout.market ? marketStoreyLabel(level) : ''; // (task studio-survivor-market-20261108-005807-01: 'Market floor', 'Housing deck')
 }
 

@@ -29,7 +29,7 @@ import {installWounds, woundsOf, type WoundController, type WoundResult, type Wo
 import {materialBaseColor, sampleTexture, textureMean} from './sample';
 import {finishClass} from './impactFinish'; // task reactor-expansion-20261101 (lane CONTROLS): impacts take the drawn finish
 import {extractPatch, fallbackFlap} from './fleshPatch';
-import {isLootHolderKind} from '../items/loot';
+import {knownSupportKind} from '../physics/merchOnHost'; // task studio-skywalk-variety-20261107-231448-01 (lane MERCH)
 import type {PhysicsSystem} from '../physics/world';
 import type {PickupLike} from '../physics/dynamicItems';
 import {S as SPAN} from '../debug/updateProfile'; // task hitch-attribution-recorder-20261105: hit.* span ids (timing only)
@@ -521,7 +521,8 @@ export class DamageSystem {
     let limit = maxT;
     if (wh && wh.kind === 'prop' && wh.prop !== undefined && L && Math.abs(wh.t - maxT) < 1e-4) {
       const p = L.props[wh.prop];
-      if (p && isLootHolderKind(p.kind)) limit = Math.min(maxT + 2, rayExitT(o, d, p, maxT));
+      // (lane MERCH: + a host's declared open shelves — knocked-loose stock lying back on them is hit through its box too)
+      if (p && knownSupportKind(p.kind)) limit = Math.min(maxT + 2, rayExitT(o, d, p, maxT));
     }
     const dir = new THREE.Vector3(d.x, d.y, d.z).normalize();
     const pickups = (this.hooks.pickups?.() ?? []) as readonly PickupLike[];

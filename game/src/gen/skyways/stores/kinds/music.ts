@@ -12,8 +12,9 @@
 // Affordances (root CLAUDE.md "Props — core design rules", docs/skyways-stores/music.md):
 //  - the record stock is separate supported stock, never baked into a fixture: skyMuBinRecords stands in one compartment of an empty
 //    rack (host = the rack), skyMuFacedRecords on one ledge of the new-arrivals board (host = the board); like lane SHOPS-A's book
-//    stacks they are light `onHost` kinds — inside a bay / on a ledge they rest within their static host (the physics only lets on-host
-//    decor go loose from its host's TOP), so nothing floats when shot;
+//    stacks they are light `onHost` kinds — (lane MERCH, task studio-skywalk-variety-20261107-231448-01) a bin block goes loose on the
+//    rack's declared trays when shot (physics/merchOnHost.ts); a faced row (one prop for five sleeves) stays on its ledge at layout
+//    version 3, version 4 splits it into five loose sleeves (kinds/merch.ts) on the board's declared ledges, so nothing floats when shot;
 //  - records are PHYSICAL STOCK, not items: no record item exists and no new inventory is invented (the store's finds are the existing
 //    loot in its holders);
 //  - nothing here is storage: the turntable's dust-cover hinge holds no lid, the headphones / stool / boards have nothing to open.
@@ -40,8 +41,12 @@ const FACED_D = r3(COVER_WALL.ledgeD);
 
 const DEF: Readonly<Record<StoreMusicKind, PropDef>> = {
   skyMuBinRecords: {w: BIN.w, d: BIN.d, h: BIN.h, blocksSight: false, physics: {mass: 4.5, dynamic: true, shape: 'box', mat: 'pad', contact: true, onHost: true}},
-  skyMuFacedRecords: {w: r3((FACED_PER_LEDGE - 1) * FACED_PITCH + LP_SLEEVE.s + 0.04), d: FACED_D, h: FACED_H, blocksSight: false, physics: {mass: 1.8, dynamic: true, shape: 'box', mat: 'pad', contact: true, onHost: true}},
-  skyMuCoverWall: {w: r3(COVER_WALL.w + 0.05), d: r3(COVER_WALL_DEPTH), h: r3(COVER_WALL_TOP), blocksSight: false},
+  // (task studio-skywalk-variety-20261107-231448-01, lane MERCH: the row of five sleeves is ONE prop — static now; layout version 4 splits it
+  // into five loose sleeves, kinds/merch.ts skyMerchFacedLp, standing on the board's declared ledges)
+  skyMuFacedRecords: {w: r3((FACED_PER_LEDGE - 1) * FACED_PITCH + LP_SLEEVE.s + 0.04), d: FACED_D, h: FACED_H, blocksSight: false},
+  skyMuCoverWall: {w: r3(COVER_WALL.w + 0.05), d: r3(COVER_WALL_DEPTH), h: r3(COVER_WALL_TOP), blocksSight: false,
+    // (lane MERCH) its three ledges as declared open shelves (board face to the lip; physics/merchOnHost.ts)
+    shelves: COVER_WALL.ledges.map((y, i, a) => ({y, x0: -COVER_WALL.w / 2, x1: COVER_WALL.w / 2, z0: r3(-COVER_WALL_DEPTH / 2 + COVER_WALL.t), z1: r3(COVER_WALL_DEPTH / 2), clear: r3((a[i + 1] ?? COVER_WALL.h) - y - 0.03)}))},
   skyMuBinLabel: {...MUSIC_DIMS.binLabel, blocksSight: false},
   skyMuTurntable: {...MUSIC_DIMS.turntable, blocksSight: false, physics: {mass: 7, dynamic: true, shape: 'box', mat: 'pad', contact: true, onHost: true}},
   skyMuHeadphones: {...MUSIC_DIMS.headphones, blocksSight: false, physics: {mass: 0.55, dynamic: true, shape: 'box', mat: 'pad', contact: true, onHost: true}},
@@ -51,8 +56,10 @@ const DEF: Readonly<Record<StoreMusicKind, PropDef>> = {
 };
 
 const PHYS: Readonly<Record<StoreMusicKind, DestPhys>> = {
-  skyMuBinRecords: {dynamic: true, mass: 4.5, mat: 'pad', shape: 'box', onHost: true, how: 'a bay of 10-inch LP sleeves filed upright in one compartment of a record-bin rack (~4.5 kg of card and vinyl): inside the bay the static rack\'s divider / bar / back walls hold it (on-host decor goes loose only from a host top), so a shot marks it and nothing floats; standing on a counter / table top it would go loose'},
-  skyMuFacedRecords: {dynamic: true, mass: 1.8, mat: 'pad', shape: 'box', onHost: true, how: 'five 12-inch LP sleeves stood face-out on a ledge of the new-arrivals board (~1.8 kg): held by the ledge lip and the board (not the host top), they rest within the static wall fixture — marked by a shot, never floating'},
+  // (task studio-skywalk-variety-20261107-231448-01, lane MERCH: the bin block now goes loose on the rack's declared trays when shot)
+  skyMuBinRecords: {dynamic: true, mass: 4.5, mat: 'pad', shape: 'box', onHost: true, how: 'a bay of 10-inch LP sleeves filed upright in one compartment of a record-bin rack (~4.5 kg of card and vinyl): a shot knocks the block over / out of its bay onto the rack\'s trays or the floor (on-host decor on the rack\'s declared trays: physics/merchOnHost.ts)'},
+  // (lane MERCH: an explicit exception — the board declares no shelves, so the row stays put; tests/skyways-merch-physics.test.ts lists it)
+  skyMuFacedRecords: {dynamic: false, why: 'host decor', how: 'five 12-inch LP sleeves stood face-out on a ledge of the new-arrivals board, ONE prop for the row (a 1.9 m row would fly as a single plank): it stays on the static board, marked by a shot (layout version 3). Layout version 4 splits every row into five loose sleeves (kinds/merch.ts skyMerchFacedLp) that a shot knocks off the ledge'},
   skyMuCoverWall: {dynamic: false, why: 'mounted', how: 'black-stained display board with three oak ledges and its NEW ARRIVALS header, screwed to the shop wall from 0.92 m up: a bump or a bullet does not move it'},
   skyMuBinLabel: {dynamic: false, why: 'mounted', how: 'printed genre card screwed to a record-bin rack\'s front apron: fixed to the static rack'},
   skyMuTurntable: {dynamic: true, mass: 7, mat: 'pad', shape: 'box', onHost: true, how: 'belt-drive turntable on rubber feet (~7 kg) on the listening counter: on the counter top a shot knocks it off (on-host decor), a bump slides it'},

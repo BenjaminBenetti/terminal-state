@@ -25,7 +25,8 @@ const DT = 1 / 60;
 // (task studio-skyways-level-20261106-054448, lane ADDON: + the Skyways convention's boxed figure — a cardboard window box)
 // (task studio-skyways-destinations-20261106-170011-01, lane SHOPS-A: + the bookshop's loose hardcover stacks and the hobby shop's boxed model kits)
 // (task studio-alpha-skyways-shops-20261107-054512-01, lane STORE-MUSIC: + the record store's filed sleeves in the bins and the faced-out LPs)
-const CARDBOARD_KINDS = ['archiveBoxes', 'cardboardBoxFlaps', 'newspaperBundles', 'skyDBookStack', 'skyDModelKits', 'skyMuBinRecords', 'skyMuFacedRecords', 'skywaysConFigureBox'];
+// (task studio-skywalk-variety-20261107-231448-01, lane MERCH: the faced-out row is one static prop now; its split sleeves skyMerchFacedLp are the loose ones)
+const CARDBOARD_KINDS = ['archiveBoxes', 'cardboardBoxFlaps', 'newspaperBundles', 'skyDBookStack', 'skyDModelKits', 'skyMerchFacedLp', 'skyMuBinRecords', 'skywaysConFigureBox'];
 
 describe('M01 classification: which loose props are cardboard (every level)', () => {
   it('exactly the dynamic kinds of damage class cardboard strike as cardboard; every other loose prop keeps prop', () => {

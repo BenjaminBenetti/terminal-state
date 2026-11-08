@@ -26,6 +26,8 @@
 // or atrium roof is in view (checked every SKYWAYS_EXT.checkS, in line of sight), like the tower's city. Not registered with the level
 // culler (always-visible scenery with its own gate); registered as a warm-up pool (compiled even while hidden).
 // Budget: shells 1 draw, bridges + curbs 1, bridge glazing 1, inner ground 1, wrecks 1 instanced draw per model part, + the Office city.
+// (Task studio-skywalk-variety-20261107-231448-01, lane FACADE: the buildings' facade relief — world/skywaysFacade.ts — is merged
+// into those same meshes: its curtain-wall panels into the shells, its vertex-coloured boxes into the bridges + curbs: no new draw.)
 // Lighting: never the station light field (unlit, the exterior's fake outdoor light).
 
 import * as THREE from 'three';
@@ -45,6 +47,7 @@ import {
 } from './exterior';
 import {preloadOfficeArch} from './officeArch';
 import {roofGlass} from './mallArch';
+import {emitFacadeBox, planSkywaysFacades, type SkywaysFacadePlan} from './skywaysFacade';
 
 // ---------------------------------------------------------------------------------------------
 // Constants
@@ -128,6 +131,8 @@ export interface SkywaysExteriorPlan {
   streets: StreetRect[];
   /** The Office city around the complex (world/exterior.ts planExterior; `streets` appended). */
   city: ExteriorPlan;
+  /** (lane FACADE) Each building's facade relief (world/skywaysFacade.ts), merged into the shells / bridges meshes. */
+  facades: SkywaysFacadePlan[];
 }
 
 const inRect = (r: SkywaysRect, x: number, z: number, pad = 0) => x >= r.x0 - pad && x <= r.x1 + pad && z >= r.z0 - pad && z <= r.z1 + pad;
@@ -254,7 +259,13 @@ export function planSkywaysExterior(layout: StationLayout): SkywaysExteriorPlan 
   // --- the Office city around the complex ---
   const city = planExterior({foot: ext, groundY: gy, eyeAbove: storeyY(2) + 1.6 - gy, seed: layout.seed >>> 0});
   city.streets.push(...streets);
-  return {groundY: gy, exterior: {...ext}, shells, bridges: plans, ground, curbs, wrecks, streets, city};
+  // --- (lane FACADE) the facade relief, clear of every bridge tube (outer cross-section, slab underside to roof glass / slab) ---
+  const tubes = bridges.map(br => {
+    const apex = info.bridges.find(q => q.id === br.id)?.roof?.apexY ?? -Infinity;
+    return {id: br.id, rect: bridgeOuter(br), y0: br.deckY - SKYWAYS_EXT.deckDepth, y1: Math.max(apex + 0.3, br.ceilY + SKYWAYS_EXT.roofDepth)};
+  });
+  const facades = planSkywaysFacades(info, layout.seed >>> 0, {shells, tubes});
+  return {groundY: gy, exterior: {...ext}, shells, bridges: plans, ground, curbs, wrecks, streets, city, facades};
 }
 
 /** One bridge tube's exterior: slab underside, roof, side fascias minus the window spans, steel posts / chords, glazing sheets. */
@@ -429,7 +440,8 @@ export interface SkywaysExteriorModels {
   wrecks?: Partial<Record<WreckKey, GLTF | null>>;
 }
 
-export interface SkywaysExteriorStats { meshes: number; draws: number; triangles: number; shells: number; bridges: number; wrecks: number; wreckModels: number; cityTris: number }
+/** (facadeBoxes / facadeTris: lane FACADE's relief, counted inside the shells / bridges meshes' triangles.) */
+export interface SkywaysExteriorStats { meshes: number; draws: number; triangles: number; shells: number; bridges: number; wrecks: number; wreckModels: number; cityTris: number; facadeBoxes: number; facadeTris: number }
 
 export interface SkywaysExteriorView {
   root: THREE.Group;
@@ -447,7 +459,7 @@ export function buildSkywaysExterior(plan: SkywaysExteriorPlan, models: SkywaysE
   const root = new THREE.Group();
   root.name = 'skyways-exterior';
   const geometries: THREE.BufferGeometry[] = [], instanced: THREE.InstancedMesh[] = [];
-  const stats: SkywaysExteriorStats = {meshes: 0, draws: 0, triangles: 0, shells: plan.shells.length, bridges: plan.bridges.length, wrecks: plan.wrecks.length, wreckModels: 0, cityTris: 0};
+  const stats: SkywaysExteriorStats = {meshes: 0, draws: 0, triangles: 0, shells: plan.shells.length, bridges: plan.bridges.length, wrecks: plan.wrecks.length, wreckModels: 0, cityTris: 0, facadeBoxes: 0, facadeTris: 0};
   // the Office city (ring road, ruined blocks, heroes, the dome) round the complex, its city map painted with the Skyways streets
   const city = buildExterior(plan.city, models.city ?? {});
   city.root.name = 'skyways-city';
@@ -468,17 +480,24 @@ export function buildSkywaysExterior(plan: SkywaysExteriorPlan, models: SkywaysE
     for (const r of plan.ground) g.rect({axis: 'y', c: plan.groundY, n: 1, s0: r.x0, s1: r.x1, t0: r.z0, t1: r.z1});
     add(g.geometry(), groundMesh.material as THREE.Material, 'skyways-ext-ground');
   }
-  // building shells
+  // building shells (+ lane FACADE's curtain-wall panels: projecting bay fronts, setback walls)
   {
     const g = new Geo();
     for (const s of plan.shells) for (const q of s.faces) g.rect(q);
+    for (const f of plan.facades) for (const q of f.panels) g.rect(q);
     add(g.geometry(), facadeMaterial(), 'skyways-ext-shells');
   }
-  // bridge exteriors + curbs (vertex-coloured stand-in material)
+  // bridge exteriors + curbs (vertex-coloured stand-in material) + lane FACADE's relief boxes and setback roofs
   {
     const g = new Geo();
     for (const b of plan.bridges) { for (const q of b.faces) g.rect(q, CONCRETE); for (const s of b.steel) g.box(s); }
     for (const c of plan.curbs) g.box(c);
+    for (const f of plan.facades) {
+      for (const b of f.boxes) stats.facadeTris += emitFacadeBox(g, b, plan.groundY);
+      for (const r of f.roofs) { g.rect(r.q, r.color); stats.facadeTris += 2; }
+      stats.facadeBoxes += f.boxes.length;
+    }
+    stats.facadeTris += plan.facades.reduce((s, f) => s + f.panels.length * 2, 0);
     add(g.geometry(), propMaterial(), 'skyways-ext-bridges');
   }
   // bridge glazing (uv metres: bars on the pane columns, one row)

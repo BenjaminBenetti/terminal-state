@@ -84,7 +84,8 @@ polish: a prop that looks usable must not silently ship as decoration-only. Chec
    (local mesh separation; no regeneration without approval) and place them as separate runtime props or loot items on
    the furniture's real support surface: seeded, supported, not floating or overlapping, so they move (rule 2) or can be
    taken. Permanent structural parts (handles, hinges, shelves, built-in fixtures) stay in the model and need not become
-   pickups. A remaining baked case is listed as an explicit exception, never silently shipped.
+   pickups. A remaining baked case is listed as an explicit exception, never silently shipped. Store merchandise and other
+   loose things on top of counters or on shelves are likewise separate props that react physically when shot.
 5. **Real-world scale, checked beside a zombie.** Every new or changed prop is inspected in a rendered size comparison
    beside an actual runtime-scaled standing zombie: `node tools/asset-pipeline/props/scale-check.mjs --kind <kind>` (CPU
    render at the game's runtime fit; usage in `docs/prop-affordances.md`).

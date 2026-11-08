@@ -21,6 +21,7 @@ import {propPhysics} from '../src/damage/materials';
 import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {dynamicKind} from '../src/physics/dynamicItems';
+import {looseDecorKind, restsOnHost} from '../src/physics/merchOnHost'; // task studio-skywalk-variety-20261107-231448-01 (lane MERCH)
 import {ECON_CATS, HANDFUL, HOLDER_ALLOW, econCat, lootProfile} from '../src/items/lootTables';
 import {isLootHolderKind} from '../src/items/loot';
 import {purposeById, purposeLoot} from '../src/gen/purposes';
@@ -71,7 +72,11 @@ describe('Northern Groove Records: kinds, audits, stock geometry (pure)', () => 
       expect(PROP_DEFS[k].w * PROP_DEFS[k].d * PROP_DEFS[k].h).toBeGreaterThan(0);
     }
     // the stock / booth equipment is light on-host decor; the stool a light floor prop; the boards / cards / posters mounted
-    for (const k of ['skyMuBinRecords', 'skyMuFacedRecords', 'skyMuTurntable', 'skyMuHeadphones'] as const) expect(STORE_MUSIC_SPECS[k].phys).toMatchObject({dynamic: true, onHost: true});
+    for (const k of ['skyMuBinRecords', 'skyMuTurntable', 'skyMuHeadphones'] as const) expect(STORE_MUSIC_SPECS[k].phys).toMatchObject({dynamic: true, onHost: true});
+    // (task studio-skywalk-variety-20261107-231448-01, lane MERCH) the faced-out ROW is one prop for five sleeves: static host decor on the
+    // board (layout version 3); version 4 splits every row into five loose sleeves (kinds/merch.ts skyMerchFacedLp) on the declared ledges
+    expect(STORE_MUSIC_SPECS.skyMuFacedRecords.phys).toMatchObject({dynamic: false, why: 'host decor'});
+    expect(STORE_MUSIC_SPECS.skyMuCoverWall.def.shelves?.length).toBe(COVER_WALL.ledges.length);
     expect(STORE_MUSIC_SPECS.skyMuStool.phys).toMatchObject({dynamic: true});
     for (const k of ['skyMuCoverWall', 'skyMuBinLabel', 'skyMuGigPoster', 'skyMuSign'] as const) expect(STORE_MUSIC_SPECS[k].phys).toMatchObject({dynamic: false, why: 'mounted'});
     // the Mall model it uses is registered for Skyways (recorded)
@@ -260,14 +265,17 @@ describe('Northern Groove Records on real seeds (both formats)', () => {
     }
   }, 120_000);
 
-  it('physics: the stock rests within its static hosts (never goes loose from a bay / ledge); booth equipment on the console top goes loose; stools are floor props', () => {
+  it('physics: the stock stands inside its static hosts (bin blocks go loose on the rack\'s declared trays, faced rows are static rows — split per sleeve in version 4); booth equipment on the console top goes loose; stools are floor props', () => {
     const {layout: l, anchor: an} = HITS[0];
     const props = storeProps(l, an);
     for (const p of props.filter(q => q.kind === 'skyMuBinRecords' || q.kind === 'skyMuFacedRecords')) {
       const h = l.props[p.host!];
       expect(dynamicKind(h.kind)).toBe(false);
-      // on-host decor goes loose only from its host's TOP (DynamicItems.restsOnStaticHost): a bay / ledge is below it
+      // a bay / ledge is below the host's top (task studio-skywalk-variety-20261107-231448-01, lane MERCH: physics/merchOnHost.ts — a
+      // bin block goes loose on the rack's declared trays when shot; the faced row (one prop for five sleeves) is an explicit exception)
       expect(Math.abs(p.y - (h.y + h.h))).toBeGreaterThan(0.05);
+      // (bin blocks go loose on the trays; a faced row is a static kind — version 4 splits it into loose sleeves)
+      expect(p.kind === 'skyMuBinRecords' ? restsOnHost(p, l.props) : looseDecorKind(p.kind)).toBe(p.kind === 'skyMuBinRecords' ? 'shelf' : false);
     }
     for (const p of props.filter(q => q.kind === 'skyMuTurntable' || q.kind === 'skyMuHeadphones')) {
       const h = l.props[p.host!];

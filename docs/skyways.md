@@ -122,12 +122,17 @@ Every kit model is a Codex concept turned into a Meshy T2.5 model with its PBR m
 - A station a player entered under GAME76 (memory with visits, no record) keeps regenerating that exact layout (version 1, pinned by
   fingerprints in `tests/skyways-dest-layout-version.test.ts`), so its saved holders, pickups, kills and car stay consistent.
 - Every station not yet entered in GAME77 got version 2, the destinations.
-- **Version 3, the rework** (task studio-skyways-rework-20261107-054512-01) is what every station not yet entered gets now, in new
-  and existing campaigns.
-- Versions 1 and 2 regenerate through a FROZEN snapshot of the GAME77 generator (`gen/skyways/legacy77/`). The test pins both
-  versions' fingerprints (GAME76 and GAME77), so a station a player already entered keeps its holders, pickups, kills and add-on.
-- Never edit the snapshot. Never rename or resize a prop kind it places; add a new kind instead.
-- Fixes that change no layout data reach every version: the stairs, the store and court finishes, the clock, the signs.
+- Version 3, the rework (task studio-skyways-rework-20261107-054512-01), was what GAME78–80 gave every new station.
+- **Version 4, the building programmes** (task studio-skywalk-variety-20261107-231448-01) is what every station not yet entered gets
+  now, in new and existing campaigns.
+- Versions 1 and 2 regenerate through a FROZEN snapshot of the GAME77 generator (`gen/skyways/legacy77/`), version 3 through a frozen
+  snapshot of its core (`gen/skyways/legacy80/`: index / carve / frame / validate). The test pins all three versions' fingerprints, so a
+  station a player already entered keeps its holders, pickups, kills and add-on.
+- Never edit the snapshots. Never rename or resize a prop kind they place; add a new kind instead.
+- The shared dressers learn the version they dress from `skywaysGenVersion(layout)` (a side channel: no layout data); every
+  version-4 generation change is gated on it.
+- Fixes that change no layout data reach every version: the stairs (the open wells' ceilings and walls), the store, shop and court
+  finishes, the clock, the signs and wording, the silent arcade, shelf-stock physics, the exterior relief, culling.
 
 ## The rework (layout version 3)
 
@@ -176,6 +181,23 @@ Every kit model is a Codex concept turned into a Meshy T2.5 model with its PBR m
   - two fixed stair lanes side by side form one wide stair, with no seam rail.
   - Evidence: `tests/skyways-stairs.test.ts`, using a real player.
 - **The clock court's tick:** half its old level, heard within 8 m. The chime strikes only within that range.
+
+## The building programmes (layout version 4)
+
+Each building has a PROGRAMME (`skywaysTypes.ts SkywaysProgramme`, drawn by `frame.ts` on its own stream, bridge neighbours' kinds
+avoided where it can; a map of four or more buildings mixes at least three):
+- **`gallery`: a bridge house** — the skywalk level only (no street floor, no stair): one long, wide promenade between its bridges,
+  lookouts over the streets on every free facade, shops and arcades along it; a low shell (11–16 m).
+- **`hall`: a market hall** — fills its block; open from its street floor to the glass roof inside a narrow gallery ring, one narrow
+  run inside the hall, food counters round its floor (the food court's first choice), no anchor store; the shell stops just over its
+  glass. Broad blocks only.
+- **`tower`: an office tower lobby** — a tall lobby with a free-standing GRAND STAIR in its middle (floor on all four sides, a full
+  run-out beyond both ends), a café or two, no shop arcade at street level, the tenant's office floor at the skywalk level; a tall shell.
+- **`classic`**: the earlier lobby + skywalk court blocks (shops, anchors, most with an atrium); the add-on host is always classic.
+Also in version 4: the ramen restaurant is an ordinary storefront tenant with its own sign (about three maps in five, any building /
+storey, never the station concourse; `Storefront.ownDress` keeps the generic fit-out out of its dining room); the convention tables
+carry a few real drinks / snacks (`skywaysConSnacks.ts`); player text says "Skywalk" (`skywalkText.ts`, every version).
+Tests: `tests/skyways-programmes.test.ts`.
 
 ## The add-on (exactly one)
 

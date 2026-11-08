@@ -292,7 +292,7 @@ export function drawSkywaysMapFace(ctx: Ctx, plan: SkywaysMapPlan, level: number
   }
   // header: the complex's name, what this is, this storey
   text(ctx, plan.name.toUpperCase(), C, MAP_FACE.header.title, `bold 40px ${FONT}`, '#f2f4f5', 'center');
-  text(ctx, 'PEDWAY · STREET · +15 SKYWAY DIRECTORY', C, MAP_FACE.header.sub, `600 17px ${FONT}`, PAL.skyway, 'center');
+  text(ctx, 'PEDWAY · STREET · SKYWALK DIRECTORY', C, MAP_FACE.header.sub, `600 17px ${FONT}`, PAL.skyway, 'center');
   {
     const lab = `THIS LEVEL · ${(plan.storeys.find(s => s.level === level)?.label ?? `Level ${level}`).toUpperCase()}`;
     ctx.font = `bold 15px ${FONT}`;
@@ -312,7 +312,7 @@ export function drawSkywaysMapFace(ctx: Ctx, plan: SkywaysMapPlan, level: number
   {
     const y = MAP_FACE.legendY;
     const items: [string, (x: number) => void][] = [
-      ['+15 Skyway', x => { ctx.strokeStyle = PAL.skyway; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 26, y); ctx.stroke(); }],
+      ['Skywalk', x => { ctx.strokeStyle = PAL.skyway; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 26, y); ctx.stroke(); }],
       ['Pedway', x => { ctx.strokeStyle = PAL.pedway; ctx.lineWidth = 5; dash(ctx, [8, 5]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 26, y); ctx.stroke(); dash(ctx, []); }],
       ['Stairs', x => runIcon(ctx, x + 11, y, 20, 'stairs')],
       ['Escalators', x => runIcon(ctx, x + 11, y, 20, 'escalator')],

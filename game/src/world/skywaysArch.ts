@@ -15,6 +15,8 @@
 //  - the station storey (platforms, track bed, track tunnels, its shops / back rooms) and every storefront unit (shops / eateries:
 //    their own storefront walls / floors) keep the builder's own rule (null keys); above the station storey the storefront units take
 //    the pedway's plain plaster ceiling (and their door soffits), not the station ceiling kit.
+//    (task studio-skywalk-variety-20261107-231448-01, lane DRESS) except the small storefront units' walls and floors: their use's
+//    interior palette (world/skywaysShopFinish.ts: seven palettes as rows of the Mall's per-vertex finish programs — no draw call added).
 // The keys are arch-owned finishes for bullet impacts too (world/finishAt.ts, damage/impactFinish.ts: plaster / terrazzo / tile /
 // concrete) and never take a station wall treatment (world/wallDetailPlan.ts: the mall's front / back-of-house recipes).
 // Every surface reuses the office architecture's materials (world/officeArch.ts: ONE program per surface kind — the plasterboard wall,
@@ -45,6 +47,13 @@ import {buildSkylights, SKYLIGHT_SKY_KEY, skylightSkyMaterial, type SkylightStat
 import {skywaysArchSpan, skywaysArchTexture, skywaysTexturedMaterial, usesSkywaysArchTextures} from './skywaysArchTextures';
 import type {SkywaysArchTextureKey} from '../assets/skywaysArchTextures.generated';
 import type {SkywaysBridge} from '../gen/skyways/skywaysTypes';
+// (task studio-skywalk-variety-20261107-231448-01, lane DRESS) the small shops' interior palettes (by their use), drawn by the Mall's
+// per-vertex finish-row programs (one wall + one floor material for every palette: no draw call added)
+import {
+  SKYWAYS_SHOP_FLOOR_KEY, SKYWAYS_SHOP_PALETTES, SKYWAYS_SHOP_PALETTE_IDS, SKYWAYS_SHOP_WALL_KEY, skywaysShopFloorKey, skywaysShopPaletteOf, skywaysShopRows,
+  skywaysShopWallKey, type SkywaysShopPalette,
+} from './skywaysShopFinish';
+import {MALL_SPAN, floorRow, mallSurfaceMaterial, wallRow, writeRow} from './mallSurfaces';
 
 // ---------------------------------------------------------------------------------------------
 // Styles (pure data)
@@ -76,7 +85,7 @@ export const SKYWAYS_TEX_KEYS = {herringbone: 'skyways-tex-herringbone', brickWa
 export const SKYWAYS_PAVER_STANDIN = {kind: 'stone' as FloorKind, tint: 0x6b3a2f};
 export const SKYWAYS_SLAT_STANDIN = {kind: 'raw' as CeilingKind, tint: 0x3a2b21, bar: 0x1c1612};
 
-/** What a Skyways area is, for its finishes ('station' / 'shop': the builder's own rule). */
+/** What a Skyways area is, for its finishes ('station': the builder's own rule; 'shop': its palette walls / floor, else the builder's). */
 export type SkywaysClass = 'station' | 'shop' | 'public' | 'court' | 'bridge' | 'wet' | 'boh' | 'anchor' | 'office';
 
 /** The class of an area (`bridges`: the layout.areas ids of the bridge decks). */
@@ -134,6 +143,9 @@ export class SkywaysArch {
   /** (lane ARCH) bridge roof / skylight build stats (QA / tests). */
   bridgeRoofs: BridgeRoofStats[] = [];
   skylightStats: SkylightStats = {coffers: 0, panes: 0, meshes: 0, triangles: 0};
+  /** (lane DRESS) area id -> its small shop palette (null: the builder's rule), cached; the palettes' finish rows are written once. */
+  private readonly shopPal = new Map<number, SkywaysShopPalette | null>();
+  private shopRows = false;
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): SkywaysArch | null {
     return layout.skyways ? new SkywaysArch(layout, mats, levels) : null;
@@ -247,6 +259,41 @@ export class SkywaysArch {
     });
   }
 
+  /** (task studio-skywalk-variety-20261107-231448-01, lane DRESS) a small storefront unit's palette (world/skywaysShopFinish.ts), cached. */
+  shopPalette(areaId: number): SkywaysShopPalette | null {
+    let p = this.shopPal.get(areaId);
+    if (p === undefined) this.shopPal.set(areaId, (p = skywaysShopPaletteOf(this.layout, areaId)));
+    return p;
+  }
+
+  /** (lane DRESS) Writes the palettes' rows into the Mall finish table (its reserved top rows; once per build). */
+  private writeShopRows(): void {
+    if (this.shopRows) return;
+    this.shopRows = true;
+    for (const p of SKYWAYS_SHOP_PALETTE_IDS) {
+      const r = skywaysShopRows(p), f = SKYWAYS_SHOP_PALETTES[p];
+      writeRow(r.wall, wallRow(f.wall));
+      writeRow(r.floor, floorRow(f.floor));
+    }
+  }
+
+  /** (lane DRESS) A small shop's wall key ('skyways-shop-wall|<row>': the Mall wall program, the palette's row per vertex), or null. */
+  private shopWallKey(areaId: number): string | null {
+    const p = this.shopPalette(areaId);
+    if (!p) return null;
+    this.writeShopRows();
+    this.def(SKYWAYS_SHOP_WALL_KEY, () => mallSurfaceMaterial('wall'));
+    return skywaysShopWallKey(p);
+  }
+
+  private shopFloorKey(areaId: number): string | null {
+    const p = this.shopPalette(areaId);
+    if (!p) return null;
+    this.writeShopRows();
+    this.def(SKYWAYS_SHOP_FLOOR_KEY, () => mallSurfaceMaterial('floor'));
+    return skywaysShopFloorKey(p);
+  }
+
   /** Register a lazily built material behind a key. */
   private def(key: string, make: () => THREE.Material): string {
     if (!this.specs.has(key)) this.specs.set(key, make);
@@ -313,6 +360,8 @@ export class SkywaysArch {
       // 'tileShop'): they take the store's finish before the storefront rule, or the store reads as the Subway tile box
       // (integration 20261107-115426: the internal stair's sloped flank faces too — a raking dado, never a strip of Subway tile)
       if (cls === 'anchor') return {...f, finish: this.anchorWallKey(f.area)};
+      // (task studio-skywalk-variety-20261107-231448-01, lane DRESS) a small storefront unit's walls: its use's palette, not the Subway tile
+      if (cls === 'shop' && f.finish === 'tileShop') { const k = this.shopWallKey(f.area); if (k) return {...f, finish: k}; }
       if (f.finish === 'tileShop') return f;
       if (cls === 'station' || cls === 'shop') return f;
       // (task studio-skyways-rework-20261107-054512-01, lane ARCH) a roofed bridge's side walls stop at the springing line (the glass
@@ -357,6 +406,7 @@ export class SkywaysArch {
     // (lane ARCH) roofed bridges: clay pavers; skylit / atrium courts: herringbone brick (stand-ins: dark brick-red stone / court stone)
     if (cls === 'bridge' && this.roofed.has(area)) return this.texKey('pavers', () => this.def('skyways-floor-pavers', () => floorMaterial(this.mats, 'skyways-floor-pavers', SKYWAYS_PAVER_STANDIN.kind, SKYWAYS_PAVER_STANDIN.tint)));
     if ((cls === 'public' || cls === 'court') && this.courtLook(area)) return this.texKey('herringbone', () => this.floorKeyOf('court'));
+    if (cls === 'shop') return this.shopFloorKey(area); // (lane DRESS) a small shop's palette floor (null: the builder's rule)
     switch (cls) {
       case 'public': case 'court': case 'bridge': case 'wet': case 'boh': case 'office': return this.floorKeyOf(cls);
       case 'anchor': return this.anchorFloorKey(lvl.grid.area[i]);
@@ -411,6 +461,7 @@ export class SkywaysArch {
     // (lane ARCH) the textured finishes: their texture's real-world span; the skylight sky: unmapped
     for (const [t, k] of Object.entries(SKYWAYS_TEX_KEYS) as [SkywaysArchTextureKey, string][]) if (key === k) return skywaysArchSpan(t);
     if (key === SKYLIGHT_SKY_KEY) return {u: 1, v: 1};
+    if (key.startsWith('skyways-shop-')) return {u: MALL_SPAN, v: MALL_SPAN}; // (lane DRESS) the Mall programs' span
     if (key.startsWith('skyways-floor') || key.startsWith('skyways-anchor-floor')) return {u: OFFICE_FLOOR_SPAN, v: OFFICE_FLOOR_SPAN};
     if (key.startsWith('skyways-ceil') || key.startsWith('skyways-anchor-ceil')) return {u: OFFICE_CEIL_SPAN, v: OFFICE_CEIL_SPAN};
     if (key === 'skyways-trim') return {u: 1, v: 1};
@@ -420,6 +471,7 @@ export class SkywaysArch {
   /** The material behind a skyways key (built on first use); undefined for any other key. */
   material(key: string): THREE.Material | undefined {
     if (!isSkywaysKey(key)) return undefined;
+    if (key.includes('|')) key = key.slice(0, key.indexOf('|')); // (lane DRESS) a finish-row key: its program's material
     let m = this.materials.get(key);
     if (!m) {
       const make = this.specs.get(key);

@@ -17,6 +17,7 @@ import {FOOD_IDS, DRINK_IDS} from '../src/items/items';
 import {SKYWAYS_RAMEN_PURPOSE} from '../src/gen/skyways/ramenPurposes';
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
 import {outfitterDressOf} from '../src/gen/skyways/stores/outfitterDress'; // (task studio-alpha-skyways-shops-20261107-054512-01, lane STORE-OUTFITTER)
+import {skywaysConSnacksOf} from '../src/gen/skyways/skywaysConSnacks'; // (task studio-skywalk-variety-20261107-231448-01, lane DRESS)
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const cache = new Map<number, StationLayout>();
@@ -84,7 +85,7 @@ describe('Skyways: generated layouts', () => {
         const g = l.levels[b.level].grid, [cx, cy] = g.cellOf((b.rect.x0 + b.rect.x1) / 2, (b.rect.z0 + b.rect.z1) / 2);
         expect(d[b.level][g.idx(cx, cy)], `seed ${s} bridge ${b.id}`).toBeGreaterThan(0);
       }
-      expect(storeyLabel(l, 2)).toBe('+15 Skyway');
+      expect(storeyLabel(l, 2)).toBe('Skywalk'); // (task studio-skywalk-variety-20261107-231448-01: generic player wording)
     }
   });
 
@@ -118,12 +119,33 @@ describe('Skyways: generated layouts', () => {
     }
   });
 
-  it('the ramen restaurant (base shop pool): one per level, its finite edible food supported (never on the floor)', () => {
+  // (layout version 4, task studio-skywalk-variety-20261107-231448-01; user: "ramen shop always seems to spawn at the station, it
+  // should be random like other shops, and it should have a sign!") an ORDINARY TENANT: on some maps, in different buildings / storeys,
+  // never the station's pedway concourse; a storefront with its own fascia sign (its name, lit or dim)
+  it('the ramen restaurant: an ordinary storefront tenant with its sign (some maps, varied buildings / storeys, never the concourse); its finite edible food supported (never on the floor)', () => {
+    let present = 0;
+    const where = new Set<string>();
+    for (let s = 1; s <= 30; s++) {
+      const l = gen(s), r = l.skyways!.restaurant;
+      if (!r) { expect(l.storefronts.some(sf => sf.ownDress), `seed ${s}`).toBe(false); continue; }
+      present++;
+      where.add(`${l.skyways!.buildings.find(b => b.id === r.building)!.role === 'station' ? 'station' : 'other'}:${r.level}`);
+      expect(r.level, `seed ${s}: not the pedway concourse`).toBeGreaterThanOrEqual(1);
+      const sf = l.storefronts.find(q => q.unit === r.area)!;
+      expect(sf, `seed ${s}: a storefront`).toBeTruthy();
+      expect([sf.name, sf.ownDress, sf.sign === 'dead'], `seed ${s}: its sign`).toEqual([r.name, true, false]);
+      expect(l.areas[r.kitchen!].purpose).toBe(SKYWAYS_RAMEN_PURPOSE.kitchen);
+    }
+    expect(present, 'ramen on some maps').toBeGreaterThanOrEqual(8);
+    expect(present, 'ramen not on every map').toBeLessThan(30);
+    expect(where.size, `varied: ${[...where].join(' ')}`).toBeGreaterThanOrEqual(3);
     for (const s of SEEDS) {
-      const l = gen(s), r = l.skyways!.restaurant!;
-      expect(r).toBeTruthy();
+      const l = gen(s), r = l.skyways!.restaurant;
+      if (!r) continue;
       expect(l.areas[r.area].purpose).toBe(SKYWAYS_RAMEN_PURPOSE.dining);
-      const food = l.pickups.filter(p => FOOD.has(p.itemId));
+      // (lane DRESS, layout version 4) the convention's table snacks are the venue's own (tests/skyways-con-snacks.test.ts)
+      const snacks = new Set((skywaysConSnacksOf(l) ?? []).map(q => q.pickup));
+      const food = l.pickups.filter(p => FOOD.has(p.itemId) && !snacks.has(p));
       expect(food.length).toBeGreaterThanOrEqual(2);
       expect(food.length).toBeLessThanOrEqual(4);
       for (const p of food) {
@@ -137,8 +159,11 @@ describe('Skyways: generated layouts', () => {
   it('ordinary small loot is not piled on the floor: the only loose floor finds are weapon finds (+ their ammo / pistol-start boxes)', () => {
     for (const s of SEEDS.slice(0, 5)) {
       const l = gen(s), r = l.skyways!.restaurant;
+      const snacks = new Set((skywaysConSnacksOf(l) ?? []).map(q => q.pickup));
       for (const p of l.pickups) {
         if (FOOD.has(p.itemId) || l.areas[p.area]?.ext) continue; // the restaurant's plates; the annex keeps its own program
+        // (lane DRESS, layout version 4: the convention's drinks / snacks stand on its table tops, never on the floor)
+        if (snacks.has(p)) { expect(p.y - l.levels[p.level ?? 0].baseY, `seed ${s}: ${p.itemId} on a table`).toBeGreaterThan(0.7); continue; }
         // (lane STORE-OUTFITTER: the outfitter's ONE real backpack, a gear find standing on its pack-wall shelf — not a floor pile)
         if (outfitterDressOf(l).some(r => r.backpack && l.pickups[r.backpack.pickup] === p)) continue;
         expect(/^(rifle|shotgun|pistol|ammo_|gas_mask|gas_filter)/.test(p.itemId) || p.reward !== undefined, `seed ${s}: ${p.itemId}`).toBe(true);

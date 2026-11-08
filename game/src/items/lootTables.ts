@@ -537,6 +537,14 @@ export const RAMEN_FRIDGE: LootSpec = {items: [[SUSHI_BENTO, 1.4], [RAMEN, 0.9],
 export const RAMEN_KITCHEN: LootSpec = {items: [[SUSHI_BENTO, 1], ['water', 0.8], [RAMEN, 0.4]], lots: [1, 1], empty: 0.6, exact: true};
 /** What was left standing on the dining tables / the counter's pass: the dresser's few LOOSE pickups (gen/skyways/ramen.ts RAMEN_LOOSE). */
 export const RAMEN_LOOSE_ROWS: ItemRows = [[RAMEN, 1.2], [RAMEN_CHASHU, 0.8], [SUSHI_BENTO, 1], [BUBBLE_TEA, 1]];
+/**
+ * Task studio-skywalk-variety-20261107-231448-01 (lane DRESS): the Skyways convention's TABLE SNACKS (gen/skyways/skywaysConSnacks.ts,
+ * layout version 4): single loose servings left on the event's tables — a vendor's / the badge staff's bubble tea, a can, a bag of chips
+ * (the first one off a panel table is always a bubble tea), and the panelists' drinks on the panel table. Finite: CON_SNACKS.total per
+ * venue, remembered like every pickup, never refilled.
+ */
+export const CON_TABLE_SNACK_ROWS: ItemRows = [[BUBBLE_TEA, 3], ['cola', 1], ['water', 1], ['juice', 0.5], ['chips', 0.8], ['chocolate', 0.7]];
+export const CON_PANEL_DRINK_ROWS: ItemRows = [['water', 2.2], [BUBBLE_TEA, 1], ['cola', 0.6]];
 
 /**
  * OWN tables of the openable kinds (world/openablesSpec.ts `loot` references these): NEW container kinds roll theirs over every

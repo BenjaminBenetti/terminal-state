@@ -10,9 +10,10 @@
 //   clear for the car body and its hall entry is >= 7 m wide.
 // - Glazing: every window span lies in solid wall cells of its storey with walkable floor right behind it (the Office rule: bodies
 //   never leave through glass).
-// - The ramen restaurant exists (the base shop pool's edible food).
+// - (layout version 4: the ramen restaurant is an ordinary tenant — absent on some maps; when present its dining room is a storefront unit.)
 // - Placements: enemies >= the profile's walking distance from the start, never on a ramp.
 
+import {skywaysGenVersion} from './layoutVersion'; // (layout version 4: the ramen is a storefront tenant)
 import {CELL, FLOOR, SOLID} from '../grid';
 import {levelDistance, levelIssues, type LevelRules} from '../levelGen';
 import {levelsOf} from '../levels';
@@ -76,7 +77,7 @@ export function skywaysIssues(layout: StationLayout, opts: {startCells?: number}
   }
   const fronted = layout.storefronts.filter(s => s.unit >= 0).length;
   if (fronted < MIN_SKYWAYS_UNITS) issues.push(`${fronted} shop units`);
-  if (!info.restaurant) issues.push('no ramen restaurant');
+  if (skywaysGenVersion(layout) >= 4 && info.restaurant && !layout.storefronts.some(sf => sf.unit === info.restaurant!.area)) issues.push('ramen without its storefront');
 
   // --- The add-on -------------------------------------------------------------------------------------------------------------
   const ad = info.addon;

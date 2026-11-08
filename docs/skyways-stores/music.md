@@ -69,7 +69,7 @@ holders.
 | Kind | What | Openables audit | Physics audit | Scale check W×H×D (contact) |
 |---|---|---|---|---|
 | `skyMuBinRecords` | a bay's filed block of 10-inch sleeves | `none` (decor: physical stock) | **dynamic** 4.5 kg box, `pad`, `onHost` (see note 1) | 0.27 × 0.29 × 0.18 m on the 0.466 m tray floor; 2 contact lines (bottom edges) |
-| `skyMuFacedRecords` | five 12-inch LPs face-out on a ledge | `none` | **dynamic** 1.8 kg, `pad`, `onHost` (see note 2) | 1.86 × 0.31 × 0.08 m on the 0.98 m ledge; 6 contacts |
+| `skyMuFacedRecords` | five 12-inch LPs face-out on a ledge | `none` | static `host decor` (see note 2) | 1.86 × 0.31 × 0.08 m on the 0.98 m ledge; 6 contacts |
 | `skyMuCoverWall` | display board, three oak ledges, NEW ARRIVALS header | `none` (surface) | static `mounted` | 2.04 × 1.96 × 0.12 m from 0.92 m (ledges 0.98 / 1.48 / 1.98 m, header top 2.88 m) |
 | `skyMuBinLabel` | genre card on a rack's front apron | `none` | static `mounted` | 0.25 × 0.115 × 0.006 m at 0.36 m |
 | `skyMuTurntable` | belt-drive turntable on the booth console | `none` (equipment; the dust cover is gone) | **dynamic** 7 kg, `pad`, `onHost` | 0.45 × 0.11 × 0.36 m on the 0.85 m console; 4 feet |
@@ -79,9 +79,11 @@ holders.
 | `skyMuSign` | LISTENING BOOTHS board | `none` | static `mounted` | 1.63 × 0.28 × 0.04 m from 2.2 m |
 
 Notes:
-1. As with lane SHOPS-A's book stacks, on-host decor goes loose only from its host's top. Inside a bay, the rack's walls hold the block,
-   so it never floats.
-2. The ledge lip and the board hold the row inside the static fixture.
+1. A shot knocks a bin block loose inside its bay (task studio-skywalk-variety-20261107-231448-01, lane MERCH;
+   `physics/merchOnHost.ts`). It then lands on the rack's declared trays (`skyDRecordBins` `shelves`) or on the floor, and never floats.
+2. The faced row is one prop for five sleeves, so the row kind is static: the ledge lip and the board hold it (layout version 3). Layout
+   version 4 splits every row into five loose sleeves (`skyMerchFacedLp`, task studio-skywalk-variety-20261107-231448-01, lane MERCH),
+   standing on the board's declared ledges (`skyMuCoverWall` `shelves`).
 
 Scale checks:
 - `node tools/asset-pipeline/skyways-stores/music/qa-music.mjs --glb <dir>` writes the runtime geometry to GLB (flat colours, atlas

@@ -111,11 +111,13 @@ describe('Skyways layout variety: generated layouts stay coherent', () => {
     expect(foodCourts).toBeGreaterThan(0);
   });
 
-  it('every building climbs by its own stairs; every bridge opens into both of its buildings; every pedway ends in a stair inside its building', () => {
+  it('every building with a street floor climbs by its own stairs (a bridge house has none: the bridge level only); every bridge opens into both of its buildings; every pedway ends in a stair inside its building', () => {
     for (const s of SEEDS) {
       const l = gen(s), info = l.skyways!;
       for (const b of info.buildings) {
         const ups = l.levelLinks.filter(k => k.lower === 1 && k.upper === 2 && k.kind === 'stairs' && inside(b.rect, k.top.x, k.top.z));
+        // (layout version 4, task studio-skywalk-variety-20261107-231448-01) a skywalk-only BRIDGE HOUSE: no street floor, no run
+        if (b.programme === 'gallery') { expect(b.levels, `seed ${s} ${b.id}`).toEqual([2]); expect(ups.length, `seed ${s} ${b.id} bridge house`).toBe(0); continue; }
         expect(ups.length, `seed ${s} ${b.id} (${b.plan}): a street -> skyway stair of its own`).toBeGreaterThan(0);
       }
       for (const br of info.bridges) {

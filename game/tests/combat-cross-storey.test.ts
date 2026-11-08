@@ -534,7 +534,10 @@ describe('wiring (source): Game.fire and the damage QA shot use the one enemy te
   const body = (s: string, name: string) => { const i = s.indexOf(`  private ${name}(`); return s.slice(i, s.indexOf('\n  }\n', i)); };
   it('fire(): per pellet the world ray, then nearestEnemyHit before it; the pre-fix reject is gone', () => {
     const fire = body(src, 'fire');
-    expect(fire).toContain('const wh = raycastWorld(this.levels, this.layout.props, o, d, def.range, this.layout.trench.floorY);');
+    // (task studio-skywalk-variety-20261107-231448-01, lane MERCH: the world ray through physics/merchOnHost.ts raycastShot — raycastWorld
+    // first, then the shelf stock inside open shelving it passed)
+    expect(fire).toContain('const wh = raycastShot(this.levels, this.layout.props, o, d, def.range, this.layout.trench.floorY);');
+    expect(readFileSync(path.join(GAME, 'src/physics/merchOnHost.ts'), 'utf8')).toContain('raycastWorld(world, props, o, d, maxDist, trenchY)');
     expect(fire).toContain('const eh = nearestEnemyHit(o, d, bestT, this.zombies);');
     expect(fire.indexOf('nearestEnemyHit(')).toBeGreaterThan(fire.indexOf('for (let i = 0; i < def.pellets; i++)'));
     expect(fire).not.toMatch(/> 1\.6\) continue/);

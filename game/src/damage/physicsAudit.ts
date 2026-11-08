@@ -65,11 +65,15 @@ const SUBWAY_STATIC: Readonly<Record<string, readonly [StaticWhy, string]>> = {
   shopShutter: ['structure', 'rolled-down shop shutter'],
   // task track2-playtest-revision (lane ROOMS): collision box of an annex machinery assembly (gen/annexRooms.ts)
   annexMachine: ['machinery', 'anchored plant built into a service annex (boiler bank, generator set, turbine, fans, switchgear, channel curbs / basin parapets / spillway chute walls): tonnes of bolted steel and cast concrete'],
-  magazineRack: ['fixture', 'loaded wire magazine rack, a store fixture'],
-  techDisplay: ['built-in', 'store display table with devices'],
-  deviceWall: ['built-in', 'wall display of devices'],
+  // (task studio-skywalk-variety-20261107-231448-01, lane MERCH: what is stock and what is fixture — root CLAUDE.md rule 4. The magazine rack and
+  // the flower stand draw bare (world/shelfStockCarcass.ts displayTreatment / AUTHORED_CARCASS): their stock is separate physical filler.
+  // The demo table and the device wall are split in Skyways layout version 4 (gen/skyways/skywaysMerchSplit.ts); elsewhere their devices
+  // remain part of the fixture: an explicit exception.)
+  magazineRack: ['fixture', 'wire magazine rack, a store fixture: an authored carcass whose magazines / newspapers are separate physical filler stock on its ledges and in its bin (world/shelfStock.ts: a shot knocks them about)'],
+  techDisplay: ['built-in', 'store display table: in Skyways layout version 4 the bare table and its six demo devices are separate loose props (gen/skyways/skywaysMerchSplit.ts); elsewhere the devices remain authored parts of the table (explicit baked-stock exception)'],
+  deviceWall: ['built-in', 'wall display unit: in Skyways layout version 4 its four display devices are separate loose props cut from the model (world/skywaysMerch.ts) and its boxed stock is filler; the accessory cards hang on its pegboard hooks; elsewhere the devices remain part of the model (explicit baked-stock exception)'],
   showcase: ['fixture', 'glazed store showcase'],
-  flowerStand: ['fixture', 'florist\'s tiered stand'],
+  flowerStand: ['fixture', 'florist\'s tiered stand: the bare stepped stand; its buckets of flowers are separate physical filler stock on its steps (world/shelfStock.ts: a shot knocks them about)'],
   repairBench: ['built-in', 'repair workbench with its pegboard'],
   pizzaOven: ['machinery', 'pizza oven (~300 kg)'],
   breadRack: ['fixture', 'bakery bread rack'],

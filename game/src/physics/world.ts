@@ -35,6 +35,9 @@ import {DynamicItems} from './dynamicItems';
 import {LiveSAPBroadphase, useSparseCollisionMatrix} from './broadphase';
 import {PHYS_MATS, type PhysMat} from '../damage/materials';
 import type {PropPlacement} from '../gen/props';
+import {isLootHolderKind} from '../items/loot';
+import {holderBoxes} from './holderShapes';
+import {SHELF_BOARD, hostShelves} from './merchOnHost'; // task studio-skywalk-variety-20261107-231448-01 (lane MERCH)
 
 export type {KillImpulse, RagdollTarget} from './ragdoll';
 export type {CasingKind} from './casings';
@@ -690,7 +693,10 @@ export class PhysicsSystem implements BodyHost {
       if (Math.floor(p.x / span) !== cx0 / CHUNK || Math.floor(p.z / span) !== cy0 / CHUNK) continue;
       if (p.h <= 0.02 || p.hx <= 0 || p.hz <= 0) continue;
       // Iteration 07: loot holders are solid for ragdolls, but items / chunks rest on their real shelves
-      const hb = this.holderBoxes?.(p) ?? null;
+      // (task studio-skywalk-variety-20261107-231448-01, lane MERCH: a non-holder host's declared open shelves the same way — gen/props.ts
+      // PropDef.shelves: its knocked-loose shelf stock / items land on them, `[]` (hung decor) nothing holds them)
+      const sh = isLootHolderKind(p.kind) ? undefined : hostShelves(p.kind);
+      const hb = this.holderBoxes?.(p) ?? (sh ? holderBoxes(p, sh, {slab: SHELF_BOARD}) ?? [] : null);
       if (!hb) { box(p.x - p.hx, p.x + p.hx, p.y, p.y + p.h, p.z - p.hz, p.z + p.hz); continue; }
       box(p.x - p.hx, p.x + p.hx, p.y, p.y + p.h, p.z - p.hz, p.z + p.hz, GROUP_RAGDOLL);
       for (const b of hb) box(b.min.x, b.max.x, b.min.y, b.max.y, b.min.z, b.max.z, GROUP_ITEM | GROUP_CHUNK);
