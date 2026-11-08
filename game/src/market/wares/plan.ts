@@ -15,7 +15,7 @@ import type {ItemShape} from '../../items/items';
 import type {Orient} from '../../items/lootLayout';
 import {WARES, type WareSurface} from './slots';
 
-/** A ware's resting size as it is drawn upright (w = local x, d = local z, h = height) and how it may lie down. */
+/** A ware's size as its model stands upright (w = local x, d = local z, h = height) and how it may lie down. */
 export interface WareDims { w: number; d: number; h: number; shape: ItemShape }
 
 /** One displayed stack: its surface, surface-local centre (x, z: +z = toward the front edge), yaw (0 or PI/2 on top of the surface's) and
@@ -97,10 +97,13 @@ export class WarePacker {
     this.rows.forEach((rows, si) => {
       const s = this.surfaces[si], W = s.w - 2 * WARES.edge;
       for (const r of rows) {
-        const items = r.items.slice().sort((a, b) => a.x0 - b.x0);
-        const total = items.reduce((n, q) => n + (q.x1 - q.x0), 0);
-        const gap = Math.max(WARES.gap, (W - total) / (items.length + 1));
-        let x = -s.w / 2 + WARES.edge + gap;
+        const items = r.items.slice().sort((a, b) => a.x0 - b.x0), n = items.length;
+        if (!n) continue;
+        const total = items.reduce((k, q) => k + (q.x1 - q.x0), 0), free = W - total;
+        // even gaps at both ends and between; a row packed tighter than that keeps its ends at the edges (its gaps were >= WARES.gap)
+        const roomy = free >= (n + 1) * WARES.gap || n === 1;
+        const gap = roomy ? free / (n + 1) : free / (n - 1);
+        let x = -s.w / 2 + WARES.edge + (roomy ? gap : 0);
         for (const q of items) {
           const w = q.x1 - q.x0;
           q.x0 = x;

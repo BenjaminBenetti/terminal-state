@@ -35,7 +35,6 @@ import {stackFromJSON, stackToJSON, type ItemStack} from '../../items/inventory'
 import {MARKET_STALLS, type MarketLayout, type MarketStallId} from '../../gen/market/marketTypes';
 import type {PropPlacement} from '../../gen/props';
 import type {Pickup} from '../../world/pickups';
-import {lotLocalMatrix} from '../../world/containers';
 import {localBounds} from '../../physics/dynamicItems';
 import {rayAabb} from '../../combat/hitscan';
 import type {MarketHostilityApi} from '../hostility';
@@ -87,8 +86,7 @@ export interface Ware {
 
 type WaresLayout = {market?: MarketLayout; props: readonly PropPlacement[]};
 
-const UP = new THREE.Vector3(0, 1, 0), ONE = new THREE.Vector3(1, 1, 1);
-const V = new THREE.Vector3(), Q = new THREE.Quaternion(), M = new THREE.Matrix4(), INV = new THREE.Matrix4();
+const M = new THREE.Matrix4(), LIE = new THREE.Matrix4(), INV = new THREE.Matrix4(), SEAT = new THREE.Box3();
 const EYE = new THREE.Vector3(), DIR = new THREE.Vector3(), LO = new THREE.Vector3(), LD = new THREE.Vector3(), HIT = new THREE.Vector3();
 
 /** "Rifle — …", "30 9mm rounds", "2 × Bandage" (the plain Take prompt's wording, game.ts updateHud). */
@@ -159,16 +157,16 @@ export class MarketWares {
     this.seen = -1;
   }
 
-  /** The resting size of an item as displayed (a gun / an item without registry dims: its model's own bounds, lying as drawn). */
+  /**
+   * The size of an item as displayed: its drawn model's own bounds (the item template / a gun lying on its side: world/pickups.ts
+   * meshFor), so the plan never overlaps two models; how it may lie down: the registry's shape (a gun never: it already lies).
+   */
   dimsOf(itemId: string): WareDims {
     let d = this.dims.get(itemId);
     if (d) return d;
+    const s = this.boxOf(itemId).getSize(new THREE.Vector3());
     const reg = ITEM_DIMS[itemId];
-    if (reg && itemDef(itemId).kind !== 'weapon') d = reg;
-    else {
-      const s = this.boxOf(itemId).getSize(new THREE.Vector3());
-      d = {w: s.x, d: s.z, h: s.y, shape: 'flat'};
-    }
+    d = {w: s.x, d: s.z, h: s.y, shape: reg && itemDef(itemId).kind !== 'weapon' ? reg.shape : 'flat'};
     this.dims.set(itemId, d);
     return d;
   }
@@ -180,9 +178,17 @@ export class MarketWares {
     return b;
   }
 
-  /** A ware's pickup at its planned spot: the stall's own stack (same object), tagged owned. */
+  /**
+   * A ware's pickup at its planned spot: the stall's own stack (same object), tagged owned. Its pose: the plan's yaw, then the lie-down
+   * turn (items/lootLayout.ts orientations: a cylinder on its side about z, a box on its back about x); then seated by the model's own
+   * turned box — its bottom ON the surface, its footprint centred on the planned spot (never floating, never sunk).
+   */
   private spawn(stall: MarketStallId, st: ItemStack, pl: WarePlace): Ware {
-    M.compose(V.set(pl.x, pl.y, pl.z), Q.setFromAxisAngle(UP, pl.yaw), ONE).multiply(lotLocalMatrix({itemId: st.itemId, x: 0, y: 0, z: 0, yaw: 0, orient: pl.orient}));
+    M.makeRotationY(pl.yaw);
+    if (pl.orient === 'side') M.multiply(LIE.makeRotationZ(Math.PI / 2));
+    else if (pl.orient === 'back') M.multiply(LIE.makeRotationX(-Math.PI / 2));
+    const b = SEAT.copy(this.boxOf(st.itemId)).applyMatrix4(M);
+    M.premultiply(LIE.makeTranslation(pl.x - (b.min.x + b.max.x) / 2, pl.y - b.min.y, pl.z - (b.min.z + b.max.z) / 2));
     const p = this.host.pickups.addAt(st, M);
     p.owner = stall;
     const w: Ware = {stall, uid: st.uid, pickup: p, place: pl, box: this.boxOf(st.itemId)};
