@@ -2,13 +2,14 @@
 // injuries (lane INJURY) see every hit the same way.
 //
 // Order: Game.hurtPlayer builds a PlayerHit (where it lands, how hard) -> (task studio-general-armor-20261107-231448-01) the worn armour POOL
-// (player/armor.ts, the same for every body part) reduces the HP damage -> HP damage -> the injury system rolls an injury as for an
-// UNARMORED player (the hit's raw amount) and then the armour save (the hit's pool) may cancel it.
+// (player/armor.ts, the same for every body part; ENEMY hits only) reduces the HP damage -> HP damage -> the injury system rolls an
+// injury as for an UNARMORED player (the hit's raw amount) and then the armour save (the hit's pool) may cancel it.
 
 export type HitLocation = 'head' | 'torso' | 'arm' | 'leg';
 /**
  * Task track1-siren-blightbelly-20261031 (lane BLIGHT): 'blast' = a physical blast (a Blightbelly's death burst) — armour and
  * limb injuries treat it like any hit (injury cause 'hit'); the gas mask has nothing to do with it (only the gas cloud).
+ * (task studio-general-armor-20261107-231448-01: armour only meets an ENEMY's hit, isEnemyHit — the Blightbelly's blast is attributed enemy: true.)
  */
 export type HitSource = 'zombie' | 'creature' | 'fall' | 'other' | 'blast';
 

@@ -8,18 +8,21 @@
 //  - Each armor-bearing gear item contributes its OWN current armor: the stack's `armor` (items/inventory.ts ItemStack; absent =
 //    undamaged = its definition's GearSpec.armor). The pool is their plain SUM (pips add up, as the user describes), capped at
 //    ARMOR.cap (0.8, the existing safety cap: never invulnerable).
-//  - A hit (Game.applyPlayerHit: enemy attacks after the x2 enemy multiplier, falls) loses `pool` of its damage, whatever body part it
-//    lands on. Gas and the empty food / water drain: see ARMOR.environment (user question B pending).
-//  - INJURY SAVE: an injury the game would give an UNARMORED player (player/injuries.ts: the candidate is rolled on the raw damage,
-//    not the armour-reduced damage) is cancelled with probability = the pool of that hit (a 25 % pool: a 25 % chance to stay unhurt).
-//  - WEAR: a hit the armour actually mitigated (absorbed > 0) picks ONE worn item that contributed armour (uniformly) and lowers its own
+//  - ENEMY DAMAGE ONLY (user, answer B: "this purely applies to damage applied by enemies, all types of enemies"): an enemy's hit
+//    (player/hits.ts isEnemyHit — every family's claw / bite / fist, the Blightbelly's attributed blast; after the x2 enemy multiplier)
+//    loses `pool` of its damage, whatever body part it lands on. Falls, 'other' hits, the toxic gas field and the empty food / water
+//    drain never meet the armour: no reduction, no injury save, no wear.
+//  - INJURY SAVE (enemy hits): an injury the game would give an UNARMORED player (player/injuries.ts: the candidate is rolled on the raw
+//    damage, not the armour-reduced damage) is cancelled with probability = the pool of that hit (a 25 % pool: a 25 % chance to stay
+//    unhurt). Hard landings are not enemy damage: no save.
+//  - WEAR: an enemy hit the armour actually mitigated (absorbed > 0) picks ONE worn item that contributed armour (uniformly) and lowers its own
 //    armour by ARMOR_WEAR_PER_HIT (clamped at 0): damaged gear blocks less from the NEXT hit on. The amount is the user's pending answer
 //    A; until it is set wear is off (never guessed). Wear is per item and travels with it (drop / bag / Lockbox / cargo / saves).
 
 import type {ItemStack} from '../items/inventory';
 import {GEAR_SLOTS, gearSpec, type GearSlot} from '../items/gear';
 import {ARMOR_CAP} from './modifiers';
-import {armorFor, type PlayerHit} from './hits';
+import {armorFor, isEnemyHit, type PlayerHit} from './hits';
 
 export const ARMOR = {
   /** One pip = 2.5 % armor; the HUD steps in half pips (1.25 %). */
@@ -39,11 +42,6 @@ export const ARMOR = {
  */
 export const ARMOR_WEAR_PER_HIT: number | null = null;
 
-/**
- * Whether the pool also reduces the toxic gas damage and the empty food / water drain — PENDING user answer B. Until answered they keep
- * their existing rules (no armour): only hits / falls go through the pool.
- */
-export const ARMOR_REDUCES_ENVIRONMENT: boolean | null = null;
 
 /** An item's current armour fraction (its stack's own `armor`, else its definition's; 0 for anything else). */
 export function itemArmor(stack: Pick<ItemStack, 'itemId' | 'armor'> | null | undefined): number {
@@ -108,11 +106,12 @@ export type ArmorWear = {slot: GearSlot; before: number; after: number};
 /**
  * One hit through the worn armour (Game.applyPlayerHit, after the enemy x2): the pool is read ONCE, before any wear — it cuts this hit
  * and rides on it as `armor` (the injury save of this hit) — then, only if it actually mitigated something, ONE contributing item
- * wears (wearOne). Per hit, never per frame. `wearRoll` is drawn only when an item wears.
+ * wears (wearOne). Per hit, never per frame. `wearRoll` is drawn only when an item wears. A hit that is not an enemy's (isEnemyHit:
+ * a fall, 'other') meets no armour at all: pool 0, nothing absorbed, no save, no wear.
  */
 export function armorHit<H extends PlayerHit>(hit: H, worn: Worn, wearRoll: () => number, wear: number | null = ARMOR_WEAR_PER_HIT):
   {resolved: H & {applied: number; absorbed: number; armor: number}; wore: ArmorWear | null} {
-  const pool = armorPool(worn);
+  const pool = isEnemyHit(hit) ? armorPool(worn) : 0;
   const {applied, absorbed} = armorFor(hit, pool);
   const wore = absorbed > 0 && wear ? wearOne(worn, wearRoll(), wear) : null;
   return {resolved: {...hit, applied, absorbed, armor: pool}, wore};

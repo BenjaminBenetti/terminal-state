@@ -327,10 +327,11 @@ Task studio-general-armor-20261107-231448-01 (`src/player/armor.ts`).
   pool is capped at 80 %.
 - **HUD.** Blue pips sit above the health bar, ten to a row (a full row is 25 %). Further rows stack on the first and overlap
   it by about 25 %. The display moves in half pips, rounded down; the stored value keeps its fraction.
-- **Damage.** A hit loses the pool's share of its damage, whatever it hits. The enemy damage multiplier applies first.
-- **Injury save.** The game rolls an injury as for an unarmored player. If it would injure you, a second roll with the
-  pool as its chance cancels it. Hard landings save the same way.
-- **Wear.** A hit the armor reduced wears one worn armor item, chosen at random. The worn value stays with the item: take
+- **Enemy damage only.** An enemy's hit, from any enemy type, loses the pool's share of its damage, whatever it hits. The
+  enemy damage multiplier applies first. Falls, toxic gas and starving or dehydration never meet the armor.
+- **Injury save.** The game rolls an injury from an enemy hit as for an unarmored player. If it would injure you, a second
+  roll with the pool as its chance cancels it. Hard landings get no save.
+- **Wear.** An enemy hit the armor reduced wears one worn armor item, chosen at random. The worn value stays with the item: take
   off, drop, Lockbox, cargo and saves keep it. Old saves load undamaged.
 
 ## Gas mask, filters and breached office windows

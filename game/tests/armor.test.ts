@@ -1,17 +1,18 @@
 // Task studio-general-armor-20261107-231448-01 (user: "lets simplify clothing armor ... simply have clothing give you armor similar to what
 // it does now, but not specific to any piece of the body"): ONE armour pool from the WORN gear (player/armor.ts) — pips of 2.5 %, shown in
-// half pips rounded down, ten a row wrapping with a 25 % overlap; it cuts every hit by its share on any body part, it is the chance an
-// injury the game would give an unarmoured player does not happen (one save roll), and a hit it mitigated wears ONE contributing item
-// (the amount is the user's pending answer A: off until set). Wear lives on the item and survives every inventory / save route.
+// half pips rounded down, ten a row wrapping with a 25 % overlap; it cuts every ENEMY hit by its share on any body part (answer B: "this
+// purely applies to damage applied by enemies, all types of enemies" — not gas, starving, falls), it is the chance an injury the game
+// would give an unarmoured player does not happen (one save roll), and a hit it mitigated wears ONE contributing item (the amount is the
+// user's pending answer A: off until set). Wear lives on the item and survives every inventory / save route.
 import fs from 'node:fs';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {mulberry32} from '../src/core/rng';
 import {
-  ARMOR, ARMOR_REDUCES_ENVIRONMENT, ARMOR_WEAR_PER_HIT, armorContributors, armorHit, armorPool, displayHalfPips, injurySaved, itemArmor,
+  ARMOR, ARMOR_WEAR_PER_HIT, armorContributors, armorHit, armorPool, displayHalfPips, injurySaved, itemArmor,
   pipRows, pipsText, wearOne,
 } from '../src/player/armor';
 import {ARMOR_CAP} from '../src/player/modifiers';
-import {incomingHit, type PlayerHit, type ResolvedHit} from '../src/player/hits';
+import {incomingHit, isEnemyHit, type PlayerHit, type ResolvedHit} from '../src/player/hits';
 import {InjurySystem, hitInjuryChance, installInjuries, type InjuryHost} from '../src/player/injuries';
 import {GEAR_ITEMS, GEAR_SLOTS, gearSpec, gearStatText, type GearSlot} from '../src/items/gear';
 import {Inventory, stackFromJSON, stackToJSON, type ItemStack} from '../src/items/inventory';
@@ -85,7 +86,7 @@ describe('the armour pool: what counts, its units and the display', () => {
   });
 });
 
-describe('damage: one share off every hit, any body part, after the enemy x2', () => {
+describe('damage: one share off every ENEMY hit, any body part, after the enemy x2', () => {
   it('a 12.5 % pool takes 12.5 % off a head, torso, arm or leg hit; the enemy x2 comes first', () => {
     for (const location of ['head', 'torso', 'arm', 'leg'] as const) {
       const {resolved} = armorHit(incomingHit(hit({amount: 10, location, enemy: true})), kit(), seq(), null);
@@ -98,12 +99,31 @@ describe('damage: one share off every hit, any body part, after the enemy x2', (
     expect([bare.resolved.applied, bare.resolved.absorbed, bare.resolved.armor, bare.wore]).toEqual([20, 0, 0, null]);
   });
 
-  it('scope B is pending: until answered the gas field and the empty-vitals drain keep their existing (unarmoured) rules', () => {
-    expect([null, true, false]).toContain(ARMOR_REDUCES_ENVIRONMENT);
-    if (ARMOR_REDUCES_ENVIRONMENT !== true) {
-      expect(src('world/gas/system.ts')).toMatch(/pl\.takeDamage\(dps \* dt\)/);
-      expect(src('game.ts')).toMatch(/if \(surv\.hpLoss > 0\) p\.takeDamage\(surv\.hpLoss\);/);
+  it('answer B: every enemy family\'s attack and the attributed Blightbelly blast meet the armour; falls / other / unattributed hits do not', () => {
+    const enemy: PlayerHit[] = [hit({source: 'zombie'}), hit({source: 'creature'}), hit({source: 'blast', attacker: 'blightbelly', enemy: true}),
+      hit({source: 'zombie', attacker: 'strainer'}), hit({source: 'zombie', attacker: 'siren'})];
+    for (const h of enemy) {
+      expect(isEnemyHit(h)).toBe(true);
+      const {resolved, wore} = armorHit(incomingHit(h), kit(), seq(0), ARMOR.halfPip);
+      expect(resolved.armor).toBeCloseTo(0.125, 12);
+      expect(resolved.absorbed).toBeGreaterThan(0);
+      expect(wore).not.toBeNull();
     }
+    const other: PlayerHit[] = [hit({source: 'fall'}), hit({source: 'other'}), hit({source: 'blast'}), hit({source: 'zombie', enemy: false})];
+    for (const h of other) {
+      const w = kit();
+      let draws = 0;
+      const {resolved, wore} = armorHit(incomingHit(h), w, () => { draws++; return 0; }, ARMOR.halfPip);
+      expect([resolved.applied, resolved.absorbed, resolved.armor, wore, draws]).toEqual([20, 0, 0, null, 0]);
+      expect(armorPool(w)).toBeCloseTo(0.125, 12); // nothing worn down
+    }
+  });
+
+  it('answer B: the gas field (incl. an enemy\'s gas puff) and the empty food / water drain never go through the armour', () => {
+    expect(src('world/gas/system.ts')).toMatch(/pl\.takeDamage\(dps \* dt\)/);
+    expect(src('world/gas/system.ts')).not.toMatch(/armorHit|armorPool|applyPlayerHit/);
+    expect(src('game.ts')).toMatch(/if \(surv\.hpLoss > 0\) p\.takeDamage\(surv\.hpLoss\);/);
+    expect(src('player/armor.ts')).toMatch(/const pool = isEnemyHit\(hit\) \? armorPool\(worn\) : 0;/);
   });
 });
 
@@ -133,30 +153,31 @@ describe('the injury save: one roll against the pool on the UNARMOURED candidate
     expect(draws).toBe(2); // candidate + side
   });
 
-  it('seeded: a 25 % pool leaves ~75 % of the unarmoured injury rate (hits and hard landings)', () => {
+  it('seeded: a 25 % pool leaves ~75 % of the unarmoured injury rate of enemy hits', () => {
     const rng = mulberry32(2026);
     const n = 8000;
-    let bare = 0, armoured = 0, landBare = 0, landArmoured = 0;
+    let bare = 0, armoured = 0;
     for (let i = 0; i < n; i++) {
       if (new InjurySystem(rng).onHit(r({}))) bare++;
       if (new InjurySystem(rng).onHit(r({applied: 11.25, absorbed: 3.75, armor: 0.25}))) armoured++;
-      if (new InjurySystem(rng).onLanding(12)) landBare++;
-      if (new InjurySystem(rng).onLanding(12, 0.25)) landArmoured++;
     }
     expect(bare / n).toBeGreaterThan(0.33 - 0.02); expect(bare / n).toBeLessThan(0.33 + 0.02);
     expect(armoured / n).toBeGreaterThan(0.33 * 0.75 - 0.02); expect(armoured / n).toBeLessThan(0.33 * 0.75 + 0.02);
-    expect(landArmoured / landBare).toBeGreaterThan(0.75 - 0.05); expect(landArmoured / landBare).toBeLessThan(0.75 + 0.05);
   });
 
-  it('the game wires it: the landing save reads the worn pool; a hit carries its own snapshot', () => {
-    expect(src('game.ts')).toMatch(/installInjuries\(this, \{aiming: \(\) => this\.aiming, armor: \(\) => armorPool\(this\.inv\.gear\)\}\)/);
+  it('answer B: a hard landing is not enemy damage — armour gives it no save; a non-enemy hit carries pool 0 (no save)', () => {
+    expect(src('game.ts')).toMatch(/installInjuries\(this, \{aiming: \(\) => this\.aiming\}\)/);
     const host = {modifierSources: [], hitListeners: [], frameHooks: [] as ((dt: number) => void)[], aimOffset: {yaw: 0, pitch: 0}, mods: {swayAmp: 0, swayHz: 0},
       player: {alive: true, justLanded: true, landSpeed: 12, sprinting: false, crouched: false, stamina: 100}, hud: {toast() {}}, sfx: {hurt() {}}} as unknown as InjuryHost;
-    const sys = new InjurySystem(seq(0, 0.1));
-    installInjuries(host, {aiming: () => false, armor: () => 0.125}, sys);
+    const sys = new InjurySystem(seq(0, 0.1, 0));
+    installInjuries(host, {aiming: () => false}, sys);
     for (const f of host.frameHooks) f(0.016);
-    expect(sys.saves).toBe(1);
-    expect(sys.limbs.leg).toBeFalsy();
+    expect(sys.saves).toBe(0);
+    expect(sys.limbs.leg).toBeTruthy(); // the 0.1 roll was NOT spent on a save
+    const fall = armorHit(hit({source: 'fall', location: 'leg', amount: 15}), kit(), seq(), ARMOR.halfPip).resolved;
+    const s = new InjurySystem(seq(0, 0.01, 0));
+    expect(s.onHit(fall)).toBe('leg'); // no armour, no save roll
+    expect(s.saves).toBe(0);
   });
 });
 

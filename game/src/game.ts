@@ -581,7 +581,7 @@ export class Game {
     // Iteration 16 (lane INJURY): hit listener (arm / leg hits) + frame hook (landings, sway -> aimOffset, HUD) + ModifierSource
     // Task frame-budget-deferral-20261030 (lane MEASURE): names the frame hooks each install below registered (profiler spans)
     const hookName = (name: string) => { const n = this.prof.hookNames; while (n.length < this.frameHooks.length) n.push(name); };
-    this.injuries = installInjuries(this, {aiming: () => this.aiming, armor: () => armorPool(this.inv.gear)});
+    this.injuries = installInjuries(this, {aiming: () => this.aiming});
     hookName('injuries');
     this.gear = installGear(this); // Iteration 16 (lane GEAR): modifier source, key 6 / bag view, E on grounded bags, section hooks, warm-up pool
     hookName('gear');
@@ -3294,8 +3294,9 @@ export class Game {
    * Iteration 16: apply a hit to the player through armor; notifies hitListeners. Other damage sources (falls) use this too.
    * (task studio-alpha-survival-controls-20261107-060450-01) an enemy's attack lands at ENEMY_DAMAGE_TO_PLAYER x its raw amount first
    * (player/hits.ts incomingHit): armour, the injury roll and the HUD all see that hit.
-   * (task studio-general-armor-20261107-231448-01) The armour is ONE pool from the worn gear (player/armor.ts armorHit), read before this hit's wear: it cuts the
-   * damage on any body part, rides on the resolved hit for the injury save, and a hit it mitigated wears ONE contributing item.
+   * (task studio-general-armor-20261107-231448-01) The armour is ONE pool from the worn gear (player/armor.ts armorHit), read before this hit's wear: it cuts an
+   * ENEMY hit's damage on any body part, rides on the resolved hit for the injury save, and a hit it mitigated wears ONE contributing
+   * item. Non-enemy hits meet no armour.
    */
   applyPlayerHit(raw: PlayerHit): ResolvedHit {
     const hit = incomingHit(raw);

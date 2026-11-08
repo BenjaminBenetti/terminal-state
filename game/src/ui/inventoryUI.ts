@@ -543,7 +543,7 @@ export class InventoryUI {
     const mods: string[] = [];
     // (task studio-general-armor-20261107-231448-01) the worn armour as ONE pool first ("armor 5 pips (12.5 %)"), then each item's other stats
     const pool = armorPool(inv.gear);
-    if (pool > 0) mods.push(`armor ${pipsText(pool)} pips (${+(pool * 100).toFixed(2)} %) — cuts every hit; same chance to shrug off an injury`);
+    if (pool > 0) mods.push(`armor ${pipsText(pool)} pips (${+(pool * 100).toFixed(2)} %) — cuts every enemy hit; same chance to shrug off its injury`);
     for (const st of inv.gearSlots) if (st) { const t = gearStatText({...itemDef(st.itemId).gear!, armor: undefined}); if (t) mods.push(t); }
     const sum = document.querySelector('#inv-gear-wrap .gear-sum');
     if (sum) sum.textContent = mods.length ? mods.join(' · ') : 'nothing worn — gear is rare: armor vest, chest rig, backpack, hard hat, boots, gloves, gas mask';

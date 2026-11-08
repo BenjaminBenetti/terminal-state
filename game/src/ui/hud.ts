@@ -175,7 +175,7 @@ export class Hud {
       const step = ARMOR_PIP_H * (1 - ARMOR.rowOverlap);
       el.innerHTML = rows.map((r, k) => `<div class="arow" style="bottom:${k * step}px">${r.map(p => p === 'half' ? '<i class="half"></i>' : '<i></i>').join('')}</div>`).join('');
       el.classList.toggle('none', !rows.length);
-      el.title = rows.length ? `Armor ${pipsText(pool)} pips (${+(pool * 100).toFixed(1)} %): cuts every hit and may save you from an injury` : '';
+      el.title = rows.length ? `Armor ${pipsText(pool)} pips (${+(pool * 100).toFixed(1)} %): cuts every enemy hit and may save you from its injury` : '';
       const row = bar.parentElement as HTMLElement | null;
       if (row) row.style.marginTop = rows.length ? `${6 + ARMOR_PIP_GAP + ARMOR_PIP_H + (rows.length - 1) * step}px` : '';
     });

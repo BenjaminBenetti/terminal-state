@@ -5,7 +5,7 @@
 // equipping, unequipping, travelling or retrying can never stack a bonus.
 //
 // Base-tier stats (exact; documented in reference/tasks/office-space-survival-20261029/lanes/gear.done):
-//   armor_vest  chest     armor 4 pips = 10 % (task studio-general-armor-20261107-231448-01: the pooled armour of player/armor.ts — any hit; was torso-only 20 % on
+//   armor_vest  chest     armor 4 pips = 10 % (task studio-general-armor-20261107-231448-01: the pooled armour of player/armor.ts — any enemy hit; was torso-only 20 % on
 //                         the ~50 % of melee hits that land on the torso: the same 10 % on average)
 //   chest_rig   chest     +4 pocket slots (12 -> 16); refused off while those 4 pockets hold anything
 //   backpack    backpack  its own 12-slot container, only reachable while it lies on the ground (6, click, then E)
@@ -80,13 +80,13 @@ const gear = (id: string, name: string, short: string, icon: GearIconKey, spec: 
 
 export const GEAR_ITEMS: Record<string, ItemDef> = {
   armor_vest: gear('armor_vest', 'Worn soft armor vest', 'Armor vest', 'vest', {slot: 'chest', tier: 1, armor: 0.1},
-    'Faded navy soft body armor with frayed velcro. Takes the edge off every hit (armor). Worn on the chest (instead of a rig).'),
+    'Faded navy soft body armor with frayed velcro. Takes the edge off every enemy hit (armor). Worn on the chest (instead of a rig).'),
   chest_rig: gear('chest_rig', 'Patched chest rig', 'Chest rig', 'rig', {slot: 'chest', tier: 1, pockets: 4},
     'Olive load-bearing rig with mag and utility pouches. Four extra pockets while worn. Worn on the chest (instead of a vest).'),
   backpack: gear('backpack', 'Faded red daypack', 'Backpack', 'backpack', {slot: 'backpack', tier: 1, bagSlots: BACKPACK_SLOTS},
     `A dirty hiking daypack with ${BACKPACK_SLOTS} slots of its own. You cannot reach into it while wearing it: press 6 to take it off, click to set it down, then E to open it.`),
   helmet: gear('helmet', 'Dented hard hat', 'Hard hat', 'helmet', {slot: 'helmet', tier: 1, armor: 0.025},
-    'A scuffed yellow construction hard hat with a chin strap. Softens blows a little (armor).'),
+    'A scuffed yellow construction hard hat with a chin strap. Softens enemy blows a little (armor).'),
   boots: gear('boots', 'Scuffed work boots', 'Work boots', 'boots', {slot: 'boots', tier: 1, speedMult: 1.05},
     'Worn leather work boots, laces knotted. Sure footing: you move a little faster.'),
   gloves: gear('gloves', 'Worn work gloves', 'Work gloves', 'gloves', {slot: 'gloves', tier: 1, spreadMult: 0.92, handlingMult: 0.92},
