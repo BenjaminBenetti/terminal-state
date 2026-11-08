@@ -58,6 +58,7 @@ import {meleeDamage, meleeRayDirs, resolveMelee} from './combat/melee'; // lane 
 import {DAMAGE_MATERIALS, propDamageSpec} from './damage/materials'; // lane KNIFE: blade-on-surface cue / chips
 import {Hud} from './ui/hud';
 import {InventoryUI} from './ui/inventoryUI';
+import {hideTooltip} from './ui/tooltip'; // task studio-ui-subway-maps-20261108-074144-01 (the game's own tooltip)
 import {Sfx, ambienceTypeFor, humEmitters, roomKindFor} from './audio/sfx';
 import {fanSources} from './audio/fanSound';
 import {ANNEX_GENSET, gensetModelKeysFor} from './assets/annexGenset';
@@ -148,6 +149,7 @@ import {installMarketVisuals} from './world/marketVisuals'; // task studio-survi
 import {skywaysGardenModelKeysFor} from './world/skywaysGardens'; // (lane ARCH) the planters' foliage model
 import {SKYWAYS_LAYOUT_LANE, skywaysLayoutVersionFor} from './gen/skyways/layoutVersion'; // task studio-skyways-destinations-20261106-170011-01
 import {installSkywaysDestAudio} from './world/skywaysDestAudio'; // task skyways-destinations-20261106 (lane AUDIO): the destinations' location sounds
+import {installSubwayMapRead} from './world/subwayMapRead'; // task studio-ui-subway-maps-20261108-074144-01: the station map kiosks' close-up read
 import {installSkywaysMapRead} from './world/skywaysMapRead'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the directory boards' close-up read
 import {installMarketTrade, type TradeSystem} from './market/trade/tradeSystem';
 import {MARKET_HUMAN_MODEL_FILES} from './market/humanLooks'; // task studio-survivor-market-20261108-005807-01 (lane HUMANS): the friendly cast file
@@ -619,6 +621,7 @@ export class Game {
     installMarketTextures(this); // task studio-survivor-market-20261108-005807-01 (lane LEVEL): the market's Codex surface textures before the build; inert elsewhere
     installMarketVisuals(this); hookName('marketVisuals'); // (lane LEVEL) the market's slow ceiling fans (frame hook) and stall awnings; inert elsewhere
     installSkywaysMapRead(this); hookName('skywaysMapRead'); // task studio-skyways-rework-20261107-054512-01 (lane MAPS): E at a directory board reads its face (inert without boards)
+    installSubwayMapRead(this); hookName('subwayMapRead'); // task studio-ui-subway-maps-20261108-074144-01: E at a Subway station map kiosk reads its face (inert without kiosks)
     installSkywaysDestAudio(this); // task skyways-destinations-20261106 (lane AUDIO): clock tick / chime, arcade attract, cinema projector emitters per section (inert elsewhere)
     installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
     installMallAtmosphere(this); // Task track3-eaton-centre-20261031 (lane ARCH): mall = light dusty haze, raised far plane, culler fog distance (inert elsewhere)
@@ -2083,6 +2086,7 @@ export class Game {
     this.input.active = s === 'playing';
     if (s !== 'playing') { this.input.clear(); this.cancelUse(s); this.cancelFlareHold(); this.weapon.cancelSwing(); } // lane KNIFE / FEEL: no stale windup / contact after a menu / death / loading
     this.invUI.cancelDrag();
+    hideTooltip(); // (task studio-ui-subway-maps-20261108-074144-01) every screen change takes the game tooltip with it
     for (const id of ['title', 'pause', 'inventory', 'death', 'win', 'error']) $('#' + id).classList.add('hidden');
     const screen: Partial<Record<GameState, string>> = {title: 'title', paused: 'pause', inventory: 'inventory', dead: 'death', won: 'win', error: 'error', loading: 'title'};
     if (screen[s]) $('#' + screen[s]).classList.remove('hidden');

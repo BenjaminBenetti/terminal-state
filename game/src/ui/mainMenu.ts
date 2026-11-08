@@ -24,6 +24,7 @@
 import {SAVE_SLOTS, type SaveMeta} from '../campaign/types';
 import type {LevelId} from '../levels/types';
 import {seedToCode} from '../core/rng';
+import {setTip} from './tooltip'; // task studio-ui-subway-maps-20261108-074144-01 (the game tooltip)
 import {
   CoalescedApply, QUALITY_LABEL, QUALITY_OPTIONS, RENDER_PERCENT, SETTINGS_BOUNDS, nativeRatioLabel, qualityDescription, renderPercent,
   renderScaleFromPercent, renderScaleReadout, volumeFromPercent, volumePercent,
@@ -800,7 +801,7 @@ export class MainMenuView {
         const p = d.createElement('div');
         p.className = `mm-line${slot && k === 0 && r.tone === 'valid' ? ' mm-name' : ''}`;
         p.textContent = l;
-        p.title = l; // the full text when the row ellipsizes it
+        setTip(p, {head: l}); // the full text when the row ellipsizes it (task studio-ui-subway-maps-20261108-074144-01: the game tooltip, no native title)
         info.append(p);
       });
       const acts = d.createElement('div');
@@ -886,7 +887,7 @@ export class MainMenuView {
     b.className = a.tone ?? '';
     b.disabled = !!a.disabled;
     b.hidden = false;
-    b.title = a.hint ?? '';
+    setTip(b, a.hint ? {head: a.hint} : null); // (task studio-ui-subway-maps-20261108-074144-01)
     if (a.pressed !== undefined) b.setAttribute('aria-pressed', String(a.pressed));
     if (!qa) b.addEventListener('click', () => { void this.ctl.activate(a.id); });
     return b;

@@ -41,15 +41,35 @@ const invItems = (inv: Inventory) => inv.hotbar.concat(inv.pack, inv.throwSlot ?
 const countOf = (inv: Inventory, id: string) => inv.count(id);
 
 describe('levels registry', () => {
-  it('subway generate is generateStation unchanged (identical output for sample seeds; no gear = no change)', () => {
+  // (task studio-ui-subway-maps-20261108-074144-01) the Subway now appends its station map kiosks (gen/subwayMapKiosks.ts) to the generated
+  // station: everything else is exactly generateStation's output (no gear = no other change), every older prop keeps its index, and the
+  // only grid change is the kiosks' own blocked cells
+  it('subway generate is generateStation + its station map kiosks appended (identical otherwise; no gear = no other change)', () => {
     for (const seed of [20261029, 0x5eed]) {
       const a = LEVELS.subway.generate('main', {levelSeed: seed, startWeapon: 'pistol'});
       const b = generateStation(seed, {startWeapon: 'pistol'});
       expect(a.name).toBe(b.name);
       expect(a.pickups).toEqual(b.pickups);
       expect(a.zombies).toEqual(b.zombies);
-      expect(a.props.length).toBe(b.props.length);
-      expect(a).toEqual(b);
+      const kiosks = a.props.slice(b.props.length);
+      expect(kiosks.length).toBeGreaterThan(0);
+      expect(kiosks.every(p => p.kind === 'subwayMapKiosk')).toBe(true);
+      expect(a.props.slice(0, b.props.length)).toEqual(b.props);
+      const {props: _pa, grid: ga, levels: la, ...restA} = a, {props: _pb, grid: gb, levels: lb, ...restB} = b;
+      expect(restA).toEqual(restB);
+      // the grids: the same, but for the cells under the kiosks (blocked)
+      for (let lv = 0; lv < la.length; lv++) {
+        const A = la[lv].grid, B = lb[lv].grid;
+        expect([A.cells, A.area, A.floor, A.ceil, A.rampIdx, A.sightBlocked]).toEqual([B.cells, B.area, B.floor, B.ceil, B.rampIdx, B.sightBlocked]);
+        const own = new Set<number>();
+        for (const k of kiosks) if ((k.level ?? 0) === lv) {
+          const [x0, y0] = A.cellOf(k.x - k.hx + 0.04, k.z - k.hz + 0.04), [x1, y1] = A.cellOf(k.x + k.hx - 0.04, k.z + k.hz - 0.04);
+          for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) own.add(A.idx(x, y));
+        }
+        for (let i = 0; i < A.blocked.length; i++) if (A.blocked[i] !== B.blocked[i]) expect(own.has(i) && A.blocked[i] === 1 && B.blocked[i] === 0, `L${lv} cell ${i}`).toBe(true);
+      }
+      expect(ga).toBe(la[0].grid);
+      expect(gb).toBe(lb[0].grid);
       const c = LEVELS.subway.generate('main', {levelSeed: seed, startWeapon: 'pistol', gear: []});
       expect(c.pickups).toEqual(b.pickups);
     }
@@ -63,7 +83,8 @@ describe('levels registry', () => {
     const extra = geared.pickups.slice(base.pickups.length).map(p => p.itemId).sort();
     expect(extra).toEqual(['boots', 'helmet']);
     expect(geared.zombies).toEqual(base.zombies);
-    expect(geared.props).toEqual(base.props);
+    expect(geared.props.slice(0, base.props.length)).toEqual(base.props); // (+ the station map kiosks after them: task studio-ui-subway-maps-20261108-074144-01)
+    expect(geared.props.slice(base.props.length).every(p => p.kind === 'subwayMapKiosk')).toBe(true);
   });
 
   it('describes both logical levels: each is ONE continuous world (section main)', () => {

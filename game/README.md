@@ -320,6 +320,19 @@ settings, slots) with the QA hooks (`window.__menu`); there `#btn-start` builds 
   QA hooks: `liftButtons()`, `liftPress(id)`, `goRoofLadder()`, `goTransit(end, lane)`, `bagHoldE(s)`, `flareGive(n)`,
   `stallOpen()`, `officeArch()`.
 
+## Tooltips, the network map's opening view and Subway map kiosks
+Task studio-ui-subway-maps-20261108-074144-01.
+- **Tooltips.** Menus and item grids use the game's own tooltip (`src/ui/tooltip.ts`), not the browser's `title` tooltip. That
+  covers the inventory, a grounded backpack, the Lockbox, the car trunk, the network map and the menus. It closes with the panel,
+  even when the cursor has not moved.
+  - Mark an element with `data-tip` (and optional `data-tip-body` / `-hint` / `-tone`), via `tipAttrs()` or `setTip()`.
+  - Item text comes from `src/ui/itemTip.ts`.
+- **Network map.** The train console's map opens on the whole sheet, so the legend and the size of the network are in view. F still
+  zooms to the known stations; Home or "Whole map" goes back. Unknown stations still never print.
+- **Subway map kiosks.** "STATION MAP" pylons stand on platform 1 by the arrival and in the ticket halls and concourses (up to 4).
+  Each shows its own storey's public plan, turned the way you face, with YOU ARE HERE. E at the panel reads it up close; E again or
+  walking away closes it. They are procedural, with no model to load. See `docs/prop-affordances.md`.
+
 ## Armor
 Task studio-general-armor-20261107-231448-01 (`src/player/armor.ts`).
 - **One pool.** Worn gear with armor adds to one armor value. It is not tied to a body part. Gear in pockets, bags, the

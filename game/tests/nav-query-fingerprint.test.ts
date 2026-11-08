@@ -143,9 +143,18 @@ describe('nav query fingerprints (behaviour preservation of the string-pulling h
     // Track 2 GEN-2 proof: with the core reserve OFF the core view reproduces the pin (the extensions never touch the core)
     const off = generateStation(1234, {startWeapon: 'pistol', trackExtensions: TRACK_EXT_RESERVE_OFF});
     check('SUBWAY core (reserve off)', fingerprint(levelsOf(coreView(off)), coreView(off), 0x5ab, 2500, true), SUBWAY);
+    // (task studio-ui-subway-maps-20261108-074144-01) the Subway level now appends its station map kiosks AFTER generation
+    // (gen/subwayMapKiosks.ts). PROOF that only the world changed, not the queries: the same station before the kiosk pass (generateStation
+    // with the level's own track extensions = LEVELS.subway.generate minus that one appended pass) reproduces BOTH old pins byte for byte.
+    const pre = generateStation(1234, {startWeapon: 'pistol', trackExtensions: LEVELS.subway.trackExtensions});
     // reserve on: seed 1234's skeleton leaves no bed end open, so the reserve keeps nothing and its core is unchanged
-    check('SUBWAY core', fingerprint(levelsOf(coreView(sub)), coreView(sub), 0x5ab, 2500, true), SUBWAY);
-    check('SUBWAY', fingerprint(levelsOf(sub), sub, 0x5ab, 2500, true), SUBWAY_LIVE);
+    check('SUBWAY core', fingerprint(levelsOf(coreView(pre)), coreView(pre), 0x5ab, 2500, true), SUBWAY);
+    check('SUBWAY', fingerprint(levelsOf(pre), pre, 0x5ab, 2500, true), SUBWAY_LIVE);
+    // the live world with its kiosks (their footprints block cells: the sampled world changes, the query code does not)
+    expect(sub.props.slice(0, pre.props.length)).toEqual(pre.props);
+    expect(sub.props.slice(pre.props.length).map(p => p.kind).every(k => k === 'subwayMapKiosk')).toBe(true);
+    check('SUBWAY + kiosks core', fingerprint(levelsOf(coreView(sub)), coreView(sub), 0x5ab, 2500, true), SUBWAY_KIOSKS_CORE);
+    check('SUBWAY + kiosks', fingerprint(levelsOf(sub), sub, 0x5ab, 2500, true), SUBWAY_KIOSKS_LIVE);
     const fx = levelFixture();
     const LF = new Levels(fx.levels, fx.levelLinks, fx.rails);
     check('FIXTURE', fingerprint(LF, fx, 0xf1f, 3000, false), FIXTURE);
@@ -205,5 +214,10 @@ const SUBWAY = {lines: '4a492dc5', circles: '04796bf8', support: '72973980', rai
 // (round 3: seed 1234's annexes re-laid (logical layout) + hideout props; was {lines 0be2b9f8, circles 24650d58, support 8501fb29,
 // rails 8f0e3c65, finds dcd8c5b9}; the core / reserve-off pins unchanged)
 const SUBWAY_LIVE = {lines: '40f9a6a5', circles: '54b44b85', support: 'bea8e4c8', rails: '7cdb6fc5', finds: '2c8d2da5'};
+// (task studio-ui-subway-maps-20261108-074144-01) seed 1234 WITH its station map kiosks (appended after generation; SUBWAY / SUBWAY_LIVE
+// above still hold for the station before that pass — the proof in the test). Only the PathFinder waypoint lists move (the kiosks'
+// footprints block cells the paths used to cross); lines / circles / support / rails are byte-identical. gen/levels.ts / gen/grid.ts untouched.
+const SUBWAY_KIOSKS_CORE = {...SUBWAY, finds: '526b8f97'};
+const SUBWAY_KIOSKS_LIVE = {...SUBWAY_LIVE, finds: '08b93f25'};
 /** The fixture runs no PathFinder (finds = the empty hash). */
 const FIXTURE = {lines: '2278f298', circles: 'c101d1b8', support: '1243b7fb', rails: 'ca023ed8', finds: '811c9dc5'};

@@ -29,6 +29,7 @@ import type {LevelId} from '../src/levels/types';
 import {canonDiff, canonLayout} from './helpers/trackExtCore';
 import {FRESH, absentSeeds, presentSeeds} from './helpers/btsArea';
 import {freshLayout} from './helpers/annexRoute';
+import {placeSubwayMapKiosks} from '../src/gen/subwayMapKiosks';
 
 const report = (s: string) => process.stdout.write(`[bts-area] ${s}\n`);
 /** The census corpus formula of the track-extension tests. */
@@ -41,8 +42,9 @@ const live = (level: LevelId, levelSeed: number): StationLayout => LEVELS[level]
 const noAnnex = (cfg: TrackExtConfig): TrackExtConfig => ({...cfg, annex: {...cfg.annex, max: 0}});
 const reference = (level: LevelId, levelSeed: number): StationLayout => {
   const cfg = noAnnex(LEVELS[level].trackExtensions as TrackExtConfig);
-  return level === 'subway' ? generateStation(levelSeed, {startWeapon: 'pistol', trackExtensions: cfg})
-    : level === 'office' ? generateOfficeLevel({levelSeed, startWeapon: 'pistol'}, undefined, undefined, cfg)
+  // (task studio-ui-subway-maps-20261108-074144-01) the Subway's registry path ends with its station map kiosks: the reference gets the same pass
+  if (level === 'subway') { const l = generateStation(levelSeed, {startWeapon: 'pistol', trackExtensions: cfg}); placeSubwayMapKiosks(l); return l; }
+  return level === 'office' ? generateOfficeLevel({levelSeed, startWeapon: 'pistol'}, undefined, undefined, cfg)
       : level === 'reactor' ? generateReactorLevel({levelSeed, startWeapon: 'pistol'}, {trackExt: cfg}) // task reactor-build-20261101 (lane GEN)
         : level === 'skyways' ? generateSkywaysLevel({levelSeed, startWeapon: 'pistol'}, {trackExt: cfg}) // task studio-skyways-level-20261106-054448-01
           : generateMallLevel({levelSeed, startWeapon: 'pistol'}, {trackExt: cfg});
