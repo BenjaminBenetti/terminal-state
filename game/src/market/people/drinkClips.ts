@@ -23,11 +23,11 @@ export const DRINK = {
   /** Sampling rate of these slow loops (keys / s). */
   fps: 15,
   /** The fist round the bottle: grip point from the wrist along the hand / toward the palm. */
-  gripAlong: 0.075, gripPalm: 0.035,
+  gripAlong: 0.1, gripPalm: 0.045,
   /** The hip joint above a seat's top (seated). */
   hipOverSeat: 0.11,
-  /** The lips relative to the head joint (head frame). */
-  mouth: [0, 0.05, 0.115] as const,
+  /** The lips relative to the head joint (head frame): its height; forward = the body mesh's face there + `lips` (lipsForward), else z. */
+  mouth: [0, 0.05, 0.115] as const, lips: 0.008,
   /** Bottle pitch (deg; - = the top toward the face) held / at a sip / at a big swig. */
   holdPitch: 4, sipPitch: -78, swigPitch: -96,
 } as const;
@@ -57,9 +57,23 @@ function bottleHand(grip: THREE.Vector3, g: THREE.Quaternion, G: HandGrip, pole:
   return {kind: 'ik', target: grip.clone().sub(G.pos.clone().applyQuaternion(hand)), pole, end: hand};
 }
 
+/** The lips relative to the head joint (head frame) of a body: DRINK.mouth's height, `forward` in front of the joint. */
+export const mouthOffset = (forward: number = DRINK.mouth[2]): THREE.Vector3 => V(DRINK.mouth[0], DRINK.mouth[1], forward);
+
 /** The lips' model-frame point of a posed trunk. */
-export function mouthOf(t: Trunk): THREE.Vector3 {
-  return t.pos.Head.clone().add(V(...DRINK.mouth).applyQuaternion(t.rot.Head));
+export function mouthOf(t: Trunk, offset = mouthOffset()): THREE.Vector3 {
+  return t.pos.Head.clone().add(offset.clone().applyQuaternion(t.rot.Head));
+}
+
+/**
+ * How far in front of the head joint a body's lips are: its bind mesh's frontmost vertex near the midline at mouth height (+ `lips`),
+ * else DRINK.mouth's default. (`mesh` = the body's SkinnedMesh: its geometry is in the bind frame.)
+ */
+export function lipsForward(mesh: THREE.SkinnedMesh, rig: HumanRig): number {
+  const P = mesh.geometry.attributes.position, y0 = rig.bind.Head.y + DRINK.mouth[1];
+  let z = -Infinity;
+  for (let i = 0; i < P.count; i++) if (Math.abs(P.getY(i) - y0) < 0.03 && Math.abs(P.getX(i)) < 0.03 && P.getZ(i) > z) z = P.getZ(i);
+  return Number.isFinite(z) && z - rig.bind.Head.z > 0.04 && z - rig.bind.Head.z < 0.2 ? +(z - rig.bind.Head.z + DRINK.lips).toFixed(3) : DRINK.mouth[2];
 }
 
 interface Kit { rig: HumanRig; B: Record<string, THREE.Vector3>; hipsY: number; armIn: number; thigh: number; shin: number }
@@ -98,7 +112,7 @@ function sipAt(variant: 0 | 1, u: number): {s: number; swig: number} {
 }
 
 /** A drinking pose: `variant` 0 / 1 at loop phase u; `seat` = the seat height in model metres (null: standing). */
-function drinkPose(k: Kit, G: HandGrip, bottle: BottleSpec, variant: 0 | 1, u: number, seat: number | null): HumanPose {
+function drinkPose(k: Kit, G: HandGrip, bottle: BottleSpec, variant: 0 | 1, u: number, seat: number | null, lips: THREE.Vector3): HumanPose {
   const {s, swig} = sipAt(variant, u);
   const w = TAU * u, breath = Math.sin(w * (variant ? 4 : 3));
   // a look round between the sips (variant 1), the head back for a sip
@@ -118,14 +132,14 @@ function drinkPose(k: Kit, G: HandGrip, bottle: BottleSpec, variant: 0 | 1, u: n
       const gHold = eulerQ([DRINK.holdPitch, 8, 0]);
       const gSip = eulerQ([DRINK.sipPitch + (DRINK.swigPitch - DRINK.sipPitch) * swig - 4 * Math.sin(TAU * u * 6) * s, 0, 0]);
       const g = gHold.clone().slerp(gSip, s);
-      const atLips = mouthOf(t).sub(V(0, bottle.h - bottle.grip, 0).applyQuaternion(gSip));
+      const atLips = mouthOf(t, lips).sub(V(0, bottle.h - bottle.grip, 0).applyQuaternion(gSip));
       const grip = hold.clone().lerp(atLips, s).add(V(0, 0, 0.07 * Math.sin(Math.PI * s)));
       return bottleHand(grip, g, G, V(-0.65, -0.75, -0.1));
     },
     armL: variant === 1
       ? () => ({kind: 'fk', upper: [-28, 0, -k.armIn + 6] as Deg3, lower: [-72, 0, 0] as Deg3, end: [0, 0, 8] as Deg3}) // the forearm forward, on the counter
       : sitting
-        ? () => ({kind: 'fk', upper: [-24, 0, -k.armIn + 3] as Deg3, lower: [-48, 0, 0] as Deg3, end: [0, 0, 6] as Deg3}) // the hand on the thigh
+        ? (t: Trunk): Limb => ({kind: 'ik', target: t.pos.L_Thigh.clone().add(V(0.03, 0.07, k.thigh * 0.5)), pole: V(0.5, -0.5, -0.4)}) // the hand on the thigh
         : () => ({kind: 'fk', upper: [3 * Math.sin(w), 0, -k.armIn + 1] as Deg3, lower: [-10, 0, 0] as Deg3, end: [0, 0, 6] as Deg3}),
     legL: sitting ? seatedLeg(k, 'L', hips, 0.03) : plant(k, 'L', 0.05, 0.07, 7),
     legR: sitting ? seatedLeg(k, 'R', hips, 0.05) : plant(k, 'R', -0.05, -0.05, -9),
@@ -148,18 +162,18 @@ const cache = new WeakMap<object, Map<string, DrinkClipSet>>();
  * The drinking loops of a body (cached per cast file `owner` + body + bottle + seat): both variants, standing (`seatCm` null) or seated
  * on a seat that high (cm), with the bottle's grip in the right hand.
  */
-export function drinkClips(owner: object, body: string, prefix: string, rig: HumanRig, bottle: BottleSpec, seatCm: number | null): DrinkClipSet {
+export function drinkClips(owner: object, body: string, prefix: string, rig: HumanRig, bottle: BottleSpec, seatCm: number | null, lips: number = DRINK.mouth[2]): DrinkClipSet {
   let m = cache.get(owner);
   if (!m) cache.set(owner, (m = new Map()));
-  const key = `${body}|${bottle.h.toFixed(3)}|${bottle.grip.toFixed(3)}|${seatCm ?? '-'}`;
+  const key = `${body}|${bottle.h.toFixed(3)}|${bottle.grip.toFixed(3)}|${seatCm ?? '-'}|${lips.toFixed(3)}`;
   let s = m.get(key);
   if (s) return s;
-  const k = kitOf(rig), G = bottleGrip(rig);
+  const k = kitOf(rig), G = bottleGrip(rig), mo = mouthOffset(lips);
   const clips = new Map<string, THREE.AnimationClip>();
   for (const v of [0, 1] as const) {
     const name = seatCm === null ? DRINK_CLIP.stand(v) : DRINK_CLIP.sit(v, seatCm);
     const seat = seatCm === null ? null : seatCm / 100;
-    clips.set(name, sampleClip(name, DRINK.T[v], rig, prefix, t => drinkPose(k, G, bottle, v, t / DRINK.T[v], seat), DRINK.fps));
+    clips.set(name, sampleClip(name, DRINK.T[v], rig, prefix, t => drinkPose(k, G, bottle, v, t / DRINK.T[v], seat, mo), DRINK.fps));
   }
   s = {clips, grip: G};
   m.set(key, s);

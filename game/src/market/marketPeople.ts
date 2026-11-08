@@ -34,7 +34,7 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import type {Game} from '../game';
 import type {MarketLayout, MarketSpot, MarketStall, MarketStallId} from '../gen/market/marketTypes';
 import type {TrainPlacement} from '../gen/playerTrain';
-import type {Waypoint} from '../gen/grid';
+import {STEP_UP, type Waypoint} from '../gen/grid';
 import type {Levels} from '../gen/levels';
 import {moveCircle, resolveCircle, type PropIndex} from '../core/physics';
 import {groundOf} from '../ai/motor';
@@ -45,8 +45,8 @@ import {HumanWardrobe} from './humanWardrobe';
 import {HumanActor} from './humanActor';
 import {MARKET_HUMAN_KEY, marketCast, marketHumanModelKeys, SPOT_CLIP, type HumanClip} from './humanLooks';
 import {rigFromSkeleton} from './combat/combatClips';
-import {DRINK_CLIP, bottleGrip, drinkClips, seatBucket, type BottleSpec} from './people/drinkClips';
-import {attachBottle, patronBottle, type BottleSource} from './people/bottle';
+import {DRINK_CLIP, bottleGrip, drinkClips, lipsForward, seatBucket, type BottleSpec, type DrinkClipSet} from './people/drinkClips';
+import {attachBottle, bottleSpecOf, patronBottle, type BottleSource} from './people/bottle';
 import {seatAt} from './people/seats';
 
 /** Tuning. */
@@ -159,6 +159,8 @@ export class MarketPeople {
   /** (lane PEOPLE) The patrons' bottle model (resolved once per build) and whether the bottles were put away (hostile). */
   private bottleModel: BottleSource | null = null;
   private stowed = false;
+  /** (lane PEOPLE) Each body's lips (m in front of its head joint: drinkClips lipsForward), measured once. */
+  private readonly lips = new Map<string, number>();
   /** QA / tests. */
   readonly counts = {built: 0, paths: 0, pathFails: 0, arrivals: 0, replans: 0, greetings: 0, rounds: 0, lingers: 0};
   /**
@@ -227,7 +229,7 @@ export class MarketPeople {
     if (!M) return;
     const gltf = this.host.propModels.get(MARKET_HUMAN_KEY);
     if (!gltf) { console.warn('market people: market-human-cast not loaded; the market has no people'); return; }
-    if (this.wardrobe?.gltf !== gltf) { this.wardrobe?.dispose(); this.wardrobe = new HumanWardrobe(gltf); }
+    if (this.wardrobe?.gltf !== gltf) { this.wardrobe?.dispose(); this.wardrobe = new HumanWardrobe(gltf); this.lips.clear(); }
     const W = this.wardrobe;
     this.market = M;
     this.keepout = trainKeepout(this.host.trainPlacement);
@@ -271,6 +273,7 @@ export class MarketPeople {
       this.add(actor);
       this.residents.push(r);
     }
+    if (drinkAt.length) this.prepareDrinks();
     this.counts.built++;
   }
 
@@ -348,20 +351,19 @@ export class MarketPeople {
    * at a random phase, the bottle in its hand. False when the loop cannot be built (the plain spot loop then).
    */
   private startDrinking(r: Resident, initial: boolean): boolean {
-    const src = this.bottleModel, gltf = this.host.propModels.get(MARKET_HUMAN_KEY), a = r.actor;
-    if (!src || !gltf) return false;
+    const src = this.bottleModel, a = r.actor;
+    if (!src) return false;
     const seat = this.seats[r.spot] ?? null;
     const cm = seat ? seatBucket(seat.y - a.y) : null;
     const variant = (r.rand() < 0.5 ? 0 : 1) as 0 | 1;
     try {
-      const rig = rigFromSkeleton(a.meshes[0].skeleton, a.prefix);
       if (!r.bottle) {
         const hand = a.bone('R_Hand');
         if (!hand) return false;
-        r.bottle = attachBottle(hand, src, bottleGrip(rig));
+        r.bottle = attachBottle(hand, src, bottleGrip(rigFromSkeleton(a.meshes[0].skeleton, a.prefix)));
         this.host.atmosphere?.markShadows(r.bottle.holder, false);
       }
-      a.addClips(drinkClips(gltf, a.look.body, a.prefix, rig, r.bottle.spec, cm).clips);
+      a.addClips(this.drinkSet(a, cm, r.bottle.spec).clips);
     } catch (err) { console.warn('market people: no drinking clips for', r.id, err); return false; }
     const clip = cm === null ? DRINK_CLIP.stand(variant) : DRINK_CLIP.sit(variant, cm);
     r.drink = {variant, clip, seat};
@@ -372,6 +374,28 @@ export class MarketPeople {
     r.timer = (initial ? r.rand() : 1) * (lo + r.rand() * (hi - lo));
     this.counts.rounds++;
     return true;
+  }
+
+  /** A body's drinking loops for a seat bucket (cm; null standing) and the bottle (cached by the clip module; its lips once per body). */
+  private drinkSet(a: HumanActor, cm: number | null, spec: BottleSpec): DrinkClipSet {
+    const gltf = this.host.propModels.get(MARKET_HUMAN_KEY);
+    if (!gltf) throw new Error('no cast');
+    const rig = rigFromSkeleton(a.meshes[0].skeleton, a.prefix);
+    let lips = this.lips.get(a.look.body);
+    if (lips === undefined) { lips = lipsForward(a.meshes[0], rig); this.lips.set(a.look.body, lips); }
+    return drinkClips(gltf, a.look.body, a.prefix, rig, spec, cm, lips);
+  }
+
+  /** At a build with a bar: every resident body's loops for every 'drink' spot's seat height, on the loading screen (never mid-play). */
+  private prepareDrinks(): void {
+    const src = this.bottleModel;
+    if (!src) return;
+    const spec = bottleSpecOf(src.obj), cms = new Set<number | null>();
+    this.spots.forEach((s, i) => { if (s.kind === 'drink') { const seat = this.seats[i]; cms.add(seat ? seatBucket(seat.y - s.y) : null); } });
+    const bodies = new Map<string, HumanActor>();
+    for (const r of this.residents) if (!bodies.has(r.actor.look.body)) bodies.set(r.actor.look.body, r.actor);
+    try { for (const a of bodies.values()) for (const cm of cms) this.drinkSet(a, cm, spec); }
+    catch (err) { console.warn('market people: drinking clips', err); }
   }
 
   /** The round is over (leaving the spot / the market turns hostile): the bottle put away. */
@@ -403,7 +427,7 @@ export class MarketPeople {
       this.counts.paths++;
       if (path && path.length && this.routeClear(a.x, a.z, a.y, path)) {
         this.stopDrinking(r);
-        r.spot = c.i; r.path = path; r.wp = 0; r.state = 'walk';
+        r.spot = c.i; r.path = this.squareSteps(path, a.y); r.wp = 0; r.state = 'walk';
         r.checkT = 0; r.checkX = a.x; r.checkZ = a.z;
         a.play('Walk', 0.35);
         return true;
@@ -435,8 +459,8 @@ export class MarketPeople {
       return 0;
     }
     const path = r.path!;
-    let wp = path[r.wp];
-    while (wp && r.wp < path.length - 1 && Math.hypot(wp[0] - a.x, wp[1] - a.z) < P.waypoint) wp = path[++r.wp];
+    r.wp = this.nextWaypoint(a, path, r.wp);
+    const wp = path[r.wp];
     const last = r.wp >= path.length - 1;
     const dx = wp[0] - a.x, dz = wp[1] - a.z, d = Math.hypot(dx, dz);
     if (last && d < P.arrive) { this.arrive(r); return 0; }
@@ -445,7 +469,7 @@ export class MarketPeople {
     const sp = r.speed * Math.max(0.15, align) * (last ? Math.min(1, 0.4 + d) : 1);
     const ox = a.x, oz = a.z;
     const step = Math.min(sp * dt, d);
-    [a.x, a.z] = moveCircle(this.host.levels, this.host.propIndex, a.x, a.z, dx / (d || 1) * step, dz / (d || 1) * step, P.radius, a.y, P.height);
+    [a.x, a.z] = moveCircle(this.host.levels, this.host.propIndex, a.x, a.z, dx / (d || 1) * step, dz / (d || 1) * step, P.radius, this.stepFeet(a, wp), P.height);
     // stuck (the player in a doorway, a crowd): another spot
     r.checkT += dt;
     if (r.checkT >= P.stuckS) {
@@ -469,11 +493,63 @@ export class MarketPeople {
     a.y = groundOf(h.levels, a.x, a.z, a.y);
   }
 
+  /**
+   * (Task studio-market-bar-20261108-225231-01, lane PEOPLE) The waypoint a walker heads for: reached ones (within MARKET_PEOPLE.waypoint,
+   * about their height) are passed — but a waypoint is left early only when the straight walk from here to the next is clear, so nobody
+   * cuts a stair's corner off a ramp's side onto the landing above (they used to stick there, trying a step too high). Shared with the
+   * hostile people's motion.
+   */
+  nextWaypoint(a: HumanActor, path: Waypoint[], wp: number): number {
+    const L = this.host.levels;
+    while (wp < path.length - 1) {
+      const w = path[wp], n = path[wp + 1];
+      const d = Math.hypot(w[0] - a.x, w[1] - a.z);
+      if (d >= MARKET_PEOPLE.waypoint || (w[3] !== undefined && Math.abs(w[3] - a.y) > 0.6)) break;
+      if (d > 0.08 && !L.walkLineClear(a.x, a.y, a.z, n[0], n[1], MARKET_PEOPLE.radius * 0.8, n[3])) break;
+      wp++;
+    }
+    return wp;
+  }
+
+  /**
+   * (Lane PEOPLE) The feet height a walker's collision uses toward waypoint `w`: its own, lifted by at most 8 cm when the waypoint lies a
+   * full step up — so every path-finder step between cell centres (up to NAV_STEP) can be taken (a ramp's side onto a catwalk measured
+   * 0.46 m from where the walker stood, one centimetre over, and it slid back down the stair).
+   */
+  stepFeet(a: HumanActor, w: Waypoint): number {
+    const wy = w[3];
+    if (wy === undefined || wy - a.y < STEP_UP - 0.08) return a.y;
+    return Math.min(a.y + 0.08, Math.max(a.y, wy - STEP_UP + 0.01));
+  }
+
+  /**
+   * (Lane PEOPLE) A route's diagonal steps that climb onto another floor (a stair's side onto the catwalk beside it, ~0.45 m between cell
+   * centres) become two straight steps through the corner cell on the higher floor: the walker steps across at the ramp's own height,
+   * never down the ramp while stepping up (the 0.45 m step rule then refused it, and it stuck there).
+   */
+  squareSteps(path: Waypoint[], ay: number): Waypoint[] {
+    const L = this.host.levels, out: Waypoint[] = [];
+    let px = NaN, py = ay, pz = NaN;
+    for (const w of path) {
+      const wy = w[3] ?? py;
+      if (out.length && w[2] === undefined && Math.abs(wy - py) > 0.25 && Math.abs(w[0] - px) > 0.1 && Math.abs(w[1] - pz) > 0.1) {
+        const hi = Math.max(wy, py);
+        for (const [cx, cz] of [[w[0], pz], [px, w[1]]] as const) {
+          const s = L.supportIn(cx, cz, hi + 0.05, 0.1);
+          if (s && Math.abs(s.floor - hi) < 0.06 && L.circleClear(cx, cz, MARKET_PEOPLE.radius * 0.8, s.floor)) { out.push([cx, cz, undefined, s.floor]); break; }
+        }
+      }
+      out.push(w);
+      px = w[0]; pz = w[1]; py = wy;
+    }
+    return out;
+  }
+
   /** (lane COMBAT) A path between two feet points (no ladder links), clear of the train keep-out; null when none. */
   route(ax: number, ay: number, az: number, bx: number, by: number, bz: number): Waypoint[] | null {
     const path = this.host.pathfinder.find(ax, az, bx, bz, 0.34, MARKET_PEOPLE.maxExpand, {ay, by, noLinks: true});
     this.counts.paths++;
-    if (path && path.length && this.routeClear(ax, az, ay, path)) return path;
+    if (path && path.length && this.routeClear(ax, az, ay, path)) return this.squareSteps(path, ay);
     this.counts.pathFails++;
     return null;
   }

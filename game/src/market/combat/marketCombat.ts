@@ -712,8 +712,8 @@ export class MarketCombat implements MarketHostilityApi {
   /** Follow the path; true on arrival. Stuck -> a re-plan (fleeing) / give up the route (moving). */
   private walk(p: MarketCombatant, dt: number, speed: number, turn: number): boolean {
     const a = p.actor, path = p.path!;
-    let wp = path[p.wp];
-    while (wp && p.wp < path.length - 1 && Math.hypot(wp[0] - a.x, wp[1] - a.z) < MARKET_PEOPLE.waypoint) wp = path[++p.wp];
+    p.wp = this.host.marketPeople.nextWaypoint(a, path, p.wp); // (lane PEOPLE: never cutting a stair's corner)
+    const wp = path[p.wp];
     const last = p.wp >= path.length - 1;
     const dx = wp[0] - a.x, dz = wp[1] - a.z, d = Math.hypot(dx, dz);
     if (last && d < MARKET_PEOPLE.arrive) { p.path = null; return true; }
@@ -721,7 +721,7 @@ export class MarketCombat implements MarketHostilityApi {
     const align = Math.cos(wrap(yawTo(dx, dz) - a.yaw));
     const sp = speed * Math.max(0.2, align) * (last ? Math.min(1, 0.4 + d) : 1);
     const ox = a.x, oz = a.z, step = Math.min(sp * dt, d);
-    [a.x, a.z] = moveCircle(this.host.levels, this.host.propIndex, a.x, a.z, dx / (d || 1) * step, dz / (d || 1) * step, MARKET_PEOPLE.radius, a.y, MARKET_PEOPLE.height);
+    [a.x, a.z] = moveCircle(this.host.levels, this.host.propIndex, a.x, a.z, dx / (d || 1) * step, dz / (d || 1) * step, MARKET_PEOPLE.radius, this.host.marketPeople.stepFeet(a, wp), MARKET_PEOPLE.height);
     p.moved = Math.hypot(a.x - ox, a.z - oz) / dt;
     p.checkT += dt;
     if (p.checkT >= MARKET_COMBAT.stuckS) {
