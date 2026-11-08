@@ -13,6 +13,9 @@
 //    Enter on) a station SELECTS it and opens the details panel; travel happens only on the explicit "Depart" button (onConfirm);
 //    Cancel clears the selection. Hover never selects, a click never departs. view mode (title / pause "view map"): read-only.
 //  - Pan (drag), zoom (wheel at the cursor, + / - keys and buttons), F = fit the known stations, Home = the whole sheet.
+//    (task studio-ui-subway-maps-20261108-074144-01: the map OPENS on the whole sheet (fitOverview): the title band, the legend and the scale of the network
+//    are in view even with two stations known. The sheet is printed from the WHOLE network, so the overview reveals nothing that is
+//    not known: unknown stations, names, kinds and track still never print. Fitted once per open, never re-snapped while you pan.)
 //  - Keyboard: arrows move between selectable stations by direction, Enter selects, Esc / E / Tab close (task
 //    studio-alpha-survival-controls-20261107-060450-01: E / Tab on a fresh press; Tab no longer cycles the stations).
 //  - While open, the map owns the keyboard (a window capture listener, installed on open and removed on close): typing 1 3 3 7
@@ -728,7 +731,7 @@ export class PaperMap {
     this.mount();
     this.attach();
     this.root?.classList.remove('pm-hidden');
-    this.fitKnown();
+    this.fitOverview();
     this.renderPanel();
     this.root?.focus?.();
   }
@@ -888,6 +891,14 @@ export class PaperMap {
     this.setView(s, (w - PAPER.w * s) / 2, BAR_H + (h - BAR_H - PAPER.h * s) / 2);
   }
 
+  /**
+   * (task studio-ui-subway-maps-20261108-074144-01) The opening view: the whole sheet, so the legend at the top and the size of the network read at once (user:
+   * "it should start zoomed out! So that you can see the legend at the top and get a sense of the scale"). F still frames the known stations.
+   */
+  fitOverview(): void {
+    this.fitSheet();
+  }
+
   /** Frame the known stations (zoomed in up to 1.7x the whole-sheet scale, so the sheet still reads as a map; never below it). */
   fitKnown(): void {
     const st = this.state;
@@ -985,10 +996,10 @@ export class PaperMap {
     el.setAttribute('aria-label', 'Network map');
     el.setAttribute('tabindex', '-1');
     el.innerHTML = `<div class="pm-stage"><div class="pm-sheet"></div></div>
-      <header class="pm-bar"><b>Network map</b><span class="pm-mode"></span><span class="pm-tools"><button type="button" class="pm-zoom-out" aria-label="Zoom out" title="Zoom out (-)">−</button><button type="button" class="pm-zoom-in" aria-label="Zoom in" title="Zoom in (+)">+</button><button type="button" class="pm-fit" title="Fit the known stations (F)">Fit</button><button type="button" class="pm-close" title="Close (Esc)">Close</button></span></header>
+      <header class="pm-bar"><b>Network map</b><span class="pm-mode"></span><span class="pm-tools"><button type="button" class="pm-zoom-out" aria-label="Zoom out" title="Zoom out (-)">−</button><button type="button" class="pm-zoom-in" aria-label="Zoom in" title="Zoom in (+)">+</button><button type="button" class="pm-fit" title="Zoom to the known stations (F)">Fit</button><button type="button" class="pm-whole" title="Show the whole map (Home)">Whole map</button><button type="button" class="pm-close" title="Close (Esc)">Close</button></span></header>
       <aside class="pm-panel pm-hidden" aria-live="polite"></aside>
       <div class="pm-note pm-hidden"></div>
-      <div class="pm-help">Drag to pan · wheel or + and − zoom · F fits · arrows or Tab pick a station · Enter selects · Esc closes</div>
+      <div class="pm-help">Drag to pan · wheel or + and − zoom · F fits the known stations · Home shows the whole map · arrows pick a station · Enter selects · Esc closes</div>
       <div class="pm-live" aria-live="polite"></div>`;
     (this.opts.parent ?? document.querySelector('#app') ?? document.body).appendChild(el);
     this.root = el;
@@ -1140,6 +1151,7 @@ export class PaperMap {
     if (hit('.pm-zoom-in')) { this.zoomBy(1.35); return; }
     if (hit('.pm-zoom-out')) { this.zoomBy(1 / 1.35); return; }
     if (hit('.pm-fit')) { this.fitKnown(); return; }
+    if (hit('.pm-whole')) { this.fitOverview(); return; }
     if (hit('.pm-depart')) { this.confirm(); return; }
     if (hit('.pm-cancel')) { this.cancel(); return; }
     if (!hit('.pm-stage') || this.suppressClick) return;

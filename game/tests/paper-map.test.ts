@@ -390,8 +390,10 @@ describe('the overlay', () => {
     dom.click(dom.doc.querySelector('.pm-zoom-in'));
     dom.key('Equal', {key: '+'});
     expect(map.viewState.s).toBeGreaterThan(v1.s);
-    dom.click(dom.doc.querySelector('.pm-fit'));
-    expect(map.viewState.s).toBeCloseTo(v0.s, 5);
+    dom.click(dom.doc.querySelector('.pm-whole')); // (task studio-ui-subway-maps-20261108-074144-01) back to the opening overview
+    expect(map.viewState).toEqual(v0);
+    dom.click(dom.doc.querySelector('.pm-fit')); // F / Fit frames the known stations: never further out than the overview
+    expect(map.viewState.s).toBeGreaterThanOrEqual(v0.s - 1e-9);
     // drag
     const t0 = map.viewState.tx;
     stage.dispatchEvent(new MiniEvent('pointerdown', {button: 0, pointerId: 7, clientX: 300, clientY: 300}));
