@@ -105,6 +105,7 @@ export function marketCast(seed: number, traders: number, residents: number, av:
 }
 
 /** The loop a resident plays at a spot of each kind (layout.market.spots[].kind). */
-export const SPOT_CLIP: Readonly<Record<'idle' | 'sit' | 'work' | 'cook' | 'sleep' | 'chat', HumanClip>> = {
+export const SPOT_CLIP: Readonly<Record<'idle' | 'sit' | 'work' | 'cook' | 'sleep' | 'chat' | 'drink', HumanClip>> = {
   idle: 'Idle', sit: 'Sit', work: 'Work', cook: 'Work', sleep: 'Sit', chat: 'Talk',
+  drink: 'Sit', // (task studio-market-bar-20261108-225231-01: a bar patron; the PEOPLE lane gives it a drinking clip)
 };

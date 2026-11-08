@@ -158,6 +158,8 @@ import {MARKET_HUMAN_MODEL_FILES} from './market/humanLooks'; // task studio-sur
 import {installMarketPeople, type MarketPeople} from './market/marketPeople'; // (lane HUMANS): the market's residents + stall traders // task studio-survivor-market-20261108-005807-01 (lane TRADE): Rail Ties + the six stalls
 import {installMarketCombat, playerPelletDamage, type MarketCombat, type MarketCombatant} from './market/combat/marketCombat'; // task studio-market-rework-20261108-074144-01 (lane COMBAT)
 import type {MarketHostilityApi} from './market/hostility';
+import type {BeerEffectsApi, VomitApi} from './market/beer/effectsApi'; // task studio-market-bar-20261108-225231-01 (seams)
+import type {MarketAudioApi} from './market/marketAudio';
 import {installMarketWares, type MarketWares} from './market/wares/wares'; // task studio-market-rework-20261108-074144-01 (lane WARES): the stalls' owned stock on display, the red Steal
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
@@ -383,6 +385,11 @@ export class Game {
   marketCombat!: MarketCombat;
   /** (lane COMBAT) The market hostility seam (market/hostility.ts) the trade / wares lanes call: hostile, provoke, canTrade. */
   marketHostility!: MarketHostilityApi;
+  /** Task studio-market-bar-20261108-225231-01 (seams; market/beer/effectsApi.ts, market/marketAudio.ts): the one timed beer's effects, the
+   *  player's throw-up action and the market's sounds — set by their installs; read with optional chaining. */
+  beerEffects?: BeerEffectsApi;
+  vomit?: VomitApi;
+  marketAudio?: MarketAudioApi;
   /** Task studio-market-rework-20261108-074144-01 (lane WARES): the stalls' real stock displayed as owned world items; theft (market/wares/wares.ts). */
   marketWares!: MarketWares;
   /** Task skyways-level-20261106 (lane CAR): the Skyways prize car — while `driving`, update() steps the player through it (world/skywaysCar.ts). */

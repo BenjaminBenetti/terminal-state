@@ -46,7 +46,8 @@ export interface MarketDisplaySlot extends MarketPoint {
 /** A place a resident idles / sits / works at (walkable floor, never the trench, the parked train's footprint or a counter). */
 export interface MarketSpot extends MarketPoint {
   yaw: number;
-  kind: 'idle' | 'sit' | 'work' | 'cook' | 'sleep' | 'chat';
+  /** ('drink', task studio-market-bar-20261108-225231-01: a bar patron's post — a stool at the bar counter or a seat at a bar table.) */
+  kind: 'idle' | 'sit' | 'work' | 'cook' | 'sleep' | 'chat' | 'drink';
   area: number;
 }
 
@@ -54,8 +55,9 @@ export interface MarketLayout {
   /**
    * 1: the first market (one salvaged shed, stall row); 2 (task studio-market-rework-20261108-074144-01): the dense container settlement.
    * A station keeps the version it was first built with (its geometry, ids and stock never reroll); unvisited markets build the newest.
+   * 3 (task studio-market-bar-20261108-225231-01): version 2's settlement plus a substantial upper-level bar (its bartender a stall).
    */
-  v: 1 | 2;
+  v: 1 | 2 | 3;
   /** Exactly one stall per MARKET_STALLS id. */
   stalls: MarketStall[];
   /** Resident spots (wander targets / idle posts), at least a dozen, spread over the market's storeys. */
