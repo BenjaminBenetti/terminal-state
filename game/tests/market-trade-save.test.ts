@@ -164,18 +164,43 @@ describe('market stock: seeded once, remembered, never refilled', () => {
     expect([JSON.stringify(t.sys.stock!.toJSON()), t.sys.wallet.ties]).toEqual([at.stock, at.ties]);
   });
 
-  it('item state other tasks add to stacks (armor wear) survives the stock record exactly as the shared serializers carry it', () => {
+  it('armor wear survives the stock record through the shared serializers (the Lockbox\'s loader); 0 = depleted stays 0', () => {
     const inv = new Inventory();
-    const vest = inv.makeStack('armor_vest', 1) as ItemStack & {armor?: number};
-    vest.armor = gearSpec('armor_vest')!.armor! / 2;
-    const carried = (stackToJSON(vest) as {armor?: number}).armor === vest.armor; // (true once the item-state field is in the serializers)
-    const st = new MarketStock();
-    st.stalls.gear.push(vest);
-    const back = MarketStock.fromJSON(JSON.parse(JSON.stringify(st.toJSON()))).stalls.gear[0] as ItemStack & {armor?: number};
-    expect(back.armor).toBe(carried ? vest.armor : undefined);
-    const box = new TrainLockbox(1); // one serializer path for every store: the Lockbox keeps exactly the same
-    box.load({v: 1, slots: [stackToJSON(vest)]});
-    expect((box.slots[0] as ItemStack & {armor?: number}).armor).toBe(back.armor);
+    for (const left of [gearSpec('armor_vest')!.armor! / 2, 0]) {
+      const vest: ItemStack = inv.makeStack('armor_vest', 1);
+      vest.armor = left;
+      const st = new MarketStock();
+      st.stalls.gear.push(vest);
+      const back = MarketStock.fromJSON(JSON.parse(JSON.stringify(st.toJSON()))).stalls.gear[0];
+      expect([back.uid, back.armor]).toEqual([vest.uid, left]);
+      const box = new TrainLockbox(1); // one serializer path for every store: the Lockbox keeps exactly the same
+      box.load({v: 1, slots: [stackToJSON(vest)]});
+      expect(box.slots[0]!.armor).toBe(left);
+    }
+  });
+
+  it('a save with worn armor in stock validates and restores it; armor out of range or on a non-armor item in stock is refused', () => {
+    const t = market(300);
+    const vest = t.h.inv.makeStack('armor_vest', 1);
+    vest.armor = gearSpec('armor_vest')!.armor! * 0.25;
+    t.h.inv.set(P(4), vest);
+    t.standAt('gear');
+    t.press();
+    expect(t.sys.sell(P(4)).ok).toBe(true);
+    const file = t.h.file('arrival');
+    const v = validateSaveFile(file);
+    expect(v.ok).toBe(true);
+    if (!v.ok) return;
+    const u = market();
+    u.teardown();
+    installRestore(prepareRestore(v.value.run, u.h.makeRun), u.h.target());
+    u.build();
+    expect(u.sys.stock!.stalls.gear.find(s => s.uid === vest.uid)?.armor).toBe(vest.armor);
+    const i = (run: Record<string, unknown>) => stockOf(run).stalls.gear.findIndex(s => s.uid === vest.uid);
+    const over = revalidate(file, run => { stockOf(run).stalls.gear[i(run)].armor = 0.5; });
+    expect(over.ok).toBe(false);
+    const wrong = revalidate(file, run => { stockOf(run).stalls.general[0].armor = 0.05; });
+    expect(wrong.ok).toBe(false);
   });
 
   it('a trade made after the level entry saves and validates: the entry snapshot and the run are separate uid scopes', () => {

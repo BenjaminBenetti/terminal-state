@@ -12,6 +12,8 @@ import {MARKET_STALLS, type MarketStallId} from '../src/gen/market/marketTypes';
 import {MarketWallet} from '../src/market/trade/wallet';
 import {MarketStock, STOCK_MAX} from '../src/market/trade/stock';
 import {buyPrice, sellQuote} from '../src/market/trade/stalls';
+import {stackUnitCents} from '../src/market/trade/value';
+import {itemArmor} from '../src/player/armor';
 import {buy, quoteBuy, sell, type TradeCtx} from '../src/market/trade/transactions';
 import {census, tradeState, uniqueUids} from './helpers/marketTradeFixture';
 
@@ -78,9 +80,9 @@ describe('market trades: what moves', () => {
     expect(r2.ok && r2.price).toBe(buyPrice(lot, 3));
   });
 
-  it('armor wear (an optional item-state field another task adds) travels with the stack both ways and lowers the price; it is never reset', () => {
+  it('armor wear travels with the stack both ways and lowers the price; it is never reset or repaired', () => {
     const {inv, stock, ctx, wallet} = setup('gear', 1000);
-    const vest = inv.makeStack('armor_vest', 1) as ReturnType<Inventory['makeStack']> & {armor?: number};
+    const vest = inv.makeStack('armor_vest', 1);
     const full = gearSpecArmor('armor_vest');
     vest.armor = full / 2;
     inv.set(P(0), vest);
@@ -92,6 +94,14 @@ describe('market trades: what moves', () => {
     const price = buyPrice(vest, 1), before = wallet.ties;
     expect(buy(ctx, i).ok).toBe(true);
     expect([inv.allStacks().includes(vest), vest.armor, before - wallet.ties]).toEqual([true, full / 2, price]);
+    // depleted armor (0) is still an armor vest: priced at its non-armor share, kept at 0 through a sale
+    vest.armor = 0;
+    const ref = inv.find(vest.uid)!;
+    expect(stackUnitCents(vest)).toBeLessThan(stackUnitCents(fresh));
+    expect(stackUnitCents(vest)).toBeGreaterThan(0);
+    expect(sell(ctx, ref).ok).toBe(true);
+    expect(vest.armor).toBe(0);
+    expect(itemArmor(vest)).toBe(0);
   });
 
   it('worn gear sells (the helmet off your head); a chest rig whose extra pockets hold items is refused with nothing changed', () => {

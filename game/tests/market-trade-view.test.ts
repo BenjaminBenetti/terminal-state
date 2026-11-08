@@ -167,7 +167,7 @@ describe('market trade view: the panel', () => {
     const t = market(500);
     t.standAt('fuel');
     t.press();
-    expect(dom.el('.tr-stock-h').textContent).toMatch(new RegExp(`one can = ¼ tank · your train holds ${tanksText(trainCapacityUnits())}$`)); // (1 tank; 2 with the two-tank train)
+    expect(dom.el('.tr-stock-h').textContent).toMatch(new RegExp(`one can = ¼ tank · your train holds ${tanksText(trainCapacityUnits())}$`)); // (the two-tank train: 2 tanks)
     const i = t.sys.stock!.stalls.fuel.findIndex(s => s.itemId === FUEL.canItem && s.count === 2);
     expect(i).toBeGreaterThanOrEqual(0);
     t.sys.view.select({side: 'buy', index: i});

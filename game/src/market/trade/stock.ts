@@ -17,7 +17,7 @@
 //  - gear: 3-4 distinct pieces (GEAR_WEIGHTS + the gas mask), some part-used (a mask's fitted filter, an airtank's air);
 //  - scrap: 3-5 lots of crafting materials (GLOBAL_POOL.material).
 // LOADING never throws: each stall's list goes through the Lockbox's sanitising stack loader (run/trainLockbox.ts — the same serializer
-// every store uses, so item state other tasks add to stacks is kept); a uid already seen in another stall is dropped. A strict check of
+// every store uses: mag / filter / air / armor wear are kept exactly, clamped like the Lockbox's); a uid already seen in another stall is dropped. A strict check of
 // the saved record is save/validate.ts (marketStock).
 import {Rng, hashString} from '../../core/rng';
 import {ITEMS, type ItemDef} from '../../items/items';
@@ -37,13 +37,9 @@ export const STOCK_MAX = 96;
 
 export interface MarketStockJSON { v: 1; stalls: Record<MarketStallId, StackJSON[]> }
 
-/**
- * The train's fuel capacity in quarter units: FUEL.trainTankUnits where the build defines it (the two-tank train), else one tank
- * (FUEL.tankUnits). Never a literal.
- */
+/** The train's built-in fuel capacity in quarter units (FUEL.trainTankUnits: two tanks; FUEL.tankUnits is one tank = one hop). Never a literal. */
 export function trainCapacityUnits(): number {
-  const t = (FUEL as unknown as {readonly trainTankUnits?: unknown}).trainTankUnits;
-  return typeof t === 'number' && Number.isInteger(t) && t > 0 ? t : FUEL.tankUnits;
+  return FUEL.trainTankUnits;
 }
 
 /** A stack factory with the run's uid counter (Inventory.makeStack). */
@@ -88,7 +84,7 @@ export function stallDraws(stall: MarketStallId, rng: Rng): Draw[] {
 }
 
 /** A stack carries condition of its own (mag / filter / air / bag / wear): it is never merged with another. */
-const plain = (s: ItemStack) => s.mag === undefined && s.filter === undefined && s.air === undefined && !s.bag && (s as {armor?: unknown}).armor === undefined;
+const plain = (s: ItemStack) => s.mag === undefined && s.filter === undefined && s.air === undefined && !s.bag && s.armor === undefined;
 
 /**
  * Put `piece` into a stock list: merged onto plain stacks of the same item up to stackMax, the rest as the SAME stack (uid kept). Returns

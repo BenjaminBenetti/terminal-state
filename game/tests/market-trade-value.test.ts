@@ -27,7 +27,7 @@ function at(d: ItemDef, frac: number, count = 1): ItemStack {
   if (d.kind === 'weapon') s.mag = Math.round(WEAPONS[d.weaponId!].magazine * frac);
   if (isFilterMask(d.id)) s.filter = gearSpec(d.id)!.filterLife! * frac;
   if (isAirtank(d.id)) s.air = gearSpec(d.id)!.airLife! * frac;
-  if ((gearSpec(d.id)?.armor ?? 0) > 0) (s as {armor?: number}).armor = gearSpec(d.id)!.armor! * frac; // (another task's optional wear field)
+  if ((gearSpec(d.id)?.armor ?? 0) > 0) s.armor = gearSpec(d.id)!.armor! * frac; // the armor left after wear (player/armor.ts)
   return s;
 }
 const FRACS = [0, 0.1, 0.25, 0.5, 0.75, 0.9, 1];
@@ -194,9 +194,10 @@ describe('market stalls: who buys what', () => {
     expect(buyPrice(can, 1)).toBe(FUEL.canUnits * VALUE.fuelPerUnit);
     expect(buyPrice(can, FUEL.canStackMax)).toBe(FUEL.canStackMax * FUEL.canUnits * VALUE.fuelPerUnit);
     const canUnitsStocked = (seed: number) => stallDraws('fuel', stockRng('st-09', seed, 'fuel')).filter(d => d.itemId === FUEL.canItem).reduce((n, d) => n + d.count * FUEL.canUnits, 0);
-    // this build's capacity: FUEL.trainTankUnits where it exists (the two-tank train another task adds), else one tank
-    const own = (FUEL as unknown as {trainTankUnits?: number}).trainTankUnits;
-    expect(trainCapacityUnits()).toBe(own ?? FUEL.tankUnits);
+    // the train's capacity is FUEL.trainTankUnits (two tanks), not one tank
+    const own = FUEL.trainTankUnits;
+    expect(trainCapacityUnits()).toBe(own);
+    expect(own).toBe(2 * FUEL.tankUnits);
     for (let seed = 1; seed < 40; seed++) {
       const u = canUnitsStocked(seed);
       expect(u).toBeGreaterThanOrEqual(FUEL.hopUnits);
@@ -210,11 +211,8 @@ describe('market stalls: who buys what', () => {
       const seen = new Set<number>();
       for (let seed = 1; seed < 80; seed++) { const u = canUnitsStocked(seed); expect(u).toBeGreaterThanOrEqual(FUEL.hopUnits); expect(u).toBeLessThanOrEqual(12); seen.add(u); }
       expect(Math.max(...seen)).toBeGreaterThan(2 * FUEL.tankUnits);
-    } finally {
-      if (desc) Object.defineProperty(FUEL, 'trainTankUnits', desc);
-      else delete (FUEL as unknown as {trainTankUnits?: number}).trainTankUnits;
-    }
-    expect(trainCapacityUnits()).toBe(own ?? FUEL.tankUnits);
+    } finally { Object.defineProperty(FUEL, 'trainTankUnits', desc!); }
+    expect(trainCapacityUnits()).toBe(own);
   });
 
   it('stock: themed per stall from the loot pools, bounded, deterministic per station + stall, independent stalls', () => {

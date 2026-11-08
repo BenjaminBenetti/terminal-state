@@ -59,7 +59,7 @@ const refuse = (code: TradeRefusalCode, text: string): TradeRefusal => ({ok: fal
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
 /** The ties a stall charges for `count` of this stack (its condition included): the value, rounded UP. */
-export function buyPrice(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air'>, count: number): number {
+export function buyPrice(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air' | 'armor'>, count: number): number {
   const n = Math.max(0, Math.floor(count));
   return Math.ceil((n * stackUnitCents(stack) * TRADE_RATES.buyPct) / (CENTS * 100));
 }
@@ -84,7 +84,7 @@ function elsewhere(stall: MarketStallId, itemId: string, names?: Partial<Record<
  * What a stall pays for `count` of this stack (ties, rounded DOWN), or why it will not buy it. `names`: the stalls' signs (the layout's), so
  * a refusal points at a stall the player can see.
  */
-export function sellQuote(stall: MarketStallId, stack: Pick<ItemStack, 'itemId' | 'count' | 'mag' | 'filter' | 'air' | 'bag'>, count: number,
+export function sellQuote(stall: MarketStallId, stack: Pick<ItemStack, 'itemId' | 'count' | 'mag' | 'filter' | 'air' | 'armor' | 'bag'>, count: number,
   names?: Partial<Record<MarketStallId, string>>): SellQuote | TradeRefusal {
   const d = ITEMS[stack.itemId];
   if (!d || !STALL_TRADE[stall]) return refuse('unknown', 'Nobody here knows what that is.');

@@ -12,8 +12,9 @@
 // full stack of their kind, so a rarer / bulkier unit (it stacks less) is worth more each.
 //
 // CONDITION travels with the stack and is priced, never repaired: a gun's loaded rounds (`mag`, each at the loose round's value), a gas
-// mask's fitted filter charge (`filter`, its share of a spare filter), an airtank's air (`air`, per second), and armor wear when the item
-// state carries it (`armor`, the fraction left: an optional field another task adds — read only when present; absent = undamaged).
+// mask's fitted filter charge (`filter`, its share of a spare filter), an airtank's air (`air`, per second), and armor wear (`armor`, the
+// fraction LEFT in absolute GearSpec.armor units, read through the common player/armor.ts itemArmor: absent = undamaged, 0 = depleted;
+// the worn share of the armor's value comes off). Nothing here — or in any trade — writes, resets or repairs any of these fields.
 // A backpack is valued EMPTY (the trade rules refuse a bag with contents: market/trade/stalls.ts).
 //
 // Values are integer hundredths of a tie ("cents"), so every price is exact integer arithmetic (market/trade/stalls.ts rounds buys up,
@@ -26,6 +27,7 @@ import {GEAR_WEIGHTS, GLOBAL_POOL, LIMB_ECONOMY, econCat, type ItemRows} from '.
 import {FUEL} from '../../fuel/fuel';
 import type {ItemKind} from '../../items/items';
 import type {ItemStack} from '../../items/inventory';
+import {itemArmor} from '../../player/armor';
 
 /** Hundredths of a tie per tie. */
 export const CENTS = 100;
@@ -119,20 +121,19 @@ export function roundCents(c: Caliber): number {
   return baseCents(CALIBERS[c].itemId);
 }
 
-/** The armor a stack has left (the optional `armor` wear field when present, clamped to 0..full; absent = full), and its full value. */
-export function armorState(stack: Pick<ItemStack, 'itemId'>): {left: number; full: number} | null {
+/** The armor a stack has left (itemArmor: its `armor` wear clamped to 0..full; absent = full) and its full value; null = no armor. */
+export function armorState(stack: Pick<ItemStack, 'itemId' | 'armor'>): {left: number; full: number} | null {
   const full = gearSpec(stack.itemId)?.armor ?? 0;
   if (!(full > 0)) return null;
-  const a = (stack as {armor?: unknown}).armor;
-  const left = typeof a === 'number' && Number.isFinite(a) ? Math.max(0, Math.min(full, a)) : full;
-  return {left, full};
+  const left = itemArmor(stack);
+  return {left: Number.isFinite(left) ? left : full, full};
 }
 
 /**
  * The value of ONE unit of this very stack, in cents, with its condition: + the loaded rounds (each at the loose round's value), + the
  * fitted filter charge (its share of a spare filter), + the air left; armor wear takes its share of the armor value off. 0 = untradeable.
  */
-export function stackUnitCents(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air'>): number {
+export function stackUnitCents(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air' | 'armor'>): number {
   const d = ITEMS[stack.itemId];
   const base = baseCents(stack.itemId);
   if (!d || !base) return 0;
@@ -158,14 +159,14 @@ export function stackUnitCents(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter
 }
 
 /** The value of `count` units of the stack (default: all of it), in cents. */
-export function stackCents(stack: Pick<ItemStack, 'itemId' | 'count' | 'mag' | 'filter' | 'air'>, count = stack.count): number {
+export function stackCents(stack: Pick<ItemStack, 'itemId' | 'count' | 'mag' | 'filter' | 'air' | 'armor'>, count = stack.count): number {
   return Math.max(0, Math.floor(count)) * stackUnitCents(stack);
 }
 
 const pct = (x: number) => Math.ceil(Math.max(0, Math.min(1, x)) * 100 - 1e-9);
 
 /** The condition a trade row names: "7 of 15 rounds loaded", "filter 54 % fitted", "air 52 % · 312 s", "armor 3 of 4 left"; '' = none. */
-export function conditionText(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air' | 'bag'>): string {
+export function conditionText(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air' | 'armor' | 'bag'>): string {
   const d = ITEMS[stack.itemId];
   if (!d) return '';
   const out: string[] = [];
