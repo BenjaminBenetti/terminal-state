@@ -152,6 +152,7 @@ import {installSkywaysMapRead} from './world/skywaysMapRead'; // task studio-sky
 import {installMarketTrade, type TradeSystem} from './market/trade/tradeSystem';
 import {MARKET_HUMAN_MODEL_FILES} from './market/humanLooks'; // task studio-survivor-market-20261108-005807-01 (lane HUMANS): the friendly cast file
 import {installMarketPeople, type MarketPeople} from './market/marketPeople'; // (lane HUMANS): the market's residents + stall traders // task studio-survivor-market-20261108-005807-01 (lane TRADE): Rail Ties + the six stalls
+import {installMarketWares, type MarketWares} from './market/wares/wares'; // task studio-market-rework-20261108-074144-01 (lane WARES): the stalls' owned stock on display, the red Steal
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
 import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
@@ -371,6 +372,8 @@ export class Game {
   trade!: TradeSystem;
   /** Task studio-survivor-market-20261108-005807-01 (lane HUMANS): the market's residents + traders (market/marketPeople.ts). */
   marketPeople!: MarketPeople;
+  /** Task studio-market-rework-20261108-074144-01 (lane WARES): the stalls' real stock displayed as owned world items; theft (market/wares/wares.ts). */
+  marketWares!: MarketWares;
   /** Task skyways-level-20261106 (lane CAR): the Skyways prize car — while `driving`, update() steps the player through it (world/skywaysCar.ts). */
   skywaysCar!: SkywaysCar;
   /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
@@ -668,6 +671,10 @@ export class Game {
     // trade view (E at a stall's front; inert where the layout has no market)
     this.trade = installMarketTrade(this);
     hookName('marketTrade');
+    // task studio-market-rework-20261108-074144-01 (lane WARES): AFTER the trade (its build reads the trade's stock) — every stall's real stock
+    // as owned world items on its display surfaces; its E / prompt go first (unshift): aimed at a ware, a red Steal (inert without a market)
+    this.marketWares = installMarketWares(this);
+    hookName('marketWares');
     // (lane HUMANS) the market's friendly people — traders at their stalls, residents wandering between the market's spots; their own list
     // (never game.zombies: not hit, counted, alerted or carried); spawned in the section build (before the warm-up); inert elsewhere
     this.marketPeople = installMarketPeople(this);

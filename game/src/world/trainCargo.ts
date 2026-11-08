@@ -137,10 +137,14 @@ export class TrainCargoSystem {
     return lx > S.interior.x0 && lx < S.interior.x1 && Math.abs(lz) < S.interior.halfWidth && ly > S.floorY - 0.3 && ly < S.ceilingY;
   }
 
-  /** The pickup lies in the parked car: the train's (its object's origin, train-local). */
+  /**
+   * The pickup lies in the parked car: the train's (its object's origin, train-local). Task studio-market-rework-20261108-074144-01 (lane
+   * WARES): never an OWNED pickup (a market stall's displayed stock, Pickup.owner) — knocked into the car it stays the stall's: never
+   * captured, saved, counted or carried as cargo.
+   */
   ownsPickup(p: Pickup): boolean {
     const pl = this.parked();
-    if (!pl) return false;
+    if (!pl || p.owner) return false;
     const q = worldToTrain(pl, p.obj.position.x, p.obj.position.y, p.obj.position.z);
     return this.insideCar(q.x, q.y, q.z);
   }
@@ -162,6 +166,7 @@ export class TrainCargoSystem {
     if (!root || !p) return 0;
     let n = 0;
     for (const pk of [...h.pickups.list]) {
+      if (pk.owner) continue; // (lane WARES: a stall's ware is never cargo)
       const q = worldToTrain(p, pk.obj.position.x, pk.obj.position.y, pk.obj.position.z);
       if (!this.insideCar(q.x, q.y, q.z)) continue;
       const local = QW.copy(pk.obj.quaternion).premultiply(QY.setFromAxisAngle(UP, -p.yaw));
@@ -256,6 +261,7 @@ export class TrainCargoSystem {
     const p = this.parked();
     if (p) {
       for (const pk of h.pickups.list) {
+        if (pk.owner) continue; // (lane WARES: a stall's ware is never cargo)
         const q = worldToTrain(p, pk.obj.position.x, pk.obj.position.y, pk.obj.position.z);
         if (!this.insideCar(q.x, q.y, q.z)) continue;
         out.push(this.recordOf({kind: 'item', stack: pk.stack, x: q.x, y: q.y, z: q.z, q: QW.copy(pk.obj.quaternion).premultiply(QY.setFromAxisAngle(UP, -p.yaw))}));
@@ -363,6 +369,7 @@ export class TrainCargoSystem {
     const h = this.host, p = this.parked();
     if (!p) return;
     for (const pk of [...h.pickups.list]) {
+      if (pk.owner) continue; // (lane WARES: a stall's ware is never cargo)
       const q = worldToTrain(p, pk.obj.position.x, pk.obj.position.y, pk.obj.position.z);
       if (!this.insideCar(q.x, q.y, q.z)) continue;
       this.pending.push(this.recordOf({kind: 'item', stack: pk.stack, x: q.x, y: q.y, z: q.z, q: QW.copy(pk.obj.quaternion).premultiply(QY.setFromAxisAngle(UP, -p.yaw))}));
