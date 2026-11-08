@@ -17,15 +17,25 @@
 // openness, ramen as an ordinary random tenant, store merchandise loose, convention snacks): version 3 regenerates through the FROZEN
 // version-3 core (gen/skyways/legacy80/, fingerprints pinned); every station not yet entered gets version 4. The shared dressers learn
 // which version they dress from skywaysGenVersion(layout) (set by each generator before dressing; layout data unchanged).
+//
+// Task studio-skywalk-encounters-20261108-074144-01 (version 5, the ENCOUNTERS pass: the Siren at the Mall's odds, a roaming horde,
+// the convention's cosplay zombies, a few Mall store families in the storefront allocation): version 4 regenerates through the SAME
+// live generator with every version-5 change gated on `skywaysGenVersion(layout) >= SKYWAYS_ENCOUNTERS_MIN_VERSION` (or the context's
+// layout version) and the frozen version-4 spawn profile (ai/spawnTables.ts SKYWAYS_V4_SPAWN_PROFILE) — fingerprints pinned in
+// tests/skyways-dest-layout-version.test.ts (GAME84: areas, props, purposes, every enemy record in full, hordes); every station not yet
+// entered gets version 5. A station entered at 1-4 keeps its enemies, kills, loot and layout exactly.
 
 export const SKYWAYS_LAYOUT_LANE = 'skyways.layout';
 /**
  * 1 = GAME76's layout (the first release + the layout-variety pass); 2 = the destinations pass (GAME77); 3 = the Skyways rework (task
  * studio-skyways-rework-20261107-054512: the ten major stores, gen/skyways/stores/, with their outward storefronts, Skyways-scoped loot
- * purposes and dressers — and the parent's architecture); 4 = the building programmes (task studio-skywalk-variety-20261107-231448-01).
- * Stations entered at 1 / 2 / 3 keep regenerating exactly that layout.
+ * purposes and dressers — and the parent's architecture); 4 = the building programmes (task studio-skywalk-variety-20261107-231448-01);
+ * 5 = the encounters pass (task studio-skywalk-encounters-20261108-074144-01). Stations entered at 1 / 2 / 3 / 4 keep regenerating exactly
+ * that layout.
  */
-export const SKYWAYS_LAYOUT_VERSION = 4;
+export const SKYWAYS_LAYOUT_VERSION = 5;
+/** The first version of the encounters pass (Siren / horde / cosplay zombies / Mall store families): gate every change on it. */
+export const SKYWAYS_ENCOUNTERS_MIN_VERSION = 5;
 /** The newest version the frozen GAME77 generator (gen/skyways/legacy77/) serves. */
 export const SKYWAYS_LEGACY77_MAX = 2;
 /** The version the frozen version-3 core (gen/skyways/legacy80/) serves. */

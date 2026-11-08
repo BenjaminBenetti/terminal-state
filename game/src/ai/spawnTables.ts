@@ -691,7 +691,7 @@ export const REACTOR_SPAWN_PROFILE: SpawnProfile = {
  * courts, shops, service rooms of every building) and the skyway level (concourses, bridges, shops, the add-on hall), plus the
  * station's Beyond-the-Station annex. Counts scale with the ~3x larger walkable area of the upper storeys.
  */
-export const SKYWAYS_SPAWN_PROFILE: SpawnProfile = {
+export const SKYWAYS_V4_SPAWN_PROFILE: SpawnProfile = {
   id: 'skyways', label: 'Skyways', families: ENEMY_POOL, zombieTypes: ZOMBIE_TYPES,
   contexts: {
     station: {label: 'Station storey (platforms, pedway concourse, station back of house)', count: [5, 8], placement: OFFICE_PLACEMENT, accept: {min: 'count', max: 'count'}},
@@ -701,6 +701,15 @@ export const SKYWAYS_SPAWN_PROFILE: SpawnProfile = {
   },
   rooms: {},
 };
+/**
+ * Task studio-skywalk-encounters-20261108-074144-01: Skyways layout versions 1-4 keep THIS profile FROZEN (the stations entered under
+ * GAME76-84 regenerate their enemies exactly: gen/skyways/layoutVersion.ts); version 5 rolls SKYWAYS_SPAWN_PROFILE below.
+ */
+export const SKYWAYS_SPAWN_PROFILE: SpawnProfile = {...SKYWAYS_V4_SPAWN_PROFILE};
+/** The Skyways spawn profile a layout version rolls (1-4: the frozen version-4 profile; 5+: the current one). */
+export function skywaysSpawnProfileFor(layoutVersion: number): SpawnProfile {
+  return layoutVersion >= 5 ? SKYWAYS_SPAWN_PROFILE : SKYWAYS_V4_SPAWN_PROFILE;
+}
 
 /**
  * Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET — a CALM settlement (user: "Calm area, no enemies"): no
