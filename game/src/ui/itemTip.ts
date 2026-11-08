@@ -11,6 +11,7 @@ import {WEAPONS, caliberLabel, reserveFor, weaponsForCaliber} from '../weapons/w
 import {CALIBERS} from '../items/calibers';
 import {MATERIAL_NOTE} from '../items/craftMaterials';
 import type {TipContent, TipTone} from './tooltip';
+import {CURRENCY_NOTE} from '../items/railTies'; // task studio-market-rework-20261108-074144-01: the market's physical Rail Ties
 
 /** Mask lane: a gas mask's fitted filter in whole percent (rounded up: 0 only when empty). */
 export const filterPct = (filter: number | undefined) => Math.ceil(Math.max(0, Math.min(1, (filter ?? 0) / FILTER_LIFE_S)) * 100 - 1e-9);
@@ -39,6 +40,7 @@ export function itemTipLines(st: ItemStack, o: {inv?: Inventory} = {}): string[]
   if (def.kind === 'supply') out.push('A worn gas mask fits one by itself when its filter runs out');
   if (def.kind === 'material') out.push(MATERIAL_NOTE);
   if (def.kind === 'part') out.push('Reactor restart part — take it to its control and press E there');
+  if (def.kind === 'currency') out.push(CURRENCY_NOTE);
   return out.filter(Boolean);
 }
 

@@ -3,6 +3,8 @@
 // the stock is seeded ONCE per market station into its lane memory and remembered (leave / return / save / load / Retry never re-seed or
 // refill); every stock stack joins the run's one-item-one-uid set in save/validate.ts (and the Retry snapshot's own set); malformed stock
 // and wallets are refused; the uid counter is reserved above every stock uid on load.
+// Task studio-market-rework-20261108-074144-01 (lane TRADE): the ties are carried ITEMS now (they save / restore / Retry with the inventory);
+// the wallet participant only carries an old balance over (market-trade-migration.test.ts) and saves {v: 2, migrated: true} otherwise.
 import {describe, expect, it} from 'vitest';
 import {Inventory, stackToJSON, type ItemStack, type SlotRef} from '../src/items/inventory';
 import {gearSpec} from '../src/items/gear';
@@ -12,15 +14,16 @@ import {parseSaveText, validateSaveFile} from '../src/save/validate';
 import {installRestore, makeSaveFile, maxUidOfRun, prepareRestore, saveFileText, type SaveFileV1Like} from '../src/save/serialize';
 import {restoreCarry, restoreParticipants} from '../src/run/snapshot';
 import {WALLET_MAX, WALLET_PARTICIPANT} from '../src/market/trade/wallet';
+import {RAIL_TIES_ID} from '../src/items/railTies';
 import {MARKET_STOCK_LANE, MarketStock, STOCK_MAX, type MarketStockJSON} from '../src/market/trade/stock';
 import {Harness, fixtureCampaign, sid} from './helpers/saveFixture';
-import {MARKET_STATION, census, tradeHost, uniqueUids} from './helpers/marketTradeFixture';
+import {MARKET_STATION, carriedTies, census, giveTies, tradeHost, uniqueUids} from './helpers/marketTradeFixture';
 
 const P = (i: number): SlotRef => ({bar: 'pack', index: i});
 const KEY = {level: 'subway' as const, section: 'main', station: MARKET_STATION};
 const memId = `${MARKET_STATION}:main`;
 
-/** A market host built at its station, with a few things to sell and `ties` earned. */
+/** A market host built at its station, with a few things to sell and `ties` carried (in the first free pocket, P(4)). */
 function market(ties = 0) {
   const t = tradeHost();
   t.h.inv.set(P(0), t.h.inv.makeStack('water', 3));
@@ -28,7 +31,7 @@ function market(ties = 0) {
   t.h.inv.set(P(2), t.h.inv.makeStack('pistol', 1, 11));
   t.h.inv.set(P(3), t.h.inv.makeStack('scrap_metal', 12));
   t.build();
-  if (ties) t.sys.wallet.receive(ties);
+  if (ties) giveTies(t.h.inv, ties);
   return t;
 }
 
@@ -40,17 +43,16 @@ function revalidate(file: SaveFileV1Like, mutate: (run: Record<string, unknown>)
 }
 const stockOf = (run: Record<string, unknown>, id = memId) => ((run.memories as Record<string, {lanes: Record<string, unknown>}>)[id].lanes[MARKET_STOCK_LANE]) as MarketStockJSON;
 
-describe('market wallet: a run participant', () => {
-  it('registers itself; New Game is 0 (no windfall); a save carries {v: 1, ties}', () => {
-    const t = market();
+describe('market wallet: a run participant (no balance: the ties are carried items)', () => {
+  it('registers itself; New Game owes nothing (no windfall); a save carries {v: 2, migrated: true} and the ties in the inventory', () => {
+    const t = market(12);
     expect(t.h.participants.filter(p => p.id === WALLET_PARTICIPANT).length).toBe(1);
-    expect(t.sys.wallet.ties).toBe(0);
-    t.sys.wallet.receive(37);
+    expect(t.sys.legacy.owed).toBe(0);
     for (const p of t.h.participants) p.reset(); // NewGame (resetParticipants)
-    expect(t.sys.wallet.ties).toBe(0);
-    t.sys.wallet.receive(12);
+    expect(t.sys.legacy.owed).toBe(0);
     const file = t.h.file('arrival');
-    expect(file.run.participants[WALLET_PARTICIPANT]).toEqual({v: 1, ties: 12});
+    expect(file.run.participants[WALLET_PARTICIPANT]).toEqual({v: 2, migrated: true});
+    expect(file.run.carry.inventory.pack[4]).toMatchObject({itemId: RAIL_TIES_ID, count: 12});
     expect(validateSaveFile(file).ok).toBe(true);
   });
 
@@ -64,12 +66,12 @@ describe('market wallet: a run participant', () => {
     t.teardown();
     if (!v.ok) return;
     installRestore(prepareRestore(v.value.run, t.h.makeRun), t.h.target());
-    expect(t.sys.wallet.ties).toBe(0);
+    expect([t.sys.legacy.owed, carriedTies(t.h.inv)]).toEqual([0, 0]);
     t.build();
     expect(t.sys.counts.seeded).toBe(2); // (the first market() build + this station's first build in the loaded run)
   });
 
-  it('save -> export text -> import -> install: the balance, the stock (same uids, same condition) and the inventory exactly; no re-seed', () => {
+  it('save -> export text -> import -> install: the ties carried, the stock (same uids, same condition) and the inventory exactly; no re-seed', () => {
     const t = market(20);
     t.standAt('gun');
     expect(t.press()).toBe(true);
@@ -77,7 +79,7 @@ describe('market wallet: a run participant', () => {
     expect(t.sys.sell(P(1), 25).ok).toBe(true);
     const lot = t.sys.stock!.stalls.gun.findIndex(s => s.itemId === 'ammo_12ga');
     if (lot >= 0) expect(t.sys.buy(lot, 2).ok).toBe(true);
-    const ties = t.sys.wallet.ties, stock = JSON.stringify(t.sys.stock!.toJSON()), carry = JSON.stringify(t.h.inv.toJSON());
+    const ties = carriedTies(t.h.inv), stock = JSON.stringify(t.sys.stock!.toJSON()), carry = JSON.stringify(t.h.inv.toJSON());
     const text = saveFileText(t.h.file('arrival'));
     const v = parseSaveText(text);
     expect(v.ok).toBe(true);
@@ -87,7 +89,7 @@ describe('market wallet: a run participant', () => {
     u.teardown();
     const p = prepareRestore(v.value.run, u.h.makeRun);
     installRestore(p, u.h.target());
-    expect(u.sys.wallet.ties).toBe(ties);
+    expect(carriedTies(u.h.inv)).toBe(ties);
     expect(JSON.stringify(u.h.inv.toJSON())).toBe(carry);
     const seeded = u.sys.counts.seeded;
     u.build();
@@ -134,17 +136,17 @@ describe('market stock: seeded once, remembered, never refilled', () => {
     expect(uniqueUids(census(t.h.inv, t.sys.stock!).uids)).toBe(true);
   });
 
-  it('Retry: the stock, the balance and the inventory go back to the level-entry snapshot together; the station is not re-seeded', () => {
+  it('Retry: the stock and the inventory (with its ties) go back to the level-entry snapshot together; the station is not re-seeded', () => {
     const t = market(30);
     t.h.takeEntry();
     const snap = t.h.run.entry!;
-    const at = {stock: JSON.stringify(t.sys.stock!.toJSON()), inv: JSON.stringify(t.h.inv.toJSON()), ties: t.sys.wallet.ties};
+    const at = {stock: JSON.stringify(t.sys.stock!.toJSON()), inv: JSON.stringify(t.h.inv.toJSON()), ties: carriedTies(t.h.inv)};
     t.standAt('gun');
     t.press();
     expect(t.sys.sell(P(2)).ok).toBe(true);
     const cheap = t.sys.stock!.stalls.gun.findIndex(s => s.itemId.startsWith('ammo_'));
     expect(t.sys.buy(cheap, 1).ok).toBe(true);
-    expect(t.sys.wallet.ties).not.toBe(at.ties);
+    expect(carriedTies(t.h.inv)).not.toBe(at.ties);
     // Game.retryLevel: teardown, this station's memories from the snapshot, the carry state, the participants, rebuild
     t.teardown();
     t.h.run.restoreScopeMemories(KEY, snap.memories);
@@ -155,13 +157,14 @@ describe('market stock: seeded once, remembered, never refilled', () => {
     expect(t.sys.counts.seeded).toBe(1);
     expect(JSON.stringify(t.sys.stock!.toJSON())).toBe(at.stock);
     expect(JSON.stringify(t.h.inv.toJSON())).toBe(at.inv);
-    expect(t.sys.wallet.ties).toBe(at.ties);
+    expect(carriedTies(t.h.inv)).toBe(at.ties);
     // retry twice: same again (the snapshot is never consumed)
     t.teardown();
     t.h.run.restoreScopeMemories(KEY, snap.memories);
+    t.h.inv.loadJSON(restoreCarry(snap, {player: t.h.player, survival: t.h.survival, battery: t.h.battery, stats: t.h.stats}).toJSON());
     restoreParticipants(snap, t.h.participants);
     t.build();
-    expect([JSON.stringify(t.sys.stock!.toJSON()), t.sys.wallet.ties]).toEqual([at.stock, at.ties]);
+    expect([JSON.stringify(t.sys.stock!.toJSON()), carriedTies(t.h.inv)]).toEqual([at.stock, at.ties]);
   });
 
   it('armor wear survives the stock record through the shared serializers (the Lockbox\'s loader); 0 = depleted stays 0', () => {
@@ -183,10 +186,10 @@ describe('market stock: seeded once, remembered, never refilled', () => {
     const t = market(300);
     const vest = t.h.inv.makeStack('armor_vest', 1);
     vest.armor = gearSpec('armor_vest')!.armor! * 0.25;
-    t.h.inv.set(P(4), vest);
+    t.h.inv.set(P(5), vest);
     t.standAt('gear');
     t.press();
-    expect(t.sys.sell(P(4)).ok).toBe(true);
+    expect(t.sys.sell(P(5)).ok).toBe(true);
     const file = t.h.file('arrival');
     const v = validateSaveFile(file);
     expect(v.ok).toBe(true);
@@ -266,6 +269,7 @@ describe('market save validation: one item, one uid; strict records', () => {
       ['no uid', s => { delete (s.stalls.general[0] as {uid?: number}).uid; }, /missing field 'uid'/],
       ['null lot', s => { (s.stalls.general as unknown[])[0] = null; }, /expected an object/],
       ['a part', s => { s.stalls.scrap.push({uid: 99999, itemId: 'reactor_key', count: 1}); }, /restart part is not trade stock/],
+      ['Rail Ties', s => { s.stalls.general.push({uid: 99995, itemId: RAIL_TIES_ID, count: 50}); }, /Rail Ties are money, not trade stock/],
       ['bag contents', s => { s.stalls.gear.push({uid: 99998, itemId: 'backpack', count: 1, bag: [{uid: 99997, itemId: 'water', count: 1}, ...new Array(11).fill(null)]}); }, /backpack in stock must be empty/],
       ['too many', s => { for (let i = 0; i <= STOCK_MAX; i++) s.stalls.scrap.push({uid: 50000 + i, itemId: 'scrap_metal', count: 1}); }, /too many entries/],
       ['bad mag', s => { s.stalls.gun.push({uid: 99996, itemId: 'rifle', count: 1, mag: 31}); }, /out of range/],
@@ -277,9 +281,10 @@ describe('market save validation: one item, one uid; strict records', () => {
     }
   });
 
-  it('a malformed wallet is refused; an absent one is fine', () => {
+  it('a malformed wallet is refused; an absent one, an old {v: 1} balance and a settled {v: 2} are fine', () => {
     const {file} = base();
-    const bad: unknown[] = [{v: 1, ties: -1}, {v: 1, ties: 1.5}, {v: 1, ties: '5'}, {v: 2, ties: 5}, {v: 1, ties: 5, bonus: 1}, {v: 1, ties: WALLET_MAX + 1}, [], 7];
+    const bad: unknown[] = [{v: 1, ties: -1}, {v: 1, ties: 1.5}, {v: 1, ties: '5'}, {v: 2, ties: 5}, {v: 2, migrated: false}, {v: 2}, {v: 2, migrated: true, ties: 3},
+      {v: 3, migrated: true}, {v: 1, ties: 5, bonus: 1}, {v: 1, ties: WALLET_MAX + 1}, [], 7];
     for (const w of bad) {
       const r = revalidate(file, run => { (run.participants as Record<string, unknown>)[WALLET_PARTICIPANT] = w; });
       expect(r.ok, JSON.stringify(w)).toBe(false);
@@ -287,6 +292,7 @@ describe('market save validation: one item, one uid; strict records', () => {
     }
     expect(revalidate(file, run => { delete (run.participants as Record<string, unknown>)[WALLET_PARTICIPANT]; }).ok).toBe(true);
     expect(revalidate(file, run => { (run.participants as Record<string, unknown>)[WALLET_PARTICIPANT] = {v: 1, ties: WALLET_MAX}; }).ok).toBe(true);
+    expect(revalidate(file, run => { (run.participants as Record<string, unknown>)[WALLET_PARTICIPANT] = {v: 2, migrated: true}; }).ok).toBe(true);
   });
 
   it('the uid counter on load is reserved above a stock uid that is higher than everything carried', () => {

@@ -1795,8 +1795,8 @@
     },
     {
       "path": "assets/derivatives/market-textures.json",
-      "bytes": 7912,
-      "sha256": "97837f19546629915b8bf5b617e1d69dd83e649a0037637c424e65344224ce58"
+      "bytes": 9778,
+      "sha256": "44aba73f6414919c34e3e4b7fc24b114a17f9748cf90992bc1eca8a17d4bf509"
     },
     {
       "path": "assets/derivatives/meshy-t25-ammo-20261030.json",
@@ -4702,6 +4702,11 @@
       "path": "assets/textures/mall/ads/ad-womenswear.jpg",
       "bytes": 20836,
       "sha256": "5675e080c91abffaf9a7c980afdeb78de9e5029b8c32d45f012a11056cbc1033"
+    },
+    {
+      "path": "assets/textures/market/market-container-rib.jpg",
+      "bytes": 232153,
+      "sha256": "96da2ec6295e8a2ee3211399ae7059b7cff05ba91f820a3d0a2bb0d789b3539c"
     },
     {
       "path": "assets/textures/market/market-corrugated-roof.jpg",

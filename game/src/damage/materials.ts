@@ -279,6 +279,7 @@ export const ITEM_CLASS: Record<string, DamageClass> = {
   // Task office-props-physics-scale-20261030 (lane RACK): crafting materials — circuit board + wire bundle; bent steel; plastic specimen jar
   electrical_parts: 'plastic', scrap_metal: 'sheetMetal', bio_mater: 'plastic',
   reactor_key: 'steel', fuse_cartridge: 'porcelain', // task reactor-build-20261101 (lane RESTART): brass key on a fob; ceramic HRC fuse cartridge
+  rail_ties: 'wood', // task studio-market-rework-20261108-074144-01 (lane TRADE): a strapped bundle of creosoted tie offcuts (the sleeper's class)
 };
 export function itemClass(itemId: string): DamageClass {
   return ITEM_CLASS[itemId] ?? 'plastic';
@@ -358,6 +359,8 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   bio_mater: {mass: 0.35, shape: 'cylinder', mat: 'plastic'},
   // task reactor-build-20261101 (lane RESTART): key + ring + fob ~50 g; a 0.3 m sand-filled ceramic HRC cartridge ~0.9 kg
   reactor_key: {mass: 0.05, shape: 'box', mat: 'metal'}, fuse_cartridge: {mass: 0.9, shape: 'box', mat: 'stone'},
+  // task studio-market-rework-20261108-074144-01 (lane TRADE): four creosoted offcuts, ~11 l of hardwood at ~0.75 kg/l, + two steel straps
+  rail_ties: {mass: 8.5, shape: 'box', mat: 'wood'},
 };
 export function itemPhysics(itemId: string): ItemPhysics {
   return ITEM_PHYSICS[itemId] ?? {mass: 0.3, shape: 'box', mat: 'plastic'};

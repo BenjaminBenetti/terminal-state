@@ -31,6 +31,7 @@ import {STATION_PROPS_LANE, cargoProblem, stationPropsProblem, type CargoPropJSO
 import {PROP_DEFS} from '../gen/props'; // task train-all-cargo: carried props are of real kinds
 import {MARKET_STALLS} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
 import {MARKET_STOCK_LANE, STOCK_MAX} from '../market/trade/stock';
+import {MARKET_HOSTILITY_LANE, marketHostilityProblem} from '../market/combat/record'; // task studio-market-rework-20261108-074144-01 (lane COMBAT): a market station's hostility
 import {WALLET_PARTICIPANT, walletProblem} from '../market/trade/wallet';
 import {checksumOf, utf8Bytes} from './checksum';
 import {transitRouteProblem} from '../campaign/discovery';
@@ -465,7 +466,7 @@ function participants(v: unknown, path: string, seen: Set<number>): void {
   const keys = Object.keys(o);
   if (keys.length > SAVE_LIMITS.participants) bad(path, 'too many run participants');
   for (const k of keys) str(k, path, 48, LANE_ID, 'a participant id');
-  if (o[WALLET_PARTICIPANT] !== undefined) { const wp = walletProblem(o[WALLET_PARTICIPANT]); if (wp) bad(`${path}.${WALLET_PARTICIPANT}`, wp); } // lane TRADE: the Rail Ties balance
+  if (o[WALLET_PARTICIPANT] !== undefined) { const wp = walletProblem(o[WALLET_PARTICIPANT]); if (wp) bad(`${path}.${WALLET_PARTICIPANT}`, wp); } // lane TRADE: an old Rail Ties balance still owed ({v: 1}) or settled ({v: 2})
   const t = o[PLAYER_TRAIN_PARTICIPANT];
   if (t !== undefined && t !== null) {
     const p = `${path}.${PLAYER_TRAIN_PARTICIPANT}`, r = obj(t, p);
@@ -507,7 +508,8 @@ function sectionBags(v: unknown, path: string): void {
 /**
  * Task studio-survivor-market-20261108-005807-01 (lane TRADE): a market station's stall stock (market/trade/stock.ts MarketStockJSON) —
  * every stall listed, at most STOCK_MAX stacks each, every stack as strictly as the Lockbox's (item, count, mag, filter, air, bag) with
- * its uid in the scope's set (uidScope); no reactor restart part, no backpack holding items.
+ * its uid in the scope's set (uidScope); no reactor restart part, no Rail Ties (task studio-market-rework-20261108-074144-01: the money is
+ * never stock), no backpack holding items.
  */
 function marketStock(v: unknown, path: string): void {
   const o = obj(v, path);
@@ -519,7 +521,9 @@ function marketStock(v: unknown, path: string): void {
     arr(st[id], `${path}.stalls.${id}`, STOCK_MAX).forEach((s, i) => {
       const p = `${path}.stalls.${id}[${i}]`;
       stack(s, p, {uid: true, inBag: false, seen: uidScope, needBag: true});
-      if (itemOf((s as {itemId: unknown}).itemId, `${p}.itemId`).kind === 'part') bad(p, 'a reactor restart part is not trade stock');
+      const kind = itemOf((s as {itemId: unknown}).itemId, `${p}.itemId`).kind;
+      if (kind === 'part') bad(p, 'a reactor restart part is not trade stock');
+      if (kind === 'currency') bad(p, 'Rail Ties are money, not trade stock'); // task studio-market-rework-20261108-074144-01 (lane TRADE)
       if (((s as {bag?: unknown[]}).bag ?? []).some(c => c !== null)) bad(p, 'a backpack in stock must be empty');
     });
   }
@@ -539,6 +543,7 @@ function lanes(v: unknown, path: string): void {
     if ((car as {v: number}).v === 2) slotList((car as {trunk: unknown}).trunk, `${path}.${SKYWAYS_CAR_LANE}.trunk`, TRUNK_SLOTS, new Set());
   }
   if (has(o, MARKET_STOCK_LANE)) marketStock(o[MARKET_STOCK_LANE], `${path}.${MARKET_STOCK_LANE}`); // lane TRADE: a market station's stall stock
+  if (has(o, MARKET_HOSTILITY_LANE)) { const hp = marketHostilityProblem(o[MARKET_HOSTILITY_LANE]); if (hp) bad(`${path}.${MARKET_HOSTILITY_LANE}`, hp); } // lane COMBAT: the settlement's hostility (people alive / dead / fled)
   if (has(o, STATION_PROPS_LANE)) { // task train-all-cargo: the layout props the station lost to the train + the carried props lying there
     const sp = stationPropsProblem(o[STATION_PROPS_LANE]);
     if (sp) bad(`${path}.${STATION_PROPS_LANE}`, sp);
