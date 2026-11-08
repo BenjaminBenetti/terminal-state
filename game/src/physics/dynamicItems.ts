@@ -929,7 +929,8 @@ export class DynamicItems {
     const q = prop.host !== undefined ? this.host.statics?.props[prop.host] : undefined;
     const w = this.host.world;
     if (!q || !w || prop.y < q.y + q.h - 0.03 || this.hostSlabs.has(q)) return;
-    if (hostShelves(q.kind) !== undefined) return; // (lane MERCH: its declared shelves carry it — the round tier top, not its square box)
+    // (lane MERCH: a host declaring a board at its top carries it on that board — the round tier top, not its square box)
+    if (hostShelves(q.kind)?.some(s => Math.abs(s.y - q.h) < 0.03)) return;
     const T = 0.05;
     const b = new CANNON.Body({mass: 0, type: CANNON.Body.STATIC, material: this.host.staticMaterial ?? this.host.material('heavy'),
       collisionFilterGroup: GROUP_STATIC, collisionFilterMask: GROUP_ITEM | GROUP_CHUNK});
