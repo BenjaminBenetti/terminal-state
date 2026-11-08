@@ -267,7 +267,7 @@ export class MarketCombat implements MarketHostilityApi {
       if (r.x !== undefined) { p.actor.x = r.x; p.actor.y = r.y!; p.actor.z = r.z!; p.actor.yaw = r.yaw!; }
       if (r.s === 'dead') { this.layDead(p); continue; }
       if (p.role === 'fight') { this.setMode(p, 'engage'); this.draw(p, true); }
-      else this.setMode(p, 'hide');
+      else { this.setMode(p, 'hide'); p.actor.play(COMBAT_CLIP.cower, 0); }
       p.actor.sync();
     }
   }
@@ -421,8 +421,7 @@ export class MarketCombat implements MarketHostilityApi {
     p.path = null;
     this.counts.kills++;
     p.actor.cancelOneShot(0);
-    // the physics ragdoll from the current pose, shoved by the hit (falls back to the Death clip)
-    p.body.recordPose(1 / 60);
+    // the physics ragdoll from the current pose (the last frames' bone motion carried on), shoved by the hit (falls back to the Death clip)
     const rag = this.host.physics?.ragdoll(p.body, impulse) ?? false;
     p.ragdolled = rag;
     if (rag) this.counts.ragdolls++;

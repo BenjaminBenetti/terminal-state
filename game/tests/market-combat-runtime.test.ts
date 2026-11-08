@@ -20,6 +20,7 @@ import {armorPool} from '../src/player/armor';
 import {WEAPONS} from '../src/weapons/weapons';
 import {GEAR_SLOTS} from '../src/items/gear';
 import {raycastWorld} from '../src/combat/hitscan';
+import {PhysicsSystem} from '../src/physics/world';
 import {validateSaveFile, parseSaveText} from '../src/save/validate';
 import {installRestore, makeSaveFile, prepareRestore, saveFileText} from '../src/save/serialize';
 import {restoreCarry, restoreParticipants} from '../src/run/snapshot';
@@ -100,6 +101,47 @@ describe('market people are targets with an ordinary zombie\'s health', () => {
     while (q.state === 'alive' && n < 12) { q.actor.sync(); const {mh} = shootAt(w, e2, bonePos(q, 'Spine')); if (mh) n++; else break; }
     expect(n).toBe(Math.ceil(MARKET_HOSTILITY.hp / WEAPONS.pistol.damage));
     expect(w.combat.counts.provoked).toBe(1);
+  });
+});
+
+describe('a kill ragdolls the body on the shared 18-joint skeleton (physics/ragdoll.ts), the body stays', () => {
+  it('the physics ragdoll takes the human\'s bones, falls onto the market floor, settles and freezes; no volumes after', () => {
+    const ph = new PhysicsSystem(null);
+    const w = combatWorld(A, 808, {physics: ph});
+    ph.build(w.layout);
+    w.build();
+    const p = w.combat.people.find(x => x.id.startsWith('resident:'))!;
+    // standing, animated a moment (bone velocities recorded)
+    p.actor.play('Idle', 0);
+    for (let i = 0; i < 5; i++) { p.actor.animate(1 / 30); p.actor.sync(); p.body.recordPose(1 / 30); }
+    const eye = new THREE.Vector3(p.actor.x - Math.sin(p.actor.yaw) * 2, p.actor.y + 1.5, p.actor.z - Math.cos(p.actor.yaw) * 2);
+    const at = () => bonePos(p, 'Head').add(new THREE.Vector3(0, 0.07, 0));
+    for (let i = 0; i < 10 && p.state === 'alive'; i++) {
+      const r = rayTo(eye, at());
+      const mh = w.combat.rayHit(r.o, r.d, 50);
+      if (!mh) throw new Error(`shot ${i} missed ${p.id}`);
+      w.combat.pellet(mh.person, playerPelletDamage(WEAPONS.rifle, mh.part, mh.t), at(), new THREE.Vector3(r.d.x, r.d.y, r.d.z), mh.part === 'head', 'rifle');
+      w.combat.endShot(WEAPONS.rifle);
+    }
+    expect(p.state).toBe('dead');
+    expect(p.ragdolled).toBe(true);
+    expect(p.actor.frozen).toBe(true);
+    expect(w.combat.counts.ragdolls).toBe(1);
+    const start = {x: p.actor.x, z: p.actor.z};
+    for (let t = 0; t < 12; t += 1 / 60) { ph.update(1 / 60); w.frame(1 / 60); } // (it lies still within ~8 s and freezes)
+    const s = ph.stats();
+    expect(s.ragdollsFailed).toBe(0);
+    expect(s.ragdollsActive).toBe(0);
+    expect(s.ragdollsFrozen).toBe(1);
+    const pelvis = bonePos(p, 'Hips');
+    expect(Number.isFinite(pelvis.x + pelvis.y + pelvis.z)).toBe(true);
+    // down (lying / slumped against whatever it fell on), not standing: the pelvis was ~0.85 m up, the head ~1.5 m
+    expect(pelvis.y - p.actor.y).toBeLessThan(0.5);
+    expect(pelvis.y - p.actor.y).toBeGreaterThan(-0.05);
+    expect(bonePos(p, 'Head').y - p.actor.y).toBeLessThan(0.8);
+    expect(Math.hypot(p.actor.x - start.x, p.actor.z - start.z)).toBeLessThan(2.5); // (ragdollMoved follows the pelvis)
+    expect(p.body.hitVolumes(999, p.state === 'alive').length).toBe(0);
+    expect(p.actor.root.parent).not.toBeNull(); // the body stays
   });
 });
 
