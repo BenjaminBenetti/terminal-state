@@ -12,6 +12,7 @@
 
 import type {DamageClass} from './materials';
 import {skywaysShopImpact} from '../world/skywaysShopFinish'; // task studio-skywalk-variety-20261107-231448-01 (lane DRESS): pure data
+import {skywaysMallImpact} from '../world/skywaysMallFinish'; // task studio-skywalk-encounters-20261108-074144-01 (lane STORES): pure data
 
 const REACTOR: Readonly<Record<string, DamageClass>> = {
   'reactor-wall': 'concrete', 'reactor-roof': 'concrete', 'reactor-floor': 'concrete', 'reactor-ceil': 'concrete',
@@ -52,7 +53,8 @@ export function finishClass(key: string | null | undefined): DamageClass | null 
   if (key in SKYWAYS) return SKYWAYS[key]; // task studio-skyways-level-20261106-054448 (lane VIEW): world/skywaysArch.ts keys
   if (key in MARKET) return MARKET[key]; // task studio-survivor-market-20261108-005807-01 (lane LEVEL): world/marketArch.ts keys
   // (task studio-skywalk-variety-20261107-231448-01, lane DRESS) the small shops' palettes: skyways-shop-{wall|floor}|<finish row>
-  if (key.startsWith('skyways-shop-')) return skywaysShopImpact(key);
+  // (task studio-skywalk-encounters-20261108-074144-01, lane STORES) + the Mall store families' rows under the same keys
+  if (key.startsWith('skyways-shop-')) return skywaysMallImpact(key) ?? skywaysShopImpact(key);
   // (task studio-skyways-rework-20261107-054512-01) the anchor stores' finishes: skyways-anchor-{wall-<class>|floor-<kind>|ceil-<kind>}@<family>
   const an = /^skyways-anchor-(wall|floor|ceil)-([a-z]+)@/.exec(key);
   if (an) return an[1] === 'wall' ? (an[2] as DamageClass) : an[1] === 'floor' ? OFFICE_FLOOR[an[2]] ?? null : OFFICE_CEIL[an[2]] ?? null;

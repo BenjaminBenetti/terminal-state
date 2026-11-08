@@ -8,7 +8,7 @@ import type {ShopBox} from './storefronts';
 import type {Traversal} from './traversal';
 import type {EnemyArchetypeId} from '../ai/creatureSpawn';
 import type {CompanyId, RoofInfo, TenantFloor, TransitInfo} from './office/overhaulTypes';
-import type {MallInfo} from './mall/mallTypes';
+import type {MallInfo, MallProgram} from './mall/mallTypes';
 import type {ReactorInfo} from './reactor/reactorTypes'; // task reactor-build-20261101 (primary): THE REACTOR
 import type {SkywaysInfo} from './skyways/skywaysTypes'; // task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS
 import type {MarketLayout} from './market/marketTypes'; // task studio-survivor-market-20261108-005807-01: THE SURVIVOR MARKET
@@ -301,6 +301,14 @@ export interface Storefront {
    * gen/skyways/ramen.ts): the station dresser's generic storefront fit-out skips it; its front, fascia and sign are drawn as usual.
    */
   ownDress?: true;
+  /**
+   * Task studio-skywalk-encounters-20261108-074144-01 (lane STORES; Skyways layout version >= 5): a MALL STORE FAMILY lifted into this
+   * ordinary unit (gen/skyways/skywaysMallStores.ts) — its Mall programme (gen/mall/shops.ts MALL_PROGRAMS). The station dresser keeps
+   * only the shopfront blockers (like an anchor); the Mall programme's own recipe furnishes the unit (purpose `mall-<programme>`), its
+   * fascia takes the Mall brand sign (world/skywaysMallFascia.ts) and its walls / floor the programme's Mall finish
+   * (world/skywaysMallFinish.ts). Absent on every other storefront (and on every Skyways station of layout versions 1-4).
+   */
+  mall?: MallProgram;
 }
 
 export interface StationLayout {

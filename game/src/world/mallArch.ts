@@ -313,6 +313,10 @@ function drawIcon(ctx: CanvasRenderingContext2D, icon: string, x: number, y: num
   ctx.restore();
 }
 
+// (task studio-skywalk-encounters-20261108-074144-01, lane STORES) the brand typefaces / pictograms for the Skywalk's Mall store families'
+// fascia slots (world/skywaysMallFascia.ts: the same brand style in the storefront lettering atlas)
+export {FONT as BRAND_FONT, drawIcon as drawBrandIcon};
+
 /** Aged brand fascia sign (canvas): brand name, pictogram, accent rule; grime gradient, a faded patch, a dropped letter. */
 export function brandSignTexture(brand: string, program: MallProgram, seed: number, w = 768, h = 120): THREE.CanvasTexture {
   const st = BRAND_STYLE[program];

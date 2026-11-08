@@ -1354,6 +1354,17 @@ export function dressMallShops(layout: StationLayout, rng: Rng, opts: MallDressO
   return reports;
 }
 
+/**
+ * Task studio-skywalk-encounters-20261108-074144-01 (lane STORES): ONE sales floor furnished with a Mall programme's own interior OUTSIDE
+ * the mall (the Skywalk's Mall store families, gen/skyways/skywaysMallStores.ts) — exactly the two steps dressMallShops runs per shop:
+ * the programme's FOCAL display, then its RECIPE, through the shared placement primitive on `d`'s context. The caller owns the frame,
+ * the shopfront blockers, the entry keep-out, the lights and the height frame. dressMallShops never calls it (the mall is unchanged).
+ */
+export function dressMallRecipe(d: ShopDresser, fit: MallShopFit): void {
+  focalDisplay(d, fit);
+  RECIPES[fit.recipe](d, fit);
+}
+
 /** Side of the stock room facing the sales floor (its door wall), so its frame's "front" is the door. */
 function backFront(layout: StationLayout, b: Area, a: Area): Side {
   if (b.y + b.h <= a.y) return 'S';
@@ -1391,7 +1402,7 @@ function shopfront(layout: StationLayout, ctx: PlaceCtx, s: MallShop, fit: MallS
 }
 
 /** A grid of ceiling lights over a shop area (absolute y, level-tagged), unless the area already has fixtures. */
-function shopLights(layout: StationLayout, a: Area, step: number): void {
+export function shopLights(layout: StationLayout, a: Area, step: number): void {
   if (layout.lights.some(l => l.area === a.id)) return;
   const lv = areaLevel(a);
   const w = a.w * CELL, h = a.h * CELL, nx = Math.max(1, Math.round(w / step)), nz = Math.max(1, Math.round(h / step));

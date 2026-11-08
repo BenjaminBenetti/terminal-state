@@ -49,6 +49,7 @@ import {dressSkywaysAtriums, dressSkywaysFoodCourts} from './greenery';
 import {dressSkywaysDestinations} from './destinations/index';
 import {placeSkywaysMapBoards} from './mapBoards'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS)
 import {splitSkywaysMerch} from './skywaysMerchSplit'; // task studio-skywalk-variety-20261107-231448-01 (lane MERCH)
+import {assignSkywaysMallStores, dressSkywaysMallStores, skywaysMallStoreHolds} from './skywaysMallStores'; // task studio-skywalk-encounters-20261108-074144-01 (lane STORES)
 import {dressSkywaysGardens} from './gardens'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): gallery troughs / court bench-planters
 import {skywaysSkylights} from './skylights'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): skylight coffers of the skyway courts
 import {SKYWAYS_LEVEL, type SkywaysInfo, type SkywaysRect, type SkywaysWindow} from './skywaysTypes';
@@ -170,7 +171,8 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   layout.startWeapon = ctx.startWeapon ?? 'rifle';
 
   // --- Dressing (run mouths, bridge decks' middle lane, the add-on hall held clear) -----------------------------------------------
-  const release = holdCells(layout, holds(layout, sc, ox, oy));
+  assignSkywaysMallStores(layout, rng.fork('skyways-mall-stores'), ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION); // (version 5, lane STORES: a few Mall store families; held clear below)
+  const release = holdCells(layout, [...holds(layout, sc, ox, oy), ...skywaysMallStoreHolds(layout)]);
   if ((ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_STORES_MIN_VERSION) markStoreAreas(layout.areas, sc.anchors); // (task studio-alpha-skyways-shops-20261107-054512-01: no floor piles in the stores)
   dress(layout, rng.fork('dress'));
   release();
@@ -185,6 +187,7 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   dressSkywaysFoodCourts(layout, rng.fork('skyways-food-courts'));
   // (task studio-skyways-destinations-20261106-170011-01) the anchor shops' interiors and the landmark courts' centrepieces
   dressSkywaysDestinations(layout, rng.fork('skyways-destinations'), {version: ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION}); // (+ the version: task studio-alpha-skyways-shops-20261107-054512-01)
+  dressSkywaysMallStores(layout, rng.fork('skyways-mall-stores-dress')); // (task studio-skywalk-encounters-20261108-074144-01, lane STORES: version 5 only)
   dressSkywaysOfficeWing(layout, rng.fork('skyways-office')); // (task studio-skyways-rework-20261107-054512-01) the tenant office wing
   if (ram) dressSkywaysRamen(layout, rng.fork('skyways-ramen'), {dining: layout.areas[ram.area], ...(ram.kitchen !== undefined ? {kitchen: layout.areas[ram.kitchen]} : {}), level: ram.level});
   placeSkywaysMapBoards(layout, rng.fork('skyways-map-boards')); // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the local directory boards (layout v3 only)
