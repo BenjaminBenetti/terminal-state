@@ -99,7 +99,7 @@ function oraclePoses(S: SkywaysPerfScene): PerfPose[] {
     if (ok(a.level, x, z) && outp.filter(p => p.name.startsWith('stair')).length < 6) outp.push({name: `stair-L${a.level}`, x, y: L.levels[a.level].grid.floorAt(x, z) + PERF_EYE, z, yaw: (a.id * 2.4) % (2 * Math.PI), pitch: -0.1});
   }
   const sp = L.playerSpawn;
-  for (const yaw of [0, Math.PI]) outp.push({name: 'station', x: sp.x, y: (sp.y ?? 0) + PERF_EYE, z: sp.z, yaw, pitch: 0});
+  for (const yaw of [0, Math.PI]) outp.push({name: 'station', x: sp.x, y: L.levels[0].grid.floorAt(sp.x, sp.z) + PERF_EYE, z: sp.z, yaw, pitch: 0});
   return outp;
 }
 
