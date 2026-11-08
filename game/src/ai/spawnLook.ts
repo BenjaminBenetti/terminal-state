@@ -15,9 +15,16 @@
 // The lingerie garments load lazily (ai/lingerie.ts LINGERIE_MODEL_FILES through Game.propModels): only for a layout that holds a
 // lingerie-tagged spawn (lingerieModelKeysFor, a Game.sectionModelKeys hook) — never on the Subway, Office, Reactor or a mall
 // without a lingerie store.
+//
+// Task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): likewise the Skyways anime convention's COSPLAY zombies
+// (ZombieSpawn.look 'cosplay', placed only by gen/skyways/cosplaySpawns.ts in the convention venue of a version-5 layout) wear a costume:
+// ai/cosplay.ts cosplayLook(seed, index), built by the SEPARATE cosplay library (createCosplayLibrary). Used only when that library can
+// build it exactly with all three slots (head piece, upper, lower); otherwise the ordinary pick. Its files load lazily
+// (cosplayModelKeysFor) only for a layout holding a cosplay-tagged spawn.
 
 import type {StationLayout, ZombieSpawn} from '../gen/stationTypes';
 import {LINGERIE_MODEL_FILES, lingerieLook} from './lingerie';
+import {COSPLAY_MODEL_FILES, cosplayLook} from './cosplay';
 import {pickZombieLook, type LegacyZombieLook, type WardrobeAvailability, type ZombieLook, type ZombiePool} from './wardrobe';
 
 /** What the pick needs from a look library (WardrobeLibrary / ZombieLookLibrary satisfy it). */
@@ -29,8 +36,9 @@ export interface SpawnLookLibrary {
 /** A spawn's look and the library that builds it. */
 export interface SpawnLookChoice {
   look: ZombieLook;
-  /** 'lingerie' = build with the lingerie library (createLingerieLibrary); 'ordinary' = the ordinary wardrobe library. */
-  library: 'ordinary' | 'lingerie';
+  /** 'lingerie' = build with the lingerie library (createLingerieLibrary); 'cosplay' = the cosplay library (createCosplayLibrary);
+   *  'ordinary' = the ordinary wardrobe library. */
+  library: 'ordinary' | 'lingerie' | 'cosplay';
 }
 
 /** True when a lingerie look may be shown: buildable exactly by the lingerie library and dressed top AND bottom. */
@@ -38,9 +46,15 @@ export function lingerieLookUsable(look: ZombieLook | null | undefined, lib: Pic
   return !!look && !!lib && !!look.wear.upper && !!look.wear.lower && lib.isValid(look);
 }
 
+/** (lane COSPLAY) True when a costume look may be shown: buildable exactly by the cosplay library, head piece + upper + lower. */
+export function cosplayLookUsable(look: ZombieLook | null | undefined, lib: Pick<SpawnLookLibrary, 'isValid'> | null | undefined): look is ZombieLook {
+  return !!look && !!lib && !!look.wear.head && !!look.wear.upper && !!look.wear.lower && lib.isValid(look);
+}
+
 /**
  * The look of spawn `index` of the layout seeded `seed` (see the module comment). `ordinary` = the ordinary wardrobe library,
- * `lingerie` = the lingerie library (null while its garments are not loaded), `pool` = the ordinary pool (default registry).
+ * `lingerie` = the library of the spawn's look tag: the lingerie library for a 'lingerie' spawn, the cosplay library for a 'cosplay'
+ * spawn (null while its files are not loaded), `pool` = the ordinary pool (default registry).
  */
 export function chooseSpawnLook(
   seed: number, index: number, s: Pick<ZombieSpawn, 'type' | 'look'>, ordinary: SpawnLookLibrary, lingerie?: Pick<SpawnLookLibrary, 'isValid'> | null, pool?: ZombiePool,
@@ -50,10 +64,19 @@ export function chooseSpawnLook(
     const look = lingerieLook(seed, index, lingerie ? l => lingerie.isValid(l) : undefined);
     if (lingerieLookUsable(look, lingerie)) return {look, library: 'lingerie'};
   }
+  if (s.look === 'cosplay') {
+    const look = cosplayLook(seed, index, lingerie ? l => lingerie.isValid(l) : undefined);
+    if (cosplayLookUsable(look, lingerie)) return {look, library: 'cosplay'};
+  }
   return {look: pickZombieLook(seed, index, s.type, ordinary.available, pool), library: 'ordinary'};
 }
 
 /** Game.sectionModelKeys hook: the lazy lingerie garment keys, only for a layout with a lingerie-tagged spawn. */
 export function lingerieModelKeysFor(layout: Pick<StationLayout, 'zombies'>): string[] {
   return layout.zombies.some(z => z.look === 'lingerie') ? Object.keys(LINGERIE_MODEL_FILES).sort() : [];
+}
+
+/** (lane COSPLAY) Game.sectionModelKeys hook: the lazy cosplay files, only for a layout with a cosplay-tagged spawn. */
+export function cosplayModelKeysFor(layout: Pick<StationLayout, 'zombies'>): string[] {
+  return layout.zombies.some(z => z.look === 'cosplay') ? Object.keys(COSPLAY_MODEL_FILES).sort() : [];
 }

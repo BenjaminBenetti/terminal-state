@@ -245,6 +245,23 @@ fork (`skyways-enemies-<storey>`), tags its spawns with the context:
 - **`floor`**: the skyway level (concourses, bridges, atrium galleries, shops, the add-on hall), U{10..15}.
 - **`service`**: `SERVICE_CONTEXT`, the station's Beyond-the-Station annex (`TRACK_EXT_SKYWAYS.annex.max = 1`, the standard
   one-roll chance), appended last; the Strainer only there (`STRAINER_CONTEXTS` unchanged).
+- **`cosplay`** (layout version 5+; task studio-skywalk-encounters-20261108-074144-01, lane COSPLAY; user: "the animie convention
+  "event" should have special "cosplay zombies" spawned, which are just zombies wearing special clothing"): the CONVENTION zone
+  `COSPLAY_CONTEXT` (`game/src/ai/cosplayContext.ts`). Only when the level's one add-on is the anime convention (never the prize
+  display; at most one per level: `COSPLAY_CONVENTIONS_MAX`), `game/src/gen/skyways/cosplaySpawns.ts` `placeCosplaySpawns` runs ONE
+  run on its own fork (`skyways-cosplay-spawns`, drawn from only then): **U{4..6}** spawns (`COSPLAY_ZONE_BUDGET`) on the venue's
+  public event floor (main hall, exhibitors' floor, photo lounge, panel rooms: round-robin, the main hall first), each a 3 × 3-clear
+  walkable floor cell, never a ramp, ≥ 36 walking cells from the start, 5 m off the run landings, ≥ 3 m from every door of those
+  areas and from the add-on's entry, ≥ 2.5 m from every mascot statue, off the stage + 1 m, 2 m from every enemy on the storey, a
+  0.5 m disc never splitting the storey (`COSPLAY_PLACEMENT` + `COSPLAY_SPAWN_RULES`). Every spawn is a shambler tagged
+  `ZombieSpawn.look = 'cosplay'` and the context `cosplay`, APPENDED after every other spawn (ambient, annex `service`): every other
+  index is unchanged. Families: its OWN pool `COSPLAY_FAMILY_POOL` (ordinary zombies only); no eligibility rule names it; not in
+  the storey counts. Looks: `chooseSpawnLook` gives exactly these spawns a costume — `game/src/ai/cosplay.ts` `cosplayLook(layout
+  seed, spawn index)` (bear-ear hat + wig, oversized mascot head, sushi hat, alternate-palette wig + uniform; consecutive spawns differ),
+  built by its SEPARATE `createCosplayLibrary` (the ordinary pool can never pick a costume piece), only when buildable exactly, else the
+  ordinary pick; the files (`COSPLAY_MODEL_FILES`) load lazily, only for a layout holding a cosplay-tagged spawn
+  (`cosplayModelKeysFor`). Versions 1-4 never run it (`SKYWAYS_V4_SPAWN_PROFILE` has no such context). Tests:
+  `game/tests/skyways-cosplay-spawns.test.ts`, `game/tests/skyways-cosplay-looks.test.ts`.
 - No horde pool and no room modifiers. One family roll at the end (`assignEnemyArchetypes`). The convention mascot statues are
   static props, never enemies.
 

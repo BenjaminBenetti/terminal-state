@@ -42,6 +42,7 @@ import {ALL_PURPOSES} from '../gen/purposes';
 // Task track3-eaton-centre-20261031 (lane PROFILES): the horde pool's rules (lane HORDE owns the type / validation / defaults;
 // hordeSpec.ts imports only TYPES from this module, so there is no runtime import cycle).
 import {HORDE_FORBIDDEN_FAMILIES, MALL_HORDE_RULES, validateHordeRules, type HordeRules} from './hordeSpec';
+import {COSPLAY_CONTEXT} from './cosplayContext'; // (task studio-skywalk-encounters-20261108-074144-01, lane COSPLAY: a leaf module, type-only imports)
 export type {HordeRules} from './hordeSpec';
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -214,15 +215,18 @@ export type RoomModifiers = Readonly<Record<string, RoomModifier>>;
  * (LINGERIE_CONTEXT; gen/mall/lingerieSpawns.ts): once per lingerie store (0..1 per mall), inside that store only (its walk-in
  * changing area first, then its sales floor), appended after every other spawn of the level (annex 'service' spawns included),
  * ordinary zombies only (its own pool), every spawn tagged ZombieSpawn.look 'lingerie' (the lingerie-set look at spawn time).
+ * Task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): 'cosplay' = the ZONE context of the Skyways anime convention (layout
+ * version 5+; ai/cosplayContext.ts COSPLAY_CONTEXT, gen/skyways/cosplaySpawns.ts): once per convention (0..1 per level), on the venue's event
+ * floor only, appended after every other spawn, ordinary zombies only (its own pool), every spawn tagged ZombieSpawn.look 'cosplay'.
  */
-export type SpawnContextId = 'station' | 'street' | 'floor' | 'roof' | 'pit' | 'ring' | 'service' | 'horde' | 'lingerie';
+export type SpawnContextId = 'station' | 'street' | 'floor' | 'roof' | 'pit' | 'ring' | 'service' | 'horde' | 'lingerie' | 'cosplay';
 /**
  * Track 2 (lane CONTENT): 'service' = ONE run per seeded SERVICE ANNEX of a track-bearing level (gen/annexContent.ts
  * placeServiceSpawns; 0-2 annexes per level): a per-annex ZONE BUDGET placed in that annex's areas only, on its own fork, appended
  * after every core spawn and tagged markSpawnContext(…, 'service'); excluded from the core station / street / floor counts and
  * reported separately. No family is enabled by it (the Office's Siren eligibility lists only 'floor').
  */
-export const SPAWN_CONTEXT_IDS: readonly SpawnContextId[] = ['station', 'street', 'floor', 'roof', 'pit', 'ring', 'service', 'horde', 'lingerie'];
+export const SPAWN_CONTEXT_IDS: readonly SpawnContextId[] = ['station', 'street', 'floor', 'roof', 'pit', 'ring', 'service', 'horde', 'lingerie', 'cosplay'];
 /** Lane INTEG: the context tag of horde members (ai/hordePlace.ts placeHordes tags every member it appends). */
 export const HORDE_CONTEXT = 'horde' as const satisfies SpawnContextId;
 
@@ -705,7 +709,9 @@ export const SKYWAYS_V4_SPAWN_PROFILE: SpawnProfile = {
  * Task studio-skywalk-encounters-20261108-074144-01: Skyways layout versions 1-4 keep THIS profile FROZEN (the stations entered under
  * GAME76-84 regenerate their enemies exactly: gen/skyways/layoutVersion.ts); version 5 rolls SKYWAYS_SPAWN_PROFILE below.
  */
-export const SKYWAYS_SPAWN_PROFILE: SpawnProfile = {...SKYWAYS_V4_SPAWN_PROFILE};
+export const SKYWAYS_SPAWN_PROFILE: SpawnProfile = {...SKYWAYS_V4_SPAWN_PROFILE,
+  contexts: {...SKYWAYS_V4_SPAWN_PROFILE.contexts, cosplay: COSPLAY_CONTEXT}, // (lane COSPLAY) the convention's cosplay zombies (ai/cosplayContext.ts)
+};
 /** The Skyways spawn profile a layout version rolls (1-4: the frozen version-4 profile; 5+: the current one). */
 export function skywaysSpawnProfileFor(layoutVersion: number): SpawnProfile {
   return layoutVersion >= 5 ? SKYWAYS_SPAWN_PROFILE : SKYWAYS_V4_SPAWN_PROFILE;
