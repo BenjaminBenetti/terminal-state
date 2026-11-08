@@ -30,10 +30,11 @@ const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 describe('Skyways version 5 rolls the Mall\'s Siren and horde rules; versions 1-4 keep the frozen profile', () => {
   it('the profiles: version 5 = the Mall\'s Siren draw / room gates / cap / spacing / retail placement and horde pool; 1-4 frozen (none)', () => {
-    expect(SKYWAYS_LAYOUT_VERSION).toBe(SKYWAYS_ENCOUNTERS_MIN_VERSION);
+    expect(SKYWAYS_LAYOUT_VERSION).toBeGreaterThanOrEqual(SKYWAYS_ENCOUNTERS_MIN_VERSION); // (version 6: task studio-cosplay-general-20261108-225231-01)
     expect(SPAWN_PROFILES.skyways).toBe(SKYWAYS_SPAWN_PROFILE);
     for (const v of [1, 2, 3, 4]) expect(skywaysSpawnProfileFor(v), `v${v}`).toBe(SKYWAYS_V4_SPAWN_PROFILE);
     expect(skywaysSpawnProfileFor(5)).toBe(SKYWAYS_SPAWN_PROFILE);
+    expect(skywaysSpawnProfileFor(6)).toBe(SKYWAYS_SPAWN_PROFILE); // (versions 5 and 6 share the profile)
     expect(validateSpawnProfile(SKYWAYS_SPAWN_PROFILE)).toEqual([]);
     // versions 1-4: no Siren, no horde (as shipped)
     expect(SKYWAYS_V4_SPAWN_PROFILE.families.find(([f]) => f === 'siren')?.[1] ?? 0).toBe(0);

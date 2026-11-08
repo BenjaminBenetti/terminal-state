@@ -85,14 +85,16 @@ function fingerprint(seed: number, layoutVersion?: number): string {
 
 describe('Skyways layout version (save compatibility)', () => {
   it('the policy: a station entered under GAME76 (visits, no record) keeps version 1; a recorded version is kept; a new station gets the current one', () => {
-    expect(SKYWAYS_LAYOUT_VERSION).toBe(5);
-    expect(skywaysLayoutVersionFor(undefined)).toBe(5);
-    expect(skywaysLayoutVersionFor({visits: 0, lanes: {}})).toBe(5);
+    expect(SKYWAYS_LAYOUT_VERSION).toBe(6); // (task studio-cosplay-general-20261108-225231-01: the second-floor cosplay crowd)
+    expect(skywaysLayoutVersionFor(undefined)).toBe(6);
+    expect(skywaysLayoutVersionFor({visits: 0, lanes: {}})).toBe(6);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {}})).toBe(1);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 2}}})).toBe(2);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 3}}})).toBe(3);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 4}}})).toBe(4);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 5}}})).toBe(5); // (task studio-skywalk-encounters-20261108-074144-01)
+    expect(skywaysLayoutVersionFor({visits: 0, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 5}}})).toBe(5); // (a station first BUILT at 5 keeps 5)
+    expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 6}}})).toBe(6); // (task studio-cosplay-general-20261108-225231-01)
     expect(skywaysLayoutVersionFor({visits: 0, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 1}}})).toBe(1);
     // a malformed record falls back to the visit rule
     expect(skywaysLayoutVersionFor({visits: 1, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 9}}})).toBe(1);
