@@ -39,6 +39,7 @@ import {OFFICE_FLOORS} from '../../game/src/gen/office/frame';
 import {MALL_RINGS} from '../../game/src/gen/mall/mallTypes'; // task track3-eaton-centre-20261031 (lane PROFILES)
 import {LINGERIE_SPAWN_RULES, LINGERIE_STORES_MAX} from '../../game/src/gen/mall/lingerieSpawns'; // task mall-lingerie-20261102-221554 (lane CONTEXT): the lingerie store's zone
 import {COSPLAY_CONVENTIONS_MAX, COSPLAY_SPAWN_RULES} from '../../game/src/gen/skyways/cosplaySpawns'; // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): the convention's zone
+import {COSPLAY_FLOOR_BUDGET} from '../../game/src/gen/skyways/cosplayFloors'; // task studio-cosplay-general-20261108-225231-01 (lane UPPER): the version-6 second run
 import * as CC from '../../game/src/ai/cosplayContext';
 const {COSPLAY_CONTEXT} = CC;
 import {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_MARKET, TRACK_EXT_REACTOR, TRACK_EXT_SKYWAYS} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs); + the mall's (task mall-playtest-revision-20261031: at most 1)
@@ -224,6 +225,8 @@ const COSPLAY_ZONE_EXPLAIN: readonly string[] = [
   `Round-robin over the hosting areas — the main hall first, the others in a seeded order — one spawn per area per pass (spread over the venue), each from up to ${COSPLAY_CONTEXT.placement.tries} random picks of that area's stand points.`,
   `A pick is taken when it is ≥ ${COSPLAY_CONTEXT.placement.spacingM} m from every enemy already on the storey and its fair-passage disc never splits the floor. Spacing and eligible floor can leave the run short of its count (placed < count); a run never regenerates the level.`,
   'Each placed spawn is an ordinary zombie (the convention\'s own pool, rolled by the one family roll at the end).',
+  // (task studio-cosplay-general-20261108-225231-01, lane UPPER) the version-6 second run on the convention building's other floor
+  `Layout version 6+: a SECOND run appended right after it (gen/skyways/cosplayFloors.ts placeCosplayFloorSpawns, fork skyways-cosplay-floors), U{${COSPLAY_FLOOR_BUDGET[0]}..${COSPLAY_FLOOR_BUDGET[1]}} more on the host building's other public storey joined to the venue by its stair (today its street floor: lobby / galleria / court, entrance halls — never a shop, washroom, back room or stair core), each pick uniform over that floor's stand points with the same keep-offs (landings, doors, the boarded street entrances, passage, spacing); same tags and pool. A convention level holds up to ${COSPLAY_CONTEXT.count[1] + COSPLAY_FLOOR_BUDGET[1]} cosplayers.`,
 ];
 
 /**
@@ -300,7 +303,7 @@ export const ENEMY_LEVEL_ADAPTER: Readonly<Record<LevelId, {
       floor: {storeys: 'the skyway level (concourses, bridges, shops, the add-on hall)', runs: 1},
       service: {storeys: 'one seeded service annex off a station track tunnel (its rooms and corridors only)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT_SKYWAYS.annex.max], note: SERVICE_ZONE_NOTE}},
       // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): the anime convention's cosplay zombies (0..1 convention per level)
-      cosplay: {storeys: 'the convention venue\'s event floor (main hall, exhibitors\' floor, photo lounge, panel rooms; nowhere else)', runs: 1,
+      cosplay: {storeys: 'the convention venue\'s event floor (main hall, exhibitors\' floor, photo lounge, panel rooms) and, from layout version 6, the host building\'s other public floor joined to it by its stair (its street-floor concourse); nowhere else', runs: 1,
         zone: {runsPerLevel: [0, COSPLAY_CONVENTIONS_MAX], note: COSPLAY_ZONE_NOTE, where: COSPLAY_ZONE_WHERE, explain: COSPLAY_ZONE_EXPLAIN}},
     },
   },

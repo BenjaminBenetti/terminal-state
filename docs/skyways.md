@@ -123,8 +123,12 @@ Every kit model is a Codex concept turned into a Meshy T2.5 model with its PBR m
   fingerprints in `tests/skyways-dest-layout-version.test.ts`), so its saved holders, pickups, kills and car stay consistent.
 - Every station not yet entered in GAME77 got version 2, the destinations.
 - Version 3, the rework (task studio-skyways-rework-20261107-054512-01), was what GAME78–80 gave every new station.
-- **Version 4, the building programmes** (task studio-skywalk-variety-20261107-231448-01) is what every station not yet entered gets
-  now, in new and existing campaigns.
+- Version 4, the building programmes (task studio-skywalk-variety-20261107-231448-01), came next.
+- Version 5, the encounters pass (task studio-skywalk-encounters-20261108-074144-01: the Siren, the horde, the convention's cosplay
+  zombies, the Mall store families), followed (fingerprints pinned as GAME87).
+- **Version 6, the convention's cosplay crowd on both floors of its building** (task studio-cosplay-general-20261108-225231-01,
+  `gen/skyways/cosplayFloors.ts`; see `docs/enemy-spawns.md`), is what every station not yet entered gets now, in new and existing
+  campaigns. Versions 4–6 share the live generator, with every change gated on the version.
 - Versions 1 and 2 regenerate through a FROZEN snapshot of the GAME77 generator (`gen/skyways/legacy77/`), version 3 through a frozen
   snapshot of its core (`gen/skyways/legacy80/`: index / carve / frame / validate). The test pins all three versions' fingerprints, so a
   station a player already entered keeps its holders, pickups, kills and add-on.
@@ -147,7 +151,8 @@ Every kit model is a Codex concept turned into a Meshy T2.5 model with its PBR m
     - the exhibitors' floor (the host's skyway court);
     - the main stage hall with backstage, storage and washrooms;
     - two panel rooms and a photo lounge;
-    - the street level below stays the building's ordinary lobby.
+    - the street level below stays the building's ordinary lobby. From layout version 6, some of the cosplay crowd stands there too
+      (`gen/skyways/cosplayFloors.ts`).
   - `prize-car` is a public PRIZE DISPLAY in the host's skyway court (`addon.display`; no add-on rooms), with the stanchion ring, the
     turntable and the prize board (`gen/skyways/addonPrizeDisplay.ts`).
 - **Tenant OFFICE WING (about one map in five):** an open-plan office off a lobby, with a meeting room, private offices and a break

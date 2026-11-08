@@ -250,7 +250,8 @@ fork (`skyways-enemies-<storey>`), tags its spawns with the context:
   `COSPLAY_CONTEXT` (`game/src/ai/cosplayContext.ts`). Only when the level's one add-on is the anime convention (never the prize
   display; at most one per level: `COSPLAY_CONVENTIONS_MAX`), `game/src/gen/skyways/cosplaySpawns.ts` `placeCosplaySpawns` runs ONE
   run on its own fork (`skyways-cosplay-spawns`, drawn from only then): **U{4..6}** spawns (`COSPLAY_ZONE_BUDGET`) on the venue's
-  public event floor (main hall, exhibitors' floor, photo lounge, panel rooms: round-robin, the main hall first), each a 3 × 3-clear
+  public event floor (main hall, exhibitors' floor, photo lounge, panel rooms: round-robin, the main hall first; layout version 6 adds
+  a second run on the convention building's other floor, see "Version 6" below), each a 3 × 3-clear
   walkable floor cell, never a ramp, ≥ 36 walking cells from the start, 5 m off the run landings, ≥ 3 m from every door of those
   areas and from the add-on's entry, ≥ 2.5 m from every mascot statue, off the stage + 1 m, 2 m from every enemy on the storey, a
   0.5 m disc never splitting the storey (`COSPLAY_PLACEMENT` + `COSPLAY_SPAWN_RULES`). Every spawn is a shambler tagged
@@ -315,6 +316,35 @@ The census (48 finished levels): 1.44 groups per level, **no level without a hor
 `layout.zombies` entries appended after every ambient spawn and before the annex's. The normal kill memory keeps killed members dead
 on return or Continue. A group with no living member stays dead, and the living ones start again from their placed positions (as
 in the Mall). Runtime: `HordeDirector` walks `layout.skyways.patrol`.
+
+### Version 6: the convention's cosplay crowd on both floors of its building
+
+<!-- Task studio-cosplay-general-20261108-225231-01 (lane UPPER). User: "Convention cosplay zombies need upper-floor presence too, not
+just bottom." -->
+
+**Why only one floor before.** The convention venue is ONE storey: the host's skyway floor (storey 2, y 10). That storey holds its
+main hall, exhibitors' floor, registration, panel rooms, photo lounge and back of house. Nothing lies above it, and the host stays a
+classic block with no atrium, gallery or mezzanine. The stage deck is walkable at runtime (`stageSupport.ts`), but it is the stage
+and never a spawn floor. The host's street floor (storey 1, y 5) is its ordinary lobby / galleria / court and entrance halls. The
+host's own public stair joins it to the venue. The version-5 run only ever stood on the venue storey (30 checked convention seeds:
+always storey 2, no raised venue floor).
+
+**The second run.** `game/src/gen/skyways/cosplayFloors.ts` `placeCosplayFloorSpawns` (gated on `SKYWAYS_COSPLAY_FLOORS_MIN_VERSION`
+= 6; own fork `skyways-cosplay-floors`) adds **U{2..4}** (`COSPLAY_FLOOR_BUDGET`) more cosplayers. They go on every OTHER public
+storey of the host that a stair inside the building joins to the venue storey (`cosplayFloorLevels`, above or below; today always the
+street floor).
+- **Where.** The host's public concourse there (`cosplayFloorAreas`: kind `concourse`, type `concourse` / `retail-arcade`): never a
+  shop, washroom, back room, stair core or another building. Each pick is uniform over that floor's stand points.
+- **Fairness.** The venue run's rules on that floor: walkable 3 × 3-clear floor at the storey's height, never a ramp, ≥ 36 walking
+  cells from the start, 5 m off every landing, ≥ 3 m from every door of those areas and from the boarded street entrances, a 0.5 m
+  disc never splitting the floor, and 2 m spacing.
+- **Tags and order.** The same shamblers, look, `cosplay` context and zombie-only pool. They are APPENDED right after the venue run,
+  so every earlier spawn, horde, prop and pickup is version 5's. The census hook is not fed, because that floor is already reported
+  under `street`.
+- **Saves.** A station first built at 1–5 keeps that version and its enemies (GAME87 pins). Unvisited stations and new campaigns get
+  version 6. Both versions use `SKYWAYS_SPAWN_PROFILE`.
+- **Census.** 30 convention seeds: venue 5.13 and street floor 2.93 per level, never fewer than 2 on either. The 10-seed test set:
+  5.0 / 3.0. Test: `game/tests/skyways-cosplay-floors.test.ts`.
 
 ## The Survivor Market (`market`)
 
