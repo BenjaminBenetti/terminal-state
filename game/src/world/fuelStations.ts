@@ -221,12 +221,15 @@ export class FuelStations {
 
   /** Fuel units in the live station right now (its fuel lots in holders, pickups, cans in its grounded bags, its carts outside the car). */
   liveUnits(): number {
-    const g = this.game as unknown as {pickups: {list: readonly {stack: {itemId: string; count: number; bag?: readonly ({itemId: string; count: number} | null)[]}}[]}; gear?: {bags?: readonly {stack: {bag?: readonly ({itemId: string; count: number} | null)[]}}[]}};
+    const g = this.game as unknown as {pickups: {list: readonly {owner?: string; stack: {itemId: string; count: number; bag?: readonly ({itemId: string; count: number} | null)[]}}[]}; gear?: {bags?: readonly {stack: {bag?: readonly ({itemId: string; count: number} | null)[]}}[]}};
     let lots = 0;
     for (const h of this.containers?.all ?? []) for (const l of h.state.lots) if (l.itemId === FUEL.canItem) lots += l.count * FUEL.canUnits;
     // (task train-loose-cargo: cans / bags lying in the parked train are the train's cargo, not the station's stock)
+    // (task studio-market-rework-20261108-074144-01, lane WARES: a market stall's displayed cans are its stock for sale — Pickup.owner —
+    // never the station's fuel; the remembered figure never counts them either: run/worldMemory.ts capturePickups)
     const cargo = (this.game as unknown as {trainCargo?: {ownsPickup(p: unknown): boolean; ownsBag(b: unknown): boolean}}).trainCargo;
-    const pickups = cargo ? g.pickups.list.filter(p => !cargo.ownsPickup(p)) : g.pickups.list;
+    const free = g.pickups.list.filter(p => !p.owner);
+    const pickups = cargo ? free.filter(p => !cargo.ownsPickup(p)) : free;
     const bags = cargo ? (g.gear?.bags ?? []).filter(b => !cargo.ownsBag(b)) : g.gear?.bags ?? [];
     return lots + stationFuelRemaining({pickups, bags, carts: this.carts?.stationRecords() ?? []});
   }
