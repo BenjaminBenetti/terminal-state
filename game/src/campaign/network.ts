@@ -622,7 +622,7 @@ const SUFFIX = {
   mall: ['Arcade', 'Galleria', 'Market', 'Promenade', 'Centre'],
   reactor: ['Works', 'Power', 'Powerhouse'],
   // task studio-survivor-market-20261108-005807-01 (lane LEVEL): a survivor settlement's name (the mall keeps 'Market')
-  market: ['Bazaar', 'Trading Post', 'Swap', 'Camp', 'Stockade'],
+  market: ['Bazaar', 'Outpost', 'Swap', 'Camp', 'Stockade'],
 } as const;
 
 const LINE_NAMES: readonly string[] = ['Meridian', 'Foundry', 'Harbour', 'Lantern', 'Quarry', 'Canal', 'Tidewater', 'Granary', 'Kestrel', 'Heron', 'Ember', 'Larch', 'Beacon', 'Thistle'];

@@ -1,0 +1,245 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "market-textures",
+ "task": "studio-survivor-market-20261108-005807-01",
+ "lane": "LEVEL",
+ "status": "runtime derivatives (resize / JPEG only) of ORIGINAL tileable surface textures generated for this project with Codex native image_gen (owned Codex CLI) under the user's art authorization for the Survivor Market (Codex initial images, no numerical cap); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "rebuild": "node tools/asset-pipeline/props/build-market-textures.mjs",
+ "rawStorage": "reference/tasks/survivor-market-20261108-005807/textures/{TEXTURE-LEDGER.jsonl, raw/codex-<n>-<id>-exec-<id>.png, prompts/<id>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "tool": "sharp (libvips) via tools/asset-pipeline/props/build-market-textures.mjs",
+ "textures": {
+  "market-corrugated-wall": {
+   "use": "Survivor Market: the shed and stall-row walls (corrugated metal)",
+   "subject": "salvaged corrugated metal sheets in faded oxide red / teal / cream / galvanized grey, vertical ribs, riveted laps, rust streaks; straight-on, tileable",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 301,
+    "session": "01a1b8e6-3688-7201-b174-dadb6d3a8f99",
+    "requested": "2026-11-08T02:04:17.250792Z",
+    "finished": "2026-11-08T02:04:55.968562Z",
+    "seconds": 38.7
+   },
+   "prompt": {
+    "file": "corrugated-wall.txt",
+    "sha256": "9de49942b1cc53dd164be22adf0eaecf5b344cc05f19dea638c6a763401f27b8"
+   },
+   "source": {
+    "file": "codex-301-corrugated-wall-exec-ae4a443b-7e02-4b9d-8c90-fbfdbbdb2d24.png",
+    "sha256": "c4cd725dff01647a354d366624419f8e5cd929dff393d4721e333de8eb9763a6",
+    "bytes": 3182863,
+    "width": 1254,
+    "height": 1254
+   },
+   "recipe": {
+    "resize": {
+     "width": 1024,
+     "height": 1024,
+     "kernel": "lanczos3",
+     "fit": "fill"
+    },
+    "colour": "sRGB, alpha removed",
+    "encode": {
+     "format": "jpeg",
+     "quality": 85,
+     "mozjpeg": true,
+     "chromaSubsampling": "4:2:0",
+     "metadata": "stripped"
+    }
+   },
+   "tileCheck": {
+    "seamLR": 17.9,
+    "interiorLR": 9.2,
+    "seamTB": 15.7,
+    "interiorTB": 5.4,
+    "note": "mean absolute grey difference (0..255) across the wrap seams vs between interior neighbour rows / columns"
+   },
+   "spanM": {
+    "u": 2,
+    "v": 2
+   },
+   "output": {
+    "url": "assets/textures/market/market-corrugated-wall.jpg",
+    "bytes": 226961,
+    "sha256": "7568db0ac392b66f273256b1a91ec7acef6cee126996ef5f1c46b4b6c1ced0f5",
+    "width": 1024,
+    "height": 1024,
+    "format": "jpeg"
+   }
+  },
+  "market-corrugated-roof": {
+   "use": "Survivor Market: the shed roof over the platform, square and deck; the stall / gate ceilings",
+   "subject": "underside of an old galvanized corrugated steel roof with rust blooms and patched sheets, horizontal ribs; from below, tileable",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 302,
+    "session": "01a1b8e6-cdc4-7781-b119-5e2dd894a6ca",
+    "requested": "2026-11-08T02:04:55.994591Z",
+    "finished": "2026-11-08T02:05:31.852217Z",
+    "seconds": 35.9
+   },
+   "prompt": {
+    "file": "corrugated-roof.txt",
+    "sha256": "d76e15a20d4be1c55bd91797d2c09f55eb998ab7d1ad79300a0dc5404ed38f01"
+   },
+   "source": {
+    "file": "codex-302-corrugated-roof-exec-a111f722-e628-43e4-ba35-ab78749cbc60.png",
+    "sha256": "55aceb0bd0e97371392f744f06ea6d4dd3de09d2afc53e2fba5c2c6bd175d94a",
+    "bytes": 3315009,
+    "width": 1254,
+    "height": 1254
+   },
+   "recipe": {
+    "resize": {
+     "width": 1024,
+     "height": 1024,
+     "kernel": "lanczos3",
+     "fit": "fill"
+    },
+    "colour": "sRGB, alpha removed",
+    "encode": {
+     "format": "jpeg",
+     "quality": 85,
+     "mozjpeg": true,
+     "chromaSubsampling": "4:2:0",
+     "metadata": "stripped"
+    }
+   },
+   "tileCheck": {
+    "seamLR": 11.9,
+    "interiorLR": 8,
+    "seamTB": 19.4,
+    "interiorTB": 9.1,
+    "note": "mean absolute grey difference (0..255) across the wrap seams vs between interior neighbour rows / columns"
+   },
+   "spanM": {
+    "u": 2,
+    "v": 2
+   },
+   "output": {
+    "url": "assets/textures/market/market-corrugated-roof.jpg",
+    "bytes": 231498,
+    "sha256": "398a8ab906526bb02a66811f00a34ef9c9584d82d0f61483f7b5dac246648f8c",
+    "width": 1024,
+    "height": 1024,
+    "format": "jpeg"
+   }
+  },
+  "market-plywood": {
+   "use": "Survivor Market: the stall alcoves and under-deck rooms (walls), the housing deck (boards) and its underside",
+   "subject": "salvaged plywood sheets and scrap boards with peeling paint remnants and nail rows; straight-on, tileable",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 303,
+    "session": "01a1b8e7-59ea-7381-a76e-59aa9a2f322f",
+    "requested": "2026-11-08T02:05:31.856926Z",
+    "finished": "2026-11-08T02:06:13.871595Z",
+    "seconds": 42
+   },
+   "prompt": {
+    "file": "plywood.txt",
+    "sha256": "6ff1f9184f73ff1bb5060566048713c81f77cfb86f8204b9b5870332525a2ab2"
+   },
+   "source": {
+    "file": "codex-303-plywood-exec-0227d169-68e4-4bdb-90ba-51bb7e11ed02.png",
+    "sha256": "8442abf2ddf6bb35efefc08e79e01f0c783bac3be64f34eed57d02e0caa279b6",
+    "bytes": 3553793,
+    "width": 1254,
+    "height": 1254
+   },
+   "recipe": {
+    "resize": {
+     "width": 1024,
+     "height": 1024,
+     "kernel": "lanczos3",
+     "fit": "fill"
+    },
+    "colour": "sRGB, alpha removed",
+    "encode": {
+     "format": "jpeg",
+     "quality": 85,
+     "mozjpeg": true,
+     "chromaSubsampling": "4:2:0",
+     "metadata": "stripped"
+    }
+   },
+   "tileCheck": {
+    "seamLR": 14.8,
+    "interiorLR": 8.8,
+    "seamTB": 33.9,
+    "interiorTB": 17.1,
+    "note": "mean absolute grey difference (0..255) across the wrap seams vs between interior neighbour rows / columns"
+   },
+   "spanM": {
+    "u": 2.8,
+    "v": 2.8
+   },
+   "output": {
+    "url": "assets/textures/market/market-plywood.jpg",
+    "bytes": 264187,
+    "sha256": "e697e50491ac85e9dda933c4bbe32455f875e52d546f7266fbdf6e275ccab55c",
+    "width": 1024,
+    "height": 1024,
+    "format": "jpeg"
+   }
+  },
+  "market-tarp": {
+   "use": "Survivor Market: the stall awnings (patched canvas)",
+   "subject": "patched canvas tarpaulin, faded olive / rust orange with sewn-on salvaged fabric patches and stitching; flat, tileable",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 304,
+    "session": "01a1b8e7-fe05-7923-b219-9cc1554a7b76",
+    "requested": "2026-11-08T02:06:13.879003Z",
+    "finished": "2026-11-08T02:06:54.490148Z",
+    "seconds": 40.6
+   },
+   "prompt": {
+    "file": "tarp.txt",
+    "sha256": "309ab698b13c301255e9af85d120e4ba07876fa7264a2cf62aa6e8a8f70def8c"
+   },
+   "source": {
+    "file": "codex-304-tarp-exec-56e4be0d-0130-4880-8773-c1d9504903eb.png",
+    "sha256": "f0027a61afa312e9530bf6bd47b5730dd5c2ff45fd6779b2cf560c6ea0783771",
+    "bytes": 4160853,
+    "width": 1254,
+    "height": 1254
+   },
+   "recipe": {
+    "resize": {
+     "width": 1024,
+     "height": 1024,
+     "kernel": "lanczos3",
+     "fit": "fill"
+    },
+    "colour": "sRGB, alpha removed",
+    "encode": {
+     "format": "jpeg",
+     "quality": 85,
+     "mozjpeg": true,
+     "chromaSubsampling": "4:2:0",
+     "metadata": "stripped"
+    }
+   },
+   "tileCheck": {
+    "seamLR": 25.9,
+    "interiorLR": 18.1,
+    "seamTB": 39.3,
+    "interiorTB": 27.1,
+    "note": "mean absolute grey difference (0..255) across the wrap seams vs between interior neighbour rows / columns"
+   },
+   "spanM": {
+    "u": 2.4,
+    "v": 2.4
+   },
+   "output": {
+    "url": "assets/textures/market/market-tarp.jpg",
+    "bytes": 294401,
+    "sha256": "4a9932d81d6cbfaf5b77739cfe88aa4c2f0fa4aad6f3dfb5812f0f433403be99",
+    "width": 1024,
+    "height": 1024,
+    "format": "jpeg"
+   }
+  }
+ }
+}

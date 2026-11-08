@@ -141,6 +141,8 @@ import {applySkywaysStageSupport} from './gen/skyways/stageSupport'; // (lane VE
 import {SKYWAYS_DEST_MODEL_FILES, skywaysDestModelKeysFor} from './gen/skyways/destinations/skywaysDestModels'; // task studio-skyways-destinations-20261106-170011-01 (lane LANDMARKS)
 import {installSkywaysDestinations} from './world/skywaysDestRuntime'; // (destinations, lane LANDMARKS) the posters' / plaques' art atlases
 import {installSkywaysArchTextures} from './world/skywaysArchTextures'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): court / bridge finish textures
+import {installMarketTextures} from './world/marketTextures'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL)
+import {installMarketVisuals} from './world/marketVisuals'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL)
 import {skywaysGardenModelKeysFor} from './world/skywaysGardens'; // (lane ARCH) the planters' foliage model
 import {SKYWAYS_LAYOUT_LANE, skywaysLayoutVersionFor} from './gen/skyways/layoutVersion'; // task studio-skyways-destinations-20261106-170011-01
 import {installSkywaysDestAudio} from './world/skywaysDestAudio'; // task skyways-destinations-20261106 (lane AUDIO): the destinations' location sounds
@@ -183,6 +185,8 @@ export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory'
 
 /** Task studio-alpha-campaign-foundation-20261102-230708-01: the ordinary station objective (no kill goal). */
 export const SCAVENGE_OBJECTIVE = 'Scavenge fuel and supplies. Return to the train when done.'; // (task train-fuel-system: the train needs a tank of fuel per stop)
+/** Task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market's objective line (a calm pit stop: trade, then ride on). */
+export const MARKET_OBJECTIVE = 'Trade at the stalls. Return to the train when done.';
 
 // (task campaign-foundation-20261102, lane MENU: + renderScale — a linear render-resolution scale over the DPR-capped native buffer;
 // the persisted values live in ui/settingsStore.ts, main.ts copies them in)
@@ -603,6 +607,8 @@ export class Game {
     this.skywaysAddon = installSkywaysAddon(this); hookName('skywaysAddon'); // task studio-skyways-level-20261106-054448 (lane ADDON): inert without layout.skyways
     installSkywaysDestinations(this); // task studio-skyways-destinations-20261106-170011-01 (lane LANDMARKS): poster / plaque atlases before the build; inert elsewhere
     installSkywaysArchTextures(this); // task studio-skyways-rework-20261107-054512-01 (lane ARCH): the courts' / bridges' Codex textures before the build (layout v3); inert elsewhere
+    installMarketTextures(this); // task studio-survivor-market-20261108-005807-01 (lane LEVEL): the market's Codex surface textures before the build; inert elsewhere
+    installMarketVisuals(this); hookName('marketVisuals'); // (lane LEVEL) the market's slow ceiling fans (frame hook) and stall awnings; inert elsewhere
     installSkywaysMapRead(this); hookName('skywaysMapRead'); // task studio-skyways-rework-20261107-054512-01 (lane MAPS): E at a directory board reads its face (inert without boards)
     installSkywaysDestAudio(this); // task skyways-destinations-20261106 (lane AUDIO): clock tick / chime, arcade attract, cinema projector emitters per section (inert elsewhere)
     installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
@@ -982,7 +988,7 @@ export class Game {
       // task reactor-expansion-20261101 (lane CONTROLS): bullet impacts on an arch-drawn finish (Reactor pit concrete / steel grating /
       // rusted plate, Office drywall / carpet …) take that finish's class and colour (world/finishAt.ts, damage/impactFinish.ts)
       finishAt: this.world.finishAt ?? null,
-      finishMaterial: k => this.world.officeArch?.material(k) ?? this.world.mallArch?.material(k) ?? this.world.reactorArch?.material(k),
+      finishMaterial: k => this.world.officeArch?.material(k) ?? this.world.mallArch?.material(k) ?? this.world.reactorArch?.material(k) ?? this.world.marketArch?.material(k), // (+ the market's: task studio-survivor-market-20261108-005807-01)
       // Iteration 07 (Lane K): shot items move — rigid items / chunks, loot lots lifted off holders (same item / count, never duplicated)
       physics: this.physics,
       lots: (o, d, maxT) => cm.shotLots(o, d, maxT).map(l => ({holder: l.holder, lotId: l.lotId, t: l.t})),
@@ -1083,7 +1089,7 @@ export class Game {
     const obj = document.querySelector('#objective .obj-title');
     // Task studio-alpha-campaign-foundation-20261102-230708-01 (user: "No ordinary clear-all-zombies objective: default objective says
     // scavenge for resources and return to the train when done"): no kill goal anywhere; the Reactor keeps its real endgame chain.
-    if (obj) obj.textContent = key.level === 'reactor' ? 'Restart the reactor' : SCAVENGE_OBJECTIVE;
+    if (obj) obj.textContent = key.level === 'reactor' ? 'Restart the reactor' : key.level === 'market' ? MARKET_OBJECTIVE : SCAVENGE_OBJECTIVE; // (+ the market's: task studio-survivor-market-20261108-005807-01)
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.propModels.sealed = this.levelResources.sealed = true; // lane PACKAGE (track3): the level is built; a later fetch counts as `late`
     this.updateCamera(0);
@@ -1313,6 +1319,9 @@ export class Game {
     const net = generateNetwork(o.networkSeed ?? freshSeed());
     let state = newCampaign(net);
     const devNode = o.dev?.level ? net.nodes.find(n => n.archetype === o.dev!.level) : undefined;
+    // task studio-survivor-market-20261108-005807-01 (lane LEVEL): a dev start of an archetype the network has no node of never starts
+    // silently at another station (every network drawn with ORDINARY_WEIGHTS holds every archetype; this guards any other census)
+    if (o.dev?.level && !devNode) return {ok: false, error: `This network has no ${archetypeLabel(o.dev.level)} station — try again for another network.`};
     if (devNode && devNode.id !== state.current) state = {...state, current: devNode.id, known: [devNode.id], visited: [devNode.id]};
     const w = await this.newGame(net.nodes.find(n => n.id === state.current)!.archetype, {campaign: state, enter: true});
     if (!w) return {ok: false, error: 'The new game could not start.'};

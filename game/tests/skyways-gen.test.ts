@@ -12,7 +12,7 @@ import {levelDistance} from '../src/gen/levelGen';
 import {playerTrainPlacement} from '../src/gen/playerTrain';
 import {placeStationFuel} from '../src/gen/fuelPlacement';
 import {ordinaryCounts} from '../src/campaign/network';
-import {ORDINARY_WEIGHTS, PRE_SKYWAYS_WEIGHTS} from '../src/campaign/types';
+import {ORDINARY_WEIGHTS, PRE_MARKET_WEIGHTS, PRE_SKYWAYS_WEIGHTS} from '../src/campaign/types';
 import {FOOD_IDS, DRINK_IDS} from '../src/items/items';
 import {SKYWAYS_RAMEN_PURPOSE} from '../src/gen/skyways/ramenPurposes';
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
@@ -29,9 +29,11 @@ describe('Skyways: registration and the campaign share', () => {
     expect(LEVEL_IDS.indexOf('skyways')).toBe(LEVEL_IDS.length - 2);
     expect(LEVELS.skyways.tier).toBe(2);
     expect(LEVELS.skyways.name).toBe('Skyways');
-    expect(ORDINARY_WEIGHTS).toEqual({subway: 0.7, office: 0.1, mall: 0.1, skyways: 0.1});
-    const now = ordinaryCounts(), before = ordinaryCounts(PRE_SKYWAYS_WEIGHTS);
+    // (task studio-survivor-market-20261108-005807-01: + the market's 5 %, also from the Subway's share — Skyways' 10 % unchanged)
+    expect(ORDINARY_WEIGHTS).toEqual({subway: 0.65, office: 0.1, mall: 0.1, skyways: 0.1, market: 0.05});
+    const now = ordinaryCounts(PRE_MARKET_WEIGHTS), before = ordinaryCounts(PRE_SKYWAYS_WEIGHTS);
     expect(now).toEqual({subway: 27, office: 4, mall: 4, skyways: 4});
+    expect(ordinaryCounts().skyways).toBe(4);
     expect([now.office, now.mall]).toEqual([before.office, before.mall]); // Office / Mall unchanged
     expect(before.subway - now.subway).toBe(now.skyways); // the whole share comes from the Subway
   });
