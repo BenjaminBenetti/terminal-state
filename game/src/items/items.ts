@@ -66,6 +66,7 @@ import {MEDICAL_DIMS, MEDICAL_ITEMS, treatsText, type Limb, type MedicalIconKey}
 import {MATERIAL_DIMS, MATERIAL_ITEMS, type MaterialIconKey} from './craftMaterials'; // lane RACK (office-props-physics-scale-20261030)
 import {SKYWAYS_DRINK_IDS, SKYWAYS_FOOD_DIMS, SKYWAYS_FOOD_IDS, SKYWAYS_FOOD_ITEMS, type SkywaysFoodIconKey} from './skywaysFood'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {RAIL_TIES_DIMS, RAIL_TIES_ITEMS} from './railTies'; // task studio-market-rework-20261108-074144-01 (lane TRADE)
+import {BEER_DIMS, BEER_ITEMS} from './beers'; // task studio-market-bar-20261108-225231-01: the market bar's beers
 
 // + bread (task office-props-physics-scale-20261030, lane FURN): only bakery display cases hold it (items/lootTables.ts BAKERY_ROWS)
 // + the Skyways ramen restaurant's ramen bowls / bento and bubble tea (task studio-skyways-level-20261106-054448, lane FOOD: items/skywaysFood.ts)
@@ -141,6 +142,7 @@ export const ITEMS: Record<string, ItemDef> = {
     description: 'A heavy ceramic switchgear fuse cartridge with tinned end caps and blade contacts. The reactor switchgear has two burnt-out slots; press E on a slot to seat one.'},
   // --- Task studio-market-rework-20261108-074144-01 (lane TRADE): the survivor market's currency, Rail Ties (items/railTies.ts) — never loot ---
   ...RAIL_TIES_ITEMS,
+  ...BEER_ITEMS, // task studio-market-bar-20261108-225231-01: the market bar's beers (items/beers.ts; bar stock only, never loot)
 };
 
 export function itemDef(id: string): ItemDef {
@@ -237,6 +239,7 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   reactor_key: {w: 0.13, d: 0.0573, h: 0.0073, shape: 'flat'},
   fuse_cartridge: {w: 0.3, d: 0.062, h: 0.0623, shape: 'flat'},
   ...RAIL_TIES_DIMS, // task studio-market-rework-20261108-074144-01 (lane TRADE): the code-built tie bundle (world/railTiesModel.ts)
+  ...BEER_DIMS, // task studio-market-bar-20261108-225231-01: the beer bottles
 };
 
 export function itemDims(id: string): ItemDims {
