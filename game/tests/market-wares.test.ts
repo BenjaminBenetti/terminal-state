@@ -40,7 +40,7 @@ import {PLAYER_TRAIN_SPEC as SPEC} from '../src/world/playerTrainSpec';
 import {FUEL} from '../src/fuel/fuel';
 import {validateSaveFile} from '../src/save/validate';
 import {installRestore, prepareRestore} from '../src/save/serialize';
-import {census, tradeHost, uniqueUids} from './helpers/marketTradeFixture';
+import {census, giveTies, tradeHost, uniqueUids} from './helpers/marketTradeFixture';
 
 installCanvasShim(false);
 (ShimContext.prototype as unknown as {clip(): void}).clip ??= () => {}; // (item stand-in label atlases clip their cells)
@@ -275,8 +275,8 @@ describe('market wares: the displays ARE the stock', () => {
 
   it('buy / sell (the trade\'s transactions): a bought stack leaves, a partly bought one shows the rest, a sold one joins a free gap — nothing else moves', () => {
     const m = market();
-    m.sys.wallet.receive(5000);
-    const ctx: TradeCtx = {inv: m.h.inv, wallet: m.sys.wallet, stock: m.sys.stock!, stall: 'general'};
+    giveTies(m.h.inv, 2000);
+    const ctx: TradeCtx = {inv: m.h.inv, stock: m.sys.stock!, stall: 'general'};
     const list = m.sys.stock!.stalls.general;
     const pose = () => new Map([...m.wares.wares.values()].map(w => [w.uid, w.pickup.obj.position.toArray().join(',')]));
     // a whole lot
