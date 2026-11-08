@@ -10,11 +10,11 @@
 import {beforeAll, describe, expect, it} from 'vitest';
 import fs from 'node:fs';
 import * as THREE from 'three';
-import {COMBAT_CLIP, GUN_MARKERS} from '../src/market/combat/combatClips';
-import {MARKET_COMBAT, MARKET_COMBAT_TEXT, type MarketCombatant} from '../src/market/combat/marketCombat';
+import {COMBAT_CLIP} from '../src/market/combat/combatClips';
+import {MARKET_COMBAT_TEXT, type MarketCombatant} from '../src/market/combat/marketCombat';
 import {MARKET_HOSTILITY} from '../src/market/combat/roles';
 import {MARKET_HOSTILITY_LANE, type MarketHostilityJSON} from '../src/market/combat/record';
-import {NPC_GUNS, npcRoundDamage} from '../src/market/combat/npcGun';
+import {npcRoundDamage} from '../src/market/combat/npcGun';
 import {ENEMY_DAMAGE_TO_PLAYER} from '../src/player/hits';
 import {armorPool} from '../src/player/armor';
 import {WEAPONS} from '../src/weapons/weapons';
@@ -320,7 +320,6 @@ describe('their gunfire', () => {
     const bore = new THREE.Vector3(0, 0, -1).transformDirection(t.body.gunHolder!.matrixWorld);
     const fwd = new THREE.Vector3(Math.sin(t.actor.yaw), 0, Math.cos(t.actor.yaw));
     expect(bore.dot(fwd)).toBeGreaterThan(Math.cos(0.2));
-    void GUN_MARKERS; void NPC_GUNS;
   });
 });
 
@@ -366,7 +365,6 @@ describe('persistence: dead stay dead, fled stay gone (leave / return, save / lo
     expect(w.host.scene.children.length).toBe(w.combat.people.filter(p => p.state !== 'fled').length);
     // nobody comes back to life, no stall trades
     for (const s of w.layout.market!.stalls) expect(w.combat.canTrade(s.id)).toBe(false);
-    void fledIds;
   });
 
   it('save -> export text -> import -> load -> build: the same hostile market; a malformed record is refused', () => {
@@ -462,6 +460,5 @@ describe('the calm market, trade gating, not an enemy', () => {
     w.combat.provoke({kind: 'theft', stall: 'gun'});
     expect(w.combat.hostile).toBe(true);
     expect(w.combat.canTrade('gun')).toBe(false);
-    void MARKET_COMBAT;
   });
 });

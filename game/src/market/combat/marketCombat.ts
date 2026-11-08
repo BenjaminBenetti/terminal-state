@@ -747,7 +747,7 @@ export class MarketCombat implements MarketHostilityApi {
         end.set(muzzle.x + d.x * ph.t, muzzle.y + d.y * ph.t, muzzle.z + d.z * ph.t);
       } else {
         end.set(muzzle.x + d.x * wh.t, muzzle.y + d.y * wh.t, muzzle.z + d.z * wh.t);
-        if (wh.kind !== 'none') this.impact(wh, end, d);
+        if (wh.kind !== 'none') this.impact(wh, end);
       }
       if (i < 2 && (pellets > 1 || this.counts.shots % 2 === 0)) this.host.fx?.tracer?.(new THREE.Vector3(muzzle.x, muzzle.y, muzzle.z), end.clone());
     }
@@ -766,7 +766,7 @@ export class MarketCombat implements MarketHostilityApi {
   }
 
   /** A survivor's round on a surface: its material's impact (fx + positional sound); no lasting damage (only the player's guns do that). */
-  private impact(wh: WorldHit, point: THREE.Vector3, d: Vec3): void {
+  private impact(wh: WorldHit, point: THREE.Vector3): void {
     const n = new THREE.Vector3(wh.nx, wh.ny, wh.nz);
     const props = this.host.layout.props;
     let spec = DAMAGE_MATERIALS.concrete;
@@ -777,7 +777,6 @@ export class MarketCombat implements MarketHostilityApi {
     }
     this.host.fx?.impact?.(point, n, spec.fx as never, {chips: 3});
     this.host.sfx?.impact?.(point.x, point.y, point.z, spec.sound as never);
-    void d;
   }
 
   // ------------------------------------------------------------------------------------------------------------------- bodies
