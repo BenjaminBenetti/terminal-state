@@ -95,7 +95,6 @@ describe('loot reference: coverage (unknown registrations fail)', () => {
   // task studio-base-salvage-20261108-073314-01: dresser-declared contexts are REAL (each witness level places it) and shown as declared,
   // never as sampled; every level lists a holder context for each crafting material (the shared base salvage / its own salvage)
   it('generator-declared holder contexts: witnessed, shown as declared (not sampled); all three materials have a source on every level', () => {
-    const r = ref();
     let declared = 0;
     for (const id of LEVEL_IDS) {
       for (const d of LEVEL_ADAPTER[id].declared ?? []) {
