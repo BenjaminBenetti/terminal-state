@@ -32,6 +32,7 @@
 import {KITCHEN_LINE, PROP_DEFS, PURPOSE_SURFACES, SHELF_TIER_Y, SHOP_COOLER_SURFACES} from '../gen/props';
 import {purposePropShape, type PurposePart, type PartMat} from '../gen/purposeShapes';
 import type {Board, Box3Like, V3} from './shelfStockLayout';
+import {MERCH_BARE_VARIANT} from '../gen/skyways/stores/kinds/merch'; // lane MERCH: a bare device wall (its devices are props)
 
 /** Picture-carrying purpose materials (gen/purposeShapes.ts PURPOSE_MAT_KEYS) removed by the derivation. */
 export const PICTURE_MATS: ReadonlySet<string> = new Set(['stockSnacks', 'stockGrocery', 'stockPharmacy', 'stockCleaning', 'stockDevices', 'stockCartons', 'stockParts', 'magazines', 'flowers', 'bread', 'donuts', 'fruit']);
@@ -419,7 +420,9 @@ export function stockColliders(kind: string, variant: number, boards: readonly B
       const top = boards[0]?.y ?? DEVICE_WALL_DECK.y;
       box(-w / 2, 0, -d / 2 + 0.03, w / 2, top, d / 2 - 0.03); // cabinet
       box(-w / 2, 0, -d / 2, w / 2, h, -0.235); // back panel / pegboard
-      box(-w / 2 + 0.03, top, -0.075, w / 2 - 0.03, top + 0.21, 0.12); // the display phones on their stands (T2.5 model: z -0.07..0.11)
+      // the display phones on their stands (T2.5 model: z -0.07..0.11) — not on a bare unit (task studio-skywalk-variety-20261107-231448-01,
+      // lane MERCH: Skyways version 4 stands them on the deck as separate loose props, gen/skyways/skywaysMerchSplit.ts)
+      if (variant !== MERCH_BARE_VARIANT) box(-w / 2 + 0.03, top, -0.075, w / 2 - 0.03, top + 0.21, 0.12);
       box(-w / 2 + 0.03, 1.25, -0.235, w / 2 - 0.03, 1.28, -0.045); // accessory shelf (T2.5 model: 1.256..1.278, z -0.17..-0.05)
       break;
     }

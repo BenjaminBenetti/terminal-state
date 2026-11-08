@@ -138,7 +138,9 @@ export const PROP_DEFS: Record<PropKind, PropDef> = {
   /** Device table island (phones/tablets on stands). */
   techDisplay: {w: 1.6, d: 0.9, h: 0.92, blocksSight: false},
   /** Device wall unit: cabinet with phones on stands + hooked accessories + screen (Lane A tech-display.glb 1.10 x 2.00 x 0.58). */
-  deviceWall: {w: 1.1, d: 0.58, h: 2.0, blocksSight: false},
+  // (task studio-skywalk-variety-20261107-231448-01, lane MERCH: + its cabinet deck as a declared open shelf — the 0.849 m ray-cast deck of
+  // the model, world/shelfStockCarcass.ts DEVICE_WALL_DECK — where Skyways version 4 stands its display devices as separate props)
+  deviceWall: {w: 1.1, d: 0.58, h: 2.0, blocksSight: false, shelves: [{y: 0.849, x0: -0.53, x1: 0.53, z0: -0.22, z1: 0.27, clear: 0.4}]},
   /** Glass display counter (devices inside). */
   showcase: {w: 1.5, d: 0.6, h: 1.0, blocksSight: false},
   flowerStand: {w: 1.4, d: 0.7, h: 1.2, blocksSight: false},
