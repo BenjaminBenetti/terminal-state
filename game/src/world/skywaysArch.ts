@@ -15,6 +15,8 @@
 //  - the station storey (platforms, track bed, track tunnels, its shops / back rooms) and every storefront unit (shops / eateries:
 //    their own storefront walls / floors) keep the builder's own rule (null keys); above the station storey the storefront units take
 //    the pedway's plain plaster ceiling (and their door soffits), not the station ceiling kit.
+//    (task studio-skywalk-variety-20261107-231448-01, lane DRESS) except the small storefront units' walls and floors: their use's
+//    interior palette (world/skywaysShopFinish.ts: seven palettes as rows of the Mall's per-vertex finish programs — no draw call added).
 // The keys are arch-owned finishes for bullet impacts too (world/finishAt.ts, damage/impactFinish.ts: plaster / terrazzo / tile /
 // concrete) and never take a station wall treatment (world/wallDetailPlan.ts: the mall's front / back-of-house recipes).
 // Every surface reuses the office architecture's materials (world/officeArch.ts: ONE program per surface kind — the plasterboard wall,
@@ -83,7 +85,7 @@ export const SKYWAYS_TEX_KEYS = {herringbone: 'skyways-tex-herringbone', brickWa
 export const SKYWAYS_PAVER_STANDIN = {kind: 'stone' as FloorKind, tint: 0x6b3a2f};
 export const SKYWAYS_SLAT_STANDIN = {kind: 'raw' as CeilingKind, tint: 0x3a2b21, bar: 0x1c1612};
 
-/** What a Skyways area is, for its finishes ('station' / 'shop': the builder's own rule). */
+/** What a Skyways area is, for its finishes ('station': the builder's own rule; 'shop': its palette walls / floor, else the builder's). */
 export type SkywaysClass = 'station' | 'shop' | 'public' | 'court' | 'bridge' | 'wet' | 'boh' | 'anchor' | 'office';
 
 /** The class of an area (`bridges`: the layout.areas ids of the bridge decks). */
