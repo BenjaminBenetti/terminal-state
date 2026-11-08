@@ -13,6 +13,9 @@
 //    Enter on) a station SELECTS it and opens the details panel; travel happens only on the explicit "Depart" button (onConfirm);
 //    Cancel clears the selection. Hover never selects, a click never departs. view mode (title / pause "view map"): read-only.
 //  - Pan (drag), zoom (wheel at the cursor, + / - keys and buttons), F = fit the known stations, Home = the whole sheet.
+//    (task studio-ui-subway-maps-20261108-074144-01: the map OPENS on the whole sheet (fitOverview): the title band, the legend and the scale of the network
+//    are in view even with two stations known. The sheet is printed from the WHOLE network, so the overview reveals nothing that is
+//    not known: unknown stations, names, kinds and track still never print. Fitted once per open, never re-snapped while you pan.)
 //  - Keyboard: arrows move between selectable stations by direction, Enter selects, Esc / E / Tab close (task
 //    studio-alpha-survival-controls-20261107-060450-01: E / Tab on a fresh press; Tab no longer cycles the stations).
 //  - While open, the map owns the keyboard (a window capture listener, installed on open and removed on close): typing 1 3 3 7
@@ -36,6 +39,7 @@ import {canTravel, enableCheat, neighbors, reactorKnown, travelBlock, travelPlan
 import {DEV_GRANT_SEQUENCE, SequenceMatcher, digitOfCode} from '../items/devGrant';
 import {isTypingTarget} from '../player/input';
 import {seedToCode} from '../core/rng';
+import {hideTooltip, refreshTooltip, tipAttrs} from './tooltip'; // task studio-ui-subway-maps-20261108-074144-01
 
 /** The paper texture (runtime URL, relative like every other asset URL). */
 export const DEFAULT_PAPER_TEXTURE = 'assets/textures/paper-map.jpg';
@@ -578,8 +582,11 @@ export function renderInk(m: MapModel, net: SubwayNetwork, mode: MapMode, select
   // hit areas (>= 30 screen px across)
   o.push(`<g class="pm-hits">`);
   for (const s of m.stations) {
-    const label = `${s.node.name}, ${s.kind === 'maintenance' ? `${kindLabel(s.kind)} (${archetypeLabel(s.node.archetype)})` : archetypeLabel(s.node.archetype)}${s.current ? ', you are here' : s.adjacent ? ', one stop away' : s.can && mode === 'travel' ? ', visited' : ''}`;
-    o.push(`<circle class="pm-hit${s.can ? ' pm-can' : ''}" data-station="${esc(s.node.id)}" cx="${n1(s.p.x)}" cy="${n1(s.p.y)}" r="${n1(m.hitR)}"><title>${esc(label)}</title></circle>`);
+    const kindText = s.kind === 'maintenance' ? `${kindLabel(s.kind)} (${archetypeLabel(s.node.archetype)})` : archetypeLabel(s.node.archetype);
+    const status = s.current ? 'You are here' : s.adjacent ? 'One stop away' : s.can && mode === 'travel' ? 'Visited' : '';
+    const label = `${s.node.name}, ${kindText}${status ? `, ${status.toLowerCase()}` : ''}`;
+    // (task studio-ui-subway-maps-20261108-074144-01) the game's tooltip (no SVG <title>: a native tooltip outlived the closed map); the label stays the accessible name
+    o.push(`<circle class="pm-hit${s.can ? ' pm-can' : ''}" data-station="${esc(s.node.id)}" cx="${n1(s.p.x)}" cy="${n1(s.p.y)}" r="${n1(m.hitR)}" role="img" aria-label="${esc(label)}"${tipAttrs({head: s.node.name, lines: [kindText, status]})}></circle>`);
   }
   o.push(`</g></svg>`);
   return o.join('');
@@ -728,7 +735,7 @@ export class PaperMap {
     this.mount();
     this.attach();
     this.root?.classList.remove('pm-hidden');
-    this.fitKnown();
+    this.fitOverview();
     this.renderPanel();
     this.root?.focus?.();
   }
@@ -737,6 +744,7 @@ export class PaperMap {
   close(): void {
     if (!this.openFlag) return;
     this.openFlag = false;
+    hideTooltip(); // (task studio-ui-subway-maps-20261108-074144-01)
     this.detach();
     this.matcher.reset();
     this.selected = null;
@@ -888,6 +896,14 @@ export class PaperMap {
     this.setView(s, (w - PAPER.w * s) / 2, BAR_H + (h - BAR_H - PAPER.h * s) / 2);
   }
 
+  /**
+   * (task studio-ui-subway-maps-20261108-074144-01) The opening view: the whole sheet, so the legend at the top and the size of the network read at once (user:
+   * "it should start zoomed out! So that you can see the legend at the top and get a sense of the scale"). F still frames the known stations.
+   */
+  fitOverview(): void {
+    this.fitSheet();
+  }
+
   /** Frame the known stations (zoomed in up to 1.7x the whole-sheet scale, so the sheet still reads as a map; never below it). */
   fitKnown(): void {
     const st = this.state;
@@ -985,10 +1001,10 @@ export class PaperMap {
     el.setAttribute('aria-label', 'Network map');
     el.setAttribute('tabindex', '-1');
     el.innerHTML = `<div class="pm-stage"><div class="pm-sheet"></div></div>
-      <header class="pm-bar"><b>Network map</b><span class="pm-mode"></span><span class="pm-tools"><button type="button" class="pm-zoom-out" aria-label="Zoom out" title="Zoom out (-)">−</button><button type="button" class="pm-zoom-in" aria-label="Zoom in" title="Zoom in (+)">+</button><button type="button" class="pm-fit" title="Fit the known stations (F)">Fit</button><button type="button" class="pm-close" title="Close (Esc)">Close</button></span></header>
+      <header class="pm-bar"><b>Network map</b><span class="pm-mode"></span><span class="pm-tools"><button type="button" class="pm-zoom-out" aria-label="Zoom out"${tipAttrs({head: 'Zoom out (−)'})}>−</button><button type="button" class="pm-zoom-in" aria-label="Zoom in"${tipAttrs({head: 'Zoom in (+)'})}>+</button><button type="button" class="pm-fit"${tipAttrs({head: 'Zoom to the known stations (F)'})}>Fit</button><button type="button" class="pm-whole"${tipAttrs({head: 'Show the whole map (Home)'})}>Whole map</button><button type="button" class="pm-close"${tipAttrs({head: 'Close (Esc)'})}>Close</button></span></header>
       <aside class="pm-panel pm-hidden" aria-live="polite"></aside>
       <div class="pm-note pm-hidden"></div>
-      <div class="pm-help">Drag to pan · wheel or + and − zoom · F fits · arrows or Tab pick a station · Enter selects · Esc closes</div>
+      <div class="pm-help">Drag to pan · wheel or + and − zoom · F fits the known stations · Home shows the whole map · arrows pick a station · Enter selects · Esc closes</div>
       <div class="pm-live" aria-live="polite"></div>`;
     (this.opts.parent ?? document.querySelector('#app') ?? document.body).appendChild(el);
     this.root = el;
@@ -1034,6 +1050,7 @@ export class PaperMap {
     this.model = buildMapModel(st, this.mode, this.view.s, this.selected, this.focused, this.paperPositions(), !!this.args?.fuel);
     if (this.sheet) this.sheet.innerHTML = renderInk(this.model, st.network, this.mode, this.selected, this.focused, this.args?.fuel ?? null);
     this.applyTransform();
+    refreshTooltip(); // (task studio-ui-subway-maps-20261108-074144-01) a re-print replaced the hovered station: re-bind or hide
     const mode = this.root?.querySelector('.pm-mode');
     if (mode) {
       const here = st.network.nodes.find(n => n.id === st.current);
@@ -1140,6 +1157,7 @@ export class PaperMap {
     if (hit('.pm-zoom-in')) { this.zoomBy(1.35); return; }
     if (hit('.pm-zoom-out')) { this.zoomBy(1 / 1.35); return; }
     if (hit('.pm-fit')) { this.fitKnown(); return; }
+    if (hit('.pm-whole')) { this.fitOverview(); return; }
     if (hit('.pm-depart')) { this.confirm(); return; }
     if (hit('.pm-cancel')) { this.cancel(); return; }
     if (!hit('.pm-stage') || this.suppressClick) return;

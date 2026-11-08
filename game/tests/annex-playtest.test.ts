@@ -277,7 +277,10 @@ describe('survivor caches deeper in (round 2, lane CACHE, R5)', () => {
       // so every earlier holder index / loot roll is unchanged) and no other prop carries the cache key
       const pieces = new Set(caches.flatMap(c => c.pieces));
       const firstPiece = Math.min(...pieces);
-      expect(pieces.size, `${level} ${seed} cache pieces are the tail`).toBe(layout.props.length - firstPiece);
+      // (task studio-ui-subway-maps-20261108-074144-01: the Subway's station map kiosks are appended after them, by the registry's last pass)
+      const kiosks = layout.props.slice(firstPiece).filter(p => p.kind === 'subwayMapKiosk').length;
+      expect(layout.props.slice(layout.props.length - kiosks).every(p => p.kind === 'subwayMapKiosk'), `${level} ${seed} kiosks last`).toBe(true);
+      expect(pieces.size, `${level} ${seed} cache pieces are the tail`).toBe(layout.props.length - kiosks - firstPiece);
       layout.props.forEach((p, i) => { if (p.purpose === ANNEX_CACHE_KEY) expect(pieces.has(i)).toBe(true); });
     }
   });

@@ -547,6 +547,31 @@ doors, run mouths, walking lanes / plazas, landmark discs, bridge lanes and shop
 - Tests: `tests/skyways-map-boards.test.ts` (both audits, the shape inside its box, placement and clearances on real seeds, the plan
   against the layout, YOU ARE HERE, storey highlighting, forbidden words, the renderer's bounded meshes / textures, the close-up read).
 
+### Subway station map kiosks (task studio-ui-subway-maps-20261108-074144-01)
+One NEW kind, `subwayMapKiosk` (`gen/subwayMapKioskKind.ts`). It is a wall-backed "STATION MAP" pylon in the mall directory's
+proportions: a painted-steel cabinet on a plinth, with a printed panel behind a brushed-steel frame.
+- **Build:** procedural geometry in the existing shape materials; there is no model and no generation. The panel is a code-drawn plan
+  of the generated station (`world/subwayMapPlan.ts`, drawn by `world/subwayMapKiosks.ts`): one per-layout runtime-composited data
+  texture (an atlas) for all the station's kiosks.
+- **Placement:** `gen/subwayMapKiosks.ts` places them after generation. They are appended to `layout.props`, RNG-neutral and
+  deterministic, so older prop indices never move.
+  - Where: platform 1 by the arrival, then the ticket / fare halls, the concourses, the arcade and the food court, then the other
+    platforms. At most 4, one per area, at least 8 m apart.
+  - Back on a solid wall (never an opening, storefront or light well), with a 1.2 m reading strip in front.
+  - Clear of door zones and door clear volumes, stairs, ladder / link stand areas, the track edge (2 m), pickups, enemy spawns, the
+    arrival point, signs and every other prop.
+
+| Kind | Openables audit | Physics audit | Scale check (`--prop` of its runtime geometry beside `lastshift`) |
+|---|---|---|---|
+| `subwayMapKiosk` | `none` (`equipment`): a sealed sign — the plan behind a screwed glazed panel in a welded steel cabinet, no door, lid or drawer | static `anchored` (~120 kg cabinet bolted to the floor and the wall behind it) | 0.94 × 2.10 × 0.32 m; grounded on its plinth (4 contacts, span 0.94 × 0.32 m); panel 0.80–1.94 m |
+
+- Nothing loose is part of it (no baked clutter). Damage: sheet metal, marks only (never breaks).
+- E at a kiosk's face opens a close-up of the same face (`world/subwayMapRead.ts`, the Skyways boards' read rules).
+- The face prints only public, non-extension space on the kiosk's own storey, heads-up, with YOU ARE HERE. It never prints
+  back-of-house, the service level, the track extensions, props, loot or enemies.
+- Tests: `tests/subway-map-kiosks.test.ts`. It covers both audits, placement and clearances on 12 real seeds, the non-destructive
+  append, the plan's secrecy, the face, the renderer's bounded meshes / one texture, and the close-up read.
+
 ### Skyways planted galleries and courts (task studio-skyways-rework-20261107-054512-01, lane ARCH)
 `gen/skyways/gardens.ts` (layout version 3) lines every atrium opening's skyway-level gallery with planter troughs against the
 balustrade, and puts a few bench-planters in the large skyway courts and the atrium courts. Two NEW code-drawn kinds

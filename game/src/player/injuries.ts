@@ -33,6 +33,7 @@ import {LIMBS, treatsText, type Limb} from '../items/medical';
 import type {ItemDef} from '../items/items';
 import {STAMINA_PCT_PER_UNIT} from './player'; // task studio-alpha-survival-controls-20261107-060450-01 (the stamina reserve's units)
 import {injurySaved} from './armor'; // task studio-general-armor-20261107-231448-01: the armour save
+import {tipAttrs} from '../ui/tooltip'; // task studio-ui-subway-maps-20261108-074144-01 (the inventory's limbs line)
 
 export type {Limb};
 export type LimbSide = 'left' | 'right';
@@ -348,10 +349,10 @@ export function injuryStatusText(v: InjuryView): string {
 /** #inv-vitals fragments (lane GEAR renders them after Water): `.crit` turns the <b> red. */
 export function injuryStatusHtml(v: InjuryView): string {
   const hurt = LIMBS.filter(l => limbOf(v, l));
-  if (!hurt.length) return '<span class="limbs" title="No arm or leg injuries">Limbs <b>OK</b></span>';
+  if (!hurt.length) return `<span class="limbs"${tipAttrs({head: 'Limbs OK', hint: 'No arm or leg injuries'})}>Limbs <b>OK</b></span>`; // (task studio-ui-subway-maps-20261108-074144-01: the game tooltip)
   return hurt.map(l => {
     const i = limbOf(v, l)!;
-    return `<span class="limbs crit" title="${EFFECT[l]} — treat with a ${TREAT[l]}">${cap(i.side)} ${l} <b>injured</b> · ${l === 'leg' ? 'splint' : 'sling'}</span>`;
+    return `<span class="limbs crit"${tipAttrs({head: `${cap(i.side)} ${l} injured`, lines: [EFFECT[l]], hint: `Treat with a ${TREAT[l]}`, tone: 'danger'})}>${cap(i.side)} ${l} <b>injured</b> · ${l === 'leg' ? 'splint' : 'sling'}</span>`;
   }).join('');
 }
 
