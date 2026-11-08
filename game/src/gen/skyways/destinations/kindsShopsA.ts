@@ -13,7 +13,7 @@
 //    display tent is pegged to weighted plates; the canoe hangs from the ceiling);
 //  - LOOSE things are dynamic with plausible masses (the wingback, egg and camp chairs, the arc lamp, the drum kit, guitars on their
 //    stands, the toy robot; the small merchandise — book stacks, record crates, backpacks, lanterns, boxed kits, the airship model —
-//    is `onHost`: it goes loose on a static host's top, or from the floor);
+//    is `onHost`: it goes loose on a static host's top or (lane MERCH) on a known open shelf inside it, or from the floor);
 //  - nothing is storage: the kit is fixtures, furniture, exhibits and merchandise (the anchors' storage / loot holders are EXISTING
 //    openable / holder kinds: counters, coolers, shelving, sideboards — gen/skyways/destinations/shopsA.ts). Things that only LOOK
 //    openable (the tent's zipped door, a backpack's zips, the boxed kits, the piano lid) are explicit exceptions with their reason;
@@ -89,7 +89,7 @@ const PHYS: Readonly<Record<ShopsAKind, DestPhys>> = {
   skyDBookcase: {dynamic: false, why: 'too heavy', how: 'solid oak six-shelf bookcase (~85 kg, 2.4 m tall) standing against the shop wall: a bump or a bullet does not shift it; its book stacks are separate loose props on its measured shelves'},
   skyDBookTable: {dynamic: false, why: 'too heavy', how: 'three-tier round oak display table on a pedestal plinth (~45 kg, no castors): a bump cannot slide it; the book stacks / lanterns on its tiers are separate loose props'},
   skyDWingbackChair: {dynamic: true, mass: 24, mat: 'pad', shape: 'box', how: 'leather wingback armchair on wooden feet (~24 kg): shoved across the floor when walked into, slides / tips under buckshot'},
-  skyDBookStack: {dynamic: true, mass: 5, mat: 'pad', shape: 'box', onHost: true, how: 'stack of six hardcover books (~5 kg) on a shelf / tier / sideboard: on a host top a shot knocks it off (on-host decor); inside a bookcase bay it rests within the static case'},
+  skyDBookStack: {dynamic: true, mass: 5, mat: 'pad', shape: 'box', onHost: true, how: 'stack of six hardcover books (~5 kg) on a shelf / tier / sideboard: a shot knocks it over or off its shelf / top (on-host decor on a known open support: physics/merchOnHost.ts)'},
   skyDCanoe: {dynamic: false, why: 'mounted', how: 'wood-and-canvas canoe (~30 kg) hung from the ceiling on two steel cables: out of reach overhead (a clear underside >= 2.3 m), bullets mark it only'},
   skyDTent: {dynamic: false, why: 'anchored', how: 'pitched two-person display dome tent: its poles and guy lines are clipped to weighted display plates on the shop floor, so a bump or a bullet does not drag it'},
   skyDBackpack: {dynamic: true, mass: 6, mat: 'pad', shape: 'box', onHost: true, how: 'stuffed display hiking pack (~6 kg) standing on the floor: buckshot knocks it over, a bump shoves it'},
@@ -103,7 +103,7 @@ const PHYS: Readonly<Record<ShopsAKind, DestPhys>> = {
   skyDAmpStack: {dynamic: false, why: 'too heavy', how: 'guitar half stack: amplifier head on a speaker cabinet (~45 kg, no castors): a bump cannot slide it'},
   skyDDiorama: {dynamic: false, why: 'too heavy', how: 'model-railway diorama built on a sturdy 3 m wooden table (~120 kg): it does not move'},
   skyDAirshipModel: {dynamic: true, mass: 2.5, mat: 'pad', shape: 'box', onHost: true, how: 'display model airship on its little brass stand (~2.5 kg) on a sideboard: a shot knocks it off the top (on-host decor)'},
-  skyDModelKits: {dynamic: true, mass: 2, mat: 'pad', shape: 'box', onHost: true, how: 'stack of five boxed plastic model kits (~2 kg of cardboard) on a shelf tier: inside a shelving bay it rests within the static unit; on a top a shot knocks it off'},
+  skyDModelKits: {dynamic: true, mass: 2, mat: 'pad', shape: 'box', onHost: true, how: 'stack of five boxed plastic model kits (~2 kg of cardboard) on a shelf tier or a top: a shot knocks it over or off its shelf (on-host decor on a known open support: physics/merchOnHost.ts)'},
   skyDToyRobot: {dynamic: true, mass: 12, mat: 'pad', shape: 'box', how: 'metre-tall tin-toy robot on its round display base (~12 kg): buckshot tips it, a bump shoves it'},
   skyDSofa: {dynamic: false, why: 'too heavy', how: 'mid-century three-seat sofa (~55 kg, no castors): a bump cannot slide it'},
   skyDEggChair: {dynamic: true, mass: 25, mat: 'pad', shape: 'box', how: 'egg lounge chair on a swivel star base (~25 kg): shoved across the showroom floor when walked into, tips under buckshot'},
@@ -188,7 +188,8 @@ function shelvesOf(k: ShopsAKind): Shelves | undefined {
     const yf = r3(Math.min(...front.map(b => b.y0)) - 0.002), yb = r3(Math.min(...back.map(b => b.y0)) - 0.002);
     return [
       {y: yf, x0, x1, z0: zb, z1: r3(Math.max(...front.map(b => b.z1)) + 0.12), clear: r3(yb - yf)},
-      {y: yb, x0, x1, z0: zb, z1: r3(Math.min(...front.map(b => b.z0)) - 0.005), clear: r3(m.h - yb)},
+      // (its board stops 2.5 cm short of the front row's sleeves: physics/holderShapes.ts grows each board 1.5 cm)
+      {y: yb, x0, x1, z0: zb, z1: r3(Math.min(...front.map(b => b.z0)) - 0.025), clear: r3(m.h - yb)},
     ];
   }
   return undefined;

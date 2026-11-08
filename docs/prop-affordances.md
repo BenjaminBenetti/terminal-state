@@ -197,6 +197,27 @@ office-props-physics-scale-20261030, lane PHYS; `tests/contact-physics.test.ts`)
 - On-host decor (`onHost`, e.g. the monitor on a desk) goes loose on its static host's top (a host-top support slab is
   added); a prop that something rests on never goes loose (every world); collider `fit` shrinks a chair's box (it is tucked
   under its desk). Pickups lying on a prop that starts to move are woken with it (they fall / ride, never float).
+- Shelf stock (task studio-skywalk-variety-20261107-231448-01, lane MERCH; user: "items on top of counters / shelves should not
+  be part of the counter / shelf and have physics, when shot"). On-host decor standing INSIDE its static host's box also goes
+  loose when shot: skates on a slatwall deck, books on a bookcase shelf, kits on a gondola tier, a record-bin block, a pot in a
+  hanging basket. The one rule is `physics/merchOnHost.ts`, used by every consumer for every present and future movable kind:
+  - It needs a KNOWN open support under it. That is a loot holder's own loot surfaces (its shelves: the holder now collides
+    small things by its UNCUT surfaces, so the deck is there under a moved piece) or the host kind's declared
+    `PropDef.shelves` (host frame; `[]` = it hangs its decor on hooks, so a knocked piece falls). Today `skyDBookcase`,
+    `skyDBookTable` and `skyDRecordBins` declare their measured shelves / tiers / trays, and `storeGardenBasketRail` declares
+    `[]`.
+  - A host without a known support keeps its decor static. The Office reception counter-well monitor is inside a closed
+    counter block.
+  - A bullet that strikes such open shelving goes on into it (`raycastShot`, Game.fire): the first resting shelf piece on its
+    line takes the hit, unless a wall or slab lies between. It never passes into an enclosed holder or a host without known
+    shelves. A loose piece lying back on a shelf is hit as a body through the host's box.
+  - Shelf stock is out of a walker's reach: the shelving is in the way, so there is no contact wake.
+  - Explicit exception: `skyMuFacedRecords` (one prop for a row of five sleeves on the new-arrivals ledge; its board declares no
+    shelves).
+  - Tests: `tests/skyways-merch-physics.test.ts`. A guard over real version 3 / 4 seeds checks that every piece resting inside its
+    host has a known support and that no declared board starts inside stock. A buckshot volley through the real damage and
+    physics path into one sample of every kind @ host pair checks that it goes loose, moves, never sinks through its shelf and
+    rests supported. A shot pot falls and a Player shoves it.
 - Loot rides with its holder or is dropped as real pickups. It never floats, duplicates or vanishes; hover highlights follow
   the item.
   - A moving holder must be a spill holder (`spill` in `world/openablesSpec.ts`: `containers.goLoose` drops its finite lots as
