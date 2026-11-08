@@ -18,7 +18,9 @@ import type {TrackExtConfig} from '../gen/trackExt/types';
 // "Industrial Service Cathedral" pit under a rim station.
 // Task studio-skyways-level-20261106-054448-01 (primary): + 'skyways' — SKYWAYS (gen/skyways/index.ts generateSkywaysLevel): a connected
 // multi-building pedway network with glazed bridges over the streets and exactly one localized add-on.
-export type LevelId = 'subway' | 'office' | 'mall' | 'skyways' | 'reactor';
+// Task studio-survivor-market-20261108-005807-01 (lane LEVEL): + 'market' — THE SURVIVOR MARKET (gen/market/index.ts generateMarketLevel): a
+// compact calm settlement the player's train pulls into for a pit stop (no enemies, clean air, six trader stalls, housing, a kitchen).
+export type LevelId = 'subway' | 'office' | 'mall' | 'market' | 'skyways' | 'reactor';
 
 /** A section of a logical level: every level is one section, 'main' (one continuous world). */
 export interface SectionKey {
