@@ -10,8 +10,11 @@
 //    walls of setback / stepped tops — merged into the shells mesh.
 // Styles (per building from its role, then a seeded rotation over the hubs so neighbours differ): civic (the station building: a
 // limestone base colonnade, full-bay piers, heavy cornice), masonry (brick piers on every other bay = punched windows, stone
-// courses, oriel bays), grid (a concrete frame of piers and spandrels), ribbon (continuous spandrel panels, corner piers only) and
-// fins (deep mullion fins, stepped crowns, masts). Crowns: parapet, penthouse, setback, stepped, frame.
+// courses, oriel bays), grid (a concrete frame of piers and spandrels), ribbon (continuous spandrel panels with sill lips, corner
+// piers only) and fins (deep mullion fins, stepped crowns, masts). Crowns by height: parapet / penthouse on low buildings, penthouse /
+// setback / stepped / frame on tall ones. Colours are flat per-element albedos (like the curbs / bridge steel), darkened toward the
+// top like the curtain wall; no new texture. Runtime only: its own seeded stream (never a generation draw), no shadow casting (the
+// exterior is unlit), the exterior's fog, visibility gate and warm-up pool unchanged.
 // The relief is laid on the facade material's own grid (storey lines every 4.4 m from the street, bay lines on the world 1.5 m
 // grid) so spandrels sit on its concrete bands and piers on its mullions.
 // Keep-clear: nothing is placed in front of a window / entrance span (its outward prism, so the view out stays clear and no relief
@@ -399,6 +402,11 @@ function planBuilding(info: SkywaysInfo, b: SkywaysBuilding, shell: FacadeContex
   const inset = (r: SkywaysRect, ix: number, iz: number): SkywaysRect => ({x0: r.x0 + ix, z0: r.z0 + iz, x1: r.x1 - ix, z1: r.z1 - iz});
   const keepOut: SkywaysRect[] = [];
   if (b.atrium) keepOut.push({x0: b.atrium.rect.x0 - 2, z0: b.atrium.rect.z0 - 2, x1: b.atrium.rect.x1 + 2, z1: b.atrium.rect.z1 + 2});
+  // skylight wells under the roofs (layout v3+): plant never stands over one
+  for (const s of info.skylights ?? []) {
+    const r = s.rect;
+    if (r.x1 > b.rect.x0 && r.x0 < b.rect.x1 && r.z1 > b.rect.z0 && r.z0 < b.rect.z1) keepOut.push({x0: r.x0 - 1, z0: r.z0 - 1, x1: r.x1 + 1, z1: r.z1 + 1});
+  }
   /** Rooftop plant: n boxes inside the roof (clear of its parapet, each other and the keep-outs). */
   const plant = (r: SkywaysRect, y: number, n: number, big = false): void => {
     const R = inset(r, F.parapet.t + 1.2, F.parapet.t + 1.2), W = R.x1 - R.x0, D = R.z1 - R.z0;
