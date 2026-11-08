@@ -147,6 +147,7 @@ import {skywaysGardenModelKeysFor} from './world/skywaysGardens'; // (lane ARCH)
 import {SKYWAYS_LAYOUT_LANE, skywaysLayoutVersionFor} from './gen/skyways/layoutVersion'; // task studio-skyways-destinations-20261106-170011-01
 import {installSkywaysDestAudio} from './world/skywaysDestAudio'; // task skyways-destinations-20261106 (lane AUDIO): the destinations' location sounds
 import {installSkywaysMapRead} from './world/skywaysMapRead'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the directory boards' close-up read
+import {installMarketTrade, type TradeSystem} from './market/trade/tradeSystem'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): Rail Ties + the six stalls
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
 import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
@@ -362,6 +363,8 @@ export class Game {
   trainCargo!: TrainCargoSystem;
   /** Task studio-beta-train-all-cargo-20261107-184244-01: the movable props aboard (world/trainPropCargo.ts). */
   trainPropCargo!: TrainPropCargo;
+  /** Task studio-survivor-market-20261108-005807-01 (lane TRADE): the Rail Ties wallet + market trade (market/trade/tradeSystem.ts). */
+  trade!: TradeSystem;
   /** Task skyways-level-20261106 (lane CAR): the Skyways prize car — while `driving`, update() steps the player through it (world/skywaysCar.ts). */
   skywaysCar!: SkywaysCar;
   /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
@@ -655,6 +658,10 @@ export class Game {
     hookName('train');
     this.lockbox = installLockbox(this); // task train-lockbox-windows-20261101-232156 (lane BOX): after TRAIN (its onLockboxInteract opens the view)
     hookName('lockbox');
+    // task studio-survivor-market-20261108-005807-01 (lane TRADE): the Rail Ties wallet (run participant 'market.wallet') + the market stalls'
+    // trade view (E at a stall's front; inert where the layout has no market)
+    this.trade = installMarketTrade(this);
+    hookName('marketTrade');
     installSkywaysTrunk(this); hookName('skywaysTrunk'); // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): after the car (its section hook follows the car's) and the Lockbox; inert without the car
     // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
     // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
