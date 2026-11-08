@@ -67,6 +67,7 @@ import {buildWasteVisuals} from './reactor/wasteVisuals'; // task reactor-expans
 import {SkywaysArch} from './skywaysArch'; // task studio-skyways-level-20261106-054448 (lane VIEW): the Skyways finishes + atrium roofs
 import {MarketArch} from './marketArch'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market's corrugated / salvaged finishes
 import {TRACK_SLEEPER} from './railTiesModel'; // task studio-market-rework-20261108-074144-01 (lane TRADE): the sleeper's size, shared with the Rail Ties model
+import {platformLipBoxes, platformLipGeometry} from './platformEdgeLip'; // task studio-cosplay-general-20261108-225231-01 (lane GENERAL): the edge lip, proud of the floor / face
 
 class Accum {
   pos: number[] = [];
@@ -596,12 +597,14 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     }
   }
   // Platform edge lips (both edges of an island).
+  // Task studio-cosplay-general-20261108-225231-01 (lane GENERAL; user: "Subway platform edge z-fighting."): the lip stood flush
+  // inside the platform (top = the floor, front = the platform face: coplanar duplicates); it now stands a few mm proud of both,
+  // world-mapped (world/platformEdgeLip.ts). Same trim chunk + level as before (keyed at the old box centre).
   for (const id of layout.platforms) {
     const a = layout.areas[id];
     const g = gridOf(levelOf(a));
     const af = g.floorOf(g.idx(a.x, a.y));
-    const zs = a.edge === 'NS' ? [a.y * CELL + 0.04, (a.y + a.h) * CELL - 0.04] : [a.edge === 'S' ? (a.y + a.h) * CELL - 0.04 : a.y * CELL + 0.04];
-    for (const z of zs) for (const [xa, xb] of chunkSpans(a.x * CELL, (a.x + a.w) * CELL)) addBox('platformFace', (xa + xb) / 2, af - 0.04, z, xb - xa, 0.08, 0.08);
+    for (const b of platformLipBoxes(a, af, chunkSpans)) trimList('platformFace', b.cx, b.keyZ, levelAt(b.cx, b.keyY, b.keyZ)).push(platformLipGeometry(b, mats.scale.platformFace));
   }
   // Passages (stairs, escalator halls, transfer passages): wall handrails along the side walls.
   // Iteration 07 (Lane DW): rails stop short of every opening (gen/doorways.ts passageRails).
