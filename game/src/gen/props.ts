@@ -77,6 +77,13 @@ export interface PropDef {
    * decor declared with its kind (gen/skyways/kitchenKinds.ts).
    */
   physics?: {mass: number; dynamic: boolean; shape?: 'box' | 'cylinder'; mat?: 'metal' | 'plastic' | 'soft' | 'heavy' | 'wood' | 'glass' | 'stone' | 'cloth' | 'flesh' | 'castor' | 'pad'; onHost?: boolean; contact?: boolean};
+  /**
+   * Task studio-skywalk-variety-20261107-231448-01 (lane MERCH): the OPEN support surfaces inside a non-holder host's box (prop frame:
+   * origin bottom centre, front +Z; like a loot holder's surfaces) — the shelves / tiers / bin floors its movable on-host decor stands on
+   * (physics/merchOnHost.ts). Declared: that decor goes loose there when shot, and loose things rest on them (physics/world.ts). `[]` = it
+   * HANGS its decor (hooks): knocked loose, it falls. Absent: no known open support (a closed counter well keeps its decor static).
+   */
+  shelves?: readonly {y: number; x0: number; x1: number; z0: number; z1: number; clear: number}[];
 }
 
 export const PROP_DEFS: Record<PropKind, PropDef> = {

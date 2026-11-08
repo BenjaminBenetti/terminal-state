@@ -21,6 +21,7 @@ import {propPhysics} from '../src/damage/materials';
 import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {dynamicKind} from '../src/physics/dynamicItems';
+import {restsOnHost} from '../src/physics/merchOnHost'; // task studio-skywalk-variety-20261107-231448-01 (lane MERCH)
 import {ECON_CATS, HANDFUL, HOLDER_ALLOW, econCat, lootProfile} from '../src/items/lootTables';
 import {isLootHolderKind} from '../src/items/loot';
 import {purposeById, purposeLoot} from '../src/gen/purposes';
@@ -260,14 +261,16 @@ describe('Northern Groove Records on real seeds (both formats)', () => {
     }
   }, 120_000);
 
-  it('physics: the stock rests within its static hosts (never goes loose from a bay / ledge); booth equipment on the console top goes loose; stools are floor props', () => {
+  it('physics: the stock stands inside its static hosts (bin blocks go loose on the rack\'s declared trays, faced rows stay on their ledge); booth equipment on the console top goes loose; stools are floor props', () => {
     const {layout: l, anchor: an} = HITS[0];
     const props = storeProps(l, an);
     for (const p of props.filter(q => q.kind === 'skyMuBinRecords' || q.kind === 'skyMuFacedRecords')) {
       const h = l.props[p.host!];
       expect(dynamicKind(h.kind)).toBe(false);
-      // on-host decor goes loose only from its host's TOP (DynamicItems.restsOnStaticHost): a bay / ledge is below it
+      // a bay / ledge is below the host's top (task studio-skywalk-variety-20261107-231448-01, lane MERCH: physics/merchOnHost.ts — a
+      // bin block goes loose on the rack's declared trays when shot; the faced row (one prop for five sleeves) is an explicit exception)
       expect(Math.abs(p.y - (h.y + h.h))).toBeGreaterThan(0.05);
+      expect(restsOnHost(p, l.props)).toBe(p.kind === 'skyMuBinRecords' ? 'shelf' : null);
     }
     for (const p of props.filter(q => q.kind === 'skyMuTurntable' || q.kind === 'skyMuHeadphones')) {
       const h = l.props[p.host!];

@@ -52,6 +52,7 @@ import {lureWorld} from './ai/lightLure'; // Iteration 12 (AI): light attracts e
 import {moveZombie, sameLevel, settleZombie} from './ai/motor';
 import {ladderTarget, type Ladder} from './gen/traversal';
 import {raycastWorld, type Vec3, type WorldHit} from './combat/hitscan';
+import {raycastShot} from './physics/merchOnHost'; // task studio-skywalk-variety-20261107-231448-01 (lane MERCH): bullets into open shelves
 import {nearestEnemyHit} from './combat/enemyRay'; // lane COMBAT (reactor-playtest-round2): cross-storey bullet / pellet hits
 import {meleeDamage, meleeRayDirs, resolveMelee} from './combat/melee'; // lane KNIFE (knife-melee-20261030)
 import {DAMAGE_MATERIALS, propDamageSpec} from './damage/materials'; // lane KNIFE: blade-on-surface cue / chips
@@ -2945,7 +2946,8 @@ export class Game {
       const d: Vec3 = {x: dir.x, y: dir.y, z: dir.z};
       prof.begin(SPAN.fireRays);
       // Lane B (iteration 08): through every level's bands — a slab between shooter and target stops the bullet
-      const wh = raycastWorld(this.levels, this.layout.props, o, d, def.range, this.layout.trench.floorY);
+      // (lane MERCH: struck open shelving -> the first resting shelf piece on the line inside it: physics/merchOnHost.ts)
+      const wh = raycastShot(this.levels, this.layout.props, o, d, def.range, this.layout.trench.floorY);
       let bestT = wh.t, bestZ: EnemyActor | null = null, bestPart = 'torso';
       // Lane COMBAT (reactor-playtest-round2): every live enemy's volumes along the full 3D ray, any storey, culled or not (combat/
       // enemyRay.ts: the old cheap reject mis-projected pitched rays and skipped enemies up / down stairs, atria and the pit)

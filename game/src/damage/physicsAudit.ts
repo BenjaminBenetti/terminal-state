@@ -65,11 +65,13 @@ const SUBWAY_STATIC: Readonly<Record<string, readonly [StaticWhy, string]>> = {
   shopShutter: ['structure', 'rolled-down shop shutter'],
   // task track2-playtest-revision (lane ROOMS): collision box of an annex machinery assembly (gen/annexRooms.ts)
   annexMachine: ['machinery', 'anchored plant built into a service annex (boiler bank, generator set, turbine, fans, switchgear, channel curbs / basin parapets / spillway chute walls): tonnes of bolted steel and cast concrete'],
-  magazineRack: ['fixture', 'loaded wire magazine rack, a store fixture'],
-  techDisplay: ['built-in', 'store display table with devices'],
-  deviceWall: ['built-in', 'wall display of devices'],
+  // (task studio-skywalk-variety-20261107-231448-01, lane MERCH: the four store fixtures whose stock is still part of their drawn shape
+  // are EXPLICIT baked-stock exceptions — root CLAUDE.md rule 4; no magazine / device / flower prop or item exists to separate them into)
+  magazineRack: ['fixture', 'loaded wire magazine rack, a store fixture: its magazines are drawn as part of the rack, held in its wire pockets (explicit baked-stock exception)'],
+  techDisplay: ['built-in', 'store display table with devices: the demo devices are part of the table, security-tethered display units (explicit baked-stock exception)'],
+  deviceWall: ['built-in', 'wall display of devices: the devices are part of the wall unit, tethered display units (explicit baked-stock exception)'],
   showcase: ['fixture', 'glazed store showcase'],
-  flowerStand: ['fixture', 'florist\'s tiered stand'],
+  flowerStand: ['fixture', 'florist\'s tiered stand: its flower buckets are drawn as part of the stand (explicit baked-stock exception: no bucket kind yet)'],
   repairBench: ['built-in', 'repair workbench with its pegboard'],
   pizzaOven: ['machinery', 'pizza oven (~300 kg)'],
   breadRack: ['fixture', 'bakery bread rack'],
