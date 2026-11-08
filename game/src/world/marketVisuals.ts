@@ -168,7 +168,7 @@ export function buildMarketView(layout: StationLayout): MarketView | null {
     root.add(canvas, battens);
   }
   // --- (version 2) lines across the lanes: wire + poles (steel), laundry (plain dyed cloth, vertex colours, both sides) ---
-  const lines = layout.market.v === 2 ? settleLines(layout) : [];
+  const lines = layout.market.v >= 2 ? settleLines(layout) : []; // (+ version 3, task studio-market-bar-20261108-225231-01)
   const lg = lineGeometry(lines);
   if (lg) {
     geometries.push(lg.steel);

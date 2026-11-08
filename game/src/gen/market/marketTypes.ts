@@ -60,6 +60,9 @@ export interface MarketSpot extends MarketPoint {
   /** ('drink', task studio-market-bar-20261108-225231-01: a bar patron's post — a stool at the bar counter or a seat at a bar table.) */
   kind: 'idle' | 'sit' | 'work' | 'cook' | 'sleep' | 'chat' | 'drink';
   area: number;
+  /** (task studio-market-bar-20261108-225231-01, lane BAR: a 'drink' post) the seat it belongs to — the bar stool / chair (layout.props
+   *  index) a patron sits on; the post itself is the clear floor beside it, facing the counter / the table. */
+  seat?: number;
 }
 
 export interface MarketLayout {

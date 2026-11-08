@@ -43,8 +43,9 @@ export interface LevelOnlyRule {
  */
 export const LEVEL_ONLY_RULES: readonly LevelOnlyRule[] = [
   // task studio-skyways-level-20261106-054448-01: the mall's café furniture (its family stays the mall's) also furnishes the Skyways
-  // ramen restaurant (gen/skyways/ramen.ts RAMEN_SEATING) — matched before the general mall rule
-  {level: 'mall', also: ['skyways'], path: /^(?:\.\/)?assets\/models\/mall-(?:cafe-bistro-table|cafe-chair|food-court-table-set)\.glb$/},
+  // ramen restaurant (gen/skyways/ramen.ts RAMEN_SEATING) — matched before the general mall rule; (task studio-market-bar-20261108-225231-01,
+  // lane BAR) and the Survivor Market's upper-level bar (gen/market/v3/barDress.ts: its bistro tables and chairs)
+  {level: 'mall', also: ['skyways', 'market'], path: /^(?:\.\/)?assets\/models\/mall-(?:cafe-bistro-table|cafe-chair|food-court-table-set)\.glb$/},
   // task studio-survivor-market-20261108-005807-01 (lane LEVEL): the mall's gun rack, plank shelving and camping tent also furnish the
   // Survivor Market's stalls / housing deck (gen/market/dress.ts; still the mall's family) — matched before the general mall rule
   {level: 'mall', also: ['skyways', 'market'], path: /^(?:\.\/)?assets\/models\/mall-(?:gun-wall-rack|outdoors-plank-shelving|camping-tent-display)\.glb$/},

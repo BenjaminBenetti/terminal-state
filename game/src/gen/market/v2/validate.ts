@@ -32,7 +32,13 @@ export const SETTLE_LEVEL_RULES: LevelRules = {minLevels: 3, overlapRoles: [], m
  */
 export const SETTLE_DISPLAY = {min: 4, reach: 1.3, customerReach: 2.6, nearWidth: 5.0, solidTops: ['gunDisplay'] as readonly string[]} as const;
 
-export function settleIssues(layout: StationLayout): string[] {
+/**
+ * Task studio-market-bar-20261108-225231-01 (lane BAR): `expect` — the record version and the stall ids in order (layout version 3:
+ * 3 and the six + the bar, gen/market/v3/barValidate.ts) and the stalls whose stock is NOT shown within the customer's reach from across
+ * the counter (the bar: its bottles stand on the backbar behind the bartender — reached by walking behind the counter); version 2's by
+ * default.
+ */
+export function settleIssues(layout: StationLayout, expect: {v: number; stalls: readonly string[]; behindCounter?: readonly string[]} = {v: 2, stalls: MARKET_STALLS}): string[] {
   const issues: string[] = [];
   const m = layout.market;
   if (!m) return ['no market record'];
@@ -80,9 +86,9 @@ export function settleIssues(layout: StationLayout): string[] {
   };
 
   // --- The record ---------------------------------------------------------------------------------------------------------------
-  if (m.v !== 2) issues.push('market record version');
+  if (m.v !== expect.v) issues.push('market record version');
   const ids = m.stalls.map(s => s.id);
-  if (ids.length !== MARKET_STALLS.length || MARKET_STALLS.some((id, i) => ids[i] !== id)) issues.push(`stalls ${ids.join(',')}`);
+  if (ids.length !== expect.stalls.length || expect.stalls.some((id, i) => ids[i] !== id)) issues.push(`stalls ${ids.join(',')}`);
   for (const s of m.stalls) {
     const a = layout.areas[s.area];
     if (!a || !s.name) { issues.push(`stall ${s.id} record`); continue; }
@@ -107,7 +113,7 @@ export function settleIssues(layout: StationLayout): string[] {
       if (side(wz) === side(s.front.z) && marketStandOk(gS, wx, wz)) stand.push([wx, wz]);
     }
     const nearW = disp.filter(d => stand.some(([x, z]) => Math.hypot(d.x - x, d.z - z, d.y - eye) <= SETTLE_DISPLAY.customerReach)).reduce((n, d) => n + d.w, 0);
-    if (nearW < SETTLE_DISPLAY.nearWidth) issues.push(`stall ${s.id}: ${nearW.toFixed(2)} m of display within the customer's reach`);
+    if (nearW < SETTLE_DISPLAY.nearWidth && !expect.behindCounter?.includes(s.id)) issues.push(`stall ${s.id}: ${nearW.toFixed(2)} m of display within the customer's reach`);
     for (const [k, d] of disp.entries()) {
       // on a real item-collision surface of this shop: its `host` fixture (an empty-keyed loot holder or a solid display top), the slot
       // inside its box, between its base and top, with free height above it
