@@ -20,8 +20,13 @@
 // OWNERSHIP AND THEFT:
 //  - the plain [E] Take never targets an owned pickup (PickupManager.target skips them). This system aims at its wares itself: the
 //    crosshair ray on a ware's own box (within WARES.reach, in sight) shows the in-game prompt "[E] Steal <item>" with Steal in RED, and
-//    its look-at highlight (PickupManager.hover). Its prompt / E come FIRST (unshifted): looking straight at a ware on the counter is
-//    Steal; looking at the trader / past the wares at the stall's customer spot is still the trade's "[E] Trade".
+//    its look-at highlight (PickupManager.hover). Its prompt / E come FIRST (unshifted): looking straight at a ware is Steal; looking at
+//    the trader / past the wares at the stall's customer spot is still the trade's "[E] Trade".
+//  - (task studio-market-bar-20261108-225231-01, lane SHELVES; user: "Move owner wares to a shelf near them, not the counter immediately
+//    in front (accidental theft when trying to talk).") the wares stand on the shelves NEAR the trader, never on the customer counter
+//    (slots.ts stallSurfaces), and the trader's BODY and the COUNTER occlude the aim (occluder): a ware behind the trader / across the
+//    counter is not aimed while the trader / counter is in front of it — the look is the trade's. Only a ware whose own box the crosshair
+//    meets first, in reach and in sight, is a red Steal.
 //  - [E] on an aimed ware = THEFT: as much of the stack as the inventory takes (simulated first on Inventory.clone(): a full inventory,
 //    a taken back slot … refuse with nothing changed — no theft, no loss) leaves the stock through TradeSystem.takeStock (the whole stack
 //    as the same object, or a fresh-uid part; the stock record is written at once) into the inventory, and the settlement is provoked:
@@ -32,14 +37,14 @@ import * as THREE from 'three';
 import {ITEM_DIMS, itemDef} from '../../items/items';
 import {ammoText} from '../../items/calibers';
 import {stackFromJSON, stackToJSON, type ItemStack} from '../../items/inventory';
-import {MARKET_STALLS, type MarketLayout, type MarketStallId} from '../../gen/market/marketTypes';
+import {MARKET_STALLS, type MarketLayout, type MarketStall, type MarketStallId} from '../../gen/market/marketTypes';
 import type {PropPlacement} from '../../gen/props';
 import type {Pickup} from '../../world/pickups';
 import {localBounds} from '../../physics/dynamicItems';
-import {rayAabb} from '../../combat/hitscan';
+import {rayAabb, rayCapsule} from '../../combat/hitscan';
 import type {MarketHostilityApi} from '../hostility';
 import type {MarketStock} from '../trade/stock';
-import {WARES, stallSurfaces} from './slots';
+import {WARES, counterBoxes, stallSurfaces} from './slots';
 import {planStall, type WareDims, type WarePacker, type WarePlace} from './plan';
 
 /** The red of the Steal prompt. */
@@ -66,6 +71,8 @@ export interface WaresHost {
   sfx?: unknown;
   /** The combat lane's settlement hostility (absent: no one reacts yet; the theft itself still happens). */
   marketHostility?: MarketHostilityApi | null;
+  /** (task studio-market-bar-20261108-225231-01) The live traders (their bodies occlude the Steal aim). Absent: each stall's trader post. */
+  marketPeople?: {traderAt(stall: MarketStallId): {x: number; y: number; z: number} | null} | null;
   trainRide?: {riding: boolean} | null;
   gear?: {session?: unknown; readied?: boolean} | null;
   frameHooks: ((dt: number) => void)[];
@@ -109,6 +116,11 @@ export class MarketWares {
   private stock: MarketStock | null = null;
   private layout: WaresLayout | null = null;
   private seen = -1;
+  /** (task studio-market-bar-20261108-225231-01) The built stalls and their counters' solid boxes: the Steal aim's occluders. */
+  private stalls: MarketStall[] = [];
+  private counters: {min: {x: number; y: number; z: number}; max: {x: number; y: number; z: number}}[] = [];
+  /** QA / tests: what blocked the last aim at a ware ('trader' | 'counter' | ''). */
+  lastBlock: '' | 'trader' | 'counter' = '';
 
   constructor(readonly host: WaresHost) {}
 
@@ -131,6 +143,8 @@ export class MarketWares {
     const m = layout?.market, stock = this.host.trade?.stock ?? null;
     if (!layout || !m || !Array.isArray(m.stalls)) return;
     this.layout = layout; // (kept even without stock yet: a stock that appears later is displayed by the next frame)
+    this.stalls = m.stalls.filter(s => (MARKET_STALLS as readonly string[]).includes(s.id));
+    this.counters = this.stalls.flatMap(s => counterBoxes(layout, s));
     if (!stock) return;
     this.stock = stock;
     for (const stall of m.stalls) {
@@ -155,6 +169,8 @@ export class MarketWares {
     this.stock = null;
     this.layout = null;
     this.seen = -1;
+    this.stalls = [];
+    this.counters = [];
   }
 
   /**
@@ -266,6 +282,12 @@ export class MarketWares {
       const r = rayAabb(LO, LD, {x: b.min.x - pad, y: b.min.y - pad, z: b.min.z - pad}, {x: b.max.x + pad, y: b.max.y + pad, z: b.max.z + pad});
       if (r && r.t < bt) { bt = r.t; best = w; }
     }
+    this.lastBlock = '';
+    if (best) {
+      // (task studio-market-bar-20261108-225231-01) a trader's body or a counter in front of the ware takes the look: Trade, never Steal
+      const block = this.occluder(EYE, DIR, bt);
+      if (block) { this.lastBlock = block; best = null; }
+    }
     if (best) {
       HIT.copy(DIR).multiplyScalar(bt).add(EYE);
       const lv = h.levels, g = h.layout?.grid;
@@ -275,6 +297,34 @@ export class MarketWares {
     this.aimed = best;
     this.setHover(best?.pickup ?? null);
     return best;
+  }
+
+  /** A stall's trader as it stands now (the live people when installed: null once it is gone; else its post). */
+  traderAt(s: MarketStall): {x: number; y: number; z: number} | null {
+    const mp = this.host.marketPeople;
+    return mp ? mp.traderAt(s.id) : s.trader ?? null;
+  }
+
+  /**
+   * What the ray o + d t hits before `tMax` of the stalls' traders (an upright WARES.traderR / traderH capsule on the feet) and counters
+   * (their solid boxes): 'trader' / 'counter', or null. The INTERACTION PRIORITY: looking at the trader (or across the counter at what
+   * lies behind it) is the trade's — the [E] Trade at the customer spot; only a ware whose own box the crosshair meets FIRST is a Steal.
+   */
+  occluder(o: THREE.Vector3, d: THREE.Vector3, tMax: number): 'trader' | 'counter' | null {
+    const R = WARES.traderR, Hh = WARES.traderH;
+    let t = tMax, what: 'trader' | 'counter' | null = null;
+    for (const s of this.stalls) {
+      const p = this.traderAt(s);
+      if (!p) continue;
+      if (Math.hypot(p.x - o.x, p.z - o.z) > tMax + R + 0.1) continue;
+      const tt = rayCapsule(o, d, {x: p.x, y: p.y + R, z: p.z}, {x: p.x, y: p.y + Hh - R, z: p.z}, R);
+      if (tt < t) { t = tt; what = 'trader'; }
+    }
+    for (const b of this.counters) {
+      const r = rayAabb(o, d, b.min, b.max);
+      if (r && r.t < t) { t = r.t; what = 'counter'; }
+    }
+    return what;
   }
 
   private setHover(p: Pickup | null): void {
