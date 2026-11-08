@@ -1,7 +1,9 @@
 // Task studio-beta-train-fuel-system-20261106-024923-01 (user-confirmed design, 2026-11-06): TRAIN FUEL — the pure core (no three.js / DOM).
 //
 // Units: one QUARTER of the train's tank is the unit everything counts in (integers only: no partial cans, no float drift).
-//   - the train's built-in tank holds FUEL.tankUnits (4 = one tank = ONE hop); a New Game starts EMPTY (0);
+//   - one TANK is FUEL.tankUnits (4 quarters = ONE hop); the train's built-in tank holds FUEL.trainTankUnits (task
+//     studio-general-armor-20261107-231448-01, user: "train should be able to hold 2 tanks of fuel internally": 8 = two tanks; was one);
+//     a New Game starts EMPTY (0);
 //   - every actual track EDGE travelled costs FUEL.hopUnits (4), a multi-hop route hops x 4 — paid once, at departure;
 //   - a fuel CAN (`fuel_can`, an ordinary inventory item: pockets / quick slots / bags / the train chest) holds FUEL.canUnits (1),
 //     stacks to FUEL.canStackMax (2): two slots carry a full tank;
@@ -24,8 +26,13 @@ import {Rng, hashString} from '../core/rng';
 import type {ItemStack} from '../items/inventory';
 
 export const FUEL = {
-  /** Train tank capacity in quarter units (one tank = one hop). */
+  /** One tank in quarter units (= one hop: the unit the HUD / map count tanks in). */
   tankUnits: 4,
+  /**
+   * The train's built-in tank capacity in quarter units: TWO tanks (task studio-general-armor-20261107-231448-01; was one). The ONE
+   * capacity every clamp / validator / pour / refund / gauge reads; a hop still costs FUEL.hopUnits.
+   */
+  trainTankUnits: 8,
   /** Cost of one track edge (one hop), quarter units. */
   hopUnits: 4,
   /** One fuel can, quarter units. */
@@ -153,7 +160,7 @@ export function refundDebit(d: FuelDebit, tank: number, carts: CartFuel[], chest
     if (s) s.count += c.count;
     else { const i = chest.indexOf(null); if (i >= 0) chest[i] = alloc(c.count, c.uid); }
   }
-  return Math.min(FUEL.tankUnits, tank + d.tank);
+  return Math.min(FUEL.trainTankUnits, tank + d.tank);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -209,7 +216,7 @@ export function trainFuelProblem(v: unknown): string | null {
   const o = v as Record<string, unknown>;
   for (const k of Object.keys(o)) if (!['v', 'tank', 'cargo'].includes(k)) return `unexpected train fuel field '${k}'`;
   if (o.v !== 1) return 'unsupported train fuel version';
-  if (!units(o.tank, FUEL.tankUnits)) return `train fuel ${String(o.tank)} out of range (0 to ${FUEL.tankUnits})`;
+  if (!units(o.tank, FUEL.trainTankUnits)) return `train fuel ${String(o.tank)} out of range (0 to ${FUEL.trainTankUnits})`;
   if (!Array.isArray(o.cargo) || o.cargo.length > 16) return 'train cargo must be a list of at most 16 carts';
   const ids = new Set<string>();
   for (const c of o.cargo) {
@@ -256,7 +263,7 @@ export function debitProblem(v: unknown): string | null {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return 'a fuel debit must be an object';
   const o = v as Record<string, unknown>;
   for (const k of Object.keys(o)) if (!['tank', 'carts', 'chest'].includes(k)) return `unexpected fuel debit field '${k}'`;
-  if (!units(o.tank, FUEL.tankUnits)) return 'fuel debit tank out of range';
+  if (!units(o.tank, FUEL.trainTankUnits)) return 'fuel debit tank out of range';
   if (!Array.isArray(o.carts) || o.carts.length > 16 || !Array.isArray(o.chest) || o.chest.length > 64) return 'a fuel debit lists carts and chest stacks';
   for (const c of o.carts) if (!c || typeof c !== 'object' || typeof (c as {uid?: unknown}).uid !== 'string' || !units((c as {units?: unknown}).units, FUEL.cartUnits) || Object.keys(c).length !== 2) return 'a malformed fuel debit cart';
   for (const c of o.chest) if (!c || typeof c !== 'object' || !Number.isInteger((c as {uid?: unknown}).uid) || !units((c as {count?: unknown}).count, FUEL.canStackMax) || Object.keys(c).length !== 2) return 'a malformed fuel debit chest stack';

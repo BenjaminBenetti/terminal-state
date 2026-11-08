@@ -29,8 +29,17 @@ export const SMOKE_LIMITS = {
 } as const;
 /** Occlusion windows: scatter lights use layers 0..3, smoke emitters layers 4..7. */
 export const VIS_WINDOWS = SMOKE_LIMITS.scatterLights + SMOKE_LIMITS.emitters;
-/** Window size in grid cells (CELL = 0.5 m): 48 cells = 24 m, i.e. +-12 m around the source. */
-export const VIS_RES = 48;
+/**
+ * Window size in TEXELS per side (every layer of the shared texture). (task studio-general-armor-20261107-231448-01, user: flare light
+ * distance x4) The flare lights' windows (scatter layers) span 192 x 0.5 m = 96 m, +-48 m around the flare — past its 46 m reach, so the
+ * longer light is never clipped by the window (outside = dark) nor leaks through walls — computed as a ray fan (computeVisWindowFan);
+ * the smoke emitters' windows compute only their central VIS_EMITTER_SPAN texels: +-12 m exactly as before (the rest stays 0 = dark).
+ */
+export const VIS_RES = 192;
+/** World size of one window texel (m) per layer kind (both the storey grid's 0.5 m cell). */
+export const VIS_TEXEL = {scatter: CELL, emitter: CELL} as const;
+/** Texels per side a smoke emitter's window computes around its source (48 x 0.5 m = 24 m, as before). */
+export const VIS_EMITTER_SPAN = 48;
 
 export interface SmokeEmitterOptions {
   x: number; y: number; z: number;
@@ -329,24 +338,74 @@ export function gridLineOfSight(g: Grid, x0: number, z0: number, x1: number, z1:
 }
 
 export interface VisWindow {
-  /** World x / z of the window's first texel edge, texel = CELL. */
+  /** World x / z of the window's first texel edge. */
   x0: number; z0: number;
+  /** Texel size (m): the window spans VIS_RES x texel. */
+  texel: number;
   /** Storey band the source stands in (the march fades the window out above / below it). */
   floor: number; ceil: number;
 }
 
-/** Fills `out` (VIS_RES^2 bytes, row-major z then x) with the source's 2D visibility at its height; returns the window. */
-export function computeVisWindow(src: VisSource, lookup: VisLookup, out: Uint8Array): VisWindow | null {
+/**
+ * Fills `out` (VIS_RES^2 bytes, row-major z then x) with the source's 2D visibility at its height (line of sight from the source to
+ * each texel's centre on the storey's 0.5 m grid); returns the window. `texel`: the texel size (default CELL); `span`: texels per side
+ * computed around the source (default all; the rest stays 0 = dark).
+ */
+export function computeVisWindow(src: VisSource, lookup: VisLookup, out: Uint8Array, o: {texel?: number; span?: number} = {}): VisWindow | null {
   const at = lookup.grid(src.x, src.y, src.z);
   if (!at) { out.fill(0); return null; }
-  const half = VIS_RES / 2;
-  const x0 = (Math.floor(src.x / CELL) - half + 1) * CELL, z0 = (Math.floor(src.z / CELL) - half + 1) * CELL;
+  const texel = o.texel ?? CELL, span = Math.min(VIS_RES, o.span ?? VIS_RES);
+  const half = VIS_RES / 2, lo = half - span / 2, hi = half + span / 2;
+  const x0 = (Math.floor(src.x / texel) - half + 1) * texel, z0 = (Math.floor(src.z / texel) - half + 1) * texel;
+  const nearR = Math.max(0.6, texel * 0.75); // the source's own texel is always seen
   for (let j = 0; j < VIS_RES; j++) for (let i = 0; i < VIS_RES; i++) {
-    const cx = x0 + (i + 0.5) * CELL, cz = z0 + (j + 0.5) * CELL;
-    const near = Math.hypot(cx - src.x, cz - src.z) < 0.6;
+    if (i < lo || i >= hi || j < lo || j >= hi) { out[j * VIS_RES + i] = 0; continue; }
+    const cx = x0 + (i + 0.5) * texel, cz = z0 + (j + 0.5) * texel;
+    const near = Math.hypot(cx - src.x, cz - src.z) < nearR;
     out[j * VIS_RES + i] = near || gridLineOfSight(at.grid, src.x, src.z, cx, cz) ? 255 : 0;
   }
-  return {x0, z0, floor: at.floor, ceil: at.ceil};
+  return {x0, z0, texel, floor: at.floor, ceil: at.ceil};
+}
+
+/**
+ * (task studio-general-armor-20261107-231448-01) The flare lights' large windows (texel > CELL) as a FAN of rays: from the source to
+ * every border texel's centre, stepping the storey's 0.5 m grid (Amanatides-Woo) and marking each texel a ray crosses visible until a
+ * SOLID cell (or the bounds) stops it. Adjacent rays are less than a texel apart everywhere inside the window, so every reachable texel is
+ * crossed; walls block exactly (a cell seen in part reads visible: at most one 0.5 m cell of soft edge, as the bilinear sampling of the
+ * windows already had). ~4 x VIS_RES rays instead of VIS_RES^2 line-of-sight tests (the per-texel version of a 96 m window costs several
+ * times more: measured in the task report).
+ */
+export function computeVisWindowFan(src: VisSource, lookup: VisLookup, out: Uint8Array, texel: number): VisWindow | null {
+  const at = lookup.grid(src.x, src.y, src.z);
+  out.fill(0);
+  if (!at) return null;
+  const g = at.grid, half = VIS_RES / 2;
+  const x0 = (Math.floor(src.x / texel) - half + 1) * texel, z0 = (Math.floor(src.z / texel) - half + 1) * texel;
+  const mark = (x: number, z: number) => {
+    const i = Math.floor((x - x0) / texel), j = Math.floor((z - z0) / texel);
+    if (i >= 0 && j >= 0 && i < VIS_RES && j < VIS_RES) out[j * VIS_RES + i] = 255;
+  };
+  mark(src.x, src.z);
+  const ray = (tx: number, tz: number) => {
+    const dx = tx - src.x, dz = tz - src.z;
+    let cx = Math.floor(src.x / CELL), cy = Math.floor(src.z / CELL);
+    const ex = Math.floor(tx / CELL), ey = Math.floor(tz / CELL);
+    const sx = dx > 0 ? 1 : -1, sy = dz > 0 ? 1 : -1;
+    const tdx = Math.abs(dx) > 1e-9 ? CELL / Math.abs(dx) : Infinity, tdy = Math.abs(dz) > 1e-9 ? CELL / Math.abs(dz) : Infinity;
+    let tmx = Math.abs(dx) > 1e-9 ? ((sx > 0 ? (cx + 1) * CELL - src.x : src.x - cx * CELL) / Math.abs(dx)) : Infinity;
+    let tmy = Math.abs(dz) > 1e-9 ? ((sy > 0 ? (cy + 1) * CELL - src.z : src.z - cy * CELL) / Math.abs(dz)) : Infinity;
+    for (let n = 0; n < 8 * VIS_RES && (cx !== ex || cy !== ey); n++) {
+      if (tmx < tmy) { cx += sx; tmx += tdx; } else { cy += sy; tmy += tdy; }
+      if (!g.inBounds(cx, cy) || g.cells[g.idx(cx, cy)] === SOLID) return;
+      mark((cx + 0.5) * CELL, (cy + 0.5) * CELL);
+    }
+  };
+  for (let k = 0; k < VIS_RES; k++) {
+    const c = (k + 0.5) * texel;
+    ray(x0 + c, z0 + 0.5 * texel); ray(x0 + c, z0 + (VIS_RES - 0.5) * texel);
+    ray(x0 + 0.5 * texel, z0 + c); ray(x0 + (VIS_RES - 0.5) * texel, z0 + c);
+  }
+  return {x0, z0, texel, floor: at.floor, ceil: at.ceil};
 }
 
 /** Recompute a window only when its source moved (> 0.3 m) and at most every `minDt` seconds (flares in flight). */

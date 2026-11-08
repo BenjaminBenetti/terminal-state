@@ -117,7 +117,7 @@ export const ITEMS: Record<string, ItemDef> = {
   battery: {id: 'battery', name: 'D-cell battery', short: 'Battery', kind: 'consumable', stackMax: 4, recharge: 1, useTime: 1.4, verb: 'use', icon: 'battery',
     description: 'Unbranded 1.5 V D cell, scuffed but holding charge. Swap it into the flashlight to refill it to 100 %.'},
   flare: {id: 'flare', name: 'Road flare', short: 'Flare', kind: 'throwable', stackMax: 10, icon: 'flare', // INTERACT (#6): was 3
-    description: 'Red highway flare. Goes in the grenade slot: hold G to strike and ready one, release to throw (or hold click while it is in your hand): about 50 s of red light and smoke. Light draws the infected.'},
+    description: 'Red highway flare. Goes in the grenade slot: hold G to strike and ready one, release to throw (or hold click while it is in your hand): about 100 s of red light and smoke. Light draws the infected.'},
   // --- Task gasmask-breach-20261030 (mask lane): a passive supply (authored model: world/authoredItems.ts) ---
   gas_filter: {id: 'gas_filter', name: 'Gas mask filter canister', short: 'Filter', kind: 'supply', stackMax: 6, icon: 'filter',
     description: 'Screw-in 40 mm respirator filter, seal intact. Nothing to use by hand: a gas mask on your face fits a spare by itself when its filter runs out (from your pockets or quick slots — never from a worn backpack). One lasts 37.5 seconds on the face.'}, // (task train-fuel-system: corrected — FILTER_LIFE_S is 37.5 s since PR #52)

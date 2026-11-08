@@ -2,7 +2,8 @@
 // INJURY). Both lanes contribute a ModifierSource; Game combines them every frame from the BASE values (never
 // accumulating into the player's stored stats), so equipping / unequipping / travelling can never stack a bonus.
 //
-// Combination rules: multipliers multiply, additive terms add, armor fractions combine as 1 - Π(1 - a) (capped 0.8).
+// Combination rules: multipliers multiply, additive terms add. (task studio-general-armor-20261107-231448-01: armour left the modifiers — it is the worn pool of
+// player/armor.ts, read at the moment of each hit; ARMOR_CAP stays its cap.)
 
 export interface PlayerModifiers {
   /** Walk / sprint / crouch speed multiplier (1 = base). */
@@ -13,9 +14,6 @@ export interface PlayerModifiers {
   swayAmp: number;
   /** Sway frequency (Hz) when swayAmp > 0. */
   swayHz: number;
-  /** Fraction of incoming damage absorbed by head / torso armor (0..0.8). */
-  armorHead: number;
-  armorTorso: number;
   /** Extra pocket (body inventory) slots from load-bearing gear. */
   extraPockets: number;
   /** Reload / item-use time multiplier (gloves; 1 = base). */
@@ -23,7 +21,7 @@ export interface PlayerModifiers {
 }
 
 export const BASE_MODIFIERS: Readonly<PlayerModifiers> = Object.freeze({
-  speedMult: 1, spreadMult: 1, swayAmp: 0, swayHz: 0.35, armorHead: 0, armorTorso: 0, extraPockets: 0, handlingMult: 1,
+  speedMult: 1, spreadMult: 1, swayAmp: 0, swayHz: 0.35, extraPockets: 0, handlingMult: 1,
 });
 
 /** A contributor (gear, injuries): returns a partial modifier set computed from its own current state. */
@@ -33,7 +31,6 @@ export const ARMOR_CAP = 0.8;
 
 export function combineModifiers(sources: readonly ModifierSource[]): PlayerModifiers {
   const m: PlayerModifiers = {...BASE_MODIFIERS};
-  let keepHead = 1, keepTorso = 1;
   for (const src of sources) {
     const p = src();
     if (p.speedMult !== undefined) m.speedMult *= p.speedMult;
@@ -41,11 +38,7 @@ export function combineModifiers(sources: readonly ModifierSource[]): PlayerModi
     if (p.handlingMult !== undefined) m.handlingMult *= p.handlingMult;
     if (p.swayAmp !== undefined && p.swayAmp > m.swayAmp) { m.swayAmp = p.swayAmp; if (p.swayHz !== undefined) m.swayHz = p.swayHz; }
     else if (p.swayAmp !== undefined) m.swayAmp += p.swayAmp * 0.25; // a second source adds a little, never doubles
-    if (p.armorHead !== undefined) keepHead *= 1 - Math.max(0, Math.min(1, p.armorHead));
-    if (p.armorTorso !== undefined) keepTorso *= 1 - Math.max(0, Math.min(1, p.armorTorso));
     if (p.extraPockets !== undefined) m.extraPockets += Math.max(0, Math.floor(p.extraPockets));
   }
-  m.armorHead = Math.min(ARMOR_CAP, 1 - keepHead);
-  m.armorTorso = Math.min(ARMOR_CAP, 1 - keepTorso);
   return m;
 }

@@ -19,7 +19,8 @@ import {CLIP_MANIFEST_REACTOR_STARTUP} from './manifest.reactorStartup.generated
 import {CLIP_MANIFEST_REACTOR_ENDING} from './manifest.reactorEnding.generated'; // task reactor-surface-ending-20261102 (lane AUDIO): the beam ignition + surface rain
 import {CLIP_MANIFEST_FUEL} from './manifest.fuel.generated'; // task train-fuel-system-20261106 (lane PORT): engine stall, fuel pour, fuel cart rolling
 import {CLIP_MANIFEST_SKYWAYS_CAR} from './manifest.skywaysCar.generated'; // task studio-skyways-level-20261106-054448-01: the prize car's engine loops, skid, door
-import {CLIP_MANIFEST_SKYWAYS_DESTINATIONS} from './manifest.skywaysDestinations.generated'; // task skyways-destinations-20261106 (lane AUDIO): clock tick / chime, arcade, projector
+import {CLIP_MANIFEST_SKYWAYS_DESTINATIONS} from './manifest.skywaysDestinations.generated';
+import {CLIP_MANIFEST_HEAD_HIT} from './manifest.headHit.generated'; // task studio-general-armor-20261107-231448-01: the head-hit skull crack // task skyways-destinations-20261106 (lane AUDIO): clock tick / chime, arcade, projector
 
 /**
  * Runtime manifest: the iteration-05 bank plus the iteration-06 material-breaking cues
@@ -30,7 +31,7 @@ import {CLIP_MANIFEST_SKYWAYS_DESTINATIONS} from './manifest.skywaysDestinations
  * 20261101-201110-01 (lane AUDIO): + the Strainer's wet footfalls / arm swing / claw contact / hit squish (tools/audio-pipeline/
  * strainer-build.mjs; provenance derivatives/audio-strainer.json).
  */
-export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS};
+export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT};
 
 /** Every cue the game can play, in decode-priority order (most frequent / important first). */
 export const CUES = [
@@ -71,6 +72,8 @@ export const CUES = [
   // sounds — the Clock Court's tick loop and bell chime, the Starfall Arcade's attract loop, the Aurora Picture House's projector loop.
   'clockTick', 'clockChime', 'arcadeAttract', 'projectorRun',
   'casingBrass', 'casingHull', 'bodyFall', 'hurt', 'hitTick', 'hitKill',
+  // task studio-general-armor-20261107-231448-01 (tools/audio-pipeline/headhit-build.mjs): the skull crack layered on the hit confirm of a confirmed HEAD hit.
+  'headHit',
   'bedWind', 'bedRumble', 'bedHvac', 'bedFridge', 'bedBuzz',
   'shotgunPump', 'shellInsert', 'rifleMagOut', 'rifleMagIn', 'rifleCharge', 'rifleMagDrop', 'dryFire', 'equip',
   'jump', 'land', 'crouch', 'ladder', 'heartbeat', 'breath', 'death',

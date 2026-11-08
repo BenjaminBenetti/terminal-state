@@ -27,7 +27,7 @@ import {FUEL, trainFuelProblem, type CargoCartJSON, type TrainFuelJSON} from '..
 import {TrainCargo} from './trainCargo';
 
 /**
- * The train's fuel: the tank (quarter units, 0..FUEL.tankUnits) and the carts aboard. With a live cart system attached (`live`, the
+ * The train's fuel: the tank (quarter units, 0..FUEL.trainTankUnits) and the carts aboard. With a live cart system attached (`live`, the
  * world's FuelCarts) the cargo's truth is the live carts (their poses / units at save time); without one (Node, between worlds) the
  * stored records are kept exactly.
  */
@@ -54,7 +54,7 @@ export class TrainFuel {
   load(d: unknown): void {
     const ok = d !== undefined && trainFuelProblem(d) === null;
     const j = ok ? d as TrainFuelJSON : {v: 1 as const, tank: 0, cargo: []};
-    this.tank = Math.max(0, Math.min(FUEL.tankUnits, j.tank));
+    this.tank = Math.max(0, Math.min(FUEL.trainTankUnits, j.tank));
     this.cargo = j.cargo.map(c => ({...c}));
     this.live?.restore(this.cargo.map(c => ({...c})));
   }
