@@ -13,7 +13,7 @@ import {PhysicsSystem} from '../src/physics/world';
 import {levelsOf} from '../src/gen/levels';
 import {Inventory} from '../src/items/inventory';
 import {FIX, levelFixture} from './helpers/levelFixture';
-import {VIS_RES} from '../src/render/smoke';
+import {VIS_RES, VIS_TEXEL} from '../src/render/smoke';
 import {CELL} from '../src/gen/grid';
 import {VolumetricAtmosphere} from '../src/render/volumetric';
 import {generateStation} from '../src/gen/station';
@@ -153,15 +153,18 @@ describe('hold -> release consumes exactly one flare on the release (real FlareS
 
 // ---------------------------------------------------------------------------------------------
 describe('the flare light: much stronger red, occluded like its fog glow', () => {
-  it('light contract: 6x the candela, a reach inside the occlusion window, same red, physical decay; pooled FlareLights, no shadow', () => {
-    expect(FLARE.light).toMatchObject({color: 0xff2a12, intensity: 42, distance: 11.5, decay: 2});
+  // (task studio-general-armor-20261107-231448-01, user: "increase flair light distance 4x"): the reach 11.5 -> 46 m, the same candela / red / decay; the flare's
+  // occlusion window grew with it (render/smoke.ts: 192 x 0.5 m texels, +-48 m) so the longer light is never clipped by it
+  it('light contract: 6x the candela, the reach x4 inside its occlusion window, same red, physical decay; pooled FlareLights, no shadow', () => {
+    expect(FLARE.light).toMatchObject({color: 0xff2a12, intensity: 42, distance: 46, decay: 2});
+    expect(FLARE.light.distance).toBe(4 * 11.5);
     expect(FLARE.light.intensity / 7).toBe(6); // iteration 12/13: 7 cd, 10 m
-    expect(FLARE.light.distance).toBeLessThanOrEqual((VIS_RES / 2 - 0.5) * CELL); // lit only where the window can say "visible"
+    expect(FLARE.light.distance).toBeLessThanOrEqual((VIS_RES / 2 - 0.5) * VIS_TEXEL.scatter); // lit only where the window can say "visible"
     const fl = new FlareSystem(new THREE.Group(), new PhysicsSystem(null), new LightSources());
     expect(fl.lights).toHaveLength(FLARE.maxActive);
     for (const l of fl.lights) {
       expect(isFlareLight(l)).toBe(true);
-      expect([l.castShadow, l.intensity, l.distance, l.decay]).toEqual([false, 0, 11.5, 2]);
+      expect([l.castShadow, l.intensity, l.distance, l.decay]).toEqual([false, 0, 46, 2]);
     }
     // incident light at 2 / 5 / 8 m (physical inverse square inside the cutoff): 6x everywhere it reached before
     const at = (d: number, I: number) => I / (d * d);
@@ -261,5 +264,32 @@ describe('iteration 15: firing recoil x1.5 across the board (user: "fifty percen
     expect(pick('rifle')).toEqual([24, 1, 0.028, 0.004, 0.03, 0.1, 30, true, 90, 40, 0.7, 2.5, 0.7, 0.25, '{"kind":"magazine","time":2.1,"emptyTime":2.55}', 0.55, 52, 0.95, 30, 'rifle']);
     expect(pick('shotgun')).toEqual([15, 9, 0.075, 0.052, 0.02, 0.82, 6, false, 30, 7, 0.25, 1.8, 0.75, 0.55, '{"kind":"shell","start":0.38,"each":0.48,"end":0.42}', 0.6, 60, 0.92, 38, 'shotgun']);
     expect(pick('pistol')).toEqual([17, 1, 0.022, 0.006, 0.025, 0.16, 15, false, 60, 22, 0.6, 2.4, 0.7, 0.18, '{"kind":"magazine","time":1.4,"emptyTime":1.65}', 0.35, 58, 1.0, 24, 'pistol']);
+  });
+});
+
+// Task studio-general-armor-20261107-231448-01 (user: flare light distance x4, duration x2): the flare's occlusion window covers the new
+// reach as a ray fan (render/smoke.ts computeVisWindowFan) that agrees with the exact per-texel line of sight, and walls still block it.
+describe('the x4 flare reach: a +-48 m occlusion window that still stops at walls', () => {
+  it('covers the reach; the fan matches the exact line of sight (walls block, the open hall is lit to the window edge)', async () => {
+    const {computeVisWindow, computeVisWindowFan, VIS_EMITTER_SPAN} = await import('../src/render/smoke');
+    const {Grid, FLOOR, SOLID} = await import('../src/gen/grid');
+    expect(VIS_RES * VIS_TEXEL.scatter).toBeGreaterThanOrEqual(2 * FLARE.light.distance);
+    expect(VIS_EMITTER_SPAN * VIS_TEXEL.emitter).toBe(24); // smoke windows: +-12 m, as before
+    // a 120 m x 60 m hall (x x z) split by a solid wall at x = 70 m (a door gap at z 28-31 m)
+    const g = new Grid(240, 120);
+    for (let y = 0; y < 120; y++) for (let x = 0; x < 240; x++) { const i = g.idx(x, y); g.cells[i] = x === 140 && !(y >= 56 && y < 62) ? SOLID : FLOOR; }
+    const look = {grid: () => ({grid: g, floor: 0, ceil: 4})};
+    const fan = new Uint8Array(VIS_RES * VIS_RES), exact = new Uint8Array(VIS_RES * VIS_RES);
+    const src = {x: 50.25, y: 0.3, z: 20.25};
+    const w = computeVisWindowFan(src, look, fan, VIS_TEXEL.scatter)!;
+    computeVisWindow(src, look, exact, {texel: VIS_TEXEL.scatter});
+    const at = (buf: Uint8Array, x: number, z: number) => buf[Math.floor((z - w.z0) / w.texel) * VIS_RES + Math.floor((x - w.x0) / w.texel)];
+    expect(at(fan, 50, 55)).toBe(255); // 35 m away in the open: lit (the old +-12 m window said dark)
+    expect(at(fan, 20, 50)).toBe(255); // ~42 m away diagonally: lit
+    expect(at(fan, 90, 20)).toBe(0); // behind the wall, out of the door's line: dark
+    expect(at(exact, 90, 20)).toBe(0);
+    let diff = 0, lit = 0;
+    for (let i = 0; i < fan.length; i++) { if (exact[i]) lit++; if (fan[i] !== exact[i]) diff++; }
+    expect(diff / lit).toBeLessThan(0.05); // the fan agrees with the exact per-texel line of sight
   });
 });

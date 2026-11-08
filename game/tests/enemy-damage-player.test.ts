@@ -35,10 +35,10 @@ describe('enemy damage to the player: x2, the player only', () => {
 
   it('armour keeps its fraction of the doubled hit (mitigation semantics unchanged)', () => {
     const hit = incomingHit<PlayerHit>({amount: 12, source: 'zombie', location: 'torso', enemy: true});
-    const {applied, absorbed} = armorFor(hit, 0, 0.3);
+    const {applied, absorbed} = armorFor(hit, 0.3);
     expect(applied).toBeCloseTo(24 * 0.7, 9);
     expect(absorbed).toBeCloseTo(24 * 0.3, 9);
-    expect(armorFor(hit, 0, 0).applied).toBe(24); // unarmoured: the full 2x
+    expect(armorFor(hit, 0).applied).toBe(24); // unarmoured: the full 2x
   });
 
   it('per family: the raw attack before -> after (melee of every family, the Blightbelly blast at point blank)', () => {
@@ -58,7 +58,8 @@ describe('enemy damage to the player: x2, the player only', () => {
   it('the paths: hurtPlayer + the blast are attributed enemy hits through applyPlayerHit -> incomingHit; gas / survival are not', () => {
     const game = src('game.ts');
     // the one pipeline scales first, then armour, then HP and the injury listeners (they see the doubled hit)
-    expect(game).toMatch(/applyPlayerHit\(raw: PlayerHit\): ResolvedHit \{\s*const hit = incomingHit\(raw\);\s*const \{applied, absorbed\} = armorFor\(hit,/);
+    // (task studio-general-armor-20261107-231448-01: the worn pool, player/armor.ts armorHit -> armorFor)
+    expect(game).toMatch(/applyPlayerHit\(raw: PlayerHit\): ResolvedHit \{\s*const hit = incomingHit\(raw\);\s*const \{resolved\} = armorHit\(hit, this\.inv\.gear, this\.wearRand\);/);
     expect(game).toMatch(/source: creature \? 'creature' : 'zombie', enemy: true,/);
     expect(src('ai/blightBurst.ts')).toMatch(/source: 'blast', location, attacker: 'blightbelly', enemy: true\}/);
     // the gas field (incl. a Blightbelly's puff) and the empty-vitals drain damage the player directly, unscaled
