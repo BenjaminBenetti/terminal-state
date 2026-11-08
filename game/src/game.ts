@@ -1083,7 +1083,8 @@ export class Game {
     if (this.layout.hordes?.length) {
       const byIndex = new Map<number, EnemyActor>();
       for (const [z, i] of this.enemyIndex) byIndex.set(i, z);
-      this.hordes = new HordeDirector(this.layout, this.levels, i => byIndex.get(i)?.brain, spawnProfile(key.level).horde?.patrol);
+      // (task studio-skywalk-encounters-20261108-074144-01: Skyways version 5 hordes walk the Skyways patrol graph; the Mall's otherwise)
+      this.hordes = new HordeDirector(this.layout, this.levels, i => byIndex.get(i)?.brain, spawnProfile(key.level).horde?.patrol, this.layout.skyways?.patrol);
     } else this.hordes = null;
     // Iteration 16 (RUN): first visit: the generated pickups; afterwards exactly the remembered loose items (dropped ones too)
     const plan = pickupPlan(this.layout.pickups.length, mem);

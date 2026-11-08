@@ -702,10 +702,65 @@ export const SKYWAYS_V4_SPAWN_PROFILE: SpawnProfile = {
   rooms: {},
 };
 /**
+ * Task studio-skywalk-encounters-20261108-074144-01 (user: "It feels like the siren cannot spawn on this level, It should spawn the same
+ * amount as the mall"): diagnosis — she could NOT: Skyways rolled the ordinary pool (siren weight 0: she is opt-in per level) with no
+ * eligibility rule. Layout version 5 opts in with the MALL'S rules: an ENCLOSED-ROOM encounter of the street and skyway storeys
+ * (contexts 'street' / 'floor': the shops' sales floors and stock rooms, eateries, office / crew rooms — never the station storey with
+ * its platforms and the train, never a concourse / bridge / passage / closet, never a washroom, stair core, plant room or elevator,
+ * never an annex, a horde or the convention's cosplay crowd), the Office / Mall room gates (room >= 4 x 4 m, a clear 1.5 x 1.5 m patch,
+ * doorways >= 3 m away, never sealing passage), at most 4 per level and 24 m apart (her hum's reach) — and the Mall's DRAW: the
+ * weight is the Mall's 0.8 together with the Mall's retail placement (SKYWAYS_SIREN_WEIGHT: the census there and in docs/enemy-spawns.md
+ * "Skyways"). An ineligible or over-cap draw becomes an ordinary zombie.
+ */
+export const SKYWAYS_SIREN_ELIGIBILITY: FamilyEligibility = {
+  contexts: ['street', 'floor'],
+  kinds: ['room'],
+  excludeRooms: ['washroom', 'stair-core', 'storage', 'utility', 'office-stair', 'office-elevator'],
+  minSideCells: 8, minAreaCells: 100, clearCells: 1, doorKeepM: 3, passageRadiusM: 2.5, maxPerLevel: 4,
+  fallback: 'zombie',
+  why: 'enclosed rooms (shops, stock rooms, eateries, offices) of the street / skyway storeys only, room >= 4 x 4 m, clear floor patch, doorways >= 3 m away, never seals passage, <= 4 per level',
+};
+/** The Mall's Siren spacing (24 m = her hum's reach): two dormant Sirens are never heard humming at once. */
+export const SKYWAYS_SIREN_SPACING: FamilySpacing = {spacingM: 24, why: 'never two Sirens within earshot of one another (her hum carries 24 m), as in the Mall'};
+/**
+ * The Skyways Siren DRAW weight = the Mall's (MALL_SIREN_WEIGHT 0.8). With the Mall's retail-floor placement (shops x MALL_SHOP_WEIGHT)
+ * on the street / skyway storeys, its room gates, cap 4 and 24 m spacing, NO separate tuning was needed. Census (48 version-5 levels,
+ * level seeds 1201 + k x 7919, k = 0..47): mean 1.79 Sirens per level (first half 1.88, second half 1.71; the Mall's census: 1.96 —
+ * tuning half 2.17, validation half 1.75); levels with none 5 / 48 (10.4 %; the Mall 8.3 %); 5.8 % of the ~31 placed ambient enemies;
+ * never on the station storey, in an annex, a horde or the convention crowd. Before (versions 1-4): 0 — she could not spawn.
+ * (With the Office's placement — storefront units 0.5 — only ~1.25 slots per level passed her room gates: the Mall's R8 finding.)
+ */
+export const SKYWAYS_SIREN_WEIGHT = MALL_SIREN_WEIGHT;
+/**
+ * Task studio-skywalk-encounters-20261108-074144-01 (user: "I want to have at least 1 random zombie hoard spawn on this map (just like the
+ * mall hoard)"): the MALL'S roaming-horde pool (ordinary zombies only, 5..20 per group, 40 % coated, the Mall's budget / spacing / patrol
+ * pace) on the Skyways street and skyway storeys (never the station storey with the train): 1..2 groups (at most one per storey), each
+ * >= 45 m walking from the start and >= 28 m clear of it, along the Skyways patrol graph (gen/skyways/patrol.ts), clipped to the
+ * storey's patrol route (18 m per member). Placed after the ambient runs (their positions are kept off), never on a stair run / mouth.
+ */
+export const SKYWAYS_HORDE: HordeRules = {
+  ...MALL_HORDE,
+  placement: {...MALL_HORDE.placement, storeys: [1, 2]},
+};
+
+/**
  * Task studio-skywalk-encounters-20261108-074144-01: Skyways layout versions 1-4 keep THIS profile FROZEN (the stations entered under
  * GAME76-84 regenerate their enemies exactly: gen/skyways/layoutVersion.ts); version 5 rolls SKYWAYS_SPAWN_PROFILE below.
  */
-export const SKYWAYS_SPAWN_PROFILE: SpawnProfile = {...SKYWAYS_V4_SPAWN_PROFILE};
+export const SKYWAYS_SPAWN_PROFILE: SpawnProfile = {
+  ...SKYWAYS_V4_SPAWN_PROFILE,
+  // (the Mall's retail-floor placement on the shop storeys: its shop sales floors x MALL_SHOP_WEIGHT — "the infected linger in the
+  // shops" — is what gives the Mall's Siren her eligible rooms; the counts and the station storey's Office placement are unchanged)
+  contexts: {
+    ...SKYWAYS_V4_SPAWN_PROFILE.contexts,
+    street: {...SKYWAYS_V4_SPAWN_PROFILE.contexts.street!, placement: MALL_RING_PLACEMENT},
+    floor: {...SKYWAYS_V4_SPAWN_PROFILE.contexts.floor!, placement: MALL_RING_PLACEMENT},
+  },
+  families: familyPool({siren: SKYWAYS_SIREN_WEIGHT}),
+  eligibility: {siren: SKYWAYS_SIREN_ELIGIBILITY},
+  spacing: {siren: SKYWAYS_SIREN_SPACING},
+  horde: SKYWAYS_HORDE,
+};
 /** The Skyways spawn profile a layout version rolls (1-4: the frozen version-4 profile; 5+: the current one). */
 export function skywaysSpawnProfileFor(layoutVersion: number): SpawnProfile {
   return layoutVersion >= 5 ? SKYWAYS_SPAWN_PROFILE : SKYWAYS_V4_SPAWN_PROFILE;
