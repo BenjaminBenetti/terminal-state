@@ -21,6 +21,8 @@ import type {SettleCarve} from './carve';
 import {SURF_TOP, type DisplaySource, type SettleAnchors} from './dress';
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
+/** At most this many of the homes' beds / other posts become resident spots (seeded pick). */
+export const SETTLE_HOME_SPOTS = {sleep: 2, other: 2} as const;
 
 /** Surface options as the runtime's loot holders use them (world/containers.ts: the measured shelf tiers). */
 function surfaceOptions(): SurfaceOptions {
@@ -81,8 +83,13 @@ export function settleRecord(layout: StationLayout, sc: SettleCarve, anchors: Se
     });
   }
   const spots: MarketSpot[] = [];
+  // the homes are private: only a few of their beds / tables are resident posts (the residents live out in the lanes, the yard, the
+  // catwalks, the kitchen, the workshop and the services — a lived-in place you SEE), never one per home
+  const isHome = (area: number) => /Home$|home$/.test(layout.areas[area]?.label ?? '');
+  const homeUses = rng.shuffle(anchors.uses.filter(u => isHome(u.area)).map(u => u));
+  const keepHome = new Set([...homeUses.filter(u => u.kind === 'sleep').slice(0, SETTLE_HOME_SPOTS.sleep), ...homeUses.filter(u => u.kind !== 'sleep').slice(0, SETTLE_HOME_SPOTS.other)]);
   for (const u of anchors.uses) {
-    if (u.level > 1) continue;
+    if (u.level > 1 || (isHome(u.area) && !keepHome.has(u))) continue;
     const g = layout.levels[u.level].grid;
     const p = nudge(g, u.x, u.z, u.area);
     if (!p || spots.some(s => s.level === u.level && Math.hypot(s.x - p.x, s.z - p.z) < 0.9)) continue;
