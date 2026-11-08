@@ -20,6 +20,7 @@ import {isReactorItem, reactorItemModel, reactorItemSource} from './reactor/rest
 import {fuelCanModel, fuelCanModelSource} from './fuelCanModel'; // task train-fuel-system-20261106 (lane PORT): the delivered fuel-can GLB (fallback box if not loaded)
 import {Grid} from '../gen/grid';
 import type {Levels} from '../gen/levels';
+import type {MarketStallId} from '../gen/market/marketTypes';
 
 export interface Pickup {
   id: number;
@@ -32,6 +33,12 @@ export interface Pickup {
    * lot left the holder): its holder serial and lot id, as provenance (QA / tests).
    */
   fromLot?: {holder: number; lot: number};
+  /**
+   * Task studio-market-rework-20261108-074144-01 (lane WARES): an OWNED pickup — a market stall's displayed stock (market/wares/wares.ts;
+   * the stall's id). It is never the plain [E] Take target (the wares system aims at it and offers a red Steal), never station memory
+   * (run/worldMemory.ts capturePickups), never train cargo (world/trainCargo.ts) and never station fuel (world/fuelStations.ts).
+   */
+  owner?: MarketStallId;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -369,6 +376,11 @@ export class PickupManager {
   readonly list: Pickup[] = [];
   private nextId = 1;
   private highlighted: Pickup | null = null;
+  /**
+   * Task studio-market-rework-20261108-074144-01 (lane WARES): the owned pickup the wares system has under the crosshair (it aims at owned
+   * pickups itself: `target` skips them) — drawn with the same look-at highlight.
+   */
+  hover: Pickup | null = null;
 
   constructor(private readonly guns: Record<string, GLTF>) {
     this.group.name = 'pickups';
@@ -433,6 +445,7 @@ export class PickupManager {
     p.obj.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh && !m.userData.shared && !this.isShared(m)) m.geometry.dispose(); });
     for (const m of p.mats) m.dispose();
     if (this.highlighted === p) this.highlighted = null;
+    if (this.hover === p) this.hover = null;
   }
 
   private isShared(m: THREE.Mesh): boolean {
@@ -489,6 +502,7 @@ export class PickupManager {
     let best: Pickup | null = null, bestScore = Infinity;
     const v = new THREE.Vector3();
     for (const p of this.list) {
+      if (p.owner) continue; // (lane WARES: a stall's ware is aimed at by market/wares — never a plain Take)
       v.set(p.x - eye.x, p.y + 0.08 - eye.y, p.z - eye.z);
       const d = v.length();
       if (d > 2.6) continue;
@@ -511,14 +525,15 @@ export class PickupManager {
     // Readability in dark rooms: a faint warm self-glow plus a brief, staggered glint every few
     // seconds, so supplies read as silhouettes without a flashlight. The look-at highlight is stronger.
     for (const p of this.list) {
-      if (p === this.highlighted) continue;
+      if (p === this.highlighted || p === this.hover) continue;
       const s = Math.sin(t * 2.2 + p.id * 2.39);
       const k = 0.035 + (s > 0.9 ? (s - 0.9) * 1.3 : 0);
       for (const m of p.mats) m.emissive?.setRGB(k, k * 0.9, k * 0.72);
     }
-    if (this.highlighted) {
+    for (const hl of [this.highlighted, this.hover]) {
+      if (!hl) continue;
       const k = 0.12 + 0.08 * Math.sin(t * 6);
-      for (const m of this.highlighted.mats) m.emissive?.setRGB(k, k * 0.85, k * 0.5);
+      for (const m of hl.mats) m.emissive?.setRGB(k, k * 0.85, k * 0.5);
     }
   }
 }

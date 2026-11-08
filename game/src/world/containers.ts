@@ -248,8 +248,11 @@ function storeyOf(layout: StationLayout, y: number): number {
   return id;
 }
 
-/** Holder-local transform of a placed lot: resting position, yaw, then lie-down orientation. */
-function lotLocalMatrix(l: Lot): THREE.Matrix4 {
+/**
+ * Holder-local transform of a placed lot: resting position, yaw, then lie-down orientation. (Exported for the market's displayed wares,
+ * task studio-market-rework-20261108-074144-01 lane WARES: market/wares/wares.ts stands its stock the same way.)
+ */
+export function lotLocalMatrix(l: Pick<Lot, 'itemId' | 'x' | 'y' | 'z' | 'yaw' | 'orient'>): THREE.Matrix4 {
   const d = itemDims(l.itemId);
   const m = new THREE.Matrix4().compose(new THREE.Vector3(l.x, l.y, l.z), new THREE.Quaternion().setFromAxisAngle(UP, l.yaw), new THREE.Vector3(1, 1, 1));
   if (l.orient === 'side') m.multiply(new THREE.Matrix4().makeTranslation(d.h / 2, d.w / 2, 0)).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2));
