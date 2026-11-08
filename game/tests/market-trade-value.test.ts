@@ -3,6 +3,10 @@
 // strictly below every stall's price for every item, condition and count (no arbitrage, also by splitting / merging / loading rounds or
 // fitting filters); every ordinary item sells somewhere (the general store and the scrapyard buy broadly); the reactor parts never sell;
 // a bag with contents is refused; the fuel stall works in the common fuel units and reads the train's capacity from FUEL.
+// Task studio-market-rework-20261108-074144-01 (lane TRADE): EVERY stall buys every ordinary item at its multiple (own line 55 %, the general
+// store 40 %, the scrapyard 35 %, another specialist 25 %: the right stall always pays the most, no arbitrage over all items / conditions /
+// counts / stalls); Rail Ties themselves are never bought or sold; the gear prices (armor vest 72, the rest by stats into the guns' band)
+// with the guns unchanged.
 import {describe, expect, it} from 'vitest';
 import {ITEMS, type ItemDef} from '../src/items/items';
 import {Inventory, type ItemStack} from '../src/items/inventory';
@@ -14,12 +18,12 @@ import {GAS_MASK} from '../src/gear/gasMask';
 import {FUEL} from '../src/fuel/fuel';
 import {MARKET_STALLS, type MarketStallId} from '../src/gen/market/marketTypes';
 import {CENTS, GAS_FILTER_ID, VALUE, baseCents, isTradeable, rarityFactor, roundCents, stackUnitCents} from '../src/market/trade/value';
-import {STALL_TRADE, TRADE_RATES, buyBackPct, buyPrice, sellQuote} from '../src/market/trade/stalls';
+import {STALL_TRADE, TRADE_RATES, betterStall, buyBackPct, buyPrice, sellQuote} from '../src/market/trade/stalls';
 import {MarketStock, stallDraws, stockRng, trainCapacityUnits} from '../src/market/trade/stock';
 
 const inv = new Inventory();
 const ALL = Object.values(ITEMS);
-const TRADEABLE = ALL.filter(d => d.kind !== 'part');
+const TRADEABLE = ALL.filter(d => d.kind !== 'part' && d.kind !== 'currency');
 
 /** A stack of an item at a given condition fraction (0 = empty magazine / no filter / no air / armor gone, 1 = full). */
 function at(d: ItemDef, frac: number, count = 1): ItemStack {
@@ -34,8 +38,14 @@ const FRACS = [0, 0.1, 0.25, 0.5, 0.75, 0.9, 1];
 const sellOrNull = (stall: MarketStallId, s: ItemStack, n: number) => { const q = sellQuote(stall, s, n); return q.ok ? q.price : null; };
 
 describe('market value model: from the item data', () => {
-  it('every tradeable item has a value; the reactor restart parts have none and are refused everywhere with a reason', () => {
+  it('every tradeable item has a value; the reactor restart parts and Rail Ties have none and are refused everywhere with a reason', () => {
     for (const d of TRADEABLE) expect(baseCents(d.id), d.id).toBeGreaterThan(0);
+    expect(ALL.filter(d => d.kind === 'currency').map(d => d.id)).toEqual(['rail_ties']);
+    for (const st of MARKET_STALLS) {
+      const q = sellQuote(st, inv.makeStack('rail_ties', 1000), 1000);
+      expect([q.ok, !q.ok && q.code, isTradeable('rail_ties'), baseCents('rail_ties'), buyBackPct(st, 'rail_ties')]).toEqual([false, 'currency', false, 0, null]);
+      if (!q.ok) expect(q.text).toMatch(/money/);
+    }
     const parts = ALL.filter(d => d.kind === 'part');
     expect(parts.map(d => d.id).sort()).toEqual(['fuse_cartridge', 'reactor_key']);
     for (const d of parts) {
@@ -104,9 +114,8 @@ describe('market prices: no arbitrage, anywhere', () => {
     }
     expect(checked).toBeGreaterThan(400);
     for (const st of MARKET_STALLS) {
-      const s = STALL_TRADE[st];
       expect(TRADE_RATES.themedPct).toBeLessThan(TRADE_RATES.buyPct);
-      if (s.broadPct !== null) expect(s.broadPct).toBeLessThan(TRADE_RATES.themedPct);
+      expect(STALL_TRADE[st].broadPct).toBeLessThan(TRADE_RATES.themedPct);
     }
   });
 
@@ -141,40 +150,46 @@ describe('market prices: no arbitrage, anywhere', () => {
 });
 
 describe('market stalls: who buys what', () => {
-  it('every ordinary item sells somewhere: the general store and the scrapyard take anything ordinary; a single unit is worth a tie somewhere (or the refusal names the count)', () => {
-    for (const d of TRADEABLE) {
-      for (const st of ['general', 'scrap'] as const) {
-        const q = sellQuote(st, inv.makeStack(d.id, d.stackMax), d.stackMax);
-        expect(q.ok, `${d.id}@${st}`).toBe(true);
-        if (q.ok) expect(q.price).toBeGreaterThanOrEqual(1);
-      }
-      const one = inv.makeStack(d.id, 1);
-      const best = Math.max(0, ...MARKET_STALLS.map(st => sellOrNull(st, one, 1) ?? 0));
-      if (baseCents(d.id) * TRADE_RATES.themedPct >= CENTS * 100) expect(best, d.id).toBeGreaterThanOrEqual(1);
-      else {
-        const q = sellQuote(MARKET_STALLS.find(st => STALL_TRADE[st].deals(d))!, one, 1);
-        expect(q.ok).toBe(false);
-        if (!q.ok) { expect(q.code).toBe('too-little'); expect(q.text).toMatch(/sell at least \d+ at once/); }
-      }
-    }
-  });
-
-  it('themed stalls buy their own line at the themed share and refuse the rest, naming a stall that takes it', () => {
+  it('the multiplier table: own line 55 %, general store 40 %, scrapyard 35 %, any other specialist 25 %', () => {
+    expect(TRADE_RATES).toEqual({buyPct: 100, themedPct: 55, offPct: 25});
+    expect(Object.fromEntries(MARKET_STALLS.map(st => [st, STALL_TRADE[st].broadPct]))).toEqual({gun: 25, medical: 25, fuel: 25, general: 40, gear: 25, scrap: 35});
     const own: Record<MarketStallId, string[]> = {gun: ['rifle', 'knife', 'ammo_9mm'], medical: ['medkit', 'trauma_kit', 'arm_sling'], fuel: [FUEL.canItem, 'flare', 'battery'],
       general: ['water', 'beans', 'battery', 'flare', GAS_FILTER_ID], gear: ['armor_vest', 'gas_mask', 'airtank_backpack', 'backpack'], scrap: ['scrap_metal', 'electrical_parts', 'bio_mater']};
     for (const st of MARKET_STALLS) for (const id of own[st]) expect(buyBackPct(st, id), `${id}@${st}`).toBe(TRADE_RATES.themedPct);
-    for (const st of ['gun', 'medical', 'fuel', 'gear'] as const) {
-      const off = TRADEABLE.filter(d => !STALL_TRADE[st].deals(d));
-      expect(off.length).toBeGreaterThan(0);
-      for (const d of off) {
-        const q = sellQuote(st, inv.makeStack(d.id, d.stackMax), d.stackMax);
-        expect(q.ok).toBe(false);
-        if (!q.ok) { expect(q.code).toBe('off-line'); expect(q.text).toMatch(/general store|scrapyard|medic|gunsmith|outfitter|fuel/i); }
+    for (const st of MARKET_STALLS) for (const d of TRADEABLE) expect(buyBackPct(st, d.id), `${d.id}@${st}`).toBe(STALL_TRADE[st].deals(d) ? 55 : STALL_TRADE[st].broadPct);
+  });
+
+  it('EVERY stall buys every ordinary item (or names the count worth a tie); the right stall pays the most; the broad buyers beat a wrong specialist', () => {
+    let checked = 0;
+    for (const d of TRADEABLE) {
+      const whole = inv.makeStack(d.id, d.stackMax), prices: Partial<Record<MarketStallId, number>> = {};
+      for (const st of MARKET_STALLS) {
+        const q = sellQuote(st, whole, d.stackMax);
+        if (q.ok) { prices[st] = q.price; checked++; } else { expect(q.code, `${d.id}@${st}`).toBe('too-little'); expect(q.text).toMatch(/sell at least \d+ at once|Not worth a tie/); }
       }
+      expect(prices.general, d.id).toBeGreaterThanOrEqual(1); // the general store takes a full stack of anything ordinary
+      const right = MARKET_STALLS.filter(st => STALL_TRADE[st].deals(d));
+      for (const st of MARKET_STALLS) {
+        for (const r of right) expect(prices[r] ?? 0, `${d.id}: ${r} vs ${st}`).toBeGreaterThanOrEqual(prices[st] ?? 0);
+        if (!STALL_TRADE[st].deals(d) && st !== 'general' && st !== 'scrap') {
+          expect(prices.general ?? 0, `${d.id}: general vs ${st}`).toBeGreaterThanOrEqual(prices[st] ?? 0);
+          expect(prices.scrap ?? 0, `${d.id}: scrap vs ${st}`).toBeGreaterThanOrEqual(prices[st] ?? 0);
+        }
+      }
+      // a single unit of anything worth a tie at its own line's share sells there
+      const one = inv.makeStack(d.id, 1);
+      if (right.length && baseCents(d.id) * TRADE_RATES.themedPct >= CENTS * 100) expect(sellQuote(right[0], one, 1).ok, d.id).toBe(true);
     }
-    // the layout's signs are used when given
-    const q = sellQuote('gun', inv.makeStack('water', 1), 1, {general: 'PANTRY', scrap: 'SCRAP KING'});
-    expect(!q.ok && q.text).toMatch(/try PANTRY or SCRAP KING for the water/);
+    expect(checked).toBeGreaterThan(200);
+  });
+
+  it('the deal names a stall that pays more (and none at the best one); signs from the layout', () => {
+    const water = inv.makeStack('water', 3), names = {general: 'PANTRY', scrap: 'SCRAP KING'};
+    const b = betterStall('gun', water, 3, names);
+    expect(b).toEqual({stall: 'general', name: 'PANTRY', price: sellOrNull('general', water, 3)});
+    expect(betterStall('general', water, 3, names)).toBeNull();
+    expect(betterStall('gear', inv.makeStack('armor_vest', 1), 1)).toBeNull();
+    expect(betterStall('scrap', inv.makeStack('rifle', 1), 1)?.name).toBe('the gunsmith');
   });
 
   it('a backpack is bought empty only (its contents are never priced, deleted or duplicated); worn wear stays on the item', () => {
@@ -215,6 +230,11 @@ describe('market stalls: who buys what', () => {
     expect(trainCapacityUnits()).toBe(own);
   });
 
+  it('stock never holds Rail Ties: a record listing them loads without them (they are the money, not goods)', () => {
+    const st = MarketStock.fromJSON({v: 1, stalls: {general: [{uid: 90001, itemId: 'rail_ties', count: 500}, {uid: 90002, itemId: 'water', count: 2}]}});
+    expect(st.stalls.general.map(s => s.itemId)).toEqual(['water']);
+  });
+
   it('stock: themed per stall from the loot pools, bounded, deterministic per station + stall, independent stalls', () => {
     const mk = (id: string, n: number) => inv.makeStack(id, n);
     const a = MarketStock.seed('st-04', 777, mk), b = MarketStock.seed('st-04', 777, mk), c = MarketStock.seed('st-05', 777, mk);
@@ -237,5 +257,40 @@ describe('market stalls: who buys what', () => {
       expect(ammo).toBeLessThanOrEqual(6 * 12); // at most six big boxes: no free global ammo
       expect(s.stalls.gun.filter(x => ITEMS[x.itemId].kind === 'weapon').length).toBeLessThanOrEqual(2);
     }
+  });
+});
+
+describe('market prices: gear (user: "bump chest armor up to 72 rail ties, and move other gear items up to match")', () => {
+  const fresh = (id: string) => inv.makeStack(id, 1);
+  it('a fresh full-condition armor vest retails at exactly 72 ties; the other gear rises by its stats into the guns\' band', () => {
+    const table = Object.fromEntries(['helmet', 'boots', 'gloves', 'chest_rig', 'gas_mask', 'armor_vest', 'backpack', 'airtank_backpack'].map(id => [id, buyPrice(fresh(id), 1)]));
+    expect(table).toEqual({helmet: 37, boots: 55, gloves: 57, chest_rig: 61, gas_mask: 70, armor_vest: 72, backpack: 78, airtank_backpack: 100});
+    const empty = fresh('airtank_backpack');
+    empty.air = 0;
+    expect(buyPrice(empty, 1)).toBe(28); // its air is priced per second on top (a resource, like a spare filter)
+    // the guns are unchanged (full magazine / empty)
+    const gun = (id: string, mag?: number) => buyPrice(inv.makeStack(id, 1, mag), 1);
+    expect([gun('rifle'), gun('rifle', 0), gun('shotgun'), gun('shotgun', 0), gun('pistol'), gun('pistol', 0), gun('knife')]).toEqual([113, 90, 89, 72, 68, 57, 42]);
+    // every gear piece in the guns' band (a knife .. a loaded rifle), the vest above a loaded pistol
+    for (const d of ALL.filter(x => x.kind === 'gear')) {
+      const p = buyPrice(fresh(d.id), 1);
+      expect(p, d.id).toBeGreaterThanOrEqual(gun('knife') - 5);
+      expect(p, d.id).toBeLessThanOrEqual(gun('rifle'));
+    }
+    expect(table.armor_vest).toBeGreaterThan(gun('pistol'));
+    expect(table.armor_vest).toBeGreaterThanOrEqual(6 * buyPrice(fresh('beans'), 1)); // (was ~2 cans of beans)
+  });
+
+  it('condition still prices in: armor wear (itemArmor) lowers the vest, a fitted filter raises the mask; nothing is repaired or refilled', () => {
+    const vest = fresh('armor_vest'), full = gearSpec('armor_vest')!.armor!;
+    const at = (left: number | undefined) => { const v = fresh('armor_vest'); if (left !== undefined) v.armor = left; return buyPrice(v, 1); };
+    expect([at(undefined), at(full)]).toEqual([72, 72]);
+    expect(at(full / 2)).toBeLessThan(72);
+    expect(at(0)).toBeLessThan(at(full / 2));
+    expect(at(0)).toBeGreaterThan(0);
+    const mask = fresh('gas_mask');
+    mask.filter = FILTER_LIFE_S;
+    expect(buyPrice(mask, 1)).toBe(70 + buyPrice(inv.makeStack(GAS_FILTER_ID, 1), 1));
+    expect(vest.armor).toBeUndefined();
   });
 });

@@ -30,6 +30,7 @@ export const RAIL_TIES_ITEMS: Record<string, ItemDef> = {
 };
 
 export const RAIL_TIES_DIMS: Record<string, ItemDims> = {
-  // a strapped bundle of four tie offcuts (2 x 2), lying along X: the bundle's section is one track sleeper's (world/railTiesModel.ts)
-  [RAIL_TIES_ID]: {w: 0.36, d: 0.24, h: 0.14, shape: 'flat'},
+  // a strapped bundle of four tie offcuts (2 x 2), lying along X: its timber section is one track sleeper's (0.24 x 0.14 m), + the two steel
+  // straps and the spike heads (world/railTiesModel.ts measured bounds)
+  [RAIL_TIES_ID]: {w: 0.356, d: 0.246, h: 0.149, shape: 'flat'},
 };
