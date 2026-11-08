@@ -257,7 +257,9 @@ describe('shot / hit spans (debug/updateProfile.ts)', () => {
     const game = readFileSync(fileURLToPath(new URL('../src/game.ts', import.meta.url)), 'utf8');
     expect(game).toMatch(/if \(e\.type === 'fire'\) \{ prof\.begin\(SPAN\.fire\); this\.fire\(e\.def\); prof\.end\(SPAN\.fire\); \}/);
     expect(game).toMatch(/\{ prof\.begin\(SPAN\.melee\); this\.meleeContact\(e\.def\); prof\.end\(SPAN\.melee\); \}/);
-    expect(game).toMatch(/prof\.begin\(SPAN\.fireRays\);\s*\/\/ Lane B[^\n]*\n\s*const wh = raycastWorld\(/);
+    // (task studio-skywalk-variety-20261107-231448-01, lane MERCH: the world ray through physics/merchOnHost.ts raycastShot — raycastWorld,
+    // then the shelf stock inside open shelving it passed; one more comment line)
+    expect(game).toMatch(/prof\.begin\(SPAN\.fireRays\);\s*\/\/ Lane B[^\n]*\n(\s*\/\/[^\n]*\n)*\s*const wh = raycastShot\(/);
     expect(game).toMatch(/const fh = this\.stock\.pelletHit\([^\n]*\n\s*prof\.end\(SPAN\.fireRays\);/);
     expect(game).toMatch(/prof\.begin\(SPAN\.fireFx\);\s*this\.sfx\.shot\(def\.sound\);/);
     expect(game).toMatch(/this\.physics\.onFire\([^\n]*\n\s*prof\.end\(SPAN\.fireFx\);/);
