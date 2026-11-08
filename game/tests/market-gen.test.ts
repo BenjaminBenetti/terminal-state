@@ -15,6 +15,7 @@ import {MARKET_ART, marketAwnings, marketFans} from '../src/gen/market/art';
 import {PLAYER_TRAIN_SPEC} from '../src/world/playerTrainSpec';
 import {playerTrainPlacement, trainToWorld} from '../src/gen/playerTrain';
 import {SPAWN_PROFILES} from '../src/ai/spawnTables';
+import {fuelWeight} from '../src/gen/fuelPlacement';
 import type {StationLayout} from '../src/gen/stationTypes';
 
 const SEEDS = [1, 2, 3, 42, 777, 4242, 9001, 123456, 0xdeadbeef, 20261108];
@@ -132,6 +133,8 @@ describe('the Survivor Market generator', () => {
       expect(L.pickups).toEqual([]);
     }
     expect(Object.values(SPAWN_PROFILES.market.contexts).filter(c => c.count[1] > 0).map(c => c.label)).toEqual([SPAWN_PROFILES.market.contexts.service!.label]);
+    // the common station-fuel rules unchanged: only the workshop has a fuel affinity (its storage takes the plan's cans, like any station's)
+    for (const {L} of layouts) expect(L.areas.filter(a => fuelWeight(a) > 0).map(a => a.purpose)).toEqual(['workshop']);
     expect(SPAWN_PROFILES.market.contexts.station!.count).toEqual([0, 0]);
     expect(SPAWN_PROFILES.market.horde).toBeUndefined();
     expect(LEVELS.market.trackExtensions).toBe('none');

@@ -4,6 +4,9 @@
 // build hook adds a group to the scene before the warm-up (so every program is compiled with the level), its frame hook turns the fan
 // rotors (one InstancedMesh: a matrix per fan per frame, nothing allocated), its teardown removes and disposes everything. Inert on
 // every other level.
+// The shed's ATMOSPHERE: an ordinary (never green: no gas here) warm dusty haze lighter than the station's near-black fog, so the whole
+// settlement (40 m of square, the deck, the far stalls) reads from the platform; the camera far plane / the culler's fog distance follow;
+// teardown restores the indoor MOOD values exactly (the mall's recipe, world/mallAtmosphere.ts: uniform / camera values only).
 
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -11,9 +14,13 @@ import type {StationLayout} from '../gen/stationTypes';
 import {marketAwnings, marketFans, type MarketFan} from '../gen/market/art';
 import {SurfaceNodeMaterial} from './materials';
 import {marketSpan, marketTexture} from './marketTextures';
+import {MOOD, syncGlowFog} from './lights';
+import {fogCullDistance} from './levelCulling';
 
 export interface MarketVisualsHost {
   scene: THREE.Scene;
+  camera?: THREE.PerspectiveCamera;
+  world?: {culler?: {maxDistance: number}} | null;
   sectionHooks: {build?(layout: StationLayout): void; teardown?(): void}[];
   frameHooks: ((dt: number) => void)[];
 }
@@ -29,6 +36,8 @@ export interface MarketView {
 }
 
 const FAN_STEEL = 0x34322e, AWNING_STANDIN = 0x6d6a3e;
+/** The shed's haze (FogExp2): warm dusty brown, ~55 % transmittance across the 35 m square (MOOD: ~10 %); the camera far plane (m). */
+export const MARKET_FOG = {density: 0.022, color: 0x2b2620, far: 120};
 
 /** One fan's rotor (motor housing + four blades) about +Y, centred on the hub. */
 function rotorGeometry(r: number): THREE.BufferGeometry {
@@ -142,10 +151,14 @@ export class MarketVisuals {
     return this;
   }
 
+  private farWas: number | null = null;
+  private fogOn = false;
+
   build(layout: StationLayout): void {
     if (this.view) this.teardown();
     const v = buildMarketView(layout);
-    if (!v) return;
+    if (!v) { this.restoreFog(); return; }
+    this.applyFog();
     this.host.scene.add(v.root);
     this.view = v;
     this.t = 0;
@@ -158,7 +171,33 @@ export class MarketVisuals {
     turnFans(this.view, this.t);
   }
 
+  /** The shed's haze, the far plane, the culler's fog distance. */
+  private applyFog(): void {
+    const fog = this.host.scene.fog as THREE.FogExp2 | null;
+    if (fog && fog.isFogExp2) { fog.density = MARKET_FOG.density; fog.color.setHex(MARKET_FOG.color); syncGlowFog(fog); }
+    const cam = this.host.camera;
+    if (cam) {
+      if (this.farWas === null) this.farWas = cam.far;
+      cam.far = Math.max(this.farWas, MARKET_FOG.far);
+      cam.updateProjectionMatrix();
+    }
+    const culler = this.host.world?.culler;
+    if (culler) culler.maxDistance = Math.min(fogCullDistance(MARKET_FOG.density), MARKET_FOG.far);
+    this.fogOn = true;
+  }
+
+  /** The indoor MOOD values back exactly. */
+  private restoreFog(): void {
+    if (!this.fogOn) return;
+    const fog = this.host.scene.fog as THREE.FogExp2 | null;
+    if (fog && fog.isFogExp2) { fog.density = MOOD.fogDensity; fog.color.setHex(MOOD.fogColor); syncGlowFog(fog); }
+    if (this.farWas !== null && this.host.camera) { this.host.camera.far = this.farWas; this.host.camera.updateProjectionMatrix(); }
+    this.farWas = null;
+    this.fogOn = false;
+  }
+
   teardown(): void {
+    this.restoreFog();
     const v = this.view;
     this.view = null;
     if (!v) return;

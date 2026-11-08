@@ -38,7 +38,7 @@ import type {Area, StationLayout} from '../../game/src/gen/stationTypes';
 import {OFFICE_FLOORS} from '../../game/src/gen/office/frame';
 import {MALL_RINGS} from '../../game/src/gen/mall/mallTypes'; // task track3-eaton-centre-20261031 (lane PROFILES)
 import {LINGERIE_SPAWN_RULES, LINGERIE_STORES_MAX} from '../../game/src/gen/mall/lingerieSpawns'; // task mall-lingerie-20261102-221554 (lane CONTEXT): the lingerie store's zone
-import {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_REACTOR, TRACK_EXT_SKYWAYS} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs); + the mall's (task mall-playtest-revision-20261031: at most 1)
+import {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_MARKET, TRACK_EXT_REACTOR, TRACK_EXT_SKYWAYS} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs); + the mall's (task mall-playtest-revision-20261031: at most 1)
 import {CELL} from '../../game/src/gen/grid';
 import {ROOM_LABEL} from '../../game/src/gen/stationKit';
 import {purposeById} from '../../game/src/gen/purposes';
@@ -289,7 +289,7 @@ export const ENEMY_LEVEL_ADAPTER: Readonly<Record<LevelId, {
       note: `ONE continuous level (LevelId 'market'): a calm survivor settlement in a salvaged railway shed where the player's train stops (the platform, six trader stalls, the market square, the housing deck), generated once per level seed. NO enemies: the generator never runs a placement (its one ambient context places [0, 0]), there is no horde pool, no Siren eligibility and no service annex (LEVELS.market.trackExtensions 'none'); its friendly residents are not enemies (never in layout.zombies).`},
     contexts: {
       station: {storeys: 'the whole settlement (platform, stalls, square, housing deck)', runs: 0, hook: 'count [0, 0]: a calm settlement, gen/market never asks for a placement run'},
-      service: {storeys: 'none: the market grows no service annex (trackExtensions none)', runs: 0, hook: 'declared for the shared annex contract only; no annex, so it never runs'},
+      service: {storeys: 'none: the market grows no service annex (LEVELS.market.trackExtensions none)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT_MARKET.annex.max], note: SERVICE_ZONE_NOTE}},
     },
   },
 };

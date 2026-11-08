@@ -1228,7 +1228,9 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
 
   // --- rare gear (one roll per logical level; grouped by identical resolved parameters)
   const groups = new Map<string, LevelId[]>();
-  for (const l of levels) { const k = JSON.stringify(gearParams(profiles.get(l)!)); groups.set(k, [...(groups.get(k) ?? []), l]); }
+  // (task studio-survivor-market-20261108-005807-01) a level whose profile rolls NO gear at all (cap / mean 0: the Survivor Market, no free
+  // loot) has no rare-gear roll to describe: it joins no group
+  for (const l of levels) { const gp = gearParams(profiles.get(l)!); if (!(gp.cap > 0 && gp.mean > 0)) continue; const k = JSON.stringify(gp); groups.set(k, [...(groups.get(k) ?? []), l]); }
   for (const [, ls] of groups) {
     const g = gearParams(profiles.get(ls[0])!);
     const w = Object.entries(g.weights).filter(([id, x]) => GEAR_ITEMS[id] && x > 0);
