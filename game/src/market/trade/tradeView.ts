@@ -11,8 +11,10 @@ import {ITEMS} from '../../items/items';
 import {GEAR_SLOTS, GEAR_SLOT_NAMES} from '../../items/gear';
 import {WEAPONS} from '../../weapons/weapons';
 import {PACK_SIZE, type ItemStack, type SlotRef} from '../../items/inventory';
+import {FUEL, tanksText} from '../../fuel/fuel';
 import {RAIL_TIES, TIE_GLYPH, tiesHtml, tiesText} from './ties';
 import {buyPrice} from './stalls';
+import {trainCapacityUnits} from './stock';
 import {conditionText} from './value';
 import {amountText, quoteBuy, quoteSell, type TradeCtx, type TradeResult} from './transactions';
 
@@ -223,7 +225,9 @@ export class TradeView {
   private dealLine(c: TradeCtx): {text: string; bad: boolean; ok: boolean} {
     const s = this.selection, st = this.selected();
     if (!s || !st) return {text: 'Pick one of your items to sell, or something on the stall to buy.', bad: false, ok: false};
-    const cond = conditionText(st), what = `${amountText(st.itemId, this.qty)}${cond ? ` (${cond})` : ''}`;
+    // fuel in the common units: a can is FUEL.canUnits quarter-tank units (tanksText: "¼ tank", "½ tank" …)
+    const cond = st.itemId === FUEL.canItem ? `${tanksText(this.qty * FUEL.canUnits)} of fuel` : conditionText(st);
+    const what = `${amountText(st.itemId, this.qty)}${cond ? ` (${cond})` : ''}`;
     if (s.side === 'sell') {
       const q = quoteSell(c, s.ref, this.qty);
       return q.ok ? {text: `Sell ${what} for ${tiesText(q.price)}`, bad: false, ok: true} : {text: q.text, bad: true, ok: false};
@@ -274,7 +278,8 @@ export class TradeView {
     set('.tr-title', this.host.stallName());
     const wal = root.querySelector('.tr-wallet');
     if (wal) wal.innerHTML = tiesHtml(c.wallet.ties);
-    set('.tr-stock-h', `Stall stock · buy · ${stock.length} ${stock.length === 1 ? 'lot' : 'lots'}`);
+    const fuel = c.stall === 'fuel' ? ` · one can = ${tanksText(FUEL.canUnits)} · your train holds ${tanksText(trainCapacityUnits())}` : '';
+    set('.tr-stock-h', `Stall stock · buy · ${stock.length} ${stock.length === 1 ? 'lot' : 'lots'}${fuel}`);
     const ex = inv.extraPockets;
     set('.tr-pockets', `Pockets · ${inv.pack.length}${ex ? ` (${PACK_SIZE} + ${ex} chest rig)` : ''}`);
     const dl = root.querySelector('.tr-deal-text');

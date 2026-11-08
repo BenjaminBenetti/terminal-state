@@ -5,7 +5,7 @@
 // duplicated, no item is created or lost, and the balance is exactly the sum of the trades.
 import {describe, expect, it} from 'vitest';
 import {ITEMS} from '../src/items/items';
-import {GEAR_SLOTS} from '../src/items/gear';
+import {GEAR_SLOTS, gearSpec} from '../src/items/gear';
 import {Inventory, PACK_SIZE, type SlotRef} from '../src/items/inventory';
 import {mulberry32} from '../src/core/rng';
 import {MARKET_STALLS, type MarketStallId} from '../src/gen/market/marketTypes';
@@ -18,6 +18,7 @@ import {census, tradeState, uniqueUids} from './helpers/marketTradeFixture';
 const H = (i: number): SlotRef => ({bar: 'hotbar', index: i});
 const P = (i: number): SlotRef => ({bar: 'pack', index: i});
 const G = (slot: string): SlotRef => ({bar: 'gear', index: GEAR_SLOTS.indexOf(slot as never)});
+const gearSpecArmor = (id: string): number => gearSpec(id)!.armor!;
 
 function setup(stall: MarketStallId = 'general', ties = 0) {
   const inv = new Inventory(), wallet = new MarketWallet();
@@ -75,6 +76,22 @@ describe('market trades: what moves', () => {
     expect([lot.count, g.stock.stalls.gun.includes(lot), g.inv.count('ammo_9mm')]).toEqual([17, true, 3]);
     expect(g.inv.allStacks().find(s => s.itemId === 'ammo_9mm')!.uid).not.toBe(lot.uid);
     expect(r2.ok && r2.price).toBe(buyPrice(lot, 3));
+  });
+
+  it('armor wear (an optional item-state field another task adds) travels with the stack both ways and lowers the price; it is never reset', () => {
+    const {inv, stock, ctx, wallet} = setup('gear', 1000);
+    const vest = inv.makeStack('armor_vest', 1) as ReturnType<Inventory['makeStack']> & {armor?: number};
+    const full = gearSpecArmor('armor_vest');
+    vest.armor = full / 2;
+    inv.set(P(0), vest);
+    const fresh = inv.makeStack('armor_vest', 1);
+    expect(buyPrice(vest, 1)).toBeLessThan(buyPrice(fresh, 1));
+    expect(sell(ctx, P(0)).ok).toBe(true);
+    const i = stock.stalls.gear.indexOf(vest);
+    expect([i >= 0, vest.armor]).toEqual([true, full / 2]);
+    const price = buyPrice(vest, 1), before = wallet.ties;
+    expect(buy(ctx, i).ok).toBe(true);
+    expect([inv.allStacks().includes(vest), vest.armor, before - wallet.ties]).toEqual([true, full / 2, price]);
   });
 
   it('worn gear sells (the helmet off your head); a chest rig whose extra pockets hold items is refused with nothing changed', () => {

@@ -8,6 +8,7 @@ import type {SlotRef} from '../src/items/inventory';
 import {TIE_GLYPH} from '../src/market/trade/ties';
 import {TRADE_RT, TRADE_TEXT} from '../src/market/trade/tradeSystem';
 import {buyPrice} from '../src/market/trade/stalls';
+import {FUEL} from '../src/fuel/fuel';
 import {installFakeDom, type FakeDom} from './helpers/fakeDom';
 import {tradeHost, tradeState} from './helpers/marketTradeFixture';
 
@@ -159,6 +160,21 @@ describe('market trade view: the panel', () => {
     expect(r && !r.ok && r.code).toBe('short');
     expect(t.snap()).toBe(before);
     expect(t.sfx.denied).toBe(2);
+  });
+
+  it('the fuel stall speaks the common fuel units: a can is a quarter tank, the train\'s capacity from FUEL', () => {
+    const t = market(500);
+    t.standAt('fuel');
+    t.press();
+    expect(dom.el('.tr-stock-h').textContent).toMatch(/one can = ¼ tank · your train holds 1 tank$/);
+    const i = t.sys.stock!.stalls.fuel.findIndex(s => s.itemId === FUEL.canItem && s.count === 2);
+    expect(i).toBeGreaterThanOrEqual(0);
+    t.sys.view.select({side: 'buy', index: i});
+    expect(t.sys.view.deal).toMatch(/^Buy 2 × Fuel \(½ tank of fuel\) for 20 ties$/);
+    t.sys.view.setQty(1);
+    expect(t.sys.view.deal).toMatch(/^Buy Fuel \(¼ tank of fuel\) for 10 ties$/);
+    expect(t.sys.view.confirm()?.ok).toBe(true);
+    expect(t.h.inv.count(FUEL.canItem)).toBe(1); // an ordinary can in the pockets: pour it at the fuel cap or stow it, as always
   });
 
   it('a buy that fits: the quantity starts at what you can pay for', () => {
