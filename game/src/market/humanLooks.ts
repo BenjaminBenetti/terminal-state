@@ -12,7 +12,7 @@ import {hashString, mulberry32} from '../core/rng';
 /** Lazy prop-library key + file of the cast (catalogue bytes = the GLB's size; tests/market-people-assets.test.ts checks it). */
 export const MARKET_HUMAN_KEY = 'market_humanCast';
 export const MARKET_HUMAN_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = {
-  [MARKET_HUMAN_KEY]: {url: 'assets/models/market-human-cast.glb', bytes: 13_036_576},
+  [MARKET_HUMAN_KEY]: {url: 'assets/models/market-human-cast.glb', bytes: 13_729_296},
 };
 
 /** The cast model keys a layout needs: only the market (layout.market) ever fetches the humans. */

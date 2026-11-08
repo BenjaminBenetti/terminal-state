@@ -53,6 +53,9 @@ export const LEVEL_ONLY_RULES: readonly LevelOnlyRule[] = [
   // task studio-skyways-level-20261106-054448-01: Skyways' kit (skyways-*.glb: the prize car, the mascot statues, street wrecks, the
   // ramen kitchen; textures/skyways/**: the convention / prize / ramen art atlases). The edible food models (item-*.glb) are shared.
   {level: 'skyways', path: /^(?:\.\/)?assets\/(?:models\/skyways-[A-Za-z0-9_-]+\.glb|textures\/skyways\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2))$/},
+  // task studio-survivor-market-20261108-005807-01 (lane HUMANS): THE SURVIVOR MARKET's own files — market-*.glb (the friendly
+  // humans' market-human-cast.glb: market/humanLooks.ts; the level's models) and textures/market/**
+  {level: 'market', path: /^(?:\.\/)?assets\/(?:models\/market-[A-Za-z0-9_-]+\.glb|textures\/market\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2))$/},
 ];
 
 /** The level that alone may load `url`, or null when it is shared. */

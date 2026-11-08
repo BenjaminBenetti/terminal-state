@@ -5,7 +5,7 @@
 //   --reuse         reuse the zombie wardrobe's cached canonical-body / wearable stages (/tmp/ll-zombie-variants, keyed exactly as
 //                   zombie/build-wardrobe.mjs keys them) and this builder's fit cache (/tmp/ll-market-humans/fit-cache)
 //   dev only: --bodies=m1,f1 --wear=hoodie,cap --no-fit (bodies + clips only) --out=DIR (write to DIR/models, DIR/derivatives;
-//             nothing else touched, no allowlist update)
+//             nothing else touched, no allowlist update) --no-gate (QA: keep gate failures, to render where they poke)
 //
 // Pipeline (every library reused by import from tools/asset-pipeline/zombie, none edited; the zombie outputs are untouched):
 //  1. bodies (lib/body.mjs): the Meshy base placed at its stature, skeleton detected on a densified copy (+ documented landmark
@@ -219,7 +219,7 @@ async function main() {
     if (m.animated > g.animated) fail.push(`animated ${(m.animated * 100).toFixed(2)}% > ${g.animated * 100}%`);
     m.pass = !fail.length;
     fitGate.variants.push(m);
-    if (fail.length) {
+    if (fail.length && !ARGS.has('--no-gate')) {
       excluded.push({body: B.id, wearable: w.id, slot: w.def.slot, rule: 'fit-pose-gate', reason: `body still visibly pokes through the refitted cloth in the healthy clips: ${fail.join(', ')} of ${cov} covered vertices`, metrics: m});
       delete fits[w.id][B.id];
       console.log(`  ! ${w.id} x ${B.id} EXCLUDED by the pose gate: ${fail.join(', ')}`);
@@ -302,7 +302,7 @@ async function main() {
   const glbBytes = fs.readFileSync(GLB_FILE);
   // sources unchanged
   for (const s of sources) if (sha256File(s.file) !== s.sha256) throw new Error('SOURCE CHANGED ' + s.file);
-  const manifest = buildManifest({bodies, wear, fits, excluded, fitGate, summary, glb: {path: OUT.glb, bytes: glbBytes.length, sha256: sha(glbBytes)}, castWear, t0});
+  const manifest = buildManifest({bodies, wear, fits, excluded, fitGate, summary, glb: {path: OUT.glb, bytes: glbBytes.length, sha256: sha(glbBytes)}, castWear});
   const manBuf = Buffer.from(JSON.stringify(manifest, null, 2) + '\n');
   fs.writeFileSync(guard(JSON_FILE), manBuf);
   console.log(`wrote ${OUT.glb} ${glbBytes.length} B, ${OUT.manifest} ${manBuf.length} B`);
@@ -322,7 +322,7 @@ const HONESTY = {sourcesHadSkeleton: false, rig: 'NEW derivative skeleton (the s
   animation: 'hand-authored procedural HEALTHY clips (tools/asset-pipeline/humans/lib/clips.mjs; same functions for every body, sampled with each body\'s own joints) - NOT motion capture, NOT the zombie clips',
   maps: 'the Meshy base colour, metallic-roughness and normal maps are KEPT on the Meshy mesh / UVs (re-encoded JPEG, resized only)', generation: 'no generation, inference, model download or network service was used by this builder'};
 
-function buildManifest({bodies, wear, fits, excluded, fitGate, summary, glb, castWear, t0}) {
+function buildManifest({bodies, wear, fits, excluded, fitGate, summary, glb, castWear}) {
   return {schema: 'the-last-line/derivative-manifest@1', asset: 'market-human-cast', task: HUMANS_TASK, title: 'Friendly market humans: five Meshy T2.5 bases x fitted ordinary wearables, healthy clips (prototype)', status: STATUS, honesty: HONESTY,
     outputs: {glb: {...glb, format: 'glTF 2.0 binary (KHR_mesh_quantization int8 normals); JPEG textures; per body: 18 prefixed joints, the skinned body, its fitted wearables on the SAME skin, its clips "<body>:<Clip>"; per wearable one shared texture / UV / index set'}},
     levelOnly: 'market (game/src/assets/levelAssets.ts LEVEL_ONLY_RULES market-*)',
@@ -351,8 +351,8 @@ function buildManifest({bodies, wear, fits, excluded, fitGate, summary, glb, cas
       'Hidden-side geometry of the Meshy bases is AI-hallucinated; the maps are the Meshy model\'s own (normal map kept, sampled without tangents).',
       'Unapproved prototype: appearance, anatomy, deformation, performance and licensing not certified.',
     ],
-    rebuild: 'LL_THREADS=1 node --max-old-space-size=6000 tools/asset-pipeline/humans/build-humans.mjs --reuse && node tools/asset-pipeline/humans/qa/sheets.mjs',
-    buildSeconds: Math.round((Date.now() - t0) / 1000)};
+    // (no build time / date: the record is byte-reproducible, like the GLB)
+    rebuild: 'LL_THREADS=1 node --max-old-space-size=6000 tools/asset-pipeline/humans/build-humans.mjs --reuse && node tools/asset-pipeline/humans/qa/sheets.mjs'};
 }
 
 await main();

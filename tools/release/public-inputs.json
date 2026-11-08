@@ -1789,6 +1789,11 @@
       "sha256": "830b870e5f4f72192b2d2847d60a181db2ba760d41ea891e46a272e155d74b55"
     },
     {
+      "path": "assets/derivatives/market-human-cast.json",
+      "bytes": 146778,
+      "sha256": "809d5adaabfe96f768632af36a1b329eebc57f74fcde447f01a9c23f11c33bb5"
+    },
+    {
       "path": "assets/derivatives/meshy-t25-ammo-20261030.json",
       "bytes": 28564,
       "sha256": "16c2f68670691e29034f64cd044f94a7bb482a19adeb075db694a40801ae3219"
@@ -2832,6 +2837,11 @@
       "path": "assets/models/mall-womens-skirts-group.glb",
       "bytes": 210276,
       "sha256": "6a49b6574a22eef83a7d80e56a701d9b5a8f705217e5d6aedb6fec696b769a7c"
+    },
+    {
+      "path": "assets/models/market-human-cast.glb",
+      "bytes": 13729296,
+      "sha256": "a1b3cb9d0d2b6dbc10ed4bbc8b7fdd3224702fb215c410de480ddacd1302ff88"
     },
     {
       "path": "assets/models/office-aquarium.glb",
