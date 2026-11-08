@@ -90,15 +90,17 @@ function keepClear(layout: StationLayout, ctx: PlaceCtx): void {
     const [x0, y0, x1, y1] = cellsOfBox(x, z, r, r);
     for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) if (g.inBounds(cx, cy)) markCell(ctx, ctx.keep, g.idx(cx, cy));
   };
-  const on = (level: number | undefined) => (level ?? 0) === ctx.level;
-  for (const p of layout.pickups) if (on(p.level)) disc(p.x, p.z, R.pickupClear);
-  for (const z of layout.zombies) if (on(z.level)) disc(z.x, z.z, R.spawnClear);
+  // only the core's own things: an extension (tunnel / annex) lies behind a wall, so nothing in it is in a kiosk's way — and the core's
+  // kiosks then come out the same whether a station rolled its extensions or not (tests/track-ext-core.test.ts core invariance)
+  const on = (level: number | undefined, area: number) => (level ?? 0) === ctx.level && !layout.areas[area]?.ext;
+  for (const p of layout.pickups) if (on(p.level, p.area)) disc(p.x, p.z, R.pickupClear);
+  for (const z of layout.zombies) if (on(z.level, z.area)) disc(z.x, z.z, R.spawnClear);
   if (ctx.level === 0) disc(layout.playerSpawn.x, layout.playerSpawn.z, R.arrivalClear);
   // every prop below the kiosk's top (mounted plates, hung fixtures, wall items do not block cells but would intersect the cabinet)
-  for (const p of layout.props) if (on(p.level) && p.y < SUBWAY_MAP_KIOSK.top + 0.2) disc(p.x, p.z, Math.max(p.hx, p.hz) + 0.15);
+  for (const p of layout.props) if (on(p.level, p.area) && p.y < SUBWAY_MAP_KIOSK.top + 0.2) disc(p.x, p.z, Math.max(p.hx, p.hz) + 0.15);
   for (const s of layout.signs) {
     const base = layout.levels[s.level ?? 0]?.baseY ?? 0;
-    if (on(s.level) && s.y - base < SUBWAY_MAP_KIOSK.top + 0.35) disc(s.x, s.z, (s.w ?? 1.2) / 2 + 0.1);
+    if (on(s.level, s.area) && s.y - base < SUBWAY_MAP_KIOSK.top + 0.35) disc(s.x, s.z, (s.w ?? 1.2) / 2 + 0.1);
   }
 }
 
