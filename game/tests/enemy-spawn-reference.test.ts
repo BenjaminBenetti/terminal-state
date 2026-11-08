@@ -7,7 +7,7 @@
 //  - task track1-siren-blightbelly-20261031 (lane SPAWN), schema 2: tiers === the registry, family stats / rules === the exported
 //    constants (Siren hp = 2 x the shambler's), eligibility rules === the profile, the eligibility census === a fresh generation.
 
-import {describe, expect, it} from 'vitest';
+import {beforeAll, describe, expect, it} from 'vitest';
 import {LINGERIE_STORES_MAX} from '../src/gen/mall/lingerieSpawns'; // task mall-lingerie-20261102-221554 (lane CONTEXT): the mall's lingerie store zone
 import {trackExtConfig} from '../src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone; task mall-playtest-revision-20261031: per level — the mall grows at most 1)
 import {existsSync, readFileSync} from 'node:fs';
@@ -37,6 +37,11 @@ const readSource = (f: string): string | null => {
 };
 let cached: EnemyReference | null = null;
 const ref = (): EnemyReference => (cached ??= buildEnemyReference({readSource, commit: 'test'}));
+// Task studio-skywalk-encounters-20261108-074144-01: the reference is built ONCE here (fixture setup, its own explicit time limit), not
+// inside the first test: every level with a family eligibility rule adds its 20-level sampled eligibility census
+// (ENEMY_ELIGIBILITY_SEEDS), and Skyways version 5 now has one (its Siren) — 20 more generated Skyways levels. Every assertion below is
+// unchanged and keeps the default per-test limit.
+beforeAll(() => { ref(); }, 300_000);
 const level = (id: string) => ref().levels.find(l => l.id === id)!;
 
 /** Every SourceLoc in a JSON value. */
