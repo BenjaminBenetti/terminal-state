@@ -59,11 +59,38 @@ const BEER_TEXT: Readonly<Record<BeerId, string>> = {
   beer_bock: 'A thick, filling bock: sets food and water to 200 %. Not a timed buff; it goes with any other beer.',
 };
 
-/** (seam: minimal) The beers' item definitions — the BEER lane replaces the placeholder icon and adds the drink's effects. */
+/** (lane BEER) The HUD / inventory fallback glyph key of every beer (ui/icons.ts; the 3D icon is the bottle with its own Codex label). */
+export type BeerIconKey = 'beer';
+
+/** Is this beer a TIMED one (it occupies the one timed slot)? */
+export const isTimedBeer = (id: string): boolean => isBeer(id) && BEERS[id].effect !== 'overfill';
+
+/** (lane BEER) "10 min" — a timed beer's active duration as the tooltip / hint shows it. */
+export const beerDurationText = (): string => `${Math.round(BEER_TUNING.activeSeconds / 60)} min`;
+
+/** (lane BEER) What one beer does (tooltip / weapon-panel hint / item detail): the effect and its duration, or the instant overfill. */
+export function beerEffectText(id: BeerId): string {
+  const t = BEER_TUNING, d = beerDurationText();
+  switch (BEERS[id].effect) {
+    case 'speed': return `+${Math.round((t.speedMult - 1) * 100)} % ground speed for ${d} (timed beer)`;
+    case 'pickup': return `${Math.round(t.pickupDupChance * 100)} % chance a new find is doubled for ${d} (timed beer)`;
+    case 'armor': return `+${Math.round(t.tempArmor / 0.025)} armour pips for ${d} (timed beer)`;
+    case 'stealth': return `${Math.round((1 - t.perceptionMult) * 100)} % harder to detect for ${d} (timed beer)`;
+    case 'overfill': return `sets food and water to ${t.overfill} % · not a timed buff`;
+  }
+}
+
+/** (lane BEER) The one-beer rule, as the tooltip states it. */
+export const BEER_RULE_NOTE = 'One timed beer at a time: another one (the same one too) makes you throw up and replaces it.';
+
+/** The beers' item definitions (bar stock only: never loot, never generated, never a dev drop). */
 export const BEER_ITEMS: Record<string, ItemDef> = Object.fromEntries(BEER_IDS.map(id => [id, {
-  id, name: BEERS[id].name, short: BEERS[id].short, kind: 'consumable', stackMax: 6, useTime: 2.0, verb: 'drink', icon: 'cola',
+  id, name: BEERS[id].name, short: BEERS[id].short, kind: 'consumable', stackMax: 6, useTime: 2.0, verb: 'drink', icon: 'beer',
   description: BEER_TEXT[id],
 } satisfies ItemDef]));
 
-/** A 330 ml long-neck bottle, standing (the BEER lane's model sets the measured bounds). */
+/**
+ * A 330 ml long-neck bottle, standing: the code-built bottle's measured bounds (market/beer/beerModel.ts BEER_BOTTLE; tests): 62 mm across
+ * the body, 235 mm tall to the top of the crown cap.
+ */
 export const BEER_DIMS: Record<string, ItemDims> = Object.fromEntries(BEER_IDS.map(id => [id, {w: 0.062, d: 0.062, h: 0.235, shape: 'cylinder'} satisfies ItemDims]));

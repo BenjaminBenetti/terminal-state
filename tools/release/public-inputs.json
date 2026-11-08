@@ -1719,6 +1719,11 @@
       "sha256": "77f6a7ff4881aac2d626c896f4fa74c12d7377de17878cc4b9b2abefdb865c34"
     },
     {
+      "path": "assets/derivatives/beer-labels.json",
+      "bytes": 7492,
+      "sha256": "36144764c823d714bb402a0f0462836d934179470cbae88f69904d9c6041c9f4"
+    },
+    {
       "path": "assets/derivatives/creature-ratdog.json",
       "bytes": 23070,
       "sha256": "2534182960bf96f813b2d57d92d2b530250ddaeb5d9967a7aa15b2fb6ccd23f4"
@@ -4722,6 +4727,11 @@
       "path": "assets/textures/mall/ads/ad-womenswear.jpg",
       "bytes": 20836,
       "sha256": "5675e080c91abffaf9a7c980afdeb78de9e5029b8c32d45f012a11056cbc1033"
+    },
+    {
+      "path": "assets/textures/market/beer-labels.jpg",
+      "bytes": 243575,
+      "sha256": "aa7fd94f6d752328b64b6f93ea86e323150cfa0e2db1c688f40d8930a6e3ccf9"
     },
     {
       "path": "assets/textures/market/market-container-rib.jpg",

@@ -1,0 +1,282 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "beer-labels",
+ "task": "studio-market-bar-20261108-225231-01",
+ "lane": "BEER",
+ "status": "runtime derivative (resize / atlas packing / JPEG only) of ORIGINAL beer-label images generated for this project with Codex native image_gen (owned Codex CLI) under the user's art authorization for the market bar's beers (Codex initial images: labels); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "rebuild": "node tools/asset-pipeline/props/build-beer-labels.mjs",
+ "rawStorage": "reference/tasks/market-bar-20261108-225231/beer/{LABEL-LEDGER.jsonl, raw/codex-<n>-label-<beer>-exec-<id>.png, prompts/label-<beer>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "tool": "sharp (libvips) via tools/asset-pipeline/props/build-beer-labels.mjs",
+ "atlas": {
+  "url": "assets/textures/market/beer-labels.jpg",
+  "width": 1024,
+  "height": 1024,
+  "cell": {
+   "w": 512,
+   "h": 341
+  },
+  "label": {
+   "w": 500,
+   "h": 333
+  },
+  "unusedCell": {
+   "fill": {
+    "r": 232,
+    "g": 220,
+    "b": 192
+   }
+  },
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "bytes": 243575,
+  "sha256": "aa7fd94f6d752328b64b6f93ea86e323150cfa0e2db1c688f40d8930a6e3ccf9"
+ },
+ "labels": {
+  "beer_lager": {
+   "subject": "EXPRESS LINE / LAGER: a vintage subway train rushing forward with speed lines; golden yellow, signal green and black on aged cream paper",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 801,
+    "session": "01a1bd78-4859-7c23-8791-b323dd85a93c",
+    "requested": "2026-11-08T23:22:18.825516Z",
+    "finished": "2026-11-08T23:22:50.880155Z",
+    "seconds": 32
+   },
+   "prompt": {
+    "file": "label-lager.txt",
+    "sha256": "62f489a217711b7bdd55aa0dc78da83fa032e054d4270514cfba768548aeba32"
+   },
+   "source": {
+    "file": "codex-801-label-lager-exec-eadcbdaa-fdeb-4e0b-bd5d-38ff938c1a88.png",
+    "sha256": "1a4a9645cb76747a17c82e15d089f5f54a64e889c41676e2cb148500ebdf4256",
+    "bytes": 3338059,
+    "width": 1536,
+    "height": 1024
+   },
+   "recipe": {
+    "resize": {
+     "width": 500,
+     "height": 333,
+     "kernel": "lanczos3",
+     "fit": "fill"
+    },
+    "gutter": {
+     "x": 6,
+     "y": 4,
+     "extendWith": "copy"
+    },
+    "colour": "sRGB, alpha removed"
+   },
+   "atlasRect": {
+    "x": 6,
+    "y": 4,
+    "w": 500,
+    "h": 333,
+    "uv": [
+     0.005859,
+     0.670898,
+     0.494141,
+     0.996094
+    ]
+   }
+  },
+  "beer_pilsner": {
+   "subject": "LUCKY SWITCH / PILSNER: a railway switch lever topped by a clover, wheat sprays; emerald green, gold and black on aged cream paper",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 802,
+    "session": "01a1bd78-c528-7843-b9d9-83254f98d8bd",
+    "requested": "2026-11-08T23:22:50.892178Z",
+    "finished": "2026-11-08T23:23:23.066824Z",
+    "seconds": 32.2
+   },
+   "prompt": {
+    "file": "label-pilsner.txt",
+    "sha256": "81ca8224b2a0d08d150ed5587c127c8c7c5567cbc66196c00fb3cffa30ac30ff"
+   },
+   "source": {
+    "file": "codex-802-label-pilsner-exec-348fed6c-d595-4221-b7a0-afe33dea5301.png",
+    "sha256": "f917cf02aca3a26a21fdee86dfbb8996f2aee5531ca505b9a714fb4b4e4870a1",
+    "bytes": 3415712,
+    "width": 1536,
+    "height": 1024
+   },
+   "recipe": {
+    "resize": {
+     "width": 500,
+     "height": 333,
+     "kernel": "lanczos3",
+     "fit": "fill"
+    },
+    "gutter": {
+     "x": 6,
+     "y": 4,
+     "extendWith": "copy"
+    },
+    "colour": "sRGB, alpha removed"
+   },
+   "atlasRect": {
+    "x": 518,
+    "y": 4,
+    "w": 500,
+    "h": 333,
+    "uv": [
+     0.505859,
+     0.670898,
+     0.994141,
+     0.996094
+    ]
+   }
+  },
+  "beer_stout": {
+   "subject": "IRONCLAD / STOUT: a riveted iron shield over two crossed railroad spikes; charcoal, rust copper and off-white on aged cream paper",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 803,
+    "session": "01a1bd79-430f-7903-bbc1-eed8283d257f",
+    "requested": "2026-11-08T23:23:23.112939Z",
+    "finished": "2026-11-08T23:23:51.656868Z",
+    "seconds": 28.5
+   },
+   "prompt": {
+    "file": "label-stout.txt",
+    "sha256": "c0b58d709967108e554523706c8a98b4399564adb98bdb4100f9cb145df88b85"
+   },
+   "source": {
+    "file": "codex-803-label-stout-exec-e36b46a4-5036-4dd8-957f-54fe084200ed.png",
+    "sha256": "4c5e906fd414b7a7f3d6b0158c33541c17275e7260d42d43197fa6b65e3827e1",
+    "bytes": 3583742,
+    "width": 1536,
+    "height": 1024
+   },
+   "recipe": {
+    "resize": {
+     "width": 500,
+     "height": 333,
+     "kernel": "lanczos3",
+     "fit": "fill"
+    },
+    "gutter": {
+     "x": 6,
+     "y": 4,
+     "extendWith": "copy"
+    },
+    "colour": "sRGB, alpha removed"
+   },
+   "atlasRect": {
+    "x": 6,
+    "y": 345,
+    "w": 500,
+    "h": 333,
+    "uv": [
+     0.005859,
+     0.337891,
+     0.494141,
+     0.663086
+    ]
+   }
+  },
+  "beer_porter": {
+   "subject": "NIGHT SHIFT / PORTER: a crescent moon over a brick tunnel mouth with a hanging lantern; navy, amber and black on aged cream paper",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 804,
+    "session": "01a1bd79-b27e-7ac2-ac21-d498882723ca",
+    "requested": "2026-11-08T23:23:51.666053Z",
+    "finished": "2026-11-08T23:24:23.125771Z",
+    "seconds": 31.5
+   },
+   "prompt": {
+    "file": "label-porter.txt",
+    "sha256": "87d9b2f541070153ab22b7712295948afba7011a04c557e1b102cbecc57896e9"
+   },
+   "source": {
+    "file": "codex-804-label-porter-exec-c2ecacd3-e41c-496b-bd5f-d9c03ae4c43b.png",
+    "sha256": "7937a1da1b2a263744e1c2b122bee21b9402025b0d12c7c4aa8c1f60b339e668",
+    "bytes": 3353725,
+    "width": 1536,
+    "height": 1024
+   },
+   "recipe": {
+    "resize": {
+     "width": 500,
+     "height": 333,
+     "kernel": "lanczos3",
+     "fit": "fill"
+    },
+    "gutter": {
+     "x": 6,
+     "y": 4,
+     "extendWith": "copy"
+    },
+    "colour": "sRGB, alpha removed"
+   },
+   "atlasRect": {
+    "x": 518,
+    "y": 345,
+    "w": 500,
+    "h": 333,
+    "uv": [
+     0.505859,
+     0.337891,
+     0.994141,
+     0.663086
+    ]
+   }
+  },
+  "beer_bock": {
+   "subject": "SECOND SUPPER / BOCK: a billy goat head over a crossed fork and knife and a loaf; brick red, dark brown and black on aged cream paper",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 805,
+    "session": "01a1bd7a-2d71-7b92-820a-e997cde64247",
+    "requested": "2026-11-08T23:24:23.133894Z",
+    "finished": "2026-11-08T23:25:03.598773Z",
+    "seconds": 40.5
+   },
+   "prompt": {
+    "file": "label-bock.txt",
+    "sha256": "545b9726d37a58ea8e2c9911461a359df515e6052b49ad8f3a1ab934c770c1ac"
+   },
+   "source": {
+    "file": "codex-805-label-bock-exec-a3a5cf52-4eab-49ad-8c06-0d899c4d6f64.png",
+    "sha256": "fa2977abcb3cd63be2b945c7084ac3eb8bc1f2085243a8ecbb8cea43e4dd0db3",
+    "bytes": 3362117,
+    "width": 1536,
+    "height": 1024
+   },
+   "recipe": {
+    "resize": {
+     "width": 500,
+     "height": 333,
+     "kernel": "lanczos3",
+     "fit": "fill"
+    },
+    "gutter": {
+     "x": 6,
+     "y": 4,
+     "extendWith": "copy"
+    },
+    "colour": "sRGB, alpha removed"
+   },
+   "atlasRect": {
+    "x": 6,
+    "y": 686,
+    "w": 500,
+    "h": 333,
+    "uv": [
+     0.005859,
+     0.004883,
+     0.494141,
+     0.330078
+    ]
+   }
+  }
+ }
+}
