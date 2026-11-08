@@ -40,6 +40,7 @@ import {SKYWAYS_PROP_MODELS} from '../src/assets/skywaysProps.generated';
 import {OFFICE_ASSETS} from '../src/assets/officeAssets';
 // (task studio-skywalk-variety-20261107-231448-01, lane DRESS) the small shops' palettes (the Mall's finish-row programs)
 import {SKYWAYS_SHOP_FLOOR_KEY, SKYWAYS_SHOP_WALL_KEY, skywaysShopFloorKey, skywaysShopWallKey} from '../src/world/skywaysShopFinish';
+import {skywaysMallFloorKey, skywaysMallWallKey} from '../src/world/skywaysMallFinish'; // (task studio-skywalk-encounters-20261108-074144-01, lane STORES)
 import {mallSurfaceMaterial} from '../src/world/mallSurfaces';
 
 installCanvasShim(false);
@@ -97,7 +98,8 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
         // ceiling — their stand-ins here, no textures loaded; tests/skyways-arch-rework.test.ts covers the textured path)
         const roofed = L.skyways!.bridges.some(b => b.area === ar.id && b.roof), courtLook = a.rework && (cls === 'court' || (L.skyways!.skylights ?? []).some(s => s.area === ar.id));
         // (task studio-skywalk-variety-20261107-231448-01, lane DRESS) a small shop's floor: its use's palette floor (world/skywaysShopFinish.ts)
-        if (cls === 'shop') { const p = a.shopPalette(ar.id); expect(fk, `${ar.label} floor`).toBe(p ? skywaysShopFloorKey(p) : null); }
+        // (task studio-skywalk-encounters-20261108-074144-01, lane STORES: layout version 5 — a Mall store family's floor: its programme's Mall row)
+        if (cls === 'shop') { const m = a.mallStoreProgram(ar.id), p = a.shopPalette(ar.id); expect(fk, `${ar.label} floor`).toBe(m ? skywaysMallFloorKey(m) : p ? skywaysShopFloorKey(p) : null); }
         else if (cls === 'station') expect(fk, `${ar.label} floor`).toBeNull();
         else if (roofed) expect(fk, `${ar.label} floor`).toBe('skyways-floor-pavers');
         else if (courtLook) expect(fk, `${ar.label} floor`).toBe('skyways-floor-court');
@@ -128,7 +130,8 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
         // (task studio-skywalk-variety-20261107-231448-01, lane DRESS) a small storefront unit's walls take its use's palette, never the
         // Subway shop tile (a shop area without a known use keeps the builder's rule)
         if (cls === 'shop') {
-          const p = a.shopPalette(f.area);
+          const p = a.shopPalette(f.area), m = a.mallStoreProgram(f.area); // (+ a Mall store family's wall: its programme's Mall row, lane STORES)
+          if (m) { expect(f.finish, `${L.areas[f.area].label} wall`).toBe(skywaysMallWallKey(m)); expect(finishClass(f.finish)).not.toBeNull(); continue; }
           if (p) { expect(f.finish, `${L.areas[f.area].label} wall`).toBe(skywaysShopWallKey(p)); expect(finishClass(f.finish)).not.toBeNull(); } else expect(f.finish.startsWith('skyways-'), `${f.finish} ${cls}`).toBe(false);
           continue;
         }
