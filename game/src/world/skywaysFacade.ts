@@ -78,8 +78,8 @@ export interface FacadeContext {
 interface StyleSpec {
   /** Shaft verticals: every `pitch` bays, width, depth; `full` = a whole bay wide (centred on the bay; masonry). */
   piers: {pitch: number; w: number; d: number; full?: boolean} | null;
-  /** Spandrel bands on the storey lines (every n storeys; band lo / hi about the line). */
-  spandrel: {every: number; d: number; lo: number; hi: number} | null;
+  /** Spandrel bands on the storey lines (every n storeys; band lo / hi about the line; an optional sill lip on its top edge). */
+  spandrel: {every: number; d: number; lo: number; hi: number; lip?: {d: number; h: number}} | null;
   /** Deeper string courses every n storeys. */
   course: {every: number; d: number; h: number} | null;
   corner: {w: number; d: number};
@@ -93,7 +93,7 @@ interface StyleSpec {
 
 const LIMESTONE: RGB = [0.44, 0.4, 0.33], SANDSTONE: RGB = [0.4, 0.33, 0.24], BRICK: RGB = [0.27, 0.13, 0.09], BRICK_TAN: RGB = [0.3, 0.2, 0.13];
 const CONCRETE: RGB = [0.4, 0.39, 0.37], CONCRETE_WARM: RGB = [0.36, 0.33, 0.29], PANEL_LIGHT: RGB = [0.5, 0.5, 0.48], BRONZE: RGB = [0.1, 0.08, 0.06];
-const STEEL: RGB = [0.07, 0.075, 0.08], ALU: RGB = [0.36, 0.37, 0.38], GRANITE: RGB = [0.14, 0.13, 0.125], GRANITE_RED: RGB = [0.17, 0.11, 0.09];
+const STEEL: RGB = [0.07, 0.075, 0.08], ALU: RGB = [0.36, 0.37, 0.38], SLATE: RGB = [0.15, 0.17, 0.19], GRANITE: RGB = [0.14, 0.13, 0.125], GRANITE_RED: RGB = [0.17, 0.11, 0.09];
 const ROOF: RGB = [0.08, 0.075, 0.07], PLANT: RGB = [0.2, 0.2, 0.19], PLANT_DARK: RGB = [0.11, 0.11, 0.115];
 
 export const FACADE_STYLES: Record<FacadeStyle, StyleSpec> = {
@@ -113,13 +113,13 @@ export const FACADE_STYLES: Record<FacadeStyle, StyleSpec> = {
     crowns: ['frame', 'parapet', 'setback'], palette: {trim: [CONCRETE, CONCRETE_WARM], base: [GRANITE, CONCRETE_WARM], accent: [STEEL, BRONZE]},
   },
   ribbon: {
-    piers: null, spandrel: {every: 1, d: 0.24, lo: 0.75, hi: 0.95}, course: null,
-    corner: {w: 1.2, d: 0.3}, base: {plinth: 0.35, pitch: 5, w: 0.6, d: 0.4, band: 0.42, posts: false}, cornice: {h: 0.5, d: 0.34}, bays: 0,
-    crowns: ['setback', 'penthouse', 'parapet'], palette: {trim: [BRONZE, PANEL_LIGHT], base: [GRANITE, STEEL], accent: [STEEL, ALU]},
+    piers: null, spandrel: {every: 1, d: 0.26, lo: 1.1, hi: 1.25, lip: {d: 0.42, h: 0.12}}, course: null,
+    corner: {w: 1.2, d: 0.32}, base: {plinth: 0.35, pitch: 5, w: 0.6, d: 0.4, band: 0.44, posts: false}, cornice: {h: 0.5, d: 0.5}, bays: 0,
+    crowns: ['setback', 'penthouse', 'parapet'], palette: {trim: [BRONZE, PANEL_LIGHT, SLATE], base: [GRANITE, STEEL], accent: [STEEL, ALU]},
   },
   fins: {
-    piers: {pitch: 1, w: 0.16, d: 0.55}, spandrel: null, course: {every: 5, d: 0.2, h: 0.25},
-    corner: {w: 0.7, d: 0.62}, base: {plinth: 0.35, pitch: 4, w: 0.6, d: 0.66, band: 0.46, posts: false}, cornice: {h: 0.4, d: 0.22}, bays: 0,
+    piers: {pitch: 1, w: 0.22, d: 0.75}, spandrel: null, course: {every: 5, d: 0.3, h: 0.25},
+    corner: {w: 0.7, d: 0.82}, base: {plinth: 0.35, pitch: 4, w: 0.6, d: 0.66, band: 0.46, posts: false}, cornice: {h: 0.6, d: 0.88}, bays: 0,
     crowns: ['stepped', 'setback', 'frame'], palette: {trim: [ALU, BRONZE], base: [GRANITE, STEEL], accent: [STEEL, ALU]},
   },
 };
@@ -215,13 +215,17 @@ const tint = (c: RGB, k: number): RGB => [c[0] * k, c[1] * k, c[2] * k];
 /** Plans the facade relief of every Skyways building (deterministic per layout seed; runtime only: never touches generation). */
 export function planSkywaysFacades(info: SkywaysInfo, seed: number, ctx: FacadeContext): SkywaysFacadePlan[] {
   const rnd0 = mulberry32((seed ^ 0xfacade5) >>> 0);
-  const hubs = info.buildings.filter(b => b.role === 'hub').map(b => b.id).sort();
-  const hubStart = Math.floor(rnd0() * HUB_STYLES.length);
+  const ROLE: Partial<Record<SkywaysBuilding['role'], FacadeStyle>> = {station: 'civic', tower: 'fins', hotel: 'masonry'};
+  // the hubs rotate through the characters no role building has taken (all four when that leaves fewer than two)
+  const taken = new Set(info.buildings.map(b => ROLE[b.role]).filter(Boolean));
+  const free = HUB_STYLES.filter(s => !taken.has(s));
+  const pool = free.length >= 2 ? free : HUB_STYLES;
+  const hubs = info.buildings.filter(b => !ROLE[b.role]).map(b => b.id).sort();
+  const hubStart = Math.floor(rnd0() * pool.length);
   return info.buildings.map((b, i) => {
     const shell = ctx.shells.find(s => s.building === b.id);
     const rnd = mulberry32((seed ^ Math.imul(i + 1, 0x9e3779b1) ^ 0x5eedfa) >>> 0);
-    const style: FacadeStyle = b.role === 'station' ? 'civic' : b.role === 'tower' ? 'fins' : b.role === 'hotel' ? 'masonry'
-      : HUB_STYLES[(hubStart + Math.max(0, hubs.indexOf(b.id))) % HUB_STYLES.length];
+    const style: FacadeStyle = ROLE[b.role] ?? pool[(hubStart + Math.max(0, hubs.indexOf(b.id))) % pool.length];
     return planBuilding(info, b, shell ?? {building: b.id, podiumTop: b.top, tower: null, top: b.top}, ctx.tubes, style, rnd);
   });
 }
@@ -254,7 +258,10 @@ function planBuilding(info: SkywaysInfo, b: SkywaysBuilding, shell: FacadeContex
   const upper: {rect: SkywaysRect; walls: Wall[]; t0: number} | null = podium !== null && tower
     ? {rect: tower, walls: wallsOf(tower, podium, top), t0: podium}
     : tallEnough ? {rect: b.rect, walls: wallsOf(b.rect, baseTop, top), t0: baseTop} : null;
-  const crown: FacadeCrown = upper ? pick(S.crowns) : (rnd() < 0.5 ? 'parapet' : 'penthouse');
+  // crowns by height: a tall building never ends in a plain parapet, a low one never in a setback / stepped top
+  const height = top - gy;
+  const crowns = S.crowns.filter(c => (height > 45 ? c !== 'parapet' : height < 30 ? c === 'parapet' || c === 'penthouse' : true));
+  let crown: FacadeCrown = upper && crowns.length ? pick(crowns) : (rnd() < 0.5 ? 'parapet' : 'penthouse');
 
   // wall-local box (s, t, depth out of the wall) -> a world box; `open` faces: the back face when it sits on the wall (a box rising
   // above the wall's top — a crown frame — keeps it: seen from behind over the roof)
@@ -328,7 +335,8 @@ function planBuilding(info: SkywaysInfo, b: SkywaysBuilding, shell: FacadeContex
       const cd2 = F.canopy.d;
       put(w, 'canopy', accent, s0, s1, ct, ct + F.canopy.h, 0, cd2);
       put(w, 'canopy', accent, s0, s1, ct - 0.14, ct + F.canopy.h + 0.14, cd2, cd2 + 0.08); // fascia
-      if (S.base.posts) for (const s of [s0 + 0.15, s1 - 0.27]) put(w, 'canopy', accent, s, s + 0.12, gy, ct, cd2 - 0.2, cd2 - 0.08, FACE.ny | FACE.py);
+      // posts (civic / masonry) only where they stand clear of every window / door prism (else the canopy is cantilevered)
+      if (S.base.posts) for (const s of [s0 + 0.15, s1 - 0.27]) if (!ks.some(k => overlaps({s0: s, s1: s + 0.12, t0: gy, t1: ct}, k))) put(w, 'canopy', accent, s, s + 0.12, gy, ct, cd2 - 0.2, cd2 - 0.08, FACE.ny | FACE.py);
     }
   }
 
@@ -347,7 +355,11 @@ function planBuilding(info: SkywaysInfo, b: SkywaysBuilding, shell: FacadeContex
       vertical(w, 'corner', trim, w.s0 - e, w.s0 + cw, vt0, vt1, cd);
       vertical(w, 'corner', trim, w.s1 - cw, w.s1 + e, vt0, vt1, cd);
       const k0 = lineAtOrAbove(vt0 + 1.2), k1 = Math.floor((cornB - 1.2 - gy) / F.storey);
-      if (S.spandrel) for (let k = k0; k <= k1; k++) if ((k - k0) % S.spandrel.every === 0) run(w, 'spandrel', trim, line(k) - S.spandrel.lo, line(k) + S.spandrel.hi, S.spandrel.d);
+      if (S.spandrel) for (let k = k0; k <= k1; k++) if ((k - k0) % S.spandrel.every === 0) {
+        const sp = S.spandrel;
+        run(w, 'spandrel', trim, line(k) - sp.lo, line(k) + sp.hi - (sp.lip ? sp.lip.h : 0), sp.d);
+        if (sp.lip) run(w, 'spandrel', accent, line(k) + sp.hi - sp.lip.h, line(k) + sp.hi, sp.lip.d);
+      }
       if (S.course) for (let k = k0 + S.course.every - 1; k <= k1; k += S.course.every) run(w, 'course', accent, line(k) + 0.13 - S.course.h / 2, line(k) + 0.13 + S.course.h / 2, S.course.d);
       // projecting bays (oriels): their cheeks / soffits in the trim, their fronts in the curtain wall
       const wide = w.s1 - w.s0;
@@ -438,6 +450,8 @@ function planBuilding(info: SkywaysInfo, b: SkywaysBuilding, shell: FacadeContex
       roof = s; roofY += h;
       peak = roofY + F.parapet.h + F.parapet.cope;
     }
+    // a roof too narrow for a setback (a slim atrium tower) takes a penthouse instead
+    if (roofY === top) crown = 'penthouse';
   }
   plant(roof, roofY, crown === 'penthouse' ? 2 : 1 + Math.floor(rnd() * 2), crown === 'penthouse');
   if ((crown === 'stepped' || (crown === 'setback' && top - gy > 45)) && (style === 'fins' || rnd() < 0.5)) {
