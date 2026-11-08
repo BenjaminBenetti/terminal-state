@@ -110,7 +110,8 @@ describe('Skyways map boards: placement on real seeds', () => {
       expect(bs.some(b => (b.level ?? 0) === 0 && Math.hypot(b.x - transit.bottom.x, b.z - transit.bottom.z) < 16), `seed ${s} concourse`).toBe(true);
       // every building: a board on its street level and on its skyway level (each has public hub floor on both)
       // (layout v3: a convention host's skyway floor is the event VENUE — the venue dresser's, no board inside it)
-      for (const b of info.buildings) for (const lv of [1, 2]) {
+      // (layout version 4: a bridge house has no street floor — a board on its bridge level only)
+      for (const b of info.buildings) for (const lv of b.levels.filter(q => q >= 1)) {
         if (lv === info.addon.level && b.id === info.addon.building && info.addon.venue?.length) { expect(bs.some(p => p.level === lv && info.addon.venue!.some(v => v.area === p.area)), `seed ${s} venue`).toBe(false); continue; }
         expect(bs.some(p => p.level === lv && inside(b.rect, p.x, p.z)), `seed ${s} ${b.name} L${lv}`).toBe(true);
       }
@@ -211,14 +212,15 @@ describe('Skyways map boards: the plan matches the layout', () => {
     expect(skywalkText(skywalkText('Calder +15'))).toBe('Calder Skywalk');
   });
 
-  it('buildings, bridges (one +15 line each through its deck), pedways, runs and every destination', () => {
+  it('buildings, bridges (one skywalk line each through its deck), pedways, runs and every destination', () => {
     let offices = 0;
     for (const s of SEEDS) {
       const L = gen(s), info = L.skyways!, plan = skywaysMapPlan(L)!;
-      expect(plan.name).toBe(info.name);
+      expect(plan.name).toBe(skywalkText(info.name));
       expect(plan.buildings.map(b => [b.id, b.name])).toEqual(info.buildings.map(b => [b.id, b.name]));
-      // every building's public floor on both storeys (a convention host's skyway floor drawn as the event venue)
-      for (const b of plan.buildings) for (const lv of [1, 2]) {
+      // every building's public floor on both storeys (a convention host's skyway floor drawn as the event venue; layout version 4: a
+      // bridge house's bridge level only)
+      for (const b of plan.buildings) for (const lv of info.buildings.find(q => q.id === b.id)!.levels.filter(q => q >= 1)) {
         const kind = lv === info.addon.level && b.id === info.addon.building && info.addon.venue?.length ? 'event' : 'hub';
         expect(plan.spaces.some(q => q.level === lv && q.kind === kind && inside(b.rect, (q.rect.x0 + q.rect.x1) / 2, (q.rect.z0 + q.rect.z1) / 2)), `seed ${s} ${b.name} L${lv}`).toBe(true);
       }

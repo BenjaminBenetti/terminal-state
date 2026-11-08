@@ -15,6 +15,7 @@ import type {Rng} from '../../core/rng';
 import {SKYWAYS_CAR} from '../../assets/skywaysCar.generated';
 import {SKYWAYS_STANCHION} from './addonKinds';
 import {AddonDresser, quarter, r3, yawToward} from './addonFrame';
+import {skywaysGenVersion} from './layoutVersion';
 import {SKYWAYS_PRIZE_LANE_HALF, type PrizeCarResult} from './addonPrize';
 
 /** How far ahead of the car the kept exit lane reaches (m, from its spot). */
@@ -70,7 +71,13 @@ export function dressPrizeDisplay(d: AddonDresser): PrizeCarResult {
   for (const [lx, lz] of order) {
     if (lz > 0 && Math.abs(lx) < laneW) continue; // the exit lane ahead stays open
     const x = car.x + fx * lz - fz * lx, z = car.z + fz * lz + fx * lx;
-    const p = d.putRound('skywaysPrizeStanchion', x, z, yawToward(x - car.x, z - car.z), {checkZone: false, area: pieceAt(d, x, z)});
+    let p = d.putRound('skywaysPrizeStanchion', x, z, yawToward(x - car.x, z - car.z), {checkZone: false, area: pieceAt(d, x, z)});
+    // (layout version 4, task studio-skywalk-variety-20261107-231448-01) a post the body's cell mask swallows (a car parked on a diagonal:
+    // the kept cells reach further at the corners) steps outward a few centimetres instead of leaving a gap in the rope line
+    if (!p && skywaysGenVersion(d.layout) >= 4) {
+      const n = Math.hypot(x - car.x, z - car.z) || 1, ux = (x - car.x) / n, uz = (z - car.z) / n;
+      for (const k of [0.15, 0.3, 0.45]) { const qx = x + ux * k, qz = z + uz * k; p = d.putRound('skywaysPrizeStanchion', qx, qz, yawToward(qx - car.x, qz - car.z), {checkZone: false, area: pieceAt(d, qx, qz)}); if (p) break; }
+    }
     if (p) res.stanchions.push(p);
   }
   if (res.stanchions.length < 6) d.skipped.push(`prize display: ${res.stanchions.length} stanchions`);

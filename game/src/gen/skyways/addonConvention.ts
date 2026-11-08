@@ -15,6 +15,7 @@
 // Reserved first (PlaceCtx.keep): 1.5 m in front of every door of the hall and 1.8 m wide lanes from the entry to the stage front
 // and to the washroom door. Pure data; the rng is consumed only here.
 
+import {skywaysGenVersion} from './layoutVersion'; // (layout version 4: the greeter's nearest spot first)
 import {CELL} from '../grid';
 import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from '../props';
 import {WALL_ROT, areaConnected, backed, markCell, placeAgainstWall, rowAlongWall, wallRange, wallSpot, wallXZ} from '../placeKit';
@@ -205,9 +206,20 @@ export function dressConvention(d: AddonDresser): ConventionResult {
     const wSide = wIn ? Math.sign((wIn[0] - E.x) * tx + (wIn[1] - E.z) * tz) || 1 : 1;
     let done = false;
     // (layout-variety pass: the entry may sit near a corner or a support door now — a few more spots, still at the entrance)
-    for (const side of [-wSide, wSide]) for (const lat of [E.half + 1.2, E.half + 1.8, E.half + 2.5, E.half + 3.2, E.half + 4.0, E.half + 5.0, E.half + 6.0]) for (const dv of [1.3, 1.9, 2.6, 3.4, 4.2]) {
+    const spots: [number, number][] = [];
+    const v4 = skywaysGenVersion(d.layout) >= 4;
+    for (const side of [-wSide, wSide]) for (const lat of [...(v4 ? [E.half + 0.8] : []), E.half + 1.2, E.half + 1.8, E.half + 2.5, E.half + 3.2, E.half + 4.0, E.half + 5.0, E.half + 6.0]) for (const dv of [...(v4 ? [0.9] : []), 1.3, 1.9, 2.6, 3.4, 4.2]) spots.push([E.x + E.nx * dv + tx * lat * side, E.z + E.nz * dv + tz * lat * side]);
+    // (layout version 4, task studio-skywalk-variety-20261107-231448-01: every candidate — beside the entry and on the arcs in from it
+    // — nearest to the entry first, either side; the placement kit keeps the entry lane clear as before)
+    if (v4) {
+      for (let r = 2.5; r <= 8; r += 0.75) for (let k = 0; k <= 12; k++) {
+        const a = (k % 2 ? -1 : 1) * Math.ceil(k / 2) * (Math.PI / 14), c = Math.cos(a), sn = Math.sin(a);
+        spots.push([E.x + (E.nx * c - E.nz * sn) * r, E.z + (E.nz * c + E.nx * sn) * r]);
+      }
+      spots.sort((p, q) => Math.hypot(p[0] - E.x, p[1] - E.z) - Math.hypot(q[0] - E.x, q[1] - E.z));
+    }
+    for (const [x, z] of spots) {
       if (done) break;
-      const x = E.x + E.nx * dv + tx * lat * side, z = E.z + E.nz * dv + tz * lat * side;
       const p = statueAt(d, 'entrance-wave', x, z, yawToward(E.x - x, E.z - z));
       if (p) { res.statues.push(p); done = true; }
     }

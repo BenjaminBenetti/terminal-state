@@ -47,8 +47,9 @@ installCanvasShim(false);
 (ShimContext.prototype as unknown as {clip?: () => void}).clip ??= () => {};
 
 const PUB = (rel: string) => fileURLToPath(new URL('../public/' + rel, import.meta.url));
-/** Seeds whose landmark courts cover all six families (1: fountain, fig tree, orrery; 2: + geese, dinosaur; 4: + clock). */
-const SEEDS = [1, 2, 4];
+/** Seeds whose landmark courts cover all six families (layout version 4, task studio-skywalk-variety-20261107-231448-01: 1: fountain,
+ *  fig tree, orrery, dinosaur; 4: + geese; 8: + clock — the building programmes re-laid every map, so the covering seeds moved). */
+const SEEDS = [1, 4, 8];
 const HEROES = Object.values(LANDMARK_KIND);
 const rowOf = (kind: SkywaysDestKind) => SKYWAYS_DEST_PROPS[SKYWAYS_DEST_SPECS[kind].model!];
 

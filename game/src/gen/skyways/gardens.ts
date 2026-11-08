@@ -11,6 +11,7 @@
 //    walking ring kept round each, door zones / stairs / landmark discs respected).
 // Existing approved assets only: the planters are procedural bodies with the office's potted-plant foliage model (world/skywaysGardens.ts).
 
+import {skywaysGenVersion} from './layoutVersion'; // (layout version 4: the venue floor excluded)
 import type {Rng} from '../../core/rng';
 import {CELL, FLOOR} from '../grid';
 import {areaConnected, makePlaceCtx, markCell, tryPlaceProp, type PlaceCtx} from '../placeKit';
@@ -92,6 +93,9 @@ function keepCirculation(ctx: PlaceCtx, layout: StationLayout): void {
 /** Areas the gardens never touch: bridges, the add-on, anchors (and their pieces), shops / eateries, back of house. */
 function excludedAreas(layout: StationLayout): Set<number> {
   const info = layout.skyways!, out = new Set<number>([...info.bridges.map(b => b.area), ...info.addon.areas]);
+  // (layout version 4, task studio-skywalk-variety-20261107-231448-01) the convention VENUE's floor too: its own dresser keeps the walk
+  // from every bridge to every door open — a bench-planter dropped into the exhibitors' floor afterwards could close it
+  if (skywaysGenVersion(layout) >= 4) for (const v of info.addon.venue ?? []) out.add(v.area);
   for (const an of info.anchors ?? []) for (const id of [an.floor, ...(an.upper !== undefined ? [an.upper] : []), ...an.zones, ...an.stock]) out.add(id);
   for (const a of layout.areas) if (!a.publicSpace || a.type === 'shop' || a.type === 'eatery' || /^office-/.test(a.type as string) || out.has(a.parent)) out.add(a.id);
   return out;

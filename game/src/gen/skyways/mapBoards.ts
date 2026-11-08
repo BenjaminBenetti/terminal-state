@@ -14,6 +14,7 @@
 // entries (and the other shop fronts), the add-on's entry / display and every bridge's lane into its buildings; a clear reading strip in
 // front; its back toward the nearest wall where there is one (the middle of a court stays open). Lifted onto the storey's absolute floor.
 
+import {skywaysGenVersion} from './layoutVersion'; // (layout version 4)
 import type {Rng} from '../../core/rng';
 import {CELL, FLOOR, type Grid} from '../grid';
 import {cellsOfBox, makePlaceCtx, markCell, tryPlaceProp, type PlaceCtx} from '../placeKit';
@@ -242,7 +243,9 @@ function placeNear(ctx: PlaceCtx, wall: Float32Array, areas: Area[], target: {x:
     cands.push({x, z, s, a: byId.get(g.area[i])!});
   }
   cands.sort((p, q) => p.s - q.s);
-  for (const c of cands.slice(0, 120)) {
+  // (layout version 4, task studio-skywalk-variety-20261107-231448-01: a market-hall station's busy concourse can fill the best 120
+  // spots near its stair foot — try further down the ranking before giving up on the spot)
+  for (const c of cands.slice(0, skywaysGenVersion(ctx.layout) >= 4 ? 600 : 120)) {
     for (const rot of yawOrder(g, wall, c.x, c.z, look)) {
       const x = r3(c.x), z = r3(c.z), {hx, hz} = footprint(KIND, rot);
       if (!flatUnder(g, x, z, hx, hz)) continue;

@@ -25,6 +25,7 @@
 // Existing approved kinds only besides the destination kinds; deterministic from the rng it is given.
 // keepLandmarkClear: the atrium greenery / food-court seating (gen/skyways/greenery.ts, which runs first) keep the courts' clear discs.
 
+import {skywaysGenVersion} from '../layoutVersion'; // (layout version 4: market-hall courts)
 import type {Rng} from '../../../core/rng';
 import {SKYWAYS_DEST_PROPS} from '../../../assets/skywaysDestProps.generated';
 import {CELL, FLOOR, type Grid} from '../../grid';
@@ -362,9 +363,12 @@ export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandma
     let n = rng.int(...LANDMARK_DRESS.lights);
     const a0 = rng.range(0, 2 * Math.PI), c = res.centre;
     const used: [number, number][] = [];
+    // (layout version 4, task studio-skywalk-variety-20261107-231448-01: a MARKET HALL's court lies under its big glass roof — the
+    // nearest ceiling within reach is the gallery ring, further out)
+    const maxD = skywaysGenVersion(layout) >= 4 ? 15.0 : 9.0;
     for (let j = 0; j < 8 && n > 0; j++) {
       const t = a0 + (j % 2 ? Math.PI : 0) + Math.floor(j / 2) * (Math.PI / 4);
-      for (let d = R0 + 1.0; d <= 9.0; d += 0.5) {
+      for (let d = R0 + 1.0; d <= maxD; d += 0.5) {
         const x = X + Math.sin(t) * d, z = Z + Math.cos(t) * d;
         const [cx, cy] = g.cellOf(x, z);
         if (!g.inBounds(cx, cy) || g.area[g.idx(cx, cy)] !== area.id || g.cells[g.idx(cx, cy)] !== FLOOR) break;

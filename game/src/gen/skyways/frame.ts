@@ -304,9 +304,11 @@ export function skywaysFrame(levelSeed: number, salt = 0, opts: {legacy?: boolea
     for (const q of buildings) {
       q.programme = done.get(q.id) ?? 'classic';
       // the programme's silhouette: a low bridge house, a tall market hall under its glass roof, an office tower, a mid-rise block
-      q.height = q.programme === 'gallery' ? pr.range(11, 16) : q.programme === 'hall' ? pr.range(17, 24) : q.programme === 'tower' ? pr.range(62, 96) : pr.range(28, 58);
-      // atria: every market hall; a classic block now and then; never a bridge house or an office lobby (its grand stair is the feature)
-      q.atrium = q.programme === 'hall' || (q.programme === 'classic' && q.id !== host.id && q.atrium && pr.chance(0.6));
+      // (a market hall's shell stops just above its glass roof: the hall reads as a glazed hall, not a slab beside a vault)
+      q.height = q.programme === 'gallery' ? pr.range(11, 16) : q.programme === 'hall' ? pr.range(12.4, 14) : q.programme === 'tower' ? pr.range(62, 96) : pr.range(28, 58);
+      // atria: every market hall and most classic blocks (version 3's open atria); never a bridge house or an office lobby (its grand
+      // stair is the feature)
+      q.atrium = q.programme === 'hall' || (q.programme === 'classic' && q.id !== host.id && q.atrium && pr.chance(0.85));
       if (q.id !== station.id && q.id !== host.id) q.role = q.atrium ? 'hub' : 'tower';
     }
   }

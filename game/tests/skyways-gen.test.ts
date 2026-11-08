@@ -116,10 +116,29 @@ describe('Skyways: generated layouts', () => {
     }
   });
 
-  it('the ramen restaurant (base shop pool): one per level, its finite edible food supported (never on the floor)', () => {
+  // (layout version 4, task studio-skywalk-variety-20261107-231448-01; user: "ramen shop always seems to spawn at the station, it
+  // should be random like other shops, and it should have a sign!") an ORDINARY TENANT: on some maps, in different buildings / storeys,
+  // never the station's pedway concourse; a storefront with its own fascia sign (its name, lit or dim)
+  it('the ramen restaurant: an ordinary storefront tenant with its sign (some maps, varied buildings / storeys, never the concourse); its finite edible food supported (never on the floor)', () => {
+    let present = 0;
+    const where = new Set<string>();
+    for (let s = 1; s <= 30; s++) {
+      const l = gen(s), r = l.skyways!.restaurant;
+      if (!r) { expect(l.storefronts.some(sf => sf.ownDress), `seed ${s}`).toBe(false); continue; }
+      present++;
+      where.add(`${l.skyways!.buildings.find(b => b.id === r.building)!.role === 'station' ? 'station' : 'other'}:${r.level}`);
+      expect(r.level, `seed ${s}: not the pedway concourse`).toBeGreaterThanOrEqual(1);
+      const sf = l.storefronts.find(q => q.unit === r.area)!;
+      expect(sf, `seed ${s}: a storefront`).toBeTruthy();
+      expect([sf.name, sf.ownDress, sf.sign === 'dead'], `seed ${s}: its sign`).toEqual([r.name, true, false]);
+      expect(l.areas[r.kitchen!].purpose).toBe(SKYWAYS_RAMEN_PURPOSE.kitchen);
+    }
+    expect(present, 'ramen on some maps').toBeGreaterThanOrEqual(8);
+    expect(present, 'ramen not on every map').toBeLessThan(30);
+    expect(where.size, `varied: ${[...where].join(' ')}`).toBeGreaterThanOrEqual(3);
     for (const s of SEEDS) {
-      const l = gen(s), r = l.skyways!.restaurant!;
-      expect(r).toBeTruthy();
+      const l = gen(s), r = l.skyways!.restaurant;
+      if (!r) continue;
       expect(l.areas[r.area].purpose).toBe(SKYWAYS_RAMEN_PURPOSE.dining);
       const food = l.pickups.filter(p => FOOD.has(p.itemId));
       expect(food.length).toBeGreaterThanOrEqual(2);
