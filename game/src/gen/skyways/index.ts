@@ -48,6 +48,7 @@ import {dressSkywaysRamen} from './ramen';
 import {dressSkywaysAtriums, dressSkywaysFoodCourts} from './greenery';
 import {dressSkywaysDestinations} from './destinations/index';
 import {placeSkywaysMapBoards} from './mapBoards'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS)
+import {splitSkywaysMerch} from './skywaysMerchSplit'; // task studio-skywalk-variety-20261107-231448-01 (lane MERCH)
 import {dressSkywaysGardens} from './gardens'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): gallery troughs / court bench-planters
 import {skywaysSkylights} from './skylights'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): skylight coffers of the skyway courts
 import {SKYWAYS_LEVEL, type SkywaysInfo, type SkywaysRect, type SkywaysWindow} from './skywaysTypes';
@@ -210,6 +211,8 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
     finishExtensions(layout, ext, {ox, oy, grow: 'east-south'});
     populateExtensions(layout, rng, {loot, spawns, dressRng: rng.fork('dress')});
   }
+  // (task studio-skywalk-variety-20261107-231448-01, lane MERCH) version 4: fixture-drawn merchandise -> separate movable stock props
+  splitSkywaysMerch(layout);
   assignEnemyArchetypes(layout, spawns);
   applyFamilySpacing(layout, spawns);
   return layout;

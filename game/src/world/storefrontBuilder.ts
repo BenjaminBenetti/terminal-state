@@ -19,6 +19,7 @@ import {isP7Kind, p7ModelKey} from '../gen/props07';
 import {rendersOwnBody} from './openablesSpec';
 import {PURPOSE_ACCENT, isPurposeMat, purposePropShape, shapeVariant, stockShelfStock, type PurposePart} from '../gen/purposeShapes';
 import {AUTHORED_CARCASS, displayTreatment} from './shelfStockCarcass';
+import {bareTechTableParts, isMerchBare, splitDeviceWall} from './skywaysMerch'; // task studio-skywalk-variety-20261107-231448-01 (lane MERCH)
 import {SHOP_HOLDERS, shopPropShape, storefrontParts, type ShopBox, type ShopFace} from '../gen/storefronts';
 import type {ShopUse, StationLayout, Storefront} from '../gen/stationTypes';
 import {canvasTexture} from './canvasTextures';
@@ -189,7 +190,11 @@ function buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: Stor
     // Iteration 08 (Lane S): kinds whose model bakes product pictures in (magazine rack) use the derived authored carcass instead.
     const model = modelKey && MODEL_READY.has(kind) && !AUTHORED_CARCASS.has(kind) ? deps.models[modelKey] : undefined;
     if (model) {
-      instances += deps.instanceModel(group, model, list.map(placeM), {w: def.w, h: def.h, d: def.d, anchor: 'bottom'}, kind);
+      // (task studio-skywalk-variety-20261107-231448-01, lane MERCH: a bare unit — Skyways version 4 stands its devices as separate props —
+      // draws the model's own cut, without them: world/skywaysMerch.ts splitDeviceWall)
+      const bare = list.filter(p => isMerchBare(kind, p.variant)), whole = bare.length ? list.filter(p => !isMerchBare(kind, p.variant)) : list;
+      if (whole.length) instances += deps.instanceModel(group, model, whole.map(placeM), {w: def.w, h: def.h, d: def.d, anchor: 'bottom'}, kind);
+      if (bare.length) instances += deps.instanceModel(group, splitDeviceWall(model).body, bare.map(placeM), {w: def.w, h: def.h, d: def.d, anchor: 'bottom'}, kind);
       continue;
     }
     // Stock shelves over the generated shelving unit (same frame as plain shelves) when present.
@@ -198,10 +203,15 @@ function buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: Stor
     const palette = PURPOSE_ACCENT[kind];
     for (const p of list) {
       const v = shapeVariant(kind, p.variant);
-      const sk = `${kind}:${v}:${stockOnly ? 's' : 'f'}`;
+      const bare = isMerchBare(kind, p.variant); // (lane MERCH: a bare demo table — its devices are separate props in Skyways version 4)
+      const sk = `${kind}:${v}:${stockOnly ? 's' : 'f'}${bare ? ':bare' : ''}`;
       let parts = shapes.get(sk);
       // Iteration 08 (Lane S): display treatment derived at runtime — product-picture parts removed (3D filler stock stands on the boards).
-      if (!parts) shapes.set(sk, (parts = displayTreatment(kind, v, stockOnly ? stockShelfStock(v) : purposePropShape(kind, v) ?? [], {model: stockOnly})));
+      if (!parts) {
+        parts = displayTreatment(kind, v, stockOnly ? stockShelfStock(v) : purposePropShape(kind, v) ?? [], {model: stockOnly});
+        if (bare && kind === 'techDisplay') parts = bareTechTableParts(parts);
+        shapes.set(sk, parts);
+      }
       if (!parts.length) continue;
       instances++;
       const m4 = placeM(p);

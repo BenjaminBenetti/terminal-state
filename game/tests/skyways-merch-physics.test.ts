@@ -41,9 +41,8 @@ const SEEDS = 10;
 const LOG = '/tmp/merch-samples.txt';
 const VERSIONS = [3, 4] as const;
 /** Movable decor kind @ host kind that deliberately stays on its host, with the reason (the audit row says the same). */
-const EXCEPTIONS: Readonly<Record<string, string>> = {
-  'skyMuFacedRecords@skyMuCoverWall': 'five LP sleeves are ONE prop (a 1.9 m row): it would fly as a single plank, so the board declares no shelves',
-};
+// (none today: the faced-out LP row — one prop for five sleeves — is a static kind now and layout version 4 splits it into loose sleeves)
+const EXCEPTIONS: Readonly<Record<string, string>> = {};
 
 const gen = (seed: number, layoutVersion: number) => LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', layoutVersion} as never) as StationLayout;
 const place = (kind: string, x: number, z: number, y = 0, extra: Partial<PropPlacement> = {}): PropPlacement => {
