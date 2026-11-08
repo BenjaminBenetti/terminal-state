@@ -48,7 +48,7 @@ import {
   type QualityPreset,
 } from './atmosphere';
 import {
-  SMOKE_LIMITS, ScatterLights, SmokeField, VIS_RES, VIS_WINDOWS, computeVisWindow, windowStale,
+  SMOKE_LIMITS, ScatterLights, SmokeField, VIS_EMITTER_SPAN, VIS_RES, VIS_TEXEL, VIS_WINDOWS, computeVisWindow, computeVisWindowFan, windowStale,
   type SmokeEmitterOptions, type SmokeHandle, type VisLookup,
 } from './smoke';
 import {bindFlareVisibility, isFlareLight} from '../world/flareLight'; // Iteration 15
@@ -264,7 +264,7 @@ export class VolumetricAtmosphere {
   readonly visTex: THREE.DataArrayTexture;
   private readonly lightLayer = new Map<THREE.PointLight, number>();
   private readonly smokeLayer = new Map<number, number>();
-  private readonly winState: {x0: number; z0: number; floor: number; ceil: number; ok: boolean}[] = Array.from({length: VIS_WINDOWS}, () => ({x0: 0, z0: 0, floor: -1e3, ceil: 1e3, ok: false}));
+  private readonly winState: {x0: number; z0: number; texel: number; floor: number; ceil: number; ok: boolean}[] = Array.from({length: VIS_WINDOWS}, () => ({x0: 0, z0: 0, texel: 0.5, floor: -1e3, ceil: 1e3, ok: false}));
   private levelGrids: Grid[] = [];
   private lastFogTime = Number.NaN;
   private field: LightFieldVolume | null = null;
@@ -727,8 +727,12 @@ export class VolumetricAtmosphere {
     if (!windowStale(st, x, y, z, now)) return;
     st.winX = x; st.winY = y; st.winZ = z; st.winT = now;
     const n = VIS_RES * VIS_RES;
-    const w = computeVisWindow({x, y: y + 0.25, z}, this.visLookup, this.visData.subarray(layer * n, (layer + 1) * n));
-    this.winState[layer] = w ? {...w, ok: true} : {x0: 0, z0: 0, floor: -1e3, ceil: 1e3, ok: false};
+    // (task studio-general-armor-20261107-231448-01) scatter-light (flare) layers: 1 m texels (+-48 m); smoke emitter layers: 0.5 m, their central 24 m (as before)
+    const scatterLayer = layer < SMOKE_LIMITS.scatterLights;
+    const o = scatterLayer ? {texel: VIS_TEXEL.scatter} : {texel: VIS_TEXEL.emitter, span: VIS_EMITTER_SPAN};
+    const dst = this.visData.subarray(layer * n, (layer + 1) * n), at = {x, y: y + 0.25, z};
+    const w = scatterLayer ? computeVisWindowFan(at, this.visLookup, dst, o.texel) : computeVisWindow(at, this.visLookup, dst, o);
+    this.winState[layer] = w ? {...w, ok: true} : {x0: 0, z0: 0, texel: o.texel, floor: -1e3, ceil: 1e3, ok: false};
     this.visTex.needsUpdate = true;
   }
 
@@ -739,10 +743,11 @@ export class VolumetricAtmosphere {
     if (dt > 0) this.smoke.step(dt);
     const u = this.u, p = this.params;
     const win = u.win.array as THREE.Vector4[], winY = u.winY.array as THREE.Vector4[];
-    const size = 1 / (VIS_RES * (this.densityMap?.cell ?? 0.5));
+    // (the window's world size: VIS_RES texels of its own texel size — per layer since task studio-general-armor-20261107-231448-01)
+    const sizeOf = (w: {texel: number}) => 1 / (VIS_RES * w.texel);
     const setWin = (k: number, layer: number) => {
       const w = this.winState[layer];
-      if (w.ok) { win[k].set(w.x0, w.z0, size, layer); winY[k].set(w.floor, w.ceil, 0, 0); } else { win[k].set(0, 0, 1, -1); winY[k].set(-1e3, 1e3, 0, 0); }
+      if (w.ok) { win[k].set(w.x0, w.z0, sizeOf(w), layer); winY[k].set(w.floor, w.ceil, 0, 0); } else { win[k].set(0, 0, 1, -1); winY[k].set(-1e3, 1e3, 0, 0); }
     };
     const pos = u.scatPos.array as THREE.Vector4[], col = u.scatCol.array as THREE.Vector4[];
     let n = 0;
@@ -762,7 +767,7 @@ export class VolumetricAtmosphere {
       // Iteration 15: the same window occludes the flare's light on surfaces (no glow through walls / slabs)
       if (isFlareLight(l)) {
         const w = this.winState[layer];
-        if (w.ok) { l.window.set(w.x0, w.z0, size, layer); l.band.set(w.floor, w.ceil); } else l.clearWindow();
+        if (w.ok) { l.window.set(w.x0, w.z0, sizeOf(w), layer); l.band.set(w.floor, w.ceil); } else l.clearWindow();
       }
       n++;
     }

@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 58630,
-      "sha256": "41a66f750ba1e49bfe3653222603260d15b1cd2254afa2d88c8cff39f20e2429"
+      "bytes": 59508,
+      "sha256": "e7dd1386cae09df255cdf8443c7cb0c37c6f73a19a85914fe45a0d8567bfd0db"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 2400,
-      "sha256": "76b66e652196dd09d94795169b92f146770251c0254e1d4e5c4f7e5ebb3fab19"
+      "bytes": 2501,
+      "sha256": "d59fc221683ebec223f5d35537c66feeafb8796be55425e4a5233e5021d8ee51"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -407,6 +407,16 @@
       "path": "assets/audio/fuel-pour.mp3",
       "bytes": 20897,
       "sha256": "59afe9ae2c224e50cf2027092167b797a43353dc8bc43ae87f991e85209d1f4f"
+    },
+    {
+      "path": "assets/audio/head-hit-01.mp3",
+      "bytes": 2716,
+      "sha256": "822478f24026d67ca1a90350c79a1ee7c858bcd44dfa727f5a6a0e5dbfa21108"
+    },
+    {
+      "path": "assets/audio/head-hit-02.mp3",
+      "bytes": 2716,
+      "sha256": "c84b3a054227b8ac026c8e0ec0bf1b563debac0615f517edd6e3d554153540e7"
     },
     {
       "path": "assets/audio/heal-01.mp3",
@@ -1637,6 +1647,11 @@
       "path": "assets/derivatives/audio-fuel.json",
       "bytes": 5049,
       "sha256": "fb5f0ddc3985bfc038af63e781ce88e7a5b3a9cb8e9f9931a3d786981193cf0b"
+    },
+    {
+      "path": "assets/derivatives/audio-head-hit.json",
+      "bytes": 3512,
+      "sha256": "1be77a01f72c109da1885f4746f48b62ebe73b7bb197a10e7d2ad6a522b241a3"
     },
     {
       "path": "assets/derivatives/audio-iteration05.json",

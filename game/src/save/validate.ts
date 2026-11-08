@@ -194,7 +194,7 @@ function itemOf(v: unknown, path: string): ItemDef {
   return ITEMS[canon];
 }
 
-const STACK_KEYS = ['uid', 'itemId', 'count', 'mag', 'bag', 'filter', 'air'] as const;
+const STACK_KEYS = ['uid', 'itemId', 'count', 'mag', 'bag', 'filter', 'air', 'armor'] as const; // (+ armor: task studio-general-armor-20261107-231448-01)
 /**
  * Task filter-tension-airtank-20261104-072836: the largest fitted-filter charge a stack of the run being validated may hold = the
  * filter life that run was written with (run.filterLifeS; absent = LEGACY_FILTER_LIFE_S, a save from before 37.5 s filters).
@@ -251,6 +251,11 @@ function stack(v: unknown, path: string, o: {uid: boolean; inBag: boolean; seen?
   if (has(s, 'air')) { // task filter-tension-airtank: an Airtank Backpack's air (s)
     if (!isAirtank(def.id)) bad(`${path}.air`, `${def.id} holds no air`);
     num(s.air, `${path}.air`, 0, (gearSpec(def.id)?.airLife ?? 0) + 1e-6);
+  }
+  if (has(s, 'armor')) { // task studio-general-armor-20261107-231448-01: an armour-bearing gear item's armour left after wear
+    const full = gearSpec(def.id)?.armor ?? 0;
+    if (!(full > 0)) bad(`${path}.armor`, `${def.id} has no armour`);
+    num(s.armor, `${path}.armor`, 0, full + 1e-6);
   }
   const slots = def.gear?.bagSlots ?? 0;
   if (slots > 0 && o.inBag) bad(path, 'a backpack inside a backpack');

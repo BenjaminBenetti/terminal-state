@@ -16,7 +16,7 @@
 //    the cart stuck, a hit, death, a ladder, any menu, the train departing, a world teardown let go.
 //  - HOSE: with the cart within PORT.hoseMax of the parked train's fuel cap, E while aiming at the DRUM connects the hose (one pooled
 //    tube); one unit flows every FUEL_CART.transferEvery s into game.playerTrain.fuel.tank (integers, conserved exactly, never past
-//    FUEL.tankUnits); it disconnects on E, the tank full, the cart empty, the cart grabbed / pushed beyond the hose's reach, the train
+//    FUEL.trainTankUnits); it disconnects on E, the tank full, the cart empty, the cart grabbed / pushed beyond the hose's reach, the train
 //    departing or a teardown (a unit in progress is simply not transferred).
 //
 // OWNERSHIP (the rule): a cart wholly inside the PARKED car (trainPort.ts cartAboard on its train-local centre) at save / teardown time is
@@ -582,7 +582,7 @@ export class FuelCarts implements FuelCartsLike {
     if (this.insideCar(c, p)) return 'Take the cart out to the fuel cap'; // (the cap is on the outer skin: no hose through the wall)
     if (this.nozzleToCap(c, p) > FUEL_CART.hoseMax) return 'Too far from the fuel cap';
     if (c.fuel.units <= 0) return CART_TEXT.empty;
-    if (this.host.playerTrain.fuel.tank >= FUEL.tankUnits) return 'The train tank is full';
+    if (this.host.playerTrain.fuel.tank >= FUEL.trainTankUnits) return 'The train tank is full';
     return null;
   }
 
@@ -612,18 +612,18 @@ export class FuelCarts implements FuelCartsLike {
     if (!p || c.mode !== 'world' || !this.carts.includes(c)) { this.disconnect(null); return; }
     if (this.grab?.cart === c) { this.disconnect(CART_TEXT.disconnected); return; }
     if (this.nozzleToCap(c, p) > FUEL_CART.hoseMax) { this.disconnect(CART_TEXT.pulled, true); return; }
-    if (fuel.tank >= FUEL.tankUnits) { this.disconnect(CART_TEXT.full); return; }
+    if (fuel.tank >= FUEL.trainTankUnits) { this.disconnect(CART_TEXT.full); return; }
     if (c.fuel.units <= 0) { this.disconnect(CART_TEXT.empty, true); return; }
     H.t += dt;
     if (H.t >= FUEL_CART.transferEvery) {
       H.t -= FUEL_CART.transferEvery;
       // one whole unit: out of the drum, into the tank (integers; never past the tank's capacity)
       c.fuel.units -= 1;
-      fuel.tank = Math.min(FUEL.tankUnits, fuel.tank + 1);
+      fuel.tank = Math.min(FUEL.trainTankUnits, fuel.tank + 1);
       this.counts.transfers++;
       this.sfx?.fuelPour?.();
       setGauge(c.view, c.fuel.units);
-      if (fuel.tank >= FUEL.tankUnits) { this.disconnect(CART_TEXT.full); return; }
+      if (fuel.tank >= FUEL.trainTankUnits) { this.disconnect(CART_TEXT.full); return; }
       if (c.fuel.units <= 0) { this.disconnect(CART_TEXT.empty, true); return; }
     }
     this.shapeHose();
@@ -747,7 +747,7 @@ export class FuelCarts implements FuelCartsLike {
     const tank = this.host.playerTrain.fuel.tank;
     if (this.hoseOn?.cart === c) return `<b>[E]</b> Disconnect the hose · fuelling · train tank ${tanksText(tank)}`;
     if (part === 'drum' && this.connectBlock(c) === null) return `<b>[E]</b> Connect the hose · cart ${tanksText(c.fuel.units)} · train tank ${tanksText(tank)}`;
-    const note = part === 'drum' && this.parkedPlacement() && this.nozzleToCap(c, this.parkedPlacement()!) <= FUEL_CART.hoseMax && tank >= FUEL.tankUnits ? ' · train tank full' : '';
+    const note = part === 'drum' && this.parkedPlacement() && this.nozzleToCap(c, this.parkedPlacement()!) <= FUEL_CART.hoseMax && tank >= FUEL.trainTankUnits ? ' · train tank full' : '';
     return `<b>[E]</b> Grab the fuel cart · ${tanksText(c.fuel.units)}${note}`;
   }
 

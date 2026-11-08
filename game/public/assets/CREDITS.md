@@ -537,3 +537,15 @@ invented (no real films, studios, actors or brands). Runtime derivative (crop / 
   Midway", "Skywalk at Midnight") and the art-deco REFRESHMENTS concession board.
 - Unapproved prototypes; provider terms apply; no commercial clearance implied.
 <!-- END skyways-store-cinema-art-20261107 -->
+
+<!-- BEGIN head-hit-audio-20261107 (headhit-build.mjs) -->
+## Head-hit audio (skull crack)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the general
+feedback task's local Sound Lab allowance (2 jobs of a 4-job cap). Powered by Stability AI. Stability AI Community
+License + Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades,
+levelling, MP3) built by `tools/audio-pipeline/headhit-build.mjs` (provenance: `assets/derivatives/audio-head-hit.json`). Not
+reviewed by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/head-hit-01.mp3` — headHit (Sound Lab job 20261107T232716-256099295)
+- `assets/audio/head-hit-02.mp3` — headHit (Sound Lab job 20261107T232721-253643819)
+<!-- END head-hit-audio-20261107 -->
