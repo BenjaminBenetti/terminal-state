@@ -19,8 +19,8 @@ import {fighterCount} from '../src/market/combat/roles';
 import {MARKET_PEOPLE} from '../src/market/marketPeople';
 import {WEAPONS} from '../src/weapons/weapons';
 import {playerPelletDamage} from '../src/market/combat/marketCombat';
-import {validateSaveFile, parseSaveText} from '../src/save/validate';
-import {installRestore, makeSaveFile, prepareRestore, saveFileText} from '../src/save/serialize';
+import {parseSaveText} from '../src/save/validate';
+import {installRestore, prepareRestore, saveFileText} from '../src/save/serialize';
 import {restoreCarry, restoreParticipants} from '../src/run/snapshot';
 import {combatWorld, loadCombatAssets, rayTo, type CombatAssets} from './helpers/marketCombatFixture';
 
