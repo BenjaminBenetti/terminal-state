@@ -48,6 +48,11 @@ export interface WareSurface {
   level: number;
   /** The layout.props indices it lies on (v1: its holder, both modules for a joined counter top; v2: the slot's `host` when named). */
   hosts: number[];
+  /**
+   * Surface-local x spans with a real board / top under them (absent: the whole width). A joined counter top has none over its seam (the
+   * holders' item collision ends at each module's loot surface): a ware stands inside one span or bridges two (market/wares/plan.ts).
+   */
+  supports?: [number, number][];
 }
 
 type Layoutish = {props: readonly PropPlacement[]; market?: MarketLayout};
@@ -95,9 +100,11 @@ function joinRuns(list: (WareSurface & {k: number})[], props: readonly PropPlace
       if (!wa || !wb || ha.kind !== hb.kind || !sameYaw(ha.rot, hb.rot) || Math.abs(ha.y - hb.y) > 0.01 || Math.abs(across(y, ha.x, ha.z) - across(y, hb.x, hb.z)) > 0.02) continue;
       if (Math.abs((along(y, hb.x, hb.z) - wb / 2) - (along(y, ha.x, ha.z) + wa / 2)) > 0.02) continue;
       const a0 = sa.a0, a1 = sb.a1, am = (a0 + a1) / 2;
-      // (back to world: x = am cos - u sin ... the inverse of along / across)
+      // (back to world: the inverse of along / across)
       const x = am * Math.cos(y) + sa.u * Math.sin(y), z = -am * Math.sin(y) + sa.u * Math.cos(y);
-      const m = {...A, x, z, w: a1 - a0, hosts: [...A.hosts, ...B.hosts], k: Math.min(A.k, B.k)};
+      // the supported spans in the joined surface's own x (each part's spans, or its whole width): never the seam between them
+      const spans = (sp: Span): [number, number][] => (sp.s.supports ?? [[-sp.s.w / 2, sp.s.w / 2]]).map(([p, q]) => [p + (sp.a0 + sp.a1) / 2 - am, q + (sp.a0 + sp.a1) / 2 - am]);
+      const m = {...A, x, z, w: a1 - a0, hosts: [...A.hosts, ...B.hosts], supports: [...spans(sa), ...spans(sb)], k: Math.min(A.k, B.k)};
       out.splice(Math.max(i, j), 1);
       out.splice(Math.min(i, j), 1, m);
       merged = true;

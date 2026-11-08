@@ -5,7 +5,9 @@
 // back): rows from the front, each as deep as its deepest ware; a ware goes into the first row (front first) with an x gap wide enough
 // (and the last row may deepen while depth is left), else a new row behind. Each ware stands upright facing the front; one too tall for
 // the surface's free height lies down (cylinders on their side, boxes on their back: items/lootLayout.ts orientations), turned 90° only
-// when that is the only way it fits. A gun lies on its side (world/pickups.ts meshFor) by its model's real bounds.
+// when that is the only way it fits. A gun lies on its side (world/pickups.ts meshFor) by its model's real bounds. A surface's supported
+// spans (WareSurface.supports: a joined counter top has no board over its seam) hold every ware: inside one span, or bridging two (a long
+// gun across the seam, resting on both tops) — never over the gap alone, so a woken ware never drops into the counter.
 //  - ORDER: the stall's stock order (the trade view's), surfaces in their given order (the counter tops first). A stack that fits no
 //    space left is not shown and the next one is tried (it stays in stock: listed / bought in the trade view, never lost); at most
 //    WARES.maxPerStall per stall.
@@ -47,6 +49,28 @@ function footprints(d: WareDims, clear: number): {sx: number; sz: number; sy: nu
   if (d.shape === 'cylinder') add('side', d.h, d.w, d.d);
   else if (d.shape === 'box') add('back', d.w, d.d, d.h);
   return out;
+}
+
+/** Least overlap (m) a ware bridging a seam keeps on each supported span it rests on. */
+const BRIDGE = 0.04;
+
+/** A ware spanning x0 .. x0 + sx is held up: inside one supported span, or bridging two (resting on both). */
+export function supported(s: WareSurface, x0: number, sx: number): boolean {
+  const sp = s.supports;
+  if (!sp?.length) return true;
+  const x1 = x0 + sx;
+  if (sp.some(([a, b]) => x0 >= a - 1e-9 && x1 <= b + 1e-9)) return true;
+  return sp.filter(([a, b]) => Math.min(b, x1) - Math.max(a, x0) >= BRIDGE).length >= 2;
+}
+
+/** The leftmost held-up start for an sx-wide ware inside the free gap [g0, g1] (null: none). */
+function spotIn(s: WareSurface, g0: number, g1: number, sx: number): number | null {
+  if (g1 - g0 < sx - 1e-9) return null;
+  // (the gap's ends, then each span's ends: flush with it, or bridging onto it by just BRIDGE)
+  const cands = [g0, g1 - sx, ...(s.supports ?? []).flatMap(([a, b]) => [a, b - sx, a + BRIDGE - sx, b - BRIDGE])]
+    .filter(x => x >= g0 - 1e-9 && x + sx <= g1 + 1e-9).sort((a, b) => a - b);
+  for (const x of cands) if (supported(s, x, sx)) return Math.min(Math.max(g0, x), g1 - sx);
+  return null;
 }
 
 /** The packing state of one stall's surfaces. */
@@ -92,7 +116,10 @@ export class WarePacker {
     }
   }
 
-  /** Spread every row evenly along its surface (the build's look; call before the wares are spawned). */
+  /**
+   * Spread every row evenly along its surface (the build's look; call before the wares are spawned). A row whose spread would put a ware
+   * off its surface's supports (a joined counter top's seam) keeps its packed spots.
+   */
   spread(): void {
     this.rows.forEach((rows, si) => {
       const s = this.surfaces[si], W = s.w - 2 * WARES.edge;
@@ -104,13 +131,14 @@ export class WarePacker {
         const roomy = free >= (n + 1) * WARES.gap || n === 1;
         const gap = roomy ? free / (n + 1) : free / (n - 1);
         let x = -s.w / 2 + WARES.edge + (roomy ? gap : 0);
-        for (const q of items) {
+        const to = items.map(q => { const x0 = x; x += q.x1 - q.x0 + gap; return x0; });
+        if (items.some((q, i) => !supported(s, to[i], q.x1 - q.x0))) continue;
+        items.forEach((q, i) => {
           const w = q.x1 - q.x0;
-          q.x0 = x;
-          q.x1 = x + w;
-          x += w + gap;
+          q.x0 = to[i];
+          q.x1 = to[i] + w;
           this.placed.set(q.uid, this.toPlace(si, q, r.u0));
-        }
+        });
       }
     });
   }
@@ -128,14 +156,17 @@ export class WarePacker {
       const items = r.items.slice().sort((a, b) => a.x0 - b.x0);
       let x = lo;
       for (const q of items) {
-        if (q.x0 - G - x >= sx - 1e-9) return {row: r, u0: r.u0, x0: x};
+        const at = spotIn(s, x, q.x0 - G, sx);
+        if (at !== null) return {row: r, u0: r.u0, x0: at};
         x = Math.max(x, q.x1 + G);
       }
-      if (hi - x >= sx - 1e-9) return {row: r, u0: r.u0, x0: x};
+      const at = spotIn(s, x, hi, sx);
+      if (at !== null) return {row: r, u0: r.u0, x0: at};
     }
     const u0 = rows.length ? Math.max(...rows.map(r => r.u0 + r.depth)) + G : E;
     if (u0 + sz > s.d - E + 1e-9) return null;
-    return {u0, x0: lo};
+    const at = spotIn(s, lo, hi, sx);
+    return at === null ? null : {u0, x0: at};
   }
 
   private toPlace(si: number, q: Slot, u0: number): WarePlace {

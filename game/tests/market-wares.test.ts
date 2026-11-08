@@ -30,7 +30,7 @@ import {MARKET_STOCK_LANE, type MarketStockJSON} from '../src/market/trade/stock
 import {buy, sell, type TradeCtx} from '../src/market/trade/transactions';
 import type {MarketProvocation} from '../src/market/hostility';
 import {WARES, stallSurfaces, vendorDisplayHosts} from '../src/market/wares/slots';
-import {planStall, type WarePlace} from '../src/market/wares/plan';
+import {planStall, supported, type WarePlace} from '../src/market/wares/plan';
 import {MarketWares, STEAL_RED, WARES_TEXT, wareLabel, type Ware} from '../src/market/wares/wares';
 import {capturePickups} from '../src/run/worldMemory';
 import {TrainCargoSystem} from '../src/world/trainCargo';
@@ -173,6 +173,7 @@ describe('market wares: the display plan', () => {
       expect(p.lz + p.sz / 2).toBeLessThanOrEqual(s.d / 2 + 1e-9);
       expect(p.sy).toBeLessThanOrEqual(s.clear);
       expect(near(p.y, s.y)).toBe(true);
+      expect(supported(s, p.lx - p.sx / 2, p.sx), `${p.uid} over the seam`).toBe(true); // (on a board / top, or bridging two)
       for (const q of places) {
         if (q === p || q.surface !== p.surface) continue;
         const ox = Math.min(p.lx + p.sx / 2, q.lx + q.sx / 2) - Math.max(p.lx - p.sx / 2, q.lx - q.sx / 2);
@@ -215,8 +216,13 @@ describe('market wares: the display plan', () => {
       const pk = planStall([{uid: 1, itemId: 'shotgun'}, {uid: 2, itemId: 'ammo_12ga'}, {uid: 3, itemId: 'ammo_12ga'}, {uid: 4, itemId: 'ammo_9mm'}],
         surfaces, id => (id === 'shotgun' ? shotgun : dims(id)));
       expect(pk.placed.has(1), `${seed}`).toBe(true);
-      expect(surfaces[pk.placed.get(1)!.surface].hosts.length, `${seed}`).toBe(2);
+      const g = pk.placed.get(1)!, top = surfaces[g.surface];
+      expect([top.hosts.length, top.supports?.length], `${seed}`).toEqual([2, 2]);
+      // too long for either module's free top: it bridges the seam, resting on both
+      expect(top.supports!.some(([a, b]) => g.lx - g.sx / 2 >= a - 1e-9 && g.lx + g.sx / 2 <= b + 1e-9), `${seed}`).toBe(false);
+      expect(supported(top, g.lx - g.sx / 2, g.sx)).toBe(true);
       expect(pk.count).toBe(4);
+      checkPlan([...pk.placed.values()], surfaces);
     }
   });
 });
