@@ -18,7 +18,7 @@ import {combineModifiers, type ModifierSource} from '../src/player/modifiers';
 import {armorHit, armorPool, ARMOR, ARMOR_WEAR_PER_HIT, tempHalfPips} from '../src/player/armor';
 import {ZombieBrain, alertListeners, type BrainWorld} from '../src/ai/brain';
 import {restoreParticipants} from '../src/run/snapshot';
-import {makeSaveFile, restoreRun, saveFileText} from '../src/save/serialize';
+import {makeSaveFile, restoreRun, saveFileText, type SaveFileV1Like} from '../src/save/serialize';
 import {validateSaveFile} from '../src/save/validate';
 import {Harness} from './helpers/saveFixture';
 
@@ -28,7 +28,8 @@ const src = (rel: string) => readFileSync(fileURLToPath(new URL(`../src/${rel}`,
 const {Game} = await import('../src/game');
 
 /** A plain beer host (Node): the real Survival / Inventory, a vomit spy, the registries. */
-function host(o: Partial<BeerHost> = {}): BeerHost & {toasts: string[]; vomit: {active: boolean; start: ReturnType<typeof vi.fn>}} {
+type TestHost = Omit<BeerHost, 'survival' | 'inv'> & {survival: Survival; inv: Inventory; toasts: string[]; vomit: {active: boolean; start: ReturnType<typeof vi.fn>}};
+function host(o: Partial<Omit<TestHost, 'toasts'>> = {}): TestHost {
   const toasts: string[] = [];
   return {
     survival: new Survival(), inv: new Inventory(), player: {x: 0, y: 0, z: 0, yaw: 0}, state: 'playing',
@@ -142,7 +143,7 @@ describe('the ONE timed slot: a second timed beer throws up and REPLACES; the Bo
   });
 
   it('without a vomit action (or one that cannot start now) the buff is still replaced', () => {
-    const h = host({vomit: null}), beer = new BeerEffects(h).install();
+    const h = host({vomit: null as never}), beer = new BeerEffects(h).install();
     beer.drink('beer_lager');
     beer.drink('beer_pilsner');
     expect(beer.active!.itemId).toBe('beer_pilsner');
@@ -251,7 +252,7 @@ describe('the timer: ACTIVE play only; exact across save / load / Continue / Ret
 });
 
 /** Re-checksum a mutated file (save/serialize makeSaveFile over the run). */
-const remake = (f: {run: unknown}): unknown => makeSaveFile(f.run as never, (f as {meta: unknown}).meta as never);
+const remake = (f: {run: unknown}): SaveFileV1Like => makeSaveFile(f.run as never, (f as unknown as {meta: unknown}).meta as never);
 
 describe('Express Line Lager: ONE x1.25 on the player\'s ground movement (walk / sprint / crouch / aim together)', () => {
   it('one ModifierSource multiplied once with gear / injuries; a second drink never doubles it; a grabbed fuel cart keeps its pace', () => {

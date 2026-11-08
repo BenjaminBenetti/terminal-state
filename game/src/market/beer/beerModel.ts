@@ -25,14 +25,17 @@ export const BEER_BOTTLE = {
   segments: 24,
   /** The crown cap: bottom (flared skirt) / top radius, from y0 to the bottle's top. */
   cap: {r0: 0.0146, r1: 0.0136, y0: 0.2265, y1: 0.235},
-  /** The label band: its height and centre height on the straight body (its width follows the art's aspect around the body). */
-  label: {h: 0.07, y: 0.066, lift: 0.0004},
+  /**
+   * The label band: its height and centre height on the straight body; its width follows the art's 3 : 2 around the body (~153 degrees:
+   * the whole label, its name included, reads from the front and in the item icon).
+   */
+  label: {h: 0.056, y: 0.066, lift: 0.0004},
 } as const;
 
 /** Glass / cap colours (flat runtime colours, sRGB hex). */
 export const BEER_LOOK: Readonly<Record<BeerId, {glass: number; cap: number}>> = {
   beer_lager: {glass: 0x2d5a24, cap: 0xc9a43c}, // green glass, gold crown
-  beer_pilsner: {glass: 0x3f7f3a, cap: 0x2f7d4f}, // emerald glass, green crown
+  beer_pilsner: {glass: 0x377031, cap: 0x2f7d4f}, // emerald glass, green crown
   beer_stout: {glass: 0x24140a, cap: 0x8c4c2a}, // near-black glass, copper crown
   beer_porter: {glass: 0x46240c, cap: 0x203462}, // brown glass, navy crown
   beer_bock: {glass: 0x6a3410, cap: 0x8f2a22}, // amber glass, red crown

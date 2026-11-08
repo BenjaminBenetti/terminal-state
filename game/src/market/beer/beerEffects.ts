@@ -119,7 +119,7 @@ const toastFx = (id: BeerId): string => beerEffectText(id).replace(/ \(timed bee
 
 export class BeerEffects implements BeerEffectsApi {
   /** The one timed beer (null: none). */
-  private slot: {itemId: BeerId; remaining: number} | null = null;
+  private slot: {itemId: BeerId; effect: TimedBeerEffect; remaining: number} | null = null;
   /** The Pilsner's durable roll memory (source hashes, oldest first) and its set. */
   private rolled: number[] = [];
   private readonly rolledSet = new Set<number>();
@@ -141,13 +141,13 @@ export class BeerEffects implements BeerEffectsApi {
   // ---------------------------------------------------------------------------------------------------------------------
   // The slot and its effects (BeerEffectsApi)
 
+  /** The one timed beer (read-only to callers; the HUD reads it every frame: no allocation). */
   get active(): ActiveBeer | null {
-    const s = this.slot;
-    return s ? {itemId: s.itemId, effect: BEERS[s.itemId].effect as TimedBeerEffect, remaining: s.remaining} : null;
+    return this.slot;
   }
 
   private effect(): TimedBeerEffect | null {
-    return this.slot ? (BEERS[this.slot.itemId].effect as TimedBeerEffect) : null;
+    return this.slot ? this.slot.effect : null;
   }
 
   speedMult(): number { return this.effect() === 'speed' ? BEER_TUNING.speedMult : 1; }
@@ -172,7 +172,7 @@ export class BeerEffects implements BeerEffectsApi {
       if (threw) this.counts.vomits++;
       this.counts.replaced++;
     }
-    this.slot = {itemId, remaining: BEER_TUNING.activeSeconds};
+    this.slot = {itemId, effect: spec.effect, remaining: BEER_TUNING.activeSeconds};
     this.counts.timed++;
     return prev ? `You threw up — ${spec.name} replaces ${BEERS[prev.itemId].name}: ${toastFx(itemId)}` : `Drank ${spec.name}: ${toastFx(itemId)}`;
   }
@@ -270,7 +270,7 @@ export class BeerEffects implements BeerEffectsApi {
     this.reset();
     if (p) { console.warn(`beer: run record ignored (${p})`); return; }
     const r = d as BeerSaveV1;
-    this.slot = r.active ? {itemId: r.active.itemId, remaining: r.active.remaining} : null;
+    this.slot = r.active ? {itemId: r.active.itemId, effect: BEERS[r.active.itemId].effect as TimedBeerEffect, remaining: r.active.remaining} : null;
     for (const h of r.rolled) this.remember(h);
   }
 
@@ -289,6 +289,14 @@ export class BeerEffects implements BeerEffectsApi {
     return {active: this.active, rolled: this.rolled.length, counts: {...this.counts}, lastDup: this.lastDup,
       mods: {speed: this.speedMult(), perception: this.perceptionMult(), tempArmor: this.tempArmor()}};
   }
+}
+
+/** QA hooks (spread into window.__LL by qa.ts) for SHORT serial browser spot checks: read-only (no item grants: beers are bar stock only). */
+export function beerQaApi(sys: () => BeerEffectsApi | null | undefined) {
+  return {
+    /** The active timed beer, the Pilsner's roll memory size, counters, the last bonus, the live multipliers. */
+    beer: () => (sys() as BeerEffects | null | undefined)?.qa?.() ?? null,
+  };
 }
 
 /** Installs Game.beerEffects (one call in the Game constructor). */

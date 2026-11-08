@@ -20,7 +20,7 @@ const {Game} = await import('../src/game');
 
 const SEED = 11, SCOPE = 'st-07:main', HOLDER = holderKey('shelf', 0, 1.5, -2.25);
 
-type Host = BeerHost & {toasts: string[]; floor: {stack: ItemStack; x: number; y: number; z: number}[]; bags: {id: string; stack: ItemStack}[]};
+type Host = Omit<BeerHost, 'inv'> & {inv: Inventory; toasts: string[]; floor: {stack: ItemStack; x: number; y: number; z: number}[]; bags: {id: string; stack: ItemStack}[]};
 function host(inv = new Inventory()): Host {
   const toasts: string[] = [], floor: Host['floor'] = [], bags: Host['bags'] = [];
   return {
