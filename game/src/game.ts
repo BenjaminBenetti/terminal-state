@@ -160,6 +160,7 @@ import {installMarketCombat, playerPelletDamage, type MarketCombat, type MarketC
 import type {MarketHostilityApi} from './market/hostility';
 import type {BeerEffectsApi, VomitApi} from './market/beer/effectsApi'; // task studio-market-bar-20261108-225231-01 (seams)
 import type {MarketAudioApi} from './market/marketAudio';
+import {installVomit, type VomitAction} from './player/vomit'; // task studio-market-bar-20261108-225231-01 (lane SHELVES): the throw-up action (Game.vomit)
 import {installMarketWares, type MarketWares} from './market/wares/wares'; // task studio-market-rework-20261108-074144-01 (lane WARES): the stalls' owned stock on display, the red Steal
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
@@ -390,6 +391,8 @@ export class Game {
   beerEffects?: BeerEffectsApi;
   vomit?: VomitApi;
   marketAudio?: MarketAudioApi;
+  /** (lane SHELVES) Game.vomit's implementation (player/vomit.ts): its held-item lowering, read by the viewmodel step. */
+  private vomitAction: VomitAction | null = null;
   /** Task studio-market-rework-20261108-074144-01 (lane WARES): the stalls' real stock displayed as owned world items; theft (market/wares/wares.ts). */
   marketWares!: MarketWares;
   /** Task skyways-level-20261106 (lane CAR): the Skyways prize car — while `driving`, update() steps the player through it (world/skywaysCar.ts). */
@@ -705,6 +708,10 @@ export class Game {
     this.marketCombat = installMarketCombat(this);
     this.marketHostility = this.marketCombat;
     hookName('marketCombat');
+    // task studio-market-bar-20261108-225231-01 (lane SHELVES): the throw-up action (Game.vomit: body / camera / held item, the food chunks —
+    // a physics body source —, the retch); its frame hook runs after the player's step and before the camera; inert until start()
+    this.vomit = this.vomitAction = installVomit(this);
+    hookName('vomit');
     installSkywaysTrunk(this); hookName('skywaysTrunk'); // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): after the car (its section hook follows the car's) and the Lockbox; inert without the car
     // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
     // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
@@ -2530,6 +2537,7 @@ export class Game {
     if (def.kind !== 'consumable') return;
     if (this.gasMask.transitioning) return; // mask lane: no use starts while the gas mask goes on / comes off (H, click)
     if (this.skywaysCar?.refuseUse()) return; // (lane CAR) no item use while driving the Skyways car
+    if (this.vomit?.active) return; // (lane SHELVES) no timed use starts while throwing up (H / a click)
     // Iteration 12 (LIGHT): a battery is refused at >= 99 % charge (nothing used)
     // Iteration 16 (lane INJURY): a limb treatment needs its injury ("No leg injury to treat"); it heals no HP, so the HP check is skipped
     const blocked = (def.recharge ? this.torch.battery.refuseReason() : null)
@@ -2626,6 +2634,7 @@ export class Game {
   }
 
   private interact(): void {
+    if (this.vomit?.active) return; // (lane SHELVES) throwing up: no interaction until it is over
     for (const h of this.interactHandlers) if (h()) return; // Iteration 16: lane handlers first (grounded backpack, elevator, stair doors)
     if (this.containerTarget) { this.containers?.interact(this.containerTarget); return; }
     const p = this.currentTarget;
@@ -2758,7 +2767,7 @@ export class Game {
     // A fresh sprint (Shift while moving forward) interrupts a timed use. Until the consume view has
     // brought the gun back up it stays lowered: no aiming, firing or reloading.
     if (this.use && (inp.hit('ShiftLeft') || inp.hit('ShiftRight')) && (inp.down('KeyW') || inp.down('ArrowUp'))) this.cancelUse('sprint');
-    const vmBusy = !!this.use || this.consumeView.busy;
+    const vmBusy = !!this.use || this.consumeView.busy || !!this.vomit?.active; // (lane SHELVES: throwing up — no aim / reload, the gun lowered)
     this.aiming = !!wdef && !wdef.melee && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active && !laneOwns;
     const moveOpts = {aiming: this.aiming, speedMult: (this.use ? 0.6 : wdef?.moveMult ?? 1) * this.mods.speedMult, canSprint: !this.use && !inp.mouse[0]};
     // (lane RIDE) riding: car pose -> the player's car-local step -> the world pose (TrainRide.stepPlayer); else the world body as ever
@@ -2870,6 +2879,8 @@ export class Game {
     prof.lap(SPAN.view);
     this.consumeView.update(dt); // item-to-face pose + gun holster level, before the gun pose
     if (this.skywaysCar.holster > 0) this.viewmodel.setHolstered(this.skywaysCar.holster); // (lane CAR) hands on the wheel: the held item lowered
+    const vomitHolster = this.vomitAction?.holster ?? 0; // (lane SHELVES) throwing up: the held item lowered (whichever lowers it more wins)
+    if (vomitHolster > 0) this.viewmodel.setHolstered(Math.max(vomitHolster, this.consumeView.holster, this.skywaysCar.holster));
     this.viewmodel.update(dt, {
       // (task mouse-axis-invert: the sway follows the EFFECTIVE turn, so an inverted axis sways with the view, not against it)
       moving: Math.min(1, p.speed / WALK_SPEED), sprint: p.sprinting, aiming: this.aiming, lookDX: inp.dx * lookSigns(this.settings).x, lookDY: inp.dy * lookSigns(this.settings).y,
