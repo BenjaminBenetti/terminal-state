@@ -14,6 +14,9 @@
 //    rising over the roofs never level-culled (world/levelCulling.ts);
 //  - fine per-storey cohorts and the per-storey, culler-decided loot display (world/builder.ts, containers.ts, storefrontBuilder.ts);
 //  - enemies, pickups and the prize car decided from their boxes every update (world/reactor/cpuActorCulling.ts, now the Skyways too);
+//  - the flashlight's shadow frustum and near-plane clip zone (follow-up, version 4): a torch within its 0.2 m near plane of a wall sees
+//    through it, so nothing in its frustum is hidden for it then, and an unclipped torch must be slab-blocked itself; portal tiles are
+//    tested out to the fog's reach by view depth (the 55 m cap culled a fixture the fog still drew);
 //  - correctness: a depth-buffered oracle — the eye (to the fog distance), the flashlight's shadow camera (its 30 m) — finds no visible
 //    mesh hidden and no hidden moving object whose whole cull box shows a pixel, on the trace poses, bridges, atria, the street level
 //    looking out of its windows, the skyway storey's windows, stair cores and the station, on layout versions 3 and 4.
@@ -40,29 +43,41 @@ const TRACE = [{x: 33.62, z: 78.26}, {x: 40, z: 77}] as const;
 const VERSIONS = [3, SKYWAYS_LAYOUT_VERSION] as const;
 
 /**
- * The budget: scene + flashlight-shadow draws over the trace sweep (2 positions x 12 yaws, every 30 deg; the poses on their cell centres).
- * Measured on the lane's branch (layout v3 = v4 for this seed then): worst 510, total 6,525 per version (rules off, with the new build's
- * fine cohorts: 10,949). The same 24 views at the trace's exact coordinates on the code BEFORE the fixes: worst 975 (yaw 330 at (40, 77)),
- * total 12,430; after: worst 523, total 6,942 — the east-facing (240-330 deg) views 557-975 -> 267-523. A failure means the Skyways'
- * submitted work grew: measure again (LL_SKYWAYS_CPU_OUT) and decide consciously before raising a cap. Version 4 is the live generator
- * (its building programmes are being reworked): its caps carry headroom and its cut is checked over the east-facing views together.
+ * The budget: scene + flashlight-shadow draws over the trace sweep (2 positions x 12 yaws, every 30 deg) on real open floor (openNear).
+ * Layout v3: the trace's own spots (to the cell centre) — measured worst 506, total 6,295 (rules off, with the new build's fine cohorts:
+ * 10,720); at the trace's exact coordinates the code BEFORE lane PERF drew worst 975 (yaw 330 at (40, 77)), total 12,430 over these yaws.
+ * Layout v4 (the building programmes): the trace's coordinates are SOLID on storey 2, so the poses are the nearest open floor
+ * ((30.75, 75.25) and (42.25, 77.25) at the time) — measured worst 432, total 5,779 (rules off 12,628); the code before lane PERF drew
+ * worst 1,283 / 998 at those poses (15 deg sweeps: 14,356 / 11,312 -> 6,276 / 5,405). A failure means the Skyways' submitted work
+ * grew: measure again (LL_SKYWAYS_CPU_OUT) and decide consciously before raising a cap. Version 4 is the live generator: its east-facing
+ * cut is checked over those views together.
  */
 const BUDGET = {
   3: {worst: 560, total: 7200, eastCut: 0.25},
-  4: {worst: 640, total: 8200, eastCut: 0.2},
+  4: {worst: 480, total: 6400, eastCut: 0.25},
 } as const;
 
-/** The nearest open storey-2 floor cell centre to (x, z) within 6 m (the trace pose as generated; a reworked layout may move walls). */
-function openNear(S: SkywaysPerfScene, level: number, x: number, z: number): {x: number; z: number} | null {
-  const g = S.layout.levels[level].grid;
-  let best: {x: number; z: number} | null = null, bd = Infinity;
-  for (let dz = -6; dz <= 6; dz += CELL) for (let dx = -6; dx <= 6; dx += CELL) {
-    const [cx, cy] = g.cellOf(x + dx, z + dz);
-    if (!g.inBounds(cx, cy)) continue;
+/**
+ * The nearest REAL OPEN FLOOR of a storey to (x, z) within 12 m: a cell centre whose 3 x 3 cells are walkable, unblocked, flat floor at
+ * the storey's own floor height (no stair flight, no other deck) — where a player can stand, the player's 0.3 m radius clear. On layout
+ * v3 that is the trace's own spot (to the cell centre); on version 4 (the building programmes moved the walls) the trace's coordinates
+ * are SOLID on storey 2, so the trace-equivalent pose is the nearest such floor — never a point over a stair flight or inside a wall.
+ */
+function openNear(S: SkywaysPerfScene, level: number, x: number, z: number): {x: number; z: number; y: number} | null {
+  const g = S.layout.levels[level].grid, base = S.layout.levels[level].baseY;
+  const flat = (cx: number, cy: number) => {
+    if (!g.inBounds(cx, cy)) return false;
     const i = g.idx(cx, cy);
-    if (g.cells[i] !== FLOOR || g.blocked[i]) continue;
+    return g.cells[i] === FLOOR && !g.blocked[i] && g.rampIdx[i] < 0 && Math.abs(g.floor[i] - base) < 0.05;
+  };
+  let best: {x: number; z: number; y: number} | null = null, bd = Infinity;
+  for (let dz = -12; dz <= 12; dz += CELL) for (let dx = -12; dx <= 12; dx += CELL) {
+    const [cx, cy] = g.cellOf(x + dx, z + dz);
+    let ok = true;
+    for (let j = -1; j <= 1 && ok; j++) for (let q = -1; q <= 1 && ok; q++) ok = flat(cx + q, cy + j);
+    if (!ok) continue;
     const d = dx * dx + dz * dz;
-    if (d < bd) { bd = d; best = {x: (cx + 0.5) * CELL, z: (cy + 0.5) * CELL}; }
+    if (d < bd) { bd = d; best = {x: (cx + 0.5) * CELL, z: (cy + 0.5) * CELL, y: base}; }
   }
   return best;
 }
@@ -75,7 +90,7 @@ function oraclePoses(S: SkywaysPerfScene): PerfPose[] {
   const L = S.layout, info = L.skyways!, outp: PerfPose[] = [];
   const base = (lv: number) => L.levels[lv].baseY;
   const ok = (lv: number, x: number, z: number) => { const g = L.levels[lv].grid, [cx, cy] = g.cellOf(x, z); return g.inBounds(cx, cy) && g.cells[g.idx(cx, cy)] === FLOOR && !g.blocked[g.idx(cx, cy)]; };
-  for (const t of TRACE) { const p = openNear(S, 2, t.x, t.z); if (p) for (let d = 0; d < 360; d += 45) outp.push({name: 'trace', x: p.x, y: base(2) + PERF_EYE, z: p.z, yaw: deg(d), pitch: 0}); }
+  for (const t of TRACE) { const p = openNear(S, 2, t.x, t.z); if (p) for (let d = 0; d < 360; d += 45) outp.push({name: 'trace', x: p.x, y: p.y + PERF_EYE, z: p.z, yaw: deg(d), pitch: 0}); }
   for (const b of info.bridges) {
     const r = b.rect, mx = (r.x0 + r.x1) / 2, mz = (r.z0 + r.z1) / 2;
     for (const d of [0, 90, 180, 270]) outp.push({name: `bridge-${b.id}`, x: mx, y: base(b.level) + PERF_EYE, z: mz, yaw: deg(d), pitch: d === 90 ? -0.25 : 0});
@@ -122,15 +137,16 @@ describe('the REAL Skyways: render objects per view (scene + flashlight shadow p
     expect(c.windowRule).toBe(true);
   }, 600_000);
 
-  for (const v of VERSIONS) it(`layout v${v}: the trace sweep (storey 2, 2 positions x 12 yaws) within budget; the rules cut every east-facing view`, async () => {
+  for (const v of VERSIONS) it(`layout v${v}: the trace sweep (storey 2 open floor, 2 positions x 12 yaws) within budget; the rules cut the east-facing views`, async () => {
     const S = await skywaysPerfScene(SEED, v);
     const B = BUDGET[v === 3 ? 3 : 4];
     let worst = 0, total = 0, offTotal = 0, eastOn = 0, eastOff = 0;
     for (const t of TRACE) {
       const p0 = openNear(S, 2, t.x, t.z);
-      expect(p0, `an open storey-2 cell near (${t.x}, ${t.z})`).not.toBeNull();
+      expect(p0, `open storey-2 floor near (${t.x}, ${t.z})`).not.toBeNull();
+      out(`v${v} trace (${t.x}, ${t.z}) -> pose (${p0!.x}, ${p0!.z}) on the storey-2 floor`);
       for (let d = 0; d < 360; d += 30) {
-        const p: PerfPose = {name: 'trace', x: p0!.x, y: S.layout.levels[2].baseY + PERF_EYE, z: p0!.z, yaw: deg(d), pitch: 0};
+        const p: PerfPose = {name: 'trace', x: p0!.x, y: p0!.y + PERF_EYE, z: p0!.z, yaw: deg(d), pitch: 0};
         const off = perfMeasure(S, p, false);
         perfDone(off);
         const on = perfMeasure(S, p, true);
