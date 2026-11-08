@@ -36,6 +36,7 @@ import {armorPool, pipsText} from '../player/armor'; // task studio-general-armo
 import {WEAPONS, reserveFor, weaponsForCaliber} from '../weapons/weapons';
 import {CALIBERS, CALIBER_IDS, ammoItemFor} from '../items/calibers'; // lane AMMO
 import {MATERIAL_NOTE} from '../items/craftMaterials'; // lane RACK (office-props-physics-scale-20261030)
+import {CURRENCY_NOTE} from '../items/railTies'; // task studio-market-rework-20261108-074144-01 (lane TRADE)
 import {CRITICAL, LOW} from '../player/survival';
 import {GEAR_ICONS} from './gearIcons';
 import {ICONS} from './icons';
@@ -515,7 +516,8 @@ export class InventoryUI {
         : def?.kind === 'throwable' ? (this.selected?.bar === 'throw' ? 'In the grenade slot: hold G to ready it, release to throw' : 'Right-click / double-click / Equip puts it in the grenade slot (G)') // INTERACT (#6)
         : def?.kind === 'supply' ? `A worn gas mask fits one by itself when its filter runs out · ${inv.count(def.id)} carried where the mask can reach them (not in a worn backpack)` // mask lane
         : def?.kind === 'material' ? `${MATERIAL_NOTE} · ${inv.count(def.id)} in pockets / quick slots` // lane RACK (office-props-physics-scale-20261030)
-        : def?.kind === 'part' ? `Reactor restart part — nothing to use by hand: take it to its control and press E there · ${inv.count(def.id)} in pockets / quick slots` : ''); // task reactor-build-20261101 (lane RESTART)
+        : def?.kind === 'part' ? `Reactor restart part — nothing to use by hand: take it to its control and press E there · ${inv.count(def.id)} in pockets / quick slots` // task reactor-build-20261101 (lane RESTART)
+        : def?.kind === 'currency' ? `${CURRENCY_NOTE} · ${inv.count(def.id)} ready to spend` : ''); // task studio-market-rework-20261108-074144-01 (lane TRADE)
       fx.classList.toggle('refused', !!this.note && this.noteBad);
     }
     const useBtn = $('#btn-inv-use') as HTMLButtonElement;
@@ -523,7 +525,7 @@ export class InventoryUI {
     useBtn.disabled = !def || def.kind !== 'consumable';
     const eq = $('#btn-inv-equip') as HTMLButtonElement;
     eq.textContent = def?.kind === 'gear' ? (worn ? 'Take off' : 'Wear') : 'Equip'; // Iteration 16
-    eq.disabled = !def || def.kind === 'ammo' || def.kind === 'supply' || def.kind === 'material' || def.kind === 'part' || (worn && !!def && isBagItem(def.id)) || (def.kind === 'throwable' && this.selected?.bar === 'throw'); // INTERACT; mask lane: filters are passive
+    eq.disabled = !def || def.kind === 'ammo' || def.kind === 'supply' || def.kind === 'material' || def.kind === 'part' || def.kind === 'currency' || (worn && !!def && isBagItem(def.id)) || (def.kind === 'throwable' && this.selected?.bar === 'throw'); // INTERACT; mask lane: filters are passive
     ($('#btn-inv-drop') as HTMLButtonElement).disabled = !def;
     const v = this.actions.vitals?.();
     const vit = document.querySelector('#inv-vitals');

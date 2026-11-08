@@ -75,7 +75,7 @@ export interface CargoHost {
   gear?: {bags: GroundBag[]; releaseBag(b: GroundBag): ItemStack | null; adoptBag(id: string, stack: ItemStack, pose: {x: number; y: number; z: number; yaw: number; level: number}): GroundBag; recordFilter: ((b: GroundBag) => boolean) | null} | null;
   trainRuntime?: {spec: PlayerTrainSpec; view: {root: THREE.Object3D} | null; train: {placement: TrainPlacement} | null; carLocal(x: number, y: number, z: number): {x: number; y: number; z: number} | null; carDir(x: number, y: number, z: number): {x: number; y: number; z: number} | null} | null;
   trainRide?: {riding: boolean; phase: string; moving: boolean; local: {x: number; y: number; z: number; yaw: number}} | null;
-  playerTrain: {cargo: {live: {cargo(): CargoItemJSON[]; restore(items: CargoItemJSON[]): void} | null}};
+  playerTrain: {cargo: {live: {cargo(): CargoItemJSON[]; restore(items: CargoItemJSON[]): void; add?(item: CargoItemJSON): void} | null}};
   hud: {toast(text: string, warn?: boolean): void};
   sfx: unknown;
   frameHooks: ((dt: number) => void)[];
@@ -114,7 +114,7 @@ export class TrainCargoSystem {
     h.frameHooks.push(dt => this.frame(dt));
     h.interactHandlers.push(() => this.onInteract());
     h.promptProviders?.push(() => this.prompt);
-    h.playerTrain.cargo.live = {cargo: () => this.cargo(), restore: items => this.restore(items)};
+    h.playerTrain.cargo.live = {cargo: () => this.cargo(), restore: items => this.restore(items), add: item => this.addPending(item)};
     if (h.gear) h.gear.recordFilter = b => this.ownsBag(b);
     return this;
   }
@@ -310,6 +310,17 @@ export class TrainCargoSystem {
     }
     this.pending = items.map(r => structuredClone(r));
     this.reserve(this.pending);
+    this.spawnPending();
+  }
+
+  /**
+   * Task studio-market-rework-20261108-074144-01 (lane TRADE): one more record aboard (run/trainCargo.ts TrainCargo.add: the old market
+   * balance's overflow) — a pending record like a load's, spawned in the parked car now (or riding with the moving car), else at the next
+   * world with a parked car; saved with the cargo meanwhile (cargo() lists pending records).
+   */
+  addPending(item: CargoItemJSON): void {
+    this.pending.push(structuredClone(item));
+    this.reserve([item]);
     this.spawnPending();
   }
 
