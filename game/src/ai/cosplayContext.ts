@@ -32,6 +32,6 @@ export const COSPLAY_PLACEMENT: PlacementRules = {
 export const COSPLAY_FAMILY_POOL: FamilyPool = [['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0], ['strainer', 0]];
 /** The 'cosplay' zone context of Skyways (once per convention; never regenerates a level: no accepted minimum). */
 export const COSPLAY_CONTEXT: SpawnContextRule = {
-  label: 'Anime convention (cosplay zombies on the venue\'s event floor)', count: COSPLAY_ZONE_BUDGET, placement: COSPLAY_PLACEMENT,
+  label: 'Anime convention (cosplay zombies on the venue event floor)', count: COSPLAY_ZONE_BUDGET, placement: COSPLAY_PLACEMENT,
   accept: {min: null, max: 'count'}, families: COSPLAY_FAMILY_POOL,
 };

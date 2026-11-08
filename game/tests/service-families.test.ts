@@ -11,6 +11,7 @@ import {
 } from '../src/ai/spawnTables';
 import {isExtensionArea} from '../src/gen/trackExt/types';
 import {freshLayout} from './helpers/annexRoute';
+import {COSPLAY_FAMILY_POOL} from '../src/ai/cosplayContext'; // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY)
 import type {StationLayout} from '../src/gen/stationTypes';
 import type {LevelId} from '../src/levels/types';
 import {FRESH} from './helpers/btsArea';
@@ -57,6 +58,13 @@ describe('R6: service-only family pool', () => {
         // ('lingerie', LINGERIE_FAMILY_POOL) is ordinary zombies only (its variants are a wardrobe look of the zombie family)
         if (id === 'mall' && c === 'lingerie') {
           expect(rule?.families, `${id} ${c}`).toBe(LINGERIE_FAMILY_POOL);
+          expect(rule!.families!.filter(([, w]) => w > 0)).toEqual([['zombie', 1]]);
+          continue;
+        }
+        // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): the third — the Skyways convention's cosplay zone ('cosplay',
+        // COSPLAY_FAMILY_POOL) is ordinary zombies only too (its spawns are a costume look of the zombie family)
+        if (id === 'skyways' && c === 'cosplay') {
+          expect(rule?.families, `${id} ${c}`).toBe(COSPLAY_FAMILY_POOL);
           expect(rule!.families!.filter(([, w]) => w > 0)).toEqual([['zombie', 1]]);
           continue;
         }
