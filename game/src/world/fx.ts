@@ -473,6 +473,18 @@ export class Effects {
     }
   }
 
+  /**
+   * Task studio-market-rework-20261108-074144-01 (lane COMBAT): a gun fired by someone ELSE (a hostile survivor) — the flash seen from the
+   * outside (bright additive glow sprites in the existing glow ring: a core and a short forward jet, ~2 frames) + the same smoke wisps /
+   * embers as the player's muzzle(). The player's own flash is the viewmodel's.
+   */
+  muzzleFlash(pos: THREE.Vector3, dir: THREE.Vector3, big: boolean): void {
+    this.glow.spawn(pos, 0, 0, 0, big ? 0.34 : 0.24, 0.05, this.spark, 1);
+    const jet = this.tmp.copy(pos).addScaledVector(dir, big ? 0.16 : 0.1);
+    this.glow.spawn(jet, dir.x * 0.6, dir.y * 0.6, dir.z * 0.6, big ? 0.22 : 0.15, 0.04, this.spark, 0.9);
+    this.muzzle(pos, dir, big);
+  }
+
   /** Muzzle smoke wisps (+ shotgun embers) at the barrel tip. */
   muzzle(pos: THREE.Vector3, dir: THREE.Vector3, big: boolean): void {
     const n = big ? 3 : 1 + (Math.random() < 0.5 ? 1 : 0);

@@ -152,6 +152,8 @@ import {installSkywaysMapRead} from './world/skywaysMapRead'; // task studio-sky
 import {installMarketTrade, type TradeSystem} from './market/trade/tradeSystem';
 import {MARKET_HUMAN_MODEL_FILES} from './market/humanLooks'; // task studio-survivor-market-20261108-005807-01 (lane HUMANS): the friendly cast file
 import {installMarketPeople, type MarketPeople} from './market/marketPeople'; // (lane HUMANS): the market's residents + stall traders // task studio-survivor-market-20261108-005807-01 (lane TRADE): Rail Ties + the six stalls
+import {installMarketCombat, playerPelletDamage, type MarketCombat, type MarketCombatant} from './market/combat/marketCombat'; // task studio-market-rework-20261108-074144-01 (lane COMBAT)
+import type {MarketHostilityApi} from './market/hostility';
 import {installMarketWares, type MarketWares} from './market/wares/wares'; // task studio-market-rework-20261108-074144-01 (lane WARES): the stalls' owned stock on display, the red Steal
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
@@ -372,6 +374,10 @@ export class Game {
   trade!: TradeSystem;
   /** Task studio-survivor-market-20261108-005807-01 (lane HUMANS): the market's residents + traders (market/marketPeople.ts). */
   marketPeople!: MarketPeople;
+  /** Task studio-market-rework-20261108-074144-01 (lane COMBAT): attackable market people, the settlement's hostility, their gunfire (market/combat/marketCombat.ts). */
+  marketCombat!: MarketCombat;
+  /** (lane COMBAT) The market hostility seam (market/hostility.ts) the trade / wares lanes call: hostile, provoke, canTrade. */
+  marketHostility!: MarketHostilityApi;
   /** Task studio-market-rework-20261108-074144-01 (lane WARES): the stalls' real stock displayed as owned world items; theft (market/wares/wares.ts). */
   marketWares!: MarketWares;
   /** Task skyways-level-20261106 (lane CAR): the Skyways prize car — while `driving`, update() steps the player through it (world/skywaysCar.ts). */
@@ -680,6 +686,12 @@ export class Game {
     this.marketPeople = installMarketPeople(this);
     hookName('marketPeople');
     this.trade.onTalk = id => this.marketPeople.onTalk(id); // the trader greets the customer who opens its stall
+    // task studio-market-rework-20261108-074144-01 (lane COMBAT): after the people (its section build reads them; its frame drives them once
+    // hostile) — their hit volumes for fire() / meleeContact(), the settlement's hostility (Game.marketHostility), the hostile survivors'
+    // gunfire through gunshotPlayer; the lane store 'market.hostility'; inert where the layout has no market
+    this.marketCombat = installMarketCombat(this);
+    this.marketHostility = this.marketCombat;
+    hookName('marketCombat');
     installSkywaysTrunk(this); hookName('skywaysTrunk'); // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): after the car (its section hook follows the car's) and the Lockbox; inert without the car
     // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
     // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
@@ -2987,14 +2999,18 @@ export class Game {
       // enemyRay.ts: the old cheap reject mis-projected pitched rays and skipped enemies up / down stairs, atria and the pit)
       const eh = nearestEnemyHit(o, d, bestT, this.zombies);
       if (eh) { bestT = eh.t; bestZ = eh.enemy; bestPart = eh.part; }
+      // task studio-market-rework-20261108-074144-01 (lane COMBAT): a market person nearer still (its own bone volumes, any storey)
+      const mh = this.marketCombat.rayHit(o, d, bestT);
+      let bestP: MarketCombatant | null = null;
+      if (mh) { bestT = mh.t; bestZ = null; bestP = mh.person; bestPart = mh.part; }
       // Lane D: corpses stop (and tear under) bullets too; shots passing close knock loose pickups about.
       const corpse = this.damage.corpseHit(this.zombies, o, d, bestT);
-      if (corpse) { bestT = corpse.t; bestZ = null; }
+      if (corpse) { bestT = corpse.t; bestZ = null; bestP = null; }
       // Iteration 08 (Lane S): a filler stock piece on the pellet line (exact per-piece test; inside a stocked shelf when its box is the
       // world hit) takes the pellet: its impulse at the hit point. Loot items / pickups in front of it still take it first (Lane K path).
-      const fh = this.stock.pelletHit(o, d, bestT, wh, this.layout.props, !!bestZ || !!corpse);
+      const fh = this.stock.pelletHit(o, d, bestT, wh, this.layout.props, !!bestZ || !!corpse || !!bestP);
       prof.end(SPAN.fireRays);
-      if (fh) { bestT = fh.t; bestZ = null; }
+      if (fh) { bestT = fh.t; bestZ = null; bestP = null; }
       const end = origin.clone().addScaledVector(dir, bestT);
       const shot = {damage: def.damage * WeaponController.falloff(def, bestT), pellet: def.pellets > 1, weapon: def.id};
       // Iteration 07 (Lane K): items / lots / light props on the shot line take the bullet's impulse (it passes on through them)
@@ -3013,6 +3029,9 @@ export class Game {
         dmg.set(bestZ, e);
         // Lane D: rest-space flesh / clothing wound + blood + flesh pieces (was fx.bodyHit only)
         this.damage.hitZombie(bestZ, end, dir, bestPart as 'head' | 'torso' | 'limb', {...shot, damage: amount});
+      } else if (bestP) {
+        // (lane COMBAT) the same damage (falloff x the weapon's part multiplier), aggregated per person for this trigger pull
+        this.marketCombat.pellet(bestP, playerPelletDamage(def, bestPart as 'head' | 'torso' | 'limb', bestT), end, dir, bestPart === 'head', def.id);
       } else if (corpse && !fh) {
         this.damage.hitZombie(corpse.z, end, dir, corpse.part, shot, true);
         this.sfx.impact(end.x, end.y, end.z, 'flesh');
@@ -3045,10 +3064,12 @@ export class Game {
         prof.end(SPAN.ragdoll);
       }
     }
-    if (dmg.size) {
+    // (lane COMBAT) each market person this shot reached takes it once: its hit confirm, flinch, the settlement's hostility, a ragdoll
+    const people = this.marketCombat.endShot(def);
+    if (dmg.size || people.hit) {
       this.stats.hits++;
-      this.hud.hitmarker(anyKill);
-      this.sfx.hitTick(anyKill);
+      this.hud.hitmarker(anyKill || people.kill);
+      this.sfx.hitTick(anyKill || people.kill);
     }
     // gunfire alerts zombies; walls muffle it (Lane B, iteration 08: a slab between storeys muffles it more). Task
     // office-seamless-20261029 (ENGINE): 3D distance, x0.35 per slab between the storeys (ai/brain.ts hearingMuffle); no
@@ -3095,16 +3116,23 @@ export class Game {
     const up = new THREE.Vector3().crossVectors(right, fwd).normalize();
     const o: Vec3 = {x: origin.x, y: origin.y, z: origin.z};
     const L = this.levels, props = this.layout.props, trench = this.layout.trench.floorY;
+    // (task studio-market-rework-20261108-074144-01, lane COMBAT: + the market's people, their own volumes)
     const res = resolveMelee(o, meleeRayDirs(fwd, right, up, def.melee.rays), def.range,
-      this.zombies.map(z => ({id: z, alive: z.brain.alive, x: z.brain.x, y: z.brain.y, z: z.brain.z, volumes: z.hitVolumes})),
+      [...this.zombies.map(z => ({id: z as EnemyActor | MarketCombatant, alive: z.brain.alive, x: z.brain.x, y: z.brain.y, z: z.brain.z, volumes: z.hitVolumes})), ...this.marketCombat.meleeTargets()],
       (ro, rd, max) => raycastWorld(L, props, ro, rd, max, trench),
       (ro, rd, maxT) => this.damage.corpseHit(this.zombies, ro, rd, maxT));
     if (!res) { this.logMelee({kind: 'miss'}); return; } // a clean miss: only the swing's rustle
     this.damage.beginShot(); // one wound / tear group per swing
     const point = new THREE.Vector3(res.point.x, res.point.y, res.point.z), dir = new THREE.Vector3(res.dir.x, res.dir.y, res.dir.z);
     const wound = {damage: 24, pellet: false, weapon: def.id}; // wound / gore sizing of one rifle round
-    if (res.kind === 'enemy') {
-      const z = res.target;
+    if (res.kind === 'enemy' && this.marketCombat.isCombatant(res.target)) {
+      // (lane COMBAT) a market person: the blade's damage once (its confirm / flinch / hostility / ragdoll inside)
+      const killed = this.marketCombat.meleeHit(res.target, meleeDamage(def, res.part), res.part, point, dir, def.id);
+      this.hud.hitmarker(killed);
+      this.sfx.hitTick(killed);
+      this.logMelee({kind: 'person', part: res.part, t: +res.t.toFixed(3), damage: meleeDamage(def, res.part), killed, id: res.target.id});
+    } else if (res.kind === 'enemy') {
+      const z = res.target as EnemyActor;
       this.damage.hitZombie(z, point, dir, res.part, wound);
       const killed = z.brain.damage(meleeDamage(def, res.part), this.player.x, this.player.z, this.player.y, {stagger: false});
       z.hitFlash = 1;
@@ -3314,6 +3342,22 @@ export class Game {
     this.sfx.hurt();
     this.cancelUse('hit');
     return resolved;
+  }
+
+  /**
+   * Task studio-market-rework-20261108-074144-01 (lane COMBAT): a hostile survivor's round reaching the player from (fromX, fromZ) — the
+   * ENEMY hit (`hit.enemy`) through the one pipeline like a zombie's claw (the enemy x2 once, armour, the injury save, wear), with the
+   * same directional feedback as any hit from somewhere (HUD direction, shake, hurt cue, an item in use knocked away).
+   */
+  gunshotPlayer(hit: PlayerHit, fromX: number, fromZ: number): ResolvedHit {
+    return this.blastPlayer(hit, fromX, fromZ);
+  }
+
+  /** (lane COMBAT) Someone else's muzzle flash lights the scene (the player's muzzle light, when the player is not firing this instant). */
+  npcMuzzleLight(at: THREE.Vector3): void {
+    if (this.muzzleT > 0.02) return;
+    this.muzzleLight.position.copy(at);
+    this.muzzleT = 0.05;
   }
 
   /** Task track1-siren-blightbelly-20261031 (lane BLIGHT): an enemy killed by a Blightbelly's blast — the normal kill bookkeeping (stats, death cue, ragdoll). */

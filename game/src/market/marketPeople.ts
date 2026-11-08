@@ -11,8 +11,11 @@
 //    and the props); people keep apart from each other and step away from the player (the player is never pushed); the parked
 //    train's car and the aprons in front of its platform doors are a solid keep-out for them (trainKeepout), and no spot / route
 //    through it is ever chosen.
-//  - NOT ENEMIES: a separate list, never in game.zombies — so never hit-tested, damaged, counted in kill memory / clear counts,
-//    lured by lights, alerted by gunshots, given growls / attacks, shoved by the physics walkers or carried as train cargo.
+//  - NOT ENEMIES: a separate list, never in game.zombies — so never counted in kill memory / clear counts, lured by lights, alerted by
+//    gunshots, given growls / zombie attacks, shoved by the physics walkers or carried as train cargo.
+//  - Task studio-market-rework-20261108-074144-01 (lane COMBAT): they CAN be attacked (market/combat/marketCombat.ts: the player's
+//    bullets / knife through their own hit volumes; one successful attack or a theft turns the settlement hostile). Once hostile the combat
+//    system drives everyone (`takeover`: this calm frame stands aside), removes the fled (`remove`) and reuses `settle` for collision.
 //  - LAZY MODEL: the cast file is a level-only lazy model (sectionModelKeys: only a layout with `market` asks for it); the people are
 //    spawned in the section build (before the loading-screen warm-up, which therefore compiles them); teardown removes them.
 //  - SEEDED: looks / posts / initial spots come from the station seed on this system's own hash streams (no game / generator RNG
@@ -94,8 +97,10 @@ export interface MarketPeopleHost {
   atmosphere?: {markShadows(root: THREE.Object3D, cast: boolean): void} | null;
 }
 
-interface Trader { stall: MarketStall; actor: HumanActor; postYaw: number; rand: () => number; swapT: number }
+interface Trader { id: string; stall: MarketStall; actor: HumanActor; postYaw: number; rand: () => number; swapT: number }
 interface Resident {
+  /** (lane COMBAT) the person's id in the hostility record ('resident:<index>'). */
+  id: string;
   index: number; actor: HumanActor; rand: () => number; speed: number;
   state: 'idle' | 'walk';
   /** Spot index it idles at / walks to. */
@@ -124,6 +129,8 @@ export class MarketPeople {
   readonly counts = {built: 0, paths: 0, pathFails: 0, arrivals: 0, replans: 0, greetings: 0};
   /** Optional: called when a greeting starts (the trade lane may hook audio). */
   onGreet: ((stallId: MarketStallId) => void) | null = null;
+  /** Task studio-market-rework-20261108-074144-01 (lane COMBAT): true = the combat system drives every person this frame (hostile). */
+  takeover: (() => boolean) | null = null;
 
   constructor(readonly host: MarketPeopleHost) {}
 
@@ -138,6 +145,19 @@ export class MarketPeople {
 
   /** Every person (traders first). */
   get people(): HumanActor[] { return [...this.traders.map(t => t.actor), ...this.residents.map(r => r.actor)]; }
+
+  /** Task studio-market-rework-20261108-074144-01 (lane COMBAT): every person with its record id (traders 'trader:<stall>', residents 'resident:<i>'). */
+  get roster(): {id: string; actor: HumanActor; stall?: MarketStallId}[] {
+    return [...this.traders.map(t => ({id: t.id, actor: t.actor, stall: t.stall.id})), ...this.residents.map(r => ({id: r.id, actor: r.actor}))];
+  }
+
+  /** (lane COMBAT) A person leaves the settlement for good (fled): out of the scene and the lists. */
+  remove(actor: HumanActor): void {
+    const t = this.traders.findIndex(x => x.actor === actor), r = this.residents.findIndex(x => x.actor === actor);
+    if (t < 0 && r < 0) return;
+    if (t >= 0) this.traders.splice(t, 1); else this.residents.splice(r, 1);
+    actor.dispose();
+  }
 
   // ---------------------------------------------------------------------------------------------------------------------
   // Trade lane hooks
@@ -181,7 +201,7 @@ export class MarketPeople {
       const rand = mulberry32(hashString(`market-trader:${stall.id}`, seed));
       actor.play(rand() < 0.6 ? 'Talk' : 'Idle', 0);
       this.add(actor);
-      this.traders.push({stall, actor, postYaw: actor.yaw, rand, swapT: 4 + rand() * 8});
+      this.traders.push({id: `trader:${stall.id}`, stall, actor, postYaw: actor.yaw, rand, swapT: 4 + rand() * 8});
     });
     // residents start at distinct seeded spots, each with its own remaining dwell
     const order = this.spots.map((_, i) => i);
@@ -192,7 +212,7 @@ export class MarketPeople {
       const actor = new HumanActor(W.build(cast.residents[i]), rand());
       const s = this.spots[order[i]];
       actor.x = s.x; actor.z = s.z; actor.y = s.y; actor.yaw = modelYaw(s.yaw);
-      const r: Resident = {index: i, actor, rand, speed: actor.walkSpeed * (0.9 + rand() * 0.14), state: 'idle', spot: order[i], timer: 0, path: null, wp: 0, checkT: 0, checkX: s.x, checkZ: s.z};
+      const r: Resident = {id: `resident:${i}`, index: i, actor, rand, speed: actor.walkSpeed * (0.9 + rand() * 0.14), state: 'idle', spot: order[i], timer: 0, path: null, wp: 0, checkT: 0, checkX: s.x, checkZ: s.z};
       this.arrive(r, true);
       this.add(actor);
       this.residents.push(r);
@@ -326,8 +346,29 @@ export class MarketPeople {
   // ---------------------------------------------------------------------------------------------------------------------
   // Frame
 
+  /**
+   * One walker's collision after its step: out of the train keep-out, out of walls / props (height-aware circle), feet on the floor.
+   * (Task studio-market-rework-20261108-074144-01, lane COMBAT: shared with the hostile people's motion.)
+   */
+  settle(a: HumanActor): void {
+    const h = this.host, R = MARKET_PEOPLE.radius;
+    this.pushOut(a);
+    [a.x, a.z] = resolveCircle(h.levels, h.propIndex, a.x, a.z, R, a.y, MARKET_PEOPLE.height);
+    a.y = groundOf(h.levels, a.x, a.z, a.y);
+  }
+
+  /** (lane COMBAT) A path between two feet points (no ladder links), clear of the train keep-out; null when none. */
+  route(ax: number, ay: number, az: number, bx: number, by: number, bz: number): Waypoint[] | null {
+    const path = this.host.pathfinder.find(ax, az, bx, bz, 0.34, MARKET_PEOPLE.maxExpand, {ay, by, noLinks: true});
+    this.counts.paths++;
+    if (path && path.length && this.routeClear(ax, az, ay, path)) return path;
+    this.counts.pathFails++;
+    return null;
+  }
+
   frame(dt: number): void {
     if (!this.market || dt <= 0) return;
+    if (this.takeover?.()) return; // (lane COMBAT: hostile — the combat system moves / animates everyone)
     const h = this.host, P = MARKET_PEOPLE, pl = h.player;
     this.tick++;
     const speeds = this.residents.map(r => this.stepResident(r, dt));
@@ -344,9 +385,7 @@ export class MarketPeople {
       if (d < min && Math.abs(pl.y - a.y) < 1) {
         if (d > 1e-4) { a.x += dx / d * (min - d); a.z += dz / d * (min - d); } else a.x += min;
       }
-      this.pushOut(a);
-      [a.x, a.z] = resolveCircle(h.levels, h.propIndex, a.x, a.z, P.radius, a.y, P.height);
-      a.y = groundOf(h.levels, a.x, a.z, a.y);
+      this.settle(a);
     }
     // traders: at their posts; face a customer in front of the counter; alternate talking / idling
     for (const t of this.traders) {

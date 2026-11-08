@@ -174,6 +174,9 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       search: () => sfx.search(), eat: () => { for (const k of ['chips', 'chocolate', 'beans', 'noodles', 'other']) sfx.eat(k); },
       drink: () => { for (const k of ['cola', 'water', 'juice', 'other']) sfx.drink(k); }, death: () => sfx.death(), win: () => sfx.win(),
       impact: () => { for (const s of ['concrete', 'tile', 'metal', 'wood', 'flesh', 'glass', 'sheet'] as const) { ctx.currentTime += 1; sfx.impact(3, 1, 3, s); } },
+      // task studio-market-rework-20261108-074144-01 (lane COMBAT): a hostile survivor's shot / reload — the player's own gun clips, positional
+      npcShot: () => { for (const k of ['rifle', 'shotgun', 'pistol'] as const) { ctx.currentTime += 1; sfx.npcShot(k, 3, 1.4, 3); } },
+      npcReload: () => { for (const k of ['rifle', 'shotgun', 'pistol'] as const) { ctx.currentTime += 1; sfx.npcReload(k, 3, 1.4, 3, 2, 4); } },
       hitConfirm: () => { ctx.currentTime += 1; sfx.hitConfirm(3, 1, 3); ctx.currentTime += 1; sfx.shot('pistol'); sfx.hitConfirm(70, 1, 3, z); },
       // Iteration 12 (AUDIO): flashlight battery + flare
       cough: () => { ctx.currentTime += 1; sfx.cough(); }, // gas-mask-roof feedback: the player's cough
