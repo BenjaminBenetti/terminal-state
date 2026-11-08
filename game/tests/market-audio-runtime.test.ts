@@ -117,6 +117,9 @@ describe('market audio: the calm crowd\'s murmur', () => {
     for (const p of r.people) p.mode = 'calm';
     r.run(MARKET_SOUNDS.tick + 0.05);
     expect(r.chatter.at(-1)!.length).toBe(1);
+    for (const p of r.people) p.mode = 'drink'; // any calm-time mode another system adds (a bar patron's) still murmurs
+    r.run(MARKET_SOUNDS.tick + 0.05);
+    expect(r.chatter.at(-1)!.length).toBe(1);
     r.teardown();
     expect(r.stops).toEqual([MARKET_SOUNDS.teardownFade]);
     const n = r.chatter.length;

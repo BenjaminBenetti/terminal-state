@@ -7,10 +7,10 @@
 //  - cash(): ONE subtle register cue — the trade's success commit calls it (market/trade/tradeSystem.ts TradeSystem.done: a successful
 //    sell / buy, Confirm or Ctrl+click alike); never a preview / quote / refusal / cancel / theft (those never reach the commit).
 //  - CHATTER: every `tick` s the calm people near the player (market/marketPeople.ts roster; calm = the settlement is not hostile and the
-//    person's combat record, if any, is alive and calm) are grouped (greedy: the nearest ungrouped person and everyone within `groupRadius`
-//    m on its storey) — a group of at least `minPeople` is a murmur at its centroid's head height, its level sqrt(n / full) (more people,
-//    louder; capped at 1) with an edge fade at the range, the nearest `voices` groups; a group within `barRadius` of a bar post (layout v3's
-//    'drink' spots / a 'bar' stall's trader) murmurs with the BAR take. The levels sum to at most `totalCap`. Sfx.crowdChatter turns the
+//    person's combat record, if any, is alive, neither hiding nor alarmed: HIDING_MODES / ALARMED_MODES) are grouped (greedy: the nearest
+//    ungrouped person and everyone within `groupRadius` m on its storey) — a group of at least `minPeople` is a murmur at its centroid's
+//    head height, its level sqrt(n / full) (more people, louder; capped at 1) with an edge fade at the range, the nearest `voices` groups;
+//    a group within `barRadius` of a bar post (layout v3's 'drink' spots / a 'bar' stall's trader) murmurs with the BAR take. The levels sum to at most `totalCap`. Sfx.crowdChatter turns the
 //    groups into at most three positional loops on the ambient bus (own-shot ducking, pause mute). HOSTILE: no calm people — every channel
 //    fades (the murmur DUCKS out; the screams / grunts take over). Dead / hiding / gone people never count. Teardown / leaving the level:
 //    Sfx.stopCrowd. Other levels: nothing.
@@ -40,6 +40,8 @@ export const MARKET_SOUNDS = {
 
 /** Combat modes in which a person is HIDING (market/combat/marketCombat.ts; the PEOPLE lane's refuge hiding): silent. */
 export const HIDING_MODES: ReadonlySet<string> = new Set(['hide', 'hidden', 'hiding', 'cower', 'cowering']);
+/** Combat modes of an ALARMED person (panicking / fleeing / fighting): never part of the calm murmur. Any other live mode counts as calm. */
+export const ALARMED_MODES: ReadonlySet<string> = new Set(['panic', 'flee', 'draw', 'engage', 'move', 'cover', 'reload']);
 
 /** The Sfx surface this needs (audio/sfx.ts). */
 export interface MarketSfx {
@@ -147,10 +149,11 @@ export class MarketSounds implements MarketAudioApi {
 
   frame(dt: number): void {
     if (!this.market) return;
-    this.clock += Math.max(0, Number.isFinite(dt) ? dt : 0);
+    const d = Math.max(0, Number.isFinite(dt) ? dt : 0);
+    this.clock += d;
     this.startDue();
     this.follow();
-    this.tickT += dt;
+    this.tickT += d;
     if (this.tickT >= MARKET_SOUNDS.tick) {
       this.tickT = 0;
       this.counts.ticks++;
@@ -241,7 +244,7 @@ export class MarketSounds implements MarketAudioApi {
     const pts: (Pt & {d: number})[] = [];
     for (const r of roster) {
       const rec = this.record(r.id);
-      if (rec && (rec.state !== 'alive' || rec.mode !== 'calm')) continue;
+      if (rec && (rec.state !== 'alive' || HIDING_MODES.has(rec.mode) || ALARMED_MODES.has(rec.mode))) continue;
       const a = rec?.actor ?? r.actor;
       if (![a.x, a.y, a.z].every(Number.isFinite)) continue;
       const d = Math.hypot(a.x - P.x, a.y - P.y, a.z - P.z);
