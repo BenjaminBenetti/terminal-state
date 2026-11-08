@@ -16,7 +16,8 @@ import {LEVELS} from '../src/levels/registry';
 import type {StationLayout} from '../src/gen/stationTypes';
 
 installCanvasShim(false);
-const L = LEVELS.market.generate('main', {levelSeed: 77}) as StationLayout;
+// (task studio-market-rework-20261108-074144-01: layout version 1's look; version 2's is tests/market-settlement-look.test.ts)
+const L = LEVELS.market.generate('main', {levelSeed: 77, layoutVersion: 1}) as StationLayout;
 
 describe('the Survivor Market look', () => {
   it('the builder draws the market finishes (walls / roof / plywood / deck), arch-owned for impacts; the platform keeps its slab', () => {

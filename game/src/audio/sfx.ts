@@ -1487,6 +1487,36 @@ export class Sfx {
   // ---------------------------------------------------------------------------------------
   // World sounds (positional)
 
+  /**
+   * Task studio-market-rework-20261108-074144-01 (lane COMBAT): a hostile survivor's gunshot at a world point — the SAME shot take as the
+   * player's own gun of that kind (WEAPON_SHOT_CUES), positional (distance, occlusion, reverb send), never dropped (pri 2). It never
+   * starts the player's hit-confirm window (shotAt is the player's own shot only).
+   */
+  npcShot(kind: WeaponSoundKind, x: number, y: number, z: number): void {
+    const v = this.voice({at: {x, y, z}, ref: 3.2, rolloff: 0.9, send: 0.9, pri: 2, maxDist: 120, occMax: 0.75});
+    const map = WEAPON_SHOT_CUES[kind] ?? WEAPON_SHOT_CUES.rifle;
+    this.play(v, map.cue, {rate: rnd(0.96, 1.04) * map.rate, jitter: 0, gain: map.gain});
+    if (kind === 'shotgun') this.play(this.voice({at: {x, y, z}, ref: 2, rolloff: 1.1, send: 0.25, pri: 1, maxDist: 35}), 'shotgunPump', {delay: 0.42});
+  }
+
+  /**
+   * (lane COMBAT) A hostile survivor's reload at a world point, `seconds` long: the player's reload cues of that kind, positional (the
+   * magazine out / in and the charging handle; a shotgun's shells one by one, then the pump).
+   */
+  npcReload(kind: WeaponSoundKind, x: number, y: number, z: number, seconds: number, shells = 1): void {
+    const at = {x, y, z}, o = {at, ref: 1.8, rolloff: 1.2, send: 0.2, pri: 1, maxDist: 30};
+    if (kind === 'shotgun') {
+      const n = Math.max(1, Math.min(8, shells)), step = seconds / (n + 1);
+      for (let i = 0; i < n; i++) this.play(this.voice(o), 'shellInsert', {delay: step * (i + 0.6), jitter: 0.05});
+      this.play(this.voice(o), 'shotgunPump', {delay: Math.max(0, seconds - 0.35)});
+      return;
+    }
+    const rate = kind === 'pistol' ? 1.25 : 1;
+    this.play(this.voice(o), 'rifleMagOut', {delay: 0.05, rate});
+    this.play(this.voice(o), 'rifleMagIn', {delay: seconds * 0.6, rate});
+    this.play(this.voice(o), 'rifleCharge', {delay: Math.max(0, seconds - 0.3), rate: kind === 'pistol' ? 1.35 : 1});
+  }
+
   /** Bullet impact at a world point. */
   impact(x: number, y: number, z: number, surface: Surface): void {
     if (!this.live || !this.take('impact')) return;

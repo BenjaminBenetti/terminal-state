@@ -47,6 +47,9 @@ export const ICONS: Record<IconKey, string> = {
   // a fuse cartridge lying along X (ceramic body, end caps, blade contacts)
   reactorKey: S(`<rect x="4" y="9" width="20" height="14" rx="4"/><circle cx="9" cy="16" r="2.2" fill="${DARK}" opacity="0.55"/><circle cx="29" cy="16" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="38" cy="16" r="5"/><circle cx="38" cy="16" r="1.8" fill="${DARK}" opacity="0.5"/><path d="M42 14.5h18v3h-3v3h-3v-3h-3v3h-3v-3h-6z"/>`),
   fuseCartridge: S(`<rect x="15" y="8" width="34" height="16" rx="3"/><rect x="11" y="7" width="6" height="18" rx="1.5" opacity="0.75"/><rect x="47" y="7" width="6" height="18" rx="1.5" opacity="0.75"/><rect x="3" y="14" width="9" height="4"/><rect x="52" y="14" width="9" height="4"/><rect x="24" y="12" width="16" height="8" fill="${DARK}" opacity="0.3"/>`),
+  // task studio-market-rework-20261108-074144-01 (lane TRADE): Rail Ties — a 2 x 2 bundle of tie offcuts seen end-on-ish, two steel straps
+  // (the HUD glyph style; the 3D icon is the code-built bundle, world/railTiesModel.ts)
+  railTies: S(`<rect x="8" y="5" width="47" height="10" rx="1"/><rect x="8" y="17" width="47" height="10" rx="1"/><path d="M8 15h47M31.5 5v22" stroke="${DARK}" stroke-width="1.4" opacity="0.6"/><path d="M12 9h14M36 10h15M13 21h12M37 22h14" stroke="${DARK}" stroke-width="0.9" opacity="0.4"/><rect x="16" y="3.5" width="4" height="25" rx="0.8" opacity="0.7"/><rect x="43" y="3.5" width="4" height="25" rx="0.8" opacity="0.7"/>`),
 };
 
 /** Iteration 12 (LIGHT): small square HUD icons for the light panel (battery meter, flare count). */

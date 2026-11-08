@@ -18,7 +18,14 @@
 // A backpack is valued EMPTY (the trade rules refuse a bag with contents: market/trade/stalls.ts).
 //
 // Values are integer hundredths of a tie ("cents"), so every price is exact integer arithmetic (market/trade/stalls.ts rounds buys up,
-// sells down). The reactor restart parts (kind 'part') have no trade value at all.
+// sells down). The reactor restart parts (kind 'part') have no trade value at all; nor have Rail Ties themselves (kind 'currency').
+//
+// Task studio-market-rework-20261108-074144-01 (lane TRADE), GEAR PRICES. User: "gear prices are two low, with this price level a chest
+// armor is only a little more than 4 cans of beans. Lets go bump chest armor up to 72 rail ties, and move other gear items up to match,
+// They should be similar to the guns, which have a good price." VALUE.gear is retuned so a fresh armor vest retails at exactly 72 ties and
+// every other piece rises by its own stats into the guns' range (knife 42 .. rifle 113): hard hat 37, work boots 55, work gloves 57, chest
+// rig 61, gas mask 70 (+ its fitted filter), armor vest 72, backpack 78, airtank 28 empty .. 100 full (its air still priced per second).
+// Guns, food, medicine, ammo and supplies are unchanged; condition (wear / filter / air / rounds) still prices in through this one path.
 import {ITEMS, type ItemDef} from '../../items/items';
 import {WEAPONS, type WeaponDef} from '../../weapons/weapons';
 import {CALIBERS, type Caliber} from '../../items/calibers';
@@ -40,13 +47,17 @@ export const GAS_FILTER_ID = 'gas_filter';
 /** The value model's tuning (ties). */
 export const VALUE = {
   /** Ties per FULL stack of an item valued by its stack size (no stats of its own): ammo, flares, crafting materials … */
-  stackTies: {ammo: 90, throwable: 60, material: 60, supply: 40, consumable: 30, gear: 20, weapon: 40} as Readonly<Record<Exclude<ItemKind, 'part'>, number>>,
+  stackTies: {ammo: 90, throwable: 60, material: 60, supply: 40, consumable: 30, gear: 20, weapon: 40} as Readonly<Record<Exclude<ItemKind, 'part' | 'currency'>, number>>,
   /** A consumable's worth per point of what it restores (survival 0-100 scale; drains cost a little), per battery refill, per limb treated. */
   consumable: {heal: 0.35, food: 0.3, water: 0.3, drain: 0.15, recharge: 10, limb: 12},
   /** A weapon: base + sustained damage (damage x pellets / interval) x perDps; its loaded rounds are priced on top. */
   weapon: {base: 30, perDps: 0.25},
-  /** Gear: base + its stats (armor fraction, pocket, bag slot, +speed, -spread, -handling time, a mask's face piece); air per second. */
-  gear: {base: 12, armor: 120, pocket: 4, bagSlot: 2.5, speed: 300, spread: 150, handling: 150, mask: 20, airPerSecond: 0.12},
+  /**
+   * Gear: base + its stats (armor fraction, pocket, bag slot, +speed, -spread, -handling time, a mask's face piece); air per second.
+   * (task studio-market-rework-20261108-074144-01, lane TRADE: was base 12, armor 120, pocket 4, bagSlot 2.5, speed 300, spread / handling
+   * 150, mask 20 — the armor vest retails at 72 now; air per second unchanged: it is a resource, like a spare filter)
+   */
+  gear: {base: 24, armor: 465, pocket: 9, bagSlot: 5.5, speed: 600, spread: 200, handling: 200, mask: 46, airPerSecond: 0.12},
   /** One second of gas-mask filter (a spare filter = FILTER_LIFE_S of it). */
   filterPerSecond: 0.24,
   /** One unit (a quarter tank) of the train's fuel. */
@@ -61,10 +72,13 @@ const pos = (v: number | undefined) => Math.max(0, v ?? 0);
 const neg = (v: number | undefined) => Math.max(0, -(v ?? 0));
 const toCents = (ties: number) => Math.max(1, Math.round(ties * CENTS));
 
-/** Whether an item can be traded at all: a known item that is not a progression part (the reactor restart key / fuse cartridges). */
+/**
+ * Whether an item can be traded at all: a known item that is not a progression part (the reactor restart key / fuse cartridges) and not
+ * the currency itself (Rail Ties pay for goods; they are never bought or sold for ties).
+ */
 export function isTradeable(itemId: string): boolean {
   const d = ITEMS[itemId];
-  return !!d && d.kind !== 'part';
+  return !!d && d.kind !== 'part' && d.kind !== 'currency';
 }
 
 /** The rarity factor of an item from its loot pool's weights (1 when it is in no pool: shop-only / level-specific finds). */
@@ -97,15 +111,15 @@ function gearTies(g: GearSpec): number {
     + pos(1 - (g.spreadMult ?? 1)) * k.spread + pos(1 - (g.handlingMult ?? 1)) * k.handling + (g.filterLife ? k.mask : 0);
 }
 
-const stackRule = (d: ItemDef) => VALUE.stackTies[d.kind as Exclude<ItemKind, 'part'>] / Math.max(1, d.stackMax);
+const stackRule = (d: ItemDef) => VALUE.stackTies[d.kind as Exclude<ItemKind, 'part' | 'currency'>] / Math.max(1, d.stackMax);
 
 /**
  * The intrinsic value of ONE unit, in cents: a weapon with an EMPTY magazine, a gas mask with NO filter charge, an EMPTY airtank, armor
- * undamaged, a backpack empty. 0 for anything that cannot be traded (unknown items, the reactor restart parts).
+ * undamaged, a backpack empty. 0 for anything that cannot be traded (unknown items, the reactor restart parts, Rail Ties).
  */
 export function baseCents(itemId: string): number {
   const d = ITEMS[itemId];
-  if (!d || d.kind === 'part') return 0;
+  if (!d || !isTradeable(itemId)) return 0;
   let ties: number;
   if (d.kind === 'weapon' && d.weaponId && WEAPONS[d.weaponId]) ties = VALUE.weapon.base + dps(WEAPONS[d.weaponId]) * VALUE.weapon.perDps;
   else if (d.kind === 'gear' && d.gear) ties = gearTies(d.gear);

@@ -1,10 +1,12 @@
 // Task studio-survivor-market-20261108-005807-01 (lane TRADE): RAIL TIES — the survivor market's currency (user decision): literally
-// reclaimed railroad track ties (wooden sleepers), NOT coins, scrip or printed chits. Short name "ties". A run balance only (the wallet,
-// market/trade/wallet.ts): no inventory item, no weight, no track-harvesting, no bulk sleeper handling. Shown in the trade view (and at
-// most a small "· N ties" tail on a stall's [E] prompt), never on the HUD.
+// reclaimed railroad track ties (wooden sleepers), NOT coins, scrip or printed chits. Short name "ties".
+// Task studio-market-rework-20261108-074144-01 (lane TRADE): now a PHYSICAL ITEM (items/railTies.ts `rail_ties`, stack 1000) carried in the
+// inventory like any stack — paid and received only through market/trade/payment.ts; no hidden balance, nothing on the HUD. The trade
+// view (and a small "· N ties" tail on a stall's [E] prompt) show the ties you carry.
 //
 // TIE_GLYPH: the small track-tie mark next to every amount (an inline SVG glyph in the style of the HUD's silhouette icons, ui/icons.ts):
 // a weathered timber sleeper with its two steel tie plates and spike heads. UI iconography, not a texture.
+export {RAIL_TIES_ID, RAIL_TIES_STACK} from '../../items/railTies';
 
 export const RAIL_TIES = {
   /** The currency's name (headings, help text). */

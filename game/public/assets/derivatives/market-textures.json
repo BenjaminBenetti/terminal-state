@@ -183,6 +183,68 @@
     "format": "jpeg"
    }
   },
+  "market-container-rib": {
+   "use": "Survivor Market layout version 2: the shipping-container exteriors (tinted per container paint)",
+   "subject": "the galvanized corrugated steel sheet of the roof source (call 302) turned a quarter turn: vertical ribs, as up a shipping container wall; tileable",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 302,
+    "session": "01a1b8e6-cdc4-7781-b119-5e2dd894a6ca",
+    "requested": "2026-11-08T02:04:55.994591Z",
+    "finished": "2026-11-08T02:05:31.852217Z",
+    "seconds": 35.9
+   },
+   "prompt": {
+    "file": "corrugated-roof.txt",
+    "sha256": "d76e15a20d4be1c55bd91797d2c09f55eb998ab7d1ad79300a0dc5404ed38f01"
+   },
+   "source": {
+    "file": "codex-302-corrugated-roof-exec-a111f722-e628-43e4-ba35-ab78749cbc60.png",
+    "sha256": "55aceb0bd0e97371392f744f06ea6d4dd3de09d2afc53e2fba5c2c6bd175d94a",
+    "bytes": 3315009,
+    "width": 1254,
+    "height": 1254
+   },
+   "recipe": {
+    "rotate": {
+     "degrees": 90,
+     "clockwise": true
+    },
+    "resize": {
+     "width": 1024,
+     "height": 1024,
+     "kernel": "lanczos3",
+     "fit": "fill"
+    },
+    "colour": "sRGB, alpha removed",
+    "encode": {
+     "format": "jpeg",
+     "quality": 85,
+     "mozjpeg": true,
+     "chromaSubsampling": "4:2:0",
+     "metadata": "stripped"
+    }
+   },
+   "tileCheck": {
+    "seamLR": 19.3,
+    "interiorLR": 8.1,
+    "seamTB": 12,
+    "interiorTB": 8,
+    "note": "mean absolute grey difference (0..255) across the wrap seams vs between interior neighbour rows / columns"
+   },
+   "spanM": {
+    "u": 2,
+    "v": 2
+   },
+   "output": {
+    "url": "assets/textures/market/market-container-rib.jpg",
+    "bytes": 232153,
+    "sha256": "96da2ec6295e8a2ee3211399ae7059b7cff05ba91f820a3d0a2bb0d789b3539c",
+    "width": 1024,
+    "height": 1024,
+    "format": "jpeg"
+   }
+  },
   "market-tarp": {
    "use": "Survivor Market: the stall awnings (patched canvas)",
    "subject": "patched canvas tarpaulin, faded olive / rust orange with sewn-on salvaged fabric patches and stitching; flat, tileable",

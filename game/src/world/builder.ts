@@ -66,6 +66,7 @@ import {registerReactorArchVisuals} from './reactor/archVisuals'; // task reacto
 import {buildWasteVisuals} from './reactor/wasteVisuals'; // task reactor-expansion-20261101 (lane WASTE): the waste repository's look
 import {SkywaysArch} from './skywaysArch'; // task studio-skyways-level-20261106-054448 (lane VIEW): the Skyways finishes + atrium roofs
 import {MarketArch} from './marketArch'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market's corrugated / salvaged finishes
+import {TRACK_SLEEPER} from './railTiesModel'; // task studio-market-rework-20261108-074144-01 (lane TRADE): the sleeper's size, shared with the Rail Ties model
 
 class Accum {
   pos: number[] = [];
@@ -641,7 +642,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // Sleepers (instanced, every track of every bed), one instanced mesh per trim chunk.
   {
     const m4 = new THREE.Matrix4();
-    const sleeperGeo = new THREE.BoxGeometry(0.24, 0.14, 2.5);
+    const sleeperGeo = new THREE.BoxGeometry(TRACK_SLEEPER.w, TRACK_SLEEPER.h, TRACK_SLEEPER.len); // (0.24 x 0.14 x 2.5 m; the Rail Ties model derives from it)
     const byChunk = new Map<string, THREE.Matrix4[]>();
     for (const t of layout.trenches) {
       const per = Math.floor((t.x1 - t.x0) / 0.65);
