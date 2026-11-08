@@ -38,6 +38,9 @@ export interface MarketDisplaySlot extends MarketPoint {
   /** Usable width (along yaw's right axis) / depth of the surface (m). */
   w: number;
   d: number;
+  /** (lane LAYOUT, layout v2) Free height above the surface (m) and the layout.props index of the fixture it belongs to. */
+  clear?: number;
+  host?: number;
 }
 
 /** A place a resident idles / sits / works at (walkable floor, never the trench, the parked train's footprint or a counter). */

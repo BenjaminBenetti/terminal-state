@@ -3,22 +3,22 @@
 // furnished layout. Pure and deterministic.
 //
 // A stall's displays are the real surfaces of its display fixtures (counter tops, shelf tiers, plank shelving, the medicine cabinet's
-// shelves, the gun rack's cradle shelf, table tops): the same surfaces the loot / physics code knows for those kinds (items/lootLayout.ts
-// holderSurfaces; a plain fixture's box top), in world space after the upper storeys were lifted — the WARES lane stands the stall's
-// real, owned stock there. Spots: version 1's rule (clear, flat floor of their storey, nudged to the nearest clear cell of their area
+// shelves, the gun shop's felt display bench): the same item-collision surfaces the loot / physics code knows for those kinds
+// (items/lootLayout.ts holderSurfaces of an empty-keyed holder; a solid fixture's box top), in world space after the upper storeys were
+// lifted, each with its free height (`clear`) and its fixture (`host`), nearest the stall's customer spot first — the WARES lane stands the
+// stall's real, owned stock there (market/wares/slots.ts: the first ones it shows). Spots: version 1's rule (clear, flat floor of their storey, nudged to the nearest clear cell of their area
 // within 1.5 m, else dropped), storeys 0 and 1 only (the residents never climb the rooftop ladders).
 
 import type {Rng} from '../../../core/rng';
 import {PROP_DEFS, SHELF_TIER_Y, type PropPlacement} from '../../props';
 import {holderSurfaces, type SurfaceHolder, type SurfaceOptions} from '../../../items/lootLayout';
 import {isLootHolderKind} from '../../../items/loot';
-import {GUN_RACK_SHELF_Y} from '../../mall/kinds';
 import type {Grid} from '../../grid';
 import type {StationLayout} from '../../stationTypes';
 import {MARKET_STALLS, type MarketDisplaySlot, type MarketLayout, type MarketSpot, type MarketStall, type MarketStallId} from '../marketTypes';
 import {MARKET_POPULATION, marketStandOk} from '../spots';
 import type {SettleCarve} from './carve';
-import {SURF_GUN_RACK, SURF_TOP, type DisplaySource, type SettleAnchors} from './dress';
+import {SURF_TOP, type DisplaySource, type SettleAnchors} from './dress';
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
@@ -28,11 +28,10 @@ function surfaceOptions(): SurfaceOptions {
   return {shelf: {tierY: SHELF_TIER_Y, w: sh.w, d: sh.d, h: sh.h}};
 }
 
-/** A display fixture's surface in its prop frame (y above its base; x along its width, z toward its front), or null. */
-export function displaySurface(p: PropPlacement, surface: number): {y: number; x0: number; x1: number; z0: number; z1: number} | null {
+/** A display fixture's surface in its prop frame (y above its base; x along its width, z toward its front; its free height), or null. */
+export function displaySurface(p: PropPlacement, surface: number): {y: number; x0: number; x1: number; z0: number; z1: number; clear: number} | null {
   const def = PROP_DEFS[p.kind];
-  if (surface === SURF_TOP) return {y: def.h + 0.002, x0: -def.w / 2 + 0.06, x1: def.w / 2 - 0.06, z0: -def.d / 2 + 0.06, z1: def.d / 2 - 0.06};
-  if (surface === SURF_GUN_RACK) return {y: GUN_RACK_SHELF_Y + 0.002, x0: -def.w / 2 + 0.12, x1: def.w / 2 - 0.12, z0: -Math.min(0.1, def.d / 2 - 0.03), z1: Math.min(0.1, def.d / 2 - 0.03)};
+  if (surface === SURF_TOP) return {y: def.h + 0.002, x0: -def.w / 2 + 0.06, x1: def.w / 2 - 0.06, z0: -def.d / 2 + 0.06, z1: def.d / 2 - 0.06, clear: 0.5};
   if (!isLootHolderKind(p.kind)) return null;
   return holderSurfaces(p.kind as SurfaceHolder, def, surfaceOptions())[surface] ?? null;
 }
@@ -44,7 +43,8 @@ export function displaySlotOf(layout: StationLayout, src: DisplaySource): Market
   const s = displaySurface(p, src.surface);
   if (!s) return null;
   const cx = (s.x0 + s.x1) / 2, cz = (s.z0 + s.z1) / 2, c = Math.cos(p.rot), sn = Math.sin(p.rot);
-  return {x: r3(p.x + cx * c + cz * sn), z: r3(p.z - cx * sn + cz * c), y: r3(p.y + s.y), level: p.level ?? 0, yaw: r3(p.rot), w: r3(s.x1 - s.x0), d: r3(s.z1 - s.z0)};
+  return {x: r3(p.x + cx * c + cz * sn), z: r3(p.z - cx * sn + cz * c), y: r3(p.y + s.y), level: p.level ?? 0, yaw: r3(p.rot), w: r3(s.x1 - s.x0), d: r3(s.z1 - s.z0),
+    clear: r3(Math.min(0.6, s.clear)), host: src.prop};
 }
 
 /** The nearest clear stand point of `area` within `r` cells of (x, z) (cell centres; the point itself first), or null. */
@@ -68,7 +68,10 @@ export function settleRecord(layout: StationLayout, sc: SettleCarve, anchors: Se
     const d = anchors.stalls.find(s => s.id === id);
     if (!d) continue;
     const y = base(d.level);
-    const displays = d.displays.map(src => displaySlotOf(layout, src)).filter((q): q is MarketDisplaySlot => !!q);
+    // nearest the customer spot first (the counter tops, the side shelving, then the back wall), ties by fixture / height
+    const far = (q: MarketDisplaySlot) => Math.hypot(q.x - d.front.x, q.z - d.front.z, q.y - (y + 1.6));
+    const displays = d.displays.map(src => displaySlotOf(layout, src)).filter((q): q is MarketDisplaySlot => !!q)
+      .sort((p, q) => far(p) - far(q) || (p.host ?? 0) - (q.host ?? 0) || p.y - q.y);
     stalls.push({
       id, name: names[id], area: d.area,
       counter: {...d.counter, x: r3((d.counter.x0 + d.counter.x1) / 2), z: r3((d.counter.z0 + d.counter.z1) / 2), y, level: d.level},

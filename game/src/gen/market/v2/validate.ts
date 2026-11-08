@@ -18,13 +18,19 @@ import {doorwayIssues} from '../../doorways';
 import {playerTrainPlacement} from '../../playerTrain';
 import {dropInLadderOpening, excuseDesignedRailGaps} from '../../reactor/pathsGen';
 import type {StationLayout} from '../../stationTypes';
+import {isLootHolderKind} from '../../../items/loot';
+import {MARKET_EMPTY_KEY} from '../dress';
 import {MARKET_STALLS} from '../marketTypes';
 import {MARKET_POPULATION, marketStandOk} from '../spots';
 import {SETTLE} from './frame';
 
 export const SETTLE_LEVEL_RULES: LevelRules = {minLevels: 3, overlapRoles: [], maxRiser: 0.19, minFlightWidth: 1.5};
-/** Fewest display surfaces a stall shows its stock on; how far (m) a display may lie from walkable floor of its storey. */
-export const SETTLE_DISPLAY = {min: 4, reach: 1.3} as const;
+/**
+ * Fewest display surfaces a stall shows its stock on; how far (m) a display may lie from walkable floor of its storey; the board length
+ * (m, summed widths) within `customerReach` of the customer's eye at the counter (market/wares/slots.ts WARES.reach); the solid display
+ * fixtures.
+ */
+export const SETTLE_DISPLAY = {min: 4, reach: 1.3, customerReach: 2.6, nearWidth: 5.0, solidTops: ['gunDisplay'] as readonly string[]} as const;
 
 export function settleIssues(layout: StationLayout): string[] {
   const issues: string[] = [];
@@ -91,10 +97,24 @@ export function settleIssues(layout: StationLayout): string[] {
     if (-Math.cos(s.trader.yaw) * (s.front.z - s.trader.z) <= 0) issues.push(`stall ${s.id} trader faces away`);
     const disp = s.displays ?? [];
     if (disp.length < SETTLE_DISPLAY.min) issues.push(`stall ${s.id}: ${disp.length} displays`);
+    // enough of them within the customer's reach (the wares' Steal aim: market/wares/slots.ts WARES.reach, from the eye at the counter):
+    // the summed board length there holds the ~18 stacks a stall shows
+    // (from any clear standing point on the customer's side of the counter: the shop floor in front of it, its doorway)
+    const eye = s.front.y + 1.6, gS = levels[s.front.level].grid, stand: [number, number][] = [];
+    for (let y = a.y - 1; y <= a.y + a.h; y++) for (let x = a.x - 1; x <= a.x + a.w; x++) {
+      if (!gS.inBounds(x, y) || gS.area[gS.idx(x, y)] !== s.area) continue;
+      const [wx, wz] = gS.center(x, y);
+      if (side(wz) === side(s.front.z) && marketStandOk(gS, wx, wz)) stand.push([wx, wz]);
+    }
+    const nearW = disp.filter(d => stand.some(([x, z]) => Math.hypot(d.x - x, d.z - z, d.y - eye) <= SETTLE_DISPLAY.customerReach)).reduce((n, d) => n + d.w, 0);
+    if (nearW < SETTLE_DISPLAY.nearWidth) issues.push(`stall ${s.id}: ${nearW.toFixed(2)} m of display within the customer's reach`);
     for (const [k, d] of disp.entries()) {
-      // on a real fixture of this shop (inside its box, between its base and top)
-      const host = layout.props.find(p => p.area === s.area && (p.level ?? 0) === d.level && Math.abs(d.x - p.x) <= p.hx + 1e-3 && Math.abs(d.z - p.z) <= p.hz + 1e-3 && d.y >= p.y - 1e-3 && d.y <= p.y + p.h + 0.01);
-      if (!host) { issues.push(`stall ${s.id} display ${k} not on a fixture`); continue; }
+      // on a real item-collision surface of this shop: its `host` fixture (an empty-keyed loot holder or a solid display top), the slot
+      // inside its box, between its base and top, with free height above it
+      const host = d.host !== undefined ? layout.props[d.host] : undefined;
+      if (!host || host.area !== s.area || (host.level ?? 0) !== d.level || Math.abs(d.x - host.x) > host.hx + 1e-3 || Math.abs(d.z - host.z) > host.hz + 1e-3 || d.y < host.y - 1e-3 || d.y > host.y + host.h + 0.01) { issues.push(`stall ${s.id} display ${k} not on its fixture`); continue; }
+      if (!(isLootHolderKind(host.kind) ? host.purpose === MARKET_EMPTY_KEY : SETTLE_DISPLAY.solidTops.includes(host.kind))) issues.push(`stall ${s.id} display ${k} on a ${host.kind} (not an item surface)`);
+      if (!((d.clear ?? 0) >= 0.1)) issues.push(`stall ${s.id} display ${k} without free height`);
       const g = levels[d.level].grid;
       let near = false;
       const r = Math.ceil(SETTLE_DISPLAY.reach / CELL);

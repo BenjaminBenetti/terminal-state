@@ -233,7 +233,8 @@ export function carveSettlement(k: Kit, f: SettleFrame, rng: Rng): SettleCarve |
   backSlots.forEach((r, i) => {
     const u = backUse.get(i) ?? {use: 'storage' as ContainerUse};
     const wide = u.use === 'shop' || u.use === 'workshop';
-    container(r, 0, 'N', wide ? (u.use === 'shop' ? r.w - 2 : Math.min(6, r.w - 2)) : u.use === 'bunks' ? 3 : 2, u.use, 'back', back, {wide, ...(u.stall ? {stall: u.stall} : {}), label: u.use === 'workshop' ? 'Workshop' : u.use === 'bunks' ? 'Bunk room' : undefined});
+    // (a shop's wide shopfront leaves a cell of wall at each side inside: its side shelving stands there)
+    container(r, 0, 'N', wide ? (u.use === 'shop' ? r.w - 4 : Math.min(6, r.w - 2)) : u.use === 'bunks' ? 3 : 2, u.use, 'back', back, {wide, ...(u.stall ? {stall: u.stall} : {}), label: u.use === 'workshop' ? 'Workshop' : u.use === 'bunks' ? 'Bunk room' : undefined});
   });
 
   // --- 6. Storey 1: catwalks, upper containers (homes / closed), bridges ------------------------------------------------------------

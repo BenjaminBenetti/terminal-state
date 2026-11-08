@@ -53,8 +53,8 @@ export interface SettleAnchors {
   uses: {kind: UseKind; x: number; z: number; level: number; yaw: number; area: number}[];
 }
 
-/** Box-top display surface (a counter / table top) and the gun rack's lower cradle shelf (record.ts). */
-export const SURF_TOP = -1, SURF_GUN_RACK = -2;
+/** A solid fixture's box top as a display surface (the gun shop's felt bench; record.ts). */
+export const SURF_TOP = -1;
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const WALL_ROT: Record<Side, number> = {N: 0, S: Math.PI, W: Math.PI / 2, E: -Math.PI / 2};
@@ -62,8 +62,11 @@ const OPP: Record<Side, Side> = {N: 'S', S: 'N', E: 'W', W: 'E'};
 
 /** Holder fixtures and their exposed display surfaces (indices into items/lootLayout.ts holderSurfaces) the stalls show stock on. */
 const SHELF_SURFACES: Readonly<Partial<Record<PropKind, readonly number[]>>> = {
-  shelf: [1, 2, 3], outdoorsPlankShelving: [0, 1, 2], medCabinet: [1, 2, 3], shopCounter: [0],
+  shelf: [0, 1, 2], outdoorsPlankShelving: [0, 1, 2], medCabinet: [1, 2, 3], shopCounter: [0],
 };
+/** Solid display fixtures whose box top is the surface (their static collider's top: wares rest on it). Never a decor box with no item
+ *  collision inside (the gun rack's cradle): the rack stands there as the trade's look only. */
+const SOLID_TOPS: ReadonlySet<PropKind> = new Set(['gunDisplay']);
 
 /** A container's local frame: u along its opening wall (world +x), v depth inward from the opening wall; world <-> local. */
 interface Frame { c: ContainerCarve; U: number; V: number; x: (u: number) => number; z: (v: number) => number; back: Side; face: Side; out: number; base: number }
@@ -139,8 +142,7 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     const idx = layout.props.indexOf(p);
     const sh = SHELF_SURFACES[p.kind];
     if (sh) for (const s of sh) out.push({prop: idx, surface: s});
-    else if (p.kind === 'gunRack') out.push({prop: idx, surface: SURF_GUN_RACK});
-    else out.push({prop: idx, surface: SURF_TOP});
+    else if (SOLID_TOPS.has(p.kind)) out.push({prop: idx, surface: SURF_TOP});
   };
   const W = (r: Rect) => ({x0: r.x * CELL, z0: r.y * CELL, x1: (r.x + r.w) * CELL, z1: (r.y + r.h) * CELL});
   /** The lane-side sign / awning band over an opening (world, the wall face toward the lane) at height y above the storey floor. */
@@ -157,7 +159,7 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     const a = area(c.area), F = frameOf(c, sc.bases);
     a.label = names[c.stall];
     a.noFloorLoot = true;
-    const d = c.row === 'front' ? walkIn(F, a, c.stall) : counterFront(F, a, c.stall);
+    const d = walkIn(F, a, c.stall);
     if (!d) return fail(`${c.stall} ${c.row} shop ${why}`);
     anchors.stalls.push(d);
     light(a, F.x(F.U / 2), F.z(F.V * 0.55), S.cont - 0.02, {power: 0.9});
@@ -165,11 +167,14 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     boardOver(c, names[c.stall].split(' — ')[0], STALL_SIGNS[c.stall].style, ontoOf(c), 2.42);
   }
 
-  /** Counter run along u at depth v (front toward the opening), flush with one side, the trader's >= 1.5 m way in at the other end. */
-  function counterRun(F: Frame, a: Area, v: number, modules: number, gapLeft: boolean): {props: PropPlacement[]; x0: number; x1: number; u0: number; u1: number} | null {
+  /**
+   * Counter run along u at depth v (front toward the opening): the trader's >= 1.5 m way in at one end, flush with the other side wall
+   * (`centred`: the run as near the middle as that way in allows — a shop's counter, its customer spot central between the side shelving).
+   */
+  function counterRun(F: Frame, a: Area, v: number, modules: number, gapLeft: boolean, centred = false): {props: PropPlacement[]; x0: number; x1: number; u0: number; u1: number} | null {
     const cw = PROP_DEFS.shopCounter.w, runW = modules * cw;
     if (F.U - runW < 1.5 - 1e-6) return null;
-    const u0 = gapLeft ? F.U - runW : 0;
+    const u0 = centred ? (gapLeft ? 1.5 : F.U - runW - 1.5) : gapLeft ? F.U - runW : 0;
     const props: PropPlacement[] = [];
     for (let k = 0; k < modules; k++) {
       const p = put(a, 'shopCounter', F.x(u0 + cw / 2 + k * cw), F.z(v), F.out, {doorOk: true});
@@ -179,7 +184,7 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     return {props, x0: F.x(u0), x1: F.x(u0 + runW), u0, u1: u0 + runW};
   }
   function stallRecord(F: Frame, a: Area, id: MarketStallId, run: NonNullable<ReturnType<typeof counterRun>>, vCounter: number, vTrader: number, vFront: number, displays: DisplaySource[]): StallDressed2 {
-    const cd = PROP_DEFS.shopCounter.d, uc = (run.u0 + run.u1) / 2;
+    const cd = PROP_DEFS.shopCounter.d, uc = Math.max(run.u0 + 0.45, Math.min(run.u1 - 0.45, F.U / 2));
     const za = F.z(vCounter - cd / 2), zb = F.z(vCounter + cd / 2);
     // the trader faces the opening (the customer): forward (-sin yaw, -cos yaw) points out of the container
     const yaw = F.face === 'S' ? Math.PI : 0;
@@ -192,7 +197,7 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
   function tradeKit(id: MarketStallId): {back: PropKind[]; side: PropKind; extra: PropKind[]} {
     switch (id) {
       // (back-wall kinds are all <= 0.5 m deep: one cell row, the trader's two rows in front of it stay clear)
-      case 'gun': return {back: ['gunRack', 'outdoorsPlankShelving'], side: 'outdoorsPlankShelving', extra: ['crate', 'handToolbox']};
+      case 'gun': return {back: ['gunRack', 'outdoorsPlankShelving'], side: 'gunDisplay', extra: ['crate', 'handToolbox']};
       case 'medical': return {back: ['medCabinet', 'shelf', 'medCabinet'], side: 'shelf', extra: ['ivPole', 'oxygenCart']};
       case 'fuel': return {back: ['outdoorsPlankShelving', 'shelf', 'outdoorsPlankShelving'], side: 'outdoorsPlankShelving', extra: ['gasCylinderCart', 'portableGenerator']};
       case 'general': return {back: ['outdoorsPlankShelving', 'outdoorsPlankShelving', 'outdoorsPlankShelving'], side: 'outdoorsPlankShelving', extra: ['basketStack', 'newspaperBundles']};
@@ -200,17 +205,23 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
       case 'scrap': return {back: ['outdoorsPlankShelving', 'shelf', 'outdoorsPlankShelving'], side: 'shelf', extra: ['airCompressor', 'crate']};
     }
   }
-  /** A walk-in shop (Market Lane, 4 m deep): customers 0-1.5 m (side shelving), counter 1.5-2.5 m, trader 2.5-3.5 m, back wall 3.5-4 m. */
+  /**
+   * A walk-in shop (4 m deep; a doorway on the Market Lane, a wide shopfront on the Back Lane): customers 0-1.5 m between the side
+   * shelving, the counter 1.5-2.5 m (the trader's way in at one end), the trader 2.5-3.5 m, the back wall's fixtures 3.5-4 m — every
+   * counter top and side board within the 2.6 m reach of the customer spot (market/wares/slots.ts WARES.reach).
+   */
   function walkIn(F: Frame, a: Area, id: MarketStallId): StallDressed2 | null {
     const kit = tradeKit(id), displays: DisplaySource[] = [];
-    const vCounter = 2.0, vTrader = 3.0, vFront = 1.1;
+    const vCounter = 2.0, vTrader = 3.0, vFront = 1.2;
     const gapLeft = rng.chance(0.5);
-    const run = counterRun(F, a, vCounter, 2, gapLeft);
+    const run = counterRun(F, a, vCounter, F.U >= 6.0 ? 3 : 2, gapLeft, true);
     if (!run) { why = `counter (${F.U} m) ${why}`; return null; }
     for (const p of run.props) displaysOf(p, displays);
-    for (const p of backRow(F, a, kit.back, 0.05, F.U - 0.05, 0.1, rng.chance(0.5))) if (p.kind !== 'coatRack') displaysOf(p, displays);
+    for (const p of backRow(F, a, kit.back, 0.05, F.U - 0.05, 0.1, rng.chance(0.5))) displaysOf(p, displays);
     // side shelving in the customer zone (both side walls), then the trade's floor props in the trader zone's free end
-    for (const side of ['L', 'R'] as const) displaysOf(sideProp(F, a, kit.side, side, 0.78), displays);
+    // (the gun shop: its felt bench on one side, ammo shelving on the other; a fixture that does not fit falls back to plank shelving)
+    const sides = id === 'gun' ? (rng.chance(0.5) ? [kit.side, 'outdoorsPlankShelving'] : ['outdoorsPlankShelving', kit.side]) as PropKind[] : [kit.side, kit.side];
+    (['L', 'R'] as const).forEach((side, k) => displaysOf(sideProp(F, a, sides[k], side, 0.78) ?? (sides[k] !== 'outdoorsPlankShelving' ? sideProp(F, a, 'outdoorsPlankShelving', side, 0.78) : null), displays));
     const free = gapLeft ? [0.1, run.u0 - 0.1] : [run.u1 + 0.1, F.U - 0.1];
     for (const k of kit.extra.slice(0, 1)) {
       const w = PROP_DEFS[k].w;
@@ -220,24 +231,6 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     if (displays.length < 4) { why = `${displays.length} displays (${F.U} m)`; return null; }
     return stallRecord(F, a, id, run, vCounter, vTrader, vFront, displays);
   }
-  /** A counter-fronted shop (Back Lane): entry 0-1 m, counter 1.1-1.9 m, trader 2-3 m, side shelving 2-3.4 m, back wall 3.5-4 m. */
-  function counterFront(F: Frame, a: Area, id: MarketStallId): StallDressed2 | null {
-    const kit = tradeKit(id), displays: DisplaySource[] = [];
-    const vCounter = 1.5, vTrader = 2.5, vFront = 0.6;
-    const modules = F.U >= 6.0 ? 3 : 2;
-    const gapLeft = rng.chance(0.5);
-    const run = counterRun(F, a, vCounter, modules, gapLeft) ?? counterRun(F, a, vCounter, 2, gapLeft);
-    if (!run) { why = `counter (${F.U} m) ${why}`; return null; }
-    for (const p of run.props) displaysOf(p, displays);
-    for (const p of backRow(F, a, kit.back, 0.05, F.U - 0.05, 0.1, rng.chance(0.5))) if (p.kind !== 'coatRack') displaysOf(p, displays);
-    // side fixture on the far side from the trader's way in (in the trader zone), the trade's floor prop by the other wall
-    displaysOf(sideProp(F, a, kit.side, gapLeft ? 'R' : 'L', 2.75), displays);
-    const k = kit.extra[0], w = PROP_DEFS[k].d;
-    put(a, k, F.x(gapLeft ? w / 2 + 0.05 : F.U - w / 2 - 0.05), F.z(3.0), gapLeft ? WALL_ROT.W : WALL_ROT.E);
-    if (displays.length < 4) { why = `${displays.length} displays (${F.U} m)`; return null; }
-    return stallRecord(F, a, id, run, vCounter, vTrader, vFront, displays);
-  }
-
   // --- 2. The other containers ----------------------------------------------------------------------------------------------------
   for (const c of sc.containers) {
     if (c.use === 'shop') continue;
