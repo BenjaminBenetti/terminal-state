@@ -40,17 +40,16 @@ const TRACE = [{x: 33.62, z: 78.26}, {x: 40, z: 77}] as const;
 const VERSIONS = [3, SKYWAYS_LAYOUT_VERSION] as const;
 
 /**
- * The budget: scene + flashlight-shadow draws over the trace sweep (2 positions x 12 yaws, every 30 deg). Measured on the lane's branch
- * (layout v3 = v4 for this seed at the time): worst 486, total 8,005 per version; the same harness before the fixes (no occlusion, the
- * coarse cohorts, untracked movers): worst 966 (yaw 330 at (40, 77)), total 12,447 — the east-facing (240-330 deg) views 680-966 ->
- * 330-486. A failure means the Skyways' submitted work grew: measure again (LL_SKYWAYS_CPU_OUT) and decide consciously before raising a
- * cap. Version 4 is the live generator (its programmes are being reworked): its caps carry headroom, the share cut is the invariant.
+ * The budget: scene + flashlight-shadow draws over the trace sweep (2 positions x 12 yaws, every 30 deg; the poses on their cell centres).
+ * Measured on the lane's branch (layout v3 = v4 for this seed then): worst 510, total 6,525 per version (rules off, with the new build's
+ * fine cohorts: 10,949). The same 24 views at the trace's exact coordinates on the code BEFORE the fixes: worst 975 (yaw 330 at (40, 77)),
+ * total 12,430; after: worst 523, total 6,942 — the east-facing (240-330 deg) views 557-975 -> 267-523. A failure means the Skyways'
+ * submitted work grew: measure again (LL_SKYWAYS_CPU_OUT) and decide consciously before raising a cap. Version 4 is the live generator
+ * (its building programmes are being reworked): its caps carry headroom and its cut is checked over the east-facing views together.
  */
 const BUDGET = {
-  3: {worst: 540, total: 8800},
-  4: {worst: 640, total: 10400},
-  /** The rules (occlusion + window rule + tracking) must remove at least this share of the rules-off draws on every east-facing view. */
-  eastCut: 0.25,
+  3: {worst: 560, total: 7200, eastCut: 0.25},
+  4: {worst: 640, total: 8200, eastCut: 0.2},
 } as const;
 
 /** The nearest open storey-2 floor cell centre to (x, z) within 6 m (the trace pose as generated; a reworked layout may move walls). */
@@ -125,7 +124,8 @@ describe('the REAL Skyways: render objects per view (scene + flashlight shadow p
 
   for (const v of VERSIONS) it(`layout v${v}: the trace sweep (storey 2, 2 positions x 12 yaws) within budget; the rules cut every east-facing view`, async () => {
     const S = await skywaysPerfScene(SEED, v);
-    let worst = 0, total = 0, offTotal = 0;
+    const B = BUDGET[v === 3 ? 3 : 4];
+    let worst = 0, total = 0, offTotal = 0, eastOn = 0, eastOff = 0;
     for (const t of TRACE) {
       const p0 = openNear(S, 2, t.x, t.z);
       expect(p0, `an open storey-2 cell near (${t.x}, ${t.z})`).not.toBeNull();
@@ -139,17 +139,22 @@ describe('the REAL Skyways: render objects per view (scene + flashlight shadow p
         out(`v${v} (${p.x.toFixed(2)}, ${p.z.toFixed(2)}) yaw ${d}: rules off ${off.scene.total} + ${off.shadow.total} = ${a} | on ${on.scene.total} + ${on.shadow.total} = ${b}; `
           + `slab ${c.slabCulled}, occluded ${c.occlusionCulled}, tracked hidden ${c.trackedCulled} / ${c.trackedCount}, air ${JSON.stringify(c.airStats.levels)}`);
         out(`    scene ${censusLine(on.scene)} | shadow ${censusLine(on.shadow)}`);
-        expect(b, `v${v} yaw ${d}`).toBeLessThanOrEqual(a); // the rules only remove work here (no other storey's glass in sight)
-        if (d >= 240 && d <= 330) expect(b, `v${v} yaw ${d} cut`).toBeLessThanOrEqual(a * (1 - BUDGET.eastCut));
+        // the rules only remove work unless another storey is seen through glass (then they draw it, correctly)
+        if (!c.airStats.levels.length) expect(b, `v${v} yaw ${d}`).toBeLessThanOrEqual(a);
+        if (d >= 240 && d <= 330) {
+          eastOn += b; eastOff += a;
+          if (v === 3) expect(b, `v${v} yaw ${d} cut`).toBeLessThanOrEqual(a * (1 - B.eastCut)); // (the frozen v3 layout: every view)
+        }
         worst = Math.max(worst, b);
         total += b;
         offTotal += a;
         perfDone(on);
       }
     }
-    out(`v${v}: worst ${worst}, total ${total} (rules off ${offTotal})`);
-    expect(worst).toBeLessThanOrEqual(BUDGET[v === 3 ? 3 : 4].worst);
-    expect(total).toBeLessThanOrEqual(BUDGET[v === 3 ? 3 : 4].total);
+    out(`v${v}: worst ${worst}, total ${total} (rules off ${offTotal}); east-facing ${eastOn} (rules off ${eastOff})`);
+    expect(eastOn).toBeLessThanOrEqual(eastOff * (1 - B.eastCut));
+    expect(worst).toBeLessThanOrEqual(B.worst);
+    expect(total).toBeLessThanOrEqual(B.total);
   }, 900_000);
 
   for (const v of VERSIONS) it(`layout v${v} oracle: no visible mesh culled (eye); nothing the rules hide is seen by the flashlight; no hidden mover's box shows`, async () => {

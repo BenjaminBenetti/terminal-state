@@ -81,12 +81,15 @@
 // through two panes across a street (a lobby from a bridge, a bridge from a lobby) was culled although visible (lane PERF's depth
 // oracle: 78 visible meshes hidden on 62 Skyways poses). With `slabs.windows` (Skyways: every glazed span, its storey and heights):
 //  - the sight rays (portal tiles, windows) also pass through the see rects' volumes (the glass, the street air);
-//  - WINDOW TILES: a span of a storey the eye is not on, in the frustum, inside the fog and in sight (samples along the span at its
-//    heights, nearest first; kept per eye position), makes its storey AIR-VISIBLE: every mesh of it is a candidate (no margin) and the
-//    slab planes + storey occlusion decide them exactly, as the mall's atrium-visible storeys; air-visible storeys seed the portal hops.
+//  - WINDOW TILES: a span of a storey the eye is not on, in the frustum, inside the fog and in sight (every cell along the span at four
+//    heights, just inside its face toward the eye; kept per eye position), makes its storey AIR-VISIBLE: every mesh of it is a candidate
+//    (no margin) and the slab planes + storey occlusion decide them exactly, as the mall's atrium-visible storeys; air-visible storeys
+//    seed the portal hops;
+//  - a mesh rising over the top storey's occlusion range (stair wells' walls up to the building tops, the atrium vaults: seen over the
+//    roofs through any glass) is never level-culled.
 // `everyStorey` (QA / tests): every storey a candidate, no portal / level rule at all (the upper bound the window rule is checked
-// against). And with occlusion data on a stack of <= LEGACY_STACK storeys (the Skyways' three; the mall / Reactor have more) a mesh
-// spanning several bands registers as an unlevelled entry (fog, slab planes, per-storey slices) instead of never being culled.
+// against). And on such a stack of <= LEGACY_STACK storeys (the Skyways' three) a mesh spanning several bands registers as an
+// unlevelled entry (fog, slab planes, per-storey slices) instead of never being culled. Without `slabs.windows` nothing here runs.
 
 import * as THREE from 'three';
 import {CELL, FLOOR, VOID, type Grid} from '../gen/grid';
@@ -406,7 +409,7 @@ export class LevelCuller {
   /** Per window tile: its sight result (1 / 0) for the eye position of stamp winSeeK (LevelCuller.posStamp). */
   private winSeeK = new Int32Array(0);
   private winSeeV = new Uint8Array(0);
-  /** See-through volumes of the sight rays (slabs.windows only): per column (CSR) the merged see intervals [y0, y1]. */
+  /** See-through volumes of the sight rays (slabs.windows only): per column (CSR) the [y0, y1] of every see rect over it. */
   private seeStart: Int32Array | null = null;
   private seeY = new Float64Array(0);
   /** Window tiles tested / seen and the air-visible storeys of the last update (Skyways; zeros elsewhere). */
@@ -1120,9 +1123,9 @@ export class LevelCuller {
         if (lo !== hi || b.max.y - b.min.y > 4.5) {
           // Iteration 08: never level-culled. Tall stacks: render with every level whose storey (base .. base + 4.5 m) it spans.
           const span = this.levels.length > LEGACY_STACK ? this.levels.filter(l => l.baseY <= b.max.y + 0.3 && l.baseY + 4.5 >= b.min.y).map(l => l.id) : [];
-          // Task studio-skywalk-variety (lane PERF): a small stack WITH occlusion data (the Skyways) keeps it as an unlevelled entry —
-          // fog, slab planes and per-storey slices decide it (never level-culled, as before)
-          if (!span.length && this.occl.length && this.levels.length <= LEGACY_STACK) { entry.occ = this.occlusionLevel(entry); this.entries.push(entry); return; }
+          // Task studio-skywalk-variety (lane PERF): a small stack WITH occlusion data and window tiles (the Skyways) keeps it as an
+          // unlevelled entry — fog, slab planes and per-storey slices decide it (never level-culled, as before)
+          if (!span.length && this.occl.length && this.winTiles.length) { entry.occ = this.occlusionLevel(entry); this.entries.push(entry); return; }
           if (!span.length || span.length === this.levels.length) { this.stats.uncullable++; return; }
           entry.levels = span; this.stats.multi++; if (this.occl.length) entry.occ = this.occlusionLevel(entry); this.entries.push(entry); return;
         }
