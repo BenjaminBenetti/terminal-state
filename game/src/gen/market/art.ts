@@ -6,11 +6,16 @@
 import {CELL} from '../grid';
 import type {StationLayout} from '../stationTypes';
 import {MARKET} from './frame';
+import {settleAwnings, settleFans} from './v2/art';
 
 /** A ceiling fan: hub centre (world), blade radius, the rod up to the ceiling, its storey and spin (rad / s; slow). */
 export interface MarketFan { x: number; y: number; z: number; r: number; rod: number; level: number; speed: number; phase: number }
 /** A stall awning: a sloped canvas from the wall over a stall opening (world: x span, the wall line z, its outward depth, heights). */
-export interface MarketAwning { x0: number; x1: number; z: number; depth: number; yWall: number; yEdge: number; stall: string }
+export interface MarketAwning {
+  x0: number; x1: number; z: number; depth: number; yWall: number; yEdge: number; stall: string;
+  /** Task studio-market-rework-20261108-074144-01: the direction (z) the canvas reaches out from the wall (layout version 2); absent = +1. */
+  dir?: 1 | -1;
+}
 
 /** Fan / awning dimensions (m). */
 export const MARKET_ART = {
@@ -27,6 +32,7 @@ const hash = (a: number, b: number) => {
 /** The fans of a market layout: a row down the square under the roof, one per under-deck room (under the soffit), two over the deck. */
 export function marketFans(layout: StationLayout): MarketFan[] {
   if (!layout.market) return [];
+  if (layout.market.v === 2) return settleFans(layout); // (task studio-market-rework-20261108-074144-01: the container settlement's)
   const out: MarketFan[] = [];
   const F = MARKET_ART.fan;
   const add = (x: number, z: number, ceil: number, level: number, hang: number) => {
@@ -53,6 +59,7 @@ export function marketFans(layout: StationLayout): MarketFan[] {
 export function marketAwnings(layout: StationLayout): MarketAwning[] {
   const m = layout.market;
   if (!m) return [];
+  if (m.v === 2) return settleAwnings(layout); // (task studio-market-rework-20261108-074144-01: the container settlement's)
   const A = MARKET_ART.awning;
   const out: MarketAwning[] = [];
   for (const s of m.stalls) {

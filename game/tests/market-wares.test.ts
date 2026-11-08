@@ -48,6 +48,10 @@ installCanvasShim(false);
 const SEEDS = [1, 42, 4242, 9001, 20261108];
 const layouts = new Map<number, StationLayout>();
 const layoutOf = (seed: number) => { let L = layouts.get(seed); if (!L) layouts.set(seed, (L = generateMarketLevel({levelSeed: seed}))); return L; };
+// (task studio-market-rework-20261108-074144-01, lane LAYOUT: the default market is layout version 2 now — the v1-surface cases below
+// generate layout version 1 explicitly, the rest run on the default)
+const layouts1 = new Map<number, StationLayout>();
+const layoutOf1 = (seed: number) => { let L = layouts1.get(seed); if (!L) layouts1.set(seed, (L = generateMarketLevel({levelSeed: seed, layoutVersion: 1}))); return L; };
 const H = (i: number): SlotRef => ({bar: 'hotbar', index: i});
 const P = (i: number): SlotRef => ({bar: 'pack', index: i});
 const near = (a: number, b: number, eps = 1e-6) => Math.abs(a - b) <= eps;
@@ -108,7 +112,7 @@ describe('market wares: where they are displayed', () => {
   it('v1: every stall shows on the real open surfaces of its own empty-keyed furniture — counter tops first, joined across the run\'s seam', () => {
     const prof = lootProfile('market');
     for (const seed of SEEDS) {
-      const L = layoutOf(seed);
+      const L = layoutOf1(seed);
       expect(L.market!.v).toBe(1);
       const hosts = vendorDisplayHosts(L);
       for (const s of L.market!.stalls) {
@@ -214,7 +218,7 @@ describe('market wares: the display plan', () => {
   it('the v1 gun counter takes a 0.98 m shotgun (the joined top) beside the lantern and the toolbox, plus its ammo', () => {
     const shotgun: ItemDims = {w: 0.98, d: 0.229, h: 0.095, shape: 'flat'}; // world/pickups.ts meshFor's shotgun-user.glb on its side
     for (const seed of SEEDS) {
-      const L = layoutOf(seed), s = L.market!.stalls.find(x => x.id === 'gun')!, surfaces = stallSurfaces(L, s);
+      const L = layoutOf1(seed), s = L.market!.stalls.find(x => x.id === 'gun')!, surfaces = stallSurfaces(L, s);
       const pk = planStall([{uid: 1, itemId: 'shotgun'}, {uid: 2, itemId: 'ammo_12ga'}, {uid: 3, itemId: 'ammo_12ga'}, {uid: 4, itemId: 'ammo_9mm'}],
         surfaces, id => (id === 'shotgun' ? shotgun : dims(id)));
       expect(pk.placed.has(1), `${seed}`).toBe(true);

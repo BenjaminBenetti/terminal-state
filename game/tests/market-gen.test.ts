@@ -1,6 +1,9 @@
 // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET's generator (gen/market) over a seed sample — every
 // station valid on its first attempts, the player's train docks at its platform, the six stalls and the residents' spots on clear floor
 // reachable from the train, the deck (storey 1) up its stair, the calm rules (no enemies / hordes / annexes / gas / free loot).
+// Task studio-market-rework-20261108-074144-01 (lane LAYOUT): this is LAYOUT VERSION 1 (gen/market/layoutVersion.ts: the stations a
+// player entered under the first market's build regenerate it forever), generated explicitly with layoutVersion 1; version 2 (the
+// container settlement, now the default) is tests/market-settlement.test.ts.
 import {describe, expect, it} from 'vitest';
 import {CELL, FLOOR} from '../src/gen/grid';
 import {levelDistance} from '../src/gen/levelGen';
@@ -21,7 +24,7 @@ import type {StationLayout} from '../src/gen/stationTypes';
 
 const SEEDS = [1, 2, 3, 42, 777, 4242, 9001, 123456, 0xdeadbeef, 20261108];
 const layouts = SEEDS.map(s => {
-  const L = generateMarketLevel({levelSeed: s});
+  const L = generateMarketLevel({levelSeed: s, layoutVersion: 1});
   return {seed: s, L, attempts: MARKET_GEN_STATS.attempts};
 });
 
@@ -40,7 +43,7 @@ describe('the Survivor Market generator', () => {
       expect([seed, marketIssues(L)]).toEqual([seed, []]);
       expect(attempts, `seed ${seed}`).toBeLessThanOrEqual(2);
     }
-    const again = generateMarketLevel({levelSeed: SEEDS[0]});
+    const again = generateMarketLevel({levelSeed: SEEDS[0], layoutVersion: 1});
     const sig = (L: StationLayout) => JSON.stringify({areas: L.areas, props: L.props, lights: L.lights, signs: L.signs, market: L.market, rails: L.rails});
     expect(sig(again)).toBe(sig(layouts[0].L));
     expect(MARKET_GEN_STATS.ms).toBeLessThan(400);
@@ -130,7 +133,7 @@ describe('the Survivor Market generator', () => {
     for (const s of SEEDS) {
       const gear = rollLevelGear(s, 'market', ['main']);
       expect(gear.main).toEqual([]);
-      const L = LEVELS.market.generate('main', {levelSeed: s, gear: gear.main});
+      const L = LEVELS.market.generate('main', {levelSeed: s, gear: gear.main, layoutVersion: 1});
       expect(L.pickups).toEqual([]);
     }
     expect(Object.values(SPAWN_PROFILES.market.contexts).filter(c => c.count[1] > 0).map(c => c.label)).toEqual([SPAWN_PROFILES.market.contexts.service!.label]);

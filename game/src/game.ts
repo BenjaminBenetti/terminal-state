@@ -147,6 +147,7 @@ import {installMarketTextures} from './world/marketTextures'; // task studio-sur
 import {installMarketVisuals} from './world/marketVisuals'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL)
 import {skywaysGardenModelKeysFor} from './world/skywaysGardens'; // (lane ARCH) the planters' foliage model
 import {SKYWAYS_LAYOUT_LANE, skywaysLayoutVersionFor} from './gen/skyways/layoutVersion'; // task studio-skyways-destinations-20261106-170011-01
+import {MARKET_LAYOUT_LANE, marketLayoutVersionFor} from './gen/market/layoutVersion'; // task studio-market-rework-20261108-074144-01 (lane LAYOUT)
 import {installSkywaysDestAudio} from './world/skywaysDestAudio'; // task skyways-destinations-20261106 (lane AUDIO): the destinations' location sounds
 import {installSkywaysMapRead} from './world/skywaysMapRead'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the directory boards' close-up read
 import {installMarketTrade, type TradeSystem} from './market/trade/tradeSystem';
@@ -806,9 +807,12 @@ export class Game {
   generateSection(key: SectionKey, run: RunState = this.run): StationLayout {
     this.lifecycleCounts.generate++;
     // (task studio-skyways-destinations-20261106-170011-01) a Skyways station regenerates with the layout version it was first built with
-    const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : undefined;
+    // (task studio-market-rework-20261108-074144-01, lane LAYOUT) so does a Survivor Market: a market entered under the first market's
+    // build keeps version 1 forever, an unvisited / new one builds the container settlement (gen/market/layoutVersion.ts)
+    const versionLane = key.level === 'skyways' ? SKYWAYS_LAYOUT_LANE : key.level === 'market' ? MARKET_LAYOUT_LANE : null;
+    const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : undefined;
     const layout = LEVELS[key.level].generate(key.section, {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {})}); // (campaign: the node's own seed)
-    if (layoutVersion !== undefined && run.laneStore(SKYWAYS_LAYOUT_LANE, key) === undefined) run.setLaneStore(SKYWAYS_LAYOUT_LANE, {v: layoutVersion}, key);
+    if (layoutVersion !== undefined && versionLane && run.laneStore(versionLane, key) === undefined) run.setLaneStore(versionLane, {v: layoutVersion}, key);
     const node = key.station ? run.node(key.station) : null;
     if (node) adoptStationName(layout, node.name); // campaign: the map's / save's name is the one on the signs and the HUD
     return layout;
