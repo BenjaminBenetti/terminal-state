@@ -125,6 +125,8 @@ describe('small-shop palettes on real Skyways layouts (versions 4, 3, 2)', () =>
       for (const f of w.wallFaces) {
         if (!f.finish.startsWith('skyways-shop-')) continue;
         const alongX = Math.abs(f.z0 - f.z1) < 1e-9, plane = alongX ? f.z0 : f.x0, s0 = alongX ? f.x0 : f.z0, s1 = alongX ? f.x1 : f.z1;
+        // (a sloped face — a flight's flank — goes to the builder's stair pseudo-level chunk at its midpoint: world/builder.ts STAIR_LEVEL)
+        if (f.slope) { const m = (s0 + s1) / 2; wallChunks.add(`S:${alongX ? Math.floor(m / CHUNK_M) : Math.floor(plane / CHUNK_M)},${alongX ? Math.floor(plane / CHUNK_M) : Math.floor(m / CHUNK_M)}:${f.level}`); continue; }
         for (let c = Math.floor(s0 / CHUNK_M); c * CHUNK_M < s1 - 1e-6; c++) wallChunks.add(`${f.level}:${alongX ? c : Math.floor(plane / CHUNK_M)},${alongX ? Math.floor(plane / CHUNK_M) : c}`);
       }
       for (const lv of L.levels) {

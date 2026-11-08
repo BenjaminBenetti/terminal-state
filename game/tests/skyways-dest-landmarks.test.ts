@@ -47,9 +47,7 @@ installCanvasShim(false);
 (ShimContext.prototype as unknown as {clip?: () => void}).clip ??= () => {};
 
 const PUB = (rel: string) => fileURLToPath(new URL('../public/' + rel, import.meta.url));
-/** Seeds whose landmark courts cover all six families (layout version 4, task studio-skywalk-variety-20261107-231448-01: 1: fountain,
- *  fig tree, orrery, dinosaur; 4: + geese; 8: + clock — the building programmes re-laid every map, so the covering seeds moved). */
-const SEEDS = [1, 4, 8];
+
 const HEROES = Object.values(LANDMARK_KIND);
 const rowOf = (kind: SkywaysDestKind) => SKYWAYS_DEST_PROPS[SKYWAYS_DEST_SPECS[kind].model!];
 
@@ -59,6 +57,19 @@ const gen = (seed: number): StationLayout => {
   if (!L) layouts.set(seed, (L = LEVELS.skyways.generate('main', {levelSeed: seed} as never)));
   return L;
 };
+/**
+ * Seeds whose landmark courts cover all six families: the first seeds (in order, from 1) each adding a family not yet covered
+ * (task studio-skywalk-variety-20261107-231448-01: the layout version 4 programmes re-lay every map — a scan keeps the fixture honest
+ * when generation moves; every family must still turn up within the first 24 seeds and each covering seed's courts pass every check).
+ */
+const SEEDS: number[] = (() => {
+  const missing = new Set<string>(SKYWAYS_LANDMARK_FAMILIES), out: number[] = [];
+  for (let s = 1; s <= 24 && missing.size; s++) {
+    const fams = (gen(s).skyways!.landmarks ?? []).map(m => m.family as string);
+    if (fams.some(f => missing.has(f))) { out.push(s); for (const f of fams) missing.delete(f); }
+  }
+  return out;
+})();
 const gridOf = (L: StationLayout, level: number): Grid => L.levels[level].grid;
 /** Sample points over a box (rotated by a quarter turn: hx / hz already world) or a disc. */
 function samples(x: number, z: number, hx: number, hz: number, disc: boolean): [number, number][] {
