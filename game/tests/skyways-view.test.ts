@@ -38,6 +38,9 @@ import {isArchFinish} from '../src/world/finishAt';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {SKYWAYS_PROP_MODELS} from '../src/assets/skywaysProps.generated';
 import {OFFICE_ASSETS} from '../src/assets/officeAssets';
+// (task studio-skywalk-variety-20261107-231448-01, lane DRESS) the small shops' palettes (the Mall's finish-row programs)
+import {SKYWAYS_SHOP_FLOOR_KEY, SKYWAYS_SHOP_WALL_KEY, skywaysShopFloorKey, skywaysShopWallKey} from '../src/world/skywaysShopFinish';
+import {mallSurfaceMaterial} from '../src/world/mallSurfaces';
 
 installCanvasShim(false);
 const SEEDS = [1, 2] as const;
@@ -93,7 +96,9 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
         // (its glass roof); the skylit skyway courts and the atrium courts take the court look: the warm floor, the timber slat
         // ceiling — their stand-ins here, no textures loaded; tests/skyways-arch-rework.test.ts covers the textured path)
         const roofed = L.skyways!.bridges.some(b => b.area === ar.id && b.roof), courtLook = a.rework && (cls === 'court' || (L.skyways!.skylights ?? []).some(s => s.area === ar.id));
-        if (cls === 'station' || cls === 'shop') expect(fk, `${ar.label} floor`).toBeNull();
+        // (task studio-skywalk-variety-20261107-231448-01, lane DRESS) a small shop's floor: its use's palette floor (world/skywaysShopFinish.ts)
+        if (cls === 'shop') { const p = a.shopPalette(ar.id); expect(fk, `${ar.label} floor`).toBe(p ? skywaysShopFloorKey(p) : null); }
+        else if (cls === 'station') expect(fk, `${ar.label} floor`).toBeNull();
         else if (roofed) expect(fk, `${ar.label} floor`).toBe('skyways-floor-pavers');
         else if (courtLook) expect(fk, `${ar.label} floor`).toBe('skyways-floor-court');
         else expect(fk, `${ar.label} floor`).toBe(FLOOR_OF[cls]);
@@ -120,7 +125,14 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
         // store's finish (never the Subway shop tile) — the flank faces of a two-level store's internal stair too (integration
         // 20261107-115426)
         if (cls === 'anchor') { expect(f.finish, 'a store wall').toMatch(/^skyways-anchor-wall-[a-z]+@/); expect(finishClass(f.finish)).not.toBeNull(); continue; }
-        if (f.finish === 'tileShop' || cls === 'station' || cls === 'shop') { expect(f.finish.startsWith('skyways-'), `${f.finish} ${cls}`).toBe(false); continue; }
+        // (task studio-skywalk-variety-20261107-231448-01, lane DRESS) a small storefront unit's walls take its use's palette, never the
+        // Subway shop tile (a shop area without a known use keeps the builder's rule)
+        if (cls === 'shop') {
+          const p = a.shopPalette(f.area);
+          if (p) { expect(f.finish, `${L.areas[f.area].label} wall`).toBe(skywaysShopWallKey(p)); expect(finishClass(f.finish)).not.toBeNull(); } else expect(f.finish.startsWith('skyways-'), `${f.finish} ${cls}`).toBe(false);
+          continue;
+        }
+        if (f.finish === 'tileShop' || cls === 'station') { expect(f.finish.startsWith('skyways-'), `${f.finish} ${cls}`).toBe(false); continue; }
         if (f.slope) { expect(['skyways-wall', 'skyways-boh']).toContain(f.finish); continue; }
         // (lane ARCH) a skylight coffer's well walls: the plain plaster of a light well
         const well = (L.skyways!.skylights ?? []).some(s => s.area === f.area && f.y0 >= s.ceilY - 0.02);
@@ -210,7 +222,13 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
     // (lane ARCH) + the rework's court / bridge finishes (textured or their stand-ins), the roof steel and the skylight sky
     const archKeys = [...used.keys()].filter(k => /^skyways-(tex-|floor-pavers|ceil-slats|skylight-sky|roof-steel)/.test(k));
     expect(archKeys.length).toBeLessThanOrEqual(8);
-    expect(used.size - anchorKeys.length - archKeys.length).toBeLessThanOrEqual(15);
+    // (lane DRESS) + the small shops' palettes: ONE wall and ONE floor material for every palette (the Mall's finish-row programs)
+    const shopKeys = [...used.keys()].filter(k => k.startsWith('skyways-shop-'));
+    expect(shopKeys.sort()).toEqual([SKYWAYS_SHOP_FLOOR_KEY, SKYWAYS_SHOP_WALL_KEY]);
+    expect(used.get(SKYWAYS_SHOP_WALL_KEY)).toBe(mallSurfaceMaterial('wall'));
+    expect(used.get(SKYWAYS_SHOP_FLOOR_KEY)).toBe(mallSurfaceMaterial('floor'));
+    for (const k of shopKeys) expect(finishClass(k), k).not.toBeNull();
+    expect(used.size - anchorKeys.length - archKeys.length - shopKeys.length).toBeLessThanOrEqual(15);
     expect(anchorKeys.length).toBeLessThanOrEqual(6 * (L.skyways!.anchors?.length ?? 0));
     for (const k of anchorKeys) expect(finishClass(k), k).not.toBeNull();
     const aw = anchorKeys.filter(k => k.startsWith('skyways-anchor-wall-')).map(k => used.get(k) as OfficeSurfaceMaterial);

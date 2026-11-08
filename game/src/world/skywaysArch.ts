@@ -45,8 +45,13 @@ import {buildSkylights, SKYLIGHT_SKY_KEY, skylightSkyMaterial, type SkylightStat
 import {skywaysArchSpan, skywaysArchTexture, skywaysTexturedMaterial, usesSkywaysArchTextures} from './skywaysArchTextures';
 import type {SkywaysArchTextureKey} from '../assets/skywaysArchTextures.generated';
 import type {SkywaysBridge} from '../gen/skyways/skywaysTypes';
-// (task studio-skywalk-variety-20261107-231448-01, lane DRESS) the small shops' interior palettes (by their use)
-import {skywaysShopFloorOf, skywaysShopPaletteOf, skywaysShopWallKey, skywaysShopWallSpec, type SkywaysShopPalette} from './skywaysShopFinish';
+// (task studio-skywalk-variety-20261107-231448-01, lane DRESS) the small shops' interior palettes (by their use), drawn by the Mall's
+// per-vertex finish-row programs (one wall + one floor material for every palette: no draw call added)
+import {
+  SKYWAYS_SHOP_FLOOR_KEY, SKYWAYS_SHOP_PALETTES, SKYWAYS_SHOP_PALETTE_IDS, SKYWAYS_SHOP_WALL_KEY, skywaysShopFloorKey, skywaysShopPaletteOf, skywaysShopRows,
+  skywaysShopWallKey, type SkywaysShopPalette,
+} from './skywaysShopFinish';
+import {MALL_SPAN, floorRow, mallSurfaceMaterial, wallRow, writeRow} from './mallSurfaces';
 
 // ---------------------------------------------------------------------------------------------
 // Styles (pure data)
@@ -136,8 +141,9 @@ export class SkywaysArch {
   /** (lane ARCH) bridge roof / skylight build stats (QA / tests). */
   bridgeRoofs: BridgeRoofStats[] = [];
   skylightStats: SkylightStats = {coffers: 0, panes: 0, meshes: 0, triangles: 0};
-  /** (lane DRESS) area id -> its small shop palette (null: the builder's rule), cached. */
+  /** (lane DRESS) area id -> its small shop palette (null: the builder's rule), cached; the palettes' finish rows are written once. */
   private readonly shopPal = new Map<number, SkywaysShopPalette | null>();
+  private shopRows = false;
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): SkywaysArch | null {
     return layout.skyways ? new SkywaysArch(layout, mats, levels) : null;
@@ -258,18 +264,32 @@ export class SkywaysArch {
     return p;
   }
 
+  /** (lane DRESS) Writes the palettes' rows into the Mall finish table (its reserved top rows; once per build). */
+  private writeShopRows(): void {
+    if (this.shopRows) return;
+    this.shopRows = true;
+    for (const p of SKYWAYS_SHOP_PALETTE_IDS) {
+      const r = skywaysShopRows(p), f = SKYWAYS_SHOP_PALETTES[p];
+      writeRow(r.wall, wallRow(f.wall));
+      writeRow(r.floor, floorRow(f.floor));
+    }
+  }
+
+  /** (lane DRESS) A small shop's wall key ('skyways-shop-wall|<row>': the Mall wall program, the palette's row per vertex), or null. */
   private shopWallKey(areaId: number): string | null {
     const p = this.shopPalette(areaId);
     if (!p) return null;
-    const key = skywaysShopWallKey(p);
-    return this.def(key, () => wallMaterial(this.mats, key, skywaysShopWallSpec(p)));
+    this.writeShopRows();
+    this.def(SKYWAYS_SHOP_WALL_KEY, () => mallSurfaceMaterial('wall'));
+    return skywaysShopWallKey(p);
   }
 
   private shopFloorKey(areaId: number): string | null {
     const p = this.shopPalette(areaId);
     if (!p) return null;
-    const f = skywaysShopFloorOf(p);
-    return this.def(f.key, () => floorMaterial(this.mats, f.key, f.kind, f.tint));
+    this.writeShopRows();
+    this.def(SKYWAYS_SHOP_FLOOR_KEY, () => mallSurfaceMaterial('floor'));
+    return skywaysShopFloorKey(p);
   }
 
   /** Register a lazily built material behind a key. */
@@ -439,7 +459,8 @@ export class SkywaysArch {
     // (lane ARCH) the textured finishes: their texture's real-world span; the skylight sky: unmapped
     for (const [t, k] of Object.entries(SKYWAYS_TEX_KEYS) as [SkywaysArchTextureKey, string][]) if (key === k) return skywaysArchSpan(t);
     if (key === SKYLIGHT_SKY_KEY) return {u: 1, v: 1};
-    if (key.startsWith('skyways-floor') || key.startsWith('skyways-anchor-floor') || key.startsWith('skyways-shop-floor')) return {u: OFFICE_FLOOR_SPAN, v: OFFICE_FLOOR_SPAN}; // (+ shop: lane DRESS)
+    if (key.startsWith('skyways-shop-')) return {u: MALL_SPAN, v: MALL_SPAN}; // (lane DRESS) the Mall programs' span
+    if (key.startsWith('skyways-floor') || key.startsWith('skyways-anchor-floor')) return {u: OFFICE_FLOOR_SPAN, v: OFFICE_FLOOR_SPAN};
     if (key.startsWith('skyways-ceil') || key.startsWith('skyways-anchor-ceil')) return {u: OFFICE_CEIL_SPAN, v: OFFICE_CEIL_SPAN};
     if (key === 'skyways-trim') return {u: 1, v: 1};
     return {u: OFFICE_WALL_SPAN, v: OFFICE_WALL_SPAN};
@@ -448,6 +469,7 @@ export class SkywaysArch {
   /** The material behind a skyways key (built on first use); undefined for any other key. */
   material(key: string): THREE.Material | undefined {
     if (!isSkywaysKey(key)) return undefined;
+    if (key.includes('|')) key = key.slice(0, key.indexOf('|')); // (lane DRESS) a finish-row key: its program's material
     let m = this.materials.get(key);
     if (!m) {
       const make = this.specs.get(key);
