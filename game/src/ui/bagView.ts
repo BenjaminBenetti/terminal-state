@@ -12,7 +12,9 @@
 // Task knife-windup-20261030 (lane SLOT): + the melee slot (~; melee weapons only, validated by the inventory), shown first.
 
 import {itemIconHtml} from './itemIcons';
-import {effectText, itemDef} from '../items/items';
+import {itemDef} from '../items/items';
+import {itemTip} from './itemTip'; // (task studio-ui-subway-maps-20261108-074144-01)
+import {hideTooltip, refreshTooltip, setTip, tipAttrs} from './tooltip';
 import {PACK_SIZE, type AnyRef, type Inventory, type ItemStack} from '../items/inventory';
 import {ICONS} from './icons';
 import {WEAPONS} from '../weapons/weapons';
@@ -62,6 +64,7 @@ export class BagView {
   hide(): void {
     this.cancelDrag();
     this.root?.classList.add('hidden');
+    hideTooltip(); // (task studio-ui-subway-maps-20261108-074144-01) the tooltip goes with the panel
   }
 
   private mount(): void {
@@ -196,8 +199,8 @@ export class BagView {
     const cell = (ref: AnyRef, st: ItemStack | null) => {
       const def = st ? itemDef(st.itemId) : null;
       const count = def ? (def.kind === 'weapon' ? (WEAPONS[def.weaponId!].melee ? '' : `<span class="count">${st!.mag}/${WEAPONS[def.weaponId!].magazine}</span>`) : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
-      const fx = def?.kind === 'consumable' ? effectText(def) : '';
-      const title = def ? ` title="${def.name}${fx ? ` — ${fx}` : ''}. Click to move it ${ref.bar === 'bag' ? 'to you' : 'into the backpack'} · drag to a slot"` : '';
+      // (task studio-ui-subway-maps-20261108-074144-01) the game's own tooltip (escaped: weapon names quote their nickname)
+      const title = st ? tipAttrs(itemTip(st, `Click to move it ${ref.bar === 'bag' ? 'to you' : 'into the backpack'} · drag to a slot`, {inv})) : '';
       const extra = ref.bar === 'pack' && ref.index >= PACK_SIZE ? ' gear-extra' : '';
       const sel = inv.selectedRef(); // SLOT: the melee slot while its weapon is drawn
       const held = ref.bar === sel.bar && ref.index === sel.index ? ' held' : '';
@@ -224,9 +227,10 @@ export class BagView {
     if (wear) {
       const worn = inv.worn('backpack');
       wear.disabled = !!worn;
-      wear.title = worn ? (isBagItem(worn.itemId) ? 'You are already wearing a backpack — put yours down first (6, then click)' : `You are wearing the ${itemDef(worn.itemId).name} — take it off first (Tab: gear)`) : 'Pick this backpack up and wear it (its contents stay inside)';
+      setTip(wear, {head: 'Wear it', hint: worn ? (isBagItem(worn.itemId) ? 'You are already wearing a backpack — put yours down first (6, then click)' : `You are wearing the ${itemDef(worn.itemId).name} — take it off first (Tab: gear)`) : 'Pick this backpack up and wear it (its contents stay inside)'});
     }
     const n = root.querySelector('.bv-note');
     if (n) { n.textContent = this.note; n.classList.toggle('refused', this.noteBad); }
+    refreshTooltip();
   }
 }

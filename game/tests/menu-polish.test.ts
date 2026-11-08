@@ -480,7 +480,7 @@ describe('item 6: one clean grid row per save slot', () => {
       expect(rows).toHaveLength(SAVE_SLOTS);
       for (const r of rows) {
         expect(r.elements.map(e => e.className)).toEqual(['mm-head', 'mm-info', 'mm-acts']);
-        for (const l of r.querySelectorAll('.mm-line')) expect(l.getAttribute('title') ?? (l as unknown as {title: string}).title).toBe(l.textContent);
+        for (const l of r.querySelectorAll('.mm-line')) expect(l.getAttribute('data-tip')).toBe(l.textContent); // (the game tooltip, no native title)
       }
       expect(m.dialog.querySelector('.mm-rows')!.classList.contains('mm-slots')).toBe(true);
       const name = rows[0].querySelector('.mm-line.mm-name')!;

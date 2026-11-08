@@ -39,6 +39,7 @@ import {canTravel, enableCheat, neighbors, reactorKnown, travelBlock, travelPlan
 import {DEV_GRANT_SEQUENCE, SequenceMatcher, digitOfCode} from '../items/devGrant';
 import {isTypingTarget} from '../player/input';
 import {seedToCode} from '../core/rng';
+import {hideTooltip, refreshTooltip, tipAttrs} from './tooltip'; // task studio-ui-subway-maps-20261108-074144-01
 
 /** The paper texture (runtime URL, relative like every other asset URL). */
 export const DEFAULT_PAPER_TEXTURE = 'assets/textures/paper-map.jpg';
@@ -581,8 +582,11 @@ export function renderInk(m: MapModel, net: SubwayNetwork, mode: MapMode, select
   // hit areas (>= 30 screen px across)
   o.push(`<g class="pm-hits">`);
   for (const s of m.stations) {
-    const label = `${s.node.name}, ${s.kind === 'maintenance' ? `${kindLabel(s.kind)} (${archetypeLabel(s.node.archetype)})` : archetypeLabel(s.node.archetype)}${s.current ? ', you are here' : s.adjacent ? ', one stop away' : s.can && mode === 'travel' ? ', visited' : ''}`;
-    o.push(`<circle class="pm-hit${s.can ? ' pm-can' : ''}" data-station="${esc(s.node.id)}" cx="${n1(s.p.x)}" cy="${n1(s.p.y)}" r="${n1(m.hitR)}"><title>${esc(label)}</title></circle>`);
+    const kindText = s.kind === 'maintenance' ? `${kindLabel(s.kind)} (${archetypeLabel(s.node.archetype)})` : archetypeLabel(s.node.archetype);
+    const status = s.current ? 'You are here' : s.adjacent ? 'One stop away' : s.can && mode === 'travel' ? 'Visited' : '';
+    const label = `${s.node.name}, ${kindText}${status ? `, ${status.toLowerCase()}` : ''}`;
+    // (task studio-ui-subway-maps-20261108-074144-01) the game's tooltip (no SVG <title>: a native tooltip outlived the closed map); the label stays the accessible name
+    o.push(`<circle class="pm-hit${s.can ? ' pm-can' : ''}" data-station="${esc(s.node.id)}" cx="${n1(s.p.x)}" cy="${n1(s.p.y)}" r="${n1(m.hitR)}" role="img" aria-label="${esc(label)}"${tipAttrs({head: s.node.name, lines: [kindText, status]})}></circle>`);
   }
   o.push(`</g></svg>`);
   return o.join('');
@@ -740,6 +744,7 @@ export class PaperMap {
   close(): void {
     if (!this.openFlag) return;
     this.openFlag = false;
+    hideTooltip(); // (task studio-ui-subway-maps-20261108-074144-01)
     this.detach();
     this.matcher.reset();
     this.selected = null;
@@ -996,7 +1001,7 @@ export class PaperMap {
     el.setAttribute('aria-label', 'Network map');
     el.setAttribute('tabindex', '-1');
     el.innerHTML = `<div class="pm-stage"><div class="pm-sheet"></div></div>
-      <header class="pm-bar"><b>Network map</b><span class="pm-mode"></span><span class="pm-tools"><button type="button" class="pm-zoom-out" aria-label="Zoom out" title="Zoom out (-)">−</button><button type="button" class="pm-zoom-in" aria-label="Zoom in" title="Zoom in (+)">+</button><button type="button" class="pm-fit" title="Zoom to the known stations (F)">Fit</button><button type="button" class="pm-whole" title="Show the whole map (Home)">Whole map</button><button type="button" class="pm-close" title="Close (Esc)">Close</button></span></header>
+      <header class="pm-bar"><b>Network map</b><span class="pm-mode"></span><span class="pm-tools"><button type="button" class="pm-zoom-out" aria-label="Zoom out"${tipAttrs({head: 'Zoom out (−)'})}>−</button><button type="button" class="pm-zoom-in" aria-label="Zoom in"${tipAttrs({head: 'Zoom in (+)'})}>+</button><button type="button" class="pm-fit"${tipAttrs({head: 'Zoom to the known stations (F)'})}>Fit</button><button type="button" class="pm-whole"${tipAttrs({head: 'Show the whole map (Home)'})}>Whole map</button><button type="button" class="pm-close"${tipAttrs({head: 'Close (Esc)'})}>Close</button></span></header>
       <aside class="pm-panel pm-hidden" aria-live="polite"></aside>
       <div class="pm-note pm-hidden"></div>
       <div class="pm-help">Drag to pan · wheel or + and − zoom · F fits the known stations · Home shows the whole map · arrows pick a station · Enter selects · Esc closes</div>
@@ -1045,6 +1050,7 @@ export class PaperMap {
     this.model = buildMapModel(st, this.mode, this.view.s, this.selected, this.focused, this.paperPositions(), !!this.args?.fuel);
     if (this.sheet) this.sheet.innerHTML = renderInk(this.model, st.network, this.mode, this.selected, this.focused, this.args?.fuel ?? null);
     this.applyTransform();
+    refreshTooltip(); // (task studio-ui-subway-maps-20261108-074144-01) a re-print replaced the hovered station: re-bind or hide
     const mode = this.root?.querySelector('.pm-mode');
     if (mode) {
       const here = st.network.nodes.find(n => n.id === st.current);

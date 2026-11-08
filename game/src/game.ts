@@ -58,6 +58,7 @@ import {meleeDamage, meleeRayDirs, resolveMelee} from './combat/melee'; // lane 
 import {DAMAGE_MATERIALS, propDamageSpec} from './damage/materials'; // lane KNIFE: blade-on-surface cue / chips
 import {Hud} from './ui/hud';
 import {InventoryUI} from './ui/inventoryUI';
+import {hideTooltip} from './ui/tooltip'; // task studio-ui-subway-maps-20261108-074144-01 (the game's own tooltip)
 import {Sfx, ambienceTypeFor, humEmitters, roomKindFor} from './audio/sfx';
 import {fanSources} from './audio/fanSound';
 import {ANNEX_GENSET, gensetModelKeysFor} from './assets/annexGenset';
@@ -2083,6 +2084,7 @@ export class Game {
     this.input.active = s === 'playing';
     if (s !== 'playing') { this.input.clear(); this.cancelUse(s); this.cancelFlareHold(); this.weapon.cancelSwing(); } // lane KNIFE / FEEL: no stale windup / contact after a menu / death / loading
     this.invUI.cancelDrag();
+    hideTooltip(); // (task studio-ui-subway-maps-20261108-074144-01) every screen change takes the game tooltip with it
     for (const id of ['title', 'pause', 'inventory', 'death', 'win', 'error']) $('#' + id).classList.add('hidden');
     const screen: Partial<Record<GameState, string>> = {title: 'title', paused: 'pause', inventory: 'inventory', dead: 'death', won: 'win', error: 'error', loading: 'title'};
     if (screen[s]) $('#' + screen[s]).classList.remove('hidden');
