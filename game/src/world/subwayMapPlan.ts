@@ -241,17 +241,19 @@ export function drawKioskFace(ctx: Ctx, plan: SubwayMapPlan, pose: KioskPose, ox
     ctx.fillText(t, x, y);
     return true;
   };
-  // YOU ARE HERE first (it always wins its spot)
+  // YOU ARE HERE first (it always wins its spot): its dot's room is reserved, its label placed, then every other label keeps clear of
+  // both; the dot itself is drawn last, over everything
   const here = toPx(hereOf(pose).x, hereOf(pose).z);
   KIOSK_FACE_DRAW.here = {x: here.x - ox, y: here.y - oy};
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath(); ctx.arc(here.x, here.y, 11, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = RED;
-  ctx.beginPath(); ctx.arc(here.x, here.y, 8, 0, Math.PI * 2); ctx.fill();
+  taken.push({x0: here.x - 13, y0: here.y - 13, x1: here.x + 13, y1: here.y + 13});
   const hereUp = here.y - 26 > box.y + 10;
   place('YOU ARE HERE', here.x, hereUp ? here.y - 24 : here.y + 24, 15, true, RED);
   for (const l of st.labels) { const p = toPx(l.x, l.z); if (place(l.text, p.x, p.y, l.big ? 16 : 12, l.big, INK)) KIOSK_FACE_DRAW.labels++; }
   for (const s of st.stairs) { const p = toPx(s.x, s.z); if (place(`⇅ ${s.text}`, p.x, p.y, 12, false, '#3a3630')) KIOSK_FACE_DRAW.stairs++; }
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(here.x, here.y, 11, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = RED;
+  ctx.beginPath(); ctx.arc(here.x, here.y, 8, 0, Math.PI * 2); ctx.fill();
   // legend
   const ly = oy + F.h - F.legend;
   ctx.fillStyle = INK;

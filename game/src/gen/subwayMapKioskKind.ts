@@ -49,5 +49,6 @@ export const SUBWAY_MAP_KIOSK_OPEN_AUDIT: readonly {kind: SubwayMapKioskKind; cl
  * subwayMapKioskBody + subwayMapKioskFaceGeometry exported to a GLB — beside a runtime-scaled standing zombie, front and side views looked
  * at; render in the task's private qa folder): W x H x D, grounded contact, notes.
  */
-export const SUBWAY_MAP_KIOSK_SCALE = '0.94 x 2.10 x 0.34 m (plinth lip included; cabinet 0.90 x 0.30); grounded on its plinth (contact 0.94 x 0.34 m), ' +
-  'back to the wall; the printed panel from 0.80 to 1.94 m: an adult reads the plan at eye height, a head taller than a standing zombie, like a station map pylon';
+export const SUBWAY_MAP_KIOSK_SCALE = '0.94 x 2.10 x 0.32 m (plinth lip and panel frame included; cabinet 0.90 x 0.30); grounded on its plinth (4 contacts, span ' +
+  '0.94 x 0.32 m, base y 0), back to the wall; the printed panel from 0.80 to 1.94 m: an adult reads the plan at eye height; 0.32 m above the 1.78 m zombie, ' +
+  'just over a 2.0 m door, like a station map pylon (scale-check 2026-11-08, zombie lastshift x 1.0)';
