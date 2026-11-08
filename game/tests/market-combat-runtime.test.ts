@@ -1,11 +1,13 @@
 // Task studio-market-rework-20261108-074144-01 (lane COMBAT): the market fighting back, driven in Node on a REAL generated Survivor Market
 // (levels, path finder, props, the parked train) with the real cast and the player's real gun models:
 //  - people are targets: bone volumes with head / torso / limb classification; an ordinary zombie's 100 hp through the player's own damage;
-//  - the first successful attack turns the settlement hostile once (~30 % draw, the rest flee); a theft makes the robbed trader fight;
+//  - the first successful attack turns the settlement hostile once (half draw, the rest flee — task studio-market-bar-20261108-225231-01
+//    raised it from ~30 %); a theft makes the robbed trader fight;
 //  - their gunfire: real line of sight (a wall / slab blocks the round), their magazine / reloads, positional shot / reload sounds, the
 //    muzzle flash; their hits go through the player's ENEMY pipeline (x2 once, armour cuts it and wears);
-//  - fleers run away along routes (never through the train keep-out) and leave; armed hostiles animate every frame;
-//  - persistence: teardown / rebuild, save -> load, Retry (the entry snapshot); dead stay dead, fled stay gone; trade gating;
+//  - fleers run away along routes (never through the train keep-out) to their refuges and hide there, present (task
+//    studio-market-bar-20261108-225231-01: they no longer leave; tests/market-people-hide-runtime.test.ts); armed hostiles animate every frame;
+//  - persistence: teardown / rebuild, save -> load, Retry (the entry snapshot); dead stay dead, hiders stay hidden; trade gating;
 //  - never in game.zombies, never cargo, never loot; the calm market is untouched until provoked.
 import {beforeAll, describe, expect, it} from 'vitest';
 import fs from 'node:fs';
@@ -145,8 +147,8 @@ describe('a kill ragdolls the body on the shared 18-joint skeleton (physics/ragd
   });
 });
 
-describe('hostility: ~30 % fight with real guns, the rest flee; a theft makes the robbed trader fight', () => {
-  it('provoke: roles by the seeded split, fighters draw their gun and aim, fleers run away from the player and leave', () => {
+describe('hostility: half fight with real guns, the rest flee; a theft makes the robbed trader fight', () => {
+  it('provoke: roles by the seeded split, fighters draw their gun and aim, fleers run from the player to their refuges and hide — never leaving', () => {
     const w = combatWorld(A);
     w.build();
     const st = w.layout.market!.stalls[2];
@@ -155,27 +157,24 @@ describe('hostility: ~30 % fight with real guns, the rest flee; a theft makes th
     w.combat.provoke({kind: 'theft', stall: 'gun'}); // idempotent: once
     expect(w.combat.counts.provoked).toBe(1);
     const fight = w.combat.people.filter(p => p.role === 'fight'), flee = w.combat.people.filter(p => p.role === 'flee');
-    expect(fight.length).toBe(Math.max(1, Math.round(w.combat.people.length * 0.3)));
+    expect(fight.length).toBe(Math.max(1, Math.round(w.combat.people.length * 0.5)));
     expect(flee.length).toBe(w.combat.people.length - fight.length);
-    const start = new Map(flee.map(p => [p, Math.hypot(p.actor.x - w.player.x, p.actor.z - w.player.z)]));
     w.player.alive = false; // (only the motion here: nobody shoots a dead player)
     w.run(2.5);
     for (const p of fight) { expect(p.body.gunShown, p.id).toBe(true); expect(p.actor.current?.includes(p.gun) || p.actor.loop.includes(p.gun), p.id).toBe(true); }
     for (const p of flee) expect(p.body.gunShown).toBe(false);
-    // the fleers: on their way or hidden, farther from the player, never in the train keep-out
-    let farther = 0;
+    // the fleers: on their way or hidden, never in the train keep-out
     for (let i = 0; i < 300; i++) {
       w.frame();
       for (const p of flee) if (p.state === 'alive') expect(w.people.inKeepout(p.actor.x, p.actor.z, p.actor.y), p.id).toBe(false);
     }
-    for (const p of flee) if (p.state === 'fled' || Math.hypot(p.actor.x - w.player.x, p.actor.z - w.player.z) > start.get(p)! + 1) farther++;
-    expect(farther / flee.length).toBeGreaterThan(0.6);
-    // unseen long enough: they leave the market (out of the scene)
-    w.run(16);
-    const fled = flee.filter(p => p.state === 'fled');
-    expect(fled.length).toBeGreaterThan(0);
-    for (const p of fled) expect(p.actor.root.parent).toBeNull();
-    expect(w.combat.counts.fled).toBe(fled.length);
+    // long after: home and hiding (the ones the player's position does not cut off), every one still in the scene
+    w.run(30);
+    const book = w.combat.refugeBook();
+    const home = flee.filter(p => p.hidden && book.inside(book.claimOf(p.id)!.refuge, p.actor.x, p.actor.y, p.actor.z));
+    expect(home.length / flee.length).toBeGreaterThan(0.6);
+    for (const p of flee) { expect(p.state).toBe('alive'); expect(p.actor.root.parent).not.toBeNull(); }
+    expect(w.host.scene.children.length).toBe(w.combat.people.length);
   });
 
   it('a theft at a stall: that trader fights — never flees; no stall trades', () => {
@@ -198,7 +197,8 @@ describe('their gunfire', () => {
     w.build();
     w.combat.provoke({kind: 'theft', stall: 'gun'});
     const t = w.combat.people.find(p => p.id === 'trader:gun')!;
-    for (const p of w.combat.people) if (p !== t) { p.state = 'fled'; w.people.remove(p.actor); }
+    // (everyone else out of the way: off the combat's and the people's lists — nobody "flees" out of the market any more)
+    for (const p of [...w.combat.people]) if (p !== t) { w.combat.people.splice(w.combat.people.indexOf(p), 1); w.people.remove(p.actor); }
     // a clear spot in front of the trader on its storey (the counter between: step to the side of it)
     return {w, t, d};
   }
@@ -323,7 +323,7 @@ describe('their gunfire', () => {
   });
 });
 
-describe('persistence: dead stay dead, fled stay gone (leave / return, save / load, Retry)', () => {
+describe('persistence: dead stay dead, hiders stay hidden (leave / return, save / load, Retry)', () => {
   function provoked() {
     const w = combatWorld(A);
     w.build();
@@ -334,24 +334,25 @@ describe('persistence: dead stay dead, fled stay gone (leave / return, save / lo
     const eye = new THREE.Vector3(w.player.x, victim.actor.y + 1.55, w.player.z);
     for (let i = 0; i < 4 && victim.state === 'alive'; i++) shootAt(w, eye, bonePos(victim, 'Head').add(new THREE.Vector3(0, 0.07, 0)), 'rifle');
     expect(victim.state).toBe('dead');
-    w.player.x += 200; // far away: the fleers hide unseen and leave
+    w.player.x += 200; // far away: the fleers run home and hide
     w.run(20);
     return {w, victim};
   }
   const snapshot = (w: World) => w.combat.people.map(p => [p.id, p.state, p.role, p.gun, p.npc.mag, p.npc.spare, Math.round(p.hp)]);
 
-  it('the record is written at once and on every change; teardown -> rebuild restores it (bodies lying where they fell)', () => {
+  it('the record is written at once and on every change; teardown -> rebuild restores it (bodies lying where they fell, hiders in their refuges)', () => {
     const {w, victim} = provoked();
     const rec = w.h.run.laneStore<MarketHostilityJSON>(MARKET_HOSTILITY_LANE)!;
-    expect(rec).toMatchObject({v: 1, hostile: true, cause: 'attack'});
+    expect(rec).toMatchObject({v: 2, hostile: true, cause: 'attack'});
     expect(rec.people['resident:1']).toMatchObject({s: 'dead', hp: 0, posture: 'down'});
-    const fledIds = w.combat.people.filter(p => p.state === 'fled').map(p => p.id);
-    expect(fledIds.length).toBeGreaterThan(0);
+    const hidden = w.combat.people.filter(p => p.state === 'alive' && p.hidden).map(p => p.id);
+    expect(hidden.length).toBeGreaterThan(0);
     const at = {x: victim.actor.x, z: victim.actor.z};
     w.teardown();
     const after = w.h.run.laneStore<MarketHostilityJSON>(MARKET_HOSTILITY_LANE)!;
-    // the alive fleers left while the player was away
-    for (const [id, r] of Object.entries(after.people)) if (r.role === 'flee' && r.s !== 'dead') expect(r.s, id).toBe('fled');
+    // nobody left while the player was away: the alive fleers are hiding in their refuges (or on their way)
+    for (const [id, r] of Object.entries(after.people)) if (r.role === 'flee' && r.s !== 'dead') { expect(r.s, id).toBe('alive'); expect(r.refuge, id).toMatch(/^(home|bunks|store|room):\d+$/); }
+    for (const id of hidden) expect(after.people[id].posture).toBe('hide');
     const want = Object.entries(after.people).map(([id, r]) => [id, r.s]);
     w.build();
     expect(w.combat.hostile).toBe(true);
@@ -361,8 +362,9 @@ describe('persistence: dead stay dead, fled stay gone (leave / return, save / lo
     expect(v2.actor.z).toBeCloseTo(at.z, 2);
     expect(v2.actor.current).toBe(COMBAT_CLIP.death);
     expect(bonePos(v2, 'Head').y - v2.actor.y).toBeLessThan(0.45); // lying
-    for (const p of w.combat.people) if (p.state === 'fled') expect(p.actor.root.parent).toBeNull();
-    expect(w.host.scene.children.length).toBe(w.combat.people.filter(p => p.state !== 'fled').length);
+    for (const id of hidden) { const p = w.combat.people.find(q => q.id === id)!; expect(p.hidden).toBe(true); expect(p.actor.current).toBe(COMBAT_CLIP.cower); }
+    for (const p of w.combat.people) expect(p.actor.root.parent).not.toBeNull();
+    expect(w.host.scene.children.length).toBe(w.combat.people.length);
     // nobody comes back to life, no stall trades
     for (const s of w.layout.market!.stalls) expect(w.combat.canTrade(s.id)).toBe(false);
   });
