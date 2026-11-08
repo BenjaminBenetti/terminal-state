@@ -26,8 +26,12 @@ export function stackFromRecord(inv: Inventory, rec: StackRecord): ItemStack {
   return st;
 }
 
+/**
+ * The section's loose items as records. Task studio-market-rework-20261108-074144-01 (lane WARES): never an OWNED pickup (a market stall's
+ * displayed stock, Pickup.owner): the stall's stock record is its truth and its displays are rebuilt from it on every build.
+ */
 export function capturePickups(list: readonly Pickup[], layoutIndexOf: (p: Pickup) => number | undefined): PickupRecord[] {
-  return list.map(p => {
+  return list.filter(p => !p.owner).map(p => {
     const o = p.obj;
     const rec: PickupRecord = {
       stack: stackRecord(p.stack),
