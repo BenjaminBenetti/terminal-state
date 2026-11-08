@@ -1,0 +1,731 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "outfit-cosplay",
+ "task": "studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY)",
+ "status": {
+  "approved": false,
+  "gameReady": false,
+  "stage": "unapproved prototype derivative (convention cosplay variants of the ordinary zombie); fit / deformation not certified",
+  "licenseClearance": "none - inherits each source model's status (the mascot / sushi figurine: community-supplied sources via the user, no licence or authorship claim; the garments: Meshy-generated prototype derivatives)"
+ },
+ "item": "Convention cosplay costume pieces for the ordinary zombie (Skyways anime convention, layout version 5): head pieces split from the convention mascot statue / the sushi mascot figurine, and dyed copies of fitted ordinary garments",
+ "generation": "none - no model / image / audio generation, no Meshy, no Codex: deterministic processing (split, simplify, rigid fit, colour transform) of models already shipped in this repository",
+ "sources": {
+  "mascot": {
+   "file": "game/public/assets/models/skyways-mascot-poses.glb",
+   "node": "stand",
+   "sha256": "03f834661d65629e6ebda366e0e706981907fad58f3f897f332705780886ecc5",
+   "provenance": "assets/derivatives/skyways-mascot-poses.json",
+   "maps": "base colour / normal / metallic-roughness kept (re-encoded only); the rose palette = a per-texel hue / value transform of the base colour (hair hue -> rose, hat brown -> cream)"
+  },
+  "sushi": {
+   "file": "game/public/assets/models/skyways-sushi-mascot.glb",
+   "sha256": "8c978561f85b38ba12ebab139a8ac2b341645aaadc68afc02a207f8c3ce66a23",
+   "provenance": "assets/derivatives/skyways-sushi-mascot.json",
+   "maps": "base colour kept"
+  },
+  "garments": {
+   "cosplay-hoodie-cocoa": {
+    "base": "hoodie",
+    "baseFile": "game/public/assets/models/outfit-hoodie-t25.glb",
+    "baseSha256": "b0d827ca0c1a14360e018abb8d7fde7c9cc98ee933dab6a95ad4551c4320c92a",
+    "dye": "cocoa",
+    "dyeRgb": [
+     104,
+     66,
+     46
+    ],
+    "sourceMedianLuma": 59.8466
+   },
+   "cosplay-hoodie-salmon": {
+    "base": "hoodie",
+    "baseFile": "game/public/assets/models/outfit-hoodie-t25.glb",
+    "baseSha256": "b0d827ca0c1a14360e018abb8d7fde7c9cc98ee933dab6a95ad4551c4320c92a",
+    "dye": "salmon",
+    "dyeRgb": [
+     226,
+     116,
+     82
+    ],
+    "sourceMedianLuma": 59.8466
+   },
+   "cosplay-sweater-cream": {
+    "base": "sweater",
+    "baseFile": "game/public/assets/models/outfit-sweater-t25.glb",
+    "baseSha256": "afc69fb41c72f3136a8275131b17c373a6aca2c73d14c1e2c155fc9618f15a67",
+    "dye": "cream",
+    "dyeRgb": [
+     226,
+     214,
+     192
+    ],
+    "sourceMedianLuma": 118.6918
+   },
+   "cosplay-blazer-navy": {
+    "base": "blazer",
+    "baseFile": "game/public/assets/models/outfit-blazer-t25.glb",
+    "baseSha256": "8a25514379680f4a2b8aa2940253f996c1b99f35bef253c7573a0197b0937b24",
+    "dye": "navy",
+    "dyeRgb": [
+     44,
+     52,
+     86
+    ],
+    "sourceMedianLuma": 69.7782
+   },
+   "cosplay-slacks-maroon": {
+    "base": "slacks",
+    "baseFile": "game/public/assets/models/outfit-slacks-t25.glb",
+    "baseSha256": "8d4d9cc620838e06944166600ebf326747432d923d33fa935ef8e32585a3e9f6",
+    "dye": "maroon",
+    "dyeRgb": [
+     104,
+     40,
+     46
+    ],
+    "sourceMedianLuma": 90.7742
+   },
+   "cosplay-slacks-rice": {
+    "base": "slacks",
+    "baseFile": "game/public/assets/models/outfit-slacks-t25.glb",
+    "baseSha256": "8d4d9cc620838e06944166600ebf326747432d923d33fa935ef8e32585a3e9f6",
+    "dye": "rice",
+    "dyeRgb": [
+     222,
+     220,
+     210
+    ],
+    "sourceMedianLuma": 90.7742
+   }
+  },
+  "ordinary": {
+   "slacks": {
+    "model": "outfit_slacks",
+    "file": "game/public/assets/models/outfit-slacks-t25.glb",
+    "use": "reused unchanged (the ordinary boot file)"
+   }
+  },
+  "bodies": {
+   "lastshift": {
+    "file": "game/public/assets/models/zombie-body-lastshift-t25.glb",
+    "geometryHash": "a3ff502ac29e332f"
+   },
+   "courier": {
+    "file": "game/public/assets/models/zombie-body-courier-t25.glb",
+    "geometryHash": "a7c4419f00bbad6b"
+   },
+   "agent": {
+    "file": "game/public/assets/models/zombie-body-agent-t25.glb",
+    "geometryHash": "95778dc81f6bc6fb"
+   },
+   "heavyset": {
+    "file": "game/public/assets/models/zombie-body-heavyset-t25.glb",
+    "geometryHash": "eb4123c6da2fab4d"
+   },
+   "tall": {
+    "file": "game/public/assets/models/zombie-body-tall-t25.glb",
+    "geometryHash": "4d802b021b389417"
+   },
+   "paleGaze": {
+    "file": "game/public/assets/models/zombie-body-pale-gaze-t25.glb",
+    "geometryHash": "7321b4d1b03a9090"
+   },
+   "paleRevenant": {
+    "file": "game/public/assets/models/zombie-body-pale-revenant-t25.glb",
+    "geometryHash": "5511d659cb90e37d"
+   },
+   "paleApparition": {
+    "file": "game/public/assets/models/zombie-body-pale-apparition-t25.glb",
+    "geometryHash": "e7f9713ac27ac65a"
+   }
+  }
+ },
+ "method": [
+  "mascot split: each triangle classed by its base-colour texels (blue hair: hue 180-250, s > 0.25, v > 0.25; hat maroon-brown: hue < 40 or > 330, s > 0.3, 0.18 <= v < 0.65, above y 0.8 m - the skirt below is the same colour); the remaining triangles' connected components (welded across UV seams): the largest = body / face, small ones above y 0.6 m enclosed by the hat / hair (the bear-face appliqué, the pin, the hair clip) join the hat",
+  "wig / bear hat = hat + hair + enclosed pieces (10105 source triangles -> 3841); costume head = that (hair above y 0.4 m) + the face above y 0.6 m (11319 -> 4999); sushi hat 6000 -> 3802; meshoptimizer simplifyWithAttributes (normal-weighted, border locked)",
+  "rigid fit per body (all weights on the Head joint): body head landmarks by lib/headwear.mjs measureHead on the runtime bind mesh; wig: the mascot eye line / face front / face half-width mapped onto the body's, scale factor and small offsets searched (eyes kept clear, poking head vertices minimised; long-haired bodies excluded: their hair hangs below the wig); costume head: the smallest scale enclosing every head vertex (9-direction ray inside test), the nose 2 cm behind its face, the whole real head hidden; sushi hat: 0.31 m wide, level, its rice belly seated on the head surface (ray-down contact, 22 mm into the hair)",
+  "hidden body triangles: all three vertices covered (outward normal ray meets the piece within the cover distance) or inside the costume head; a body whose best fit leaves more poking head vertices than the gate gets no variant; a piece ships only for the bodies of the costumes it belongs to (every piece of the costume fitted, upper x lower layering allowed)",
+  "dyed garments: geometry, UVs, skin weights, body masks and layering masks of the ordinary fitted garment copied unchanged (layering keys extended to the cosplay ids); base colour = dye colour x (texel luminance / median luminance)^0.9 + a 12 % trace of the original texel; metallic-roughness map kept",
+  "identical attribute data shared across body variants (one accessor): UVs / indices, a rigid piece's normals / joints / weights"
+ ],
+ "mascotSplit": {
+  "sourceTriangles": 19499,
+  "wigTriangles": 10105,
+  "faceTriangles": 3779,
+  "smallPieces": 35,
+  "landmarks": {
+   "eyeY": 0.8247,
+   "faceFrontZ": 0.4001,
+   "faceHalfWidthAtEyes": 0.3502,
+   "chinY": 0.6035,
+   "neckCut": 0.6
+  }
+ },
+ "fit": {
+  "gates": {
+   "wig": {
+    "k": [
+     0.95,
+     1,
+     1.05,
+     1.1,
+     1.15,
+     1.2,
+     1.25,
+     1.3
+    ],
+    "dz": [
+     -0.01,
+     0,
+     0.01,
+     0.02
+    ],
+    "dy": [
+     -0.01,
+     0,
+     0.01
+    ],
+    "cover": 0.16,
+    "maxPokes": 12,
+    "eyeClear": 0.25,
+    "bulkCap": 0.03
+   },
+   "head": {
+    "s": [
+     0.4,
+     0.42,
+     0.44,
+     0.46,
+     0.48,
+     0.5,
+     0.52,
+     0.55,
+     0.58,
+     0.62
+    ],
+    "dy": [
+     -0.02,
+     0,
+     0.02,
+     0.04
+    ],
+    "noseGap": 0.02,
+    "maxOutside": 12,
+    "bulkCap": 0.08,
+    "hairCutY": 0.4
+   },
+   "sushi": {
+    "widthM": 0.31,
+    "embed": 0.022,
+    "dz": [
+     -0.02,
+     -0.01,
+     0,
+     0.01,
+     0.02
+    ],
+    "belly": [
+     0.03,
+     0.08
+    ],
+    "cover": 0.12,
+    "maxPokes": 12,
+    "bulkCap": 0.02
+   },
+   "simplify": {
+    "wig": 3600,
+    "head": 5000,
+    "sushi": 3600
+   }
+  },
+  "longHairNoWig": [
+   "paleGaze",
+   "paleRevenant",
+   "paleApparition"
+  ],
+  "perBody": {
+   "lastshift": {
+    "wig": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid wig: mascot eye line / face front / face width mapped onto the body's, (k, dz, dy) searched",
+     "scale": 0.3195,
+     "k": 1.25,
+     "dz": 0.02,
+     "dy": 0,
+     "pokes": 4,
+     "hidden": 2652
+    },
+    "head": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid costume head: smallest scale enclosing every head vertex (9-direction inside test), nose behind the costume face",
+     "scale": 0.48,
+     "dy": -0.02,
+     "headVerticesOutside": 0,
+     "hidden": 2997
+    },
+    "sushi": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid hat: level, rice belly seated on the head surface (ray-down contact, pressed 22 mm into the hair: the little feet sink out of sight), fore-aft searched",
+     "scale": 0.6037,
+     "lift": 1.7339,
+     "dz": 0,
+     "pokes": 2,
+     "hidden": 121
+    }
+   },
+   "courier": {
+    "wig": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid wig: mascot eye line / face front / face width mapped onto the body's, (k, dz, dy) searched",
+     "scale": 0.252,
+     "k": 1.3,
+     "dz": 0.02,
+     "dy": 0,
+     "pokes": 1,
+     "hidden": 610
+    },
+    "head": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid costume head: smallest scale enclosing every head vertex (9-direction inside test), nose behind the costume face",
+     "scale": 0.5,
+     "dy": -0.02,
+     "headVerticesOutside": 4,
+     "hidden": 1168
+    },
+    "sushi": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid hat: level, rice belly seated on the head surface (ray-down contact, pressed 22 mm into the hair: the little feet sink out of sight), fore-aft searched",
+     "scale": 0.6037,
+     "lift": 1.7584,
+     "dz": 0,
+     "pokes": 0,
+     "hidden": 42
+    }
+   },
+   "agent": {
+    "wig": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid wig: mascot eye line / face front / face width mapped onto the body's, (k, dz, dy) searched",
+     "scale": 0.3409,
+     "k": 1.3,
+     "dz": 0.02,
+     "dy": 0.01,
+     "pokes": 1,
+     "hidden": 3045
+    },
+    "head": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid costume head: smallest scale enclosing every head vertex (9-direction inside test), nose behind the costume face",
+     "scale": 0.4,
+     "dy": -0.02,
+     "headVerticesOutside": 0,
+     "hidden": 4339
+    },
+    "sushi": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid hat: level, rice belly seated on the head surface (ray-down contact, pressed 22 mm into the hair: the little feet sink out of sight), fore-aft searched",
+     "scale": 0.6037,
+     "lift": 1.6091,
+     "dz": 0.01,
+     "pokes": 0,
+     "hidden": 83
+    }
+   },
+   "heavyset": {
+    "wig": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid wig: mascot eye line / face front / face width mapped onto the body's, (k, dz, dy) searched",
+     "scale": 0.2801,
+     "k": 1.05,
+     "dz": 0,
+     "dy": 0,
+     "pokes": 0,
+     "hidden": 858
+    },
+    "head": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid costume head: smallest scale enclosing every head vertex (9-direction inside test), nose behind the costume face",
+     "scale": 0.55,
+     "dy": -0.02,
+     "headVerticesOutside": 1,
+     "hidden": 2946
+    },
+    "sushi": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid hat: level, rice belly seated on the head surface (ray-down contact, pressed 22 mm into the hair: the little feet sink out of sight), fore-aft searched",
+     "scale": 0.6037,
+     "lift": 1.7395,
+     "dz": 0,
+     "pokes": 0,
+     "hidden": 43
+    }
+   },
+   "tall": {
+    "wig": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid wig: mascot eye line / face front / face width mapped onto the body's, (k, dz, dy) searched",
+     "scale": 0.2975,
+     "k": 1.3,
+     "dz": 0.02,
+     "dy": -0.01,
+     "pokes": 0,
+     "hidden": 3107
+    },
+    "head": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid costume head: smallest scale enclosing every head vertex (9-direction inside test), nose behind the costume face",
+     "scale": 0.46,
+     "dy": -0.02,
+     "headVerticesOutside": 0,
+     "hidden": 3166
+    },
+    "sushi": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid hat: level, rice belly seated on the head surface (ray-down contact, pressed 22 mm into the hair: the little feet sink out of sight), fore-aft searched",
+     "scale": 0.6037,
+     "lift": 1.7081,
+     "dz": 0,
+     "pokes": 2,
+     "hidden": 208
+    }
+   },
+   "paleGaze": {
+    "wig": {
+     "ok": false,
+     "reason": "long own hair would hang below the wig"
+    },
+    "head": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid costume head: smallest scale enclosing every head vertex (9-direction inside test), nose behind the costume face",
+     "scale": 0.44,
+     "dy": -0.02,
+     "headVerticesOutside": 0,
+     "hidden": 5468
+    },
+    "sushi": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid hat: level, rice belly seated on the head surface (ray-down contact, pressed 22 mm into the hair: the little feet sink out of sight), fore-aft searched",
+     "scale": 0.6037,
+     "lift": 1.5966,
+     "dz": 0,
+     "pokes": 9,
+     "hidden": 135
+    }
+   },
+   "paleRevenant": {
+    "wig": {
+     "ok": false,
+     "reason": "long own hair would hang below the wig"
+    },
+    "head": {
+     "ok": false,
+     "reason": "43 head vertices outside",
+     "mode": "rigid costume head: smallest scale enclosing every head vertex (9-direction inside test), nose behind the costume face",
+     "scale": 0.55,
+     "dy": -0.02,
+     "headVerticesOutside": 43,
+     "hidden": 2849
+    },
+    "sushi": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid hat: level, rice belly seated on the head surface (ray-down contact, pressed 22 mm into the hair: the little feet sink out of sight), fore-aft searched",
+     "scale": 0.6037,
+     "lift": 1.6147,
+     "dz": 0.02,
+     "pokes": 7,
+     "hidden": 120
+    }
+   },
+   "paleApparition": {
+    "wig": {
+     "ok": false,
+     "reason": "long own hair would hang below the wig"
+    },
+    "head": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid costume head: smallest scale enclosing every head vertex (9-direction inside test), nose behind the costume face",
+     "scale": 0.42,
+     "dy": -0.02,
+     "headVerticesOutside": 0,
+     "hidden": 4801
+    },
+    "sushi": {
+     "ok": true,
+     "reason": "",
+     "mode": "rigid hat: level, rice belly seated on the head surface (ray-down contact, pressed 22 mm into the hair: the little feet sink out of sight), fore-aft searched",
+     "scale": 0.6037,
+     "lift": 1.6285,
+     "dz": 0,
+     "pokes": 1,
+     "hidden": 101
+    }
+   }
+  }
+ },
+ "dyes": {
+  "cocoa": {
+   "label": "cocoa brown",
+   "rgb": [
+    104,
+    66,
+    46
+   ]
+  },
+  "salmon": {
+   "label": "salmon orange",
+   "rgb": [
+    226,
+    116,
+    82
+   ]
+  },
+  "cream": {
+   "label": "cream",
+   "rgb": [
+    226,
+    214,
+    192
+   ]
+  },
+  "navy": {
+   "label": "navy",
+   "rgb": [
+    44,
+    52,
+    86
+   ]
+  },
+  "maroon": {
+   "label": "maroon (the mascot's skirt)",
+   "rgb": [
+    104,
+    40,
+    46
+   ]
+  },
+  "rice": {
+   "label": "rice white",
+   "rgb": [
+    222,
+    220,
+    210
+   ]
+  }
+ },
+ "costumes": [
+  {
+   "id": "bear-idol",
+   "label": "Mascot cosplay: bear-ear hat, blue wig, cream knit top, maroon trousers",
+   "pieces": {
+    "head": "cosplay-bearhat",
+    "upper": "cosplay-sweater-cream",
+    "lower": "cosplay-slacks-maroon"
+   },
+   "bodies": [
+    "courier",
+    "heavyset",
+    "tall"
+   ]
+  },
+  {
+   "id": "mascot-suit",
+   "label": "Mascot costume: oversized mascot head, cocoa hoodie, maroon trousers",
+   "pieces": {
+    "head": "cosplay-mascot-head",
+    "upper": "cosplay-hoodie-cocoa",
+    "lower": "cosplay-slacks-maroon"
+   },
+   "bodies": [
+    "lastshift",
+    "courier",
+    "heavyset",
+    "tall"
+   ]
+  },
+  {
+   "id": "sushi-fan",
+   "label": "Nigiri cosplay: sushi mascot hat, salmon hoodie, rice-white trousers",
+   "pieces": {
+    "head": "cosplay-sushi-hat",
+    "upper": "cosplay-hoodie-salmon",
+    "lower": "cosplay-slacks-rice"
+   },
+   "bodies": [
+    "lastshift",
+    "courier",
+    "heavyset",
+    "tall",
+    "paleRevenant"
+   ]
+  },
+  {
+   "id": "rose-uniform",
+   "label": "Mascot cosplay, alternate palette: cream bear-ear hat, rose wig, navy uniform blazer, grey slacks",
+   "pieces": {
+    "head": "cosplay-bearhat-rose",
+    "upper": "cosplay-blazer-navy",
+    "lower": "slacks"
+   },
+   "bodies": [
+    "lastshift",
+    "courier",
+    "heavyset",
+    "tall"
+   ]
+  }
+ ],
+ "wearables": {
+  "head": [
+   {
+    "id": "cosplay-bearhat",
+    "label": "Mascot cosplay: bear-ear hat + blue wig",
+    "bodies": [
+     "courier",
+     "heavyset",
+     "tall"
+    ]
+   },
+   {
+    "id": "cosplay-bearhat-rose",
+    "label": "Mascot cosplay (alternate palette): cream bear-ear hat + rose wig",
+    "bodies": [
+     "lastshift",
+     "courier",
+     "heavyset",
+     "tall"
+    ]
+   },
+   {
+    "id": "cosplay-mascot-head",
+    "label": "Oversized mascot costume head",
+    "bodies": [
+     "lastshift",
+     "courier",
+     "heavyset",
+     "tall"
+    ]
+   },
+   {
+    "id": "cosplay-sushi-hat",
+    "label": "Nigiri-sushi mascot hat",
+    "bodies": [
+     "lastshift",
+     "courier",
+     "heavyset",
+     "tall",
+     "paleRevenant"
+    ]
+   }
+  ],
+  "upper": [
+   {
+    "id": "cosplay-hoodie-cocoa",
+    "label": "Cocoa-brown mascot-suit hoodie",
+    "base": "hoodie",
+    "bodies": [
+     "lastshift",
+     "courier",
+     "heavyset",
+     "tall"
+    ]
+   },
+   {
+    "id": "cosplay-hoodie-salmon",
+    "label": "Salmon-orange hoodie",
+    "base": "hoodie",
+    "bodies": [
+     "lastshift",
+     "courier",
+     "heavyset",
+     "tall",
+     "paleRevenant"
+    ]
+   },
+   {
+    "id": "cosplay-sweater-cream",
+    "label": "Cream knit top",
+    "base": "sweater",
+    "bodies": [
+     "courier",
+     "heavyset",
+     "tall"
+    ]
+   },
+   {
+    "id": "cosplay-blazer-navy",
+    "label": "Navy uniform blazer",
+    "base": "blazer",
+    "bodies": [
+     "lastshift",
+     "courier",
+     "heavyset",
+     "tall"
+    ]
+   }
+  ],
+  "lower": [
+   {
+    "id": "cosplay-slacks-maroon",
+    "label": "Maroon trousers",
+    "base": "slacks",
+    "bodies": [
+     "lastshift",
+     "courier",
+     "heavyset",
+     "tall"
+    ]
+   },
+   {
+    "id": "cosplay-slacks-rice",
+    "label": "Rice-white trousers",
+    "base": "slacks",
+    "bodies": [
+     "lastshift",
+     "courier",
+     "heavyset",
+     "tall",
+     "paleRevenant"
+    ]
+   }
+  ]
+ },
+ "outputs": {
+  "head": {
+   "file": "game/public/assets/models/outfit-cosplay-head.glb",
+   "url": "assets/models/outfit-cosplay-head.glb",
+   "bytes": 2044868,
+   "sha256": "4a6507dc284c1861d35d278cd86105ff54541d07da439359941164d1d28d104e"
+  },
+  "upper": {
+   "file": "game/public/assets/models/outfit-cosplay-upper.glb",
+   "url": "assets/models/outfit-cosplay-upper.glb",
+   "bytes": 2253656,
+   "sha256": "3948ab7281b7245ae4616c35755e333b332678630c8433d8a22f4833dbaae29d"
+  },
+  "lower": {
+   "file": "game/public/assets/models/outfit-cosplay-lower.glb",
+   "url": "assets/models/outfit-cosplay-lower.glb",
+   "bytes": 688840,
+   "sha256": "340049eb6efb2f01d2bebc9ad2e77aab31d64231b64f66bfa78b476fd0e31051"
+  }
+ }
+}
