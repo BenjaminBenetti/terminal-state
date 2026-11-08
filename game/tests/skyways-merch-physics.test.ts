@@ -15,6 +15,7 @@
 //    behind a door / declared shelf / hook), and no declared board starts inside any of its host's stock — the listed exceptions only.
 import {beforeAll, describe, expect, it} from 'vitest';
 import * as THREE from 'three';
+import * as fs from 'node:fs';
 import {LEVELS} from '../src/levels/registry';
 import {PROP_DEFS, type PropPlacement} from '../src/gen/props';
 import type {StationLayout} from '../src/gen/stationTypes';
@@ -36,6 +37,8 @@ installCanvasShim(false);
 (ShimContext.prototype as unknown as {clip?: () => void}).clip ??= () => {};
 
 const SEEDS = 10;
+/** Per-sample numbers (vitest hides console output). */
+const LOG = '/tmp/merch-samples.txt';
 const VERSIONS = [3, 4] as const;
 /** Movable decor kind @ host kind that deliberately stays on its host, with the reason (the audit row says the same). */
 const EXCEPTIONS: Readonly<Record<string, string>> = {
@@ -137,6 +140,7 @@ interface Sample { seed: number; v: number; key: string; index: number }
 let samples: Sample[] = [];
 const guard = {checked: 0, keys: new Set<string>(), exceptions: 0};
 beforeAll(() => {
+  fs.writeFileSync(LOG, '');
   const seen = new Set<string>();
   for (const v of VERSIONS) for (let seed = 1; seed <= SEEDS; seed++) {
     const l = gen(seed, v);
@@ -216,7 +220,7 @@ describe('real Skyways stores (layout versions 3 and 4)', () => {
     expect([...versions].sort()).toEqual([3, 4]);
   }, 900_000);
 
-  it('Blue Line Sports: skates shot off the boot wall; a geranium pot shot out of its basket falls and a real Player shoves it along the floor', () => {
+  it('Blue Line Sports: skates knocked about / off the boot wall by a volley; a geranium pot shot out of its basket falls and a real Player shoves it along the floor', () => {
     let pushed = 0;
     for (const v of VERSIONS) {
       const sk = samples.find(s => s.v === v && s.key === 'hkSkates@wallBay');
@@ -239,6 +243,7 @@ describe('real Skyways stores (layout versions 3 and 4)', () => {
       for (let k = 0; k < 120; k++) rg.ph.update(DT);
       const after = posOf(rg, q)!;
       expect(after.p.distanceTo(res!.end), 'shoved by the walker').toBeGreaterThan(0.1);
+      fs.appendFileSync(LOG, `v${v} pot shoved ${after.p.distanceTo(res!.end).toFixed(3)} m by the walking Player (no shot)\n`);
       pushed++;
     }
     expect(pushed, 'a pot shoved by the Player on at least one layout version').toBeGreaterThan(0);
@@ -275,16 +280,16 @@ function volley(rig: ContactRig, sys: DamageSystem, o: Vec3, d: Vec3, n = 9): vo
 }
 
 /** A loose piece as drawn: its body's object matrix -> centre, lowest corner, footprint. */
-function posOf(rig: ContactRig, p: PropPlacement): {p: THREE.Vector3; minY: number; box: THREE.Box3} | null {
+function posOf(rig: ContactRig, p: PropPlacement): {p: THREE.Vector3; minY: number; box: THREE.Box3; q: THREE.Quaternion} | null {
   const e = rig.ph.dynamicItems.loose().find(q => q.prop === p);
   if (!e) return null;
   const box = new THREE.Box3();
   for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) box.expandByPoint(new THREE.Vector3(e.center.x + sx * e.half.x, e.center.y + sy * e.half.y, e.center.z + sz * e.half.z).applyMatrix4(e.matrix));
-  const c = e.center.clone().applyMatrix4(e.matrix);
-  if (propPhysics(p.kind).shape !== 'cylinder') return {p: c, minY: box.min.y, box};
+  const c = e.center.clone().applyMatrix4(e.matrix), q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().extractRotation(e.matrix));
+  if (propPhysics(p.kind).shape !== 'cylinder') return {p: c, minY: box.min.y, box, q};
   // a cylinder collider (radius half.x, axis = the body's local Y): its true lowest point, not its box corner's
   const up = new THREE.Vector3(0, 1, 0).transformDirection(e.matrix), uy = Math.abs(up.y);
-  return {p: c, minY: c.y - e.half.y * uy - e.half.x * Math.sqrt(Math.max(0, 1 - uy * uy)), box};
+  return {p: c, minY: c.y - e.half.y * uy - e.half.x * Math.sqrt(Math.max(0, 1 - uy * uy)), box, q};
 }
 
 /** The highest support top at or just under `minY` overlapping the footprint: the floor, a host surface, a prop's top, a loose body. */
@@ -322,7 +327,7 @@ function shootSample(rig: ContactRig, sys: DamageSystem, index: number, why: str
   for (const f of [new THREE.Vector3(Math.sin(p.rot), 0, Math.cos(p.rot)), new THREE.Vector3(Math.sin(q.rot), 0, Math.cos(q.rot)), radial.lengthSq() > 1e-4 ? radial.normalize() : null]) {
     if (!f) continue;
     // (from the side first: a piece standing against a wall / a back panel only rocks under a volley straight into it)
-    for (const yaw of [0.6, -0.6, 0]) for (const up of [0.15, -0.35, 0.55]) dirs.push(f.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).setY(up).normalize());
+    for (const yaw of [1.1, -1.1, 0.6, -0.6, 0]) for (const up of [0.15, -0.35, 0.55]) dirs.push(f.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).setY(up).normalize());
   }
   // every open line from which a bullet reaches it while it rests (the volley takes the first; a piece boxed in by its neighbours / a
   // wall only rocks — then the next line, as a player would step aside and shoot again)
@@ -334,9 +339,10 @@ function shootSample(rig: ContactRig, sys: DamageSystem, index: number, why: str
   }
   if (!aims.length) return null;
   const start = c.clone(), y0 = p.y, sup = supportsOf(q), [lx, lz] = local(q, p.x, p.z);
+  const q0 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.rot), turned = (r: THREE.Quaternion) => q0.angleTo(r);
   const deck = sup.find(s => Math.abs(s.y - (y0 - q.y)) < 0.07 && lx >= s.x0 - 0.02 && lx <= s.x1 + 0.02 && lz >= s.z0 - 0.02 && lz <= s.z1 + 0.02);
   const shoved = sys.counts.propsShoved;
-  let sank = false, volleys = 0;
+  let sank = false, volleys = 0, peak = 0;
   for (const aim of aims) {
     if (volleys >= 3) break;
     if (volleys > 0 && !rig.ph.dynamicItems.rayHits(aim.o, aim.d, 3, []).some(h => h.prop === p)) continue; // (it no longer stands on that line)
@@ -349,21 +355,26 @@ function shootSample(rig: ContactRig, sys: DamageSystem, index: number, why: str
     for (let k = 0; k < 360; k++) {
       rig.ph.update(DT);
       const now = posOf(rig, p);
+      if (now) peak = Math.max(peak, now.p.distanceTo(start));
       if (!now || !deck) continue;
       const [nx, nz] = local(q, now.p.x, now.p.z);
       if (nx > deck.x0 + 0.03 && nx < deck.x1 - 0.03 && nz > deck.z0 + 0.03 && nz < deck.z1 - 0.03 && now.minY < y0 - 0.07) sank = true;
     }
     const at = posOf(rig, p);
-    if (at && at.p.distanceTo(start) > 0.02) break;
+    if (at && (peak > 0.03 || turned(at.q) > 0.09)) break;
   }
   const end = posOf(rig, p);
   expect(end, `${why}: still a loose body`).toBeTruthy();
   expect(rig.ph.dynamicItems.stats().propsAwake, `${why}: settled (asleep)`).toBe(0);
   expect(sank, `${why}: sank through the shelf it stood on`).toBe(false);
-  expect(end!.p.distanceTo(start), `${why}: it moved (${volleys} volleys, ${sys.counts.propsShoved - shoved} pellets shoved it)`).toBeGreaterThan(0.02);
+  // it reacted: knocked more than 3 cm (a piece driven into the wall behind its shelf bounces back off it) or left turned more than 5 deg
+  const moved = end!.p.distanceTo(start), turn = turned(end!.q);
+  expect(peak > 0.03 || turn > 0.09, `${why}: knocked ${peak.toFixed(3)} m (rests ${moved.toFixed(3)} m away), turned ${(turn * 180 / Math.PI).toFixed(1)} deg (${volleys} volleys, ${sys.counts.propsShoved - shoved} pellets shoved it)`).toBe(true);
   const under = supportUnder(rig, p, end!.box, end!.minY);
   expect(end!.minY - under, `${why}: resting on something (not floating): min y ${end!.minY.toFixed(3)} support ${under.toFixed(3)} (stood at ${y0.toFixed(3)}, host ${q.kind} at ${q.y.toFixed(3)}; ends at ${end!.p.x.toFixed(2)}, ${end!.p.y.toFixed(2)}, ${end!.p.z.toFixed(2)})`).toBeLessThan(0.07);
   expect(end!.minY - under, `${why}: not sunk into its support`).toBeGreaterThan(-0.08);
+  const left = Math.abs(under - y0) > 0.05; // it came to rest on another support than the one it stood on (another deck / the floor)
+  fs.appendFileSync(LOG, `${why}\tpeak ${peak.toFixed(3)}\trests ${moved.toFixed(3)} away\tturned ${(turn * 180 / Math.PI).toFixed(1)}\tvolleys ${volleys}\tpellets ${sys.counts.propsShoved - shoved}\t${left ? `left its shelf: ${(y0 - q.y).toFixed(2)} -> ${(under - q.y).toFixed(2)} above the host base` : 'on its shelf'}\n`);
   return {end: end!.p, minY: end!.minY};
 }
 

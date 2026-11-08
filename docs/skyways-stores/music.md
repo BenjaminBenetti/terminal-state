@@ -79,9 +79,10 @@ holders.
 | `skyMuSign` | LISTENING BOOTHS board | `none` | static `mounted` | 1.63 × 0.28 × 0.04 m from 2.2 m |
 
 Notes:
-1. As with lane SHOPS-A's book stacks, on-host decor goes loose only from its host's top. Inside a bay, the rack's walls hold the block,
-   so it never floats.
-2. The ledge lip and the board hold the row inside the static fixture.
+1. A shot knocks a bin block loose inside its bay (task studio-skywalk-variety-20261107-231448-01, lane MERCH;
+   `physics/merchOnHost.ts`). It then lands on the rack's declared trays (`skyDRecordBins` `shelves`) or on the floor, and never floats.
+2. The ledge lip and the board hold the faced row on the static fixture. This is an explicit exception: the row of five sleeves is one
+   prop, so the board declares no shelves until the row is split per sleeve.
 
 Scale checks:
 - `node tools/asset-pipeline/skyways-stores/music/qa-music.mjs --glb <dir>` writes the runtime geometry to GLB (flat colours, atlas
