@@ -124,11 +124,14 @@ function marketRails(layout: StationLayout): RailRun[] {
   return pathRails(layout, [...base, ...extra.map(r => ({...r, h: r.h ?? 1.1}))]);
 }
 
-/** Player start: on the platform between the two market gates, 2 m back from the edge, facing the gates (south). */
+/**
+ * Player start: on the platform in front of the market gate nearer the platform's middle, 2 m back from the edge, facing it (south) —
+ * the parked train centres on it, so its middle door opens straight onto the gate and the square beyond.
+ */
 function startOf(layout: StationLayout, mc: MarketCarve): void {
-  const g = layout.grid, P = mc.platform;
-  const gx = mc.gates.map(gt => (gt.rect.x + gt.rect.w / 2));
-  const sx0 = Math.round((gx[0] + gx[1]) / 2), sy0 = P.y + 4;
+  const g = layout.grid, P = mc.platform, pc = P.x + P.w / 2;
+  const gx = mc.gates.map(gt => (gt.rect.x + gt.rect.w / 2)).sort((a, b) => Math.abs(a - pc) - Math.abs(b - pc));
+  const sx0 = Math.round(gx[0]), sy0 = P.y + 4;
   let spot: [number, number] | null = null;
   search: for (let r = 0; r < 24; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
     if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;

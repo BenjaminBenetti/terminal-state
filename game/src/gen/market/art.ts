@@ -43,7 +43,7 @@ export function marketFans(layout: StationLayout): MarketFan[] {
   }
   for (const a of layout.areas) {
     if ((a.level ?? 0) !== 0 || a.kind !== 'room' || a.type === 'shop') continue; // the rooms under the deck
-    add((a.x + a.w / 2) * CELL, (a.y + a.h * 0.25) * CELL, a.ceil, 0, MARKET_ART.fan.hubDrop); // (the front half: clear of the room's lamp row)
+    add((a.x + a.w * 0.68) * CELL, (a.y + a.h * 0.25) * CELL, a.ceil, 0, MARKET_ART.fan.hubDrop); // (the front half, off-centre: clear of the room's lamp row and its hanging name board)
   }
   if (deck) for (const t of [0.3, 0.72]) add((deck.x + deck.w * t) * CELL, (deck.y + deck.h * 0.55) * CELL, deck.ceil, 1, 1.4); // (above the deck's lamps)
   return out;

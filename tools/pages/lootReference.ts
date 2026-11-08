@@ -195,6 +195,7 @@ export const LOOT_TABLES_EXPORT_ROLES: Readonly<Record<string, string>> = {
   MALL_FLOOR: 'floor program (mall)', MALL_SALVAGE: 'economy.salvage (mall) + holder salvage rows', MALL_TABLES: 'profile tables (mall)',
   MALL_OVERRIDES: 'levels (profiles: mall overrides)', MALL_PROFILE: 'levels (profiles: mall)',
   REACTOR_OVERRIDES: 'levels (profiles: reactor overrides)', REACTOR_PROFILE: 'levels (profiles: reactor)', // task reactor-build-20261101
+  MARKET_PROFILE: 'levels (profiles: market — no free loot)', // task studio-survivor-market-20261108-005807-01
   // task reactor-playtest-round2-20261102 (lane ARRIVAL): the Reactor's total-loot hold (slot lots / container empty overrides, the
   // mall's storage fill scaled in the Reactor's own tables)
   REACTOR_PICKED_OVER: 'levels (profiles: reactor overrides)', REACTOR_FILL_SCALE: 'economy.storageFill (reactor scale)', REACTOR_TABLES: 'profile tables (reactor)',
