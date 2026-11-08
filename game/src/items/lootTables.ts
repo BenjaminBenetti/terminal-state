@@ -1279,6 +1279,23 @@ export const REACTOR_OVERRIDES: LootOverrides = {
 export const REACTOR_PROFILE: LootProfile = {id: 'reactor', label: 'Reactor', tables: REACTOR_TABLES, overrides: REACTOR_OVERRIDES};
 
 /**
+ * Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET — NO free loot in the settlement (the residents' things
+ * and the stall goods are not loot: the goods are the traders' stock, market/trade). The generator places no pickups and every holder it
+ * places carries the exact empty key (gen/market/dress.ts MARKET_EMPTY_KEY); this profile is the second guard for anything that would
+ * still roll here: every economy category weighs 0 (resolveRows -> no rows), every slot rolls no lots, no floor finds, and the
+ * level-wide gear roll is empty (gear cap 0; the mask / filter roll is 0 / 0: gen/maskLoot.ts). The station's common fuel plan is not
+ * loot tables (world/fuelStations.ts, the shared rule for every station).
+ */
+export const MARKET_PROFILE: LootProfile = {
+  id: 'market', label: 'Survivor Market (no free loot)', tables: BASE_TABLES, overrides: {
+    categoryWeight: Object.fromEntries(ECON_CATS.map(c => [c, 0])) as Multipliers<EconCat>,
+    slot: Object.fromEntries(SLOT_CATEGORIES.map(s => [s, {lots: 0}])) as LootOverrides['slot'],
+    floor: {chance: Object.fromEntries(ECON_CATS.map(c => [c, 0])) as Multipliers<EconCat>},
+    gear: {mean: 0, cap: 0},
+  },
+};
+
+/**
  * THE PER-LEVEL PROFILES. Both current levels use today's tables with NO overrides (the user likes the current rates). A new level
  * adds its entry here (Record<LevelId, …> makes that mandatory); a deeper level tunes through `overrides` (docs/loot-tables.md).
  */
@@ -1293,6 +1310,8 @@ export const PROFILES: Readonly<Record<LevelId, LootProfile>> = {
   // Task reactor-build-20261101 (primary): THE REACTOR — the mall's tables (its per-storey loose floor program serves the tiers) with
   // the culminating level's pressure: ammo, medicine and batteries scarcer, materials a little rarer (docs/loot-tables.md overrides).
   reactor: REACTOR_PROFILE,
+  // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET — no free loot (MARKET_PROFILE).
+  market: MARKET_PROFILE,
 };
 
 /** The loot profile of a logical level. */

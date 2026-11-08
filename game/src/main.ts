@@ -48,11 +48,11 @@ function webgl2(): boolean {
 // the menu's first item) enters it — the 26 scripts that wait for that and click #btn-start keep working. ?qa=1&qaPrebuild=0 shows the
 // real menu (diorama, settings, slots) with QA hooks; there #btn-start builds the scratch run on click (__LL.ready() only after it).
 
-/** The URL's developer start (?level= / ?seed= / ?officeSeed= / ?mallSeed= / ?reactorSeed=; ?qa=1 always offers it). */
+/** The URL's developer start (?level= / ?seed= / ?officeSeed= / ?mallSeed= / ?marketSeed= / ?reactorSeed=; ?qa=1 always offers it). */
 function devStartFromUrl(p: URLSearchParams, qaMode: boolean): DevStart | null {
   const seedOf = (k: string) => { const v = p.get(k); return v ? codeToSeed(v) ?? undefined : undefined; };
   const seeds: Partial<Record<LevelId, number>> = {};
-  for (const [l, k] of [['subway', 'seed'], ['office', 'officeSeed'], ['mall', 'mallSeed'], ['skyways', 'skywaysSeed'], ['reactor', 'reactorSeed']] as const) { const s = seedOf(k); if (s !== undefined) seeds[l] = s; }
+  for (const [l, k] of [['subway', 'seed'], ['office', 'officeSeed'], ['mall', 'mallSeed'], ['market', 'marketSeed'], ['skyways', 'skywaysSeed'], ['reactor', 'reactorSeed']] as const) { const s = seedOf(k); if (s !== undefined) seeds[l] = s; }
   const level = p.get('level');
   const any = qaMode || isLevelId(level) || Object.keys(seeds).length > 0 || p.has('mallVariant');
   return any ? {level: isLevelId(level) ? level : 'subway', seeds} : null;
@@ -254,7 +254,7 @@ async function boot(): Promise<void> {
     if (targets[2]) $('#btn-death-new-fourth').textContent = `New game · ${LEVELS[targets[2]].name}`;
     if (targets[3]) $('#btn-death-new-fifth').textContent = `New game · ${LEVELS[targets[3]].name}`;
     if (s === 'dead') showLastSave();
-    $('#win-title').textContent = cur.level === 'office' ? 'Office tower clear' : cur.level === 'mall' ? `${nameOf('mall')} clear` : cur.level === 'reactor' ? 'Reactor pit clear' : cur.level === 'skyways' ? 'Skyways clear' : 'Station clear';
+    $('#win-title').textContent = cur.level === 'office' ? 'Office tower clear' : cur.level === 'mall' ? `${nameOf('mall')} clear` : cur.level === 'reactor' ? 'Reactor pit clear' : cur.level === 'skyways' ? 'Skyways clear' : cur.level === 'market' ? `${nameOf('market')}` : 'Station clear';
   });
   // task reactor-build-20261101 (lane RESTART): the title shows the persistent local "Reactor restarted" milestone once earned
   game.stateListeners.push((st: GameState) => { if (st !== 'title') return; const el = $('#milestone-badge'), t = milestoneBadge(readMilestones()); if (el) { el.textContent = t; el.hidden = !t; } });

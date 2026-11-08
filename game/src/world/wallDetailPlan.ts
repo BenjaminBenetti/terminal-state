@@ -66,6 +66,7 @@ export function finishFamily(finish: string): Finish {
   // on the block grid; the public plaster never cut)
   if (/^skyways-boh/.test(finish)) return 'paint';
   if (/^skyways-/.test(finish)) return 'office';
+  if (/^market-/.test(finish)) return 'office'; // task studio-survivor-market-20261108-005807-01: corrugated / plywood, never cut by the station grid
   if (/shop/i.test(finish)) return 'shopTile';
   if (/tile/i.test(finish)) return 'tile';
   if (/paint|plaster|block/i.test(finish)) return 'paint';
@@ -82,6 +83,7 @@ export function treatmentOf(face: Pick<WallFace, 'zone' | 'finish'>): Treatment 
   // Task studio-skyways-level-20261106-054448 (lane VIEW): Skyways finishes take the mall's (no station identity either)
   if (/^skyways-boh/.test(face.finish)) return 'mallService';
   if (/^skyways-/.test(face.finish)) return 'mallWall';
+  if (/^market-/.test(face.finish)) return 'mallWall'; // task studio-survivor-market-20261108-005807-01: no station identity either
   if (face.zone === 'trackbed' && /platformFace/i.test(face.finish)) return 'trackFace';
   return ZONE_TREATMENT[face.zone] ?? 'servicePaint';
 }

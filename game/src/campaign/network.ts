@@ -25,7 +25,7 @@
 
 import type {LevelId} from '../levels/types';
 import {Rng, hashString} from '../core/rng';
-import {NETWORK_SIZE, ORDINARY_WEIGHTS, PRE_SKYWAYS_WEIGHTS, type NetworkLine, type StationId, type StationNode, type SubwayNetwork} from './types';
+import {NETWORK_SIZE, ORDINARY_WEIGHTS, PRE_MARKET_WEIGHTS, PRE_SKYWAYS_WEIGHTS, type NetworkLine, type StationId, type StationNode, type SubwayNetwork} from './types';
 
 /** The layout grid: points 0..w x 0..h; one grid unit = `unit` map units (so x spans 0..98, y 0..56). */
 export const GRID = {w: 28, h: 16, unit: 3.5} as const;
@@ -48,7 +48,7 @@ export interface NetworkOptions {
   maintenanceRoute?: boolean;
 }
 
-const ARCHETYPES: readonly LevelId[] = ['subway', 'office', 'mall', 'skyways', 'reactor'];
+const ARCHETYPES: readonly LevelId[] = ['subway', 'office', 'mall', 'market', 'skyways', 'reactor']; // (+ market: task studio-survivor-market-20261108-005807-01)
 
 /** In-world wording of an archetype (map details, HUD). */
 export function archetypeLabel(a: LevelId): string {
@@ -57,6 +57,7 @@ export function archetypeLabel(a: LevelId): string {
     case 'office': return 'Office tower';
     case 'mall': return 'Shopping mall';
     case 'skyways': return 'Skyways';
+    case 'market': return 'Survivor market'; // (task studio-survivor-market-20261108-005807-01)
     case 'reactor': return 'Reactor';
   }
   return 'Station';
@@ -620,6 +621,8 @@ const SUFFIX = {
   office: ['Plaza', 'Exchange', 'Chambers', 'Commerce', 'Tower'],
   mall: ['Arcade', 'Galleria', 'Market', 'Promenade', 'Centre'],
   reactor: ['Works', 'Power', 'Powerhouse'],
+  // task studio-survivor-market-20261108-005807-01 (lane LEVEL): a survivor settlement's name (the mall keeps 'Market')
+  market: ['Bazaar', 'Outpost', 'Swap', 'Camp', 'Stockade'],
 } as const;
 
 const LINE_NAMES: readonly string[] = ['Meridian', 'Foundry', 'Harbour', 'Lantern', 'Quarry', 'Canal', 'Tidewater', 'Granary', 'Kestrel', 'Heron', 'Ember', 'Larch', 'Beacon', 'Thistle'];
@@ -692,6 +695,7 @@ function finish(seed: number, b: Board, weights: OrdinaryWeights, bypass = false
   const names = b.st.map((_, i) => {
     const stem = stems[i % stems.length];
     const role = arch[i] === 'reactor' ? 'reactor' : arch[i] === 'office' && rng.chance(0.6) ? 'office' : arch[i] === 'mall' && rng.chance(0.6) ? 'mall'
+      : arch[i] === 'market' && rng.chance(0.7) ? 'market' // (task studio-survivor-market-20261108-005807-01: drawn only for market nodes)
       : inks[i] > 1 && rng.chance(0.55) ? 'interchange' : b.adj[i].length === 1 && rng.chance(0.5) ? 'terminus' : rng.chance(0.68) ? 'plain' : '';
     if (!role) return stem;
     const pool = SUFFIX[role as keyof typeof SUFFIX].filter(s => (used.get(s) ?? 0) < 3);
@@ -828,8 +832,9 @@ export function validateNetwork(net: unknown, opts: NetworkOptions = {}): string
   }
   if ((count.reactor ?? 0) !== 1) errs.push(`network: ${count.reactor ?? 0} Reactor nodes, expected exactly 1`);
   // task studio-skyways-level-20261106-054448-01: without explicit weights, a network drawn before Skyways (PRE_SKYWAYS_WEIGHTS) is as
-  // valid as a current one — saved networks are never regenerated (an old campaign keeps its worlds).
-  const censuses = opts.weights ? [opts.weights] : [ORDINARY_WEIGHTS, PRE_SKYWAYS_WEIGHTS];
+  // valid as a current one — saved networks are never regenerated (an old campaign keeps its worlds). Task studio-survivor-market-
+  // 20261108-005807-01: + the census drawn before the Survivor Market (PRE_MARKET_WEIGHTS: 27 / 4 / 4 / 4, no market).
+  const censuses = opts.weights ? [opts.weights] : [ORDINARY_WEIGHTS, PRE_MARKET_WEIGHTS, PRE_SKYWAYS_WEIGHTS];
   const censusErrs = censuses.map(w => {
     const want = ordinaryCounts(w, NETWORK_SIZE.ordinary), e: string[] = [];
     for (const k of new Set([...Object.keys(want), ...Object.keys(count).filter(c => c !== 'reactor')])) {

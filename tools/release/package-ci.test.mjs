@@ -103,13 +103,13 @@ test('manifest states no total cap, keeps the per-file / count guards and report
   const r=m.report;
   assert.equal(Object.values(r.byType).reduce((s,v)=>s+v.bytes,0),m.totalBytes);
   assert.equal(Object.values(r.byType).reduce((s,v)=>s+v.files,0),m.fileCount);
-  assert.deepEqual(r.levelFamilies.models,{mall:{files:1,bytes:5},office:{files:1,bytes:6},reactor:{files:0,bytes:0},skyways:{files:0,bytes:0},shared:{files:1,bytes:4}}); // (reactor-build, lane ARCH: + the reactor family; + skyways)
-  assert.deepEqual(r.levelFamilies.textures,{mall:{files:1,bytes:3},office:{files:0,bytes:0},reactor:{files:0,bytes:0},skyways:{files:0,bytes:0},shared:{files:0,bytes:0}});
+  assert.deepEqual(r.levelFamilies.models,{mall:{files:1,bytes:5},office:{files:1,bytes:6},reactor:{files:0,bytes:0},skyways:{files:0,bytes:0},market:{files:0,bytes:0},shared:{files:1,bytes:4}}); // (reactor-build, lane ARCH: + the reactor family; + skyways; + market)
+  assert.deepEqual(r.levelFamilies.textures,{mall:{files:1,bytes:3},office:{files:0,bytes:0},reactor:{files:0,bytes:0},skyways:{files:0,bytes:0},market:{files:0,bytes:0},shared:{files:0,bytes:0}});
   assert.deepEqual(r.byType.audio,{files:1,bytes:5});
   assert.equal(r.excludedUnreferencedModelBytes,Buffer.byteLength('obsolete'));
   assert.equal(r.largestFiles[0].path,'assets/index-test.js');
   const lines=reportLines(m).join('\n');
-  assert.match(lines,/no total-size cap/);assert.match(lines,/models by family: mall 1 \/ 5 B · office 1 \/ 6 B · reactor 0 \/ 0 B · skyways 0 \/ 0 B · shared 1 \/ 4 B/); // (reactor-build, lane ARCH)
+  assert.match(lines,/no total-size cap/);assert.match(lines,/models by family: mall 1 \/ 5 B · office 1 \/ 6 B · reactor 0 \/ 0 B · skyways 0 \/ 0 B · market 0 \/ 0 B · shared 1 \/ 4 B/); // (reactor-build, lane ARCH)
   assert.match(lines,/advisory \(not a CI limit\).*fits/);
   assert.match(reportLines({...m,totalBytes:STATIC_HOST_ADVISORY_BYTES+1}).join('\n'),/exceeds by 1 B: use the dynamic app/);
 });

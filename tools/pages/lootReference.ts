@@ -136,8 +136,9 @@ export const GENERATED_FROM: readonly string[] = [
 export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
   /** Task track3-eaton-centre-20261031 (lane PROFILES): + 'mall' (gen/mall/supplies.ts placeMallSupplies, once per storey). */
   floor: 'subway' | 'office' | 'mall' | 'none';
-  /** + 'mall-plan' (task track3-eaton-centre-20261031): the mall's bounded once-per-run gun-shop weapon plan (lane SHOPS). */
-  weapons: 'station' | 'office-plan' | 'mall-plan';
+  /** + 'mall-plan' (task track3-eaton-centre-20261031): the mall's bounded once-per-run gun-shop weapon plan (lane SHOPS). + 'none' (task
+   *  studio-survivor-market-20261108-005807-01): no weapon finds at all (the Survivor Market: its gun stall's goods are trade stock). */
+  weapons: 'station' | 'office-plan' | 'mall-plan' | 'none';
   pistolBoxes: boolean;
   rewards: readonly string[];
   /** Task gas-mask-roof-feedback-20261030 (item 10): curated FIND reward keys the level's generator lays out (gen/office/roof.ts placeRoofFind). */
@@ -158,6 +159,9 @@ export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
   // — no loose floor program (user 2026-11-06: ordinary small loot sits on shelves / counters / in containers; the floor is reserved for
   // key finds) — and the station weapon finds (gen/weaponFinds.ts placeWeaponFinds).
   skyways: {floor: 'none', weapons: 'station', pistolBoxes: true, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
+  // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET — no free loot: no loose floor program, no weapon
+  // finds, no pistol-start boxes, no annex (trackExtensions 'none'); every holder it places carries the exact empty key (gen/market/dress.ts)
+  market: {floor: 'none', weapons: 'none', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: false},
 };
 
 /**
@@ -191,6 +195,7 @@ export const LOOT_TABLES_EXPORT_ROLES: Readonly<Record<string, string>> = {
   MALL_FLOOR: 'floor program (mall)', MALL_SALVAGE: 'economy.salvage (mall) + holder salvage rows', MALL_TABLES: 'profile tables (mall)',
   MALL_OVERRIDES: 'levels (profiles: mall overrides)', MALL_PROFILE: 'levels (profiles: mall)',
   REACTOR_OVERRIDES: 'levels (profiles: reactor overrides)', REACTOR_PROFILE: 'levels (profiles: reactor)', // task reactor-build-20261101
+  MARKET_PROFILE: 'levels (profiles: market — no free loot)', // task studio-survivor-market-20261108-005807-01
   // task reactor-playtest-round2-20261102 (lane ARRIVAL): the Reactor's total-loot hold (slot lots / container empty overrides, the
   // mall's storage fill scaled in the Reactor's own tables)
   REACTOR_PICKED_OVER: 'levels (profiles: reactor overrides)', REACTOR_FILL_SCALE: 'economy.storageFill (reactor scale)', REACTOR_TABLES: 'profile tables (reactor)',
@@ -1223,7 +1228,9 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
 
   // --- rare gear (one roll per logical level; grouped by identical resolved parameters)
   const groups = new Map<string, LevelId[]>();
-  for (const l of levels) { const k = JSON.stringify(gearParams(profiles.get(l)!)); groups.set(k, [...(groups.get(k) ?? []), l]); }
+  // (task studio-survivor-market-20261108-005807-01) a level whose profile rolls NO gear at all (cap / mean 0: the Survivor Market, no free
+  // loot) has no rare-gear roll to describe: it joins no group
+  for (const l of levels) { const gp = gearParams(profiles.get(l)!); if (!(gp.cap > 0 && gp.mean > 0)) continue; const k = JSON.stringify(gp); groups.set(k, [...(groups.get(k) ?? []), l]); }
   for (const [, ls] of groups) {
     const g = gearParams(profiles.get(ls[0])!);
     const w = Object.entries(g.weights).filter(([id, x]) => GEAR_ITEMS[id] && x > 0);
@@ -1311,6 +1318,8 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
       ? {level: l, summary: `gen/weaponFinds.ts placeWeaponFinds: plausible back-of-house rooms (security office, lockers, workshops, platform-end work zones), >= ${FIND_MIN_SPAWN_M} m from the spawn (straight line and path); a second copy well away from the first.`}
       : LEVEL_ADAPTER[l].weapons === 'mall-plan'
       ? {level: l, summary: MALL_WEAPON_PLAN_SUMMARY} // Task mall-playtest-revision-20261031 (lane SHOPS, U11): per-gun-shop stock, loadout-free
+      : LEVEL_ADAPTER[l].weapons === 'none'
+      ? {level: l, summary: 'No weapon finds: a calm settlement (the gun stall\'s goods are the trader\'s stock, bought — never map finds).'} // task studio-survivor-market-20261108-005807-01
       : {level: l, summary: `gen/office/spawns.ts officeWeaponPlan: ONE plan per level picks the storey of each copy (storey weights ${storeyW.map(([s, x]) => `${s === 1 ? 'street' : s}: ${rd(x / swd)}`).join(', ')} — first-copy shares), then placeOfficeWeapons drops it in a weighted room of that storey >= 30 cells walking from the start.`}),
     knobs: [
       {what: 'copy thresholds (0 / 1 / 2 copies)', value: `${FIND_COPY_THRESHOLDS.none} / ${FIND_COPY_THRESHOLDS.one}`, at: B.src.at(F.weaponFinds, 'FIND_COPY_THRESHOLDS'), overrides: ['none']},

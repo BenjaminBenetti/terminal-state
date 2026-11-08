@@ -170,7 +170,14 @@ export const TRACK_EXT_REACTOR: TrackExtConfig = {...TRACK_EXT, coreReserveM: 0,
  */
 export const TRACK_EXT_SKYWAYS: TrackExtConfig = {...TRACK_EXT, coreReserveM: 0, annex: {...TRACK_EXT.annex, max: 1}};
 
-/** Per-level track-extension config (levels/registry.ts LEVELS[..].trackExtensions reads it). */
+/**
+ * Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET grows no extensions at all — LEVELS.market.trackExtensions
+ * is 'none' (a calm settlement: no Beyond-the-Station annex, no 'service' spawns; the bed ends stay closed). This record only answers the
+ * per-level questions asked of every level's config (the annex ceiling the references report): zero annexes.
+ */
+export const TRACK_EXT_MARKET: TrackExtConfig = {...TRACK_EXT, annex: {...TRACK_EXT.annex, max: 0}};
+
+/** Per-level track-extension config (levels/registry.ts LEVELS[..].trackExtensions reads it; the market declares 'none' there). */
 export function trackExtConfig(levelId: string): TrackExtConfig {
-  return levelId === 'office' ? TRACK_EXT_OFFICE : levelId === 'mall' ? TRACK_EXT_MALL : levelId === 'reactor' ? TRACK_EXT_REACTOR : levelId === 'skyways' ? TRACK_EXT_SKYWAYS : TRACK_EXT;
+  return levelId === 'office' ? TRACK_EXT_OFFICE : levelId === 'mall' ? TRACK_EXT_MALL : levelId === 'reactor' ? TRACK_EXT_REACTOR : levelId === 'skyways' ? TRACK_EXT_SKYWAYS : levelId === 'market' ? TRACK_EXT_MARKET : TRACK_EXT;
 }

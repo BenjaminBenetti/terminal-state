@@ -212,7 +212,7 @@ describe('Game carry: Travel keeps the Lockbox, Retry restores it with the inven
       inv: new Inventory(), playerTrain: new PlayerTrainRecord(), runParticipants: [] as {id: string}[], arrival: {kind: 'start'}, startWeapon: 'pistol', bagStoreWired: false,
       survival: new Survival(), torch: {battery, reset: (c?: number) => battery.reset(c)}, player: {hp: 100, stamina: 100, damageTaken: 0, alive: true},
       stats: {shots: 0, hits: 0, kills: 0, time: 0, headshots: 0, healed: 0, itemsUsed: 0},
-      run: createRun({seeds: {subway: 1, office: 2, mall: 3, skyways: 707, reactor: 4}, start: {level: 'subway', section: 'main'}, levels: LEVELS}),
+      run: createRun({seeds: {subway: 1, office: 2, mall: 3, market: 808, skyways: 707, reactor: 4}, start: {level: 'subway', section: 'main'}, levels: LEVELS}),
     };
     Object.setPrototypeOf(s, Game.prototype);
     return s as unknown as Shell;

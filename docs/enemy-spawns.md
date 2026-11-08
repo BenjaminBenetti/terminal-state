@@ -248,6 +248,17 @@ fork (`skyways-enemies-<storey>`), tags its spawns with the context:
 - No horde pool and no room modifiers. One family roll at the end (`assignEnemyArchetypes`). The convention mascot statues are
   static props, never enemies.
 
+## The Survivor Market (`market`)
+
+<!-- Task studio-survivor-market-20261108-005807-01 (lane LEVEL): a calm survivor settlement, no enemies. -->
+
+`MARKET_SPAWN_PROFILE` (`SPAWN_PROFILES.market`, `LEVELS.market.tier = 1`) is ONE logical level, `LevelId` `market`
+(`game/src/gen/market/index.ts` `generateMarketLevel`): a calm settlement in a salvaged railway shed where the player's train stops.
+It places **no enemies anywhere**: its one ambient context **`station`** counts U{0..0} and the generator never asks for a placement
+run; there is no horde pool, no eligibility rule (no Siren) and no service annex (`LEVELS.market.trackExtensions` is `'none'`;
+`TRACK_EXT_MARKET.annex.max = 0`), so the declared **`service`** zone never runs. Its friendly residents and traders are not enemies
+(never in `layout.zombies`), and no other level's profile is ever used as a fallback.
+
 ## Units: what the numbers are
 
 - **Count range**: spawns one run of a context tries to place; E[count] = (lo + hi) / 2. There is no per-area spawn density at

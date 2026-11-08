@@ -19,8 +19,17 @@ export type StationId = string;
  * Ordinary station archetypes and their configured weights (user 2026-11-02: 80 / 10 / 10; future archetypes take Subway's share).
  * Task studio-skyways-level-20261106-054448-01 (user: "10 % ... taken from default Subway levels"): + Skyways 10 % out of the Subway's
  * share — 70 / 10 / 10 / 10: of the 39 ordinary nodes 27 Subway (incl. the start), 4 Office, 4 Mall, 4 Skyways (Office / Mall unchanged).
+ * Task studio-survivor-market-20261108-005807-01 (lane LEVEL; user: "5% map allocation from Subway ONLY"): + the Survivor Market 5 % out
+ * of the Subway's share — 65 / 10 / 10 / 10 / 5: of the 39 ordinary nodes 25 Subway (incl. the start), 4 Office, 4 Mall, 4 Skyways,
+ * 2 Market (largest remainder; the non-Subway shares unchanged).
  */
-export const ORDINARY_WEIGHTS: Readonly<Record<Exclude<LevelId, 'reactor'>, number>> = {subway: 0.7, office: 0.1, mall: 0.1, skyways: 0.1};
+export const ORDINARY_WEIGHTS: Readonly<Record<Exclude<LevelId, 'reactor'>, number>> = {subway: 0.65, office: 0.1, mall: 0.1, skyways: 0.1, market: 0.05};
+/**
+ * Task studio-survivor-market-20261108-005807-01 (lane LEVEL): the weights every network generated BEFORE the Survivor Market was drawn
+ * with (27 / 4 / 4 / 4 / 0). Saved networks are never regenerated (validateNetwork accepts every census below): an existing campaign keeps
+ * its worlds — no visited Subway world turns into a market; market nodes appear in campaigns started on this build.
+ */
+export const PRE_MARKET_WEIGHTS: Readonly<Partial<Record<Exclude<LevelId, 'reactor'>, number>>> = {subway: 0.7, office: 0.1, mall: 0.1, skyways: 0.1};
 /**
  * The weights every network generated BEFORE Skyways was drawn with (31 / 4 / 4 / 0). Saved networks are never regenerated: a save
  * written by an older build keeps its network (validateNetwork accepts either census), so an existing campaign never turns a visited
@@ -28,7 +37,7 @@ export const ORDINARY_WEIGHTS: Readonly<Record<Exclude<LevelId, 'reactor'>, numb
  */
 export const PRE_SKYWAYS_WEIGHTS: Readonly<Partial<Record<Exclude<LevelId, 'reactor'>, number>>> = {subway: 0.8, office: 0.1, mall: 0.1};
 
-/** Network size: ~40 nodes = 39 ordinary (largest remainder of the weights: 27 Subway incl. the start, 4 Office, 4 Mall, 4 Skyways) + exactly 1 Reactor. */
+/** Network size: ~40 nodes = 39 ordinary (largest remainder of the weights: 25 Subway incl. the start, 4 Office, 4 Mall, 4 Skyways, 2 Market) + exactly 1 Reactor. */
 export const NETWORK_SIZE = {ordinary: 39, reactor: 1} as const;
 
 /** A station of the network. */

@@ -7,7 +7,7 @@
 import {describe, expect, it} from 'vitest';
 import fs from 'node:fs';
 import {GRID, MIN_REACTOR_DEPTH, fallbackNetwork, generateNetwork, generateNetworkInfo, graphDistances, hashNodeSeed, ordinaryCounts, validateNetwork} from '../src/campaign/network';
-import {NETWORK_SIZE, ORDINARY_WEIGHTS, type SubwayNetwork, PRE_SKYWAYS_WEIGHTS} from '../src/campaign/types';
+import {NETWORK_SIZE, ORDINARY_WEIGHTS, type SubwayNetwork, PRE_MARKET_WEIGHTS, PRE_SKYWAYS_WEIGHTS} from '../src/campaign/types';
 import {hashString} from '../src/core/rng';
 
 const SEEDS = Array.from({length: 360}, (_, i) => (Math.imul(i + 1, 2654435761) ^ 0x5bd1e995) >>> 0);
@@ -36,16 +36,18 @@ function stats(net: SubwayNetwork) {
 }
 
 describe('the network over the seed sample', () => {
-  it('every network validates, used no fallback, and has the exact archetype counts 27 / 4 / 4 / 4 / 1', () => {
+  it('every network validates, used no fallback, and has the exact archetype counts 25 / 4 / 4 / 4 / 2 / 1', () => {
     // task studio-skyways-level-20261106-054448-01: Skyways takes 10 % from the Subway's share (Office / Mall unchanged)
-    expect(ordinaryCounts()).toEqual({subway: 27, office: 4, mall: 4, skyways: 4});
+    // task studio-survivor-market-20261108-005807-01: the Survivor Market takes 5 % from the Subway's share (2 of 39; the rest unchanged)
+    expect(ordinaryCounts()).toEqual({subway: 25, office: 4, mall: 4, skyways: 4, market: 2});
+    expect(ordinaryCounts(PRE_MARKET_WEIGHTS)).toEqual({subway: 27, office: 4, mall: 4, skyways: 4}); // what networks before the market were drawn with
     expect(ordinaryCounts(PRE_SKYWAYS_WEIGHTS)).toEqual({subway: 31, office: 4, mall: 4}); // what earlier networks were drawn with
     for (const {network: net, fallback} of nets) {
       expect([net.seed, validateNetwork(net)]).toEqual([net.seed, []]);
       expect(fallback).toBe(false);
       const c: Record<string, number> = {};
       for (const n of net.nodes) c[n.archetype] = (c[n.archetype] ?? 0) + 1;
-      expect(c).toEqual({subway: 27, office: 4, mall: 4, skyways: 4, reactor: 1});
+      expect(c).toEqual({subway: 25, office: 4, mall: 4, skyways: 4, market: 2, reactor: 1});
       expect(net.nodes.length).toBe(NETWORK_SIZE.ordinary + NETWORK_SIZE.reactor);
     }
   });
@@ -161,10 +163,15 @@ describe('determinism', () => {
     // change. Proof that nothing else moved: the legacy mode below still yields the earlier pin exactly.
     // re-pinned (task studio-skyways-level-20261106-054448-01): Skyways in the ordinary mix is an intended change of the archetype draw
     // only — with the pre-Skyways weights the same seed still yields the earlier pin exactly (graph, ids, positions, lines untouched).
+    // re-pinned (task studio-survivor-market-20261108-005807-01): two market nodes in the ordinary mix is an intended change of the
+    // archetype draw (and their names) only — with the pre-market weights the same seed still yields the earlier pin exactly (a617fdcb),
+    // and the Skyways nodes / graph / ids / Reactor are where they were.
     const net = generateNetwork(20261102);
     expect({nodes: net.nodes.length, edges: net.edges.length, lines: net.lines.length, start: net.start, reactor: net.reactor,
-      fingerprint: hashString(JSON.stringify(net)).toString(16)}).toEqual({nodes: 40, edges: 41, lines: 6, start: 'st-00', reactor: 'st-06', fingerprint: 'a617fdcb'});
+      fingerprint: hashString(JSON.stringify(net)).toString(16)}).toEqual({nodes: 40, edges: 41, lines: 6, start: 'st-00', reactor: 'st-06', fingerprint: 'a28e3851'});
     expect(net.nodes.filter(n => n.archetype === 'skyways').map(n => n.id)).toEqual(['st-12', 'st-28', 'st-29', 'st-35']);
+    expect(net.nodes.filter(n => n.archetype === 'market').map(n => n.id)).toEqual(['st-11', 'st-25']);
+    expect(hashString(JSON.stringify(generateNetwork(20261102, {weights: PRE_MARKET_WEIGHTS}))).toString(16)).toBe('a617fdcb');
     expect(hashString(JSON.stringify(generateNetwork(20261102, {weights: PRE_SKYWAYS_WEIGHTS}))).toString(16)).toBe('612733f3');
   });
 
@@ -191,7 +198,7 @@ describe('determinism', () => {
     expect(validateNetwork(net, {weights: w})).toEqual([]);
     expect(validateNetwork(net).some(e => e.includes('subway nodes'))).toBe(true);
     expect(() => generateNetwork(77, {weights: {office: 1}})).toThrow(/Subway/);
-    expect(ordinaryCounts(ORDINARY_WEIGHTS, 10)).toEqual({subway: 7, office: 1, mall: 1, skyways: 1});
+    expect(ordinaryCounts(ORDINARY_WEIGHTS, 10)).toEqual({subway: 7, office: 1, mall: 1, skyways: 1, market: 0});
   });
 
   it('the last-resort layout is a valid network too', () => {

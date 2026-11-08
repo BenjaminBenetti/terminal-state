@@ -561,6 +561,17 @@ rock suites, the complexes' room graphs) brought ~45 % more furnished holders, s
   are mostly service rooms, so their finds lean to batteries / flares. Floor pickups, the key, the fuses and the gas mask / filters
   (`gen/maskLoot.ts`) are unchanged.
 
+## The Survivor Market (`market`)
+
+<!-- Task studio-survivor-market-20261108-005807-01 (lane LEVEL). -->
+
+`PROFILES.market` = `MARKET_PROFILE`: **no free loot** in the calm settlement (the residents' belongings and the stall goods are not
+loot: the goods are the traders' finite stock). The generator places no pickups and every holder it places carries the exact empty key
+(`gen/market/dress.ts` `MARKET_EMPTY_KEY` = `ANNEX_PICKED_KEY`); the profile is the second guard: `categoryWeight` 0 for every
+economy category, `slot.lots` 0 for every slot, `floor.chance` 0, `gear` `{mean: 0, cap: 0}` (an empty level-wide gear roll; the
+mask / filter roll is 0 / 0 in `MASK_LOOT.levels.market`). The station's common fuel plan is not loot tables: only the workshop has a
+fuel affinity, so a market station's plan cans lie in its storage like at any station (`world/fuelStations.ts`).
+
 ## Verify
 
 - `tests/loot-golden.test.ts` hashes current behaviour:
