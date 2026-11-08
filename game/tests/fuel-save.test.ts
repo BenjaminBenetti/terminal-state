@@ -38,7 +38,7 @@ describe('fuel in saves', () => {
     expect((run.memories[`${sid(0)}:main`].lanes as Any)[FUEL_LANE]).toEqual({v: 1, realized: true, carts: [{uid: 'cart:st-01', units: 8, x: 12.5, y: 0, z: -3, yaw: 0.5, level: 0}]});
   });
 
-  it('malformed fuel is refused (with the checksum fixed): tank 5, a cart with 9 units, duplicate carts, a charge that does not add up', () => {
+  it('malformed fuel is refused (with the checksum fixed): tank 9, a cart with 9 units, duplicate carts, a charge that does not add up', () => {
     const h = harness();
     h.train.fuel.tank = 2;
     h.run.campaign!.transit = {from: sid(1), to: sid(2), phase: 'departing', cheat: false, fuel: {cost: 4, debit: {tank: 2, carts: [], chest: [{uid: 900001, count: 2}]}}};
@@ -52,7 +52,7 @@ describe('fuel in saves', () => {
       expect(r.ok).toBe(false);
       expect((r as {error: string}).error).toMatch(re);
     };
-    rejects(f => { f.run.participants['player-train'].fuel.tank = 5; }, /train fuel 5 out of range/);
+    rejects(f => { f.run.participants['player-train'].fuel.tank = 9; }, /train fuel 9 out of range/); // (task studio-general-armor-20261107-231448-01: the train holds two tanks)
     rejects(f => { f.run.participants['player-train'].fuel.cargo = [{uid: 'c', units: 9, x: 0, y: 0, z: 0, yaw: 0}]; }, /units 9 out of range/);
     rejects(f => { const c = {uid: 'c', units: 1, x: 0, y: 0, z: 0, yaw: 0}; f.run.participants['player-train'].fuel.cargo = [c, c]; }, /duplicate fuel cart/);
     rejects(f => { f.run.campaign.transit.fuel.cost = 8; }, /fuel drawn does not match/);

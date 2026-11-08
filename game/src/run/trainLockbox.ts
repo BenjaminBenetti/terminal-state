@@ -42,6 +42,8 @@ function stackFrom(j: unknown, inBag: boolean, seen: Set<number>): ItemStack | n
   }
   if (isFilterMask(itemId) && Number.isFinite(o.filter)) s.filter = Math.max(0, Math.min(gearSpec(itemId)!.filterLife!, o.filter as number));
   if (isAirtank(itemId) && Number.isFinite(o.air)) s.air = Math.max(0, Math.min(gearSpec(itemId)!.airLife!, o.air as number)); // task filter-tension-airtank
+  const fullArmor = gearSpec(itemId)?.armor ?? 0; // task studio-general-armor-20261107-231448-01: worn armour stays worn in the Lockbox
+  if (fullArmor > 0 && Number.isFinite(o.armor)) s.armor = Math.max(0, Math.min(fullArmor, o.armor as number));
   if (slots > 0) {
     const src = Array.isArray(o.bag) ? o.bag : [];
     s.bag = Array.from({length: slots}, (_, i) => stackFrom(src[i], true, seen));

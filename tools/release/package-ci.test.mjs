@@ -129,8 +129,27 @@ test('a site above the removed 150 MiB total packages (no total cap) with exact 
   for(let i=0;i<7;i++) assert.equal(fs.statSync(path.join(f.root,`artifacts/terminal-state-web/site/assets/models/big-${i}.glb`)).size,chunk);
   const g=fixture(t);const p=path.join(g.root,'dist/game/assets/models/live.glb');fs.truncateSync(p,MAX_FILE+1);assert.throws(g.run,/size limit/);
 });
-test('file-count guard still rejects more than MAX_FILES outputs',t=>{
-  const f=fixture(t);
-  for(let i=0;i<=MAX_FILES;i++) f.put(`dist/game/assets/models/extra-${i}.glb`,'x');
-  assert.throws(f.run,/too many files/);
+// (task studio-general-armor-20261107-231448-01) the guard bounds the SHIPPED artifact: more than MAX_FILES referenced, allowlisted outputs
+// are refused; tracked inputs the packager drops (unreferenced models / provenance) do not count toward it.
+function bulk(t,n,{referenced}){
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'terminal-state-package-'));
+  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const put=(rel,body)=>{const p=path.join(root,rel);fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,body);};
+  const files=[['assets/models/live.glb','live']];
+  for(let i=0;i<n;i++) files.push([`assets/derivatives/extra-${i}.json`,`{"i":${i}}`]);
+  for(const [rel,b] of files) {put(`game/public/${rel}`,b);put(`dist/game/${rel}`,b);}
+  put('tools/release/public-inputs.json',JSON.stringify({schema:'terminal-state-public-inputs-v1',files:files.map(([rel,b])=>({path:rel,bytes:Buffer.byteLength(b),sha256:sha(b)}))}));
+  put('dist/game/index.html','<script type="module" src="./assets/index-test.js"></script><link rel="stylesheet" href="./assets/index-test.css">');
+  const refs=referenced?files.map(([rel])=>`fetch("${rel}");`).join(''):'fetch("assets/models/live.glb");';
+  put('dist/game/assets/index-test.js',refs);
+  put('dist/game/assets/index-test.css','body {color:red}');
+  return ()=>packageSite({root,commit});
+}
+test('file-count guard still rejects more than MAX_FILES shipped outputs',t=>{
+  assert.throws(bulk(t,MAX_FILES,{referenced:true}),/too many files/);
+});
+test('file-count guard counts shipped outputs: unreferenced tracked provenance beyond the cap is dropped, not counted',t=>{
+  const m=bulk(t,MAX_FILES,{referenced:false})();
+  assert.equal(m.excludedUnreferencedProvenance.length,MAX_FILES);
+  assert(m.fileCount<=MAX_FILES);
 });

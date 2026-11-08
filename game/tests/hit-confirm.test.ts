@@ -216,12 +216,12 @@ describe('foreground player hit confirm: aggregation and bounds', () => {
     expect(all.length).toBe(2);
     const melee = all.filter(c => src.lastIndexOf('private meleeContact(', c.index) > src.lastIndexOf('private fire(', c.index));
     expect(melee.length).toBe(1);
-    expect(melee[0][1].split(',').map(s => s.trim())).toEqual(['point.x', 'point.y', 'point.z', 'z']);
+    expect(melee[0][1].split(',').map(s => s.trim())).toEqual(['point.x', 'point.y', 'point.z', 'z', "res.part === 'head'"]); // (+ the confirmed head part: task studio-general-armor-20261107-231448-01)
     const inMelee = src.slice(src.lastIndexOf('private meleeContact(', melee[0].index), melee[0].index);
     expect(inMelee).not.toContain('for (');
     const calls = all.filter(c => !melee.includes(c));
     expect(calls.length).toBe(1);
-    expect(calls[0][1].split(',').map(s => s.trim())).toEqual(['e.point.x', 'e.point.y', 'e.point.z', 'z']);
+    expect(calls[0][1].split(',').map(s => s.trim())).toEqual(['e.point.x', 'e.point.y', 'e.point.z', 'z', 'e.head']);
     const before = src.slice(0, calls[0].index);
     // the nearest enclosing loop is the per-enemy damage map (never the per-pellet loop)
     expect(before.lastIndexOf('for (')).toBe(before.lastIndexOf('for (const [z, e] of dmg)'));

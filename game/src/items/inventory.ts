@@ -69,6 +69,11 @@ export interface ItemStack {
   filter?: number;
   /** Task filter-tension-airtank-20261104-072836: an Airtank Backpack's air, seconds left (airtanks only; undefined = empty). */
   air?: number;
+  /**
+   * (task studio-general-armor-20261107-231448-01) An armour-bearing gear item's armour LEFT after wear (fraction, 0..its GearSpec.armor; player/armor.ts). Absent =
+   * undamaged (every older save / new item); travels with the item (drop / bag / Lockbox / cargo / saves): never reset by equipping.
+   */
+  armor?: number;
 }
 
 export type Bar = 'hotbar' | 'pack' | 'gear' | 'throw' | 'melee';
@@ -110,7 +115,7 @@ export type RefusalCode = 'split' | 'wrong-slot' | 'not-gear' | 'pockets-occupie
 export interface Refusal { code: RefusalCode; text: string }
 
 /** Plain-data stack (snapshots). Mask lane: + `filter` (a gas mask's fitted-filter seconds). */
-export interface StackJSON { uid: number; itemId: string; count: number; mag?: number; bag?: (StackJSON | null)[]; filter?: number; air?: number }
+export interface StackJSON { uid: number; itemId: string; count: number; mag?: number; bag?: (StackJSON | null)[]; filter?: number; air?: number; armor?: number }
 export interface InventoryJSON {
   /** 1: iteration-16 snapshots (no grenade slot), 2: + grenade slot (no melee slot) — both still loaded; 3: current. */
   v: 1 | 2 | 3;
@@ -143,6 +148,7 @@ export function stackToJSON(s: ItemStack | null | undefined): StackJSON | null {
   if (s.bag) j.bag = s.bag.map(stackToJSON);
   if (s.filter !== undefined) j.filter = s.filter; // mask lane
   if (s.air !== undefined) j.air = s.air; // task filter-tension-airtank
+  if (s.armor !== undefined) j.armor = s.armor; // task studio-general-armor-20261107-231448-01: armour left after wear
   return j;
 }
 
@@ -157,6 +163,7 @@ export function stackFromJSON(j: StackJSON | null | undefined): ItemStack | null
   if (j.bag) s.bag = j.bag.map(stackFromJSON);
   if (j.filter !== undefined) s.filter = j.filter; // mask lane
   if (j.air !== undefined) s.air = j.air; // task filter-tension-airtank
+  if (j.armor !== undefined) s.armor = j.armor; // task studio-general-armor-20261107-231448-01
   return s;
 }
 
@@ -998,6 +1005,12 @@ export class Inventory {
         const life = gearSpec(s.itemId)?.airLife ?? 0;
         if (!isAirtank(s.itemId)) out.push(`non-airtank ${s.itemId} carries air`);
         else if (!Number.isFinite(s.air) || s.air < 0 || s.air > life + 1e-6) out.push(`bad air ${s.itemId}:${s.air}`);
+      }
+      // task studio-general-armor-20261107-231448-01: armour left only on armour-bearing gear, finite, 0..its full armour
+      if (s.armor !== undefined) {
+        const full = gearSpec(s.itemId)?.armor ?? 0;
+        if (!(full > 0)) out.push(`non-armour ${s.itemId} carries armour wear`);
+        else if (!Number.isFinite(s.armor) || s.armor < 0 || s.armor > full + 1e-6) out.push(`bad armour ${s.itemId}:${s.armor}`);
       }
     };
     this.hotbar.forEach(s => s && check(s, 'hotbar'));

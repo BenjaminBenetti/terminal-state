@@ -320,6 +320,21 @@ settings, slots) with the QA hooks (`window.__menu`); there `#btn-start` builds 
   QA hooks: `liftButtons()`, `liftPress(id)`, `goRoofLadder()`, `goTransit(end, lane)`, `bagHoldE(s)`, `flareGive(n)`,
   `stallOpen()`, `officeArch()`.
 
+## Armor
+Task studio-general-armor-20261107-231448-01 (`src/player/armor.ts`).
+- **One pool.** Worn gear with armor adds to one armor value. It is not tied to a body part. Gear in pockets, bags, the
+  Lockbox or cargo adds nothing. A **pip** is 2.5 %. The armor vest gives 4 pips (10 %) and the hard hat 1 pip (2.5 %). The
+  pool is capped at 80 %.
+- **HUD.** Blue pips sit above the health bar, ten to a row (a full row is 25 %). Further rows stack on the first and overlap
+  it by about 25 %. The display moves in half pips, rounded down; the stored value keeps its fraction.
+- **Enemy damage only.** An enemy's hit, from any enemy type, loses the pool's share of its damage, whatever it hits. The
+  enemy damage multiplier applies first. Falls, toxic gas and starving or dehydration never meet the armor.
+- **Injury save.** The game rolls an injury from an enemy hit as for an unarmored player. If it would injure you, a second
+  roll with the pool as its chance cancels it. Hard landings get no save.
+- **Wear.** An enemy hit the armor reduced costs one worn armor item, chosen at random, a quarter pip (0.625 %); two hits
+  cost half a pip. The worn value stays with the item: take
+  off, drop, Lockbox, cargo and saves keep it. Old saves load undamaged.
+
 ## Gas mask, filters and breached office windows
 Task gasmask-breach-20261030. All balance values are first-pass constants: `GAS_MASK` (`src/gear/gasMask.ts`), `MASK_LOOT`
 (`src/gen/maskLoot.ts`), `WINDOW_BREACH` (`src/world/windowBreach.ts`) and `GAS` (`src/world/gas/field.ts`).

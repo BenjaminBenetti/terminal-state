@@ -387,14 +387,15 @@ describe('flares: physical toss on the right storey, burn, cap, cleanup, exactly
     expect(fl.counts.rescued).toBe(0);
   });
 
-  it('burns ~50 s with a strike flare-up and a final fade, then goes out and is cleaned up after the husk time', () => {
+  // (task studio-general-armor-20261107-231448-01, user: "Increase duration 2x"): 50 -> 100 s (the strike / final fade / husk unchanged)
+  it('burns ~100 s with a strike flare-up and a final fade, then goes out and is cleaned up after the husk time', () => {
     expect(flareEnvelope(0)).toBeCloseTo(0.5, 6);
     expect(flareEnvelope(1)).toBe(1);
     expect(flareEnvelope(FLARE.burn - FLARE.fade - 0.01)).toBe(1);
     expect(flareEnvelope(FLARE.burn - FLARE.fade / 2)).toBeCloseTo(0.5, 6);
     expect(flareEnvelope(FLARE.burn)).toBe(0);
-    expect(FLARE.burn).toBeGreaterThanOrEqual(45);
-    expect(FLARE.burn).toBeLessThanOrEqual(60);
+    expect(FLARE.burn).toBe(100);
+    expect([FLARE.fade, FLARE.ignite, FLARE.husk]).toEqual([6, 0.35, 20]);
     const {fl, sources, run, smoke, audio, scene} = setup();
     fl.throw(eyeAt(21, FIX.upperY, 5), norm(0, -0.2, 1));
     run(4);

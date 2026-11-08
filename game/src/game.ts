@@ -69,7 +69,8 @@ import {PlayerLight, applyBatteryItem} from './player/flashlight'; // Iteration 
 import {FlareSystem, throwOneFlare, type FlareSmokeHost} from './weapons/throwables'; // Iteration 12 (LIGHT): thrown road flares (grenade slot)
 import {FlareHold} from './weapons/flareHold'; // Iteration 15: hold to ready, release to throw
 import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifiers} from './player/modifiers'; // Iteration 16 (shared contract)
-import {armorFor, incomingHit, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
+import {incomingHit, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
+import {armorHit, armorPool} from './player/armor'; // task studio-general-armor-20261107-231448-01: the worn armour pool
 import {biteHitLocation, installInjuries, injuryStatusHtml, type InjurySystem} from './player/injuries'; // Iteration 16 (lane INJURY)
 import {installGear, type GearSystem} from './gear/system'; // Iteration 16 (lane GEAR): gear slots, deployable backpack, grounded bags
 import {installFuelStations, type FuelStations} from './world/fuelStations'; // task train-fuel-system: the stations' finite fuel (plans realized once; map figures)
@@ -2905,6 +2906,7 @@ export class Game {
       // Iteration 12 (LIGHT): battery meter + flare (grenade slot) count
       battery: {charge: this.torch.battery.charge, on: this.flashlightOn, flicker: this.torch.battery.flicker, spares: this.inv.count('battery')},
       flares: {count: this.inv.count('flare'), burning: this.flares.burningCount},
+      armor: armorPool(this.inv.gear), // task studio-general-armor-20261107-231448-01: the blue armour pips
     }, this.inv);
   }
 
@@ -2995,7 +2997,7 @@ export class Game {
     for (const [z, e] of dmg) {
       const killed = z.brain.damage(e.total, this.player.x, this.player.z, this.player.y);
       z.hitFlash = 1;
-      this.sfx.hitConfirm(e.point.x, e.point.y, e.point.z, z); // Iteration 12 (AUDIO): foreground (non-spatial) flesh confirm, once per enemy per shot (pellets aggregated in dmg; `z` de-dups)
+      this.sfx.hitConfirm(e.point.x, e.point.y, e.point.z, z, e.head); // Iteration 12 (AUDIO): foreground (non-spatial) flesh confirm, once per enemy per shot (pellets aggregated in dmg; `z` de-dups); + the skull crack when a pellet / bullet of this shot really hit its HEAD (task studio-general-armor-20261107-231448-01)
       if (e.head) this.stats.headshots++;
       // knockback along the shot direction (stays out of walls)
       const k = def.knockback * (e.pellets / def.pellets) * (killed ? 1.4 : 1);
@@ -3074,7 +3076,7 @@ export class Game {
       this.damage.hitZombie(z, point, dir, res.part, wound);
       const killed = z.brain.damage(meleeDamage(def, res.part), this.player.x, this.player.z, this.player.y, {stagger: false});
       z.hitFlash = 1;
-      this.sfx.hitConfirm(point.x, point.y, point.z, z);
+      this.sfx.hitConfirm(point.x, point.y, point.z, z, res.part === 'head'); // (+ the head crack on a confirmed head hit: task studio-general-armor-20261107-231448-01)
       if (killed) {
         this.stats.kills++;
         enemyCues(z).death(this.sfx, z);
@@ -3295,15 +3297,20 @@ export class Game {
    * Iteration 16: apply a hit to the player through armor; notifies hitListeners. Other damage sources (falls) use this too.
    * (task studio-alpha-survival-controls-20261107-060450-01) an enemy's attack lands at ENEMY_DAMAGE_TO_PLAYER x its raw amount first
    * (player/hits.ts incomingHit): armour, the injury roll and the HUD all see that hit.
+   * (task studio-general-armor-20261107-231448-01) The armour is ONE pool from the worn gear (player/armor.ts armorHit), read before this hit's wear: it cuts an
+   * ENEMY hit's damage on any body part, rides on the resolved hit for the injury save, and a hit it mitigated wears ONE contributing
+   * item. Non-enemy hits meet no armour.
    */
   applyPlayerHit(raw: PlayerHit): ResolvedHit {
     const hit = incomingHit(raw);
-    const {applied, absorbed} = armorFor(hit, this.mods.armorHead, this.mods.armorTorso);
-    this.player.takeDamage(applied);
-    const resolved: ResolvedHit = {...hit, applied, absorbed};
+    const {resolved} = armorHit(hit, this.inv.gear, this.wearRand);
+    this.player.takeDamage(resolved.applied);
     for (const fn of this.hitListeners) fn(resolved);
     return resolved;
   }
+
+  /** (task studio-general-armor-20261107-231448-01) Which worn item a mitigating hit wears: its own stream (the level's seeded stream is never shifted). */
+  private readonly wearRand = mulberry32((Math.random() * 0x100000000) >>> 0);
 
   private die(): void {
     if (this.state !== 'playing') return;

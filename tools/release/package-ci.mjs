@@ -14,6 +14,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 // limit was removed by user decision (2026-10-31: quality and playability first; no replacement total cap). The total is
 // reported exactly (manifest totalBytes + report, console) instead. The per-file guard (MAX_FILE) and the file-count guard
 // (MAX_FILES) stay, as do the allowlist / provenance / path / symlink / secret / runtime-URL checks below.
+// Task studio-general-armor-20261107-231448-01 (lead, packaging): MAX_FILES bounds the ARTIFACT — the files actually shipped — not the
+// local dist folder, which also holds the tracked-but-never-shipped inputs this packager already drops (unreferenced models /
+// provenance JSON: 177 files at the time, all still allowlisted + hash-checked). Counting those let tracked provenance alone block a new
+// legitimate runtime asset (dist sat at exactly 1000 while 823 files shipped).
 export const MAX_FILE = 25 * 1024 * 1024, MAX_FILES = 1000;
 const digest = b => crypto.createHash('sha256').update(b).digest('hex');
 const fail = m => { throw new Error(m); };
@@ -173,7 +177,7 @@ export function packageSite({root = ROOT, commit, output} = {}) {
     if (!e || e.bytes !== b.length || e.sha256 !== digest(b)) fail(`Unreviewed public input: ${rel}`);
   }
   const all = walk(dist);
-  if (all.length > MAX_FILES || !all.includes('index.html')) fail('Missing entry or too many files');
+  if (!all.includes('index.html')) fail('Missing entry or too many files');
   for (const rel of all) {
     if (rel !== 'index.html' && !bundlePath(rel) && !allowed.has(rel)) fail(`Unallowlisted output: ${rel}`);
     if (allowed.has(rel)) {
@@ -195,6 +199,7 @@ export function packageSite({root = ROOT, commit, output} = {}) {
     if (/^assets\/derivatives\/[^/]+\.json$/.test(f) && !code.includes(f)) { excludedUnreferencedProvenance.push(f); return false; }
     return true;
   });
+  if (files.length > MAX_FILES) fail(`Missing entry or too many files: ${files.length} shipped outputs exceed ${MAX_FILES}`);
   const fileSet = new Set(files);
   for (const rel of files.filter(f => /\.(js|html|css)$/.test(f))) checkRuntime(fs.readFileSync(path.join(dist, rel), 'utf8'), rel, fileSet);
   const entries = files.map(rel => {
