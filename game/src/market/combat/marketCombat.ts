@@ -461,6 +461,7 @@ export class MarketCombat implements MarketHostilityApi {
       if (p.state === 'alive') {
         const far = Math.hypot(p.actor.x - pl.x, p.actor.z - pl.z) > MARKET_COMBAT.far;
         if (!far) { this.perceive(p, dt); if (p.role === 'fight') this.fight(p, dt); else this.flee(p, dt); }
+        else if (p.role === 'flee') { if (p.mode !== 'hide') { this.setMode(p, 'hide'); p.actor.play(COMBAT_CLIP.cower, 0.35); } p.hiddenT += dt; } // got away: unseen
       }
     }
     this.separate();

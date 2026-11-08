@@ -59,10 +59,13 @@ interface Kit {
   hipsY: number;
   legLen: number;
   armLen: number;
+  /** Roll (deg) bringing the bind A-pose upper arm in to a relaxed hang (~6 degrees off the side): + for the left arm, mirrored. */
+  armIn: number;
 }
 
 function kitOf(rig: HumanRig): Kit {
-  return {rig, B: rig.bind, hipsY: rig.bind.Hips.y, legLen: rig.reach('L_leg'), armLen: rig.reach('L_arm')};
+  const ua = rig.bindLocal.L_Forearm, abd = Math.atan2(Math.abs(ua.x), -ua.y) * 180 / Math.PI;
+  return {rig, B: rig.bind, hipsY: rig.bind.Hips.y, legLen: rig.reach('L_leg'), armLen: rig.reach('L_arm'), armIn: Math.max(0, abd - 6)};
 }
 
 // ---------------------------------------------------------------------------------------------------------------- shared pieces
@@ -178,8 +181,8 @@ function unarmedClips(k: Kit, prefix: string): Map<string, THREE.AnimationClip> 
     const u = t / G.T, w = TAU * u, L = runLegs(k, G, u), sw = Math.cos(w);
     return {
       hips: L.hips, hipsRot: [9, L.hipsYaw, 0], spine: [5, -L.hipsYaw * 0.6, 0], chest: [4, -L.hipsYaw * 0.9, 0], neck: [-6, 0, 0], head: [-4, 0, 0],
-      armL: () => ({kind: 'fk', upper: [32 * sw - 6, 0, -10], lower: [-80 - 14 * Math.max(0, -sw), 0, 0], end: [0, 0, 6]}),
-      armR: () => ({kind: 'fk', upper: [-32 * sw - 6, 0, 10], lower: [-80 - 14 * Math.max(0, sw), 0, 0], end: [0, 0, -6]}),
+      armL: () => ({kind: 'fk', upper: [32 * sw - 6, 0, -k.armIn + 2], lower: [-80 - 14 * Math.max(0, -sw), 0, 0], end: [0, 0, 6]}),
+      armR: () => ({kind: 'fk', upper: [-32 * sw - 6, 0, k.armIn - 2], lower: [-80 - 14 * Math.max(0, sw), 0, 0], end: [0, 0, -6]}),
       legL: L.legL, legR: L.legR,
     };
   }));
@@ -199,29 +202,30 @@ function unarmedClips(k: Kit, prefix: string): Map<string, THREE.AnimationClip> 
     const e = ss(0, 0.07, t) * (1 - ss(0.1, CLIP_DURATION.hit, t));
     return {
       hips: V(0, k.hipsY - 0.01 - 0.03 * e, k.B.Hips.z - 0.03 * e), hipsRot: [-4 * e, 0, 0], spine: [1 - 8 * e, 0, 0], chest: [1 - 9 * e, 0, 3 * e], neck: [2 - 6 * e, 0, 0], head: [-2 - 12 * e, 0, -6 * e],
-      armL: () => ({kind: 'fk', upper: [-30 * e, 0, -4], lower: [-12 - 50 * e, 0, 0]}),
-      armR: () => ({kind: 'fk', upper: [-26 * e, 0, 4], lower: [-12 - 46 * e, 0, 0]}),
+      armL: () => ({kind: 'fk', upper: [-30 * e, 0, -k.armIn + 10 * e], lower: [-12 - 50 * e, 0, 0]}),
+      armR: () => ({kind: 'fk', upper: [-26 * e, 0, k.armIn - 10 * e], lower: [-12 - 46 * e, 0, 0]}),
       legL: plant(k, 'L', 0, 0), legR: plant(k, 'R', 0, 0),
     };
   }));
-  // --- Death: knees buckle, the body tips back and lies on its back (FK throughout: the feet leave the floor as it falls)
+  // --- Death: the knees buckle, it sits down hard, then falls on its back (FK throughout, keyed so the feet stay near the floor: the
+  //     thigh / shin angles at each key put the ankle at its standing height — buckled, sitting knees-up, lying knees a little up)
   out.set(COMBAT_CLIP.death, sampleClip(COMBAT_CLIP.death, CLIP_DURATION.death, rig, prefix, t => {
-    const u = t / CLIP_DURATION.death;
-    const hips = keyed(u, [[0, V(0, k.hipsY - 0.01, k.B.Hips.z)], [0.28, V(0, k.hipsY * 0.68, k.B.Hips.z - 0.05)], [0.72, V(0, 0.13, k.B.Hips.z - 0.36)], [0.84, V(0, 0.15, k.B.Hips.z - 0.37)], [1, V(0, 0.125, k.B.Hips.z - 0.37)]], mixV);
-    const hipsRot = keyed<Deg3>(u, [[0, [0, 0, 0]], [0.28, [6, 0, 2]], [0.72, [-90, 0, 4]], [0.84, [-86, 0, 4]], [1, [-90, 0, 4]]], lerp3);
-    const spine = keyed<Deg3>(u, [[0, [1, 0, 0]], [0.28, [16, 0, 0]], [0.72, [-4, 0, 0]], [1, [0, 0, 0]]], lerp3);
-    const chest = keyed<Deg3>(u, [[0, [1, 0, 0]], [0.28, [12, 0, 0]], [0.72, [-6, 0, 0]], [1, [-2, 0, 0]]], lerp3);
-    const head = keyed<Deg3>(u, [[0, [-2, 0, 0]], [0.28, [22, 0, 0]], [0.72, [-14, 10, 18]], [1, [-10, 18, 26]]], lerp3);
-    const thigh = keyed<Deg3>(u, [[0, [0, 0, 0]], [0.28, [-38, 0, 0]], [0.72, [-14, 0, 0]], [1, [-6, 0, 0]]], lerp3);
-    const shin = keyed<Deg3>(u, [[0, [0, 0, 0]], [0.28, [62, 0, 0]], [0.72, [24, 0, 0]], [1, [14, 0, 0]]], lerp3);
-    // the arms come up a little as it buckles, then fall out to the sides onto the floor (+ pitch = toward the back = the floor)
-    const upper = keyed<Deg3>(u, [[0, [0, 0, 0]], [0.28, [-20, 0, 12]], [0.72, [6, 0, 36]], [1, [10, 0, 42]]], lerp3);
-    const lower = keyed<Deg3>(u, [[0, [-10, 0, 0]], [0.28, [-40, 0, 0]], [0.72, [-22, 0, 0]], [1, [-18, 0, 0]]], lerp3);
+    const u = t / CLIP_DURATION.death, Hz = k.B.Hips.z;
+    const hips = keyed(u, [[0, V(0, k.hipsY - 0.01, Hz)], [0.28, V(0, k.hipsY - 0.09, Hz - 0.04)], [0.5, V(0, 0.2, Hz - 0.22)], [0.75, V(0, 0.13, Hz - 0.32)], [0.86, V(0, 0.145, Hz - 0.33)], [1, V(0, 0.125, Hz - 0.33)]], mixV);
+    const hipsRot = keyed<Deg3>(u, [[0, [0, 0, 0]], [0.28, [8, 0, 2]], [0.5, [-20, 0, 3]], [0.75, [-90, 0, 4]], [0.86, [-86, 0, 4]], [1, [-90, 0, 4]]], lerp3);
+    const spine = keyed<Deg3>(u, [[0, [1, 0, 0]], [0.28, [14, 0, 0]], [0.5, [10, 0, 0]], [0.75, [-4, 0, 0]], [1, [0, 0, 0]]], lerp3);
+    const chest = keyed<Deg3>(u, [[0, [1, 0, 0]], [0.28, [10, 0, 0]], [0.5, [6, 0, 0]], [0.75, [-6, 0, 0]], [1, [-2, 0, 0]]], lerp3);
+    const head = keyed<Deg3>(u, [[0, [-2, 0, 0]], [0.28, [20, 0, 0]], [0.5, [10, 0, 0]], [0.75, [-14, 10, 18]], [1, [-10, 18, 26]]], lerp3);
+    const thigh = keyed<Deg3>(u, [[0, [0, 0, 0]], [0.28, [-32, 0, 0]], [0.5, [-100, 0, 0]], [0.75, [-12, 0, 0]], [1, [-4, 0, 0]]], lerp3);
+    const shin = keyed<Deg3>(u, [[0, [0, 0, 0]], [0.28, [58, 0, 0]], [0.5, [80, 0, 0]], [0.75, [20, 0, 0]], [1, [9, 0, 0]]], lerp3);
+    // the arms come up a little as it buckles, brace back as it sits, then fall out to the sides onto the floor (+ pitch = back)
+    const upper = keyed<Deg3>(u, [[0, [0, 0, 0]], [0.28, [-20, 0, 12]], [0.5, [-5, 0, 25]], [0.75, [6, 0, 36]], [1, [10, 0, 42]]], lerp3);
+    const lower = keyed<Deg3>(u, [[0, [-10, 0, 0]], [0.28, [-40, 0, 0]], [0.5, [-25, 0, 0]], [0.75, [-22, 0, 0]], [1, [-18, 0, 0]]], lerp3);
     return {
       hips, hipsRot, spine, chest, neck: [0, 0, 0], head,
       armL: () => ({kind: 'fk', upper, lower}), armR: () => ({kind: 'fk', upper: [upper[0], 0, -upper[2]], lower}),
       legL: () => ({kind: 'fk', upper: add3(thigh, [0, 4, 3]), lower: shin, end: [-20 * u, 0, 0]}),
-      legR: () => ({kind: 'fk', upper: add3(thigh, [-4 * u, -4, -3]), lower: add3(shin, [-8 * u, 0, 0]), end: [-24 * u, 0, 0]}),
+      legR: () => ({kind: 'fk', upper: add3(thigh, [0, -4, -3]), lower: add3(shin, [-6 * u, 0, 0]), end: [-24 * u, 0, 0]}),
     };
   }));
   return out;

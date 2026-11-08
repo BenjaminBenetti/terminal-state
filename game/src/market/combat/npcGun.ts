@@ -38,8 +38,8 @@ export const NPC_GUNS: Readonly<Record<MarketGunId, NpcGunSpec>> = {
   pistol: {interval: [0.42, 0.75], burst: [1, 1], pause: [0, 0], spread: 0.03, aimError: 0.22, lag: 0.28, reaction: [0.45, 0.9], damageScale: 0.5, range: 28, reloadMult: 1.3},
   // rifle 24 x 0.38 = raw 9.1 per round, bursts of 2-4
   rifle: {interval: [0.13, 0.18], burst: [2, 4], pause: [0.75, 1.35], spread: 0.026, aimError: 0.24, lag: 0.3, reaction: [0.55, 1.0], damageScale: 0.38, range: 40, reloadMult: 1.3},
-  // shotgun 9 pellets x 15 x 0.28 = raw 4.2 each (all nine point blank = raw 38), falling off past 7 m
-  shotgun: {interval: [1.05, 1.5], burst: [1, 1], pause: [0, 0], spread: 0.01, aimError: 0.16, lag: 0.25, reaction: [0.5, 0.95], damageScale: 0.28, range: 16, reloadMult: 1.25},
+  // shotgun 9 pellets x 15 x 0.18 = raw 2.7 each (all nine point blank = raw 24, ~2.4 zombie claws), falling off past 7 m
+  shotgun: {interval: [1.05, 1.5], burst: [1, 1], pause: [0, 0], spread: 0.01, aimError: 0.16, lag: 0.25, reaction: [0.5, 0.95], damageScale: 0.18, range: 16, reloadMult: 1.25},
 };
 
 /** Raw damage of one round / pellet of `gun` reaching the player `dist` m away (before the player's hit pipeline). */
