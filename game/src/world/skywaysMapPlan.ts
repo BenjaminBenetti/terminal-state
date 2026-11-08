@@ -10,6 +10,7 @@
 //  - per board: YOU ARE HERE (its own position) and the floor context line ("You are on the +15 Skyway level, <building>").
 // Never fuel, prose, gameplay hints, campaign travel or anything about the prize beyond its ordinary event name (SKYWAYS_MAP_FORBIDDEN).
 
+import {skywalkText} from '../gen/skyways/skywalkText'; // task studio-skywalk-variety-20261107-231448-01
 import {CELL} from '../gen/grid';
 import type {Area, StationLayout} from '../gen/stationTypes';
 import type {PropPlacement} from '../gen/props';
@@ -54,11 +55,11 @@ const levelOf = (a: Area): number => a.level ?? 0;
 
 /** The storey phrase of a floor context line. */
 export function storeyPhrase(level: number): string {
-  return level === 2 ? '+15 Skyway level' : level === 1 ? 'Street level' : 'Pedway concourse level';
+  return level === 2 ? 'Skywalk level' : level === 1 ? 'Street level' : 'Pedway concourse level'; // (task studio-skywalk-variety-20261107-231448-01: no '+15')
 }
 /** A storey's short tag (dim labels of other storeys). */
 export function storeyTag(level: number): string {
-  return level === 2 ? '+15' : level === 1 ? 'Street' : 'Concourse';
+  return level === 2 ? 'Skywalk' : level === 1 ? 'Street' : 'Concourse';
 }
 
 const plans = new WeakMap<StationLayout, SkywaysMapPlan>();
@@ -162,7 +163,7 @@ export function skywaysMapPlan(layout: StationLayout): SkywaysMapPlan | null {
 
   // --- destination labels --------------------------------------------------------------------------------------------------------
   const labels: MapLabel[] = [];
-  const label = (kind: MapLabelKind, text: string, level: number, x: number, z: number) => labels.push({kind, text, level, x: r2(x), z: r2(z), building: buildingAt(x, z)});
+  const label = (kind: MapLabelKind, text: string, level: number, x: number, z: number) => labels.push({kind, text: skywalkText(text), level, x: r2(x), z: r2(z), building: buildingAt(x, z)});
   {
     const a = info.addon, c = centre(a.hall);
     if (a.id === 'convention' && a.venue?.length) {
@@ -214,7 +215,7 @@ export function skywaysMapPlan(layout: StationLayout): SkywaysMapPlan | null {
   const boundsOf: Record<number, SkywaysRect> = {};
   for (const s of info.storeys) boundsOf[s.level] = s.level === 0 ? bounds : union(shell);
   const plan: SkywaysMapPlan = {
-    name: info.name, bounds, boundsOf, storeys: info.storeys.map(s => ({level: s.level, label: s.label})), buildings,
+    name: skywalkText(info.name), bounds, boundsOf, storeys: info.storeys.map(s => ({level: s.level, label: skywalkText(s.label)})), buildings, // (player text: skywalkText)
     streets: info.streets.map(s => ({rect: {...s.rect}, axis: s.axis})), spaces, runs, lines, labels,
   };
   plans.set(layout, plan);

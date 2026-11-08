@@ -82,7 +82,7 @@ describe('Skyways: generated layouts', () => {
         const g = l.levels[b.level].grid, [cx, cy] = g.cellOf((b.rect.x0 + b.rect.x1) / 2, (b.rect.z0 + b.rect.z1) / 2);
         expect(d[b.level][g.idx(cx, cy)], `seed ${s} bridge ${b.id}`).toBeGreaterThan(0);
       }
-      expect(storeyLabel(l, 2)).toBe('+15 Skyway');
+      expect(storeyLabel(l, 2)).toBe('Skywalk'); // (task studio-skywalk-variety-20261107-231448-01: generic player wording)
     }
   });
 

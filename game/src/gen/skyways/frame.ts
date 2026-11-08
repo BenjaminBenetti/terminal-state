@@ -21,7 +21,7 @@
 //    the bridges).
 
 import {Rng, hashString} from '../../core/rng';
-import {SKYWAYS_ADDONS, SKYWAYS_LANDMARK_FAMILIES, SKYWAYS_SHOP_FAMILIES, type SkywaysAddonId, type SkywaysBuildingRole, type SkywaysFamily, type SkywaysLandmarkFamily, type SkywaysPlan, type SkywaysShopFamily, type SkywaysTopology} from './skywaysTypes';
+import {SKYWAYS_ADDONS, SKYWAYS_LANDMARK_FAMILIES, SKYWAYS_SHOP_FAMILIES, type SkywaysAddonId, type SkywaysBuildingRole, type SkywaysFamily, type SkywaysLandmarkFamily, type SkywaysPlan, type SkywaysProgramme, type SkywaysShopFamily, type SkywaysTopology} from './skywaysTypes';
 
 /** Storey height (m): storey k at y = STOREY * k (station 0, street level 5, skyway level 10). */
 export const STOREY = 5.0;
@@ -66,6 +66,8 @@ export interface FrameBuilding {
   corner: number;
   /** An office suite off a service corridor on this storey (0 = none). */
   offices: number;
+  /** (layout version 4) The building's programme (skywaysTypes SkywaysProgramme; 'classic' before). */
+  programme: SkywaysProgramme;
 }
 
 /** A bridge edge of the frame (carved at the skyway level; lateral position chosen by the carve within `lateral`'s preference). */
@@ -86,8 +88,9 @@ export interface SkywaysFrame {
   addonHost: string;
   addonLevel: 1 | 2;
   addonApproach: 'direct' | 'foyer';
-  /** The building whose skyway level holds the ramen restaurant (never the add-on host). */
-  ramen: string;
+  /** The building the ramen restaurant is tried in first (never the add-on host); (layout version 4) null = no ramen this map — an
+   *  ordinary tenant, not a fixture of every level. */
+  ramen: string | null;
   /** Station platform length (cells). */
   Lp: number;
   /** The station transit well: the hub edge it hugs, its position along it (0..1) and its lanes. */
@@ -229,7 +232,7 @@ export function skywaysFrame(levelSeed: number, salt = 0, opts: {legacy?: boolea
     const w = colW[b.col] - set[0] - set[1], h = rowD[b.row] - set[2] - set[3];
     const id = `B${buildings.length}`;
     buildings.push({id, name: '', col: b.col, row: b.row, role: 'tower', x: colX[b.col] + rowShift[b.row] + set[0], y: rowZ[b.row] + colShift[b.col] + set[2], w, h,
-      atrium: false, height: rng.range(28, 90), plan: 'court', axis: 'x', corner: 0, offices: 0});
+      atrium: false, height: rng.range(28, 90), plan: 'court', axis: 'x', corner: 0, offices: 0, programme: 'classic'});
   }
   // printed names: a seeded draw from the pool (the shape stream: a retry keeps every name)
   const names = shape.shuffle(B_NAMES.slice());
@@ -275,6 +278,38 @@ export function skywaysFrame(levelSeed: number, salt = 0, opts: {legacy?: boolea
   // Pre-breached routes: about a third of the bridges (at least one when there are three or more), never every route clean.
   const nBreach = bridges.length >= 3 ? Math.max(1, Math.round(bridges.length * rng.range(0.25, 0.4))) : bridges.length ? (rng.chance(0.5) ? 1 : 0) : 0;
   for (const b of rng.shuffle(bridges.slice()).slice(0, nBreach)) b.breached = true;
+  // --- (layout version 4) Building PROGRAMMES (task studio-skywalk-variety-20261107-231448-01): what each building IS ---------------
+  // Breadth-first from the station over the bridge graph, each building draws a programme that its bridge neighbours do not already
+  // have where it can (crossing a bridge changes the experience), spread over the kinds (no kind twice before every kind once). The
+  // station and the underground pedways' buildings keep a street lobby (no bridge house there); the add-on host stays classic (its
+  // venue / display carve). Its own stream: the rest of the frame draws as before.
+  if (!opts.legacy) {
+    const pr = new Rng(salt ? hashString(`skyways:programme:${salt}`, seed) : hashString('skyways:programme', seed));
+    const nbrs = (q: FrameBuilding) => bridges.filter(e => e.a === q.id || e.b === q.id).map(e => buildings.find(p => p.id === (e.a === q.id ? e.b : e.a))!);
+    const order: FrameBuilding[] = [station], seen = new Set([station.id]);
+    for (let i = 0; i < order.length; i++) for (const n of pr.shuffle(nbrs(order[i]))) if (!seen.has(n.id)) { seen.add(n.id); order.push(n); }
+    for (const q of buildings) if (!seen.has(q.id)) order.push(q);
+    const done = new Map<string, SkywaysProgramme>(), count: Record<SkywaysProgramme, number> = {classic: 0, gallery: 0, hall: 0, tower: 0};
+    // (the station row's neighbours / the building north of the station may take an underground pedway: they keep a street lobby)
+    const pedwayCand = new Set([byCell(stationCol - 1, stationRow), byCell(stationCol + 1, stationRow), byCell(stationCol, stationRow - 1)].filter(Boolean).map(q => q!.id));
+    for (const q of order) {
+      if (q.id === host.id) { done.set(q.id, 'classic'); count.classic++; continue; }
+      const kinds: [SkywaysProgramme, number][] = q.id === station.id ? [['hall', 1], ['tower', 1], ['classic', 0.8]]
+        : [['gallery', pedwayCand.has(q.id) ? 0.35 : 1.15], ['hall', 1], ['tower', 0.95], ['classic', 0.75]];
+      const near = nbrs(q).map(n => done.get(n.id)).filter(Boolean);
+      const w = kinds.map(([kd, base]) => [kd, base * (near.includes(kd) ? 0.12 : 1) / (1 + 2.5 * count[kd]) * (kd === 'gallery' && q.w * q.h < 2400 ? 0.5 : 1)] as [SkywaysProgramme, number]);
+      const kd = pr.weighted(w);
+      done.set(q.id, kd); count[kd]++;
+    }
+    for (const q of buildings) {
+      q.programme = done.get(q.id) ?? 'classic';
+      // the programme's silhouette: a low bridge house, a tall market hall under its glass roof, an office tower, a mid-rise block
+      q.height = q.programme === 'gallery' ? pr.range(11, 16) : q.programme === 'hall' ? pr.range(17, 24) : q.programme === 'tower' ? pr.range(62, 96) : pr.range(28, 58);
+      // atria: every market hall; a classic block now and then; never a bridge house or an office lobby (its grand stair is the feature)
+      q.atrium = q.programme === 'hall' || (q.programme === 'classic' && q.id !== host.id && q.atrium && pr.chance(0.6));
+      if (q.id !== station.id && q.id !== host.id) q.role = q.atrium ? 'hub' : 'tower';
+    }
+  }
   // --- Floor plans (per building, to suit its bridges) --------------------------------------------------------------------------
   const sidesOf = (q: FrameBuilding) => bridges.filter(e => e.a === q.id || e.b === q.id).map(e => {
     const o = buildings.find(p => p.id === (e.a === q.id ? e.b : e.a))!;
@@ -284,6 +319,10 @@ export function skywaysFrame(levelSeed: number, salt = 0, opts: {legacy?: boolea
     const sides = sidesOf(q);
     const ew = sides.filter(s => s === 'E' || s === 'W').length, ns = sides.length - ew;
     const longX = q.w >= q.h;
+    // (layout version 4) the programme fixes the plan: a bridge house is one long promenade between its bridges; a market hall and an
+    // office lobby are courts (one big hall); classic blocks keep the plan families
+    if (q.programme === 'gallery') { q.plan = 'galleria'; q.axis = ew > ns ? 'x' : ns > ew ? 'z' : (longX ? 'x' : 'z'); continue; }
+    if (q.programme === 'hall' || q.programme === 'tower') { q.plan = 'court'; q.axis = longX ? 'x' : 'z'; continue; }
     if (q.id === station.id) q.plan = rng.weighted([['court', 0.6], ['galleria', 0.4]] as const), q.axis = 'x';
     else if (q.id === host.id) {
       q.plan = rng.weighted([['court', 0.55], ['galleria', 0.45]] as const);
@@ -300,19 +339,25 @@ export function skywaysFrame(levelSeed: number, salt = 0, opts: {legacy?: boolea
   }
   // --- Programmes, links, the add-on's approach -----------------------------------------------------------------------------------
   // The ramen restaurant: a non-host building (never the add-on's)
-  const ramen = rng.pick(buildings.filter(q => q.id !== host.id)).id;
+  const ramenPick = rng.pick(buildings.filter(q => q.id !== host.id)).id;
+  // (layout version 4, user: "ramen shop always seems to spawn at the station, it should be random like other shops") an ordinary
+  // tenant: about three maps in five, tried first in a random non-host building (its own stream)
+  const ramen = opts.legacy || new Rng(hashString('skyways:ramen', seed)).chance(0.6) ? ramenPick : null;
   // The food court: a non-host building's skyway or street level (the station lobby too), most levels — a court plan by preference
   // (an atrium building's: the street-level court under the glass); a cross plan's arms leave its lobby few walls
   const fcPool = buildings.filter(q => q.id !== host.id && q.id !== ramen);
-  const fcB = rng.chance(0.85) && fcPool.length ? rng.weighted(fcPool.map(q => [q, q.plan === 'court' ? 3 : q.plan === 'cross' ? 0.5 : 2] as const)) : null;
-  const foodCourt = fcB ? {building: fcB.id, level: (fcB.atrium ? 1 : rng.chance(0.6) ? 2 : 1) as 1 | 2} : null;
+  // (layout version 4: a market hall's floor first; never a bridge house's street level)
+  const fcB = rng.chance(0.85) && fcPool.length ? rng.weighted(fcPool.map(q => [q, q.programme === 'hall' ? 12 : q.plan === 'court' ? 3 : q.plan === 'cross' ? 0.5 : 2] as const)) : null;
+  const foodCourt = fcB ? {building: fcB.id, level: (fcB.programme === 'gallery' ? 2 : fcB.atrium ? 1 : rng.chance(0.6) ? 2 : 1) as 1 | 2} : null;
   // An office suite: one ordinary building's skyway or street level, about half the time
   const offPool = buildings.filter(q => q.id !== host.id && q.id !== station.id && q.id !== fcB?.id);
-  const offB = offPool.length && rng.chance(0.5) ? rng.pick(offPool) : undefined;
-  if (offB) offB.offices = rng.chance(0.6) ? 2 : 1;
+  // (layout version 4: an office tower's bridge level IS its tenant's floor; else, about half the time, an ordinary building's)
+  const tower = offPool.find(q => q.programme === 'tower');
+  const offB = tower ?? (offPool.length && rng.chance(0.5) ? rng.pick(offPool.filter(q => q.programme !== 'hall').length ? offPool.filter(q => q.programme !== 'hall') : offPool) : undefined);
+  if (offB) offB.offices = tower || offB.programme === 'gallery' ? 2 : rng.chance(0.6) ? 2 : 1;
   // Underground pedways: the concourse runs under the street to the station row's neighbours and / or north to the building behind
   // the station (each with its own open stair up into that lobby): none, one or two
-  const lowerCand = [byCell(stationCol - 1, stationRow), byCell(stationCol + 1, stationRow), byCell(stationCol, stationRow - 1)].filter((q): q is FrameBuilding => !!q && q.id !== host.id);
+  const lowerCand = [byCell(stationCol - 1, stationRow), byCell(stationCol + 1, stationRow), byCell(stationCol, stationRow - 1)].filter((q): q is FrameBuilding => !!q && q.id !== host.id && q.programme !== 'gallery');
   const nLower = Math.min(lowerCand.length, rng.weighted([[0, 0.25], [1, 0.5], [2, 0.25]] as const));
   const lowerLinks = rng.shuffle(lowerCand).slice(0, nLower).map(q => q.id);
   const transitLanes = rng.weighted(TRANSIT_LANE_SETS);

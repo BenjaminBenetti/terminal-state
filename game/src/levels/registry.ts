@@ -17,6 +17,7 @@ import {trackExtConfig} from '../gen/trackExt/config'; // Track 2 (lane GEN): tu
 import {generateReactorLevel} from '../gen/reactor/index'; // task reactor-build-20261101 (lane GEN): THE REACTOR
 import {generateSkywaysLevel} from '../gen/skyways/index'; // task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS
 import {lootProfile} from '../items/lootTables'; // task mall-round3-20261031 (lane SHOPS, R6): the gear placement bias
+import {skywalkText} from '../gen/skyways/skywalkText'; // task studio-skywalk-variety-20261107-231448-01
 import {trainSpawnPose, type TrainPlacement} from '../gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE): start arrivals inside the train
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
@@ -178,8 +179,8 @@ export function storeyLabel(layout: StationLayout, level: number): string {
   if (m) return m.label;
   const r = layout.reactor?.tiers.find(t => t.level === level); // task reactor-build-20261101: 'Rim', 'Tier 1' … 'Core floor'
   if (r) return r.label;
-  const k = layout.skyways?.storeys.find(t => t.level === level); // Skyways: 'Concourse', 'Street level', '+15 Skyway'
-  return k ? k.label : '';
+  const k = layout.skyways?.storeys.find(t => t.level === level); // Skyways: 'Concourse', 'Street level', 'Skywalk'
+  return k ? skywalkText(k.label) : ''; // (task studio-skywalk-variety-20261107-231448-01: no '+15' in player text)
 }
 
 /** The player pose a level starts at: the office's platform start (layout.office.start), else layout.playerSpawn. */

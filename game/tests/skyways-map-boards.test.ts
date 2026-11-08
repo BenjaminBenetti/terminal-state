@@ -12,7 +12,8 @@
 //    storey, the overlay quads at each board's marker / strip, textures released with the face mesh.
 import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
-import {LEVELS} from '../src/levels/registry';
+import {LEVELS, storeyLabel} from '../src/levels/registry';
+import {skywalkText} from '../src/gen/skyways/skywalkText';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {CELL, FLOOR} from '../src/gen/grid';
 import {PROP_DEFS, type PropPlacement} from '../src/gen/props';
@@ -191,6 +192,25 @@ describe('Skyways map boards: placement on real seeds', () => {
 });
 
 describe('Skyways map boards: the plan matches the layout', () => {
+  // (task studio-skywalk-variety-20261107-231448-01, user: the board "references '+15' which ties it directly to the inspiration art ...
+  // just say 'skywalk'") no player-facing '+15' / 'Skyway' on the board — the face's texts, the plan's names and every here-line —
+  // for version 4 AND for the older layouts' recorded labels (displayed through skywalkText)
+  it('the board says Skywalk: no "+15" / "Skyway" in any player text (version 4 and older layouts)', () => {
+    for (const [seed, v] of [[1, undefined], [4, 3], [2, 2]] as [number, number | undefined][]) {
+      const l = LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', ...(v ? {layoutVersion: v} : {})} as never);
+      const plan = skywaysMapPlan(l)!;
+      const texts = [...skywaysMapTexts(plan), ...(l.skyways!.storeys.map(s => storeyLabel(l, s.level)))];
+      for (const b of l.props.filter(p => isSkywaysMapBoardKind(p.kind))) { const h = skywaysBoardHere(plan, b); texts.push(h.line, ...h.lines); }
+      for (const t of texts) expect(t, `seed ${seed} v${v ?? 'cur'}`).not.toMatch(/\+15|\bSkyway\b|SKYWAY\b/);
+      expect(texts.some(t => /Skywalk/.test(t)), `seed ${seed}`).toBe(true);
+    }
+    expect(skywalkText('Escalators & stairs · Street level – +15')).toBe('Escalators & stairs · Street level – Skywalk');
+    expect(skywalkText('Calder +15')).toBe('Calder Skywalk');
+    expect(skywalkText('+15 Skyway')).toBe('Skywalk');
+    expect(skywalkText('Skyway bridge · A – B')).toBe('Skywalk bridge · A – B');
+    expect(skywalkText(skywalkText('Calder +15'))).toBe('Calder Skywalk');
+  });
+
   it('buildings, bridges (one +15 line each through its deck), pedways, runs and every destination', () => {
     let offices = 0;
     for (const s of SEEDS) {
@@ -263,7 +283,7 @@ describe('Skyways map boards: the plan matches the layout', () => {
         const bld = info.buildings.find(q => inside(q.rect, b.x, b.z))!;
         expect(bld, `seed ${s}`).toBeTruthy();
         expect(here.line).toBe(`You are on the ${storeyPhrase(lv)}, ${bld.name}`);
-        if (lv === 2) expect(here.line).toMatch(/^You are on the \+15 Skyway level, /);
+        if (lv === 2) expect(here.line).toMatch(/^You are on the Skywalk level, /); // (task studio-skywalk-variety-20261107-231448-01: no '+15')
         // the marker sprite stays on the printed circle
         const M = MAP_FACE.marker, x0 = markerFlip(p) ? p.x - (M.w - M.dot) : p.x - M.dot;
         for (const [x, y] of [[x0, p.y - M.h / 2], [x0 + M.w, p.y - M.h / 2], [x0, p.y + M.h / 2], [x0 + M.w, p.y + M.h / 2]]) expect(Math.hypot(x - 512, y - 512)).toBeLessThanOrEqual(MAP_FACE.r);

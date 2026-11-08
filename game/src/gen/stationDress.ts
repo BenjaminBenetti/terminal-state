@@ -201,7 +201,7 @@ export function dress(layout: StationLayout, rng: Rng): void {
         // Iteration 08 (Lane A): public stair cores between levels — lights only (Lane A adds their wayfinding after dress()).
         case 'stair-core': lineLights(c, area, 4, 0.06); break;
         case 'washroom': dressWashroom(c, area); break;
-        case 'eatery': case 'shop': if (area.storefront !== undefined) dressStorefront(api, layout, layout.storefronts[area.storefront]); break;
+        case 'eatery': case 'shop': if (area.storefront !== undefined && !layout.storefronts[area.storefront].ownDress) dressStorefront(api, layout, layout.storefronts[area.storefront]); break; // (ownDress: its own dresser, Skyways v4 ramen)
         default: dressBackOfHouse(c, area); break;
       }
     });
