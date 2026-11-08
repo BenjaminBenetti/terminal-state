@@ -76,7 +76,7 @@ export const MARKET_PEOPLE = {
    * on for another round instead of leaving; how many times likelier a regular picks a 'drink' spot; the share of the residents (at most
    * one per 'drink' spot) who start at the bar as its regulars.
    */
-  drink: {dwell: [35, 90] as [number, number], stay: 0.45, regularWeight: 6, regulars: 0.34},
+  drink: {dwell: [35, 90] as [number, number], stay: 0.55, regularWeight: 10, regulars: 0.34},
 } as const;
 
 /** A keep-out rectangle in world x / z. */
@@ -406,8 +406,8 @@ export class MarketPeople {
 
   /** Pick a free spot and a route to it; false (and a short wait) when none was found this time. */
   private depart(r: Resident): boolean {
-    // (lane PEOPLE) a patron often stays for another round
-    if (r.drink && r.rand() < MARKET_PEOPLE.drink.stay) {
+    // (lane PEOPLE) a patron often stays for another round — and the last one at the bar always does (the bar never empties)
+    if (r.drink && (this.residents.filter(o => o.drink).length <= 1 || r.rand() < MARKET_PEOPLE.drink.stay)) {
       const [lo, hi] = MARKET_PEOPLE.drink.dwell;
       r.timer = lo + r.rand() * (hi - lo);
       this.counts.lingers++;
