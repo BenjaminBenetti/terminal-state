@@ -354,8 +354,9 @@ export class TradeView {
       } else if (st) price = `${buyPrice(st, st.count)}`;
       if (st && !no) { // exactly what a Ctrl+click does (the quantity / price Confirm would use)
         const sel: TradeSel = side === 'sell' ? {side: 'sell', ref} : {side: 'buy', index: i};
-        const n = this.quickQty(sel), q = sel.side === 'sell' ? quoteSell(c, ref, n) : quoteBuy(c, i, n);
-        if (q.ok) quick = ` · Ctrl+click: ${sel.side} ${amountText(st.itemId, q.count)} for ${tiesText(q.price)}`;
+        const n = this.quickQty(sel), qb = sel.side === 'buy' ? quoteBuy(c, i, n) : null, q = qb ?? quoteSell(c, ref, n);
+        const short = qb?.ok && !qb.afford ? ` (you have ${tiesText(qb.have)})` : '';
+        if (q.ok) quick = ` · Ctrl+click: ${sel.side} ${amountText(st.itemId, q.count)} for ${tiesText(q.price)}${short}`;
       }
       const cond = st ? conditionText(st) : '';
       const title = def ? ` title="${esc(`${def.name}${cond ? ` — ${cond}` : ''}${why ? ` · ${why}` : ''}${quick}`)}"` : '';

@@ -54,7 +54,7 @@ export const TRADE_TEXT = {
   hostile: 'The market has turned on you — nobody will trade with you now',
   unmanned: 'Nobody is minding this stall any more — trade closed',
   refused: 'This stall will not trade with you.',
-  migrated: (p: TiesPlaced) => `Your market balance is now real Rail Ties: ${[p.carried ? `${p.carried} in your pockets` : '', p.lockbox ? `${p.lockbox} in the train's Lockbox` : '',
+  migrated: (p: TiesPlaced) => `Your market balance is now real Rail Ties: ${[p.carried ? `${p.carried} carried` : '', p.lockbox ? `${p.lockbox} in the train's Lockbox` : '',
     p.cargo ? `${p.cargo} on the train's floor` : ''].filter(Boolean).join(' · ')}${p.left ? ` · ${p.left} more once you make room` : ''}`,
   owed: (n: number) => `${n} Rail Ties from your old market balance are waiting — free a quick slot, pocket or Lockbox slot to take them`,
 } as const;
@@ -115,6 +115,8 @@ export class TradeSystem {
   private seen = '';
   /** The state settleWallet last tried in (it retries an unplaced remainder only when the inventory / Lockbox changed). */
   private settleSeen = '';
+  /** The owed amount the "waiting" warning last named (said once per amount, not on every retry). */
+  private owedSaid = -1;
 
   constructor(readonly host: TradeHost) {
     this.view = new TradeView({
@@ -225,7 +227,8 @@ export class TradeSystem {
     this.legacy.settle(n);
     this.settleSeen = `${h.inv.version}:${train?.lockbox.version ?? -1}:${this.legacy.owed}`;
     if (n) { this.counts.settled++; h.syncHeld?.(); h.hud.toast(TRADE_TEXT.migrated(placed), placed.left > 0); }
-    else h.hud.toast(TRADE_TEXT.owed(placed.left), true);
+    else if (placed.left !== this.owedSaid) h.hud.toast(TRADE_TEXT.owed(placed.left), true);
+    this.owedSaid = placed.left;
     return placed;
   }
 
@@ -414,5 +417,8 @@ export function marketTradeQaApi(sys: () => TradeSystem | null | undefined) {
     tradeSell: (spec: string, count?: number) => sys()?.sell(qaRef(spec), count) ?? null,
     /** Buy `count` (default all) of the open stall's stock lot `index`. */
     tradeBuy: (index: number, count?: number) => sys()?.buy(index, count) ?? null,
+    /** Task studio-market-rework-20261108-074144-01: a Ctrl+click on a carried slot ('pack:0') / a stock lot (its index), as the view does it. */
+    tradeQuickSell: (spec: string) => sys()?.view.quick({side: 'sell', ref: qaRef(spec)}) ?? null,
+    tradeQuickBuy: (index: number) => sys()?.view.quick({side: 'buy', index}) ?? null,
   };
 }
