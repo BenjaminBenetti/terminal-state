@@ -16,7 +16,7 @@ import {SETTLE} from './frame';
 export const SETTLE_ART = {
   fan: {r: 0.62, drop: 1.6, spin: [0.9, 1.4] as const},
   awning: {depth: 0.95, drop: 0.28, wallY: 2.86, over: 0.25},
-  line: {y: [4.9, 5.6] as const, sag: 0.25, every: 5.5},
+  line: {y: [5.25, 5.65] as const, sag: 0.25, every: 5.5},
 } as const;
 
 /** A sagging line across a lane (laundry: cloth pieces hang from it; cable: bare). World endpoints at height y, the sag at the middle. */
