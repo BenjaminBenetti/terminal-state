@@ -106,25 +106,25 @@ function spec(box: {w: number; h: number; d: number}, s: Omit<DestKindSpec, 'def
 
 export const STORE_MERCH_SPECS: Readonly<Record<StoreMerchKind, DestKindSpec>> = {
   skyMerchDemoPhone: spec(demoBox(true), {
-    phys: D(0.3, 'a demo phone on its little stand (~0.3 kg) on the phone shop\'s demo table: a shot knocks it over or off the table (on-host decor)'),
+    phys: D(0.6, 'a demo phone on its weighted display stand (~0.6 kg together) on the phone shop\'s demo table: a shot knocks it over or off the table (on-host decor)'),
     damage: 'screen', open: {cls: 'none', role: 'equipment', how: 'a demo phone on a stand: nothing to open'},
     parts: () => demoDeviceParts(true),
   }),
   skyMerchDemoTablet: spec(demoBox(false), {
-    phys: D(0.7, 'a demo tablet on its stand (~0.7 kg) on the demo table: a shot knocks it over or off the table (on-host decor)'),
+    phys: D(0.85, 'a demo tablet on its weighted display stand (~0.85 kg together) on the demo table: a shot knocks it over or off the table (on-host decor)'),
     damage: 'screen', open: {cls: 'none', role: 'equipment', how: 'a demo tablet on a stand: nothing to open'},
     parts: () => demoDeviceParts(false),
   }),
   skyMerchWallPhone: spec(wallBox('skyMerchWallPhone'), {
-    phys: D(0.35, 'a display phone on its stand (~0.35 kg) on the device wall\'s cabinet deck: a shot knocks it over or off the deck (on-host decor on the unit\'s declared deck)'),
+    phys: D(0.6, 'a display phone on its weighted stand (~0.6 kg together) on the device wall\'s cabinet deck: a shot knocks it over or off the deck (on-host decor on the unit\'s declared deck)'),
     damage: 'screen', open: {cls: 'none', role: 'equipment', how: 'a display phone on a stand: nothing to open'},
   }),
   skyMerchWallTablet: spec(wallBox('skyMerchWallTablet'), {
-    phys: D(0.75, 'a display tablet on its stand (~0.75 kg) on the device wall\'s cabinet deck: a shot knocks it over or off the deck (on-host decor on the unit\'s declared deck)'),
+    phys: D(0.9, 'a display tablet on its weighted stand (~0.9 kg together) on the device wall\'s cabinet deck: a shot knocks it over or off the deck (on-host decor on the unit\'s declared deck)'),
     damage: 'screen', open: {cls: 'none', role: 'equipment', how: 'a display tablet on a stand: nothing to open'},
   }),
   skyMerchFacedLp: spec(FACED_LP, {
-    phys: D(0.3, 'one 12-inch LP in its sleeve (~0.3 kg) stood face-out on a ledge of the new-arrivals board: a shot knocks it over the lip (on-host decor on the board\'s declared ledges)'),
+    phys: D(0.55, 'one 12-inch album — a gatefold double LP, two 180 g records (~0.55 kg) — stood face-out on a ledge of the new-arrivals board: a shot knocks it over the lip (on-host decor on the board\'s declared ledges)'),
     damage: 'cardboard', open: {cls: 'none', role: 'decor', how: 'a record in its sleeve on display: nothing to open (records are not inventory items)'},
   }),
 };

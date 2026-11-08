@@ -212,8 +212,8 @@ office-props-physics-scale-20261030, lane PHYS; `tests/contact-physics.test.ts`)
     line takes the hit, unless a wall or slab lies between. It never passes into an enclosed holder or a host without known
     shelves. A loose piece lying back on a shelf is hit as a body through the host's box.
   - Shelf stock is out of a walker's reach: the shelving is in the way, so there is no contact wake.
-  - Explicit exception: `skyMuFacedRecords` (one prop for a row of five sleeves on the new-arrivals ledge; its board declares no
-    shelves).
+  - `skyMuFacedRecords` (one prop for a row of five sleeves) is now a static kind; layout version 4 splits every row into five loose
+    sleeves (see "Skyways version 4: merchandise split off its fixtures" below).
   - Tests: `tests/skyways-merch-physics.test.ts`. A guard over real version 3 / 4 seeds checks that every piece resting inside its
     host has a known support and that no declared board starts inside stock. A buckshot volley through the real damage and
     physics path into one sample of every kind @ host pair checks that it goes loose, moves, never sinks through its shelf and
@@ -471,6 +471,47 @@ family's base-use purpose. The NEW kinds (`kindsShopsB.ts`: lane KITS' measured 
   on-host props with their spans cut out of the tables' loot tops.
 - Tests: `tests/skyways-dest-shops-b.test.ts` (both audits, measured footprints, signature pieces per family on real seeds, the screen on
   the far wall with the rows facing it, support / containment / overlaps, lanes to every door, base-use loot, determinism).
+
+### Skyways version 4: merchandise split off its fixtures (task studio-skywalk-variety-20261107-231448-01, lane MERCH)
+User: "cover other affected Skyways counter / shelf items consistently, not only one pair of skates". Three shop fixtures still drew
+their merchandise as part of the fixture. Skyways layout version 4 splits them into the bare fixture plus separate, ordinary movable
+stock props. The pass is `gen/skyways/skywaysMerchSplit.ts`, run at the very end of version-4 generation:
+- it appends props (no index shifts) and makes no rng draws;
+- it is gated on `skywaysGenVersion(layout) >= 4`, so versions 1-3 and every other level keep their fixtures whole.
+
+The kinds are in `gen/skyways/stores/kinds/merch.ts` and are drawn by `world/skywaysMerch.ts`:
+- **Demo table** (`techDisplay`): its six demo phones / tablets on stands were authored parts of the table. Version 4 draws the bare table
+  (variant 1; its box drops to the 0.76 m top) and places six `skyMerchDemoPhone` / `skyMerchDemoTablet` props carrying exactly those parts.
+- **Device wall** (`deviceWall`, `tech-display-t25.glb`): its four display devices were part of the model. At runtime the model is
+  deterministically mesh-separated: its fitted triangles are cut exactly at fixed planes (`world/meshSplit.ts` partition) into the bare
+  unit (variant 1) and four `skyMerchWallPhone` / `skyMerchWallTablet` props. Each draws its own cut triangles with the model's material
+  and maps; the GLB is untouched.
+  - The unit declares its 0.849 m cabinet deck (`PropDef.shelves`).
+  - Its filler colliders leave the deck front free for the devices.
+  - Its blister cards stay hung on the pegboard hooks (hung stock, like garments on a rail).
+- **Faced-out LPs** (`skyMuFacedRecords`): the row of five sleeves becomes five `skyMerchFacedLp` sleeves (one cover each) on the cover
+  wall's declared ledges. The row kind itself is static now (version 3 keeps its rows).
+- **Magazine rack and flower stand: no change needed.** They already draw bare (`world/shelfStockCarcass.ts` displayTreatment /
+  `AUTHORED_CARCASS`), and their magazines and flower buckets are separate physical filler stock on their real boards
+  (`world/shelfStock.ts`).
+
+| Kind | Openables audit | Physics audit | Scale (same geometry and size as before the split; viewed beside `lastshift`) |
+|---|---|---|---|
+| `skyMerchDemoPhone` / `skyMerchDemoTablet` | `none` (equipment) | **dynamic** 0.6 / 0.85 kg with their weighted stands, `pad`, `onHost` (the table top) | 0.08 × 0.16 × 0.07 / 0.20 × 0.15 × 0.06 m on the 0.76 m top (`scale-check.mjs --kind skyMerchDemoPhone --lift 0.76 --kind skyMerchDemoTablet --lift 0.76 --kind techDisplay`) |
+| `skyMerchWallPhone` / `skyMerchWallTablet` | `none` (equipment) | **dynamic** 0.6 / 0.9 kg with their stands, `pad`, `onHost` (the declared deck) | 0.13-0.17 × 0.18 × 0.16 / 0.22 × 0.20-0.23 × 0.21-0.24 m on the 0.85 m deck (`--prop tech-display-t25.glb --fit 1.1,2.0,0.58`) |
+| `skyMerchFacedLp` | `none` (decor) | **dynamic** 0.55 kg (a gatefold double LP), `pad`, `onHost` (the declared ledges) | 0.32 × 0.30 × 0.09 m, one sleeve of the row |
+
+- Tests: `tests/skyways-merch-split.test.ts` covers:
+  - both audits;
+  - the exact model cut against the real GLB: nothing lost, nothing left in the cut, each device where the data says;
+  - the table's device parts moved one-for-one;
+  - version-4 seeds split (found, not hard-coded), with every piece on a known support and none overlapping;
+  - version 3 unchanged;
+  - determinism;
+  - the drawn world with the real model;
+  - a volley knocking a demo device and a wall device off.
+
+  `tests/skyways-merch-physics.test.ts` samples the new pieces with every other shelf stock.
 
 ### Skyways local directory boards (task studio-skyways-rework-20261107-054512-01, lane MAPS)
 One NEW kind, `skywaysMapBoard` (`gen/skyways/mapBoardKind.ts`): a round freestanding directory on a pedestal — a 0.95 m printed face
