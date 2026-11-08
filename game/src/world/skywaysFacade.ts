@@ -2,7 +2,7 @@
 // (world/skywaysExterior.ts: flat outward faces in the Office curtain-wall material) read as real, DIFFERENT buildings. Pure plan
 // (deterministic per layout seed, data-driven from layout.skyways: every layout version, any footprint / height / role) + a small
 // emitter; skywaysExterior.ts merges the result into its EXISTING meshes, so the detail adds no draw call:
-//  - boxes (vertex-coloured, the exterior's stand-in prop material): plinths, base piers / colonnades, the +15 band, entrance
+//  - boxes (vertex-coloured, the exterior's stand-in prop material): plinths, base piers / colonnades, the skywalk band, entrance
 //    canopies (some on posts), the base course, shaft piers / full-bay masonry piers / fins, corner piers, spandrel bands and string
 //    courses, projecting bays' cheeks, cornices, parapets + copings, a crown frame, setback cornices, rooftop plant, masts — merged
 //    into the bridges + curbs mesh;
@@ -305,14 +305,14 @@ function planBuilding(info: SkywaysInfo, b: SkywaysBuilding, shell: FacadeContex
   /** Whether a vertical strip meets a window span (piers move off windows rather than float over them). */
   const hitsWindow = (w: Wall, s0: number, s1: number, t0: number, t1: number) => kc(w).some(k => k.kind === 'window' && overlaps({s0, s1, t0, t1}, k));
 
-  // --- the base: plinth, +15 band, base piers, corners, canopies, the base course / podium cornice ---
+  // --- the base: plinth, skywalk band, base piers, corners, canopies, the base course / podium cornice ---
   for (const w of lowWalls) {
     const ks = kc(w);
     // plinth: under the lowest sill on this wall (never cut under a window)
     let ph = S.base.plinth;
     for (const k of ks) if (k.kind === 'window' && k.t0 > gy + 0.05) ph = Math.min(ph, k.t0 - gy - 0.04);
     if (ph >= 0.18) run(w, 'plinth', baseC, gy, gy + ph, S.base.d * 0.5, FACE.ny);
-    // the +15 band: the slab line between the street and skyway storeys (cut at the bridge joins)
+    // the skywalk band: the slab line between the street and skyway storeys (cut at the bridge joins)
     const bandLo = sky.baseY - 0.9, bandHi = sky.baseY + 0.3;
     if (bandHi < lowTop - 0.5) run(w, 'band', accent, bandLo, bandHi, S.base.band);
     // base piers: a colonnade rhythm (moved off windows / entrances; split round bridge tubes)
