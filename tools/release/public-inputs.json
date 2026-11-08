@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 60852,
-      "sha256": "4b9bb0297ec1e3108484432e7da89ef2dc1b6a1af54616aaa052dd9b1db417e7"
+      "bytes": 62887,
+      "sha256": "3a4f5c057364110d87044bb9bbf9522fcee4512b2fd9492fcf7cd8fb35948a2d"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 2501,
-      "sha256": "d59fc221683ebec223f5d35537c66feeafb8796be55425e4a5233e5021d8ee51"
+      "bytes": 2858,
+      "sha256": "46cfc8b4369af9e2e8852151e7c9ad64e005af298b7b5407561c4e7c9dbfdf31"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -884,6 +884,71 @@
       "sha256": "8159db27d7a99c8e006f4f8b2d354119f9ac3ce921eb6473a78a2fdfa7297368"
     },
     {
+      "path": "assets/audio/market-bar-chatter-loop.mp3",
+      "bytes": 73978,
+      "sha256": "2dacdc2a6fedb757477874d752765607698c0023a806e20ec8cb3db112096238"
+    },
+    {
+      "path": "assets/audio/market-cash-01.mp3",
+      "bytes": 6896,
+      "sha256": "fb40dbaa0ce0c8d49aa72723769571458a3e5bccc95d9faed27fb03d2e7638db"
+    },
+    {
+      "path": "assets/audio/market-cash-02.mp3",
+      "bytes": 11284,
+      "sha256": "eff2faf127c4cafdad32700dba58e91444d77b17c650ee3cb12e781771ae2c92"
+    },
+    {
+      "path": "assets/audio/market-chatter-loop.mp3",
+      "bytes": 73978,
+      "sha256": "9924933523371cacd0b864494feed2315d6ab421c2e5d2c46b91e6077f285dd5"
+    },
+    {
+      "path": "assets/audio/market-grunt-01.mp3",
+      "bytes": 4388,
+      "sha256": "9e5133cdc402ccfd241deb2f72e93aae189c5f4c530a72579e133e31454d8035"
+    },
+    {
+      "path": "assets/audio/market-grunt-02.mp3",
+      "bytes": 4806,
+      "sha256": "bde51670b2050278b644136062cda61dc1dbd17726bbd3de5df82d5f37243139"
+    },
+    {
+      "path": "assets/audio/market-grunt-03.mp3",
+      "bytes": 4388,
+      "sha256": "4cb6b948f63bf5a1e38d264f02be008b46c115c4cb07ecfd8b571ee9d4083e4f"
+    },
+    {
+      "path": "assets/audio/market-retch-01.mp3",
+      "bytes": 13583,
+      "sha256": "a293fc8b3e598ac71ab91abaf849fb79e5a59da153e56e70119f0df8d779ee18"
+    },
+    {
+      "path": "assets/audio/market-scream-01.mp3",
+      "bytes": 10448,
+      "sha256": "6ee9f940c5c8d036849e886cc742f5a78528192b009c956ae15b4dffa8e81f15"
+    },
+    {
+      "path": "assets/audio/market-scream-02.mp3",
+      "bytes": 11911,
+      "sha256": "2df3f7fcc694c67b1975ab849008564b60b53d2d386eecb5a9c64f363dbc30fd"
+    },
+    {
+      "path": "assets/audio/market-scream-03.mp3",
+      "bytes": 7523,
+      "sha256": "e0e5362279519cfaf8df1d2d3b6c9b96513c3f6ac32275fc21b3ce54c3818845"
+    },
+    {
+      "path": "assets/audio/market-scream-04.mp3",
+      "bytes": 5015,
+      "sha256": "3018c4d1e70940b089497c0bab29d7068a20144f169f262d48935f0f3623312b"
+    },
+    {
+      "path": "assets/audio/market-scream-05.mp3",
+      "bytes": 6687,
+      "sha256": "c51b55358507a05ad027c0eb1f413a4c8d9fe4c5a5f9b5f7c04ccfa77064cd81"
+    },
+    {
       "path": "assets/audio/pickup-01.mp3",
       "bytes": 6269,
       "sha256": "6506647718f9d1b38349d00f486e883d38c9ee95e3494cbd392bd5d3d197194b"
@@ -1682,6 +1747,11 @@
       "path": "assets/derivatives/audio-iteration12.json",
       "bytes": 18565,
       "sha256": "d9f003bd4157f8ae320333a77de17d1386749315ea4762395e5b2d8d9f18ee05"
+    },
+    {
+      "path": "assets/derivatives/audio-market-bar.json",
+      "bytes": 41742,
+      "sha256": "e50ac79262baace96936f81391da85a1049a1796bd5bd89338b5b6ba831ac4ec"
     },
     {
       "path": "assets/derivatives/audio-reactor-ending.json",

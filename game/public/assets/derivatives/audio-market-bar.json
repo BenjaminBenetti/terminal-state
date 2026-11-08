@@ -1,0 +1,1778 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "audio-market-bar-20261108",
+ "task": "studio-market-bar-20261108-225231-01",
+ "lane": "AUDIO",
+ "generatedBy": "the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (the task's local Sound Lab allowance: 6 jobs of a 12-job cap, every first take accepted; the rest of the allowance closed unused)",
+ "plannedBy": "tools/audio-pipeline/market-audio-plan.py",
+ "rebuild": "SOUND_LAB_AUDIO_DIR=<raw dir> node tools/audio-pipeline/market-audio-build.mjs",
+ "privacy": "This public record names each raw take by its Sound Lab job id, seed and SHA-256 (raw WAV, lab sidecar, prompt). The prompt text, the raw takes and their paths stay in the private raw archive (independent backup), not in Git.",
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (5 ms / 50 ms envelopes, quiet fraction, onsets, spectrogram images, spectral centroid / bands, YIN voicing, clipping, BS.1770 loudness, loop-seam continuity). `metrics` / `gate` describe signal structure only. The user taste-tests in game.",
+  "gameReady": false,
+  "approved": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "loudness": {
+  "method": "ITU-R BS.1770-4 K-weighting, 400 ms blocks / 75 % overlap, -70 LUFS absolute + -10 LU relative gate (mono); sample peak (no true-peak oversampling)"
+ },
+ "mixCalibration": {
+  "note": "CUE_GAIN (audio/sfx.ts) per cue = 10^((target - measured) / 20): the target is the cue's loudness AT THE SOURCE (derivative x CUE_GAIN, before distance / occlusion / master), set against the existing cues (derivatives/audio-track1.json mixCalibration.reference: zombie groan -18.5, zombie attack -20.3, player hurt -24.0, cough -25.9 momentary-max LUFS). First estimates for the ear pass.",
+  "cues": {
+   "marketCash": {
+    "measure": "momentary-max LUFS (mean of variants)",
+    "measuredLufs": -15.6,
+    "targetLufs": -28,
+    "cueGain": 0.24,
+    "mixLufs": -28,
+    "mixPeakDbfs": -13.4,
+    "variants": 2
+   },
+   "marketChatter": {
+    "measure": "integrated LUFS",
+    "measuredLufs": -21.3,
+    "targetLufs": -31,
+    "cueGain": 0.33,
+    "mixLufs": -30.9,
+    "mixPeakDbfs": -14.9,
+    "variants": 1
+   },
+   "marketBarChatter": {
+    "measure": "integrated LUFS",
+    "measuredLufs": -20.6,
+    "targetLufs": -31,
+    "cueGain": 0.3,
+    "mixLufs": -31.1,
+    "mixPeakDbfs": -13.4,
+    "variants": 1
+   },
+   "marketScream": {
+    "measure": "momentary-max LUFS (mean of variants)",
+    "measuredLufs": -14.7,
+    "targetLufs": -19.5,
+    "cueGain": 0.58,
+    "mixLufs": -19.5,
+    "mixPeakDbfs": -9.2,
+    "variants": 5
+   },
+   "marketGrunt": {
+    "measure": "momentary-max LUFS (mean of variants)",
+    "measuredLufs": -18,
+    "targetLufs": -21,
+    "cueGain": 0.71,
+    "mixLufs": -21,
+    "mixPeakDbfs": -6.3,
+    "variants": 3
+   },
+   "marketRetch": {
+    "measure": "momentary-max LUFS (mean of variants)",
+    "measuredLufs": -14,
+    "targetLufs": -23,
+    "cueGain": 0.35,
+    "mixLufs": -23.1,
+    "mixPeakDbfs": -12,
+    "variants": 1
+   }
+  }
+ },
+ "kbps": 64,
+ "derivatives": [
+  {
+   "cue": "marketCash",
+   "url": "assets/audio/market-cash-01.mp3",
+   "bytes": 6896,
+   "sha256": "fb40dbaa0ce0c8d49aa72723769571458a3e5bccc95d9faed27fb03d2e7638db",
+   "dur": 0.82,
+   "window": {
+    "startS": 0.18,
+    "endS": 1
+   },
+   "ops": [
+    "mono",
+    "trim 0.18-1 s",
+    "cosine fades 0.003 / 0.3 s",
+    "peak -1 dBFS (8.5 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "gate": {
+    "kind": "register",
+    "pass": true,
+    "failed": [],
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 10.43,
+       "flatness": 0.2,
+       "voicedFrac": 0.127
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping",
+      "ok": true,
+      "value": 0,
+      "need": "< 0.0001"
+     },
+     {
+      "name": "impulsive (transients)",
+      "ok": true,
+      "value": 20.4,
+      "need": "crest factor >= 14 dB"
+     },
+     {
+      "name": "loudest moment early",
+      "ok": true,
+      "value": {
+       "peakS": 0.28,
+       "durationS": 0.82
+      },
+      "need": "peak in the first 40 %"
+     },
+     {
+      "name": "bright (bell / metal)",
+      "ok": true,
+      "value": 7066,
+      "need": "centroid >= 2 kHz"
+     },
+     {
+      "name": "decays",
+      "ok": true,
+      "value": -106,
+      "need": "slope < 0"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.82,
+    "peakDbfs": -1,
+    "rmsDbfs": -21.4,
+    "crestDb": 20.4,
+    "clippedFrac": 0,
+    "quietFrac": 0.387,
+    "activeFrac": 0.813,
+    "levelSpreadDb": 10.43,
+    "attack": {
+     "onsetS": 0.02,
+     "peakS": 0.28,
+     "riseMs": 150
+    },
+    "decay": {
+     "firstQuarterDb": -28.7,
+     "lastQuarterDb": -41.4,
+     "lastMinusFirstDb": -12.7,
+     "slopeDbPerS": -106,
+     "activeEndS": 0.65
+    },
+    "spectral": {
+     "centroidHz": 7066,
+     "flatness": 0.2,
+     "rolloff85Hz": 8845,
+     "bands": {
+      "0-300Hz": 0.067,
+      "300-1000Hz": 0.123,
+      "1000-3000Hz": 0.043,
+      "3000-8000Hz": 0.285,
+      "8000-22050Hz": 0.483
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.127,
+     "f0MedianHz": 1340,
+     "f0P5Hz": 1339,
+     "f0P95Hz": 1620,
+     "rangeSt": 3.29,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -16.9,
+     "momentaryMaxLufs": -15.6
+    }
+   },
+   "source": {
+    "clip": "market-cash-01",
+    "jobId": "20261108T231710-315953922",
+    "seed": 315953922,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "fd648c60e0539828bae190ed0020750d575a4b20ec57e75062595a1b3611e44a",
+    "rawBytes": 529244,
+    "labSidecarSha256": "c02748de2a425fd2a9663032a93e09c1c160e166a016fd3c67548790b2e4d198",
+    "promptSha256": "617a8f5c5c7cd87131a8495c825e5ba09354d7b676277520678325a68f89985d"
+   }
+  },
+  {
+   "cue": "marketCash",
+   "url": "assets/audio/market-cash-02.mp3",
+   "bytes": 11284,
+   "sha256": "eff2faf127c4cafdad32700dba58e91444d77b17c650ee3cb12e781771ae2c92",
+   "dur": 1.38,
+   "window": {
+    "startS": 0.18,
+    "endS": 1.56
+   },
+   "ops": [
+    "mono",
+    "trim 0.18-1.56 s",
+    "cosine fades 0.003 / 0.06 s",
+    "dip -18 dB over 0.98-1.36 s (take time; 0.04 s cosine ramps)",
+    "peak -1 dBFS (8.5 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "gate": {
+    "kind": "register",
+    "pass": true,
+    "failed": [],
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 10.68,
+       "flatness": 0.196,
+       "voicedFrac": 0.099
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping",
+      "ok": true,
+      "value": 0,
+      "need": "< 0.0001"
+     },
+     {
+      "name": "impulsive (transients)",
+      "ok": true,
+      "value": 22.2,
+      "need": "crest factor >= 14 dB"
+     },
+     {
+      "name": "loudest moment early",
+      "ok": true,
+      "value": {
+       "peakS": 0.28,
+       "durationS": 1.38
+      },
+      "need": "peak in the first 40 %"
+     },
+     {
+      "name": "bright (bell / metal)",
+      "ok": true,
+      "value": 6656,
+      "need": "centroid >= 2 kHz"
+     },
+     {
+      "name": "decays",
+      "ok": true,
+      "value": -32.4,
+      "need": "slope < 0"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.38,
+    "peakDbfs": -1,
+    "rmsDbfs": -23.2,
+    "crestDb": 22.2,
+    "clippedFrac": 0,
+    "quietFrac": 0.589,
+    "activeFrac": 0.63,
+    "levelSpreadDb": 10.68,
+    "attack": {
+     "onsetS": 0.02,
+     "peakS": 0.28,
+     "riseMs": 150
+    },
+    "decay": {
+     "firstQuarterDb": -17.6,
+     "lastQuarterDb": -26.6,
+     "lastMinusFirstDb": -9,
+     "slopeDbPerS": -32.4,
+     "activeEndS": 1.35
+    },
+    "spectral": {
+     "centroidHz": 6656,
+     "flatness": 0.196,
+     "rolloff85Hz": 7747,
+     "bands": {
+      "0-300Hz": 0.067,
+      "300-1000Hz": 0.131,
+      "1000-3000Hz": 0.066,
+      "3000-8000Hz": 0.298,
+      "8000-22050Hz": 0.439
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.099,
+     "f0MedianHz": 1340,
+     "f0P5Hz": 1339,
+     "f0P95Hz": 1620,
+     "rangeSt": 3.29,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -17.8,
+     "momentaryMaxLufs": -15.6
+    }
+   },
+   "source": {
+    "clip": "market-cash-01",
+    "jobId": "20261108T231710-315953922",
+    "seed": 315953922,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "fd648c60e0539828bae190ed0020750d575a4b20ec57e75062595a1b3611e44a",
+    "rawBytes": 529244,
+    "labSidecarSha256": "c02748de2a425fd2a9663032a93e09c1c160e166a016fd3c67548790b2e4d198",
+    "promptSha256": "617a8f5c5c7cd87131a8495c825e5ba09354d7b676277520678325a68f89985d"
+   }
+  },
+  {
+   "cue": "marketChatter",
+   "url": "assets/audio/market-chatter-loop.mp3",
+   "bytes": 73978,
+   "sha256": "9924933523371cacd0b864494feed2315d6ab421c2e5d2c46b91e6077f285dd5",
+   "dur": 9.2,
+   "loop": {
+    "start": 0.1,
+    "length": 9
+   },
+   "ops": [
+    "mono",
+    "stationary window from 0.5 s (std 0.97 dB over 0.5 s blocks)",
+    "loop 9 s, equal-power crossfade 1 s",
+    "margins 0.1 s",
+    "rms -20 dBFS (4.1 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "gate": {
+    "kind": "murmur",
+    "pass": true,
+    "failed": [],
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 1.47,
+       "flatness": 0.016,
+       "voicedFrac": 0.017
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping",
+      "ok": true,
+      "value": 0,
+      "need": "< 0.0001"
+     },
+     {
+      "name": "sustained",
+      "ok": true,
+      "value": 1,
+      "need": "active >= 0.95"
+     },
+     {
+      "name": "steady level",
+      "ok": true,
+      "value": 1.47,
+      "need": "50 ms level spread <= 4 dB"
+     },
+     {
+      "name": "voice band",
+      "ok": true,
+      "value": {
+       "centroidHz": 465,
+       "shareUnder3k": 0.99
+      },
+      "need": "centroid 250-1500 Hz, >= 90 % under 3 kHz"
+     },
+     {
+      "name": "not tonal (no single drone)",
+      "ok": true,
+      "value": 0.017,
+      "need": "voiced <= 0.6"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 9,
+    "peakDbfs": -5.3,
+    "rmsDbfs": -20,
+    "crestDb": 14.7,
+    "clippedFrac": 0,
+    "quietFrac": 0,
+    "activeFrac": 1,
+    "levelSpreadDb": 1.47,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 6.925,
+     "riseMs": 1430
+    },
+    "decay": {
+     "firstQuarterDb": -20.8,
+     "lastQuarterDb": -19,
+     "lastMinusFirstDb": 1.8,
+     "slopeDbPerS": -0.5,
+     "activeEndS": 9
+    },
+    "spectral": {
+     "centroidHz": 465,
+     "flatness": 0.016,
+     "rolloff85Hz": 674,
+     "bands": {
+      "0-300Hz": 0.404,
+      "300-1000Hz": 0.537,
+      "1000-3000Hz": 0.05,
+      "3000-8000Hz": 0.007,
+      "8000-22050Hz": 0.002
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.017,
+     "f0MedianHz": 239,
+     "f0P5Hz": 198,
+     "f0P95Hz": 266,
+     "rangeSt": 5.08,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -21.3,
+     "momentaryMaxLufs": -17.8
+    },
+    "loopSeam": {
+     "wrapJump": 0.0029,
+     "meanStep": 0.0083,
+     "edgeLevelDb": -1.45
+    }
+   },
+   "source": {
+    "clip": "market-chatter-01",
+    "jobId": "20261108T231715-332510952",
+    "seed": 332510952,
+    "seconds": 12,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "45d4f69ab4bdda18afb5aeee12341e17ca46d0b86df680707fe03a3f107e1a48",
+    "rawBytes": 2116844,
+    "labSidecarSha256": "a072a15070ef1813c638d73559ccae7b429074d95f754c055d133a7d75c0f87a",
+    "promptSha256": "323541a59f6f0b2417002c833a5e93b1f46652668abb3adbdc2afba51b11a88c"
+   }
+  },
+  {
+   "cue": "marketBarChatter",
+   "url": "assets/audio/market-bar-chatter-loop.mp3",
+   "bytes": 73978,
+   "sha256": "2dacdc2a6fedb757477874d752765607698c0023a806e20ec8cb3db112096238",
+   "dur": 9.2,
+   "loop": {
+    "start": 0.1,
+    "length": 9
+   },
+   "ops": [
+    "mono",
+    "stationary window from 1.5 s (std 2.12 dB over 0.5 s blocks)",
+    "loop 9 s, equal-power crossfade 1 s",
+    "margins 0.1 s",
+    "rms -20 dBFS (15.1 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "gate": {
+    "kind": "murmur",
+    "pass": true,
+    "failed": [],
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 3.23,
+       "flatness": 0.01,
+       "voicedFrac": 0.242
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping",
+      "ok": true,
+      "value": 0,
+      "need": "< 0.0001"
+     },
+     {
+      "name": "sustained",
+      "ok": true,
+      "value": 1,
+      "need": "active >= 0.95"
+     },
+     {
+      "name": "steady level",
+      "ok": true,
+      "value": 3.23,
+      "need": "50 ms level spread <= 4 dB"
+     },
+     {
+      "name": "voice band",
+      "ok": true,
+      "value": {
+       "centroidHz": 575,
+       "shareUnder3k": 0.99
+      },
+      "need": "centroid 250-1500 Hz, >= 90 % under 3 kHz"
+     },
+     {
+      "name": "not tonal (no single drone)",
+      "ok": true,
+      "value": 0.242,
+      "need": "voiced <= 0.6"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 9,
+    "peakDbfs": -2.9,
+    "rmsDbfs": -20,
+    "crestDb": 17.1,
+    "clippedFrac": 0,
+    "quietFrac": 0,
+    "activeFrac": 1,
+    "levelSpreadDb": 3.23,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 4.705,
+     "riseMs": 4700
+    },
+    "decay": {
+     "firstQuarterDb": -19.9,
+     "lastQuarterDb": -20.1,
+     "lastMinusFirstDb": -0.3,
+     "slopeDbPerS": 0.4,
+     "activeEndS": 9
+    },
+    "spectral": {
+     "centroidHz": 575,
+     "flatness": 0.01,
+     "rolloff85Hz": 777,
+     "bands": {
+      "0-300Hz": 0.134,
+      "300-1000Hz": 0.799,
+      "1000-3000Hz": 0.056,
+      "3000-8000Hz": 0.01,
+      "8000-22050Hz": 0.001
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.242,
+     "f0MedianHz": 210,
+     "f0P5Hz": 113,
+     "f0P95Hz": 511,
+     "rangeSt": 26.16,
+     "notes": 1,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -20.6,
+     "momentaryMaxLufs": -15.6
+    },
+    "loopSeam": {
+     "wrapJump": 0.0282,
+     "meanStep": 0.0082,
+     "edgeLevelDb": 0.95
+    }
+   },
+   "source": {
+    "clip": "market-chatter-bar-01",
+    "jobId": "20261108T231720-1480472885",
+    "seed": 1480472885,
+    "seconds": 12,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "e90f9a0a41d6e588c0f6a4d8c275976550f8ba96aa96cfd3162b387a7a7fd840",
+    "rawBytes": 2116844,
+    "labSidecarSha256": "aeb3064d55d65a7b97434a425c1efce6b8c41424f08ecc1e26fd47e14649e93d",
+    "promptSha256": "3b8778f69b926c07b159f91a91d60ad7af4f04b477b5d0462a11729fccedd2d6"
+   }
+  },
+  {
+   "cue": "marketScream",
+   "url": "assets/audio/market-scream-01.mp3",
+   "bytes": 10448,
+   "sha256": "6ee9f940c5c8d036849e886cc742f5a78528192b009c956ae15b4dffa8e81f15",
+   "dur": 1.26,
+   "window": {
+    "startS": 0.34,
+    "endS": 1.6
+   },
+   "ops": [
+    "mono",
+    "trim 0.34-1.6 s",
+    "cosine fades 0.006 / 0.08 s",
+    "loudness -16 LUFS integrated under a -1 dBFS peak ceiling (1.9 dB, loudness target)",
+    "mp3 mono 64 kbps"
+   ],
+   "gate": {
+    "kind": "scream",
+    "pass": true,
+    "failed": [],
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 9.14,
+       "flatness": 0.02,
+       "voicedFrac": 0.913
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping",
+      "ok": true,
+      "value": 0,
+      "need": "< 0.0001"
+     },
+     {
+      "name": "one event",
+      "ok": true,
+      "value": 0.076,
+      "need": "quiet <= 0.25"
+     },
+     {
+      "name": "rises fast",
+      "ok": true,
+      "value": 360,
+      "need": "<= 450 ms"
+     },
+     {
+      "name": "bright",
+      "ok": true,
+      "value": {
+       "centroidHz": 1916,
+       "shareAbove1k": 0.99
+      },
+      "need": "centroid >= 1 kHz, >= 50 % above 1 kHz"
+     },
+     {
+      "name": "a voice (pitched)",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.913,
+       "f0MedianHz": 667
+      },
+      "need": "voiced >= 0.4, f0 >= 250 Hz"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.26,
+    "peakDbfs": -6.5,
+    "rmsDbfs": -18.2,
+    "crestDb": 11.7,
+    "clippedFrac": 0,
+    "quietFrac": 0.076,
+    "activeFrac": 1,
+    "levelSpreadDb": 9.14,
+    "attack": {
+     "onsetS": 0.02,
+     "peakS": 1.04,
+     "riseMs": 360
+    },
+    "decay": {
+     "firstQuarterDb": -31,
+     "lastQuarterDb": -16.9,
+     "lastMinusFirstDb": 14.1,
+     "slopeDbPerS": -345,
+     "activeEndS": 1.25
+    },
+    "spectral": {
+     "centroidHz": 1916,
+     "flatness": 0.02,
+     "rolloff85Hz": 2508,
+     "bands": {
+      "0-300Hz": 0.002,
+      "300-1000Hz": 0.006,
+      "1000-3000Hz": 0.795,
+      "3000-8000Hz": 0.196,
+      "8000-22050Hz": 0.001
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.913,
+     "f0MedianHz": 667,
+     "f0P5Hz": 344,
+     "f0P95Hz": 1530,
+     "rangeSt": 25.84,
+     "notes": 2,
+     "noteSteps": 1,
+     "movementSt": 7.9
+    },
+    "loudness": {
+     "integratedLufs": -16,
+     "momentaryMaxLufs": -14.6
+    }
+   },
+   "source": {
+    "clip": "market-scream-01",
+    "jobId": "20261108T231724-174431427",
+    "seed": 174431427,
+    "seconds": 8,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "fcb0f975b06a2bf86609f4bf0c1f44aca3824ff2a6ec5b7a80a891db6499fa48",
+    "rawBytes": 1411244,
+    "labSidecarSha256": "26b4d1e05deec9332997f76dc6c83b2a159054a9e623b9f66e2386d3479e0a63",
+    "promptSha256": "e8bc312b56bbe4fced762af17d461530bbff0bdbdf213997a7607fb922bafbe6"
+   }
+  },
+  {
+   "cue": "marketScream",
+   "url": "assets/audio/market-scream-02.mp3",
+   "bytes": 11911,
+   "sha256": "2df3f7fcc694c67b1975ab849008564b60b53d2d386eecb5a9c64f363dbc30fd",
+   "dur": 1.45,
+   "window": {
+    "startS": 1.94,
+    "endS": 3.39
+   },
+   "ops": [
+    "mono",
+    "trim 1.94-3.39 s",
+    "cosine fades 0.006 / 0.08 s",
+    "loudness -16 LUFS integrated under a -1 dBFS peak ceiling (1.5 dB, loudness target)",
+    "mp3 mono 64 kbps"
+   ],
+   "gate": {
+    "kind": "scream",
+    "pass": true,
+    "failed": [],
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 5.55,
+       "flatness": 0.009,
+       "voicedFrac": 0.689
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping",
+      "ok": true,
+      "value": 0,
+      "need": "< 0.0001"
+     },
+     {
+      "name": "one event",
+      "ok": true,
+      "value": 0.066,
+      "need": "quiet <= 0.25"
+     },
+     {
+      "name": "rises fast",
+      "ok": true,
+      "value": 55,
+      "need": "<= 450 ms"
+     },
+     {
+      "name": "bright",
+      "ok": true,
+      "value": {
+       "centroidHz": 1191,
+       "shareAbove1k": 0.62
+      },
+      "need": "centroid >= 1 kHz, >= 50 % above 1 kHz"
+     },
+     {
+      "name": "a voice (pitched)",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.689,
+       "f0MedianHz": 521
+      },
+      "need": "voiced >= 0.4, f0 >= 250 Hz"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.45,
+    "peakDbfs": -4.5,
+    "rmsDbfs": -16.7,
+    "crestDb": 12.2,
+    "clippedFrac": 0,
+    "quietFrac": 0.066,
+    "activeFrac": 0.966,
+    "levelSpreadDb": 5.55,
+    "attack": {
+     "onsetS": 0.02,
+     "peakS": 0.315,
+     "riseMs": 55
+    },
+    "decay": {
+     "firstQuarterDb": -14.2,
+     "lastQuarterDb": -18.3,
+     "lastMinusFirstDb": -4.1,
+     "slopeDbPerS": -10.5,
+     "activeEndS": 1.4
+    },
+    "spectral": {
+     "centroidHz": 1191,
+     "flatness": 0.009,
+     "rolloff85Hz": 1418,
+     "bands": {
+      "0-300Hz": 0.001,
+      "300-1000Hz": 0.376,
+      "1000-3000Hz": 0.609,
+      "3000-8000Hz": 0.014,
+      "8000-22050Hz": 0.001
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.689,
+     "f0MedianHz": 521,
+     "f0P5Hz": 358,
+     "f0P95Hz": 1041,
+     "rangeSt": 18.48,
+     "notes": 2,
+     "noteSteps": 1,
+     "movementSt": 12.62
+    },
+    "loudness": {
+     "integratedLufs": -16,
+     "momentaryMaxLufs": -13.7
+    }
+   },
+   "source": {
+    "clip": "market-scream-01",
+    "jobId": "20261108T231724-174431427",
+    "seed": 174431427,
+    "seconds": 8,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "fcb0f975b06a2bf86609f4bf0c1f44aca3824ff2a6ec5b7a80a891db6499fa48",
+    "rawBytes": 1411244,
+    "labSidecarSha256": "26b4d1e05deec9332997f76dc6c83b2a159054a9e623b9f66e2386d3479e0a63",
+    "promptSha256": "e8bc312b56bbe4fced762af17d461530bbff0bdbdf213997a7607fb922bafbe6"
+   }
+  },
+  {
+   "cue": "marketScream",
+   "url": "assets/audio/market-scream-03.mp3",
+   "bytes": 7523,
+   "sha256": "e0e5362279519cfaf8df1d2d3b6c9b96513c3f6ac32275fc21b3ce54c3818845",
+   "dur": 0.91,
+   "window": {
+    "startS": 4.16,
+    "endS": 5.07
+   },
+   "ops": [
+    "mono",
+    "trim 4.16-5.07 s",
+    "cosine fades 0.006 / 0.08 s",
+    "loudness -16 LUFS integrated under a -1 dBFS peak ceiling (-2.6 dB, loudness target)",
+    "mp3 mono 64 kbps"
+   ],
+   "gate": {
+    "kind": "scream",
+    "pass": true,
+    "failed": [],
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 6.68,
+       "flatness": 0.014,
+       "voicedFrac": 0.817
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping",
+      "ok": true,
+      "value": 0,
+      "need": "< 0.0001"
+     },
+     {
+      "name": "one event",
+      "ok": true,
+      "value": 0.11,
+      "need": "quiet <= 0.25"
+     },
+     {
+      "name": "rises fast",
+      "ok": true,
+      "value": 70,
+      "need": "<= 450 ms"
+     },
+     {
+      "name": "bright",
+      "ok": true,
+      "value": {
+       "centroidHz": 1568,
+       "shareAbove1k": 0.96
+      },
+      "need": "centroid >= 1 kHz, >= 50 % above 1 kHz"
+     },
+     {
+      "name": "a voice (pitched)",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.817,
+       "f0MedianHz": 1387
+      },
+      "need": "voiced >= 0.4, f0 >= 250 Hz"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.91,
+    "peakDbfs": -8.2,
+    "rmsDbfs": -18,
+    "crestDb": 9.8,
+    "clippedFrac": 0,
+    "quietFrac": 0.11,
+    "activeFrac": 0.944,
+    "levelSpreadDb": 6.68,
+    "attack": {
+     "onsetS": 0.015,
+     "peakS": 0.72,
+     "riseMs": 70
+    },
+    "decay": {
+     "firstQuarterDb": -19.9,
+     "lastQuarterDb": -18.8,
+     "lastMinusFirstDb": 1.2,
+     "slopeDbPerS": -46.8,
+     "activeEndS": 0.85
+    },
+    "spectral": {
+     "centroidHz": 1568,
+     "flatness": 0.014,
+     "rolloff85Hz": 1748,
+     "bands": {
+      "0-300Hz": 0.001,
+      "300-1000Hz": 0.039,
+      "1000-3000Hz": 0.904,
+      "3000-8000Hz": 0.055,
+      "8000-22050Hz": 0.001
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.817,
+     "f0MedianHz": 1387,
+     "f0P5Hz": 448,
+     "f0P95Hz": 1440,
+     "rangeSt": 20.2,
+     "notes": 2,
+     "noteSteps": 1,
+     "movementSt": 19.28
+    },
+    "loudness": {
+     "integratedLufs": -16,
+     "momentaryMaxLufs": -15.1
+    }
+   },
+   "source": {
+    "clip": "market-scream-01",
+    "jobId": "20261108T231724-174431427",
+    "seed": 174431427,
+    "seconds": 8,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "fcb0f975b06a2bf86609f4bf0c1f44aca3824ff2a6ec5b7a80a891db6499fa48",
+    "rawBytes": 1411244,
+    "labSidecarSha256": "26b4d1e05deec9332997f76dc6c83b2a159054a9e623b9f66e2386d3479e0a63",
+    "promptSha256": "e8bc312b56bbe4fced762af17d461530bbff0bdbdf213997a7607fb922bafbe6"
+   }
+  },
+  {
+   "cue": "marketScream",
+   "url": "assets/audio/market-scream-04.mp3",
+   "bytes": 5015,
+   "sha256": "3018c4d1e70940b089497c0bab29d7068a20144f169f262d48935f0f3623312b",
+   "dur": 0.6,
+   "window": {
+    "startS": 5.64,
+    "endS": 6.24
+   },
+   "ops": [
+    "mono",
+    "trim 5.64-6.24 s",
+    "cosine fades 0.006 / 0.08 s",
+    "loudness -16 LUFS integrated under a -1 dBFS peak ceiling (3.1 dB, loudness target)",
+    "mp3 mono 64 kbps"
+   ],
+   "gate": {
+    "kind": "scream",
+    "pass": true,
+    "failed": [],
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 8.44,
+       "flatness": 0.026,
+       "voicedFrac": 0.681
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping",
+      "ok": true,
+      "value": 0,
+      "need": "< 0.0001"
+     },
+     {
+      "name": "one event",
+      "ok": true,
+      "value": 0.16,
+      "need": "quiet <= 0.25"
+     },
+     {
+      "name": "rises fast",
+      "ok": true,
+      "value": 155,
+      "need": "<= 450 ms"
+     },
+     {
+      "name": "bright",
+      "ok": true,
+      "value": {
+       "centroidHz": 1551,
+       "shareAbove1k": 0.96
+      },
+      "need": "centroid >= 1 kHz, >= 50 % above 1 kHz"
+     },
+     {
+      "name": "a voice (pitched)",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.681,
+       "f0MedianHz": 1346
+      },
+      "need": "voiced >= 0.4, f0 >= 250 Hz"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.6,
+    "peakDbfs": -6.9,
+    "rmsDbfs": -18.2,
+    "crestDb": 11.4,
+    "clippedFrac": 0,
+    "quietFrac": 0.16,
+    "activeFrac": 0.917,
+    "levelSpreadDb": 8.44,
+    "attack": {
+     "onsetS": 0.025,
+     "peakS": 0.33,
+     "riseMs": 155
+    },
+    "decay": {
+     "firstQuarterDb": -21.8,
+     "lastQuarterDb": -32.9,
+     "lastMinusFirstDb": -11.1,
+     "slopeDbPerS": -166.5,
+     "activeEndS": 0.55
+    },
+    "spectral": {
+     "centroidHz": 1551,
+     "flatness": 0.026,
+     "rolloff85Hz": 2053,
+     "bands": {
+      "0-300Hz": 0.002,
+      "300-1000Hz": 0.041,
+      "1000-3000Hz": 0.925,
+      "3000-8000Hz": 0.031,
+      "8000-22050Hz": 0
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.681,
+     "f0MedianHz": 1346,
+     "f0P5Hz": 479,
+     "f0P95Hz": 1464,
+     "rangeSt": 19.35,
+     "notes": 1,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -16,
+     "momentaryMaxLufs": -15.4
+    }
+   },
+   "source": {
+    "clip": "market-scream-01",
+    "jobId": "20261108T231724-174431427",
+    "seed": 174431427,
+    "seconds": 8,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "fcb0f975b06a2bf86609f4bf0c1f44aca3824ff2a6ec5b7a80a891db6499fa48",
+    "rawBytes": 1411244,
+    "labSidecarSha256": "26b4d1e05deec9332997f76dc6c83b2a159054a9e623b9f66e2386d3479e0a63",
+    "promptSha256": "e8bc312b56bbe4fced762af17d461530bbff0bdbdf213997a7607fb922bafbe6"
+   }
+  },
+  {
+   "cue": "marketScream",
+   "url": "assets/audio/market-scream-05.mp3",
+   "bytes": 6687,
+   "sha256": "c51b55358507a05ad027c0eb1f413a4c8d9fe4c5a5f9b5f7c04ccfa77064cd81",
+   "dur": 0.79,
+   "window": {
+    "startS": 6.61,
+    "endS": 7.4
+   },
+   "ops": [
+    "mono",
+    "trim 6.61-7.4 s",
+    "cosine fades 0.006 / 0.08 s",
+    "loudness -16 LUFS integrated under a -1 dBFS peak ceiling (2.0 dB, loudness target)",
+    "mp3 mono 64 kbps"
+   ],
+   "gate": {
+    "kind": "scream",
+    "pass": true,
+    "failed": [],
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 7.5,
+       "flatness": 0.008,
+       "voicedFrac": 0.952
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping",
+      "ok": true,
+      "value": 0,
+      "need": "< 0.0001"
+     },
+     {
+      "name": "one event",
+      "ok": true,
+      "value": 0.108,
+      "need": "quiet <= 0.25"
+     },
+     {
+      "name": "rises fast",
+      "ok": true,
+      "value": 445,
+      "need": "<= 450 ms"
+     },
+     {
+      "name": "bright",
+      "ok": true,
+      "value": {
+       "centroidHz": 1354,
+       "shareAbove1k": 0.99
+      },
+      "need": "centroid >= 1 kHz, >= 50 % above 1 kHz"
+     },
+     {
+      "name": "a voice (pitched)",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.952,
+       "f0MedianHz": 1293
+      },
+      "need": "voiced >= 0.4, f0 >= 250 Hz"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.79,
+    "peakDbfs": -7.5,
+    "rmsDbfs": -17.5,
+    "crestDb": 10,
+    "clippedFrac": 0,
+    "quietFrac": 0.108,
+    "activeFrac": 1,
+    "levelSpreadDb": 7.5,
+    "attack": {
+     "onsetS": 0.025,
+     "peakS": 0.66,
+     "riseMs": 445
+    },
+    "decay": {
+     "firstQuarterDb": -22.5,
+     "lastQuarterDb": -16.6,
+     "lastMinusFirstDb": 5.9,
+     "slopeDbPerS": -229.9,
+     "activeEndS": 0.75
+    },
+    "spectral": {
+     "centroidHz": 1354,
+     "flatness": 0.008,
+     "rolloff85Hz": 1543,
+     "bands": {
+      "0-300Hz": 0.001,
+      "300-1000Hz": 0.005,
+      "1000-3000Hz": 0.975,
+      "3000-8000Hz": 0.018,
+      "8000-22050Hz": 0
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.952,
+     "f0MedianHz": 1293,
+     "f0P5Hz": 600,
+     "f0P95Hz": 1364,
+     "rangeSt": 14.23,
+     "notes": 1,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -16,
+     "momentaryMaxLufs": -14.8
+    }
+   },
+   "source": {
+    "clip": "market-scream-01",
+    "jobId": "20261108T231724-174431427",
+    "seed": 174431427,
+    "seconds": 8,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "fcb0f975b06a2bf86609f4bf0c1f44aca3824ff2a6ec5b7a80a891db6499fa48",
+    "rawBytes": 1411244,
+    "labSidecarSha256": "26b4d1e05deec9332997f76dc6c83b2a159054a9e623b9f66e2386d3479e0a63",
+    "promptSha256": "e8bc312b56bbe4fced762af17d461530bbff0bdbdf213997a7607fb922bafbe6"
+   }
+  },
+  {
+   "cue": "marketGrunt",
+   "url": "assets/audio/market-grunt-01.mp3",
+   "bytes": 4388,
+   "sha256": "9e5133cdc402ccfd241deb2f72e93aae189c5f4c530a72579e133e31454d8035",
+   "dur": 0.5,
+   "window": {
+    "startS": 1.59,
+    "endS": 2.09
+   },
+   "ops": [
+    "mono",
+    "trim 1.59-2.09 s",
+    "cosine fades 0.006 / 0.05 s",
+    "loudness -18 LUFS integrated under a -1 dBFS peak ceiling (-2.1 dB, loudness target)",
+    "mp3 mono 64 kbps"
+   ],
+   "gate": {
+    "kind": "grunt",
+    "pass": true,
+    "failed": [],
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 8.83,
+       "flatness": 0.003,
+       "voicedFrac": 0.615
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping",
+      "ok": true,
+      "value": 0,
+      "need": "< 0.0001"
+     },
+     {
+      "name": "one event",
+      "ok": true,
+      "value": 0.192,
+      "need": "quiet <= 0.25"
+     },
+     {
+      "name": "short",
+      "ok": true,
+      "value": 0.5,
+      "need": "0.3-0.8 s"
+     },
+     {
+      "name": "a voice (pitched)",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.615,
+       "f0MedianHz": 114
+      },
+      "need": "voiced >= 0.4"
+     },
+     {
+      "name": "low (chest voice)",
+      "ok": true,
+      "value": {
+       "centroidHz": 290,
+       "shareUnder1k": 0.99
+      },
+      "need": "centroid <= 1.2 kHz, >= 60 % under 1 kHz"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.5,
+    "peakDbfs": -3.3,
+    "rmsDbfs": -17.9,
+    "crestDb": 14.6,
+    "clippedFrac": 0,
+    "quietFrac": 0.192,
+    "activeFrac": 0.9,
+    "levelSpreadDb": 8.83,
+    "attack": {
+     "onsetS": 0.025,
+     "peakS": 0.3,
+     "riseMs": 265
+    },
+    "decay": {
+     "firstQuarterDb": -30.8,
+     "lastQuarterDb": -17.9,
+     "lastMinusFirstDb": 12.9,
+     "slopeDbPerS": -251.6,
+     "activeEndS": 0.45
+    },
+    "spectral": {
+     "centroidHz": 290,
+     "flatness": 0.003,
+     "rolloff85Hz": 305,
+     "bands": {
+      "0-300Hz": 0.582,
+      "300-1000Hz": 0.411,
+      "1000-3000Hz": 0.006,
+      "3000-8000Hz": 0.001,
+      "8000-22050Hz": 0
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.615,
+     "f0MedianHz": 114,
+     "f0P5Hz": 97,
+     "f0P95Hz": 201,
+     "rangeSt": 12.58,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -18,
+     "momentaryMaxLufs": -18
+    }
+   },
+   "source": {
+    "clip": "market-grunt-01",
+    "jobId": "20261108T231729-1404249699",
+    "seed": 1404249699,
+    "seconds": 6,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "eba9f81cd9d129e1d6401386210f8eddb992346db3ec7ab67e0e1092a9d4c008",
+    "rawBytes": 1058444,
+    "labSidecarSha256": "90ee516e92824ecdbeb441305380f668b5f9550d43579607aa2fc6a251874b31",
+    "promptSha256": "107b6df49dddc231463d81949338ed2ae143eff6b7440ea3f9ba15854db04c21"
+   }
+  },
+  {
+   "cue": "marketGrunt",
+   "url": "assets/audio/market-grunt-02.mp3",
+   "bytes": 4806,
+   "sha256": "bde51670b2050278b644136062cda61dc1dbd17726bbd3de5df82d5f37243139",
+   "dur": 0.57,
+   "window": {
+    "startS": 2.25,
+    "endS": 2.82
+   },
+   "ops": [
+    "mono",
+    "trim 2.25-2.82 s",
+    "cosine fades 0.006 / 0.05 s",
+    "loudness -18 LUFS integrated under a -1 dBFS peak ceiling (-2.1 dB, loudness target)",
+    "mp3 mono 64 kbps"
+   ],
+   "gate": {
+    "kind": "grunt",
+    "pass": true,
+    "failed": [],
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 8.77,
+       "flatness": 0.001,
+       "voicedFrac": 0.756
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping",
+      "ok": true,
+      "value": 0,
+      "need": "< 0.0001"
+     },
+     {
+      "name": "one event",
+      "ok": true,
+      "value": 0.133,
+      "need": "quiet <= 0.25"
+     },
+     {
+      "name": "short",
+      "ok": true,
+      "value": 0.57,
+      "need": "0.3-0.8 s"
+     },
+     {
+      "name": "a voice (pitched)",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.756,
+       "f0MedianHz": 139
+      },
+      "need": "voiced >= 0.4"
+     },
+     {
+      "name": "low (chest voice)",
+      "ok": true,
+      "value": {
+       "centroidHz": 359,
+       "shareUnder1k": 0.99
+      },
+      "need": "centroid <= 1.2 kHz, >= 60 % under 1 kHz"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.57,
+    "peakDbfs": -6.8,
+    "rmsDbfs": -18.6,
+    "crestDb": 11.7,
+    "clippedFrac": 0,
+    "quietFrac": 0.133,
+    "activeFrac": 1,
+    "levelSpreadDb": 8.77,
+    "attack": {
+     "onsetS": 0.025,
+     "peakS": 0.23,
+     "riseMs": 120
+    },
+    "decay": {
+     "firstQuarterDb": -26.1,
+     "lastQuarterDb": -33.4,
+     "lastMinusFirstDb": -7.2,
+     "slopeDbPerS": -89.1,
+     "activeEndS": 0.55
+    },
+    "spectral": {
+     "centroidHz": 359,
+     "flatness": 0.001,
+     "rolloff85Hz": 392,
+     "bands": {
+      "0-300Hz": 0.508,
+      "300-1000Hz": 0.485,
+      "1000-3000Hz": 0.006,
+      "3000-8000Hz": 0,
+      "8000-22050Hz": 0
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.756,
+     "f0MedianHz": 139,
+     "f0P5Hz": 101,
+     "f0P95Hz": 150,
+     "rangeSt": 6.91,
+     "notes": 1,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -18,
+     "momentaryMaxLufs": -18
+    }
+   },
+   "source": {
+    "clip": "market-grunt-01",
+    "jobId": "20261108T231729-1404249699",
+    "seed": 1404249699,
+    "seconds": 6,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "eba9f81cd9d129e1d6401386210f8eddb992346db3ec7ab67e0e1092a9d4c008",
+    "rawBytes": 1058444,
+    "labSidecarSha256": "90ee516e92824ecdbeb441305380f668b5f9550d43579607aa2fc6a251874b31",
+    "promptSha256": "107b6df49dddc231463d81949338ed2ae143eff6b7440ea3f9ba15854db04c21"
+   }
+  },
+  {
+   "cue": "marketGrunt",
+   "url": "assets/audio/market-grunt-03.mp3",
+   "bytes": 4388,
+   "sha256": "4cb6b948f63bf5a1e38d264f02be008b46c115c4cb07ecfd8b571ee9d4083e4f",
+   "dur": 0.5,
+   "window": {
+    "startS": 3.04,
+    "endS": 3.54
+   },
+   "ops": [
+    "mono",
+    "trim 3.04-3.54 s",
+    "cosine fades 0.006 / 0.05 s",
+    "loudness -18 LUFS integrated under a -1 dBFS peak ceiling (3.4 dB, loudness target)",
+    "mp3 mono 64 kbps"
+   ],
+   "gate": {
+    "kind": "grunt",
+    "pass": true,
+    "failed": [],
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 10.83,
+       "flatness": 0.006,
+       "voicedFrac": 0.692
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping",
+      "ok": true,
+      "value": 0,
+      "need": "< 0.0001"
+     },
+     {
+      "name": "one event",
+      "ok": true,
+      "value": 0.121,
+      "need": "quiet <= 0.25"
+     },
+     {
+      "name": "short",
+      "ok": true,
+      "value": 0.5,
+      "need": "0.3-0.8 s"
+     },
+     {
+      "name": "a voice (pitched)",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.692,
+       "f0MedianHz": 123
+      },
+      "need": "voiced >= 0.4"
+     },
+     {
+      "name": "low (chest voice)",
+      "ok": true,
+      "value": {
+       "centroidHz": 415,
+       "shareUnder1k": 0.94
+      },
+      "need": "centroid <= 1.2 kHz, >= 60 % under 1 kHz"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.5,
+    "peakDbfs": -6,
+    "rmsDbfs": -18.3,
+    "crestDb": 12.3,
+    "clippedFrac": 0,
+    "quietFrac": 0.121,
+    "activeFrac": 1,
+    "levelSpreadDb": 10.83,
+    "attack": {
+     "onsetS": 0.015,
+     "peakS": 0.2,
+     "riseMs": 120
+    },
+    "decay": {
+     "firstQuarterDb": -24.7,
+     "lastQuarterDb": -31.1,
+     "lastMinusFirstDb": -6.4,
+     "slopeDbPerS": -98,
+     "activeEndS": 0.5
+    },
+    "spectral": {
+     "centroidHz": 415,
+     "flatness": 0.006,
+     "rolloff85Hz": 385,
+     "bands": {
+      "0-300Hz": 0.424,
+      "300-1000Hz": 0.514,
+      "1000-3000Hz": 0.059,
+      "3000-8000Hz": 0.002,
+      "8000-22050Hz": 0.001
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.692,
+     "f0MedianHz": 123,
+     "f0P5Hz": 89,
+     "f0P95Hz": 129,
+     "rangeSt": 6.33,
+     "notes": 1,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -18,
+     "momentaryMaxLufs": -18
+    }
+   },
+   "source": {
+    "clip": "market-grunt-01",
+    "jobId": "20261108T231729-1404249699",
+    "seed": 1404249699,
+    "seconds": 6,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "eba9f81cd9d129e1d6401386210f8eddb992346db3ec7ab67e0e1092a9d4c008",
+    "rawBytes": 1058444,
+    "labSidecarSha256": "90ee516e92824ecdbeb441305380f668b5f9550d43579607aa2fc6a251874b31",
+    "promptSha256": "107b6df49dddc231463d81949338ed2ae143eff6b7440ea3f9ba15854db04c21"
+   }
+  },
+  {
+   "cue": "marketRetch",
+   "url": "assets/audio/market-retch-01.mp3",
+   "bytes": 13583,
+   "sha256": "a293fc8b3e598ac71ab91abaf849fb79e5a59da153e56e70119f0df8d779ee18",
+   "dur": 1.65,
+   "window": {
+    "startS": 0.33,
+    "endS": 1.98
+   },
+   "ops": [
+    "mono",
+    "trim 0.33-1.98 s",
+    "cosine fades 0.006 / 0.06 s",
+    "loudness -18 LUFS integrated under a -1 dBFS peak ceiling (4.2 dB, loudness target)",
+    "mp3 mono 64 kbps"
+   ],
+   "gate": {
+    "kind": "retch",
+    "pass": true,
+    "failed": [],
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 9.16,
+       "flatness": 0.094,
+       "voicedFrac": 0.451
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping",
+      "ok": true,
+      "value": 0,
+      "need": "< 0.0001"
+     },
+     {
+      "name": "a voice in it",
+      "ok": true,
+      "value": 0.451,
+      "need": "voiced >= 0.2"
+     },
+     {
+      "name": "one action",
+      "ok": true,
+      "value": 1.65,
+      "need": "0.8-2.5 s"
+     },
+     {
+      "name": "ends",
+      "ok": true,
+      "value": {
+       "activeEndS": 1.6,
+       "durationS": 1.65
+      },
+      "need": "active end before the clip end"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.65,
+    "peakDbfs": -2.9,
+    "rmsDbfs": -19.9,
+    "crestDb": 17.1,
+    "clippedFrac": 0,
+    "quietFrac": 0.283,
+    "activeFrac": 0.848,
+    "levelSpreadDb": 9.16,
+    "attack": {
+     "onsetS": 0.02,
+     "peakS": 0.96,
+     "riseMs": 785
+    },
+    "decay": {
+     "firstQuarterDb": -26.7,
+     "lastQuarterDb": -32.2,
+     "lastMinusFirstDb": -5.4,
+     "slopeDbPerS": -39.5,
+     "activeEndS": 1.6
+    },
+    "spectral": {
+     "centroidHz": 1221,
+     "flatness": 0.094,
+     "rolloff85Hz": 3456,
+     "bands": {
+      "0-300Hz": 0.002,
+      "300-1000Hz": 0.671,
+      "1000-3000Hz": 0.281,
+      "3000-8000Hz": 0.038,
+      "8000-22050Hz": 0.007
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.451,
+     "f0MedianHz": 513,
+     "f0P5Hz": 356,
+     "f0P95Hz": 918,
+     "rangeSt": 16.41,
+     "notes": 1,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -18,
+     "momentaryMaxLufs": -14
+    }
+   },
+   "source": {
+    "clip": "market-retch-01",
+    "jobId": "20261108T231733-622219597",
+    "seed": 622219597,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "32546c4ca8098ff495927927d60107d2b2e03812e9d6219c443796e66c08ee41",
+    "rawBytes": 529244,
+    "labSidecarSha256": "7786d5de4fc7670d930e921bb1338f0741ddace76024aa54c926be0b391a2d8e",
+    "promptSha256": "9a9728d219ce2f77f3fbd6406cb81fa341ddacb9a1e8a8eec540f98345b79326"
+   }
+  }
+ ]
+}
