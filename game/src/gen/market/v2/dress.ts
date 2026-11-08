@@ -222,10 +222,12 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     // (the gun shop: its felt bench on one side, ammo shelving on the other; a fixture that does not fit falls back to plank shelving)
     const sides = id === 'gun' ? (rng.chance(0.5) ? [kit.side, 'outdoorsPlankShelving'] : ['outdoorsPlankShelving', kit.side]) as PropKind[] : [kit.side, kit.side];
     (['L', 'R'] as const).forEach((side, k) => displaysOf(sideProp(F, a, sides[k], side, 0.78) ?? (sides[k] !== 'outdoorsPlankShelving' ? sideProp(F, a, 'outdoorsPlankShelving', side, 0.78) : null), displays));
-    const free = gapLeft ? [0.1, run.u0 - 0.1] : [run.u1 + 0.1, F.U - 0.1];
-    for (const k of kit.extra.slice(0, 1)) {
+    // (the trade's floor props behind the counter's far end, never in the trader's way in)
+    const free = gapLeft ? [run.u1 + 0.05, F.U - 0.05] : [0.05, run.u0 - 0.05];
+    for (const k of kit.extra) {
       const w = PROP_DEFS[k].w;
-      if (free[1] - free[0] >= w + 1.0) put(a, k, F.x(gapLeft ? free[0] + w / 2 + 0.05 : free[1] - w / 2 - 0.05), F.z(vTrader + 0.1), F.out);
+      if (free[1] - free[0] < w + 0.05) continue;
+      if (put(a, k, F.x(gapLeft ? free[1] - w / 2 : free[0] + w / 2), F.z(vTrader + 0.1), F.out)) break;
     }
     if (id === 'medical') mountProp(ctxOf(a), a, F.face, F.x(gapLeft ? F.U - 0.6 : 0.6), 'firstAidWallKit', 1.35, F.base);
     if (displays.length < 4) { why = `${displays.length} displays (${F.U} m)`; return null; }
