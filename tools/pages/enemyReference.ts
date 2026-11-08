@@ -38,6 +38,9 @@ import type {Area, StationLayout} from '../../game/src/gen/stationTypes';
 import {OFFICE_FLOORS} from '../../game/src/gen/office/frame';
 import {MALL_RINGS} from '../../game/src/gen/mall/mallTypes'; // task track3-eaton-centre-20261031 (lane PROFILES)
 import {LINGERIE_SPAWN_RULES, LINGERIE_STORES_MAX} from '../../game/src/gen/mall/lingerieSpawns'; // task mall-lingerie-20261102-221554 (lane CONTEXT): the lingerie store's zone
+import {COSPLAY_CONVENTIONS_MAX, COSPLAY_SPAWN_RULES} from '../../game/src/gen/skyways/cosplaySpawns'; // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): the convention's zone
+import * as CC from '../../game/src/ai/cosplayContext';
+const {COSPLAY_CONTEXT} = CC;
 import {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_MARKET, TRACK_EXT_REACTOR, TRACK_EXT_SKYWAYS} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs); + the mall's (task mall-playtest-revision-20261031: at most 1)
 import {CELL} from '../../game/src/gen/grid';
 import {ROOM_LABEL} from '../../game/src/gen/stationKit';
@@ -95,12 +98,14 @@ const F = {
   trackExt: 'game/src/gen/trackExt/config.ts', annexContent: 'game/src/gen/annexContent.ts',
   // task mall-lingerie-20261102-221554 (lane CONTEXT): the mall's optional lingerie store's store-local zone context
   lingerieSpawns: 'game/src/gen/mall/lingerieSpawns.ts',
+  // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): the Skyways convention's cosplay zone context
+  cosplaySpawns: 'game/src/gen/skyways/cosplaySpawns.ts', cosplayContext: 'game/src/ai/cosplayContext.ts',
 } as const;
 
 /** The game modules whose exported values the reference reads (this file's imports). Other files appear only as source links. */
 export const ENEMY_GENERATED_FROM: readonly string[] = [
   F.tables, F.archetypes, F.registry, F.frame, F.grid, F.stationKit, F.purposes, F.pistol, F.spawn, F.brain, F.blightbelly, F.siren, F.creatureActor,
-  F.contract, F.mallTypes, F.trackExt, F.strainer, F.lingerieSpawns,
+  F.contract, F.mallTypes, F.trackExt, F.strainer, F.lingerieSpawns, F.cosplaySpawns, F.cosplayContext,
 ].slice().sort();
 
 /**
@@ -209,6 +214,19 @@ const LINGERIE_ZONE_EXPLAIN: readonly string[] = [
 ];
 
 /**
+ * Task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): how the Skyways convention's cosplay zone context relates to the level,
+ * its eligibility line and the placement steps of gen/skyways/cosplaySpawns.ts placeCosplaySpawns (not the generic area order).
+ */
+const COSPLAY_ZONE_NOTE = `A CONVENTION ZONE BUDGET (layout version 5+): one run when the level's one add-on is the anime convention (0 to ${COSPLAY_CONVENTIONS_MAX} per level, never guaranteed — the alternative add-on, the prize display, has none), on its own fork (skyways-cosplay-spawns), appended after EVERY other spawn of the level (ambient, hordes, annex 'service') and tagged 'cosplay' (spawn context and ZombieSpawn.look). It is additive to the core contexts and NOT in the whole-level total; its spawns draw from the convention's OWN family pool (COSPLAY_FAMILY_POOL: ordinary zombies only — no Blightbelly, Siren, rat/dog or Strainer), are shamblers, and wear a costume at spawn time (ai/cosplay.ts cosplayLook(level seed, spawn index): the mascot's bear-ear hat + wig, an oversized mascot head, a sushi hat, the alternate-palette wig with a uniform) — a wardrobe look of the zombie family, never a new family. Every other spawn keeps the ordinary wardrobe pick. No leash. Killed ones stay dead for the run (per-index memory). Layout versions 1-4 never run it.`;
+const COSPLAY_ZONE_WHERE = `the convention venue's public event floor only (its main hall, exhibitors' floor, photo lounge and panel rooms — never registration, the back of house, storage or the washrooms): a 3 × 3-clear walkable floor cell, never a ramp, ≥ ${COSPLAY_SPAWN_RULES.doorKeepM} m from every door of those areas and from the add-on's entry, ≥ ${COSPLAY_SPAWN_RULES.statueKeepM} m from every mascot statue (the greeter included), off the stage + ${COSPLAY_SPAWN_RULES.stageMarginM} m, a ${COSPLAY_SPAWN_RULES.passageRadiusM} m disc around the spawn never splitting the storey (fair passage)`;
+const COSPLAY_ZONE_EXPLAIN: readonly string[] = [
+  `Only with the convention add-on (layout version 5+): draw count = U{${COSPLAY_CONTEXT.count[0]}..${COSPLAY_CONTEXT.count[1]}} (one draw, rng.int); every one a shambler (no coat roll: the look is a costume).`,
+  `Round-robin over the hosting areas — the main hall first, the others in a seeded order — one spawn per area per pass (spread over the venue), each from up to ${COSPLAY_CONTEXT.placement.tries} random picks of that area's stand points.`,
+  `A pick is taken when it is ≥ ${COSPLAY_CONTEXT.placement.spacingM} m from every enemy already on the storey and its fair-passage disc never splits the floor. Spacing and eligible floor can leave the run short of its count (placed < count); a run never regenerates the level.`,
+  'Each placed spawn is an ordinary zombie (the convention\'s own pool, rolled by the one family roll at the end).',
+];
+
+/**
  * GENERATOR ADAPTER: which generator reads each level's profile and how often each context runs per level. These are code paths
  * of the generators (not data), declared here — `Record<LevelId, …>` makes a new level fail to typecheck until it is documented,
  * and game/tests/enemy-spawn-reference.test.ts checks that the contexts declared here === the profile's === the ones the real
@@ -275,12 +293,15 @@ export const ENEMY_LEVEL_ADAPTER: Readonly<Record<LevelId, {
   // one placeOfficeEnemies run on its own fork (skyways-enemies-<storey>), + the station's annex.
   skyways: {
     generator: {fn: 'generateSkywaysLevel', file: F.skywaysIndex,
-      note: `ONE continuous level (LevelId 'skyways', tier 2): a subway station under the station building, its pedway concourse, the street-level lobbies and the "+15" skyway level with glazed bridges between the buildings, generated once per level seed: placeOfficeEnemies runs the station context once (storey 0), the street context once (storey 1) and the floor context once (storey 2), each on its own fork (skyways-enemies-<storey>), and tags its spawns with the context; then (Track 2) the station's tunnel / service annex (at most ${TRACK_EXT_SKYWAYS.annex.max}) is attached and placeServiceSpawns runs the service context once per seeded service annex, appended last; assignEnemyArchetypes rolls every family ONCE at the end. Moving between storeys never rerolls anything.`},
+      note: `ONE continuous level (LevelId 'skyways', tier 2): a subway station under the station building, its pedway concourse, the street-level lobbies and the "+15" skyway level with glazed bridges between the buildings, generated once per level seed: placeOfficeEnemies runs the station context once (storey 0), the street context once (storey 1) and the floor context once (storey 2), each on its own fork (skyways-enemies-<storey>), and tags its spawns with the context; then (Track 2) the station's tunnel / service annex (at most ${TRACK_EXT_SKYWAYS.annex.max}) is attached and placeServiceSpawns runs the service context once per seeded service annex, appended last; then (layout version 5+, task studio-skywalk-encounters-20261108-074144-01) the anime convention's cosplay run (gen/skyways/cosplaySpawns.ts placeCosplaySpawns, fork "skyways-cosplay-spawns": the cosplay context, at most ${COSPLAY_CONVENTIONS_MAX} convention) is appended after those; assignEnemyArchetypes rolls every family ONCE at the end. Moving between storeys never rerolls anything.`},
     contexts: {
       station: {storeys: 'the station storey (platforms, the pedway concourse, the station back of house)', runs: 1},
       street: {storeys: 'the street level (every building: lobbies, atrium courts, entrance halls, shops, service rooms)', runs: 1},
       floor: {storeys: 'the skyway level (concourses, bridges, shops, the add-on hall)', runs: 1},
       service: {storeys: 'one seeded service annex off a station track tunnel (its rooms and corridors only)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT_SKYWAYS.annex.max], note: SERVICE_ZONE_NOTE}},
+      // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): the anime convention's cosplay zombies (0..1 convention per level)
+      cosplay: {storeys: 'the convention venue\'s event floor (main hall, exhibitors\' floor, photo lounge, panel rooms; nowhere else)', runs: 1,
+        zone: {runsPerLevel: [0, COSPLAY_CONVENTIONS_MAX], note: COSPLAY_ZONE_NOTE, where: COSPLAY_ZONE_WHERE, explain: COSPLAY_ZONE_EXPLAIN}},
     },
   },
   // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET — a calm settlement: no placement run at all.
@@ -340,6 +361,14 @@ class Sources {
 
 /** Export name of a spawnTables object (by identity): rules shared by several contexts link to their named constant. */
 const EXPORT_NAME = new Map<unknown, string>(Object.entries(ST).filter(([, v]) => v && typeof v === 'object').map(([k, v]) => [v, k]));
+/**
+ * (task studio-skywalk-encounters-20261108-074144-01, lane COSPLAY) rule objects declared OUTSIDE spawnTables (the Skyways convention's
+ * zone context lives in its own leaf module, ai/cosplayContext.ts): their export name and the file their source links point into.
+ */
+const EXPORT_FILE = new Map<unknown, string>();
+for (const [k, v] of Object.entries(CC)) if (v && typeof v === 'object' && !EXPORT_NAME.has(v)) { EXPORT_NAME.set(v, k); EXPORT_FILE.set(v, F.cosplayContext); }
+/** The file a rule object's source link points into (spawnTables unless declared elsewhere). */
+const fileOf = (obj: unknown): string => EXPORT_FILE.get(obj) ?? F.tables;
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Helpers
@@ -726,12 +755,12 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
           const fams = c.families, den = fams.reduce((s2, [, w]) => s2 + w, 0);
           return {rows: fams.map(([family, weight]) => ({family, weight, share: den > 0 ? rd(weight / den) : 0})),
             note: 'This context\'s OWN pool: its spawns draw their family from it (the same single roll per spawn, room modifiers and eligibility on top) instead of the level pool. The shares are CONFIGURED selection probabilities per spawn, not quotas: a 5-6-enemy annex may hold none or several; the sampled census shows the placed outcome.',
-            at: src.at(F.tables, symbolOf(fams, `${base}.contexts.${id}.families`))};
+            at: src.at(fileOf(fams), symbolOf(fams, `${base}.contexts.${id}.families`))};
         })()} : {}),
         placement: {
           areaWeights: weightsInfo(pl.areaWeights), caps: capsInfo(pl.caps), triesPerArea: pl.tries,
           spacing: {metres: pl.spacingM, scope: storeyed ? 'straight line, same storey' : 'straight line'},
-          keepAway, eligibility, explanation, at: src.at(F.tables, symbolOf(pl, plPath)),
+          keepAway, eligibility, explanation, at: src.at(fileOf(pl), symbolOf(pl, plPath)),
         },
         rejection, ...(a.hook ? {hook: a.hook} : {}), at: src.at(F.tables, `${base}.contexts.${id}`),
       };
@@ -875,12 +904,12 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
       ...[...new Set(Object.values(P.contexts).map(c => c!.placement))].flatMap(pl => {
         const name = symbolOf(pl, `${base}.placement`);
         return [
-          {what: 'area weights', value: `${pl.areaWeights.rules.length} rules, otherwise ${pl.areaWeights.otherwise}`, at: src.at(F.tables, symbolOf(pl.areaWeights, `${name}.areaWeights`))},
-          {what: 'caps', value: `passes ${pl.caps.passes.join(' / ')}; ${pl.caps.rules.length} rules`, at: src.at(F.tables, symbolOf(pl.caps, `${name}.caps`))},
-          {what: 'tries per area visit', value: pl.tries, at: src.at(F.tables, `${name}.tries`)},
-          {what: 'spacing (m)', value: pl.spacingM, at: src.at(F.tables, `${name}.spacingM`)},
-          {what: 'keep-away from the start (cells)', value: pl.startCells, at: src.at(F.tables, `${name}.startCells`), note: `${pl.startCells * CELL} m walking`},
-          ...(pl.landingKeepM !== undefined ? [{what: 'landing keep-off (m)', value: pl.landingKeepM, at: src.at(F.tables, `${name}.landingKeepM`)}] : []),
+          {what: 'area weights', value: `${pl.areaWeights.rules.length} rules, otherwise ${pl.areaWeights.otherwise}`, at: src.at(fileOf(pl), symbolOf(pl.areaWeights, `${name}.areaWeights`))},
+          {what: 'caps', value: `passes ${pl.caps.passes.join(' / ')}; ${pl.caps.rules.length} rules`, at: src.at(fileOf(pl), symbolOf(pl.caps, `${name}.caps`))},
+          {what: 'tries per area visit', value: pl.tries, at: src.at(fileOf(pl), `${name}.tries`)},
+          {what: 'spacing (m)', value: pl.spacingM, at: src.at(fileOf(pl), `${name}.spacingM`)},
+          {what: 'keep-away from the start (cells)', value: pl.startCells, at: src.at(fileOf(pl), `${name}.startCells`), note: `${pl.startCells * CELL} m walking`},
+          ...(pl.landingKeepM !== undefined ? [{what: 'landing keep-off (m)', value: pl.landingKeepM, at: src.at(fileOf(pl), `${name}.landingKeepM`)}] : []),
         ];
       }),
       ...(mv ? [{what: 'storey moves (keep on main, passes, tries, spacing)', value: `${mv.mainKeep}, ${mv.passes}, ${mv.tries}, ${mv.spacingM} m / ${mv.spacingDy} m`, at: levelMoves!.at}] : []),

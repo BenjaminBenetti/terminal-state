@@ -9,6 +9,7 @@
 
 import {beforeAll, describe, expect, it} from 'vitest';
 import {LINGERIE_STORES_MAX} from '../src/gen/mall/lingerieSpawns'; // task mall-lingerie-20261102-221554 (lane CONTEXT): the mall's lingerie store zone
+import {COSPLAY_CONVENTIONS_MAX} from '../src/gen/skyways/cosplaySpawns'; // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): the Skyways convention's zone
 import {trackExtConfig} from '../src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone; task mall-playtest-revision-20261031: per level — the mall grows at most 1)
 import {existsSync, readFileSync} from 'node:fs';
 import {LEVELS, LEVEL_IDS} from '../src/levels/registry';
@@ -113,9 +114,10 @@ describe('enemy spawn reference: runtime agreement', () => {
         // Track 2 (lane CONTENT): the 'service' annex context is a ZONE (one run per seeded annex, 0-TRACK_EXT.annex.max per level),
         // reported separately: never part of the whole-level total; task mall-lingerie-20261102-221554 (lane CONTEXT): so is the mall's
         // 'lingerie' store context (one run per lingerie store, 0-LINGERIE_STORES_MAX per mall)
-        expect(!!c.zone, `${L.id} ${c.id} zone`).toBe(c.id === 'service' || c.id === 'lingerie');
+        // (lane COSPLAY: + the Skyways convention's 'cosplay' context: one run per convention, 0-COSPLAY_CONVENTIONS_MAX per level)
+        expect(!!c.zone, `${L.id} ${c.id} zone`).toBe(c.id === 'service' || c.id === 'lingerie' || c.id === 'cosplay');
         if (c.zone) {
-          const max = c.id === 'lingerie' ? LINGERIE_STORES_MAX : trackExtConfig(L.id as LevelId).annex.max;
+          const max = c.id === 'lingerie' ? LINGERIE_STORES_MAX : c.id === 'cosplay' ? COSPLAY_CONVENTIONS_MAX : trackExtConfig(L.id as LevelId).annex.max;
           expect(c.zone.runsPerLevel).toEqual({lo: 0, hi: max});
           expect(c.zone.perLevelMax).toBe(max * pc.count[1]);
           continue;
