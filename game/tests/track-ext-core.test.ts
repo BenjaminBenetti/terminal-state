@@ -16,6 +16,7 @@ import {generateOfficeLevel} from '../src/gen/office/index';
 import {coreView, isExtensionArea} from '../src/gen/trackExt/index';
 import {LEVELS} from '../src/levels/registry';
 import {isMaskLootItem, placeMaskLoot, placeSectionGear, rollLevelGear} from '../src/levels/gearAdapter';
+import {placeSubwayMapKiosks} from '../src/gen/subwayMapKiosks';
 import {buildDecayField} from '../src/world/decay';
 import {FLOOR} from '../src/gen/grid';
 import {extractWallFaces, LevelColumns, stationLevels} from '../src/world/levelGeometry';
@@ -119,6 +120,7 @@ describe('track extensions — the core level is unchanged', () => {
       const none = level === 'subway' ? generateStation(seed, {startWeapon: 'pistol', trackExtensions: OTHER_PLAN}) : generateOfficeLevel({levelSeed: seed, startWeapon: 'pistol'}, undefined, undefined, 'none');
       placeSectionGear(none, all.filter(g => !isMaskLootItem(g.itemId)));
       placeMaskLoot(none, all.filter(g => isMaskLootItem(g.itemId)));
+      if (level === 'subway') placeSubwayMapKiosks(none); // (task studio-ui-subway-maps-20261108-074144-01: the registry's last pass — the core's kiosks are the same either way)
       sameCore(ext, none, `${level} ${seed} (+ gear)`);
       // the gear / mask roll never lands in an extension (the annexes' own floor finds are theirs, appended before it — and so is a
       // hideout's own gear piece, the round-3 layout pickup tagged ANNEX_CACHE_GEAR_KEY: lane AREA's 3964205382 rolls an armor vest there)
