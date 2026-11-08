@@ -117,28 +117,49 @@ export class WarePacker {
   }
 
   /**
-   * Spread every row evenly along its surface (the build's look; call before the wares are spawned). A row whose spread would put a ware
-   * off its surface's supports (a joined counter top's seam) keeps its packed spots.
+   * Spread every row evenly along its surface (the build's look; call before the wares are spawned). On a surface with supported spans
+   * (a joined counter top) a ware bridging the seam stays where it is; the others are shared out over the free stretches of the spans
+   * (the least-filled first) and spread evenly in each — never over the seam. A row that cannot be shared out keeps its packed spots.
    */
   spread(): void {
+    const E = WARES.edge, G = WARES.gap;
     this.rows.forEach((rows, si) => {
-      const s = this.surfaces[si], W = s.w - 2 * WARES.edge;
+      const s = this.surfaces[si], lo = -s.w / 2 + E, hi = s.w / 2 - E;
       for (const r of rows) {
-        const items = r.items.slice().sort((a, b) => a.x0 - b.x0), n = items.length;
-        if (!n) continue;
-        const total = items.reduce((k, q) => k + (q.x1 - q.x0), 0), free = W - total;
-        // even gaps at both ends and between; a row packed tighter than that keeps its ends at the edges (its gaps were >= WARES.gap)
-        const roomy = free >= (n + 1) * WARES.gap || n === 1;
-        const gap = roomy ? free / (n + 1) : free / (n - 1);
-        let x = -s.w / 2 + WARES.edge + (roomy ? gap : 0);
-        const to = items.map(q => { const x0 = x; x += q.x1 - q.x0 + gap; return x0; });
-        if (items.some((q, i) => !supported(s, to[i], q.x1 - q.x0))) continue;
-        items.forEach((q, i) => {
+        if (!r.items.length) continue;
+        const spans = (s.supports ?? [[lo, hi]]).map(([a, b]) => [Math.max(lo, a), Math.min(hi, b)] as [number, number]).filter(([a, b]) => b > a);
+        const inSpan = (q: Slot) => spans.some(([a, b]) => q.x0 >= a - 1e-9 && q.x1 <= b + 1e-9);
+        const fixed = r.items.filter(q => !inSpan(q)), free = r.items.filter(inSpan).sort((a, b) => a.x0 - b.x0);
+        // the stretches the free wares may use: each span minus the bridging wares (and a gap round them)
+        let segs: [number, number][] = spans.map(([a, b]) => [a, b]);
+        for (const q of fixed) segs = segs.flatMap(([a, b]): [number, number][] => [[a, Math.min(b, q.x0 - G)], [Math.max(a, q.x1 + G), b]]).filter(([a, b]) => b - a > 1e-6);
+        const bins = segs.map(([a, b]) => ({a, b, items: [] as Slot[], used: 0}));
+        let ok = true;
+        for (const q of free) {
           const w = q.x1 - q.x0;
-          q.x0 = to[i];
-          q.x1 = to[i] + w;
-          this.placed.set(q.uid, this.toPlace(si, q, r.u0));
-        });
+          const fit = bins.filter(bn => bn.used + w + bn.items.length * G <= bn.b - bn.a + 1e-9)
+            .sort((p, q2) => (p.used + w) / (p.b - p.a) - (q2.used + w) / (q2.b - q2.a) || p.a - q2.a)[0];
+          if (!fit) { ok = false; break; }
+          fit.items.push(q);
+          fit.used += w;
+        }
+        if (!ok) continue;
+        for (const bn of bins) {
+          const n = bn.items.length;
+          if (!n) continue;
+          const len = bn.b - bn.a, room = len - bn.used;
+          // even gaps at both ends and between; a stretch packed tighter than that keeps its ends at its edges (gaps >= WARES.gap)
+          const roomy = room >= (n + 1) * G || n === 1;
+          const gap = roomy ? room / (n + 1) : room / (n - 1);
+          let x = bn.a + (roomy ? gap : 0);
+          for (const q of bn.items) {
+            const w = q.x1 - q.x0;
+            q.x0 = x;
+            q.x1 = x + w;
+            x += w + gap;
+          }
+        }
+        for (const q of r.items) this.placed.set(q.uid, this.toPlace(si, q, r.u0));
       }
     });
   }
