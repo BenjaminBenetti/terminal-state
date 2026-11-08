@@ -8,7 +8,8 @@ import type {SlotRef} from '../src/items/inventory';
 import {TIE_GLYPH} from '../src/market/trade/ties';
 import {TRADE_RT, TRADE_TEXT} from '../src/market/trade/tradeSystem';
 import {buyPrice} from '../src/market/trade/stalls';
-import {FUEL} from '../src/fuel/fuel';
+import {FUEL, tanksText} from '../src/fuel/fuel';
+import {trainCapacityUnits} from '../src/market/trade/stock';
 import {installFakeDom, type FakeDom} from './helpers/fakeDom';
 import {tradeHost, tradeState} from './helpers/marketTradeFixture';
 
@@ -166,7 +167,7 @@ describe('market trade view: the panel', () => {
     const t = market(500);
     t.standAt('fuel');
     t.press();
-    expect(dom.el('.tr-stock-h').textContent).toMatch(/one can = ¼ tank · your train holds 1 tank$/);
+    expect(dom.el('.tr-stock-h').textContent).toMatch(new RegExp(`one can = ¼ tank · your train holds ${tanksText(trainCapacityUnits())}$`)); // (1 tank; 2 with the two-tank train)
     const i = t.sys.stock!.stalls.fuel.findIndex(s => s.itemId === FUEL.canItem && s.count === 2);
     expect(i).toBeGreaterThanOrEqual(0);
     t.sys.view.select({side: 'buy', index: i});

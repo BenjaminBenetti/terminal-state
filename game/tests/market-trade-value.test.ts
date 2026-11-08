@@ -194,21 +194,27 @@ describe('market stalls: who buys what', () => {
     expect(buyPrice(can, 1)).toBe(FUEL.canUnits * VALUE.fuelPerUnit);
     expect(buyPrice(can, FUEL.canStackMax)).toBe(FUEL.canStackMax * FUEL.canUnits * VALUE.fuelPerUnit);
     const canUnitsStocked = (seed: number) => stallDraws('fuel', stockRng('st-09', seed, 'fuel')).filter(d => d.itemId === FUEL.canItem).reduce((n, d) => n + d.count * FUEL.canUnits, 0);
-    expect(trainCapacityUnits()).toBe(FUEL.tankUnits); // this build: one tank
+    // this build's capacity: FUEL.trainTankUnits where it exists (the two-tank train another task adds), else one tank
+    const own = (FUEL as unknown as {trainTankUnits?: number}).trainTankUnits;
+    expect(trainCapacityUnits()).toBe(own ?? FUEL.tankUnits);
     for (let seed = 1; seed < 40; seed++) {
       const u = canUnitsStocked(seed);
       expect(u).toBeGreaterThanOrEqual(FUEL.hopUnits);
       expect(u).toBeLessThanOrEqual(trainCapacityUnits());
     }
-    // the two-tank train (another task adds FUEL.trainTankUnits): the stall follows the constant, never a magic 4
-    Object.defineProperty(FUEL, 'trainTankUnits', {value: 8, configurable: true, enumerable: true});
+    // a bigger train (three tanks, a value no build uses): the stall follows the constant, never a magic number
+    const desc = Object.getOwnPropertyDescriptor(FUEL, 'trainTankUnits');
+    Object.defineProperty(FUEL, 'trainTankUnits', {value: 12, configurable: true, enumerable: true, writable: true});
     try {
-      expect(trainCapacityUnits()).toBe(8);
+      expect(trainCapacityUnits()).toBe(12);
       const seen = new Set<number>();
-      for (let seed = 1; seed < 80; seed++) { const u = canUnitsStocked(seed); expect(u).toBeGreaterThanOrEqual(FUEL.hopUnits); expect(u).toBeLessThanOrEqual(8); seen.add(u); }
-      expect(Math.max(...seen)).toBeGreaterThan(FUEL.tankUnits);
-    } finally { delete (FUEL as unknown as {trainTankUnits?: number}).trainTankUnits; }
-    expect(trainCapacityUnits()).toBe(FUEL.tankUnits);
+      for (let seed = 1; seed < 80; seed++) { const u = canUnitsStocked(seed); expect(u).toBeGreaterThanOrEqual(FUEL.hopUnits); expect(u).toBeLessThanOrEqual(12); seen.add(u); }
+      expect(Math.max(...seen)).toBeGreaterThan(2 * FUEL.tankUnits);
+    } finally {
+      if (desc) Object.defineProperty(FUEL, 'trainTankUnits', desc);
+      else delete (FUEL as unknown as {trainTankUnits?: number}).trainTankUnits;
+    }
+    expect(trainCapacityUnits()).toBe(own ?? FUEL.tankUnits);
   });
 
   it('stock: themed per stall from the loot pools, bounded, deterministic per station + stall, independent stalls', () => {

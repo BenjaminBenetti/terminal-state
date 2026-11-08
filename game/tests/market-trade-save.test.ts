@@ -4,13 +4,15 @@
 // refill); every stock stack joins the run's one-item-one-uid set in save/validate.ts (and the Retry snapshot's own set); malformed stock
 // and wallets are refused; the uid counter is reserved above every stock uid on load.
 import {describe, expect, it} from 'vitest';
-import type {SlotRef} from '../src/items/inventory';
+import {Inventory, stackToJSON, type ItemStack, type SlotRef} from '../src/items/inventory';
+import {gearSpec} from '../src/items/gear';
+import {TrainLockbox} from '../src/run/trainLockbox';
 import {MARKET_STALLS} from '../src/gen/market/marketTypes';
 import {parseSaveText, validateSaveFile} from '../src/save/validate';
 import {installRestore, makeSaveFile, maxUidOfRun, prepareRestore, saveFileText, type SaveFileV1Like} from '../src/save/serialize';
 import {restoreCarry, restoreParticipants} from '../src/run/snapshot';
 import {WALLET_MAX, WALLET_PARTICIPANT} from '../src/market/trade/wallet';
-import {MARKET_STOCK_LANE, STOCK_MAX, type MarketStockJSON} from '../src/market/trade/stock';
+import {MARKET_STOCK_LANE, MarketStock, STOCK_MAX, type MarketStockJSON} from '../src/market/trade/stock';
 import {Harness, fixtureCampaign, sid} from './helpers/saveFixture';
 import {MARKET_STATION, census, tradeHost, uniqueUids} from './helpers/marketTradeFixture';
 
@@ -160,6 +162,20 @@ describe('market stock: seeded once, remembered, never refilled', () => {
     restoreParticipants(snap, t.h.participants);
     t.build();
     expect([JSON.stringify(t.sys.stock!.toJSON()), t.sys.wallet.ties]).toEqual([at.stock, at.ties]);
+  });
+
+  it('item state other tasks add to stacks (armor wear) survives the stock record exactly as the shared serializers carry it', () => {
+    const inv = new Inventory();
+    const vest = inv.makeStack('armor_vest', 1) as ItemStack & {armor?: number};
+    vest.armor = gearSpec('armor_vest')!.armor! / 2;
+    const carried = (stackToJSON(vest) as {armor?: number}).armor === vest.armor; // (true once the item-state field is in the serializers)
+    const st = new MarketStock();
+    st.stalls.gear.push(vest);
+    const back = MarketStock.fromJSON(JSON.parse(JSON.stringify(st.toJSON()))).stalls.gear[0] as ItemStack & {armor?: number};
+    expect(back.armor).toBe(carried ? vest.armor : undefined);
+    const box = new TrainLockbox(1); // one serializer path for every store: the Lockbox keeps exactly the same
+    box.load({v: 1, slots: [stackToJSON(vest)]});
+    expect((box.slots[0] as ItemStack & {armor?: number}).armor).toBe(back.armor);
   });
 
   it('a trade made after the level entry saves and validates: the entry snapshot and the run are separate uid scopes', () => {
