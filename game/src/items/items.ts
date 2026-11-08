@@ -12,7 +12,9 @@
 // FUTURE crafting system: passive like 'supply' (never used / equipped / thrown; pockets first), nothing consumes it yet.
 // Task reactor-build-20261101 (lane RESTART): 'part' = a finite restart part of THE REACTOR (startup key, fuse cartridge): passive
 // (never used / equipped / thrown; pockets first), placed once by the level generator, never in a loot table; a control consumes it.
-export type ItemKind = 'weapon' | 'ammo' | 'consumable' | 'throwable' | 'gear' | 'supply' | 'material' | 'part';
+// Task studio-market-rework-20261108-074144-01 (lane TRADE): 'currency' = the survivor market's Rail Ties (items/railTies.ts): passive
+// (never used / equipped / thrown; pockets first), stacks to 1000, never loot, never traded for itself; only a trade pays it out.
+export type ItemKind = 'weapon' | 'ammo' | 'consumable' | 'throwable' | 'gear' | 'supply' | 'material' | 'part' | 'currency';
 
 /** Key into the HUD icon set (ui/icons.ts). */
 export type IconKey =
@@ -26,7 +28,8 @@ export type IconKey =
   | MaterialIconKey // lane RACK (office-props-physics-scale-20261030): crafting materials
   | 'fuelCan' // task train-fuel-system-20261106-024923: the train's fuel can
   | SkywaysFoodIconKey // task studio-skyways-level-20261106-054448 (lane FOOD): ramen bowls, sushi bento, bubble tea (items/skywaysFood.ts)
-  | 'reactorKey' | 'fuseCartridge'; // task reactor-build-20261101 (lane RESTART): the reactor restart parts
+  | 'reactorKey' | 'fuseCartridge' // task reactor-build-20261101 (lane RESTART): the reactor restart parts
+  | 'railTies'; // task studio-market-rework-20261108-074144-01 (lane TRADE): the market's Rail Ties (items/railTies.ts)
 
 /** How a consumable is used: wording, sound and the stat it mainly restores ('use': the flashlight battery). */
 export type ConsumeVerb = 'apply' | 'eat' | 'drink' | 'use';
@@ -62,6 +65,7 @@ import type {Caliber} from './calibers';
 import {MEDICAL_DIMS, MEDICAL_ITEMS, treatsText, type Limb, type MedicalIconKey} from './medical';
 import {MATERIAL_DIMS, MATERIAL_ITEMS, type MaterialIconKey} from './craftMaterials'; // lane RACK (office-props-physics-scale-20261030)
 import {SKYWAYS_DRINK_IDS, SKYWAYS_FOOD_DIMS, SKYWAYS_FOOD_IDS, SKYWAYS_FOOD_ITEMS, type SkywaysFoodIconKey} from './skywaysFood'; // task studio-skyways-level-20261106-054448 (lane FOOD)
+import {RAIL_TIES_DIMS, RAIL_TIES_ITEMS} from './railTies'; // task studio-market-rework-20261108-074144-01 (lane TRADE)
 
 // + bread (task office-props-physics-scale-20261030, lane FURN): only bakery display cases hold it (items/lootTables.ts BAKERY_ROWS)
 // + the Skyways ramen restaurant's ramen bowls / bento and bubble tea (task studio-skyways-level-20261106-054448, lane FOOD: items/skywaysFood.ts)
@@ -135,6 +139,8 @@ export const ITEMS: Record<string, ItemDef> = {
     description: 'The shift supervisor\'s reactor startup key, brass on a red fob. The control-room key switch will not arm the rod control without it — the switch keeps it once it is in.'},
   fuse_cartridge: {id: 'fuse_cartridge', name: 'Fuse cartridge', short: 'Fuse', kind: 'part', stackMax: 3, icon: 'fuseCartridge',
     description: 'A heavy ceramic switchgear fuse cartridge with tinned end caps and blade contacts. The reactor switchgear has two burnt-out slots; press E on a slot to seat one.'},
+  // --- Task studio-market-rework-20261108-074144-01 (lane TRADE): the survivor market's currency, Rail Ties (items/railTies.ts) — never loot ---
+  ...RAIL_TIES_ITEMS,
 };
 
 export function itemDef(id: string): ItemDef {
@@ -230,6 +236,7 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   // / .fuseCartridge, so they stay at scale 1; world/reactor/restartItems.ts): the key lying flat, the ceramic cartridge along X
   reactor_key: {w: 0.13, d: 0.0573, h: 0.0073, shape: 'flat'},
   fuse_cartridge: {w: 0.3, d: 0.062, h: 0.0623, shape: 'flat'},
+  ...RAIL_TIES_DIMS, // task studio-market-rework-20261108-074144-01 (lane TRADE): the code-built tie bundle (world/railTiesModel.ts)
 };
 
 export function itemDims(id: string): ItemDims {

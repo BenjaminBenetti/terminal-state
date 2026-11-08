@@ -1,10 +1,15 @@
 // Task studio-survivor-market-20261108-005807-01 (lane TRADE): fixtures of the market trade tests — a fake `layout.market` (the six stalls in
 // a row, each counter 2 m wide with its customer spot in front), a Node host for the trade controller on the save fixture's Game-like
 // Harness (real RunState / Inventory / participants), and census helpers (every stack + uid across the inventory and every stall).
+// Task studio-market-rework-20261108-074144-01 (lane TRADE): Rail Ties are carried items now (giveTies), the host has the harness's player
+// train (its Lockbox / cargo take an old balance's overflow) and a settable market hostility (market/hostility.ts).
 import type {MarketLayout, MarketStall, MarketStallId} from '../../src/gen/market/marketTypes';
 import {MARKET_STALLS} from '../../src/gen/market/marketTypes';
 import {stacksIn, type Inventory, type ItemStack} from '../../src/items/inventory';
+import {RAIL_TIES_ID} from '../../src/items/railTies';
+import type {MarketHostilityApi} from '../../src/market/hostility';
 import type {MarketStock} from '../../src/market/trade/stock';
+import {carriedTies, receiveTies} from '../../src/market/trade/payment';
 import {TradeSystem, type TradeHost} from '../../src/market/trade/tradeSystem';
 import {Harness, fixtureCampaign, sid} from './saveFixture';
 
@@ -41,6 +46,7 @@ export function tradeHost(o: {station?: string} = {}) {
     interactHandlers: [] as (() => boolean)[], promptProviders: [] as (() => string | null)[], runParticipants: h.participants,
     stateListeners: [] as ((s: string, p: string) => void)[], inputOwners: [] as (() => boolean)[], hitListeners: [] as ((hit: {amount: number}) => void)[],
     gear: {session: null as unknown, cancelReady() {}, showResume() {}}, syncs: 0, syncHeld() { this.syncs++; },
+    playerTrain: h.train, marketHostility: null as MarketHostilityApi | null,
   };
   const sys = new TradeSystem(host as unknown as TradeHost).install();
   const layout = {market: fakeMarket()};
@@ -58,17 +64,30 @@ export function tradeHost(o: {station?: string} = {}) {
   return {h, host, sys, layout, build, teardown, frame, press, prompt, standAt, toasts, sfx};
 }
 
-/** Every stack (bag contents included) in the inventory + the stock: item totals and the sorted uid list. */
+/** Every stack (bag contents included) in the inventory + the stock: item totals (the goods; `ties` apart) and the sorted uid list. */
 export function census(inv: Inventory, stock: MarketStock) {
   const all: ItemStack[] = [...inv.allStacks(true), ...stock.all().flatMap(stacksIn)];
   const counts: Record<string, number> = {};
-  for (const s of all) counts[s.itemId] = (counts[s.itemId] ?? 0) + s.count;
-  return {counts, uids: all.map(s => s.uid).sort((a, b) => a - b)};
+  let ties = 0;
+  for (const s of all) if (s.itemId === RAIL_TIES_ID) ties += s.count; else counts[s.itemId] = (counts[s.itemId] ?? 0) + s.count;
+  return {counts, ties, uids: all.map(s => s.uid).sort((a, b) => a - b)};
 }
+
+/** Put `n` Rail Ties into the quick slots / pockets (the payment helper's receive: pockets first, stacks of up to 1000). */
+export function giveTies(inv: Inventory, n: number): void {
+  if (receiveTies(inv, n) > 0) throw new Error(`no room for ${n} ties`);
+}
+
+/** A hostility stub (market/hostility.ts): `allow(stall)` decides canTrade; `hostile` the settlement flag. */
+export function hostility(allow: (stall: MarketStallId) => boolean = () => true, hostile = false): MarketHostilityApi & {hostile: boolean} {
+  return {hostile, provoke() {}, canTrade: allow};
+}
+
+export {carriedTies};
 
 export const uniqueUids = (uids: number[]): boolean => new Set(uids).size === uids.length;
 
-/** Byte-exact state of a trade (inventory snapshot incl. its uid counter, the stock record, the balance). */
-export function tradeState(inv: Inventory, stock: MarketStock, ties: number): string {
-  return JSON.stringify({inv: inv.toJSON(), stock: stock.toJSON(), ties});
+/** Byte-exact state of a trade (inventory snapshot incl. its uid counter and its ties, the stock record). */
+export function tradeState(inv: Inventory, stock: MarketStock): string {
+  return JSON.stringify({inv: inv.toJSON(), stock: stock.toJSON(), ties: carriedTies(inv)});
 }

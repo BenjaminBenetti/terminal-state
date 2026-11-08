@@ -18,6 +18,8 @@ import {gearItemModel, gearModelSource, registerGasMaskOutfit} from '../gear/mod
 import {isGearItem} from '../items/gear';
 import {isReactorItem, reactorItemModel, reactorItemSource} from './reactor/restartItems'; // task reactor-build-20261101 (lane RESTART)
 import {fuelCanModel, fuelCanModelSource} from './fuelCanModel'; // task train-fuel-system-20261106 (lane PORT): the delivered fuel-can GLB (fallback box if not loaded)
+import {RAIL_TIES_MODEL_SOURCE, railTiesModel} from './railTiesModel'; // task studio-market-rework-20261108-074144-01 (lane TRADE)
+import {RAIL_TIES_ID} from '../items/railTies';
 import {Grid} from '../gen/grid';
 import type {Levels} from '../gen/levels';
 
@@ -273,6 +275,10 @@ export function itemTemplate(itemId: string): THREE.Object3D {
     // task reactor-build-20261101 (lane RESTART): startup key / fuse cartridge — the Meshy kit GLBs (procedural stand-in if one failed to load)
     t = reactorItemModel(itemId);
     templateSource.set(itemId, reactorItemSource(itemId));
+  } else if (itemId === RAIL_TIES_ID) {
+    // task studio-market-rework-20261108-074144-01 (lane TRADE): Rail Ties — a bundle of tie offcuts code-built from the track sleeper
+    t = railTiesModel();
+    templateSource.set(itemId, RAIL_TIES_MODEL_SOURCE);
   } else if (isMaterialItem(itemId)) {
     // Task office-props-physics-scale-20261030 (lane RACK): crafting materials — authored procedural geometry (world/materialItems.ts)
     t = materialItemModel(itemId);
