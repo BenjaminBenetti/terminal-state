@@ -401,6 +401,8 @@ level carryover work like any stack) and their descriptions say so.
 | `scrap_metal` | Scrap metal | 20 | 1–2 / 1–3 | server racks, server cupboards |
 | `bio_mater` | Bio mater (the user's label) | 10 | 1 / 1–2 | lab storage (lane FURN's rows) |
 
+All three are also **basic finite loot on every level** through the shared base salvage (next section).
+
 - **Economy category `material`.** `econCat` returns `'material'`. `scarceFinds` keeps a rolled material **exactly as rolled**
   (like ammo), so a table's row weight is the real rate. `OFF_THEME_WEIGHTS.material` is 0 and no theme lists it, so no other
   holder ever re-themes a find into a material. Only holders whose **own rows** name a material hold one, and their
@@ -410,11 +412,74 @@ level carryover work like any stack) and their descriptions say so.
   most finds are electrical parts. Measured over Office seeds 1–3 (23–59 racks a level): 9–37 material units a level.
 - **Server cupboard** (`SERVER_SPARES_ROWS`, the server cabinet's two cupboards): the old spares plus electrical parts 0.8 and
   scrap metal 0.25, about a quarter of its lots.
-- The Subway and every other table are unchanged (no material rows).
+- No other table has material rows of its own; every other level-wide material source is a salvage table (below, and the mall's).
 
 To add a material: an `items/craftMaterials.ts` def, its dims, a model in `world/materialItems.ts`, an icon in
 `ui/materialIcons.ts`, `ITEM_CLASS` / `ITEM_PHYSICS` rows in `damage/materials.ts` and a `BOX_COUNT` entry. Then add rows to
 the holders it fits, and `'material'` to their `HOLDER_ALLOW`.
+
+### Base salvage (every level)
+
+<!-- Task studio-base-salvage-20261108-073314-01. User: "what about if we changed the base loot table? these items are supposed to be
+basic and found in all levels" -> "ok that sounds good. Lets do that". -->
+
+The three materials are **basic** supplies: `BASE_TABLES.salvage` = `BASE_SALVAGE`, so every profile that rolls the base tables gets it.
+That is the Subway, the Office, Skyways and any future level; there is no per-level list to extend.
+
+**It is additive** (`SalvageTables.extra`). A fitting holder rolls its own table exactly as before. Then, on its own stream
+`loot:<kind>:<index>:salvage`, it has a chance of **one** extra salvage lot (`items/loot.ts` `salvageLot`):
+- **The odds.** The chance is the rule's `share`, per holder, before overrides and fit. The item comes from the rule's rows, after
+  the profile's item / category weights. Its stack size is `BOX_COUNT` for that holder kind.
+- **Placement.** The lot goes in a free spot beside the rolled lots (`lootLayout.ts` `freeLotSpot`), so no rolled lot moves or is
+  covered. Its id is `index * 1000 + SALVAGE_ID` (700), and `isSalvageLotId` tests for it.
+- **Nothing else changes.** Food, drink, medicine, ammo, torch cells and flares keep their chances, their counts, their placement
+  and their lot ids. There is no compensating supply change anywhere.
+
+**Routing** is the ordinary salvage routing (`lootEconomy.ts` `salvageRule`): the purpose entry first, else the loot theme's.
+
+| Rule | Share (per holder) | Mix |
+|---|---|---|
+| `workshop`, `office-workshop` | 0.18 | `BASE_WORKSHOP_SALVAGE`: scrap 3, electrical 1 |
+| `electrical-room`, `electrical-closet` | 0.18 | `BASE_ELECTRICAL_SALVAGE`: electrical 3, scrap 0.8 |
+| `signal-room` / `office-it` | 0.14 / 0.12 | electrical mix |
+| `pump-room`, `boiler-room`, `generator-room`, `turbine-hall`, `ventilation-plant` | 0.12 | workshop mix |
+| `storage`, `office-storage`, `office-utility` / `custodial-room` | 0.1 / 0.08 | `BASE_SERVICE_SALVAGE`: scrap 1.6, electrical 1.2, bio 0.35 |
+| `office-lab`, `office-labfloor` / `first-aid-room`, `supply-closet` | 0.12 / 0.06 | `BASE_BIO_SALVAGE`: bio mater |
+| theme `service` / `tech` / `medical` | 0.06 / 0.06 / 0.04 | service / electrical / bio mix |
+
+**Where it never goes.** The rule applies to ordinary own / purpose tables only. It never applies to:
+- exact tables: the annex supply / scraps / stash / cache / picked-over storage and the market's empty key;
+- curated rewards, fixtures and plain-room (legacy) holders;
+- container-themed storage (`CONTAINER_THEMED`) and junk bins (`RANDOM_HOLDERS`);
+- holders whose `HOLDER_ALLOW` excludes materials: fridges, coolers, food fixtures, medicine cabinets, gun lockers, vending.
+
+**How to tune or switch it off.**
+- Slot overrides shape the table roll only. A profile tunes the base salvage through its own `salvage` table (`{}` means none) or
+  through `categoryWeight.material` / `itemWeight`.
+- A level with its **own** salvage replaces it wholesale. The mall and the Reactor use `MALL_SALVAGE` (the rows mode, unchanged);
+  the market uses `MARKET_SALVAGE`. One rule per holder, never both.
+
+**Finite and persistent.**
+- The lot is rolled once, remembered by lot id and never refilled; there is no floor scatter and no per-seed guarantee.
+- A holder remembered from **before** this rule (an old save) never gains it: `run/worldMemory.ts` `dropUnrecordedSalvage` runs
+  right after the holders are built. The same applies to a holder whose lot was taken.
+- Holders not realized yet (an unvisited section or station of an old save, or any new campaign) roll it.
+- Fuel placement leaves salvage lots out of its taken room, so the fuel cans lie exactly where they did before. A can laid on a
+  salvage lot removes it (`ContainerManager.addLots`).
+- Saves, trade, cargo and item stacks are unchanged.
+
+**Amounts.** Expected salvage lots per level, before fit (sampled levels):
+
+| Level | Lots | Scrap | Electrical | Bio mater |
+|---|---|---|---|---|
+| Subway | ≈ 5.6 | 2.3 | 2.4 | 0.9 |
+| Office | ≈ 4.5 | 2.0 | 1.8 | 0.6 |
+| Skyways | ≈ 5.5 | 1.7 | 2.5 | 1.3 |
+| Market | ≈ 2.0 | 1.0 | 0.8 | 0.2 |
+
+These are on top of the existing server-rack / lab-drawer rows and the mall's own salvage. They are per-holder chances summed over
+the sampled holders: an estimate, not a per-level guarantee. The evidence is in `tests/base-salvage.test.ts` and
+`tests/loot-golden.test.ts` stage 19. Every pre-existing holder hash is unchanged over the non-salvage lots.
 
 ## The mall (`mall`)
 
@@ -443,8 +508,9 @@ filters 2–5).
   share / (1 − share) × Σ(table) × its share of the mix), then the profile's item / category weights apply like any row. They are
   rolled per lot and kept exactly as rolled (category `material`), finite and placed only where they fit (the holder's surfaces).
   Never legacy room-type tables, curated rewards, fixtures, container-themed storage, junk holders, or holders whose `HOLDER_ALLOW`
-  excludes `material` (coolers, fridges, food lines, first-aid fixtures, gun lockers). Absent in `BASE_TABLES`: Subway and Office
-  draws are byte-identical (`withSalvage` returns the same array; `tests/loot-golden.test.ts`).
+  excludes `material` (coolers, fridges, food lines, first-aid fixtures, gun lockers). This is the mall's ROWS mode. `BASE_TABLES`
+  carries the additive base salvage instead ("Base salvage" above: `withSalvage` leaves those tables' rows untouched). The mall's own
+  table replaces it, so a mall holder never gets both.
 - **`MALL_SALVAGE`** — the named mixes `MALL_ELECTRONICS_SALVAGE` (electrical parts 3 : scrap 0.7), `MALL_HARDWARE_SALVAGE` (scrap 3 :
   parts 0.9), `MALL_BIO_SALVAGE` (bio mater), `MALL_STOCKROOM_SALVAGE` (scrap 1.6 : parts 1.1 : bio 0.15):
   - by theme: tech 0.3 (electronics), service 0.3 (stock-room mix), medical 0.15 (bio), security 0.1 (hardware), personal 0.08;
@@ -571,6 +637,17 @@ loot: the goods are the traders' finite stock). The generator places no pickups 
 economy category, `slot.lots` 0 for every slot, `floor.chance` 0, `gear` `{mean: 0, cap: 0}` (an empty level-wide gear roll; the
 mask / filter roll is 0 / 0 in `MASK_LOOT.levels.market`). The station's common fuel plan is not loot tables: only the workshop has a
 fuel affinity, so a market station's plan cans lie in its storage like at any station (`world/fuelStations.ts`).
+
+**Basic salvage in the workshop (the one exception).** The workshop's own storage is its rolling tool chest, salvaged plank shelving
+and crates (`gen/market/dress.ts`). It carries `MARKET_WORKSHOP_KEY` (`'market-workshop'`): an ordinary, always-empty table
+(`MARKET_WORKSHOP_EMPTY`).
+- **What it can hold.** The market's own salvage table `MARKET_SALVAGE` (additive) gives each of these holders a 0.5 chance of one
+  base salvage lot from the shared `BASE_SERVICE_SALVAGE` rows: scrap, electrical parts and, now and then, bio mater.
+- **What the profile allows.** `categoryWeight` is 1 for `material` only. Every slot still rolls 0 lots, so no holder's own table
+  rolls anything. There are no free guns, food, medicine, fuel, trader stock or NPC loot.
+- **Everything else stays empty.** Every other holder keeps the exact empty key. The base theme salvage is replaced, so nothing
+  seeps into the kitchen or the bunks.
+- **Unchanged.** Trader stock, the wallet, prices and ownership. Workbenches stay scenery: no crafting and no conversion.
 
 ## Verify
 

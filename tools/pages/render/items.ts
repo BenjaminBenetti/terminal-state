@@ -1,5 +1,5 @@
 // Task loot-reference-pages-20261030 (lane SITE): item index and one page per item (every table and source that can produce it).
-import type {ItemInfo} from '../lootReferenceTypes';
+import type {ItemInfo, OccurrenceInfo} from '../lootReferenceTypes';
 import {esc, filterBox, href, num, renderPage, searchAttr, slug, table} from './html';
 import {contextLink, groupChip, itemCell, probCell, shareCell, specialLink, tableLink, type Site} from './common';
 import {TABLE_KIND_LABEL} from './tables';
@@ -46,6 +46,11 @@ ${ungrouped.length ? `<section id="group-other" data-filter-group><h2>Other</h2>
   });
 }
 
+/** Task studio-base-salvage-20261108-073314-01: sampled (k of N sample levels) vs declared (possible, not sampled). */
+function basisCell(o: OccurrenceInfo): string {
+  return o.basis === 'observed' ? `sampled · ${o.levelsObserved} of ${o.samples}` : `<span class="muted">declared, not sampled</span>`;
+}
+
 export function renderItemPage(site: Site, item: ItemInfo): string {
   const p = site.itemPage.get(item.id)!;
   const {ref} = site;
@@ -82,9 +87,9 @@ export function renderItemPage(site: Site, item: ItemInfo): string {
     const ctxTable = ctxs.length
       ? table({
         caption: `${level.label}: holder contexts that can yield ${item.name} (per holder, before fit)`,
-        head: ['Holder context', 'Expected units', 'Chance of at least one'],
+        head: ['Holder context', 'Expected units', 'Chance of at least one', 'Seen in the sample levels'],
         numeric: [1],
-        rows: ctxs.map(({h, e}) => [contextLink(site, p, h.id), num(e!.units), probCell(e!.pAtLeastOne)]),
+        rows: ctxs.map(({h, e}) => [contextLink(site, p, h.id), num(e!.units), probCell(e!.pAtLeastOne), basisCell(h.occurrence)]),
         rowAttrs: ctxs.map(({h}) => searchAttr(h.kind, h.kindLabel, h.areaKey, h.areaLabel, h.slot)),
       })
       : '';
@@ -118,8 +123,9 @@ ${floorTable}
 <dt>Economy category</dt><dd>${item.econ ? `<code>${esc(item.econ)}</code>` : 'none (not a consumable resource)'}</dd>
 <dt>Stack size</dt><dd>${item.stackMax}</dd>
 </dl>
-<p class="note">Per-holder figures are exact before fit for one holder of that context. How many such holders a level has is decided
-by the generator, so no per-level chance of finding ${esc(item.name)} is stated.</p>
+<p class="note">Per-holder figures are exact before fit for one holder of that context (an additive base salvage lot included). How many
+such holders a level has is decided by the generator, so no per-level chance of finding ${esc(item.name)} is stated. A context is either
+sampled (placed in some of the fixed sample levels) or declared (a purpose, reward or level generator can place it, but no sample level did).</p>
 <h2 id="tables">Tables</h2>
 ${tablesHtml}
 <h2 id="where">Where it can come from, per level</h2>

@@ -20,7 +20,7 @@ import {levelsOf} from '../src/gen/levels';
 import {PROP_DEFS} from '../src/gen/props';
 import {Inventory} from '../src/items/inventory';
 import {placementBox} from '../src/items/lootLayout';
-import {rollHolderLots, isLootHolderKind, type Lot} from '../src/items/loot';
+import {rollHolderLots, isLootHolderKind, isSalvageLotId, type Lot} from '../src/items/loot';
 import {CONTAINER_THEMED, HOLDER_ALLOW, HOLDER_SLOTS, OPENABLE_TABLES, econCat, lootProfile} from '../src/items/lootTables';
 import {WorldMaterials} from '../src/world/materials';
 import {ContainerManager, type Holder} from '../src/world/containers';
@@ -236,7 +236,7 @@ describe('generated Office levels: placed, clear to open, reachable; the Subway 
   it('fitted openings sweep clear of walls / doorways / props; most open fully; each holder is reachable from its stand point', () => {
     const counts = new Map<string, number>();
     let parts = 0, full = 0, reach = 0, holders = 0;
-    const lots = {old: 0, new: 0, oldAmmo: 0, newAmmo: 0, material: 0, materialUnits: 0};
+    const lots = {old: 0, new: 0, oldAmmo: 0, newAmmo: 0, material: 0, materialUnits: 0, salvage: 0};
     const materialKinds = new Set<string>();
     const missed = new Map<string, number>();
     const m = new THREE.Matrix4(), w = new THREE.Matrix4(), v = new THREE.Vector3();
@@ -246,7 +246,9 @@ describe('generated Office levels: placed, clear to open, reachable; the Subway 
       cm.build(l, {}, lootProfile('office'));
       const fit = new FitIndex(l);
       for (const h of cm.all) for (const lot of h.state.lots) {
-        // task office-props-physics-scale-20261030 (lane RACK): crafting materials are a separate, bounded resource (below)
+        // task office-props-physics-scale-20261030 (lane RACK): crafting materials are a separate, bounded resource (below); task
+        // studio-base-salvage-20261108-073314-01: the shared base salvage lot is its own (additive) source, counted apart
+        if (isSalvageLotId(lot.id)) { expect(econCat(lot.itemId)).toBe('material'); lots.salvage++; continue; }
         if (econCat(lot.itemId) === 'material') { lots.material++; lots.materialUnits += lot.count; materialKinds.add(h.kind); continue; }
         const n = (NEW as readonly string[]).includes(h.kind) ? 'new' : 'old';
         lots[n]++;
@@ -294,7 +296,7 @@ describe('generated Office levels: placed, clear to open, reachable; the Subway 
     expect(lots.newAmmo / lots.oldAmmo).toBeLessThan(0.05);
     // lane RACK: electrical parts / scrap metal only in the server racks / cupboards (+ lab storage's bio mater, lane FURN), a finite
     // handful per level (measured 9-37 units on seeds 1-3 with 23-59 racks)
-    console.info(`[office-openables] crafting materials: ${lots.material} lots / ${lots.materialUnits} units over ${OFFICE_SEEDS.length} levels in ${[...materialKinds].join(', ')}`);
+    console.info(`[office-openables] crafting materials: ${lots.material} lots / ${lots.materialUnits} units over ${OFFICE_SEEDS.length} levels in ${[...materialKinds].join(', ')} (+ ${lots.salvage} base salvage lots)`);
     for (const k of materialKinds) expect(HOLDER_ALLOW[k], k).toContain('material');
     expect(lots.materialUnits / OFFICE_SEEDS.length).toBeGreaterThan(3);
     expect(lots.materialUnits / OFFICE_SEEDS.length).toBeLessThan(60);

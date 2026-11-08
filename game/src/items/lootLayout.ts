@@ -338,3 +338,44 @@ export function packItems(itemIds: readonly string[], surfaces: readonly Surface
   });
   return out;
 }
+
+/** A placed lot's local box (placementBox). */
+export type LotBox = ReturnType<typeof placementBox>;
+
+/** Do two lot boxes overlap (with `pad` clearance in x / z; boxes that only meet in height — stacked faces — do not)? */
+export function lotBoxesOverlap(a: LotBox, b: LotBox, pad = 0): boolean {
+  return a.min[0] < b.max[0] + pad && a.max[0] > b.min[0] - pad && a.min[1] < b.max[1] - 0.002 && a.max[1] > b.min[1] + 0.002
+    && a.min[2] < b.max[2] + pad && a.max[2] > b.min[2] - pad;
+}
+
+/**
+ * Task studio-base-salvage-20261108-073314-01: a FREE spot for ONE more item beside lots already placed (`taken` boxes; holder-local),
+ * or null — so an extra lot never moves, re-packs or covers a rolled one. Surfaces in a random order; per surface the packer's
+ * orientations (upright first), facing the front, else a quarter turn, a small yaw jitter; `gap` clear of every taken box and of the
+ * surface ends, a random free x and the packer's front bias in depth. Never a vending spill area or a snug pill drawer.
+ */
+export function freeLotSpot(itemId: string, surfaces: readonly Surface[], taken: readonly LotBox[], rnd: () => number, gap = 0.03): Placement | null {
+  const order = surfaces.map((_, i) => ({i, k: rnd()})).sort((a, b) => a.k - b.k);
+  for (const {i} of order) {
+    const s = surfaces[i];
+    if (s.spill || s.snug) continue;
+    for (const orient of orientOptions(itemId, false)) {
+      const o = orientedSize(itemId, orient);
+      if (o.sy + 0.004 > s.clear) continue;
+      for (const base of [0, Math.PI / 2]) {
+        const yaw = base + (rnd() * 2 - 1) * (orient === 'up' ? 0.3 : 0.18);
+        const c = Math.abs(Math.cos(yaw)), sn = Math.abs(Math.sin(yaw));
+        const sx = c * o.sx + sn * o.sz, sz = sn * o.sx + c * o.sz;
+        if (sz > s.z1 - s.z0 || sx + 2 * gap > s.x1 - s.x0) continue;
+        const z = (s.z0 + s.z1) / 2 + (s.z1 - s.z0 - sz) / 2 * 0.35;
+        const xs: number[] = [];
+        for (let x = s.x0 + gap + sx / 2; x <= s.x1 - gap - sx / 2 + 1e-9; x += 0.01) {
+          const p = {surface: i, x, y: s.y, z, yaw, orient};
+          if (!taken.some(t => lotBoxesOverlap(placementBox(itemId, p), t, gap))) xs.push(x);
+        }
+        if (xs.length) return {surface: i, x: xs[Math.floor(rnd() * xs.length)], y: s.y, z, yaw, orient};
+      }
+    }
+  }
+  return null;
+}

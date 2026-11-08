@@ -295,6 +295,8 @@ export interface OccurrenceInfo {
   storeys?: readonly string[];
   /** Office: tenant companies whose floors held it (company ids). */
   companies?: readonly string[];
+  /** Task studio-base-salvage-20261108-073314-01: 'declared' by a level dresser (generator adapter: who places it, a witness level seed). */
+  declaredBy?: string;
 }
 
 export interface HolderContext {
@@ -320,9 +322,10 @@ export interface HolderContext {
   scarcity: ScarcityStage;
   /**
    * Task track3-eaton-centre-20261031 (lane PROFILES): the level's SALVAGE rows this holder's table gained (crafting materials kept
-   * exactly as rolled; `share` = their part of the table weight before overrides; `from` = the purpose entry or the loot theme).
+   * exactly as rolled; `share` = their part of the table weight before overrides; `from` = the purpose entry or the loot theme). Task
+   * studio-base-salvage-20261108-073314-01: `additive` = the base salvage LOT instead (`share` = its per-holder chance; the table is unchanged).
    */
-  salvage?: {from: string; share: number; rows: readonly TableRow[]};
+  salvage?: {from: string; share: number; rows: readonly TableRow[]; additive?: boolean};
   /** null for fixtures. */
   expected: ExpectedUnits | null;
   occurrence: OccurrenceInfo;
@@ -360,7 +363,9 @@ export interface EconomyInfo {
   handfulFallback: Range;
   limb: {share: Readonly<Record<string, number>>; holder: Readonly<Record<string, number>>; poolTable: string};
   /** Task track3-eaton-centre-20261031 (lane PROFILES): the profile's salvage rules (absent = none: every shipped Subway / Office table). */
-  salvage?: {purposes: readonly {key: string; share: number; rows: readonly TableRow[]}[]; themes: readonly {key: string; share: number; rows: readonly TableRow[]}[]; note: string};
+  salvage?: {purposes: readonly {key: string; share: number; rows: readonly TableRow[]}[]; themes: readonly {key: string; share: number; rows: readonly TableRow[]}[]; note: string;
+    /** Task studio-base-salvage-20261108-073314-01: ADDITIVE (base salvage): `share` = the per-holder chance of one extra material lot. */
+    additive?: boolean};
   /** Task mall-playtest-revision-20261031 (lane SHOPS, U10): the profile's per-compartment storage fill (absent = none: every Subway / Office table). */
   storageFill?: {kinds: readonly {kind: string; chance: number; area: number; lots: readonly [number, number]; cats: readonly string[]; weights: Readonly<Record<string, number>>; fallback: readonly string[]}[]; stockThemes: readonly string[]; note: string};
   legacy: {
