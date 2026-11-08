@@ -306,7 +306,7 @@ describe('treatment', () => {
     const s = fixed(0);
     expect(s.treatmentHint(itemDef(LEG_SPLINT))).toBe('No leg injury — keep it for later');
     expect(injuryStatusText(s)).toBe('Limbs OK — no arm or leg injuries');
-    expect(injuryStatusHtml(s)).toBe('<span class="limbs" title="No arm or leg injuries">Limbs <b>OK</b></span>');
+    expect(injuryStatusHtml(s)).toBe('<span class="limbs" data-tip="Limbs OK" data-tip-hint="No arm or leg injuries">Limbs <b>OK</b></span>'); // (the game tooltip)
     s.onHit(hit({location: 'leg', source: 'creature'}));
     expect(s.treatmentHint(itemDef(TRAUMA_KIT))).toBe('Click to apply · treats your left leg');
     expect(injuryStatusText(s)).toBe('Left leg injured (limping, short sprints) — leg splint or trauma kit');

@@ -16,7 +16,9 @@
 
 import type {Game} from '../game';
 import {itemIconHtml} from './itemIcons';
-import {effectText, itemDef} from '../items/items';
+import {itemDef} from '../items/items';
+import {itemTip} from './itemTip'; // (task studio-ui-subway-maps-20261108-074144-01)
+import {hideTooltip, refreshTooltip, setTip, tipAttrs} from './tooltip';
 import {isBagItem} from '../items/gear';
 import {PACK_SIZE, type Inventory, type ItemStack, type StoreSideRef} from '../items/inventory';
 import {ICONS} from './icons';
@@ -163,6 +165,7 @@ export class LockboxView {
   hide(): void {
     this.cancelDrag();
     this.root?.classList.add('hidden');
+    hideTooltip(); // (task studio-ui-subway-maps-20261108-074144-01) the tooltip goes with the panel
   }
 
   private mount(): void {
@@ -330,10 +333,9 @@ export class LockboxView {
       const def = st ? itemDef(st.itemId) : null;
       const w = def?.kind === 'weapon' ? WEAPONS[def.weaponId!] : null;
       const count = def ? (w ? (w.melee ? '' : `<span class="count">${st!.mag}/${w.magazine}</span>`) : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
-      const fx = def?.kind === 'consumable' ? effectText(def) : '';
-      const inside = st?.bag ? ` (${st.bag.filter(Boolean).length} inside)` : '';
       const verb = ref.bar === 'store' ? (st && isBagItem(st.itemId) ? 'to wear it' : 'to take it') : `into ${this.opts.the}`;
-      const title = def ? ` title="${def.name}${inside}${fx ? ` — ${fx}` : ''}. Click to move it ${verb} · drag to a slot"` : '';
+      // (task studio-ui-subway-maps-20261108-074144-01) the game's own tooltip (a bag's contents count is in its lines; escaped names)
+      const title = st ? tipAttrs(itemTip(st, `Click to move it ${verb} · drag to a slot`, {inv})) : '';
       const extra = ref.bar === 'pack' && ref.index >= PACK_SIZE ? ' gear-extra' : '';
       const held = ref.bar === sel.bar && ref.index === sel.index ? ' held' : '';
       const key = ref.bar === 'hotbar' ? `<span class="key">${ref.index + 1}</span>` : ref.bar === 'throw' ? '<span class="key">G</span>'
@@ -356,10 +358,11 @@ export class LockboxView {
     if (stow) {
       const worn = inv.worn('backpack');
       stow.disabled = !worn;
-      stow.title = worn ? `Put your backpack (and everything in it) into ${this.opts.the}` : 'You are not wearing a backpack';
+      setTip(stow, {head: 'Stow worn backpack', hint: worn ? `Put your backpack (and everything in it) into ${this.opts.the}` : 'You are not wearing a backpack'});
     }
     const n = root.querySelector('.lb-note');
     if (n) { n.textContent = this.note; n.classList.toggle('refused', this.noteBad); }
+    refreshTooltip();
   }
 }
 

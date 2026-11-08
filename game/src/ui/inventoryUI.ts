@@ -31,7 +31,7 @@
 import {itemIconHtml} from './itemIcons';
 import {effectText, itemDef, useButtonLabel} from '../items/items';
 import {MELEE_REF, PACK_SIZE, THROW_REF, isMeleeItem, type Bar, type Inventory, type SlotRef} from '../items/inventory';
-import {AIRTANK_AIR_S, FILTER_LIFE_S, GEAR_SLOTS, GEAR_SLOT_NAMES, gearStatText, isAirtank, isBagItem, isFilterMask} from '../items/gear';
+import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearStatText, isAirtank, isBagItem, isFilterMask} from '../items/gear';
 import {armorPool, pipsText} from '../player/armor'; // task studio-general-armor-20261107-231448-01
 import {WEAPONS, reserveFor, weaponsForCaliber} from '../weapons/weapons';
 import {CALIBERS, CALIBER_IDS, ammoItemFor} from '../items/calibers'; // lane AMMO
@@ -41,6 +41,8 @@ import {CRITICAL, LOW} from '../player/survival';
 import {GEAR_ICONS} from './gearIcons';
 import {ICONS} from './icons';
 import {ensureGearStyles} from './gearStyles';
+import {airText, filterPct, itemTip} from './itemTip'; // (task studio-ui-subway-maps-20261108-074144-01: the slot tooltips; filterPct / airText moved there, shared)
+import {refreshTooltip, tipAttrs} from './tooltip';
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 
@@ -81,15 +83,9 @@ interface DragState {
 }
 
 const same = (a: SlotRef | null | undefined, b: SlotRef | null | undefined) => !!a && !!b && a.bar === b.bar && a.index === b.index;
-/** Task knife-windup-20261030 (SLOT): text inside a title="…" attribute (weapon names quote their nickname: Knife — "Last resort"). */
-const attr = (t: string) => t.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 // Task office-overhaul-20261030 (INTERACT): by data-bar (the grenade slot lives in the quick-slot row)
 const slotSel = (r: SlotRef) => `#inventory .slot[data-bar="${r.bar}"][data-index="${r.index}"]`;
 const GEAR_GHOST: Record<string, string> = {helmet: GEAR_ICONS.helmet, chest: GEAR_ICONS.vest, gloves: GEAR_ICONS.gloves, boots: GEAR_ICONS.boots, backpack: GEAR_ICONS.backpack, mask: GEAR_ICONS.gasmask};
-/** Mask lane: a gas mask's fitted filter in whole percent (rounded up: 0 only when empty). */
-const filterPct = (filter: number | undefined) => Math.ceil(Math.max(0, Math.min(1, (filter ?? 0) / FILTER_LIFE_S)) * 100 - 1e-9);
-/** Task filter-tension-airtank-20261104-072836: an Airtank Backpack's air left ("Air 85 % · 510 s left" / "Air empty — cannot be refilled"). */
-const airText = (air: number | undefined) => ((air ?? 0) > 0 ? `Air ${Math.ceil(Math.max(0, Math.min(1, (air ?? 0) / AIRTANK_AIR_S)) * 100 - 1e-9)} % · ${Math.ceil(air ?? 0)} s left` : 'Air empty — it cannot be refilled');
 /** Mask lane: what goes in each gear slot (empty-slot hint). */
 const SLOT_WHAT: Record<string, string> = {helmet: 'a helmet', chest: 'an armor vest or a chest rig', gloves: 'gloves', boots: 'boots', backpack: 'a backpack', mask: 'a gas mask'};
 
@@ -468,25 +464,29 @@ export class InventoryUI {
       const count = def ? (def.kind === 'weapon' ? (WEAPONS[def.weaponId!].melee ? '' : `<span class="count">${st!.mag}/${WEAPONS[def.weaponId!].magazine}</span>`)
         : isFilterMask(def.id) ? `<span class="count">${filterPct(st!.filter)}%</span>` // mask lane: the fitted filter
         : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
-      let title = def ? ` title="${attr(def.name)}${usable ? ` — ${effectText(def)}. Double-click or right-click to ${useButtonLabel(def).toLowerCase()}` : ''}${def.kind === 'gear' ? ` — ${gearStatText(def.gear!, st)}. Double-click or right-click to ${ref.bar === 'gear' ? 'take it off' : 'wear it'}` : ''}. Drag to move · Shift-drag to split · drag out of the panel to drop"` : '';
+      // (task studio-ui-subway-maps-20261108-074144-01) the game's own tooltip (ui/tooltip.ts): no native title, which outlived the closed panel under a still cursor
+      const use = usable ? `Double-click or right-click to ${useButtonLabel(def!).toLowerCase()} · ` : def?.kind === 'gear' ? `Double-click or right-click to ${ref.bar === 'gear' ? 'take it off' : 'wear it'} · ` : '';
+      let title = st ? tipAttrs(itemTip(st, `${use}Drag to move · Shift-drag to split · drag out of the panel to drop`, {inv})) : '';
       // Iteration 16: gear slots (slot name + empty silhouette); the worn backpack's contents stay hidden
       let lead = ref.bar === 'hotbar' ? `<span class="key">${ref.index + 1}</span>` : '';
       let cls = '';
       // Task office-overhaul-20261030 (INTERACT, #6): the grenade slot
       if (ref.bar === 'throw') {
         lead = `<span class="key">G</span>${def ? '' : `<span class="ghost">${ICONS.flare}</span>`}`;
-        title = def ? ` title="${attr(def.name)} — grenade slot: hold G to ready it, release to throw. Drag to move · drag out of the panel to drop"` : ' title="Grenade slot (G): drag a flare here (or right-click one) — hold G to ready it, release to throw"';
+        title = st ? tipAttrs(itemTip(st, 'Grenade slot: hold G to ready it, release to throw · drag to move · drag out of the panel to drop', {inv}))
+          : tipAttrs({head: 'Grenade slot (G)', hint: 'Drag a flare here (or right-click one) — hold G to ready it, release to throw'});
       }
       // Task knife-windup-20261030 (SLOT): the melee slot
       if (ref.bar === 'melee') {
         lead = `<span class="key">~</span>${def ? '' : `<span class="ghost">${ICONS.knife}</span>`}`;
-        title = def ? ` title="${attr(def.name)} — melee slot: ~ draws it (it takes no quick slot). Drag to move · drag out of the panel to drop"` : ' title="Melee slot (~): drag a knife here (or right-click one) — ~ draws it; it takes no quick slot"';
+        title = st ? tipAttrs(itemTip(st, 'Melee slot: ~ draws it (it takes no quick slot) · drag to move · drag out of the panel to drop', {inv}))
+          : tipAttrs({head: 'Melee slot (~)', hint: 'Drag a knife here (or right-click one) — ~ draws it; it takes no quick slot'});
       }
       if (ref.bar === 'gear') {
         const slot = GEAR_SLOTS[ref.index];
         lead = `<span class="gslot">${GEAR_SLOT_NAMES[slot]}</span>${def ? '' : `<span class="ghost">${GEAR_GHOST[slot] ?? ''}</span>`}`;
-        if (def && isBagItem(def.id)) { cls = ' worn-bag'; title = ` title="${attr(def.name)} — worn. Its contents are only reachable on the ground: press 6, click to set it down, then tap E to open it (hold E picks it back up), or drag it out of this panel."`; }
-        else if (!def) title = ` title="${GEAR_SLOT_NAMES[slot]}: drag ${SLOT_WHAT[slot] ?? slot} here to wear it${slot === 'mask' ? ' (Q puts it on your face)' : ''}"`;
+        if (def && isBagItem(def.id)) { cls = ' worn-bag'; title = tipAttrs(itemTip(st!, 'Worn. Its contents are only reachable on the ground: press 6, click to set it down, then tap E to open it (hold E picks it back up), or drag it out of this panel.', {inv})); }
+        else if (!def) title = tipAttrs({head: GEAR_SLOT_NAMES[slot], hint: `Drag ${SLOT_WHAT[slot] ?? slot} here to wear it${slot === 'mask' ? ' (Q puts it on your face)' : ''}`});
       } else if (ref.bar === 'pack' && ref.index >= PACK_SIZE) cls = ' gear-extra';
       return `<div class="slot${sel ? ' selected' : ''}${held ? ' held' : ''}${usable ? ' usable' : ''}${def ? ' filled' : ''}${cls}" data-bar="${ref.bar}" data-index="${ref.index}" role="button" tabindex="0"${title}>${lead}${def ? itemIconHtml(def.id) : ''}<span class="nm">${def ? def.short : ''}</span>${count}</div>`;
     };
@@ -497,6 +497,7 @@ export class InventoryUI {
     if (qh && qh.tagName === 'H3') qh.textContent = 'Melee slot (~) · quick slots (1–5) · grenade slot (G)';
     $('#inv-pack').innerHTML = inv.pack.map((_, i) => cell({bar: 'pack', index: i})).join('');
     this.renderGear(inv, cell);
+    refreshTooltip(); // (task studio-ui-subway-maps-20261108-074144-01) the hovered slot was just replaced: keep the tooltip on the new one (its new text)
     if (refocus) (document.querySelector(`#inventory .slot[data-bar="${refocus.bar}"][data-index="${refocus.index}"]`) as HTMLElement | null)?.focus();
     if (this.selected && !inv.get(this.selected)) this.selected = null;
     const st = this.selected ? inv.get(this.selected) : null;

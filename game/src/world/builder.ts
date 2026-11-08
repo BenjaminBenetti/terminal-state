@@ -50,6 +50,8 @@ import {buildSkywaysGardenProp} from './skywaysGardens'; // task studio-skyways-
 import {isSkywaysGardenKind} from '../gen/skyways/destinations/kindsGardens';
 import {buildSkywaysMapBoards} from './skywaysMapBoards'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the local directory boards
 import {isSkywaysMapBoardKind} from '../gen/skyways/mapBoardKind';
+import {isSubwayMapKioskKind} from '../gen/subwayMapKioskKind'; // task studio-ui-subway-maps-20261108-074144-01
+import {buildSubwayMapKiosks} from './subwayMapKiosks';
 import {OfficeArch} from './officeArch'; // Task office-overhaul-20261030 (lane ARCH): office storeys look like an office
 import {setExteriorRoof} from './exterior'; // Task office-overhaul-20261030 (lane ARCH): roof deck for the outdoor fog / tower shell
 import {levelsOf} from '../gen/levels'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's collision rails
@@ -682,6 +684,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     // task studio-skyways-destinations-20261106-170011-01 (lane LANDMARKS): the destination kinds (lazy skyways-d-* models, hung cables, Codex art panels)
     if (isSkywaysDestKind(kind)) { instances += buildSkywaysDestProp(group, kind, list, mats, instanceModel, models, layout); continue; }
     if (isSkywaysMapBoardKind(kind)) { instances += buildSkywaysMapBoards(group, list, mats, layout); continue; } // task studio-skyways-rework-20261107-054512-01 (lane MAPS)
+    if (isSubwayMapKioskKind(kind)) { instances += buildSubwayMapKiosks(group, list, mats, layout); continue; } // task studio-ui-subway-maps-20261108-074144-01 (procedural, no model)
     // Storefront furniture / glazing / shutters: built by storefrontBuilder.
     if (SHOP_FURNITURE.includes(kind) || SHOP_BLOCKERS.includes(kind)) continue;
     const def = PROP_DEFS[kind];

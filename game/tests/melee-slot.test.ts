@@ -562,7 +562,7 @@ describe('HUD ~ cell, inventory melee cell, controls, responsive hotbar', () => 
     expect(cell.innerHTML).toMatch(/<span class="key">~<\/span>/);
     expect(cell.classList.contains('held')).toBe(true);
     expect(row.children[0].classList.contains('held')).toBe(false);
-    expect(cell.title).toMatch(/melee slot: ~ draws it/);
+    expect(cell.dataset.tipHint).toMatch(/Melee slot: ~ draws it/);
     expect(ui.dropAt(H(0), MELEE_REF)).toBe('refused');
     expect(dom.el('#inv-detail .fx').textContent).toMatch(/Only melee weapons/);
     expect(ui.dropAt(MELEE_REF, P(8))).toBe('moved'); // a knife may leave the slot ...

@@ -17,6 +17,7 @@ import {MENU_TRAIN_KEYS, MenuScene, type MenuRenderer, type MenuSceneAssets} fro
 import {OFFICE_ASSETS, loadOfficeAsset, loadOfficeTexture, type OfficeAssetId} from './assets/officeAssets';
 import {setSkylineTexture} from './world/exterior';
 import {ATMOSPHERE_QUALITY} from './render/atmosphere'; // (lane MENU, campaign polish item 7: the quality setting's real numbers in its help line)
+import {installTooltips, setTip} from './ui/tooltip'; // task studio-ui-subway-maps-20261108-074144-01
 import {lastSaveNote} from './ui/loadingScreen'; // (lane MENU, DEATH: the death screen's last-save line)
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
@@ -148,6 +149,7 @@ async function boot(): Promise<void> {
     return;
   }
   const canvas = $('#view') as HTMLCanvasElement;
+  installTooltips(); // (task studio-ui-subway-maps-20261108-074144-01) the game's own tooltip: menus use it instead of native titles
   const game = new Game(canvas, qa);
   if (qa) installQaHooks(game);
   (window as unknown as {__game?: Game}).__game = qa ? game : undefined;
@@ -213,7 +215,7 @@ async function boot(): Promise<void> {
   const showLastSave = () => {
     const st = game.lastSaveStatus();
     deathLoad.disabled = !st.ok;
-    deathLoad.title = st.ok ? '' : st.message;
+    setTip(deathLoad, st.ok ? null : {head: 'No save to load', hint: st.message}); // (task studio-ui-subway-maps-20261108-074144-01: the game tooltip)
     deathNote().textContent = lastSaveNote(st, iso => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso : d.toLocaleString(); });
   };
   deathLoad.addEventListener('click', () => {
@@ -355,7 +357,7 @@ async function boot(): Promise<void> {
   };
   const toMenu = (b: HTMLButtonElement) => b.addEventListener('click', () => {
     if (!game.run.campaign) { game.setState('title'); return; }
-    if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Confirm: back to the main menu'; b.title = autosaveNote(); const n = document.querySelector('#pause .fine'); if (n && game.state === 'paused') n.textContent = autosaveNote(); return; }
+    if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Confirm: back to the main menu'; setTip(b, {head: 'Back to the main menu', hint: autosaveNote()}); const n = document.querySelector('#pause .fine'); if (n && game.state === 'paused') n.textContent = autosaveNote(); return; }
     b.dataset.armed = ''; b.textContent = 'Main menu';
     game.returnToMenu(); // (trainRide.reset + the title; lane CREDITS' end card takes the same path after its save)
   });

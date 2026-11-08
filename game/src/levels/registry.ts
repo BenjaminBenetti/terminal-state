@@ -1,7 +1,8 @@
 // Iteration 16 (lane RUN) / iteration 17 (seamless): the logical levels of the game (levels/types.ts). Each level is ONE
 // continuous world, section 'main':
 //  - subway: generateStation(levelSeed, {startWeapon}) with ZERO changes to its output; the level-wide gear roll (lane GEAR)
-//    is appended to layout.pickups afterwards (no gear => identical). Track 2 (lane GEN): + the level's track extensions
+//    is appended to layout.pickups afterwards (no gear => identical); then (task studio-ui-subway-maps-20261108-074144-01) the station map kiosks are
+//    appended to layout.props (gen/subwayMapKiosks.ts: deterministic, RNG-neutral, every older prop keeps its index). Track 2 (lane GEN): + the level's track extensions
 //    (LevelDef.trackExtensions), attached after every core pass (the core station is unchanged up to a crop translation).
 //  - office: lane GEN's generateOfficeLevel(ctx) — the compact station, the tower lobby and office floors 2–8 at their real
 //    heights in one layout (stairs + a moving elevator between them; nothing inside the level is a travel).
@@ -19,6 +20,7 @@ import {generateSkywaysLevel} from '../gen/skyways/index'; // task studio-skyway
 import {MARKET_GENERIC_NAME, generateMarketLevel, marketNameOf, marketStoreyLabel} from '../gen/market/index'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL)
 import {lootProfile} from '../items/lootTables'; // task mall-round3-20261031 (lane SHOPS, R6): the gear placement bias
 import {skywalkText} from '../gen/skyways/skywalkText'; // task studio-skywalk-variety-20261107-231448-01
+import {placeSubwayMapKiosks} from '../gen/subwayMapKiosks'; // task studio-ui-subway-maps-20261108-074144-01
 import {trainSpawnPose, type TrainPlacement} from '../gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE): start arrivals inside the train
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
@@ -50,7 +52,9 @@ export const LEVELS: Record<LevelId, LevelDef> = {
     trackExtensions: trackExtConfig('subway'),
     generate: (section, ctx) => {
       if (section !== 'main') throw new Error(`Subway has no section '${section}'`);
-      return withGear(generateStation(ctx.levelSeed >>> 0, {startWeapon: ctx.startWeapon, trackExtensions: LEVELS.subway.trackExtensions}), ctx, 'subway');
+      const layout = withGear(generateStation(ctx.levelSeed >>> 0, {startWeapon: ctx.startWeapon, trackExtensions: LEVELS.subway.trackExtensions}), ctx, 'subway');
+      placeSubwayMapKiosks(layout); // (task studio-ui-subway-maps-20261108-074144-01) the station map kiosks: appended last, RNG-neutral (gen/subwayMapKiosks.ts)
+      return layout;
     },
   },
   office: {
