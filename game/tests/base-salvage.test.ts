@@ -124,6 +124,8 @@ describe('one shared rule: every level type reaches all three materials through 
       expect(extraSalvageRule(k, pu.id, P), `${k}@${pu.id}`).toBeUndefined();
     }
     for (const id of [ANNEX_SUPPLY_KEY, ANNEX_SCRAPS_KEY, ANNEX_STASH_KEY, ANNEX_PICKED_KEY, ANNEX_CACHE_KEY]) for (const k of ['stockShelf', 'crate', 'cabinetTall'] as HolderKind[]) expect(extraSalvageRule(k, id, P), `${k}@${id}`).toBeUndefined();
+    // sealed, anchored non-loot fixtures (the Subway's station map kiosks, PR #71) are no loot holders at all: no lot can ever land there
+    expect(isLootHolderKind('subwayMapKiosk')).toBe(false);
   });
 });
 
