@@ -313,7 +313,7 @@ function host(L: StationLayout, o: {gas?: BlightHost['gas']} = {}) {
     damage: {burst: () => 1},
     sfx: {blightBurst: (_id, x, _y, z) => { audio.push(`burst@${x.toFixed(1)},${z.toFixed(1)}`); return true; }, blightHiss: () => { audio.push('hiss'); return true; }},
     frameHooks: [], sectionHooks: [],
-    blastPlayer: (hit, fx, fz) => { hits.push({hit, from: [fx, fz]}); return {applied: armorFor(hit, 0, 0).applied}; },
+    blastPlayer: (hit, fx, fz) => { hits.push({hit, from: [fx, fz]}); return {applied: armorFor(hit, 0).applied}; },
     blastKill: z => { kills.push(z); },
     clockV: 0, get clock() { return this.clockV; },
   };
@@ -538,9 +538,9 @@ describe('blast: falloff, cover / LOS, storey isolation, never an instakill, the
 
   it('the hit pipeline: \'blast\' hits are reduced by worn armour and can injure a limb (cause hit); locations spread over the body', () => {
     const hit = (location: 'torso' | 'leg'): PlayerHit => ({amount: 20, source: 'blast', location, attacker: 'blightbelly'});
-    expect(armorFor(hit('torso'), 0, 0.4).applied).toBeCloseTo(12, 9);
-    expect(hitInjuryChance({...hit('leg'), applied: 20})).toBeGreaterThan(0);
-    expect(hitInjuryChance({...hit('torso'), applied: 20})).toBe(0);
+    expect(armorFor(hit('torso'), 0.4).applied).toBeCloseTo(12, 9);
+    expect(hitInjuryChance(hit('leg'))).toBeGreaterThan(0);
+    expect(hitInjuryChance(hit('torso'))).toBe(0);
     const n: Record<string, number> = {};
     for (let i = 0; i < 1000; i++) { const l = blastHitLocation((i + 0.5) / 1000); n[l] = (n[l] ?? 0) + 1; }
     expect(n).toEqual({torso: 550, leg: 250, arm: 150, head: 50});

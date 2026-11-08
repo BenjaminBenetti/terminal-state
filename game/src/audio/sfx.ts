@@ -98,7 +98,7 @@ export const AMBIENT_LEVEL = 1;
  */
 export const CUE_GAIN: Record<CueId, number> = {
   rifleShot: 1, shotgunShot: 1, pistolShot: 1, shotgunPump: 0.42, shellInsert: 0.4, rifleMagOut: 0.38, rifleMagIn: 0.42, rifleCharge: 0.45,
-  rifleMagDrop: 0.3, dryFire: 0.35, equip: 0.28, hitTick: 0.22, hitKill: 0.32,
+  rifleMagDrop: 0.3, dryFire: 0.35, equip: 0.28, hitTick: 0.22, hitKill: 0.32, headHit: 0.5,
   impactConcrete: 0.55, impactTile: 0.55, impactMetal: 0.5, impactWood: 0.55, impactFlesh: 0.5,
   impactGlass: 0.5, impactSheetMetal: 0.48, fleshTear: 0.42, breakGlass: 0.62, breakWood: 0.58, debrisFall: 0.32,
   itemCan: 0.34, itemLight: 0.3, chunkFlesh: 0.34, propTopple: 0.5, // iteration 07 (Lane K)
@@ -339,6 +339,13 @@ const PANNER_MAX_DIST = 90;
 export const HIT_CONFIRM = {
   /** Final linear gain on the −1 dBFS impactFlesh clip (fixed; iteration 11 was 0.5 near and 0.155–0.2 at range). */
   level: 0.65,
+  /**
+   * (task studio-general-armor-20261107-231448-01, user: "a different impact sound when you hit the zombies head ... better feedback when you hit the weak spot")
+   * Final linear gain of the headHit skull crack (−1 dBFS takes) layered on the same confirm voice, same onset, when the shot's confirmed
+   * hit part is the HEAD (never a miss / torso / aim near the head). A first estimate (not auditioned on the worker): the bright crack
+   * (centroid 4-5 kHz) over the wet thwack (the flesh layer stays) — distinct without masking it.
+   */
+  headLevel: 0.6,
   /** Max |pan| toward the hit (restrained: direction hint only). */
   pan: 0.3,
   /** Seconds after the player's shot onset (pistol/rifle transient peak is 5–35 ms into the clip). */
@@ -651,6 +658,8 @@ export class Sfx {
   private shotConfirms = 0;
   private shotConfirmed = new WeakSet<object>();
   private confirms = 0;
+  /** Head-hit skull cracks played (task studio-general-armor-20261107-231448-01; QA / tests). */
+  headConfirms = 0;
   // Iteration 12 (AUDIO): burning flare loops (bounded, FLARE_LOOP.max).
   private flareLoops: FlareLoop[] = [];
   /** Task reactor-build-20261101: the Reactor's machine loops (bounded: MACHINE_LOOP.max). */
@@ -1490,7 +1499,7 @@ export class Sfx {
    * (±HIT_CONFIRM.pan) depends on where the hit is. `enemy` (the actor) de-duplicates within one shot: one confirm per enemy
    * per shot even if a caller reports every pellet. Own token bucket + own voice cap; `y` is unused (no distance model).
    */
-  hitConfirm(x: number, _y: number, z: number, enemy?: object): void {
+  hitConfirm(x: number, _y: number, z: number, enemy?: object, head = false): void {
     const ctx = this.live;
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -1504,6 +1513,8 @@ export class Sfx {
     const v = this.voice({pri: 2, fg: true, pan: hitConfirmPan(this.listener, x, z), send: HIT_CONFIRM.send});
     const clip = this.play(v, 'impactFlesh', {delay, jitter: 0.04, gainJitter: 0, gain: HIT_CONFIRM.level * Math.pow(HIT_CONFIRM.multiGain, k) / CUE_GAIN.impactFlesh});
     if (!clip) return;
+    // the head: the skull crack on the same voice, same onset (task studio-general-armor-20261107-231448-01)
+    if (head && this.play(v, 'headHit', {delay, jitter: 0.03, gainJitter: 0, gain: HIT_CONFIRM.headLevel * Math.pow(HIT_CONFIRM.multiGain, k) / CUE_GAIN.headHit})) this.headConfirms++;
     this.confirms++;
     if (sameShot) {
       this.shotConfirms++;

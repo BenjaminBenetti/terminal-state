@@ -17,7 +17,7 @@ const cans = (n: number): ItemStack => { const s = inv.makeStack('fuel_can', n);
 
 describe('the user-confirmed numbers (quarter-tank units)', () => {
   it('tank 4 = one hop; a hop costs 4; a can 1, stack 2 (two slots = a tank); a cart 8 (two tanks); a station >= 4 in total', () => {
-    expect(FUEL).toMatchObject({tankUnits: 4, hopUnits: 4, canUnits: 1, canStackMax: 2, cartUnits: 8, stationMinUnits: 4, canItem: 'fuel_can'});
+    expect(FUEL).toMatchObject({tankUnits: 4, trainTankUnits: 8, hopUnits: 4, canUnits: 1, canStackMax: 2, cartUnits: 8, stationMinUnits: 4, canItem: 'fuel_can'});
     expect(ITEMS.fuel_can).toMatchObject({id: 'fuel_can', kind: 'supply', stackMax: 2, icon: 'fuelCan'});
     expect(2 * FUEL.canStackMax * FUEL.canUnits).toBe(FUEL.tankUnits);
     expect(itemDims('fuel_can').h).toBeCloseTo(0.30, 2); // task fuel-feedback: user "Smaller fuel cans roughly med-pack sized" (was a 0.47 m jerrycan)
@@ -153,7 +153,8 @@ describe('records and validators', () => {
     expect(cartProblem({...cart, x: NaN}, false)).toMatch(/x out of range/);
     expect(cartProblem({...cart, extra: 1}, false)).toMatch(/unexpected/);
     expect(trainFuelProblem({v: 1, tank: 4, cargo: [cart]})).toBeNull();
-    expect(trainFuelProblem({v: 1, tank: 5, cargo: []})).toMatch(/out of range/);
+    expect(trainFuelProblem({v: 1, tank: 8, cargo: []})).toBeNull(); // (task studio-general-armor-20261107-231448-01: the train holds two tanks)
+    expect(trainFuelProblem({v: 1, tank: 9, cargo: []})).toMatch(/out of range/);
     expect(trainFuelProblem({v: 1, tank: 1, cargo: [cart, cart]})).toMatch(/duplicate/);
     expect(stationFuelProblem({v: 1, realized: true, carts: [{...cart, level: 0}]})).toBeNull();
     expect(stationFuelProblem({v: 1, carts: []})).toMatch(/realized/);

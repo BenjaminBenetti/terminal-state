@@ -6,6 +6,7 @@ import {GEAR_ITEMS, GEAR_SLOTS, gearModifiersFor, gearStatText} from '../src/ite
 import {ITEMS, itemDims} from '../src/items/items';
 import {BASE_MODIFIERS, combineModifiers} from '../src/player/modifiers';
 import {armorFor} from '../src/player/hits';
+import {armorPool} from '../src/player/armor';
 import {ICONS} from '../src/ui/icons';
 import * as THREE from 'three';
 import {gearItemModel, gearModelSource, registerGearModel} from '../src/gear/models';
@@ -33,13 +34,16 @@ describe('base-tier gear items', () => {
     expect(GEAR_ITEMS.chest_rig.gear!.slot).toBe('chest');
   });
 
-  it('exact stats from base values: vest 0.20 torso, hat 0.25 head, rig +4 pockets, boots x1.05, gloves x0.92 / x0.92', () => {
+  // task studio-general-armor-20261107-231448-01: armour is ONE pool (player/armor.ts) — vest 4 pips (10 %), hard hat 1 pip (2.5 %)
+  it('exact stats from base values: vest 10 % + hat 2.5 % pooled armour, rig +4 pockets, boots x1.05, gloves x0.92 / x0.92', () => {
     const inv = new Inventory();
     expect(mods(inv)).toEqual({...BASE_MODIFIERS});
+    expect(armorPool(inv.gear)).toBe(0);
     for (const id of ['armor_vest', 'helmet', 'boots', 'gloves']) expect(inv.add(inv.makeStack(id, 1))).toBe(0);
     let m = mods(inv);
-    expect(m.armorTorso).toBeCloseTo(0.2, 12);
-    expect(m.armorHead).toBeCloseTo(0.25, 12);
+    expect(armorPool(inv.gear)).toBeCloseTo(0.125, 12);
+    expect(m).not.toHaveProperty('armorTorso');
+    expect(m).not.toHaveProperty('armorHead');
     expect(m.speedMult).toBeCloseTo(1.05, 12);
     expect(m.spreadMult).toBeCloseTo(0.92, 12);
     expect(m.handlingMult).toBeCloseTo(0.92, 12);
@@ -51,7 +55,7 @@ describe('base-tier gear items', () => {
     const rig = inv.makeStack('chest_rig', 1);
     expect(inv.add(rig)).toBe(0);
     m = mods(inv);
-    expect(m.armorTorso).toBe(0);
+    expect(armorPool(inv.gear)).toBeCloseTo(0.025, 12); // only the hard hat's pip left
     expect(m.extraPockets).toBe(4);
     expect(inv.pack.length).toBe(PACK_SIZE + 4);
   });
@@ -76,25 +80,27 @@ describe('base-tier gear items', () => {
   });
 
   it('an item in the wrong slot never counts (defensive: modifiers read the slot type)', () => {
-    expect(gearModifiersFor({chest: {itemId: 'helmet'}, helmet: {itemId: 'armor_vest'}})).toMatchObject({armorHead: 0, armorTorso: 0});
+    expect(gearModifiersFor({chest: {itemId: 'boots'}, boots: {itemId: 'gloves'}})).toEqual({speedMult: 1, spreadMult: 1, handlingMult: 1, extraPockets: 0});
+    const st = (itemId: string) => ({itemId, count: 1, uid: 1}) as never;
+    expect(armorPool({chest: st('helmet'), helmet: st('armor_vest')})).toBe(0);
   });
 });
 
 describe('armor through the hit pipeline (player/hits.ts armorFor)', () => {
-  it('vest takes 20 % off torso hits, hard hat 25 % off head hits, limbs are not armored', () => {
+  it('the vest + hard hat pool (12.5 %) takes the same share off every body part', () => {
     const inv = new Inventory();
     inv.add(inv.makeStack('armor_vest', 1));
     inv.add(inv.makeStack('helmet', 1));
-    const m = mods(inv);
-    const hit = (location: 'head' | 'torso' | 'arm' | 'leg') => armorFor({amount: 10, source: 'zombie', location}, m.armorHead, m.armorTorso);
-    expect(hit('torso').applied).toBeCloseTo(8, 10);
-    expect(hit('torso').absorbed).toBeCloseTo(2, 10);
-    expect(hit('head').applied).toBeCloseTo(7.5, 10);
-    expect(hit('arm').applied).toBe(10);
-    expect(hit('leg').applied).toBe(10);
+    const pool = armorPool(inv.gear);
+    const hit = (location: 'head' | 'torso' | 'arm' | 'leg') => armorFor({amount: 10, source: 'zombie', location}, pool);
+    for (const l of ['head', 'torso', 'arm', 'leg'] as const) {
+      expect(hit(l).applied).toBeCloseTo(8.75, 10);
+      expect(hit(l).absorbed).toBeCloseTo(1.25, 10);
+    }
     inv.takeOff('chest');
-    const bare = mods(inv);
-    expect(armorFor({amount: 10, source: 'zombie', location: 'torso'}, bare.armorHead, bare.armorTorso).applied).toBe(10);
+    expect(armorFor({amount: 10, source: 'zombie', location: 'torso'}, armorPool(inv.gear)).applied).toBeCloseTo(9.75, 10);
+    inv.takeOff('helmet');
+    expect(armorFor({amount: 10, source: 'zombie', location: 'torso'}, armorPool(inv.gear)).applied).toBe(10);
   });
 });
 

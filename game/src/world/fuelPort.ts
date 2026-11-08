@@ -93,7 +93,7 @@ export function fuelNeckMouthLocal(spec = PLAYER_TRAIN_SPEC): {x: number; y: num
 
 /** The HUD readout (ui/hud.ts setFuel). */
 export interface FuelHudView {
-  /** Quarter pips lit (0..FUEL.tankUnits). */
+  /** Quarter pips lit (0..FUEL.trainTankUnits: two tanks of four). */
   pips: number;
   /** The tank in quarter units. */
   tank: number;
@@ -116,7 +116,7 @@ export function fuelReadout(tank: number, cartsAboard: readonly CartFuel[], ches
   const extra = r.chest + r.carts;
   const parts = [r.chest ? `chest ${tankCount(r.chest)}` : '', r.carts ? `carts ${tankCount(r.carts)}` : ''].filter(Boolean);
   const text = `Fuel ${tanksText(r.tank)}${extra ? ` · aboard +${tanksText(extra)} (${parts.join(', ')})` : ''}`;
-  return {pips: Math.max(0, Math.min(FUEL.tankUnits, Math.floor(r.tank))), tank: r.tank, text, low: r.total < FUEL.hopUnits, reserves: r};
+  return {pips: Math.max(0, Math.min(FUEL.trainTankUnits, Math.floor(r.tank))), tank: r.tank, text, low: r.total < FUEL.hopUnits, reserves: r};
 }
 
 /** Ray (origin o, unit direction d) vs an axis-aligned box: entry distance within [0, maxT], or null. */
@@ -429,7 +429,7 @@ export class FuelPortSystem {
     const refuse = (text: string, why: FuelPress): FuelPress => { g.hud.toast(text, true); g.sfx.denied(); this.counts.refused++; return why; };
     if (g.trainRide?.riding) return refuse('Not while moving', 'riding');
     const tank = g.playerTrain.fuel.tank;
-    if (tank >= FUEL.tankUnits) return refuse(`The tank is full — ${tanksText(tank)}`, 'full');
+    if (tank >= FUEL.trainTankUnits) return refuse(`The tank is full — ${tanksText(tank)}`, 'full');
     if (g.inv.count(FUEL.canItem) <= 0) {
       const inBag = (g.inv.wornBag()?.bag ?? []).some(s => s?.itemId === FUEL.canItem);
       return refuse(inBag ? 'No fuel can at hand — the ones in your backpack need it set down' : 'No fuel can', 'no-can');
@@ -510,15 +510,15 @@ export class FuelPortSystem {
     this.pour = null;
     this.showPour(false);
     const fuel = g.playerTrain.fuel;
-    if (fuel.tank >= FUEL.tankUnits) { g.hud.toast(`The tank is full — ${tanksText(fuel.tank)}`, true); g.sfx.denied(); this.counts.refused++; return; }
+    if (fuel.tank >= FUEL.trainTankUnits) { g.hud.toast(`The tank is full — ${tanksText(fuel.tank)}`, true); g.sfx.denied(); this.counts.refused++; return; }
     const held = !g.inv.meleeSelected ? g.inv.selectedStack() : null;
     const fromHand = held?.itemId === FUEL.canItem;
     const took = fromHand ? g.inv.consumeAt(g.inv.selectedRef()) : g.inv.take(FUEL.canItem, 1) === 1;
     if (!took) { g.hud.toast('No fuel can', true); g.sfx.denied(); this.counts.refused++; return; }
-    fuel.tank = Math.min(FUEL.tankUnits, fuel.tank + FUEL.canUnits);
+    fuel.tank = Math.min(FUEL.trainTankUnits, fuel.tank + FUEL.canUnits);
     this.counts.pours++;
     const left = g.inv.count(FUEL.canItem);
-    g.hud.toast(`Fuel in — tank ${tanksText(fuel.tank)}${fuel.tank >= FUEL.tankUnits ? ' (full)' : ''} · ${left ? `${left} can${left > 1 ? 's' : ''} left` : 'no cans left'}`);
+    g.hud.toast(`Fuel in — tank ${tanksText(fuel.tank)}${fuel.tank >= FUEL.trainTankUnits ? ' (full)' : ''} · ${left ? `${left} can${left > 1 ? 's' : ''} left` : 'no cans left'}`);
     if (fromHand) g.syncHeld();
   }
 
@@ -541,7 +541,7 @@ export class FuelPortSystem {
     if (this.pour) return `<b>Pouring fuel…</b> ${Math.min(99, Math.floor(this.pour.t / this.pour.total * 100))} %`;
     if (!this.aimed) return null;
     const tank = g.playerTrain.fuel.tank, n = g.inv.count(FUEL.canItem);
-    if (tank >= FUEL.tankUnits) return `Fuel cap · the tank is full (${tanksText(tank)})`;
+    if (tank >= FUEL.trainTankUnits) return `Fuel cap · the tank is full (${tanksText(tank)})`;
     return n ? `<b>[E]</b> Pour a fuel can · tank ${tanksText(tank)} · ${n} can${n > 1 ? 's' : ''}` : `<b>[E]</b> Fuel cap · tank ${tanksText(tank)} · no fuel can`;
   }
 

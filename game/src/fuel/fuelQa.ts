@@ -14,6 +14,6 @@ export function fuelQaApi(game: Game) {
         here: st ? game.fuelStations.nodeFuel(st) : null, plan: st && seed !== undefined ? stationFuelPlan(seed, st) : null, last: game.fuelStations.last};
     },
     /** QA: set the tank (quarter units, clamped 0..4). */
-    fuelSetTank: (units: number) => { game.playerTrain.fuel.tank = Math.max(0, Math.min(FUEL.tankUnits, Math.floor(units))); return game.playerTrain.fuel.tank; },
+    fuelSetTank: (units: number) => { game.playerTrain.fuel.tank = Math.max(0, Math.min(FUEL.trainTankUnits, Math.floor(units))); return game.playerTrain.fuel.tank; },
   };
 }

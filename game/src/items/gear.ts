@@ -5,10 +5,11 @@
 // equipping, unequipping, travelling or retrying can never stack a bonus.
 //
 // Base-tier stats (exact; documented in reference/tasks/office-space-survival-20261029/lanes/gear.done):
-//   armor_vest  chest     torso armor 0.20 (torso hits lose 20 % of their damage; torso = ~50 % of melee hits)
+//   armor_vest  chest     armor 4 pips = 10 % (task studio-general-armor-20261107-231448-01: the pooled armour of player/armor.ts — any enemy hit; was torso-only 20 % on
+//                         the ~50 % of melee hits that land on the torso: the same 10 % on average)
 //   chest_rig   chest     +4 pocket slots (12 -> 16); refused off while those 4 pockets hold anything
 //   backpack    backpack  its own 12-slot container, only reachable while it lies on the ground (6, click, then E)
-//   helmet      helmet    head armor 0.25 (head = ~10 % of melee hits)
+//   helmet      helmet    armor 1 pip = 2.5 % (was head-only 25 % on the ~10 % of hits that land on the head: the same 2.5 % on average)
 //   boots       boots     move speed x1.05 (walk / sprint / crouch)
 //   gloves      gloves    weapon spread x0.92 · reload / item-use time x0.92
 //
@@ -44,7 +45,10 @@ export interface GearSpec {
   slot: GearSlot;
   /** 1 = base ("crappiest") tier. */
   tier: number;
-  /** Armor fraction for its hit location (helmet: head, chest: torso). */
+  /**
+   * (task studio-general-armor-20261107-231448-01) The armour this item adds to the player's POOL while worn and undamaged (fraction: one pip = 0.025; player/armor.ts).
+   * Its stack's own `armor` holds what is left after wear. Any gear item with armor > 0 joins the pool (no separate list).
+   */
   armor?: number;
   /** Extra pocket slots (load-bearing chest rig). */
   pockets?: number;
@@ -75,14 +79,14 @@ const gear = (id: string, name: string, short: string, icon: GearIconKey, spec: 
   ({id, name, short, kind: 'gear', stackMax: 1, icon, gear: spec, description});
 
 export const GEAR_ITEMS: Record<string, ItemDef> = {
-  armor_vest: gear('armor_vest', 'Worn soft armor vest', 'Armor vest', 'vest', {slot: 'chest', tier: 1, armor: 0.2},
-    'Faded navy soft body armor with frayed velcro. Takes the edge off hits to the torso. Worn on the chest (instead of a rig).'),
+  armor_vest: gear('armor_vest', 'Worn soft armor vest', 'Armor vest', 'vest', {slot: 'chest', tier: 1, armor: 0.1},
+    'Faded navy soft body armor with frayed velcro. Takes the edge off every enemy hit (armor). Worn on the chest (instead of a rig).'),
   chest_rig: gear('chest_rig', 'Patched chest rig', 'Chest rig', 'rig', {slot: 'chest', tier: 1, pockets: 4},
     'Olive load-bearing rig with mag and utility pouches. Four extra pockets while worn. Worn on the chest (instead of a vest).'),
   backpack: gear('backpack', 'Faded red daypack', 'Backpack', 'backpack', {slot: 'backpack', tier: 1, bagSlots: BACKPACK_SLOTS},
     `A dirty hiking daypack with ${BACKPACK_SLOTS} slots of its own. You cannot reach into it while wearing it: press 6 to take it off, click to set it down, then E to open it.`),
-  helmet: gear('helmet', 'Dented hard hat', 'Hard hat', 'helmet', {slot: 'helmet', tier: 1, armor: 0.25},
-    'A scuffed yellow construction hard hat with a chin strap. Softens blows to the head.'),
+  helmet: gear('helmet', 'Dented hard hat', 'Hard hat', 'helmet', {slot: 'helmet', tier: 1, armor: 0.025},
+    'A scuffed yellow construction hard hat with a chin strap. Softens enemy blows a little (armor).'),
   boots: gear('boots', 'Scuffed work boots', 'Work boots', 'boots', {slot: 'boots', tier: 1, speedMult: 1.05},
     'Worn leather work boots, laces knotted. Sure footing: you move a little faster.'),
   gloves: gear('gloves', 'Worn work gloves', 'Work gloves', 'gloves', {slot: 'gloves', tier: 1, spreadMult: 0.92, handlingMult: 0.92},
@@ -136,10 +140,16 @@ export function isBagItem(itemId: string | null | undefined): boolean {
 
 const pct = (x: number) => `${Math.round(Math.abs(x) * 100)} %`;
 
-/** One-line stat text: "torso armor 20 %", "+4 pockets", "speed +5 %", "spread −8 % · handling +8 %". */
-export function gearStatText(spec: GearSpec): string {
+/** One-line stat text: "armor 4 pips (10 %)", "+4 pockets", "speed +5 %", "spread −8 % · handling +8 %". */
+export function gearStatText(spec: GearSpec, stack?: {armor?: number} | null): string {
   const out: string[] = [];
-  if (spec.armor) out.push(`${spec.slot === 'helmet' ? 'head' : 'torso'} armor ${pct(spec.armor)}`);
+  // (task studio-general-armor-20261107-231448-01) pooled armour: pips (half-pip steps, rounded down) of what this item has left / when new
+  if (spec.armor) {
+    const left = stack?.armor === undefined ? spec.armor : Math.max(0, Math.min(spec.armor, stack.armor));
+    const pips = (a: number) => { const h = Math.floor(a / 0.0125 + 1e-9), w = Math.floor(h / 2); return h % 2 ? `${w || ''}½` : `${w}`; };
+    const exact = (a: number) => `${+(a * 100).toFixed(2)} %`; // 2.5 %, not a rounded 3 %
+    out.push(left < spec.armor - 1e-9 ? `armor ${pips(left)} / ${pips(spec.armor)} pips (${exact(left)}, worn)` : `armor ${pips(spec.armor)} pip${spec.armor === 0.025 ? '' : 's'} (${exact(spec.armor)})`);
+  }
   if (spec.pockets) out.push(`+${spec.pockets} pockets`);
   if (spec.bagSlots) out.push(`${spec.bagSlots}-slot bag (open it on the ground)`);
   if (spec.speedMult && spec.speedMult !== 1) out.push(`speed ${spec.speedMult > 1 ? '+' : '−'}${pct(spec.speedMult - 1)}`);
@@ -152,16 +162,15 @@ export function gearStatText(spec: GearSpec): string {
 
 /** The worn-gear modifier contribution (pure). Missing / unknown items contribute nothing. */
 export function gearModifiersFor(worn: Readonly<Partial<Record<GearSlot, {itemId: string} | null>>>): Partial<PlayerModifiers> {
-  let speed = 1, spread = 1, handling = 1, head = 0, torso = 0, pockets = 0;
+  let speed = 1, spread = 1, handling = 1, pockets = 0;
   for (const slot of GEAR_SLOTS) {
     const spec = gearSpec(worn[slot]?.itemId);
     if (!spec || spec.slot !== slot) continue; // an item in the wrong slot never counts
     if (spec.speedMult) speed *= spec.speedMult;
     if (spec.spreadMult) spread *= spec.spreadMult;
     if (spec.handlingMult) handling *= spec.handlingMult;
-    if (spec.armor && slot === 'helmet') head = 1 - (1 - head) * (1 - spec.armor);
-    if (spec.armor && slot === 'chest') torso = 1 - (1 - torso) * (1 - spec.armor);
     if (spec.pockets && slot === 'chest') pockets += spec.pockets;
   }
-  return {speedMult: speed, spreadMult: spread, handlingMult: handling, armorHead: head, armorTorso: torso, extraPockets: pockets};
+  // (task studio-general-armor-20261107-231448-01) armour is no longer a per-frame modifier: the hit reads the worn pool at the moment of the hit (player/armor.ts)
+  return {speedMult: speed, spreadMult: spread, handlingMult: handling, extraPockets: pockets};
 }
