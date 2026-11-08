@@ -909,3 +909,44 @@ describe('the generated mall (lane GEN) — when registered', () => {
     expect(q(dirMs, 0.5)).toBeLessThan(1);
   });
 });
+
+// Task studio-skywalk-encounters-20261108-074144-01 (user: "at least 1 random zombie hoard spawn on this map (just like the mall hoard)"):
+// Skyways layout version 5 places the Mall's horde pool on its own patrol graph (gen/skyways/patrol.ts, layout.skyways.patrol; Game
+// hands it to the director). The same roam as the real mall's: real links only, supported, cohesive, groups walk.
+describe('the generated Skyways (layout version 5): the Mall\'s hordes roam its patrol graph', () => {
+  it('roams real Skyways links: supported, no jumps, cohesive crowds that walk; storey changes by stairs only', () => {
+    const layout = LEVELS.skyways.generate('main', {levelSeed: 3, startWeapon: 'pistol'});
+    const rules = SPAWN_PROFILES.skyways.horde!;
+    expect(layout.hordes?.length ?? 0).toBeGreaterThanOrEqual(1);
+    const patrol = layout.skyways!.patrol!;
+    const SECS = 90;
+    const sim = makeSim({layout, patrol}, {rules, scheduler: true, player: {x: layout.playerSpawn.x, y: 0, z: layout.playerSpawn.z, alive: true}});
+    const gs = sim.director.groups;
+    expect(gs.length).toBe(layout.hordes!.length);
+    const prev = gs.map(g => ({x: g.ax, z: g.az, y: g.ay}));
+    let bad = 0, jumps = 0, offGeom = 0, samples = 0, within = 0;
+    for (let f = 0; f < 60 * SECS; f++) {
+      sim.step(() => {
+        gs.forEach((g, k) => {
+          if (g.phase === 'dead') return;
+          if (!supported(sim.L, g.ax, g.az, g.ay)) bad++;
+          const p = prev[k];
+          if (Math.hypot(g.ax - p.x, g.az - p.z) > 0.05 && !sim.L.walkLineClear(p.x, p.y, p.z, g.ax, g.az, 0.1)) jumps++;
+          prev[k] = {x: g.ax, z: g.az, y: g.ay};
+        });
+      });
+      if (f % 30 === 0) for (const g of gs) for (const m of g.members) {
+        const b = m.brain;
+        if (b.alive && !supported(sim.L, b.x, b.z, b.y)) offGeom++;
+        if (m.formed && m.hasSlot) { samples++; if (m.slotErr() <= 3) within++; }
+      }
+    }
+    const sum = sim.director.summary();
+    console.info(`[horde skyways] ${SECS} s on level seed 3: ${gs.length} groups (${gs.map(g => g.members.length).join('/')} members), legs ${sum.map(g => g.legs).join('/')}, walked ${sum.map(g => Math.round(g.walked)).join('/')} m, bad legs ${sum.map(g => g.badLegs).join('/')}, within 3 m of slot ${(within / Math.max(1, samples) * 100).toFixed(1)} %; patrol ${patrol.length} nodes`);
+    expect(bad).toBe(0);
+    expect(jumps).toBe(0);
+    expect(offGeom).toBe(0);
+    expect(within / Math.max(1, samples)).toBeGreaterThan(0.85);
+    for (const g of sum) if (g.phase !== 'dead') expect(g.walked).toBeGreaterThan(20);
+  }, 180000);
+});
