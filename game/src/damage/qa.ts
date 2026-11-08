@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import type {Game} from '../game';
 import {raycastWorld, type Vec3} from '../combat/hitscan';
+import {raycastShot} from '../physics/merchOnHost'; // lane MERCH: the same bullet ray as Game.fire
 import {nearestEnemyHit} from '../combat/enemyRay';
 import {DAMAGE_MATERIALS, STRUCTURAL_CLASS, propDamageSpec, structuralKeyAt} from './materials';
 import {PROP_DEFS, type PropPlacement} from '../gen/props';
@@ -108,7 +109,7 @@ export function damageQaApi(game: Game, lookAt: LookAt, teleport: Teleport) {
       const dir = game.camera.getWorldDirection(new THREE.Vector3());
       const o: Vec3 = {x: origin.x, y: origin.y, z: origin.z}, d: Vec3 = {x: dir.x, y: dir.y, z: dir.z};
       const L = game.layout;
-      const wh = raycastWorld(game.levels ?? L.grid, L.props, o, d, 90, L.trench.floorY);
+      const wh = raycastShot(game.levels ?? L.grid, L.props, o, d, 90, L.trench.floorY);
       let bestT = wh.t, bz: (typeof game.zombies)[number] | null = null, part: 'head' | 'torso' | 'limb' = 'torso';
       const eh = nearestEnemyHit(o, d, bestT, game.zombies); // lane COMBAT (reactor-playtest-round2): the same enemy test as Game.fire
       if (eh) { bestT = eh.t; bz = eh.enemy; part = eh.part; }

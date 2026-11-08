@@ -105,7 +105,9 @@ export const STORE_GARDEN_SPECS: Readonly<Record<StoreGardenKind, DestKindSpec>>
     open: {cls: 'exception', role: 'storage', how: 'sealed, heat-welded bags of soil on a pallet: merchandise, not storage (soil is not an item); the store\'s storage is its openable cabinets / chests / lockers'},
   },
   storeGardenBasketRail: {
-    def: {w: BASKET_RAIL.w, d: BASKET_RAIL.d, h: BASKET_RAIL_H, blocksSight: false},
+    // (task studio-skywalk-variety-20261107-231448-01, lane MERCH: `shelves: []` — it HANGS its pots in the hook rings, nothing under them:
+    // a shot pot goes loose and drops out of its ring; physics/merchOnHost.ts. Before, on-host decor below a host's top never went loose.)
+    def: {w: BASKET_RAIL.w, d: BASKET_RAIL.d, h: BASKET_RAIL_H, blocksSight: false, shelves: []},
     phys: {dynamic: false, why: 'mounted', how: 'galvanised hanging-basket rail hung from the ceiling on two steel rods (its hanging baskets are separate geranium pots on its hooks: a shot knocks one off)'},
     damage: 'steel',
     open: {cls: 'none', role: 'decor', how: 'ceiling-hung rail with hooks: nothing to open'},

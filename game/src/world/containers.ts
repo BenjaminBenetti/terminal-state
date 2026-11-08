@@ -167,6 +167,11 @@ export interface Holder {
   prop: PropPlacement;
   state: HolderState;
   surfaces: Surface[];
+  /**
+   * (task studio-skywalk-variety-20261107-231448-01, lane MERCH) The same surfaces UNCUT: the real shelves under the on-top / shelf decor
+   * too — item / chunk / loose-prop collision (physicsBoxes), so a piece of stock knocked loose stands on its shelf, never in a cut gap.
+   */
+  support?: Surface[];
   /** Holder-local → world. */
   matrix: THREE.Matrix4;
   root: THREE.Group | null;
@@ -488,7 +493,8 @@ export class ContainerManager {
       const isC = isContainerKind(kind);
       const def = holderDims(kind);
       // Iteration 07 (Lane P2): spans taken by on-top decor (register, lamp ...) are not loot surface.
-      const surfaces = cutSurfaces(holderSurfaces(kind, def, {...opts, crateSplitY: this.crateSplitY()}), p.cut);
+      const support = holderSurfaces(kind, def, {...opts, crateSplitY: this.crateSplitY()});
+      const surfaces = cutSurfaces(support, p.cut);
       // Iteration 05 (Lane R): the holder's purpose (prop override, else its room/store purpose)
       // keys the loot table (gen/purposes.ts); plain halls keep their room type.
       const area = layout.areas[p.area];
@@ -500,7 +506,7 @@ export class ContainerManager {
       const matrix = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y + (openable ? p.lift ?? 0 : 0), p.z), new THREE.Quaternion().setFromAxisAngle(UP, p.rot), new THREE.Vector3(1, 1, 1));
       const h: Holder = {
         group: isC ? 'container' : 'surface', index, serial: this.all.length, kind, prop: p,
-        state: createHolderState(layout.seed, index, kind, areaType, surfaces, undefined, loot), surfaces, matrix,
+        state: createHolderState(layout.seed, index, kind, areaType, surfaces, undefined, loot), surfaces, support, matrix,
         root: null, hinges: [], leafMeshes: [], inner: [], t: 0, pryT: 0,
         min: new THREE.Vector3(p.x - p.hx, p.y, p.z - p.hz), max: new THREE.Vector3(p.x + p.hx, p.y + p.h, p.z + p.hz),
         lotMats: new Map(), lotBoxes: new Map(), shown: false,
@@ -1164,7 +1170,7 @@ export class ContainerManager {
     const h = this.holderFor(prop);
     if (!h) return null;
     if (h.open) return this.openPhysicsBoxes(h, prop);
-    return holderBoxes(prop, h.surfaces, {broken: !!h.broken});
+    return holderBoxes(prop, h.support ?? h.surfaces, {broken: !!h.broken}); // (lane MERCH: uncut — the shelf under its decor too)
   }
 
   /**
@@ -1178,11 +1184,12 @@ export class ContainerManager {
     const rt = h.open!;
     if (rt.loose) return [];
     const base = Math.abs(rt.matrix.elements[13] - prop.y) > 1e-6 ? {...prop, y: rt.matrix.elements[13]} : prop;
-    if (h.kind === 'shopCooler') return holderBoxes(base, h.surfaces, {broken: !!h.broken, glassBroken: rt.glassBroken});
-    const exposed = h.surfaces.filter(q => q.part === undefined);
+    const sup = h.support ?? h.surfaces; // (lane MERCH: uncut — the shelf under its decor too)
+    if (h.kind === 'shopCooler') return holderBoxes(base, sup, {broken: !!h.broken, glassBroken: rt.glassBroken});
+    const exposed = sup.filter(q => q.part === undefined);
     const open = rt.spec.parts.map((_, i) => i).filter(i => rt.spec.parts[i].move.type === 'hinge' && h.state.parts?.[i]);
     if (!open.length) return exposed.length ? holderBoxes(base, exposed, {broken: !!h.broken}) : null;
-    const out = holderBoxes(base, [...exposed, ...h.surfaces.filter(q => q.part !== undefined && open.includes(q.part))], {broken: !!h.broken}) ?? [];
+    const out = holderBoxes(base, [...exposed, ...sup.filter(q => q.part !== undefined && open.includes(q.part))], {broken: !!h.broken}) ?? [];
     const T = 0.03, local: [number, number, number, number, number, number][] = [];
     for (const i of open) {
       const ps = rt.spec.parts[i];

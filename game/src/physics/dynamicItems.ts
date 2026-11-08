@@ -61,10 +61,9 @@ import * as THREE from 'three';
 import {rayAabb, type Vec3} from '../combat/hitscan';
 import {itemPhysics, propDamageSpec, propPhysics, ridesHost, type PhysMat} from '../damage/materials';
 import {PROP_DEFS, type PropPlacement} from '../gen/props';
-import {isLootHolderKind} from '../items/loot';
-import {isSpillHolderKind} from '../world/openablesSpec';
 import {GROUP_CHUNK, GROUP_ITEM, GROUP_RAGDOLL, GROUP_STATIC} from './ragdoll';
 import {STATIC_CHUNK_M, groundClamp, restTime, staticChunkKey, type BodyHost, type ImpactFamily} from './chunks';
+import {dynamicKind, hostRest, hostShelves, restsOnHost} from './merchOnHost'; // task studio-skywalk-variety-20261107-231448-01 (lane MERCH)
 import type {StaticQuery} from './staticQuery';
 
 export const MAX_DYNAMIC_ITEMS = 16;
@@ -94,15 +93,8 @@ const CB = 1;
 /** Lane PHYS (office worlds): share of the walker-speed gap a shove closes per frame (the Subway keeps 0.35). */
 const OFFICE_SHOVE_GAIN = 0.6;
 
-/**
- * Whether props of this kind can become rigid bodies at all: flagged dynamic (PROP_PHYSICS / PROP_DEFS.physics) with a finite
- * mass, and not a loot holder (its lots would float) unless it is a spill holder (trash can / wheelie bin: goLoose spills them).
- * Placement rules come on top (DynamicItems.isDynamicProp: on the floor, or on a static host for `onHost` kinds).
- */
-export function dynamicKind(kind: string): boolean {
-  const ph = propPhysics(kind);
-  return ph.dynamic && Number.isFinite(ph.mass) && !(isLootHolderKind(kind) && !isSpillHolderKind(kind));
-}
+// (task studio-skywalk-variety-20261107-231448-01, lane MERCH: dynamicKind moved to physics/merchOnHost.ts with the on-host rule)
+export {dynamicKind};
 /**
  * Task mall-round2-20261031 (lane AUDIO, M01; user: "cardboard boxes play the metal clanking sound when being pushed around, should
  * actually be more of a cardboard sound" — a general statement, every level): the contact-sound family of a loose prop. Every loose
@@ -672,15 +664,16 @@ export class DynamicItems {
     const onFloor = g === undefined || (Number.isFinite(g) && Math.abs(prop.y - g) < 0.06);
     // Lane PHYS: on-host decor may go loose on its static host's top; nothing that carries another prop does (task
     // office-props-physics-scale-20261030: in every world — the Subway wakes by contact too, never leaving a floating stack)
+    // (task studio-skywalk-variety-20261107-231448-01, lane MERCH: or on a known open support INSIDE its static host — a shelf deck,
+    // tier, bin floor or hook — physics/merchOnHost.ts restsOnHost; before, only the host's top face counted, so all shelf stock was static)
     if (!onFloor && !(propPhysics(prop.kind).onHost && this.restsOnStaticHost(prop))) return false;
     return !this.supportsOther(prop);
   }
 
-  /** Lane PHYS: the prop stands on its host's top face (prop.host), the host is a prop that never moves. */
+  /** Lane PHYS: the prop stands on its static host's top face (prop.host) — or (lane MERCH) on a known open shelf inside it. */
   private restsOnStaticHost(prop: PropPlacement): boolean {
-    const q = prop.host !== undefined ? this.host.statics?.props[prop.host] : undefined;
-    if (!q || q === prop || q.h <= 0.02 || dynamicKind(q.kind)) return false;
-    return Math.abs(prop.y - (q.y + q.h)) < 0.03 && Math.abs(prop.x - q.x) <= q.hx && Math.abs(prop.z - q.z) <= q.hz;
+    const props = this.host.statics?.props;
+    return !!props && restsOnHost(prop, props) !== null;
   }
 
   /**
@@ -726,8 +719,11 @@ export class DynamicItems {
     let v = this.supportsMemo.get(p);
     if (v === undefined) {
       const top = p.y + p.h;
-      v = (this.host.statics?.props ?? []).some(q => q !== p && q.h > 0.02 && !q.mounted && Math.abs(q.y - top) < 0.06
-        && Math.abs(q.x - p.x) < q.hx + p.hx - 0.05 && Math.abs(q.z - p.z) < q.hz + p.hz - 0.05);
+      const props = this.host.statics?.props ?? [];
+      // (lane MERCH: a piece standing on a shelf of ITS OWN host rests on that shelf, not on the stock of the shelf below)
+      v = props.some(q => q !== p && q.h > 0.02 && !q.mounted && Math.abs(q.y - top) < 0.06
+        && Math.abs(q.x - p.x) < q.hx + p.hx - 0.05 && Math.abs(q.z - p.z) < q.hz + p.hz - 0.05
+        && !(q.host !== undefined && props[q.host] !== p && hostRest(q, props[q.host]) === 'shelf'));
       this.supportsMemo.set(p, v);
     }
     return v;
@@ -905,8 +901,9 @@ export class DynamicItems {
     let z0 = prop.z - (quarter ? half.x : half.z), z1 = prop.z + (quarter ? half.x : half.z);
     const ox0 = x0, ox1 = x1, oz0 = z0, oz1 = z1;
     const y0 = prop.y + 0.02, y1 = prop.y + prop.h - 0.02, level = prop.level ?? 0;
+    const host = prop.host !== undefined ? props[prop.host] : undefined; // (lane MERCH: shelf stock stands INSIDE its host's box)
     for (const q of props) {
-      if (q === prop || q.h <= 0.02 || q.mounted || (q.level ?? 0) !== level || q.y >= y1 || q.y + q.h <= y0) continue;
+      if (q === prop || q === host || q.h <= 0.02 || q.mounted || (q.level ?? 0) !== level || q.y >= y1 || q.y + q.h <= y0) continue;
       const px = Math.min(x1, q.x + q.hx) - Math.max(x0, q.x - q.hx), pz = Math.min(z1, q.z + q.hz) - Math.max(z0, q.z - q.hz);
       if (px <= START_PEN || pz <= START_PEN) continue;
       // clip along the shallower axis, on the neighbour's side
@@ -932,6 +929,7 @@ export class DynamicItems {
     const q = prop.host !== undefined ? this.host.statics?.props[prop.host] : undefined;
     const w = this.host.world;
     if (!q || !w || prop.y < q.y + q.h - 0.03 || this.hostSlabs.has(q)) return;
+    if (hostShelves(q.kind) !== undefined) return; // (lane MERCH: its declared shelves carry it — the round tier top, not its square box)
     const T = 0.05;
     const b = new CANNON.Body({mass: 0, type: CANNON.Body.STATIC, material: this.host.staticMaterial ?? this.host.material('heavy'),
       collisionFilterGroup: GROUP_STATIC, collisionFilterMask: GROUP_ITEM | GROUP_CHUNK});
@@ -1254,6 +1252,7 @@ export class DynamicItems {
           if (p.h <= 0.02 || this.ents.has(p)) continue;
           // a floor prop at the walker's feet (never one on a desk / counter: its host is in the way)
           if (p.y > a.y + 0.45 || p.y < a.y - 0.6 || p.y + p.h < a.y + 0.05) continue;
+          if (p.host !== undefined && hostRest(p, props[p.host]) === 'shelf') continue; // (lane MERCH: low shelf stock: the shelving is in the way)
           const nx = Math.max(p.x - p.hx, Math.min(a.x, p.x + p.hx)), nz = Math.max(p.z - p.hz, Math.min(a.z, p.z + p.hz));
           const dx = nx - a.x, dz = nz - a.z, dist = Math.hypot(dx, dz);
           if (dist > reach) continue;

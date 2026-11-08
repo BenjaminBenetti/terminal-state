@@ -24,6 +24,7 @@ import type {DestKindSpec, DestOpen, DestPhys} from './kindTypes';
 import type {DamageClass} from '../../../damage/materials';
 import type {PropDef} from '../../props';
 import {SKYWAYS_DEST_PROPS, type SkywaysDestPropKey} from '../../../assets/skywaysDestProps.generated';
+import {BIN_BAYS, BIN_STYLES, binBlock} from '../stores/musicStock'; // lane MERCH: the record bins' measured trays (pure data)
 
 export const SHOPS_A_KINDS = [
   // books (Paper Prairie Books)
@@ -153,11 +154,52 @@ const BOX_TO_TOP: Partial<Record<ShopsAKind, () => number>> = {
 };
 const BLOCKS_SIGHT: ReadonlySet<ShopsAKind> = new Set(['skyDBookcase']);
 
+type Shelves = NonNullable<PropDef['shelves']>;
+/**
+ * Task studio-skywalk-variety-20261107-231448-01 (lane MERCH): the declared OPEN supports (gen/props.ts PropDef.shelves, host frame) of the
+ * kit's three non-holder hosts, from the same measured data their dressers place the stock by — so a book stack / lantern / bin block
+ * shot loose lands on its real shelf (physics/merchOnHost.ts, physics/world.ts):
+ *  - the bookcase: its six measured shelf tops and its top, between the side panels, back panel to front edge;
+ *  - the tiered table: each round tier as five nested rectangles (15-75 deg: the union is the disc within 1 %);
+ *  - the record bins (gen/skyways/stores/musicStock.ts): the front row's tray under its blocks (a solid base the whole depth of the
+ *    rack) and the back row's sloped tray as one board under its lowest block, stopping short of the front row's sleeves.
+ */
+function shelvesOf(k: ShopsAKind): Shelves | undefined {
+  const m = destDims(k);
+  if (k === 'skyDBookcase') {
+    const x = r3(m.w / 2 - 0.06), z0 = r3(-m.d / 2 + 0.03), z1 = r3(m.d / 2 - 0.02), ys = [...bookcaseShelves(), r3(m.h)];
+    return ys.map((y, i) => ({y, x0: -x, x1: x, z0, z1, clear: r3((ys[i + 1] ?? y + 0.5) - y - 0.03)}));
+  }
+  if (k === 'skyDBookTable') {
+    const tiers = bookTableTiers(), out: Shelves[number][] = [];
+    tiers.forEach((t, i) => {
+      const r = t.r - 0.01, clear = r3((tiers[i + 1]?.y ?? t.y + 0.5) - t.y - 0.03);
+      for (const deg of [15, 30, 45, 60, 75]) {
+        const a = deg * Math.PI / 180, hx = r3(r * Math.cos(a)), hz = r3(r * Math.sin(a));
+        out.push({y: t.y, x0: -hx, x1: hx, z0: -hz, z1: hz, clear});
+      }
+    });
+    return out;
+  }
+  if (k === 'skyDRecordBins') {
+    const blocks = Array.from({length: 2 * BIN_STYLES}, (_, v) => binBlock(v));
+    const front = blocks.filter(b => b.row === 0), back = blocks.filter(b => b.row === 1);
+    const x0 = BIN_BAYS[0][0], x1 = BIN_BAYS[BIN_BAYS.length - 1][1], zb = r3(-m.d / 2 + 0.01);
+    const yf = r3(Math.min(...front.map(b => b.y0)) - 0.002), yb = r3(Math.min(...back.map(b => b.y0)) - 0.002);
+    return [
+      {y: yf, x0, x1, z0: zb, z1: r3(Math.max(...front.map(b => b.z1)) + 0.12), clear: r3(yb - yf)},
+      {y: yb, x0, x1, z0: zb, z1: r3(Math.min(...front.map(b => b.z0)) - 0.005), clear: r3(m.h - yb)},
+    ];
+  }
+  return undefined;
+}
+
 function defOf(k: ShopsAKind): PropDef {
-  const m = destDims(k), ph = PHYS[k];
+  const m = destDims(k), ph = PHYS[k], shelves = shelvesOf(k);
   return {w: r3(m.w), d: r3(m.d), h: r3(BOX_TO_TOP[k]?.() ?? m.h), blocksSight: BLOCKS_SIGHT.has(k),
     // dynamic: the calibrated contact-wake rules (`contact`) + `onHost` small merchandise (goes loose on a static host's top)
-    ...(ph.dynamic ? {physics: {mass: ph.mass, dynamic: true, shape: ph.shape, mat: ph.mat, contact: true, ...(ph.onHost ? {onHost: true} : {})}} : {})};
+    ...(ph.dynamic ? {physics: {mass: ph.mass, dynamic: true, shape: ph.shape, mat: ph.mat, contact: true, ...(ph.onHost ? {onHost: true} : {})}} : {}),
+    ...(shelves ? {shelves} : {})};
 }
 
 export const SHOPS_A_SPECS: Readonly<Record<ShopsAKind, DestKindSpec>> = Object.fromEntries(SHOPS_A_KINDS.map(k =>

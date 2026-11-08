@@ -16,6 +16,8 @@ import type {PropPlacement} from '../gen/props';
 export interface SurfaceLike { y: number; x0: number; x1: number; z0: number; z1: number; clear: number }
 
 const ENCLOSED = new Set(['cabinetTall', 'cabinetLow', 'crate', 'shopCooler', 'fridge', 'gunLocker', 'medCabinet', 'shopDisplay']);
+/** (lane MERCH) An enclosed holder: walls / roof / glass round its surfaces (a bullet does not reach into it through its box). */
+export const isEnclosedHolderKind = (kind: string): boolean => ENCLOSED.has(kind);
 /** Enclosed holders whose front is glass (closed for items unless it shattered). */
 const GLAZED = new Set(['shopCooler', 'shopDisplay']);
 const SLAB = 0.06;
@@ -25,7 +27,7 @@ const WALL = 0.04;
  * World-space boxes (axis-aligned; props only ever turn in quarter turns) for items / chunks.
  * Returns null when the holder should stay one solid box.
  */
-export function holderBoxes(p: PropPlacement, surfaces: readonly SurfaceLike[], o: {broken?: boolean; glassBroken?: boolean} = {}): THREE.Box3[] | null {
+export function holderBoxes(p: PropPlacement, surfaces: readonly SurfaceLike[], o: {broken?: boolean; glassBroken?: boolean; slab?: number} = {}): THREE.Box3[] | null {
   if (o.broken) return [];
   const quarter = Math.round(p.rot / (Math.PI / 2)) & 1;
   const w = quarter ? p.hz * 2 : p.hx * 2, d = quarter ? p.hx * 2 : p.hz * 2, h = p.h;
@@ -38,7 +40,8 @@ export function holderBoxes(p: PropPlacement, surfaces: readonly SurfaceLike[], 
   const low = sorted[0];
   // solid base below the lowest surface, over that surface's rect
   local.push([cx(low.x0 - m), 0, cz(low.z0 - m), cx(low.x1 + m), low.y, cz(low.z1 + m)]);
-  for (const s of sorted.slice(1)) local.push([cx(s.x0 - m), s.y - SLAB, cz(s.z0 - m), cx(s.x1 + m), s.y, cz(s.z1 + m)]);
+  const slab = o.slab ?? SLAB; // (lane MERCH: a declared shelf board is thinner — it never reaches into the stock of the shelf below)
+  for (const s of sorted.slice(1)) local.push([cx(s.x0 - m), s.y - slab, cz(s.z0 - m), cx(s.x1 + m), s.y, cz(s.z1 + m)]);
   if (ENCLOSED.has(p.kind)) {
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, top = 0;
     for (const s of inside) { x0 = Math.min(x0, s.x0); x1 = Math.max(x1, s.x1); z0 = Math.min(z0, s.z0); z1 = Math.max(z1, s.z1); top = Math.max(top, s.y + s.clear); }
