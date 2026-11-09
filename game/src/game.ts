@@ -29,6 +29,7 @@ import {Player, WALK_SPEED, stanceRecoilMult, stanceSpreadMult} from './player/p
 import {Inventory, MELEE_REF, THROW_REF, isMeleeItem, type ItemStack, type SlotRef} from './items/inventory';
 import {ITEMS, itemDef, throwHint, useHint, useLabel} from './items/items';
 import {WEAPONS, WeaponController, caliberLabel, reserveFor, type WeaponDef} from './weapons/weapons';
+import {baseSpread, bloomDecay, reloadCueTime, shotBloom, shotRecoil} from './weapons/gunHandling'; // task studio-weapon-variety-production-20261109-224355-01 (lane GUNS)
 import {CALIBERS, ammoText} from './items/calibers'; // lane AMMO: caliber-based ammo
 import {Viewmodel} from './weapons/viewmodel';
 import {devPistolRequested, makePistolDevPlaceholder, PISTOL_ART_READY, startWeaponFor, type StartWeapon} from './weapons/pistol';
@@ -2797,7 +2798,7 @@ export class Game {
 
   currentSpread(def: WeaponDef): number {
     const moving = Math.min(1, this.player.speed / WALK_SPEED);
-    const base = this.aiming ? def.spreadAim : def.spreadHip;
+    const base = baseSpread(def, this.aiming, this.weapon.def === def ? this.weapon.settleSpread : 0); // (weapon variety, lane GUNS: + an AimSettle)
     return (base + def.spreadMove * moving * (this.aiming ? 0.4 : 1) + this.bloom + (this.player.sprinting ? 0.05 : 0)) * stanceSpreadMult(this.player.crouched)
       * this.mods.spreadMult; // Iteration 16: gloves / arm injury
   }
@@ -2879,7 +2880,7 @@ export class Game {
       // (`clears`: menus / blur / pointer unlock) cancels a windup too. `pressed` is Input's per-frame latch: a down + up inside
       // one frame still starts the full windup -> swing -> recovery.
       const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns && !rideHolster, pressed: inp.mousePressed[0] && !flareOwns && !rideHolster, reload: inp.hit('KeyR') && !vmBusy && !this.skywaysCar.driving, // (lane RIDE: holstered; lane CAR: no reload while driving)
-        lowered: p.sprinting || vmBusy || p.climbing || (!!wdef.melee && (laneOwns || (this.lmbLatch && this.weapon.winding))), clears: inp.clears}, this.inv);
+        aiming: this.aiming, lowered: p.sprinting || vmBusy || p.climbing || (!!wdef.melee && (laneOwns || (this.lmbLatch && this.weapon.winding))), clears: inp.clears}, this.inv); // (lane GUNS: + aiming, an AimSettle)
       for (const e of ev) {
         // (task hitch-attribution-recorder-20261105: weapon.fire / weapon.melee spans — timing only, a no-op unless profiling)
         if (e.type === 'fire') { prof.begin(SPAN.fire); this.fire(e.def); prof.end(SPAN.fire); }
@@ -2887,9 +2888,9 @@ export class Game {
         else if (e.type === 'swing') this.sfx.meleeSwing(); // lane KNIFE / FEEL: the whoosh at the RELEASE (no gunfire, bullets, flash or recoil)
         else if (e.type === 'contact') { prof.begin(SPAN.melee); this.meleeContact(e.def); prof.end(SPAN.melee); }
         else if (e.type === 'dry') { this.sfx.dry(e.def.sound); if (e.def.caliber && reserveFor(e.def, this.inv) === 0) this.hud.toast(`Out of ${caliberLabel(e.def)} ${CALIBERS[e.def.caliber].unit[1]}`, true); }
-        else if (e.type === 'reloadStart') this.sfx.reloadStart(e.def.sound, e.empty);
+        else if (e.type === 'reloadStart') this.sfx.reloadStart(e.def.reloadCue ?? e.def.sound, e.empty, reloadCueTime(e.def, e.empty)); // (lane GUNS: the gun's cue set + timing)
         else if (e.type === 'shellIn') { this.sfx.shellIn(); this.viewmodel.shellBump(); }
-        else if (e.type === 'reloadEnd') this.sfx.reloadEnd(e.def.sound);
+        else if (e.type === 'reloadEnd') { if (e.def.reload.kind === 'break') this.sfx.dry(e.def.sound); else this.sfx.reloadEnd(e.def.reloadCue ?? e.def.sound); } // (lane GUNS: a break action closes with a click)
       }
     } else if (heldDef?.kind === 'consumable' && inp.mousePressed[0] && !this.use && !flareOwns) {
       this.startUse(this.inv.selectedRef());
@@ -2924,7 +2925,7 @@ export class Game {
     const rec = wdef ? wdef.recoil.recover : 8;
     this.recoilPitch -= this.recoilPitch * Math.min(1, rec * dt);
     this.recoilYaw -= this.recoilYaw * Math.min(1, rec * dt);
-    this.bloom = Math.max(0, this.bloom - dt * 0.06);
+    this.bloom = Math.max(0, this.bloom - dt * bloomDecay(wdef)); // (lane GUNS: a def's own Bloom recovery; else the shared 0.06)
     this.shake = Math.max(0, this.shake - dt * 2.5);
     this.updateCamera(dt);
 
@@ -2981,6 +2982,7 @@ export class Game {
       crouch: p.crouchBlend, vy: p.grounded ? 0 : p.vy, landDip: p.landDip,
       throwReady: this.flareHold.ready01, // Iteration 15: grenade-style pull-back
       melee: this.weapon.meleePose, // lane KNIFE / FEEL: windup / ready / slash / recovery pose (weapons/meleeView.ts)
+      actionOpen: this.weapon.actionOpen, // (weapon variety, lane GUNS) a break action's barrels open / closed
     });
     prof.lap(SPAN.hud);
     this.hud.setStance(p.crouched, p.standBlocked);
@@ -3105,17 +3107,19 @@ export class Game {
     this.damage.beginShot();
     this.shotCounter++;
     prof.begin(SPAN.fireFx);
-    this.sfx.shot(def.sound);
+    this.sfx.shot(def.sound, def.shotCycle); // (lane GUNS: no pump rack after a semi-auto / break-action shotgun's shot)
     this.viewmodel.fire(def, stanceRecoilMult(this.player.crouched));
     this.muzzleT = 0.05;
     const f0 = this.forward();
     this.muzzleLight.position.copy(this.camera.position).addScaledVector(f0, 0.8);
     const spread = this.currentSpread(def);
     const kickMul = (this.aiming ? 0.6 : 1) * stanceRecoilMult(this.player.crouched);
-    this.recoilPitch += def.recoil.pitch * kickMul;
-    this.recoilYaw += (this.rand() - 0.5) * 2 * def.recoil.yaw * kickMul;
-    this.player.pitch = Math.min(1.45, this.player.pitch + def.recoil.pitch * 0.3 * kickMul);
-    if (def.pellets === 1) this.bloom = Math.min(0.03, this.bloom + 0.0035);
+    // (weapon variety, lane GUNS: weapons/gunHandling.ts — a def's RecoilClimb / Bloom; the baseline guns' former expressions verbatim)
+    const kick = shotRecoil(def, kickMul, this.weapon.streak, this.rand);
+    this.recoilPitch += kick.pitch;
+    this.recoilYaw += kick.yaw;
+    this.player.pitch = Math.min(1.45, this.player.pitch + kick.view);
+    this.bloom = shotBloom(def, this.bloom);
 
     this.camera.updateMatrixWorld(true);
     const origin = this.camera.getWorldPosition(new THREE.Vector3());
