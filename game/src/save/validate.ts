@@ -31,6 +31,7 @@ import {STATION_PROPS_LANE, cargoProblem, stationPropsProblem, type CargoPropJSO
 import {PROP_DEFS} from '../gen/props'; // task train-all-cargo: carried props are of real kinds
 import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
 import {MARKET_STOCK_LANE, STOCK_MAX} from '../market/trade/stock';
+import {BUNKER_LANE, bunkerStateProblem} from '../world/bunker/objectiveState'; // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE)
 import {MARKET_HOSTILITY_LANE, marketHostilityProblem} from '../market/combat/record'; // task studio-market-rework-20261108-074144-01 (lane COMBAT): a market station's hostility
 import {WALLET_PARTICIPANT, walletProblem} from '../market/trade/wallet';
 import {BEER_PARTICIPANT, beerSaveProblem} from '../market/beer/beerSave'; // task studio-market-bar-20261108-225231-01 (lane BEER): the timed beer's record
@@ -541,6 +542,7 @@ function lanes(v: unknown, path: string): void {
   for (const k of keys) str(k, path, 48, LANE_ID, 'a lane id');
   if (has(o, BAG_LANE)) sectionBags(o[BAG_LANE], `${path}.${BAG_LANE}`);
   if (has(o, FUEL_LANE)) { const fp = stationFuelProblem(o[FUEL_LANE]); if (fp) bad(`${path}.${FUEL_LANE}`, fp); } // task train-fuel-system
+  if (has(o, BUNKER_LANE)) { const bp = bunkerStateProblem(o[BUNKER_LANE]); if (bp) bad(`${path}.${BUNKER_LANE}`, bp); } // task bunker-level (lane OBJECTIVE): a Bunker station's generators + intel claim
   if (has(o, SKYWAYS_CAR_LANE)) { // task skyways-level-20261106 (lane CAR)
     const car = o[SKYWAYS_CAR_LANE], cp = skywaysCarProblem(car);
     if (cp) bad(`${path}.${SKYWAYS_CAR_LANE}`, cp);
