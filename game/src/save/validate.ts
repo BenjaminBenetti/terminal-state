@@ -33,6 +33,8 @@ import {MARKET_STALLS} from '../gen/market/marketTypes'; // task studio-survivor
 import {MARKET_STOCK_LANE, STOCK_MAX} from '../market/trade/stock';
 import {MARKET_HOSTILITY_LANE, marketHostilityProblem} from '../market/combat/record'; // task studio-market-rework-20261108-074144-01 (lane COMBAT): a market station's hostility
 import {WALLET_PARTICIPANT, walletProblem} from '../market/trade/wallet';
+import {BEER_PARTICIPANT, beerSaveProblem} from '../market/beer/beerSave'; // task studio-market-bar-20261108-225231-01 (lane BEER): the timed beer's record
+import {SURVIVAL_OVERFILL} from '../player/survival'; // (lane BEER) food / water may hold the Bock's overfill (0..200)
 import {checksumOf, utf8Bytes} from './checksum';
 import {transitRouteProblem} from '../campaign/discovery';
 import {hashString} from '../core/rng'; // (task studio-skyways-level-20261106-054448-01: the pre-Skyways seed default)
@@ -440,8 +442,9 @@ function vitals(v: unknown, path: string): void {
 function survival(v: unknown, path: string): void {
   const o = obj(v, path);
   only(o, path, SURVIVAL);
-  num(o.hunger, `${path}.hunger`, 0, 100);
-  num(o.thirst, `${path}.thirst`, 0, 100);
+  // (task studio-market-bar-20261108-225231-01, lane BEER) food / water 0..200: Second Supper Bock's overfill (player/survival.ts SURVIVAL_OVERFILL)
+  num(o.hunger, `${path}.hunger`, 0, SURVIVAL_OVERFILL);
+  num(o.thirst, `${path}.thirst`, 0, SURVIVAL_OVERFILL);
   num(o.time, `${path}.time`, 0, 1e9);
 }
 
@@ -467,6 +470,7 @@ function participants(v: unknown, path: string, seen: Set<number>): void {
   if (keys.length > SAVE_LIMITS.participants) bad(path, 'too many run participants');
   for (const k of keys) str(k, path, 48, LANE_ID, 'a participant id');
   if (o[WALLET_PARTICIPANT] !== undefined) { const wp = walletProblem(o[WALLET_PARTICIPANT]); if (wp) bad(`${path}.${WALLET_PARTICIPANT}`, wp); } // lane TRADE: an old Rail Ties balance still owed ({v: 1}) or settled ({v: 2})
+  if (o[BEER_PARTICIPANT] !== undefined) { const bp = beerSaveProblem(o[BEER_PARTICIPANT]); if (bp) bad(`${path}.${BEER_PARTICIPANT}`, bp); } // (task studio-market-bar-20261108-225231-01, lane BEER) the timed beer + the Pilsner's rolls
   const t = o[PLAYER_TRAIN_PARTICIPANT];
   if (t !== undefined && t !== null) {
     const p = `${path}.${PLAYER_TRAIN_PARTICIPANT}`, r = obj(t, p);

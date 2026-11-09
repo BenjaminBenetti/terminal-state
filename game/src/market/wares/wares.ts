@@ -43,6 +43,7 @@ import type {Pickup} from '../../world/pickups';
 import {localBounds} from '../../physics/dynamicItems';
 import {rayAabb, rayCapsule} from '../../combat/hitscan';
 import type {MarketHostilityApi} from '../hostility';
+import type {AcquireSource} from '../beer/effectsApi'; // task studio-market-bar-20261108-225231-01 (lane BEER)
 import type {MarketStock} from '../trade/stock';
 import {WARES, counterBoxes, stallSurfaces} from './slots';
 import {planStall, type WareDims, type WarePacker, type WarePlace} from './plan';
@@ -80,6 +81,8 @@ export interface WaresHost {
   interactHandlers: (() => boolean)[];
   promptProviders?: (() => string | null)[];
   syncHeld?(): void;
+  /** Task studio-market-bar-20261108-225231-01 (lane BEER): the Pilsner's one acquisition hook (Game.beerEffects; absent: nothing). */
+  beerEffects?: {acquired?(source: AcquireSource, taken: ItemStack): void} | null;
 }
 
 /** One displayed ware: the stall's stock stack on its pickup, where the plan put it, its model's local box. */
@@ -367,6 +370,7 @@ export class MarketWares {
     if (!piece) { this.sync(); return true; }
     const left = h.inv.add(piece);
     const got = piece.count - left;
+    const taken = {...piece, count: got}; // (lane BEER: exactly what went in, before anything below touches the piece)
     if (left > 0) {
       // (never expected: the copy took it all. The rest is the player's now — it lies where the ware lay, an ordinary item: no loss, no copy)
       piece.count = left;
@@ -379,6 +383,7 @@ export class MarketWares {
     sfx?.pickup?.();
     h.syncHeld?.();
     h.hud.toast(WARES_TEXT.stolen(wareLabel({itemId: piece.itemId, count: got})), true);
+    h.beerEffects?.acquired?.({kind: 'ware', stall: w.stall, uid: w.uid}, taken); // (lane BEER) a stolen ware: the Pilsner may double it (rolled once per ware)
     return true;
   }
 

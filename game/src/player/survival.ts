@@ -1,4 +1,5 @@
-// Hunger and thirst, shown on the HUD as FOOD and WATER fullness (0-100, higher = better).
+// Hunger and thirst, shown on the HUD as FOOD and WATER fullness (0-100, higher = better; task studio-market-bar-20261108-225231-01,
+// lane BEER: up to SURVIVAL_OVERFILL = 200 after Second Supper Bock — the HUD's green overfill — draining normally from there).
 // Pure logic, no DOM/three.js. Both start at 80 on spawn, new station and restart. It only ticks from
 // Game.update(), which runs only in the 'playing' state: pause, inventory, menus, map, death and the
 // win screen freeze it (no catch-up of time spent away).
@@ -10,7 +11,13 @@
 // on becoming empty and then at most once a minute while empty (`pain` in the tick; never while frozen).
 
 export const SURVIVAL_START = 80;
+/** The normal cap: ordinary food / drink fill up to this (never above; never truncating an existing overfill either). */
 export const SURVIVAL_MAX = 100;
+/**
+ * Task studio-market-bar-20261108-225231-01 (lane BEER): the OVERFILL ceiling of food AND water (never health / stamina / filters). Second
+ * Supper Bock SETS both to this (Survival.overfill); the overfill drains at the normal rate (no expiry) and saves / loads as it is.
+ */
+export const SURVIVAL_OVERFILL = 200;
 /** The drain multiplier on the former rates (task studio-alpha-survival-controls-20261107-060450-01). */
 export const SURVIVAL_RATE = 8;
 /** Food points lost per second of play (8 x 1 point every 110 s: 100 -> 0 in 22.9 min). */
@@ -44,7 +51,13 @@ export function survivalTicks(state: string): boolean {
   return state === 'playing';
 }
 
-const clamp = (v: number) => Math.max(0, Math.min(SURVIVAL_MAX, v));
+/** (lane BEER) 0..SURVIVAL_OVERFILL: a stat above 100 is the Bock's overfill (only Survival.overfill puts it there). */
+const clamp = (v: number) => Math.max(0, Math.min(SURVIVAL_OVERFILL, v));
+/**
+ * (lane BEER) An ordinary food / drink delta: a gain fills to SURVIVAL_MAX at most but never truncates an existing overfill (at 180 water
+ * stays 180); a loss (salty chips' −4 water) applies as ever, from wherever the stat is.
+ */
+const gain = (cur: number, d: number) => (d > 0 ? Math.max(cur, Math.min(SURVIVAL_MAX, cur + d)) : clamp(cur + d));
 
 export class Survival {
   hunger = SURVIVAL_START;
@@ -96,11 +109,22 @@ export class Survival {
     return {hpLoss, warnings, pain};
   }
 
-  /** Applies an item's food/water effect (clamped). Returns the deltas actually applied. */
+  /** Applies an item's food/water effect (capped at 100; an existing overfill is never truncated). Returns the deltas actually applied. */
   consume(item: Consumable): {hunger: number; thirst: number} {
     const h0 = this.hunger, t0 = this.thirst;
-    this.hunger = clamp(this.hunger + (item.hunger ?? 0));
-    this.thirst = clamp(this.thirst + (item.thirst ?? 0));
+    this.hunger = gain(this.hunger, item.hunger ?? 0);
+    this.thirst = gain(this.thirst, item.thirst ?? 0);
+    return {hunger: this.hunger - h0, thirst: this.thirst - t0};
+  }
+
+  /**
+   * Task studio-market-bar-20261108-225231-01 (lane BEER): Second Supper Bock — SETS food AND water to `level` (the 200 % overfill; not
+   * +200, never above SURVIVAL_OVERFILL). Returns the deltas applied.
+   */
+  overfill(level = SURVIVAL_OVERFILL): {hunger: number; thirst: number} {
+    const h0 = this.hunger, t0 = this.thirst, v = clamp(level);
+    this.hunger = v;
+    this.thirst = v;
     return {hunger: this.hunger - h0, thirst: this.thirst - t0};
   }
 

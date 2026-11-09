@@ -126,7 +126,7 @@ import {createRun, type RunState} from './run/runState';
 import {enemiesToSpawn, mergeKilled, pickupPlan} from './run/memory';
 import {resetParticipants, restoreCarry, restoreParticipants, takeSnapshot, type RunParticipant, type RunSnapshot} from './run/snapshot';
 import {starterInventory} from './run/starter';
-import {applyHolders, captureHolders, capturePickups, dropUnrecordedSalvage, restorePickup} from './run/worldMemory';
+import {applyHolders, captureHolders, capturePickups, dropUnrecordedSalvage, holderKeyOf, restorePickup} from './run/worldMemory';
 import {runBagStore} from './run/bagStore';
 import {playerTrainPlacement, type TrainPlacement} from './gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE)
 import {PlayerTrainRecord, PLAYER_TRAIN_PARTICIPANT} from './run/playerTrain'; // (lane PLACE: the run's one train identity)
@@ -159,6 +159,9 @@ import {installMarketPeople, type MarketPeople} from './market/marketPeople'; //
 import {installMarketCombat, playerPelletDamage, type MarketCombat, type MarketCombatant} from './market/combat/marketCombat'; // task studio-market-rework-20261108-074144-01 (lane COMBAT)
 import type {MarketHostilityApi} from './market/hostility';
 import type {BeerEffectsApi, VomitApi} from './market/beer/effectsApi'; // task studio-market-bar-20261108-225231-01 (seams)
+import {installBeerEffects} from './market/beer/beerEffects'; // (lane BEER) the one timed beer, the Bock's overfill, the Pilsner's acquisition hook
+import {preloadBeerLabels} from './market/beer/beerModel'; // (lane BEER) the bottles' Codex label atlas before the item templates / icons
+import {isBeer} from './items/beers';
 import type {MarketAudioApi} from './market/marketAudio';
 import {installMarketAudio} from './market/audio/marketSounds'; // task studio-market-bar-20261108-225231-01 (lane AUDIO): Game.marketAudio
 import {installVomit, type VomitAction} from './player/vomit'; // task studio-market-bar-20261108-225231-01 (lane SHELVES): the throw-up action (Game.vomit)
@@ -718,6 +721,10 @@ export class Game {
     // a physics body source —, the retch); its frame hook runs after the player's step and before the camera; inert until start()
     this.vomit = this.vomitAction = installVomit(this);
     hookName('vomit');
+    // task studio-market-bar-20261108-225231-01 (lane BEER): Game.beerEffects — the one timed beer (frame hook: active play only; run participant
+    // 'market.beer'; the Lager's ModifierSource), the Bock's overfill, the Pilsner's acquisition hook (market/beer/beerEffects.ts)
+    installBeerEffects(this);
+    hookName('beerEffects');
     installSkywaysTrunk(this); hookName('skywaysTrunk'); // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): after the car (its section hook follows the car's) and the Lockbox; inert without the car
     // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
     // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
@@ -786,6 +793,7 @@ export class Game {
     await preloadMedicalModels(); // Iteration 16 (lane INJURY): Meshy splint / sling (null urls / failures -> authored models)
     await preloadReactorItemModels(); // task reactor-build-20261101 (lane RESTART): startup key / fuse cartridge kit GLBs (failures -> procedural stand-ins)
     await preloadFuelCanModel(); // task train-fuel-system (lane PORT): the fuel-can GLB before item templates / icons (a failure -> the fallback box)
+    await preloadBeerLabels(); // task studio-market-bar-20261108-225231-01 (lane BEER): the beer bottles' Codex label atlas (a failure -> plain paper labels)
     registerItemModels(m as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>);
     const consumables: Record<string, THREE.Object3D> = {};
     for (const id of Object.values(ITEMS).filter(d => d.kind === 'consumable' || d.kind === 'throwable').map(d => d.id)) {
@@ -2579,10 +2587,12 @@ export class Game {
       this.hud.toast(`Battery swapped in: flashlight ${this.torch.battery.percent} %${this.torch.battery.on ? '' : ' (F to switch on)'}`);
     } else if (used && (def.verb === 'eat' || def.verb === 'drink')) {
       // Food/drink: restore hunger/thirst (HUD bars animate up and pop "+N").
-      const d = this.survival.consume(def);
+      // (task studio-market-bar-20261108-225231-01, lane BEER) a beer's effect is committed HERE, once, after its unit was consumed
+      const beer = isBeer(def.id) ? this.beerEffects?.drink?.(def.id) : undefined;
+      const d = beer === undefined ? this.survival.consume(def) : null;
       this.stats.itemsUsed++;
       if (def.verb === 'drink') this.sfx.drink(def.id); else this.sfx.eat(def.id);
-      this.hud.toast(`${def.verb === 'drink' ? 'Drank' : 'Ate'} ${def.name.toLowerCase()}: ${Survival.describe(d)}`);
+      this.hud.toast(d ? `${def.verb === 'drink' ? 'Drank' : 'Ate'} ${def.name.toLowerCase()}: ${Survival.describe(d)}` : beer!);
     } else if (used) {
       const healed = p.heal(def.heal ?? 0);
       this.stats.healed += healed;
@@ -2642,7 +2652,7 @@ export class Game {
   private interact(): void {
     if (this.vomit?.active) return; // (lane SHELVES) throwing up: no interaction until it is over
     for (const h of this.interactHandlers) if (h()) return; // Iteration 16: lane handlers first (grounded backpack, elevator, stair doors)
-    if (this.containerTarget) { this.containers?.interact(this.containerTarget); return; }
+    if (this.containerTarget) { this.takeFromHolder(this.containerTarget); return; }
     const p = this.currentTarget;
     if (!p) {
       // Lane T (iteration 05): rescue ladder under the crosshair -> scripted climb (Space / S lets go).
@@ -2661,6 +2671,8 @@ export class Game {
     if (left === before) { this.hud.toast('No room in inventory — drop something (Tab)', true); this.sfx.denied(); return; }
     this.sfx.pickup();
     const got = before - left;
+    // (task studio-market-bar-20261108-225231-01, lane BEER) what went in and where it came from: the Pilsner's one acquisition hook (below)
+    const taken = {...p.stack, count: got}, src = {kind: 'pickup' as const, layoutIndex: this.layoutPickup.get(p), lot: p.fromLot ? {holder: this.holderKeyBySerial(p.fromLot.holder), lot: p.fromLot.lot} : undefined};
     if (left > 0) { p.stack.count = left; this.hud.toast(`Took ${got} ${def.short} (no room for ${left})`); }
     else {
       this.pickups.remove(p);
@@ -2673,7 +2685,33 @@ export class Game {
         if (prevSelectedEmpty) this.selectMelee();
       } else this.hud.toast(def.kind === 'weapon' ? `${def.short} stored in backpack` : `+${got} ${def.name}`);
     }
+    this.beerEffects?.acquired?.(src, taken); // (lane BEER) a generated / lot-origin pickup only: the player's own drops have no origin
     this.syncHeld();
+  }
+
+  /**
+   * [E] on a holder / its aimed lot (ContainerManager.interact, unchanged). Task studio-market-bar-20261108-225231-01 (lane BEER): while
+   * Lucky Switch Pilsner is active, every lot this gave up (whole or in part: its count before vs after) goes through the one acquisition
+   * hook as the default stack the lot became (items/loot.ts transferLot: makeStack).
+   */
+  private takeFromHolder(t: ContainerTarget): void {
+    const h = t.container, luck = this.beerEffects?.active?.effect === 'pickup';
+    const before = luck ? h.state.lots.map(l => ({id: l.id, itemId: l.itemId, count: l.count})) : null;
+    this.containers?.interact(t);
+    if (!before) return;
+    for (const b of before) {
+      const n = b.count - (h.state.lots.find(l => l.id === b.id)?.count ?? 0);
+      if (n <= 0) continue;
+      const st = this.inv.makeStack(b.itemId, 1);
+      st.count = n; // (a lot may hold more than one stack: the exact count taken)
+      this.beerEffects?.acquired?.({kind: 'lot', holder: holderKeyOf(h), lot: b.id}, st);
+    }
+  }
+
+  /** (task studio-market-bar-20261108-225231-01, lane BEER) A holder's run-memory key by its serial (Pickup.fromLot provenance). */
+  private holderKeyBySerial(serial: number): string {
+    const h = this.containers?.all[serial];
+    return h ? holderKeyOf(h) : `holder#${serial}`;
   }
 
   /**
@@ -3004,6 +3042,8 @@ export class Game {
       battery: {charge: this.torch.battery.charge, on: this.flashlightOn, flicker: this.torch.battery.flicker, spares: this.inv.count('battery')},
       flares: {count: this.inv.count('flare'), burning: this.flares.burningCount},
       armor: armorPool(this.inv.gear), // task studio-general-armor-20261107-231448-01: the blue armour pips
+      armorTemp: this.beerEffects?.tempArmor() ?? 0, // (task studio-market-bar-20261108-225231-01, lane BEER) Ironclad Stout: shown on top, distinguishable
+      beer: this.beerEffects?.active ?? null, // (lane BEER) the active timed beer: name + time left
     }, this.inv);
   }
 
@@ -3147,7 +3187,8 @@ export class Game {
     // An open-atrium level (layout.mall) adds the cross-storey rule (ATRIUM_PERCEPTION: x0.7 per storey through the void, at most 3
     // new cross-storey responders per noise); the Subway / Office pass no flag: the established loop.
     alertListeners(this.zombies.map(z => z.brain), P, radius,
-      b => multi ? this.levels.lineOfSight({x: P.x, y: P.eye, z: P.z}, {x: b.x, y: b.y + 1.5, z: b.z}) : this.layout.grid.lineOfSight(P.x, P.z, b.x, b.z), bases, !!this.layout.mall || !!this.layout.reactor); // task reactor-build-20261101 (lane ARCH): + the Reactor's open pit (cross-storey hearing)
+      b => multi ? this.levels.lineOfSight({x: P.x, y: P.eye, z: P.z}, {x: b.x, y: b.y + 1.5, z: b.z}) : this.layout.grid.lineOfSight(P.x, P.z, b.x, b.z), bases, !!this.layout.mall || !!this.layout.reactor, // task reactor-build-20261101 (lane ARCH): + the Reactor's open pit (cross-storey hearing)
+      this.beerEffects?.perceptionMult() ?? 1); // (task studio-market-bar-20261108-225231-01, lane BEER) the player's one detectability factor (Night Shift Porter)
     this.prof.end(SPAN.alert);
   }
 
@@ -3274,6 +3315,8 @@ export class Game {
       ...(this.layout.mall || this.layout.reactor ? {atrium: true} : {}), // (reactor-build, lane ARCH: + the open pit)
       // Task studio-beta-mall-round3-20261031-01 (lane ENEMY, R2): the open-atrium notice rule (ai/brain.ts ATRIUM_PERCEPTION); mall only
       ...(this.layout.mall || this.layout.reactor ? {atriumNotice: true} : {}), // (reactor-build, lane ARCH: + the open pit)
+      // task studio-market-bar-20261108-225231-01 (lane BEER): the player's ONE detectability factor (Night Shift Porter 0.75; else 1)
+      detect: this.beerEffects?.perceptionMult() ?? 1,
     };
   }
 
@@ -3432,7 +3475,7 @@ export class Game {
    */
   applyPlayerHit(raw: PlayerHit): ResolvedHit {
     const hit = incomingHit(raw);
-    const {resolved} = armorHit(hit, this.inv.gear, this.wearRand);
+    const {resolved} = armorHit(hit, this.inv.gear, this.wearRand, undefined, this.beerEffects?.tempArmor() ?? 0); // (task studio-market-bar-20261108-225231-01, lane BEER: + Ironclad Stout's temporary armour in the same pool, never worn down)
     this.player.takeDamage(resolved.applied);
     for (const fn of this.hitListeners) fn(resolved);
     return resolved;
