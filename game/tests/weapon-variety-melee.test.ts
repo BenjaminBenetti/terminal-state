@@ -17,6 +17,7 @@ import {MELEE_KNOCK, MELEE_MASS, MELEE_PROTECTED, MELEE_WINDED, MeleeShoves, mel
 import {KNIFE_POSES, MELEE_POSES, VARIETY_MELEE_AIMS, VARIETY_MELEE_LENGTHS, aimPose, meleePoseOffset, varietyTip, type MeleePoses} from '../src/weapons/meleeView';
 import {VARIETY_MELEE_IDS, VARIETY_WEAPONS, type VarietyMeleeId} from '../src/weapons/varietyIds';
 import {VARIETY_MELEE_DEFS} from '../src/weapons/varietyMelee';
+import {WEAPON_VARIETY_MODELS} from '../src/assets/weaponVarietyModels.generated';
 import {ZOMBIE_STATS, ZombieBrain, type BrainWorld} from '../src/ai/brain';
 import {RATDOG_STATS} from '../src/ai/creatureActor';
 import {STRAINER_STAGGER_MIN, StrainerBrain} from '../src/ai/strainer';
@@ -133,7 +134,7 @@ describe('handling table vs the knife (windup 0.15 / swing 0.65 s, 30 body / 60 
       expect(d.melee!.strike, id).toBeLessThan(d.melee!.sweep);
       expect(d.melee!.holdMax, id).toBeUndefined();
       expect(d.melee!.propHits, id).toBe(true);
-      expect(d.view.length, id).toBe(VARIETY_MELEE_LENGTHS[id]); // until the cooked model's length arrives
+      expect(d.view.length, id).toBe(WEAPON_VARIETY_MODELS[id]?.length ?? VARIETY_MELEE_LENGTHS[id]); // the cooked model's length once delivered
     }
   });
 
@@ -731,7 +732,11 @@ describe('first-person key poses (aimed and solved for each model\'s length; thr
 
   it('poses follow the model: a delivered Tip marker / length re-solves them (scaled to length), the approved lengths until then', () => {
     expect(VARIETY_MELEE_LENGTHS).toEqual({fire_axe: 0.90, machete: 0.62, sledgehammer: 0.92, crowbar: 0.76, slugger: 0.84, track_shovel: 1.25});
-    for (const id of IDS) expect(Math.hypot(...varietyTip(id)), id).toBeCloseTo(VARIETY_MELEE_LENGTHS[id], 9);
+    for (const id of IDS) {
+      const mk = WEAPON_VARIETY_MODELS[id]?.markers, g = mk?.Grip ?? [0, 0, 0];
+      if (mk?.Tip) expect(varietyTip(id), id).toEqual([mk.Tip[0] - g[0], mk.Tip[1] - g[1], mk.Tip[2] - g[2]]); // the delivered Tip, from the Grip
+      else expect(varietyTip(id), id).toEqual([0, 0, -(WEAPON_VARIETY_MODELS[id]?.length ?? VARIETY_MELEE_LENGTHS[id])]);
+    }
     // a longer model with the same aim lands its tip on the same screen point (farther out), the grip unchanged
     const a = VARIETY_MELEE_AIMS.fire_axe.contact;
     const p1 = aimPose(a, [0, 0, -0.9]), p2 = aimPose(a, [0, 0.05, -1.1]);
