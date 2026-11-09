@@ -20,7 +20,7 @@ import type {BunkerCarve, StoreyCarve} from './carve';
 import type {ObjectiveRec} from './dress';
 
 /** Strength bands (fraction of the gas field's cap; the exposure's damage threshold is 0.12). */
-export const GAS_STRENGTH = {weak: [0.26, 0.34] as const, medium: [0.5, 0.62] as const, strong: [0.86, 0.95] as const};
+export const GAS_STRENGTH = {weak: [0.34, 0.42] as const, medium: [0.5, 0.62] as const, strong: [0.86, 0.95] as const};
 /** A zone at or above this strength is STRONG (routes to the objectives never cross it). */
 export const GAS_STRONG = 0.8;
 
@@ -55,9 +55,10 @@ function seedCells(layout: StationLayout, lv: number, id: number, n: number): nu
 function corridorSeed(layout: StationLayout, lv: number, id: number, rng: Rng): number[] {
   const a = layout.areas[id], g = layout.levels[lv].grid, horiz = a.w >= a.h, len = horiz ? a.w : a.h;
   if (len < 10) return [];
-  const t0 = rng.int(2, len - 8), out: number[] = [];
-  for (let t = t0; t < t0 + 5; t++) {
-    const x = horiz ? a.x + t : a.x + Math.floor(a.w / 2), y = horiz ? a.y + Math.floor(a.h / 2) : a.y + t;
+  // two cells wide along the corridor's middle, six long (a ruptured line overhead: a band of gas, not a thread)
+  const t0 = rng.int(2, len - 9), out: number[] = [];
+  for (let t = t0; t < t0 + 6; t++) for (const o of [-1, 0]) {
+    const x = horiz ? a.x + t : a.x + Math.floor(a.w / 2) + o, y = horiz ? a.y + Math.floor(a.h / 2) + o : a.y + t;
     const i = g.idx(x, y);
     if (g.cells[i] === FLOOR && g.area[i] === id) out.push(i);
   }

@@ -7,7 +7,9 @@
 // damage/physicsAudit.ts, world/openablesSpec.ts OPENABLE_AUDIT:
 //  - rule 1: neither is storage (a diesel generator set on its skid with its control box; a bank of computer cabinets with a screen wall
 //    and an operator desk wired into it) — the rooms' storage is their own openable holders;
-//  - rule 2 / 3: static, `anchored` / machinery: a ~3 t generator set bolted to its plinth, a cabinet bank bolted to the floor;
+//  - rule 2 / 3: static — the generator `anchored` machinery (a ~3 t set bolted to its plinth), the core cluster a `built-in` fixture
+//    (sealed cabinets + a built-in console bolted to the floor); fronts kept clear: >= 1.6 m before a generator (2.0 m held), >= 1.75 m
+//    before the cluster (3.0 m held), the processing hall's headroom 6.4 m (the screen top 3.55 m);
 //  - rule 4: nothing loose is part of either (the core's operator terminal is a built-in desk console); rule 5: the dims below are the
 //    Reactor model's real size (scale-checked beside a zombie with the Reactor kit) and the contract's cluster footprint.
 

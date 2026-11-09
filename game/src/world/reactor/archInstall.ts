@@ -60,7 +60,7 @@ export class ReactorArchRuntime {
   constructor(private readonly host: ReactorArchHost) {
     host.sectionModelKeys?.push(layout => reactorModelKeysFor(layout as {reactor?: unknown}));
     host.sectionModelKeys?.push(layout => minesModelKeysFor(layout)); // task reactor-expansion-20261101 (lane MINES): the mine set pieces
-    host.sectionModelKeys?.push(layout => ((layout as {reactor?: unknown}).reactor ? bunkerModelKeysFor(layout) : [])); // (lane BUNKER) hero props
+    host.sectionModelKeys?.push(layout => ((layout as {reactor?: unknown}).reactor || (layout as {bunker?: unknown}).bunker ? bunkerModelKeysFor(layout) : [])); // (lane BUNKER) hero props (+ the Bunker level's shelter: task studio-bunker-level-20261109-072224-01)
     host.sectionModelKeys?.push(layout => wasteModelKeysFor(layout)); // task reactor-expansion-20261101 (lane WASTE): the waste repository's models
     host.sectionPreloads?.push(layout => this.preload(layout));
     host.sectionHooks.push({build: layout => this.build(layout), teardown: () => this.teardown()});
@@ -71,7 +71,8 @@ export class ReactorArchRuntime {
 
   /** The Codex surface sets behind the Reactor's loading screen (any other level: nothing). */
   async preload(layout: StationLayout): Promise<void> {
-    if (!(layout as {reactor?: unknown}).reactor || !this.host.levelResources) return;
+    // (task studio-bunker-level-20261109-072224-01: the Bunker's finishes reuse the Reactor's surface sets: world/bunkerArch.ts)
+    if (!((layout as {reactor?: unknown}).reactor || (layout as {bunker?: unknown}).bunker) || !this.host.levelResources) return;
     const res = this.host.levelResources;
     const loads = reactorTextureLoads();
     const got = await Promise.all(loads.map(l => res.load(REACTOR_LEVEL, l.url, {srgb: l.srgb, repeat: true, anisotropy: l.map === 'color' ? 8 : 4})));
@@ -80,7 +81,8 @@ export class ReactorArchRuntime {
   }
 
   build(layout: StationLayout): void {
-    if (!(layout as {reactor?: unknown}).reactor) { this.restore(); releaseReactorMaterials(); return; }
+    // (task studio-bunker-level-20261109-072224-01: a Bunker world keeps the Reactor surface materials it was just built with; no Reactor fog)
+    if (!(layout as {reactor?: unknown}).reactor) { this.restore(); if (!(layout as {bunker?: unknown}).bunker) releaseReactorMaterials(); return; }
     this.apply(REACTOR_FOG.density, REACTOR_FOG.color);
   }
 

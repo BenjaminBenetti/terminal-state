@@ -100,6 +100,7 @@ import {WASTE_MODEL_FILES} from './world/reactor/wasteAssets'; // task reactor-e
 import {attributeInstancing, setAttributeInstancing} from './render/instancing'; // Task track3-eaton-centre-20261031 (lane PERF): shared instancing programs in the mall
 import {collectTextures, modelTextures, releaseModelTexturesAfterUpload, stageUploads, textureReleaseStats, trackUploads} from './assets/textureRelease'; // (lane PERF) mall: decoded images freed after upload, uploads staged
 import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
+import {bunkerGasSource} from './world/gas/zones'; // task studio-bunker-level-20261109-072224-01: the Bunker's local gas leaks (a gas zone world)
 import {installCough, type CoughFeedback} from './audio/cough'; // Task gas-mask-roof-feedback-20261030: the player coughs while gas hurts them
 import {installReactorAir} from './world/reactor/generators'; // task reactor-build-20261101 (lane AIR): Reactor depth gas + auxiliary generators
 import {installBlightBurst, type BlightBurstSystem, type BlightEnemy} from './ai/blightBurst'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly's once-only death burst
@@ -664,6 +665,7 @@ export class Game {
     this.gas = installGas(this); // Task gasmask-breach-20261030 (lane GAS): after TOWER (its build reads the windows) — bullet hits, frame hook, section hooks
     hookName('gas');
     this.gas.windowSources.push(() => this.skywaysWindows.gasSource()); // (lane GAS, Skyways) the glazing's panes when the world has no office tower
+    this.gas.zoneSources.push(bunkerGasSource); // task studio-bunker-level-20261109-072224-01: the Bunker's gas zones (visible green fog + exposure, one field)
     // Task gasmask-breach-20261030 (primary): breach gas spares the player only behind a mask that is on with a working filter.
     // The mask's frame hook runs first (installed earlier), so a filter swapped in this frame already counts.
     this.gas.protection = () => this.gasMask.protects();
