@@ -3,7 +3,9 @@
 // commons is exactly the V12 void at its full clear height and nothing else on the storey is taller than a hall; a real mix of scales
 // (the 11.6 m nave, 4-6 m halls, 3 m rooms and 2 m streets); the anchors served by one open area each; the gen-0 plant room; the
 // declared hazards (at most a weak laundry leak); the compositions (the lamp ring, the hearth, the stage, the refectory, the quarters'
-// personal storage); no food holders outside the kitchen / pantry; budgets; determinism.
+// personal storage); loot holders near the first Bunker's count (living storage in every lived-in room; food holders — the kitchen,
+// the pantry, the mess tables — at the first Bunker's ~25, never above; food-stock kinds only in the kitchen / pantry); budgets;
+// determinism.
 
 import {beforeAll, describe, expect, it} from 'vitest';
 import {generateBunkerLevel} from '../src/gen/bunker/index';
@@ -13,8 +15,8 @@ import {bunkerSpine, V2_BASES} from '../src/gen/bunker/v2/spine';
 import {F2_DOORS, F2_PLAN} from '../src/gen/bunker/v2/floor2';
 import {F2_DRESS_STATS} from '../src/gen/bunker/v2/floor2Dress';
 import {CELL, FLOOR} from '../src/gen/grid';
-import {HOLDER_LOTS} from '../src/items/lootTables';
-import {isOpenableKind} from '../src/world/openablesSpec';
+import {isLootHolderKind} from '../src/items/loot';
+import {purposeById} from '../src/gen/purposes';
 import type {Area, StationLayout} from '../src/gen/stationTypes';
 
 const SEEDS = [9001, 16920, 4401, 12320, 7, 31337, 2024, 555];
@@ -163,7 +165,11 @@ describe('Bunker v2 storey 2 — habitation', () => {
       const {L, areas, dress} = run(seed);
       expect(dress.skipped, `seed ${seed}`).toEqual([]);
       for (const n of ['hearth bed', 'stage', 'servery', 'planting trough']) expect(dress.built, `seed ${seed}`).toContain(n);
-      expect(dress.built.filter(b => b.startsWith('refectory')).length).toBe(3);
+      // the refectory: three rows of three mess tables (staff-room food surfaces) between six fixed galley benches
+      expect(dress.built.filter(b => b.startsWith('refectory bench')).length).toBe(6);
+      const messTables = L.props.filter(p => p.area === areas.mess.id && p.kind === 'table');
+      expect(messTables.length).toBe(9);
+      for (const t of messTables) expect(t.purpose).toBe('staff-room');
       // the lamp ring: eight fixtures hung in the well, 6.4 m up
       const ring = L.lights.filter(l => l.area === areas.commons.id && Math.abs(l.y - BASE - 6.38) < 0.05);
       expect(ring.length).toBe(8);
@@ -177,8 +183,8 @@ describe('Bunker v2 storey 2 — habitation', () => {
     }
   });
 
-  it('stocks living loot: personal storage in the quarters, food only by the kitchen / pantry purposes', () => {
-    const FOOD = new Set(['fridge', 'kitchenette', 'stockShelf', 'snackRack', 'vending', 'chestFreezer', 'shopCooler', 'breadRack']);
+  it('stocks living loot near the first Bunker\'s count: personal storage everywhere people lived, food at the first Bunker\'s level', () => {
+    const FOOD_KINDS = new Set(['fridge', 'kitchenette', 'stockShelf', 'snackRack', 'vending', 'chestFreezer', 'shopCooler', 'breadRack']);
     for (const seed of SEEDS) {
       const {L, areas} = run(seed);
       const mine = L.props.filter(p => (p.level ?? 0) === LV);
@@ -188,12 +194,22 @@ describe('Bunker v2 storey 2 — habitation', () => {
         expect(inQ.filter(p => p.kind === 'bunkBed').length, `${seed} ${k} bunks`).toBeGreaterThanOrEqual(5);
         expect(inQ.filter(p => p.kind === 'footlocker' || p.kind === 'staffLockers').length, `${seed} ${k} storage`).toBeGreaterThanOrEqual(6);
       }
-      // openable storage (lockers, footlockers, cabinets, crates, bins …) — the living storey's finds
-      const holders = mine.filter(p => (isOpenableKind(p.kind) || HOLDER_LOTS[p.kind] !== undefined) && !FOOD.has(p.kind) && !['table', 'desk', 'toiletStall'].includes(p.kind));
-      expect(holders.length, `seed ${seed} holders`).toBeGreaterThanOrEqual(25);
-      expect(holders.length, `seed ${seed} holders`).toBeLessThanOrEqual(60);
-      // food holders stand only where the station dresser put them by purpose (the kitchen, the pantry)
-      for (const p of mine) if (FOOD.has(p.kind)) expect([areas.kitchen.id, areas.pantry.id], `${seed} ${p.kind} in ${L.areas[p.area].label}`).toContain(p.area);
+      // every loot holder (containers + surfaces), and those whose loot table is a food one (the holder's purpose, else its room's)
+      const holders = mine.filter(p => isLootHolderKind(p.kind));
+      const food = holders.filter(p => purposeById(p.purpose ?? L.areas[p.area]?.purpose)?.theme === 'food');
+      expect(holders.length, `seed ${seed} holders`).toBeGreaterThanOrEqual(80);
+      expect(holders.length, `seed ${seed} holders`).toBeLessThanOrEqual(105);
+      expect(holders.length - food.length, `seed ${seed} non-food holders`).toBeGreaterThanOrEqual(62);
+      // food: back to about the first Bunker's ~25 (never above it): the kitchen, the pantry and the mess tables
+      expect(food.length, `seed ${seed} food holders`).toBeGreaterThanOrEqual(17);
+      expect(food.length, `seed ${seed} food holders`).toBeLessThanOrEqual(25);
+      for (const p of food) expect([areas.kitchen.id, areas.pantry.id, areas.mess.id], `${seed} ${p.kind} in ${L.areas[p.area].label}`).toContain(p.area);
+      // food-stock kinds stand only where the station dresser put them by purpose (the kitchen, the pantry)
+      for (const p of mine) if (FOOD_KINDS.has(p.kind)) expect([areas.kitchen.id, areas.pantry.id], `${seed} ${p.kind} in ${L.areas[p.area].label}`).toContain(p.area);
+      // the living rooms all hold something of their own
+      for (const k of ['school', 'nursery', 'laundry', 'games', 'westSt', 'southSt', 'landing', 'freight', 'lobby']) {
+        expect(holders.filter(p => p.area === areas[k].id).length, `${seed} ${k} holders`).toBeGreaterThanOrEqual(2);
+      }
     }
   });
 
@@ -202,7 +218,7 @@ describe('Bunker v2 storey 2 — habitation', () => {
       const {L, dress} = run(seed);
       const props = L.props.filter(p => (p.level ?? 0) === LV).length;
       const lights = L.lights.filter(l => (l.level ?? 0) === LV).length;
-      expect(props, `seed ${seed} props`).toBeLessThanOrEqual(160);
+      expect(props, `seed ${seed} props`).toBeLessThanOrEqual(195);
       expect(lights, `seed ${seed} lights`).toBeLessThanOrEqual(80);
       expect(dress.decor, `seed ${seed} decor`).toBeLessThanOrEqual(150);
     }

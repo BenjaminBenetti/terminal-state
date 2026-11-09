@@ -216,7 +216,7 @@ function commons(F: F2, a: Area): void {
   if (wallSign(F.D, a, 'S', hx, 4.3, {kind: 'info', text: 'WE KEEP THE LIGHT', w: 3.4})) F2_DRESS_STATS.signs++;
   // the audience: a row of folding chairs before the dais, the middle left free (the hearth's south bench faces the stage)
   const cz = sz0 - 1.35;
-  for (const dx of [-3.1, -2.4, 2.4, 3.1]) put(F, a, 'foldingChair', hx + dx, cz, 0, {laneOk: true, plazaOk: true});
+  for (const dx of [-2.8, 2.8]) put(F, a, 'foldingChair', hx + dx, cz, 0, {laneOk: true, plazaOk: true});
   // trees flanking the dais
   const tz = sz1 - PROP_DEFS.planterTree.d / 2 - 0.05;
   putAny(F, a, 'planterTree', [[sx0 - 1.0, tz, 0], [sx0 - 1.25, tz, 0], [sx0 - 0.75, tz, 0]]);
@@ -262,23 +262,37 @@ function messHall(F: F2, a: Area, kitchen: Area | undefined): void {
     });
     if (wallSign(F.D, a, 'N', (s0 + s1) / 2, 2.55, {kind: 'info', text: 'SERVERY · 0700 · 1200 · 1800', w: 3.0})) F2_DRESS_STATS.signs++;
   } else F2_DRESS_STATS.skipped.push('servery: no wall');
-  // THE REFECTORY: three long built-in tables with fixed benches, running north-south toward the commons opening
-  const len = 6.0, zA = R.z0 + 2.5, zB = zA + len;
-  const xs = [R.x0 + 4.0, R.x0 + 8.0, R.x0 + 12.0];
+  // THE REFECTORY: three long rows running north-south toward the commons opening — each three mess tables pushed end to end (the
+  // shelter's food surfaces: staff-room purpose, as the first Bunker's mess tables) between two fixed galley benches (anchored
+  // built-ins: collision-only strips under the seats)
+  // (a 1.6 m table covers four 0.5 m cells: on a 2.0 m pitch the row's tables tile the grid with no free cell between them)
+  const tbl = PROP_DEFS.table, nT = 3, pitch = 2.0, zA = R.z0 + 2.5, zB = zA + nT * pitch;
+  const xs = [R.x0 + 3.75, R.x0 + 8.25, R.x0 + 12.75];
+  let tables = 0;
   for (const c of xs) {
-    builtIn(F, a, {x0: c - 1.0, z0: zA, x1: c + 1.0, z1: zB}, 0.76, `refectory ${c}`, () => {
-      decor(F, 'woodVeneer', {x0: c - 0.42, z0: zA + 0.05, x1: c + 0.42, z1: zB - 0.05}, 0.72, 0.76);
-      for (const s of [-1, 1]) decor(F, 'woodVeneer', {x0: c + s * 0.62 - 0.18, z0: zA + 0.15, x1: c + s * 0.62 + 0.18, z1: zB - 0.15}, 0.42, 0.46);
-      for (const z of [zA + 0.6, zB - 0.6]) {
-        decor(F, 'steelDark', {x0: c - 0.8, z0: z - 0.04, x1: c + 0.8, z1: z + 0.04}, 0.05, 0.42);
-        decor(F, 'steelDark', {x0: c - 0.06, z0: z - 0.04, x1: c + 0.06, z1: z + 0.04}, 0.42, 0.72);
-      }
-    });
-    light(F, a, c, zA + 1.6, 4.5, Math.PI / 2);
-    light(F, a, c, zB - 1.6, 4.5, Math.PI / 2);
+    const row: PropPlacement[] = [];
+    for (let k = 0; k < nT; k++) {
+      const p = put(F, a, 'table', c, zA + pitch / 2 + k * pitch, 0, {laneOk: true});
+      if (p) { p.purpose = 'staff-room'; row.push(p); }
+    }
+    tables += row.length;
+    if (!row.length) continue;
+    // the benches: one cell each side of the tables' cells, the rows' length
+    for (const s of [-1, 1]) {
+      const x0 = s < 0 ? Math.floor((c - tbl.w / 2) / CELL) * CELL - CELL : Math.ceil((c + tbl.w / 2) / CELL) * CELL;
+      const z0 = Math.floor(zA / CELL) * CELL, z1 = Math.ceil(zB / CELL) * CELL;
+      builtIn(F, a, {x0, z0, x1: x0 + CELL, z1}, 0.46, `refectory bench ${c} ${s}`, () => {
+        const sx0 = s < 0 ? x0 + 0.05 : x0 + 0.03, sx1 = s < 0 ? x0 + CELL - 0.03 : x0 + CELL - 0.05;
+        decor(F, 'woodVeneer', {x0: sx0, z0: z0 + 0.1, x1: sx1, z1: z1 - 0.1}, 0.42, 0.46);
+        for (const z of [z0 + 0.5, (z0 + z1) / 2, z1 - 0.5]) decor(F, 'steelDark', {x0: sx0 + 0.08, z0: z - 0.04, x1: sx1 - 0.08, z1: z + 0.04}, 0, 0.42);
+      });
+    }
+    light(F, a, c, zA + 1.2, 4.5, Math.PI / 2);
+    light(F, a, c, zB - 1.2, 4.5, Math.PI / 2);
   }
-  // a few loose folding chairs pulled up at the tables' ends, a bin by the servery
-  for (const [x, z] of [[xs[0], zB + 0.6], [xs[1] - 0.3, zA - 0.65]] as const) put(F, a, 'foldingChair', x, z, z > zB ? Math.PI : 0, {laneOk: true});
+  if (tables < nT * xs.length) F2_DRESS_STATS.skipped.push(`refectory: ${tables} tables`);
+  // a loose folding chair pulled up at a row's end, a bin by the servery
+  put(F, a, 'foldingChair', xs[0], zB + 0.6, Math.PI, {laneOk: true});
   wallPut(F, a, 'bin', ['N'], 0, s1 + 0.6);
 }
 
@@ -302,10 +316,13 @@ function landing(F: F2, a: Area, freight: Area | undefined): void {
   wallPut(F, a, 'palletJack', east, 0, R.z0 + 2);
   wallPut(F, a, 'cartonStack', ['E'], 0, R.z0 + 4.5);
   wallPut(F, a, 'crate', ['N'], 0, R.x1 - 1.0);
-  wallPut(F, a, 'handTruck', ['N'], 0, R.x1 - 2.2);
-  // arrivals: a bench and the roll-call board on the north wall facing the stair
+  // arrivals: a bench and the roll-call board on the north wall facing the stair, the duty warden's desk and its records
   wallPut(F, a, 'bench', ['N'], 0.6, R.x0 + 4.5);
   wallPut(F, a, 'noticeBoard', ['N'], 0, R.x0 + 2.0);
+  wallPut(F, a, 'desk', ['N', 'W'], 0.8, R.x0 + 11.5, true);
+  wallPut(F, a, 'filingCabinet', ['N', 'W'], 0.7, R.x0 + 13.2, true);
+  // more of the freight bay's stock (crates of supplies waiting for the lift)
+  for (let i = 0; i < 2; i++) wallPut(F, a, 'crate', ['E', 'N'], 0, R.z0 + 1.0 + i * 0.7, true);
   if (wallSign(F.D, a, 'N', R.x0 + 7.5, 2.75, {kind: 'service', text: 'LEVEL 2 · HABITATION', w: 2.4})) F2_DRESS_STATS.signs++;
   if (freight) {
     const d = doorOf(F, a, freight);
@@ -320,6 +337,9 @@ function freightCorridor(F: F2, a: Area): void {
   wallPut(F, a, 'cartonStack', ['W'], 0, R.z0 + 9);
   wallPut(F, a, 'crate', ['E'], 0, R.z0 + 6);
   wallPut(F, a, 'crate', ['W'], 0, R.z1 - 6);
+  // the corridor's supply shelving and a tool cupboard
+  wallPut(F, a, 'shelf', ['E', 'W'], 0.8, R.z0 + 13, true);
+  wallPut(F, a, 'cabinetTall', ['W', 'E'], 0.8, R.z1 - 10, true);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -358,7 +378,6 @@ function greenWalk(F: F2, a: Area, commonsA: Area | undefined): void {
     decor(F, 'black', {x0: R.x0 + 0.08, z0: t0 + 0.08, x1: R.x0 + tw + 0.17, z1: t1 - 0.08}, 0.6, 0.62);
   });
   putAny(F, a, 'pottedPlantSmall', [[R.x0 + 0.3, t0 - 0.45, 0], [R.x0 + 0.3, t0 - 0.7, 0]]);
-  putAny(F, a, 'pottedPlantSmall', [[R.x0 + 0.3, t1 + 0.4, 0], [R.x0 + 0.3, t1 + 0.6, 0]]);
   if (wallSign(F.D, a, 'W', R.z0 + 4.4, 2.5, {kind: 'service', text: 'GROW LAMPS ON 0600 – 2000', w: 2.0})) F2_DRESS_STATS.signs++;
 }
 
@@ -367,14 +386,21 @@ function greenWalk(F: F2, a: Area, commonsA: Area | undefined): void {
 
 function schoolroom(F: F2, a: Area): void {
   const R = W(a);
-  // the front is the commons wall (north): the whiteboard, the teacher's desk in the corner, two rows of stacking chairs facing it
+  // the front is the commons wall (north): the whiteboard, the teacher's desk in the corner, two rows of pupils' desks facing it
+  // (each a desk for two with its stacking chairs behind)
   wallPut(F, a, 'mobileWhiteboard', ['N'], 0.8, (R.x0 + R.x1) / 2);
   wallPut(F, a, 'desk', ['N', 'W'], 0.7, R.x0 + 1.0);
-  const mx = (R.x0 + R.x1) / 2;
-  for (const [dz, xs] of [[2.6, [-1.6, -0.55, 0.55, 1.6]], [4.0, [-1.05, 1.05]]] as const) for (const dx of xs) put(F, a, 'plasticStackChair', mx + dx, R.z0 + dz, Math.PI, {laneOk: true});
+  const mx = (R.x0 + R.x1) / 2 - 0.25, dk = PROP_DEFS.desk;
+  for (const dz of [2.15, 3.85]) for (const dx of [-1.6, 1.6]) {
+    const x = mx + dx, z = R.z0 + dz;
+    if (!put(F, a, 'desk', x, z, 0, {laneOk: true})) continue;
+    for (const s of [-0.38, 0.38]) put(F, a, 'plasticStackChair', x + s, z + dk.d / 2 + 0.33, Math.PI, {laneOk: true});
+  }
   wallPut(F, a, 'noticeBoard', ['W', 'E'], 0, (R.z0 + R.z1) / 2);
-  // the teacher's supply cupboard
+  // the teacher's supply cupboard, the book shelf, the class records
   wallPut(F, a, 'cabinetLow', ['W', 'S', 'E'], 0.7, R.z0 + 1.2, true);
+  wallPut(F, a, 'shelf', ['W', 'E', 'S'], 0.8, R.z1 - 1.5, true);
+  wallPut(F, a, 'filingCabinet', ['E', 'W', 'S'], 0.7, R.z0 + 1.0, true);
 }
 
 function nursery(F: F2, a: Area): void {
@@ -386,8 +412,11 @@ function nursery(F: F2, a: Area): void {
   wallPut(F, a, 'beanBag', ['N', 'S'], 0, R.x0 + 1.2);
   wallPut(F, a, 'babyStroller', ['S', 'N', 'W'], 0, R.x1 - 2.4);
   wallPut(F, a, 'lobbySofa', ['S', 'N'], 0.6, mx);
-  // the nursery's changing / supplies cupboard
+  // the nursery's changing / supplies cupboard, the linen press, the toy shelf and the toy box
   wallPut(F, a, 'cabinetLow', ['N', 'S', 'E'], 0.7, R.x0 + 1.5, true);
+  wallPut(F, a, 'cabinetTall', ['E', 'N', 'S'], 0.8, R.z1 - 1.2, true);
+  wallPut(F, a, 'shelf', ['N', 'S', 'W'], 0.8, R.x1 - 1.5, true);
+  wallPut(F, a, 'crate', ['S', 'N', 'W', 'E'], 0, R.x0 + 2.5, true);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -425,6 +454,11 @@ function dormitory(F: F2, a: Area): void {
   bunkRow(F, a, far, 5, 5, 1.7);
   bunkRow(F, a, ds, 4, 4, 1.7);
   for (let i = 0; i < 4; i++) if (!wallPut(F, a, 'staffLockers', [shorts[i % 2], shorts[(i + 1) % 2]], 1.0, undefined, true)) break;
+  // two wardrobes, and the sleepers' table down the aisle (cards, letters) with its chairs
+  for (let i = 0; i < 2; i++) wallPut(F, a, 'cabinetTall', [shorts[(i + 1) % 2], shorts[i % 2]], 0.8, undefined, true);
+  const R = W(a), mx = (R.x0 + R.x1) / 2, mz = (R.z0 + R.z1) / 2;
+  const t = near(F, a, 'table', mx, mz, Math.PI / 2, {ring: 0.5, laneOk: true}, 1.5);
+  if (t) for (const s of [-1, 1]) put(F, a, 'foldingChair', t.x + s * 1.2, t.z, s < 0 ? Math.PI / 2 : -Math.PI / 2, {laneOk: true});
 }
 
 /**
@@ -447,11 +481,12 @@ function familyQuarters(F: F2, a: Area): void {
   if (put(F, a, 'table', mx, mz, Math.PI / 2, {ring: 0.6})) {
     put(F, a, 'foldingChair', mx - 0.35, mz - 1.15, 0, {laneOk: true});
     put(F, a, 'foldingChair', mx + 0.35, mz + 1.15, Math.PI, {laneOk: true});
-    put(F, a, 'foldingChair', mx - 1.35, mz, Math.PI / 2, {laneOk: true});
   }
   bunkRow(F, a, ds, 3, 3, 2.3);
   wallPut(F, a, 'cabinetTall', ['W', 'E'], 0.8, undefined, true);
-  wallPut(F, a, 'coatRack', ['E', 'W'], 0, undefined, true);
+  // the families' chests of drawers on the end walls, a writing desk for letters and lessons
+  for (let i = 0; i < 2; i++) wallPut(F, a, 'cabinetLow', [i ? 'W' : 'E', i ? 'E' : 'W'], 0.7, undefined, true);
+  wallPut(F, a, 'desk', ['E', 'W', ds], 0.7, undefined, true);
 }
 
 function latrines(F: F2, a: Area): void {
@@ -459,7 +494,6 @@ function latrines(F: F2, a: Area): void {
   const door = F.D.doors(a)[0], ds = door ? doorSide(door, a) : 'N';
   const sides: Side[] = ds === 'N' || ds === 'S' ? ['W', 'E'] : ['N', 'S'];
   for (let i = 0; i < 2; i++) if (!wallPut(F, a, 'bunkerDeconShower', [...sides, ds], 0.9, undefined, true)) break;
-  wallPut(F, a, 'bench', [ds, ...sides], 0.6, undefined, true);
 }
 
 function laundry(F: F2, a: Area): void {
@@ -476,7 +510,9 @@ function laundry(F: F2, a: Area): void {
   near(F, a, 'clothingRack', mx, mz + 1.2, 0, {ring: 0.5}, 1.0);
   wallPut(F, a, 'cabinetTall', [...sides, ds], 0.8, undefined, true);
   for (let i = 0; i < 2; i++) wallPut(F, a, 'wheelieBin', [...sides, ds], 0.3, undefined, true);
-  wallPut(F, a, 'mopBucketWringer', [ds, ...sides], 0, undefined, true);
+  // the folded-linen shelf and the soap / iron cupboard
+  wallPut(F, a, 'shelf', [...sides, far, ds], 0.8, undefined, true);
+  wallPut(F, a, 'cabinetLow', [...sides, ds, far], 0.7, undefined, true);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -489,13 +525,18 @@ function gamesHall(F: F2, a: Area): void {
   near(F, a, 'foosballTable', mx - 3.0, mz + 2.6, 0, {ring: 0.8, laneOk: true}, 2.0);
   // the jukebox on the north wall, the treadmills along the core's wall (east), the TV corner
   wallPut(F, a, 'jukebox', ['N'], 0.8, mx);
-  for (let i = 0; i < 2; i++) wallPut(F, a, 'treadmill', ['E'], 0.8, R.z0 + 2.0 + i * 1.5);
+  wallPut(F, a, 'treadmill', ['E'], 0.8, R.z0 + 2.0);
   wallPut(F, a, 'lobbySofa', ['W', 'S'], 0.8, R.z0 + 2.4);
   wallPut(F, a, 'crtTvCart', ['N', 'W'], 0.6, R.x0 + 1.0);
-  wallPut(F, a, 'bench', ['S', 'W'], 0.6, R.x1 - 2.0);
   // the players' lockers by the freight door, a notice board of fixtures and scores
   for (let i = 0; i < 3; i++) wallPut(F, a, 'staffLockers', ['W', 'S'], 1.0, R.z1 - 2.0 - i * 1.25, true);
   wallPut(F, a, 'noticeBoard', ['W', 'N'], 0, R.z0 + 2.0);
+  // the equipment store: a cupboard, a shelf of games and kit, crates of sports gear; a card table with its chairs
+  wallPut(F, a, 'cabinetTall', ['N', 'E'], 0.8, R.x1 - 1.0, true);
+  wallPut(F, a, 'shelf', ['N', 'E', 'S'], 0.8, R.x0 + 2.5, true);
+  for (let i = 0; i < 2; i++) wallPut(F, a, 'crate', ['S', 'E', 'N'], 0, R.x1 - 1.0 - i * 0.8, true);
+  const ct = near(F, a, 'table', mx + 3.0, mz + 3.2, Math.PI / 2, {ring: 0.6, laneOk: true}, 1.5);
+  if (ct) for (const s of [-1, 1]) put(F, a, 'foldingChair', ct.x, ct.z + s * 1.15, s < 0 ? 0 : Math.PI, {laneOk: true});
   // two more lamps over the play floor
   light(F, a, mx - 2.5, mz, 4.5, 0);
   light(F, a, mx + 2.5, mz, 4.5, 0);
@@ -508,6 +549,9 @@ function serviceLanding(F: F2, a: Area): void {
   wallPut(F, a, 'noticeBoard', ['S'], 0, R.x0 + 9.0);
   wallPut(F, a, 'fireExtinguisher', ['S', 'N'], 0.4, R.x0 + 13.0);
   for (let i = 0; i < 2; i++) wallPut(F, a, 'crate', ['E', 'S'], 0, R.z0 + 2.0 + i * 0.8);
+  // the maintenance crew's cupboard and parts shelf by the plant door
+  wallPut(F, a, 'cabinetTall', ['S', 'E'], 0.8, R.x1 - 4.0, true);
+  wallPut(F, a, 'shelf', ['S'], 0.8, R.x1 - 6.5, true);
 }
 
 function plantRoom(F: F2, a: Area): void {
@@ -532,6 +576,9 @@ function street(F: F2, a: Area): void {
     const t = (i + 0.5) / n;
     light(F, a, alongX ? R.x0 + len * t : (R.x0 + R.x1) / 2, alongX ? (R.z0 + R.z1) / 2 : R.z0 + len * t, a.ceil - F.base - 0.02, alongX ? 0 : Math.PI / 2);
   }
+  // the residents' corridor lockers: a few single units along the street's walls (the 2 m street keeps a 1.4 m way past them)
+  const sides: Side[] = alongX ? ['N', 'S'] : ['W', 'E'];
+  for (const f of [0.3, 0.7]) wallPut(F, a, 'staffLockers', sides, 0.6, (alongX ? R.x0 : R.z0) + len * f, true);
 }
 
 /** Fallen ceiling panels and a sagging duct in an aged room (decor only, never in a doorway, never over a prop). */
