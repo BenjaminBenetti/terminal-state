@@ -192,7 +192,7 @@ function depot(f: F3): void {
   const desk = scanWall(D, a, 'desk', ['E'], 0.9, deskZ);
   if (desk) place(D, a, 'officeSwivelChair', desk.x - 0.75, desk.z, rotFacing(1, 0), {laneOk: true});
   const xs = ex - 1.0;
-  const staged: PropKind[] = ['parcelPallet', 'cartonStack', 'crate', 'parcelPallet', 'crate', 'cartonStack'];
+  const staged: PropKind[] = ['parcelPallet', 'cartonStack', 'crate', 'parcelPallet'];
   let n = 0;
   for (let z = az0(a) + 1.6; z < az1(a) - 5 && n < staged.length; z += 1.5) {
     if (sd && z > sd.y * CELL - 1.2 && z < (sd.y + sd.h) * CELL + 1.2) continue;
@@ -346,8 +346,8 @@ function yard(f: F3): void {
   if (!a) return;
   scanWall(D, a, 'palletJack', ['E', 'N'], 0.5);
   scanWall(D, a, 'gasCylinderCart', ['E'], 0.6);
-  scanWall(D, a, 'crate', ['E', 'S'], 0);
   scanWall(D, a, 'handTruck', ['N'], 0.5);
+  stock(scanWall(D, a, 'crate', ['E', 'S'], 0), 'storage');
   // the yard's electric tug and its flatbed trailer, parked along the north wall (anchored for good: flat batteries)
   for (let t = ax0(a) + 3; t < ax1(a) - 7.5; t += 0.5) {
     const tug = wallBox(a, 'N', t, t + 2.0, 0.6, 1.8), trl = wallBox(a, 'N', t + 2.3, t + 5.3, 0.55, 1.85);
@@ -382,6 +382,7 @@ function lobby(f: F3): void {
   scanWall(D, a, 'handTruck', ['W'], 0.5);
   scanWall(D, a, 'cartonStack', ['N'], 0, ax0(a) + 1);
   scanWall(D, a, 'cartonStack', ['W'], 0);
+  stock(scanWall(D, a, 'cabinetTall', ['N', 'W'], 0.8, ax0(a) + 3), 'storage');
 }
 
 function laundry(f: F3): void {
@@ -417,7 +418,7 @@ function gasStore(f: F3): void {
   const a = A.gasStore;
   if (!a) return;
   const back = OPP[doorSide(D.doors(a)[0] ?? ({x: a.x - 1, y: a.y, w: 1, h: 3} as Door), a)];
-  for (const k of ['gasCylinderCart', 'oxygenCart', 'gasCylinderCart'] as PropKind[]) scanWall(D, a, k, [back, 'N', 'S'], 0.5);
+  for (const k of ['gasCylinderCart', 'oxygenCart'] as PropKind[]) scanWall(D, a, k, [back, 'N', 'S'], 0.5);
   scanWall(D, a, 'cabinetTall', ['N', 'S', back], 0.8);
   // the cylinder restraint rail along the back wall
   const [lo, hi] = wallRange(a, back);

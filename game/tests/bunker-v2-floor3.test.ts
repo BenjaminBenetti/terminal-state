@@ -166,9 +166,11 @@ describe('bunker v2 storey 3: services & medical (the service street)', () => {
       expect(stats.cubicles).toBeGreaterThanOrEqual(2);
       const street = byLabel(L, 'Service street').map(a => a.id);
       expect(props.filter(p => street.includes(p.area) && p.kind === 'planterTree').length, `seed ${s} street islands`).toBeGreaterThanOrEqual(1);
-      // budgets (the lead's per-storey targets): props <= ~150, lights <= ~75, decor <= ~150, 25-45 openable loot containers
+      // budgets (the lead's per-storey targets): props <= ~150 (incl. the collision-only footprints), lights <= ~75, decor <= ~150,
+      // 25-45 openable loot containers
       const base = L.levels[LV].baseY;
-      expect(props.length, `seed ${s} props`).toBeLessThanOrEqual(150);
+      expect(props.length, `seed ${s} props`).toBeLessThanOrEqual(155);
+      expect(props.filter(p => p.kind !== 'annexMachine').length, `seed ${s} rendered props`).toBeLessThanOrEqual(140);
       expect(L.lights.filter(l => (l.level ?? 0) === LV).length, `seed ${s} lights`).toBeLessThanOrEqual(75);
       expect(L.decor.filter(d => d.y0 > base - 0.5 && d.y0 < base + 6.9).length, `seed ${s} decor`).toBeLessThanOrEqual(150);
       const boxes = props.filter(p => isContainerKind(p.kind));
