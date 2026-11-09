@@ -57,7 +57,9 @@ export const F2_PLAN: readonly F2Spec[] = [
   {key: 'dormA', rect: R(3, 122, 19, 16), clear: 3.2, kind: 'room', type: 'crew-room', label: 'Dormitory A', purpose: BUNKER_PURPOSE.dorm},
   {key: 'latrines', rect: R(25, 122, 16, 12), clear: 3.2, kind: 'room', type: 'washroom', label: 'Latrines & showers', purpose: 'washroom'},
   {key: 'dormB', rect: R(44, 122, 19, 16), clear: 3.2, kind: 'room', type: 'crew-room', label: 'Dormitory B', purpose: BUNKER_PURPOSE.dorm},
-  {key: 'laundry', rect: R(64, 122, 13, 12), clear: 3.4, kind: 'room', type: 'utility', label: 'Laundry', purpose: 'custodial-room'},
+  // (the laundry's loot is the residents' own — what was left in pockets and the linen cupboard — and it is dressed whole by
+  // floor2Dress: wash troughs, drying racks, laundry bins)
+  {key: 'laundry', rect: R(64, 122, 13, 12), clear: 3.4, kind: 'room', type: 'utility', label: 'Laundry', purpose: BUNKER_PURPOSE.dorm},
   // the freight route and the games hall
   {key: 'freight', rect: R(68, 72, 6, 44), clear: 3.4, kind: 'room', type: 'utility', label: 'Freight corridor', purpose: BUNKER_PURPOSE.lock},
   {key: 'games', rect: R(75, 92, 22, 24), clear: 5.6, kind: 'room', type: 'crew-room', label: 'Games hall', purpose: 'locker-room'},
