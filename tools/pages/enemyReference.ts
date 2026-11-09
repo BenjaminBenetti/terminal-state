@@ -42,7 +42,7 @@ import {COSPLAY_CONVENTIONS_MAX, COSPLAY_SPAWN_RULES} from '../../game/src/gen/s
 import {COSPLAY_FLOOR_BUDGET} from '../../game/src/gen/skyways/cosplayFloors'; // task studio-cosplay-general-20261108-225231-01 (lane UPPER): the version-6 second run
 import * as CC from '../../game/src/ai/cosplayContext';
 const {COSPLAY_CONTEXT} = CC;
-import {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_MARKET, TRACK_EXT_REACTOR, TRACK_EXT_SKYWAYS} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs); + the mall's (task mall-playtest-revision-20261031: at most 1)
+import {TRACK_EXT, TRACK_EXT_BUNKER, TRACK_EXT_MALL, TRACK_EXT_MARKET, TRACK_EXT_REACTOR, TRACK_EXT_SKYWAYS} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs); + the mall's (task mall-playtest-revision-20261031: at most 1)
 import {CELL} from '../../game/src/gen/grid';
 import {ROOM_LABEL} from '../../game/src/gen/stationKit';
 import {purposeById} from '../../game/src/gen/purposes';
@@ -94,7 +94,7 @@ const F = {
   strainer: 'game/src/ai/strainer.ts', // task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY)
   contract: 'game/src/levels/levelContract.ts',
   // task track3-eaton-centre-20261031 (lane PROFILES): the mall (seeded "<Name> Center")
-  mallIndex: 'game/src/gen/mall/index.ts', reactorIndex: 'game/src/gen/reactor/index.ts', skywaysIndex: 'game/src/gen/skyways/index.ts', marketIndex: 'game/src/gen/market/index.ts', mallTypes: 'game/src/gen/mall/mallTypes.ts', hordeSpec: 'game/src/ai/hordeSpec.ts',
+  mallIndex: 'game/src/gen/mall/index.ts', reactorIndex: 'game/src/gen/reactor/index.ts', skywaysIndex: 'game/src/gen/skyways/index.ts', marketIndex: 'game/src/gen/market/index.ts', bunkerIndex: 'game/src/gen/bunker/index.ts', mallTypes: 'game/src/gen/mall/mallTypes.ts', hordeSpec: 'game/src/ai/hordeSpec.ts',
   // Track 2 (lane CONTENT): the service annexes (zone context): their generation config and the content pass that places them
   trackExt: 'game/src/gen/trackExt/config.ts', annexContent: 'game/src/gen/annexContent.ts',
   // task mall-lingerie-20261102-221554 (lane CONTEXT): the mall's optional lingerie store's store-local zone context
@@ -218,6 +218,13 @@ const LINGERIE_ZONE_EXPLAIN: readonly string[] = [
  * Task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): how the Skyways convention's cosplay zone context relates to the level,
  * its eligibility line and the placement steps of gen/skyways/cosplaySpawns.ts placeCosplaySpawns (not the generic area order).
  */
+/**
+ * Task studio-bunker-level-20261109-072224-01 (lane LEVEL): THE BUNKER's damp zone — one run per Bunker level over its water-damaged
+ * areas (layout.bunker.damp); 0 when a level has no damp area (gen/bunker: the maintenance & water storey's pump hall / filtration plant /
+ * flooded wing). The reference's zone ceiling.
+ */
+export const BUNKER_DAMP_RUNS_MAX = 1;
+const BUNKER_DAMP_ZONE_NOTE = `A DAMP-SECTION ZONE BUDGET: one run per Bunker level (0 to ${BUNKER_DAMP_RUNS_MAX}: a level without a damp area has none) over the water-damaged areas only (layout.bunker.damp: the pump hall, the filtration plant, the flooded maintenance wing), on its own fork, appended after the storey runs and tagged 'damp'. It is additive to the core contexts and NOT in the whole-level total; its one spawn draws from the zone's OWN family pool (BUNKER_DAMP_SHARES: rat/dog 10 %, THE STRAINER 30 % — the only pool outside the service annexes that enables it: STRAINER_CONTEXTS — the zombie the remainder; no Siren, no Blightbelly). Per-spawn probabilities, not a quota: at most one Strainer per level, never guaranteed. Killed ones stay dead for the run (per-index memory).`;
 const COSPLAY_ZONE_NOTE = `A CONVENTION ZONE BUDGET (layout version 5+): one run when the level's one add-on is the anime convention (0 to ${COSPLAY_CONVENTIONS_MAX} per level, never guaranteed — the alternative add-on, the prize display, has none), on its own fork (skyways-cosplay-spawns), appended after EVERY other spawn of the level (ambient, hordes, annex 'service') and tagged 'cosplay' (spawn context and ZombieSpawn.look). It is additive to the core contexts and NOT in the whole-level total; its spawns draw from the convention's OWN family pool (COSPLAY_FAMILY_POOL: ordinary zombies only — no Blightbelly, Siren, rat/dog or Strainer), are shamblers, and wear a costume at spawn time (ai/cosplay.ts cosplayLook(level seed, spawn index): the mascot's bear-ear hat + wig, an oversized mascot head, a sushi hat, the alternate-palette wig with a uniform) — a wardrobe look of the zombie family, never a new family. Every other spawn keeps the ordinary wardrobe pick. No leash. Killed ones stay dead for the run (per-index memory). Layout versions 1-4 never run it.`;
 const COSPLAY_ZONE_WHERE = `the convention venue's public event floor only (its main hall, exhibitors' floor, photo lounge and panel rooms — never registration, the back of house, storage or the washrooms): a 3 × 3-clear walkable floor cell, never a ramp, ≥ ${COSPLAY_SPAWN_RULES.doorKeepM} m from every door of those areas and from the add-on's entry, ≥ ${COSPLAY_SPAWN_RULES.statueKeepM} m from every mascot statue (the greeter included), off the stage + ${COSPLAY_SPAWN_RULES.stageMarginM} m, a ${COSPLAY_SPAWN_RULES.passageRadiusM} m disc around the spawn never splitting the storey (fair passage)`;
 const COSPLAY_ZONE_EXPLAIN: readonly string[] = [
@@ -305,6 +312,20 @@ export const ENEMY_LEVEL_ADAPTER: Readonly<Record<LevelId, {
       // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): the anime convention's cosplay zombies (0..1 convention per level)
       cosplay: {storeys: 'the convention venue\'s event floor (main hall, exhibitors\' floor, photo lounge, panel rooms) and, from layout version 6, the host building\'s other public floor joined to it by its stair (its street-floor concourse); nowhere else', runs: 1,
         zone: {runsPerLevel: [0, COSPLAY_CONVENTIONS_MAX], note: COSPLAY_ZONE_NOTE, where: COSPLAY_ZONE_WHERE, explain: COSPLAY_ZONE_EXPLAIN}},
+    },
+  },
+  // Task studio-bunker-level-20261109-072224-01 (lane LEVEL): THE BUNKER — one placeOfficeEnemies run per storey (station / floor / ring
+  // contexts, each its own pool), the damp-section zone run, no annex.
+  bunker: {
+    generator: {fn: 'generateBunkerLevel', file: F.bunkerIndex,
+      note: `ONE continuous level (LevelId 'bunker', tier 2; its display name is the shelter's seeded name, gen/bunker/names.ts bunkerNameOf(levelSeed)): a buried subway station at the vault door of a civil-defence shelter and the shelter's storeys DESCENDING below it (entry & security, habitation, services & medical, maintenance & water, the central processing core), generated once per level seed: placeOfficeEnemies runs the station context once (storey 0), the floor context once per upper shelter storey (1-3) and the ring context once per deep storey (4-5), each on its own fork with its OWN family pool, and tags its spawns with the context; then the damp-section run (the damp context: at most ${BUNKER_DAMP_RUNS_MAX} per level, its own pool with the rare Strainer) is appended; there is no service annex (LEVELS.bunker.trackExtensions 'none'); assignEnemyArchetypes rolls every family ONCE at the end (the Siren's room eligibility included) and applyFamilySpacing keeps the Sirens apart. Moving between storeys never rerolls anything.`},
+    contexts: {
+      station: {storeys: 'the station storey (level 0: the platform, the arrival hall, the vault vestibule behind the open vault door)', runs: 1},
+      floor: {storeys: 'one upper shelter storey (each of levels 1-3: entry & security, habitation, services & medical)', runs: 3},
+      ring: {storeys: 'one deep shelter storey (each of levels 4-5: maintenance & water, the central processing core)', runs: 2},
+      damp: {storeys: 'the water-damaged areas of the shelter (layout.bunker.damp; nowhere else)', runs: 1,
+        zone: {runsPerLevel: [0, BUNKER_DAMP_RUNS_MAX], note: BUNKER_DAMP_ZONE_NOTE, where: 'an area listed in layout.bunker.damp (the pump hall, the filtration plant, the flooded maintenance wing), the storey placement rules of its storey'}},
+      service: {storeys: 'none: the bunker grows no service annex (LEVELS.bunker.trackExtensions none)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT_BUNKER.annex.max], note: SERVICE_ZONE_NOTE}},
     },
   },
   // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET — a calm settlement: no placement run at all.

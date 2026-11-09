@@ -23,7 +23,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 describe('the Survivor Market registration', () => {
   it('is a registered LevelId before Skyways (Skyways second-to-last, the Reactor last), one continuous section, no track extensions', () => {
     expect(isLevelId('market')).toBe(true);
-    expect(LEVEL_IDS).toEqual(['subway', 'office', 'mall', 'market', 'skyways', 'reactor']);
+    expect(LEVEL_IDS).toEqual(['subway', 'office', 'mall', 'market', 'bunker', 'skyways', 'reactor']); // (+ the Bunker after the market: task studio-bunker-level-20261109-072224-01)
     expect(LEVELS.market).toMatchObject({id: 'market', name: MARKET_GENERIC_NAME, entry: 'main', trackExtensions: 'none'});
     expect(LEVELS.market.sections(1)).toEqual(['main']);
     expect(levelTier('market')).toBe(1);

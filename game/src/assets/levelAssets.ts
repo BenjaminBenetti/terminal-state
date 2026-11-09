@@ -52,8 +52,12 @@ export const LEVEL_ONLY_RULES: readonly LevelOnlyRule[] = [
   // (task studio-skyways-rework-20261107-054512-01: the Skyways stores reuse the mall's furniture / fixtures / textures — user: "unique
   // proper stores remixed from Subway / Mall / Office assets"; still the mall's family, never fetched by any other level)
   {level: 'mall', also: ['skyways'], path: /^(?:\.\/)?assets\/(?:models\/mall-[A-Za-z0-9_-]+\.glb|textures\/mall\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2))$/},
-  // task reactor-build-20261101 (lane ARCH): the Reactor's kit (assets/reactorKit.generated.ts: reactor-*.glb, textures/reactor/**)
-  {level: 'reactor', path: /^(?:\.\/)?assets\/(?:models\/reactor-[A-Za-z0-9_-]+\.glb|textures\/reactor\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2))$/},
+  // task reactor-build-20261101 (lane ARCH): the Reactor's kit (assets/reactorKit.generated.ts: reactor-*.glb, textures/reactor/**).
+  // Task studio-bunker-level-20261109-072224-01 (lane LEVEL): THE BUNKER reuses it (still the Reactor's family): the arch textures /
+  // finishes (world/builder.ts BunkerArch), the shelter hero props (REACTOR_X_KIT bunk bed, radio console, air filtration unit, blast
+  // door), the auxiliary generator (REACTOR_KIT.generator: the objective's three generators), control consoles / switchgear — a Bunker
+  // fetches only the keys its own layout places (selectLevelKeys), never another level's
+  {level: 'reactor', also: ['bunker'], path: /^(?:\.\/)?assets\/(?:models\/reactor-[A-Za-z0-9_-]+\.glb|textures\/reactor\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2))$/},
   // task studio-skyways-level-20261106-054448-01: Skyways' kit (skyways-*.glb: the prize car, the mascot statues, street wrecks, the
   // ramen kitchen; textures/skyways/**: the convention / prize / ramen art atlases). The edible food models (item-*.glb) are shared.
   {level: 'skyways', path: /^(?:\.\/)?assets\/(?:models\/skyways-[A-Za-z0-9_-]+\.glb|textures\/skyways\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2))$/},

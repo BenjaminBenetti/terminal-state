@@ -56,7 +56,7 @@ describe('Market bar: the layout version policy (version 3 = the settlement with
   });
 
   it('a campaign: a version-2 station keeps version 2 (no bar), a never-entered one records version 3 on its first build', () => {
-    const run = createRun({seeds: {subway: 1, office: 2, mall: 3, market: 4, skyways: 5, reactor: 6}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
+    const run = createRun({seeds: {subway: 1, office: 2, mall: 3, market: 4, bunker: 7, skyways: 5, reactor: 6}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
     const v1Key = {level: 'market' as const, section: 'main', station: 'st-v1'}, v2Key = {level: 'market' as const, section: 'main', station: 'st-v2'}, newKey = {level: 'market' as const, section: 'main', station: 'st-new'};
     run.memory(v1Key).visits = 2; // entered under the first market's build: no record
     run.memory(v2Key).visits = 1;

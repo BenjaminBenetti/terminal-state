@@ -9,6 +9,7 @@ import {SKYWAYS_ADDON_PROP_DEFS, type SkywaysAddonKind} from './skyways/addonKin
 import {SKYWAYS_DEST_PROP_DEFS, type SkywaysDestKind} from './skyways/destinations/registry'; // task studio-skyways-destinations-20261106-170011-01
 import {SKYWAYS_MAPBOARD_PROP_DEFS, type SkywaysMapBoardKind} from './skyways/mapBoardKind'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS)
 import {SUBWAY_MAP_KIOSK_PROP_DEFS, type SubwayMapKioskKind} from './subwayMapKioskKind'; // task studio-ui-subway-maps-20261108-074144-01
+import {BUNKER_OBJECTIVE_PROP_DEFS, type BunkerObjectiveKind} from './bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01
 
 export type PropKind =
   | 'bench' | 'cabinetTall' | 'cabinetLow' | 'column' | 'crate' | 'bin' | 'fareGate'
@@ -46,7 +47,8 @@ export type PropKind =
   // task studio-skyways-destinations-20261106-170011-01: the Skyways destination shop / landmark kinds (gen/skyways/destinations/registry.ts).
   | SkywaysDestKind
   | SkywaysMapBoardKind // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the local directory board (gen/skyways/mapBoardKind.ts)
-  | SubwayMapKioskKind; // task studio-ui-subway-maps-20261108-074144-01: the Subway's station map kiosk (gen/subwayMapKioskKind.ts)
+  | SubwayMapKioskKind // task studio-ui-subway-maps-20261108-074144-01: the Subway's station map kiosk (gen/subwayMapKioskKind.ts)
+  | BunkerObjectiveKind; // task studio-bunker-level-20261109-072224-01: the Bunker's generator slots + core cluster (gen/bunker/bunkerKinds.ts)
 
 /** Purpose props (iteration 05). Holders: see PURPOSE_SURFACES; the rest are furniture/decor. */
 export const PURPOSE_PROP_KINDS = [
@@ -211,6 +213,7 @@ export const PROP_DEFS: Record<PropKind, PropDef> = {
   ...SKYWAYS_DEST_PROP_DEFS, // task studio-skyways-destinations-20261106-170011-01
   ...SKYWAYS_MAPBOARD_PROP_DEFS, // task studio-skyways-rework-20261107-054512-01 (lane MAPS)
   ...SUBWAY_MAP_KIOSK_PROP_DEFS, // task studio-ui-subway-maps-20261108-074144-01
+  ...BUNKER_OBJECTIVE_PROP_DEFS, // task studio-bunker-level-20261109-072224-01
 };
 
 /**

@@ -75,7 +75,7 @@ export interface MenuHost {
 // ---------------------------------------------------------------------------------------------
 // Formatting (pure)
 
-const DEFAULT_LEVEL_NAMES: Record<LevelId, string> = {subway: 'Subway', office: 'Office Space', mall: 'Shopping Center', market: 'Survivor Market', skyways: 'Skyways', reactor: 'Reactor'};
+const DEFAULT_LEVEL_NAMES: Record<LevelId, string> = {subway: 'Subway', office: 'Office Space', mall: 'Shopping Center', market: 'Survivor Market', bunker: 'Bunker', skyways: 'Skyways', reactor: 'Reactor'}; // (+ bunker: task studio-bunker-level-20261109-072224-01)
 
 /** "45 s", "12 min", "1 h 05 min". */
 export function formatPlaytime(seconds: number): string {

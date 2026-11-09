@@ -20,7 +20,9 @@ import type {TrackExtConfig} from '../gen/trackExt/types';
 // multi-building pedway network with glazed bridges over the streets and exactly one localized add-on.
 // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): + 'market' — THE SURVIVOR MARKET (gen/market/index.ts generateMarketLevel): a
 // compact calm settlement the player's train pulls into for a pit stop (no enemies, clean air, six trader stalls, housing, a kitchen).
-export type LevelId = 'subway' | 'office' | 'mall' | 'market' | 'skyways' | 'reactor';
+// Task studio-bunker-level-20261109-072224-01 (lane LEVEL): + 'bunker' — THE BUNKER (gen/bunker/index.ts generateBunkerLevel): a buried
+// station at the vault door of a civil-defence shelter descending through real storeys to its central processing core.
+export type LevelId = 'subway' | 'office' | 'mall' | 'market' | 'bunker' | 'skyways' | 'reactor';
 
 /** A section of a logical level: every level is one section, 'main' (one continuous world). */
 export interface SectionKey {

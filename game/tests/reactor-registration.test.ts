@@ -23,7 +23,7 @@ describe('the Reactor registration', () => {
     expect(LEVELS.reactor.entry).toBe('main');
     expect(LEVELS.reactor.name).toBe('Reactor');
     for (const l of LEVEL_IDS) if (l !== 'reactor') expect(travelTargets(l)).toContain('reactor');
-    expect(travelTargets('reactor')).toEqual(['subway', 'office', 'mall', 'market', 'skyways']);
+    expect(travelTargets('reactor')).toEqual(['subway', 'office', 'mall', 'market', 'bunker', 'skyways']); // (+ bunker: task studio-bunker-level-20261109-072224-01)
     expect(sectionLabel({level: 'reactor', section: 'main'})).toBe('Station and pit');
     expect(clearLabel({level: 'reactor', section: 'main'})).toBe('Pit clear');
     expect(validateLevelRegistry()).toEqual([]);
@@ -51,7 +51,7 @@ describe('the Reactor registration', () => {
     expect(p.eligibility?.siren?.contexts).toEqual(['ring', 'pit']);
     expect(p.eligibility?.siren?.maxPerLevel).toBe(2);
     for (const c of ['station', 'floor', 'ring', 'pit'] as const) expect(w(c as 'floor', 'strainer')).toBe(0);
-    expect(STRAINER_CONTEXTS).toEqual(['service']); // registry lock unchanged
+    expect(STRAINER_CONTEXTS).toEqual(['service', 'damp']); // registry lock: + the Bunker's damp zone only (task studio-bunker-level-20261109-072224-01); the Reactor's contexts stay at 0
   });
 
   it('loot: the mall tables under the culminating level pressure; always one gas mask and a tight filter supply', () => {

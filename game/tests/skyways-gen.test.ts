@@ -31,7 +31,8 @@ describe('Skyways: registration and the campaign share', () => {
     expect(LEVELS.skyways.tier).toBe(2);
     expect(LEVELS.skyways.name).toBe('Skyways');
     // (task studio-survivor-market-20261108-005807-01: + the market's 5 %, also from the Subway's share — Skyways' 10 % unchanged)
-    expect(ORDINARY_WEIGHTS).toEqual({subway: 0.65, office: 0.1, mall: 0.1, skyways: 0.1, market: 0.05});
+    // (task studio-bunker-level-20261109-072224-01: + the Bunker's 5 %, from the Subway's share too — Skyways' 10 % unchanged)
+    expect(ORDINARY_WEIGHTS).toEqual({subway: 0.6, office: 0.1, mall: 0.1, skyways: 0.1, market: 0.05, bunker: 0.05});
     const now = ordinaryCounts(PRE_MARKET_WEIGHTS), before = ordinaryCounts(PRE_SKYWAYS_WEIGHTS);
     expect(now).toEqual({subway: 27, office: 4, mall: 4, skyways: 4});
     expect(ordinaryCounts().skyways).toBe(4);

@@ -582,6 +582,7 @@ describe('loot: level-wide mask / filter rolls with their own rng (existing loot
       reactor: {masks: new Set(), filters: new Set(), withMask: 0}, // (task reactor-build-20261101: not rolled here)
       skyways: {masks: new Set(), filters: new Set(), withMask: 0}, // (task studio-skyways-level-20261106-054448-01: not rolled here)
       market: {masks: new Set(), filters: new Set(), withMask: 0}, // (task studio-survivor-market-20261108-005807-01: not rolled here)
+      bunker: {masks: new Set(), filters: new Set(), withMask: 0}, // (task studio-bunker-level-20261109-072224-01: not rolled here)
     };
     for (const seed of SEEDS) for (const level of ['office', 'subway'] as const) {
       const r = rollMaskLoot(seed, level, ['main']).main;

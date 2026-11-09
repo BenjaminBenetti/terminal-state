@@ -87,7 +87,7 @@ export const OPT_IN_FAMILIES: readonly EnemyFamilyId[] = ['siren'];
  * pool); validateSpawnProfile rejects a positive Strainer weight anywhere else — a level pool (which every core context reads), any
  * other context's pool, a horde pool (also HORDE_FORBIDDEN_FAMILIES).
  */
-export const STRAINER_CONTEXTS: readonly SpawnContextId[] = ['service'];
+export const STRAINER_CONTEXTS: readonly SpawnContextId[] = ['service', 'damp']; // (task studio-bunker-level-20261109-072224-01: + the Bunker's 'damp' zone)
 /** Families locked to a list of contexts' own pools (validateSpawnProfile): family -> the contexts where its weight may be > 0. */
 export const CONTEXT_LOCKED_FAMILIES: Readonly<Partial<Record<EnemyFamilyId, readonly SpawnContextId[]>>> = {strainer: STRAINER_CONTEXTS};
 
@@ -218,15 +218,19 @@ export type RoomModifiers = Readonly<Record<string, RoomModifier>>;
  * Task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): 'cosplay' = the ZONE context of the Skyways anime convention (layout
  * version 5+; ai/cosplayContext.ts COSPLAY_CONTEXT, gen/skyways/cosplaySpawns.ts): once per convention (0..1 per level), on the venue's event
  * floor only, appended after every other spawn, ordinary zombies only (its own pool), every spawn tagged ZombieSpawn.look 'cosplay'.
+ * Task studio-bunker-level-20261109-072224-01: 'damp' = the ZONE context of the Bunker's water-damaged sections (BUNKER_DAMP_CONTEXT;
+ * gen/bunker/spawns.ts): one run per level over the layout's damp areas only (layout.bunker.damp: the pump hall, filtration plant,
+ * flooded maintenance wing), appended after the storey runs; its own small pool is the only place outside the service annexes where
+ * THE STRAINER may have weight (STRAINER_CONTEXTS) — a rare swamp lurker, at most one per level.
  */
-export type SpawnContextId = 'station' | 'street' | 'floor' | 'roof' | 'pit' | 'ring' | 'service' | 'horde' | 'lingerie' | 'cosplay';
+export type SpawnContextId = 'station' | 'street' | 'floor' | 'roof' | 'pit' | 'ring' | 'service' | 'horde' | 'lingerie' | 'cosplay' | 'damp';
 /**
  * Track 2 (lane CONTENT): 'service' = ONE run per seeded SERVICE ANNEX of a track-bearing level (gen/annexContent.ts
  * placeServiceSpawns; 0-2 annexes per level): a per-annex ZONE BUDGET placed in that annex's areas only, on its own fork, appended
  * after every core spawn and tagged markSpawnContext(…, 'service'); excluded from the core station / street / floor counts and
  * reported separately. No family is enabled by it (the Office's Siren eligibility lists only 'floor').
  */
-export const SPAWN_CONTEXT_IDS: readonly SpawnContextId[] = ['station', 'street', 'floor', 'roof', 'pit', 'ring', 'service', 'horde', 'lingerie', 'cosplay'];
+export const SPAWN_CONTEXT_IDS: readonly SpawnContextId[] = ['station', 'street', 'floor', 'roof', 'pit', 'ring', 'service', 'horde', 'lingerie', 'cosplay', 'damp'];
 /** Lane INTEG: the context tag of horde members (ai/hordePlace.ts placeHordes tags every member it appends). */
 export const HORDE_CONTEXT = 'horde' as const satisfies SpawnContextId;
 
@@ -790,6 +794,56 @@ export const MARKET_SPAWN_PROFILE: SpawnProfile = {
 };
 
 /**
+ * Task studio-bunker-level-20261109-072224-01: THE BUNKER — a civil-defence shelter descending through real storeys under its station
+ * (gen/bunker/index.ts). Existing families only, Reactor-like depth grading but never denser, per storey context (the generator tags
+ * each storey run: gen/bunker/spawns.ts bunkerSpawnContext):
+ *  - 'station' = storey 0 (the platform, the arrival hall, the vault vestibule): a few, the arrival keeps its start keep-off;
+ *  - 'floor'   = storeys 1-3 (entry & security, habitation, services & medical): the shelter's infected inhabitants, a rare Blightbelly,
+ *                rat/dogs in the corridors and a SIREN dormant in an enclosed room (BUNKER_SIREN_ELIGIBILITY);
+ *  - 'ring'    = storeys 4-5 (maintenance & water, the central processing core): a little denser, more Blightbellies, the Siren too;
+ *  - 'damp'    = BUNKER_DAMP_CONTEXT: one spawn per level in the water-damaged areas only (layout.bunker.damp): usually an ordinary
+ *                zombie, sometimes THE STRAINER (unchanged: 1200 HP, long reach) — never more than one, never guaranteed;
+ *  - 'service' = SERVICE_CONTEXT (the shared annex contract; LEVELS.bunker.trackExtensions 'none': it never runs).
+ * No horde pool. Counts are per storey run; the generator places what fits (accept 'count' max).
+ */
+export const BUNKER_SIREN_ELIGIBILITY: FamilyEligibility = {
+  contexts: ['floor', 'ring'],
+  kinds: ['room'],
+  excludeRooms: ['washroom', 'stair-core', 'office-stair', 'office-elevator', 'supply-closet', 'janitor-closet'],
+  minSideCells: 8, minAreaCells: 100, clearCells: 1, doorKeepM: 3, passageRadiusM: 2.5, maxPerLevel: 3,
+  fallback: 'zombie',
+  why: 'enclosed rooms of the bunker storeys 1-5 only (dormitories, mess, wards, stores, plant rooms, the core hall) — never the station storey, a stairwell, washroom or corridor; room >= 4 x 4 m, clear floor patch, doorways >= 3 m away, never seals passage, <= 3 per level',
+};
+/** Two dormant Sirens are never heard humming at once (her hum carries 24 m), as in the Mall / Skyways. */
+export const BUNKER_SIREN_SPACING: FamilySpacing = {spacingM: 24, why: 'never two Sirens within earshot of one another (her hum carries 24 m)'};
+/** The Bunker's Siren DRAW weight per storey pool (census: docs/bunker.md "Enemies"; an ineligible / over-cap draw is a zombie). */
+export const BUNKER_SIREN_WEIGHT = 0.3;
+const BUNKER_FLOOR_POOL: FamilyPool = familyPool({ratdog: 0.08, blightbelly: 0.05, siren: BUNKER_SIREN_WEIGHT});
+const BUNKER_DEEP_POOL: FamilyPool = familyPool({ratdog: 0.08, blightbelly: 0.1, siren: BUNKER_SIREN_WEIGHT});
+/** The damp zone's own pool: an ordinary zombie, a rat/dog, or (rarely) THE STRAINER — its only weight outside the service annexes. */
+export const BUNKER_DAMP_SHARES: Readonly<Partial<Record<ShareFamilyId, number>>> = {ratdog: 0.1, blightbelly: 0, siren: 0, strainer: 0.3};
+/** The damp sections' placement: the Mall's rules, kept further from the start (the damp wings lie deep). */
+const BUNKER_DAMP_PLACEMENT: PlacementRules = {...MALL_PLACEMENT, startCells: 60};
+export const BUNKER_DAMP_CONTEXT: SpawnContextRule = {
+  label: 'Damp / water-damaged sections (once per level, the damp areas only)', count: [1, 1], placement: BUNKER_DAMP_PLACEMENT,
+  accept: {min: null, max: 'count'}, families: familyPool(BUNKER_DAMP_SHARES),
+};
+export const BUNKER_SPAWN_PROFILE: SpawnProfile = {
+  id: 'bunker', label: 'Bunker', families: familyPool(), zombieTypes: ZOMBIE_TYPES,
+  contexts: {
+    station: {label: 'Station storey (platform, arrival hall, vault vestibule)', count: [2, 3], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}},
+    floor: {label: 'Upper shelter storey (each of storeys 1-3: entry & security, habitation, services & medical)', count: [6, 8], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}, families: BUNKER_FLOOR_POOL},
+    ring: {label: 'Deep shelter storey (each of storeys 4-5: maintenance & water, the processing core)', count: [7, 9], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}, families: BUNKER_DEEP_POOL},
+    damp: BUNKER_DAMP_CONTEXT,
+    service: SERVICE_CONTEXT,
+  },
+  rooms: {},
+  eligibility: {siren: BUNKER_SIREN_ELIGIBILITY},
+  spacing: {siren: BUNKER_SIREN_SPACING},
+  budgets: {ambient: {total: 3 + 8 * 3 + 9 * 2 + 1, perStorey: 9}},
+};
+
+/**
  * THE PER-LEVEL PROFILES. Every level lists every family (familyPool); the Office opts in to the Siren with its eligibility rule.
  * No room modifiers (every room resolves to 1). A new level adds its entry here (Record<LevelId, …> makes that mandatory;
  * levels/levelContract.ts validateLevelRegistry + tests/enemy-spawn-contract.test.ts check coverage and the tier).
@@ -826,6 +880,8 @@ export const SPAWN_PROFILES: Readonly<Record<LevelId, SpawnProfile>> = {
   reactor: REACTOR_SPAWN_PROFILE,
   // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET (MARKET_SPAWN_PROFILE: no enemies).
   market: MARKET_SPAWN_PROFILE,
+  // Task studio-bunker-level-20261109-072224-01: THE BUNKER (BUNKER_SPAWN_PROFILE: storey contexts, the Siren in rooms, the damp Strainer).
+  bunker: BUNKER_SPAWN_PROFILE,
 };
 
 /** The spawn profile of a logical level. */

@@ -7,8 +7,8 @@ import {parseSectionId} from '../src/run/bagStore';
 import {sectionId, type LevelId} from '../src/levels/types';
 import type {CampaignState, SubwayNetwork} from '../src/campaign/types';
 
-const LEVELS = {subway: {sections: () => ['main']}, office: {sections: () => ['main']}, mall: {sections: () => ['main']}, market: {sections: () => ['main']}, skyways: {sections: () => ['main']}, reactor: {sections: () => ['main']}} as Record<LevelId, {sections(s: number): string[]}>;
-const SEEDS = {subway: 11, office: 22, mall: 33, market: 808, skyways: 707, reactor: 44};
+const LEVELS = {subway: {sections: () => ['main']}, office: {sections: () => ['main']}, mall: {sections: () => ['main']}, market: {sections: () => ['main']}, bunker: {sections: () => ['main']}, skyways: {sections: () => ['main']}, reactor: {sections: () => ['main']}} as Record<LevelId, {sections(s: number): string[]}>;
+const SEEDS = {subway: 11, office: 22, mall: 33, market: 808, bunker: 909, skyways: 707, reactor: 44};
 
 function fixture(): CampaignState {
   const network: SubwayNetwork = {
@@ -72,7 +72,7 @@ describe('campaign run: one persistent world per station', () => {
     const rolls: string[] = [];
     const run = createRun({seeds: SEEDS, start: {level: 'subway', section: 'main'}, levels: LEVELS, rollGear: (_s, l) => { rolls.push(l); return {main: []}; }});
     expect(run.campaign).toBeNull();
-    expect(rolls.sort()).toEqual(['mall', 'market', 'office', 'reactor', 'skyways', 'subway']);
+    expect(rolls.sort()).toEqual(['bunker', 'mall', 'market', 'office', 'reactor', 'skyways', 'subway']); // (+ bunker: task studio-bunker-level-20261109-072224-01)
     expect(run.sectionId).toBe('subway:main');
     expect(run.scopeOf()).toBe('subway');
   });

@@ -158,7 +158,7 @@ function candidates(layout: StationLayout, startArea: number): Candidate[] {
 
 /** The start pose of a layout (Office / Mall platform starts, else the Subway's playerSpawn). Same order as levels/registry.ts arrivalPose. */
 function startPoint(layout: StationLayout): {x: number; z: number; level: number} {
-  const s = layout.office?.start ?? layout.mall?.start ?? layout.skyways?.start; // (+ Skyways' platform start)
+  const s = layout.office?.start ?? layout.mall?.start ?? layout.skyways?.start ?? layout.bunker?.start; // (+ Skyways' platform start; + the Bunker's: task studio-bunker-level-20261109-072224-01)
   if (s) return {x: s.x, z: s.z, level: s.level ?? 0};
   const sp = layout.playerSpawn as {x: number; z: number; level?: number};
   return {x: sp.x, z: sp.z, level: sp.level ?? 0};

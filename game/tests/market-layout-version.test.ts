@@ -72,7 +72,7 @@ describe('Survivor Market layout version (save compatibility)', () => {
   });
 
   it('a campaign station: an old visited market keeps version 1, a new one records the current version (3) on its first build (Game.generateSection)', () => {
-    const run = createRun({seeds: {subway: 1, office: 2, mall: 3, market: 4, skyways: 5, reactor: 6}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
+    const run = createRun({seeds: {subway: 1, office: 2, mall: 3, market: 4, bunker: 7, skyways: 5, reactor: 6}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
     const oldKey = {level: 'market' as const, section: 'main', station: 'st-old'}, newKey = {level: 'market' as const, section: 'main', station: 'st-new'};
     run.memory(oldKey).visits = 2; // entered under the first market's build: no record
     const version = (k: typeof oldKey) => {

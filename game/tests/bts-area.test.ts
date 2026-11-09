@@ -246,7 +246,7 @@ describe('the Beyond the Station area roll (one 20 % roll per logical level)', (
     expect(attempts.length).toBeGreaterThanOrEqual(6);
     for (const a of attempts) expect(a.extensions!.area).toEqual({roll: btsAreaRoll(seed), chance: BTS_AREA_CHANCE, present: true});
     // a revisit: the run keeps only the level seeds; the level regenerates identically (the area included)
-    const run = createRun({seeds: {subway: PRESENT[0], office: ABSENT[0], mall: PRESENT[1], market: 808, skyways: 707, reactor: ABSENT[1]}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
+    const run = createRun({seeds: {subway: PRESENT[0], office: ABSENT[0], mall: PRESENT[1], market: 808, bunker: 909, skyways: 707, reactor: ABSENT[1]}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
     for (const level of TRACK_LEVELS) {
       const s = run.seeds[level], first = gen(level, s), again = LEVELS[level].generate('main', {levelSeed: run.seeds[level], startWeapon: 'pistol'} as never);
       expect(again.extensions!.area!.present, level).toBe(btsAreaPresent(s));

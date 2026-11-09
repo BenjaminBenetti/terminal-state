@@ -172,22 +172,23 @@ export function pickByDirection(from: Pt, cands: readonly {id: string; x: number
 // --- station types and the details card (pure; lane MAP) ---------------------------------------------------------------------
 
 /** What a station's icon shows: its archetype, or the Maintenance Route (an ordinary Subway node printed as the Reactor's bypass). */
-export type StationKind = 'subway' | 'office' | 'mall' | 'skyways' | 'market' | 'reactor' | 'maintenance'; // (+ market: task studio-survivor-market-20261108-005807-01)
+export type StationKind = 'subway' | 'office' | 'mall' | 'skyways' | 'market' | 'bunker' | 'reactor' | 'maintenance'; // (+ market: task studio-survivor-market-20261108-005807-01; + bunker: task studio-bunker-level-20261109-072224-01)
 
 export function stationKind(node: StationNode, net: SubwayNetwork): StationKind {
   if (node.id === net.reactor || node.archetype === 'reactor') return 'reactor';
   if (node.name === MAINTENANCE_ROUTE.name && node.archetype === 'subway') return 'maintenance';
-  return node.archetype === 'office' ? 'office' : node.archetype === 'mall' ? 'mall' : node.archetype === 'skyways' ? 'skyways' : node.archetype === 'market' ? 'market' : 'subway';
+  return node.archetype === 'office' ? 'office' : node.archetype === 'mall' ? 'mall' : node.archetype === 'skyways' ? 'skyways' : node.archetype === 'market' ? 'market' : node.archetype === 'bunker' ? 'bunker' : 'subway';
 }
 
 /** The printed wording of a kind (key, card, hit titles). */
 export function kindLabel(k: StationKind): string {
-  return k === 'maintenance' ? MAINTENANCE_ROUTE.name : k === 'office' ? 'Office tower' : k === 'mall' ? 'Shopping mall' : k === 'skyways' ? 'Skyways' : k === 'market' ? 'Survivor market' : k === 'reactor' ? 'Reactor' : 'Subway station';
+  return k === 'maintenance' ? MAINTENANCE_ROUTE.name : k === 'office' ? 'Office tower' : k === 'mall' ? 'Shopping mall' : k === 'skyways' ? 'Skyways' : k === 'market' ? 'Survivor market' : k === 'bunker' ? 'Civil-defence shelter' : k === 'reactor' ? 'Reactor' : 'Subway station';
 }
 
 /**
  * The ink of one station icon centred at p (radius r): a round dot (Subway), a square tower with windows (Office), a shopping bag
- * with its handle (Mall), the radiation trefoil (Reactor), a hex nut (Maintenance Route). `filled` = visited (solid ink, the paper
+ * with its handle (Mall), the radiation trefoil (Reactor), a hex nut (Maintenance Route), a buried dome over its ground line with a
+ * round hatch (Bunker). `filled` = visited (solid ink, the paper
  * showing through the details); otherwise a paper-white body in an ink outline. Shapes differ, so the type never relies on colour.
  */
 export function stationGlyph(kind: StationKind, p: Pt, r: number, filled: boolean, hub = false): string {
@@ -217,6 +218,15 @@ export function stationGlyph(kind: StationKind, p: Pt, r: number, filled: boolea
       const h = r * 0.98, w = r * 1.02, base = y + h * 0.82;
       return `<path d="M${n1(x - w)} ${n1(base)} L${n1(x)} ${n1(y - h)} L${n1(x + w)} ${n1(base)} Z" fill="${fill}" stroke="${INK}" stroke-width="${sw}" stroke-linejoin="round"/>`
         + `<path d="M${n1(x)} ${n1(y - h * 0.15)} L${n1(x - w * 0.3)} ${n1(base)} L${n1(x + w * 0.3)} ${n1(base)} Z" fill="${detail}"/>`;
+    }
+    case 'bunker': {
+      // a buried shelter: a low earth dome standing on its ground line, a round hatch with its locking bar in the middle (task
+      // studio-bunker-level-20261109-072224-01; an original map symbol)
+      const w = r * 1.08, base = y + r * 0.62, top = y - r * 0.92, hr = r * 0.34, hy = y + r * 0.02;
+      return `<path d="M${n1(x - w)} ${n1(base)} C${n1(x - w)} ${n1(top)} ${n1(x + w)} ${n1(top)} ${n1(x + w)} ${n1(base)} Z" fill="${fill}" stroke="${INK}" stroke-width="${sw}" stroke-linejoin="round"/>`
+        + `<path d="M${n1(x - w * 1.12)} ${n1(base)} L${n1(x + w * 1.12)} ${n1(base)}" fill="none" stroke="${INK}" stroke-width="${sw}" stroke-linecap="round"/>`
+        + `<circle cx="${n1(x)}" cy="${n1(hy)}" r="${n1(hr)}" fill="${detail}"/>`
+        + `<path d="M${n1(x - hr * 0.7)} ${n1(hy)} L${n1(x + hr * 0.7)} ${n1(hy)}" fill="none" stroke="${fill}" stroke-width="1.1"/>`;
     }
     case 'maintenance': {
       const R = r * 1.08;
@@ -523,6 +533,7 @@ export function renderInk(m: MapModel, net: SubwayNetwork, mode: MapMode, select
   const symbols = [sym('subway', 'Subway'), sym('office', 'Office'), sym('mall', 'Mall')];
   if (net.nodes.some(nd => nd.archetype === 'skyways')) symbols.push(sym('skyways', 'Skyways')); // (only networks that have the type)
   if (net.nodes.some(nd => nd.archetype === 'market')) symbols.push(sym('market', 'Market')); // (task studio-survivor-market-20261108-005807-01: only networks that have one)
+  if (net.nodes.some(nd => nd.archetype === 'bunker')) symbols.push(sym('bunker', 'Shelter')); // (task studio-bunker-level-20261109-072224-01: only networks that have one)
   if (m.reactorShown) symbols.push(sym('reactor', 'Reactor'));
   if (m.maintenanceShown) symbols.push(sym('maintenance', MAINTENANCE_ROUTE.name, `<line x1="0" y1="-4" x2="24" y2="-4" stroke="${MAINTENANCE_ROUTE.color}" stroke-width="3" stroke-dasharray="5 3"/>`));
   symbols.push({w: 30 + keyText('Visited / not yet', 11), svg: `${stationGlyph('subway', {x: 5, y: -4}, 4.6, true)}${stationGlyph('subway', {x: 17, y: -4}, 4.6, false)}<text x="27" y="0" font-size="11">Visited / not yet</text>`});

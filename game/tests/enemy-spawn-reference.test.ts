@@ -27,7 +27,7 @@ import {CELL} from '../src/gen/grid';
 import {OFFICE_FLOORS} from '../src/gen/office/frame';
 import {startWeaponFor} from '../src/weapons/pistol';
 import {
-  ENEMY_CENSUS_SEEDS, ENEMY_ELIGIBILITY_SEEDS, ENEMY_FAMILY_ADAPTER, ENEMY_GENERATED_FROM, ENEMY_LEVEL_ADAPTER, buildEnemyReference, eligibilityCensus,
+  BUNKER_DAMP_RUNS_MAX, ENEMY_CENSUS_SEEDS, ENEMY_ELIGIBILITY_SEEDS, ENEMY_FAMILY_ADAPTER, ENEMY_GENERATED_FROM, ENEMY_LEVEL_ADAPTER, buildEnemyReference, eligibilityCensus,
   enemyCensus, expectedCoatedShare, ruleRows,
 } from '../../tools/pages/enemyReference';
 import {ENEMY_REFERENCE_SCHEMA, type EnemyReference, type SourceLoc} from '../../tools/pages/enemyReferenceTypes';
@@ -115,9 +115,10 @@ describe('enemy spawn reference: runtime agreement', () => {
         // reported separately: never part of the whole-level total; task mall-lingerie-20261102-221554 (lane CONTEXT): so is the mall's
         // 'lingerie' store context (one run per lingerie store, 0-LINGERIE_STORES_MAX per mall)
         // (lane COSPLAY: + the Skyways convention's 'cosplay' context: one run per convention, 0-COSPLAY_CONVENTIONS_MAX per level)
-        expect(!!c.zone, `${L.id} ${c.id} zone`).toBe(c.id === 'service' || c.id === 'lingerie' || c.id === 'cosplay');
+        // (task studio-bunker-level-20261109-072224-01: + the Bunker's 'damp' context: one run per level over its damp areas, 0-BUNKER_DAMP_RUNS_MAX)
+        expect(!!c.zone, `${L.id} ${c.id} zone`).toBe(c.id === 'service' || c.id === 'lingerie' || c.id === 'cosplay' || c.id === 'damp');
         if (c.zone) {
-          const max = c.id === 'lingerie' ? LINGERIE_STORES_MAX : c.id === 'cosplay' ? COSPLAY_CONVENTIONS_MAX : trackExtConfig(L.id as LevelId).annex.max;
+          const max = c.id === 'lingerie' ? LINGERIE_STORES_MAX : c.id === 'cosplay' ? COSPLAY_CONVENTIONS_MAX : c.id === 'damp' ? BUNKER_DAMP_RUNS_MAX : trackExtConfig(L.id as LevelId).annex.max;
           expect(c.zone.runsPerLevel).toEqual({lo: 0, hi: max});
           expect(c.zone.perLevelMax).toBe(max * pc.count[1]);
           continue;

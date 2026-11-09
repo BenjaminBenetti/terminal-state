@@ -44,7 +44,7 @@ import {ENTERED_KEEP, MAX_HOLDER_PARTS, SAVE_FORMAT, SAVE_POINTS, SAVE_REASONS, 
 export const SAVE_FILE_V = 1;
 
 /** Archetypes a save may name (levels/registry.ts LEVEL_IDS; save-validate.test asserts they match). */
-export const SAVE_ARCHETYPES: readonly LevelId[] = ['subway', 'office', 'mall', 'market', 'skyways', 'reactor']; // (+ market: task studio-survivor-market-20261108-005807-01)
+export const SAVE_ARCHETYPES: readonly LevelId[] = ['subway', 'office', 'mall', 'market', 'bunker', 'skyways', 'reactor']; // (+ market: task studio-survivor-market-20261108-005807-01; + bunker: task studio-bunker-level-20261109-072224-01)
 
 export const SAVE_LIMITS = {
   /** An exported file / a stored value, UTF-8 bytes. */
@@ -673,6 +673,9 @@ function validateRunBody(r: Record<string, unknown>, o: ValidateOptions, path: s
   // task studio-survivor-market-20261108-005807-01 (lane LEVEL): likewise a run saved before the Survivor Market has no seeds.market — the
   // same deterministic default rule (its own hash key), so every older save still loads
   if (seeds.market === undefined && typeof seeds.subway === 'number' && Number.isInteger(seeds.subway)) seeds.market = hashString('terminal-state:market-seed', seeds.subway >>> 0);
+  // task studio-bunker-level-20261109-072224-01 (lane LEVEL): likewise a run saved before the Bunker has no seeds.bunker — the same
+  // deterministic default rule (its own hash key), so every older save still loads
+  if (seeds.bunker === undefined && typeof seeds.subway === 'number' && Number.isInteger(seeds.subway)) seeds.bunker = hashString('terminal-state:bunker-seed', seeds.subway >>> 0);
   only(seeds, `${path}.seeds`, SAVE_ARCHETYPES);
   for (const l of SAVE_ARCHETYPES) int(seeds[l], `${path}.seeds.${l}`, 0, UINT32);
   str(r.section, `${path}.section`, 32, SECTION, 'a section id');

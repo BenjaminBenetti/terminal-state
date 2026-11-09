@@ -177,7 +177,14 @@ export const TRACK_EXT_SKYWAYS: TrackExtConfig = {...TRACK_EXT, coreReserveM: 0,
  */
 export const TRACK_EXT_MARKET: TrackExtConfig = {...TRACK_EXT, annex: {...TRACK_EXT.annex, max: 0}};
 
-/** Per-level track-extension config (levels/registry.ts LEVELS[..].trackExtensions reads it; the market declares 'none' there). */
+/**
+ * Task studio-bunker-level-20261109-072224-01 (lane LEVEL): THE BUNKER grows no extensions — LEVELS.bunker.trackExtensions is 'none' (the
+ * buried station's bed ends stay closed end walls; the level's back of house is the shelter itself, no Beyond-the-Station annex, no
+ * 'service' spawns). Like the market's, this record only answers the per-level questions asked of every level's config: zero annexes.
+ */
+export const TRACK_EXT_BUNKER: TrackExtConfig = {...TRACK_EXT, annex: {...TRACK_EXT.annex, max: 0}};
+
+/** Per-level track-extension config (levels/registry.ts LEVELS[..].trackExtensions reads it; the market and the bunker declare 'none' there). */
 export function trackExtConfig(levelId: string): TrackExtConfig {
-  return levelId === 'office' ? TRACK_EXT_OFFICE : levelId === 'mall' ? TRACK_EXT_MALL : levelId === 'reactor' ? TRACK_EXT_REACTOR : levelId === 'skyways' ? TRACK_EXT_SKYWAYS : levelId === 'market' ? TRACK_EXT_MARKET : TRACK_EXT;
+  return levelId === 'office' ? TRACK_EXT_OFFICE : levelId === 'mall' ? TRACK_EXT_MALL : levelId === 'reactor' ? TRACK_EXT_REACTOR : levelId === 'skyways' ? TRACK_EXT_SKYWAYS : levelId === 'market' ? TRACK_EXT_MARKET : levelId === 'bunker' ? TRACK_EXT_BUNKER : TRACK_EXT; // (+ the bunker's zero-annex record: task studio-bunker-level-20261109-072224-01)
 }

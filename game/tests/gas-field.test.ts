@@ -451,7 +451,7 @@ describe('exposure: one damage calculation per frame from the eye concentration;
     const L = officeLevel(12345);
     const {h, step} = host(L);
     const key = {level: 'office' as const, section: 'main'};
-    let run = createRun({seeds: {subway: 1, office: 12345, mall: 7, market: 808, skyways: 707, reactor: 9}, start: key, levels: LEVELS});
+    let run = createRun({seeds: {subway: 1, office: 12345, mall: 7, market: 808, bunker: 909, skyways: 707, reactor: 9}, start: key, levels: LEVELS});
     (h as {run: unknown}).run = undefined;
     Object.defineProperty(h, 'run', {get: () => run});
     const sys = installGas(h as unknown as GasHost);
@@ -484,7 +484,7 @@ describe('exposure: one damage calculation per frame from the eye concentration;
     // break again, then NewGame (a new run): clean
     sys.breakPane(p.ref.id);
     h.sectionHooks[0].teardown!();
-    run = createRun({seeds: {subway: 1, office: 12345, mall: 7, market: 808, skyways: 707, reactor: 9}, start: key, levels: LEVELS});
+    run = createRun({seeds: {subway: 1, office: 12345, mall: 7, market: 808, bunker: 909, skyways: 707, reactor: 9}, start: key, levels: LEVELS});
     h.sectionHooks[0].build!(L);
     expect(sys.windows!.state.size).toBe(0);
     expect(sys.field!.storeys).toEqual([]);

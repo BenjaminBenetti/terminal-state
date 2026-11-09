@@ -171,6 +171,10 @@ export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
   // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET — no free loot: no loose floor program, no weapon
   // finds, no pistol-start boxes, no annex (trackExtensions 'none'); every holder it places carries the exact empty key (gen/market/dress.ts)
   market: {floor: 'none', weapons: 'none', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: false},
+  // Task studio-bunker-level-20261109-072224-01 (lane LEVEL): THE BUNKER — the Reactor's paths: the per-storey mall floor program
+  // (gen/mall/supplies.ts placeMallSupplies over the station + shelter storeys) and the station weapon finds (gen/weaponFinds.ts); no
+  // annex (trackExtensions 'none'), no rewards
+  bunker: {floor: 'mall', weapons: 'station', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: false},
 };
 
 /**

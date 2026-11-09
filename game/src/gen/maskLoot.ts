@@ -48,6 +48,9 @@ export const MASK_LOOT = {
     skyways: {masks: [1, 2], filters: [2, 5]},
     // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET — clean air and no free loot: no masks, no filters.
     market: {masks: [0, 0], filters: [0, 0]},
+    // Task studio-bunker-level-20261109-072224-01 (lane LEVEL): THE BUNKER has local gas leaks (layout.bunker.gasZones — every one
+    // avoidable on a clean route to the generators / the core): the Office's / mall's roll, masks and filters available like the gas levels.
+    bunker: {masks: [1, 2], filters: [2, 5]},
   } as Readonly<Record<LevelId, MaskLootSpec>>,
   /** A found mask's fitted filter: this fraction range of FILTER_LIFE_S (uniform, seeded per mask). */
   foundFilter: [0.35, 0.75] as const,
