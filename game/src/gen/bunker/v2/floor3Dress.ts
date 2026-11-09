@@ -2,7 +2,7 @@
 // dresser furnished / lit the rooms by purpose (gen/bunker/v2/floor3.ts carves them). World metres on this storey's grid; props in the
 // placeKit local height frame (the pipeline lifts them onto the floor), decor / lights / signs through the Bunker's Dx (absolute).
 //
-//  - the SERVICE STREET: a continuous ceiling light trough down its crown with a line of fixtures under it, steel ribs every ~6.5 m
+//  - the SERVICE STREET: a continuous ceiling light trough down its crown with a line of fixtures under it, steel ribs every ~8.5 m
 //    (its bays), the bulkhead gate between its compartments (hazard-striped jambs, plates both faces), the residents' notice wall at
 //    its north end, waiting benches and planters at the infirmary end, hung wayfinding;
 //  - the SUPPLY DEPOT: five runs of high pallet racking (orange beams on steel posts, collision-only footprints, see-through), picked
@@ -103,8 +103,8 @@ function street(f: F3): void {
     deco(D, 'steelDark', {x0: cx - 0.68, x1: cx - 0.6, z0, z1}, h - 0.32, h - 0.02);
     deco(D, 'steelDark', {x0: cx + 0.6, x1: cx + 0.68, z0, z1}, h - 0.32, h - 0.02);
     for (let z = z0 + 1.5; z <= z1 - 0.8; z += 4.5) light(D, a, cx, z, h - 0.3, false);
-    // the street's bays: steel ribs across the ceiling every ~6.5 m
-    for (let z = az0(a) + 3.2; z < az1(a) - 2; z += 6.5) {
+    // the street's bays: steel ribs across the ceiling every ~8.5 m
+    for (let z = az0(a) + 3.2; z < az1(a) - 2; z += 8.5) {
       deco(D, 'steelDark', {x0: ax0(a), x1: cx - 0.7, z0: z - 0.15, z1: z + 0.15}, h - 0.45, h);
       deco(D, 'steelDark', {x0: cx + 0.7, x1: ax1(a), z0: z - 0.15, z1: z + 0.15}, h - 0.45, h);
     }
@@ -125,7 +125,12 @@ function street(f: F3): void {
     doorPlate(D, gate, S, 'SUPPLY DEPOT · FABRICATION', 2.8);
   }
   // the residents' notice wall at the north end of the street (the far end of its sightline)
-  if (N) for (let i = 0; i < 3; i++) placeAgainstWall(D.ctx, N, 'noticeBoard', {sides: ['N'], y: 1.1, tries: 20});
+  if (N) {
+    const cx = (ax0(N) + ax1(N)) / 2;
+    deco(D, 'woodVeneer', {x0: cx - 2.2, x1: cx + 2.2, z0: az0(N), z1: az0(N) + 0.04}, 0.8, 2.6);
+    for (let i = 0; i < 3; i++) placeAgainstWall(D.ctx, N, 'noticeBoard', {sides: ['N'], y: 1.1, tries: 20});
+    wallSign(D, N, 'N', cx, 3.6, {kind: 'service', text: 'LEVEL 3 · SERVICES & MEDICAL', w: 4.2});
+  }
   // street islands down the crown: a planter between two benches back to back (one per compartment), the street's resting places
   for (const a of comps) {
     const cx = (ax0(a) + ax1(a)) / 2, bw = PROP_DEFS.bench.w;
@@ -170,7 +175,7 @@ function depot(f: F3): void {
     const b: Box = {x0: cx * CELL + 0.01, x1: (cx + 2) * CELL - 0.01, z0: r0 * CELL + 0.01, z1: (r1 + 1) * CELL - 0.01};
     if (!solid(D, a, b, rackH)) { F3_DRESS_STATS.skipped.push(`rack ${cx}`); continue; }
     F3_DRESS_STATS.racks++;
-    const zs = [b.z0 + 0.05, b.z1 - 0.05];
+    const zs = [b.z0 + 0.05, (b.z0 + b.z1) / 2, b.z1 - 0.05];
     for (const z of zs) for (const x of [b.x0 + 0.05, b.x1 - 0.05]) deco(D, 'steelDark', {x0: x - 0.05, x1: x + 0.05, z0: z - 0.05, z1: z + 0.05}, 0, rackH);
     for (const y of [1.5, 3.0, 4.5]) if (y + 0.14 < rackH + 0.01) deco(D, 'plasticSeat', {x0: b.x0, x1: b.x1, z0: b.z0, z1: b.z1}, y, y + 0.14);
     // the aisle fixtures (the racks' tops are 1.5 m below the ceiling)
@@ -224,8 +229,17 @@ function fabrication(f: F3): void {
   deco(D, 'black', B(bl - 0.55, bl + 0.55, C1 - 0.75, C1 - 0.12), yr + 0.3, yr + 0.9);
   const hc = C0 + (C1 - C0) * 0.42;
   deco(D, 'steelDark', B(bl - 0.42, bl + 0.42, hc - 0.4, hc + 0.4), yr - 0.2, yr + 0.35);
-  deco(D, 'steelBright', B(bl - 0.03, bl + 0.03, hc - 0.03, hc + 0.03), 3.6, yr - 0.2);
-  deco(D, 'black', B(bl - 0.16, bl + 0.16, hc - 0.12, hc + 0.12), 3.2, 3.6);
+  deco(D, 'steelBright', B(bl - 0.03, bl + 0.03, hc - 0.03, hc + 0.03), 3.5, yr - 0.2);
+  deco(D, 'black', B(bl - 0.16, bl + 0.16, hc - 0.12, hc + 0.12), 3.2, 3.5);
+  // the job they left: a pump motor hanging on the hook over its engine stand (the stand anchored; the load well above head height)
+  deco(D, 'steelDark', B(bl - 0.55, bl + 0.55, hc - 0.4, hc + 0.4), 2.45, 3.1);
+  deco(D, 'black', B(bl - 0.4, bl + 0.4, hc - 0.3, hc + 0.3), 2.3, 2.45);
+  deco(D, 'steelBright', B(bl - 0.75, bl - 0.55, hc - 0.25, hc + 0.25), 2.6, 2.95);
+  const stand = B(bl - 0.75, bl + 0.75, hc - 0.5, hc + 0.5);
+  if (solid(D, a, {x0: Math.floor(stand.x0 / CELL) * CELL + 0.01, x1: Math.ceil(stand.x1 / CELL) * CELL - 0.01, z0: Math.floor(stand.z0 / CELL) * CELL + 0.01, z1: Math.ceil(stand.z1 / CELL) * CELL - 0.01}, 0.75)) {
+    deco(D, 'steelDark', B(bl - 0.6, bl + 0.6, hc - 0.35, hc + 0.35), 0, 0.6);
+    deco(D, 'plasticSeat', stand, 0.6, 0.7);
+  }
   // high-bay fixtures in two rows clear of the bridge
   for (const cf of [0.28, 0.72]) for (let l = L0 + 2.5; l < L1 - 1.5; l += 5.5) {
     if (Math.abs(l - bl) < 1.2) continue;
@@ -254,7 +268,6 @@ function fabrication(f: F3): void {
           const [nx, nz] = NORMAL[sd], fc = face(a, sd);
           deco(D, 'steelDark', b, 0, 0.9);
           deco(D, 'steelBright', wallBox(a, sd, t - 1.3, t - 0.6, 0.15, 0.85), 0.9, 1.45);
-          deco(D, 'steelBright', wallBox(a, sd, t + 0.8, t + 1.15, 0.25, 0.75), 0.9, 1.25);
           deco(D, 'black', wallBox(a, sd, t - 0.6, t + 0.8, 0.45, 0.55), 1.0, 1.1);
           void nx; void nz; void fc;
           t += 3.2;
@@ -268,7 +281,6 @@ function fabrication(f: F3): void {
           deco(D, 'steelDark', wallBox(a, sd, t - 0.32, t + 0.32, 0.08, 0.72), 0, 0.12);
           deco(D, 'steelBright', wallBox(a, sd, t - 0.06, t + 0.06, 0.15, 0.27), 0.12, 1.6);
           deco(D, 'steelDark', wallBox(a, sd, t - 0.2, t + 0.2, 0.12, 0.62), 1.35, 1.82);
-          deco(D, 'steelBright', wallBox(a, sd, t - 0.22, t + 0.22, 0.3, 0.6), 0.75, 0.8);
         }
       }
     }
@@ -287,8 +299,6 @@ function fabrication(f: F3): void {
     const z = ((sd.y + sd.h / 2) * CELL), x = (yd.x + yd.w / 2) * CELL;
     deco(D, 'plasticSeat', {x0: ax0(a) + 0.2, x1: x + 0.9, z0: z - 1.0, z1: z - 0.92}, 0, 0.008);
     deco(D, 'plasticSeat', {x0: ax0(a) + 0.2, x1: x - 0.9, z0: z + 0.92, z1: z + 1.0}, 0, 0.008);
-    deco(D, 'plasticSeat', {x0: x + 0.82, x1: x + 0.9, z0: z - 1.0, z1: az1(a) - 0.2}, 0, 0.008);
-    deco(D, 'plasticSeat', {x0: x - 0.9, x1: x - 0.82, z0: z + 0.92, z1: az1(a) - 0.2}, 0, 0.008);
   }
 }
 
@@ -320,8 +330,6 @@ function plantRoom(f: F3): void {
       deco(D, 'shopFrame', b, 0, 0.03);
       deco(D, 'steelDark', wallBox(a, sd, t - 1.2, t + 1.2, 0.05, 0.12), 0, 0.18);
       deco(D, 'steelDark', wallBox(a, sd, t - 1.2, t + 1.2, 1.23, 1.3), 0, 0.18);
-      deco(D, 'black', wallBox(a, sd, t - 0.7, t - 0.55, 0.25, 1.1), 0.03, 0.3);
-      deco(D, 'black', wallBox(a, sd, t + 0.55, t + 0.7, 0.25, 1.1), 0.03, 0.3);
       deco(D, 'steelDark', wallBox(a, sd, t - 1.0, t + 1.0, 0.2, 1.15), 0.3, 1.4);
       deco(D, 'plasticSeat', wallBox(a, sd, t - 1.0, t + 1.0, 0.19, 1.16), 0.9, 1.02);
       deco(D, 'kitchenSteel', wallBox(a, sd, t + 0.6, t + 0.75, 0.6, 0.75), 1.4, 1.58);
@@ -340,6 +348,21 @@ function yard(f: F3): void {
   scanWall(D, a, 'gasCylinderCart', ['E'], 0.6);
   scanWall(D, a, 'crate', ['E', 'S'], 0);
   scanWall(D, a, 'handTruck', ['N'], 0.5);
+  // the yard's electric tug and its flatbed trailer, parked along the north wall (anchored for good: flat batteries)
+  for (let t = ax0(a) + 3; t < ax1(a) - 7.5; t += 0.5) {
+    const tug = wallBox(a, 'N', t, t + 2.0, 0.6, 1.8), trl = wallBox(a, 'N', t + 2.3, t + 5.3, 0.55, 1.85);
+    const box = (b: Box): Box => ({x0: Math.floor(b.x0 / CELL) * CELL + 0.01, x1: Math.ceil(b.x1 / CELL) * CELL - 0.01, z0: Math.floor(b.z0 / CELL) * CELL + 0.01, z1: Math.ceil(b.z1 / CELL) * CELL - 0.01});
+    if (!freeFor(D, a, box(tug)) || !freeFor(D, a, box(trl))) continue;
+    if (!solid(D, a, box(tug), 1.5)) continue;
+    deco(D, 'plasticSeat', tug, 0.25, 1.0);
+    deco(D, 'black', wallBox(a, 'N', t + 1.1, t + 1.6, 0.75, 1.65), 1.0, 1.45);
+    deco(D, 'steelDark', wallBox(a, 'N', t + 0.1, t + 0.5, 0.7, 1.7), 1.0, 1.5);
+    if (solid(D, a, box(trl), 0.75)) {
+      deco(D, 'steelDark', trl, 0.45, 0.6);
+      deco(D, 'black', wallBox(a, 'N', t + 2.0, t + 2.3, 1.1, 1.3), 0.4, 0.5);
+    }
+    break;
+  }
   // a painted walkway down the yard from the street to the stair (keep-clear lines)
   const z = (az0(a) + az1(a)) / 2;
   deco(D, 'plasticSeat', {x0: ax0(a) + 0.2, x1: ax1(a) - 0.4, z0: z - 1.3, z1: z - 1.22}, 0, 0.008);
@@ -380,15 +403,13 @@ function laundry(f: F3): void {
       const stack = i % 3 === 2;
       deco(D, 'kitchenSteel', wallBox(a, sd, s + 0.02, s + 0.73, 0.05, 0.75), 0, stack ? 1.85 : 0.9);
       deco(D, 'black', wallBox(a, sd, s + 0.17, s + 0.58, 0.75, 0.78), 0.3, 0.71);
-      if (stack) deco(D, 'black', wallBox(a, sd, s + 0.17, s + 0.58, 0.75, 0.78), 1.15, 1.56);
     }
     break;
   }
   const cx = (ax0(a) + ax1(a)) / 2, cz = (az0(a) + az1(a)) / 2;
   place(D, a, 'table', cx, cz + 0.6, a.w >= a.h ? Math.PI / 2 : 0, {ring: 0.7});
   for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'clothingRack', {front: 0.6, tries: 16});
-  stock(placeAgainstWall(D.ctx, a, 'cabinetTall', {front: 0.8, tries: 16}), 'supply-closet');
-  for (let i = 0; i < 2; i++) stock(placeAgainstWall(D.ctx, a, 'shelf', {front: 0.8, tries: 16}), 'supply-closet');
+  // (its linen shelving / cupboards are the station dresser's: the supply-closet purpose, dressings and linen)
 }
 
 function gasStore(f: F3): void {
@@ -452,7 +473,7 @@ function ward(f: F3): void {
       if (run0 < 0) return;
       const s0 = t0 + run0 * bayW, s1 = t0 + i * bayW;
       deco(D, 'steelBright', {x0: s0, x1: s1, z0: zFront - 0.02, z1: zFront + 0.02}, railY, railY + 0.04);
-      for (let k = run0; k <= i; k++) deco(D, 'steelBright', {x0: t0 + k * bayW - 0.02, x1: t0 + k * bayW + 0.02, z0: Math.min(fc, zFront), z1: Math.max(fc, zFront)}, railY, railY + 0.04);
+      for (let k = run0; k <= i; k++) if (k === run0 || k === i || (k - run0) % 2 === 0) deco(D, 'steelBright', {x0: t0 + k * bayW - 0.02, x1: t0 + k * bayW + 0.02, z0: Math.min(fc, zFront), z1: Math.max(fc, zFront)}, railY, railY + 0.04);
       run0 = -1;
     };
     for (let i = 0; i < n; i++) {
@@ -520,7 +541,6 @@ function isolation(f: F3): void {
     if (!solid(D, a, b, glassH, false)) continue;
     ok++;
     deco(D, 'glassShopfront', along ? {x0: b.x0, x1: b.x1, z0: (b.z0 + b.z1) / 2 - 0.03, z1: (b.z0 + b.z1) / 2 + 0.03} : {x0: (b.x0 + b.x1) / 2 - 0.03, x1: (b.x0 + b.x1) / 2 + 0.03, z0: b.z0, z1: b.z1}, 0.1, glassH);
-    deco(D, 'steelBright', along ? {x0: b.x0, x1: b.x1, z0: (b.z0 + b.z1) / 2 - 0.05, z1: (b.z0 + b.z1) / 2 + 0.05} : {x0: (b.x0 + b.x1) / 2 - 0.05, x1: (b.x0 + b.x1) / 2 + 0.05, z0: b.z0, z1: b.z1}, glassH, glassH + 0.08);
   }
   // the side walls between cubicles (glass, on the cell line between them)
   for (let i = 1; i < n; i++) {

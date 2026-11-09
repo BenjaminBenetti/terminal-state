@@ -64,7 +64,7 @@ function carve(ctx: FloorCarveCtx): FloorCarveResult | null {
   if (!lobby) return null;
   ctx.door(R(SX - 1, 59, 1, 10), streetS, lobby, DOOR.wide);
   ctx.door(R(47, 57, 8, 1), lobby, depot, DOOR.wide);
-  const laundry = room('laundry', R(24, 59, 21, 11), 'room', 'utility', F3_CLEAR.room, lobby, {label: 'Laundry', purpose: BUNKER_PURPOSE.lock});
+  const laundry = room('laundry', R(24, 59, 21, 11), 'room', 'utility', F3_CLEAR.room, lobby, {label: 'Laundry', purpose: 'supply-closet'});
   if (!laundry) return null;
   ctx.door(R(45, 61, 1, 4), lobby, laundry, DOOR.room);
 
