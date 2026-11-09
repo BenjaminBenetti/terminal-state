@@ -64,26 +64,29 @@ describe('the melee slot takes melee weapons only (a genuine equipment slot)', (
 
   it('not a hardcoded knife button: a future melee weapon (registered at runtime) is accepted, picked into the slot and drawn', () => {
     const W = WEAPONS as Record<string, WeaponDef>, I = ITEMS as Record<string, ItemDef>;
-    W.crowbar = {...WEAPONS.knife, id: 'crowbar', itemId: 'crowbar'};
-    I.crowbar = {...ITEMS.knife, id: 'crowbar', weaponId: 'crowbar', name: 'Crowbar', short: 'Crowbar'};
+    // (task studio-weapon-variety-production-20261109-224355-01, lane MELEE: the hypothetical weapon was 'crowbar' — now a REAL weapon-variety
+    // melee weapon, which this test would overwrite and then delete; a made-up id keeps the test's meaning)
+    expect(W.test_club).toBeUndefined();
+    W.test_club ={...WEAPONS.knife, id: 'test_club', itemId: 'test_club'};
+    I.test_club = {...ITEMS.knife, id: 'test_club', weaponId: 'test_club', name: 'Test club', short: 'Test club'};
     try {
-      expect(isMeleeItem('crowbar')).toBe(true);
+      expect(isMeleeItem('test_club')).toBe(true);
       const inv = new Inventory();
-      const bar = inv.makeStack('crowbar', 1);
+      const bar = inv.makeStack('test_club', 1);
       expect(inv.add(bar)).toBe(0);
       expect(inv.melee).toBe(bar);
       expect(inv.selectMelee()).toBe(true);
       expect(inv.selectedStack()).toBe(bar);
       const knife = inv.makeStack('knife', 1);
       inv.set(P(0), knife);
-      expect(inv.equipMeleeFrom(P(0))).toBe('swapped'); // the crowbar goes back where the knife was
+      expect(inv.equipMeleeFrom(P(0))).toBe('swapped'); // the test_club goes back where the knife was
       expect([inv.melee, inv.pack[0]]).toEqual([knife, bar]);
       expect(inv.invariants()).toEqual([]);
     } finally {
-      delete W.crowbar;
-      delete I.crowbar;
+      delete W.test_club;
+      delete I.test_club;
     }
-    expect(isMeleeItem('crowbar')).toBe(false);
+    expect(isMeleeItem('test_club')).toBe(false);
   });
 
   it('pickups: a knife fills an EMPTY melee slot first (same object); a second one is an ordinary item; room counts the slot; guns never go there', () => {

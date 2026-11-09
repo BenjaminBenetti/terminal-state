@@ -34,6 +34,8 @@ export interface MeleePoses {
    * `raised` toward it as the charge builds, and the swing starts from the pose the release left (absent: no charge pose).
    */
   charged?: HeldPose;
+  /** Lane MELEE (weapon variety): recovery dip scale (x RECOVER_DIP; default 1) — a long weapon dips lower so its head passes under the aim point. */
+  dip?: number;
 }
 
 /**
@@ -75,7 +77,7 @@ export interface MeleeAim {
   /** Camera-space direction the model's +Y (the top of its side view) is turned toward (orthogonalised against the shaft). */
   up: readonly [number, number, number];
 }
-export interface MeleeAims { carry: MeleeAim; raised: MeleeAim; contact: MeleeAim; through: MeleeAim; charged?: MeleeAim }
+export interface MeleeAims { carry: MeleeAim; raised: MeleeAim; contact: MeleeAim; through: MeleeAim; charged?: MeleeAim; dip?: number }
 
 type V3 = readonly [number, number, number];
 const norm = (v: V3): [number, number, number] => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
@@ -124,7 +126,7 @@ export function aimPoses(aims: MeleeAims, tipModel: V3): MeleePoses {
   const charged = aims.charged ? aimPose(aims.charged, tipModel, raised.rot) : undefined;
   const contact = aimPose(aims.contact, tipModel, raised.rot);
   const through = aimPose(aims.through, tipModel, contact.rot);
-  return charged ? {carry, raised, contact, through, charged} : {carry, raised, contact, through};
+  return {carry, raised, contact, through, ...(charged ? {charged} : {}), ...(aims.dip !== undefined ? {dip: aims.dip} : {})};
 }
 
 /** The approved real lengths (m; PLAN: M01..M06) — the tip distance until the delivered model's Tip marker replaces it. */
@@ -151,52 +153,58 @@ export function varietyLength(id: VarietyMeleeId): number {
  * crosshair at contact (`tip: [0, 0]`).
  */
 export const VARIETY_MELEE_AIMS: Readonly<Record<VarietyMeleeId, MeleeAims>> = {
-  // OVERHEAD CHOP, two-handed: haft across the body, head up right (edge forward) -> raised over the right shoulder (head up behind,
-  // edge up / forward) -> down through the crosshair (edge leading, down) -> low centre-left follow-through
+  // OVERHEAD CHOP, two-handed: haft diagonal across the body, head up right (its flat to the eye, edge forward-in) -> raised up the
+  // right side, the head just over the top edge (edge forward) -> down through the crosshair (edge leading, a slight cant) -> low
+  // centre-left follow-through
   fire_axe: {
-    carry: {grip: [0.10, -0.42, -0.40], tip: [0.42, 0.42], up: [-0.2, 0.15, 0.95]},
-    raised: {grip: [0.16, -0.10, -0.34], tip: [0.55, 1.9], up: [0, -0.35, 1]},
-    contact: {grip: [0.04, -0.30, -0.46], tip: [0, 0], up: [0, 1, 0.2]},
-    through: {grip: [-0.02, -0.40, -0.36], tip: [-0.25, -1.1], up: [0, 0.3, -1]},
+    carry: {grip: [0.0, -0.40, -0.40], tip: [0.46, 0.46], up: [0.8, -0.3, 0.5]},
+    raised: {grip: [0.15, -0.16, -0.36], tip: [0.62, 1.35], up: [0.2, -0.2, 1]},
+    contact: {grip: [0.06, -0.30, -0.46], tip: [0, 0], up: [0.35, 1, 0.1]},
+    through: {grip: [-0.02, -0.40, -0.36], tip: [-0.25, -1.1], up: [0.2, 0.3, -1]},
   },
-  // the same chop, heavier: lower carry (the head rests out at the right), a higher draw back
+  // the same chop, heavier: the head rests lower out at the right, a higher draw back
   sledgehammer: {
-    carry: {grip: [0.12, -0.45, -0.40], tip: [0.50, 0.30], up: [-0.3, 0.1, 0.95]},
-    raised: {grip: [0.17, -0.06, -0.32], tip: [0.50, 2.2], up: [0, -0.35, 1]},
-    contact: {grip: [0.04, -0.32, -0.48], tip: [0, 0], up: [0, 1, 0.2]},
-    through: {grip: [-0.02, -0.42, -0.36], tip: [-0.20, -1.2], up: [0, 0.3, -1]},
+    carry: {grip: [0.0, -0.44, -0.40], tip: [0.52, 0.30], up: [0.8, -0.3, 0.5]},
+    raised: {grip: [0.15, -0.18, -0.36], tip: [0.62, 1.25], up: [0.2, -0.2, 1]},
+    contact: {grip: [0.06, -0.32, -0.48], tip: [0, 0], up: [0.35, 1, 0.1]},
+    through: {grip: [-0.02, -0.42, -0.36], tip: [-0.20, -1.2], up: [0.2, 0.3, -1]},
   },
-  // HORIZONTAL SWEEP, one-handed (a long knife): blade up right, edge forward -> drawn back to the right at shoulder height (edge
-  // toward the coming slash, left) -> flat through the crosshair -> far left
+  // HORIZONTAL SWEEP, one-handed (a long knife): blade up right, edge forward -> cocked back to the right at shoulder height, the
+  // point out past the right edge (edge toward the coming slash) -> level through the crosshair, edge leading left -> far left
   machete: {
     carry: {grip: [0.18, -0.24, -0.38], tip: [0.32, 0.50], up: [0.25, -0.15, 1]},
-    raised: {grip: [0.30, -0.10, -0.30], tip: [0.95, 0.45], up: [0.1, 0.9, 0.5]},
-    contact: {grip: [0.12, -0.12, -0.34], tip: [0, 0], up: [0, 1, 0.1]},
-    through: {grip: [-0.08, -0.16, -0.36], tip: [-0.95, -0.15], up: [0, 1, 0.3]},
+    raised: {grip: [0.22, -0.08, -0.32], tip: [1.45, 0.42], up: [0.2, 0.3, 1]},
+    contact: {grip: [0.16, -0.10, -0.34], tip: [0, 0], up: [1, 0.25, 0]},
+    through: {grip: [-0.08, -0.14, -0.36], tip: [-1.0, -0.12], up: [0.6, 0.3, 0.8]},
+    dip: 3.0,
   },
-  // MID STRIKE, one-handed: bar up right -> raised up beside the head -> diagonal down-left through the crosshair -> low left
+  // MID STRIKE, one-handed: bar up right -> raised up beside the head -> diagonal down-left through the crosshair (the hooked claw
+  // leading) -> low left
   crowbar: {
     carry: {grip: [0.18, -0.26, -0.38], tip: [0.36, 0.52], up: [0.6, 0, 1]},
-    raised: {grip: [0.28, -0.04, -0.30], tip: [0.75, 1.25], up: [-0.4, 0.2, 1]},
-    contact: {grip: [0.10, -0.16, -0.36], tip: [0, 0], up: [0.6, 0.7, 0.2]},
+    raised: {grip: [0.26, -0.06, -0.32], tip: [0.72, 1.15], up: [-0.4, 0.2, 1]},
+    contact: {grip: [0.12, -0.14, -0.36], tip: [0, 0], up: [0.7, 0.6, 0.2]},
     through: {grip: [-0.06, -0.26, -0.34], tip: [-0.80, -0.75], up: [0.5, 0.4, 0.6]},
+    dip: 1.8,
   },
-  // HORIZONTAL SWEEP with a CHARGE, two-handed: the bat up over the right shoulder -> cocked back right; the CHARGE pulls it further
-  // back and up (visible charge) -> level through the crosshair -> wrapped round to the left
+  // HORIZONTAL SWEEP with a CHARGE, two-handed: the bat up at the right shoulder -> cocked back right; the CHARGE draws it further
+  // back and up (still in view at the right edge: the visible charge) -> level through the crosshair -> wrapped round to the left
   slugger: {
     carry: {grip: [0.12, -0.38, -0.38], tip: [0.45, 0.55], up: [0, 0, 1]},
-    raised: {grip: [0.26, -0.18, -0.30], tip: [1.05, 0.70], up: [0, 1, 0]},
-    charged: {grip: [0.32, -0.12, -0.24], tip: [1.45, 1.10], up: [0, 1, 0]},
-    contact: {grip: [0.08, -0.22, -0.40], tip: [0, 0], up: [0, 1, 0]},
-    through: {grip: [-0.10, -0.24, -0.34], tip: [-1.10, 0.10], up: [0, 1, 0]},
+    raised: {grip: [0.22, -0.20, -0.32], tip: [0.88, 0.80], up: [0, 1, 0]},
+    charged: {grip: [0.24, -0.16, -0.29], tip: [1.02, 1.15], up: [0, 1, 0]},
+    contact: {grip: [0.18, -0.12, -0.36], tip: [0, 0], up: [0, 1, 0]},
+    through: {grip: [-0.10, -0.18, -0.34], tip: [-1.10, 0.10], up: [0, 1, 0]},
+    dip: 2.6,
   },
-  // WIDE FLAT SWEEP, two-handed: the long haft low across the body, blade forward-right (face along the sweep) -> drawn back right ->
-  // flat through the crosshair (the blade's face leading) -> far left
+  // WIDE FLAT SWEEP, two-handed: the long haft diagonal across the body, the blade up right with its face to the eye -> drawn back to
+  // the right edge -> flat through the crosshair (the blade's face leading left) -> far left
   track_shovel: {
-    carry: {grip: [0.06, -0.40, -0.36], tip: [0.40, -0.05], up: [0, 1, 0]},
-    raised: {grip: [0.22, -0.26, -0.28], tip: [1.15, 0.05], up: [0, 1, 0]},
-    contact: {grip: [0.06, -0.30, -0.38], tip: [0, 0], up: [0, 1, 0]},
-    through: {grip: [-0.10, -0.32, -0.32], tip: [-1.10, -0.05], up: [0, 1, 0]},
+    carry: {grip: [0.0, -0.48, -0.34], tip: [0.55, 0.62], up: [-1, 1, 0]},
+    raised: {grip: [0.18, -0.30, -0.30], tip: [0.92, 0.32], up: [-0.3, 1, 0]},
+    contact: {grip: [0.12, -0.26, -0.36], tip: [0, 0], up: [0, 1, 0]},
+    through: {grip: [-0.10, -0.30, -0.32], tip: [-1.05, -0.05], up: [0, 1, 0]},
+    dip: 2.6,
   },
 };
 
@@ -269,7 +277,8 @@ export function meleePoseOffset(stage: MeleeStage | null, t: number, m: Pick<Mel
   if (stage === 'recover') {
     mix(rel(poses.through, c, tmpA), ZERO, smooth(t / m.recovery), out);
     const dip = Math.sin(Math.PI * clamp01(t / m.recovery));
-    out.y -= dip * RECOVER_DIP.pos; out.rx -= dip * RECOVER_DIP.rot;
+    const dk = poses.dip ?? 1; // (lane MELEE: a long weapon's deeper dip; the knife x1)
+    out.y -= dip * RECOVER_DIP.pos * dk; out.rx -= dip * RECOVER_DIP.rot * dk;
     return out;
   }
   return mix(ZERO, ZERO, 0, out);
