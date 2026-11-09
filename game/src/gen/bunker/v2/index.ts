@@ -320,7 +320,7 @@ function tryLevel(genSeed: number, seed: number, attempt: number, ctx: SectionGe
 
   // --- lighting, traversal, the record -------------------------------------------------------------------------------------------
   applyLighting(layout, rng.fork('lighting'));
-  v2Lights(layout, sc, gens, coreRec, hz.aged, rng.fork('shelter-lights'));
+  v2Lights(layout, sc, gens, coreRec, hz.aged, rng.fork('shelter-lights'), carved.flatMap(r => r.lit ?? []));
   finishTraversal(layout);
   const vp = layout.props[vaultProp];
   const info: BunkerInfo = {
@@ -397,13 +397,14 @@ function planV2Hazards(layout: StationLayout, carved: readonly FloorCarveResult[
 }
 
 /** The shelter's light condition (the v1 rule): aged areas dark / sputtering, the generator rooms and the core hall on steady power. */
-function v2Lights(layout: StationLayout, sc: SpineCarve, gens: readonly {area: number}[], core: {area: number}, aged: ReadonlySet<number>, rng: Rng): void {
+function v2Lights(layout: StationLayout, sc: SpineCarve, gens: readonly {area: number}[], core: {area: number}, aged: ReadonlySet<number>, rng: Rng, lit: readonly number[] = []): void {
   for (const a of layout.areas) {
     if (!aged.has(a.id)) continue;
     a.lighting = rng.chance(0.6) ? 'dark' : 'dim';
     for (const l of layout.lights) if (l.area === a.id) { if (rng.chance(0.5)) { l.broken = true; l.flicker = false; } else { l.flicker = true; l.broken = false; } }
   }
-  for (const id of [...gens.map(g => g.area), core.area]) {
+  // (+ the floors' steady-power areas: their main routes / landmark halls; never one the floor also marked aged)
+  for (const id of [...new Set([...gens.map(g => g.area), core.area, ...lit.filter(i => layout.areas[i] && !aged.has(i))])]) {
     const a = layout.areas[id], own = layout.lights.filter(l => l.area === id);
     a.lighting = 'lit';
     for (const l of own) { l.broken = false; l.flicker = false; l.dying = false; l.power = Math.max(l.power ?? 0.8, 0.8); }
