@@ -32,7 +32,7 @@
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import type {Game} from '../game';
-import type {MarketLayout, MarketSpot, MarketStall, MarketStallId} from '../gen/market/marketTypes';
+import {BAR_STALL, type MarketLayout, type MarketSpot, type MarketStall, type MarketStallId} from '../gen/market/marketTypes';
 import type {TrainPlacement} from '../gen/playerTrain';
 import {STEP_UP, type Waypoint} from '../gen/grid';
 import type {Levels} from '../gen/levels';
@@ -117,8 +117,6 @@ export interface MarketPeopleHost {
   warmRegistry?: {addPool(name: string, roots: () => readonly THREE.Object3D[]): void} | null;
 }
 
-/** (lane PEOPLE) The 'bar' stall's id (layout v3; the BAR lane adds it to MarketStallId). */
-const BAR_STALL = 'bar';
 
 interface Trader { id: string; stall: MarketStall; actor: HumanActor; postYaw: number; rand: () => number; swapT: number; bartender: boolean }
 /** (lane PEOPLE) A patron's round at a 'drink' spot: its loop variant, its seat (null: standing at the counter). */
@@ -245,7 +243,7 @@ export class MarketPeople {
       actor.x = stall.trader.x; actor.z = stall.trader.z; actor.y = stall.trader.y;
       actor.yaw = modelYaw(stall.trader.yaw);
       const rand = mulberry32(hashString(`market-trader:${stall.id}`, seed));
-      const bartender = (stall.id as string) === BAR_STALL;
+      const bartender = stall.id === BAR_STALL;
       actor.play(bartender ? 'Work' : rand() < 0.6 ? 'Talk' : 'Idle', 0);
       this.add(actor);
       this.traders.push({id: `trader:${stall.id}`, stall, actor, postYaw: actor.yaw, rand, swapT: 4 + rand() * 8, bartender});
@@ -398,6 +396,14 @@ export class MarketPeople {
     catch (err) { console.warn('market people: drinking clips', err); }
   }
 
+  /** (Lane PEOPLE) A seated patron's post (the clear floor beside its seat: where it stands up to), or null when it is not seated. */
+  seatedPost(actor: HumanActor): {x: number; z: number} | null {
+    const r = this.residents.find(o => o.actor === actor);
+    if (!r || r.state !== 'idle' || !r.drink?.seat) return null;
+    const s = this.spots[r.spot];
+    return {x: s.x, z: s.z};
+  }
+
   /** The round is over (leaving the spot / the market turns hostile): the bottle put away. */
   private stopDrinking(r: Resident): void {
     if (r.bottle) r.bottle.holder.visible = false;
@@ -486,8 +492,8 @@ export class MarketPeople {
    * One walker's collision after its step: out of the train keep-out, out of walls / props (height-aware circle), feet on the floor.
    * (Task studio-market-rework-20261108-074144-01, lane COMBAT: shared with the hostile people's motion.)
    */
-  settle(a: HumanActor): void {
-    const h = this.host, R = MARKET_PEOPLE.radius;
+  settle(a: HumanActor, R: number = MARKET_PEOPLE.radius): void {
+    const h = this.host;
     this.pushOut(a);
     [a.x, a.z] = resolveCircle(h.levels, h.propIndex, a.x, a.z, R, a.y, MARKET_PEOPLE.height);
     a.y = groundOf(h.levels, a.x, a.z, a.y);
@@ -495,9 +501,10 @@ export class MarketPeople {
 
   /**
    * (Task studio-market-bar-20261108-225231-01, lane PEOPLE) The waypoint a walker heads for: reached ones (within MARKET_PEOPLE.waypoint,
-   * about their height) are passed — but a waypoint is left early only when the straight walk from here to the next is clear, so nobody
-   * cuts a stair's corner off a ramp's side onto the landing above (they used to stick there, trying a step too high). Shared with the
-   * hostile people's motion.
+   * about their height) are passed — but where the next one lies at another height (a stair's end, a ramp's side) the waypoint is left
+   * early only when the straight walk from here to the next is clear, so nobody cuts a stair's corner off a ramp's side onto the landing
+   * above (they used to stick there, trying a step too high). On a flat floor the plain tolerance (a prop beside a waypoint can keep a
+   * walker from ever standing on it). Shared with the hostile people's motion.
    */
   nextWaypoint(a: HumanActor, path: Waypoint[], wp: number): number {
     const L = this.host.levels;
@@ -505,7 +512,8 @@ export class MarketPeople {
       const w = path[wp], n = path[wp + 1];
       const d = Math.hypot(w[0] - a.x, w[1] - a.z);
       if (d >= MARKET_PEOPLE.waypoint || (w[3] !== undefined && Math.abs(w[3] - a.y) > 0.6)) break;
-      if (d > 0.08 && !L.walkLineClear(a.x, a.y, a.z, n[0], n[1], MARKET_PEOPLE.radius * 0.8, n[3])) break;
+      const climb = Math.abs((n[3] ?? a.y) - a.y) > 0.2;
+      if (climb && d > 0.08 && !L.walkLineClear(a.x, a.y, a.z, n[0], n[1], MARKET_PEOPLE.radius * 0.8, n[3])) break;
       wp++;
     }
     return wp;

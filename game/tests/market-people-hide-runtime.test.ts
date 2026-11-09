@@ -35,11 +35,13 @@ const inScene = (w: World, p: MarketCombatant) => { let o: THREE.Object3D | null
 function checkBodies(w: World, tag: string): void {
   const L = w.host.levels;
   for (const p of w.combat.people) {
-    if (p.state !== 'alive') continue;
+    if (p.state !== 'alive' || p.standUp) continue; // (a bar patron still getting up off its stool sits on the seat's own collider)
     const a = p.actor;
     expect(w.people.inKeepout(a.x, a.z, a.y), `${tag} ${p.id} in the train keep-out`).toBe(false);
     expect(L.supportIn(a.x, a.z, a.y, 0.35), `${tag} ${p.id} off the floor at ${a.x.toFixed(2)},${a.y.toFixed(2)},${a.z.toFixed(2)}`).not.toBeNull();
-    expect(L.circleClear(a.x, a.z, 0.12, a.y), `${tag} ${p.id} inside a wall at ${a.x.toFixed(2)},${a.y.toFixed(2)},${a.z.toFixed(2)}`).toBe(true);
+    // never inside a wall / slab: the floor goes on under the whole body core (a wall column has no floor at the feet; props are the
+    // collision's business, their cell flags are coarser than their boxes)
+    for (const [ox, oz] of [[0.12, 0], [-0.12, 0], [0, 0.12], [0, -0.12]]) expect(L.supportIn(a.x + ox, a.z + oz, a.y, 0.46), `${tag} ${p.id} inside a wall at ${a.x.toFixed(2)},${a.y.toFixed(2)},${a.z.toFixed(2)}`).not.toBeNull();
     const bed = w.layout.trenches.find(t => a.x > t.x0 && a.x < t.x1 && a.z > t.z0 && a.z < t.z1 && Math.abs(a.y - t.floorY) < 0.6);
     expect(bed, `${tag} ${p.id} in the track bed`).toBeUndefined();
   }
@@ -61,7 +63,7 @@ function provokedAway(seed = 808, o: Parameters<typeof combatWorld>[2] = {}, sec
 
 describe('half fight, half flee; the fleers run home and hide — alive and present', () => {
   it('provoked: round(n / 2) fighters; every fleer reaches a refuge slot (its home first) and cowers there, never removed', () => {
-    for (const seed of [808, 1234]) {
+    for (const seed of [808, 1234, 31]) { // (layout v3: the bar deck over the Yard; 31 squeezes past a fan beside the bar stair's landing)
       const w = provokedAway(seed);
       const n = w.combat.people.length;
       expect(w.combat.people.filter(p => p.role === 'fight').length).toBe(fighterCount(n));
@@ -199,7 +201,8 @@ describe('persistence: hiding survives leaving, save / load and Retry', () => {
     expect(snap(w)).toEqual(want);
     for (const p of fleers(w)) {
       const [x, y, z] = where.get(p.id)!;
-      expect([p.actor.x, p.actor.y, p.actor.z].map(v => +v.toFixed(2))).toEqual([x, y, z].map(v => +v.toFixed(2)));
+      // (the record keeps millimetres)
+      expect(Math.abs(p.actor.x - x)).toBeLessThan(0.002); expect(Math.abs(p.actor.y - y)).toBeLessThan(0.002); expect(Math.abs(p.actor.z - z)).toBeLessThan(0.002);
       expect(p.mode).toBe('hide');
       expect(p.actor.current).toBe(COMBAT_CLIP.cower);
       expect(inScene(w, p)).toBe(true);

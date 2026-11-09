@@ -1,9 +1,10 @@
 // Task studio-market-bar-20261108-225231-01 (lane PEOPLE): THE BAR'S PATRONS AND BARTENDER (market/marketPeople.ts with
-// market/people/{drinkClips,bottle,seats}.ts), driven in Node on a real generated market whose layout gets 'drink' spots (stand-ins for
-// layout v3's bar: some with a chair, some standing at a counter) and a 'bar' stall — the real cast and the real cola-can model as the
-// bottle (the fallback while the beer has no model). User: "NPCs drinking" / "bartender selling beers".
+// market/people/{drinkClips,bottle,seats}.ts), driven in Node on real generated markets — layout v3's bar deck (its 'drink' posts each
+// name their counter stool / table chair; its 'bar' stall) — with the real cast and the real cola-can model as the bottle (the fallback
+// while the beer has no model). User: "NPCs drinking" / "bartender selling beers".
 //  - patrons at 'drink' spots play a runtime drinking loop (raise, sip, lower; two variants, staggered) with a bottle in the right hand
-//    that reaches the lips; seated on the spot's chair at its seat height, else standing; they linger; the bar's regulars return;
+//    that reaches the lips; seated on the post's stool / chair at its seat height (a post without a seat — synthetic, on a v2 layout —
+//    stands); they linger; the bar's regulars return;
 //  - the bartender works the counter (the Work loop) and turns to talk to a customer;
 //  - hostile: the bottles are put away; the bar's people take part (the robbed bartender fights);
 //  - no 'drink' spot (layouts v1 / v2): no bottle, no drinking loop — the calm market as before.
@@ -43,25 +44,20 @@ beforeAll(async () => {
   can = new THREE.Group(); can.add(m);
 });
 
-const CHAIR = 'plasticStackChair';
-/** A market with a stand-in bar: `n` spots become 'drink' spots (every other one with a chair), plus a 'bar' stall. */
-function barMarket(seed = 808, n = 6) {
-  const chairs: number[] = [];
-  const w = combatWorld(A, seed, {fresh: true, edit: (L: StationLayout) => {
-    const M = L.market!;
-    const picks = M.spots.filter(s => s.kind === 'idle' || s.kind === 'chat' || s.kind === 'sit' || s.kind === 'work').slice(0, n);
-    picks.forEach((s, i) => {
-      s.kind = 'drink';
-      if (i % 2 === 0) {
-        chairs.push(L.props.length);
-        L.props.push({kind: CHAIR, x: s.x, z: s.z, y: s.y, rot: 0, area: s.area, hx: 0.25, hz: 0.275, h: 0.8, blocksSight: false, variant: 0, ...(s.level ? {level: s.level} : {})});
-      }
-    });
-    const src = M.stalls[3];
-    M.stalls.push({...structuredClone(src), id: 'bar' as MarketStallId, name: 'THE LAST STOP — bar', trader: {...src.front, yaw: src.trader.yaw}});
+/** The market as built now (layout v3: the settlement + the bar deck, its 'drink' posts naming their seats, the 'bar' stall). */
+function barMarket(seed = 808) {
+  const w = combatWorld(A, seed);
+  expect(w.layout.market!.v).toBe(3);
+  w.people.bottleSource = () => ({obj: can, item: 'cola', source: 'models.item_cola (test)'});
+  return {w};
+}
+/** Standing posts (no seat): a version-2 layout (no bar) with `n` spots turned into 'drink' posts that name no seat. */
+function standingPosts(seed = 808, n = 6) {
+  const w = combatWorld(A, seed, {layoutVersion: 2, fresh: true, edit: (L: StationLayout) => {
+    for (const s of L.market!.spots.filter(q => q.kind === 'idle' || q.kind === 'chat' || q.kind === 'work').slice(0, n)) s.kind = 'drink';
   }});
   w.people.bottleSource = () => ({obj: can, item: 'cola', source: 'models.item_cola (test)'});
-  return {w, chairs};
+  return {w};
 }
 type R = ReturnType<typeof barMarket>['w']['people']['residents'][number];
 const patrons = (w: ReturnType<typeof barMarket>['w']) => w.people.residents.filter(r => r.drink);
@@ -72,7 +68,9 @@ describe('seats (market/people/seats.ts)', () => {
     expect(seatHeightOf('plasticStackChair')).toBeCloseTo(0.431, 3);
     expect(seatHeightOf('foldingChair')).toBeCloseTo(0.428, 3);
     expect(seatHeightOf('barStool')).toBe(0.72);
-    expect(seatHeightOf('cafeChair')).toBe(0.45);
+    expect(seatHeightOf('barStool', 0.7)).toBe(0.7); // (a stool's padded top is its height)
+    expect(seatHeightOf('skyMuStool', 0.66)).toBe(0.66); // (layout v3's counter stools)
+    expect(seatHeightOf('cafeChair')).toBe(0.43); // (layout v3's table chairs: the seat board at 0.41 + 0.02)
     expect(seatHeightOf('couch')).toBe(0.42);
     for (const k of ['repairBench', 'benchGrinderStand', 'labBench', 'wheelchair', 'crate', 'campTable']) expect(seatHeightOf(k), k).toBeNull();
     const spot = {x: 1, z: 1, y: 2.95, level: 1, yaw: 0, kind: 'drink' as const, area: 3};
@@ -81,17 +79,20 @@ describe('seats (market/people/seats.ts)', () => {
     expect(seatAt(spot, [p('foldingChair', 1 + SEAT_REACH + 0.05, 1)])).toBeNull();
     expect(seatAt(spot, [p('foldingChair', 1.1)])).toBeNull(); // (another storey)
     expect(seatAt(spot, [p('foldingChair', 1.1, 1)])!.y).toBeCloseTo(2.95 + 0.428, 3);
+    // a post naming its seat (layout v3) takes that one, even past SEAT_REACH
+    expect(seatAt({...spot, seat: 1}, [p('foldingChair', 1.1, 1), p('cafeChair', 1.9, 1)])).toMatchObject({x: 1.9, prop: 1, y: 2.95 + 0.43});
   });
 });
 
 describe('bar patrons drink', () => {
-  it('the bar\'s regulars start at its \'drink\' spots playing a drinking loop, a bottle in the right hand; seated on a chair, else standing', () => {
-    const {w, chairs} = barMarket();
+  it('the bar\'s regulars start at its \'drink\' posts playing a drinking loop, a bottle in the right hand, seated on the post\'s stool / chair', () => {
+    const {w} = barMarket();
     w.build();
     const P = patrons(w);
-    const nRes = w.people.residents.length;
-    expect(P.length).toBe(Math.min(6, Math.round(nRes * MARKET_PEOPLE.drink.regulars)));
-    let seated = 0, standing = 0;
+    const nRes = w.people.residents.length, posts = w.people.spots.filter(s => s.kind === 'drink').length;
+    expect(posts).toBeGreaterThanOrEqual(6);
+    expect(P.length).toBe(Math.min(posts, Math.round(nRes * MARKET_PEOPLE.drink.regulars)));
+    let seated = 0;
     for (const r of P) {
       const a = r.actor, s = w.people.spots[r.spot];
       expect(s.kind).toBe('drink');
@@ -102,23 +103,20 @@ describe('bar patrons drink', () => {
       expect(r.bottle!.holder.visible).toBe(true);
       expect(r.bottle!.holder.parent).toBe(a.bone('R_Hand'));
       expect(r.bottle!.holder.name).toBe(`market-bottle-${PATRON_BOTTLE_ITEMS[1]}`);
-      if (r.drink!.seat) {
-        seated++;
-        const chair = w.layout.props[chairs.find(i => Math.hypot(w.layout.props[i].x - s.x, w.layout.props[i].z - s.z) < 1e-6)!];
-        expect(chair).toBeDefined();
-        expect(a.loop).toMatch(/^DrinkSit2?@\d+$/);
-        expect(Math.hypot(a.x - chair.x, a.z - chair.z)).toBeLessThan(0.05); // on the chair
-        a.animate(0.01); // (the clip's pose)
-        const hips = bonePos(a, 'Hips').y - a.y;
-        expect(hips).toBeGreaterThan((0.431 + 0.05) * 0.94);
-        expect(hips).toBeLessThan((0.431 + DRINK.hipOverSeat + 0.05) * 1.06);
-      } else {
-        standing++;
-        expect(a.loop).toMatch(/^Drink2?$/);
-      }
+      // on the post's own seat (layout v3: s.seat), at its seat height
+      expect(s.seat).toBeDefined();
+      const seat = w.layout.props[s.seat!], top = seatHeightOf(seat.kind, seat.h)!;
+      expect(top).not.toBeNull();
+      expect(r.drink!.seat).not.toBeNull();
+      seated++;
+      expect(a.loop).toMatch(/^DrinkSit2?@\d+$/);
+      expect(Math.hypot(a.x - seat.x, a.z - seat.z)).toBeLessThan(0.05);
+      a.animate(0.01); // (the clip's pose)
+      const hips = bonePos(a, 'Hips').y - a.y;
+      expect(hips, `${r.id} on a ${seat.kind}`).toBeGreaterThan((top + 0.05) * 0.94);
+      expect(hips, `${r.id} on a ${seat.kind}`).toBeLessThan((top + DRINK.hipOverSeat + 0.05) * 1.06);
     }
-    expect(seated).toBeGreaterThan(0);
-    expect(standing).toBeGreaterThan(0);
+    expect(seated).toBe(P.length);
     // everyone else: no bottle shown
     for (const r of w.people.residents) if (!r.drink) expect(r.bottle?.holder.visible ?? false).toBe(false);
   });
@@ -174,20 +172,36 @@ describe('bar patrons drink', () => {
   it('the bartender (the \'bar\' stall\'s trader) works the counter between a word and a pause, and turns to talk to a customer', () => {
     const {w} = barMarket();
     w.build();
-    const t = w.people.traders.find(x => (x.stall.id as string) === 'bar')!;
+    const t = w.people.traders.find(x => x.stall.id === 'bar')!;
     expect(t.bartender).toBe(true);
+    expect(w.people.traders.filter(x => x.bartender)).toEqual([t]); // (one bartender: the bar stall's)
     expect(t.actor.loop).toBe('Work');
     const loops = new Set<string>();
     for (let i = 0; i < 30 * 60; i++) { w.frame(1 / 30); loops.add(t.actor.loop); }
     expect(loops.has('Work')).toBe(true);
     expect(loops.size).toBeGreaterThan(1);
-    const st = w.layout.market!.stalls.find(s => (s.id as string) === 'bar')!;
-    Object.assign(w.player, {x: t.actor.x - Math.sin(t.actor.yaw) * -2, y: t.actor.y, z: t.actor.z - Math.cos(t.actor.yaw) * -2});
-    void st;
+    // a customer at the bar's customer spot (in front of the counter): the bartender turns to talk
+    const st = w.layout.market!.stalls.find(s => s.id === 'bar')!;
+    Object.assign(w.player, {x: st.front.x, y: st.front.y, z: st.front.z});
     for (let i = 0; i < 20; i++) w.frame(1 / 30);
     expect(t.actor.loop).toBe('Talk');
-    // the other traders never take up the bartender's work
-    for (const o of w.people.traders) if (o !== t) expect(o.bartender).toBe(false);
+  });
+
+  it('a \'drink\' post with no seat (synthetic, on a version-2 layout without a bar): the patron drinks standing at the post', () => {
+    const {w} = standingPosts();
+    w.build();
+    const P = patrons(w);
+    expect(P.length).toBeGreaterThan(0);
+    for (const r of P) {
+      const s = w.people.spots[r.spot];
+      expect(r.drink!.seat).toBeNull();
+      expect(r.actor.loop).toMatch(/^Drink2?$/);
+      expect(Math.hypot(r.actor.x - s.x, r.actor.z - s.z)).toBeLessThan(0.05);
+      expect(r.bottle!.holder.visible).toBe(true);
+      r.actor.animate(0.01);
+      expect(bonePos(r.actor, 'Hips').y - r.actor.y).toBeGreaterThan(0.7); // standing
+    }
+    for (const t of w.people.traders) expect(t.bartender).toBe(false); // (no bar stall on v2)
   });
 
   it('hostile: the bottles are put away; the bar\'s people take part — a theft at the bar makes the bartender fight', () => {
