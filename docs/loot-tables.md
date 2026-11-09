@@ -68,6 +68,10 @@ The old modules re-export the same objects: `items/lootEconomy.ts`, `gen/gearLoo
    - First-spawn floor pickups use `pantryPickupItem`. Bread and the Skyways ramen food are never substituted.
    - A substituted lot's id is `rolled id + 10 000 000 × (code + 1)`. A remembered holder therefore keeps exactly what its
      record names. An old save's record lists the rolled ids, so it keeps its old items.
+7. **Natural food / drink half (realization).** Half of the natural food and drink finds stay; see
+   [Natural food / drink half](#natural-food--drink-half-every-level). This runs in `game.ts` buildSection, after the fuel lots,
+   the shelf filler and the section memory. The tables, the rolls and every census below are unchanged; what the player meets is
+   about half of their food / drink.
 
 Contents are rolled once. They are finite and remembered by lot id (`run/memory.ts`). Nothing refills or re-rolls.
 
@@ -190,6 +194,43 @@ This is the test-only `REDUCED_FOOD` profile in `tests/loot-tables.test.ts`, whi
 | Office floor food | 1 | 0 |
 
 The Subway's loose pickups were byte-identical (its floor program has no food).
+
+## Natural food / drink half (every level)
+
+<!-- Task studio-food-drink-half-20261109-201124-01. User (2026-11-09): "food spawn rate is to high … lets cut food / drink spawn in
+half. 50% reduction." -->
+
+Every natural food or drink find stays with probability `NATURAL_FOOD_KEEP` = 0.5 (`items/naturalFood.ts`), on every level and for
+every food / drink: the old items, bakery bread, the Skyways ramen food and the 24 pantry items alike.
+
+- **A retention gate, not a re-weighting.** Halving the food rows' weights would not halve what the player finds, and it would hand
+  the freed draws to ammo, medicine or fuel. The gate instead decides each find by a stable hash of its origin, with no RNG stream:
+  - a holder lot: the section, the holder's memory key and the lot's ROLLED id (its food-variety variant decides like the rolled lot);
+  - a generated floor pickup: the section and its layout index (its yaw is still drawn, so every other pickup keeps its stream).
+- **What a kept find keeps.** Its id, item (variant), count, spot and compartment. A dropped one never appears; its spot reads as
+  taken, and the shelf filler and fuel cans are placed exactly as before.
+- **What counts.** `isNaturalFood` = `econCat` `food` / `drink`. Curated rewards (`REWARD_TABLES` holders, `reward` pickups) always
+  spawn.
+- **Exactly once** (`run/worldMemory.ts` `dropNaturalFood`, `game.ts` buildSection):
+  - Only holders without a section-memory record and the first spawn of a section's floor pickups are gated.
+  - A remembered holder or pickup list from any save, old or new, is restored exactly as recorded, so already-found food stays.
+  - Unvisited sections of an old campaign get the new rate.
+  - The gate is idempotent: a kept find stays kept.
+- **Not touched:** nutrition, stacks and the survival drain; market vendor stock and the beers; the starter kit; anything carried,
+  dropped, stored or shipped; the shelf filler; every non-food lot and pickup.
+- **Measured** (`tests/food-half.test.ts`; the food-variety layouts of every level; `/tmp/food-half/census.json`). The expected keep
+  is exactly 0.5 per find.
+
+| Level | Food units before → after | Drink units before → after | Food + drink |
+|---|---|---|---|
+| Subway | 165 → 81 | 177 → 95 | ×0.52 |
+| Office | 76 → 35 | 86 → 39 | ×0.46 |
+| Mall | 59 → 33 | 80 → 37 | ×0.50 |
+| Market | 0 | 0 | (no food loot) |
+| Bunker | 22 → 9 | 20 → 13 | ×0.52 |
+| Skyways | 105 → 58 | 215 → 95 | ×0.48 |
+| Reactor | 16 → 6 | 19 → 12 | ×0.51 |
+| All | 443 → 222 (×0.50) | 597 → 291 (×0.49) | ×0.49 |
 
 ## Explicit exceptions (not table-driven)
 
