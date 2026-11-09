@@ -167,6 +167,8 @@ export const FLOOR_4: BunkerFloorModule = {
       gas,
       damp: ['reservoir', 'treatment', 'pumpHall', 'power', 'feed', 'drainage', 'sump', 'ejector', 'westWalk'].map(id),
       aged: ['drainage', 'sump', 'ejector'].map(id),
+      // the main line on steady power: freight hall → pump hall → core gallery (the first view of the core's nave is never dark)
+      lit: ['freight', 'pumpHall', 'gallery'].map(id),
     };
   },
   dress: dressFloor4,

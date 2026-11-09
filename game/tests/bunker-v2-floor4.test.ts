@@ -151,7 +151,7 @@ describe('bunker v2 storey 4: maintenance & water', () => {
     }
   });
 
-  it('hazards: the strong chlorine leak in a one-door dead end, a weak sewer leak, damp water plant, an aged drainage wing', () => {
+  it('hazards and light: the strong chlorine leak in a one-door dead end, a weak sewer leak, damp water plant, an aged drainage wing, the main line lit', () => {
     for (const s of SEEDS) {
       const {layout} = gen(s);
       const b = layout.bunker!, g = layout.levels[LV].grid;
@@ -165,6 +165,14 @@ describe('bunker v2 storey 4: maintenance & water', () => {
       expect(zones.some(z => z.strength < 0.5 && z.cells.every(i => g.area[i] === ej.id)), `${s} weak`).toBe(true);
       for (const n of ['Reservoir hall', 'Water treatment', 'Pump hall', 'Auxiliary power room', 'Drainage gallery', 'Flooded sump']) expect(b.damp, `${s} ${n}`).toContain(byLabel(layout, n)!.id);
       for (const n of ['Drainage gallery', 'Flooded sump', 'Sewage ejector room']) expect(['dark', 'dim'], `${s} ${n}`).toContain(byLabel(layout, n)!.lighting);
+      // the main line on steady power: lit, with working fixtures
+      for (const n of ['Freight hall', 'Pump hall', 'Core gallery']) {
+        const a = byLabel(layout, n)!;
+        expect(a.lighting, `${s} ${n}`).toBe('lit');
+        const own = layout.lights.filter(l => l.area === a.id);
+        expect(own.length, `${s} ${n} fixtures`).toBeGreaterThan(0);
+        expect(own.every(l => !l.broken), `${s} ${n} working`).toBe(true);
+      }
     }
   });
 
