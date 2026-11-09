@@ -55,7 +55,7 @@ interface Opening {
 /** The storey's keys (QA / tests / dress). */
 export const FLOOR4_KEYS = {
   reservoir: 'reservoir', treatment: 'treatment', chlorine: 'chlorine', filtration: 'filtration', boiler: 'boiler', power: 'power',
-  pipeRun: 'pipeRun', workshop: 'workshop', link: 'link', stores: 'stores', switchRoom: 'switch', washroom: 'washroom', crew: 'crew',
+  pipeRun: 'pipeRun', workshop: 'workshop', link: 'link', stores: 'stores', washroom: 'washroom', crew: 'crew',
   freight: 'freight', pumpHall: 'pumpHall', passage: 'passage', gallery: 'gallery', feed: 'feed', drainage: 'drainage', sump: 'sump',
   ejector: 'ejector', westWalk: 'westWalk',
 } as const;
@@ -76,21 +76,20 @@ function specs(): Spec[] {
     // --- between the plant band and the hub ---------------------------------------------------------------------------------------
     {key: 'workshop', r: R(49, 37, 16, 18), kind: 'room', type: 'utility', clear: H.room, label: 'Maintenance workshop', purpose: 'workshop', parent: 'link'},
     {key: 'link', r: R(66, 37, 4, 18), kind: 'service', type: 'service-corridor', clear: H.run, label: 'Pipe run', purpose: 'service-corridor', parent: 'freight'},
-    {key: 'stores', r: R(71, 37, 14, 12), kind: 'room', type: 'storage', clear: H.room, label: 'Maintenance stores', purpose: 'storage', parent: 'link'},
-    {key: 'switch', r: R(86, 38, 10, 17), kind: 'room', type: 'utility', clear: H.room, label: 'Switch room', purpose: 'electrical-room', parent: 'crew'},
-    {key: 'washroom', r: R(97, 38, 11, 17), kind: 'room', type: 'washroom', clear: H.room, label: 'Crew washroom', purpose: 'washroom', parent: 'crew'},
+    {key: 'stores', r: R(71, 37, 12, 10), kind: 'room', type: 'storage', clear: H.room, label: 'Maintenance stores', purpose: 'storage', parent: 'link'},
+    {key: 'washroom', r: R(88, 41, 13, 14), kind: 'room', type: 'washroom', clear: H.room, label: 'Crew washroom', purpose: 'washroom', parent: 'crew'},
     {key: 'crew', r: R(85, 56, 23, 15), kind: 'room', type: 'crew-room', clear: H.room + 0.2, label: 'Crew room', purpose: 'locker-room', parent: 'freight'},
     // --- the hub and the axis ---------------------------------------------------------------------------------------------------
-    {key: 'freight', r: R(30, 56, 54, 15), kind: 'room', type: 'utility', clear: H.lobby, label: 'Freight hall', purpose: 'storage'},
-    {key: 'pumpHall', r: R(68, 72, 23, 41), kind: 'room', type: 'utility', clear: H.hall, label: 'Pump hall', purpose: 'pump-room', parent: 'freight'},
+    {key: 'freight', r: R(30, 56, 54, 15), kind: 'room', type: 'utility', clear: H.lobby, label: 'Freight hall', purpose: 'turbine-hall'},
+    {key: 'pumpHall', r: R(68, 72, 23, 41), kind: 'room', type: 'utility', clear: H.hall, label: 'Pump hall', purpose: 'turbine-hall', parent: 'freight'},
     {key: 'passage', r: R(92, 72, 5, 49), kind: 'service', type: 'service-corridor', clear: H.run + 0.2, label: 'Service passage', purpose: 'service-corridor', parent: 'crew'},
-    {key: 'gallery', r: R(30, 114, 61, 10), kind: 'room', type: 'utility', clear: H.gallery, label: 'Core gallery', purpose: 'service-corridor', parent: 'pumpHall', role: 'catwalk', noFloorLoot: true},
-    {key: 'feed', r: R(92, 122, 26, 24), kind: 'room', type: 'utility', clear: H.lobby, label: 'Cooling feed gallery', purpose: 'pump-room', parent: 'passage'},
+    {key: 'gallery', r: R(30, 114, 61, 10), kind: 'room', type: 'crew-room', clear: H.gallery, label: 'Core gallery', purpose: '', parent: 'pumpHall', role: 'catwalk', publicSpace: true, noFloorLoot: true},
+    {key: 'feed', r: R(92, 122, 26, 24), kind: 'room', type: 'utility', clear: H.lobby, label: 'Cooling feed gallery', purpose: 'turbine-hall', parent: 'passage'},
     // --- the damaged drainage wing ------------------------------------------------------------------------------------------------
     {key: 'drainage', r: R(30, 72, 12, 41), kind: 'room', type: 'utility', clear: H.room, label: 'Drainage gallery', purpose: 'sewage-room', parent: 'freight'},
     {key: 'sump', r: R(12, 76, 17, 20), kind: 'room', type: 'utility', clear: 4.2, label: 'Flooded sump', purpose: 'overflow-chamber', parent: 'drainage'},
     {key: 'ejector', r: R(12, 97, 17, 14), kind: 'room', type: 'utility', clear: H.room, label: 'Sewage ejector room', purpose: 'sewage-room', parent: 'drainage'},
-    {key: 'westWalk', r: R(40, 125, 10, 20), kind: 'room', type: 'utility', clear: H.gallery, label: 'West catwalk', purpose: 'service-corridor', parent: 'gallery', role: 'catwalk', noFloorLoot: true},
+    {key: 'westWalk', r: R(40, 125, 10, 20), kind: 'room', type: 'crew-room', clear: H.gallery, label: 'West catwalk', purpose: '', parent: 'gallery', role: 'catwalk', publicSpace: true, noFloorLoot: true},
   ];
 }
 
@@ -111,7 +110,6 @@ function openings(): Opening[] {
     {a: 'freight', b: 'pumpHall', w: 12, h: 3.0, at: 0.5},
     {a: 'freight', b: 'drainage', w: 8, h: 2.8, at: 0.5},
     {a: 'freight', b: 'crew', w: 6, h: 2.8, at: 0.5, jitter: 0.4},
-    {a: 'crew', b: 'switch', w: 3, h: 2.6, at: 0.5, jitter: 0.6},
     {a: 'crew', b: 'washroom', w: 3, h: 2.6, at: 0.5, jitter: 0.6},
     {a: 'crew', b: 'passage', w: 5, h: 2.8, gap: R(92, 71, 5, 1)},
     {a: 'pumpHall', b: 'passage', w: 4, h: 2.8, at: 0.5, jitter: 0.5},
@@ -134,7 +132,7 @@ export const FLOOR_4: BunkerFloorModule = {
     const byKey = new Map<string, Area>();
     const all = specs();
     for (const s of all) {
-      const a = ctx.room(s.r, s.kind, s.type, s.clear, -1, {label: s.label, purpose: s.purpose, role: s.role, publicSpace: s.publicSpace ?? false, noFloorLoot: s.noFloorLoot});
+      const a = ctx.room(s.r, s.kind, s.type, s.clear, -1, {label: s.label, purpose: s.purpose || undefined, role: s.role, publicSpace: s.publicSpace ?? false, noFloorLoot: s.noFloorLoot});
       if (!a) return null;
       byKey.set(s.key, a);
     }
