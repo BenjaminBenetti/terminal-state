@@ -112,6 +112,7 @@ import {installReactorEnding} from './world/reactor/ending'; // task studio-reac
 import {installReactorSurface} from './world/reactor/surface'; // task studio-reactor-surface-ending-20261102 (lane SURFACE): the city / rain / clear air outside
 import {installReactorCredits} from './world/reactor/credits'; // task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane CREDITS): the end credits
 import {installReactorCpuCulling} from './world/reactor/cpuActorCulling'; // task studio-reactor-submit-roof-fog-20261102 (lane CPU)
+import {installBunkerObjective} from './world/bunker/objective'; // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE): the Bunker's optional generators + core intel
 import {installReactorMapBoards} from './world/reactor/mapBoard'; // task reactor-expansion-20261101 (lane CONTROLS) // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
@@ -689,6 +690,7 @@ export class Game {
     installReactorCredits(this); hookName('reactorCredits');
     installReactorCpuCulling(this); hookName('reactorCpuCulling'); // task studio-reactor-submit-roof-fog-20261102 (lane CPU): enemies / pickups behind the Reactor's rock decided by the level culler (inert elsewhere)
     installReactorMapBoards(this); hookName('reactorMapBoards'); // task reactor-expansion-20261101 (lane CONTROLS): floor-map boards beside the instruction boards (X marks, storey buttons; inert off the Reactor) // task reactor-build-20261101 (lane RESTART): E / hold-E controls, prompts, screens, the win sequence, section hooks (inert off the Reactor)
+    installBunkerObjective(this); hookName('bunkerObjective'); // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE): fuel + turnkey-start the three auxiliary generators, core map intel once per station (lane 'bunker.state'; inert off the Bunker)
     // Task player-train-shell-20261101-202805 (lane TRAIN): LAST (its build rebuilds game.propIndex over everything already there, after the
     // stalls; its E handler / prompt come after the others): section hooks (the car at game.trainPlacement, interior volume + colliders, built
     // synchronously before the first update), frame hook (doors), E + prompt, the boot-time head / tail / interior lights, warm pool
