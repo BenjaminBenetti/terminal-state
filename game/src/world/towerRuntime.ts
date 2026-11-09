@@ -58,6 +58,8 @@ export interface TowerHost {
   state: string;
   warming?: boolean;
   prepareBeforeShow?(root: THREE.Object3D): Promise<void>;
+  /** Task studio-bunker-rework-20261109-205115-01: fuel carts (world/fuelCarts.ts) standing in the cab ride along (their storey too). */
+  fuelCarts?: {carry?(inside: (x: number, y: number, z: number) => boolean, dy: number, level: number): number};
   /** Loose pickups (world/pickups.ts): resting ones inside the cab ride along. */
   pickups?: {
     carry(inside: (x: number, y: number, z: number) => boolean, dy: number): number;
@@ -176,7 +178,14 @@ export class TowerRuntime {
   target: Target | null = null;
   prompt: string | null = null;
   /** Counters (QA / tests): presses = every button press; calls = landing calls; picks = cab floor selections. */
-  readonly counts = {presses: 0, calls: 0, picks: 0, departs: 0, arrivals: 0, reopen: 0, alarms: 0};
+  readonly counts = {presses: 0, calls: 0, picks: 0, departs: 0, arrivals: 0, reopen: 0, alarms: 0, unpowered: 0, parked: 0};
+  /**
+   * Task studio-bunker-rework-20261109-205115-01: an external POWER source for the car (the Bunker's cargo lift runs on the shelter's
+   * three auxiliary generators: world/bunker/objective.ts sets it per build). Unpowered, every button refuses (a denied buzz and the
+   * offline reason) and the car stands shut at its stop; `park` records the car's stop when the world is torn down. Null (Office,
+   * mall): always powered, nothing recorded — unchanged.
+   */
+  liftPower: {on(): boolean; offline(): string; park?(floor: number): void} | null = null;
   /** Id of the last pressed button and how (QA). */
   lastPress: {id: string; via: 'click' | 'key' | 'qa'} | null = null;
   private retired: (() => void)[] = [];
@@ -231,14 +240,14 @@ export class TowerRuntime {
     if (info.elevator && info.elevator.stops.length) {
       const plan = planElevator(info.elevator);
       const stops = info.elevator.stops;
-      const logic = new ElevatorLogic(stops.map(s => ({floor: s.floor, y: s.y})), {floor: stops[0].floor});
+      const logic = new ElevatorLogic(stops.map(s => ({floor: s.floor, y: s.y})), {floor: info.elevator.home ?? stops[0].floor}); // (+ a record's home stop: the Bunker's cargo lift)
       const G = plan.gate, cab = info.elevator.cab;
       const along = Math.abs(G.nx) > 0.5 ? G.cz : G.cx;
       const gate: VolumeGate = {side: info.elevator.doorSide, a0: along - G.hw, a1: along + G.hw, depth: G.depth, height: plan.doorH, open: false};
       const s0 = stops[logic.stop ?? 0];
       const vol: DynamicVolume = {x0: cab.x0, z0: cab.z0, x1: cab.x1, z1: cab.z1, floorY: logic.y, ceilY: logic.y + plan.cabH, level: s0.levelId, area: s0.area, gates: [gate], stops: stops.map(s => s.y), name: 'elevator-cab'};
       h.levels.addDynamicVolume(vol);
-      const view = buildElevatorView(plan, h.mats, {glass: !!layout.mall}); // task track3 (lane ARCH): the mall's glass car
+      const view = buildElevatorView(plan, h.mats, {glass: !!layout.mall, cargo: !!info.elevator.cargo}); // task track3 (lane ARCH): the mall's glass car (+ the Bunker's freight car)
       view.setCab(logic.y, 0);
       view.setIndicator(stopLabel(stops, logic.floor), 0);
       root.add(view.root);
@@ -294,13 +303,14 @@ export class TowerRuntime {
       // Task mall-round2-20261031 (lane PERF, M05): the mall's glass car + shaft rig (~35 meshes, drawn in both passes whenever in the
       // frustum) obey the culler too: tagged with every storey the shaft serves and DYNAMIC bounds (the car, ropes, counterweight and
       // travelling cable move: world/levelCulling.ts re-derives their boxes every update from the current matrices). Office unchanged.
-      if (o.elevator && layout.mall) registerMovingLift(culler as {register(root: THREE.Object3D): void}, o.elevator.view, o.elevator.plan.info.stops.map(s => s.levelId));
+      if (o.elevator && (layout.mall || o.elevator.plan.info.cargo)) registerMovingLift(culler as {register(root: THREE.Object3D): void}, o.elevator.view, o.elevator.plan.info.stops.map(s => s.levelId)); // (+ the Bunker's cargo car and shaft liner)
     }
     // An eye in the cab (inside the shaft, solid on every storey grid) is on the cab's storey: updateCuller sets the
     // culler's public LevelCuller.eyeOverride each frame (ENGINE, task office-seamless-20261029; no private-field patch).
   }
 
   teardown(): void {
+    this.parkCar();
     const o = this.office;
     this.office = null;
     this.target = null;
@@ -400,6 +410,50 @@ export class TowerRuntime {
     if (o.exterior) this.updateExterior(o, dt);
   }
 
+  /**
+   * Task studio-bunker-rework-20261109-205115-01: the car's stop when the world goes (the power source records it: a revisit / load
+   * finds the car where it was left). A car still travelling finishes its run at once — the loose things in it (pickups, fuel carts)
+   * carried the rest of the way, so nothing is saved hanging in the shaft.
+   */
+  private parkCar(): void {
+    const e = this.office?.elevator, park = this.liftPower?.park;
+    if (!e || !park) return;
+    const L = e.logic;
+    const i = L.moving && L.target !== null ? L.target : L.stop ?? L.nearest;
+    const st = L.stops[i];
+    if (!st) return;
+    const dy = st.y - L.y;
+    if (Math.abs(dy) > 1e-6) {
+      const h = this.host;
+      h.pickups?.carry(e.insideLoose, dy);
+      h.fuelCarts?.carry?.(e.insideLoose, dy, e.plan.info.stops[i]?.levelId ?? 0);
+    }
+    this.counts.parked++;
+    park(st.floor);
+  }
+
+  /**
+   * Task studio-bunker-rework-20261109-205115-01: stands the car at `floor`'s stop, gates shut (the remembered stop, right after the
+   * world was built — before anything ran). False when there is no car / no such stop.
+   */
+  placeCar(floor: number): boolean {
+    const e = this.office?.elevator;
+    if (!e) return false;
+    const stops = e.plan.info.stops, i = stops.findIndex(q => q.floor === floor);
+    if (i < 0) return false;
+    const logic = new ElevatorLogic(stops.map(q => ({floor: q.floor, y: q.y})), {floor});
+    e.logic = logic;
+    e.lamps.car = logic.car; e.lamps.hallUp = logic.hallUp; e.lamps.hallDown = logic.hallDown;
+    e.prevY = logic.y;
+    const v = e.vol;
+    v.floorY = logic.y; v.ceilY = logic.y + e.plan.cabH; v.level = stops[i].levelId; v.area = stops[i].area;
+    e.gate.open = false;
+    e.view.setCab(logic.y, 0);
+    e.view.setIndicator(stopLabel(stops, logic.floor), 0);
+    e.indKey = -1;
+    return true;
+  }
+
   /** The player stands inside the cab right now. */
   playerInCab(): boolean {
     const e = this.office?.elevator, P = this.host.player;
@@ -446,6 +500,7 @@ export class TowerRuntime {
         c.zombies++;
       }
       c.pickups = h.pickups?.carry(e.insideLoose, dy) ?? 0;
+      h.fuelCarts?.carry?.(e.insideLoose, dy, near.levelId); // (task studio-bunker-rework-20261109-205115-01: fuel carts ride the cargo lift)
     }
     // --- views: doors, indicator, lit buttons / lanterns, emissive flicker ---
     e.view.setCab(L.y, L.door);
@@ -604,7 +659,7 @@ export class TowerRuntime {
     const t = e && this.host.state === 'playing' ? this.pickButton(o, cabY) : null;
     this.target = t;
     e?.view.setHover(t?.btn ?? null);
-    this.prompt = t && e ? this.promptFor(e, t.btn) : null;
+    this.prompt = t && e ? (this.liftPower && !this.liftPower.on() && t.btn.kind !== 'alarm' ? `<b>Cargo lift · NO POWER</b> · ${this.liftPower.offline()}` : this.promptFor(e, t.btn)) : null;
   }
 
   /** QA: re-target with the current camera now (after aiming the view directly). */
@@ -655,6 +710,14 @@ export class TowerRuntime {
     this.lastPress = {id: b.id, via};
     const at: P3 = b.where === 'car' ? {x: b.at.x, y: b.at.y + L.y, z: b.at.z} : b.at;
     towerCue(h.sfx, 'click', at, {rate: 1.5, gain: 0.8});
+    // (task studio-bunker-rework-20261109-205115-01: a car without power — the Bunker's cargo lift before its generators run — answers
+    // nothing but the alarm bell: a dead buzz and the reason)
+    if (this.liftPower && !this.liftPower.on() && b.kind !== 'alarm') {
+      this.counts.unpowered++;
+      towerCue(h.sfx, 'denied', at, {rate: 0.8, gain: 0.7});
+      h.hud.toast(this.liftPower.offline(), true);
+      return;
+    }
     switch (b.kind) {
       case 'floor': {
         const r = L.select(b.floor);

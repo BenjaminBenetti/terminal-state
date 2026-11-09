@@ -5,6 +5,7 @@
 
 import {CELL, SOLID, type Grid} from '../gen/grid';
 import {mallTowerRecord} from '../gen/mall/elevator'; // Task track3-eaton-centre-20261031 (lane GEN): the mall's glass elevator
+import {bunkerTowerRecord} from '../gen/bunker/v2/liftPlan'; // task studio-bunker-rework-20261109-205115-01: the Bunker's cargo lift
 
 export type Side = 'N' | 'S' | 'E' | 'W';
 export interface Rect2 { x0: number; z0: number; x1: number; z1: number }
@@ -43,6 +44,11 @@ export interface ElevatorInfo {
   panel: {x: number; dy: number; z: number};
   /** Stops, bottom-up. */
   stops: StopInfo[];
+  /** Task studio-bunker-rework-20261109-205115-01: the gate's clear height (default LIFT_DOOR_H), the freight car's look, the stop's
+   *  floor the car stands at when the world is built (default the bottom stop). The Office / mall records author none of them. */
+  doorHeight?: number;
+  cargo?: boolean;
+  home?: number;
 }
 
 export interface StoreyInfo { floor: number; levelId: number; baseY: number; label: string; clear: number; name?: string }
@@ -118,6 +124,8 @@ export interface TowerLayoutLike {
   office?: unknown;
   /** Task track3-eaton-centre-20261031 (lane GEN): The Eaton's Center record (its glass elevator rides the same runtime). */
   mall?: unknown;
+  /** Task studio-bunker-rework-20261109-205115-01: a version-2 Bunker's record (its cargo lift rides the same runtime). */
+  bunker?: unknown;
 }
 
 /**
@@ -125,7 +133,8 @@ export interface TowerLayoutLike {
  * (lane GEN): a mall layout (no office record) yields its glass elevator in the same v2 shape (gen/mall/elevator.ts; no windows).
  */
 export function readTowerInfo(layout: TowerLayoutLike): TowerInfo | null {
-  const o = (layout.office ?? (layout.mall ? mallTowerRecord(layout as unknown as Parameters<typeof mallTowerRecord>[0]) : undefined)) as Record<string, unknown> | undefined;
+  const o = (layout.office ?? (layout.mall ? mallTowerRecord(layout as unknown as Parameters<typeof mallTowerRecord>[0]) : undefined)
+    ?? (layout.bunker ? bunkerTowerRecord(layout as unknown as Parameters<typeof bunkerTowerRecord>[0]) ?? undefined : undefined)) as Record<string, unknown> | undefined;
   if (!o || typeof o !== 'object') return null;
   const lv = (id: number) => layout.levels?.find(l => l.id === id) ?? layout.levels?.[id];
   const floorHeight = Math.max(2.5, num(o.floorHeight, 4.4));
@@ -177,7 +186,13 @@ export function readTowerInfo(layout: TowerLayoutLike): TowerInfo | null {
         landing: {x: num((s.landing as Record<string, unknown> | undefined)?.x, out.x), z: num((s.landing as Record<string, unknown> | undefined)?.z, out.z)},
       }];
     }).sort((a, b) => a.y - b.y);
-    if (stops.length) elevator = {cab, shaft, doorSide: e.doorSide, door, cabHeight: Math.max(2.2, num(e.cabHeight, 2.6)), panel, stops};
+    if (stops.length) {
+      elevator = {cab, shaft, doorSide: e.doorSide, door, cabHeight: Math.max(2.2, num(e.cabHeight, 2.6)), panel, stops};
+      // (task studio-bunker-rework-20261109-205115-01: the Bunker's cargo lift record — absent on the Office / mall records)
+      if (typeof e.doorHeight === 'number' && Number.isFinite(e.doorHeight)) elevator.doorHeight = Math.max(2.0, e.doorHeight);
+      if (e.cargo === true) elevator.cargo = true;
+      if (typeof e.home === 'number' && stops.some(q => q.floor === e.home)) elevator.home = e.home;
+    }
   }
   // windows: every span of every storey (sill / head relative to its own storey floor)
   const windows: WindowSpan[] = Array.isArray(o.windows) ? (o.windows as Record<string, unknown>[]).flatMap(w => {

@@ -41,6 +41,7 @@
 // KNOWLEDGE, which Retry never takes back (campaign.known is not part of the snapshot), so the claim is written into the entry snapshot's
 // copy of this lane too (claim only, the generators keep their entry states): Retry can never re-claim / re-roll / farm it.
 
+import type {FuelHoseTarget} from '../fuelCarts'; // task studio-bunker-rework-20261109-205115-01
 import * as THREE from 'three';
 import type {Game} from '../../game';
 import type {StationLayout} from '../../gen/stationTypes';
@@ -59,7 +60,7 @@ import {FuelPourView, POUR_VIEW} from '../fuelPourView';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import type {SmokeEmitterOptions, SmokeHandle} from '../../render/smoke';
 import {
-  BUNKER_LANE, bunkerIntelText, bunkerStateJSON, chooseBunkerIntel, coreAlive, loadBunkerState, onlineCount,
+  BUNKER_LANE, addGenFuel, bunkerIntelText, bunkerStateJSON, chooseBunkerIntel, coreAlive, fuelNeeded, loadBunkerState, onlineCount,
   type BunkerGenState, type BunkerIntelJSON, type BunkerStateJSON,
 } from './objectiveState';
 import {CORE_SCREEN_PX, drawCoreScreen, type CoreScreenModel} from './coreScreen';
@@ -105,6 +106,9 @@ export const BUNKER_CORE = {
   /** The close-up's pixel scale over the face. */
   READ_SCALE: 2,
 } as const;
+
+/** The tower runtime's cargo-lift seams (world/towerRuntime.ts TowerRuntime.liftPower / placeCar). */
+interface LiftTower { liftPower: {on(): boolean; offline(): string; park?(floor: number): void} | null; placeCar(floor: number): boolean }
 
 type CancelReason = 'away' | 'hit' | 'sprint' | 'menu' | 'riding' | 'busy' | 'teardown' | 'state';
 /** What a press at a generator did. */
@@ -166,7 +170,11 @@ export class BunkerObjective {
   readOpen = false;
   /** The visible pour (one, re-parented to the pouring generator's frame; built at the first Bunker build, then kept). */
   pourView: FuelPourView | null = null;
-  readonly counts = {pours: 0, refused: 0, cancelled: 0, starts: 0, holdCancels: 0, claims: 0, reads: 0, saves: 0, alerts: 0, cues: 0, loops: 0, exhausts: 0, noUplink: 0};
+  readonly counts = {pours: 0, refused: 0, cancelled: 0, starts: 0, holdCancels: 0, claims: 0, reads: 0, saves: 0, alerts: 0, cues: 0, loops: 0, exhausts: 0, noUplink: 0, hoseUnits: 0};
+  /** The generators' hose targets registered with the fuel carts (this build). */
+  private readonly hoseTargets: FuelHoseTarget[] = [];
+  /** The cargo lift's power source this build gave the tower runtime (null: no lift). */
+  private liftPower: LiftTower['liftPower'] = null;
   lastCancel: CancelReason | null = null;
   private crankUntil: number[] = [];
   private loopAt: number[] = [];
@@ -244,6 +252,8 @@ export class BunkerObjective {
     this.crankUntil = info.generators.map(() => -Infinity); // restored online generators run at once (no re-crank, no re-start sound)
     this.loopAt = info.generators.map(() => -Infinity);
     this.ensurePourView();
+    this.registerHoseTargets();
+    this.connectLift();
     const culler = this.host.world?.culler as {register?(o: THREE.Object3D): void} | undefined;
     root.updateMatrixWorld(true); // (the culler measures each registered mesh's world box now: the placements' transforms must be in)
     if (culler && typeof culler.register === 'function') { for (const v of this.gens) culler.register(v.body); culler.register(this.core.root); }
@@ -258,7 +268,70 @@ export class BunkerObjective {
     this.clear();
   }
 
+  /**
+   * Task studio-bunker-rework-20261109-205115-01: every generator's filler is a fuel TARGET of the carts' hose (world/fuelCarts.ts
+   * FuelHoseTarget) — the same physical rules as at the train's cap; one unit per tick, committed here before it leaves the drum.
+   */
+  private registerHoseTargets(): void {
+    const carts = (this.host as {fuelCarts?: {targets: FuelHoseTarget[]}}).fuelCarts;
+    if (!carts || !this.info) return;
+    this.info.generators.forEach((slot, i) => {
+      const L = LETTERS[i] ?? '?', id = slot.id, at = {x: 0, y: 0, z: 0};
+      const t: FuelHoseTarget = {
+        id: `bunker:${id}`,
+        label: `auxiliary generator ${L}`,
+        cap: () => genToWorld(slot, genNeckMouth(), at),
+        // (no hose fuel while a can is being poured into the same filler: the pour re-checks the need at its end)
+        room: () => (this.state && this.pour?.gen !== i ? fuelNeeded(this.state, id) : 0),
+        take: () => this.hoseFuel(i),
+        fullText: `Auxiliary generator ${L} fuelled — hose disconnected · hold [E] to turn the key`,
+      };
+      carts.targets.push(t);
+      this.hoseTargets.push(t);
+    });
+  }
+
+  /**
+   * Task studio-bunker-rework-20261109-205115-01: a version-2 Bunker's CARGO LIFT runs on the three auxiliary generators — powered
+   * exactly while all three are online (never by the intel claim, a visit or fuel per ride), refusing every call before that with the
+   * reason; its stop is remembered in this station's record (the car is parked there on the next build: revisit / load / Retry).
+   */
+  private connectLift(): void {
+    const tower = (this.host as {tower?: LiftTower}).tower;
+    if (!tower || !this.info?.lift) return;
+    const power: NonNullable<LiftTower['liftPower']> = {
+      on: () => this.alive,
+      offline: () => {
+        const n = this.state ? onlineCount(this.state, this.ids) : 0;
+        return `The cargo lift runs on the shelter's auxiliary generators — ${n}/${this.ids.length} online · the stairs still go everywhere`;
+      },
+      park: floor => { if (this.state) { this.state.lift = {stop: floor}; this.save(); } },
+    };
+    tower.liftPower = power;
+    this.liftPower = power;
+    const stop = this.state?.lift?.stop;
+    if (stop !== undefined) tower.placeCar(stop);
+  }
+
+  /** One unit from a cart's hose into generator `i` (true: committed and saved; the cart debits it in the same tick). */
+  private hoseFuel(i: number): boolean {
+    const id = this.info?.generators[i]?.id;
+    if (!id || !this.state || this.pour?.gen === i) return false;
+    if (addGenFuel(this.state, id, 1) !== 1) return false;
+    this.counts.hoseUnits++;
+    this.save();
+    this.sendVisuals(this.host.clock);
+    this.updateScreen(true);
+    return true;
+  }
+
   private clear(): void {
+    const tower = (this.host as {tower?: LiftTower}).tower;
+    if (tower && this.liftPower && tower.liftPower === this.liftPower) tower.liftPower = null;
+    this.liftPower = null;
+    const carts = (this.host as {fuelCarts?: {targets: FuelHoseTarget[]}}).fuelCarts;
+    if (carts) for (const t of this.hoseTargets.splice(0)) { const k = carts.targets.indexOf(t); if (k >= 0) carts.targets.splice(k, 1); }
+    this.hoseTargets.length = 0;
     this.cancelHold();
     this.closeRead();
     if (this.pour) { this.pour = null; this.showPour(false); }
@@ -402,9 +475,11 @@ export class BunkerObjective {
     const L = LETTERS[i] ?? '?', st = this.genState(i);
     if (st === 'online') return refuse(`Auxiliary generator ${L} is running — it needs no more fuel`, 'online');
     if (st === 'fuelled') return refuse(`Auxiliary generator ${L} is already fuelled — hold [E] to turn the key`, 'fuelled');
+    // (a can holds one quarter-tank unit — exactly the generator's need; a cart's hose is the other source: world/fuelCarts.ts)
+    if (fuelNeeded(this.state, this.info.generators[i].id) < FUEL.canUnits) return refuse(`Auxiliary generator ${L} needs less than a can — use a fuel cart's hose`, 'fuelled');
     if (g.inv.count(FUEL.canItem) <= 0) {
       const inBag = (g.inv.wornBag()?.bag ?? []).some(s => s?.itemId === FUEL.canItem);
-      return refuse(inBag ? 'No fuel can at hand — the ones in your backpack need it set down' : 'No fuel can', 'no-can');
+      return refuse(inBag ? 'No fuel can at hand — the ones in your backpack need it set down' : 'No fuel — pour a fuel can or connect a fuel cart\'s hose', 'no-can');
     }
     if (g.player.climbing || g.consumeView?.busy || g.gasMask?.transitioning || g.gear?.readied) return refuse('Hands busy', 'busy');
     this.pour = {gen: i, t: 0, total: FUEL_PORT.pourS, clears: g.input.clears, away: 0};
@@ -480,12 +555,12 @@ export class BunkerObjective {
     this.pour = null;
     this.showPour(false);
     const id = this.info?.generators[i]?.id;
-    if (!id || !this.state || this.genState(i) !== 'off') { g.hud.toast('Already fuelled — nothing used', true); g.sfx.denied(); this.counts.refused++; return; }
+    if (!id || !this.state || this.genState(i) !== 'off' || fuelNeeded(this.state, id) < FUEL.canUnits) { g.hud.toast('Already fuelled — nothing used', true); g.sfx.denied(); this.counts.refused++; return; }
     const held = !g.inv.meleeSelected ? g.inv.selectedStack() : null;
     const fromHand = held?.itemId === FUEL.canItem;
     const took = fromHand ? g.inv.consumeAt(g.inv.selectedRef()) : g.inv.take(FUEL.canItem, 1) === 1;
     if (!took) { g.hud.toast('No fuel can', true); g.sfx.denied(); this.counts.refused++; return; }
-    this.state.gens[id] = 'fuelled';
+    addGenFuel(this.state, id, FUEL.canUnits); // (one can = one unit = the whole need: the generator is fuelled)
     this.counts.pours++;
     this.save();
     this.sendVisuals(this.host.clock);
@@ -785,7 +860,7 @@ export class BunkerObjective {
     if (st === 'online') return `Auxiliary generator ${L} ONLINE · auxiliary power ${n}/${ids.length}`;
     if (st === 'fuelled') return `<b>Hold [E]</b> Turn the key — start auxiliary generator ${L} · FUELLED`;
     const cans = this.host.inv.count(FUEL.canItem);
-    return cans ? `<b>[E]</b> Pour a fuel can · auxiliary generator ${L} (${label}) OFFLINE · ${cans} can${cans > 1 ? 's' : ''}` : `<b>[E]</b> Auxiliary generator ${L} (${label}) OFFLINE · no fuel — needs one fuel can`;
+    return cans ? `<b>[E]</b> Pour a fuel can · auxiliary generator ${L} (${label}) OFFLINE · needs ¼ tank · ${cans} can${cans > 1 ? 's' : ''}` : `<b>[E]</b> Auxiliary generator ${L} (${label}) OFFLINE · needs ¼ tank of fuel — a fuel can or a fuel cart's hose`;
   }
 
   /** QA / tests: a compact report. */

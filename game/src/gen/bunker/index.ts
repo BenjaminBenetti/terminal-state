@@ -42,6 +42,8 @@ import {dressShelter, placeObjectives} from './dress';
 import {planHazards} from './hazards';
 import {placeBunkerEnemies} from './spawns';
 import {bunkerIssues} from './validate';
+import {BUNKER_LAYOUT_VERSION} from './layoutVersion';
+import {generateBunkerV2} from './v2/index';
 
 export {BUNKER_GENERIC_NAME, bunkerNameOf, bunkerShortName} from './names';
 export {BUNKER_BASES, BUNKER_CORE_LEVEL, BUNKER_LEVELS, BUNKER_STOREY_LABELS, bunkerFrame, bunkerSeed} from './frame';
@@ -68,8 +70,18 @@ export function bunkerStoreyLabel(layout: StationLayout, level: number): string 
   return layout.bunker?.storeys.find(s => s.level === level)?.label ?? '';
 }
 
-/** The ONE continuous Bunker layout (station + the shelter storeys + layout.bunker). */
+/**
+ * The ONE continuous Bunker layout (station + the shelter storeys + layout.bunker). Task studio-bunker-rework-20261109-205115-01: a
+ * station's layout version (gen/bunker/layoutVersion.ts; absent = the current one) picks the generator — version 1 regenerates the
+ * first Bunker exactly (below, frozen), version 2 the inhabited rework with the cargo lift (gen/bunker/v2/index.ts).
+ */
 export function generateBunkerLevel(ctx: SectionGenContext, opts: BunkerGenOptions = {}): StationLayout {
+  if ((ctx.layoutVersion ?? BUNKER_LAYOUT_VERSION) >= 2) return generateBunkerV2(ctx, opts);
+  return generateBunkerV1(ctx, opts);
+}
+
+/** Version 1 (the first Bunker, task studio-bunker-level-20261109-072224-01): frozen — entered stations regenerate it exactly. */
+function generateBunkerV1(ctx: SectionGenContext, opts: BunkerGenOptions = {}): StationLayout {
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const loot = opts.loot ?? lootProfile(BUNKER_ID);
   const spawns = opts.spawns ?? spawnProfile(BUNKER_ID);

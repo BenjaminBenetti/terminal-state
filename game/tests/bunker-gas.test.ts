@@ -9,6 +9,7 @@
 //  - the clean routes: with every cell the field holds above the strong band shut, every generator's front and the core cluster's front
 //    are still reached from the platform start;
 //  - the Office's breach path is unchanged (a breach without a strength is the original arithmetic).
+// (Task studio-bunker-rework-20261109-205115-01: these pin VERSION 1 explicitly — an entered station keeps it; version 2 has its own tests.)
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
 import {installCanvasShim} from './helpers/canvas2d';
@@ -27,7 +28,7 @@ installCanvasShim(false);
 
 const SEEDS = [9001, 24839, 56515];
 const layouts = new Map<number, StationLayout>();
-const bunker = (s: number) => { let l = layouts.get(s); if (!l) layouts.set(s, (l = generateBunkerLevel({levelSeed: s}))); return l; };
+const bunker = (s: number) => { let l = layouts.get(s); if (!l) layouts.set(s, (l = generateBunkerLevel({levelSeed: s, layoutVersion: 1}))); return l; };
 
 function game(L: StationLayout, protect = false) {
   const atmo = new VolumetricAtmosphere(null, {flashlight: new THREE.SpotLight()}, 'high');

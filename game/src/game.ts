@@ -157,6 +157,7 @@ import {skywaysGardenModelKeysFor} from './world/skywaysGardens'; // (lane ARCH)
 import {SKYWAYS_LAYOUT_LANE, skywaysLayoutVersionFor} from './gen/skyways/layoutVersion'; // task studio-skyways-destinations-20261106-170011-01
 import {MARKET_LAYOUT_LANE, marketLayoutVersionFor} from './gen/market/layoutVersion'; // task studio-market-rework-20261108-074144-01 (lane LAYOUT)
 import {BUNKER_LAYOUT_LANE, bunkerLayoutVersionFor} from './gen/bunker/layoutVersion'; // task studio-bunker-level-20261109-072224-01 (lane LEVEL)
+import {setObjectiveTitle} from './ui/objectiveTitle'; // task studio-bunker-rework-20261109-205115-01
 import {installSkywaysDestAudio} from './world/skywaysDestAudio'; // task skyways-destinations-20261106 (lane AUDIO): the destinations' location sounds
 import {installSubwayMapRead} from './world/subwayMapRead'; // task studio-ui-subway-maps-20261108-074144-01: the station map kiosks' close-up read
 import {installSkywaysMapRead} from './world/skywaysMapRead'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the directory boards' close-up read
@@ -1213,7 +1214,8 @@ export class Game {
     const obj = document.querySelector('#objective .obj-title');
     // Task studio-alpha-campaign-foundation-20261102-230708-01 (user: "No ordinary clear-all-zombies objective: default objective says
     // scavenge for resources and return to the train when done"): no kill goal anywhere; the Reactor keeps its real endgame chain.
-    if (obj) obj.textContent = key.level === 'reactor' ? 'Restart the reactor' : key.level === 'market' ? MARKET_OBJECTIVE : key.level === 'bunker' ? BUNKER_OBJECTIVE : SCAVENGE_OBJECTIVE; // (+ the market's: task studio-survivor-market-20261108-005807-01; + the bunker's: task studio-bunker-level-20261109-072224-01)
+    // (task studio-bunker-rework-20261109-205115-01: a long title — the Bunker's — on two balanced lines: ui/objectiveTitle.ts)
+    if (obj) setObjectiveTitle(obj, key.level === 'reactor' ? 'Restart the reactor' : key.level === 'market' ? MARKET_OBJECTIVE : key.level === 'bunker' ? BUNKER_OBJECTIVE : SCAVENGE_OBJECTIVE); // (+ the market's: task studio-survivor-market-20261108-005807-01; + the bunker's: task studio-bunker-level-20261109-072224-01)
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.propModels.sealed = this.levelResources.sealed = true; // lane PACKAGE (track3): the level is built; a later fetch counts as `late`
     void this.preparePantry(null, this.run, true); // (lane ITEMS: carried pantry items restored after the prepare — a loaded save — get their models; usually a no-op)

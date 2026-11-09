@@ -5,7 +5,7 @@
 import {describe, expect, it} from 'vitest';
 import {
   BUNKER_LANE, bunkerIntelText, bunkerStateProblem, chooseBunkerIntel, coreAlive, freshBunkerState, loadBunkerState, onlineCount,
-  type BunkerStateJSON,
+  type BunkerStateV1JSON,
 } from '../src/world/bunker/objectiveState';
 import {CORE_SCREEN_PX, coreScreenKey, drawCoreScreen, type CoreScreenModel} from '../src/world/bunker/coreScreen';
 import {revealStations, validateCampaign, visibleNodes} from '../src/campaign/discovery';
@@ -21,8 +21,13 @@ type Any = any;
 
 const IDS = ['gen-0', 'gen-1', 'gen-2'];
 const AT = '2026-11-09T08:15:00.000Z';
-const good: BunkerStateJSON[] = [
+// (task studio-bunker-rework-20261109-205115-01: version-1 records stay valid in saves — they migrate on load — and version 2 stores the
+// paid fuel quantity per generator + the cargo lift's stop)
+const good: unknown[] = [
   freshBunkerState(IDS),
+  {v: 2, gens: {'gen-0': 'online', 'gen-1': 'fuelled', 'gen-2': 'off'}, fuel: {'gen-0': 1, 'gen-1': 1, 'gen-2': 0}},
+  {v: 2, gens: {'gen-0': 'online', 'gen-1': 'online', 'gen-2': 'online'}, fuel: {'gen-0': 1, 'gen-1': 1, 'gen-2': 1}, intel: {claimedAt: AT, kind: 'reactor', nodeId: 'st-39'}, lift: {stop: 3}},
+  {v: 2, gens: {}, fuel: {}},
   {v: 1, gens: {'gen-0': 'online', 'gen-1': 'fuelled', 'gen-2': 'off'}},
   {v: 1, gens: {'gen-0': 'online', 'gen-1': 'online', 'gen-2': 'online'}, intel: {claimedAt: AT, kind: 'reactor', nodeId: 'st-39'}},
   {v: 1, gens: {'gen-0': 'online', 'gen-1': 'online', 'gen-2': 'online'}, intel: {claimedAt: AT, kind: 'market', nodeId: 'st-07'}},
@@ -48,7 +53,19 @@ describe('bunker.state: the strict validator and the loader', () => {
     const bad: [unknown, RegExp][] = [
       [null, /must be an object/], [[], /must be an object/], ['x', /must be an object/],
       [{v: 1, gens: {}, extra: 1}, /unexpected bunker objective field 'extra'/],
-      [{v: 2, gens: {}}, /unsupported bunker objective version/],
+      [{v: 3, gens: {}}, /unsupported bunker objective version/],
+      [{v: 2, gens: {}}, /fuel must be an object/],
+      [{v: 2, gens: {'gen-0': 'off'}, fuel: {}}, /gen-0 has a malformed fuel quantity/],
+      [{v: 2, gens: {'gen-0': 'off'}, fuel: {'gen-0': 0.5}}, /gen-0 has a malformed fuel quantity/],
+      [{v: 2, gens: {'gen-0': 'off'}, fuel: {'gen-0': 2}}, /gen-0 has a malformed fuel quantity/],
+      [{v: 2, gens: {'gen-0': 'fuelled'}, fuel: {'gen-0': 0}}, /gen-0: state and fuel disagree/],
+      [{v: 2, gens: {'gen-0': 'online'}, fuel: {'gen-0': 0}}, /gen-0: state and fuel disagree/],
+      [{v: 2, gens: {'gen-0': 'off'}, fuel: {'gen-0': 1}}, /gen-0: state and fuel disagree/],
+      [{v: 2, gens: {}, fuel: {'gen-5': 0}}, /fuel for an unknown generator/],
+      [{v: 2, gens: {}, fuel: {}, lift: {stop: -1}}, /lift stop/],
+      [{v: 2, gens: {}, fuel: {}, lift: {stop: 2, y: 3}}, /lift record/],
+      [{v: 2, gens: {}, fuel: {}, cans: 3}, /unexpected bunker objective field 'cans'/],
+      [{v: 1, gens: {}, fuel: {}}, /unexpected bunker objective field 'fuel'/],
       [{v: 1}, /generators must be an object/], [{v: 1, gens: []}, /generators must be an object/],
       [{v: 1, gens: {'gen-x': 'off'}}, /malformed bunker generator id/], [{v: 1, gens: {reactor: 'off'}}, /malformed bunker generator id/],
       [{v: 1, gens: {'gen-0': 'running'}}, /unknown state/], [{v: 1, gens: {'gen-0': 1}}, /unknown state/],
@@ -66,9 +83,10 @@ describe('bunker.state: the strict validator and the loader', () => {
   });
 
   it('loads a copy of a valid record (missing generators off, never aliased); a malformed / absent one is fresh', () => {
-    const stored: BunkerStateJSON = {v: 1, gens: {'gen-0': 'online', 'gen-2': 'fuelled'}, intel: {claimedAt: AT, kind: 'reactor', nodeId: 'st-39'}};
+    const stored: BunkerStateV1JSON = {v: 1, gens: {'gen-0': 'online', 'gen-2': 'fuelled'}, intel: {claimedAt: AT, kind: 'reactor', nodeId: 'st-39'}};
     const st = loadBunkerState(stored, IDS);
-    expect(st).toEqual({v: 1, gens: {'gen-0': 'online', 'gen-1': 'off', 'gen-2': 'fuelled'}, intel: stored.intel});
+    // version 1 -> 2: fuelled / online were PAID in full (their can was poured), off paid nothing; the states and the claim unchanged
+    expect(st).toEqual({v: 2, gens: {'gen-0': 'online', 'gen-1': 'off', 'gen-2': 'fuelled'}, fuel: {'gen-0': 1, 'gen-1': 0, 'gen-2': 1}, intel: stored.intel});
     st.gens['gen-1'] = 'fuelled';
     st.intel!.kind = 'charted';
     expect(stored.gens['gen-1']).toBeUndefined();
@@ -77,8 +95,8 @@ describe('bunker.state: the strict validator and the loader', () => {
     expect(loadBunkerState({v: 9, gens: {'gen-0': 'online'}}, IDS)).toEqual(freshBunkerState(IDS));
     expect(onlineCount(st, IDS)).toBe(1);
     expect(coreAlive(st, IDS)).toBe(false);
-    expect(coreAlive({v: 1, gens: {'gen-0': 'online', 'gen-1': 'online', 'gen-2': 'online'}}, IDS)).toBe(true);
-    expect(coreAlive({v: 1, gens: {}}, [])).toBe(false); // no generators: never "alive"
+    expect(coreAlive({v: 2, gens: {'gen-0': 'online', 'gen-1': 'online', 'gen-2': 'online'}, fuel: {'gen-0': 1, 'gen-1': 1, 'gen-2': 1}}, IDS)).toBe(true);
+    expect(coreAlive({v: 2, gens: {}, fuel: {}}, [])).toBe(false); // no generators: never "alive"
   });
 
   it('is registered in the save validator: a good lane round-trips through the save text, a malformed one is refused', () => {
