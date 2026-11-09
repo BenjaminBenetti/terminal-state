@@ -85,6 +85,13 @@ export const MARKET_COMBAT = {
   far: 70,
   /** Stuck: less than `stuckM` progress in `stuckS` seconds re-plans. */
   stuckM: 0.25, stuckS: 2.2,
+  /**
+   * (Lane PEOPLE) Stuck twice at one place (within 1 m): for `s` seconds the walker's body circle narrows to `r` m — the path finder's
+   * cells can pass a gap a prop's collider narrows below a body (v3: a lane fan beside the bar stair's landing left 0.48 m).
+   */
+  squeeze: {r: 0.2, s: 3},
+  /** (Lane PEOPLE) A bar patron seated on a stool / chair when the market turns: seconds to stand up off it onto its post beside it. */
+  standUp: 0.4,
   /** Record the live state at least this often while hostile (s). */
   persistEvery: 1,
   /** The player's shot shoves a hit person this far per pellet share (m), like a zombie's knockback. */
@@ -132,6 +139,10 @@ export interface MarketCombatant {
   aimT: number; reaction: number; aimPt: Vec3 | null;
   repathT: number;
   checkT: number; checkX: number; checkZ: number;
+  /** (lane PEOPLE) Where / how often it last got stuck, and the narrowed body's remaining time (MARKET_COMBAT.squeeze). */
+  stuckN: number; stuckX: number; stuckZ: number; squeezeT: number;
+  /** (lane PEOPLE) Standing up off a bar seat onto its post (from -> to, progress 0..1); null otherwise. */
+  standUp: {x0: number; z0: number; x1: number; z1: number; t: number} | null;
   readonly rand: () => number;
   /** Moved this frame (m/s), for the run's playback rate. */
   moved: number;
@@ -240,6 +251,9 @@ export class MarketCombat implements MarketHostilityApi {
     for (const p of this.people) if (p.state !== 'alive') book.release(p.id);
     for (const p of this.people) {
       if (p.state !== 'alive') continue;
+      // (lane PEOPLE) a patron sitting on a bar stool / chair stands up off it onto its post first
+      const post = this.host.marketPeople.seatedPost(p.actor);
+      if (post) p.standUp = {x0: p.actor.x, z0: p.actor.z, x1: post.x, z1: post.z, t: 0};
       p.actor.cancelOneShot(0.1);
       if (p.role === 'fight') { this.setMode(p, 'draw'); p.delay = between(p.rand, [0.25, 0.9]) * (p.stall && p.stall === stall ? 0.5 : 1); }
       else { this.setMode(p, 'panic'); p.delay = between(p.rand, MARKET_COMBAT.panic); p.actor.play(COMBAT_CLIP.hit, 0.08); } // a startled flinch, then the run (and the scream)
@@ -279,6 +293,7 @@ export class MarketCombat implements MarketHostilityApi {
         path: null, wp: 0, goal: null, speed: between(rand, MARKET_COMBAT.fleeSpeed) * r.actor.scale,
         seeT: rand() * MARKET_COMBAT.perceive, sees: false, clear: false, lostT: 0, lastSeen: null,
         aimT: 0, reaction: between(rand, NPC_GUNS[gun].reaction), aimPt: null, repathT: 0, checkT: 0, checkX: r.actor.x, checkZ: r.actor.z, rand, moved: 0, ragdolled: false,
+        stuckN: 0, stuckX: r.actor.x, stuckZ: r.actor.z, squeezeT: 0, standUp: null,
       };
       body.onMoved = (x, z) => { p.actor.x = x; p.actor.z = z; };
       this.people.push(p);
@@ -558,6 +573,7 @@ export class MarketCombat implements MarketHostilityApi {
     this.detect = this.host.beerEffects?.perceptionMult() ?? 1;
     for (const p of this.people) {
       p.moved = 0;
+      p.squeezeT = Math.max(0, p.squeezeT - dt);
       if (p.state === 'alive') {
         const far = Math.hypot(p.actor.x - pl.x, p.actor.z - pl.z) > MARKET_COMBAT.far;
         if (!far) this.perceive(p, dt);
@@ -570,7 +586,14 @@ export class MarketCombat implements MarketHostilityApi {
     this.separate();
     for (const p of this.people) {
       const a = p.actor;
-      if (p.state === 'alive') this.host.marketPeople.settle(a);
+      const su = p.standUp;
+      if (su && p.state === 'alive') {
+        // (lane PEOPLE) off the seat onto the post, eased (the seat's own collider is not a wall to push out of)
+        su.t = Math.min(1, su.t + dt / MARKET_COMBAT.standUp);
+        const k = su.t * su.t * (3 - 2 * su.t);
+        a.x = su.x0 + (su.x1 - su.x0) * k; a.z = su.z0 + (su.z1 - su.z0) * k;
+        if (su.t >= 1) p.standUp = null;
+      } else if (p.state === 'alive') this.host.marketPeople.settle(a, p.squeezeT > 0 ? MARKET_COMBAT.squeeze.r : MARKET_PEOPLE.radius);
       const dist = Math.hypot(a.x - pl.x, a.z - pl.z);
       // armed hostiles every frame (no animation LOD); the rest by distance like the calm market
       const stride = p.state === 'alive' && p.role === 'fight' ? 1 : dist < MARKET_PEOPLE.lod.near ? 1 : dist < MARKET_PEOPLE.lod.mid ? 2 : 4;
@@ -721,7 +744,7 @@ export class MarketCombat implements MarketHostilityApi {
     const align = Math.cos(wrap(yawTo(dx, dz) - a.yaw));
     const sp = speed * Math.max(0.2, align) * (last ? Math.min(1, 0.4 + d) : 1);
     const ox = a.x, oz = a.z, step = Math.min(sp * dt, d);
-    [a.x, a.z] = moveCircle(this.host.levels, this.host.propIndex, a.x, a.z, dx / (d || 1) * step, dz / (d || 1) * step, MARKET_PEOPLE.radius, this.host.marketPeople.stepFeet(a, wp), MARKET_PEOPLE.height);
+    [a.x, a.z] = moveCircle(this.host.levels, this.host.propIndex, a.x, a.z, dx / (d || 1) * step, dz / (d || 1) * step, p.squeezeT > 0 ? MARKET_COMBAT.squeeze.r : MARKET_PEOPLE.radius, this.host.marketPeople.stepFeet(a, wp), MARKET_PEOPLE.height);
     p.moved = Math.hypot(a.x - ox, a.z - oz) / dt;
     p.checkT += dt;
     if (p.checkT >= MARKET_COMBAT.stuckS) {
@@ -729,6 +752,10 @@ export class MarketCombat implements MarketHostilityApi {
       p.checkT = 0; p.checkX = a.x; p.checkZ = a.z;
       if (stuck) {
         p.path = null;
+        // (lane PEOPLE) held up twice at one place: squeeze past (a narrower body for a moment)
+        if (Math.hypot(a.x - p.stuckX, a.z - p.stuckZ) < 1) p.stuckN++; else p.stuckN = 1;
+        p.stuckX = a.x; p.stuckZ = a.z;
+        if (p.stuckN >= 2) p.squeezeT = MARKET_COMBAT.squeeze.s;
         // (lane PEOPLE) a fleer held up inside its own refuge (the player in its corner) hides where it is; elsewhere it re-plans
         if (p.role === 'flee') { if (this.inRefuge(p)) this.hideNow(p); else this.runFor(p); }
         return false;

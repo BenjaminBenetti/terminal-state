@@ -29,6 +29,8 @@ export class HumanCombatBody implements RagdollTarget {
   private muzzleLocal = new THREE.Vector3();
   private volumes: RayVolume[] = [];
   private stamp = -1;
+  /** The pose (feet, yaw) the volumes were read at. */
+  private readonly at = [NaN, NaN, NaN, NaN];
   /** Aim pitch (rad, + = up) applied on top of the clip, and its smoothing. */
   aimPitch = 0;
   private shownPitch = 0;
@@ -54,8 +56,12 @@ export class HumanCombatBody implements RagdollTarget {
   /** The volumes of the current pose (recomputed at most once per `frame` stamp). Dead / ragdolled: none. */
   hitVolumes(frame: number, alive: boolean): readonly RayVolume[] {
     if (!alive || this.actor.frozen) return (this.volumes = []);
-    if (frame === this.stamp && this.volumes.length) return this.volumes;
+    // (task studio-market-bar-20261108-225231-01, lane PEOPLE: also re-read when the body moved since — a shove / a placement within
+    // one frame left a later ray testing where it had stood)
+    const a = this.actor, at = this.at;
+    if (frame === this.stamp && this.volumes.length && at[0] === a.x && at[1] === a.y && at[2] === a.z && at[3] === a.yaw) return this.volumes;
     this.stamp = frame;
+    at[0] = a.x; at[1] = a.y; at[2] = a.z; at[3] = a.yaw;
     this.root.updateMatrixWorld(true);
     const p = (n: string) => { const b = this.actor.bone(n); return b ? this.tmp.setFromMatrixPosition(b.matrixWorld).clone() : new THREE.Vector3(this.actor.x, this.actor.y + 1, this.actor.z); };
     const s = this.scale, H = HUMAN_HIT;
