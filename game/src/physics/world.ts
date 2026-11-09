@@ -60,7 +60,7 @@ export const SHELL_EJECT_DELAY = 0.46; // end of the pump back-stroke (Sfx.shot 
  * right of the receiver above the magazine well, shotgun port ~(0.027, 0.055, 0.06) on the
  * receiver's right side. Directions: right, up, slightly back.
  */
-export const EJECTION_PORTS: Record<string, {pos: THREE.Vector3; dir: THREE.Vector3; kind: CasingKind}> = {
+export const EJECTION_PORTS: Record<string, {pos: THREE.Vector3; dir: THREE.Vector3; kind: CasingKind; delay?: number}> = {
   rifle: {pos: new THREE.Vector3(0.0294, 0.1217, -0.1085), dir: new THREE.Vector3(1, 0.55, 0.22).normalize(), kind: 'rifle'},
   shotgun: {pos: new THREE.Vector3(0.0269, 0.0131, -0.1275), dir: new THREE.Vector3(1, 0.5, 0.12).normalize(), kind: 'shell'},
   // Pistol lane: slide port right of the slide (dev placeholder geometry). Reuses the rifle brass casing kind (same
@@ -68,6 +68,14 @@ export const EJECTION_PORTS: Record<string, {pos: THREE.Vector3; dir: THREE.Vect
   // 2026-10-28 user weapon models: a held model's `Eject` marker (EjectionPortSource.ejectionMarker) overrides `pos`;
   // these constants remain the fallback for a model without one. `dir` / `kind` always come from here.
   pistol: {pos: new THREE.Vector3(0.016, 0.058, -0.045), dir: new THREE.Vector3(1, 0.7, 0.15).normalize(), kind: 'rifle'},
+  // Task studio-weapon-variety-production-20261109-224355-01 (lane GUNS): the weapon-variety guns. Their cooked models carry an `Eject`
+  // marker (which wins); these grip-relative positions are only the fallback. Brass for the 9mm / 5.56 guns; the semi-auto box-magazine
+  // shotgun throws its hull at once (`delay` 0: no pump stroke). The coach gun has no entry: a break action keeps its hulls until opened.
+  hornet: {pos: new THREE.Vector3(0.02, 0.07, -0.06), dir: new THREE.Vector3(1, 0.6, 0.15).normalize(), kind: 'rifle'},
+  longslide: {pos: new THREE.Vector3(0.016, 0.06, -0.06), dir: new THREE.Vector3(1, 0.7, 0.15).normalize(), kind: 'rifle'},
+  stub: {pos: new THREE.Vector3(0.03, 0.09, 0.12), dir: new THREE.Vector3(1, 0.55, 0.22).normalize(), kind: 'rifle'},
+  overwatch: {pos: new THREE.Vector3(0.03, 0.1, -0.1), dir: new THREE.Vector3(1, 0.55, 0.22).normalize(), kind: 'rifle'},
+  thresher: {pos: new THREE.Vector3(0.03, 0.06, -0.12), dir: new THREE.Vector3(1, 0.5, 0.12).normalize(), kind: 'shell', delay: 0},
 };
 
 /** Killing-shot impulse (N·s). Rifle ~38; shotgun 22 + 85 x pellet fraction (full hit ~107). */
@@ -379,7 +387,7 @@ export class PhysicsSystem implements BodyHost {
    */
   onFire(weaponId: string, port: EjectionPortSource, camera: THREE.PerspectiveCamera, shooter: {vx: number; vy?: number; vz: number}): void {
     if (!EJECTION_PORTS[weaponId]) return;
-    const delay = EJECTION_PORTS[weaponId].kind === 'shell' ? SHELL_EJECT_DELAY : 0;
+    const delay = EJECTION_PORTS[weaponId].delay ?? (EJECTION_PORTS[weaponId].kind === 'shell' ? SHELL_EJECT_DELAY : 0); // (lane GUNS: + a port's own delay)
     if (delay <= 0) this.ejectNow(weaponId, port, camera, shooter);
     else this.pending.push({t: delay, weaponId, port, camera, inherit: shooter});
   }

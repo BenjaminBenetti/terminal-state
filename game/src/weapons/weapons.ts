@@ -12,6 +12,30 @@ import {VARIETY_MELEE_DEFS} from './varietyMelee'; // task studio-weapon-variety
 
 export interface MagazineReload { kind: 'magazine'; time: number; emptyTime: number }
 export interface ShellReload { kind: 'shell'; start: number; each: number; end: number }
+/**
+ * Task studio-weapon-variety-production-20261109-224355-01 (lane GUNS): a BREAK action (the coach gun). R opens the action
+ * (`start` s: the spent hulls are thrown out `eject` s in, once it is fully open) -> loads shells one at a time (`each` s,
+ * up to `magazine`, fewer when the reserve runs out) -> closes (`end` s). Nothing fires while it is open; a trigger press
+ * (with a shell loaded) stops the loading after the current shell and closes it; a weapon switch mid-reload keeps exactly
+ * the shells already loaded (each was taken from the reserve as it went in). Same shape as ShellReload (start / each / end).
+ */
+export interface BreakReload { kind: 'break'; start: number; eject: number; each: number; end: number }
+
+/**
+ * Lane GUNS: optional handling extensions (weapon variety). Absent on the baseline pistol / rifle / shotgun / knife, whose
+ * behaviour is therefore exactly as before (tests/weapon-variety-guns.test.ts snapshots their defs).
+ *  - AimSettle: aiming down sights steadies over `time` s — the aimed cone starts `extra` rad wider and eases to `spreadAim`;
+ *    each shot sets the settle back by `shot` x `time` (a follow-up waits for the hold to steady again).
+ *  - RecoilClimb: sustained fire climbs — shot n of a string (the next shot within the interval + 0.1 s) kicks the camera
+ *    1 + `climb` x min(n, `cap`) times the def's pitch; `jitter` adds a further random sideways kick (rad) per shot.
+ *  - Bloom: per-shot spread growth (`per` rad up to `max`) and its recovery (`decay` rad/s); absent = the shared rule
+ *    (single-projectile guns +0.0035 up to 0.03, recovering 0.06 rad/s).
+ */
+export interface AimSettle { time: number; extra: number; shot: number }
+export interface RecoilClimb { climb: number; cap: number; jitter: number }
+export interface Bloom { per: number; max: number; decay: number }
+/** Lane GUNS: the existing gun cue sets (audio/sfx.ts); a variety gun reuses one of them (no new audio). */
+export type GunCue = 'rifle' | 'shotgun' | 'pistol';
 
 export interface WeaponDef {
   id: string;
@@ -38,14 +62,22 @@ export interface WeaponDef {
   limbMult: number;
   /** Push applied to zombies per pellet (m/s). */
   knockback: number;
-  reload: MagazineReload | ShellReload;
+  reload: MagazineReload | ShellReload | BreakReload;
   recoil: {pitch: number; yaw: number; kick: number; recover: number};
   equipTime: number;
   aimFov: number;
   moveMult: number;
   /** Loudness radius (m) for alerting zombies. */
   noise: number;
-  sound: 'rifle' | 'shotgun' | 'pistol';
+  sound: GunCue;
+  // ---- lane GUNS (weapon variety): optional handling, all absent on the baseline guns (see AimSettle / RecoilClimb / Bloom) ----
+  aimSettle?: AimSettle;
+  recoilClimb?: RecoilClimb;
+  bloom?: Bloom;
+  /** The cue set of the reload sounds (default `sound`): e.g. a box-magazine shotgun uses the magazine cues. */
+  reloadCue?: GunCue;
+  /** The action cue after a shot: 'pump' = the pump-action rack, 'none' = semi-auto / break action. Default: a pump for 'shotgun'. */
+  shotCycle?: 'pump' | 'none';
   /**
    * Viewmodel placement in camera space, pivoting at the model's Grip marker. Aim offsets come
    * from measured derivative geometry: shotgun rib ~0.07 m above the stock wrist (iron sights).
@@ -244,10 +276,14 @@ export interface TriggerInput {
    * while a melee windup / ready hold is under way cancels it (the wiped button must not read as a release that swings).
    */
   clears?: number;
+  /** Lane GUNS: aiming down sights this frame (game.aiming) — drives a def's AimSettle; absent = not aiming. */
+  aiming?: boolean;
 }
 
 /** Lane FEEL: frame-sum tolerance for the melee stage timers (60 fps steps hit the stage lengths exactly). */
 const MELEE_EPS = 1e-6;
+/** Lane GUNS: a shot within the def's interval + this gap (s) of the previous one continues a string (RecoilClimb). */
+export const STREAK_GAP = 0.1;
 
 export class WeaponController {
   def: WeaponDef | null = null;
@@ -275,6 +311,11 @@ export class WeaponController {
   private pressQueued = false;
   /** Lane FEEL: TriggerInput.clears seen last frame (a change = the held input was wiped: a windup cancels, never swings). */
   private seenClears: number | undefined;
+  /** Lane GUNS: shots so far in the current string (0 = the first shot of a string; RecoilClimb) and seconds since the last shot. */
+  streak = 0;
+  private sinceShot = Infinity;
+  /** Lane GUNS: seconds of steady aiming counted toward the def's AimSettle (0 when not aiming; shots set it back). */
+  aimT = 0;
 
   equip(stack: ItemStack | null, defs = WEAPONS): void {
     if (stack === this.stack && stack) return;
@@ -284,7 +325,32 @@ export class WeaponController {
     this.phaseT = this.def ? this.def.equipTime : 0;
     this.cooldown = 0;
     this.progress = 0;
+    this.streak = 0; this.sinceShot = Infinity; this.aimT = 0; // lane GUNS: a new weapon starts a fresh string, unsettled
     this.resetMelee(); // lane KNIFE / FEEL: a windup, ready hold or swing never survives a weapon change (no stale contact)
+  }
+
+  /**
+   * Lane GUNS: the extra aimed cone (rad) the def's AimSettle still adds now — `extra` at the start of ADS, eased to 0 after
+   * `time` s of steady aim. 0 for a def without one (the baseline guns) or while not aiming.
+   */
+  get settleSpread(): number {
+    const a = this.def?.aimSettle;
+    if (!a) return 0;
+    const k = Math.min(1, this.aimT / Math.max(1e-6, a.time));
+    return a.extra * (1 - k * k * (3 - 2 * k));
+  }
+
+  /**
+   * Lane GUNS: how far a BREAK action is open (0 closed .. 1 fully open): opening over the first `eject` s of the reload,
+   * open while shells go in, closing over `end`. 0 for every other weapon / phase (the viewmodel turns the model's Barrels).
+   */
+  get actionOpen(): number {
+    const d = this.def;
+    if (!d || d.reload.kind !== 'break' || this.phase !== 'reloading') return 0;
+    const r = d.reload, clamp = (x: number) => Math.min(1, Math.max(0, x));
+    if (this.shellStage === 'start') return clamp((r.start - this.phaseT) / Math.max(1e-6, r.eject));
+    if (this.shellStage === 'load') return 1;
+    return clamp(this.phaseT / Math.max(1e-6, r.end));
   }
 
   get reloading(): boolean {
@@ -348,6 +414,8 @@ export class WeaponController {
     const d = this.def, s = this.stack;
     if (!d || !s) return ev;
     this.cooldown = Math.max(0, this.cooldown - dt);
+    this.sinceShot += dt; // lane GUNS: string timing (RecoilClimb)
+    if (d.aimSettle) this.aimT = input.aiming ? this.aimT + dt : 0; // lane GUNS: the hold steadies while aiming
     if (this.phase === 'equipping') {
       this.phaseT -= dt;
       this.progress = 1 - Math.max(0, this.phaseT) / d.equipTime;
@@ -359,7 +427,7 @@ export class WeaponController {
     }
     if (d.melee) return this.updateMelee(dt, input, ev); // lane KNIFE: swing cycle instead of fire / magazine / reload
     if (this.phase === 'reloading') {
-      if (input.pressed && d.reload.kind === 'shell' && (s.mag ?? 0) > 0) this.interruptReload = true;
+      if (input.pressed && (d.reload.kind === 'shell' || d.reload.kind === 'break') && (s.mag ?? 0) > 0) this.interruptReload = true; // (lane GUNS: + break)
       this.phaseT -= dt / Math.max(0.25, this.handling); // Iteration 16: handling scales the whole reload (magazine and shell by shell)
       if (d.reload.kind === 'magazine') {
         const total = (s.mag ?? 0) === 0 ? d.reload.emptyTime : d.reload.time;
@@ -371,6 +439,8 @@ export class WeaponController {
           this.phase = 'idle';
           ev.push({type: 'reloadEnd', def: d});
         }
+      } else if (d.reload.kind === 'break') {
+        this.updateBreak(d, d.reload, s, inv, ev); // lane GUNS: open -> load up to `magazine` -> close
       } else {
         const r = d.reload;
         while (this.phaseT <= 0 && this.phase === 'reloading') {
@@ -409,6 +479,10 @@ export class WeaponController {
         s.mag = (s.mag ?? 0) - 1;
         inv.version++;
         this.cooldown = d.interval;
+        // lane GUNS: string count for RecoilClimb; a shot sets an AimSettle hold back (both unused by the baseline guns)
+        this.streak = this.sinceShot <= d.interval + STREAK_GAP ? this.streak + 1 : 0;
+        this.sinceShot = 0;
+        if (d.aimSettle) this.aimT = Math.max(0, this.aimT - d.aimSettle.shot * d.aimSettle.time);
         ev.push({type: 'fire', def: d});
       } else if (input.pressed) {
         this.cooldown = 0.25;
@@ -427,6 +501,33 @@ export class WeaponController {
     if (d.reload.kind === 'magazine') this.phaseT = (s.mag ?? 0) === 0 ? d.reload.emptyTime : d.reload.time;
     else { this.shellStage = 'start'; this.phaseT = d.reload.start; }
     ev.push({type: 'reloadStart', def: d, empty: (s.mag ?? 0) === 0});
+  }
+
+  /**
+   * Lane GUNS: the BREAK action's reload stages (BreakReload), carried across frame boundaries like the shell reload:
+   * 'start' = opening (the hulls leave at `eject` s) -> 'load' one shell per `each` s (taken from the reserve as it goes
+   * in; never past `magazine`) -> 'end' = closing, then idle. A trigger press (interruptReload, with a shell loaded)
+   * closes it after the current shell — or straight after opening. Firing is only possible once it is closed (idle).
+   */
+  private updateBreak(d: WeaponDef, r: BreakReload, s: ItemStack, inv: Inventory, ev: WeaponEvent[]): void {
+    const full = () => (s.mag ?? 0) >= d.magazine || reserveFor(d, inv) === 0 || this.interruptReload;
+    while (this.phaseT <= 0 && this.phase === 'reloading') {
+      if (this.shellStage === 'start') {
+        if (full()) { this.shellStage = 'end'; this.phaseT += r.end; } else { this.shellStage = 'load'; this.phaseT += r.each; }
+      } else if (this.shellStage === 'load') {
+        const ammo = weaponAmmoItem(d);
+        if (ammo && (s.mag ?? 0) < d.magazine && inv.take(ammo, 1) === 1) {
+          s.mag = (s.mag ?? 0) + 1;
+          inv.version++;
+          ev.push({type: 'shellIn', def: d});
+        }
+        if (full()) { this.shellStage = 'end'; this.phaseT += r.end; } else this.phaseT += r.each;
+      } else {
+        this.phase = 'idle';
+        ev.push({type: 'reloadEnd', def: d});
+      }
+    }
+    this.progress = (s.mag ?? 0) / d.magazine;
   }
 
   /**

@@ -1394,7 +1394,9 @@ export class Sfx {
   // ---------------------------------------------------------------------------------------
   // Weapons (player-local)
 
-  shot(kind: WeaponSoundKind): void {
+  /** `cycle` (task studio-weapon-variety-production-20261109-224355-01, lane GUNS): the action cue after the shot — 'pump' racks
+   *  the pump action, 'none' (semi-auto / break action) nothing; absent = a pump for the 'shotgun' set (the baseline shotgun). */
+  shot(kind: WeaponSoundKind, cycle?: 'pump' | 'none'): void {
     const v = this.voice({send: 1, pri: 2});
     if (!v) return;
     // Iteration 12: a new shot — the hit confirms of THIS shot are timed from its onset and de-duplicated per enemy.
@@ -1414,7 +1416,7 @@ export class Sfx {
       }
     }
     this.duck(big ? 0.4 : kind === 'pistol' ? 0.7 : 0.6);
-    if (big) this.pump(0.42);
+    if (cycle ? cycle === 'pump' : big) this.pump(0.42);
   }
   /** Dry-fire hammer click. */
   dry(kind: WeaponSoundKind = 'rifle'): void {
@@ -1430,19 +1432,21 @@ export class Sfx {
     if (!v) return;
     for (const s of v.srcs) { try { s.stop(); } catch { /* already stopped */ } }
   }
-  reloadStart(kind: WeaponSoundKind, empty = false): void {
+  /** `time` (lane GUNS): the gun's own magazine reload seconds, so the magazine-in cue lands mid-reload for every gun of the set
+   *  (absent = the baseline pistol's / rifle's times, which are also what the baseline guns pass). */
+  reloadStart(kind: WeaponSoundKind, empty = false, time?: number): void {
     this.stopReload();
     this.lastReloadEmpty = empty;
     const v = this.voice({send: 0.15, pri: 1});
     this.reloadVoice = v;
     if (kind === 'pistol') {
       // Pistol lane: the existing Sound Lab rifle magazine cues, pitched up and timed to the 1.4 s / 1.65 s reload.
-      const T = empty ? 1.65 : 1.4;
+      const T = time ?? (empty ? 1.65 : 1.4);
       this.play(v, 'rifleMagOut', {delay: 0.04, rate: 1.25, gain: 0.85});
       if (empty) this.play(v, 'rifleMagDrop', {delay: 0.42, gain: 0.6, rate: 1.3});
       this.play(v, 'rifleMagIn', {delay: T * 0.5, rate: 1.25, gain: 0.85});
     } else if (kind === 'rifle') {
-      const T = empty ? 2.55 : 2.1;
+      const T = time ?? (empty ? 2.55 : 2.1);
       this.play(v, 'rifleMagOut', {delay: 0.05});
       if (empty) this.play(v, 'rifleMagDrop', {delay: 0.62, gain: 0.8}); // spent mag hits the floor
       this.play(v, 'rifleMagIn', {delay: T * 0.5});
