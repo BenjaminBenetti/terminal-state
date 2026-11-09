@@ -30,7 +30,7 @@ const DOOR = {wide: 3.0, room: 2.7, narrow: 2.5} as const;
 
 /** The floor's area keys (QA / tests / dress). */
 export type F3Key =
-  | 'streetN' | 'streetS' | 'depot' | 'lobby' | 'laundry' | 'fab' | 'yard' | 'plant' | 'gasStore' | 'washroom'
+  | 'streetN' | 'streetS' | 'depot' | 'lobby' | 'laundry' | 'fab' | 'yard' | 'plant' | 'gasStore' | 'washroom' | 'medStores'
   | 'clinic' | 'ward' | 'corridor' | 'treatment' | 'dispensary' | 'airlock' | 'isolation';
 
 /** The isolation ward's leak (medium) and the cylinder store's (weak, seeded). */
@@ -85,10 +85,13 @@ function carve(ctx: FloorCarveCtx): FloorCarveResult | null {
   if (!gasStore) return null;
   ctx.door(R(SX + SW, 85, 1, 3), streetS, gasStore, DOOR.room);
 
-  // --- the street's west side between the cores: the washroom --------------------------------------------------
+  // --- the street's west side between the cores: the washroom, the medical stores (the infirmary's supply closet) -------------------
   const washroom = room('washroom', R(56, 84, 13, 11), 'room', 'washroom', F3_CLEAR.room, streetS, {label: 'Washroom', purpose: 'washroom'});
   if (!washroom) return null;
   ctx.door(R(SX - 1, 88, 1, 3), streetS, washroom, DOOR.room);
+  const medStores = room('medStores', R(56, 97, 13, 15), 'room', 'storage', F3_CLEAR.store, streetS, {label: 'Medical stores', purpose: 'supply-closet'});
+  if (!medStores) return null;
+  ctx.door(R(SX - 1, 104, 1, 3), streetS, medStores, DOOR.room);
 
   // --- south: the INFIRMARY at the main stair (apron x 45-53, rows 114-117) ----------------------------------------------------------
   const clinic = room('clinic', R(36, 114, 46, 14), 'room', 'crew-room', F3_CLEAR.clinic, streetS, {label: 'Infirmary hall', purpose: BUNKER_PURPOSE.decon, publicSpace: true});

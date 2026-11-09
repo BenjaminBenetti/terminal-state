@@ -25,7 +25,7 @@ import {CELL, FLOOR} from '../../grid';
 import {PROP_DEFS, type PropKind, type PropPlacement} from '../../props';
 import type {Area, Door, LightPlacement, Side} from '../../stationTypes';
 import type {ShopMat} from '../../storefronts';
-import {doorSide, placeAgainstWall, propBlocksDoorway, rowAlongWall, tryPlaceProp, wallRange, wallSpot} from '../../placeKit';
+import {begin, commit, doorSide, placeAgainstWall, rollback, propBlocksDoorway, rowAlongWall, tryPlaceProp, wallRange, wallSpot} from '../../placeKit';
 import {NORMAL, OPP, doorPlate, face, freeFor, rotFacing, scanWall, solidProp, sweepPockets, wallBox, wallSign, type Dx} from '../../reactor/complex/bunkerDress';
 import {shelterDx} from '../dress';
 import type {FloorDressCtx} from './floorApi';
@@ -74,6 +74,12 @@ function dropLights(D: Dx, a: Area): void {
   D.layout.lights = D.layout.lights.filter(l => l.area !== a.id);
 }
 
+/** A holder's loot purpose (PropPlacement.purpose: the room's own otherwise). */
+function stock<T extends PropPlacement | null>(p: T, purpose: string): T {
+  if (p) p.purpose = purpose;
+  return p;
+}
+
 const place = (D: Dx, a: Area, kind: PropKind, x: number, z: number, rot: number, o: Parameters<typeof tryPlaceProp>[6] = {}): PropPlacement | null =>
   tryPlaceProp(D.ctx, a, kind, r3(Math.round(x * 4) / 4), r3(Math.round(z * 4) / 4), rot, o);
 
@@ -90,12 +96,13 @@ function street(f: F3): void {
   const {D, A} = f;
   const comps = [A.streetN, A.streetS].filter((a): a is Area => !!a);
   for (const a of comps) {
+    dropLights(D, a);
     const h = rel(D, a), cx = (ax0(a) + ax1(a)) / 2, z0 = az0(a) + 0.5, z1 = az1(a) - 0.5;
     // the crown's light trough: a luminous panel strip between two steel lips, the fixtures hung under it
-    deco(D, 'panel', {x0: cx - 0.6, x1: cx + 0.6, z0, z1}, h - 0.1, h - 0.02);
+    deco(D, 'signBand', {x0: cx - 0.6, x1: cx + 0.6, z0, z1}, h - 0.1, h - 0.02);
     deco(D, 'steelDark', {x0: cx - 0.68, x1: cx - 0.6, z0, z1}, h - 0.32, h - 0.02);
     deco(D, 'steelDark', {x0: cx + 0.6, x1: cx + 0.68, z0, z1}, h - 0.32, h - 0.02);
-    for (let z = z0 + 1.0; z <= z1 - 0.8; z += 3.2) light(D, a, cx, z, h - 0.3, false);
+    for (let z = z0 + 1.5; z <= z1 - 0.8; z += 4.5) light(D, a, cx, z, h - 0.3, false);
     // the street's bays: steel ribs across the ceiling every ~6.5 m
     for (let z = az0(a) + 3.2; z < az1(a) - 2; z += 6.5) {
       deco(D, 'steelDark', {x0: ax0(a), x1: cx - 0.7, z0: z - 0.15, z1: z + 0.15}, h - 0.45, h);
@@ -110,24 +117,28 @@ function street(f: F3): void {
     for (const [a, zf, dir] of [[N, gate.y * CELL, -1], [S, (gate.y + 1) * CELL, 1]] as const) {
       for (const [j0, j1] of [[ax0(a), gx0], [gx1, ax1(a)]]) {
         deco(D, 'steelDark', {x0: j0, x1: j1, z0: zf, z1: zf + dir * 0.08}, 0, gate.height + 0.35);
-        for (let y = 0.2; y < gate.height; y += 0.6) deco(D, 'plasticSeat', {x0: j0 + 0.04, x1: j1 - 0.04, z0: zf + dir * 0.08, z1: zf + dir * 0.1}, y, y + 0.28);
+        deco(D, 'plasticSeat', {x0: j0 + 0.08, x1: j1 - 0.08, z0: zf + dir * 0.08, z1: zf + dir * 0.1}, 0.1, gate.height - 0.1);
       }
       deco(D, 'steelDark', {x0: gx0, x1: gx1, z0: zf, z1: zf + dir * 0.08}, gate.height, gate.height + 0.35);
     }
     doorPlate(D, gate, N, 'INFIRMARY · MAIN STAIR · WORKS YARD', 3.2);
     doorPlate(D, gate, S, 'SUPPLY DEPOT · FABRICATION', 2.8);
   }
-  // the residents' notice wall at the north end of the street (the far end of its sightline), a bench and planters by it
-  if (N) {
-    for (let i = 0; i < 3; i++) placeAgainstWall(D.ctx, N, 'noticeBoard', {sides: ['N'], y: 1.1, tries: 20});
-    scanWall(D, N, 'planterTree', ['N'], 0.3, ax0(N) + 0.8);
-    scanWall(D, N, 'planterTree', ['N'], 0.3, ax1(N) - 0.8);
-    scanWall(D, N, 'bench', ['W', 'E'], 0.6, az0(N) + 3);
+  // the residents' notice wall at the north end of the street (the far end of its sightline)
+  if (N) for (let i = 0; i < 3; i++) placeAgainstWall(D.ctx, N, 'noticeBoard', {sides: ['N'], y: 1.1, tries: 20});
+  // street islands down the crown: a planter between two benches back to back (one per compartment), the street's resting places
+  for (const a of comps) {
+    const cx = (ax0(a) + ax1(a)) / 2, bw = PROP_DEFS.bench.w;
+    for (const zf of [0.42, 0.58, 0.32, 0.68]) {
+      const z = Math.round((az0(a) + (az1(a) - az0(a)) * zf) * 2) / 2;
+      begin(D.ctx);
+      const ok = place(D, a, 'planterTree', cx, z, 0, {}) && place(D, a, 'bench', cx, z - 0.55 - bw / 2, Math.PI / 2, {front: 0.6}) && place(D, a, 'bench', cx, z + 0.55 + bw / 2, -Math.PI / 2, {front: 0.6});
+      if (ok) { commit(D.ctx); break; }
+      rollback(D.ctx);
+    }
   }
-  // the infirmary end: waiting benches along the walls, a bin, hung wayfinding in both compartments
+  // hung wayfinding in both compartments, a bin by the infirmary portal
   if (S) {
-    scanWall(D, S, 'bench', ['W'], 0.6, az1(S) - 4);
-    scanWall(D, S, 'bench', ['E'], 0.6, az1(S) - 6);
     scanWall(D, S, 'bin', ['W', 'E'], 0, az1(S) - 2);
     hang(D, S, (az0(S) + az1(S)) / 2 + 4, 'INFIRMARY · MAIN STAIR');
   }
@@ -159,34 +170,35 @@ function depot(f: F3): void {
     const b: Box = {x0: cx * CELL + 0.01, x1: (cx + 2) * CELL - 0.01, z0: r0 * CELL + 0.01, z1: (r1 + 1) * CELL - 0.01};
     if (!solid(D, a, b, rackH)) { F3_DRESS_STATS.skipped.push(`rack ${cx}`); continue; }
     F3_DRESS_STATS.racks++;
-    const zs = [b.z0 + 0.05, (b.z0 + b.z1) / 2, b.z1 - 0.05];
+    const zs = [b.z0 + 0.05, b.z1 - 0.05];
     for (const z of zs) for (const x of [b.x0 + 0.05, b.x1 - 0.05]) deco(D, 'steelDark', {x0: x - 0.05, x1: x + 0.05, z0: z - 0.05, z1: z + 0.05}, 0, rackH);
     for (const y of [1.5, 3.0, 4.5]) if (y + 0.14 < rackH + 0.01) deco(D, 'plasticSeat', {x0: b.x0, x1: b.x1, z0: b.z0, z1: b.z1}, y, y + 0.14);
     // the aisle fixtures (the racks' tops are 1.5 m below the ceiling)
     const lx = (cx + 2) * CELL + 1.25;
-    if (lx < ax1(a) - 0.5) for (const z of [b.z0 + (b.z1 - b.z0) * 0.25, b.z0 + (b.z1 - b.z0) * 0.75]) light(D, a, lx, z, h - 0.3, false);
+    if (lx < ax1(a) - 0.5 && runs.indexOf(cx) % 2 === 0) light(D, a, lx, (b.z0 + b.z1) / 2, h - 0.3, false);
   }
   // the goods-in way along the street side and the south cross aisle: fixtures
   const ex = ((runs.length ? runs[runs.length - 1] + 2 : a.x) * CELL + ax1(a)) / 2;
-  for (let z = az0(a) + 2.5; z < az1(a) - 1; z += 5) light(D, a, ex, z, h - 0.3, false);
-  for (let x = ax0(a) + 3; x < ex - 3; x += 6) light(D, a, x, az1(a) - 2.2, h - 0.3, true);
-  if (runs.length) light(D, a, ax0(a) + 1.0, (az0(a) + az1(a)) / 2, h - 0.3, false);
+  for (let z = az0(a) + 3; z < az1(a) - 1; z += 6) light(D, a, ex, z, h - 0.3, false);
+  for (let x = ax0(a) + 4; x < ex - 3; x += 8) light(D, a, x, az1(a) - 2.2, h - 0.3, true);
   // the stock that is left: staged on the floor of the goods-in way, by the issue desk at the street door
   const sd = doorOf(D, a, A.streetN);
   const deskZ = sd ? sd.y * CELL - 1.6 : az0(a) + 4;
   const desk = scanWall(D, a, 'desk', ['E'], 0.9, deskZ);
   if (desk) place(D, a, 'officeSwivelChair', desk.x - 0.75, desk.z, rotFacing(1, 0), {laneOk: true});
   const xs = ex - 1.0;
-  const stock: PropKind[] = ['parcelPallet', 'cartonStack', 'parcelPallet', 'crate', 'cartonStack', 'crate'];
+  const staged: PropKind[] = ['parcelPallet', 'cartonStack', 'crate', 'parcelPallet', 'crate', 'cartonStack'];
   let n = 0;
-  for (let z = az0(a) + 1.6; z < az1(a) - 5 && n < stock.length; z += 1.5) {
+  for (let z = az0(a) + 1.6; z < az1(a) - 5 && n < staged.length; z += 1.5) {
     if (sd && z > sd.y * CELL - 1.2 && z < (sd.y + sd.h) * CELL + 1.2) continue;
-    if (place(D, a, stock[n], xs, z, Math.PI / 2)) n++;
+    if (stock(place(D, a, staged[n], xs, z, Math.PI / 2), 'storage')) n++;
   }
   const pj = scanWall(D, a, 'palletJack', ['S'], 0.5, ex);
   if (!pj) placeAgainstWall(D.ctx, a, 'handTruck', {tries: 16});
-  placeAgainstWall(D.ctx, a, 'cabinetTall', {sides: ['W'], front: 0.8, tries: 16});
-  placeAgainstWall(D.ctx, a, 'noticeBoard', {sides: ['E'], y: 1.1, tries: 16});
+  // the depot's own storage along its walls (the maintenance-stores loot): shelving on the west wall, store cupboards on the north
+  rowAlongWall(D.ctx, a, 'W', 'shelf', {front: 0.8, max: 3, from: az0(a) + 2.5}).forEach(p => stock(p, 'storage'));
+  for (let i = 0; i < 3; i++) stock(scanWall(D, a, 'cabinetTall', ['N'], 0.8, ax0(a) + 3 + i * 7), 'storage');
+  stock(scanWall(D, a, 'cabinetLow', ['S'], 0.7, ax0(a) + 4), 'storage');
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -215,7 +227,7 @@ function fabrication(f: F3): void {
   deco(D, 'steelBright', B(bl - 0.03, bl + 0.03, hc - 0.03, hc + 0.03), 3.6, yr - 0.2);
   deco(D, 'black', B(bl - 0.16, bl + 0.16, hc - 0.12, hc + 0.12), 3.2, 3.6);
   // high-bay fixtures in two rows clear of the bridge
-  for (const cf of [0.28, 0.72]) for (let l = L0 + 2.5; l < L1 - 1.5; l += 4.5) {
+  for (const cf of [0.28, 0.72]) for (let l = L0 + 2.5; l < L1 - 1.5; l += 5.5) {
     if (Math.abs(l - bl) < 1.2) continue;
     const c = C0 + (C1 - C0) * cf;
     light(D, a, alongX ? l : c, alongX ? c : l, h - 0.2, alongX);
@@ -263,6 +275,12 @@ function fabrication(f: F3): void {
     if (lathe && drill) break;
   }
   if (!lathe) F3_DRESS_STATS.skipped.push('lathe');
+  // the fitters' tool lockers and rolling tool chests by the benches (workshop loot)
+  for (let i = 0; i < 2; i++) scanWall(D, a, 'cabinetTall', sides, 0.8, (alongX ? L0 : C0) + 2 + i * 1.2);
+  for (const lf of [0.3, 0.7]) {
+    const l = L0 + (L1 - L0) * lf + 1.4, c = mc + 1.3;
+    place(D, a, 'rollingToolChest', alongX ? l : c, alongX ? c : l, alongX ? 0 : Math.PI / 2, {front: 0.6});
+  }
   // walkway markings from the street door to the yard doors
   const sd = doorOf(D, a, A.streetN), yd = doorOf(D, a, A.yard);
   if (sd && yd) {
@@ -320,7 +338,6 @@ function yard(f: F3): void {
   if (!a) return;
   scanWall(D, a, 'palletJack', ['E', 'N'], 0.5);
   scanWall(D, a, 'gasCylinderCart', ['E'], 0.6);
-  scanWall(D, a, 'cableSpool', ['N', 'E'], 0.6);
   scanWall(D, a, 'crate', ['E', 'S'], 0);
   scanWall(D, a, 'handTruck', ['N'], 0.5);
   // a painted walkway down the yard from the street to the stair (keep-clear lines)
@@ -338,12 +355,10 @@ function lobby(f: F3): void {
   if (an) {
     const x0 = an.apron.x * CELL + 0.1, x1 = (an.apron.x + an.apron.w) * CELL - 0.1, z0 = an.apron.y * CELL + 0.1, z1 = (an.apron.y + an.apron.h) * CELL - 0.05;
     for (const b of [{x0, x1, z0, z1: z0 + 0.12}, {x0, x1: x0 + 0.12, z0, z1}, {x0: x1 - 0.12, x1, z0, z1}]) deco(D, 'plasticSeat', b, 0, 0.008);
-    for (let x = x0 + 0.4; x < x1 - 0.5; x += 0.8) deco(D, 'black', {x0: x, x1: x + 0.35, z0: z0 + 0.02, z1: z0 + 0.1}, 0.008, 0.01);
   }
   scanWall(D, a, 'handTruck', ['W'], 0.5);
   scanWall(D, a, 'cartonStack', ['N'], 0, ax0(a) + 1);
   scanWall(D, a, 'cartonStack', ['W'], 0);
-  scanWall(D, a, 'noticeBoard', ['N'], 0);
 }
 
 function laundry(f: F3): void {
@@ -354,7 +369,7 @@ function laundry(f: F3): void {
   const ms: Side[] = (['N', 'S', 'W'] as Side[]).sort((p, q) => D.doors(a).filter(d => doorSide(d, a) === p).length - D.doors(a).filter(d => doorSide(d, a) === q).length);
   for (const sd of ms) {
     const [lo, hi] = wallRange(a, sd);
-    const len = Math.min(6.0, hi - lo - 1.6);
+    const len = Math.min(4.5, hi - lo - 1.6);
     if (len < 3) continue;
     const t0 = lo + 0.8;
     const b = wallBox(a, sd, t0, t0 + len, 0.05, 0.8);
@@ -372,7 +387,8 @@ function laundry(f: F3): void {
   const cx = (ax0(a) + ax1(a)) / 2, cz = (az0(a) + az1(a)) / 2;
   place(D, a, 'table', cx, cz + 0.6, a.w >= a.h ? Math.PI / 2 : 0, {ring: 0.7});
   for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'clothingRack', {front: 0.6, tries: 16});
-  placeAgainstWall(D.ctx, a, 'cabinetTall', {front: 0.8, tries: 16});
+  stock(placeAgainstWall(D.ctx, a, 'cabinetTall', {front: 0.8, tries: 16}), 'supply-closet');
+  for (let i = 0; i < 2; i++) stock(placeAgainstWall(D.ctx, a, 'shelf', {front: 0.8, tries: 16}), 'supply-closet');
 }
 
 function gasStore(f: F3): void {
@@ -380,7 +396,7 @@ function gasStore(f: F3): void {
   const a = A.gasStore;
   if (!a) return;
   const back = OPP[doorSide(D.doors(a)[0] ?? ({x: a.x - 1, y: a.y, w: 1, h: 3} as Door), a)];
-  for (const k of ['gasCylinderCart', 'oxygenCart', 'gasCylinderCart', 'oxygenCart'] as PropKind[]) scanWall(D, a, k, [back, 'N', 'S'], 0.5);
+  for (const k of ['gasCylinderCart', 'oxygenCart', 'gasCylinderCart'] as PropKind[]) scanWall(D, a, k, [back, 'N', 'S'], 0.5);
   scanWall(D, a, 'cabinetTall', ['N', 'S', back], 0.8);
   // the cylinder restraint rail along the back wall
   const [lo, hi] = wallRange(a, back);
@@ -398,10 +414,11 @@ function clinic(f: F3): void {
   const st = D.doors(a).find(d => d.y === a.y - 1 && d.x < a.x + 22);
   const tx = st ? (st.x + st.w / 2) * CELL + 4.5 : ax0(a) + 9;
   const desk = scanWall(D, a, 'receptionDesk', ['S'], 1.2, tx);
-  if (desk) {
-    scanWall(D, a, 'pottedPlantSmall', ['S'], 0.3, desk.x - 2.0);
-    scanWall(D, a, 'pottedPlantSmall', ['S'], 0.3, desk.x + 2.0);
-  }
+  // the reception's medicine and dressings cabinets on the wall behind it
+  const kx = desk?.x ?? tx;
+  stock(scanWall(D, a, 'medCabinet', ['S'], 0.9, kx - 2.4), 'first-aid-room');
+  stock(scanWall(D, a, 'cabinetTall', ['S'], 0.8, kx + 2.3), 'first-aid-room');
+  stock(scanWall(D, a, 'cabinetLow', ['S', 'W'], 0.7, kx - 4.2), 'first-aid-room');
   // waiting benches in rows facing the reception, between the stair and the street portal
   const bz = (az0(a) + az1(a)) / 2 - 0.6;
   let nb = 0;
@@ -413,7 +430,7 @@ function clinic(f: F3): void {
   scanWall(D, a, 'waterCooler', ['N', 'W'], 0.5);
   scanWall(D, a, 'planterTree', ['N'], 0.3, ax1(a) - 0.8);
   scanWall(D, a, 'planterTree', ['N'], 0.3, ax1(a) - 11.0);
-  for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'noticeBoard', {sides: ['N', 'W'], y: 1.1, tries: 20});
+  placeAgainstWall(D.ctx, a, 'noticeBoard', {sides: ['N', 'W'], y: 1.1, tries: 20});
 }
 
 /** The casualty ward: bays along both long walls under curtain rails, stretcher beds in most, drip stands, the nurses' station. */
@@ -444,16 +461,17 @@ function ward(f: F3): void {
       if (main && propBlocksDoorway(D.layout, mid, (fc + zFront) / 2, bayW / 2, Math.abs(fc - zFront) / 2, D.base, 2.0)) { flush(i); continue; }
       if (run0 < 0) run0 = i;
       // the bed: a stretcher with its head to the wall, every bay but a seeded empty one or two
-      if (D.rng.chance(0.82)) {
+      let bed = false;
+      if (D.rng.chance(0.55)) {
         const sp = wallSpot(a, sd, mid, 'wheeledStretcher');
         const p = place(D, a, 'wheeledStretcher', sp.x, sp.z, sd === 'N' ? 0 : Math.PI, {});
         if (p) {
-          beds++;
+          beds++; bed = true;
           if (D.rng.chance(0.35)) place(D, a, 'ivPole', mid + 0.75, fc - nz * 0.45, sd === 'N' ? 0 : Math.PI, {});
         }
       }
-      // a bunched curtain at the bay's side against the wall
-      deco(D, 'panel', {x0: s0 + 0.03, x1: s0 + 0.13, z0: Math.min(fc - nz * 0.03, fc - nz * 0.35), z1: Math.max(fc - nz * 0.03, fc - nz * 0.35)}, 0.25, railY);
+      // a stripped bay keeps its dressings cabinet against the wall
+      if (!bed) { const sp = wallSpot(a, sd, mid, 'cabinetTall'); stock(place(D, a, 'cabinetTall', sp.x, sp.z, sp.rot, {front: 0.8}), 'first-aid-room'); }
     }
     flush(n);
   }
@@ -462,10 +480,11 @@ function ward(f: F3): void {
   if (main) {
     const t = (main.x + main.w / 2) * CELL;
     scanWall(D, a, 'desk', ['N'], 0.9, t + 3.2);
-    scanWall(D, a, 'medCabinet', ['N'], 0.9, t - 3.0);
+    stock(scanWall(D, a, 'medCabinet', ['N'], 0.9, t - 3.0), 'first-aid-room');
+    stock(scanWall(D, a, 'cabinetLow', ['N'], 0.7, t + 5.5), 'first-aid-room');
   }
   // fixtures over the aisle
-  for (let x = ax0(a) + 2; x < ax1(a) - 1; x += 4) light(D, a, x, (az0(a) + az1(a)) / 2, rel(D, a) - 0.05, true);
+  for (let x = ax0(a) + 2.5; x < ax1(a) - 1; x += 5.5) light(D, a, x, (az0(a) + az1(a)) / 2, rel(D, a) - 0.05, true);
 }
 
 /** The isolation ward: glazed cubicles along the wall opposite its door, a bed in each, the medium gas leak. */
@@ -501,7 +520,6 @@ function isolation(f: F3): void {
     if (!solid(D, a, b, glassH, false)) continue;
     ok++;
     deco(D, 'glassShopfront', along ? {x0: b.x0, x1: b.x1, z0: (b.z0 + b.z1) / 2 - 0.03, z1: (b.z0 + b.z1) / 2 + 0.03} : {x0: (b.x0 + b.x1) / 2 - 0.03, x1: (b.x0 + b.x1) / 2 + 0.03, z0: b.z0, z1: b.z1}, 0.1, glassH);
-    deco(D, 'steelBright', along ? {x0: b.x0, x1: b.x1, z0: (b.z0 + b.z1) / 2 - 0.05, z1: (b.z0 + b.z1) / 2 + 0.05} : {x0: (b.x0 + b.x1) / 2 - 0.05, x1: (b.x0 + b.x1) / 2 + 0.05, z0: b.z0, z1: b.z1}, 0, 0.1);
     deco(D, 'steelBright', along ? {x0: b.x0, x1: b.x1, z0: (b.z0 + b.z1) / 2 - 0.05, z1: (b.z0 + b.z1) / 2 + 0.05} : {x0: (b.x0 + b.x1) / 2 - 0.05, x1: (b.x0 + b.x1) / 2 + 0.05, z0: b.z0, z1: b.z1}, glassH, glassH + 0.08);
   }
   // the side walls between cubicles (glass, on the cell line between them)
@@ -521,8 +539,18 @@ function isolation(f: F3): void {
       if (i % 2 === 0) place(D, a, 'ivPole', along ? mid + 0.85 : fc - nx * 0.45, along ? fc - nz * 0.45 : mid + 0.85, sp.rot, {});
     }
   }
-  scanWall(D, a, 'biohazardBin', [OPP[back]], 0.4);
-  scanWall(D, a, 'medCabinet', [OPP[back]], 0.9);
+  scanWall(D, a, 'bin', [OPP[back]], 0);
+  stock(scanWall(D, a, 'medCabinet', [OPP[back]], 0.9), 'first-aid-room');
+  stock(scanWall(D, a, 'cabinetLow', [OPP[back], 'W', 'E'], 0.7), 'first-aid-room');
+}
+
+/** The clinical corridor's dressings cabinet, the dispensary's shelving, the yard's tool lockers. */
+function stores(f: F3): void {
+  const {D, A} = f;
+  const corr = A.corridor, disp = A.dispensary, yd = A.yard;
+  if (corr) stock(scanWall(D, corr, 'medCabinet', ['W', 'E'], 0.9, (az0(corr) + az1(corr)) / 2 - 3), 'first-aid-room');
+  if (disp) { for (let i = 0; i < 2; i++) stock(scanWall(D, disp, 'medCabinet', ['N', 'S', 'W'], 0.9), 'first-aid-room'); }
+  if (yd) for (let i = 0; i < 2; i++) stock(scanWall(D, yd, 'cabinetTall', ['N'], 0.8, ax1(yd) - 2 - i * 1.2), 'storage');
 }
 
 function treatment(f: F3): void {
@@ -537,7 +565,7 @@ function treatment(f: F3): void {
 
 const PLATE: Partial<Record<F3Key, string>> = {
   depot: 'SUPPLY DEPOT · GOODS INWARD', lobby: 'FREIGHT LIFT', laundry: 'LAUNDRY', fab: 'FABRICATION', yard: 'WORKS YARD', gasStore: 'MEDICAL GASES · NO NAKED FLAMES',
-  washroom: 'WASHROOM', clinic: 'INFIRMARY', ward: 'CASUALTY WARD', corridor: 'CLINICAL CORRIDOR', treatment: 'TREATMENT ROOM',
+  washroom: 'WASHROOM', medStores: 'MEDICAL STORES', clinic: 'INFIRMARY', ward: 'CASUALTY WARD', corridor: 'CLINICAL CORRIDOR', treatment: 'TREATMENT ROOM',
   dispensary: 'DISPENSARY', airlock: 'ISOLATION · MASKS ON', isolation: 'ISOLATION WARD · NO ENTRY',
 };
 
@@ -595,6 +623,7 @@ export function dressFloor3(c: FloorDressCtx): void {
   step('ward', ward);
   step('isolation', isolation);
   step('treatment', treatment);
+  step('stores', stores);
   step('plates', plates);
   // the guarantee: no floor pocket anywhere on the storey (a prop of this pass that closes one off goes again)
   sweepPockets(D, areas, p0);
