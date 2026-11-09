@@ -378,10 +378,13 @@ function planV2Hazards(layout: StationLayout, carved: readonly FloorCarveResult[
   const genAreas = new Set(gens.map(g => g.area));
   const proposals: {level: number; area: number; strength: 'weak' | 'medium' | 'strong'}[] = [];
   carved.forEach((r, L) => { for (const q of r.gas ?? []) proposals.push({level: L, area: q.area, strength: q.strength}); });
-  // at most six leaks over the level: every strong / medium one, then the weak ones storey by storey (a deterministic cut, never a retry)
+  // at most six leaks over the level (a deterministic cut, never a retry): every strong / medium one, then each storey's first weak
+  // one, then a storey's extra weak ones, deepest storey first — the services storey's optional cylinder-store leak is the first to go
+  // (its designer's choice), the maintenance storey's ejector-room leak beside its strong one stays
   const rank = {strong: 0, medium: 1, weak: 2} as const;
-  proposals.sort((p, q) => rank[p.strength] - rank[q.strength] || p.level - q.level);
-  proposals.length = Math.min(proposals.length, 6);
+  const tier = (q: (typeof proposals)[number], i: number) => (q.strength === 'weak' ? (proposals.some((o, j) => j !== i && o.level === q.level && (o.strength !== 'weak' || j < i)) ? 3 : 2) : rank[q.strength]);
+  const order = proposals.map((q, i) => ({q, t: tier(q, i), i})).sort((a, b) => a.t - b.t || (a.t === 3 ? b.q.level - a.q.level : a.q.level - b.q.level) || a.i - b.i);
+  proposals.splice(0, proposals.length, ...order.slice(0, 6).map(o => o.q));
   const doorsOf = (id: number) => layout.doors.filter(d => d.a === id || d.b === id).length;
   for (const q of proposals) {
     const a = layout.areas[q.area];

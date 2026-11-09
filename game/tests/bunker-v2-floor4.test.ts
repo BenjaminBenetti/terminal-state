@@ -37,6 +37,12 @@ const byLabel = (l: StationLayout, label: string): Area | undefined => storey(l)
 const m2 = (a: Area) => a.w * a.h * CELL * CELL;
 const clear = (a: Area) => a.ceil - BASE;
 
+/** (lead, integration: storey 5's nave rises through this storey's slab — its decor is not this storey's) */
+const inNave = (d: {x0: number; z0: number; x1: number; z1: number; y0: number}): boolean => {
+  const v = bunkerSpine().voids.find(q => q.id === 'V45')!.rect, cx = (d.x0 + d.x1) / 2 / 0.5, cz = (d.z0 + d.z1) / 2 / 0.5;
+  return d.y0 < BASE + 0.05 && cx >= v.x && cx < v.x + v.w && cz >= v.y && cz < v.y + v.h;
+};
+
 describe('bunker v2 storey 4: maintenance & water', () => {
   it('the whole level is valid on every seed (bunkerIssues + bunkerV2Issues)', () => {
     const bad: string[] = [];
@@ -181,7 +187,7 @@ describe('bunker v2 storey 4: maintenance & water', () => {
       const {layout, ms} = gen(s);
       const props = layout.props.filter(p => (p.level ?? 0) === LV).length;
       const lights = layout.lights.filter(l => (l.level ?? 0) === LV).length;
-      const decor = layout.decor.filter(d => d.y0 >= BASE - 7.5 && d.y1 <= BASE + 7.01).length;
+      const decor = layout.decor.filter(d => d.y0 >= BASE - 0.5 && d.y1 <= BASE + 7.01 && !inNave(d)).length;
       expect(props, `${s} props`).toBeLessThanOrEqual(150);
       expect(lights, `${s} lights`).toBeLessThanOrEqual(75);
       expect(decor, `${s} decor`).toBeLessThanOrEqual(150);
@@ -197,7 +203,7 @@ describe('bunker v2 storey 4: maintenance & water', () => {
       areas: storey(l).map(q => [q.label, q.x, q.y, q.w, q.h, q.ceil, q.purpose]),
       doors: l.doors.filter(d => d.level === LV).map(d => [d.x, d.y, d.w, d.h]),
       props: l.props.filter(p => (p.level ?? 0) === LV).map(p => [p.kind, p.x, p.y, p.z, p.rot]),
-      decor: l.decor.filter(d => d.y0 >= BASE - 7.5 && d.y1 <= BASE + 7.01).length,
+      decor: l.decor.filter(d => d.y0 >= BASE - 0.5 && d.y1 <= BASE + 7.01 && !inNave(d)).length,
     });
     expect(sig(b)).toBe(sig(a));
     expect(FLOOR_4.level).toBe(LV);
