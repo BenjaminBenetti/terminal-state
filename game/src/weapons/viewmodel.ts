@@ -65,7 +65,7 @@ export interface ViewState {
    * Lane FEEL (knife-windup-20261030): the held melee weapon's cycle stage and seconds into it (weapons.ts
    * WeaponController.meleePose: windup / ready / swing / recover; stage null / absent = the carry pose).
    */
-  melee?: {stage: MeleeStage | null; t: number};
+  melee?: {stage: MeleeStage | null; t: number; charge?: number}; // (lane MELEE, weapon variety: + a charge weapon's charge 0..1)
   /** Lane GUNS: how far the held gun's BREAK action is open (WeaponController.actionOpen, 0 closed .. 1 open; absent = 0). */
   actionOpen?: number;
 }
@@ -427,7 +427,9 @@ export class Viewmodel {
     // eases back to the carry instead of snapping (no pop).
     if (it.def?.melee) {
       const st = s.melee?.stage ?? null;
-      const k = meleePoseOffset(st, s.melee?.t ?? 0, it.def.melee, MELEE_POSES[it.def.view.model] ?? KNIFE_POSES, this.swingPose);
+      // (lane MELEE, weapon variety: each weapon's own key poses by its model key = weapon id; a charge weapon's ready pose / swing
+      // start follow its charge)
+      const k = meleePoseOffset(st, s.melee?.t ?? 0, it.def.melee, MELEE_POSES[it.def.view.model] ?? KNIFE_POSES, this.swingPose, s.melee?.charge ?? 0);
       const a = this.meleeApplied, f = st ? 1 : Math.min(1, dt * 14);
       a.x += (k.x - a.x) * f; a.y += (k.y - a.y) * f; a.z += (k.z - a.z) * f;
       a.rx += (k.rx - a.rx) * f; a.ry += (k.ry - a.ry) * f; a.rz += (k.rz - a.rz) * f;

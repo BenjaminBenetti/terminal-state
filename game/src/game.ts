@@ -58,7 +58,9 @@ import {ladderTarget, type Ladder} from './gen/traversal';
 import {raycastWorld, type Vec3, type WorldHit} from './combat/hitscan';
 import {raycastShot} from './physics/merchOnHost'; // task studio-skywalk-variety-20261107-231448-01 (lane MERCH): bullets into open shelves
 import {nearestEnemyHit} from './combat/enemyRay'; // lane COMBAT (reactor-playtest-round2): cross-storey bullet / pellet hits
-import {meleeDamage, meleeRayDirs, resolveMelee} from './combat/melee'; // lane KNIFE (knife-melee-20261030)
+import {meleeRayDirs, resolveMelee, resolveMeleeSweep, asMeleeSweep} from './combat/melee'; // lane KNIFE (knife-melee-20261030)
+// task studio-weapon-variety-production-20261109-224355-01 (lane MELEE): heavy melee hits — charge / stamina / per-target damage, mass knockback, stagger
+import {MeleeShoves, meleeHint, meleeHitDamage, meleeKillStrength, meleeKnockFor, meleePushDir, meleeShoveStep, meleeStaggerOpts, meleeStaminaCost, meleeSwing} from './combat/meleeImpact';
 import {DAMAGE_MATERIALS, propDamageSpec} from './damage/materials'; // lane KNIFE: blade-on-surface cue / chips
 import {Hud} from './ui/hud';
 import {InventoryUI} from './ui/inventoryUI';
@@ -2206,7 +2208,7 @@ export class Game {
     // a loading screen (load / new game / retry build a new world) or the error screen; pause / inventory / map only hold it
     if (s === 'title' || s === 'dead' || s === 'loading' || s === 'error') this.journeyCompile?.cancel();
     this.input.active = s === 'playing';
-    if (s !== 'playing') { this.input.clear(); this.cancelUse(s); this.cancelFlareHold(); this.weapon.cancelSwing(); } // lane KNIFE / FEEL: no stale windup / contact after a menu / death / loading
+    if (s !== 'playing') { this.input.clear(); this.cancelUse(s); this.cancelFlareHold(); this.weapon.cancelSwing(); this.meleeShoves.clear(); } // lane KNIFE / FEEL: no stale windup / contact after a menu / death / loading (lane MELEE: nor a push)
     this.invUI.cancelDrag();
     hideTooltip(); // (task studio-ui-subway-maps-20261108-074144-01) every screen change takes the game tooltip with it
     for (const id of ['title', 'pause', 'inventory', 'death', 'win', 'error']) $('#' + id).classList.add('hidden');
@@ -2895,6 +2897,7 @@ export class Game {
     } else if (heldDef?.kind === 'consumable' && inp.mousePressed[0] && !this.use && !flareOwns) {
       this.startUse(this.inv.selectedRef());
     }
+    this.stepMeleeShoves(dt); // lane MELEE (weapon variety): heavy melee pushes, bounded, never through walls / off the floor
 
     if (this.use) {
       this.use.t += dt;
@@ -3048,7 +3051,7 @@ export class Game {
     const def = st ? itemDef(st.itemId) : null;
     let hint = '';
     if (wdef && st) {
-      if (wdef.melee) hint = this.weapon.winding ? 'Release to slash' : 'Hold · release to slash'; // lane KNIFE / FEEL (short: a long hint overlapped the hotbar at 960 px)
+      if (wdef.melee) hint = meleeHint(wdef, this.weapon.winding, this.weapon.chargeLevel) ?? (this.weapon.winding ? 'Release to slash' : 'Hold · release to slash'); // lane KNIFE / FEEL (short: a long hint overlapped the hotbar at 960 px); lane MELEE: a weapon-variety line / the slugger's charge cue
       else if (this.weapon.reloading) hint = 'Reloading…';
       else if ((st.mag ?? 0) === 0) hint = reserveFor(wdef, this.inv) ? 'Empty — press R' : `No ${caliberLabel(wdef)} ammo`;
       else if ((st.mag ?? 0) <= wdef.magazine * 0.25 && reserveFor(wdef, this.inv)) hint = 'Low — R to reload';
@@ -3253,6 +3256,13 @@ export class Game {
    * or knockback; the hit never staggers (contact stays a trade). Feedback as a shot hit: wound / blood / flesh pieces
    * (damage/system.ts), the foreground flesh confirm, hit marker + tick, the enemy's hurt / death cue, ragdoll on a kill. A
    * blade hit (flesh or surface) is a quiet noise (`def.noise`, 5 m vs 24-38 m for gunshots); a clean miss is silent.
+   * Task studio-weapon-variety-production-20261109-224355-01 (lane MELEE): the six new melee weapons resolve the same contact through
+   * the per-swing HIT SET (combat/melee.ts resolveMeleeSweep: up to `melee.maxTargets` DISTINCT targets, each struck once, the same
+   * rays / occlusion) — enemies, creatures and Market people alike, through the common head / limb multipliers — and add what the
+   * knife never had (combat/meleeImpact.ts): the stamina cost paid here (short = a winded swing), a charge weapon's charge
+   * (WeaponController.swingCharge), a sweep's reduced 2nd target, a mass-scaled push (protected bosses barely move; delivered by
+   * meleeShoves, never through walls / off the floor), a stagger under the brain's own cooldown rules, a heavier kill impulse, and the
+   * normal prop hit interactions (meleeProps). The knife has none of those MeleeSpec fields: its path below is the one it always had.
    */
   private meleeContact(def: WeaponDef): void {
     if (!def.melee || !this.player.alive || this.state !== 'playing') return;
@@ -3263,51 +3273,107 @@ export class Game {
     const up = new THREE.Vector3().crossVectors(right, fwd).normalize();
     const o: Vec3 = {x: origin.x, y: origin.y, z: origin.z};
     const L = this.levels, props = this.layout.props, trench = this.layout.trench.floorY;
+    const m = def.melee, dirs = meleeRayDirs(fwd, right, up, m.rays);
     // (task studio-market-rework-20261108-074144-01, lane COMBAT: + the market's people, their own volumes)
-    const res = resolveMelee(o, meleeRayDirs(fwd, right, up, def.melee.rays), def.range,
-      [...this.zombies.map(z => ({id: z as EnemyActor | MarketCombatant, alive: z.brain.alive, x: z.brain.x, y: z.brain.y, z: z.brain.z, volumes: z.hitVolumes})), ...this.marketCombat.meleeTargets()],
-      (ro, rd, max) => raycastWorld(L, props, ro, rd, max, trench),
-      (ro, rd, maxT) => this.damage.corpseHit(this.zombies, ro, rd, maxT));
-    if (!res) { this.logMelee({kind: 'miss'}); return; } // a clean miss: only the swing's rustle
+    const targets = [...this.zombies.map(z => ({id: z as EnemyActor | MarketCombatant, alive: z.brain.alive, x: z.brain.x, y: z.brain.y, z: z.brain.z, volumes: z.hitVolumes})), ...this.marketCombat.meleeTargets()];
+    const world = (ro: Vec3, rd: Vec3, max: number) => raycastWorld(L, props, ro, rd, max, trench);
+    const corpses = (ro: Vec3, rd: Vec3, maxT: number) => this.damage.corpseHit(this.zombies, ro, rd, maxT);
+    // lane MELEE: a weapon-variety sweep's hit set; the knife: resolveMelee's one target, as ever
+    const sweep = m.maxTargets ? resolveMeleeSweep(o, dirs, def.range, targets, world, corpses, m.maxTargets) : asMeleeSweep(resolveMelee(o, dirs, def.range, targets, world, corpses));
+    // lane MELEE: the swing's stamina is paid at its contact (a cancelled swing costs nothing; the knife costs 0), then its scaling
+    const charge = this.weapon.swingCharge;
+    const swing = meleeSwing(m, charge, !this.player.spendStamina(meleeStaminaCost(m, charge)));
+    const res0 = sweep.contact;
+    if (!sweep.hits.length && !res0) { if (m.propHits) this.meleeProps(def, o, dirs[0], def.range, null, swing.damageMult); this.logMelee({kind: 'miss'}); return; } // a clean miss: only the swing's rustle (lane MELEE: loose items on the line still take it)
     this.damage.beginShot(); // one wound / tear group per swing
-    const point = new THREE.Vector3(res.point.x, res.point.y, res.point.z), dir = new THREE.Vector3(res.dir.x, res.dir.y, res.dir.z);
     const wound = {damage: 24, pellet: false, weapon: def.id}; // wound / gore sizing of one rifle round
-    if (res.kind === 'enemy' && this.marketCombat.isCombatant(res.target)) {
-      // (lane COMBAT) a market person: the blade's damage once (its confirm / flinch / hostility / ragdoll inside)
-      const killed = this.marketCombat.meleeHit(res.target, meleeDamage(def, res.part), res.part, point, dir, def.id);
-      this.hud.hitmarker(killed);
-      this.sfx.hitTick(killed);
-      this.logMelee({kind: 'person', part: res.part, t: +res.t.toFixed(3), damage: meleeDamage(def, res.part), killed, id: res.target.id});
-    } else if (res.kind === 'enemy') {
-      const z = res.target as EnemyActor;
+    let anyKill = false;
+    // lane MELEE: each struck target ONCE (the per-swing hit set: the knife's is its one target)
+    for (const [i, res] of sweep.hits.entries()) {
+      const point = new THREE.Vector3(res.point.x, res.point.y, res.point.z), dir = new THREE.Vector3(res.dir.x, res.dir.y, res.dir.z);
+      const amount = meleeHitDamage(def, res.part, swing, i);
+      if (this.marketCombat.isCombatant(res.target)) {
+        // (lane COMBAT) a market person: the blade's damage once (its confirm / flinch / hostility / ragdoll inside)
+        const killed = this.marketCombat.meleeHit(res.target, amount, res.part, point, dir, def.id);
+        anyKill ||= killed;
+        this.logMelee({kind: 'person', part: res.part, t: +res.t.toFixed(3), damage: amount, killed, id: res.target.id});
+        continue;
+      }
+      const z = res.target as EnemyActor, arch = archetypeOf(z);
+      const knock = meleeKnockFor(swing.knockback, arch, z.brain.type); // lane MELEE: by the target's mass (protected bosses resist)
       this.damage.hitZombie(z, point, dir, res.part, wound);
-      const killed = z.brain.damage(meleeDamage(def, res.part), this.player.x, this.player.z, this.player.y, {stagger: false});
+      const killed = z.brain.damage(amount, this.player.x, this.player.z, this.player.y, swing.stagger > 0 ? meleeStaggerOpts(swing.stagger, arch) : {stagger: false});
       z.hitFlash = 1;
       this.sfx.hitConfirm(point.x, point.y, point.z, z, res.part === 'head'); // (+ the head crack on a confirmed head hit: task studio-general-armor-20261107-231448-01)
       if (killed) {
+        anyKill = true;
         this.stats.kills++;
         enemyCues(z).death(this.sfx, z);
         this.prof.begin(SPAN.ragdoll);
-        this.physics.ragdoll(z, {dir: fwd, point, strength: killImpulseStrength(def.id, 1, 1), bone: res.part === 'head' ? 'head' : undefined});
+        this.physics.ragdoll(z, {dir: fwd, point, strength: meleeKillStrength(killImpulseStrength(def.id, 1, 1), knock), bone: res.part === 'head' ? 'head' : undefined});
         this.prof.end(SPAN.ragdoll);
-      } else enemyCues(z).hurt(this.sfx, z);
-      this.hud.hitmarker(killed);
-      this.sfx.hitTick(killed);
-      this.logMelee({kind: 'enemy', part: res.part, t: +res.t.toFixed(3), damage: meleeDamage(def, res.part), killed, hp: z.brain.hp, archetype: z.archetype ?? 'zombie', type: z.brain.type});
-    } else if (res.kind === 'corpse') {
-      this.logMelee({kind: 'corpse', t: +res.t.toFixed(3)});
-      this.damage.hitZombie(res.corpse.z, point, dir, res.corpse.part, wound, true);
+      } else {
+        enemyCues(z).hurt(this.sfx, z);
+        if (knock > 0) { const [px, pz] = meleePushDir(res.dir, right, m.knockSide); this.meleeShoves.add(z.brain, px, pz, knock); } // lane MELEE: the push
+      }
+      this.logMelee({kind: 'enemy', part: res.part, t: +res.t.toFixed(3), damage: amount, killed, hp: z.brain.hp, archetype: z.archetype ?? 'zombie', type: z.brain.type, ...(knock > 0 ? {knock: +knock.toFixed(3)} : {})});
+    }
+    if (sweep.hits.length) {
+      this.hud.hitmarker(anyKill);
+      this.sfx.hitTick(anyKill);
+    } else if (res0?.kind === 'corpse') {
+      const point = new THREE.Vector3(res0.point.x, res0.point.y, res0.point.z), dir = new THREE.Vector3(res0.dir.x, res0.dir.y, res0.dir.z);
+      this.logMelee({kind: 'corpse', t: +res0.t.toFixed(3)});
+      this.damage.hitZombie(res0.corpse.z, point, dir, res0.corpse.part, wound, true);
       this.sfx.impact(point.x, point.y, point.z, 'flesh');
-    } else {
-      // blade on a surface: its material's impact cue and a few chips, no crater / prop damage (a knife does not break things)
-      const wh = res.hit, n = new THREE.Vector3(wh.nx, wh.ny, wh.nz);
-      const spec = wh.kind === 'prop' && wh.prop !== undefined && props[wh.prop] ? DAMAGE_MATERIALS[propDamageSpec(props[wh.prop].kind).cls]
-        : wh.kind === 'wall' || wh.kind === 'floor' || wh.kind === 'ceiling' ? DAMAGE_MATERIALS[this.damage.structuralClassAt(wh.kind, wh.level, point, n)] : DAMAGE_MATERIALS.concrete; // (task reactor-expansion-20261101, lane CONTROLS: the surface's own material)
-      this.sfx.impact(point.x, point.y, point.z, spec.sound);
-      this.fx.impact(point, n, spec.fx, {decal: false, chips: 2, dust: 0.35});
-      this.logMelee({kind: 'world', surface: wh.kind, t: +res.t.toFixed(3)});
+    } else if (res0) {
+      const point = new THREE.Vector3(res0.point.x, res0.point.y, res0.point.z), wh = res0.hit;
+      // lane MELEE: a weapon-variety weapon's normal prop hit (a struck prop / loose items); the knife (and a bare surface): chips only
+      if (!(m.propHits && this.meleeProps(def, o, res0.dir, res0.t, wh, swing.damageMult))) {
+        // blade on a surface: its material's impact cue and a few chips, no crater / prop damage (a knife does not break things)
+        const n = new THREE.Vector3(wh.nx, wh.ny, wh.nz);
+        const spec = wh.kind === 'prop' && wh.prop !== undefined && props[wh.prop] ? DAMAGE_MATERIALS[propDamageSpec(props[wh.prop].kind).cls]
+          : wh.kind === 'wall' || wh.kind === 'floor' || wh.kind === 'ceiling' ? DAMAGE_MATERIALS[this.damage.structuralClassAt(wh.kind, wh.level, point, n)] : DAMAGE_MATERIALS.concrete; // (task reactor-expansion-20261101, lane CONTROLS: the surface's own material)
+        this.sfx.impact(point.x, point.y, point.z, spec.sound);
+        this.fx.impact(point, n, spec.fx, {decal: false, chips: 2, dust: 0.35});
+      }
+      this.logMelee({kind: 'world', surface: wh.kind, t: +res0.t.toFixed(3)});
     }
     this.alertZombies(def.noise);
+  }
+
+  /**
+   * Task studio-weapon-variety-production-20261109-224355-01 (lane MELEE): a weapon-variety swing's NORMAL prop hit interactions along
+   * the contact ray `d` up to `t` (the struck surface, or the reach on a miss) — the bullet pipeline's pieces, never its window /
+   * lane handlers: loose pickups / lots / light movable props on the line take the impulse (DamageSystem.knockPickups), shelf stock
+   * the blow (ShelfStock.pelletHit / shoot), and a struck prop its normal hit (DamageSystem.hitWorld: per-instance damage, a movable
+   * prop's shove, its cue / fx). Returns true when something there took the hit (else the caller shows the knife's chips).
+   */
+  private meleeProps(def: WeaponDef, o: Vec3, d: Vec3, t: number, wh: WorldHit | null, damageMult: number): boolean {
+    const shot = {damage: def.damage * damageMult, pellet: false, weapon: def.id}, dir = new THREE.Vector3(d.x, d.y, d.z);
+    const props = this.layout.props;
+    const fh = wh ? this.stock.pelletHit(o, d, t, wh, props, false) : null;
+    if (fh) {
+      if (!this.damage.knockPickups(o, d, fh.t, undefined, shot)) this.stock.shoot(fh, dir, shot.damage);
+      return true;
+    }
+    if (this.damage.knockPickups(o, d, t, wh ?? undefined, shot) > 0) return true;
+    if (wh?.kind === 'prop' && wh.prop !== undefined && props[wh.prop]) {
+      this.damage.hitWorld(wh, new THREE.Vector3(o.x + d.x * t, o.y + d.y * t, o.z + d.z * t), dir, shot);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Task studio-weapon-variety-production-20261109-224355-01 (lane MELEE): heavy melee pushes under way (combat/meleeImpact.ts: bounded,
+   * 0.2 s each, one per body); stepped once a frame in play (stepMeleeShoves), cleared whenever play stops.
+   */
+  readonly meleeShoves = new MeleeShoves<EnemyActor['brain']>();
+  private stepMeleeShoves(dt: number): void {
+    this.meleeShoves.update(dt, (b, dx, dz) => meleeShoveStep(b, dx, dz,
+      (x, z, mx, mz) => moveCircle(this.levels, this.propIndex, x, z, mx, mz, b.stats.radius, b.y, b.stats.height ?? BODY_CLEAR),
+      (x, z, y) => this.levels.supportIn(x, z, y + 0.05, 0.3)?.floor));
   }
 
   /** Lane KNIFE (QA, `__LL.snapshot().melee`): the last few swing contacts and what they struck (read-only record). */

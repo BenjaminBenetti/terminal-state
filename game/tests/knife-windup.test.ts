@@ -30,6 +30,7 @@ const {Viewmodel} = await import('../src/weapons/viewmodel');
 const {Inventory} = await import('../src/items/inventory');
 const {MODEL_FILES} = await import('../src/assets/manifest');
 const {ZOMBIE_STATS} = await import('../src/ai/brain');
+const {VARIETY_MELEE_IDS} = await import('../src/weapons/varietyIds');
 
 const GAME = fileURLToPath(new URL('..', import.meta.url));
 const KNIFE = WEAPONS.knife;
@@ -223,7 +224,9 @@ describe('hold to wind up, release to swing', () => {
     expect(h.wc.meleeStage).toBeNull();
     h.secs(1);
     expect(h.types()).toEqual(['windup']);
-    expect(Object.keys(WEAPONS).filter(k => WEAPONS[k].melee)).toEqual(['knife']); // no club / crowbar was added
+    // no club was added by this spec — the melee weapons are the knife plus the six user-approved weapon-variety additions (task
+    // studio-weapon-variety-production-20261109-224355-01, weapons/varietyIds.ts; re-pinned by lane MELEE: weapon-variety-melee.test.ts)
+    expect(Object.keys(WEAPONS).filter(k => WEAPONS[k].melee)).toEqual(['knife', ...VARIETY_MELEE_IDS]);
   });
 });
 
