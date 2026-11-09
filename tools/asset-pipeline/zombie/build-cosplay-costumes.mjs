@@ -10,8 +10,8 @@
 //        game/public/assets/derivatives/outfit-cosplay-costume.json  provenance (sources, Meshy tasks, sha256), method, per body x clip
 //                                                                  fit metrics, gate, bytes
 //        game/src/ai/cosplayCostumes.generated.ts                  runtime table (files, bytes, wearables, costumes, fitted bodies)
-//   --check    rebuild in a temp dir and require every output to be byte-identical (needs the private masters; without them: a
-//              structural check of the shipped files against the recorded bytes / sha256)
+//   --check    rebuild in a temp dir and require every output to be byte-identical (needs the private masters; without them - or with
+//              --structural - a structural check of the shipped files against the recorded bytes / sha256)
 //   dev only: --out=DIR, --costumes=a,b, --bodies=a,b, --step=0.2 (coarser validation), --no-gate
 // Method: lib/costume-fit.mjs (parts, landmark retarget, interior caps, offset-field clearance through every validation pose, weights,
 // masks), lib/costume-metrics.mjs (per clip poke-through / cloth-inside / coverage of the unclothed bodies), the head pieces from
@@ -411,7 +411,8 @@ async function build(outRoot) {
       'Heeled / platform footwear keeps its shape: the body\'s flat foot is hidden inside (the open arch shows the floor, as a real one).', 'Long hair hangs over / through the collar and back of a jacket where it lies within the cloth offset.', 'Unapproved prototype; gameReady false.'],
     rebuild: `node tools/asset-pipeline/zombie/build-cosplay-costumes.mjs (the Meshy masters are private: ${RAW_DIR})`,
   };
-  fs.writeFileSync(path.join(outRoot, DERIV, RECORD), JSON.stringify(recordJson, null, 1) + '\n');
+  // (wall-clock timings are not provenance: dropped, so a rebuild is byte-identical)
+  fs.writeFileSync(path.join(outRoot, DERIV, RECORD), JSON.stringify(recordJson, (k, v) => (k === 'ms' ? undefined : v), 1) + '\n');
   const str = v => `'${String(v).replace(/\\/g, '\\\\').replace(/'/g, '\\\'')}'`;
   const arr = a => `[${a.map(str).join(', ')}]`;
   const ts = [
@@ -448,10 +449,10 @@ function headLabel(c) {
 const OUTPUTS = [...Object.values(FILES).map(f => `${MODELS}/${f}`), `${DERIV}/${RECORD}`, `${GEN}/${TABLE}`];
 async function check() {
   const rawOk = PIECE_ORDER.every(id => fs.existsSync(path.join(SRC_ROOT, RAW_DIR, id, 'a1', 'native.glb')));
-  if (!rawOk) {
+  if (!rawOk || ARGS.has('--structural')) {
     const R = JSON.parse(fs.readFileSync(path.join(REPO, DERIV, RECORD), 'utf8'));
     const bad = Object.values(R.outputs).filter(o => { const f = path.join(REPO, o.file); return !fs.existsSync(f) || fs.statSync(f).size !== o.bytes || sha256File(f) !== o.sha256; }).map(o => o.file);
-    console.log(`--check (private masters not available: structural only): ${Object.keys(R.outputs).length} files, mismatches: ${bad.length ? bad.join(', ') : 'none'}`);
+    console.log(`--check (${rawOk ? '--structural' : 'private masters not available'}: structural only): ${Object.keys(R.outputs).length} files, mismatches: ${bad.length ? bad.join(', ') : 'none'}`);
     if (bad.length) process.exit(1);
     return;
   }

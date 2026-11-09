@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 60852,
-      "sha256": "4b9bb0297ec1e3108484432e7da89ef2dc1b6a1af54616aaa052dd9b1db417e7"
+      "bytes": 62475,
+      "sha256": "447836e908fa6767ab0c4046393ef1fc44f53398a8676effa00b274949938efd"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1865,8 +1865,8 @@
     },
     {
       "path": "assets/derivatives/outfit-cosplay-costume.json",
-      "bytes": 448028,
-      "sha256": "b7671c2ca2caea07c6caac19c25737d856d2c73e434bda3d4cc0d7d0baf4d04b"
+      "bytes": 447249,
+      "sha256": "826a0fb7f2f2a56efaac72c5d188327d46cbc1fd4532d85f8cec1bfce35806c0"
     },
     {
       "path": "assets/derivatives/outfit-cosplay.json",
