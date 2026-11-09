@@ -5,7 +5,7 @@
 import {describe, expect, it} from 'vitest';
 import {
   BUNKER_LANE, bunkerIntelText, bunkerStateProblem, chooseBunkerIntel, coreAlive, freshBunkerState, loadBunkerState, onlineCount,
-  type BunkerStateJSON, type BunkerStateV1JSON,
+  type BunkerStateV1JSON,
 } from '../src/world/bunker/objectiveState';
 import {CORE_SCREEN_PX, coreScreenKey, drawCoreScreen, type CoreScreenModel} from '../src/world/bunker/coreScreen';
 import {revealStations, validateCampaign, visibleNodes} from '../src/campaign/discovery';

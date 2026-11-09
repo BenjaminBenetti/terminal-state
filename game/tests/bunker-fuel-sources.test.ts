@@ -30,7 +30,7 @@ function generatorTarget(at: {x: number; y: number; z: number}) {
 }
 
 /** A room (no train), a cart at (2.5, 3) facing +x, the player behind it; the target's filler `dx` m beyond the drum. */
-function setup(units = FUEL.cartUnits, dx = 0.9) {
+function setup(units: number = FUEL.cartUnits, dx = 0.9) {
   const {h, carts} = roomHost();
   carts.spawn({uid: 'cart:g', units, x: 2.5, y: 0, z: 3, yaw: Math.PI / 2, level: 0});
   h.player.place(1.4, 3, 0, 0);
