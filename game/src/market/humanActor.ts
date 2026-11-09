@@ -87,8 +87,11 @@ export class HumanActor {
 
   has(name: HumanClip | string): boolean { return this.actions.has(name); }
 
-  /** Crossfade to a clip (a one-shot plays once, then the current loop resumes; a terminal one holds). */
-  play(name: HumanClip | string, fade = 0.3): void {
+  /**
+   * Crossfade to a clip (a one-shot plays once, then the current loop resumes; a terminal one holds). Task
+   * studio-market-bar-20261108-225231-01 (lane PEOPLE): `phase` (0..1) starts a loop that far into it (staggered bar patrons).
+   */
+  play(name: HumanClip | string, fade = 0.3, phase = 0): void {
     const next = this.actions.get(name);
     if (!next) return;
     if (this.oneShot && this.terminal.has(this.oneShot)) return; // (dead: nothing plays over the fall)
@@ -98,6 +101,7 @@ export class HumanActor {
     if (this.current === name && !shot) return;
     const prev = this.current ? this.actions.get(this.current) : null;
     next.reset();
+    if (phase > 0 && !shot) next.time = (phase % 1) * next.getClip().duration;
     next.setEffectiveTimeScale(1);
     next.setEffectiveWeight(1);
     next.play();

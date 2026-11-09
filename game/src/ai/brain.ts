@@ -149,7 +149,17 @@ export interface BrainWorld {
    * aggro scenario can compare the rule off / on with the atrium chase rules unchanged. Absent: the established sight.
    */
   atriumNotice?: boolean;
+  /**
+   * Task studio-market-bar-20261108-225231-01 (lane BEER): THE one "how detectable is the player" factor (Night Shift Porter: 0.75;
+   * absent / 1: the established perception). Applied ONCE per channel — an UNAWARE enemy's sight / notice distances (sees, noticeAcross)
+   * and the player's noise radius (alertListeners `detect`) — never compounded. An enemy already aware of the player keeps its sight:
+   * the AI is never switched off and aggro is never dropped by it.
+   */
+  detect?: number;
 }
+
+/** (lane BEER) The detection factor in use: a finite positive BrainWorld.detect, else 1. */
+export const detectFactor = (v: number | undefined): number => (v !== undefined && Number.isFinite(v) && v > 0 ? v : 1);
 
 export interface BrainOutput {
   /** Desired horizontal direction (unit or zero). */
@@ -242,8 +252,11 @@ const HEAR_TURNS: ReadonlySet<BrainState> = new Set<BrainState>(['idle', 'wander
  * `atrium` (open-atrium levels only): listeners on another storey with a sight line through the void use ATRIUM_PERCEPTION.hearOpen
  * per storey (through slabs: the established muffle), and of ALL the listeners on other storeys that would newly start hunting at
  * most hearCrossMax react (nearest first). Without `atrium`: exactly the established loop.
+ * Task studio-market-bar-20261108-225231-01 (lane BEER): `detect` = BrainWorld.detect (the player's one detectability factor) scales the
+ * noise radius once, before everything else (1: the established loop).
  */
-export function alertListeners(brains: Iterable<ZombieBrain>, src: {x: number; y: number; z: number}, radius: number, los: (b: ZombieBrain) => boolean, bases: readonly number[] | null, atrium = false): void {
+export function alertListeners(brains: Iterable<ZombieBrain>, src: {x: number; y: number; z: number}, radius: number, los: (b: ZombieBrain) => boolean, bases: readonly number[] | null, atrium = false, detect = 1): void {
+  radius *= detectFactor(detect);
   let cross: {b: ZombieBrain; d: number; r: number}[] | null = null;
   for (const b of brains) {
     const d = Math.hypot(b.x - src.x, b.z - src.z, b.y - src.y);
@@ -399,11 +412,13 @@ export class ZombieBrain {
     if (w.atriumNotice === true && !this.aware && w.py !== undefined && Math.abs(w.py - this.y) > ATRIUM_PERCEPTION.dy) return this.noticeAcross(w, dx, dz, dt);
     this.noticeT = 0;
     const d = Math.hypot(dx, dz);
-    if (d > this.stats.sightRange) return false;
-    if (d > 2.5) {
+    // (lane BEER) an UNAWARE enemy's notice distances x the player's one detectability factor (an aware one: the established sight)
+    const k = this.aware ? 1 : detectFactor(w.detect);
+    if (d > this.stats.sightRange * k) return false;
+    if (d > 2.5 * k) {
       const ang = Math.atan2(dx, dz) - this.yaw;
       const a = Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang)));
-      if (!this.aware && a > 1.3 && d > 5) return false;
+      if (!this.aware && a > 1.3 && d > 5 * k) return false;
     }
     return w.los(this.x, this.z, w.px, w.pz, this.y, w.py);
   }
@@ -414,9 +429,9 @@ export class ZombieBrain {
    * for dwellS s of continuous sight (any frame without it starts the count again).
    */
   private noticeAcross(w: BrainWorld, dx: number, dz: number, dt: number): boolean {
-    const A = ATRIUM_PERCEPTION, d = Math.hypot(dx, dz, (w.py ?? this.y) - this.y);
-    let ok = d <= this.stats.sightRange * A.noticeFrac;
-    if (ok && d > A.closeM) {
+    const A = ATRIUM_PERCEPTION, d = Math.hypot(dx, dz, (w.py ?? this.y) - this.y), k = detectFactor(w.detect); // (lane BEER: unaware only)
+    let ok = d <= this.stats.sightRange * A.noticeFrac * k;
+    if (ok && d > A.closeM * k) {
       const ang = Math.atan2(dx, dz) - this.yaw;
       ok = Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang))) <= 1.3;
     }

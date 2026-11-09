@@ -15,7 +15,9 @@ drive loops car-engine-idle-loop.mp3 / car-engine-drive-loop.mp3, engine start c
 car-reverse-loop.mp3, brake stop car-brake.mp3, tyre skid car-skid.mp3, door car-door.mp3): ../derivatives/audio-skyways-car.json; the Skyways destinations set (clock tick loop
 skyways-clock-tick-loop.mp3, clock chime skyways-clock-chime.mp3, arcade attract loop skyways-arcade-attract-loop.mp3, projector loop
 skyways-projector-loop.mp3): ../derivatives/audio-skyways-destinations.json; the head-hit set (skull crack
-head-hit-01.mp3, head-hit-02.mp3): ../derivatives/audio-head-hit.json).
+head-hit-01.mp3, head-hit-02.mp3): ../derivatives/audio-head-hit.json; the market set (cash register market-cash-01.mp3 / market-cash-02.mp3, crowd murmur loops
+market-chatter-loop.mp3 / market-bar-chatter-loop.mp3, panic screams market-scream-01..05.mp3, angry grunts market-grunt-01..03.mp3,
+retch market-retch-01.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-market-bar.json).
 
 Powered by Stability AI.
 

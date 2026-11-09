@@ -47,10 +47,20 @@ export function loadCombatAssets(): Promise<CombatAssets> {
 export const COMBAT_STATION = sid(3);
 const layouts = new Map<number, StationLayout>();
 
-/** A market world + its people + the combat on a save Harness. */
-export function combatWorld(a: CombatAssets, seed = 808, o: {harness?: Harness; physics?: MarketCombatHost['physics']} = {}) {
-  let layout = layouts.get(seed);
-  if (!layout) { layout = generateMarketLevel({levelSeed: seed}); layouts.set(seed, layout); }
+/**
+ * A market world + its people + the combat on a save Harness. (Task studio-market-bar-20261108-225231-01, lane PEOPLE: `layoutVersion`
+ * picks the market generator (1 = the first shed market; default the current one), `fresh` generates a private copy a test may edit
+ * (`edit` runs on it before the systems see it), `marketAudio` / `beerEffects` stand in for Game's.)
+ */
+export function combatWorld(a: CombatAssets, seed = 808, o: {harness?: Harness; physics?: MarketCombatHost['physics']; layoutVersion?: number; fresh?: boolean; edit?: (l: StationLayout) => void;
+  marketAudio?: MarketCombatHost['marketAudio']; beerEffects?: MarketCombatHost['beerEffects']} = {}) {
+  const key = seed * 10 + (o.layoutVersion ?? 0);
+  let layout = o.fresh ? undefined : layouts.get(key);
+  if (!layout) {
+    layout = generateMarketLevel({levelSeed: seed, ...(o.layoutVersion ? {layoutVersion: o.layoutVersion} : {})} as Parameters<typeof generateMarketLevel>[0]);
+    if (!o.fresh) layouts.set(key, layout);
+  }
+  o.edit?.(layout);
   const L = layout;
   const levels = levelsOf(L), pathfinder = new PathFinder(levels), propIndex = new PropIndex(levels, L.props);
   const trainPlacement = playerTrainPlacement(L);
@@ -85,6 +95,8 @@ export function combatWorld(a: CombatAssets, seed = 808, o: {harness?: Harness; 
       return resolved;
     },
     marketPeople: null as unknown as MarketPeople,
+    marketAudio: o.marketAudio ?? null,
+    beerEffects: o.beerEffects ?? null,
   };
   host.marketPeople = new MarketPeople(host as unknown as MarketPeopleHost).install();
   const combat = new MarketCombat(host as unknown as MarketCombatHost).install();

@@ -29,7 +29,8 @@ export type IconKey =
   | 'fuelCan' // task train-fuel-system-20261106-024923: the train's fuel can
   | SkywaysFoodIconKey // task studio-skyways-level-20261106-054448 (lane FOOD): ramen bowls, sushi bento, bubble tea (items/skywaysFood.ts)
   | 'reactorKey' | 'fuseCartridge' // task reactor-build-20261101 (lane RESTART): the reactor restart parts
-  | 'railTies'; // task studio-market-rework-20261108-074144-01 (lane TRADE): the market's Rail Ties (items/railTies.ts)
+  | 'railTies' // task studio-market-rework-20261108-074144-01 (lane TRADE): the market's Rail Ties (items/railTies.ts)
+  | BeerIconKey; // task studio-market-bar-20261108-225231-01 (lane BEER): the market bar's beers (items/beers.ts)
 
 /** How a consumable is used: wording, sound and the stat it mainly restores ('use': the flashlight battery). */
 export type ConsumeVerb = 'apply' | 'eat' | 'drink' | 'use';
@@ -66,6 +67,7 @@ import {MEDICAL_DIMS, MEDICAL_ITEMS, treatsText, type Limb, type MedicalIconKey}
 import {MATERIAL_DIMS, MATERIAL_ITEMS, type MaterialIconKey} from './craftMaterials'; // lane RACK (office-props-physics-scale-20261030)
 import {SKYWAYS_DRINK_IDS, SKYWAYS_FOOD_DIMS, SKYWAYS_FOOD_IDS, SKYWAYS_FOOD_ITEMS, type SkywaysFoodIconKey} from './skywaysFood'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {RAIL_TIES_DIMS, RAIL_TIES_ITEMS} from './railTies'; // task studio-market-rework-20261108-074144-01 (lane TRADE)
+import {BEER_DIMS, BEER_ITEMS, beerEffectText, isBeer, type BeerIconKey} from './beers'; // task studio-market-bar-20261108-225231-01: the market bar's beers
 
 // + bread (task office-props-physics-scale-20261030, lane FURN): only bakery display cases hold it (items/lootTables.ts BAKERY_ROWS)
 // + the Skyways ramen restaurant's ramen bowls / bento and bubble tea (task studio-skyways-level-20261106-054448, lane FOOD: items/skywaysFood.ts)
@@ -141,6 +143,7 @@ export const ITEMS: Record<string, ItemDef> = {
     description: 'A heavy ceramic switchgear fuse cartridge with tinned end caps and blade contacts. The reactor switchgear has two burnt-out slots; press E on a slot to seat one.'},
   // --- Task studio-market-rework-20261108-074144-01 (lane TRADE): the survivor market's currency, Rail Ties (items/railTies.ts) — never loot ---
   ...RAIL_TIES_ITEMS,
+  ...BEER_ITEMS, // task studio-market-bar-20261108-225231-01: the market bar's beers (items/beers.ts; bar stock only, never loot)
 };
 
 export function itemDef(id: string): ItemDef {
@@ -163,6 +166,7 @@ export function effectText(def: ItemDef): string {
   if (def.thirst) out.push(`${signed(def.thirst)} water`);
   if (def.recharge) out.push(`flashlight battery ${Math.round(def.recharge * 100)} %`); // Iteration 12 (LIGHT)
   if (def.treats?.length) out.push(`treats ${def.treats.length > 1 ? `${treatsText(def.treats)} injuries` : `a ${treatsText(def.treats)} injury`}`); // Iteration 16 (lane INJURY)
+  if (isBeer(def.id)) out.push(beerEffectText(def.id)); // task studio-market-bar-20261108-225231-01 (lane BEER): the effect and its duration
   return out.join(' · ');
 }
 
@@ -237,6 +241,7 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   reactor_key: {w: 0.13, d: 0.0573, h: 0.0073, shape: 'flat'},
   fuse_cartridge: {w: 0.3, d: 0.062, h: 0.0623, shape: 'flat'},
   ...RAIL_TIES_DIMS, // task studio-market-rework-20261108-074144-01 (lane TRADE): the code-built tie bundle (world/railTiesModel.ts)
+  ...BEER_DIMS, // task studio-market-bar-20261108-225231-01: the beer bottles
 };
 
 export function itemDims(id: string): ItemDims {

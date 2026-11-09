@@ -139,6 +139,7 @@ function viewFor(itemId: string): {az: number; el: number} {
   if (['chocolate', 'medkit', 'bandage', 'arm_sling', 'trauma_kit', 'leg_splint'].includes(itemId)) return {az: 32 * DEG, el: 38 * DEG}; // + Iteration 16 treatments
   if (itemId === 'electrical_parts' || itemId === 'scrap_metal') return {az: 24 * DEG, el: 42 * DEG}; // lane RACK (office-props-physics-scale-20261030): flat salvage
   if (itemId === 'rail_ties') return {az: 34 * DEG, el: 28 * DEG}; // task studio-market-rework-20261108-074144-01 (lane TRADE): the tie bundle's sawn ends + top
+  if (itemId.startsWith('beer_')) return {az: 12 * DEG, el: 10 * DEG}; // task studio-market-bar-20261108-225231-01 (lane BEER): the bottle's own label to the front
   const ammo = AMMO_ICON_VIEW[itemId];
   if (ammo) return {az: ammo.az * DEG, el: ammo.el * DEG}; // lane AMMO: the caliber's printed face / stencil toward the camera
   if (itemId === 'flare') return {az: 12 * DEG, el: 30 * DEG}; // Iteration 12 (LIGHT): the tube lies along X, printed band to the front

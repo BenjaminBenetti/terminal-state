@@ -55,6 +55,19 @@ export function settleFans(layout: StationLayout): MarketFan[] {
     if (a.label === 'The Yard') { for (const t of [-0.25, 0.25]) for (const u of [-0.22, 0.22]) add(cx + a.w * CELL * t, cz + a.h * CELL * u); continue; }
     if (a.w > a.h * 4) for (const t of [0.2, 0.5, 0.8]) add((a.x + a.w * t) * CELL, cz);
   }
+  // (task studio-market-bar-20261108-225231-01, lane BAR: layout version 3) two fans from the shed roof over the bar deck (blades ~4 m
+  // over its floor; the deck has nothing over it but the roof)
+  const bar = layout.market?.stalls.find(s => s.id === 'bar'), deck = bar ? layout.areas[bar.area] : undefined;
+  if (deck && deck.level === 1) {
+    const g1 = layout.levels[1]?.grid, y = SETTLE.roofY - F.drop;
+    const clear = (x: number, z: number) => { if (!g1) return false; const [cx, cy] = g1.cellOf(x, z); return g1.inBounds(cx, cy) && g1.area[g1.idx(cx, cy)] === deck.id && g1.ceil[g1.idx(cx, cy)] >= SETTLE.roofY - 0.05; };
+    for (const t of [0.3, 0.7]) {
+      const x = (deck.x + deck.w * t) * CELL, z = (deck.y + deck.h * 0.62) * CELL;
+      if (![[0, 0], [F.r, 0], [-F.r, 0], [0, F.r], [0, -F.r]].every(([dx, dz]) => clear(x + dx, z + dz))) continue;
+      const k = out.length;
+      out.push({x: r3(x), y: r3(y), z: r3(z), r: F.r, rod: r3(SETTLE.roofY - y), level: 1, speed: r3(F.spin[0] + (F.spin[1] - F.spin[0]) * hash(layout.seed, k)), phase: r3(hash(k, layout.seed) * Math.PI * 2)});
+    }
+  }
   return out;
 }
 

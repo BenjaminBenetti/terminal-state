@@ -35,6 +35,7 @@ import {FUEL} from '../../fuel/fuel';
 import type {ItemKind} from '../../items/items';
 import type {ItemStack} from '../../items/inventory';
 import {itemArmor} from '../../player/armor';
+import {BEERS, isBeer} from '../../items/beers'; // task studio-market-bar-20261108-225231-01: the bar's fixed beer prices
 
 /** Hundredths of a tie per tie. */
 export const CENTS = 100;
@@ -125,6 +126,7 @@ export function baseCents(itemId: string): number {
   else if (d.kind === 'gear' && d.gear) ties = gearTies(d.gear);
   else if (d.id === GAS_FILTER_ID) ties = FILTER_LIFE_S * VALUE.filterPerSecond;
   else if (d.id === FUEL.canItem) ties = FUEL.canUnits * VALUE.fuelPerUnit;
+  else if (isBeer(d.id)) return toCents(BEERS[d.id].price); // (task studio-market-bar-20261108-225231-01) the user's prices: 20 / 40 ties a bottle
   else if (d.kind === 'consumable' && consumableTies(d) > 0) ties = consumableTies(d);
   else return toCents(stackRule(d)); // ammo, flares, materials, anything without stats: by stack size (may be under a tie a unit)
   return toCents(Math.max(VALUE.minUnit, ties * rarityFactor(d.id)));

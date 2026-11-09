@@ -565,3 +565,26 @@ reviewed by ear on the build worker. Raw takes are kept outside Git.
 - `assets/audio/head-hit-01.mp3` — headHit (Sound Lab job 20261107T232716-256099295)
 - `assets/audio/head-hit-02.mp3` — headHit (Sound Lab job 20261107T232721-253643819)
 <!-- END head-hit-audio-20261107 -->
+
+<!-- BEGIN market-bar-audio-20261108 (market-audio-build.mjs) -->
+## Market audio (cash register, crowd murmur, panic screams, angry grunts, retch)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the market bar
+task's local Sound Lab allowance (6 jobs of a 12-job cap). Powered by Stability AI. Stability AI Community License +
+Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades, loop,
+levelling, MP3) built by `tools/audio-pipeline/market-audio-build.mjs` (provenance: `assets/derivatives/audio-market-bar.json`). Not
+reviewed by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/market-cash-01.mp3` — marketCash (Sound Lab job 20261108T231710-315953922)
+- `assets/audio/market-cash-02.mp3` — marketCash (Sound Lab job 20261108T231710-315953922)
+- `assets/audio/market-chatter-loop.mp3` — marketChatter (Sound Lab job 20261108T231715-332510952)
+- `assets/audio/market-bar-chatter-loop.mp3` — marketBarChatter (Sound Lab job 20261108T231720-1480472885)
+- `assets/audio/market-scream-01.mp3` — marketScream (Sound Lab job 20261108T231724-174431427)
+- `assets/audio/market-scream-02.mp3` — marketScream (Sound Lab job 20261108T231724-174431427)
+- `assets/audio/market-scream-03.mp3` — marketScream (Sound Lab job 20261108T231724-174431427)
+- `assets/audio/market-scream-04.mp3` — marketScream (Sound Lab job 20261108T231724-174431427)
+- `assets/audio/market-scream-05.mp3` — marketScream (Sound Lab job 20261108T231724-174431427)
+- `assets/audio/market-grunt-01.mp3` — marketGrunt (Sound Lab job 20261108T231729-1404249699)
+- `assets/audio/market-grunt-02.mp3` — marketGrunt (Sound Lab job 20261108T231729-1404249699)
+- `assets/audio/market-grunt-03.mp3` — marketGrunt (Sound Lab job 20261108T231729-1404249699)
+- `assets/audio/market-retch-01.mp3` — marketRetch (Sound Lab job 20261108T231733-622219597)
+<!-- END market-bar-audio-20261108 -->

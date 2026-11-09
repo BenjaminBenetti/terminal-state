@@ -66,14 +66,26 @@ export function armorContributors(worn: Worn): ArmorContributor[] {
   return out;
 }
 
-/** The armour pool of what is worn: the sum of the contributors, capped at ARMOR.cap. */
-export function armorPool(worn: Worn): number {
-  return Math.min(ARMOR.cap, armorContributors(worn).reduce((s, c) => s + c.armor, 0));
+/**
+ * The armour pool of what is worn: the sum of the contributors, capped at ARMOR.cap. Task studio-market-bar-20261108-225231-01 (lane
+ * BEER): + `temp`, a TEMPORARY amount (Ironclad Stout's +5 pips = 0.125) added into the SAME pool under the same cap — never an item's
+ * armour, never worn down (wear only ever touches worn contributors: wearOne).
+ */
+export function armorPool(worn: Worn, temp = 0): number {
+  return Math.min(ARMOR.cap, armorContributors(worn).reduce((s, c) => s + c.armor, 0) + (temp > 0 ? temp : 0));
 }
 
 /** Half pips the HUD shows for a pool (rounded DOWN; never more than the pool). */
 export function displayHalfPips(pool: number): number {
   return Math.max(0, Math.floor(pool / ARMOR.halfPip + 1e-9));
+}
+
+/**
+ * Task studio-market-bar-20261108-225231-01 (lane BEER): of the half pips the HUD shows for an EFFECTIVE pool, how many are the temporary
+ * armour `temp` (its share inside that pool; the top-most pips): the HUD draws them distinguishably.
+ */
+export function tempHalfPips(pool: number, temp: number): number {
+  return Math.max(0, displayHalfPips(pool) - displayHalfPips(Math.max(0, pool - Math.max(0, temp))));
 }
 
 /** Pips as text: "4", "3½", "0". */
@@ -106,10 +118,13 @@ export type ArmorWear = {slot: GearSlot; before: number; after: number};
  * and rides on it as `armor` (the injury save of this hit) — then, only if it actually mitigated something, ONE contributing item
  * wears (wearOne). Per hit, never per frame. `wearRoll` is drawn only when an item wears. A hit that is not an enemy's (isEnemyHit:
  * a fall, 'other') meets no armour at all: pool 0, nothing absorbed, no save, no wear.
+ * Task studio-market-bar-20261108-225231-01 (lane BEER): `temp` = the temporary armour (Ironclad Stout) in the same pool — it cuts the hit
+ * and rides on the injury save like worn armour; a mitigated hit still wears ONE worn contributor when there is one (nothing worn:
+ * nothing wears), and `temp` itself never wears (it expires with its beer).
  */
-export function armorHit<H extends PlayerHit>(hit: H, worn: Worn, wearRoll: () => number, wear: number | null = ARMOR_WEAR_PER_HIT):
+export function armorHit<H extends PlayerHit>(hit: H, worn: Worn, wearRoll: () => number, wear: number | null = ARMOR_WEAR_PER_HIT, temp = 0):
   {resolved: H & {applied: number; absorbed: number; armor: number}; wore: ArmorWear | null} {
-  const pool = isEnemyHit(hit) ? armorPool(worn) : 0;
+  const pool = isEnemyHit(hit) ? armorPool(worn, temp) : 0;
   const {applied, absorbed} = armorFor(hit, pool);
   const wore = absorbed > 0 && wear ? wearOne(worn, wearRoll(), wear) : null;
   return {resolved: {...hit, applied, absorbed, armor: pool}, wore};

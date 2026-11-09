@@ -10,6 +10,8 @@
 //    item surfaces of the shop (empty-keyed holders / a solid bench top) that hold the ~18 stacks a stall shows (market/wares planner);
 //  - resident spots of every kind on the ground and the catwalks (never the rooftops), the calm rules (no enemies / hordes / annexes / gas /
 //    free loot), the station fuel plan's cans in the workshop only.
+// (Re-pinned by task studio-market-bar-20261108-225231-01, lane BAR: the default is now layout version 3 — this settlement plus the bar,
+// market-bar-layout.test.ts — so these version-2 checks generate version 2 explicitly: a station recorded as version 2 keeps exactly it.)
 import {describe, expect, it} from 'vitest';
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
 import {levelDistance} from '../src/gen/levelGen';
@@ -41,7 +43,7 @@ import type {StationLayout} from '../src/gen/stationTypes';
 
 const SEEDS = [1, 2, 3, 42, 777, 4242, 9001, 123456, 0xdeadbeef, 20261108];
 const layouts = SEEDS.map(s => {
-  const L = generateMarketLevel({levelSeed: s});
+  const L = generateMarketLevel({levelSeed: s, layoutVersion: 2});
   return {seed: s, L, attempts: SETTLE_GEN_STATS.attempts, ms: SETTLE_GEN_STATS.ms};
 });
 
@@ -55,7 +57,7 @@ function fromTrainDoor(L: StationLayout, ladders = true): Int32Array[] {
 }
 
 describe('the Survivor Market, layout version 2 (the container settlement)', () => {
-  it('is the default: valid for every seed on its first attempts, deterministic, quick; seeded variety', () => {
+  it('valid for every seed on its first attempts, deterministic, quick; seeded variety', () => {
     for (const {seed, L, attempts, ms} of layouts) {
       expect(L.market!.v, `seed ${seed}`).toBe(2);
       expect([seed, marketLayoutIssues(L)]).toEqual([seed, []]);
@@ -63,8 +65,8 @@ describe('the Survivor Market, layout version 2 (the container settlement)', () 
       expect(ms, `seed ${seed}`).toBeLessThan(400);
     }
     const sig = (L: StationLayout) => JSON.stringify({areas: L.areas, doors: L.doors, props: L.props, lights: L.lights, signs: L.signs, market: L.market, rails: L.rails, links: L.levelLinks});
-    expect(sig(generateMarketLevel({levelSeed: SEEDS[0]}))).toBe(sig(layouts[0].L));
     expect(sig(generateMarketLevel({levelSeed: SEEDS[0], layoutVersion: 2}))).toBe(sig(layouts[0].L));
+    expect(sig(LEVELS.market.generate('main', {levelSeed: SEEDS[0], layoutVersion: 2}))).toBe(sig(layouts[0].L));
     expect(new Set(layouts.map(({L}) => L.market!.stalls.map(s => s.name).join('|'))).size).toBeGreaterThan(5);
     expect(new Set(layouts.map(({L}) => L.levelLinks[0].bottom.x > L.grid.w * CELL / 2)).size).toBe(2); // both mirror states
     // the stalls sit in different containers from station to station
@@ -168,9 +170,10 @@ describe('the Survivor Market, layout version 2 (the container settlement)', () 
           expect(d.clear!, tag).toBeGreaterThan(0.1);
           expect(d.level).toBe(s.front.level);
         }
-        // the wares planner (market/wares) takes them as given and fits a full stall's worth of mixed stock
+        // the wares planner (market/wares) takes them — all but the customer counter tops (task studio-market-bar-20261108-225231-01: the
+        // wares stand on the shelves near the trader) — and fits a full stall's worth of mixed stock
         const surfaces = stallSurfaces(L, s);
-        expect(surfaces.length).toBe(disp.length);
+        expect(surfaces.length).toBe(disp.filter(d => L.props[d.host!].kind !== 'shopCounter').length);
         expect(planStall(mixed, surfaces, id => itemDims(id)).count, tag).toBe(WARES.maxPerStall);
       }
     }
