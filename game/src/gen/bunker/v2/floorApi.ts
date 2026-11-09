@@ -67,6 +67,11 @@ export interface FloorCarveResult {
   damp?: number[];
   /** Aged / damaged areas (dark or sputtering lights, fallen ceiling panels kept off the doorways). */
   aged?: number[];
+  /**
+   * Areas on steady power: lit, their fixtures working (the main routes / landmark halls a floor wants readable). The pipeline applies
+   * it after the shared lighting pass (an area listed both here and in `aged` stays aged).
+   */
+  lit?: number[];
 }
 
 /** What a floor module sees while dressing (after the station dresser ran over the whole level). */

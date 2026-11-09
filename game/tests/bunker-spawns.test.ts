@@ -7,6 +7,7 @@
 //  - THE STRAINER: only the 'damp' context's pool gives it weight; placed only in the damp areas (layout.bunker.damp), at most one per
 //    level, on well under every level (never a guaranteed boss);
 //  - normal outfits only (no cosplay / lingerie looks), no hordes, the arrival keep-off (no enemy within the profile's start distance).
+// (Task studio-bunker-rework-20261109-205115-01: these pin VERSION 1 explicitly — an entered station keeps it; version 2 has its own tests.)
 import {describe, expect, it} from 'vitest';
 import {appendFileSync, writeFileSync} from 'node:fs';
 import {BUNKER_SPAWN_PROFILE, SPAWN_PROFILES, STRAINER_CONTEXTS, spawnContextOf, validateSpawnProfile} from '../src/ai/spawnTables';
@@ -22,7 +23,7 @@ const SEEDS = Array.from({length: N}, (_, k) => 4401 + k * 7919);
 describe('bunker enemies', () => {
   writeFileSync(LOG, '');
   const layouts: StationLayout[] = [];
-  const all = () => { if (!layouts.length) for (const s of SEEDS) layouts.push(generateBunkerLevel({levelSeed: s})); return layouts; };
+  const all = () => { if (!layouts.length) for (const s of SEEDS) layouts.push(generateBunkerLevel({levelSeed: s, layoutVersion: 1})); return layouts; };
 
   it('the profile is registered and validates; the Strainer is context-locked to the damp zone', () => {
     expect(SPAWN_PROFILES.bunker).toBe(BUNKER_SPAWN_PROFILE);

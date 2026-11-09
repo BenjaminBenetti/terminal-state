@@ -474,7 +474,7 @@ export function planElevator(info: ElevatorInfo): ElevatorPlan {
   if (!(depth > 0.05)) depth = 0.5;
   const gate: DoorGate = {cx, cz, nx, nz, tx, tz, hw, depth};
   const cabH = info.cabHeight;
-  const doorH = Math.min(LIFT_DOOR_H, cabH - 0.15);
+  const doorH = Math.min(info.doorHeight ?? LIFT_DOOR_H, cabH - 0.15); // (task studio-bunker-rework-20261109-205115-01: a record's own gate height — the cargo lift)
   const [pa, pb] = [gateWorld(gate, 0, -hw), gateWorld(gate, depth, hw)];
   const passage: Rect2 = {x0: Math.min(pa[0], pb[0]), z0: Math.min(pa[1], pb[1]), x1: Math.max(pa[0], pb[0]), z1: Math.max(pa[1], pb[1])};
   // the car's local frame (l along the door wall from the door centre, w into the cab)
@@ -1135,8 +1135,39 @@ export function cabGlassMaterial(): MeshBasicNodeMaterial {
   return (cabGlassMat = m);
 }
 
-export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, opts: {glass?: boolean} = {}): ElevatorView {
+/** Task studio-bunker-rework-20261109-205115-01: the cargo car's face-UV finishes (nothing swims on the moving car). */
+export function cargoMaterials() {
+  return {
+    paint: faceMat('cargo-cab-paint', 'paintedSteel', {color: 0x7a8474, metalness: 0.3, glow: 0.12}),
+    deck: faceMat('cargo-cab-deck', 'brushedSteel', {color: 0x8c8b86, metalness: 0.5, glow: 0.1}),
+    hazard: faceMat('cargo-hazard', 'paintedSteel', {color: 0xd6a032, metalness: 0.2, glow: 0.14}),
+    bars: faceMat('cargo-gate-bars', 'paintedSteel', {color: 0x3c403a, metalness: 0.35, glow: 0.08}),
+    door: faceMat('cargo-landing-door', 'paintedSteel', {color: 0x6e7867, metalness: 0.3, glow: 0.08}),
+    liner: faceMat('cargo-shaft-liner', 'paintedSteel', {color: 0x9a948a, metalness: 0.1, glow: 0.06}),
+  };
+}
+
+/** A barred gate leaf (centred on x = 0, bottom at the floor; local x along the gate, z through it): rails + vertical bars. */
+function cargoBarLeaf(leafW: number, dH: number): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  const hw = leafW / 2, top = dH - 0.004, bar = 0.016, rail = 0.04;
+  parts.push(boxAt(0, 0.03, 0, hw, 0.03, 0.02));                 // bottom rail
+  parts.push(boxAt(0, top - rail / 2, 0, hw, rail / 2, 0.02));    // top rail
+  parts.push(boxAt(0, 1.05, 0, hw, rail / 2, 0.018));             // mid rail
+  parts.push(boxAt(-hw + 0.02, top / 2, 0, 0.02, top / 2, 0.02));  // stiles
+  parts.push(boxAt(hw - 0.02, top / 2, 0, 0.02, top / 2, 0.02));
+  for (let x = -hw + 0.13; x < hw - 0.08; x += 0.11) parts.push(boxAt(x, top / 2, 0, bar / 2, top / 2 - 0.02, bar / 2));
+  return merged(parts);
+}
+
+export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, opts: {glass?: boolean; cargo?: boolean} = {}): ElevatorView {
   const glass = opts.glass === true; // task track3 (lane ARCH): the mall's glass car (the office car: false, unchanged)
+  // task studio-bunker-rework-20261109-205115-01: the Bunker's CARGO LIFT — the same car / landings / panels re-finished as an industrial
+  // freight car (painted civil-defence steel, a chequer deck in a hazard border, no handrail / mirror / veneer), barred see-through car
+  // gates, painted landing doors in hazard-yellow portals, and a shaft liner with the landing openings, so the shaft visibly slides past
+  // the barred gate while it travels. Every other car is unchanged (cargo false).
+  const cargo = opts.cargo === true;
+  const CG = cargo ? cargoMaterials() : null;
   const {info, gate: G, doorH: dH, cabH: H, frame: F, cop} = plan;
   const M = elevatorMaterials();
   const floor = cabFloorMats(mats);
@@ -1236,8 +1267,8 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, opts
     g.rotateX(Math.PI / 2); g.translate(lmid, H - 0.002, D - 0.2);
     P.add('dark', g);
   }
-  // handrail: a round bar on standoffs with rosettes, returned to the wall at both ends (side walls + rear)
-  {
+  // handrail: a round bar on standoffs with rosettes, returned to the wall at both ends (side walls + rear) — not in a freight car
+  if (!cargo) {
     const RY = 0.9, RO = 0.055, RR = 0.019, SR = 0.009;
     const run = (a: V3, b: V3, wallOff: V3, stands: number): void => {
       P.rod('rail', a, b, RR);
@@ -1310,7 +1341,9 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, opts
     const c = rig.cable, edge = rig.side > 0 ? lMin : lMax;
     P.box('sling', Math.min(edge, c.lCar) - 0.03, Math.max(edge, c.lCar) + 0.03, -RG.plank, -RG.plank + 0.04, c.w - 0.04, c.w + 0.04);
   }
-  const cabMat: Record<string, THREE.Material> = {
+  const cabMat: Record<string, THREE.Material> = CG ? {
+    steel: CG.paint, wood: CG.paint, mirror: CG.paint, dark: M.cabDark, ceil: CG.paint, rail: CG.hazard, field: CG.deck, border: CG.hazard,
+  } : {
     steel: M.cabSteel, wood: M.cabWood, mirror: M.cabMirror, dark: M.cabDark, ceil: M.cabCeil, rail: M.cabRail, field: floor.field, border: floor.border,
     light: M.light, flicker: M.lightFlicker,
     ...(glass ? {glass: cabGlassMaterial(), sling: rigMaterials().steel} : {}),
@@ -1325,6 +1358,8 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, opts
   // cab doors (just outside the cab plane): each leaf covers half the opening + overlap, slides along the tangent into its pocket
   const leafW = hw + 0.02;
   const leafGeo = own(boxAt(0, (0.006 + dH - 0.004) / 2, 0, leafW / 2, (dH - 0.01) / 2, 0.018).applyMatrix4(MR));
+  // (cargo: the car's gate leaves are BARRED — vertical bars between a top / bottom / mid rail: the shaft shows between them)
+  const barGeo = CG ? own(cargoBarLeaf(leafW, dH).applyMatrix4(MR)) : null;
   type Leaf = {m: THREE.Mesh; w: number; sign: number};
   const leaf = (parent: THREE.Object3D, w: number, sign: number, mat: THREE.Material, name: string, level?: number): Leaf => ({m: mesh(parent, leafGeo, mat, name, level), w, sign});
   const place = (lf: Leaf, open: number) => {
@@ -1333,7 +1368,9 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, opts
     const [x, z] = toW(lf.sign * (leafW / 2 + o * (hw + 0.003)), lf.w);
     lf.m.position.set(x, lf.m.position.y, z);
   };
-  const cabLeaves = [leaf(cabG, -0.022, -1, M.cabSteel, 'tower-door-cab-l'), leaf(cabG, -0.022, 1, M.cabSteel, 'tower-door-cab-r')];
+  const cabLeaves = CG && barGeo
+    ? [-1, 1].map(sg => ({m: mesh(cabG, barGeo, CG.bars, sg < 0 ? 'tower-door-cab-l' : 'tower-door-cab-r'), w: -0.022, sign: sg}))
+    : [leaf(cabG, -0.022, -1, M.cabSteel, 'tower-door-cab-l'), leaf(cabG, -0.022, 1, M.cabSteel, 'tower-door-cab-r')];
   for (const lf of cabLeaves) place(lf, 0);
   // hover rings (one in the cab for its panel, one for the landing stations)
   const ringGeo = own(new THREE.RingGeometry(1.08, 1.3, 28)); // x the button radius: clear of the neighbouring caps
@@ -1407,10 +1444,10 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, opts
     g.position.y = st.y;
     g.userData.level = st.levelId;
     const lvl = st.levelId, call = plan.calls[i], cl = call.l, cy = call.at.y - st.y, list = plan.hallButtons[i];
-    mesh(g, landingStatic(cl, cy), steelBright, 'tower-landing-frame', lvl);
+    mesh(g, landingStatic(cl, cy), CG ? CG.hazard : steelBright, 'tower-landing-frame', lvl);
     mesh(g, landingButtons(cl, cy, list), M.face, 'tower-landing-buttons', lvl);
     mesh(g, indOutGeo, M.indicator, 'tower-indicator-out', lvl);
-    const ls = [leaf(g, -(d - 0.022), -1, M.door, 'tower-door-landing-l', lvl), leaf(g, -(d - 0.022), 1, M.door, 'tower-door-landing-r', lvl)];
+    const ls = [leaf(g, -(d - 0.022), -1, CG ? CG.door : M.door, 'tower-door-landing-l', lvl), leaf(g, -(d - 0.022), 1, CG ? CG.door : M.door, 'tower-door-landing-r', lvl)];
     for (const lf of ls) place(lf, 0);
     landingLeaves.push(ls);
     const lamps: (typeof hallLamps)[number] = {
@@ -1545,6 +1582,22 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, opts
       bend.position.y = yb;
     };
     rigUpdate(plan.info.stops[0]?.y ?? 0);
+  }
+  // (cargo: the shaft's front wall seen from inside the car — its inner face just outside the car's gate plane, from the pit to over
+  // the top stop, the landing openings left open: through the bars the landings and the wall slide past while the car travels)
+  if (CG && info.stops.length) {
+    const L = new Parts(), wl = -0.07, wl2 = -0.05;
+    const yb = info.stops[0].y - 0.6, yt = info.stops[info.stops.length - 1].y + H + 0.8;
+    let y = yb;
+    for (const st of info.stops) {
+      if (st.y > y + 1e-3) L.box('l', lMin, lMax, y, st.y, wl, wl2);
+      L.box('l', lMin, -hw - 0.02, st.y, st.y + dH + 0.02, wl, wl2);
+      L.box('l', hw + 0.02, lMax, st.y, st.y + dH + 0.02, wl, wl2);
+      y = st.y + dH + 0.02;
+    }
+    if (yt > y) L.box('l', lMin, lMax, y, yt, wl, wl2);
+    const lg = L.take('l', MW);
+    if (lg) { const m = mesh(root, own(lg), CG.liner, 'tower-shaft-liner'); m.userData.levels = info.stops.map(st => st.levelId); }
   }
   const carLamps = plan.carButtons.map(b => ({b, m: lit.get(b.id)!}));
   let hoverId = '';

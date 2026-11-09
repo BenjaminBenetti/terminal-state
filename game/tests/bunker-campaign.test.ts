@@ -110,7 +110,7 @@ describe('saves from before the Bunker', () => {
 describe('the Bunker layout version lane (bunker.layout)', () => {
   it('v1 from the first release; a recorded version is kept; a never-entered station builds the current one', () => {
     expect(BUNKER_LAYOUT_LANE).toBe('bunker.layout');
-    expect(BUNKER_LAYOUT_VERSION).toBe(1);
+    expect(BUNKER_LAYOUT_VERSION).toBe(2); // (task studio-bunker-rework-20261109-205115-01: version 2 = the inhabited rework; entered v1 stations keep 1)
     expect(bunkerLayoutVersionFor(undefined)).toBe(BUNKER_LAYOUT_VERSION);
     expect(bunkerLayoutVersionFor({visits: 0, lanes: {}})).toBe(BUNKER_LAYOUT_VERSION);
     expect(bunkerLayoutVersionFor({visits: 3, lanes: {[BUNKER_LAYOUT_LANE]: {v: 1}}})).toBe(1);

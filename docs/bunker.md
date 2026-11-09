@@ -11,6 +11,10 @@ replaces it on the signs.
 - Objective (optional): `world/bunker/*` (three generators, each fuelled with one can and started with the familiar turnkey, power
   the core cluster, which grants map intel once per station; lane store `bunker.state`).
 - Look: `world/bunkerArch.ts` (the Reactor's arch materials, varied by programme) and the Reactor bunker's hero models.
+- **Two layout versions** (`gen/bunker/layoutVersion.ts`): version 1 is the first Bunker, documented in the sections below and frozen
+  for every station entered under it. **Version 2** is the inhabited rework (open communal halls and galleries, a strong identity per
+  storey, the powered cargo lift, the round vault bore), built for every unvisited station and every new campaign. See
+  [Version 2](#version-2-the-inhabited-shelter) below.
 
 ## Storeys
 
@@ -150,3 +154,96 @@ stairs per shelter pair, footprints, damp, gas zones, rack rows, budget, determi
 volumetric layers, strength ordering, the mask, clean routes, the Office arithmetic unchanged), `bunker-spawns` (profile, census),
 `bunker-registration` / `bunker-campaign` (registry, references, network allocation, saves), and `bunker-objective-*` (the objective
 lane).
+
+## Version 2: the inhabited shelter
+
+Task studio-bunker-rework-20261109-205115-01. The user's verdict on version 1: "adequate but lacks character" — rooms and corridors.
+Version 2 changes the ARCHITECTURE: larger open communal and working spaces mixed with constrained security / private / service rooms,
+real changes of scale and sightlines, and a strong, different human purpose on every storey, inside one coherent buried shelter.
+Each storey was designed by its own floor designer (one Claude Code agent per storey) round a shared spine the lead fixed first.
+
+### The spine (`gen/bunker/v2/spine.ts`)
+
+Everything that must line up between storeys is fixed, so the six floors were designed in parallel:
+
+- **Storeys**: six, 7 m apart (y 0 … −35), the programmes and labels of version 1 (station, entry & security, habitation, services &
+  medical, maintenance & water, the central processing core). Level roles: the station `main`, storey 4 `lower` (damp), the rest `ring`.
+- **The canvas**: one 140 × 150-cell grid (70 × 75 m) for every storey; each floor carves inside its envelope, off the keep-outs.
+- **Stairs**: two scissor cores, real shafts with the same footprint on every storey: the main stair (core A) from the station's vault
+  vestibule down to storey 5, the service stair (core B) from storey 1 down. Each storey has one landing per core at alternating ends and
+  ONE fixed landing door per core; every storey pair from 1 down has two independent runs (loops: removing any one run keeps every
+  storey reachable).
+- **The cargo lift shaft**: 10 × 12 cells beside the main stair, solid on every storey grid (the car is a moving volume), its gate on
+  the north face at every stop; every storey keeps a clear 6 × 4 m loading apron in front of it.
+- **The voids**: two double-height spaces, a lower storey's hall rising 11.6 m through the slab of the storey above, which leaves the
+  well open with a railed gallery round it: **V12** (the habitation commons, overlooked from the entry storey) and **V45** (the processing
+  core's nave, overlooked from the maintenance storey). The storey culler's portal tiles show the other storey through a well.
+- **The station's fixed pieces**: the track bed and side platform, the bulkhead band with the vault lane, the vault vestibule (the
+  vertical hub: the main stair's head and the lift's top landing open off it).
+- **Anchors**: each stair door / the lift apron / the vault's hall side must be served by ONE area of its floor; the pipeline cuts the
+  landing doors and holds every apron clear of furniture.
+
+### The floors (`gen/bunker/v2/floor0.ts` … `floor5.ts`)
+
+Contract: `gen/bunker/v2/floorApi.ts` — a floor carves its areas (`FloorCarveCtx.room / door / connect`), names its generator room
+(storeys 2–4) or its core hall (storey 5), proposes its gas leaks / damp / aged areas, and dresses its own areas after the station
+dresser. FLOORS_PLACEHOLDER
+
+### The pipeline (`gen/bunker/v2/index.ts`)
+
+Spine carve → the six floors → anchor doors → the vault lane → crop / links / apertures / rails → the vault door, the three generators
+(in the floors' generator rooms) and the core cluster → hazards from the floors' proposals (3–6 leaks, at least one strong, a strong
+leak only in a dead-end room) → one station dresser pass (aprons, fronts and the threshold held) → each floor's dressing → the shared
+enemy / supply / weapon passes (the version-1 profile and census) → lighting → traversal → `layout.bunker` (version 2: + `lift`,
+`voids`, `floors`) → validation (`bunkerIssues` + `gen/bunker/v2/validate.ts` `bunkerV2Issues`).
+
+### The vault entry (fix 2)
+
+The blast door is a square steel frame round a ~2.64 m round bore. Version 1 cut a 1.5 × 3.1 m slot through the bulkhead, so the player
+saw a narrow rectangular slot inside the round frame, and the builder's door trim stood across the lane (it framed the 3 × 2-cell
+opening as a wall along Z through its first column: two steel slabs and a bar the player walked through).
+- **Every version**: `world/builder.ts` frames a thick opening along the wall its two areas share (jambs on the lane's walls, never
+  across it). The version-1 layout itself is frozen, so its slot keeps its rectangular look (its trim no longer crosses the path).
+- **Version 2** (`gen/bunker/v2/vault.ts`): the bulkhead is cut 3.5 m wide and 3.25 m tall — wider and taller than the ring — so every
+  grid face lies behind the frame's steel and the model's own round bore is the tunnel. The walkable lane is the middle 1.5 m over the
+  same three-riser threshold; the cells beside it are the ring's curved cheeks (collision from the threshold up, where a foot meets the
+  rising curve); the lane door carries `noFrame` (the model frames it). Never locked, passable both ways.
+
+### The cargo lift
+
+A large freight car (4 × 5 m, a 3.2 × 2.9 m gate, 3.2 m clear) in one shaft through the station and all five shelter storeys, on the
+Office / mall elevator runtime (`world/towerRuntime.ts`, `world/elevator.ts`; the record: `gen/bunker/v2/liftPlan.ts`
+`bunkerTowerRecord`):
+- **Look**: painted civil-defence steel, a chequer deck in a hazard border, barred see-through car gates, hazard-yellow landing portals
+  with painted landing doors, a shaft liner with the landing openings — the shaft and the landings slide past the bars while it runs.
+- **Power**: off until ALL THREE generators are online (the objective's power seam: never the intel claim, a visit or fuel per ride).
+  Unpowered, every button answers with a dead buzz and the reason; the stairs stay the essential routes before and after.
+- **Riding**: the player, enemies inside, resting props and loot holders (physics), pickups, ragdolls and FUEL CARTS (their storey
+  too) ride the car's motion; enemies never call it and the pathfinder ignores it (stairs only). Doors open only level at a stop; an
+  obstruction re-opens them; nobody is ever shut in.
+- **Persistence**: the car's stop is kept in the station's `bunker.state` record; a car torn down mid-run finishes its run with its
+  loose things (nothing saved hanging in the shaft). Pause / death / menus freeze it; Retry restores it with the section.
+
+### The generators' fuel (fix 3)
+
+Each generator needs ONE QUARTER-TANK fuel unit (`BUNKER_GEN_FUEL_UNITS` = the fuel system's unit) from any common train-style source,
+by the same physical rules as the train's cap:
+- a **fuel can** poured at its filler (one can = one unit);
+- a **fuel cart's hose** within reach of the filler (`world/fuelCarts.ts` `FuelHoseTarget`): one unit in one tick, the generator
+  committing it as the drum gives it, the hose disconnecting when the generator is fuelled — the cart keeps the rest. Carts cannot use
+  stairs, so in practice a cart reaches a generator only where it physically can; cans carried down the stairs are the dependable
+  source before the lift has power.
+Then the familiar 2 s turnkey start. The record (`bunker.state` version 2) stores each generator's PAID quantity; a version-1 record
+migrates as paid (fuelled / online = paid in full): no re-charge, no refund, an online generator never un-starts.
+
+### The objective title (fix 1)
+
+The Bunker's objective title shows on two balanced lines at the HUD's normal size in a bounded panel (`ui/objectiveTitle.ts`); every
+other level's one-line title is unchanged.
+
+### Version policy
+
+- Version 2 builds for every station never entered (and every new campaign's). A station entered under version 1 keeps version 1
+  exactly (`tests/bunker-v1-frozen.test.ts` pins its whole layout); it gets the HUD, vault-trim and fuel fixes (runtime only), never a
+  lift shaft cut through its saved rooms.
+- The network share (5 %, from the Subway only, new campaigns only) and every save rule are unchanged.

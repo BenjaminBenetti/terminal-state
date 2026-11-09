@@ -132,6 +132,27 @@ interface TrainRuntimeLike {
   readonly view: {root: THREE.Object3D} | null;
 }
 interface TrainRideLike { riding: boolean; moving: boolean; phase?: string; model?: RideLocalModel }
+/**
+ * Task studio-bunker-rework-20261109-205115-01 (user: generators fuel "from ANY supported source JUST LIKE TRAIN"): a fuel TARGET the
+ * cart's hose can feed besides the parked train's cap — the Bunker's auxiliary generators (world/bunker/objective.ts registers them in
+ * `targets` while its station is built). The hose works exactly as at the train: within FUEL_CART.hoseMax of the target's filler, one
+ * whole unit per transfer tick, the cart's unit leaving in the SAME tick the target takes it, disconnecting when the target is full /
+ * the cart empty / grabbed / pulled out of reach. Never remote: no target without a physical cart beside it.
+ */
+export interface FuelHoseTarget {
+  readonly id: string;
+  /** Short name in prompts / toasts ('auxiliary generator A'). */
+  readonly label: string;
+  /** The filler's world position (the hose reaches nozzle -> here). */
+  cap(): P3;
+  /** Whole units it takes now (0: full / not accepting). */
+  room(): number;
+  /** Commits ONE unit (true) — or refuses (false: nothing moves, the cart keeps its unit). */
+  take(): boolean;
+  /** The toast when the hose disconnects because the target is full. */
+  readonly fullText: string;
+}
+
 interface TrainFuelLike { tank: number; live: {cargo(): CargoCartJSON[]; restore(c: CargoCartJSON[]): void} | null; setCargo?(c: readonly CargoCartJSON[]): void }
 
 /** What the carts need from Game (structural: tests drive them with a fake host + the real Player / train runtime / ride). */
@@ -192,15 +213,17 @@ export class FuelCarts implements FuelCartsLike {
   worldLive = false;
   /** The grabbed cart (null: none). */
   grab: {cart: Cart; lag: number} | null = null;
-  /** The connected hose (null: none). */
-  hoseOn: {cart: Cart; t: number} | null = null;
+  /** The connected hose (null: none); `target` null = the parked train's cap. */
+  hoseOn: {cart: Cart; t: number; target: FuelHoseTarget | null} | null = null;
+  /** Task studio-bunker-rework-20261109-205115-01: other fuel targets the hose can feed (the Bunker's generators; registered per world). */
+  readonly targets: FuelHoseTarget[] = [];
   /** Captured cargo: whether a ride was seen, idle seconds without one, the ride model's collision swap. */
   private captured: {sawRide: boolean; idle: number; swap: {model: RideLocalModel; orig: PropIndex; mine: PropIndex} | null} | null = null;
   /** The cart / part under the crosshair (this frame) and the prompt. */
   aim: {cart: Cart; part: 'frame' | 'drum'; t: number} | null = null;
   prompt: string | null = null;
   /** QA / tests. */
-  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, connects: 0, disconnects: 0, transfers: 0, pushes: 0, restores: 0, steps: 0, bullets: 0};
+  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, connects: 0, disconnects: 0, transfers: 0, pushes: 0, restores: 0, steps: 0, bullets: 0, carried: 0};
   private proto: THREE.Group | null = null;
   private protoGen = -1;
   private modelsGen = cartModelsGen;
@@ -576,6 +599,31 @@ export class FuelCarts implements FuelCartsLike {
 
   /** Why the hose cannot connect to `c` now (null = it can). */
   connectBlock(c: Cart): string | null {
+    return this.hoseChoice(c).block;
+  }
+
+  /**
+   * Where the hose would go: a registered target within reach with room (the nearest), else the parked train's cap (the original
+   * rules, unchanged — with no target registered nothing here differs).
+   */
+  hoseChoice(c: Cart): {target: FuelHoseTarget | null; block: string | null} {
+    if (this.targets.length && c.mode === 'world' && this.grab?.cart !== c) {
+      const a = this.nozzleWorld(c);
+      let best: FuelHoseTarget | null = null, bd = Infinity, full: FuelHoseTarget | null = null;
+      for (const t of this.targets) {
+        const q = t.cap(), d = Math.hypot(a.x - q.x, a.y - q.y, a.z - q.z);
+        if (d > FUEL_CART.hoseMax) continue;
+        if (t.room() <= 0) { full ??= t; continue; }
+        if (d < bd) { bd = d; best = t; }
+      }
+      if (best) return {target: best, block: c.fuel.units <= 0 ? CART_TEXT.empty : null};
+      if (full) return {target: full, block: `The ${full.label} needs no more fuel`};
+    }
+    return {target: null, block: this.trainHoseBlock(c)};
+  }
+
+  /** The original train-cap rules. */
+  private trainHoseBlock(c: Cart): string | null {
     const p = this.parkedPlacement();
     if (!p || c.mode !== 'world') return 'There is no train here';
     if (this.grab?.cart === c) return 'Let go of the cart first';
@@ -586,8 +634,8 @@ export class FuelCarts implements FuelCartsLike {
     return null;
   }
 
-  private connect(c: Cart): void {
-    this.hoseOn = {cart: c, t: 0};
+  private connect(c: Cart, target: FuelHoseTarget | null = null): void {
+    this.hoseOn = {cart: c, t: 0, target};
     this.counts.connects++;
     this.hose.mesh.visible = true;
     this.shapeHose();
@@ -608,6 +656,7 @@ export class FuelCarts implements FuelCartsLike {
   private stepHose(dt: number): void {
     const H = this.hoseOn;
     if (!H) return;
+    if (H.target) { this.stepTargetHose(H as {cart: Cart; t: number; target: FuelHoseTarget}, dt); return; }
     const c = H.cart, p = this.parkedPlacement(), fuel = this.host.playerTrain.fuel;
     if (!p || c.mode !== 'world' || !this.carts.includes(c)) { this.disconnect(null); return; }
     if (this.grab?.cart === c) { this.disconnect(CART_TEXT.disconnected); return; }
@@ -629,8 +678,39 @@ export class FuelCarts implements FuelCartsLike {
     this.shapeHose();
   }
 
+  /** A hose on a registered target: the train hose's rules against the target's filler and room (one unit per tick, both sides at once). */
+  private stepTargetHose(H: {cart: Cart; t: number; target: FuelHoseTarget}, dt: number): void {
+    const c = H.cart, T = H.target;
+    if (c.mode !== 'world' || !this.carts.includes(c) || !this.targets.includes(T)) { this.disconnect(null); return; }
+    if (this.grab?.cart === c) { this.disconnect(CART_TEXT.disconnected); return; }
+    const a = this.nozzleWorld(c), q = T.cap();
+    if (Math.hypot(a.x - q.x, a.y - q.y, a.z - q.z) > FUEL_CART.hoseMax) { this.disconnect(CART_TEXT.pulled, true); return; }
+    if (T.room() <= 0) { this.disconnect(T.fullText); return; }
+    if (c.fuel.units <= 0) { this.disconnect(CART_TEXT.empty, true); return; }
+    H.t += dt;
+    if (H.t >= FUEL_CART.transferEvery) {
+      H.t -= FUEL_CART.transferEvery;
+      // one whole unit: the target commits it, then it leaves the drum (a refusal moves nothing)
+      if (T.take()) {
+        c.fuel.units -= 1;
+        this.counts.transfers++;
+        this.sfx?.fuelPour?.();
+        setGauge(c.view, c.fuel.units);
+      }
+      if (T.room() <= 0) { this.disconnect(T.fullText); return; }
+      if (c.fuel.units <= 0) { this.disconnect(CART_TEXT.empty, true); return; }
+    }
+    this.shapeHose();
+  }
+
   private shapeHose(): void {
-    const H = this.hoseOn, p = this.parkedPlacement();
+    const H = this.hoseOn;
+    if (H?.target) {
+      const a = this.nozzleWorld(H.cart), b = H.target.cap();
+      this.hose.update(a.x, a.y, a.z, b.x, b.y, b.z, H.cart.body.y);
+      return;
+    }
+    const p = this.parkedPlacement();
     if (!H || !p) return;
     const a = this.nozzleWorld(H.cart), b = this.capWorld(p);
     this.hose.update(a.x, a.y, a.z, b.x, b.y, b.z, Math.min(H.cart.body.y, p.floorY));
@@ -679,9 +759,10 @@ export class FuelCarts implements FuelCartsLike {
     if (!aim) return false;
     const c = aim.cart;
     if (this.hoseOn?.cart === c) { this.disconnect(CART_TEXT.disconnected); return true; }
-    if (aim.part === 'drum' && this.connectBlock(c) === null) {
+    const choice = aim.part === 'drum' ? this.hoseChoice(c) : null;
+    if (choice && choice.block === null) {
       if (this.hoseOn) this.disconnect(null);
-      this.connect(c);
+      this.connect(c, choice.target);
       return true;
     }
     this.startGrab(c);
@@ -745,8 +826,11 @@ export class FuelCarts implements FuelCartsLike {
 
   private promptFor(c: Cart, part: 'frame' | 'drum'): string {
     const tank = this.host.playerTrain.fuel.tank;
+    if (this.hoseOn?.cart === c && this.hoseOn.target) return `<b>[E]</b> Disconnect the hose · fuelling the ${this.hoseOn.target.label} · cart ${tanksText(c.fuel.units)}`;
     if (this.hoseOn?.cart === c) return `<b>[E]</b> Disconnect the hose · fuelling · train tank ${tanksText(tank)}`;
-    if (part === 'drum' && this.connectBlock(c) === null) return `<b>[E]</b> Connect the hose · cart ${tanksText(c.fuel.units)} · train tank ${tanksText(tank)}`;
+    const choice = part === 'drum' ? this.hoseChoice(c) : null;
+    if (choice?.target && choice.block === null) return `<b>[E]</b> Connect the hose to the ${choice.target.label} · cart ${tanksText(c.fuel.units)} · needs ${tanksText(choice.target.room())}`;
+    if (choice && choice.block === null) return `<b>[E]</b> Connect the hose · cart ${tanksText(c.fuel.units)} · train tank ${tanksText(tank)}`;
     const note = part === 'drum' && this.parkedPlacement() && this.nozzleToCap(c, this.parkedPlacement()!) <= FUEL_CART.hoseMax && tank >= FUEL.trainTankUnits ? ' · train tank full' : '';
     return `<b>[E]</b> Grab the fuel cart · ${tanksText(c.fuel.units)}${note}`;
   }
@@ -868,6 +952,23 @@ export class FuelCarts implements FuelCartsLike {
     this.counts.spawned++;
   }
 
+  /**
+   * Task studio-bunker-rework-20261109-205115-01: carts standing in a moving lift car ride it (world/towerRuntime.ts calls this with
+   * the car's dy each frame, like the pickups): their height and storey follow the car; nothing else of them changes (fuel, uid).
+   * A connected hose stays connected only while it still reaches (stepHose re-checks every frame). Returns the carts carried.
+   */
+  carry(inside: (x: number, y: number, z: number) => boolean, dy: number, level: number): number {
+    let n = 0;
+    for (const c of this.carts) {
+      if (c.mode !== 'world' || !inside(c.body.x, c.body.y, c.body.z)) continue;
+      c.body.y += dy;
+      if (c.body.level !== level) { c.body.level = level; this.markLevel(c); }
+      n++;
+    }
+    this.counts.carried += n;
+    return n;
+  }
+
   private markLevel(c: Cart): void {
     c.view.group.traverse(o => { if ((o as THREE.Mesh).isMesh) o.userData.level = c.body.level; });
   }
@@ -939,7 +1040,7 @@ export class FuelCarts implements FuelCartsLike {
     return {
       worldLive: this.worldLive, carts: this.all(), pendingStation: this.pendingStation.map(s => ({...s})), snapshot: this.stationSnapshot?.length ?? null,
       grab: this.grab ? {uid: this.grab.cart.uid, lag: r4(this.grab.lag)} : null,
-      hose: this.hoseOn ? {uid: this.hoseOn.cart.uid, t: r4(this.hoseOn.t)} : null,
+      hose: this.hoseOn ? {uid: this.hoseOn.cart.uid, t: r4(this.hoseOn.t), ...(this.hoseOn.target ? {target: this.hoseOn.target.id} : {})} : null,
       captured: this.captured ? {sawRide: this.captured.sawRide, idle: r4(this.captured.idle), swapped: !!this.captured.swap} : null,
       tank: this.host.playerTrain.fuel.tank, prompt: this.prompt, counts: {...this.counts},
     };
