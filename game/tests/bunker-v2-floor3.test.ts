@@ -1,6 +1,7 @@
 // Task studio-bunker-rework-20261109-205115-01: the Bunker v2's storey 3 (SERVICES & MEDICAL, gen/bunker/v2/floor3.ts): the whole
 // level valid, the service street's programme, its openness and mix of scales, the anchors served, the generator room, the declared
-// hazards (the isolation ward's medium leak, the cylinder store's seeded weak one), the dressing's landmarks, its budgets, determinism.
+// hazards (the isolation ward's medium leak, the cylinder store's seeded weak one), the dressing's landmarks, its budgets and loot
+// (holders at version 1's level; food only in the ration store, at version 1's count), determinism.
 //
 // (While storey 4 is still the lead's placeholder it proposes only a medium leak; the pipeline needs a strong one somewhere, so this
 // test lifts storey 4's own proposals to strong when it has none: the placeholder's leak is in its one-door dead-end room. Once the
@@ -17,8 +18,8 @@ import {BUNKER_V2_FLOORS} from '../src/gen/bunker/v2/floors';
 import type {BunkerFloorModule} from '../src/gen/bunker/v2/floorApi';
 import {bunkerSpine} from '../src/gen/bunker/v2/spine';
 import {FLOOR_3, F3_CLEAR} from '../src/gen/bunker/v2/floor3';
-import {F3_DRESS_STATS} from '../src/gen/bunker/v2/floor3Dress';
-import {isContainerKind} from '../src/items/loot';
+import {F3_DRESS_STATS, F3_RATION_HOLDERS} from '../src/gen/bunker/v2/floor3Dress';
+import {isContainerKind, isLootHolderKind} from '../src/items/loot';
 
 const LV = 3;
 const SEEDS = [9001, 16920, 4401, 12320, 20239, 28158, 36077, 77];
@@ -61,7 +62,8 @@ describe('bunker v2 storey 3: services & medical (the service street)', () => {
       const {L} = gen(s);
       expect(byLabel(L, 'Service street').length, `seed ${s}`).toBe(2);
       for (const label of ['Supply depot', 'Freight lobby', 'Laundry', 'Fabrication hall', 'Works yard', 'Services plant room', 'Medical gas store', 'Washroom',
-        'Infirmary hall', 'Casualty ward', 'Clinical corridor', 'Treatment room', 'Dispensary', 'Medical stores', 'Isolation airlock', 'Isolation ward']) one(L, label);
+        'Infirmary hall', 'Casualty ward', 'Clinical corridor', 'Treatment room', 'Dispensary', 'Medical stores', 'Ration store', 'Isolation airlock', 'Isolation ward']) one(L, label);
+      expect(one(L, 'Ration store').purpose).toBe('stock-room');
       expect(one(L, 'Services plant room').purpose).toBe('generator-room');
       expect(one(L, 'Treatment room').purpose).toBe('first-aid-room');
       expect(one(L, 'Fabrication hall').purpose).toBe('workshop');
@@ -167,21 +169,31 @@ describe('bunker v2 storey 3: services & medical (the service street)', () => {
       expect(props.some(p => p.area === one(L, 'Treatment room').id && p.kind === 'examTable'), `seed ${s} exam couch`).toBe(true);
       const street = byLabel(L, 'Service street').map(a => a.id);
       expect(props.filter(p => street.includes(p.area) && p.kind === 'planterTree').length, `seed ${s} street islands`).toBeGreaterThanOrEqual(1);
-      // budgets (the lead's per-storey targets): props <= ~150 (incl. the collision-only footprints), lights <= ~75, decor <= ~150,
-      // 25-45 openable loot containers
+      // budgets (the lead's per-storey targets after the integration): props <= ~170 (incl. the collision-only footprints), lights
+      // <= ~75, decor <= ~150; loot holders at version 1's level (storey 3 of v1: ~83) — no quiet loot cut
       const base = L.levels[LV].baseY;
-      expect(props.length, `seed ${s} props`).toBeLessThanOrEqual(155);
-      expect(props.filter(p => p.kind !== 'annexMachine').length, `seed ${s} rendered props`).toBeLessThanOrEqual(140);
+      expect(props.length, `seed ${s} props`).toBeLessThanOrEqual(182);
+      expect(props.filter(p => p.kind !== 'annexMachine').length, `seed ${s} rendered props`).toBeLessThanOrEqual(165);
       expect(L.lights.filter(l => (l.level ?? 0) === LV).length, `seed ${s} lights`).toBeLessThanOrEqual(75);
       expect(L.decor.filter(d => d.y0 > base - 0.5 && d.y0 < base + 6.9).length, `seed ${s} decor`).toBeLessThanOrEqual(150);
-      const boxes = props.filter(p => isContainerKind(p.kind));
-      expect(boxes.length, `seed ${s} containers`).toBeGreaterThanOrEqual(25);
-      expect(boxes.length, `seed ${s} containers`).toBeLessThanOrEqual(45);
-      // the storey's finds read medical / services: most containers stock medical, storage or workshop loot
       const lootOf = (p: (typeof props)[number]) => p.purpose ?? L.areas[p.area]?.purpose ?? '';
-      const themed = boxes.filter(p => ['first-aid-room', 'supply-closet', 'reactor-bunker-decon', 'storage', 'workshop', 'generator-room'].includes(lootOf(p)));
-      expect(themed.length / boxes.length, `seed ${s} themed`).toBeGreaterThanOrEqual(0.6);
-      expect(boxes.some(p => p.kind === 'fridge' || p.kind === 'kitchenette' || p.kind === 'vending')).toBe(false);
+      const holders = props.filter(p => isLootHolderKind(p.kind));
+      expect(holders.length, `seed ${s} holders`).toBeGreaterThanOrEqual(80);
+      expect(holders.length, `seed ${s} holders`).toBeLessThanOrEqual(115);
+      const boxes = props.filter(p => isContainerKind(p.kind));
+      expect(boxes.length, `seed ${s} containers`).toBeGreaterThanOrEqual(30);
+      expect(boxes.length, `seed ${s} containers`).toBeLessThanOrEqual(60);
+      // FOOD: only the ration store stocks the stock-room (food) tables, exactly version 1's ration store (parity, never more)
+      const ration = one(L, 'Ration store');
+      const food = holders.filter(p => lootOf(p) === 'stock-room');
+      expect(food.length, `seed ${s} food holders`).toBe(F3_RATION_HOLDERS);
+      expect(food.every(p => p.area === ration.id)).toBe(true);
+      expect(props.some(p => ['fridge', 'kitchenette', 'vending', 'shopCooler', 'snackRack'].includes(p.kind)), `seed ${s} food kinds`).toBe(false);
+      expect(L.areas.filter(a => (a.level ?? 0) === LV && a.id !== ration.id && ['stock-room', 'staff-room'].includes(a.purpose ?? '')).length).toBe(0);
+      // the storey's other finds read medical / services: most containers outside the ration store stock medical, storage or workshop loot
+      const nonFood = boxes.filter(p => p.area !== ration.id);
+      const themed = nonFood.filter(p => ['first-aid-room', 'supply-closet', 'reactor-bunker-decon', 'storage', 'workshop', 'generator-room'].includes(lootOf(p)));
+      expect(themed.length / nonFood.length, `seed ${s} themed`).toBeGreaterThanOrEqual(0.6);
       // nothing of this storey's own on a held apron / in front of the generator
       for (const p of props) expect(p.kind === 'annexMachine' ? p.h : 0).toBeLessThanOrEqual(6.4);
     }
