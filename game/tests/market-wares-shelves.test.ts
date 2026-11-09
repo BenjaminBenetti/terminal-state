@@ -20,7 +20,7 @@ import {CELL} from '../src/gen/grid';
 import {MARKET_STALLS, type MarketStall, type MarketStallId} from '../src/gen/market/marketTypes';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {PickupManager} from '../src/world/pickups';
-import {WARES, allStallSurfaces, isCustomerCounter, stallSurfaces, type WareSurface} from '../src/market/wares/slots';
+import {WARES, allStallSurfaces, isCustomerCounter, stallSurfaces, talkCorridor, type WareSurface} from '../src/market/wares/slots';
 import {MarketWares, WARES_TEXT, wareLabel, type Ware} from '../src/market/wares/wares';
 import type {MarketProvocation} from '../src/market/hostility';
 import {census, tradeHost, uniqueUids} from './helpers/marketTradeFixture';
@@ -97,10 +97,13 @@ describe('market wares on the shelves: where they stand', () => {
       for (const s of L.market!.stalls) {
         const tag = `v${v} ${seed} ${s.id}`;
         const all = allStallSurfaces(L, s), ss = stallSurfaces(L, s);
-        // the layout offers its counter tops; the wares never use them
+        // the layout offers its counter tops; a stall with shelving never uses them (one without: only the far ends, the test below)
         expect(all.some(q => q.hosts.some(i => L.props[i].kind === 'shopCounter')), tag).toBe(true);
-        expect(ss.length, tag).toBe(all.filter(q => !isCustomerCounter(L, s, q)).length);
-        for (const q of ss) { checkShelf(L, s, q, tag); expect(all).toContainEqual(q); }
+        const shelves = all.filter(q => !isCustomerCounter(L, s, q));
+        if (shelves.length) {
+          expect(ss.length, tag).toBe(shelves.length);
+          for (const q of ss) { checkShelf(L, s, q, tag); expect(all).toContainEqual(q); expect(q.end).toBeUndefined(); }
+        } else expect(ss.every(q => q.end === true), `${tag}: counter ends only`).toBe(true);
         const k = ss.map(q => Math.hypot(q.x - s.trader.x, q.z - s.trader.z, q.y - (s.trader.y + 1.2)));
         for (let i = 1; i < k.length; i++) expect(k[i], tag).toBeGreaterThanOrEqual(k[i - 1] - 1e-9);
         if (v === 2) expect(ss.length, `${tag}: shelving behind / beside the trader`).toBeGreaterThanOrEqual(6);
@@ -108,12 +111,87 @@ describe('market wares on the shelves: where they stand', () => {
     }
   });
 
-  it('v1\'s first market: the stalls with shelving show on it; the gun / fuel / scrap stalls (a counter and a rack / cylinders / cartons only) show none', () => {
+  it('v1\'s first market: stalls with shelving keep the shelves-only rule; the gun / fuel / scrap stalls (no shelving) use ONLY their counter run\'s far ends — never the stretch in front of the trader / customer spot', () => {
     for (const seed of SEEDS) {
       const L = gen(seed, 1);
-      const n = (id: MarketStallId) => stallSurfaces(L, L.market!.stalls.find(s => s.id === id)!).length;
-      for (const id of ['medical', 'general', 'gear'] as const) expect(n(id), `${seed} ${id}`).toBeGreaterThanOrEqual(3);
-      for (const id of ['gun', 'fuel', 'scrap'] as const) expect(n(id), `${seed} ${id}`).toBe(0);
+      const stall = (id: MarketStallId) => L.market!.stalls.find(s => s.id === id)!;
+      for (const id of ['medical', 'general', 'gear'] as const) {
+        const ss = stallSurfaces(L, stall(id));
+        expect(ss.length, `${seed} ${id}`).toBeGreaterThanOrEqual(3);
+        for (const q of ss) { expect(q.end).toBeUndefined(); checkShelf(L, stall(id), q, `${seed} ${id}`); }
+      }
+      for (const id of ['gun', 'fuel', 'scrap'] as const) {
+        const s = stall(id), ss = stallSurfaces(L, s), tag = `${seed} ${id}`;
+        expect(ss.length, tag).toBeGreaterThanOrEqual(2); // (both ends of the run)
+        const counters = allStallSurfaces(L, s).filter(q => isCustomerCounter(L, s, q));
+        for (const q of ss) {
+          expect(q.end, tag).toBe(true);
+          expect(q.w, tag).toBeGreaterThanOrEqual(WARES.minW);
+          // a piece of a real counter top (same height / depth / yaw), lying wholly inside it
+          const host = counters.find(c => Math.abs(c.y - q.y) < 1e-9 && Math.abs(c.d - q.d) < 1e-9 && c.hosts.join() === q.hosts.join())!;
+          expect(host, tag).toBeDefined();
+          const lx = (q.x - host.x) * Math.cos(host.yaw) - (q.z - host.z) * Math.sin(host.yaw);
+          expect(lx - q.w / 2, tag).toBeGreaterThanOrEqual(-host.w / 2 - 1e-6);
+          expect(lx + q.w / 2, tag).toBeLessThanOrEqual(host.w / 2 + 1e-6);
+          // never within WARES.talk (along the counter) of the trader's post or the customer spot
+          const cor = talkCorridor(s, q)!;
+          expect(cor[0], tag).toBeLessThan(cor[1]);
+          expect(q.w / 2 <= cor[0] + 1e-6 || -q.w / 2 >= cor[1] - 1e-6, `${tag}: outside the talk corridor`).toBe(true);
+          for (const p of [s.trader, s.front]) {
+            const along = (p.x - q.x) * Math.cos(q.yaw) - (p.z - q.z) * Math.sin(q.yaw);
+            expect(Math.abs(along) - q.w / 2, `${tag}: away from ${p === s.trader ? 'the trader' : 'the customer'}`).toBeGreaterThanOrEqual(WARES.talk - 1e-6);
+          }
+        }
+        // one end each side of the trader
+        const sides = new Set(ss.map(q => Math.sign((q.x - s.trader.x) * Math.cos(q.yaw) - (q.z - s.trader.z) * Math.sin(q.yaw))));
+        expect(sides.size, tag).toBe(2);
+      }
+    }
+  });
+
+  it('v1 gun / fuel / scrap: their wares stand ONLY on the far counter ends (stock objects); at the customer spot looking at the trader it is Trade; beside the end, Steal', () => {
+    for (const seed of [42, 4242]) {
+      const L = gen(seed, 1), m = market(L);
+      for (const id of ['gun', 'fuel', 'scrap'] as const) {
+        const s = m.stall(id), ss = stallSurfaces(L, s), shown = m.shown(id), tag = `${seed} ${id}`;
+        expect(shown.length, tag).toBeGreaterThan(0);
+        for (const w of shown) {
+          const q = ss[w.place.surface];
+          expect(q.end, tag).toBe(true);
+          expect(m.sys.stock!.stalls[id].includes(w.pickup.stack)).toBe(true);
+          // its box wholly outside the talk corridor (along the counter, from the trader's / customer's axis)
+          const b = new THREE.Box3().setFromObject(w.pickup.obj), c = Math.cos(q.yaw), n = Math.sin(q.yaw);
+          const along = (x: number, z: number) => (x - s.trader.x) * c - (z - s.trader.z) * n;
+          const xs = [along(b.min.x, b.min.z), along(b.max.x, b.min.z), along(b.min.x, b.max.z), along(b.max.x, b.max.z)];
+          expect(Math.min(...xs.map(Math.abs)), `${tag} ${w.pickup.stack.itemId}`).toBeGreaterThanOrEqual(WARES.talk - 0.02);
+          expect(Math.abs(b.min.y - q.y)).toBeLessThan(0.006);
+        }
+        // at the customer spot: looking at the trader (face / chest / belt) is Trade; E opens the trade, nothing is stolen
+        const eye = new THREE.Vector3(s.front.x, s.front.y + 1.6, s.front.z);
+        for (const h of [1.0, 1.3, 1.55, 1.7]) {
+          for (const dx of [-0.2, 0, 0.2]) {
+            m.look(new THREE.Vector3(s.trader.x + dx, s.trader.y + h, s.trader.z), eye);
+            expect(m.wares.aimed, `${tag} trader @${h} ${dx}`).toBeNull();
+            expect(m.prompt(), tag).toMatch(/^<b>\[E\]<\/b> Trade — /);
+          }
+        }
+        const c0 = census(m.h.inv, m.sys.stock!), p0 = m.provoked.length, t0 = m.wares.counts.thefts;
+        const dom = installFakeDom();
+        try { expect(m.press()).toBe(true); expect(m.sys.open?.id).toBe(id); m.sys.close('user'); } finally { dom.uninstall(); }
+        expect([m.provoked.length, m.wares.counts.thefts]).toEqual([p0, t0]);
+        expect(census(m.h.inv, m.sys.stock!)).toEqual(c0);
+        // beside the end (the customer side, level with that end of the run): aimed straight at a ware there, Steal; E = theft
+        const w = shown.find(x => m.h.inv.count(x.pickup.stack.itemId) === 0) ?? shown[0];
+        const q = ss[w.place.surface], f = new THREE.Vector3(Math.sin(q.yaw), 0, Math.cos(q.yaw));
+        const beside = new THREE.Vector3(w.place.x, s.front.y + 1.6, w.place.z).addScaledVector(f, q.d / 2 + 0.55);
+        m.look(m.centre(w), beside);
+        expect(m.wares.aimed, `${tag} beside the end`).toBe(w);
+        expect(m.prompt()).toBe(WARES_TEXT.steal(wareLabel(w.pickup.stack)));
+        expect(m.press()).toBe(true);
+        expect([m.wares.counts.thefts, m.wares.lastTheft?.stall], tag).toEqual([t0 + 1, id]);
+        expect(m.provoked.at(-1)).toEqual({kind: 'theft', stall: id});
+        m.hostility.hostile = false;
+      }
     }
   });
 

@@ -16,7 +16,8 @@
 //  - TASK studio-market-bar-20261108-225231-01 (lane SHELVES; user: "Move owner wares to a shelf near them, not the counter immediately
 //    in front (accidental theft when trying to talk)."): the wares use `stallSurfaces` — every surface but the CUSTOMER COUNTER TOPS (the
 //    counter between the customer and the trader: isCustomerCounter, any version — v1's derived tops, v2's counter displays, a v3 bar
-//    counter), nearest the TRADER first: the back wall behind the trader, then the side shelving / racks. Runtime only (layout geometry
+//    counter), nearest the TRADER first: the back wall behind the trader, then the side shelving / racks. A stall with no shelving at all
+//    (v1's gun / fuel / scrap) keeps only its counter run's ENDS away from the talk corridor (counterEnds). Runtime only (layout geometry
 //    untouched). The trader's body and the counter occlude the Steal aim (market/wares/wares.ts aim): talking is Trade.
 // `vendorDisplayHosts` lists the props those surfaces lie on: a loot / salvage system must never fill them (the displays are the stall's
 // finite stock, nothing else).
@@ -44,6 +45,12 @@ export const WARES = {
   /** (task studio-market-bar-20261108-225231-01) The trader's body as an aim occluder: an upright capsule (radius, height; m). */
   traderR: 0.3,
   traderH: 1.85,
+  /**
+   * (task studio-market-bar-20261108-225231-01) A stall with NO shelving (v1's gun / fuel / scrap stalls) shows its wares on its counter
+   * run's ENDS only: never within this half-width (m, along the counter) of the trader / customer-spot axis — the stretch a customer
+   * talks across.
+   */
+  talk: 0.75,
 } as const;
 
 /** One flat display surface in the world: its centre (y = the resting height), its yaw (three.js rotation.y, front = local +Z, the
@@ -61,6 +68,8 @@ export interface WareSurface {
    * holders' item collision ends at each module's loot surface): a ware stands inside one span or bridges two (market/wares/plan.ts).
    */
   supports?: [number, number][];
+  /** (task studio-market-bar-20261108-225231-01) A counter-run END of a stall without shelving (counterEnds): away from the talk corridor. */
+  end?: boolean;
 }
 
 type Layoutish = {props: readonly PropPlacement[]; market?: MarketLayout};
@@ -198,17 +207,50 @@ export function counterBoxes(layout: Layoutish, stall: MarketStall): {min: {x: n
 }
 
 /**
+ * The talk corridor of a stall along a counter surface's own x (surface-local): the trader's post and the customer spot projected onto it,
+ * WARES.talk either side. Null without a trader / customer point.
+ */
+export function talkCorridor(stall: MarketStall, s: WareSurface): [number, number] | null {
+  const c = Math.cos(s.yaw), n = Math.sin(s.yaw);
+  const pts = [stall.trader, stall.front].filter(p => p && fin(p.x) && fin(p.z)).map(p => (p.x - s.x) * c - (p.z - s.z) * n);
+  return pts.length ? [Math.min(...pts) - WARES.talk, Math.max(...pts) + WARES.talk] : null;
+}
+
+/**
+ * (task studio-market-bar-20261108-225231-01, the lead's rule for stalls WITHOUT shelving) A counter surface's ENDS away from the talk
+ * corridor: the parts of its width outside talkCorridor (at most one each side), each its own surface (`end`), its supported spans
+ * clipped to it; never the stretch in front of the trader / the customer spot. [] when nothing usable is left.
+ */
+export function counterEnds(stall: MarketStall, s: WareSurface): WareSurface[] {
+  const cor = talkCorridor(stall, s);
+  if (!cor) return [];
+  const c = Math.cos(s.yaw), n = Math.sin(s.yaw), h = s.w / 2, out: WareSurface[] = [];
+  for (const [a, b] of [[-h, Math.min(h, cor[0])], [Math.max(-h, cor[1]), h]] as [number, number][]) {
+    if (b - a < WARES.minW) continue;
+    const m = (a + b) / 2;
+    const supports = s.supports?.map(([p, q]): [number, number] => [Math.max(p, a) - m, Math.min(q, b) - m]).filter(([p, q]) => q - p >= WARES.minW);
+    if (supports && !supports.length) continue;
+    out.push({...s, x: s.x + c * m, z: s.z - n * m, w: b - a, hosts: [...s.hosts], ...(supports ? {supports} : {}), end: true});
+  }
+  return out;
+}
+
+/**
  * The display surfaces of one stall — its owned wares stand here (market/wares/wares.ts): every offered surface but the customer counter
  * tops (isCustomerCounter), NEAREST THE TRADER first (its post, chest high: the shelves behind / beside the vendor before the ones by the
  * entrance; ties keep the layout's order). Runtime only: no layout's geometry changes (v1 / v2 stay byte-identical). A stall whose shelves
- * hold fewer stacks shows what fits (the rest stays in its stock, listed and bought in the trade view); a v1 stall with no shelving
- * furniture at all (its first market's gun / fuel / scrap stalls: a counter and a rack / cylinders / cartons only) shows none.
+ * hold fewer stacks shows what fits (the rest stays in its stock, listed and bought in the trade view).
+ * A stall with NO shelving at all (v1's first market: the gun / fuel / scrap stalls — a counter and a rack / cylinders / cartons only)
+ * shows its wares on its counter run's ENDS only (counterEnds: never within WARES.talk of the trader / customer-spot axis); the trader's
+ * body and the counter still give the customer spot's look to the trade (wares.ts occluder).
  */
 export function stallSurfaces(layout: Layoutish, stall: MarketStall): WareSurface[] {
   const t = stall.trader, ty = (t?.y ?? 0) + 1.2;
   const far = (s: WareSurface) => (t && fin(t.x) && fin(t.z) ? Math.hypot(s.x - t.x, s.z - t.z, s.y - ty) : 0);
-  return allStallSurfaces(layout, stall).filter(s => !isCustomerCounter(layout, stall, s))
-    .map((s, i) => ({s, i, k: far(s)})).sort((a, b) => a.k - b.k || a.i - b.i).map(e => e.s);
+  const all = allStallSurfaces(layout, stall);
+  let use = all.filter(s => !isCustomerCounter(layout, stall, s));
+  if (!use.length) use = all.filter(s => isCustomerCounter(layout, stall, s)).flatMap(s => counterEnds(stall, s));
+  return use.map((s, i) => ({s, i, k: far(s)})).sort((a, b) => a.k - b.k || a.i - b.i).map(e => e.s);
 }
 
 /** Every stall's display surfaces (empty without a market). */
