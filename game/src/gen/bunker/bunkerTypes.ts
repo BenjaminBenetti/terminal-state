@@ -66,9 +66,31 @@ export interface BunkerGasZone {
   strength: number;
 }
 
+/**
+ * Task studio-bunker-rework-20261109-205115-01: the CARGO LIFT of a version-2 Bunker (gen/bunker/v2/liftPlan.ts; runtime
+ * world/bunker/cargoLift.ts). World metres. The shaft is solid on every storey grid; the car is a moving Levels volume inside it.
+ */
+export interface BunkerLiftInfo {
+  /** The car's interior footprint and the shaft's outer box (incl. its 0.5 m walls). */
+  cab: {x0: number; z0: number; x1: number; z1: number};
+  shaft: {x0: number; z0: number; x1: number; z1: number};
+  /** The gate's side at every stop, its opening centre on the car's edge and clear width. */
+  doorSide: 'N' | 'S' | 'E' | 'W';
+  door: {x: number; z: number; width: number};
+  /** The car's clear height and the gate's clear height above a stop floor. */
+  cabHeight: number;
+  gateHeight: number;
+  /** Stops top-down by storey (stops[i].level === i): the storey floor, the landing area (the floor's area over the apron), the
+   *  landing stand point in front of the gate and the landing's call panel (on the shaft face beside the gate). */
+  stops: {level: number; y: number; area: number; landing: {x: number; z: number}; callPanel: {x: number; y: number; z: number}}[];
+  /** The stop the car stands at, gates shut, until it has power (the station). */
+  home: number;
+}
+
 /** layout.bunker — set by gen/bunker for every Bunker layout (absent on every other level). */
 export interface BunkerInfo {
-  version: 1;
+  /** 1 = the first Bunker (frozen); 2 = the inhabited rework with the cargo lift (task studio-bunker-rework-20261109-205115-01). */
+  version: 1 | 2;
   name: string;
   storeys: BunkerStorey[];
   /** The vault door at the entrance (a functional door: never locked; collision correct from both sides). */
@@ -79,4 +101,8 @@ export interface BunkerInfo {
   /** Area ids of damp / water-damaged sections (Strainer habitat, wetness). */
   damp: number[];
   start: {x: number; z: number; yaw: number; level: number};
+  /** Version 2: the cargo lift, the double-height voids (lower storey's hall open through the upper storey), the floors' titles. */
+  lift?: BunkerLiftInfo;
+  voids?: {id: string; lower: number; upper: number; rect: {x: number; y: number; w: number; h: number}; ceil: number}[];
+  floors?: string[];
 }

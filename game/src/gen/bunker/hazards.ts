@@ -34,7 +34,7 @@ export interface BunkerHazards {
 const doorsOf = (layout: StationLayout, id: number) => layout.doors.filter(d => d.a === id || d.b === id);
 
 /** A compact seed block of `n x n` cells of area `id` on storey `lv` (the room's cell farthest from its doors). */
-function seedCells(layout: StationLayout, lv: number, id: number, n: number): number[] {
+export function seedCells(layout: StationLayout, lv: number, id: number, n: number): number[] {
   const a = layout.areas[id], g = layout.levels[lv].grid;
   const ds = doorsOf(layout, id).map(d => [d.x + d.w / 2, d.y + d.h / 2]);
   let best: [number, number] | null = null, bd = -1;
@@ -52,7 +52,7 @@ function seedCells(layout: StationLayout, lv: number, id: number, n: number): nu
 }
 
 /** A line of seed cells along the middle of a corridor (a ruptured ceiling line). */
-function corridorSeed(layout: StationLayout, lv: number, id: number, rng: Rng): number[] {
+export function corridorSeed(layout: StationLayout, lv: number, id: number, rng: Rng): number[] {
   const a = layout.areas[id], g = layout.levels[lv].grid, horiz = a.w >= a.h, len = horiz ? a.w : a.h;
   if (len < 10) return [];
   // two cells wide along the corridor's middle, six long (a ruptured line overhead: a band of gas, not a thread)

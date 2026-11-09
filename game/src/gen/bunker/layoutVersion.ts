@@ -9,8 +9,12 @@
 // regenerating version 1 exactly (their holders / pickups / kills / lanes refer to it).
 
 export const BUNKER_LAYOUT_LANE = 'bunker.layout';
-/** 1 = the first Bunker (task studio-bunker-level-20261109-072224-01). */
-export const BUNKER_LAYOUT_VERSION = 1;
+/**
+ * 1 = the first Bunker (task studio-bunker-level-20261109-072224-01); 2 = the inhabited rework: open communal halls and galleries,
+ * floor identities, the cargo lift, the round vault aperture (task studio-bunker-rework-20261109-205115-01, gen/bunker/v2/*). A
+ * station entered under version 1 keeps it (its lane record); an unvisited one (or a new campaign's) builds version 2.
+ */
+export const BUNKER_LAYOUT_VERSION = 2;
 
 /** The layout version a Bunker station regenerates with, from its section memory (undefined = never touched). */
 export function bunkerLayoutVersionFor(mem: {visits: number; lanes: Record<string, unknown>} | undefined): number {
