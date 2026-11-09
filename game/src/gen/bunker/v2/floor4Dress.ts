@@ -32,7 +32,7 @@ type Box = {x0: number; z0: number; x1: number; z1: number};
 const B = (x0: number, z0: number, x1: number, z1: number): Box => ({x0: Math.min(x0, x1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), z1: Math.max(z0, z1)});
 
 /** QA / tests: what the last storey-4 dress did. */
-export const FLOOR4_DRESS_STATS = {props: 0, decor: 0, lights: 0, signs: 0, tanks: 0, pumps: 0, boilers: 0, skipped: [] as string[]};
+export const FLOOR4_DRESS_STATS = {props: 0, decor: 0, lights: 0, signs: 0, tanks: 0, pumps: 0, boilers: 0, holders: 0, skipped: [] as string[]};
 
 /** A room's world rect. */
 const W = (a: Area): Box => ({x0: a.x * CELL, z0: a.y * CELL, x1: (a.x + a.w) * CELL, z1: (a.y + a.h) * CELL});
@@ -432,6 +432,34 @@ function crewRoom(D: Dx, a: Area): void {
   placeAgainstWall(D.ctx, a, 'filingCabinet', {tries: 16, front: 0.7, sides: walls});
 }
 
+/**
+ * The programme rooms' working storage (all openable / searchable holders of existing kinds, stocked by the room's purpose; never a
+ * food holder): tool chests, tool cabinets and a workbench in the workshop, supply cabinets and crates in the stores, crew lockers,
+ * spares cabinets in the boiler house / filtration plant / power room, a reagent cabinet in water treatment, a spares cabinet in the
+ * cooling feed gallery. Exhaustive wall scans (fewest-door walls first), an access
+ * strip in front of every door / drawer, the room kept connected.
+ */
+const STORAGE: Readonly<Record<string, readonly [PropKind, number][]>> = {
+  workshop: [['rollingToolChest', 0.8], ['cabinetTall', 0.8], ['desk', 0.8]],
+  stores: [['cabinetTall', 0.8], ['crate', 0], ['crate', 0]],
+  crew: [['staffLockers', 1.0], ['staffLockers', 1.0]],
+  boiler: [['cabinetTall', 0.8], ['cabinetLow', 0.7]],
+  filtration: [['cabinetTall', 0.8], ['crate', 0]],
+  power: [['cabinetTall', 0.8]],
+  treatment: [['cabinetTall', 0.8]],
+  feed: [['cabinetTall', 0.8]],
+};
+function workingStorage(D: Dx, a: Area, key: string): number {
+  let n = 0;
+  for (const [kind, front] of STORAGE[key] ?? []) {
+    // a room whose walls are taken stores it as a crate instead (a lid: no front strip)
+    const p = scanWall(D, a, kind, wallsByDoors(D, a), front, undefined, true) ?? (kind !== 'crate' ? scanWall(D, a, 'crate', wallsByDoors(D, a), 0, undefined, true) : null);
+    if (p) n++;
+  }
+  FLOOR4_DRESS_STATS.holders += n;
+  return n;
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Helpers
 
@@ -453,7 +481,7 @@ function sideOfProp(p: PropPlacement): Side {
 /** Storey 4's bespoke dressing. */
 export function dressFloor4(ctx: FloorDressCtx): void {
   const S = FLOOR4_DRESS_STATS;
-  S.props = S.decor = S.lights = S.signs = S.tanks = S.pumps = S.boilers = 0;
+  S.props = S.decor = S.lights = S.signs = S.tanks = S.pumps = S.boilers = S.holders = 0;
   S.skipped = [];
   const {layout, carved} = ctx;
   const A = (k: string): Area | undefined => (carved.areas[k] !== undefined ? layout.areas[carved.areas[k]] : undefined);
@@ -476,6 +504,7 @@ export function dressFloor4(ctx: FloorDressCtx): void {
   run('freight', (d, a) => freightHall(d, a, lift));
   run('chlorine', chlorination);
   run('crew', crewRoom);
+  for (const k of Object.keys(STORAGE)) run(k, (d, a) => { workingStorage(d, a, k); });
   for (const k of ['reservoir', 'treatment', 'pumpHall', 'power', 'feed']) run(k, (d, a) => seepage(d, a, 2));
   run('drainage', (d, a) => flooded(d, a, false));
   run('sump', (d, a) => flooded(d, a, true));

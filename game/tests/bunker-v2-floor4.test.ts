@@ -13,6 +13,7 @@ import {bunkerSpine} from '../src/gen/bunker/v2/spine';
 import {FLOOR_4} from '../src/gen/bunker/v2/floor4';
 import {FLOOR4_DRESS_STATS} from '../src/gen/bunker/v2/floor4Dress';
 import {GAS_STRONG} from '../src/gen/bunker/hazards';
+import {isLootHolderKind} from '../src/items/loot';
 import {spawnProfile} from '../src/ai/spawnTables';
 import {CELL, FLOOR} from '../src/gen/grid';
 import type {Area, StationLayout} from '../src/gen/stationTypes';
@@ -182,13 +183,30 @@ describe('bunker v2 storey 4: maintenance & water', () => {
     }
   });
 
-  it('stays inside the storey budget (props <= 150, lights <= 75, decor <= 150) and the generation time', () => {
+  it('keeps version 1\'s loot volume: ~56 holders per storey in programme rooms, never a food holder', () => {
+    const FOOD = new Set(['fridge', 'kitchenette', 'snackRack', 'chestFreezer', 'shopCooler', 'hotdogCart', 'grillLine', 'espressoBar', 'wokLine', 'deliLine', 'blenderBar', 'vending', 'stall']);
+    let sum = 0;
+    for (const s of SEEDS) {
+      const {layout, dress} = gen(s);
+      const holders = layout.props.filter(p => (p.level ?? 0) === LV && isLootHolderKind(p.kind));
+      expect(holders.length, `${s} holders`).toBeGreaterThanOrEqual(45);
+      expect(holders.length, `${s} holders`).toBeLessThanOrEqual(75);
+      expect(holders.filter(p => FOOD.has(p.kind)).map(p => p.kind), `${s} food holders`).toEqual([]);
+      // the working storage this storey adds itself (tool chests, cabinets, crew lockers, crates) mostly fits
+      expect(dress.holders, `${s} working storage`).toBeGreaterThanOrEqual(10);
+      for (const k of ['Maintenance workshop', 'Maintenance stores', 'Crew room']) expect(holders.some(p => p.area === byLabel(layout, k)!.id), `${s} ${k}`).toBe(true);
+      sum += holders.length;
+    }
+    expect(sum / SEEDS.length, 'mean holders').toBeGreaterThanOrEqual(52);
+  });
+
+  it('stays inside the storey budget (props <= 165, lights <= 75, decor <= 150) and the generation time', () => {
     for (const s of SEEDS) {
       const {layout, ms} = gen(s);
       const props = layout.props.filter(p => (p.level ?? 0) === LV).length;
       const lights = layout.lights.filter(l => (l.level ?? 0) === LV).length;
       const decor = layout.decor.filter(d => d.y0 >= BASE - 0.5 && d.y1 <= BASE + 7.01 && !inNave(d)).length;
-      expect(props, `${s} props`).toBeLessThanOrEqual(150);
+      expect(props, `${s} props`).toBeLessThanOrEqual(165);
       expect(lights, `${s} lights`).toBeLessThanOrEqual(75);
       expect(decor, `${s} decor`).toBeLessThanOrEqual(150);
       expect(ms, `${s} ms`).toBeLessThan(6000);
