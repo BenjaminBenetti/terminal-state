@@ -730,6 +730,10 @@ describe('the Overwatch scope: a runtime lens on the Sight axis, magnified aim',
     expect(a.radius).toBe(0.016);
     const none = new THREE.Group();
     expect(RifleOptic.sightApertureSpec(none, 0.016)).toBeNull();
+    // a Sight marker placed OVER the scope (not on its axis): no scope body around it -> no lens (the Sight ADS fallback)
+    m.getObjectByName('Sight')!.position.y = 0.13;
+    expect(RifleOptic.sightApertureSpec(m, 0.016)).toBeNull();
+    expect(RifleOptic.attach(m, WEAPONS.overwatch.view.optic!)).toBeNull();
   });
 
   it('held in the viewmodel: the lens attaches, full ADS puts the eye on its axis eyeRelief behind it (crosshair hides); hip = dark lens', () => {

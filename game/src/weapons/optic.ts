@@ -43,8 +43,9 @@ export interface OpticSpec {
    * Task studio-weapon-variety-production-20261109-224355-01 (lane GUNS): a SCOPED gun whose model has no authored glass
    * (the Meshy-cooked Overwatch DMR): the runtime aperture is centred on the model's `Sight` marker — the scope's rear lens
    * centre on its axis — and sits just eye-side (APERTURE_GAP) of the scope's rear-most surface around that axis, measured
-   * from the geometry within `radius` x 1.6 of the axis and ±SIGHT_APERTURE_DEPTH m of the marker (the marker's own z
-   * without geometry). The main camera's narrow `aimFov` is the magnification the lens shows; the reticle is the optic's.
+   * from the geometry within `radius` x 1.6 of the axis and ±SIGHT_APERTURE_DEPTH m of the marker. No scope body around the
+   * marker's axis = no lens (the `Sight` ADS fallback). The main camera's narrow `aimFov` is the magnification the lens shows;
+   * the reticle is the optic's.
    */
   sightAperture?: {radius: number};
 }
@@ -53,6 +54,8 @@ export interface OpticSpec {
 export const APERTURE_GAP = 0.0022;
 /** Lane GUNS: how far (m) along the axis from the `Sight` marker the scope's rear surface is searched. */
 export const SIGHT_APERTURE_DEPTH = 0.12;
+/** Lane GUNS: fewer model vertices than this around the `Sight` axis = no scope body there (the lens is not attached). */
+export const SIGHT_APERTURE_MIN_VERTS = 8;
 
 /** Iteration 15: the runtime aperture attaches only when the model's `Sight` marker is within this distance (m) of its axis. */
 export const APERTURE_SIGHT_TOLERANCE = 0.01;
@@ -256,7 +259,7 @@ export class RifleOptic {
   /**
    * Lane GUNS: the runtime aperture of a scope on the model's `Sight` axis (OpticSpec.sightAperture): x / y = the marker,
    * z = the rear-most vertex within radius x 1.6 of that axis and ±SIGHT_APERTURE_DEPTH of the marker, + APERTURE_GAP.
-   * Null without a `Sight` marker.
+   * Null without a `Sight` marker, or with no scope body around its axis (SIGHT_APERTURE_MIN_VERTS).
    */
   static sightApertureSpec(model: THREE.Object3D, radius: number): NonNullable<OpticSpec['aperture']> | null {
     model.updateMatrixWorld(true);
@@ -264,17 +267,19 @@ export class RifleOptic {
     if (!sight) return null;
     const s = sight.getWorldPosition(new THREE.Vector3());
     const r2 = (radius * 1.6) ** 2, v = new THREE.Vector3();
-    let zRear = s.z;
+    let zRear = -Infinity, around = 0;
     model.traverse(o => {
       const m = o as THREE.Mesh;
       const pos = m.isMesh ? m.geometry?.getAttribute('position') : undefined;
       if (!pos) return;
       for (let i = 0; i < pos.count; i++) {
         v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
-        if ((v.x - s.x) ** 2 + (v.y - s.y) ** 2 <= r2 && Math.abs(v.z - s.z) <= SIGHT_APERTURE_DEPTH && v.z > zRear) zRear = v.z;
+        if ((v.x - s.x) ** 2 + (v.y - s.y) ** 2 <= r2 && Math.abs(v.z - s.z) <= SIGHT_APERTURE_DEPTH) { around++; if (v.z > zRear) zRear = v.z; }
       }
     });
-    return {x: s.x, y: s.y, z: zRear + APERTURE_GAP, radius};
+    // no scope body around the marker's axis (a marker placed over the scope, not on its axis): no lens — the Sight ADS fallback
+    if (around < SIGHT_APERTURE_MIN_VERTS) return null;
+    return {x: s.x, y: s.y, z: Math.max(zRear, s.z) + APERTURE_GAP, radius};
   }
 
   /**
