@@ -98,7 +98,7 @@ function attemptStorey(level: number, sk: StoreySkeleton, prog: StoreyProgramme,
   for (const sp of want) g.place(sp);
   g.grow(n => !isCorr(n));
   for (const sp of skipped) g.place(sp);
-  for (let i = 0, n = 1; i < 5; i++) if (g.place(prog.spare, n > 1 ? `store${n}` : 'store')) n++;
+  for (let i = 0, n = 1; i < 3; i++) if (g.place(prog.spare, n > 1 ? `store${n}` : 'store')) n++;
   g.grow(n => !n.fixed);
   // --- doors: every parent door must fit (most constrained first), then seeded loops ---------------------------------------------
   const spanOf = (e: {a: number; b: number}) => {

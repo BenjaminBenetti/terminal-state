@@ -267,34 +267,45 @@ function musterHall(D: Dx, a: Area): void {
   for (let i = 0; i < 2; i++) scanWall(D, a, 'staffLockers', horiz ? ['N', 'S'] : ['W', 'E'], 1.0, undefined, true);
 }
 
-/** The processing hall: rows of server racks along the long axis either side of the central aisle to the core cluster, data cabinets. */
+/**
+ * The processing hall: rows of server racks running along the core cluster's axis (its front's direction), either side of the central
+ * approach aisle that leads to it, then data cabinets. The rows start beside the cluster's wall and stop 2 m short of the far wall.
+ */
 function processingHall(D: Dx, a: Area, coreProp: PropPlacement | null): void {
-  const horiz = a.w >= a.h;
-  const rack = PROP_DEFS.serverRack;
   const ax0 = a.x * CELL, az0 = a.y * CELL, ax1 = (a.x + a.w) * CELL, az1 = (a.y + a.h) * CELL;
-  const L0 = (horiz ? ax0 : az0) + 3.0, L1 = (horiz ? ax1 : az1) - 3.0;
+  // the aisle runs along the cluster's facing axis (x when it faces east / west), centred on it; without one along the hall's long axis
+  const fx = coreProp ? Math.round(Math.sin(coreProp.rot)) : 0;
+  const horiz = coreProp ? fx !== 0 : a.w >= a.h;
+  const rack = PROP_DEFS.serverRack;
+  // the rows run from beyond the cluster's held 3 m front strip to 2 m short of the far wall
+  let L0 = (horiz ? ax0 : az0) + 2.0, L1 = (horiz ? ax1 : az1) - 2.0;
+  if (coreProp) {
+    const sgn = horiz ? fx : Math.round(Math.cos(coreProp.rot)), c0 = horiz ? coreProp.x : coreProp.z, hd = horiz ? coreProp.hx : coreProp.hz;
+    if (sgn > 0) L0 = c0 + hd + 3.2; else L1 = c0 - hd - 3.2;
+  }
   const C0 = horiz ? az0 : ax0, C1 = horiz ? az1 : ax1, cm = (C0 + C1) / 2;
-  // the aisle centre: the core cluster's axis when it stands on a short wall
   const aisle = coreProp ? (horiz ? coreProp.z : coreProp.x) : cm;
+  const clearHalf = 0;
   let n = 0;
   // rows either side of the central aisle (2.4 m to the cluster): the inner rows face the aisle, then back-to-back pairs facing out
   // across 1.6 m service aisles, as long as a row keeps 1.2 m off the side walls
   const offs: [number, 1 | -1][] = [];
-  for (let k = 0, c = 1.2 + rack.d / 2; k < 4; k++) {
+  for (let k = 0, c = 1.2 + Math.max(0, clearHalf) + rack.d / 2; k < 4; k++) {
     const facing: 1 | -1 = k % 2 === 0 ? -1 : 1; // -1: front toward the aisle
     offs.push([c, facing]);
     c += k % 2 === 0 ? rack.d : rack.d + 1.6;
   }
   for (const [o, facing] of offs) for (const sgn of [-1, 1] as const) {
-    const c = aisle + sgn * o;
+    // (the 1.0 m deep rack centred on a cell boundary covers exactly two cells across the row)
+    const c = Math.round((aisle + sgn * o) / CELL) * CELL;
     if (c - rack.d / 2 < C0 + 1.2 || c + rack.d / 2 > C1 - 1.2) continue;
     // the prop's front (sin rot, cos rot) points toward the aisle (facing -1) or away from it (+1)
     const dir = sgn * facing;
     const rot = horiz ? (dir > 0 ? 0 : Math.PI) : (dir > 0 ? Math.PI / 2 : -Math.PI / 2);
-    // a rack row (0.6 m units) with a 1.2 m cross gap every 4 racks
+    // a rack row on a 1.0 m pitch (each 0.6 m unit centred in a pair of cells: neighbours never share a cell) with a 1.0 m cross
+    // gap every 4 racks
     let k = 0;
-    for (let l = L0; l <= L1 - rack.w; l += rack.w + (++k % 4 === 0 ? 1.2 : 0)) {
-      const t = l + rack.w / 2;
+    for (let t = Math.ceil(L0) + 0.5; t + rack.w / 2 <= L1 + 1e-6; t += 1.0 + (++k % 4 === 0 ? 1.0 : 0)) {
       const x = horiz ? t : c, z = horiz ? c : t;
       if (tryPlaceProp(D.ctx, a, 'serverRack', r3(x), r3(z), rot, {laneOk: true})) n++;
     }
