@@ -1,4 +1,5 @@
-// Hunger and thirst, shown on the HUD as FOOD and WATER fullness (0-100, higher = better).
+// Hunger and thirst, shown on the HUD as FOOD and WATER fullness (0-100, higher = better; task studio-market-bar-20261108-225231-01,
+// lane BEER: up to SURVIVAL_OVERFILL = 200 after Second Supper Bock — the HUD's green overfill — draining normally from there).
 // Pure logic, no DOM/three.js. Both start at 80 on spawn, new station and restart. It only ticks from
 // Game.update(), which runs only in the 'playing' state: pause, inventory, menus, map, death and the
 // win screen freeze it (no catch-up of time spent away).
