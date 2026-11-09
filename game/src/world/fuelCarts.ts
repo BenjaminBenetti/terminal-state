@@ -223,7 +223,7 @@ export class FuelCarts implements FuelCartsLike {
   aim: {cart: Cart; part: 'frame' | 'drum'; t: number} | null = null;
   prompt: string | null = null;
   /** QA / tests. */
-  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, connects: 0, disconnects: 0, transfers: 0, pushes: 0, restores: 0, steps: 0, bullets: 0};
+  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, connects: 0, disconnects: 0, transfers: 0, pushes: 0, restores: 0, steps: 0, bullets: 0, carried: 0};
   private proto: THREE.Group | null = null;
   private protoGen = -1;
   private modelsGen = cartModelsGen;
@@ -950,6 +950,23 @@ export class FuelCarts implements FuelCartsLike {
     this.markLevel(c);
     this.carts.push(c);
     this.counts.spawned++;
+  }
+
+  /**
+   * Task studio-bunker-rework-20261109-205115-01: carts standing in a moving lift car ride it (world/towerRuntime.ts calls this with
+   * the car's dy each frame, like the pickups): their height and storey follow the car; nothing else of them changes (fuel, uid).
+   * A connected hose stays connected only while it still reaches (stepHose re-checks every frame). Returns the carts carried.
+   */
+  carry(inside: (x: number, y: number, z: number) => boolean, dy: number, level: number): number {
+    let n = 0;
+    for (const c of this.carts) {
+      if (c.mode !== 'world' || !inside(c.body.x, c.body.y, c.body.z)) continue;
+      c.body.y += dy;
+      if (c.body.level !== level) { c.body.level = level; this.markLevel(c); }
+      n++;
+    }
+    this.counts.carried += n;
+    return n;
   }
 
   private markLevel(c: Cart): void {

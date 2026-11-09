@@ -14,6 +14,8 @@
 // the blast door) through world/reactor/bunkerModels.ts — the same instanced build the Reactor's arch uses. The keys are arch-owned for
 // bullet impacts (world/finishAt.ts) like the Reactor's.
 
+import {bunkerTowerRecord} from '../gen/bunker/v2/liftPlan'; // task studio-bunker-rework-20261109-205115-01
+import {cutOfficeShaftDoors} from './officeProps';
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import type {Level} from '../gen/levels';
@@ -64,6 +66,10 @@ export class BunkerArch {
 
   /** Wall finishes: cast concrete (vault side, circulation), rusted plate (plant), the builder's rule elsewhere. */
   remapFaces<F extends BuiltFace>(faces: F[]): F[] {
+    // (task studio-bunker-rework-20261109-205115-01: a version-2 Bunker's cargo-lift gates cut out of the shaft's landing faces, as the
+    // Office / mall cut their elevator doorways: the open gate is a real aperture, the shut landing doors fill it)
+    const rec = bunkerTowerRecord(this.layout);
+    if (rec?.elevator) faces = cutOfficeShaftDoors(faces, {office: rec} as unknown as Parameters<typeof cutOfficeShaftDoors>[1]);
     return faces.map(f => {
       const c = this.classOf(f.area);
       const key: ReactorSurfaceKey | null = c === 'vault' || c === 'circulation' ? 'reactor-wall' : c === 'plant' ? 'reactor-room-wall' : null;

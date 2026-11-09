@@ -107,6 +107,9 @@ export const BUNKER_CORE = {
   READ_SCALE: 2,
 } as const;
 
+/** The tower runtime's cargo-lift seams (world/towerRuntime.ts TowerRuntime.liftPower / placeCar). */
+interface LiftTower { liftPower: {on(): boolean; offline(): string; park?(floor: number): void} | null; placeCar(floor: number): boolean }
+
 type CancelReason = 'away' | 'hit' | 'sprint' | 'menu' | 'riding' | 'busy' | 'teardown' | 'state';
 /** What a press at a generator did. */
 export type BunkerPress = 'pouring' | 'fuelled' | 'online' | 'no-can' | 'riding' | 'busy' | 'ignored';
@@ -170,6 +173,8 @@ export class BunkerObjective {
   readonly counts = {pours: 0, refused: 0, cancelled: 0, starts: 0, holdCancels: 0, claims: 0, reads: 0, saves: 0, alerts: 0, cues: 0, loops: 0, exhausts: 0, noUplink: 0, hoseUnits: 0};
   /** The generators' hose targets registered with the fuel carts (this build). */
   private readonly hoseTargets: FuelHoseTarget[] = [];
+  /** The cargo lift's power source this build gave the tower runtime (null: no lift). */
+  private liftPower: LiftTower['liftPower'] = null;
   lastCancel: CancelReason | null = null;
   private crankUntil: number[] = [];
   private loopAt: number[] = [];
@@ -248,6 +253,7 @@ export class BunkerObjective {
     this.loopAt = info.generators.map(() => -Infinity);
     this.ensurePourView();
     this.registerHoseTargets();
+    this.connectLift();
     const culler = this.host.world?.culler as {register?(o: THREE.Object3D): void} | undefined;
     root.updateMatrixWorld(true); // (the culler measures each registered mesh's world box now: the placements' transforms must be in)
     if (culler && typeof culler.register === 'function') { for (const v of this.gens) culler.register(v.body); culler.register(this.core.root); }
@@ -285,6 +291,28 @@ export class BunkerObjective {
     });
   }
 
+  /**
+   * Task studio-bunker-rework-20261109-205115-01: a version-2 Bunker's CARGO LIFT runs on the three auxiliary generators — powered
+   * exactly while all three are online (never by the intel claim, a visit or fuel per ride), refusing every call before that with the
+   * reason; its stop is remembered in this station's record (the car is parked there on the next build: revisit / load / Retry).
+   */
+  private connectLift(): void {
+    const tower = (this.host as {tower?: LiftTower}).tower;
+    if (!tower || !this.info?.lift) return;
+    const power: NonNullable<LiftTower['liftPower']> = {
+      on: () => this.alive,
+      offline: () => {
+        const n = this.state ? onlineCount(this.state, this.ids) : 0;
+        return `The cargo lift runs on the shelter's auxiliary generators — ${n}/${this.ids.length} online · the stairs still go everywhere`;
+      },
+      park: floor => { if (this.state) { this.state.lift = {stop: floor}; this.save(); } },
+    };
+    tower.liftPower = power;
+    this.liftPower = power;
+    const stop = this.state?.lift?.stop;
+    if (stop !== undefined) tower.placeCar(stop);
+  }
+
   /** One unit from a cart's hose into generator `i` (true: committed and saved; the cart debits it in the same tick). */
   private hoseFuel(i: number): boolean {
     const id = this.info?.generators[i]?.id;
@@ -298,6 +326,9 @@ export class BunkerObjective {
   }
 
   private clear(): void {
+    const tower = (this.host as {tower?: LiftTower}).tower;
+    if (tower && this.liftPower && tower.liftPower === this.liftPower) tower.liftPower = null;
+    this.liftPower = null;
     const carts = (this.host as {fuelCarts?: {targets: FuelHoseTarget[]}}).fuelCarts;
     if (carts) for (const t of this.hoseTargets.splice(0)) { const k = carts.targets.indexOf(t); if (k >= 0) carts.targets.splice(k, 1); }
     this.hoseTargets.length = 0;
