@@ -62,8 +62,7 @@ describe('Bunker v2 storey 2 — habitation', () => {
       expect(areas.pantry.purpose).toBe('stock-room');
       expect(areas.latrines.type).toBe('washroom');
       expect(areas.plant.purpose).toBe('generator-room');
-      expect(areas.games.purpose).toBe('locker-room');
-      for (const k of ['dormA', 'dormB', 'school', 'nursery', 'laundry', 'westSt', 'southSt']) expect(areas[k].purpose, k).toBe('reactor-bunker-dormitory');
+      for (const k of ['dormA', 'dormB', 'school', 'nursery', 'laundry', 'games', 'westSt', 'southSt']) expect(areas[k].purpose, k).toBe('reactor-bunker-dormitory');
       // one dormitory houses the families
       expect([areas.dormA.label, areas.dormB.label].sort()).toEqual(['Dormitory', 'Family quarters']);
       // every planned opening is a door of the layout between the right two areas
@@ -203,8 +202,8 @@ describe('Bunker v2 storey 2 — habitation', () => {
       const {L, dress} = run(seed);
       const props = L.props.filter(p => (p.level ?? 0) === LV).length;
       const lights = L.lights.filter(l => (l.level ?? 0) === LV).length;
-      expect(props, `seed ${seed} props`).toBeLessThanOrEqual(165);
-      expect(lights, `seed ${seed} lights`).toBeLessThanOrEqual(85);
+      expect(props, `seed ${seed} props`).toBeLessThanOrEqual(160);
+      expect(lights, `seed ${seed} lights`).toBeLessThanOrEqual(80);
       expect(dress.decor, `seed ${seed} decor`).toBeLessThanOrEqual(150);
     }
   });

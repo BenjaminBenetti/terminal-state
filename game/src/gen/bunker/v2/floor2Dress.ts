@@ -278,7 +278,7 @@ function messHall(F: F2, a: Area, kitchen: Area | undefined): void {
     light(F, a, c, zB - 1.6, 4.5, Math.PI / 2);
   }
   // a few loose folding chairs pulled up at the tables' ends, a bin by the servery
-  for (const [x, z] of [[xs[0], zB + 0.6], [xs[2] + 0.2, zB + 0.65], [xs[1] - 0.3, zA - 0.65]] as const) put(F, a, 'foldingChair', x, z, z > zB ? Math.PI : 0, {laneOk: true});
+  for (const [x, z] of [[xs[0], zB + 0.6], [xs[1] - 0.3, zA - 0.65]] as const) put(F, a, 'foldingChair', x, z, z > zB ? Math.PI : 0, {laneOk: true});
   wallPut(F, a, 'bin', ['N'], 0, s1 + 0.6);
 }
 
@@ -331,7 +331,7 @@ function arcade(F: F2, a: Area): void {
   for (let z = R.z0 + 3.0; z < R.z1 - 0.5; z += 6.0) light(F, a, (R.x0 + R.x1) / 2, z, a.ceil - F.base - 0.02, Math.PI / 2);
   // the wall of notes: boards along the core's blind wall
   let n = 0;
-  for (const t of [R.z0 + 3.0, R.z0 + 7.0, R.z0 + 11.5, R.z0 + 15.5]) if (n < 4 && wallPut(F, a, 'noticeBoard', ['E'], 0, t)) n++;
+  for (const t of [R.z0 + 3.0, R.z0 + 9.0, R.z0 + 15.0]) if (n < 3 && wallPut(F, a, 'noticeBoard', ['E'], 0, t)) n++;
   if (wallSign(F.D, a, 'E', R.z0 + 9.3, 2.45, {kind: 'service', text: 'MESSAGES · MISSING · FOUND', w: 2.2})) F2_DRESS_STATS.signs++;
 }
 
@@ -371,7 +371,7 @@ function schoolroom(F: F2, a: Area): void {
   wallPut(F, a, 'mobileWhiteboard', ['N'], 0.8, (R.x0 + R.x1) / 2);
   wallPut(F, a, 'desk', ['N', 'W'], 0.7, R.x0 + 1.0);
   const mx = (R.x0 + R.x1) / 2;
-  for (const [dz, xs] of [[2.6, [-1.6, -0.6, 0.6, 1.6]], [4.0, [-1.1, 0.1, 1.3]]] as const) for (const dx of xs) put(F, a, 'plasticStackChair', mx + dx, R.z0 + dz, Math.PI, {laneOk: true});
+  for (const [dz, xs] of [[2.6, [-1.6, -0.55, 0.55, 1.6]], [4.0, [-1.05, 1.05]]] as const) for (const dx of xs) put(F, a, 'plasticStackChair', mx + dx, R.z0 + dz, Math.PI, {laneOk: true});
   wallPut(F, a, 'noticeBoard', ['W', 'E'], 0, (R.z0 + R.z1) / 2);
   // the teacher's supply cupboard
   wallPut(F, a, 'cabinetLow', ['W', 'S', 'E'], 0.7, R.z0 + 1.2, true);
@@ -493,9 +493,21 @@ function gamesHall(F: F2, a: Area): void {
   wallPut(F, a, 'lobbySofa', ['W', 'S'], 0.8, R.z0 + 2.4);
   wallPut(F, a, 'crtTvCart', ['N', 'W'], 0.6, R.x0 + 1.0);
   wallPut(F, a, 'bench', ['S', 'W'], 0.6, R.x1 - 2.0);
+  // the players' lockers by the freight door, a notice board of fixtures and scores
+  for (let i = 0; i < 3; i++) wallPut(F, a, 'staffLockers', ['W', 'S'], 1.0, R.z1 - 2.0 - i * 1.25, true);
+  wallPut(F, a, 'noticeBoard', ['W', 'N'], 0, R.z0 + 2.0);
   // two more lamps over the play floor
   light(F, a, mx - 2.5, mz, 4.5, 0);
   light(F, a, mx + 2.5, mz, 4.5, 0);
+}
+
+/** The service landing (the service stair's lobby): a bench by the stair, the maintenance notices, spare crates by the plant door. */
+function serviceLanding(F: F2, a: Area): void {
+  const R = W(a);
+  wallPut(F, a, 'bench', ['S'], 0.6, R.x0 + 6.0);
+  wallPut(F, a, 'noticeBoard', ['S'], 0, R.x0 + 9.0);
+  wallPut(F, a, 'fireExtinguisher', ['S', 'N'], 0.4, R.x0 + 13.0);
+  for (let i = 0; i < 2; i++) wallPut(F, a, 'crate', ['E', 'S'], 0, R.z0 + 2.0 + i * 0.8);
 }
 
 function plantRoom(F: F2, a: Area): void {
@@ -596,6 +608,7 @@ export function dressFloor2(ctx: FloorDressCtx): void {
   run('latrines', a => latrines(F, a));
   run('laundry', a => laundry(F, a));
   run('games', a => gamesHall(F, a));
+  run('lobby', a => serviceLanding(F, a));
   run('plant', a => plantRoom(F, a));
   for (const k of ['westSt', 'southSt']) run(k, a => street(F, a));
   for (const id of ctx.carved.aged ?? []) { const a = layout.areas[id]; if (a) step(`aged ${a.label}`, () => agedRoom(F, a)); }

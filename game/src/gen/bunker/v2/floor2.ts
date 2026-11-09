@@ -62,7 +62,7 @@ export const F2_PLAN: readonly F2Spec[] = [
   {key: 'laundry', rect: R(64, 122, 13, 12), clear: 3.4, kind: 'room', type: 'utility', label: 'Laundry', purpose: BUNKER_PURPOSE.dorm},
   // the freight route and the games hall
   {key: 'freight', rect: R(68, 72, 6, 44), clear: 3.4, kind: 'room', type: 'utility', label: 'Freight corridor', purpose: BUNKER_PURPOSE.lock},
-  {key: 'games', rect: R(75, 92, 22, 24), clear: 5.6, kind: 'room', type: 'crew-room', label: 'Games hall', purpose: 'locker-room'},
+  {key: 'games', rect: R(75, 92, 22, 24), clear: 5.6, kind: 'room', type: 'crew-room', label: 'Games hall', purpose: BUNKER_PURPOSE.dorm},
   // the utility wing at the service stair
   {key: 'lobby', rect: R(78, 122, 41, 10), clear: 3.6, kind: 'room', type: 'utility', label: 'Service landing', purpose: BUNKER_PURPOSE.lock},
   {key: 'plant', rect: R(108, 103, 22, 18), clear: 5.6, kind: 'room', type: 'utility', label: 'Habitation plant room', purpose: 'generator-room'},
