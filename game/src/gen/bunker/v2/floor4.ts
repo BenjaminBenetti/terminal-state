@@ -18,6 +18,7 @@
 // Hazards: the STRONG leak is the chlorination room (a dead end off water treatment: ruptured chlorine cylinders), a weak one in the
 // sewage ejector room. Damp: the water plant, the pump hall, the generator room and the drainage wing (the Strainer's habitat).
 
+import type {Rng} from '../../../core/rng';
 import type {Area, AreaKind, AreaRole, Rect, RoomType} from '../../stationTypes';
 import type {BunkerFloorModule, FloorCarveCtx, FloorCarveResult, V2GasClass} from './floorApi';
 import {dressFloor4} from './floor4Dress';
@@ -63,32 +64,44 @@ export const FLOOR4_KEYS = {
 /** Clear heights (m). */
 const H = {hall: 6.4, plant: 5.4, mid: 4.6, room: 3.4, run: 3.0, lobby: 5.0, gallery: 4.6} as const;
 
-function specs(): Spec[] {
+/**
+ * The storey's areas. The architecture is designed, not drawn: a seed varies its secondary pieces only — the chlorination room's
+ * place along water treatment's east wall, the order of the flooded sump and the sewage ejector room off the drainage gallery, the
+ * crew washroom's place, the cooling feed gallery's depth, the reservoir's depth.
+ */
+function specs(rng: Rng): Spec[] {
+  const clY = 9 + rng.int(0, 8);
+  const sumpFirst = rng.chance(0.5);
+  const sumpR = sumpFirst ? R(12, 76, 17, 20) : R(12, 91, 17, 20);
+  const ejR = sumpFirst ? R(12, 97, 17, 14) : R(12, 76, 17, 14);
+  const wrX = 86 + rng.int(0, 6);
+  const feedW = 24 + rng.int(0, 4), feedH = 22 + rng.int(0, 3);
+  const resH = 28 + rng.int(0, 2);
   return [
     // --- the north plant band -----------------------------------------------------------------------------------------------------
-    {key: 'reservoir', r: R(6, 6, 42, 30), kind: 'room', type: 'utility', clear: H.hall, label: 'Reservoir hall', purpose: 'overflow-chamber', parent: 'pipeRun'},
+    {key: 'reservoir', r: R(6, 36 - resH, 42, resH), kind: 'room', type: 'utility', clear: H.hall, label: 'Reservoir hall', purpose: 'overflow-chamber', parent: 'pipeRun'},
     {key: 'treatment', r: R(49, 8, 30, 22), kind: 'room', type: 'utility', clear: H.plant, label: 'Water treatment', purpose: 'pump-room', parent: 'pipeRun'},
-    {key: 'chlorine', r: R(80, 14, 11, 12), kind: 'room', type: 'utility', clear: H.room, label: 'Chlorination room', purpose: 'spillway', parent: 'treatment'},
-    {key: 'filtration', r: R(95, 8, 18, 22), kind: 'room', type: 'utility', clear: H.mid, label: 'Air filtration plant', purpose: 'ventilation-plant', parent: 'pipeRun'},
-    {key: 'boiler', r: R(114, 8, 22, 28), kind: 'room', type: 'utility', clear: H.plant, label: 'Boiler house', purpose: 'boiler-room', parent: 'pipeRun'},
+    {key: 'chlorine', r: R(80, clY, 11, 12), kind: 'room', type: 'utility', clear: H.room, label: 'Chlorination room', purpose: 'spillway', parent: 'treatment'},
+    {key: 'filtration', r: R(95, 12, 17, 18), kind: 'room', type: 'utility', clear: H.mid, label: 'Air filtration plant', purpose: 'ventilation-plant', parent: 'pipeRun'},
+    {key: 'boiler', r: R(114, 10, 22, 26), kind: 'room', type: 'utility', clear: H.plant, label: 'Boiler house', purpose: 'boiler-room', parent: 'pipeRun'},
     {key: 'power', r: R(115, 37, 21, 20), kind: 'room', type: 'utility', clear: 6.0, label: 'Auxiliary power room', purpose: 'generator-room', parent: 'boiler'},
     {key: 'pipeRun', r: R(49, 31, 64, 5), kind: 'service', type: 'service-corridor', clear: H.run, label: 'North pipe run', purpose: 'service-corridor', parent: 'link'},
     // --- between the plant band and the hub ---------------------------------------------------------------------------------------
     {key: 'workshop', r: R(49, 37, 16, 18), kind: 'room', type: 'utility', clear: H.room, label: 'Maintenance workshop', purpose: 'workshop', parent: 'link'},
     {key: 'link', r: R(66, 37, 4, 18), kind: 'service', type: 'service-corridor', clear: H.run, label: 'Pipe run', purpose: 'service-corridor', parent: 'freight'},
     {key: 'stores', r: R(71, 37, 12, 10), kind: 'room', type: 'storage', clear: H.room, label: 'Maintenance stores', purpose: 'storage', parent: 'link'},
-    {key: 'washroom', r: R(88, 41, 13, 14), kind: 'room', type: 'washroom', clear: H.room, label: 'Crew washroom', purpose: 'washroom', parent: 'crew'},
+    {key: 'washroom', r: R(wrX, 41, 13, 14), kind: 'room', type: 'washroom', clear: H.room, label: 'Crew washroom', purpose: 'washroom', parent: 'crew'},
     {key: 'crew', r: R(85, 56, 23, 15), kind: 'room', type: 'crew-room', clear: H.room + 0.2, label: 'Crew room', purpose: 'locker-room', parent: 'freight'},
     // --- the hub and the axis ---------------------------------------------------------------------------------------------------
     {key: 'freight', r: R(30, 56, 54, 15), kind: 'room', type: 'utility', clear: H.lobby, label: 'Freight hall', purpose: 'turbine-hall'},
     {key: 'pumpHall', r: R(68, 72, 23, 41), kind: 'room', type: 'utility', clear: H.hall, label: 'Pump hall', purpose: 'turbine-hall', parent: 'freight'},
     {key: 'passage', r: R(92, 72, 5, 49), kind: 'service', type: 'service-corridor', clear: H.run + 0.2, label: 'Service passage', purpose: 'service-corridor', parent: 'crew'},
     {key: 'gallery', r: R(30, 114, 61, 10), kind: 'room', type: 'crew-room', clear: H.gallery, label: 'Core gallery', purpose: '', parent: 'pumpHall', role: 'catwalk', publicSpace: true, noFloorLoot: true},
-    {key: 'feed', r: R(92, 122, 26, 24), kind: 'room', type: 'utility', clear: H.lobby, label: 'Cooling feed gallery', purpose: 'turbine-hall', parent: 'passage'},
+    {key: 'feed', r: R(92, 122, feedW, feedH), kind: 'room', type: 'utility', clear: H.lobby, label: 'Cooling feed gallery', purpose: 'turbine-hall', parent: 'passage'},
     // --- the damaged drainage wing ------------------------------------------------------------------------------------------------
     {key: 'drainage', r: R(30, 72, 12, 41), kind: 'room', type: 'utility', clear: H.room, label: 'Drainage gallery', purpose: 'sewage-room', parent: 'freight'},
-    {key: 'sump', r: R(12, 76, 17, 20), kind: 'room', type: 'utility', clear: 4.2, label: 'Flooded sump', purpose: 'overflow-chamber', parent: 'drainage'},
-    {key: 'ejector', r: R(12, 97, 17, 14), kind: 'room', type: 'utility', clear: H.room, label: 'Sewage ejector room', purpose: 'sewage-room', parent: 'drainage'},
+    {key: 'sump', r: sumpR, kind: 'room', type: 'utility', clear: 4.2, label: 'Flooded sump', purpose: 'overflow-chamber', parent: 'drainage'},
+    {key: 'ejector', r: ejR, kind: 'room', type: 'utility', clear: H.room, label: 'Sewage ejector room', purpose: 'sewage-room', parent: 'drainage'},
     {key: 'westWalk', r: R(40, 125, 10, 20), kind: 'room', type: 'crew-room', clear: H.gallery, label: 'West catwalk', purpose: '', parent: 'gallery', role: 'catwalk', publicSpace: true, noFloorLoot: true},
   ];
 }
@@ -130,7 +143,7 @@ export const FLOOR_4: BunkerFloorModule = {
   carve(ctx: FloorCarveCtx): FloorCarveResult | null {
     const rng = ctx.rng;
     const byKey = new Map<string, Area>();
-    const all = specs();
+    const all = specs(rng);
     for (const s of all) {
       const a = ctx.room(s.r, s.kind, s.type, s.clear, -1, {label: s.label, purpose: s.purpose || undefined, role: s.role, publicSpace: s.publicSpace ?? false, noFloorLoot: s.noFloorLoot});
       if (!a) return null;

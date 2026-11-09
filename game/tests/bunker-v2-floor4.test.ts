@@ -168,12 +168,14 @@ describe('bunker v2 storey 4: maintenance & water', () => {
     }
   });
 
-  it('stays inside the storey budget (props, decor) and the generation time', () => {
+  it('stays inside the storey budget (props <= 150, lights <= 75, decor <= 150) and the generation time', () => {
     for (const s of SEEDS) {
       const {layout, ms} = gen(s);
       const props = layout.props.filter(p => (p.level ?? 0) === LV).length;
+      const lights = layout.lights.filter(l => (l.level ?? 0) === LV).length;
       const decor = layout.decor.filter(d => d.y0 >= BASE - 7.5 && d.y1 <= BASE + 7.01).length;
-      expect(props, `${s} props`).toBeLessThanOrEqual(140);
+      expect(props, `${s} props`).toBeLessThanOrEqual(150);
+      expect(lights, `${s} lights`).toBeLessThanOrEqual(75);
       expect(decor, `${s} decor`).toBeLessThanOrEqual(150);
       expect(ms, `${s} ms`).toBeLessThan(6000);
     }

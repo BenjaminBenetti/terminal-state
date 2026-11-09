@@ -117,34 +117,37 @@ function reservoir(D: Dx, a: Area): void {
   // a depth gauge board and the plates
   wallSign(D, a, 'N', (tank.x0 + tank.x1) / 2, 2.3, {kind: 'service', text: 'POTABLE WATER RESERVOIR · NO ENTRY', w: 2.6});
   wallSign(D, a, 'S', (tank.x0 + tank.x1) / 2, 2.3, {kind: 'service', text: 'RESERVOIR LEVEL · CHECK EVERY SHIFT', w: 2.4});
-  // lights over the walkway (the dresser's fixtures hang over the middle)
-  for (const x of [w.x0 + 1.6, w.x1 - 1.6]) light(D, a, x, (w.z0 + w.z1) / 2, Math.PI / 2, false, 0.8);
 }
 
 /** Water treatment: the long sand-filter bed along a wall without doors, the settling basin, pressure filter vessels. */
 function treatment(D: Dx, a: Area): void {
   const w = W(a);
   const walls = wallsByDoors(D, a);
-  // the filter bed: 2.5 m deep along the quietest long wall, its ends 2 m off the corners
+  // the filter bed: a 2.4 m deep trough along the quietest wall (the longest free run of it: 11 m down to 6 m), a pipe rail on its edge
   let beds = 0;
-  for (const sd of walls) {
-    if (beds) break;
-    const long = sd === 'N' || sd === 'S' ? w.x1 - w.x0 : w.z1 - w.z0;
-    if (long < 9) continue;
-    const [lo, hi] = wallRange(a, sd);
-    const b = wallBox(a, sd, lo + 2.0, hi - 2.0, 0.6, 3.1);
-    if (basin(D, a, b, 1.0, 0.7)) {
-      beds++;
-      // the gallery rail over the bed: a steel pipe rail on posts along its outer edge
-      const rail = wallBox(a, sd, lo + 2.0, hi - 2.0, 3.0, 3.1);
-      D.decor('steelDark', rail, 1.0, 1.1);
+  for (const len of [11, 9, 7.5, 6]) {
+    for (const sd of walls) {
+      if (beds) break;
+      const [lo, hi] = wallRange(a, sd);
+      for (const off of [0.6, 1.1]) {
+        if (beds) break;
+        for (let t = lo + 1.5; t + len <= hi - 1.5 + 1e-6 && !beds; t += 0.5) {
+          if (!basin(D, a, wallBox(a, sd, t, t + len, off, off + 2.4), 1.0, 0.7)) continue;
+          D.decor('steelDark', wallBox(a, sd, t, t + len, off + 2.3, off + 2.4), 1.0, 1.1);
+          beds++;
+        }
+      }
     }
+    if (beds) break;
   }
+  if (!beds) FLOOR4_DRESS_STATS.skipped.push('treatment: filter bed');
   // the settling basin: a square trough in the room's middle half
   const cx = (w.x0 + w.x1) / 2, cz = (w.z0 + w.z1) / 2;
-  for (const d of [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]]) {
-    if (basin(D, a, B(cx + d[0] - 2.5, cz + d[1] - 2.0, cx + d[0] + 2.5, cz + d[1] + 2.0), 0.9, 0.6)) break;
+  let settled = false;
+  for (const d of [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5], [3, 0], [-3, 0], [0, 3], [0, -3]]) {
+    if (basin(D, a, B(cx + d[0] - 2.5, cz + d[1] - 2.0, cx + d[0] + 2.5, cz + d[1] + 2.0), 0.9, 0.6)) { settled = true; break; }
   }
+  if (!settled) FLOOR4_DRESS_STATS.skipped.push('treatment: settling basin');
   // pressure filter vessels (the heater tanks' tall cylinders) along a free wall
   for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'waterHeaterTank', {front: 0.8, tries: 16, sides: walls.slice(1)});
   wallSign(D, a, walls[walls.length - 1], wallMid(a, walls[walls.length - 1]), 2.4, {kind: 'service', text: 'WATER TREATMENT · SAND FILTERS', w: 2.2});
@@ -198,13 +201,16 @@ function pumpHall(D: Dx, a: Area): void {
       D.decor('steelDark', B(w.x0 + 0.5, w.z1 - 0.35, w.x1 - 0.5, w.z1), yR, yR + 0.35);
     }
   }
+  // the nave's structural rhythm: steel pilasters up the long walls every ~5 m carrying the crane rails (flush, clear of doorways / props)
+  for (const sd of (alongZ ? ['W', 'E'] : ['N', 'S']) as Side[]) {
+    const [lo, hi] = wallRange(a, sd);
+    for (let t = lo + 3.0; t <= hi - 2.5; t += 6) put(D, 'steelDark', wallBox(a, sd, t - 0.25, t + 0.25, 0, 0.3), 0, top);
+  }
   // the pipe banks along the side walls (where the dresser left room), the aisle's floor line
   for (const sd of (alongZ ? ['W', 'E'] : ['N', 'S']) as Side[]) scanWall(D, a, 'bunkerPipeBank', [sd], 0.9);
   D.decor('plasticSeat', alongZ ? B(cA - 1.6, L0 - 2.0, cA - 1.5, L1 + 2.0) : B(L0 - 2.0, cA - 1.6, L1 + 2.0, cA - 1.5), 0, 0.008);
   D.decor('plasticSeat', alongZ ? B(cA + 1.5, L0 - 2.0, cA + 1.6, L1 + 2.0) : B(L0 - 2.0, cA + 1.5, L1 + 2.0, cA + 1.6), 0, 0.008);
   wallSign(D, a, alongZ ? 'N' : 'W', alongZ ? cA - 3.0 : cA - 3.0, 3.6, {kind: 'service', text: 'PUMP HALL · RAW & POTABLE MAINS', w: 2.4});
-  // a second line of fixtures over each pump row
-  for (const r of rows) for (let i = 0; i < r.zs.length; i += 2) light(D, a, alongZ ? r.c : r.zs[i], alongZ ? r.zs[i] : r.c, alongZ ? Math.PI / 2 : 0, false, 0.85);
 }
 
 /** The rim of the V45 well on this storey: an amber safety line on the gallery floor along every railed edge of `a`. */
@@ -261,7 +267,9 @@ function gallery(D: Dx, a: Area): void {
     const p = tryPlaceProp(D.ctx, a, 'bench', Math.round(t * 4) / 4, r3(w.z0 + 0.45), 0, {front: 0.8});
     if (p) FLOOR4_DRESS_STATS.props++;
   }
-  for (let x = w.x0 + 3; x < w.x1 - 2; x += 6) light(D, a, x, w.z1 - 1.6, 0, false, 0.85);
+  // the rim walk lit along its length when the dresser hung fewer than four fixtures here (the storey's light budget)
+  const own = D.layout.lights.filter(l => l.area === a.id).length;
+  if (own < 4) for (const f of [0.3, 0.7]) light(D, a, w.x0 + (w.x1 - w.x0) * f, w.z1 - 1.6, 0, false, 0.85);
 }
 
 /** The cooling feed gallery (the service stair's landing hall on the well's east side): the operator's console turned to the drop. */
@@ -364,7 +372,9 @@ function flooded(D: Dx, a: Area, pit: boolean): void {
   const w = W(a), rng = D.rng;
   if (pit) {
     const cx = (w.x0 + w.x1) / 2, cz = (w.z0 + w.z1) / 2;
-    for (const d of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) if (basin(D, a, B(cx + d[0] - 2.0, cz + d[1] - 2.0, cx + d[0] + 2.0, cz + d[1] + 2.0), 0.7, 0.55, 'steelDark')) break;
+    let ok = false;
+    for (const d of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) if (basin(D, a, B(cx + d[0] - 2.0, cz + d[1] - 2.0, cx + d[0] + 2.0, cz + d[1] + 2.0), 0.7, 0.55, 'steelDark')) { ok = true; break; }
+    if (!ok) FLOOR4_DRESS_STATS.skipped.push('sump pit');
   }
   // standing water: a few broad sheets (flat; the decor never blocks), clear of the doorways
   const n = Math.max(2, Math.round((w.x1 - w.x0) * (w.z1 - w.z0) / 40));
@@ -378,7 +388,7 @@ function flooded(D: Dx, a: Area, pit: boolean): void {
     got++;
   }
   // fallen ceiling panels
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 2; i++) {
     const pw = rng.range(0.9, 1.5), pd = rng.range(0.6, 1.1);
     const x = w.x0 + 0.5 + rng.next() * Math.max(0.1, w.x1 - w.x0 - pw - 1.0), z = w.z0 + 0.5 + rng.next() * Math.max(0.1, w.z1 - w.z0 - pd - 1.0);
     put(D, 'panel', B(x, z, x + pw, z + pd), 0.006, 0.05);
@@ -394,6 +404,32 @@ function duct(D: Dx, a: Area, side: Side, w = 0.5): void {
     const t1 = Math.min(hi - 0.1, t + 6);
     for (const [s0, s1] of [[t, t1], [t, (t + t1) / 2], [(t + t1) / 2, t1]]) if (put(D, 'steelBright', wallBox(a, side, s0, s1, 0.06, 0.06 + w), y0, y1)) break;
   }
+}
+
+/** Seepage in a damp plant room: a few small puddles of standing water by the walls (flat; clear of doorways and props). */
+function seepage(D: Dx, a: Area, n: number): void {
+  const w = W(a), rng = D.rng;
+  let got = 0;
+  for (let i = 0; i < n * 4 && got < n; i++) {
+    const sd = (['N', 'S', 'W', 'E'] as Side[])[rng.int(0, 3)];
+    const [lo, hi] = wallRange(a, sd);
+    const len = rng.range(1.2, 2.6), t = lo + 0.5 + rng.next() * Math.max(0.1, hi - lo - len - 1.0);
+    const b = wallBox(a, sd, t, t + len, 0.05, rng.range(0.7, 1.4));
+    const q = B(Math.max(b.x0, w.x0), Math.max(b.z0, w.z0), Math.min(b.x1, w.x1), Math.min(b.z1, w.z1));
+    if (put(D, 'glassShopfront', q, 0, 0.006)) got++;
+  }
+}
+
+/** The crew room: the foreman's desk and the shift board by it (the room's lockers / benches are the dresser's locker-room stock). */
+function crewRoom(D: Dx, a: Area): void {
+  const walls = wallsByDoors(D, a);
+  const desk = scanWall(D, a, 'desk', walls, 0.8, undefined, true);
+  if (desk) {
+    const sd = sideOfProp(desk), t = sd === 'N' || sd === 'S' ? desk.x : desk.z;
+    placeAgainstWall(D.ctx, a, 'noticeBoard', {y: 1.1, tries: 16, sides: [sd]});
+    wallSign(D, a, sd, t, 2.35, {kind: 'service', text: 'SHIFT ROSTER · PLANT ROUNDS', w: 2.2});
+  }
+  placeAgainstWall(D.ctx, a, 'filingCabinet', {tries: 16, front: 0.7, sides: walls});
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -439,9 +475,18 @@ export function dressFloor4(ctx: FloorDressCtx): void {
   run('power', powerRoom);
   run('freight', (d, a) => freightHall(d, a, lift));
   run('chlorine', chlorination);
+  run('crew', crewRoom);
+  for (const k of ['reservoir', 'treatment', 'pumpHall', 'power', 'feed']) run(k, (d, a) => seepage(d, a, 2));
   run('drainage', (d, a) => flooded(d, a, false));
   run('sump', (d, a) => flooded(d, a, true));
   run('ejector', (d, a) => flooded(d, a, false));
+  // the cramped runs stay dimmer than the halls: every other ceiling fixture of the long ones (the storey's light budget, <= ~75)
+  for (const k of ['pipeRun', 'passage']) run(k, (d, a) => {
+    const own = d.layout.lights.filter(l => l.area === a.id && (l.level ?? 0) === d.lv);
+    if (own.length < 4) return;
+    const drop = new Set(own.filter((_, i) => i % 2 === 1));
+    d.layout.lights = d.layout.lights.filter(l => !drop.has(l));
+  });
   for (const k of ['pipeRun', 'link', 'passage']) run(k, (d, a) => { const longs: Side[] = a.w >= a.h ? ['N', 'S'] : ['W', 'E']; duct(d, a, wallsByDoors(d, a).filter(s => longs.includes(s))[0] ?? longs[0]); });
   // door plates in the shelter's words
   step('plates', () => {
