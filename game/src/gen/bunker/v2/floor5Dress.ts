@@ -142,8 +142,8 @@ function dressNave(D: Dx, a: Area, gallery: Area | undefined): void {
   // the cross axis: the north door's span (the gallery side), else the hall's middle
   const nd = gallery ? doorBetween(D, a, gallery) : undefined;
   const ax0 = nd ? nd.x * CELL : (x0 + x1) / 2 - 1.5, ax1 = nd ? (nd.x + nd.w) * CELL : (x0 + x1) / 2 + 1.5, axc = (ax0 + ax1) / 2;
-  // (the ranks run on to the east wall: the cluster's held front strip refuses placements in front of it)
-  const east = x1 - 0.05;
+  // (the ranks stop at the cluster's face: it stands free against the east wall, the corners beside it open)
+  const east = core ? core.x - core.hx - 0.05 : x1 - 0.05;
   // 1) the coolant risers: the pipe bank against the south wall on the cross axis (it terminates the view in from the gallery)
   // (on the axis, else the nearest free stretch of the south wall within 4 m: the dresser's few cabinets may hold the exact spot)
   const pipe = scanSeal(D, a, 'bunkerPipeBank', ['S'], 0.9, axc, 4.0);
@@ -161,7 +161,7 @@ function dressNave(D: Dx, a: Area, gallery: Area | undefined): void {
     const order: PropKind[] = side === 'N' ? ['bunkerMainframe'] : ['serverRack', 'bunkerMainframe'];
     const sideEast = side === 'S' && pipe ? Math.max(east0, pipe.x + pipe.hx + 0.5) : east0;
     const sideWest1 = side === 'S' && pipe ? Math.min(west1, pipe.x - pipe.hx - 0.5) : west1;
-    for (const p of [...rank(D, a, side, west0, sideWest1, order, 4, 0.5), ...rank(D, a, side, sideEast, east, [...order].reverse(), 4, 0.5)]) {
+    for (const p of [...rank(D, a, side, west0, sideWest1, order, 4, 0.5), ...rank(D, a, side, sideEast, east, order, 4, 0.5)]) {
       if (p.kind === 'bunkerMainframe') S.mainframes++; else S.racks++;
     }
   }
@@ -292,8 +292,8 @@ function dressBay(D: Dx, a: Area, lift: {x: number; y: number; w: number; h: num
   // (the freight lobby is a hall with no loot purpose of its own: what waits here is consignments — carton stacks and pallets, not
   // loot holders; the storey's finds sit in its programme rooms)
   const far: Side[] = ['N', 'E'];
-  for (let i = 0; i < 3; i++) placeAgainstWall(D.ctx, a, 'cartonStack', {sides: far, tries: 16});
-  for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'parcelPallet', {sides: far, tries: 16});
+  for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'cartonStack', {sides: far, tries: 16});
+  placeAgainstWall(D.ctx, a, 'parcelPallet', {sides: far, tries: 16});
   placeAgainstWall(D.ctx, a, 'handTruck', {sides: ['N'], tries: 16});
   placeAgainstWall(D.ctx, a, 'tripodWorkLight', {sides: ['N', 'E'], tries: 12});
 }
@@ -347,7 +347,7 @@ function dressCommons(D: Dx, a: Area): void {
   const cx = (a.x + a.w * 0.62) * CELL, cz = (a.y + a.h * 0.42) * CELL;
   let tables = 0;
   for (const [ox, oz] of [[0, 0], [0, 3.2], [-3.0, 0], [-3.0, 3.2], [3.0, 0]] as const) {
-    if (tables >= 2) break;
+    if (tables >= 1) break;
     const x = Math.round((cx + ox) * 4) / 4, z = Math.round((cz + oz) * 4) / 4;
     const t = tryPlaceProp(D.ctx, a, 'table', x, z, 0, {ring: 0.5});
     if (!t) continue;
@@ -364,10 +364,38 @@ function dressCommons(D: Dx, a: Area): void {
   }
 }
 
+/** The cable way behind the core: cable trays down both walls just over head height, isolator switches, a line of lamps. */
+function dressCableway(D: Dx, a: Area): void {
+  const rel = a.ceil - D.base, alongZ = a.h >= a.w;
+  const sides: Side[] = alongZ ? ['W', 'E'] : ['N', 'S'];
+  const [lo, hi] = wallRange(a, sides[0]);
+  for (const sd of sides) for (const [y, deep] of [[rel - 0.62, 0.32], [rel - 0.3, 0.22]] as const) {
+    D.decor('grille', wallBox(a, sd, lo + 0.2, hi - 0.2, 0.04, deep), y, y + 0.04);
+    D.decor('black', wallBox(a, sd, lo + 0.2, hi - 0.2, 0.06, deep - 0.04), y + 0.04, y + 0.12);
+  }
+  mountOn(D, a, [sides[1]], 'disconnectSwitch', 1.2, 2);
+  for (let t = lo + 1.5; t < hi - 1; t += 4) light(D, a, alongZ ? (a.x + a.w / 2) * CELL : t, alongZ ? t : (a.y + a.h / 2) * CELL, rel - 0.02, alongZ ? Math.PI / 2 : 0, false, 0.7);
+}
+
+/** The UPS battery room: a free-standing string of battery cabinets (back-to-back panel pairs down the room's middle). */
+function dressBattery(D: Dx, a: Area): void {
+  const pd = PROP_DEFS.electricalPanel, alongX = a.w >= a.h;
+  // (cell boundaries: the backs meet on one, the pair's ends on others — no two cabinets share a grid cell)
+  const cx = Math.round(a.x + a.w / 2) * CELL, cz = Math.round(a.y + a.h / 2) * CELL;
+  begin(D.ctx);
+  let n = 0;
+  for (const s of [-0.6, 0.6]) for (const sg of [-1, 1]) {
+    const off = sg * (pd.d / 2 + 0.005), t = (alongX ? cx : cz) + s;
+    const x = alongX ? t : cx + off, z = alongX ? cz + off : t;
+    if (tryPlaceProp(D.ctx, a, 'electricalPanel', r3(x), r3(z), alongX ? (sg < 0 ? Math.PI : 0) : (sg < 0 ? -Math.PI / 2 : Math.PI / 2), {front: 0.8, laneOk: true})) n++;
+  }
+  if (n < 4) rollback(D.ctx); else commit(D.ctx);
+}
+
 /** The operators' gallery: benches along the north wall between its doors (the shift change), a rota board, plants, extinguishers. */
 function dressGallery(D: Dx, a: Area): void {
   const rel = a.ceil - D.base;
-  for (let i = 0; i < 3; i++) placeAgainstWall(D.ctx, a, 'bench', {sides: ['N'], front: 0.6, tries: 20});
+  for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'bench', {sides: ['N'], front: 0.6, tries: 20});
   placeAgainstWall(D.ctx, a, 'noticeBoard', {sides: ['N', 'S'], y: 1.1, tries: 16});
   mountOn(D, a, ['S', 'N'], 'fireExtinguisherCabinet', 0.6, 1);
   placeAgainstWall(D.ctx, a, 'pottedPlantSmall', {sides: ['N', 'S'], tries: 12});
@@ -401,13 +429,17 @@ export function dressFloor5(ctx: FloorDressCtx): void {
   if (commons) step('commons', () => dressCommons(D, commons));
   if (bunks) step('bunks', () => dormitory(D, bunks));
   if (gallery) step('gallery', () => dressGallery(D, gallery));
+  const cableway = A('cableway');
+  if (cableway) step('cableway', () => dressCableway(D, cableway));
+  const battery = A('battery');
+  if (battery) step('battery', () => dressBattery(D, battery));
   // plates in the shelter's words
   step('plates', () => {
     const P: [string, string, string][] = [
       ['nave', 'gallery', 'PROCESSING HALL'], ['nave', 'narthex', 'PROCESSING HALL · CLEAN AREA'], ['narthex', 'gallery', 'PROCESSING HALL · CLEAN ROOM'],
       ['control', 'gallery', 'CORE CONTROL'], ['control', 'cooling', 'CORE CONTROL'], ['cooling', 'bay', 'COOLING PLANT'], ['chiller', 'cooling', 'CHILLER ROOM · DANGER'],
       ['switch', 'gallery', 'SWITCH ROOM · DANGER'], ['library', 'bay', 'TAPE LIBRARY'], ['commons', 'bay', 'OPERATORS\' COMMONS'], ['bunks', 'commons', 'BUNK ROOM · NIGHT SHIFT'],
-      ['wash', 'commons', 'WASHROOM'],
+      ['wash', 'commons', 'WASHROOM'], ['cableway', 'gallery', 'CABLE WAY · CORE SUPPLY'], ['battery', 'cableway', 'UPS BATTERIES · DANGER'],
     ];
     for (const [r, o, text] of P) { const ra = A(r), oa = A(o); if (ra && oa) plate(D, ra, oa, text); }
     // the storey at both stair doors (the side the stair lands on)

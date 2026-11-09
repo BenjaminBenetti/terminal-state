@@ -27,7 +27,7 @@ const L5 = V2_CORE_LEVEL;
 const LABELS = {
   nave: 'Central processing hall', narthex: 'Clean-room lobby', gallery: 'Operators\' gallery', control: 'Core control room', cooling: 'Cooling plant',
   chiller: 'Chiller room', switch: 'Switch room', bay: 'Freight lobby', library: 'Tape library', commons: 'Operators\' commons', bunks: 'Night-shift bunk room',
-  wash: 'Operators\' washroom',
+  wash: 'Operators\' washroom', cableway: 'Cable way', battery: 'UPS battery room',
 } as const;
 type Key = keyof typeof LABELS;
 
@@ -77,6 +77,7 @@ describe('bunker v2 storey 5 — the central processing core', () => {
     const P: Record<Key, string> = {
       nave: 'office-server', narthex: 'locker-room', gallery: BUNKER_PURPOSE.lock, control: BUNKER_PURPOSE.radio, cooling: 'ventilation-plant', chiller: 'pump-room',
       switch: 'electrical-room', bay: BUNKER_PURPOSE.lock, library: 'office-server', commons: 'staff-room', bunks: BUNKER_PURPOSE.dorm, wash: 'washroom',
+      cableway: BUNKER_PURPOSE.lock, battery: 'electrical-closet',
     };
     for (const seed of SEEDS) {
       const {layout} = gen(seed);
@@ -164,8 +165,12 @@ describe('bunker v2 storey 5 — the central processing core', () => {
       // the gallery: >= 25 m long and low; the tight rooms: at least four rooms under 50 m2 at <= 3.4 m
       expect(Math.max(A.gallery.w, A.gallery.h) * CELL).toBeGreaterThanOrEqual(25);
       expect(clear(A.gallery)).toBeLessThanOrEqual(3.4);
-      const tight = (['narthex', 'chiller', 'switch', 'bunks', 'wash'] as Key[]).filter(k => m2(A[k]) < 50 && clear(A[k]) <= 3.4);
+      const tight = (['narthex', 'chiller', 'switch', 'bunks', 'wash', 'battery'] as Key[]).filter(k => m2(A[k]) < 50 && clear(A[k]) <= 3.4);
       expect(tight.length, `seed ${seed} tight rooms`).toBeGreaterThanOrEqual(4);
+      // the cable way behind the core: 2 m wide, 2.8 m clear, >= 10 m long — the tightest space of the storey beside its tallest
+      expect(Math.min(A.cableway.w, A.cableway.h) * CELL).toBeLessThanOrEqual(2.0);
+      expect(Math.max(A.cableway.w, A.cableway.h) * CELL).toBeGreaterThanOrEqual(10);
+      expect(clear(A.cableway)).toBeLessThanOrEqual(2.8);
       // nothing else on the storey rises into storey 4 (stair runs excepted)
       for (const a of layout.areas) if ((a.level ?? 0) === L5 && a.id !== A.nave.id && a.role !== 'stair') expect(clear(a), `seed ${seed} ${a.label}`).toBeLessThanOrEqual(6.7);
     }
@@ -214,7 +219,7 @@ describe('bunker v2 storey 5 — the central processing core', () => {
       const holders = layout.props.filter(p => (p.level ?? 0) === L5 && isLootHolderKind(p.kind));
       const plain = holders.filter(p => layout.areas[p.area].purpose === BUNKER_PURPOSE.lock);
       expect(plain.length, `seed ${seed} holders in plain halls`).toBeLessThanOrEqual(2);
-      const tech = holders.filter(p => ['office-server', 'electrical-room', BUNKER_PURPOSE.radio].includes(layout.areas[p.area].purpose ?? ''));
+      const tech = holders.filter(p => ['office-server', 'electrical-room', 'electrical-closet', BUNKER_PURPOSE.radio].includes(layout.areas[p.area].purpose ?? ''));
       expect(tech.length, `seed ${seed} computing / records / electrical holders`).toBeGreaterThanOrEqual(15);
       // food stays with the shared passes: no fridge / kitchenette / vending outside the commons' staff-room purpose
       for (const p of layout.props) if ((p.level ?? 0) === L5 && ['fridge', 'kitchenette', 'vending'].includes(p.kind)) expect(layout.areas[p.area].purpose).toBe('staff-room');

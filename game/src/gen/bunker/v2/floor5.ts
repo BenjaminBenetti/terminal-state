@@ -28,7 +28,7 @@ import {dressFloor5} from './floor5Dress';
 const R = (x: number, y: number, w: number, h: number): Rect => ({x, y, w, h});
 
 /** Clear heights (m above the storey floor). */
-export const F5_CLEAR = {gallery: 3.4, narthex: 3.0, control: 3.6, cooling: 6.4, chiller: 3.4, switch: 3.2, bay: 4.0, library: 3.0, commons: 5.2, bunks: 3.0, wash: 3.0} as const;
+export const F5_CLEAR = {gallery: 3.4, narthex: 3.0, control: 3.6, cooling: 6.4, chiller: 3.4, switch: 3.2, bay: 4.0, library: 3.0, commons: 5.2, bunks: 3.0, wash: 3.0, cableway: 2.8, battery: 3.2} as const;
 /** Door heights (m). */
 const DOOR = {grand: 3.0, wide: 3.0, room: 2.6} as const;
 
@@ -36,7 +36,7 @@ const DOOR = {grand: 3.0, wide: 3.0, room: 2.6} as const;
 export const F5_AXIS = {x: 69, w: 6} as const;
 
 /** Area keys (FloorCarveResult.areas) of this storey. */
-export type F5Key = 'nave' | 'narthex' | 'gallery' | 'control' | 'cooling' | 'chiller' | 'switch' | 'bay' | 'library' | 'commons' | 'bunks' | 'wash';
+export type F5Key = 'nave' | 'narthex' | 'gallery' | 'control' | 'cooling' | 'chiller' | 'switch' | 'bay' | 'library' | 'commons' | 'bunks' | 'wash' | 'cableway' | 'battery';
 
 function carve5(ctx: FloorCarveCtx): FloorCarveResult | null {
   const rng = ctx.rng, own = ctx.frame.owns;
@@ -82,6 +82,14 @@ function carve5(ctx: FloorCarveCtx): FloorCarveResult | null {
   const bunks = add('bunks', R(bx, nTop, bunksW, 13), 'room', 'crew-room', F5_CLEAR.bunks, commons, 'Night-shift bunk room', BUNKER_PURPOSE.dorm);
   const wash = add('wash', R(wx, nTop, washW, 13), 'room', 'washroom', F5_CLEAR.wash, commons, 'Operators\' washroom', 'washroom');
   if (!bunks || !wash) return null;
+  // --- behind the core cluster: the CABLE WAY (2 m wide, 2.8 m: the tightest space on the storey, the core's supply runs along the
+  // nave's east wall) from the gallery's east end, and off it the dead-end UPS BATTERY ROOM under core B's foot
+  const cwH = 22 + rng.int(0, 4);
+  const cableway = add('cableway', R(V.x + V.w + 1, gallery.y, B.x - 1 - (V.x + V.w + 1), cwH), 'passage', 'utility', F5_CLEAR.cableway, gallery, 'Cable way', BUNKER_PURPOSE.lock);
+  if (!cableway) return null;
+  const btY = V.y + rng.int(0, 2), btW = 12 + rng.int(0, 3);
+  const battery = add('battery', R(B.x, btY, btW, Math.min(12, cableway.y + cableway.h - 1 - btY)), 'room', 'utility', F5_CLEAR.battery, cableway, 'UPS battery room', 'electrical-closet');
+  if (!battery) return null;
 
   // --- doors ----------------------------------------------------------------------------------------------------------------------
   const ax = F5_AXIS.x, aw = F5_AXIS.w;
@@ -108,6 +116,10 @@ function carve5(ctx: FloorCarveCtx): FloorCarveResult | null {
   // the freight lobby: west to the tape library, east to the commons (a wide double door)
   ctx.door(R(bay.x - 1, bay.y + 1 + rng.int(0, 3), 1, 4), bay, library, DOOR.room);
   ctx.door(R(bay.x + bay.w, bay.y + 2 + rng.int(0, 3), 1, 6), bay, commons, DOOR.wide);
+  // the cable way: off the gallery's east end, a narrow door up from the core control room (a loop), the battery room off its side
+  ctx.door(R(cableway.x - 1, gallery.y + 2, 1, 4), gallery, cableway, DOOR.room);
+  ctx.door(R(cableway.x + 1, control.y + control.h, 2, 1), control, cableway, DOOR.room);
+  ctx.door(R(battery.x - 1, battery.y + 2 + rng.int(0, Math.max(0, battery.h - 8)), 1, 4), cableway, battery, DOOR.room);
   // the commons -> bunk room / washroom
   ctx.door(R(bunks.x + 2 + rng.int(0, Math.max(0, bunks.w - 7)), commons.y - 1, 3, 1), commons, bunks, DOOR.room);
   ctx.door(R(wash.x + 2 + rng.int(0, Math.max(0, wash.w - 7)), commons.y - 1, 3, 1), commons, wash, DOOR.room);
