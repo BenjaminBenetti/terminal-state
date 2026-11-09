@@ -258,11 +258,15 @@ fork (`skyways-enemies-<storey>`), tags its spawns with the context:
   `ZombieSpawn.look = 'cosplay'` and the context `cosplay`, APPENDED after every other spawn (ambient, annex `service`): every other
   index is unchanged. Families: its OWN pool `COSPLAY_FAMILY_POOL` (ordinary zombies only); no eligibility rule names it; not in
   the storey counts. Looks: `chooseSpawnLook` gives exactly these spawns a costume — `game/src/ai/cosplay.ts` `cosplayLook(layout
-  seed, spawn index)` (bear-ear hat + wig, oversized mascot head, sushi hat, alternate-palette wig + uniform; consecutive spawns differ),
-  built by its SEPARATE `createCosplayLibrary` (the ordinary pool can never pick a costume piece), only when buildable exactly, else the
-  ordinary pick; the files (`COSPLAY_MODEL_FILES`) load lazily, only for a layout holding a cosplay-tagged spawn
-  (`cosplayModelKeysFor`). Versions 1-4 never run it (`SKYWAYS_V4_SPAWN_PROFILE` has no such context). Tests:
-  `game/tests/skyways-cosplay-spawns.test.ts`, `game/tests/skyways-cosplay-looks.test.ts`.
+  seed, spawn index)`: FULL head-to-toe costumes (task studio-cosplay-general-20261108-225231-01, lane COSTUME: bear idol, mascot
+  suit, sushi fan, rose uniform - head piece, jacket / top, skirt or trousers with legwear and footwear; consecutive spawns differ;
+  ~70 % on female bodies, the unclothed pale ones preferred, seeded per spawn and local to the convention), built by its SEPARATE
+  `createCosplayLibrary` (the ordinary pool can never pick a costume piece), only when buildable exactly, else a COVERED ordinary pick
+  (`cosplayFallbackPool`: the ordinary pool without the unclothed bodies); the files (`COSPLAY_MODEL_FILES`:
+  `outfit-cosplay-costume-{head,upper,lower}.glb`, `tools/asset-pipeline/zombie/build-cosplay-costumes.mjs`) load lazily, only for a
+  layout holding a cosplay-tagged spawn (`cosplayModelKeysFor`), before the section is built and warmed up. Versions 1-4 never run
+  it (`SKYWAYS_V4_SPAWN_PROFILE` has no such context). Tests: `game/tests/skyways-cosplay-spawns.test.ts`,
+  `game/tests/skyways-cosplay-looks.test.ts`, `game/tests/skyways-cosplay-costumes.test.ts`.
 - No horde pool and no room modifiers. One family roll at the end (`assignEnemyArchetypes`). The convention mascot statues are
   static props, never enemies.
 

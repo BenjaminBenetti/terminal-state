@@ -363,6 +363,23 @@ Not reviewed by ear on the build worker. Raw takes are kept outside Git.
   unchanged. Only the base-colour map has a deterministic, luminance-preserving colour transform.
 - Provenance: `assets/derivatives/outfit-cosplay.json`. Unapproved prototypes; no commercial clearance implied. Ordinary zombie
   clips only.
+- Since the full-costume update below these three files are no longer used by the game; they stay in the repository as cooked
+  inputs (not shipped).
+
+### Full cosplay costumes (the convention's current looks)
+- `assets/models/outfit-cosplay-costume-{head,upper,lower}.glb` dress the convention's cosplay zombies head to toe: bear idol,
+  mascot suit, sushi fan and rose uniform (jacket / top / coat / blazer; skirt or trousers with stockings / socks and footwear).
+- The eight garments are Meshy T2.5 image-to-3D models generated for this project from Codex-made concept images (initial
+  ghost-mannequin garment art), under the user's explicit Meshy authorization for this task. The raw Meshy outputs, concepts and
+  their records stay private (studio reference task folder); task ids and sha256 are in the provenance record.
+- The Meshy PBR maps are kept: base colour, normal and metallic / roughness, resized / re-encoded / packed only. No retexturing,
+  projection or painting.
+- Fitted per body by the local deterministic CPU builder `tools/asset-pipeline/zombie/build-cosplay-costumes.mjs` (landmark
+  retarget, clearance through every animation clip and ragdoll-like poses, skin weights from the body, covered body parts hidden).
+- The head pieces are the convention-mascot / sushi-figurine pieces above (same sources and status), re-fitted to each costume
+  body; on the long-haired bodies the bear-ear hat is worn without the wig.
+- Provenance: `assets/derivatives/outfit-cosplay-costume.json`. AI-generated assets: unapproved prototypes, no licence or
+  commercial clearance implied. Ordinary zombie clips only.
 
 <!-- BEGIN paper-map-20261102 (build-paper-map.mjs) -->
 ## Campaign: the paper subway map
