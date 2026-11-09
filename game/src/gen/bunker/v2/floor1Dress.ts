@@ -188,8 +188,11 @@ function decontamination(D: Dx, a: Area): void {
 /** The arrival lobby: benches on the south wall, a stretcher, the first-aid kit; the way to decontamination. */
 function arrivalLobby(D: Dx, a: Area, decon: Area | undefined): void {
   for (let i = 0; i < 2; i++) scanWall(D, a, 'bench', ['S'], 0.6, (a.x + a.w * 0.62) * CELL);
-  scanWall(D, a, 'wheeledStretcher', ['E'], 0.6);
-  mountProp(D.ctx, a, 'N', (a.x + a.w * 0.62) * CELL, 'firstAidWallKit', 1.3, D.base);
+  // the triage corner: a stretcher and the first-aid kit (medical loot, not the hall's shelter supply)
+  const st = scanWall(D, a, 'wheeledStretcher', ['E'], 0.6);
+  if (st) st.purpose = 'first-aid-room';
+  const kit = mountProp(D.ctx, a, 'N', (a.x + a.w * 0.62) * CELL, 'firstAidWallKit', 1.3, D.base);
+  if (kit) kit.purpose = 'first-aid-room';
   const d = doorTo(D, a, decon);
   if (d) doorPlate(D, d, a, 'ALL ARRIVALS · DECONTAMINATION', 2.6);
 }
