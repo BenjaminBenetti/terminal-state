@@ -41,9 +41,10 @@ export function bunkerAreaClass(layout: StationLayout, a: Area | undefined): Bun
     return 'room';
   }
   if (a.type === 'stair-core' || a.kind === 'service') return 'circulation';
+  // (task studio-bunker-rework-20261109-205115-01: a version-2 shelter's passages are circulation too — cast concrete)
+  if (layout.bunker?.version === 2 && a.kind === 'passage') return 'circulation';
   if (lv === 4 && a.kind === 'room' && a.type !== 'washroom') return 'plant';
   if (PLANT.has(a.purpose ?? '')) return 'plant';
-  void layout;
   return 'room';
 }
 

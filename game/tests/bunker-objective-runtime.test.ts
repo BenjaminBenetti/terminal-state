@@ -102,6 +102,7 @@ function shell(o: {campaign?: CampaignState | null; layout?: StationLayout | nul
     atmosphere: {addSmokeEmitter: () => { calls.smoke++; return {id: 1, alive: true, emitting: true, setPos() {}, stop() {}}; }},
     fuelPort: {heldObj: null as THREE.Object3D | null},
     fuelCarts: {targets: [] as FuelHoseTarget[]}, // (task studio-bunker-rework-20261109-205115-01: the carts' hose targets)
+    tower: {liftPower: null as {on(): boolean; offline(): string; park?(floor: number): void} | null, placed: [] as number[], placeCar(f: number) { this.placed.push(f); return true; }},
   };
   const sys = installBunkerObjective(g as unknown as Game);
   // every lane write of the run (the objective must only ever write BUNKER_LANE)
@@ -457,6 +458,38 @@ describe('bunker objective: a fuel cart hose is a common source (task studio-bun
     expect(s.sys.genState(0)).toBe('fuelled');
     s.teardown();
     expect(s.g.fuelCarts.targets).toHaveLength(0);
+  });
+});
+
+describe('bunker objective: the cargo lift runs on the three generators (task studio-bunker-rework-20261109-205115-01)', () => {
+  it('a Bunker with a lift powers it exactly while all three are online; its stop is remembered in the record and restored on a build', () => {
+    const base = fixtureLayout();
+    const lift = {cab: {x0: 0, z0: 0, x1: 4, z1: 5}, shaft: {x0: -0.5, z0: -0.5, x1: 4.5, z1: 5.5}, doorSide: 'N' as const, door: {x: 2, z: 0, width: 3.2}, cabHeight: 3.2, gateHeight: 2.9, stops: [], home: 0};
+    const layout = {...base, bunker: {...(base as unknown as {bunker: BunkerInfo}).bunker, version: 2, lift}} as unknown as StationLayout;
+    const s = shell({layout});
+    const T = s.g.tower;
+    expect(T.liftPower).not.toBeNull();
+    expect(T.liftPower!.on()).toBe(false);
+    expect(T.liftPower!.offline()).toMatch(/auxiliary generators — 0\/3 online · the stairs still go everywhere/);
+    for (const i of [0, 1]) { s.give(1); s.fuel(i); s.startGen(i); }
+    expect(T.liftPower!.on()).toBe(false); // two of three: still no power
+    s.give(1); s.fuel(2);
+    expect(T.liftPower!.on()).toBe(false); // fuelled is not online
+    s.startGen(2);
+    expect(T.liftPower!.on()).toBe(true);
+    expect(s.sys.state!.intel).toBeUndefined(); // (power needs no intel claim)
+    // the stop at teardown goes into the record; the next build stands the car there
+    T.liftPower!.park!(3);
+    expect((s.lane() as {lift?: {stop: number}}).lift).toEqual({stop: 3});
+    s.teardown();
+    expect(T.liftPower).toBeNull();
+    s.build(layout);
+    expect(T.placed.at(-1)).toBe(3);
+    expect(T.liftPower!.on()).toBe(true);
+    // a version-1 Bunker (no lift): no power seam
+    s.teardown();
+    s.build(base);
+    expect(T.liftPower).toBeNull();
   });
 });
 
