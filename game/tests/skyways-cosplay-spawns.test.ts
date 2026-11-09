@@ -12,7 +12,7 @@ import {LEVELS} from '../src/levels/registry';
 import {createMemory, enemiesToSpawn} from '../src/run/memory';
 import {generateSkywaysLevel, skywaysAddonOf, skywaysIssues} from '../src/gen/skyways/index';
 import {doorPoint} from '../src/gen/skyways/addonFrame';
-import {SKYWAYS_ENCOUNTERS_MIN_VERSION, SKYWAYS_LAYOUT_VERSION} from '../src/gen/skyways/layoutVersion';
+import {SKYWAYS_ENCOUNTERS_MIN_VERSION} from '../src/gen/skyways/layoutVersion';
 import {COSPLAY_SPAWN_LOOK, COSPLAY_SPAWN_RULES, COSPLAY_SPAWN_STATS, cosplayVenueAreas, placeCosplaySpawns} from '../src/gen/skyways/cosplaySpawns';
 import {COSPLAY_CONTEXT, COSPLAY_FAMILY_POOL, COSPLAY_PLACEMENT, COSPLAY_ZONE_BUDGET} from '../src/ai/cosplayContext';
 import {CONTEXT_LOCKED_FAMILIES, ENEMY_FAMILY_IDS, SKYWAYS_SPAWN_PROFILE, SKYWAYS_V4_SPAWN_PROFILE, SPAWN_CONTEXT_IDS, familyPool, sealsPassage, skywaysSpawnProfileFor,
@@ -22,7 +22,9 @@ import type {StationLayout} from '../src/gen/stationTypes';
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 707, 4242, 103855126, 9001, 31337];
 const CONVENTION = SEEDS.filter(s => skywaysAddonOf(s) === 'convention');
 const PRIZE = SEEDS.filter(s => skywaysAddonOf(s) !== 'convention');
-const gen = (seed: number, layoutVersion = SKYWAYS_LAYOUT_VERSION): StationLayout => LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', layoutVersion} as never);
+// (task studio-cosplay-general-20261108-225231-01, lane UPPER: these pins are the VERSION-5 venue run; version 6 appends the second-floor
+// run after it — tests/skyways-cosplay-floors.test.ts)
+const gen = (seed: number, layoutVersion = SKYWAYS_ENCOUNTERS_MIN_VERSION): StationLayout => LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', layoutVersion} as never);
 const cache = new Map<number, StationLayout>();
 const v5 = (seed: number) => { let l = cache.get(seed); if (!l) cache.set(seed, (l = gen(seed))); return l; };
 const tagged = (l: StationLayout) => l.zombies.flatMap((z, i) => (z.look === COSPLAY_SPAWN_LOOK ? [i] : []));
@@ -119,7 +121,7 @@ describe('Skyways cosplay zombies: generation (layout version 5)', () => {
   it('APPENDED on its own fork: every other spawn is byte-identical to a run without the cosplay context', () => {
     const without: SpawnProfile = {...SKYWAYS_SPAWN_PROFILE, contexts: Object.fromEntries(Object.entries(SKYWAYS_SPAWN_PROFILE.contexts).filter(([k]) => k !== 'cosplay'))};
     for (const seed of [...CONVENTION.slice(0, 3), ...PRIZE.slice(0, 1)]) {
-      const ctx = {levelSeed: seed, startWeapon: 'pistol' as const, layoutVersion: SKYWAYS_LAYOUT_VERSION};
+      const ctx = {levelSeed: seed, startWeapon: 'pistol' as const, layoutVersion: SKYWAYS_ENCOUNTERS_MIN_VERSION};
       const a = generateSkywaysLevel(ctx), b = generateSkywaysLevel(ctx, {spawns: without});
       const n = tagged(a).length;
       expect(JSON.stringify(a.zombies.slice(0, a.zombies.length - n)), `seed ${seed}`).toBe(JSON.stringify(b.zombies));
