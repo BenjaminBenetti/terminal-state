@@ -30,7 +30,7 @@ const DOOR = {wide: 3.0, room: 2.7, narrow: 2.5} as const;
 
 /** The floor's area keys (QA / tests / dress). */
 export type F3Key =
-  | 'streetN' | 'streetS' | 'depot' | 'lobby' | 'laundry' | 'fab' | 'yard' | 'plant' | 'gasStore' | 'washroom' | 'medStores'
+  | 'streetN' | 'streetS' | 'depot' | 'ration' | 'lobby' | 'laundry' | 'fab' | 'yard' | 'plant' | 'gasStore' | 'washroom' | 'medStores'
   | 'clinic' | 'ward' | 'corridor' | 'treatment' | 'dispensary' | 'airlock' | 'isolation';
 
 /** The isolation ward's leak (medium) and the cylinder store's (weak, seeded). */
@@ -56,9 +56,14 @@ function carve(ctx: FloorCarveCtx): FloorCarveResult | null {
 
   // --- west: the SUPPLY DEPOT, its freight lobby at the cargo lift, the laundry ------------------------------------------------------
   const dy = yN + rng.int(2, 5);
-  const depot = room('depot', R(25, dy, 44, 57 - dy), 'room', 'stock-room', F3_CLEAR.depot, streetN, {label: 'Supply depot', purpose: BUNKER_PURPOSE.lock});
+  const depot = room('depot', R(25, dy, 44, 57 - dy), 'room', 'storage', F3_CLEAR.depot, streetN, {label: 'Supply depot', purpose: BUNKER_PURPOSE.lock});
   if (!depot) return null;
   ctx.door(R(SX - 1, rng.int(33, 38), 1, 8), streetN, depot, DOOR.wide);
+  // the RATION STORE behind the depot's racks: a modest stock room with one narrow door (the first Bunker's storey-3 ration store;
+  // its shelving is the station dresser's stock-room furnishing: parity with version 1's food stock, never more)
+  const ration = room('ration', R(10, 38, 14, 16), 'room', 'stock-room', F3_CLEAR.store, depot, {label: 'Ration store', purpose: 'stock-room'});
+  if (!ration) return null;
+  ctx.door(R(24, rng.int(42, 48), 1, 2), depot, ration, DOOR.narrow);
   // the freight lobby: the lift's loading bay (apron x 56-67, rows 63-70) runs right up to the shaft's north wall
   const lobby = room('lobby', R(46, 58, 23, 13), 'room', 'utility', F3_CLEAR.lobby, streetS, {label: 'Freight lobby', purpose: BUNKER_PURPOSE.lock, noFloorLoot: true});
   if (!lobby) return null;
