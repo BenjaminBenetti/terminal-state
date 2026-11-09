@@ -187,7 +187,23 @@ Everything that must line up between storeys is fixed, so the six floors were de
 
 Contract: `gen/bunker/v2/floorApi.ts` — a floor carves its areas (`FloorCarveCtx.room / door / connect`), names its generator room
 (storeys 2–4) or its core hall (storey 5), proposes its gas leaks / damp / aged areas, and dresses its own areas after the station
-dresser. FLOORS_PLACEHOLDER
+dresser.
+
+Each storey's own idea (its designer's report: `reference/` task folder, not shipped):
+
+| Storey | Identity | Spatial idea | Landmarks |
+|---|---|---|---|
+| 0 Station | the **admission concourse**: how a buried shelter took in the people its trains brought | platform (5.2 m, overflow berths at its ends) → three portals → the 6.4 m colonnaded **vault hall** nave on the vault axis, low (3.6 m) registration and waiting halls opening onto it through arcades, a narrow corridor to the observation ward (dead end) | the lit blast door at the end of the spawn's sightline, the marshals' booths and podium, the shelter's name over the door, "NOW ADMITTING" |
+| 1 Entry & security | the **admission line**: decontamination → intake → screening → the reveal | tight arrival lobby and decontamination → the 6 m intake hall (queue barriers, registration counter) → three narrow screening lanes → the overlook: a gallery RING round the V12 well, the deep muster gallery opposite; a security wing behind (duty hall, guard corridor, cells, operations, warden, armoury dead end) | the first view down into the commons 7 m below, the muster gallery's benches facing the rail |
+| 2 Habitation | **a buried town round its square** | the commons under the V12 void built like a church nave with low aisles (the planted Green Walk, the Arcade), the 5.2 m mess hall opening 8 m wide onto it, then 2 m "sleeping streets" 47 m long with family quarters, a dormitory, latrines and the laundry; the school and nursery between square and street | the Lamp Ring (eight warm lamps under the gallery), the hearth tree and benches, the stage with its film screen and motto |
+| 3 Services & medical | **the service street** | a 6 m-wide, 5.6 m-tall internal street between the stair cores, split by a hazard-striped bulkhead gate; the 6.4 m supply depot (high racking) and the fabrication hall (gantry crane) either side; the infirmary waiting hall, a 23 m casualty ward of curtained bays, the clinical corridor and an airlock into the isolation ward (the medium leak) | the backlit ceiling trough of the street, the gantry with its hanging pump motor |
+| 4 Maintenance & water (damp) | **the machine floor** | 6.4 m plant halls (reservoir, pump hall, water treatment, boiler house) on one north-south line linked by cramped 2–2.5 m pipe runs, ending on the core gallery: a railed rim round the V45 well; a flooded, aged drainage wing (sump, sewage ejector) | the walled reservoir with columns standing in the water, the pump rows under crane rails, the view down into the core's nave |
+| 5 Processing core | **the shelter's brain**, operators living beside the machines in shifts | a low 28 m gallery and a clean-room lobby open into the 11.6 m NAVE (the V45 void) on its long axis; a 37 m freight axis (lift → loading bay → 6.4 m cooling plant → control room → gallery → nave); tight technical rooms (chiller, switch room, UPS battery room via a cable way) and the operators' commons, bunk room and tape library | the core cluster under a 7 × 3 m status board terminating the nave's axis; tape cabinets and racks along the walls; coolant pipes climbing to the ceiling |
+
+Loot reads as each storey's programme (holders by their purpose's theme): security / personal on the entry storey, personal on the
+habitation storey, services / medical on the services storey, services / crew on the maintenance storey, technical / records on the
+core storey. Every storey serves its anchors, holds its generator (2–4) or the core (5), and proposes its own hazards (the strong leak:
+storey 4's chlorination room; medium: storey 3's isolation ward; weak ones on storeys 1, 2, 3, 4, 5, at most six over the level).
 
 ### The pipeline (`gen/bunker/v2/index.ts`)
 
