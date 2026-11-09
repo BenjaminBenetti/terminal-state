@@ -818,7 +818,7 @@ describe('casings and wiring', () => {
 
   it('game.ts: the controller gets the ADS state, fire() uses the per-gun recoil / bloom maths, the gun\'s cue set / timing / cycle', () => {
     const g = src('src/game.ts');
-    expect(g).toMatch(/clears: inp\.clears, aiming: this\.aiming\}, this\.inv\)/);
+    expect(g).toMatch(/aiming: this\.aiming, lowered: p\.sprinting [^\n]*, clears: inp\.clears\}, this\.inv\)/);
     expect(g).toMatch(/const kick = shotRecoil\(def, kickMul, this\.weapon\.streak, this\.rand\);/);
     expect(g).toMatch(/this\.player\.pitch = Math\.min\(1\.45, this\.player\.pitch \+ kick\.view\);/);
     expect(g).toMatch(/this\.bloom = shotBloom\(def, this\.bloom\);/);
