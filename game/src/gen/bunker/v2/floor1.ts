@@ -14,7 +14,8 @@
 // The security wing (east, behind the cores): the duty hall at the service stair's landing (the duty desk, the staff lockers), a long
 // 2 m guard corridor from the freight lobby down to the arrival lobby (the staff route that skips decontamination), four holding cells
 // off its west side, operations, the warden's office (with the shelter's records), the guard room and its dead-end armoury off the
-// east side. Below the intake hall: the latrines and the confiscated-property store; the search room off the hall's west end.
+// east side. Below the intake hall: the latrines, the confiscated-property store and the registry; the search room off the hall's
+// west end.
 // Loot reads as the storey's programme: the rooms carry security-office / armoury / locker-room / lost-property / agent-office /
 // decontamination purposes; the halls and passages dressed here keep the generic shelter purpose, and the holders standing in them
 // carry their own purpose (the registration desks: agent-office; the booths' monitor desks: security-office).
@@ -36,7 +37,7 @@ const DOOR = {main: 3.0, room: 2.6, lane: 2.6, cell: 2.4} as const;
 /** The storey's area keys (FloorCarveResult.areas; floor1Dress.ts reads them). */
 export type F1Key =
   | 'galN' | 'galE' | 'galS' | 'galW' | 'freight' | 'duty' | 'guardCorr' | 'ops' | 'warden' | 'guard' | 'armoury'
-  | 'arrival' | 'decon' | 'intake' | 'search' | 'lane1' | 'lane2' | 'lane3' | 'booth1' | 'booth2' | 'latrines' | 'store'
+  | 'arrival' | 'decon' | 'intake' | 'search' | 'lane1' | 'lane2' | 'lane3' | 'booth1' | 'booth2' | 'latrines' | 'store' | 'registry'
   | 'cell1' | 'cell2' | 'cell3' | 'cell4';
 
 
@@ -100,12 +101,13 @@ function carve(ctx: FloorCarveCtx): FloorCarveResult | null {
   if (!ctx.connect(lanes[1], booths[1], 2, DOOR.cell, 'mid')) return null;
   if (!ctx.connect(intake, search, 2, DOOR.cell, 'mid')) return null;
 
-  // --- below the intake hall: the latrines, the confiscated-property store ---------------------------------------------------------
+  // --- below the intake hall: the latrines, the confiscated-property store, the registry (the admission cards on file) --------------
   const by = intake.y + intake.h + 1, bh = 147 - by; // rows 140..146
   const latr = add('latrines', R(3, by, 12, bh), 'room', 'washroom', F1_CLEAR.room, 'Latrines', {purpose: 'washroom'});
-  const store = add('store', R(16, by, 14, bh), 'room', 'storage', F1_CLEAR.store, 'Confiscated property', {purpose: 'lost-property'});
-  if (!latr || !store) return null;
-  for (const r of [latr, store]) if (!ctx.connect(intake, r, 3, DOOR.room, rng.range(0.25, 0.75))) return null;
+  const store = add('store', R(16, by, 12, bh), 'room', 'storage', F1_CLEAR.store, 'Confiscated property', {purpose: 'lost-property'});
+  const reg = add('registry', R(29, by, aW - 29, bh), 'room', 'agent-office', F1_CLEAR.room, 'Registry', {purpose: 'agent-office'});
+  if (!latr || !store || !reg) return null;
+  for (const r of [latr, store, reg]) if (!ctx.connect(intake, r, 3, DOOR.room, rng.range(0.25, 0.75))) return null;
 
   // --- the main stair's arrival lobby (south of core A) and decontamination -------------------------------------------------------
   const arrival = add('arrival', R(A.x, A.y + A.h + 1, 30, 8), 'room', 'crew-room', F1_CLEAR.lobby, 'Arrival lobby', pub);

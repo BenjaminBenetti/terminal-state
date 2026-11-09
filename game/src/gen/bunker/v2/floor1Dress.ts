@@ -16,7 +16,7 @@
 import {CELL} from '../../grid';
 import {PROP_DEFS, type PropKind, type PropPlacement} from '../../props';
 import type {Area, Side} from '../../stationTypes';
-import {boxClear, doorSide, mountProp, placeAgainstWall, propBlocksDoorway, tryPlaceProp} from '../../placeKit';
+import {boxClear, doorSide, mountProp, placeAgainstWall, propBlocksDoorway, rowAlongWall, tryPlaceProp} from '../../placeKit';
 import {OPP, armoury, ceilingDuct, doorPlate, island, radioRoom, scanWall, sweepPockets, wallSign, type Dx} from '../../reactor/complex/bunkerDress';
 import {shelterDx} from '../dress';
 import type {FloorDressCtx} from './floorApi';
@@ -167,9 +167,10 @@ function booth(D: Dx, a: Area): void {
   }
 }
 
-/** The search room (the dresser furnished it as a security office): the inspection table in the middle. */
+/** The search room (the dresser furnished it as a security office): the inspection table in the middle, an evidence cabinet. */
 function searchRoom(D: Dx, a: Area): void {
   put(D, a, 'table', (a.x + a.w / 2) * CELL, (a.y + a.h * 0.45) * CELL, 0, {ring: 0.5});
+  scanWall(D, a, 'cabinetTall', ['N', 'W', 'E'], 0.8, undefined, true);
 }
 
 /** Decontamination: shower booths along the far wall, wash troughs, suit lockers by the dirty-side door, the eyewash. */
@@ -178,7 +179,9 @@ function decontamination(D: Dx, a: Area): void {
   const free = (['S', 'E', 'N', 'W'] as Side[]).filter(s => !sides.has(s));
   for (let i = 0; i < 3; i++) if (!scanWall(D, a, 'bunkerDeconShower', free, 1.0, undefined, true)) break;
   for (let i = 0; i < 2; i++) scanWall(D, a, 'washCounter', ['E', ...free], 0.7, undefined, true);
-  scanWall(D, a, 'staffLockers', ['N'], 1.0, (a.x + a.w * 0.75) * CELL, true);
+  // the suit lockers by the dirty-side door, the medical cabinets (dressings, burn kits) on the clean side
+  for (let i = 0; i < 3; i++) scanWall(D, a, 'staffLockers', ['N'], 1.0, (a.x + a.w * 0.78) * CELL, true);
+  for (let i = 0; i < 2; i++) scanWall(D, a, 'medCabinet', ['N', 'W', 'S'], 0.8, (a.x + a.w * 0.2) * CELL, true);
   mountProp(D.ctx, a, 'N', (a.x + a.w * 0.55) * CELL, 'eyewashStation', 0.9, D.base);
   // the decontamination line: an amber band across the room between the dirty (stair) side and the clean (hall) side
   const xm = (a.x + a.w * 0.45) * CELL;
@@ -211,7 +214,8 @@ function freightLobby(D: Dx, a: Area, apron: {x: number; y: number; w: number; h
 
 /** The duty hall: the staff lockers on the back wall, the duty desk facing the service stair's landing, the punch clock, a bench. */
 function dutyHall(D: Dx, a: Area): void {
-  // (the locker room purpose already lined a wall with the staff lockers)
+  // (the locker room purpose already lined a wall with the staff lockers) a second bank on the front wall, west of the stair's landing
+  rowAlongWall(D.ctx, a, 'S', 'staffLockers', {front: 1.0, max: 5, from: (a.x + 2) * CELL, to: (a.x + a.w * 0.55) * CELL});
   // the duty desk stands free 2.2 m off the back wall facing the landing, the sergeant's chair between it and the wall
   const dz = a.y * CELL + 2.25;
   for (const f of [0.66, 0.6, 0.72, 0.54]) {
@@ -229,21 +233,49 @@ function dutyHall(D: Dx, a: Area): void {
   }
 }
 
-/** Operations: the radio console + chair (the Reactor shelter's radio room), the control console, the map table. */
+/** Operations: the radio console + chair (the Reactor shelter's radio room), the control console, the watch officers' desks, the map table. */
 function operations(D: Dx, a: Area): void {
   radioRoom(D, a);
   scanWall(D, a, 'bunkerControlConsole', ['E', 'N', 'S'], 1.0, undefined, true);
+  for (let i = 0; i < 2; i++) {
+    const d = scanWall(D, a, 'desk', ['S', 'N'], 0.9, (a.x + a.w * (i ? 0.75 : 0.45)) * CELL);
+    if (!d) continue;
+    const fx = Math.round(Math.sin(d.rot)), fz = Math.round(Math.cos(d.rot));
+    put(D, a, 'officeSwivelChair', d.x + fx * 0.75, d.z + fz * 0.75, d.rot + Math.PI, {laneOk: true});
+  }
   island(D, a, 'conferenceTable', 'S', 0.8);
 }
 
-/** The warden's office (the dresser furnished it as an office: desk, safe, cabinets, files): his coat on the rack by the door. */
+/** The warden's office (the dresser furnished it as an office: desk, safe, cabinets): the shelter's files along its long walls, his coat rack. */
 function wardenOffice(D: Dx, a: Area): void {
+  rowAlongWall(D.ctx, a, 'N', 'officeFiling', {front: 0.9, max: 3});
+  rowAlongWall(D.ctx, a, 'S', 'filingCabinet', {front: 0.8, max: 3, from: (a.x + a.w * 0.5) * CELL});
   if (!D.layout.props.some(p => p.area === a.id && p.kind === 'coatRack')) scanWall(D, a, 'coatRack', ['W', 'N', 'S'], 0.4);
 }
 
-/** The guard room: the dresser placed the gun locker / monitor desk / cabinets; the duty roster board. */
+/** The guard room: the dresser placed the gun locker / monitor desk / cabinets; the guards' lockers, the duty roster board. */
 function guardRoom(D: Dx, a: Area): void {
+  for (let i = 0; i < 2; i++) scanWall(D, a, 'staffLockers', ['N', 'S', 'E'], 1.0, undefined, true);
   if (!D.layout.props.some(p => p.area === a.id && p.kind === 'noticeBoard')) placeAgainstWall(D.ctx, a, 'noticeBoard', {y: 1.2, tries: 16});
+}
+
+/** The armoury beyond the Reactor shelter's armoury dresser: one more gun locker on a side wall, ammunition crates. */
+function armouryExtra(D: Dx, a: Area): void {
+  const d = D.doors(a)[0];
+  const ms: Side = d ? doorSide(d, a) : 'W';
+  const sides: Side[] = ms === 'N' || ms === 'S' ? ['W', 'E'] : ['N', 'S'];
+  scanWall(D, a, 'gunLocker', [...sides, OPP[ms]], 0.8, undefined, true);
+  for (let i = 0; i < 2; i++) scanWall(D, a, 'crate', [OPP[ms], ...sides], 0, undefined, true);
+}
+
+/** The registry (the dresser furnished it as an office): the admission cards in a row of filing cabinets on its back wall. */
+function registry(D: Dx, a: Area): void {
+  rowAlongWall(D.ctx, a, 'S', 'filingCabinet', {front: 0.8, max: 3});
+}
+
+/** The confiscated-property store (the dresser's lost-property shelving / suitcases): one more shelf of bagged belongings. */
+function confiscated(D: Dx, a: Area): void {
+  scanWall(D, a, 'shelf', ['S', 'E', 'W'], 0.8, undefined, true);
 }
 
 /** A holding cell: a cot on its back wall, nothing else. */
@@ -289,7 +321,9 @@ export function dressFloor1(ctx: FloorDressCtx): void {
   at('duty', a => dutyHall(D, a));
   at('warden', a => wardenOffice(D, a));
   at('guard', a => guardRoom(D, a));
-  at('armoury', a => armoury(D, a));
+  at('armoury', a => { armoury(D, a); armouryExtra(D, a); });
+  at('store', a => confiscated(D, a));
+  at('registry', a => registry(D, a));
   for (const k of ['cell1', 'cell2', 'cell3', 'cell4']) at(k, a => holdingCell(D, a));
   at('guardCorr', a => ceilingDuct(D, a, 'E'));
 
@@ -312,5 +346,5 @@ export function dressFloor1(ctx: FloorDressCtx): void {
 const PLATE_TEXT: Readonly<Record<string, string>> = {
   decon: 'DECONTAMINATION', search: 'SEARCH ROOM', booth1: 'CHECKPOINT', booth2: 'CHECKPOINT', ops: 'OPERATIONS', warden: 'SHELTER WARDEN',
   guard: 'GUARD ROOM', armoury: 'ARMOURY · AUTHORISED ONLY', latrines: 'LATRINES', store: 'CONFISCATED PROPERTY', duty: 'DUTY DESK',
-  cell1: 'HOLDING 1', cell2: 'HOLDING 2', cell3: 'HOLDING 3', cell4: 'HOLDING 4',
+  registry: 'REGISTRY', cell1: 'HOLDING 1', cell2: 'HOLDING 2', cell3: 'HOLDING 3', cell4: 'HOLDING 4',
 };
