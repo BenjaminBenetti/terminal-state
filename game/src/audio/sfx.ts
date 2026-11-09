@@ -28,6 +28,7 @@ import {makeIR} from './reverb';
 import type {ImpactFamily} from '../physics/chunks';
 import {VOCAL_GATE, vocalGain} from '../ai/vocalReach'; // Task office-overhaul-20261030 (lane AUDIO): enemy vocals by navigable route
 import {STRAINER_SWING_PEAK_S} from './manifest.strainer.generated'; // lane AUDIO (strainer squish set): each swing clip's peak time
+import {PANTRY_SOUND} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the pantry items' existing takes
 
 /**
  * Task office-overhaul-20261030 (lane AUDIO, user #4 "over grunting" through the office floors): navigable route (m) from the
@@ -211,6 +212,10 @@ const CLOSE_CUE: Record<string, CueId> = {
   desk: 'drawerOpen', monitorDesk: 'drawerOpen', kitchenette: 'cabinetClose',
 };
 const EAT_CUE: Record<string, CueId> = {chips: 'eatChips', chocolate: 'eatChocolate', beans: 'eatBeans', noodles: 'eatNoodles'};
+// (task studio-food-shelf-production-20261109-002816-01, lane ITEMS: the pantry foods / drinks reuse these takes — crunchy bags and boxes the
+// chips take, tins / jars / tubs the beans take, bars the chocolate take, the oats canister the noodles take; cans the cola take, cartons the
+// juice take, bottles the water take; no new audio)
+const PANTRY_CUE = PANTRY_SOUND as Readonly<Record<string, CueId>>;
 // (task studio-skyways-level-20261106-054448, lane FOOD: the ramen bowls / bento chew with the generic 'eat' take; the bubble tea's
 // straw-and-cup drink uses the carton-and-gulps take)
 const DRINK_CUE: Record<string, CueId> = {cola: 'drinkCola', water: 'drinkWater', juice: 'drinkJuice', bubble_tea: 'drinkJuice'};
@@ -1541,9 +1546,9 @@ export class Sfx {
   /** Rummage rustle while searching a container. */
   search(): void { this.play(this.voice({send: 0.15}), 'search', {jitter: 0.06}); }
   /** Eating: item id picks the take (chips, chocolate, beans, noodles; other foods chew). */
-  eat(item?: string): void { this.play(this.voice({send: 0.08}), (item && EAT_CUE[item]) || 'eat', {jitter: 0.02}); }
+  eat(item?: string): void { this.play(this.voice({send: 0.08}), (item && (EAT_CUE[item] ?? PANTRY_CUE[item])) || 'eat', {jitter: 0.02}); }
   /** Drinking: item id picks the take (cola, water, juice; other drinks use water). */
-  drink(item?: string): void { this.play(this.voice({send: 0.08}), (item && DRINK_CUE[item]) || 'drinkWater', {jitter: 0.02}); }
+  drink(item?: string): void { this.play(this.voice({send: 0.08}), (item && (DRINK_CUE[item] ?? PANTRY_CUE[item])) || 'drinkWater', {jitter: 0.02}); }
   death(): void { this.play(this.voice({pri: 2, send: 0.3}), 'death', {jitter: 0.02}); }
   win(): void { this.play(this.voice({pri: 2, send: 0.4}), 'win', {jitter: 0, gainJitter: 0}); }
 

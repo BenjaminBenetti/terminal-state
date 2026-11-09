@@ -15,6 +15,7 @@ import {BUNKER_DAMAGE_CLASS} from '../gen/reactor/complex/bunkerKinds'; // task 
 import {officePropPhysics} from '../gen/office/physics'; // Task office-interactions-layout-20261030 (lane PHYS)
 import {MALL_RIDER_KINDS} from '../gen/mall/kinds'; // Task mall-playtest-revision-20261031 (lane SHOPS, U05): garments ride their rail
 import {SKYWAYS_FOOD_CLASS, SKYWAYS_FOOD_MODEL_CLASS, SKYWAYS_FOOD_PHYSICS} from '../items/skywaysFood'; // task studio-skyways-level-20261106-054448 (lane FOOD)
+import {PANTRY_CLASS, PANTRY_MODEL_CLASS, PANTRY_PHYSICS} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
 import {SKYWAYS_KITCHEN_DAMAGE_CLASS} from '../gen/skyways/kitchenKinds'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {SKYWAYS_ADDON_DAMAGE_CLASS} from '../gen/skyways/addonKinds'; // task studio-skyways-level-20261106-054448 (lane ADDON)
 import {SKYWAYS_DEST_DAMAGE_CLASS} from '../gen/skyways/destinations/registry'; // task studio-skyways-destinations-20261106-170011-01
@@ -166,6 +167,7 @@ export const MODEL_KEY_CLASS: Record<string, DamageClass> = {
   item_water: 'plastic', item_cola: 'sheetMetal', item_juice: 'cardboard', item_chocolate: 'food', item_chips: 'food', item_beans: 'sheetMetal', item_noodles: 'food',
   item_bread: 'food', // lane FURN (office-props-physics-scale-20261030): the bakery loaf
   ...SKYWAYS_FOOD_MODEL_CLASS, // task studio-skyways-level-20261106-054448 (lane FOOD): ceramic ramen bowls, the bento tray, the tea cup
+  ...PANTRY_MODEL_CLASS, // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the pantry tins / jars / pouches / bottles / cartons
   item_ammo_9mm: 'cardboard', item_ammo_556: 'sheetMetal', item_ammo_12ga: 'cardboard', // lane AMMO (knife-melee-20261030): Meshy T2.5 ammo boxes
   trashCan: 'sheetMetal', shopCounter: 'laminate', shopBackbar: 'steel', shopCooler: 'sheetMetal', shopDisplay: 'steel',
   janitorCart: 'plastic', magazineRack: 'steel', techDisplay: 'laminate', hotdogCart: 'steel', gunLocker: 'sheetMetal',
@@ -269,6 +271,7 @@ export const ITEM_CLASS: Record<string, DamageClass> = {
   water: 'plastic', cola: 'sheetMetal', juice: 'cardboard', chocolate: 'food', chips: 'food', beans: 'sheetMetal', noodles: 'food',
   bread: 'food', // lane FURN (office-props-physics-scale-20261030)
   ...SKYWAYS_FOOD_CLASS, // task studio-skyways-level-20261106-054448 (lane FOOD): ceramic ramen bowls (porcelain), bento / tea cup (plastic)
+  ...PANTRY_CLASS, // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): tins sheet metal, jars / bottles glass, pouches / tubs plastic, cartons card
   battery: 'sheetMetal', flare: 'cardboard', // Iteration 12 (LIGHT): steel-jacketed D cell; waxed-paper road flare
   leg_splint: 'plastic', arm_sling: 'fabric', trauma_kit: 'fabric', // Iteration 16 (lane INJURY): foam splint roll; sling packet; nylon pouch
   // Iteration 16 (primary, for lane GEAR's items): soft armor / nylon / boots / gloves = fabric; the hard hat = plastic
@@ -339,6 +342,7 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   juice: {mass: 0.3, shape: 'box', mat: 'soft'}, chocolate: {mass: 0.1, shape: 'box', mat: 'soft'}, chips: {mass: 0.16, shape: 'box', mat: 'soft'},
   bread: {mass: 0.45, shape: 'box', mat: 'soft'}, // lane FURN (office-props-physics-scale-20261030): a stale round loaf
   ...SKYWAYS_FOOD_PHYSICS, // task studio-skyways-level-20261106-054448 (lane FOOD): full ramen bowls ~1 kg, bento ~0.5 kg, bubble tea ~0.6 kg
+  ...PANTRY_PHYSICS, // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): 0.1 kg pouches .. a 1 kg milk brick
   ammo_556: {mass: 0.9, shape: 'box', mat: 'metal'}, ammo_12ga: {mass: 0.7, shape: 'box', mat: 'soft'}, ammo_9mm: {mass: 0.5, shape: 'box', mat: 'soft'}, // lane AMMO: small steel 5.56 can
   medkit: {mass: 0.6, shape: 'box', mat: 'plastic'}, bandage: {mass: 0.08, shape: 'box', mat: 'soft'},
   rifle: {mass: 3.4, shape: 'box', mat: 'heavy'}, shotgun: {mass: 3.6, shape: 'box', mat: 'heavy'}, pistol: {mass: 0.9, shape: 'box', mat: 'heavy'},

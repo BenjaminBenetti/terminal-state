@@ -16,6 +16,7 @@
 
 import * as THREE from 'three';
 import {itemDef} from '../items/items';
+import {PANTRY_CONSUME} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
 
 /**
  * hand  = the item is the held quick-slot item (viewmodel shows it): rises straight from the hand;
@@ -79,7 +80,11 @@ function styleFor(itemId: string, box: THREE.Box3): Style {
   const s: Style = {motion: 'tip', anchor: top, base: id, a0: 1.25, a1: 2.0, yaw: -0.18, roll: 0.08, shake: 0, target: MOUTH};
   if (def.verb === 'drink') return s;
   if (def.verb === 'eat') {
-    switch (itemId) {
+    // (task studio-food-shelf-production-20261109-002816-01, lane ITEMS) a pantry food uses an EXISTING motion: a bar's end-on bites, a bag's
+    // tip and shake, a tin's tip and scoop, a cup's tip, a squeeze bottle / pouch held up like a drink, or the plain bite
+    const as = (PANTRY_CONSUME as Readonly<Record<string, string>>)[itemId];
+    if (as === 'sip') return s;
+    switch (as ?? itemId) {
       case 'chocolate':
         // Bar held end-on, its +X end at the mouth (base: +X -> +Y), small bites.
         return {...s, motion: 'bite', anchor: new THREE.Vector3(box.max.x, centre.y, centre.z), base: euler(0, 0, Math.PI / 2), a0: 1.05, a1: 1.15, yaw: -0.12, roll: 0.3, target: new THREE.Vector3(0.012, -0.05, -0.15)};

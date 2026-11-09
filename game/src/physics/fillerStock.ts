@@ -672,7 +672,8 @@ export class FillerStock implements BodySource {
     w.addEventListener('postStep', this.onPostStep);
     // package vs package: a little bounce and less grip than the world default (no restitution), so a
     // hit row scatters instead of dying in a dead pile
-    const mats = [...new Set(['metal', 'plastic', 'soft', 'glass'] as PhysMat[])];
+    // (task food-shelf-production, lane SHELF: + the modelled ruined props' wooden fruit crate and cloth rags / sacks)
+    const mats = [...new Set(['metal', 'plastic', 'soft', 'glass', 'wood', 'cloth'] as PhysMat[])];
     for (let i = 0; i < mats.length; i++) for (let j = i; j < mats.length; j++) {
       const a = PHYS_MATS[mats[i]], b = PHYS_MATS[mats[j]];
       w.addContactMaterial(new CANNON.ContactMaterial(this.host!.material(mats[i]), this.host!.material(mats[j]), {
