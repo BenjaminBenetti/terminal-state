@@ -295,7 +295,10 @@ export class BunkerObjective {
       this.pourView = new FuelPourView(FUEL.canItem, toPourFrame(genNeckMouth()), {plateZ: -P.frontZ, skinZ: -P.bodyZ}, (pos, q) => this.handPose(pos, q));
     }
     const at = this.pour ? this.gens[this.pour.gen] : this.gens[0];
-    if (at && this.pourView.root.parent !== at.pourFrame) at.pourFrame.add(this.pourView.root);
+    if (at && this.pourView.root.parent !== at.pourFrame) {
+      at.pourFrame.add(this.pourView.root);
+      this.pourView.root.traverse(o => { if ((o as THREE.Mesh).isMesh) o.userData.level = at.slot.level; }); // (the generator's storey; never level-registered: it moves)
+    }
     return this.pourView;
   }
 
