@@ -17,6 +17,7 @@ import {BUNKER_CORE, BUNKER_GEN, installBunkerObjective, type BunkerObjective} f
 import {BUNKER_LANE, type BunkerStateJSON} from '../src/world/bunker/objectiveState';
 import {BUNKER_OBJECTIVE_MODELS, CORE_LAYOUT, CORE_USE, GEN_AIM, GEN_PANEL, GEN_USE, genNeckMouth, genToWorld} from '../src/world/bunker/objectiveViews';
 import {FUEL_PORT} from '../src/world/fuelPort';
+import {POUR_VIEW} from '../src/world/fuelPourView';
 import {REACTOR_GEN} from '../src/world/reactor/generators';
 import {FUEL} from '../src/fuel/fuel';
 import type {ItemStack} from '../src/items/inventory';
@@ -254,6 +255,35 @@ describe('bunker objective: the fuel pour (exactly one can, only on success)', (
     expect(s.g.inputOwners.some(f => f())).toBe(false);
     expect(s.toasts.at(-1)!.text).toBe('Fuel in — auxiliary generator A fuelled · hold [E] to turn the key · 1 can left');
     expect(s.h.inv.invariants()).toEqual([]);
+  });
+
+  it('the visible pour runs in the pouring generator\'s frame: the can lifts from the hand, its stream goes into the panel\'s filler neck, the can stays in front of the body', () => {
+    const s = shell();
+    s.give(1);
+    s.fuel(0); // (generator 0 first: the pour view then moves to generator 1's frame)
+    s.give(1);
+    s.standAtGen(1);
+    s.step();
+    expect(s.press()).toBe(true);
+    const v = s.sys.pourView!, gen = s.sys.gens[1];
+    expect(v.root.parent).toBe(gen.pourFrame);
+    s.step(POUR_VIEW.liftS + POUR_VIEW.tiltS + 0.4);
+    expect(v.qa()).toMatchObject({active: true, phase: 'pour', visible: true, stream: true});
+    const ends = v.streamEnds()!;
+    const mouth = genNeckMouth();
+    // pour frame -> generator frame: (x, y, z) -> (-x, y, -z); the stream ends just inside the neck's mouth
+    expect(-ends.to.x).toBeCloseTo(mouth.x, 2);
+    expect(ends.to.y).toBeCloseTo(mouth.y, 2);
+    expect(-ends.to.z).toBeLessThan(mouth.z);
+    expect(-ends.to.z).toBeGreaterThan(mouth.z - 0.02);
+    expect(ends.from.y).toBeGreaterThan(mouth.y); // from the spout above
+    gen.root.updateMatrixWorld(true);
+    const b = new THREE.Box3().setFromObject(v.can).applyMatrix4(gen.root.matrixWorld.clone().invert());
+    expect(b.min.z).toBeGreaterThan(GEN_PANEL.bodyZ - 0.01);
+    expect((b.min.z + b.max.z) / 2).toBeGreaterThan(GEN_PANEL.frontZ + 0.04);
+    s.step(FUEL_PORT.pourS);
+    expect(v.qa().visible).toBe(false);
+    expect(s.sys.genState(1)).toBe('fuelled');
   });
 
   it('a can in the hand + left click pours; the hand\'s can is the one used (a pocket can stays)', () => {

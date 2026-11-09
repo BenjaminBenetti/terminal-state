@@ -245,6 +245,7 @@ export class BunkerObjective {
     this.loopAt = info.generators.map(() => -Infinity);
     this.ensurePourView();
     const culler = this.host.world?.culler as {register?(o: THREE.Object3D): void} | undefined;
+    root.updateMatrixWorld(true); // (the culler measures each registered mesh's world box now: the placements' transforms must be in)
     if (culler && typeof culler.register === 'function') { for (const v of this.gens) culler.register(v.body); culler.register(this.core.root); }
     this.screenSig = '';
     this.sendVisuals(0);
@@ -292,7 +293,8 @@ export class BunkerObjective {
   ensurePourView(): FuelPourView {
     if (!this.pourView) {
       const P = GEN_PANEL;
-      this.pourView = new FuelPourView(FUEL.canItem, toPourFrame(genNeckMouth()), {plateZ: -P.frontZ, skinZ: -P.bodyZ}, (pos, q) => this.handPose(pos, q));
+      // limits: the posed can stays in front of the panel's lamp / key (4 cm proud of the plate), its spout corner in front of the body face
+      this.pourView = new FuelPourView(FUEL.canItem, toPourFrame(genNeckMouth()), {plateZ: -(P.frontZ + 0.04), skinZ: -P.bodyZ}, (pos, q) => this.handPose(pos, q));
     }
     const at = this.pour ? this.gens[this.pour.gen] : this.gens[0];
     if (at && this.pourView.root.parent !== at.pourFrame) {
