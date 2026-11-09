@@ -67,12 +67,13 @@ describe('the Bunker registration', () => {
     expect(share(p.contexts.damp!.families, 'siren')).toBe(0);
     // the Siren: a real draw on the shelter storeys, an eligibility rule (never the station storey)
     expect(OPT_IN_FAMILIES).toContain('siren');
-    // (the shelter storeys read the LEVEL pool — ai/familySpacing.ts re-derives families from it, so her spacing / cap see her; the
-    // station storey has its own Siren-free pool)
+    // (every storey run reads the LEVEL pool — ai/familySpacing.ts re-derives families from it, so her spacing / cap see her; a draw on
+    // the station storey is ineligible there and stays a zombie)
+    expect(p.contexts.station!.families).toBeUndefined();
     expect(p.contexts.floor!.families).toBeUndefined();
     expect(p.contexts.ring!.families).toBeUndefined();
     expect(share(p.families, 'siren')).toBeGreaterThan(0);
-    expect(share(p.contexts.station!.families, 'siren')).toBe(0);
+    expect(p.eligibility?.siren?.contexts).not.toContain('station');
     expect(p.eligibility?.siren?.contexts).toEqual(['floor', 'ring']);
     expect(p.eligibility?.siren?.kinds).toEqual(['room']);
     expect(p.eligibility?.siren?.excludeRooms).toEqual(expect.arrayContaining(['washroom', 'stair-core']));

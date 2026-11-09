@@ -370,11 +370,15 @@ run; there is no horde pool, no eligibility rule (no Siren) and no service annex
 storeys going DOWN below it to the central processing core. Existing families only, depth-graded like the Reactor but never denser. The
 ambient runs, each tagged with its context by `placeOfficeEnemies` on its own fork:
 
-- **`station`**: storey 0 (the platform, the arrival hall, the vault vestibule), U{2..3}; the arrival keeps its start keep-off.
-- **`floor`**: each of storeys 1–3 (entry & security, habitation, services & medical), U{6..8} per storey. Its own pool
-  `familyPool({ratdog: 0.08, blightbelly: 0.05, siren: BUNKER_SIREN_WEIGHT})`.
-- **`ring`**: each of storeys 4–5 (maintenance & water, the processing core), U{7..9} per storey. Its own pool
-  `familyPool({ratdog: 0.08, blightbelly: 0.1, siren: BUNKER_SIREN_WEIGHT})`.
+- **`station`**: storey 0 (the platform, the arrival hall, the vault vestibule), U{2..3}; a Siren drawn there is ineligible (the
+  rule lists `floor` / `ring` only) and stays a zombie; the arrival keeps its start keep-off.
+- **`floor`**: each of storeys 1–3 (entry & security, habitation, services & medical), U{6..8} per storey.
+- **`ring`**: each of storeys 4–5 (maintenance & water, the processing core), U{7..9} per storey.
+- Every storey run reads the LEVEL pool `BUNKER_SHELTER_POOL` = `familyPool({blightbelly: 0.07, siren: BUNKER_SIREN_WEIGHT})` (rat/dog
+  the default 0.05), `BUNKER_SIREN_WEIGHT` = 0.16 (set by the census below). Depth grading comes from the counts. Only the damp zone has
+  its own pool (`tests/service-families.test.ts` lists it as the fourth deliberate exception). It is the level pool because
+  `applyFamilySpacing` re-derives a spawn's family from the level pool: a Siren drawn from a context's own pool would escape her
+  spacing / cap.
 - **`damp`** (a ZONE context, `BUNKER_DAMP_CONTEXT`): ONE spawn per level over the water-damaged areas only (`layout.bunker.damp`: the
   pump hall, the filtration plant, the flooded wing), appended after the storey runs. Its own pool `BUNKER_DAMP_SHARES` (rat/dog 0.1,
   **Strainer 0.3**, the zombie the remainder) is the only place outside the service annexes where THE STRAINER (unchanged: 1200 HP,
@@ -384,8 +388,12 @@ ambient runs, each tagged with its context by `placeOfficeEnemies` on its own fo
   (never a stairwell, washroom, closet or corridor), the Office / Mall room gates, at most **3** per level, ≥ 24 m apart
   (`BUNKER_SIREN_SPACING`, `applyFamilySpacing`). An ineligible draw falls back to a zombie.
 - **No horde pool.** Ambient budget 3 + 3 × 8 + 2 × 9 + 1 = 46 per level (the Reactor's is 54).
-- **Census:** _(placeholder — the generator lane fills the Siren / Strainer census here: Sirens per level mean / none / max, Strainers
-  per level mean / max, from a bounded seed set.)_
+- **Census** (32 generated levels, level seeds 4401 + k × 7919, `tests/bunker-spawns.test.ts`):
+  - enemies: 40.9 per level (station 2.6, floor 21.3, ring 16.0, damp 1.0);
+  - Sirens: 1.47 per level; 31 of 32 levels have at least one; max 3;
+  - Strainers: 0.38 per level; 12 of 32 levels have one; never more than one.
+
+  The Siren's share is about the Mall's (1.96) and the Office's (1.97).
 
 ## Units: what the numbers are
 

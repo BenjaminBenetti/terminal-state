@@ -677,7 +677,10 @@ per storey: `LEVEL_ADAPTER.bunker.floor = 'mall'`) and the weapon finds the stat
 palette (`items/pantryVariety.ts` `LEVEL_PANTRY.bunker`) is shelf-stable: field rations, ration bricks, tins, crackers, oats, long-life
 milk, bottled drinks (rations leaned up in security / service rooms like the Reactor's).
 
-Census: _(placeholder — the generator lane fills the per-run units here once the level generates.)_
+Census (16 generated levels, level seeds 4401 + k × 7919): about 30 loose pickups per level (ammunition boxes, batteries, flares,
+dressings, salvage parts and the odd weapon find, spread over six storeys) and about 280 holders (footlockers, staff and gun lockers,
+cabinets, crates, shelving), most of them stocked by their room's purpose through the base tables and many left empty by those tables'
+own empty chances. The finite food / drink and fuel plans apply as on every base-table level.
 
 ## Verify
 
