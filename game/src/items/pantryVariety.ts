@@ -85,9 +85,9 @@ export const LEVEL_PANTRY: Readonly<Record<string, readonly PantryId[]>> = {
   // the reactor: control rooms, bunkers, maintenance
   reactor: [RAISINS, HONEY, JERKY, SALTINES, FIELD_RATION, RATION_BRICK, CORNED_BEEF, SARDINES, PEANUT_BUTTER, ROLLED_OATS, ICED_COFFEE, UHT_MILK, SPORTS_DRINK],
   // the bunker (task studio-bunker-level-20261109-072224-01): a civil-defence shelter's shelf-stable stores — rations, tins, crackers,
-  // oats, long-life milk, bottled drinks (no fresh-shop snacks)
+  // oats, long-life milk, canned coffee, bottled drinks (no fresh-shop snacks)
   bunker: [RAISINS, HONEY, JERKY, SALTINES, TRAIL_MIX, FIELD_RATION, RATION_BRICK, CORNED_BEEF, SARDINES, PICKLES, WAX_CHEESE, PEANUT_BUTTER,
-    ROLLED_OATS, UHT_MILK, ICED_TEA, SPORTS_DRINK],
+    ROLLED_OATS, ICED_COFFEE, UHT_MILK, ICED_TEA, SPORTS_DRINK],
 };
 
 /** The pantry items `level` can realize (its palette; every item for an unknown level). */

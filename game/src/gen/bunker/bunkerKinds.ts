@@ -31,7 +31,7 @@ export const BUNKER_OBJECTIVE_DAMAGE_CLASS: Readonly<Record<BunkerObjectiveKind,
 /** Physics-affordance rows (damage/physicsAudit.ts). */
 export const BUNKER_OBJECTIVE_STATIC: Readonly<Record<BunkerObjectiveKind, readonly [StaticWhy, string]>> = {
   [BUNKER_GENERATOR_KIND]: ['anchored', 'auxiliary diesel generator set: ~3 t of engine, alternator and control box on a steel skid bolted to its plinth (a bump or a bullet never moves it)'],
-  [BUNKER_CORE_KIND]: ['anchored', 'central processing cluster: a bank of steel computer cabinets with its screen wall and operator desk, bolted to the floor and cabled to the hall'],
+  [BUNKER_CORE_KIND]: ['built-in', 'central processing cluster: sealed equipment cabinets with the screen wall and a built-in operator console, bolted to the floor and cabled into the hall (a fixture, not loose furniture)'],
 };
 
 export const BUNKER_OBJECTIVE_OPEN_AUDIT: readonly {kind: BunkerObjectiveKind; cls: 'none'; role: 'equipment'; how: string}[] = [
