@@ -155,6 +155,13 @@ volumetric layers, strength ordering, the mask, clean routes, the Office arithme
 `bunker-registration` / `bunker-campaign` (registry, references, network allocation, saves), and `bunker-objective-*` (the objective
 lane).
 
+Version 2 (task studio-bunker-rework-20261109-205115-01): `bunker-v1-frozen` (version 1's whole layout pinned by fingerprints taken
+before the rework; the version-1 tests above pass `layoutVersion: 1`), `bunker-v2-level` (version policy, validity over 8 seeds,
+determinism, budget, the record, the vault bore, voids and lift aprons, the architecture's change of scale, loot parity, the enemy
+census), `bunker-v2-floor0` … `bunker-v2-floor5` (each designer's storey), `bunker-cargo-lift` (record, power, the real player riding,
+riders, parking, the freight look), `bunker-fuel-sources` (a cart's hose fuelling a generator, the quarter unit), `bunker-objective-title`
+(the two-line title).
+
 ## Version 2: the inhabited shelter
 
 Task studio-bunker-rework-20261109-205115-01. The user's verdict on version 1: "adequate but lacks character" — rooms and corridors.
