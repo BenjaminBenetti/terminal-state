@@ -17,7 +17,9 @@ import {fogCullDistance} from './world/levelCulling';
 import {WorldMaterials} from './world/materials';
 import {MOOD, StationLighting} from './world/lights';
 import {VolumetricAtmosphere} from './render/volumetric';
-import {PickupManager, makeSupplyMesh, registerItemModels, type Pickup} from './world/pickups';
+import {PickupManager, makeSupplyMesh, refreshItemTemplates, registerItemModels, type Pickup} from './world/pickups';
+import {levelPreloadPantryIds, pantryHolderRealizer, pantryIdsIn, pantryPickupItem} from './items/pantryVariety'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): food variety
+import {ensurePantryModels} from './world/pantryModels'; // (lane ITEMS) the pantry items' lazy models
 import {Survival, survivalTicks} from './player/survival';
 import {ContainerManager, type ContainerEvent, type ContainerTarget} from './world/containers';
 import {SoundGate} from './world/openables';
@@ -31,7 +33,7 @@ import {CALIBERS, ammoText} from './items/calibers'; // lane AMMO: caliber-based
 import {Viewmodel} from './weapons/viewmodel';
 import {devPistolRequested, makePistolDevPlaceholder, PISTOL_ART_READY, startWeaponFor, type StartWeapon} from './weapons/pistol';
 import {ConsumeView} from './weapons/consumeView';
-import {buildItemIcons} from './ui/itemIcons';
+import {buildItemIcons, refreshItemIcons} from './ui/itemIcons';
 import {ZombieActor} from './ai/zombieActor';
 import {StrainerWetTrail} from './ai/strainerTrail';
 import {createEnemyActor, enemyCues, type EnemyActor} from './ai/creatureArchetypes'; // iteration 07 (Lane Q): generic enemy archetypes (rat/dog)
@@ -65,7 +67,7 @@ import {fanSources} from './audio/fanSound';
 import {ANNEX_GENSET, gensetModelKeysFor} from './assets/annexGenset';
 import {PhysicsSystem, killImpulseStrength} from './physics/world';
 import {DamageSystem} from './damage/system';
-import {ShelfStock} from './world/shelfStock';
+import {ShelfStock, SHELF_JUNK_KEY, SHELF_JUNK_MODEL_FILES, shelfJunkModelKeysFor} from './world/shelfStock'; // (+ task studio-food-shelf-production-20261109-002816-01: the Meshy shelf-junk atlas)
 import {LightSources} from './world/lightSources';
 import {PlayerLight, applyBatteryItem} from './player/flashlight'; // Iteration 12 (LIGHT): flashlight battery + body glow
 import {FlareSystem, throwOneFlare, type FlareSmokeHost} from './weapons/throwables'; // Iteration 12 (LIGHT): thrown road flares (grenade slot)
@@ -273,7 +275,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...COSPLAY_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES, ...MARKET_HUMAN_MODEL_FILES}); // (survivor market, lane HUMANS: + the friendly cast, level-only market-*) (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...COSPLAY_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES, ...MARKET_HUMAN_MODEL_FILES, ...SHELF_JUNK_MODEL_FILES}); // (task studio-food-shelf-production-20261109-002816-01: + the shelf-junk atlas, lazy) // (survivor market, lane HUMANS: + the friendly cast, level-only market-*) (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
   /** Task track3-eaton-centre-20261031 (lane PACKAGE): textures / GPU resources owned by ONE level, released when the level changes (assets/levelResources.ts). */
   readonly levelResources = new LevelResources();
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
@@ -464,7 +466,7 @@ export class Game {
   // (round 2, R3) + the generated annex genset model on a layout with a genset record (a shared file: every annex-bearing level)
   // (task mall-lingerie-20261102, lane STORE) + the lingerie store's display sets: lane FIT's outfit files they are cut from (lazy, same keys)
   // (task mall-lingerie-20261102-221554, lane CONTEXT) + the lingerie garments on a layout with lingerie-tagged spawns (the mall's lingerie store only)
-  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys, lingerieModelKeysFor, cosplayModelKeysFor];
+  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys, lingerieModelKeysFor, cosplayModelKeysFor, shelfJunkModelKeysFor]; // (+ task studio-food-shelf-production-20261109-002816-01: the shelf-junk atlas only on layouts with stockable holders)
   /** One lifecycle operation at a time: travel, new game, retry level. */
   private readonly lifecycle = new SingleFlight();
   /** Live pickups that are (what is left of) a generated layout pickup -> its layout.pickups index. */
@@ -598,6 +600,7 @@ export class Game {
     // Iteration 14: effects hidden until the first shot / hit and the thrown-flare prototypes are warmed with the station
     this.warmRegistry.addPool('effects', () => [this.fx.group]);
     this.warmRegistry.addPool('flares', () => this.flares.warmPrototypes());
+    this.warmRegistry.addPool('shelf-junk-moving', () => this.stock.warmRoots()); // (task studio-food-shelf-production-20261109-002816-01) the moving shelf-junk instanced meshes compile behind the loading screen
     // Task studio-performance-recorder-20261103 (lane RENDER-CPU): the holders' contents hidden until used — the loot display's
     // batches (one InstancedMesh = one node build per item x storey, shown when a lot comes within view distance) and the holders'
     // interiors (shown when opened) — compile with the station instead of on first sight
@@ -868,7 +871,32 @@ export class Game {
     for (const pre of this.sectionPreloads) {
       try { await pre(layout); } catch (err) { console.warn('Iteration 16: a section preload failed', err); }
     }
+    await this.preparePantry(key, run); // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the pantry models this section can show
     return layout;
+  }
+
+  /**
+   * Task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): fetch (behind the loading screen) the pantry food / drink models
+   * `key` can show — its level's palette (items/pantryVariety.ts levelPreloadPantryIds), the pantry items in its memory and everything the player
+   * carries (inventory, Lockbox, train cargo) — and refresh what already showed a fallback (templates, held copies, icons). Resident
+   * models stay (world/pantryModels.ts). `late`: after a build (a save's carried items): only the carried set.
+   */
+  private async preparePantry(key: SectionKey | null, run: RunState = this.run, late = false): Promise<void> {
+    try {
+      const ids = pantryIdsIn([this.inv.toJSON(), this.playerTrain.lockbox.toJSON(), this.playerTrain.cargo.toJSON(), key ? run.peekMemory(key) ?? null : null]);
+      if (key && !late) for (const id of levelPreloadPantryIds(key.level)) ids.add(id);
+      const fresh = await ensurePantryModels(ids, {late});
+      if (!fresh.length) return;
+      refreshItemTemplates(fresh);
+      for (const id of fresh) {
+        if (this.use?.itemId === id) continue; // (a late load mid-use keeps the copy in the hand)
+        const o = makeSupplyMesh(id);
+        o.rotation.set(0.5, -0.4, 0.15); // (Game.load's consumable hand pose)
+        this.viewmodel?.addHeldItem(id, o, {hip: [0.16, -0.17, -0.36], yaw: 0.05, roll: -0.04});
+      }
+      if (this.world) this.syncHeld();
+      if (this.gpuInit) await refreshItemIcons(this.renderer, fresh);
+    } catch (err) { console.warn('pantry food: model preparation failed', err); }
   }
 
   /** Iteration 16: every lazy model key a section uses (p7 props + lane keys, e.g. office models). */
@@ -1017,7 +1045,10 @@ export class Game {
     }
     // Searchable cabinets/crates; loot is rolled from the station seed + container index.
     // Task loot-tables-20261030 (lane LOOT): under the logical level's loot profile (items/lootTables.ts PROFILES; one per level).
-    this.containers.build(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>, lootProfile(key.level)); // iteration 08 (Lane I): openables split the lazy p7 models too
+    // (task studio-food-shelf-production-20261109-002816-01, lane ITEMS: + the food-variety realization of every holder's rolled lots, a
+    // remembered holder exactly as its record names it — items/pantryVariety.ts)
+    this.containers.build(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>, lootProfile(key.level),
+      pantryHolderRealizer(key.level, this.run.peekMemory(key)?.holders ?? {}, lootProfile(key.level))); // iteration 08 (Lane I): openables split the lazy p7 models too
     dropUnrecordedSalvage(this.containers, this.run.peekMemory(key)?.holders ?? {}); // (task base-salvage: a remembered holder never gains the base salvage lot)
     for (const h of this.sectionHooks) h.holders?.(this.layout); // task fuel-feedback: fuel cans as loot lots (before the filler / memory)
     applySkywaysStageSupport(this.layout); // (lane VENUE) after the world is drawn, before levels / prop index / paths / physics read the grid
@@ -1046,7 +1077,8 @@ export class Game {
     this.physics.holderBoxes = p => this.stock.physicsBoxes(p, cm.physicsBoxes(p));
     // Iteration 08 (Lane S): 3D filler stock dressed around the real loot lots (rest meshes + bodies on demand; no respawn per station).
     if (!this.stock.group.parent) { this.scene.add(this.stock.group); this.stock.filler.attach(this.physics); }
-    this.stock.build(this.layout, {models: this.assets.models as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>,
+    // (task studio-food-shelf-production-20261109-002816-01) + the shelf-junk atlas (lazy prop model; absent -> the same layout with the procedural fallbacks)
+    this.stock.build(this.layout, {models: {...this.assets.models, [SHELF_JUNK_KEY]: this.propModels.get(SHELF_JUNK_KEY)} as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>,
       lotsOf: p => cm.holderFor(p)?.state.lots.map(l => placementBox(l.itemId, l)) ?? []});
     // Iteration 16 (RUN): holders as the player left them (taken lots stay taken; the shelf filler keeps the gaps)
     const mem = this.run.memory(key);
@@ -1143,7 +1175,7 @@ export class Game {
     const plan = pickupPlan(this.layout.pickups.length, mem);
     for (const i of plan.fromLayout) {
       const p = this.layout.pickups[i];
-      const st = this.inv.makeStack(p.itemId, p.count);
+      const st = this.inv.makeStack(pantryPickupItem(this.layout, i, key.level), p.count); // (lane ITEMS: a first spawn's food variety; same count)
       if (p.filter !== undefined) st.filter = p.filter; // mask lane: a found gas mask's seeded, partly used filter (gen/maskLoot.ts)
       // Task mall-playtest-revision-20261031 (lane SHOPS, U11): a placement's own yaw (a gun lying along its gun-shop bench) wins; the
       // random yaw is still drawn so every other pickup keeps its stream. No pickup is ever filtered by the player's loadout here.
@@ -1168,6 +1200,7 @@ export class Game {
     if (obj) obj.textContent = key.level === 'reactor' ? 'Restart the reactor' : key.level === 'market' ? MARKET_OBJECTIVE : SCAVENGE_OBJECTIVE; // (+ the market's: task studio-survivor-market-20261108-005807-01)
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.propModels.sealed = this.levelResources.sealed = true; // lane PACKAGE (track3): the level is built; a later fetch counts as `late`
+    void this.preparePantry(null, this.run, true); // (lane ITEMS: carried pantry items restored after the prepare — a loaded save — get their models; usually a no-op)
     this.updateCamera(0);
   }
   genMs = 0;

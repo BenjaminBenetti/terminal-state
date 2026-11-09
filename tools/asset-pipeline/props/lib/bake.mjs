@@ -256,6 +256,12 @@ export async function bake(dense, low, opts) {
   const rmax = Math.max(1, Math.ceil(searchRadius / grid.h));
   log(`grid ${grid.dims.join('x')} h=${grid.h.toExponential(3)} refs=${grid.refs} rmax=${rmax} (${Date.now() - t0} ms)`);
   const BC = toShared(dense.bc.data), MR = toShared(dense.mr.data);
+  // opt-in (task food-shelf-production, lane COOK): dense.nm = the source's tangent-space normal map (RGBA, same size as bc). Each
+  // sample's dense normal is then perturbed by it through three's derivative tangent frame of the dense face (the exact inverse of
+  // encodeNormal), so the source normal-map detail survives the bake. Without dense.nm the output is unchanged.
+  const NM = dense.nm ? toShared(dense.nm.data) : null;
+  const DG = dense.nm ? toShared(Float32Array.from(faceGradients({pos: dense.P, uv: dense.UV, idx: dense.I}))) : null;
+  if (dense.nm && (dense.nm.width !== dense.bc.width || dense.nm.height !== dense.bc.height)) throw new Error('bc/nm size mismatch');
 
   const ras = rasterize(low, R, 1.5 * supersample);
   log(`raster ${R}^2 inside=${ras.inside} skirt=${ras.skirtCount} overlapInterior=${ras.overlapInterior} (${Date.now() - t0} ms)`);
@@ -287,7 +293,7 @@ export async function bake(dense, low, opts) {
     P: P.buffer, N: Nn.buffer, UV: UVd.buffer, I: Id.buffer, FN: FN.buffer, cellStart: grid.cellStart.buffer, cellTris: grid.cellTris.buffer,
     BC: BC.buffer, MR: MR.buffer, samples: samples.buffer, outColor: outColor.buffer, outMR: outMR.buffer, outN: outN.buffer, outStatus: outStatus.buffer, outDist: outDist.buffer, counter: counter.buffer,
     ox: grid.origin[0], oy: grid.origin[1], oz: grid.origin[2], h: grid.h, dx: grid.dims[0], dy: grid.dims[1], dz: grid.dims[2], rmax,
-    texW: dense.bc.width, texH: dense.bc.height, nSamples: nS, chunk: 4096,
+    texW: dense.bc.width, texH: dense.bc.height, nSamples: nS, chunk: 4096, NM: NM ? NM.buffer : null, DG: DG ? DG.buffer : null,
   };
   if (dense.mr.width !== dense.bc.width || dense.mr.height !== dense.bc.height) throw new Error('bc/mr size mismatch');
   await Promise.all(Array.from({length: workers}, () => new Promise((resolve, reject) => {

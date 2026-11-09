@@ -75,6 +75,84 @@ export interface DressInput {
   seed: number;
   /** Most rows deep per facing (station-wide thinning lowers it). */
   depthCap?: number;
+  /**
+   * Task food-shelf-production (lane SHELF): extra sold-out-bay chance per bay (station-wide thinning's last resort before the hard
+   * bound, when the triangle / geometry budget is still exceeded at one row deep). Draws no extra random numbers.
+   */
+  gapBoost?: number;
+  /**
+   * Task food-shelf-production (lane SHELF): share (0..1] of the modelled ruined props' weight a category keeps; the rest goes to
+   * the authored piece each stands in for (StockArch.standIn). 1 = the catalogue as authored; lower = the station-wide triangle
+   * budget's thinning (world/shelfStock.ts): shelves stay as full, with fewer models.
+   */
+  junkShare?: number;
+  /**
+   * Task food-shelf-production (lane SHELF): a storage / stock-room unit's TOP deck (`board` index) and the clearance (m) from it
+   * to the ceiling: big ruined boxes go up there (UNIT_TOP), only where the ceiling leaves their height + UNIT_TOP.headroom.
+   */
+  unitTop?: {board: number; clear: number};
+}
+
+/**
+ * Task food-shelf-production (lane SHELF): TOP-OF-UNIT storage — the modelled boxes too big for any bay (the 0.55 x 0.47 x 0.34 m
+ * shipping box; the torn carton and the fruit crate where a bay is too small) stand on top of storage / stock-room shelving, as
+ * stockrooms keep their overflow: at most `max` per unit, on its top deck (`z0`: the top deck has no back brace, so it is deeper
+ * than the bays: tests/shelf-junk-models.test.ts checks the shelf model), only under at least the box height + `headroom` of
+ * ceiling, never on / in front of a loot lot or on-top decor. Drawn from its own fork of the holder seed (`fork`): no other
+ * stream moves (the rows on the top deck then fill round the boxes).
+ */
+export const UNIT_TOP = {
+  picks: [['junk_shipping_box', 0.6], ['junk_torn_carton', 0.25], ['junk_rotten_fruit_crate', 0.15]] as readonly (readonly [string, number])[],
+  headroom: 0.05, z0: -0.19, max: 2, fork: 'stock:unit-top',
+  /** Chance of 0 / 1 box (else 2). */
+  none: 0.35, one: 0.8,
+};
+
+/** Big boxes on a unit's top deck (UNIT_TOP), before its rows are dressed. */
+function dressTop(ctx: Ctx, b: Board, bi: number, clear: number, seed: number): void {
+  const r = mulberry32(hashString(UNIT_TOP.fork, seed >>> 0));
+  const roll = r();
+  const n = roll < UNIT_TOP.none ? 0 : roll < UNIT_TOP.one ? 1 : UNIT_TOP.max;
+  if (!n) return;
+  const deck = b.deck ?? flatDeck(b);
+  // the box's own limits: the ceiling (less the headroom) above, the deeper top deck behind
+  const top: Board = {...b, z0: Math.min(b.z0, UNIT_TOP.z0), top: b.y + clear - UNIT_TOP.headroom};
+  const rows = UNIT_TOP.picks.filter(([id]) => { const A = STOCK_ARCHES[ARCH_INDEX[id]]; return A.h <= top.top - top.y - 0.004 && A.d + yawRoom(A) <= top.z1 - top.z0 && A.w + yawRoom(A) <= top.x1 - top.x0; });
+  const first = r() < 0.5 ? -1 : 1;
+  for (let k = 0; k < n && rows.length; k++) {
+    const a = pickWeighted(rows, r);
+    const A = STOCK_ARCHES[a];
+    const yaw = (r() - 0.5) * 0.06;
+    const ex = (Math.abs(Math.cos(yaw)) * A.w + Math.abs(Math.sin(yaw)) * A.d) / 2, ez = (Math.abs(Math.sin(yaw)) * A.w + Math.abs(Math.cos(yaw)) * A.d) / 2;
+    // the first box towards one end, the second towards the other (pushed back against the wall side of the deck)
+    const side = k === 0 ? first : -first;
+    const free = top.x1 - top.x0 - 2 * ex;
+    if (free < 0) continue;
+    const cx = (top.x0 + top.x1) / 2 + side * free / 2 * (0.55 + r() * 0.45);
+    const cz = top.z0 + ez + 0.004;
+    const dy = deck(cx - ex, cz - ez, cx + ex, cz + ez);
+    if (!Number.isFinite(dy)) continue;
+    tryAdd(ctx, {arch: a, variant: Math.floor(r() * A.variants), c: [cx, dy + 0.0015 + A.h / 2, cz], q: qYXZ(yaw), board: bi, on: -1, tint: r()}, top);
+  }
+}
+
+const rowsCache = new Map<string, readonly (readonly [string, number])[]>();
+/** A category's weighted rows at a model share (1: CATEGORY_STOCK exactly; the stand-ins take the rest of each model row's weight). */
+export function categoryRows(category: StockCategory, share = 1): readonly (readonly [string, number])[] {
+  if (share >= 1) return CATEGORY_STOCK[category];
+  const key = `${category}:${share}`;
+  let rows = rowsCache.get(key);
+  if (!rows) {
+    const out: [string, number][] = [];
+    for (const [id, w] of CATEGORY_STOCK[category]) {
+      const A = STOCK_ARCHES[ARCH_INDEX[id]];
+      if (!A.model || !A.standIn) { out.push([id, w]); continue; }
+      if (share > 0) out.push([id, w * share]);
+      out.push([A.standIn, w * (1 - share)]);
+    }
+    rowsCache.set(key, (rows = out));
+  }
+  return rows;
 }
 
 /** Clearance kept around real loot lots. */
@@ -82,7 +160,7 @@ export const LOT_GAP = 0.025;
 /** Iteration 12 (LOOT lane): rows deep of an intact leftover package (the rest of the facing long gone). */
 export const INTACT_ROWS = 2;
 /** Gap between neighbouring pieces in a facing / between facings (m). */
-const GAP_SAME = 0.004, GAP_PRODUCT = 0.012, GAP_ROW = 0.006;
+const GAP_SAME = 0.004, GAP_PRODUCT = 0.009, GAP_ROW = 0.006; // (task food-shelf-production: products 9..18 mm apart, was 12..24)
 /** Tolerance of the overlap test (pieces may touch). */
 const EPS = 0.0008;
 
@@ -216,11 +294,30 @@ function tryAdd(ctx: Ctx, p: StockPlacement, b: Board): number {
   return ctx.out.length - 1;
 }
 
+/** Yaw jitter allowance of a facing (m, both ways) on top of its box. */
+const yawRoom = (A: StockArch) => Math.max(A.w, A.d) * 0.026;
+/**
+ * Task food-shelf-production (lane SHELF): the category's rows that can stand on this board at all (height under the board above,
+ * depth, width): the dresser picks among them, so a board whose clearance suits only some products (a shallow cooler shelf, the
+ * modelled shipping box on a 0.29 m deck) is filled with those instead of giving up after a few misfits.
+ */
+function boardRows(weights: readonly (readonly [string, number])[], b: Board): (readonly [string, number])[] {
+  return weights.filter(([id]) => {
+    const A = STOCK_ARCHES[ARCH_INDEX[id]];
+    if (A.low && b.y > LOW_DECK_Y) return false;
+    return A.h <= b.top - b.y - 0.004 && A.d + yawRoom(A) <= b.z1 - b.z0 && A.w + yawRoom(A) <= b.x1 - b.x0;
+  });
+}
+/** Highest deck (holder-local m) heavy bulk goods (StockArch.low: sacks, a crate of fruit) stand on: a shelf's bottom deck. */
+export const LOW_DECK_Y = 0.35;
+
 /** Facings / rows / stacks along a shelf board. */
-function dressRows(ctx: Ctx, b: Board, bi: number, category: StockCategory, depthCap: number): void {
+function dressRows(ctx: Ctx, b: Board, bi: number, category: StockCategory, depthCap: number, gapBoost: number, share: number): void {
   const {r} = ctx;
   const deck = b.deck ?? flatDeck(b);
-  const weights = CATEGORY_STOCK[category];
+  const weights = categoryRows(category, share);
+  const fitRows = boardRows(weights, b);
+  if (!fitRows.length) return;
   // Iteration 12 (LOOT lane): abandoned shelves — more sold-out bays, more looted facings, more knocked-over pieces (coolers most)
   const sparse = CATEGORY_SPARSE[category] ?? DEFAULT_SPARSE;
   let x = b.x0 + 0.003;
@@ -230,7 +327,7 @@ function dressRows(ctx: Ctx, b: Board, bi: number, category: StockCategory, dept
   const boardV = b.variant !== undefined ? b.variant + Math.floor(r() * 997) : undefined;
   while (x < b.x1 - 0.04 && guard++ < 400) {
     // Sold-out bay: a gap, sometimes with one knocked-over package lying in it.
-    if (r() < sparse.gap && !b.full) {
+    if (r() < sparse.gap + gapBoost && !b.full) {
       const gw = 0.06 + r() * 0.16;
       if (r() < sparse.tipped) tipped(ctx, b, bi, deck, weights, x, Math.min(b.x1, x + gw));
       x += gw;
@@ -240,10 +337,14 @@ function dressRows(ctx: Ctx, b: Board, bi: number, category: StockCategory, dept
     if (!run || run.left <= 0) {
       // a product that fits this board (height under the board above, depth, the width left)
       run = null;
+      // (task food-shelf-production: the last tries pick among the products that still fit the width left, so the end of a
+      // board is filled with something narrower instead of left bare)
       for (let tries = 0; tries < 8 && !run; tries++) {
-        const a = pickWeighted(weights, r);
+        const narrow = tries >= 3 ? fitRows.filter(([id]) => { const B = STOCK_ARCHES[ARCH_INDEX[id]]; return B.w + yawRoom(B) <= b.x1 - x; }) : fitRows;
+        if (!narrow.length) break;
+        const a = pickWeighted(narrow, r);
         const A = STOCK_ARCHES[a];
-        const big = Math.max(A.w, A.d) * 0.026; // yaw jitter allowance
+        const big = yawRoom(A);
         if (A.h > b.top - b.y - 0.004 || A.d + big > b.z1 - b.z0 || A.w + big > b.x1 - x) continue;
         const rv = Math.floor(r() * A.variants);
         // iteration 12: an intact (unopened) package is a leftover — one facing (now and then two), never a full block
@@ -296,7 +397,7 @@ function dressRows(ctx: Ctx, b: Board, bi: number, category: StockCategory, dept
       }
     }
     run.left--;
-    x = a1 + (run.left > 0 ? GAP_SAME : GAP_PRODUCT + r() * 0.012);
+    x = a1 + (run.left > 0 ? GAP_SAME : GAP_PRODUCT + r() * 0.009);
   }
 }
 
@@ -431,7 +532,8 @@ export function dressHolder(input: DressInput): StockPlacement[] {
   const ctx: Ctx = {out: [], obbs: [], ext: [], lots: input.lots, r: mulberry32(input.seed >>> 0)};
   input.boards.forEach((b, i) => {
     const cat = b.category ?? input.category;
-    if (b.mode === 'rows') dressRows(ctx, b, i, cat, input.depthCap ?? 3);
+    if (input.unitTop?.board === i && b.mode === 'rows') dressTop(ctx, b, i, input.unitTop.clear, input.seed);
+    if (b.mode === 'rows') dressRows(ctx, b, i, cat, input.depthCap ?? 3, input.gapBoost ?? 0, input.junkShare ?? 1);
     else if (b.mode === 'lean') dressLean(ctx, b, i, cat);
     else if (b.mode === 'flat') dressFlat(ctx, b, i, cat);
     else if (b.mode === 'hang') dressHang(ctx, b, i, cat);

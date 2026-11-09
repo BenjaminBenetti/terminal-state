@@ -188,8 +188,11 @@ export const TOP_DECK_CLEAR = 0.3;
  * about x ±0.50 / z ±0.17, the posts' inner faces stand at x ±0.477, the diagonal brace runs across
  * the back at z ≈ -0.19..-0.16 and the decks' front lips at z ≈ 0.15..0.19 (the top deck's lip rises
  * from z 0.149).
+ * Task food-shelf-production (lane SHELF): the live Meshy T2.5 shelf (shelf-t25.glb) measures flat to z 0.185 on every tier, its
+ * lip rising at z ≈ 0.19..0.2 (ray-cast deck profile, 2026-11-09): stock may use the deck to z 0.18 (0.332 m deep), so the
+ * modelled crate, tray and binder stack (0.29..0.31 m deep at real size) fit. tests/shelfStock.test.ts checks no piece meets the model.
  */
-export const SHELF_MODEL_RECT = {x0: -0.462, x1: 0.462, z0: -0.152, z1: 0.14};
+export const SHELF_MODEL_RECT = {x0: -0.462, x1: 0.462, z0: -0.152, z1: 0.18};
 
 /**
  * Stockable deck of tech-display-t25.glb (deviceWall, fitted 1.1 x 2.0 x 0.58; Meshy T2.5, ray-cast 2026-10-29): flat cabinet
@@ -270,9 +273,15 @@ export function measureDecks(tris: Float32Array, tiers: readonly number[], w: nu
   };
 }
 
-/** Boards of a stocked holder (holder-local). `deck`: measured decks of the generated shelf model (stockShelf). */
+/**
+ * Boards of a stocked holder (holder-local). `deck`: measured decks of the generated shelf model (stockShelf, and the plain storage
+ * 'shelf' kind, which renders the same shelf.glb at the same footprint: world/builder.ts MODEL_FOR).
+ */
 export function stockBoards(kind: string, variant: number, o: {deck?: DeckSampler | null} = {}): Board[] {
   switch (kind) {
+    // task food-shelf-production (lane SHELF): storage shelving takes the measured decks of its model only (its procedural fallback
+    // box has no boards to stand stock on)
+    case 'shelf': return o.deck ? stockBoards('stockShelf', variant, o) : [];
     case 'stockShelf': {
       const T = SHELF_TIER_Y;
       if (o.deck) {
@@ -346,6 +355,7 @@ export function stockColliders(kind: string, variant: number, boards: readonly B
   const out: Box3Like[] = [];
   const box = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number) => out.push({min: [x0, y0, z0], max: [x1, y1, z1]});
   switch (kind) {
+    case 'shelf':
     case 'stockShelf': {
       const {w, d, h} = PROP_DEFS.stockShelf;
       // Full-depth boards (the loot surfaces only cover the front band) at the measured deck height,
@@ -361,7 +371,8 @@ export function stockColliders(kind: string, variant: number, boards: readonly B
           box(xa, top - 0.03, -d / 2 + 0.01, xb, top, d / 2 - 0.01);
         }
       }
-      box(-w / 2 + 0.045, SHELF_TIER_Y[0] - 0.06, -d / 2 - 0.0042, w / 2 - 0.045, h - 0.04, -d / 2 + 0.02);
+      // the plain back board stands behind a stock shelf only (displayTreatment); storage shelving is the open unit against its wall
+      if (kind === 'stockShelf') box(-w / 2 + 0.045, SHELF_TIER_Y[0] - 0.06, -d / 2 - 0.0042, w / 2 - 0.045, h - 0.04, -d / 2 + 0.02);
       break;
     }
     case 'snackRack': {
