@@ -59,7 +59,7 @@ describe('bunker v2 storey 1 (entry & security)', () => {
     for (const s of SEEDS) {
       const {l} = gen(s);
       const need = ['Decontamination', 'Intake hall', 'Screening lane 1', 'Screening lane 2', 'Screening lane 3', 'Guard booth 1', 'Guard booth 2', 'Search room',
-        'Operations room', "Warden's office", 'Guard room', 'Armoury', 'Duty hall', 'Latrines', 'Confiscated property', 'Freight lobby', 'Guard corridor', 'Arrival lobby',
+        'Operations room', "Warden's office", 'Guard room', 'Armoury', 'Duty hall', 'Latrines', 'Confiscated property', 'Registry', 'Freight lobby', 'Guard corridor', 'Arrival lobby',
         'Muster gallery', 'Overlook gallery', 'East gallery walk', 'West gallery walk', 'Holding cell 1', 'Holding cell 2', 'Holding cell 3', 'Holding cell 4'];
       for (const n of need) expect(byLabel(l, n), `${s}: ${n}`).toBeDefined();
       const decon = byLabel(l, 'Decontamination')!;
@@ -78,6 +78,7 @@ describe('bunker v2 storey 1 (entry & security)', () => {
       expect(propsIn(l, byLabel(l, 'Duty hall')!).filter(p => p.kind === 'staffLockers').length).toBeGreaterThanOrEqual(2);
       expect(byLabel(l, 'Latrines')!.purpose).toBe('washroom');
       expect(byLabel(l, 'Confiscated property')!.purpose).toBe('lost-property');
+      expect(byLabel(l, 'Registry')!.purpose).toBe('agent-office');
       // every lane: its detector against the planned wall, the 1.5 m walkway beside it open between the two doorways
       for (let i = 0; i < 3; i++) {
         const ln = byLabel(l, `Screening lane ${i + 1}`)!;
@@ -174,11 +175,11 @@ describe('bunker v2 storey 1 (entry & security)', () => {
     for (const s of SEEDS) {
       const {l} = gen(s);
       const p1 = l.props.filter(p => (p.level ?? 0) === 1);
-      expect(p1.length).toBeLessThanOrEqual(160);
+      expect(p1.length).toBeLessThanOrEqual(180);
       expect(l.lights.filter(q => (q.level ?? 0) === 1).length).toBeLessThanOrEqual(80);
       const holders = p1.filter(p => isLootHolderKind(p.kind));
-      expect(holders.length).toBeGreaterThanOrEqual(25);
-      expect(holders.length).toBeLessThanOrEqual(60);
+      expect(holders.length).toBeGreaterThanOrEqual(55);
+      expect(holders.length).toBeLessThanOrEqual(90);
       for (const p of p1) expect(['fridge', 'kitchenette', 'vending', 'snackRack', 'shopCooler', 'chestFreezer']).not.toContain(p.kind);
       expect(l.decor.filter(d => d.y0 > FR.base - 0.5 && d.y0 < FR.base + 6.9).length).toBeLessThanOrEqual(150);
     }
