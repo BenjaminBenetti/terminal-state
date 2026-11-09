@@ -4,23 +4,27 @@
 //
 // The processing route (south-west), a deliberate squeeze-and-release:
 //   the main stair's south landing → the ARRIVAL LOBBY (low, long: 3.4 m) → DECONTAMINATION (showers, wash troughs: 3.2 m; the weak
-//   residue leak) → the INTAKE HALL (the storey's generous open space: 20 x 9 m, 6 m tall; registration counter, queue barriers,
-//   waiting benches) → the CHECKPOINT (three 2.5 m lanes through the screening wall, metal detectors, two guard booths, a search room:
-//   3.0 m) → the OVERLOOK: the south side of a GALLERY RING round the well (4.6 m, the void's own ceiling), the commons 7 m below and
-//   11.6 m of air over it — the shelter's first big view, straight ahead as you leave the lanes.
+//   residue leak) → the INTAKE HALL (the storey's generous open space: 20 x 8.5 m, 6 m tall; registration counter, queue barriers,
+//   waiting benches) → the CHECKPOINT (three 3.5 m lanes through the screening wall, a walk-through detector filling half of each,
+//   two 2 m guard booths between them: 3.0 m) → the OVERLOOK: the south side of a GALLERY RING round the well (4.6 m, the void's own
+//   ceiling), the commons 7 m below and 11.6 m of air over it — the shelter's first big view, straight ahead as you leave a lane.
 // The gallery ring: the south overlook, the narrow east walk between the well and the main stair's shaft, the west walk on the
 // envelope's edge and the deep north MUSTER GALLERY (roll-call boards, benches facing the rail, planters) that opens onto the freight
 // lobby round the cargo lift's landing.
 // The security wing (east, behind the cores): the duty hall at the service stair's landing (the duty desk, the staff lockers), a long
-// 2 m guard corridor from the freight lobby down to the arrival lobby (the staff route that skips decontamination), the holding cells
-// off its west side, operations, the warden's office + records strongroom, the guard room and its dead-end armoury off the east side.
-// Below the intake hall: the latrines, the confiscation store and the registry.
+// 2 m guard corridor from the freight lobby down to the arrival lobby (the staff route that skips decontamination), four holding cells
+// off its west side, operations, the warden's office (with the shelter's records), the guard room and its dead-end armoury off the
+// east side. Below the intake hall: the latrines and the confiscated-property store; the search room off the hall's west end.
+// Loot reads as the storey's programme: the rooms carry security-office / armoury / locker-room / lost-property / agent-office /
+// decontamination purposes; the halls and passages dressed here keep the generic shelter purpose, and the holders standing in them
+// carry their own purpose (the registration desks: agent-office; the booths' monitor desks: security-office).
 
 import type {Area, AreaKind, Rect, RoomType} from '../../stationTypes';
 import {BUNKER_PURPOSE} from '../../reactor/complex/bunkerPurposes';
 import type {BunkerFloorModule, FloorCarveCtx, FloorCarveResult, FloorAreaOpts} from './floorApi';
 import {V2} from './spine';
 import {dressFloor1} from './floor1Dress';
+import {F1_LANES} from './floor1Plan';
 
 const R = (x: number, y: number, w: number, h: number): Rect => ({x, y, w, h});
 
@@ -31,9 +35,10 @@ const DOOR = {main: 3.0, room: 2.6, lane: 2.6, cell: 2.4} as const;
 
 /** The storey's area keys (FloorCarveResult.areas; floor1Dress.ts reads them). */
 export type F1Key =
-  | 'galN' | 'galE' | 'galS' | 'galW' | 'freight' | 'duty' | 'guardCorr' | 'ops' | 'warden' | 'records' | 'guard' | 'armoury'
-  | 'arrival' | 'decon' | 'intake' | 'search' | 'lane1' | 'lane2' | 'lane3' | 'booth1' | 'booth2' | 'latrines' | 'store' | 'registry'
+  | 'galN' | 'galE' | 'galS' | 'galW' | 'freight' | 'duty' | 'guardCorr' | 'ops' | 'warden' | 'guard' | 'armoury'
+  | 'arrival' | 'decon' | 'intake' | 'search' | 'lane1' | 'lane2' | 'lane3' | 'booth1' | 'booth2' | 'latrines' | 'store'
   | 'cell1' | 'cell2' | 'cell3' | 'cell4';
+
 
 function carve(ctx: FloorCarveCtx): FloorCarveResult | null {
   const a: Record<string, number> = {};
@@ -57,50 +62,50 @@ function carve(ctx: FloorCarveCtx): FloorCarveResult | null {
   const galE = add('galE', R(wx1, wy0 + 1, aW - wx1, well.h - 2), 'room', 'crew-room', F1_CLEAR.gallery, 'East gallery walk', pub);
   const galS = add('galS', R(3, wy1, aW - 3, 8), 'room', 'crew-room', F1_CLEAR.gallery, 'Overlook gallery', pub);
   if (!galN || !galW || !galE || !galS) return null;
-  // the ring's corners: the walks open full width (no wall stub) into the north / south galleries, the void's full height
+  // the ring's corners: the walks open full width (no wall stub, no door frame: one continuous gallery) into the north / south
+  // galleries, the void's full height
   for (const g of [galW, galE]) {
-    ctx.door(R(g.x, wy0, g.w, 1), galN, g, F1_CLEAR.gallery);
-    ctx.door(R(g.x, wy1 - 1, g.w, 1), galS, g, F1_CLEAR.gallery);
+    ctx.door(R(g.x, wy0, g.w, 1), galN, g, F1_CLEAR.gallery).noFrame = true;
+    ctx.door(R(g.x, wy1 - 1, g.w, 1), galS, g, F1_CLEAR.gallery).noFrame = true;
   }
 
-  // --- the checkpoint: three screening lanes through the wall south of the overlook, two guard booths, the search room ------------
-  // (x: search 3..9 | lane 11..16 | booth 18..22 | lane 24..29 | booth 31..35 | lane 37..42, core A's wall behind it; rows 111..120)
+  // --- the checkpoint: three screening lanes through the wall south of the overlook, two guard booths between them -----------------
+  // (x: search 3..8 | lane 10..16 | booth 18..21 | lane 23..29 | booth 31..34 | lane 36..42, core A's wall behind it; rows 111..120).
+  // Every lane: the walk-through detector against one side wall, a 1.5 m walkway beside it between the two doorways (F1_LANES).
   const cy0 = galS.y + galS.h + 1, ch = 10;
-  const search = add('search', R(3, cy0, 7, ch), 'room', 'utility', F1_CLEAR.room, 'Search room', {purpose: BUNKER_PURPOSE.lock});
-  if (!search) return null;
   const lanes: Area[] = [];
   const booths: Area[] = [];
   for (let i = 0; i < 3; i++) {
-    const lx = 11 + i * 13;
-    const ln = add(`lane${i + 1}` as F1Key, R(lx, cy0, 6, ch), 'room', 'crew-room', F1_CLEAR.lane, `Screening lane ${i + 1}`, {publicSpace: true, purpose: BUNKER_PURPOSE.lock, noFloorLoot: true});
+    const lx = 10 + i * 13;
+    const ln = add(`lane${i + 1}` as F1Key, R(lx, cy0, 7, ch), 'room', 'crew-room', F1_CLEAR.lane, `Screening lane ${i + 1}`, {publicSpace: true, purpose: BUNKER_PURPOSE.lock, noFloorLoot: true});
     if (!ln) return null;
     lanes.push(ln);
     if (i < 2) {
-      const b = add(`booth${i + 1}` as F1Key, R(lx + 7, cy0, 5, ch), 'room', 'utility', F1_CLEAR.lane, `Guard booth ${i + 1}`, {purpose: BUNKER_PURPOSE.lock});
+      const b = add(`booth${i + 1}` as F1Key, R(lx + 8, cy0, 4, ch), 'room', 'utility', F1_CLEAR.lane, `Guard booth ${i + 1}`, {purpose: BUNKER_PURPOSE.lock});
       if (!b) return null;
       booths.push(b);
     }
   }
+  const search = add('search', R(3, cy0, 6, ch), 'room', 'utility', F1_CLEAR.room, 'Search room', {purpose: 'security-office'});
   // the intake hall: the storey's big open room under the lanes
   const intake = add('intake', R(3, cy0 + ch + 1, aW - 3, 17), 'room', 'crew-room', F1_CLEAR.intake, 'Intake hall', pub);
-  if (!intake) return null;
-  for (const ln of lanes) {
-    ctx.door(R(ln.x + 1, galS.y + galS.h, 4, 1), galS, ln, DOOR.lane);
-    ctx.door(R(ln.x + 1, intake.y - 1, 4, 1), intake, ln, DOOR.lane);
-  }
-  // the booths open into one lane each (the guard faces the lane he screens); the search room off the first lane
-  const flip = rng.chance(0.5);
-  if (!ctx.connect(lanes[flip ? 1 : 0], booths[0], 2, DOOR.cell, 'mid')) return null;
-  if (!ctx.connect(lanes[flip ? 1 : 2], booths[1], 2, DOOR.cell, 'mid')) return null;
-  if (!ctx.connect(lanes[0], search, 2, DOOR.cell, 0.7)) return null;
+  if (!intake || !search) return null;
+  lanes.forEach((ln, i) => {
+    const wx = F1_LANES[i] === 'W' ? ln.x + 4 : ln.x; // the walkway's three cells
+    ctx.door(R(wx, galS.y + galS.h, 3, 1), galS, ln, DOOR.lane);
+    ctx.door(R(wx, intake.y - 1, 3, 1), intake, ln, DOOR.lane);
+  });
+  // each booth opens onto the walkway of the lane west of it (the guard faces the people he screens); the search room off the hall
+  if (!ctx.connect(lanes[0], booths[0], 2, DOOR.cell, 'mid')) return null;
+  if (!ctx.connect(lanes[1], booths[1], 2, DOOR.cell, 'mid')) return null;
+  if (!ctx.connect(intake, search, 2, DOOR.cell, 'mid')) return null;
 
-  // --- below the intake hall: latrines, the confiscation store, the registry ----------------------------------------------------------
+  // --- below the intake hall: the latrines, the confiscated-property store ---------------------------------------------------------
   const by = intake.y + intake.h + 1, bh = 147 - by; // rows 140..146
   const latr = add('latrines', R(3, by, 12, bh), 'room', 'washroom', F1_CLEAR.room, 'Latrines', {purpose: 'washroom'});
-  const store = add('store', R(16, by, 12, bh), 'room', 'storage', F1_CLEAR.store, 'Confiscated property', {purpose: 'lost-property'});
-  const reg = add('registry', R(29, by, aW - 29, bh), 'room', 'agent-office', F1_CLEAR.room, 'Registry', {purpose: 'agent-office'});
-  if (!latr || !store || !reg) return null;
-  for (const r of [latr, store, reg]) if (!ctx.connect(intake, r, 3, DOOR.room, rng.range(0.25, 0.75))) return null;
+  const store = add('store', R(16, by, 14, bh), 'room', 'storage', F1_CLEAR.store, 'Confiscated property', {purpose: 'lost-property'});
+  if (!latr || !store) return null;
+  for (const r of [latr, store]) if (!ctx.connect(intake, r, 3, DOOR.room, rng.range(0.25, 0.75))) return null;
 
   // --- the main stair's arrival lobby (south of core A) and decontamination -------------------------------------------------------
   const arrival = add('arrival', R(A.x, A.y + A.h + 1, 30, 8), 'room', 'crew-room', F1_CLEAR.lobby, 'Arrival lobby', pub);
@@ -133,21 +138,19 @@ function carve(ctx: FloorCarveCtx): FloorCarveResult | null {
   if (!ops) return null;
   if (!ctx.connect(guardCorr, ops, 3, DOOR.room, 'mid')) return null;
   if (!ctx.connect(duty, ops, 4, DOOR.room, 0.3)) return null;
-  // two rows of paired rooms below operations: warden + records strongroom, guard room + armoury (seeded order)
+  // below operations: the warden's office (his desk, the shelter's records) and the guard room + its dead-end armoury (seeded order)
   const rowA = ops.y + ops.h + 1, rowB = rowA + 10;
   const wardenFirst = rng.chance(0.5);
   const wy = wardenFirst ? rowA : rowB, gy = wardenFirst ? rowB : rowA;
-  const warden = add('warden', R(ex, wy, 12, 9), 'room', 'agent-office', F1_CLEAR.room, "Warden's office", {purpose: 'agent-office'});
-  const records = add('records', R(ex + 13, wy, eW - 13, 9), 'room', 'storage', F1_CLEAR.store, 'Records strongroom', {purpose: 'storage'});
+  const warden = add('warden', R(ex, wy, eW, 9), 'room', 'agent-office', F1_CLEAR.room, "Warden's office", {purpose: 'agent-office'});
   const guard = add('guard', R(ex, gy, 12, 9), 'room', 'utility', F1_CLEAR.room, 'Guard room', {purpose: 'security-office'});
   const armoury = add('armoury', R(ex + 13, gy, eW - 13, 9), 'room', 'storage', F1_CLEAR.store, 'Armoury', {purpose: BUNKER_PURPOSE.armoury});
-  if (!warden || !records || !guard || !armoury) return null;
+  if (!warden || !guard || !armoury) return null;
   if (!ctx.connect(guardCorr, warden, 3, DOOR.room, 'mid')) return null;
-  if (!ctx.connect(warden, records, 2, DOOR.room, 'mid')) return null;
   if (!ctx.connect(guardCorr, guard, 3, DOOR.room, 'mid')) return null;
   if (!ctx.connect(guard, armoury, 2, DOOR.room, 'mid')) return null;
   // the holding cells off the guard corridor's west side (3 m x 3 m), under the lift shaft
-  const nCells = rng.chance(0.5) ? 4 : 3;
+  const nCells = 4;
   const cells: Area[] = [];
   const cTop = shaft.y + shaft.h + 1;
   for (let i = 0; i < nCells; i++) {

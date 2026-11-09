@@ -1,31 +1,32 @@
 // Task studio-bunker-rework-20261109-205115-01: THE BUNKER v2 — storey 1's own dressing (after the station dresser's purpose pass; the
 // carve and the storey's idea: gen/bunker/v2/floor1.ts). A few strong compositions per space, existing kinds only:
-//  - the gallery ring: benches in rows facing the rail (the muster gallery's roll call), planters and the dead plants nobody watered,
-//    the roll-call boards on the muster gallery's back wall, the overlook's plates over the lane mouths ("HABITATION COMMONS BELOW");
-//  - the intake hall: the registration counter (desks + clerks' chairs) across the hall, queue barriers funnelling to the three
-//    lanes, rows of waiting benches facing the screening wall, the hall's tall pendant grid;
-//  - the checkpoint: a walk-through metal detector in every lane (the walkway beside it), the booths' consoles, the search table;
-//  - decontamination: shower booths along the far wall, wash troughs, suit lockers, the eyewash, hazard-amber floor bands;
-//  - the arrival lobby: benches, a stretcher, the first-aid kit, the wayfinding to decontamination;
-//  - the freight lobby: the loading bay's amber outline round the lift apron, crates / cartons / a pallet jack on the far side;
-//  - the security wing: the duty desk at the service stair, operations (radio console, control console, the map table), the
-//    warden's desk, the records' filing, the guard room's mess table, the armoury's gun lockers, the holding cells' cots.
-// Storage placed here opens (cabinets, lockers, crates, gun lockers, filing cabinets: existing openables / holders; their loot comes
-// from the room's purpose table). Loose things move (chairs, benches, crates, bins: the dresser's own physics kinds). No food holders.
+//  - the gallery ring: the muster gallery's benches in rows facing the rail, planters at the row ends, the roll-call boards and the
+//    warden's podium on its back wall; the overlook's plates over the lane mouths ("HABITATION COMMONS BELOW");
+//  - the intake hall: queue barriers funnelling to the three lanes, the registration counter (desks + clerks' chairs) across the
+//    hall, rows of waiting benches facing the screening wall, the hall's tall pendant grid;
+//  - the checkpoint: the walk-through detector filling half of every lane (the walkway beside it), the booths' monitor desks;
+//  - decontamination: shower booths along the far wall, wash troughs, suit lockers, the eyewash, the amber decontamination line;
+//  - the arrival lobby: benches, a stretcher, the first-aid kit, the way to decontamination;
+//  - the freight lobby: the loading bay's amber outline round the lift apron, goods stacked on the far side, a pallet jack;
+//  - the security wing: the duty desk + staff lockers at the service stair, operations (radio console, control console, the map
+//    table), the warden's desk with the shelter's files and safe, the armoury's gun lockers, the holding cells' cots.
+// Storage placed here opens (cabinets, lockers, crates, gun lockers, filing cabinets, the safe: existing openables / holders, loot from
+// the room's purpose table). Loose things move (chairs, benches, crates, bins: their kinds' own physics). No food holders.
 
-import {CELL, FLOOR} from '../../grid';
+import {CELL} from '../../grid';
 import {PROP_DEFS, type PropKind, type PropPlacement} from '../../props';
 import type {Area, Side} from '../../stationTypes';
-import {doorSide, placeAgainstWall, propBlocksDoorway, boxClear, rowAlongWall, tryPlaceProp, wallRange, mountProp} from '../../placeKit';
-import {OPP, armoury, doorPlate, island, radioRoom, scanWall, sweepPockets, wallSign, ceilingDuct, type Dx} from '../../reactor/complex/bunkerDress';
+import {boxClear, doorSide, mountProp, placeAgainstWall, propBlocksDoorway, tryPlaceProp} from '../../placeKit';
+import {OPP, armoury, ceilingDuct, doorPlate, island, radioRoom, scanWall, sweepPockets, wallSign, type Dx} from '../../reactor/complex/bunkerDress';
 import {shelterDx} from '../dress';
 import type {FloorDressCtx} from './floorApi';
+import {F1_LANES} from './floor1Plan';
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const q4 = (v: number) => Math.round(v * 4) / 4;
 
 /** QA / tests: what the last storey-1 dress placed. */
-export const F1_DRESS_STATS = {props: 0, decor: 0, signs: 0, lights: 0, skipped: [] as string[]};
+export const F1_DRESS_STATS = {props: 0, decor: 0, signs: 0, lights: 0, detectors: 0, skipped: [] as string[]};
 
 /** A light grid over a big area (the station dresser hangs at most three down the middle): `step` m apart, skipping spots near a fixture. */
 function hallLights(D: Dx, a: Area, step: number, inset = 1.6): number {
@@ -52,7 +53,7 @@ function floorDecor(D: Dx, m: Parameters<Dx['decor']>[0], b: {x0: number; z0: nu
   return true;
 }
 
-/** An amber hazard outline (0.12 m bands) round a world rect: the loading bay, the decontamination line. */
+/** An amber hazard outline (0.12 m bands) round a world rect: the loading bay. */
 function outline(D: Dx, b: {x0: number; z0: number; x1: number; z1: number}, w = 0.12): void {
   for (const e of [{...b, z1: b.z0 + w}, {...b, z0: b.z1 - w}, {...b, x1: b.x0 + w}, {...b, x0: b.x1 - w}]) floorDecor(D, 'plasticSeat', e);
 }
@@ -62,47 +63,50 @@ const put = (D: Dx, a: Area, kind: PropKind, x: number, z: number, rot: number, 
 
 /** Rot of a prop whose front faces side `s` of the room (front = (sin rot, cos rot)). */
 const ROT_TOWARD: Record<Side, number> = {N: Math.PI, S: 0, W: -Math.PI / 2, E: Math.PI / 2};
+/** The door between two areas. */
+const doorTo = (D: Dx, a: Area, b: Area | undefined) => (b ? D.doors(a).find(q => q.a === b.id || q.b === b.id) : undefined);
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // The gallery ring
 
-/** The muster gallery: two rows of benches facing the rail, planters at the row ends, the roll-call boards on the back wall. */
+/** The muster gallery: two rows of benches facing the rail, planters at the row ends, the roll-call boards + the warden's podium. */
 function musterGallery(D: Dx, a: Area, wellX0: number, wellX1: number): void {
   const rail = (a.y + a.h) * CELL; // the rail line (the well's north edge)
-  const x0 = wellX0 * CELL + 1.6, x1 = wellX1 * CELL - 1.6;
-  const bench = PROP_DEFS.bench;
+  const cx = (wellX0 + wellX1) / 2 * CELL;
+  const bench = PROP_DEFS.bench, pitch = bench.w + 1.5;
   let n = 0;
-  for (const back of [2.6, 4.6]) {
-    for (let x = x0 + bench.w / 2; x + bench.w / 2 <= x1 + 1e-6; x += bench.w + 1.4) if (put(D, a, 'bench', x, rail - back, 0, {ring: 0.5})) n++;
-  }
-  // planters at both ends of the bench rows, and dead pot plants along the back wall
-  for (const x of [x0 - 0.9, x1 + 0.9]) put(D, a, 'planterTree', x, rail - 3.6, 0, {ring: 0.5});
+  for (const back of [2.4, 4.4]) for (const k of [-1, 0, 1]) if (put(D, a, 'bench', cx + k * pitch, rail - back, 0)) n++;
+  for (const s of [-1, 1]) put(D, a, 'planterTree', cx + s * (1.5 * pitch + 1.2), rail - 3.4, 0, {ring: 0.5});
   const back = a.y * CELL;
-  for (let i = 0; i < 4; i++) placeAgainstWall(D.ctx, a, 'noticeBoard', {sides: ['N'], y: 1.2, tries: 20});
-  put(D, a, 'securityPodium', (wellX0 + wellX1) / 2 * CELL, back + 1.4, 0, {ring: 0.4});
-  for (const f of [0.08, 0.92]) put(D, a, 'deadPlant', (a.x + a.w * f) * CELL, back + 0.7, 0);
-  wallSign(D, a, 'N', (wellX0 + wellX1) / 2 * CELL, 3.3, {kind: 'info', text: 'ROLL CALL · REPORT TO YOUR WARDEN', w: 3.2});
+  put(D, a, 'securityPodium', cx, back + 1.0, 0, {ring: 0.3});
+  for (const s of [-1, 1]) mountProp(D.ctx, a, 'N', cx + s * 2.2, 'noticeBoard', 1.2, D.base);
+  mountProp(D.ctx, a, 'N', cx + 4.2, 'noticeBoard', 1.2, D.base);
+  wallSign(D, a, 'N', cx, 3.4, {kind: 'info', text: 'ROLL CALL · REPORT TO YOUR WARDEN', w: 3.2});
   if (n < 4) F1_DRESS_STATS.skipped.push(`muster benches ${n}`);
 }
 
-/** The overlook (south gallery): two benches at its ends facing the well, plates over the lane mouths. */
+/** The overlook (south gallery): a bench at each end facing the well, plates over the lane mouths and on the back wall. */
 function overlook(D: Dx, a: Area, lanes: Area[]): void {
   const rail = a.y * CELL;
-  for (const x of [a.x * CELL + 2.2, (a.x + a.w) * CELL - 2.2]) put(D, a, 'bench', x, rail + 2.2, Math.PI, {ring: 0.5});
-  for (const x of [a.x * CELL + 0.8]) put(D, a, 'pottedPlantSmall', x, (a.y + a.h) * CELL - 0.5, 0);
+  // benches in the gaps between the lane mouths' sightlines (each lane's walk to the rail stays open: the first view)
+  const mouths = lanes.map(ln => doorTo(D, ln, a)).filter(d => !!d).map(d => [d!.x, d!.x + d!.w] as const).sort((p, q) => p[0] - q[0]);
+  const gaps: [number, number][] = [];
+  let x0 = a.x;
+  for (const [m0, m1] of mouths) { gaps.push([x0, m0]); x0 = m1; }
+  gaps.push([x0, a.x + a.w]);
+  for (const [g0, g1] of gaps.filter(([g0, g1]) => (g1 - g0) * CELL >= PROP_DEFS.bench.w + 1.2).slice(0, 2)) put(D, a, 'bench', (g0 + g1) / 2 * CELL, rail + 2.0, Math.PI);
   const mid = lanes[1] ?? lanes[0];
-  if (mid) wallSign(D, a, 'S', (mid.x + mid.w / 2) * CELL, 3.7, {kind: 'info', text: 'LEVEL 2 · HABITATION COMMONS BELOW', w: 3.4});
   for (const ln of lanes) {
-    const d = D.doors(ln).find(q => q.a === a.id || q.b === a.id);
-    if (d) doorPlate(D, d, a, 'EXIT · ADMISSIONS', 1.6);
+    const d = doorTo(D, ln, a);
+    if (!d) continue;
+    if (ln === mid) wallSign(D, a, 'S', (d.x + d.w / 2) * CELL, 3.85, {kind: 'info', text: 'LEVEL 2 · HABITATION COMMONS BELOW', w: 3.4});
+    else doorPlate(D, d, a, 'NO ENTRY · ADMISSIONS', 1.8);
   }
 }
 
-/** A gallery walk: one bench against the outer wall facing the well, a fire point. */
+/** The wider (west) gallery walk: a bench against its outer wall facing the well. */
 function galleryWalk(D: Dx, a: Area, outer: Side): void {
-  const x = outer === 'W' ? a.x * CELL + PROP_DEFS.bench.d / 2 + 0.05 : (a.x + a.w) * CELL - PROP_DEFS.bench.d / 2 - 0.05;
-  if (a.w * CELL >= 3) put(D, a, 'bench', x, (a.y + a.h / 2) * CELL, ROT_TOWARD[OPP[outer]]);
-  scanWall(D, a, 'fireExtinguisherCabinet', [outer], 0.5);
+  if (a.w * CELL >= 3) put(D, a, 'bench', outer === 'W' ? a.x * CELL + 0.3 : (a.x + a.w) * CELL - 0.3, (a.y + a.h / 2) * CELL, ROT_TOWARD[OPP[outer]]);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -111,144 +115,131 @@ function galleryWalk(D: Dx, a: Area, outer: Side): void {
 /** The intake hall: queue barriers to the lanes, the registration counter, waiting benches facing the screening wall. */
 function intakeHall(D: Dx, a: Area, lanes: Area[]): void {
   const top = a.y * CELL, bot = (a.y + a.h) * CELL;
-  // queue barriers: a pair either side of each lane's mouth, running south from the screening wall
+  // queue barriers: one each side of every lane mouth's approach, running south from the screening wall (a funnel per lane)
   for (const ln of lanes) {
-    const cx = (ln.x + ln.w / 2) * CELL;
-    for (const s of [-1, 1]) put(D, a, 'crowdBarrier', cx + s * 1.5, top + 2.2, Math.PI / 2);
+    const d = doorTo(D, ln, a);
+    if (!d) continue;
+    const cx = (d.x + d.w / 2) * CELL;
+    for (const s of [-1, 1]) put(D, a, 'crowdBarrier', cx + s * 1.3, top + 2.1, Math.PI / 2);
   }
-  // the registration counter: desks in a line across the hall's middle, clerks behind them (north), applicants come from the south
-  const zc = top + (bot - top) * 0.52;
+  // the registration counter: three desks across the hall's middle, the clerks' chairs behind them (north); applicants queue south
+  const zc = Math.round((top + (bot - top) * 0.5) / CELL) * CELL; // (on a cell line: the desk covers two rows, the chair the two behind)
   const desk = PROP_DEFS.desk;
+  const cx = (a.x + a.w / 2) * CELL;
   let desks = 0;
-  for (let x = a.x * CELL + 3.0; x <= (a.x + a.w) * CELL - 4.0; x += desk.w + 1.6) {
-    const p = put(D, a, 'desk', x, zc, 0, {ring: 0.4});
+  for (const k of [-1, 0, 1]) {
+    const x = cx + k * (desk.w + 2.6);
+    const p = put(D, a, 'desk', x, zc, 0, {front: 0.8});
     if (!p) continue;
+    p.purpose = 'agent-office'; // (the registration desks' drawers hold office things, not the hall's shelter supply)
     desks++;
-    put(D, a, 'officeSwivelChair', x, zc - desk.d / 2 - 0.45, 0, {laneOk: true});
+    put(D, a, 'officeSwivelChair', x, zc - 1.0, 0, {laneOk: true});
   }
-  // waiting benches: two rows near the south wall facing the screening wall
-  for (const back of [1.5, 3.2]) for (let x = a.x * CELL + 2.4; x <= (a.x + a.w) * CELL - 2.4; x += PROP_DEFS.bench.w + 1.6) put(D, a, 'bench', x, bot - back, Math.PI, {ring: 0.4});
-  for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'noticeBoard', {sides: ['W', 'S'], y: 1.2, tries: 16});
-  wallSign(D, a, 'N', (a.x + a.w / 2) * CELL, 4.6, {kind: 'info', text: 'ADMISSIONS · ALL ARRIVALS REGISTER HERE', w: 4.2});
-  lanes.forEach((ln, i) => {
-    const d = D.doors(ln).find(q => q.a === a.id || q.b === a.id);
-    if (d) doorPlate(D, d, a, `SCREENING ${i + 1}`, 1.4);
-  });
+  // waiting benches: a row along the south wall's middle, facing the screening wall
+  for (const k of [-1.5, -0.5, 0.5, 1.5]) put(D, a, 'bench', cx + k * (PROP_DEFS.bench.w + 1.4), bot - 1.6, Math.PI, {ring: 0.4});
+  mountProp(D.ctx, a, 'W', (a.y + a.h / 2) * CELL, 'noticeBoard', 1.2, D.base);
+  wallSign(D, a, 'N', cx, 4.6, {kind: 'info', text: 'ADMISSIONS · ALL ARRIVALS REGISTER HERE', w: 4.2});
+  wallSign(D, a, 'S', cx, 2.6, {kind: 'info', text: 'HAVE YOUR SHELTER CARD READY', w: 2.8});
+  lanes.forEach((ln, i) => { const d = doorTo(D, ln, a); if (d) doorPlate(D, d, a, `SCREENING ${i + 1}`, 1.4); });
   if (desks < 2) F1_DRESS_STATS.skipped.push(`intake desks ${desks}`);
 }
 
-/** A screening lane: the walk-through detector against one wall (the walkway beside it). */
+/** A screening lane: the walk-through detector against its side wall, the walkway beside it between the two doorways. */
 function lane(D: Dx, a: Area, side: 'W' | 'E'): void {
   const det = PROP_DEFS.metalDetector;
-  // along the lane (its 3.1 m width north-south), backed against the given wall
-  const x = side === 'W' ? a.x * CELL + det.d / 2 + 0.02 : (a.x + a.w) * CELL - det.d / 2 - 0.02;
+  // turned along the lane (its 3.1 m width north-south), backed against the given wall, its body clear of both doorways' cells
+  const x = side === 'W' ? a.x * CELL + det.d / 2 + 0.01 : (a.x + a.w) * CELL - det.d / 2 - 0.01;
   const z = (a.y + a.h / 2) * CELL;
-  if (!put(D, a, 'metalDetector', x, z, Math.PI / 2, {laneOk: true})) put(D, a, 'securityPodium', side === 'W' ? a.x * CELL + 0.45 : (a.x + a.w) * CELL - 0.45, z, side === 'W' ? Math.PI / 2 : -Math.PI / 2);
+  if (put(D, a, 'metalDetector', x, z, side === 'W' ? Math.PI / 2 : -Math.PI / 2, {checkZone: false, laneOk: true})) F1_DRESS_STATS.detectors++;
+  else F1_DRESS_STATS.skipped.push(`lane detector ${a.label}`);
 }
 
-/** A guard booth: the console facing the lane door, the guard's chair. */
+/** A guard booth: the monitor desk on the wall facing the lane door, the guard's chair. */
 function booth(D: Dx, a: Area): void {
-  const ds = D.doors(a)[0];
-  const s = ds ? doorSide(ds, a) : 'W';
+  if (D.layout.props.some(p => p.area === a.id && (p.kind === 'monitorDesk' || p.kind === 'desk'))) return;
+  const d = D.doors(a)[0];
+  const s: Side = d ? doorSide(d, a) : 'W';
   const p = scanWall(D, a, 'monitorDesk', [OPP[s], 'N', 'S'], 0.9);
   if (p) {
+    p.purpose = 'security-office'; // (the guard's desk: security loot in a booth that is otherwise bare)
     const fx = Math.round(Math.sin(p.rot)), fz = Math.round(Math.cos(p.rot));
-    put(D, a, 'officeSwivelChair', p.x + fx * 0.8, p.z + fz * 0.8, p.rot + Math.PI, {laneOk: true});
+    put(D, a, 'officeSwivelChair', p.x + fx * 0.75, p.z + fz * 0.75, p.rot + Math.PI, {laneOk: true});
   }
-  mountProp(D.ctx, a, OPP[s], (a.y + a.h / 2) * CELL, 'keyCabinet', 1.4, D.base);
 }
 
-/** The search room: the inspection table, a chair, the bin, a cabinet for what they took off you. */
+/** The search room (the dresser furnished it as a security office): the inspection table in the middle. */
 function searchRoom(D: Dx, a: Area): void {
-  island(D, a, 'table', 'S', 0.7);
-  scanWall(D, a, 'cabinetLow', ['N', 'W', 'S'], 0.7);
-  scanWall(D, a, 'bin', ['S', 'W'], 0);
+  put(D, a, 'table', (a.x + a.w / 2) * CELL, (a.y + a.h * 0.45) * CELL, 0, {ring: 0.5});
 }
 
-/** Decontamination: shower booths on the far wall, wash troughs on a side wall, suit lockers by the dirty-side door, the eyewash. */
+/** Decontamination: shower booths along the far wall, wash troughs, suit lockers by the dirty-side door, the eyewash. */
 function decontamination(D: Dx, a: Area): void {
-  const ds = D.doors(a);
-  const sides = new Set(ds.map(d => doorSide(d, a)));
+  const sides = new Set(D.doors(a).map(d => doorSide(d, a)));
   const free = (['S', 'E', 'N', 'W'] as Side[]).filter(s => !sides.has(s));
   for (let i = 0; i < 3; i++) if (!scanWall(D, a, 'bunkerDeconShower', free, 1.0, undefined, true)) break;
   for (let i = 0; i < 2; i++) scanWall(D, a, 'washCounter', ['E', ...free], 0.7, undefined, true);
-  for (let i = 0; i < 2; i++) scanWall(D, a, 'staffLockers', ['N'], 1.0, undefined, true);
-  scanWall(D, a, 'eyewashStation', ['N', 'E'], 0.6, undefined, true);
-  scanWall(D, a, 'bin', ['N', 'S'], 0, undefined, true);
-  // the decontamination line: an amber band across the room between the dirty and clean sides
-  const xm = (a.x + a.w * 0.5) * CELL;
+  scanWall(D, a, 'staffLockers', ['N'], 1.0, (a.x + a.w * 0.75) * CELL, true);
+  mountProp(D.ctx, a, 'N', (a.x + a.w * 0.55) * CELL, 'eyewashStation', 0.9, D.base);
+  // the decontamination line: an amber band across the room between the dirty (stair) side and the clean (hall) side
+  const xm = (a.x + a.w * 0.45) * CELL;
   floorDecor(D, 'plasticSeat', {x0: xm - 0.08, x1: xm + 0.08, z0: a.y * CELL + 0.1, z1: (a.y + a.h) * CELL - 0.1});
 }
 
 /** The arrival lobby: benches on the south wall, a stretcher, the first-aid kit; the way to decontamination. */
 function arrivalLobby(D: Dx, a: Area, decon: Area | undefined): void {
   for (let i = 0; i < 2; i++) scanWall(D, a, 'bench', ['S'], 0.6, (a.x + a.w * 0.62) * CELL);
-  scanWall(D, a, 'wheeledStretcher', ['E', 'S'], 0.6);
-  mountProp(D.ctx, a, 'N', (a.x + a.w * 0.6) * CELL, 'firstAidWallKit', 1.3, D.base);
-  if (decon) {
-    const d = D.doors(a).find(q => q.a === decon.id || q.b === decon.id);
-    if (d) doorPlate(D, d, a, 'ALL ARRIVALS · DECONTAMINATION', 2.6);
-  }
-  wallSign(D, a, 'N', (a.x + a.w * 0.75) * CELL, 2.2, {kind: 'info', text: 'ARRIVALS · KEEP TO THE LINE', w: 2.4, arrow: 'left'});
+  scanWall(D, a, 'wheeledStretcher', ['E'], 0.6);
+  mountProp(D.ctx, a, 'N', (a.x + a.w * 0.62) * CELL, 'firstAidWallKit', 1.3, D.base);
+  const d = doorTo(D, a, decon);
+  if (d) doorPlate(D, d, a, 'ALL ARRIVALS · DECONTAMINATION', 2.6);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // The freight lobby and the security wing
 
-/** The freight lobby: the loading bay outlined round the lift apron, goods stacked along the far wall, a pallet jack. */
-function freightLobby(D: Dx, a: Area): void {
-  const an = D.layout.bunker ? null : null; void an;
-  const ap = {x: 56, y: 63, w: 12, h: 8};
-  outline(D, {x0: ap.x * CELL + 0.06, z0: ap.y * CELL + 0.06, x1: (ap.x + ap.w) * CELL - 0.06, z1: (ap.y + ap.h) * CELL - 0.02});
-  for (let i = 0; i < 3; i++) scanWall(D, a, 'crate', ['N'], 0, (a.x + a.w * 0.3) * CELL);
-  for (let i = 0; i < 2; i++) scanWall(D, a, 'cartonStack', ['N'], 0, (a.x + a.w * 0.7) * CELL);
-  scanWall(D, a, 'palletJack', ['N', 'E'], 0.4);
-  scanWall(D, a, 'desk', ['W', 'N'], 0.8);
-  wallSign(D, a, 'S', (ap.x + ap.w / 2) * CELL, 3.6, {kind: 'service', text: 'CARGO LIFT · KEEP BAY CLEAR', w: 3.0});
+/** The freight lobby: the loading bay outlined round the lift apron, goods stacked on the far side, a pallet jack. */
+function freightLobby(D: Dx, a: Area, apron: {x: number; y: number; w: number; h: number}): void {
+  outline(D, {x0: apron.x * CELL + 0.06, z0: apron.y * CELL + 0.06, x1: (apron.x + apron.w) * CELL - 0.06, z1: (apron.y + apron.h) * CELL - 0.02});
+  scanWall(D, a, 'crate', ['N'], 0, (a.x + a.w * 0.35) * CELL);
+  scanWall(D, a, 'cartonStack', ['N'], 0, (a.x + a.w * 0.65) * CELL);
+  scanWall(D, a, 'palletJack', ['N', 'E'], 0.4, (a.x + a.w * 0.8) * CELL);
+  wallSign(D, a, 'S', (apron.x + apron.w / 2) * CELL, 3.7, {kind: 'service', text: 'CARGO LIFT · KEEP BAY CLEAR', w: 3.0});
 }
 
-/** The duty hall: the duty desk facing the service stair's landing, the punch clock, the key cabinet. */
+/** The duty hall: the staff lockers on the back wall, the duty desk facing the service stair's landing, the punch clock, a bench. */
 function dutyHall(D: Dx, a: Area): void {
-  const desk = scanWall(D, a, 'receptionDesk', ['N'], 1.2, (a.x + a.w * 0.62) * CELL);
-  if (desk) put(D, a, 'officeSwivelChair', desk.x, desk.z - 1.25, 0, {laneOk: true});
-  mountProp(D.ctx, a, 'N', (a.x + a.w * 0.3) * CELL, 'punchClock', 1.3, D.base);
-  scanWall(D, a, 'bench', ['W', 'N'], 0.6);
+  // (the locker room purpose already lined a wall with the staff lockers)
+  // the duty desk stands free 2.2 m off the back wall facing the landing, the sergeant's chair between it and the wall
+  const dz = a.y * CELL + 2.25;
+  for (const f of [0.66, 0.6, 0.72, 0.54]) {
+    const desk = put(D, a, 'receptionDesk', (a.x + a.w * f) * CELL, dz, 0);
+    if (!desk) continue;
+    put(D, a, 'officeSwivelChair', desk.x, a.y * CELL + 0.75, 0, {laneOk: true});
+    break;
+  }
+  if (!D.layout.props.some(p => p.area === a.id && p.kind === 'punchClock')) mountProp(D.ctx, a, 'N', (a.x + a.w * 0.52) * CELL, 'punchClock', 1.3, D.base);
 }
 
-/** Operations: the radio console + chair (the Reactor shelter's radio room), the control console, the map table, a whiteboard. */
+/** Operations: the radio console + chair (the Reactor shelter's radio room), the control console, the map table. */
 function operations(D: Dx, a: Area): void {
   radioRoom(D, a);
   scanWall(D, a, 'bunkerControlConsole', ['E', 'N', 'S'], 1.0, undefined, true);
-  const t = island(D, a, 'conferenceTable', 'S', 0.8);
-  if (t) for (const s of [-1, 1]) put(D, a, 'foldingChair', t.x + s * 0.8, t.z + 1.05, Math.PI, {laneOk: true});
-  scanWall(D, a, 'mobileWhiteboard', ['W', 'S', 'N'], 0.6);
+  island(D, a, 'conferenceTable', 'S', 0.8);
 }
 
-/** The warden's office: the desk facing the door, the chair, the coat rack, a filing cabinet. */
+/** The warden's office (the dresser furnished it as an office: desk, safe, cabinets, files): his coat on the rack by the door. */
 function wardenOffice(D: Dx, a: Area): void {
-  const ms = D.doors(a)[0] ? doorSide(D.doors(a)[0], a) : 'W';
-  const desk = D.layout.props.find(p => p.area === a.id && p.kind === 'desk') ?? null;
-  if (desk) { const fx = Math.round(Math.sin(desk.rot)), fz = Math.round(Math.cos(desk.rot)); put(D, a, 'officeSwivelChair', desk.x - fx * 0.8, desk.z - fz * 0.8, desk.rot, {laneOk: true}); }
-  scanWall(D, a, 'coatRack', [ms, 'N', 'S'], 0.4);
-  scanWall(D, a, 'filingCabinet', ['N', 'S', 'E'], 0.8);
+  if (!D.layout.props.some(p => p.area === a.id && p.kind === 'coatRack')) scanWall(D, a, 'coatRack', ['W', 'N', 'S'], 0.4);
 }
 
-/** The records strongroom: filing cabinets in a row, archive boxes. */
-function recordsRoom(D: Dx, a: Area): void {
-  rowAlongWall(D.ctx, a, 'E', 'filingCabinet', {front: 0.8, max: 4});
-  for (let i = 0; i < 2; i++) scanWall(D, a, 'archiveBoxes', ['N', 'S'], 0);
-}
-
-/** The guard room: the mess table and folding chairs (the dresser placed the gun locker / monitor desk / cabinets). */
+/** The guard room: the dresser placed the gun locker / monitor desk / cabinets; the duty roster board. */
 function guardRoom(D: Dx, a: Area): void {
-  const t = island(D, a, 'table', 'N', 0.7);
-  if (t) for (const [dx, dz, r] of [[0, -1.15, 0], [0, 1.15, Math.PI]] as const) put(D, a, 'foldingChair', t.x + dx, t.z + dz, r, {laneOk: true});
+  if (!D.layout.props.some(p => p.area === a.id && p.kind === 'noticeBoard')) placeAgainstWall(D.ctx, a, 'noticeBoard', {y: 1.2, tries: 16});
 }
 
-/** A holding cell: a cot on one wall, a bucket. */
+/** A holding cell: a cot on its back wall, nothing else. */
 function holdingCell(D: Dx, a: Area): void {
   scanWall(D, a, 'palletBed', ['W', 'N', 'S'], 0.5);
-  scanWall(D, a, 'bin', ['N', 'S', 'W'], 0);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -256,6 +247,7 @@ function holdingCell(D: Dx, a: Area): void {
 export function dressFloor1(ctx: FloorDressCtx): void {
   const S = F1_DRESS_STATS;
   S.skipped = [];
+  S.detectors = 0;
   const {layout, carved} = ctx;
   const key = carved.areas;
   const A = (k: string): Area | undefined => (key[k] !== undefined ? layout.areas[key[k]] : undefined);
@@ -267,50 +259,37 @@ export function dressFloor1(ctx: FloorDressCtx): void {
   const well = ctx.frame.well!.rect;
   const lanes = ['lane1', 'lane2', 'lane3'].map(A).filter((q): q is Area => !!q);
 
-  // lights first (the dressing below keeps clear of nothing they need)
-  for (const k of ['galN', 'galS', 'intake', 'freight', 'duty', 'ops', 'arrival', 'decon']) { const a = A(k); if (a) step(`lights ${k}`, () => hallLights(D, a, k === 'intake' ? 4.2 : 4.6)); }
-  for (const k of ['galE', 'galW', 'guardCorr']) { const a = A(k); if (a) step(`lights ${k}`, () => hallLights(D, a, 4.0, 1.0)); }
+  // the big spaces' pendant grids (the dresser hung at most three fixtures down the middle)
+  for (const k of ['galN', 'galS', 'intake', 'freight', 'duty']) { const a = A(k); if (a) step(`lights ${k}`, () => hallLights(D, a, k === 'intake' ? 5.0 : 6.0, 2.0)); }
 
-  const galN = A('galN'), galS = A('galS'), galE = A('galE'), galW = A('galW');
-  if (galN) step('muster', () => musterGallery(D, galN, well.x, well.x + well.w));
-  if (galS) step('overlook', () => overlook(D, galS, lanes));
-  if (galE) step('galE', () => galleryWalk(D, galE, 'E'));
-  if (galW) step('galW', () => galleryWalk(D, galW, 'W'));
-  const intake = A('intake');
-  if (intake) step('intake', () => intakeHall(D, intake, lanes));
-  lanes.forEach((ln, i) => step(`lane${i + 1}`, () => lane(D, ln, i % 2 ? 'E' : 'W')));
-  for (const k of ['booth1', 'booth2']) { const a = A(k); if (a) step(k, () => booth(D, a)); }
-  const search = A('search');
-  if (search) step('search', () => searchRoom(D, search));
-  const decon = A('decon');
-  if (decon) step('decon', () => decontamination(D, decon));
-  const arrival = A('arrival');
-  if (arrival) step('arrival', () => arrivalLobby(D, arrival, decon));
-  const freight = A('freight');
-  if (freight) step('freight', () => freightLobby(D, freight));
-  const duty = A('duty');
-  if (duty) step('duty', () => dutyHall(D, duty));
-  const ops = A('ops');
-  if (ops) step('ops', () => operations(D, ops));
-  const warden = A('warden');
-  if (warden) step('warden', () => wardenOffice(D, warden));
-  const records = A('records');
-  if (records) step('records', () => recordsRoom(D, records));
-  const guard = A('guard');
-  if (guard) step('guard', () => guardRoom(D, guard));
-  const arm = A('armoury');
-  if (arm) step('armoury', () => armoury(D, arm));
-  for (const k of ['cell1', 'cell2', 'cell3', 'cell4']) { const a = A(k); if (a) step(k, () => holdingCell(D, a)); }
-  const corr = A('guardCorr');
-  if (corr) step('corr duct', () => ceilingDuct(D, corr, 'E'));
+  const at = (k: string, fn: (a: Area) => void) => { const a = A(k); if (a) step(k, () => fn(a)); };
+  // the line first (its hero pieces need the most room), then the ring, then the wing
+  lanes.forEach((ln, i) => step(`lane${i + 1}`, () => lane(D, ln, F1_LANES[i])));
+  at('decon', a => decontamination(D, a));
+  at('intake', a => intakeHall(D, a, lanes));
+  at('booth1', a => booth(D, a));
+  at('booth2', a => booth(D, a));
+  at('search', a => searchRoom(D, a));
+  at('arrival', a => arrivalLobby(D, a, A('decon')));
+  at('galN', a => musterGallery(D, a, well.x, well.x + well.w));
+  at('galS', a => overlook(D, a, lanes));
+  at('galW', a => galleryWalk(D, a, 'W'));
+  const lift = ctx.frame.anchors.find(q => q.id === 'lift');
+  at('freight', a => freightLobby(D, a, lift?.apron ?? {x: 56, y: 63, w: 12, h: 8}));
+  at('ops', a => operations(D, a));
+  at('duty', a => dutyHall(D, a));
+  at('warden', a => wardenOffice(D, a));
+  at('guard', a => guardRoom(D, a));
+  at('armoury', a => armoury(D, a));
+  for (const k of ['cell1', 'cell2', 'cell3', 'cell4']) at(k, a => holdingCell(D, a));
+  at('guardCorr', a => ceilingDuct(D, a, 'E'));
 
-  // plates on the rooms' doors in the shelter's words
+  // plates on the rooms' main doors in the shelter's words (the dresser's stock plate by that door gives way)
   step('plates', () => {
     for (const [k, text] of Object.entries(PLATE_TEXT)) {
       const a = A(k);
-      if (!a) continue;
-      const d = D.doors(a)[0];
-      if (!d) continue;
+      const d = a ? D.doors(a)[0] : undefined;
+      if (!a || !d) continue;
       const outside = layout.areas[d.a === a.id ? d.b : d.a];
       layout.signs = layout.signs.filter(sg => !(sg.area === outside.id && sg.kind === 'service' && Math.hypot(sg.x - (d.x + d.w / 2) * CELL, sg.z - (d.y + d.h / 2) * CELL) < 2.6));
       doorPlate(D, d, outside, text, text.length > 14 ? 2.0 : 1.4);
@@ -319,11 +298,10 @@ export function dressFloor1(ctx: FloorDressCtx): void {
   // the guarantee: no floor pocket anywhere on the storey's areas
   sweepPockets(D, areas, p0);
   S.props = layout.props.length - p0; S.decor = layout.decor.length - d0; S.signs = layout.signs.length - s0; S.lights = layout.lights.length - l0;
-  void FLOOR; void wallRange;
 }
 
 const PLATE_TEXT: Readonly<Record<string, string>> = {
   decon: 'DECONTAMINATION', search: 'SEARCH ROOM', booth1: 'CHECKPOINT', booth2: 'CHECKPOINT', ops: 'OPERATIONS', warden: 'SHELTER WARDEN',
-  records: 'RECORDS', guard: 'GUARD ROOM', armoury: 'ARMOURY · AUTHORISED ONLY', latrines: 'LATRINES', store: 'CONFISCATED PROPERTY', registry: 'REGISTRY',
+  guard: 'GUARD ROOM', armoury: 'ARMOURY · AUTHORISED ONLY', latrines: 'LATRINES', store: 'CONFISCATED PROPERTY', duty: 'DUTY DESK',
   cell1: 'HOLDING 1', cell2: 'HOLDING 2', cell3: 'HOLDING 3', cell4: 'HOLDING 4',
 };
