@@ -4,11 +4,13 @@
 //    and its wait line, the marshals' booths flanking the door with a podium at the threshold, dead planters by the portal, benches in
 //    the west bay, warm lamps on the door, the shelter's plates;
 //  - the registration hall: the queue line, the registration counter (two runs of counter modules, clerks' chairs behind), records;
-//  - the waiting hall: benches in rows facing the arcade, luggage, bedrolls along the far wall, a child's rocking horse;
-//  - the observation ward's camp beds, receiving's goods, the billeting desk, the platform's overflow berths and its portal framing;
+//  - the waiting hall: benches in rows facing the arcade, luggage, bedrolls and the families' trunks along the far wall, a child's
+//    rocking horse;
+//  - the observation corridor's duct and the ward's camp beds, goods by receiving, the billeting board, the platform's overflow
+//    berths and its portal framing;
 //  - plates and notices in the shelter's own words; the composer's retail stock (shoe-shine chairs, capsule toys, newspaper boxes,
 //    cash machines …) taken out of the vault hall, the vestibule and the platform: a civil-defence shelter's admission halls.
-// Storage placed here opens (counters, filing cabinets, archive boxes, shelves, medicine cabinet: existing holders, loot by the room's
+// Storage placed here opens (counters, archive boxes, footlockers, medicine cabinet: existing holders, loot by the room's
 // purpose); loose things move (chairs, barriers, luggage, planters: their existing physics classes); anchored structure (columns, the
 // booths) is the existing classification. Every placement goes through placeKit (door zones, access strips, area connectivity).
 
@@ -263,7 +265,7 @@ function vaultHall(D: Dx, a: Area, name: string): void {
 /**
  * The registration hall: a queue line of crowd barriers parallel to the counter (its entry at the west end), the registration
  * counter in two runs of counter modules (customers north, the clerks' chairs south: the admission kits are its loot), and the
- * cleared side behind it — records (filing cabinets, archive boxes) on the back wall, the inspection gates on the east wall.
+ * cleared side behind it — the records (archive boxes) on the back wall, the inspection gates on the east wall.
  */
 function registration(D: Dx, a: Area): void {
   const ax0 = a.x * CELL, ax1 = (a.x + a.w) * CELL, az1 = (a.y + a.h) * CELL;
@@ -282,8 +284,7 @@ function registration(D: Dx, a: Area): void {
   // the queue line: barriers parallel to the counter, closed at the east wall, the entry at the west end
   const bz = cz - ck.d / 2 - 1.55, bw = PROP_DEFS.crowdBarrier.w;
   for (let x = ax1 - 0.35 - bw / 2; x - bw / 2 >= ax0 + 2.4; x -= bw + 0.05) put(D, a, 'crowdBarrier', x, bz, 0);
-  // records on the cleared side's back wall
-  along(D, a, 'filingCabinet', 'S', 1, 0.8, (ax0 + ax1) / 2 + 1.5);
+  // the records on the cleared side's back wall
   along(D, a, 'archiveBoxes', 'S', 1, 0.6, ax1 - 1.5);
   scanWall(D, a, 'securityPodium', ['E'], 0.8, az1 - 2.5);
   // notices on the public side
@@ -312,6 +313,8 @@ function waitingHall(D: Dx, a: Area): void {
   }
   // bedrolls along the east wall (families slept here waiting for their group), a child's rocking horse in the corner
   along(D, a, 'bedroll', 'E', 2, 0.4, az0 + 3);
+  // the families' trunks by the bedrolls (openable: their belongings, the hall's personal-effects purpose)
+  along(D, a, 'footlocker', 'E', 2, 0.5, az0 + 7.5);
   along(D, a, 'rockingHorse', 'S', 1, 0.5, ax1 - 1.5);
   // notices
   wallSign(D, a, 'E', az1 - 2.5, 2.3, {kind: 'info', text: 'WAIT HERE UNTIL YOUR GROUP IS CALLED', w: 2.4});
@@ -322,7 +325,7 @@ function waitingHall(D: Dx, a: Area): void {
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Rooms
 
-/** The observation ward: camp beds along both long walls, a stretcher, an IV pole, the medicine cabinet. */
+/** The observation ward: camp beds along both long walls, an IV pole, the medicine cabinet. */
 function observation(D: Dx, a: Area): void {
   const bed = PROP_DEFS.palletBed;
   const horiz = a.w >= a.h;
@@ -339,16 +342,14 @@ function observation(D: Dx, a: Area): void {
       if (put(D, a, 'palletBed', sp.x + nx * dd, sp.z + nz * dd, rot + Math.PI / 2)) n++;
     }
   }
-  scanWall(D, a, 'wheeledStretcher', horiz ? ['E', 'W'] : ['N', 'S'], 0.6);
   scanWall(D, a, 'ivPole', horiz ? ['E', 'W'] : ['N', 'S'], 0.4);
   scanWall(D, a, 'medCabinet', horiz ? ['W', 'E'] : ['S', 'N'], 0.8);
   wallSign(D, a, horiz ? 'E' : 'S', horiz ? (a.y + a.h / 2) * CELL : (a.x + a.w / 2) * CELL, 2.2, {kind: 'service', text: 'MASKS ON AT ALL TIMES · NO VISITORS', w: 2.2});
 }
 
-/** The observation corridor: a duct under its low ceiling, a stretcher parked against the wall, its warning. */
+/** The observation corridor: a duct under its low ceiling, its warning. */
 function corridor(D: Dx, a: Area): void {
   ceilingDuct(D, a, 'N', 0.45);
-  scanWall(D, a, 'wheeledStretcher', ['N'], 0.5);
   wallSign(D, a, 'S', (a.x + a.w / 2) * CELL, 2.0, {kind: 'service', text: 'ISOLATION · KEEP DOORS SHUT', w: 1.8});
 }
 
