@@ -16,7 +16,7 @@ import {FILTER_LIFE_S, gearSpec, isAirtank, isBagItem, isFilterMask} from '../sr
 import {GAS_FILTER_ID as LOOT_FILTER_ID} from '../src/gen/maskLoot';
 import {GAS_MASK} from '../src/gear/gasMask';
 import {FUEL} from '../src/fuel/fuel';
-import {MARKET_STALLS, type MarketStallId} from '../src/gen/market/marketTypes';
+import {MARKET_STALLS, type MarketShopId, type MarketStallId} from '../src/gen/market/marketTypes';
 import {CENTS, GAS_FILTER_ID, VALUE, baseCents, isTradeable, rarityFactor, roundCents, stackUnitCents} from '../src/market/trade/value';
 import {STALL_TRADE, TRADE_RATES, betterStall, buyBackPct, buyPrice, sellQuote} from '../src/market/trade/stalls';
 import {MarketStock, stallDraws, stockRng, trainCapacityUnits} from '../src/market/trade/stock';
@@ -153,7 +153,7 @@ describe('market stalls: who buys what', () => {
   it('the multiplier table: own line 55 %, general store 40 %, scrapyard 35 %, any other specialist 25 %', () => {
     expect(TRADE_RATES).toEqual({buyPct: 100, themedPct: 55, offPct: 25});
     expect(Object.fromEntries(MARKET_STALLS.map(st => [st, STALL_TRADE[st].broadPct]))).toEqual({gun: 25, medical: 25, fuel: 25, general: 40, gear: 25, scrap: 35});
-    const own: Record<MarketStallId, string[]> = {gun: ['rifle', 'knife', 'ammo_9mm'], medical: ['medkit', 'trauma_kit', 'arm_sling'], fuel: [FUEL.canItem, 'flare', 'battery'],
+    const own: Record<MarketShopId, string[]> = {gun: ['rifle', 'knife', 'ammo_9mm'], medical: ['medkit', 'trauma_kit', 'arm_sling'], fuel: [FUEL.canItem, 'flare', 'battery'],
       general: ['water', 'beans', 'battery', 'flare', GAS_FILTER_ID], gear: ['armor_vest', 'gas_mask', 'airtank_backpack', 'backpack'], scrap: ['scrap_metal', 'electrical_parts', 'bio_mater']};
     for (const st of MARKET_STALLS) for (const id of own[st]) expect(buyBackPct(st, id), `${id}@${st}`).toBe(TRADE_RATES.themedPct);
     for (const st of MARKET_STALLS) for (const d of TRADEABLE) expect(buyBackPct(st, d.id), `${d.id}@${st}`).toBe(STALL_TRADE[st].deals(d) ? 55 : STALL_TRADE[st].broadPct);

@@ -27,7 +27,7 @@ import type {Area, LightPlacement, Rect, Side, SignPlacement, StationLayout} fro
 import {MARKET_EMPTY_KEY} from '../dress';
 import {MARKET_WORKSHOP_KEY} from '../../../items/lootTables'; // task studio-base-salvage-20261108-073314-01: the community stores' basic salvage
 import {STALL_SIGNS} from '../names';
-import type {MarketStallId} from '../marketTypes';
+import type {MarketShopId, MarketStallId} from '../marketTypes';
 import {SETTLE} from './frame';
 import type {ContainerCarve, SettleCarve} from './carve';
 
@@ -195,7 +195,7 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     };
   }
   /** The trade's fixtures and props: back-wall run, side fixtures, floor props (none of them carries anything but wares). */
-  function tradeKit(id: MarketStallId): {back: PropKind[]; side: PropKind; extra: PropKind[]} {
+  function tradeKit(id: MarketShopId): {back: PropKind[]; side: PropKind; extra: PropKind[]} {
     switch (id) {
       // (back-wall kinds are all <= 0.5 m deep: one cell row, the trader's two rows in front of it stay clear)
       case 'gun': return {back: ['gunRack', 'outdoorsPlankShelving'], side: 'gunDisplay', extra: ['crate', 'handToolbox']};
@@ -211,7 +211,7 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
    * shelving, the counter 1.5-2.5 m (the trader's way in at one end), the trader 2.5-3.5 m, the back wall's fixtures 3.5-4 m — every
    * counter top and side board within the 2.6 m reach of the customer spot (market/wares/slots.ts WARES.reach).
    */
-  function walkIn(F: Frame, a: Area, id: MarketStallId): StallDressed2 | null {
+  function walkIn(F: Frame, a: Area, id: MarketShopId): StallDressed2 | null {
     const kit = tradeKit(id), displays: DisplaySource[] = [];
     const vCounter = 2.0, vTrader = 3.0, vFront = 1.2;
     const gapLeft = rng.chance(0.5);

@@ -14,6 +14,7 @@
 //   general    |     55 %     |   40 %   (the broad buyers: the general store and the scrapyard stay broad)
 //   outfitter  |     55 %     |   25 %
 //   scrapyard  |     55 %     |   35 %
+//   bartender  |     55 %     |   25 %   (task studio-market-bar-20261108-225231-01, layout version 3's bar: beers and drinks)
 // So the right stall pays more than twice what a wrong specialist does, and the general store / the scrapyard beat any wrong specialist.
 // All multiples are < 100 %, so for every item, condition and count the best sale anywhere is strictly below the cheapest purchase
 // anywhere: no buy -> sell profit at the same or another stall / market, and splitting or merging stacks cannot create one (a sum of
@@ -25,7 +26,8 @@
 import {ITEMS, type ItemDef} from '../../items/items';
 import {econCat} from '../../items/lootTables';
 import {FUEL} from '../../fuel/fuel';
-import {MARKET_STALLS, type MarketStallId} from '../../gen/market/marketTypes';
+import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL, type MarketStallId} from '../../gen/market/marketTypes';
+import {isBeer} from '../../items/beers';
 import type {ItemStack} from '../../items/inventory';
 import {CENTS, GAS_FILTER_ID, stackUnitCents} from './value';
 
@@ -61,6 +63,9 @@ export const STALL_TRADE: Readonly<Record<MarketStallId, StallTrade>> = {
     deals: d => isEcon(d, 'food', 'drink', 'battery', 'flare') || d.id === GAS_FILTER_ID},
   gear: {id: 'gear', label: 'Outfitter', line: 'worn gear, masks and packs', broadPct: TRADE_RATES.offPct, deals: d => d.kind === 'gear'},
   scrap: {id: 'scrap', label: 'Scrapyard', line: 'salvage and crafting materials', broadPct: 35, deals: d => d.kind === 'material'},
+  // task studio-market-bar-20261108-225231-01 (lane BAR): the upper-level bar's bartender (layout version 3) — the market's beers (items/beers.ts:
+  // the bar's own stock) and ordinary drinks; anything else at the specialists' off-line multiple
+  bar: {id: 'bar', label: 'Bartender', line: 'beers and drinks', broadPct: TRADE_RATES.offPct, deals: d => isBeer(d.id) || isEcon(d, 'drink')},
 };
 
 export type TradeRefusalCode = 'unknown' | 'part' | 'currency' | 'bag-contents' | 'too-little';
@@ -106,13 +111,14 @@ export function sellQuote(stall: MarketStallId, stack: Pick<ItemStack, 'itemId' 
 
 /**
  * Another stall here that pays MORE for the same sale, and what it pays (null: this stall is already the best or as good) — the deal line
- * names it ("PANTRY pays 4"), so using the right stall is worth it and easy to see.
+ * names it ("PANTRY pays 4"), so using the right stall is worth it and easy to see. (Task studio-market-bar-20261108-225231-01: the six,
+ * plus the bar where the station has one — its sign among `names`, the station's stalls; a market without a bar never names it.)
  */
 export function betterStall(stall: MarketStallId, stack: Pick<ItemStack, 'itemId' | 'count' | 'mag' | 'filter' | 'air' | 'armor' | 'bag'>, count: number,
   names?: Partial<Record<MarketStallId, string>>): {stall: MarketStallId; name: string; price: number} | null {
   const here = sellQuote(stall, stack, count);
   let best: {stall: MarketStallId; name: string; price: number} | null = null;
-  for (const s of MARKET_STALLS) {
+  for (const s of names ? MARKET_STALLS_ALL.filter(q => q !== BAR_STALL || names[q] !== undefined) : MARKET_STALLS) {
     if (s === stall) continue;
     const q = sellQuote(s, stack, count);
     if (q.ok && q.price > (here.ok ? here.price : 0) && (!best || q.price > best.price)) best = {stall: s, name: signOf(s, names), price: q.price};

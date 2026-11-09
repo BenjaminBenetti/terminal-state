@@ -248,7 +248,11 @@ describe('market wares: the displays ARE the stock', () => {
   it('build: every displayed ware is its stall\'s own stock stack (same object / uid), owned, on the pickups; nothing else is spawned', () => {
     const m = market();
     let total = 0;
-    for (const id of MARKET_STALLS) {
+    // (re-pinned by task studio-market-bar-20261108-225231-01, lane BAR: the default market is layout version 3 — its bartender is a
+    // seventh stall whose beers are displayed on the backbar like every stall's stock, so the census runs over the layout's stalls)
+    const ids = m.L.market!.stalls.map(s => s.id);
+    expect(ids).toEqual([...MARKET_STALLS, 'bar']);
+    for (const id of ids) {
       const list = m.sys.stock!.stalls[id], shown = m.shown(id);
       expect(shown.length, id).toBeGreaterThan(0);
       expect(shown.length).toBeLessThanOrEqual(Math.min(list.length, WARES.maxPerStall));

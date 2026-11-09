@@ -17,7 +17,7 @@
 // Bridges join the catwalks across the lanes; ladders climb from the catwalks to the rooftops.
 
 import {Rng, hashString} from '../../../core/rng';
-import {MARKET_STALLS, type MarketStallId} from '../marketTypes';
+import {MARKET_STALLS, type MarketShopId} from '../marketTypes';
 import {marketNameOf} from '../frame';
 
 /** Fixed dimensions (cells unless noted). */
@@ -62,8 +62,8 @@ export interface SettleFrame {
   /** Middle row widths (cells, canonical west -> east): west end alley, block A, cross alley, block B, the yard, block C, east end alley. */
   mid: {west: number; a: number; cross: number; b: number; yard: number; c: number; east: number};
   /** Which stalls stand in the front row (walk-in shops) and which in the back row (counter-fronted), in canonical west -> east order. */
-  front: MarketStallId[];
-  back: MarketStallId[];
+  front: MarketShopId[];
+  back: MarketShopId[];
   /** The settlement's painted name. */
   name: string;
   salt: number;

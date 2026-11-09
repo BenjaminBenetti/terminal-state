@@ -101,7 +101,7 @@ export class MarketArch {
     const g = layout.grid, top = (levels[1]?.baseY ?? 0) + 2.4;
     this.atrium = new Uint8Array(g.w * g.h);
     for (let i = 0; i < g.cells.length; i++) if (g.cells[i] !== SOLID && g.hasCeil(i) && g.ceil[i] >= top) this.atrium[i] = 1;
-    this.v2 = layout.market?.v === 2;
+    this.v2 = (layout.market?.v ?? 1) >= 2; // (+ version 3: the same settlement with the bar — task studio-market-bar-20261108-225231-01)
     if (this.v2) {
       // each container (a room of storey 0 / 1) and its wall ring: one seeded paint, never the same as the container before it in its row
       for (let L = 0; L < 2; L++) this.paint.push(new Int8Array(g.w * g.h).fill(-1));

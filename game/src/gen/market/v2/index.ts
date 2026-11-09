@@ -18,7 +18,7 @@ import {cropKit} from '../../office/common';
 import {pathRails} from '../../reactor/pathsGen';
 import type {SectionGenContext} from '../../../levels/types';
 import type {StationLayout} from '../../stationTypes';
-import {MARKET_STALLS, type MarketStallId} from '../marketTypes';
+import {BAR_STALL, MARKET_STALLS, type MarketStallId} from '../marketTypes';
 import {marketSeed} from '../frame';
 import {stallName} from '../names';
 import {SETTLE, settleFrame, type SettleFrame} from './frame';
@@ -26,6 +26,11 @@ import {carveSettlement, type SettleCarve} from './carve';
 import {dressSettlement} from './dress';
 import {settleRecord} from './record';
 import {settleIssues} from './validate';
+// task studio-market-bar-20261108-225231-01 (lane BAR): layout version 3 = this settlement + the upper-level bar (gen/market/v3/)
+import {carveBar, type BarCarve} from '../v3/barCarve';
+import {dressBar} from '../v3/barDress';
+import {barRecord} from '../v3/barRecord';
+import {barSettleIssues} from '../v3/barValidate';
 
 /** Generation attempts before the last generated layout is returned with its issues. */
 const ATTEMPTS = 8;
@@ -42,19 +47,24 @@ export function settleStoreyLabel(level: number): string {
   return level === 2 ? 'Rooftops' : level === 1 ? 'Catwalks' : 'Market lanes';
 }
 
-/** The ONE continuous version-2 market layout. */
-export function generateSettlement(ctx: SectionGenContext): StationLayout {
+/**
+ * The ONE continuous version-2 market layout. Task studio-market-bar-20261108-225231-01 (lane BAR): `opts.bar` — layout version 3, the
+ * same settlement plus the upper-level bar (gen/market/v3/: its carve before the crop, its furnishing after version 2's, its record and
+ * checks after version 2's; every draw of its own from forks, so version 2's stream is untouched). Version 2 is `bar` false (the default).
+ */
+export function generateSettlement(ctx: SectionGenContext, opts: {bar?: boolean} = {}): StationLayout {
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const seed = marketSeed(ctx.levelSeed);
+  const bar = opts.bar === true;
   let f = settleFrame(ctx.levelSeed);
   let fallback: StationLayout | null = null;
   SETTLE_GEN_STATS.carveFails = 0;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const s = attempt === 0 ? seed : hashString('retry' + attempt, seed);
-    const layout = trySettlement(f, s, seed, attempt, ctx);
+    const layout = trySettlement(f, s, seed, attempt, ctx, undefined, bar);
     SETTLE_GEN_STATS.attempts = attempt + 1;
     if (!layout) { SETTLE_GEN_STATS.carveFails++; f = settleFrame(ctx.levelSeed, SETTLE_GEN_STATS.carveFails); continue; }
-    const issues = settleIssues(layout);
+    const issues = bar ? barSettleIssues(layout) : settleIssues(layout);
     SETTLE_GEN_STATS.issues = issues;
     if (!issues.length) { fallback = layout; break; }
     for (const i of new Set(issues.map(q => q.replace(/-?[\d.]+/g, '#')))) SETTLE_REJECTS.set(i, (SETTLE_REJECTS.get(i) ?? 0) + 1);
@@ -65,20 +75,24 @@ export function generateSettlement(ctx: SectionGenContext): StationLayout {
   throw new Error('market (version 2) generation failed');
 }
 
-/** QA / tests: one attempt (null when the program does not fit). */
-export function settlementAttempt(ctx: SectionGenContext, attempt: number, salt = 0): {layout: StationLayout | null; carve: SettleCarve | null} {
+/** QA / tests: one attempt (null when the program does not fit); `bar`: version 3's. */
+export function settlementAttempt(ctx: SectionGenContext, attempt: number, salt = 0, bar = false): {layout: StationLayout | null; carve: SettleCarve | null; bar: BarCarve | null} {
   const seed = marketSeed(ctx.levelSeed);
-  const out = {carve: null as SettleCarve | null};
-  const layout = trySettlement(settleFrame(ctx.levelSeed, salt), attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, out);
-  return {layout, carve: out.carve};
+  const out = {carve: null as SettleCarve | null, bar: null as BarCarve | null};
+  const layout = trySettlement(settleFrame(ctx.levelSeed, salt), attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, out, bar);
+  return {layout, carve: out.carve, bar: out.bar};
 }
 
-function trySettlement(f: SettleFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, out?: {carve: SettleCarve | null}): StationLayout | null {
+function trySettlement(f: SettleFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, out?: {carve: SettleCarve | null; bar?: BarCarve | null}, bar = false): StationLayout | null {
   const rng = new Rng(genSeed);
   const k = new Kit(rng, {levels: SETTLE.canvas.levels, w: SETTLE.canvas.w, h: SETTLE.canvas.h});
   const sc = carveSettlement(k, f, rng.fork('carve'));
   if (!sc) return null;
   if (out) out.carve = sc;
+  // (version 3) the bar deck over the yard, before the crop (no draw: geometry only)
+  const bc = bar ? carveBar(k, sc, 'Bar') : null;
+  if (bar && !bc) return null;
+  if (out && bc) out.bar = bc;
   // --- Crop (fixed origin: canvas cells = grid cells) ----------------------------------------------------------------------------
   const c = cropKit(k, [0, 1, 2], 0, 0, k.g.w, k.g.h);
   const levels: Level[] = c.grids.map((grid, id) => ({id, role: id === 0 ? 'main' : 'ring', grid, baseY: sc.bases[id]}));
@@ -113,12 +127,20 @@ function trySettlement(f: SettleFrame, genSeed: number, seed: number, attempt: n
   const anchors = dressSettlement(layout, sc, rng.fork('dress'), names);
   layout.traversal.ladders.push(...roofLadders);
   if (!anchors) return null;
+  // (version 3) the covered yard's lamps hang under the deck; the bar's furnishing (its own forks: the name, the dressing)
+  const barName = bc ? stallName(BAR_STALL, rng.fork('market-bar-name')) : '';
+  const barDressed = bc ? dressBar(layout, bc, rng.fork('market-bar'), barName) : null;
+  if (bc) {
+    if (!barDressed) return null;
+    for (const l of layout.lights) if (l.area === sc.lanes.yard.id && (l.level ?? 0) === 0 && l.y > SETTLE.cont) l.y = SETTLE.cont - 0.05;
+  }
   liftLevels(layout, {lights: layout.lights.length, signs: layout.signs.length});
   for (const a of layout.areas) a.lighting = 'lit';
   finishTraversal(layout);
   // finishTraversal's rescue-ladder plate ('EMERGENCY LADDER', storey-less) is not for the rooftop ladders (the Reactor's rule)
   layout.signs = layout.signs.filter(s => !roofLadders.some(q => Math.abs(q.x + 0.95 - s.x) < 1e-6 && Math.abs(q.bottomY + 0.72 - s.y) < 1e-6));
   layout.market = settleRecord(layout, sc, anchors, names, rng.fork('market-spots'));
+  if (bc && barDressed) layout.market = barRecord(layout, sc, bc, barDressed, barName, rng.fork('market-bar-spots'), layout.market);
   return layout;
 }
 
