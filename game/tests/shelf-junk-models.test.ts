@@ -14,7 +14,7 @@ import {CATEGORY_STOCK, MAX_STOCK_PER_STATION, STOCK_ARCHES, stockCategory, type
 import {JUNK_PROPS, SHELF_JUNK_KEY, junkArchId, junkAtlasCooked, junkDims, junkNode, junkPart} from '../src/world/shelfJunkModels';
 import {archGeometry, junkSet, stockMaterial} from '../src/world/shelfStockGeometry';
 import {ShelfStock, shelfJunkModelKeysFor} from '../src/world/shelfStock';
-import {LOW_DECK_Y, dressHolder, holderStockSeed, obbBoxOverlap, placementOBB} from '../src/world/shelfStockLayout';
+import {LOW_DECK_Y, dressHolder, holderStockSeed, obbBoxOverlap, obbOverlap, placementOBB} from '../src/world/shelfStockLayout';
 import {SHELF_JUNK_ATLAS} from '../src/assets/foodShelfModels.generated';
 import {PhysicsSystem} from '../src/physics/world';
 import {FLOOR, Grid, SOLID} from '../src/gen/grid';
@@ -121,9 +121,13 @@ describe('the 27 ruined props are filler archetypes', () => {
       const boards = stockBoards(kind, v, {deck: d as never});
       for (let seed = 0; seed < 40; seed++) for (const p of dressHolder({category: stockCategory(kind, v, purpose)!, boards, lots: [], seed})) { const m = STOCK_ARCHES[p.arch].model; if (m) placed.add(m); }
     }
-    const missing = JUNK_PROPS.map(j => j.id).filter(id => !placed.has(id));
-    // P14 at the cooked size (0.55 x 0.47 x 0.34 m) is taller than every bay and deeper than every shelf deck; the estimate fitted
-    expect(missing).toEqual(junkPart('P14') && junkPart('P14')!.h > 0.45 ? ['P14'] : []);
+    // P14 at the cooked size (0.55 x 0.47 x 0.34 m) is taller than every bay and deeper than every shelf deck: it stands on top of
+    // storage units (UNIT_TOP) only
+    const inBays = JUNK_PROPS.map(j => j.id).filter(id => !placed.has(id));
+    expect(inBays).toEqual(junkPart('P14') && junkPart('P14')!.h > 0.45 ? ['P14'] : []);
+    const boards = stockBoards('shelf', 0, {deck: deck as never});
+    for (let seed = 0; seed < 40; seed++) for (const p of dressHolder({category: 'storage', boards, lots: [], seed, unitTop: {board: boards.length - 1, clear: 1}})) { const m = STOCK_ARCHES[p.arch].model; if (m) placed.add(m); }
+    expect(JUNK_PROPS.map(j => j.id).filter(id => !placed.has(id))).toEqual([]);
   });
 
   it('the atlas is a lazy model of levels with stock (never fetched while the registry is the stub)', () => {
@@ -213,6 +217,70 @@ describe('batching: merged per chunk, detached to instancing, rejoined at rest',
   });
 });
 
+describe('top-of-unit boxes (storage / stock-room shelving)', () => {
+  const BIG = new Set(['junk_shipping_box', 'junk_torn_carton', 'junk_rotten_fruit_crate']);
+  it('the shipping box stands on top of storage units: under the ceiling headroom, at most 2 per unit, clear of lots, decor and the model', async () => {
+    const {fittedTriangles} = await import('../src/world/shelfStock');
+    const {triangleHitsOBB} = await import('./helpers/stockHelpers');
+    const {levelsOf} = await import('../src/gen/levels');
+    const {UNIT_TOP, obbExtent} = await import('../src/world/shelfStockLayout');
+    const tris = fittedTriangles(shelf, 1.2, 1.85, 0.45);
+    let shipping = 0, units = 0;
+    for (const seed of SEEDS) {
+      const {stock, layout} = await stockedStation(seed);
+      const L = levelsOf(layout);
+      for (const h of stock.holders) {
+        const tb = h.boards.length - 1;
+        const tops = h.placements.filter(p => p.board === tb && BIG.has(STOCK_ARCHES[p.arch].id) && STOCK_ARCHES[p.arch].h > h.boards[tb].top - h.boards[tb].y);
+        if (!tops.length) continue;
+        // only storage shelving and back-of-house stock shelving, on their top deck, with the measured headroom
+        expect(h.kind === 'shelf' || (h.kind === 'stockShelf' && h.shop === undefined), h.kind).toBe(true);
+        expect(h.unitTop?.board).toBe(tb);
+        expect(tops.length).toBeLessThanOrEqual(UNIT_TOP.max);
+        units++;
+        const ceil = L.ceilingOver(h.prop.x, h.prop.z, Math.max(h.prop.hx, h.prop.hz), h.prop.y + 0.05);
+        for (const p of tops) {
+          const A = STOCK_ARCHES[p.arch], o = placementOBB(p), e = obbExtent(o);
+          if (A.id === 'junk_shipping_box') shipping++;
+          expect(h.prop.y + p.c[1] + e[1] + UNIT_TOP.headroom).toBeLessThanOrEqual(ceil + 1e-6); // the ceiling leaves room
+          const deckY = h.boards[tb].deck!(p.c[0] - e[0], p.c[2] - e[2], p.c[0] + e[0], p.c[2] + e[2]);
+          expect(p.c[1] - e[1] - deckY).toBeGreaterThan(-0.001); expect(p.c[1] - e[1] - deckY).toBeLessThan(0.0045); // seated on the top deck
+          for (const b of h.blockers) expect(obbBoxOverlap(o, b, 0), `${A.id} over a lot / decor`).toBe(false);
+          for (const q of h.placements) if (q !== p) expect(obbOverlap(o, placementOBB(q), 0)).toBe(false);
+          // never inside the shelf model (posts, lips, braces): the deeper top deck is clear
+          const ob = placementOBB(p, 0.002), oe = obbExtent(ob);
+          for (let t = 0; t < tris.length; t += 9) {
+            const a: [number, number, number] = [tris[t], tris[t + 1], tris[t + 2]], b2: [number, number, number] = [tris[t + 3], tris[t + 4], tris[t + 5]], c: [number, number, number] = [tris[t + 6], tris[t + 7], tris[t + 8]];
+            if (Math.max(a[1], b2[1], c[1]) < ob.c[1] - oe[1] || Math.min(a[0], b2[0], c[0]) > ob.c[0] + oe[0] || Math.max(a[0], b2[0], c[0]) < ob.c[0] - oe[0]) continue;
+            expect(triangleHitsOBB(a, b2, c, ob), `${A.id} in the shelf model`).toBe(false);
+          }
+        }
+      }
+    }
+    expect(units).toBeGreaterThan(10);
+    expect(shipping).toBeGreaterThan(10); // P14 is placed on every seed's stock rooms
+  });
+
+  it('own RNG fork: every other board of the unit dresses exactly as without the top boxes; no headroom, no boxes', async () => {
+    const deck = (await import('../src/world/shelfStock')).shelfDecks(shelf);
+    const {stockBoards} = await import('../src/world/shelfStockCarcass');
+    const boards = stockBoards('shelf', 0, {deck});
+    const tb = boards.length - 1;
+    let boxed = 0;
+    for (let seed = 1; seed < 30; seed++) {
+      const plain = dressHolder({category: 'storage', boards, lots: [], seed});
+      const top = dressHolder({category: 'storage', boards, lots: [], seed, unitTop: {board: tb, clear: 1.2}});
+      const sig = (l: typeof plain) => l.filter(p => p.board !== tb).map(p => `${p.arch}:${p.c.map(v => v.toFixed(5))}`).join('|');
+      expect(sig(top)).toBe(sig(plain));
+      if (top.some(p => STOCK_ARCHES[p.arch].id === 'junk_shipping_box')) boxed++;
+      // a low ceiling (0.4 m over the top deck): nothing taller than its headroom goes up there
+      const low = dressHolder({category: 'storage', boards, lots: [], seed, unitTop: {board: tb, clear: 0.4}});
+      for (const p of low.filter(q => q.board === tb)) expect(STOCK_ARCHES[p.arch].h).toBeLessThanOrEqual(0.35);
+    }
+    expect(boxed).toBeGreaterThan(5);
+  });
+});
+
 describe('storage shelving, hosted props, determinism and loot', () => {
   it('storage / closet / workshop shelving is stocked with the junk of its room; never a lot or a prop standing on it', async () => {
     let shelves = 0;
@@ -226,7 +294,7 @@ describe('storage shelving, hosted props, determinism and loot', () => {
         const lots = cm.holderFor(h.prop)?.state.lots ?? [];
         const {placementBox} = await import('../src/items/lootLayout');
         for (const l of lots) for (const p of h.placements) expect(obbBoxOverlap(placementOBB(p), placementBox(l.itemId, l), 0)).toBe(false);
-        for (const p of h.placements) { const A = STOCK_ARCHES[p.arch]; if (A.low) expect(h.boards[p.board].y).toBeLessThanOrEqual(LOW_DECK_Y); }
+        for (const p of h.placements) { const A = STOCK_ARCHES[p.arch]; if (A.low && p.board !== h.unitTop?.board) expect(h.boards[p.board].y).toBeLessThanOrEqual(LOW_DECK_Y); } // (bottom decks, or the unit's top)
       }
     }
     expect(shelves).toBeGreaterThan(5);
@@ -256,7 +324,7 @@ describe('storage shelving, hosted props, determinism and loot', () => {
       expect(JSON.stringify(layout.props)).toBe(props); // the layout is read, never written
       // each holder's dressing is its own (holder seed): re-dressed alone it is the same
       if (S.thinning === 'none') for (const h of S.holders.filter((_, i) => i % 7 === 0)) {
-        const alone = dressHolder({category: h.category, boards: h.boards, lots: h.blockers, seed: h.seed});
+        const alone = dressHolder({category: h.category, boards: h.boards, lots: h.blockers, seed: h.seed, ...(h.unitTop ? {unitTop: h.unitTop} : {})});
         if (!layout.extensions) expect(h.seed).toBe(holderStockSeed(layout.seed >>> 0, h.kind, h.prop.x, h.prop.z, h.prop.y));
         expect(alone.map(p => `${p.arch}:${p.c.map(v => v.toFixed(5))}`)).toEqual(h.placements.map(p => `${p.arch}:${p.c.map(v => v.toFixed(5))}`));
       }

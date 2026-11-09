@@ -9,7 +9,7 @@ import {purposePropShape, stockShelfStock, STOCK_THEMES, type PurposePart} from 
 import {
   ARCH_INDEX, CATEGORY_STOCK, LABEL_VARIANTS, MAX_STOCK_PER_STATION, STOCKED_KINDS, STOCK_ARCHES, isStockedKind, stockCategory,
 } from '../src/world/shelfStockCatalog';
-import {dressHolder, footprintRect, obbOverlap, obbBoxOverlap, obbExtent, placementOBB, qAxes, type Board, type OBB, type StockPlacement, type V3} from '../src/world/shelfStockLayout';
+import {UNIT_TOP, dressHolder, footprintRect, obbOverlap, obbBoxOverlap, obbExtent, placementOBB, qAxes, type Board, type OBB, type StockPlacement, type V3} from '../src/world/shelfStockLayout';
 import {AUTHORED_CARCASS, PICTURE_MATS, displayTreatment, stockBoards, type DeckSampler} from '../src/world/shelfStockCarcass';
 import {ShelfStock, deviceWallDeck, fittedTriangles, qaStandFree, shelfDecks} from '../src/world/shelfStock';
 import {archGeometry, atlasLayout, labelUV, stockMaterial} from '../src/world/shelfStockGeometry';
@@ -174,7 +174,9 @@ describe('dressing (generated stations, real loot, real shelf decks)', () => {
           expect(err, `${h.kind} piece ${i} seat`).toBeGreaterThan(-0.0015);
           expect(err, `${h.kind} piece ${i} floats`).toBeLessThan(0.0045);
           const top = p.c[1] + obbExtent(obbs[i])[1];
-          expect(top, `${h.kind} piece ${i} top`).toBeLessThanOrEqual(b.top + 1e-6);
+          // (task food-shelf-production: a storage unit's top-of-unit boxes reach up to the ceiling less UNIT_TOP's headroom)
+          const lim = p.board === h.unitTop?.board ? Math.max(b.top, b.y + h.unitTop.clear - UNIT_TOP.headroom) : b.top;
+          expect(top, `${h.kind} piece ${i} top`).toBeLessThanOrEqual(lim + 1e-6);
           for (let j = i + 1; j < h.placements.length; j++) {
             const a = obbs[i], c = obbs[j];
             if (Math.abs(a.c[0] - c.c[0]) > 0.7 || Math.abs(a.c[1] - c.c[1]) > 0.7 || Math.abs(a.c[2] - c.c[2]) > 0.7) continue;

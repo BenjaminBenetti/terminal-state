@@ -34,11 +34,11 @@ import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {PROP_DEFS, SHELF_TIER_Y, type PropPlacement} from '../gen/props';
 import type {StationLayout} from '../gen/station';
-import type {Levels} from '../gen/levels';
+import {levelsOf, type Levels} from '../gen/levels';
 import {DAMAGE_MATERIALS} from '../damage/materials';
 import type {Vec3} from '../combat/hitscan';
-import {MAX_STOCK_GEOMETRY_BYTES, MAX_STOCK_PER_STATION, MAX_STOCK_TRIANGLES, STOCK_ARCHES, isStockedKind, stockCategory, type StockCategory} from './shelfStockCatalog';
-import {dressHolder, holderStockSeed, type Board, type Box3Like, type StockPlacement} from './shelfStockLayout';
+import {ARCH_INDEX, MAX_STOCK_GEOMETRY_BYTES, MAX_STOCK_PER_STATION, MAX_STOCK_TRIANGLES, STOCK_ARCHES, isStockedKind, stockCategory, type StockCategory} from './shelfStockCatalog';
+import {UNIT_TOP, dressHolder, holderStockSeed, type Board, type Box3Like, type StockPlacement} from './shelfStockLayout';
 import {DEVICE_WALL_DECK, measureDecks, stockBoards, stockColliders, toWorldBoxes, type DeckSampler} from './shelfStockCarcass';
 import {archCost, archGeometry, archTriangles, junkSet, stockMaterial, stockTextureBytes, type JunkSet} from './shelfStockGeometry';
 import {SHELF_JUNK_KEY, SHELF_JUNK_MODEL_FILES, junkAtlasCooked} from './shelfJunkModels';
@@ -89,6 +89,8 @@ export interface StockedHolder {
   blockers: Box3Like[];
   /** Its dressing seed (shelfStockLayout.ts holderStockSeed of its core-frame position; QA / tests). */
   seed: number;
+  /** Storage / stock-room unit: its top deck and the ceiling clearance over it (top-of-unit boxes; QA / tests). */
+  unitTop?: {board: number; clear: number};
 }
 
 /** One merged rest mesh of a chunk (one family, one material, one draw call). */
@@ -250,7 +252,7 @@ export class ShelfStock implements FillerView {
   // Build
 
   /** Dress every stocked holder of the station and bake the rest meshes. Replaces the previous station's stock. */
-  build(layout: Pick<StationLayout, 'props' | 'areas' | 'seed'> & {storefronts?: StationLayout['storefronts']; extensions?: StationLayout['extensions']}, deps: StockDeps): void {
+  build(layout: Pick<StationLayout, 'props' | 'areas' | 'seed'> & {storefronts?: StationLayout['storefronts']; extensions?: StationLayout['extensions']; grid?: StationLayout['grid']; levels?: StationLayout['levels']; levelLinks?: StationLayout['levelLinks']}, deps: StockDeps): void {
     const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
     this.clear();
     this.seed = layout.seed >>> 0;
@@ -262,7 +264,10 @@ export class ShelfStock implements FillerView {
     if (this.junk && this.junk !== junk) this.junk.dispose(); // (another loaded file: the old templates' buffers go)
     this.junk = junk;
     // 1. holders + their boards / lots / seeds
-    type Pre = {prop: PropPlacement; kind: string; category: StockCategory; boards: Board[]; lots: Box3Like[]; seed: number; back: boolean; area: number; shop?: number};
+    type Pre = {prop: PropPlacement; kind: string; category: StockCategory; boards: Board[]; lots: Box3Like[]; seed: number; back: boolean; area: number; shop?: number; unitTop?: {board: number; clear: number}};
+    // task food-shelf-production (lane SHELF): ceilings over storage / stock-room units (their top-of-unit boxes need the headroom)
+    const L = layout.grid ? levelsOf(layout as Parameters<typeof levelsOf>[0]) : null;
+    const minTop = Math.min(...UNIT_TOP.picks.map(([id]) => STOCK_ARCHES[ARCH_INDEX[id]].h)) + UNIT_TOP.headroom;
     const pre: Pre[] = [];
     // Track 2 (lane GEN): stock seeds from CORE-frame positions, so a crop translation by track extensions keeps every shelf's stock:
     // the core's props at their exact core-frame x / z (extensions.coreXZ: a translated double can come back one ulp off and flip a
@@ -289,7 +294,14 @@ export class ShelfStock implements FillerView {
       if (!boards.length) continue;
       const shop = p.shop ?? (area as {storefront?: number} | undefined)?.storefront;
       const lots = [...(deps.lotsOf?.(p) ?? []), ...hostedBoxes(p, pi, nearProps(p))];
-      pre.push({prop: p, kind: p.kind, category, boards, lots, seed: holderStockSeed(this.seed, p.kind, xz && 2 * pi < xz.length ? xz[2 * pi] : p.x - sx, xz && 2 * pi < xz.length ? xz[2 * pi + 1] : p.z - sz, p.y), back: shop === undefined, area: p.area, shop});
+      // top-of-unit boxes: storage shelving and back-of-house stock shelving on its measured model, under a ceiling with the room
+      let unitTop: Pre['unitTop'];
+      if (L && deck && (p.kind === 'shelf' || (p.kind === 'stockShelf' && shop === undefined))) {
+        const tb = boards.length - 1, ceil = L.ceilingOver(p.x, p.z, Math.max(p.hx, p.hz), p.y + 0.05);
+        const clear = Math.min(3, ceil - (p.y + boards[tb].y));
+        if (clear >= minTop) unitTop = {board: tb, clear};
+      }
+      pre.push({prop: p, kind: p.kind, category, boards, lots, seed: holderStockSeed(this.seed, p.kind, xz && 2 * pi < xz.length ? xz[2 * pi] : p.x - sx, xz && 2 * pi < xz.length ? xz[2 * pi + 1] : p.z - sz, p.y), back: shop === undefined, area: p.area, shop, ...(unitTop ? {unitTop} : {})});
     }
     // 2. dress (station-wide bounds on pieces, triangles and rest-mesh bytes: back-of-house rows thin first, then the modelled props'
     // share drops — each gives way to the authored piece it stands in for, so the shelves stay as full — then all rows 1 deep; and,
@@ -320,7 +332,7 @@ export class ShelfStock implements FillerView {
       // (a pass whose model share alone cannot bring the triangles under the bound is skipped: the models' triangles scale with the
       // share; the last pass always runs)
       if (last && k < passes.length - 1 && share < last.share && last.t - last.mt * (1 - share / last.share) * 0.85 > MAX_STOCK_TRIANGLES * 1.12) continue;
-      dressed = pre.map(h => dressHolder({category: h.category, boards: h.boards, lots: h.lots, seed: h.seed, depthCap: pass.cap(h), gapBoost: pass.gap ?? 0, junkShare: share}));
+      dressed = pre.map(h => dressHolder({category: h.category, boards: h.boards, lots: h.lots, seed: h.seed, depthCap: pass.cap(h), gapBoost: pass.gap ?? 0, junkShare: share, ...(h.unitTop ? {unitTop: h.unitTop} : {})}));
       this.thinning = pass.name;
       const c = cost(dressed.flat());
       last = {t: c.t, mt: c.mt, share};
@@ -371,7 +383,7 @@ export class ShelfStock implements FillerView {
       list.forEach((pl, k) => { if (pl.on >= 0) pieces[first + pl.on].above.push(first + k); });
       const cols = toWorldBoxes(p, stockColliders(h.kind, p.variant, h.boards)).map(b => new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max)));
       colliders.push(...cols);
-      const holder: StockedHolder = {index: hi, prop: p, kind: h.kind, category: h.category, level, boards: h.boards, placements: list, first, count: list.length, colliders: cols, area: h.area, chunk: ci, blockers: h.lots, seed: h.seed, ...(h.shop !== undefined ? {shop: h.shop} : {})};
+      const holder: StockedHolder = {index: hi, prop: p, kind: h.kind, category: h.category, level, boards: h.boards, placements: list, first, count: list.length, colliders: cols, area: h.area, chunk: ci, blockers: h.lots, seed: h.seed, ...(h.unitTop ? {unitTop: h.unitTop} : {}), ...(h.shop !== undefined ? {shop: h.shop} : {})};
       this.holders.push(holder);
       this.holderOf.set(p, holder);
     });

@@ -86,6 +86,54 @@ export interface DressInput {
    * budget's thinning (world/shelfStock.ts): shelves stay as full, with fewer models.
    */
   junkShare?: number;
+  /**
+   * Task food-shelf-production (lane SHELF): a storage / stock-room unit's TOP deck (`board` index) and the clearance (m) from it
+   * to the ceiling: big ruined boxes go up there (UNIT_TOP), only where the ceiling leaves their height + UNIT_TOP.headroom.
+   */
+  unitTop?: {board: number; clear: number};
+}
+
+/**
+ * Task food-shelf-production (lane SHELF): TOP-OF-UNIT storage — the modelled boxes too big for any bay (the 0.55 x 0.47 x 0.34 m
+ * shipping box; the torn carton and the fruit crate where a bay is too small) stand on top of storage / stock-room shelving, as
+ * stockrooms keep their overflow: at most `max` per unit, on its top deck (`z0`: the top deck has no back brace, so it is deeper
+ * than the bays: tests/shelf-junk-models.test.ts checks the shelf model), only under at least the box height + `headroom` of
+ * ceiling, never on / in front of a loot lot or on-top decor. Drawn from its own fork of the holder seed (`fork`): no other
+ * stream moves (the rows on the top deck then fill round the boxes).
+ */
+export const UNIT_TOP = {
+  picks: [['junk_shipping_box', 0.6], ['junk_torn_carton', 0.25], ['junk_rotten_fruit_crate', 0.15]] as readonly (readonly [string, number])[],
+  headroom: 0.05, z0: -0.19, max: 2, fork: 'stock:unit-top',
+  /** Chance of 0 / 1 box (else 2). */
+  none: 0.35, one: 0.8,
+};
+
+/** Big boxes on a unit's top deck (UNIT_TOP), before its rows are dressed. */
+function dressTop(ctx: Ctx, b: Board, bi: number, clear: number, seed: number): void {
+  const r = mulberry32(hashString(UNIT_TOP.fork, seed >>> 0));
+  const roll = r();
+  const n = roll < UNIT_TOP.none ? 0 : roll < UNIT_TOP.one ? 1 : UNIT_TOP.max;
+  if (!n) return;
+  const deck = b.deck ?? flatDeck(b);
+  // the box's own limits: the ceiling (less the headroom) above, the deeper top deck behind
+  const top: Board = {...b, z0: Math.min(b.z0, UNIT_TOP.z0), top: b.y + clear - UNIT_TOP.headroom};
+  const rows = UNIT_TOP.picks.filter(([id]) => { const A = STOCK_ARCHES[ARCH_INDEX[id]]; return A.h <= top.top - top.y - 0.004 && A.d + yawRoom(A) <= top.z1 - top.z0 && A.w + yawRoom(A) <= top.x1 - top.x0; });
+  const first = r() < 0.5 ? -1 : 1;
+  for (let k = 0; k < n && rows.length; k++) {
+    const a = pickWeighted(rows, r);
+    const A = STOCK_ARCHES[a];
+    const yaw = (r() - 0.5) * 0.06;
+    const ex = (Math.abs(Math.cos(yaw)) * A.w + Math.abs(Math.sin(yaw)) * A.d) / 2, ez = (Math.abs(Math.sin(yaw)) * A.w + Math.abs(Math.cos(yaw)) * A.d) / 2;
+    // the first box towards one end, the second towards the other (pushed back against the wall side of the deck)
+    const side = k === 0 ? first : -first;
+    const free = top.x1 - top.x0 - 2 * ex;
+    if (free < 0) continue;
+    const cx = (top.x0 + top.x1) / 2 + side * free / 2 * (0.55 + r() * 0.45);
+    const cz = top.z0 + ez + 0.004;
+    const dy = deck(cx - ex, cz - ez, cx + ex, cz + ez);
+    if (!Number.isFinite(dy)) continue;
+    tryAdd(ctx, {arch: a, variant: Math.floor(r() * A.variants), c: [cx, dy + 0.0015 + A.h / 2, cz], q: qYXZ(yaw), board: bi, on: -1, tint: r()}, top);
+  }
 }
 
 const rowsCache = new Map<string, readonly (readonly [string, number])[]>();
@@ -484,6 +532,7 @@ export function dressHolder(input: DressInput): StockPlacement[] {
   const ctx: Ctx = {out: [], obbs: [], ext: [], lots: input.lots, r: mulberry32(input.seed >>> 0)};
   input.boards.forEach((b, i) => {
     const cat = b.category ?? input.category;
+    if (input.unitTop?.board === i && b.mode === 'rows') dressTop(ctx, b, i, input.unitTop.clear, input.seed);
     if (b.mode === 'rows') dressRows(ctx, b, i, cat, input.depthCap ?? 3, input.gapBoost ?? 0, input.junkShare ?? 1);
     else if (b.mode === 'lean') dressLean(ctx, b, i, cat);
     else if (b.mode === 'flat') dressFlat(ctx, b, i, cat);
