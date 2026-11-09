@@ -816,24 +816,29 @@ export const BUNKER_SIREN_ELIGIBILITY: FamilyEligibility = {
 };
 /** Two dormant Sirens are never heard humming at once (her hum carries 24 m), as in the Mall / Skyways. */
 export const BUNKER_SIREN_SPACING: FamilySpacing = {spacingM: 24, why: 'never two Sirens within earshot of one another (her hum carries 24 m)'};
-/** The Bunker's Siren DRAW weight per storey pool (census: docs/bunker.md "Enemies"; an ineligible / over-cap draw is a zombie). */
-export const BUNKER_SIREN_WEIGHT = 0.3;
-const BUNKER_FLOOR_POOL: FamilyPool = familyPool({ratdog: 0.08, blightbelly: 0.05, siren: BUNKER_SIREN_WEIGHT});
-const BUNKER_DEEP_POOL: FamilyPool = familyPool({ratdog: 0.08, blightbelly: 0.1, siren: BUNKER_SIREN_WEIGHT});
+/** The Bunker's Siren DRAW weight in the shelter pool (census: docs/bunker.md "Enemies"; an ineligible / over-cap draw is a zombie). */
+export const BUNKER_SIREN_WEIGHT = 0.16;
+/**
+ * The shelter storeys' pool = the LEVEL pool (the 'floor' / 'ring' runs read it; depth grading comes from their counts): ai/familySpacing.ts
+ * re-derives a spawn's family from the level pool, so the Siren's 24 m spacing and cap only see her when she is drawn from it.
+ */
+export const BUNKER_SHELTER_POOL: FamilyPool = familyPool({ratdog: 0.08, blightbelly: 0.07, siren: BUNKER_SIREN_WEIGHT});
+/** The station storey's own pool: no Siren roll at the platform (the ordinary default shares). */
+const BUNKER_STATION_POOL: FamilyPool = familyPool();
 /** The damp zone's own pool: an ordinary zombie, a rat/dog, or (rarely) THE STRAINER — its only weight outside the service annexes. */
 export const BUNKER_DAMP_SHARES: Readonly<Partial<Record<ShareFamilyId, number>>> = {ratdog: 0.1, blightbelly: 0, siren: 0, strainer: 0.3};
 /** The damp sections' placement: the Mall's rules, kept further from the start (the damp wings lie deep). */
-const BUNKER_DAMP_PLACEMENT: PlacementRules = {...MALL_PLACEMENT, startCells: 60};
+export const BUNKER_DAMP_PLACEMENT: PlacementRules = {...MALL_PLACEMENT, startCells: 60};
 export const BUNKER_DAMP_CONTEXT: SpawnContextRule = {
   label: 'Damp / water-damaged sections (once per level, the damp areas only)', count: [1, 1], placement: BUNKER_DAMP_PLACEMENT,
   accept: {min: null, max: 'count'}, families: familyPool(BUNKER_DAMP_SHARES),
 };
 export const BUNKER_SPAWN_PROFILE: SpawnProfile = {
-  id: 'bunker', label: 'Bunker', families: familyPool(), zombieTypes: ZOMBIE_TYPES,
+  id: 'bunker', label: 'Bunker', families: BUNKER_SHELTER_POOL, zombieTypes: ZOMBIE_TYPES,
   contexts: {
-    station: {label: 'Station storey (platform, arrival hall, vault vestibule)', count: [2, 3], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}},
-    floor: {label: 'Upper shelter storey (each of storeys 1-3: entry & security, habitation, services & medical)', count: [6, 8], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}, families: BUNKER_FLOOR_POOL},
-    ring: {label: 'Deep shelter storey (each of storeys 4-5: maintenance & water, the processing core)', count: [7, 9], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}, families: BUNKER_DEEP_POOL},
+    station: {label: 'Station storey (platform, arrival hall, vault vestibule)', count: [2, 3], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}, families: BUNKER_STATION_POOL},
+    floor: {label: 'Upper shelter storey (each of storeys 1-3: entry & security, habitation, services & medical)', count: [6, 8], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}},
+    ring: {label: 'Deep shelter storey (each of storeys 4-5: maintenance & water, the processing core)', count: [7, 9], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}},
     damp: BUNKER_DAMP_CONTEXT,
     service: SERVICE_CONTEXT,
   },
