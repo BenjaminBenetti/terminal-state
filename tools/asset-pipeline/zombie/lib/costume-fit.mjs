@@ -48,7 +48,7 @@ export const COSTUME_FIT = {
   clear: {upper: 0.007, lower: 0.006},     // bind: cloth >= this outside the inner surface point it is anchored to
   minClear: {upper: 0.005, lower: 0.004},  // bind: every covered inner vertex has the cloth >= this outside it
   poseClear: 0.002,                        // every validation pose: the same test (contact allowed, no poke)
-  maxBind: 0.08, maxExtra: 0.03, maxRoundRaise: 0.04, maxDeficitStep: 0.012, minDirCos: 0.5, bindRounds: 8, poseRounds: 4, freezeAfter: 9,
+  maxBind: 0.14, maxExtra: 0.05, maxRoundRaise: 0.04, maxDeficitStep: 0.012, minDirCos: 0.5, poseDirCos: 0.3, bindRounds: 8, poseRounds: 6, freezeAfter: 9,
   nearM: 0.06,                              // a cloth triangle counts against an inner vertex only when anchored within this of it
   coverDist: 0.16,                          // bind coverage ray length (skirts flare off the thighs)
   ease: {upper: {x: 0.016, z: 0.02}, lower: {x: 0.008, z: 0.012}},
@@ -336,7 +336,18 @@ export function analyseGarment(G, kind, cfg = {}) {
     }
   }
   if (split === null) throw new Error('lower piece: the legs never part on the midline');
-  const skirtHem = cfg.style === 'skirt' ? split : null, crotch = cfg.style === 'trousers' ? split : null;
+  // trousers: the CROTCH is the gusset over the legs - the median first cloth met by five rays going UP the midline (x = 0, round the
+  // waist's front-back centre) from between the legs; baggy legs that touch at the midline keep the frontal split far lower
+  let crotch = null;
+  if (cfg.style === 'trousers') {
+    if (cfg.crotch != null) crotch = cfg.crotch;
+    else {
+      const grid = new TriGrid(P, G.idx, 0.02), zc = (zMinW(P, n, waistTop) + zMaxW(P, n, waistTop)) / 2, y0 = split - 0.02, hits = [];
+      for (const dz of [-0.03, -0.015, 0, 0.015, 0.03]) { const h = grid.ray(0, y0, zc + dz, 0, 1, 0, waistTop - y0); if (h) hits.push(y0 + h.t); }
+      crotch = hits.length ? Math.max(split, quantile(hits, 0.5)) : split;
+    }
+  }
+  const skirtHem = cfg.style === 'skirt' ? split : null;
   // waistband reference section (top 1-4 cm)
   let hw = 0, zMin = Infinity, zMax = -Infinity;
   for (let i = 0; i < n; i++) { const y = P[i * 3 + 1]; if (y > waistTop - 0.04 && y < waistTop - 0.01 && crossing.has(info[label[i]])) { hw = Math.max(hw, Math.abs(P[i * 3])); zMin = Math.min(zMin, P[i * 3 + 2]); zMax = Math.max(zMax, P[i * 3 + 2]); } }
@@ -822,7 +833,7 @@ function anchorsOf(B, I, pos, part, kind) {
 }
 
 /** Cloth weights from the anchors (dense rows over the 18 joints), the collar / skirt rules, masked smoothing, top-4. */
-function anchorWeights(B, I, A, pos, idx, part, kind, opts) {
+function anchorWeights(B, I, A, pos, idx, part, kind, opts, cfg = {}) {
   const names = B.names, NJ = names.length, JI = Object.fromEntries(names.map((nm, j) => [nm, j]));
   const n = pos.length / 3, Wd = new Float32Array(n * NJ), crY = B.costume.crotch[1];
   for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) {
@@ -844,6 +855,13 @@ function anchorWeights(B, I, A, pos, idx, part, kind, opts) {
       const g = (1 - ss(0.03, sc + 0.04, Math.abs(x))) * ss(crY + 0.06, crY - 0.02, y), tL = ss(-sc, sc, x);
       row[JI.L_Thigh] = (1 - g) * row[JI.L_Thigh] + g * T * tL;
       row[JI.R_Thigh] = (1 - g) * row[JI.R_Thigh] + g * T * (1 - tL);
+      // a SKIRT over an unclothed body must keep covering it: its lower part follows the thighs only partly and the hips for the rest
+      // (cfg.skirtHips; the stride then pushes the skirt out - the pose rounds flare it - instead of lifting it off the groin)
+      if (cfg.skirtHips && part[i] === 'waist') {
+        const h = cfg.skirtHips * ss(crY + 0.06, crY - 0.03, y);
+        for (let j = 0; j < NJ; j++) row[j] *= 1 - h;
+        row[JI.Hips] += h;
+      }
     }
     let s = 0; for (let j = 0; j < NJ; j++) s += row[j];
     if (s > 0) for (let j = 0; j < NJ; j++) row[j] /= s; else row[JI.Hips] = 1;
@@ -929,7 +947,7 @@ export function fitPiece(B, G, GA, cfg, layer = null, opts = COSTUME_FIT) {
   const I = innerSurface(B, layer);
   const base = M.pos, n = base.length / 3, idx = G.idx;
   const A = anchorsOf(B, I, base, M.part, kind);
-  const Wt = anchorWeights(B, I, A, base, idx, M.part, kind, opts);
+  const Wt = anchorWeights(B, I, A, base, idx, M.part, kind, opts, cfg);
   const nI = I.pos.length / 3;
   const BP = I.pos, BN = I.nrm;
   const clear = opts.clear[kind], minClear = opts.minClear[kind];
@@ -977,7 +995,7 @@ export function fitPiece(B, G, GA, cfg, layer = null, opts = COSTUME_FIT) {
   // reported, not chased (lib/fit07.mjs: chasing it over-inflates)
   const triDir = (tri, i) => { let x = 0, y = 0, z = 0; for (let c = 0; c < 3; c++) { const g = idx[tri * 3 + c]; x += A.n[g * 3]; y += A.n[g * 3 + 1]; z += A.n[g * 3 + 2]; } const l = Math.hypot(x, y, z) || 1; return (x * BN[i * 3] + y * BN[i * 3 + 1] + z * BN[i * 3 + 2]) / l; };
   let skew = 0;
-  const raiseTri = (field, tri, d, cap, i) => { if (i !== undefined && triDir(tri, i) < opts.minDirCos) { skew++; return; } for (let c = 0; c < 3; c++) { const g = idx[tri * 3 + c]; if (!gain[g]) continue; for (let k = 0; k < 3; k++) if (A.bw[g * 3 + k] > 0.15) raise(field, A.verts[g * 3 + k], d, cap); } };
+  const raiseTri = (field, tri, d, cap, i, minCos = opts.minDirCos) => { if (i !== undefined && triDir(tri, i) < minCos) { skew++; return; } for (let c = 0; c < 3; c++) { const g = idx[tri * 3 + c]; if (!gain[g]) continue; for (let k = 0; k < 3; k++) if (A.bw[g * 3 + k] > 0.15) raise(field, A.verts[g * 3 + k], d, cap); } };
   const bindLog = [];
   for (let r = 0; r < opts.bindRounds; r++) {
     // (a) every cloth vertex >= clear outside its own anchor (exact: the need is applied before the between-vertex test sees it)
@@ -985,9 +1003,10 @@ export function fitPiece(B, G, GA, cfg, layer = null, opts = COSTUME_FIT) {
     const reqA = new Float32Array(nI);
     let anchorNeed = 0;
     for (let i = 0; i < n; i++) {
-      if (A.dist[i] > 0.08 || !gain[i]) continue;
+      if (!gain[i] || A.dist[i] > 0.2) continue;
       const s = (pos[i * 3] - A.q[i * 3]) * A.n[i * 3] + (pos[i * 3 + 1] - A.q[i * 3 + 1]) * A.n[i * 3 + 1] + (pos[i * 3 + 2] - A.q[i * 3 + 2]) * A.n[i * 3 + 2];
-      if (s < clear - 1e-4 && s > -0.08) { anchorNeed++; for (let k = 0; k < 3; k++) if (A.bw[i * 3 + k] > 0.2) raise(reqA, A.verts[i * 3 + k], Math.min(opts.maxRoundRaise, clear - s), 1); }
+      // near the skin (8 cm) any shortfall; deeper only cloth really INSIDE the body (a jacket front sunk into a big belly: ray parity)
+      if (s < clear - 1e-4 && s > -0.2 && (A.dist[i] <= 0.08 && s > -0.08 || insideByParity(B.skinGrid, pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]))) { anchorNeed++; for (let k = 0; k < 3; k++) if (A.bw[i * 3 + k] > 0.2) raise(reqA, A.verts[i * 3 + k], Math.min(opts.maxRoundRaise, clear - s), 1); }
     }
     let nA = 0;
     for (let i = 0; i < nI; i++) if (reqA[i] > 1e-4) { nA++; eBind[i] = Math.min(opts.maxBind, eBind[i] + reqA[i]); }
@@ -1021,7 +1040,7 @@ export function fitPiece(B, G, GA, cfg, layer = null, opts = COSTUME_FIT) {
       const d = deficits({pos: ip, nrm: inrm, idx: I.idx}, {pos: cp, idx}, opts.poseClear, {covered: bc, eligible, near: nearInner, track, allow});
       const s = per[p.clip] ??= {poses: 0, covered: d.stats.covered, maxPoke: 0, maxClose: 0, maxExposed: 0};
       s.poses++; s.maxPoke = Math.max(s.maxPoke, d.stats.poke); s.maxClose = Math.max(s.maxClose, d.stats.close); s.maxExposed = Math.max(s.maxExposed, d.stats.exposed);
-      for (let i = 0; i < nI; i++) if (d.def[i] > 0 && d.hitTri[i] >= 0) raiseTri(req, d.hitTri[i], Math.min(opts.maxDeficitStep, d.def[i]), 1, i);
+      for (let i = 0; i < nI; i++) if (d.def[i] > 0 && d.hitTri[i] >= 0) raiseTri(req, d.hitTri[i], Math.min(opts.maxDeficitStep, d.def[i]), 1, i, opts.poseDirCos);
     }
     let need = 0, mx = 0;
     for (let i = 0; i < nI; i++) if (req[i] > 1e-4) { need++; mx = Math.max(mx, req[i]); if (++raised[i] >= opts.freezeAfter + 3) frozen[i] = 1; }
@@ -1136,3 +1155,33 @@ function partAllowance(B, I, part, idx) {
 }
 
 export {insideByParity};
+
+/** Front-back extent of the garment's top 6 cm (its waistband). */
+function zMinW(P, n, top) { let z = Infinity; for (let i = 0; i < n; i++) if (P[i * 3 + 1] > top - 0.06) z = Math.min(z, P[i * 3 + 2]); return z; }
+function zMaxW(P, n, top) { let z = -Infinity; for (let i = 0; i < n; i++) if (P[i * 3 + 1] > top - 0.06) z = Math.max(z, P[i * 3 + 2]); return z; }
+
+// ------------------------------------------------------------------------------------------------------------------------------ ragdoll poses
+import {EXTREME_POSES} from './extreme-poses.mjs';
+const qmul4 = (a, b) => [a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1], a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0], a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3], a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]];
+const qrot4 = (q, v) => { const [x, y, z, w] = q; const ix = w * v[0] + y * v[2] - z * v[1], iy = w * v[1] + z * v[0] - x * v[2], iz = w * v[2] + x * v[1] - y * v[0], iw = -x * v[0] - y * v[1] - z * v[2]; return [ix * w + iw * -x + iy * -z - iz * -y, iy * w + iw * -y + iz * -x - ix * -z, iz * w + iw * -z + ix * -y - iy * -x]; };
+const mulM4 = (a, b) => { const o = new Array(16).fill(0); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) o[c * 4 + r] += a[k * 4 + r] * b[c * 4 + k]; return o; };
+const trsM4 = (p, q) => { const [x, y, z, w] = q; return [1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w), 0, 2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w), 0, 2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y), 0, p[0], p[1], p[2], 1]; };
+/**
+ * The three ragdoll-like extreme poses of lib/extreme-poses.mjs (inside the runtime ragdoll's joint limits: legs splayed, crumpled,
+ * twisted - the kind of pose a corpse ends in; zombies hand their bones to a physics ragdoll on death) as validation poses
+ * {clip: 'ragdoll-<name>', t: 0, mats} (skinning matrices JointWorld x IBM, like lib/lingerie-body.mjs skinMats).
+ */
+export function ragdollPoses(B) {
+  const R = B.R, ibm = B.mesh.ibm;
+  return Object.entries(EXTREME_POSES).map(([name, rot]) => {
+    const world = [];
+    R.joints.forEach((j, i) => {
+      const local = {q: rot[j.getName()] ?? j.getRotation().slice(), p: j.getTranslation().slice()};
+      const pi = R.joints.indexOf(j.getParentNode());
+      if (pi < 0) world[i] = local;
+      else { const P = world[pi]; world[i] = {q: qmul4(P.q, local.q), p: qrot4(P.q, local.p).map((v, c) => v + P.p[c])}; }
+    });
+    const W = world.map(w => trsM4(w.p, w.q));
+    return {clip: name, t: 0, mats: B.mesh.skinJoints.map((j, k) => mulM4(W[R.joints.indexOf(j)], Array.from(ibm.subarray(k * 16, k * 16 + 16))))};
+  });
+}

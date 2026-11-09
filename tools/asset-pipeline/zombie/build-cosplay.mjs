@@ -72,7 +72,7 @@ const GARMENTS = {
   lower: [['cosplay-slacks-maroon', 'slacks', 'maroon', 'Maroon trousers'], ['cosplay-slacks-rice', 'slacks', 'rice', 'Rice-white trousers']],
 };
 /** The head pieces. */
-const HEADS = [
+export const HEADS = [
   {id: 'cosplay-bearhat', piece: 'wig', palette: 'blue', label: 'Mascot cosplay: bear-ear hat + blue wig'},
   {id: 'cosplay-bearhat-rose', piece: 'wig', palette: 'rose', label: 'Mascot cosplay (alternate palette): cream bear-ear hat + rose wig'},
   {id: 'cosplay-mascot-head', piece: 'head', palette: 'blue', label: 'Oversized mascot costume head'},
@@ -91,9 +91,9 @@ export const COSTUMES = [
 /** Ordinary wearables a costume may reuse unchanged (its file is the ordinary boot model). */
 const ORDINARY_PIECES = {slacks: {model: 'outfit_slacks', file: 'outfit-slacks-t25.glb'}};
 /** Bodies whose own long hair hangs below a wig (it would show under the cut of the wig): no wig variant. */
-const LONG_HAIR = ['paleGaze', 'paleRevenant', 'paleApparition'];
+export const LONG_HAIR = ['paleGaze', 'paleRevenant', 'paleApparition'];
 /** Fit gates and search ranges. */
-const FIT = {
+export const FIT = {
   wig: {k: [0.95, 1.0, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3], dz: [-0.01, 0, 0.01, 0.02], dy: [-0.01, 0, 0.01], cover: 0.16, maxPokes: 12, eyeClear: 0.25, bulkCap: 0.03},
   head: {s: [0.4, 0.42, 0.44, 0.46, 0.48, 0.5, 0.52, 0.55, 0.58, 0.62], dy: [-0.02, 0, 0.02, 0.04], noseGap: 0.02, maxOutside: 12, bulkCap: 0.08, hairCutY: 0.4},
   sushi: {widthM: 0.31, embed: 0.022, dz: [-0.02, -0.01, 0, 0.01, 0.02], belly: [0.03, 0.08], cover: 0.12, maxPokes: 12, bulkCap: 0.02},
@@ -104,11 +104,11 @@ const FIT = {
 // ------------------------------------------------------------------------------------------------------------------------------
 // glTF helpers
 
-const floats = (accessor, comps) => { const n = accessor.getCount(), out = new Float32Array(n * comps), el = []; for (let i = 0; i < n; i++) { accessor.getElement(i, el); for (let c = 0; c < comps; c++) out[i * comps + c] = el[c]; } return out; };
-async function imageRGB(img) { const {data, info} = await sharp(Buffer.from(img)).removeAlpha().raw().toBuffer({resolveWithObject: true}); return {data, width: info.width, height: info.height}; }
-const jpeg = (rgb, q = 85) => sharp(Buffer.from(rgb.data), {raw: {width: rgb.width, height: rgb.height, channels: 3}}).jpeg({quality: q, mozjpeg: false, chromaSubsampling: '4:4:4'}).toBuffer();
+export const floats = (accessor, comps) => { const n = accessor.getCount(), out = new Float32Array(n * comps), el = []; for (let i = 0; i < n; i++) { accessor.getElement(i, el); for (let c = 0; c < comps; c++) out[i * comps + c] = el[c]; } return out; };
+export async function imageRGB(img) { const {data, info} = await sharp(Buffer.from(img)).removeAlpha().raw().toBuffer({resolveWithObject: true}); return {data, width: info.width, height: info.height}; }
+export const jpeg = (rgb, q = 85) => sharp(Buffer.from(rgb.data), {raw: {width: rgb.width, height: rgb.height, channels: 3}}).jpeg({quality: q, mozjpeg: false, chromaSubsampling: '4:4:4'}).toBuffer();
 
-async function loadBody(id) {
+export async function loadBody(id) {
   const file = path.join(REPO, bodyFile(id));
   const doc = await io.read(file);
   const root = doc.getRoot();
@@ -137,8 +137,8 @@ async function loadBody(id) {
 // The mascot split
 
 const hsv = (r, g, b) => { r /= 255; g /= 255; b /= 255; const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn; let h = 0; if (d) { if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h *= 60; if (h < 0) h += 360; } return [h, mx ? d / mx : 0, mx]; };
-const HAIR = 1, BROWN = 2, OTHER = 0;
-function texelClass(r, g, b) {
+export const HAIR = 1, BROWN = 2, OTHER = 0;
+export function texelClass(r, g, b) {
   const [h, s, v] = hsv(r, g, b);
   if (h > 180 && h < 250 && s > 0.25 && v > 0.25) return HAIR;
   if ((h < 40 || h > 330) && v < 0.65 && v >= 0.18 && s > 0.3) return BROWN;
@@ -162,7 +162,7 @@ function components(tris, idx, wid) {
   return [...groups.values()];
 }
 
-async function loadMascot() {
+export async function loadMascot() {
   const file = 'game/public/assets/models/skyways-mascot-poses.glb';
   const doc = await io.read(path.join(REPO, file));
   const node = doc.getRoot().listNodes().find(n => n.getName() === 'stand');
@@ -210,7 +210,7 @@ async function loadMascot() {
 }
 
 /** A sub-mesh of triangles `tris`, compacted and simplified to `target` triangles (UV seams kept: meshoptimizer simplifyWithAttributes). */
-function subMesh(src, tris, target) {
+export function subMesh(src, tris, target) {
   const remap = new Map(), P = [], N = [], U = [], I = [];
   for (const t of tris) for (let c = 0; c < 3; c++) {
     const v = src.idx[t * 3 + c];
@@ -230,7 +230,7 @@ function subMesh(src, tris, target) {
 }
 
 /** The rose / cream alternate palette of the mascot's base map (hair hue -> rose, hat brown -> cream; every other texel unchanged). */
-function rosePalette(base) {
+export function rosePalette(base) {
   const out = new Uint8Array(base.data.length);
   for (let i = 0; i < base.data.length; i += 3) {
     const r = base.data[i], g = base.data[i + 1], b = base.data[i + 2];
@@ -267,10 +267,10 @@ function dye(base, rgb) {
 // ------------------------------------------------------------------------------------------------------------------------------
 // Rigid fits
 
-const tf = (pos, s, o, t) => { const out = new Float32Array(pos.length); for (let i = 0; i < pos.length; i += 3) for (let c = 0; c < 3; c++) out[i + c] = (pos[i + c] - o[c]) * s + t[c]; return out; };
+export const tf = (pos, s, o, t) => { const out = new Float32Array(pos.length); for (let i = 0; i < pos.length; i += 3) for (let c = 0; c < 3; c++) out[i + c] = (pos[i + c] - o[c]) * s + t[c]; return out; };
 
 /** Body vertices near the head region (head / neck dominant, or anything above the shoulders): the hide candidates. */
-function headVerts(body) {
+export function headVerts(body) {
   const out = [], y0 = body.head.noseY - 0.2;
   for (let v = 0; v < body.dom.length; v++) if (body.dom[v] === HEAD || body.dom[v] === NECK || body.pos[v * 3 + 1] > y0) out.push(v);
   return out;
@@ -280,7 +280,7 @@ function headVerts(body) {
  * uncovered just outside the piece (its surface within 3 cm inward: skin / own hair through the wig or hat). Shoulders / chest under the
  * hanging locks are the garments' (they are not counted).
  */
-function coverage(body, verts, grid, cover, minY = -Infinity) {
+export function coverage(body, verts, grid, cover, minY = -Infinity) {
   const P = body.pos, N = body.nrm, covered = new Uint8Array(P.length / 3);
   let pokes = 0;
   for (const v of verts) {
@@ -292,20 +292,20 @@ function coverage(body, verts, grid, cover, minY = -Infinity) {
 }
 const DIRS = [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0], [0.7071, 0.7071, 0], [-0.7071, 0.7071, 0], [0, 0.7071, 0.7071], [0, 0.7071, -0.7071]];
 const inside = (grid, x, y, z, far = 0.6) => DIRS.every(([dx, dy, dz]) => grid.ray(x, y, z, dx, dy, dz, far));
-function eyesClear(body, grid, far) {
+export function eyesClear(body, grid, far) {
   const h = body.head, ey = h.noseY + 0.032;
   return [-0.032, 0.032].every(dx => !grid.ray(h.cx + dx, ey, h.noseZ - 0.03, 0, 0, 1, far));
 }
-function hideMask(body, isHidden) {
+export function hideMask(body, isHidden) {
   const I = body.idx, nt = I.length / 3, hide = new Uint8Array(nt);
   let n = 0;
   for (let t = 0; t < nt; t++) if (isHidden(I[t * 3]) && isHidden(I[t * 3 + 1]) && isHidden(I[t * 3 + 2])) { hide[t] = 1; n++; }
   return {hide, n};
 }
-const bboxOf = pos => { const b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]; for (let i = 0; i < pos.length; i += 3) for (let c = 0; c < 3; c++) { b[c] = Math.min(b[c], pos[i + c]); b[c + 3] = Math.max(b[c + 3], pos[i + c]); } return b; };
+export const bboxOf = pos => { const b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]; for (let i = 0; i < pos.length; i += 3) for (let c = 0; c < 3; c++) { b[c] = Math.min(b[c], pos[i + c]); b[c + 3] = Math.max(b[c + 3], pos[i + c]); } return b; };
 
 /** The wig / bear hat: the mascot's face line mapped onto the body's (eye line, face front between the eyes, face width). */
-function fitWig(body, wig, land) {
+export function fitWig(body, wig, land) {
   const h = body.head, F = FIT.wig;
   if (LONG_HAIR.includes(body.id)) return {ok: false, reason: 'long own hair would hang below the wig', pos: wig.pos, mask: {hide: new Uint8Array(0), n: 0}, stats: {}};
   const eyeLv = h.levels.reduce((b, l) => Math.abs(l.y - (h.noseY + 0.032)) < Math.abs(b.y - (h.noseY + 0.032)) ? l : b, h.levels[0]);
@@ -330,7 +330,7 @@ function fitWig(body, wig, land) {
 }
 
 /** The oversized costume head: the smallest scale that ENCLOSES the body's head (every head-dominant vertex inside), the nose behind its face. */
-function fitHead(body, head, land) {
+export function fitHead(body, head, land) {
   const h = body.head, F = FIT.head;
   const hv = []; for (let v = 0; v < body.dom.length; v++) if (body.dom[v] === HEAD) hv.push(v);
   let best = null;
@@ -362,7 +362,7 @@ function fitHead(body, head, land) {
  * surface under it (a ray down onto the Head / Neck triangles), lifted so the lowest clearance is -embed (pressed into the hair); the
  * little feet sink into the hair (hidden). Fore-aft offset searched (fewest poking head vertices, eyes clear).
  */
-function fitSushi(body, sushi) {
+export function fitSushi(body, sushi) {
   const h = body.head, F = FIT.sushi, b = bboxOf(sushi.pos), s = F.widthM / (b[3] - b[0]);
   const verts = headVerts(body);
   const headTri = []; for (let t = 0; t < body.idx.length / 3; t++) if ([0, 1, 2].every(c => { const d = body.dom[body.idx[t * 3 + c]]; return d === HEAD || d === NECK; })) headTri.push(body.idx[t * 3], body.idx[t * 3 + 1], body.idx[t * 3 + 2]);
@@ -395,7 +395,7 @@ function fitSushi(body, sushi) {
 }
 
 /** Head-hit bulk of a fitted head piece: its mean half extent above the eye line beyond the body's measured head radius (capped). */
-function headBulk(body, pos, cap) {
+export function headBulk(body, pos, cap) {
   const b = bboxOf(pos), half = ((b[3] - b[0]) + (b[5] - b[2])) / 4;
   return r4(Math.max(0, Math.min(cap, half - body.extras.hit.head)));
 }
@@ -403,7 +403,7 @@ function headBulk(body, pos, cap) {
 // ------------------------------------------------------------------------------------------------------------------------------
 // Writer: one GLB per slot, several wearables (own materials) per file
 
-function addSkeleton(doc, buf, holder, jw, prefix, skinName) {
+export function addSkeleton(doc, buf, holder, jw, prefix, skinName) {
   const nodes = {};
   for (const [name, parent] of JOINTS) {
     const t = parent ? jw[name].map((v, c) => v - jw[parent][c]) : jw[name];
@@ -655,17 +655,21 @@ async function build(outRoot) {
   return {manifest, out};
 }
 
-const OUTPUTS = [`${MODELS}/outfit-cosplay-head.glb`, `${MODELS}/outfit-cosplay-upper.glb`, `${MODELS}/outfit-cosplay-lower.glb`, 'game/public/assets/derivatives/outfit-cosplay.json', 'game/src/ai/cosplay.generated.ts'];
-if (ARGS.has('--check')) {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cosplay-check-'));
-  await build(tmp);
-  const bad = OUTPUTS.filter(f => !fs.existsSync(path.join(REPO, f)) || !fs.readFileSync(path.join(tmp, f)).equals(fs.readFileSync(path.join(REPO, f))));
-  fs.rmSync(tmp, {recursive: true, force: true});
-  if (bad.length) { console.error('cosplay --check: differs:', bad.join(', ')); process.exit(1); }
-  console.log('cosplay --check: every output byte-identical');
-} else {
-  const root = OPT.out ? path.resolve(OPT.out) : REPO;
-  const {manifest, out} = await build(root);
-  const brief = Object.fromEntries(Object.entries(manifest.fit.perBody).map(([b, f]) => [b, Object.fromEntries(Object.entries(f).map(([k, v]) => [k, `${v.ok ? 'ok' : 'NO'} ${v.pokes ?? v.headVerticesOutside ?? ''} s=${v.scale ?? ''} ${v.reason}`]))]));
-  console.log(JSON.stringify({fit: brief, split: manifest.mascotSplit, costumes: manifest.costumes, outputs: out}, null, 1));
+// (task studio-cosplay-general-20261108-225231-01, lane COSTUME: build-cosplay-costumes.mjs imports the head-piece functions above; the
+// build below runs only when this file is executed)
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  const OUTPUTS = [`${MODELS}/outfit-cosplay-head.glb`, `${MODELS}/outfit-cosplay-upper.glb`, `${MODELS}/outfit-cosplay-lower.glb`, 'game/public/assets/derivatives/outfit-cosplay.json', 'game/src/ai/cosplay.generated.ts'];
+  if (ARGS.has('--check')) {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cosplay-check-'));
+    await build(tmp);
+    const bad = OUTPUTS.filter(f => !fs.existsSync(path.join(REPO, f)) || !fs.readFileSync(path.join(tmp, f)).equals(fs.readFileSync(path.join(REPO, f))));
+    fs.rmSync(tmp, {recursive: true, force: true});
+    if (bad.length) { console.error('cosplay --check: differs:', bad.join(', ')); process.exit(1); }
+    console.log('cosplay --check: every output byte-identical');
+  } else {
+    const root = OPT.out ? path.resolve(OPT.out) : REPO;
+    const {manifest, out} = await build(root);
+    const brief = Object.fromEntries(Object.entries(manifest.fit.perBody).map(([b, f]) => [b, Object.fromEntries(Object.entries(f).map(([k, v]) => [k, `${v.ok ? 'ok' : 'NO'} ${v.pokes ?? v.headVerticesOutside ?? ''} s=${v.scale ?? ''} ${v.reason}`]))]));
+    console.log(JSON.stringify({fit: brief, split: manifest.mascotSplit, costumes: manifest.costumes, outputs: out}, null, 1));
+  }
 }
