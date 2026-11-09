@@ -188,7 +188,7 @@ describe('bunker objective: inert elsewhere, the views, the warm-up, the wiring'
       const local = b.clone().applyMatrix4(v.root.matrixWorld.clone().invert());
       expect(local.max.z).toBeLessThan(BUNKER_GENERATOR_DIMS.d / 2 + 0.15);
       expect(local.max.x).toBeLessThan(BUNKER_GENERATOR_DIMS.w / 2);
-      expect(local.min.y).toBeGreaterThan(1);
+      expect(local.min.y).toBeGreaterThan(0.6); // (above the skid: the housing face)
       v.root.traverse(o => { if ((o as THREE.Mesh).isMesh) expect(typeof o.userData.level).toBe('number'); });
     }
     const core = s.sys.core!;
@@ -230,7 +230,7 @@ describe('bunker objective: the fuel pour (exactly one can, only on success)', (
     s.standAtGen(0);
     s.step();
     expect(s.sys.target).toMatchObject({kind: 'gen', index: 0});
-    expect(s.prompt()).toBe('<b>[E]</b> Pour a fuel can · auxiliary generator A (Habitation plant room) · 2 cans');
+    expect(s.prompt()).toBe('<b>[E]</b> Pour a fuel can · auxiliary generator A (Habitation plant room) OFFLINE · 2 cans');
     expect(s.press()).toBe(true);
     expect(s.sys.pour).not.toBeNull();
     expect(s.calls.pour).toBe(1);
@@ -307,7 +307,7 @@ describe('bunker objective: the fuel pour (exactly one can, only on success)', (
     const s = shell();
     s.standAtGen(0);
     s.step();
-    expect(s.prompt()).toBe('<b>[E]</b> Auxiliary generator A (Habitation plant room) · no fuel — needs one fuel can');
+    expect(s.prompt()).toBe('<b>[E]</b> Auxiliary generator A (Habitation plant room) OFFLINE · no fuel — needs one fuel can');
     expect(s.press()).toBe(true);
     expect(s.toasts.at(-1)).toEqual({text: 'No fuel can', warn: true});
     const bag = s.h.inv.makeStack('backpack', 1);
@@ -429,7 +429,7 @@ describe('bunker objective: the turnkey start', () => {
     s.give(1);
     s.fuel(0);
     s.step();
-    expect(s.prompt()).toBe('<b>Hold [E]</b> Turn the key — start auxiliary generator A');
+    expect(s.prompt()).toBe('<b>Hold [E]</b> Turn the key — start auxiliary generator A · FUELLED');
     keys.add('KeyE');
     expect(s.press()).toBe(true);
     expect(s.g.inputOwners.some(f => f())).toBe(true);
@@ -451,7 +451,7 @@ describe('bunker objective: the turnkey start', () => {
     expect(s.sys.gens[0].qa().lamp).toBe(`#${new THREE.Color(0.2, 1.0, 0.32).getHexString()}`);
     expect(s.calls.loops).toBe(1);
     expect(s.calls.smoke).toBe(1);
-    expect(s.prompt()).toBe('Auxiliary generator A running · auxiliary power 1/3');
+    expect(s.prompt()).toBe('Auxiliary generator A ONLINE · auxiliary power 1/3');
   });
 
   it('a cancelled start leaves it FUELLED and costs nothing; the next start is free; ONLINE takes no more fuel (no refund, no duplicate)', () => {

@@ -782,10 +782,10 @@ export class BunkerObjective {
       return this.run.campaign ? '<b>[E]</b> Retrieve map intel from the core' : '<b>[E]</b> Core terminal · no network uplink';
     }
     const L = LETTERS[t.index] ?? '?', st = this.genState(t.index), label = this.info.generators[t.index].label;
-    if (st === 'online') return `Auxiliary generator ${L} running · auxiliary power ${n}/${ids.length}`;
-    if (st === 'fuelled') return `<b>Hold [E]</b> Turn the key — start auxiliary generator ${L}`;
+    if (st === 'online') return `Auxiliary generator ${L} ONLINE · auxiliary power ${n}/${ids.length}`;
+    if (st === 'fuelled') return `<b>Hold [E]</b> Turn the key — start auxiliary generator ${L} · FUELLED`;
     const cans = this.host.inv.count(FUEL.canItem);
-    return cans ? `<b>[E]</b> Pour a fuel can · auxiliary generator ${L} (${label}) · ${cans} can${cans > 1 ? 's' : ''}` : `<b>[E]</b> Auxiliary generator ${L} (${label}) · no fuel — needs one fuel can`;
+    return cans ? `<b>[E]</b> Pour a fuel can · auxiliary generator ${L} (${label}) OFFLINE · ${cans} can${cans > 1 ? 's' : ''}` : `<b>[E]</b> Auxiliary generator ${L} (${label}) OFFLINE · no fuel — needs one fuel can`;
   }
 
   /** QA / tests: a compact report. */

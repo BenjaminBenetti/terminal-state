@@ -36,22 +36,23 @@ export const BUNKER_OBJECTIVE_MODELS = {
 interface V3 { x: number; y: number; z: number }
 
 /**
- * The generator's fuel / start panel (generator-local metres, front +Z). Probed on the cooked GLB (2026-11-09): the body face is at
- * z 0.56 .. 0.61 over x 0.7 .. 1.3, y 1.2 .. 1.7, left of the control box (x 1.54 .. 2.35, out to z 0.84) — the plate's back sits inside
- * that face, the neck / lamp / key on its front.
+ * The generator's fuel / start panel (generator-local metres, front +Z). Probed on the cooked GLB and checked on a front render
+ * (2026-11-09): the engine housing's plain face is at z 0.59 .. 0.61 over y 0.65 .. 1.0 below its third louvred door (x 0.81 .. 1.22),
+ * left of the control box (gauges / levers x 1.54 .. 2.35, out to z 0.84) — the plate's back sits inside that face, the filler neck /
+ * lamp / key on its front (a genset's filler sits low on its housing).
  */
 export const GEN_PANEL = {
-  cx: 0.95, cy: 1.42, w: 0.5, h: 0.4, backZ: 0.555, frontZ: 0.625,
+  cx: 1.0, cy: 0.85, w: 0.5, h: 0.34, backZ: 0.555, frontZ: 0.625,
   /** The body face behind the plate (the pour's "skin": the posed can stays in front of it). */
   bodyZ: 0.6,
-  neck: {x: 0.85, y: 1.36, r: 0.034, len: 0.05},
+  neck: {x: 0.88, y: 0.82, r: 0.034, len: 0.05},
   cap: {r: 0.046, len: 0.03},
-  lamp: {x: 1.1, y: 1.53, r: 0.026},
-  key: {x: 1.1, y: 1.33, r: 0.032},
+  lamp: {x: 1.13, y: 0.95, r: 0.026},
+  key: {x: 1.13, y: 0.77, r: 0.032},
 } as const;
 
 /** The aim box of a generator's controls (generator-local): the panel and the model's control box beside it. */
-export const GEN_AIM = {x0: 0.55, x1: 2.45, y0: 0.7, y1: 1.85, z0: 0.4, z1: 1.0} as const;
+export const GEN_AIM = {x0: 0.6, x1: 2.45, y0: 0.6, y1: 1.85, z0: 0.4, z1: 1.0} as const;
 /** Where the operator stands (generator-local plan point in front of the panel / control box). */
 export const GEN_USE = {x: 1.3, z: 1.6} as const;
 /** The exhaust outlet (generator-local; the model's tallest part is its muffler stack at x ~1.8). */
@@ -95,12 +96,12 @@ const G = (k: string, make: () => THREE.BufferGeometry) => { let g = geos.get(k)
 let fixtureMats: {plate: THREE.MeshStandardMaterial; neck: THREE.MeshStandardMaterial; cap: THREE.MeshStandardMaterial; dark: THREE.MeshStandardMaterial; key: THREE.MeshStandardMaterial; steel: THREE.MeshStandardMaterial} | null = null;
 function mats(): NonNullable<typeof fixtureMats> {
   fixtureMats ??= {
-    plate: new THREE.MeshStandardMaterial({name: 'bunker-gen-panel', color: 0x3a3f3a, roughness: 0.62, metalness: 0.45}),
+    plate: new THREE.MeshStandardMaterial({name: 'bunker-gen-panel', color: 0x4a5049, roughness: 0.62, metalness: 0.45}),
     neck: new THREE.MeshStandardMaterial({name: 'bunker-gen-neck', color: 0x6b6f72, roughness: 0.4, metalness: 0.7}),
     cap: new THREE.MeshStandardMaterial({name: 'bunker-gen-cap', color: 0xc99a1e, roughness: 0.5, metalness: 0.3}),
     dark: new THREE.MeshStandardMaterial({name: 'bunker-gen-opening', color: 0x0d0f10, roughness: 0.9, metalness: 0.1}),
     key: new THREE.MeshStandardMaterial({name: 'bunker-gen-key', color: 0xb8b2a0, roughness: 0.35, metalness: 0.85}),
-    steel: new THREE.MeshStandardMaterial({name: 'bunker-core-steel', color: 0x2c3134, roughness: 0.55, metalness: 0.55}),
+    steel: new THREE.MeshStandardMaterial({name: 'bunker-core-steel', color: 0x3b4245, roughness: 0.55, metalness: 0.55}),
   };
   return fixtureMats;
 }
