@@ -191,8 +191,10 @@ export function bunkerSpine(): BunkerSpine {
     keepOut.push({...shaft});
     let envelope: Rect = {x: 3, y: 3, w: W - 6, h: H - 6};
     if (L === 0) {
-      // the station: the arrival envelope is the floor's; the bed, platform, bulkhead and vestibule are the spine's
-      envelope = {...arrival};
+      // the station: the floor's envelope is the arrival side (rows between the platform wall and the bulkhead) AND the vault side
+      // south of the bulkhead (rooms there open off the spine's vestibule only: the vault lane is the one way through the bulkhead);
+      // the bed, platform, bulkhead band and vestibule are the spine's
+      envelope = {x: arrival.x, y: arrival.y, w: arrival.w, h: 110 - arrival.y};
       keepOut.push(grow(bed), grow(platform), grow(vest), bulkhead);
       // (the stair head and the lift's top landing open into the spine's vestibule; the floor serves the vault's hall side only, and
       // returns its own openings off the platform: FloorCarveResult.openings)

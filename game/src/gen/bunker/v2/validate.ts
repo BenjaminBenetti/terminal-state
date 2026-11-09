@@ -72,6 +72,12 @@ export function bunkerV2Issues(layout: StationLayout): string[] {
       if (!(x >= v.rect.x && x < v.rect.x + v.rect.w && y >= v.rect.y && y < v.rect.y + v.rect.h)) { out.push(`${v.id}: tall cell outside the void on storey ${v.lower}`); break; }
     }
   }
+  // the bulkhead: the vault lane is the one way through it (no other opening in its rows on the station storey)
+  for (const d of layout.doors) {
+    if ((d.level ?? 0) !== 0 || d.noFrame) continue;
+    const B = sp.station.bulkhead;
+    if (d.y < B.y + B.h && d.y + d.h > B.y) out.push(`door ${d.id} through the vault bulkhead`);
+  }
   // the floors inside their envelopes (the spine's own areas excepted)
   for (const a of layout.areas) {
     const L = a.level ?? 0, fr = sp.storeys[L];
