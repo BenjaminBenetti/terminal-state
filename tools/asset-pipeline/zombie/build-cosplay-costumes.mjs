@@ -29,7 +29,7 @@ import {MeshoptSimplifier} from 'meshoptimizer';
 import {KHRMeshQuantization} from '@gltf-transform/extensions';
 import {loadRawGarment, simplifyPiece, sha256File} from './lib/lingerie-garment.mjs';
 import {loadBody, validationPoses, clipDurations} from './lib/lingerie-body.mjs';
-import {prepareCostumeBody, analyseGarment, fitPiece, interiorCaps, dropTriangles, ragdollPoses, COSTUME_FIT} from './lib/costume-fit.mjs';
+import {prepareCostumeBody, analyseGarment, fitPiece, interiorCaps, dropTriangles, ragdollPoses, hairHide, COSTUME_FIT} from './lib/costume-fit.mjs';
 import {measureCostume, checkCostumeLimits, COSTUME_LIMITS} from './lib/costume-metrics.mjs';
 import {bitsetBase64, quantizeWeights} from './lib/variant-glb.mjs';
 import {TriGrid} from './lib/penetration.mjs';
@@ -392,9 +392,9 @@ async function build(outRoot) {
       'garments: degenerate triangles dropped; meshoptimizer UV-weighted simplification to the runtime budget (one shared topology / UVs / indices for every body); interior caps (Meshy\'s closed openings, skirt floors, skirt-lining bridges to the legwear, chords through a limb) found over every body the piece is tried on and dropped',
       'parts (garment frame): upper = torso + sleeves (measured armpits, the seam leaning out along the sleeve angle); lower = waist / skirt + legs (trousers below the measured crotch; skirt legwear below the measured hem and up under it) + footwear (below the configured shoe top)',
       'retarget: torso / waist one scale per axis from the reference section to the body\'s + ease, back / centre per height, vertical landmarks (armpit, shoulder line, configured hem / waist, crotch); sleeves along shoulder -> elbow -> wrist -> hand (configured cuff); trouser legs along hip -> knee -> ankle; tight legwear on the leg\'s smoothed outer surface + 3.5 mm; shoes heel / toe / sole / width boxes onto the foot, turned to its yaw, the body\'s own feet hidden inside',
-      'clearance: an offset field on the inner surface (the closed skin + fused hair, never free hair; + the fitted lower under an upper): every cloth vertex >= 6-7 mm outside its anchor, every covered skin vertex >= 4-5 mm under cloth, then the same through every validation pose (lib/fit07.mjs method); chords / contacts it cannot clear are reported, not chased',
+      'clearance: an offset field on the inner surface (the closed skin + fused hair, never free hair; + the fitted lower under an upper, its contacts matched by the lower\'s own skin anchors too, so a bulky lower is cleared): every cloth vertex >= 6-7 mm outside its anchor, every covered skin vertex >= 4-5 mm under cloth, then the same through every validation pose (lib/fit07.mjs method); chords / contacts it cannot clear are reported, not chased',
       'weights: the body\'s own skin weights at the anchor; collars / hoods follow the neck; skirts and hems below the crotch follow the thighs (the centre line split between both); masked smoothing; quantised to u8',
-      'masks: body triangles enclosed by the cloth in the bind pose (normal + 4 tilted rays) and covered in every validation pose are hidden; the feet inside the shoes are hidden; the upper hides the lower\'s waist it encloses (hideWear)',
+      'masks: body triangles enclosed by the cloth in the bind pose (normal + 4 tilted rays) and covered in every validation pose are hidden; the feet inside the shoes are hidden; the upper hides the lower\'s waist it encloses and every lower triangle whose skin anchors the upper\'s torso covers in the bind pose and every validation pose (hideWear); body hair inside / poking through the torso / waist cloth in the bind pose or any validation pose, and the hair islands that leaves lying on the cloth, is hidden with the upper (lib/costume-fit.mjs hairHide)',
       'head pieces: build-cosplay.mjs\'s split of the mascot statue / sushi figurine and its rigid fits, here re-run for every costume body; the bear-ear hat carries its wig only on short-haired bodies (the long-haired pale bodies wear the hat alone on their own hair, fitted with a wider scale / lift search)',
       `validation: every ${step} s of all six clips + each clip's last frame; metrics on the shipped u8 weights (lib/costume-metrics.mjs); a (costume, body) ships only when every limit holds in every frame`,
     ],
@@ -408,7 +408,7 @@ async function build(outRoot) {
     wearables: record,
     outputs: out,
     limitations: ['Linear-blend skinned with the body\'s weights: no cloth simulation (skirts swing with the thighs, never drape).', 'Meshy hidden-side geometry is AI-reconstructed; interior caps it closed openings with are removed, not rebuilt.',
-      'Heeled / platform footwear keeps its shape: the body\'s flat foot is hidden inside (the open arch shows the floor, as a real one).', 'Long hair hangs over / through the collar and back of a jacket where it lies within the cloth offset.', 'Unapproved prototype; gameReady false.'],
+      'Heeled / platform footwear keeps its shape: the body\'s flat foot is hidden inside (the open arch shows the floor, as a real one).', 'Long hair that would lie inside / through the costume\'s back is hidden (it ends at the collar); hair over the shoulders and outside the garment, joined to the head, stays.', 'Unapproved prototype; gameReady false.'],
     rebuild: `node tools/asset-pipeline/zombie/build-cosplay-costumes.mjs (the Meshy masters are private: ${RAW_DIR})`,
   };
   // (wall-clock timings are not provenance: dropped, so a rebuild is byte-identical)
@@ -477,14 +477,24 @@ async function job() {
   // a skirt over an UNCLOTHED body follows the hips more (it must keep covering), over a clothed one the thighs (cfg.skirtHips {nude, clothed})
   const lfit = typeof lo.P.fit.skirtHips === 'object' ? {...lo.P.fit, skirtHips: lo.P.fit.skirtHips[BODIES[b].nude ? 'nude' : 'clothed']} : lo.P.fit;
   const FL = fitPiece(B, lo.G, lo.GA, lfit, null);
-  const layer = {pos: FL.pos, idx: lo.G.idx, joints: FL.joints, weights: FL.weights, anchorNrm: FL.anchorNrm, part: FL.part};
+  const layer = {pos: FL.pos, idx: lo.G.idx, joints: FL.joints, weights: FL.weights, anchorNrm: FL.anchorNrm, anchorPos: FL.anchorPos, part: FL.part};
   const FU = fitPiece(B, up.G, up.GA, up.P.fit, layer);
   // runtime data (quantised u8 weights: the metrics measure exactly what ships)
   const qL = quantizeWeights(FL.joints, FL.weights), qU = quantizeWeights(FU.joints, FU.weights);
   const f = a => Float32Array.from(a, v => v / 255);
+  // the body's hair inside / poking through the costume's torso / waist cloth in any validation pose (+ the islands it leaves lying on
+  // the cloth) is hidden with the upper (its hideBodyTriangles), on the shipped (quantised) skinning
+  const masks = new Uint8Array(FU.mask.hide.length); for (let t = 0; t < masks.length; t++) masks[t] = FU.mask.hide[t] | FL.mask.hide[t];
+  const hair = hairHide(B, [
+    {pos: FL.pos, idx: lo.G.idx, joints: qL.joints, weights: f(qL.weights), anchorPos: FL.anchorPos, anchorNrm: FL.anchorNrm, part: FL.part},
+    {pos: FU.pos, idx: up.G.idx, joints: qU.joints, weights: f(qU.weights), anchorPos: FU.anchorPos, anchorNrm: FU.anchorNrm, part: FU.part},
+  ], B.poses, masks);
+  let hairAdded = 0;
+  for (let t = 0; t < hair.hide.length; t++) if (hair.hide[t] && !FU.mask.hide[t]) { FU.mask.hide[t] = 1; FU.mask.hidden++; hairAdded++; }
+  FU.report.hair = {...hair.stats, hiddenByUpper: hairAdded};
   const M = measureCostume(B, [
-    {name: 'lower', pos: FL.pos, idx: lo.G.idx, joints: qL.joints, weights: f(qL.weights), hide: FL.mask.hide, part: FL.part},
-    {name: 'upper', pos: FU.pos, idx: up.G.idx, joints: qU.joints, weights: f(qU.weights), hide: FU.mask.hide, part: FU.part},
+    {name: 'lower', pos: FL.pos, idx: lo.G.idx, joints: qL.joints, weights: f(qL.weights), hide: FL.mask.hide, part: FL.part, anchorPos: FL.anchorPos, anchorNrm: FL.anchorNrm, hideWear: FU.hideLayer?.hide},
+    {name: 'upper', pos: FU.pos, idx: up.G.idx, joints: qU.joints, weights: f(qU.weights), hide: FU.mask.hide, part: FU.part, anchorPos: FU.anchorPos, anchorNrm: FU.anchorNrm},
   ], {poses: B.poses, nude: !!BODIES[b].nude});
   const keep = F => ({pos: F.pos, nrm: F.nrm, mask: F.mask, hideLayer: F.hideLayer, bulkM: F.bulkM, report: F.report});
   fs.writeFileSync(path.join(dir, `fit-${cid}@${b}.v8`), v8.serialize({FL: keep(FL), FU: keep(FU), qL, qU, summary: M.summary, zones: M.zones, poses: M.poses, failures: checkCostumeLimits(M.summary), ms: Date.now() - t0}));

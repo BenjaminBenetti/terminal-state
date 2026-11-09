@@ -23,7 +23,8 @@
 //    inner-surface point of the regions its part may cover (sleeves -> own arm / hand + the shoulder cap; torso -> torso / neck / head
 //    (hoods, collars) and the thighs below the crotch; waist -> torso + legs; legs -> own leg + foot; shoes -> own foot + shin); inner
 //    surface = the body's closed skin (+ fused hair; never the free-hanging hair, which hangs OVER the cloth) and, for an upper, the
-//    fitted lower piece (the jacket hem goes over the waistband). Bind rounds raise the field where cloth is closer than `clear` to its
+//    fitted lower piece (the jacket hem goes over the waistband; a lower vertex is matched to the upper's cloth by its own skin anchor
+//    too and its depth measured to the body, so a bulky hakama or a thin bow is cleared). Bind rounds raise the field where cloth is closer than `clear` to its
 //    anchor or a covered inner vertex has the cloth nearer than `minClear` / under it; POSE rounds do the same in every validation pose
 //    (every 0.1 s of all six clips) and raise an extra field (capped). Every garment vertex moves along its anchor normal by the field
 //    there: both walls of a thick garment move together (no crumple), thin sheets keep their relief.
@@ -32,7 +33,9 @@
 //    thighs: lib/fit07.mjs's coat-skirt rule) so a stride swings the skirt instead of tearing through it; light masked smoothing.
 // 5. MASKS: body triangles enclosed by the cloth in the bind pose (normal + 4 tilted rays, lib/fit.mjs coverMask) AND covered (never
 //    poking, never exposed) in every validation pose are hidden (feet inside shoes, the arms inside sleeves, the torso inside the top);
-//    an upper hides the lower's triangles it encloses (hideWear: the waistband under the hem) the same way.
+//    an upper hides the lower's triangles it encloses (hideWear: the waistband under the hem) the same way, plus every lower triangle
+//    whose own skin anchors its torso covers in the bind pose and every validation pose (a bulky lower bulging out through the upper);
+//    body hair inside / poking through the costume's torso / waist cloth is hidden with the upper (hairHide).
 import {TriGrid, insideByParity, weldMap, outerHull} from './penetration.mjs';
 import {coverMask} from './fit.mjs';
 import {skinWith, posedWeldedNormals, clothGraph, carryNormals, spatialNeighbours} from './lingerie-fit.mjs';
@@ -51,6 +54,12 @@ export const COSTUME_FIT = {
   maxBind: 0.14, maxExtra: 0.05, maxRoundRaise: 0.04, maxDeficitStep: 0.012, minDirCos: 0.5, poseDirCos: 0.3, bindRounds: 8, poseRounds: 6, freezeAfter: 9,
   nearM: 0.06,                              // a cloth triangle counts against an inner vertex only when anchored within this of it
   coverDist: 0.16,                          // bind coverage ray length (skirts flare off the thighs)
+  // the upper hides the lower's cloth whose skin anchor ray meets the upper's torso within this distance (bind + every pose)
+  layerCoverM: 0.15,
+  // body hair vs the costume's torso / waist cloth (hairClothFrame): search distance, cloth anchored within nearM of the hair's skin point
+  // and crossed along its anchor normal (cos > hairDirCos)
+  hairMaxDist: 0.25, hairNearM: 0.25, hairDirCos: 0, hairSideM: 0.12,
+  hairIslandShare: 0.8,                     // a visible hair island at least this much in / on the cloth (bind) is hidden
   ease: {upper: {x: 0.016, z: 0.02}, lower: {x: 0.008, z: 0.012}},
   tightOffset: 0.0035,                      // legwear (stockings / socks) inner face above the skin
   shoeMargin: 0.012,                        // shoe inner margin round the body's foot (heel, toe, sides)
@@ -781,6 +790,8 @@ export function innerSurface(B, layer = null) {
   for (const [k, v] of ring) if (v instanceof Set) ring.set(k, Uint32Array.from([...v].sort((x, y) => x - y)));
   const layerIdx = Uint32Array.from(layer.idx, v => v + nb);
   const I = {pos, idx, nrm, joints, weights, remap, ring, nb, nl, layerIdx, isBody: false};
+  // the layer's own skin anchors (a bulky lower stands far off the skin the upper's cloth may be anchored on)
+  if (layer.anchorPos) { I.apos = new Float32Array(N * 3); I.apos.set(B.pos); I.apos.set(layer.anchorPos, nb * 3); }
   // orientation of the layer's geometric normals vs the direction it was pushed out along (fixed once: posed normals keep it)
   const g = layerGeomNormals(I, layer.pos);
   I.layerSign = new Int8Array(nl);
@@ -920,7 +931,9 @@ function deficits(inner, cloth, minClear, {covered = null, coverDist, outDist = 
     const out = og.ray(x - nx * 1e-4, y - ny * 1e-4, z - nz * 1e-4, nx, ny, nz, covered ? outDist : coverDist, 0, skip);
     if (out) { if (!covered) cov[i] = 1; if (out.t < minClear) { d = minClear - out.t; tri = out.tri; close++; } }
     else {
-      const back = ig.ray(x - nx * 0.001, y - ny * 0.001, z - nz * 0.001, -nx, -ny, -nz, 0.4, 0.004);
+      // the inner surface's own thickness behind the vertex: for a layer vertex the BODY under it (a thin bow / frill on the lower has
+      // its other wall millimetres behind: the upper sunk under it would never be seen)
+      const back = (inner.bodyGrid && i >= inner.nb ? inner.bodyGrid : ig).ray(x - nx * 0.001, y - ny * 0.001, z - nz * 0.001, -nx, -ny, -nz, 0.4, 0.004);
       const lim = Math.min(maxDepth, 0.45 * (back ? back.t : 0.4));
       const u = og.ray(x + nx * 1e-4, y + ny * 1e-4, z + nz * 1e-4, -nx, -ny, -nz, lim, 0.0002, skip);
       if (u) { if (!covered) cov[i] = 1; d = u.t + minClear; tri = u.tri; poke++; if (track) track.poke[i] = 1; }
@@ -949,8 +962,18 @@ export function fitPiece(B, G, GA, cfg, layer = null, opts = COSTUME_FIT) {
   const BP = I.pos, BN = I.nrm;
   const clear = opts.clear[kind], minClear = opts.minClear[kind];
   // a cloth triangle counts against inner vertex i only when ALL its corners are anchored within nearM of i (a triangle spanning a limb -
-  // anchored on opposite sides - is a chord no outward lift can clear: never chased)
-  const nearInner = (i, tri) => { for (let c = 0; c < 3; c++) { const g = idx[tri * 3 + c]; if (Math.hypot(A.q[g * 3] - BP[i * 3], A.q[g * 3 + 1] - BP[i * 3 + 1], A.q[g * 3 + 2] - BP[i * 3 + 2]) >= opts.nearM) return false; } return true; };
+  // anchored on opposite sides - is a chord no outward lift can clear: never chased); a layer vertex also by its own skin anchor (cloth
+  // anchored on the skin under a bulky lower)
+  const AP = I.apos;
+  const nearInner = (i, tri) => {
+    for (let c = 0; c < 3; c++) {
+      const g = idx[tri * 3 + c];
+      if (Math.hypot(A.q[g * 3] - BP[i * 3], A.q[g * 3 + 1] - BP[i * 3 + 1], A.q[g * 3 + 2] - BP[i * 3 + 2]) < opts.nearM) continue;
+      if (AP && i >= I.nb && Math.hypot(A.q[g * 3] - AP[i * 3], A.q[g * 3 + 1] - AP[i * 3 + 1], A.q[g * 3 + 2] - AP[i * 3 + 2]) < opts.nearM) continue;
+      return false;
+    }
+    return true;
+  };
   // eligible inner vertices: the body's inner surface (+ the layer's outer face); the head only under a hood-like part
   const eligible = new Uint8Array(nI);
   for (const v of I.idx) eligible[v] = v >= I.nb || B.costume.hull[v] ? 1 : 0;
@@ -962,6 +985,8 @@ export function fitPiece(B, G, GA, cfg, layer = null, opts = COSTUME_FIT) {
   }
   const innerBind = {pos: BP, nrm: BN, idx: I.idx};
   innerBind.grid = new TriGrid(BP, I.idx, 0.03);
+  const nBodyIdx = I.idx.length - (I.layerIdx?.length ?? 0);
+  if (!I.isBody) { innerBind.nb = I.nb; innerBind.bodyGrid = new TriGrid(BP, I.idx.subarray(0, nBodyIdx), 0.03); }
   const allow = partAllowance(B, I, M.part, idx);
   // ---- the offset field
   const eBind = new Float32Array(nI), eExtra = new Float32Array(nI), frozen = new Uint8Array(nI), raised = new Uint8Array(nI);
@@ -1034,7 +1059,7 @@ export function fitPiece(B, G, GA, cfg, layer = null, opts = COSTUME_FIT) {
       const ip = skinWith(p.mats, BP, I.joints, I.weights);
       const inrm = posedInnerNormals(B, I, ip);
       const cp = skinWith(p.mats, bindPos, Wt.joints, Wt.weights);
-      const d = deficits({pos: ip, nrm: inrm, idx: I.idx}, {pos: cp, idx}, opts.poseClear, {covered: bc, eligible, near: nearInner, track, allow});
+      const d = deficits({pos: ip, nrm: inrm, idx: I.idx, ...(I.isBody ? {} : {nb: I.nb, bodyGrid: new TriGrid(ip, I.idx.subarray(0, nBodyIdx), 0.03)})}, {pos: cp, idx}, opts.poseClear, {covered: bc, eligible, near: nearInner, track, allow});
       const s = per[p.clip] ??= {poses: 0, covered: d.stats.covered, maxPoke: 0, maxClose: 0, maxExposed: 0};
       s.poses++; s.maxPoke = Math.max(s.maxPoke, d.stats.poke); s.maxClose = Math.max(s.maxClose, d.stats.close); s.maxExposed = Math.max(s.maxExposed, d.stats.exposed);
       for (let i = 0; i < nI; i++) if (d.def[i] > 0 && d.hitTri[i] >= 0) raiseTri(req, d.hitTri[i], Math.min(opts.maxDeficitStep, d.def[i]), 1, i, opts.poseDirCos);
@@ -1072,7 +1097,22 @@ export function fitPiece(B, G, GA, cfg, layer = null, opts = COSTUME_FIT) {
     const ml = coverMask({pos: layer.pos, idx: layer.idx}, {pos, idx: Uint32Array.from(torsoIdx)}, {...opts.mask.layer, bodyJoints: null, skipJoints: []});
     const h = new Uint8Array(ml.hide.length); let k = 0;
     for (let t = 0; t < h.length; t++) { if (!ml.hide[t] || (layer.part && [0, 1, 2].some(c => layer.part[layer.idx[t * 3 + c]] !== 'waist'))) continue; let ok = true; for (let c = 0; c < 3; c++) { const v = I.nb + layer.idx[t * 3 + c]; if (final.track.poke[v] || final.track.exposed[v]) { ok = false; break; } } if (ok) { h[t] = 1; k++; } }
-    hideLayer = {hide: h, hidden: k};
+    // + the lower's cloth whose OWN SKIN ANCHOR the upper's torso covers (the ray from the anchor out along its normal meets the torso
+    // within layerCoverM) in the bind pose AND every validation pose: hidden even where a bulky lower bulges out through the upper (the
+    // upper lies under it there, so hiding it shows the upper, never a hole); shoes never
+    let byAnchor = 0;
+    if (layer.anchorPos) {
+      const tIdx = Uint32Array.from(torsoIdx), nl = layer.pos.length / 3, cov = new Uint8Array(nl);
+      for (let v = 0; v < nl; v++) cov[v] = layer.part && layer.part[v].startsWith('shoe') ? 0 : 1;
+      for (const p of [null, ...poses]) {
+        const up = p ? skinWith(p.mats, pos, Wt.joints, Wt.weights) : pos;
+        const an = p ? skinWith(p.mats, layer.anchorPos, layer.joints, layer.weights, layer.anchorNrm) : {pos: layer.anchorPos, nrm: layer.anchorNrm};
+        const g = new TriGrid(up, tIdx, 0.03), AP = an.pos, AN = an.nrm;
+        for (let v = 0; v < nl; v++) if (cov[v] && !g.ray(AP[v * 3] + AN[v * 3] * 0.001, AP[v * 3 + 1] + AN[v * 3 + 1] * 0.001, AP[v * 3 + 2] + AN[v * 3 + 2] * 0.001, AN[v * 3], AN[v * 3 + 1], AN[v * 3 + 2], opts.layerCoverM)) cov[v] = 0;
+      }
+      for (let t = 0; t < h.length; t++) if (!h[t] && cov[layer.idx[t * 3]] && cov[layer.idx[t * 3 + 1]] && cov[layer.idx[t * 3 + 2]]) { h[t] = 1; k++; byAnchor++; }
+    }
+    hideLayer = {hide: h, hidden: k, byAnchor};
   }
   // ---- normals: the source shading carried onto the fitted surface
   const Gw = clothGraph({pos, idx});
@@ -1096,8 +1136,8 @@ export function fitPiece(B, G, GA, cfg, layer = null, opts = COSTUME_FIT) {
   const report = {map: M.report, parts, displacementByPart, anchorFallbacks: A.fallback, anchorDistanceM: {p50: q(A.dist, 0.5), p95: q(A.dist, 0.95)}, skirtVertices: Wt.skirtVertices,
     fieldM: {bindMax: q(eBind, 1), poseExtraMax: q(eExtra, 1), displacementP50: q(disp, 0.5), displacementP95: q(disp, 0.95), displacementMax: q(disp, 1)},
     bindRounds: bindLog, poseRounds: poseLog, finalPerClip: final.per, validationPoses: poses.length, directionSkewSkipped: skew, shoes: shoeFit,
-    mask: {hidden, feetInShoes: feet, droppedNotCoveredInEveryPose: dropped, total: hide.length}, layerHidden: hideLayer?.hidden ?? null, bulkM, ms: Date.now() - t0};
-  return {pos, nrm, joints: Wt.joints, weights: Wt.weights, part: M.part, anchorNrm, mask: {hide, hidden}, hideLayer, bulkM, report};
+    mask: {hidden, feetInShoes: feet, droppedNotCoveredInEveryPose: dropped, total: hide.length}, layerHidden: hideLayer?.hidden ?? null, layerHiddenByAnchor: hideLayer?.byAnchor ?? null, bulkM, ms: Date.now() - t0};
+  return {pos, nrm, joints: Wt.joints, weights: Wt.weights, part: M.part, anchorNrm, anchorPos: A.q, mask: {hide, hidden}, hideLayer, bulkM, report};
 }
 
 /** Welded geometric normals of the layer part of an inner surface (positions `lp` of the layer's vertices). */
@@ -1156,6 +1196,162 @@ export {insideByParity};
 /** Front-back extent of the garment's top 6 cm (its waistband). */
 function zMinW(P, n, top) { let z = Infinity; for (let i = 0; i < n; i++) if (P[i * 3 + 1] > top - 0.06) z = Math.min(z, P[i * 3 + 2]); return z; }
 function zMaxW(P, n, top) { let z = -Infinity; for (let i = 0; i < n; i++) if (P[i * 3 + 1] > top - 0.06) z = Math.max(z, P[i * 3 + 2]); return z; }
+
+// ------------------------------------------------------------------------------------------------------------------------------ hair vs cloth
+// Only the costume's torso / waist cloth: the layer over the back, chest and hips that long hair can lie in or on; sleeves and trouser
+// legs swing past hair without covering it.
+const HAIR_CLOTH_PARTS = new Set(['torso', 'waist']);
+
+/** Barycentric weights of point p in triangle (a, b, c) (flat offsets into P), clamped to the triangle. */
+function bary(P, a, b, c, px, py, pz) {
+  const v0 = [P[b] - P[a], P[b + 1] - P[a + 1], P[b + 2] - P[a + 2]], v1 = [P[c] - P[a], P[c + 1] - P[a + 1], P[c + 2] - P[a + 2]], v2 = [px - P[a], py - P[a + 1], pz - P[a + 2]];
+  const d00 = dot(v0, v0), d01 = dot(v0, v1), d11 = dot(v1, v1), d20 = dot(v2, v0), d21 = dot(v2, v1), den = d00 * d11 - d01 * d01;
+  if (Math.abs(den) < 1e-14) return [1 / 3, 1 / 3, 1 / 3];
+  let v = (d11 * d20 - d01 * d21) / den, w = (d00 * d21 - d01 * d20) / den;
+  v = Math.min(1, Math.max(0, v)); w = Math.min(1 - v, Math.max(0, w));
+  return [1 - v - w, v, w];
+}
+
+/** Every hair vertex (welded representative) with its closest closed-skin point (both skinned with the hair vertex's own weights). */
+export function hairSetup(B) {
+  const n = B.pos.length / 3, verts = [], skin = [];
+  for (let v = 0; v < n; v++) {
+    if (!B.hair[v] || B.remap[v] !== v) continue;
+    const c = B.skinGrid.closest(B.pos[v * 3], B.pos[v * 3 + 1], B.pos[v * 3 + 2], 0.3); if (!c) continue;
+    verts.push(v); skin.push(c.q[0], c.q[1], c.q[2]);
+  }
+  const V = Uint32Array.from(verts);
+  return {verts: V, free: Uint8Array.from(verts, v => B.fused[v] ? 0 : 1), pos: Float32Array.from(verts.flatMap(v => [B.pos[v * 3], B.pos[v * 3 + 1], B.pos[v * 3 + 2]])), skin: Float32Array.from(skin),
+    joints: Uint8Array.from(verts.flatMap(v => [0, 1, 2, 3].map(k => B.joints[v * 4 + k]))), weights: Float32Array.from(verts.flatMap(v => [0, 1, 2, 3].map(k => B.weights[v * 4 + k])))};
+}
+
+/** The costume's torso / waist cloth merged: cloths [{pos, idx, joints, weights, anchorPos, anchorNrm, part}] (weights as floats). */
+export function hairClothMerge(cloths) {
+  const nv = cloths.reduce((a, c) => a + c.pos.length / 3, 0);
+  const pos = new Float32Array(nv * 3), anchorPos = new Float32Array(nv * 3), anchorNrm = new Float32Array(nv * 3), joints = new Uint8Array(nv * 4), weights = new Float32Array(nv * 4), idx = [], pieces = [];
+  let o = 0;
+  for (const c of cloths) {
+    pos.set(c.pos, o * 3); anchorPos.set(c.anchorPos, o * 3); anchorNrm.set(c.anchorNrm, o * 3); joints.set(c.joints, o * 4); weights.set(c.weights, o * 4);
+    const own = [];
+    for (let t = 0; t < c.idx.length; t += 3) if ([0, 1, 2].every(k => HAIR_CLOTH_PARTS.has(c.part[c.idx[t + k]]))) own.push(c.idx[t] + o, c.idx[t + 1] + o, c.idx[t + 2] + o);
+    idx.push(...own); pieces.push(Uint32Array.from(own));
+    o += c.pos.length / 3;
+  }
+  return {pos, anchorPos, anchorNrm, joints, weights, idx: Uint32Array.from(idx), pieces};
+}
+
+/**
+ * One frame (mats null = the bind pose) of hair against the merged torso / waist cloth. Cloth "outward" is its own anchor normal (the
+ * direction it was offset from the skin along; both walls of a thick garment share it), interpolated at the cloth point; only cloth
+ * anchored within nearM of the hair's skin point counts. A hair vertex is
+ *  - UNDER the cloth (inside the costume, or crossing its surface) when either
+ *    (a) it lies on the INNER side of the closest cloth point of a piece (within sideM; the offset to it within 60 deg of the cloth's
+ *        normal, never beside a hem / collar edge), or
+ *    (b) the ray from it away from the skin (skin point -> hair) leaves cloth OUTWARD (cos > minCos) within maxDist;
+ *  - OVER the cloth (lying on its outside) when it lies on the OUTER side of such a closest cloth point, or the ray back towards the
+ *    skin enters cloth inward before the skin.
+ * Cloth met from the wrong side by a ray (hair outside a jacket bent towards its collar) is stepped over.
+ */
+export function hairClothFrame(H, C, mats, {maxDist = COSTUME_FIT.hairMaxDist, nearM = COSTUME_FIT.hairNearM, minCos = COSTUME_FIT.hairDirCos, sideM = COSTUME_FIT.hairSideM} = {}) {
+  const cp = mats ? skinWith(mats, C.pos, C.joints, C.weights) : C.pos;
+  const A = mats ? skinWith(mats, C.anchorPos, C.joints, C.weights, C.anchorNrm) : {pos: C.anchorPos, nrm: C.anchorNrm}, ca = A.pos, cn = A.nrm;
+  const hp = mats ? skinWith(mats, H.pos, H.joints, H.weights) : H.pos, sp = mats ? skinWith(mats, H.skin, H.joints, H.weights) : H.skin;
+  const g = new TriGrid(cp, C.idx, 0.03), I = C.idx, nh = H.verts.length, under = new Uint8Array(nh), over = new Uint8Array(nh), n2 = nearM * nearM;
+  const pg = C.pieces.filter(ix => ix.length).map(ix => ({ix, g: new TriGrid(cp, ix, 0.03)}));
+  // the side of a piece's closest cloth point the hair lies on (-1 inner, +1 outer, 0 none / beside an edge)
+  const side = (x, y, z, sx, sy, sz) => {
+    let out = 0;
+    for (const {ix, g: gp} of pg) {
+      const h = gp.closest(x, y, z, sideM); if (!h) continue;
+      const a = ix[h.tri * 3] * 3, b = ix[h.tri * 3 + 1] * 3, c = ix[h.tri * 3 + 2] * 3, w = [h.q[3], h.q[4], h.q[5]];
+      const ax = w[0] * ca[a] + w[1] * ca[b] + w[2] * ca[c], ay = w[0] * ca[a + 1] + w[1] * ca[b + 1] + w[2] * ca[c + 1], az = w[0] * ca[a + 2] + w[1] * ca[b + 2] + w[2] * ca[c + 2];
+      if ((ax - sx) ** 2 + (ay - sy) ** 2 + (az - sz) ** 2 > n2) continue;
+      const nx = w[0] * cn[a] + w[1] * cn[b] + w[2] * cn[c], ny = w[0] * cn[a + 1] + w[1] * cn[b + 1] + w[2] * cn[c + 1], nz = w[0] * cn[a + 2] + w[1] * cn[b + 2] + w[2] * cn[c + 2];
+      const vx = x - h.q[0], vy = y - h.q[1], vz = z - h.q[2], d = Math.hypot(vx, vy, vz), sd = (vx * nx + vy * ny + vz * nz) / (Math.hypot(nx, ny, nz) || 1);
+      if (Math.abs(sd) >= 0.5 * d) { if (sd < 0) return -1; out = 1; }
+    }
+    return out;
+  };
+  // nearest hit whose cloth point (anchor + anchor normal interpolated at the hit: big flat panels have corners far apart) is anchored
+  // within nearM of the skin point and crossed along its anchor normal (sgn +1: outward, -1: inward); others are stepped over (at most 6)
+  const hitNear = (x, y, z, dx, dy, dz, tMax, sx, sy, sz, sgn) => {
+    let t0 = 0;
+    for (let it = 0; it < 6; it++) {
+      const h = g.ray(x, y, z, dx, dy, dz, tMax, t0); if (!h) return false;
+      const a = I[h.tri * 3] * 3, b = I[h.tri * 3 + 1] * 3, c = I[h.tri * 3 + 2] * 3;
+      const px = x + dx * h.t, py = y + dy * h.t, pz = z + dz * h.t;
+      const w = bary(cp, a, b, c, px, py, pz);
+      const ax = w[0] * ca[a] + w[1] * ca[b] + w[2] * ca[c], ay = w[0] * ca[a + 1] + w[1] * ca[b + 1] + w[2] * ca[c + 1], az = w[0] * ca[a + 2] + w[1] * ca[b + 2] + w[2] * ca[c + 2];
+      const nx = w[0] * cn[a] + w[1] * cn[b] + w[2] * cn[c], ny = w[0] * cn[a + 1] + w[1] * cn[b + 1] + w[2] * cn[c + 1], nz = w[0] * cn[a + 2] + w[1] * cn[b + 2] + w[2] * cn[c + 2];
+      const cos = sgn * (nx * dx + ny * dy + nz * dz) / (Math.hypot(nx, ny, nz) || 1);
+      if (cos > minCos && (ax - sx) ** 2 + (ay - sy) ** 2 + (az - sz) ** 2 <= n2) return true;
+      t0 = h.t + 1e-4;
+    }
+    return false;
+  };
+  for (let k = 0; k < nh; k++) {
+    const sx = sp[k * 3], sy = sp[k * 3 + 1], sz = sp[k * 3 + 2];
+    const x = hp[k * 3], y = hp[k * 3 + 1], z = hp[k * 3 + 2], dx = x - sx, dy = y - sy, dz = z - sz, l = Math.hypot(dx, dy, dz);
+    if (l < 1e-5) continue;
+    const ux = dx / l, uy = dy / l, uz = dz / l;
+    const sd = side(x, y, z, sx, sy, sz);
+    if (sd < 0 || hitNear(x, y, z, ux, uy, uz, maxDist, sx, sy, sz, 1)) under[k] = 1;
+    if (sd > 0 || hitNear(x, y, z, -ux, -uy, -uz, l, sx, sy, sz, -1)) over[k] = 1;
+  }
+  return {under, over};
+}
+
+/**
+ * Visible hair islands: connected components (shared welded vertices) of the body's hair triangles (all three corners hair) no mask
+ * hides (`hidden`: body-triangle bitset) with at least `share` of their vertices UNDER or OVER the cloth in the bind pose (`inCloth`,
+ * per body vertex; the rest is the rim where the lock crosses the cloth surface): hair emerging from the cloth with no visible link to
+ * the head (the dark blob a long lock makes where it pokes out of a jacket back). Returns the islands' triangles.
+ */
+export function hairIslands(B, hidden, inCloth, share = COSTUME_FIT.hairIslandShare) {
+  const nT = B.idx.length / 3, par = new Int32Array(B.pos.length / 3).map((_, i) => i);
+  const find = a => { while (par[a] !== a) { par[a] = par[par[a]]; a = par[a]; } return a; };
+  const tris = [];
+  for (let t = 0; t < nT; t++) {
+    if (hidden[t]) continue;
+    const a = B.remap[B.idx[t * 3]], b = B.remap[B.idx[t * 3 + 1]], c = B.remap[B.idx[t * 3 + 2]];
+    if (!B.hair[a] || !B.hair[b] || !B.hair[c]) continue;
+    tris.push(t); par[find(b)] = find(a); par[find(c)] = find(a);
+  }
+  const seen = new Set(), nIn = new Map(), nAll = new Map();
+  for (const t of tris) for (let k = 0; k < 3; k++) {
+    const v = B.remap[B.idx[t * 3 + k]]; if (seen.has(v)) continue; seen.add(v);
+    const r = find(v); nAll.set(r, (nAll.get(r) ?? 0) + 1); if (inCloth[v]) nIn.set(r, (nIn.get(r) ?? 0) + 1);
+  }
+  return tris.filter(t => { const r = find(B.remap[B.idx[t * 3]]); return (nIn.get(r) ?? 0) >= share * nAll.get(r); });
+}
+
+/**
+ * Body hair hidden under a costume (per body x costume, merged into the upper's hideBodyTriangles): every hair triangle with a corner
+ * UNDER the torso / waist cloth in the bind pose or any validation pose (inside the costume or poking through it), then the visible
+ * hair islands left lying on the cloth (hairIslands). Hair over the shoulders and outside the garment, joined to the head, stays.
+ * cloths [{pos, idx, joints, weights (floats), anchorPos, part}], hidden = the costume's other body masks (union).
+ */
+export function hairHide(B, cloths, poses, hidden) {
+  const H = hairSetup(B), C = hairClothMerge(cloths), nV = B.pos.length / 3, nT = B.idx.length / 3;
+  const under = new Uint8Array(nV), inCloth = new Uint8Array(nV);
+  let f = 0;
+  for (const m of [null, ...poses.map(p => p.mats)]) {
+    const s = hairClothFrame(H, C, m);
+    for (let k = 0; k < H.verts.length; k++) { if (s.under[k] && H.free[k]) under[H.verts[k]] = 1; if (!f && (s.under[k] || s.over[k])) inCloth[H.verts[k]] = 1; }
+    f++;
+  }
+  const hide = new Uint8Array(nT), all = Uint8Array.from(hidden);
+  let byUnder = 0;
+  for (let t = 0; t < nT; t++) {
+    const a = B.remap[B.idx[t * 3]], b = B.remap[B.idx[t * 3 + 1]], c = B.remap[B.idx[t * 3 + 2]];
+    if (!B.hair[a] || !B.hair[b] || !B.hair[c] || !(under[a] || under[b] || under[c])) continue;
+    hide[t] = 1; if (!all[t]) byUnder++; all[t] = 1;
+  }
+  const isl = hairIslands(B, all, inCloth);
+  for (const t of isl) hide[t] = 1;
+  let n = 0; for (let t = 0; t < nT; t++) if (hide[t]) n++;
+  return {hide, hidden: n, stats: {hairVertices: H.verts.length, underInSomeFrame: under.reduce((a, v) => a + v, 0), trianglesUnder: byUnder, islandTriangles: isl.length, frames: f}};
+}
 
 // ------------------------------------------------------------------------------------------------------------------------------ ragdoll poses
 import {EXTREME_POSES} from './extreme-poses.mjs';

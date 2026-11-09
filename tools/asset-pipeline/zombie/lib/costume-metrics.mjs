@@ -8,6 +8,10 @@
 //  - cloth inside the body: cloth vertices (every 2nd) deeper than 5 mm inside the posed closed skin (ray parity) where that skin is
 //    VISIBLE (its closest triangle not hidden) and belongs to the regions the cloth part is fitted over, per piece (cloth inside ANOTHER
 //    limb - a hand pushed into a skirt, an arm pressed into a jacket's flank: the animation's own limb contact - is reported apart);
+//  - garment over garment: lower cloth the upper's torso covers in the bind pose that pokes OUT through the upper's torso in a pose
+//    while still visible (not hidden by the upper's hideWear); a hand / cuff pressed into a skirt is limb contact, not counted;
+//  - hair: visible free-hair SHEET vertices under the costume's torso / waist cloth in a pose (inside it or crossing it: dark hair
+//    through a jacket's back) and visible hair islands lying on the cloth with no visible link to the head (bind pose);
 //  - coverage of the UNCLOTHED bodies (ZombieBodyDef nude): the breast apex zones, the groin V and its core (lib/lingerie-metrics.mjs
 //    zones) and the TORSO (skin between the crotch + 3 cm and the armpits - 4 cm, not facing down): a zone vertex is covered when it is
 //    hidden, or NO sight line from it toward a viewer escapes past the costume and the body itself (every azimuth; a standing / moving
@@ -16,7 +20,7 @@
 import {TriGrid, prepareInner, bindCoverage, auditPose, insideByParity} from './penetration.mjs';
 import {skinWith, posedWeldedNormals} from './lingerie-fit.mjs';
 import {coverageZones} from './lingerie-metrics.mjs';
-import {REG} from './costume-fit.mjs';
+import {REG, hairSetup, hairClothMerge, hairClothFrame, hairIslands} from './costume-fit.mjs';
 
 const r4 = v => +(+v).toFixed(4);
 
@@ -27,6 +31,8 @@ export const COSTUME_LIMITS = {
   pokeVisible: 0.02, pokeVisibleExtreme: 0.05, pokeVisibleCount: 25,
   exposedHidden: 0.03, exposedHiddenCount: 12,
   clothDeep: 0.03,                          // per piece: fraction of cloth vertices > 5 mm inside the posed body
+  // the lower poking through the upper (the ordinary wardrobe's layering gate: 1.5 % animated); visible hair under / through the cloth
+  layerPokeVisible: 0.015, layerPokeVisibleCount: 6, hairUnderCloth: 6, hairIslandVertices: 0,
   apexCoverage: 1, groinCoreCoverage: 1, groinCoverage: 0.85, torsoCoverage: 0.96, // unclothed bodies only
 };
 
@@ -58,6 +64,34 @@ export function measureCostume(B, pieces, {poses, nude = false} = {}) {
   // B.skinIdx triangle -> the body triangle (hide mask index)
   const triOf = new Map(); for (let t = 0; t < nT; t++) triOf.set(`${B.idx[t * 3]},${B.idx[t * 3 + 1]},${B.idx[t * 3 + 2]}`, t);
   const skinTri = Int32Array.from({length: B.skinIdx.length / 3}, (_, t) => triOf.get(`${B.skinIdx[t * 3]},${B.skinIdx[t * 3 + 1]},${B.skinIdx[t * 3 + 2]}`) ?? 0);
+  // ---- garment over garment: the lower's cloth the upper's TORSO covers in the bind pose (from the lower vertex's own skin anchor
+  // outward), then per pose a covered, VISIBLE lower vertex (a lower triangle using it not hidden by the upper's hideWear) whose posed
+  // outward ray misses the upper's torso while that torso lies just under it = the lower poking through the upper
+  const up = pieces.find(p => p.name === 'upper'), lo = pieces.find(p => p.name === 'lower');
+  const layer = up && lo && lo.anchorPos ? (() => {
+    const torso = []; for (let t = 0; t < up.idx.length; t += 3) if (up.part[up.idx[t]] === 'torso' && up.part[up.idx[t + 1]] === 'torso' && up.part[up.idx[t + 2]] === 'torso') torso.push(up.idx[t], up.idx[t + 1], up.idx[t + 2]);
+    const tIdx = Uint32Array.from(torso), g = new TriGrid(up.pos, tIdx, 0.03), nv = lo.pos.length / 3, A = lo.anchorPos, N = lo.anchorNrm;
+    const vis = new Uint8Array(nv); for (let t = 0; t < lo.idx.length / 3; t++) if (!lo.hideWear?.[t]) for (let c = 0; c < 3; c++) vis[lo.idx[t * 3 + c]] = 1;
+    const covered = [];
+    for (let v = 0; v < nv; v++) { if (lo.part[v].startsWith('shoe')) continue; if (g.ray(A[v * 3] + N[v * 3] * 0.001, A[v * 3 + 1] + N[v * 3 + 1] * 0.001, A[v * 3 + 2] + N[v * 3 + 2] * 0.001, N[v * 3], N[v * 3 + 1], N[v * 3 + 2], 0.3)) covered.push(v); }
+    return {tIdx, covered, vis};
+  })() : null;
+  // ---- hair under / through the costume (lib/costume-fit.mjs hairClothFrame on the shipped data): a visible free-hair vertex (not
+  // fused onto the skin; used by a triangle no mask hides) UNDER the torso / waist cloth in a pose is hair inside the costume or crossing
+  // its surface (dark hair through a jacket's back); plus, in the bind pose, the visible hair islands lying on the cloth with no visible
+  // link to the head (hairIslands)
+  const H = cloth.every(p => p.anchorPos) ? hairSetup(B) : null, HC = H ? hairClothMerge(cloth) : null;
+  // visible hair SHEET vertices (used by a visible triangle with three hair corners; the hairline's mixed hair / skin triangles are skin)
+  const sheet = new Uint8Array(n);
+  for (let t = 0; t < nT; t++) { if (hide[t]) continue; const a = B.remap[B.idx[t * 3]], b = B.remap[B.idx[t * 3 + 1]], c = B.remap[B.idx[t * 3 + 2]]; if (B.hair[a] && B.hair[b] && B.hair[c]) sheet[a] = sheet[b] = sheet[c] = 1; }
+  const hairVis = H ? [...H.verts.keys()].filter(k => H.free[k] && sheet[H.verts[k]]) : [];
+  let islandVertices = 0;
+  if (H) {
+    const s0 = hairClothFrame(H, HC, null), inCloth = new Uint8Array(n);
+    for (let k = 0; k < H.verts.length; k++) if (s0.under[k] || s0.over[k]) inCloth[H.verts[k]] = 1;
+    const iv = new Set(); for (const t of hairIslands(B, hide, inCloth)) for (let c = 0; c < 3; c++) iv.add(B.remap[B.idx[t * 3 + c]]);
+    islandVertices = iv.size;
+  }
   const perClip = {};
   for (const pose of poses) {
     const bp = skinWith(pose.mats, B.pos, B.joints, B.weights);
@@ -114,6 +148,23 @@ export function measureCostume(B, pieces, {poses, nude = false} = {}) {
       for (const i of torsoZone) if (!vis[B.remap[i]] || !seen(i, bn[i * 3], bn[i * 3 + 1], bn[i * 3 + 2], view.torso)) tok++;
       frame.coverage = {apex: zone(zones.apex), groin: zone(zones.groin), groinCore: zone(zones.groinCore), torso: torsoZone.length ? r4(tok / torsoZone.length) : 1};
     }
+    if (layer) {
+      const pu = posed[cloth.indexOf(up)].pos, pl = posed[cloth.indexOf(lo)].pos, g = new TriGrid(pu, layer.tIdx, 0.03);
+      const pn = skinWith(pose.mats, lo.pos, lo.joints, lo.weights, lo.anchorNrm).nrm;
+      let poke = 0;
+      for (const v of layer.covered) {
+        if (!layer.vis[v]) continue;
+        const x = pl[v * 3], y = pl[v * 3 + 1], z = pl[v * 3 + 2], nx = pn[v * 3], ny = pn[v * 3 + 1], nz = pn[v * 3 + 2];
+        if (g.ray(x, y, z, nx, ny, nz, 0.12, 0.0005)) continue;
+        if (g.ray(x, y, z, -nx, -ny, -nz, 0.06, 0.0005)) poke++;
+      }
+      frame.layer = {covered: layer.covered.length, pokeVisible: poke, pokeVisibleFraction: r4(poke / Math.max(1, layer.covered.length))};
+    }
+    if (H) {
+      const sh = hairClothFrame(H, HC, pose.mats);
+      let under = 0; for (const k of hairVis) if (sh.under[k]) under++;
+      frame.hair = {visible: hairVis.length, underCloth: under, islandVertices};
+    }
     (perClip[pose.clip] ??= []).push(frame);
   }
   const summary = {};
@@ -125,6 +176,8 @@ export function measureCostume(B, pieces, {poses, nude = false} = {}) {
     limbContact: Object.fromEntries(cloth.map(p => [p.name, Math.max(...frames.map(f => f.limbContact[p.name]))])),
     // where the worst frame's sunk cloth is: '<cloth part>><body region>' (lib/costume-fit.mjs REG) -> vertices (every 2nd)
     clothDeepWhere: Object.fromEntries(cloth.map(p => { const f = frames.reduce((a, x) => (x.clothDeep[p.name] > a.clothDeep[p.name] ? x : a)); return [p.name, f.clothDeepWhere[p.name]]; }))};
+    if (frames[0].layer) S.layer = {covered: frames[0].layer.covered, pokeVisible: Math.max(...frames.map(f => f.layer.pokeVisible)), pokeVisibleFraction: Math.max(...frames.map(f => f.layer.pokeVisibleFraction))};
+    if (frames[0].hair) S.hair = {visible: frames[0].hair.visible, underCloth: Math.max(...frames.map(f => f.hair.underCloth)), islandVertices: frames[0].hair.islandVertices};
     if (nude) S.coverage = Object.fromEntries(['apex', 'groin', 'groinCore', 'torso'].map(k => [k, Math.min(...frames.map(f => f.coverage[k]))]));
     summary[clip] = S;
   }
@@ -163,6 +216,9 @@ export function checkCostumeLimits(summary, lim = COSTUME_LIMITS) {
     if (S.body.pokeVisibleFraction > pokeLim && S.body.pokeVisible > lim.pokeVisibleCount) fail.push(`${clip}: visible body poke ${S.body.pokeVisible} vertices (${S.body.pokeVisibleFraction})`);
     if (S.body.exposedHiddenFraction > lim.exposedHidden && S.body.exposedHidden > lim.exposedHiddenCount) fail.push(`${clip}: exposed hidden ${S.body.exposedHidden} vertices (${S.body.exposedHiddenFraction})`);
     for (const [pn, d] of Object.entries(S.clothDeep)) if (d > lim.clothDeep) fail.push(`${clip} ${pn}: cloth inside the body ${d}`);
+    if (S.layer && S.layer.pokeVisibleFraction > lim.layerPokeVisible && S.layer.pokeVisible > lim.layerPokeVisibleCount) fail.push(`${clip}: lower pokes through the upper at ${S.layer.pokeVisible} visible vertices (${S.layer.pokeVisibleFraction})`);
+    if (S.hair && S.hair.underCloth > lim.hairUnderCloth) fail.push(`${clip}: ${S.hair.underCloth} visible hair vertices under / through the costume`);
+    if (S.hair && S.hair.islandVertices > lim.hairIslandVertices) fail.push(`${clip}: ${S.hair.islandVertices} visible hair vertices in islands lying on the costume`);
     if (S.coverage) {
       if (S.coverage.apex < lim.apexCoverage) fail.push(`${clip}: apex coverage ${S.coverage.apex}`);
       if (S.coverage.groinCore < lim.groinCoreCoverage) fail.push(`${clip}: groin core coverage ${S.coverage.groinCore}`);

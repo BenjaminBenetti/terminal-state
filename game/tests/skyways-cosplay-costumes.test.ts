@@ -104,6 +104,33 @@ describe('full costumes', () => {
     }
   });
 
+  it('garment over garment and hair, every shipped fit in every frame: the lower never pokes through the upper; no hair inside / through the costume, no hair island left lying on it', () => {
+    // coordinator QA: the hakama showed through the happi coat (sushi-fan x heavyset), long dark hair through the back of the jackets
+    // (pale bodies); the builder measures both on the shipped data (lib/costume-metrics.mjs) and the gate holds them
+    const L = RECORD.gate.limits;
+    expect(L.layerPokeVisible).toBeLessThanOrEqual(0.015);
+    expect(L.hairUnderCloth).toBeLessThanOrEqual(6);
+    expect(L.hairIslandVertices).toBe(0);
+    for (const {costume, body} of COSPLAY_FITS) {
+      const f = RECORD.fits[`${costume}@${body}`], k = `${costume} x ${body}`;
+      for (const [clip, S] of Object.entries(f.summary) as [string, {layer: {covered: number; pokeVisible: number; pokeVisibleFraction: number}; hair: {visible: number; underCloth: number; islandVertices: number}}][]) {
+        expect(S.layer, `${k} ${clip} layer`).toBeDefined();
+        expect(S.layer.covered, `${k} ${clip}`).toBeGreaterThan(0);
+        expect(S.layer.pokeVisibleFraction <= L.layerPokeVisible || S.layer.pokeVisible <= L.layerPokeVisibleCount, `${k} ${clip} lower through upper ${S.layer.pokeVisible}`).toBe(true);
+        expect(S.hair, `${k} ${clip} hair`).toBeDefined();
+        expect(S.hair.underCloth, `${k} ${clip} hair under the cloth`).toBeLessThanOrEqual(L.hairUnderCloth);
+        expect(S.hair.islandVertices, `${k} ${clip} hair islands`).toBe(0);
+      }
+      // the fixes are data: the upper hides the lower it covers (hideWear) and the hair inside / through it (hideBodyTriangles)
+      expect(f.fit.upper.layerHidden, k).toBeGreaterThan(0);
+      expect(f.fit.upper.hair.hiddenByUpper, k).toBeGreaterThanOrEqual(0);
+      if (NUDE.has(body)) expect(f.fit.upper.hair.hiddenByUpper, `${k}: long hair under the jacket hidden`).toBeGreaterThan(0);
+    }
+    const heavy = RECORD.fits['sushi-fan@heavyset'];
+    expect(heavy, 'sushi-fan x heavyset ships (the coat cleared over the hakama)').toBeDefined();
+    expect(Math.max(...Object.values(heavy.summary as Record<string, {layer: {pokeVisibleFraction: number}}>).map(S => S.layer.pokeVisibleFraction))).toBeLessThan(0.01);
+  });
+
   it('never in the ordinary or the lingerie pools; the lingerie sets never on a cosplay body variant id', () => {
     for (const w of ZOMBIE_WEARABLES) expect(isCosplayWearable(w.id)).toBe(false);
     for (const s of LINGERIE_BUILD) { expect(isCosplayWearable(s.top)).toBe(false); expect(isCosplayWearable(s.bottom)).toBe(false); }
