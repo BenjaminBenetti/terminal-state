@@ -28,7 +28,7 @@ import {PickupManager, type Pickup} from '../src/world/pickups';
 
 installCanvasShim(false);
 
-const SEEDS = {subway: 0x1234abcd, office: 0x0badf00d, mall: 0x3a11c0de, market: 808, skyways: 707, reactor: 0x5eac7012}; // (+ mall: task track3-eaton-centre-20261031, lane GEN)
+const SEEDS = {subway: 0x1234abcd, office: 0x0badf00d, mall: 0x3a11c0de, market: 808, bunker: 909, skyways: 707, reactor: 0x5eac7012}; // (+ mall: task track3-eaton-centre-20261031, lane GEN)
 
 function fakeEnvTextures(): Record<TextureKey, THREE.Texture> {
   const out = {} as Record<TextureKey, THREE.Texture>;
@@ -155,7 +155,7 @@ describe('run state: NewGame vs travel', () => {
     expect(r.memory().killed).toEqual([0, 2]);
     expect(r.laneStore('gear.bags')).toEqual({bags: [{id: 1}]});
     expect(r.memoryIds()).toEqual(['office:main', 'subway:main']);
-    const fresh = newRun({subway: 1, office: 2, mall: 3, market: 808, skyways: 707, reactor: 4});
+    const fresh = newRun({subway: 1, office: 2, mall: 3, market: 808, bunker: 909, skyways: 707, reactor: 4});
     expect(fresh.memoryIds()).toEqual([]);
     expect(fresh.peekMemory({level: 'subway', section: 'main'})).toBeUndefined();
     expect(fresh.entry).toBeNull();

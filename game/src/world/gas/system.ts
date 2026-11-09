@@ -53,7 +53,7 @@ import type {WindowPlan, WindowView} from '../officeWindows';
 import {WINDOWS_LANE, WINDOW_BREACH, WindowBreaches, paneCentre, sourceCells, type Breach, type PaneRef, type WindowsRecord} from '../windowBreach';
 import {roofAirOf, roofBlend, type RoofAir} from '../roofAir'; // task gas-mask-roof-feedback-20261030 (item 10): the toxic roof
 import {GasHud} from '../../ui/gasHud';
-import {GAS, GasField} from './field';
+import {GAS, GasField, type GasDomain} from './field';
 import {GasPuffs, type PuffGrid, type PuffSpec} from './puff'; // task track1-siren-blightbelly-20261031 (lane BLIGHT)
 import type {DepthGasSource} from '../reactor/air'; // task reactor-build-20261101 (lane AIR): the Reactor's depth gas
 
@@ -116,6 +116,19 @@ export interface GasWindowSource {
   prebreached?: readonly string[];
 }
 
+/**
+ * Task studio-bunker-level-20261109-072224-01: a world of permanent LOCAL GAS LEAKS (the Bunker's gas zones, layout.bunker.gasZones):
+ * each zone becomes a breach of its own strength (GasBreach.strength) on its storey's field at the section build, fast-forwarded
+ * GAS.AGE_CAP_S so the gas is already spread on arrival. The leaks belong to the layout (nothing is saved). Everything downstream —
+ * the field tick, the storey layers of the visible green volumetric fog, the ONE exposure calculation, the mask / filter, the HUD and
+ * the in-engine fallback — is the Office's breach path: the same field drives what shows and what hurts.
+ */
+export interface GasZoneSource {
+  zones: readonly {id: string; level: number; cells: readonly number[]; strength: number}[];
+  /** Covered cells (default: the whole grid). */
+  domain?: GasDomain;
+}
+
 /** Distance (m) from world (x, y, z) to a pane's glass rectangle (lane CAR's contact test; the glass sits behind the room-side face). */
 export function paneDistance(ref: PaneRef, x: number, y: number, z: number): number {
   const p = ref.plan, a = p.along === 'x' ? x : z, c = p.along === 'x' ? z : x;
@@ -164,6 +177,11 @@ export class GasSystem {
    * when the layout has no tower windows (the Skyways glazing runtime registers one; null = not its world).
    */
   readonly windowSources: (() => GasWindowSource | null)[] = [];
+  /**
+   * Task studio-bunker-level-20261109-072224-01: zone worlds (local leaks), asked in order at each section build when the layout has
+   * no window world (the Bunker registers one: world/gas/zones.ts bunkerGasSource; null = not its world).
+   */
+  readonly zoneSources: ((layout: StationLayout) => GasZoneSource | null)[] = [];
   /** RUN lane store of the current world's panes (WINDOWS_LANE for the Office; the source's own lane otherwise). */
   lane: string = WINDOWS_LANE;
   /** Counters (QA / tests). */
@@ -199,7 +217,7 @@ export class GasSystem {
     // the Office tower's windows, else (task studio-skyways-level-20261106-054448, lane GAS) a registered window world (the Skyways)
     const o = this.host.tower.office, w = o?.windows;
     const src: GasWindowSource | null = o && w ? {plans: w.plans, view: w.view, exterior: o.info.exterior, lane: WINDOWS_LANE} : this.windowSource();
-    if (!src) return;
+    if (!src) { this.zoneBuild(layout, closed); return; } // (task studio-bunker-level-20261109-072224-01: else a zone world's leaks)
     this.windows = new WindowBreaches(src.plans, src.view);
     this.lane = src.lane;
     // the fields cover the tower footprint / the complex (+ the closed ring)
@@ -211,6 +229,22 @@ export class GasSystem {
     if (rec !== undefined) this.fastForward(this.windows.restore(rec, this.host.clock));
     // (lane GAS, Skyways) the first build of this world: its pre-breached panes as breaches of the capped age — the restore path
     else if (src.prebreached?.length) this.fastForward(this.windows.restore(prebreachRecord(src.prebreached), this.host.clock));
+    this.upload();
+  }
+
+  /** Task studio-bunker-level-20261109-072224-01: the first registered zone world's leaks, seeded and spread (no lane state). */
+  private zoneBuild(layout: StationLayout, closed?: (cx: number, cy: number) => boolean): void {
+    let z: GasZoneSource | null = null;
+    for (const f of this.zoneSources) {
+      try { z = f(layout); } catch (err) { console.warn('gas: a zone source failed', err); z = null; }
+      if (z && z.zones.length) break;
+      z = null;
+    }
+    if (!z) return;
+    const storeys = new Set(z.zones.map(q => q.level));
+    this.field = new GasField(layout.levels.filter(l => storeys.has(l.id)).map(l => ({id: l.id, grid: l.grid})), {domain: z.domain, closed});
+    for (const q of z.zones) this.field.addBreach({id: q.id, level: q.level, cells: q.cells, strength: q.strength});
+    this.field.advance(GAS.AGE_CAP_S);
     this.upload();
   }
 

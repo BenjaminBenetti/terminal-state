@@ -401,7 +401,7 @@ describe('loot: ONE new normal gear-pool row; base filters, masks and the gear c
   it('GEAR_WEIGHTS = the previous weights + airtank_backpack 0.8; mean / cap unchanged; mask-loot tables unchanged on every level', () => {
     expect(GEAR_WEIGHTS).toEqual({armor_vest: 1, chest_rig: 1, backpack: 1.4, helmet: 1, boots: 1, gloves: 1, airtank_backpack: 0.8});
     expect([GEAR_LOOT.mean, GEAR_LOOT.cap]).toEqual([1, 5]);
-    expect(MASK_LOOT.levels).toEqual({office: {masks: [1, 2], filters: [2, 5]}, subway: {masks: [0, 1], filters: [0, 2]}, mall: {masks: [1, 2], filters: [2, 5]}, reactor: {masks: [1, 1], filters: [3, 5]}, skyways: {masks: [1, 2], filters: [2, 5]}, market: {masks: [0, 0], filters: [0, 0]}}); // (+ skyways: the Office's roll, task studio-skyways-level-20261106-054448-01; + market: clean air, no free loot — task studio-survivor-market-20261108-005807-01)
+    expect(MASK_LOOT.levels).toEqual({office: {masks: [1, 2], filters: [2, 5]}, subway: {masks: [0, 1], filters: [0, 2]}, mall: {masks: [1, 2], filters: [2, 5]}, reactor: {masks: [1, 1], filters: [3, 5]}, skyways: {masks: [1, 2], filters: [2, 5]}, market: {masks: [0, 0], filters: [0, 0]}, bunker: {masks: [1, 2], filters: [2, 5]}}); // (+ skyways: the Office's roll, task studio-skyways-level-20261106-054448-01; + market: clean air, no free loot — task studio-survivor-market-20261108-005807-01; + bunker: local gas leaks, the Office's roll — task studio-bunker-level-20261109-072224-01)
     expect(MASK_LOOT.foundFilter).toEqual([0.35, 0.75]);
   });
 

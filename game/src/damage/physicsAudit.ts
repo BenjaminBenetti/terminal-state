@@ -24,6 +24,7 @@ import {SKYWAYS_ADDON_PHYS, isSkywaysAddonKind} from '../gen/skyways/addonKinds'
 import {SKYWAYS_DEST_PHYS, isSkywaysDestKind} from '../gen/skyways/destinations/registry'; // task studio-skyways-destinations-20261106-170011-01
 import {SKYWAYS_MAPBOARD_PHYS, isSkywaysMapBoardKind} from '../gen/skyways/mapBoardKind'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS)
 import {SUBWAY_MAP_KIOSK_STATIC} from '../gen/subwayMapKioskKind'; // task studio-ui-subway-maps-20261108-074144-01
+import {BUNKER_MODEL_STATIC, BUNKER_OBJECTIVE_STATIC} from '../gen/bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01
 
 export interface PhysAuditRow {
   kind: string;
@@ -125,6 +126,8 @@ const SUBWAY_STATIC: Readonly<Record<string, readonly [StaticWhy, string]>> = {
   waterHeaterTank: ['fixture', 'plumbed water heater tank'],
   emergencyCallPoint: ['anchored', 'emergency call point post'],
   ...SUBWAY_MAP_KIOSK_STATIC, // task studio-ui-subway-maps-20261108-074144-01: the station map kiosk
+  ...BUNKER_OBJECTIVE_STATIC, // task studio-bunker-level-20261109-072224-01: the Bunker's generator slots + core cluster
+  ...BUNKER_MODEL_STATIC, // (follow-up) the Bunker's model-backed flavour kinds
   // task reactor-expansion-20261101 (lane BUNKER): the Reactor bunker's hero props (gen/reactor/complex/bunkerKinds.ts)
   ...BUNKER_STATIC,
 };

@@ -98,8 +98,9 @@ describe('Strainer: registry, weights and the context lock', () => {
   });
 
   it('weights: service pool 0.08 (rat/dog 0.20, Blightbelly 0.05 unchanged, zombies 0.67); an explicit 0 in every other pool; hordes 0', () => {
-    expect(STRAINER_CONTEXTS).toEqual(['service']);
-    expect(CONTEXT_LOCKED_FAMILIES).toEqual({strainer: ['service']});
+    // (task studio-bunker-level-20261109-072224-01: + the Bunker's 'damp' zone — its own pool, the rare swamp lurker of the damp sections)
+    expect(STRAINER_CONTEXTS).toEqual(['service', 'damp']);
+    expect(CONTEXT_LOCKED_FAMILIES).toEqual({strainer: ['service', 'damp']});
     expect(DEFAULT_FAMILY_SHARES.strainer).toBe(0);
     expect(SERVICE_FAMILY_SHARES).toEqual({ratdog: 0.2, blightbelly: 0.05, siren: 0, strainer: 0.08});
     expect(SERVICE_FAMILY_POOL).toEqual([['zombie', 0.67], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.2], ['strainer', 0.08]]);
@@ -111,7 +112,7 @@ describe('Strainer: registry, weights and the context lock', () => {
       expect(p.families.find(([f]) => f === 'strainer'), id).toEqual(['strainer', 0]);
       for (const [c, rule] of Object.entries(p.contexts)) {
         if (!rule?.families) continue;
-        expect(share(rule.families, 'strainer'), `${id} ${c}`).toBe(c === 'service' ? 0.08 : 0);
+        expect(share(rule.families, 'strainer'), `${id} ${c}`).toBe(c === 'service' ? 0.08 : c === 'damp' ? 0.3 : 0); // (damp: the Bunker's zone, BUNKER_DAMP_SHARES)
       }
       if (p.horde) expect(share(p.horde.families, 'strainer'), `${id} horde`).toBe(0);
     }
@@ -193,7 +194,9 @@ describe('Strainer: core / non-service picks bit-identical; service-annex simula
     const lines: string[] = [];
     for (const id of LEVEL_IDS) {
       const P = spawnProfile(id);
-      const ctxs = Object.keys(P.contexts).filter(c => c !== 'service') as (keyof typeof P.contexts)[];
+      // (task studio-bunker-level-20261109-072224-01: the Bunker's 'damp' zone is a Strainer context of its own — STRAINER_CONTEXTS — never a
+      // core context here; its one-spawn run is checked by the Bunker's own spawn tests)
+      const ctxs = Object.keys(P.contexts).filter(c => c !== 'service' && !(STRAINER_CONTEXTS as readonly string[]).includes(c)) as (keyof typeof P.contexts)[];
       let svc = 0, svcStrainer = 0, svcRat = 0, svcBb = 0, core = 0, coreStrainer = 0, coreMoved = 0;
       for (let k = 0; k < 2000; k++) {
         // a level: core spawns in each core context, then 1-2 annex runs of 5-6 service spawns appended last (the generator's order)

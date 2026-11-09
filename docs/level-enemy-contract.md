@@ -30,8 +30,9 @@ mall: {
    - **Every family listed**: build the pool with `familyPool(shares)` — `DEFAULT_FAMILY_SHARES` gives **blightbelly 0.05 (default
      ON)**, **siren 0 (default OFF)**, ratdog 0.05, **strainer 0 (context-locked)**, the zombie the remainder, in `ENEMY_FAMILY_IDS`
      roll order. Turning Blightbelly off for a level is `familyPool({blightbelly: 0})` with a written reason.
-   - **The Strainer is context-locked** (`CONTEXT_LOCKED_FAMILIES`, `STRAINER_CONTEXTS = ['service']`): a positive weight is valid
-     ONLY in the own pool of a listed context (today the service annexes' `SERVICE_FAMILY_POOL`, 0.08); a level pool, any other
+   - **The Strainer is context-locked** (`CONTEXT_LOCKED_FAMILIES`, `STRAINER_CONTEXTS = ['service', 'damp']`): a positive weight is valid
+     ONLY in the own pool of a listed context (the service annexes' `SERVICE_FAMILY_POOL`, 0.08; the Bunker's damp sections'
+     `BUNKER_DAMP_CONTEXT` pool, 0.3 of its one spawn per level — see §2c); a level pool, any other
      context's pool and every horde pool must say 0 (`validateSpawnProfile`). A new area enables it deliberately by adding its
      context to `STRAINER_CONTEXTS` and a weight to that context's pool.
    - **The Siren is opt-in, deliberately** (`OPT_IN_FAMILIES`): a siren weight > 0 is only valid with an explicit
@@ -99,6 +100,20 @@ profile, family list, tier or guarantee.
   (`HordePlacementRules.routeMPerMember` / `startClearM`) and `ENEMY_LEVEL_ADAPTER.mall`; details and the census in
   `docs/enemy-spawns.md` "The mall".
 
+## 2c. A level zone context: the Bunker's damp sections (task studio-bunker-level-20261109-072224-01)
+
+The Bunker (`LevelId` `bunker`, tier 2, `BUNKER_SPAWN_PROFILE`) tags each storey run with its context — `'station'` (storey 0: the
+platform, arrival hall, vault vestibule), `'floor'` (storeys 1-3), `'ring'` (storeys 4-5) — and adds ONE zone context:
+
+- `'damp'` (`BUNKER_DAMP_CONTEXT`, in `SpawnContextId` / `SPAWN_CONTEXT_IDS` and `STRAINER_CONTEXTS`): one run per level over the
+  layout's water-damaged areas only (`layout.bunker.damp`), count `[1, 1]`, appended after the storey runs and tagged
+  `markSpawnContext(…, 'damp')`. Its OWN pool (`BUNKER_DAMP_SHARES`: rat/dog 0.1, Strainer 0.3, the zombie the remainder) is the only
+  place outside the service annexes where THE STRAINER (unchanged) may have weight — at most one per level, never guaranteed.
+- The Siren is opt-in with `BUNKER_SIREN_ELIGIBILITY`: contexts `'floor'` / `'ring'` (never the station storey), enclosed rooms only
+  (never a stairwell, washroom, closet or corridor), the Office / Mall room gates, ≤ 3 per level, 24 m apart
+  (`BUNKER_SIREN_SPACING`). Census: `docs/enemy-spawns.md` "The Bunker" / `docs/bunker.md`.
+- `'service'` is declared (`SERVICE_CONTEXT`, the shared annex contract) but never runs: `LEVELS.bunker.trackExtensions` is `'none'`.
+
 ## 3. What validation catches
 
 | Check | Where |
@@ -117,7 +132,8 @@ profile, family list, tier or guarantee.
 - [ ] `SPAWN_PROFILES[id]` via `familyPool(...)`; Blightbelly on unless a written reason says otherwise.
 - [ ] Siren: weight 0, or a deliberate draw weight + `eligibility.siren` (contexts, room exclusions, clearance, cap) + a census
       showing the level's target (report mean, share of runs with none, max).
-- [ ] Strainer: 0 in the level pool (`familyPool` does it); it appears only through an annex `service` context's own pool.
+- [ ] Strainer: 0 in the level pool (`familyPool` does it); it appears only through the own pool of a `STRAINER_CONTEXTS` context
+      (an annex `service` run, the Bunker's `damp` zone).
 - [ ] Every context the generator runs declared with an explicit `count`; annex contexts too, appended last and tagged.
 - [ ] Every placement routine calls `markSpawnContext`; `assignEnemyArchetypes` once at the end.
 - [ ] `ENEMY_LEVEL_ADAPTER[id]` in `tools/pages/enemyReference.ts`.

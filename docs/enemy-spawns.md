@@ -361,6 +361,40 @@ run; there is no horde pool, no eligibility rule (no Siren) and no service annex
 `TRACK_EXT_MARKET.annex.max = 0`), so the declared **`service`** zone never runs. Its friendly residents and traders are not enemies
 (never in `layout.zombies`), and no other level's profile is ever used as a fallback.
 
+## The Bunker (`bunker`)
+
+<!-- Task studio-bunker-level-20261109-072224-01 (lane LEVEL): a civil-defence shelter descending under its station. -->
+
+`BUNKER_SPAWN_PROFILE` (`SPAWN_PROFILES.bunker`, `LEVELS.bunker.tier = 2`) is ONE logical level, `LevelId` `bunker`
+(`game/src/gen/bunker/index.ts` `generateBunkerLevel`): a buried station at the vault door of a civil-defence shelter, and the shelter's
+storeys going DOWN below it to the central processing core. Existing families only, depth-graded like the Reactor but never denser. The
+ambient runs, each tagged with its context by `placeOfficeEnemies` on its own fork:
+
+- **`station`**: storey 0 (the platform, the arrival hall, the vault vestibule), U{2..3}; a Siren drawn there is ineligible (the
+  rule lists `floor` / `ring` only) and stays a zombie; the arrival keeps its start keep-off.
+- **`floor`**: each of storeys 1–3 (entry & security, habitation, services & medical), U{6..8} per storey.
+- **`ring`**: each of storeys 4–5 (maintenance & water, the processing core), U{7..9} per storey.
+- Every storey run reads the LEVEL pool `BUNKER_SHELTER_POOL` = `familyPool({blightbelly: 0.07, siren: BUNKER_SIREN_WEIGHT})` (rat/dog
+  the default 0.05), `BUNKER_SIREN_WEIGHT` = 0.16 (set by the census below). Depth grading comes from the counts. Only the damp zone has
+  its own pool (`tests/service-families.test.ts` lists it as the fourth deliberate exception). It is the level pool because
+  `applyFamilySpacing` re-derives a spawn's family from the level pool: a Siren drawn from a context's own pool would escape her
+  spacing / cap.
+- **`damp`** (a ZONE context, `BUNKER_DAMP_CONTEXT`): ONE spawn per level over the water-damaged areas only (`layout.bunker.damp`: the
+  pump hall, the filtration plant, the flooded wing), appended after the storey runs. Its own pool `BUNKER_DAMP_SHARES` (rat/dog 0.1,
+  **Strainer 0.3**, the zombie the remainder) is the only place outside the service annexes where THE STRAINER (unchanged: 1200 HP,
+  long reach) may appear (`STRAINER_CONTEXTS = ['service', 'damp']`) — at most one per level, never guaranteed.
+- **`service`**: declared (`SERVICE_CONTEXT`, the shared annex contract) but never run — `LEVELS.bunker.trackExtensions` is `'none'`.
+- **The Siren is opt-in** via `BUNKER_SIREN_ELIGIBILITY`: contexts `floor` and `ring` (never the station storey), enclosed ROOMS only
+  (never a stairwell, washroom, closet or corridor), the Office / Mall room gates, at most **3** per level, ≥ 24 m apart
+  (`BUNKER_SIREN_SPACING`, `applyFamilySpacing`). An ineligible draw falls back to a zombie.
+- **No horde pool.** Ambient budget 3 + 3 × 8 + 2 × 9 + 1 = 46 per level (the Reactor's is 54).
+- **Census** (32 generated levels, level seeds 4401 + k × 7919, `tests/bunker-spawns.test.ts`):
+  - enemies: 40.9 per level (station 2.6, floor 21.3, ring 16.0, damp 1.0);
+  - Sirens: 1.47 per level; 31 of 32 levels have at least one; max 3;
+  - Strainers: 0.38 per level; 12 of 32 levels have one; never more than one.
+
+  The Siren's share is about the Mall's (1.96) and the Office's (1.97).
+
 ## Units: what the numbers are
 
 - **Count range**: spawns one run of a context tries to place; E[count] = (lo + hi) / 2. There is no per-area spawn density at
@@ -497,7 +531,8 @@ A tall (bind height 2.15 m, slightly taller than a zombie), long-armed, clawed i
 NORMAL registered family: `ENEMY_ARCHETYPES.strainer` (`game/src/ai/creatureArchetypes.ts`), stats `STRAINER_STATS` and brain
 `StrainerBrain` (`game/src/ai/strainer.ts`), actor `StrainerActor` (`game/src/ai/strainerActor.ts`), lazy model `enemy_strainer` →
 `assets/models/enemy-strainer.glb` (`game/src/ai/enemyModels.ts`: fetched only for a layout that placed one). It spawns only through
-the ordinary per-spawn family roll of the service annexes (0.08, above) — no special spawner, no forced or guaranteed Strainer.
+the ordinary per-spawn family roll of the service annexes (0.08, above) and (task studio-bunker-level-20261109-072224-01) of the
+Bunker's damp-section zone (0.3 of its one spawn per level, "The Bunker" above) — no special spawner, no forced or guaranteed Strainer.
 
 | Stat | Strainer | Ordinary zombie (shambler) |
 |---|---|---|

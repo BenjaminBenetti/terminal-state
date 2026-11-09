@@ -662,6 +662,26 @@ and crates (`gen/market/dress.ts`). It carries `MARKET_WORKSHOP_KEY` (`'market-w
   seeps into the kitchen or the bunks.
 - **Unchanged.** Trader stock, the wallet, prices and ownership. Workbenches stay scenery: no crafting and no conversion.
 
+## The Bunker (`bunker`)
+
+<!-- Task studio-bunker-level-20261109-072224-01 (lane LEVEL). -->
+
+`PROFILES.bunker` = today's shared `BASE_TABLES` with **no overrides** (like Skyways): the civil-defence shelter's rooms carry existing
+station purposes plus the Reactor shelter's own bunker purposes (`gen/reactor/complex/bunkerPurposes.ts`: blast-door lock,
+decontamination, dormitory, radio room, armoury), so every holder stocks by its purpose / theme through the base tables — the finite
+food / drink plan, the additive `BASE_SALVAGE` lot in service / tech / medical places, the station fuel plan (`world/fuelStations.ts`,
+unchanged: the generators' fuel is found like any can). Ammo comes only from the armoury's purpose rule and the ordinary floor finds.
+There is no merchant stock and no currency loot. The loose floor program is the Reactor's (`gen/mall/supplies.ts` `placeMallSupplies`
+per storey: `LEVEL_ADAPTER.bunker.floor = 'mall'`) and the weapon finds the station rule. Gas masks / filters: the Office's roll
+(`MASK_LOOT.levels.bunker` 1–2 masks, 2–5 filters) — the shelter has local gas leaks, every one avoidable on a clean route. The pantry
+palette (`items/pantryVariety.ts` `LEVEL_PANTRY.bunker`) is shelf-stable: field rations, ration bricks, tins, crackers, oats, long-life
+milk, bottled drinks (rations leaned up in security / service rooms like the Reactor's).
+
+Census (16 generated levels, level seeds 4401 + k × 7919): about 30 loose pickups per level (ammunition boxes, batteries, flares,
+dressings, salvage parts and the odd weapon find, spread over six storeys) and about 280 holders (footlockers, staff and gun lockers,
+cabinets, crates, shelving), most of them stocked by their room's purpose through the base tables and many left empty by those tables'
+own empty chances. The finite food / drink and fuel plans apply as on every base-table level.
+
 ## Verify
 
 - `tests/loot-golden.test.ts` hashes current behaviour:

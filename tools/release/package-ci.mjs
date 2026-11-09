@@ -114,7 +114,7 @@ export function checkRuntime(text, rel, files) {
 // mall level); assets/models/office-*.glb + assets/textures/office/** are the office catalogue (its gear / medical models
 // are used in every level and the mall's shops may reuse office / company props); everything else is shared.
 const REPORT_TYPES = ['bundle', 'models', 'textures', 'audio', 'derivatives', 'notices'];
-const REPORT_FAMILIES = ['mall', 'office', 'reactor', 'skyways', 'market', 'shared']; // task reactor-build-20261101 (lane ARCH): + the Reactor (levelAssets.ts LEVEL_ONLY_RULES); + the Survivor Market (task studio-survivor-market-20261108-005807-01)
+const REPORT_FAMILIES = ['mall', 'office', 'reactor', 'skyways', 'market', 'bunker', 'shared']; // task reactor-build-20261101 (lane ARCH): + the Reactor (levelAssets.ts LEVEL_ONLY_RULES); + the Survivor Market (task studio-survivor-market-20261108-005807-01); + the Bunker (task studio-bunker-level-20261109-072224-01: its own future bunker-* files; today it reuses the Reactor family's)
 const typeOf = rel => rel === 'index.html' || bundlePath(rel) ? 'bundle' : rel.startsWith('assets/models/') ? 'models'
   : rel.startsWith('assets/textures/') ? 'textures' : rel.startsWith('assets/audio/') && rel.endsWith('.mp3') ? 'audio'
   : rel.startsWith('assets/derivatives/') ? 'derivatives' : 'notices';
@@ -122,7 +122,8 @@ const familyOf = rel => /^assets\/(?:models\/mall-|textures\/mall\/)/.test(rel) 
   : /^assets\/(?:models\/office-|textures\/office\/)/.test(rel) ? 'office'
   : /^assets\/(?:models\/reactor-|textures\/reactor\/)/.test(rel) ? 'reactor'
   : /^assets\/(?:models\/skyways-|textures\/skyways\/)/.test(rel) ? 'skyways'
-  : /^assets\/(?:models\/market-|textures\/market\/)/.test(rel) ? 'market' : 'shared'; // (reactor-build, lane ARCH; + skyways; + market)
+  : /^assets\/(?:models\/market-|textures\/market\/)/.test(rel) ? 'market'
+  : /^assets\/(?:models\/bunker-|textures\/bunker\/)/.test(rel) ? 'bunker' : 'shared'; // (reactor-build, lane ARCH; + skyways; + market; + bunker)
 const tally = keys => Object.fromEntries(keys.map(k => [k, {files: 0, bytes: 0}]));
 export function sizeReport(entries, excludedBytes = [], excludedProvenanceBytes = []) {
   const byType = tally(REPORT_TYPES), models = tally(REPORT_FAMILIES), textures = tally(REPORT_FAMILIES);

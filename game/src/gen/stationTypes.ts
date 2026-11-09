@@ -11,6 +11,7 @@ import type {CompanyId, RoofInfo, TenantFloor, TransitInfo} from './office/overh
 import type {MallInfo, MallProgram} from './mall/mallTypes';
 import type {ReactorInfo} from './reactor/reactorTypes'; // task reactor-build-20261101 (primary): THE REACTOR
 import type {SkywaysInfo} from './skyways/skywaysTypes'; // task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS
+import type {BunkerInfo} from './bunker/bunkerTypes'; // task studio-bunker-level-20261109-072224-01: THE BUNKER
 import type {MarketLayout} from './market/marketTypes'; // task studio-survivor-market-20261108-005807-01: THE SURVIVOR MARKET
 import type {WasteDecor} from './reactor/complex/wasteTypes'; // task reactor-expansion-20261101 (lane WASTE): the waste repository decor
 import type {HordeGroupSpec} from '../ai/hordeSpec'; // Task track3-eaton-centre-20261031 (lane HORDE)
@@ -369,6 +370,8 @@ export interface StationLayout {
   skyways?: SkywaysInfo;
   /** Task studio-survivor-market-20261108-005807-01: THE SURVIVOR MARKET (LevelId 'market') — stalls, resident spots (gen/market/marketTypes.ts). */
   market?: MarketLayout;
+  /** Task studio-bunker-level-20261109-072224-01: THE BUNKER (LevelId 'bunker') — storeys, vault door, generators, core, gas zones (gen/bunker/bunkerTypes.ts). */
+  bunker?: BunkerInfo;
   /** task reactor-expansion-20261101 (lane WASTE): the waste repository's decor (gen/reactor/complex/wasteTypes.ts; world/reactor/wasteVisuals.ts). */
   reactorWaste?: WasteDecor;
   /** Task track3-eaton-centre-20261031 (lane HORDE): roaming horde groups (ai/hordePlace.ts); absent = none (Subway, Office). */

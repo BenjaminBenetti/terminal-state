@@ -1397,6 +1397,11 @@ export const PROFILES: Readonly<Record<LevelId, LootProfile>> = {
   reactor: REACTOR_PROFILE,
   // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET — no free loot (MARKET_PROFILE).
   market: MARKET_PROFILE,
+  // Task studio-bunker-level-20261109-072224-01 (lane LEVEL): THE BUNKER — today's shared tables, no overrides (like Skyways): its rooms
+  // carry existing station purposes (+ the Reactor shelter's bunker purposes: dormitory, armoury, decontamination, radio room), so the
+  // holders stock by theme through BASE_TABLES — the finite food / drink plan, the additive BASE_SALVAGE lot, the station fuel plan;
+  // ammo only in the armoury by its purpose's rule. No merchant stock, no currency loot.
+  bunker: {id: 'bunker', label: 'Bunker', tables: BASE_TABLES, overrides: {}},
 };
 
 /** The loot profile of a logical level. */

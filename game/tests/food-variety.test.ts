@@ -333,7 +333,7 @@ describe('food variety: persistence (holder memory keeps lot ids only)', () => {
 
 describe('food variety: census over real generated layouts of every level', () => {
   it('same lots and food units, much less chocolate, more distinct foods, food / water totals within 10 %; every variant fits', () => {
-    const SEEDS: Record<LevelId, number[]> = {subway: [11, 222, 3333, 9120], office: [11, 222, 3333], mall: [5, 61], market: [7], skyways: [3, 47], reactor: [13, 29]};
+    const SEEDS: Record<LevelId, number[]> = {subway: [11, 222, 3333, 9120], office: [11, 222, 3333], mall: [5, 61], market: [7], bunker: [17], skyways: [3, 47], reactor: [13, 29]};
     const census: Record<string, unknown> = {};
     const checks: [string, boolean][] = [];
     for (const level of LEVEL_IDS) {

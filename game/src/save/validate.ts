@@ -31,6 +31,7 @@ import {STATION_PROPS_LANE, cargoProblem, stationPropsProblem, type CargoPropJSO
 import {PROP_DEFS} from '../gen/props'; // task train-all-cargo: carried props are of real kinds
 import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
 import {MARKET_STOCK_LANE, STOCK_MAX} from '../market/trade/stock';
+import {BUNKER_LANE, bunkerStateProblem} from '../world/bunker/objectiveState'; // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE)
 import {MARKET_HOSTILITY_LANE, marketHostilityProblem} from '../market/combat/record'; // task studio-market-rework-20261108-074144-01 (lane COMBAT): a market station's hostility
 import {WALLET_PARTICIPANT, walletProblem} from '../market/trade/wallet';
 import {BEER_PARTICIPANT, beerSaveProblem} from '../market/beer/beerSave'; // task studio-market-bar-20261108-225231-01 (lane BEER): the timed beer's record
@@ -44,7 +45,7 @@ import {ENTERED_KEEP, MAX_HOLDER_PARTS, SAVE_FORMAT, SAVE_POINTS, SAVE_REASONS, 
 export const SAVE_FILE_V = 1;
 
 /** Archetypes a save may name (levels/registry.ts LEVEL_IDS; save-validate.test asserts they match). */
-export const SAVE_ARCHETYPES: readonly LevelId[] = ['subway', 'office', 'mall', 'market', 'skyways', 'reactor']; // (+ market: task studio-survivor-market-20261108-005807-01)
+export const SAVE_ARCHETYPES: readonly LevelId[] = ['subway', 'office', 'mall', 'market', 'bunker', 'skyways', 'reactor']; // (+ market: task studio-survivor-market-20261108-005807-01; + bunker: task studio-bunker-level-20261109-072224-01)
 
 export const SAVE_LIMITS = {
   /** An exported file / a stored value, UTF-8 bytes. */
@@ -541,6 +542,7 @@ function lanes(v: unknown, path: string): void {
   for (const k of keys) str(k, path, 48, LANE_ID, 'a lane id');
   if (has(o, BAG_LANE)) sectionBags(o[BAG_LANE], `${path}.${BAG_LANE}`);
   if (has(o, FUEL_LANE)) { const fp = stationFuelProblem(o[FUEL_LANE]); if (fp) bad(`${path}.${FUEL_LANE}`, fp); } // task train-fuel-system
+  if (has(o, BUNKER_LANE)) { const bp = bunkerStateProblem(o[BUNKER_LANE]); if (bp) bad(`${path}.${BUNKER_LANE}`, bp); } // task bunker-level (lane OBJECTIVE): a Bunker station's generators + intel claim
   if (has(o, SKYWAYS_CAR_LANE)) { // task skyways-level-20261106 (lane CAR)
     const car = o[SKYWAYS_CAR_LANE], cp = skywaysCarProblem(car);
     if (cp) bad(`${path}.${SKYWAYS_CAR_LANE}`, cp);
@@ -673,6 +675,9 @@ function validateRunBody(r: Record<string, unknown>, o: ValidateOptions, path: s
   // task studio-survivor-market-20261108-005807-01 (lane LEVEL): likewise a run saved before the Survivor Market has no seeds.market — the
   // same deterministic default rule (its own hash key), so every older save still loads
   if (seeds.market === undefined && typeof seeds.subway === 'number' && Number.isInteger(seeds.subway)) seeds.market = hashString('terminal-state:market-seed', seeds.subway >>> 0);
+  // task studio-bunker-level-20261109-072224-01 (lane LEVEL): likewise a run saved before the Bunker has no seeds.bunker — the same
+  // deterministic default rule (its own hash key), so every older save still loads
+  if (seeds.bunker === undefined && typeof seeds.subway === 'number' && Number.isInteger(seeds.subway)) seeds.bunker = hashString('terminal-state:bunker-seed', seeds.subway >>> 0);
   only(seeds, `${path}.seeds`, SAVE_ARCHETYPES);
   for (const l of SAVE_ARCHETYPES) int(seeds[l], `${path}.seeds.${l}`, 0, UINT32);
   str(r.section, `${path}.section`, 32, SECTION, 'a section id');

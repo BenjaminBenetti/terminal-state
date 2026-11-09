@@ -18,6 +18,7 @@ import {trackExtConfig} from '../gen/trackExt/config'; // Track 2 (lane GEN): tu
 import {generateReactorLevel} from '../gen/reactor/index'; // task reactor-build-20261101 (lane GEN): THE REACTOR
 import {generateSkywaysLevel} from '../gen/skyways/index'; // task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS
 import {MARKET_GENERIC_NAME, generateMarketLevel, marketNameOf, marketStoreyLabel} from '../gen/market/index'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL)
+import {BUNKER_GENERIC_NAME, bunkerNameOf, bunkerStoreyLabel, generateBunkerLevel} from '../gen/bunker/index'; // task studio-bunker-level-20261109-072224-01 (lane LEVEL)
 import {lootProfile} from '../items/lootTables'; // task mall-round3-20261031 (lane SHOPS, R6): the gear placement bias
 import {skywalkText} from '../gen/skyways/skywalkText'; // task studio-skywalk-variety-20261107-231448-01
 import {placeSubwayMapKiosks} from '../gen/subwayMapKiosks'; // task studio-ui-subway-maps-20261108-074144-01
@@ -25,7 +26,7 @@ import {trainSpawnPose, type TrainPlacement} from '../gen/playerTrain'; // task 
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
 /** Logical levels in tier order (subway 0, office 1, mall 2 — task track3-eaton-centre-20261031, lane GEN). */
-export const LEVEL_IDS: readonly LevelId[] = ['subway', 'office', 'mall', 'market', 'skyways', 'reactor']; // (+ reactor, tier 3: task reactor-build-20261101; + skyways: task studio-skyways-level-20261106-054448-01, before the Reactor; + market: task studio-survivor-market-20261108-005807-01, before Skyways)
+export const LEVEL_IDS: readonly LevelId[] = ['subway', 'office', 'mall', 'market', 'bunker', 'skyways', 'reactor']; // (+ reactor, tier 3: task reactor-build-20261101; + skyways: task studio-skyways-level-20261106-054448-01, before the Reactor; + market: task studio-survivor-market-20261108-005807-01, before Skyways; + bunker: task studio-bunker-level-20261109-072224-01, after the market — Skyways stays second-to-last, the Reactor last)
 
 /**
  * Gear of the level-wide roll (lane GEAR), placed once, after generation. Task gasmask-breach-20261030 (mask lane): the roll's
@@ -108,6 +109,26 @@ export const LEVELS: Record<LevelId, LevelDef> = {
       return withGear(generateMarketLevel(ctx), ctx, 'market');
     },
   },
+  // Task studio-bunker-level-20261109-072224-01 (lane LEVEL): THE BUNKER — a buried station at the vault door of a civil-defence shelter
+  // (gen/bunker/index.ts): through the open vault door the shelter DESCENDS through real storeys (entry & security, habitation, services &
+  // medical, maintenance & water) to the central processing core on the lowest one; local gas leaks, damp wings, the shelter's infected
+  // inhabitants. ONE continuous world, section 'main'; an ordinary network node (5 % of the ordinary stations, taken from the Subway's
+  // share: campaign/types.ts ORDINARY_WEIGHTS). The DISPLAY name is the shelter's seeded name (gen/bunker/names.ts bunkerNameOf).
+  bunker: {
+    id: 'bunker',
+    tier: 2, // an ordinary node of the Office / Mall difficulty band; metadata only
+    name: BUNKER_GENERIC_NAME,
+    blurb: 'A buried station at the door of a civil-defence shelter — descend its storeys past quarters, wards and plant rooms to the processing core.',
+    entry: 'main',
+    sections: () => ['main'],
+    // no Beyond-the-Station tunnels / annexes (no 'service' spawns): the buried station's bed ends stay closed end walls; the car still
+    // parks on the bed (gen/playerTrain.ts) and leaves the way it came. Explicitly 'none' (gen/trackExt/config.ts TRACK_EXT_BUNKER: 0 annexes)
+    trackExtensions: 'none',
+    generate: (section, ctx) => {
+      if (section !== 'main') throw new Error(`${BUNKER_GENERIC_NAME} has no section '${section}'`);
+      return withGear(generateBunkerLevel(ctx), ctx, 'bunker');
+    },
+  },
   // Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS — a connected multi-building public pedway network loosely inspired
   // by Alberta's pedway / "+15" systems (gen/skyways/index.ts): the station under one building, the underground pedway concourse up into
   // its street-level lobby, stair cores up to the skyway level and glazed bridges over the streets to the other buildings, plus exactly
@@ -180,22 +201,22 @@ export function travelTargets(level: LevelId): LevelId[] {
  */
 export function levelDisplayName(level: LevelId, levelSeed?: number): string {
   if (levelSeed === undefined || !Number.isFinite(levelSeed)) return LEVELS[level].name;
-  return level === 'mall' ? mallNameOf(levelSeed) : level === 'market' ? marketNameOf(levelSeed) : LEVELS[level].name; // (+ the market's seeded name: task studio-survivor-market-20261108-005807-01)
+  return level === 'mall' ? mallNameOf(levelSeed) : level === 'market' ? marketNameOf(levelSeed) : level === 'bunker' ? bunkerNameOf(levelSeed) : LEVELS[level].name; // (+ the market's seeded name: task studio-survivor-market-20261108-005807-01; + the shelter's: task studio-bunker-level-20261109-072224-01)
 }
 
 /** Short human label of a level's world ("Station", "Station and tower", "Station and mall"). */
 export function sectionLabel(key: SectionKey): string {
-  return key.level === 'office' ? 'Station and tower' : key.level === 'mall' ? 'Station and mall' : key.level === 'reactor' ? 'Station and pit' : key.level === 'skyways' ? 'Station and skyways' : key.level === 'market' ? 'Station and settlement' : 'Station';
+  return key.level === 'office' ? 'Station and tower' : key.level === 'mall' ? 'Station and mall' : key.level === 'reactor' ? 'Station and pit' : key.level === 'skyways' ? 'Station and skyways' : key.level === 'market' ? 'Station and settlement' : key.level === 'bunker' ? 'Station and shelter' : 'Station';
 }
 
 /** What the HUD calls clearing the level. */
 export function clearLabel(key: SectionKey): string {
-  return key.level === 'office' ? 'Tower clear' : key.level === 'mall' ? 'Mall clear' : key.level === 'reactor' ? 'Pit clear' : key.level === 'skyways' ? 'Skyways clear' : key.level === 'market' ? 'Market clear' : 'Station clear';
+  return key.level === 'office' ? 'Tower clear' : key.level === 'mall' ? 'Mall clear' : key.level === 'reactor' ? 'Pit clear' : key.level === 'skyways' ? 'Skyways clear' : key.level === 'market' ? 'Market clear' : key.level === 'bunker' ? 'Shelter clear' : 'Station clear';
 }
 
 /**
  * Storey label of a layout level id: the office's ('L' = lobby, '2'..'8'); the mall's ('Subway', 'Level 1' … 'Level 3'; lane GEN);
- * '' for the Subway.
+ * the Bunker's (layout.bunker.storeys labels); '' for the Subway.
  */
 export function storeyLabel(layout: StationLayout, level: number): string {
   const s = layout.office?.storeys.find(t => t.levelId === level);
@@ -206,6 +227,7 @@ export function storeyLabel(layout: StationLayout, level: number): string {
   if (r) return r.label;
   const k = layout.skyways?.storeys.find(t => t.level === level); // Skyways: 'Concourse', 'Street level', 'Skywalk'
   if (k) return skywalkText(k.label); // (task studio-skywalk-variety-20261107-231448-01: no '+15' in player text)
+  if (layout.bunker) return bunkerStoreyLabel(layout, level); // task studio-bunker-level-20261109-072224-01: 'Station', the shelter storeys' labels
   return layout.market ? marketStoreyLabel(level, layout.market.v) : ''; // (+ version 2's storeys: task studio-market-rework-20261108-074144-01) // (task studio-survivor-market-20261108-005807-01: 'Market floor', 'Housing deck')
 }
 
@@ -224,7 +246,7 @@ export interface ArrivalPose { x: number; z: number; yaw: number; level?: number
  */
 export function arrivalPose(layout: StationLayout, arrival: Arrival, train?: TrainPlacement | null): ArrivalPose {
   if (train && arrival.kind === 'start') return trainSpawnPose(layout, train);
-  const start = layout.office?.start ?? layout.mall?.start ?? layout.reactor?.start ?? layout.skyways?.start; // (lane GEN: + the mall's platform start; + the reactor's rim platform start; + Skyways')
+  const start = layout.office?.start ?? layout.mall?.start ?? layout.reactor?.start ?? layout.skyways?.start ?? layout.bunker?.start; // (lane GEN: + the mall's platform start; + the reactor's rim platform start; + Skyways'; + the Bunker's: task studio-bunker-level-20261109-072224-01)
   if (start) return {...start, source: 'start'};
   const sp = layout.playerSpawn as {x: number; z: number; yaw: number; level?: number; y?: number};
   return {x: sp.x, z: sp.z, yaw: sp.yaw, level: sp.level, y: sp.y, source: 'playerSpawn'};

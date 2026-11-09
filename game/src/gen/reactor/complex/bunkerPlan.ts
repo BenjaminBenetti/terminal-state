@@ -113,7 +113,7 @@ export const BUNKER = {
 /** QA / tests: what the last plans did (attempts used, why attempts failed). */
 export const BUNKER_PLAN_STATS = {attempts: 0, fails: {} as Record<string, number>};
 
-interface Prog { key: string; label: string; kind: AreaKind; type: RoomType; purpose: string; role: ComplexRoom['role']; clear?: number }
+export interface Prog { key: string; label: string; kind: AreaKind; type: RoomType; purpose: string; role: ComplexRoom['role']; clear?: number }
 
 /**
  * A program room: its sizes (cells: long side min / max, short side min / max, either orientation), the rooms it may open off
@@ -121,7 +121,7 @@ interface Prog { key: string; label: string; kind: AreaKind; type: RoomType; pur
  * whether it must exist, dead end (`leaf`: one door, no rooms off it), no rooms off it (`noKids`), its growth cap, door kind / width,
  * a pull toward the back of the shelter (`deep`) or toward a room (`near`), rooms it should not share a wall with (`avoid`).
  */
-interface Spec extends Prog {
+export interface Spec extends Prog {
   size: readonly [number, number, number, number];
   parents: Readonly<Record<string, number>>;
   wing?: BunkerWing;
@@ -146,7 +146,7 @@ interface Spec extends Prog {
 }
 
 const C = BUNKER.clear;
-const room = (key: string, label: string, type: RoomType, purpose: string, o: Omit<Spec, keyof Prog> & {role?: ComplexRoom['role']; clear?: number}): Spec =>
+export const room = (key: string, label: string, type: RoomType, purpose: string, o: Omit<Spec, keyof Prog> & {role?: ComplexRoom['role']; clear?: number}): Spec =>
   ({key, label, kind: 'room', type, purpose, role: o.role ?? 'room', ...o});
 
 /** The rooms every shelter has (placed in this order onto the corridor skeleton). */
@@ -188,11 +188,11 @@ const OPTIONAL: readonly Spec[] = [
 const SPARE: Spec = room('store', 'Storeroom', 'storage', 'storage', {role: 'store', clear: C.store, size: [8, 12, 8, 10],
   parents: {corr: 1, hub: 0.8, hall: 0.4, workshop: 0.5, mess: 0.4, infirmary: 0.4, filtration: 0.4, guard: 0.3, warden: 0.3}, cap: [13, 11]});
 
-const CORRIDOR: Omit<Prog, 'key' | 'label'> = {kind: 'service', type: 'service-corridor', purpose: 'service-corridor', role: 'corridor', clear: C.corridor};
+export const CORRIDOR: Omit<Prog, 'key' | 'label'> = {kind: 'service', type: 'service-corridor', purpose: 'service-corridor', role: 'corridor', clear: C.corridor};
 /** Corridor names by the wing of the rooms on them. */
 const CORRIDOR_LABEL: Readonly<Record<string, string>> = {living: 'Quarters corridor', plant: 'Plant corridor', ops: 'Operations corridor', '': 'Service passage'};
 
-interface Node extends PlanRoom {
+export interface Node extends PlanRoom {
   id: number;
   /** Entry geometry (never grows). */
   fixed: boolean;
@@ -209,9 +209,9 @@ interface Node extends PlanRoom {
   walls?: Partial<Record<LSide, readonly [number, number] | false>>;
 }
 
-interface Edge { a: number; b: number; kind: PlanDoor['kind']; dw: number; loop: boolean; range?: readonly [number, number]; placed?: PlanDoor }
+export interface Edge { a: number; b: number; kind: PlanDoor['kind']; dw: number; loop: boolean; range?: readonly [number, number]; placed?: PlanDoor }
 
-const isCorr = (n: PlanRoom) => n.role === 'corridor';
+export const isCorr = (n: PlanRoom) => n.role === 'corridor';
 const ENTRY = new Set(['lock', 'decon', 'guard']);
 /** A node's parent class: 'hub' (the muster corridor), 'corr' (another corridor) or its key without the duplicate number. */
 const cls = (n: PlanRoom) => (n.key === 'muster' ? 'hub' : isCorr(n) ? 'corr' : n.key.replace(/\d+$/, ''));
@@ -224,7 +224,7 @@ const SUITE: Readonly<Record<string, number>> = {
 /** Rooms that never take a loop door from a corridor (the dormitories stay quiet, the switch room / armoury stay single-door). */
 const NO_CORRIDOR_LOOP = new Set(['armoury', 'dorm', 'dorm2', 'switch']);
 
-class Planner {
+export class Planner {
   readonly occ: Occ;
   readonly nodes: Node[] = [];
   readonly edges: Edge[] = [];

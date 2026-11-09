@@ -100,6 +100,8 @@ import {WASTE_MODEL_FILES} from './world/reactor/wasteAssets'; // task reactor-e
 import {attributeInstancing, setAttributeInstancing} from './render/instancing'; // Task track3-eaton-centre-20261031 (lane PERF): shared instancing programs in the mall
 import {collectTextures, modelTextures, releaseModelTexturesAfterUpload, stageUploads, textureReleaseStats, trackUploads} from './assets/textureRelease'; // (lane PERF) mall: decoded images freed after upload, uploads staged
 import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
+import {bunkerGasSource} from './world/gas/zones'; // task studio-bunker-level-20261109-072224-01: the Bunker's local gas leaks (a gas zone world)
+import {BUNKER_KIT_MODEL_FILES, bunkerModelKindKeysFor} from './gen/bunker/bunkerKinds'; // (follow-up) the Bunker's model-backed flavour kinds (lazy)
 import {installCough, type CoughFeedback} from './audio/cough'; // Task gas-mask-roof-feedback-20261030: the player coughs while gas hurts them
 import {installReactorAir} from './world/reactor/generators'; // task reactor-build-20261101 (lane AIR): Reactor depth gas + auxiliary generators
 import {installBlightBurst, type BlightBurstSystem, type BlightEnemy} from './ai/blightBurst'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly's once-only death burst
@@ -112,6 +114,7 @@ import {installReactorEnding} from './world/reactor/ending'; // task studio-reac
 import {installReactorSurface} from './world/reactor/surface'; // task studio-reactor-surface-ending-20261102 (lane SURFACE): the city / rain / clear air outside
 import {installReactorCredits} from './world/reactor/credits'; // task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane CREDITS): the end credits
 import {installReactorCpuCulling} from './world/reactor/cpuActorCulling'; // task studio-reactor-submit-roof-fog-20261102 (lane CPU)
+import {installBunkerObjective} from './world/bunker/objective'; // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE): the Bunker's optional generators + core intel
 import {installReactorMapBoards} from './world/reactor/mapBoard'; // task reactor-expansion-20261101 (lane CONTROLS) // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
@@ -152,6 +155,7 @@ import {installMarketVisuals} from './world/marketVisuals'; // task studio-survi
 import {skywaysGardenModelKeysFor} from './world/skywaysGardens'; // (lane ARCH) the planters' foliage model
 import {SKYWAYS_LAYOUT_LANE, skywaysLayoutVersionFor} from './gen/skyways/layoutVersion'; // task studio-skyways-destinations-20261106-170011-01
 import {MARKET_LAYOUT_LANE, marketLayoutVersionFor} from './gen/market/layoutVersion'; // task studio-market-rework-20261108-074144-01 (lane LAYOUT)
+import {BUNKER_LAYOUT_LANE, bunkerLayoutVersionFor} from './gen/bunker/layoutVersion'; // task studio-bunker-level-20261109-072224-01 (lane LEVEL)
 import {installSkywaysDestAudio} from './world/skywaysDestAudio'; // task skyways-destinations-20261106 (lane AUDIO): the destinations' location sounds
 import {installSubwayMapRead} from './world/subwayMapRead'; // task studio-ui-subway-maps-20261108-074144-01: the station map kiosks' close-up read
 import {installSkywaysMapRead} from './world/skywaysMapRead'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the directory boards' close-up read
@@ -208,6 +212,8 @@ export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory'
 export const SCAVENGE_OBJECTIVE = 'Scavenge fuel and supplies. Return to the train when done.'; // (task train-fuel-system: the train needs a tank of fuel per stop)
 /** Task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market's objective line (a calm pit stop: trade, then ride on). */
 export const MARKET_OBJECTIVE = 'Trade at the stalls. Return to the train when done.';
+/** Task studio-bunker-level-20261109-072224-01 (lane LEVEL): the Bunker's objective line (scavenge; the optional generators / core). */
+export const BUNKER_OBJECTIVE = 'Scavenge the shelter · optional: restart three generators to power the core. Return to the train when done.';
 
 // (task campaign-foundation-20261102, lane MENU: + renderScale — a linear render-resolution scale over the DPR-capped native buffer;
 // the persisted values live in ui/settingsStore.ts, main.ts copies them in)
@@ -275,7 +281,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...COSPLAY_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES, ...MARKET_HUMAN_MODEL_FILES, ...SHELF_JUNK_MODEL_FILES}); // (task studio-food-shelf-production-20261109-002816-01: + the shelf-junk atlas, lazy) // (survivor market, lane HUMANS: + the friendly cast, level-only market-*) (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...COSPLAY_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES, ...MARKET_HUMAN_MODEL_FILES, ...SHELF_JUNK_MODEL_FILES, ...BUNKER_KIT_MODEL_FILES}); // (task studio-food-shelf-production-20261109-002816-01: + the shelf-junk atlas, lazy) // (survivor market, lane HUMANS: + the friendly cast, level-only market-*) (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
   /** Task track3-eaton-centre-20261031 (lane PACKAGE): textures / GPU resources owned by ONE level, released when the level changes (assets/levelResources.ts). */
   readonly levelResources = new LevelResources();
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
@@ -438,7 +444,7 @@ export class Game {
   readonly sirens: SirenSystem;
   // ==== Iteration 16 (lane RUN): the run — logical levels, sections, travel, carryover (lanes/run.notes) ====
   /** The current run (run/runState.ts): level seeds, gear roll, section memories, the Retry-level snapshot. Replaced by NewGame. */
-  run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed(), mall: freshSeed(), market: freshSeed(), skyways: freshSeed(), reactor: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS}); // (+ mall: task track3-eaton-centre-20261031, lane GEN; + reactor: task reactor-build-20261101)
+  run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed(), mall: freshSeed(), market: freshSeed(), bunker: freshSeed(), skyways: freshSeed(), reactor: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS}); // (+ mall: task track3-eaton-centre-20261031, lane GEN; + reactor: task reactor-build-20261101)
   /** How the player arrived in the current section (lane TOWER: kind 'elevator' starts inside the cab, doors closed). */
   arrival: Arrival = {kind: 'start'};
   /** Run-scoped lane state (INJURY / GEAR): saved at level entry (Retry), restored by Retry level, reset by NewGame — never by travel. */
@@ -466,7 +472,7 @@ export class Game {
   // (round 2, R3) + the generated annex genset model on a layout with a genset record (a shared file: every annex-bearing level)
   // (task mall-lingerie-20261102, lane STORE) + the lingerie store's display sets: lane FIT's outfit files they are cut from (lazy, same keys)
   // (task mall-lingerie-20261102-221554, lane CONTEXT) + the lingerie garments on a layout with lingerie-tagged spawns (the mall's lingerie store only)
-  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys, lingerieModelKeysFor, cosplayModelKeysFor, shelfJunkModelKeysFor]; // (+ task studio-food-shelf-production-20261109-002816-01: the shelf-junk atlas only on layouts with stockable holders)
+  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys, lingerieModelKeysFor, cosplayModelKeysFor, shelfJunkModelKeysFor, bunkerModelKindKeysFor]; // (+ task studio-food-shelf-production-20261109-002816-01: the shelf-junk atlas only on layouts with stockable holders)
   /** One lifecycle operation at a time: travel, new game, retry level. */
   private readonly lifecycle = new SingleFlight();
   /** Live pickups that are (what is left of) a generated layout pickup -> its layout.pickups index. */
@@ -660,6 +666,7 @@ export class Game {
     this.gas = installGas(this); // Task gasmask-breach-20261030 (lane GAS): after TOWER (its build reads the windows) — bullet hits, frame hook, section hooks
     hookName('gas');
     this.gas.windowSources.push(() => this.skywaysWindows.gasSource()); // (lane GAS, Skyways) the glazing's panes when the world has no office tower
+    this.gas.zoneSources.push(bunkerGasSource); // task studio-bunker-level-20261109-072224-01: the Bunker's gas zones (visible green fog + exposure, one field)
     // Task gasmask-breach-20261030 (primary): breach gas spares the player only behind a mask that is on with a working filter.
     // The mask's frame hook runs first (installed earlier), so a filter swapped in this frame already counts.
     this.gas.protection = () => this.gasMask.protects();
@@ -689,6 +696,7 @@ export class Game {
     installReactorCredits(this); hookName('reactorCredits');
     installReactorCpuCulling(this); hookName('reactorCpuCulling'); // task studio-reactor-submit-roof-fog-20261102 (lane CPU): enemies / pickups behind the Reactor's rock decided by the level culler (inert elsewhere)
     installReactorMapBoards(this); hookName('reactorMapBoards'); // task reactor-expansion-20261101 (lane CONTROLS): floor-map boards beside the instruction boards (X marks, storey buttons; inert off the Reactor) // task reactor-build-20261101 (lane RESTART): E / hold-E controls, prompts, screens, the win sequence, section hooks (inert off the Reactor)
+    installBunkerObjective(this); hookName('bunkerObjective'); // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE): fuel + turnkey-start the three auxiliary generators, core map intel once per station (lane 'bunker.state'; inert off the Bunker)
     // Task player-train-shell-20261101-202805 (lane TRAIN): LAST (its build rebuilds game.propIndex over everything already there, after the
     // stalls; its E handler / prompt come after the others): section hooks (the car at game.trainPlacement, interior volume + colliders, built
     // synchronously before the first update), frame hook (doors), E + prompt, the boot-time head / tail / interior lights, warm pool
@@ -845,8 +853,9 @@ export class Game {
     // (task studio-skyways-destinations-20261106-170011-01) a Skyways station regenerates with the layout version it was first built with
     // (task studio-market-rework-20261108-074144-01, lane LAYOUT) so does a Survivor Market: a market entered under the first market's
     // build keeps version 1 forever, an unvisited / new one builds the container settlement (gen/market/layoutVersion.ts)
-    const versionLane = key.level === 'skyways' ? SKYWAYS_LAYOUT_LANE : key.level === 'market' ? MARKET_LAYOUT_LANE : null;
-    const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : undefined;
+    // (task studio-bunker-level-20261109-072224-01, lane LEVEL) and a Bunker: version 1 from its first release (gen/bunker/layoutVersion.ts)
+    const versionLane = key.level === 'skyways' ? SKYWAYS_LAYOUT_LANE : key.level === 'market' ? MARKET_LAYOUT_LANE : key.level === 'bunker' ? BUNKER_LAYOUT_LANE : null;
+    const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : key.level === 'bunker' ? bunkerLayoutVersionFor(run.peekMemory(key)) : undefined;
     const layout = LEVELS[key.level].generate(key.section, {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {})}); // (campaign: the node's own seed)
     if (layoutVersion !== undefined && versionLane && run.laneStore(versionLane, key) === undefined) run.setLaneStore(versionLane, {v: layoutVersion}, key);
     const node = key.station ? run.node(key.station) : null;
@@ -1197,7 +1206,7 @@ export class Game {
     const obj = document.querySelector('#objective .obj-title');
     // Task studio-alpha-campaign-foundation-20261102-230708-01 (user: "No ordinary clear-all-zombies objective: default objective says
     // scavenge for resources and return to the train when done"): no kill goal anywhere; the Reactor keeps its real endgame chain.
-    if (obj) obj.textContent = key.level === 'reactor' ? 'Restart the reactor' : key.level === 'market' ? MARKET_OBJECTIVE : SCAVENGE_OBJECTIVE; // (+ the market's: task studio-survivor-market-20261108-005807-01)
+    if (obj) obj.textContent = key.level === 'reactor' ? 'Restart the reactor' : key.level === 'market' ? MARKET_OBJECTIVE : key.level === 'bunker' ? BUNKER_OBJECTIVE : SCAVENGE_OBJECTIVE; // (+ the market's: task studio-survivor-market-20261108-005807-01; + the bunker's: task studio-bunker-level-20261109-072224-01)
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.propModels.sealed = this.levelResources.sealed = true; // lane PACKAGE (track3): the level is built; a later fetch counts as `late`
     void this.preparePantry(null, this.run, true); // (lane ITEMS: carried pantry items restored after the prepare — a loaded save — get their models; usually a no-op)
@@ -1802,7 +1811,7 @@ export class Game {
       const startNode = o.campaign?.network.nodes.find(n => n.id === o.campaign!.current);
       if (startNode) level = startNode.archetype;
       const def = LEVELS[level];
-      const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed(), mall: o.seeds?.mall ?? freshSeed(), market: o.seeds?.market ?? freshSeed(), skyways: o.seeds?.skyways ?? freshSeed(), reactor: o.seeds?.reactor ?? freshSeed()}; // (+ mall: lane GEN; + reactor: task reactor-build-20261101)
+      const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed(), mall: o.seeds?.mall ?? freshSeed(), market: o.seeds?.market ?? freshSeed(), bunker: o.seeds?.bunker ?? freshSeed(), skyways: o.seeds?.skyways ?? freshSeed(), reactor: o.seeds?.reactor ?? freshSeed()}; // (+ mall: lane GEN; + reactor: task reactor-build-20261101)
       const key: SectionKey = startNode ? {level, section: def.entry, station: startNode.id} : {level, section: def.entry};
       const run = createRun({seeds, start: key, levels: LEVELS, rollGear: rollLevelGear, campaign: o.campaign ?? null});
       const shown = startNode ? startNode.name : levelDisplayName(level, seeds[level]); // (task mall-playtest-revision, lane GEN: the seeded mall name)
@@ -3053,9 +3062,9 @@ export class Game {
     const area = multi ? this.levels.areaAt(p.x, p.z, p.y) : this.layout.grid.areaAt(p.x, p.z);
     // Iteration 17: the office tower's storey ("Open-plan office · Floor 5 · Bramley House"); task mall-playtest-revision-20261031
     // (lane GEN): the mall's retail floor too ("Paper Lantern Books · Sales floor · Level 2 · Harbourline Center")
-    const storey = (this.layout.office || this.layout.mall || this.layout.skyways) && area >= 0 ? storeyLabel(this.layout, this.layout.areas[area].level ?? 0) : '';
-    // (+ Skyways: 'Concourse' / 'Street level' / '+15 Skyway' as printed)
-    const storeyName = !storey ? '' : this.layout.mall ? (storey === 'Subway' ? '' : storey) : this.layout.skyways ? storey : storey === 'L' ? 'Lobby' : `Floor ${storey}`;
+    const storey = (this.layout.office || this.layout.mall || this.layout.skyways || this.layout.bunker) && area >= 0 ? storeyLabel(this.layout, this.layout.areas[area].level ?? 0) : '';
+    // (+ Skyways: 'Concourse' / 'Street level' / '+15 Skyway' as printed; + the Bunker's storey labels as printed: task studio-bunker-level-20261109-072224-01)
+    const storeyName = !storey ? '' : this.layout.mall ? (storey === 'Subway' ? '' : storey) : this.layout.skyways || this.layout.bunker ? storey : storey === 'L' ? 'Lobby' : `Floor ${storey}`;
     const storeyText = storeyName && !(area >= 0 && (this.layout.skyways ? skywalkText(this.layout.areas[area].label) : this.layout.areas[area].label).includes(storeyName)) ? ` · ${storeyName}` : ''; // (a stairwell label already names its floor)
     this.hud.update({
       hp: p.hp, maxHp: p.maxHp, stamina: p.stamina,

@@ -34,16 +34,16 @@ import type {BunkerCarveRec} from './bunker';
 import {BLAST, isBunkerKind} from './bunkerKinds';
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
-const OPP: Record<Side, Side> = {N: 'S', S: 'N', E: 'W', W: 'E'};
-const NORMAL: Record<Side, [number, number]> = {N: [0, -1], S: [0, 1], W: [-1, 0], E: [1, 0]};
-const sideOfDir = (dx: number, dz: number): Side => (Math.abs(dz) >= Math.abs(dx) ? (dz < 0 ? 'N' : 'S') : dx < 0 ? 'W' : 'E');
+export const OPP: Record<Side, Side> = {N: 'S', S: 'N', E: 'W', W: 'E'};
+export const NORMAL: Record<Side, [number, number]> = {N: [0, -1], S: [0, 1], W: [-1, 0], E: [1, 0]};
+export const sideOfDir = (dx: number, dz: number): Side => (Math.abs(dz) >= Math.abs(dx) ? (dz < 0 ? 'N' : 'S') : dx < 0 ? 'W' : 'E');
 /** Yaw (prop convention: front = (sin rot, cos rot)) of a prop whose front faces (dx, dz). */
-const rotFacing = (dx: number, dz: number): number => (Math.abs(dz) >= Math.abs(dx) ? (dz > 0 ? 0 : Math.PI) : dx > 0 ? Math.PI / 2 : -Math.PI / 2);
+export const rotFacing = (dx: number, dz: number): number => (Math.abs(dz) >= Math.abs(dx) ? (dz > 0 ? 0 : Math.PI) : dx > 0 ? Math.PI / 2 : -Math.PI / 2);
 
 /** QA / tests: what the last dress placed. */
 export const BUNKER_DRESS_STATS = {ms: 0, dropped: 0, filled: 0, props: 0, decor: 0, lights: 0, signs: 0, beds: 0, footlockers: 0, tanks: 0, panels: 0, skipped: [] as string[]};
 
-interface Dx {
+export interface Dx {
   layout: StationLayout;
   rec: BunkerCarveRec;
   g: Grid;
@@ -150,7 +150,7 @@ export function dressBunker(layout: StationLayout, rng: Rng, crop: {ox: number; 
  * Cells a footprint covers by more than 5 mm (placeKit's cellsOfBox forgives 4 cm at each edge): a hero model's visible body never
  * stands over a walkable cell (user rule: collision matches the visible geometry; lane PATHS' audit).
  */
-function coverCells(x: number, z: number, hx: number, hz: number): [number, number, number, number] {
+export function coverCells(x: number, z: number, hx: number, hz: number): [number, number, number, number] {
   const e = 0.005;
   return [Math.floor((x - hx + e) / CELL), Math.floor((z - hz + e) / CELL), Math.floor((x + hx - e) / CELL), Math.floor((z + hz - e) / CELL)];
 }
@@ -159,7 +159,7 @@ function coverCells(x: number, z: number, hx: number, hz: number): [number, numb
  * After a placement of a hero model kind: block the extra cells its footprint covers (coverCells); undone (prop removed) when one of
  * them is not this area's free floor or the area would split. `p` must be the last prop pushed.
  */
-function sealOrDrop(D: Dx, a: Area, p: PropPlacement): boolean {
+export function sealOrDrop(D: Dx, a: Area, p: PropPlacement): boolean {
   const {g, ctx, layout} = D;
   const [c0, r0, c1, r1] = coverCells(p.x, p.z, p.hx, p.hz);
   const extra: number[] = [];
@@ -183,7 +183,7 @@ function sealOrDrop(D: Dx, a: Area, p: PropPlacement): boolean {
 }
 
 /** A collision prop over a world AABB (forced: the bunker's own anchored pieces), blocking its floor cells of `areaIds`. */
-function solidProp(D: Dx, kind: PropKind, a: Area, b: {x0: number; z0: number; x1: number; z1: number}, h: number, rot: number, variant: number, sight: boolean): PropPlacement {
+export function solidProp(D: Dx, kind: PropKind, a: Area, b: {x0: number; z0: number; x1: number; z1: number}, h: number, rot: number, variant: number, sight: boolean): PropPlacement {
   const {g, layout, lv} = D;
   const x = r3((b.x0 + b.x1) / 2), z = r3((b.z0 + b.z1) / 2), hx = r3((b.x1 - b.x0) / 2), hz = r3((b.z1 - b.z0) / 2);
   const [c0, r0, c1, r1] = coverCells(x, z, hx, hz);
@@ -200,7 +200,7 @@ function solidProp(D: Dx, kind: PropKind, a: Area, b: {x0: number; z0: number; x
 }
 
 /** Free floor cells of area `a` under a world AABB (not blocked / kept / in a door zone), and the area stays connected once blocked. */
-function freeFor(D: Dx, a: Area, b: {x0: number; z0: number; x1: number; z1: number}): boolean {
+export function freeFor(D: Dx, a: Area, b: {x0: number; z0: number; x1: number; z1: number}): boolean {
   const {g, ctx} = D;
   const [c0, r0, c1, r1] = cellsOfBox((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2, (b.x1 - b.x0) / 2, (b.z1 - b.z0) / 2);
   const cells: number[] = [];
@@ -217,11 +217,11 @@ function freeFor(D: Dx, a: Area, b: {x0: number; z0: number; x1: number; z1: num
 }
 
 /** World-space wall face coordinate of a side of an area, and the along-wall world range. */
-function face(a: Area, s: Side): number {
+export function face(a: Area, s: Side): number {
   return s === 'N' ? a.y * CELL : s === 'S' ? (a.y + a.h) * CELL : s === 'W' ? a.x * CELL : (a.x + a.w) * CELL;
 }
 /** World AABB of a box against wall `s` of `a`: along [t0, t1], `off0`..`off1` m out from the wall face. */
-function wallBox(a: Area, s: Side, t0: number, t1: number, off0: number, off1: number): {x0: number; z0: number; x1: number; z1: number} {
+export function wallBox(a: Area, s: Side, t0: number, t1: number, off0: number, off1: number): {x0: number; z0: number; x1: number; z1: number} {
   const fc = face(a, s), [nx, nz] = NORMAL[s];
   if (s === 'N' || s === 'S') { const z0 = fc - nz * off0, z1 = fc - nz * off1; return {x0: t0, x1: t1, z0: Math.min(z0, z1), z1: Math.max(z0, z1)}; }
   const x0 = fc - nx * off0, x1 = fc - nx * off1;
@@ -229,7 +229,7 @@ function wallBox(a: Area, s: Side, t0: number, t1: number, off0: number, off1: n
 }
 
 /** The side of `a` holding most of its doors / the main (parent) door. */
-function mainSide(D: Dx, a: Area): Side | null {
+export function mainSide(D: Dx, a: Area): Side | null {
   const ds = D.doors(a);
   const d = ds.find(q => q.a === a.parent || q.b === a.parent) ?? ds[0];
   return d ? doorSide(d, a) : null;
@@ -240,7 +240,7 @@ const doorCount = (D: Dx, a: Area, s: Side) => D.doors(a).filter(d => doorSide(d
  * Deterministic exhaustive wall placement: every 0.25 m along each wall of `sides` (in order), nearest `prefer` (world, along the wall)
  * first; the placement primitive's checks (door zones, access strip, connectivity, real wall behind) decide. Null when nothing fits.
  */
-function scanWall(D: Dx, a: Area, kind: PropKind, sides: readonly Side[], front: number, prefer?: number, pockets = false): PropPlacement | null {
+export function scanWall(D: Dx, a: Area, kind: PropKind, sides: readonly Side[], front: number, prefer?: number, pockets = false): PropPlacement | null {
   const w = PROP_DEFS[kind].w;
   for (const sd of sides) {
     const [lo, hi] = wallRange(a, sd);
@@ -348,7 +348,7 @@ function lockAndDecon(D: Dx): void {
  * Free floor cells of area `a` no walker reaches (height-aware: a step <= STEP_UP), searched from every opening of the area — over
  * the area's rect + 3 cells (its deep doorway cells: the bulkhead lane belongs to the decon).
  */
-function pocketCells(D: Dx, a: Area): number[] {
+export function pocketCells(D: Dx, a: Area): number[] {
   const {g} = D;
   const doors = D.doors(a);
   const x0 = a.x - 3, y0 = a.y - 3, x1 = a.x + a.w + 2, y1 = a.y + a.h + 2;
@@ -381,7 +381,7 @@ function pocketCells(D: Dx, a: Area): number[] {
 }
 
 /** Takes back every prop from index `n0` (their floor cells back to free floor). */
-function dropProps(D: Dx, n0: number): void {
+export function dropProps(D: Dx, n0: number): void {
   const {g, layout} = D;
   while (layout.props.length > n0) {
     const p = layout.props.pop()!;
@@ -399,7 +399,7 @@ function unblockProp(g: Grid, p: PropPlacement): void {
  * The guarantee after the whole pass: a pocket left in any bunker area loses the latest removable prop of this pass bordering it
  * (never the blast door's anchored parts) until none is left; a pocket with no such prop (none expected) is filled (blocked).
  */
-function sweepPockets(D: Dx, areas: readonly Area[], p0: number): void {
+export function sweepPockets(D: Dx, areas: readonly Area[], p0: number): void {
   const {g, layout} = D;
   for (const a of areas) {
     for (let guard = 0; guard < 24; guard++) {
@@ -426,7 +426,7 @@ function sweepPockets(D: Dx, areas: readonly Area[], p0: number): void {
 // Rooms
 
 /** Barracks rows: bunks head to the long walls, a footlocker at each foot, a bank of lockers on a short wall. */
-function dormitory(D: Dx, a: Area): void {
+export function dormitory(D: Dx, a: Area): void {
   const S = BUNKER_DRESS_STATS;
   const horiz = a.w >= a.h;
   const byDoors = (p: Side, q: Side) => doorCount(D, a, p) - doorCount(D, a, q);
@@ -487,7 +487,7 @@ function dormitory(D: Dx, a: Area): void {
 }
 
 /** Mess tables in rows with folding chairs (the station dresser already put the kitchenette, fridge, a table, notice board …). */
-function mess(D: Dx, a: Area): void {
+export function mess(D: Dx, a: Area): void {
   const tbl = PROP_DEFS.table, ch = PROP_DEFS.foldingChair;
   const horiz = a.w >= a.h;
   const ax0 = a.x * CELL, az0 = a.y * CELL, aw = a.w * CELL, ah = a.h * CELL;
@@ -526,7 +526,7 @@ function mess(D: Dx, a: Area): void {
 }
 
 /** The dead-end ARMOURY: gun lockers along the far wall, ammunition cabinets, crates, a bench. */
-function armoury(D: Dx, a: Area): void {
+export function armoury(D: Dx, a: Area): void {
   const ms = mainSide(D, a) ?? 'S';
   const far = OPP[ms];
   const sides: Side[] = ms === 'N' || ms === 'S' ? ['W', 'E'] : ['N', 'S'];
@@ -540,7 +540,7 @@ function armoury(D: Dx, a: Area): void {
 }
 
 /** The radio operator's console (REACTOR_X_KIT.radioConsole) against a free wall, its chair. */
-function radioRoom(D: Dx, a: Area): void {
+export function radioRoom(D: Dx, a: Area): void {
   const ms = mainSide(D, a) ?? 'S';
   const order: Side[] = [OPP[ms], ...(ms === 'N' || ms === 'S' ? ['W', 'E'] as Side[] : ['N', 'S'] as Side[]), ms];
   let p = scanWall(D, a, 'radioConsole', order, 0.9);
@@ -558,7 +558,7 @@ function radioRoom(D: Dx, a: Area): void {
 }
 
 /** Air filtration units (REACTOR_X_KIT.airFilter) against the walls, a ceiling duct along the room. */
-function filtration(D: Dx, a: Area): void {
+export function filtration(D: Dx, a: Area): void {
   const ms = mainSide(D, a) ?? 'S';
   const far = OPP[ms];
   const sides: Side[] = ms === 'N' || ms === 'S' ? ['W', 'E'] : ['N', 'S'];
@@ -578,7 +578,7 @@ function filtration(D: Dx, a: Area): void {
  * walkway `ring` all round: the whole room on a 0.25 m lattice, nearest its centre first (the seeded rooms' doors / the dresser's
  * stock may hold every wall spot).
  */
-function island(D: Dx, a: Area, kind: PropKind, face: Side, ring: number): PropPlacement | null {
+export function island(D: Dx, a: Area, kind: PropKind, face: Side, ring: number): PropPlacement | null {
   const [fx, fz] = NORMAL[face], cx = (a.x + a.w / 2) * CELL, cz = (a.y + a.h / 2) * CELL;
   const spots: [number, number][] = [];
   for (let x = a.x * CELL + 1.2; x <= (a.x + a.w) * CELL - 1.2 + 1e-6; x += 0.25) for (let z = a.y * CELL + 1.2; z <= (a.y + a.h) * CELL - 1.2 + 1e-6; z += 0.25) spots.push([r3(x), r3(z)]);
@@ -694,7 +694,7 @@ function dayTank(D: Dx, a: Area, side: Side, t: number, hl = 1.45): void {
 // Ducts, plates, wayfinding
 
 /** A rectangular ventilation duct under the ceiling along wall `side` of `a` (segments skip props / doorway volumes). */
-function ceilingDuct(D: Dx, a: Area, side: Side, w = 0.45): void {
+export function ceilingDuct(D: Dx, a: Area, side: Side, w = 0.45): void {
   const rel = a.ceil - D.base;
   const y1 = rel - 0.08, y0 = y1 - 0.34;
   if (y0 < 2.5) return;
@@ -722,7 +722,7 @@ function corridorDucts(D: Dx): void {
 }
 
 /** A wall sign on `side` of `area` near `t` (world along the wall), `yRel` above the floor (centre); false when no backed spot. */
-function wallSign(D: Dx, area: Area, side: Side, t: number, yRel: number, s: Pick<SignPlacement, 'kind' | 'text'> & Partial<Pick<SignPlacement, 'w' | 'arrow'>>): boolean {
+export function wallSign(D: Dx, area: Area, side: Side, t: number, yRel: number, s: Pick<SignPlacement, 'kind' | 'text'> & Partial<Pick<SignPlacement, 'w' | 'arrow'>>): boolean {
   const y = r3(D.base + yRel), dims = signDims(s);
   const spot = wallSignSpot(D.g, area, side, t, y, dims);
   if (spot === null || !backed(D.ctx, area, side, spot - dims.w / 2, spot + dims.w / 2, y - dims.h / 2)) return false;
@@ -734,7 +734,7 @@ function wallSign(D: Dx, area: Area, side: Side, t: number, yRel: number, s: Pic
 }
 
 /** A plate on `outside`'s side of door `d`: over the opening when there is a soffit, else beside it. */
-function doorPlate(D: Dx, d: Door, outside: Area, text: string, w = 1.4): boolean {
+export function doorPlate(D: Dx, d: Door, outside: Area, text: string, w = 1.4): boolean {
   const side = doorSide(d, outside);
   const mid = d.h === 1 || (d.w > 1 && (side === 'N' || side === 'S')) ? (d.x + d.w / 2) * CELL : (d.y + d.h / 2) * CELL;
   const rel = outside.ceil - D.base;

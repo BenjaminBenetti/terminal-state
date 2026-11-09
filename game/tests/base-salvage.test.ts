@@ -60,6 +60,7 @@ describe('one shared rule: every level type reaches all three materials through 
     expect(PROFILES.subway.tables.salvage).toBe(BASE_SALVAGE);
     expect(PROFILES.office.tables.salvage).toBe(BASE_SALVAGE);
     expect(PROFILES.skyways.tables.salvage).toBe(BASE_SALVAGE);
+    expect(PROFILES.bunker.tables.salvage).toBe(BASE_SALVAGE); // (task studio-bunker-level-20261109-072224-01: the shared tables)
     expect(PROFILES.mall.tables.salvage).toBe(MALL_SALVAGE);
     expect(PROFILES.reactor.tables.salvage).toBe(MALL_SALVAGE);
     expect(PROFILES.market.tables.salvage).toBe(MARKET_SALVAGE);

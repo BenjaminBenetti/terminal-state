@@ -193,7 +193,7 @@ describe('save/validate: the network graph and station references', () => {
     rejects(f => { nodes(f)[7].archetype = 'reactor'; }, /exactly one Reactor/);
     rejects(f => { nodes(f)[0].archetype = 'office'; }, /start station is not a Subway/);
     rejects(f => { nodes(f)[39].archetype = 'subway'; }, /exactly one Reactor/);
-    rejects(f => { nodes(f)[7].archetype = 'casino'; }, /is not one of subway \| office \| mall \| market \| skyways \| reactor/);
+    rejects(f => { nodes(f)[7].archetype = 'casino'; }, /is not one of subway \| office \| mall \| market \| bunker \| skyways \| reactor/);
     rejects(f => { const n = f.run.campaign.network; n.edges = n.edges.filter((e: string[]) => !e.includes(sid(39))); n.lines[1].stations.pop(); }, /not connected \(1 stations unreachable/);
     rejects(f => { f.run.campaign.network.lines[0].color = 'red'; }, /#rrggbb/);
     rejects(f => { nodes(f)[4].lines = ['purple']; }, /unknown line 'purple'/);

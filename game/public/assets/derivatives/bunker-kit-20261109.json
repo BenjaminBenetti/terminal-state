@@ -1,0 +1,98 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "bunker-kit-20261109",
+ "task": "studio-bunker-level-20261109-072224-01",
+ "lane": "LEVEL (cook); the primary generated the model under the Bunker's approved select-flavour budget",
+ "status": "runtime derivatives of NEW Bunker flavour models generated for this project with Meshy T2.5 (smart topology) through the Meshy MCP from Codex initial reference images; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "authority": {
+  "approvalSha256": "8bca478998ce8c54336d8e621b0fb4c874385810ff59852579cc151d368174b1",
+  "caps": {
+   "credits": 200,
+   "maxGenerationAttempts": 13,
+   "maxPaidPOSTs": 20
+  }
+ },
+ "rebuild": "node tools/asset-pipeline/props/build-bunker-kit.mjs",
+ "rawStorage": "reference/tasks/bunker-level-20261109-072224/meshy/raw/<asset>/<attempt>/ (immutable native GLB + native_textures + SHA256.txt) + meshy/MANIFEST.json + LEDGER.jsonl; the Codex original reference/tasks/bunker-level-20261109-072224/codex/; outside Git",
+ "texturePolicy": "Meshy maps kept channel for channel (re-encoded JPEG: base / metallicRoughness / normal per KIT.tex); no reprojection / retexture",
+ "budget": {
+  "attempts": 1,
+  "paidPOSTs": 1,
+  "billed": 15,
+  "reserved": 0
+ },
+ "models": [
+  {
+   "key": "mainframe",
+   "id": "mainframe-tape-cabinet",
+   "url": "assets/models/bunker-mainframe-tape-cabinet.glb",
+   "bytes": 587108,
+   "tris": 8320,
+   "dims": [
+    0.8969,
+    1.9,
+    0.5245
+   ],
+   "what": "bunker: retro reel-to-reel mainframe tape cabinet (sealed computer equipment; its louvred doors are service panels)",
+   "scale": 1.99651,
+   "rawExtent": [
+    0.4492,
+    0.9517,
+    0.2627
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 132081
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 14831
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 23823
+    }
+   ],
+   "task": "01a1bfc1-3a2f-773a-a458-f2cdadf1b1fc",
+   "credits": 15,
+   "request": {
+    "tool": "meshy_image_to_3d",
+    "ai_model": "meshy-t2.5",
+    "model_type": "smart-topology",
+    "should_texture": true,
+    "enable_pbr": true,
+    "texture_resolution": "2k",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 15000
+   },
+   "codexInput": {
+    "file": "codex/mainframe-tape-cabinet.png",
+    "sha256": "a134346d5b9de7d9b0f1c17bc3727ba132c9a3de63f7fe7072a826f297378979"
+   },
+   "source": {
+    "file": "raw/mainframe-tape-cabinet/a1/native.glb",
+    "sha256": "e10eb07540ffb1d12902941923415abbe1587e1b81d5561d8912a37d12852dd3",
+    "bytes": 5493756
+   },
+   "sha256": "22bd9a4f097eb257ca150d3f7f5a3caf55bf894f060220e9a0d9f0fbe04d3405"
+  }
+ ]
+}

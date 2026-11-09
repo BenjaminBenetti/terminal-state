@@ -68,6 +68,14 @@ describe('R6: service-only family pool', () => {
           expect(rule!.families!.filter(([, w]) => w > 0)).toEqual([['zombie', 1]]);
           continue;
         }
+        // task studio-bunker-level-20261109-072224-01: the fourth — the Bunker's damp-section zone ('damp', BUNKER_DAMP_CONTEXT) is the one
+        // other pool where the Strainer may appear (STRAINER_CONTEXTS), at most one spawn per level; never a Siren there
+        if (id === 'bunker' && c === 'damp') {
+          expect(rule?.families, `${id} ${c}`).toBeDefined();
+          expect(share(rule!.families!, 'siren')).toBe(0);
+          expect(rule!.count).toEqual([1, 1]);
+          continue;
+        }
         expect(rule?.families, `${id} ${c}`).toBeUndefined();
       }
       // the level pools themselves are untouched: never the service pool

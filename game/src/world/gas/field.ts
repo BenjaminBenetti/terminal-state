@@ -115,8 +115,13 @@ export interface GasFieldOptions {
   closed?: (cx: number, cy: number) => boolean;
 }
 
-/** A breach as the field sees it: its storey and the grid indices of its source cells. */
-export interface GasBreach { id: string; level: number; cells: readonly number[] }
+/**
+ * A breach as the field sees it: its storey and the grid indices of its source cells. Task studio-bunker-level-20261109-072224-01:
+ * `strength` (0..1 of GAS.CAP, default the cap) = a weaker LOCAL LEAK (the Bunker's gas zones): its sources and its room's pool fill
+ * toward that level instead of the cap (the visible fog and the exposure read the same field, so a weak leak both shows and hurts less).
+ * Every breach at full strength keeps the original arithmetic exactly (no per-cell caps are allocated).
+ */
+export interface GasBreach { id: string; level: number; cells: readonly number[]; strength?: number }
 
 /** Per-storey statistics (QA / tests). */
 export interface GasStoreyStats {
@@ -142,6 +147,12 @@ export class StoreyGas {
   readonly pool: Uint8Array;
   readonly src: Uint8Array;
   readonly breaches: string[] = [];
+  /**
+   * Task studio-bunker-level-20261109-072224-01: per-cell fill levels of the pool / source cells once a WEAKER source joined this storey
+   * (the strongest breach reaching a cell wins); null while every source is at the cap (the original path, bit-identical).
+   */
+  private poolCap: Float32Array | null = null;
+  private srcCap: Float32Array | null = null;
   /** Active box (domain-local, inclusive); x0 > x1 = empty. */
   x0 = 1; y0 = 1; x1 = 0; y1 = 0;
   asleep = false;
@@ -173,17 +184,28 @@ export class StoreyGas {
     return x < 0 || y < 0 || x >= this.dw || y >= this.dh ? -1 : y * this.dw + x;
   }
 
-  /** Adds sources + the pool region of their room; false when none of the cells is gas-open. */
-  addSources(id: string, cells: readonly number[]): boolean {
+  /** Adds sources + the pool region of their room; false when none of the cells is gas-open. `strength`: GasBreach.strength. */
+  addSources(id: string, cells: readonly number[], strength: number = GAS.CAP): boolean {
     const loc = cells.map(gi => this.local(gi)).filter(i => i >= 0 && this.open[i]);
     if (!loc.length) return false;
+    const s = Math.min(GAS.CAP, Math.max(0, strength));
+    if (s < GAS.CAP && !this.poolCap) {
+      // the first weaker source: per-cell fill levels, every cell an earlier (full-strength) breach already holds at the cap
+      const n = this.dw * this.dh;
+      this.poolCap = new Float32Array(n);
+      this.srcCap = new Float32Array(n);
+      for (let i = 0; i < n; i++) { if (this.pool[i]) this.poolCap[i] = GAS.CAP; if (this.src[i]) this.srcCap[i] = GAS.CAP; }
+    }
     this.breaches.push(id);
     for (const i of loc) {
       this.src[i] = 1;
+      if (this.srcCap) this.srcCap[i] = Math.max(this.srcCap[i], s);
       const x = i % this.dw, y = (i - x) / this.dw;
       this.grow(x, y);
     }
-    this.markPool(loc);
+    const marked: number[] = [];
+    this.markPool(loc, marked);
+    if (this.poolCap) for (const i of marked) this.poolCap[i] = Math.max(this.poolCap[i], s);
     this.asleep = false;
     this.dirty = true;
     return true;
@@ -199,7 +221,7 @@ export class StoreyGas {
    * Pool region: the cells of the sources' room (their most common area id) within POOL_RADIUS_M walking metres of them
    * (chamfer distance on the open cells of that room, no corner cutting) decay at K_POOL.
    */
-  private markPool(loc: readonly number[]): void {
+  private markPool(loc: readonly number[], out?: number[]): void {
     const g = this.grid, dw = this.dw;
     const areaOf = (i: number) => { const x = i % dw, y = (i - x) / dw; return g.area[(y + this.oy) * g.w + x + this.ox]; };
     const tally = new Map<number, number>();
@@ -218,6 +240,7 @@ export class StoreyGas {
         const i = b[q];
         if (dist.get(i) !== d) continue;
         this.pool[i] = 1;
+        out?.push(i);
         for (const [dx, dy, w] of NEIGH) {
           const j = i + dx + dy * dw;
           if (!ok(j)) continue;
@@ -234,6 +257,7 @@ export class StoreyGas {
   /** One explicit substep of length dt over the active box (grows it where the front reaches its edge). Returns max |Δc|. */
   step(dt: number): number {
     if (!this.active) return 0;
+    if (this.poolCap) return this.stepCapped(dt);
     const dw = this.dw, c = this.c, nx = this.next, open = this.open, pool = this.pool, src = this.src;
     const r = GAS.D * dt / (CELL * CELL);
     const keep = Math.exp(-GAS.SOURCE_RATE * dt);
@@ -254,6 +278,47 @@ export class StoreyGas {
         // pool: the breach keeps pushing gas in — what reached the room grows toward the cap behind the front; spill: decays
         if (pool[i]) v += fill * v * (cap - v) - kPool * v; else v -= kSpill * v;
         if (src[i]) v = cap - (cap - v) * keep;
+        if (v < flush) v = 0; else if (v > cap) v = cap;
+        nx[i] = v;
+        const d = v > ci ? v - ci : ci - v;
+        if (d > maxD) maxD = d;
+        if (v > 0) { if (x === x0) gx0 = true; if (x === x1) gx1 = true; if (y === y0) gy0 = true; if (y === y1) gy1 = true; }
+      }
+    }
+    this.next = c;
+    this.c = nx;
+    // the front reached the box edge: the box takes one more cell there (never into the closed ring)
+    if (gx0 && this.x0 > 1) this.x0--;
+    if (gx1 && this.x1 < this.dw - 2) this.x1++;
+    if (gy0 && this.y0 > 1) this.y0--;
+    if (gy1 && this.y1 < this.dh - 2) this.y1++;
+    return maxD;
+  }
+
+  /** Task studio-bunker-level-20261109-072224-01: step() with per-cell fill levels (a weaker source on this storey). */
+  private stepCapped(dt: number): number {
+    if (!this.active) return 0;
+    const cp = this.poolCap!, cs = this.srcCap!;
+    const dw = this.dw, c = this.c, nx = this.next, open = this.open, pool = this.pool, src = this.src;
+    const r = GAS.D * dt / (CELL * CELL);
+    const keep = Math.exp(-GAS.SOURCE_RATE * dt);
+    const cap = GAS.CAP, flush = GAS.FLUSH, fill = GAS.FILL_RATE * dt, kPool = GAS.K_POOL * dt, kSpill = GAS.K_SPILL * dt;
+    const {x0, y0, x1, y1} = this;
+    let maxD = 0, gx0 = false, gx1 = false, gy0 = false, gy1 = false;
+    for (let y = y0; y <= y1; y++) {
+      let i = y * dw + x0;
+      for (let x = x0; x <= x1; x++, i++) {
+        if (!open[i]) continue;
+        const ci = c[i];
+        let lap = 0;
+        if (open[i - 1]) lap += c[i - 1] - ci;
+        if (open[i + 1]) lap += c[i + 1] - ci;
+        if (open[i - dw]) lap += c[i - dw] - ci;
+        if (open[i + dw]) lap += c[i + dw] - ci;
+        let v = ci + r * lap;
+        // pool: the breach keeps pushing gas in — what reached the room grows toward the cap behind the front; spill: decays
+        if (pool[i]) v += fill * v * (cp[i] - v) - kPool * v; else v -= kSpill * v;
+        if (src[i]) v = cs[i] - (cs[i] - v) * keep;
         if (v < flush) v = 0; else if (v > cap) v = cap;
         nx[i] = v;
         const d = v > ci ? v - ci : ci - v;
@@ -338,11 +403,11 @@ export class GasField {
       if (!grid) return false;
       const d = this.domain;
       s = new StoreyGas(b.level, grid, d.x1 - d.x0, d.y1 - d.y0, d.x0, d.y0, this.opts.closed);
-      if (!s.addSources(b.id, b.cells)) return false;
+      if (!s.addSources(b.id, b.cells, b.strength)) return false;
       this.storeyMap.set(b.level, s);
       return true;
     }
-    return s.addSources(b.id, b.cells);
+    return s.addSources(b.id, b.cells, b.strength);
   }
 
   /** Advances by play time dt on the fixed tick (at most MAX_TICKS_PER_FRAME ticks per call). Returns the ticks run. */

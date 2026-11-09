@@ -5,7 +5,7 @@
 // cola, juice, water — bread and the Skyways ramen food stay as they are), a seeded hash of its STABLE identity (station seed + holder
 // kind / index + lot id; or the layout pickup index) picks a member of the same FAMILY (items/pantryFood.ts), weighted by context: the
 // logical level's palette (which pantry items a level stocks: rice crackers in Skyways / Market / Mall / Office shops, field rations and
-// ration bricks in the Subway / Office / Reactor / Market, ...), the holder's loot theme and slot (rations in security / service rooms and
+// ration bricks in the Subway / Office / Reactor / Market / Bunker, ...), the holder's loot theme and slot (rations in security / service rooms and
 // lockers, milk and pudding in fridges, iced coffee in vending machines ...). The old item stays one member of its family (KEEP share).
 //
 // What it never does: no table row is re-weighted, no RNG stream is drawn (a pure hash), nothing is added or removed — one lot stays one
@@ -84,6 +84,10 @@ export const LEVEL_PANTRY: Readonly<Record<string, readonly PantryId[]>> = {
     ICED_COFFEE, GINGER_SODA, ICED_TEA, JUICE_BOXES, UHT_MILK, SPORTS_DRINK],
   // the reactor: control rooms, bunkers, maintenance
   reactor: [RAISINS, HONEY, JERKY, SALTINES, FIELD_RATION, RATION_BRICK, CORNED_BEEF, SARDINES, PEANUT_BUTTER, ROLLED_OATS, ICED_COFFEE, UHT_MILK, SPORTS_DRINK],
+  // the bunker (task studio-bunker-level-20261109-072224-01): a civil-defence shelter's shelf-stable stores — rations, tins, crackers,
+  // oats, long-life milk, canned coffee, bottled drinks (no fresh-shop snacks)
+  bunker: [RAISINS, HONEY, JERKY, SALTINES, TRAIL_MIX, FIELD_RATION, RATION_BRICK, CORNED_BEEF, SARDINES, PICKLES, WAX_CHEESE, PEANUT_BUTTER,
+    ROLLED_OATS, ICED_COFFEE, UHT_MILK, ICED_TEA, SPORTS_DRINK],
 };
 
 /** The pantry items `level` can realize (its palette; every item for an unknown level). */
@@ -110,7 +114,7 @@ export function holderPantryContext(level: string, kind: string, areaType: strin
 
 /**
  * Context LEANS: multipliers on member weights (the family's keep share is never leaned). Field rations / ration bricks in security and
- * service rooms, lockers and stashes (more in the Reactor); preserved goods in food places; milk / pudding / cheese in fridges and
+ * service rooms, lockers and stashes (more in the Reactor and the Bunker); preserved goods in food places; milk / pudding / cheese in fridges and
  * coolers; iced coffee and trail mix in vending; office snacks in personal / tech rooms; rice crackers in Skyways and Market shops.
  */
 function lean(id: PantryId, c: PantryContext): number {
@@ -118,7 +122,7 @@ function lean(id: PantryId, c: PantryContext): number {
   const t = c.theme, s = c.slot, L = c.level;
   if (id === FIELD_RATION || id === RATION_BRICK) {
     if (t === 'security' || t === 'service' || s === 'arms' || s === 'stash') k *= 2.5;
-    if (L === 'reactor') k *= 1.5;
+    if (L === 'reactor' || L === 'bunker') k *= 1.5; // (+ the bunker's shelter stores: task studio-bunker-level-20261109-072224-01)
     if (s === 'vend' || s === 'cold') k *= 0.4;
   }
   if (id === JERKY && (t === 'security' || t === 'service')) k *= 1.5;

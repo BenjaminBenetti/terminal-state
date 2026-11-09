@@ -50,6 +50,16 @@ export function revealAround(state: CampaignState, id: StationId): CampaignState
 }
 
 /**
+ * Task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE): MAP KNOWLEDGE only — the network stations of `ids` become known
+ * (known ∪ ids; ids not on the network are ignored). Never visited, never current, never a neighbour reveal, never a route / transit:
+ * a revealed station is only drawn on the map (the Bunker core's intel). The same object when nothing is new (idempotent).
+ */
+export function revealStations(state: CampaignState, ids: readonly StationId[]): CampaignState {
+  const known = union(state.known, ids.filter(id => hasNode(state.network, id)));
+  return known === state.known ? state : {...state, known};
+}
+
+/**
  * Whether the train may travel to `to` now: a known neighbour of the current station, or (task campaign-polish-20261103-063841, lane
  * MAP) a VISITED station reachable over visited stations (travelPlan); any other station with the cheat.
  */

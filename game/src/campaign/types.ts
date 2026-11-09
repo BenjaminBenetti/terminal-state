@@ -3,7 +3,7 @@
 // player's own train. Every network node is its OWN persistent world.
 //
 // Identity: a StationId names ONE node (one world, one seed, its own loot / enemies / objectives / dead state); its `archetype`
-// (LevelId 'subway' | 'office' | 'mall' | 'reactor') only says WHICH generator builds it. Two Subway nodes are two different
+// (a LevelId: 'subway' | 'office' | 'mall' | 'market' | 'bunker' | 'skyways' | 'reactor') only says WHICH generator builds it. Two Subway nodes are two different
 // worlds. Section memory / lane stores are keyed by the station (`sectionId({level, section, station})` = `${station}:${section}`).
 //
 // Seeds: the network has its own `seed` (graph layout, names, archetypes) and every node a `levelSeed` derived from it by a
@@ -22,8 +22,18 @@ export type StationId = string;
  * Task studio-survivor-market-20261108-005807-01 (lane LEVEL; user: "5% map allocation from Subway ONLY"): + the Survivor Market 5 % out
  * of the Subway's share — 65 / 10 / 10 / 10 / 5: of the 39 ordinary nodes 25 Subway (incl. the start), 4 Office, 4 Mall, 4 Skyways,
  * 2 Market (largest remainder; the non-Subway shares unchanged).
+ * Task studio-bunker-level-20261109-072224-01 (lane LEVEL; user: a 5 % network allocation ONLY from the basic Subway weight): + the Bunker
+ * 5 % out of the Subway's share, APPENDED LAST — 60 / 10 / 10 / 10 / 5 / 5: of the 39 ordinary nodes 23 Subway (incl. the start), 4 Office,
+ * 4 Mall, 4 Skyways, 2 Market, 2 Bunker (largest remainder; the market / bunker tie goes by key order). Appended last, the special-node
+ * placement draws of the earlier archetypes are unchanged for a network seed: two of its Subway nodes become Bunkers.
  */
-export const ORDINARY_WEIGHTS: Readonly<Record<Exclude<LevelId, 'reactor'>, number>> = {subway: 0.65, office: 0.1, mall: 0.1, skyways: 0.1, market: 0.05};
+export const ORDINARY_WEIGHTS: Readonly<Record<Exclude<LevelId, 'reactor'>, number>> = {subway: 0.6, office: 0.1, mall: 0.1, skyways: 0.1, market: 0.05, bunker: 0.05};
+/**
+ * Task studio-bunker-level-20261109-072224-01 (lane LEVEL): the weights every network generated BEFORE the Bunker was drawn with
+ * (25 / 4 / 4 / 4 / 2, no bunker). Saved networks are never regenerated (validateNetwork accepts every census below): an existing campaign
+ * keeps its worlds — no visited Subway world turns into a Bunker; Bunker nodes appear in campaigns started on this build.
+ */
+export const PRE_BUNKER_WEIGHTS: Readonly<Partial<Record<Exclude<LevelId, 'reactor'>, number>>> = {subway: 0.65, office: 0.1, mall: 0.1, skyways: 0.1, market: 0.05};
 /**
  * Task studio-survivor-market-20261108-005807-01 (lane LEVEL): the weights every network generated BEFORE the Survivor Market was drawn
  * with (27 / 4 / 4 / 4 / 0). Saved networks are never regenerated (validateNetwork accepts every census below): an existing campaign keeps
@@ -37,7 +47,7 @@ export const PRE_MARKET_WEIGHTS: Readonly<Partial<Record<Exclude<LevelId, 'react
  */
 export const PRE_SKYWAYS_WEIGHTS: Readonly<Partial<Record<Exclude<LevelId, 'reactor'>, number>>> = {subway: 0.8, office: 0.1, mall: 0.1};
 
-/** Network size: ~40 nodes = 39 ordinary (largest remainder of the weights: 25 Subway incl. the start, 4 Office, 4 Mall, 4 Skyways, 2 Market) + exactly 1 Reactor. */
+/** Network size: ~40 nodes = 39 ordinary (largest remainder of the weights: 23 Subway incl. the start, 4 Office, 4 Mall, 4 Skyways, 2 Market, 2 Bunker) + exactly 1 Reactor. */
 export const NETWORK_SIZE = {ordinary: 39, reactor: 1} as const;
 
 /** A station of the network. */
