@@ -19,10 +19,10 @@
 
 import {CELL, FLOOR} from '../../grid';
 import {PROP_DEFS, type PropKind, type PropPlacement} from '../../props';
-import type {Area, LightPlacement, Side, StationLayout} from '../../stationTypes';
+import type {Area, LightPlacement, Side} from '../../stationTypes';
 import type {ShopMat} from '../../storefronts';
 import {boxClear, doorSide, placeAgainstWall, propBlocksDoorway, tryPlaceProp, wallRange} from '../../placeKit';
-import {NORMAL, OPP, face, freeFor, island, pocketCells, scanWall, sealOrDrop, solidProp, sweepPockets, wallBox, wallSign, doorPlate, filtration, type Dx} from '../../reactor/complex/bunkerDress';
+import {NORMAL, face, freeFor, island, pocketCells, scanWall, sealOrDrop, solidProp, sweepPockets, wallBox, wallSign, doorPlate, filtration, type Dx} from '../../reactor/complex/bunkerDress';
 import {BUNKER_GENERATOR_KIND} from '../bunkerTypes';
 import {shelterDx} from '../dress';
 import type {FloorDressCtx} from './floorApi';
@@ -275,8 +275,8 @@ function gallery(D: Dx, a: Area): void {
 /** The cooling feed gallery (the service stair's landing hall on the well's east side): the operator's console turned to the drop. */
 function feedGallery(D: Dx, a: Area): void {
   rimLine(D, a);
-  // the console free-standing near the rim, its front (the operator's side) to the east: he faces the room, his back... no — he faces
-  // the well over the console, so its front is to the east (the operator stands east of it, looking west over it into the nave)
+  // the operator's console free-standing in the hall, its front (the operator's side) to the east: standing at it he looks west over
+  // its desk and the rim into the core's nave
   island(D, a, 'bunkerControlConsole', 'E', 0.8);
   const walls = wallsByDoors(D, a).filter(s => s !== 'W');
   scanWall(D, a, 'bunkerPipeBank', walls, 0.9);
@@ -511,7 +511,4 @@ export function dressFloor4(ctx: FloorDressCtx): void {
   S.props += layout.props.length - p0;
   S.decor = layout.decor.length - d0;
   S.signs = layout.signs.length - s0;
-  void OPP;
 }
-
-export type {StationLayout};
