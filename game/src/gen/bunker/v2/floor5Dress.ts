@@ -19,11 +19,11 @@
 // Storage opens (server racks, cabinets, filing cabinets, footlockers, tool chest, archive boxes: existing openables, loot by the
 // room's purpose / the container); loose things move (chairs, crates, plants: their kinds' physics); anchored plant is classified.
 
-import {CELL, FLOOR} from '../../grid';
+import {CELL} from '../../grid';
 import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from '../../props';
 import type {Area, LightPlacement, Side} from '../../stationTypes';
-import {doorSide, placeAgainstWall, strictWallOk, tryPlaceProp, wallRange, wallSpot, mountProp} from '../../placeKit';
-import {NORMAL, OPP, ceilingDuct, doorPlate, dormitory, face, island, radioRoom, scanWall, sealOrDrop, sweepPockets, wallBox, wallSign, rotFacing, type Dx} from '../../reactor/complex/bunkerDress';
+import {begin, commit, doorSide, placeAgainstWall, rollback, strictWallOk, tryPlaceProp, wallRange, wallSpot, mountProp} from '../../placeKit';
+import {NORMAL, ceilingDuct, doorPlate, dormitory, face, radioRoom, rotFacing, scanWall, sealOrDrop, sweepPockets, wallBox, wallSign, type Dx} from '../../reactor/complex/bunkerDress';
 import {BUNKER_CORE_KIND} from '../bunkerTypes';
 import {shelterDx} from '../dress';
 import type {FloorDressCtx} from './floorApi';
@@ -37,7 +37,7 @@ export const F5_DRESS_STATS = {props: 0, decor: 0, lights: 0, signs: 0, mainfram
 
 /** A wall-backed placement at `t` along `side` (strict real-wall check + the placement primitive); hero kinds sealed. */
 function atWall(D: Dx, a: Area, side: Side, t: number, kind: PropKind, front: number, seal = false): PropPlacement | null {
-  if (!strictWallOk(D.ctx, a, side, t, kind)) { WHY[`${kind} wall`] = (WHY[`${kind} wall`] ?? 0) + 1; return null; }
+  if (!strictWallOk(D.ctx, a, side, t, kind)) { F5_REFUSED[`${kind} wall`] = (F5_REFUSED[`${kind} wall`] ?? 0) + 1; return null; }
   const s = wallSpot(a, side, t, kind);
   if (seal) {
     // a sealed hero body: its front face on a cell boundary (its collision cells = the cells it visibly covers, none half-taken)
@@ -46,20 +46,21 @@ function atWall(D: Dx, a: Area, side: Side, t: number, kind: PropKind, front: nu
     if (side === 'N' || side === 'S') s.z = fc - nz * off; else s.x = fc - nx * off;
   }
   const p = tryPlaceProp(D.ctx, a, kind, r3(s.x), r3(s.z), s.rot, {front});
-  if (!p) WHY[`${kind} place`] = (WHY[`${kind} place`] ?? 0) + 1;
-  if (p && seal && !sealOrDrop(D, a, p)) { WHY[`${kind} seal`] = (WHY[`${kind} seal`] ?? 0) + 1; return null; }
+  if (!p) F5_REFUSED[`${kind} place`] = (F5_REFUSED[`${kind} place`] ?? 0) + 1;
+  if (p && seal && !sealOrDrop(D, a, p)) { F5_REFUSED[`${kind} seal`] = (F5_REFUSED[`${kind} seal`] ?? 0) + 1; return null; }
   return p;
 }
-export const WHY: Record<string, number> = {};
+/** QA / tests: placements of the last storey-5 dress refused, by kind and check (wall backing / placement / seal). */
+export const F5_REFUSED: Record<string, number> = {};
 
 /** scanWall for a sealed hero body: every 0.25 m along the walls (nearest `prefer` first), front face on a cell boundary. */
-function scanSeal(D: Dx, a: Area, kind: PropKind, sides: readonly Side[], front: number, prefer?: number): PropPlacement | null {
+function scanSeal(D: Dx, a: Area, kind: PropKind, sides: readonly Side[], front: number, prefer?: number, maxOff = Infinity): PropPlacement | null {
   const w = PROP_DEFS[kind].w;
   for (const sd of sides) {
     const [lo, hi] = wallRange(a, sd);
     const ts: number[] = [];
-    for (let t = lo + w / 2 + 0.1; t <= hi - w / 2 - 0.1 + 1e-6; t += 0.25) ts.push(Math.round(t * 4) / 4);
     const c = prefer ?? (lo + hi) / 2;
+    for (let t = lo + w / 2 + 0.1; t <= hi - w / 2 - 0.1 + 1e-6; t += 0.25) if (Math.abs(t - c) <= maxOff) ts.push(Math.round(t * 4) / 4);
     ts.sort((p, q) => Math.abs(p - c) - Math.abs(q - c) || p - q);
     for (const t of ts) { const p = atWall(D, a, sd, t, kind, front, true); if (p) return p; }
   }
@@ -82,11 +83,11 @@ function rank(D: Dx, a: Area, side: Side, t0: number, t1: number, kinds: readonl
     const slot = k++ % (bank + 1);
     if (slot === bank) continue; // the gap between banks
     const kind = kinds[Math.floor((k - 1) / (bank + 1)) % kinds.length];
-    if (!strictWallOk(D.ctx, a, side, t, kind)) { WHY[`${kind} wall`] = (WHY[`${kind} wall`] ?? 0) + 1; continue; }
+    if (!strictWallOk(D.ctx, a, side, t, kind)) { F5_REFUSED[`${kind} wall`] = (F5_REFUSED[`${kind} wall`] ?? 0) + 1; continue; }
     const off = kind === 'bunkerMainframe' ? 0.5 : PROP_DEFS[kind].d / 2 + 0.03;
     const x = alongX ? t : fc - nx * off, z = alongX ? fc - nz * off : t;
     const p = tryPlaceProp(D.ctx, a, kind, r3(x), r3(z), wallSpot(a, side, t, kind).rot, {front});
-    if (p) out.push(p); else WHY[`${kind} place`] = (WHY[`${kind} place`] ?? 0) + 1;
+    if (p) out.push(p); else F5_REFUSED[`${kind} place`] = (F5_REFUSED[`${kind} place`] ?? 0) + 1;
   }
   return out;
 }
@@ -144,21 +145,23 @@ function dressNave(D: Dx, a: Area, gallery: Area | undefined): void {
   // (the ranks run on to the east wall: the cluster's held front strip refuses placements in front of it)
   const east = x1 - 0.05;
   // 1) the coolant risers: the pipe bank against the south wall on the cross axis (it terminates the view in from the gallery)
-  const pipe = atWall(D, a, 'S', axc, 'bunkerPipeBank', 0.9, true);
+  // (on the axis, else the nearest free stretch of the south wall within 4 m: the dresser's few cabinets may hold the exact spot)
+  const pipe = scanSeal(D, a, 'bunkerPipeBank', ['S'], 0.9, axc, 4.0);
   if (pipe) {
     // the risers climb on to the ceiling: three steel pipes and a cable ladder above the bank's top
     const top = PROP_DEFS.bunkerPipeBank.h, rel = a.ceil - D.base;
-    for (const dx of [-1.2, -0.2, 0.8]) D.decor('steelBright', wallBox(a, 'S', axc + dx - 0.11, axc + dx + 0.11, 0.25, 0.47), top - 0.2, rel - 0.05);
-    D.decor('steelDark', wallBox(a, 'S', axc + 1.35, axc + 1.75, 0.05, 0.12), top - 0.2, rel - 0.05);
+    for (const dx of [-1.2, -0.2, 0.8]) D.decor('steelBright', wallBox(a, 'S', pipe.x + dx - 0.11, pipe.x + dx + 0.11, 0.25, 0.47), top - 0.2, rel - 0.05);
+    D.decor('steelDark', wallBox(a, 'S', pipe.x + 1.35, pipe.x + 1.75, 0.05, 0.12), top - 0.2, rel - 0.05);
   }
-  // 2) the ranks along both long walls, either side of the crossing: tape cabinets and server racks in banks of four (the west
-  //    ranks start with tape cabinets on the north wall / racks on the south wall, the east ranks the other way round)
+  // 2) the ranks along both long walls, either side of the crossing, in banks of four: the north wall is the TAPE WALL (reel-to-reel
+  //    cabinets only, facing the operators' desks), the south wall alternates server racks (openable: the storey's electronics spares)
+  //    and tape cabinets either side of the coolant risers
   const west0 = x0 + 0.05, west1 = ax0 - 1.0, east0 = ax1 + 1.0;
   for (const side of ['N', 'S'] as Side[]) {
-    const order: PropKind[] = side === 'N' ? ['bunkerMainframe', 'serverRack'] : ['serverRack', 'bunkerMainframe'];
+    const order: PropKind[] = side === 'N' ? ['bunkerMainframe'] : ['serverRack', 'bunkerMainframe'];
     const sideEast = side === 'S' && pipe ? Math.max(east0, pipe.x + pipe.hx + 0.5) : east0;
     const sideWest1 = side === 'S' && pipe ? Math.min(west1, pipe.x - pipe.hx - 0.5) : west1;
-    for (const p of [...rank(D, a, side, west0, sideWest1, order, 4, 0.9), ...rank(D, a, side, sideEast, east, [order[1], order[0]], 4, 0.9)]) {
+    for (const p of [...rank(D, a, side, west0, sideWest1, order, 4, 0.5), ...rank(D, a, side, sideEast, east, [...order].reverse(), 4, 0.5)]) {
       if (p.kind === 'bunkerMainframe') S.mainframes++; else S.racks++;
     }
   }
@@ -167,14 +170,22 @@ function dressNave(D: Dx, a: Area, gallery: Area | undefined): void {
   for (const sz of [-1, 1]) for (const dxm of [ax0 - 5.0, ax0 - 2.4]) {
     const z = r3(zc + sz * 2.25), x = Math.round(dxm * 4) / 4;
     const desk = tryPlaceProp(D.ctx, a, 'desk', x, z, -Math.PI / 2);
-    if (!desk) { WHY['nave desk'] = (WHY['nave desk'] ?? 0) + 1; continue; }
+    if (!desk) { F5_REFUSED['nave desk'] = (F5_REFUSED['nave desk'] ?? 0) + 1; continue; }
     S.consoles++;
     HOSTED.push(desk);
     tryPlaceProp(D.ctx, a, 'officeSwivelChair', r3(x - PROP_DEFS.desk.d / 2 - 0.4), z, Math.PI / 2, {laneOk: true});
   }
-  // 4) the long-wall pilasters (to the storey-4 slab) and the cable trays across the hall at 6 m; a painted aisle to the cluster
+  // 4) the architecture of the tall hall: steel pilasters climbing the long walls to the ceiling between the banks, a steel band at
+  //    the storey-4 slab line, cable trays across the hall at 6 m, a painted aisle from the portal to the cluster
   const rel = a.ceil - D.base;
-  for (let x = x0 + 3.5; x < x1 - 3; x += 7) for (const side of ['N', 'S'] as Side[]) D.decor('steelDark', wallBox(a, side, x - 0.25, x + 0.25, 0, 0.18), 2.4, Math.min(rel, 7.2));
+  for (let x = x0 + 3.0; x < x1 - 1.0; x += 5.0) for (const side of ['N', 'S'] as Side[]) {
+    if (pipe && side === 'S' && Math.abs(x - pipe.x) < pipe.hx + 0.6) continue;
+    D.decor('steelDark', wallBox(a, side, x - 0.22, x + 0.22, 0, 0.22), 2.3, rel - 0.02);
+  }
+  for (const side of ['N', 'S', 'E', 'W'] as Side[]) {
+    const [lo, hi] = wallRange(a, side);
+    D.decor('steelDark', wallBox(a, side, lo, hi, 0, 0.12), 6.75, 7.0);
+  }
   for (let x = x0 + 2; x < x1 - 1.5; x += 4) {
     D.decor('grille', {x0: x - 0.3, x1: x + 0.3, z0: z0 + 0.05, z1: z1 - 0.05}, 6.0, 6.08);
     D.decor('steelDark', {x0: x - 0.32, x1: x + 0.32, z0: z0 + 0.05, z1: z1 - 0.05}, 5.98, 6.0);
@@ -182,11 +193,28 @@ function dressNave(D: Dx, a: Area, gallery: Area | undefined): void {
   const ae = core ? core.x - core.hx - 3.1 : x1 - 1;
   D.decor('plasticSeat', {x0: x0 + 0.1, x1: ae, z0: zc - 1.55, z1: zc - 1.45}, 0, 0.008);
   D.decor('plasticSeat', {x0: x0 + 0.1, x1: ae, z0: zc + 1.45, z1: zc + 1.55}, 0, 0.008);
-  // 5) the light: two more rows of pendants over the ranks (the dresser hung one down the middle), high work lights over the cluster
+  // 5) the STATUS BOARD over the cluster: a 7 x 3 m black board in a steel frame on the east wall (the landmark that ends the axis,
+  //    seen from the portal and from storey 4's catwalk), rows of indicator lamps (a few dead), an amber band, the board's name
+  if (core) {
+    const bz0 = core.z - 3.5, bz1 = core.z + 3.5, by0 = 4.4, by1 = 7.4;
+    const fb = (t0: number, t1: number, o0: number, o1: number) => wallBox(a, 'E', t0, t1, o0, o1);
+    D.decor('black', fb(bz0, bz1, 0, 0.06), by0, by1);
+    for (const [t0, t1, y0, y1] of [[bz0 - 0.15, bz1 + 0.15, by0 - 0.15, by0], [bz0 - 0.15, bz1 + 0.15, by1, by1 + 0.15], [bz0 - 0.15, bz0, by0, by1], [bz1, bz1 + 0.15, by0, by1]] as const) {
+      D.decor('steelDark', fb(t0, t1, 0, 0.1), y0, y1);
+    }
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 6; c++) {
+      if ((r * 7 + c * 3) % 5 === 0) continue;
+      const t = bz0 + 0.7 + c * 1.12, y = by0 + 0.55 + r * 0.6;
+      D.decor(r === 3 ? 'plasticSeat' : 'accent', fb(t - 0.09, t + 0.09, 0.06, 0.08), y - 0.09, y + 0.09);
+    }
+    D.decor('plasticSeat', fb(bz0, bz1, 0.06, 0.075), by1 - 0.42, by1 - 0.36);
+    wallSign(D, a, 'E', core.z, by1 + 0.6, {kind: 'service', text: 'CENTRAL PROCESSING CORE', w: 3.6});
+    light(D, a, core.x - core.hx - 4.0, core.z, 8.6, Math.PI / 2, false, 0.8);
+  }
+  // 6) the light: two more rows of pendants over the ranks (the dresser hung one down the middle)
   for (let x = x0 + 3; x < x1 - 2; x += 4.5) for (const z of [z0 + 2.2, z1 - 2.2]) light(D, a, x, z, 5.4, 0, false, 0.9);
-  // 6) plates: the hall's name over the portal side, the shelter's motto over the cluster
+  // 7) the hall's name over the portal
   wallSign(D, a, 'W', zc, 4.2, {kind: 'service', text: 'CENTRAL PROCESSING · LEVEL 5', w: 3.2});
-  wallSign(D, a, 'E', zc, 5.4, {kind: 'info', text: 'CORE · DO NOT POWER DOWN', w: 3.0});
 }
 
 /** Control-room / console desks that take a CRT terminal on their top once the pocket sweep is done. */
@@ -226,20 +254,33 @@ function dressCooling(D: Dx, a: Area): void {
   const rel = a.ceil - D.base;
   // pipe banks against the east wall (where the ceiling clears them)
   if (rel >= PROP_DEFS.bunkerPipeBank.h + 0.3) for (let i = 0; i < 2; i++) scanSeal(D, a, 'bunkerPipeBank', ['E'], 0.9, (a.y + a.h * (i ? 0.75 : 0.3)) * CELL);
-  // a line of coolant pumps on their skids down the plant (islands, their motors toward the walkway on the axis side)
-  const xs = (Math.floor(a.x + a.w * 0.62) + 0.5) * CELL; // (a cell centre: the 1.36 m skid covers three whole cells)
-  for (const f of [0.22, 0.5, 0.78]) {
-    const z = Math.round((a.y + a.h * f) * CELL * 2) / 2;
-    const p = tryPlaceProp(D.ctx, a, 'bunkerCoolantPump', r3(xs), r3(z), Math.PI / 2, {ring: 0.7});
-    if (p && sealOrDrop(D, a, p)) S.pumps++;
+  // the freight walkway on the axis (the plant's west side, door to door): painted edges; the machinery stands east of it
+  const ax0 = a.x * CELL, z0 = a.y * CELL, z1 = (a.y + a.h) * CELL;
+  const nd = D.doors(a).find(d => doorSide(d, a) === 'N' && d.w > 1);
+  const wx0 = nd ? nd.x * CELL : ax0 + 0.5, wx1 = nd ? (nd.x + nd.w) * CELL : ax0 + 3.5;
+  for (const x of [wx0 - 0.1, wx1]) D.decor('plasticSeat', {x0: x, x1: x + 0.1, z0: z0 + 0.1, z1: z1 - 0.1}, 0, 0.008);
+  // two columns of coolant pumps on their skids (islands, cell-aligned: a skid's 1.36 m covers three whole cells, its 3.5 m seven)
+  const pumps: PropPlacement[] = [];
+  const cols = [wx1 + 3.25, wx1 + 6.25].map(x => (Math.floor(x / CELL) + 0.5) * CELL);
+  for (const x of cols) for (const f of [0.3, 0.72]) {
+    const z = Math.round((z0 + (z1 - z0) * f - 0.25) * 2) / 2 + 0.25;
+    const p = tryPlaceProp(D.ctx, a, 'bunkerCoolantPump', r3(x), r3(z), Math.PI / 2, {ring: 0.7});
+    if (p && sealOrDrop(D, a, p)) { S.pumps++; pumps.push(p); }
+  }
+  // the overhead coolant headers: two pipes on a rack down the plant over the walkway's edge, a drop to every pump, hangers
+  const hx = wx1 + 1.2, yh = Math.min(rel - 0.9, 4.9);
+  for (const [o, m] of [[0, 'steelBright'], [0.45, 'plasticSeat']] as const) D.decor(m, {x0: hx + o, x1: hx + o + 0.28, z0: z0 + 0.3, z1: z1 - 0.3}, yh, yh + 0.28);
+  for (let z = z0 + 1.5; z < z1 - 1; z += 3) D.decor('steelDark', {x0: hx - 0.1, x1: hx + 0.85, z0: z, z1: z + 0.08}, yh - 0.08, rel);
+  for (const p of pumps) {
+    D.decor('steelBright', {x0: hx + 0.28, x1: p.x, z0: p.z - 1.3, z1: p.z - 1.05}, yh + 0.02, yh + 0.26);
+    D.decor('steelBright', {x0: p.x - 0.12, x1: p.x + 0.12, z0: p.z - 1.3, z1: p.z - 1.05}, PROP_DEFS.bunkerCoolantPump.h - 0.3, yh + 0.26);
   }
   // air handlers: CRAC units along the north wall, air filtration on the south
   for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'cracUnit', {sides: ['N'], front: 1.0, tries: 16});
   for (let i = 0; i < 2; i++) if (!scanWall(D, a, 'airFilterUnit', ['S', 'E'], 1.0, (a.x + a.w * 0.75) * CELL)) break;
   ceilingDuct(D, a, 'E', 0.62);
-  ceilingDuct(D, a, 'N', 0.45);
-  // a second row of fixtures over the pumps
-  for (const f of [0.25, 0.75]) light(D, a, xs, (a.y + a.h * f) * CELL, Math.min(rel - 0.1, 4.8), Math.PI / 2, false, 0.85);
+  // a row of fixtures over the pumps (the dresser hung one down the middle)
+  for (const f of [0.2, 0.5, 0.8]) light(D, a, (cols[0] + cols[1]) / 2, z0 + (z1 - z0) * f, Math.min(rel - 0.1, 4.5), Math.PI / 2, false, 0.85);
 }
 
 function dressBay(D: Dx, a: Area, lift: {x: number; y: number; w: number; h: number}): void {
@@ -248,10 +289,12 @@ function dressBay(D: Dx, a: Area, lift: {x: number; y: number; w: number; h: num
   for (const b of [{x0: bx0, x1: bx1, z0: bz0, z1: bz0 + 0.15}, {x0: bx0, x1: bx0 + 0.15, z0: bz0, z1: bz1}, {x0: bx1 - 0.15, x1: bx1, z0: bz0, z1: bz1}]) D.decor('plasticSeat', b, 0, 0.008);
   for (let x = bx0 + 0.4; x < bx1 - 0.3; x += 0.8) D.decor('black', {x0: x, x1: x + 0.3, z0: bz0 + 0.01, z1: bz0 + 0.14}, 0.008, 0.01);
   wallSign(D, a, 'S', (bx0 + bx1) / 2, 3.45, {kind: 'service', text: 'CARGO LIFT · LEVEL 5', w: 2.4});
+  // (the freight lobby is a hall with no loot purpose of its own: what waits here is consignments — carton stacks and pallets, not
+  // loot holders; the storey's finds sit in its programme rooms)
   const far: Side[] = ['N', 'E'];
-  for (let i = 0; i < 4; i++) placeAgainstWall(D.ctx, a, 'crate', {sides: far, tries: 16});
-  placeAgainstWall(D.ctx, a, 'parcelPallet', {sides: far, tries: 16});
-  placeAgainstWall(D.ctx, a, 'rollingToolChest', {sides: ['N'], tries: 16});
+  for (let i = 0; i < 3; i++) placeAgainstWall(D.ctx, a, 'cartonStack', {sides: far, tries: 16});
+  for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'parcelPallet', {sides: far, tries: 16});
+  placeAgainstWall(D.ctx, a, 'handTruck', {sides: ['N'], tries: 16});
   placeAgainstWall(D.ctx, a, 'tripodWorkLight', {sides: ['N', 'E'], tries: 12});
 }
 
@@ -261,16 +304,16 @@ function dressLibrary(D: Dx, a: Area): void {
   const x0 = a.x * CELL, x1 = (a.x + a.w) * CELL, z0 = a.y * CELL + 1.4, z1 = (a.y + a.h) * CELL - 1.6;
   const pitch = 2 * sh.d + 1.6;
   let n = 0;
-  for (let x = x0 + 2.0; x + sh.d <= x1 - 1.6 && n < 8; x += pitch) {
-    for (let z = z0 + sh.w / 2; z + sh.w / 2 <= z1 && n < 8; z += sh.w + 0.02) {
+  for (let x = x0 + 2.0; x + sh.d <= x1 - 1.6 && n < 6; x += pitch) {
+    for (let z = z0 + sh.w / 2; z + sh.w / 2 <= z1 && n < 6; z += sh.w + 0.02) {
       for (const sg of [-1, 1]) {
         const p = tryPlaceProp(D.ctx, a, 'shelf', r3(x + sg * (sh.d / 2 + 0.01)), r3(z), sg < 0 ? -Math.PI / 2 : Math.PI / 2, {laneOk: true});
         if (p) n++;
       }
     }
   }
-  for (let i = 0; i < 3; i++) placeAgainstWall(D.ctx, a, 'archiveBoxes', {tries: 16});
-  for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'filingCabinet', {tries: 16});
+  for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'archiveBoxes', {tries: 16});
+  placeAgainstWall(D.ctx, a, 'filingCabinet', {tries: 16});
   const desk = scanWall(D, a, 'desk', ['W', 'N', 'S'], 0.8);
   if (desk) HOSTED.push(desk);
 }
@@ -278,17 +321,26 @@ function dressLibrary(D: Dx, a: Area): void {
 function dressCommons(D: Dx, a: Area): void {
   const S = F5_DRESS_STATS;
   const rel = a.ceil - D.base;
-  // the planter garden on the wall opposite the service stair's landing (north), a warm lamp over it
-  const ds = D.doors(a).filter(d => doorSide(d, a) === 'N');
-  const [lo, hi] = wallRange(a, 'N');
-  let first = -1, last = -1;
-  for (let t = lo + 0.8; t <= hi - 0.8 && S.planters < 4; t += 0.25) {
-    if (ds.some(d => Math.abs(t - (d.x + d.w / 2) * CELL) < d.w * CELL / 2 + 1.6)) continue;
-    const p = atWall(D, a, 'N', t, 'planterTree', 0.6);
-    if (p) { S.planters++; if (first < 0) first = t; last = t; t += 1.2; }
+  // THE GARDEN COURT: four planter trees at the corners of a 4 x 3.5 m court, two benches facing each other inside it, a warm
+  // grow lamp low over it — the night shift's patch of green, 35 m underground. Tried round the room's middle (the dresser's table
+  // and stock may hold a spot); all four planters or nothing (one transaction).
+  const mx = (a.x + a.w / 2) * CELL, mz = (a.y + a.h / 2) * CELL;
+  const pd = PROP_DEFS.planterTree, bd = PROP_DEFS.bench;
+  const centres: [number, number][] = [];
+  for (const dz of [0, -1, 1, -2, 2, -3, 3]) for (const dx of [0, -1, 1, -2, 2, -3, 3]) centres.push([Math.round(mx + dx) , Math.round(mz + dz)]);
+  for (const [cx, cz] of centres) {
+    begin(D.ctx);
+    const hw = 2.0 - pd.w / 2, hd = 1.75 - pd.d / 2;
+    let ok = 0;
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) if (tryPlaceProp(D.ctx, a, 'planterTree', r3(cx + sx * hw), r3(cz + sz * hd), 0)) ok++;
+    if (ok < 4) { rollback(D.ctx); continue; }
+    for (const sz of [-1, 1]) tryPlaceProp(D.ctx, a, 'bench', r3(cx), r3(cz + sz * (1.75 - bd.d / 2 - 0.15)), sz < 0 ? 0 : Math.PI, {laneOk: true});
+    commit(D.ctx);
+    S.planters += 4;
+    light(D, a, cx, cz, Math.min(rel - 0.1, 3.2), 0, true, 0.9);
+    D.decor('woodVeneer', {x0: cx - 2.1, x1: cx + 2.1, z0: cz - 1.85, z1: cz + 1.85}, 0, 0.012);
+    break;
   }
-  if (first >= 0) light(D, a, (first + last) / 2, a.y * CELL + 1.2, Math.min(rel - 0.1, 3.4), 0, true, 0.9);
-  for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'pottedPlantSmall', {tries: 12});
   // a lounge corner (armchairs) and two mess tables with folding chairs, the ping-pong table
   for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'loungeArmchair', {sides: ['E', 'N'], front: 0.6, tries: 16});
   const tbl = PROP_DEFS.table, ch = PROP_DEFS.foldingChair;
@@ -318,7 +370,7 @@ function dressGallery(D: Dx, a: Area): void {
   for (let i = 0; i < 3; i++) placeAgainstWall(D.ctx, a, 'bench', {sides: ['N'], front: 0.6, tries: 20});
   placeAgainstWall(D.ctx, a, 'noticeBoard', {sides: ['N', 'S'], y: 1.1, tries: 16});
   mountOn(D, a, ['S', 'N'], 'fireExtinguisherCabinet', 0.6, 1);
-  for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'pottedPlantSmall', {sides: ['N', 'S'], tries: 12});
+  placeAgainstWall(D.ctx, a, 'pottedPlantSmall', {sides: ['N', 'S'], tries: 12});
   ceilingDuct(D, a, 'S', 0.45);
   for (let x = a.x * CELL + 2.5; x < (a.x + a.w) * CELL - 2; x += 5) light(D, a, x, (a.y + a.h / 2) * CELL, rel - 0.05, 0, true, 0.85);
 }
@@ -330,7 +382,7 @@ export function dressFloor5(ctx: FloorDressCtx): void {
   S.mainframes = S.racks = S.consoles = S.pumps = S.planters = S.lights = 0;
   S.skipped = [];
   HOSTED.length = 0;
-  for (const k of Object.keys(WHY)) delete WHY[k];
+  for (const k of Object.keys(F5_REFUSED)) delete F5_REFUSED[k];
   const {layout, carved} = ctx;
   const A = (k: string): Area | undefined => (carved.areas[k] !== undefined ? layout.areas[carved.areas[k]] : undefined);
   const mine = Object.values(carved.areas).map(id => layout.areas[id]);
@@ -352,7 +404,7 @@ export function dressFloor5(ctx: FloorDressCtx): void {
   // plates in the shelter's words
   step('plates', () => {
     const P: [string, string, string][] = [
-      ['nave', 'gallery', 'PROCESSING HALL'], ['nave', 'narthex', 'PROCESSING HALL · CLEAN AREA'], ['narthex', 'gallery', 'CLEAN-ROOM LOBBY'],
+      ['nave', 'gallery', 'PROCESSING HALL'], ['nave', 'narthex', 'PROCESSING HALL · CLEAN AREA'], ['narthex', 'gallery', 'PROCESSING HALL · CLEAN ROOM'],
       ['control', 'gallery', 'CORE CONTROL'], ['control', 'cooling', 'CORE CONTROL'], ['cooling', 'bay', 'COOLING PLANT'], ['chiller', 'cooling', 'CHILLER ROOM · DANGER'],
       ['switch', 'gallery', 'SWITCH ROOM · DANGER'], ['library', 'bay', 'TAPE LIBRARY'], ['commons', 'bay', 'OPERATORS\' COMMONS'], ['bunks', 'commons', 'BUNK ROOM · NIGHT SHIFT'],
       ['wash', 'commons', 'WASHROOM'],
@@ -366,16 +418,15 @@ export function dressFloor5(ctx: FloorDressCtx): void {
       const side: Side = an.out === 'S' ? 'N' : 'S';
       wallSign(D, out, side, (an.gate.x + an.gate.w / 2) * CELL + an.gate.w * CELL / 2 + 1.4, 2.2, {kind: 'service', text: V2_STOREY_PLATES[ctx.level], w: 2.4});
     }
-    // wayfinding from the main stair: the processing hall (west, via the clean-room lobby) and the core control / freight lift
-    if (gallery) {
-      const nd = A('narthex') && doorBetween(D, gallery, A('narthex')!);
-      if (nd) wallSign(D, gallery, 'N', (nd.x + nd.w / 2) * CELL, 2.3, {kind: 'info', text: 'PROCESSING HALL', w: 1.9, arrow: 'down'});
+    // the arrival: facing the main stair's door across the gallery, the storey's name beside the clean-room lobby's door
+    const narthex = A('narthex');
+    if (gallery && narthex) {
+      const nd = doorBetween(D, gallery, narthex);
+      if (nd) wallSign(D, gallery, 'S', (nd.x + nd.w) * CELL + 1.8, 2.25, {kind: 'service', text: 'CENTRAL PROCESSING CORE', w: 2.6});
     }
   });
   // the guarantee: no floor pocket on the storey (a prop of this pass that closes one off goes again); then the desk terminals
   sweepPockets(D, mine, p0);
   hostTerminals(D);
-  S.skipped.push(JSON.stringify(WHY));
   S.props = layout.props.length - p0; S.decor = layout.decor.length - d0; S.signs = layout.signs.length - s0;
-  void FLOOR; void NORMAL; void OPP; void face; void island;
 }

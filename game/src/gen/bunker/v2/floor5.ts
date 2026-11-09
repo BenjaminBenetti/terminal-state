@@ -51,7 +51,8 @@ function carve5(ctx: FloorCarveCtx): FloorCarveResult | null {
   // --- the south band: gallery (main stair apron), narthex, nave -------------------------------------------------------------------
   const gallery = add('gallery', R(36, V.y - 10, V.x + V.w - 36, 9), 'passage', 'utility', F5_CLEAR.gallery, null, 'Operators\' gallery', BUNKER_PURPOSE.lock);
   if (!gallery) return null;
-  const nave = add('nave', {...V}, 'room', 'utility', own.ceil - ctx.base, gallery, 'Central processing hall', BUNKER_PURPOSE.lock);
+  // (purpose 'office-server': the tech theme — the racks' and desks' finds read as computing spares, not generic supplies)
+  const nave = add('nave', {...V}, 'room', 'utility', own.ceil - ctx.base, gallery, 'Central processing hall', 'office-server');
   // the clean-room lobby west of the nave: its east wall is the nave's west wall (the portal)
   const nx0 = 38 - rng.int(0, 2);
   const narthex = add('narthex', R(nx0, V.y, V.x - 1 - nx0, 14), 'room', 'crew-room', F5_CLEAR.narthex, gallery, 'Clean-room lobby', 'locker-room');
@@ -89,7 +90,9 @@ function carve5(ctx: FloorCarveCtx): FloorCarveResult | null {
   ctx.door(R(V.x - 1, py, 1, portalH), narthex, nave, DOOR.grand);
   ctx.door(R(ax, V.y - 1, aw, 1), gallery, nave, DOOR.grand);
   // gallery -> narthex (west of the main stair's door), gallery -> control (the axis), gallery -> switch room
-  const ndx = narthex.x + 1 + rng.int(0, Math.max(0, Math.min(narthex.w - 6, 44 - narthex.x - 1)));
+  // (the lobby's door sits in front of the main stair's landing door: step off the stair, the clean-room lobby is straight ahead)
+  const sa = ctx.frame.anchors.find(a => a.id === 'stairA')!;
+  const ndx = Math.min(sa.gate.x - 1, V.x - 2 - 4);
   ctx.door(R(ndx, V.y - 1, 4, 1), gallery, narthex, DOOR.room);
   ctx.door(R(ax, gallery.y - 1, aw, 1), gallery, control, DOOR.wide);
   ctx.door(R(58 + rng.int(0, 3), gallery.y - 1, 4, 1), gallery, sw, DOOR.room);
