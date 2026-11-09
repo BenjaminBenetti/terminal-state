@@ -100,6 +100,39 @@ export interface MeleeSpec {
   recovery: number;
   /** Sweep rays: [yaw, pitch] offsets (radians) from the crosshair, tried centre first (combat/melee.ts KNIFE_RAYS). */
   rays: readonly (readonly [number, number])[];
+  // ---- Task studio-weapon-variety-production-20261109-224355-01 (lane MELEE): generic, data-driven extensions. Every field is
+  // optional; absent = the knife's behaviour exactly (one target, no knockback / stagger / stamina / charge, chips-only world hits).
+  /** Distinct targets one swing may strike (the per-swing hit set: each at most once; combat/melee.ts resolveMeleeSweep). Default 1. */
+  maxTargets?: number;
+  /** Damage multiplier for the 2nd+ target of a sweep (the first, centre-most target takes the full hit). Default 1. */
+  secondaryMult?: number;
+  /** Push (m) given to a standard-mass target (an ordinary zombie) along the swing; scaled by the target's mass (combat/meleeImpact.ts). */
+  knockback?: number;
+  /** Share of the push turned sideways along a horizontal sweep (to the left: the swings run right -> left). Default 0. */
+  knockSide?: number;
+  /** Hit stagger (s) on a target the brain lets stagger (its own cooldown / attack / boss rules). Absent = never staggers (as the knife). */
+  stagger?: number;
+  /** Stamina meter % one swing costs (paid at the contact; a short meter = a winded swing: combat/meleeImpact.ts MELEE_WINDED). */
+  stamina?: number;
+  /** Held in both hands (two-handed carry / swing poses: weapons/meleeView.ts). */
+  twoHanded?: boolean;
+  /** A CHARGE swing: holding the wound-up (ready) pose charges it over `time` s; the release's charge 0..1 scales the hit. */
+  charge?: MeleeCharge;
+  /** Struck props / loose items take the normal hit interaction (per-instance damage, a shove of a movable prop); absent = chips only. */
+  propHits?: boolean;
+}
+
+/**
+ * Lane MELEE (weapon variety): a charge swing's scaling. `k` = seconds held in the ready pose / `time` (0 = a tap, 1 = full charge;
+ * holding longer keeps 1). Each pair is [at a tap, at full charge], linear in between: damage and knockback MULTIPLY the def's
+ * damage / `knockback`, `stagger` is the stagger in seconds (absent: the spec's `stagger`), `stamina` multiplies the spec's cost.
+ */
+export interface MeleeCharge {
+  time: number;
+  damage: readonly [number, number];
+  knockback: readonly [number, number];
+  stagger?: readonly [number, number];
+  stamina?: readonly [number, number];
 }
 
 /** Lane FEEL: the stage of a melee weapon's cycle (null = the carry pose, nothing under way). */
@@ -108,6 +141,11 @@ export type MeleeStage = 'windup' | 'ready' | 'swing' | 'recover';
 /** Lane FEEL: minimum seconds between two swing starts of a melee weapon (a tap every frame cannot beat it). */
 export function meleeCadence(m: Pick<MeleeSpec, 'windup' | 'sweep' | 'recovery'>): number {
   return m.windup + m.sweep + m.recovery;
+}
+
+/** Lane MELEE (weapon variety): the charge 0..1 after holding a charge weapon's ready pose for `heldS` s (full at `time`, then kept). */
+export function meleeChargeK(c: Pick<MeleeCharge, 'time'>, heldS: number): number {
+  return Math.max(0, Math.min(1, heldS / c.time));
 }
 
 /**
@@ -228,8 +266,9 @@ export type WeaponEvent =
   // Lane KNIFE / FEEL (melee only): the release committed ONE swing (whoosh / sweep) and — exactly once per swing,
   // `melee.strike` s later unless cancelled first — the blade's contact moment, when the game resolves the hit
   // (game.ts meleeContact). `swing` numbers them.
-  | {type: 'swing'; def: WeaponDef; swing: number}
-  | {type: 'contact'; def: WeaponDef; swing: number};
+  // (lane MELEE, weapon variety: a CHARGE weapon's swing / contact also carry the release's `charge` 0..1; absent for the others)
+  | {type: 'swing'; def: WeaponDef; swing: number; charge?: number}
+  | {type: 'contact'; def: WeaponDef; swing: number; charge?: number};
 
 export interface TriggerInput {
   /** Trigger currently held. */
@@ -308,10 +347,26 @@ export class WeaponController {
     return this.phase === 'swinging' && (this.meleeStage === 'windup' || this.meleeStage === 'ready') && !this.releaseQueued;
   }
 
-  /** Lane FEEL: the viewmodel's melee pose input (weapons/meleeView.ts meleePoseOffset). */
-  get meleePose(): {stage: MeleeStage | null; t: number} {
-    return {stage: this.phase === 'swinging' ? this.meleeStage : null, t: this.stageT};
+  /**
+   * Lane FEEL: the viewmodel's melee pose input (weapons/meleeView.ts meleePoseOffset). Lane MELEE (weapon variety): + `charge` 0..1 —
+   * the live charge while a CHARGE weapon's ready pose is held, the committed swing's charge during its swing / recovery (0 otherwise).
+   */
+  get meleePose(): {stage: MeleeStage | null; t: number; charge: number} {
+    const stage = this.phase === 'swinging' ? this.meleeStage : null;
+    return {stage, t: this.stageT, charge: stage === 'ready' ? this.chargeLevel : stage === 'swing' || stage === 'recover' ? this.swingCharge : 0};
   }
+
+  /**
+   * Lane MELEE (weapon variety): the CHARGE built so far (0..1) while a charge weapon's wound-up pose is held (the HUD cue, the pose);
+   * 0 for a weapon without `melee.charge`, before the windup is complete and once released.
+   */
+  get chargeLevel(): number {
+    const c = this.def?.melee?.charge;
+    return c && this.phase === 'swinging' && this.meleeStage === 'ready' && !this.releaseQueued ? meleeChargeK(c, this.stageT) : 0;
+  }
+
+  /** Lane MELEE (weapon variety): the charge 0..1 the running / last committed swing was released with (0 without `melee.charge`). */
+  swingCharge = 0;
 
   /**
    * Lane KNIFE / FEEL: abort the melee cycle (menus / pause / focus or pointer-lock loss / death / travel / restart, and
@@ -332,6 +387,7 @@ export class WeaponController {
   private resetMelee(): void {
     this.meleeStage = null;
     this.stageT = 0;
+    this.swingCharge = 0; // lane MELEE: a cancelled / finished swing leaves no charge behind
     this.contactPending = false;
     this.releaseQueued = false;
     this.pressQueued = false;
@@ -476,7 +532,7 @@ export class WeaponController {
       } else if (st === 'swing') {
         if (this.contactPending && this.stageT + rem + MELEE_EPS >= m.strike) {
           this.contactPending = false;
-          ev.push({type: 'contact', def: d, swing: this.swingId});
+          ev.push(m.charge ? {type: 'contact', def: d, swing: this.swingId, charge: this.swingCharge} : {type: 'contact', def: d, swing: this.swingId});
         }
         const need = m.sweep - this.stageT;
         if (rem + MELEE_EPS < need) { this.stageT += rem; rem = 0; break; }
@@ -509,13 +565,15 @@ export class WeaponController {
   /** Lane FEEL: the release commits ONE swing (whoosh / sweep now, contact `strike` s later); the cooldown covers sweep + recovery. */
   private startSwing(ev: WeaponEvent[]): void {
     const d = this.def!, m = d.melee!;
+    // lane MELEE (weapon variety): a CHARGE weapon's release keeps the charge built in the ready pose (startSwing runs from 'ready')
+    this.swingCharge = m.charge && this.meleeStage === 'ready' ? meleeChargeK(m.charge, this.stageT) : 0;
     this.meleeStage = 'swing';
     this.stageT = 0;
     this.releaseQueued = false;
     this.contactPending = true;
     this.cooldown = m.sweep + m.recovery;
     this.swingId++;
-    ev.push({type: 'swing', def: d, swing: this.swingId});
+    ev.push(m.charge ? {type: 'swing', def: d, swing: this.swingId, charge: this.swingCharge} : {type: 'swing', def: d, swing: this.swingId});
   }
 
   /** Lane FEEL: back to the carry at the natural end of a recovery (keeps a press remembered meanwhile). */

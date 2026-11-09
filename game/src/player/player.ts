@@ -130,6 +130,19 @@ export class Player {
   private stepPhase = 0;
   damageTaken = 0;
 
+  /**
+   * Task studio-weapon-variety-production-20261109-224355-01 (lane MELEE): a heavy melee swing's stamina cost, `pct` of the meter (the
+   * sprint reserve): drained now and the regeneration waits STAMINA_REGEN_DELAY s, as after a sprint. Returns false when the meter was
+   * SHORT of the cost (it empties; Game makes that a winded swing). 0 costs nothing (the knife).
+   */
+  spendStamina(pct: number): boolean {
+    if (!(pct > 0)) return true;
+    const ok = this.stamina >= pct;
+    this.stamina = Math.max(0, this.stamina - pct);
+    this.sprintCd = Math.max(this.sprintCd, STAMINA_REGEN_DELAY);
+    return ok;
+  }
+
   /** A fresh life (NewGame): placed at the pose with full health / stamina. */
   spawn(x: number, z: number, yaw: number, y = 0): void {
     this.place(x, z, yaw, y);
