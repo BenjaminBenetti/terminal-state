@@ -378,6 +378,10 @@ function planV2Hazards(layout: StationLayout, carved: readonly FloorCarveResult[
   const genAreas = new Set(gens.map(g => g.area));
   const proposals: {level: number; area: number; strength: 'weak' | 'medium' | 'strong'}[] = [];
   carved.forEach((r, L) => { for (const q of r.gas ?? []) proposals.push({level: L, area: q.area, strength: q.strength}); });
+  // at most six leaks over the level: every strong / medium one, then the weak ones storey by storey (a deterministic cut, never a retry)
+  const rank = {strong: 0, medium: 1, weak: 2} as const;
+  proposals.sort((p, q) => rank[p.strength] - rank[q.strength] || p.level - q.level);
+  proposals.length = Math.min(proposals.length, 6);
   const doorsOf = (id: number) => layout.doors.filter(d => d.a === id || d.b === id).length;
   for (const q of proposals) {
     const a = layout.areas[q.area];
