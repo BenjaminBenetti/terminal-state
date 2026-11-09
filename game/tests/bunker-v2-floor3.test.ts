@@ -164,6 +164,7 @@ describe('bunker v2 storey 3: services & medical (the service street)', () => {
       expect(props.filter(p => p.area === ward.id && p.kind === 'wheeledStretcher').length, `seed ${s} ward beds`).toBeGreaterThanOrEqual(4);
       expect(props.filter(p => p.area === iso.id && p.kind === 'wheeledStretcher').length, `seed ${s} isolation beds`).toBeGreaterThanOrEqual(2);
       expect(stats.cubicles).toBeGreaterThanOrEqual(2);
+      expect(props.some(p => p.area === one(L, 'Treatment room').id && p.kind === 'examTable'), `seed ${s} exam couch`).toBe(true);
       const street = byLabel(L, 'Service street').map(a => a.id);
       expect(props.filter(p => street.includes(p.area) && p.kind === 'planterTree').length, `seed ${s} street islands`).toBeGreaterThanOrEqual(1);
       // budgets (the lead's per-storey targets): props <= ~150 (incl. the collision-only footprints), lights <= ~75, decor <= ~150,

@@ -26,7 +26,7 @@ import {PROP_DEFS, type PropKind, type PropPlacement} from '../../props';
 import type {Area, Door, LightPlacement, Side} from '../../stationTypes';
 import type {ShopMat} from '../../storefronts';
 import {begin, commit, doorSide, placeAgainstWall, rollback, propBlocksDoorway, rowAlongWall, tryPlaceProp, wallRange, wallSpot} from '../../placeKit';
-import {NORMAL, OPP, doorPlate, face, freeFor, rotFacing, scanWall, solidProp, sweepPockets, wallBox, wallSign, type Dx} from '../../reactor/complex/bunkerDress';
+import {NORMAL, OPP, doorPlate, face, freeFor, island, rotFacing, scanWall, solidProp, sweepPockets, wallBox, wallSign, type Dx} from '../../reactor/complex/bunkerDress';
 import {shelterDx} from '../dress';
 import type {FloorDressCtx} from './floorApi';
 import {V2_STOREY_PLATES} from './spine';
@@ -578,14 +578,15 @@ function treatment(f: F3): void {
   const {D, A} = f;
   const a = A.treatment;
   if (!a) return;
-  place(D, a, 'examTable', (ax0(a) + ax1(a)) / 2, (az0(a) + az1(a)) / 2, a.w >= a.h ? Math.PI / 2 : 0, {ring: 0.7});
+  // the exam / treatment couch free-standing near the middle (a walkway all round), else against a wall
+  if (!island(D, a, 'examTable', a.w >= a.h ? 'N' : 'W', 0.6)) scanWall(D, a, 'examTable', ['N', 'S', 'W', 'E'], 0.7);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Plates
 
 const PLATE: Partial<Record<F3Key, string>> = {
-  depot: 'SUPPLY DEPOT · GOODS INWARD', lobby: 'FREIGHT LIFT', laundry: 'LAUNDRY', fab: 'FABRICATION', yard: 'WORKS YARD', gasStore: 'MEDICAL GASES · NO NAKED FLAMES',
+  plant: 'AUX GENERATOR 2 · DANGER', depot: 'SUPPLY DEPOT · GOODS INWARD', lobby: 'FREIGHT LIFT', laundry: 'LAUNDRY', fab: 'FABRICATION', yard: 'WORKS YARD', gasStore: 'MEDICAL GASES · NO NAKED FLAMES',
   washroom: 'WASHROOM', medStores: 'MEDICAL STORES', clinic: 'INFIRMARY', ward: 'CASUALTY WARD', corridor: 'CLINICAL CORRIDOR', treatment: 'TREATMENT ROOM',
   dispensary: 'DISPENSARY', airlock: 'ISOLATION · MASKS ON', isolation: 'ISOLATION WARD · NO ENTRY',
 };
@@ -612,9 +613,6 @@ function plates(f: F3): void {
     if (near.size) D.layout.signs = D.layout.signs.filter(sg => !near.has(sg));
     if (doorPlate(D, d, outside, text, text.length > 16 ? 2.4 : 1.6)) F3_DRESS_STATS.signs++;
   }
-  // the generator's own plate inside its room
-  const p = A.plant;
-  if (p) wallSign(D, p, 'N', (ax0(p) + ax1(p)) / 2, 3.2, {kind: 'service', text: 'AUX GENERATOR 2 · DANGER', w: 2.4});
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
