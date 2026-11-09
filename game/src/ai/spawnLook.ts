@@ -21,11 +21,15 @@
 // ai/cosplay.ts cosplayLook(seed, index), built by the SEPARATE cosplay library (createCosplayLibrary). Used only when that library can
 // build it exactly with all three slots (head piece, upper, lower); otherwise the ordinary pick. Its files load lazily
 // (cosplayModelKeysFor) only for a layout holding a cosplay-tagged spawn.
+// Task studio-cosplay-general-20261108-225231-01 (lane COSTUME): the costumes are now FULL costumes, most of them on the UNCLOTHED pale
+// bodies. The lazy files are fetched before the section is built (Game.prepareSection awaits them), so no cosplay actor is ever built
+// while they load; if they failed to load or parse (or a look is not buildable), the spawn takes a COVERED fallback: the ordinary pick
+// from the ordinary pool with the unclothed bodies left out (cosplayFallbackPool) - an ordinary, clothed zombie, never a bare body.
 
 import type {StationLayout, ZombieSpawn} from '../gen/stationTypes';
 import {LINGERIE_MODEL_FILES, lingerieLook} from './lingerie';
 import {COSPLAY_MODEL_FILES, cosplayLook} from './cosplay';
-import {pickZombieLook, type LegacyZombieLook, type WardrobeAvailability, type ZombieLook, type ZombiePool} from './wardrobe';
+import {DEFAULT_ZOMBIE_POOL, pickZombieLook, type LegacyZombieLook, type WardrobeAvailability, type ZombieLook, type ZombiePool} from './wardrobe';
 
 /** What the pick needs from a look library (WardrobeLibrary / ZombieLookLibrary satisfy it). */
 export interface SpawnLookLibrary {
@@ -52,6 +56,16 @@ export function cosplayLookUsable(look: ZombieLook | null | undefined, lib: Pick
 }
 
 /**
+ * (lane COSTUME) The pool of a cosplay spawn's covered fallback: the ordinary pool with every unclothed (`nude`) body at weight 0 - the
+ * fallback is an ordinary clothed zombie, never one of the bodies the costumes dress from bare skin.
+ */
+export function cosplayFallbackPool(available: WardrobeAvailability, pool: ZombiePool = DEFAULT_ZOMBIE_POOL): ZombiePool {
+  const bodies: Record<string, number> = {...(pool.bodies ?? {})};
+  for (const b of available.bodies) if (b.nude) bodies[b.id] = 0;
+  return {...pool, bodies};
+}
+
+/**
  * The look of spawn `index` of the layout seeded `seed` (see the module comment). `ordinary` = the ordinary wardrobe library,
  * `lingerie` = the library of the spawn's look tag: the lingerie library for a 'lingerie' spawn, the cosplay library for a 'cosplay'
  * spawn (null while its files are not loaded), `pool` = the ordinary pool (default registry).
@@ -67,6 +81,8 @@ export function chooseSpawnLook(
   if (s.look === 'cosplay') {
     const look = cosplayLook(seed, index, lingerie ? l => lingerie.isValid(l) : undefined);
     if (cosplayLookUsable(look, lingerie)) return {look, library: 'cosplay'};
+    // (lane COSTUME) the covered fallback: the ordinary pick without the unclothed bodies
+    return {look: pickZombieLook(seed, index, s.type, ordinary.available, cosplayFallbackPool(ordinary.available, pool)), library: 'ordinary'};
   }
   return {look: pickZombieLook(seed, index, s.type, ordinary.available, pool), library: 'ordinary'};
 }

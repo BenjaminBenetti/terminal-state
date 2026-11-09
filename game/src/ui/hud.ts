@@ -52,14 +52,31 @@ const BEER_FX: Readonly<Record<string, string>> = {
 // task studio-general-armor-20261107-231448-01: the ARMOUR pips — blue pips just above the health bar, as wide as it (ten pips a row = 25 %), in half-pip steps
 // rounded down (player/armor.ts pipRows). A row past ten stacks on top of the one below, overlapping it by ARMOR.rowOverlap of its
 // height; the HP row's top margin grows with the rows so nothing above the vitals is covered. No pips with no armour.
-const ARMOR_PIP_H = 6, ARMOR_PIP_GAP = 3;
-const ARMOR_CSS = `
+// Task studio-cosplay-general-20261108-225231-01 (user: "Armor pips should be circles, not squares."): each pip is a true CIRCLE (1:1,
+// border-radius 50 %) as wide as its column — ten columns + nine gaps span exactly the health bar's (border-box) width — and a half pip
+// is the same circle filled on its left half. Rows stack upward (flex column-reverse), each further row overlapping the one below by
+// ARMOR.rowOverlap of a pip's height (a negative margin in % of the row width: a pip's diameter is (width - gaps) / ten). Presentation
+// only: the counts are still pipRows(pool) (player/armor.ts), unchanged.
+export const ARMOR_PIP_GAP = 3, ARMOR_PIP_COL_GAP = 2;
+/** CSS length of one pip's diameter inside #armor-pips (`100%` = the row width = the health bar's border box). */
+const PIP_D = `(100% - ${(ARMOR.pipsPerRow - 1) * ARMOR_PIP_COL_GAP}px) / ${ARMOR.pipsPerRow}`;
+/** The HP row's top margin for `rows` pip rows: its own 6 px + the gap + the stack (one pip + (rows - 1) x (1 - overlap) pips). The
+ * pip size follows the BAR's width, which the row's margin cannot reference: it is bounded by #vitals' width less the row's HP tag
+ * (20 px) and two 8 px gaps (styles.css), so the reserve is at most a few px generous (the HP number's width), never short. */
+export const armorRowMargin = (rows: number) => `calc(${6 + ARMOR_PIP_GAP}px + ${1 + (rows - 1) * (1 - ARMOR.rowOverlap)} * (100% - ${20 + 2 * 8 + (ARMOR.pipsPerRow - 1) * ARMOR_PIP_COL_GAP}px) / ${ARMOR.pipsPerRow})`;
+/** The pip rows' markup (pipRows: bottom row first): one `.arow` per row, an `<i>` per pip, `<i class="half">` for a half pip. */
+export const armorPipsHtml = (rows: readonly (readonly ('full' | 'half')[])[],
+  cls: (p: 'full' | 'half', index: number) => string = p => (p === 'half' ? 'half' : '')): string =>
+  rows.map((r, k) => `<div class="arow">${r.map((p, j) => { const c = cls(p, k * ARMOR.pipsPerRow + j); return c ? `<i class="${c}"></i>` : '<i></i>'; }).join('')}</div>`).join('');
+export const ARMOR_CSS = `
 #vitals .bar.health { position: relative; }
-#armor-pips { position: absolute; left: -1px; right: -1px; bottom: calc(100% + ${ARMOR_PIP_GAP}px); height: 0; pointer-events: none; }
+#armor-pips { position: absolute; left: -1px; right: -1px; bottom: calc(100% + ${ARMOR_PIP_GAP}px); display: flex; flex-direction: column-reverse; pointer-events: none; }
 #armor-pips.none { display: none; }
-#armor-pips .arow { position: absolute; left: 0; right: 0; display: grid; grid-template-columns: repeat(${ARMOR.pipsPerRow}, 1fr); gap: 2px; }
-#armor-pips i { height: ${ARMOR_PIP_H}px; box-sizing: border-box; background: #3d8fe0; border: 1px solid #0d1d30; box-shadow: 0 0 3px rgba(61, 143, 224, 0.45); }
-#armor-pips i.half { width: 50%; }`;
+#armor-pips .arow { display: grid; grid-template-columns: repeat(${ARMOR.pipsPerRow}, 1fr); column-gap: ${ARMOR_PIP_COL_GAP}px; }
+#armor-pips .arow + .arow { margin-bottom: calc(-${ARMOR.rowOverlap} * ${PIP_D}); }
+#armor-pips i { display: block; width: 100%; aspect-ratio: 1 / 1; border-radius: 50%; box-sizing: border-box; background: #3d8fe0; border: 1px solid #0d1d30; box-shadow: 0 0 3px rgba(61, 143, 224, 0.45); }
+#armor-pips i.half { background: linear-gradient(90deg, #3d8fe0 50%, rgba(13, 29, 48, 0.6) 50%); }
+#armor-pips i.half.temp { background: linear-gradient(90deg, #a9dcff 50%, rgba(13, 29, 48, 0.6) 50%); }`;
 
 // Task studio-beta-train-fuel-system-20261106-024923-01 (lane PORT): the train FUEL readout — a row at the top of the light panel in the
 // battery meter's style (icon, label, four quarter pips like the battery bar's cells, cream text; amber when the train cannot make one
@@ -222,12 +239,12 @@ export class Hud {
         el.id = 'armor-pips';
         bar.appendChild(el);
       }
-      const step = ARMOR_PIP_H * (1 - ARMOR.rowOverlap);
-      el.innerHTML = rows.map((r, k) => `<div class="arow" style="bottom:${k * step}px">${r.map((p, j) => { const c = cls(p, k * ARMOR.pipsPerRow + j); return c ? `<i class="${c}"></i>` : '<i></i>'; }).join('')}</div>`).join('');
+      // (rows bottom first; ARMOR_CSS lays them out: circles, overlap, the bar's width; lane BEER's `temp` class on the temporary share)
+      el.innerHTML = armorPipsHtml(rows, cls);
       el.classList.toggle('none', !rows.length);
       el.title = rows.length ? `Armor ${pipsText(pool)} pips (${+(pool * 100).toFixed(1)} %): cuts every enemy hit and may save you from its injury${share > 0 ? ` — ${pipsText(share)} of them temporary (Ironclad Stout)` : ''}` : '';
       const row = bar.parentElement as HTMLElement | null;
-      if (row) row.style.marginTop = rows.length ? `${6 + ARMOR_PIP_GAP + ARMOR_PIP_H + (rows.length - 1) * step}px` : '';
+      if (row) row.style.marginTop = rows.length ? armorRowMargin(rows.length) : '';
     });
   }
 

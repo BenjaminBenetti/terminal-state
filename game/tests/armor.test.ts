@@ -318,8 +318,9 @@ describe('ui: blue pips above the health bar; the inventory names the pool', () 
   beforeAll(() => { dom = installFakeDom(); });
   afterAll(() => dom.uninstall());
 
-  it('pips in rows of ten, each further row 4.5 px up (6 px pips, 25 % overlap); written only on a visible change; hidden at 0', async () => {
-    const {Hud} = await import('../src/ui/hud');
+  // (task studio-cosplay-general-20261108-225231-01: the pips are circles now — their geometry is CSS, tests/armor-pips-circles.test.ts)
+  it('pips in rows of ten (circles, 25 % overlap); written only on a visible change; hidden at 0', async () => {
+    const {Hud, armorRowMargin} = await import('../src/ui/hud');
     const hud = new Hud();
     const bar = dom.el('#vitals .bar.health');
     const row = new FakeEl('div');
@@ -330,9 +331,9 @@ describe('ui: blue pips above the health bar; the inventory names the pool', () 
     expect(el.classList.contains('none')).toBe(false);
     expect(el.title).toMatch(/Armor 5 pips \(12\.5 %\)/);
     hud.setArmor(0.2625);
-    expect(el.innerHTML.match(/class="arow" style="bottom:(\d+(?:\.\d+)?)px"/g)).toEqual(['class="arow" style="bottom:0px"', 'class="arow" style="bottom:4.5px"']);
+    expect(el.innerHTML.match(/<div class="arow">/g)).toHaveLength(2);
     expect((el.innerHTML.match(/<i class="half"><\/i>/g) ?? []).length).toBe(1);
-    expect(row.style.marginTop).toBe(`${6 + 3 + 6 + 4.5}px`);
+    expect(row.style.marginTop).toBe(armorRowMargin(2));
     const html = el.innerHTML;
     el.innerHTML = 'sentinel';
     hud.setArmor(0.2625 + 0.005); // same half-pip count: no write
@@ -341,7 +342,7 @@ describe('ui: blue pips above the health bar; the inventory names the pool', () 
     hud.setArmor(0);
     expect(el.classList.contains('none')).toBe(true);
     expect(row.style.marginTop).toBe('');
-    expect(src('ui/hud.ts')).toMatch(/#armor-pips i \{ height: [^;]+; box-sizing: border-box; background: #3d8fe0;/); // blue
+    expect(src('ui/hud.ts')).toMatch(/#armor-pips i \{ [^}]*border-radius: 50%; box-sizing: border-box; background: #3d8fe0;/); // blue
     expect(src('game.ts')).toMatch(/armor: armorPool\(this\.inv\.gear\), \/\/ /);
   });
 
