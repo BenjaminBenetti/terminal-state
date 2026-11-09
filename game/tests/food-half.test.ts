@@ -147,7 +147,7 @@ describe('natural food half: through the real ContainerManager.build + run/world
       expect(snap(load.cm)).toEqual(snap(old.cm));
       // the same old save, but one holder was never realized in it (a new area of the campaign): only that one is gated
       const keys = Object.keys(oldRecs);
-      const fresh = keys.find((k, i) => old.cm.all[i].state.lots.filter(l => isNaturalFood(l.itemId)).length >= 2) ?? keys[0];
+      const fresh = keys.find((_, i) => old.cm.all[i].state.lots.filter(l => isNaturalFood(l.itemId)).length >= 2) ?? keys[0];
       const partial = Object.fromEntries(keys.filter(k => k !== fresh).map(k => [k, oldRecs[k]]));
       const mixed = built(seed, partial);
       dropNaturalFood(mixed.cm, partial, mixed.layout.seed, SID, profile);
