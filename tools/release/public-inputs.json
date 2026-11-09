@@ -1815,53 +1815,53 @@
     },
     {
       "path": "assets/derivatives/food-shelf-butter-cookies-model.json",
-      "bytes": 7386,
-      "sha256": "23f4838caa42cff8d8c07742cad37739cd173a60f83426a7b016754665388eef"
+      "bytes": 12150,
+      "sha256": "4493fa6de46396cd3f27d4b5f8739827e017dced71fc8e8fb3f82e0ec29dfc13"
     },
     {
       "path": "assets/derivatives/food-shelf-corned-beef-model.json",
-      "bytes": 11021,
-      "sha256": "c31ed6bfe4ae4f9bde19cbcb8bf4bb20e9b650ea58881b63fedaa09647f80687"
+      "bytes": 13343,
+      "sha256": "ce4fabb06229dc3dda6ffd5df25a2934b75c22d9e3556ab42b26dd0f92555a80"
     },
     {
       "path": "assets/derivatives/food-shelf-field-ration-model.json",
-      "bytes": 7960,
-      "sha256": "14b8037ef173035e816ab1f2927be39d5316a2dee57409ee568926a1a69bc52a"
+      "bytes": 10445,
+      "sha256": "e266df964c17965e1616c76fbf643aa8793f83a92590dd390308f8620ca9be6a"
     },
     {
       "path": "assets/derivatives/food-shelf-fruit-puree-model.json",
-      "bytes": 7301,
-      "sha256": "b5822289b70ab1830fac6e6c19683361c852b12c0e98c04c4cd528b32c364355"
+      "bytes": 11861,
+      "sha256": "6a743d3d0d876d5d115a9594f02fd4be512861bc047844a86c9d34875d241a6b"
     },
     {
       "path": "assets/derivatives/food-shelf-ginger-soda-model.json",
-      "bytes": 8719,
-      "sha256": "fa6ab6d9940363027c98fa28a0c27de0ad03d2c5c4261b565f10917142130f32"
+      "bytes": 10887,
+      "sha256": "da68eb950b11a43ebfd3aad05f533e17e4bc92de52af1da7d1d404193b84ce16"
     },
     {
       "path": "assets/derivatives/food-shelf-honey-model.json",
-      "bytes": 7269,
-      "sha256": "bccecd265f8f6116319007c3dfc70e3d7410891639fb1352cd8ac75292e83aa7"
+      "bytes": 10881,
+      "sha256": "673ec70eba743c178ff46c3d119f91e50cd41c24ec232083aa4a16dd1d4c1e18"
     },
     {
       "path": "assets/derivatives/food-shelf-iced-coffee-model.json",
-      "bytes": 7319,
-      "sha256": "bdd123004564350da206f3d8eee5c45e0e9459dc818b75e298257de36a3fd7b7"
+      "bytes": 10069,
+      "sha256": "a72f9bfcf3c95fbc947279a1db69929b4666a53301d7092e1d7cf75afb00deca"
     },
     {
       "path": "assets/derivatives/food-shelf-iced-tea-model.json",
-      "bytes": 7380,
-      "sha256": "6e7732219693d36919f75c6034a0cd8d965b0d704c6d9240147ecc0a3c389a8c"
+      "bytes": 12101,
+      "sha256": "8171ccdb20ff3c755d125644977888bedd35ab6c46b77ac7729f92c0438e03d7"
     },
     {
       "path": "assets/derivatives/food-shelf-jerky-model.json",
-      "bytes": 7310,
-      "sha256": "b166ef0a00c143e158c32ce88ad02198ee5bcb586cfaf69c30f830d6d9176237"
+      "bytes": 10231,
+      "sha256": "d40ce3b9c13339e7022b7d6de442685c35cf82da5915a83000076443ff2b465a"
     },
     {
       "path": "assets/derivatives/food-shelf-juice-boxes-model.json",
-      "bytes": 7392,
-      "sha256": "3b3f9067e2487e7fdbb498c77bcef602901a47d323b72f0a511c2e1b5e892205"
+      "bytes": 10662,
+      "sha256": "3d56b48a64448920292342a49b4d291ff1c3d955e74357fe1d20860fefdcac85"
     },
     {
       "path": "assets/derivatives/food-shelf-junk-atlas.json",
@@ -1870,73 +1870,73 @@
     },
     {
       "path": "assets/derivatives/food-shelf-peanut-butter-model.json",
-      "bytes": 7596,
-      "sha256": "eade66d940b2a40034d5636bd76787c425865004c45b473b5e8c38ffac1b22f4"
+      "bytes": 9914,
+      "sha256": "22e24e5acff58f58644c07d089151e37f020f1caf639b6225de900f03dcc7d53"
     },
     {
       "path": "assets/derivatives/food-shelf-pickles-model.json",
-      "bytes": 7585,
-      "sha256": "c85f2b0d479b61d52ecaeb6b1f609a96d9228a5a4ee9d02272eff3436c333840"
+      "bytes": 10026,
+      "sha256": "561b85f26d8c3fe3beb9d42125d3b1788aa2e19570fc46a57416dd6a55a226e5"
     },
     {
       "path": "assets/derivatives/food-shelf-pudding-cups-model.json",
-      "bytes": 7512,
-      "sha256": "629c90be7a66f9efe3d0cf594eb2e42c1205c7e17cc92a8c254dc8b7aa29f2fb"
+      "bytes": 10562,
+      "sha256": "c2cfd30faf288d74937837658c9329150a9054efcb65dd38085ef0b7952223f7"
     },
     {
       "path": "assets/derivatives/food-shelf-raisins-model.json",
-      "bytes": 7678,
-      "sha256": "a96ad2907de5de5b1022520d75a7487ae8b3ab30504f4d8cd2d68dc94558dffc"
+      "bytes": 10048,
+      "sha256": "3cc7ce602c5ee6d5167f810221137ec59130a24788d79aac7514bfb6802cbd27"
     },
     {
       "path": "assets/derivatives/food-shelf-ration-brick-model.json",
-      "bytes": 7657,
-      "sha256": "08afde5afda4eb8ffbb502c193453b1652c95e3e70524eb0c220fe9f0a030755"
+      "bytes": 11087,
+      "sha256": "9ac2c7846b6425075bac03bd29752c7e54b0955483db052ea22782da24ab63c9"
     },
     {
       "path": "assets/derivatives/food-shelf-rice-crackers-model.json",
-      "bytes": 7968,
-      "sha256": "f06f60581bd95b22cb62b1073c7649f7762566ccb960df8ca7350b0e8e722ae7"
+      "bytes": 10342,
+      "sha256": "3a9a5f8e731afd61aa01df3a92a022c07cde6300139153f7e66e39c2d09637a6"
     },
     {
       "path": "assets/derivatives/food-shelf-rolled-oats-model.json",
-      "bytes": 7318,
-      "sha256": "fac2e487f7b16be2a709446a3411ef363550612528197bc01f98a002eef49e75"
+      "bytes": 10052,
+      "sha256": "833683547b4c4cb403d77144b6e0b4ba7ac212019437f0fc7502f7650ae47205"
     },
     {
       "path": "assets/derivatives/food-shelf-saltines-model.json",
-      "bytes": 7466,
-      "sha256": "dc1395848d02721df6a7f43b2255180156de8ed66a8bf43d7add0783309a5bdb"
+      "bytes": 10634,
+      "sha256": "11b2c8e5d94a26f6b018018d6c0c2896b724e8dcd3922d79c9cf782f44c4dadd"
     },
     {
       "path": "assets/derivatives/food-shelf-sardines-model.json",
-      "bytes": 8117,
-      "sha256": "4d3fb0b9850950850d121833f00c69aea3d33eb7953a63e53c79265a4c0e5b22"
+      "bytes": 10414,
+      "sha256": "3b3ed28ebc3f483d855497ca897373e8afbe18902bf092ee0735bef758c14d88"
     },
     {
       "path": "assets/derivatives/food-shelf-smoked-sausage-model.json",
-      "bytes": 7851,
-      "sha256": "da9f588097d489fa9c194e3f9e305889210b2fe52b25bc77023c7971a9fcbd7d"
+      "bytes": 10782,
+      "sha256": "a559aa961a0b1f041e175ea93b77dde7482d9b3a11902535bc66dbbe9c3132e3"
     },
     {
       "path": "assets/derivatives/food-shelf-sports-drink-model.json",
-      "bytes": 7300,
-      "sha256": "28b5ed6299681db74bd46d3339a5c382eb19f306e366add14e642889fc237dc3"
+      "bytes": 10131,
+      "sha256": "d2b2ef7e01685c154975c840871cfb826731f28e34c62c986851b9b1dbb58dde"
     },
     {
       "path": "assets/derivatives/food-shelf-trail-mix-model.json",
-      "bytes": 7264,
-      "sha256": "818f5b4e253b84bfea190d21e15d8a1c5656eaba093419ea66b1f6ac40adb53f"
+      "bytes": 9950,
+      "sha256": "574ebbcb011cb49216e32c9a14929e3eb37dce07b49fbe188d0e1149df5a6b3b"
     },
     {
       "path": "assets/derivatives/food-shelf-uht-milk-model.json",
-      "bytes": 7731,
-      "sha256": "d407147fe39ea32194a195b328c6e102952f7171d10ef04301057bce54232159"
+      "bytes": 10486,
+      "sha256": "abcf4842a404be330ff4831400644d76e0cbc76c1ab34c381596bae5e6ebab99"
     },
     {
       "path": "assets/derivatives/food-shelf-wax-cheese-model.json",
-      "bytes": 8075,
-      "sha256": "f040604c9a4ae2dff5d1a2c8fd526d4d6eac4ebb90579aa37f7de7eb71e8a549"
+      "bytes": 10224,
+      "sha256": "3ddc2eff27cdd0b34ac5a696aa17752b934e2748c0996ec45afce18ed0c1cd4a"
     },
     {
       "path": "assets/derivatives/gear-airtank-backpack.json",
@@ -2755,123 +2755,123 @@
     },
     {
       "path": "assets/models/food-butter-cookies.glb",
-      "bytes": 244684,
-      "sha256": "524516e065a831af7b17760e505e099c78d7fbfd2814406cc768fa6a2df4bab6"
+      "bytes": 189880,
+      "sha256": "36b8378fb3689ec10919136f56dbfcf44921c8fa187ca717a2f402df3a59e4f1"
     },
     {
       "path": "assets/models/food-corned-beef.glb",
-      "bytes": 178876,
-      "sha256": "b38eeecdef41897ec6f71d1be523a48c4e0dff3d2e339c946564372ea8224d18"
+      "bytes": 389584,
+      "sha256": "4c6e4903488e08c2c37e525380575c6dfc36a296c74f72261c4fd2b5d09aae7b"
     },
     {
       "path": "assets/models/food-field-ration.glb",
-      "bytes": 198488,
-      "sha256": "30a597ee72a65cb6f6f714f52dda39e3b3d81fd91140b67b164ed1e9c0d342c1"
+      "bytes": 143888,
+      "sha256": "44b145be0a44e5cea90dee47e301beb00afd45ece5a5ed218d64a5646e0e5797"
     },
     {
       "path": "assets/models/food-fruit-puree.glb",
-      "bytes": 183748,
-      "sha256": "984b15f4b0232b6e2d3d0d9a87c476628bec9782cb44f3ec9b279b54d696e6da"
+      "bytes": 218512,
+      "sha256": "566cfe7ce2b9cebc5dd4faf1b5739216dd70587a50d5426bb780b8922b8ed4ca"
     },
     {
       "path": "assets/models/food-ginger-soda.glb",
-      "bytes": 201924,
-      "sha256": "79df6a917e578f71a11122d9d09ea28be194218f096a5f1237fb5fcdd3c20251"
+      "bytes": 162644,
+      "sha256": "0b83f9165ddce0a9967b82884296436830435d7b38a24b1c89fb34c58808126f"
     },
     {
       "path": "assets/models/food-honey.glb",
-      "bytes": 205756,
-      "sha256": "f4d1429609599e8371c2c167f3db732292327289ce67cb291f998782d9b6323c"
+      "bytes": 194476,
+      "sha256": "86e003606d98c2cb80ad99cd88b65d8be2ba379d24efaaf6d4b6fb9c528fccef"
     },
     {
       "path": "assets/models/food-iced-coffee.glb",
-      "bytes": 239236,
-      "sha256": "3276de4571c61be4f7ae2c1408bc3608348d5450b21d95ae711b587c5e79a6ce"
+      "bytes": 369388,
+      "sha256": "a2a3e8685eb10b7c370d66e92cf37b04b9870d01c2a1d4af26acab0bdeafb346"
     },
     {
       "path": "assets/models/food-iced-tea.glb",
-      "bytes": 201608,
-      "sha256": "6a8987af4ef0052f099c25c40cdb27d37a5da8330e92d85a95f0f8bef729b98f"
+      "bytes": 166456,
+      "sha256": "d05c188f6e593ebe156c137a3fd3d363507d96da491cd1bf9d4a481bca31b0c4"
     },
     {
       "path": "assets/models/food-jerky.glb",
-      "bytes": 218620,
-      "sha256": "d82defa1b2a7ced088f74b7af092379fd3c0bb9fd8e0128f3ee4a01e61405221"
+      "bytes": 229528,
+      "sha256": "45b1d68a4564f3f6ae51f50228b13c6b815d3ea37970e6590159ff6805743071"
     },
     {
       "path": "assets/models/food-juice-boxes.glb",
-      "bytes": 184812,
-      "sha256": "f1a42eb11cfb159708920f40f2823d4e5a0c0284381598cd2b63b591f4c8b3c0"
+      "bytes": 203308,
+      "sha256": "6138f176c9bbe7ade58efed8afc11800a8090139b209bdda36b4b7f8f50a16a1"
     },
     {
       "path": "assets/models/food-peanut-butter.glb",
-      "bytes": 184548,
-      "sha256": "230350804f876b8178e7b789e6b833587a003d6df18db12c4f93f026e66f28f0"
+      "bytes": 183048,
+      "sha256": "4a56604a4b77b54ca5c3417f009f676b8901a684f229e13b5d961c0d66992765"
     },
     {
       "path": "assets/models/food-pickles.glb",
-      "bytes": 207148,
-      "sha256": "0e9fed919ea9b71f6eb56782838379e67ff45b39c8f54813cac5ebc2009c1d2a"
+      "bytes": 239144,
+      "sha256": "8d94c75957e95e1501c3602b25407a6b402d958b7e4d4304a893149dcb270498"
     },
     {
       "path": "assets/models/food-pudding-cups.glb",
-      "bytes": 179984,
-      "sha256": "ab8ab0fd9c50993e13ef92fd3c9fe3a9e9a12f45c70e46909e6d7afe9817971b"
+      "bytes": 314660,
+      "sha256": "5526024c4b780761d0ed647c5d328a901208805b23748493d629bea87299486a"
     },
     {
       "path": "assets/models/food-raisins.glb",
-      "bytes": 249404,
-      "sha256": "f212d391fd261fe54d75937729d91380af68e85a2adf82d679cda4814e3c0008"
+      "bytes": 231852,
+      "sha256": "10a23ed1e9526f570d9b7a9d31bbf6d47872449da46d228dca0126481c5393d1"
     },
     {
       "path": "assets/models/food-ration-brick.glb",
-      "bytes": 176804,
-      "sha256": "eed950838e2cef97dac5d15ec71a06d7b9fb0b48f01339f2671f0e2397335889"
+      "bytes": 359676,
+      "sha256": "859c422f1c6a78d50f75f72a0125e992130d4020a108ae969176bcb9f5641bd1"
     },
     {
       "path": "assets/models/food-rice-crackers.glb",
-      "bytes": 174072,
-      "sha256": "3ce1829085852ec9f7dda5150740de0c7f6023a1cb12265cf17422da763340ef"
+      "bytes": 191920,
+      "sha256": "671ed35d0f5556b6701901372866ac9079b5640906e8c7d3d384bf1b2e460b5d"
     },
     {
       "path": "assets/models/food-rolled-oats.glb",
-      "bytes": 201772,
-      "sha256": "451116c3cdb7aaf6dd99c1fe84c359fd1c66ad79b12002316dc878b6cf2a9731"
+      "bytes": 197028,
+      "sha256": "52f2ba69712bee6be99b3860915175aab0945a74ee42a04dda33608d51caf766"
     },
     {
       "path": "assets/models/food-saltines.glb",
-      "bytes": 182720,
-      "sha256": "a4ae618f6218b3a7822bfeced40d4424f8ec341c6cc9752d9ee2916b28e6da24"
+      "bytes": 339624,
+      "sha256": "ebae811370001dc2e2055c3fc29d43cb3b9ce1eb29c71def43691c7b6cefb26d"
     },
     {
       "path": "assets/models/food-sardines.glb",
-      "bytes": 215656,
-      "sha256": "7aabbb75dc4f4412dd2f5fac8d95a5a2c0c9cec9bcb7271f9469a64b616f55a9"
+      "bytes": 203048,
+      "sha256": "3d49d7922ca6256a126e48ff8df7ba00b922f0c8fce0c0bab1a37cbb7714bf7f"
     },
     {
       "path": "assets/models/food-smoked-sausage.glb",
-      "bytes": 271532,
-      "sha256": "0aaf4e2ce16618a4fffd764cc4ffb862cf1b48edf987d238ede6c8dcb5c9c899"
+      "bytes": 253336,
+      "sha256": "b439373b3f99c4ae71a9292de99a788c1001d9c97461b58915bbf07944b74b64"
     },
     {
       "path": "assets/models/food-sports-drink.glb",
-      "bytes": 201404,
-      "sha256": "391d12abf45e9a69f9ea3e8adc52b6cb02bad1178514723fb6089b9b71757ae1"
+      "bytes": 150444,
+      "sha256": "fe42e46d1c8859cc2702aba8fab7c3198d0ca9509b18718746731c6bdd7cf639"
     },
     {
       "path": "assets/models/food-trail-mix.glb",
-      "bytes": 191748,
-      "sha256": "7ecb409f2581c4a0ee5c2131db8f75c5304fdafce7a4521705f2238647802539"
+      "bytes": 217652,
+      "sha256": "014b6c861d9c5852fb2c9d8693a3cac4e8c1653221e679f0d1833c5d93c9d02f"
     },
     {
       "path": "assets/models/food-uht-milk.glb",
-      "bytes": 202496,
-      "sha256": "f3032926c2aa632a8f206f53c44ecad7e1c6c8a979fee5fc006d71800573fbaa"
+      "bytes": 174888,
+      "sha256": "7185e9041c714d3928d75ea463843e15a7cc49858749b31c661654f22a426cb4"
     },
     {
       "path": "assets/models/food-wax-cheese.glb",
-      "bytes": 214980,
-      "sha256": "5b02359b280bd14d6d5ce551c1f4c3e19e905ac78a57b080c35efbc546b73f66"
+      "bytes": 144948,
+      "sha256": "e4419b8452ed29875d087fe614a9bd340d327821d89483e89f08c2f27ef611f1"
     },
     {
       "path": "assets/models/gear-airtank-backpack.glb",

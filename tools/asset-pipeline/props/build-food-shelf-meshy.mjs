@@ -1,15 +1,23 @@
-// Task studio-food-shelf-production-20261109-002816-01 (lane COOK): the runtime derivatives of the approved food / drink / ruined-shelf
-// Meshy T2.5 models. Route: Codex native image_gen INITIAL conditioning image (a strict straight-on elevation conditioned on the
-// user-approved concept original) -> Meshy T2.5 image-to-3D (smart topology, 2K PBR); every model KEEPS Meshy's own PBR maps (base
-// colour, metallic-roughness, normal), downsized / re-encoded / atlas-packed only — never a Codex re-texture or projection.
+// Tasks studio-food-shelf-production-20261109-002816-01 (lane COOK: the ruined shelf props' atlas, the first food / drink models) and
+// studio-fresh-food-redo-20261109-040427-01 (lane COOK: the 24 food / drink pickups redone as brand-new, factory-fresh products): the
+// runtime derivatives of the approved food / drink / ruined-shelf Meshy T2.5 models. Route: Codex native image_gen INITIAL conditioning
+// image (a strict straight-on elevation conditioned on the user-approved concept original) -> Meshy T2.5 image-to-3D (smart topology, 2K
+// PBR); every model KEEPS Meshy's own PBR maps (base colour, metallic-roughness, normal), downsized / re-encoded / atlas-packed only —
+// never a Codex re-texture or projection.
 //
-// Reads (never modifies) the lead's private task records OUTSIDE Git (reference/tasks/food-shelf-production-20261109-002816/):
-//   PRODUCTION-ASSET-MANIFEST.json   the 51 approved asset ids (names, approved concept originals + sha256; D03 / D08 excluded)
+// Reads (never modifies) the lead's private task records OUTSIDE Git, one task per family:
+//   the 24 collectibles  reference/tasks/fresh-food-redo-20261109-040427/      (FOOD-REDO-ASSET-MANIFEST.json: the 24 ids)
+//   the 27 ruined props  reference/tasks/food-shelf-production-20261109-002816/ (PRODUCTION-ASSET-MANIFEST.json: the 51 first ids)
+// each with:
 //   USER-GENERATION-APPROVAL.json    its sha256 must equal every reservation's approvalSha256
 //   gen/LEDGER.jsonl                 the broker's fsynced reserve / posted / settle / raw / accept lines (the ONLY source of raws)
 //   gen/raw/<ID>-<RES>-<taskId>.glb  the immutable raw originals (read-only; sha256 + bytes checked against the ledger's raw line)
 //   gen/lanes/<lane>/codex.jsonl     the Codex call that produced the reserved conditioning image (matched by sha256; no prompts kept)
-// Only the LATEST ACCEPTED reservation per asset id is cooked (an asset without one is skipped and left out of the registry).
+// Only the LATEST ACCEPTED reservation per asset id is cooked. The real write needs all 24 collectibles accepted (the registry never
+// drops an item); a ruined prop without one is skipped and left out of the registry. The production ledger also names the model each
+// collectible REPLACES (its provenance `replaces`).
+// --food-only cooks the 24 collectibles ONLY: it never bakes or writes the atlas (shelf-junk-atlas.glb, food-shelf-junk-atlas.json), keeps
+// the registry's SHELF_JUNK_ATLAS section and every non-food allowlist entry byte-identical (checked before / after the write).
 // Writes deterministically:
 //   game/public/assets/models/food-<slug>.glb             24 collectibles: one node / mesh / primitive / material, Meshy maps downsized
 //   game/public/assets/models/shelf-junk-atlas.glb        27 ruined props: one mesh node per prop id (P01..P27), ALL on ONE material
@@ -20,12 +28,15 @@
 //
 // Collectibles: exact-attribute weld (+ degenerate triangles / unreferenced vertices dropped; lossless), meshoptimizer seam-preserving
 // simplification only above the 2500-triangle budget (source UVs / normals kept, so Meshy's maps stay mapped exactly; refused when
-// crumpled), UNIFORM scale so the plan's reference measure is its real size (H = the full height, W = the longer horizontal extent =
-// width / length, D = the diameter = the horizontal extent, optionally within a height band), Meshy's native frame (+Y up, front +Z),
-// grounded (min y = 0) and centred on x / z, baked into the vertices (identity node); Meshy's maps downsized to 512 / 256 / 256 px.
-// Recorded per-asset processing (ADJUST: the lead's binding cook adjustments and the lanes' accept notes): local mesh separation of
-// extruded label islands, squashing an extruded label part, real-depth stretches of face-on-reconstructed packaging, half turns,
-// lay-flat quarter turns and rigid rest-pose rolls; the registry's w / h / d describe the final resting pose.
+// crumpled), posed (Meshy's native frame +Y up, front +Z; a half turn / lay-flat quarter turn / rigid rest-pose roll where recorded),
+// UNIFORM scale so the plan's reference measure is its real size (H = the full height, W = the longer horizontal extent = width / length,
+// D = the diameter = the horizontal extent), then each axis corrected to the item's EXACT nominal resting-pose extents (NOMINAL: the
+// registry w / h / d that container fit and food-variety choice read; scaled about the centre, normals by the inverse transpose; the
+// per-axis factors recorded), grounded (min y = 0) and centred on x / z, baked into the vertices (identity node); Meshy's maps downsized
+// to 512 / 256 / 256 px (ITEM_TEX_LABEL: a recorded 1024 px base-colour exception for sliver-UV labels). Recorded per-asset processing
+// (ADJUST: the lead's binding cook adjustments and the lanes' accept notes): local mesh separation of extruded label islands, pressing /
+// squashing an extruded label part onto the face, half turns, lay-flat / stand-up quarter turns and rigid rest-pose rolls; the registry's
+// w / h / d describe the final resting pose.
 // Ruined props (one atlas GLB, lean for the SHELF lane's stock budget): the leanest position-only simplification step (small parts
 // 250-600, big ones 450-900 triangles) within the target error, re-fitted to the plan size, freshly unwrapped into the prop's own
 // square atlas cell (cell side by surface area at one uniform texel density, skyline-packed into 2048 px) and baked from the dense
@@ -33,8 +44,9 @@
 // (lib/bake.mjs). Meshy's 200-1000-chart UV layouts stall a seam-preserving collapse far above these budgets and a seam-crossing
 // collapse smears the texture, so baking is the only way to keep Meshy's maps at this triangle count (processing, not authoring).
 //
-//   node tools/asset-pipeline/props/build-food-shelf-meshy.mjs [--reference <dir>] [--dry-run <scratch dir>]
-//   (--reference defaults to <repo>/reference; --dry-run writes the GLBs + provenance + a registry preview only into the scratch dir)
+//   node tools/asset-pipeline/props/build-food-shelf-meshy.mjs [--food-only] [--reference <dir>] [--dry-run <scratch dir>]
+//   (--reference defaults to <repo>/reference; --dry-run writes the GLBs + provenance + a registry preview only into the scratch dir and
+//   accepts a partial set of collectibles; --food-only: the 24 collectibles only, the atlas and its records untouched)
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -47,12 +59,9 @@ import {bake, downsample} from './lib/bake.mjs';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const arg = n => { const i = process.argv.indexOf(n); return i < 0 ? null : process.argv[i + 1]; };
-const TASK = 'studio-food-shelf-production-20261109-002816-01';
-const TASK_DIR = 'reference/tasks/food-shelf-production-20261109-002816';
 const REF = path.resolve(arg('--reference') ?? path.join(root, 'reference'));
-const T = path.join(REF, 'tasks/food-shelf-production-20261109-002816');
-const GEN = path.join(T, 'gen');
 const DRY = arg('--dry-run');
+const FOOD_ONLY = process.argv.includes('--food-only');
 const PUB = path.join(root, 'game/public');
 const REG = path.join(root, 'game/src/assets/foodShelfModels.generated.ts');
 const ALLOW = path.join(root, 'tools/release/public-inputs.json');
@@ -63,18 +72,46 @@ const sharp = (await import('sharp')).default;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
 /**
+ * The task records (private, outside Git): the collectibles come from the fresh redo task, the ruined props from the production task.
+ * caps = the task's broker caps; codexLane = the lane folder whose codex.jsonl holds the conditioning image's Codex result line.
+ */
+const TASKS = {
+  production: {task: 'studio-food-shelf-production-20261109-002816-01', dir: 'reference/tasks/food-shelf-production-20261109-002816',
+    manifest: 'PRODUCTION-ASSET-MANIFEST.json', caps: {credits: 1000, attempts: 66, posts: 100}, codexLane: rv => rv.lane,
+    approvalSummary: "the user's fresh food / shelf generation approval: up to 1000 Meshy credits on the 51 approved food, drink and ruined-shelf assets with the T2.5 model (caps 66 attempts / 100 paid POSTs; D03 / D08 excluded); Codex conditioning images recorded",
+    route: 'Codex native image_gen INITIAL conditioning image (a strict straight-on front elevation, conditioned on the user-approved concept original) -> Meshy T2.5 image-to-3D (smart topology, 2K PBR texture); the Meshy model keeps its own PBR maps (downsized / re-encoded / atlas-packed only; no re-texture, projection or hand-painted replacement)',
+    licence: "generated for this project (Codex initial image -> Meshy T2.5) under the user's food / shelf generation approval; provider terms apply; unapproved prototype asset, no blanket licence or commercial clearance implied"},
+  redo: {task: 'studio-fresh-food-redo-20261109-040427-01', dir: 'reference/tasks/fresh-food-redo-20261109-040427',
+    manifest: 'FOOD-REDO-ASSET-MANIFEST.json', caps: {credits: 500, attempts: 33, posts: 50},
+    // the broker accepts a status-ok Codex image of this task from any lane's refs/ (e.g. the lead's pilot refs): the input's own lane folder
+    codexLane: rv => path.basename(path.dirname(path.dirname(rv.input))),
+    approvalSummary: "the user's clean food / drink redo approval: up to 500 Meshy credits on the 24 food / drink pickups with the T2.5 model (caps 33 attempts / 50 paid POSTs; D03 / D08 excluded), brand-new factory-fresh products from NEW Codex conditioning images (recorded)",
+    route: 'Codex native image_gen INITIAL conditioning image (a NEW strict straight-on front elevation of the brand-new, factory-fresh product, conditioned on the user-approved concept original; the previous straight-on reference for framing only) -> a FRESH Meshy T2.5 image-to-3D (smart topology, 2K PBR texture); the Meshy model keeps its own PBR maps (downsized / re-encoded only; no re-texture, recolour, projection or hand-painted replacement)',
+    licence: "generated for this project (Codex initial image -> Meshy T2.5) under the user's clean food / drink redo approval; provider terms apply; unapproved prototype asset, no blanket licence or commercial clearance implied"},
+};
+
+/**
  * The plan's table. fit: the reference measure and its real size (m): h = the full height, w = the longer horizontal extent (width /
  * length), d = the diameter (the longer horizontal extent; `band` = [lo, hi] height fractions it is measured in, e.g. a tin without
- * its brush).
+ * its brush). nominal (collectibles): the EXACT resting-pose extents [w, h, d] (m, 4 decimals) every model of the item is cooked to:
+ * the item dims that container fit and food-variety choice read (items/pantryFood.ts PANTRY_DIMS), fixed by the first production cook.
  */
 const ITEMS = [
-  ['F01', 'corned_beef', {h: 0.10}], ['F02', 'sardines', {w: 0.11}], ['F03', 'field_ration', {h: 0.20}], ['F04', 'ration_brick', {w: 0.15}],
-  ['F05', 'pickles', {h: 0.18}], ['F06', 'peanut_butter', {h: 0.12}], ['F07', 'saltines', {w: 0.22}], ['F08', 'jerky', {h: 0.20}],
-  ['F09', 'trail_mix', {h: 0.20}], ['F10', 'honey', {h: 0.17}], ['F11', 'butter_cookies', {d: 0.20}], ['F12', 'pudding_cups', {w: 0.15}],
-  ['F13', 'fruit_puree', {h: 0.15}], ['F14', 'raisins', {w: 0.12}], ['F15', 'smoked_sausage', {w: 0.28}], ['F16', 'wax_cheese', {d: 0.14}],
-  ['F17', 'rolled_oats', {h: 0.24}], ['F18', 'rice_crackers', {w: 0.22}], ['D01', 'sports_drink', {h: 0.23}], ['D02', 'iced_coffee', {h: 0.17}],
-  ['D04', 'iced_tea', {h: 0.24}], ['D05', 'juice_boxes', {w: 0.15}], ['D06', 'uht_milk', {h: 0.20}], ['D07', 'ginger_soda', {h: 0.22}],
-].map(([id, slug, fit]) => ({id, slug, fit}));
+  ['F01', 'corned_beef', {h: 0.10}, [0.1344, 0.1, 0.065]], ['F02', 'sardines', {w: 0.11}, [0.11, 0.025, 0.075]],
+  ['F03', 'field_ration', {h: 0.20}, [0.1436, 0.02, 0.2]], ['F04', 'ration_brick', {w: 0.15}, [0.15, 0.0761, 0.062]],
+  ['F05', 'pickles', {h: 0.18}, [0.1096, 0.18, 0.1103]], ['F06', 'peanut_butter', {h: 0.12}, [0.1274, 0.12, 0.1274]],
+  ['F07', 'saltines', {w: 0.22}, [0.22, 0.091, 0.0719]], ['F08', 'jerky', {h: 0.20}, [0.1314, 0.2, 0.0248]],
+  ['F09', 'trail_mix', {h: 0.20}, [0.1604, 0.2, 0.05]], ['F10', 'honey', {h: 0.17}, [0.0989, 0.17, 0.0563]],
+  ['F11', 'butter_cookies', {d: 0.20}, [0.1995, 0.0941, 0.2]], ['F12', 'pudding_cups', {w: 0.15}, [0.15, 0.1389, 0.1302]],
+  ['F13', 'fruit_puree', {h: 0.15}, [0.0853, 0.15, 0.0238]], ['F14', 'raisins', {w: 0.12}, [0.12, 0.0645, 0.03]],
+  ['F15', 'smoked_sausage', {w: 0.28}, [0.2801, 0.0957, 0.0735]], ['F16', 'wax_cheese', {d: 0.14}, [0.14, 0.065, 0.1399]],
+  ['F17', 'rolled_oats', {h: 0.24}, [0.1431, 0.24, 0.1407]], ['F18', 'rice_crackers', {w: 0.22}, [0.22, 0.035, 0.1172]],
+  ['D01', 'sports_drink', {h: 0.23}, [0.0793, 0.23, 0.0809]], ['D02', 'iced_coffee', {h: 0.17}, [0.0711, 0.17, 0.0713]],
+  ['D04', 'iced_tea', {h: 0.24}, [0.0592, 0.24, 0.0594]], ['D05', 'juice_boxes', {w: 0.15}, [0.15, 0.0964, 0.0586]],
+  ['D06', 'uht_milk', {h: 0.20}, [0.095, 0.2, 0.065]], ['D07', 'ginger_soda', {h: 0.22}, [0.0617, 0.22, 0.0629]],
+].map(([id, slug, fit, nominal]) => ({id, slug, fit, nominal}));
+/** Per-axis exact-fit factors outside this band are listed for the lead's visual check (the console + the provenance `axisFit.review`). */
+const AXIS_REVIEW = [0.85, 1.18];
 const JUNK = [
   ['P01', 'mouldy_loaf', {w: 0.32}], ['P02', 'bloated_can', {h: 0.12}], ['P03', 'burst_milk', {h: 0.25}], ['P04', 'rotten_fruit_crate', {w: 0.40}],
   ['P05', 'crushed_cereal', {h: 0.30}], ['P06', 'mould_jar', {h: 0.18}], ['P07', 'flour_sack', {h: 0.40}], ['P08', 'deli_clamshell', {w: 0.18}],
@@ -88,29 +125,39 @@ const dashed = s => s.replace(/_/g, '-');
 /**
  * Recorded per-asset geometry processing (deterministic; the lead's binding cook adjustments + the lane accept notes), applied to the
  * raw mesh (`dropIslands`, `flatten`: raw Meshy units) or after the uniform fit (`depth`, `layFlat`, `settle`):
- *  dropIslands  local mesh separation: position-connected islands lying wholly in front of raw z = minZ are removed (expected counts checked)
+ *  dropIslands  local mesh separation: position-connected islands lying wholly in front of raw z = minZ, or wholly inside a raw box
+ *               (inBox), are removed (expected island / triangle counts checked)
  *  flatten      one position-connected island (matched by its triangle count + raw bounds) is squashed along raw +Z toward z = toZ
- *  stretch      the face-on conditioning image gave Meshy no (or a wrong) depth: the named raw axes are scaled about their centre to the real product
- *               extents (m; normals by the inverse transpose); the plan's reference measure stays exact (equal to a raw pre-scale)
+ *  press        the islands lying wholly inside a raw box (an extruded label picture) are pressed along z onto the product's own front
+ *               surface (a relief of `factor` + `offset` remains; Meshy's UVs / maps unchanged): the picture stays, the face is flush again
+ *  stretch      (ruined props only; unused) the named raw axes are scaled about their centre to the real product extents (m; normals by the
+ *               inverse transpose); the collectibles' depth comes from the exact per-axis fit to NOMINAL instead
  *  turn         a half turn about y (the clean label faces raw -Z)
  *  layFlat      a quarter turn about x (-90 deg): the front (+Z) face turns up (+Y), the old top goes to -Z (rests on its back, label up)
+ *  standUp      (collectibles) a quarter turn about x (+90 deg): a label Meshy built facing up (+Y) turns to the front (+Z)
  *  settle       rigid rolls about z / x onto stable supports (a model that would otherwise stand on a dangling speck)
+ * The collectible rows describe the FRESH redo raws (task studio-fresh-food-redo-20261109-040427-01: the art lanes' accept notes + the
+ * cook's inspection of each new raw); the first production raws' rows (island counts / bounds of those meshes) are history in Git.
  */
 const ADJUST = {
-  F01: {dropIslands: {minZ: 0.175, dropTris: 1450, keepTris: 1629,
-    why: "local mesh separation (lane A1 salvage accept of R006, lead confirmed): Meshy extruded the label's plate / meat illustration into 12 separate islands standing proud of the tin's front face (raw z 0.265); removing them leaves the closed tin with lid and side key (a faint pale ghost of the plate art stays on the label)"},
-    stretch: {z: 0.065, why: 'lead: a real corned beef tin is 0.065 m deep (Meshy: ~0.10 m for H 0.10)'}},
-  F02: {stretch: {y: 0.075, z: 0.025, why: "lead: the model is the tin's label face (raw depth ~6 mm); a real club sardine tin is 0.11 x 0.075 m and 0.025 m thick"}, layFlat: 'lead: lies label-up'},
-  F03: {stretch: {z: 0.020, why: 'lead: the pouch is ~5 mm deep; a filled field-ration pouch is 0.02 m thick (length 0.20 m)'}, layFlat: 'lead: lies flat, label up'},
-  F05: {turn: "lead: the clean PICKLES label faces raw -Z (the +Z label text is garbled): a half turn about y brings it to the front"},
-  F06: {turn: 'lead: the clean label faces raw -Z (the +Z label text is slightly garbled): a half turn about y brings it to the front'},
-  F14: {stretch: {z: 0.030, why: 'lead: the real three-box raisin pack is 0.03 m deep (Meshy: ~0.058 m)'}},
-  F15: {settle: 'the paper tag hangs 3 cm below the chub (a hanging pose): resting on the tag alone the chub floats; it rolls onto the tag and the chub end'},
-  F16: {stretch: {z: 0.065, why: 'lead: a 0.14 m wax cheese round is 0.065 m thick (Meshy: lens-thin ~2 cm)'}, layFlat: 'lead: lies on its flat face, the circular CHEESE label up'},
-  F18: {stretch: {z: 0.035, why: 'lead: the 0.22 m rice cracker tray pack is 0.035 m deep (Meshy: ~1 cm)'}, layFlat: 'lead: lies label-up'},
-  D06: {stretch: {x: 0.095, z: 0.065, why: 'lead: a 0.20 m UHT 1 L brick has a ~0.095 x 0.065 m footprint (Meshy: 0.084 x ~0.04 m)'}},
-  D07: {flatten: {tris: 956, min: [-0.055, -0.177, 0.077], max: [0.082, -0.098, 0.168], toZ: 0.094, factor: 0.12,
-    why: "lane A3 / lead: Meshy extruded the label's ginger-root illustration into a separate closed part ~1.6 cm proud of the round bottle; squashed onto the label surface the art stays and the bottle is round again"}},
+  F01: {press: {inBox: {min: [-0.24, -0.21, 0.14], max: [0.32, 0, 0.48]}, islands: 11, tris: 833, factor: 0.1, offset: 0.004,
+    why: "lane L1 accept of R001 / lead: Meshy extruded the label's plate / meat / parsley illustration into 11 separate islands standing up to ~0.19 raw units proud of the tin's +Z face; the label underneath only carries a faint smudge of it, so the islands are pressed flat onto the face (the crisp picture stays, the tin face is flush)"}},
+  F02: {layFlat: 'plan: the sardine tin lies label-up'},
+  F03: {layFlat: 'plan: the ration pouch lies flat, label up (its 8 stew-chunk islands stay: ~0.003 raw units proud = ~1 mm after the cook, flush with the label; stripped, the bowl print underneath is an empty pale oval)'},
+  F10: {dropIslands: {inBox: [{min: [-0.21, -0.27, 0.13], max: [0.21, 0.15, 0.18]}, {min: [-0.21, -0.27, -0.18], max: [0.21, 0.15, -0.13]}], islands: 2, dropTris: 184, keepTris: 2965,
+    why: "local mesh separation (lane L2 accept of R012, lead): the two hexagon HONEY labels were extruded as flat plates standing off the curved bottle front and back; removed, the hexagon labels stay printed on the bottle"}},
+  F11: {press: {inBox: {min: [-0.22, -0.16, 0.23], max: [0.23, 0.02, 0.36]}, islands: 4, tris: 1742, factor: 0.1, offset: 0.004,
+    why: "lane L2 accept of R023 / lead: the label's cookie illustration was extruded as 4 islands up to ~0.07 raw units proud of the tin's +Z side; the tin underneath only carries a faint smudge of it, so the islands are pressed flat onto the tin (the crisp cookies stay; the seal tape over the lid seam is a real part and kept)"}},
+  F12: {standUp: "lead / lane L2 accept of R020: Meshy read the straight-on elevation as a top view (the sleeve card lies across the cup tops, the label faces +Y); stood up, the label faces +Z like the item's current upright box"},
+  F13: {press: {inBox: {min: [-0.19, -0.28, -0.07], max: [0.21, 0.05, 0.18]}, islands: 6, tris: 2265, factor: 0.1, offset: 0.004,
+    why: "lane L3 accept of R007 / lead: the label's apple / pear / leaf illustration was extruded as 6 islands up to ~0.19 raw units proud of the pouch's +Z face; the pouch underneath only carries a blurred blob of it, so the islands are pressed flat onto the pouch (the crisp fruit stays; the cap and spout parts are kept)"}},
+  F15: {settle: 'the paper hang tag hangs ~0.1 raw units below the chub (a hanging pose): resting on the tag alone the chub floats; it rolls onto the tag and the chub end'},
+  F16: {layFlat: 'plan: the wax cheese round lies on its flat face, the circular label up'},
+  F18: {layFlat: 'plan: the rice cracker tray pack lies label-up'},
+  D04: {dropIslands: {inBox: {min: [-0.11, -0.29, 0.05], max: [0.12, -0.03, 0.16]}, islands: 9, dropTris: 585, keepTris: 2423,
+    why: "local mesh separation (lane L4 accept of R014, lead): the label's lemon-and-leaf illustration was extruded as 9 islands up to ~0.04 raw units proud of the bottle's +Z label; removed, the art stays printed on the label"}},
+  D07: {dropIslands: {inBox: {min: [-0.075, -0.19, 0.07], max: [0.085, -0.1, 0.19]}, islands: 1, dropTris: 1630, keepTris: 1530,
+    why: "local mesh separation (lane L4 accept of R024, lead): the label's ginger-root illustration was extruded as a separate closed part ~0.09 raw units proud of the bottle's +Z label; removed, the art stays printed on the label and the bottle is round again"}},
   P11: {layFlat: 'lead: Meshy built the wrapper / cup cluster upright on a narrow base; laid on its back it rests stably like the approved concept',
     settle: 'laid on its back it first touches the floor with one protruding wrapper corner (2.4 cm below the broad back); it rolls onto its back'},
   P24: {layFlat: 'lead / lane A5: the coiled cable and dead adapter were reconstructed standing up (the conditioning image is their top view); laid flat'},
@@ -135,9 +182,18 @@ const JUNK_TARGET_ERROR = 0.015;
 const BAKE = {supersample: 2, workers: 6};
 /**
  * Collectible map sizes [base, metallicRoughness, normal] px: the repo's consumable-item class (meshy-t25 items: 512 px colour, 256 px
- * MR / normal; ~2 MB GPU per item). The packaging lettering stays legible at 512 (checked); 1024 / 512 / 512 would be ~8 MB GPU each.
+ * MR / normal; ~2 MB GPU per item). The packaging lettering stays legible at 512 (checked; the exceptions are ITEM_TEX_LABEL);
+ * 1024 / 512 / 512 would be ~8 MB GPU each.
  */
 const ITEM_TEX = [512, 256, 256];
+/**
+ * Recorded per-item map-size exceptions [base, metallicRoughness, normal] px (lead, task studio-fresh-food-redo-20261109-040427-01; at
+ * most 8 items): Meshy packed these labels into narrow UV slivers, so at the class's 512 px the clean print smears into grime-like streaks.
+ */
+const ITEM_TEX_LABEL = {D02: [1024, 256, 256], F07: [1024, 256, 256], F04: [1024, 256, 256], F01: [1024, 256, 256], F12: [1024, 256, 256]};
+const ITEM_TEX_LABEL_WHY = "lead: Meshy packed this label into narrow UV slivers; at the class's 512 px base colour the clean print smears into grime-like streaks, at 1024 px it stays crisp (metallic-roughness / normal keep the class's 256 px)";
+if (Object.keys(ITEM_TEX_LABEL).length > 8 || Object.keys(ITEM_TEX_LABEL).some(id => !ITEMS.some(r => r.id === id))) throw new Error('ITEM_TEX_LABEL: at most 8 collectible ids');
+const itemTex = id => ITEM_TEX_LABEL[id] ?? ITEM_TEX;
 /**
  * The shared atlas: base colour 2048 px; metallic-roughness and normal stored at 1024 px (lead: texture memory on every stocked level;
  * the same cells, an exact 2 x 2 downsample of the 2048 bake, normals renormalised); square cells on a 16 px grid (even pixels, so the
@@ -154,77 +210,107 @@ const JPEG = {baseColor: {quality: 86, chromaSubsampling: '4:2:0'}, metallicRoug
 const SLOTS = ['baseColor', 'metallicRoughness', 'normal'];
 
 // ---------- records ----------
-const manifest = JSON.parse(fs.readFileSync(path.join(T, 'PRODUCTION-ASSET-MANIFEST.json'), 'utf8'));
-const approved = new Map(manifest.assets.map(a => [a.id, a]));
-for (const r of [...ITEMS, ...JUNK]) if (!approved.has(r.id) || (manifest.excluded ?? []).includes(r.id)) throw new Error(`${r.id}: not an approved asset`);
-if (ITEMS.length + JUNK.length !== manifest.assets.length) throw new Error('the plan table does not cover the approved manifest');
-const approvalSha = sha(fs.readFileSync(path.join(T, 'USER-GENERATION-APPROVAL.json')));
-const ledgerLines = fs.readFileSync(path.join(GEN, 'LEDGER.jsonl'), 'utf8').split('\n').filter(Boolean).map((l, i) => ({...JSON.parse(l), seq: i + 1}));
-const CAPS = {credits: 1000, attempts: 66, posts: 100};
+/**
+ * One task's records (manifest, approval, ledger, Codex lines), cross-checked like its broker: `records(row)` = the latest accepted
+ * reservation of an asset (or null), `previous(row)` = the same from the ledger lines only (no raw read: what a new model replaces).
+ */
+function taskRecords(name) {
+  const cfg = TASKS[name], T = path.join(REF, path.relative('reference', cfg.dir)), GEN = path.join(T, 'gen');
+  const manifest = JSON.parse(fs.readFileSync(path.join(T, cfg.manifest), 'utf8'));
+  const approved = new Map(manifest.assets.map(a => [a.id, a]));
+  const approvalSha = sha(fs.readFileSync(path.join(T, 'USER-GENERATION-APPROVAL.json')));
+  const ledgerLines = fs.readFileSync(path.join(GEN, 'LEDGER.jsonl'), 'utf8').split('\n').filter(Boolean).map((l, i) => ({...JSON.parse(l), seq: i + 1}));
 
-/** The broker's own state machine (gen/broker.py state()) over the ledger, keeping the line numbers. */
-function ledgerState() {
-  const res = new Map();
-  for (const l of ledgerLines) {
-    if (l.type === 'reserve') { res.set(l.res, {reserve: l, state: 'reserved', billed: 0, lines: {reserve: l.seq}}); continue; }
-    const x = res.get(l.res);
-    if (!x) continue;
-    if (l.asset !== x.reserve.asset) throw new Error(`ledger line ${l.seq}: asset ${l.asset} != reservation ${l.res} asset ${x.reserve.asset}`);
-    if (l.type === 'posted') Object.assign(x, {state: 'posted', taskId: l.taskId, posted: l});
-    else if (l.type === 'uncertain') x.state = 'uncertain';
-    else if (l.type === 'reconciled') { if (l.taskId) Object.assign(x, {state: 'posted', taskId: l.taskId, posted: l}); else x.state = 'released'; }
-    else if (l.type === 'settle') Object.assign(x, {state: l.status.toLowerCase(), billed: l.billed, settle: l});
-    else if (l.type === 'raw') x.raw = l;
-    else if (l.type === 'accept') Object.assign(x, {accepted: true, accept: l});
-    else if (l.type === 'reject') Object.assign(x, {accepted: false, reject: l});
-    x.lines[l.type] = l.seq;
+  /** The broker's own state machine (gen/broker.py state()) over the ledger, keeping the line numbers. */
+  function ledgerState() {
+    const res = new Map();
+    for (const l of ledgerLines) {
+      if (l.type === 'reserve') { res.set(l.res, {reserve: l, state: 'reserved', billed: 0, lines: {reserve: l.seq}}); continue; }
+      const x = res.get(l.res);
+      if (!x) continue;
+      if (l.asset !== x.reserve.asset) throw new Error(`${name} ledger line ${l.seq}: asset ${l.asset} != reservation ${l.res} asset ${x.reserve.asset}`);
+      if (l.type === 'posted') Object.assign(x, {state: 'posted', taskId: l.taskId, posted: l});
+      else if (l.type === 'uncertain') x.state = 'uncertain';
+      else if (l.type === 'reconciled') { if (l.taskId) Object.assign(x, {state: 'posted', taskId: l.taskId, posted: l}); else x.state = 'released'; }
+      else if (l.type === 'settle') Object.assign(x, {state: l.status.toLowerCase(), billed: l.billed, settle: l});
+      else if (l.type === 'raw') x.raw = l;
+      else if (l.type === 'accept') Object.assign(x, {accepted: true, accept: l});
+      else if (l.type === 'reject') Object.assign(x, {accepted: false, reject: l});
+      x.lines[l.type] = l.seq;
+    }
+    const all = [...res.values()];
+    const billed = all.reduce((s, x) => s + x.billed, 0);
+    const reserved = all.filter(x => ['reserved', 'posted', 'uncertain'].includes(x.state)).reduce((s, x) => s + x.reserve.credits, 0);
+    return {res, billed, reserved, attempts: all.length, posts: all.length};
   }
-  const all = [...res.values()];
-  const billed = all.reduce((s, x) => s + x.billed, 0);
-  const reserved = all.filter(x => ['reserved', 'posted', 'uncertain'].includes(x.state)).reduce((s, x) => s + x.reserve.credits, 0);
-  return {res, billed, reserved, attempts: all.length, posts: all.length};
-}
-const ledger = ledgerState();
-if (ledger.billed + ledger.reserved > CAPS.credits || ledger.attempts > CAPS.attempts || ledger.posts > CAPS.posts) throw new Error(`ledger outside the caps: ${JSON.stringify({billed: ledger.billed, reserved: ledger.reserved, attempts: ledger.attempts})}`);
+  const ledger = ledgerState(), CAPS = cfg.caps;
+  if (ledger.billed + ledger.reserved > CAPS.credits || ledger.attempts > CAPS.attempts || ledger.posts > CAPS.posts) throw new Error(`${name} ledger outside the caps: ${JSON.stringify({billed: ledger.billed, reserved: ledger.reserved, attempts: ledger.attempts})}`);
 
-const codexLines = new Map();
-function codexOf(lane, inputSha) {
-  if (!codexLines.has(lane)) {
-    const f = path.join(GEN, 'lanes', lane, 'codex.jsonl');
-    codexLines.set(lane, fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split('\n').filter(l => l.trim().startsWith('{')).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean) : []);
+  const codexLines = new Map();
+  function codexOf(lane, inputSha, asset) {
+    if (!codexLines.has(lane)) {
+      const f = path.join(GEN, 'lanes', lane, 'codex.jsonl');
+      codexLines.set(lane, fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split('\n').filter(l => l.trim().startsWith('{')).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean) : []);
+    }
+    const hit = codexLines.get(lane).filter(l => l.phase === 'result' && l.sha256 === inputSha);
+    if (!hit.length) return null;
+    const h = hit[hit.length - 1];
+    const intent = codexLines.get(lane).find(l => l.phase === 'intent' && l.id === h.id && l.attempt === h.attempt);
+    const base = {lane, asset: h.id, attempt: h.attempt, session: h.session, status: h.status, size: h.size, bytes: h.bytes, sha256: h.sha256};
+    if (name === 'production') return {...base, identityReferenceSha256: intent?.inputSha256 ?? h.inputSha256 ?? null, promptSha256: intent?.promptSha256 ?? null,
+      generator: 'OpenAI Codex CLI built-in image_gen (image model id not reported)'};
+    // the redo's intent lines list every attached image (Image 1 = the approved concept original; Image 2 = the previous straight-on
+    // reference, framing only, unless --identity-only); the extra note text is prompt content (not kept: only whether one was given)
+    const ins = intent?.inputSha256 ?? [];
+    return {...base, inputImages: ins.map((s, i) => ({image: i + 1, sha256: s, role: s === approved.get(asset)?.sourceImageSha256 ? 'the user-approved concept original (identity)' : 'the previous production straight-on reference (framing only)'})),
+      identityOnly: intent?.identityOnly ?? null, extraInstruction: intent ? !!intent.extra : null, promptSha256: intent?.promptSha256 ?? null,
+      imageGenGenerations: h.imageGenGenerations ?? null, generator: 'OpenAI Codex CLI built-in image_gen (image model id not reported)'};
   }
-  const hit = codexLines.get(lane).filter(l => l.phase === 'result' && l.sha256 === inputSha);
-  if (!hit.length) return null;
-  const h = hit[hit.length - 1];
-  const intent = codexLines.get(lane).find(l => l.phase === 'intent' && l.id === h.id && l.attempt === h.attempt);
-  return {lane, asset: h.id, attempt: h.attempt, session: h.session, status: h.status, size: h.size, bytes: h.bytes, sha256: h.sha256,
-    identityReferenceSha256: intent?.inputSha256 ?? h.inputSha256 ?? null, promptSha256: intent?.promptSha256 ?? null,
-    generator: 'OpenAI Codex CLI built-in image_gen (image model id not reported)'};
-}
-const relT = f => { const rel = path.relative(T, f); if (rel.startsWith('..')) throw new Error(`${f} is outside the task dir`); return `${TASK_DIR}/${rel.split(path.sep).join('/')}`; };
+  const relT = f => { const rel = path.relative(T, f); if (rel.startsWith('..')) throw new Error(`${f} is outside the task dir`); return `${cfg.dir}/${rel.split(path.sep).join('/')}`; };
+  const latestAccepted = id => [...ledger.res.values()].filter(x => x.reserve.asset === id && x.accepted === true).sort((p, q) => q.accept.seq - p.accept.seq)[0] ?? null;
 
-/** The latest accepted reservation of an asset (or null), every record cross-checked. */
-function records(row) {
-  const a = approved.get(row.id);
-  const cands = [...ledger.res.values()].filter(x => x.reserve.asset === row.id && x.accepted === true).sort((p, q) => q.accept.seq - p.accept.seq);
-  if (!cands.length) return null;
-  const x = cands[0], rv = x.reserve;
-  const fail = m => { throw new Error(`${row.id} ${rv.res}: ${m}`); };
-  if (x.state !== 'succeeded' || !x.settle || x.settle.status !== 'SUCCEEDED') fail(`accepted but not SUCCEEDED (${x.state})`);
-  if (!x.taskId || !x.raw) fail('no task id / raw line');
-  if (rv.approvalSha256 !== approvalSha) fail('reservation approval sha256 != USER-GENERATION-APPROVAL.json');
-  if (rv.approvedSourceSha256 !== a.sourceImageSha256) fail('approved concept sha256 mismatch');
-  if (rv.params?.file_path !== rv.input || rv.params?.ai_model !== 'meshy-t2.5' || rv.params?.model_type !== 'smart-topology' || rv.params?.enable_pbr !== true) fail('reservation params are not the approved T2.5 PBR recipe');
-  const inputBytes = fs.readFileSync(rv.input);
-  if (sha(inputBytes) !== rv.inputSha256 || inputBytes.length !== rv.inputBytes) fail('conditioning image sha256 / bytes mismatch');
-  const rawFile = x.raw.file;
-  if (path.dirname(path.resolve(rawFile)) !== path.join(GEN, 'raw') || !path.basename(rawFile).startsWith(`${row.id}-`) || !path.basename(rawFile).includes(x.taskId)) fail(`raw file name ${rawFile} is not gen/raw/<ID>-<RES>-<taskId>.glb`);
-  const bytes = fs.readFileSync(rawFile);
-  if (sha(bytes) !== x.raw.sha256 || bytes.length !== x.raw.bytes) fail(`raw original sha256 / bytes mismatch (${rawFile})`);
-  const codex = codexOf(rv.lane, rv.inputSha256);
-  return {res: rv.res, lane: rv.lane, taskId: x.taskId, reserve: rv, settle: x.settle, raw: x.raw, accept: x.accept, lines: x.lines, bytes, inputBytes, codex, approvedAsset: a,
-    attemptsForAsset: [...ledger.res.values()].filter(y => y.reserve.asset === row.id).map(y => ({res: y.reserve.res, state: y.state, accepted: y.accepted ?? null}))};
+  function records(row) {
+    const a = approved.get(row.id);
+    const x = latestAccepted(row.id);
+    if (!x) return null;
+    const rv = x.reserve;
+    const fail = m => { throw new Error(`${row.id} ${rv.res}: ${m}`); };
+    if (x.state !== 'succeeded' || !x.settle || x.settle.status !== 'SUCCEEDED') fail(`accepted but not SUCCEEDED (${x.state})`);
+    if (!x.taskId || !x.raw) fail('no task id / raw line');
+    if (rv.approvalSha256 !== approvalSha) fail('reservation approval sha256 != USER-GENERATION-APPROVAL.json');
+    if (rv.approvedSourceSha256 !== a.sourceImageSha256) fail('approved concept sha256 mismatch');
+    if (rv.params?.file_path !== rv.input || rv.params?.ai_model !== 'meshy-t2.5' || rv.params?.model_type !== 'smart-topology' || rv.params?.enable_pbr !== true) fail('reservation params are not the approved T2.5 PBR recipe');
+    const inputBytes = fs.readFileSync(rv.input);
+    if (sha(inputBytes) !== rv.inputSha256 || inputBytes.length !== rv.inputBytes) fail('conditioning image sha256 / bytes mismatch');
+    const rawFile = x.raw.file;
+    if (path.dirname(path.resolve(rawFile)) !== path.join(GEN, 'raw') || !path.basename(rawFile).startsWith(`${row.id}-`) || !path.basename(rawFile).includes(x.taskId)) fail(`raw file name ${rawFile} is not gen/raw/<ID>-<RES>-<taskId>.glb`);
+    const bytes = fs.readFileSync(rawFile);
+    if (sha(bytes) !== x.raw.sha256 || bytes.length !== x.raw.bytes) fail(`raw original sha256 / bytes mismatch (${rawFile})`);
+    const codex = codexOf(cfg.codexLane(rv), rv.inputSha256, row.id);
+    if (name === 'redo') { // the redo broker's own admission rule: a status-ok Codex image of THIS task for this asset id, the session it recorded
+      if (!codex || codex.status !== 'ok' || codex.asset !== row.id) fail('no status-ok Codex result line of this task for the conditioning image');
+      if (rv.codexSession !== codex.session || rv.codexAttempt !== codex.attempt) fail('the reservation\'s Codex session / attempt != the Codex result line');
+    }
+    return {task: taskApi, res: rv.res, lane: rv.lane, taskId: x.taskId, reserve: rv, settle: x.settle, raw: x.raw, accept: x.accept, lines: x.lines, bytes, inputBytes, codex, approvedAsset: a,
+      attemptsForAsset: [...ledger.res.values()].filter(y => y.reserve.asset === row.id).map(y => ({res: y.reserve.res, state: y.state, accepted: y.accepted ?? null}))};
+  }
+  function previous(row) {
+    const x = latestAccepted(row.id);
+    return x && {task: cfg.task, reservation: x.reserve.res, lane: x.reserve.lane, meshyTask: x.taskId, conditioningImageSha256: x.reserve.inputSha256,
+      raw: {file: `${relT(x.raw.file)} (raw original, read-only, outside Git)`, sha256: x.raw.sha256, bytes: x.raw.bytes}};
+  }
+  const taskApi = {name, ...cfg, approved, excluded: manifest.excluded ?? [], approvalSha, records, previous, relT, ledger,
+    approval: {userGenerationApprovalSha256: approvalSha, summary: cfg.approvalSummary}};
+  return taskApi;
 }
+const PROD = taskRecords('production'), FOOD = taskRecords('redo');
+for (const r of JUNK) if (!PROD.approved.has(r.id) || PROD.excluded.includes(r.id)) throw new Error(`${r.id}: not an approved production asset`);
+if (ITEMS.length + JUNK.length !== PROD.approved.size) throw new Error('the plan table does not cover the production manifest');
+for (const r of ITEMS) if (!FOOD.approved.has(r.id) || FOOD.excluded.includes(r.id) || !PROD.approved.has(r.id)) throw new Error(`${r.id}: not an approved redo asset`);
+if (ITEMS.length !== FOOD.approved.size) throw new Error('the plan table does not cover the redo manifest');
+for (const r of ITEMS) if (FOOD.approved.get(r.id).itemDef !== r.slug) throw new Error(`${r.id}: redo manifest itemDef ${FOOD.approved.get(r.id).itemDef} != ${r.slug}`);
+for (const r of ITEMS) for (const k of Object.keys(ADJUST[r.id] ?? {})) if (!['dropIslands', 'flatten', 'press', 'turn', 'layFlat', 'standUp', 'settle'].includes(k)) throw new Error(`${r.id}: ADJUST.${k} is not a collectible adjustment (the exact per-axis fit sets the extents)`);
+for (const r of JUNK) if (ADJUST[r.id]?.standUp) throw new Error(`${r.id}: standUp is a collectible adjustment`);
 
 // ---------- geometry ----------
 async function readSource(id, rec) {
@@ -366,15 +452,18 @@ function islands(m) {
 function preAdjust(id, m, adj) {
   const rec = {};
   if (adj?.dropIslands) {
-    const a = adj.dropIslands, list = islands(m);
-    const drop = list.filter(o => o.min[2] >= a.minZ);
+    // minZ: islands lying wholly in front of raw z = minZ; inBox: islands lying wholly inside the raw box (an extruded label illustration
+    // in front of the face, clear of the product's own parts); the dropped / kept triangle counts must match the recorded ones
+    const a = adj.dropIslands, list = islands(m), boxes = a.inBox ? [a.inBox].flat() : [];
+    const inside = o => boxes.some(b => [0, 1, 2].every(k => o.min[k] >= b.min[k] && o.max[k] <= b.max[k]));
+    const drop = list.filter(o => (a.inBox ? inside(o) : o.min[2] >= a.minZ));
     const dropTris = drop.reduce((s, o) => s + o.tris.length, 0), keepTris = m.I.length / 3 - dropTris;
-    if (dropTris !== a.dropTris || keepTris !== a.keepTris) throw new Error(`${id}: island drop ${dropTris} / keep ${keepTris} != the expected ${a.dropTris} / ${a.keepTris}`);
+    if (dropTris !== a.dropTris || keepTris !== a.keepTris || (a.islands != null && drop.length !== a.islands)) throw new Error(`${id}: island drop ${drop.length} islands / ${dropTris} tris, keep ${keepTris} != the expected ${a.islands ?? '-'} / ${a.dropTris} / ${a.keepTris}`);
     const gone = new Set(drop.flatMap(o => o.tris)), I = [];
     for (let t = 0; t < m.I.length / 3; t++) if (!gone.has(t)) I.push(m.I[3 * t], m.I[3 * t + 1], m.I[3 * t + 2]);
     m = {...m, I: Uint32Array.from(I)};
-    rec.dropIslands = {rule: `position-connected islands lying wholly in front of raw z = ${a.minZ} (min z >= ${a.minZ})`, islands: drop.length, ofIslands: list.length,
-      droppedTriangles: dropTris, keptTriangles: keepTris, droppedBounds: drop.map(o => ({tris: o.tris.length, min: o.min.map(r4), max: o.max.map(r4)})), why: a.why};
+    rec.dropIslands = {rule: a.inBox ? `position-connected islands lying wholly inside the raw box${boxes.length > 1 ? 'es' : ''} ${boxes.map(b => `min ${JSON.stringify(b.min)} max ${JSON.stringify(b.max)}`).join(' / ')} (Meshy units)` : `position-connected islands lying wholly in front of raw z = ${a.minZ} (min z >= ${a.minZ})`,
+      islands: drop.length, ofIslands: list.length, droppedTriangles: dropTris, keptTriangles: keepTris, droppedBounds: drop.map(o => ({tris: o.tris.length, min: o.min.map(r4), max: o.max.map(r4)})), why: a.why};
   }
   if (adj?.flatten) {
     const a = adj.flatten, list = islands(m);
@@ -389,7 +478,62 @@ function preAdjust(id, m, adj) {
     m = {...m, P, N};
     rec.flatten = {island: {tris: a.tris, min: hit[0].min.map(r4), max: hit[0].max.map(r4)}, rule: `z' = ${a.toZ} + (z - ${a.toZ}) * ${a.factor} for the island's vertices (raw units); normals inverse-transpose, renormalised`, why: a.why};
   }
+  if (adj?.press) m = press(id, m, adj.press, rec);
   return {m, rec};
+}
+
+/**
+ * ADJUST.press: the islands lying wholly inside the raw box(es) (an extruded label illustration) are pressed along z onto the rest of the
+ * mesh's front surface: each island vertex at (x, y, z) over the front-most surface point zs (a ray along -z against the other triangles)
+ * goes to zs + offset + (z - zs) * factor in front of it, or zs + (z - zs) * factor behind it; the front side takes the surface's normal
+ * there (the picture lies on the label like print), the hidden side the inverse transpose of the z squash. Meshy's UVs / maps unchanged.
+ */
+function press(id, m, a, rec) {
+  const list = islands(m), boxes = [a.inBox].flat();
+  const sel = list.filter(o => boxes.some(b => [0, 1, 2].every(k => o.min[k] >= b.min[k] && o.max[k] <= b.max[k])));
+  const selTris = sel.reduce((s, o) => s + o.tris.length, 0);
+  if (sel.length !== a.islands || selTris !== a.tris) throw new Error(`${id}: press selects ${sel.length} islands / ${selTris} tris != the expected ${a.islands} / ${a.tris}`);
+  const own = new Set(sel.flatMap(o => o.tris)), T = m.I.length / 3, body = [];
+  for (let t = 0; t < T; t++) if (!own.has(t)) body.push(t);
+  // x-y grid of the receiving triangles' projected bounds
+  const G = 64, bb = boundsOf(m.P), cx = (bb.max[0] - bb.min[0]) / G || 1, cy = (bb.max[1] - bb.min[1]) / G || 1;
+  const cell = (x, y) => [Math.min(G - 1, Math.max(0, Math.floor((x - bb.min[0]) / cx))), Math.min(G - 1, Math.max(0, Math.floor((y - bb.min[1]) / cy)))];
+  const grid = Array.from({length: G * G}, () => []);
+  for (const t of body) {
+    const v = [0, 1, 2].map(k => m.I[3 * t + k]);
+    const [x0, y0] = cell(Math.min(...v.map(q => m.P[3 * q])), Math.min(...v.map(q => m.P[3 * q + 1]))), [x1, y1] = cell(Math.max(...v.map(q => m.P[3 * q])), Math.max(...v.map(q => m.P[3 * q + 1])));
+    for (let gx = x0; gx <= x1; gx++) for (let gy = y0; gy <= y1; gy++) grid[gy * G + gx].push(t);
+  }
+  const front = (x, y) => { // the front-most receiving surface over (x, y): z + interpolated (outward) normal
+    let best = null;
+    const [gx, gy] = cell(x, y);
+    for (const t of grid[gy * G + gx]) {
+      const [i, j, k] = [0, 1, 2].map(q => 3 * m.I[3 * t + q]);
+      const d = (m.P[j + 1] - m.P[k + 1]) * (m.P[i] - m.P[k]) + (m.P[k] - m.P[j]) * (m.P[i + 1] - m.P[k + 1]);
+      if (Math.abs(d) < 1e-14) continue;
+      const b0 = ((m.P[j + 1] - m.P[k + 1]) * (x - m.P[k]) + (m.P[k] - m.P[j]) * (y - m.P[k + 1])) / d;
+      const b1 = ((m.P[k + 1] - m.P[i + 1]) * (x - m.P[k]) + (m.P[i] - m.P[k]) * (y - m.P[k + 1])) / d, b2 = 1 - b0 - b1;
+      if (b0 < -1e-9 || b1 < -1e-9 || b2 < -1e-9) continue;
+      const z = b0 * m.P[i + 2] + b1 * m.P[j + 2] + b2 * m.P[k + 2];
+      if (!best || z > best.z) best = {z, n: [0, 1, 2].map(c => b0 * m.N[i + c] + b1 * m.N[j + c] + b2 * m.N[k + c])};
+    }
+    return best;
+  };
+  const P = Float32Array.from(m.P), N = Float32Array.from(m.N);
+  let misses = 0, maxRelief = 0;
+  for (const o of sel) for (const v of o.verts) {
+    const x = m.P[3 * v], y = m.P[3 * v + 1], z = m.P[3 * v + 2], s = front(x, y);
+    if (!s) { misses++; continue; }
+    const dz = z - s.z, nz = dz > 0 ? s.z + a.offset + dz * a.factor : s.z + dz * a.factor;
+    P[3 * v + 2] = nz;
+    maxRelief = Math.max(maxRelief, nz - s.z);
+    const n = dz > 0 ? s.n : [m.N[3 * v], m.N[3 * v + 1], m.N[3 * v + 2] / a.factor], l = Math.hypot(...n) || 1;
+    for (let c = 0; c < 3; c++) N[3 * v + c] = n[c] / l;
+  }
+  if (misses) throw new Error(`${id}: press: ${misses} island vertices have no receiving surface behind them`);
+  rec.press = {rule: `position-connected islands lying wholly inside the raw box${boxes.length > 1 ? 'es' : ''} ${boxes.map(b => `min ${JSON.stringify(b.min)} max ${JSON.stringify(b.max)}`).join(' / ')} (Meshy units) pressed along z onto the front-most other surface zs: z' = zs + ${a.offset} + (z - zs) * ${a.factor} in front of it, zs + (z - zs) * ${a.factor} behind it; the front side takes the surface normal, the hidden side the inverse transpose`,
+    islands: sel.length, triangles: selTris, maxReliefRaw: r4(maxRelief), pressedBounds: sel.map(o => ({tris: o.tris.length, min: o.min.map(r4), max: o.max.map(r4)})), why: a.why};
+  return {...m, P, N};
 }
 
 function boundsOf(P) {
@@ -513,10 +657,40 @@ async function cookGeometry(row, rec) {
   const welded = weld(pre.m); // (the weld also drops vertices no longer referenced after an island removal)
   const charts = uvCharts(welded);
   const {m: low, info: simp} = await simplifyStepped(welded, ITEM_BUDGETS);
-  const {P, N, fit} = fitMesh(low, {...row.fit, stretch: adj.stretch, turn: adj.turn, layFlat: adj.layFlat, settle: adj.settle});
+  // the pose (half turn / lay-flat / rest-pose roll) and the uniform fit on the plan's reference measure (rigid poses commute with the
+  // uniform scale: the measure is the plan's, as fitMesh defines it), then the exact per-axis fit to the item's nominal extents
+  // standUp (collectibles): a quarter turn about x the other way round from layFlat, (x, y, z) -> (x, -z, y): a label Meshy built facing
+  // up (+Y) turns to the front (+Z); applied rigidly before the fit (the reference measure is then taken in the upright frame)
+  const up = adj.standUp ? {...low, P: Float32Array.from(low.P), N: Float32Array.from(low.N)} : low;
+  if (adj.standUp) for (const A of [up.P, up.N]) for (let i = 0; i < A.length; i += 3) { const y = A[i + 1], z = A[i + 2]; A[i + 1] = -z; A[i + 2] = y; }
+  const posed = fitMesh(up, {...row.fit, turn: adj.turn, layFlat: adj.layFlat, settle: adj.settle});
+  const {P, N, axisFit} = exactFit(row, posed.P, posed.N);
+  const stood = adj.standUp ? {standUp: {rotation: 'a quarter turn about x: (x, y, z) -> (x, -z, y); the raw up (+Y) face to the front (+Z), the raw front (+Z) down', reason: adj.standUp}} : {};
+  const fit = {...posed.fit, ...stood, axisFit, rotation: adj.standUp ? 'stood up (the label Meshy built facing up turned to the front +Z)' : posed.fit.rotation, translate: axisFit.translate, uniformTranslate: posed.fit.translate};
   const b = boundsOf(P);
   const dims = [0, 1, 2].map(k => r4(b.max[k] - b.min[k]));
   return {src, extent, welded, charts, simp, fit, adjust: Object.keys(pre.rec).length ? pre.rec : null, mesh: {P, N, UV: low.UV, I: low.I}, dims, min: b.min.map(r6), max: b.max.map(r6), uvRange: [r6(umin), r6(umax)]};
+}
+
+/**
+ * The exact per-axis fit of a posed, uniformly fitted collectible: each axis is scaled about the box centre to the item's NOMINAL
+ * resting-pose extent (normals by the inverse transpose, renormalised), then grounded (min y = 0) and centred on x / z. The factors show
+ * how far the new model's proportions differ from the item box (1 = the uniform fit already matches); those outside AXIS_REVIEW are flagged.
+ */
+function exactFit(row, P0, N0) {
+  const P = Float32Array.from(P0), N = Float32Array.from(N0), b = boundsOf(P);
+  const ext = [0, 1, 2].map(a => b.max[a] - b.min[a]), c = [0, 1, 2].map(a => (b.min[a] + b.max[a]) / 2);
+  const k = row.nominal.map((v, a) => v / ext[a]);
+  for (let i = 0; i < P.length; i += 3) for (let a = 0; a < 3; a++) P[i + a] = c[a] + (P[i + a] - c[a]) * k[a];
+  for (let i = 0; i < N.length; i += 3) { const x = N[i] / k[0], y = N[i + 1] / k[1], z = N[i + 2] / k[2], l = Math.hypot(x, y, z) || 1; N[i] = x / l; N[i + 1] = y / l; N[i + 2] = z / l; }
+  const bb = boundsOf(P), t = [-(bb.min[0] + bb.max[0]) / 2, -bb.min[1], -(bb.min[2] + bb.max[2]) / 2];
+  for (let i = 0; i < P.length; i += 3) for (let a = 0; a < 3; a++) P[i + a] += t[a];
+  const fb = boundsOf(P), dims = [0, 1, 2].map(a => r4(fb.max[a] - fb.min[a]));
+  if (dims.some((v, a) => v !== row.nominal[a])) throw new Error(`${row.id}: exact fit ${dims.join(' x ')} != nominal ${row.nominal.join(' x ')}`);
+  const review = ['x', 'y', 'z'].filter((_, a) => k[a] < AXIS_REVIEW[0] || k[a] > AXIS_REVIEW[1]);
+  return {P, N, axisFit: {nominalM: row.nominal, fromM: ext.map(r4), factors: k.map(r6), axes: 'the final resting-pose frame (x = w, y = h, z = d)',
+    rule: 'each axis scaled about the box centre to the exact nominal extent (the item dims container fit and food-variety choice read), normals inverse-transpose, renormalised; then grounded / centred',
+    reviewBand: AXIS_REVIEW, review: review.length ? `factor(s) outside ${AXIS_REVIEW.join(' - ')} on ${review.join(', ')}: checked visually` : null, translate: t.map(r6)}};
 }
 
 const checkFactors = (id, mt) => {
@@ -530,7 +704,7 @@ const noUrls = (id, glb) => { const j = glb.subarray(20, 20 + glb.readUInt32LE(1
 // ---------- collectibles ----------
 const itemOut = [], skipped = [];
 for (const row of ITEMS) {
-  const rec = records(row);
+  const rec = FOOD.records(row);
   if (!rec) { skipped.push(row.id); continue; }
   const id = `food-${dashed(row.slug)}`, url = `assets/models/${id}.glb`, provRel = `assets/derivatives/food-shelf-${dashed(row.slug)}-model.json`;
   const g = await cookGeometry(row, rec);
@@ -542,7 +716,7 @@ for (const row of ITEMS) {
   prim.setAttribute('NORMAL', doc.createAccessor().setType('VEC3').setArray(Float32Array.from(g.mesh.N)).setBuffer(r.listBuffers()[0]));
   prim.setAttribute('TEXCOORD_0', doc.createAccessor().setType('VEC2').setArray(Float32Array.from(g.mesh.UV)).setBuffer(r.listBuffers()[0]));
   prim.setIndices(doc.createAccessor().setType('SCALAR').setArray(indexArray(g.mesh.I, nv)).setBuffer(r.listBuffers()[0]));
-  const px = {baseColor: ITEM_TEX[0], metallicRoughness: ITEM_TEX[1], normal: ITEM_TEX[2]};
+  const tx = itemTex(row.id), px = {baseColor: tx[0], metallicRoughness: tx[1], normal: tx[2]};
   for (const slot of SLOTS) {
     const t = g.src.textures[slot];
     const img = await (await resizeMap(t.getImage(), px[slot])).jpeg(JPEG[slot]).toBuffer();
@@ -567,9 +741,12 @@ for (const row of ITEMS) {
   const m0 = cr.listMaterials()[0];
   const slotOf = t => SLOTS.find(s => ({baseColor: m0.getBaseColorTexture(), metallicRoughness: m0.getMetallicRoughnessTexture(), normal: m0.getNormalTexture()})[s] === t) ?? 'unused';
   const textures = cr.listTextures().map(t => ({slot: slotOf(t), size: t.getSize(), mime: t.getMimeType(), bytes: t.getImage().byteLength, sha256: sha(t.getImage())}));
-  itemOut.push({row, id, url, provRel, rec, g, glb, dims, min: bb.min.map(r6), max: bb.max.map(r6), tris, vertices: cp.getAttribute('POSITION').getCount(), textures});
+  if (dims.some((v, a) => v !== row.nominal[a])) throw new Error(`${id}: written extents ${dims.join(' x ')} != nominal ${row.nominal.join(' x ')}`);
+  if (tris > ITEM_BUDGETS[0]) console.log(`${row.id}: NOTE ${tris} triangles > the ${ITEM_BUDGETS[0]} class budget (raised step: ${JSON.stringify(g.simp.raisedFrom ?? null)})`);
+  if (g.fit.axisFit.review) console.log(`${row.id}: REVIEW axis factors ${g.fit.axisFit.factors.join(' / ')} (${g.fit.axisFit.review})`);
+  itemOut.push({row, id, url, provRel, rec: {...rec, bytes: null, inputBytes: null}, g, glb, dims, min: bb.min.map(r6), max: bb.max.map(r6), tris, vertices: cp.getAttribute('POSITION').getCount(), textures});
   console.log(`${row.id} ${id}: ${rec.bytes.length} B ${g.src.m.I.length / 3} tris -> ${glb.length} B ${tris} tris (${g.simp.applied ? `simplified to the ${g.simp.budget} step, err ${g.simp.errorRelative}` : g.simp.reason}; ${g.charts} UV charts), ` +
-    `dims ${dims.join(' x ')} m (${g.fit.measure} ${g.fit.size}${g.fit.axis ? ` on ${g.fit.axis}` : ''}), scale ${g.fit.scale}; maps ${textures.map(t => `${t.slot} ${t.size[0]} ${t.bytes}`).join(', ')}`);
+    `dims ${dims.join(' x ')} m (${g.fit.measure} ${g.fit.size}${g.fit.axis ? ` on ${g.fit.axis}` : ''}, uniform scale ${g.fit.scale}; axis factors ${g.fit.axisFit.factors.join(' / ')}); maps ${textures.map(t => `${t.slot} ${t.size[0]} ${t.bytes}`).join(', ')}`);
 }
 
 // ---------- ruined props: one shared atlas (lean low-poly + a bake of Meshy's own maps) ----------
@@ -579,8 +756,8 @@ for (const row of ITEMS) {
 // projection charts) into the prop's own atlas cell, and Meshy's base colour / metallic-roughness / normal maps are resampled onto it
 // (lib/bake.mjs: closest same-facing dense surface; the Meshy normal map folded into the dense normal) — UV baking, not re-authoring.
 const parts = [];
-for (const row of JUNK) {
-  const rec = records(row);
+for (const row of FOOD_ONLY ? [] : JUNK) { // --food-only: no ruined prop is read, cooked or baked
+  const rec = PROD.records(row);
   if (!rec) { skipped.push(row.id); continue; }
   const src = await readSource(row.id, rec);
   checkFactors(row.id, src.material);
@@ -744,22 +921,18 @@ if (parts.length) {
 if (skipped.length) console.log(`not accepted yet (skipped, left out of the registry): ${skipped.join(' ')}`);
 
 // ---------- provenance ----------
-const ROUTE = 'Codex native image_gen INITIAL conditioning image (a strict straight-on front elevation, conditioned on the user-approved concept original) -> Meshy T2.5 image-to-3D (smart topology, 2K PBR texture); the Meshy model keeps its own PBR maps (downsized / re-encoded / atlas-packed only; no re-texture, projection or hand-painted replacement)';
-const LICENCE = "generated for this project (Codex initial image -> Meshy T2.5) under the user's food / shelf generation approval; provider terms apply; unapproved prototype asset, no blanket licence or commercial clearance implied";
-const APPROVAL = {userGenerationApprovalSha256: approvalSha,
-  summary: "the user's fresh food / shelf generation approval: up to 1000 Meshy credits on the 51 approved food, drink and ruined-shelf assets with the T2.5 model (caps 66 attempts / 100 paid POSTs; D03 / D08 excluded); Codex conditioning images recorded"};
 const lineOf = l => { const {seq: _s, type: _t, ...rest} = l; return rest; };
 function sourceProv(row, rec, g) {
-  const a = rec.approvedAsset;
+  const a = rec.approvedAsset, tk = rec.task;
   return {
     asset: row.id, name: a.name, class: a.class,
     approvedConcept: {sha256: a.sourceImageSha256, file: `${path.relative(root, a.workerApprovedOriginal).split(path.sep).join('/')} (approved concept original, outside Git)`},
-    conditioningImage: {sha256: rec.reserve.inputSha256, bytes: rec.reserve.inputBytes, file: `${relT(rec.reserve.input)} (outside Git)`,
+    conditioningImage: {sha256: rec.reserve.inputSha256, bytes: rec.reserve.inputBytes, file: `${tk.relT(rec.reserve.input)} (outside Git)`,
       codex: rec.codex ?? 'no matching Codex result line found in the lane record'},
     meshy: {tool: rec.reserve.tool, request: (({file_path: _f, ...rest}) => rest)(rec.reserve.params), task: rec.taskId, reservation: rec.res, lane: rec.lane,
       status: rec.settle.status, billedCredits: rec.settle.billed, attemptsForAsset: rec.attemptsForAsset, acceptNote: rec.accept.note || null,
-      ledger: {file: `${TASK_DIR}/gen/LEDGER.jsonl (outside Git)`, lines: rec.lines, accept: lineOf(rec.accept)}},
-    source: {file: `${relT(rec.raw.file)} (raw original, read-only, outside Git; never shipped)`, sha256: rec.raw.sha256, bytes: rec.raw.bytes,
+      ledger: {file: `${tk.dir}/gen/LEDGER.jsonl (outside Git)`, lines: rec.lines, accept: lineOf(rec.accept)}},
+    source: {file: `${tk.relT(rec.raw.file)} (raw original, read-only, outside Git; never shipped)`, sha256: rec.raw.sha256, bytes: rec.raw.bytes,
       triangles: g.src.m.I.length / 3, vertices: g.src.m.P.length / 3, extent: g.extent, uvRange: g.uvRange, uvCharts: g.charts, material: g.src.material, maps: g.src.maps,
       droppedAttributes: g.src.extraSemantics},
     rawAdjustments: g.adjust, fit: g.fit, weld: g.welded.weld, simplify: g.simp,
@@ -768,16 +941,19 @@ function sourceProv(row, rec, g) {
 const written = new Map();
 const guard = (id, buf) => { const hit = buf.toString().match(/.{0,60}(https?:|Signature|X-Amz|Key-Pair|token=).{0,20}/i); if (hit) throw new Error(`${id}: URL / token-like string in public provenance: ...${hit[0]}...`); return buf; };
 for (const o of itemOut) {
+  const a = FOOD.approved.get(o.row.id), prev = PROD.previous(o.row);
   const prov = {
     schema: 'terminal-state-derivative-v1', id: o.id, itemId: o.row.slug, asset: o.row.id,
-    role: `collectible ${approved.get(o.row.id).class === 'collectible_drink' ? 'drink' : 'food'} pickup model: ${approved.get(o.row.id).name}`,
-    task: `${TASK} (lane COOK; models generated by the asset lanes through the task's single broker / ledger)`, approval: APPROVAL, accepted: true, route: ROUTE,
+    role: `collectible ${a.class === 'collectible_drink' ? 'drink' : 'food'} pickup model: ${a.name} (brand-new, factory-fresh product)`,
+    task: `${FOOD.task} (lane COOK; fresh models generated by the art lanes through the task's single broker / ledger)`, approval: FOOD.approval, accepted: true, route: FOOD.route,
     ...sourceProv(o.row, o.rec, o.g),
+    replaces: prev ? {...prev, url: o.url, note: 'the previous (weathered) production model of this item at the same path; same item id, url and nominal w / h / d'} : null,
     output: {url: o.url, file: `game/public/${o.url}`, bytes: o.glb.length, sha256: sha(o.glb), triangles: o.tris, vertices: o.vertices, dims: o.dims, min: o.min, max: o.max},
     textures: o.textures,
-    texturePolicy: `Meshy's own maps kept slot for slot (base colour / metallic-roughness / normal), lanczos3 downsize to ${ITEM_TEX.join(' / ')} px, JPEG q86 4:2:0 / q88 4:4:4 / q90 4:4:4`,
-    convention: `metres at real size, +Y up; ${o.g.fit.rotation === 'none (Meshy native front +Z, +Y up kept)' ? 'Meshy native frame (front +Z = the straight-on elevation the model was conditioned on)' : `final resting pose: ${o.g.fit.rotation} (see fit)`}; grounded (min y = 0), centred on x / z; one node / mesh / primitive / material, identity node (transform baked into the vertices); w / h / d = the resting-pose extents`,
-    licence: LICENCE, rebuild: `node ${SELF} [--reference <dir holding tasks/food-shelf-production-20261109-002816>]`,
+    texturePolicy: `Meshy's own maps kept slot for slot (base colour / metallic-roughness / normal), lanczos3 downsize to ${itemTex(o.row.id).join(' / ')} px, JPEG q86 4:2:0 / q88 4:4:4 / q90 4:4:4 (no recolour, tint, brightening or re-texture)`,
+    ...(ITEM_TEX_LABEL[o.row.id] ? {textureException: {mapsPx: ITEM_TEX_LABEL[o.row.id], classMapsPx: ITEM_TEX, reason: ITEM_TEX_LABEL_WHY}} : {}),
+    convention: `metres at real size, +Y up; ${o.g.fit.rotation === 'none (Meshy native front +Z, +Y up kept)' ? 'Meshy native frame (front +Z = the straight-on elevation the model was conditioned on)' : `final resting pose: ${o.g.fit.rotation} (see fit)`}; grounded (min y = 0), centred on x / z; one node / mesh / primitive / material, identity node (transform baked into the vertices); w / h / d = the resting-pose extents = the item's exact nominal extents (fit.axisFit)`,
+    licence: FOOD.licence, rebuild: `node ${SELF} --food-only [--reference <dir holding tasks/fresh-food-redo-20261109-040427 + tasks/food-shelf-production-20261109-002816>]`,
   };
   written.set(o.url, o.glb);
   written.set(o.provRel, guard(o.id, Buffer.from(JSON.stringify(prov, null, 1) + '\n')));
@@ -785,7 +961,7 @@ for (const o of itemOut) {
 if (atlasOut) {
   const prov = {
     schema: 'terminal-state-derivative-v1', id: ATLAS.id, role: 'non-collectible ruined shelf props (physics filler): one GLB, one mesh node per prop id on ONE shared material with one atlas per PBR slot (base colour 2048 px, metallic-roughness / normal 1024 px)',
-    task: `${TASK} (lane COOK; models generated by the asset lanes through the task's single broker / ledger)`, approval: APPROVAL, accepted: true, route: ROUTE,
+    task: `${PROD.task} (lane COOK; models generated by the asset lanes through the task's single broker / ledger)`, approval: PROD.approval, accepted: true, route: PROD.route,
     output: {url: ATLAS.url, file: `game/public/${ATLAS.url}`, bytes: atlasOut.glb.length, sha256: sha(atlasOut.glb), nodes: parts.map(p => p.row.id), triangles: parts.reduce((s, p) => s + p.tris, 0)},
     textures: atlasOut.textures,
     atlas: {size: ATLAS.size, grid: ATLAS.grid, chartPad: ATLAS.pad, cellRule: 'square cell per prop, side = k * sqrt(low-poly surface area m² / unwrap chart fill), rounded to the grid, clamped to ' +
@@ -798,22 +974,40 @@ if (atlasOut) {
     parts: Object.fromEntries(parts.map(p => [p.row.id, {slug: p.row.slug, node: p.row.id, ...sourceProv(p.row, p.rec, p.g),
       output: {node: p.row.id, triangles: p.tris, vertices: p.vertices, dims: p.dims, min: p.min, max: p.max},
       cell: p.cell, ...p.bake}])),
-    licence: LICENCE, rebuild: `node ${SELF} [--reference <dir holding tasks/food-shelf-production-20261109-002816>]`,
+    licence: PROD.licence, rebuild: `node ${SELF} [--reference <dir holding tasks/food-shelf-production-20261109-002816>]`,
   };
   written.set(ATLAS.url, atlasOut.glb);
   written.set(atlasOut.provRel, guard(ATLAS.id, Buffer.from(JSON.stringify(prov, null, 1) + '\n')));
 }
 
 // ---------- registry ----------
-const registry = `// GENERATED by ${SELF} (task ${TASK}) — do not edit.
+// FOOD_ITEM_MODELS (+ the header) always comes from this run; SHELF_JUNK_ATLAS (from JUNK_MARK to the end) is this run's bake, or with
+// --food-only the CURRENT file's section, byte for byte.
+const JUNK_MARK = 'export interface ShelfJunkPart';
+const regNow = fs.existsSync(REG) ? fs.readFileSync(REG, 'utf8') : '';
+const junkNow = regNow.includes(JUNK_MARK) ? regNow.slice(regNow.indexOf(JUNK_MARK)) : null;
+if (FOOD_ONLY) {
+  if (!junkNow) throw new Error(`--food-only: ${path.relative(root, REG)} has no SHELF_JUNK_ATLAS section to keep`);
+  // the item dims are fixed: the current registry must already list every item at exactly this id / url / nominal w / h / d
+  for (const r of ITEMS) {
+    const m = regNow.match(new RegExp(`^  ${r.slug}: \\{id: '(\\w+)', url: '([^']+)', w: ([\\d.]+), h: ([\\d.]+), d: ([\\d.]+), tris: \\d+\\},$`, 'm'));
+    if (!m || m[1] !== r.id || m[2] !== `assets/models/food-${dashed(r.slug)}.glb` || [m[3], m[4], m[5]].some((v, a) => +v !== r.nominal[a])) throw new Error(`--food-only: the current registry entry of ${r.slug} != id ${r.id} / its url / nominal ${r.nominal.join(' x ')}`);
+  }
+}
+const ids = (k, list) => list.filter(r => ADJUST[r.id]?.[k]).map(r => r.id);
+const poseIds = k => [...ids(k, ITEMS), ...ids(k, JUNK)];
+const poses = [[poseIds('layFlat'), 'lie flat (label / front up)', 'lies flat (label / front up)'], [poseIds('turn'), 'are turned so their clean labels face +Z', 'is turned so its clean label faces +Z'],
+  [poseIds('standUp'), 'are stood up (labels Meshy built facing up turned to +Z)', 'is stood up (the label Meshy built facing up turned to +Z)'],
+  [poseIds('settle'), 'rest rolled onto stable supports', 'rests rolled onto stable supports']].filter(([l]) => l.length).map(([l, many, one]) => `${l.join(' / ')} ${l.length > 1 ? many : one}`);
+const wrap = (text, w = 136) => text.split(' ').reduce((ls, word) => { const l = ls[ls.length - 1]; if (l.length && (l + ' ' + word).length > w) ls.push(word); else ls[ls.length - 1] = l.length ? `${l} ${word}` : word; return ls; }, ['']).map(l => `// ${l}`).join('\n');
+const registryHead = `// GENERATED by ${SELF} — do not edit.
+${wrap(`FOOD_ITEM_MODELS: task ${FOOD.task} (the 24 food / drink pickups redone as brand-new, factory-fresh products: fresh Meshy models cooked to the items' exact nominal extents); SHELF_JUNK_ATLAS: task ${PROD.task}.`)}
 // The food / drink pickups' runtime models (FOOD_ITEM_MODELS, keyed by ItemDef id) and the non-collectible ruined shelf props' shared atlas
 // (SHELF_JUNK_ATLAS, one mesh node per prop id P01..P27 on ONE material). Three-free. Meshy T2.5 models (Codex initial conditioning image ->
 // Meshy image-to-3D): the collectibles keep Meshy's own PBR maps (downsized); the ruined props are lean low-poly parts baked from their Meshy
 // models (Meshy's maps resampled into one shared atlas: base colour 2048 px, metallic-roughness / normal 1024 px). Provenance in
 // assets/derivatives/food-shelf-*.json.
-// Metres at real size, +Y up, grounded (min y = 0), centred on x / z (atlas: per node, identity node transforms). w / h / d = the measured
-// RESTING-POSE extents (x / y / z): most models stand upright facing +Z; F02 / F03 / F16 / F18 / P11 / P24 lie flat (label / front up),
-// F05 / F06 are turned so their clean labels face +Z, F15 / P11 rest rolled onto stable supports (see each provenance fit).
+${wrap(`Metres at real size, +Y up, grounded (min y = 0), centred on x / z (atlas: per node, identity node transforms). w / h / d = the measured RESTING-POSE extents (x / y / z): most models stand upright facing +Z; ${poses.join(', ')} (see each provenance fit).`)}
 // id = the approved asset id; tris = triangles. Only accepted models are listed.
 
 export interface FoodShelfModel { id: string; url: string; w: number; h: number; d: number; tris: number }
@@ -821,27 +1015,42 @@ export const FOOD_ITEM_MODELS: Readonly<Record<string, FoodShelfModel>> = {
 ${itemOut.map(o => `  ${o.row.slug}: {id: '${o.row.id}', url: '${o.url}', w: ${o.dims[0]}, h: ${o.dims[1]}, d: ${o.dims[2]}, tris: ${o.tris}},`).join('\n')}
 };
 
-export interface ShelfJunkPart { id: string; slug: string; node: string; w: number; h: number; d: number; tris: number }
+`;
+const registryJunk = FOOD_ONLY ? junkNow : `${JUNK_MARK} { id: string; slug: string; node: string; w: number; h: number; d: number; tris: number }
 export const SHELF_JUNK_ATLAS: {url: string; parts: Readonly<Record<string, ShelfJunkPart>>} = {url: '${ATLAS.url}', parts: {
 ${parts.map(p => `  ${p.row.id}: {id: '${p.row.id}', slug: '${p.row.slug}', node: '${p.row.id}', w: ${p.dims[0]}, h: ${p.dims[1]}, d: ${p.dims[2]}, tris: ${p.tris}},`).join('\n')}
 }};
 `;
+const registry = registryHead + registryJunk;
 
 if (DRY) {
   fs.mkdirSync(DRY, {recursive: true});
   for (const [rel, buf] of written) fs.writeFileSync(path.join(DRY, path.basename(rel)), buf);
   fs.writeFileSync(path.join(DRY, 'foodShelfModels.generated.ts'), registry);
-  console.log(`dry run: ${written.size} files (${[...written.values()].reduce((t, b) => t + b.length, 0)} B) + registry preview written to ${DRY}`);
+  console.log(`dry run${FOOD_ONLY ? ' (--food-only)' : ''}: ${written.size} files (${[...written.values()].reduce((t, b) => t + b.length, 0)} B) + registry preview written to ${DRY}${skipped.length ? `; partial: ${skipped.join(' ')} not accepted yet` : ''}`);
   process.exit(0);
 }
 
-for (const [rel, buf] of written) fs.writeFileSync(path.join(PUB, rel), buf);
-fs.writeFileSync(REG, registry);
+// the real write: every collectible is cooked (the registry never drops an item)
+const missing = ITEMS.filter(r => !itemOut.some(o => o.row.id === r.id)).map(r => r.id);
+if (missing.length) throw new Error(`refusing the real write: ${missing.join(' ')} not accepted yet (dry-run a partial set instead); nothing written`);
+const ATLAS_FILES = [ATLAS.url, 'assets/derivatives/food-shelf-junk-atlas.json'];
+const foodPaths = new Set(ITEMS.flatMap(r => [`assets/models/food-${dashed(r.slug)}.glb`, `assets/derivatives/food-shelf-${dashed(r.slug)}-model.json`]));
 const allowRaw = fs.readFileSync(ALLOW, 'utf8');
 const allow = JSON.parse(allowRaw);
 if (JSON.stringify(allow, null, 2) + '\n' !== allowRaw) throw new Error('public-inputs.json formatting differs from JSON.stringify(_, null, 2); refusing to rewrite');
-const ownPaths = new Set([...ITEMS.flatMap(r => [`assets/models/food-${dashed(r.slug)}.glb`, `assets/derivatives/food-shelf-${dashed(r.slug)}-model.json`]), ATLAS.url, 'assets/derivatives/food-shelf-junk-atlas.json']);
+// --food-only: what must stay byte-identical (the atlas files, the registry's SHELF_JUNK_ATLAS section, every non-food allowlist entry)
+const untouched = () => {
+  const al = JSON.parse(fs.readFileSync(ALLOW, 'utf8')), reg = fs.readFileSync(REG, 'utf8');
+  return JSON.stringify({atlas: ATLAS_FILES.map(f => sha(fs.readFileSync(path.join(PUB, f)))), junk: sha(reg.slice(reg.indexOf(JUNK_MARK))), allow: al.files.filter(f => !foodPaths.has(f.path))});
+};
+const before = FOOD_ONLY ? untouched() : null;
+if (FOOD_ONLY && ([...written.keys()].some(p => !foodPaths.has(p)) || written.size !== foodPaths.size)) throw new Error('--food-only: the write set is not exactly the 48 collectible files');
+for (const [rel, buf] of written) fs.writeFileSync(path.join(PUB, rel), buf);
+fs.writeFileSync(REG, registry);
+const ownPaths = new Set([...foodPaths, ...(FOOD_ONLY ? [] : ATLAS_FILES)]);
 allow.files = [...allow.files.filter(f => !ownPaths.has(f.path)), ...[...written].map(([p, b]) => ({path: p, bytes: b.length, sha256: sha(b)}))]
   .sort((x, y) => (x.path < y.path ? -1 : x.path > y.path ? 1 : 0));
 fs.writeFileSync(ALLOW, JSON.stringify(allow, null, 2) + '\n');
-console.log(`wrote ${written.size} public files (${[...written.values()].reduce((t, b) => t + b.length, 0)} B) + ${path.relative(root, REG)} + public-inputs.json`);
+if (FOOD_ONLY && untouched() !== before) throw new Error('--food-only: an atlas file, the SHELF_JUNK_ATLAS section or a non-food allowlist entry changed');
+console.log(`wrote ${written.size} public files (${[...written.values()].reduce((t, b) => t + b.length, 0)} B) + ${path.relative(root, REG)} + public-inputs.json${FOOD_ONLY ? ' (--food-only: atlas, SHELF_JUNK_ATLAS and non-food allowlist entries verified byte-identical)' : ''}`);
