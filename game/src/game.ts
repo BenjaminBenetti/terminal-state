@@ -131,7 +131,8 @@ import {createRun, type RunState} from './run/runState';
 import {enemiesToSpawn, mergeKilled, pickupPlan} from './run/memory';
 import {resetParticipants, restoreCarry, restoreParticipants, takeSnapshot, type RunParticipant, type RunSnapshot} from './run/snapshot';
 import {starterInventory} from './run/starter';
-import {applyHolders, captureHolders, capturePickups, dropUnrecordedSalvage, holderKeyOf, restorePickup} from './run/worldMemory';
+import {applyHolders, captureHolders, capturePickups, dropNaturalFood, dropUnrecordedSalvage, holderKeyOf, restorePickup} from './run/worldMemory';
+import {keepLayoutPickup} from './items/naturalFood'; // task studio-food-drink-half-20261109-201124-01: half the natural food / drink spawn
 import {runBagStore} from './run/bagStore';
 import {playerTrainPlacement, type TrainPlacement} from './gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE)
 import {PlayerTrainRecord, PLAYER_TRAIN_PARTICIPANT} from './run/playerTrain'; // (lane PLACE: the run's one train identity)
@@ -1092,6 +1093,9 @@ export class Game {
     // Iteration 16 (RUN): holders as the player left them (taken lots stay taken; the shelf filler keeps the gaps)
     const mem = this.run.memory(key);
     applyHolders(cm, mem.holders);
+    // (task studio-food-drink-half-20261109-201124-01, user: "cut food / drink spawn in half") holders realized now for the first time keep
+    // half their natural food / drink lots (a stable per-lot hash, no RNG stream; after the fuel lots and the filler); remembered ones stay exact
+    dropNaturalFood(cm, mem.holders, this.layout.seed, mem.id, lootProfile(key.level));
     // Iteration 08 (Lane I): a shot trash can / wheelie bin still goes loose — its lid pops, its finite lots spill as pickups.
     this.physics.dynamicItems.holderLoose = p => { const carried = cm.goLoose(p); this.world.culler.release(carried); return carried; }; // Lane G: moving now
     // task office-interactions-layout-20261030 (lane PHYS): `wake` — in the office the player wakes light props by walking into them
@@ -1184,11 +1188,14 @@ export class Game {
     const plan = pickupPlan(this.layout.pickups.length, mem);
     for (const i of plan.fromLayout) {
       const p = this.layout.pickups[i];
-      const st = this.inv.makeStack(pantryPickupItem(this.layout, i, key.level), p.count); // (lane ITEMS: a first spawn's food variety; same count)
-      if (p.filter !== undefined) st.filter = p.filter; // mask lane: a found gas mask's seeded, partly used filter (gen/maskLoot.ts)
       // Task mall-playtest-revision-20261031 (lane SHOPS, U11): a placement's own yaw (a gun lying along its gun-shop bench) wins; the
       // random yaw is still drawn so every other pickup keeps its stream. No pickup is ever filtered by the player's loadout here.
       const yaw = this.rand() * Math.PI * 2;
+      // (task studio-food-drink-half-20261109-201124-01) half the natural food / drink floor finds stay (a stable hash of the layout index;
+      // drawn after the yaw, so every other pickup keeps its stream); a skipped one is simply not there (the pickup memory records the rest)
+      if (!keepLayoutPickup(this.layout.seed, mem.id, i, p)) continue;
+      const st = this.inv.makeStack(pantryPickupItem(this.layout, i, key.level), p.count); // (lane ITEMS: a first spawn's food variety; same count)
+      if (p.filter !== undefined) st.filter = p.filter; // mask lane: a found gas mask's seeded, partly used filter (gen/maskLoot.ts)
       this.layoutPickup.set(this.pickups.add(st, p.x, p.y, p.z, p.yaw ?? yaw), i);
     }
     for (const rec of plan.restored) {
