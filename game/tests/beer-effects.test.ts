@@ -372,7 +372,8 @@ describe('Night Shift Porter: ONE detectability factor 0.75 (unaware sight / not
     expect(beer.perceptionMult()).toBe(1);
     beer.drink('beer_porter');
     expect(beer.perceptionMult()).toBe(0.75);
-    expect(src('market/combat/marketCombat.ts')).not.toMatch(/beerEffects/); // (the PEOPLE lane wires market/combat, not this lane)
+    // (integrated with the PEOPLE lane) the market's fighters read the same factor exactly once per frame (their sight distance)
+    expect(src('market/combat/marketCombat.ts').match(/beerEffects\?\.perceptionMult\(\)/g)).toHaveLength(1);
   });
 });
 
