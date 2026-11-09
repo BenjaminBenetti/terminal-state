@@ -25,6 +25,7 @@ import v8 from 'node:v8';
 import {fileURLToPath} from 'node:url';
 import sharp from 'sharp';
 import {Document, NodeIO} from '@gltf-transform/core';
+import {MeshoptSimplifier} from 'meshoptimizer';
 import {KHRMeshQuantization} from '@gltf-transform/extensions';
 import {loadRawGarment, simplifyPiece, sha256File} from './lib/lingerie-garment.mjs';
 import {loadBody, validationPoses, clipDurations} from './lib/lingerie-body.mjs';
@@ -50,6 +51,7 @@ const GENERATOR = 'Terminal State cosplay costume builder (tools/asset-pipeline/
 const MODELS = 'game/public/assets/models', DERIV = 'game/public/assets/derivatives', GEN = 'game/src/ai';
 const FILES = {head: 'outfit-cosplay-costume-head.glb', upper: 'outfit-cosplay-costume-upper.glb', lower: 'outfit-cosplay-costume-lower.glb'};
 const RECORD = 'outfit-cosplay-costume.json', TABLE = 'cosplayCostumes.generated.ts';
+const SUSHI_EMBED = 0.04;
 const io = new NodeIO().registerExtensions([KHRMeshQuantization]);
 const r4 = v => +(+v).toFixed(4);
 const sha = b => crypto.createHash('sha256').update(b).digest('hex');
@@ -94,8 +96,26 @@ async function prepareGarment(id) {
     if (ar < 1e-12) { degenerate++; continue; }
     keep.push(raw.idx[t], raw.idx[t + 1], raw.idx[t + 2]);
   }
-  const G = await simplifyPiece(raw, Uint32Array.from(keep), {targetTris: P.simplify, targetError: 0.01});
-  return {id, P, raw, G, GA: analyseGarment(G, P.slot, P.fit), cleaning: {sourceTriangles: raw.idx.length / 3, sourceVertices: raw.pos.length / 3, degenerateDropped: degenerate}};
+  const clean = Uint32Array.from(keep);
+  let G, budgets = null;
+  if (P.slot === 'lower') {
+    // per-part budgets (the simplifier's error metric would spend a lower's triangles on the shoes' laces and leave a smooth sock a
+    // handful of rings: too few for a knee to bend in): waist / skirt, legwear, footwear simplified apart, their shared borders locked
+    const GA0 = analyseGarment({...raw, idx: clean}, P.slot, P.fit), top = s => (P.fit.shoeTop != null ? GA0.side[s].sole + P.fit.shoeTop : GA0.side[s].ankle[1]);
+    const partOf = v => (!GA0.legSide[v] || GA0.wl[v] < 0.5 ? 'waist' : raw.pos[v * 3 + 1] < top(GA0.legSide[v] > 0 ? 'L' : 'R') ? 'shoes' : 'legs');
+    budgets = {waist: 0.5, legs: 0.3, shoes: 0.2};
+    const groups = {waist: [], legs: [], shoes: []};
+    for (let t = 0; t < clean.length; t += 3) { const c = {}; for (let k = 0; k < 3; k++) { const p = partOf(clean[t + k]); c[p] = (c[p] ?? 0) + 1; } const p = Object.entries(c).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0][0]; groups[p].push(clean[t], clean[t + 1], clean[t + 2]); }
+    await MeshoptSimplifier.ready;
+    const merged = [];
+    for (const [p, list] of Object.entries(groups)) {
+      const idx = Uint32Array.from(list), target = Math.round(P.simplify * budgets[p]);
+      const out = idx.length / 3 > target ? MeshoptSimplifier.simplifyWithAttributes(idx, raw.pos, 3, raw.uv, 2, [0.5, 0.5], null, target * 3, 0.01, ['LockBorder'])[0] : idx;
+      merged.push(...out);
+    }
+    G = await simplifyPiece(raw, Uint32Array.from(merged), {targetTris: null});
+  } else G = await simplifyPiece(raw, clean, {targetTris: P.simplify, targetError: 0.01});
+  return {id, P, raw, G, GA: analyseGarment(G, P.slot, P.fit), cleaning: {sourceTriangles: raw.idx.length / 3, sourceVertices: raw.pos.length / 3, degenerateDropped: degenerate, partBudgets: budgets}};
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------ head pieces
@@ -126,6 +146,9 @@ function fitHat(body, hat, land) {
 class TriGridProxy extends TriGrid { constructor(pos, idx) { super(pos, idx, 0.02); } }
 
 async function buildHeads(costumes, cbodies) {
+  // the sushi hat sits DOWN on the head (build-cosplay.mjs pressed its rice belly 22 mm into the hair: a flat belly on a round crown
+  // then floated over the sides): 40 mm here, the hair under it hidden by its own 2.5 cm mask below
+  HEADKIT.FIT.sushi.embed = SUSHI_EMBED;
   const mascot = await HEADKIT.loadMascot();
   const wig = HEADKIT.subMesh(mascot, mascot.wig, HEADKIT.FIT.simplify.wig);
   const hatTris = mascot.wig.filter(t => mascot.cls[t] !== HEADKIT.HAIR);

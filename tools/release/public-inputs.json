@@ -1865,8 +1865,8 @@
     },
     {
       "path": "assets/derivatives/outfit-cosplay-costume.json",
-      "bytes": 450683,
-      "sha256": "1282392b66c8e5b49d55c8e838914f7c88bf3dfdfba29c3bb0935bb1f1cff1f1"
+      "bytes": 448028,
+      "sha256": "b7671c2ca2caea07c6caac19c25737d856d2c73e434bda3d4cc0d7d0baf4d04b"
     },
     {
       "path": "assets/derivatives/outfit-cosplay.json",
@@ -3365,18 +3365,18 @@
     },
     {
       "path": "assets/models/outfit-cosplay-costume-head.glb",
-      "bytes": 2054892,
-      "sha256": "4b473909d0bd93377a9f585c325425a41df74bcddaf4c90e87a657992f1ce4fc"
+      "bytes": 2057904,
+      "sha256": "610c89b46e7894f68cfffd9072cd0f889ec8eb3713732d0fecb0a2a1c7464e76"
     },
     {
       "path": "assets/models/outfit-cosplay-costume-lower.glb",
-      "bytes": 3119360,
-      "sha256": "b9d3c5bd376e95cbd248fda053ac4d13ddac3113ece318762f775cf85cb9a560"
+      "bytes": 3300252,
+      "sha256": "8eec146503ab9ea7440128356515bcf6756c2c7af9eb122c634882d7ccb09001"
     },
     {
       "path": "assets/models/outfit-cosplay-costume-upper.glb",
-      "bytes": 3615464,
-      "sha256": "2dac3b445e160a1f25b667a743cba582ef65e219b3e397e0d804da4a14f7f098"
+      "bytes": 3849368,
+      "sha256": "20a4709430cf2652ad4bdda25759b66b7a810c2f7eea0069c3c50f0af1eea346"
     },
     {
       "path": "assets/models/outfit-cosplay-head.glb",

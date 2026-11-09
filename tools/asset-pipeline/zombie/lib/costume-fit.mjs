@@ -491,24 +491,21 @@ export function mapGarment(B, G, GA, cfg, opts = COSTUME_FIT) {
   for (const s of ['L', 'R']) {
     const S = GA.side[s], leg = C.leg[s], F = C.foot[s];
     const Hg = Winv(leg.pts[0]);
-    // the garment leg's own centreline (box centre of the leg cloth per 1 cm of height, gaps interpolated, smoothed over +-3 cm): the
-    // radial frame of every leg vertex (a hip-joint guess would twist a tight stocking round the knee)
+    // the garment leg's own centreline: the radial frame of every leg vertex (a hip-joint guess would twist a tight stocking round the
+    // knee)
     const sg = s === 'L' ? 1 : -1, bins = new Map();
     for (let i = 0; i < n; i++) {
       if (GA.legSide[i] !== sg || GA.wl[i] < 0.5) continue;
-      const j = Math.round(P[i * 3 + 1] / 0.01), b = bins.get(j) ?? bins.set(j, {x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity}).get(j);
-      b.x0 = Math.min(b.x0, P[i * 3]); b.x1 = Math.max(b.x1, P[i * 3]); b.z0 = Math.min(b.z0, P[i * 3 + 2]); b.z1 = Math.max(b.z1, P[i * 3 + 2]);
+      const j = Math.round(P[i * 3 + 1] / 0.01), b = bins.get(j) ?? bins.set(j, {x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity, n: 0}).get(j);
+      b.x0 = Math.min(b.x0, P[i * 3]); b.x1 = Math.max(b.x1, P[i * 3]); b.z0 = Math.min(b.z0, P[i * 3 + 2]); b.z1 = Math.max(b.z1, P[i * 3 + 2]); b.n++;
     }
-    const js = [...bins.keys()].sort((a, b) => a - b), jLo = js[0], jHi = js[js.length - 1];
-    const raw = new Map(js.map(j => { const b = bins.get(j); return [j, [(b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2]]; }));
-    const cl = new Map();
-    for (let j = jLo; j <= jHi; j++) {
-      let x = 0, z = 0, w = 0;
-      for (let d = -3; d <= 3; d++) { const r = raw.get(j + d); if (!r) continue; x += r[0]; z += r[1]; w++; }
-      cl.set(j, w ? [x / w, z / w] : null);
-    }
-    for (let j = jLo; j <= jHi; j++) if (!cl.get(j)) { let a = j - 1; while (!cl.get(a)) a--; let b = j + 1; while (b <= jHi && !cl.get(b)) b++; const A = cl.get(a), Bq = cl.get(b) ?? A, f = (j - a) / Math.max(1, b - a); cl.set(j, [A[0] + (Bq[0] - A[0]) * f, A[1] + (Bq[1] - A[1]) * f]); }
-    const centre = y => { const j = Math.max(jLo, Math.min(jHi, Math.round(y / 0.01))); const c = cl.get(j); return [c[0], y, c[1]]; };
+    // a STRAIGHT line (least squares over the 1 cm box centres above the footwear, each weighted by the vertices it holds): the masters
+    // stand straight-legged, and a simplified sock has too few vertices per height for a per-height centre (it would wobble)
+    const ys = [...bins.keys()].map(j => j * 0.01).filter(y => y > (cfg.shoeTop != null ? S.sole + cfg.shoeTop : S.ankle[1]));
+    let w0 = 0, wy = 0, wx = 0, wz = 0, wyy = 0, wxy = 0, wzy = 0;
+    for (const y of ys) { const b = bins.get(Math.round(y / 0.01)), w = Math.sqrt(b.n), cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2; w0 += w; wy += w * y; wx += w * cx; wz += w * cz; wyy += w * y * y; wxy += w * cx * y; wzy += w * cz * y; }
+    const den = w0 * wyy - wy * wy, bx = den ? (w0 * wxy - wy * wx) / den : 0, bz = den ? (w0 * wzy - wy * wz) / den : 0, ax = (wx - bx * wy) / (w0 || 1), az = (wz - bz * wy) / (w0 || 1);
+    const centre = y => [ax + bx * y, y, az + bz * y];
     // pointing DOWN the leg like the body chain (hip -> knee -> ankle): the radial frame is turned by the small bend between them
     const tangent = y => nrmz(sub(centre(y - 0.03), centre(y + 0.03)));
     const yTop = Hg[1], yAnk = S.ankle[1];
@@ -534,7 +531,7 @@ export function mapGarment(B, G, GA, cfg, opts = COSTUME_FIT) {
       if (!GA.legSide[i] || GA.wl[i] < 0.5) continue;
       const {ids, ds} = NB.get(i); let a = 0, w = 0;
       for (let q = 0; q < ids.length; q++) { const j = ids[q]; if (GA.legSide[j] !== GA.legSide[i] || GA.wl[j] < 0.5) continue; const g = Math.exp(-0.5 * (ds[q] / 0.01) ** 2); a += g * rad0[j]; w += g; }
-      reliefOf[i] = Math.max(-0.006, Math.min(0.03, rad0[i] - (w ? a / w : rad0[i])));
+      reliefOf[i] = Math.max(-0.006, Math.min(0.015, rad0[i] - (w ? a / w : rad0[i])));
     }
     for (let i = 0; i < n; i++) reliefOf[i] = reliefOf[Gg.remap[i]];
   }
