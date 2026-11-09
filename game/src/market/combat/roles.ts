@@ -2,6 +2,7 @@
 // they all become hostile, about 70% will just run away, and the remaining ones will pull out random weapons and start firing back!" /
 // "If the player picks those items up, the shop keeper will attack them"). Pure and SEEDED on this system's own hash streams (no game /
 // generator RNG draw): the same station + person always gets the same gun and the same role.
+// Task studio-market-bar-20261108-225231-01 (lane PEOPLE): user — "Increase attackers to 50%": half fight, half flee (was 30 / 70).
 //  - fighters: round(fightShare x people) of a seeded shuffle of everyone (at least one); the ROBBED trader always fights (it takes the
 //    last fighter's place, so the split stays the same);
 //  - every person carries a seeded real gun (pistol / rifle / shotgun: the player's own weapon definitions and models) with a full
@@ -12,8 +13,8 @@ import type {MarketStallId} from '../../gen/market/marketTypes';
 import {MARKET_GUNS, traderId, type MarketGunId, type MarketRole} from './record';
 
 export const MARKET_HOSTILITY = {
-  /** Share of the settlement that draws a gun and fights (the rest flee). */
-  fightShare: 0.3,
+  /** Share of the settlement that draws a gun and fights (the rest flee; task studio-market-bar-20261108-225231-01: 0.5, was 0.3). */
+  fightShare: 0.5,
   /** Gun weights (the pistol is the common sidearm). */
   gunWeights: {pistol: 0.45, rifle: 0.3, shotgun: 0.25} as Record<MarketGunId, number>,
   /** Spare magazines carried (min, max), on top of the full one. */
