@@ -11,7 +11,7 @@
 //     kitchen; ON THE DECK (storey 1, `deckY`): the upper housing (bedrolls, tents, screens), reached by one open stair from the square.
 
 import {Rng, hashString} from '../../core/rng';
-import {MARKET_STALLS, type MarketStallId} from './marketTypes';
+import {MARKET_STALLS, type MarketShopId} from './marketTypes';
 
 /** Fixed dimensions (cells unless noted). */
 export const MARKET = {
@@ -50,7 +50,7 @@ export interface MarketFrame {
   /** Square depth north of the deck (cells; the deck adds MARKET.deckDepth). */
   squareD: number;
   /** The six stalls in band order (canonical west -> east), and where the two gates sit in that sequence (slot indices 0..8). */
-  order: MarketStallId[];
+  order: MarketShopId[];
   gates: [number, number];
   /** Under-deck split (fractions of the deck length): workshop | bunk room | kitchen. */
   split: [number, number];

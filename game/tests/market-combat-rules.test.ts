@@ -1,7 +1,7 @@
 // Task studio-market-rework-20261108-074144-01 (lane COMBAT): the market hostility's pure rules —
 //  - survivors have an ORDINARY zombie's health (ai/brain.ts ZOMBIE_STATS.shambler), the player's weapons unchanged;
-//  - the 70 / 30 split over seeds (round(0.3 n) fighters, at least one), the robbed trader always fights, roles / guns / rounds seeded and
-//    stable per station + person, all three real guns used;
+//  - the 50 / 50 split over seeds (round(0.5 n) fighters, at least one; task studio-market-bar-20261108-225231-01, was 70 / 30), the robbed
+//    trader always fights, roles / guns / rounds seeded and stable per station + person, all three real guns used;
 //  - an NPC gun's cadence (single shots / bursts, never faster than the player's gun), magazine, reloads (magazine / shell by shell);
 //  - a round's raw damage (the gun's falloff x the NPC scale, before the player's pipeline), where it lands on the player's body;
 //  - the hostility record's validator (save/validate.ts runs it on every lane store).
@@ -35,9 +35,9 @@ describe('health: an ordinary zombie, the player\'s weapons unchanged', () => {
   });
 });
 
-describe('roles: ~70 % flee, ~30 % fight; the robbed trader fights', () => {
-  it('round(0.3 n) fighters (at least one); over many stations every person fights ~30 % of the time', () => {
-    expect([fighterCount(0), fighterCount(1), fighterCount(3), fighterCount(10), fighterCount(18), fighterCount(20)]).toEqual([0, 1, 1, 3, 5, 6]);
+describe('roles: half flee, half fight (task studio-market-bar-20261108-225231-01: was ~70 / 30); the robbed trader fights', () => {
+  it('round(0.5 n) fighters (at least one); over many stations every person fights ~50 % of the time', () => {
+    expect([fighterCount(0), fighterCount(1), fighterCount(3), fighterCount(10), fighterCount(18), fighterCount(20)]).toEqual([0, 1, 2, 5, 9, 10]);
     const list = ids(12), tally = new Map(list.map(id => [id, 0]));
     let fighters = 0;
     const N = 400;
@@ -49,7 +49,7 @@ describe('roles: ~70 % flee, ~30 % fight; the robbed trader fights', () => {
       for (const [id, role] of r) if (role === 'fight') tally.set(id, tally.get(id)! + 1);
     }
     expect(fighters / (N * list.length)).toBeCloseTo(fighterCount(18) / 18, 6);
-    for (const [id, n] of tally) expect(n / N, id).toBeGreaterThan(0.17), expect(n / N, id).toBeLessThan(0.4);
+    for (const [id, n] of tally) expect(n / N, id).toBeGreaterThan(0.37), expect(n / N, id).toBeLessThan(0.63);
   });
 
   it('a theft: the robbed stall\'s trader always fights (taking a fighter\'s place: the split is unchanged); stable per station', () => {
@@ -184,7 +184,8 @@ describe('the hostility record (save/validate.ts)', () => {
   it('accepts a well-formed record and refuses every malformed one', () => {
     expect(marketHostilityProblem(good())).toBeNull();
     const bad: [string, (r: Record<string, unknown> & {people: Record<string, Record<string, unknown>>}) => void][] = [
-      ['version', r => { r.v = 2; }],
+      ['version', r => { r.v = 3; }], // (1 and 2 are read: task studio-market-bar-20261108-225231-01)
+      ['fled in a version-2 record', r => { r.v = 2; }],
       ['calm', r => { r.hostile = false; }],
       ['cause', r => { r.cause = 'insult'; }],
       ['theft without a stall', r => { delete r.stall; }],

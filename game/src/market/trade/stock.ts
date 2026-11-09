@@ -15,7 +15,12 @@
 //    hard-coded tank) + 1-2 lots of rail supplies (flares, cells). Ordinary cans: it is not a refuelling service;
 //  - general: 7-10 lots of food, drink, cells, flares (GLOBAL_POOL) and spare gas filters;
 //  - gear: 3-4 distinct pieces (GEAR_WEIGHTS + the gas mask), some part-used (a mask's fitted filter, an airtank's air);
-//  - scrap: 3-5 lots of crafting materials (GLOBAL_POOL.material).
+//  - scrap: 3-5 lots of crafting materials (GLOBAL_POOL.material);
+//  - bar (task studio-market-bar-20261108-225231-01, layout version 3's bartender only): every one of the five beers (items/beers.ts BEER_IDS:
+//    BAR_BEER_COUNTS bottles each — the four timed beers 3-6, the Bock 2-4) + 1-2 small lots of ordinary drinks (GLOBAL_POOL.drink).
+// Task studio-market-bar-20261108-225231-01: a station seeds the stalls ITS layout places (versions 1 / 2: the six, in the same order and
+// with the same uids as before; version 3: + the bar, last), and its record lists the bar only when the bar holds something (a market
+// without a bar writes exactly the six as before; an old record without `bar` loads with an empty bar).
 // LOADING never throws: each stall's list goes through the Lockbox's sanitising stack loader (run/trainLockbox.ts — the same serializer
 // every store uses: mag / filter / air / armor wear are kept exactly, clamped like the Lockbox's); a uid already seen in another stall is dropped (and, task
 // studio-market-rework-20261108-074144-01, a restart part or Rail Ties: never stock). A strict check of the saved record is save/validate.ts
@@ -28,7 +33,8 @@ import {BOX_COUNT, GEAR_WEIGHTS, GLOBAL_POOL, LIMB_ECONOMY, type ItemRows, type 
 import {FUEL} from '../../fuel/fuel';
 import {stackToJSON, stacksIn, type ItemStack, type StackJSON} from '../../items/inventory';
 import {TrainLockbox} from '../../run/trainLockbox';
-import {MARKET_STALLS, type MarketStallId} from '../../gen/market/marketTypes';
+import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL, type MarketStallId} from '../../gen/market/marketTypes';
+import {BEER_IDS, type BeerId} from '../../items/beers';
 import {GAS_FILTER_ID} from './value';
 
 /** Section-memory lane of a market station's stock (save/validate.ts checks it strictly). */
@@ -36,7 +42,12 @@ export const MARKET_STOCK_LANE = 'market.stock';
 /** Most stacks one stall's stock may hold (sold items merge first; a sale that would pass it is refused, nothing changes). */
 export const STOCK_MAX = 96;
 
-export interface MarketStockJSON { v: 1; stalls: Record<MarketStallId, StackJSON[]> }
+export interface MarketStockJSON { v: 1; stalls: Record<typeof MARKET_STALLS[number], StackJSON[]> & {bar?: StackJSON[]} }
+
+/** Task studio-market-bar-20261108-225231-01 (lane BAR): bottles of each beer the bartender starts with (inclusive ranges; finite, never refilled). */
+export const BAR_BEER_COUNTS: Readonly<Record<BeerId, LotRange>> = {
+  beer_lager: [3, 6], beer_pilsner: [3, 6], beer_stout: [3, 6], beer_porter: [3, 6], beer_bock: [2, 4],
+};
 
 /** The train's built-in fuel capacity in quarter units (FUEL.trainTankUnits: two tanks; FUEL.tankUnits is one tank = one hop). Never a literal. */
 export function trainCapacityUnits(): number {
@@ -81,6 +92,8 @@ export function stallDraws(stall: MarketStallId, rng: Rng): Draw[] {
     case 'general': return lots(rng, [...GLOBAL_POOL.food, ...GLOBAL_POOL.drink, ...GLOBAL_POOL.battery, ...GLOBAL_POOL.flare, [GAS_FILTER_ID, 0.6]], [7, 10], small(rng, 3));
     case 'gear': return lots(rng, [...Object.entries(GEAR_WEIGHTS), ['gas_mask', 1]], [3, 4], () => 1, true);
     case 'scrap': return lots(rng, GLOBAL_POOL.material, [3, 5], d => rng.int(2, Math.min(6, d.stackMax)));
+    // (task studio-market-bar-20261108-225231-01) the bartender: all five beers, then a little ordinary drink
+    case 'bar': return [...BEER_IDS.map(id => ({itemId: id, count: rng.int(BAR_BEER_COUNTS[id][0], BAR_BEER_COUNTS[id][1])})), ...lots(rng, GLOBAL_POOL.drink, [1, 2], small(rng, 3))];
   }
 }
 
@@ -116,7 +129,7 @@ export function stockHasRoom(list: readonly ItemStack[], piece: ItemStack): bool
   return list.filter(s => s.itemId === piece.itemId && plain(s)).reduce((n, s) => n + d.stackMax - s.count, 0) >= piece.count;
 }
 
-const emptyStalls = (): Record<MarketStallId, ItemStack[]> => Object.fromEntries(MARKET_STALLS.map(s => [s, [] as ItemStack[]])) as Record<MarketStallId, ItemStack[]>;
+const emptyStalls = (): Record<MarketStallId, ItemStack[]> => Object.fromEntries(MARKET_STALLS_ALL.map(s => [s, [] as ItemStack[]])) as Record<MarketStallId, ItemStack[]>;
 
 /** The RNG namespace of a stall's stock at one market station (scope = the station id; seed = its world seed). */
 export function stockRng(scope: string, seed: number, stall: MarketStallId): Rng {
@@ -129,10 +142,13 @@ export class MarketStock {
   /** Bumped by every change (the open view redraws). */
   version = 0;
 
-  /** The station's first stock (deterministic contents per scope + seed; uids from `make`). */
-  static seed(scope: string, seed: number, make: MakeStack): MarketStock {
+  /**
+   * The station's first stock (deterministic contents per scope + seed; uids from `make`) for the stalls its layout places (`stalls`,
+   * default the six; seeded in the fixed MARKET_STALLS_ALL order whatever order they are given in — the bar last).
+   */
+  static seed(scope: string, seed: number, make: MakeStack, stalls: readonly MarketStallId[] = MARKET_STALLS): MarketStock {
     const st = new MarketStock();
-    for (const stall of MARKET_STALLS) {
+    for (const stall of MARKET_STALLS_ALL.filter(s => stalls.includes(s))) {
       const rng = stockRng(scope, seed, stall), list = st.stalls[stall];
       for (const d of stallDraws(stall, rng)) {
         let left = d.count;
@@ -155,7 +171,7 @@ export class MarketStock {
     const src = j && typeof j === 'object' && (j as {stalls?: unknown}).stalls && typeof (j as {stalls: unknown}).stalls === 'object'
       ? (j as {stalls: Record<string, unknown>}).stalls : {};
     const seen = new Set<number>();
-    for (const stall of MARKET_STALLS) {
+    for (const stall of MARKET_STALLS_ALL) {
       const raw = Array.isArray(src[stall]) ? (src[stall] as unknown[]).slice(0, STOCK_MAX) : [];
       const box = new TrainLockbox(raw.length);
       box.load({v: 1, slots: raw});
@@ -170,14 +186,16 @@ export class MarketStock {
   }
 
   toJSON(): MarketStockJSON {
-    const stalls = {} as Record<MarketStallId, StackJSON[]>;
+    const stalls = {} as MarketStockJSON['stalls'];
     for (const s of MARKET_STALLS) stalls[s] = this.stalls[s].map(x => stackToJSON(x)!);
+    // (the bar only when it holds something: lossless — an absent bar loads empty — and a market without a bar writes the six as before)
+    if (this.stalls[BAR_STALL].length) stalls[BAR_STALL] = this.stalls[BAR_STALL].map(x => stackToJSON(x)!);
     return {v: 1, stalls};
   }
 
   /** Every stock stack (all stalls). */
   all(): ItemStack[] {
-    return MARKET_STALLS.flatMap(s => this.stalls[s]);
+    return MARKET_STALLS_ALL.flatMap(s => this.stalls[s]);
   }
 
   /** Highest uid held (bag contents included): the inventory's counter stays above it. */

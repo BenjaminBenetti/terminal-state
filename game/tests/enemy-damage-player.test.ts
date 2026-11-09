@@ -59,7 +59,8 @@ describe('enemy damage to the player: x2, the player only', () => {
     const game = src('game.ts');
     // the one pipeline scales first, then armour, then HP and the injury listeners (they see the doubled hit)
     // (task studio-general-armor-20261107-231448-01: the worn pool, player/armor.ts armorHit -> armorFor)
-    expect(game).toMatch(/applyPlayerHit\(raw: PlayerHit\): ResolvedHit \{\s*const hit = incomingHit\(raw\);\s*const \{resolved\} = armorHit\(hit, this\.inv\.gear, this\.wearRand\);/);
+    // (task studio-market-bar-20261108-225231-01, lane BEER: + Ironclad Stout's temporary armour in the same pool, after the x2 as ever)
+    expect(game).toMatch(/applyPlayerHit\(raw: PlayerHit\): ResolvedHit \{\s*const hit = incomingHit\(raw\);\s*const \{resolved\} = armorHit\(hit, this\.inv\.gear, this\.wearRand, undefined, this\.beerEffects\?\.tempArmor\(\) \?\? 0\);/);
     expect(game).toMatch(/source: creature \? 'creature' : 'zombie', enemy: true,/);
     expect(src('ai/blightBurst.ts')).toMatch(/source: 'blast', location, attacker: 'blightbelly', enemy: true\}/);
     // the gas field (incl. a Blightbelly's puff) and the empty-vitals drain damage the player directly, unscaled

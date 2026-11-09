@@ -123,7 +123,8 @@ describe('damage: one share off every ENEMY hit, any body part, after the enemy 
     expect(src('world/gas/system.ts')).toMatch(/pl\.takeDamage\(dps \* dt\)/);
     expect(src('world/gas/system.ts')).not.toMatch(/armorHit|armorPool|applyPlayerHit/);
     expect(src('game.ts')).toMatch(/if \(surv\.hpLoss > 0\) p\.takeDamage\(surv\.hpLoss\);/);
-    expect(src('player/armor.ts')).toMatch(/const pool = isEnemyHit\(hit\) \? armorPool\(worn\) : 0;/);
+    // (task studio-market-bar-20261108-225231-01, lane BEER: + the temporary armour, still enemy hits only)
+    expect(src('player/armor.ts')).toMatch(/const pool = isEnemyHit\(hit\) \? armorPool\(worn, temp\) : 0;/);
   });
 });
 

@@ -21,8 +21,9 @@ import type {Inventory, ItemStack, SlotRef} from '../../items/inventory';
 import type {SectionKey} from '../../levels/types';
 import type {RunState} from '../../run/runState';
 import type {RunParticipant} from '../../run/snapshot';
-import {MARKET_STALLS, type MarketLayout, type MarketStall, type MarketStallId} from '../../gen/market/marketTypes';
+import {isMarketStallId, type MarketLayout, type MarketStall, type MarketStallId} from '../../gen/market/marketTypes';
 import type {MarketHostilityApi} from '../hostility';
+import type {MarketAudioApi} from '../marketAudio';
 import type {CargoItemJSON} from '../../run/trainCargo';
 import {trainSpawnLocal} from '../../gen/playerTrain';
 import {PLAYER_TRAIN_SPEC} from '../../world/playerTrainSpec';
@@ -86,6 +87,8 @@ export interface TradeHost {
   marketHostility?: MarketHostilityApi | null;
   /** The run's player train (run/playerTrain.ts): its Lockbox and loose cargo take an old balance's overflow. Read live. */
   playerTrain?: {lockbox: {readonly slots: (ItemStack | null)[]; version: number}; cargo: {records(): CargoItemJSON[]; add(item: CargoItemJSON): void}} | null;
+  /** Task studio-market-bar-20261108-225231-01 (lane AUDIO): the market's sounds (market/marketAudio.ts) — one register cue per successful trade. Read live. */
+  marketAudio?: Pick<MarketAudioApi, 'cash'> | null;
 }
 
 const now = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -163,7 +166,7 @@ export class TradeSystem {
     this.settleWallet(); // (any station: an old balance becomes real ties wherever the loaded run goes on)
     const m = layout?.market;
     if (!m || !Array.isArray(m.stalls)) return;
-    this.stalls = m.stalls.filter(s => (MARKET_STALLS as readonly string[]).includes(s.id));
+    this.stalls = m.stalls.filter(s => isMarketStallId(s.id)); // (the six; layout version 3: + the bar — task studio-market-bar-20261108-225231-01)
     if (!this.stalls.length) return;
     const run = this.host.run, key: SectionKey = {...run.current};
     this.key = key;
@@ -173,7 +176,7 @@ export class TradeSystem {
       this.counts.loaded++;
     } else {
       const inv = this.host.inv;
-      this.stock = MarketStock.seed(run.scopeOf(key), run.seedFor(key), (id, n) => inv.makeStack(id, n));
+      this.stock = MarketStock.seed(run.scopeOf(key), run.seedFor(key), (id, n) => inv.makeStack(id, n), this.stalls.map(s => s.id)); // (the stalls this layout places)
       this.counts.seeded++;
       this.write();
     }
@@ -366,6 +369,7 @@ export class TradeSystem {
       this.counts.trades++;
       this.host.syncHeld?.();
       sfx?.pickup?.();
+      this.host.marketAudio?.cash(); // task studio-market-bar-20261108-225231-01 (lane AUDIO): THE success commit — one subtle register cue per trade
     } else sfx?.denied?.();
     return r;
   }
@@ -389,9 +393,9 @@ export class TradeSystem {
   /** QA: a compact state report. */
   qa() {
     return {open: this.open?.id ?? null, target: this.target?.id ?? null, ties: carriedTies(this.host.inv), owed: this.legacy.owed, stalls: this.stalls.map(s => s.id),
-      stock: this.stock ? Object.fromEntries(MARKET_STALLS.map(s => [s, this.stock!.summary(s)])) : null,
+      stock: this.stock ? Object.fromEntries(this.stalls.map(s => [s.id, this.stock!.summary(s.id)])) : null,
       note: this.view.note, noteBad: this.view.noteBad, deal: this.view.deal, lastClose: this.lastClose, counts: {...this.counts},
-      lines: Object.fromEntries(MARKET_STALLS.map(s => [s, STALL_TRADE[s].line]))};
+      lines: Object.fromEntries(this.stalls.map(s => [s.id, STALL_TRADE[s.id].line]))};
   }
 }
 

@@ -12,12 +12,18 @@
 //    Every v1 market holder carries the exact empty key (gen/market/dress.ts MARKET_EMPTY_KEY): no loot lot competes for the space.
 //    The counter run is two abutting 1.5 m modules with one continuous top: the facing ends of their surfaces join into ONE surface across
 //    the seam (a long gun lies over it, resting on both tops), so a shotgun still fits beside the lantern and the toolbox.
-//  - ORDER: nearest the stall's customer spot first (the counter tops, then the back fixtures), ties by prop index.
+//  - ORDER (allStallSurfaces): nearest the stall's customer spot first (the counter tops, then the back fixtures), ties by prop index.
+//  - TASK studio-market-bar-20261108-225231-01 (lane SHELVES; user: "Move owner wares to a shelf near them, not the counter immediately
+//    in front (accidental theft when trying to talk)."): the wares use `stallSurfaces` — every surface but the CUSTOMER COUNTER TOPS (the
+//    counter between the customer and the trader: isCustomerCounter, any version — v1's derived tops, v2's counter displays, a v3 bar
+//    counter), nearest the TRADER first: the back wall behind the trader, then the side shelving / racks. A stall with no shelving at all
+//    (v1's gun / fuel / scrap) keeps only its counter run's ENDS away from the talk corridor (counterEnds). Runtime only (layout geometry
+//    untouched). The trader's body and the counter occlude the Steal aim (market/wares/wares.ts aim): talking is Trade.
 // `vendorDisplayHosts` lists the props those surfaces lie on: a loot / salvage system must never fill them (the displays are the stall's
 // finite stock, nothing else).
 import {PROP_DEFS, SHELF_TIER_Y, type PropPlacement} from '../../gen/props';
 import {cutSurfaces} from '../../gen/props07';
-import {MARKET_STALLS, type MarketLayout, type MarketStall, type MarketStallId} from '../../gen/market/marketTypes';
+import {isMarketStallId, type MarketLayout, type MarketStall, type MarketStallId} from '../../gen/market/marketTypes';
 import {isContainerKind, isSurfaceKind} from '../../items/loot';
 import {holderSurfaces, type SurfaceHolder} from '../../items/lootLayout';
 
@@ -36,6 +42,15 @@ export const WARES = {
   /** The Steal aim: reach from the eye to the ware (m), the pad round its box (m). */
   reach: 2.6,
   pad: 0.015,
+  /** (task studio-market-bar-20261108-225231-01) The trader's body as an aim occluder: an upright capsule (radius, height; m). */
+  traderR: 0.3,
+  traderH: 1.85,
+  /**
+   * (task studio-market-bar-20261108-225231-01) A stall with NO shelving (v1's gun / fuel / scrap stalls) shows its wares on its counter
+   * run's ENDS only: never within this half-width (m, along the counter) of the trader / customer-spot axis — the stretch a customer
+   * talks across.
+   */
+  talk: 0.75,
 } as const;
 
 /** One flat display surface in the world: its centre (y = the resting height), its yaw (three.js rotation.y, front = local +Z, the
@@ -53,6 +68,8 @@ export interface WareSurface {
    * holders' item collision ends at each module's loot surface): a ware stands inside one span or bridges two (market/wares/plan.ts).
    */
   supports?: [number, number][];
+  /** (task studio-market-bar-20261108-225231-01) A counter-run END of a stall without shelving (counterEnds): away from the talk corridor. */
+  end?: boolean;
 }
 
 type Layoutish = {props: readonly PropPlacement[]; market?: MarketLayout};
@@ -133,8 +150,8 @@ function derivedSurfaces(layout: Layoutish, stall: MarketStall): WareSurface[] {
   return joined.map(({k: _k, ...s}) => s);
 }
 
-/** The display surfaces of one stall (v2: its `displays`; v1: derived from its furniture). */
-export function stallSurfaces(layout: Layoutish, stall: MarketStall): WareSurface[] {
+/** Every display surface a stall's layout offers (v2 / v3: its `displays`; v1: derived from its furniture) — customer counter tops included. */
+export function allStallSurfaces(layout: Layoutish, stall: MarketStall): WareSurface[] {
   if (Array.isArray(stall.displays) && stall.displays.length) {
     const out: WareSurface[] = [];
     for (const s of stall.displays) {
@@ -148,10 +165,98 @@ export function stallSurfaces(layout: Layoutish, stall: MarketStall): WareSurfac
   return derivedSurfaces(layout, stall);
 }
 
+/** The counter kinds a customer talks to the trader across (never a ware's display: task studio-market-bar-20261108-225231-01). */
+export const COUNTER_KINDS: ReadonlySet<string> = new Set(['shopCounter']);
+/** Margin (m) round the stall's counter footprint inside which a surface counts as that counter's top. */
+const COUNTER_PAD = 0.05;
+
+/**
+ * Task studio-market-bar-20261108-225231-01 (lane SHELVES; user: "Move owner wares to a shelf near them, not the counter immediately in
+ * front (accidental theft when trying to talk)."): a surface IS the customer counter between the customer and the trader when one of its
+ * hosts is a counter kind or stands on the stall's counter footprint (`stall.counter`: the counter run / the bar counter), or — a surface
+ * without a host — when its centre lies over that footprint (same storey). Any layout version: v1's derived counter tops, v2's counter
+ * `displays`, a v3 bar counter whatever its kind.
+ */
+export function isCustomerCounter(layout: Layoutish, stall: MarketStall, s: WareSurface): boolean {
+  const c = stall.counter, P = COUNTER_PAD;
+  if (!c || ![c.x0, c.x1, c.z0, c.z1].every(fin)) return false;
+  const x0 = Math.min(c.x0, c.x1) - P, x1 = Math.max(c.x0, c.x1) + P, z0 = Math.min(c.z0, c.z1) - P, z1 = Math.max(c.z0, c.z1) + P;
+  const lv = c.level ?? 0;
+  for (const i of s.hosts) {
+    const p = layout.props[i];
+    if (!p) continue;
+    if (COUNTER_KINDS.has(p.kind as string)) return true;
+    // (the prop's footprint overlaps the counter footprint by more than the margin: it is part of the counter run)
+    if ((p.level ?? 0) === lv && Math.min(x1, p.x + p.hx) - Math.max(x0, p.x - p.hx) > 2 * P && Math.min(z1, p.z + p.hz) - Math.max(z0, p.z - p.hz) > 2 * P) return true;
+  }
+  return !s.hosts.length && s.level === lv && s.x >= x0 && s.x <= x1 && s.z >= z0 && s.z <= z1;
+}
+
+/** The solid boxes of a stall's counter (the free-standing props on its counter footprint, its storey): world min / max. */
+export function counterBoxes(layout: Layoutish, stall: MarketStall): {min: {x: number; y: number; z: number}; max: {x: number; y: number; z: number}}[] {
+  const c = stall.counter, P = COUNTER_PAD;
+  if (!c || ![c.x0, c.x1, c.z0, c.z1].every(fin)) return [];
+  const x0 = Math.min(c.x0, c.x1) - P, x1 = Math.max(c.x0, c.x1) + P, z0 = Math.min(c.z0, c.z1) - P, z1 = Math.max(c.z0, c.z1) + P;
+  const lv = c.level ?? 0, out: ReturnType<typeof counterBoxes> = [];
+  for (const p of layout.props) {
+    if (p.host !== undefined || p.mounted || (p.level ?? 0) !== lv) continue;
+    if (Math.min(x1, p.x + p.hx) - Math.max(x0, p.x - p.hx) <= 2 * P || Math.min(z1, p.z + p.hz) - Math.max(z0, p.z - p.hz) <= 2 * P) continue;
+    out.push({min: {x: p.x - p.hx, y: p.y, z: p.z - p.hz}, max: {x: p.x + p.hx, y: p.y + p.h, z: p.z + p.hz}});
+  }
+  return out;
+}
+
+/**
+ * The talk corridor of a stall along a counter surface's own x (surface-local): the trader's post and the customer spot projected onto it,
+ * WARES.talk either side. Null without a trader / customer point.
+ */
+export function talkCorridor(stall: MarketStall, s: WareSurface): [number, number] | null {
+  const c = Math.cos(s.yaw), n = Math.sin(s.yaw);
+  const pts = [stall.trader, stall.front].filter(p => p && fin(p.x) && fin(p.z)).map(p => (p.x - s.x) * c - (p.z - s.z) * n);
+  return pts.length ? [Math.min(...pts) - WARES.talk, Math.max(...pts) + WARES.talk] : null;
+}
+
+/**
+ * (task studio-market-bar-20261108-225231-01, the lead's rule for stalls WITHOUT shelving) A counter surface's ENDS away from the talk
+ * corridor: the parts of its width outside talkCorridor (at most one each side), each its own surface (`end`), its supported spans
+ * clipped to it; never the stretch in front of the trader / the customer spot. [] when nothing usable is left.
+ */
+export function counterEnds(stall: MarketStall, s: WareSurface): WareSurface[] {
+  const cor = talkCorridor(stall, s);
+  if (!cor) return [];
+  const c = Math.cos(s.yaw), n = Math.sin(s.yaw), h = s.w / 2, out: WareSurface[] = [];
+  for (const [a, b] of [[-h, Math.min(h, cor[0])], [Math.max(-h, cor[1]), h]] as [number, number][]) {
+    if (b - a < WARES.minW) continue;
+    const m = (a + b) / 2;
+    const supports = s.supports?.map(([p, q]): [number, number] => [Math.max(p, a) - m, Math.min(q, b) - m]).filter(([p, q]) => q - p >= WARES.minW);
+    if (supports && !supports.length) continue;
+    out.push({...s, x: s.x + c * m, z: s.z - n * m, w: b - a, hosts: [...s.hosts], ...(supports ? {supports} : {}), end: true});
+  }
+  return out;
+}
+
+/**
+ * The display surfaces of one stall — its owned wares stand here (market/wares/wares.ts): every offered surface but the customer counter
+ * tops (isCustomerCounter), NEAREST THE TRADER first (its post, chest high: the shelves behind / beside the vendor before the ones by the
+ * entrance; ties keep the layout's order). Runtime only: no layout's geometry changes (v1 / v2 stay byte-identical). A stall whose shelves
+ * hold fewer stacks shows what fits (the rest stays in its stock, listed and bought in the trade view).
+ * A stall with NO shelving at all (v1's first market: the gun / fuel / scrap stalls — a counter and a rack / cylinders / cartons only)
+ * shows its wares on its counter run's ENDS only (counterEnds: never within WARES.talk of the trader / customer-spot axis); the trader's
+ * body and the counter still give the customer spot's look to the trade (wares.ts occluder).
+ */
+export function stallSurfaces(layout: Layoutish, stall: MarketStall): WareSurface[] {
+  const t = stall.trader, ty = (t?.y ?? 0) + 1.2;
+  const far = (s: WareSurface) => (t && fin(t.x) && fin(t.z) ? Math.hypot(s.x - t.x, s.z - t.z, s.y - ty) : 0);
+  const all = allStallSurfaces(layout, stall);
+  let use = all.filter(s => !isCustomerCounter(layout, stall, s));
+  if (!use.length) use = all.filter(s => isCustomerCounter(layout, stall, s)).flatMap(s => counterEnds(stall, s));
+  return use.map((s, i) => ({s, i, k: far(s)})).sort((a, b) => a.k - b.k || a.i - b.i).map(e => e.s);
+}
+
 /** Every stall's display surfaces (empty without a market). */
 export function marketSurfaces(layout: Layoutish): Partial<Record<MarketStallId, WareSurface[]>> {
   const out: Partial<Record<MarketStallId, WareSurface[]>> = {};
-  for (const s of layout.market?.stalls ?? []) if ((MARKET_STALLS as readonly string[]).includes(s.id)) out[s.id] = stallSurfaces(layout, s);
+  for (const s of layout.market?.stalls ?? []) if (isMarketStallId(s.id)) out[s.id] = stallSurfaces(layout, s); // (+ the bar: task studio-market-bar-20261108-225231-01)
   return out;
 }
 

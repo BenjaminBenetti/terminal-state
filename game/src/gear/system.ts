@@ -256,6 +256,9 @@ export class GearSystem {
     this.wornKey = this.keyOfWorn();
     g.sfx.pickup();
     g.hud.toast(`Picked up the ${itemDef(b.stack.itemId).short.toLowerCase()} — wearing it (6 takes it off)`);
+    // task studio-market-bar-20261108-225231-01 (lane BEER): the Pilsner's one acquisition hook — only an untouched generated find counts
+    // ('found:<i>' with nothing put in it); a bag the player set down ('bag:<uid>') never does
+    g.beerEffects?.acquired?.({kind: 'bag', id: b.id, empty: !(b.stack.bag ?? []).some(Boolean)}, b.stack);
     g.syncHeld();
     return true;
   }

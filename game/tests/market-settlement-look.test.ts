@@ -3,6 +3,8 @@
 // impacts), plywood-lined container interiors and floors, corrugated rooftops; the art derived from the layout (gen/market/v2/art.ts):
 // fans high over the yard / lanes only, an awning on the lane side of every stall / tea / kitchen / repair opening (never under a
 // bridge), laundry / cable lines across the lanes high over every walking band; world/marketVisuals.ts builds them.
+// (Re-pinned by task studio-market-bar-20261108-225231-01, lane BAR: the default is now layout version 3, the settlement plus the bar —
+// market-bar-layout.test.ts covers its fans / look — so this version-2 look test generates version 2 explicitly.)
 import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
 import {installCanvasShim} from './helpers/canvas2d';
@@ -19,9 +21,24 @@ import {SETTLE} from '../src/gen/market/v2/frame';
 import {generateMarketLevel} from '../src/gen/market/index';
 import {CELL} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
+import {NodeIO} from '@gltf-transform/core';
+import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
+import {MARKET_HUMAN_KEY, MARKET_HUMAN_MODEL_FILES} from '../src/market/humanLooks';
+
+/** (task studio-market-bar-20261108-225231-01) The market cast file (textures dropped: Node has no image decoder) — its garments hang on the lines. */
+async function castGltf(): Promise<GLTF> {
+  const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
+  const doc = await io.read(path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public'), MARKET_HUMAN_MODEL_FILES[MARKET_HUMAN_KEY].url));
+  for (const t of doc.getRoot().listTextures()) t.dispose();
+  const bin = await io.writeBinary(doc);
+  return new Promise<GLTF>((res, rej) => new GLTFLoader().parse(bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength) as ArrayBuffer, '', res, rej));
+}
 
 installCanvasShim(false);
-const L = generateMarketLevel({levelSeed: 77}) as StationLayout;
+const L = generateMarketLevel({levelSeed: 77, layoutVersion: 2}) as StationLayout;
 
 describe('the Survivor Market look, layout version 2', () => {
   it('the builder paints the containers (several paints), plywood inside, corrugated rooftops; every key arch-owned', () => {
@@ -50,7 +67,7 @@ describe('the Survivor Market look, layout version 2', () => {
     expect(settleAreaClass(L.areas[L.platform])).toBe('platform');
   });
 
-  it('fans high over open floor, awnings on the lane side of the openings (never under a bridge), lines high across the lanes', () => {
+  it('fans high over open floor, awnings on the lane side of the openings (never under a bridge), lines high across the lanes', async () => {
     const open = (x: number, z: number) => { const i = L.grid.idx(...L.grid.cellOf(x, z)); return L.levels[1].grid.cells[i] === 0 && L.levels[2].grid.cells[i] === 0 && L.grid.ceil[i] >= SETTLE.roofY - 0.05; };
     const fans = marketFans(L);
     expect(fans.length).toBeGreaterThanOrEqual(2);
@@ -83,7 +100,9 @@ describe('the Survivor Market look, layout version 2', () => {
       expect(open((l.x0 + l.x1) / 2, (l.z0 + l.z1) / 2)).toBe(true);
       expect(Math.abs(l.z1 - l.z0) / CELL).toBeGreaterThanOrEqual(6); // across a whole lane (catwalk edge to catwalk edge)
     }
-    const v = buildMarketView(L)!;
+    // (task studio-market-bar-20261108-225231-01: the laundry is the market cast's real garments, built from the loaded cast file —
+    // world/marketClothes.ts, tests/market-clothes.test.ts)
+    const v = buildMarketView(L, {garments: await castGltf()})!;
     expect(v.awnings).toBe(aw.length);
     expect(v.lines).toBe(lines.length);
     expect(v.root.getObjectByName('market-laundry')).toBeDefined();
