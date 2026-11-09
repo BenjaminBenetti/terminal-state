@@ -32,7 +32,7 @@ import {V2_STOREY_PLATES} from './spine';
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
 /** QA / tests: what the last storey-5 dress placed. */
-export const F5_DRESS_STATS = {props: 0, decor: 0, lights: 0, signs: 0, mainframes: 0, racks: 0, consoles: 0, pumps: 0, planters: 0, skipped: [] as string[]};
+export const F5_DRESS_STATS = {props: 0, decor: 0, lights: 0, signs: 0, mainframes: 0, racks: 0, consoles: 0, pumps: 0, planters: 0, stocked: 0, skipped: [] as string[]};
 
 
 /** A wall-backed placement at `t` along `side` (strict real-wall check + the placement primitive); hero kinds sealed. */
@@ -312,10 +312,44 @@ function dressLibrary(D: Dx, a: Area): void {
       }
     }
   }
-  for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'archiveBoxes', {tries: 16});
-  placeAgainstWall(D.ctx, a, 'filingCabinet', {tries: 16});
   const desk = scanWall(D, a, 'desk', ['W', 'N', 'S'], 0.8);
   if (desk) HOSTED.push(desk);
+}
+
+/**
+ * The storey's STORAGE (lead follow-up after the integration: version 2 must not quietly cut version 1's loot) — real, openable
+ * holders where the programme keeps things, never food: the tape library's archive boxes, lateral files and filing cabinets; the
+ * switch room's spares cabinets and tool chest; the control room's operator desks (CRT on top), log filing cabinet and data cabinet;
+ * the cooling plant's spares cabinets and tool chest; the battery room's spares cabinet; the operators' lockers in the bunk room and
+ * the commons. Each placed deterministically along the room's walls (scanWall: every 0.25 m, access strips and connectivity kept).
+ */
+function stock(D: Dx, A: (k: string) => Area | undefined): number {
+  let n = 0;
+  const put = (key: string, kind: PropKind, count: number, sides: readonly Side[], front: number, prefer?: (a: Area) => number): void => {
+    const a = A(key);
+    if (!a) return;
+    for (let i = 0; i < count; i++) {
+      const p = scanWall(D, a, kind, sides, front, prefer?.(a), true);
+      if (!p) break;
+      n++;
+      if (kind === 'desk') HOSTED.push(p);
+    }
+  };
+  const lo = (a: Area, s: 'x' | 'y') => (s === 'x' ? a.x : a.y) * CELL + 0.5;
+  put('library', 'archiveBoxes', 4, ['N', 'S', 'W'], 0.6);
+  put('library', 'officeFiling', 1, ['S', 'N', 'W'], 0.8);
+  put('library', 'filingCabinet', 2, ['N', 'S', 'W'], 0.8);
+  put('switch', 'cabinetTall', 2, ['W', 'N', 'S', 'E'], 0.8);
+  put('switch', 'rollingToolChest', 1, ['W', 'S', 'N', 'E'], 0.8);
+  put('control', 'desk', 2, ['S', 'E', 'N'], 0.9, a => lo(a, 'x') + a.w * CELL * 0.7);
+  put('control', 'filingCabinet', 1, ['E', 'N', 'S'], 0.8);
+  put('control', 'serverCabinet', 1, ['N', 'E', 'S'], 0.8);
+  put('cooling', 'cabinetTall', 2, ['S', 'W', 'N'], 0.8);
+  put('cooling', 'rollingToolChest', 1, ['W', 'S', 'N'], 0.8);
+  put('battery', 'cabinetTall', 1, ['E', 'N', 'S'], 0.8);
+  put('bunks', 'staffLockers', 2, ['E', 'W', 'N', 'S'], 1.0);
+  put('commons', 'staffLockers', 2, ['E', 'N', 'S'], 1.0);
+  return n;
 }
 
 function dressCommons(D: Dx, a: Area): void {
@@ -407,7 +441,7 @@ function dressGallery(D: Dx, a: Area): void {
 
 export function dressFloor5(ctx: FloorDressCtx): void {
   const S = F5_DRESS_STATS;
-  S.mainframes = S.racks = S.consoles = S.pumps = S.planters = S.lights = 0;
+  S.mainframes = S.racks = S.consoles = S.pumps = S.planters = S.lights = S.stocked = 0;
   S.skipped = [];
   HOSTED.length = 0;
   for (const k of Object.keys(F5_REFUSED)) delete F5_REFUSED[k];
@@ -428,6 +462,7 @@ export function dressFloor5(ctx: FloorDressCtx): void {
   if (library) step('library', () => dressLibrary(D, library));
   if (commons) step('commons', () => dressCommons(D, commons));
   if (bunks) step('bunks', () => dormitory(D, bunks));
+  step('storage', () => { S.stocked = stock(D, A); });
   if (gallery) step('gallery', () => dressGallery(D, gallery));
   const cableway = A('cableway');
   if (cableway) step('cableway', () => dressCableway(D, cableway));
