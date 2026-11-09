@@ -7,11 +7,12 @@
 //
 // The deck in its own frame: u across it from the stair side toward block C (world x, or -x when mirrored), v from its Market Lane edge
 // (north) toward the Back Lane (south). Rows of the plan (v, m):
-//   0.5 - 1.0   the BACKBAR along the north railing: shelving units (the bar's bottles — the bartender's finite stock — stand on their
-//               tiers: the stall's display surfaces) and the jukebox at the block-C end; the bar's hanging name board above it;
+//   0.5 - 1.0   the BACKBAR along the north railing: shelving units end to end (the bar's bottles — the bartender's finite stock —
+//               stand on their tiers: the stall's display surfaces); the bar's hanging name board above it;
 //   1.0 - 2.0   the bartender's aisle (the bartender's post in the middle, facing the customers);
-//   2.0 - 2.8   the long BAR COUNTER (shop counter modules, flush with the deck's block-C edge; the bartender's way in at the stair end);
-//   2.8 - 3.5   the counter STOOLS, with a clear gap in the middle: the customer's spot to buy from the bartender;
+//   2.0 - 2.8   the long BAR COUNTER (three 1.5 m shop counter modules, flush with the deck's block-C edge; the bartender's way in at the
+//               stair end; a till and two lanterns riding on it);
+//   3.0 - 3.5   the counter STOOLS (every other cell), the customer's spot to buy from the bartender behind the middle gap;
 //   4.5 - 7.5   a row of bistro TABLES with a chair each side (the stair's landing at the south-west keeps its approach clear), the
 //               jukebox against the block-C edge facing them;
 //   7.5 - 8.0   along the south railing: crates of empties, a globe bar;
