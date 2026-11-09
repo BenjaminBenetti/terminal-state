@@ -1141,9 +1141,9 @@ export function cargoMaterials() {
     paint: faceMat('cargo-cab-paint', 'paintedSteel', {color: 0x7a8474, metalness: 0.3, glow: 0.12}),
     deck: faceMat('cargo-cab-deck', 'brushedSteel', {color: 0x8c8b86, metalness: 0.5, glow: 0.1}),
     hazard: faceMat('cargo-hazard', 'paintedSteel', {color: 0xd6a032, metalness: 0.2, glow: 0.14}),
-    bars: faceMat('cargo-gate-bars', 'paintedSteel', {color: 0x5d625a, metalness: 0.35, glow: 0.1}),
+    bars: faceMat('cargo-gate-bars', 'paintedSteel', {color: 0x3c403a, metalness: 0.35, glow: 0.08}),
     door: faceMat('cargo-landing-door', 'paintedSteel', {color: 0x6e7867, metalness: 0.3, glow: 0.08}),
-    liner: faceMat('cargo-shaft-liner', 'paintedSteel', {color: 0x55585a, metalness: 0.15, glow: 0.05}),
+    liner: faceMat('cargo-shaft-liner', 'paintedSteel', {color: 0x9a948a, metalness: 0.1, glow: 0.06}),
   };
 }
 
