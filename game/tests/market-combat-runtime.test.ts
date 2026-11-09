@@ -122,7 +122,9 @@ describe('a kill ragdolls the body on the shared 18-joint skeleton (physics/ragd
     const w = combatWorld(A, 808, {physics: ph});
     ph.build(w.layout);
     w.build();
-    const p = w.combat.people.find(x => x.id.startsWith('resident:'))!;
+    // (a resident on the floor: layout v3's first residents are bar regulars sitting on stools — standing one up in place below would
+    // put it inside its stool)
+    const p = w.combat.people.find(x => x.id.startsWith('resident:') && !w.people.residents.find(r => r.id === x.id)?.drink)!;
     // standing, animated a moment (bone velocities recorded)
     p.actor.play('Idle', 0);
     for (let i = 0; i < 5; i++) { p.actor.animate(1 / 30); p.actor.sync(); p.body.recordPose(1 / 30); }
