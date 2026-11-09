@@ -52,6 +52,9 @@ export const ICONS: Record<IconKey, string> = {
   // task studio-market-rework-20261108-074144-01 (lane TRADE): Rail Ties — a 2 x 2 bundle of tie offcuts seen end-on-ish, two steel straps
   // (the HUD glyph style; the 3D icon is the code-built bundle, world/railTiesModel.ts)
   railTies: S(`<rect x="8" y="5" width="47" height="10" rx="1"/><rect x="8" y="17" width="47" height="10" rx="1"/><path d="M8 15h47M31.5 5v22" stroke="${DARK}" stroke-width="1.4" opacity="0.6"/><path d="M12 9h14M36 10h15M13 21h12M37 22h14" stroke="${DARK}" stroke-width="0.9" opacity="0.4"/><rect x="16" y="3.5" width="4" height="25" rx="0.8" opacity="0.7"/><rect x="43" y="3.5" width="4" height="25" rx="0.8" opacity="0.7"/>`),
+  // task studio-market-bar-20261108-225231-01 (lane BEER): a standing long-neck bottle (crown cap, neck, shoulder, the label band) — the HUD
+  // glyph style; the 3D icon is the code-built bottle with its own Codex label (market/beer/beerModel.ts)
+  beer: S(`<rect x="29.6" y="1" width="4.8" height="2.2" rx="0.6"/><path d="M30.2 3.2h3.6v6.3c0 1.7 4.6 3.4 4.6 6.6V29a2 2 0 0 1-2 2h-8.8a2 2 0 0 1-2-2V16.1c0-3.2 4.6-4.9 4.6-6.6z"/><rect x="25.6" y="18" width="12.8" height="8" fill="${DARK}" opacity="0.45"/>`),
 };
 
 /** Iteration 12 (LIGHT): small square HUD icons for the light panel (battery meter, flare count). */

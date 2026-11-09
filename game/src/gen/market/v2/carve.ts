@@ -16,7 +16,7 @@ import {Kit, TUN, type TrenchCells} from '../../stationKit';
 import {STAIR, layStairRun, type StairFlight} from '../../traversal';
 import {SINGLE_BED_CELLS, TRENCH_DEPTH, type Area, type Rect, type Side} from '../../stationTypes';
 import type {Rng} from '../../../core/rng';
-import type {MarketStallId} from '../marketTypes';
+import type {MarketShopId} from '../marketTypes';
 import {SETTLE, settleRows, type SettleFrame} from './frame';
 
 /** Open stair: a large headroom capped by the cell ceiling (the shed roof): the version-1 stair's rule, capped (Ramp.capCeil). */
@@ -38,7 +38,7 @@ export interface ContainerCarve {
   door: Rect;
   wide: boolean;
   use: ContainerUse;
-  stall?: MarketStallId;
+  stall?: MarketShopId;
   /** Where it stands: the front / back row, a middle block, or an upper container (homes) and the block index. */
   row: 'front' | 'back' | 'block' | 'upper';
   block?: number;
@@ -148,7 +148,7 @@ export function carveSettlement(k: Kit, f: SettleFrame, rng: Rng): SettleCarve |
   const containers: ContainerCarve[] = [];
   const pendingDoors: (() => void)[] = [];
   /** A container interior (canonical rect) on storey L, its opening on `face` (canonical side) of `width` cells (centred + `shift`). */
-  const container = (cr: Rect, L: 0 | 1, face: 'N' | 'S', width: number, use: ContainerUse, row: ContainerCarve['row'], onto: Area, opts: {stall?: MarketStallId; block?: number; wide?: boolean; shift?: number; label?: string} = {}): ContainerCarve => {
+  const container = (cr: Rect, L: 0 | 1, face: 'N' | 'S', width: number, use: ContainerUse, row: ContainerCarve['row'], onto: Area, opts: {stall?: MarketShopId; block?: number; wide?: boolean; shift?: number; label?: string} = {}): ContainerCarve => {
     const r = M(cr);
     const type = use === 'shop' ? 'shop' : use === 'workshop' ? 'utility' : use === 'kitchen' || use === 'bunks' || use === 'home' ? 'crew-room' : 'storage';
     const a = k.addArea(r, 'room', type, L ? c1 : c0, onto.id, L ? lvl(L, opts.label ?? 'Home') : {label: opts.label ?? 'Container', publicSpace: false});
@@ -228,7 +228,7 @@ export function carveSettlement(k: Kit, f: SettleFrame, rng: Rng): SettleCarve |
   container(wsSlot, 0, 'N', 6, 'workshop', 'back', back, {wide: true, label: 'Workshop'});
   // shops on the widest slots, the bunk room next, the rest storage / homes
   const order = backSlots.map((r, i) => ({r, i, key: r.w + rng.next() * 0.5})).sort((p, q) => q.key - p.key);
-  const backUse = new Map<number, {use: ContainerUse; stall?: MarketStallId}>();
+  const backUse = new Map<number, {use: ContainerUse; stall?: MarketShopId}>();
   backStalls.forEach((id, j) => backUse.set(order[j].i, {use: 'shop', stall: id}));
   for (const use of ['bunks', 'storage', 'home', 'storage', 'home'] as ContainerUse[]) {
     const s = order.find(o => !backUse.has(o.i));

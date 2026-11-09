@@ -11,14 +11,14 @@ import {Kit, TUN, type TrenchCells} from '../stationKit';
 import {STAIR, layStairRun, stairRunCells, type StairFlight} from '../traversal';
 import {SLAB} from '../levelGen';
 import {SINGLE_BED_CELLS, TRENCH_DEPTH, type Area, type Rect} from '../stationTypes';
-import type {MarketStallId} from './marketTypes';
+import type {MarketShopId} from './marketTypes';
 import {MARKET, type MarketFrame} from './frame';
 
 /** Open stair: a large headroom capped by the cell ceiling (the shed roof) — gen/levels.ts header, the mall's / Reactor's open runs. */
 export const OPEN_HEADROOM = 40;
 
 /** One trader stall: its alcove area, the alcove rect (cells) and the opening onto the square (cells, one row). */
-export interface StallCarve { id: MarketStallId; area: number; rect: Rect; opening: Rect }
+export interface StallCarve { id: MarketShopId; area: number; rect: Rect; opening: Rect }
 /** One market gate: the passage through the stall row (cells) and its two openings. */
 export interface GateCarve { area: number; rect: Rect; platformDoor: Rect; squareDoor: Rect }
 /** The under-deck rooms (storey 0) by use. */

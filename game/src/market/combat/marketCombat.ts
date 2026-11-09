@@ -9,20 +9,27 @@
 //    multipliers are unchanged; an ORDINARY zombie's 100 hp (roles.ts MARKET_HOSTILITY.hp). Blood / the hit confirm / a flinch, and on a
 //    kill the physics ragdoll (fallback: the Death clip); the body stays, never searchable (no loot), never a kill / clear count.
 //  - HOSTILITY, once and for good, per market station: the first successful attack on anyone (or a theft, provoke) turns the settlement
-//    hostile — ~30 % draw their seeded real gun and fight, the rest flee (roles.ts; the robbed trader always fights). No reset / bribe /
-//    reputation. canTrade(stall) is false from then on (and for a dead / fled trader).
-//  - FLEEING: a panicked flinch, then a run along path-finder routes (no ladders, never through the parked train's keep-out, never past the
-//    player) to the farthest hidden spot; cowering there; seen up close again -> runs on; unseen for a while -> leaves the market for good.
+//    hostile — half draw their seeded real gun and fight, the rest flee (roles.ts; the robbed trader always fights). No reset / bribe /
+//    reputation. canTrade(stall) is false from then on (and for a dead trader).
+//  - FLEEING (task studio-market-bar-20261108-225231-01, lane PEOPLE; user: "Fleeing survivors must hide in homes, not disappear/despawn"):
+//    a panicked flinch and a scream, then a run along path-finder routes (no ladders, never through the parked train's keep-out, never
+//    past the player) through the real doors / stairs to the person's REFUGE (market/people/refuges.ts: its home, else the bunk room /
+//    store rooms / another private room), screaming now and then; there it cowers in its hide slot out of the doorway's line, ALIVE and
+//    PRESENT (still a target): the player close in sight -> a flinch / scream, never a vanishing act. A blocked way home (the player in it)
+//    -> cower where it is and try again shortly (another refuge with room when its own cannot be reached). Nobody ever leaves the market.
 //  - FIGHTING: the gun comes out (the player's own model in the right hand), the shooter turns to the player and fires the gun's real
 //    cadence from the muzzle along the world ray (walls / slabs / props / the train stop it; nobody else is ever hit), with spread, a lagged
 //    and jittered aim point, the magazine and reloads (into nearby cover when there is some), the player's own gun sounds (positional) and
 //    a muzzle flash / smoke / tracer / impact. Out of sight or range it moves (paths) until it has a line again. Out of rounds it flees.
-//    Every armed hostile animates every frame (no animation LOD).
+//    Every armed hostile animates every frame (no animation LOD). It grunts (Game.marketAudio) as it draws, when hit and now and then.
+//  - DETECTION: the player's detectability (Game.beerEffects.perceptionMult: the Night Shift Porter's 0.75) scales the sight distance, ONCE.
 //  - ITS HITS ON THE PLAYER go through Game.applyPlayerHit as an ENEMY hit (enemy: true): the global enemy x2 once, the worn armour pool,
 //    the injury save and armour wear as for a zombie's claw (Game.gunshotPlayer: + the HUD direction, shake, hurt cue).
-//  - PERSISTENCE (record.ts, lane store 'market.hostility' of the station): written at the provocation and on every change (deaths, flight,
-//    rounds) + once a second while hostile; a station built again reads it: the dead lie where they fell, the fled are gone, the rest
-//    resume (fighters hunt; alive fleers left while the player was away). Retry / Continue follow the section memory's own rules.
+//  - PERSISTENCE (record.ts, lane store 'market.hostility' of the station, version 2): written at the provocation and on every change
+//    (deaths, flight, rounds) + once a second while hostile; a station built again reads it: the dead lie where they fell, the rest resume
+//    (fighters hunt; hiders cower in their refuge; a fleer the player left behind on a route it had found reached its refuge meanwhile).
+//    A version-1 record's 'fled' people come back as hiders in a refuge (hp / gun / rounds / role kept). Retry / Continue follow the
+//    section memory's own rules.
 //  - The calm market is untouched until provoked: no zombies, no gas, the player is never pushed (people step away / around).
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
@@ -46,10 +53,12 @@ import type {MarketHostilityApi, MarketProvocation} from '../hostility';
 import type {HumanActor} from '../humanActor';
 import {MARKET_HUMAN_KEY} from '../humanLooks';
 import {MARKET_PEOPLE, type MarketPeople} from '../marketPeople';
+import type {Area} from '../../gen/stationTypes';
+import {RefugeBook, marketRefuges} from '../people/refuges';
 import {HumanCombatBody} from './body';
 import {COMBAT_CLIP, COMBAT_TERMINAL, combatClips, combatOneShots, rigFromSkeleton, type CombatClipSet} from './combatClips';
 import {NPC_GUNS, NpcGun, coneDir, npcRoundDamage, playerBulletHit, playerChest, type PlayerBody} from './npcGun';
-import {MARKET_HOSTILITY_LANE, marketHostilityProblem, traderId, type MarketGunId, type MarketHostilityJSON, type MarketPersonRecord, type MarketPosture, type MarketRole} from './record';
+import {MARKET_HOSTILITY_LANE, MARKET_HOSTILITY_VERSION, marketHostilityProblem, traderId, type MarketGunId, type MarketHostilityJSON, type MarketPersonRecord, type MarketPosture, type MarketRole} from './record';
 import {MARKET_HOSTILITY, ammoFor, assignRoles, gunFor} from './roles';
 
 /** Tuning. */
@@ -60,10 +69,14 @@ export const MARKET_COMBAT = {
   panic: [0.12, 0.6] as const, fleeSpeed: [3.0, 3.6] as const, moveSpeed: 2.5,
   /** Turn rates (rad/s): fleeing / an armed hostile. */
   turnFlee: 6, turnFight: 6.5,
-  /** A hiding person runs on when the player is this close and in sight (m); leaves after this long unseen (s) and this far (m). */
-  reflee: 6.5, leaveS: [7, 13] as const, leaveDist: 10,
-  /** A hiding place is at least this far from the player (m); a flight route never passes within `passGap` of the player. */
-  hideMin: 9, passGap: 2.2,
+  /** (lane PEOPLE) A hider flinches / screams when the player is this close and in sight (m), at most every `flinch` s. */
+  reflee: 6.5, flinch: [2.5, 4.5] as const,
+  /** A flight route never passes within `passGap` of the player (m); a stranded fleer tries again after `retry` s. */
+  passGap: 2.2, retry: [1.2, 2.6] as const,
+  /** Sight distance (m) before the player's detectability (Game.beerEffects.perceptionMult). */
+  sight: 60,
+  /** (lane PEOPLE) Voices (Game.marketAudio): a running fleer screams every `scream` s, a fighter in a firefight grunts every `grunt` s. */
+  scream: [2.2, 4.5] as const, grunt: [3.5, 8] as const,
   /** An armed hostile: seconds without a line before it moves; re-plan every `repath` s; stands once within range x `standoff` with a line. */
   lostS: 0.6, repath: 1.4, standoff: 0.8,
   /** Cover for a reload: ring radii (m) x 8 directions round the shooter. */
@@ -72,6 +85,13 @@ export const MARKET_COMBAT = {
   far: 70,
   /** Stuck: less than `stuckM` progress in `stuckS` seconds re-plans. */
   stuckM: 0.25, stuckS: 2.2,
+  /**
+   * (Lane PEOPLE) Stuck twice at one place (within 1 m): for `s` seconds the walker's body circle narrows to `r` m — the path finder's
+   * cells can pass a gap a prop's collider narrows below a body (v3: a lane fan beside the bar stair's landing left 0.48 m).
+   */
+  squeeze: {r: 0.2, s: 3},
+  /** (Lane PEOPLE) A bar patron seated on a stool / chair when the market turns: seconds to stand up off it onto its post beside it. */
+  standUp: 0.4,
   /** Record the live state at least this often while hostile (s). */
   persistEvery: 1,
   /** The player's shot shoves a hit person this far per pellet share (m), like a zombie's knockback. */
@@ -92,7 +112,7 @@ export interface MarketCombatant {
   readonly body: HumanCombatBody;
   readonly stall?: MarketStallId;
   hp: number;
-  state: 'alive' | 'dead' | 'fled';
+  state: 'alive' | 'dead';
   role: MarketRole;
   readonly gun: MarketGunId;
   readonly npc: NpcGun;
@@ -100,10 +120,16 @@ export interface MarketCombatant {
   mode: Mode;
   /** Timer of the current mode (s). */
   t: number;
-  /** A one-off delay (draw reaction / panic) and the hidden-then-leave time. */
+  /** A one-off delay (draw reaction / panic). */
   delay: number;
-  leaveAfter: number;
-  hiddenT: number;
+  /** (lane PEOPLE) Hiding in its refuge slot (arrived): false while running there or stranded on the way. */
+  hidden: boolean;
+  /** (lane PEOPLE) A route to its refuge slot was found (a player who leaves finds it home on return). */
+  routed: boolean;
+  /** (lane PEOPLE) A stranded fleer's next try (s, against `t`), the hider's flinch cooldown, the next scream / grunt (s). */
+  retry: number; flinchT: number; voiceT: number;
+  /** (lane PEOPLE) Its own place when the station was built (its refuge is picked near it). */
+  readonly home: Vec3;
   path: Waypoint[] | null; wp: number;
   goal: Vec3 | null;
   speed: number;
@@ -113,6 +139,10 @@ export interface MarketCombatant {
   aimT: number; reaction: number; aimPt: Vec3 | null;
   repathT: number;
   checkT: number; checkX: number; checkZ: number;
+  /** (lane PEOPLE) Where / how often it last got stuck, and the narrowed body's remaining time (MARKET_COMBAT.squeeze). */
+  stuckN: number; stuckX: number; stuckZ: number; squeezeT: number;
+  /** (lane PEOPLE) Standing up off a bar seat onto its post (from -> to, progress 0..1); null otherwise. */
+  standUp: {x0: number; z0: number; x1: number; z1: number; t: number} | null;
   readonly rand: () => number;
   /** Moved this frame (m/s), for the run's playback rate. */
   moved: number;
@@ -145,6 +175,10 @@ export interface MarketCombatHost {
   /** Optional: flash the scene's muzzle light at a world point (Game.npcMuzzleLight). */
   npcMuzzleLight?(at: THREE.Vector3): void;
   marketPeople: MarketPeople;
+  /** (task studio-market-bar-20261108-225231-01 seams) The player's detectability (1, or 0.75: the Night Shift Porter). */
+  beerEffects?: {perceptionMult(): number} | null;
+  /** (seams) The panic screams / angry grunts (the audio system caps / staggers / varies them). */
+  marketAudio?: {scream(personId: string, x: number, y: number, z: number): void; grunt(personId: string, x: number, y: number, z: number): void} | null;
 }
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -164,13 +198,19 @@ export class MarketCombat implements MarketHostilityApi {
   private built = false;
   private frameNo = 0;
   private persistT = 0;
+  /** (lane PEOPLE) The station's areas (refuges) and who hides where (built when first needed: the provocation / a hostile record). */
+  private areas: readonly Area[] = [];
+  private market: MarketLayout | null = null;
+  private book: RefugeBook | null = null;
+  /** The player's detectability this frame (perceptionMult, read once per frame). */
+  private detect = 1;
   /** The player's shot being aggregated (one trigger pull). */
   private shot = new Map<MarketCombatant, {total: number; pellets: number; head: boolean; point: THREE.Vector3; dir: THREE.Vector3; weapon: string}>();
   /** The player's recent positions (an aim point lags them). */
   private trail: {t: number; x: number; y: number; z: number}[] = [];
   private clock = 0;
   /** QA / tests. */
-  readonly counts = {provoked: 0, shots: 0, rounds: 0, playerHits: 0, reloads: 0, kills: 0, fled: 0, persisted: 0, ragdolls: 0, paths: 0};
+  readonly counts = {provoked: 0, shots: 0, rounds: 0, playerHits: 0, reloads: 0, kills: 0, persisted: 0, ragdolls: 0, paths: 0, hidden: 0, screams: 0, grunts: 0, flinches: 0, migrated: 0};
   /** The last few rounds fired at the player (QA): who, distance, hit (location) or what stopped it. */
   readonly log: {id: string; gun: MarketGunId; dist: number; hit: string; t: number}[] = [];
 
@@ -203,12 +243,20 @@ export class MarketCombat implements MarketHostilityApi {
     this.cause = {kind: cause.kind, ...(stall ? {stall} : {}), ...(cause.person ? {person: cause.person} : {})};
     this.counts.provoked++;
     const roles = assignRoles(this.seed, this.allIds, cause.kind === 'theft' ? stall : undefined);
+    for (const p of this.people) p.role = roles.get(p.id) ?? 'flee';
+    // (lane PEOPLE) every fleer's refuge: seeded over everyone with the flee role (the victim of the first shot included, so who was hit
+    // never reshuffles the others' homes), then the dead give their slot back
+    const book = this.refugeBook();
+    book.assign(this.seed, this.people.filter(p => p.role === 'flee').map(p => ({id: p.id, ...p.home})));
+    for (const p of this.people) if (p.state !== 'alive') book.release(p.id);
     for (const p of this.people) {
-      p.role = roles.get(p.id) ?? 'flee';
       if (p.state !== 'alive') continue;
+      // (lane PEOPLE) a patron sitting on a bar stool / chair stands up off it onto its post first
+      const post = this.host.marketPeople.seatedPost(p.actor);
+      if (post) p.standUp = {x0: p.actor.x, z0: p.actor.z, x1: post.x, z1: post.z, t: 0};
       p.actor.cancelOneShot(0.1);
       if (p.role === 'fight') { this.setMode(p, 'draw'); p.delay = between(p.rand, [0.25, 0.9]) * (p.stall && p.stall === stall ? 0.5 : 1); }
-      else { this.setMode(p, 'panic'); p.delay = between(p.rand, MARKET_COMBAT.panic); p.actor.play(COMBAT_CLIP.hit, 0.08); } // a startled flinch, then the run
+      else { this.setMode(p, 'panic'); p.delay = between(p.rand, MARKET_COMBAT.panic); p.actor.play(COMBAT_CLIP.hit, 0.08); } // a startled flinch, then the run (and the scream)
     }
     this.host.hud?.toast(cause.kind === 'theft' ? MARKET_COMBAT_TEXT.theft : MARKET_COMBAT_TEXT.hostile, true);
     this.persist();
@@ -216,12 +264,14 @@ export class MarketCombat implements MarketHostilityApi {
 
   // =================================================================================================================== lifecycle
 
-  build(layout: {seed: number; market?: MarketLayout}): void {
+  build(layout: {seed: number; market?: MarketLayout; areas?: readonly Area[]}): void {
     this.reset();
     if (!layout?.market) return;
     const h = this.host, MP = h.marketPeople;
     this.seed = layout.seed >>> 0;
     this.key = {...h.run.current};
+    this.areas = layout.areas ?? [];
+    this.market = layout.market;
     const roster = MP.roster;
     this.allIds = roster.map(r => r.id);
     const owner = h.propModels.get(MARKET_HUMAN_KEY) ?? MP;
@@ -238,15 +288,18 @@ export class MarketCombat implements MarketHostilityApi {
       const rand = mulberry32(hashString(`market-combat:${r.id}`, this.seed));
       const p: MarketCombatant = {
         id: r.id, actor: r.actor, body, ...(r.stall ? {stall: r.stall} : {}), hp: MARKET_HOSTILITY.hp, state: 'alive', role: 'flee', gun,
-        npc: new NpcGun(gun, ammo.mag, ammo.spare, rand), clips, mode: 'calm', t: 0, delay: 0, leaveAfter: between(rand, MARKET_COMBAT.leaveS), hiddenT: 0,
+        npc: new NpcGun(gun, ammo.mag, ammo.spare, rand), clips, mode: 'calm', t: 0, delay: 0,
+        hidden: false, routed: false, retry: 0, flinchT: 0, voiceT: 0, home: {x: r.actor.x, y: r.actor.y, z: r.actor.z},
         path: null, wp: 0, goal: null, speed: between(rand, MARKET_COMBAT.fleeSpeed) * r.actor.scale,
         seeT: rand() * MARKET_COMBAT.perceive, sees: false, clear: false, lostT: 0, lastSeen: null,
         aimT: 0, reaction: between(rand, NPC_GUNS[gun].reaction), aimPt: null, repathT: 0, checkT: 0, checkX: r.actor.x, checkZ: r.actor.z, rand, moved: 0, ragdolled: false,
+        stuckN: 0, stuckX: r.actor.x, stuckZ: r.actor.z, squeezeT: 0, standUp: null,
       };
       body.onMoved = (x, z) => { p.actor.x = x; p.actor.z = z; };
       this.people.push(p);
     }
     this.built = true;
+    this.refugeBook(); // (lane PEOPLE: the refuges' line-of-sight ranking on the loading screen, never a hitch at the provocation)
     const rec = h.run.laneStore<MarketHostilityJSON>(MARKET_HOSTILITY_LANE, this.key);
     if (rec !== undefined) {
       const bad = marketHostilityProblem(rec);
@@ -255,26 +308,60 @@ export class MarketCombat implements MarketHostilityApi {
     }
   }
 
-  /** A station built again: the hostile record applied to the freshly spawned people. */
+  /**
+   * A station built again: the hostile record applied to the freshly spawned people. (Lane PEOPLE) Hiders cower in their refuge; a fleer
+   * recorded on its way resumes the run from where it was; a version-1 record's FLED people (alive, gone, no position) come back as hiders
+   * in a refuge with their hp / gun / rounds / role; the dead stay dead. The record is rewritten at once in the current version.
+   */
   private restore(rec: MarketHostilityJSON): void {
     this.hostileFlag = true;
     this.cause = {kind: rec.cause, ...(rec.stall ? {stall: rec.stall} : {})};
-    for (const p of [...this.people]) {
+    const book = this.refugeBook();
+    /** People to put in a refuge slot now (an old record's fled; anyone the record does not know). */
+    const placeIn: MarketCombatant[] = [];
+    for (const p of this.people) {
       const r = rec.people[p.id];
-      if (!r) { p.role = 'flee'; this.setMode(p, 'hide'); continue; } // (nobody joins a hostile market: never happens within a version)
-      p.role = r.role; p.hp = r.hp; p.npc.mag = r.mag; p.npc.spare = r.spare;
-      if (r.s === 'fled') { this.leave(p, false); continue; }
+      if (!r) { p.role = 'flee'; placeIn.push(p); continue; } // (nobody joins a hostile market: never happens within a layout version)
+      p.role = r.role; p.npc.mag = r.mag; p.npc.spare = r.spare;
+      if (r.s === 'fled') { p.hp = r.hp > 0 ? r.hp : 0.01; placeIn.push(p); this.counts.migrated++; continue; }
+      p.hp = r.hp;
       if (r.x !== undefined) { p.actor.x = r.x; p.actor.y = r.y!; p.actor.z = r.z!; p.actor.yaw = r.yaw!; }
       if (r.s === 'dead') { this.layDead(p); continue; }
       if (p.role === 'fight') { this.setMode(p, 'engage'); this.draw(p, true); }
-      else { this.setMode(p, 'hide'); p.actor.play(COMBAT_CLIP.cower, 0); }
+      else {
+        const ref = r.refuge !== undefined ? book.byId(r.refuge) : undefined;
+        if (ref) book.claimNear(p.id, ref, p.actor.x, p.actor.z);
+        if (ref && r.posture === 'hide' && book.claimOf(p.id) && book.inside(ref, p.actor.x, p.actor.y, p.actor.z)) this.hideNow(p, 0);
+        else { this.setMode(p, 'flee'); p.path = null; p.actor.play(COMBAT_CLIP.cower, 0); } // (its run resumes on the first frame)
+      }
       p.actor.sync();
     }
+    // the fleers still without a slot get the seeded assignment; the ones to place appear in theirs (no refuge at all: their own place)
+    book.assign(this.seed, this.people.filter(p => p.state === 'alive' && p.role === 'flee').map(p => ({id: p.id, ...p.home})));
+    for (const p of placeIn) {
+      const s = book.slotOf(p.id);
+      const at = s ?? {...p.home, yaw: p.actor.yaw};
+      p.actor.x = at.x; p.actor.y = at.y; p.actor.z = at.z; p.actor.yaw = at.yaw;
+      if (p.role === 'fight') { this.setMode(p, 'engage'); this.draw(p, true); }
+      else if (s) this.hideNow(p, 0);
+      else { this.setMode(p, 'flee'); p.path = null; p.actor.play(COMBAT_CLIP.cower, 0); }
+      p.actor.sync();
+    }
+    this.persist();
+  }
+
+  /** (lane PEOPLE) The station's refuges and who hides where (computed once per build, when first needed). */
+  refugeBook(): RefugeBook {
+    if (!this.book) this.book = new RefugeBook(this.market ? marketRefuges({areas: this.areas, market: this.market}, this.host.levels) : [], this.host.levels);
+    return this.book;
   }
 
   private reset(): void {
     this.people.length = 0;
     this.allIds = [];
+    this.areas = [];
+    this.market = null;
+    this.book = null;
     this.hostileFlag = false;
     this.cause = null;
     this.built = false;
@@ -286,8 +373,15 @@ export class MarketCombat implements MarketHostilityApi {
 
   teardown(): void {
     if (this.built && this.hostileFlag) {
-      // alive people who were running / hiding used the player's absence to leave the market for good
-      for (const p of this.people) if (p.state === 'alive' && p.role === 'flee') { p.state = 'fled'; this.counts.fled++; }
+      // (lane PEOPLE) a fleer on its way home along a route it had found used the player's absence to get there (into its slot); one that
+      // never found a way stays where it was and runs on when the player is back. Nobody leaves the market.
+      for (const p of this.people) {
+        if (p.state !== 'alive' || p.role !== 'flee' || p.hidden || !p.routed) continue;
+        const s = this.book?.slotOf(p.id);
+        if (!s) continue;
+        p.actor.x = s.x; p.actor.y = s.y; p.actor.z = s.z; p.actor.yaw = s.yaw;
+        p.hidden = true; p.mode = 'hide'; p.path = null;
+      }
       this.persist();
     }
     this.reset();
@@ -296,7 +390,7 @@ export class MarketCombat implements MarketHostilityApi {
   /** One prototype gun holder per gun model (hidden in a person's hand): the warm-up compiles them. */
   private gunPrototypes(): THREE.Object3D[] {
     const seen = new Set<MarketGunId>(), out: THREE.Object3D[] = [];
-    for (const p of this.people) if (p.body.gunHolder && !seen.has(p.gun) && p.state !== 'fled') { seen.add(p.gun); out.push(p.body.gunHolder); }
+    for (const p of this.people) if (p.body.gunHolder && !seen.has(p.gun)) { seen.add(p.gun); out.push(p.body.gunHolder); }
     return out;
   }
 
@@ -304,9 +398,11 @@ export class MarketCombat implements MarketHostilityApi {
 
   private recordOf(p: MarketCombatant): MarketPersonRecord {
     const a = p.actor;
-    const posture: MarketPosture = p.state === 'dead' ? 'down' : p.role === 'fight' ? 'fight' : p.mode === 'hide' ? 'hide' : 'flee';
+    const posture: MarketPosture = p.state === 'dead' ? 'down' : p.role === 'fight' ? 'fight' : p.mode === 'hide' && p.hidden ? 'hide' : 'flee';
     const r: MarketPersonRecord = {s: p.state, hp: p.state === 'dead' ? 0 : Math.max(0.01, Math.round(p.hp * 100) / 100), role: p.role, gun: p.gun, mag: p.npc.mag, spare: p.npc.spare, posture};
-    if (p.state !== 'fled') { r.x = +a.x.toFixed(3); r.y = +a.y.toFixed(3); r.z = +a.z.toFixed(3); r.yaw = +wrap(a.yaw).toFixed(4); }
+    r.x = +a.x.toFixed(3); r.y = +a.y.toFixed(3); r.z = +a.z.toFixed(3); r.yaw = +wrap(a.yaw).toFixed(4);
+    const c = p.state === 'alive' ? this.book?.claimOf(p.id) : undefined;
+    if (c) r.refuge = c.refuge.id;
     return r;
   }
 
@@ -315,7 +411,7 @@ export class MarketCombat implements MarketHostilityApi {
     if (!this.hostileFlag || !this.key || !this.cause) return;
     const people: Record<string, MarketPersonRecord> = {};
     for (const p of this.people) people[p.id] = this.recordOf(p);
-    const json: MarketHostilityJSON = {v: 1, hostile: true, cause: this.cause.kind, ...(this.cause.stall ? {stall: this.cause.stall} : {}), people};
+    const json: MarketHostilityJSON = {v: MARKET_HOSTILITY_VERSION, hostile: true, cause: this.cause.kind, ...(this.cause.stall ? {stall: this.cause.stall} : {}), people};
     this.host.run.setLaneStore(MARKET_HOSTILITY_LANE, json, this.key);
     this.counts.persisted++;
   }
@@ -409,8 +505,14 @@ export class MarketCombat implements MarketHostilityApi {
       // a flinch; an armed shooter loses its aim for a moment
       p.actor.play(p.body.gunShown ? COMBAT_CLIP.hitArmed(p.gun) : COMBAT_CLIP.hit, 0.06);
       p.aimT *= 0.3;
-      if (p.role === 'fight' && p.mode === 'draw') p.delay = Math.min(p.delay, 0.2); // shot at: draws at once
-      if (p.mode === 'hide') this.setMode(p, 'flee');
+      if (p.role === 'fight') {
+        if (p.mode === 'draw') p.delay = Math.min(p.delay, 0.2); // shot at: draws at once
+        this.grunt(p);
+      } else {
+        // (lane PEOPLE) a scream; a hider stays in its refuge (cornered, still a target); a stranded one makes its run now
+        this.scream(p);
+        if (p.mode === 'hide' && !p.hidden) p.retry = Math.min(p.retry, p.t);
+      }
     }
     return killed;
   }
@@ -419,6 +521,9 @@ export class MarketCombat implements MarketHostilityApi {
     p.state = 'dead';
     p.mode = 'dead';
     p.path = null;
+    // (lane PEOPLE) a body outside its refuge gives its slot back (one that died in it keeps the corner it lies in)
+    const c = this.book?.claimOf(p.id);
+    if (c && !this.book!.inside(c.refuge, p.actor.x, p.actor.y, p.actor.z)) this.book!.release(p.id);
     this.counts.kills++;
     p.actor.cancelOneShot(0);
     // the physics ragdoll from the current pose (the last frames' bone motion carried on), shoved by the hit (falls back to the Death clip)
@@ -436,12 +541,22 @@ export class MarketCombat implements MarketHostilityApi {
     p.actor.sync();
   }
 
-  /** A person leaves the market for good (fled): out of the scene. */
-  private leave(p: MarketCombatant, count = true): void {
-    p.state = 'fled';
-    p.mode = 'calm';
-    this.host.marketPeople.remove(p.actor);
-    if (count) { this.counts.fled++; this.persist(); }
+  // =================================================================================================================== voices
+
+  /** (lane PEOPLE) A fleer's panic scream at its head (Game.marketAudio caps / staggers / varies them). */
+  private scream(p: MarketCombatant): void {
+    const a = p.actor;
+    this.host.marketAudio?.scream(p.id, a.x, a.y + a.heightM * 0.92, a.z);
+    this.counts.screams++;
+    p.voiceT = between(p.rand, MARKET_COMBAT.scream);
+  }
+
+  /** (lane PEOPLE) A fighter's angry grunt. */
+  private grunt(p: MarketCombatant): void {
+    const a = p.actor;
+    this.host.marketAudio?.grunt(p.id, a.x, a.y + a.heightM * 0.92, a.z);
+    this.counts.grunts++;
+    p.voiceT = between(p.rand, MARKET_COMBAT.grunt);
   }
 
   // =================================================================================================================== frame
@@ -454,20 +569,31 @@ export class MarketCombat implements MarketHostilityApi {
     const pl = this.host.player;
     this.trail.push({t: this.clock, x: pl.x, y: pl.y, z: pl.z});
     while (this.trail.length > 2 && this.trail[0].t < this.clock - 1.5) this.trail.shift();
+    // the player's detectability (the Night Shift Porter): ONE factor this frame, used once — the sight distance in perceive()
+    this.detect = this.host.beerEffects?.perceptionMult() ?? 1;
     for (const p of this.people) {
-      if (p.state === 'fled') continue;
       p.moved = 0;
+      p.squeezeT = Math.max(0, p.squeezeT - dt);
       if (p.state === 'alive') {
         const far = Math.hypot(p.actor.x - pl.x, p.actor.z - pl.z) > MARKET_COMBAT.far;
-        if (!far) { this.perceive(p, dt); if (p.role === 'fight') this.fight(p, dt); else this.flee(p, dt); }
-        else if (p.role === 'flee') { if (p.mode !== 'hide') { this.setMode(p, 'hide'); p.actor.play(COMBAT_CLIP.cower, 0.35); } p.hiddenT += dt; } // got away: unseen
+        if (!far) this.perceive(p, dt);
+        else p.sees = p.clear = false;
+        // (lane PEOPLE) far fighters keep their posture (bounded cost); a fleer keeps going home wherever the player is
+        if (p.role === 'fight') { if (!far) this.fight(p, dt); }
+        else this.flee(p, dt);
       }
     }
     this.separate();
     for (const p of this.people) {
-      if (p.state === 'fled') continue;
       const a = p.actor;
-      if (p.state === 'alive') this.host.marketPeople.settle(a);
+      const su = p.standUp;
+      if (su && p.state === 'alive') {
+        // (lane PEOPLE) off the seat onto the post, eased (the seat's own collider is not a wall to push out of)
+        su.t = Math.min(1, su.t + dt / MARKET_COMBAT.standUp);
+        const k = su.t * su.t * (3 - 2 * su.t);
+        a.x = su.x0 + (su.x1 - su.x0) * k; a.z = su.z0 + (su.z1 - su.z0) * k;
+        if (su.t >= 1) p.standUp = null;
+      } else if (p.state === 'alive') this.host.marketPeople.settle(a, p.squeezeT > 0 ? MARKET_COMBAT.squeeze.r : MARKET_PEOPLE.radius);
       const dist = Math.hypot(a.x - pl.x, a.z - pl.z);
       // armed hostiles every frame (no animation LOD); the rest by distance like the calm market
       const stride = p.state === 'alive' && p.role === 'fight' ? 1 : dist < MARKET_PEOPLE.lod.near ? 1 : dist < MARKET_PEOPLE.lod.mid ? 2 : 4;
@@ -475,8 +601,6 @@ export class MarketCombat implements MarketHostilityApi {
       a.sync();
       if (p.state === 'alive' && dist < 30 && p.moved > 0.2) p.body.recordPose(dt);
     }
-    // fleers out of sight long enough leave (after the step: never mid-iteration)
-    for (const p of [...this.people]) if (p.state === 'alive' && p.mode === 'hide' && p.hiddenT >= p.leaveAfter && Math.hypot(p.actor.x - pl.x, p.actor.z - pl.z) > MARKET_COMBAT.leaveDist) this.leave(p);
     this.persistT += dt;
     if (this.persistT >= MARKET_COMBAT.persistEvery) { this.persistT = 0; this.persist(); }
   }
@@ -497,7 +621,7 @@ export class MarketCombat implements MarketHostilityApi {
     const eye = p.body.eyeWorld(), chest = playerChest(pl as PlayerBody);
     const head = {x: pl.x, y: pl.eye, z: pl.z};
     const L = this.host.levels;
-    p.sees = Math.hypot(eye.x - pl.x, eye.y - pl.eye, eye.z - pl.z) < 60 && (L.lineOfSight(eye, head) || L.lineOfSight(eye, chest));
+    p.sees = Math.hypot(eye.x - pl.x, eye.y - pl.eye, eye.z - pl.z) < MARKET_COMBAT.sight * this.detect && (L.lineOfSight(eye, head) || L.lineOfSight(eye, chest));
     if (p.sees) p.lastSeen = {x: pl.x, y: pl.y, z: pl.z};
     p.clear = false;
     if (p.sees && p.role === 'fight') {
@@ -516,55 +640,82 @@ export class MarketCombat implements MarketHostilityApi {
 
   // ------------------------------------------------------------------------------------------------------------------- fleeing
 
+  /**
+   * (Lane PEOPLE) A fleer: the startled look, the run home (screaming now and then), then hiding in its refuge slot for good — cowering,
+   * facing its doorway, flinching (and screaming) when the player comes close in sight. A stranded one cowers and tries again shortly.
+   */
   private flee(p: MarketCombatant, dt: number): void {
     const a = p.actor, pl = this.host.player;
     p.t += dt;
+    p.voiceT -= dt;
+    p.flinchT -= dt;
     if (p.mode === 'calm') this.setMode(p, 'panic');
     if (p.mode === 'panic') {
       a.yaw = turnToward(a.yaw, yawTo(pl.x - a.x, pl.z - a.z), MARKET_COMBAT.turnFlee * dt); // looks toward the shot
-      if (p.t >= p.delay) this.runFor(p);
+      if (p.t >= p.delay) { this.scream(p); this.runFor(p); }
       return;
     }
     if (p.mode === 'flee') {
       if (!p.path) { this.runFor(p); if (!p.path) return; }
-      if (this.walk(p, dt, p.speed, MARKET_COMBAT.turnFlee)) { this.setMode(p, 'hide'); a.play(COMBAT_CLIP.cower, 0.35); }
+      if (this.walk(p, dt, p.speed, MARKET_COMBAT.turnFlee)) { this.hideNow(p); return; }
+      if (p.voiceT <= 0 && p.moved > 0.5) this.scream(p);
       return;
     }
-    // hide: cower; seen up close -> run on; unseen -> the leave timer runs
+    // hide
     if (a.loop !== COMBAT_CLIP.cower) a.play(COMBAT_CLIP.cower, 0.35);
+    if (!p.hidden) { if (p.t >= p.retry) this.runFor(p); return; } // (stranded on its way: another try)
+    const s = this.book?.slotOf(p.id);
+    if (s) a.yaw = turnToward(a.yaw, s.yaw, 2.5 * dt);
     const d = Math.hypot(a.x - pl.x, a.z - pl.z);
-    if (p.sees) { p.hiddenT = 0; if (d < MARKET_COMBAT.reflee && p.t > 0.8) this.runFor(p); }
-    else p.hiddenT += dt;
+    if (p.sees && d < MARKET_COMBAT.reflee && p.flinchT <= 0 && Math.abs(pl.y - a.y) < 2) {
+      a.play(COMBAT_CLIP.hit, 0.08); // (a one-shot: back to the cower)
+      this.scream(p);
+      this.counts.flinches++;
+      p.flinchT = between(p.rand, MARKET_COMBAT.flinch);
+    }
   }
 
-  /** Pick a far, hidden place and run there (none: cower where it stands). */
+  /** (Lane PEOPLE) In its refuge: hiding (cowering) for good. */
+  private hideNow(p: MarketCombatant, fade = 0.35): void {
+    this.setMode(p, 'hide');
+    p.hidden = true;
+    p.goal = null;
+    p.actor.play(COMBAT_CLIP.cower, fade);
+    p.flinchT = Math.max(p.flinchT, 0.8);
+    this.counts.hidden++;
+  }
+
+  /**
+   * (Lane PEOPLE) Run for its refuge slot (its own refuge first, then another with room): the first route through the doors / stairs that
+   * keeps clear of the parked train and never passes the player. None now: cower where it stands and try again in a moment.
+   */
   private runFor(p: MarketCombatant): void {
-    const a = p.actor, pl = this.host.player, MP = this.host.marketPeople, L = this.host.levels;
-    const pe = {x: pl.x, y: pl.eye, z: pl.z};
-    const myD = Math.hypot(a.x - pl.x, a.z - pl.z, (a.y - pl.y) * 3);
-    const taken = new Set(this.people.filter(o => o !== p && o.goal).map(o => `${o.goal!.x.toFixed(1)},${o.goal!.z.toFixed(1)}`));
-    const cands = MP.spots.map(s => {
-      const dP = Math.hypot(s.x - pl.x, s.z - pl.z, (s.y - pl.y) * 3), dS = Math.hypot(s.x - a.x, s.z - a.z, (s.y - a.y) * 3);
-      if (dP < MARKET_COMBAT.hideMin || taken.has(`${s.x.toFixed(1)},${s.z.toFixed(1)}`)) return null;
-      const hidden = !L.lineOfSight(pe, {x: s.x, y: s.y + 1.1, z: s.z});
-      // farther from the player, out of sight, not a marathon, never toward the player
-      const score = dP + (hidden ? 10 : 0) - dS * 0.25 - (dP < myD ? 8 : 0) + p.rand() * 2;
-      return {s, score};
-    }).filter((c): c is NonNullable<typeof c> => !!c).sort((x, y) => y.score - x.score);
-    for (const c of cands.slice(0, 5)) {
-      const path = MP.route(a.x, a.y, a.z, c.s.x, c.s.y, c.s.z);
+    const a = p.actor, MP = this.host.marketPeople, book = this.refugeBook();
+    p.hidden = false;
+    for (const c of book.options(p.id, a.x, a.y, a.z, 3)) {
+      const s = c.refuge.slots[c.slot];
+      if (Math.hypot(s.x - a.x, s.z - a.z) < MARKET_PEOPLE.arrive && Math.abs(s.y - a.y) < 0.5) { book.claim(p.id, c.refuge, c.slot); p.routed = true; this.hideNow(p); return; }
+      const path = MP.route(a.x, a.y, a.z, s.x, s.y, s.z);
       this.counts.paths++;
       if (!path || this.passesPlayer(a, path)) continue;
+      book.claim(p.id, c.refuge, c.slot);
       this.setMode(p, 'flee');
-      p.path = path; p.wp = 0; p.goal = {x: c.s.x, y: c.s.y, z: c.s.z};
+      p.path = path; p.wp = 0; p.goal = {x: s.x, y: s.y, z: s.z}; p.routed = true;
       p.checkT = 0; p.checkX = a.x; p.checkZ = a.z;
       a.play(COMBAT_CLIP.run, 0.25);
       return;
     }
-    // nowhere to go: hide right here
+    // the way home is blocked (the player in it, a crowd): cower here, try again shortly
     this.setMode(p, 'hide');
     p.goal = null;
+    p.retry = between(p.rand, MARKET_COMBAT.retry);
     a.play(COMBAT_CLIP.cower, 0.35);
+  }
+
+  /** (Lane PEOPLE) The person stands inside its claimed refuge. */
+  private inRefuge(p: MarketCombatant): boolean {
+    const c = this.book?.claimOf(p.id);
+    return !!c && this.book!.inside(c.refuge, p.actor.x, p.actor.y, p.actor.z);
   }
 
   private passesPlayer(a: HumanActor, path: Waypoint[]): boolean {
@@ -584,8 +735,8 @@ export class MarketCombat implements MarketHostilityApi {
   /** Follow the path; true on arrival. Stuck -> a re-plan (fleeing) / give up the route (moving). */
   private walk(p: MarketCombatant, dt: number, speed: number, turn: number): boolean {
     const a = p.actor, path = p.path!;
-    let wp = path[p.wp];
-    while (wp && p.wp < path.length - 1 && Math.hypot(wp[0] - a.x, wp[1] - a.z) < MARKET_PEOPLE.waypoint) wp = path[++p.wp];
+    p.wp = this.host.marketPeople.nextWaypoint(a, path, p.wp); // (lane PEOPLE: never cutting a stair's corner)
+    const wp = path[p.wp];
     const last = p.wp >= path.length - 1;
     const dx = wp[0] - a.x, dz = wp[1] - a.z, d = Math.hypot(dx, dz);
     if (last && d < MARKET_PEOPLE.arrive) { p.path = null; return true; }
@@ -593,28 +744,40 @@ export class MarketCombat implements MarketHostilityApi {
     const align = Math.cos(wrap(yawTo(dx, dz) - a.yaw));
     const sp = speed * Math.max(0.2, align) * (last ? Math.min(1, 0.4 + d) : 1);
     const ox = a.x, oz = a.z, step = Math.min(sp * dt, d);
-    [a.x, a.z] = moveCircle(this.host.levels, this.host.propIndex, a.x, a.z, dx / (d || 1) * step, dz / (d || 1) * step, MARKET_PEOPLE.radius, a.y, MARKET_PEOPLE.height);
+    [a.x, a.z] = moveCircle(this.host.levels, this.host.propIndex, a.x, a.z, dx / (d || 1) * step, dz / (d || 1) * step, p.squeezeT > 0 ? MARKET_COMBAT.squeeze.r : MARKET_PEOPLE.radius, this.host.marketPeople.stepFeet(a, wp), MARKET_PEOPLE.height);
     p.moved = Math.hypot(a.x - ox, a.z - oz) / dt;
     p.checkT += dt;
     if (p.checkT >= MARKET_COMBAT.stuckS) {
       const stuck = Math.hypot(a.x - p.checkX, a.z - p.checkZ) < MARKET_COMBAT.stuckM;
       p.checkT = 0; p.checkX = a.x; p.checkZ = a.z;
-      if (stuck) { p.path = null; if (p.role === 'flee') this.runFor(p); return false; }
+      if (stuck) {
+        p.path = null;
+        // (lane PEOPLE) held up twice at one place: squeeze past (a narrower body for a moment)
+        if (Math.hypot(a.x - p.stuckX, a.z - p.stuckZ) < 1) p.stuckN++; else p.stuckN = 1;
+        p.stuckX = a.x; p.stuckZ = a.z;
+        if (p.stuckN >= 2) p.squeezeT = MARKET_COMBAT.squeeze.s;
+        // (lane PEOPLE) a fleer held up inside its own refuge (the player in its corner) hides where it is; elsewhere it re-plans
+        if (p.role === 'flee') { if (this.inRefuge(p)) this.hideNow(p); else this.runFor(p); }
+        return false;
+      }
     }
     return false;
   }
 
   // ------------------------------------------------------------------------------------------------------------------- fighting
 
-  /** The gun comes out (instant: a restored shooter). */
+  /** The gun comes out (instant: a restored shooter) with an angry grunt. */
   private draw(p: MarketCombatant, instant = false): void {
     p.body.gunShown = true;
     p.actor.play(COMBAT_CLIP.aim(p.gun), instant ? 0 : 0.45);
+    if (!instant) this.grunt(p);
   }
 
   private fight(p: MarketCombatant, dt: number): void {
     const a = p.actor, pl = this.host.player, S = NPC_GUNS[p.gun];
     p.t += dt;
+    p.voiceT -= dt;
+    if (p.voiceT <= 0 && p.sees && p.mode !== 'draw' && p.body.gunShown) this.grunt(p); // (lane PEOPLE) now and then in a firefight
     if (p.npc.tick(dt) === 'reloaded') { this.counts.reloads++; this.persist(); this.setMode(p, 'engage'); a.play(COMBAT_CLIP.aim(p.gun), 0.3); }
     if (p.mode === 'calm') this.setMode(p, 'draw');
     if (p.mode === 'draw') {
@@ -802,7 +965,8 @@ export class MarketCombat implements MarketHostilityApi {
   qa() {
     return {
       hostile: this.hostileFlag, cause: this.cause, counts: {...this.counts},
-      people: this.people.map(p => ({id: p.id, state: p.state, role: p.role, mode: p.mode, hp: +p.hp.toFixed(1), gun: p.gun, mag: p.npc.mag, spare: p.npc.spare, drawn: p.body.gunShown, x: +p.actor.x.toFixed(2), y: +p.actor.y.toFixed(2), z: +p.actor.z.toFixed(2), clip: p.actor.current})),
+      people: this.people.map(p => ({id: p.id, state: p.state, role: p.role, mode: p.mode, hidden: p.hidden, refuge: this.book?.claimOf(p.id)?.refuge.id ?? null, hp: +p.hp.toFixed(1), gun: p.gun, mag: p.npc.mag, spare: p.npc.spare, drawn: p.body.gunShown, x: +p.actor.x.toFixed(2), y: +p.actor.y.toFixed(2), z: +p.actor.z.toFixed(2), clip: p.actor.current})),
+      refuges: this.book?.refuges.map(r => ({id: r.id, label: r.label, level: r.level, slots: r.slots.length, hidden: r.slots.filter(s => s.hidden).length, load: this.book!.load(r)})) ?? [],
       log: [...this.log],
     };
   }

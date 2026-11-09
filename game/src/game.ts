@@ -67,7 +67,7 @@ import {fanSources} from './audio/fanSound';
 import {ANNEX_GENSET, gensetModelKeysFor} from './assets/annexGenset';
 import {PhysicsSystem, killImpulseStrength} from './physics/world';
 import {DamageSystem} from './damage/system';
-import {ShelfStock} from './world/shelfStock';
+import {ShelfStock, SHELF_JUNK_KEY, SHELF_JUNK_MODEL_FILES, shelfJunkModelKeysFor} from './world/shelfStock'; // (+ task studio-food-shelf-production-20261109-002816-01: the Meshy shelf-junk atlas)
 import {LightSources} from './world/lightSources';
 import {PlayerLight, applyBatteryItem} from './player/flashlight'; // Iteration 12 (LIGHT): flashlight battery + body glow
 import {FlareSystem, throwOneFlare, type FlareSmokeHost} from './weapons/throwables'; // Iteration 12 (LIGHT): thrown road flares (grenade slot)
@@ -128,7 +128,7 @@ import {createRun, type RunState} from './run/runState';
 import {enemiesToSpawn, mergeKilled, pickupPlan} from './run/memory';
 import {resetParticipants, restoreCarry, restoreParticipants, takeSnapshot, type RunParticipant, type RunSnapshot} from './run/snapshot';
 import {starterInventory} from './run/starter';
-import {applyHolders, captureHolders, capturePickups, dropUnrecordedSalvage, restorePickup} from './run/worldMemory';
+import {applyHolders, captureHolders, capturePickups, dropUnrecordedSalvage, holderKeyOf, restorePickup} from './run/worldMemory';
 import {runBagStore} from './run/bagStore';
 import {playerTrainPlacement, type TrainPlacement} from './gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE)
 import {PlayerTrainRecord, PLAYER_TRAIN_PARTICIPANT} from './run/playerTrain'; // (lane PLACE: the run's one train identity)
@@ -160,6 +160,13 @@ import {MARKET_HUMAN_MODEL_FILES} from './market/humanLooks'; // task studio-sur
 import {installMarketPeople, type MarketPeople} from './market/marketPeople'; // (lane HUMANS): the market's residents + stall traders // task studio-survivor-market-20261108-005807-01 (lane TRADE): Rail Ties + the six stalls
 import {installMarketCombat, playerPelletDamage, type MarketCombat, type MarketCombatant} from './market/combat/marketCombat'; // task studio-market-rework-20261108-074144-01 (lane COMBAT)
 import type {MarketHostilityApi} from './market/hostility';
+import type {BeerEffectsApi, VomitApi} from './market/beer/effectsApi'; // task studio-market-bar-20261108-225231-01 (seams)
+import {installBeerEffects} from './market/beer/beerEffects'; // (lane BEER) the one timed beer, the Bock's overfill, the Pilsner's acquisition hook
+import {preloadBeerLabels} from './market/beer/beerModel'; // (lane BEER) the bottles' Codex label atlas before the item templates / icons
+import {isBeer} from './items/beers';
+import type {MarketAudioApi} from './market/marketAudio';
+import {installMarketAudio} from './market/audio/marketSounds'; // task studio-market-bar-20261108-225231-01 (lane AUDIO): Game.marketAudio
+import {installVomit, type VomitAction} from './player/vomit'; // task studio-market-bar-20261108-225231-01 (lane SHELVES): the throw-up action (Game.vomit)
 import {installMarketWares, type MarketWares} from './market/wares/wares'; // task studio-market-rework-20261108-074144-01 (lane WARES): the stalls' owned stock on display, the red Steal
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
@@ -268,7 +275,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...COSPLAY_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES, ...MARKET_HUMAN_MODEL_FILES}); // (survivor market, lane HUMANS: + the friendly cast, level-only market-*) (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...COSPLAY_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES, ...MARKET_HUMAN_MODEL_FILES, ...SHELF_JUNK_MODEL_FILES}); // (task studio-food-shelf-production-20261109-002816-01: + the shelf-junk atlas, lazy) // (survivor market, lane HUMANS: + the friendly cast, level-only market-*) (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
   /** Task track3-eaton-centre-20261031 (lane PACKAGE): textures / GPU resources owned by ONE level, released when the level changes (assets/levelResources.ts). */
   readonly levelResources = new LevelResources();
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
@@ -385,6 +392,13 @@ export class Game {
   marketCombat!: MarketCombat;
   /** (lane COMBAT) The market hostility seam (market/hostility.ts) the trade / wares lanes call: hostile, provoke, canTrade. */
   marketHostility!: MarketHostilityApi;
+  /** Task studio-market-bar-20261108-225231-01 (seams; market/beer/effectsApi.ts, market/marketAudio.ts): the one timed beer's effects, the
+   *  player's throw-up action and the market's sounds — set by their installs; read with optional chaining. */
+  beerEffects?: BeerEffectsApi;
+  vomit?: VomitApi;
+  marketAudio?: MarketAudioApi;
+  /** (lane SHELVES) Game.vomit's implementation (player/vomit.ts): its held-item lowering, read by the viewmodel step. */
+  private vomitAction: VomitAction | null = null;
   /** Task studio-market-rework-20261108-074144-01 (lane WARES): the stalls' real stock displayed as owned world items; theft (market/wares/wares.ts). */
   marketWares!: MarketWares;
   /** Task skyways-level-20261106 (lane CAR): the Skyways prize car — while `driving`, update() steps the player through it (world/skywaysCar.ts). */
@@ -452,7 +466,7 @@ export class Game {
   // (round 2, R3) + the generated annex genset model on a layout with a genset record (a shared file: every annex-bearing level)
   // (task mall-lingerie-20261102, lane STORE) + the lingerie store's display sets: lane FIT's outfit files they are cut from (lazy, same keys)
   // (task mall-lingerie-20261102-221554, lane CONTEXT) + the lingerie garments on a layout with lingerie-tagged spawns (the mall's lingerie store only)
-  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys, lingerieModelKeysFor, cosplayModelKeysFor];
+  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys, lingerieModelKeysFor, cosplayModelKeysFor, shelfJunkModelKeysFor]; // (+ task studio-food-shelf-production-20261109-002816-01: the shelf-junk atlas only on layouts with stockable holders)
   /** One lifecycle operation at a time: travel, new game, retry level. */
   private readonly lifecycle = new SingleFlight();
   /** Live pickups that are (what is left of) a generated layout pickup -> its layout.pickups index. */
@@ -586,6 +600,7 @@ export class Game {
     // Iteration 14: effects hidden until the first shot / hit and the thrown-flare prototypes are warmed with the station
     this.warmRegistry.addPool('effects', () => [this.fx.group]);
     this.warmRegistry.addPool('flares', () => this.flares.warmPrototypes());
+    this.warmRegistry.addPool('shelf-junk-moving', () => this.stock.warmRoots()); // (task studio-food-shelf-production-20261109-002816-01) the moving shelf-junk instanced meshes compile behind the loading screen
     // Task studio-performance-recorder-20261103 (lane RENDER-CPU): the holders' contents hidden until used — the loot display's
     // batches (one InstancedMesh = one node build per item x storey, shown when a lot comes within view distance) and the holders'
     // interiors (shown when opened) — compile with the station instead of on first sight
@@ -700,6 +715,19 @@ export class Game {
     this.marketCombat = installMarketCombat(this);
     this.marketHostility = this.marketCombat;
     hookName('marketCombat');
+    // task studio-market-bar-20261108-225231-01 (lane AUDIO): after the people / combat (its section build and frame read them) — the market's
+    // sounds (Game.marketAudio, market/marketAudio.ts): the trade's register cue, the calm crowd's murmur, the fleers' screams / fighters'
+    // grunts (the people call them), the player's retch; inert without a market (the retch / register play wherever they are called)
+    this.marketAudio = installMarketAudio(this);
+    hookName('marketAudio');
+    // task studio-market-bar-20261108-225231-01 (lane SHELVES): the throw-up action (Game.vomit: body / camera / held item, the food chunks —
+    // a physics body source —, the retch); its frame hook runs after the player's step and before the camera; inert until start()
+    this.vomit = this.vomitAction = installVomit(this);
+    hookName('vomit');
+    // task studio-market-bar-20261108-225231-01 (lane BEER): Game.beerEffects — the one timed beer (frame hook: active play only; run participant
+    // 'market.beer'; the Lager's ModifierSource), the Bock's overfill, the Pilsner's acquisition hook (market/beer/beerEffects.ts)
+    installBeerEffects(this);
+    hookName('beerEffects');
     installSkywaysTrunk(this); hookName('skywaysTrunk'); // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): after the car (its section hook follows the car's) and the Lockbox; inert without the car
     // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
     // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
@@ -768,6 +796,7 @@ export class Game {
     await preloadMedicalModels(); // Iteration 16 (lane INJURY): Meshy splint / sling (null urls / failures -> authored models)
     await preloadReactorItemModels(); // task reactor-build-20261101 (lane RESTART): startup key / fuse cartridge kit GLBs (failures -> procedural stand-ins)
     await preloadFuelCanModel(); // task train-fuel-system (lane PORT): the fuel-can GLB before item templates / icons (a failure -> the fallback box)
+    await preloadBeerLabels(); // task studio-market-bar-20261108-225231-01 (lane BEER): the beer bottles' Codex label atlas (a failure -> plain paper labels)
     registerItemModels(m as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>);
     const consumables: Record<string, THREE.Object3D> = {};
     for (const id of Object.values(ITEMS).filter(d => d.kind === 'consumable' || d.kind === 'throwable').map(d => d.id)) {
@@ -1048,7 +1077,8 @@ export class Game {
     this.physics.holderBoxes = p => this.stock.physicsBoxes(p, cm.physicsBoxes(p));
     // Iteration 08 (Lane S): 3D filler stock dressed around the real loot lots (rest meshes + bodies on demand; no respawn per station).
     if (!this.stock.group.parent) { this.scene.add(this.stock.group); this.stock.filler.attach(this.physics); }
-    this.stock.build(this.layout, {models: this.assets.models as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>,
+    // (task studio-food-shelf-production-20261109-002816-01) + the shelf-junk atlas (lazy prop model; absent -> the same layout with the procedural fallbacks)
+    this.stock.build(this.layout, {models: {...this.assets.models, [SHELF_JUNK_KEY]: this.propModels.get(SHELF_JUNK_KEY)} as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>,
       lotsOf: p => cm.holderFor(p)?.state.lots.map(l => placementBox(l.itemId, l)) ?? []});
     // Iteration 16 (RUN): holders as the player left them (taken lots stay taken; the shelf filler keeps the gaps)
     const mem = this.run.memory(key);
@@ -2554,6 +2584,7 @@ export class Game {
     if (def.kind !== 'consumable') return;
     if (this.gasMask.transitioning) return; // mask lane: no use starts while the gas mask goes on / comes off (H, click)
     if (this.skywaysCar?.refuseUse()) return; // (lane CAR) no item use while driving the Skyways car
+    if (this.vomit?.active) return; // (lane SHELVES) no timed use starts while throwing up (H / a click)
     // Iteration 12 (LIGHT): a battery is refused at >= 99 % charge (nothing used)
     // Iteration 16 (lane INJURY): a limb treatment needs its injury ("No leg injury to treat"); it heals no HP, so the HP check is skipped
     const blocked = (def.recharge ? this.torch.battery.refuseReason() : null)
@@ -2589,10 +2620,12 @@ export class Game {
       this.hud.toast(`Battery swapped in: flashlight ${this.torch.battery.percent} %${this.torch.battery.on ? '' : ' (F to switch on)'}`);
     } else if (used && (def.verb === 'eat' || def.verb === 'drink')) {
       // Food/drink: restore hunger/thirst (HUD bars animate up and pop "+N").
-      const d = this.survival.consume(def);
+      // (task studio-market-bar-20261108-225231-01, lane BEER) a beer's effect is committed HERE, once, after its unit was consumed
+      const beer = isBeer(def.id) ? this.beerEffects?.drink?.(def.id) : undefined;
+      const d = beer === undefined ? this.survival.consume(def) : null;
       this.stats.itemsUsed++;
       if (def.verb === 'drink') this.sfx.drink(def.id); else this.sfx.eat(def.id);
-      this.hud.toast(`${def.verb === 'drink' ? 'Drank' : 'Ate'} ${def.name.toLowerCase()}: ${Survival.describe(d)}`);
+      this.hud.toast(d ? `${def.verb === 'drink' ? 'Drank' : 'Ate'} ${def.name.toLowerCase()}: ${Survival.describe(d)}` : beer!);
     } else if (used) {
       const healed = p.heal(def.heal ?? 0);
       this.stats.healed += healed;
@@ -2650,8 +2683,9 @@ export class Game {
   }
 
   private interact(): void {
+    if (this.vomit?.active) return; // (lane SHELVES) throwing up: no interaction until it is over
     for (const h of this.interactHandlers) if (h()) return; // Iteration 16: lane handlers first (grounded backpack, elevator, stair doors)
-    if (this.containerTarget) { this.containers?.interact(this.containerTarget); return; }
+    if (this.containerTarget) { this.takeFromHolder(this.containerTarget); return; }
     const p = this.currentTarget;
     if (!p) {
       // Lane T (iteration 05): rescue ladder under the crosshair -> scripted climb (Space / S lets go).
@@ -2670,6 +2704,8 @@ export class Game {
     if (left === before) { this.hud.toast('No room in inventory — drop something (Tab)', true); this.sfx.denied(); return; }
     this.sfx.pickup();
     const got = before - left;
+    // (task studio-market-bar-20261108-225231-01, lane BEER) what went in and where it came from: the Pilsner's one acquisition hook (below)
+    const taken = {...p.stack, count: got}, src = {kind: 'pickup' as const, layoutIndex: this.layoutPickup.get(p), lot: p.fromLot ? {holder: this.holderKeyBySerial(p.fromLot.holder), lot: p.fromLot.lot} : undefined};
     if (left > 0) { p.stack.count = left; this.hud.toast(`Took ${got} ${def.short} (no room for ${left})`); }
     else {
       this.pickups.remove(p);
@@ -2682,7 +2718,33 @@ export class Game {
         if (prevSelectedEmpty) this.selectMelee();
       } else this.hud.toast(def.kind === 'weapon' ? `${def.short} stored in backpack` : `+${got} ${def.name}`);
     }
+    this.beerEffects?.acquired?.(src, taken); // (lane BEER) a generated / lot-origin pickup only: the player's own drops have no origin
     this.syncHeld();
+  }
+
+  /**
+   * [E] on a holder / its aimed lot (ContainerManager.interact, unchanged). Task studio-market-bar-20261108-225231-01 (lane BEER): while
+   * Lucky Switch Pilsner is active, every lot this gave up (whole or in part: its count before vs after) goes through the one acquisition
+   * hook as the default stack the lot became (items/loot.ts transferLot: makeStack).
+   */
+  private takeFromHolder(t: ContainerTarget): void {
+    const h = t.container, luck = this.beerEffects?.active?.effect === 'pickup';
+    const before = luck ? h.state.lots.map(l => ({id: l.id, itemId: l.itemId, count: l.count})) : null;
+    this.containers?.interact(t);
+    if (!before) return;
+    for (const b of before) {
+      const n = b.count - (h.state.lots.find(l => l.id === b.id)?.count ?? 0);
+      if (n <= 0) continue;
+      const st = this.inv.makeStack(b.itemId, 1);
+      st.count = n; // (a lot may hold more than one stack: the exact count taken)
+      this.beerEffects?.acquired?.({kind: 'lot', holder: holderKeyOf(h), lot: b.id}, st);
+    }
+  }
+
+  /** (task studio-market-bar-20261108-225231-01, lane BEER) A holder's run-memory key by its serial (Pickup.fromLot provenance). */
+  private holderKeyBySerial(serial: number): string {
+    const h = this.containers?.all[serial];
+    return h ? holderKeyOf(h) : `holder#${serial}`;
   }
 
   /**
@@ -2782,7 +2844,7 @@ export class Game {
     // A fresh sprint (Shift while moving forward) interrupts a timed use. Until the consume view has
     // brought the gun back up it stays lowered: no aiming, firing or reloading.
     if (this.use && (inp.hit('ShiftLeft') || inp.hit('ShiftRight')) && (inp.down('KeyW') || inp.down('ArrowUp'))) this.cancelUse('sprint');
-    const vmBusy = !!this.use || this.consumeView.busy;
+    const vmBusy = !!this.use || this.consumeView.busy || !!this.vomit?.active; // (lane SHELVES: throwing up — no aim / reload, the gun lowered)
     this.aiming = !!wdef && !wdef.melee && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active && !laneOwns;
     const moveOpts = {aiming: this.aiming, speedMult: (this.use ? 0.6 : wdef?.moveMult ?? 1) * this.mods.speedMult, canSprint: !this.use && !inp.mouse[0]};
     // (lane RIDE) riding: car pose -> the player's car-local step -> the world pose (TrainRide.stepPlayer); else the world body as ever
@@ -2894,6 +2956,8 @@ export class Game {
     prof.lap(SPAN.view);
     this.consumeView.update(dt); // item-to-face pose + gun holster level, before the gun pose
     if (this.skywaysCar.holster > 0) this.viewmodel.setHolstered(this.skywaysCar.holster); // (lane CAR) hands on the wheel: the held item lowered
+    const vomitHolster = this.vomitAction?.holster ?? 0; // (lane SHELVES) throwing up: the held item lowered (whichever lowers it more wins)
+    if (vomitHolster > 0) this.viewmodel.setHolstered(Math.max(vomitHolster, this.consumeView.holster, this.skywaysCar.holster));
     this.viewmodel.update(dt, {
       // (task mouse-axis-invert: the sway follows the EFFECTIVE turn, so an inverted axis sways with the view, not against it)
       moving: Math.min(1, p.speed / WALK_SPEED), sprint: p.sprinting, aiming: this.aiming, lookDX: inp.dx * lookSigns(this.settings).x, lookDY: inp.dy * lookSigns(this.settings).y,
@@ -3011,6 +3075,8 @@ export class Game {
       battery: {charge: this.torch.battery.charge, on: this.flashlightOn, flicker: this.torch.battery.flicker, spares: this.inv.count('battery')},
       flares: {count: this.inv.count('flare'), burning: this.flares.burningCount},
       armor: armorPool(this.inv.gear), // task studio-general-armor-20261107-231448-01: the blue armour pips
+      armorTemp: this.beerEffects?.tempArmor() ?? 0, // (task studio-market-bar-20261108-225231-01, lane BEER) Ironclad Stout: shown on top, distinguishable
+      beer: this.beerEffects?.active ?? null, // (lane BEER) the active timed beer: name + time left
     }, this.inv);
   }
 
@@ -3154,7 +3220,8 @@ export class Game {
     // An open-atrium level (layout.mall) adds the cross-storey rule (ATRIUM_PERCEPTION: x0.7 per storey through the void, at most 3
     // new cross-storey responders per noise); the Subway / Office pass no flag: the established loop.
     alertListeners(this.zombies.map(z => z.brain), P, radius,
-      b => multi ? this.levels.lineOfSight({x: P.x, y: P.eye, z: P.z}, {x: b.x, y: b.y + 1.5, z: b.z}) : this.layout.grid.lineOfSight(P.x, P.z, b.x, b.z), bases, !!this.layout.mall || !!this.layout.reactor); // task reactor-build-20261101 (lane ARCH): + the Reactor's open pit (cross-storey hearing)
+      b => multi ? this.levels.lineOfSight({x: P.x, y: P.eye, z: P.z}, {x: b.x, y: b.y + 1.5, z: b.z}) : this.layout.grid.lineOfSight(P.x, P.z, b.x, b.z), bases, !!this.layout.mall || !!this.layout.reactor, // task reactor-build-20261101 (lane ARCH): + the Reactor's open pit (cross-storey hearing)
+      this.beerEffects?.perceptionMult() ?? 1); // (task studio-market-bar-20261108-225231-01, lane BEER) the player's one detectability factor (Night Shift Porter)
     this.prof.end(SPAN.alert);
   }
 
@@ -3281,6 +3348,8 @@ export class Game {
       ...(this.layout.mall || this.layout.reactor ? {atrium: true} : {}), // (reactor-build, lane ARCH: + the open pit)
       // Task studio-beta-mall-round3-20261031-01 (lane ENEMY, R2): the open-atrium notice rule (ai/brain.ts ATRIUM_PERCEPTION); mall only
       ...(this.layout.mall || this.layout.reactor ? {atriumNotice: true} : {}), // (reactor-build, lane ARCH: + the open pit)
+      // task studio-market-bar-20261108-225231-01 (lane BEER): the player's ONE detectability factor (Night Shift Porter 0.75; else 1)
+      detect: this.beerEffects?.perceptionMult() ?? 1,
     };
   }
 
@@ -3439,7 +3508,7 @@ export class Game {
    */
   applyPlayerHit(raw: PlayerHit): ResolvedHit {
     const hit = incomingHit(raw);
-    const {resolved} = armorHit(hit, this.inv.gear, this.wearRand);
+    const {resolved} = armorHit(hit, this.inv.gear, this.wearRand, undefined, this.beerEffects?.tempArmor() ?? 0); // (task studio-market-bar-20261108-225231-01, lane BEER: + Ironclad Stout's temporary armour in the same pool, never worn down)
     this.player.takeDamage(resolved.applied);
     for (const fn of this.hitListeners) fn(resolved);
     return resolved;

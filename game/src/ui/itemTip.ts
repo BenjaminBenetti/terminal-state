@@ -12,6 +12,7 @@ import {CALIBERS} from '../items/calibers';
 import {MATERIAL_NOTE} from '../items/craftMaterials';
 import type {TipContent, TipTone} from './tooltip';
 import {CURRENCY_NOTE} from '../items/railTies'; // task studio-market-rework-20261108-074144-01: the market's physical Rail Ties
+import {BEER_RULE_NOTE, isTimedBeer} from '../items/beers'; // task studio-market-bar-20261108-225231-01 (lane BEER)
 
 /** Mask lane: a gas mask's fitted filter in whole percent (rounded up: 0 only when empty). */
 export const filterPct = (filter: number | undefined) => Math.ceil(Math.max(0, Math.min(1, (filter ?? 0) / FILTER_LIFE_S)) * 100 - 1e-9);
@@ -30,6 +31,7 @@ export function itemTipLines(st: ItemStack, o: {inv?: Inventory} = {}): string[]
     out.push(`${CALIBERS[def.caliber].designation} · loads: ${loads || 'no weapon yet'}`);
   }
   if (def.kind === 'consumable') out.push(effectText(def));
+  if (isTimedBeer(def.id)) out.push(BEER_RULE_NOTE); // task studio-market-bar-20261108-225231-01 (lane BEER): one timed beer at a time
   if (def.kind === 'gear' && def.gear) {
     if (isFilterMask(def.id)) out.push(`Filter ${filterPct(st.filter)} % fitted`);
     if (isAirtank(def.id)) out.push(airText(st.air));

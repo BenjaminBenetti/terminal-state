@@ -13,7 +13,41 @@ import type {LimbInjury} from '../player/injuries'; // Iteration 16 (lane INJURY
 import type {MaskHudView} from '../gear/gasMask'; // task gasmask-breach-20261030 (mask lane)
 import type {FuelHudView} from '../world/fuelPort'; // task train-fuel-system (lane PORT)
 import {FUEL} from '../fuel/fuel'; // task studio-general-armor-20261107-231448-01 (the two-tank pip row)
-import {ARMOR, pipRows, pipsText} from '../player/armor'; // task studio-general-armor-20261107-231448-01 (the armour pips)
+import {ARMOR, displayHalfPips, pipRows, pipsText, tempHalfPips} from '../player/armor'; // task studio-general-armor-20261107-231448-01 (the armour pips)
+import {SURVIVAL_MAX} from '../player/survival';
+import {BEERS, BEER_TUNING, isBeer} from '../items/beers'; // task studio-market-bar-20261108-225231-01 (lane BEER)
+
+// Task studio-market-bar-20261108-225231-01 (lane BEER), kept apart from the armour / vitals styles above (small, additive):
+//  - the OVERFILL of food / water (Second Supper Bock, up to 200 %): a GREEN band overlapping the top of the full bar for the part above
+//    100 (its width = overfill / 100 of the bar), the base bar still showing beneath it; the percentage reads green;
+//  - the TEMPORARY armour pips (Ironclad Stout, HudState.armorTemp): the top-most pips of the effective pool get the class `temp` (a pale
+//    blue, the same pip shape);
+//  - the ACTIVE timed beer: a compact row under the water bar — the beer's short name, its effect and the minutes : seconds left.
+const BEER_CSS = `
+#vitals .surv .bar { position: relative; }
+#vitals .surv .bar .over { position: absolute; left: 0; top: 0; height: 55%; width: 0; background: #5ccf5f; box-shadow: 0 0 4px rgba(92, 207, 95, 0.65); transition: width 0.7s ease-out; pointer-events: none; }
+#vitals .surv.overfill .pct { color: #7fe081; }
+#armor-pips i.temp { background: #a9dcff; border-color: #24496e; box-shadow: 0 0 4px rgba(169, 220, 255, 0.7); }
+#vitals #beer-tag { margin-top: 5px; font-size: 10.5px; letter-spacing: 0.12em; white-space: nowrap; color: #e6b65c; }
+#vitals #beer-tag.none { display: none; }
+#beer-tag .tag { display: flex; justify-content: center; color: #e6b65c; }
+#beer-tag .tag svg { width: 26px; height: 13px; }
+#beer-tag .fx { color: var(--cream-dim); letter-spacing: 0.06em; }
+#beer-tag .left { margin-left: auto; color: var(--cream); font-variant-numeric: tabular-nums; }`;
+const ensureBeerCss = (): void => {
+  if (typeof document === 'undefined' || document.querySelector('#beer-css')) return;
+  const st = document.createElement('style');
+  st.id = 'beer-css';
+  st.textContent = BEER_CSS;
+  document.head.appendChild(st);
+};
+/** (lane BEER) "9:41". */
+export const beerClock = (s: number): string => { const t = Math.max(0, Math.ceil(s)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+/** (lane BEER) The beer row's short effect. */
+const BEER_FX: Readonly<Record<string, string>> = {
+  speed: `+${Math.round((BEER_TUNING.speedMult - 1) * 100)}% SPEED`, pickup: 'LUCKY FINDS',
+  armor: `+${Math.round(BEER_TUNING.tempArmor / ARMOR.pip)} ARMOR`, stealth: `${Math.round((1 - BEER_TUNING.perceptionMult) * 100)}% HIDDEN`,
+};
 
 // task studio-general-armor-20261107-231448-01: the ARMOUR pips — blue pips just above the health bar, as wide as it (ten pips a row = 25 %), in half-pip steps
 // rounded down (player/armor.ts pipRows). A row past ten stacks on top of the one below, overlapping it by ARMOR.rowOverlap of its
@@ -93,7 +127,7 @@ export interface HudState {
   aiming: boolean;
   flashlight: boolean;
   use: {label: string; progress: number} | null;
-  /** Survival fullness 0-100 (FOOD = hunger, WATER = thirst); bars hidden when omitted. */
+  /** Survival fullness 0-100 (FOOD = hunger, WATER = thirst); bars hidden when omitted. (lane BEER: up to 200 — the green overfill.) */
   food?: number;
   water?: number;
   /** Iteration 12 (LIGHT): flashlight battery (charge 0..1, light switched on, flicker amount 0..1, spare batteries carried). */
@@ -102,6 +136,14 @@ export interface HudState {
   flares?: {count: number; burning: number};
   /** (task studio-general-armor-20261107-231448-01) The worn armour pool (player/armor.ts armorPool): the blue pips above the health bar. */
   armor?: number;
+  /**
+   * Task studio-market-bar-20261108-225231-01 (lane BEER): the TEMPORARY armour (Ironclad Stout: 0.125 = 5 pips; Game.beerEffects.tempArmor()).
+   * The pips then show the EFFECTIVE pool min(ARMOR.cap, armor + armorTemp) — what an enemy hit meets (player/armor.ts armorPool(worn,
+   * temp)) — and its temporary share (the top-most pips; class `temp`) distinguishably. `armor` stays the worn pool.
+   */
+  armorTemp?: number;
+  /** (lane BEER) The active timed beer (Game.beerEffects.active): its name / effect and the active seconds left; null = none. */
+  beer?: {itemId: string; remaining: number} | null;
 }
 
 export class Hud {
@@ -154,10 +196,18 @@ export class Hud {
     vitals.appendChild(el);
   }
 
-  /** (task studio-general-armor-20261107-231448-01) The armour pips above the health bar (written only when the shown half-pip count changes). */
-  setArmor(pool: number): void {
-    const rows = pipRows(pool);
-    this.set('armor', rows.map(r => r.join(',')).join('|'), () => {
+  /**
+   * (task studio-general-armor-20261107-231448-01) The armour pips above the health bar (written only when the shown half-pip count changes).
+   * Task studio-market-bar-20261108-225231-01 (lane BEER): `temp` = the temporary armour (Ironclad Stout). The pips show the EFFECTIVE pool
+   * min(ARMOR.cap, pool + temp) (`pool` = the worn pool, as before); the top-most pips holding any of its temporary half pips (its share
+   * under the cap: tempHalfPips) get the class `temp` (same shape, pale blue).
+   */
+  setArmor(worn: number, temp = 0): void {
+    const pool = Math.min(ARMOR.cap, worn + (temp > 0 ? temp : 0)), share = pool - Math.min(worn, pool); // (lane BEER) the effective pool, temp's share in it
+    const rows = pipRows(pool), keep = displayHalfPips(pool) - tempHalfPips(pool, share); // (lane BEER) the half pips that are worn armour
+    const cls = (p: 'full' | 'half', i: number) => [p === 'half' ? 'half' : '', 2 * i + (p === 'half' ? 0 : 1) >= keep ? 'temp' : ''].filter(Boolean).join(' ');
+    if (temp > 0) ensureBeerCss();
+    this.set('armor', `${rows.map(r => r.join(',')).join('|')}#${keep}`, () => {
       const bar = document.querySelector('#vitals .bar.health') as HTMLElement | null;
       if (!bar) return;
       if (!document.querySelector('#armor-css')) {
@@ -173,11 +223,41 @@ export class Hud {
         bar.appendChild(el);
       }
       const step = ARMOR_PIP_H * (1 - ARMOR.rowOverlap);
-      el.innerHTML = rows.map((r, k) => `<div class="arow" style="bottom:${k * step}px">${r.map(p => p === 'half' ? '<i class="half"></i>' : '<i></i>').join('')}</div>`).join('');
+      el.innerHTML = rows.map((r, k) => `<div class="arow" style="bottom:${k * step}px">${r.map((p, j) => { const c = cls(p, k * ARMOR.pipsPerRow + j); return c ? `<i class="${c}"></i>` : '<i></i>'; }).join('')}</div>`).join('');
       el.classList.toggle('none', !rows.length);
-      el.title = rows.length ? `Armor ${pipsText(pool)} pips (${+(pool * 100).toFixed(1)} %): cuts every enemy hit and may save you from its injury` : '';
+      el.title = rows.length ? `Armor ${pipsText(pool)} pips (${+(pool * 100).toFixed(1)} %): cuts every enemy hit and may save you from its injury${share > 0 ? ` — ${pipsText(share)} of them temporary (Ironclad Stout)` : ''}` : '';
       const row = bar.parentElement as HTMLElement | null;
       if (row) row.style.marginTop = rows.length ? `${6 + ARMOR_PIP_GAP + ARMOR_PIP_H + (rows.length - 1) * step}px` : '';
+    });
+  }
+
+  /**
+   * Task studio-market-bar-20261108-225231-01 (lane BEER): the active timed beer — a compact row under the water bar (built on first use):
+   * the beer's short name, its effect, the time left (m:ss, written once a second); hidden without one.
+   */
+  setBeer(b: {itemId: string; remaining: number} | null): void {
+    const on = !!b && isBeer(b.itemId) && b.remaining > 0;
+    this.set('beer', on ? `${b!.itemId}|${beerClock(b!.remaining)}` : '', () => {
+      if (typeof document === 'undefined') return;
+      let el = document.querySelector('#beer-tag') as HTMLElement | null;
+      if (!el && !on) return;
+      if (!el) {
+        const water = document.querySelector('#surv-water');
+        if (!water?.parentElement) return;
+        ensureBeerCss();
+        el = document.createElement('div');
+        el.id = 'beer-tag';
+        el.className = 'row none';
+        el.innerHTML = `<span class="tag">${ICONS.beer}</span><span class="name"></span><span class="fx"></span><span class="left"></span>`;
+        water.insertAdjacentElement('afterend', el);
+      }
+      el.classList.toggle('none', !on);
+      if (!on || !isBeer(b!.itemId)) return;
+      const spec = BEERS[b!.itemId];
+      el.querySelector('.name')!.textContent = spec.short.toUpperCase();
+      el.querySelector('.fx')!.textContent = BEER_FX[spec.effect] ?? '';
+      el.querySelector('.left')!.textContent = beerClock(b!.remaining);
+      el.title = `${spec.name}: ${BEER_FX[spec.effect] ?? ''} for ${beerClock(b!.remaining)} more (active play). Another timed beer makes you throw up and replaces it.`;
     });
   }
 
@@ -223,7 +303,8 @@ export class Hud {
   update(s: HudState, inv: Inventory): void {
     const hpFrac = Math.max(0, s.hp / s.maxHp);
     this.set('hp', String(Math.ceil(s.hp)), v => { $('#hp-num').textContent = v; $<HTMLElement>('#vitals .health .fill').style.width = `${hpFrac * 100}%`; $('#vitals .health').classList.toggle('low', hpFrac < 0.3); $('#vignette').classList.toggle('low', hpFrac < 0.3); });
-    this.setArmor(s.armor ?? 0); // task studio-general-armor-20261107-231448-01
+    this.setArmor(s.armor ?? 0, s.armorTemp ?? 0); // task studio-general-armor-20261107-231448-01 (+ lane BEER: the temporary share)
+    this.setBeer(s.beer ?? null); // (lane BEER) the active timed beer
     this.set('st', s.stamina.toFixed(0), v => { $<HTMLElement>('#vitals .stam .fill').style.width = `${v}%`; });
     this.set('wn', s.weaponName, v => { $('#weapon-name').textContent = v; });
     this.set('mag', s.melee ? 'melee' : s.mag === null ? '' : `${s.mag}|${s.reserve}`, v => {
@@ -472,6 +553,17 @@ export class Hud {
     if (pct === prev) return;
     this.survShown[key] = pct;
     (row.querySelector('.fill') as HTMLElement).style.width = `${Math.max(0, Math.min(100, v))}%`;
+    // (task studio-market-bar-20261108-225231-01, lane BEER) the overfill above 100: a green band overlapping the full bar (built on first use)
+    const over = Math.max(0, Math.min(SURVIVAL_MAX, v - SURVIVAL_MAX));
+    let band = row.querySelector('.bar .over') as HTMLElement | null;
+    if (!band && over > 0) {
+      ensureBeerCss();
+      band = document.createElement('div');
+      band.className = 'over';
+      row.querySelector('.bar')?.appendChild(band);
+    }
+    if (band) band.style.width = `${over}%`;
+    row.classList.toggle('overfill', over > 0);
     row.querySelector('.pct')!.textContent = `${pct}%`;
     row.classList.toggle('low', v <= LOW && v > CRITICAL);
     row.classList.toggle('crit', v <= CRITICAL);

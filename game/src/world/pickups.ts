@@ -20,6 +20,8 @@ import {isReactorItem, reactorItemModel, reactorItemSource} from './reactor/rest
 import {fuelCanModel, fuelCanModelSource} from './fuelCanModel'; // task train-fuel-system-20261106 (lane PORT): the delivered fuel-can GLB (fallback box if not loaded)
 import {RAIL_TIES_MODEL_SOURCE, railTiesModel} from './railTiesModel'; // task studio-market-rework-20261108-074144-01 (lane TRADE)
 import {RAIL_TIES_ID} from '../items/railTies';
+import {isBeer} from '../items/beers'; // task studio-market-bar-20261108-225231-01 (lane BEER)
+import {beerModel, beerModelSource} from '../market/beer/beerModel';
 import {isPantryItem} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
 import {pantryFallbackModel, pantryGltf, pantryModelSource} from './pantryModels';
 import {Grid} from '../gen/grid';
@@ -296,6 +298,10 @@ export function itemTemplate(itemId: string): THREE.Object3D {
     // task studio-market-rework-20261108-074144-01 (lane TRADE): Rail Ties — a bundle of tie offcuts code-built from the track sleeper
     t = railTiesModel();
     templateSource.set(itemId, RAIL_TIES_MODEL_SOURCE);
+  } else if (isBeer(itemId)) {
+    // task studio-market-bar-20261108-225231-01 (lane BEER): the market bar's beers — a code-built long-neck with the beer's own Codex label
+    t = beerModel(itemId);
+    templateSource.set(itemId, beerModelSource());
   } else if (isMaterialItem(itemId)) {
     // Task office-props-physics-scale-20261030 (lane RACK): crafting materials — authored procedural geometry (world/materialItems.ts)
     t = materialItemModel(itemId);

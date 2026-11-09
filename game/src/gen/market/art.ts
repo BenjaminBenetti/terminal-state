@@ -32,7 +32,7 @@ const hash = (a: number, b: number) => {
 /** The fans of a market layout: a row down the square under the roof, one per under-deck room (under the soffit), two over the deck. */
 export function marketFans(layout: StationLayout): MarketFan[] {
   if (!layout.market) return [];
-  if (layout.market.v === 2) return settleFans(layout); // (task studio-market-rework-20261108-074144-01: the container settlement's)
+  if (layout.market.v >= 2) return settleFans(layout); // (task studio-market-rework-20261108-074144-01: the container settlement's; + version 3)
   const out: MarketFan[] = [];
   const F = MARKET_ART.fan;
   const add = (x: number, z: number, ceil: number, level: number, hang: number) => {
@@ -59,7 +59,7 @@ export function marketFans(layout: StationLayout): MarketFan[] {
 export function marketAwnings(layout: StationLayout): MarketAwning[] {
   const m = layout.market;
   if (!m) return [];
-  if (m.v === 2) return settleAwnings(layout); // (task studio-market-rework-20261108-074144-01: the container settlement's)
+  if (m.v >= 2) return settleAwnings(layout); // (task studio-market-rework-20261108-074144-01: the container settlement's; + version 3)
   const A = MARKET_ART.awning;
   const out: MarketAwning[] = [];
   for (const s of m.stalls) {
