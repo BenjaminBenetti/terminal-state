@@ -16,6 +16,7 @@ import {officePropPhysics} from '../gen/office/physics'; // Task office-interact
 import {MALL_RIDER_KINDS} from '../gen/mall/kinds'; // Task mall-playtest-revision-20261031 (lane SHOPS, U05): garments ride their rail
 import {SKYWAYS_FOOD_CLASS, SKYWAYS_FOOD_MODEL_CLASS, SKYWAYS_FOOD_PHYSICS} from '../items/skywaysFood'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {PANTRY_CLASS, PANTRY_MODEL_CLASS, PANTRY_PHYSICS} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
+import {WEAPON_VARIETY_CLASS, WEAPON_VARIETY_PHYSICS} from '../items/weaponVarietyItems'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI)
 import {SKYWAYS_KITCHEN_DAMAGE_CLASS} from '../gen/skyways/kitchenKinds'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {SKYWAYS_ADDON_DAMAGE_CLASS} from '../gen/skyways/addonKinds'; // task studio-skyways-level-20261106-054448 (lane ADDON)
 import {SKYWAYS_DEST_DAMAGE_CLASS} from '../gen/skyways/destinations/registry'; // task studio-skyways-destinations-20261106-170011-01
@@ -288,6 +289,7 @@ export const ITEM_CLASS: Record<string, DamageClass> = {
   rail_ties: 'wood', // task studio-market-rework-20261108-074144-01 (lane TRADE): a strapped bundle of creosoted tie offcuts (the sleeper's class)
   // task studio-market-bar-20261108-225231-01: the bar's beers — brown glass long-necks
   beer_lager: 'glass', beer_pilsner: 'glass', beer_stout: 'glass', beer_porter: 'glass', beer_bock: 'glass',
+  ...WEAPON_VARIETY_CLASS, // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve new weapons
 };
 export function itemClass(itemId: string): DamageClass {
   return ITEM_CLASS[itemId] ?? 'plastic';
@@ -350,6 +352,7 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   medkit: {mass: 0.6, shape: 'box', mat: 'plastic'}, bandage: {mass: 0.08, shape: 'box', mat: 'soft'},
   rifle: {mass: 3.4, shape: 'box', mat: 'heavy'}, shotgun: {mass: 3.6, shape: 'box', mat: 'heavy'}, pistol: {mass: 0.9, shape: 'box', mat: 'heavy'},
   knife: {mass: 0.32, shape: 'box', mat: 'metal'}, // lane KNIFE: ~0.32 m survival knife, steel blade + rubber grip
+  ...WEAPON_VARIETY_PHYSICS, // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve new weapons (items/weaponVarietyItems.ts)
   // Iteration 12 (LIGHT): D cell ~140 g (upright cylinder); road flare ~220 g lying along X (box collider when shot as a pickup)
   battery: {mass: 0.14, shape: 'cylinder', mat: 'metal'}, flare: {mass: 0.22, shape: 'box', mat: 'soft'},
   // Iteration 16 (lane INJURY): rolled SAM splint ~120 g, sling + wrap packet ~150 g, trauma pouch ~0.7 kg

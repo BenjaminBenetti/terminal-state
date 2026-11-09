@@ -896,7 +896,8 @@ export class Game {
    * Task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): fetch (behind the loading screen) the new weapons' models this
    * section can show — what its first spawn realizes (items/weaponVariety.ts), what its memory holds and everything the player carries
    * (inventory, Lockbox, train cargo) — and hand fresh ones to the held view (Viewmodel.addModel, lane GUNS; guarded until it exists) and
-   * the icons. World pickups find them through world/weaponVarietyModels.ts. `late` (after a build: a save's carried items): no layout.
+   * the icons. World pickups find them through world/weaponVarietyModels.ts. `late` (after a build: a save's carried items, installed
+   * after the prepare): no first-spawn plan (the build has realized it), counted as a late fetch.
    */
   private async prepareWeaponVariety(layout: StationLayout | null, key: SectionKey | null, run: RunState = this.run, late = false): Promise<void> {
     try {
@@ -1248,7 +1249,7 @@ export class Game {
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.propModels.sealed = this.levelResources.sealed = true; // lane PACKAGE (track3): the level is built; a later fetch counts as `late`
     void this.preparePantry(null, this.run, true); // (lane ITEMS: carried pantry items restored after the prepare — a loaded save — get their models; usually a no-op)
-    void this.prepareWeaponVariety(null, null, this.run, true); // (lane LOOT-UI: likewise carried new weapons)
+    void this.prepareWeaponVariety(null, key, this.run, true); // (lane LOOT-UI: likewise carried / remembered new weapons; usually a no-op)
     this.updateCamera(0);
   }
   genMs = 0;

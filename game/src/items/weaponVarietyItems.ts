@@ -10,6 +10,7 @@
 // A leaf module: import only TYPES from items.ts.
 import type {ItemDef} from './items';
 import type {VarietyWeaponId} from '../weapons/varietyIds';
+import type {DamageClass, ItemPhysics} from '../damage/materials';
 
 /** HUD icon keys of the twelve (ui/weaponVarietyIcons.ts): the item ids themselves. */
 export type WeaponVarietyIconKey = VarietyWeaponId;
@@ -48,4 +49,23 @@ export const VARIETY_WEAPON_ITEMS: Readonly<Record<VarietyWeaponId, ItemDef>> = 
     'Dented aluminium baseball bat. Melee: hold the button to charge the swing — the longer the windup, the harder it lands — and release to swing. No ammo, never runs out.'),
   track_shovel: W('track_shovel', 'Track Shovel — "Long reach"', 'Track shovel',
     `Long-handled track ballast shovel with a steel blade. Two-handed, with the longest reach of any melee weapon: wide, sweeping strikes. ${MELEE}`),
+};
+
+/** Impact class of each as a loose item (damage/materials.ts ITEM_CLASS): steel guns and tools; the aluminium bat rings like sheet metal. */
+export const WEAPON_VARIETY_CLASS: Readonly<Record<VarietyWeaponId, DamageClass>> = {
+  hornet: 'steel', longslide: 'steel', stub: 'steel', overwatch: 'steel', coach_gun: 'steel', thresher: 'steel',
+  fire_axe: 'steel', machete: 'steel', sledgehammer: 'steel', crowbar: 'steel', slugger: 'sheetMetal', track_shovel: 'steel',
+};
+
+/**
+ * Rigid body of each as a loose item (physics/dynamicItems.ts; damage/materials.ts ITEM_PHYSICS): plausible real masses (kg) on a box
+ * collider, like the baseline guns (rifle 3.4, pistol 0.9, knife 0.32): a compact SMG ~2.6, a target pistol ~1.1, a bullpup ~3.0, a
+ * scoped DMR ~4.5, a side-by-side ~3.2, a box-fed shotgun ~4.2; a fire axe ~2.7, a machete ~0.6, a 4.5 kg sledge, a crowbar ~1.4, an
+ * aluminium bat ~0.9, a ballast shovel ~2.4.
+ */
+export const WEAPON_VARIETY_PHYSICS: Readonly<Record<VarietyWeaponId, ItemPhysics>> = {
+  hornet: {mass: 2.6, shape: 'box', mat: 'heavy'}, longslide: {mass: 1.1, shape: 'box', mat: 'heavy'}, stub: {mass: 3.0, shape: 'box', mat: 'heavy'},
+  overwatch: {mass: 4.5, shape: 'box', mat: 'heavy'}, coach_gun: {mass: 3.2, shape: 'box', mat: 'heavy'}, thresher: {mass: 4.2, shape: 'box', mat: 'heavy'},
+  fire_axe: {mass: 2.7, shape: 'box', mat: 'heavy'}, machete: {mass: 0.6, shape: 'box', mat: 'metal'}, sledgehammer: {mass: 4.5, shape: 'box', mat: 'heavy'},
+  crowbar: {mass: 1.4, shape: 'box', mat: 'metal'}, slugger: {mass: 0.9, shape: 'box', mat: 'metal'}, track_shovel: {mass: 2.4, shape: 'box', mat: 'heavy'},
 };

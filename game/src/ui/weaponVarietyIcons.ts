@@ -20,8 +20,8 @@ export const WEAPON_VARIETY_ICONS: Record<WeaponVarietyIconKey, string> = {
   coach_gun: S(`<path d="M2 16l14-4h8v6h-8l-12 6z"/><rect x="22" y="12" width="8" height="7" rx="1"/><rect x="22.5" y="9.5" width="2" height="2.5"/><rect x="26" y="9.5" width="2" height="2.5"/><rect x="30" y="11.5" width="30" height="2.5"/><rect x="30" y="14.5" width="30" height="2.5" opacity="0.8"/><rect x="32" y="17" width="10" height="2.5"/><rect x="24.5" y="19" width="1.5" height="3"/>`),
   // semi-auto box-magazine shotgun: a solid stock, a deep receiver, a thick barrel over the handguard, a wide box magazine
   thresher: S(`<path d="M2 14h12v6h-3L2 24z"/><rect x="14" y="11" width="24" height="8" rx="1"/><rect x="38" y="12" width="20" height="4"/><rect x="58" y="11.5" width="3" height="5"/><rect x="38" y="16" width="12" height="3"/><path d="M28 19h8l1 9h-8z"/><path d="M18 19h5l-2 7h-5z"/><rect x="24" y="8.5" width="6" height="2.5"/>`),
-  // fire axe: a long haft with a wrapped grip, the head at the right — the curved blade forward, the pick to the back
-  fire_axe: S(`<rect x="4" y="14.5" width="46" height="3.5" rx="1.5"/><rect x="4" y="14" width="10" height="4.5" rx="1.5" opacity="0.7"/><rect x="46" y="9" width="6" height="14" rx="1"/><path d="M52 8c4 1 8 4 9 8-1 4-5 7-9 8z"/><path d="M46 11.5l-9 3 9 2z"/>`),
+  // fire axe: a long haft with a wrapped grip; the head across its end — the flared, curved blade below, the pick above
+  fire_axe: S(`<rect x="4" y="14.5" width="50" height="3.5" rx="1.5"/><rect x="4" y="14" width="10" height="4.5" rx="1.5" opacity="0.7"/><rect x="49" y="9" width="9" height="13" rx="1"/><path d="M49 21h9l4 7c-5 2-12 2-17 0z"/><path d="M50 9h7l-4-7z"/>`),
   // machete: a riveted grip, a short bolster, a long blade widening toward the tip
   machete: S(`<rect x="4" y="13" width="13" height="6" rx="2"/><circle cx="8" cy="16" r="1" fill="${DARK}" opacity="0.55"/><circle cx="13" cy="16" r="1" fill="${DARK}" opacity="0.55"/><rect x="17" y="12" width="2" height="8"/><path d="M19 13h30c6 0 11 1 13 3-3 3-8 4-13 4H19z"/>`),
   // sledgehammer: a long handle, a big block head

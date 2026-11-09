@@ -434,7 +434,7 @@ describe('weapon variety: game.ts wiring (source order)', () => {
   });
   it('the models are prepared behind the loading screen (prepareSection) and carried ones again after a build; the warm pool is registered', () => {
     expect(src).toContain('await this.prepareWeaponVariety(layout, key, run);');
-    expect(src).toContain('void this.prepareWeaponVariety(null, null, this.run, true);');
+    expect(src).toContain('void this.prepareWeaponVariety(null, key, this.run, true);');
     expect(src).toContain("this.warmRegistry.addPool('weapon-variety', () => weaponVarietyWarmRoots());");
     expect(src).toContain('vm?.addModel?.(id, g)');
   });
