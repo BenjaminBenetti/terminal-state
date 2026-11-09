@@ -67,6 +67,12 @@ import {planCohorts, trianglesOf} from './staticCohorts'; // task static-batchin
  */
 export const CRATE_LID_SPLIT_Y = 0.81;
 
+/**
+ * Task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): a realization hook for a holder's freshly rolled lots (ContainerManager
+ * .build): the same count / order back, only the items it realizes differently (items/pantryVariety.ts realizeHolderLots).
+ */
+export type HolderRealizer = (h: {seed: number; kind: HolderKind; index: number; areaType: string; prop: PropPlacement; surfaces: readonly Surface[]}, lots: readonly Lot[]) => readonly Lot[];
+
 /** Reach for [E] on holders (eye to hit point, meters). */
 export const CONTAINER_REACH = 2.1;
 /** Reach for aimed items (slightly longer: they sit inside/behind the holder front). */
@@ -476,7 +482,12 @@ export class ContainerManager {
    * Registers every loot holder of the layout and rolls its lots ONCE. Task loot-tables-20261030 (lane LOOT): `loot` = the section's
    * logical-level loot profile (game.ts: lootProfile(key.level)); default: the level-agnostic baseline (today's tables).
    */
-  build(layout: StationLayout, extraModels: Record<string, GLTF | undefined> = {}, loot: LootProfile = BASELINE_PROFILE): void {
+  /**
+   * Task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): `realize` = the realization hook a holder's freshly rolled lots go
+   * through before they are placed / shown / counted (game.ts: items/pantryVariety.ts food variety with the section's holder records);
+   * absent = the rolled lots as they are (tests, QA).
+   */
+  build(layout: StationLayout, extraModels: Record<string, GLTF | undefined> = {}, loot: LootProfile = BASELINE_PROFILE, realize?: HolderRealizer): void {
     this.clear();
     const opts = surfaceOptions();
     const placements = new Map<LegacyKind, {matrix: THREE.Matrix4; level: number}[]>();
@@ -511,6 +522,7 @@ export class ContainerManager {
         min: new THREE.Vector3(p.x - p.hx, p.y, p.z - p.hz), max: new THREE.Vector3(p.x + p.hx, p.y + p.h, p.z + p.hz),
         lotMats: new Map(), lotBoxes: new Map(), shown: false,
       };
+      if (realize) { const lots = realize({seed: layout.seed, kind, index, areaType, prop: p, surfaces}, h.state.lots); if (lots !== h.state.lots) h.state.lots = lots.map(l => ({...l})); } // (lane ITEMS: food variety)
       if (kind === 'vending') this.settleSpill(h, layout.levels?.[p.level ?? 0]?.grid ?? layout.grid); // iteration 08: the holder's own storey
       if (openable) { this.openables.attach(h, fit.context(p, !!openableSpec(kind)?.seatAside)); this.openList.push(h); } // seatAside: lane OPEN (office-interactions-layout)
       this.placeLots(h);

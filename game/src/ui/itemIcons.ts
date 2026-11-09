@@ -25,6 +25,7 @@ import {ITEMS} from '../items/items';
 import {makeSupplyMesh} from '../world/pickups';
 import {ICONS} from './icons';
 import {gearIconView, preloadGearModels} from '../gear/models'; // Iteration 16 (lane GEAR)
+import {PANTRY_DIMS, isPantryItem} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
 
 /** Icon bitmap size (CSS shows them at roughly half size, so they stay sharp at DPR 1.5–2). */
 export const ICON_W = 192;
@@ -142,6 +143,7 @@ function viewFor(itemId: string): {az: number; el: number} {
   const ammo = AMMO_ICON_VIEW[itemId];
   if (ammo) return {az: ammo.az * DEG, el: ammo.el * DEG}; // lane AMMO: the caliber's printed face / stencil toward the camera
   if (itemId === 'flare') return {az: 12 * DEG, el: 30 * DEG}; // Iteration 12 (LIGHT): the tube lies along X, printed band to the front
+  if (isPantryItem(itemId) && PANTRY_DIMS[itemId].shape === 'flat') return {az: 30 * DEG, el: 36 * DEG}; // (lane ITEMS: flat tins / rounds / packs from higher up)
   if (def?.kind === 'gear') return gearIconView(itemId); // Iteration 16 (lane GEAR): per-piece angles (front three-quarter; the flat gloves from above)
   return {az: 30 * DEG, el: 18 * DEG};
 }
@@ -313,4 +315,16 @@ export async function buildItemIcons(renderer: WebGPURenderer, guns: Record<stri
   stats.bytes = bytes;
   stats.version++;
   return itemIconStats();
+}
+
+/**
+ * Task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): re-render the icons of `ids` only (their lazily loaded models
+ * arrived: world/pantryModels.ts) — the other icons and the boot render's failure list are kept; the cache version bumps (HUD redraw).
+ */
+export async function refreshItemIcons(renderer: WebGPURenderer, ids: readonly string[]): Promise<void> {
+  if (!ids.length) return;
+  const keep = stats.failed.filter(id => !ids.includes(id)), method = stats.method;
+  try { await buildItemIcons(renderer, {}, [...ids]); } catch (err) { console.warn('item icons: refresh failed', err); }
+  stats.failed = [...keep, ...stats.failed.filter(id => ids.includes(id))];
+  if (method !== 'pending') stats.method = method;
 }

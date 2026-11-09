@@ -17,7 +17,9 @@ import {fogCullDistance} from './world/levelCulling';
 import {WorldMaterials} from './world/materials';
 import {MOOD, StationLighting} from './world/lights';
 import {VolumetricAtmosphere} from './render/volumetric';
-import {PickupManager, makeSupplyMesh, registerItemModels, type Pickup} from './world/pickups';
+import {PickupManager, makeSupplyMesh, refreshItemTemplates, registerItemModels, type Pickup} from './world/pickups';
+import {levelPantryIds, pantryHolderRealizer, pantryIdsIn, pantryPickupItem} from './items/pantryVariety'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): food variety
+import {ensurePantryModels} from './world/pantryModels'; // (lane ITEMS) the pantry items' lazy models
 import {Survival, survivalTicks} from './player/survival';
 import {ContainerManager, type ContainerEvent, type ContainerTarget} from './world/containers';
 import {SoundGate} from './world/openables';
@@ -31,7 +33,7 @@ import {CALIBERS, ammoText} from './items/calibers'; // lane AMMO: caliber-based
 import {Viewmodel} from './weapons/viewmodel';
 import {devPistolRequested, makePistolDevPlaceholder, PISTOL_ART_READY, startWeaponFor, type StartWeapon} from './weapons/pistol';
 import {ConsumeView} from './weapons/consumeView';
-import {buildItemIcons} from './ui/itemIcons';
+import {buildItemIcons, refreshItemIcons} from './ui/itemIcons';
 import {ZombieActor} from './ai/zombieActor';
 import {StrainerWetTrail} from './ai/strainerTrail';
 import {createEnemyActor, enemyCues, type EnemyActor} from './ai/creatureArchetypes'; // iteration 07 (Lane Q): generic enemy archetypes (rat/dog)
@@ -840,7 +842,32 @@ export class Game {
     for (const pre of this.sectionPreloads) {
       try { await pre(layout); } catch (err) { console.warn('Iteration 16: a section preload failed', err); }
     }
+    await this.preparePantry(key, run); // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the pantry models this section can show
     return layout;
+  }
+
+  /**
+   * Task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): fetch (behind the loading screen) the pantry food / drink models
+   * `key` can show — its level's palette (items/pantryVariety.ts levelPantryIds), the pantry items in its memory and everything the player
+   * carries (inventory, Lockbox, train cargo) — and refresh what already showed a fallback (templates, held copies, icons). Resident
+   * models stay (world/pantryModels.ts). `late`: after a build (a save's carried items): only the carried set.
+   */
+  private async preparePantry(key: SectionKey | null, run: RunState = this.run, late = false): Promise<void> {
+    try {
+      const ids = pantryIdsIn([this.inv.toJSON(), this.playerTrain.lockbox.toJSON(), this.playerTrain.cargo.toJSON(), key ? run.peekMemory(key) ?? null : null]);
+      if (key && !late) for (const id of levelPantryIds(key.level)) ids.add(id);
+      const fresh = await ensurePantryModels(ids, {late});
+      if (!fresh.length) return;
+      refreshItemTemplates(fresh);
+      for (const id of fresh) {
+        if (this.use?.itemId === id) continue; // (a late load mid-use keeps the copy in the hand)
+        const o = makeSupplyMesh(id);
+        o.rotation.set(0.5, -0.4, 0.15); // (Game.load's consumable hand pose)
+        this.viewmodel?.addHeldItem(id, o, {hip: [0.16, -0.17, -0.36], yaw: 0.05, roll: -0.04});
+      }
+      if (this.world) this.syncHeld();
+      if (this.gpuInit) await refreshItemIcons(this.renderer, fresh);
+    } catch (err) { console.warn('pantry food: model preparation failed', err); }
   }
 
   /** Iteration 16: every lazy model key a section uses (p7 props + lane keys, e.g. office models). */
@@ -989,7 +1016,10 @@ export class Game {
     }
     // Searchable cabinets/crates; loot is rolled from the station seed + container index.
     // Task loot-tables-20261030 (lane LOOT): under the logical level's loot profile (items/lootTables.ts PROFILES; one per level).
-    this.containers.build(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>, lootProfile(key.level)); // iteration 08 (Lane I): openables split the lazy p7 models too
+    // (task studio-food-shelf-production-20261109-002816-01, lane ITEMS: + the food-variety realization of every holder's rolled lots, a
+    // remembered holder exactly as its record names it — items/pantryVariety.ts)
+    this.containers.build(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>, lootProfile(key.level),
+      pantryHolderRealizer(key.level, this.run.peekMemory(key)?.holders ?? {}, lootProfile(key.level))); // iteration 08 (Lane I): openables split the lazy p7 models too
     dropUnrecordedSalvage(this.containers, this.run.peekMemory(key)?.holders ?? {}); // (task base-salvage: a remembered holder never gains the base salvage lot)
     for (const h of this.sectionHooks) h.holders?.(this.layout); // task fuel-feedback: fuel cans as loot lots (before the filler / memory)
     applySkywaysStageSupport(this.layout); // (lane VENUE) after the world is drawn, before levels / prop index / paths / physics read the grid
@@ -1115,7 +1145,7 @@ export class Game {
     const plan = pickupPlan(this.layout.pickups.length, mem);
     for (const i of plan.fromLayout) {
       const p = this.layout.pickups[i];
-      const st = this.inv.makeStack(p.itemId, p.count);
+      const st = this.inv.makeStack(pantryPickupItem(this.layout, i, key.level), p.count); // (lane ITEMS: a first spawn's food variety; same count)
       if (p.filter !== undefined) st.filter = p.filter; // mask lane: a found gas mask's seeded, partly used filter (gen/maskLoot.ts)
       // Task mall-playtest-revision-20261031 (lane SHOPS, U11): a placement's own yaw (a gun lying along its gun-shop bench) wins; the
       // random yaw is still drawn so every other pickup keeps its stream. No pickup is ever filtered by the player's loadout here.
@@ -1140,6 +1170,7 @@ export class Game {
     if (obj) obj.textContent = key.level === 'reactor' ? 'Restart the reactor' : key.level === 'market' ? MARKET_OBJECTIVE : SCAVENGE_OBJECTIVE; // (+ the market's: task studio-survivor-market-20261108-005807-01)
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.propModels.sealed = this.levelResources.sealed = true; // lane PACKAGE (track3): the level is built; a later fetch counts as `late`
+    void this.preparePantry(null, this.run, true); // (lane ITEMS: carried pantry items restored after the prepare — a loaded save — get their models; usually a no-op)
     this.updateCamera(0);
   }
   genMs = 0;

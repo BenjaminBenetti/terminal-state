@@ -75,6 +75,11 @@ export interface DressInput {
   seed: number;
   /** Most rows deep per facing (station-wide thinning lowers it). */
   depthCap?: number;
+  /**
+   * Task food-shelf-production (lane SHELF): extra sold-out-bay chance per bay (station-wide thinning's last resort before the hard
+   * bound, when the triangle / geometry budget is still exceeded at one row deep). Draws no extra random numbers.
+   */
+  gapBoost?: number;
 }
 
 /** Clearance kept around real loot lots. */
@@ -216,11 +221,27 @@ function tryAdd(ctx: Ctx, p: StockPlacement, b: Board): number {
   return ctx.out.length - 1;
 }
 
+/** Yaw jitter allowance of a facing (m, both ways) on top of its box. */
+const yawRoom = (A: StockArch) => Math.max(A.w, A.d) * 0.026;
+/**
+ * Task food-shelf-production (lane SHELF): the category's rows that can stand on this board at all (height under the board above,
+ * depth, width): the dresser picks among them, so a board whose clearance suits only some products (a shallow cooler shelf, the
+ * modelled shipping box on a 0.29 m deck) is filled with those instead of giving up after a few misfits.
+ */
+function boardRows(weights: readonly (readonly [string, number])[], b: Board): (readonly [string, number])[] {
+  return weights.filter(([id]) => {
+    const A = STOCK_ARCHES[ARCH_INDEX[id]];
+    return A.h <= b.top - b.y - 0.004 && A.d + yawRoom(A) <= b.z1 - b.z0 && A.w + yawRoom(A) <= b.x1 - b.x0;
+  });
+}
+
 /** Facings / rows / stacks along a shelf board. */
-function dressRows(ctx: Ctx, b: Board, bi: number, category: StockCategory, depthCap: number): void {
+function dressRows(ctx: Ctx, b: Board, bi: number, category: StockCategory, depthCap: number, gapBoost: number): void {
   const {r} = ctx;
   const deck = b.deck ?? flatDeck(b);
   const weights = CATEGORY_STOCK[category];
+  const rows = boardRows(weights, b);
+  if (!rows.length) return;
   // Iteration 12 (LOOT lane): abandoned shelves — more sold-out bays, more looted facings, more knocked-over pieces (coolers most)
   const sparse = CATEGORY_SPARSE[category] ?? DEFAULT_SPARSE;
   let x = b.x0 + 0.003;
@@ -230,7 +251,7 @@ function dressRows(ctx: Ctx, b: Board, bi: number, category: StockCategory, dept
   const boardV = b.variant !== undefined ? b.variant + Math.floor(r() * 997) : undefined;
   while (x < b.x1 - 0.04 && guard++ < 400) {
     // Sold-out bay: a gap, sometimes with one knocked-over package lying in it.
-    if (r() < sparse.gap && !b.full) {
+    if (r() < sparse.gap + gapBoost && !b.full) {
       const gw = 0.06 + r() * 0.16;
       if (r() < sparse.tipped) tipped(ctx, b, bi, deck, weights, x, Math.min(b.x1, x + gw));
       x += gw;
@@ -241,9 +262,9 @@ function dressRows(ctx: Ctx, b: Board, bi: number, category: StockCategory, dept
       // a product that fits this board (height under the board above, depth, the width left)
       run = null;
       for (let tries = 0; tries < 8 && !run; tries++) {
-        const a = pickWeighted(weights, r);
+        const a = pickWeighted(rows, r);
         const A = STOCK_ARCHES[a];
-        const big = Math.max(A.w, A.d) * 0.026; // yaw jitter allowance
+        const big = yawRoom(A);
         if (A.h > b.top - b.y - 0.004 || A.d + big > b.z1 - b.z0 || A.w + big > b.x1 - x) continue;
         const rv = Math.floor(r() * A.variants);
         // iteration 12: an intact (unopened) package is a leftover — one facing (now and then two), never a full block
@@ -431,7 +452,7 @@ export function dressHolder(input: DressInput): StockPlacement[] {
   const ctx: Ctx = {out: [], obbs: [], ext: [], lots: input.lots, r: mulberry32(input.seed >>> 0)};
   input.boards.forEach((b, i) => {
     const cat = b.category ?? input.category;
-    if (b.mode === 'rows') dressRows(ctx, b, i, cat, input.depthCap ?? 3);
+    if (b.mode === 'rows') dressRows(ctx, b, i, cat, input.depthCap ?? 3, input.gapBoost ?? 0);
     else if (b.mode === 'lean') dressLean(ctx, b, i, cat);
     else if (b.mode === 'flat') dressFlat(ctx, b, i, cat);
     else if (b.mode === 'hang') dressHang(ctx, b, i, cat);

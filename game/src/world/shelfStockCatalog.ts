@@ -11,6 +11,7 @@
 import type {ImpactFamily} from '../physics/chunks';
 import type {PhysMat} from '../damage/materials';
 import type {DamageClass} from '../damage/materials';
+import {JUNK_PROPS, junkArchId, junkDims} from './shelfJunkModels'; // task food-shelf-production (lane SHELF): the 27 modelled ruined props
 
 /** Geometry recipe of an archetype (world/shelfStockGeometry.ts builds each one, low-poly). */
 export type StockShape =
@@ -66,6 +67,12 @@ export interface StockArch {
   facings: [number, number];
   /** Iteration 12 (LOOT lane): what the piece reads as (aged / boxed / trash classes vs the few intact packages). */
   look: StockLook;
+  /**
+   * Task food-shelf-production (lane SHELF): a MODEL-BACKED archetype — the ruined-prop id (P01..P27, world/shelfJunkModels.ts) whose
+   * mesh node in the shared atlas GLB draws it; `shape` / `label` are its procedural fallback (drawn at the same box until the atlas
+   * is loaded). Absent: an authored procedural archetype.
+   */
+  model?: string;
 }
 
 const A = (id: string, shape: StockShape, w: number, h: number, d: number, label: LabelKind, variants: number,
@@ -150,6 +157,13 @@ export const STOCK_ARCHES: readonly StockArch[] = [
   A('bottleEmpty', 'bottle', 0.066, 0.215, 0.066, 'oldbottle', 3, PLASTIC(0.06), {depth: 3, facings: [1, 3]}, 'trash'),
   // broken glass bottle (the lower body, a jagged crown)
   A('bottleBroken', 'shard', 0.07, 0.13, 0.07, 'oldbottle', 3, {collider: 'cylinder', mass: 0.18, mat: 'glass', fam: 'glass', hit: 'glass'}, {depth: 2, facings: [1, 2]}, 'trash'),
+  // --- task food-shelf-production (lane SHELF): the 27 Meshy-modelled ruined props (world/shelfJunkModels.ts), manifest order --------
+  ...JUNK_PROPS.map(j => {
+    const [w, h, d] = junkDims(j);
+    return {...A(junkArchId(j), j.fallback.shape, w, h, d, j.fallback.label, j.fallback.variants,
+      {collider: j.collider, mass: j.mass, mat: j.mat, fam: j.fam, hit: j.hit, ...(j.fit ? {fit: j.fit} : {})},
+      {stack: j.stack, depth: j.depth, facings: j.facings}, j.look), model: j.id};
+  }),
 ];
 
 export const ARCH_INDEX: Readonly<Record<string, number>> = Object.fromEntries(STOCK_ARCHES.map((a, i) => [a.id, i]));
@@ -171,29 +185,55 @@ export const LABEL_VARIANTS: Readonly<Record<Exclude<LabelKind, 'none'>, number>
 
 export type StockCategory =
   | 'snacks' | 'grocery' | 'pharmacy' | 'cleaning' | 'devices' | 'cartons' | 'parts'
-  | 'drinks' | 'juice' | 'magazines' | 'flowers' | 'bread' | 'pastry' | 'keys' | 'fruit';
+  | 'drinks' | 'juice' | 'magazines' | 'flowers' | 'bread' | 'pastry' | 'keys' | 'fruit'
+  // task food-shelf-production (lane SHELF): storage-room / office / back-of-house food shelving (the plain 'shelf' kind)
+  | 'storage' | 'office' | 'pantry';
 
 /**
  * Weighted archetype lists per category (shelf dressing picks facings from these). Iteration 12 (LOOT lane): ~30 years on, most
  * of what is left is cardboard, trash and broken / spoiled goods; intact packages are a faded minority (tests: >= 75 % of pieces in
  * the box / trash / spoiled / aged classes). Coolers: mostly empty, broken bottles and crushed cans.
+ *
+ * Task food-shelf-production (lane SHELF): the crude authored spoiled / trash / aged / boxed packaging is ROUTED to the modelled
+ * ruined props where they correspond (world/shelfJunkModels.ts; `junk_*` ids): loaf -> mouldy loaf, rusty tins -> bloated can /
+ * rusty tin stack, gable cartons -> burst milk, jars -> mould jar, opened cereal / snack boxes -> crushed cereal, plain / open /
+ * crushed cartons -> retail carton / shipping box / torn carton / crushed box, blister -> blister card, wrappers -> wrapper cluster,
+ * spray -> trigger sprayer, jug -> cleaner jug, paper rolls / towels -> towel pack (+ rags), paint -> paint tin, cable reel ->
+ * cable + dead adapter. Kept authored: the intact leftover product facings, crushed cans, empty / broken bottles, medicine boxes,
+ * device boxes, tube boxes, magazines / newspapers, dead flowers, donut boxes, key blanks and the juice bar's whole fruit (no model
+ * counterpart). Non-food junk goes to cleaning / parts / storage / office shelving, the food ruins to food shops and pantries.
  */
 export const CATEGORY_STOCK: Readonly<Record<StockCategory, readonly (readonly [string, number])[]>> = {
-  snacks: [['canCrushed', 2.2], ['wrapper', 1.6], ['snackboxOpen', 1.4], ['bagTorn', 1], ['bottleEmpty', 0.8], ['cartonOpen', 0.4], ['cartonCrushed', 0.4], ['chips', 0.7], ['snack', 0.6], ['candy', 0.5]],
-  grocery: [['canRusty', 4], ['jar', 2], ['canCrushed', 1.6], ['snackboxOpen', 0.6], ['wrapper', 0.8], ['bottleEmpty', 0.5], ['cartonOpen', 0.4], ['cartonCrushed', 0.4], ['bagTorn', 0.4], ['cartonS', 0.3], ['towels', 0.3], ['tin', 0.6], ['cereal', 0.4], ['pantry', 0.4], ['cup', 0.3]],
-  pharmacy: [['medboxOpen', 2.8], ['wrapper', 1.2], ['bottleEmpty', 1], ['cartonOpen', 0.4], ['cartonS', 0.3], ['cartonCrushed', 0.4], ['medbox', 0.8], ['pills', 0.6], ['lotion', 0.5]],
-  cleaning: [['spray', 2], ['jug', 1.6], ['rolls', 1], ['towels', 1], ['cartonOpen', 1.2], ['cartonCrushed', 0.8], ['wrapper', 0.6]],
-  devices: [['phonebox', 2], ['blister', 1.5], ['gadget', 1.2], ['tabletbox', 0.6], ['cartonOpen', 1.2], ['cartonCrushed', 0.8], ['wrapper', 0.8]],
-  cartons: [['cartonS', 3], ['cartonL', 2], ['cartonOpen', 2.2], ['cartonCrushed', 1.5], ['canRusty', 0.4], ['rolls', 0.4]],
-  parts: [['cartonS', 2], ['paint', 2], ['reel', 1.4], ['tubes', 1.2], ['cartonOpen', 1], ['cartonCrushed', 0.6], ['jug', 0.5]],
-  drinks: [['bottleEmpty', 3], ['bottleBroken', 1.5], ['canCrushed', 1.5], ['bottle', 0.4], ['soda', 0.35], ['energy', 0.2], ['bigbottle', 0.2], ['carton1l', 0.2]],
-  juice: [['bottleEmpty', 2.5], ['bottleBroken', 1], ['canCrushed', 0.6], ['carton1l', 0.5], ['bottle', 0.5]],
+  snacks: [['canCrushed', 1.6], ['junk_wrapper_cluster', 1.1], ['wrapper', 0.6], ['junk_crushed_cereal', 0.9], ['snackboxOpen', 0.5], ['bagTorn', 0.5], ['bottleEmpty', 0.6],
+    ['junk_retail_carton', 0.4], ['junk_crushed_box', 0.25], ['junk_shelf_tray', 0.3], ['junk_deli_clamshell', 0.25], ['chips', 0.7], ['snack', 0.6], ['candy', 0.5]],
+  grocery: [['junk_bloated_can', 2], ['junk_rusty_tins', 1.4], ['junk_mould_jar', 1.4], ['canCrushed', 1.4], ['junk_crushed_cereal', 0.6], ['junk_wrapper_cluster', 0.6], ['bottleEmpty', 0.5],
+    ['junk_mouldy_loaf', 0.3], ['junk_flour_sack', 0.35], ['junk_potato_sack', 0.3], ['junk_egg_carton', 0.3], ['junk_rotten_fruit_crate', 0.35], ['junk_deli_clamshell', 0.3],
+    ['junk_shelf_tray', 0.3], ['junk_retail_carton', 0.3], ['junk_crushed_box', 0.3], ['junk_towel_pack', 0.2], ['tin', 0.6], ['cereal', 0.4], ['pantry', 0.4], ['cup', 0.3]],
+  pharmacy: [['medboxOpen', 2.4], ['junk_wrapper_cluster', 0.6], ['wrapper', 0.5], ['bottleEmpty', 0.9], ['junk_retail_carton', 0.5], ['junk_crushed_box', 0.3], ['junk_blister_card', 0.4],
+    ['medbox', 0.8], ['pills', 0.6], ['lotion', 0.5]],
+  cleaning: [['junk_trigger_sprayer', 2], ['junk_cleaner_jug', 1.6], ['junk_towel_pack', 1], ['junk_rag_bundle', 0.8], ['junk_torn_carton', 0.6], ['junk_crushed_box', 0.5],
+    ['junk_wrapper_cluster', 0.4], ['junk_retail_carton', 0.4]],
+  devices: [['phonebox', 1.6], ['junk_blister_card', 1.5], ['gadget', 1], ['tabletbox', 0.5], ['junk_retail_carton', 0.8], ['junk_torn_carton', 0.5], ['junk_crushed_box', 0.5],
+    ['junk_cable_adapter', 0.6], ['junk_wrapper_cluster', 0.4]],
+  cartons: [['junk_retail_carton', 1.6], ['junk_shipping_box', 1.6], ['junk_torn_carton', 1.8], ['junk_crushed_box', 1.4], ['junk_carton_bundle', 1], ['junk_shelf_tray', 0.6],
+    ['junk_rusty_tins', 0.3], ['junk_towel_pack', 0.3]],
+  parts: [['junk_paint_tin', 2], ['junk_cable_adapter', 1.4], ['junk_tool_tote', 1], ['junk_retail_carton', 1], ['junk_torn_carton', 0.8], ['junk_crushed_box', 0.5], ['tubes', 1],
+    ['junk_cleaner_jug', 0.5], ['junk_rag_bundle', 0.6], ['junk_blister_card', 0.4]],
+  drinks: [['bottleEmpty', 3], ['bottleBroken', 1.5], ['canCrushed', 1.5], ['junk_burst_milk', 0.4], ['junk_deli_clamshell', 0.3], ['junk_egg_carton', 0.15], ['bottle', 0.4], ['soda', 0.35], ['energy', 0.2], ['bigbottle', 0.2]],
+  juice: [['bottleEmpty', 2.5], ['bottleBroken', 1], ['canCrushed', 0.6], ['junk_burst_milk', 0.5], ['bottle', 0.5]],
   magazines: [['magazine', 1]],
   flowers: [['bunch', 3], ['plant', 1]],
-  bread: [['loaf', 3], ['wrapper', 1], ['bagTorn', 0.6], ['pantry', 0.3]],
-  pastry: [['donutbox', 3], ['wrapper', 1], ['loaf', 0.5]],
+  bread: [['junk_mouldy_loaf', 3], ['junk_wrapper_cluster', 0.8], ['wrapper', 0.4], ['bagTorn', 0.4], ['junk_shelf_tray', 0.4], ['junk_flour_sack', 0.2], ['pantry', 0.3]],
+  pastry: [['donutbox', 3], ['junk_wrapper_cluster', 0.6], ['wrapper', 0.5], ['junk_mouldy_loaf', 0.5], ['junk_shelf_tray', 0.3]],
   keys: [['key', 1]],
   fruit: [['fruit', 1]],
+  storage: [['junk_shipping_box', 1.4], ['junk_torn_carton', 1.4], ['junk_crushed_box', 1], ['junk_retail_carton', 1.2], ['junk_carton_bundle', 1], ['junk_binder_stack', 0.6],
+    ['junk_paint_tin', 0.6], ['junk_cable_adapter', 0.6], ['junk_tool_tote', 0.5], ['junk_rag_bundle', 0.5], ['junk_towel_pack', 0.5], ['junk_cleaner_jug', 0.5],
+    ['junk_trigger_sprayer', 0.4], ['junk_wrapper_cluster', 0.4], ['junk_rusty_tins', 0.3], ['canCrushed', 0.3], ['bottleEmpty', 0.3]],
+  office: [['junk_binder_stack', 2.4], ['junk_retail_carton', 1.2], ['junk_torn_carton', 1], ['junk_crushed_box', 0.8], ['junk_shipping_box', 0.8], ['junk_carton_bundle', 0.8],
+    ['junk_cable_adapter', 0.6], ['junk_wrapper_cluster', 0.4], ['canCrushed', 0.3], ['bottleEmpty', 0.3]],
+  pantry: [['junk_flour_sack', 1], ['junk_potato_sack', 0.8], ['junk_rusty_tins', 1.2], ['junk_bloated_can', 1.2], ['junk_mould_jar', 0.8], ['junk_rotten_fruit_crate', 0.6],
+    ['junk_egg_carton', 0.4], ['junk_shipping_box', 0.6], ['junk_torn_carton', 0.6], ['junk_crushed_box', 0.4], ['junk_shelf_tray', 0.5], ['junk_wrapper_cluster', 0.4], ['junk_cleaner_jug', 0.3]],
 };
 
 /**
@@ -229,12 +269,30 @@ export function stockCategory(kind: string, variant: number, purpose: string | u
     case 'deviceWall': return 'devices';
     // juice bar: crates of whole fruit on the counter
     case 'blenderBar': return 'fruit';
+    // task food-shelf-production (lane SHELF): plain storage shelving (storage / stock rooms, closets, workshops, plant rooms, office
+    // storage / archives, kitchens' back shelves) by the room it stands in
+    case 'shelf': return shelfCategory(purpose);
     default: return null;
   }
 }
 
+/**
+ * Task food-shelf-production (lane SHELF): what a plain storage shelf ('shelf' kind) of a room holds, by its purpose id: cleaning
+ * supplies in janitor / supply closets, binders and boxes in offices / archives, medical boxes in clinics, spoiled food stores in
+ * kitchens / pantries, parts / paint / cable / totes in workshops and plant rooms, else general storage (boxes and mixed junk).
+ */
+export function shelfCategory(purpose: string | undefined): StockCategory {
+  const p = (purpose ?? '').toLowerCase();
+  if (/janitor|supply|clean|wash/.test(p)) return 'cleaning';
+  if (/office|archive|mail|record|copy|admin|reception|agent|law|account|library|study/.test(p)) return 'office';
+  if (/pharm|medic|clinic|first-aid|dispens|infirm/.test(p)) return 'pharmacy';
+  if (/kitchen|ramen|roast|bak|cafe|coffee|food|deli|pantry|canteen|crew|diner|restaurant|grocer/.test(p)) return 'pantry';
+  if (/work|tool|hardware|electric|maint|utility|plant|boiler|generator|turbine|pump|vent|signal|sewage|spill|overflow|machine|garage|repair|fuel/.test(p)) return 'parts';
+  return 'storage';
+}
+
 /** Holder kinds that receive filler stock (tests: every one gets stock appropriate to its category). */
-export const STOCKED_KINDS = ['stockShelf', 'snackRack', 'shopCooler', 'magazineRack', 'flowerStand', 'breadRack', 'repairBench', 'deviceWall', 'blenderBar'] as const;
+export const STOCKED_KINDS = ['stockShelf', 'snackRack', 'shopCooler', 'magazineRack', 'flowerStand', 'breadRack', 'repairBench', 'deviceWall', 'blenderBar', 'shelf'] as const;
 export type StockedKind = (typeof STOCKED_KINDS)[number];
 export const isStockedKind = (k: string): k is StockedKind => (STOCKED_KINDS as readonly string[]).includes(k);
 
@@ -243,3 +301,11 @@ export const isStockedKind = (k: string): k is StockedKind => (STOCKED_KINDS as 
  * reading as full shelves); see world/shelfStockLayout.ts.
  */
 export const MAX_STOCK_PER_STATION = 6000;
+/**
+ * Task food-shelf-production (lane SHELF): per-station bounds on the stock's triangles and packed rest-mesh geometry, under the
+ * rendering budgets (tests/shelfStock.test.ts: < 320 k triangles, < 14 MB). The thinning passes (world/shelfStock.ts) hold them
+ * exactly like the piece bound, from the archetypes' static triangle counts (the cooked registry's for model-backed ones), so a
+ * station dresses the same whether or not the model atlas loaded.
+ */
+export const MAX_STOCK_TRIANGLES = 300_000;
+export const MAX_STOCK_GEOMETRY_BYTES = 13 * 1048576;

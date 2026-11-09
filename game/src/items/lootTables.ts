@@ -37,6 +37,7 @@ import {genericAmmo} from './calibers'; // lane AMMO (knife-melee-20261030): pur
 import {ARM_SLING, LEG_SPLINT, LIMB_TREATMENT_IDS, TRAUMA_KIT} from './medical';
 import {BIO_MATER, ELECTRICAL_PARTS, SCRAP_METAL, isMaterialItem} from './craftMaterials'; // lane RACK (office-props-physics-scale-20261030)
 import {BUBBLE_TEA, RAMEN, RAMEN_CHASHU, SKYWAYS_DRINK_IDS, SKYWAYS_FOOD_IDS, SUSHI_BENTO} from './skywaysFood'; // task studio-skyways-level-20261106-054448 (lane FOOD)
+import {PANTRY_DRINK_IDS, PANTRY_FOOD_IDS} from './pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): econ categories only
 import type {LootTheme} from '../gen/purposes';
 import type {LootTilt} from '../gen/office/companies';
 import type {LevelId} from '../levels/types';
@@ -95,8 +96,10 @@ export const BATTERY_ID = 'battery';
 export const FLARE_ID = 'flare';
 // + the Skyways ramen restaurant's food / bubble tea (task studio-skyways-level-20261106-054448, lane FOOD): only its own RAMEN_* tables and its
 // loose table pickups name them — no shared row, global pool or golden draw changes (econCat only classifies rows that already hold them)
-const FOOD = new Set(['chocolate', 'chips', 'beans', 'noodles', 'bread', ...SKYWAYS_FOOD_IDS]); // + bread: lane FURN (office-props-physics-scale-20261030), bakery cases only
-const DRINK = new Set<string>(['water', 'cola', 'juice', ...SKYWAYS_DRINK_IDS]);
+// + the pantry foods / drinks (task studio-food-shelf-production-20261109-002816-01, lane ITEMS: items/pantryFood.ts): no row names them either
+// (they come only from items/pantryVariety.ts family substitution at realization) — classified here for HOLDER_ALLOW / trade / value
+const FOOD = new Set<string>(['chocolate', 'chips', 'beans', 'noodles', 'bread', ...SKYWAYS_FOOD_IDS, ...PANTRY_FOOD_IDS]); // + bread: lane FURN (office-props-physics-scale-20261030), bakery cases only
+const DRINK = new Set<string>(['water', 'cola', 'juice', ...SKYWAYS_DRINK_IDS, ...PANTRY_DRINK_IDS]);
 /** HP medicine (bandage / med kit). Iteration 16 (lane INJURY): the limb treatments (items/medical.ts) are 'med' too. */
 export const HP_MED: ReadonlySet<string> = new Set(['bandage', 'medkit']);
 const MED = new Set<string>([...HP_MED, ...LIMB_TREATMENT_IDS]);

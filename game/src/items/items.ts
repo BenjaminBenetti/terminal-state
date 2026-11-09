@@ -28,6 +28,7 @@ export type IconKey =
   | MaterialIconKey // lane RACK (office-props-physics-scale-20261030): crafting materials
   | 'fuelCan' // task train-fuel-system-20261106-024923: the train's fuel can
   | SkywaysFoodIconKey // task studio-skyways-level-20261106-054448 (lane FOOD): ramen bowls, sushi bento, bubble tea (items/skywaysFood.ts)
+  | PantryIconKey // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the 24 pantry foods / drinks (items/pantryFood.ts)
   | 'reactorKey' | 'fuseCartridge' // task reactor-build-20261101 (lane RESTART): the reactor restart parts
   | 'railTies'; // task studio-market-rework-20261108-074144-01 (lane TRADE): the market's Rail Ties (items/railTies.ts)
 
@@ -66,11 +67,14 @@ import {MEDICAL_DIMS, MEDICAL_ITEMS, treatsText, type Limb, type MedicalIconKey}
 import {MATERIAL_DIMS, MATERIAL_ITEMS, type MaterialIconKey} from './craftMaterials'; // lane RACK (office-props-physics-scale-20261030)
 import {SKYWAYS_DRINK_IDS, SKYWAYS_FOOD_DIMS, SKYWAYS_FOOD_IDS, SKYWAYS_FOOD_ITEMS, type SkywaysFoodIconKey} from './skywaysFood'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {RAIL_TIES_DIMS, RAIL_TIES_ITEMS} from './railTies'; // task studio-market-rework-20261108-074144-01 (lane TRADE)
+import {PANTRY_DIMS, PANTRY_DRINK_IDS, PANTRY_FOOD_IDS, PANTRY_ITEMS, type PantryIconKey} from './pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
 
 // + bread (task office-props-physics-scale-20261030, lane FURN): only bakery display cases hold it (items/lootTables.ts BAKERY_ROWS)
 // + the Skyways ramen restaurant's ramen bowls / bento and bubble tea (task studio-skyways-level-20261106-054448, lane FOOD: items/skywaysFood.ts)
-export const FOOD_IDS = ['chocolate', 'chips', 'beans', 'noodles', 'bread', ...SKYWAYS_FOOD_IDS] as const;
-export const DRINK_IDS = ['water', 'cola', 'juice', ...SKYWAYS_DRINK_IDS] as const;
+// + the 18 pantry foods / 6 drinks (task studio-food-shelf-production-20261109-002816-01, lane ITEMS: items/pantryFood.ts) — in no table row:
+//   they appear only by family substitution of the old items at realization (items/pantryVariety.ts)
+export const FOOD_IDS = ['chocolate', 'chips', 'beans', 'noodles', 'bread', ...SKYWAYS_FOOD_IDS, ...PANTRY_FOOD_IDS] as const;
+export const DRINK_IDS = ['water', 'cola', 'juice', ...SKYWAYS_DRINK_IDS, ...PANTRY_DRINK_IDS] as const;
 
 export const ITEMS: Record<string, ItemDef> = {
   rifle: {id: 'rifle', name: 'Rifle — "Kept running"', short: 'Rifle', kind: 'weapon', stackMax: 1, weaponId: 'rifle', icon: 'rifle',
@@ -117,6 +121,8 @@ export const ITEMS: Record<string, ItemDef> = {
     description: 'A round crusty loaf from a bakery display case, gone hard as a brick. Filling once you work through the crust, and thirsty work.'},
   // --- task studio-skyways-level-20261106-054448 (lane FOOD): the Skyways ramen restaurant's food (items/skywaysFood.ts) ---
   ...SKYWAYS_FOOD_ITEMS,
+  // --- task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the pantry foods / drinks (items/pantryFood.ts) ---
+  ...PANTRY_ITEMS,
   // --- Iteration 12 (LIGHT): light survival (authored models: world/authoredItems.ts) ---
   battery: {id: 'battery', name: 'D-cell battery', short: 'Battery', kind: 'consumable', stackMax: 4, recharge: 1, useTime: 1.4, verb: 'use', icon: 'battery',
     description: 'Unbranded 1.5 V D cell, scuffed but holding charge. Swap it into the flashlight to refill it to 100 %.'},
@@ -213,6 +219,7 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   // COMPANY_PART_DIMS.bread, so fitItemModel keeps it at scale 1): a round loaf, always resting on its base
   bread: {w: 0.26, d: 0.2231, h: 0.0919, shape: 'flat'},
   ...SKYWAYS_FOOD_DIMS, // task studio-skyways-level-20261106-054448 (lane FOOD): the item models' real bounds (assets/skywaysFoodModels.ts)
+  ...PANTRY_DIMS, // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the cooked models' bounds, else the vision board's real size
   // Lane AMMO (knife-melee-20261030): the measured runtime bounds of the Meshy T2.5 ammo boxes (assets/manifest.ts item_ammo_*;
   // derivatives/meshy-t25-ammo-20261030.json), so fitItemModel keeps them at scale 1. They stand upright ('flat': never laid down)
   // and are all < 0.176 m tall: they fit the 0.18 m desk-drawer / low-cupboard clearance (items/lootLayout.ts).

@@ -18,6 +18,17 @@
 // targeting code (world/containers.ts, world/pickups.ts) only ever sees real lots and pickups, and
 // filler never appears in either list. Real loot lots keep their own models / glow / finite ids and
 // are never covered (the dresser stops facings short of them).
+//
+// Task studio-food-shelf-production-20261109-002816-01 (lane SHELF): MODEL-BACKED filler — the 27 Meshy-modelled ruined props
+// (world/shelfJunkModels.ts: spoiled groceries, ruined boxes / packaging, non-food storage / maintenance / office junk) replace the
+// crude authored packaging where they correspond (world/shelfStockCatalog.ts CATEGORY_STOCK). They come as ONE atlas GLB (one mesh
+// node per prop, ONE shared material with Meshy's own maps), a lazy per-level model (deps.models[SHELF_JUNK_KEY]); until it is
+// loaded (or if it fails) each draws its procedural fallback at the same box — same layout, same bodies. The SAME batching, narrowly
+// extended: a chunk's resting model pieces merge into ONE extra mesh per (level, chunk) beside its authored-filler mesh (two draw
+// calls per chunk at most, however many pieces), a moving model piece collapses out of it into an instanced mesh per archetype
+// (same shared material; prepared at build so the warm-up compiles it: warmRoots) and is written back in place when it settles.
+// Storage shelving ('shelf' kind: storage / stock rooms, closets, workshops, office storage) is stocked too, and props standing on a
+// holder (on-top decor, crates on shelves) are kept clear like real lots. Station-wide bounds: pieces, triangles, geometry bytes.
 
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
@@ -26,11 +37,25 @@ import type {StationLayout} from '../gen/station';
 import type {Levels} from '../gen/levels';
 import {DAMAGE_MATERIALS} from '../damage/materials';
 import type {Vec3} from '../combat/hitscan';
-import {MAX_STOCK_PER_STATION, STOCK_ARCHES, isStockedKind, stockCategory, type StockCategory} from './shelfStockCatalog';
+import {MAX_STOCK_GEOMETRY_BYTES, MAX_STOCK_PER_STATION, MAX_STOCK_TRIANGLES, STOCK_ARCHES, isStockedKind, stockCategory, type StockCategory} from './shelfStockCatalog';
 import {dressHolder, holderStockSeed, type Board, type Box3Like, type StockPlacement} from './shelfStockLayout';
 import {DEVICE_WALL_DECK, measureDecks, stockBoards, stockColliders, toWorldBoxes, type DeckSampler} from './shelfStockCarcass';
-import {archGeometry, archTriangles, stockMaterial, stockTextureBytes} from './shelfStockGeometry';
+import {archCost, archGeometry, archTriangles, junkSet, stockMaterial, stockTextureBytes, type JunkSet} from './shelfStockGeometry';
+import {SHELF_JUNK_KEY, SHELF_JUNK_MODEL_FILES, junkAtlasCooked} from './shelfJunkModels';
 import {FILLER_TUNING, FillerStock, type FillerHit, type FillerPiece, type FillerSpec, type FillerView} from '../physics/fillerStock';
+
+export {SHELF_JUNK_KEY, SHELF_JUNK_MODEL_FILES};
+
+/**
+ * Game.sectionModelKeys hook (task food-shelf-production, lane SHELF): the lazy atlas of the modelled ruined props, for a layout
+ * with stockable holders once the cook delivered it (the stub registry asks for nothing). Never fetched for a level without stock.
+ */
+export function shelfJunkModelKeysFor(layout: {props: readonly {kind: string}[]}): string[] {
+  return junkAtlasCooked() && layout.props.some(p => isStockedKind(p.kind)) ? [SHELF_JUNK_KEY] : [];
+}
+
+/** Rest-mesh family of a piece: 0 = authored filler (label atlas material), 1 = modelled ruined prop (the junk atlas material). */
+type Fam = 0 | 1;
 
 /**
  * Iteration 12 (LOOT lane): per-piece grime / fade tint range (was 0.86..1.06): the filler reads dusty and uneven next to the
@@ -62,21 +87,53 @@ export interface StockedHolder {
   chunk: number;
 }
 
-interface Chunk {
-  key: string;
-  level: number;
+/** One merged rest mesh of a chunk (one family, one material, one draw call). */
+interface ChunkPart {
   mesh: THREE.Mesh;
   pos: THREE.BufferAttribute;
   nor: THREE.BufferAttribute;
   tris: number;
 }
 
+interface Chunk {
+  key: string;
+  level: number;
+  /** [authored filler, modelled ruined props]: a part only where the chunk has pieces of that family. */
+  parts: [ChunkPart | null, ChunkPart | null];
+}
+
 interface DynSet { mesh: THREE.InstancedMesh; cap: number }
 
 export interface StockDeps {
+  /** Boot models (shelf, techDisplay) and, when the level fetched it, the ruined-prop atlas (SHELF_JUNK_KEY: Game.propModels). */
   models: Record<string, GLTF | undefined>;
   /** Real loot lots of a holder prop (holder-local AABBs; items/lootLayout.ts placementBox). */
   lotsOf?: (p: PropPlacement) => Box3Like[];
+}
+
+/** Moving-set key of an archetype (authored: per label variant; modelled: one per archetype). */
+const dynKey = (fam: Fam, arch: number, variant: number) => (fam ? -1 - arch : arch * 64 + variant);
+
+/**
+ * Holder-local boxes of the props standing ON a stocked holder (on-top decor, crates on a storage shelf: `host`, or standing
+ * inside its footprint above its base) — the dresser keeps them clear like real loot lots (nothing inside or in front of them).
+ */
+function hostedBoxes(holder: PropPlacement, hi: number, near: readonly {p: PropPlacement; i: number}[]): Box3Like[] {
+  const out: Box3Like[] = [];
+  const c = Math.cos(holder.rot), s = Math.sin(holder.rot);
+  for (const {p: q, i} of near) {
+    if (q === holder || q.cargoGone || (q.level ?? 0) !== (holder.level ?? 0)) continue;
+    const inside = Math.abs(q.x - holder.x) < holder.hx - 0.02 && Math.abs(q.z - holder.z) < holder.hz - 0.02 && q.y > holder.y + 0.02 && q.y < holder.y + holder.h + 0.05;
+    if (q.host !== hi && !inside) continue;
+    const min: [number, number, number] = [Infinity, q.y - holder.y, Infinity], max: [number, number, number] = [-Infinity, q.y - holder.y + q.h, -Infinity];
+    for (const X of [q.x - q.hx, q.x + q.hx]) for (const Z of [q.z - q.hz, q.z + q.hz]) {
+      const dx = X - holder.x, dz = Z - holder.z;
+      const lx = dx * c - dz * s, lz = dx * s + dz * c;
+      min[0] = Math.min(min[0], lx); max[0] = Math.max(max[0], lx); min[2] = Math.min(min[2], lz); max[2] = Math.max(max[2], lz);
+    }
+    out.push({min, max});
+  }
+  return out;
 }
 
 export interface StockFx {
@@ -164,15 +221,18 @@ export class ShelfStock implements FillerView {
   readonly filler = new FillerStock();
   holders: StockedHolder[] = [];
   private readonly holderOf = new Map<PropPlacement, StockedHolder>();
-  /** Per piece: archetype, label variant, tint, chunk, vertex range. */
+  /** Per piece: archetype, label variant, tint, rest-mesh family, chunk, vertex range (in its family's part). */
   private arch = new Uint16Array(0);
   private variant = new Uint8Array(0);
   private tint = new Float32Array(0);
+  private fam = new Uint8Array(0);
   private chunkOf = new Int32Array(0);
   private vStart = new Int32Array(0);
   private vCount = new Int32Array(0);
   private chunks: Chunk[] = [];
   private readonly dyn = new Map<number, DynSet>();
+  /** The loaded ruined-prop atlas of this station (null: every model archetype draws its procedural fallback). */
+  private junk: JunkSet | null = null;
   private seed = 0;
   /** Thinning applied to reach MAX_STOCK_PER_STATION (QA). */
   thinning = 'none';
@@ -193,6 +253,10 @@ export class ShelfStock implements FillerView {
     const deck = deps.models.shelf ? shelfDecks(deps.models.shelf) : null;
     // the electronics wall bay renders tech-display.glb when loaded (storefrontBuilder MODEL_READY), else its authored fallback
     const wallDeck = deps.models.techDisplay ? deviceWallDeck(deps.models.techDisplay) : null;
+    // task food-shelf-production (lane SHELF): the ruined-prop atlas of this level (lazy; absent = procedural fallbacks)
+    const junk = junkSet(deps.models[SHELF_JUNK_KEY]);
+    if (this.junk && this.junk !== junk) this.junk.dispose(); // (another loaded file: the old templates' buffers go)
+    this.junk = junk;
     // 1. holders + their boards / lots / seeds
     type Pre = {prop: PropPlacement; kind: string; category: StockCategory; boards: Board[]; lots: Box3Like[]; seed: number; back: boolean; area: number; shop?: number};
     const pre: Pre[] = [];
@@ -201,37 +265,57 @@ export class ShelfStock implements FillerView {
     // cm rounding tie), props appended after the core by their translated-back position.
     const ext = layout.extensions, xz = ext?.coreXZ?.props;
     const sx = ext?.shift.x ?? 0, sz = ext?.shift.z ?? 0;
+    // props standing on holders (on-top decor, crates on shelves): a 2 m cell index of every prop
+    const cells = new Map<string, {p: PropPlacement; i: number}[]>();
+    const cellKey = (x: number, z: number) => `${Math.floor(x / 2)},${Math.floor(z / 2)}`;
+    layout.props.forEach((p, i) => { const k = cellKey(p.x, p.z); let l = cells.get(k); if (!l) cells.set(k, (l = [])); l.push({p, i}); });
+    const nearProps = (p: PropPlacement) => {
+      const out: {p: PropPlacement; i: number}[] = [];
+      for (let gx = Math.floor((p.x - p.hx) / 2); gx <= Math.floor((p.x + p.hx) / 2); gx++) for (let gz = Math.floor((p.z - p.hz) / 2); gz <= Math.floor((p.z + p.hz) / 2); gz++) out.push(...(cells.get(`${gx},${gz}`) ?? []));
+      return out;
+    };
     for (let pi = 0; pi < layout.props.length; pi++) {
       const p = layout.props[pi];
-      if (!isStockedKind(p.kind)) continue;
+      if (!isStockedKind(p.kind) || p.cargoGone) continue;
       const area = layout.areas[p.area];
       const purpose = p.purpose ?? area?.purpose;
       const category = stockCategory(p.kind, p.variant, purpose);
       if (!category) continue;
-      const boards = stockBoards(p.kind, p.variant, {deck: p.kind === 'stockShelf' ? deck : p.kind === 'deviceWall' ? wallDeck : null});
+      const boards = stockBoards(p.kind, p.variant, {deck: p.kind === 'stockShelf' || p.kind === 'shelf' ? deck : p.kind === 'deviceWall' ? wallDeck : null});
       if (!boards.length) continue;
       const shop = p.shop ?? (area as {storefront?: number} | undefined)?.storefront;
-      pre.push({prop: p, kind: p.kind, category, boards, lots: deps.lotsOf?.(p) ?? [], seed: holderStockSeed(this.seed, p.kind, xz && 2 * pi < xz.length ? xz[2 * pi] : p.x - sx, xz && 2 * pi < xz.length ? xz[2 * pi + 1] : p.z - sz, p.y), back: shop === undefined, area: p.area, shop});
+      const lots = [...(deps.lotsOf?.(p) ?? []), ...hostedBoxes(p, pi, nearProps(p))];
+      pre.push({prop: p, kind: p.kind, category, boards, lots, seed: holderStockSeed(this.seed, p.kind, xz && 2 * pi < xz.length ? xz[2 * pi] : p.x - sx, xz && 2 * pi < xz.length ? xz[2 * pi + 1] : p.z - sz, p.y), back: shop === undefined, area: p.area, shop});
     }
-    // 2. dress (station-wide bound: back-of-house rows thin first, then all)
-    const passes: {cap: (h: Pre) => number; name: string}[] = [
+    // 2. dress (station-wide bounds on pieces, triangles and rest-mesh bytes: back-of-house rows thin first, then all; then, as the
+    // last resort before the hard bound, more sold-out bays). Costs are the archetypes' static ones (archCost), never what loaded.
+    const passes: {cap: (h: Pre) => number; gap?: number; name: string}[] = [
       {cap: () => 3, name: 'none'},
       {cap: h => (h.back ? 1 : 3), name: 'back rooms 1 deep'},
       {cap: h => (h.back ? 1 : 2), name: 'back rooms 1 deep, shops 2 deep'},
       {cap: () => 1, name: 'all 1 deep'},
+      {cap: () => 1, gap: 0.25, name: 'all 1 deep, sparser'},
+      {cap: () => 1, gap: 0.5, name: 'all 1 deep, sparse'},
     ];
+    const cost = (l: readonly StockPlacement[]) => { let t = 0, b = 0; for (const p of l) { const c = archCost(p.arch); t += c.tris; b += c.bytes; } return {t, b}; };
     let dressed: StockPlacement[][] = [];
     for (const pass of passes) {
-      dressed = pre.map(h => dressHolder({category: h.category, boards: h.boards, lots: h.lots, seed: h.seed, depthCap: pass.cap(h)}));
+      dressed = pre.map(h => dressHolder({category: h.category, boards: h.boards, lots: h.lots, seed: h.seed, depthCap: pass.cap(h), gapBoost: pass.gap ?? 0}));
       this.thinning = pass.name;
-      if (dressed.reduce((n, l) => n + l.length, 0) <= MAX_STOCK_PER_STATION) break;
+      const c = cost(dressed.flat());
+      if (dressed.reduce((n, l) => n + l.length, 0) <= MAX_STOCK_PER_STATION && c.t <= MAX_STOCK_TRIANGLES && c.b <= MAX_STOCK_GEOMETRY_BYTES) break;
     }
-    // hard bound (never reached by generated stations; keeps the cap a cap)
-    let budget = MAX_STOCK_PER_STATION;
-    dressed = dressed.map(l => { const k = Math.max(0, Math.min(l.length, budget)); budget -= k; return k < l.length ? l.slice(0, k).filter(p => p.on < k) : l; });
+    // hard bound (never reached by generated stations; keeps the caps caps)
+    let budget = MAX_STOCK_PER_STATION, tBudget = MAX_STOCK_TRIANGLES, bBudget = MAX_STOCK_GEOMETRY_BYTES;
+    dressed = dressed.map(l => {
+      let k = 0;
+      while (k < l.length && budget > 0) { const c = archCost(l[k].arch); if (c.tris > tBudget || c.bytes > bBudget) break; tBudget -= c.tris; bBudget -= c.bytes; budget--; k++; }
+      if (k < l.length) budget = 0;
+      return k < l.length ? l.slice(0, k).filter(p => p.on < k) : l;
+    });
     // 3. pieces (world poses) + chunks
     const total = dressed.reduce((n, l) => n + l.length, 0);
-    this.arch = new Uint16Array(total); this.variant = new Uint8Array(total); this.tint = new Float32Array(total);
+    this.arch = new Uint16Array(total); this.variant = new Uint8Array(total); this.tint = new Float32Array(total); this.fam = new Uint8Array(total);
     this.chunkOf = new Int32Array(total); this.vStart = new Int32Array(total); this.vCount = new Int32Array(total);
     const pieces: FillerPiece[] = [];
     const chunkKeys = new Map<string, number>();
@@ -242,7 +326,7 @@ export class ShelfStock implements FillerView {
       const level = p.level ?? 0;
       const key = `${level}:${Math.floor(p.x / CHUNK)},${Math.floor(p.z / CHUNK)}`;
       let ci = chunkKeys.get(key) ?? -1;
-      if (ci < 0 && list.length) { ci = chunkPieces.length; chunkKeys.set(key, ci); chunkPieces.push([]); this.chunks.push({key, level} as Chunk); }
+      if (ci < 0 && list.length) { ci = chunkPieces.length; chunkKeys.set(key, ci); chunkPieces.push([]); this.chunks.push({key, level, parts: [null, null]}); }
       const holderQ = tq.setFromAxisAngle(UP, p.rot).clone();
       const holderM = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y, p.z), holderQ, ts);
       const first = pieces.length;
@@ -259,6 +343,7 @@ export class ShelfStock implements FillerView {
         const q = holderQ.clone().multiply(new THREE.Quaternion(pl.q[0], pl.q[1], pl.q[2], pl.q[3]));
         pieces.push({id, spec, p: c, q, home: c.clone(), holder: hi, above: [], state: 'rest', body: null, moved: false, box: new THREE.Box3(), ...(h.boards[pl.board]?.mode === 'hang' ? {hung: true} : {})});
         this.arch[id] = pl.arch; this.variant[id] = pl.variant; this.tint[id] = FILLER_TINT[0] + pl.tint * (FILLER_TINT[1] - FILLER_TINT[0]);
+        this.fam[id] = A.model && junk?.geometry(pl.arch) ? 1 : 0;
         this.chunkOf[id] = ci;
         chunkPieces[ci].push(id);
       });

@@ -34,7 +34,9 @@ interface Batch { parts: {im: THREE.InstancedMesh; local: THREE.Matrix4}[]; cap:
  * knocked off a gallery: its loot never loses its instance). Capacity per batch = the item's total lots (no overflow anywhere).
  * Subway / Office: unchanged (storeyOf null).
  */
-interface Highlight { obj: THREE.Object3D; mats: THREE.MeshStandardMaterial[]; meshes: THREE.Mesh[] }
+/** (task studio-food-shelf-production-20261109-002816-01, lane ITEMS: `tpl` = the item template it was copied from — a lazily loaded model
+ * replaces the template (world/pickups.ts refreshItemTemplates), and the cached copy is rebuilt from the new one) */
+interface Highlight { obj: THREE.Object3D; mats: THREE.MeshStandardMaterial[]; meshes: THREE.Mesh[]; tpl: THREE.Object3D }
 
 /** Layers a fresh object renders on (the camera layers; never the level culler's cull layer). */
 const DRAW_MASK = new THREE.Layers().mask;
@@ -159,8 +161,15 @@ export class LotDisplay {
 
   private highlight(itemId: string): Highlight {
     let h = this.highlights.get(itemId);
+    const tpl = itemTemplate(itemId);
+    if (h && h.tpl !== tpl) { // (lane ITEMS: the item's model arrived since this copy was made)
+      this.group.remove(h.obj);
+      for (const m of h.mats) m.dispose();
+      this.highlights.delete(itemId);
+      h = undefined;
+    }
     if (!h) {
-      const obj = itemTemplate(itemId).clone(true);
+      const obj = tpl.clone(true);
       const mats: THREE.MeshStandardMaterial[] = [];
       const meshes: THREE.Mesh[] = [];
       obj.traverse(o => {
@@ -177,7 +186,7 @@ export class LotDisplay {
       obj.matrixAutoUpdate = false;
       obj.visible = false;
       obj.name = `loot-highlight-${itemId}`;
-      h = {obj, mats, meshes};
+      h = {obj, mats, meshes, tpl};
       this.highlights.set(itemId, h);
     }
     // Task office-overhaul-20261030 (INTERACT, #12): (re)attached lazily — after this station's culler registration

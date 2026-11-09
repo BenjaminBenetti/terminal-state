@@ -20,6 +20,7 @@ import * as THREE from 'three';
 import {MeshStandardNodeMaterial} from 'three/webgpu'; // Iteration 13 (MAT-A)
 import {canvasTexture} from './canvasTextures';
 import {LABEL_VARIANTS, STOCK_ARCHES, type LabelKind, type StockArch} from './shelfStockCatalog';
+import {JUNK_PROPS, junkNode, junkTris} from './shelfJunkModels'; // task food-shelf-production (lane SHELF)
 
 type Ctx = CanvasRenderingContext2D;
 type R = () => number;
@@ -1320,4 +1321,126 @@ export function archGeometry(a: number, variant: number): THREE.BufferGeometry {
 export function archTriangles(a: number): number {
   const g = archGeometry(a, 0);
   return (g.index ? g.index.count : g.attributes.position.count) / 3;
+}
+
+// ---------------------------------------------------------------------------------------
+// Task food-shelf-production (lane SHELF): the modelled ruined props (world/shelfJunkModels.ts) from the shared atlas GLB
+
+/**
+ * Static per-piece cost of archetype `a` the station-wide thinning budgets with (world/shelfStock.ts): triangles and packed
+ * rest-mesh bytes. A model-backed archetype costs what the cooked registry says its part has (25 bytes / vertex procedural,
+ * 22 model: float position, int16 normal, uint16 UV; ~1 vertex per triangle on the cooked Meshy parts; 4 bytes / index),
+ * independent of whether the atlas loaded, so the dressing is the same either way.
+ */
+export function archCost(a: number): {tris: number; bytes: number} {
+  let c = costCache[a];
+  if (!c) {
+    const A = STOCK_ARCHES[a];
+    const j = A.model ? JUNK_PROPS.find(p => p.id === A.model) : undefined;
+    const mt = j ? junkTris(j) : undefined;
+    if (mt !== undefined) c = {tris: mt, bytes: mt * 22 + mt * 12};
+    else { const g = archGeometry(a, 0), t = archTriangles(a); c = {tris: t, bytes: g.attributes.position.count * 25 + t * 12}; }
+    costCache[a] = c;
+  }
+  return c;
+}
+const costCache: {tris: number; bytes: number}[] = [];
+
+/** The atlas's runtime set: ONE shared material (Meshy's own maps, untouched) and a fitted template geometry per model archetype. */
+export interface JunkSet {
+  readonly material: THREE.Material;
+  /** Template of a model-backed archetype (origin bottom-centre, front +Z, fitted to its catalogue box), null = not in the atlas. */
+  geometry(arch: number): THREE.BufferGeometry | null;
+  /** Every template UV lies in [0, 1] (rest meshes pack them as normalised uint16). */
+  readonly uvShort: boolean;
+  /** GPU bytes of the shared maps (+ mips; QA budget). */
+  readonly textureBytes: number;
+  /** Archetypes drawn from the atlas. */
+  readonly arches: readonly number[];
+  dispose(): void;
+}
+
+const junkCache = new WeakMap<object, JunkSet | null>();
+/**
+ * The runtime set of a loaded atlas GLB (cached per loaded file): each model archetype's node (world/shelfJunkModels.ts junkNode)
+ * baked to one template geometry (positions / normals / UVs) and fitted exactly to its catalogue box like any filler piece. A part
+ * that is missing, has no UVs or uses another material than the shared one keeps its procedural fallback. null: nothing usable.
+ */
+export function junkSet(gltf: {scene: THREE.Object3D} | undefined | null): JunkSet | null {
+  if (!gltf?.scene) return null;
+  if (junkCache.has(gltf)) return junkCache.get(gltf)!;
+  const s = buildJunkSet(gltf.scene);
+  junkCache.set(gltf, s);
+  return s;
+}
+
+function buildJunkSet(root: THREE.Object3D): JunkSet | null {
+  root.updateMatrixWorld(true);
+  let shared: THREE.Material | null = null;
+  const geos = new Map<number, THREE.BufferGeometry>();
+  let uvShort = true;
+  const v = new THREE.Vector3(), nm = new THREE.Matrix3();
+  STOCK_ARCHES.forEach((A, a) => {
+    if (!A.model) return;
+    const node = root.getObjectByName(junkNode(A.model));
+    if (!node) return;
+    const meshes: THREE.Mesh[] = [];
+    node.traverse(o => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
+    if (!meshes.length) return;
+    for (const m of meshes) {
+      if (Array.isArray(m.material) || !m.geometry.attributes.uv || !m.geometry.attributes.position) { console.warn(`shelf junk ${A.model}: unusable mesh (fallback kept)`); return; }
+      shared ??= m.material;
+      if (m.material !== shared) { console.warn(`shelf junk ${A.model}: a second material (the atlas shares one; fallback kept)`); return; }
+    }
+    // bake the node's meshes (their scene transforms) into one buffer, then fit it to the archetype box
+    const P: number[] = [], N: number[] = [], U: number[] = [], I: number[] = [];
+    for (const m of meshes) {
+      const g = m.geometry, pos = g.attributes.position, uv = g.attributes.uv;
+      let nrm = g.attributes.normal as THREE.BufferAttribute | undefined;
+      if (!nrm) { const c = g.clone(); c.computeVertexNormals(); nrm = c.attributes.normal as THREE.BufferAttribute; }
+      nm.getNormalMatrix(m.matrixWorld);
+      const base = P.length / 3;
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld); P.push(v.x, v.y, v.z);
+        v.fromBufferAttribute(nrm, i).applyMatrix3(nm).normalize(); N.push(v.x, v.y, v.z);
+        U.push(uv.getX(i), uv.getY(i));
+      }
+      const idx = g.index;
+      if (idx) for (let i = 0; i < idx.count; i++) I.push(base + idx.getX(i)); else for (let i = 0; i < pos.count; i++) I.push(base + i);
+    }
+    let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+    for (let i = 0; i < P.length; i += 3) { x0 = Math.min(x0, P[i]); x1 = Math.max(x1, P[i]); y0 = Math.min(y0, P[i + 1]); y1 = Math.max(y1, P[i + 1]); z0 = Math.min(z0, P[i + 2]); z1 = Math.max(z1, P[i + 2]); }
+    if (!(x1 - x0 > 1e-6 && y1 - y0 > 1e-6 && z1 - z0 > 1e-6)) return;
+    const kx = A.w / (x1 - x0), ky = A.h / (y1 - y0), kz = A.d / (z1 - z0), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    for (let i = 0; i < P.length; i += 3) { P[i] = (P[i] - cx) * kx; P[i + 1] = (P[i + 1] - y0) * ky; P[i + 2] = (P[i + 2] - cz) * kz; }
+    // normals under the (slightly) non-uniform fit: inverse-transpose = 1 / k per axis
+    for (let i = 0; i < N.length; i += 3) { const a0 = N[i] / kx, a1 = N[i + 1] / ky, a2 = N[i + 2] / kz, l = Math.hypot(a0, a1, a2) || 1; N[i] = a0 / l; N[i + 1] = a1 / l; N[i + 2] = a2 / l; }
+    for (const t of U) if (t < -1e-4 || t > 1 + 1e-4) { uvShort = false; break; }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+    geo.setIndex(I);
+    geo.computeBoundingBox();
+    geo.computeBoundingSphere();
+    geo.userData.shared = true;
+    geo.name = `shelf-junk-${A.model}`;
+    geos.set(a, geo);
+  });
+  if (!geos.size || !shared) return null;
+  const mat: THREE.Material = shared;
+  let textureBytes = 0;
+  const seen = new Set<unknown>();
+  for (const val of Object.values(mat)) {
+    const t = val as THREE.Texture | null;
+    if (!t?.isTexture || seen.has(t.source)) continue;
+    seen.add(t.source);
+    const img = t.image as {width?: number; height?: number} | undefined;
+    if (img?.width && img.height) textureBytes += img.width * img.height * 4 * 4 / 3;
+  }
+  return {
+    material: mat, uvShort, textureBytes: Math.round(textureBytes), arches: [...geos.keys()],
+    geometry: a => geos.get(a) ?? null,
+    dispose: () => { for (const g of geos.values()) g.dispose(); },
+  };
 }

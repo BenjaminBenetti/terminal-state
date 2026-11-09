@@ -20,6 +20,8 @@ import {isReactorItem, reactorItemModel, reactorItemSource} from './reactor/rest
 import {fuelCanModel, fuelCanModelSource} from './fuelCanModel'; // task train-fuel-system-20261106 (lane PORT): the delivered fuel-can GLB (fallback box if not loaded)
 import {RAIL_TIES_MODEL_SOURCE, railTiesModel} from './railTiesModel'; // task studio-market-rework-20261108-074144-01 (lane TRADE)
 import {RAIL_TIES_ID} from '../items/railTies';
+import {isPantryItem} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
+import {pantryFallbackModel, pantryGltf, pantryModelSource} from './pantryModels';
 import {Grid} from '../gen/grid';
 import type {Levels} from '../gen/levels';
 import type {MarketStallId} from '../gen/market/marketTypes';
@@ -63,6 +65,14 @@ export function registerItemModels(models: Record<string, GLTF | undefined>): vo
   registerGasMaskOutfit(models.outfit_gasmask); // task gasmask-breach-20261030 (mask lane): the gas-mask item = the shipped zombie outfit mask (gear/models.ts)
   templates.clear();
   templateSource.clear();
+}
+
+/**
+ * Task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): drop the cached templates of `ids` (a lazily loaded model arrived:
+ * world/pantryModels.ts), so the next pickup / lot batch / held copy / icon uses it. Objects already built keep their old copy.
+ */
+export function refreshItemTemplates(ids: Iterable<string>): void {
+  for (const id of ids) { templates.delete(id); templateSource.delete(id); }
 }
 
 /** 'models.item_water (generated)' or 'procedural stand-in' per item id (QA/report). */
@@ -298,6 +308,12 @@ export function itemTemplate(itemId: string): THREE.Object3D {
     // Iteration 16 (lane GEAR): Meshy T2.5 gear derivative A1-A6 once delivered (preloaded), else a procedural stand-in
     t = gearItemModel(itemId);
     templateSource.set(itemId, gearModelSource(itemId));
+  } else if (isPantryItem(itemId)) {
+    // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the pantry foods / drinks — the cook's Meshy model once
+    // world/pantryModels.ts fetched it (lazy, per level), fitted like every food model; until then a plain labelled fallback primitive
+    const g = pantryGltf(itemId);
+    t = g ? fitItemModel(g as GLTF, itemId) : pantryFallbackModel(itemId);
+    templateSource.set(itemId, pantryModelSource(itemId));
   } else if (gltf) {
     t = fitItemModel(gltf, itemId);
     templateSource.set(itemId, `models.${key} (generated)`);
