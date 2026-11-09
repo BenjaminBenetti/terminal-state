@@ -58,6 +58,22 @@ Spare storerooms fill leftover voids (at most three per storey).
 - Both kinds are anchored or built-in equipment rather than storage (`gen/bunker/bunkerKinds.ts`, classified in the openables and
   physics audits). The builder never draws them; `world/bunker` does.
 
+## Flavour models
+
+- **Mainframe tape cabinets** (`bunkerMainframe`): the Bunker's own model, a reel-to-reel tape cabinet generated with Meshy T2.5 from a
+  Codex reference under the Bunker's approved flavour budget. It is cooked by `tools/asset-pipeline/props/build-bunker-kit.mjs`
+  (grounded, 0.90 × 1.90 × 0.52 m, Meshy maps kept, resized / re-encoded only) to `assets/models/bunker-mainframe-tape-cabinet.glb`.
+  Provenance is in `assets/derivatives/bunker-kit-20261109.json`; the file is allowlisted, credited and loaded on the Bunker only.
+  - In the processing hall, banks of four alternate with banks of four server racks along the approach aisle (flush fronts).
+  - Two stand in the core control room.
+- **Reused models**, each as a model-backed kind drawn through the builder's instanced path:
+  - the Reactor's decontamination shower booth: two in decontamination;
+  - its control console: in the core control room, beside the radio desk, a desk with a CRT terminal and two wall data cabinets;
+  - its coolant pump (as the pump hall's water pumps) and its 4 m pipe bank (only where the ceiling clears it).
+- The maintenance storey's water plant also uses the existing p7 water pump skids, treatment tanks (water heater tanks), valve
+  manifolds and an air filtration unit.
+- Classification and scale checks: docs/prop-affordances.md "The Bunker's kinds".
+
 ## Hazards
 
 - **Gas leaks** (`layout.bunker.gasZones`, 3–6 per level, `gen/bunker/hazards.ts`):

@@ -21,7 +21,7 @@ import {SKYWAYS_ADDON_DAMAGE_CLASS} from '../gen/skyways/addonKinds'; // task st
 import {SKYWAYS_DEST_DAMAGE_CLASS} from '../gen/skyways/destinations/registry'; // task studio-skyways-destinations-20261106-170011-01
 import {SKYWAYS_MAPBOARD_DAMAGE_CLASS} from '../gen/skyways/mapBoardKind'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS)
 import {SUBWAY_MAP_KIOSK_DAMAGE_CLASS} from '../gen/subwayMapKioskKind'; // task studio-ui-subway-maps-20261108-074144-01
-import {BUNKER_OBJECTIVE_DAMAGE_CLASS} from '../gen/bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01
+import {BUNKER_MODEL_DAMAGE_CLASS, BUNKER_OBJECTIVE_DAMAGE_CLASS} from '../gen/bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01
 import type {ShapeMat} from '../gen/propShapes';
 import type {PurposeMat} from '../gen/purposeShapes';
 import type {BreakCue, Surface} from '../audio/sfx';
@@ -255,6 +255,7 @@ export const PROP_DAMAGE: Record<PropKind, PropDamageSpec> = {
   ...(Object.fromEntries(Object.entries(SKYWAYS_MAPBOARD_DAMAGE_CLASS).map(([k, c]) => [k, NEVER(c)])) as Record<keyof typeof SKYWAYS_MAPBOARD_DAMAGE_CLASS, PropDamageSpec>), // (lane MAPS: the directory board — marks only)
   ...(Object.fromEntries(Object.entries(SUBWAY_MAP_KIOSK_DAMAGE_CLASS).map(([k, c]) => [k, NEVER(c)])) as Record<keyof typeof SUBWAY_MAP_KIOSK_DAMAGE_CLASS, PropDamageSpec>), // (task studio-ui-subway-maps-20261108-074144-01: the map kiosk — marks only)
   ...(Object.fromEntries(Object.entries(BUNKER_OBJECTIVE_DAMAGE_CLASS).map(([k, c]) => [k, NEVER(c)])) as Record<keyof typeof BUNKER_OBJECTIVE_DAMAGE_CLASS, PropDamageSpec>), // (task studio-bunker-level-20261109-072224-01: the Bunker's generators / core cluster — marks only)
+  ...(Object.fromEntries(Object.entries(BUNKER_MODEL_DAMAGE_CLASS).map(([k, c]) => [k, NEVER(c)])) as Record<keyof typeof BUNKER_MODEL_DAMAGE_CLASS, PropDamageSpec>), // (follow-up: the Bunker's model-backed flavour kinds — marks only)
 };
 
 /** Spec for any prop kind (unknown future kinds: painted sheet metal, never breaks). */

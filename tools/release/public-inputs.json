@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 64510,
-      "sha256": "8185c5c663bf12a392a1133e271ead4f64e3a48577b10a13c93a1011b32b2e0f"
+      "bytes": 65375,
+      "sha256": "c2c1dfbcd2b77ccc13e09995e957a7b6253ca3a5340beb4a2944866b2d5b7bbe"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1794,6 +1794,11 @@
       "sha256": "36144764c823d714bb402a0f0462836d934179470cbae88f69904d9c6041c9f4"
     },
     {
+      "path": "assets/derivatives/bunker-kit-20261109.json",
+      "bytes": 2891,
+      "sha256": "6da43a14cb795a81a382318d7eb2cf2ef47f05cf99750176b1ac682367076754"
+    },
+    {
       "path": "assets/derivatives/creature-ratdog.json",
       "bytes": 23070,
       "sha256": "2534182960bf96f813b2d57d92d2b530250ddaeb5d9967a7aa15b2fb6ccd23f4"
@@ -2717,6 +2722,11 @@
       "path": "assets/models/bench-t25r1.glb",
       "bytes": 519540,
       "sha256": "490a8be5ae66ca412c02e29514d280c640a2d830cc66904cc6be252c56d6ca87"
+    },
+    {
+      "path": "assets/models/bunker-mainframe-tape-cabinet.glb",
+      "bytes": 587108,
+      "sha256": "22bd9a4f097eb257ca150d3f7f5a3caf55bf894f060220e9a0d9f0fbe04d3405"
     },
     {
       "path": "assets/models/cabinet-low-t25.glb",

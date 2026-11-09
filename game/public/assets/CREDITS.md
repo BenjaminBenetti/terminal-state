@@ -605,3 +605,11 @@ reviewed by ear on the build worker. Raw takes are kept outside Git.
 - `assets/audio/market-grunt-03.mp3` — marketGrunt (Sound Lab job 20261108T231729-1404249699)
 - `assets/audio/market-retch-01.mp3` — marketRetch (Sound Lab job 20261108T231733-622219597)
 <!-- END market-bar-audio-20261108 -->
+
+<!-- BEGIN bunker-kit-20261109 (build-bunker-kit.mjs) -->
+## The Bunker: flavour models
+
+Generated for this project with Meshy T2.5 (smart topology; image-to-3D from a Codex initial reference image, 2K PBR) through the Meshy MCP under the Bunker's approved select-flavour budget (1 generation attempt, 15 credits billed). Runtime derivatives built by `tools/asset-pipeline/props/build-bunker-kit.mjs` (provenance: `assets/derivatives/bunker-kit-20261109.json`). Provider terms apply; unapproved prototype, no licence or commercial clearance implied. Raw masters and the reference image are kept outside Git.
+
+- `assets/models/bunker-mainframe-tape-cabinet.glb` — bunker: retro reel-to-reel mainframe tape cabinet (sealed computer equipment; its louvred doors are service panels) (Meshy task 01a1bfc1-3a2f-773a-a458-f2cdadf1b1fc)
+<!-- END bunker-kit-20261109 -->

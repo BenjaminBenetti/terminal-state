@@ -67,7 +67,7 @@ import {buildWasteVisuals} from './reactor/wasteVisuals'; // task reactor-expans
 import {SkywaysArch} from './skywaysArch'; // task studio-skyways-level-20261106-054448 (lane VIEW): the Skyways finishes + atrium roofs
 import {MarketArch} from './marketArch'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market's corrugated / salvaged finishes
 import {BunkerArch} from './bunkerArch'; // task studio-bunker-level-20261109-072224-01: the Bunker's finishes (the Reactor's arch materials) + the shelter hero models
-import {isBunkerObjectiveKind} from '../gen/bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01: drawn by world/bunker (the objective lane)
+import {BUNKER_MODEL_FOR, isBunkerObjectiveKind} from '../gen/bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01: objective kinds drawn by world/bunker; the model-backed flavour kinds instanced through MODEL_FOR
 import {TRACK_SLEEPER} from './railTiesModel'; // task studio-market-rework-20261108-074144-01 (lane TRADE): the sleeper's size, shared with the Rail Ties model
 import {platformLipBoxes, platformLipGeometry} from './platformEdgeLip'; // task studio-cosplay-general-20261108-225231-01 (lane GENERAL): the edge lip, proud of the floor / face
 
@@ -197,7 +197,7 @@ export const STAIR_LEVEL = -1;
 /** Trim / sleeper chunk size (m): small cheap geometry, coarse chunks. */
 const TRIM_CHUNK_M = 64;
 /** Model keys for props that use a generated derivative when it exists (optional). */
-const MODEL_FOR: Partial<Record<PropKind, string>> = {bench: 'bench', cabinetTall: 'cabinetTall', cabinetLow: 'cabinetLow', stall: 'stall', vending: 'vending', shelf: 'shelf', bin: 'trashCan'};
+const MODEL_FOR: Partial<Record<PropKind, string>> = {bench: 'bench', cabinetTall: 'cabinetTall', cabinetLow: 'cabinetLow', stall: 'stall', vending: 'vending', shelf: 'shelf', bin: 'trashCan', ...BUNKER_MODEL_FOR}; // (+ the Bunker's model-backed flavour kinds: lazy library keys)
 
 /** Storeys tagged on an accumulator chunk key ('level:cx,cz#a-b'), else undefined. */
 function chunkLevels(chunk: string): number[] | undefined {

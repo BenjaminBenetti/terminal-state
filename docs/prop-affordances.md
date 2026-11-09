@@ -636,3 +636,30 @@ with ~0.95 m tyres, the carrier frame at head height and the boom to 2.43 m. Its
 `minesModelSize`. The timber set is now scaled per drift by
 `timberSetFit`: its cap ends reach the rib + 0.48 m (x ≈ 1.16 in a 3 m drift). Its posts then stand about 0.3 m proud, leaving a clear
 opening of about 2.4 × 2.35 m.
+
+### The Bunker's kinds (task studio-bunker-level-20261109-072224-01)
+`gen/bunker/bunkerKinds.ts`. Two OBJECTIVE kinds (drawn by `world/bunker`, never by the builder) and five MODEL-BACKED flavour kinds,
+drawn through the builder's generic instanced model path (`world/builder.ts` `MODEL_FOR` → the lazy library key; a non-uniform fit to the
+PropDef box, which is each model's own real size, so the scale is 1). Nothing loose is part of any of them; none is storage.
+
+| Kind | Model | Openables audit | Physics audit | Scale check (`--prop` beside `lastshift`) |
+|---|---|---|---|---|
+| `bunkerGenerator` | the Reactor's auxiliary generator (`REACTOR_KIT.generator`) | `none` (`equipment`) | static `anchored` (~3 t set on its skid) | 5.60 × 2.48 × 1.67 m, grounded; ≥ 2 m clear in front |
+| `bunkerCoreCluster` | drawn by `world/bunker` | `none` (`equipment`) | static `built-in` (sealed cabinets + a built-in console) | 6.00 × 3.60 × 2.20 m footprint, grounded; ≥ 3 m clear in front, 6.4 m headroom |
+| `bunkerMainframe` | NEW: `BUNKER_KIT.mainframe` (reel-to-reel tape cabinet, Meshy T2.5 from a Codex reference, maps kept) | `exception`: its louvred lower doors are the service panels of a live computer, not storage | static `anchored` (~400 kg, bolted, cabled) | 0.90 × 1.90 × 0.52 m; grounded (4 contacts, span 0.88 × 0.38 m); the reels face +Z |
+| `bunkerDeconShower` | `REACTOR_X_KIT.deconShower` | `exception`: a plumbed walk-in booth, open front, nothing stored | static `fixture` | 1.76 × 2.40 × 1.50 m; grounded (19 contacts) |
+| `bunkerControlConsole` | `REACTOR_KIT.controlConsole` | `exception`: the lower panels are its instrument bays | static `built-in` (~250 kg) | 3.00 × 1.54 × 1.49 m; grounded (20 contacts); work top 0.77 m |
+| `bunkerCoolantPump` | `REACTOR_KIT.coolantPump` (the pump hall's water pumps) | `none` | static `machinery` (~1.5 t skid) | 3.50 × 1.82 × 1.36 m; grounded (4 contacts) |
+| `bunkerPipeBank` | `REACTOR_KIT.pipeBank` | `none` | static `structure` | 3.87 × 4.00 × 1.49 m; grounded; placed only where the ceiling clears 4.3 m |
+
+- Scale-check renders (2026-11-09) are in the task's private QA folder (`level/scale-check/bunker-mainframe.png`,
+  `bunker-reused-plant.png`).
+- Placement (`gen/bunker/dress.ts`):
+  - the processing hall's rack rows alternate banks of four server racks with banks of four mainframes (flush fronts), keeping the
+    core cluster's 3 m front and the aisle clear;
+  - the core control room gets the control console, a desk with a CRT terminal on it (host decor), two wall data cabinets and two
+    mainframes;
+  - decontamination gets two shower booths;
+  - the maintenance storey's water plant: in the pump hall the pipe bank, two pumps, p7 water pump skids and valve manifolds; in water
+    treatment, treatment tanks (`waterHeaterTank`), an air filtration unit, a pump skid and a manifold.
+- `REACTOR_X_KIT.storageCask` is not reused: a 4.6 m nuclear dry-storage cask has no plausible place in a shelter's water plant.

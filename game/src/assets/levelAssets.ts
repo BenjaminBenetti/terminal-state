@@ -64,6 +64,8 @@ export const LEVEL_ONLY_RULES: readonly LevelOnlyRule[] = [
   // task studio-survivor-market-20261108-005807-01 (lanes LEVEL + HUMANS): THE SURVIVOR MARKET's own files — market-*.glb (the friendly
   // humans' market-human-cast.glb: market/humanLooks.ts) and textures/market/** (the Codex-authored corrugated / plywood / tarp surfaces,
   // world/marketTextures.ts)
+  // task studio-bunker-level-20261109-072224-01: the Bunker's own flavour models (assets/bunkerKit.generated.ts; build-bunker-kit.mjs)
+  {level: 'bunker', path: /^(?:\.\/)?assets\/models\/bunker-[A-Za-z0-9_-]+\.glb$/},
   {level: 'market', path: /^(?:\.\/)?assets\/(?:models\/market-[A-Za-z0-9_-]+\.glb|textures\/market\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2))$/},
 ];
 

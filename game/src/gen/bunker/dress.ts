@@ -18,14 +18,14 @@
 
 import type {Rng} from '../../core/rng';
 import {CELL, FLOOR} from '../grid';
-import {PROP_DEFS, type PropKind, type PropPlacement} from '../props';
+import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from '../props';
 import type {Area, Door, Side, StationLayout} from '../stationTypes';
-import {begin, boxClear, cellsOfBox, commit, doorSide, makePlaceCtx, placeAgainstWall, propBlocksDoorway, rollback, tryPlaceProp, wallRange, wallSpot} from '../placeKit';
+import {begin, boxClear, cellsOfBox, commit, doorSide, makePlaceCtx, placeAgainstWall, propBlocksDoorway, rollback, tryPlaceProp, wallRange, wallSpot, mountProp} from '../placeKit';
 import {frontCells} from './validate';
 import {BLAST} from '../reactor/complex/bunkerKinds';
 import type {BunkerCarveRec} from '../reactor/complex/bunker';
 import {
-  NORMAL, OPP, armoury, ceilingDuct, coverCells, doorPlate, dormitory, face, filtration, mess, pocketCells, radioRoom, rotFacing, scanWall, sealOrDrop,
+  NORMAL, OPP, armoury, ceilingDuct, coverCells, doorPlate, island, dormitory, face, filtration, mess, pocketCells, radioRoom, rotFacing, scanWall, sealOrDrop,
   solidProp, sweepPockets, wallSign, type Dx,
 } from '../reactor/complex/bunkerDress';
 import {BUNKER_CORE_KIND, BUNKER_GENERATOR_KIND} from './bunkerTypes';
@@ -39,7 +39,7 @@ const r3 = (v: number) => Math.round(v * 1000) / 1000;
 /** QA / tests: why hero placements (generators, the core cluster) were refused. */
 export const HERO_FAILS: Record<string, number> = {};
 /** QA / tests: what the last passes did. */
-export const BUNKER_DRESS_STATS = {objectives: 0, generators: 0, core: 0, props: 0, signs: 0, decor: 0, dropped: 0, skipped: [] as string[]};
+export const BUNKER_DRESS_STATS = {objectives: 0, generators: 0, core: 0, props: 0, signs: 0, decor: 0, dropped: 0, mainframes: 0, showers: 0, skipped: [] as string[]};
 
 /** A Dx (the Reactor shelter's room-dresser context) over arbitrary areas of one storey. */
 export function shelterDx(layout: StationLayout, lv: number, rng: Rng, areas: readonly Area[]): Dx {
@@ -187,6 +187,7 @@ export function placeObjectives(layout: StationLayout, bc: BunkerCarve, rng: Rng
   const S = BUNKER_DRESS_STATS;
   S.objectives = S.generators = S.core = 0;
   S.skipped = [];
+  S.mainframes = S.showers = 0;
   const holds: ObjectiveRec['holds'] = [];
   // the vault door + the threshold lane held clear on both sides
   const D0 = shelterDx(layout, 0, rng.fork('vault'), [bc.hall, bc.vest]);
@@ -242,6 +243,8 @@ export function placeObjectives(layout: StationLayout, bc: BunkerCarve, rng: Rng
 function decon(D: Dx, a: Area): void {
   const ms = heroWalls(D, a).reverse()[0];
   const back = OPP[ms], sides: Side[] = ms === 'N' || ms === 'S' ? ['W', 'E'] : ['N', 'S'];
+  // the decontamination shower booths first (REACTOR_X_KIT.deconShower: the waste repository's booth), then the wash troughs
+  for (let i = 0; i < 2; i++) if (scanWall(D, a, 'bunkerDeconShower', [back, ...sides], 1.0, undefined, true)) BUNKER_DRESS_STATS.showers++;
   for (let i = 0; i < 2; i++) scanWall(D, a, 'washCounter', [back, ...sides], 0.7, undefined, true);
   for (let i = 0; i < 3; i++) scanWall(D, a, 'staffLockers', sides, 1.0, undefined, true);
   scanWall(D, a, 'bench', sides, 0.6, undefined, true);
@@ -302,16 +305,73 @@ function processingHall(D: Dx, a: Area, coreProp: PropPlacement | null): void {
     // the prop's front (sin rot, cos rot) points toward the aisle (facing -1) or away from it (+1)
     const dir = sgn * facing;
     const rot = horiz ? (dir > 0 ? 0 : Math.PI) : (dir > 0 ? Math.PI / 2 : -Math.PI / 2);
-    // a rack row on a 1.0 m pitch (each 0.6 m unit centred in a pair of cells: neighbours never share a cell) with a 1.0 m cross
-    // gap every 4 racks
+    // a row on a 1.0 m pitch (each unit centred in a pair of cells: neighbours never share a cell) with a 1.0 m cross gap every 4
+    // units, in BANKS of 4: server racks and reel-to-reel mainframe tape cabinets alternating (a seeded phase per row); a mainframe
+    // (0.52 m deep) stands flush with the racks' fronts
     let k = 0;
+    const phase = D.rng.int(0, 1);
+    const fx = horiz ? 0 : dir, fz = horiz ? dir : 0;
     for (let t = Math.ceil(L0) + 0.5; t + rack.w / 2 <= L1 + 1e-6; t += 1.0 + (++k % 4 === 0 ? 1.0 : 0)) {
-      const x = horiz ? t : c, z = horiz ? c : t;
-      if (tryPlaceProp(D.ctx, a, 'serverRack', r3(x), r3(z), rot, {laneOk: true})) n++;
+      const main = (Math.floor(k / 4) + phase) % 2 === 1;
+      const kind: PropKind = main ? 'bunkerMainframe' : 'serverRack';
+      const shift = main ? (rack.d - PROP_DEFS.bunkerMainframe.d) / 2 : 0;
+      const x = (horiz ? t : c) + fx * shift, z = (horiz ? c : t) + fz * shift;
+      if (tryPlaceProp(D.ctx, a, kind, r3(x), r3(z), rot, {laneOk: true})) { if (main) BUNKER_DRESS_STATS.mainframes++; else n++; }
     }
   }
   if (n < 8) BUNKER_DRESS_STATS.skipped.push(`processing hall: ${n} racks`);
   for (let i = 0; i < 3; i++) placeAgainstWall(D.ctx, a, 'cabinetLow', {front: 0.7, tries: 16});
+}
+
+/** Control-room desks that take a CRT terminal on top once the storey's pocket sweep is done (dressShelter). */
+const HOSTED: PropPlacement[] = [];
+
+/** Wall-mounted pieces of a kind (p7 data cabinets, valve manifolds) at height `y`, every 0.25 m along the given walls, up to `n`. */
+function mountAlong(D: Dx, a: Area, kind: PropKind, sides: readonly Side[], y: number, n: number): number {
+  let got = 0;
+  const w = PROP_DEFS[kind].w;
+  for (const sd of sides) {
+    const [lo, hi] = wallRange(a, sd);
+    const ts: number[] = [];
+    for (let t = lo + w / 2 + 0.3; t <= hi - w / 2 - 0.3 + 1e-6; t += 0.25) ts.push(Math.round(t * 4) / 4);
+    const mid = (lo + hi) / 2;
+    ts.sort((p, q) => Math.abs(p - mid) - Math.abs(q - mid) || p - q);
+    for (const t of ts) {
+      if (got >= n) return got;
+      if (mountProp(D.ctx, a, sd, t, kind, y, D.base)) { got++; break; }
+    }
+  }
+  return got;
+}
+
+/** The core control room's extra variety: the operator's control console, a CRT terminal on a desk, data cabinets, two mainframes. */
+function controlRoom(D: Dx, a: Area): void {
+  const walls = heroWalls(D, a);
+  scanWall(D, a, 'bunkerControlConsole', walls, 1.0, undefined, true);
+  const desk = scanWall(D, a, 'desk', walls, 0.8, undefined, true);
+  // the CRT terminal goes on its top once the storey's pocket sweep is done (dressShelter: the sweep splices props, never a host's decor)
+  if (desk) HOSTED.push(desk);
+  mountAlong(D, a, 'wallDataCabinet', walls, 1.4, 2);
+  for (let i = 0; i < 2; i++) scanWall(D, a, 'bunkerMainframe', walls, 0.8, undefined, true);
+}
+
+/**
+ * The maintenance storey's water plant (the pump hall and water treatment): pumps on their skids, a pipe bank where the ceiling
+ * clears it, the p7 water pump skids / heater (treatment) tanks / valve manifolds, an air filtration unit in water treatment.
+ */
+function waterPlant(D: Dx, a: Area, hall: boolean): void {
+  const walls = heroWalls(D, a), rel = a.ceil - D.base;
+  if (hall) {
+    if (rel >= PROP_DEFS.bunkerPipeBank.h + 0.3) scanWall(D, a, 'bunkerPipeBank', walls, 0.9, undefined, true);
+    for (let i = 0; i < 2; i++) if (!island(D, a, 'bunkerCoolantPump', walls[0], 0.9)) break;
+    for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'waterPumpSkid', {front: 0.8, tries: 16});
+    mountAlong(D, a, 'pipeValveManifold', walls, 0.5, 2);
+  } else {
+    for (let i = 0; i < 2; i++) placeAgainstWall(D.ctx, a, 'waterHeaterTank', {front: 0.8, tries: 16});
+    scanWall(D, a, 'airFilterUnit', walls, 1.0, undefined, true);
+    placeAgainstWall(D.ctx, a, 'waterPumpSkid', {front: 0.8, tries: 16});
+    mountAlong(D, a, 'pipeValveManifold', walls, 0.5, 1);
+  }
 }
 
 /** Fallen ceiling panels and a hanging duct section in an aged room (decor only, low slabs: no blocked passage). */
@@ -379,7 +439,9 @@ export function dressShelter(layout: StationLayout, bc: BunkerCarve, rng: Rng, o
       if (k === 'dorm') step(`L${lv} ${key}`, () => dormitory(D, a));
       else if (k === 'mess') step(`L${lv} ${key}`, () => mess(D, a));
       else if (k === 'armoury') step(`L${lv} ${key}`, () => armoury(D, a));
-      else if (k === 'radio' || k === 'control') step(`L${lv} ${key}`, () => radioRoom(D, a));
+      else if (k === 'radio') step(`L${lv} ${key}`, () => radioRoom(D, a));
+      else if (k === 'control') step(`L${lv} ${key}`, () => { radioRoom(D, a); controlRoom(D, a); });
+      else if (lv === 4 && (k === 'hall' || k === 'treatment')) step(`L${lv} ${key}`, () => waterPlant(D, a, k === 'hall'));
       else if (k === 'filtration' || k === 'cooling') step(`L${lv} ${key}`, () => filtration(D, a));
       else if (k === 'decon') step(`L${lv} ${key}`, () => decon(D, a));
       else if (k === 'hall' && lv === 1) step(`L${lv} muster`, () => musterHall(D, a));
@@ -418,6 +480,17 @@ export function dressShelter(layout: StationLayout, bc: BunkerCarve, rng: Rng, o
     const n0 = layout.props.length;
     sweepPockets(D, areas, from);
     S.dropped += Math.max(0, n0 - layout.props.length);
+    // host decor after the sweep: a CRT terminal on each control-room desk still standing, a little back from its front edge (it rides
+    // on the desk: a loose desk-top object; the desk's loot keeps off its span). The desk is already on its floor (liftFrom).
+    for (const desk of HOSTED.splice(0)) {
+      const host = layout.props.indexOf(desk);
+      if (host < 0) continue;
+      const crt = PROP_DEFS.crtTerminal, top = PROP_DEFS.desk.h, back = (PROP_DEFS.desk.d - crt.d) / 2 - 0.04;
+      const fx = Math.round(Math.sin(desk.rot)), fz = Math.round(Math.cos(desk.rot));
+      const {hx, hz} = footprint('crtTerminal', desk.rot);
+      layout.props.push({kind: 'crtTerminal', x: r3(desk.x - fx * back), z: r3(desk.z - fz * back), y: r3(desk.y + top), rot: desk.rot, area: desk.area, hx, hz, h: crt.h, blocksSight: false, variant: 0, host, ...(lv ? {level: lv} : {})});
+      desk.cut = [...(desk.cut ?? []), {y: top, x0: -crt.w / 2 - 0.02, x1: crt.w / 2 + 0.02}];
+    }
   }
   S.props = layout.props.length - p0; S.signs = layout.signs.length - s0; S.decor = layout.decor.length - d0;
 }
