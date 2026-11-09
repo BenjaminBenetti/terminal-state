@@ -16,7 +16,7 @@ import {CELL} from '../../grid';
 import {PROP_DEFS, type PropKind, type PropPlacement} from '../../props';
 import type {Area, Rect, Side, StationLayout} from '../../stationTypes';
 import {cellsOfBox, mountProp, tryPlaceProp, wallRange, wallSpot, type PlaceOpts} from '../../placeKit';
-import {doorPlate, scanWall, sealOrDrop, wallSign, type Dx} from '../../reactor/complex/bunkerDress';
+import {ceilingDuct, doorPlate, scanWall, sealOrDrop, wallSign, type Dx} from '../../reactor/complex/bunkerDress';
 import {shelterDx} from '../dress';
 import {bunkerShortName} from '../names';
 import type {FloorDressCtx} from './floorApi';
@@ -64,6 +64,9 @@ function dropProps(layout: StationLayout, from: number, drop: (p: PropPlacement)
   layout.props.push(...keep);
   return gone.size;
 }
+
+/** The composer's loose scatter (evacuation traces, cover) that gives way to the vault hall's own composition. */
+const LOOSE: ReadonlySet<string> = new Set(['rollingSuitcase', 'babyStroller', 'bicycle', 'shoppingCart', 'wheelchair', 'wetFloorSign', 'foldingBarricade', 'crowdBarrier', 'bin', 'bench']);
 
 const NO_FRONT: ReadonlySet<string> = new Set(['column', 'fareGate', 'booth', 'noticeBoard', 'blastDoor', 'annexMachine', 'exitStair']);
 
@@ -124,10 +127,12 @@ export function dressStation(c: FloorDressCtx): void {
   const from = dresserFrom < 0 ? layout.props.length : dresserFrom;
   const pub = new Set([hall.id, vest.id, platform.id]);
   st.removed = dropProps(layout, from, p => pub.has(p.area) && OFF_THEME.has(p.kind));
-  // the platform bay in front of the central portal: its column(s) (and a bench between them) in the sightline give way to a pair of
-  // columns framing the portal
+  // the composer's loose scatter in the vault hall's nave (the colonnade, the booths and the aisle are composed here instead)
+  st.removed += dropProps(layout, from, p => p.area === hall.id && LOOSE.has(p.kind) && Math.abs(p.x - F0_AXIS) < 5.2);
+  // the platform bay in front of the central portal: its column(s) (and the benches between them) in the sightline give way to a pair
+  // of columns framing the portal
   const colZ = layout.props.find(p => p.area === platform.id && p.kind === 'column')?.z;
-  st.removed += dropProps(layout, from, p => p.area === platform.id && ((p.kind === 'column' && Math.abs(p.x - F0_AXIS) < 4.0) || (p.kind === 'bench' && Math.abs(p.x - F0_AXIS) < 2.5)));
+  st.removed += dropProps(layout, from, p => p.area === platform.id && ((p.kind === 'column' && Math.abs(p.x - F0_AXIS) < 4.0) || (p.kind === 'bench' && Math.abs(p.x - F0_AXIS) < 4.0)));
   const p0 = layout.props.length, d0 = layout.decor.length, s0 = layout.signs.length, l0 = layout.lights.length;
   const mine = [...F0_KEYS.map(A), platform, vest];
   const D = shelterDx(layout, 0, rng.fork('station'), mine);
@@ -144,6 +149,7 @@ export function dressStation(c: FloorDressCtx): void {
   step('registration', () => registration(D, A('registration')));
   step('waiting', () => waitingHall(D, A('waiting')));
   step('observation', () => observation(D, A('observation')));
+  step('corridor', () => corridor(D, A('corridor')));
   step('medical', () => medical(D, A('medical')));
   step('receiving', () => receiving(D, A('receiving')));
   step('billeting', () => billeting(D, A('billeting')));
@@ -164,23 +170,27 @@ export function dressStation(c: FloorDressCtx): void {
 function platformBay(D: Dx, p: Area, openings: readonly Rect[], name: string, colZ: number | undefined): void {
   const z = colZ ?? (p.y + Math.round(p.h * 0.58) + 0.5) * CELL;
   for (const s of [-1, 1]) if (tryPlaceProp(D.ctx, p, 'column', r3(F0_AXIS + s * 3.0), r3(z), 0, {checkZone: false, h: p.ceil})) F0_STATS.columns++;
-  // overflow berths: bunks with their long side to the back wall, away from the portals (~10 m either side of the platform's middle)
+  // overflow berths: bunks with their long side to the back wall away from the portals (~10 m either side of the platform's middle),
+  // then against the platform's dead-end walls (latecomers camped at the ends)
   const [lo, hi] = wallRange(p, 'S');
   const mid = (lo + hi) / 2;
-  const ts: number[] = [];
-  for (let t = lo + 1.5; t <= hi - 1.5; t += 0.5) ts.push(t);
-  ts.sort((u, v) => Math.abs(Math.abs(u - mid) - 10) - Math.abs(Math.abs(v - mid) - 10) || u - v);
-  for (const t of ts) {
+  const spots: {side: Side; t: number}[] = [];
+  for (let t = lo + 1.5; t <= hi - 1.5; t += 0.5) spots.push({side: 'S', t});
+  spots.sort((u, v) => Math.abs(Math.abs(u.t - mid) - 10) - Math.abs(Math.abs(v.t - mid) - 10) || u.t - v.t);
+  for (const side of ['W', 'E'] as Side[]) { const [a0, a1] = wallRange(p, side); for (let t = a1 - 1.1; t >= a0 + 2.6; t -= 0.5) spots.push({side, t}); }
+  const berths: {side: Side; t: number; q: PropPlacement}[] = [];
+  for (const {side, t} of spots) {
     if (F0_STATS.berths >= 4) break;
-    const sp = wallSpot(p, 'S', t, 'bunkBed');
-    const q = tryPlaceProp(D.ctx, p, 'bunkBed', q4(sp.x), r3(sp.z), sp.rot, FREE);
-    if (q && sealOrDrop(D, p, q)) F0_STATS.berths++;
+    const sp = wallSpot(p, side, t, 'bunkBed');
+    const q = tryPlaceProp(D.ctx, p, 'bunkBed', q4(sp.x), q4(sp.z), sp.rot, FREE);
+    if (q && sealOrDrop(D, p, q)) { F0_STATS.berths++; berths.push({side, t, q}); }
   }
-  // a suitcase or two by the berths (their owners' things)
-  for (let i = 0; i < 2; i++) {
-    const b = D.layout.props.filter(q => q.area === p.id && q.kind === 'bunkBed')[i];
-    if (b) put(D, p, 'rollingSuitcase', b.x + (i ? -1.35 : 1.35), b.z, 0, {...FREE, ring: 0.3});
-  }
+  // a suitcase by two of the berths (their owners' things), the notice over the first
+  berths.slice(0, 2).forEach(({side, q}, i) => {
+    const s = i ? -1.35 : 1.35, alongX = side === 'S' || side === 'N';
+    put(D, p, 'rollingSuitcase', q.x + (alongX ? s : 0), q.z + (alongX ? 0 : s), 0, {...FREE, ring: 0.3});
+  });
+  if (berths.length) wallSign(D, p, berths[0].side, berths[0].t, 2.2, {kind: 'info', text: 'OVERFLOW BERTHS · KEEP THE PLATFORM EDGE CLEAR', w: 2.6});
   // over the portals
   const lane = V2.station.laneX + V2.station.laneW / 2;
   for (const o of [...openings].sort((u, v) => u.x - v.x)) {
@@ -189,7 +199,6 @@ function platformBay(D: Dx, p: Area, openings: readonly Rect[], name: string, co
     const text = central ? `${name} · ALL ARRIVALS` : o.x + o.w / 2 < lane ? 'REGISTRATION · ADMISSION KITS' : 'WAITING HALL · MEDICAL INSPECTION';
     wallSign(D, p, 'S', cx, 3.62, {kind: 'service', text, w: central ? 3.0 : 2.4});
   }
-  wallSign(D, p, 'S', mid + 13.5, 1.75, {kind: 'info', text: 'OVERFLOW BERTHS · KEEP THE PLATFORM EDGE CLEAR', w: 2.6});
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -210,6 +219,7 @@ function vaultHall(D: Dx, a: Area, name: string): void {
     let n = 0;
     for (const s of [-1, 1]) if (put(D, a, 'column', ax + s * off, z, 0, {...FREE, checkZone: false, h: top})) n++;
     F0_STATS.columns += n;
+    if (n < 2) F0_STATS.skipped.push(`colonnade row ${dz}: ${n} columns`);
     if (n === 2) {
       D.decor('steelDark', {x0: x0 + 0.02, x1: x1 - 0.02, z0: z - 0.2, z1: z + 0.2}, top - 0.45, top - 0.02);
       for (const s of [-1, 1]) D.decor('steelDark', {x0: ax + s * off - 0.34, x1: ax + s * off + 0.34, z0: z - 0.34, z1: z + 0.34}, top - 0.75, top - 0.45);
@@ -218,6 +228,8 @@ function vaultHall(D: Dx, a: Area, name: string): void {
   // queue barriers between the columns and on toward the door, both colonnade lines
   const zA = z0 + F0_COLONNADE.rows[0], zB = z0 + F0_COLONNADE.rows[1];
   for (const s of [-1, 1]) for (const zc of [(zA + zB) / 2, zB + 1.5]) put(D, a, 'crowdBarrier', ax + s * off, zc, Math.PI / 2);
+  // luggage left standing in the queue between the colonnades
+  for (const [dx, dz] of [[-2.3, 3.9], [2.2, 6.6]] as const) put(D, a, 'rollingSuitcase', ax + dx, z0 + dz, D.rng.pick([0, Math.PI / 2]), {...FREE, ring: 0.3});
   // the marshals' booths flanking the door (fronts to the aisle: their inner faces 3 m off the axis, just inside the colonnade lines),
   // beside the open leaf / the frame; the threshold marshal's podium by the lane
   const bk = PROP_DEFS.booth, bz = z1 - 3.6;
@@ -271,7 +283,7 @@ function registration(D: Dx, a: Area): void {
   const bz = cz - ck.d / 2 - 1.55, bw = PROP_DEFS.crowdBarrier.w;
   for (let x = ax1 - 0.35 - bw / 2; x - bw / 2 >= ax0 + 2.4; x -= bw + 0.05) put(D, a, 'crowdBarrier', x, bz, 0);
   // records on the cleared side's back wall
-  along(D, a, 'filingCabinet', 'S', 2, 0.8, (ax0 + ax1) / 2 + 1.5);
+  along(D, a, 'filingCabinet', 'S', 1, 0.8, (ax0 + ax1) / 2 + 1.5);
   along(D, a, 'archiveBoxes', 'S', 1, 0.6, ax1 - 1.5);
   scanWall(D, a, 'securityPodium', ['E'], 0.8, az1 - 2.5);
   // notices on the public side
@@ -330,7 +342,14 @@ function observation(D: Dx, a: Area): void {
   scanWall(D, a, 'wheeledStretcher', horiz ? ['E', 'W'] : ['N', 'S'], 0.6);
   scanWall(D, a, 'ivPole', horiz ? ['E', 'W'] : ['N', 'S'], 0.4);
   scanWall(D, a, 'medCabinet', horiz ? ['W', 'E'] : ['S', 'N'], 0.8);
-  wallSign(D, a, horiz ? 'E' : 'S', horiz ? (a.y + a.h / 2) * CELL : (a.x + a.w / 2) * CELL, 2.2, {kind: 'service', text: 'HELD FOR OBSERVATION · MASKS ON', w: 2.2});
+  wallSign(D, a, horiz ? 'E' : 'S', horiz ? (a.y + a.h / 2) * CELL : (a.x + a.w / 2) * CELL, 2.2, {kind: 'service', text: 'MASKS ON AT ALL TIMES · NO VISITORS', w: 2.2});
+}
+
+/** The observation corridor: a duct under its low ceiling, a stretcher parked against the wall, its warning. */
+function corridor(D: Dx, a: Area): void {
+  ceilingDuct(D, a, 'N', 0.45);
+  scanWall(D, a, 'wheeledStretcher', ['N'], 0.5);
+  wallSign(D, a, 'S', (a.x + a.w / 2) * CELL, 2.0, {kind: 'service', text: 'ISOLATION · KEEP DOORS SHUT', w: 1.8});
 }
 
 /** The medical inspection post's notice (its furniture is the station dresser's first-aid room). */
@@ -350,8 +369,10 @@ function billeting(D: Dx, a: Area): void {
   wallSign(D, a, 'S', (a.x + a.w / 2) * CELL, 2.4, {kind: 'info', text: 'LEVEL & DORMITORY ALLOCATIONS', w: 2.2});
 }
 
-/** The vestibule (spine-owned): its stair / lift wayfinding. */
+/** The vestibule (spine-owned; its lift / stair aprons are kept clear): goods waiting for the lift by the receiving door, wayfinding. */
 function vestibule(D: Dx, v: Area): void {
+  along(D, v, 'parcelPallet', 'E', 2, 0.8, (v.y + 3) * CELL);
+  scanWall(D, v, 'handTruck', ['E'], 0.4, (v.y + 7) * CELL);
   wallSign(D, v, 'N', (V2.station.laneX - 6) * CELL, 2.2, {kind: 'info', text: 'ADMITTED PERSONS · LEVEL 1 DECONTAMINATION', w: 2.6});
   wallSign(D, v, 'N', (V2.station.laneX + 9) * CELL, 2.2, {kind: 'exit', text: 'EXIT · TO THE TRAINS', w: 1.6});
 }

@@ -12,14 +12,15 @@
 //    side behind it with the records; two narrow INSPECTION GATES lead from there into the vault hall; the MARSHALS' POST behind it
 //    has its own side door onto the apron before the blast door;
 //  - the WAITING HALL (east, low 3.6 m) — the vault hall's side aisle behind an arcade of piers: benches in rows facing the door,
-//    luggage, bedrolls of families who waited days for their group to be called; off it the MEDICAL INSPECTION post and, behind that,
-//    the OBSERVATION WARD (a dead end with failing lights: arrivals held there for a fever or a wound);
+//    luggage, bedrolls of families who waited days for their group to be called; off it the MEDICAL INSPECTION post and, down a
+//    narrow low corridor behind it, the OBSERVATION WARD (the dead end, failing lights: arrivals held there for a fever or a wound);
 //  - SURRENDERED PROPERTY at the far end of the registration side (baggage over the allowance, receipts at the counter).
 // The VAULT SIDE (behind the bulkhead, off the spine's vestibule only): RECEIVING (goods in, beside the cargo lift's landing) and the
 // BILLETING OFFICE (where the admitted were given their level and dormitory before going down the main stair).
 //
 // Scale rhythm: platform 5.2 m → portal 3.2 m (compression) → vault hall 6.4 m (release) ↔ side halls 3.6 m → rooms 3.2-3.4 m; the
-// inspection gates (1.5 m) and the marshals' door are the constrained links, the arcade and the portals the open ones.
+// inspection gates (1.5 m), the marshals' door and the observation corridor (2 m x 3 m) are the constrained links, the arcade and the
+// portals the open ones.
 // Loot by purpose (the station reads as admission): admission kits on the registration counter (the shelter lock's supply table),
 // personal belongings in the waiting hall (dormitory rows), surrendered baggage (lost property), the marshals' security office, the
 // medical inspection's first-aid stock and the observation ward's medicines, receiving's supplies. No gas, generator or core here.
@@ -63,8 +64,12 @@ function carve(ctx: FloorCarveCtx): FloorCarveResult | null {
   const medW = rng.pick([14, 15, 16]);
   const med = add('medical', R(ex1 + 1, y0, medW, H), 'room', 'crew-room', F0_CLEAR.ward, wait.id, 'first-aid-room');
   if (!prop || !med) return null;
-  const ox0 = ex1 + 1 + medW + 1, oy0 = y0 + rng.int(4, 7);
-  const obs = add('observation', R(ox0, oy0, rng.pick([15, 16, 18]), S.bulkheadY - oy0), 'room', 'crew-room', F0_CLEAR.room, med.id, BUNKER_PURPOSE.decon);
+  // the observation corridor: a narrow, low passage off the medical post's far wall, the ward at its end (the floor's deepest dead end)
+  const medE = ex1 + medW, cx0 = medE + 2, cLen = rng.int(9, 12), cy = S.bulkheadY - 7 - rng.int(0, 3);
+  const corr = add('corridor', R(cx0, cy, cLen, 4), 'room', 'utility', F0_CLEAR.corridor, med.id, BUNKER_PURPOSE.decon);
+  if (!corr) return null;
+  const ox0 = cx0 + cLen + 1, oy0 = y0 + rng.int(3, 6);
+  const obs = add('observation', R(ox0, oy0, 133 - ox0, S.bulkheadY - oy0), 'room', 'crew-room', F0_CLEAR.room, corr.id, BUNKER_PURPOSE.decon);
   if (!obs) return null;
   // --- openings ---------------------------------------------------------------------------------------------------------------------
   const openings: Rect[] = [];
@@ -85,16 +90,18 @@ function carve(ctx: FloorCarveCtx): FloorCarveResult | null {
   for (const ay of [y0 + 1, y0 + 9, y0 + 17]) ctx.door(R(wE, ay, 1, 6), wait, hall, 3.0);
   // waiting hall -> medical inspection -> observation ward (the dead end)
   ctx.door(R(ex1, y0 + 10 + rng.int(0, 4), 1, 4), wait, med, 2.6);
-  ctx.door(R(ex1 + 1 + medW, S.bulkheadY - 6 - rng.int(0, 4), 1, 3), med, obs, 2.6);
+  ctx.door(R(medE + 1, cy + rng.int(0, 1), 1, 3), med, corr, 2.4);
+  ctx.door(R(ox0 - 1, cy + rng.int(0, 1), 1, 3), corr, obs, 2.4);
   // --- the vault side (off the vestibule only) --------------------------------------------------------------------------------------
   const vx1 = vest.x + vest.w; // the vestibule's east wall column (73)
   // (holders carry the floor's programme by PURPOSE: receiving's stores, the billeting officer's office)
   const recv = add('receiving', R(vx1 + 1, vest.y, rng.pick([16, 18, 20]), rng.pick([14, 16])), 'room', 'storage', F0_CLEAR.receiving, vest.id, 'storage');
   const bil = add('billeting', R(vest.x - 1 - 12, vest.y + 2, 12, rng.pick([9, 10, 11])), 'room', 'agent-office', F0_CLEAR.room, vest.id, 'agent-office');
   if (!recv || !bil) return null;
-  ctx.door(R(vx1, vest.y + vest.h - 7, 1, 6), vest, recv, 3.0); // the goods door beside the lift's landing
+  // the goods door beside the lift's landing (inside both walls' shared span)
+  ctx.door(R(vx1, Math.min(vest.y + vest.h - 7, recv.y + recv.h - 7), 1, 6), vest, recv, 3.0);
   ctx.door(R(vest.x - 1, bil.y + 3 + rng.int(0, 2), 1, 3), vest, bil, 2.6);
-  return {areas, openings, gas: [], damp: [], aged: [obs.id]};
+  return {areas, openings, gas: [], damp: [], aged: [corr.id, obs.id]};
 }
 
 export const FLOOR_0: BunkerFloorModule = {

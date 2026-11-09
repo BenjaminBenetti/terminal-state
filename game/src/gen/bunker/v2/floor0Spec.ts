@@ -5,21 +5,21 @@ import {CELL} from '../../grid';
 import {V2} from './spine';
 
 /** Clear heights (m above the station floor). The vault hall is the storey's one tall room; the side halls are low on purpose. */
-export const F0_CLEAR = {vaultHall: 6.4, sideHall: 3.6, room: 3.2, ward: 3.4, receiving: 4.8} as const;
+export const F0_CLEAR = {vaultHall: 6.4, sideHall: 3.6, room: 3.2, ward: 3.4, corridor: 3.0, receiving: 4.8} as const;
 
 /** The floor's area keys (FloorCarveResult.areas). */
-export const F0_KEYS = ['vaultHall', 'registration', 'marshals', 'waiting', 'property', 'medical', 'observation', 'receiving', 'billeting'] as const;
+export const F0_KEYS = ['vaultHall', 'registration', 'marshals', 'waiting', 'property', 'medical', 'corridor', 'observation', 'receiving', 'billeting'] as const;
 export type F0Key = (typeof F0_KEYS)[number];
 
 /** Area labels (docs / QA / tests). */
 export const F0_LABELS: Readonly<Record<F0Key, string>> = {
   vaultHall: 'Vault hall', registration: 'Registration hall', marshals: "Marshals' post", waiting: 'Waiting hall', property: 'Surrendered property',
-  medical: 'Medical inspection', observation: 'Observation ward', receiving: 'Receiving', billeting: 'Billeting office',
+  medical: 'Medical inspection', corridor: 'Observation corridor', observation: 'Observation ward', receiving: 'Receiving', billeting: 'Billeting office',
 };
 
 /** Door plates in the shelter's words (original civil-defence wording). */
 export const F0_PLATES: Readonly<Partial<Record<F0Key, string>>> = {
-  marshals: 'SHELTER MARSHALS', property: 'SURRENDERED PROPERTY', medical: 'MEDICAL INSPECTION', observation: 'OBSERVATION · NO ADMITTANCE',
+  marshals: 'SHELTER MARSHALS', property: 'SURRENDERED PROPERTY', medical: 'MEDICAL INSPECTION', corridor: 'OBSERVATION · STAFF ONLY', observation: 'HELD FOR OBSERVATION',
   receiving: 'RECEIVING · GOODS IN', billeting: 'BILLETING OFFICE',
 };
 
