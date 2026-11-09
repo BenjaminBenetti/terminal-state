@@ -15,6 +15,7 @@ import type {StationLayout} from '../src/gen/stationTypes';
 import {BUNKER_CORE_DIMS, BUNKER_CORE_KIND, BUNKER_GENERATOR_COUNT, BUNKER_GENERATOR_DIMS, BUNKER_GENERATOR_KIND, type BunkerInfo} from '../src/gen/bunker/bunkerTypes';
 import {BUNKER_CORE, BUNKER_GEN, installBunkerObjective, type BunkerObjective} from '../src/world/bunker/objective';
 import {BUNKER_LANE, type BunkerStateJSON} from '../src/world/bunker/objectiveState';
+import type {FuelHoseTarget} from '../src/world/fuelCarts';
 import {BUNKER_OBJECTIVE_MODELS, CORE_LAYOUT, CORE_USE, GEN_AIM, GEN_PANEL, GEN_USE, genNeckMouth, genToWorld} from '../src/world/bunker/objectiveViews';
 import {FUEL_PORT} from '../src/world/fuelPort';
 import {POUR_VIEW} from '../src/world/fuelPourView';
@@ -100,6 +101,7 @@ function shell(o: {campaign?: CampaignState | null; layout?: StationLayout | nul
     world: {culler: {register: () => { calls.registered++; }}},
     atmosphere: {addSmokeEmitter: () => { calls.smoke++; return {id: 1, alive: true, emitting: true, setPos() {}, stop() {}}; }},
     fuelPort: {heldObj: null as THREE.Object3D | null},
+    fuelCarts: {targets: [] as FuelHoseTarget[]}, // (task studio-bunker-rework-20261109-205115-01: the carts' hose targets)
   };
   const sys = installBunkerObjective(g as unknown as Game);
   // every lane write of the run (the objective must only ever write BUNKER_LANE)
@@ -210,7 +212,7 @@ describe('bunker objective: inert elsewhere, the views, the warm-up, the wiring'
     // teardown removes it all and saves the record
     s.teardown();
     expect(s.g.scene.children.length).toBe(0);
-    expect(s.lane()).toEqual({v: 1, gens: {'gen-0': 'off', 'gen-1': 'off', 'gen-2': 'off'}});
+    expect(s.lane()).toEqual({v: 2, gens: {'gen-0': 'off', 'gen-1': 'off', 'gen-2': 'off'}, fuel: {'gen-0': 0, 'gen-1': 0, 'gen-2': 0}});
   });
 
   it('game.ts installs it with one line; the runtime never touches the Reactor\'s state, visuals or win', () => {
@@ -230,7 +232,7 @@ describe('bunker objective: the fuel pour (exactly one can, only on success)', (
     s.standAtGen(0);
     s.step();
     expect(s.sys.target).toMatchObject({kind: 'gen', index: 0});
-    expect(s.prompt()).toBe('<b>[E]</b> Pour a fuel can · auxiliary generator A (Habitation plant room) OFFLINE · 2 cans');
+    expect(s.prompt()).toBe('<b>[E]</b> Pour a fuel can · auxiliary generator A (Habitation plant room) OFFLINE · needs ¼ tank · 2 cans');
     expect(s.press()).toBe(true);
     expect(s.sys.pour).not.toBeNull();
     expect(s.calls.pour).toBe(1);
@@ -307,9 +309,9 @@ describe('bunker objective: the fuel pour (exactly one can, only on success)', (
     const s = shell();
     s.standAtGen(0);
     s.step();
-    expect(s.prompt()).toBe('<b>[E]</b> Auxiliary generator A (Habitation plant room) OFFLINE · no fuel — needs one fuel can');
+    expect(s.prompt()).toBe('<b>[E]</b> Auxiliary generator A (Habitation plant room) OFFLINE · needs ¼ tank of fuel — a fuel can or a fuel cart\'s hose');
     expect(s.press()).toBe(true);
-    expect(s.toasts.at(-1)).toEqual({text: 'No fuel can', warn: true});
+    expect(s.toasts.at(-1)).toEqual({text: 'No fuel — pour a fuel can or connect a fuel cart\'s hose', warn: true});
     const bag = s.h.inv.makeStack('backpack', 1);
     expect(s.h.inv.add(bag)).toBe(0);
     const inBag = s.h.inv.makeStack(FUEL.canItem, 2);
@@ -423,6 +425,41 @@ describe('bunker objective: the fuel pour (exactly one can, only on success)', (
   });
 });
 
+describe('bunker objective: a fuel cart hose is a common source (task studio-bunker-rework-20261109-205115-01)', () => {
+  it('each generator\'s filler is a hose target while the station is built: one unit fuels it (saved), no more; gone at teardown', () => {
+    const s = shell();
+    const T = s.g.fuelCarts.targets;
+    expect(T.map(t => [t.id, t.label])).toEqual([['bunker:gen-0', 'auxiliary generator A'], ['bunker:gen-1', 'auxiliary generator B'], ['bunker:gen-2', 'auxiliary generator C']]);
+    // the filler: the generator's neck mouth in the world
+    const m = genToWorld(s.info().generators[1], genNeckMouth());
+    const c = T[1].cap();
+    expect(Math.hypot(c.x - m.x, c.y - m.y, c.z - m.z)).toBeLessThan(1e-6);
+    expect(T.map(t => t.room())).toEqual([1, 1, 1]);
+    expect(T[1].take()).toBe(true);
+    expect(s.sys.genState(1)).toBe('fuelled');
+    expect(s.lane()).toEqual({v: 2, gens: {'gen-0': 'off', 'gen-1': 'fuelled', 'gen-2': 'off'}, fuel: {'gen-0': 0, 'gen-1': 1, 'gen-2': 0}});
+    expect(T[1].room()).toBe(0);
+    expect(T[1].take()).toBe(false); // no overfill
+    expect(s.sys.counts.hoseUnits).toBe(1);
+    // the turnkey start needs nothing more (the hose's unit is the fuel); online takes nothing
+    s.startGen(1);
+    expect(s.sys.genState(1)).toBe('online');
+    expect(T[1].room()).toBe(0);
+    expect(s.cans()).toBe(0);
+    // a pour in progress at a generator: its hose target takes nothing meanwhile
+    s.give(1);
+    s.standAtGen(0);
+    s.step();
+    expect(s.press()).toBe(true);
+    expect(T[0].room()).toBe(0);
+    expect(T[0].take()).toBe(false);
+    s.step(FUEL_PORT.pourS + 0.05);
+    expect(s.sys.genState(0)).toBe('fuelled');
+    s.teardown();
+    expect(s.g.fuelCarts.targets).toHaveLength(0);
+  });
+});
+
 describe('bunker objective: the turnkey start', () => {
   it('hold [E] on a FUELLED generator -> ONLINE (saved): the ring, the key turns, the start clip, one alert, cranking then running', () => {
     const s = shell();
@@ -491,7 +528,7 @@ describe('bunker objective: the turnkey start', () => {
     expect(s.cans()).toBe(3);
     expect(s.sys.counts.pours).toBe(1);
     expect(s.sys.counts.starts).toBe(1);
-    expect(s.lane()).toEqual({v: 1, gens: {'gen-0': 'online', 'gen-1': 'off', 'gen-2': 'off'}});
+    expect(s.lane()).toEqual({v: 2, gens: {'gen-0': 'online', 'gen-1': 'off', 'gen-2': 'off'}, fuel: {'gen-0': 1, 'gen-1': 0, 'gen-2': 0}});
     expect(s.sys.start(0)).toBe(false); // no second start
     expect(s.calls.cues).toBe(1);
   });
