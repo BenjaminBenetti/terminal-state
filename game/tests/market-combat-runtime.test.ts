@@ -94,8 +94,18 @@ describe('market people are targets with an ordinary zombie\'s health', () => {
     expect(shootAt(w, eye, at()).mh).toBeNull();
     // another person: 6 torso rounds
     const q = w.combat.people.find(x => x !== p && x.state === 'alive' && x.id.startsWith('resident:'))!;
-    q.actor.x = p.actor.x + 30; // (out of the way; poses are re-read from the bones)
-    faceOff(w, q, 4);
+    // (out of the way; poses are re-read from the bones) — re-pinned by task studio-market-bar-20261108-225231-01 (lane BAR): the default market
+    // is layout version 3, whose longer spot list (the bar's drink posts) starts the residents elsewhere, so "30 m along x" could leave
+    // the floor; out of the way = the lane / yard spot on the ground farthest from the body that has a clear shooting spot round it
+    const far = w.layout.market!.spots.filter(s => s.level === 0 && w.layout.areas[s.area]?.kind === 'concourse')
+      .sort((a, b) => Math.hypot(b.x - p.actor.x, b.z - p.actor.z) - Math.hypot(a.x - p.actor.x, a.z - p.actor.z));
+    let placed = false;
+    for (const c of far) {
+      Object.assign(q.actor, {x: c.x, y: c.y, z: c.z});
+      q.actor.sync();
+      try { faceOff(w, q, 4); placed = true; break; } catch { /* the next one */ }
+    }
+    expect(placed).toBe(true);
     const e2 = new THREE.Vector3(w.player.x, q.actor.y + 1.2, w.player.z);
     let n = 0;
     while (q.state === 'alive' && n < 12) { q.actor.sync(); const {mh} = shootAt(w, e2, bonePos(q, 'Spine')); if (mh) n++; else break; }

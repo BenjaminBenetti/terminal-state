@@ -3,6 +3,8 @@
 // impacts), plywood-lined container interiors and floors, corrugated rooftops; the art derived from the layout (gen/market/v2/art.ts):
 // fans high over the yard / lanes only, an awning on the lane side of every stall / tea / kitchen / repair opening (never under a
 // bridge), laundry / cable lines across the lanes high over every walking band; world/marketVisuals.ts builds them.
+// (Re-pinned by task studio-market-bar-20261108-225231-01, lane BAR: the default is now layout version 3, the settlement plus the bar —
+// market-bar-layout.test.ts covers its fans / look — so this version-2 look test generates version 2 explicitly.)
 import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
 import {installCanvasShim} from './helpers/canvas2d';
@@ -21,7 +23,7 @@ import {CELL} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
 
 installCanvasShim(false);
-const L = generateMarketLevel({levelSeed: 77}) as StationLayout;
+const L = generateMarketLevel({levelSeed: 77, layoutVersion: 2}) as StationLayout;
 
 describe('the Survivor Market look, layout version 2', () => {
   it('the builder paints the containers (several paints), plywood inside, corrugated rooftops; every key arch-owned', () => {
