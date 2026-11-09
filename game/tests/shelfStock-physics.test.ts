@@ -67,6 +67,13 @@ function blast(S: ShelfStock, props: PropPlacement[], eye: THREE.Vector3, aim: T
 }
 
 const moved = (p: FillerPiece) => p.p.distanceTo(p.home) > 0.03;
+/** x of the fullest 0.6 m window of a board's pieces (the single holder's), searched in 5 cm steps over the shelf. */
+function densestX(S: ShelfStock, board: number): number {
+  const xs = S.filler.pieces.filter(p => S.holders[p.holder].placements[p.id - S.holders[p.holder].first].board === board).map(p => p.p.x);
+  let best = 8, n = -1;
+  for (let x = 7.7; x <= 8.3001; x += 0.05) { const k = xs.filter(v => Math.abs(v - x) < 0.3).length; if (k > n) { n = k; best = x; } }
+  return best;
+}
 /**
  * Floor under a settled piece: the hall floor (0), or the track bed (trench floorY) over the VOID strip — iteration 12: light junk
  * (open boxes, empty bottles) rebounding off the shelf back can carry across the hall into the track bed; it must rest ON it.
@@ -159,11 +166,30 @@ describe('an ordinary shotgun blast into a stocked shelf', () => {
    * board (41 pieces on the grocery shelf's 2nd board) — >= 20 pieces displaced > 5 cm, >= 8 on the floor, a
    * piece >= 1.5 m away, everything settled in bounds, never more than the body cap. Six pellet patterns:
    * the first must meet the target on its own, the mean of all six too, and none may be a dud.
+   * Task food-shelf-production (lane SHELF): the grocery board now holds real-size modelled ruins (seed 2024: 8 pieces — two 0.32 m
+   * mouldy loaves and bloated cans, measured 3..8 of 8 displaced per pattern), so the FULL board of small packages is the pharmacy
+   * shelf's 2nd board (40 pieces; measured 32..39 displaced, 21..30 on the floor, 2.6..4.8 m); the grocery board is held to moving
+   * most of its (fewer, bigger) pieces in the next test's terms below.
    */
   it('one ordinary shot at 2.6 m sends a full board flying (measured target), coherent and bounded', () => {
     const results: {hits: number; disp: number; floor: number; max: number}[] = [];
+    const grocery: number[] = [];
     for (let shot = 0; shot < 6; shot++) {
-      const sh = stockProp('stockShelf', 8, 3, {variant: 1});
+      const g = stockProp('stockShelf', 8, 3, {variant: 1}), GL = hall([g], 2024), gs = scene(GL);
+      const gb = gs.S.holders[0].placements.filter(p => p.board === 1).length;
+      expect(gb).toBeGreaterThanOrEqual(6);
+      {
+        const eye = new THREE.Vector3(8, 1.6, 3 + g.hz + 2.6), aim = new THREE.Vector3(8, SHELF_TIER_Y[1] + 0.12, 3.12);
+        for (const dir of pellets(eye, aim, 11 + shot * 7919)) {
+          const d = {x: dir.x, y: dir.y, z: dir.z};
+          const wh = raycastWorld(GL.grid, GL.props, eye, d, WEAPONS.shotgun.range, GL.trench.floorY);
+          const fh = gs.S.pelletHit(eye, d, wh.t, wh, GL.props, false);
+          if (fh) gs.S.shoot(fh, dir, WEAPONS.shotgun.damage);
+        }
+        run(gs.ph, 10);
+        grocery.push(gs.S.filler.pieces.filter(q => q.home.y > SHELF_TIER_Y[1] - 0.01 && q.home.y < SHELF_TIER_Y[2] - 0.01 && q.p.distanceTo(q.home) > 0.05).length / gb);
+      }
+      const sh = stockProp('stockShelf', 8, 3, {variant: 2});
       const L = hall([sh], 2024);
       const {ph, S} = scene(L);
       expect(S.holders[0].placements.filter(p => p.board === 1).length).toBeGreaterThanOrEqual(20); // iteration 12: abandoned (junk) stock — was 41 fresh packages
@@ -199,6 +225,9 @@ describe('an ordinary shotgun blast into a stocked shelf', () => {
     expect(mean('floor')).toBeGreaterThanOrEqual(8);
     expect(mean('max')).toBeGreaterThanOrEqual(1.5);
     for (const r of results) { expect(r.disp).toBeGreaterThanOrEqual(10); expect(r.floor).toBeGreaterThanOrEqual(5); }
+    // the grocery board of real-size modelled ruins: most of it goes every time, all of it often
+    expect(grocery.reduce((a, b) => a + b, 0) / grocery.length).toBeGreaterThanOrEqual(0.6);
+    for (const k of grocery) expect(k).toBeGreaterThanOrEqual(0.25);
   });
 
   it('sends a group of pieces flying, keeps knock-on local, and everything settles on boards / the floor', () => {
@@ -209,9 +238,12 @@ describe('an ordinary shotgun blast into a stocked shelf', () => {
       const {ph, S} = scene(L);
       // iteration 12: aimed at the middle of what stands on the board round x = 8 (the lower, gappier junk stock) — was a fixed
       // 0.12 m over the board, made for the old full blocks of fresh packages
-      const onBoard = S.filler.pieces.filter(p => S.holders[p.holder].placements[p.id - S.holders[p.holder].first].board === 1 && Math.abs(p.p.x - 8) < 0.3);
+      // (task food-shelf-production: round the board's fullest 0.6 m window — the real-size modelled pieces leave the gaps elsewhere
+      // than x = 8 depending on the seed; was fixed at x = 8)
+      const cx = densestX(S, 1);
+      const onBoard = S.filler.pieces.filter(p => S.holders[p.holder].placements[p.id - S.holders[p.holder].first].board === 1 && Math.abs(p.p.x - cx) < 0.3);
       const mid = onBoard.reduce((v, p) => v.add(p.p), new THREE.Vector3()).multiplyScalar(1 / Math.max(1, onBoard.length));
-      const eye = new THREE.Vector3(8.1, 1.6, 3 + sh.hz + 2.5), aim = new THREE.Vector3(mid.x, mid.y, 3.1);
+      const eye = new THREE.Vector3(cx + 0.1, 1.6, 3 + sh.hz + 2.5), aim = new THREE.Vector3(mid.x, mid.y, 3.1);
       const hits = blast(S, L.props, eye, aim, 11 + variant);
       expect(hits.length).toBeGreaterThanOrEqual(4); // most pellets of a 9-pellet shot land in the stock
       let maxAwake = 0;
@@ -315,7 +347,8 @@ describe('budget, persistence, no loot', () => {
     ph.dynamicItems.liftLots = box => { lifted.push(box.clone()); return []; };
     const pickups: unknown[] = [];
     ph.dynamicItems.pickups = () => pickups as never;
-    blast(S, L.props, new THREE.Vector3(8, 1.6, 5.7), new THREE.Vector3(8, 0.75, 3.1), 4);
+    const cx = densestX(S, 1); // (task food-shelf-production: at the board's fullest window, was x = 8)
+    blast(S, L.props, new THREE.Vector3(cx, 1.6, 5.7), new THREE.Vector3(cx, 0.75, 3.1), 4);
     run(ph, 4);
     expect(lifted.length).toBeGreaterThan(0); // swept boxes of fast pieces were offered to the loot lift
     expect(pickups.length).toBe(0);

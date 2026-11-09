@@ -30,7 +30,7 @@ import {placementBox, type Orient, type Placement, type Surface} from './lootLay
 import {slotOf, type SlotCategory} from './lootTables';
 import {holderTheme, lootTheme, type LootTheme} from './lootEconomy';
 import {holderTable, type HolderKind} from './loot';
-import {BASELINE_PROFILE, type LootProfile} from './lootTables';
+import {BASELINE_PROFILE, catWeight, lootProfile, type LootProfile} from './lootTables';
 import {holderKey} from '../run/memory';
 import type {StationLayout} from '../gen/stationTypes';
 import {
@@ -52,7 +52,7 @@ export interface PantryFamily { base: string; keep: number; members: Readonly<Pa
 export const PANTRY_FAMILIES: Readonly<Record<string, PantryFamily>> = {
   chocolate: {base: 'chocolate', keep: 0.30, members: {[BUTTER_COOKIES]: 1.0, [PUDDING_CUPS]: 0.9, [RAISINS]: 1.0, [HONEY]: 0.7, [FRUIT_PUREE]: 0.8}},
   chips: {base: 'chips', keep: 0.40, members: {[JERKY]: 1.0, [TRAIL_MIX]: 1.1, [RICE_CRACKERS]: 0.8, [SALTINES]: 1.0}},
-  beans: {base: 'beans', keep: 0.40, members: {[CORNED_BEEF]: 1.2, [SARDINES]: 1.1, [PICKLES]: 0.6, [FIELD_RATION]: 0.7, [RATION_BRICK]: 0.18, [WAX_CHEESE]: 0.6}},
+  beans: {base: 'beans', keep: 0.40, members: {[CORNED_BEEF]: 1.2, [SARDINES]: 1.1, [PICKLES]: 0.4, [FIELD_RATION]: 0.7, [RATION_BRICK]: 0.18, [WAX_CHEESE]: 0.5, [SMOKED_SAUSAGE]: 0.5}},
   noodles: {base: 'noodles', keep: 0.45, members: {[ROLLED_OATS]: 1.2, [PEANUT_BUTTER]: 1.0, [SMOKED_SAUSAGE]: 0.8, [WAX_CHEESE]: 0.6}},
   cola: {base: 'cola', keep: 0.50, members: {[GINGER_SODA]: 1.0, [ICED_COFFEE]: 1.0}},
   juice: {base: 'juice', keep: 0.45, members: {[JUICE_BOXES]: 1.0, [UHT_MILK]: 0.9, [ICED_TEA]: 1.0}},
@@ -80,8 +80,8 @@ export const LEVEL_PANTRY: Readonly<Record<string, readonly PantryId[]>> = {
   market: [HONEY, RAISINS, BUTTER_COOKIES, JERKY, RICE_CRACKERS, TRAIL_MIX, CORNED_BEEF, SARDINES, PICKLES, FIELD_RATION, RATION_BRICK, WAX_CHEESE,
     SMOKED_SAUSAGE, ROLLED_OATS, PEANUT_BUTTER, GINGER_SODA, UHT_MILK, ICED_TEA, SPORTS_DRINK],
   // the skyways: skywalk shops, the ramen restaurant's fridges, the convention
-  skyways: [PUDDING_CUPS, FRUIT_PUREE, BUTTER_COOKIES, RICE_CRACKERS, TRAIL_MIX, JERKY, SARDINES, PICKLES, WAX_CHEESE, SMOKED_SAUSAGE, ICED_COFFEE,
-    GINGER_SODA, ICED_TEA, JUICE_BOXES, UHT_MILK, SPORTS_DRINK],
+  skyways: [PUDDING_CUPS, FRUIT_PUREE, BUTTER_COOKIES, RICE_CRACKERS, TRAIL_MIX, JERKY, CORNED_BEEF, SARDINES, PICKLES, WAX_CHEESE, SMOKED_SAUSAGE,
+    ICED_COFFEE, GINGER_SODA, ICED_TEA, JUICE_BOXES, UHT_MILK, SPORTS_DRINK],
   // the reactor: control rooms, bunkers, maintenance
   reactor: [RAISINS, HONEY, JERKY, SALTINES, FIELD_RATION, RATION_BRICK, CORNED_BEEF, SARDINES, PEANUT_BUTTER, ROLLED_OATS, ICED_COFFEE, UHT_MILK, SPORTS_DRINK],
 };
@@ -89,6 +89,15 @@ export const LEVEL_PANTRY: Readonly<Record<string, readonly PantryId[]>> = {
 /** The pantry items `level` can realize (its palette; every item for an unknown level). */
 export function levelPantryIds(level: string): readonly PantryId[] {
   return LEVEL_PANTRY[level] ?? PANTRY_IDS;
+}
+
+/**
+ * The pantry models a level's loading screen fetches for its OWN loot (world/pantryModels.ts): its palette — none for a level whose loot
+ * profile rolls no food and no drink at all (the Survivor Market: its goods are trader stock, MARKET_PROFILE zeroes both categories).
+ */
+export function levelPreloadPantryIds(level: string): readonly PantryId[] {
+  const p = lootProfile(level as never);
+  return catWeight(p, 'food', 1) > 0 || catWeight(p, 'drink', 1) > 0 ? levelPantryIds(level) : [];
 }
 
 /** The holder context of a realization: the logical level, the holder's loot theme and slot ('floor' for a loose layout pickup). */

@@ -52,12 +52,24 @@ export interface JunkProp {
   look: StockLook;
   /** Procedural fallback (world/shelfStockGeometry.ts recipe, drawn at this prop's own box). */
   fallback: {shape: StockShape; label: LabelKind; variants: number};
+  /** Heavy bulk goods (sacks, a crate of fruit) stand on a holder's bottom deck only (world/shelfStockLayout.ts LOW_DECK_Y). */
+  low?: boolean;
+  /**
+   * The authored archetype that stands in for it when a station's triangle budget lowers the model share (world/shelfStock.ts
+   * thinning passes; world/shelfStockLayout.ts categoryRows): the crude piece it replaced in that role.
+   */
+  standIn: string;
+  /**
+   * Lies on its back on a shelf (the cooked part stands upright facing +Z): a thin card would not stand on its edge, so its template
+   * is turned face up (front +Z -> +Y) and its box is the lying one (w, d, h).
+   */
+  layFlat?: boolean;
 }
 
 const J = (id: string, slug: string, family: JunkFamily, ref: JunkProp['ref'], est: [number, number, number],
   phys: Pick<JunkProp, 'collider' | 'mass' | 'mat' | 'fam' | 'hit'> & {fit?: [number, number, number]},
-  shelf: [stack: number, depth: number, facings: [number, number]], look: StockLook, fallback: JunkProp['fallback']): JunkProp =>
-  ({id, slug, family, ref, est, ...phys, stack: shelf[0], depth: shelf[1], facings: shelf[2], look, fallback});
+  shelf: [stack: number, depth: number, facings: [number, number]], look: StockLook, fallback: JunkProp['fallback'], standIn: string, low = false): JunkProp =>
+  ({id, slug, family, ref, est, ...phys, stack: shelf[0], depth: shelf[1], facings: shelf[2], look, fallback, standIn, ...(low ? {low} : {}), ...(id === 'P17' ? {layFlat: true} : {})});
 
 const CARD = (mass: number, fam: ImpactFamily = 'light') => ({collider: 'box', mass, mat: 'soft', fam, hit: 'cardboard'} as const);
 const TIN = (mass: number, collider: 'box' | 'cylinder' = 'cylinder') => ({collider, mass, mat: 'metal', fam: 'can', hit: 'sheetMetal'} as const);
@@ -66,35 +78,35 @@ const PLAS = (mass: number) => ({collider: 'box', mass, mat: 'plastic', fam: 'li
 /** The 27 ruined props (manifest order). Masses: what is left of the package after ~30 years (dried, burst, emptied). */
 export const JUNK_PROPS: readonly JunkProp[] = [
   // --- 12 spoiled groceries (food shops / back-of-house food storage) -------------------------------------------------------
-  J('P01', 'mouldy_loaf', 'food', {axis: 'w', m: 0.32}, [0.32, 0.13, 0.14], {...CARD(0.35), hit: 'food', fit: [0.95, 0.9, 0.9]}, [2, 2, [1, 2]], 'spoiled', {shape: 'loaf', label: 'loaf', variants: 3}),
-  J('P02', 'bloated_can', 'food', {axis: 'h', m: 0.12}, [0.085, 0.12, 0.085], TIN(0.45), [2, 2, [1, 3]], 'spoiled', {shape: 'tin', label: 'rusttin', variants: 3}),
-  J('P03', 'burst_milk', 'food', {axis: 'h', m: 0.25}, [0.095, 0.25, 0.095], CARD(0.12), [1, 2, [1, 2]], 'spoiled', {shape: 'gable', label: 'carton', variants: 3}),
-  J('P04', 'rotten_fruit_crate', 'food', {axis: 'w', m: 0.40}, [0.40, 0.22, 0.28], {collider: 'box', mass: 2.6, mat: 'wood', fam: 'wood', hit: 'wood', fit: [0.96, 0.92, 0.96]}, [1, 1, [1, 1]], 'spoiled', {shape: 'openbox', label: 'cartonbox', variants: 3}),
-  J('P05', 'crushed_cereal', 'food', {axis: 'h', m: 0.30}, [0.21, 0.30, 0.08], {...CARD(0.12), fit: [0.94, 0.95, 0.85]}, [1, 2, [1, 2]], 'trash', {shape: 'crushed', label: 'cereal', variants: 4}),
-  J('P06', 'mould_jar', 'food', {axis: 'h', m: 0.18}, [0.10, 0.18, 0.10], {collider: 'cylinder', mass: 0.55, mat: 'glass', fam: 'glass', hit: 'glass'}, [1, 2, [1, 3]], 'spoiled', {shape: 'jar', label: 'jar', variants: 4}),
-  J('P07', 'flour_sack', 'food', {axis: 'h', m: 0.40}, [0.26, 0.40, 0.15], {...CARD(1.8, 'cardboard'), hit: 'fabric', fit: [0.9, 0.95, 0.85]}, [1, 1, [1, 1]], 'spoiled', {shape: 'box', label: 'cartonbox', variants: 3}),
-  J('P08', 'deli_clamshell', 'food', {axis: 'w', m: 0.18}, [0.18, 0.08, 0.15], PLAS(0.12), [2, 2, [1, 2]], 'spoiled', {shape: 'box', label: 'pantry', variants: 4}),
-  J('P09', 'egg_carton', 'food', {axis: 'w', m: 0.16}, [0.16, 0.07, 0.10], CARD(0.12), [2, 2, [1, 2]], 'spoiled', {shape: 'box', label: 'cartonbox', variants: 3}),
-  J('P10', 'potato_sack', 'food', {axis: 'h', m: 0.40}, [0.30, 0.40, 0.22], {collider: 'box', mass: 3.2, mat: 'cloth', fam: 'cardboard', hit: 'fabric', fit: [0.88, 0.95, 0.85]}, [1, 1, [1, 1]], 'spoiled', {shape: 'box', label: 'cartonbox', variants: 3}),
-  J('P11', 'wrapper_cluster', 'food', {axis: 'w', m: 0.25}, [0.25, 0.08, 0.18], {...CARD(0.06), fit: [0.85, 0.8, 0.85]}, [1, 2, [1, 2]], 'trash', {shape: 'crumple', label: 'trash', variants: 4}),
-  J('P12', 'rusty_tins', 'food', {axis: 'h', m: 0.30}, [0.17, 0.30, 0.10], TIN(1.1, 'box'), [1, 2, [1, 2]], 'spoiled', {shape: 'box', label: 'rusttin', variants: 3}),
+  J('P01', 'mouldy_loaf', 'food', {axis: 'w', m: 0.32}, [0.32, 0.13, 0.14], {...CARD(0.35), hit: 'food', fit: [0.95, 0.9, 0.9]}, [1, 1, [1, 2]], 'spoiled', {shape: 'loaf', label: 'loaf', variants: 3}, 'loaf'),
+  J('P02', 'bloated_can', 'food', {axis: 'h', m: 0.12}, [0.085, 0.12, 0.085], TIN(0.45), [2, 2, [1, 3]], 'spoiled', {shape: 'tin', label: 'rusttin', variants: 3}, 'canRusty'),
+  J('P03', 'burst_milk', 'food', {axis: 'h', m: 0.25}, [0.095, 0.25, 0.095], CARD(0.12), [1, 2, [1, 2]], 'spoiled', {shape: 'gable', label: 'carton', variants: 3}, 'bottleEmpty'),
+  J('P04', 'rotten_fruit_crate', 'food', {axis: 'w', m: 0.40}, [0.40, 0.22, 0.28], {collider: 'box', mass: 2.6, mat: 'wood', fam: 'wood', hit: 'wood', fit: [0.96, 0.92, 0.96]}, [1, 1, [1, 1]], 'spoiled', {shape: 'openbox', label: 'cartonbox', variants: 3}, 'cartonOpen', true),
+  J('P05', 'crushed_cereal', 'food', {axis: 'h', m: 0.30}, [0.21, 0.30, 0.08], {...CARD(0.12), fit: [0.94, 0.95, 0.85]}, [1, 1, [1, 2]], 'trash', {shape: 'crushed', label: 'cereal', variants: 4}, 'snackboxOpen'),
+  J('P06', 'mould_jar', 'food', {axis: 'h', m: 0.18}, [0.10, 0.18, 0.10], {collider: 'cylinder', mass: 0.55, mat: 'glass', fam: 'glass', hit: 'glass'}, [1, 2, [1, 3]], 'spoiled', {shape: 'jar', label: 'jar', variants: 4}, 'jar'),
+  J('P07', 'flour_sack', 'food', {axis: 'h', m: 0.40}, [0.26, 0.40, 0.15], {...CARD(1.8, 'cardboard'), hit: 'fabric', fit: [0.9, 0.95, 0.85]}, [1, 1, [1, 1]], 'spoiled', {shape: 'box', label: 'cartonbox', variants: 3}, 'cartonS', true),
+  J('P08', 'deli_clamshell', 'food', {axis: 'w', m: 0.18}, [0.18, 0.08, 0.15], PLAS(0.12), [2, 1, [1, 2]], 'spoiled', {shape: 'box', label: 'pantry', variants: 4}, 'snackboxOpen'),
+  J('P09', 'egg_carton', 'food', {axis: 'w', m: 0.16}, [0.16, 0.07, 0.10], CARD(0.12), [2, 1, [1, 2]], 'spoiled', {shape: 'box', label: 'cartonbox', variants: 3}, 'snackboxOpen'),
+  J('P10', 'potato_sack', 'food', {axis: 'h', m: 0.40}, [0.30, 0.40, 0.22], {collider: 'box', mass: 3.2, mat: 'cloth', fam: 'cardboard', hit: 'fabric', fit: [0.88, 0.95, 0.85]}, [1, 1, [1, 1]], 'spoiled', {shape: 'box', label: 'cartonbox', variants: 3}, 'cartonS', true),
+  J('P11', 'wrapper_cluster', 'food', {axis: 'w', m: 0.25}, [0.25, 0.08, 0.18], {...CARD(0.06), fit: [0.85, 0.8, 0.85]}, [1, 1, [1, 2]], 'trash', {shape: 'crumple', label: 'trash', variants: 4}, 'wrapper'),
+  J('P12', 'rusty_tins', 'food', {axis: 'h', m: 0.30}, [0.17, 0.30, 0.10], TIN(0.9, 'box'), [1, 1, [1, 2]], 'spoiled', {shape: 'box', label: 'rusttin', variants: 3}, 'canRusty'),
   // --- 7 ruined boxes / packaging ----------------------------------------------------------------------------------------------
-  J('P13', 'retail_carton', 'box', {axis: 'w', m: 0.20}, [0.20, 0.14, 0.12], CARD(0.3), [2, 2, [1, 2]], 'box', {shape: 'box', label: 'cartonbox', variants: 3}),
-  J('P14', 'shipping_box', 'box', {axis: 'w', m: 0.55}, [0.55, 0.28, 0.27], CARD(1.2, 'cardboard'), [1, 1, [1, 1]], 'box', {shape: 'box', label: 'cartonbox', variants: 3}),
-  J('P15', 'torn_carton', 'box', {axis: 'w', m: 0.45}, [0.45, 0.24, 0.27], {...CARD(0.6, 'cardboard'), fit: [0.92, 1, 0.92]}, [1, 1, [1, 1]], 'box', {shape: 'openbox', label: 'cartonbox', variants: 3}),
-  J('P16', 'crushed_box', 'box', {axis: 'w', m: 0.45}, [0.45, 0.12, 0.27], {...CARD(0.4, 'cardboard'), fit: [0.92, 0.85, 0.95]}, [2, 1, [1, 1]], 'box', {shape: 'crushed', label: 'cartonbox', variants: 3}),
-  J('P17', 'blister_card', 'box', {axis: 'h', m: 0.25}, [0.15, 0.25, 0.04], PLAS(0.06), [1, 2, [1, 3]], 'trash', {shape: 'blister', label: 'blister', variants: 4}),
-  J('P18', 'carton_bundle', 'box', {axis: 'w', m: 0.30}, [0.30, 0.10, 0.24], CARD(1.6, 'cardboard'), [2, 1, [1, 1]], 'box', {shape: 'box', label: 'cartonbox', variants: 3}),
-  J('P19', 'shelf_tray', 'box', {axis: 'w', m: 0.40}, [0.40, 0.08, 0.26], {...CARD(0.35), fit: [0.96, 1, 0.96]}, [2, 1, [1, 1]], 'box', {shape: 'openbox', label: 'cartonbox', variants: 3}),
+  J('P13', 'retail_carton', 'box', {axis: 'w', m: 0.20}, [0.20, 0.14, 0.12], CARD(0.3), [2, 1, [1, 2]], 'box', {shape: 'box', label: 'cartonbox', variants: 3}, 'cartonS'),
+  J('P14', 'shipping_box', 'box', {axis: 'w', m: 0.55}, [0.55, 0.28, 0.27], CARD(1.2, 'cardboard'), [1, 1, [1, 1]], 'box', {shape: 'box', label: 'cartonbox', variants: 3}, 'cartonL'),
+  J('P15', 'torn_carton', 'box', {axis: 'w', m: 0.45}, [0.45, 0.24, 0.27], {...CARD(0.6, 'cardboard'), fit: [0.92, 1, 0.92]}, [1, 1, [1, 1]], 'box', {shape: 'openbox', label: 'cartonbox', variants: 3}, 'cartonOpen'),
+  J('P16', 'crushed_box', 'box', {axis: 'w', m: 0.45}, [0.45, 0.12, 0.27], {...CARD(0.4, 'cardboard'), fit: [0.92, 0.85, 0.95]}, [2, 1, [1, 1]], 'box', {shape: 'crushed', label: 'cartonbox', variants: 3}, 'cartonCrushed'),
+  J('P17', 'blister_card', 'box', {axis: 'h', m: 0.25}, [0.15, 0.25, 0.04], PLAS(0.06), [2, 1, [1, 3]], 'trash', {shape: 'box', label: 'blister', variants: 4}, 'blister'),
+  J('P18', 'carton_bundle', 'box', {axis: 'w', m: 0.30}, [0.30, 0.10, 0.24], CARD(1.6, 'cardboard'), [2, 1, [1, 1]], 'box', {shape: 'box', label: 'cartonbox', variants: 3}, 'cartonCrushed'),
+  J('P19', 'shelf_tray', 'box', {axis: 'w', m: 0.40}, [0.40, 0.08, 0.26], {...CARD(0.35), fit: [0.96, 1, 0.96]}, [1, 1, [1, 1]], 'box', {shape: 'openbox', label: 'cartonbox', variants: 3}, 'cartonOpen'),
   // --- 8 non-food storage / maintenance / office junk --------------------------------------------------------------------------
-  J('P20', 'cleaner_jug', 'junk', {axis: 'h', m: 0.30}, [0.16, 0.30, 0.11], PLAS(1.1), [1, 2, [1, 2]], 'aged', {shape: 'jug', label: 'jug', variants: 3}),
-  J('P21', 'trigger_sprayer', 'junk', {axis: 'h', m: 0.28}, [0.10, 0.28, 0.07], PLAS(0.3), [1, 2, [1, 2]], 'trash', {shape: 'spray', label: 'spray', variants: 3}),
-  J('P22', 'rag_bundle', 'junk', {axis: 'w', m: 0.30}, [0.30, 0.10, 0.22], {collider: 'box', mass: 0.45, mat: 'cloth', fam: 'light', hit: 'fabric', fit: [0.9, 0.85, 0.9]}, [2, 1, [1, 1]], 'trash', {shape: 'crumple', label: 'trash', variants: 4}),
-  J('P23', 'tool_tote', 'junk', {axis: 'w', m: 0.45}, [0.45, 0.22, 0.24], PLAS(0.9), [1, 1, [1, 1]], 'trash', {shape: 'openbox', label: 'cartonbox', variants: 3}),
-  J('P24', 'cable_adapter', 'junk', {axis: 'w', m: 0.25}, [0.25, 0.08, 0.18], {collider: 'box', mass: 0.35, mat: 'plastic', fam: 'light', hit: 'rubber', fit: [0.9, 0.85, 0.9]}, [1, 1, [1, 2]], 'trash', {shape: 'crumple', label: 'reel', variants: 2}),
-  J('P25', 'paint_tin', 'junk', {axis: 'd', m: 0.17}, [0.20, 0.19, 0.17], TIN(1.5, 'box'), [1, 1, [1, 2]], 'aged', {shape: 'box', label: 'paint', variants: 3}),
-  J('P26', 'towel_pack', 'junk', {axis: 'w', m: 0.30}, [0.30, 0.24, 0.20], CARD(0.5), [1, 1, [1, 2]], 'aged', {shape: 'rolls', label: 'towels', variants: 2}),
-  J('P27', 'binder_stack', 'junk', {axis: 'w', m: 0.32}, [0.32, 0.16, 0.27], CARD(2.4, 'cardboard'), [2, 1, [1, 1]], 'aged', {shape: 'box', label: 'news', variants: 2}),
+  J('P20', 'cleaner_jug', 'junk', {axis: 'h', m: 0.30}, [0.16, 0.30, 0.11], PLAS(1.1), [1, 1, [1, 2]], 'aged', {shape: 'jug', label: 'jug', variants: 3}, 'jug'),
+  J('P21', 'trigger_sprayer', 'junk', {axis: 'h', m: 0.28}, [0.10, 0.28, 0.07], PLAS(0.3), [1, 1, [1, 2]], 'trash', {shape: 'spray', label: 'spray', variants: 3}, 'spray'),
+  J('P22', 'rag_bundle', 'junk', {axis: 'w', m: 0.30}, [0.30, 0.10, 0.22], {collider: 'box', mass: 0.45, mat: 'cloth', fam: 'light', hit: 'fabric', fit: [0.9, 0.85, 0.9]}, [1, 1, [1, 1]], 'trash', {shape: 'crumple', label: 'trash', variants: 4}, 'wrapper'),
+  J('P23', 'tool_tote', 'junk', {axis: 'w', m: 0.45}, [0.45, 0.22, 0.24], PLAS(0.9), [1, 1, [1, 1]], 'trash', {shape: 'openbox', label: 'cartonbox', variants: 3}, 'cartonOpen'),
+  J('P24', 'cable_adapter', 'junk', {axis: 'w', m: 0.25}, [0.25, 0.08, 0.18], {collider: 'box', mass: 0.35, mat: 'plastic', fam: 'light', hit: 'rubber', fit: [0.9, 0.85, 0.9]}, [1, 1, [1, 2]], 'trash', {shape: 'crumple', label: 'reel', variants: 2}, 'reel'),
+  J('P25', 'paint_tin', 'junk', {axis: 'd', m: 0.17}, [0.20, 0.19, 0.17], TIN(1.5, 'box'), [1, 1, [1, 2]], 'aged', {shape: 'box', label: 'paint', variants: 3}, 'paint'),
+  J('P26', 'towel_pack', 'junk', {axis: 'w', m: 0.30}, [0.30, 0.24, 0.20], CARD(0.5), [1, 1, [1, 2]], 'aged', {shape: 'rolls', label: 'towels', variants: 2}, 'rolls'),
+  J('P27', 'binder_stack', 'junk', {axis: 'w', m: 0.32}, [0.32, 0.16, 0.27], CARD(2.4, 'cardboard'), [2, 1, [1, 1]], 'aged', {shape: 'box', label: 'news', variants: 2}, 'cartonS'),
 ];
 
 /** Filler archetype id of a junk prop (world/shelfStockCatalog.ts STOCK_ARCHES; never an ItemDef id). */
@@ -113,6 +125,7 @@ export function junkPart(id: string): ShelfJunkPart | undefined {
 export function junkDims(j: JunkProp): [number, number, number] {
   const p = junkPart(j.id);
   let [w, h, d] = p ? [p.w, p.h, p.d].map(v => Math.round(v * 1000) / 1000) : j.est;
+  if (j.layFlat) [h, d] = [d, h];
   if (j.collider === 'cylinder') w = d = Math.max(w, d);
   return [w, h, d];
 }

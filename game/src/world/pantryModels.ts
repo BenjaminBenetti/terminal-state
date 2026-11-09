@@ -106,11 +106,11 @@ function fallbackGeometry(id: PantryId): THREE.BufferGeometry {
       body(cylAt(r, D.h * 0.8, 0, 20).scale(sx, 1, sz)); accent(cylAt(r * 0.98, D.h * 0.2, D.h * 0.8, 20).scale(sx, 1, sz));
       break;
     }
-    case 'chub': {
-      const cr = Math.min(D.h, D.d) / 2;
-      body(new THREE.CylinderGeometry(cr, cr, D.w * 0.9, 14).rotateZ(Math.PI / 2).translate(0, cr, 0));
-      accent(new THREE.CylinderGeometry(cr * 0.4, cr * 0.4, D.w * 0.1, 8).rotateZ(Math.PI / 2).translate(-D.w * 0.475, cr, 0));
-      accent(new THREE.CylinderGeometry(cr * 0.4, cr * 0.4, D.w * 0.1, 8).rotateZ(Math.PI / 2).translate(D.w * 0.475, cr, 0));
+    case 'chub': { // a cylinder along X, elliptical to the item's height / depth
+      const along = (r: number, len: number, x: number, seg: number) => new THREE.CylinderGeometry(r, r, len, seg).rotateZ(Math.PI / 2).scale(1, D.h, D.d).translate(x, D.h / 2, 0);
+      body(along(0.5, D.w * 0.88, 0, 14));
+      accent(along(0.2, D.w * 0.06, -D.w * 0.47, 8));
+      accent(along(0.2, D.w * 0.06, D.w * 0.47, 8));
       break;
     }
     case 'multi': {

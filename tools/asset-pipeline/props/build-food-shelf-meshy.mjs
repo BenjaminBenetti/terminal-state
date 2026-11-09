@@ -13,20 +13,25 @@
 // Writes deterministically:
 //   game/public/assets/models/food-<slug>.glb             24 collectibles: one node / mesh / primitive / material, Meshy maps downsized
 //   game/public/assets/models/shelf-junk-atlas.glb        27 ruined props: one mesh node per prop id (P01..P27), ALL on ONE material
-//                                                         whose base / metallic-roughness / normal maps are one 2048 px atlas each
+//                                                         whose base colour (2048 px) / metallic-roughness / normal (1024 px) maps are one atlas each
 //   game/public/assets/derivatives/food-shelf-<slug>-model.json, food-shelf-junk-atlas.json   provenance (no URLs / tokens / prompts)
 //   game/src/assets/foodShelfModels.generated.ts          FOOD_ITEM_MODELS (key = ItemDef id = slug) + SHELF_JUNK_ATLAS (three-free)
 //   tools/release/public-inputs.json                      ONLY this script's entries added / updated (others untouched)
 //
-// Per model: exact-attribute weld (+ degenerate triangles dropped; lossless), meshoptimizer seam-preserving simplification ONLY where
-// the delivered count is above the budget (collectibles 2500, ruined props 2000 triangles; source UVs / normals kept; the result is
-// refused when visibly crumpled), UNIFORM scale so the plan's reference measure is its real size (H = the full height, W = the longer
-// horizontal extent = width / length, D = the diameter = the horizontal extent, optionally within a height band), Meshy's native
-// frame kept (+Y up, front +Z), grounded (min y = 0) and centred on x / z, baked into the vertices (identity nodes).
-// Atlas: each prop's three Meshy maps are resized into ONE square cell per prop (the same cell in all three atlases), the cell side
-// proportional to sqrt(surface area / UV area) so every prop gets the same texel density; cells sit on a 16 px grid with an 8 px
-// edge-copied gutter (no bleeding between props down to the 256 px mip); the prop's UVs are remapped into its cell's inner square
-// (uniform u / v scale: tangent frames and normal-map handedness unchanged). Meshy material factors must all be 1 (else refused).
+// Collectibles: exact-attribute weld (+ degenerate triangles / unreferenced vertices dropped; lossless), meshoptimizer seam-preserving
+// simplification only above the 2500-triangle budget (source UVs / normals kept, so Meshy's maps stay mapped exactly; refused when
+// crumpled), UNIFORM scale so the plan's reference measure is its real size (H = the full height, W = the longer horizontal extent =
+// width / length, D = the diameter = the horizontal extent, optionally within a height band), Meshy's native frame (+Y up, front +Z),
+// grounded (min y = 0) and centred on x / z, baked into the vertices (identity node); Meshy's maps downsized to 512 / 256 / 256 px.
+// Recorded per-asset processing (ADJUST: the lead's binding cook adjustments and the lanes' accept notes): local mesh separation of
+// extruded label islands, squashing an extruded label part, real-depth stretches of face-on-reconstructed packaging, half turns,
+// lay-flat quarter turns and rigid rest-pose rolls; the registry's w / h / d describe the final resting pose.
+// Ruined props (one atlas GLB, lean for the SHELF lane's stock budget): the leanest position-only simplification step (small parts
+// 250-600, big ones 450-900 triangles) within the target error, re-fitted to the plan size, freshly unwrapped into the prop's own
+// square atlas cell (cell side by surface area at one uniform texel density, skyline-packed into 2048 px) and baked from the dense
+// Meshy model: Meshy's base colour / metallic-roughness resampled, its normal map folded into the baked tangent-space normal
+// (lib/bake.mjs). Meshy's 200-1000-chart UV layouts stall a seam-preserving collapse far above these budgets and a seam-crossing
+// collapse smears the texture, so baking is the only way to keep Meshy's maps at this triangle count (processing, not authoring).
 //
 //   node tools/asset-pipeline/props/build-food-shelf-meshy.mjs [--reference <dir>] [--dry-run <scratch dir>]
 //   (--reference defaults to <repo>/reference; --dry-run writes the GLBs + provenance + a registry preview only into the scratch dir)
@@ -37,6 +42,8 @@ import {Document, NodeIO, TextureInfo} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {getBounds, prune, dedup} from '@gltf-transform/functions';
 import {MeshoptSimplifier} from 'meshoptimizer';
+import {unwrap} from './lib/unwrap.mjs';
+import {bake, downsample} from './lib/bake.mjs';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const arg = n => { const i = process.argv.indexOf(n); return i < 0 ? null : process.argv[i + 1]; };
@@ -75,7 +82,7 @@ const JUNK = [
   ['P13', 'retail_carton', {w: 0.20}], ['P14', 'shipping_box', {w: 0.55}], ['P15', 'torn_carton', {w: 0.45}], ['P16', 'crushed_box', {w: 0.45}],
   ['P17', 'blister_card', {h: 0.25}], ['P18', 'carton_bundle', {w: 0.30}], ['P19', 'shelf_tray', {w: 0.40}], ['P20', 'cleaner_jug', {h: 0.30}],
   ['P21', 'trigger_sprayer', {h: 0.28}], ['P22', 'rag_bundle', {w: 0.30}], ['P23', 'tool_tote', {w: 0.45}], ['P24', 'cable_adapter', {w: 0.25}],
-  ['P25', 'paint_tin', {d: 0.17}], ['P26', 'towel_pack', {w: 0.30}], ['P27', 'binder_stack', {w: 0.32}],
+  ['P25', 'paint_tin', {d: 0.17, band: [0, 0.1]}], ['P26', 'towel_pack', {w: 0.30}], ['P27', 'binder_stack', {w: 0.32}],
 ].map(([id, slug, fit]) => ({id, slug, fit}));
 const dashed = s => s.replace(/_/g, '-');
 /**
@@ -83,40 +90,60 @@ const dashed = s => s.replace(/_/g, '-');
  * raw mesh (`dropIslands`, `flatten`: raw Meshy units) or after the uniform fit (`depth`, `layFlat`, `settle`):
  *  dropIslands  local mesh separation: position-connected islands lying wholly in front of raw z = minZ are removed (expected counts checked)
  *  flatten      one position-connected island (matched by its triangle count + raw bounds) is squashed along raw +Z toward z = toZ
- *  depth        the face-on conditioning image gave Meshy no depth: z is scaled to the real product depth (m) about its centre; the plan's
- *               reference measure does not involve z, so this equals a raw-Z pre-scale before the uniform fit
- *  layFlat      a quarter turn about x: the front (+Z) face turns up (+Y), the old top goes to -Z (rests on its back, label up)
- *  settle       a rigid roll about z onto two supports (a model that would otherwise stand on a dangling speck)
+ *  stretch      the face-on conditioning image gave Meshy no (or a wrong) depth: the named raw axes are scaled about their centre to the real product
+ *               extents (m; normals by the inverse transpose); the plan's reference measure stays exact (equal to a raw pre-scale)
+ *  turn         a half turn about y (the clean label faces raw -Z)
+ *  layFlat      a quarter turn about x (-90 deg): the front (+Z) face turns up (+Y), the old top goes to -Z (rests on its back, label up)
+ *  settle       rigid rolls about z / x onto stable supports (a model that would otherwise stand on a dangling speck)
  */
 const ADJUST = {
   F01: {dropIslands: {minZ: 0.175, dropTris: 1450, keepTris: 1629,
-    why: "lane A1 salvage accept: Meshy extruded the label's plate / meat illustration into 12 islands standing proud of the tin's front face (raw z 0.265); removing them leaves the closed tin with lid and side key (a faint pale ghost of the plate art stays on the label)"}},
-  F02: {depth: {z: 0.025, why: 'lane A1: depth 5 % of the width (~6 mm); a real club sardine tin is ~25 mm deep (plain metal side band stretched)'}},
-  F03: {depth: {z: 0.020, why: 'lane A1: depth ~5 mm; a filled field-ration retort pouch is ~20 mm thick'}},
+    why: "local mesh separation (lane A1 salvage accept of R006, lead confirmed): Meshy extruded the label's plate / meat illustration into 12 separate islands standing proud of the tin's front face (raw z 0.265); removing them leaves the closed tin with lid and side key (a faint pale ghost of the plate art stays on the label)"},
+    stretch: {z: 0.065, why: 'lead: a real corned beef tin is 0.065 m deep (Meshy: ~0.10 m for H 0.10)'}},
+  F02: {stretch: {y: 0.075, z: 0.025, why: "lead: the model is the tin's label face (raw depth ~6 mm); a real club sardine tin is 0.11 x 0.075 m and 0.025 m thick"}, layFlat: 'lead: lies label-up'},
+  F03: {stretch: {z: 0.020, why: 'lead: the pouch is ~5 mm deep; a filled field-ration pouch is 0.02 m thick (length 0.20 m)'}, layFlat: 'lead: lies flat, label up'},
+  F05: {turn: "lead: the clean PICKLES label faces raw -Z (the +Z label text is garbled): a half turn about y brings it to the front"},
+  F06: {turn: 'lead: the clean label faces raw -Z (the +Z label text is slightly garbled): a half turn about y brings it to the front'},
+  F14: {stretch: {z: 0.030, why: 'lead: the real three-box raisin pack is 0.03 m deep (Meshy: ~0.058 m)'}},
   F15: {settle: 'the paper tag hangs 3 cm below the chub (a hanging pose): resting on the tag alone the chub floats; it rolls onto the tag and the chub end'},
-  F16: {depth: {z: 0.065, why: 'lead: a 0.14 m wax cheese round is 0.065 m thick (Meshy: lens-thin ~2 cm)'}, layFlat: 'lead: lies on its flat face, the circular CHEESE label up'},
-  F18: {depth: {z: 0.035, why: 'lead: the 0.22 m rice cracker tray pack is 0.035 m deep (Meshy: ~1 cm)'}, layFlat: 'lead: lies label-up'},
-  D06: {depth: {z: 0.065, why: 'lead: a 0.20 m UHT 1 L brick is ~0.065 m deep (Meshy: ~0.04 m); the front face keeps the approved proportions (0.084 m wide)'}},
+  F16: {stretch: {z: 0.065, why: 'lead: a 0.14 m wax cheese round is 0.065 m thick (Meshy: lens-thin ~2 cm)'}, layFlat: 'lead: lies on its flat face, the circular CHEESE label up'},
+  F18: {stretch: {z: 0.035, why: 'lead: the 0.22 m rice cracker tray pack is 0.035 m deep (Meshy: ~1 cm)'}, layFlat: 'lead: lies label-up'},
+  D06: {stretch: {x: 0.095, z: 0.065, why: 'lead: a 0.20 m UHT 1 L brick has a ~0.095 x 0.065 m footprint (Meshy: 0.084 x ~0.04 m)'}},
   D07: {flatten: {tris: 956, min: [-0.055, -0.177, 0.077], max: [0.082, -0.098, 0.168], toZ: 0.094, factor: 0.12,
     why: "lane A3 / lead: Meshy extruded the label's ginger-root illustration into a separate closed part ~1.6 cm proud of the round bottle; squashed onto the label surface the art stays and the bottle is round again"}},
-  P11: {layFlat: 'lead: Meshy built the wrapper / cup cluster upright on a narrow base; laid on its back it rests stably like the approved concept'},
+  P11: {layFlat: 'lead: Meshy built the wrapper / cup cluster upright on a narrow base; laid on its back it rests stably like the approved concept',
+    settle: 'laid on its back it first touches the floor with one protruding wrapper corner (2.4 cm below the broad back); it rolls onto its back'},
+  P24: {layFlat: 'lead / lane A5: the coiled cable and dead adapter were reconstructed standing up (the conditioning image is their top view); laid flat'},
 };
 /** Collectible triangle budget steps (seam-preserving; the class budget first; see simplifyStepped). */
 const ITEM_BUDGETS = [2500, 3000];
 /**
  * Ruined-prop budgets (lead, SHELF lane: a station carries ~2.3k-5.3k filler pieces under a 320k-triangle stock budget): the leanest
- * step whose result stays within JUNK_TARGET_ERROR, small parts (cans, jars, cartons, sprayers, blister card, wrappers, ...) up to 600,
- * big ones (crates, sacks, totes, shipping / torn / crushed boxes, rag bundle) up to 900 triangles.
+ * step whose position-only simplification stays within JUNK_TARGET_ERROR (meshoptimizer relative error), small parts (cans, jars,
+ * cartons, sprayers, blister card, wrappers, ...) up to 600, big ones (crates, sacks, totes, shipping / torn / crushed boxes, rag
+ * bundle) up to 900 triangles; a part with no step within the target takes its class cap (recorded; checked visually).
  */
-const JUNK_STEPS = {small: [300, 450, 600], big: [450, 600, 900]};
+const JUNK_STEPS = {small: [250, 300, 450, 600], big: [450, 600, 900]};
 const JUNK_BIG = new Set(['P04', 'P07', 'P10', 'P14', 'P15', 'P16', 'P22', 'P23']);
-const JUNK_TARGET_ERROR = 0.045;
+/**
+ * Lead's per-part caps (SHELF lane: 450-600 modelled pieces per station, the frequent parts dominate a 300k-triangle station budget):
+ * these parts are simplified straight to the cap (the bake carries the surface detail); every other part keeps its step rule.
+ */
+const JUNK_CAP = {P13: 80, P17: 120, P21: 120, P25: 150, P03: 150, P16: 300, P18: 300, P19: 300, P26: 300, P27: 300, P11: 400, P22: 400};
+const JUNK_TARGET_ERROR = 0.015;
+/** The dense -> low bake (lib/bake.mjs): supersampling and worker threads (one process; the pod has 8 GiB). */
+const BAKE = {supersample: 2, workers: 6};
 /**
  * Collectible map sizes [base, metallicRoughness, normal] px: the repo's consumable-item class (meshy-t25 items: 512 px colour, 256 px
  * MR / normal; ~2 MB GPU per item). The packaging lettering stays legible at 512 (checked); 1024 / 512 / 512 would be ~8 MB GPU each.
  */
 const ITEM_TEX = [512, 256, 256];
-const ATLAS = {size: 2048, grid: 16, pad: 8, minCell: 64, maxCell: 1024, url: 'assets/models/shelf-junk-atlas.glb', id: 'shelf-junk-atlas',
+/**
+ * The shared atlas: base colour 2048 px; metallic-roughness and normal stored at 1024 px (lead: texture memory on every stocked level;
+ * the same cells, an exact 2 x 2 downsample of the 2048 bake, normals renormalised); square cells on a 16 px grid (even pixels, so the
+ * 2 x 2 downsample never mixes two cells); `pad` = the unwrap's chart padding inside a cell (px at 2048).
+ */
+const ATLAS = {size: 2048, mrNormalDiv: 2, grid: 16, pad: 4, minCell: 64, maxCell: 1024, url: 'assets/models/shelf-junk-atlas.glb', id: 'shelf-junk-atlas',
   background: {baseColor: [128, 128, 128], metallicRoughness: [255, 255, 0], normal: [128, 128, 255]}};
 const SIMPLIFY = {normalWeight: 0.5, uvWeight: 1, targetError: 1, tool: 'meshoptimizer 1.3 simplifyWithAttributes (normals x0.5 + UV x1 attribute weights; UV seams preserved; source UVs / normals kept)',
   toolPermissive: 'meshoptimizer 1.3 simplifyWithAttributes Permissive (normals x0.5 + UV x1 attribute weights; collapses across UV seams allowed, charged by the UV attribute error; source UVs / normals kept)'};
@@ -284,28 +311,6 @@ async function simplifyStepped(m, budgets) {
   return {m, info: {applied: false, reason: `no budget step gives an uncrumpled seam-preserving result: source mesh kept`, triangles: m.I.length / 3, budgetSteps: budgets, raisedFrom: tried}};
 }
 
-/**
- * Ruined props: the leanest budget step (JUNK_STEPS) whose result stays within JUNK_TARGET_ERROR — seam-preserving first; where the
- * Meshy UV seams stall it far above the step (200-700 charts), meshoptimizer's Permissive mode (collapses across UV seams allowed but
- * charged by the UV attribute error, so texture distortion is part of the metric). No step within the target: the class cap, recorded.
- */
-async function simplifyLean(m, steps) {
-  const tried = [];
-  let last = null;
-  for (const budget of steps) {
-    for (const mode of ['seam', 'permissive']) {
-      const r = await simplify(m, budget, mode, Infinity);
-      if (r.info.reason?.startsWith('already')) return {m: r.m, info: {...r.info, budgetSteps: steps, targetError: JUNK_TARGET_ERROR}};
-      const a = r.info.applied ? r.info : r.info.attempt;
-      tried.push({budget, mode, triangles: a.triangles, errorRelative: a.errorRelative});
-      if (r.info.applied && r.info.errorRelative <= JUNK_TARGET_ERROR) return {m: r.m, info: {...r.info, budgetSteps: steps, targetError: JUNK_TARGET_ERROR, tried}};
-      if (r.info.applied && budget === steps[steps.length - 1] && (!last || r.info.errorRelative < last.info.errorRelative)) last = r;
-    }
-  }
-  if (!last) throw new Error('no lean simplification reached the class cap');
-  return {m: last.m, info: {...last.info, budgetSteps: steps, targetError: JUNK_TARGET_ERROR, tried, note: `no step within the ${JUNK_TARGET_ERROR} target error: the class cap ${steps[steps.length - 1]} (lowest error), checked visually`}};
-}
-
 /** Simplification on the welded source buffer (UVs / normals kept); `kept` + reason when it stalls or crumples. mode: seam | permissive. */
 async function simplify(m, budget, mode = 'seam', maxError = MAX_KEEP_ERROR) {
   const tris0 = m.I.length / 3;
@@ -393,6 +398,18 @@ function boundsOf(P) {
   return {min, max};
 }
 
+/** The plan's reference measure on a mesh in its final frame (a laid-flat model: H on z, W / D on the x / y footprint). */
+function measureOf(P, fit, layFlat) {
+  const b = boundsOf(P), e = [0, 1, 2].map(k => b.max[k] - b.min[k]);
+  if (fit.h) return layFlat ? e[2] : e[1];
+  if (layFlat) return Math.max(e[0], e[1]);
+  if (!fit.band) return Math.max(e[0], e[2]);
+  const lo = b.min[1] + fit.band[0] * e[1], hi = b.min[1] + fit.band[1] * e[1];
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (let i = 0; i < P.length; i += 3) if (P[i + 1] >= lo && P[i + 1] <= hi) { x0 = Math.min(x0, P[i]); x1 = Math.max(x1, P[i]); z0 = Math.min(z0, P[i + 2]); z1 = Math.max(z1, P[i + 2]); }
+  return Math.max(x1 - x0, z1 - z0);
+}
+
 /** The UNIFORM fit on the plan's reference measure: scale, grounded, centred on x / z (normals unchanged under a uniform scale). */
 function fitMesh(low, fit) {
   const b = boundsOf(low.P);
@@ -412,13 +429,20 @@ function fitMesh(low, fit) {
   }
   const P = low.P.map(v => v * s), N = Float32Array.from(low.N);
   const out = {...info, scale: r6(s), measuredOn: 'the welded (and simplified) mesh that ships'};
-  // depth correction: a face-on conditioning image leaves the reconstructed depth (z) of flat-faced packaging a guess; z is stretched
-  // about its centre to the real product depth (normals by the inverse transpose), the reference measure untouched
-  if (fit.depth) {
-    const bz = boundsOf(P), from = bz.max[2] - bz.min[2], k = fit.depth.z / from, cz = (bz.min[2] + bz.max[2]) / 2;
-    for (let i = 0; i < P.length; i += 3) P[i + 2] = cz + (P[i + 2] - cz) * k;
-    for (let i = 0; i < N.length; i += 3) { const x = N[i], y = N[i + 1], z = N[i + 2] / k, l = Math.hypot(x, y, z) || 1; N[i] = x / l; N[i + 1] = y / l; N[i + 2] = z / l; }
-    out.depthCorrection = {axis: 'z', fromM: r4(from), toM: fit.depth.z, factor: r6(k), reason: fit.depth.why, normals: 'inverse-transpose (z / factor), renormalised'};
+  // stretch: a face-on conditioning image leaves the reconstructed depth (z) of flat-faced packaging a guess; the named raw axes are
+  // scaled about their centre to the real product extents (normals by the inverse transpose)
+  if (fit.stretch) {
+    const bz = boundsOf(P), k = [1, 1, 1], from = {};
+    ['x', 'y', 'z'].forEach((ax, i) => { if (fit.stretch[ax]) { from[ax] = r4(bz.max[i] - bz.min[i]); k[i] = fit.stretch[ax] / (bz.max[i] - bz.min[i]); } });
+    const c = [0, 1, 2].map(i => (bz.min[i] + bz.max[i]) / 2);
+    for (let i = 0; i < P.length; i += 3) for (let a = 0; a < 3; a++) P[i + a] = c[a] + (P[i + a] - c[a]) * k[a];
+    for (let i = 0; i < N.length; i += 3) { const x = N[i] / k[0], y = N[i + 1] / k[1], z = N[i + 2] / k[2], l = Math.hypot(x, y, z) || 1; N[i] = x / l; N[i + 1] = y / l; N[i + 2] = z / l; }
+    out.stretch = {axes: 'raw (before any turn / lay-flat)', fromM: from, toM: Object.fromEntries(['x', 'y', 'z'].filter(a => fit.stretch[a]).map(a => [a, fit.stretch[a]])),
+      factors: k.map(r6), reason: fit.stretch.why, normals: 'inverse-transpose, renormalised'};
+  }
+  if (fit.turn) {
+    for (const A of [P, N]) for (let i = 0; i < A.length; i += 3) { A[i] = -A[i]; A[i + 2] = -A[i + 2]; }
+    out.turn = {rotation: 'a half turn about y: (x, y, z) -> (-x, y, -z)', reason: fit.turn};
   }
   // lie flat: a quarter turn about x, the front (+Z) face up (+Y), the old top to -Z
   if (fit.layFlat) {
@@ -428,58 +452,55 @@ function fitMesh(low, fit) {
   // rest pose: a model standing on a speck (a dangling tag) is rolled about z, rigidly, onto the support edge of its x-y hull on the side
   // of its centre of mass (two contacts), as it would settle under gravity
   if (fit.settle) {
-    let roll = 0;
-    for (let it = 0; it < 4; it++) {
-      let li = 0;
-      for (let i = 3; i < P.length; i += 3) if (P[i + 1] < P[li + 1]) li = i;
-      const L = [P[li], P[li + 1]], C = centroidXY(P, low.I);
-      const dir = C[0] < L[0] ? -1 : 1;
-      let best = null;
-      for (let i = 0; i < P.length; i += 3) {
-        const d = dir * (P[i] - L[0]);
-        if (d < 1e-4) continue;
-        const a = Math.atan2(P[i + 1] - L[1], d);
-        if (!best || a < best.a) best = {a, x: P[i]};
+    const rolls = {aboutZDeg: 0, aboutXDeg: 0};
+    for (let it = 0; it < 8; it++) {
+      let moved = false;
+      for (const h of [0, 2]) { // h = the horizontal axis of the tipping plane: x (a roll about z) or z (a roll about x)
+        let minY = Infinity;
+        for (let i = 1; i < P.length; i += 3) minY = Math.min(minY, P[i]);
+        let h0 = Infinity, h1 = -Infinity, i0 = -1, i1 = -1;
+        for (let i = 0; i < P.length; i += 3) if (P[i + 1] < minY + 1e-5) { if (P[i + h] < h0) { h0 = P[i + h]; i0 = i; } if (P[i + h] > h1) { h1 = P[i + h]; i1 = i; } }
+        const C = centroid(P, low.I)[h];
+        if (C >= h0 - 1e-4 && C <= h1 + 1e-4) continue; // the centre of mass is over the contacts along this axis
+        const dir = C < h0 ? -1 : 1, li = dir < 0 ? i0 : i1, L = [P[li + h], P[li + 1]];
+        let best = null;
+        for (let i = 0; i < P.length; i += 3) {
+          const d = dir * (P[i + h] - L[0]);
+          if (d < 1e-4) continue;
+          const ang = Math.atan2(P[i + 1] - L[1], d);
+          if (!best || ang < best) best = ang;
+        }
+        if (best == null) continue;
+        const th = dir < 0 ? best : -best, c = Math.cos(th), sn = Math.sin(th);
+        for (let i = 0; i < P.length; i += 3) { const x = P[i + h] - L[0], y = P[i + 1] - L[1]; P[i + h] = x * c - y * sn + L[0]; P[i + 1] = x * sn + y * c + L[1]; }
+        for (let i = 0; i < N.length; i += 3) { const x = N[i + h], y = N[i + 1]; N[i + h] = x * c - y * sn; N[i + 1] = x * sn + y * c; }
+        rolls[h ? 'aboutXDeg' : 'aboutZDeg'] += (h ? -1 : 1) * th * 180 / Math.PI;
+        moved = true;
       }
-      if (!best || best.a < 1e-3) break;
-      const th = dir < 0 ? best.a : -best.a, c = Math.cos(th), sn = Math.sin(th);
-      for (const A of [P, N]) for (let i = 0; i < A.length; i += 3) { const x = A[i] - (A === P ? L[0] : 0), y = A[i + 1] - (A === P ? L[1] : 0); A[i] = x * c - y * sn + (A === P ? L[0] : 0); A[i + 1] = x * sn + y * c + (A === P ? L[1] : 0); }
-      roll += th;
+      if (!moved) break;
     }
-    out.restPose = {rollAboutZDeg: r4(roll * 180 / Math.PI), reason: fit.settle, method: 'rigid roll about z onto the x-y hull support edge on the centre-of-mass side (surface-weighted centroid), iterated until stable'};
+    out.restPose = {rollAboutZDeg: r4(rolls.aboutZDeg), rollAboutXDeg: r4(rolls.aboutXDeg), reason: fit.settle,
+      method: 'rigid rolls about z and x (alternating), each pivoting on the outermost floor contact toward the centre of mass (surface-weighted centroid) onto the next hull support, until the centre of mass is over the contacts on both axes'};
   }
   const bb = boundsOf(P), tx = -(bb.min[0] + bb.max[0]) / 2, ty = -bb.min[1], tz = -(bb.min[2] + bb.max[2]) / 2;
   for (let i = 0; i < P.length; i += 3) { P[i] += tx; P[i + 1] += ty; P[i + 2] += tz; }
-  return {P, N, fit: {...out, translate: [tx, ty, tz].map(r6), rotation: fit.layFlat ? 'laid flat (front face up)' : fit.settle ? 'the rest-pose roll about z only (front +Z, +Y up kept)' : 'none (Meshy native front +Z, +Y up kept)'}};
+  return {P, N, fit: {...out, translate: [tx, ty, tz].map(r6), rotation: fit.layFlat ? 'laid flat (front face up)' : fit.turn ? 'a half turn about y (the clean label to the front)' : fit.settle ? 'the rest-pose roll about z only (front +Z, +Y up kept)' : 'none (Meshy native front +Z, +Y up kept)'}};
 }
 
-/** Surface-area-weighted centroid (x, y) of an indexed mesh (the centre of mass of a thin shell). */
-function centroidXY(P, I) {
-  let A = 0, x = 0, y = 0;
+/** Surface-area-weighted centroid (x, y, z) of an indexed mesh (the centre of mass of a thin shell). */
+function centroid(P, I) {
+  let A = 0, x = 0, y = 0, z = 0;
   for (let f = 0; f < I.length; f += 3) {
     const a = 3 * I[f], b = 3 * I[f + 1], c = 3 * I[f + 2];
     const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2], vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
     const w = 0.5 * Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
-    A += w; x += w * (P[a] + P[b] + P[c]) / 3; y += w * (P[a + 1] + P[b + 1] + P[c + 1]) / 3;
+    A += w; x += w * (P[a] + P[b] + P[c]) / 3; y += w * (P[a + 1] + P[b + 1] + P[c + 1]) / 3; z += w * (P[a + 2] + P[b + 2] + P[c + 2]) / 3;
   }
-  return [x / A, y / A];
-}
-
-/** Surface area (m², shipped mesh) and UV area (fraction of the unit square) of an indexed mesh. */
-function areas(P, UV, I) {
-  let A = 0, U = 0;
-  for (let f = 0; f < I.length; f += 3) {
-    const a = I[f], b = I[f + 1], c = I[f + 2];
-    const ux = P[3 * b] - P[3 * a], uy = P[3 * b + 1] - P[3 * a + 1], uz = P[3 * b + 2] - P[3 * a + 2];
-    const vx = P[3 * c] - P[3 * a], vy = P[3 * c + 1] - P[3 * a + 1], vz = P[3 * c + 2] - P[3 * a + 2];
-    A += 0.5 * Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
-    U += 0.5 * Math.abs((UV[2 * b] - UV[2 * a]) * (UV[2 * c + 1] - UV[2 * a + 1]) - (UV[2 * c] - UV[2 * a]) * (UV[2 * b + 1] - UV[2 * a + 1]));
-  }
-  return {surfaceM2: A, uvArea: U};
+  return [x / A, y / A, z / A];
 }
 
 /** Cooks one model's geometry (weld -> simplify -> uniform fit) and its measurements. */
-async function cookGeometry(row, rec, junk) {
+async function cookGeometry(row, rec) {
   const src = await readSource(row.id, rec);
   const srcB = boundsOf(src.m.P);
   const extent = [0, 1, 2].map(k => r4(srcB.max[k] - srcB.min[k]));
@@ -491,8 +512,8 @@ async function cookGeometry(row, rec, junk) {
   const pre = preAdjust(row.id, src.m, adj);
   const welded = weld(pre.m); // (the weld also drops vertices no longer referenced after an island removal)
   const charts = uvCharts(welded);
-  const {m: low, info: simp} = junk ? await simplifyLean(welded, JUNK_STEPS[JUNK_BIG.has(row.id) ? 'big' : 'small']) : await simplifyStepped(welded, ITEM_BUDGETS);
-  const {P, N, fit} = fitMesh(low, {...row.fit, depth: adj.depth, layFlat: adj.layFlat, settle: adj.settle});
+  const {m: low, info: simp} = await simplifyStepped(welded, ITEM_BUDGETS);
+  const {P, N, fit} = fitMesh(low, {...row.fit, stretch: adj.stretch, turn: adj.turn, layFlat: adj.layFlat, settle: adj.settle});
   const b = boundsOf(P);
   const dims = [0, 1, 2].map(k => r4(b.max[k] - b.min[k]));
   return {src, extent, welded, charts, simp, fit, adjust: Object.keys(pre.rec).length ? pre.rec : null, mesh: {P, N, UV: low.UV, I: low.I}, dims, min: b.min.map(r6), max: b.max.map(r6), uvRange: [r6(umin), r6(umax)]};
@@ -512,7 +533,7 @@ for (const row of ITEMS) {
   const rec = records(row);
   if (!rec) { skipped.push(row.id); continue; }
   const id = `food-${dashed(row.slug)}`, url = `assets/models/${id}.glb`, provRel = `assets/derivatives/food-shelf-${dashed(row.slug)}-model.json`;
-  const g = await cookGeometry(row, rec, false);
+  const g = await cookGeometry(row, rec);
   const {doc, prim, mat} = g.src;
   const r = doc.getRoot();
   const nv = g.mesh.P.length / 3;
@@ -551,18 +572,63 @@ for (const row of ITEMS) {
     `dims ${dims.join(' x ')} m (${g.fit.measure} ${g.fit.size}${g.fit.axis ? ` on ${g.fit.axis}` : ''}), scale ${g.fit.scale}; maps ${textures.map(t => `${t.slot} ${t.size[0]} ${t.bytes}`).join(', ')}`);
 }
 
-// ---------- ruined props: one shared atlas ----------
+// ---------- ruined props: one shared atlas (lean low-poly + a bake of Meshy's own maps) ----------
+// Meshy's UV layouts (200-1000 charts) stall a seam-preserving collapse at 500-1700 triangles and a seam-crossing one smears the
+// texture, so the lean parts are re-baked: the dense (raw, fitted) model keeps Meshy's UVs and maps; a position-welded copy is simplified
+// by position only (best silhouette) to the leanest budget step within JUNK_TARGET_ERROR, freshly unwrapped (lib/unwrap.mjs box
+// projection charts) into the prop's own atlas cell, and Meshy's base colour / metallic-roughness / normal maps are resampled onto it
+// (lib/bake.mjs: closest same-facing dense surface; the Meshy normal map folded into the dense normal) — UV baking, not re-authoring.
 const parts = [];
 for (const row of JUNK) {
   const rec = records(row);
   if (!rec) { skipped.push(row.id); continue; }
-  const g = await cookGeometry(row, rec, true);
-  checkFactors(row.id, g.src.material);
-  if (g.src.material.doubleSided !== true) throw new Error(`${row.id}: the shared atlas material is double-sided like every Meshy material; this source is not`);
-  const ar = areas(g.mesh.P, g.mesh.UV, g.mesh.I);
-  parts.push({row, rec, g, ...ar, need: Math.sqrt(ar.surfaceM2 / Math.max(ar.uvArea, 1e-6))});
-  console.log(`${row.id} ${row.slug}: ${rec.bytes.length} B ${g.src.m.I.length / 3} tris -> ${g.mesh.I.length / 3} tris (${g.simp.applied ? `simplified to the ${g.simp.budget} step, err ${g.simp.errorRelative}` : g.simp.reason}; ${g.charts} UV charts), ` +
-    `dims ${g.dims.join(' x ')} m (${g.fit.measure} ${g.fit.size}${g.fit.axis ? ` on ${g.fit.axis}` : ''}), scale ${g.fit.scale}, surface ${r4(ar.surfaceM2)} m², UV area ${r4(ar.uvArea)}`);
+  const src = await readSource(row.id, rec);
+  checkFactors(row.id, src.material);
+  if (src.material.doubleSided !== true) throw new Error(`${row.id}: the shared atlas material is double-sided like every Meshy material; this source is not`);
+  const srcB = boundsOf(src.m.P);
+  const adj = ADJUST[row.id] ?? {};
+  const pre = preAdjust(row.id, src.m, adj);
+  const welded = weld(pre.m);
+  const {P: Pd, N: Nd, fit} = fitMesh(welded, {...row.fit, stretch: adj.stretch, turn: adj.turn, layFlat: adj.layFlat, settle: adj.settle});
+  // low: positional weld -> position-only simplification at the leanest step within the target error
+  const key = new Map(), rep = new Uint32Array(Pd.length / 3), Pu = [];
+  for (let v = 0; v < Pd.length / 3; v++) { const k = `${Pd[3 * v]},${Pd[3 * v + 1]},${Pd[3 * v + 2]}`; if (!key.has(k)) { key.set(k, key.size); Pu.push(Pd[3 * v], Pd[3 * v + 1], Pd[3 * v + 2]); } rep[v] = key.get(k); }
+  const Iu = Uint32Array.from(welded.I, i => rep[i]), PuF = Float32Array.from(Pu);
+  await MeshoptSimplifier.ready;
+  const steps = JUNK_CAP[row.id] ? [JUNK_CAP[row.id]] : JUNK_STEPS[JUNK_BIG.has(row.id) ? 'big' : 'small'], tried = [];
+  let out = null, err = 0, budget = 0;
+  for (const t of steps) {
+    [out, err] = MeshoptSimplifier.simplify(Iu, PuF, 3, t * 3, 1, []);
+    budget = t; tried.push({budget: t, triangles: out.length / 3, errorRelative: r6(err)});
+    if (err <= JUNK_TARGET_ERROR) break;
+  }
+  const map = new Int32Array(PuF.length / 3).fill(-1), lp = [], li = new Uint32Array(out.length);
+  for (let i = 0; i < out.length; i++) { const v = out[i]; if (map[v] < 0) { map[v] = lp.length / 3; lp.push(PuF[3 * v], PuF[3 * v + 1], PuF[3 * v + 2]); } li[i] = map[v]; }
+  const lowP = Float32Array.from(lp);
+  // the low mesh (a vertex subset of the dense one) loses extreme vertices: it is re-fitted UNIFORMLY so the plan's reference measure is
+  // exact on the mesh that ships, grounded / centred; the dense model moves with it so the bake stays aligned
+  const refit = measureOf(Pd, row.fit, !!adj.layFlat) / measureOf(lowP, row.fit, !!adj.layFlat);
+  for (const A of [lowP, Pd]) for (let i = 0; i < A.length; i++) A[i] *= refit;
+  const lb = boundsOf(lowP), t3 = [-(lb.min[0] + lb.max[0]) / 2, -lb.min[1], -(lb.min[2] + lb.max[2]) / 2];
+  for (const A of [lowP, Pd]) for (let i = 0; i < A.length; i += 3) for (let k = 0; k < 3; k++) A[i + k] += t3[k];
+  const simp = {applied: true, tool: 'meshoptimizer 1.3 simplify, position only, on the position-welded mesh (UVs / normals are re-made by the unwrap + bake)',
+    budget, budgetSteps: steps, targetError: JUNK_TARGET_ERROR, tried, fromTriangles: Iu.length / 3, triangles: li.length / 3, errorRelative: r6(err),
+    errorM: r6(err * MeshoptSimplifier.getScale(PuF, 3)), ...(JUNK_CAP[row.id] ? {leadCap: JUNK_CAP[row.id], note: `the lead's per-part cap (station triangle budget); silhouette checked visually`} : err > JUNK_TARGET_ERROR ? {note: `no step within the ${JUNK_TARGET_ERROR} target: the class cap ${budget}, checked visually`} : {}),
+    refitScale: r6(refit), regroundM: t3.map(r6)};
+  let A = 0;
+  for (let f = 0; f < li.length; f += 3) {
+    const a = 3 * li[f], b = 3 * li[f + 1], c = 3 * li[f + 2];
+    const ux = lowP[b] - lowP[a], uy = lowP[b + 1] - lowP[a + 1], uz = lowP[b + 2] - lowP[a + 2], vx = lowP[c] - lowP[a], vy = lowP[c + 1] - lowP[a + 1], vz = lowP[c + 2] - lowP[a + 2];
+    A += 0.5 * Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
+  }
+  const probe = unwrap(lowP, li, {atlas: 512, pad: ATLAS.pad});
+  const g = {src, extent: [0, 1, 2].map(k => r4(srcB.max[k] - srcB.min[k])), welded, charts: uvCharts(welded), simp, fit: {...fit, scale: r6(fit.scale * refit), lowPolyRefit: r6(refit), translate: 'per node: grounded / centred after the low-poly re-fit'},
+    adjust: Object.keys(pre.rec).length ? pre.rec : null, uvRange: null};
+  parts.push({row, rec, g, dense: {P: Pd, N: Nd, UV: welded.UV, I: welded.I}, low: {P: lowP, I: li}, surfaceM2: A, chartFill: probe.stats.chartAreaFraction,
+    need: Math.sqrt(A / probe.stats.chartAreaFraction)});
+  const lb2 = boundsOf(lowP);
+  console.log(`${row.id} ${row.slug}: ${rec.bytes.length} B ${src.m.I.length / 3} tris -> ${li.length / 3} tris (position-only at the ${budget} step, err ${r6(err)}${JUNK_CAP[row.id] ? ': lead cap' : err > JUNK_TARGET_ERROR ? ' > target: class cap' : ''}), ` +
+    `dims ${[0, 1, 2].map(k => r4(lb2.max[k] - lb2.min[k])).join(' x ')} m (${fit.measure} ${fit.size}${fit.axis ? ` on ${fit.axis}` : ''}), scale ${fit.scale}, surface ${r4(A)} m², chart fill ${r4(probe.stats.chartAreaFraction)}`);
 }
 
 /** Skyline bottom-left packing of squares (side px, multiples of the grid) into the atlas; null when they do not fit. */
@@ -597,34 +663,45 @@ function skyline(sizes, W) {
   }
   return at;
 }
-const cellSizes = k => parts.map(p => Math.min(ATLAS.maxCell, Math.max(ATLAS.minCell, ATLAS.grid * Math.round((k * p.need + 2 * ATLAS.pad) / ATLAS.grid))));
+const cellSizes = k => parts.map(p => Math.min(ATLAS.maxCell, Math.max(ATLAS.minCell, ATLAS.grid * Math.round(k * p.need / ATLAS.grid))));
+const rawRGBA = async img => { const {data, info} = await sharp(Buffer.from(img)).ensureAlpha().raw().toBuffer({resolveWithObject: true}); return {data: new Uint8Array(data), width: info.width, height: info.height}; };
 
 let atlasOut = null;
 if (parts.length) {
   // the largest uniform texel density (px / m) whose cells pack: binary search on k
-  let lo = 0, hi = ATLAS.size / Math.min(...parts.map(p => p.need)), at = null;
+  let lo = 0, hi = ATLAS.size / Math.min(...parts.map(p => p.need));
   for (let it = 0; it < 40; it++) { const k = (lo + hi) / 2; if (skyline(cellSizes(k), ATLAS.size)) lo = k; else hi = k; }
-  const k = lo, sizes = cellSizes(k);
-  at = skyline(sizes, ATLAS.size);
+  const k = lo, sizes = cellSizes(k), at = skyline(sizes, ATLAS.size);
   if (!at) throw new Error('atlas: no packing');
   const used = sizes.reduce((s, c) => s + c * c, 0) / (ATLAS.size * ATLAS.size);
-  parts.forEach((p, i) => {
-    const s = sizes[i], inner = s - 2 * ATLAS.pad;
-    p.cell = {x: at[i].x, y: at[i].y, size: s, pad: ATLAS.pad, inner,
-      uvRect: [(at[i].x + ATLAS.pad) / ATLAS.size, (at[i].y + ATLAS.pad) / ATLAS.size, (at[i].x + ATLAS.pad + inner) / ATLAS.size, (at[i].y + ATLAS.pad + inner) / ATLAS.size].map(r6),
-      texelsPerMetre: r4(inner * Math.sqrt(p.uvArea / p.surfaceM2))};
-  });
-  // the three atlases: each prop's Meshy map resized into its cell's inner square, the gutter edge-copied
+  const S = ATLAS.size, img = Object.fromEntries(SLOTS.map(slot => { const a = new Uint8Array(S * S * 3); const bg = ATLAS.background[slot]; for (let i = 0; i < S * S; i++) a.set(bg, 3 * i); return [slot, a]; }));
+  for (const [i, p] of parts.entries()) {
+    const size = sizes[i];
+    const un = unwrap(p.low.P, p.low.I, {atlas: size, pad: ATLAS.pad});
+    const tex = {};
+    for (const slot of SLOTS) tex[slot] = await rawRGBA(p.g.src.textures[slot].getImage());
+    const dims = boundsOf(p.low.P);
+    const searchRadius = Math.max(0.01, 0.08 * Math.max(...[0, 1, 2].map(q => dims.max[q] - dims.min[q])));
+    const baked = await bake({...p.dense, bc: tex.baseColor, mr: tex.metallicRoughness, nm: tex.normal}, {pos: un.pos, nrm: un.nrm, uv: un.uv, idx: un.idx},
+      {atlas: size, supersample: BAKE.supersample, mrDiv: 1, normalDiv: 1, searchRadius, workers: BAKE.workers});
+    for (const [slot, b] of [['baseColor', baked.color], ['metallicRoughness', baked.mr], ['normal', baked.normal]]) {
+      if (b.size !== size) throw new Error(`${p.row.id}: ${slot} bake size ${b.size} != cell ${size}`);
+      for (let y = 0; y < size; y++) img[slot].set(b.data.subarray(3 * y * size, 3 * (y + 1) * size), 3 * ((at[i].y + y) * S + at[i].x));
+    }
+    p.mesh = {P: un.pos, N: un.nrm, I: un.idx, UV: Float32Array.from(un.uv, (v, j) => (j % 2 ? at[i].y + v * size : at[i].x + v * size) / S)};
+    const st = baked.stats;
+    p.cell = {x: at[i].x, y: at[i].y, size, chartPad: ATLAS.pad, uvRect: [at[i].x / S, at[i].y / S, (at[i].x + size) / S, (at[i].y + size) / S].map(r6),
+      texelsPerMetre: r4(un.stats.texelsPerSourceUnit), surfaceM2: r6(p.surfaceM2), chartAreaFraction: r6(un.stats.chartAreaFraction)};
+    p.bake = {unwrap: {tool: 'lib/unwrap.mjs (box-projection charts, smoothing-group normals, shelf-packed into the cell)', charts: un.stats.charts, mergedSmallCharts: un.stats.mergedSmallCharts, vertices: un.stats.vertices},
+      bake: {tool: "lib/bake.mjs + bake-worker.mjs (closest same-facing dense surface; bilinear Meshy base colour / metallic-roughness; dense normal perturbed by Meshy's normal map, re-encoded in the low-poly tangent frame)",
+        supersample: BAKE.supersample, searchRadiusM: r6(searchRadius), samples: st.samples, matchedSameFacing: st.matchedSameFacing, matchedFallbackAnyFacing: st.matchedFallbackAnyFacing, unmatched: st.unmatched,
+        projectionDistanceM: Object.fromEntries(Object.entries(st.projectionDistanceSourceUnits).map(([q, v]) => [q, v == null ? null : r6(v)])), uvOverlapInteriorTexels: st.uvOverlapInteriorTexels}};
+    console.log(`${p.row.id}: cell ${size} px at ${at[i].x},${at[i].y}; ${un.stats.charts} charts, ${r4(un.stats.texelsPerSourceUnit)} px/m; bake matched ${st.matchedSameFacing} + fallback ${st.matchedFallbackAnyFacing} / unmatched ${st.unmatched}, p90 dist ${r6(st.projectionDistanceSourceUnits.p90 ?? 0)} m`);
+  }
   const atlasImages = {};
   for (const slot of SLOTS) {
-    const comps = [];
-    for (const p of parts) {
-      const t = p.g.src.textures[slot];
-      const cellImg = await (await resizeMap(t.getImage(), p.cell.inner)).extend({top: ATLAS.pad, bottom: ATLAS.pad, left: ATLAS.pad, right: ATLAS.pad, extendWith: 'copy'}).png().toBuffer();
-      comps.push({input: cellImg, left: p.cell.x, top: p.cell.y});
-    }
-    const [R, G, B] = ATLAS.background[slot];
-    atlasImages[slot] = await sharp({create: {width: ATLAS.size, height: ATLAS.size, channels: 3, background: {r: R, g: G, b: B}}}).composite(comps).removeAlpha().jpeg(JPEG[slot]).toBuffer();
+    const f = slot === 'baseColor' ? 1 : ATLAS.mrNormalDiv, px = S / f, data = f === 1 ? img[slot] : downsample(img[slot], S, f, slot === 'normal');
+    atlasImages[slot] = await sharp(Buffer.from(data), {raw: {width: px, height: px, channels: 3}}).jpeg(JPEG[slot]).toBuffer();
   }
   // the document: one material, one mesh node per prop (identity transforms; geometry grounded / centred per node)
   const doc = new Document();
@@ -636,12 +713,10 @@ if (parts.length) {
   const scene = doc.createScene(ATLAS.id);
   doc.getRoot().setDefaultScene(scene);
   for (const p of parts) {
-    const {P, N, UV, I} = p.g.mesh, c = p.cell;
-    const UV2 = new Float32Array(UV.length);
-    for (let i = 0; i < UV.length; i += 2) { UV2[i] = (c.x + c.pad + UV[i] * c.inner) / ATLAS.size; UV2[i + 1] = (c.y + c.pad + UV[i + 1] * c.inner) / ATLAS.size; }
+    const {P, N, UV, I} = p.mesh;
     const acc = (type, a) => doc.createAccessor().setType(type).setArray(a).setBuffer(buf);
-    const prim = doc.createPrimitive().setMaterial(mat).setAttribute('POSITION', acc('VEC3', P)).setAttribute('NORMAL', acc('VEC3', Float32Array.from(N)))
-      .setAttribute('TEXCOORD_0', acc('VEC2', UV2)).setIndices(acc('SCALAR', indexArray(I, P.length / 3)));
+    const prim = doc.createPrimitive().setMaterial(mat).setAttribute('POSITION', acc('VEC3', Float32Array.from(P))).setAttribute('NORMAL', acc('VEC3', Float32Array.from(N)))
+      .setAttribute('TEXCOORD_0', acc('VEC2', UV)).setIndices(acc('SCALAR', indexArray(I, P.length / 3)));
     scene.addChild(doc.createNode(p.row.id).setMesh(doc.createMesh(p.row.id).addPrimitive(prim)));
   }
   doc.getRoot().getAsset().generator = `Terminal State ${SELF} (glTF-Transform)`;
@@ -660,11 +735,11 @@ if (parts.length) {
     for (let i = 0; i < U.length; i += 2) if (U[i] < p.cell.uvRect[0] - 1e-6 || U[i] > p.cell.uvRect[2] + 1e-6 || U[i + 1] < p.cell.uvRect[1] - 1e-6 || U[i + 1] > p.cell.uvRect[3] + 1e-6) throw new Error(`${p.row.id}: UV outside its cell`);
     p.tris = prims[0].getIndices().getCount() / 3; p.vertices = P.length / 3;
     p.dims = [0, 1, 2].map(k => r4(b.max[k] - b.min[k])); p.min = b.min.map(r6); p.max = b.max.map(r6);
-    if (p.g.simp.applied && p.tris > p.g.simp.budget) throw new Error(`${p.row.id}: over budget`);
+    if (p.tris > p.g.simp.budget) throw new Error(`${p.row.id}: over budget`);
   }
   const textures = chk.listTextures().map((t, i) => ({slot: SLOTS[i], size: t.getSize(), mime: t.getMimeType(), bytes: t.getImage().byteLength, sha256: sha(t.getImage())}));
   atlasOut = {glb, textures, k: r4(k), used: r4(used), provRel: 'assets/derivatives/food-shelf-junk-atlas.json'};
-  console.log(`${ATLAS.id}: ${parts.length} props, ${glb.length} B, ${parts.reduce((s, p) => s + p.tris, 0)} tris; atlas ${ATLAS.size} px, density ${r4(k)} px per sqrt(m² / UV area), cells use ${(used * 100).toFixed(1)} %; maps ${textures.map(t => `${t.slot} ${t.size[0]} ${t.bytes}`).join(', ')}`);
+  console.log(`${ATLAS.id}: ${parts.length} props, ${glb.length} B, ${parts.reduce((s, p) => s + p.tris, 0)} tris; atlas ${ATLAS.size} px, k ${r4(k)}, cells use ${(used * 100).toFixed(1)} %; maps ${textures.map(t => `${t.slot} ${t.size[0]} ${t.bytes}`).join(', ')}`);
 }
 if (skipped.length) console.log(`not accepted yet (skipped, left out of the registry): ${skipped.join(' ')}`);
 
@@ -701,7 +776,7 @@ for (const o of itemOut) {
     output: {url: o.url, file: `game/public/${o.url}`, bytes: o.glb.length, sha256: sha(o.glb), triangles: o.tris, vertices: o.vertices, dims: o.dims, min: o.min, max: o.max},
     textures: o.textures,
     texturePolicy: `Meshy's own maps kept slot for slot (base colour / metallic-roughness / normal), lanczos3 downsize to ${ITEM_TEX.join(' / ')} px, JPEG q86 4:2:0 / q88 4:4:4 / q90 4:4:4`,
-    convention: 'metres at real size, +Y up; Meshy native frame (front +Z = the straight-on elevation the model was conditioned on); grounded (min y = 0), centred on x / z; one node / mesh / primitive / material, identity node (transform baked into the vertices)',
+    convention: `metres at real size, +Y up; ${o.g.fit.rotation === 'none (Meshy native front +Z, +Y up kept)' ? 'Meshy native frame (front +Z = the straight-on elevation the model was conditioned on)' : `final resting pose: ${o.g.fit.rotation} (see fit)`}; grounded (min y = 0), centred on x / z; one node / mesh / primitive / material, identity node (transform baked into the vertices); w / h / d = the resting-pose extents`,
     licence: LICENCE, rebuild: `node ${SELF} [--reference <dir holding tasks/food-shelf-production-20261109-002816>]`,
   };
   written.set(o.url, o.glb);
@@ -709,19 +784,20 @@ for (const o of itemOut) {
 }
 if (atlasOut) {
   const prov = {
-    schema: 'terminal-state-derivative-v1', id: ATLAS.id, role: 'non-collectible ruined shelf props (physics filler): one GLB, one mesh node per prop id on ONE shared material with one 2048 px atlas per PBR slot',
+    schema: 'terminal-state-derivative-v1', id: ATLAS.id, role: 'non-collectible ruined shelf props (physics filler): one GLB, one mesh node per prop id on ONE shared material with one atlas per PBR slot (base colour 2048 px, metallic-roughness / normal 1024 px)',
     task: `${TASK} (lane COOK; models generated by the asset lanes through the task's single broker / ledger)`, approval: APPROVAL, accepted: true, route: ROUTE,
     output: {url: ATLAS.url, file: `game/public/${ATLAS.url}`, bytes: atlasOut.glb.length, sha256: sha(atlasOut.glb), nodes: parts.map(p => p.row.id), triangles: parts.reduce((s, p) => s + p.tris, 0)},
     textures: atlasOut.textures,
-    atlas: {size: ATLAS.size, grid: ATLAS.grid, pad: ATLAS.pad, cellRule: 'square cell per prop, side = k * sqrt(surface area m² / UV area) + 2 * pad, rounded to the grid, clamped to ' +
+    atlas: {size: ATLAS.size, grid: ATLAS.grid, chartPad: ATLAS.pad, cellRule: 'square cell per prop, side = k * sqrt(low-poly surface area m² / unwrap chart fill), rounded to the grid, clamped to ' +
       `${ATLAS.minCell}..${ATLAS.maxCell} px; skyline bottom-left packing (largest first); k = the largest uniform density that packs (binary search)`, k: atlasOut.k, cellsUse: atlasOut.used,
-      fill: "each prop's Meshy map lanczos3-resized to the cell's inner square (the same cell in all three atlases), gutter = edge copy; unused atlas area = neutral grey / rough non-metal / flat normal",
-      uvRemap: "u' = (cell.x + pad + u * inner) / size, v' = (cell.y + pad + v * inner) / size (uniform scale: tangent frames unchanged)", background: ATLAS.background},
-    texturePolicy: "Meshy's own maps kept slot for slot (base colour / metallic-roughness / normal), atlas-packed at a uniform texel density, JPEG q86 4:2:0 / q88 4:4:4 / q90 4:4:4; Meshy material factors all 1 (checked), so one shared material is exact",
+      fill: "each prop's low-poly is unwrapped into its own cell (charts padded inside the cell) and baked from its dense Meshy model at 2x supersampling; dilated chart gutters, the rest of the cell = the prop's mean colour; unused atlas area = neutral grey / rough non-metal / flat normal",
+      background: ATLAS.background},
+    method: "lean low-poly + bake: Meshy's UV layouts (200-1000 charts) stall a seam-preserving collapse at 500-1700 triangles and a seam-crossing collapse smears the texture (both tried and rejected on sight), so each part is simplified by position only, freshly unwrapped and baked from its dense Meshy model (UV baking = processing; Meshy's own base colour / metallic-roughness / normal maps are the only texture source)",
+    texturePolicy: "Meshy's own maps resampled slot for slot (base colour / metallic-roughness bilinear; the Meshy normal map folded into the baked tangent-space normal) into one atlas per slot at a uniform texel density: base colour 2048 px, metallic-roughness and normal 1024 px (the same cells; an exact 2 x 2 box downsample of the 2048 bake, normals renormalised; lead: texture memory), JPEG q86 4:2:0 / q88 4:4:4 / q90 4:4:4; Meshy material factors all 1 (checked), so one shared material is exact",
     convention: 'metres at real size, +Y up; Meshy native frame (front +Z = the straight-on elevation each model was conditioned on); every node an identity transform, its geometry grounded (min y = 0) and centred on x / z at the node origin (the nodes overlap at the origin by design; use one node per prop instance)',
     parts: Object.fromEntries(parts.map(p => [p.row.id, {slug: p.row.slug, node: p.row.id, ...sourceProv(p.row, p.rec, p.g),
       output: {node: p.row.id, triangles: p.tris, vertices: p.vertices, dims: p.dims, min: p.min, max: p.max},
-      cell: {...p.cell, surfaceM2: r6(p.surfaceM2), uvArea: r6(p.uvArea)}}])),
+      cell: p.cell, ...p.bake}])),
     licence: LICENCE, rebuild: `node ${SELF} [--reference <dir holding tasks/food-shelf-production-20261109-002816>]`,
   };
   written.set(ATLAS.url, atlasOut.glb);
@@ -732,9 +808,13 @@ if (atlasOut) {
 const registry = `// GENERATED by ${SELF} (task ${TASK}) — do not edit.
 // The food / drink pickups' runtime models (FOOD_ITEM_MODELS, keyed by ItemDef id) and the non-collectible ruined shelf props' shared atlas
 // (SHELF_JUNK_ATLAS, one mesh node per prop id P01..P27 on ONE material). Three-free. Meshy T2.5 models (Codex initial conditioning image ->
-// Meshy image-to-3D; Meshy's own PBR maps kept, downsized / atlas-packed only); provenance in assets/derivatives/food-shelf-*.json.
-// Metres at real size, +Y up, front +Z, grounded (min y = 0), centred on x / z (atlas: per node, identity node transforms). id = the
-// approved asset id; w / h / d = the measured runtime bounds (x / y / z extents); tris = triangles. Only accepted models are listed.
+// Meshy image-to-3D): the collectibles keep Meshy's own PBR maps (downsized); the ruined props are lean low-poly parts baked from their Meshy
+// models (Meshy's maps resampled into one shared atlas: base colour 2048 px, metallic-roughness / normal 1024 px). Provenance in
+// assets/derivatives/food-shelf-*.json.
+// Metres at real size, +Y up, grounded (min y = 0), centred on x / z (atlas: per node, identity node transforms). w / h / d = the measured
+// RESTING-POSE extents (x / y / z): most models stand upright facing +Z; F02 / F03 / F16 / F18 / P11 / P24 lie flat (label / front up),
+// F05 / F06 are turned so their clean labels face +Z, F15 / P11 rest rolled onto stable supports (see each provenance fit).
+// id = the approved asset id; tris = triangles. Only accepted models are listed.
 
 export interface FoodShelfModel { id: string; url: string; w: number; h: number; d: number; tris: number }
 export const FOOD_ITEM_MODELS: Readonly<Record<string, FoodShelfModel>> = {

@@ -18,7 +18,7 @@ import {WorldMaterials} from './world/materials';
 import {MOOD, StationLighting} from './world/lights';
 import {VolumetricAtmosphere} from './render/volumetric';
 import {PickupManager, makeSupplyMesh, refreshItemTemplates, registerItemModels, type Pickup} from './world/pickups';
-import {levelPantryIds, pantryHolderRealizer, pantryIdsIn, pantryPickupItem} from './items/pantryVariety'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): food variety
+import {levelPreloadPantryIds, pantryHolderRealizer, pantryIdsIn, pantryPickupItem} from './items/pantryVariety'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): food variety
 import {ensurePantryModels} from './world/pantryModels'; // (lane ITEMS) the pantry items' lazy models
 import {Survival, survivalTicks} from './player/survival';
 import {ContainerManager, type ContainerEvent, type ContainerTarget} from './world/containers';
@@ -848,14 +848,14 @@ export class Game {
 
   /**
    * Task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): fetch (behind the loading screen) the pantry food / drink models
-   * `key` can show — its level's palette (items/pantryVariety.ts levelPantryIds), the pantry items in its memory and everything the player
+   * `key` can show — its level's palette (items/pantryVariety.ts levelPreloadPantryIds), the pantry items in its memory and everything the player
    * carries (inventory, Lockbox, train cargo) — and refresh what already showed a fallback (templates, held copies, icons). Resident
    * models stay (world/pantryModels.ts). `late`: after a build (a save's carried items): only the carried set.
    */
   private async preparePantry(key: SectionKey | null, run: RunState = this.run, late = false): Promise<void> {
     try {
       const ids = pantryIdsIn([this.inv.toJSON(), this.playerTrain.lockbox.toJSON(), this.playerTrain.cargo.toJSON(), key ? run.peekMemory(key) ?? null : null]);
-      if (key && !late) for (const id of levelPantryIds(key.level)) ids.add(id);
+      if (key && !late) for (const id of levelPreloadPantryIds(key.level)) ids.add(id);
       const fresh = await ensurePantryModels(ids, {late});
       if (!fresh.length) return;
       refreshItemTemplates(fresh);

@@ -121,8 +121,6 @@ export const ITEMS: Record<string, ItemDef> = {
     description: 'A round crusty loaf from a bakery display case, gone hard as a brick. Filling once you work through the crust, and thirsty work.'},
   // --- task studio-skyways-level-20261106-054448 (lane FOOD): the Skyways ramen restaurant's food (items/skywaysFood.ts) ---
   ...SKYWAYS_FOOD_ITEMS,
-  // --- task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the pantry foods / drinks (items/pantryFood.ts) ---
-  ...PANTRY_ITEMS,
   // --- Iteration 12 (LIGHT): light survival (authored models: world/authoredItems.ts) ---
   battery: {id: 'battery', name: 'D-cell battery', short: 'Battery', kind: 'consumable', stackMax: 4, recharge: 1, useTime: 1.4, verb: 'use', icon: 'battery',
     description: 'Unbranded 1.5 V D cell, scuffed but holding charge. Swap it into the flashlight to refill it to 100 %.'},
@@ -147,6 +145,9 @@ export const ITEMS: Record<string, ItemDef> = {
     description: 'A heavy ceramic switchgear fuse cartridge with tinned end caps and blade contacts. The reactor switchgear has two burnt-out slots; press E on a slot to seat one.'},
   // --- Task studio-market-rework-20261108-074144-01 (lane TRADE): the survivor market's currency, Rail Ties (items/railTies.ts) — never loot ---
   ...RAIL_TIES_ITEMS,
+  // --- task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the pantry foods / drinks (items/pantryFood.ts) — appended LAST so
+  // every earlier entry keeps its catalogue order (icon builds, fixtures); they appear only by family substitution (items/pantryVariety.ts) ---
+  ...PANTRY_ITEMS,
 };
 
 export function itemDef(id: string): ItemDef {

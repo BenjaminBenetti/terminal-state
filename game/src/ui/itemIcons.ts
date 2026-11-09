@@ -26,6 +26,7 @@ import {makeSupplyMesh} from '../world/pickups';
 import {ICONS} from './icons';
 import {gearIconView, preloadGearModels} from '../gear/models'; // Iteration 16 (lane GEAR)
 import {PANTRY_DIMS, isPantryItem} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
+import {pantryGltf} from '../world/pantryModels';
 
 /** Icon bitmap size (CSS shows them at roughly half size, so they stay sharp at DPR 1.5–2). */
 export const ICON_W = 192;
@@ -269,8 +270,10 @@ async function renderShots(renderer: WebGPURenderer, ids: string[], guns: Record
 /**
  * Renders every catalogue item once (call after assets load and registerItemModels()). Safe to
  * await before the title screen; on any failure the affected items keep their SVG icon.
+ * (Task studio-food-shelf-production-20261109-002816-01, lane ITEMS: a pantry food / drink whose lazy model is not loaded yet keeps its
+ * SVG glyph — never an icon of its fallback primitive; refreshItemIcons renders it once world/pantryModels.ts delivered the model.)
  */
-export async function buildItemIcons(renderer: WebGPURenderer, guns: Record<string, GLTF | undefined>, ids: string[] = Object.keys(ITEMS)): Promise<IconStats> {
+export async function buildItemIcons(renderer: WebGPURenderer, guns: Record<string, GLTF | undefined>, ids: string[] = Object.keys(ITEMS).filter(id => !isPantryItem(id) || !!pantryGltf(id))): Promise<IconStats> {
   const t0 = performance.now();
   await preloadGearModels(); // Iteration 16 (lane GEAR): the delivered Meshy gear models before their first template (icons, pickups, bags)
   let failed: string[] = [];

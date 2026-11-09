@@ -188,8 +188,11 @@ export const TOP_DECK_CLEAR = 0.3;
  * about x ±0.50 / z ±0.17, the posts' inner faces stand at x ±0.477, the diagonal brace runs across
  * the back at z ≈ -0.19..-0.16 and the decks' front lips at z ≈ 0.15..0.19 (the top deck's lip rises
  * from z 0.149).
+ * Task food-shelf-production (lane SHELF): the live Meshy T2.5 shelf (shelf-t25.glb) measures flat to z 0.185 on every tier, its
+ * lip rising at z ≈ 0.19..0.2 (ray-cast deck profile, 2026-11-09): stock may use the deck to z 0.18 (0.332 m deep), so the
+ * modelled crate, tray and binder stack (0.29..0.31 m deep at real size) fit. tests/shelfStock.test.ts checks no piece meets the model.
  */
-export const SHELF_MODEL_RECT = {x0: -0.462, x1: 0.462, z0: -0.152, z1: 0.14};
+export const SHELF_MODEL_RECT = {x0: -0.462, x1: 0.462, z0: -0.152, z1: 0.18};
 
 /**
  * Stockable deck of tech-display-t25.glb (deviceWall, fitted 1.1 x 2.0 x 0.58; Meshy T2.5, ray-cast 2026-10-29): flat cabinet

@@ -1329,7 +1329,7 @@ export function archTriangles(a: number): number {
 /**
  * Static per-piece cost of archetype `a` the station-wide thinning budgets with (world/shelfStock.ts): triangles and packed
  * rest-mesh bytes. A model-backed archetype costs what the cooked registry says its part has (25 bytes / vertex procedural,
- * 22 model: float position, int16 normal, uint16 UV; ~1 vertex per triangle on the cooked Meshy parts; 4 bytes / index),
+ * 22 model: float position, int16 normal, uint16 UV; JUNK_VERTS_PER_TRI vertices per triangle on the cooked parts; 4 bytes / index),
  * independent of whether the atlas loaded, so the dressing is the same either way.
  */
 export function archCost(a: number): {tris: number; bytes: number} {
@@ -1338,13 +1338,15 @@ export function archCost(a: number): {tris: number; bytes: number} {
     const A = STOCK_ARCHES[a];
     const j = A.model ? JUNK_PROPS.find(p => p.id === A.model) : undefined;
     const mt = j ? junkTris(j) : undefined;
-    if (mt !== undefined) c = {tris: mt, bytes: mt * 22 + mt * 12};
+    if (mt !== undefined) c = {tris: mt, bytes: Math.round(mt * JUNK_VERTS_PER_TRI * 22 + mt * 12)};
     else { const g = archGeometry(a, 0), t = archTriangles(a); c = {tris: t, bytes: g.attributes.position.count * 25 + t * 12}; }
     costCache[a] = c;
   }
   return c;
 }
 const costCache: {tris: number; bytes: number}[] = [];
+/** Vertices per triangle assumed for a cooked part (its UV-chart seams; the cooked atlas measures 1.0..2.1, 1.54 overall). */
+const JUNK_VERTS_PER_TRI = 1.75;
 
 /** The atlas's runtime set: ONE shared material (Meshy's own maps, untouched) and a fitted template geometry per model archetype. */
 export interface JunkSet {
@@ -1407,6 +1409,10 @@ function buildJunkSet(root: THREE.Object3D): JunkSet | null {
       }
       const idx = g.index;
       if (idx) for (let i = 0; i < idx.count; i++) I.push(base + idx.getX(i)); else for (let i = 0; i < pos.count; i++) I.push(base + i);
+    }
+    // a part that lies on its back on a shelf (StockArch.layFlat): turned face up about X (front +Z -> +Y, its top -> -Z)
+    if (A.layFlat) {
+      for (const B of [P, N]) for (let i = 0; i < B.length; i += 3) { const y = B[i + 1], z = B[i + 2]; B[i + 1] = z; B[i + 2] = -y; }
     }
     let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
     for (let i = 0; i < P.length; i += 3) { x0 = Math.min(x0, P[i]); x1 = Math.max(x1, P[i]); y0 = Math.min(y0, P[i + 1]); y1 = Math.max(y1, P[i + 1]); z0 = Math.min(z0, P[i + 2]); z1 = Math.max(z1, P[i + 2]); }

@@ -56,6 +56,19 @@ The old modules re-export the same objects: `items/lootEconomy.ts`, `gen/gearLoo
 5. **Fit.** `packItems` in `items/lootLayout.ts` places each item on a real surface. An item that fits nowhere is
    dropped.
 
+6. **Food variety (realization).** `ContainerManager.build` passes each holder's rolled lots through
+   `pantryHolderRealizer` (`items/pantryVariety.ts`). A lot that rolled an old food or drink (chocolate, chips, beans,
+   noodles, cola, juice, water) may become another member of its family (`PANTRY_FAMILIES`), for example butter cookies,
+   jerky, corned beef, oats, ginger soda, UHT milk or a sports drink.
+   - The pick is a hash of the lot's identity, with no RNG stream. The level palette (`LEVEL_PANTRY`) and the holder's
+     theme and slot weight it.
+   - The lot keeps its count and spot. The variant must fit there, or the old item stays. No row is re-weighted, so every
+     other lot is byte-identical (`loot-golden` is unchanged).
+   - The expected food and water of a substituted lot stays within 10 % of the old item's (`tests/food-variety.test.ts`).
+   - First-spawn floor pickups use `pantryPickupItem`. Bread and the Skyways ramen food are never substituted.
+   - A substituted lot's id is `rolled id + 10 000 000 × (code + 1)`. A remembered holder therefore keeps exactly what its
+     record names. An old save's record lists the rolled ids, so it keeps its old items.
+
 Contents are rolled once. They are finite and remembered by lot id (`run/memory.ts`). Nothing refills or re-rolls.
 
 Loose floor finds and rare gear are decided when the layout is generated:

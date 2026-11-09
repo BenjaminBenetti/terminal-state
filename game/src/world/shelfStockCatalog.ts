@@ -73,6 +73,12 @@ export interface StockArch {
    * is loaded). Absent: an authored procedural archetype.
    */
   model?: string;
+  /** Heavy bulk goods: only on a holder's bottom deck (world/shelfStockLayout.ts LOW_DECK_Y). */
+  low?: boolean;
+  /** Model-backed: the authored archetype standing in for it when the station's triangle budget lowers the model share. */
+  standIn?: string;
+  /** Model-backed: the cooked (upright) part lies on its back here (its template turned face up; world/shelfJunkModels.ts). */
+  layFlat?: boolean;
 }
 
 const A = (id: string, shape: StockShape, w: number, h: number, d: number, label: LabelKind, variants: number,
@@ -162,7 +168,7 @@ export const STOCK_ARCHES: readonly StockArch[] = [
     const [w, h, d] = junkDims(j);
     return {...A(junkArchId(j), j.fallback.shape, w, h, d, j.fallback.label, j.fallback.variants,
       {collider: j.collider, mass: j.mass, mat: j.mat, fam: j.fam, hit: j.hit, ...(j.fit ? {fit: j.fit} : {})},
-      {stack: j.stack, depth: j.depth, facings: j.facings}, j.look), model: j.id};
+      {stack: j.stack, depth: j.depth, facings: j.facings}, j.look), model: j.id, standIn: j.standIn, ...(j.low ? {low: true} : {}), ...(j.layFlat ? {layFlat: true} : {})};
   }),
 ];
 
@@ -205,35 +211,37 @@ export type StockCategory =
  */
 export const CATEGORY_STOCK: Readonly<Record<StockCategory, readonly (readonly [string, number])[]>> = {
   snacks: [['canCrushed', 1.6], ['junk_wrapper_cluster', 1.1], ['wrapper', 0.6], ['junk_crushed_cereal', 0.9], ['snackboxOpen', 0.5], ['bagTorn', 0.5], ['bottleEmpty', 0.6],
-    ['junk_retail_carton', 0.4], ['junk_crushed_box', 0.25], ['junk_shelf_tray', 0.3], ['junk_deli_clamshell', 0.25], ['chips', 0.7], ['snack', 0.6], ['candy', 0.5]],
-  grocery: [['junk_bloated_can', 2], ['junk_rusty_tins', 1.4], ['junk_mould_jar', 1.4], ['canCrushed', 1.4], ['junk_crushed_cereal', 0.6], ['junk_wrapper_cluster', 0.6], ['bottleEmpty', 0.5],
+    ['junk_retail_carton', 0.25], ['junk_crushed_box', 0.25], ['junk_shelf_tray', 0.3], ['junk_deli_clamshell', 0.25], ['chips', 0.7], ['snack', 0.6], ['candy', 0.5]],
+  grocery: [['junk_bloated_can', 2.4], ['junk_rusty_tins', 0.9], ['junk_mould_jar', 1.2], ['canCrushed', 1.6], ['junk_crushed_cereal', 0.6], ['junk_wrapper_cluster', 0.6], ['bottleEmpty', 0.5],
     ['junk_mouldy_loaf', 0.3], ['junk_flour_sack', 0.35], ['junk_potato_sack', 0.3], ['junk_egg_carton', 0.3], ['junk_rotten_fruit_crate', 0.35], ['junk_deli_clamshell', 0.3],
-    ['junk_shelf_tray', 0.3], ['junk_retail_carton', 0.3], ['junk_crushed_box', 0.3], ['junk_towel_pack', 0.2], ['tin', 0.6], ['cereal', 0.4], ['pantry', 0.4], ['cup', 0.3]],
-  pharmacy: [['medboxOpen', 2.4], ['junk_wrapper_cluster', 0.6], ['wrapper', 0.5], ['bottleEmpty', 0.9], ['junk_retail_carton', 0.5], ['junk_crushed_box', 0.3], ['junk_blister_card', 0.4],
+    ['junk_shelf_tray', 0.3], ['junk_retail_carton', 0.15], ['junk_crushed_box', 0.3], ['tin', 0.6], ['cereal', 0.4], ['pantry', 0.4], ['cup', 0.3]],
+  pharmacy: [['medboxOpen', 2.4], ['junk_wrapper_cluster', 0.6], ['wrapper', 0.5], ['bottleEmpty', 0.9], ['junk_retail_carton', 0.3], ['junk_crushed_box', 0.3], ['junk_blister_card', 0.3],
     ['medbox', 0.8], ['pills', 0.6], ['lotion', 0.5]],
   cleaning: [['junk_trigger_sprayer', 2], ['junk_cleaner_jug', 1.6], ['junk_towel_pack', 1], ['junk_rag_bundle', 0.8], ['junk_torn_carton', 0.6], ['junk_crushed_box', 0.5],
     ['junk_wrapper_cluster', 0.4], ['junk_retail_carton', 0.4]],
-  devices: [['phonebox', 1.6], ['junk_blister_card', 1.5], ['gadget', 1], ['tabletbox', 0.5], ['junk_retail_carton', 0.8], ['junk_torn_carton', 0.5], ['junk_crushed_box', 0.5],
-    ['junk_cable_adapter', 0.6], ['junk_wrapper_cluster', 0.4]],
+  // (the authored blister / wrapper stay at a small share: the only ones low and shallow enough for the electronics wall bay's
+  // 0.115 m strip under its accessory cards)
+  devices: [['phonebox', 1.6], ['junk_blister_card', 1.2], ['blister', 0.9], ['gadget', 1], ['tabletbox', 0.5], ['junk_retail_carton', 0.5], ['junk_torn_carton', 0.5], ['junk_crushed_box', 0.5],
+    ['junk_cable_adapter', 0.6], ['junk_wrapper_cluster', 0.4], ['wrapper', 0.5]],
   cartons: [['junk_retail_carton', 1.6], ['junk_shipping_box', 1.6], ['junk_torn_carton', 1.8], ['junk_crushed_box', 1.4], ['junk_carton_bundle', 1], ['junk_shelf_tray', 0.6],
-    ['junk_rusty_tins', 0.3], ['junk_towel_pack', 0.3]],
+    ['junk_towel_pack', 0.3]],
   parts: [['junk_paint_tin', 2], ['junk_cable_adapter', 1.4], ['junk_tool_tote', 1], ['junk_retail_carton', 1], ['junk_torn_carton', 0.8], ['junk_crushed_box', 0.5], ['tubes', 1],
     ['junk_cleaner_jug', 0.5], ['junk_rag_bundle', 0.6], ['junk_blister_card', 0.4]],
-  drinks: [['bottleEmpty', 3], ['bottleBroken', 1.5], ['canCrushed', 1.5], ['junk_burst_milk', 0.4], ['junk_deli_clamshell', 0.3], ['junk_egg_carton', 0.15], ['bottle', 0.4], ['soda', 0.35], ['energy', 0.2], ['bigbottle', 0.2]],
-  juice: [['bottleEmpty', 2.5], ['bottleBroken', 1], ['canCrushed', 0.6], ['junk_burst_milk', 0.5], ['bottle', 0.5]],
+  drinks: [['bottleEmpty', 3], ['bottleBroken', 1.5], ['canCrushed', 1.5], ['junk_burst_milk', 0.4], ['junk_deli_clamshell', 0.3], ['junk_egg_carton', 0.15], ['junk_torn_carton', 0.1], ['bottle', 0.4], ['soda', 0.35], ['energy', 0.2], ['bigbottle', 0.2]],
+  juice: [['bottleEmpty', 2.5], ['bottleBroken', 1], ['canCrushed', 0.6], ['junk_burst_milk', 0.5], ['junk_rotten_fruit_crate', 0.25], ['bottle', 0.5]],
   magazines: [['magazine', 1]],
   flowers: [['bunch', 3], ['plant', 1]],
-  bread: [['junk_mouldy_loaf', 3], ['junk_wrapper_cluster', 0.8], ['wrapper', 0.4], ['bagTorn', 0.4], ['junk_shelf_tray', 0.4], ['junk_flour_sack', 0.2], ['pantry', 0.3]],
-  pastry: [['donutbox', 3], ['junk_wrapper_cluster', 0.6], ['wrapper', 0.5], ['junk_mouldy_loaf', 0.5], ['junk_shelf_tray', 0.3]],
+  bread: [['junk_mouldy_loaf', 3], ['junk_wrapper_cluster', 0.8], ['wrapper', 0.4], ['bagTorn', 0.4], ['junk_shelf_tray', 0.4], ['junk_flour_sack', 0.2], ['junk_torn_carton', 0.25], ['pantry', 0.3]],
+  pastry: [['donutbox', 3], ['junk_wrapper_cluster', 0.6], ['wrapper', 0.5], ['junk_mouldy_loaf', 0.5], ['junk_shelf_tray', 0.3], ['junk_torn_carton', 0.2]],
   keys: [['key', 1]],
   fruit: [['fruit', 1]],
   storage: [['junk_shipping_box', 1.4], ['junk_torn_carton', 1.4], ['junk_crushed_box', 1], ['junk_retail_carton', 1.2], ['junk_carton_bundle', 1], ['junk_binder_stack', 0.6],
     ['junk_paint_tin', 0.6], ['junk_cable_adapter', 0.6], ['junk_tool_tote', 0.5], ['junk_rag_bundle', 0.5], ['junk_towel_pack', 0.5], ['junk_cleaner_jug', 0.5],
-    ['junk_trigger_sprayer', 0.4], ['junk_wrapper_cluster', 0.4], ['junk_rusty_tins', 0.3], ['canCrushed', 0.3], ['bottleEmpty', 0.3]],
+    ['junk_trigger_sprayer', 0.4], ['junk_wrapper_cluster', 0.4], ['canCrushed', 0.3], ['bottleEmpty', 0.3]],
   office: [['junk_binder_stack', 2.4], ['junk_retail_carton', 1.2], ['junk_torn_carton', 1], ['junk_crushed_box', 0.8], ['junk_shipping_box', 0.8], ['junk_carton_bundle', 0.8],
     ['junk_cable_adapter', 0.6], ['junk_wrapper_cluster', 0.4], ['canCrushed', 0.3], ['bottleEmpty', 0.3]],
   pantry: [['junk_flour_sack', 1], ['junk_potato_sack', 0.8], ['junk_rusty_tins', 1.2], ['junk_bloated_can', 1.2], ['junk_mould_jar', 0.8], ['junk_rotten_fruit_crate', 0.6],
-    ['junk_egg_carton', 0.4], ['junk_shipping_box', 0.6], ['junk_torn_carton', 0.6], ['junk_crushed_box', 0.4], ['junk_shelf_tray', 0.5], ['junk_wrapper_cluster', 0.4], ['junk_cleaner_jug', 0.3]],
+    ['junk_egg_carton', 0.4], ['junk_shipping_box', 0.6], ['junk_torn_carton', 0.6], ['junk_crushed_box', 0.4], ['junk_shelf_tray', 0.5], ['junk_wrapper_cluster', 0.4]],
 };
 
 /**
@@ -241,11 +249,13 @@ export const CATEGORY_STOCK: Readonly<Record<StockCategory, readonly (readonly [
  * gone) and of a knocked-over piece in a gap. Coolers (drinks / juice) are mostly empty.
  */
 export const CATEGORY_SPARSE: Readonly<Partial<Record<StockCategory, {gap: number; taken: number; tipped: number}>>> = {
+  // task food-shelf-production (lane SHELF): modestly fuller, lived-in shelves (iteration 12: coolers 0.3 / 0.5, shop shelving 0.055 /
+  // 0.15, bread 0.12 / 0.3) — coolers stay the emptiest
   drinks: {gap: 0.3, taken: 0.5, tipped: 0.6}, juice: {gap: 0.3, taken: 0.5, tipped: 0.6},
-  snacks: {gap: 0.055, taken: 0.15, tipped: 0.55}, grocery: {gap: 0.055, taken: 0.15, tipped: 0.55}, pharmacy: {gap: 0.055, taken: 0.15, tipped: 0.55},
-  bread: {gap: 0.12, taken: 0.3, tipped: 0.5}, pastry: {gap: 0.12, taken: 0.3, tipped: 0.5},
+  snacks: {gap: 0.025, taken: 0.07, tipped: 0.55}, grocery: {gap: 0.025, taken: 0.07, tipped: 0.55}, pharmacy: {gap: 0.025, taken: 0.07, tipped: 0.55},
+  bread: {gap: 0.08, taken: 0.2, tipped: 0.5}, pastry: {gap: 0.08, taken: 0.2, tipped: 0.5},
 };
-export const DEFAULT_SPARSE = {gap: 0.055, taken: 0.15, tipped: 0.45};
+export const DEFAULT_SPARSE = {gap: 0.025, taken: 0.07, tipped: 0.45};
 
 /** gen/purposeShapes.ts STOCK_THEMES order (stockShelf variant) -> category. */
 export const THEME_CATEGORY: readonly StockCategory[] = ['snacks', 'grocery', 'pharmacy', 'cleaning', 'devices', 'cartons', 'parts'];

@@ -85,6 +85,10 @@ export interface StockedHolder {
   area: number;
   /** Render chunk index (-1: nothing stands on it). */
   chunk: number;
+  /** Holder-local boxes the dressing kept clear: its real loot lots and the props standing on it (QA / tests). */
+  blockers: Box3Like[];
+  /** Its dressing seed (shelfStockLayout.ts holderStockSeed of its core-frame position; QA / tests). */
+  seed: number;
 }
 
 /** One merged rest mesh of a chunk (one family, one material, one draw call). */
@@ -121,7 +125,7 @@ const dynKey = (fam: Fam, arch: number, variant: number) => (fam ? -1 - arch : a
 function hostedBoxes(holder: PropPlacement, hi: number, near: readonly {p: PropPlacement; i: number}[]): Box3Like[] {
   const out: Box3Like[] = [];
   const c = Math.cos(holder.rot), s = Math.sin(holder.rot);
-  for (const {p: q, i} of near) {
+  for (const {p: q} of near) {
     if (q === holder || q.cargoGone || (q.level ?? 0) !== (holder.level ?? 0)) continue;
     const inside = Math.abs(q.x - holder.x) < holder.hx - 0.02 && Math.abs(q.z - holder.z) < holder.hz - 0.02 && q.y > holder.y + 0.02 && q.y < holder.y + holder.h + 0.05;
     if (q.host !== hi && !inside) continue;
@@ -287,22 +291,39 @@ export class ShelfStock implements FillerView {
       const lots = [...(deps.lotsOf?.(p) ?? []), ...hostedBoxes(p, pi, nearProps(p))];
       pre.push({prop: p, kind: p.kind, category, boards, lots, seed: holderStockSeed(this.seed, p.kind, xz && 2 * pi < xz.length ? xz[2 * pi] : p.x - sx, xz && 2 * pi < xz.length ? xz[2 * pi + 1] : p.z - sz, p.y), back: shop === undefined, area: p.area, shop});
     }
-    // 2. dress (station-wide bounds on pieces, triangles and rest-mesh bytes: back-of-house rows thin first, then all; then, as the
-    // last resort before the hard bound, more sold-out bays). Costs are the archetypes' static ones (archCost), never what loaded.
-    const passes: {cap: (h: Pre) => number; gap?: number; name: string}[] = [
+    // 2. dress (station-wide bounds on pieces, triangles and rest-mesh bytes: back-of-house rows thin first, then the modelled props'
+    // share drops — each gives way to the authored piece it stands in for, so the shelves stay as full — then all rows 1 deep; and,
+    // as the last resort before the hard bound, more sold-out bays). Costs are the archetypes' static ones (archCost: the cooked
+    // registry's triangles for model-backed ones), never what loaded: the dressing is the same with or without the atlas.
+    const passes: {cap: (h: Pre) => number; share?: number; gap?: number; name: string}[] = [
       {cap: () => 3, name: 'none'},
       {cap: h => (h.back ? 1 : 3), name: 'back rooms 1 deep'},
       {cap: h => (h.back ? 1 : 2), name: 'back rooms 1 deep, shops 2 deep'},
-      {cap: () => 1, name: 'all 1 deep'},
-      {cap: () => 1, gap: 0.25, name: 'all 1 deep, sparser'},
-      {cap: () => 1, gap: 0.5, name: 'all 1 deep, sparse'},
+      {cap: h => (h.back ? 1 : 2), share: 0.75, name: 'models 3/4'},
+      {cap: h => (h.back ? 1 : 2), share: 0.55, name: 'models 0.55'},
+      {cap: () => 1, share: 0.55, name: 'all 1 deep, models 0.55'},
+      {cap: () => 1, share: 0.4, name: 'all 1 deep, models 0.4'},
+      {cap: () => 1, share: 0.25, name: 'all 1 deep, models 1/4'},
+      {cap: () => 1, share: 0.12, name: 'all 1 deep, models 1/8'},
+      {cap: () => 1, share: 0.12, gap: 0.25, name: 'all 1 deep, models 1/8, sparser'},
+      {cap: () => 1, share: 0.12, gap: 0.5, name: 'all 1 deep, models 1/8, sparse'},
     ];
-    const cost = (l: readonly StockPlacement[]) => { let t = 0, b = 0; for (const p of l) { const c = archCost(p.arch); t += c.tris; b += c.bytes; } return {t, b}; };
+    const cost = (l: readonly StockPlacement[]) => {
+      let t = 0, b = 0, mt = 0;
+      for (const p of l) { const c = archCost(p.arch); t += c.tris; b += c.bytes; if (STOCK_ARCHES[p.arch].model) mt += c.tris; }
+      return {t, b, mt};
+    };
     let dressed: StockPlacement[][] = [];
-    for (const pass of passes) {
-      dressed = pre.map(h => dressHolder({category: h.category, boards: h.boards, lots: h.lots, seed: h.seed, depthCap: pass.cap(h), gapBoost: pass.gap ?? 0}));
+    let last: {t: number; mt: number; share: number} | null = null;
+    for (let k = 0; k < passes.length; k++) {
+      const pass = passes[k], share = pass.share ?? 1;
+      // (a pass whose model share alone cannot bring the triangles under the bound is skipped: the models' triangles scale with the
+      // share; the last pass always runs)
+      if (last && k < passes.length - 1 && share < last.share && last.t - last.mt * (1 - share / last.share) * 0.85 > MAX_STOCK_TRIANGLES * 1.12) continue;
+      dressed = pre.map(h => dressHolder({category: h.category, boards: h.boards, lots: h.lots, seed: h.seed, depthCap: pass.cap(h), gapBoost: pass.gap ?? 0, junkShare: share}));
       this.thinning = pass.name;
       const c = cost(dressed.flat());
+      last = {t: c.t, mt: c.mt, share};
       if (dressed.reduce((n, l) => n + l.length, 0) <= MAX_STOCK_PER_STATION && c.t <= MAX_STOCK_TRIANGLES && c.b <= MAX_STOCK_GEOMETRY_BYTES) break;
     }
     // hard bound (never reached by generated stations; keeps the caps caps)
@@ -350,35 +371,56 @@ export class ShelfStock implements FillerView {
       list.forEach((pl, k) => { if (pl.on >= 0) pieces[first + pl.on].above.push(first + k); });
       const cols = toWorldBoxes(p, stockColliders(h.kind, p.variant, h.boards)).map(b => new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max)));
       colliders.push(...cols);
-      const holder: StockedHolder = {index: hi, prop: p, kind: h.kind, category: h.category, level, boards: h.boards, placements: list, first, count: list.length, colliders: cols, area: h.area, chunk: ci, ...(h.shop !== undefined ? {shop: h.shop} : {})};
+      const holder: StockedHolder = {index: hi, prop: p, kind: h.kind, category: h.category, level, boards: h.boards, placements: list, first, count: list.length, colliders: cols, area: h.area, chunk: ci, blockers: h.lots, seed: h.seed, ...(h.shop !== undefined ? {shop: h.shop} : {})};
       this.holders.push(holder);
       this.holderOf.set(p, holder);
     });
-    // 4. merged rest meshes
-    const mat = stockMaterial();
-    chunkPieces.forEach((ids, ci) => this.bakeChunk(ci, ids, pieces, mat));
+    // 4. merged rest meshes (per chunk: the authored filler's, and the modelled props' when the atlas is loaded)
+    chunkPieces.forEach((ids, ci) => {
+      for (const f of [0, 1] as const) { const fi = ids.filter(id => this.fam[id] === f); if (fi.length) this.bakePart(ci, f, fi, pieces); }
+    });
+    // the moving sets of the modelled archetypes present, prepared now (hidden) so the warm-up compiles them (warmRoots)
+    if (junk) {
+      const n = new Map<number, number>();
+      for (let id = 0; id < total; id++) if (this.fam[id]) n.set(this.arch[id], (n.get(this.arch[id]) ?? 0) + 1);
+      for (const [a, c] of n) this.dynSet(1, a, 0, Math.min(c, FILLER_TUNING.maxActive));
+    }
     this.filler.setPieces(pieces, colliders, this);
     this.group.updateMatrixWorld(true);
     this.buildMs = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
   }
 
-  private bakeChunk(ci: number, ids: number[], pieces: FillerPiece[], mat: THREE.Material): void {
+  /** Template geometry of a piece (its family's: the authored archetype's, or the atlas part's). */
+  private pieceGeometry(id: number): THREE.BufferGeometry {
+    return this.fam[id] ? this.junk!.geometry(this.arch[id])! : archGeometry(this.arch[id], this.variant[id]);
+  }
+
+  /**
+   * One family's merged rest mesh of a chunk. Authored filler packs float positions, int16 normals, uint16 UVs and uint8 colours
+   * (atlas print x vertex colour x tint: 25 bytes / vertex); modelled props float positions, int16 normals and uint16 UVs (22
+   * bytes; float UVs if a part's UVs leave [0, 1]) under the atlas's own material — Meshy's maps exactly, no tint.
+   */
+  private bakePart(ci: number, fam: Fam, ids: number[], pieces: FillerPiece[]): void {
     let vc = 0, ic = 0;
     for (const id of ids) {
-      const g = archGeometry(this.arch[id], this.variant[id]);
+      const g = this.pieceGeometry(id);
       vc += g.attributes.position.count; ic += g.index!.count;
     }
-    // packed: float positions, int16 normals, uint16 UVs, uint8 colours (25 bytes / vertex)
-    const pos = new Float32Array(vc * 3), nor = new Int16Array(vc * 3), uv = new Uint16Array(vc * 2), col = new Uint8Array(vc * 3), idx = new Uint32Array(ic);
+    const shortUV = !fam || this.junk!.uvShort;
+    const pos = new Float32Array(vc * 3), nor = new Int16Array(vc * 3), uv = shortUV ? new Uint16Array(vc * 2) : new Float32Array(vc * 2), idx = new Uint32Array(ic);
+    const col = fam ? null : new Uint8Array(vc * 3);
     let vo = 0, io = 0;
     for (const id of ids) {
-      const g = archGeometry(this.arch[id], this.variant[id]);
+      const g = this.pieceGeometry(id);
       const n = g.attributes.position.count;
       this.vStart[id] = vo; this.vCount[id] = n;
       const gu = g.attributes.uv.array as Float32Array;
-      for (let i = 0; i < n * 2; i++) uv[vo * 2 + i] = Math.round(Math.max(0, Math.min(1, gu[i])) * 65535);
-      const gc = g.attributes.color.array as Float32Array, k = this.tint[id];
-      for (let i = 0; i < n * 3; i++) col[vo * 3 + i] = Math.max(0, Math.min(255, Math.round(gc[i] * k * 255)));
+      if (shortUV) for (let i = 0; i < n * 2; i++) uv[vo * 2 + i] = Math.round(Math.max(0, Math.min(1, gu[i])) * 65535);
+      else uv.set(gu.subarray(0, n * 2), vo * 2);
+      if (col) {
+        const gc = g.attributes.color.array as Float32Array, k = this.tint[id];
+        for (let i = 0; i < n * 3; i++) col[vo * 3 + i] = Math.max(0, Math.min(255, Math.round(gc[i] * k * 255)));
+      }
       const src = g.index!.array;
       for (let i = 0; i < src.length; i++) idx[io + i] = src[i] + vo;
       io += src.length;
@@ -388,20 +430,21 @@ export class ShelfStock implements FillerView {
     const P = new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage), N = new THREE.BufferAttribute(nor, 3, true).setUsage(THREE.DynamicDrawUsage);
     geo.setAttribute('position', P);
     geo.setAttribute('normal', N);
-    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2, true));
-    geo.setAttribute('color', new THREE.BufferAttribute(col, 3, true));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2, shortUV));
+    if (col) geo.setAttribute('color', new THREE.BufferAttribute(col, 3, true));
     geo.setIndex(new THREE.BufferAttribute(idx, 1));
     const ch = this.chunks[ci];
-    ch.pos = P; ch.nor = N; ch.tris = ic / 3;
-    for (const id of ids) this.writePiece(ch, id, pieces[id], false);
+    const part: ChunkPart = {pos: P, nor: N, tris: ic / 3, mesh: null as unknown as THREE.Mesh};
+    ch.parts[fam] = part;
+    for (const id of ids) this.writePiece(part, id, pieces[id], false);
     geo.computeBoundingSphere();
     if (geo.boundingSphere) geo.boundingSphere.radius += 0.5;
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.name = `shelf-stock-${ch.key}`;
+    const mesh = new THREE.Mesh(geo, fam ? this.junk!.material : stockMaterial());
+    mesh.name = fam ? `shelf-junk-${ch.key}` : `shelf-stock-${ch.key}`;
     mesh.userData.level = ch.level;
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
-    ch.mesh = mesh;
+    part.mesh = mesh;
     this.group.add(mesh);
   }
 
@@ -411,9 +454,14 @@ export class ShelfStock implements FillerView {
     return out.compose(p.p, p.q, ts).multiply(tm2.makeTranslation(0, -A.h / 2, 0));
   }
 
-  /** Writes (or collapses) one piece's vertices in its chunk; `upload` marks the ranges for a partial upload. */
-  private writePiece(ch: Chunk, id: number, p: FillerPiece | null, upload: boolean): void {
-    const g = archGeometry(this.arch[id], this.variant[id]);
+  /** The rest-mesh part a piece's vertices live in. */
+  private partOf(id: number): ChunkPart {
+    return this.chunks[this.chunkOf[id]].parts[this.fam[id] as Fam]!;
+  }
+
+  /** Writes (or collapses) one piece's vertices in its chunk part; `upload` marks the ranges for a partial upload. */
+  private writePiece(ch: ChunkPart, id: number, p: FillerPiece | null, upload: boolean): void {
+    const g = this.pieceGeometry(id);
     const s = this.vStart[id], n = this.vCount[id];
     const P = ch.pos.array as Float32Array, N = ch.nor.array as Int16Array;
     if (!p) {
@@ -447,44 +495,71 @@ export class ShelfStock implements FillerView {
   // FillerView
 
   wake(p: FillerPiece): void {
-    this.writePiece(this.chunks[this.chunkOf[p.id]], p.id, null, true);
+    this.writePiece(this.partOf(p.id), p.id, null, true);
   }
 
   rest(p: FillerPiece): void {
-    this.writePiece(this.chunks[this.chunkOf[p.id]], p.id, p, true);
+    this.writePiece(this.partOf(p.id), p.id, p, true);
   }
 
-  /** Moving / frozen pieces: one instanced mesh per (archetype, label) in use this frame. */
+  /**
+   * The moving set of an archetype with room for `n` instances (created or grown; a fresh set is hidden and empty): authored filler
+   * per (archetype, label) with the label atlas material and a per-instance tint, a modelled prop per archetype with the junk
+   * atlas's material (no tint: Meshy's maps exactly).
+   */
+  private dynSet(fam: Fam, arch: number, variant: number, n: number): DynSet {
+    const k = dynKey(fam, arch, variant);
+    let set = this.dyn.get(k);
+    if (set && set.cap >= n) return set;
+    const cap = Math.max(8, 1 << Math.ceil(Math.log2(Math.max(1, n))));
+    const mesh = fam
+      ? new THREE.InstancedMesh(this.junk!.geometry(arch)!, this.junk!.material, cap)
+      : new THREE.InstancedMesh(archGeometry(arch, variant), stockMaterial(), cap);
+    // (a grown set keeps the shadow flags the station marked on the one it replaces)
+    if (set) { mesh.castShadow = set.mesh.castShadow; mesh.receiveShadow = set.mesh.receiveShadow; this.group.remove(set.mesh); set.mesh.dispose(); }
+    mesh.name = `shelf-${fam ? 'junk' : 'stock'}-moving-${STOCK_ARCHES[arch].id}`;
+    mesh.frustumCulled = false; // a handful of instances anywhere in the station
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.count = 0;
+    mesh.visible = false;
+    this.group.add(mesh);
+    this.dyn.set(k, (set = {mesh, cap}));
+    return set;
+  }
+
+  /** Moving / frozen pieces: one instanced mesh per (archetype, label) — per archetype for modelled props — in use this frame. */
   frame(moving: readonly FillerPiece[]): void {
     const used = new Map<number, FillerPiece[]>();
     for (const p of moving) {
-      const k = this.arch[p.id] * 64 + this.variant[p.id];
+      const k = dynKey(this.fam[p.id] as Fam, this.arch[p.id], this.variant[p.id]);
       let l = used.get(k);
       if (!l) used.set(k, (l = []));
       l.push(p);
     }
     for (const [k, set] of this.dyn) if (!used.has(k) && set.mesh.count) { set.mesh.count = 0; set.mesh.visible = false; }
-    for (const [k, list] of used) {
-      let set = this.dyn.get(k);
-      if (!set || set.cap < list.length) {
-        if (set) { this.group.remove(set.mesh); set.mesh.dispose(); }
-        const cap = Math.max(8, 1 << Math.ceil(Math.log2(list.length)));
-        const mesh = new THREE.InstancedMesh(archGeometry(Math.floor(k / 64), k % 64), stockMaterial(), cap);
-        mesh.name = `shelf-stock-moving-${STOCK_ARCHES[Math.floor(k / 64)].id}`;
-        mesh.frustumCulled = false; // a handful of instances anywhere in the station
-        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        this.group.add(mesh);
-        this.dyn.set(k, (set = {mesh, cap}));
-      }
+    for (const list of used.values()) {
+      const id0 = list[0].id, fam = this.fam[id0] as Fam;
+      const set = this.dynSet(fam, this.arch[id0], this.variant[id0], list.length);
       list.forEach((p, i) => {
-        set!.mesh.setMatrixAt(i, this.pieceMatrix(p.id, p, tm));
-        set!.mesh.setColorAt(i, tc.setScalar(this.tint[p.id]));
+        set.mesh.setMatrixAt(i, this.pieceMatrix(p.id, p, tm));
+        if (!fam) set.mesh.setColorAt(i, tc.setScalar(this.tint[p.id]));
       });
       set.mesh.count = list.length;
       set.mesh.visible = true;
       set.mesh.instanceMatrix.needsUpdate = true;
       if (set.mesh.instanceColor) set.mesh.instanceColor.needsUpdate = true;
     }
+  }
+
+  /**
+   * Warm-up pool roots (Game.warmRegistry.addPool): the modelled props' moving sets prepared at build (hidden until a piece moves),
+   * so their instanced variants of the atlas material compile behind the loading screen, not on the first shot. The rest meshes
+   * are ordinary scene meshes (the warm-up finds them itself).
+   */
+  warmRoots(): THREE.Object3D[] {
+    const out: THREE.Object3D[] = [];
+    for (const [k, s] of this.dyn) if (k < 0) out.push(s.mesh);
+    return out;
   }
 
   // ---------------------------------------------------------------------------------------
@@ -541,7 +616,7 @@ export class ShelfStock implements FillerView {
         this.sfx?.impact?.(h.point.x, h.point.y, h.point.z, spec.sound);
       }
       seen.add(h.piece);
-      if (!(A.mat === 'soft' || (A.mat === 'plastic' && A.mass < 0.7))) break;
+      if (!(A.mat === 'soft' || A.mat === 'cloth' || (A.mat === 'plastic' && A.mass < 0.7))) break; // (rags / sacks: cloth)
       j *= 0.65;
       h = this.filler.rayHit(h.point, dir, 0.6, seen);
     }
@@ -556,7 +631,7 @@ export class ShelfStock implements FillerView {
 
   clear(): void {
     this.filler.setPieces([], [], null);
-    for (const c of this.chunks) if (c.mesh) { this.group.remove(c.mesh); c.mesh.geometry.dispose(); }
+    for (const c of this.chunks) for (const part of c.parts) if (part?.mesh) { this.group.remove(part.mesh); part.mesh.geometry.dispose(); }
     for (const s of this.dyn.values()) { this.group.remove(s.mesh); s.mesh.dispose(); }
     this.dyn.clear();
     this.chunks = [];
@@ -566,23 +641,42 @@ export class ShelfStock implements FillerView {
 
   dispose(): void {
     this.clear();
+    this.junk?.dispose();
+    this.junk = null;
   }
 
   // ---------------------------------------------------------------------------------------
   // QA
 
-  /** Archetype id / category of a piece (tests, QA). */
-  pieceInfo(id: number): {arch: string; variant: number; holder: number; category: StockCategory} {
+  /** Archetype id / category of a piece (tests, QA); `model`: drawn from the ruined-prop atlas (its prop id). */
+  pieceInfo(id: number): {arch: string; variant: number; holder: number; category: StockCategory; model?: string} {
     const p = this.filler.pieces[id];
-    return {arch: STOCK_ARCHES[this.arch[id]].id, variant: this.variant[id], holder: p.holder, category: this.holders[p.holder].category};
+    const model = this.fam[id] ? STOCK_ARCHES[this.arch[id]].model : undefined;
+    return {arch: STOCK_ARCHES[this.arch[id]].id, variant: this.variant[id], holder: p.holder, category: this.holders[p.holder].category, ...(model ? {model} : {})};
   }
 
-  /** Draw calls, triangles, memory and counts — per station and per stocked shop. */
+  /** QA / tests: the rest mesh holding a piece's vertices and its vertex range (collapsed to one point while the piece moves). */
+  restRange(id: number): {mesh: THREE.Mesh; start: number; count: number; family: Fam} {
+    return {mesh: this.partOf(id).mesh, start: this.vStart[id], count: this.vCount[id], family: this.fam[id] as Fam};
+  }
+
+  /** Triangles drawn for one piece (its family's template). */
+  private pieceTris(id: number): number {
+    if (!this.fam[id]) return archTriangles(this.arch[id]);
+    const g = this.junk!.geometry(this.arch[id])!;
+    return g.index!.count / 3;
+  }
+
+  /**
+   * Draw calls, triangles, memory and counts — per station and per stocked shop. drawCalls: `chunks` authored-filler rest meshes,
+   * `junk` modelled-prop rest meshes (at most one per chunk), `moving` instanced sets drawing this frame.
+   */
   stats(): {
     holders: number; pieces: number; byKind: Record<string, {holders: number; pieces: number}>; byCategory: Record<string, number>;
-    drawCalls: {chunks: number; moving: number}; triangles: number; textureMB: number; geometryMB: number; thinning: string; buildMs: number;
+    drawCalls: {chunks: number; junk: number; moving: number}; triangles: number; textureMB: number; geometryMB: number; thinning: string; buildMs: number;
     shops: {shop: number; holders: number; pieces: number; triangles: number; chunks: number}[];
     physics: ReturnType<FillerStock['stats']>;
+    junk: {loaded: boolean; pieces: number; modelPieces: number; byModel: Record<string, number>};
   } {
     const byKind: Record<string, {holders: number; pieces: number}> = {}, byCategory: Record<string, number> = {};
     const shops = new Map<number, {shop: number; holders: number; pieces: number; triangles: number; chunks: Set<number>}>();
@@ -592,7 +686,7 @@ export class ShelfStock implements FillerView {
       k.holders++; k.pieces += h.count;
       byCategory[h.category] = (byCategory[h.category] ?? 0) + h.count;
       let ht = 0;
-      for (let i = h.first; i < h.first + h.count; i++) ht += archTriangles(this.arch[i]);
+      for (let i = h.first; i < h.first + h.count; i++) ht += this.pieceTris(i);
       tris += ht;
       if (h.shop !== undefined) {
         let s = shops.get(h.shop);
@@ -600,17 +694,32 @@ export class ShelfStock implements FillerView {
         s.holders++; s.pieces += h.count; s.triangles += ht; if (h.chunk >= 0) s.chunks.add(h.chunk);
       }
     }
-    let bytes = 0;
-    for (const c of this.chunks) { const g = c.mesh?.geometry; if (!g) continue; for (const a of Object.values(g.attributes)) bytes += (a.array as ArrayLike<number> & {byteLength: number}).byteLength; bytes += (g.index!.array as Uint32Array).byteLength; }
+    let bytes = 0, chunks = 0, junkMeshes = 0;
+    for (const c of this.chunks) for (const [f, part] of c.parts.entries()) {
+      const g = part?.mesh?.geometry;
+      if (!g) continue;
+      if (f) junkMeshes++; else chunks++;
+      for (const a of Object.values(g.attributes)) bytes += (a.array as ArrayLike<number> & {byteLength: number}).byteLength;
+      bytes += (g.index!.array as Uint32Array).byteLength;
+    }
     let moving = 0;
     for (const s of this.dyn.values()) if (s.mesh.visible && s.mesh.count) moving++;
+    const byModel: Record<string, number> = {};
+    let junkPieces = 0, modelPieces = 0;
+    for (let id = 0; id < this.filler.pieces.length; id++) {
+      const A = STOCK_ARCHES[this.arch[id]];
+      if (!A.model) continue;
+      junkPieces++;
+      if (this.fam[id]) { modelPieces++; byModel[A.model] = (byModel[A.model] ?? 0) + 1; }
+    }
     return {
       holders: this.holders.length, pieces: this.filler.pieces.length, byKind, byCategory,
-      drawCalls: {chunks: this.chunks.length, moving}, triangles: tris,
-      textureMB: Math.round(stockTextureBytes() / 1048576 * 100) / 100, geometryMB: Math.round(bytes / 1048576 * 100) / 100,
+      drawCalls: {chunks, junk: junkMeshes, moving}, triangles: tris,
+      textureMB: Math.round((stockTextureBytes() + (this.junk && modelPieces ? this.junk.textureBytes : 0)) / 1048576 * 100) / 100, geometryMB: Math.round(bytes / 1048576 * 100) / 100,
       thinning: this.thinning, buildMs: Math.round(this.buildMs),
       shops: [...shops.values()].map(s => ({shop: s.shop, holders: s.holders, pieces: s.pieces, triangles: s.triangles, chunks: s.chunks.size})),
       physics: this.filler.stats(),
+      junk: {loaded: !!this.junk, pieces: junkPieces, modelPieces, byModel},
     };
   }
 
@@ -648,12 +757,18 @@ export class ShelfStock implements FillerView {
     return null;
   }
 
-  /** Rest-mesh chunks inside the camera frustum + moving-piece meshes drawn (the stock's draw calls this frame). */
-  drawCallsInView(camera: THREE.Camera): {chunks: number; inView: number; moving: number} {
+  /**
+   * Rest meshes inside the camera frustum (`inView`: both families; `junkInView` the modelled props' share) + moving-piece meshes
+   * drawn (the stock's draw calls this frame). `chunks`: spatial chunks (each draws one or two rest meshes).
+   */
+  drawCallsInView(camera: THREE.Camera): {chunks: number; inView: number; junkInView: number; moving: number} {
     const f = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
-    let inView = 0, moving = 0;
-    for (const c of this.chunks) { const s = c.mesh?.geometry.boundingSphere; if (s && f.intersectsSphere(s)) inView++; }
+    let inView = 0, junkInView = 0, moving = 0;
+    for (const c of this.chunks) for (const [k, part] of c.parts.entries()) {
+      const s = part?.mesh?.geometry.boundingSphere;
+      if (s && f.intersectsSphere(s)) { inView++; if (k) junkInView++; }
+    }
     for (const s of this.dyn.values()) if (s.mesh.visible && s.mesh.count) moving++;
-    return {chunks: this.chunks.length, inView, moving};
+    return {chunks: this.chunks.length, inView, junkInView, moving};
   }
 }

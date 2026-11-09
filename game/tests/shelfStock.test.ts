@@ -22,6 +22,19 @@ afterAll(() => uninstall());
 
 const SEEDS = [9001, 424242, 24839];
 
+/** Share of the 'rows' boards' length covered by the pieces standing on them (union of their footprints along x). */
+function rowCoverage(pl: readonly StockPlacement[], boards: readonly Board[]): number {
+  let len = 0, cov = 0;
+  boards.forEach((b, bi) => {
+    if (b.mode !== 'rows') return;
+    len += b.x1 - b.x0;
+    const iv = pl.filter(p => p.board === bi).map(p => footprintRect(p)).sort((a, c) => a[0] - c[0]);
+    let e = -Infinity;
+    for (const f of iv) { cov += Math.max(0, Math.min(f[2], b.x1) - Math.max(f[0], e, b.x0)); e = Math.max(e, f[2]); }
+  });
+  return len ? cov / len : 1;
+}
+
 /** Every placement's own expected category members (lean racks also hold their newspaper bin). */
 const allowed = (cat: keyof typeof CATEGORY_STOCK) => new Set([...CATEGORY_STOCK[cat].map(r => r[0]), ...(cat === 'magazines' ? ['news'] : [])]);
 
@@ -107,16 +120,23 @@ describe('filler catalogue and categories', () => {
       ['snackRack', 0, 'newsstand'], ['shopCooler', 0, 'convenience'], ['shopCooler', 0, 'juice'], ['magazineRack', 0, 'newsstand'],
       ['flowerStand', 0, 'florist'], ['breadRack', 0, 'bakery'], ['breadRack', 1, 'donut'], ['repairBench', 0, 'keys'], ['repairBench', 1, 'phone'],
       ['deviceWall', 0, 'tech'], ['blenderBar', 0, 'juice'],
+      // task food-shelf-production (lane SHELF): storage shelving by its room (closets, offices, kitchens, workshops, storage)
+      ['shelf', 0, 'janitor-closet'], ['shelf', 0, 'office-storage'], ['shelf', 0, 'storage'], ['shelf', 0, 'workshop'], ['shelf', 0, 'ramen-kitchen'],
     ];
     const wallDeck = deviceWallDeck(await loadModel('tech-display.glb'));
     for (const kind of STOCKED_KINDS) expect(cases.some(c => c[0] === kind), kind).toBe(true);
+    expect(['janitor-closet', 'office-storage', 'storage', 'workshop', 'ramen-kitchen'].map(p => stockCategory('shelf', 0, p))).toEqual(['cleaning', 'office', 'storage', 'parts', 'pantry']);
     for (const [kind, variant, purpose] of cases) {
       const cat = stockCategory(kind, variant, purpose)!;
       expect(cat, kind).toBeTruthy();
-      for (const d of kind === 'stockShelf' ? [deck, null] : kind === 'deviceWall' ? [wallDeck, null] : [null]) {
+      // (storage shelving stands stock only on the measured decks of its shelf.glb: its procedural fallback box has no boards)
+      if (kind === 'shelf') expect(stockBoards('shelf', variant, {deck: null}).length).toBe(0);
+      for (const d of kind === 'stockShelf' ? [deck, null] : kind === 'shelf' ? [deck] : kind === 'deviceWall' ? [wallDeck, null] : [null]) {
         const boards = stockBoards(kind, variant, {deck: d as DeckSampler | null});
         const pl = dressHolder({category: cat, boards, lots: [], seed: 31 + variant});
-        expect(pl.length, `${kind}/${variant}`).toBeGreaterThan(kind === 'repairBench' && variant === 1 ? 0 : 5);
+        // stocked: more than 5 pieces, or (task food-shelf-production: a small board of real-size modelled junk — the electronics wall
+        // fallback's 0.15 m-high cabinet top holds four 0.25 m cable coils) its row boards mostly covered
+        expect(pl.length > (kind === 'repairBench' && variant === 1 ? 0 : 5) || rowCoverage(pl, boards) > 0.7, `${kind}/${variant}: ${pl.length} pieces`).toBe(true);
         // each board holds its own category (the key-cutting bench's key wall holds key blanks)
         for (const p of pl) {
           const bc = boards[p.board].category ?? cat;
@@ -184,12 +204,22 @@ describe('dressing (generated stations, real loot, real shelf decks)', () => {
     const models = [
       {kind: 'stockShelf', deck: shelfDecks(shelf), tris: fittedTriangles(shelf, 1.2, 1.85, 0.45), variants: STOCK_THEMES.length},
       {kind: 'deviceWall', deck: deviceWallDeck(wall), tris: fittedTriangles(wall, 1.1, 2.0, 0.58), variants: 1},
+      // task food-shelf-production (lane SHELF): storage shelving (the same shelf.glb) with its big storage boxes / junk
+      {kind: 'shelf', deck: shelfDecks(shelf), tris: fittedTriangles(shelf, 1.2, 1.85, 0.45), variants: 1},
     ];
     let tested = 0;
     for (const {kind, deck, tris, variants} of models) for (let v = 0; v < variants; v++) {
       for (const seed of [5, 6, 7]) {
         const pl = dressHolder({category: stockCategory(kind, v, undefined)!, boards: stockBoards(kind, v, {deck}), lots: [], seed: seed * 100 + v});
-        if (kind === 'deviceWall') expect(pl.length).toBeGreaterThan(8);
+        // the wall bay's strip is stocked along its length (task food-shelf-production: was "> 8 pieces"; the strip now draws its fit
+        // products from the category's rows that fit it, and a full strip of 14 cm gadget boxes is 7-8 pieces: measured as coverage)
+        if (kind === 'deviceWall') {
+          expect(pl.length).toBeGreaterThanOrEqual(6);
+          const iv = pl.map(p => footprintRect(p)).map(f => [f[0], f[2]] as const).sort((a, b) => a[0] - b[0]);
+          let cov = 0, e = -Infinity;
+          for (const [a, b] of iv) { cov += Math.max(0, b - Math.max(a, e)); e = Math.max(e, b); }
+          expect(cov / (deck.rect(0).x1 - deck.rect(0).x0)).toBeGreaterThan(0.7);
+        }
         for (const p of pl) {
           const A = STOCK_ARCHES[p.arch];
           for (const o of pieceBoxes(p, 0.002)) {

@@ -67,6 +67,9 @@ function bilinear(tex, u, v, out, o) {
 }
 
 const tmp = new Float32Array(8);
+// opt-in source normal map (see bake.mjs): decoded through three's derivative tangent frame of the dense face (inverse of encodeNormal)
+const NM = d.NM ? new Uint8Array(d.NM) : null, DG = d.DG ? new Float32Array(d.DG) : null;
+const tmpN = new Float32Array(4);
 function processSample(s) {
   const px = S[6 * s], py = S[6 * s + 1], pz = S[6 * s + 2], nx = S[6 * s + 3], ny = S[6 * s + 4], nz = S[6 * s + 5];
   let cx = Math.floor((px - ox) / h), cy = Math.floor((py - oy) / h), cz = Math.floor((pz - oz) / h);
@@ -106,7 +109,21 @@ function processSample(s) {
   oM[2 * s] = Math.round(tmp[5]); oM[2 * s + 1] = Math.round(tmp[6]);
   let mx = N[3 * a] * u + N[3 * b] * v + N[3 * c] * w, my = N[3 * a + 1] * u + N[3 * b + 1] * v + N[3 * c + 1] * w, mz = N[3 * a + 2] * u + N[3 * b + 2] * v + N[3 * c + 2] * w;
   const l = Math.hypot(mx, my, mz) || 1;
-  oN[3 * s] = mx / l; oN[3 * s + 1] = my / l; oN[3 * s + 2] = mz / l;
+  mx /= l; my /= l; mz /= l;
+  if (NM) {
+    bilinear(NM, tu, tv, tmpN, 0);
+    const x = tmpN[0] / 127.5 - 1, y = tmpN[1] / 127.5 - 1, z = tmpN[2] / 127.5 - 1, g = 9 * t;
+    const NdNf = mx * DG[g + 6] + my * DG[g + 7] + mz * DG[g + 8], NdGu = mx * DG[g] + my * DG[g + 1] + mz * DG[g + 2], NdGv = mx * DG[g + 3] + my * DG[g + 4] + mz * DG[g + 5];
+    const Tx = DG[g] * NdNf - DG[g + 6] * NdGu, Ty = DG[g + 1] * NdNf - DG[g + 7] * NdGu, Tz = DG[g + 2] * NdNf - DG[g + 8] * NdGu;
+    const Bx = DG[g + 3] * NdNf - DG[g + 6] * NdGv, By = DG[g + 4] * NdNf - DG[g + 7] * NdGv, Bz = DG[g + 5] * NdNf - DG[g + 8] * NdGv;
+    const m = Math.max(Tx * Tx + Ty * Ty + Tz * Tz, Bx * Bx + By * By + Bz * Bz);
+    if (m > 0) {
+      const sc = 1 / Math.sqrt(m);
+      const nx = (x * Tx - y * Bx) * sc + z * mx, ny = (x * Ty - y * By) * sc + z * my, nz = (x * Tz - y * Bz) * sc + z * mz, ln = Math.hypot(nx, ny, nz);
+      if (ln > 0) { mx = nx / ln; my = ny / ln; mz = nz / ln; }
+    }
+  }
+  oN[3 * s] = mx; oN[3 * s + 1] = my; oN[3 * s + 2] = mz;
   oS[s] = status;
 }
 

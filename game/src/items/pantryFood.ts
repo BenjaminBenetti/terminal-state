@@ -84,14 +84,14 @@ export const PANTRY_ITEMS: Record<PantryId, ItemDef> = {
   // --- tinned / pouch meals (beans family) ---
   [CORNED_BEEF]: food(CORNED_BEEF, 'Corned beef tin', 'Corned beef', 30, -2, 4, 2.2,
     'A tapered tin of pressed corned beef with its key still taped to the side. Salty, dense and very filling, cold or not.'),
-  [SARDINES]: food(SARDINES, 'Sardine tin', 'Sardines', 22, 2, 6, 1.8,
+  [SARDINES]: food(SARDINES, 'Sardine tin', 'Sardines', 24, 2, 6, 1.8,
     'A flat ring-pull tin of sardines in oil. A small meal, and the oil goes down easier than you would think.'),
   [FIELD_RATION]: food(FIELD_RATION, 'Field ration pouch', 'Field ration', 34, 4, 3, 2.5,
     'A sealed khaki ration pouch: a retort main course, crackers and a drink sachet you mix with the juices. A full meal in one bag.'),
   [RATION_BRICK]: food(RATION_BRICK, 'Emergency ration brick', 'Ration brick', 44, -6, 3, 2.4,
     'A foil-wrapped block of compressed emergency ration, years from its date and still good. The most food in the smallest space; it leaves your mouth dry.'),
-  [PICKLES]: food(PICKLES, 'Pickled vegetables jar', 'Pickles', 12, 8, 3, 2.0,
-    'A glass jar of pickled vegetables in cloudy brine. Not much food, but the brine is wet and sharp.'),
+  [PICKLES]: food(PICKLES, 'Pickled vegetables jar', 'Pickles', 18, 6, 3, 2.0,
+    'A glass jar of pickled carrots, cauliflower and cucumbers in cloudy brine. Less filling than meat, but the brine is wet and sharp.'),
   // --- dry meals (noodles family) ---
   [PEANUT_BUTTER]: food(PEANUT_BUTTER, 'Peanut butter tub', 'Peanut butter', 30, -6, 3, 2.2,
     'A plastic tub of peanut butter, eaten off two fingers. Rich and filling, and it sticks to the roof of your mouth.'),
@@ -172,11 +172,17 @@ export const PANTRY_NOMINAL: Readonly<Record<PantryId, ItemDims>> = {
 const r4 = (v: number) => Math.round(v * 10000) / 10000;
 const shapeOf = (id: PantryId): ItemShape => PANTRY_NOMINAL[id].shape;
 
-/** Item dims: the delivered model's real bounds (FOOD_ITEM_MODELS; world/pickups.ts fitItemModel keeps it at scale 1), else the nominal size. */
+/**
+ * Item dims: the delivered model's real bounds (FOOD_ITEM_MODELS; world/pickups.ts fitItemModel keeps it at scale 1), else the nominal size.
+ * A delivered box-like model that already rests LYING (height under half its footprint: a pouch / box cooked on its back) is 'flat' — it
+ * is never turned onto its back again (that would stand it on end).
+ */
 export const PANTRY_DIMS: Record<PantryId, ItemDims> = Object.fromEntries(PANTRY_IDS.map(id => {
   const m = FOOD_ITEM_MODELS[id];
   const ok = !!m && [m.w, m.h, m.d].every(v => Number.isFinite(v) && v > 0.005 && v < 1);
-  return [id, ok ? {w: r4(m.w), d: r4(m.d), h: r4(m.h), shape: shapeOf(id)} : {...PANTRY_NOMINAL[id]}];
+  if (!ok) return [id, {...PANTRY_NOMINAL[id]}];
+  const lying = shapeOf(id) === 'box' && m.h < 0.5 * Math.max(m.w, m.d);
+  return [id, {w: r4(m.w), d: r4(m.d), h: r4(m.h), shape: lying ? 'flat' : shapeOf(id)}];
 })) as Record<PantryId, ItemDims>;
 
 /** The delivered runtime model of an item (FOOD_ITEM_MODELS entry), or null while the cook has not delivered it. */
