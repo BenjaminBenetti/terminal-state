@@ -27,6 +27,8 @@ import {ICONS} from './icons';
 import {gearIconView, preloadGearModels} from '../gear/models'; // Iteration 16 (lane GEAR)
 import {PANTRY_DIMS, isPantryItem} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
 import {pantryGltf} from '../world/pantryModels';
+import {isVarietyWeapon} from '../weapons/varietyIds'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve new weapons
+import {weaponVarietyGltf} from '../world/weaponVarietyModels';
 
 /** Icon bitmap size (CSS shows them at roughly half size, so they stay sharp at DPR 1.5–2). */
 export const ICON_W = 192;
@@ -179,7 +181,8 @@ function fitProjection(cam: THREE.PerspectiveCamera, root: THREE.Object3D, fill 
 function modelFor(itemId: string, guns: Record<string, GLTF | undefined>): THREE.Object3D | null {
   const def = ITEMS[itemId];
   if (!def) return null;
-  if (def.kind === 'weapon') return guns[itemId]?.scene.clone(true) ?? null;
+  // (lane LOOT-UI, weapon variety: + a new weapon's lazily loaded model — world/weaponVarietyModels.ts; absent -> its SVG glyph)
+  if (def.kind === 'weapon') return (guns[itemId] ?? weaponVarietyGltf(itemId))?.scene.clone(true) ?? null;
   return makeSupplyMesh(itemId);
 }
 
@@ -273,8 +276,9 @@ async function renderShots(renderer: WebGPURenderer, ids: string[], guns: Record
  * await before the title screen; on any failure the affected items keep their SVG icon.
  * (Task studio-food-shelf-production-20261109-002816-01, lane ITEMS: a pantry food / drink whose lazy model is not loaded yet keeps its
  * SVG glyph — never an icon of its fallback primitive; refreshItemIcons renders it once world/pantryModels.ts delivered the model.)
+ * (Task studio-weapon-variety-production-20261109-224355-01, lane LOOT-UI: likewise a new weapon until world/weaponVarietyModels.ts loaded it.)
  */
-export async function buildItemIcons(renderer: WebGPURenderer, guns: Record<string, GLTF | undefined>, ids: string[] = Object.keys(ITEMS).filter(id => !isPantryItem(id) || !!pantryGltf(id))): Promise<IconStats> {
+export async function buildItemIcons(renderer: WebGPURenderer, guns: Record<string, GLTF | undefined>, ids: string[] = Object.keys(ITEMS).filter(id => (!isPantryItem(id) || !!pantryGltf(id)) && (!isVarietyWeapon(id) || !!weaponVarietyGltf(id)))): Promise<IconStats> {
   const t0 = performance.now();
   await preloadGearModels(); // Iteration 16 (lane GEAR): the delivered Meshy gear models before their first template (icons, pickups, bags)
   let failed: string[] = [];
@@ -323,7 +327,8 @@ export async function buildItemIcons(renderer: WebGPURenderer, guns: Record<stri
 
 /**
  * Task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): re-render the icons of `ids` only (their lazily loaded models
- * arrived: world/pantryModels.ts) — the other icons and the boot render's failure list are kept; the cache version bumps (HUD redraw).
+ * arrived: world/pantryModels.ts; + lane LOOT-UI: world/weaponVarietyModels.ts) — the other icons and the boot render's failure list are
+ * kept; the cache version bumps (HUD redraw).
  */
 export async function refreshItemIcons(renderer: WebGPURenderer, ids: readonly string[]): Promise<void> {
   if (!ids.length) return;
