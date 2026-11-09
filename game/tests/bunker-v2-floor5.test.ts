@@ -220,13 +220,15 @@ describe('bunker v2 storey 5 — the central processing core', () => {
       const plain = holders.filter(p => layout.areas[p.area].purpose === BUNKER_PURPOSE.lock);
       expect(plain.length, `seed ${seed} holders in plain halls`).toBeLessThanOrEqual(2);
       const tech = holders.filter(p => ['office-server', 'electrical-room', 'electrical-closet', BUNKER_PURPOSE.radio].includes(layout.areas[p.area].purpose ?? ''));
-      expect(tech.length, `seed ${seed} computing / records / electrical holders`).toBeGreaterThanOrEqual(15);
+      expect(tech.length, `seed ${seed} computing / records / electrical holders`).toBeGreaterThanOrEqual(25);
+      // the storey keeps version 1's loot (its processing core carried ~73 holders): >= 60 holders, all in programme rooms but one
+      expect(holders.length, `seed ${seed} holders`).toBeGreaterThanOrEqual(60);
       // food stays with the shared passes: no fridge / kitchenette / vending outside the commons' staff-room purpose
       for (const p of layout.props) if ((p.level ?? 0) === L5 && ['fridge', 'kitchenette', 'vending'].includes(p.kind)) expect(layout.areas[p.area].purpose).toBe('staff-room');
     }
   }, 600_000);
 
-  it('storey budgets: props <= 170, decor <= 150, lights <= 75', () => {
+  it('storey budgets: props <= 185, decor <= 150, lights <= 75', () => {
     for (const seed of SEEDS) {
       const {layout} = gen(seed);
       const base = V2_BASES[L5];
@@ -235,7 +237,7 @@ describe('bunker v2 storey 5 — the central processing core', () => {
       const decor = layout.decor.filter(d => d.y0 >= base - 0.05 && d.y0 < V2_BASES[L5 - 1] - 0.05).length;
       const lights = layout.lights.filter(l => (l as {level?: number}).level === L5).length;
       log(`seed ${seed}: L5 props ${n} decor ${decor} lights ${lights}`);
-      expect(n).toBeLessThanOrEqual(170);
+      expect(n).toBeLessThanOrEqual(185);
       expect(decor).toBeLessThanOrEqual(150);
       expect(lights).toBeLessThanOrEqual(75);
     }
