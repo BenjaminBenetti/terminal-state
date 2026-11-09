@@ -22,6 +22,8 @@ import {BUNKER_SPAWN_PROFILE, spawnContextOf} from '../src/ai/spawnTables';
 import {bunkerSpawnContext} from '../src/gen/bunker/spawns';
 import {levelDistance} from '../src/gen/levelGen';
 import {CELL, FLOOR} from '../src/gen/grid';
+import {isLootHolderKind} from '../src/items/loot';
+import {ROOM_PURPOSES} from '../src/gen/purposes';
 import type {StationLayout} from '../src/gen/stationTypes';
 
 const LOG = '/tmp/bunker-v2-level.log';
@@ -125,6 +127,38 @@ describe('Bunker v2: the whole level', () => {
       }
     }
     expect(V2.liftCabH).toBeGreaterThanOrEqual(3);
+  });
+
+  it('the architecture: every storey has a large open space AND constrained rooms (a real change of scale), the two tall voids', () => {
+    for (const s of SEEDS.slice(0, 4)) {
+      const l = gen(s);
+      for (let L = 0; L < V2_LEVELS; L++) {
+        const own = l.areas.filter(a => (a.level ?? 0) === L && a.role !== 'stair' && a.role !== 'landing' && a.type !== 'platform');
+        const m2 = own.map(a => a.w * a.h * CELL * CELL).sort((a, b) => b - a);
+        expect(m2[0], `seed ${s} storey ${L} largest space`).toBeGreaterThanOrEqual(140);
+        expect(m2.filter(v => v <= 40).length, `seed ${s} storey ${L} small rooms`).toBeGreaterThanOrEqual(L === 0 ? 2 : 3);
+        const tallest = Math.max(...own.map(a => a.ceil - V2_BASES[L]));
+        expect(tallest, `seed ${s} storey ${L} tallest`).toBeGreaterThanOrEqual(5.2);
+      }
+    }
+  });
+
+  it('loot parity: the level carries about as many loot holders as version 1 (the rework is no loot cut), never more food holders', () => {
+    const seeds = SEEDS.slice(0, 6);
+    let v1 = 0, v2 = 0, f1 = 0, f2 = 0;
+    const food = (l: StationLayout, p: StationLayout['props'][number]) => {
+      const pu = (p as {purpose?: string}).purpose ?? l.areas[p.area]?.purpose ?? '';
+      return (ROOM_PURPOSES as Record<string, {theme?: string}>)[pu]?.theme === 'food';
+    };
+    for (const s of seeds) {
+      const a = generateBunkerLevel({levelSeed: s, layoutVersion: 1}), b = gen(s);
+      for (const p of a.props) if (isLootHolderKind(p.kind)) { v1++; if (food(a, p)) f1++; }
+      for (const p of b.props) if (isLootHolderKind(p.kind)) { v2++; if (food(b, p)) f2++; }
+    }
+    log(`loot holders / level: v1 ${(v1 / seeds.length).toFixed(1)} (food ${(f1 / seeds.length).toFixed(1)}), v2 ${(v2 / seeds.length).toFixed(1)} (food ${(f2 / seeds.length).toFixed(1)})`);
+    expect(v2 / v1).toBeGreaterThanOrEqual(0.88);
+    expect(v2 / v1).toBeLessThanOrEqual(1.15);
+    expect(f2).toBeLessThanOrEqual(f1); // (no compensation for the natural-food cut: never more food holders than the first Bunker)
   });
 
   it('enemies (census): storey contexts, the Siren only in shelter rooms, a rare damp Strainer, no hordes, the keep-off; a budget like v1', () => {

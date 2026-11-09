@@ -74,7 +74,9 @@ function carve5(ctx: FloorCarveCtx): FloorCarveResult | null {
   const lx0 = 38 - rng.int(0, 6), ly0 = 56 - rng.int(0, 3);
   const library = add('library', R(lx0, ly0, bay.x - 1 - lx0, 71 - ly0), 'room', 'storage', F5_CLEAR.library, bay, 'Tape library', 'office-server');
   const cmW = 26 + rng.int(-2, 3), cmY = 52 - rng.int(0, 2);
-  const commons = add('commons', R(B.x, cmY, cmW, 79 - cmY), 'room', 'crew-room', F5_CLEAR.commons, bay, 'Operators\' commons', 'staff-room');
+  // (lead, integration: the operators' commons is the crew's locker / rest room — no kitchen of its own: the level keeps the first Bunker's
+  // food holders, never more — task studio-bunker-rework-20261109-205115-01)
+  const commons = add('commons', R(B.x, cmY, cmW, 79 - cmY), 'room', 'crew-room', F5_CLEAR.commons, bay, 'Operators\' commons', 'locker-room');
   if (!library || !commons) return null;
   const nTop = commons.y - 1 - 13, bunksW = 15 + rng.int(-1, 2), washW = commons.w - bunksW - 1;
   const bunksWest = rng.chance(0.5);

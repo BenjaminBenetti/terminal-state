@@ -76,7 +76,7 @@ describe('bunker v2 storey 5 — the central processing core', () => {
   it('the programme: every room, with its purpose, inside the envelope', () => {
     const P: Record<Key, string> = {
       nave: 'office-server', narthex: 'locker-room', gallery: BUNKER_PURPOSE.lock, control: BUNKER_PURPOSE.radio, cooling: 'ventilation-plant', chiller: 'pump-room',
-      switch: 'electrical-room', bay: BUNKER_PURPOSE.lock, library: 'office-server', commons: 'staff-room', bunks: BUNKER_PURPOSE.dorm, wash: 'washroom',
+      switch: 'electrical-room', bay: BUNKER_PURPOSE.lock, library: 'office-server', commons: 'locker-room', bunks: BUNKER_PURPOSE.dorm, wash: 'washroom',
       cableway: BUNKER_PURPOSE.lock, battery: 'electrical-closet',
     };
     for (const seed of SEEDS) {
@@ -223,8 +223,9 @@ describe('bunker v2 storey 5 — the central processing core', () => {
       expect(tech.length, `seed ${seed} computing / records / electrical holders`).toBeGreaterThanOrEqual(25);
       // the storey keeps version 1's loot (its processing core carried ~73 holders): >= 60 holders, all in programme rooms but one
       expect(holders.length, `seed ${seed} holders`).toBeGreaterThanOrEqual(60);
-      // food stays with the shared passes: no fridge / kitchenette / vending outside the commons' staff-room purpose
-      for (const p of layout.props) if ((p.level ?? 0) === L5 && ['fridge', 'kitchenette', 'vending'].includes(p.kind)) expect(layout.areas[p.area].purpose).toBe('staff-room');
+      // food stays with the shared passes on the habitation / services storeys: no fridge / kitchenette / vending on the core storey
+      // (lead, integration: the commons is a locker / rest room — the level keeps the first Bunker's food holders, never more)
+      for (const p of layout.props) if ((p.level ?? 0) === L5) expect(['fridge', 'kitchenette', 'vending'], `seed ${seed} ${p.kind}`).not.toContain(p.kind);
     }
   }, 600_000);
 
