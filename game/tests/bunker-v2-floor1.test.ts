@@ -19,7 +19,7 @@ import type {Area, StationLayout} from '../src/gen/stationTypes';
 
 const LOG = '/tmp/bunker-v2-floor1.log';
 const log = (s: string) => appendFileSync(LOG, s + '\n');
-const SEEDS = [9001, 16920, 1, 77, 1234, 31337, 424242, 9001 + 7919];
+const SEEDS = [9001, 16920, 1, 77, 1234, 31337, 424242, 5555];
 const SP = bunkerSpine();
 const FR = SP.storeys[1];
 const WELL = FR.well!.rect;

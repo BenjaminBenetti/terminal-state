@@ -218,6 +218,12 @@ function dutyHall(D: Dx, a: Area): void {
     break;
   }
   if (!D.layout.props.some(p => p.area === a.id && p.kind === 'punchClock')) mountProp(D.ctx, a, 'N', (a.x + a.w * 0.52) * CELL, 'punchClock', 1.3, D.base);
+  // the guards' briefing corner at the hall's west end: the roster whiteboard on the back wall, two benches facing it
+  const wb = scanWall(D, a, 'mobileWhiteboard', ['N'], 1.4, (a.x + a.w * 0.22) * CELL);
+  if (wb) {
+    for (const back of [2.3, 3.8]) put(D, a, 'bench', wb.x, a.y * CELL + back, Math.PI);
+    wallSign(D, a, 'N', wb.x, 2.6, {kind: 'service', text: 'GUARD BRIEFING · DUTY ROSTER', w: 2.4});
+  }
 }
 
 /** Operations: the radio console + chair (the Reactor shelter's radio room), the control console, the map table. */
