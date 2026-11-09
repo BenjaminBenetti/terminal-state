@@ -70,6 +70,7 @@ import {SKYWAYS_DRINK_IDS, SKYWAYS_FOOD_DIMS, SKYWAYS_FOOD_IDS, SKYWAYS_FOOD_ITE
 import {RAIL_TIES_DIMS, RAIL_TIES_ITEMS} from './railTies'; // task studio-market-rework-20261108-074144-01 (lane TRADE)
 import {BEER_DIMS, BEER_ITEMS, beerEffectText, isBeer, type BeerIconKey} from './beers'; // task studio-market-bar-20261108-225231-01: the market bar's beers
 import {PANTRY_DIMS, PANTRY_DRINK_IDS, PANTRY_FOOD_IDS, PANTRY_ITEMS, type PantryIconKey} from './pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
+import {VARIETY_WEAPON_ITEMS} from './weaponVarietyItems'; // task studio-weapon-variety-production-20261109-224355-01: the twelve new weapons
 
 // + bread (task office-props-physics-scale-20261030, lane FURN): only bakery display cases hold it (items/lootTables.ts BAKERY_ROWS)
 // + the Skyways ramen restaurant's ramen bowls / bento and bubble tea (task studio-skyways-level-20261106-054448, lane FOOD: items/skywaysFood.ts)
@@ -151,6 +152,7 @@ export const ITEMS: Record<string, ItemDef> = {
   // --- task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the pantry foods / drinks (items/pantryFood.ts) — appended LAST so
   // every earlier entry keeps its catalogue order (icon builds, fixtures); they appear only by family substitution (items/pantryVariety.ts) ---
   ...PANTRY_ITEMS,
+  ...VARIETY_WEAPON_ITEMS, // task studio-weapon-variety-production-20261109-224355-01 (items/weaponVarietyItems.ts)
 };
 
 export function itemDef(id: string): ItemDef {

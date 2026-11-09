@@ -6,6 +6,9 @@ import {ammoItemFor, CALIBERS, type Caliber} from '../items/calibers';
 import type {OpticSpec} from './optic';
 import {KNIFE_RAYS} from '../combat/melee'; // lane KNIFE
 import {carryView, KNIFE_POSES} from './meleeView'; // lane FEEL: the knife's upright carry pose
+import {RECOIL_SCALE, firingRecoil} from './recoil';
+import {VARIETY_GUN_DEFS} from './varietyGuns'; // task studio-weapon-variety-production-20261109-224355-01: the six new guns
+import {VARIETY_MELEE_DEFS} from './varietyMelee'; // task studio-weapon-variety-production-20261109-224355-01: the six new melee weapons
 
 export interface MagazineReload { kind: 'magazine'; time: number; emptyTime: number }
 export interface ShellReload { kind: 'shell'; start: number; each: number; end: number }
@@ -59,7 +62,8 @@ export interface WeaponDef {
    * part: the user rifle's red dot has an opaque lens, so the optic sits just under the crosshair instead of filling the view.
    * `aim` stays the fallback for a model without a Sight marker.
    */
-  view: {model: 'rifle' | 'shotgun' | 'pistol' | 'knife'; hip: [number, number, number]; aim: [number, number, number]; hipYaw: number; hipPitch: number; hipRoll: number; length: number; optic?: OpticSpec; sightRelief?: number; sightLift?: number};
+  view: {model: string; // the held model key: the baseline 'rifle' | 'shotgun' | 'pistol' | 'knife', or a weapon-variety id (weapons/varietyIds.ts)
+    hip: [number, number, number]; aim: [number, number, number]; hipYaw: number; hipPitch: number; hipRoll: number; length: number; optic?: OpticSpec; sightRelief?: number; sightLift?: number};
   /**
    * Lane KNIFE (knife-melee-20261030): a MELEE weapon. Its swing replaces the gun's fire / magazine / reload cycle in
    * WeaponController (no ammo is ever counted or taken, R does nothing, no ADS). The shared fields keep their meaning:
@@ -113,10 +117,7 @@ export function meleeCadence(m: Pick<MeleeSpec, 'windup' | 'sweep' | 'recovery'>
  * scaled twice. Recovery rate, damage, spread, fire rate, ammo, knockback and every other motion are unchanged.
  * Base values (iteration 14) stay readable at each def.
  */
-export const RECOIL_SCALE = 1.5;
-export function firingRecoil(base: WeaponDef['recoil']): WeaponDef['recoil'] {
-  return {pitch: base.pitch * RECOIL_SCALE, yaw: base.yaw * RECOIL_SCALE, kick: base.kick * RECOIL_SCALE, recover: base.recover};
-}
+export {RECOIL_SCALE, firingRecoil}; // (task studio-weapon-variety-production-20261109-224355-01: defined in weapons/recoil.ts, a leaf module the variety defs share)
 
 export const WEAPONS: Record<string, WeaponDef> = {
   rifle: {
@@ -178,6 +179,9 @@ export const WEAPONS: Record<string, WeaponDef> = {
     // forward (was carried sideways: blade up-left, flat to the eye). Windup / ready / swing / recovery: weapons/meleeView.ts.
     view: {model: 'knife', ...carryView(KNIFE_POSES.carry), length: 0.32},
   },
+  // task studio-weapon-variety-production-20261109-224355-01: the twelve user-approved additions (the baseline four above are unchanged)
+  ...VARIETY_GUN_DEFS,
+  ...VARIETY_MELEE_DEFS,
 };
 
 /** Lane KNIFE: the weapon def of an item id when it is a melee weapon (knife), else null. */
