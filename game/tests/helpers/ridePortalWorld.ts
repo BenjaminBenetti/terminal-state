@@ -56,6 +56,8 @@ const loadModel = (url: string) => { let m = modelCache.get(url); if (!m) modelC
 export interface PortalWorld {
   id: LevelId; seed: number; layout: StationLayout; mats: WorldMaterials; world: BuiltWorld; cm: ContainerManager; stock: ShelfStock;
   scene: THREE.Scene;
+  /** The model library's geometries (Game.propModels.ownsGeometry: shared by every station, never edited by a level). */
+  modelGeometries: Set<THREE.BufferGeometry>;
   /** The three static roots Game.buildSection shows: the world group, the holders, the shelf stock. */
   roots: THREE.Object3D[];
   /** The parked car's placement and its two ride portals (null: the level places no car on this seed). */
@@ -107,5 +109,7 @@ export async function portalWorld(id: LevelId, seed: number, o: {layout?: Statio
   for (const r of roots) scene.add(r);
   scene.updateMatrixWorld(true);
   const placement = playerTrainPlacement(layout);
-  return {id, seed, layout, mats, world, cm, stock, scene, roots, placement, portals: placement ? ridePortals(layout, placement) : null, ms: {world: t1 - t0, all: performance.now() - t0}};
+  const modelGeometries = new Set<THREE.BufferGeometry>();
+  for (const g of Object.values(models)) g.scene.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) modelGeometries.add(m.geometry); });
+  return {id, seed, layout, mats, world, cm, stock, scene, modelGeometries, roots, placement, portals: placement ? ridePortals(layout, placement) : null, ms: {world: t1 - t0, all: performance.now() - t0}};
 }

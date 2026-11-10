@@ -55,6 +55,8 @@ export const PORTAL_RT = {
   carPad: 0.35,
   /** A mover's bounds round its origin: half width, height (an enemy, a person); a pickup's half size. */
   actor: [0.6, 2.1] as const, item: 0.4,
+  /** A static root's whole object further than this from both cuts' boxes when the station is bound is never looked at again. */
+  reach: 3,
 } as const;
 
 export interface PortalState {
@@ -101,6 +103,11 @@ interface InstTrack {
   /** instanceMatrix.version / count as last looked at (after our own writes). */
   version: number; count: number;
   hidden: Map<number, HiddenInstance>;
+  /**
+   * The instances whose bounds reach into either cut's box, found when the station is bound (or when another system rewrote the
+   * matrices since): an engage looks at these only. `nearVersion` / `nearCount`: the matrices they were found in.
+   */
+  near: Uint32Array; nearVersion: number; nearCount: number;
 }
 type ObjKind = 'static' | 'actor' | 'item' | 'leaf';
 interface Slot {
@@ -116,6 +123,7 @@ interface Slot {
 /** The first rotation element of a matrix we collapsed: tells it from another system's all-zero matrix (damage/propDamage.ts ZERO). */
 const MARK = Math.fround(1e-30);
 const IDENTITY = new THREE.Matrix4();
+const NONE = new Uint32Array(0);
 const _m = new THREE.Matrix4(), _inv = new THREE.Matrix4(), _v = new THREE.Vector3(), _frustum = new THREE.Frustum(), _box = new THREE.Box3();
 const ease = (t: number): number => t * t * (3 - 2 * t);
 
@@ -228,8 +236,28 @@ export class RidePortalRuntime {
     for (const m of fresh) {
       this.stats.scanned++;
       if (late) this.stats.late++;
-      if (this.splittable(m)) this.split(m); else this.wholes.push(m);
+      if (this.splittable(m)) this.split(m);
+      else if (this.nearCuts(m)) this.wholes.push(m);
     }
+  }
+
+  /**
+   * Could whole object `m` (rule 3) ever lie in a cut? Its bounds within PORTAL_RT.reach of a cut's box when the station is bound (a
+   * static root's objects stay put; a holder's door swings less than that). Everything else is never looked at again.
+   */
+  private nearCuts(m: THREE.Object3D): boolean {
+    const g = (m as THREE.Mesh).geometry as THREE.BufferGeometry | undefined, e = m.matrixWorld.elements, k = PORTAL_RT.reach;
+    let cx = e[12], cy = e[13], cz = e[14], r = 1;
+    if (g && !(m as THREE.Sprite).isSprite) {
+      if (!g.boundingSphere) g.computeBoundingSphere();
+      const bs = g.boundingSphere;
+      if (!bs || !Number.isFinite(bs.radius)) return true;
+      const c = bs.center;
+      cx = e[0] * c.x + e[4] * c.y + e[8] * c.z + e[12]; cy = e[1] * c.x + e[5] * c.y + e[9] * c.z + e[13]; cz = e[2] * c.x + e[6] * c.y + e[10] * c.z + e[14];
+      r = bs.radius * Math.sqrt(Math.max(e[0] * e[0] + e[1] * e[1] + e[2] * e[2], e[4] * e[4] + e[5] * e[5] + e[6] * e[6], e[8] * e[8] + e[9] * e[9] + e[10] * e[10]));
+    }
+    r += k;
+    return this.slots.some(s => boxOverlaps(s.cut.box, cx - r, cy - r, cz - r, cx + r, cy + r, cz + r));
   }
 
   /** Rule 1 applies: one mesh's own world-space geometry (never a model's, a shared or a placed one), plain and whole. */
@@ -284,8 +312,38 @@ export class RidePortalRuntime {
 
   private track(im: THREE.InstancedMesh): InstTrack {
     let t = this.tracks.get(im);
-    if (!t) { this.tracks.set(im, (t = {im, version: -1, count: -1, hidden: new Map()})); this.stats.instanced++; }
+    if (!t) {
+      this.tracks.set(im, (t = {im, version: -1, count: -1, hidden: new Map(), near: NONE, nearVersion: -1, nearCount: -1}));
+      this.stats.instanced++;
+      this.findNear(t);
+      t.version = im.instanceMatrix.version;
+      t.count = im.count;
+    }
     return t;
+  }
+
+  /** `t.near`: the instances whose world bounds overlap either cut's box (an instance we hold hidden: by its original matrix). */
+  private findNear(t: InstTrack): void {
+    const im = t.im, attr = im.instanceMatrix, a = attr.array as Float32Array, g = im.geometry;
+    t.nearVersion = attr.version;
+    t.nearCount = im.count;
+    t.near = NONE;
+    if (!g.boundingBox) g.computeBoundingBox();
+    const bb = g.boundingBox!;
+    if (bb.isEmpty()) return;
+    const lc = bb.getCenter(_v), lx = lc.x, ly = lc.y, lz = lc.z;
+    const hx = (bb.max.x - bb.min.x) / 2, hy = (bb.max.y - bb.min.y) / 2, hz = (bb.max.z - bb.min.z) / 2;
+    const W = im.matrixWorld, ident = W.equals(IDENTITY), n = Math.min(im.count, a.length / 16), cuts = this.slots.map(s => s.cut.box);
+    let out: number[] | null = null;
+    for (let i = 0; i < n; i++) {
+      const hi = t.hidden.get(i);
+      let e: ArrayLike<number> = hi ? hi.orig : a, q = hi ? 0 : i * 16;
+      if (!ident) { _m.fromArray(e as Float32Array, q).premultiply(W); e = _m.elements; q = 0; }
+      const cx = e[q] * lx + e[q + 4] * ly + e[q + 8] * lz + e[q + 12], cy = e[q + 1] * lx + e[q + 5] * ly + e[q + 9] * lz + e[q + 13], cz = e[q + 2] * lx + e[q + 6] * ly + e[q + 10] * lz + e[q + 14];
+      const ex = Math.abs(e[q]) * hx + Math.abs(e[q + 4]) * hy + Math.abs(e[q + 8]) * hz, ey = Math.abs(e[q + 1]) * hx + Math.abs(e[q + 5]) * hy + Math.abs(e[q + 9]) * hz, ez = Math.abs(e[q + 2]) * hx + Math.abs(e[q + 6]) * hy + Math.abs(e[q + 10]) * hz;
+      for (const b of cuts) if (boxOverlaps(b, cx - ex, cy - ey, cz - ez, cx + ex, cy + ey, cz + ez)) { (out ??= []).push(i); break; }
+    }
+    if (out) t.near = Uint32Array.from(out);
   }
 
   // -------------------------------------------------------------------------------------------
@@ -533,7 +591,10 @@ export class RidePortalRuntime {
       if (ours) { a.set(hi.orig, o); dirty = true; }
       t.hidden.delete(i);
     }
-    if (any) for (let i = 0; i < n; i++) {
+    // (the candidates are found again only when another system rewrote the matrices since: our own writes leave them as they are)
+    if (any && (attr.version !== t.nearVersion || im.count !== t.nearCount)) this.findNear(t);
+    if (any) for (const i of t.near) {
+      if (i >= n) continue;
       const o = i * 16;
       if (a[o] === 0 && a[o + 1] === 0 && a[o + 2] === 0 && a[o + 5] === 0 && a[o + 10] === 0) continue; // (collapsed by its owner: not shown)
       let e: ArrayLike<number> = a, q = o;
@@ -547,9 +608,11 @@ export class RidePortalRuntime {
       a[o + 1] = a[o + 2] = a[o + 4] = a[o + 5] = a[o + 6] = a[o + 8] = a[o + 9] = a[o + 10] = 0;
       dirty = true;
     }
+    const fresh = attr.version === t.nearVersion && im.count === t.nearCount;
     if (dirty) attr.needsUpdate = true;
     t.version = attr.version;
     t.count = im.count;
+    if (fresh) t.nearVersion = attr.version; // (our writes: the candidates stand)
   }
 
   /** Nobody can see the portal's plane: further than PORTAL_RT.unseen from the eye, or outside the camera's view. */
