@@ -234,77 +234,91 @@ every food / drink: the old items, bakery bread, the Skyways ramen food and the 
 
 ## Weapon variety (every level)
 
-<!-- Task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve approved weapons as diversified weapon finds. -->
+<!-- Task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve approved weapons as diversified weapon finds.
+     Task studio-weapon-poses-slot-hierarchy-20261110-064835-01: the USER's slot hierarchy and the matching ammo (this section). -->
 
 The twelve new weapons (`weapons/varietyIds.ts`: six guns, two per existing caliber, and six melee weapons) are never new spawn rows.
-They take the IDENTITY of existing weapon finds (`items/weaponVariety.ts`), so the find count and the ammo supply stay exactly as before.
+They take the IDENTITY of existing weapon finds (`items/weaponVariety.ts`). The find count, the origins and the ammo budget stay as
+before. The user's design (2026-11-10) replaced the earlier family split (40 % baseline / ~42 % same-family new guns / 18 % melee) and
+its "same rounds per caliber" rule for every NEW roll.
 
-- **The opportunities** (the census lists them all): every generated layout pickup of a baseline gun that is not a curated reward.
-  Each producer lays the gun and then, at the next layout index, one box of its own caliber (`WEAPON_FIND_AMMO`):
+- **The opportunities** (unchanged; the census lists them all): every generated layout pickup of a baseline gun that is not a curated
+  reward. Each producer lays the gun and then, at the next layout index, one box of its own caliber (`WEAPON_FIND_AMMO`):
   - `gen/weaponFinds.ts` `placeWeaponFinds`: the Subway, the Bunker, Skyways and the Reactor (shotgun + rifle for the shipped pistol
     start; shotgun only for a rifle start);
   - `gen/office/spawns.ts` `placeOfficeWeapons` (`officeWeaponPlan`): the Office storeys;
-  - `gen/mall/shopsWeapons.ts` `placeMallWeapons`: the mall gun shops' bench, rack or floor stock (the only pistol finds).
-  Not opportunities: the Office roof find (`reward`), the starter kit, market vendor stock (`market/trade/stock.ts` keeps its baseline
-  weapon rows), NPC loadouts. No loot table holds a gun, and the Survivor Market places no weapon pickup.
+  - `gen/mall/shopsWeapons.ts` `placeMallWeapons`: the Mall gun shops' bench, rack or floor stock.
+
+  Not opportunities, left exactly as authored: the Office roof find (`reward`, curated), the starter kit, the Survivor Market's paid
+  merchant stock (`market/trade/stock.ts`), NPC loadouts. No loot table holds a gun, and a level without weapon finds gains none.
+- **The slots** (`slotKindOf`, `slotRows`). A find in a GUN STORE (an area whose purpose / type carries the `guns` tag: the Mall's
+  `mall-guns` shop, on any level that builds one; the Skywalk's store pool has none) is a **Gun slot**. Every other ordinary find is a
+  **Weapon slot**.
+
+  | Slot | Leaves | Each leaf |
+  |---|---|---|
+  | Weapon | 50 % gun: pistol, Hornet, Longslide, rifle, Stub, Overwatch, shotgun, Coach Gun, Thresher; 50 % melee: knife, Fire Axe, Machete, Sledgehammer, Crowbar, Slugger, Track Shovel | gun 1/18, melee 1/14 |
+  | Gun | the 9 guns | 1/9 |
+  | Pistol / Rifle / Shotgun (category) | its 3 guns | 1/3 |
+  | Melee | the 7 melee weapons | 1/7 |
+
+  No generator lays an explicit category slot today; the kinds exist for one to be declared. The source family no longer constrains
+  the pick and there is no place lean: an ordinary Weapon slot on any level can realize any of its 16 leaves.
 - **The choice.** At a section's first spawn (`game.ts` buildSection, memory pickups `null`), a stable hash of the find's origin
-  (section id, layout index, rolled baseline; seeded by the layout seed) picks the identity. No RNG stream is read, so every other
-  draw, yaw, lot and position is unchanged. Shares per family (`WEAPON_VARIETY_FAMILIES`, `MELEE_SHARE`):
+  (section id, layout index, rolled baseline; seeded by the layout seed) picks the leaf. No RNG stream is read, so every other draw,
+  yaw, lot and position is unchanged. Eligibility reads the delivered catalogue (WeaponDef + item + delivered model registry), never the
+  loaded-model cache. Nothing re-selects on a load failure, a UI update, a save or a revisit.
+- **Fit — no fallback to the old gun.** Every floor find stands on a cell with a clear 1-cell ring, so any weapon (up to the 1.25 m Track
+  Shovel) lies there in any orientation. Only its paired box can be in the way: a weapon whose half-length + 0.08 m reaches the box
+  lies ACROSS the box direction (the change's `yaw`; same spot). A find on a display host (gun-shop bench / rack, its own yaw) offers
+  only leaves no longer than the bench top (`HOST_MAX_M` 1.1 m): every gun fits, and a Weapon slot on a host would lose only the Track
+  Shovel. A find without its paired box (none in generated layouts) offers only a gun of the source caliber that loads every round.
+- **Ammo matches the selected gun; the budget stays.** Each family's standard bundle is its find's loaded magazine + its paired box:
+  pistol 15 + 15 (9 mm), rifle 30 + 20 (5.56), shotgun 6 + 6 shells. A find's bundle is worth `u` standard bundles (1.0 for every
+  generated find).
+  - A **gun** result of caliber c gets T = round(u × the standard total of c) rounds of ITS caliber:
+    loaded = min(magazine, round(T × the standard loaded fraction of c)), the rest in the paired box (at least 1 round stays in the box).
+    Rounding is half up.
+  - A **melee** result has no gun: its paired box keeps the source caliber and takes the whole source bundle (box + loaded rounds).
+  - So every find is worth exactly one standard bundle, whatever it became (30 rifle rounds never become 30 shells). Per gun, for one
+    bundle:
 
-  | Family | Baseline | Variant A | Variant B | Melee (all six) |
-  |---|---|---|---|---|
-  | pistol finds | pistol 0.40 | hornet 0.20 | longslide 0.22 | 0.18 |
-  | rifle finds | rifle 0.40 | stub 0.23 | overwatch 0.19 | 0.18 |
-  | shotgun finds | shotgun 0.40 | coach_gun 0.23 | thresher 0.19 | 0.18 |
+    | Gun | Loaded | Boxed | Gun | Loaded | Boxed | Gun | Loaded | Boxed |
+    |---|---|---|---|---|---|---|---|---|
+    | pistol | 15 | 15 | rifle | 30 | 20 | shotgun | 6 | 6 |
+    | Hornet | 15 | 15 | Stub | 30 | 20 | Coach Gun | 2 | 10 |
+    | Longslide | 10 | 20 | Overwatch | 12 | 38 | Thresher | 6 | 6 |
 
-  The melee share is split by base weights (`MELEE_BASE`) with place leans: a track shovel in Subway / Bunker / Reactor work and
-  storage rooms, a crowbar or sledgehammer in workshops and stores, a fire axe in security rooms and the Office / Reactor, a machete in
-  a gun shop, a slugger in locker and staff rooms.
-- **Eligibility.** A pick is realized only when the identity is playable and fits; otherwise the find stays its baseline gun:
-  - its WeaponDef exists and its model is delivered (`assets/weaponVarietyModels.generated.ts`; no stand-in is ever shown);
-  - a gun of the family's own caliber, or a melee weapon;
-  - a weapon longer than the baseline (fixed approved lengths, `VARIETY_LENGTH_M`) must not lie into its paired box
-    (half-length + 0.08 m ≤ the gap) or past a display bench (`HOST_MAX_M` 1.1 m: the track shovel never lies on a gun-shop bench);
-  - the rounds rule below must hold exactly.
-- **Rounds are never minted or lost.** The original find loads its baseline's full magazine. The realized gun loads min(those
-  rounds, its capacity); the coach gun holds at most 2. The rest, or all of them for a melee weapon, go into the paired box: the same
-  caliber item, its count plus the rest, within its stack limit.
+  Standalone ammo rows and every other pickup are untouched.
 - **Saves.** A realized find is an ordinary layout pickup: run memory records its whole stack (item, count, loaded rounds). A
-  remembered pickup list, from any save, is restored exactly. Nothing is converted, rerolled or migrated. New identities appear only in
-  sections whose pickups were never realized, including the unvisited areas of an old campaign. No id encoding is needed.
-- **Measured** (`tests/weapon-variety-loot.test.ts`; real layouts of every level, pistol start plus two rifle-start seeds each;
-  `/tmp/weapon-variety-loot/census.json`), with every identity eligible (all defs and models present). The weapon find count and the
-  ammo units per caliber (boxes plus loaded rounds) are identical, and every other pickup is unchanged. The rounds moved into boxes
-  depend on the new guns' magazine sizes (their WeaponDefs).
+  remembered pickup list, from any save, is restored exactly. Nothing is converted, rerolled or migrated; finds already realized under
+  the old rule stay what they are. The new rule reaches every section whose pickups were never realized, including the unvisited
+  areas of an old campaign.
+- **Measured** (`tests/weapon-variety-loot.test.ts`: 76 real layouts of every level, pistol start plus two rifle-start seeds each;
+  `/tmp/weapon-variety-loot/census.json`). The weapon find count and every other pickup are identical, and every find carries exactly
+  one standard bundle before and after (127.0 = 127.0). Raw rounds in the find bundles move with the new mix (melee results keep the
+  source caliber):
 
-  | Level (layouts) | Weapon finds, before = after | Realized as: baseline / new gun / melee | Ammo units 9mm / 5.56 / 12-gauge, before = after | Rounds moved into boxes |
+  | Level (layouts) | Finds (slots) | Realized: gun / melee | Bundle rounds before: 9mm / 5.56 / 12ga | After: 9mm / 5.56 / 12ga |
   |---|---|---|---|---|
-  | Subway (18) | 36 | 10 / 20 / 6 | 795 / 2770 / 564 | 210 |
-  | Office (6) | 10 | 4 / 3 / 3 | 255 / 820 / 200 | 60 |
-  | Mall (26) | 30 | 12 / 16 / 2 | 1350 / 1940 / 304 | 87 |
-  | Market (2) | 0 | (no weapon finds) | 0 | 0 |
-  | Bunker (14) | 34 | 11 / 15 / 8 | 1545 / 1940 / 436 | 180 |
-  | Skyways (5) | 8 | 4 / 4 / 0 | 165 / 150 / 60 | 8 |
-  | Reactor (5) | 9 | 3 / 6 / 0 | 495 / 570 / 120 | 0 |
-  | All (76) | 127 | 44 / 64 / 19 | 4605 / 8190 / 1684 | 545 |
+  | Subway (18) | 36 (Weapon) | 11 / 25 | 0 / 850 / 228 | 90 / 700 / 228 |
+  | Office (6) | 10 (Weapon) | 4 / 6 | 0 / 200 / 72 | 0 / 400 / 24 |
+  | Mall (26) | 30 (Gun: gun shops) | 30 / 0 | 270 / 350 / 168 | 240 / 750 / 84 |
+  | Market (2) | 0 | — | — | — |
+  | Bunker (14) | 34 (Weapon) | 14 / 20 | 0 / 650 / 252 | 120 / 750 / 180 |
+  | Skyways (5) | 8 (Weapon) | 5 / 3 | 0 / 150 / 60 | 0 / 200 / 48 |
+  | Reactor (5) | 9 (Weapon) | 4 / 5 | 0 / 150 / 72 | 0 / 200 / 60 |
+  | All (76) | 127 | 68 / 59 | 270 / 2350 / 852 | 450 / 3000 / 624 |
 
-  Possible vs sampled family shares:
-
-  | Family | Possible: baseline / A / B / melee | Real census (finds) | 30 000 synthetic finds |
-  |---|---|---|---|
-  | pistol | 0.40 / 0.20 / 0.22 / 0.18 | 0.44 / 0.22 / 0.22 / 0.11 (9) | each within 0.02 of its weight |
-  | rifle | 0.40 / 0.23 / 0.19 / 0.18 | 0.28 / 0.36 / 0.21 / 0.15 (47) | each within 0.02 |
-  | shotgun | 0.40 / 0.23 / 0.19 / 0.18 | 0.38 / 0.23 / 0.24 / 0.15 (71) | each within 0.02 |
-
-  The real census is small, so its shares scatter (one standard deviation is 5–16 points at these counts). The synthetic check in
-  the same test runs the real plan over 10 000 finds per family. The baseline also takes every pick that was not eligible, such as
-  an Overwatch whose box lies in the same cell.
+  All 16 leaves appear in the Weapon slots of these layouts and every gun category in the gun shops. The real census is small, so its
+  shares scatter (the Weapon slots came out 59 melee of 97). The same test's synthetic check runs the real plan over 36 000 finds: every
+  leaf within sampling error of 1/18, 1/14 or 1/9, whatever the source family.
 
 ## Explicit exceptions (not table-driven)
 
 - **Weapon finds and their paired ammo.** In `gen/weaponFinds.ts` this includes the `ammo_9mm` floor boxes for a pistol start.
-  In `gen/office/spawns.ts` it is the weapon plan and placement. Their identities are diversified at realization (see "Weapon
-  variety" above); their count, spots and boxes are not.
+  In `gen/office/spawns.ts` it is the weapon plan and placement. Their identities (Weapon / Gun slots) and their paired box's caliber
+  and count (one standard bundle) are set at realization (see "Weapon variety" above); their count, spots and boxes are not.
 - **The starter kit** (`run/starter.ts`).
 - **Fixtures with baked contents.** Fire and AED cabinets: `loot: null`.
 - **Vending pry / spill and bin spill mechanics.** These move existing lots; they do not roll new ones.
