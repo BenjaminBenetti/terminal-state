@@ -180,12 +180,17 @@ export function aoRawAt(v: AoView, ix: number, iy: number, aw: number, ah: numbe
     const pnLen = Math.hypot(pn[0], pn[1], pn[2]);
     const cosN = clamp(dot(pn, V) / Math.max(pnLen, 1e-5), 0, 1);
     const n = (dot(T, pn) >= 0 ? 1 : -1) * Math.acos(cosN), sinN = Math.sin(n);
-    // samples are whole pixels, up to half a pixel off the slice's line. Each is placed IN the slice by its distance along the
-    // surface's tangent line there (`L`, on the + side) and its height over the tangent PLANE (exact wherever the pixel is; / pnLen
-    // = measured within the slice): on a flat surface every sample then sits exactly on the tangent line, so an open floor reads open
-    // at any angle instead of gaining a pixel-snapping bias. A slice that sees the surface nearly edge-on (tiny pnLen: next to no
-    // weight, heights blown up) takes no samples.
+    // samples are whole pixels, up to half a pixel off the slice's line. Each is placed IN the slice by its height over the tangent
+    // PLANE (exact wherever the pixel is; / pnLen = measured within the slice) and its distance along the surface's tangent line there
+    // (`L`, on the + side): on a flat surface every sample then sits exactly on the tangent line, so an open floor reads open at any
+    // angle instead of gaining a pixel-snapping bias. Near the horizon of a grazing floor a pixel that is beside the slice's line on
+    // screen can lie almost straight ACROSS the slice in the world (screen-to-floor is strongly anisotropic there): its offset along
+    // B (the tangent plane's direction across the slice), less the part the slice's own tilt explains (kb), is counted as distance
+    // along the surface too (the sample turned about the normal into the slice, its height kept). Without it such a sample had next
+    // to no distance (a direction from rounding noise) and darkened an open floor by up to 7 % (lane AO debug log, 2026-11-10).
+    // A slice that sees the surface nearly edge-on (tiny pnLen: next to no weight, heights blown up) takes no samples.
     const L: V3 = [T[0] * cosN - V[0] * sinN, T[1] * cosN - V[1] * sinN, T[2] * cosN - V[2] * sinN];
+    const B = cross(N, L), kb = dot(pn, B) / Math.max(pnLen, 1e-5);
     const sure = smooth(AO_EDGE_ON[0], AO_EDGE_ON[1], pnLen * pnLen);
     // the horizons start at the surface's own tangent plane (cos of the angle from the view vector), +direction and -direction
     let hc0 = -sinN, hc1 = sinN;
@@ -200,7 +205,7 @@ export function aoRawAt(v: AoView, ix: number, iy: number, aw: number, ah: numbe
         const S = aoViewPos(v, qx, qy, zs), d0: V3 = [S[0] - P[0], S[1] - P[1], S[2] - P[2]];
         const fr = Math.min(Math.hypot(d0[0], d0[1], d0[2]) / R, 1);
         const w = (1 - fr * fr) * (1 - smooth(look.thickness * 0.5, look.thickness, d0[2])) * sure;
-        const along = Math.abs(dot(d0, L)), up = dot(d0, N) / Math.max(pnLen, 1e-3);
+        const up = dot(d0, N) / Math.max(pnLen, 1e-3), along = Math.hypot(dot(d0, L), dot(d0, B) - up * kb);
         const low = side ? sinN : -sinN, hc = low + ((low * along + cosN * up) / Math.max(Math.hypot(along, up), 1e-6) - low) * w;
         if (side) hc1 = Math.max(hc1, hc); else hc0 = Math.max(hc0, hc);
       }
