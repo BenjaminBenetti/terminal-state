@@ -45,6 +45,7 @@ import * as THREE from 'three';
 import {CELL, SOLID, VOID, type Grid} from '../gen/grid';
 import type {Level} from '../gen/levels';
 import type {LightPlacement} from '../gen/station';
+import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 
 // ---------------------------------------------------------------------------------------------
 // Tunables
@@ -434,6 +435,15 @@ function traceUnion(W: number, H: number, U: UnionBands, fx: number, fz: number,
 }
 
 export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD): BakedField {
+  return drainSync(bakeLightFieldSteps(src, p));
+}
+
+/**
+ * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): the bake as steps (core/pacedBuild.ts) — the same code in the
+ * same order, a `yield` between its phases, every few fixtures of the direct light, per bounce slot and per encoded slot rows, where
+ * the journey's paced build may let a frame be drawn (the result is not read before it returns). `stats.ms` is wall time, waits included.
+ */
+export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_FIELD): BuildSteps<BakedField> {
   const t0 = performance.now();
   const g = src.grid;
   const W = g.w, H = g.h, n = W * H;
@@ -445,6 +455,7 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
   const U = S > 1 && src.crossLevel !== false ? unionBands(geos, n) : null;
   const flood = U && (src.crossCull ?? S > LEGACY_BANDS) ? new BandFlood(U, W, H) : null;
 
+  yield 'field.direct';
   // --- Direct light (per slot) -------------------------------------------------------------
   const LS = geos.map((_, s) => slotLayers(s));
   const E = LS.map(L => new Float32Array(n * L * 3));       // tinted fluence (rgb)
@@ -462,6 +473,7 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
   });
 
   for (let li = 0; li < src.lights.length; li++) {
+    if (li % 4 === 3) yield;
     const l = src.lights[li];
     const grp = fixtureGroup(l, li);
     groups[li] = grp;
@@ -545,12 +557,14 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
     }
   }
 
+  yield 'field.extra';
   // Task track3-eaton-centre-20261031 (lane ARCH): extra direct light (the mall skylight), steady (no flicker circuit share).
   const extra = src.extraDirect ? src.extraDirect({W, H, levels: levels.slice(0, S), geos, layers: LS, E, D, EL, bands: U ? {start: U.start, f: U.f, c: U.c} : null}) ?? undefined : undefined;
 
   // --- Bounce fill per slot: half area mean, half local, then a short wall-respecting diffusion ------
   // (Open cells only, typed arrays and precomputed neighbour masks: this runs before the JIT warms up.)
-  const bounce = geos.map((geo, s) => {
+  yield 'field.bounce';
+  const bounceOf = (geo: ColumnGeometry, s: number) => {
     const {open, floorH} = geo;
     const L = LS[s];
     const sg = levels[s].grid;
@@ -600,8 +614,11 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
       [B, B2] = [B2, B];
     }
     return B;
-  });
+  };
+  const bounce: Float32Array[] = [];
+  for (let s = 0; s < geos.length; s++) { bounce.push(bounceOf(geos[s], s)); yield; } // (lane BUILD: one slot per step)
 
+  yield 'field.headers';
   // --- Column headers: which slots are really present per column (a flight carved into two level grids is one band: it
   // belongs to the level whose walking height is nearer, so the shader's choice is unique), sorted by floor.
   const masks = new Uint16Array(n), bandCnt = new Uint8Array(n), bandSlot = new Uint8Array(n * MAX_BANDS), legacyCol = new Uint8Array(n);
@@ -688,6 +705,7 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
     slotY[2 * s] = lo - 0.25; slotY[2 * s + 1] = hi + 0.25;
   }
 
+  yield 'field.encode';
   // --- Encode --------------------------------------------------------------------------------
   const enc = (v: number) => Math.round(Math.sqrt(Math.min(1, Math.max(0, v / FIELD_EMAX))) * 255);
   const u8 = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255);
@@ -696,7 +714,7 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
     const Es = E[s], Ds = D[s], ELs = EL[s], GLs = GL[s], G2Ls = G2L[s], B = bounce[s];
     const base = slotBase(s), L = LS[s];
     const ylo = slotY[2 * s], yr = slotY[2 * s + 1] - ylo;
-    for (let cy = 0; cy < H; cy++) for (let cx = 0; cx < W; cx++) {
+    for (let cy = 0; cy < H; cy++) { if (cy % 16 === 15) yield; for (let cx = 0; cx < W; cx++) { // (lane BUILD: a step per 16 rows)
       const i = cy * W + cx;
       // Closed cells: zero light; heights borrowed from an open neighbour so filtering near walls stays sane.
       let hi = i;
@@ -732,7 +750,7 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
         data[ob + 2] = u8(dl > 1e-6 ? dzv * inv * 0.5 + 0.5 : 0.5);
         data[ob + 3] = el > 0 ? u8(G2Ls[i * L + k] / el) : 0;
       }
-    }
+    } }
   }
   return {
     w: W, h: H, layers: LAYERS, depth, slots: S, data, yMin, yMax, groups, hdr, slotY, masks,

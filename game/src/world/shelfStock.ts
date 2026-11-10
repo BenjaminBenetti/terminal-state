@@ -43,6 +43,7 @@ import {DEVICE_WALL_DECK, measureDecks, stockBoards, stockColliders, toWorldBoxe
 import {archCost, archGeometry, archTriangles, junkSet, stockMaterial, stockTextureBytes, type JunkSet} from './shelfStockGeometry';
 import {SHELF_JUNK_KEY, SHELF_JUNK_MODEL_FILES, junkAtlasCooked} from './shelfJunkModels';
 import {FILLER_TUNING, FillerStock, type FillerHit, type FillerPiece, type FillerSpec, type FillerView} from '../physics/fillerStock';
+import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 
 export {SHELF_JUNK_KEY, SHELF_JUNK_MODEL_FILES};
 
@@ -253,6 +254,15 @@ export class ShelfStock implements FillerView {
 
   /** Dress every stocked holder of the station and bake the rest meshes. Replaces the previous station's stock. */
   build(layout: Pick<StationLayout, 'props' | 'areas' | 'seed'> & {storefronts?: StationLayout['storefronts']; extensions?: StationLayout['extensions']; grid?: StationLayout['grid']; levels?: StationLayout['levels']; levelLinks?: StationLayout['levelLinks']}, deps: StockDeps): void {
+    drainSync(this.buildSteps(layout, deps));
+  }
+
+  /**
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): build as steps (core/pacedBuild.ts) — the same code in the same
+   * order, a `yield` between its phases and inside their loops (holders, dressing passes, rest-mesh chunks), where the journey's paced
+   * build may let a frame be drawn. Nothing reads the stock before the build returns; `buildMs` is wall time, waits included.
+   */
+  *buildSteps(layout: Pick<StationLayout, 'props' | 'areas' | 'seed'> & {storefronts?: StationLayout['storefronts']; extensions?: StationLayout['extensions']; grid?: StationLayout['grid']; levels?: StationLayout['levels']; levelLinks?: StationLayout['levelLinks']}, deps: StockDeps): BuildSteps<void> {
     const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
     this.clear();
     this.seed = layout.seed >>> 0;
@@ -284,6 +294,7 @@ export class ShelfStock implements FillerView {
       return out;
     };
     for (let pi = 0; pi < layout.props.length; pi++) {
+      if (pi % 64 === 63) yield;
       const p = layout.props[pi];
       if (!isStockedKind(p.kind) || p.cargoGone) continue;
       const area = layout.areas[p.area];
@@ -325,6 +336,7 @@ export class ShelfStock implements FillerView {
       for (const p of l) { const c = archCost(p.arch); t += c.tris; b += c.bytes; if (STOCK_ARCHES[p.arch].model) mt += c.tris; }
       return {t, b, mt};
     };
+    yield 'stock.dress';
     let dressed: StockPlacement[][] = [];
     let last: {t: number; mt: number; share: number} | null = null;
     for (let k = 0; k < passes.length; k++) {
@@ -332,7 +344,12 @@ export class ShelfStock implements FillerView {
       // (a pass whose model share alone cannot bring the triangles under the bound is skipped: the models' triangles scale with the
       // share; the last pass always runs)
       if (last && k < passes.length - 1 && share < last.share && last.t - last.mt * (1 - share / last.share) * 0.85 > MAX_STOCK_TRIANGLES * 1.12) continue;
-      dressed = pre.map(h => dressHolder({category: h.category, boards: h.boards, lots: h.lots, seed: h.seed, depthCap: pass.cap(h), gapBoost: pass.gap ?? 0, junkShare: share, ...(h.unitTop ? {unitTop: h.unitTop} : {})}));
+      dressed = [];
+      for (let hi = 0; hi < pre.length; hi++) {
+        if (hi % 16 === 15) yield;
+        const h = pre[hi];
+        dressed.push(dressHolder({category: h.category, boards: h.boards, lots: h.lots, seed: h.seed, depthCap: pass.cap(h), gapBoost: pass.gap ?? 0, junkShare: share, ...(h.unitTop ? {unitTop: h.unitTop} : {})}));
+      }
       this.thinning = pass.name;
       const c = cost(dressed.flat());
       last = {t: c.t, mt: c.mt, share};
@@ -346,6 +363,7 @@ export class ShelfStock implements FillerView {
       if (k < l.length) budget = 0;
       return k < l.length ? l.slice(0, k).filter(p => p.on < k) : l;
     });
+    yield 'stock.pieces';
     // 3. pieces (world poses) + chunks
     const total = dressed.reduce((n, l) => n + l.length, 0);
     this.arch = new Uint16Array(total); this.variant = new Uint8Array(total); this.tint = new Float32Array(total); this.fam = new Uint8Array(total);
@@ -388,9 +406,12 @@ export class ShelfStock implements FillerView {
       this.holderOf.set(p, holder);
     });
     // 4. merged rest meshes (per chunk: the authored filler's, and the modelled props' when the atlas is loaded)
-    chunkPieces.forEach((ids, ci) => {
+    yield 'stock.bake';
+    for (let ci = 0; ci < chunkPieces.length; ci++) {
+      const ids = chunkPieces[ci];
       for (const f of [0, 1] as const) { const fi = ids.filter(id => this.fam[id] === f); if (fi.length) this.bakePart(ci, f, fi, pieces); }
-    });
+      yield; // (lane BUILD: one chunk per step)
+    }
     // the moving sets of the modelled archetypes present, prepared now (hidden) so the warm-up compiles them (warmRoots)
     if (junk) {
       const n = new Map<number, number>();

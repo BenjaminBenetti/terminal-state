@@ -56,6 +56,7 @@ import {averageColor, boxGeo, firstMaterial, fittedMeshes, partition, soupGeomet
 import {FitIndex, OpenableSet, interiorShadowSide, type OpenRT} from './openables';
 import {openableActive, openableSpec} from './openablesSpec';
 import {planCohorts, trianglesOf} from './staticCohorts'; // task static-batching-warmup-20261105
+import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 
 /**
  * Lid split for the generated crate model (`models.crate`, assets/models/crate-t25.glb): triangles
@@ -488,6 +489,15 @@ export class ContainerManager {
    * absent = the rolled lots as they are (tests, QA).
    */
   build(layout: StationLayout, extraModels: Record<string, GLTF | undefined> = {}, loot: LootProfile = BASELINE_PROFILE, realize?: HolderRealizer): void {
+    drainSync(this.buildSteps(layout, extraModels, loot, realize));
+  }
+
+  /**
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): build as steps (core/pacedBuild.ts) — the same code in the same
+   * order, a `yield` every few holders and per body kind, where the journey's paced build may let a frame be drawn. Between steps only
+   * finished holder roots stand in the group (far from the riding camera); nothing reads the manager before the build returns.
+   */
+  *buildSteps(layout: StationLayout, extraModels: Record<string, GLTF | undefined> = {}, loot: LootProfile = BASELINE_PROFILE, realize?: HolderRealizer): BuildSteps<void> {
     this.clear();
     const opts = surfaceOptions();
     const placements = new Map<LegacyKind, {matrix: THREE.Matrix4; level: number}[]>();
@@ -498,9 +508,11 @@ export class ContainerManager {
     this.openables.setModels(allModels, this.mats);
     const fit = new FitIndex(layout);
     const openIdx = new Map<string, number>();
+    let step = 0; // (lane BUILD)
     for (const p of layout.props) {
       const kind = p.kind as string;
       if (!isLootHolderKind(kind)) continue;
+      if (++step % 6 === 0) yield;
       const isC = isContainerKind(kind);
       const def = holderDims(kind);
       // Iteration 07 (Lane P2): spans taken by on-top decor (register, lamp ...) are not loot surface.
@@ -565,11 +577,14 @@ export class ContainerManager {
     // the same slab / storey occlusion, so the per-storey loot display batches are decided like the mall's)
     // (task studio-skywalk-variety-20261107-231448-01, lane PERF: + the Skyways — its culler has the same occlusion now)
     const byStorey = !!(layout as {mall?: unknown}).mall || !!(layout as {reactor?: unknown}).reactor || !!(layout as {skyways?: unknown}).skyways;
+    yield 'holders.openables';
     this.openables.finish(byStorey);
     // Bodies: instanced per kind in ~12 m chunks (frustum culling), like builder props. Task static-batching-warmup-20261105
     // (world/staticCohorts.ts): per level on every level (the holder's own level; was: the mall / Reactor by storey band); coarse
     // cohorts for a cheap kind where the culler has no slab occlusion (!byStorey).
+    yield 'holders.bodies';
     for (const [kind, list0] of placements) {
+      yield;
       const body = this.model(kind).body;
       let tris = 0;
       for (const part of body) tris += trianglesOf(part.geo);
@@ -586,6 +601,7 @@ export class ContainerManager {
         }
       }
     }
+    yield 'holders.display';
     this.built = layout;
     this.allocateDisplay(layout, counts);
     this.lastEye.set(layout.playerSpawn.x, 1.6, layout.playerSpawn.z);
