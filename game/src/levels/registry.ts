@@ -23,6 +23,7 @@ import {lootProfile} from '../items/lootTables'; // task mall-round3-20261031 (l
 import {skywalkText} from '../gen/skyways/skywalkText'; // task studio-skywalk-variety-20261107-231448-01
 import {placeSubwayMapKiosks} from '../gen/subwayMapKiosks'; // task studio-ui-subway-maps-20261108-074144-01
 import {trainSpawnPose, type TrainPlacement} from '../gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE): start arrivals inside the train
+import {applyEnemyRoster} from '../ai/enemyRoster'; // task studio-screacher-production-20261110-221858-01: the per-level seeded family roster
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
 /** Logical levels in tier order (subway 0, office 1, mall 2 — task track3-eaton-centre-20261031, lane GEN). */
@@ -165,6 +166,19 @@ export const LEVELS: Record<LevelId, LevelDef> = {
     },
   },
 };
+
+// Task studio-screacher-production-20261110-221858-01: THE SEEDED ENEMY ROSTER runs on every level's FINISHED layout, here and nowhere
+// else (ai/enemyRoster.ts applyEnemyRoster: from the level map's own seed — e.g. 40 % of maps hold 1-3 Screachers in place of ordinary
+// zombie slots, the rest none; the Survivor Market never any). One wrapper for every registered level, so a new level gets it too.
+// `ctx.rosterVersion` absent = 0 = no pass (levels/types.ts); the game passes the station's recorded version.
+for (const id of LEVEL_IDS) {
+  const generate = LEVELS[id].generate;
+  LEVELS[id].generate = (section, ctx) => {
+    const layout = generate(section, ctx);
+    applyEnemyRoster(layout, id, ctx.levelSeed, ctx.rosterVersion ?? 0);
+    return layout;
+  };
+}
 
 export function isLevelId(v: unknown): v is LevelId {
   return typeof v === 'string' && (LEVEL_IDS as readonly string[]).includes(v);

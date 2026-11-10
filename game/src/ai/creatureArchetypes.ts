@@ -23,6 +23,8 @@ import {BlightbellyActor} from './blightbellyActor'; // Task track1-siren-blight
 import {SIREN_STATS} from './siren'; // Task track1-siren-blightbelly-20261031 (lane SIREN)
 import {SIREN_MODEL_KEY, SirenActor} from './sirenActor'; // Task track1-siren-blightbelly-20261031 (lane SIREN)
 import {SIREN_CUES} from './sirenCues'; // Task track1-siren-blightbelly-20261031 (lane SIREN)
+import {SCREACHER_CUES, SCREACHER_STATS, SCREACHER_VARIANTS, SCREACHER_VOICE_Y, screacherVariantOf} from './screacher'; // task studio-screacher-production-20261110-221858-01
+import {ScreacherActor} from './screacherActor'; // task studio-screacher-production-20261110-221858-01
 import {ENEMY_POOL, type EnemyArchetypeId} from './creatureSpawn';
 
 export {ENEMY_POOL, type EnemyArchetypeId};
@@ -113,6 +115,7 @@ export function enemyCues(z: EnemyActor): EnemyCues {
   if (archetypeOf(z) === 'blightbelly') return BLIGHT_CUES; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): deep groans, heavy gait
   if (archetypeOf(z) === 'siren') return SIREN_CUES; // Task track1-siren-blightbelly-20261031 (lane SIREN): dormant hum, one wake scream, no groans
   if (archetypeOf(z) === 'strainer') return STRAINER_CUES; // lane FAMILY: the zombie voice calls (deep groan from its taller mouth) + its own wet squelch set
+  if (archetypeOf(z) === 'screacher') return SCREACHER_CUES; // the headless one: its own stump voice (echo scream, shriek, wheeze), zombie footfalls
   return archetypeOf(z) === 'ratdog' ? RATDOG_CUES : ZOMBIE_CUES;
 }
 
@@ -128,6 +131,11 @@ export interface EnemyArchetypeDef {
   /** Feet-to-voice height for positional audio (m). */
   voiceHeight: number;
   source: string;
+  /**
+   * Task studio-screacher-production-20261110-221858-01: a family with SEVERAL approved bodies (one enemy type, the same stats): model
+   * variant id (ZombieSpawn.variant) -> lazy model key. `model` is then null; a spawn loads exactly its own variant (ai/enemyModels.ts).
+   */
+  variantModels?: Readonly<Record<string, string>>;
 }
 
 export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetypeDef> = {
@@ -152,6 +160,13 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetypeDef> = {
   // loaded per layout (ai/enemyModels.ts).
   strainer: {id: 'strainer', label: 'Strainer', model: 'enemy_strainer', stats: STRAINER_STATS, climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: STRAINER_VOICE_Y,
     source: 'user-picked Strainer concept (Beyond the Station) -> derivative enemy-strainer.glb (lane ASSET: shared 18-joint rig, clips Idle / Walk / Run / Attack / Hit / Death, extras enemyStrainer)'},
+  // Task studio-screacher-production-20261110-221858-01: THE SCREACHER, APPENDED LAST (= ENEMY_FAMILY_IDS; weight 0 in every pool:
+  // placed only by the per-level seeded roster, ai/enemyRoster.ts) — a headless, blind, sound-hunting infected that screams to
+  // echolocate (ai/screacher.ts brain / stats, ai/screacherActor.ts). ONE enemy type with four approved bodies (variantModels: the
+  // spawn's `variant` picks the GLB; the AI and stats are the same). No ladder links; models lazily loaded per layout.
+  screacher: {id: 'screacher', label: 'Screacher', model: null, stats: SCREACHER_STATS, climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: SCREACHER_VOICE_Y,
+    variantModels: Object.fromEntries(Object.entries(SCREACHER_VARIANTS).map(([id, v]) => [id, v.model])),
+    source: 'four user-approved headless concepts (SC01-SC04) -> Meshy T2.5 image-to-3D -> derivatives enemy-screacher-sc01..sc04.glb (shared 18-joint rig, clips Idle / Walk / Run / Attack / Hit / Death / Scream, extras enemyScreacher)'},
 };
 
 /**
@@ -182,6 +197,13 @@ export function createEnemyActor(spawn: ZombieSpawn, models: Record<string, GLTF
   if (spawn.archetype === 'strainer') {
     const g = models[ENEMY_ARCHETYPES.strainer.model!];
     if (g) return {actor: new StrainerActor(g, spawn, rand), fallback: false};
+    return {actor: zombie(), fallback: true};
+  }
+  // Task studio-screacher-production-20261110-221858-01: the Screacher in its spawn's approved body when that (lazily loaded) variant
+  // model is there, else the Strainer's contract — a counted zombie stand-in (QA `fallback`; never a T-pose, a box or another variant)
+  if (spawn.archetype === 'screacher') {
+    const g = models[SCREACHER_VARIANTS[screacherVariantOf(spawn)].model];
+    if (g) return {actor: new ScreacherActor(g, spawn, rand), fallback: false};
     return {actor: zombie(), fallback: true};
   }
   return {actor: zombie(), fallback: false};

@@ -55,9 +55,12 @@ export type {HordeRules} from './hordeSpec';
  * Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): 'strainer' (THE STRAINER, ai/strainer.ts) is APPENDED LAST.
  * Every pool that gives it weight 0 (every pool outside the service annexes: STRAINER_CONTEXTS) keeps its bands, its total and so
  * every pick of the same roll bit-identical (pickEnemyArchetype never lands on a weight-0 family).
+ * Task studio-screacher-production-20261110-221858-01: 'screacher' (THE SCREACHER, ai/screacher.ts: a headless, blind, sound-hunting
+ * infected) is APPENDED LAST and is ROSTER-ONLY (ROSTER_ONLY_FAMILIES below): weight 0 in EVERY pool — no per-spawn roll ever lands on
+ * it, so every older pick stays bit-identical — and placed only by the per-level seeded roster pass (ai/enemyRoster.ts).
  */
-export type EnemyFamilyId = 'zombie' | 'blightbelly' | 'siren' | 'ratdog' | 'strainer';
-export const ENEMY_FAMILY_IDS: readonly EnemyFamilyId[] = ['zombie', 'blightbelly', 'siren', 'ratdog', 'strainer'];
+export type EnemyFamilyId = 'zombie' | 'blightbelly' | 'siren' | 'ratdog' | 'strainer' | 'screacher';
+export const ENEMY_FAMILY_IDS: readonly EnemyFamilyId[] = ['zombie', 'blightbelly', 'siren', 'ratdog', 'strainer', 'screacher'];
 /** Room-modifier family key that applies its density to every family of the room. */
 export const ALL_FAMILIES = 'all';
 
@@ -77,7 +80,7 @@ export type ShareFamilyId = Exclude<EnemyFamilyId, 'zombie'>;
  *    (CONTEXT_LOCKED_FAMILIES): a positive weight only in the pool of a context listed in STRAINER_CONTEXTS (the Beyond the Station
  *    service annexes: SERVICE_FAMILY_SHARES.strainer 0.08); every level pool, every other context and every horde pool says 0.
  */
-export const DEFAULT_FAMILY_SHARES: Readonly<Record<ShareFamilyId, number>> = {blightbelly: 0.05, siren: 0, ratdog: 0.05, strainer: 0};
+export const DEFAULT_FAMILY_SHARES: Readonly<Record<ShareFamilyId, number>> = {blightbelly: 0.05, siren: 0, ratdog: 0.05, strainer: 0, screacher: 0};
 /** Families a level must enable deliberately: weight > 0 is only valid together with an explicit `eligibility` rule. */
 export const OPT_IN_FAMILIES: readonly EnemyFamilyId[] = ['siren'];
 /**
@@ -88,6 +91,13 @@ export const OPT_IN_FAMILIES: readonly EnemyFamilyId[] = ['siren'];
  * other context's pool, a horde pool (also HORDE_FORBIDDEN_FAMILIES).
  */
 export const STRAINER_CONTEXTS: readonly SpawnContextId[] = ['service', 'damp']; // (task studio-bunker-level-20261109-072224-01: + the Bunker's 'damp' zone)
+/**
+ * Task studio-screacher-production-20261110-221858-01: families placed ONLY by the per-level seeded roster pass (ai/enemyRoster.ts
+ * applyEnemyRoster: the level's seed decides whether the family is in the level at all, then it replaces a few ordinary zombie slots).
+ * Their weight is 0 in every level, context and horde pool (validateSpawnProfile rejects anything else): a per-spawn roll never places
+ * one, so a level whose roster excludes the family has exactly none.
+ */
+export const ROSTER_ONLY_FAMILIES: readonly EnemyFamilyId[] = ['screacher'];
 /** Families locked to a list of contexts' own pools (validateSpawnProfile): family -> the contexts where its weight may be > 0. */
 export const CONTEXT_LOCKED_FAMILIES: Readonly<Partial<Record<EnemyFamilyId, readonly SpawnContextId[]>>> = {strainer: STRAINER_CONTEXTS};
 
@@ -555,7 +565,7 @@ export const MALL_HORDE: HordeRules = {
   label: 'Roaming hordes',
   groups: MALL_HORDE_RULES.groups,
   size: [5, 20],
-  families: [['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0], ['strainer', 0]], // lane FAMILY: the Strainer never joins a horde
+  families: [['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0], ['strainer', 0], ['screacher', 0]], // lane FAMILY: the Strainer never joins a horde (nor the roster-only Screacher)
   zombieTypes: {coatedChance: 0.4, atLeastOneEach: false},
   budget: MALL_HORDE_RULES.budget,
   placement: MALL_HORDE_RULES.placement,
@@ -1246,6 +1256,7 @@ export function validateSpawnProfile(p: SpawnProfile, roomKeys: ReadonlySet<stri
     else seen.add(f);
     num(`families[${i}].weight`, w);
     if (finiteNonNeg(w)) poolSum += w;
+    if (typeof f === 'string' && ROSTER_ONLY_FAMILIES.includes(f as EnemyFamilyId) && finiteNonNeg(w) && w > 0) bad(`families.${f}`, `roster-only family with weight ${w} (placed only by ai/enemyRoster.ts: spawnTables ROSTER_ONLY_FAMILIES)`);
   });
   for (const f of ENEMY_FAMILY_IDS) if (Array.isArray(p.families) && !seen.has(f)) bad('families', `family ${f} missing (list it with weight 0 to exclude it)`);
   // --- zombie types
@@ -1281,6 +1292,7 @@ export function validateSpawnProfile(p: SpawnProfile, roomKeys: ReadonlySet<stri
         // lane FAMILY: a context-locked family (the Strainer) may only have weight in the pools of its listed contexts
         const locked = typeof f === 'string' ? CONTEXT_LOCKED_FAMILIES[f as EnemyFamilyId] : undefined;
         if (locked && finiteNonNeg(w) && w > 0 && !locked.includes(id as SpawnContextId)) bad(`${path}.families.${f}`, `context-locked family with weight ${w} outside its contexts [${locked.join(', ')}] (spawnTables CONTEXT_LOCKED_FAMILIES)`);
+        if (typeof f === 'string' && ROSTER_ONLY_FAMILIES.includes(f as EnemyFamilyId) && finiteNonNeg(w) && w > 0) bad(`${path}.families.${f}`, `roster-only family with weight ${w} (placed only by ai/enemyRoster.ts: spawnTables ROSTER_ONLY_FAMILIES)`);
       });
       if (Array.isArray(c.families)) for (const f of ENEMY_FAMILY_IDS) if (!cs.has(f)) bad(`${path}.families`, `family ${f} missing (list it with weight 0 to exclude it)`);
       if (Array.isArray(c.families) && sum <= 0) bad(`${path}.families`, 'every family weight is 0');
@@ -1334,6 +1346,7 @@ export function validateSpawnProfile(p: SpawnProfile, roomKeys: ReadonlySet<stri
     const fams = Array.isArray(p.horde?.families) ? p.horde.families : [];
     for (const f of registry) if (!fams.some(r => r[0] === f)) bad('horde.families', `family ${f} missing (list it with weight 0 to exclude it: the horde pool is explicit)`);
     for (const [f, w] of fams) if (HORDE_FORBIDDEN_FAMILIES.includes(f) && w > 0) bad('horde.families', `${f} never joins an ordinary-zombie horde`);
+    for (const [f, w] of fams) if (ROSTER_ONLY_FAMILIES.includes(f as EnemyFamilyId) && w > 0) bad('horde.families', `roster-only family ${f} with weight ${w} (placed only by ai/enemyRoster.ts)`);
   }
   const sp = p.spacing;
   if (sp !== undefined && (!sp || typeof sp !== 'object')) bad('spacing', 'not a map');

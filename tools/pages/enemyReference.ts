@@ -31,6 +31,8 @@ import {BLIGHTBELLY_BURST, BLIGHTBELLY_STATS} from '../../game/src/ai/blightbell
 import {SIREN_CLAW, SIREN_STATS, SIREN_WAKE} from '../../game/src/ai/siren';
 import {LUNGE as RATDOG_LUNGE, RATDOG_STATS} from '../../game/src/ai/creatureActor';
 import {STRAINER_ASSET, STRAINER_MAX_TOP_M, STRAINER_SCALE, STRAINER_STATS} from '../../game/src/ai/strainer'; // task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY)
+import {SCREACHER_AGGRO, SCREACHER_ASSET, SCREACHER_ECHO, SCREACHER_MAX_TOP_M, SCREACHER_NOISE, SCREACHER_SCALE, SCREACHER_SENSE, SCREACHER_SPEED, SCREACHER_STATS} from '../../game/src/ai/screacher'; // task studio-screacher-production-20261110-221858-01
+import {FAMILY_ROSTER} from '../../game/src/ai/enemyRoster'; // task studio-screacher-production-20261110-221858-01: the seeded roster rule
 import {LEVELS, LEVEL_IDS} from '../../game/src/levels/registry';
 import {validateLevelRegistry} from '../../game/src/levels/levelContract';
 import type {LevelId} from '../../game/src/levels/types';
@@ -101,12 +103,14 @@ const F = {
   lingerieSpawns: 'game/src/gen/mall/lingerieSpawns.ts',
   // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): the Skyways convention's cosplay zone context
   cosplaySpawns: 'game/src/gen/skyways/cosplaySpawns.ts', cosplayContext: 'game/src/ai/cosplayContext.ts',
+  // task studio-screacher-production-20261110-221858-01: the Screacher and the seeded family roster
+  screacher: 'game/src/ai/screacher.ts', roster: 'game/src/ai/enemyRoster.ts',
 } as const;
 
 /** The game modules whose exported values the reference reads (this file's imports). Other files appear only as source links. */
 export const ENEMY_GENERATED_FROM: readonly string[] = [
   F.tables, F.archetypes, F.registry, F.frame, F.grid, F.stationKit, F.purposes, F.pistol, F.spawn, F.brain, F.blightbelly, F.siren, F.creatureActor,
-  F.contract, F.mallTypes, F.trackExt, F.strainer, F.lingerieSpawns, F.cosplaySpawns, F.cosplayContext,
+  F.contract, F.mallTypes, F.trackExt, F.strainer, F.lingerieSpawns, F.cosplaySpawns, F.cosplayContext, F.screacher, F.roster,
 ].slice().sort();
 
 /**
@@ -146,6 +150,20 @@ export const ENEMY_FAMILY_ADAPTER: Readonly<Record<EnemyFamilyId, {
     rules: [
       {title: 'Body, reach and claw timing (asset contract enemy-strainer.glb; provisional until the GLB lands)', value: STRAINER_ASSET, file: F.strainer, symbol: 'STRAINER_ASSET'},
       {title: 'Runtime root scale (its own narrow jitter)', value: {scale: STRAINER_SCALE, maxTopM: STRAINER_MAX_TOP_M}, file: F.strainer, symbol: 'STRAINER_SCALE'},
+    ],
+  },
+  // task studio-screacher-production-20261110-221858-01: THE SCREACHER (headless, blind, sound-hunting; placed only by the seeded roster)
+  screacher: {
+    stats: [{variant: null, stats: SCREACHER_STATS, file: F.screacher, symbol: 'SCREACHER_STATS'}],
+    rules: [
+      {title: 'Seeded roster: the chance a level holds Screachers at all, and how many', value: FAMILY_ROSTER.screacher, file: F.roster, symbol: 'FAMILY_ROSTER.screacher'},
+      {title: 'Paces of its three aggression tiers (m/s)', value: SCREACHER_SPEED, file: F.screacher, symbol: 'SCREACHER_SPEED'},
+      {title: 'Aggression: distinct sounds raise heat, quiet cools it', value: SCREACHER_AGGRO, file: F.screacher, symbol: 'SCREACHER_AGGRO'},
+      {title: 'Loudness of the sounds it hears besides gunfire (source radius, m)', value: SCREACHER_NOISE, file: F.screacher, symbol: 'SCREACHER_NOISE'},
+      {title: 'Touch and memory', value: SCREACHER_SENSE, file: F.screacher, symbol: 'SCREACHER_SENSE'},
+      {title: 'Echolocation scream', value: SCREACHER_ECHO, file: F.screacher, symbol: 'SCREACHER_ECHO'},
+      {title: 'Body, reach and clip timing (asset contract enemy-screacher-sc01..sc04.glb)', value: SCREACHER_ASSET, file: F.screacher, symbol: 'SCREACHER_ASSET'},
+      {title: 'Runtime root scale (its own narrow jitter)', value: {scale: SCREACHER_SCALE, maxTopM: SCREACHER_MAX_TOP_M}, file: F.screacher, symbol: 'SCREACHER_SCALE'},
     ],
   },
 };

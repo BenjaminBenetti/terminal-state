@@ -20,6 +20,7 @@ export const MELEE_MASS: Readonly<Record<string, number>> = {
   blightbelly: 1.9, // the obese one barely shifts
   siren: 1.1,
   strainer: 2.6, // tall, heavy body
+  screacher: 0.9, // tall but gaunt: a lanky headless body is a little easier to shove than a zombie (task studio-screacher-production-20261110-221858-01)
 };
 /** Protected bosses (their HP / rig / AI / sounds unchanged): they RESIST KNOCKDOWN — a token push, never a longer stagger. */
 export const MELEE_PROTECTED: ReadonlySet<string> = new Set(['strainer', 'siren']);

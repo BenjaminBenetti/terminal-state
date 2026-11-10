@@ -36,9 +36,16 @@ const MAX_SIM = 9;
  * (loose props of damage class cardboard — physics/dynamicItems.ts propImpactFamily; every other loose prop stays 'prop').
  */
 export type ImpactFamily = 'can' | 'light' | 'heavy' | 'prop' | 'cardboard' | 'flesh' | 'stone' | 'wood' | 'glass' | 'metal';
+/** Which kind of loose object struck (PhysAudio.physImpact `source`). */
+export type ImpactSource = 'item' | 'stock' | 'thrown';
 export interface PhysAudio {
   /** `mass` (kg, optional): the striking body's mass (the cardboard thud deepens with it; other families ignore it). */
-  physImpact?(x: number, y: number, z: number, speed: number, family: ImpactFamily, mass?: number): void;
+  /**
+   * `source` (task studio-screacher-production-20261110-221858-01): named by the callers whose contact is a loose OBJECT striking the
+   * world — a dynamic item / prop ('item'), shelf stock ('stock'), a thrown item ('thrown'); debris and flesh chunks name none. The
+   * game reports a named contact as world noise to sound-hunting enemies (game.ts physicsAudio); the sound itself ignores it.
+   */
+  physImpact?(x: number, y: number, z: number, speed: number, family: ImpactFamily, mass?: number, source?: ImpactSource): void;
   /**
    * Task mall-round2-20261031 (lane AUDIO, M01): one drag tick of a cardboard prop sliding along its floor at `speed` m/s (the caller
    * paces the ticks: physics/dynamicItems.ts PROP_DRAG, never per frame); `id` = the moving prop (stable key: one drag voice each).
