@@ -59,7 +59,11 @@ export interface TowerHost {
   warming?: boolean;
   prepareBeforeShow?(root: THREE.Object3D): Promise<void>;
   /** Task studio-bunker-rework-20261109-205115-01: fuel carts (world/fuelCarts.ts) standing in the cab ride along (their storey too). */
-  fuelCarts?: {carry?(inside: (x: number, y: number, z: number) => boolean, dy: number, level: number): number};
+  fuelCarts?: {
+    carry?(inside: (x: number, y: number, z: number) => boolean, dy: number, level: number): number;
+    /** Task studio-fuel-cart-stairs-20261110-004505-01: some cart's footprint (x, y, z, radius) satisfies the test (the doorway). */
+    anyAt?(test: (x: number, y: number, z: number, r: number) => boolean): boolean;
+  };
   /** Loose pickups (world/pickups.ts): resting ones inside the cab ride along. */
   pickups?: {
     carry(inside: (x: number, y: number, z: number) => boolean, dy: number): number;
@@ -95,6 +99,11 @@ export interface ElevatorRt {
   levels: Levels;
   /** The player is the doorway obstruction this frame; last "stand clear" hint time. */
   playerBlocks: boolean;
+  /** Task studio-fuel-cart-stairs-20261110-004505-01: a fuel cart stands in the doorway (it holds the doors like a body); the stop
+   *  height the doorway test compares against (NaN while the cab moves); the test itself (one closure per cab). */
+  cartBlocks: boolean;
+  doorY: number;
+  cartInDoor: (x: number, y: number, z: number, r: number) => boolean;
   hintT: number;
   humT: number;
   /** The doorway was open last frame (its shutting sweeps loose things out of it). */
@@ -142,6 +151,9 @@ export function registerMovingLift(culler: {register(root: THREE.Object3D): void
     culler.register(c);
   }
 }
+
+/** Task studio-fuel-cart-stairs-20261110-004505-01: the hint while a fuel cart in the doorway holds a called lift. */
+export const LIFT_CART_TEXT = 'A fuel cart is in the lift doorway — push it all the way in or out';
 
 /** Eye pad for the doorway classification (inDoorway radius: 0.4 x this past the cab / landing planes). */
 const GATE_EYE_PAD = 0.4;
@@ -256,6 +268,8 @@ export class TowerRuntime {
       const cabH = plan.cabH;
       const e: ElevatorRt = {
         plan, view, logic, vol, gate, levels: h.levels, playerBlocks: false, hintT: 1e9, humT: 0, gateWas: false, carried: {player: false, zombies: 0, pickups: 0},
+        // (a cart's whole footprint clear of the door planes: 2.5 x inDoorway's 0.4 r pad = its radius)
+        cartBlocks: false, doorY: NaN, cartInDoor: (x, y, z, r) => Math.abs(y - e.doorY) < 1.2 && inDoorway(plan.gate, x, z, r * 2.5),
         prevY: logic.y,
         lamps: {car: logic.car, hallUp: logic.hallUp, hallDown: logic.hallDown, open: false, close: false, alarm: false, lanternStop: -1, lanternDir: 0},
         flash: {open: 0, close: 0, alarm: 0}, indKey: logic.floor * 4 + 1,
@@ -415,7 +429,7 @@ export class TowerRuntime {
    * finds the car where it was left). A car still travelling finishes its run at once — the loose things in it (pickups, fuel carts)
    * carried the rest of the way, so nothing is saved hanging in the shaft.
    */
-  private parkCar(): void {
+  parkCar(): void {
     const e = this.office?.elevator, park = this.liftPower?.park;
     if (!e || !park) return;
     const L = e.logic;
@@ -427,6 +441,9 @@ export class TowerRuntime {
       const h = this.host;
       h.pickups?.carry(e.insideLoose, dy);
       h.fuelCarts?.carry?.(e.insideLoose, dy, e.plan.info.stops[i]?.levelId ?? 0);
+      // (task studio-fuel-cart-stairs-20261110-004505-01: the car IS at that stop now — the fuel carts' teardown hook, which runs
+      // before this runtime's, parks it first so the carts it records stand at the stop; this runtime's own call then moves nothing)
+      this.placeCar(st.floor);
     }
     this.counts.parked++;
     park(st.floor);
@@ -468,6 +485,11 @@ export class TowerRuntime {
     const playerIn = P.alive && e.inside(P.x, P.y, P.z);
     let doorway = P.alive && Math.abs(P.y - stopY) < 1.2 && inDoorway(G, P.x, P.z, P.radius);
     e.playerBlocks = doorway;
+    // (task studio-fuel-cart-stairs-20261110-004505-01: a fuel cart standing in the doorway holds the doors like a body: they never
+    // shut on it and the cab never leaves it half in the wall)
+    e.doorY = stopY;
+    e.cartBlocks = !Number.isNaN(stopY) && !!h.fuelCarts?.anyAt?.(e.cartInDoor);
+    if (e.cartBlocks) doorway = true;
     e.hintT += dt;
     let enemyInside = false;
     for (const z of h.zombies) {
@@ -544,6 +566,7 @@ export class TowerRuntime {
           if (x.type === 'reopen') this.counts.reopen++;
           if (x.why === 'enemy') { if (e.hintT > 3) { e.hintT = 0; h.hud.toast('The doors won’t close with something inside', true); } }
           else if (e.playerBlocks && e.logic.requests.size && e.hintT > 4) { e.hintT = 0; h.hud.toast('Stand clear of the doors'); }
+          else if (e.cartBlocks && e.logic.requests.size && e.hintT > 4) { e.hintT = 0; h.hud.toast(LIFT_CART_TEXT, true); }
           break;
         case 'chime':
           // arrival "ding": an existing click, pitched up, twice (no new audio)

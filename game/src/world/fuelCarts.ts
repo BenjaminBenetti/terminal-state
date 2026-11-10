@@ -8,7 +8,12 @@
 //
 // THE CART (world/fuelCartModel.ts): composed from the approved hand truck + (scaled) drum models, a runtime lid gauge. Its controller
 // (world/fuelCartPhysics.ts) is kinematic: the player's own collision (walls, ledges, props, the parked car's volume / walls / door
-// leaves / curbs) + a floor rule (never off a platform edge, no stairs).
+// leaves / curbs) + a floor rule (never off a platform edge).
+//  - STAIRS (task studio-fuel-cart-stairs-20261110-004505-01; user: "Just let the player drag the carts up and down stairs"): a pushed or
+//    grabbed cart goes up and down real stair runs and landings on every level (the flight's pitch line is its floor; tests/
+//    fuel-cart-stairs.test.ts). On steps it is DRAWN lying on the step edges, tilted with the slope (cartRestPose: the view only; aim
+//    and the hose nozzle follow the drawn pose); let go on a stair it stops where it is. A cart inside a lift rides it (carry), holds
+//    the lift's doors while it stands in the doorway (anyAt) and is never left hanging in a shaft (seat).
 //  - PUSH: walking into a free cart shoves it (slowly: 150 kg full); the player never walks through it.
 //  - GRAB: aim at it within FUEL_CART.grabReach and press E: it follows a hand point FUEL_CART.hold m in front of the player on a damped
 //    spring (pull it out of a corner, steer it), turning to trail the player; the player walks at FUEL_CART.speedMult (a modifier
@@ -59,7 +64,7 @@ import {playerTrainPlacement, trainToWorld, worldToTrain, type TrainPlacement} f
 import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from './playerTrainSpec';
 import {RIDE_FRAME, setRideCargoBoxes, type RideLocalModel} from './trainRideLocal';
 import {rayBox, rayCylinder, type Box3Like, type P3} from './towerShared';
-import {CART, cartFloorAt, cartMass, pushByPlayer, separateCarts, separatePlayer, stepCart, turnToward, wrapYaw, type CartBody, type CartTarget, type CartWorld} from './fuelCartPhysics';
+import {CART, cartFloorAt, cartMass, cartRestPose, pushByPlayer, separateCarts, separatePlayer, stepCart, turnToward, wrapYaw, type CartBody, type CartPose, type CartTarget, type CartWorld} from './fuelCartPhysics';
 import {CART_LOOK, CartHose, buildCartView, cartMaterials, cartModelsGen, loadCartModels, refreshCartBody, setGauge, type CartView} from './fuelCartModel';
 
 export const FUEL_CART = {
@@ -115,6 +120,16 @@ interface Cart {
   mode: Mode;
   readonly view: CartView;
   awake: boolean;
+  /** The DRAWN pose over the body (lift / pitch / roll: steps and slopes; zeros on flat floor) and whether it has reached its rest. */
+  readonly pose: CartPose;
+  poseSettled: boolean;
+  /** The body pose the drawn pose was last solved for, and what the view shows now (no matrix work for a cart at rest). */
+  readonly solved: {x: number; y: number; z: number; yaw: number};
+  readonly drawn: {x: number; y: number; z: number; yaw: number; pitch: number; roll: number};
+  /** The storey its meshes are tagged with. */
+  markedLevel: number;
+  /** Spawned / released where nothing supports it (a lift shaft whose car stands elsewhere): frames it still waits to be seated. */
+  unseated: number;
 }
 
 /** A readout of one cart (the lead's map stock / QA). */
@@ -180,6 +195,11 @@ export interface FuelCartHost {
   stateListeners?: ((state: never, prev: never) => void)[];
   sectionPreloads?: ((layout: never) => Promise<void>)[];
   atmosphere?: {markShadows(root: THREE.Object3D, structure: boolean): void};
+  /**
+   * Task studio-fuel-cart-stairs-20261110-004505-01: the level's lift (world/towerRuntime.ts), if any — asked to park its car BEFORE
+   * this system records the station's carts at a teardown (a cart riding in the car is recorded at the car's stop, never mid-shaft).
+   */
+  tower?: {parkCar?(): void} | null;
   /** A bullet's world hit (Game.bulletHitHandlers: true = handled, no crater behind). */
   bulletHitHandlers?: ((wh: never, point: THREE.Vector3, dir: THREE.Vector3, shot: number, damage: number) => boolean)[];
   fx?: {impact(pos: THREE.Vector3, normal: THREE.Vector3, surface: 'metal', opts?: {decal?: boolean; chips?: number}): void} | null;
@@ -223,7 +243,7 @@ export class FuelCarts implements FuelCartsLike {
   aim: {cart: Cart; part: 'frame' | 'drum'; t: number} | null = null;
   prompt: string | null = null;
   /** QA / tests. */
-  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, connects: 0, disconnects: 0, transfers: 0, pushes: 0, restores: 0, steps: 0, bullets: 0, carried: 0};
+  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, connects: 0, disconnects: 0, transfers: 0, pushes: 0, restores: 0, steps: 0, bullets: 0, carried: 0, seated: 0, poses: 0};
   private proto: THREE.Group | null = null;
   private protoGen = -1;
   private modelsGen = cartModelsGen;
@@ -233,6 +253,11 @@ export class FuelCarts implements FuelCartsLike {
   private readonly target: CartTarget = {x: 0, z: 0, vx: 0, vz: 0};
   private readonly boxScratch: Box3Like = {min: {x: 0, y: 0, z: 0}, max: {x: 0, y: 0, z: 0}};
   private readonly world: CartWorld = {levels: null as unknown as Levels, props: null};
+  private readonly poseScratch: CartPose = {dy: 0, pitch: 0, roll: 0};
+  private readonly inv = new THREE.Matrix4();
+  private readonly lo = new THREE.Vector3();
+  private readonly ld = new THREE.Vector3();
+  private readonly nz = new THREE.Vector3();
 
   constructor(readonly host: FuelCartHost) {
     this.group.name = 'fuel-carts';
@@ -447,6 +472,8 @@ export class FuelCarts implements FuelCartsLike {
   private onTeardown(): void {
     if (this.grab) this.letGo('teardown');
     if (this.hoseOn) this.disconnect(null);
+    // (a lift car still travelling finishes its run with the carts in it first: this hook runs before the lift's own teardown)
+    try { this.host.tower?.parkCar?.(); } catch (err) { console.warn('fuel carts: parking the lift failed', err); }
     this.aim = null;
     this.prompt = null;
     this.setRoll(0);
@@ -489,6 +516,7 @@ export class FuelCarts implements FuelCartsLike {
     for (const c of this.carts) {
       if (c.mode !== 'world') continue;
       c.body.units = c.fuel.units;
+      if (c.unseated > 0) this.seat(c);
       const dx = c.body.x - P.x, dz = c.body.z - P.z, d = Math.hypot(dx, dz);
       const grabbed = this.grab?.cart === c;
       if (!grabbed && !c.awake && d > FUEL_CART.activeRange) continue;
@@ -528,12 +556,9 @@ export class FuelCarts implements FuelCartsLike {
     if (!riding && P.alive) for (const c of this.carts) if (c.mode === 'world') separatePlayer(c.body, P, this.world);
     for (const c of this.carts) {
       if (c.mode !== 'world') continue;
-      const g = c.view.group;
-      if (g.position.x !== c.body.x || g.position.y !== c.body.y || g.position.z !== c.body.z || g.rotation.y !== c.body.yaw) {
-        g.position.set(c.body.x, c.body.y, c.body.z);
-        g.rotation.set(0, c.body.yaw, 0);
-        g.updateMatrixWorld(true);
-      }
+      if (c.body.level !== c.markedLevel) this.markLevel(c); // (dragged over a stair: its meshes carry the storey it stands on)
+      this.solvePose(c, dt);
+      this.draw(c);
       setGauge(c.view, c.fuel.units);
     }
     for (const c of this.carts) if (c.mode === 'cargo') setGauge(c.view, c.fuel.units);
@@ -717,7 +742,13 @@ export class FuelCarts implements FuelCartsLike {
   }
 
   private nozzleWorld(c: Cart): P3 {
-    const N = CART_LOOK.nozzle, s = Math.sin(c.body.yaw), co = Math.cos(c.body.yaw);
+    const N = CART_LOOK.nozzle;
+    if (this.tilted(c)) {
+      // (on steps / a slope: the bung where it is drawn)
+      const v = this.nz.set(N.x, N.y, N.z).applyMatrix4(c.view.group.matrixWorld);
+      return {x: v.x, y: v.y, z: v.z};
+    }
+    const s = Math.sin(c.body.yaw), co = Math.cos(c.body.yaw);
     return {x: c.body.x + N.x * co + N.z * s, y: c.body.y + N.y, z: c.body.z - N.x * s + N.z * co};
   }
 
@@ -783,8 +814,17 @@ export class FuelCarts implements FuelCartsLike {
       const b = c.body;
       if (Math.hypot(b.x - o.x, b.z - o.z) > FUEL_CART.drumReach + 0.8) continue;
       const s = Math.sin(b.yaw), co = Math.cos(b.yaw);
-      const tf = rayCylinder(o, d, b.x + K.frame.z * s, b.z + K.frame.z * co, K.frame.r, b.y, b.y + K.height, FUEL_CART.grabReach);
-      const td = rayCylinder(o, d, b.x + K.drumZ * s, b.z + K.drumZ * co, K.drumR + 0.02, b.y + K.drumBase, b.y + K.drumTop + 0.03, FUEL_CART.drumReach);
+      let tf: number | null, td: number | null;
+      if (this.tilted(c)) {
+        // on steps / a slope the cart is drawn tilted: the same two cylinders in its own drawn frame (the ray taken into it), so the
+        // handle and the drum are aimed at where they are seen
+        const lo = this.lo.copy(o).applyMatrix4(this.inv.copy(c.view.group.matrixWorld).invert()), ld = this.ld.copy(d).transformDirection(this.inv);
+        tf = rayCylinder(lo, ld, 0, K.frame.z, K.frame.r, 0, K.height, FUEL_CART.grabReach);
+        td = rayCylinder(lo, ld, 0, K.drumZ, K.drumR + 0.02, K.drumBase, K.drumTop + 0.03, FUEL_CART.drumReach);
+      } else {
+        tf = rayCylinder(o, d, b.x + K.frame.z * s, b.z + K.frame.z * co, K.frame.r, b.y, b.y + K.height, FUEL_CART.grabReach);
+        td = rayCylinder(o, d, b.x + K.drumZ * s, b.z + K.drumZ * co, K.drumR + 0.02, b.y + K.drumBase, b.y + K.drumTop + 0.03, FUEL_CART.drumReach);
+      }
       // the drum wins whenever the ray meets it (the truck's frame is mostly open air: looking down at the lid over the handle aims
       // at the drum); aimed higher (the handle bar) or at the wheels / uprights it is the frame
       const part = td !== null ? 'drum' : tf !== null ? 'frame' : null;
@@ -878,10 +918,10 @@ export class FuelCarts implements FuelCartsLike {
       c.body.vx = c.body.vz = 0;
       c.mode = 'world';
       c.awake = false;
+      c.unseated = f ? 0 : SEAT_FRAMES;
       this.group.add(c.view.group);
-      c.view.group.position.set(c.body.x, c.body.y, c.body.z);
-      c.view.group.rotation.set(0, c.body.yaw, 0);
-      c.view.group.updateMatrixWorld(true);
+      this.solvePose(c, 0, true);
+      this.draw(c, true);
       this.markLevel(c);
       this.counts.released++;
     }
@@ -938,13 +978,18 @@ export class FuelCarts implements FuelCartsLike {
       mode: 'world',
       view,
       awake: false,
+      pose: {dy: 0, pitch: 0, roll: 0}, poseSettled: false, solved: {x: NaN, y: NaN, z: NaN, yaw: NaN},
+      drawn: {x: NaN, y: NaN, z: NaN, yaw: NaN, pitch: NaN, roll: NaN},
+      markedLevel: -1,
+      // (nothing under it at its recorded height — a lift shaft whose car stands elsewhere: seated on the first frames)
+      unseated: f || !this.host.levels ? 0 : SEAT_FRAMES,
     };
     c.fuel.units = Math.max(0, Math.min(FUEL.cartUnits, Math.floor(c.fuel.units)));
     view.group.name = `fuel-cart:${rec.uid}`;
-    view.group.position.set(c.body.x, c.body.y, c.body.z);
-    view.group.rotation.set(0, c.body.yaw, 0);
+    view.group.rotation.order = 'YXZ'; // (yaw, then the rest pose's pitch / roll in the cart's own frame; yaw alone is unchanged)
     this.group.add(view.group);
-    view.group.updateMatrixWorld(true);
+    this.solvePose(c, 0, true);
+    this.draw(c, true);
     this.host.atmosphere?.markShadows(view.group, false);
     setGauge(view, c.fuel.units);
     this.markLevel(c);
@@ -970,7 +1015,76 @@ export class FuelCarts implements FuelCartsLike {
   }
 
   private markLevel(c: Cart): void {
+    c.markedLevel = c.body.level;
     c.view.group.traverse(o => { if ((o as THREE.Mesh).isMesh) o.userData.level = c.body.level; });
+  }
+
+  /** The cart is drawn off its upright stance (steps, a slope, a threshold): aim and the nozzle use the drawn frame. */
+  private tilted(c: Cart): boolean {
+    const p = c.pose;
+    return c.mode === 'world' && (Math.abs(p.pitch) > 0.01 || Math.abs(p.roll) > 0.01 || Math.abs(p.dy) > 0.01);
+  }
+
+  /**
+   * The drawn pose follows the rest pose under the footprint (world/fuelCartPhysics.ts cartRestPose): solved only when the body moved
+   * or the pose is still easing; `snap` = at once (spawn / release). A cart at rest on flat floor costs four comparisons.
+   */
+  private solvePose(c: Cart, dt: number, snap = false): void {
+    const L = this.host.levels, b = c.body, q = c.solved;
+    if (!L) return;
+    const moved = q.x !== b.x || q.y !== b.y || q.z !== b.z || q.yaw !== b.yaw;
+    if (!snap && !moved && c.poseSettled) return;
+    const T = cartRestPose(L, b, this.poseScratch), p = c.pose;
+    q.x = b.x; q.y = b.y; q.z = b.z; q.yaw = b.yaw;
+    this.counts.poses++;
+    const k = snap ? 1 : 1 - Math.exp(-CART.poseRate * dt);
+    p.dy += (T.dy - p.dy) * k; p.pitch += (T.pitch - p.pitch) * k; p.roll += (T.roll - p.roll) * k;
+    if (Math.abs(T.dy - p.dy) < 5e-4 && Math.abs(T.pitch - p.pitch) < 1e-3 && Math.abs(T.roll - p.roll) < 1e-3) {
+      p.dy = T.dy; p.pitch = T.pitch; p.roll = T.roll;
+      c.poseSettled = true;
+    } else c.poseSettled = false;
+  }
+
+  /** The view at the body + the drawn pose (matrix work only when something changed). */
+  private draw(c: Cart, force = false): void {
+    const g = c.view.group, b = c.body, p = c.pose, d = c.drawn, y = b.y + p.dy;
+    if (!force && d.x === b.x && d.y === y && d.z === b.z && d.yaw === b.yaw && d.pitch === p.pitch && d.roll === p.roll) return;
+    d.x = b.x; d.y = y; d.z = b.z; d.yaw = b.yaw; d.pitch = p.pitch; d.roll = p.roll;
+    g.position.set(b.x, y, b.z);
+    g.rotation.set(-p.pitch, b.yaw, p.roll); // (order YXZ: +pitch lifts the front, +roll lifts the +x side)
+    g.updateMatrixWorld(true);
+  }
+
+  /**
+   * A cart with nothing under it at its height (recorded inside a lift shaft whose car now stands at another stop) is put on the
+   * surface of its own column: the nearest band below it, else the column's top band (the car above it). Tried for a few frames after
+   * the world was built (the lift's car is registered by its own build hook, after this system's).
+   */
+  private seat(c: Cart): void {
+    const L = this.host.levels, b = c.body;
+    if (!L) return;
+    if (L.supportIn(b.x, b.z, b.y, CART.step)) { c.unseated = 0; return; }
+    const s = L.supportAt(b.x, b.z, b.y, CART.step) ?? L.supportAt(b.x, b.z, Infinity, CART.step);
+    if (!s) { c.unseated--; return; }
+    b.y = s.floor; b.level = s.level; b.vx = b.vz = 0;
+    c.unseated = 0;
+    this.counts.seated++;
+    this.solvePose(c, 0, true);
+  }
+
+  /**
+   * Some world cart's footprint satisfies `test(x, y, z, radius)` (world/towerRuntime.ts: a cart standing in a lift's doorway holds
+   * the doors like a body does — never shut on, never left behind half in the wall).
+   */
+  anyAt(test: (x: number, y: number, z: number, r: number) => boolean): boolean {
+    for (const c of this.carts) if (c.mode === 'world' && test(c.body.x, c.body.y, c.body.z, CART.radius)) return true;
+    return false;
+  }
+
+  /** QA / tests: a live cart's drawn pose over its body (lift, pitch, roll), or null. */
+  poseOf(uid: string): CartPose | null {
+    const c = this.carts.find(k => k.uid === uid);
+    return c ? {...c.pose} : null;
   }
 
   private removeAt(i: number): void {
@@ -1048,6 +1162,8 @@ export class FuelCarts implements FuelCartsLike {
 }
 
 const byUid = (a: {uid: string}, b: {uid: string}) => (a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0);
+/** Frames a cart spawned without support waits for its column's surface (the lift's car) before it gives up. */
+const SEAT_FRAMES = 240;
 
 /** Installs the fuel carts (one call in the Game constructor; registries only). */
 export function installFuelCarts(game: Game): FuelCarts {
