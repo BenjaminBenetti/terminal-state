@@ -59,6 +59,7 @@ import {REACTOR_GAS_LOOK, type DepthGasTable} from '../world/reactor/air'; // ta
 // the Reactor's open pit top), the pit's light shafts, the in-engine fog fallback when the pass is off
 import {PIT_SHAFTS, ROOF_GAS_LOOK, fallbackFog, officeRoofGas, type OutdoorGas, type ShaftSpec} from '../world/gaslightRules';
 import {ROOF_FOG, roofAirOf} from '../world/roofAir';
+import {RIDE_MASK} from '../world/rideMask'; // task studio-perf-ao-train-continuity-20261110-022206-01: the ride tunnel's medium (the CPU mirror)
 
 /** Task gasmask-breach-20261030: the gas term's look (uniform values only; QA may edit them live). */
 export interface GasLook { ext: number; scatter: number; emission: number; noise: number; tint: [number, number, number] }
@@ -503,7 +504,7 @@ export class VolumetricAtmosphere {
    */
   fogSample(x: number, y: number, z: number, t = this.fogTime()): {sigma: number; dense: number; detail: number; mult: number; slot: number; time: number} {
     if (!this.densityMap) return {sigma: 0, dense: 0, detail: 0, mult: 0, slot: 0, time: t};
-    const s = mediumAt([x, y, z], this.maps(), this.params, t);
+    const s = mediumAt([x, y, z], this.maps(), this.params, t, undefined, RIDE_MASK); // (task studio-perf-ao-train-continuity-20261110-022206-01: the ride tunnel's plain bed medium, as the march)
     return {sigma: s.sigma, dense: s.dense, detail: s.detail, mult: s.mult, slot: s.slot, time: t};
   }
 

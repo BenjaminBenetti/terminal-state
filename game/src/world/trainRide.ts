@@ -151,8 +151,14 @@ export const RIDE = {
   gateClear: 1.5,
   /** An arrival through a breach lets the portal go once the car's trailing end is this far inside the station (m), or at the stop. */
   stubRelease: 20,
-  /** A portal still not released this long after the stop goes at once (s). */
+  /** A GATE portal still not released this long after the stop goes at once (s). */
   releaseWait: 5,
+  /**
+   * A BREACH's release tail waits for the portal runtime instead (it lets the station tunnel back only where nobody sees it change:
+   * world/ridePortalRuntime.ts PORTAL_RT, last resort after its own 90 s); this is only the ride's outer bound for a runtime that never
+   * lets go. A gate is shut by then and goes after `releaseWait`.
+   */
+  breachReleaseWait: 120,
   /**
    * The scene fog blends from the level's own to the tunnel murk (MOOD) while the eye passes the portal plane: from / to this many
    * metres beyond it (negative: the station side).
@@ -1009,7 +1015,7 @@ export class TrainRide {
     if (!tl) return;
     tl.t += dt;
     this.stepPortal(dt);
-    if (this.tail === tl && tl.t >= RIDE.releaseWait) this.dropPortal();
+    if (this.tail === tl && tl.t >= (this.gateReal ? RIDE.releaseWait : RIDE.breachReleaseWait)) this.dropPortal();
   }
 
   /** The old world goes (a section teardown): its portal, its end plane and its fog are its own again — the runtime let go at once itself. */
