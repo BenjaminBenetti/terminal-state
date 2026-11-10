@@ -756,6 +756,77 @@ describe('the Overwatch scope: a runtime lens on the Sight axis, magnified aim',
   });
 });
 
+// Lead follow-up (QA first-person renders: the Stub's crosshair floated ~36 px above its reflex sight): the Stub aims THROUGH its open
+// red-dot window like the rifle's optic — the same runtime lens (optic.ts sightAperture, searched only the hoop's own depth), no zoom.
+describe('the Stub red dot: a see-through lens in the open reflex window, centred on the Sight axis, no magnification', async () => {
+  const {NodeIO} = await import('@gltf-transform/core');
+  const {GLTFLoader} = await import('three/addons/loaders/GLTFLoader.js');
+  const io = new NodeIO();
+  const doc = await io.read(path.join(GAME, 'public/assets/models/weapon-stub.glb'));
+  for (const t of doc.getRoot().listTextures()) t.dispose(); // no image decoding in node
+  const bin = await io.writeBinary(doc);
+  const stub = await new Promise<{scene: THREE.Group}>((res, rej) => new GLTFLoader().parse(bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength) as ArrayBuffer, '', res as never, rej));
+  const spec = WEAPONS.stub.view.optic!;
+  /** Every vertex of a model (model frame). */
+  const verts = (root: THREE.Object3D) => {
+    root.updateMatrixWorld(true);
+    const out: THREE.Vector3[] = [];
+    root.traverse(o => { const m = o as THREE.Mesh; const p = m.isMesh ? m.geometry.getAttribute('position') : null; if (p) for (let i = 0; i < p.count; i++) out.push(new THREE.Vector3().fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld)); });
+    return out;
+  };
+
+  it('the def: an optic on the Sight window (radius / hoop depth), sightLift 0, the same mild aim FOV (56: no zoom); rifle / Overwatch optics unchanged', () => {
+    expect(spec).toStrictEqual({eyeRelief: 0.248, sightAperture: {radius: 0.012, depth: 0.015}});
+    expect(WEAPONS.stub.view.sightLift).toBe(0);
+    expect(WEAPONS.stub.aimFov).toBe(56);
+    expect(WEAPONS.stub.aimFov).toBeGreaterThan(WEAPONS.rifle.aimFov); // a red dot: no magnification (the rifle's own red dot aims at 52)
+    expect(WEAPONS.overwatch.view.optic).toStrictEqual({eyeRelief: 0.085, sightAperture: {radius: 0.016}}); // default search depth
+    expect(WEAPONS.rifle.view.optic).toStrictEqual({eyeRelief: 0.105, aperture: {x: -0.0035, y: 0.1394, z: 0.0855, radius: 0.016}});
+  });
+
+  it('on weapon-stub.glb: the glass is centred on the Sight marker, just eye-side of the hoop, inside its clear opening', () => {
+    const sight = stub.scene.getObjectByName('Sight')!.getWorldPosition(new THREE.Vector3());
+    const a = RifleOptic.sightApertureSpec(stub.scene, spec.sightAperture!.radius, spec.sightAperture!.depth)!;
+    expect(a).not.toBeNull();
+    expect(a.x).toBe(sight.x);
+    expect(a.y).toBe(sight.y);
+    expect(a.radius).toBe(0.012);
+    // just behind the hoop (its rear edge ~9.5 mm eye-side of the marker), not behind the mount further back (~50 mm)
+    expect(a.z - sight.z).toBeGreaterThan(0.005);
+    expect(a.z - sight.z).toBeLessThan(0.02);
+    expect(RifleOptic.sightApertureSpec(stub.scene, 0.012)!.z - sight.z).toBeGreaterThan(0.04); // (the default scope depth would reach the mount)
+    // the window is open where the glass is: no vertex of the hoop within the glass radius (+0.5 mm) of the axis over its depth
+    const vs = verts(stub.scene);
+    const hoop = vs.filter(v => Math.abs(v.z - sight.z) <= 0.03);
+    const clear = Math.min(...hoop.map(v => Math.hypot(v.x - a.x, v.y - a.y)));
+    expect(clear).toBeGreaterThan(a.radius + 0.0005);
+    // seen from the ADS eye (eyeRelief behind the glass, on the axis), NOTHING of the gun projects inside the glass: its depth mask
+    // hides no part of the frame or receiver — only the world shows through it
+    const eyeZ = a.z + spec.eyeRelief;
+    const inside = vs.filter(v => v.z < a.z && Math.hypot(v.x - a.x, v.y - a.y) * spec.eyeRelief / (eyeZ - v.z) < a.radius);
+    expect(inside.length).toBe(0);
+  });
+
+  it('held in the viewmodel: full ADS puts the eye on the axis eyeRelief behind the glass (the window centre on the crosshair, which hides); hip = dark lens', () => {
+    const vm = new Viewmodel({} as never, {});
+    vm.addModel('stub', stub);
+    vm.setItem('stub');
+    expect(vm.heldOptic).not.toBeNull();
+    for (let i = 0; i < 40; i++) vm.update(0.05, viewState());
+    expect(vm.opticAim).toBeLessThan(0.05);
+    for (let i = 0; i < 80; i++) vm.update(0.05, viewState({aiming: true}));
+    expect(vm.opticAim).toBeGreaterThan(0.6);
+    const eye = vm.heldOptic!.eye;
+    expect(Math.hypot(eye.x, eye.y)).toBeLessThan(0.001);
+    expect(eye.z).toBeCloseTo(spec.eyeRelief, 3);
+    // the Sight marker (window centre) sits on the screen centre, ~0.26 m ahead as the former sight relief (same apparent size)
+    vm.scene.updateMatrixWorld(true);
+    const s = heldRoot(vm).getObjectByName('Sight')!.getWorldPosition(new THREE.Vector3()).applyMatrix4(vm.camera.matrixWorldInverse);
+    expect(Math.hypot(s.x, s.y)).toBeLessThan(0.001);
+    expect(-s.z).toBeCloseTo(WEAPONS.stub.view.sightRelief!, 2);
+  });
+});
+
 // ------------------------------------------------------------------------------------------------------------------------------
 function glbJson(file: string) {
   const b = fs.readFileSync(path.join(GAME, 'public/assets/models', file));
