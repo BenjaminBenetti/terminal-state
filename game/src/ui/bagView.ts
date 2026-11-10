@@ -11,7 +11,7 @@
 // inventory validates every move). The view opens on a TAP of E (a held E picks the bag up instead: gear/system.ts).
 // Task knife-windup-20261030 (lane SLOT): + the melee slot (~; melee weapons only, validated by the inventory), shown first.
 
-import {itemIconHtml} from './itemIcons';
+import {itemIconHtml, onItemIconsChanged} from './itemIcons';
 import {itemDef} from '../items/items';
 import {itemTip} from './itemTip'; // (task studio-ui-subway-maps-20261108-074144-01)
 import {hideTooltip, refreshTooltip, setTip, tipAttrs} from './tooltip';
@@ -46,7 +46,11 @@ export class BagView {
   /** Last action (QA / tests in a browser). */
   last: {kind: string; from?: AnyRef; to?: AnyRef | null; result: string} | null = null;
 
-  constructor(private readonly host: BagViewHost) {}
+  constructor(private readonly host: BagViewHost) {
+    // (task studio-weapon-runtime-fix-20261110-022206-01) item icons were (re)rendered — a weapon model that arrived while this view shows
+    // the weapon: redraw, so its glyph becomes the rendered preview at once (never mid-drag: the drop redraws)
+    onItemIconsChanged(() => { if (this.visible && !this.drag?.active) this.render(); });
+  }
 
   get visible(): boolean {
     return !!this.root && !this.root.classList.contains('hidden');

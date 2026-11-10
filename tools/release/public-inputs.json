@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 65375,
-      "sha256": "c2c1dfbcd2b77ccc13e09995e957a7b6253ca3a5340beb4a2944866b2d5b7bbe"
+      "bytes": 68257,
+      "sha256": "b3f84877115e758a37d932f8931c5f461df42b133d8ed88f0624fc85e3f627fc"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 2858,
-      "sha256": "46cfc8b4369af9e2e8852151e7c9ad64e005af298b7b5407561c4e7c9dbfdf31"
+      "bytes": 3070,
+      "sha256": "d27343e7709f683d55a7fbc5bcd8e49dc47e413ca68f658aacfe066449babfcc"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -407,6 +407,106 @@
       "path": "assets/audio/fuel-pour.mp3",
       "bytes": 20897,
       "sha256": "59afe9ae2c224e50cf2027092167b797a43353dc8bc43ae87f991e85209d1f4f"
+    },
+    {
+      "path": "assets/audio/gun-coach-gun-break-close-01.mp3",
+      "bytes": 5642,
+      "sha256": "3ccfe648660afc14f86596892260d91c969aed759abbdbaf4f768236bf24d37d"
+    },
+    {
+      "path": "assets/audio/gun-coach-gun-break-open-01.mp3",
+      "bytes": 4702,
+      "sha256": "8bfc01d4a34ae01a7131bf666bd9efb86e1e4395a4c928e74a50214039db2938"
+    },
+    {
+      "path": "assets/audio/gun-coach-gun-shot-01.mp3",
+      "bytes": 13374,
+      "sha256": "883c47736ec1df20a67fc2f163766565ad51c54b7eb424763f248d892f082c64"
+    },
+    {
+      "path": "assets/audio/gun-hornet-mag-in-01.mp3",
+      "bytes": 7210,
+      "sha256": "913f09433f795b23153d67d11a122fffab3fee9ee33f27e6cf1a688a672c41f9"
+    },
+    {
+      "path": "assets/audio/gun-hornet-mag-out-01.mp3",
+      "bytes": 3762,
+      "sha256": "82ee35668adb2a81d165f02f4ebef01a940ff2d2a3fdc809950edd23aa29d735"
+    },
+    {
+      "path": "assets/audio/gun-hornet-shot-01.mp3",
+      "bytes": 5851,
+      "sha256": "43582536eccb9331f0546b5755b7b319af4638d7cbdd1dd7f3ae248f89faf670"
+    },
+    {
+      "path": "assets/audio/gun-hornet-shot-02.mp3",
+      "bytes": 5433,
+      "sha256": "30cdebbac79240009254b55da8fec4004b11c2cbe67bde713e448edd5c297cc0"
+    },
+    {
+      "path": "assets/audio/gun-longslide-mag-in-01.mp3",
+      "bytes": 8150,
+      "sha256": "aa07d496920504ae6a891354857420cd7b9dbc5ee96c6929e0f1d944355d0678"
+    },
+    {
+      "path": "assets/audio/gun-longslide-mag-out-01.mp3",
+      "bytes": 5016,
+      "sha256": "c4730d43f738261d42419690262e378716604ea74870189cc1c8442fb324b617"
+    },
+    {
+      "path": "assets/audio/gun-longslide-shot-01.mp3",
+      "bytes": 10449,
+      "sha256": "053536ddaa2de48a9bd0f2505d09441c2f9b00adafdafc95034b629d660ddf8d"
+    },
+    {
+      "path": "assets/audio/gun-overwatch-mag-in-01.mp3",
+      "bytes": 4389,
+      "sha256": "7f139360810bea83546baaa6270e9ebee4c673f7f91e5ff47af1be2087771d53"
+    },
+    {
+      "path": "assets/audio/gun-overwatch-mag-out-01.mp3",
+      "bytes": 6583,
+      "sha256": "20e827a4d1831e3d4cf8dc3e535b160a43e7a9bb8a53589623a2cc4e2c85c113"
+    },
+    {
+      "path": "assets/audio/gun-overwatch-shot-01.mp3",
+      "bytes": 7941,
+      "sha256": "79cce6687d7ba99fc48a93410072412a2a44482225f965a97f6e38a24a108318"
+    },
+    {
+      "path": "assets/audio/gun-stub-mag-in-01.mp3",
+      "bytes": 8464,
+      "sha256": "08aaed309cf59586b56fdfaf95b9c8bff28b16102f5601e990523f1986c7e32f"
+    },
+    {
+      "path": "assets/audio/gun-stub-mag-out-01.mp3",
+      "bytes": 3762,
+      "sha256": "19e832a5768b3b8e5a7d8c7bed18c53e9d5ade082521e9a60b4a886ba6676c84"
+    },
+    {
+      "path": "assets/audio/gun-stub-shot-01.mp3",
+      "bytes": 7523,
+      "sha256": "29f65a276951ea29351085091dfc4cefdb3e474b9c42f5f6d4f3e2611d21f693"
+    },
+    {
+      "path": "assets/audio/gun-stub-shot-02.mp3",
+      "bytes": 7105,
+      "sha256": "bfeeb2373696967679cb04799b7d36990f319a8fdec762f47507b0cad9963f56"
+    },
+    {
+      "path": "assets/audio/gun-thresher-mag-in-01.mp3",
+      "bytes": 6583,
+      "sha256": "7cb758179c679ead11fede799e3a5f0acea9347eb7fe8e1c0500e98417a0dc45"
+    },
+    {
+      "path": "assets/audio/gun-thresher-mag-out-01.mp3",
+      "bytes": 4702,
+      "sha256": "7ec5a3548663a70765eb192fe454ba082b8ab198e124a10a756bcc41218dccd3"
+    },
+    {
+      "path": "assets/audio/gun-thresher-shot-01.mp3",
+      "bytes": 11702,
+      "sha256": "75bad3d3aace2027b900f97993fc73540887cf2b0545dbb6146e5f949b7a13dc"
     },
     {
       "path": "assets/audio/head-hit-01.mp3",
@@ -1712,6 +1812,11 @@
       "path": "assets/derivatives/audio-fuel.json",
       "bytes": 5049,
       "sha256": "fb5f0ddc3985bfc038af63e781ce88e7a5b3a9cb8e9f9931a3d786981193cf0b"
+    },
+    {
+      "path": "assets/derivatives/audio-gun-variety.json",
+      "bytes": 32950,
+      "sha256": "403fb3a894b31ccd25ff542346cce12ab3889943af84addf5e068600f40889bb"
     },
     {
       "path": "assets/derivatives/audio-head-hit.json",

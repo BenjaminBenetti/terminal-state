@@ -21,6 +21,7 @@ import {hordeQaApi} from './ai/hordeQa'; // Task track3-eaton-centre-20261031 (l
 import {gearQaApi} from './gear/qa'; // Iteration 16 (lane GEAR): gear / backpack spot-check hooks
 import {marketTradeQaApi} from './market/trade/tradeSystem'; // task studio-survivor-market-20261108-005807-01 (lane TRADE)
 import {marketCombatQaApi} from './market/combat/marketCombat'; // task studio-market-rework-20261108-074144-01 (lane COMBAT)
+import {weaponVarietyQaApi} from './world/weaponVarietyDelivery'; // task studio-weapon-runtime-fix-20261110-022206-01
 import {marketAudioQaApi} from './market/audio/marketSounds'; // task studio-market-bar-20261108-225231-01 (lane AUDIO)
 import {marketWaresQaApi} from './market/wares/wares'; // task studio-market-rework-20261108-074144-01 (lane WARES)
 import {vomitQaApi} from './player/vomit'; // task studio-market-bar-20261108-225231-01 (lane SHELVES): the throw-up action
@@ -364,6 +365,7 @@ export function installQaHooks(game: Game): void {
     ...hordeQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     ...gearQaApi(game), // Iteration 16 (lane GEAR): gear(), gearGive(id), bagPlace(), bagOpen(), bagQuick('pack:0'), bagMove(a, b), bagWear(), bagClose()
     ...marketTradeQaApi(() => game.trade), // task studio-survivor-market-20261108-005807-01 (lane TRADE): trade(), the stalls' stock / balance / deal line
+    ...weaponVarietyQaApi(() => game, itemIconUrl), // task studio-weapon-runtime-fix-20261110-022206-01: weaponVariety() — per new weapon: model state / held / preview; loader + delivery counters
     ...marketCombatQaApi(() => game.marketCombat), // task studio-market-rework-20261108-074144-01 (lane COMBAT): marketCombat() (hostility, people, rounds), marketProvoke(stall?, kind?)
     ...marketAudioQaApi(() => game.marketAudio, () => game.sfx.marketAudioState()), // task studio-market-bar-20261108-225231-01 (lane AUDIO): marketAudio() (murmur groups / channels, voices, counts)
     ...marketWaresQaApi(() => game.marketWares), // task studio-market-rework-20261108-074144-01 (lane WARES): wares(), waresSteal(uid)

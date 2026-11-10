@@ -613,3 +613,33 @@ Generated for this project with Meshy T2.5 (smart topology; image-to-3D from a C
 
 - `assets/models/bunker-mainframe-tape-cabinet.glb` — bunker: retro reel-to-reel mainframe tape cabinet (sealed computer equipment; its louvred doors are service panels) (Meshy task 01a1bfc1-3a2f-773a-a458-f2cdadf1b1fc)
 <!-- END bunker-kit-20261109 -->
+
+<!-- BEGIN gun-variety-audio-20261110 (gun-variety-build.mjs) -->
+## Weapon-variety gun audio (shots, magazine out / in, break open / close)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the gun audio
+task's local Sound Lab allowance (17 jobs of a 24-job cap). Powered by Stability AI. Stability AI Community License +
+Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades,
+levelling, MP3) built by `tools/audio-pipeline/gun-variety-build.mjs` (provenance: `assets/derivatives/audio-gun-variety.json`). Not
+reviewed by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/gun-longslide-shot-01.mp3` — gunLongslideShot (Sound Lab job 20261110T064241-184262446)
+- `assets/audio/gun-stub-shot-01.mp3` — gunStubShot (Sound Lab job 20261110T064246-2014766852)
+- `assets/audio/gun-stub-shot-02.mp3` — gunStubShot (Sound Lab job 20261110T064251-529127606)
+- `assets/audio/gun-overwatch-shot-01.mp3` — gunOverwatchShot (Sound Lab job 20261110T064255-445153277)
+- `assets/audio/gun-coach-gun-shot-01.mp3` — gunCoachGunShot (Sound Lab job 20261110T064300-1564851814)
+- `assets/audio/gun-thresher-shot-01.mp3` — gunThresherShot (Sound Lab job 20261110T064304-171167837)
+- `assets/audio/gun-hornet-mag-out-01.mp3` — gunHornetMagOut (Sound Lab job 20261110T064309-1029141341)
+- `assets/audio/gun-hornet-mag-in-01.mp3` — gunHornetMagIn (Sound Lab job 20261110T064309-1029141341)
+- `assets/audio/gun-longslide-mag-out-01.mp3` — gunLongslideMagOut (Sound Lab job 20261110T064313-1006943679)
+- `assets/audio/gun-longslide-mag-in-01.mp3` — gunLongslideMagIn (Sound Lab job 20261110T064313-1006943679)
+- `assets/audio/gun-stub-mag-out-01.mp3` — gunStubMagOut (Sound Lab job 20261110T064318-1579386861)
+- `assets/audio/gun-stub-mag-in-01.mp3` — gunStubMagIn (Sound Lab job 20261110T064318-1579386861)
+- `assets/audio/gun-overwatch-mag-out-01.mp3` — gunOverwatchMagOut (Sound Lab job 20261110T064323-1092673271)
+- `assets/audio/gun-overwatch-mag-in-01.mp3` — gunOverwatchMagIn (Sound Lab job 20261110T064323-1092673271)
+- `assets/audio/gun-thresher-mag-out-01.mp3` — gunThresherMagOut (Sound Lab job 20261110T064327-733333169)
+- `assets/audio/gun-thresher-mag-in-01.mp3` — gunThresherMagIn (Sound Lab job 20261110T064327-733333169)
+- `assets/audio/gun-coach-gun-break-open-01.mp3` — gunCoachGunBreakOpen (Sound Lab job 20261110T064332-741355159)
+- `assets/audio/gun-coach-gun-break-close-01.mp3` — gunCoachGunBreakClose (Sound Lab job 20261110T064332-741355159)
+- `assets/audio/gun-hornet-shot-01.mp3` — gunHornetShot (Sound Lab job 20261110T064738-1979131141)
+- `assets/audio/gun-hornet-shot-02.mp3` — gunHornetShot (Sound Lab job 20261110T065448-1388891472)
+<!-- END gun-variety-audio-20261110 -->

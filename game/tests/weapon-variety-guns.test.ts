@@ -4,7 +4,8 @@
 // handling vs its family baseline (a table) and no strict upgrade; semi re-arm vs auto hold, strings (recoil climb), ADS settle; the
 // BREAK action (two shots, partial / cancelled reloads, no third shot, no free ammo, never "6 of 2", nothing fires while open); the
 // viewmodel's late model registration (addModel) and the reload part hooks (Magazine out -> in, Barrels about the Hinge); the scope's
-// runtime lens on the Sight axis; the hold rules re-measured on the baseline GLBs; the game.ts wiring. No browser, no git history.
+// runtime lens on the Sight axis; the hip poses anchored to the starter pistol's (re-measured on pistol.glb); the game.ts wiring. No
+// browser, no git history.
 import {describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
 import fs from 'node:fs';
@@ -16,9 +17,9 @@ vi.mock('../src/world/canvasTextures', () => ({canvasTexture: () => new THREE.Te
 const {WEAPONS, WeaponController, firingRecoil, weaponAmmoItem, reserveFor, STREAK_GAP} = await import('../src/weapons/weapons');
 type TriggerInput = import('../src/weapons/weapons').TriggerInput;
 type WeaponDef = import('../src/weapons/weapons').WeaponDef;
-const {VARIETY_GUN_DEFS, HOLD_RULES, VARIETY_GUN_LENGTHS, derivedHip} = await import('../src/weapons/varietyGuns');
+const {VARIETY_GUN_DEFS, HOLD_RULES, PISTOL_HOLD, VARIETY_GUN_LENGTHS, anchoredHip} = await import('../src/weapons/varietyGuns');
 const {WEAPON_VARIETY_MODELS} = await import('../src/assets/weaponVarietyModels.generated');
-const {VARIETY_GUN_IDS, VARIETY_WEAPONS} = await import('../src/weapons/varietyIds');
+const {VARIETY_GUN_IDS, VARIETY_MELEE_IDS, VARIETY_WEAPONS} = await import('../src/weapons/varietyIds');
 const {shotRecoil, shotBloom, bloomDecay, baseSpread, reloadCueTime, SHARED_BLOOM} = await import('../src/weapons/gunHandling');
 const {GunParts, magazinePartPose, barrelsAngle, BREAK_ANGLE, MAG_PART} = await import('../src/weapons/gunParts');
 const {Viewmodel} = await import('../src/weapons/viewmodel');
@@ -833,52 +834,113 @@ function glbJson(file: string) {
   return JSON.parse(b.subarray(20, 20 + b.readUInt32LE(12)).toString());
 }
 
-describe('held-pose rules (HOLD_RULES) re-measured on the baseline user guns; derived hips once the cooked models land', () => {
-  it('the long-gun / handgun rules reproduce the rifle / shotgun / pistol hip poses within 3 cm', () => {
-    for (const [file, id, kind] of [['rifle-user.glb', 'rifle', 'long'], ['shotgun-user.glb', 'shotgun', 'long'], ['pistol.glb', 'pistol', 'handgun']] as const) {
-      const j = glbJson(file);
-      const node = (n: string) => j.nodes.find((x: {name: string}) => x.name === n);
-      const G = node('Grip').translation as number[], S = node('Sight').translation as number[];
-      const meshNode = j.nodes.find((x: {mesh?: number}) => x.mesh !== undefined);
-      const acc = j.accessors[j.meshes[meshNode.mesh].primitives[0].attributes.POSITION];
-      const mtx = new THREE.Matrix4().compose(new THREE.Vector3(...(meshNode.translation ?? [0, 0, 0])), new THREE.Quaternion(...(meshNode.rotation ?? [0, 0, 0, 1])), new THREE.Vector3(...(meshNode.scale ?? [1, 1, 1])));
-      const box = new THREE.Box3(new THREE.Vector3(...acc.min), new THREE.Vector3(...acc.max)).applyMatrix4(mtx);
-      const hip = WEAPONS[id].view.hip;
-      if (kind === 'long') {
-        const r = HOLD_RULES.long;
-        expect(Math.abs(r.sightY - (S[1] - G[1]) - hip[1]), `${id} y`).toBeLessThan(0.03);
-        expect(Math.abs(r.buttZ - (box.max.z - G[2]) - hip[2]), `${id} z`).toBeLessThan(0.03);
-        expect(Math.abs(r.x - hip[0]), `${id} x`).toBeLessThan(0.03);
-      } else {
-        const r = HOLD_RULES.handgun;
-        expect(Math.abs(r.sightY - (S[1] - G[1]) - hip[1]), `${id} y`).toBeLessThan(0.03);
-        expect(r.gripZ).toBe(hip[2]);
-        expect(r.x).toBe(hip[0]);
-      }
+// Task studio-weapon-poses-slot-hierarchy-20261110-064835-01 — the USER: the Overwatch "looks too small", the Coach Gun "too much stock
+// visible / holding position not aligned"; "Use starter pistol holding pose as best reference". Every new gun's hip pose is anchored to
+// the starter pistol's (unchanged): the Grip at the pistol hand's depth, the Sight where the pistol's Sight shows on screen.
+describe('hip poses anchored to the starter pistol (PISTOL_HOLD / HOLD_RULES / anchoredHip)', () => {
+  /** The camera-space point of model point `p` (a gun's model frame) held at `hip` with its def's hip rotation, pivoting at `grip`. */
+  const held = (d: WeaponDef, grip: readonly number[], p: readonly number[]) => {
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(d.view.hipPitch, d.view.hipYaw, d.view.hipRoll));
+    return new THREE.Vector3(p[0] - grip[0], p[1] - grip[1], p[2] - grip[2]).applyQuaternion(q).add(new THREE.Vector3(...d.view.hip));
+  };
+  const VFOV = 54, ASPECT = 16 / 9; // the Viewmodel camera (weapons/viewmodel.ts), a 16:9 screen
+  /** Normalised screen position (-1..1 on screen) of a camera-space point in front of the eye. */
+  const screen = (v: THREE.Vector3) => { const t = Math.tan(THREE.MathUtils.degToRad(VFOV / 2)); return [v.x / (-v.z * t * ASPECT), v.y / (-v.z * t)]; };
+
+  it('PISTOL_HOLD is the pistol\'s own (unchanged) hip pose, its Sight re-measured on pistol.glb; the baseline guns keep theirs', () => {
+    expect(WEAPONS.pistol.view.hip).toEqual([...PISTOL_HOLD.grip]);
+    expect([WEAPONS.pistol.view.hipYaw, WEAPONS.pistol.view.hipPitch, WEAPONS.pistol.view.hipRoll]).toEqual([0.08, 0.03, -0.04]);
+    const j = glbJson('pistol.glb');
+    const node = (n: string) => j.nodes.find((x: {name: string}) => x.name === n);
+    const s = held(WEAPONS.pistol, node('Grip').translation, node('Sight').translation);
+    expect(s.distanceTo(new THREE.Vector3(...PISTOL_HOLD.sight))).toBeLessThan(0.0005);
+    expect(WEAPONS.rifle.view.hip).toEqual([0.245, -0.41, -0.7]);
+    expect(WEAPONS.shotgun.view.hip).toEqual([0.235, -0.27, -0.66]);
+    for (const id of ['pistol', 'rifle', 'shotgun', 'knife', ...VARIETY_MELEE_IDS]) expect(WEAPONS[id].view.kickTravel, id).toBeUndefined();
+  });
+
+  it('anchoredHip: the Grip at the kind\'s depth, the turned Sight on the eye -> pistol-Sight line; the fallback without markers', () => {
+    const entry = {id: 'G03', itemId: 'stub' as const, kind: 'gun' as const, url: 'x', length: 0.7, tris: 1, parts: ['Magazine'],
+      bounds: {min: [-0.03, -0.15, -0.35] as [number, number, number], max: [0.03, 0.12, 0.35] as [number, number, number]},
+      markers: {Grip: [0, -0.05, -0.02], Muzzle: [0, 0.03, -0.35], Sight: [0.01, 0.09, 0.05]} as Record<string, [number, number, number]>};
+    for (const kind of ['long', 'handgun'] as const) {
+      const hip = anchoredHip(entry, kind, [1, 2, 3]);
+      expect(hip[2]).toBe(HOLD_RULES[kind].gripZ);
+      const r = HOLD_RULES[kind];
+      const d = {view: {hip, hipYaw: r.yaw, hipPitch: r.pitch, hipRoll: r.roll}} as unknown as WeaponDef;
+      const s = held(d, entry.markers.Grip, entry.markers.Sight), a = new THREE.Vector3(...PISTOL_HOLD.sight);
+      expect(s.x / s.z).toBeCloseTo(a.x / a.z, 12);
+      expect(s.y / s.z).toBeCloseTo(a.y / a.z, 12);
+    }
+    expect(anchoredHip(undefined, 'long', [1, 2, 3])).toEqual([1, 2, 3]);
+    expect(anchoredHip({...entry, markers: {Grip: [0, 0, 0]}}, 'long', [1, 2, 3])).toEqual([1, 2, 3]); // no Sight: fallback
+  });
+
+  it('every delivered gun: Grip at the pistol hand\'s depth, Sight on the pistol Sight\'s screen spot (the real Viewmodel), kick travel', () => {
+    const pistolSight = screen(new THREE.Vector3(...PISTOL_HOLD.sight));
+    for (const id of VARIETY_GUN_IDS) {
+      const m = WEAPON_VARIETY_MODELS[id]!;
+      expect(m, id).toBeTruthy();
+      const d = WEAPONS[id], kind = id === 'longslide' ? 'handgun' : 'long';
+      expect(d.view.hip[2], id).toBe(PISTOL_HOLD.grip[2]);
+      // the Viewmodel's own placement (a stand-in body with the registry's markers) puts the Sight there
+      const scene = new THREE.Group();
+      scene.add(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, m.length), new THREE.MeshBasicMaterial()));
+      for (const [name, p] of Object.entries(m.markers)) { const o = new THREE.Object3D(); o.name = name; o.position.set(...p); scene.add(o); }
+      const vm = new Viewmodel({} as never, {});
+      vm.addModel(id, {scene});
+      vm.setItem(id);
+      for (let i = 0; i < 40; i++) vm.update(0.05, viewState());
+      vm.scene.updateMatrixWorld(true);
+      const s = heldRoot(vm).getObjectByName('Sight')!.getWorldPosition(new THREE.Vector3()).applyMatrix4(vm.camera.matrixWorldInverse);
+      const sp = screen(s);
+      expect(Math.abs(sp[0] - pistolSight[0]), `${id} x`).toBeLessThan(1e-9);
+      expect(Math.abs(sp[1] - pistolSight[1]), `${id} y`).toBeLessThan(1e-9);
+      expect(d.view.kickTravel, id).toBe(kind === 'long' ? 0.36 / 0.7 : undefined);
     }
   });
 
-  it('derivedHip: from a registry entry\'s markers / bounds by the rules; the fallback without one', () => {
-    const entry = {id: 'G03', itemId: 'stub' as const, kind: 'gun' as const, url: 'x', length: 0.7, tris: 1, parts: ['Magazine'],
-      bounds: {min: [-0.03, -0.15, -0.35] as [number, number, number], max: [0.03, 0.12, 0.35] as [number, number, number]},
-      markers: {Grip: [0, -0.05, -0.02], Muzzle: [0, 0.03, -0.35], Sight: [0, 0.09, 0.05]} as Record<string, [number, number, number]>};
-    const long = derivedHip(entry, 'long', [1, 2, 3]);
-    expect(long[0]).toBe(HOLD_RULES.long.x);
-    expect(long[1]).toBeCloseTo(HOLD_RULES.long.sightY - 0.14, 12);
-    expect(long[2]).toBeCloseTo(HOLD_RULES.long.buttZ - 0.37, 12);
-    const hand = derivedHip(entry, 'handgun', [1, 2, 3]);
-    expect(hand).toEqual([HOLD_RULES.handgun.x, HOLD_RULES.handgun.sightY - 0.14, HOLD_RULES.handgun.gripZ]);
-    expect(derivedHip(undefined, 'long', [1, 2, 3])).toEqual([1, 2, 3]);
-    expect(derivedHip({...entry, markers: {Grip: [0, 0, 0]}}, 'long', [1, 2, 3])).toEqual([1, 2, 3]); // no Sight: fallback
-    // each gun's def follows its delivered entry (the cook lane's registry), else keeps its fallback
-    for (const id of VARIETY_GUN_IDS) {
-      const m = WEAPON_VARIETY_MODELS[id];
-      if (!m) continue;
-      const kind = id === 'longslide' ? 'handgun' : 'long';
-      const hip = WEAPONS[id].view.hip;
-      expect(hip[1], id).toBeCloseTo(HOLD_RULES[kind].sightY - (m.markers.Sight[1] - m.markers.Grip[1]), 12);
-      if (kind === 'long') expect(hip[2], id).toBeCloseTo(HOLD_RULES.long.buttZ - (m.bounds.max[2] - m.markers.Grip[2]), 12);
+  it('nearer and larger than the old rifle-rule hold (the Overwatch\'s span over 1.5 x); the Coach Gun\'s butt off screen at hip (it showed before)', () => {
+    // the old hold (Sight 0.19 m under the eye, butt 0.405 m out) from the same markers: the guns now sit at about half the distance
+    for (const id of VARIETY_GUN_IDS.filter(g => g !== 'longslide')) {
+      const m = WEAPON_VARIETY_MODELS[id]!, G = m.markers.Grip;
+      const oldZ = -0.405 - (m.bounds.max[2] - G[2]);
+      expect(WEAPONS[id].view.hip[2] / oldZ, id).toBeLessThan(0.55);
     }
+    // the Overwatch's scope (Sight) -> muzzle span on screen: over 1.5 x its old hold's (the user: "looks too small")
+    const ow = WEAPON_VARIETY_MODELS.overwatch!;
+    const span = (d: WeaponDef) => { const a = screen(held(d, ow.markers.Grip, ow.markers.Muzzle)), b = screen(held(d, ow.markers.Grip, ow.markers.Sight));
+      return Math.hypot((a[0] - b[0]) * ASPECT, a[1] - b[1]); };
+    const owOld = {...WEAPONS.overwatch, view: {...WEAPONS.overwatch.view, hip: [0.24, -0.19 - (ow.markers.Sight[1] - ow.markers.Grip[1]), -0.405 - (ow.bounds.max[2] - ow.markers.Grip[2])] as [number, number, number]}};
+    expect(span(WEAPONS.overwatch) / span(owOld)).toBeGreaterThan(1.5);
+    // the Coach Gun's butt plate (every corner of its rear face) is outside the view at hip; under the old hold it was on screen
+    const coach = WEAPON_VARIETY_MODELS.coach_gun!, {min, max} = coach.bounds;
+    const corners = [[min[0], min[1]], [min[0], max[1]], [max[0], min[1]], [max[0], max[1]]].map(([x, y]) => [x, y, max[2]]);
+    const out = (v: THREE.Vector3) => v.z > -0.01 || screen(v).some(c => Math.abs(c) > 1);
+    for (const c of corners) expect(out(held(WEAPONS.coach_gun, coach.markers.Grip, c))).toBe(true);
+    const oldHold = {...WEAPONS.coach_gun, view: {...WEAPONS.coach_gun.view, hip: [0.24, -0.261, -0.72] as [number, number, number]}};
+    expect(corners.some(c => !out(held(oldHold, coach.markers.Grip, c)))).toBe(true);
+  });
+
+  it('the visual kick at hip pushes back kickTravel x as far (the same on-screen kick as the old hold); ADS and the baseline guns unchanged', () => {
+    const push = (id: string, aiming: boolean) => {
+      const vm = new Viewmodel({} as never, {});
+      vm.addModel(id, gunModel({length: 0.9, magazine: true}));
+      vm.setItem(id);
+      for (let i = 0; i < 80; i++) vm.update(0.05, viewState({aiming}));
+      const pivot = vm.camera.children.find(c => c.type === 'Group')!;
+      const z0 = pivot.position.z;
+      vm.fire(WEAPONS[id]);
+      vm.update(0.016, viewState({aiming}));
+      const kick = (vm as unknown as {kick: number}).kick;
+      return {dz: pivot.position.z - z0, kick};
+    };
+    for (const id of ['overwatch', 'coach_gun', 'thresher', 'hornet', 'stub']) {
+      const h = push(id, false);
+      expect(h.dz / h.kick, id).toBeCloseTo(0.36 / 0.7, 6);
+      if (id !== 'overwatch' && id !== 'stub') { const a = push(id, true); expect(a.dz / a.kick, `${id} ADS`).toBeCloseTo(1, 6); } // (no optic: full push)
+    }
+    for (const id of ['rifle', 'shotgun', 'pistol', 'longslide']) { const h = push(id, false); expect(h.dz / h.kick, id).toBeCloseTo(1, 9); }
   });
 });
 
@@ -899,8 +961,9 @@ describe('casings and wiring', () => {
     expect(g).toMatch(/this\.bloom = shotBloom\(def, this\.bloom\);/);
     expect(g).toMatch(/this\.bloom = Math\.max\(0, this\.bloom - dt \* bloomDecay\(wdef\)\);/);
     expect(g).toMatch(/baseSpread\(def, this\.aiming, this\.weapon\.def === def \? this\.weapon\.settleSpread : 0\)/);
-    expect(g).toMatch(/this\.sfx\.shot\(def\.sound, def\.shotCycle\);/);
-    expect(g).toMatch(/this\.sfx\.reloadStart\(e\.def\.reloadCue \?\? e\.def\.sound, e\.empty, reloadCueTime\(e\.def, e\.empty\)\)/);
+    // (+ task studio-weapon-soundlab-audio-20261110-063407-01: each call also passes the held gun's id — its own Sound Lab cues, audio/gunVoices.ts)
+    expect(g).toMatch(/this\.sfx\.shot\(def\.sound, def\.shotCycle, def\.id\);/);
+    expect(g).toMatch(/this\.sfx\.reloadStart\(e\.def\.reloadCue \?\? e\.def\.sound, e\.empty, reloadCueTime\(e\.def, e\.empty\), e\.def\.id\)/);
     // the old inline recoil / bloom lines are gone (one source of truth)
     expect(g).not.toMatch(/this\.recoilPitch \+= def\.recoil\.pitch \* kickMul/);
     expect(g).not.toMatch(/Math\.min\(0\.03, this\.bloom \+ 0\.0035\)/);

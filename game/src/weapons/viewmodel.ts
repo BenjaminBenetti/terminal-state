@@ -216,9 +216,20 @@ export class Viewmodel {
 
   /** Lane GUNS: the item last asked for by setItem, even when its model was not registered yet (addModel shows it on arrival). */
   private wanted: string | null = null;
+  /**
+   * Task studio-weapon-runtime-fix-20261110-022206-01: called when setItem asks for a WEAPON that has no held model yet (a lazily loaded
+   * one that arrived mid-play: the Lockbox gear drop, a trade ...). The game requests the model (world/weaponVarietyModels.ts
+   * requestWeaponVarietyModel); addModel then shows it. Never called for an item that simply has no held model (empty hands, gear).
+   */
+  onMissing: ((itemId: string) => void) | null = null;
+  /** QA / tests: the item asked for last (its model may still be on its way). */
+  get wantedItem(): string | null {
+    return this.wanted;
+  }
 
   setItem(itemId: string | null): void {
     this.wanted = itemId;
+    if (itemId && !this.items.has(itemId) && WEAPONS[itemId]) this.onMissing?.(itemId);
     if (this.current === itemId) return;
     if (this.current) this.items.get(this.current)!.root.visible = false;
     this.current = itemId && this.items.has(itemId) ? itemId : null;
@@ -357,7 +368,10 @@ export class Viewmodel {
     pos.y += bobY + this.swayY * (1 - aimK * 0.7);
     // optic ADS: the eyepiece is at the cheek, so the visual kick is scaled down there (hip and iron sights unchanged)
     const optK = it.optic ? aimK : 0;
-    pos.z += this.kick * 1.0 * (1 - optK * OPTIC_ADS_KICK.pos);
+    // (weapon poses task) a gun held nearer the eye than its kick was tuned at pushes back proportionally less at hip (view.kickTravel),
+    // so the kick looks as big as before on screen; ADS unchanged
+    const travel = it.def?.view.kickTravel;
+    pos.z += this.kick * (travel === undefined ? 1.0 : hipK * travel + aimK) * (1 - optK * OPTIC_ADS_KICK.pos);
     const rot = new THREE.Euler(this.kick * 3.2 * (1 - optK * OPTIC_ADS_KICK.rot) + this.swayY * 2 + hipK * it.hipPitch, this.swayX * 2.5 + hipK * it.hipYaw, hipK * it.hipRoll);
     // stance: crouching settles the gun a little lower and canted in; jumps make it lag, landings dip it
     const crouch = ease(Math.max(0, Math.min(1, s.crouch ?? 0)));

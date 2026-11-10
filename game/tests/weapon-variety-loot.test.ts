@@ -1,11 +1,13 @@
 // Task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve new weapons as ITEMS and as diversified WEAPON FINDS
-// (items/weaponVarietyItems.ts, items/weaponVariety.ts, world/weaponVarietyModels.ts, game.ts buildSection's first spawn). HARD user
-// constraints: the same weapon find rate, the same ammo supply, saves / recorded loot exact.
-//  - census over real generated layouts of every level: the weapon find COUNT and the ammo units (boxes + loaded rounds) identical per
-//    caliber, every non-weapon pickup identical (a paired box differs only by the rounds that moved into it), family shares near their
-//    weights (written to /tmp/weapon-variety-loot/census.json);
-//  - the loaded-round rules (never minted, never lost; the coach gun holds at most 2; a melee identity's rounds all go to its box);
-//  - eligibility (a weapon without its def / delivered model, or that does not fit, stays the baseline find);
+// (items/weaponVarietyItems.ts, items/weaponVariety.ts, world/weaponVarietyModels.ts, game.ts buildSection's first spawn).
+// Task studio-weapon-poses-slot-hierarchy-20261110-064835-01 (USER's new design, superseding the 40 / ~42 / 18 split and the "same rounds
+// per caliber" rule for new rolls): a WEAPON slot is 50 % gun (9 equal) / 50 % melee (7 equal, the knife included), a gun store's find is
+// a GUN slot (9 equal), and the paired ammo MATCHES the selected gun at the same normalized budget (one standard bundle per find).
+//  - census over real generated layouts of every level: the weapon find COUNT identical, every other pickup identical, every find's
+//    normalized ammo budget 1.0 before and after (raw rounds per caliber recorded), gun-store finds never melee, every leaf reachable
+//    (written to /tmp/weapon-variety-loot/census.json);
+//  - the ammo rule (own caliber, magazine cap, the coach gun <= 2, a melee result's box keeps the whole source bundle);
+//  - eligibility and fit (the delivered catalogue; a display host's length; a long floor find laid across its box — never a fallback);
 //  - persistence through run/worldMemory (an old record keeps its items, a revisit is identical, a new area is diversified);
 //  - the common paths accept the twelve (inventory / melee slot, save validation incl. Lockbox / cargo / memory, uid cloning, trade
 //    value) and vendor stock keeps its baseline weapon rows.
@@ -34,8 +36,9 @@ import {VARIETY_GUN_IDS, VARIETY_MELEE_IDS, VARIETY_WEAPONS, VARIETY_WEAPON_IDS,
 import {VARIETY_WEAPON_ITEMS} from '../src/items/weaponVarietyItems';
 import {WEAPON_VARIETY_MODELS} from '../src/assets/weaponVarietyModels.generated';
 import {
-  BASELINE_GUNS, HOST_MAX_M, MELEE_SHARE, VARIETY_LENGTH_M, WEAPON_VARIETY_FAMILIES, identityAvailable, identityRows, pairedBox,
-  plannedVarietyIds, varietyIdsIn, weaponFindPlan, type WeaponFindOptions,
+  BASELINE_GUNS, BOX_CLEAR_M, GUN_CATEGORIES, GUN_LEAVES, HOST_MAX_M, MELEE_LEAVES, WEAPON_SLOT_SPLIT, caliberBundle, familyBundle, gunAmmo,
+  identityAvailable, isGunStoreArea, pairedBox, plannedVarietyIds, slotKindOf, slotRows, varietyIdsIn, weaponFindPlan, weaponLength,
+  type BaselineGun, type WeaponFindOptions,
 } from '../src/items/weaponVariety';
 import {WEAPON_FIND_AMMO} from '../src/gen/weaponFinds';
 import {ammoItemFor} from '../src/items/calibers';
@@ -75,16 +78,6 @@ function firstSpawn(layout: StationLayout, level: string, section: string, o: We
   });
 }
 
-/** Ammo units per ammo item: loose boxes + rounds loaded in guns. */
-function ammoUnits(stacks: readonly {itemId: string; count: number; mag?: number}[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const s of stacks) {
-    const d = ITEMS[s.itemId];
-    if (d.kind === 'ammo') out[s.itemId] = (out[s.itemId] ?? 0) + s.count;
-    else if (d.kind === 'weapon' && WEAPONS[s.itemId]?.caliber) { const a = ammoItemFor(WEAPONS[s.itemId].caliber!); out[a] = (out[a] ?? 0) + (s.mag ?? 0); }
-  }
-  return out;
-}
 
 // ---------------------------------------------------------------------------------------
 describe('weapon variety: the twelve ItemDefs', () => {
@@ -214,103 +207,149 @@ function synth(spots: readonly Spot[], seed = 4242): StationLayout {
   return {seed, pickups, areas: [{id: 0, type: 'storage', purpose: spots[0]?.area ?? 'storage'}]} as unknown as StationLayout;
 }
 
-describe('weapon variety: the realization rules (synthetic finds)', () => {
-  it('the identity rows: the baseline is the most common in each family; melee <= 25 %; each family sums to 1', () => {
-    expect(MELEE_SHARE).toBeLessThanOrEqual(0.25);
-    for (const f of BASELINE_GUNS) {
-      const g = WEAPON_VARIETY_FAMILIES[f];
-      expect(Object.keys(g)[0]).toBe(f);
-      for (const [id, w] of Object.entries(g)) if (id !== f) expect(g[f], id).toBeGreaterThan(w);
-      for (const place of ['storage', 'mall-guns', 'locker-room', 'workshop']) for (const level of LEVEL_IDS) {
-        const rows = identityRows(f, {level, place, host: false});
-        expect(rows.reduce((s, [, w]) => s + w, 0)).toBeCloseTo(1, 9);
-        expect(rows.filter(([id]) => VARIETY_MELEE_IDS.includes(id as never)).reduce((s, [, w]) => s + w, 0)).toBeCloseTo(MELEE_SHARE, 9);
-        const top = Math.max(...rows.map(([, w]) => w));
-        expect(rows[0][1]).toBe(top);
-        for (const [id] of rows) expect(id === f || (isVarietyWeapon(id) && (VARIETY_WEAPONS[id].family === f || VARIETY_WEAPONS[id].family === 'knife')), id).toBe(true);
+describe('weapon variety: the user\'s slot hierarchy and the matching ammo (synthetic finds)', () => {
+  const sum = (rows: [string, number][]) => rows.reduce((t, [, w]) => t + w, 0);
+  it('the slot rows: Weapon = 50 % gun (each of 9 guns 1/18) + 50 % melee (each of 7 melee weapons 1/14, the knife included); Gun = 9 x 1/9; categories 3 x 1/3; Melee 7 x 1/7', () => {
+    expect(WEAPON_SLOT_SPLIT).toEqual({gun: 0.5, melee: 0.5});
+    expect([...GUN_LEAVES]).toEqual(['pistol', 'hornet', 'longslide', 'rifle', 'stub', 'overwatch', 'shotgun', 'coach_gun', 'thresher']);
+    expect([...MELEE_LEAVES]).toEqual(['knife', 'fire_axe', 'machete', 'sledgehammer', 'crowbar', 'slugger', 'track_shovel']);
+    const weapon = slotRows('weapon');
+    expect(weapon.length).toBe(16);
+    for (const [id, w] of weapon) expect(w, id).toBeCloseTo(GUN_LEAVES.includes(id) ? 1 / 18 : 1 / 14, 12);
+    expect(sum(weapon)).toBeCloseTo(1, 12);
+    expect(slotRows('gun')).toEqual(GUN_LEAVES.map(id => [id, 1 / 9]));
+    expect(slotRows('melee')).toEqual(MELEE_LEAVES.map(id => [id, 1 / 7]));
+    for (const c of BASELINE_GUNS) {
+      expect(slotRows(c)).toEqual(GUN_CATEGORIES[c].map(id => [id, 1 / 3]));
+      for (const id of GUN_CATEGORIES[c]) { // a category = one caliber family (the categories are data, not a second item / render whitelist)
+        expect(WEAPONS[id].caliber, id).toBe(WEAPONS[c].caliber);
+        if (isVarietyWeapon(id)) expect(VARIETY_WEAPONS[id].family).toBe(c);
       }
     }
+    for (const id of [...GUN_LEAVES, ...MELEE_LEAVES]) expect([id, !!WEAPONS[id], !!ITEMS[id], !!WEAPONS[id].melee]).toEqual([id, true, true, MELEE_LEAVES.includes(id)]);
   });
 
-  it('shares over 30 000 synthetic finds come within 2 points of the weights; pure + deterministic per origin', () => {
-    const N = 10000;
-    const spots: Spot[] = BASELINE_GUNS.flatMap(family => Array.from({length: N}, () => ({family})));
-    const layout = synth(spots);
-    const plan = weaponFindPlan(layout, 'subway', 'subway:main', ALL);
-    expect(weaponFindPlan(layout, 'subway', 'subway:main', ALL)).toEqual(plan);
-    for (const family of BASELINE_GUNS) {
-      const fs = plan.finds.filter(f => f.family === family);
-      expect(fs.length).toBe(N);
-      const rows = identityRows(family, {level: 'subway', place: 'storage|storage', host: false});
-      for (const [id, w] of rows) {
-        const got = fs.filter(f => f.itemId === id).length / N;
-        expect(Math.abs(got - w), `${family} -> ${id}: ${got.toFixed(3)} vs ${w.toFixed(3)}`).toBeLessThan(0.02);
+  it('a GUN STORE is the semantic `guns` purpose / type tag (any level), every other ordinary find a Weapon slot', () => {
+    expect(['mall-guns', 'mall-guns-back', 'guns'].map(t => isGunStoreArea({purpose: t, type: 'shop'}))).toEqual([true, true, true]);
+    expect(['storage', 'office-armory', 'security-office', 'gunsmithy', 'mall-outdoors', 'locker-room'].map(t => isGunStoreArea({purpose: t, type: 'storage'}))).toEqual([false, false, false, false, false, false]);
+    expect([slotKindOf({purpose: 'mall-guns', type: 'shop'}), slotKindOf({purpose: 'workshop', type: 'storage'}), slotKindOf(undefined)]).toEqual(['gun', 'weapon', 'weapon']);
+  });
+
+  it('shares over 36 000 synthetic finds: Weapon slots ~50 / 50, every leaf near 1/18 or 1/14 whatever the source family; Gun slots 1/9 each and never melee; pure + deterministic per origin', () => {
+    const N = 6000;
+    const tol = (p: number, n: number) => 3.5 * Math.sqrt(p * (1 - p) / n) + 0.003;
+    for (const area of ['storage', 'mall-guns']) {
+      const layout = synth(BASELINE_GUNS.flatMap(family => Array.from({length: N}, () => ({family, area}))));
+      const plan = weaponFindPlan(layout, 'subway', 'subway:main', ALL);
+      expect(weaponFindPlan(layout, 'subway', 'subway:main', ALL)).toEqual(plan);
+      const kind = area === 'mall-guns' ? 'gun' : 'weapon';
+      for (const family of BASELINE_GUNS) {
+        const fs = plan.finds.filter(f => f.family === family);
+        expect(fs.length).toBe(N);
+        for (const f of fs) expect([f.slot, f.picked]).toEqual([kind, f.itemId]); // no fallback: the realized item IS the pick
+        for (const [id, p] of slotRows(kind)) {
+          const got = fs.filter(f => f.itemId === id).length / N;
+          expect(Math.abs(got - p), `${area} ${family} -> ${id}: ${got.toFixed(4)} vs ${p.toFixed(4)}`).toBeLessThan(tol(p, N));
+        }
+        if (kind === 'gun') expect(fs.some(f => MELEE_LEAVES.includes(f.itemId))).toBe(false);
+        else {
+          const gunShare = fs.filter(f => GUN_LEAVES.includes(f.itemId)).length / N;
+          expect(Math.abs(gunShare - 0.5)).toBeLessThan(tol(0.5, N));
+        }
       }
     }
-    // another section / seed decides independently (a hash of the origin, not a stream)
-    const other = weaponFindPlan(layout, 'subway', 'subway:other', ALL);
-    const same = plan.finds.filter((f, i) => f.itemId === other.finds[i].itemId).length / plan.finds.length;
-    expect(same).toBeLessThan(0.6);
+    // another section decides independently (a hash of the origin, not a stream)
+    const layout = synth(BASELINE_GUNS.flatMap(family => Array.from({length: 2000}, () => ({family}))));
+    const a = weaponFindPlan(layout, 'subway', 'subway:main', ALL), b = weaponFindPlan(layout, 'subway', 'subway:other', ALL);
+    expect(a.finds.filter((f, i) => f.itemId === b.finds[i].itemId).length / a.finds.length).toBeLessThan(0.15);
   });
 
-  it('loaded rounds are never minted or lost: min(original, capacity) loaded, the rest into the paired box; melee loads none; coach gun <= 2', () => {
+  it('the standard bundles and the per-gun ammo of one bundle: own caliber, within the magazine (coach gun 2), the rest boxed, the budget kept', () => {
+    expect(BASELINE_GUNS.map(f => familyBundle(f))).toEqual([
+      {caliber: '9x19mm', loaded: 15, box: 15, total: 30}, {caliber: '5.56x45mm', loaded: 30, box: 20, total: 50}, {caliber: '12ga', loaded: 6, box: 6, total: 12}]);
+    const table = Object.fromEntries(GUN_LEAVES.map(id => [id, gunAmmo(WEAPONS[id].caliber!, WEAPONS[id].magazine, 1)]));
+    expect(table).toEqual({
+      pistol: {loaded: 15, box: 15}, hornet: {loaded: 15, box: 15}, longslide: {loaded: 10, box: 20},
+      rifle: {loaded: 30, box: 20}, stub: {loaded: 30, box: 20}, overwatch: {loaded: 12, box: 38},
+      shotgun: {loaded: 6, box: 6}, coach_gun: {loaded: 2, box: 10}, thresher: {loaded: 6, box: 6},
+    });
+    for (const id of GUN_LEAVES) {
+      const w = WEAPONS[id], t = table[id], std = caliberBundle(w.caliber!);
+      expect((t.loaded + t.box) / std.total, id).toBe(1); // exactly one standard bundle of its own caliber
+      expect(t.loaded, id).toBeLessThanOrEqual(w.magazine);
+      expect(t.box, id).toBeGreaterThanOrEqual(1);
+      expect(t.box, id).toBeLessThanOrEqual(ITEMS[ammoItemFor(w.caliber!)].stackMax);
+    }
+    // a different budget scales with half-up rounding (never minted beyond round(u x standard))
+    expect(gunAmmo('12ga', 2, 1.5)).toEqual({loaded: 2, box: 16});
+    expect(gunAmmo('9x19mm', 30, 0.5)).toEqual({loaded: 8, box: 7});
+  });
+
+  it('every realized find carries exactly one standard bundle in its OWN caliber; a melee result boxes the whole source bundle in the source caliber; baseline-same picks change nothing', () => {
     const layout = synth(BASELINE_GUNS.flatMap(family => Array.from({length: 1500}, () => ({family}))));
     const plan = weaponFindPlan(layout, 'subway', 'subway:main', ALL);
     const seen = new Set<string>();
     for (const f of plan.finds) {
       seen.add(f.itemId);
-      const base = WEAPONS[f.family].magazine;
-      expect(f.original).toBe(base);
-      const w = WEAPONS[f.itemId];
-      expect(f.mag).toBe(w.melee ? 0 : Math.min(base, w.magazine));
-      expect(f.mag + f.boxAfter, f.itemId).toBe(f.original + f.boxBefore); // supply exact
-      expect(f.boxBefore).toBe(WEAPON_FIND_AMMO[f.family][1]);
+      const w = WEAPONS[f.itemId], src = familyBundle(f.family as BaselineGun);
+      expect([f.original, f.boxBefore, f.budget, f.boxItemBefore]).toEqual([src.loaded, src.box, 1, ammoItemFor(src.caliber)]);
+      if (w.melee) {
+        expect([f.mag, f.boxItemAfter, f.boxAfter]).toEqual([0, ammoItemFor(src.caliber), src.total]);
+      } else {
+        const own = gunAmmo(w.caliber!, w.magazine, 1);
+        expect([f.mag, f.boxAfter, f.boxItemAfter]).toEqual([own.loaded, own.box, ammoItemFor(w.caliber!)]);
+        expect((f.mag + f.boxAfter) / caliberBundle(w.caliber!).total).toBe(1);
+      }
       if (f.itemId === 'coach_gun') expect(f.mag).toBeLessThanOrEqual(2);
-      if (VARIETY_MELEE_IDS.includes(f.itemId as never)) expect(f.boxAfter).toBe(f.boxBefore + base);
-      // the plan's changes are exactly the realized stacks
-      const ch = plan.changes.get(f.index);
-      if (f.itemId === f.family) expect(ch).toBeUndefined(); else expect(ch).toEqual({itemId: f.itemId, count: 1, mag: f.mag});
-      const bc = plan.changes.get(f.box!);
-      if (f.boxAfter === f.boxBefore) expect(bc).toBeUndefined(); else expect(bc).toEqual({itemId: WEAPON_FIND_AMMO[f.family][0], count: f.boxAfter});
+      // the plan's changes are exactly the realized stacks; a pick equal to the source with its standard bundle changes nothing
+      const ch = plan.changes.get(f.index), bc = plan.changes.get(f.box!);
+      if (f.itemId === f.family && f.yaw === undefined) expect([ch, bc]).toEqual([undefined, undefined]);
+      else expect(ch).toEqual({itemId: f.itemId, count: 1, mag: f.mag, ...(f.yaw !== undefined ? {yaw: f.yaw} : {})});
+      if (f.boxItemAfter !== f.boxItemBefore || f.boxAfter !== f.boxBefore) expect(bc).toEqual({itemId: f.boxItemAfter, count: f.boxAfter});
     }
-    for (const id of [...VARIETY_WEAPON_IDS, ...BASELINE_GUNS]) expect(seen.has(id), id).toBe(true);
+    for (const id of [...GUN_LEAVES, ...MELEE_LEAVES]) expect(seen.has(id), id).toBe(true);
   });
 
-  it('eligibility: no def / model -> the baseline (no change at all); no paired box -> no melee / round-moving identity; a full box -> none either', () => {
-    const spots: Spot[] = BASELINE_GUNS.flatMap(family => Array.from({length: 400}, () => ({family})));
-    const none = weaponFindPlan(synth(spots), 'subway', 'subway:main', {available: () => false});
-    expect(none.changes.size).toBe(0);
-    expect(none.finds.every(f => f.itemId === f.family && f.mag === f.original)).toBe(true);
-    // this build's own registry decides by default (def + delivered model)
+  it('eligibility: the delivered catalogue decides (never the loaded cache); without a paired box only a source-caliber gun that loads every round (no melee, nothing lost)', () => {
     for (const id of VARIETY_WEAPON_IDS) expect(identityAvailable(id), id).toBe(!!WEAPONS[id] && !!WEAPON_VARIETY_MODELS[id]);
-    const dflt = weaponFindPlan(synth(spots), 'subway', 'subway:main');
-    for (const f of dflt.finds) if (f.itemId !== f.family) expect(identityAvailable(f.itemId)).toBe(true);
-    // without a paired box
+    const spots: Spot[] = BASELINE_GUNS.flatMap(family => Array.from({length: 600}, () => ({family})));
+    // a build that could realize none of the new weapons: the slot offers only what it can realize (the baseline guns + the knife)
+    const none = weaponFindPlan(synth(spots), 'subway', 'subway:main', {available: id => !isVarietyWeapon(id)});
+    expect(new Set(none.finds.map(f => f.itemId))).toEqual(new Set(['pistol', 'rifle', 'shotgun', 'knife']));
     const lone = weaponFindPlan(synth(spots.map(s => ({...s, boxGap: null}))), 'subway', 'subway:main', ALL);
     for (const f of lone.finds) {
       expect(f.box).toBeNull();
-      expect(f.mag, f.itemId).toBe(f.original); // nothing can move: only identities that hold all the rounds
-      expect(VARIETY_MELEE_IDS.includes(f.itemId as never)).toBe(false);
+      const w = WEAPONS[f.itemId];
+      expect([!!w.melee, w.caliber, f.mag], f.itemId).toEqual([false, WEAPONS[f.family].caliber, f.original]);
     }
-    // a box that cannot take the rounds (stackMax): those identities stay the baseline
-    const full = weaponFindPlan(synth(spots.map(s => ({...s, boxCount: ITEMS[WEAPON_FIND_AMMO[s.family][0]].stackMax}))), 'subway', 'subway:main', ALL);
-    for (const f of full.finds) expect(f.boxAfter).toBe(f.boxBefore);
+    expect(new Set(lone.finds.map(f => f.itemId))).toEqual(new Set(['pistol', 'hornet', 'rifle', 'stub', 'shotgun', 'thresher']));
   });
 
-  it('fit: a weapon longer than the baseline never lies into its paired box or past a display bench', () => {
-    const spots: Spot[] = BASELINE_GUNS.flatMap(family => [0.25, 0.67, 1.0, 2.0].flatMap(boxGap => Array.from({length: 300}, () => ({family, boxGap}))));
+  it('fit: a long floor find is laid ACROSS its box direction (same spot), never swapped back; a display host only offers what fits its top', () => {
+    const spots: Spot[] = BASELINE_GUNS.flatMap(family => [0.25, 0.6, 1.0, 2.0].flatMap(boxGap => Array.from({length: 300}, () => ({family, boxGap}))));
     const layout = synth(spots);
-    const plan = weaponFindPlan(layout, 'mall', 'mall:main', ALL);
-    let longer = 0;
+    const plan = weaponFindPlan(layout, 'subway', 'subway:main', ALL);
+    let across = 0;
     for (const f of plan.finds) {
-      const len = isVarietyWeapon(f.itemId) ? VARIETY_LENGTH_M[f.itemId] : WEAPONS[f.itemId].view.length;
-      const gap = Math.abs(layout.pickups[f.box!].x - layout.pickups[f.index].x);
-      if (len > WEAPONS[f.family].view.length) { longer++; expect(len / 2 + 0.08, `${f.itemId} at ${gap}`).toBeLessThanOrEqual(gap); }
+      const p = layout.pickups[f.index], bp = layout.pickups[f.box!];
+      const dx = bp.x - p.x, dz = bp.z - p.z, gap = Math.hypot(dx, dz);
+      const needs = weaponLength(f.itemId) / 2 + BOX_CLEAR_M > gap;
+      expect(f.yaw !== undefined, `${f.itemId} at ${gap}`).toBe(needs);
+      if (f.yaw !== undefined) {
+        across++;
+        // the lying weapon's long axis (its local X turned by yaw: (cos, -sin)) is perpendicular to the box direction
+        expect(Math.abs(Math.cos(f.yaw) * dx - Math.sin(f.yaw) * dz) / gap).toBeLessThan(1e-9);
+      }
     }
-    expect(longer).toBeGreaterThan(0);
-    const hosts = weaponFindPlan(synth(BASELINE_GUNS.flatMap(family => Array.from({length: 600}, () => ({family, yaw: 1.2, boxGap: 2})))), 'mall', 'mall:main', ALL);
-    for (const f of hosts.finds) if (isVarietyWeapon(f.itemId)) expect(VARIETY_LENGTH_M[f.itemId] <= Math.max(HOST_MAX_M, WEAPONS[f.family].view.length), f.itemId).toBe(true);
-    expect(hosts.finds.some(f => f.picked === 'track_shovel' && f.itemId === f.family)).toBe(true); // the 1.25 m shovel never lies on a bench
+    expect(across).toBeGreaterThan(0);
+    expect(plan.finds.filter(f => f.itemId === 'track_shovel').length).toBeGreaterThan(0); // the longest one is realized on the floor too
+    // hosted (a gun-shop bench / rack, own yaw): Gun slots offer all nine guns (each fits); a Weapon slot on a host would only lose the shovel
+    const shop = weaponFindPlan(synth(BASELINE_GUNS.flatMap(family => Array.from({length: 900}, () => ({family, yaw: 1.2, boxGap: 2, area: 'mall-guns'})))), 'mall', 'mall:main', ALL);
+    expect(new Set(shop.finds.map(f => f.itemId))).toEqual(new Set(GUN_LEAVES));
+    for (const f of shop.finds) expect([f.slot, f.yaw]).toEqual(['gun', undefined]);
+    const hostedWeapon = weaponFindPlan(synth(BASELINE_GUNS.flatMap(family => Array.from({length: 900}, () => ({family, yaw: 1.2, boxGap: 2})))), 'mall', 'mall:main', ALL);
+    for (const f of hostedWeapon.finds) expect(weaponLength(f.itemId), f.itemId).toBeLessThanOrEqual(HOST_MAX_M);
+    expect(new Set(hostedWeapon.finds.map(f => f.itemId)).size).toBe(15);
   });
 
   it('a curated reward (the Office roof find) and non-weapon pickups are never opportunities', () => {
@@ -436,53 +475,67 @@ describe('weapon variety: game.ts wiring (source order)', () => {
     expect(src).toContain('await this.prepareWeaponVariety(layout, key, run);');
     expect(src).toContain('void this.prepareWeaponVariety(null, key, this.run, true);');
     expect(src).toContain("this.warmRegistry.addPool('weapon-variety', () => weaponVarietyWarmRoots());");
-    expect(src).toContain('vm?.addModel?.(id, g)');
+    // (task studio-weapon-runtime-fix-20261110-022206-01: re-pinned — the hand-over to the held view / pickups / icons is no longer done inside
+    // the preload only (a weapon that arrived mid-play never got its model); it is the one delivery's, for a model that arrives by any path)
+    expect(src).toContain('this.weaponVariety = installWeaponVarietyDelivery({');
+    expect(readFileSync(fileURLToPath(new URL('../src/world/weaponVarietyDelivery.ts', import.meta.url)), 'utf8')).toContain('if (vm?.addModel(id, g)) held++;');
   });
 });
 
 // ---------------------------------------------------------------------------------------
-describe('weapon variety: census over real generated layouts of every level', () => {
-  it('weapon find count and ammo units identical per caliber; every other pickup identical; family shares near their weights', () => {
+describe('weapon variety: census over real generated layouts of every level (the user\'s slot hierarchy + matching ammo)', () => {
+  it('the weapon find count and every other pickup identical; one standard ammo bundle per find before and after; gun stores never melee; every leaf reachable', () => {
     const SEEDS: Record<LevelId, number[]> = {subway: [11, 222, 3333, 9120, 41, 77, 5, 61, 17, 29, 101, 202, 303, 404, 505, 606], office: [11, 222, 3333, 9120], mall: [5, 61, 11, 222, 3333, 9120, 41, 77, 3, 13, 17, 29, 47, 101, 202, 303, 404, 505, 606, 707, 808, 909, 1234, 4321], market: [7], bunker: [11, 222, 3333, 17, 5, 61, 41, 77, 101, 202, 303, 404], skyways: [3, 47, 11], reactor: [13, 29, 222]};
     const census: Record<string, unknown> = {};
-    const shares: Record<string, Record<string, number>> = {pistol: {}, rifle: {}, shotgun: {}};
-    const possible: Record<string, Record<string, number>> = {pistol: {}, rifle: {}, shotgun: {}};
-    const opp: Record<string, number> = {pistol: 0, rifle: 0, shotgun: 0};
-    let layouts = 0, totalFinds = 0;
+    /** The stacks of a first spawn WITHOUT any plan (the generator's own baseline finds). */
+    const plain = (layout: StationLayout, level: string) => layout.pickups.map((p, i) => ({itemId: pantryPickupItem(layout, i, level), count: p.count, mag: ITEMS[p.itemId]?.kind === 'weapon' ? WEAPONS[p.itemId].magazine : undefined, reward: p.reward}));
+    /** Normalized ammo budget of a bundle: rounds / the standard bundle of their caliber. */
+    const norm = (ammoId: string, rounds: number) => { const c = Object.values(WEAPONS).find(w => w.caliber && ammoItemFor(w.caliber) === ammoId)!.caliber!; return rounds / caliberBundle(c).total; };
+    const leaves: Record<string, Record<string, number>> = {weapon: {}, gun: {}};
+    let layouts = 0, totalFinds = 0, budgetBefore = 0, budgetAfter = 0, across = 0;
     const issues: string[] = [];
     for (const level of LEVEL_IDS) {
       const sid = sectionId({level, section: 'main'});
-      const row = {layouts: 0, finds: 0, before: {} as Record<string, number>, after: {} as Record<string, number>, ammoBefore: {} as Record<string, number>, ammoAfter: {} as Record<string, number>, movedRounds: 0, otherPickups: 0, defaultBuildChanges: 0};
+      const row = {layouts: 0, finds: 0, slots: {} as Record<string, number>, after: {} as Record<string, number>, roundsBefore: {} as Record<string, number>, roundsAfter: {} as Record<string, number>, otherPickups: 0};
       for (const start of ['pistol', 'rifle'] as const) for (const seed of start === 'pistol' ? SEEDS[level] : SEEDS[level].slice(0, 2)) {
         const layout = LEVELS[level].generate('main', {levelSeed: seed, startWeapon: start});
         layouts++; row.layouts++;
-        const before = firstSpawn(layout, level, sid, {available: () => false});
+        const before = plain(layout, level);
         const after = firstSpawn(layout, level, sid, ALL);
-        row.defaultBuildChanges += weaponFindPlan(layout, level, sid).changes.size;
         const plan = weaponFindPlan(layout, level, sid, ALL);
-        const weapons = (xs: typeof before) => xs.filter(s => ITEMS[s.itemId].kind === 'weapon').length;
+        expect(weaponFindPlan(layout, level, sid)).toEqual(plan); // this build's own catalogue = every identity (all twelve delivered)
+        const weapons = (xs: typeof before) => xs.filter(x => ITEMS[x.itemId].kind === 'weapon').length;
         if (weapons(before) !== weapons(after)) issues.push(`${level} ${seed}: weapon count ${weapons(before)} -> ${weapons(after)}`);
-        const ab = ammoUnits(before), aa = ammoUnits(after);
-        for (const k of new Set([...Object.keys(ab), ...Object.keys(aa)])) if ((ab[k] ?? 0) !== (aa[k] ?? 0)) issues.push(`${level} ${seed}: ${k} ${ab[k]} -> ${aa[k]}`);
-        for (const [k, v] of Object.entries(ab)) row.ammoBefore[k] = (row.ammoBefore[k] ?? 0) + v;
-        for (const [k, v] of Object.entries(aa)) row.ammoAfter[k] = (row.ammoAfter[k] ?? 0) + v;
-        const boxes = new Set(plan.finds.map(f => f.box));
+        const bundled = new Set(plan.finds.flatMap(f => [f.index, f.box]));
         before.forEach((b, i) => {
-          const a = after[i];
-          if (plan.finds.some(f => f.index === i)) return;
-          if (boxes.has(i)) { if (a.itemId !== b.itemId || a.count < b.count) issues.push(`${level} ${seed}: box ${i} ${b.itemId}x${b.count} -> ${a.itemId}x${a.count}`); row.movedRounds += a.count - b.count; return; }
+          if (bundled.has(i)) return;
           row.otherPickups++;
-          if (JSON.stringify(a) !== JSON.stringify(b)) issues.push(`${level} ${seed}: pickup ${i} changed`);
+          if (JSON.stringify(after[i]) !== JSON.stringify(b)) issues.push(`${level} ${seed}: pickup ${i} changed`);
         });
         for (const f of plan.finds) {
-          totalFinds++; row.finds++; opp[f.family]++;
+          totalFinds++; row.finds++;
           if (before[f.index].itemId !== f.family) issues.push(`${level} ${seed}: find ${f.index} was ${before[f.index].itemId}`);
-          shares[f.family][f.itemId] = (shares[f.family][f.itemId] ?? 0) + 1;
-          row.before[f.family] = (row.before[f.family] ?? 0) + 1;
-          row.after[f.itemId] = (row.after[f.itemId] ?? 0) + 1;
+          if (f.box === null) { issues.push(`${level} ${seed}: find ${f.index} has no paired box`); continue; }
           const area = layout.areas[layout.pickups[f.index].area];
-          for (const [id, w] of identityRows(f.family, {level, place: `${area?.purpose ?? ''}|${area?.type ?? ''}`, host: layout.pickups[f.index].yaw !== undefined})) possible[f.family][id] = (possible[f.family][id] ?? 0) + w;
-          if (pairedBox(layout.pickups, f.index) === null) issues.push(`${level} ${seed}: find ${f.index} has no paired box`);
+          if (f.slot !== (isGunStoreArea(area) ? 'gun' : 'weapon')) issues.push(`${level} ${seed}: find ${f.index} slot ${f.slot}`);
+          if (f.slot === 'gun' && MELEE_LEAVES.includes(f.itemId)) issues.push(`${level} ${seed}: a gun store realized ${f.itemId}`);
+          if (f.yaw !== undefined) across++;
+          row.slots[f.slot] = (row.slots[f.slot] ?? 0) + 1;
+          leaves[f.slot === 'gun' ? 'gun' : 'weapon'][f.itemId] = (leaves[f.slot === 'gun' ? 'gun' : 'weapon'][f.itemId] ?? 0) + 1;
+          row.after[f.itemId] = (row.after[f.itemId] ?? 0) + 1;
+          // the bundle (loaded + box) before / after, raw per ammo item and normalized
+          const srcAmmo = before[f.box].itemId;
+          const bBefore = norm(srcAmmo, (before[f.index].mag ?? 0) + before[f.box].count);
+          const w = WEAPONS[f.itemId];
+          const aAmmo = after[f.box].itemId, aRounds = (w.melee ? 0 : after[f.index].mag ?? 0) + after[f.box].count;
+          if (!w.melee && aAmmo !== ammoItemFor(w.caliber!)) issues.push(`${level} ${seed}: ${f.itemId} paired with ${aAmmo}`);
+          if (w.melee && aAmmo !== srcAmmo) issues.push(`${level} ${seed}: melee ${f.itemId} box ${aAmmo} (source ${srcAmmo})`);
+          const bAfter = norm(aAmmo, aRounds);
+          if (Math.abs(bBefore - 1) > 1e-9 || Math.abs(bAfter - 1) > 1e-9) issues.push(`${level} ${seed}: find ${f.index} budget ${bBefore} -> ${bAfter}`);
+          budgetBefore += bBefore; budgetAfter += bAfter;
+          row.roundsBefore[srcAmmo] = (row.roundsBefore[srcAmmo] ?? 0) + (before[f.index].mag ?? 0) + before[f.box].count;
+          row.roundsAfter[aAmmo] = (row.roundsAfter[aAmmo] ?? 0) + aRounds;
+          if (!w.melee && (after[f.index].mag ?? 0) > w.magazine) issues.push(`${level} ${seed}: ${f.itemId} loads ${after[f.index].mag}`);
         }
       }
       census[level] = row;
@@ -490,23 +543,24 @@ describe('weapon variety: census over real generated layouts of every level', ()
     expect(issues).toEqual([]);
     // every level with weapon finds has them; the market has none (vendor stock only)
     for (const level of LEVEL_IDS) expect(((census[level] as {finds: number}).finds) > 0, level).toBe(level !== 'market');
-    // family shares: baseline the most common; melee <= 25 % (+ sampling slack); each identity near its possible share
-    const melee = (f: string) => Object.entries(shares[f]).filter(([id]) => VARIETY_MELEE_IDS.includes(id as never)).reduce((s, [, n]) => s + n, 0) / opp[f];
-    const table: Record<string, unknown> = {};
-    for (const f of BASELINE_GUNS) {
-      const n = opp[f];
-      expect(n, f).toBeGreaterThan(8);
-      const fam = WEAPON_VARIETY_FAMILIES[f];
-      const sampled = Object.fromEntries(Object.keys(fam).map(id => [id, +((shares[f][id] ?? 0) / n).toFixed(3)]));
-      const poss = Object.fromEntries(Object.keys(fam).map(id => [id, +((possible[f][id] ?? 0) / n).toFixed(3)]));
-      table[f] = {opportunities: n, possible: {...poss, melee: MELEE_SHARE}, sampled: {...sampled, melee: +melee(f).toFixed(3)}, melee: Object.fromEntries(VARIETY_MELEE_IDS.map(id => [id, shares[f][id] ?? 0]))};
-      const tol = 2.6 * Math.sqrt(0.25 / n) + 0.02;
-      for (const id of Object.keys(fam)) expect(Math.abs(sampled[id] - poss[id]), `${f} -> ${id} (${n} finds)`).toBeLessThan(tol + (id === f ? 0.08 : 0)); // (the baseline also takes every pick that did not fit)
-      expect(melee(f), f).toBeLessThan(MELEE_SHARE + tol);
-    }
-    const pooled = (k: 'ammoBefore' | 'ammoAfter') => Object.values(census).reduce((s: Record<string, number>, r) => { for (const [a, v] of Object.entries((r as Record<string, Record<string, number>>)[k])) s[a] = (s[a] ?? 0) + v; return s; }, {} as Record<string, number>);
-    census.all = {layouts, finds: totalFinds, ammoBefore: pooled('ammoBefore'), ammoAfter: pooled('ammoAfter'), families: table};
-    expect(pooled('ammoAfter')).toEqual(pooled('ammoBefore'));
+    // gun stores (the Mall's gun shops) are Gun slots; the rest Weapon slots
+    expect(((census.mall as {slots: Record<string, number>}).slots.gun ?? 0)).toBeGreaterThan(10);
+    // declared eligibility over these layouts: every Weapon-slot leaf and every gun-store gun appears (not a promise for every seed)
+    for (const id of [...GUN_LEAVES, ...MELEE_LEAVES]) expect(leaves.weapon[id] ?? 0, `weapon slot ${id}`).toBeGreaterThan(0);
+    // gun stores (a few dozen finds here): all three categories appear and no leaf strays from 1/9 (the per-leaf uniformity itself is the
+    // synthetic test's 36 000 finds); the counts go to the census
+    const gunN = Object.values(leaves.gun).reduce((t, n) => t + n, 0);
+    for (const c of BASELINE_GUNS) expect(GUN_CATEGORIES[c].reduce((t, id) => t + (leaves.gun[id] ?? 0), 0), `gun store ${c}`).toBeGreaterThan(0);
+    for (const id of GUN_LEAVES) expect(Math.abs((leaves.gun[id] ?? 0) - gunN / 9), `gun store ${id}`).toBeLessThan(3.5 * Math.sqrt(gunN * (1 / 9) * (8 / 9)) + 1);
+    const weaponN = Object.values(leaves.weapon).reduce((t, n) => t + n, 0);
+    const meleeN = MELEE_LEAVES.reduce((t, id) => t + (leaves.weapon[id] ?? 0), 0);
+    expect(Math.abs(meleeN / weaponN - 0.5), `melee ${meleeN} of ${weaponN}`).toBeLessThan(3.5 * Math.sqrt(0.25 / weaponN));
+    // the normalized ammo budget: exactly one standard bundle per find, before and after
+    expect(budgetAfter).toBeCloseTo(budgetBefore, 9);
+    expect(budgetBefore).toBeCloseTo(totalFinds, 9);
+    const pooled = (k: 'roundsBefore' | 'roundsAfter') => Object.values(census).reduce((t: Record<string, number>, r) => { for (const [a, v] of Object.entries((r as Record<string, Record<string, number>>)[k])) t[a] = (t[a] ?? 0) + v; return t; }, {});
+    census.all = {layouts, finds: totalFinds, budgetBefore, budgetAfter, laidAcross: across, roundsBefore: pooled('roundsBefore'), roundsAfter: pooled('roundsAfter'),
+      weaponSlot: {finds: weaponN, melee: meleeN, leaves: leaves.weapon}, gunStore: leaves.gun};
     expect(totalFinds).toBeGreaterThan(80);
     mkdirSync(OUT, {recursive: true});
     writeFileSync(`${OUT}/census.json`, JSON.stringify(census, null, 1));
