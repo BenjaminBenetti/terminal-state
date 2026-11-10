@@ -708,9 +708,10 @@ export class TrainRide {
       const want = this.continuousYaw(this.placement.yaw), dy = want - this.base.yaw, maxTurn = RIDE.yawRate * dt;
       this.base.yaw = Math.abs(dy) <= maxTurn ? want : this.base.yaw + Math.sign(dy) * maxTurn;
       this.transit.setYaw(this.base.yaw);
-      // no new signal comes into sight from here on (the ones in sight are carried into the arrival's stub)
+      // no new signal comes into sight from here on (the ones in sight are carried into the arrival's stub: none of them can stand
+      // at the portal plane, which is `hi` ahead of the car at the hand-back)
       const [lo, hi] = RIDE.signalBand;
-      this.transit.hideSignalsOutside(lo, hi);
+      this.transit.hideSignalsOutside(lo, hi - TRANSIT.signal.planeClear);
       ready = this.transitV === target && this.base.yaw === want;
     }
     const w0 = this.transitV, gap = target - w0;
