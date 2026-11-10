@@ -8,13 +8,16 @@
 // table). Baseline references: pistol semi 0.16 s / 17 dmg / 15 rds; rifle auto 0.1 s / 24 / 30; pump shotgun 0.82 s / 15 x 9 / 6.
 // Calibers come from varietyIds.ts (the three existing ammo pools); sound cues are the existing 'pistol' | 'rifle' | 'shotgun' sets.
 //
-// HELD VIEW (weapons/viewmodel.ts pivots a model at its `Grip` marker): the hip pose is DERIVED from the cooked model's markers when its
-// registry entry exists (assets/weaponVarietyModels.generated.ts), with the rules the baseline user guns follow (measured from
-// derivatives/user-weapons-20261028.json): a long gun carries its `Sight` 0.19 m below the eye line and its butt (bounds max z) 0.405 m
-// in front of the eye; a handgun its `Sight` 0.083 m below and its grip 0.36 m out. The rifle / shotgun / pistol hip poses reproduce
-// to within 3 cm by these rules (tests/weapon-variety-guns.test.ts re-measures them from the GLBs). ADS always comes from the model's `Sight` marker (sightRelief / sightLift, or the Overwatch scope's
-// runtime lens on it); `aim` is only the fallback for a model without one. Until the model is delivered, the fallback numbers below
-// (the same rules on the approved masters' proportions at the real lengths) are used; the gun is simply not shown without a model.
+// HELD VIEW (weapons/viewmodel.ts pivots a model at its `Grip` marker). Task studio-weapon-poses-slot-hierarchy-20261110-064835-01, the
+// USER (2026-11-10): the Overwatch "looks too small", the Coach Gun shows "too much stock" and its "holding position not aligned"; "Use
+// starter pistol holding pose as best reference". So every new gun's hip pose is ANCHORED to the starter pistol's (weapons.ts `pistol`
+// view, unchanged): its firing hand (`Grip`) at the pistol hand's depth and its `Sight` in the pistol sight's on-screen direction, the
+// gun turned by its kind's hip rotation (HOLD_RULES; the baseline long guns' / the pistol's). Before, the long guns followed the rifle
+// and shotgun (Sight 0.19 m under the eye, butt 0.405 m out) and so sat about twice as far from the eye as the pistol. The pose is
+// computed from the cooked model's registry markers (assets/weaponVarietyModels.generated.ts): it moves only where the model is held —
+// no scale or mesh change. The baseline rifle / shotgun / pistol keep their poses. ADS always comes from the model's `Sight` marker
+// (sightRelief / sightLift, or the scope / red-dot runtime lens on it); `aim` is only the fallback for a model without one. Until the
+// model is delivered, the fallback numbers below (the anchored hips, rounded) are used; the gun is simply not shown without a model.
 import type {WeaponDef} from './weapons';
 import {firingRecoil} from './recoil';
 import {VARIETY_WEAPONS, type VarietyGunId} from './varietyIds';
@@ -25,33 +28,57 @@ export const VARIETY_GUN_LENGTHS: Readonly<Record<VarietyGunId, number>> = {
   hornet: 0.62, longslide: 0.27, stub: 0.7, overwatch: 1.05, coach_gun: 0.95, thresher: 1.0,
 };
 
-/** The held-pose rules (camera space, m) the baseline user guns follow (see the module header). */
+/**
+ * The starter pistol's hip pose (weapons.ts `pistol` view: Grip pivot at hip [0.16, -0.17, -0.36], yaw 0.08 / pitch 0.03 / roll -0.04)
+ * with its `Sight` marker in camera space (m), measured on pistol.glb (tests/weapon-variety-guns.test.ts re-measures both).
+ */
+export const PISTOL_HOLD = {grip: [0.16, -0.17, -0.36], sight: [0.1649, -0.0834, -0.3398]} as const;
+
+/**
+ * Each kind's hip rules: the Grip's depth (m ahead of the eye: the pistol hand's), the hip rotation (the baseline long guns' / the
+ * pistol's) and the visual kick's push at hip (view.kickTravel). The long guns' kicks were tuned with the Grip ~0.7 m out (the rifle's
+ * hold, which they followed): at 0.36 m the same push would look about twice as big, so it is scaled by the depth ratio — the kick looks
+ * as before (its muzzle rise is an angle and needs nothing); ADS keeps the full push. The longslide is at the pistol's own depth (1).
+ */
 export const HOLD_RULES = {
-  long: {x: 0.24, sightY: -0.19, buttZ: -0.405, yaw: 0.12, pitch: 0.03, roll: -0.05},
-  handgun: {x: 0.16, sightY: -0.083, gripZ: -0.36, yaw: 0.08, pitch: 0.03, roll: -0.04},
+  long: {gripZ: -0.36, yaw: 0.12, pitch: 0.03, roll: -0.05, kickTravel: 0.36 / 0.7},
+  handgun: {gripZ: -0.36, yaw: 0.08, pitch: 0.03, roll: -0.04, kickTravel: 1},
 } as const;
 
 type Vec3 = [number, number, number];
 
+/** `v` turned by the Viewmodel's hip rotation (three.js Euler order 'XYZ': R = Rx · Ry · Rz). */
+function rotXYZ([x, y, z]: Vec3, rx: number, ry: number, rz: number): Vec3 {
+  let c = Math.cos(rz), s = Math.sin(rz);
+  [x, y] = [x * c - y * s, x * s + y * c];
+  c = Math.cos(ry); s = Math.sin(ry);
+  [x, z] = [x * c + z * s, -x * s + z * c];
+  c = Math.cos(rx); s = Math.sin(rx);
+  [y, z] = [y * c - z * s, y * s + z * c];
+  return [x, y, z];
+}
+
 /**
- * The hip position of a gun's Grip pivot from its cooked model's markers (`m` = its registry entry), else `fallback`. Long guns:
- * Sight at HOLD_RULES.long.sightY and the butt at buttZ; handguns: Sight at handgun.sightY and the grip at gripZ.
+ * The hip position of a gun's Grip pivot from its cooked model's markers (`m` = its registry entry), else `fallback`: the Grip at its
+ * kind's depth (HOLD_RULES.gripZ, the pistol hand's) and the Sight, turned by the kind's hip rotation, on the line from the eye through
+ * the pistol's Sight (PISTOL_HOLD) — so every gun's sight shows where the pistol's does, at the pistol's hand distance.
  */
-export function derivedHip(m: WeaponVarietyModel | undefined, kind: 'long' | 'handgun', fallback: Vec3, x?: number): Vec3 {
+export function anchoredHip(m: WeaponVarietyModel | undefined, kind: 'long' | 'handgun', fallback: Vec3): Vec3 {
   const G = m?.markers.Grip, S = m?.markers.Sight;
   if (!m || !G || !S) return fallback;
-  if (kind === 'handgun') { const r = HOLD_RULES.handgun; return [x ?? r.x, r.sightY - (S[1] - G[1]), r.gripZ]; }
-  const r = HOLD_RULES.long;
-  return [x ?? r.x, r.sightY - (S[1] - G[1]), r.buttZ - (m.bounds.max[2] - G[2])];
+  const r = HOLD_RULES[kind], [ax, ay, az] = PISTOL_HOLD.sight;
+  const [sx, sy, sz] = rotXYZ([S[0] - G[0], S[1] - G[1], S[2] - G[2]], r.pitch, r.yaw, r.roll);
+  const depth = -(r.gripZ + sz); // the Sight's distance ahead of the eye
+  return [ax / -az * depth - sx, ay / -az * depth - sy, r.gripZ];
 }
 
 /** The view config of a variety gun (model key = its id; length from the registry when delivered). */
-function gunView(id: VarietyGunId, kind: 'long' | 'handgun', fallbackHip: Vec3, ads: {sightRelief: number; sightLift: number; aim: Vec3; optic?: WeaponDef['view']['optic']}, x?: number): WeaponDef['view'] {
+function gunView(id: VarietyGunId, kind: 'long' | 'handgun', fallbackHip: Vec3, ads: {sightRelief: number; sightLift: number; aim: Vec3; optic?: WeaponDef['view']['optic']}): WeaponDef['view'] {
   const r = HOLD_RULES[kind];
   return {
-    model: id, hip: derivedHip(WEAPON_VARIETY_MODELS[id], kind, fallbackHip, x), aim: ads.aim, hipYaw: r.yaw, hipPitch: r.pitch, hipRoll: r.roll,
+    model: id, hip: anchoredHip(WEAPON_VARIETY_MODELS[id], kind, fallbackHip), aim: ads.aim, hipYaw: r.yaw, hipPitch: r.pitch, hipRoll: r.roll,
     length: WEAPON_VARIETY_MODELS[id]?.length ?? VARIETY_GUN_LENGTHS[id], sightRelief: ads.sightRelief, sightLift: ads.sightLift,
-    ...(ads.optic ? {optic: ads.optic} : {}),
+    ...(ads.optic ? {optic: ads.optic} : {}), ...(r.kickTravel !== 1 ? {kickTravel: r.kickTravel} : {}),
   };
 }
 
@@ -71,7 +98,7 @@ export const VARIETY_GUN_DEFS: Readonly<Record<VarietyGunId, WeaponDef>> = {
     recoilClimb: {climb: 0.12, cap: 10, jitter: 0.006},
     bloom: {per: 0.0025, max: 0.03, decay: 0.09},
     equipTime: 0.3, aimFov: 60, moveMult: 1.0, noise: 26, sound: 'pistol',
-    view: gunView('hornet', 'long', [0.23, -0.31, -0.65], {sightRelief: 0.3, sightLift: 0.012, aim: [0, -0.13, -0.3]}, 0.23),
+    view: gunView('hornet', 'long', [0.171, -0.243, -0.36], {sightRelief: 0.3, sightLift: 0.012, aim: [0, -0.13, -0.3]}),
   },
   // G02 LONGSLIDE — 9mm long-slide target pistol (one-handed, no stock). SEMI at a deliberate 0.28 s with heavy single shots (27; head
   // x2.6 = a two-headshot zombie where the pistol needs three) from a 10-round magazine. A loose hip cone, but a very tight aimed cone that
@@ -85,7 +112,7 @@ export const VARIETY_GUN_DEFS: Readonly<Record<VarietyGunId, WeaponDef>> = {
     recoil: firingRecoil({pitch: 0.03, yaw: 0.004, kick: 0.05, recover: 13}),
     aimSettle: {time: 0.3, extra: 0.008, shot: 0.6},
     equipTime: 0.4, aimFov: 52, moveMult: 1.0, noise: 26, sound: 'pistol',
-    view: gunView('longslide', 'handgun', [0.16, -0.17, -0.36], {sightRelief: 0.33, sightLift: 0.012, aim: [0, -0.1, -0.33]}),
+    view: gunView('longslide', 'handgun', [0.159, -0.154, -0.36], {sightRelief: 0.33, sightLift: 0.012, aim: [0, -0.1, -0.33]}),
   },
   // G03 STUB — 5.56 bullpup carbine for corridors. AUTO a touch faster than the rifle (0.09 s) at slightly less per round (22: ~244 dps,
   // 8 % less per 5.56 round); a BETTER hip cone and quicker handling (equip 0.42 s, moveMult 0.98) but a WORSE aimed cone (0.008 vs 0.004)
@@ -103,7 +130,7 @@ export const VARIETY_GUN_DEFS: Readonly<Record<VarietyGunId, WeaponDef>> = {
     recoil: firingRecoil({pitch: 0.011, yaw: 0.009, kick: 0.032, recover: 9}),
     recoilClimb: {climb: 0.04, cap: 8, jitter: 0.008},
     equipTime: 0.42, aimFov: 56, moveMult: 0.98, noise: 30, sound: 'rifle',
-    view: gunView('stub', 'long', [0.24, -0.3, -0.7], {sightRelief: 0.26, sightLift: 0, aim: [0, -0.145, -0.26],
+    view: gunView('stub', 'long', [0.221, -0.278, -0.36], {sightRelief: 0.26, sightLift: 0, aim: [0, -0.145, -0.26],
       optic: {eyeRelief: 0.248, sightAperture: {radius: 0.012, depth: 0.015}}}),
   },
   // G04 OVERWATCH — 5.56 designated marksman rifle, SCOPED. SEMI at a slow 0.36 s with heavy rounds (46, head x3 = one head shot drops
@@ -120,7 +147,7 @@ export const VARIETY_GUN_DEFS: Readonly<Record<VarietyGunId, WeaponDef>> = {
     aimSettle: {time: 0.6, extra: 0.02, shot: 0.8},
     bloom: {per: 0.006, max: 0.03, decay: 0.05},
     equipTime: 0.75, aimFov: 30, aimLook: 0.65 * 30 / 52, moveMult: 0.9, noise: 34, sound: 'rifle', // aimLook: the scope turns like the rifle's aim on screen
-    view: gunView('overwatch', 'long', [0.24, -0.35, -0.7], {sightRelief: 0.09, sightLift: 0, aim: [0, -0.16, -0.09],
+    view: gunView('overwatch', 'long', [0.149, -0.223, -0.36], {sightRelief: 0.09, sightLift: 0, aim: [0, -0.16, -0.09],
       optic: {eyeRelief: 0.085, sightAperture: {radius: 0.016}}}),
   },
   // G05 COACH GUN — 12-gauge side-by-side, a break action. EXACTLY TWO shots (one per barrel) with a fast follow-up between them (0.2 s),
@@ -135,7 +162,7 @@ export const VARIETY_GUN_DEFS: Readonly<Record<VarietyGunId, WeaponDef>> = {
     reload: {kind: 'break', start: 0.55, eject: 0.4, each: 0.42, end: 0.35},
     recoil: firingRecoil({pitch: 0.075, yaw: 0.02, kick: 0.11, recover: 6}),
     equipTime: 0.55, aimFov: 62, moveMult: 0.93, noise: 40, sound: 'shotgun', shotCycle: 'none',
-    view: gunView('coach_gun', 'long', [0.235, -0.26, -0.735], {sightRelief: 0.3, sightLift: 0.02, aim: [0, -0.09, -0.3]}),
+    view: gunView('coach_gun', 'long', [0.272, -0.204, -0.36], {sightRelief: 0.3, sightLift: 0.02, aim: [0, -0.09, -0.3]}),
   },
   // G06 THRESHER — 12-gauge semi-auto with a box magazine. SEMI with a much faster repeat than the pump (0.45 s vs 0.82 s) from an
   // 8-round MAGAZINE (a magazine change 2.7 / 3.2 s, not shell by shell), but fewer pellets / less per pellet (8 x 14 = 112 vs 135: 17 %
@@ -149,6 +176,6 @@ export const VARIETY_GUN_DEFS: Readonly<Record<VarietyGunId, WeaponDef>> = {
     recoil: firingRecoil({pitch: 0.07, yaw: 0.025, kick: 0.1, recover: 5}),
     bloom: {per: 0.008, max: 0.024, decay: 0.04},
     equipTime: 0.8, aimFov: 62, moveMult: 0.88, noise: 40, sound: 'shotgun', shotCycle: 'none', reloadCue: 'rifle',
-    view: gunView('thresher', 'long', [0.24, -0.36, -0.7], {sightRelief: 0.28, sightLift: 0.015, aim: [0, -0.185, -0.28]}),
+    view: gunView('thresher', 'long', [0.192, -0.255, -0.36], {sightRelief: 0.28, sightLift: 0.015, aim: [0, -0.185, -0.28]}),
   },
 };

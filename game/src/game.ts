@@ -1254,7 +1254,7 @@ export class Game {
       const wf = weaponFinds?.get(i); // (lane LOOT-UI: a diversified weapon find / its paired box — same count of finds, same rounds in total)
       const st = wf ? this.inv.makeStack(wf.itemId, wf.count, wf.mag) : this.inv.makeStack(pantryPickupItem(this.layout, i, key.level), p.count); // (lane ITEMS: a first spawn's food variety; same count)
       if (p.filter !== undefined) st.filter = p.filter; // mask lane: a found gas mask's seeded, partly used filter (gen/maskLoot.ts)
-      this.layoutPickup.set(this.pickups.add(st, p.x, p.y, p.z, p.yaw ?? yaw), i);
+      this.layoutPickup.set(this.pickups.add(st, p.x, p.y, p.z, wf?.yaw ?? p.yaw ?? yaw), i); // (task studio-weapon-poses-slot-hierarchy-20261110-064835-01: a long find laid across its box's direction)
     }
     for (const rec of plan.restored) {
       const pk = restorePickup(this.pickups, this.inv, rec);

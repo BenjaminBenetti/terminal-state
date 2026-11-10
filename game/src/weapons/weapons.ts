@@ -100,7 +100,9 @@ export interface WeaponDef {
    * `aim` stays the fallback for a model without a Sight marker.
    */
   view: {model: string; // the held model key: the baseline 'rifle' | 'shotgun' | 'pistol' | 'knife', or a weapon-variety id (weapons/varietyIds.ts)
-    hip: [number, number, number]; aim: [number, number, number]; hipYaw: number; hipPitch: number; hipRoll: number; length: number; optic?: OpticSpec; sightRelief?: number; sightLift?: number};
+    hip: [number, number, number]; aim: [number, number, number]; hipYaw: number; hipPitch: number; hipRoll: number; length: number; optic?: OpticSpec; sightRelief?: number; sightLift?: number;
+    /** (weapon poses task) The visual kick's push toward the eye at HIP, x (default 1; ADS always 1): a gun held nearer than its kick was tuned at. */
+    kickTravel?: number};
   /**
    * Lane KNIFE (knife-melee-20261030): a MELEE weapon. Its swing replaces the gun's fire / magazine / reload cycle in
    * WeaponController (no ammo is ever counted or taken, R does nothing, no ADS). The shared fields keep their meaning:
