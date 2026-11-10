@@ -1026,6 +1026,17 @@ export class DynamicItems {
     }
   }
 
+  /**
+   * Task studio-weapon-runtime-fix-20261110-022206-01: a pickup's object got its real model in place (world/pickups.ts reskin: it was a
+   * stand-in while the weapon's lazily loaded model was on its way) — its size changed, so the cached bounds of that item and this
+   * pickup's resting entity are forgotten (rebuilt lazily from the real model on the next interaction). A body in motion keeps going.
+   */
+  pickupReskinned(p: PickupLike): void {
+    boundsCache.delete(p.stack.itemId);
+    const e = this.ents.get(p.obj);
+    if (e && !e.body && !e.pending) this.forget(p.obj, e);
+  }
+
   /** Taken by the player (or cleared): drop its body, forget it. */
   private forget(key: object, e: Ent): void {
     if (e.body) this.host.world?.removeBody(e.body);

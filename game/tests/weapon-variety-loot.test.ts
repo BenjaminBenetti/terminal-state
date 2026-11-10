@@ -436,7 +436,10 @@ describe('weapon variety: game.ts wiring (source order)', () => {
     expect(src).toContain('await this.prepareWeaponVariety(layout, key, run);');
     expect(src).toContain('void this.prepareWeaponVariety(null, key, this.run, true);');
     expect(src).toContain("this.warmRegistry.addPool('weapon-variety', () => weaponVarietyWarmRoots());");
-    expect(src).toContain('vm?.addModel?.(id, g)');
+    // (task studio-weapon-runtime-fix-20261110-022206-01: re-pinned — the hand-over to the held view / pickups / icons is no longer done inside
+    // the preload only (a weapon that arrived mid-play never got its model); it is the one delivery's, for a model that arrives by any path)
+    expect(src).toContain('this.weaponVariety = installWeaponVarietyDelivery({');
+    expect(readFileSync(fileURLToPath(new URL('../src/world/weaponVarietyDelivery.ts', import.meta.url)), 'utf8')).toContain('if (vm?.addModel(id, g)) held++;');
   });
 });
 

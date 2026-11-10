@@ -28,7 +28,7 @@ import {gearIconView, preloadGearModels} from '../gear/models'; // Iteration 16 
 import {PANTRY_DIMS, isPantryItem} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
 import {pantryGltf} from '../world/pantryModels';
 import {isVarietyWeapon} from '../weapons/varietyIds'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve new weapons
-import {weaponVarietyGltf} from '../world/weaponVarietyModels';
+import {requestWeaponVarietyModel, weaponVarietyGltf} from '../world/weaponVarietyModels';
 
 /** Icon bitmap size (CSS shows them at roughly half size, so they stay sharp at DPR 1.5–2). */
 export const ICON_W = 192;
@@ -56,6 +56,17 @@ export function itemIconsVersion(): number {
   return stats.version;
 }
 
+const changeListeners = new Set<(ids: readonly string[]) => void>();
+/**
+ * Task studio-weapon-runtime-fix-20261110-022206-01: called after icons were (re)rendered, with their item ids — an OPEN item view
+ * (inventory, Lockbox / trunk, bag, trade) redraws, so a weapon whose model arrived while the view shows it trades its glyph for the
+ * rendered preview at once. (The HUD keys its slots by itemIconsVersion.)
+ */
+export function onItemIconsChanged(fn: (ids: readonly string[]) => void): () => void {
+  changeListeners.add(fn);
+  return () => { changeListeners.delete(fn); };
+}
+
 export function itemIconStats(): IconStats & {ids: string[]} {
   return {...stats, failed: [...stats.failed], ids: [...urls.keys()]};
 }
@@ -64,6 +75,9 @@ export function itemIconStats(): IconStats & {ids: string[]} {
 export function itemIconHtml(itemId: string, cls = 'ico3d'): string {
   const u = urls.get(itemId);
   if (u) return `<img class="${cls}" src="${u}" alt="" draggable="false">`;
+  // (task studio-weapon-runtime-fix-20261110-022206-01) a new weapon shown before its lazily loaded model is resident — the Lockbox gear
+  // drop, a trade, a restored save: this surface asks for the model (idempotent); its rendered icon replaces the glyph when it arrives
+  if (isVarietyWeapon(itemId) && !weaponVarietyGltf(itemId)) requestWeaponVarietyModel(itemId);
   const def = ITEMS[itemId];
   return def ? ICONS[def.icon] : '';
 }
@@ -217,18 +231,14 @@ async function renderShots(renderer: WebGPURenderer, ids: string[], guns: Record
     ...(srgbTarget ? {samples: renderer.samples ? 4 : 0, colorSpace: THREE.SRGBColorSpace} : {samples: 0, colorSpace: THREE.NoColorSpace})});
   const topDown = (renderer.backend as {isWebGPUBackend?: boolean}).isWebGPUBackend === true; // WebGPU copies rows from the top
   let rt: RenderTarget | null = null;
-  const prevTarget = renderer.getRenderTarget();
-  const prevColor = renderer.getClearColor(new THREE.Color());
-  const prevAlpha = renderer.getClearAlpha();
+  const prevColor = new THREE.Color();
   const shots: Shot[] = [];
   try {
-    renderer.setClearColor(0x000000, 0);
     for (const id of ids) {
       const obj = modelFor(id, guns);
       if (!obj) { failed.push(id); continue; }
       rt?.dispose();
       rt = makeTarget();
-      renderer.setRenderTarget(rt);
       const wrap = new THREE.Group();
       wrap.add(obj);
       scene.add(wrap);
@@ -246,8 +256,21 @@ async function renderShots(renderer: WebGPURenderer, ids: string[], guns: Record
       cam.updateProjectionMatrix();
       cam.updateMatrixWorld(true);
       fitProjection(cam, wrap);
-      renderer.clear(true, true, true);
-      renderer.render(scene, cam);
+      // Task studio-weapon-runtime-fix-20261110-022206-01: each icon is drawn ATOMICALLY — target, clear colour, clear, render, and the
+      // renderer handed back exactly as found, all before the awaited readback. Icons are refreshed while frames are being drawn (a
+      // weapon model that arrived mid-play, a station prepared during a train ride): a frame between two icons used to find this pass's
+      // render target and transparent clear colour still set.
+      const prevTarget = renderer.getRenderTarget(), prevAlpha = renderer.getClearAlpha();
+      renderer.getClearColor(prevColor);
+      try {
+        renderer.setRenderTarget(rt);
+        renderer.setClearColor(0x000000, 0);
+        renderer.clear(true, true, true);
+        renderer.render(scene, cam);
+      } finally {
+        renderer.setRenderTarget(prevTarget);
+        renderer.setClearColor(prevColor, prevAlpha);
+      }
       // Iteration 13 (CORE): async readback (a fresh buffer per icon, so a failed one never reuses the previous pixels)
       let buf: Uint8Array | null = null;
       try {
@@ -264,8 +287,6 @@ async function renderShots(renderer: WebGPURenderer, ids: string[], guns: Record
       shots.push({id, pixels: encodeIconPixels(buf, ICON_W, ICON_H, srgbTarget, 1, {topDown, stride})});
     }
   } finally {
-    renderer.setRenderTarget(prevTarget);
-    renderer.setClearColor(prevColor, prevAlpha);
     rt?.dispose();
   }
   return shots;
@@ -322,6 +343,7 @@ export async function buildItemIcons(renderer: WebGPURenderer, guns: Record<stri
   stats.ms = Math.round(performance.now() - t0);
   stats.bytes = bytes;
   stats.version++;
+  for (const fn of [...changeListeners]) { try { fn(ids); } catch (err) { console.warn('item icons: a change listener failed', err); } }
   return itemIconStats();
 }
 

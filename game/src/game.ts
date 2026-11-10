@@ -21,7 +21,8 @@ import {PickupManager, makeSupplyMesh, refreshItemTemplates, registerItemModels,
 import {levelPreloadPantryIds, pantryHolderRealizer, pantryIdsIn, pantryPickupItem} from './items/pantryVariety'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): food variety
 import {ensurePantryModels} from './world/pantryModels'; // (lane ITEMS) the pantry items' lazy models
 import {plannedVarietyIds, varietyIdsIn, weaponFindPlan} from './items/weaponVariety'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): weapon find identities
-import {WEAPON_VARIETY_WARM_GROUP, ensureWeaponVarietyModels, weaponVarietyGltf, weaponVarietyWarmRoots} from './world/weaponVarietyModels'; // (lane LOOT-UI) the new weapons' lazy models
+import {WEAPON_VARIETY_WARM_GROUP, ensureWeaponVarietyModels, weaponVarietyWarmRoots} from './world/weaponVarietyModels'; // (lane LOOT-UI) the new weapons' lazy models
+import {installWeaponVarietyDelivery, type WeaponVarietyDelivery} from './world/weaponVarietyDelivery'; // task studio-weapon-runtime-fix-20261110-022206-01: one delivery of a lazily loaded weapon model to the held view / pickups / icons
 import {Survival, survivalTicks} from './player/survival';
 import {ContainerManager, type ContainerEvent, type ContainerTarget} from './world/containers';
 import {SoundGate} from './world/openables';
@@ -36,7 +37,7 @@ import {CALIBERS, ammoText} from './items/calibers'; // lane AMMO: caliber-based
 import {Viewmodel} from './weapons/viewmodel';
 import {devPistolRequested, makePistolDevPlaceholder, PISTOL_ART_READY, startWeaponFor, type StartWeapon} from './weapons/pistol';
 import {ConsumeView} from './weapons/consumeView';
-import {buildItemIcons, refreshItemIcons} from './ui/itemIcons';
+import {buildItemIcons, onItemIconsChanged, refreshItemIcons} from './ui/itemIcons';
 import {ZombieActor} from './ai/zombieActor';
 import {StrainerWetTrail} from './ai/strainerTrail';
 import {createEnemyActor, enemyCues, type EnemyActor} from './ai/creatureArchetypes'; // iteration 07 (Lane Q): generic enemy archetypes (rat/dog)
@@ -399,6 +400,8 @@ export class Game {
   trainPropCargo!: TrainPropCargo;
   /** Task studio-survivor-market-20261108-005807-01 (lane TRADE): market trade (market/trade/tradeSystem.ts); since the rework Rail Ties are a physical item. */
   trade!: TradeSystem;
+  /** Task studio-weapon-runtime-fix-20261110-022206-01: the delivery of the new weapons' lazily loaded models (world/weaponVarietyDelivery.ts). */
+  weaponVariety!: WeaponVarietyDelivery;
   /** Task studio-survivor-market-20261108-005807-01 (lane HUMANS): the market's residents + traders (market/marketPeople.ts). */
   marketPeople!: MarketPeople;
   /** Task studio-market-rework-20261108-074144-01 (lane COMBAT): attackable market people, the settlement's hostility, their gunfire (market/combat/marketCombat.ts). */
@@ -626,6 +629,22 @@ export class Game {
     // so a dropped / found one compiles nothing in play (their held copies are the viewmodel pass's)
     this.scene.add(WEAPON_VARIETY_WARM_GROUP);
     this.warmRegistry.addPool('weapon-variety', () => weaponVarietyWarmRoots());
+    // task studio-weapon-runtime-fix-20261110-022206-01: ONE delivery of a new weapon's lazily loaded model, whenever and however it
+    // arrives (the section preload, a surface's demand — the Lockbox gear drop, a trade, a restored save —, a retry): the held view,
+    // the pickups showing a stand-in, the 3D icons (never while a warm-up owns the renderer); a failed load is said and retried
+    this.weaponVariety = installWeaponVarietyDelivery({
+      viewmodel: () => this.viewmodel,
+      pickups: () => this.pickups,
+      syncHeld: () => { if (this.world) this.syncHeld(); },
+      refreshIcons: ids => refreshItemIcons(this.renderer, ids),
+      rendererFree: () => this.warmRun,
+      rendererReady: () => !!this.gpu && this.renderer.initialized === true && !!this.viewmodel,
+      say: (text, bad) => this.hud.toast(text, bad),
+      itemName: id => itemDef(id).short,
+    });
+    // (the same task) the open inventory trades a glyph for the rendered preview as soon as it exists (the other item views and the
+    // HUD subscribe / key on the icon cache themselves)
+    onItemIconsChanged(() => { if (this.state === 'inventory' && !this.invUI.dragging) this.invUI.render(); });
     this.input = new Input(canvas, qa);
     this.input.onLockChange = locked => {
       if (!locked && this.state === 'playing' && !this.qa) this.setState('paused');
@@ -846,6 +865,10 @@ export class Game {
     await buildItemIcons(this.renderer, guns); // a pistol without a model keeps its SVG icon (ui/icons.ts)
     this.pickups = new PickupManager(guns);
     this.scene.add(this.pickups.group);
+    // task studio-weapon-runtime-fix-20261110-022206-01: a stand-in pickup that got its real model has a new size (physics bounds);
+    // the held view asks for a missing weapon model, and gets every model that is already resident
+    this.pickups.onReskin = p => this.physics?.dynamicItems.pickupReskinned(p);
+    this.weaponVariety.attach();
     this.resize();
   }
 
@@ -899,21 +922,20 @@ export class Game {
   /**
    * Task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): fetch (behind the loading screen) the new weapons' models this
    * section can show — what its first spawn realizes (items/weaponVariety.ts), what its memory holds and everything the player carries
-   * (inventory, Lockbox, train cargo) — and hand fresh ones to the held view (Viewmodel.addModel, lane GUNS; guarded until it exists) and
-   * the icons. World pickups find them through world/weaponVarietyModels.ts. `late` (after a build: a save's carried items, installed
-   * after the prepare): no first-spawn plan (the build has realized it), counted as a late fetch.
+   * (inventory, Lockbox, train cargo). `late` (after a build: a save's carried items, installed after the prepare): no first-spawn plan
+   * (the build has realized it), counted as a late fetch.
+   * Task studio-weapon-runtime-fix-20261110-022206-01: this is the PRELOAD only (so a station's finds and the carried weapons are there
+   * before play). Handing a model to the held view, the pickups and the icons is the delivery's (world/weaponVarietyDelivery.ts), for
+   * whatever arrives by any path — and a weapon that turns up mid-play is asked for by the surface that shows it. The previews are
+   * awaited here, so they are rendered before the station is revealed.
    */
   private async prepareWeaponVariety(layout: StationLayout | null, key: SectionKey | null, run: RunState = this.run, late = false): Promise<void> {
     try {
       const mem = key ? run.peekMemory(key) ?? null : null;
       const ids = varietyIdsIn([this.inv.toJSON(), this.playerTrain.lockbox.toJSON(), this.playerTrain.cargo.toJSON(), mem]);
       if (layout && key && !late && !mem?.pickups) for (const id of plannedVarietyIds(layout, key.level, mem?.id ?? sectionId(key))) ids.add(id);
-      const fresh = await ensureWeaponVarietyModels(ids, {late});
-      if (!fresh.length) return;
-      const vm = this.viewmodel as unknown as {addModel?: (id: string, g: Pick<import('three/addons/loaders/GLTFLoader.js').GLTF, 'scene'>) => void} | undefined;
-      for (const id of fresh) { const g = weaponVarietyGltf(id); if (g) vm?.addModel?.(id, g); }
-      if (this.world) this.syncHeld();
-      if (this.gpuInit) await refreshItemIcons(this.renderer, fresh);
+      await ensureWeaponVarietyModels(ids, {late});
+      if (!late) await this.weaponVariety.settled();
     } catch (err) { console.warn('weapon variety: model preparation failed', err); }
   }
 

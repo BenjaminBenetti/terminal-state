@@ -17,7 +17,7 @@
 //    item's tooltip says exactly what a Ctrl+click does ("Ctrl+click: sell 3 × Water for 2 ties"). It fires on the button's press (one
 //    transaction per click: the press is consumed, its click / context menu ignored — no world fire, no drag, nothing repeats), and the
 //    ordinary pick -> quantity -> Confirm flow is unchanged.
-import {itemIconHtml} from '../../ui/itemIcons';
+import {itemIconHtml, onItemIconsChanged} from '../../ui/itemIcons';
 import {hideTooltip, refreshTooltip, tipAttrs} from '../../ui/tooltip'; // task studio-market-rework-20261108-074144-01: the game's own tooltip (Alpha's ui/tooltip.ts)
 import {itemTip} from '../../ui/itemTip';
 import {ICONS} from '../../ui/icons';
@@ -109,7 +109,11 @@ export class TradeView {
   /** Last action (QA / tests). */
   last: {kind: string; result: string} | null = null;
 
-  constructor(private readonly host: TradeViewHost) {}
+  constructor(private readonly host: TradeViewHost) {
+    // (task studio-weapon-runtime-fix-20261110-022206-01) item icons were (re)rendered — a weapon model that arrived while this view shows
+    // the weapon: redraw, so its glyph becomes the rendered preview at once
+    onItemIconsChanged(() => { if (this.visible) this.render(); });
+  }
 
   get visible(): boolean {
     return !!this.root && !this.root.classList.contains('hidden');
