@@ -81,8 +81,8 @@ describe('ride gates: the static headwall + gate in the closed bed ends of the c
         const front = q.faceX - q.out * RIDE_GATE.proud, A = meshArea(v.wall);
         const faceArea = (q.face.z1 - q.face.z0) * (q.face.y1 - q.face.y0), openArea = [q.opening, ...q.dummies].reduce((s, o) => s + (o.z1 - o.z0) * (o.y1 - o.y0), 0);
         expect(A.area, `${id} headwall area`).toBeCloseTo(faceArea - openArea, 3);
-        expect(A.x0).toBeCloseTo(front, 6);
-        expect(A.x1).toBeCloseTo(front, 6);
+        expect(A.x0).toBeCloseTo(front, 4); // (float32 positions at x ~170 m)
+        expect(A.x1).toBeCloseTo(front, 4);
         expect(A.nx).toBeCloseTo(-q.out, 6);
         // the end wall's own finish where there is one (a hall directly behind the face has none: the tunnel lining then)
         const mat = (v.wall.material as THREE.Material).name;
@@ -103,8 +103,16 @@ describe('ride gates: the static headwall + gate in the closed bed ends of the c
         v.leaves.getMatrixAt(0, m); expect(near(m, leafMatrix(q, q.opening, -1, 1))).toBe(true);
         v.hazard.getMatrixAt(1, m); expect(near(m, leafMatrix(q, q.opening, 1, 1))).toBe(true);
         expect(Array.from(v.leaves.instanceMatrix.array.slice(32))).toEqual(Array.from(dummy));
-        // the instanced bounds hold the whole swing (the open leaves are not frustum-culled away)
-        for (const s of [-1, 1] as const) for (const e of [0, 0.5, 1]) expect(v.leaves.boundingBox!.containsBox(leafBounds(q, q.opening, s, e))).toBe(true);
+        // the instanced bounds hold the whole swing (the open leaves are not culled away), also once the level culler has registered
+        // them (its register() recomputes every InstancedMesh's box) and when anyone recomputes them
+        for (const im of [v.leaves, v.hazard]) {
+          im.computeBoundingBox(); im.computeBoundingSphere();
+          for (const s of [-1, 1] as const) for (let k = 0; k <= 20; k++) {
+            const b = leafBounds(q, q.opening, s, k / 20);
+            expect(im.boundingBox!.containsBox(b), `${id} swing ${k / 20}`).toBe(true);
+            expect(im.boundingSphere!.containsPoint(b.min) && im.boundingSphere!.containsPoint(b.max)).toBe(true);
+          }
+        }
         v.setOpen(0);
       }
     }, 240_000);

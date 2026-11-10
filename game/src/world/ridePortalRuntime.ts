@@ -59,6 +59,11 @@ export const PORTAL_RT = {
   actor: [0.6, 2.1] as const, item: 0.4,
   /** A static root's whole object further than this from both cuts' boxes when the station is bound is never looked at again. */
   reach: 3,
+  /**
+   * A whole object (rule 3) larger than this (bounding radius, m) is hidden only when it lies entirely inside a cut's box: one that
+   * reaches far outside it (an exterior's city block, a level-wide mesh) would vanish where it is seen from the station (stats.uncut).
+   */
+  wholeMax: 6,
 } as const;
 
 export interface PortalState {
@@ -131,7 +136,7 @@ const ease = (t: number): number => t * t * (3 - 2 * t);
 
 export class RidePortalRuntime {
   /** Node figures of the last bind / engage (ms) and what the bind found (QA / tests / the report). */
-  readonly stats = {prepareMs: 0, engageMs: 0, scanned: 0, splits: 0, splitTriangles: 0, instanced: 0, late: 0};
+  readonly stats = {prepareMs: 0, engageMs: 0, scanned: 0, splits: 0, splitTriangles: 0, instanced: 0, late: 0, uncut: 0};
   private slots: Slot[] = [];
   private bound: RidePortalHost['world'] | null = null;
   private splits: Split[] = [];
@@ -144,6 +149,8 @@ export class RidePortalRuntime {
   private readonly objHidden = new Map<THREE.Object3D, {slot: 0 | 1; kind: ObjKind}>();
   private readonly explicit = new Set<THREE.Object3D>();
   private carOn = false;
+  /** Large whole objects reaching into a cut that were left drawn (PORTAL_RT.wholeMax; counted once each in stats.uncut). */
+  private uncut = new WeakSet<THREE.Object3D>();
   private readonly car = {hl: 0, hw: 0, top: 0};
   private readonly proxy = (eye: THREE.Vector3): void => { for (const s of this.slots) if (s.engaged && portalEye(s.portal, eye)) return; };
 
@@ -211,7 +218,8 @@ export class RidePortalRuntime {
     this.wholes = [];
     this.seen = new WeakSet();
     this.users = new Map();
-    Object.assign(this.stats, {scanned: 0, splits: 0, splitTriangles: 0, instanced: 0, late: 0});
+    Object.assign(this.stats, {scanned: 0, splits: 0, splitTriangles: 0, instanced: 0, late: 0, uncut: 0});
+    this.uncut = new WeakSet();
   }
 
   private staticRoots(): THREE.Object3D[] {
@@ -572,7 +580,15 @@ export class RidePortalRuntime {
       r = bs.radius * Math.sqrt(Math.max(e[0] * e[0] + e[1] * e[1] + e[2] * e[2], e[4] * e[4] + e[5] * e[5] + e[6] * e[6], e[8] * e[8] + e[9] * e[9] + e[10] * e[10]));
     }
     if (this.inCar(cx, cy, cz)) return null;
-    return this.engagedSlot(cx - r, cy - r, cz - r, cx + r, cy + r, cz + r);
+    const s = this.engagedSlot(cx - r, cy - r, cz - r, cx + r, cy + r, cz + r);
+    if (s && r > PORTAL_RT.wholeMax) {
+      const b = s.cut.box;
+      if (cx - r < b.x0 || cx + r > b.x1 || cy - r < b.y0 || cy + r > b.y1 || cz - r < b.z0 || cz + r > b.z1) {
+        if (!this.uncut.has(o)) { this.uncut.add(o); this.stats.uncut++; }
+        return null;
+      }
+    }
+    return s;
   }
 
   /**

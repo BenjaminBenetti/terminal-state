@@ -220,6 +220,17 @@ function mesh(g: THREE.BufferGeometry, mat: THREE.Material, name: string, level:
 
 const tris = (g: THREE.BufferGeometry): number => (g.index ? g.index.count : g.attributes.position.count) / 3;
 
+/**
+ * The leaves' InstancedMesh: its bounds are always the whole swing (shut .. folded open), whoever asks to recompute them — the level
+ * culler's register() recomputes every InstancedMesh's box from its current (shut) matrices, which would cull the open leaves lying
+ * 1.8 m inside the tunnel while they are in view. An ordinary InstancedMesh otherwise (same program, same draws).
+ */
+class GateLeaves extends THREE.InstancedMesh {
+  constructor(g: THREE.BufferGeometry, m: THREE.Material, n: number, readonly swing: THREE.Box3) { super(g, m, n); }
+  override computeBoundingBox(): void { (this.boundingBox ??= new THREE.Box3()).copy(this.swing); }
+  override computeBoundingSphere(): void { this.boundingSphere = this.swing.getBoundingSphere(this.boundingSphere ?? new THREE.Sphere()); }
+}
+
 /** Build the static gates of `layout` into `group` (null: the level has none — no car, or a station tunnel continues both ends). */
 export function buildRideGates(group: THREE.Group, layout: StationLayout, mats: WorldMaterials): RideGatesBuilt | null {
   const p = playerTrainPlacement(layout);
@@ -254,19 +265,21 @@ export function buildRideGates(group: THREE.Group, layout: StationLayout, mats: 
     const frame = mesh(fa.geometry()!, steel, `ride-gate-frame-${key}`, p.level);
     // 3. / 4. the leaves and their hazard bands: two instances per opening
     const n = openings.length * 2, mx = new THREE.Matrix4();
+    // bounds over the whole swing (the open leaves lie 1.8 m inside the tunnel: the shut pose's would cull them in view); the moving
+    // pair sampled finely (a leaf's corners sweep arcs: their box over the swing is not that of a few poses)
+    const swing = new THREE.Box3();
+    openings.forEach((o, i) => { for (const s of [-1, 1] as const) for (let k = 0; k <= (i ? 0 : 16); k++) swing.union(leafBounds(q, o, s, k / 16)); });
+    swing.expandByScalar(0.02);
     const inst = (g: THREE.BufferGeometry, mat: THREE.Material, name: string): THREE.InstancedMesh => {
-      const im = new THREE.InstancedMesh(g, mat, n);
+      const im = new GateLeaves(g, mat, n, swing);
       im.name = name;
       im.userData.level = p.level;
       im.userData.ridePortal = true;
       im.matrixAutoUpdate = false;
       openings.forEach((o, i) => { im.setMatrixAt(2 * i, leafMatrix(q, o, -1, 0, mx)); im.setMatrixAt(2 * i + 1, leafMatrix(q, o, 1, 0, mx)); });
       im.instanceMatrix.needsUpdate = true;
-      // bounds over the whole swing (the open leaves lie 1.8 m inside the tunnel: the shut pose's sphere would cull them in view)
-      const bb = new THREE.Box3();
-      openings.forEach((o, i) => { for (const s of [-1, 1] as const) for (const e of i ? [0] : [0, 0.5, 1]) bb.union(leafBounds(q, o, s, e)); });
-      im.boundingBox = bb;
-      im.boundingSphere = bb.getBoundingSphere(new THREE.Sphere());
+      im.computeBoundingBox();
+      im.computeBoundingSphere();
       return im;
     };
     const leaves = inst(leafGeometry('steel'), steel, `ride-gate-leaves-${key}`);
