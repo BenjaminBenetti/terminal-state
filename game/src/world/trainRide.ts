@@ -322,6 +322,9 @@ export class TrainRide {
   private readonly eyeAt: P3 = {x: 0, y: 0, z: 0};
   private readonly qTilt = new THREE.Quaternion();
   private readonly qYaw = new THREE.Quaternion();
+  /** The camera tiltCamera last tilted and the orientation it left it in (a second call on the same pose is a no-op). */
+  private tiltedCam: THREE.Camera | null = null;
+  private readonly qTilted = new THREE.Quaternion();
   private readonly eTilt = new THREE.Euler(0, 0, 0, 'YZX');
   private readonly yAxis = new THREE.Vector3(0, 1, 0);
   private readonly link: TrainRideLink;
@@ -582,11 +585,16 @@ export class TrainRide {
     if (!this.riding) return;
     const c = this.pose;
     if (c.roll === 0 && c.pitch === 0) return;
+    // (train continuity) once per camera pose: Game's transit gap calls this again right after updateCamera did — the jostle's tilt
+    // was doubled there and halved the moment the next station was built (a roll step in the view mid-transit)
+    if (camera === this.tiltedCam && camera.quaternion.equals(this.qTilted)) return;
     this.eTilt.set(c.roll, c.yaw, c.pitch, 'YZX');
     this.qTilt.setFromEuler(this.eTilt);
     this.qYaw.setFromAxisAngle(this.yAxis, -c.yaw);
     this.qTilt.multiply(this.qYaw);
     camera.quaternion.premultiply(this.qTilt);
+    this.tiltedCam = camera;
+    this.qTilted.copy(camera.quaternion);
   }
 
   /** A blocked trigger pull (fire / melee / flare): the note, rate-limited. */
