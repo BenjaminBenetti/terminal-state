@@ -182,6 +182,7 @@ import {installMarketWares, type MarketWares} from './market/wares/wares'; // ta
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
 import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
+import {installRidePortals, type RidePortalRuntime} from './world/ridePortalRuntime'; // task studio-perf-ao-train-continuity-20261110-022206-01: the ride portals (gates / breaches) the moving train uses
 import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // task train-loose-cargo: every loose item / bag aboard travels with the train
 import {carriedModelKeys, installTrainPropCargo, type TrainPropCargo} from './world/trainPropCargo'; // task train-all-cargo: every movable prop aboard travels too
 import type {PropPlacement} from './gen/props';
@@ -435,6 +436,8 @@ export class Game {
    * enterTransit() for the primary's travel orchestration; while it rides, update() steps the player through it (car-local frame).
    */
   readonly trainRide: TrainRide;
+  /** Task studio-perf-ao-train-continuity-20261110-022206-01: the ride portals of the parked car's track (world/ridePortalRuntime.ts). */
+  readonly ridePortals: RidePortalRuntime;
   /**
    * Task gasmask-breach-20261030 (lane GAS): a bullet / pellet's world hit, offered before the damage system — true = handled (no
    * crater / prop damage), e.g. an office window pane took it. `shot` = the trigger pull (every pellet of one pull shares it);
@@ -751,6 +754,9 @@ export class Game {
     // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
     // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
     // (the jostle intensity = the player's Train sway setting 0..1; 0 = off)
+    // task studio-perf-ao-train-continuity-20261110-022206-01: the ride portals of the parked car's track (before the ride, which drives them)
+    this.ridePortals = installRidePortals(this);
+    hookName('ridePortals');
     this.trainRide = installTrainRide(this, this.trainRuntime, {jostle: () => this.settings.trainSway});
     this.trainRuntime.onConsoleInteract = () => { this.openTravelMap(); }; // (campaign, primary) the driving console opens the paper map
     // task train-loose-cargo: the train's loose items / bags travel with it (after the gear, train, ride and fuel carts: its section teardown

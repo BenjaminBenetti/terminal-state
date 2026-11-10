@@ -79,6 +79,7 @@ import {arrivalPlan, bedEndClear, departurePlan, routePose, type RideLevels, typ
 import {TRANSIT, TrainTransitTunnel, transitMaterials, type TransitMaterials} from './trainTransitTunnel';
 import {TrainRideAudio} from './trainRideAudio';
 import {MOOD, syncGlowFog} from './lights';
+import type {RidePortalRuntime} from './ridePortalRuntime';
 
 /** Motion tuning (m, s, m/s, m/s², m/s³). */
 export const RIDE = {
@@ -159,6 +160,8 @@ export interface RideHost {
   gear?: {placeRules?: ((x: number, y: number, z: number, level: number) => string | null)[]} | null;
   stateListeners?: ((state: never, prev: never) => void)[];
   sectionHooks?: {build?(layout: StationLayout): void; teardown?(): void}[];
+  /** Task studio-perf-ao-train-continuity-20261110-022206-01: the station's ride portals (gates / breaches; world/ridePortalRuntime.ts). */
+  ridePortals?: RidePortalRuntime;
 }
 
 export interface RideOptions {

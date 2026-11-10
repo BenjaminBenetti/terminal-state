@@ -70,6 +70,7 @@ import {BunkerArch} from './bunkerArch'; // task studio-bunker-level-20261109-07
 import {BUNKER_MODEL_FOR, isBunkerObjectiveKind} from '../gen/bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01: objective kinds drawn by world/bunker; the model-backed flavour kinds instanced through MODEL_FOR
 import {TRACK_SLEEPER} from './railTiesModel'; // task studio-market-rework-20261108-074144-01 (lane TRADE): the sleeper's size, shared with the Rail Ties model
 import {platformLipBoxes, platformLipGeometry} from './platformEdgeLip'; // task studio-cosplay-general-20261108-225231-01 (lane GENERAL): the edge lip, proud of the floor / face
+import {buildRideGates, staticGateEnds, type RideGatesBuilt} from './ridePortalView'; // task studio-perf-ao-train-continuity-20261110-022206-01: the ride gates of the parked car's closed bed ends
 
 class Accum {
   pos: number[] = [];
@@ -184,6 +185,8 @@ export interface BuiltWorld {
   bunkerArch?: BunkerArch;
   /** Task reactor-expansion-20261101 (lane CONTROLS): the arch-owned finish key under a structural hit (world/finishAt.ts; null: none). */
   finishAt?: FinishAt | null;
+  /** Task studio-perf-ao-train-continuity-20261110-022206-01: the static ride gates (world/ridePortalView.ts); null / absent: none. */
+  rideGates?: RideGatesBuilt | null;
 }
 
 /** Instanced model chunk size (m): bigger chunks = fewer draw calls, coarser frustum culling. */
@@ -524,9 +527,11 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
 
   // Tunnel mouths fade to black beyond the platform ends.
   const voidMat = new MeshBasicNodeMaterial({color: 0x030303}); // Iteration 13 (MAT-A): node material
+  const gateEnds = staticGateEnds(layout); // task studio-perf-ao-train-continuity-20261110-022206-01: a ride gate stands in these end faces
   for (const [ti, t] of layout.trenches.entries()) {
     for (const [x, end] of [[t.x0 + 0.01, 'x0'], [t.x1 - 0.01, 'x1']] as const) {
       if (ext?.continued.has(`${ti}:${end}`)) continue; // Track 2 (VIS): a tunnel continues this bed end
+      if (gateEnds.has(`${ti}:${end}`)) continue;
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(t.z1 - t.z0, t.ceil - trenchY), voidMat);
       plane.position.set(x, (t.ceil + trenchY) / 2, (t.z0 + t.z1) / 2);
       plane.rotation.y = x < (t.x0 + t.x1) / 2 ? Math.PI / 2 : -Math.PI / 2;
@@ -534,6 +539,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
       group.add(plane);
     }
   }
+  const rideGates = buildRideGates(group, layout, mats); // task studio-perf-ao-train-continuity-20261110-022206-01
   // Track 2 (VIS): tunnel shells (walls, ceiling, ballast, track, caps), annex door frames + plates, graffiti clues.
   // (round 2, R3) the generated genset model (ANNEX_GENSET, lazy: game.ts sectionModelKeys) replaces the procedural genset body
   const gensetGltf = models[ANNEX_GENSET.key];
@@ -828,6 +834,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   culler.register(group);
   return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler,
     ...(office ? {officeArch: office} : {}), ...(mall ? {mallArch: mall} : {}), ...(trackExt ? {trackExt} : {}), ...(reactor ? {reactorArch: reactor} : {}), ...(sky ? {skywaysArch: sky} : {}), ...(mkt ? {marketArch: mkt} : {}), ...(bunk ? {bunkerArch: bunk} : {}),
+    ...(rideGates ? {rideGates} : {}),
     finishAt: finishResolver(levels, faces, office ?? mall ?? reactor ?? sky ?? mkt ?? bunk ?? null)}; // task reactor-expansion-20261101 (lane CONTROLS): bullet impacts take the drawn finish (+ sky: lane VIEW)
 }
 
