@@ -283,18 +283,18 @@ They take the IDENTITY of existing weapon finds (`items/weaponVariety.ts`), so t
   | Office (6) | 10 | 4 / 3 / 3 | 255 / 820 / 200 | 60 |
   | Mall (26) | 30 | 12 / 16 / 2 | 1350 / 1940 / 304 | 87 |
   | Market (2) | 0 | (no weapon finds) | 0 | 0 |
-  | Bunker (14) | 31 | 13 / 13 / 5 | 1680 / 1800 / 352 | 140 |
+  | Bunker (14) | 34 | 11 / 15 / 8 | 1545 / 1940 / 436 | 180 |
   | Skyways (5) | 8 | 4 / 4 / 0 | 165 / 150 / 60 | 8 |
   | Reactor (5) | 9 | 3 / 6 / 0 | 495 / 570 / 120 | 0 |
-  | All (76) | 124 | 46 / 62 / 16 | 4740 / 8050 / 1600 | 505 |
+  | All (76) | 127 | 44 / 64 / 19 | 4605 / 8190 / 1684 | 545 |
 
   Possible vs sampled family shares:
 
   | Family | Possible: baseline / A / B / melee | Real census (finds) | 30 000 synthetic finds |
   |---|---|---|---|
   | pistol | 0.40 / 0.20 / 0.22 / 0.18 | 0.44 / 0.22 / 0.22 / 0.11 (9) | each within 0.02 of its weight |
-  | rifle | 0.40 / 0.23 / 0.19 / 0.18 | 0.31 / 0.39 / 0.14 / 0.16 (49) | each within 0.02 |
-  | shotgun | 0.40 / 0.23 / 0.19 / 0.18 | 0.41 / 0.27 / 0.21 / 0.11 (66) | each within 0.02 |
+  | rifle | 0.40 / 0.23 / 0.19 / 0.18 | 0.28 / 0.36 / 0.21 / 0.15 (47) | each within 0.02 |
+  | shotgun | 0.40 / 0.23 / 0.19 / 0.18 | 0.38 / 0.23 / 0.24 / 0.15 (71) | each within 0.02 |
 
   The real census is small, so its shares scatter (one standard deviation is 5–16 points at these counts). The synthetic check in
   the same test runs the real plan over 10 000 finds per family. The baseline also takes every pick that was not eligible, such as
