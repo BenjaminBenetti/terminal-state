@@ -77,7 +77,7 @@ async function rig() {
     R.backend.draw = function (this: unknown, ro, info) {
       const shadow = (scene.overrideMaterial as {isShadowPassMaterial?: boolean} | null)?.isShadowPassMaterial === true;
       const o = ro.object as THREE.SkinnedMesh;
-      out.push(`${shadow ? 'S' : 'M'}|${o.name}|${ro.material.name || ro.material.type}|${o.matrixWorld.elements.join(',')}${o.isSkinnedMesh ? `|${Array.from(o.skeleton.boneMatrices).join(',')}` : ''}`);
+      out.push(`${shadow ? 'S' : 'M'}|${o.name}|${ro.material.name || ro.material.type}|${o.matrixWorld.elements.join(',')}${o.isSkinnedMesh ? `|${Array.from(o.skeleton.boneMatrices ?? []).join(',')}` : ''}`);
       return inner.call(this, ro, info);
     };
     try { draw(); } finally { R.backend.draw = inner; }
