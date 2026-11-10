@@ -38,7 +38,7 @@ import type {WorldMaterials} from './materials';
 import {RIDE_MASK, setRideBedMedium, setRideMask} from './rideMask';
 import {stationLevels} from './levelGeometry';
 import {atmosphereFor, rideBedMultiplier} from '../render/atmosphere';
-import {boxOverlaps, cutHides, portalCut, portalEndKey, portalEye, ridePortals, type PortalCut, type RidePortal} from './ridePortal';
+import {RIDE_PORTAL, boxOverlaps, cutHides, portalCut, portalEndKey, portalEye, ridePortals, type PortalCut, type RidePortal} from './ridePortal';
 import {buildBreachHeadwall, type BreachHeadwall, type RideGateView, type RideGatesBuilt} from './ridePortalView';
 
 /** `front` = the departure portal (the cab's end), `rear` = the arrival portal (world/ridePortal.ts ridePortals). */
@@ -49,8 +49,15 @@ const WHICH: readonly PortalWhich[] = ['front', 'rear'];
 export const PORTAL_RT = {
   /** A gate's swing. */
   swing: 1.3,
-  /** A breach's headwall goes when its plane is out of the camera's view or this far from the eye — or after `timeout` s. */
-  unseen: 50, timeout: 4,
+  /**
+   * A breach's release (its headwall goes, the station tunnel beyond the plane is drawn again, the ride may drop its stub) happens
+   * only where nobody sees it happen (unobserved): the plane's section outside the camera's view, OR farther than `unseen` from the
+   * eye (RIDE_PORTAL.dark: the tunnel murk leaves < 1 % of it), OR the eye within `reach` of the plane on the station side or past it
+   * (a player walking up to the headwall: the walkable tunnel must be there; the change is at the eye, not across the view). In view
+   * and nearer, it waits — a player looking back down the station tunnel from 20-50 m would otherwise see the straight ride box turn
+   * into the bending tunnel. LAST RESORT: after `timeout` s it goes anyway (counted in state().forced and stats.forced for QA).
+   */
+  unseen: RIDE_PORTAL.dark, reach: 1, timeout: 90,
   /** The station's light fades in over this many metres at the plane (world/rideMask.ts). */
   fade: 4,
   /** Around the car's body: what is inside rides with it and is never hidden. */
@@ -58,7 +65,7 @@ export const PORTAL_RT = {
   /** A mover's bounds round its origin: half width, height (an enemy, a person); a pickup's half size. */
   actor: [0.6, 2.1] as const, item: 0.4,
   /** A static root's whole object further than this from both cuts' boxes when the station is bound is never looked at again. */
-  reach: 3,
+  near: 3,
   /**
    * A whole object (rule 3) larger than this (bounding radius, m) is hidden only when it lies entirely inside a cut's box: one that
    * reaches far outside it (an exterior's city block, a level-wide mesh) would vanish where it is seen from the station (stats.uncut).
@@ -70,12 +77,14 @@ export interface PortalState {
   /** The portal of the current station (null: no car / no station). */
   portal: RidePortal | null;
   engaged: boolean;
-  /** Being released (a gate shutting, a breach waiting to be unobserved); still engaged until done. */
-  releasing: boolean;
+  /** Being released (a gate shutting, a breach waiting to be unobserved); still engaged until done. (Optional: stand-ins may omit it.) */
+  releasing?: boolean;
   /** Gate swing 0 (shut) .. 1 (open); a breach reads 1 while engaged, 0 otherwise. */
   gate: number;
   /** What `engage` hid: static meshes cut, their triangles, instances, whole objects (QA / tests). */
   hidden: {meshes: number; triangles: number; instances: number; objects: number};
+  /** Releases of this portal (this station) the last-resort timeout forced while its plane was still observed (QA: should stay 0). */
+  forced?: number;
 }
 
 /** What the runtime reads from Game (structural: tests drive it with a fake host). */
@@ -121,6 +130,8 @@ interface Slot {
   which: PortalWhich; index: 0 | 1; portal: RidePortal; cut: PortalCut;
   gateView: RideGateView | null; breach: BreachHeadwall | null;
   engaged: boolean; releasing: boolean; releaseT: number;
+  /** Breach releases forced by PORTAL_RT.timeout while still observed (QA: should stay 0). */
+  forced: number;
   /** The gate's linear swing 0..1 and where it is going. */
   swing: number; target: number;
   /** RIDE_MASK.version when we last set the mask for this portal (-1: not ours). */
@@ -136,7 +147,8 @@ const ease = (t: number): number => t * t * (3 - 2 * t);
 
 export class RidePortalRuntime {
   /** Node figures of the last bind / engage (ms) and what the bind found (QA / tests / the report). */
-  readonly stats = {prepareMs: 0, engageMs: 0, scanned: 0, splits: 0, splitTriangles: 0, instanced: 0, late: 0, uncut: 0};
+  /** (`forced`: breach releases the timeout forced while observed, over the session — QA.) */
+  readonly stats = {prepareMs: 0, engageMs: 0, scanned: 0, splits: 0, splitTriangles: 0, instanced: 0, late: 0, uncut: 0, forced: 0};
   private slots: Slot[] = [];
   private bound: RidePortalHost['world'] | null = null;
   private splits: Split[] = [];
@@ -188,7 +200,7 @@ export class RidePortalRuntime {
       const breach = portal.kind === 'breach' && h.mats ? buildBreachHeadwall(portal, h.mats, p.level) : null;
       if (breach) h.scene.add(breach.root);
       return {which, index: i as 0 | 1, portal, cut: portalCut(portal), gateView: world.rideGates?.gates.get(portalEndKey(portal)) ?? null, breach,
-        engaged: false, releasing: false, releaseT: 0, swing: 0, target: 0, maskVersion: -1};
+        engaged: false, releasing: false, releaseT: 0, forced: 0, swing: 0, target: 0, maskVersion: -1};
     });
     this.bound = world;
     // the haze inside the ride tunnel's box: this station's plain track-bed medium (world/rideMask.ts; the transit keeps it)
@@ -254,11 +266,11 @@ export class RidePortalRuntime {
   }
 
   /**
-   * Could whole object `m` (rule 3) ever lie in a cut? Its bounds within PORTAL_RT.reach of a cut's box when the station is bound (a
+   * Could whole object `m` (rule 3) ever lie in a cut? Its bounds within PORTAL_RT.near of a cut's box when the station is bound (a
    * static root's objects stay put; a holder's door swings less than that). Everything else is never looked at again.
    */
   private nearCuts(m: THREE.Object3D): boolean {
-    const g = (m as THREE.Mesh).geometry as THREE.BufferGeometry | undefined, e = m.matrixWorld.elements, k = PORTAL_RT.reach;
+    const g = (m as THREE.Mesh).geometry as THREE.BufferGeometry | undefined, e = m.matrixWorld.elements, k = PORTAL_RT.near;
     let cx = e[12], cy = e[13], cz = e[14], r = 1;
     if (g && !(m as THREE.Sprite).isSprite) {
       if (!g.boundingSphere) g.computeBoundingSphere();
@@ -412,14 +424,15 @@ export class RidePortalRuntime {
       }
       if (!s.releasing) continue;
       s.releaseT += Math.max(0, dt);
-      // a gate is released once it has shut; a breach once nobody can see its headwall go (or, at worst, after the timeout)
-      if (s.gateView ? s.swing <= 0 : this.unobserved(s, eye) || s.releaseT >= PORTAL_RT.timeout) this.finish(s);
+      // a gate is released once it has shut; a breach once nobody can see its headwall go (or, the last resort, after the timeout)
+      if (s.gateView ? s.swing <= 0 : this.unobserved(s, eye)) this.finish(s);
+      else if (!s.gateView && s.releaseT >= PORTAL_RT.timeout) { s.forced++; this.stats.forced++; this.finish(s); }
     }
     if (any && this.slots.some(s => s.engaged)) this.sweep(false);
   }
 
   /**
-   * The ride is done with portal `which`: a gate shuts first, a breach's headwall goes once it is out of sight; then the station's own
+   * The ride is done with portal `which`: a gate shuts first, a breach's headwall goes once nobody sees it go (PORTAL_RT.unseen); then the station's own
    * geometry is drawn again and the light mask is cleared. `now`: at once (reset / teardown).
    */
   release(which: PortalWhich, opts: {now?: boolean} = {}): void {
@@ -439,14 +452,14 @@ export class RidePortalRuntime {
   state(which: PortalWhich): PortalState {
     const s = this.slot(which);
     const hidden = {meshes: 0, triangles: 0, instances: 0, objects: 0};
-    if (!s) return {portal: null, engaged: false, releasing: false, gate: 0, hidden};
+    if (!s) return {portal: null, engaged: false, releasing: false, gate: 0, hidden, forced: 0};
     if (s.engaged) {
       const k = s.index === 0 ? 0 : 2;
       for (const sp of this.splits) if (sp.n[k]) { hidden.meshes++; hidden.triangles += sp.n[k]; }
       for (const t of this.tracks.values()) for (const hi of t.hidden.values()) if (hi.slot === s.index) hidden.instances++;
       for (const o of this.objHidden.values()) if (o.slot === s.index) hidden.objects++;
     }
-    return {portal: s.portal, engaged: s.engaged, releasing: s.releasing, gate: this.gate(which), hidden};
+    return {portal: s.portal, engaged: s.engaged, releasing: s.releasing, gate: this.gate(which), hidden, forced: s.forced};
   }
 
   // -------------------------------------------------------------------------------------------
@@ -635,10 +648,17 @@ export class RidePortalRuntime {
     if (fresh) t.nearVersion = attr.version; // (our writes: the candidates stand)
   }
 
-  /** Nobody can see the portal's plane: further than PORTAL_RT.unseen from the eye, or outside the camera's view. */
+  /**
+   * Nobody sees the portal's plane change (PORTAL_RT.unseen): its section is outside the camera's view, or all of it farther than
+   * PORTAL_RT.unseen from the eye, or the eye is within PORTAL_RT.reach of the plane on the station side / past it.
+   */
   private unobserved(s: Slot, eye?: {x: number; y: number; z: number}): boolean {
     const q = s.portal, f = q.face;
-    if (eye && Math.hypot(eye.x - q.x, eye.y - (f.y0 + f.y1) / 2, eye.z - (f.z0 + f.z1) / 2) > PORTAL_RT.unseen) return true;
+    if (eye) {
+      const dy = Math.max(f.y0 - eye.y, 0, eye.y - f.y1), dz = Math.max(f.z0 - eye.z, 0, eye.z - f.z1);
+      if (Math.hypot(eye.x - q.x, dy, dz) > PORTAL_RT.unseen) return true;
+      if ((eye.x - q.x) * q.out > -PORTAL_RT.reach && dy < 0.5 && dz < 0.5) return true;
+    }
     const cam = this.host.camera;
     if (!cam) return false;
     cam.updateMatrixWorld();

@@ -145,7 +145,7 @@ describe('ride portal runtime: the gate, the breach headwall, the movers and the
     expect(rt.gate('rear')).toBe(0);
   }, 240_000);
 
-  it('the breach headwall: the tunnel section less the ride opening at the plane, only while engaged; it goes when unobserved (or after the timeout)', async () => {
+  it('the breach headwall: the tunnel section less the ride opening at the plane, only while engaged; it goes only unobserved (out of view, beyond the murk, the eye at the plane) — a forced timeout is a counted last resort', async () => {
     const w = await portalWorld('subway', 4242);
     const q = w.portals!.rear;
     let pool: (() => readonly THREE.Object3D[]) | null = null;
@@ -175,20 +175,40 @@ describe('ride portal runtime: the gate, the breach headwall, the movers and the
     look(at(q, -15, 1.6), at(q, -40, 1.6)); // (turned round)
     rt.step(0.1, cam.position);
     expect([rt.engaged('rear'), root.visible]).toEqual([false, false]);
-    // in view but far (beyond PORTAL_RT.unseen)
+    // in view but beyond the murk's sight (PORTAL_RT.unseen = RIDE_PORTAL.dark)
     rt.engage('rear', {gateOpen: true});
     rt.release('rear');
     look(at(q, -(PORTAL_RT.unseen + 5), 1.6), at(q, 0, 1.6));
     rt.step(0.1, cam.position);
     expect(rt.engaged('rear')).toBe(false);
-    // in view and near the whole time: the timeout
+    // looking back down the station tunnel from 20-50 m (in view, in the murk's sight): it waits, however long the ride's tail is
+    for (const d of [20, 35, 50]) {
+      rt.engage('rear', {gateOpen: true});
+      rt.release('rear');
+      look(at(q, -d, 1.6), at(q, 0, 1.6));
+      for (let k = 0; k < 40; k++) rt.step(0.5, cam.position);
+      expect([d, rt.engaged('rear'), root.visible]).toEqual([d, true, true]);
+      // ... until the viewer turns away
+      look(at(q, -d, 1.6), at(q, -d - 30, 1.6));
+      rt.step(0.1, cam.position);
+      expect(rt.engaged('rear')).toBe(false);
+    }
+    // a player walking up to the headwall in view: the walkable tunnel is back once the eye is at the plane (the change at the eye)
+    rt.engage('rear', {gateOpen: true});
+    rt.release('rear');
+    for (const d of [10, 4, 1.5]) { look(at(q, -d, 1.6), at(q, 5, 1.6)); rt.step(0.1, cam.position); expect([d, rt.engaged('rear')]).toEqual([d, true]); }
+    look(at(q, -0.6, 1.6), at(q, 5, 1.6));
+    rt.step(0.1, cam.position);
+    expect(rt.engaged('rear')).toBe(false);
+    // the last resort: in view and near the whole time — only after PORTAL_RT.timeout, counted (QA)
+    expect(PORTAL_RT.timeout).toBeGreaterThanOrEqual(60);
     rt.engage('rear', {gateOpen: true});
     rt.release('rear');
     look(at(q, -10, 1.6), at(q, 0, 1.6));
-    for (let t = 0; t < PORTAL_RT.timeout - 0.2; t += 0.5) rt.step(0.5, cam.position);
-    expect(rt.engaged('rear')).toBe(true);
+    for (let k = 0; k < Math.floor((PORTAL_RT.timeout - 1e-6) / 0.5); k++) rt.step(0.5, cam.position); // (just under the timeout)
+    expect([rt.engaged('rear'), rt.state('rear').forced]).toEqual([true, 0]);
     rt.step(0.5, cam.position);
-    expect(rt.engaged('rear')).toBe(false);
+    expect([rt.engaged('rear'), rt.state('rear').forced, rt.stats.forced]).toEqual([false, 1, 1]);
     // re-engaging cancels a release under way
     rt.engage('rear', {gateOpen: true});
     rt.release('rear');

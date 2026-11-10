@@ -53,7 +53,9 @@ describe('ride mask: the shader uniforms (world/lightFieldNode.ts RM)', () => {
     bindLightField(null);
     expect(RM.open.value.x).toBe(0);
     expect(RM.open.value.z).toBe(0);
+    const v = RIDE_MASK.version;
     setRideBedMedium(1.234);
+    expect(RIDE_MASK.version).toBe(v); // (the ride / the runtime tell their own mask by its version: a station's bed medium never bumps it)
     syncRideMask();
     expect(RM.bed.value.x).toBe(1.234);
     setRideMask(null);

@@ -119,15 +119,15 @@ export const RM = {
 };
 let rmVersion = -1;
 
-/** Copy RIDE_MASK into RM when it changed (cheap: one compare; bindLightField / setLightFieldLevels call it). */
+/** Copy RIDE_MASK into RM when it changed (cheap: two compares; bindLightField / setLightFieldLevels call it). */
 export function syncRideMask(): void {
   const m = RIDE_MASK;
+  if (m.bedMult !== RM.bed.value.x) RM.bed.value.set(m.bedMult, 0, 0, 0); // (the bed medium changes per station, without a version)
   if (m.version === rmVersion) return;
   rmVersion = m.version;
   const b = m.box, open = m.on && Number.isFinite(m.openX);
   if (m.on) { RM.lo.value.set(b.x0, b.y0, b.z0); RM.hi.value.set(b.x1, b.y1, b.z1); } else { RM.lo.value.set(0, 0, 0); RM.hi.value.set(0, 0, 0); }
   RM.open.value.set(open ? m.openX : 0, m.fade, open ? 1 : 0, m.on ? b.y0 + RIDE_MASK_SKIN : 0);
-  RM.bed.value.set(m.bedMult, 0, 0, 0);
 }
 
 /** Inside the ride mask's box (bool node; never while off). Mirror: rideMask.ts inRideMask. */

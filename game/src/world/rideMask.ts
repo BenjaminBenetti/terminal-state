@@ -52,11 +52,12 @@ export function setRideMask(box: Box3 | null, openX: number = Number.NaN, fade =
   m.version++;
 }
 
-/** Lane PORTAL: the haze's track-bed multiplier inside the box (the portal runtime, per station). */
+/**
+ * Lane PORTAL: the haze's track-bed multiplier inside the box (the portal runtime, per station). It does NOT bump `version` (the
+ * ride and the runtime tell their own mask by it); the shader sync compares the value itself.
+ */
 export function setRideBedMedium(mult: number): void {
-  if (!Number.isFinite(mult) || mult === RIDE_MASK.bedMult) return;
-  RIDE_MASK.bedMult = mult;
-  RIDE_MASK.version++;
+  if (Number.isFinite(mult)) RIDE_MASK.bedMult = mult;
 }
 
 /** Lane PORTAL: is world point (x, y, z) inside the mask's box (open intervals; never while off)? CPU mirror of lightFieldNode rideMaskInside. */
