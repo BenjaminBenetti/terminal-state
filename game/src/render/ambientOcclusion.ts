@@ -462,9 +462,9 @@ export class AmbientOcclusionPass {
     const p = this.presetFor(this.quality);
     const reason = this.failed ? 'failed' : !(this.override ?? this.enabled) ? (this.override === false ? 'off (?ao=off)' : 'off in the settings')
       : !pipelineActive ? (why ?? 'the atmosphere pass is not active') : null;
-    const loads = this.on && p ? aoCost(this.full[0], this.full[1], p).total : 0;
+    const loads = this.on && pipelineActive && p ? aoCost(this.full[0], this.full[1], p).total : 0;
     return {
-      setting: this.enabled, override: this.override, active: this.on, reason, failed: this.failed,
+      setting: this.enabled, override: this.override, active: this.on && pipelineActive, reason, failed: this.failed,
       size: [this.size[0], this.size[1]], preset: p, passes: {ao: this.runs, builds: this.builds},
       look: {...this.look, fade: [...this.look.fade] as [number, number], guard: [...this.look.guard] as [number, number]}, loads,
     };
