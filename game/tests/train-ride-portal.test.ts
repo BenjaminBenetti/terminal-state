@@ -20,7 +20,7 @@ import {PropIndex} from '../src/core/physics';
 import {Player, type MoveInput} from '../src/player/player';
 import {WarmupRegistry} from '../src/render/warmup';
 import type {StationLayout} from '../src/gen/stationTypes';
-import {RAIL_TOP_ABOVE_BED, playerTrainPlacement, trainSpawnPose, type TrainPlacement} from '../src/gen/playerTrain';
+import {RAIL_TOP_ABOVE_BED, playerTrainPlacement, trainSpawnPose, trainToWorld, type TrainPlacement} from '../src/gen/playerTrain';
 import {PLAYER_TRAIN_SPEC as SPEC} from '../src/world/playerTrainSpec';
 import {PlayerTrainRuntime, installPlayerTrain} from '../src/world/playerTrain';
 import {carToWorld, jostleBounds} from '../src/world/trainRideLocal';
@@ -448,6 +448,101 @@ describe('the ride through the portals: every level kind, frame by frame', () =>
       }
     }, 240000);
   }
+});
+
+// ---------------------------------------------------------------------------------------------
+
+describe('every exit path lets go of what the ride engaged', () => {
+  it('a refused departure, a reset while the doors close / beyond the plane / in transit / arriving, a death, dispose in the release tail: the portal released at once, the stub hidden, the mask cleared, the level\'s own fog back', async () => {
+    const own = {density: 0.0115, hex: 0x3a403c}; // (a level with its own haze: the mall's)
+    // one departure through a gate and one through a breach (both occur among the seeds' level kinds: the first test above)
+    const picks: StationLayout[] = [];
+    for (const kind of ['gate', 'breach'] as const) {
+      for (const seed of SEEDS) {
+        const L = LEVEL_IDS.map(id => gen(id, seed)).find(l => ridePortals(l, playerTrainPlacement(l)!).front.kind === kind);
+        if (L) { picks.push(L); break; }
+      }
+    }
+    expect(picks.length).toBe(2);
+    for (const L of picks) {
+      const {h, rt, ride, p, portals} = setup(L, {fog: new THREE.FogExp2(own.hex, own.density)});
+      const fog = h.scene.fog as THREE.FogExp2, kind = ridePortals(L, p).front.kind;
+      const clean = (tag: string, fogOwn = true) => {
+        const t = `${kind} departure, ${tag}`;
+        expect(ride.riding, t).toBe(false);
+        expect(ride.engaged, t).toBeNull();
+        expect(portals!.engaged('front'), t).toBe(false);
+        expect(portals!.engaged('rear'), t).toBe(false);
+        expect(RIDE_MASK.on, t).toBe(false);
+        expect(ride.transit.active, t).toBe(false);
+        expect(ride.state().portal.tail, t).toBeNull();
+        if (fogOwn) expect([fog.density, fog.color.getHex()], t).toEqual([own.density, own.hex]);
+        expect(rt.ride, t).toBeNull();
+        expect(rt.playerInside(), t).toBe(true);
+        expect([rt.view!.root.position.x, rt.view!.root.position.z], t).toEqual([p.x, p.z]);
+      };
+      const result = (d: Promise<unknown>) => { const box: {v: unknown} = {v: null}; void d.then(v => { box.v = v; }); return box; };
+      // 1. a body in an open doorway: the doors never shut, the departure is refused — the portal it engaged at once is let go
+      const di = rt.train!.doors.findIndex(d => d.col.door.side < 0);
+      rt.setDoor(di, true);
+      run(h, ride, 2, undefined, portals);
+      const dd = rt.train!.doors[di].col.door, w = trainToWorld(p, dd.x, SPEC.floorY, -(HW + 0.12));
+      h.zombies.push({brain: {x: w.x, z: w.z, y: p.floorY, alive: true, stats: {radius: 0.3}}});
+      let r = result(ride.depart());
+      expect(portals!.engaged('front')).toBe(true);
+      run(h, ride, RIDE.closeTimeout + 1, () => r.v !== null, portals);
+      await Promise.resolve();
+      expect(r.v).toMatchObject({status: 'refused', reason: 'door-blocked'});
+      clean('door-blocked');
+      h.zombies.length = 0;
+      // 2. reset while the doors close (the gate swinging open)
+      r = result(ride.depart());
+      run(h, ride, 0.3, undefined, portals);
+      expect(ride.phase).toBe('closing');
+      ride.reset();
+      await Promise.resolve();
+      expect(r.v).toMatchObject({status: 'refused', reason: 'aborted'});
+      clean('reset while closing');
+      // 3. reset with the whole car beyond the plane, in the stub (the murk drawn)
+      r = result(ride.depart());
+      run(h, ride, 60, () => ride.phase === 'departing' && ride.u - L2 > ride.plan!.uPlane + 5, portals);
+      expect(ride.transit.mode).toBe('stub');
+      expect(fog.density).toBe(MOOD.fogDensity);
+      ride.reset();
+      await Promise.resolve();
+      expect(r.v).toMatchObject({status: 'refused', reason: 'aborted'});
+      clean('reset beyond the plane');
+      // 4. reset in transit (the ride's own mask: the transit box)
+      r = result(ride.depart());
+      run(h, ride, 90, () => ride.phase === 'transit', portals);
+      run(h, ride, 1, undefined, portals);
+      expect(RIDE_MASK.on).toBe(true);
+      ride.reset();
+      clean('reset in transit');
+      // 5. reset mid-arrival, the car's nose inside the station and its tail still beyond the rear plane
+      void ride.depart();
+      run(h, ride, 90, () => ride.phase === 'transit', portals);
+      r = result(ride.arrive());
+      run(h, ride, 200, () => ride.phase === 'arriving' && ride.u - L2 < ride.plan!.uPlane && ride.u + L2 > ride.plan!.uPlane, portals);
+      expect(portals!.engaged('rear')).toBe(true);
+      ride.reset();
+      await Promise.resolve();
+      expect(r.v).toMatchObject({status: 'refused', reason: 'aborted'});
+      clean('reset mid-arrival');
+      // 6. a death in the station tunnel / beyond the plane (the state listener)
+      void ride.depart();
+      run(h, ride, 60, () => ride.phase === 'departing' && ride.u - L2 > ride.plan!.uPlane + 1, portals);
+      for (const f of h.stateListeners) (f as unknown as (s: string, q: string) => void)('dead', 'playing');
+      clean('death');
+      // 7. dispose right after an arrival's stop, the release tail still running (a gate swinging shut) — or nothing left (a breach)
+      void ride.depart();
+      run(h, ride, 90, () => ride.phase === 'transit', portals);
+      void ride.arrive();
+      run(h, ride, 200, () => !ride.riding, portals);
+      ride.dispose();
+      clean('dispose in the release tail', false);
+    }
+  }, 240000);
 });
 
 // ---------------------------------------------------------------------------------------------
