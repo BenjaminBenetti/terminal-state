@@ -158,7 +158,9 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
     // task skyways-destinations-20261106 (lane AUDIO): the location emitters' tick / gate / release / QA state (setLocationEmitters is exercised below)
     'locHeard', 'updateLocations', 'releaseLocation', 'trimLocationFades', 'locationAudioState',
     // task studio-market-bar-20261108-225231-01 (lane AUDIO): the crowd murmur channels' release / fade bound / stop and the QA state (play nothing)
-    'stopCrowd', 'releaseCrowd', 'trimCrowdFades', 'marketAudioState']);
+    'stopCrowd', 'releaseCrowd', 'trimCrowdFades', 'marketAudioState',
+    // task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): one slice of the reverb kernels' pre-generation (plays nothing; play-stutter-reverb-ir.test.ts)
+    'irSlice']);
 
   it('never creates an oscillator or plays a non-bank buffer (all public cues, all areas)', async () => {
     const made: FakeCtx[] = [];
