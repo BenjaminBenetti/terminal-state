@@ -533,19 +533,24 @@ Not changed, with the reason:
   pass.
 - World matrices are 7.3 % of the frame. three calls `scene.updateMatrixWorld()` once per pass. The holders root is 539 of the 545
   matrices composed each time; the world root is already static.
-- Mitigations tried, each A / B over 48 frames (3 poses × 16 yaws), interleaved runs in one process, medians:
+- Mitigations tried, each A / B over 48 frames (3 poses × 16 yaws), interleaved runs in one process, medians (three's JS per
+  frame; spread within a variant, p25–p75, about ±2–3 %):
 
-  | Mitigation | Run 1 (10 runs each) | Run 2 (12 runs each) | Kept? |
+  | Mitigation | Subway (3 runs) | Mall (2 runs) | Kept? |
   |---|---|---|---|
-  | `scene.updateMatrixWorld()` once per frame by the game, `matrixWorldAutoUpdate` off for the frame's render | −4.8 % | −4.5 % | no: under 5 % |
-  | Every holder matrix static (an upper bound: holders' doors / drawers move, so not shippable as is) | +0.1 % | −3.7 % | no |
-  | Both | −7.0 % | −5.8 % | no: it needs the second, which is not identical |
+  | The game updates the station's world matrices once per frame and turns three's per-render update off for the frame's render (`render/sceneMatrices.ts`) | −4.8 / −4.5 / −2.1 % | −9.0 / −9.3 % | **yes** (Mall over 5 %; identical) |
+  | Every holder matrix static (an upper bound: holders' doors / drawers move, so not shippable as is) | +0.1 / −3.7 / −1.8 % | −2.0 / −5.7 % | no: an upper bound that is not identical as is, and its Mall spread overlaps the baseline |
 
-  Spread within a variant (p25–p75) was about ±2–3 %. The drawn-set comparison could not decide identity here: two consecutive
-  sweeps of the unchanged frame already differ by one or two objects on a few frames (state the sweep itself changes), exactly
-  like the variants. The first mitigation is identical by construction (nothing moves between the scene pass and the shadow
-  pass), and it would save one more traversal for every further pass that renders the station scene. It is worth re-measuring
-  if the ambient-occlusion work adds such a pass.
+  - **Identity.** Comparing consecutive sweeps cannot decide it: two sweeps of the unchanged frame already differ by one or two
+    objects on a few frames (state the sweep itself changes). So the kept mitigation was compared in the same state: per pose
+    and yaw, the view was set once and the frame drawn both ways. All 48 frames were identical on both levels (draw sequence
+    and every drawn object's world matrix; 23,310 draws on the Mall).
+  - **Test.** `play-stutter-submit-matrices-once.test.ts` pins it on a moving scene: an animated parent and child, a hand-updated
+    static mesh, an InstancedMesh and a skinned mesh, with the once-updated frame drawn first after each move. It also pins one
+    traversal a frame instead of one per pass.
+  - **Scope.** `Game.drawFrame` wraps only the atmosphere's render. The direct fallback, the warm-up's compiles, the journey's
+    off-screen draws and `prepareObjects` keep three's own update. Every further pass that renders the station scene inside the
+    frame saves one more traversal.
 
 **Limits.**
 - Node only, and no native GPU. GPU-side pipeline creation, driver work and GC pause lengths need a native capture.

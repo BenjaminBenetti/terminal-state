@@ -206,6 +206,7 @@ import {installFlareLightNode} from './world/flareLight'; // Iteration 15
 import {SteamVents, annexVents, steamLight} from './world/trackExt/steam'; // Track 2 (VIS): non-hazardous annex steam
 import {WarmupRegistry, planWarmup, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
 import {RuntimeVariantPool, runtimeVariantsFirst} from './render/runtimeVariants'; // task runtime-variant-warmup-20261105: play-only variants as warm-up prototypes
+import {drawWithSceneMatricesOnce} from './render/sceneMatrices'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): one matrix update a frame
 import {woundsOf} from './damage/wounds'; // (the enemies' wound layers: their flesh-chunk material variants)
 import {renderContextDepth} from './render/renderContextDepth'; // task studio-performance-recorder-20261103 (lane RENDER-CPU)
 import {installShadowAlphaTwin} from './render/shadowOverride'; // (lane RENDER-CPU)
@@ -2419,7 +2420,9 @@ export class Game {
     if (!this.atmosphereBypass) {
       const sceneState = {background: this.scene.background, backgroundNode: this.scene.backgroundNode, fog: this.scene.fog};
       try {
-        this.atmosphere.render(this.scene, this.camera, this.time);
+        // (task studio-perf-ao-train-continuity-20261110-022206-01, lane PLAY: the station's world matrices once for the frame, not
+        // again in the shadow pass / every pass drawing the scene — render/sceneMatrices.ts)
+        drawWithSceneMatricesOnce(this.scene, () => this.atmosphere.render(this.scene, this.camera, this.time));
       } catch (err) {
         this.atmosphereBypass = `atmosphere render failed: ${String((err as Error)?.message ?? err).slice(0, 300)}`;
         if (this.gpu) recordGpuError(this.gpu, this.atmosphereBypass);
