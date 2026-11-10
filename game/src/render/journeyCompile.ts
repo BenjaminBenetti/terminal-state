@@ -42,11 +42,18 @@
 //    ahead of rendering. The frame bound above does not depend on that inheritance;
 //  - limits: one NEW build's chain (~6 yielded slices) can still cost one frame where the inheritance does not apply; GPU / driver
 //    pipeline compile is not observable or preemptible here (CPU-side units only).
+//
+// Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): TWO-PASS items (render/warmup.ts drawsTwoPass: transparent
+// DoubleSide glass). three draws them with `side` set to BackSide, then FrontSide, but compileAsync builds after the side was restored:
+// the scene lane leaves their render objects with the DoubleSide pipeline only, and the first real view created the two real pipelines
+// (a first-use census after a complete preparation: 2 per glass batch on first sight). A third lane, 'sides', draws each such item
+// OFF-SCREEN once its scene-lane compile settled (its node build is a cache hit by then): the same nested render as a shadow draw, the
+// item alone on the twin's layer, ONE item per step (two pipeline requests at most), nearest the arrival first like the scene lane.
 
 import * as THREE from 'three';
 import type {FrameScheduler} from '../core/frameBudget';
 import {compileAtDepth, renderAtDepthOffset} from './renderContextDepth';
-import type {WarmItem, WarmupRenderer} from './warmup';
+import {drawsTwoPass, type WarmItem, type WarmupRenderer} from './warmup';
 
 /** Layers nothing else uses (CULL_LAYER is 31): a chunk is drawn / compiled alone on them for one synchronous call. */
 export const PREP_LAYER = 30;
@@ -100,6 +107,8 @@ export interface JourneyCompileStats {
   slices: number; maxPerSlice: number; sliceMaxMs: number; background: boolean;
   /** Launches whose background task had not run after postStallFrames frames (the step ran them directly). */
   postStalls: number;
+  /** (lane PLAY) Two-pass items among the scene items (0 without a scene pass target) and how many were drawn off-screen so far. */
+  twoPass: number; twoPassDone: number;
   cancelReason: string | null;
 }
 
@@ -122,7 +131,8 @@ function defaultPost(): ((fn: () => void) => void) | null {
   return fn => { void s.postTask!(fn, {priority: 'background'}).catch(() => undefined); };
 }
 
-type Lane = 'scene' | 'shadow';
+type Lane = 'scene' | 'shadow' | 'sides';
+const LANES: readonly Lane[] = ['scene', 'shadow', 'sides'];
 
 export class JourneyCompile {
   readonly stats: JourneyCompileStats;
@@ -135,12 +145,17 @@ export class JourneyCompile {
   private nextScene = 0;
   private nextShadow = 0;
   private inFlight = false;
+  /** (lane PLAY) The two-pass scene items; the ones whose compile settled, in that order (the 'sides' lane's queue); the call in flight. */
+  private readonly twoPass: ReadonlySet<WarmItem>;
+  private readonly sides: WarmItem[] = [];
+  private nextSides = 0;
+  private flight: readonly WarmItem[] = [];
   private readonly generation: number;
   private readonly view = new THREE.PerspectiveCamera();
   /** The lights the game camera sees (three's light set never changes in play: only intensities do) and the shadow-casting ones. */
   private readonly lights: THREE.Object3D[] = [];
   private readonly shadowLights: (THREE.Light & {shadow: THREE.LightShadow})[] = [];
-  private readonly requested: Record<Lane, boolean> = {scene: false, shadow: false};
+  private readonly requested: Record<Lane, boolean> = {scene: false, shadow: false, sides: false};
   /** Casters per off-screen shadow draw right now (adaptive, 1 .. shadowChunk). */
   private shadowN = 1;
   /** (Pacing) the current slice: its frame number, real start (ms) and compile calls so far; the job's own step count (frameNo default). */
@@ -164,9 +179,11 @@ export class JourneyCompile {
     this.now = o.now ?? (() => performance.now());
     this.post = o.post === undefined ? defaultPost() : o.post;
     this.generation = o.scheduler.generation;
+    // (the direct path has no scene pass target: an off-screen draw would land on the canvas — no 'sides' work there either)
+    this.twoPass = new Set(o.target ? o.items.filter(i => drawsTwoPass(i.object)) : []);
     this.stats = {phase: 'scene', sceneItems: o.items.length, sceneDone: 0, casters: this.o.receiver ? o.casters.length : 0, shadowDone: 0,
       steps: 0, stepMaxMs: 0, stepMs: 0, shadowMaxPerStep: 0, sceneChunks: 0, slices: 0, maxPerSlice: 0, sliceMaxMs: 0, background: this.post !== null,
-      postStalls: 0, cancelReason: null};
+      postStalls: 0, twoPass: this.twoPass.size, twoPassDone: 0, cancelReason: null};
     this.sceneDone = new Promise(r => { this.resolveScene = r; });
     this.done = new Promise(r => { this.resolveDone = r; });
     this.view.matrixAutoUpdate = false;
@@ -190,15 +207,19 @@ export class JourneyCompile {
   private get ended(): boolean { return this.stats.phase === 'done' || this.stats.phase === 'cancelled'; }
   private get sceneLeft(): boolean { return this.nextScene < this.o.items.length || this.inFlight; }
   private get shadowLeft(): boolean { return this.nextShadow < this.stats.casters; }
+  /** (lane PLAY) Two-pass items not drawn yet (compiled or not); the scene lane hands each one over as its compile settles. */
+  private get sidesLeft(): boolean { return this.stats.twoPassDone < this.stats.twoPass; }
 
   /** Phase bookkeeping, then (re)queue whatever lane has work. */
   private progress(): void {
     if (this.ended) return;
     if (!this.sceneLeft) this.resolveScene();
-    if (!this.sceneLeft && !this.shadowLeft) { this.end('done', null); return; }
+    // (a two-pass item that never reached the queue — the scene lane ended without it — cannot be drawn: nothing is left to wait for)
+    if (!this.sceneLeft && !this.shadowLeft && !(this.sidesLeft && this.nextSides < this.sides.length)) { this.end('done', null); return; }
     this.stats.phase = this.sceneLeft ? 'scene' : 'shadow';
     if ((this.nextScene < this.o.items.length && !this.inFlight) || this.posted) this.request('scene');
     if (this.shadowLeft) this.request('shadow');
+    if (this.nextSides < this.sides.length) this.request('sides');
   }
 
   private request(lane: Lane): void {
@@ -206,7 +227,7 @@ export class JourneyCompile {
     this.requested[lane] = true;
     const r = this.o.scheduler.request({
       key: `${JOURNEY_COMPILE.key}.${lane}`, kind: `${JOURNEY_COMPILE.key}.${lane}`, priority: JOURNEY_COMPILE.priority,
-      maxStaleMs: JOURNEY_COMPILE.maxStaleMs, initialEstimateMs: lane === 'scene' ? 2 : 6, generation: this.generation,
+      maxStaleMs: JOURNEY_COMPILE.maxStaleMs, initialEstimateMs: lane === 'scene' ? 2 : lane === 'shadow' ? 6 : 4, generation: this.generation,
       step: () => this.step(lane), onCancel: reason => { this.requested[lane] = false; this.end('cancelled', reason); },
     });
     if (r === 'stale' || r === 'dropped') { this.requested[lane] = false; this.end('cancelled', r); }
@@ -220,7 +241,7 @@ export class JourneyCompile {
     try {
       if (!this.ended) {
         if (lane === 'scene') this.sceneStep();
-        else { this.shadowStep(); queueMicrotask(() => this.progress()); }
+        else { if (lane === 'shadow') this.shadowStep(); else this.sidesStep(); queueMicrotask(() => this.progress()); }
       }
       return true;
     } finally {
@@ -315,6 +336,7 @@ export class JourneyCompile {
     const {renderer: r, items, chunk} = this.o;
     const part = items.slice(this.nextScene, this.nextScene + chunk);
     this.nextScene += part.length;
+    this.flight = part;
     this.stats.sceneChunks++;
     let p: Promise<void>;
     const prevTarget = r.getRenderTarget(), prevMRT = r.getMRT();
@@ -347,6 +369,8 @@ export class JourneyCompile {
     if (this.ended) return;
     if (this.o.scheduler.generation !== this.generation) { this.end('cancelled', 'generation'); return; }
     this.stats.sceneDone += n;
+    for (const i of this.flight) if (this.twoPass.has(i)) this.sides.push(i); // (lane PLAY: compiled — the 'sides' lane may draw it now)
+    this.flight = [];
     const sameFrame = this.frameNo() === this.sliceFrame, ms = this.now() - this.sliceStart;
     if (this.sliceCount > this.stats.maxPerSlice) this.stats.maxPerSlice = this.sliceCount;
     if (sameFrame && ms > this.stats.sliceMaxMs) this.stats.sliceMaxMs = ms;
@@ -354,12 +378,12 @@ export class JourneyCompile {
     this.progress();
   }
 
-  private shadowStep(): void {
-    const {renderer: r, casters, shadowChunk, receiver} = this.o;
-    if (!receiver || this.nextShadow >= this.stats.casters) return;
-    const part = casters.slice(this.nextShadow, this.nextShadow + Math.min(shadowChunk, this.shadowN));
-    this.nextShadow += part.length;
-    const t0 = performance.now();
+  /**
+   * ONE real off-screen render of `objects` (each on its layer) into the scene pass's own target, nested at the real frame's depth, under
+   * the renderer state the real scene pass draws with; false = it failed (the job is ended).
+   */
+  private offscreen(objects: readonly [WarmItem, number][], what: string): boolean {
+    const r = this.o.renderer;
     const prevTarget = r.getRenderTarget(), prevMRT = r.getMRT();
     // (the renderer state the real scene pass draws under: RenderPipeline.render sets these around its quad, the PassNode inside it)
     const rs = r as unknown as {toneMapping: THREE.ToneMapping; outputColorSpace: THREE.ColorSpace};
@@ -367,32 +391,50 @@ export class JourneyCompile {
     try {
       rs.toneMapping = THREE.NoToneMapping;
       rs.outputColorSpace = THREE.ColorManagement.workingColorSpace as THREE.ColorSpace;
-      this.isolated([[receiver, PREP_MASK], ...part.map(i => [i, CASTER_MASK] as [WarmItem, number])], view => {
+      this.isolated(objects, view => {
         r.setRenderTarget(this.o.target);
         r.setMRT(null);
         renderAtDepthOffset(r, this.o.depth, () => r.render(this.o.scene, view));
       });
     } catch (err) {
-      console.warn('journey compile: a shadow draw failed', err);
+      console.warn(`journey compile: a ${what} draw failed`, err);
       this.end('cancelled', 'error');
-      return;
+      return false;
     } finally {
       rs.toneMapping = tm;
       rs.outputColorSpace = cs;
       r.setRenderTarget(prevTarget);
       r.setMRT(prevMRT);
     }
+    return true;
+  }
+
+  private shadowStep(): void {
+    const {casters, shadowChunk, receiver} = this.o;
+    if (!receiver || this.nextShadow >= this.stats.casters) return;
+    const part = casters.slice(this.nextShadow, this.nextShadow + Math.min(shadowChunk, this.shadowN));
+    this.nextShadow += part.length;
+    const t0 = performance.now();
+    if (!this.offscreen([[receiver, PREP_MASK], ...part.map(i => [i, CASTER_MASK] as [WarmItem, number])], 'shadow')) return;
     this.stats.shadowDone += part.length;
     if (part.length > this.stats.shadowMaxPerStep) this.stats.shadowMaxPerStep = part.length;
     const ms = performance.now() - t0, target = JOURNEY_COMPILE.shadowTargetMs;
     this.shadowN = ms < target ? Math.min(shadowChunk, this.shadowN * 2) : ms > 3 * target ? Math.max(1, this.shadowN >> 1) : this.shadowN;
   }
 
+  /** (lane PLAY) The 'sides' step: ONE compiled two-pass item drawn off-screen by the scene pass (its BackSide and FrontSide pipelines). */
+  private sidesStep(): void {
+    if (this.nextSides >= this.sides.length) return;
+    const item = this.sides[this.nextSides++];
+    if (!this.offscreen([[item, PREP_MASK]], 'two-pass')) return;
+    this.stats.twoPassDone++;
+  }
+
   private end(phase: 'done' | 'cancelled', reason: string | null): void {
     if (this.ended) return;
     this.stats.phase = phase;
     this.stats.cancelReason = reason;
-    if (phase === 'cancelled') for (const lane of ['scene', 'shadow'] as const) { const k = `${JOURNEY_COMPILE.key}.${lane}`; if (this.o.scheduler.has(k)) this.o.scheduler.cancel(k); }
+    if (phase === 'cancelled') for (const lane of LANES) { const k = `${JOURNEY_COMPILE.key}.${lane}`; if (this.o.scheduler.has(k)) this.o.scheduler.cancel(k); }
     this.resolveScene();
     this.resolveDone();
   }
