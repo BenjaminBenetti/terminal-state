@@ -35,7 +35,9 @@ import * as THREE from 'three';
 import type {StationLayout} from '../gen/stationTypes';
 import type {TrainPlacement} from '../gen/playerTrain';
 import type {WorldMaterials} from './materials';
-import {RIDE_MASK, setRideMask} from './rideMask';
+import {RIDE_MASK, setRideBedMedium, setRideMask} from './rideMask';
+import {stationLevels} from './levelGeometry';
+import {atmosphereFor, rideBedMultiplier} from '../render/atmosphere';
 import {boxOverlaps, cutHides, portalCut, portalEndKey, portalEye, ridePortals, type PortalCut, type RidePortal} from './ridePortal';
 import {buildBreachHeadwall, type BreachHeadwall, type RideGateView, type RideGatesBuilt} from './ridePortalView';
 
@@ -182,6 +184,8 @@ export class RidePortalRuntime {
         engaged: false, releasing: false, releaseT: 0, swing: 0, target: 0, maskVersion: -1};
     });
     this.bound = world;
+    // the haze inside the ride tunnel's box: this station's plain track-bed medium (world/rideMask.ts; the transit keeps it)
+    setRideBedMedium(rideBedMultiplier(atmosphereFor(layout), stationLevels(layout)[p.level]?.role ?? 'main'));
     const t0 = performance.now();
     this.prepare();
     this.stats.prepareMs = performance.now() - t0;
