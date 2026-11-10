@@ -2984,11 +2984,12 @@ export class Game {
     this.updateCamera(dt);
 
     prof.lap(SPAN.targets);
-    const eye = this.camera.getWorldPosition(new THREE.Vector3());
-    const look = this.forward();
+    // (task studio-perf-ao-train-continuity-20261110-022206-01, lane PLAY: the frame's eye / look in scratch vectors, no new ones a frame)
+    const eye = this.camera.getWorldPosition(this.frameEye);
+    const look = this.forward(this.frameLook);
     const reachWorld = this.levels.count > 1 ? this.levels : this.layout.grid; // Lane B: 3D occlusion on stacked levels
     // (lane RIDE) from the moving car nothing of the station is in reach (the car's walls are not in the station's occlusion)
-    const reachEye = this.trainRide.riding ? new THREE.Vector3(0, 1e6, 0) : eye;
+    const reachEye = this.trainRide.riding ? this.farEye : eye;
     this.currentTarget = this.pickups.target(reachEye, look, reachWorld);
     // Containers under the crosshair within reach; a closer targeted floor pickup wins.
     const tp = this.currentTarget;
@@ -2997,7 +2998,7 @@ export class Game {
     const ct = this.containerTarget;
     if (ct && !ct.lot && tp && tp.x > ct.container.min.x && tp.x < ct.container.max.x && tp.z > ct.container.min.z && tp.z < ct.container.max.z && tp.y + 0.08 < ct.container.max.y) this.containerTarget = null;
     // Container wins: clear the pickup target + its highlight (an unreachable eye matches nothing).
-    if (this.containerTarget && tp) this.currentTarget = this.pickups.target(new THREE.Vector3(0, 1e6, 0), look, reachWorld);
+    if (this.containerTarget && tp) this.currentTarget = this.pickups.target(this.farEye, look, reachWorld);
     // Lane T: a rescue ladder under the crosshair (only when nothing else is targeted).
     this.ladderAim = !this.currentTarget && !this.containerTarget && !p.climbing && !this.trainRide.riding ? ladderTarget(this.layout.traversal.ladders, eye, look, p.y) : null; // (lane RIDE: none from the moving car)
     prof.lap(SPAN.items);
@@ -3050,7 +3051,7 @@ export class Game {
     if (!p.alive) this.die();
     // Iteration 16 (RUN): a SECTION is cleared once per run (remembered); the clear screen shows when its whole LEVEL is clear
     // (the subway: its one station; the office: the street station and every floor), else a toast points onward.
-    const remaining = this.zombies.filter(z => z.brain.alive).length;
+    const remaining = this.aliveEnemies();
     if (remaining === 0 && this.wonAt < 0 && !this.sectionCleared && this.layout.zombies.length > 0 && this.state === 'playing') {
       this.wonAt = this.time;
       this.sectionCleared = true;
@@ -3062,6 +3063,19 @@ export class Game {
     if (this.wonAt >= 0 && this.time - this.wonAt > 1.6 && this.wonAt > -1 && !this.wonShown) this.wonShown = true;
   }
   private wonShown = false;
+  // Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY, user: "especially stuttering"): update()'s per-frame scratch —
+  // the eye and look vectors (their callees read them during the call, none keeps them: containers.target copies the eye) and the
+  // unreachable eye of a ride / a container target — instead of 2-3 new vectors a frame (garbage for the periodic collections).
+  private readonly frameEye = new THREE.Vector3();
+  private readonly frameLook = new THREE.Vector3();
+  private readonly farEye = new THREE.Vector3(0, 1e6, 0);
+
+  /** Lane PLAY: enemies still alive (update's clear rule and the HUD count; was a filtered array, twice a frame). */
+  private aliveEnemies(): number {
+    let n = 0;
+    for (const z of this.zombies) if (z.brain.alive) n++;
+    return n;
+  }
 
   /**
    * Task studio-alpha-campaign-foundation-20261102-230708-01: THE campaign win (the Reactor's ending; world/reactor/restart.ts calls
@@ -3137,7 +3151,7 @@ export class Game {
       mag: wdef && st && !wdef.melee && !this.gear?.readied ? st.mag ?? 0 : null, reserve: wdef ? reserveFor(wdef, this.inv) : 0,
       melee: !!wdef?.melee && !this.gear?.readied, // lane KNIFE: MELEE tag, no rounds
       hint, prompt, promptItem: lanePrompt ? undefined : this.currentTarget?.stack.itemId,
-      remaining: this.zombies.filter(z => z.brain.alive).length, total: this.layout.zombies.length, // Iteration 16: kills earlier in the run stay dead (not spawned)
+      remaining: this.aliveEnemies(), total: this.layout.zombies.length, // Iteration 16: kills earlier in the run stay dead (not spawned)
       objLine: '', // (campaign foundation) the scavenge objective has no kill counter
       area: area >= 0 ? `${this.layout.skyways ? skywalkText(this.layout.areas[area].label) : this.layout.areas[area].label}${storeyText} · ${this.layout.name}` : (multi ? this.levels.cellKindAt(p.x, p.z, p.y) : this.layout.grid.get(...this.layout.grid.cellOf(p.x, p.z))) === 2 ? `Track bed · ${this.layout.name}` : this.layout.name, // (Skyways: no '+15' wording, task studio-skywalk-variety-20261107-231448-01)
       spreadPx, aiming: this.aiming, flashlight: this.flashlightOn,
@@ -3434,14 +3448,6 @@ export class Game {
     if (this.meleeLog.length > 8) this.meleeLog.shift();
   }
 
-  private panOf(x: number, z: number): [number, number] {
-    const dx = x - this.player.x, dz = z - this.player.z;
-    const dist = Math.hypot(dx, dz);
-    const s = Math.sin(this.player.yaw), c = Math.cos(this.player.yaw);
-    const rightComp = (dx * c - dz * s) / (dist || 1);
-    return [rightComp, dist];
-  }
-
   private brainWorld(): BrainWorld {
     const g = this.layout.grid, L = this.levels, multi = L.count > 1;
     return {
@@ -3549,7 +3555,7 @@ export class Game {
       // the zombie adapter makes exactly the previous groan / swing / gait / ladder calls)
       prof.end(SPAN.motor);
       prof.begin(SPAN.anim);
-      const [, dist] = this.panOf(b.x, b.z);
+      const dist = Math.hypot(b.x - p.x, b.z - p.z); // (lane PLAY: panOf's distance without a tuple per enemy a frame)
       const cues = enemyCues(z);
       if (out.alerted) cues.alert(this.sfx, z);
       if (b.attackSeq !== seqBefore) cues.attack(this.sfx, z);
