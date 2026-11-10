@@ -127,10 +127,20 @@ export function landNoise(speed: number): number {
   const N = SCREACHER_NOISE;
   return speed >= N.landMinSpeed ? Math.min(N.landMax, N.landBase + N.landPerMs * speed) : 0;
 }
-/** Loudness radius (m) of a prop / item impact at `speed` m/s (0: too soft to count). */
-export function impactNoise(speed: number): number {
+/**
+ * How loud an impact of each physics sound family is, relative to a hard object (physics/chunks.ts ImpactFamily): soft and light
+ * things (a bean bag, a plastic bottle, a thrown flare, a cardboard box) carry less; glass and sheet metal a little more.
+ */
+export const IMPACT_FAMILY_LOUDNESS: Readonly<Record<string, number>> = {light: 0.6, cardboard: 0.7, can: 1, heavy: 1, prop: 1, wood: 1, stone: 1, glass: 1.1, metal: 1.1};
+/**
+ * Loudness radius (m) of a prop / item impact at `speed` m/s (0: too soft to count), scaled by its sound family. Measured with a real
+ * Player and the real physics: walking (3.4 m/s) into an office chair lands contacts of 2.5-4 m/s (8-12 m); sprinting into one, 6-9 m/s
+ * (the cap).
+ */
+export function impactNoise(speed: number, family?: string): number {
   const N = SCREACHER_NOISE;
-  return speed >= N.impactMinSpeed ? Math.min(N.impactMax, N.impactBase + N.impactPerMs * speed) : 0;
+  if (!(speed >= N.impactMinSpeed)) return 0;
+  return Math.min(N.impactMax, N.impactBase + N.impactPerMs * speed) * ((family !== undefined ? IMPACT_FAMILY_LOUDNESS[family] : undefined) ?? 1);
 }
 
 /** Touch, belief memory and the priority of one sound over another. */

@@ -125,7 +125,7 @@ import {installReactorCpuCulling} from './world/reactor/cpuActorCulling'; // tas
 import {installBunkerObjective} from './world/bunker/objective'; // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE): the Bunker's optional generators + core intel
 import {installReactorMapBoards} from './world/reactor/mapBoard'; // task reactor-expansion-20261101 (lane CONTROLS) // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
-import {SCREACHER_NOISE, ScreacherBrain, deliverNoise, echoLocate, impactNoise, landNoise, type ScreacherNoiseKind} from './ai/screacher'; // task studio-screacher-production-20261110-221858-01: the blind, sound-hunting family
+import {SCREACHER_NOISE, ScreacherBrain, deliverNoise, echoLocate, landNoise, type ScreacherNoiseKind} from './ai/screacher'; // task studio-screacher-production-20261110-221858-01: the blind, sound-hunting family
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 // Iteration 16 (lane RUN): logical levels / sections, travel, run carryover (levels/registry.ts, run/*)
 import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, levelDisplayName, sectionLabel, storeyLabel} from './levels/registry';
@@ -167,6 +167,7 @@ import {SKYWAYS_LAYOUT_LANE, skywaysLayoutVersionFor} from './gen/skyways/layout
 import {MARKET_LAYOUT_LANE, marketLayoutVersionFor} from './gen/market/layoutVersion'; // task studio-market-rework-20261108-074144-01 (lane LAYOUT)
 import {BUNKER_LAYOUT_LANE, bunkerLayoutVersionFor} from './gen/bunker/layoutVersion'; // task studio-bunker-level-20261109-072224-01 (lane LEVEL)
 import {ROSTER_LANE, rosterVersionFor} from './ai/enemyRoster'; // task studio-screacher-production-20261110-221858-01: the seeded family roster's version pin
+import {noisyPhysicsAudio} from './ai/screacherNoise'; // task studio-screacher-production-20261110-221858-01: prop / item contacts as world noise
 import {setObjectiveTitle} from './ui/objectiveTitle'; // task studio-bunker-rework-20261109-205115-01
 import {installSkywaysDestAudio} from './world/skywaysDestAudio'; // task skyways-destinations-20261106 (lane AUDIO): the destinations' location sounds
 import {installSubwayMapRead} from './world/subwayMapRead'; // task studio-ui-subway-maps-20261108-074144-01: the station map kiosks' close-up read
@@ -344,23 +345,12 @@ export class Game {
   /** Ragdolls (cannon-es) + pooled casings; rebuilt per station, stepped only while playing. */
   readonly physics = new PhysicsSystem(this.scene, this.physicsAudio());
   /**
-   * Task studio-screacher-production-20261110-221858-01: the physics systems' audio sink — every call goes to the Sfx unchanged; a prop /
-   * item / shelf-stock / thrown-item contact (the callers that name their `source`; debris and flesh chunks do not) and a dragged box
-   * are ALSO reported as world noise at the place they happened (worldNoise: only Screachers listen). The AI event is raised here, by
-   * the physics contact itself — never by the audio layer, whose distance culling and voice limits must not decide what an enemy hears.
+   * Task studio-screacher-production-20261110-221858-01: the physics systems' audio sink — the Sfx, wrapped so that a loose object's
+   * contact (a prop the player walked into, a kicked can, shelf stock falling, a thrown flare landing) and a dragged box are ALSO
+   * raised as world noise where they happened (ai/screacherNoise.ts; only Screachers listen: worldNoise).
    */
   private physicsAudio(): PhysicsAudio {
-    const sfx = this.sfx;
-    return {
-      casing: (x, y, z, speed, kind) => sfx.casing(x, y, z, speed, kind),
-      bodyFall: (x, y, z, strength) => sfx.bodyFall(x, y, z, strength),
-      physImpact: (x, y, z, speed, family, mass, source) => {
-        sfx.physImpact(x, y, z, speed, family, mass);
-        if (source !== undefined && family !== 'flesh') this.worldNoise(x, y, z, impactNoise(speed), 'impact');
-      },
-      propDrag: (x, y, z, speed, id) => { sfx.propDrag(x, y, z, speed, id); this.worldNoise(x, y, z, SCREACHER_NOISE.drag, 'drag'); },
-      propDragStop: id => sfx.propDragStop(id),
-    };
+    return noisyPhysicsAudio(this.sfx, (x, y, z, radius, kind) => this.worldNoise(x, y, z, radius, kind));
   }
   /** Iteration 06 (Lane D): material damage — craters, debris, per-instance prop damage / breaking, zombie wounds. */
   readonly damage = new DamageSystem(this.fx, this.sfx);
