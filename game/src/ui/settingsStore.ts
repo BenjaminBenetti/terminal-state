@@ -21,6 +21,10 @@
 //  - Task studio-beta-mouse-axis-invert-20261105-005156-01: invertX / invertY flip the horizontal / vertical mouse LOOK, each on its
 //    own (player/mouseLook.ts; both default off). A record from before invertX existed reads it as false (a missing field is just
 //    defaulted, not "fixed"); a non-boolean falls back to false. Same record, same SETTINGS_VERSION; never part of a save slot.
+//  - Task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO): ambientOcclusion (default ON) switches the screen-space ambient
+//    occlusion of the atmosphere pass (render/ambientOcclusion.ts). A record from before it existed reads it as on (missing = just
+//    defaulted, not "fixed"); a non-boolean falls back to on. Same record, same SETTINGS_VERSION. It is not a quality preset: it never
+//    changes the fog, shadows, MSAA or resolution, and AO needs the volumetric pass (no AO where the station is drawn directly).
 
 import {STORAGE_KEYS} from '../campaign/types';
 
@@ -48,10 +52,12 @@ export interface GameSettings {
   renderScale: RenderScale;
   /** The moving train's jostle on the view, 0..1 (0 = off; world/trainRide.ts scales RIDE_JOSTLE by it). */
   trainSway: number;
+  /** Lane AO: screen-space ambient occlusion on / off (the atmosphere pass; default on). */
+  ambientOcclusion: boolean;
 }
 
 /** The game's historical defaults (game.ts Settings) + native resolution. */
-export const SETTINGS_DEFAULTS: Readonly<GameSettings> = Object.freeze({sens: 1, fov: 75, volume: 0.7, muted: false, invertX: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1});
+export const SETTINGS_DEFAULTS: Readonly<GameSettings> = Object.freeze({sens: 1, fov: 75, volume: 0.7, muted: false, invertX: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1, ambientOcclusion: true});
 
 /** The existing UI bounds (index.html ranges): sensitivity 0.2-3, FOV 60-100 degrees, volume 0-100 %, train sway 0-100 %. */
 export const SETTINGS_BOUNDS = {
@@ -65,7 +71,7 @@ export const SETTINGS_BOUNDS = {
 export const SETTINGS_VERSION = 1;
 
 export type SettingsKey = keyof GameSettings;
-export const SETTINGS_KEYS: readonly SettingsKey[] = ['sens', 'fov', 'volume', 'muted', 'invertX', 'invertY', 'quality', 'renderScale', 'trainSway'];
+export const SETTINGS_KEYS: readonly SettingsKey[] = ['sens', 'fov', 'volume', 'muted', 'invertX', 'invertY', 'quality', 'renderScale', 'trainSway', 'ambientOcclusion'];
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -94,7 +100,7 @@ function field<K extends SettingsKey>(k: K, raw: unknown): {value: GameSettings[
       const c = clamp(n, b.min, b.max);
       return {value: c as GameSettings[K], fixed: c !== n};
     }
-    case 'muted': case 'invertX': case 'invertY':
+    case 'muted': case 'invertX': case 'invertY': case 'ambientOcclusion': // (lane AO: a non-boolean falls back to its default, on)
       return typeof raw === 'boolean' ? {value: raw as GameSettings[K], fixed: false} : {value: d, fixed: true};
     case 'quality':
       return raw === 'low' || raw === 'high' ? {value: raw as GameSettings[K], fixed: false} : {value: d, fixed: true};
@@ -200,6 +206,22 @@ export function qualityDescription(q: Quality, preset?: QualityPresetLike | null
   const w = Math.round(Math.sqrt(preset.maxPixels * 16 / 9)), h = Math.round(w * 9 / 16);
   return `Fog at ${fraction(preset.scale)} resolution (≤ ${w}×${h}), ${preset.steps} steps · ${preset.shadowMapSize} px flashlight shadow · `
     + `${preset.msaa > 0 ? `${preset.msaa}× MSAA` : 'no MSAA'} · ${cap}`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Ambient occlusion (task studio-perf-ao-train-continuity-20261110-022206-01, lane AO)
+
+/** The setting's plain name and its two choices (stored as the boolean ambientOcclusion). */
+export const AO_LABEL = 'Ambient occlusion';
+export const AO_OPTIONS: readonly {value: 'on' | 'off'; label: string}[] = [{value: 'on', label: 'On'}, {value: 'off', label: 'Off'}];
+
+/**
+ * The help line under the choice: what AO does, or — when the atmosphere pass that runs it cannot run in this session (fog quality
+ * off, an unsupported backend, a failure: `unavailable` = the reason, render/volumetric.ts aoUnavailable) — that it is unavailable.
+ */
+export function aoDescription(on: boolean, unavailable: string | null): string {
+  if (unavailable) return `Unavailable here: ${unavailable}`;
+  return on ? 'Soft contact shadows in corners, under furniture and around props' : 'Off: no contact shadows';
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -366,9 +388,10 @@ export function browserSettingsStorage(): SettingsStorage | null {
 }
 
 /** Copy the effective settings into the game's Settings object (game.ts reads `game.settings.*`); true when render-affecting quality changed. */
-export function copySettingsInto(target: {sens: number; fov: number; volume: number; muted: boolean; invertX: boolean; invertY: boolean; quality: Quality; renderScale: RenderScale; trainSway: number}, s: Readonly<GameSettings>): {qualityChanged: boolean} {
+export function copySettingsInto(target: {sens: number; fov: number; volume: number; muted: boolean; invertX: boolean; invertY: boolean; quality: Quality; renderScale: RenderScale; trainSway: number; ambientOcclusion?: boolean}, s: Readonly<GameSettings>): {qualityChanged: boolean} {
   const qualityChanged = target.quality !== s.quality;
   target.sens = s.sens; target.fov = s.fov; target.volume = s.volume; target.muted = s.muted;
   target.invertX = s.invertX; target.invertY = s.invertY; target.quality = s.quality; target.renderScale = s.renderScale; target.trainSway = s.trainSway;
+  target.ambientOcclusion = s.ambientOcclusion; // (lane AO)
   return {qualityChanged};
 }

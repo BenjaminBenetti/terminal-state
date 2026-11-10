@@ -48,6 +48,7 @@ import {GAS} from '../world/gas/field';
 import {REACTOR_AIR, REACTOR_GAS_LOOK} from '../world/reactor/air'; // task reactor-build-20261101 (lane AIR): the depth gas table size / look
 import {BILATERAL_K, DENSITY_MAP_RANGE} from './atmosphere';
 import {SMOKE_LIMITS, VIS_WINDOWS} from './smoke';
+import {applyAmbientOcclusion, type AoComposite} from './ambientOcclusion'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO)
 
 /** Uniform array sizes (render/smoke.ts SMOKE_LIMITS). */
 export const VF_LIMITS = {smoke: SMOKE_LIMITS.emitters, puffsPer: SMOKE_LIMITS.puffsPerEmitter, puffs: SMOKE_LIMITS.emitters * SMOKE_LIMITS.puffsPerEmitter, scatter: SMOKE_LIMITS.scatterLights, windows: VIS_WINDOWS} as const;
@@ -567,8 +568,11 @@ export function createTemporalMaterial(u: FogUniforms, cur0: THREE.Texture, cur1
  * scene x transmittance + in-scatter x intensity, with the depth-aware upsample of the low-res fog. `sceneColor` /
  * `sceneDepth`: the scene pass texture nodes (loaded FIRST so the scene pass is ordered before the fog pass);
  * `fog0` / `fog1`: the fog pass's texture nodes (in-scatter + view depth, transmittance).
+ * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO): `ao` (render/ambientOcclusion.ts) = the ambient occlusion
+ * lookup, applied to the SCENE colour before the fog (in-scatter is never darkened), behind its `aoOn` gate; absent: exactly the
+ * previous composite.
  */
-export function createCompositeNode(u: FogUniforms, sceneColor: N, sceneDepth: N, fog0: N, fog1: N): Node {
+export function createCompositeNode(u: FogUniforms, sceneColor: N, sceneDepth: N, fog0: N, fog1: N, ao?: AoComposite): Node {
   return Fn(() => {
     const uvN = n(uv());
     const fsize = n(texSize(sceneDepth));
@@ -600,6 +604,7 @@ export function createCompositeNode(u: FogUniforms, sceneColor: N, sceneDepth: N
     const ok = wsum.greaterThan(1e-4);
     const fog = n(select(ok, acc.div(max(wsum, 1e-4)), best)).mul(u.intensity);
     const tv = mix(float(1), clamp(select(ok, accT.div(max(wsum, 1e-4)), bestT), 0, 1), clamp(u.intensity, 0, 1));
-    return vec4(n(sc.rgb).mul(tv).add(fog), 1);
+    const surf = ao ? applyAmbientOcclusion(ao, sc.rgb, d, z, uvN) : sc.rgb; // (lane AO)
+    return vec4(n(surf).mul(tv).add(fog), 1);
   })() as unknown as Node;
 }
