@@ -13,6 +13,8 @@
 // their iteration-04 meaning (FLOOR cells only) for dressing and spawning; height-aware movement
 // uses passable / circleClearH / walkLineClearH / PathFinder.
 
+import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
+
 export const CELL = 0.5;
 export const SOLID = 0;
 export const FLOOR = 1;
@@ -475,6 +477,8 @@ export const PULL_PROBE_UNITS = 48;
 export interface PathFinderOptions {
   /** Level distance fields for the A* heuristic (default: when the stack has >= LEVEL_HEURISTIC_MIN_LEVELS levels). */
   levelHeuristic?: boolean;
+  /** Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): PathFinder.steps builds the level fields itself, in steps. */
+  deferLevelHeuristic?: boolean;
 }
 
 /** lane AI-CPU: the state of one PathFinder.search() A* run (PathFinder.expand), kept across its chunk boundaries. */
@@ -614,15 +618,37 @@ export class PathFinder {
         }
       }
     }
-    if (NL > 1 && (opts.levelHeuristic ?? NL >= LEVEL_HEURISTIC_MIN_LEVELS)) {
+    if (NL > 1 && (opts.levelHeuristic ?? NL >= LEVEL_HEURISTIC_MIN_LEVELS) && !opts.deferLevelHeuristic) {
       const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
       this.buildLevelDistance(W, H);
       (this as {levelHeuristicMs: number}).levelHeuristicMs = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
     }
   }
 
+  /**
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): `new PathFinder(source, opts)` as steps (core/pacedBuild.ts) —
+   * the constructor, then its level distance fields (a stacked station's reverse Dijkstra per level, the bulk of the build) one level
+   * per step, where the journey's paced build may let a frame be drawn. The same finder; `levelHeuristicMs` is wall time, waits included.
+   */
+  static *steps(source: Grid | NavLevels, opts: PathFinderOptions = {}): BuildSteps<PathFinder> {
+    const pf = new PathFinder(source, {...opts, deferLevelHeuristic: true});
+    const NL = pf.grids.length;
+    if (NL > 1 && (opts.levelHeuristic ?? NL >= LEVEL_HEURISTIC_MIN_LEVELS) && !opts.deferLevelHeuristic) {
+      yield;
+      const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+      yield* pf.levelDistanceSteps(pf.grids[0].w, pf.grids[0].h);
+      (pf as {levelHeuristicMs: number}).levelHeuristicMs = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
+    }
+    return pf;
+  }
+
   /** Least cost from every walkable node to any node of each level (reverse Dijkstra per level; see levelDist). */
   private buildLevelDistance(W: number, H: number): void {
+    drainSync(this.levelDistanceSteps(W, H));
+  }
+
+  /** buildLevelDistance as steps: one level's field per step (lane BUILD; the search loop stays in a plain closure). */
+  private *levelDistanceSteps(W: number, H: number): BuildSteps<void> {
     const NC = this.NC, NL = this.grids.length, n = NC * NL, walk = this.walk, fl = this.fl;
     const idx = new Int32Array(n).fill(-1);
     let M = 0;
@@ -657,7 +683,7 @@ export class PathFinder {
       heap[k] = lastI; heapF[k] = lastF;
       return top;
     };
-    for (let L = 0; L < NL; L++) {
+    const levelField = (L: number): Float32Array => {
       const D = new Float32Array(M).fill(Infinity);
       size = 0;
       for (let i = L * NC; i < (L + 1) * NC; i++) if (idx[i] >= 0) { D[idx[i]] = 0; push(i, 0); }
@@ -682,8 +708,9 @@ export class PathFinder {
         if (this.twinFlag[v]) for (const u of this.twins.get(v)!) relax(u, 0.01);
         if (this.linkFlag[v]) for (const li of this.linkMap.get(v)!) { const l = this.links[li]; relax(l.a === v ? l.b : l.a, l.cost); }
       }
-      this.levelDist.push(D);
-    }
+      return D;
+    };
+    for (let L = 0; L < NL; L++) { this.levelDist.push(levelField(L)); yield; } // (lane BUILD: one level per step)
   }
   private addLink(l: PathLink): void {
     const li = this.links.length;

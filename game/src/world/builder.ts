@@ -23,7 +23,7 @@ import {canvasTexture, signPlate} from './canvasTextures';
 import {companySignTexture, signStyleKey} from './companySigns'; // Task office-overhaul-20261030 (lane TENANTS)
 import {shapeMaterial, shapeMaterials} from './shapeMaterials';
 import {SHOP_BLOCKERS, SHOP_FURNITURE} from '../gen/storefronts';
-import {buildStorefronts} from './storefrontBuilder';
+import {buildStorefrontsSteps} from './storefrontBuilder';
 import {buildTraversal} from './traversalBuilder';
 import {SIGN_SIZE, passageRails, signDims} from '../gen/doorways';
 import {
@@ -35,8 +35,8 @@ import type {WallFace} from './wallFaces';
 import {LEGACY_STACK, LevelCuller} from './levelCulling';
 import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu'; // Iteration 13 (MAT-A)
 import {SIGN_ATLAS_CONTEXT} from './surfaceNodes';
-import {buildWallDetail} from './wallDetail';
-import {applyStationDecay, archShopMaterial} from './decay';
+import {buildWallDetailSteps} from './wallDetail';
+import {applyStationDecaySteps, archShopMaterial} from './decay';
 import {buildOfficeProp, cutOfficeWindows, isOfficeBuilt} from './officeProps'; // Iteration 16 (WORLD-GEN)
 import {cutSkywaysWindows} from './skywaysWindows'; // task studio-skyways-level-20261106-054448 (lane GAS): the Skyways glazing holes
 import {skywaysOcclusionSee, skywaysWindowSpans} from './skywaysOcclusion'; // task studio-skywalk-variety-20261107-231448-01 (lane PERF): the culler's see-through Skyways structure
@@ -56,7 +56,7 @@ import {OfficeArch} from './officeArch'; // Task office-overhaul-20261030 (lane 
 import {setExteriorRoof} from './exterior'; // Task office-overhaul-20261030 (lane ARCH): roof deck for the outdoor fog / tower shell
 import {levelsOf} from '../gen/levels'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's collision rails
 import {MALL_FINISH_ATTR, MallArch, downlightLensMatrix, splitFinishKey} from './mallArch'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's finishes + atrium
-import {TrackExtView, buildTrackExtensions, shellDetailFaces, type TrackExtBuilt} from './trackExt';
+import {TrackExtView, buildTrackExtensionsSteps, shellDetailFaces, type TrackExtBuilt} from './trackExt';
 import {gensetModelFit} from './trackExt/machines'; // (round 2, R3)
 import {ANNEX_GENSET} from '../assets/annexGenset.generated'; // (round 2, R3)
 import {finishResolver, type FinishAt} from './finishAt'; // task reactor-expansion-20261101 (lane CONTROLS)
@@ -340,13 +340,18 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   // --- Walls: union-of-open-columns faces, merged per straight run and level band ----------
   // Iteration 16 (WORLD-GEN): office window spans are cut out of the facade faces (no-op without layout.office).
   // Task studio-skyways-level-20261106-054448 (lane GAS): + the Skyways glazed spans (world/skywaysWindows.ts; no-op without layout.skyways).
-  const cutFaces: BuiltFace[] = cutSkywaysWindows(cutOfficeWindows(extractWallFaces(layout, levels, cols, {tileLowerHeight: mats.tileLowerHeight}), layout), layout);
+  const extracted = extractWallFaces(layout, levels, cols, {tileLowerHeight: mats.tileLowerHeight});
+  yield;
+  const cutFaces: BuiltFace[] = cutSkywaysWindows(cutOfficeWindows(extracted, layout), layout);
+  yield;
   // Task office-overhaul-20261030 (lane ARCH): office storey walls get office finishes (drywall, accent, wet-room tile, core, roof).
   const remapped: BuiltFace[] = office ? office.remapFaces(cutFaces, mats.tileLowerHeight) : mall ? mall.remapFaces(cutFaces, mats.tileLowerHeight) : reactor ? reactor.remapFaces(cutFaces) : sky ? sky.remapFaces(cutFaces, mats.tileLowerHeight) : mkt ? mkt.remapFaces(cutFaces) : bunk ? bunk.remapFaces(cutFaces) : cutFaces; // (+ reactor: lane ARCH; + sky: lane VIEW)
   // Track 2 (VIS): where a track tunnel continues a bed, its smooth shell replaces the grid geometry inside the corridor
   // (no stair-stepped walls, bed end-face stubs or door reveals inside the shell; world/trackExt/view.ts). Null = unchanged.
+  yield;
   const ext = TrackExtView.of(layout);
   const faces: BuiltFace[] = ext ? ext.clipFaces(remapped) : remapped;
+  yield;
   const emitFace = (f: BuiltFace) => {
     const alongX = Math.abs(f.z0 - f.z1) < 1e-9;
     const plane = alongX ? f.z0 : f.x0;
@@ -457,7 +462,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
       const a = layout.areas[g.area[i]];
       return a?.type === 'eatery' ? 'shop:quarryTile' : floorMatFor(a);
     };
-    for (let y = 0; y < g.h; y++) {
+    const floorRow = (y: number): void => { // (lane BUILD: a row per call, the scan out of the generator body)
       for (let x = 0; x < W;) {
         const i = y * W + x;
         const key = floorKey(i);
@@ -468,8 +473,8 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
         floorRect(key.startsWith('shop:') ? {shop: key.slice(5)} : key, id, x * CELL, y * CELL, e * CELL, (y + 1) * CELL, f);
         x = e;
       }
-      if (++step % 8 === 0) yield;
-    }
+    };
+    for (let y = 0; y < g.h; y++) { floorRow(y); if (++step % 8 === 0) yield; }
     // task studio-reactor-surface-ending-20261102 (lane REPAIRS): floor runs an arch adds beside the cells' own floors (the Reactor's
     // core deck continued under the vessel; merged into the same per-chunk accumulators: no new mesh)
     if (reactor) for (const q of reactor.floorFills(L)) floorRect(q.key, id, q.x0, q.z0, q.x1, q.z1, q.y);
@@ -513,7 +518,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   yield 'world.meshes';
   let archMeshes = 0;
   for (const [key, e] of acc) {
-    if (++step % 16 === 0) yield;
+    if (++step % 2 === 0) yield;
     const geo = e.a.geometry();
     if (!geo) continue;
     const mesh = new THREE.Mesh(geo, matOf(e.k));
@@ -541,11 +546,11 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   // into the arch wall meshes above, plus one merged 'wall-detail' group (world/wallDetail.ts).
   // Track 2 (VIS): + the tunnel shells' straight walls (treatment only: the shell draws them; world/trackExt/shell.ts).
   const treatFaces = ext ? faces.concat(shellDetailFaces(ext, layout)) : faces;
-  try { buildWallDetail(group, layout, mats, treatFaces); } catch (e) { console.warn('wall detail skipped', e); }
+  try { yield* buildWallDetailSteps(group, layout, mats, treatFaces); } catch (e) { console.warn('wall detail skipped', e); }
   yield 'world.decay';
   // Iteration 12 (ARCH): ~30 years without upkeep on walls / floors / ceilings (world/decay.ts): the station's decay
   // field (traffic lanes, edges, leaks, neglect) + the architectural materials' decay hook. Surfaces only.
-  try { applyStationDecay(layout, levels, mats); } catch (e) { console.warn('surface decay skipped', e); }
+  try { yield* applyStationDecaySteps(layout, levels, mats); } catch (e) { console.warn('surface decay skipped', e); }
 
   yield 'world.tunnels';
   // Tunnel mouths fade to black beyond the platform ends.
@@ -567,7 +572,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   // Track 2 (VIS): tunnel shells (walls, ceiling, ballast, track, caps), annex door frames + plates, graffiti clues.
   // (round 2, R3) the generated genset model (ANNEX_GENSET, lazy: game.ts sectionModelKeys) replaces the procedural genset body
   const gensetGltf = models[ANNEX_GENSET.key];
-  const trackExt = ext ? buildTrackExtensions(group, ext, layout, mats, {gensetModel: !!gensetGltf}) : undefined;
+  const trackExt = ext ? (yield* buildTrackExtensionsSteps(group, ext, layout, mats, {gensetModel: !!gensetGltf})) : undefined;
   if (trackExt && gensetGltf) trackExt.gensets = placeGensetModels(group, layout, gensetGltf);
 
   yield 'world.trim';
@@ -804,7 +809,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
 
   yield 'world.storefronts';
   // --- Storefront bays (frames, fascias, shutters, glazing, menu boards, counters …) -----------
-  instances += buildStorefronts(group, layout, {mat: k => shapeMaterial(mats, k), models, instanceModel});
+  instances += yield* buildStorefrontsSteps(group, layout, {mat: k => shapeMaterial(mats, k), models, instanceModel});
   // Iteration 16 (WORLD-GEN): office carpet, drop ceilings and window reveals (no-op without layout.office). Task
   // office-overhaul-20261030 (lane ARCH): the carpet / ceilings are the office storeys' own floors / ceilings now (office keys
   // above, no overlay over station finishes); only the window reveals are added here, in the storey's wall finish.
@@ -818,11 +823,14 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   // Task track3-eaton-centre-20261031 (lane ARCH): the mall atrium — glass vault + steel arches, glass balustrades, columns, the
   // glass shaft tower, shopfront / blade / level signage, banners, escalator soffits (world/mallArch.ts).
   if (mall) mall.buildAtrium(group, rails);
+  yield;
   // Task reactor-build-20261101 (lane ARCH): the Reactor's industrial kit (deck steel, towers, crane, pipe banks, fans, generators, the
   // vessel, site machines, bands, lamps, railings; world/reactor/arch.ts) + its ReactorVisuals (null for every other world).
   if (reactor) reactor.build(group, rails, models);
+  yield;
   if (reactor) buildWasteVisuals(group, layout, mats, models); // task reactor-expansion-20261101 (lane WASTE): the waste repository's racks / casks / kit
   registerReactorArchVisuals(reactor ? reactor.visuals : null);
+  yield;
   if (bunk) bunk.build(group, models); // task studio-bunker-level-20261109-072224-01: the shelter's hero props (REACTOR_X_KIT models)
 
   yield 'world.trimMerge';

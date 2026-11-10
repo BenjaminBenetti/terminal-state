@@ -45,6 +45,7 @@ import {
 } from 'three/tsl';
 import {addNodeHook} from '../render/nodeHooks';
 import {requestSurfaceAnisotropy} from '../render/anisotropy'; // lane FIX (U08)
+import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {SurfaceNodeMaterial, cloneSurfaceMaterial, worldMapped, type MatKey, type WorldMapping, type WorldMaterials} from './materials';
 import {shapeMaterial} from './shapeMaterials';
 import {asColor, isNodeMaterial, lfBandNode, matRef, pick, sharedStage, skipInShadowPass} from './surfaceNodes';
@@ -217,13 +218,18 @@ function valueNoise(seed: number, period: number): (x: number, y: number) => num
  * without them: same leak draws, lanes and noise frame), the rest (tunnels / annexes) from the field of the whole grid.
  */
 export function buildDecayField(layout: StationLayout, levels: readonly Level[]): DecayField {
+  return drainSync(buildDecayFieldSteps(layout, levels));
+}
+
+/** task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): buildDecayField as steps (core/pacedBuild.ts): the same code, one level of a field per step (stats.ms: wall time). */
+export function* buildDecayFieldSteps(layout: StationLayout, levels: readonly Level[]): BuildSteps<DecayField> {
   const e = layout.extensions;
-  if (!e || !hasExtensionGrowth(layout)) return buildFieldOf(layout, levels);
+  if (!e || !hasExtensionGrowth(layout)) return yield* buildFieldOf(layout, levels);
   const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
   const core = coreView(layout);
   const byId = new Map(core.levels.map(L => [L.id, L]));
-  const cf = buildFieldOf(core, levels.map(L => byId.get(L.id) ?? {...L, grid: core.grid}));
-  const full = buildFieldOf(layout, levels);
+  const cf = yield* buildFieldOf(core, levels.map(L => byId.get(L.id) ?? {...L, grid: core.grid}));
+  const full = yield* buildFieldOf(layout, levels);
   const {x, y, w, h} = e.core, W = full.w, H = full.h;
   // (2026-11-01, round-4 follow-up lane ENV) only the window's CORE cells come from the core view: an extension cell (tunnel / annex,
   // Area.ext) inside the window keeps the whole grid's texel (its own rules: damp bed floor, extension leaks / neglect). The window
@@ -244,7 +250,7 @@ export function buildDecayField(layout: StationLayout, levels: readonly Level[])
   return full;
 }
 
-function buildFieldOf(layout: StationLayout, levels: readonly Level[]): DecayField {
+function* buildFieldOf(layout: StationLayout, levels: readonly Level[]): BuildSteps<DecayField> {
   const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
   const g0 = levels[0].grid, W = g0.w, H = g0.h, S = levels.length, n = W * H;
   const data = new Uint8Array(W * H * S * 4);
@@ -252,7 +258,8 @@ function buildFieldOf(layout: StationLayout, levels: readonly Level[]): DecayFie
   const sources: number[] = [], leaks: number[] = [];
   const doors = layout.doors ?? [];
   const links = (layout as {levelLinks?: {kind: string; lower: number; upper: number; bottom: {x: number; z: number}; top: {x: number; z: number}}[]}).levelLinks ?? [];
-  for (let L = 0; L < S; L++) {
+  // (lane BUILD) one level per step; its loops stay in a plain function (out of the generator body)
+  const fillLevel = (L: number): void => {
     const g = levels[L].grid, role = levels[L].role, id = levels[L].id;
     const rnd = mulberry32(seed ^ Math.imul(L + 1, 0x9e3779b1));
     const walk = new Uint8Array(n), open = new Uint8Array(n);
@@ -388,7 +395,8 @@ function buildFieldOf(layout: StationLayout, levels: readonly Level[]): DecayFie
       data[o + 2] = Math.round(Math.min(WET_CAP, wet[i]) * 255);
       data[o + 3] = Math.round(neg * 255);
     }
-  }
+  };
+  for (let L = 0; L < S; L++) { fillLevel(L); yield; }
   return {w: W, h: H, levels: S, data, stats: {ms: (typeof performance !== 'undefined' ? performance.now() : 0) - t0, sources, leaks}};
 }
 
@@ -821,8 +829,13 @@ export function setDecayField(field: DecayField): THREE.DataTexture {
 
 /** Builder entry: age a station's architecture (field + hooks). Returns the field (stats / tests). */
 export function applyStationDecay(layout: StationLayout, levels: readonly Level[], mats: WorldMaterials): DecayField {
+  return drainSync(applyStationDecaySteps(layout, levels, mats));
+}
+
+/** task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): applyStationDecay as steps — the field in steps (buildDecayFieldSteps), then hooked and bound at once (one step). */
+export function* applyStationDecaySteps(layout: StationLayout, levels: readonly Level[], mats: WorldMaterials): BuildSteps<DecayField> {
   decayWorldMaterials(mats);
-  const f = buildDecayField(layout, levels);
+  const f = yield* buildDecayFieldSteps(layout, levels);
   setDecayField(f);
   return f;
 }

@@ -26,6 +26,7 @@ import {canvasTexture} from './canvasTextures';
 import {SurfaceNodeMaterial, surfaceMaterial} from './materials';
 import {PAINT, purposeMaterial, purposeMenuMaterial} from './purposeTextures';
 import {planCohorts, trianglesOf} from './staticCohorts'; // task static-batching-warmup-20261105
+import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {drawMallFascia} from './skywaysMallFascia'; // task studio-skywalk-encounters-20261108-074144-01 (lane STORES): Mall store families' fascias
 
 export interface StorefrontDeps {
@@ -56,9 +57,19 @@ function materialFor(deps: StorefrontDeps, key: string): THREE.Material {
 
 /** Builds every storefront of the layout into `group`. Returns the instance count (stats). */
 export function buildStorefronts(group: THREE.Group, layout: StationLayout, deps: StorefrontDeps): number {
+  return drainSync(buildStorefrontsSteps(group, layout, deps));
+}
+
+/**
+ * task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): buildStorefronts as steps (core/pacedBuild.ts) — the same code in the same order, a `yield` every few bays, between its
+ * phases and per holder kind, where the journey's paced build may let a frame be drawn (the station group is not in the scene yet).
+ */
+export function* buildStorefrontsSteps(group: THREE.Group, layout: StationLayout, deps: StorefrontDeps): BuildSteps<number> {
   const boxes: ShopBox[] = [...layout.decor];
   const faces: ShopFace[] = [];
+  let step = 0;
   for (const sf of layout.storefronts) {
+    if (++step % 4 === 0) yield;
     const p = storefrontParts(layout, sf, {anchorSign: true}); // (+ anchorSign: task studio-alpha-skyways-shops-20261107-054512-01)
     boxes.push(...p.boxes);
     faces.push(...p.faces);
@@ -67,6 +78,7 @@ export function buildStorefronts(group: THREE.Group, layout: StationLayout, deps
   const byMat = new Map<string, ShopBox[]>();
   for (const b of boxes) { let l = byMat.get(b.m); if (!l) byMat.set(b.m, (l = [])); l.push(b); }
   for (const [key, list] of byMat) {
+    if (++step % 8 === 0) yield;
     const geo = mergeAabbs(list);
     const mesh = new THREE.Mesh(geo, materialFor(deps, key));
     mesh.name = `shopfront-${key}`;
@@ -74,6 +86,7 @@ export function buildStorefronts(group: THREE.Group, layout: StationLayout, deps
     mesh.updateMatrix();
     group.add(mesh);
   }
+  yield;
   // --- Fascia lettering (atlas) and leasing hoardings ------------------------------------------
   const fascias = faces.filter(f => f.kind === 'fascia');
   if (fascias.length) group.add(faceMesh(fascias, fasciaAtlas(layout.storefronts, fascias), 'shopfront-fascia'));
@@ -82,6 +95,7 @@ export function buildStorefronts(group: THREE.Group, layout: StationLayout, deps
   // --- Furniture holders --------------------------------------------------------------------
   let instances = 0;
   for (const kind of SHOP_HOLDERS) {
+    yield;
     if (rendersOwnBody(kind, deps.models)) continue; // iteration 08 (Lane I): openable (glass-door cooler) drawn by world/openables.ts
     const list = layout.props.filter(p => p.kind === kind);
     if (!list.length) continue;
@@ -103,8 +117,10 @@ export function buildStorefronts(group: THREE.Group, layout: StationLayout, deps
     }
     instances += proceduralFurniture(group, kind, list, placements, layout.storefronts, deps);
   }
+  yield;
   // --- Purpose props (iteration 05): store fixtures, kitchen lines, back-of-house furniture ------
   instances += buildPurposeProps(group, layout, deps);
+  yield;
   // --- Iteration 07 (Lane P2): NEW generated prop types (lazy per-station models) ---------------------------------------------
   instances += buildP7Props(group, layout, deps);
   return instances + boxes.length;

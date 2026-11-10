@@ -3,7 +3,7 @@
 // loot holders + display, the shelf stock, the light field bake and the fog density / air maps — plus FINGERPRINTS of what they
 // built (every object in traversal order: type, name, flags, layers, matrices, userData, geometry attribute / index hashes, instance
 // matrices / colours, a material key; holder lots; the field / map bytes). Two builds are identical when their fingerprints are.
-// Timing stats (`ms` fields: wall-clock diagnostics) and object uuids / ids are left out.
+// Timing stats (`ms` / `timing` / `*Ms` fields: wall-clock diagnostics) and object uuids / ids are left out.
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {ShimContext, installCanvasShim} from './canvas2d';
@@ -96,7 +96,10 @@ export function hashBytes(a: ArrayLike<number> | ArrayBufferView | null | undefi
   return `${(h >>> 0).toString(16)}:${bytes.length}`;
 }
 
-/** userData / plain data as stable text: functions, objects of three and cycles by kind only; timing `ms` fields left out. */
+/** Wall-clock diagnostics kept in data (e.g. world.group.userData.wallDetail.timing): never part of a fingerprint. */
+const isTimingKey = (k: string) => k === 'ms' || k === 'timing' || /Ms$/.test(k);
+
+/** userData / plain data as stable text: functions, objects of three and cycles by kind only; timing fields (isTimingKey) left out. */
 export function stableText(v: unknown, depth = 0, seen = new WeakSet<object>()): string {
   if (v === null || v === undefined) return String(v);
   if (typeof v === 'number') return Number.isFinite(v) ? String(Math.round(v * 1e6) / 1e6) : String(v);
@@ -113,7 +116,7 @@ export function stableText(v: unknown, depth = 0, seen = new WeakSet<object>()):
   if (Array.isArray(v)) return `[${v.map(x => stableText(x, depth + 1, seen)).join(',')}]`;
   if (v instanceof Map) return `map{${[...v.entries()].map(([k, x]) => `${stableText(k, depth + 1, seen)}=>${stableText(x, depth + 1, seen)}`).join(',')}}`;
   if (v instanceof Set) return `set{${[...v].map(x => stableText(x, depth + 1, seen)).join(',')}}`;
-  return `{${Object.keys(v as object).filter(k => k !== 'ms').sort().map(k => `${k}:${stableText((v as Record<string, unknown>)[k], depth + 1, seen)}`).join(',')}}`;
+  return `{${Object.keys(v as object).filter(k => !isTimingKey(k)).sort().map(k => `${k}:${stableText((v as Record<string, unknown>)[k], depth + 1, seen)}`).join(',')}}`;
 }
 
 function geometryText(g: THREE.BufferGeometry): string {

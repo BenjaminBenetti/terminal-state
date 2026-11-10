@@ -472,12 +472,12 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
     return new FixtureVisibility(g, eff.open, eff.floorH, eff.ceilH, q.layerY, LS[F]);
   });
 
-  for (let li = 0; li < src.lights.length; li++) {
-    if (li % 4 === 3) yield;
+  // (lane BUILD) one fixture per call: the hot loops stay in a plain function (a generator body runs them slower before the JIT warms up)
+  const directOf = (li: number): void => {
     const l = src.lights[li];
     const grp = fixtureGroup(l, li);
     groups[li] = grp;
-    if (l.broken || l.power <= 0.01) continue;
+    if (l.broken || l.power <= 0.01) return;
     working++;
     if (grp < 0) steady++; else circuits[grp]++;
     const F = Math.min(S - 1, Math.max(0, l.level ?? 0));
@@ -490,9 +490,9 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
     // Tube ends (the fixture is a ~1.2 m strip): elongated pools along the fixture axis.
     const ax = Math.cos(l.rot) * 0.35, az = -Math.sin(l.rot) * 0.35;
     const [fcx, fcy] = g.cellOf(l.x, l.z);
-    if (!g.inBounds(fcx, fcy)) continue;
+    if (!g.inBounds(fcx, fcy)) return;
     const fi = fcy * W + fcx;
-    if (!geoF.open[fi]) continue;
+    if (!geoF.open[fi]) return;
     // Fixtures hang just under their own cell's ceiling (pendants lower): keep the emitter inside the cell.
     const fy = Math.max(geoF.floorH[fi] + 0.3, Math.min(l.y - 0.05, geoF.ceilH[fi] - 0.06));
     vis[F].begin(l.x, l.z, fy);
@@ -555,7 +555,8 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
         }
       }
     }
-  }
+  };
+  for (let li = 0; li < src.lights.length; li++) { directOf(li); if (li % 4 === 3) yield; }
 
   yield 'field.extra';
   // Task track3-eaton-centre-20261031 (lane ARCH): extra direct light (the mall skylight), steady (no flicker circuit share).
@@ -714,7 +715,7 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
     const Es = E[s], Ds = D[s], ELs = EL[s], GLs = GL[s], G2Ls = G2L[s], B = bounce[s];
     const base = slotBase(s), L = LS[s];
     const ylo = slotY[2 * s], yr = slotY[2 * s + 1] - ylo;
-    for (let cy = 0; cy < H; cy++) { if (cy % 16 === 15) yield; for (let cx = 0; cx < W; cx++) { // (lane BUILD: a step per 16 rows)
+    const encodeRow = (cy: number): void => { for (let cx = 0; cx < W; cx++) { // (lane BUILD: a row per call, a step per 16 rows; the loop out of the generator body)
       const i = cy * W + cx;
       // Closed cells: zero light; heights borrowed from an open neighbour so filtering near walls stays sane.
       let hi = i;
@@ -750,7 +751,8 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
         data[ob + 2] = u8(dl > 1e-6 ? dzv * inv * 0.5 + 0.5 : 0.5);
         data[ob + 3] = el > 0 ? u8(G2Ls[i * L + k] / el) : 0;
       }
-    } }
+    } };
+    for (let cy = 0; cy < H; cy++) { encodeRow(cy); if (cy % 16 === 15) yield; }
   }
   return {
     w: W, h: H, layers: LAYERS, depth, slots: S, data, yMin, yMax, groups, hdr, slotY, masks,

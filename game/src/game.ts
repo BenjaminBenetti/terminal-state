@@ -128,7 +128,7 @@ import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, levelDisplayName, sectionLabel, storeyLabel} from './levels/registry';
 import {rollLevelGear} from './levels/gearAdapter';
 import {lootProfile} from './items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
-import {sectionId, type Arrival, type LevelId, type SectionKey, type TravelRequest} from './levels/types';
+import {sectionId, type Arrival, type LevelId, type SectionGenContext, type SectionKey, type TravelRequest} from './levels/types';
 import type {CampaignState} from './campaign/types'; // Task studio-alpha-campaign-foundation-20261102-230708-01 (primary)
 import {archetypeLabel, generateNetwork, validateNetwork} from './campaign/network';
 import {arrive as arriveCampaign, enableCheat, newCampaign, revealAround, transitOf, travelPlan, upgradeCampaign} from './campaign/discovery';
@@ -873,12 +873,43 @@ export class Game {
     // build keeps version 1 forever, an unvisited / new one builds the container settlement (gen/market/layoutVersion.ts)
     // (task studio-bunker-level-20261109-072224-01, lane LEVEL) and a Bunker: version 1 from its first release (gen/bunker/layoutVersion.ts)
     const versionLane = key.level === 'skyways' ? SKYWAYS_LAYOUT_LANE : key.level === 'market' ? MARKET_LAYOUT_LANE : key.level === 'bunker' ? BUNKER_LAYOUT_LANE : null;
-    const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : key.level === 'bunker' ? bunkerLayoutVersionFor(run.peekMemory(key)) : undefined;
-    const layout = LEVELS[key.level].generate(key.section, {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {})}); // (campaign: the node's own seed)
+    const {layoutVersion, ctx} = this.sectionGenInputs(key, run);
+    // (campaign: the node's own seed; lane BUILD: a journey's destination comes pre-generated from the same inputs — takePregenerated)
+    const layout = this.takePregenerated(key, run, ctx) ?? LEVELS[key.level].generate(key.section, ctx);
     if (layoutVersion !== undefined && versionLane && run.laneStore(versionLane, key) === undefined) run.setLaneStore(versionLane, {v: layoutVersion}, key);
     const node = key.station ? run.node(key.station) : null;
     if (node) adoptStationName(layout, node.name); // campaign: the map's / save's name is the one on the signs and the HUD
     return layout;
+  }
+
+  /** generateSection's generator inputs for `key` of `run` (the layout version of a versioned level, see above; lane BUILD: + the journey's pre-generation). */
+  private sectionGenInputs(key: SectionKey, run: RunState): {layoutVersion: number | undefined; ctx: SectionGenContext} {
+    const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : key.level === 'bunker' ? bunkerLayoutVersionFor(run.peekMemory(key)) : undefined;
+    return {layoutVersion, ctx: {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {})}};
+  }
+
+  /**
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): a journey's destination layout, generated when the destination
+   * is CONFIRMED (travelToStation, before the car departs). The layout generator is one deep synchronous algorithm the paced build cannot
+   * slice: a one-off block at the click (the travel map closing) instead of frozen frames in the moving ride. generateSection takes it in
+   * place of generating again only when the run, the section and every generator input still match (else it generates as before; it is
+   * dropped either way), so its lane-store write and the station name stay at prepare time and the layout is the one the old path made.
+   */
+  private pregenerated: {run: RunState; key: string; inputs: string; layout: StationLayout} | null = null;
+
+  private pregenerateSection(key: SectionKey, run: RunState): void {
+    this.pregenerated = null;
+    try {
+      const {ctx} = this.sectionGenInputs(key, run);
+      this.pregenerated = {run, key: `${key.level}/${sectionId(key)}`, inputs: JSON.stringify(ctx), layout: LEVELS[key.level].generate(key.section, ctx)};
+    } catch (err) { console.warn('journey: pre-generating', key, 'failed (the prepare generates it again)', err); }
+  }
+
+  /** The pre-generated layout when it was made for exactly this run, section and inputs (taken once; null otherwise). */
+  private takePregenerated(key: SectionKey, run: RunState, ctx: SectionGenContext): StationLayout | null {
+    const p = this.pregenerated;
+    this.pregenerated = null;
+    return p && p.run === run && p.key === `${key.level}/${sectionId(key)}` && p.inputs === JSON.stringify(ctx) ? p.layout : null;
   }
 
   /**
@@ -1114,7 +1145,7 @@ export class Game {
     this.levels = levelsOf(this.layout);
     this.propIndex = new PropIndex(this.levels, this.layout.props);
     yield;
-    this.pathfinder = new PathFinder(this.levels); // Lane B: (level, cell) nodes; stairs join levels
+    this.pathfinder = yield* PathFinder.steps(this.levels); // Lane B: (level, cell) nodes; stairs join levels
     yield;
     this.vocalReach = new VocalReach(this.levels); // lane AUDIO: one bounded, time-sliced route field from the player (no search here)
     this.vocalReach.attachScheduler(this.frameBudget); // lane SCHED: its build slices run in spare frame time (this world's generation)
@@ -1708,9 +1739,11 @@ export class Game {
     const debit = fuel.debit;
     this.playerTrain.fuel.tank = applyDebit(debit, this.playerTrain.fuel.tank, fuel.carts, this.playerTrain.lockbox.slots);
     this.fuelCartsLike()?.captureCargo();
+    // (lane BUILD) the destination's layout now, at the confirmation: the generator cannot be sliced, the moving ride must not freeze
+    this.pregenerateSection({level: target.archetype, section: 'main', station: target.id}, run);
     // the ride's route (lane TRAIN: world/trainRide.ts depart(journey?: RideJourney); bounded extra transit time per extra hop)
     const d = await this.trainRide.depart({route: plan.route});
-    if (d.status !== 'in-tunnel') { this.fuelCartsLike()?.releaseCargo(); this.refundFuel(debit, fuel.carts); this.hud.toast(d.message, true); return {ok: false, error: d.message}; }
+    if (d.status !== 'in-tunnel') { this.pregenerated = null; this.fuelCartsLike()?.releaseCargo(); this.refundFuel(debit, fuel.carts); this.hud.toast(d.message, true); return {ok: false, error: d.message}; }
     if (fuel.cost) this.hud.toast(`${plan.hops > 1 ? `${plan.hops} stops` : 'One stop'}: ${tanksText(fuel.cost)} of fuel burnt`);
     const flight = this.lifecycle.run(async (): Promise<{ok: true} | {ok: false; error: string}> => {
       const from = run.campaign!.current;
