@@ -650,9 +650,14 @@ describe('first-person key poses (aimed and solved for each model\'s length; thr
     for (let k = -0.08; k <= 1.0001; k += 0.02) pts.push(tipM.clone().multiplyScalar(k).applyMatrix4(o.matrixWorld));
     const tip = tipM.clone().applyMatrix4(o.matrixWorld);
     const ndc = (p: THREE.Vector3) => p.clone().project(cam);
-    const on = pts.filter(p => { const n = ndc(p); return -p.z > 0.01 && Math.abs(n.x) <= 1 && Math.abs(n.y) <= 1; }).length / pts.length;
-    return {tip: ndc(tip), tipDepth: -tip.z, minDepth: Math.min(...pts.map(p => -p.z)), on};
+    const inView = (p: THREE.Vector3) => { const n = ndc(p); return -p.z > 0.01 && Math.abs(n.x) <= 1 && Math.abs(n.y) <= 1; };
+    const on = pts.filter(inView).length / pts.length;
+    /** Share of the shaft from `from` (x the tip distance, from the grip) to the tip that is in view (e.g. 0.4: the bat's barrel). */
+    const part = (from: number) => { const q = pts.filter((_, i) => -0.08 + i * 0.02 >= from - 1e-9); return q.filter(inView).length / q.length; };
+    return {tip: ndc(tip), grip: ndc(new THREE.Vector3().applyMatrix4(o.matrixWorld)), tipDepth: -tip.z, minDepth: Math.min(...pts.map(p => -p.z)), on, part};
   }
+  /** NDC -> the QA renders' 960 x 540 pixels (lead QA, qa/fp metrics). */
+  const px = (n: THREE.Vector3) => [(n.x + 1) / 2 * 960, (1 - n.y) / 2 * 540];
 
   it('aimPose: the tip lands on its aimed screen point at the model\'s real tip distance, its +Y toward `up`', () => {
     for (const id of IDS) {
@@ -684,6 +689,15 @@ describe('first-person key poses (aimed and solved for each model\'s length; thr
     }
   });
 
+  it('the overhead / mid wind-ups (axe, sledgehammer, crowbar) keep the head partly in view at the top edge (lead QA tweak)', () => {
+    for (const id of ['fire_axe', 'sledgehammer', 'crowbar'] as const) {
+      const r = view(id, 'ready', 0), c = view(id, null, 0);
+      expect(r.part(0.75), id).toBeGreaterThan(0.5); // the outer quarter (the head) mostly in frame
+      expect(r.tip.y, id).toBeGreaterThan(c.tip.y + 0.3); // still raised well above the carry
+      expect(r.tip.y, id).toBeGreaterThan(0.8); // at the top edge: an overhead / high wind-up
+    }
+  });
+
   it('carry: the head in view upper right; the wound-up hold keeps part of the weapon in view; two-handed ones carry more centrally', () => {
     for (const id of IDS) {
       const c = view(id, null, 0), r = view(id, 'ready', 0);
@@ -698,14 +712,29 @@ describe('first-person key poses (aimed and solved for each model\'s length; thr
     }
   });
 
-  it('the slugger\'s charge visibly pulls the hold further back (still partly in view) and the swing starts from where the charge left it', () => {
+  it('the slugger\'s FULL charge reads: pulled back and raised past the ready pose, the tip projecting ON SCREEN with the barrel in frame', () => {
     const r0 = view('slugger', 'ready', 0, 0), r1 = view('slugger', 'ready', 1, 1), half = view('slugger', 'ready', 0.5, 0.5);
     expect(MELEE_POSES.slugger.charged).toBeTruthy();
-    expect(r1.tip.x).toBeGreaterThan(r0.tip.x + 0.1);
+    // lead QA (2026-11-10, qa/fp SHEET-melee): the old full charge left only a 78 px strip at the right edge, tip at (970, -40) off screen.
+    // Now: the tip inside the frame — in the lead's window x 820-900, y 20-80 px at 960 x 540 — and most of the barrel (the outer 60 %) on
+    // screen, at ready and at full charge alike (the tremble included: t = 1 s)
+    const [tx, ty] = px(r1.tip);
+    expect(tx).toBeGreaterThanOrEqual(820);
+    expect(tx).toBeLessThanOrEqual(900);
+    expect(ty).toBeGreaterThanOrEqual(20);
+    expect(ty).toBeLessThanOrEqual(80);
+    expect(Math.abs(r1.tip.x)).toBeLessThan(1);
+    expect(Math.abs(r1.tip.y)).toBeLessThan(1);
+    expect(r1.part(0.4)).toBeGreaterThan(0.9);
+    expect(r0.part(0.4)).toBeGreaterThan(0.9);
+    for (let t = 0; t <= 2; t += DT) { const v = view('slugger', 'ready', t, Math.min(1, t)); expect(Math.max(Math.abs(v.tip.x), Math.abs(v.tip.y)), `t ${t.toFixed(2)}`).toBeLessThan(1); }
+    // ... and it READS as the charge: the tip climbs up (and out to the right), the hands rise into view, drawn back toward the shoulder
     expect(r1.tip.y).toBeGreaterThan(r0.tip.y + 0.2);
+    expect(r1.tip.x).toBeGreaterThan(r0.tip.x + 0.05);
+    expect(r1.grip.y).toBeGreaterThan(r0.grip.y + 0.25);
+    expect(MELEE_POSES.slugger.charged!.pos[2]).toBeGreaterThan(MELEE_POSES.slugger.raised.pos[2]); // nearer the shoulder
     expect(half.tip.y).toBeGreaterThan(r0.tip.y);
     expect(half.tip.y).toBeLessThan(r1.tip.y);
-    expect(r1.on).toBeGreaterThan(0.1);
     expect(view('slugger', 'swing', 0, 1).tip.distanceTo(view('slugger', 'ready', 0, 1).tip)).toBeLessThan(0.03);
     expect(view('slugger', 'swing', 0, 0).tip.distanceTo(r0.tip)).toBeLessThan(0.03);
   });
