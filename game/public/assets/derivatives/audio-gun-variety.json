@@ -1,0 +1,1272 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "audio-gun-variety-20261110",
+ "task": "studio-weapon-soundlab-audio-20261110-063407-01",
+ "lane": "AUDIO",
+ "generatedBy": "the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (the task's local Sound Lab allowance: 17 jobs of a 24-job cap including retries — 14 planned + 3 replacement Hornet takes for structurally rejected ones; the rest of the allowance closed unused)",
+ "plannedBy": "a plan kept with the private raw archive (the prompts stay private)",
+ "rebuild": "SOUND_LAB_AUDIO_DIR=<raw dir> node tools/audio-pipeline/gun-variety-build.mjs",
+ "privacy": "This public record names each raw take by its Sound Lab job id, seed and SHA-256 (raw WAV, lab sidecar, prompt). The prompt text, the raw takes and their paths stay in the private raw archive (independent backup), not in Git.",
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (5 ms envelopes, onsets, rise, quiet fraction, spectrogram images, spectral centroid / bands / flatness, peak, DC, slice-edge levels, BS.1770 loudness, a rapid-fire overlap sum). `gate` describes signal structure only. The user taste-tests in game.",
+  "gameReady": false,
+  "approved": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "loudness": {
+  "method": "ITU-R BS.1770-4 K-weighting, 400 ms blocks / 75 % overlap (one-shots zero-padded to one block), maximum momentary loudness; per channel, power-averaged for the stereo baselines; sample peak (no true-peak oversampling)"
+ },
+ "mixCalibration": {
+  "note": "CUE_GAIN (audio/sfx.ts, from GUN_VARIETY_CUE_GAIN) per cue = 10^((target - measured) / 20), capped at 1 (no boost): the target is the baseline family's loudness at the source (derivative x call gain x CUE_GAIN, before distance / room / master), measured the same way from the baseline raws' recorded runtime windows. First estimates for the ear pass.",
+  "references": {
+   "pistolShot": {
+    "cue": "pistolShot",
+    "takes": [
+     -25.7
+    ],
+    "atSourceLufs": -26.6,
+    "playGain": 0.9
+   },
+   "rifleShot": {
+    "cue": "rifleShot",
+    "takes": [
+     -24.4,
+     -24.7,
+     -26.7,
+     -26
+    ],
+    "atSourceLufs": -25.4,
+    "playGain": 1
+   },
+   "shotgunShot": {
+    "cue": "shotgunShot",
+    "takes": [
+     -18.8,
+     -17.4,
+     -16.5
+    ],
+    "atSourceLufs": -17.5,
+    "playGain": 1
+   },
+   "rifleMagOut": {
+    "cue": "rifleMagOut",
+    "takes": [
+     -22.9,
+     -24.7
+    ],
+    "atSourceLufs": -32.1,
+    "playGain": 0.38
+   },
+   "rifleMagIn": {
+    "cue": "rifleMagIn",
+    "takes": [
+     -24.9,
+     -24.9
+    ],
+    "atSourceLufs": -32.4,
+    "playGain": 0.42
+   }
+  },
+  "cues": {
+   "gunHornetShot": {
+    "reference": "pistolShot",
+    "targetLufs": -26.6,
+    "measuredLufs": -28.4,
+    "cueGain": 1,
+    "atSourceLufs": -28.4
+   },
+   "gunLongslideShot": {
+    "reference": "pistolShot",
+    "targetLufs": -26.6,
+    "measuredLufs": -23.2,
+    "cueGain": 0.68,
+    "atSourceLufs": -26.5
+   },
+   "gunStubShot": {
+    "reference": "rifleShot",
+    "targetLufs": -25.4,
+    "measuredLufs": -23.9,
+    "cueGain": 0.84,
+    "atSourceLufs": -25.4
+   },
+   "gunOverwatchShot": {
+    "reference": "rifleShot",
+    "targetLufs": -25.4,
+    "measuredLufs": -24.2,
+    "cueGain": 0.87,
+    "atSourceLufs": -25.4
+   },
+   "gunCoachGunShot": {
+    "reference": "shotgunShot",
+    "targetLufs": -17.5,
+    "measuredLufs": -17.3,
+    "cueGain": 0.98,
+    "atSourceLufs": -17.5
+   },
+   "gunThresherShot": {
+    "reference": "shotgunShot",
+    "targetLufs": -17.5,
+    "measuredLufs": -18.6,
+    "cueGain": 1,
+    "atSourceLufs": -18.6
+   },
+   "gunHornetMagOut": {
+    "reference": "rifleMagOut",
+    "targetLufs": -32.1,
+    "measuredLufs": -24.7,
+    "cueGain": 0.43,
+    "atSourceLufs": -32
+   },
+   "gunHornetMagIn": {
+    "reference": "rifleMagIn",
+    "targetLufs": -32.4,
+    "measuredLufs": -24.1,
+    "cueGain": 0.38,
+    "atSourceLufs": -32.5
+   },
+   "gunLongslideMagOut": {
+    "reference": "rifleMagOut",
+    "targetLufs": -32.1,
+    "measuredLufs": -25.6,
+    "cueGain": 0.47,
+    "atSourceLufs": -32.2
+   },
+   "gunLongslideMagIn": {
+    "reference": "rifleMagIn",
+    "targetLufs": -32.4,
+    "measuredLufs": -22.4,
+    "cueGain": 0.32,
+    "atSourceLufs": -32.3
+   },
+   "gunStubMagOut": {
+    "reference": "rifleMagOut",
+    "targetLufs": -32.1,
+    "measuredLufs": -24.1,
+    "cueGain": 0.4,
+    "atSourceLufs": -32.1
+   },
+   "gunStubMagIn": {
+    "reference": "rifleMagIn",
+    "targetLufs": -32.4,
+    "measuredLufs": -23,
+    "cueGain": 0.34,
+    "atSourceLufs": -32.4
+   },
+   "gunOverwatchMagOut": {
+    "reference": "rifleMagOut",
+    "targetLufs": -32.1,
+    "measuredLufs": -24.1,
+    "cueGain": 0.4,
+    "atSourceLufs": -32.1
+   },
+   "gunOverwatchMagIn": {
+    "reference": "rifleMagIn",
+    "targetLufs": -32.4,
+    "measuredLufs": -23,
+    "cueGain": 0.34,
+    "atSourceLufs": -32.4
+   },
+   "gunThresherMagOut": {
+    "reference": "rifleMagOut",
+    "targetLufs": -32.1,
+    "measuredLufs": -23,
+    "cueGain": 0.35,
+    "atSourceLufs": -32.1
+   },
+   "gunThresherMagIn": {
+    "reference": "rifleMagIn",
+    "targetLufs": -32.4,
+    "measuredLufs": -20.3,
+    "cueGain": 0.25,
+    "atSourceLufs": -32.3
+   },
+   "gunCoachGunBreakOpen": {
+    "reference": "rifleMagOut",
+    "targetLufs": -32.1,
+    "measuredLufs": -24.1,
+    "cueGain": 0.4,
+    "atSourceLufs": -32.1
+   },
+   "gunCoachGunBreakClose": {
+    "reference": "rifleMagIn",
+    "targetLufs": -32.4,
+    "measuredLufs": -21.5,
+    "cueGain": 0.29,
+    "atSourceLufs": -32.3
+   }
+  },
+  "rapidFire": {
+   "gunHornetShot": {
+    "intervalS": 0.07,
+    "shots": 12,
+    "sumPeakDbfs": -0.9,
+    "singlePeakDbfs": -1
+   },
+   "gunStubShot": {
+    "intervalS": 0.09,
+    "shots": 12,
+    "sumPeakDbfs": -4,
+    "singlePeakDbfs": -2.5
+   }
+  }
+ },
+ "derivatives": [
+  {
+   "cue": "gunLongslideShot",
+   "url": "assets/audio/gun-longslide-shot-01.mp3",
+   "bytes": 10449,
+   "sha256": "053536ddaa2de48a9bd0f2505d09441c2f9b00adafdafc95034b629d660ddf8d",
+   "dur": 0.62,
+   "window": {
+    "startS": 0,
+    "endS": 0.62
+   },
+   "ops": [
+    "mono",
+    "remove DC (3.5e-4)",
+    "trim 0-0.62 s",
+    "cosine fades 0.002 / 0.25 s",
+    "peak -1 dBFS (-0.0 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": 0.000053,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -29.6,
+     "endDb": -48.4
+    },
+    "onsetsS": [
+     0.005
+    ],
+    "riseMs": 5,
+    "activeEndS": 0.45,
+    "centroidHz": 3131,
+    "flatness": 0.161,
+    "low0to300": 0.017,
+    "momentaryMaxLufs": -23.2,
+    "secondReportDb": null
+   },
+   "source": {
+    "clip": "longslide-shot-01",
+    "jobId": "20261110T064241-184262446",
+    "seed": 184262446,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "44abb299b2c7534b7b7e6eb734938dc5b2fca3e16280dbcddafca9895fda9f9e",
+    "rawBytes": 352844,
+    "labSidecarSha256": "1536dd7a6dd8f10fbf76f20fe90f162b850b721eeae726cca09872b288d8f371",
+    "promptSha256": "9e05a6d6dc868aa1ff3683b59363cc4357bc24cde0a39a260c575c65fdcbf6f5"
+   }
+  },
+  {
+   "cue": "gunStubShot",
+   "url": "assets/audio/gun-stub-shot-01.mp3",
+   "bytes": 7523,
+   "sha256": "29f65a276951ea29351085091dfc4cefdb3e474b9c42f5f6d4f3e2611d21f693",
+   "dur": 0.42,
+   "window": {
+    "startS": 0,
+    "endS": 0.42
+   },
+   "ops": [
+    "mono",
+    "remove DC (-4.0e-4)",
+    "trim 0-0.42 s",
+    "cosine fades 0.002 / 0.15 s",
+    "peak -1 dBFS (-0.8 dB)",
+    "matched to the cue's quietest take (-2.1 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -3.1,
+    "dc": -0.000065,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -25.9,
+     "endDb": -35.2
+    },
+    "onsetsS": [
+     0
+    ],
+    "riseMs": 20,
+    "activeEndS": 0.35,
+    "centroidHz": 1432,
+    "flatness": 0.165,
+    "low0to300": 0.361,
+    "momentaryMaxLufs": -23.9,
+    "secondReportDb": null
+   },
+   "source": {
+    "clip": "stub-shot-01",
+    "jobId": "20261110T064246-2014766852",
+    "seed": 2014766852,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "828d77221084f1a4a9676ffbab9ce41ce1fb2ef0e036b4ae5421167b6ae6f5de",
+    "rawBytes": 352844,
+    "labSidecarSha256": "ac7bcd23572239039be7fe235ec38f3534b8ac9963f1a030dd052b37050dad8e",
+    "promptSha256": "d1b05a885da5bf904c792d82c2537e2c1101d8fa7927cedd4f275110430bd77b"
+   }
+  },
+  {
+   "cue": "gunStubShot",
+   "url": "assets/audio/gun-stub-shot-02.mp3",
+   "bytes": 7105,
+   "sha256": "bfeeb2373696967679cb04799b7d36990f319a8fdec762f47507b0cad9963f56",
+   "dur": 0.415,
+   "window": {
+    "startS": 0.285,
+    "endS": 0.7
+   },
+   "ops": [
+    "mono",
+    "remove DC (8.5e-5)",
+    "trim 0.285-0.7 s",
+    "cosine fades 0.002 / 0.15 s",
+    "peak -1 dBFS (-0.8 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": 0.0000064,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -31.7,
+     "endDb": -39
+    },
+    "onsetsS": [
+     0.005
+    ],
+    "riseMs": 20,
+    "activeEndS": 0.35,
+    "centroidHz": 2237,
+    "flatness": 0.168,
+    "low0to300": 0.285,
+    "momentaryMaxLufs": -23.9,
+    "secondReportDb": null
+   },
+   "source": {
+    "clip": "stub-shot-02",
+    "jobId": "20261110T064251-529127606",
+    "seed": 529127606,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "9dbba76b4fe743d7cb8e0d30cd3030367b4d5f168ff0416f4b5af09d8c3aa60d",
+    "rawBytes": 352844,
+    "labSidecarSha256": "476e2a8465f3eef19be38cba76ed62a133df17dcc18f930e11da91ae21218c6d",
+    "promptSha256": "91b2f37aa8201588edcf70380ee7ea53d98eaef51a11f5c60f4dceb5678c3232"
+   }
+  },
+  {
+   "cue": "gunOverwatchShot",
+   "url": "assets/audio/gun-overwatch-shot-01.mp3",
+   "bytes": 7941,
+   "sha256": "79cce6687d7ba99fc48a93410072412a2a44482225f965a97f6e38a24a108318",
+   "dur": 0.45,
+   "window": {
+    "startS": 0,
+    "endS": 0.45
+   },
+   "ops": [
+    "mono",
+    "remove DC (-8.1e-3)",
+    "trim 0-0.45 s",
+    "cosine fades 0.002 / 0.15 s",
+    "peak -1 dBFS (-0.9 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": -0.0012,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -21,
+     "endDb": -53.2
+    },
+    "onsetsS": [
+     0,
+     0.095
+    ],
+    "riseMs": 20,
+    "activeEndS": 0.4,
+    "centroidHz": 1337,
+    "flatness": 0.126,
+    "low0to300": 0.495,
+    "momentaryMaxLufs": -24.2,
+    "secondReportDb": null
+   },
+   "source": {
+    "clip": "overwatch-shot-01",
+    "jobId": "20261110T064255-445153277",
+    "seed": 445153277,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "ac3abe7bca7042daef6031452de62600063f265ce2c02bb3af4639dade3fb74c",
+    "rawBytes": 352844,
+    "labSidecarSha256": "0f6064e62d14de6a269b5f76057ba4c4c50210b2be65fdc6b7e49b619b35616b",
+    "promptSha256": "f3099ce26080b1b8a3b57c95c36e798f55a33a26b79606abf5072e209cc72789"
+   }
+  },
+  {
+   "cue": "gunCoachGunShot",
+   "url": "assets/audio/gun-coach-gun-shot-01.mp3",
+   "bytes": 13374,
+   "sha256": "883c47736ec1df20a67fc2f163766565ad51c54b7eb424763f248d892f082c64",
+   "dur": 0.795,
+   "window": {
+    "startS": 0.005,
+    "endS": 0.8
+   },
+   "ops": [
+    "mono",
+    "remove DC (-5.6e-3)",
+    "trim 0.005-0.8 s",
+    "cosine fades 0.002 / 0.3 s",
+    "peak -1 dBFS (2.6 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": -0.0014,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -31.2,
+     "endDb": -35.6
+    },
+    "onsetsS": [
+     0.005,
+     0.246
+    ],
+    "riseMs": 45,
+    "activeEndS": 0.7,
+    "centroidHz": 467,
+    "flatness": 0.018,
+    "low0to300": 0.744,
+    "momentaryMaxLufs": -17.3,
+    "secondReportDb": null
+   },
+   "source": {
+    "clip": "coach-shot-01",
+    "jobId": "20261110T064300-1564851814",
+    "seed": 1564851814,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "d71a29a96ff866afff6597e73b257257bf82d2cca46d29ad036a4b6c23380d7b",
+    "rawBytes": 352844,
+    "labSidecarSha256": "6395922436e9332354f28fa2d78590bae9fa55c49ac116ed4795bb11b950318f",
+    "promptSha256": "633d260e048983e1d2482bb29b73f8f1bc664a450c1e8afa45c6d220ae8d2900"
+   }
+  },
+  {
+   "cue": "gunThresherShot",
+   "url": "assets/audio/gun-thresher-shot-01.mp3",
+   "bytes": 11702,
+   "sha256": "75bad3d3aace2027b900f97993fc73540887cf2b0545dbb6146e5f949b7a13dc",
+   "dur": 0.7,
+   "window": {
+    "startS": 0,
+    "endS": 0.7
+   },
+   "ops": [
+    "mono",
+    "remove DC (-1.1e-2)",
+    "trim 0-0.7 s",
+    "cosine fades 0.002 / 0.25 s",
+    "peak -1 dBFS (-0.9 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": -0.0017,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -24,
+     "endDb": -31.9
+    },
+    "onsetsS": [
+     0.005,
+     0.296
+    ],
+    "riseMs": 25,
+    "activeEndS": 0.6,
+    "centroidHz": 847,
+    "flatness": 0.104,
+    "low0to300": 0.736,
+    "momentaryMaxLufs": -18.6,
+    "secondReportDb": null
+   },
+   "source": {
+    "clip": "thresher-shot-01",
+    "jobId": "20261110T064304-171167837",
+    "seed": 171167837,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "fde83db9db2b98d83fb329df0d99bfaf97381fbe805bc8a908d019cedaf96362",
+    "rawBytes": 352844,
+    "labSidecarSha256": "4d18df47532defec5b099b042d76abd886afc610ed0a96aeb12b6fed85afe18a",
+    "promptSha256": "05d91601813e3655002d22a6e838e9984c370f997df32c72a42af10cd344b297"
+   }
+  },
+  {
+   "cue": "gunHornetMagOut",
+   "url": "assets/audio/gun-hornet-mag-out-01.mp3",
+   "bytes": 3762,
+   "sha256": "82ee35668adb2a81d165f02f4ebef01a940ff2d2a3fdc809950edd23aa29d735",
+   "dur": 0.28,
+   "window": {
+    "startS": 0.08,
+    "endS": 0.36
+   },
+   "ops": [
+    "mono",
+    "remove DC (6.9e-5)",
+    "trim 0.08-0.36 s",
+    "cosine fades 0.004 / 0.05 s",
+    "peak -1 dBFS (4.4 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": -0.0000018,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -48.1,
+     "endDb": -48
+    },
+    "onsetsS": [
+     0.035
+    ],
+    "riseMs": 40,
+    "activeEndS": 0.2,
+    "centroidHz": 6494,
+    "flatness": 0.448,
+    "low0to300": 0.01,
+    "momentaryMaxLufs": -24.7
+   },
+   "source": {
+    "clip": "hornet-reload-01",
+    "jobId": "20261110T064309-1029141341",
+    "seed": 1029141341,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "68e203425fa15b36c01d0c002c3b78fe8a3c0a0791a250412b48d1aa3f8abc85",
+    "rawBytes": 529244,
+    "labSidecarSha256": "471d8a1fd4fa19caee8bd831536347859f38579ca4aa908681241343a359dcd6",
+    "promptSha256": "e7650568f3966738a08c3c3ed5cf9a03a50232ea0a2f48541d8bbd8715e2f56a"
+   }
+  },
+  {
+   "cue": "gunHornetMagIn",
+   "url": "assets/audio/gun-hornet-mag-in-01.mp3",
+   "bytes": 7210,
+   "sha256": "913f09433f795b23153d67d11a122fffab3fee9ee33f27e6cf1a688a672c41f9",
+   "dur": 0.56,
+   "window": {
+    "startS": 1.58,
+    "endS": 2.14
+   },
+   "ops": [
+    "mono",
+    "remove DC (7.7e-5)",
+    "trim 1.58-2.14 s",
+    "cosine fades 0.004 / 0.05 s",
+    "peak -1 dBFS (16.9 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": 0.00011,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -47.8,
+     "endDb": -48.8
+    },
+    "onsetsS": [
+     0.045,
+     0.426
+    ],
+    "riseMs": 95,
+    "activeEndS": 0.55,
+    "centroidHz": 6391,
+    "flatness": 0.184,
+    "low0to300": 0.024,
+    "momentaryMaxLufs": -24.1
+   },
+   "source": {
+    "clip": "hornet-reload-01",
+    "jobId": "20261110T064309-1029141341",
+    "seed": 1029141341,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "68e203425fa15b36c01d0c002c3b78fe8a3c0a0791a250412b48d1aa3f8abc85",
+    "rawBytes": 529244,
+    "labSidecarSha256": "471d8a1fd4fa19caee8bd831536347859f38579ca4aa908681241343a359dcd6",
+    "promptSha256": "e7650568f3966738a08c3c3ed5cf9a03a50232ea0a2f48541d8bbd8715e2f56a"
+   }
+  },
+  {
+   "cue": "gunLongslideMagOut",
+   "url": "assets/audio/gun-longslide-mag-out-01.mp3",
+   "bytes": 5016,
+   "sha256": "c4730d43f738261d42419690262e378716604ea74870189cc1c8442fb324b617",
+   "dur": 0.39,
+   "window": {
+    "startS": 0.17,
+    "endS": 0.56
+   },
+   "ops": [
+    "mono",
+    "remove DC (2.7e-4)",
+    "trim 0.17-0.56 s",
+    "cosine fades 0.004 / 0.05 s",
+    "peak -1 dBFS (3.0 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": 0.000027,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -49.9,
+     "endDb": -49.8
+    },
+    "onsetsS": [
+     0.04,
+     0.276
+    ],
+    "riseMs": 35,
+    "activeEndS": 0.35,
+    "centroidHz": 6083,
+    "flatness": 0.327,
+    "low0to300": 0.009,
+    "momentaryMaxLufs": -25.6
+   },
+   "source": {
+    "clip": "longslide-reload-01",
+    "jobId": "20261110T064313-1006943679",
+    "seed": 1006943679,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "1528b95ace7a4029492fdc0472c90622ed4dbdaa5379e2d80f6f13e2102474fe",
+    "rawBytes": 529244,
+    "labSidecarSha256": "9b25081d8c77924527866bc9a7557f0b2b28dfe9fd6775f25c642bc2e06632ae",
+    "promptSha256": "92e514346f224373026007208fbc79e45b5f7f8b2b7f9718ce44b55bd76799da"
+   }
+  },
+  {
+   "cue": "gunLongslideMagIn",
+   "url": "assets/audio/gun-longslide-mag-in-01.mp3",
+   "bytes": 8150,
+   "sha256": "aa07d496920504ae6a891354857420cd7b9dbc5ee96c6929e0f1d944355d0678",
+   "dur": 0.64,
+   "window": {
+    "startS": 1.66,
+    "endS": 2.3
+   },
+   "ops": [
+    "mono",
+    "remove DC (4.7e-5)",
+    "trim 1.66-2.3 s",
+    "cosine fades 0.004 / 0.05 s",
+    "peak -1 dBFS (2.9 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": 0.0000045,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -49.8,
+     "endDb": -49.8
+    },
+    "onsetsS": [
+     0.05,
+     0.15,
+     0.366,
+     0.421
+    ],
+    "riseMs": 385,
+    "activeEndS": 0.55,
+    "centroidHz": 6051,
+    "flatness": 0.318,
+    "low0to300": 0.01,
+    "momentaryMaxLufs": -22.4
+   },
+   "source": {
+    "clip": "longslide-reload-01",
+    "jobId": "20261110T064313-1006943679",
+    "seed": 1006943679,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "1528b95ace7a4029492fdc0472c90622ed4dbdaa5379e2d80f6f13e2102474fe",
+    "rawBytes": 529244,
+    "labSidecarSha256": "9b25081d8c77924527866bc9a7557f0b2b28dfe9fd6775f25c642bc2e06632ae",
+    "promptSha256": "92e514346f224373026007208fbc79e45b5f7f8b2b7f9718ce44b55bd76799da"
+   }
+  },
+  {
+   "cue": "gunStubMagOut",
+   "url": "assets/audio/gun-stub-mag-out-01.mp3",
+   "bytes": 3762,
+   "sha256": "19e832a5768b3b8e5a7d8c7bed18c53e9d5ade082521e9a60b4a886ba6676c84",
+   "dur": 0.27,
+   "window": {
+    "startS": 0.29,
+    "endS": 0.56
+   },
+   "ops": [
+    "mono",
+    "remove DC (1.9e-5)",
+    "trim 0.29-0.56 s",
+    "cosine fades 0.004 / 0.05 s",
+    "peak -1 dBFS (19.8 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": 0.0029,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -43.4,
+     "endDb": -29.1
+    },
+    "onsetsS": [
+     0.025,
+     0.165,
+     0.226
+    ],
+    "riseMs": 65,
+    "activeEndS": 0.25,
+    "centroidHz": 6468,
+    "flatness": 0.408,
+    "low0to300": 0.048,
+    "momentaryMaxLufs": -24.1
+   },
+   "source": {
+    "clip": "stub-reload-01",
+    "jobId": "20261110T064318-1579386861",
+    "seed": 1579386861,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "d1ed0a4e2ae99f24380b43fa5f29bf73774450cdc23b21395d6c91f0015afdf3",
+    "rawBytes": 529244,
+    "labSidecarSha256": "7cca9ea46c99084f094d6d93ba8be9ac4167fe19eed2a881a275abda4122457c",
+    "promptSha256": "c4256d02781086e082ca7747c23cf4817378d1268c1e8e414f7ccbbf48a76c8c"
+   }
+  },
+  {
+   "cue": "gunStubMagIn",
+   "url": "assets/audio/gun-stub-mag-in-01.mp3",
+   "bytes": 8464,
+   "sha256": "08aaed309cf59586b56fdfaf95b9c8bff28b16102f5601e990523f1986c7e32f",
+   "dur": 0.66,
+   "window": {
+    "startS": 1.86,
+    "endS": 2.52
+   },
+   "ops": [
+    "mono",
+    "remove DC (7.6e-4)",
+    "trim 1.86-2.52 s",
+    "cosine fades 0.004 / 0.05 s",
+    "peak -1 dBFS (11.7 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": 0.00042,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -31.7,
+     "endDb": -29.6
+    },
+    "onsetsS": [
+     0.06,
+     0.481,
+     0.531,
+     0.606
+    ],
+    "riseMs": 75,
+    "activeEndS": 0.65,
+    "centroidHz": 5468,
+    "flatness": 0.297,
+    "low0to300": 0.062,
+    "momentaryMaxLufs": -23
+   },
+   "source": {
+    "clip": "stub-reload-01",
+    "jobId": "20261110T064318-1579386861",
+    "seed": 1579386861,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "d1ed0a4e2ae99f24380b43fa5f29bf73774450cdc23b21395d6c91f0015afdf3",
+    "rawBytes": 529244,
+    "labSidecarSha256": "7cca9ea46c99084f094d6d93ba8be9ac4167fe19eed2a881a275abda4122457c",
+    "promptSha256": "c4256d02781086e082ca7747c23cf4817378d1268c1e8e414f7ccbbf48a76c8c"
+   }
+  },
+  {
+   "cue": "gunOverwatchMagOut",
+   "url": "assets/audio/gun-overwatch-mag-out-01.mp3",
+   "bytes": 6583,
+   "sha256": "20e827a4d1831e3d4cf8dc3e535b160a43e7a9bb8a53589623a2cc4e2c85c113",
+   "dur": 0.52,
+   "window": {
+    "startS": 0.06,
+    "endS": 0.58
+   },
+   "ops": [
+    "mono",
+    "remove DC (-9.5e-5)",
+    "trim 0.06-0.58 s",
+    "cosine fades 0.004 / 0.05 s",
+    "peak -1 dBFS (10.2 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": -0.000033,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -46.5,
+     "endDb": -46.6
+    },
+    "onsetsS": [
+     0.015,
+     0.08,
+     0.14,
+     0.441
+    ],
+    "riseMs": 65,
+    "activeEndS": 0.5,
+    "centroidHz": 6789,
+    "flatness": 0.238,
+    "low0to300": 0.011,
+    "momentaryMaxLufs": -24.1
+   },
+   "source": {
+    "clip": "overwatch-reload-01",
+    "jobId": "20261110T064323-1092673271",
+    "seed": 1092673271,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "54cf478dea22f4f26a0b35b7061159901e5a1bd807548b2f8158af2589ced678",
+    "rawBytes": 529244,
+    "labSidecarSha256": "6a31760654c3a3057e64eefd7a2b0e390194a9b327810219f73f3dc4922e6c9b",
+    "promptSha256": "222d0bae2307f4d225fd7578d8137ebcd9be39f49d6780784120e6c9fee73394"
+   }
+  },
+  {
+   "cue": "gunOverwatchMagIn",
+   "url": "assets/audio/gun-overwatch-mag-in-01.mp3",
+   "bytes": 4389,
+   "sha256": "7f139360810bea83546baaa6270e9ebee4c673f7f91e5ff47af1be2087771d53",
+   "dur": 0.32,
+   "window": {
+    "startS": 1.76,
+    "endS": 2.08
+   },
+   "ops": [
+    "mono",
+    "remove DC (2.1e-4)",
+    "trim 1.76-2.08 s",
+    "cosine fades 0.004 / 0.05 s",
+    "peak -1 dBFS (5.9 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": 0.000035,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -46.7,
+     "endDb": -46.5
+    },
+    "onsetsS": [
+     0.055,
+     0.115,
+     0.175
+    ],
+    "riseMs": 105,
+    "activeEndS": 0.25,
+    "centroidHz": 7705,
+    "flatness": 0.416,
+    "low0to300": 0.003,
+    "momentaryMaxLufs": -23
+   },
+   "source": {
+    "clip": "overwatch-reload-01",
+    "jobId": "20261110T064323-1092673271",
+    "seed": 1092673271,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "54cf478dea22f4f26a0b35b7061159901e5a1bd807548b2f8158af2589ced678",
+    "rawBytes": 529244,
+    "labSidecarSha256": "6a31760654c3a3057e64eefd7a2b0e390194a9b327810219f73f3dc4922e6c9b",
+    "promptSha256": "222d0bae2307f4d225fd7578d8137ebcd9be39f49d6780784120e6c9fee73394"
+   }
+  },
+  {
+   "cue": "gunThresherMagOut",
+   "url": "assets/audio/gun-thresher-mag-out-01.mp3",
+   "bytes": 4702,
+   "sha256": "7ec5a3548663a70765eb192fe454ba082b8ab198e124a10a756bcc41218dccd3",
+   "dur": 0.36,
+   "window": {
+    "startS": 0.06,
+    "endS": 0.42
+   },
+   "ops": [
+    "mono",
+    "remove DC (-1.3e-3)",
+    "trim 0.06-0.42 s",
+    "cosine fades 0.004 / 0.05 s",
+    "peak -1 dBFS (9.3 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": -0.00031,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -51,
+     "endDb": -50.1
+    },
+    "onsetsS": [
+     0,
+     0.07,
+     0.18,
+     0.256
+    ],
+    "riseMs": 80,
+    "activeEndS": 0.35,
+    "centroidHz": 3852,
+    "flatness": 0.32,
+    "low0to300": 0.426,
+    "momentaryMaxLufs": -23
+   },
+   "source": {
+    "clip": "thresher-reload-01",
+    "jobId": "20261110T064327-733333169",
+    "seed": 733333169,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "a1f1d3929a20eb6e31462b3466142b9040e0fcb979e510845b1d4f444dda9595",
+    "rawBytes": 529244,
+    "labSidecarSha256": "2dfce54ec85818ac88fa577ae869e1ab947b8d283c86b3ecae57bf0ff50db110",
+    "promptSha256": "68f75cff3636558823b026be09ef0937246e0d77a7b721885d5255670e42aa58"
+   }
+  },
+  {
+   "cue": "gunThresherMagIn",
+   "url": "assets/audio/gun-thresher-mag-in-01.mp3",
+   "bytes": 6583,
+   "sha256": "7cb758179c679ead11fede799e3a5f0acea9347eb7fe8e1c0500e98417a0dc45",
+   "dur": 0.52,
+   "window": {
+    "startS": 1.2,
+    "endS": 1.72
+   },
+   "ops": [
+    "mono",
+    "remove DC (-2.2e-4)",
+    "trim 1.2-1.72 s",
+    "cosine fades 0.004 / 0.05 s",
+    "peak -1 dBFS (1.5 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": 0.000099,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -51.4,
+     "endDb": -49.8
+    },
+    "onsetsS": [
+     0.03,
+     0.2,
+     0.271
+    ],
+    "riseMs": 240,
+    "activeEndS": 0.45,
+    "centroidHz": 2697,
+    "flatness": 0.313,
+    "low0to300": 0.128,
+    "momentaryMaxLufs": -20.3
+   },
+   "source": {
+    "clip": "thresher-reload-01",
+    "jobId": "20261110T064327-733333169",
+    "seed": 733333169,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "a1f1d3929a20eb6e31462b3466142b9040e0fcb979e510845b1d4f444dda9595",
+    "rawBytes": 529244,
+    "labSidecarSha256": "2dfce54ec85818ac88fa577ae869e1ab947b8d283c86b3ecae57bf0ff50db110",
+    "promptSha256": "68f75cff3636558823b026be09ef0937246e0d77a7b721885d5255670e42aa58"
+   }
+  },
+  {
+   "cue": "gunCoachGunBreakOpen",
+   "url": "assets/audio/gun-coach-gun-break-open-01.mp3",
+   "bytes": 4702,
+   "sha256": "8bfc01d4a34ae01a7131bf666bd9efb86e1e4395a4c928e74a50214039db2938",
+   "dur": 0.34,
+   "window": {
+    "startS": 0.22,
+    "endS": 0.56
+   },
+   "ops": [
+    "mono",
+    "remove DC (-2.7e-4)",
+    "trim 0.22-0.56 s",
+    "cosine fades 0.004 / 0.05 s",
+    "peak -1 dBFS (9.1 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": -0.000057,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -50,
+     "endDb": -50
+    },
+    "onsetsS": [
+     0.035,
+     0.185
+    ],
+    "riseMs": 40,
+    "activeEndS": 0.3,
+    "centroidHz": 4369,
+    "flatness": 0.304,
+    "low0to300": 0.03,
+    "momentaryMaxLufs": -24.1
+   },
+   "source": {
+    "clip": "coach-reload-01",
+    "jobId": "20261110T064332-741355159",
+    "seed": 741355159,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "87ffd3b42e53cedf0a0883e24703e127f9d846e71651a16d718a46f5fba1f98b",
+    "rawBytes": 529244,
+    "labSidecarSha256": "ce40e5dc45b4d68d8e24a3ed9da68b2517e48b8b6dd90154a3ba8013b9df3abf",
+    "promptSha256": "fee75764371c6e31fc935e229c3f685840de2641dcc57a147d24550993fe5c19"
+   }
+  },
+  {
+   "cue": "gunCoachGunBreakClose",
+   "url": "assets/audio/gun-coach-gun-break-close-01.mp3",
+   "bytes": 5642,
+   "sha256": "3ccfe648660afc14f86596892260d91c969aed759abbdbaf4f768236bf24d37d",
+   "dur": 0.44,
+   "window": {
+    "startS": 1.96,
+    "endS": 2.4
+   },
+   "ops": [
+    "mono",
+    "remove DC (-5.3e-4)",
+    "trim 1.96-2.4 s",
+    "cosine fades 0.004 / 0.05 s",
+    "peak -1 dBFS (2.6 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": -0.000047,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -50.5,
+     "endDb": -50
+    },
+    "onsetsS": [
+     0.04
+    ],
+    "riseMs": 15,
+    "activeEndS": 0.25,
+    "centroidHz": 5753,
+    "flatness": 0.474,
+    "low0to300": 0.048,
+    "momentaryMaxLufs": -21.5
+   },
+   "source": {
+    "clip": "coach-reload-01",
+    "jobId": "20261110T064332-741355159",
+    "seed": 741355159,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "87ffd3b42e53cedf0a0883e24703e127f9d846e71651a16d718a46f5fba1f98b",
+    "rawBytes": 529244,
+    "labSidecarSha256": "ce40e5dc45b4d68d8e24a3ed9da68b2517e48b8b6dd90154a3ba8013b9df3abf",
+    "promptSha256": "fee75764371c6e31fc935e229c3f685840de2641dcc57a147d24550993fe5c19"
+   }
+  },
+  {
+   "cue": "gunHornetShot",
+   "url": "assets/audio/gun-hornet-shot-01.mp3",
+   "bytes": 5851,
+   "sha256": "43582536eccb9331f0546b5755b7b319af4638d7cbdd1dd7f3ae248f89faf670",
+   "dur": 0.325,
+   "window": {
+    "startS": 0.295,
+    "endS": 0.62
+   },
+   "ops": [
+    "mono",
+    "remove DC (-1.8e-4)",
+    "trim 0.295-0.62 s",
+    "cosine fades 0.002 / 0.14 s",
+    "peak -1 dBFS (2.9 dB)",
+    "matched to the cue's quietest take (-4.1 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -5.1,
+    "dc": -0.000033,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -48.7,
+     "endDb": -49.7
+    },
+    "onsetsS": [
+     0.01
+    ],
+    "riseMs": 15,
+    "activeEndS": 0.2,
+    "centroidHz": 1487,
+    "flatness": 0.253,
+    "low0to300": 0.218,
+    "momentaryMaxLufs": -28.4,
+    "secondReportDb": null
+   },
+   "source": {
+    "clip": "hornet-shot-03",
+    "jobId": "20261110T064738-1979131141",
+    "seed": 1979131141,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "5c9433e082a4fc283fde372dee6b0f22b956e707410a6f2203e94100ef6f8a04",
+    "rawBytes": 352844,
+    "labSidecarSha256": "45208d0f58efb94baf51ba150db8a1ea6564dcc9908c84257c5439de3d1b41bc",
+    "promptSha256": "efbd8246608c8378e49e4c2321462974100598d3a88d0e52d6069ee207c37024"
+   }
+  },
+  {
+   "cue": "gunHornetShot",
+   "url": "assets/audio/gun-hornet-shot-02.mp3",
+   "bytes": 5433,
+   "sha256": "30cdebbac79240009254b55da8fec4004b11c2cbe67bde713e448edd5c297cc0",
+   "dur": 0.31,
+   "window": {
+    "startS": 0.27,
+    "endS": 0.58
+   },
+   "ops": [
+    "mono",
+    "remove DC (-7.1e-4)",
+    "trim 0.27-0.58 s",
+    "cosine fades 0.002 / 0.12 s",
+    "peak -1 dBFS (-0.8 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "peakDbfs": -1,
+    "dc": -0.00013,
+    "clipped": false,
+    "edgesDb": {
+     "startDb": -53.5,
+     "endDb": -53.1
+    },
+    "onsetsS": [
+     0.01
+    ],
+    "riseMs": 20,
+    "activeEndS": 0.2,
+    "centroidHz": 1743,
+    "flatness": 0.253,
+    "low0to300": 0.072,
+    "momentaryMaxLufs": -28.4,
+    "secondReportDb": null
+   },
+   "source": {
+    "clip": "hornet-shot-05",
+    "jobId": "20261110T065448-1388891472",
+    "seed": 1388891472,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "21d0c1b1fae29229fba31c4b5ab9b753c41aa162f7542a9603de4cbfdbe1608b",
+    "rawBytes": 352844,
+    "labSidecarSha256": "2d3749f6d0018a97747008ce37c5ea8e8c7eb65dd04228dc815f75a4e7e0d745",
+    "promptSha256": "efbd8246608c8378e49e4c2321462974100598d3a88d0e52d6069ee207c37024"
+   }
+  }
+ ],
+ "rejectedRaws": [
+  {
+   "clip": "hornet-shot-01",
+   "jobId": "20261110T064232-1484742355",
+   "seed": 1484742355,
+   "seconds": 2,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "8a2dda311603f37fedefafef5b03073c5fc88e41f2c2b9f7b8f42b6a12746236",
+   "rawBytes": 352844,
+   "labSidecarSha256": "fe0836da4bd07f4b10511066840f65478aa934486a93aa5209adfce5b15982d5",
+   "promptSha256": "ecc60268f4959a5c169f881d673bfaddbade18f729e82275e8f87c1fa375c322",
+   "reason": "two comparable reports 0.3 s apart (not one shot per bullet) and a bright hiss burst with almost no body (0-300 Hz share 0.02, spectral flatness 0.43)"
+  },
+  {
+   "clip": "hornet-shot-02",
+   "jobId": "20261110T064237-1711753126",
+   "seed": 1711753126,
+   "seconds": 2,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "2c6811b7b934fa2f46163cd2140bf9df1382eacbed408cd1b96e46b1449d48a3",
+   "rawBytes": 352844,
+   "labSidecarSha256": "67cd956ba0bc22075ee2d26db034984432f2e473a5ed99ce5d3fc8a8df29b86b",
+   "promptSha256": "0919b493cdc19ccba585eac0b5e0db4af6df5de86a8864789657a1e804a04714",
+   "reason": "failed the transient-onset gate (a pre-click 0.13 s before the report) and a hiss burst with almost no body (0-300 Hz share 0.006, flatness 0.49)"
+  },
+  {
+   "clip": "hornet-shot-04",
+   "jobId": "20261110T064742-808821010",
+   "seed": 808821010,
+   "seconds": 2,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "5bb4860d8793648a7745e56abe60d3141dc2d81aa5c8c719e7160a2f3f11033d",
+   "rawBytes": 352844,
+   "labSidecarSha256": "a270db9a668686566b2a57ee89f6dbf9ed07284fe4864c8e5af258a6507d6309",
+   "promptSha256": "b65bfe90eafaaa4c56d47c2133a9dd0f8cfe1eae24e2bdff7cf55646de550f71",
+   "reason": "a boomy low blast an octave below the accepted take 03 (centroid 0.75 vs 1.49 kHz, 0-300 Hz share 0.76 vs 0.22) with a large sub-sonic offset (window mean -0.027): it would alternate badly with 03 in full-auto fire; replaced by take 05 (take 03's request, a new seed)"
+  }
+ ]
+}

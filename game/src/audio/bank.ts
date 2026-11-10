@@ -21,6 +21,7 @@ import {CLIP_MANIFEST_FUEL} from './manifest.fuel.generated'; // task train-fuel
 import {CLIP_MANIFEST_SKYWAYS_CAR} from './manifest.skywaysCar.generated'; // task studio-skyways-level-20261106-054448-01: the prize car's engine loops, skid, door
 import {CLIP_MANIFEST_SKYWAYS_DESTINATIONS} from './manifest.skywaysDestinations.generated';
 import {CLIP_MANIFEST_MARKET_BAR} from './manifest.marketBar.generated'; // task studio-market-bar-20261108-225231-01 (lane AUDIO): the market set
+import {CLIP_MANIFEST_GUN_VARIETY, GUN_VARIETY_CUES} from './manifest.gunVariety.generated'; // task studio-weapon-soundlab-audio-20261110-063407-01: the six new guns' own shots / reloads (audio/gunVoices.ts)
 import {CLIP_MANIFEST_HEAD_HIT} from './manifest.headHit.generated'; // task studio-general-armor-20261107-231448-01: the head-hit skull crack // task skyways-destinations-20261106 (lane AUDIO): clock tick / chime, arcade, projector
 
 /**
@@ -32,7 +33,7 @@ import {CLIP_MANIFEST_HEAD_HIT} from './manifest.headHit.generated'; // task stu
  * 20261101-201110-01 (lane AUDIO): + the Strainer's wet footfalls / arm swing / claw contact / hit squish (tools/audio-pipeline/
  * strainer-build.mjs; provenance derivatives/audio-strainer.json).
  */
-export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT, ...CLIP_MANIFEST_MARKET_BAR};
+export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT, ...CLIP_MANIFEST_MARKET_BAR, ...CLIP_MANIFEST_GUN_VARIETY};
 
 /** Every cue the game can play, in decode-priority order (most frequent / important first). */
 export const CUES = [
@@ -81,6 +82,9 @@ export const CUES = [
   'headHit',
   'bedWind', 'bedRumble', 'bedHvac', 'bedFridge', 'bedBuzz',
   'shotgunPump', 'shellInsert', 'rifleMagOut', 'rifleMagIn', 'rifleCharge', 'rifleMagDrop', 'dryFire', 'equip',
+  // Task studio-weapon-soundlab-audio-20261110-063407-01 (tools/audio-pipeline/gun-variety-build.mjs): the weapon-variety guns' own shots
+  // and reload mechanics, named by weapon id (audio/gunVoices.ts).
+  ...GUN_VARIETY_CUES,
   'jump', 'land', 'crouch', 'ladder', 'heartbeat', 'breath', 'death',
   'drip', 'creak', 'clank', 'trainDistant', 'flicker',
   'cabinetOpen', 'cabinetClose', 'crateOpen', 'crateClose', 'vendingPry', 'vendingClose', 'coolerOpen', 'coolerClose', 'drawerOpen', 'search',
