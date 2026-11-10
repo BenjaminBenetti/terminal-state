@@ -23,6 +23,7 @@ import {treatmentOf, planWallDetail, extWallDetailCaps} from '../src/world/wallD
 import {areaNeglect} from '../src/world/decay';
 import {ambienceTypeFor, roomKindFor} from '../src/audio/sfx';
 import type {StationLayout} from '../src/gen/station';
+import {staticGateEnds} from '../src/world/ridePortalView';
 
 function fakeEnvTextures(): Record<TextureKey, THREE.Texture> {
   const out = {} as Record<TextureKey, THREE.Texture>;
@@ -166,7 +167,7 @@ describe('track tunnel shell geometry', () => {
     expect(bed.some(h => h.object.name.startsWith('arch-ballast'))).toBe(true);
   });
 
-  it('black end planes and barricades are suppressed only at the bed ends a tunnel continues', () => {
+  it('black end planes and barricades are suppressed only at the bed ends a tunnel continues (or a ride gate closes)', () => {
     const planesAt = (w: BuiltWorld) => {
       const xs: number[] = [];
       w.group.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh && (m.geometry as THREE.PlaneGeometry).type === 'PlaneGeometry' && (m.material as THREE.MeshBasicMaterial).color?.getHex() === 0x030303) xs.push(m.position.x); });
@@ -180,9 +181,14 @@ describe('track tunnel shell geometry', () => {
     expect(planesAt(both.w)).toEqual([]);
     expect(barricadeXs(both.w)).toEqual([]);
     const eastOnly = built({noWest: true});
-    expect(planesAt(eastOnly.w).map(x => Math.round(x * 100) / 100)).toEqual([TX.x0 + 0.01]);
-    expect(barricadeXs(eastOnly.w).every(x => Math.abs(x - TX.x0) <= 1)).toBe(true);
-    expect(barricadeXs(eastOnly.w).length).toBeGreaterThan(0);
+    // task studio-perf-ao-train-continuity-20261110-022206-01 (lane PORTAL): the fixture's one trench is the parked car's track, so its
+    // closed west end is a ride portal 'gate' (world/ridePortalView.ts): a headwall + steel gate stand there instead of the plane and
+    // the barricade (the closed ends of every other track keep both: tests/ride-portal-gates.test.ts on every level kind)
+    expect([...staticGateEnds(eastOnly.fx.layout)]).toEqual(['0:x0']);
+    expect(planesAt(eastOnly.w)).toEqual([]);
+    expect(barricadeXs(eastOnly.w)).toEqual([]);
+    const gateWall = eastOnly.w.group.getObjectByName('ride-gate-wall-0:x0') as THREE.Mesh;
+    expect(verts(gateWall).every(p => Math.abs(p.x - TX.x0) < 0.2)).toBe(true);
   });
 
   it('every cap kind closes the whole cross-section with opaque geometry at the walkable end', () => {
@@ -369,14 +375,15 @@ describe('service hatches in a bed wall (GEN-2 entry type)', () => {
     expect(d.y * 0.5).toBeCloseTo(TX.bedZ1, 6);
     expect((d.x + d.w / 2) * 0.5).toBeCloseTo(b.x, 6);
     expect(d.a).toBe(d.b);
-    // no tunnel continues the x0 end: its black end plane and barricade stay; the builder frames the hatch door (not the shell)
+    // no tunnel continues the x0 end: it stays closed — (task studio-perf-ao-train-continuity-20261110-022206-01, lane PORTAL) by the ride
+    // gate of the parked car's track (its headwall instead of the black end plane and the barricade); the builder frames the hatch door
     expect(view.continued.has('0:x0')).toBe(false);
     expect(view.doorIds.has(b.door)).toBe(false);
+    expect(staticGateEnds(fx.layout).has('0:x0')).toBe(true);
     let plane = false;
     w.group.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh && (m.geometry as THREE.PlaneGeometry).type === 'PlaneGeometry' && (m.material as THREE.MeshBasicMaterial).color?.getHex() === 0x030303 && Math.abs(m.position.x - (TX.x0 + 0.01)) < 1e-6) plane = true; });
-    expect(plane).toBe(true);
-    const hz = w.group.getObjectByName('traversal-hazard') as THREE.Mesh;
-    expect(verts(hz).some(p => Math.abs(p.x - TX.x0) < 0.5)).toBe(true);
+    expect(plane).toBe(false);
+    expect(w.group.getObjectByName('ride-gate-wall-0:x0')).toBeTruthy();
     // walk-through: a ray from the bed into the opening below the head passes the wall and the corridor, into the room beyond
     const toWall = new THREE.Vector3(0, 0, 1);
     const below = raycastAll(w, new THREE.Vector3(b.x, TX.bedY + 1, 33), toWall, 30).find(q => (q.object as THREE.Mesh).isMesh);

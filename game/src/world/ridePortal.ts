@@ -26,7 +26,7 @@
 
 import type {StationLayout} from '../gen/stationTypes';
 import type {BedEnd, TrackTunnel} from '../gen/trackExt/types';
-import type {TrainPlacement} from '../gen/playerTrain';
+import {playerTrainPlacement, type TrainPlacement} from '../gen/playerTrain';
 
 /** The ride tunnel's cross-section (m): half width either side of the track centre line, ceiling above the BED (the trench floor). */
 export const RIDE_BOX = {
@@ -161,6 +161,61 @@ export function gatedEnds(layout: StationLayout, p: TrainPlacement | null): Set<
   const r = ridePortals(layout, p);
   for (const q of [r.front, r.rear]) if (q.kind === 'gate') out.add(portalEndKey(q));
   return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Lane PORTAL: the gate's reveal, the cut and the shell's ring at a breach plane
+
+/**
+ * The static gate of a 'gate' portal (world/ridePortalView.ts), m. The headwall's front stands `proud` in front of the bed end face
+ * and the shut leaves just behind it: over the end wall's own fittings (the tunnel cables on their brackets and the pipes: up to
+ * 0.11 m proud), inside the player's collision radius of that wall (0.3 m; the old barricade stood at 0.12 m), so the camera never
+ * reaches them. The portal frame stands INSIDE the opening's edge (`post` / `lintel`: on an 8 m double-track end face the two
+ * openings are 0.1 m apart and 0.05 m from the side walls), between the front and the end face: it lines the reveal.
+ */
+export const RIDE_GATE = {proud: 0.16, post: 0.08, lintel: 0.1} as const;
+
+/** The cut's tolerance (m): a triangle / instance reaching no further than this to the station side of the front plane is beyond it. */
+export const RIDE_CUT = {back: 0.01} as const;
+
+/**
+ * World x of the plane the station is cut at ("the front"): a breach's portal plane; a gate's headwall front (RIDE_GATE.proud before
+ * the end face — the slab between them holds the gate's reveal and the end wall's fittings behind the headwall).
+ */
+export function portalFront(q: Pick<RidePortal, 'kind' | 'x' | 'out'>): number {
+  return q.kind === 'gate' ? q.x - q.out * RIDE_GATE.proud : q.x;
+}
+
+/** What the station must not draw while a ride uses a portal: its box, a gate's from the headwall front on. */
+export interface PortalCut { box: Box3; front: number; out: 1 | -1 }
+
+export function portalCut(q: Pick<RidePortal, 'kind' | 'x' | 'out' | 'box'>): PortalCut {
+  const front = portalFront(q), b = q.box;
+  return {box: q.out > 0 ? {...b, x0: Math.min(b.x0, front)} : {...b, x1: Math.max(b.x1, front)}, front, out: q.out};
+}
+
+/**
+ * THE CUT RULE (world/ridePortalRuntime.ts; one rule for triangles, instances and whole objects, by their world bounds): hidden when
+ * the bounds overlap the cut's box AND lie beyond its front plane (to RIDE_CUT.back). Whatever reaches the station side of the front
+ * stays drawn whole (nothing on the station side is ever hidden): the bed's floor and rails running up to a gate, a station tunnel's
+ * first straight up to a breach (its shell has a ring at the plane: breachStations below).
+ */
+export function cutHides(c: PortalCut, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): boolean {
+  if (!boxOverlaps(c.box, x0, y0, z0, x1, y1, z1)) return false;
+  return c.out > 0 ? x0 >= c.front - RIDE_CUT.back : x1 <= c.front + RIDE_CUT.back;
+}
+
+/**
+ * Arc lengths at which station tunnel `tn`'s shell gets a ring (world/trackExt/shell.ts renderStations): its breach plane when the
+ * parked car's track leaves through it — so no shell quad (walls, ceiling, ballast, rails, tray) straddles the plane and the cut is
+ * exact there (a straight run is one quad per chunk otherwise). Empty for every other tunnel and on a level without a car.
+ */
+export function breachStations(layout: StationLayout, tn: Pick<TrackTunnel, 'id' | 'trench'>): number[] {
+  const p = playerTrainPlacement(layout);
+  if (!p || tn.trench !== p.trenchIndex) return [];
+  const r = ridePortals(layout, p);
+  for (const q of [r.front, r.rear]) if (q.kind === 'breach' && q.tunnel === tn.id) return [q.sFace];
+  return [];
 }
 
 /** Car-centre distance (m, along the track from the placement) at which the car's centre is in the portal plane. */

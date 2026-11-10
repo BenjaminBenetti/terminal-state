@@ -26,8 +26,8 @@ import type {LevelId} from '../levels/types';
 import {seedToCode} from '../core/rng';
 import {setTip} from './tooltip'; // task studio-ui-subway-maps-20261108-074144-01 (the game tooltip)
 import {
-  CoalescedApply, QUALITY_LABEL, QUALITY_OPTIONS, RENDER_PERCENT, SETTINGS_BOUNDS, nativeRatioLabel, qualityDescription, renderPercent,
-  renderScaleFromPercent, renderScaleReadout, volumeFromPercent, volumePercent,
+  AO_LABEL, AO_OPTIONS, CoalescedApply, QUALITY_LABEL, QUALITY_OPTIONS, RENDER_PERCENT, SETTINGS_BOUNDS, aoDescription, nativeRatioLabel, qualityDescription,
+  renderPercent, renderScaleFromPercent, renderScaleReadout, volumeFromPercent, volumePercent,
   type CoalesceTimers, type GameSettings, type Quality, type QualityPresetLike, type SettingsStore,
 } from './settingsStore';
 
@@ -929,6 +929,11 @@ export interface SettingsFormOptions {
   qualityPresets?: Partial<Record<Quality, QualityPresetLike>>;
   /** Timers of the coalesced render-resolution apply (tests). */
   timers?: CoalesceTimers;
+  /**
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO): why ambient occlusion cannot run in this session (null: it can;
+   * render/volumetric.ts aoUnavailable) — the AO help line says so instead of pretending.
+   */
+  aoUnavailable?: () => string | null;
 }
 
 /** The form's field builders (one store; ids P + id): shared by the Settings and the Controls forms. */
@@ -1060,6 +1065,22 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
       if (Number(i.value) !== pct) i.value = String(pct);
       show(pct, s.quality);
     });
+  }
+  // task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO): ambient occlusion On / Off (the atmosphere pass's AO; never a
+  // quality preset); the help line says what it does, or that it is unavailable where the volumetric pass cannot run
+  {
+    const l = label(AO_LABEL);
+    const sel = d.createElement('select');
+    sel.id = P + 'ao';
+    for (const q of AO_OPTIONS) { const op = d.createElement('option'); op.value = q.value; op.textContent = q.label; sel.append(op); }
+    const help = d.createElement('div');
+    help.className = 'set-readout set-help';
+    help.id = P + 'ao-help';
+    sel.setAttribute('aria-describedby', help.id);
+    sel.addEventListener('change', () => store.set({ambientOcclusion: sel.value !== 'off'}));
+    l.append(sel);
+    box.append(l, help);
+    sync.push(s => { const v = s.ambientOcclusion ? 'on' : 'off'; if (sel.value !== v) sel.value = v; help.textContent = aoDescription(s.ambientOcclusion, o.aoUnavailable?.() ?? null); });
   }
   // only a short note when something is wrong (lane MENU, campaign polish item 2: no explanatory copy otherwise)
   sync.push(storeNote(box, store));

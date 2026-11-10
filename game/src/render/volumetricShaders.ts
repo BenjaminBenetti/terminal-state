@@ -42,12 +42,13 @@
 import * as THREE from 'three';
 import {NodeMaterial, type Node} from 'three/webgpu';
 import * as TSL from 'three/tsl';
-import {lfSlotAt, lightFieldSample} from '../world/lightFieldNode';
+import {RM, lfSlotAt, lightFieldSample, rideMaskInside} from '../world/lightFieldNode';
 import {MAX_SLOTS} from '../world/lightField';
 import {GAS} from '../world/gas/field';
 import {REACTOR_AIR, REACTOR_GAS_LOOK} from '../world/reactor/air'; // task reactor-build-20261101 (lane AIR): the depth gas table size / look
 import {BILATERAL_K, DENSITY_MAP_RANGE} from './atmosphere';
 import {SMOKE_LIMITS, VIS_WINDOWS} from './smoke';
+import {applyAmbientOcclusion, type AoComposite} from './ambientOcclusion'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO)
 
 /** Uniform array sizes (render/smoke.ts SMOKE_LIMITS). */
 export const VF_LIMITS = {smoke: SMOKE_LIMITS.emitters, puffsPer: SMOKE_LIMITS.puffsPerEmitter, puffs: SMOKE_LIMITS.emitters * SMOKE_LIMITS.puffsPerEmitter, scatter: SMOKE_LIMITS.scatterLights, windows: VIS_WINDOWS} as const;
@@ -287,10 +288,18 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
       const layer = int(min(slot, n(u.mapSlots).sub(1)));
       const muv = n(p).xz.sub(n(u.mapXform).xy).mul(n(u.mapXform).zw).toVar();
       const m = n(densT.sample(muv).depth(layer).level(0)).toVar();
-      const mult = m.r.mul(DENSITY_MAP_RANGE).toVar();
+      const mult0 = m.r.mul(DENSITY_MAP_RANGE).toVar();
       const mf = n(u.mapFloors).element(layer).toVar();
       const h = n(p).y.sub(n(mf).x.add(m.g.mul(n(mf).y))).toVar();
-      const hf = clamp(exp(n(u.heightFalloff).negate().mul(h.sub(u.refHeight))), 0.25, 2.5);
+      // --- task studio-perf-ao-train-continuity-20261110-022206-01 (lane PORTAL): inside the RIDE MASK's box (world/rideMask.ts) the haze
+      // is the plain track-bed tunnel medium whatever rooms the density map has there — its bed multiplier, the box's bed as the floor,
+      // the full track draft (render/atmosphere.ts mediumAt `ride`) — the same in a station's portal and in the transit. HAZE ONLY: the
+      // gas terms below keep the map's own `m` / `h` / layer (what hurts stays visible). Off: rideIn is false, every value as before.
+      const rideIn = n(rideMaskInside(p)).toVar();
+      const mult = n(select(rideIn, n(RM.bed).x, mult0)).toVar();
+      const hHaze = n(select(rideIn, n(p).y.sub(n(RM.open).w), h)).toVar();
+      // --- (end lane PORTAL)
+      const hf = clamp(exp(n(u.heightFalloff).negate().mul(hHaze.sub(u.refHeight))), 0.25, 2.5);
       // task reactor-surface-redesign-credits-20261103 (primary; user screenshot "strange fog pillars" on the Reactor's surface): the
       // height profile never drops under 0.25 and the light field lights a whole column, so over the surface deck the haze of the band
       // picked there (the outdoor storey's, the pit's under the aperture) rose into the sky as lamp / beam lit pillars. Above the deck
@@ -302,7 +311,7 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
       const wk = n(u.warp).mul(u.noiseAmount).mul(2);
       const wp = n(p).add(vec3(D.b.sub(0.5).mul(wk), D.r.sub(0.5).mul(wk).mul(0.3), D.a.sub(0.5).mul(wk))).toVar();
       const nAir = n(noiseT.sample(wp.mul(sc.p).add(u.offAir)).level(0)).r;
-      const wt = n(airT.sample(muv).depth(layer).level(0)).r.toVar();
+      const wt = n(select(rideIn, float(1), n(airT.sample(muv).depth(layer).level(0)).r)).toVar(); // (lane PORTAL: the full track draft in the ride box)
       const nPatch = n(nAir).toVar();
       If(wt.greaterThan(0.002), () => {
         const nTrk = n(noiseT.sample(wp.mul(sc.p).add(u.offTrack)).level(0)).r;
@@ -317,7 +326,7 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
       const detailF = float(1).add(amt.mul(u.detail).mul(D.g.sub(0.5)).mul(2));
       const gr = n(u.ground);
       const gh = gr.y.mul(float(1).add(gr.z.mul(D.g.sub(0.5)).mul(2)));
-      const groundT = gr.x.mul(mult).mul(exp(max(h, 0).negate().div(max(gh, 0.05)))).mul(float(1).add(amt.mul(dense.mul(1.2).sub(0.7))));
+      const groundT = gr.x.mul(mult).mul(exp(max(hHaze, 0).negate().div(max(gh, 0.05)))).mul(float(1).add(amt.mul(dense.mul(1.2).sub(0.7))));
       const sigma = base0.mul(n(hf).mul(patchF).mul(detailF).add(groundT)).toVar();
       const excess = max(sigma.sub(base0.mul(hf)), 0).toVar();
       // --- smoke puffs (tinted scattering, own extinction), gated by their emitter's occlusion window ---
@@ -559,8 +568,11 @@ export function createTemporalMaterial(u: FogUniforms, cur0: THREE.Texture, cur1
  * scene x transmittance + in-scatter x intensity, with the depth-aware upsample of the low-res fog. `sceneColor` /
  * `sceneDepth`: the scene pass texture nodes (loaded FIRST so the scene pass is ordered before the fog pass);
  * `fog0` / `fog1`: the fog pass's texture nodes (in-scatter + view depth, transmittance).
+ * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO): `ao` (render/ambientOcclusion.ts) = the ambient occlusion
+ * lookup, applied to the SCENE colour before the fog (in-scatter is never darkened), behind its `aoOn` gate; absent: exactly the
+ * previous composite.
  */
-export function createCompositeNode(u: FogUniforms, sceneColor: N, sceneDepth: N, fog0: N, fog1: N): Node {
+export function createCompositeNode(u: FogUniforms, sceneColor: N, sceneDepth: N, fog0: N, fog1: N, ao?: AoComposite): Node {
   return Fn(() => {
     const uvN = n(uv());
     const fsize = n(texSize(sceneDepth));
@@ -592,6 +604,7 @@ export function createCompositeNode(u: FogUniforms, sceneColor: N, sceneDepth: N
     const ok = wsum.greaterThan(1e-4);
     const fog = n(select(ok, acc.div(max(wsum, 1e-4)), best)).mul(u.intensity);
     const tv = mix(float(1), clamp(select(ok, accT.div(max(wsum, 1e-4)), bestT), 0, 1), clamp(u.intensity, 0, 1));
-    return vec4(n(sc.rgb).mul(tv).add(fog), 1);
+    const surf = ao ? applyAmbientOcclusion(ao, sc.rgb, d, z, uvN) : sc.rgb; // (lane AO)
+    return vec4(n(surf).mul(tv).add(fog), 1);
   })() as unknown as Node;
 }

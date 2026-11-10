@@ -2,13 +2,14 @@
 // Game host and the REAL Player body / PlayerTrainRuntime / TrainRide:
 //  - item 16 FRONT FIRST: the departure always takes the FRONT end and the arrival always comes out of the REAR end (every level kind);
 //    a ride never reverses (transit velocity >= 0, the car's world motion never against its +X), its yaw never snaps (bounded per
-//    frame through both hand-overs); bed ends crossed through a STUB (clear rock behind the end face: the box continues the bed, the
-//    end plane hidden while the car passes, then whole again) or at the EDGE (rooms behind: the car never passes the plane); the stub
-//    hand-over keeps the pattern / signals around the car; brass lying in the car rides with it; lane MAP's multi-hop journeys only
-//    lengthen the minimum transit (bounded);
+//    frame through both hand-overs); the hand-overs keep the pattern / signals around the car; brass lying in the car rides with it;
+//    lane MAP's multi-hop journeys only lengthen the minimum transit (bounded);
+//    (task studio-perf-ao-train-continuity-20261110-022206-01, lane RIDE: every bed end is crossed through its RIDE PORTAL now — a
+//    gate in a closed end, a breach in a station tunnel's first straight — straight along the track, the ride tunnel a stub from the
+//    portal plane; the old STUB / EDGE / tunnel-bend crossings and their pins are gone: see tests/train-ride-portal.test.ts)
 //  - item 15 DARK: no warm lamps, no lights, no shadow casters in the transit; red signals at a block spacing scrolling backwards at the
 //    car's speed (lenses facing the oncoming car), out of sight before the arrival leaves the transit; the station light field reads
-//    zero at the transit; a level's own fog is held while the transit shows and given back after;
+//    zero at the transit; a level's own fog is held while the car is in the ride tunnel / the transit and given back after;
 //  - item 17 SOUND: rumble / air loops only while moving, blended by speed, gone at the stop (no hum while parked), quiet on pause,
 //    stopped on reset / dispose; no run window struck on the final approach; Sfx.rideLoop is a non-positional loop into the master.
 import {afterEach, describe, expect, it, vi} from 'vitest';
@@ -25,7 +26,8 @@ import {playerTrainPlacement, trainSpawnPose, worldToTrain, type TrainPlacement}
 import {PLAYER_TRAIN_SPEC as SPEC} from '../src/world/playerTrainSpec';
 import {PlayerTrainRuntime, installPlayerTrain} from '../src/world/playerTrain';
 import {carToWorld, placementPose, worldToCar} from '../src/world/trainRideLocal';
-import {RIDE_ROUTE, arrivalPlan, arriveDir, bedEndClear, departDir, departurePlan} from '../src/world/trainRideRoute';
+import {arrivalPlan, arriveDir, departDir, departurePlan} from '../src/world/trainRideRoute';
+import {RIDE_PORTAL, ridePortals} from '../src/world/ridePortal';
 import {TRANSIT, TrainTransitTunnel, type TransitMaterials} from '../src/world/trainTransitTunnel';
 import {RIDE, TrainRide, installTrainRide, journeyOf} from '../src/world/trainRide';
 import {RIDE_AUDIO} from '../src/world/trainRideAudio';
@@ -193,72 +195,81 @@ function rideChecks(h: Host, ride: TrainRide, seconds: number, until: () => bool
 // Item 16: plans, portals, clearance
 
 describe('item 16: FRONT FIRST plans and portals on every level kind', () => {
-  it('the departure takes the front end and the arrival comes out of the rear end (cab leading both ways); bed ends are classified stub / edge', () => {
+  // (train continuity, lane RIDE) replaced: the stub / edge / tunnel classes of a bed end (bedEndClear, uEdge, uDark) — every end is
+  // crossed through its ride portal now, whatever stands behind it: a gate where it is closed, a breach where a station tunnel continues it
+  it('the departure takes the front end and the arrival comes out of the rear end (cab leading both ways); every end has its ride portal', () => {
     const cases: [string, StationLayout][] = [
       ['subway 4242', gen('subway', 4242)], ['subway 3', gen('subway', 3)], ['subway 8', gen('subway', 8)],
       ['office 4242', gen('office', 4242)], ['mall 4242', gen('mall', 4242)], ['reactor 4242', gen('reactor', 4242)],
     ];
-    const seen = {stub: 0, edge: 0, tunnel: 0};
+    const seen = {gate: 0, breach: 0};
     const kinds: Record<string, string> = {};
     for (const [tag, L] of cases) {
       const p = playerTrainPlacement(L)!;
-      const d = departurePlan(L, p), a = arrivalPlan(L, p);
+      const d = departurePlan(L, p), a = arrivalPlan(L, p), portals = ridePortals(L, p);
       expect(d.end, tag).toBe(p.front > 0 ? 'x1' : 'x0');
       expect(a.end, tag).toBe(p.front > 0 ? 'x0' : 'x1');
       expect(d.sgn, tag).toBe(1);
       expect(a.sgn, tag).toBe(-1);
       expect(departDir(d)).toBe(1);
       expect(arriveDir(a)).toBe(1);
-      const lv = levelsOf(L);
+      expect(d.portal, tag).toBe(portals.front);
+      expect(a.portal, tag).toBe(portals.rear);
       for (const [which, pl] of [['dep', d], ['arr', a]] as const) {
-        const mode = pl.kind === 'tunnel' ? 'tunnel' : bedEndClear(lv, L, p, pl.end) ? 'stub' : 'edge';
-        seen[mode]++;
-        kinds[`${tag} ${which}`] = mode;
-        if (pl.kind === 'bed-end') {
-          expect(pl.uEdge, tag).toBeGreaterThan(0);
-          expect(pl.uDark - pl.uMouth, tag).toBeCloseTo(L2 + RIDE_ROUTE.darkS, 9);
-          expect(pl.route.length, tag).toBeGreaterThan(pl.uDark + L2); // the stub run fits the bed-end route
-        }
+        seen[pl.portal.kind]++;
+        kinds[`${tag} ${which}`] = pl.portal.kind;
+        expect(pl.kind, tag).toBe(pl.portal.kind === 'breach' ? 'tunnel' : 'bed-end');
+        // the whole run is one straight line: the plane beyond the whole parked car, the hand-over RIDE_PORTAL.dark beyond the car's end
+        expect(pl.uPlane, tag).toBeGreaterThan(L2 + 1.5);
+        expect(pl.uHand - pl.uPlane, tag).toBeCloseTo(L2 + RIDE_PORTAL.dark, 9);
+        expect(pl.route.length, tag).toBeGreaterThan(pl.uHand); // the run fits the route
+        if (pl.kind === 'bed-end') expect(pl.uPlane, tag).toBeCloseTo(pl.uMouth, 9); // a gate stands in the end face
+        else expect(pl.uPlane, tag).toBeGreaterThan(pl.uMouth); // a breach: on along the tunnel's first straight
       }
     }
-    // the probe-verified classes: the mall comes out of its clear rear bed end through a stub, the Office / Subway front ends have
-    // rooms behind them (edge), the Reactor's front end is clear rock (stub), a tunnel-less Subway (seed 8) is edge both ways
-    expect(kinds['mall 4242 arr']).toBe('stub');
-    expect(kinds['office 4242 dep']).toBe('edge');
-    expect(kinds['subway 4242 dep']).toBe('edge');
-    expect(kinds['subway 4242 arr']).toBe('tunnel');
-    expect(kinds['reactor 4242 dep']).toBe('stub');
-    expect(kinds['subway 8 dep']).toBe('edge');
-    expect(kinds['subway 8 arr']).toBe('edge');
-    expect(seen.stub + seen.edge + seen.tunnel).toBe(cases.length * 2);
+    // the same ends as before, by what the layout has there: the mall's rear end, the Office / Subway front ends and the Reactor's front
+    // end are closed (gates: they were the stub / edge crossings), the Subway's rear end has its tunnel (a breach), a tunnel-less
+    // Subway (seed 8) has gates both ways
+    expect(kinds['mall 4242 arr']).toBe('gate');
+    expect(kinds['office 4242 dep']).toBe('gate');
+    expect(kinds['subway 4242 dep']).toBe('gate');
+    expect(kinds['subway 4242 arr']).toBe('breach');
+    expect(kinds['reactor 4242 dep']).toBe('gate');
+    expect(kinds['subway 8 dep']).toBe('gate');
+    expect(kinds['subway 8 arr']).toBe('gate');
+    expect(seen.gate + seen.breach).toBe(cases.length * 2);
   }, 120000);
 });
 
 // ---------------------------------------------------------------------------------------------
-// Item 16: the ride never reverses; the yaw never snaps; edge / stub crossings
+// Item 16: the ride never reverses; the yaw never snaps; the portals' stubs
 
 describe('item 16: a ride never reverses, never snaps its yaw, crosses bed ends without cutting the car', () => {
-  it('Subway (front edge -> rear tunnel, same station): forward motion only, bounded yaw steps, the cab leads into the platform, exact stop', async () => {
+  it('Subway (front gate -> rear breach, same station): forward motion only, bounded yaw steps, the cab leads into the platform, exact stop', async () => {
     const {h, rt, ride, p} = setup(gen('subway', 4242));
     const before = worldToTrain(p, h.player.x, h.player.y, h.player.z);
     let dep: {status: string} | null = null;
     void ride.depart().then(r => { dep = r; });
-    expect(ride.cross).toBe('edge'); // rooms behind the front end face
     const plan = ride.plan!;
-    // the departure: the cab's nose never passes the black end plane (edge crossing), then the transit
-    let maxNose = -Infinity;
+    expect(plan.portal.kind).toBe('gate'); // the front end is closed (rooms behind its face: the station draws none of them in the box)
+    // (train continuity: replaced the EDGE crossing's "the nose never passes the black end plane") the departure runs straight on
+    // through the plane into the ride tunnel, and hands over only with the plane RIDE_PORTAL.dark behind the car's trailing end
+    let maxNose = -Infinity, offLine = 0;
     const a = rideChecks(h, ride, 80, () => {
-      if (ride.phase === 'departing') maxNose = Math.max(maxNose, ride.u + L2);
+      if (ride.phase === 'departing') { maxNose = Math.max(maxNose, ride.u + L2); offLine = Math.max(offLine, Math.abs(ride.base.z - p.z)); }
       return ride.phase === 'transit';
     });
     await Promise.resolve();
-    expect(dep).toMatchObject({status: 'in-tunnel', dir: 1});
-    expect(maxNose).toBeLessThanOrEqual(plan.uMouth - RIDE_ROUTE.planeClear + 1e-6);
+    expect(dep).toMatchObject({status: 'in-tunnel', dir: 1, via: 'bed-end'});
+    expect(maxNose).toBeGreaterThan(plan.uPlane + SPEC.length + RIDE_PORTAL.dark - 0.5);
+    expect(offLine).toBe(0);
+    expect(ride.hand.out!.clear).toBeGreaterThanOrEqual(RIDE_PORTAL.dark);
+    expect(ride.hand.out!.clear).toBeLessThan(RIDE_PORTAL.dark + 0.5);
     expect(ride.transit.mode).toBe('transit');
     // the car keeps its yaw into the transit (no snap): the transit box takes it
     expect(ride.transit.yaw).toBeCloseTo(ride.base.yaw, 9);
     expect(Math.abs(ride.base.yaw - p.yaw)).toBeLessThan(0.05);
-    // arrive at the same station: out of the REAR end (its tunnel), front first
+    // arrive at the same station: in through the REAR end (the breach in its tunnel's first straight), front first
     let arr: {status: string; reversed?: boolean} | null = null;
     void ride.arrive().then(r => { arr = r; });
     const b = rideChecks(h, ride, 150, () => !ride.riding);
@@ -270,10 +281,11 @@ describe('item 16: a ride never reverses, never snaps its yaw, crosses bed ends 
     }
     expect(b.minTransitV).toBeGreaterThanOrEqual(0);
     expect(ride.counts.reversals).toBe(0);
-    // the car came in from behind the parked car (the rear end), cab first
+    // the car came in from behind the parked car (the rear end), cab first, from RIDE_PORTAL.dark beyond the plane
     const s = b.arrivalStart!;
     expect(((s.x - p.x) * p.front)).toBeLessThan(-L2);
     expect(Math.abs(s.yaw - p.yaw) % (2 * Math.PI)).toBeLessThan(0.3);
+    expect(ride.hand.back!.clear).toBeCloseTo(RIDE_PORTAL.dark, 9);
     // exact stop, same car-local pose, normal physics in the parked car
     const root = rt.view!.root;
     expect([root.position.x, root.position.y, root.position.z]).toEqual([p.x, p.railTopY, p.z]);
@@ -285,7 +297,7 @@ describe('item 16: a ride never reverses, never snaps its yaw, crosses bed ends 
     expect(ride.transit.active).toBe(false);
   }, 90000);
 
-  it('Subway -> Mall: the car comes out of the mall\'s clear REAR bed end through a stub (end plane hidden, then whole), cab first, exact stop', async () => {
+  it('Subway -> Mall: the car comes in through the gate of the mall\'s closed REAR bed end, the ride tunnel a stub behind it (an end plane hidden, then whole), cab first, exact stop', async () => {
     const A = gen('subway', 4242), B = gen('mall', 4242);
     const {h, rt, ride} = setup(A);
     void ride.depart();
@@ -296,8 +308,9 @@ describe('item 16: a ride never reverses, never snaps its yaw, crosses bed ends 
     const plane = (() => { let f: THREE.Object3D | null = null; h.world.group.traverse(o => { if (o.userData.bedEndVoid === key) f = o; }); return f as unknown as THREE.Object3D; })();
     expect(plane.visible).toBe(true);
     void ride.arrive();
-    let sawStub = false, hiddenWhileIn = true, groupOk = true;
+    let sawStub = false, hiddenWhileIn = true, groupOk = true, kind = '';
     const c = rideChecks(h, ride, 150, () => {
+      if (ride.phase === 'arriving') kind = ride.plan!.portal.kind;
       if (ride.phase === 'arriving' && ride.transit.mode === 'stub') {
         sawStub = true;
         // the stub continues the bed OUTWARD from the end face: its walls span [face, face + 2 * half] along the outward axis
@@ -309,7 +322,7 @@ describe('item 16: a ride never reverses, never snaps its yaw, crosses bed ends 
       }
       return !ride.riding;
     });
-    expect(ride.cross).toBe('stub');
+    expect(kind).toBe('gate');
     expect(sawStub).toBe(true);
     expect(groupOk).toBe(true);
     expect(hiddenWhileIn).toBe(true);
@@ -319,37 +332,61 @@ describe('item 16: a ride never reverses, never snaps its yaw, crosses bed ends 
     expect(c.maxYawStep).toBeLessThan(0.03);
     expect(c.minTransitV).toBeGreaterThanOrEqual(0);
     const s = c.arrivalStart!;
-    expect((s.x - p.x) * p.front).toBeLessThan(-(L2 + RIDE_ROUTE.darkS)); // started inside the stub, beyond the face
+    expect((s.x - p.x) * p.front).toBeLessThan(-(L2 + RIDE_PORTAL.dark)); // started inside the stub, RIDE_PORTAL.dark beyond the face
     const root = rt.view!.root;
     expect([root.position.x, root.position.y, root.position.z]).toEqual([p.x, p.railTopY, p.z]);
     expect(root.rotation.y).toBe(p.yaw);
     expect(rt.playerInside()).toBe(true);
   }, 120000);
 
-  it('a stub hands over to the transit seamlessly: the same pattern phase and signals around the car', () => {
+  it('a stub hands over to the transit seamlessly, and the transit back to a stub: the same pattern phase and signals around the car', () => {
     const tt = new TrainTransitTunnel().build(basic());
     const face = {x: 30, y: -0.85, z: 4};
     tt.placeStub(face, {x: 1, z: 0}, 0, RIDE.stubSignal);
-    // every shown stub signal is beyond the end face, the first one RIDE.stubSignal past it
+    // every shown stub signal is beyond the plane, the first one RIDE.stubSignal past it; the box starts at the plane, its far end capped
     const sOut = tt.signalOffsets().map(x => tt.anchor.x + x - face.x);
     expect(Math.min(...sOut)).toBeCloseTo(RIDE.stubSignal, 9);
-    // a car 13.25 m into the stub: its view of the pattern and the signals before / after the hand-over
-    const car = {x: face.x + L2 + RIDE_ROUTE.darkS, z: face.z};
-    const relSignals = () => tt.signalOffsets().map(x => +(tt.anchor.x + x - car.x).toFixed(9)).sort((a, b) => a - b);
-    const patternAt = () => ((((car.x - tt.group.position.x) % TRANSIT.period) + TRANSIT.period) % TRANSIT.period);
-    const sig0 = relSignals().filter(v => v > -70 && v < 70), pat0 = patternAt();
+    expect(tt.reach(face.x, face.z)).toEqual({ahead: 2 * TRANSIT.half, behind: 0});
+    expect(tt.endCap).toBe(1);
+    // a car at the hand-over (the plane RIDE_PORTAL.dark behind its trailing end): its view of the pattern and the signals before / after
+    const D = L2 + RIDE_PORTAL.dark;
+    const car = {x: face.x + D, z: face.z};
+    const relSignals = () => tt.signalPoints().map(q => +(q.x - car.x).toFixed(9)).sort((a, b) => a - b);
+    const sig0 = relSignals().filter(v => v > -70 && v < 70), pat0 = tt.patternAt(car.x, car.z);
+    expect(sig0.length).toBe(1); // (the first signal: just behind the car's trailing end, in sight)
     tt.handOver(car.x, car.z);
     expect(tt.mode).toBe('transit');
+    expect(tt.endCap).toBe(0);
     car.x = TRANSIT.origin.x; car.z = TRANSIT.origin.z; // the car now stands at the transit origin
     const sig1 = relSignals().filter(v => v > -70 && v < 70);
     expect(sig1).toEqual(sig0);
-    expect(patternAt()).toBeCloseTo(pat0, 9);
-    // the arrival stub (the car's +X inward): no signal between the face and the car's start, the first RIDE.stubSignalBehind behind it
-    const back = new TrainTransitTunnel().build(basic());
-    const start = L2 + RIDE_ROUTE.darkS;
-    back.placeStub(face, {x: 1, z: 0}, Math.PI, start + RIDE.stubSignalBehind);
-    const outs = back.signalOffsets().map(x => back.anchor.x - x - face.x); // group +X = -out
-    expect(Math.min(...outs)).toBeCloseTo(start + RIDE.stubSignalBehind, 9);
+    expect(tt.patternAt(car.x, car.z)).toBeCloseTo(pat0, 9);
+    // ... and no signal the stub hid on the station side of the plane shows up behind the car
+    expect(relSignals().filter(v => v < -D)).toEqual([]);
+    // (train continuity: replaced the arrival stub's "first signal RIDE.stubSignalBehind behind the start") the way back: the transit
+    // runs on to where the car's place in the pattern is an arrival stub's (arrivalGap), then IS that stub — the box ends exactly at
+    // the plane, the pattern and every signal in sight keep their place around the car (heading -X here: yaw PI)
+    tt.setYaw(Math.PI);
+    tt.advance(55.9); // (the next signal 44 m ahead: inside the band, so the arrival's cut keeps it)
+    tt.hideSignalsOutside(RIDE.signalBand[0], RIDE.signalBand[1]);
+    const gap = tt.arrivalGap(D);
+    expect(gap).toBeGreaterThanOrEqual(0);
+    expect(gap).toBeLessThan(TRANSIT.period);
+    tt.advance(gap);
+    expect(Math.min(tt.arrivalGap(D), TRANSIT.period - tt.arrivalGap(D))).toBeLessThan(1e-9);
+    const rel = () => tt.signalPoints().map(q => +(-(q.x - car.x)).toFixed(9)).sort((a, b) => a - b); // (+ = ahead of the car, which heads -X)
+    const sigA = rel(), patA = tt.patternAt(car.x, car.z);
+    expect(sigA.length).toBeGreaterThan(0);
+    const plane = {x: 500, y: -0.85, z: -20};
+    tt.handBack(plane, {x: 1, z: 0}, Math.PI, D);
+    car.x = plane.x + D; car.z = plane.z; // the car now stands D beyond the plane, heading toward it
+    expect(tt.mode).toBe('stub');
+    expect(rel()).toEqual(sigA);
+    expect(Math.abs(tt.patternAt(car.x, car.z) - patA)).toBeLessThan(1e-9);
+    const reach = tt.reach(car.x, car.z);
+    expect(reach.ahead).toBeCloseTo(D, 9); // the box ends exactly at the plane ...
+    expect(reach.behind).toBeCloseTo(2 * TRANSIT.half - D, 9); // ... and runs on far behind the car
+    expect(tt.endCap).toBe(-1);
   });
 
   it('brass lying in the car rides with it; brass outside stays', () => {
@@ -462,7 +499,12 @@ describe('item 15: a very dark transit with red signals', () => {
     const lensLeft = Math.exp(-((TRANSIT.signal.fog * MOOD.fogDensity * edge) ** 2));
     expect(lensLeft).toBeLessThan(0.02);
     expect(TRANSIT.signal.glowFar * 0.95).toBeLessThanOrEqual(edge);
-    expect(TRANSIT.signal.step).toBeGreaterThan(edge - RIDE.signalBand[0]); // at most one signal in sight at a time
+    // (train continuity: replaced "the band is narrower than a block") the band is measured from the car's ENDS now — its centre ±
+    // (half its length + RIDE_PORTAL.dark): wherever the eye is in the car, a signal at the edge is RIDE_PORTAL.dark away at least;
+    // and no eye ever has two signals within the murk's sight
+    expect(RIDE.signalBand[1]).toBeCloseTo(L2 + RIDE_PORTAL.dark, 9);
+    expect(RIDE.signalBand[0]).toBeCloseTo(-(L2 + RIDE_PORTAL.dark), 9);
+    expect(TRANSIT.signal.step).toBeGreaterThan(2 * TRANSIT.signal.glowFar);
   });
 
   it('the station light field reads zero at the transit (Subway, Mall with its sky field): only the car\'s lights and the flashlight light it', () => {
@@ -475,20 +517,35 @@ describe('item 15: a very dark transit with red signals', () => {
     }
   }, 60000);
 
-  it('a level\'s own fog is held while the transit shows (the indoor murk) and given back on arrival; a teardown drops it', async () => {
+  it('a level\'s own fog is held while the car is in the ride tunnel / the transit (the indoor murk) and given back on the way in; a teardown drops it', async () => {
     const mallFog = new THREE.FogExp2(0x3a403c, 0.0115);
     const {h, ride} = setup(gen('subway', 4242), {fog: mallFog});
     void ride.depart();
-    run(h, ride, 80, () => ride.phase === 'transit');
-    run(h, ride, 0.5);
     const fog = h.scene.fog as THREE.FogExp2;
+    // (train continuity) the level's own while the eye is in the station; the murk from a few metres beyond the portal plane on
+    // (RIDE.fogBand, blended while the eye passes the plane): the hand-over's 52 m of darkness needs it whatever the level's haze is
+    let sawOwn = false, sawBlend = false, sawMurk = false;
+    run(h, ride, 80, () => {
+      if (ride.phase === 'transit') return true;
+      const depth = ride.u + ride.local.x - ride.plan!.uPlane; // the eye beyond the portal plane (m)
+      if (depth <= RIDE.fogBand[0]) { sawOwn = true; expect(fog.density).toBe(0.0115); expect(fog.color.getHex()).toBe(0x3a403c); }
+      else if (depth >= RIDE.fogBand[1]) { sawMurk = true; expect(fog.density).toBe(MOOD.fogDensity); expect(fog.color.getHex()).toBe(MOOD.fogColor); }
+      else { sawBlend = true; expect(fog.density).toBeGreaterThan(0.0115); expect(fog.density).toBeLessThan(MOOD.fogDensity); }
+      return false;
+    });
+    expect([sawOwn, sawBlend, sawMurk]).toEqual([true, true, true]);
+    run(h, ride, 0.5);
     expect(fog.density).toBe(MOOD.fogDensity);
     expect(fog.color.getHex()).toBe(MOOD.fogColor);
     void ride.arrive();
     run(h, ride, 150, () => ride.phase === 'arriving');
+    // (replaced: "the level's fog is back when the arrival starts") the hand-back is RIDE_PORTAL.dark deep in the ride tunnel: the murk
+    expect(fog.density).toBe(MOOD.fogDensity);
+    expect(fog.color.getHex()).toBe(MOOD.fogColor);
+    run(h, ride, 150, () => !ride.riding);
+    // ... and the level's own again, exactly, once the eye is back in the station
     expect(fog.density).toBe(0.0115);
     expect(fog.color.getHex()).toBe(0x3a403c);
-    run(h, ride, 150, () => !ride.riding);
     // a teardown while the transit shows: the old level restores its own fog; nothing stale comes back on arrival
     fog.density = 0.0115; fog.color.setHex(0x3a403c);
     void ride.depart();

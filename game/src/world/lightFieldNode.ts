@@ -14,6 +14,8 @@
 //    (the sampled-texture binding follows the node's value; no rebuild).
 //  - Shared TSL for other lanes: lfSlotAt / lfBandAt / lfFloorAt (decay floor grime, world-mapped grime, fog density
 //    layer) and lightFieldSample (surfaces and the volumetric in-scattering). The CPU mirror is sampleField().
+//  - Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PORTAL): lightFieldSample is scaled by the RIDE MASK (RM below,
+//    world/rideMask.ts): zero inside a ride tunnel's box, ramping in at its open face; the CPU mirror is sampleField() x rideMaskGain().
 // Slot selection is the iteration-08 packed column texel (slice 0: band thresholds + slot ids, no per-slot loop), done with
 // float arithmetic (no integer shifts: identical on WGSL and GLSL ES 3.0). Task office-seamless-20261029 (ENGINE): N storeys.
 // An extended column (slice 0 A = band count 1..63) names its group texel (3 bands: two inner splits, three slot ids) from
@@ -24,10 +26,11 @@
 import * as THREE from 'three';
 import {LightingNode, MeshBasicNodeMaterial, NodeMaterial, PhongLightingModel, PhysicalLightingModel, QuadMesh, RenderTarget, type Node, type NodeBuilder} from 'three/webgpu';
 import {
-  Fn, If, cameraViewMatrix, clamp, float, floor, int, ivec2, ivec3, length, max, min, mix, mod, normalWorld, positionWorld, renderGroup,
+  Fn, If, abs, cameraViewMatrix, clamp, float, floor, int, ivec2, ivec3, length, max, min, mix, mod, normalWorld, positionWorld, renderGroup,
   screenCoordinate, select, texture3D, textureLoad, uniform, uniformArray, vec2, vec3, vec4,
 } from 'three/tsl';
 import {AUX_LAYERS, AUX_SLOT_DEPTH, FIELD_EMAX, GROUP_BANDS, LAYERS, MAX_SLOTS, SLOT_DEPTH, configureFieldTexture, fieldDepth, slotRange, type LightFieldVolume} from './lightField';
+import {RIDE_MASK, RIDE_MASK_SKIN} from './rideMask';
 
 /** Zero field (1 x 1 column, one slot): what materials compile and sample against before a station is bound. */
 const PLACEHOLDER = configureFieldTexture(new THREE.Data3DTexture(new Uint8Array(fieldDepth(1) * 4), 1, 1, fieldDepth(1)));
@@ -62,6 +65,7 @@ let active: LightFieldVolume | null = null;
 /** Bind a station's field to the global nodes (null: unbind -> placeholder, no field light, band fallback). */
 export function bindLightField(v: LightFieldVolume | null): void {
   active = v;
+  syncRideMask();
   if (!v) {
     LF.tex.value = PLACEHOLDER;
     LF.min.value.set(0, 0, 0);
@@ -96,6 +100,48 @@ export function activeLightField(): LightFieldVolume | null {
 /** Flicker-circuit levels of the bound field (call every frame; StationLighting.update does). */
 export function setLightFieldLevels(l0: number, l1: number, l2: number): void {
   LF.levels.value.set(l0, l1, l2);
+  syncRideMask(); // (task studio-perf-ao-train-continuity-20261110-022206-01, lane PORTAL: the ride mask rides on this per-frame sync)
+}
+
+// ---------------------------------------------------------------------------------------------
+// Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PORTAL): the RIDE MASK (world/rideMask.ts) as uniforms.
+// Plain render-group uniforms (the group LF already binds: no new uniform buffer in any stage — the march's fragment stage is at
+// WebGPU's 12, tests/reactor-x-fog-webgpu-limits.test.ts), copied from RIDE_MASK when its version changes. Off = a zero-volume box
+// at the origin: rideMaskAt reads exactly 1 and rideMaskInside false, so every program shades exactly as before. Turning the mask on /
+// off or moving it changes uniform values only (no program change).
+
+/** lo / hi = the box's corners; open = [open face x, fade m, 1 = has an open face, the box's bed (floor) y]; bed = [track-bed density multiplier, 0, 0, 0]. */
+export const RM = {
+  lo: uniform(new THREE.Vector3(0, 0, 0)).setGroup(renderGroup),
+  hi: uniform(new THREE.Vector3(0, 0, 0)).setGroup(renderGroup),
+  open: uniform(new THREE.Vector4(0, 4, 0, 0)).setGroup(renderGroup),
+  bed: uniform(new THREE.Vector4(1.5, 0, 0, 0)).setGroup(renderGroup),
+};
+let rmVersion = -1;
+
+/** Copy RIDE_MASK into RM when it changed (cheap: two compares; bindLightField / setLightFieldLevels call it). */
+export function syncRideMask(): void {
+  const m = RIDE_MASK;
+  if (m.bedMult !== RM.bed.value.x) RM.bed.value.set(m.bedMult, 0, 0, 0); // (the bed medium changes per station, without a version)
+  if (m.version === rmVersion) return;
+  rmVersion = m.version;
+  const b = m.box, open = m.on && Number.isFinite(m.openX);
+  if (m.on) { RM.lo.value.set(b.x0, b.y0, b.z0); RM.hi.value.set(b.x1, b.y1, b.z1); } else { RM.lo.value.set(0, 0, 0); RM.hi.value.set(0, 0, 0); }
+  RM.open.value.set(open ? m.openX : 0, m.fade, open ? 1 : 0, m.on ? b.y0 + RIDE_MASK_SKIN : 0);
+}
+
+/** Inside the ride mask's box (bool node; never while off). Mirror: rideMask.ts inRideMask. */
+export function rideMaskInside(p: Node): Node {
+  const P = n(p), lo = n(RM.lo), hi = n(RM.hi);
+  return P.x.greaterThan(lo.x).and(P.x.lessThan(hi.x)).and(P.y.greaterThan(lo.y)).and(P.y.lessThan(hi.y)).and(P.z.greaterThan(lo.z)).and(P.z.lessThan(hi.z));
+}
+
+/** The light field's factor at world point p: 1 outside the box; inside 1 at its open face to 0 `fade` m in (0 without one). Mirror: rideMask.ts rideMaskGain. */
+export function rideMaskAt(p: Node): Node {
+  const P = n(p), o = n(RM.open);
+  const ramp = n(clamp(float(1).sub(n(abs(n(P.x).sub(o.x))).div(max(o.y, 1e-3))), 0, 1)).mul(o.z).toVar();
+  // (materialised like every select() here: the GLSL builder prints unparenthesised ternaries inside a uniformFlow context)
+  return n(select(n(rideMaskInside(P)), ramp, float(1))).toVar();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -246,7 +292,8 @@ export function lightFieldSample(p: Node, o: {normal?: Node; slot?: Node} = {}):
   const L = n(LF.levels);
   const m = max(0, float(1).sub(n(fr.b).mul(n(L.x).oneMinus())).sub(n(fr.a).mul(n(L.y).oneMinus())).sub(n(b.a).mul(n(L.z).oneMinus())));
   const on = n(select(bound(), float(1), float(0))).toVar();
-  const g = n(m).mul(n(LF.gain)).mul(on).toVar();
+  // (lane PORTAL: x the ride mask at the point itself — 1 outside its box, so the field is exactly as before there)
+  const g = n(m).mul(n(LF.gain)).mul(on).mul(rideMaskAt(vec3(n(p)))).toVar();
   const d = n(n(b.rgb).mul(2).sub(1)).toVar();
   const dl = length(d);
   const dir = n(select(n(dl).greaterThan(1e-4), n(d).div(dl), vec3(0, 1, 0))).toVar();

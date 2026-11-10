@@ -226,8 +226,9 @@ export const MARKET_OBJECTIVE = 'Trade at the stalls. Return to the train when d
 export const BUNKER_OBJECTIVE = 'Scavenge the shelter · optional: restart three generators to power the core. Return to the train when done.';
 
 // (task campaign-foundation-20261102, lane MENU: + renderScale — a linear render-resolution scale over the DPR-capped native buffer;
-// the persisted values live in ui/settingsStore.ts, main.ts copies them in)
-export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertX: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: RenderScale; trainSway: number }
+// the persisted values live in ui/settingsStore.ts, main.ts copies them in; task studio-perf-ao-train-continuity-20261110-022206-01, lane AO:
+// + ambientOcclusion, the atmosphere pass's screen-space AO on / off)
+export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertX: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: RenderScale; trainSway: number; ambientOcclusion: boolean }
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 
@@ -281,7 +282,7 @@ export class Game {
   readonly input: Input;
   readonly hud = new Hud();
   readonly sfx = new Sfx();
-  readonly settings: Settings = {sens: 1, fov: 75, volume: 0.7, muted: false, invertX: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1};
+  readonly settings: Settings = {sens: 1, fov: 75, volume: 0.7, muted: false, invertX: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1, ambientOcclusion: true};
   // ==== task campaign-foundation-20261102 (lane MENU): main-menu hooks (main.ts / world/menuScene.ts) ====
   /** The main menu's diorama render (world/menuScene.ts), drawn by frame() in 'title' / 'loading' while no world is built; true when it drew. */
   menuRender: ((time: number) => boolean) | null = null;
@@ -2347,6 +2348,9 @@ export class Game {
     this.camera.updateProjectionMatrix();
     this.sfx.setVolume(this.settings.volume);
     this.sfx.setMuted(this.settings.muted);
+    // task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO): AO on / off is a uniform gate + the AO targets' size in the
+    // atmosphere pass (?ao= wins): no existing program is rebuilt, nothing to re-warm; off -> on builds only the AO pass's own programs
+    this.atmosphere.setAmbientOcclusion(this.settings.ambientOcclusion);
     this.resize();
   }
 
