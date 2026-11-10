@@ -52,7 +52,7 @@ export const CART = {
   /** Below this speed a free cart sleeps (m/s). */
   sleep: 0.02,
   /** A free cart on a stair flight rests on the step edges: this deceleration (m/s²) stops it within centimetres. */
-  stairDecel: 14,
+  stairDecel: 40,
   /** Rest pose: the largest tilt drawn (rad) and how fast the drawn pose follows (1/s). */
   maxTilt: 0.75,
   poseRate: 16,
