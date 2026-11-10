@@ -222,11 +222,17 @@ seed) as well.
   everything and allows travel anywhere for the rest of that run (it is saved with the run; separate from the Lockbox code).
 - **The journey** (`Game.travelToStation`, `src/world/trainRide.ts`): the occupied train closes its doors and pulls into a dark
   transit tunnel. You can walk, look and change gear inside while the old station is torn down (every change kept in its
-  memory) and the next one is generated, built and compiled in the background, with jostle. The car then emerges at the new
-  platform and stops. There is no static loading screen. A destination that cannot be generated twice sends the train back.
-  The car always runs cab first: it leaves through the front end of its track and comes into the next station through the
-  end behind the parked car, so it never reverses. Where clear rock lies behind a bed end, the transit box continues it as a
-  stub. Where rooms lie behind it, the car hands over at the end face. The transit is very dark, with red signals passing
+  memory) and the next one is generated (when the destination is confirmed) and built in small slices between frames
+  (`src/core/pacedBuild.ts`, `Game.buildSectionPaced`), then compiled in the background, with jostle. The car then emerges
+  at the new platform and stops. There is no static loading screen. A destination that cannot be generated twice sends the
+  train back. The car always runs cab first and STRAIGHT along its own track (`src/world/trainRideRoute.ts`): it leaves
+  through a ride portal at the front end of its track and comes into the next station through the portal at the end behind
+  the parked car, so it never reverses (`src/world/ridePortal.ts`, `ridePortalRuntime.ts`, `ridePortalView.ts`). A portal is
+  a steel gate in a closed bed end (it swings open for the car and shuts behind it), or a breach at the end of a station
+  tunnel's first straight. Beyond the portal the car is in the ride tunnel (the transit tunnel continuing from the portal);
+  the station hides what it would draw inside that tunnel and its baked light reads zero there, so the car never passes a
+  wall. The station hands over to the transit, and the transit to the next station, only with the portal 52 m of tunnel
+  murk behind or ahead of the car, so nothing in view changes. The transit is very dark, with red signals passing
   about every 110 m. The only light is the car's own lights and the flashlight (F also works between worlds). The ride sound
   uses existing Sound Lab beds and cues: a rumble and an air loop blended by speed, rail-joint clacks and the brakes. It stops
   at the platform and goes quiet in menus.

@@ -25,6 +25,7 @@ import {beerModel, beerModelSource} from '../market/beer/beerModel';
 import {isPantryItem} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
 import {pantryFallbackModel, pantryGltf, pantryModelSource} from './pantryModels';
 import {requestWeaponVarietyModel, weaponVarietyGltf, weaponVarietyModelUrl} from './weaponVarietyModels'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the lazily loaded new weapons (+ task studio-weapon-runtime-fix-20261110-022206-01: asked for on demand)
+import {isVarietyWeapon} from '../weapons/varietyIds';
 import {Grid} from '../gen/grid';
 import type {Levels} from '../gen/levels';
 import type {MarketStallId} from '../gen/market/marketTypes';
@@ -524,10 +525,9 @@ export class PickupManager {
     return p;
   }
 
-  add(stack: ItemStack, x: number, y: number, z: number, yaw = 0): Pickup {
-    const obj = this.meshFor(stack.itemId);
-    obj.position.set(x, y, z);
-    obj.rotation.y = yaw;
+  /** The object a pickup of `itemId` is drawn with and its OWN material copies (the glint / look-at highlight write their emissive). */
+  private build(itemId: string): {obj: THREE.Object3D; mats: THREE.MeshStandardMaterial[]} {
+    const obj = this.meshFor(itemId);
     const mats: THREE.MeshStandardMaterial[] = [];
     obj.traverse(o => {
       const m = o as THREE.Mesh;
@@ -536,6 +536,43 @@ export class PickupManager {
       const cloned = list.map(mm => { const c = (mm as THREE.MeshStandardMaterial).clone(); mats.push(c); return c; });
       m.material = Array.isArray(m.material) ? cloned : cloned[0];
     });
+    return {obj, mats};
+  }
+
+  /**
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): the meshes of a pickup of every item in `ids`, exactly as add()
+   * makes them (meshFor + its own material copies, the pickup's flags), for the runtime-variant pool (render/runtimeVariants.ts, family
+   * 'pickup': one hidden prototype per draw variant). A pickup that appears in play — a dropped item, a lot shot off its holder, a
+   * stolen ware — is a NEW non-instanced object: unless a pickup with the same material values and geometry layout lay in the station
+   * when it was warmed up, its first frame built a node variant and asked for a pipeline (first-use census over the item registry, in
+   * Node: 6 to 45 builds per level kind). Each mesh carries its world matrix inside the pickup (a mirrored model part keeps its
+   * winding in the pipeline key) and never answers a ray. Pure: nothing joins `list` or the group. `materials` are the copies made
+   * here (the pool releases them with the world). The twelve variety weapons are left to their own pool (world/weaponVarietyModels.ts).
+   */
+  pickupPrototypes(ids: Iterable<string>): {meshes: THREE.Mesh[]; materials: THREE.Material[]} {
+    const meshes: THREE.Mesh[] = [], materials: THREE.Material[] = [];
+    for (const id of new Set(ids)) {
+      if (isVarietyWeapon(id)) continue;
+      const {obj, mats} = this.build(id);
+      materials.push(...mats);
+      obj.updateMatrixWorld(true);
+      obj.traverse(o => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.matrix.copy(m.matrixWorld);
+        m.matrixAutoUpdate = false;
+        m.name = `pickup-${id}${m.name ? `-${m.name}` : ''}`;
+        m.raycast = () => {};
+        meshes.push(m);
+      });
+    }
+    return {meshes, materials};
+  }
+
+  add(stack: ItemStack, x: number, y: number, z: number, yaw = 0): Pickup {
+    const {obj, mats} = this.build(stack.itemId);
+    obj.position.set(x, y, z);
+    obj.rotation.y = yaw;
     this.group.add(obj);
     const p: Pickup = {id: this.nextId++, stack, x, y, z, obj, mats};
     this.list.push(p);

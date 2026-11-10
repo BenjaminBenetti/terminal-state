@@ -170,12 +170,15 @@ async function boot(): Promise<void> {
     const {qualityChanged} = copySettingsInto(game.settings, s);
     // only what changed: a resize (canvas re-size) for the view settings, the audio gain for volume / mute, nothing for the mouse
     if (changed.some(k => k === 'quality' || k === 'renderScale' || k === 'fov')) game.applySettings();
+    else if (changed.includes('ambientOcclusion')) game.applySettings(); // (lane AO: the atmosphere's AO gate; applies volume / mute too)
     else if (changed.some(k => k === 'volume' || k === 'muted')) { game.sfx.setVolume(s.volume); game.sfx.setMuted(s.muted); }
     if (qualityChanged) void game.rewarmAfterSettings(); // Iteration 14: new render targets -> prepare their pipelines before Resume
   });
   game.onSettingsChanged = key => { if (key === 'muted') settings.set({muted: game.settings.muted}); }; // the M key
   window.addEventListener('storage', e => { if (e.key === settings.key) settings.reload(); }); // another tab changed them
-  mountSettingsForm($('#pause-settings'), settings, {idPrefix: 'set-', qualityPresets: ATMOSPHERE_QUALITY});
+  // (task studio-perf-ao-train-continuity-20261110-022206-01, lane AO: the AO line says when the atmosphere pass cannot run it)
+  const aoUnavailable = () => game.atmosphere.aoUnavailable();
+  mountSettingsForm($('#pause-settings'), settings, {idPrefix: 'set-', qualityPresets: ATMOSPHERE_QUALITY, aoUnavailable});
   // (task studio-alpha-survival-controls-20261107-060450-01) the input preferences live under Controls: the same store, ids set-*
   mountControlsForm($('#pause-controls-form'), settings, {idPrefix: 'set-'});
 
@@ -297,7 +300,7 @@ async function boot(): Promise<void> {
     qa: qa ? {label: qaPrebuild ? `QA quick start · ${LEVELS[dev?.level ?? 'subway'].name} (scratch, not saved)` : 'QA quick start (scratch build, not saved)', start: () => qaButton.click(), ready: () => qaReady || !qaPrebuild} : null,
   });
   const menuView = new MainMenuView($('#mm-view'), menu, {
-    settings: box => { mountSettingsForm(box, settings, {idPrefix: 'mm-set-', qualityPresets: ATMOSPHERE_QUALITY}); recorder.mountPanel(box, {idPrefix: 'mm-'}); }, // (+ lane RECORDER's Performance section; lane MENU: the quality help line)
+    settings: box => { mountSettingsForm(box, settings, {idPrefix: 'mm-set-', qualityPresets: ATMOSPHERE_QUALITY, aoUnavailable}); recorder.mountPanel(box, {idPrefix: 'mm-'}); }, // (+ lane RECORDER's Performance section; lane MENU: the quality help line)
     controlsForm: box => { mountControlsForm(box, settings, {idPrefix: 'mm-set-'}); }, // (task studio-alpha-survival-controls-20261107-060450-01: input preferences under Controls)
     qaButton: qa ? qaButton : null,
     overlayHost: titleEl, // (lane MENU, campaign polish item 4: submenus open front and centre over the diorama)

@@ -524,6 +524,11 @@ Tunnels have sparse fixtures, mostly dead or dying.
   - Inside the shell, the stair-stepped grid walls are suppressed (`clipFaces`). The shell's own wall-treatment faces are
     `shellDetailFaces`.
   - The bed end plane and barricade disappear only where a tunnel continues.
+  - The two bed ends of the PARKED PLAYER TRAIN's track are ride portals (`world/ridePortal.ts`; task
+    studio-perf-ao-train-continuity-20261110-022206-01): a closed end there carries a headwall with a steel gate in the ride-box
+    opening instead of its black plane and barricade (`world/ridePortalView.ts`; a dummy gate, fixed shut, in another track's
+    opening); a tunnel that continues it gets a ring in its shell at the end of its first straight, where a ride's breach
+    headwall stands only while the train uses it. The grid, collision and layouts are unchanged.
 - **Caps, doors and graffiti:**
   - Cap meshes: `caps.ts`, with `CAP_OVERHANG` derived from `capDepth`.
   - Annex and hatch door frames carry a SERVICE plate.

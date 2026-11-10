@@ -111,10 +111,20 @@ interface WrapSpec {
   /** A lifecycle entry point: every level build / warm-up inside it is labelled with this load route. */
   route?: string;
   detail?: (args: unknown[], game: RecorderGame) => Record<string, unknown> | null;
-  result?: (r: unknown) => Record<string, unknown> | null;
+  result?: (r: unknown, game: RecorderGame) => Record<string, unknown> | null;
 }
 
 const str = (v: unknown, max = 48): string | null => (typeof v === 'string' ? v.slice(0, max) : null);
+/**
+ * Task studio-perf-ao-train-continuity-20261110-022206-01: the journey's paced build (Game.journeyBuildStats, core/pacedBuild.ts):
+ * main-thread work, slices / steps, the longest slice and step, frame waits and fallbacks (no per-slice list: the event stays small).
+ */
+const pacedSummary = (g: RecorderGame): Record<string, unknown> | null => {
+  const st = (g as {journeyBuildStats?: {slices: number; steps: number; workMs: number; maxSliceMs: number; maxStepMs: number; waits: number; fallbacks: number; hiddenSteps: number} | null}).journeyBuildStats;
+  if (!st) return null;
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+  return {slices: st.slices, steps: st.steps, workMs: r1(st.workMs), maxSliceMs: r1(st.maxSliceMs), maxStepMs: r1(st.maxStepMs), waits: st.waits, fallbacks: st.fallbacks, hiddenSteps: st.hiddenSteps};
+};
 const sectionDetail = (a: unknown[]): Record<string, unknown> => {
   const k = a[0] as {level?: unknown; section?: unknown; station?: unknown} | undefined;
   return {level: str(k?.level), section: str(k?.section), station: str(k?.station)};
@@ -143,6 +153,10 @@ const GAME_WRAPS: WrapSpec[] = [
   {name: 'generateSection', kind: 'level.generate', detail: sectionDetail},
   {name: 'prepareSection', kind: 'level.prepare', async: true, detail: sectionDetail},
   {name: 'buildSection', kind: 'level.build', detail: sectionDetail},
+  // task studio-perf-ao-train-continuity-20261110-022206-01: a train journey builds the next station in paced slices (core/pacedBuild.ts,
+  // Game.buildSectionPaced: frames are drawn between them) and generates its layout at the destination's confirmation
+  {name: 'buildSectionPaced', kind: 'level.build', async: true, detail: a => ({...sectionDetail(a), paced: true}), result: (_r, g) => pacedSummary(g)},
+  {name: 'pregenerateSection', kind: 'level.generate', detail: a => ({...sectionDetail(a), pregenerated: true})},
   {name: 'leaveSection', kind: 'level.leave'},
   {name: 'prepareGraphics', kind: 'warmup', async: true, result: r => warmupSummary(r)},
   {name: 'stageLevelTextures', kind: 'warmup.textures', async: true},
@@ -804,7 +818,8 @@ export class PerfRecorderController {
     const wrapper = function (this: unknown, ...args: unknown[]): unknown {
       if (!self.recording) return fn.apply(this, args);
       const t0 = self.now();
-      if (spec.name === 'buildSection') { self.buildDepth++; self.spawnAgg = {count: 0, ms: 0, maxMs: 0}; }
+      const building = spec.name === 'buildSection' || spec.name === 'buildSectionPaced'; // (the journey's paced build: async)
+      if (building) { self.buildDepth++; self.spawnAgg = {count: 0, ms: 0, maxMs: 0}; }
       const route = spec.route;
       if (route) self.routes.push(route);
       const unroute = () => { if (route) { const j = self.routes.lastIndexOf(route); if (j >= 0) self.routes.splice(j, 1); } };
@@ -812,16 +827,16 @@ export class PerfRecorderController {
       try {
         r = fn.apply(this, args);
       } catch (err) {
-        if (spec.name === 'buildSection') self.buildDepth--;
+        if (building) self.buildDepth--;
         self.hookDone(spec, args, undefined, t0, err);
         unroute();
         throw err;
       }
       if (spec.async && r && typeof (r as Promise<unknown>).then === 'function') {
-        (r as Promise<unknown>).then(v => { self.hookDone(spec, args, v, t0, null); unroute(); }, (e: unknown) => { self.hookDone(spec, args, undefined, t0, e); unroute(); });
+        (r as Promise<unknown>).then(v => { if (building) self.buildDepth--; self.hookDone(spec, args, v, t0, null); unroute(); }, (e: unknown) => { if (building) self.buildDepth--; self.hookDone(spec, args, undefined, t0, e); unroute(); });
         return r;
       }
-      if (spec.name === 'buildSection') self.buildDepth--;
+      if (building) self.buildDepth--;
       self.hookDone(spec, args, r, t0, null);
       unroute();
       return r;
@@ -932,14 +947,15 @@ export class PerfRecorderController {
         return;
       }
       const route = this.route();
-      const data: Record<string, unknown> = {...(spec.detail?.(args, this.g) ?? {}), ...(err ? {failed: true} : spec.result?.(result) ?? {}), route};
-      if (spec.name === 'buildSection') {
+      const data: Record<string, unknown> = {...(spec.detail?.(args, this.g) ?? {}), ...(err ? {failed: true} : spec.result?.(result, this.g) ?? {}), route};
+      const building = spec.name === 'buildSection' || spec.name === 'buildSectionPaced';
+      if (building) {
         const a = this.spawnAgg;
         data.enemySpawns = a.count; data.enemySpawnMs = r2(a.ms); data.enemySpawnMaxMs = r2(a.maxMs);
         data.enemies = this.g.zombies.length;
       }
       this.capture.event(t, spec.kind, dur, data);
-      if (spec.name === 'buildSection' && !err) {
+      if (building && !err) {
         this.worldSegment(t, args[0] as SectionKeyLike | undefined, route); // the key it built (run.current may follow later)
         this.pendingControl = t;
         this.pendingRoute = route;

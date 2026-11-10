@@ -34,6 +34,8 @@ import type {AreaKind, Archetype, RoomType, StationLayout} from '../gen/station'
 import {cellFloorFn} from '../world/lightField';
 import {stationLevels} from '../world/levelGeometry';
 import {MAX_SLOTS} from '../world/lightField';
+import {RIDE_MASK_SKIN, inRideMask, type RideMaskState} from '../world/rideMask'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane PORTAL)
+import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {REACTOR_ATMOSPHERE, reactorRockRooms} from '../world/reactor/archHaze'; // task reactor-build-20261101 (lane ARCH); (+ rock rooms: task reactor-playtest-round2-20261102, lane GAS)
 
 export type AtmosphereQuality = 'off' | 'low' | 'high';
@@ -524,10 +526,18 @@ export function areaMultiplier(layout: StationLayout, i: number, p: Pick<Atmosph
 }
 
 export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams, 'areaDensity'> & Partial<Pick<AtmosphereParams, 'levelDensity' | 'classDensity' | 'classOdds' | 'rockRoom'>>): DensityMap {
+  return drainSync(buildDensityMapSteps(layout, p));
+}
+
+/**
+ * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): buildDensityMap as steps (core/pacedBuild.ts): the same code,
+ * one level per step, where the journey's paced build may let a frame be drawn (nothing reads the map before it returns).
+ */
+export function* buildDensityMapSteps(layout: StationLayout, p: Pick<AtmosphereParams, 'areaDensity'> & Partial<Pick<AtmosphereParams, 'levelDensity' | 'classDensity' | 'classOdds' | 'rockRoom'>>): BuildSteps<DensityMap> {
   // Task office-seamless-20261029: every level (the light field's slots; was capped at 4).
   const levels = stationLevels(layout).slice(0, MAX_SLOTS);
   const g0 = layout.grid, W = g0.w, H = g0.h, n = W * H, S = levels.length;
-  const per = levels.map(L => {
+  const perLevel = (L: (typeof levels)[number]) => {
     const g = L.grid;
     const floorOf = cellFloorFn(g, layout.trench.floorY);
     const lm = p.levelDensity?.[L.role] ?? 1;
@@ -576,7 +586,9 @@ export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams,
       mult = nm;
     }
     return {open, known, mult, floor, ceil, base: L.baseY};
-  });
+  };
+  const per: ReturnType<typeof perLevel>[] = [];
+  for (const L of levels) { per.push(perLevel(L)); yield; } // (lane BUILD: one level per step)
   let yMin = Infinity, yMax = -Infinity;
   for (const q of per) for (let i = 0; i < n; i++) if (q.open[i]) { yMin = Math.min(yMin, q.floor[i]); yMax = Math.max(yMax, q.ceil[i]); }
   if (!Number.isFinite(yMin)) { yMin = 0; yMax = 3; }
@@ -680,10 +692,15 @@ export function stationDraft(seed: number): 1 | -1 {
 }
 
 export function buildAirMap(layout: StationLayout): AirMap {
+  return drainSync(buildAirMapSteps(layout));
+}
+
+/** Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): buildAirMap as steps (one level per step), like buildDensityMapSteps. */
+export function* buildAirMapSteps(layout: StationLayout): BuildSteps<AirMap> {
   const levels = stationLevels(layout).slice(0, MAX_SLOTS);
   const g0 = layout.grid, W = g0.w, H = g0.h, n = W * H, S = levels.length;
   const data = new Uint8Array(n * S);
-  levels.forEach((L, s) => {
+  const fillLevel = (L: (typeof levels)[number], s: number) => {
     const g = L.grid;
     let wt = new Float32Array(n);
     const open = new Uint8Array(n);
@@ -712,7 +729,8 @@ export function buildAirMap(layout: StationLayout): AirMap {
       wt = nw;
     }
     for (let i = 0; i < n; i++) data[s * n + i] = Math.round(Math.min(1, Math.max(0, wt[i])) * 255);
-  });
+  };
+  for (let s = 0; s < levels.length; s++) { fillLevel(levels[s], s); yield; } // (lane BUILD: one level per step)
   return {w: W, h: H, slots: S, data, draft: stationDraft(layout.seed)};
 }
 
@@ -888,13 +906,27 @@ export interface MediumMaps {
 }
 
 /**
+ * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PORTAL): the plain TRACK-BED density multiplier of a level (role) as
+ * the density map stores it (8 bits of DENSITY_MAP_RANGE) — the haze inside a ride tunnel's box (world/rideMask.ts bedMult), so the
+ * medium at a portal plane is the bed's on both sides of it.
+ */
+export function rideBedMultiplier(p: Pick<AtmosphereParams, 'areaDensity'> & Partial<Pick<AtmosphereParams, 'levelDensity'>>, role: LevelRole | 'roof' = 'main'): number {
+  const m = (p.areaDensity.trackBed ?? p.areaDensity.default ?? 1) * (p.levelDensity?.[role] ?? 1);
+  return Math.round(Math.min(1, Math.max(0, m / DENSITY_MAP_RANGE)) * 255) / 255 * DENSITY_MAP_RANGE;
+}
+
+/**
  * Iteration 13: the haze at world point p and fog time t (mirror of the TSL medium in volumetricNodes.ts). Pure: no camera,
  * no history, no visibility input. `slot` overrides the level-slot pick (the GPU uses the light field's band pick).
+ * Lane PORTAL (task studio-perf-ao-train-continuity-20261110-022206-01): `ride` = the ride mask (world/rideMask.ts RIDE_MASK) the GPU
+ * has: inside its box the plain track-bed medium (its bedMult, the box's bed as the floor, the full track draft); null / off: as before.
  */
-export function mediumAt(p: V3, maps: MediumMaps, params: AtmosphereParams, t: number, slotOverride?: number): MediumSample {
+export function mediumAt(p: V3, maps: MediumMaps, params: AtmosphereParams, t: number, slotOverride?: number, ride: Pick<RideMaskState, 'on' | 'box' | 'bedMult'> | null = null): MediumSample {
   const {map, air, noise, motion} = maps;
   const slot = slotOverride ?? (map ? densitySlot(map, p[0], p[2], p[1]) : 0);
-  const [mult, floorY] = map ? sampleDensityLayer(map, p[0], p[2], slot) : [1, 0];
+  const inRide = !!ride && inRideMask(ride, p[0], p[1], p[2]);
+  const [mult0, floor0] = map ? sampleDensityLayer(map, p[0], p[2], slot) : [1, 0];
+  const mult = inRide ? ride!.bedMult : mult0, floorY = inRide ? ride!.box.y0 + RIDE_MASK_SKIN : floor0;
   const h = p[1] - floorY;
   const hf = Math.min(2.5, Math.max(0.25, Math.exp(-params.heightFalloff * (h - params.refHeight))));
   const cap = params.skyCap, capF = cap ? 1 - smoothstep(cap.y0, cap.y1, p[1]) : 1; // (the Reactor's outdoor haze cap: the march mirror)
@@ -910,7 +942,7 @@ export function mediumAt(p: V3, maps: MediumMaps, params: AtmosphereParams, t: n
   const wk = params.warp * amt * 2;
   const wp: V3 = [p[0] + (D[2] - 0.5) * wk, p[1] + (D[0] - 0.5) * wk * 0.3, p[2] + (D[3] - 0.5) * wk];
   const q = (o: V3): V3 => [wp[0] * sc.patch[0] + o[0], wp[1] * sc.patch[1] + o[1], wp[2] * sc.patch[2] + o[2]];
-  const wt = air ? sampleAirMap(air, p[0], p[2], slot) : 0;
+  const wt = inRide ? 1 : air ? sampleAirMap(air, p[0], p[2], slot) : 0;
   let n = sampleNoise4(noise, q(off.air))[0];
   if (wt > 0.002) n += (sampleNoise4(noise, q(off.track))[0] - n) * wt;
   const cover = Math.min(0.7, Math.max(0.03, params.coverage + params.coverageSlope * (mult - 1)));

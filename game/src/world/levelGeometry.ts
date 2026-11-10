@@ -19,6 +19,7 @@ import {CELL, FLOOR, STEP_UP, VOID, rampHeight, type Grid, type Ramp} from '../g
 import type {Level, LevelLink} from '../gen/levels';
 import type {Area, StationLayout} from '../gen/station';
 import type {WallFace, WallZone} from './wallFaces';
+import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 
 // ---------------------------------------------------------------------------------------------
 // Layout access (fields Lane A adds; absent on single-level layouts)
@@ -328,6 +329,14 @@ interface OtherRun { level: number; area: number; kind: WallKind; voidCell: bool
  * Tiled walls yield one face per material band ('tileLower' up to the tile line, 'tileUpper' above).
  */
 export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'> & Pick<Partial<StationLayout>, 'extensions'>, levels: Level[], cols: LevelColumns, opts: WallOptions): BuiltFace[] {
+  return drainSync(extractWallFacesSteps(layout, levels, cols, opts));
+}
+
+/**
+ * task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): extractWallFaces as steps (core/pacedBuild.ts) — the same code in the same order, one grid line per call (its loops stay in
+ * a plain function), a `yield` every 24 lines, where the journey's paced build may let a frame be drawn (nothing reads the faces meanwhile).
+ */
+export function* extractWallFacesSteps(layout: Pick<StationLayout, 'grid' | 'areas'> & Pick<Partial<StationLayout>, 'extensions'>, levels: Level[], cols: LevelColumns, opts: WallOptions): BuildSteps<BuiltFace[]> {
   const W = cols.W, H = cols.H;
   // Track 2 (lane GEN): face seeds in the CORE frame (a crop translation by track extensions keeps every core face's detail).
   const ox = layout.extensions?.core.x ?? 0, oy = layout.extensions?.core.y ?? 0;
@@ -375,7 +384,7 @@ export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'> &
     const d = DIRS[di];
     const alongX = d.dy !== 0;
     const lines = alongX ? H : W, len = alongX ? W : H;
-    for (let l = 0; l < lines; l++) {
+    const lineFaces = (l: number): void => { // (lane BUILD: one line per call)
       const plane = (alongX ? (d.dy < 0 ? l : l + 1) : (d.dx < 0 ? l : l + 1)) * CELL;
       const runs: (OpenRun | null)[] = new Array(levels.length).fill(null);
       let openRuns = 0;
@@ -572,7 +581,8 @@ export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'> &
       }
       // Sloped runs of this line.
       for (const s of slopedRuns) emitFace(s.level, s.area, s.kind, s.voidCell, s.stair, s.ta / CELL, s.tb / CELL, 0, 0, 0, [], s);
-    }
+    };
+    for (let l = 0; l < lines; l++) { lineFaces(l); if (l % 24 === 23) yield; }
   }
   return clipSkyFaces(out, levels, W);
 }

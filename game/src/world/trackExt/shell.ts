@@ -22,6 +22,8 @@ import {Acc, basisOf, hashOf, prng, type V3} from './mesh';
 import {BOARD_SPAN, tunnelShellMaterial} from './wallFinish';
 import {CELL_BUILDER, type TrackExtView, type TunnelView} from './view';
 import {buildCap, capSpan, type CapSpan} from './caps';
+import {breachStations} from '../ridePortal'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane PORTAL): the shell's ring at a ride breach
+import {drainSync, type BuildSteps} from '../../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 
 /** Shell layout constants (m). */
 export const SHELL = {
@@ -108,22 +110,32 @@ export class ShellSink {
  * track-ext materials); `hazard` / `void` come from the caller (traversal hazard stripes, the black backing).
  */
 export function buildShells(group: THREE.Group, view: TrackExtView, layout: StationLayout, mats: WorldMaterials, extra: {hazard: THREE.Material; void: THREE.Material}): ShellBuild {
+  return drainSync(buildShellsSteps(group, view, layout, mats, extra));
+}
+
+/** task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): buildShells as steps (core/pacedBuild.ts): the same code, one tunnel per step, a step per few meshes. */
+export function* buildShellsSteps(group: THREE.Group, view: TrackExtView, layout: StationLayout, mats: WorldMaterials, extra: {hazard: THREE.Material; void: THREE.Material}): BuildSteps<ShellBuild> {
   const sink = new ShellSink();
   const sleepers = new Map<string, {tunnel: number; list: THREE.Matrix4[]}>();
   const perTunnel: TunnelShellStats[] = [];
-  view.tunnels.forEach((v, k) => {
+  for (let k = 0; k < view.tunnels.length; k++) {
+    const v = view.tunnels[k];
     const openings = doorOpenings(v, layout);
     const span = capSpan(v, layout);
     sink.setShell(k, span.back);
     perTunnel.push({id: v.t.id, length: v.f.length, meshes: 0, draws: 0, triangles: 0, instances: 0, openings, cap: {...span, kind: v.t.cap.kind}});
     buildTunnel(sink, sleepers, v, k, layout, mats, openings, span.back);
     buildCap(sink, v, k, mats, span, layout.seed >>> 0);
-  });
+    yield;
+  }
   straddleCells(sink, view, layout, mats);
+  yield;
 
   const meshes: THREE.Object3D[] = [];
   const matOf = (m: ShellMat): THREE.Material => m === 'sign' ? serviceSignMaterial(mats) : m === 'lens' ? deadLensMaterial(mats) : m === 'hazard' ? extra.hazard : m === 'void' ? extra.void : m === 'tunnel' ? tunnelShellMaterial(mats) : mats.get(m);
+  let step = 0;
   for (const [key, e] of sink.accs) {
+    if (++step % 4 === 0) yield;
     const geo = e.acc.geometry();
     if (!geo) continue;
     const mesh = new THREE.Mesh(geo, matOf(e.mat));
@@ -273,7 +285,9 @@ function buildTunnel(sink: ShellSink, sleepers: Map<string, {tunnel: number; lis
   const {t, f} = v;
   const y0 = t.floorY, y1 = t.ceilY, half = f.half;
   const end = f.length;
-  const cuts = openings.flatMap(o => [o.s0, o.s1]);
+  // task studio-perf-ao-train-continuity-20261110-022206-01 (lane PORTAL): + a ring at the breach plane of a tunnel the parked car's
+  // track leaves through (world/ridePortal.ts breachStations), so a ride can cut the shell exactly there; every other tunnel: none
+  const cuts = openings.flatMap(o => [o.s0, o.s1]).concat(breachStations(layout, t));
   // Track members run to the path end; the shell (walls / ceiling / floor) on to the back of the cap.
   const tr = renderStations(f, cuts, SHELL.chunk);
   const st = shellEnd > end + 1e-6 ? [...tr, shellEnd] : tr;

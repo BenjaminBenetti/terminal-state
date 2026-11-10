@@ -33,6 +33,12 @@
 // Task reactor-submit-roof-fog-20261102 (lane FOG): the table goes into the march's TABLE_N x 1 float data texture (u.depthTab; one
 // tiny upload per clearing change), not a uniform array — the extra uniform buffer took the depth variant to 13 per fragment stage,
 // over WebGPU's default 12: on WebGPU the Reactor's (and since the outdoor roof air, the Office's) volumetric pass failed outright.
+//
+// Task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO): AMBIENT OCCLUSION (render/ambientOcclusion.ts, docs/ambient-
+// occlusion.md) runs in this pipeline: its pass node (after the scene pass, before the composite) computes a low-res GTAO from the
+// scene depth + a depth-aware blur; the composite applies it to the scene colour before the fog. The setting (setAmbientOcclusion) and
+// ?ao= only gate it by uniform and target size: no existing program is rebuilt. It exists only where this pipeline runs (no AO on the
+// direct path). A rejected AO program turns AO off (occlusion.failed), never this pass.
 
 import * as THREE from 'three';
 import {NodeMaterial, NodeUpdateType, QuadMesh, RenderPipeline, RenderTarget, RendererUtils, TempNode, type PassNode, type WebGPURenderer} from 'three/webgpu';
@@ -42,11 +48,12 @@ import {SOLID, type Grid} from '../gen/grid';
 import {MAX_SLOTS, type LightFieldVolume} from '../world/lightField';
 import {stationLevels} from '../world/levelGeometry';
 import {
-  ATMOSPHERE_QUALITY, NOISE_CHANNELS, NOISE_SIZE, SHADOW_NEAR, SHADOW_NORMAL_BIAS, atmosphereFor, buildAirMap, buildDensityMap,
+  ATMOSPHERE_QUALITY, NOISE_CHANNELS, NOISE_SIZE, SHADOW_NEAR, SHADOW_NORMAL_BIAS, atmosphereFor, buildAirMap, buildAirMapSteps, buildDensityMap, buildDensityMapSteps,
   buildNoiseVolume, densityLayerRange, densitySlot, fieldOffsets, fogMotion, marchSize, mediumAt, mediumStats, noiseScales, sampleAirMap, shadowBiasFor,
   type AirMap, type AreaClass, type AtmosphereParams, type AtmosphereQuality, type DensityMap, type FogMotion, type MediumMaps,
   type QualityPreset,
 } from './atmosphere';
+import type {BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {
   SMOKE_LIMITS, ScatterLights, SmokeField, VIS_EMITTER_SPAN, VIS_RES, VIS_TEXEL, VIS_WINDOWS, computeVisWindow, computeVisWindowFan, windowStale,
   type SmokeEmitterOptions, type SmokeHandle, type VisLookup,
@@ -59,6 +66,9 @@ import {REACTOR_GAS_LOOK, type DepthGasTable} from '../world/reactor/air'; // ta
 // the Reactor's open pit top), the pit's light shafts, the in-engine fog fallback when the pass is off
 import {PIT_SHAFTS, ROOF_GAS_LOOK, fallbackFog, officeRoofGas, type OutdoorGas, type ShaftSpec} from '../world/gaslightRules';
 import {ROOF_FOG, roofAirOf} from '../world/roofAir';
+import {RIDE_MASK} from '../world/rideMask'; // task studio-perf-ao-train-continuity-20261110-022206-01: the ride tunnel's medium (the CPU mirror)
+// task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO): screen-space ambient occlusion inside this pipeline
+import {AO_MARK, AmbientOcclusionPass, type AoDebug} from './ambientOcclusion';
 
 /** Task gasmask-breach-20261030: the gas term's look (uniform values only; QA may edit them live). */
 export interface GasLook { ext: number; scatter: number; emission: number; noise: number; tint: [number, number, number] }
@@ -103,6 +113,8 @@ export interface AtmosphereDebug {
   frames: number;
   /** Fog pass runs and material (re)builds (QA). */
   passes: {fog: number; marchBuilds: number};
+  /** Task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO): the ambient occlusion pass (setting, active, why not, size, runs). */
+  ao: AoDebug;
 }
 
 /** `?fog=off|low|high` session override (QA / slow renderers). */
@@ -227,6 +239,10 @@ export class VolumetricAtmosphere {
   /** Smoke puffs and scatter lights (render/smoke.ts); use the methods below. */
   readonly smoke = new SmokeField();
   readonly scatter = new ScatterLights();
+  /** Task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO): the ambient occlusion pass (render/ambientOcclusion.ts). */
+  readonly occlusion = new AmbientOcclusionPass();
+  /** (lane AO) the AO targets are sized for an active AO (else 1 x 1). */
+  private aoSized = false;
   private full: [number, number] = [1, 1];
   private low: [number, number] = [1, 1];
   private densityTex: THREE.DataArrayTexture;
@@ -370,6 +386,8 @@ export class VolumetricAtmosphere {
       const [gl, , vs, fs] = a as [WebGL2RenderingContext, unknown, WebGLShader, WebGLShader];
       const src = `${gl?.getShaderSource?.(fs) ?? ''}${gl?.getShaderSource?.(vs) ?? ''}`;
       if (Object.values(VF_MARK).some(m => src.includes(m))) this.failed = 'volumetric fog program failed to compile/link (WebGL2 backend); rendering without atmosphere';
+      // (lane AO) an AO program (never the composite: it carries no AO mark) turns AO off only
+      else if (Object.values(AO_MARK).some(m => src.includes(m))) this.occlusion.fail('ambient occlusion program failed to compile/link (WebGL2 backend); rendering without AO');
       if (prev) prev(...a);
       else console.error('THREE.WebGLBackend: shader error', gl?.getShaderInfoLog?.(fs));
     };
@@ -412,14 +430,73 @@ export class VolumetricAtmosphere {
     this.marchRT?.setSize(this.low[0], this.low[1]);
     for (const h2 of this.history ?? []) h2.setSize(this.low[0], this.low[1]);
     this.historyValid = false;
+    this.occlusion.resize(this.full, this.quality, this.aoSized); // (lane AO)
   }
 
-  /** New station: per-level tunables, density + air maps, seeded motion, the baked light field; drops smoke; restarts the fog clock. */
-  setStation(layout: StationLayout, field: LightFieldVolume | null): void {
+  // --- task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO): ambient occlusion ----------------------------------------
+
+  /** The player's setting (Settings -> Ambient occlusion; ?ao= wins). Only a uniform gate + the AO targets' size change: no rebuild. */
+  setAmbientOcclusion(on: boolean): void {
+    this.occlusion.enabled = on;
+  }
+
+  /** AO runs this frame: the volumetric pipeline is active, AO is asked for and has not failed. */
+  get aoActive(): boolean {
+    return this.active && this.occlusion.wanted;
+  }
+
+  /**
+   * Why AO cannot run in this session even when switched on (null: it can, inside the volumetric pass of a station): the honest line
+   * of the settings menu. AO lives in the atmosphere pipeline: quality 'off' / ?fog=off, an unsupported backend or a failed fog
+   * pass draw the station directly, without it.
+   */
+  aoUnavailable(): string | null {
+    if (this.occlusion.failed) return 'failed on this device';
+    if (!this.renderer) return 'needs the renderer';
+    if (!this.supported || this.failed) return 'needs the volumetric fog pass (not available here)';
+    if (this.quality === 'off' || !this.enabled) return 'needs the volumetric fog pass (off)';
+    return null;
+  }
+
+  /** Why the pipeline itself is not active (debug().ao.reason). */
+  private inactiveReason(): string | null {
+    if (this.active) return null;
+    return !this.renderer ? 'no renderer' : !this.supported ? `unsupported: ${this.reason}` : this.failed ? 'the volumetric pass failed'
+      : this.quality === 'off' ? 'atmosphere quality off' : !this.enabled ? 'the volumetric pass is disabled' : !this.densityMap ? 'no station yet' : 'not active';
+  }
+
+  /** (lane AO, QA) the AO targets read back and summarised (NaN / texels without data / min / mean): AmbientOcclusionPass.probe. */
+  aoProbe(): ReturnType<AmbientOcclusionPass['probe']> | null {
+    return this.renderer ? this.occlusion.probe(this.renderer) : null;
+  }
+
+  /** The AO pass body (its node's updateBefore, after this frame's scene pass). */
+  private runAo(renderer: WebGPURenderer): void {
+    const depthTex = (this.scenePass as unknown as {getTexture(n: string): THREE.Texture} | null)?.getTexture('depth') ?? null;
+    this.occlusion.run(renderer, this.u, depthTex);
+  }
+
+  /**
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): setStation with its density + air maps built first in paced
+   * steps (render/atmosphere.ts buildDensityMapSteps / buildAirMapSteps, from the same atmosphereFor(layout) tunables), then the station
+   * set at once: nothing of the atmosphere changes before the last step. The same result as setStation(layout, field).
+   */
+  *setStationSteps(layout: StationLayout, field: LightFieldVolume | null): BuildSteps<void> {
+    const density = yield* buildDensityMapSteps(layout, atmosphereFor(layout));
+    const air = yield* buildAirMapSteps(layout);
+    yield 'fog.install';
+    this.setStation(layout, field, {density, air});
+  }
+
+  /**
+   * New station: per-level tunables, density + air maps, seeded motion, the baked light field; drops smoke; restarts the fog clock.
+   * `maps` (lane BUILD): this layout's maps already built (setStationSteps).
+   */
+  setStation(layout: StationLayout, field: LightFieldVolume | null, maps?: {density: DensityMap; air: AirMap}): void {
     this.layout = layout;
     this.params = atmosphereFor(layout);
-    this.densityMap = buildDensityMap(layout, this.params);
-    this.airMap = buildAirMap(layout);
+    this.densityMap = maps?.density ?? buildDensityMap(layout, this.params);
+    this.airMap = maps?.air ?? buildAirMap(layout);
     this.motion = fogMotion(layout.seed, this.params);
     // Task office-seamless-20261029: every storey (the density map's layers = light-field slots; was capped at 4, so a flare
     // on storey 4+ had no occlusion window: no storey band, glow through the slabs).
@@ -503,7 +580,7 @@ export class VolumetricAtmosphere {
    */
   fogSample(x: number, y: number, z: number, t = this.fogTime()): {sigma: number; dense: number; detail: number; mult: number; slot: number; time: number} {
     if (!this.densityMap) return {sigma: 0, dense: 0, detail: 0, mult: 0, slot: 0, time: t};
-    const s = mediumAt([x, y, z], this.maps(), this.params, t);
+    const s = mediumAt([x, y, z], this.maps(), this.params, t, undefined, RIDE_MASK); // (task studio-perf-ao-train-continuity-20261110-022206-01: the ride tunnel's plain bed medium, as the march)
     return {sigma: s.sigma, dense: s.dense, detail: s.detail, mult: s.mult, slot: s.slot, time: t};
   }
 
@@ -900,6 +977,7 @@ export class VolumetricAtmosphere {
       return rt;
     };
     this.marchRT ??= make('volumetric-march', THREE.NearestFilter);
+    this.occlusion.ensureTargets(); // (lane AO) 1 x 1 until AO runs
     if (this.preset?.temporal && !this.history) {
       this.history = [make('volumetric-history-a', THREE.LinearFilter), make('volumetric-history-b', THREE.LinearFilter)];
       this.historyValid = false;
@@ -920,7 +998,9 @@ export class VolumetricAtmosphere {
     const depth = (scenePass as unknown as {getTextureNode(n: string): unknown}).getTextureNode('depth');
     const src = this.history ? this.history[0] : this.marchRT!;
     this.fogNode = new FogPassNode(this, scenePass, src.textures[0], src.textures[1]);
-    const out = createCompositeNode(this.u, color, depth, this.fogNode.tex0, this.fogNode.tex1);
+    // (lane AO) the AO pass node: the composite always holds the lookup (gated by aoOn), so toggling AO never rebuilds it
+    const aoNode = this.occlusion.passNode(scenePass, rr => this.runAo(rr));
+    const out = createCompositeNode(this.u, color, depth, this.fogNode.tex0, this.fogNode.tex1, {u: this.occlusion.u, tex: aoNode.tex});
     this.pipeline = new RenderPipeline(r, out as never);
     this.pipeline.outputColorTransform = true; // ACES (renderer.toneMappingExposure) + sRGB once, after the fog
     this.scenePass = scenePass;
@@ -1015,6 +1095,7 @@ export class VolumetricAtmosphere {
     this.marchMat?.dispose();
     this.marchMat = null;
     this.marchKey = '';
+    this.occlusion.drop(); // (lane AO)
   }
 
   private disposePipeline(): void {
@@ -1121,6 +1202,10 @@ export class VolumetricAtmosphere {
     u.prevProj.value.copy(this.prevProj);
     u.historyValid.value = this.historyValid ? 1 : 0;
     u.intensity.value = p.intensity;
+    // (lane AO) the AO gate / camera projection / look; the targets follow AO on / off (1 x 1 while off)
+    const aoOn = this.aoActive;
+    if (aoOn !== this.aoSized) { this.aoSized = aoOn; this.occlusion.resize(this.full, this.quality, aoOn); }
+    this.occlusion.sync(camera, aoOn);
   }
 
   /** Medium statistics of the current station (lazy, cached; deterministic). */
@@ -1167,6 +1252,7 @@ export class VolumetricAtmosphere {
       ms: {gpu: null, cpu: Math.round(this.cpuMs * 100) / 100, cpuScene: Math.round(this.cpuSceneMs * 100) / 100},
       frames: this.frame,
       passes: {fog: this.fogRuns, marchBuilds: this.marchBuilds},
+      ao: this.occlusion.debug(this.active, this.inactiveReason()), // (lane AO)
     };
   }
 

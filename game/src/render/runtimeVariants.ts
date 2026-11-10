@@ -30,7 +30,7 @@
 import * as THREE from 'three';
 import type {NodeMaterial} from 'three/webgpu';
 import {copyNodeHooks} from './nodeHooks';
-import {geometryKey} from './warmup';
+import {drawsDoublePass, geometryKey} from './warmup';
 
 /** One family of prototypes as a subsystem built them. */
 export interface VariantFamily {
@@ -105,15 +105,10 @@ export function ownShadowNodes(m: THREE.Material): boolean {
   return !!(n.map as THREE.Texture | null | undefined)?.isTexture || !!n.colorNode || !!n.castShadowNode || !!n.maskNode || !!n.maskShadowNode;
 }
 
-/**
- * True when three r186 draws `m` in two passes — a transparent DoubleSide material that is not forceSinglePass: renderObject /
- * _renderTransparents set `side` to BackSide, then FrontSide, for the draws. compileAsync only QUEUES the work and builds it after
- * the side was restored, so it builds the DoubleSide variant, which those draws never use (probed: a hidden glass prototype compiled
- * at side 2, the first real draw built sides 1 and 0). The pool adds side proxies for such prototypes (RuntimeVariantPool.rebuild).
- */
-export function drawsDoublePass(m: THREE.Material): boolean {
-  return m.transparent === true && m.side === THREE.DoubleSide && m.forceSinglePass === false;
-}
+// drawsDoublePass (a transparent DoubleSide material three draws in two passes; compileAsync builds its DoubleSide variant, which those
+// draws never use): defined in render/warmup.ts since task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY: the warm-up
+// gives such station content a real hidden frame). The pool adds side proxies for such prototypes (RuntimeVariantPool.rebuild).
+export {drawsDoublePass};
 
 /** A copy of `m` drawn like the real material in one of its double-pass draws (node hooks + alphaTest kept: NodeMaterial.copy drops it). */
 function sideCopy(m: THREE.Material, side: THREE.Side): THREE.Material {

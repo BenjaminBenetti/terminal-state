@@ -405,8 +405,8 @@ describe('loader: held only between the mall preload and its atlas build; other 
     expect(prep).toBeGreaterThan(0);
     expect(pre).toBeGreaterThan(prep);
     expect(pre).toBeLessThan(ret);
-    // every build of a section is preceded by its prepareSection (new game / retry / travel)
-    const builds = [...src.matchAll(/this\.buildSection\(/g)].length, prepares = [...src.matchAll(/await this\.prepareSection\(/g)].length;
+    // every build of a section is preceded by its prepareSection (new game / retry / travel; lane BUILD: the journey's build is paced)
+    const builds = [...src.matchAll(/this\.buildSection(Paced)?\(/g)].length, prepares = [...src.matchAll(/await this\.prepareSection\(/g)].length;
     expect(builds).toBeGreaterThan(0);
     expect(prepares).toBe(builds);
   });

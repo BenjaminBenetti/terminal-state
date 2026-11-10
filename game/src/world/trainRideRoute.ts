@@ -1,50 +1,31 @@
 // Task studio-alpha-campaign-foundation-20261102-230708-01 (lane RIDE): WHERE the moving train runs in a station (pure, no three.js).
 //
-// A RidePlan is one bed end of the parked car's track: a polyline RideRoute of the track centre line starting at the placement's car
-// centre (u = 0), straight along the bed to the bed end face (u = uMouth), then on along the TrackTunnel that continues that end
-// (layout.extensions.tunnels with the placement's trench and `from` = that end: TunnelFrame.point(s, lat) at the track's lateral
-// offset, every 0.5 m, through the first straight and the arcs to the cap) — or, where no tunnel continues the end ('bed-end'), straight
-// on through the bed's black end plane (world/builder.ts "tunnel mouths fade to black"). The car rides the route with its two bogies
-// at u ± bogie (the body is the chord between them: on an arc it cuts the curve like a real car), local +X = sgn · the chord.
-//
 // Task studio-beta-campaign-polish-20261103-063841-01 (lane TRAIN, item 16): THE CAR ALWAYS RUNS FRONT FIRST. The player's car has
-// one cab (local +X) and no turning loop, so a rear-first departure or an arrival from the "wrong" end meant a reversal in the dark
-// (stop, dwell, run the other way) or a rear-first arrival. Now:
-//  - DEPARTURE runs +u through the FRONT end (sgn = +1): its tunnel when one continues it (hand-over at uDark: the whole car DARK_S past
-//    the mouth, never closer than CAP_CLEAR to the cap), else its bed end;
+// one cab (local +X) and no turning loop, so:
+//  - DEPARTURE runs +u through the FRONT end (sgn = +1: the cab leads);
 //  - ARRIVAL runs -u from the REAR end (sgn = -1: the car comes out of the end behind the parked car, cab leading) and stops exactly at
-//    the placement: that end's tunnel when one continues it (start at uDark), else its bed end.
+//    the placement.
 // The transit never reverses (world/trainRide.ts), so the portal depends only on the destination's placement: every level, seed,
 // multi-hop route and dev deep link gets the same, correct one.
-// A BED END is crossed one of two ways (world/trainRide.ts picks): where the corridor beyond the end face is clear rock (bedEndClear)
-// the transit box continues the bed as a short stub and the car runs through the (hidden) end plane to uDark; where rooms stand
-// behind the end face (the Subway / Office front ends: end halls, hatches) the car never passes the plane — it hands over / appears
-// at uEdge, its leading / trailing end RIDE_ROUTE.planeClear inside the black end plane.
+//
+// Task studio-perf-ao-train-continuity-20261110-022206-01 (lane RIDE): THE CAR ALWAYS RUNS STRAIGHT. User: "the train visibly plows
+// through real walls / black walls; the cuts into a fake tunnel and back are obvious." Before, a plan followed the station tunnel's
+// bends to within 4 m of its mouth (radius 17-30 m: the 16 m body cut the walls), or crossed a closed bed end through its end wall
+// ('stub') or stopped at its black plane ('edge'), and the car was cut to the transit with the station still in view.
+// Now a RidePlan is one RIDE PORTAL of the parked car's track (world/ridePortal.ts, the lead's contract): the straight line along the
+// track from the placement's car centre (u = 0) through the portal's plane (u = uPlane) — a gate in a closed bed end, or a breach at
+// the end of a station tunnel's axis-aligned first straight — into the ride tunnel beyond it, to the hand-over (u = uHand: the whole
+// car RIDE_PORTAL.dark beyond the plane, out of the tunnel murk's sight) and a little further (uMax). No bends, no cap, no modes.
 
 import type {StationLayout} from '../gen/stationTypes';
-import type {BedEnd, TrackTunnel} from '../gen/trackExt/types';
-import {CELL, SOLID, type Grid} from '../gen/grid';
+import type {BedEnd} from '../gen/trackExt/types';
 import type {TrainPlacement} from '../gen/playerTrain';
-import {TunnelFrame} from './trackExt/frame';
-import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from './playerTrainSpec';
+import {handU, planeU, ridePortals, type RidePortal} from './ridePortal';
 
 /** Route tuning (m). */
 export const RIDE_ROUTE = {
-  /** The whole car this far inside the tunnel = in darkness (hand-over / arrival start). */
-  darkS: 4,
-  /** The car's leading end never comes closer than this to a tunnel's cap. */
-  capClear: 3,
-  /** Sample spacing along the tunnel. */
-  step: 0.5,
-  /** A bed-end route continues this far past the end plane. */
-  bedRunOut: 24,
-  /** Bed end without a stub: the car's leading (departure) / trailing (arrival) end stays this far inside the black end plane. */
-  planeClear: 0.45,
-  /**
-   * The stub that continues a clear bed end: the transit box's cross-section (half width from the track centre, height above the bed;
-   * = trainTransitTunnel.ts TRANSIT.halfWidth / ceil) and the corridor length beyond the end face that must be free of open floor.
-   */
-  stub: {halfWidth: 2.4, height: 4.8, length: 40},
+  /** The straight line continues this far beyond the hand-over (a late frame never runs off the route's end). */
+  runOut: 12,
 } as const;
 
 export interface RouteSample { x: number; z: number; tx: number; tz: number }
@@ -80,102 +61,50 @@ export class RideRoute {
 }
 
 export interface RidePlan {
+  /** The portal of the parked car's track this plan runs through: the departure's FRONT (the cab's end), the arrival's REAR. */
+  which: 'front' | 'rear';
+  portal: RidePortal;
   end: BedEnd;
+  /** What the layout has at that bed end: a station tunnel continues it (a 'breach' portal) or it is closed (a 'gate'). */
   kind: 'tunnel' | 'bed-end';
-  /** layout.extensions.tunnels id (-1: bed end). */
+  /** layout.extensions.tunnels id of that station tunnel (-1: a closed bed end). */
   tunnel: number;
+  /** The straight track centre line from the placement's car centre outward through the plane. */
   route: RideRoute;
-  /** Arc length from the placement's car centre to the bed end face. */
+  /** Car-centre u at the bed end face. */
   uMouth: number;
+  /** Car-centre u with the car's centre in the portal plane (ridePortal.ts planeU). */
+  uPlane: number;
+  /** Car-centre u of the hand-over (departure) / the arrival start: the whole car RIDE_PORTAL.dark beyond the plane (handU). */
+  uHand: number;
+  /** Largest car-centre u of the route (uHand + RIDE_ROUTE.runOut). */
+  uMax: number;
   /** +1: the car's front (local +X) points along +u; -1: against it. */
   sgn: 1 | -1;
-  /** Car-centre u of the hand-over (departure) / the arrival start: the whole car in darkness. */
-  uDark: number;
-  /** Largest car-centre u (the leading end CAP_CLEAR before the cap; a bed-end route: its run-out). */
-  uMax: number;
-  /** Bed end: the car-centre u with the car's outer end RIDE_ROUTE.planeClear inside the end plane (no-stub hand-over / arrival start). */
-  uEdge: number;
-  /** The tunnel's track lateral offset (0 on a bed end). */
-  lat: number;
 }
 
-/** The tunnel continuing `end` of the placement's bed (null: none). */
-export function tunnelAt(layout: StationLayout, p: Pick<TrainPlacement, 'trenchIndex'>, end: BedEnd): TrackTunnel | null {
-  return (layout.extensions?.tunnels ?? []).find(t => t.trench === p.trenchIndex && t.from === end && t.path.length >= 2) ?? null;
+/** The straight plan through one portal of the parked car's track (see the file header). */
+export function ridePlan(layout: StationLayout, p: TrainPlacement, which: 'front' | 'rear'): RidePlan {
+  const portal = ridePortals(layout, p)[which];
+  const uPlane = planeU(portal, p), uHand = handU(portal, p), uMax = uHand + RIDE_ROUTE.runOut;
+  const route = new RideRoute([{x: p.x, z: p.z}, {x: p.x + portal.out * uMax, z: p.z}]);
+  return {
+    which, portal, end: portal.end, kind: portal.kind === 'breach' ? 'tunnel' : 'bed-end', tunnel: portal.tunnel, route,
+    uMouth: Math.abs(portal.faceX - p.x), uPlane, uHand, uMax, sgn: (portal.out * p.front) as 1 | -1,
+  };
 }
 
-/** The route plan of one bed end (see the file header). */
-export function ridePlan(layout: StationLayout, p: TrainPlacement, end: BedEnd, spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC): RidePlan {
-  const t = layout.trenches[p.trenchIndex];
-  const endX = end === 'x0' ? t.x0 : t.x1, e = end === 'x1' ? 1 : -1;
-  const sgn = (e * p.front) as 1 | -1;
-  const uMouth = Math.abs(endX - p.x), L2 = spec.length / 2, R = RIDE_ROUTE;
-  const tn = tunnelAt(layout, p, end);
-  const pts: {x: number; z: number}[] = [{x: p.x, z: p.z}, {x: endX, z: p.z}];
-  if (tn) {
-    const f = new TunnelFrame(tn);
-    const pl = f.project(endX, p.z).lat;
-    const lat = tn.rails.length ? tn.rails.reduce((b, r) => (Math.abs(r - pl) < Math.abs(b - pl) ? r : b), tn.rails[0]) : pl;
-    const sEnd = Math.min(tn.length, tn.cap?.s ?? tn.length);
-    for (let s = R.step; s < sEnd - 1e-6; s += R.step) { const [x, z] = f.point(s, lat); pts.push({x, z}); }
-    const [x, z] = f.point(sEnd, lat);
-    pts.push({x, z});
-    const route = new RideRoute(pts);
-    const uMax = Math.max(0, route.length - R.capClear - L2);
-    const uDark = Math.max(0, Math.min(uMouth + R.darkS + L2, uMax)); // (a short tunnel: as deep as its cap allows)
-    if (uMax > uMouth) return {end, kind: 'tunnel', tunnel: tn.id, route, uMouth, sgn, uDark, uMax, lat, uEdge: uDark};
-  }
-  pts.length = 1;
-  pts.push({x: endX + e * R.bedRunOut, z: p.z});
-  const route = new RideRoute(pts);
-  // the stub run: the whole car DARK_S past the end face (as in a tunnel); without a stub: the car's outer end just inside the plane
-  return {end, kind: 'bed-end', tunnel: -1, route, uMouth, sgn, uDark: uMouth + L2 + R.darkS, uMax: route.length, lat: 0, uEdge: Math.max(0, uMouth - L2 - R.planeClear)};
-}
-
-const endOf = (worldSign: number): BedEnd => (worldSign > 0 ? 'x1' : 'x0');
-
-/** The departure plan (item 16): ALWAYS the FRONT end — its tunnel, else its bed end (sgn = +1: the cab leads). */
-export function departurePlan(layout: StationLayout, p: TrainPlacement, spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC): RidePlan {
-  return ridePlan(layout, p, endOf(p.front), spec);
+/** The departure plan (item 16): ALWAYS the FRONT portal (sgn = +1: the cab leads). */
+export function departurePlan(layout: StationLayout, p: TrainPlacement): RidePlan {
+  return ridePlan(layout, p, 'front');
 }
 
 /**
- * The arrival plan (item 16): ALWAYS the REAR end — the car comes out of the end behind the parked car, cab first (sgn = -1, so
- * arriveDir = +1): its tunnel, else its bed end. No direction argument: the transit always runs front first.
+ * The arrival plan (item 16): ALWAYS the REAR portal — the car comes out of the end behind the parked car, cab first (sgn = -1, so
+ * arriveDir = +1). No direction argument: the transit always runs front first.
  */
-export function arrivalPlan(layout: StationLayout, p: TrainPlacement, spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC): RidePlan {
-  return ridePlan(layout, p, endOf(-p.front), spec);
-}
-
-/** Levels-like (gen/levels.ts Levels) or a single Grid. */
-export type RideLevels = {count: number; grid(level: number): Grid} | Grid;
-
-/**
- * True when the corridor beyond a bed end is clear (item 16): no level has an open cell (floor below the top, ceiling above the bed)
- * within RIDE_ROUTE.stub.length past the end face across the whole trench end face and the stub box, from the bed up to the higher of
- * the box top and the trench ceiling. Only then may the transit box continue the bed as a stub (the end plane hidden while the car
- * passes): rooms behind an end face (end halls, service hatches) would otherwise cut through the box / the car.
- */
-export function bedEndClear(levels: RideLevels, layout: StationLayout, p: TrainPlacement, end: BedEnd): boolean {
-  const t = layout.trenches[p.trenchIndex];
-  if (!t) return false;
-  const S = RIDE_ROUTE.stub, e = end === 'x1' ? 1 : -1, ex = end === 'x1' ? t.x1 : t.x0;
-  const z0 = Math.min(t.z0, p.z - S.halfWidth), z1 = Math.max(t.z1, p.z + S.halfWidth);
-  const yLo = t.floorY, yHi = Math.max(t.floorY + S.height, t.ceil);
-  const grids: Grid[] = 'cells' in levels ? [levels] : Array.from({length: levels.count}, (_, k) => levels.grid(k));
-  for (let s = CELL / 2; s <= S.length; s += CELL / 2) {
-    const x = ex + e * s, cx = Math.floor(x / CELL);
-    for (let z = z0 + 0.05; z <= z1 - 0.05 + 1e-9; z += CELL / 2) {
-      const cy = Math.floor(z / CELL);
-      for (const g of grids) {
-        if (!g.inBounds(cx, cy)) continue;
-        const i = g.idx(cx, cy);
-        if (g.cells[i] === SOLID) continue;
-        if (g.floorAt(x, z) < yHi && g.ceilAt(x, z) > yLo) return false;
-      }
-    }
-  }
-  return true;
+export function arrivalPlan(layout: StationLayout, p: TrainPlacement): RidePlan {
+  return ridePlan(layout, p, 'rear');
 }
 
 /** Direction of travel of a plan relative to the car: departure (+u) and arrival (-u); +1 = front-first. */

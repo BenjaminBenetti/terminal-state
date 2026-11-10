@@ -172,6 +172,23 @@ export function warmKeys(o: Renderable): string[] {
   return mats.map(x => `${kind}|${x.uuid}|${g}|${own}|${bones}|${o.receiveShadow ? 1 : 0}|${o.castShadow ? 1 : 0}`);
 }
 
+/**
+ * True when three r186 draws `m` in two passes — a transparent DoubleSide material that is not forceSinglePass: renderObject /
+ * _renderTransparents set `side` to BackSide, then FrontSide, for the draws. compileAsync only QUEUES the work and builds it after
+ * the side was restored, so it prepares the DoubleSide state, which those draws never use (probed for task
+ * runtime-variant-warmup-20261105: a hidden glass prototype compiled at side 2, the first real draw built sides 1 and 0).
+ */
+export function drawsDoublePass(m: THREE.Material): boolean {
+  return m.transparent === true && m.side === THREE.DoubleSide && m.forceSinglePass === false;
+}
+
+/** True when one of a renderable's (visible) materials is drawn in two passes (drawsDoublePass). */
+export function drawsTwoPass(o: THREE.Object3D): boolean {
+  const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+  if (!m) return false;
+  return Array.isArray(m) ? m.some(x => !!x && x.visible !== false && drawsDoublePass(x)) : drawsDoublePass(m);
+}
+
 export interface PlanOptions {
   mode: 'full' | 'view';
   /** Layers the camera renders (three Layers.mask). */
@@ -425,7 +442,14 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
   // real scene / shadow pass contexts; node builds are cache hits by then) — a first view in play then creates nothing
   const rest = plan.mode === 'full' ? [...plan.others].sort((a, b) => dist(a) - dist(b)) : [];
   const compileChunks = chunks(items, opts.compileChunk ?? WARMUP_DEFAULTS.compileChunk);
-  const frameItems = [...casters, ...rest];
+  // Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): the representatives drawn in TWO passes (drawsDoublePass:
+  // glass) get a hidden frame as well. Stage 1 prepares their render objects with the DoubleSide state (compileAsync builds after the
+  // side was restored); the real draws ask for a BackSide and a FrontSide pipeline of the same programs, which only a real draw
+  // creates — and such a material is never a shadow caster, so no hidden frame drew it. A first-use census on every level kind found
+  // exactly these left after a complete 'full' warm-up: 2 pipelines per glass batch on first sight (Skyways: 72 on one walk).
+  const casterSet = new Set(casters);
+  const twoPass = items.filter(i => !casterSet.has(i) && drawsTwoPass(i.object));
+  const frameItems = [...casters, ...twoPass, ...rest];
   // (lane RENDER-CPU) three draws a light's shadow map only when a RECEIVER draws (the shadow node lives in receivers' lit materials):
   // a chunk of casters that receive nothing (enemies, pickups, loot batches) never drew its shadow variants. Every chunk holds one
   // receiver (the first non-pooled one), so each chunk's casters really go through the shadow pass.

@@ -19,8 +19,9 @@ import type {WallFace} from './wallFaces';
 import {SurfaceNodeMaterial, cloneSurfaceMaterial, thinTrim, type WorldMaterials, type MatKey} from './materials';
 import {shapeMaterial} from './shapeMaterials';
 import {archShopMaterial} from './decay';
-import {planWallDetail, type FeatureKind, type Treatment, type WallDetailPlan, type Feature} from './wallDetailPlan';
+import {planWallDetailSteps, type FeatureKind, type Treatment, type WallDetailPlan, type Feature} from './wallDetailPlan';
 import {FRIEZE_SIZE, atlasCells, friezeTexture, wallDetailTextures, type CellRect} from './wallDetailAtlas';
+import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {Buf, LAYER_OFFSET, cutPolyC, cylinder, faceBox, flatFeature, frameOf, insetPrism, prepareCuts, pt, rimRing, rubble, type CutSpec, type DetailMat, type Frame} from './wallDetailGeometry';
 
 export interface WallDetailStats {
@@ -123,10 +124,20 @@ function cableMaterial(mats: WorldMaterials): THREE.Material {
 }
 
 export function buildWallDetail(world: THREE.Group, layout: StationLayout, mats: WorldMaterials, faces?: readonly WallFace[]): WallDetailResult {
+  return drainSync(buildWallDetailSteps(world, layout, mats, faces));
+}
+
+/**
+ * task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): buildWallDetail as steps (core/pacedBuild.ts) — the same code in the same order, a
+ * `yield` between its phases and every few features, where the journey's paced build may let a frame be drawn (the world group is not in
+ * the scene yet: nothing reads it meanwhile). The stats' timings are wall time, waits included.
+ */
+export function* buildWallDetailSteps(world: THREE.Group, layout: StationLayout, mats: WorldMaterials, faces?: readonly WallFace[]): BuildSteps<WallDetailResult> {
   const t0 = performance.now();
   const existing = world.children.find(c => c.name === 'wall-detail') as THREE.Group | undefined;
   if (existing?.userData.wallDetailResult) return existing.userData.wallDetailResult as WallDetailResult; // already treated (never cut twice)
-  const plan = planWallDetail(layout, {faces});
+  const plan = yield* planWallDetailSteps(layout, {faces});
+  yield 'world.wallDetail.prepare';
   const tPlan = performance.now();
   const group = new THREE.Group();
   group.name = 'wall-detail';
@@ -155,23 +166,30 @@ export function buildWallDetail(world: THREE.Group, layout: StationLayout, mats:
     return {axis: F.axis, plane: F.plane, nSign: F.axis === 'z' ? F.f.nz : F.f.nx, poly: cutPolyC(F, f)};
   });
   const cuts = prepareCuts(baseMeshes, specs);
+  yield 'world.wallDetail.insets';
 
   // --- insets (all-or-nothing per cut), then the walls are cut for the insets that exist -----------
-  cutFeatures.forEach((f, i) => {
-    if (!specs[i].applied) return;
+  for (let i = 0; i < cutFeatures.length; i++) {
+    if (i % 16 === 15) yield;
+    const f = cutFeatures[i];
+    if (!specs[i].applied) continue;
     const local = new Map<DetailMat, Buf>();
     const L = (k: DetailMat) => { let b = local.get(k); if (!b) local.set(k, (b = new Buf())); return b; };
     try {
       cutDetail(L, frames[f.face], f, specs[i].poly, cells);
       for (const [k, b] of local) B(k).append(b);
     } catch (e) { specs[i].applied = false; console.warn('wall detail: cut skipped', f.kind, e); }
-  });
+  }
+  yield 'world.wallDetail.commit';
   const tInsets = performance.now();
   const cutRes = cuts.commit();
   const tCut = performance.now();
+  yield 'world.wallDetail.flat';
 
   // --- flat layers, fittings ---------------------------------------------------------------------
+  let step = 0;
   for (const f of plan.features) {
+    if (++step % 64 === 0) yield;
     const F = frames[f.face];
     try {
       if (f.layer === 'flush') flatFeature(B(f.cell === 'frieze' ? 'frieze' : 'flush'), F, f, LAYER_OFFSET.flush, friezeRect);
@@ -181,6 +199,7 @@ export function buildWallDetail(world: THREE.Group, layout: StationLayout, mats:
     } catch (e) { console.warn('wall detail: feature skipped', f.kind, e); }
   }
 
+  yield 'world.wallDetail.meshes';
   const tFlat = performance.now();
   // --- meshes ----------------------------------------------------------------------------------------
   const matFor: Record<DetailMat, () => THREE.Material | null> = {

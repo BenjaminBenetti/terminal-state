@@ -25,7 +25,7 @@
 import {ClipBank, type Clip, type CueId} from './bank';
 import {GUN_VOICE_GAINS, gunCue} from './gunVoices'; // task studio-weapon-soundlab-audio-20261110-063407-01: a gun's own shot / reload cues by weapon id
 import {FAN_SOUND, audibleFans, type FanSource} from './fanSound'; // task studio-alpha-track2-round2-20261031-01 (R4): fan noise
-import {makeIR} from './reverb';
+import {startIR, type IrJob} from './reverb';
 import type {ImpactFamily} from '../physics/chunks';
 import {VOCAL_GATE, vocalGain} from '../ai/vocalReach'; // Task office-overhaul-20261030 (lane AUDIO): enemy vocals by navigable route
 import {STRAINER_SWING_PEAK_S} from './manifest.strainer.generated'; // lane AUDIO (strainer squish set): each swing clip's peak time
@@ -682,6 +682,14 @@ export class Sfx {
   private slots: {conv: ConvolverNode; wet: GainNode; kind: RoomKind | null; connected: boolean; timer: ReturnType<typeof setTimeout> | null}[] = [];
   private activeSlot = 0;
   private irCache = new Map<RoomKind, AudioBuffer>();
+  // Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): the room kernels are generated in slices from audio start
+  // (audio/reverb.ts startIR; one slice per timer task: irSlice) — the kernel under way, the kinds still to start, and counters
+  // (debugState().ir: `sync` = kernels that had to be finished at once because their room was needed before their slices were done)
+  private irJob: {kind: RoomKind; job: IrJob} | null = null;
+  private irQueue: RoomKind[] = [];
+  private irStats = {slices: 0, sync: 0};
+  /** The timer of the sliced kernel generation (tests drive the slices by hand through it). */
+  irTimer: (fn: () => void, ms: number) => void = (fn, ms) => { setTimeout(fn, ms); };
   private convolversCreated = 0;
   private roomKind: RoomKind = 'medium';
   private areaType = '';
@@ -820,9 +828,11 @@ export class Sfx {
     void this.bank.load(ctx);
     // The other rooms' IRs build off the gesture tick in small timer steps so neither Start nor a
     // later room change hitches.
-    const steps = (['tunnel', 'large', 'small'] as RoomKind[]).map(k => () => { this.ir(k); });
-    const step = () => { const f = steps.shift(); if (!f) return; try { f(); } catch { /* built lazily on use */ } setTimeout(step, 16); };
-    setTimeout(step, 30);
+    // Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): a step was one WHOLE kernel (1.5-10+ ms of main thread
+    // each, in the first play frames when the gesture entered play) and 'medium' was only ever built on use. Now every kind is
+    // generated in bounded slices, one per timer task (irSlice), the current room first (already built above when there is a convolver).
+    this.irQueue = ([this.roomKind, 'tunnel', 'large', 'small', 'medium'] as RoomKind[]).filter((k, i, all) => all.indexOf(k) === i && !this.irCache.has(k));
+    this.irTimer(() => this.irSlice(), 30);
     ctx.addEventListener?.('statechange', () => { if (this.inflight === 0) this.sync(); });
     if (typeof window !== 'undefined') {
       // Safety net: if the browser refused or reverted a resume, the next click/key fixes it.
@@ -896,7 +906,7 @@ export class Sfx {
   }
 
   /** QA/test view of the audio lifecycle, the clip bank and the spatial/ambient systems. */
-  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; fans: {sources: number; channels: number; active: number; looping: number}; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>; confirmVoices: number; confirms: number; flareLoops: number; vocal: {voices: number; gate: boolean; played: number; gated: number; sight: number; capped: number; stolen: number; steps: number}; t1: {humVoices: number; hissVoices: number; hums: number; humsSilent: number; screams: number; bursts: number; hisses: number; repeats: number}; drag: {voices: number; ticks: number; stops: number; capped: number; handoffs: number}; strainer: {voices: Record<StrainerVoiceKind, number>; steps: number; swings: number; contacts: number; squishes: number; capped: number; limited: number}; rain: {level: number; muffle: number; looping: boolean}} {
+  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; fans: {sources: number; channels: number; active: number; looping: number}; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>; confirmVoices: number; confirms: number; flareLoops: number; vocal: {voices: number; gate: boolean; played: number; gated: number; sight: number; capped: number; stolen: number; steps: number}; t1: {humVoices: number; hissVoices: number; hums: number; humsSilent: number; screams: number; bursts: number; hisses: number; repeats: number}; drag: {voices: number; ticks: number; stops: number; capped: number; handoffs: number}; strainer: {voices: Record<StrainerVoiceKind, number>; steps: number; swings: number; contacts: number; squishes: number; capped: number; limited: number}; rain: {level: number; muffle: number; looping: boolean}; ir: {ready: number; pending: number; slices: number; sync: number}} {
     const beds: Record<string, number> = {};
     for (const k of ['wind', 'rumble', 'hvac', 'fridge', 'buzz'] as const) beds[k] = this.profile[k];
     return {
@@ -912,6 +922,8 @@ export class Sfx {
       drag: {voices: [...this.drags.values()].filter(v => v.end > (this.ctx?.currentTime ?? 0)).length, ...this.dragStats}, // M01 (lane AUDIO)
       strainer: {voices: {step: this.sLive('step'), swing: this.sLive('swing'), contact: this.sLive('contact'), squish: this.sLive('squish')}, ...this.sStats}, // lane AUDIO (strainer squish set)
       rain: {level: Math.max(0, this.rain?.level ?? 0), muffle: Math.max(0, this.rain?.muffle ?? 0), looping: !!this.rain?.src}, // lane AUDIO (surface ending)
+      // task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): the sliced reverb kernels — kinds ready / still to finish, slices run, kernels finished at once
+      ir: {ready: this.irCache.size, pending: this.irQueue.length + (this.irJob ? 1 : 0), ...this.irStats},
     };
   }
 
@@ -1144,8 +1156,39 @@ export class Sfx {
 
   private ir(kind: RoomKind): AudioBuffer {
     let b = this.irCache.get(kind);
-    if (!b) { b = makeIR(this.ctx!, ROOMS[kind]); this.irCache.set(kind, b); }
+    if (!b) {
+      // Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): needed before its slices are done (the room at audio
+      // start; a room change during the pre-generation) — the rest of it right here, as before, and counted (debugState().ir.sync)
+      const under = this.irJob?.kind === kind ? this.irJob : null;
+      const job = under ? under.job : startIR(this.ctx!, ROOMS[kind]);
+      while (!job.step()) { /* to its end */ }
+      if (under) this.irJob = null;
+      else if (this.irQueue.includes(kind)) this.irQueue.splice(this.irQueue.indexOf(kind), 1); // (nothing left of it to slice)
+      this.irStats.sync++;
+      b = job.buffer;
+      this.irCache.set(kind, b);
+    }
     return b;
+  }
+
+  /**
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): one slice of the kernel pre-generation — a timer task that
+   * writes at most IR_SLICE_SAMPLES noise samples of ONE kernel, then asks for the next task while anything is left (slices never
+   * pile up in one task). Once the queue is empty every kind is cached and a room change only swaps buffers.
+   */
+  private irSlice(): void {
+    if (!this.ctx) return;
+    try {
+      if (!this.irJob && this.irQueue.length) { const kind = this.irQueue.shift()!; this.irJob = {kind, job: startIR(this.ctx, ROOMS[kind])}; }
+      const j = this.irJob;
+      if (j) {
+        this.irStats.slices++;
+        if (j.job.step()) { this.irCache.set(j.kind, j.job.buffer); this.irJob = null; }
+      }
+    } catch {
+      this.irJob = null; // built lazily on use
+    }
+    if (this.irJob || this.irQueue.length) this.irTimer(() => this.irSlice(), 16);
   }
 
   private loadSlot(i: number, kind: RoomKind): void {

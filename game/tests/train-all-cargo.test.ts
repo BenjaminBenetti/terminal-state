@@ -659,7 +659,7 @@ describe('train prop cargo: the REAL Game methods on a minimal shell', () => {
 
   it('buildSection runs the build-phase layout hooks before it reads the layout (model keys, the p7 drop, the world)', async () => {
     const {Game} = await import('../src/game');
-    const body = (Game.prototype as unknown as {buildSection: () => void}).buildSection.toString();
+    const body = (Game.prototype as unknown as {buildSectionSteps: () => void}).buildSectionSteps.toString(); // (lane BUILD: buildSection drains these steps)
     const hook = body.search(/sectionLayoutHooks[\s\S]{0,160}['"]build['"]/), keys = body.indexOf('modelKeysFor'), drop = body.indexOf('dropUnloadedP7'), world = body.indexOf('buildWorld');
     expect(hook).toBeGreaterThan(0);
     expect(hook).toBeLessThan(Math.min(keys, drop, world));
