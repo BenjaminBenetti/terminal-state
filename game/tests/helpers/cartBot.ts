@@ -239,31 +239,48 @@ export class CartBot {
       this.tick(off < 0.7);
       t += DT;
     }
+    // the last steps: straight at the point itself, until there or no longer getting nearer (something in the way: a cart, a wall)
+    for (let best = Infinity, stall = 0; t < timeout && stall < 0.6; t += DT) {
+      const d = Math.hypot(P.x - x, P.z - z);
+      if (d <= near) break;
+      if (d < best - 1e-3) { best = d; stall = 0; } else stall += DT;
+      this.tick(this.face(x, z) < 0.5);
+    }
     this.h.keys.held.delete('KeyW');
     return Math.hypot(P.x - x, P.z - z) <= near + 0.3 && Math.abs(P.y - y) < 1;
   }
 
-  /** Grab the cart: look at its handle from where the player stands (walking up to it first when out of reach) and press E. */
+  /**
+   * Grab the cart like a player: aim at a part of it that is in reach — the handle, else its frame, else the drum (E on the drum grabs
+   * when no hose can connect) — stepping up to the cart first when nothing is (a cart lying nose-down on a stair has its handle on
+   * its far side).
+   */
   grab(uid: string): boolean {
-    const P = this.h.player;
+    const P = this.h.player, K = CART_LOOK;
     if (this.carts.grab?.cart.uid === uid) return true;
-    if (this.carts.grab) this.pressAt(P.x, P.eye, P.z - 1); // (E lets go of another cart)
-    for (let tries = 0; tries < 3; tries++) {
-      const hd = this.handleOf(uid), b = this.body(uid);
-      if (Math.hypot(hd.x - P.x, hd.y - P.eye, hd.z - P.z) > FUEL_CART.grabReach - 0.25 || Math.abs(b.y - P.y) > 0.6) {
-        // a spot a pace behind the handle side, else anywhere near
-        const back = {x: b.x - Math.sin(b.yaw) * 0.95, z: b.z - Math.cos(b.yaw) * 0.95};
-        if (!this.walkTo(back.x, b.y, back.z, 0.3, 60)) this.walkTo(b.x, b.y, b.z, 1.0, 60);
+    if (this.carts.grab) this.letGo();
+    const parts = (): {x: number; y: number; z: number}[] => [
+      this.handleOf(uid), this.partOf(uid, 0, 0.8, K.frame.z), this.partOf(uid, 0, 0.45, K.frame.z), this.partOf(uid, 0, K.drumTop - 0.05, K.drumZ),
+    ];
+    const tryParts = (): boolean => {
+      for (const p of parts()) {
+        if (Math.hypot(p.x - P.x, p.y - P.eye, p.z - P.z) > FUEL_CART.drumReach + 0.6) continue;
+        this.pressAt(p.x, p.y, p.z);
+        if (this.carts.grab?.cart.uid === uid) return true;
+        if (this.carts.hoseOn?.cart.uid === uid) this.pressAt(p.x, p.y, p.z); // (the drum with a hose target in reach: connected — disconnect again)
       }
-      const hh = this.handleOf(uid);
-      this.pressAt(hh.x, hh.y, hh.z);
-      if (this.carts.grab?.cart.uid === uid) return true;
-      // (the aim met the drum and a hose was connected / disconnected instead: press again at the frame)
-      const fr = this.partOf(uid, 0, 0.95, CART_LOOK.frame.z);
-      this.pressAt(fr.x, fr.y, fr.z);
-      if (this.carts.grab?.cart.uid === uid) return true;
+      return false;
+    };
+    for (let tries = 0; tries < 3; tries++) {
+      if (tryParts()) return true;
+      // step right up to it from its handle side (a cart lying nose-down on a stair is only in reach from close by), else as near
+      // as the player can get
+      const b = this.body(uid), off = tries === 0 ? 0.72 : 0.67;
+      const back = {x: b.x - Math.sin(b.yaw) * off, z: b.z - Math.cos(b.yaw) * off};
+      const by = this.world().levels.supportAt(back.x, back.z, b.y + 0.9)?.floor ?? b.y;
+      if (!this.walkTo(back.x, by, back.z, 0.1, 60)) this.walkTo(b.x, b.y, b.z, 0.75, 60);
     }
-    return false;
+    return tryParts();
   }
 
   letGo(): void {

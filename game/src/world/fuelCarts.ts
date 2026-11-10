@@ -11,8 +11,9 @@
 // leaves / curbs) + a floor rule (never off a platform edge).
 //  - STAIRS (task studio-fuel-cart-stairs-20261110-004505-01; user: "Just let the player drag the carts up and down stairs"): a pushed or
 //    grabbed cart goes up and down real stair runs and landings on every level (the flight's pitch line is its floor; tests/
-//    fuel-cart-stairs.test.ts). On steps it is DRAWN lying on the step edges, tilted with the slope (cartRestPose: the view only; aim
-//    and the hose nozzle follow the drawn pose); let go on a stair it stops where it is. A cart inside a lift rides it (carry), holds
+//    fuel-cart-stairs.test.ts). On steps it is DRAWN lying on the step edges, tilted with the slope — held going down, tilted back toward
+//    the player with its wheels on the step behind (cartRestPose: the view only; aim and the hose nozzle follow the drawn pose); let go
+//    on a stair it stops where it is and settles onto the steps. A cart inside a lift rides it (carry), holds
 //    the lift's doors while it stands in the doorway (anyAt) and is never left hanging in a shaft (seat).
 //  - PUSH: walking into a free cart shoves it (slowly: 150 kg full); the player never walks through it.
 //  - GRAB: aim at it within FUEL_CART.grabReach and press E: it follows a hand point FUEL_CART.hold m in front of the player on a damped
@@ -123,6 +124,8 @@ interface Cart {
   /** The DRAWN pose over the body (lift / pitch / roll: steps and slopes; zeros on flat floor) and whether it has reached its rest. */
   readonly pose: CartPose;
   poseSettled: boolean;
+  /** The pose was last solved as held by its handle (a grab / a let-go re-solves it). */
+  poseHeld: boolean;
   /** The body pose the drawn pose was last solved for, and what the view shows now (no matrix work for a cart at rest). */
   readonly solved: {x: number; y: number; z: number; yaw: number};
   readonly drawn: {x: number; y: number; z: number; yaw: number; pitch: number; roll: number};
@@ -978,7 +981,7 @@ export class FuelCarts implements FuelCartsLike {
       mode: 'world',
       view,
       awake: false,
-      pose: {dy: 0, pitch: 0, roll: 0}, poseSettled: false, solved: {x: NaN, y: NaN, z: NaN, yaw: NaN},
+      pose: {dy: 0, pitch: 0, roll: 0}, poseSettled: false, poseHeld: false, solved: {x: NaN, y: NaN, z: NaN, yaw: NaN},
       drawn: {x: NaN, y: NaN, z: NaN, yaw: NaN, pitch: NaN, roll: NaN},
       markedLevel: -1,
       // (nothing under it at its recorded height — a lift shaft whose car stands elsewhere: seated on the first frames)
@@ -1032,9 +1035,11 @@ export class FuelCarts implements FuelCartsLike {
   private solvePose(c: Cart, dt: number, snap = false): void {
     const L = this.host.levels, b = c.body, q = c.solved;
     if (!L) return;
-    const moved = q.x !== b.x || q.y !== b.y || q.z !== b.z || q.yaw !== b.yaw;
+    const held = this.grab?.cart === c;
+    const moved = q.x !== b.x || q.y !== b.y || q.z !== b.z || q.yaw !== b.yaw || held !== c.poseHeld;
     if (!snap && !moved && c.poseSettled) return;
-    const T = cartRestPose(L, b, this.poseScratch), p = c.pose;
+    c.poseHeld = held;
+    const T = cartRestPose(L, b, this.poseScratch, held), p = c.pose;
     q.x = b.x; q.y = b.y; q.z = b.z; q.yaw = b.yaw;
     this.counts.poses++;
     const k = snap ? 1 : 1 - Math.exp(-CART.poseRate * dt);

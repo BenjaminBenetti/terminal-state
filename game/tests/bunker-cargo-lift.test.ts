@@ -9,13 +9,13 @@
 //    with the loose things carried the rest of the way, and placeCar restores a remembered stop;
 //  - the freight look: barred car gates (see-through), the shaft liner over every storey (the landings open), painted landing doors.
 
-import {describe, expect, it, vi} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
 import {installCanvasShim} from './helpers/canvas2d';
 import {fakeEnvTextures} from './helpers/openablesFixture';
 import {WorldMaterials} from '../src/world/materials';
 import {CAB_SPEED, DOOR_TIME} from '../src/world/elevator';
-import {gateWorld, readTowerInfo} from '../src/world/towerShared';
+import {gateLocal, gateWorld, readTowerInfo} from '../src/world/towerShared';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {levelsOf} from '../src/gen/levels';
 import {SOLID} from '../src/gen/grid';
@@ -28,6 +28,11 @@ import {Inventory} from '../src/items/inventory';
 import {generateBunkerLevel} from '../src/gen/bunker/index';
 import {V2, V2_BASES} from '../src/gen/bunker/v2/spine';
 import {bunkerTowerRecord} from '../src/gen/bunker/v2/liftPlan';
+import {LIFT_CART_TEXT} from '../src/world/towerRuntime';
+import {cartFloorAt} from '../src/world/fuelCartPhysics';
+import {BUNKER_LANE} from '../src/world/bunker/objectiveState';
+import {DT as FDT, frame} from './helpers/fuelCartsHost';
+import {bunkerCartWorld, type BunkerCartWorld} from './helpers/bunkerCartWorld';
 
 installCanvasShim(false);
 
@@ -183,5 +188,129 @@ describe('the cargo lift runtime (real Player): power, a ride down, riders, park
     const door = e.view.landings[0].getObjectByName('tower-door-landing-l') as THREE.Mesh;
     expect((door.material as THREE.Material).name).toBe('cargo-landing-door');
     expect(e.view.cab.getObjectByName('tower-cab-handrail')).toBeUndefined();
+    host.sectionHooks[0].teardown!(); // (the car's volume leaves the layout's shared Levels)
   });
+});
+
+// Task studio-fuel-cart-stairs-20261110-004505-01: the lift with the REAL fuel carts (tests/helpers/bunkerCartWorld.ts: FuelCarts +
+// the lift runtime + the objective on a generated version-2 Bunker; the bot drives the real Player).
+// (levelsOf() caches one Levels per layout: every world of this file is torn down, so no lift car volume outlives its test)
+const liveWorlds: BunkerCartWorld[] = [];
+afterEach(() => { for (const W of liveWorlds.splice(0)) { try { W.teardown(); } catch { /* already down */ } if (W.rt.train) { W.rt.ride = null; W.rt.teardown(); } } });
+
+describe('the cargo lift and real fuel carts: the doorway, a ride, parking, an empty shaft', () => {
+  const powered = (W: BunkerCartWorld) => { for (const g of W.objective.info!.generators) { W.objective.state!.gens[g.id] = 'online'; W.objective.state!.fuel[g.id] = 1; } };
+  /** A cart on the station's lift landing, the player behind it, the lift powered and its gate open. */
+  function atTheLift() {
+    const W = bunkerCartWorld(bunker());
+    liveWorlds.push(W);
+    powered(W);
+    const e = W.tower.office!.elevator!, s0 = e.plan.info.stops.find(q => q.floor === 0)!;
+    W.carts.spawn({uid: 'cart:l', units: 6, x: s0.landing.x, y: 0, z: s0.landing.z - 1.2, yaw: 0, level: 0});
+    W.h.player.place(s0.landing.x, s0.landing.z - 2.3, Math.PI, 0);
+    frame(W.h);
+    expect(W.tower.callFloor(0)).toBe(true);
+    for (let t = 0; t < 10 && !e.gate.open; t += FDT) frame(W.h);
+    expect(e.gate.open).toBe(true);
+    W.bot.cache.clear();
+    return {W, e, s0, i0: e.plan.info.stops.indexOf(s0), b: () => W.carts.bodyOf('cart:l')!};
+  }
+
+  it('a cart standing in the doorway holds the doors (the car never leaves it half in the wall); pushed in, it rides down standing on the car floor', () => {
+    const {W, e, s0, i0, b} = atTheLift();
+    const {bot, tower, carts, h} = W, G = e.plan.gate;
+    const [dx, dz] = gateWorld(G, G.depth * 0.5, 0);
+    expect(bot.dragTo('cart:l', dx, 0, dz, {arrive: 0.32}).ok).toBe(true);
+    bot.wait(1.2); // (held still: the cart comes to rest at the hand, in the doorway)
+    bot.letGo();
+    bot.wait(0.5);
+    const [sIn] = gateLocal(G, b().x, b().z);
+    expect(sIn).toBeGreaterThan(-0.3); // its footprint overlaps the doorway (the car plane is s = 0, the landing plane s = 0.5)
+    expect(sIn).toBeLessThan(0.8);
+    // the player steps well back from the doorway, then the lift is called from storey 2
+    h.player.place(s0.landing.x, s0.landing.z - 3.5, Math.PI, 0);
+    expect(tower.callFloor(2)).toBe(true);
+    for (let t = 0; t < 14; t += FDT) frame(h);
+    expect(e.cartBlocks).toBe(true);
+    expect(e.logic.stop).toBe(i0);
+    expect(e.logic.moving).toBe(false);
+    expect(e.logic.door).toBeGreaterThanOrEqual(0.99); // held open
+    expect(h.toasts).toContain(LIFT_CART_TEXT);
+    // pushed all the way in: the doors close, the car leaves, the cart rides (nobody holding it)
+    bot.cache.clear();
+    const cab = e.plan.info.cab;
+    expect(bot.dragTo('cart:l', (cab.x0 + cab.x1) / 2, 0, cab.z0 + 0.7 * (cab.z1 - cab.z0), {arrive: 0.45}).ok).toBe(true);
+    bot.letGo();
+    const s2 = e.plan.info.stops.findIndex(q => q.floor === 2);
+    let moved = false, worst = 0;
+    for (let t = 0; t < 120 && !(moved && e.logic.stop === s2 && e.gate.open); t += FDT) {
+      frame(h);
+      if (e.logic.moving) moved = true;
+      worst = Math.max(worst, Math.abs(b().y - e.logic.y));
+    }
+    expect(moved).toBe(true);
+    expect(worst).toBeLessThan(0.04);
+    expect(b().y).toBeCloseTo(-14, 3);
+    expect(b().level).toBe(2);
+    expect(carts.counts.carried).toBeGreaterThan(50);
+    expect(carts.all().map(c => [c.uid, c.units])).toEqual([['cart:l', 6]]);
+  }, 180_000);
+
+  it('a world torn down while the car travels with a cart in it: the cart is recorded AT the car\'s stop and comes back standing in the car', () => {
+    const {W, e, b} = atTheLift();
+    const {bot, tower, carts, h, harness} = W;
+    const cab = e.plan.info.cab;
+    expect(bot.dragTo('cart:l', (cab.x0 + cab.x1) / 2, 0, cab.z0 + 0.7 * (cab.z1 - cab.z0), {arrive: 0.45}).ok).toBe(true);
+    bot.letGo();
+    expect(tower.playerInCab()).toBe(true);
+    expect(tower.panelPick(4)).toBe(true);
+    for (let t = 0; t < 30 && !e.logic.moving; t += FDT) frame(h);
+    for (let t = 0; t < 4; t += FDT) frame(h);
+    expect(e.logic.moving).toBe(true);
+    const mid = b().y;
+    expect(mid).toBeLessThan(-1);
+    expect(mid).toBeGreaterThan(-27);
+    W.teardown();
+    const recs = carts.stationRecords();
+    expect(recs.map(c => [c.uid, c.units, c.level])).toEqual([['cart:l', 6, 4]]);
+    expect(recs[0].y).toBeCloseTo(-28, 3); // never mid-shaft
+    expect(harness.run.laneStore<{lift?: {stop: number}}>(BUNKER_LANE)!.lift).toEqual({stop: 4});
+    // the station again: the car stands at storey 4, the cart in it on its floor
+    carts.loadStation(recs);
+    W.build();
+    for (let t = 0; t < 0.5; t += FDT) frame(h);
+    const e2 = tower.office!.elevator!;
+    expect(e2.logic.y).toBe(-28);
+    const nb = carts.bodyOf('cart:l')!;
+    expect(nb.y).toBeCloseTo(-28, 3);
+    expect(cartFloorAt(h.levels!, nb.x, nb.z, nb.y)).not.toBeNull();
+    expect(carts.counts.seated).toBe(0); // (it was recorded where the car is: nothing to repair)
+  }, 180_000);
+
+  it('a cart recorded in the shaft where the car no longer stands is seated on the car (never left hanging, never lost)', () => {
+    const W = bunkerCartWorld(bunker());
+    liveWorlds.push(W);
+    const {carts, tower, h} = W, e = tower.office!.elevator!, cab = e.plan.info.cab;
+    const x = (cab.x0 + cab.x1) / 2, z = (cab.z0 + cab.z1) / 2;
+    // the car at the station (home), a record three storeys down the shaft: the nearest surface of its column is the car above
+    carts.loadStation([{uid: 'cart:a', units: 3, x, y: -21, z, yaw: 0.4, level: 3}]);
+    for (let t = 0; t < 0.2; t += FDT) frame(h);
+    expect(carts.counts.seated).toBe(1);
+    expect(carts.bodyOf('cart:a')!.y).toBeCloseTo(0, 6);
+    expect(carts.bodyOf('cart:a')!.level).toBe(0);
+    expect(cartFloorAt(h.levels!, x, z, carts.bodyOf('cart:a')!.y)).not.toBeNull();
+    // the car at storey 4, a record above it: it comes down onto the car
+    expect(tower.placeCar(4)).toBe(true);
+    carts.loadStation([{uid: 'cart:b', units: 8, x: x + 0.9, y: -7, z, yaw: 0, level: 1}]);
+    for (let t = 0; t < 0.2; t += FDT) frame(h);
+    expect(carts.bodyOf('cart:b')!.y).toBeCloseTo(-28, 6);
+    expect(carts.bodyOf('cart:b')!.level).toBe(4);
+    expect(carts.all().map(c => [c.uid, c.units])).toEqual([['cart:b', 8]]); // (loadStation replaced the station's carts: one cart, its fuel)
+    // a cart on an ordinary floor is never touched
+    const before = carts.counts.seated;
+    const s0 = e.plan.info.stops.find(q => q.floor === 0)!;
+    carts.spawn({uid: 'cart:c', units: 1, x: s0.landing.x, y: 0, z: s0.landing.z - 1.5, yaw: 0, level: 0});
+    for (let t = 0; t < 0.2; t += FDT) frame(h);
+    expect(carts.counts.seated).toBe(before);
+  }, 60_000);
 });

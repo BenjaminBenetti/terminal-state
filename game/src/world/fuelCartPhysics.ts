@@ -18,7 +18,8 @@
 //    never coasts down a stair;
 //  - the REST POSE (cartRestPose: view only): on steps the cart lies on the NOSING LINE (the line through the step edges, half a riser
 //    over the pitch line), pitched / rolled with the slope under its footprint; over a flight's two ends and over threshold steps it
-//    rocks from one surface to the next. The body's y stays the pitch line (collision, reach, records).
+//    rocks from one surface to the next; HELD by its handle while the steps fall away ahead it is tilted back toward the handler, its
+//    wheels on the step behind. The body's y stays the pitch line (collision, reach, records).
 // Mass: CART.emptyKg + CART.kgPerUnit per quarter unit (150 kg full). Free carts coast against rolling resistance; a walking player
 // pushes one at most CART.push.max m/s (heavier = slower) with CART.push.force; a GRABBED cart follows a target with a critically
 // damped spring whose acceleration is capped by CART.grab.force / mass.
@@ -123,20 +124,27 @@ export function cartSurfaceAt(L: Levels, x: number, z: number, y: number): numbe
 export interface CartPose { dy: number; pitch: number; roll: number }
 
 /**
- * The pose a cart at rest takes on the surface under its footprint (pure; the body is not changed): the rest surface sampled under
- * the centre, front / back and both sides (CART.rim of the radius, in the cart's own frame); the base plane tilts with them and
- * never sinks into the surface under its centre. Flat floor: exactly {0, 0, 0}.
+ * The pose a cart takes on the surface under its footprint (pure; the body is not changed): the rest surface sampled under the centre,
+ * front / back and both sides (CART.rim of the radius, in the cart's own frame); the base plane tilts with them and never sinks into
+ * the surface under its centre, its ends or its sides. Flat floor: exactly {0, 0, 0}.
+ * `held` (grabbed by its handle): where the surface FALLS AWAY ahead — going down a stair, the cart leading — the cart is held tilted
+ * BACK toward the handler by the same angle instead of nosing down the steps: its wheels stand on the step behind, the nose plate is
+ * carried clear of the steps (how a hand truck is eased down a stair). Let go, it settles onto the steps (the rest pose).
  */
-export function cartRestPose(L: Levels, b: CartBody, out: CartPose = {dy: 0, pitch: 0, roll: 0}): CartPose {
+export function cartRestPose(L: Levels, b: CartBody, out: CartPose = {dy: 0, pitch: 0, roll: 0}, held = false): CartPose {
   const d = CART.radius * CART.rim, sy = Math.sin(b.yaw), cy = Math.cos(b.yaw);
   const hc = cartSurfaceAt(L, b.x, b.z, b.y) ?? b.y;
   const at = (ux: number, uz: number): number => cartSurfaceAt(L, b.x + ux * d, b.z + uz * d, b.y) ?? hc;
   const hf = at(sy, cy), hb = at(-sy, -cy), hr = at(cy, -sy), hl = at(-cy, sy);
   if (hf === hc && hb === hc && hr === hc && hl === hc) { out.dy = hc - b.y; out.pitch = 0; out.roll = 0; return out; }
-  const m = CART.maxTilt;
-  out.pitch = Math.max(-m, Math.min(m, Math.atan2(hf - hb, 2 * d)));
-  out.roll = Math.max(-m, Math.min(m, Math.atan2(hr - hl, 2 * d)));
-  out.dy = Math.max(hc, (hf + hb) / 2, (hr + hl) / 2) - b.y;
+  // the base plane's gradients along the cart's front and its +x side (m per m)
+  const m = Math.tan(CART.maxTilt);
+  let tp = Math.max(-m, Math.min(m, (hf - hb) / (2 * d)));
+  const tr = Math.max(-m, Math.min(m, (hr - hl) / (2 * d)));
+  if (held && tp < 0) tp = -tp;
+  out.pitch = Math.atan(tp);
+  out.roll = Math.atan(tr);
+  out.dy = Math.max(hc, hf - d * tp, hb + d * tp, hr - d * tr, hl + d * tr) - b.y;
   return out;
 }
 

@@ -247,3 +247,33 @@ describe('Bunker v1 (an entered station\'s frozen layout, no lift): the same job
     void CART;
   }, 420_000);
 });
+
+describe('Retry with a cart taken down the stairs (the station\'s entry state comes back whole)', () => {
+  it('one unit hosed into gen-0, then Retry: the cart is back on the platform with all its fuel, the generator unpaid — nothing minted, nothing lost, one cart', () => {
+    const L = generateBunkerLevel({levelSeed: 16920, layoutVersion: 1});
+    const W = arrive(L);
+    const {carts, bot, objective, harness} = W;
+    const key = {...harness.run.current};
+    const home = {...carts.bodyOf(UID)!};
+    // what Game keeps for Retry: the station's section memories as they were on entry (run/runState.ts scopeMemories)
+    const entry = harness.run.scopeMemories(key);
+    const gen = objective.info!.generators[0], spot = hoseSpot(W, 0);
+    const r = bot.dragTo(UID, spot.x, gen.y, spot.z, {arrive: 0.6});
+    expect(r.ok, r.why).toBe(true);
+    expect(bot.connectHose(UID)).toBe(true);
+    bot.wait(FUEL_CART.transferEvery + 0.4);
+    expect(carts.all().map(c => [c.uid, c.units, c.level])).toEqual([[UID, FUEL.cartUnits - 1, 2]]);
+    expect(objective.genState(0)).toBe('fuelled');
+    // Retry: the world goes, the entry memories return, the station is built again
+    W.teardown();
+    harness.run.restoreScopeMemories(key, entry);
+    W.build();
+    expect(W.stations!.last).toMatchObject({mode: 'plan', cart: true}); // the same deterministic plan, realized again — once
+    expect(carts.all().map(c => [c.uid, c.units, c.level])).toEqual([[UID, FUEL.cartUnits, 0]]);
+    const b = carts.bodyOf(UID)!;
+    expect(Math.hypot(b.x - home.x, b.z - home.z)).toBeLessThan(1e-3);
+    expect(objective.genState(0)).toBe('off');
+    expect(objective.state!.fuel['gen-0']).toBe(0);
+    log(`Retry (v1 seed 16920): the cart went to storey 2 (${r.t.toFixed(0)} s) and gave 1 unit; after Retry it stands at its platform spot with ${carts.all()[0].units} units, gen-0 off`);
+  }, 240_000);
+});

@@ -8,7 +8,8 @@
 //  - let go on a flight it stops within centimetres and stays (a flat floor still lets it coast); walked into, it is pushed at the
 //    push speed and stops with the player; shot, it barely moves;
 //  - the REST POSE: on steps the cart lies on the nosing line (half a riser over the pitch line) pitched / rolled with the slope, exactly
-//    upright on flat floor; the rest surface never dips under the built steps and has no jumps along a whole run with its landings;
+//    upright on flat floor; held going down it is tilted back toward the player instead; the rest surface never dips under the built
+//    steps and has no jumps along a whole run with its landings;
 //  - the drawn cart is what the player aims at (the tilted handle grabs), its meshes carry the storey it stands on;
 //  - a station record of a cart standing on a stair survives the save text exactly.
 // The Bunker job (station cart -> three generators -> lift) is tests/bunker-cart-fuel-e2e.test.ts; the lift's own cases
@@ -241,6 +242,34 @@ describe('the real Player drags a cart over a Subway station\'s stairs', () => {
     for (let t = 0; t < 1; t += DT) frame(h);
     expect(Math.abs(b().x - x2)).toBeLessThan(0.08);
     expect(Math.hypot(b().vx, b().vz)).toBe(0);
+  }, 120_000);
+
+  it('held going DOWN a stair the cart is tilted back toward the player, wheels on the step behind; let go, it settles nose-down on the steps', () => {
+    const {h, carts, bot, b, down} = onSubway();
+    const slope = Math.atan(down.riser / down.tread), d = CART.radius * CART.rim;
+    // half way down the first service flight, still held
+    expect(bot.dragTo('cart:s', (down.s0 + down.s1) / 2, (down.h0 + down.h1) / 2, down.bottom.z, {arrive: 0.35}).ok).toBe(true);
+    bot.wait(0.8);
+    expect(carts.grab?.cart.uid).toBe('cart:s');
+    expect(flightAt(h.levels!, b().x, b().z, b().y)).not.toBeNull();
+    // the front (the drum, away from the player) points down the stair
+    const front = {x: Math.sin(b().yaw), z: Math.cos(b().yaw)};
+    const ahead = h.levels!.supportIn(b().x + front.x * 0.25, b().z + front.z * 0.25, b().y, 0.5)!.floor;
+    expect(ahead).toBeLessThan(b().y - 0.1);
+    const held = carts.poseOf('cart:s')!;
+    expect(held.pitch).toBeCloseTo(slope, 1); // tilted BACK (front up) by the stair's own angle
+    expect(held.dy).toBeCloseTo(down.riser / 2 + 2 * d * Math.tan(slope), 1); // the wheels' end rests on the nosing line behind it
+    // let go: it eases onto the steps, nose down with the slope
+    bot.letGo();
+    bot.wait(1);
+    const rest = carts.poseOf('cart:s')!;
+    expect(rest.pitch).toBeCloseTo(-slope, 1);
+    expect(rest.dy).toBeCloseTo(down.riser / 2, 2);
+    expect(Math.hypot(b().vx, b().vz)).toBe(0);
+    // grabbed again: tilted back again
+    expect(bot.grab('cart:s')).toBe(true);
+    bot.wait(0.8);
+    expect(carts.poseOf('cart:s')!.pitch).toBeGreaterThan(0.3);
   }, 120_000);
 
   it('its meshes carry the storey it stands on after a stair (level marks follow the cart)', () => {
