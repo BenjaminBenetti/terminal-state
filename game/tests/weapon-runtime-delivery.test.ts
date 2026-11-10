@@ -406,6 +406,21 @@ describe('world pickups: a stand-in becomes the real model in place', () => {
     expect([verts(again.obj), again.obj.userData.awaitingModel, w.pickups.awaitingModels()]).toEqual([real, undefined, {}]);
   });
 
+  it('a stand-in that is not a pickup (train cargo\'s riding copy) is re-skinned in place too and keeps its owner\'s storey tag', async () => {
+    const L = gatedLoader();
+    setWeaponVarietyLoader(L.loader);
+    const w = world();
+    L.hold('overwatch');
+    const riding = w.pickups.meshFor('overwatch');
+    riding.traverse(o => { if ((o as THREE.Mesh).isMesh) o.userData.level = 1; });
+    riding.position.set(2, 1, 3);
+    L.release('overwatch');
+    await sleep(40);
+    let meshes = 0;
+    riding.traverse(o => { if ((o as THREE.Mesh).isMesh) { meshes++; expect(o.userData.level).toBe(1); } });
+    expect([meshes > 0, verts(riding) > 10000, riding.position.toArray(), riding.userData.awaitingModel, w.pickups.reskinCounts.objects, w.pickups.reskinCounts.pickups]).toEqual([true, true, [2, 1, 3], undefined, 1, 0]);
+  });
+
   it('a baseline gun and a non-weapon never wait for anything', () => {
     const L = gatedLoader();
     setWeaponVarietyLoader(L.loader);

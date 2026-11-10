@@ -449,9 +449,13 @@ export class PickupManager {
         if (!root || root.userData.awaitingModel !== id) continue;
         const p = this.list.find(q => q.obj === root);
         if (p) { for (const m of p.mats) m.dispose(); p.mats.length = 0; }
+        // a per-mesh tag an owner put on the stand-in (train cargo's riding copy: userData.level for the storey culler) carries over
+        let level: unknown;
+        root.traverse(o => { if (level === undefined && (o as THREE.Mesh).isMesh && o.userData.level !== undefined) level = o.userData.level; });
         root.clear(); // (the stand-in's meshes share the cached template's geometry: nothing to dispose)
         const real = this.meshFor(id);
         for (const c of [...real.children]) root.add(c);
+        if (level !== undefined) root.traverse(o => { if ((o as THREE.Mesh).isMesh) o.userData.level = level; });
         delete root.userData.awaitingModel;
         if (p) {
           root.traverse(o => {
