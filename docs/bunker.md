@@ -253,11 +253,33 @@ Each generator needs ONE QUARTER-TANK fuel unit (`BUNKER_GEN_FUEL_UNITS` = the f
 by the same physical rules as the train's cap:
 - a **fuel can** poured at its filler (one can = one unit);
 - a **fuel cart's hose** within reach of the filler (`world/fuelCarts.ts` `FuelHoseTarget`): one unit in one tick, the generator
-  committing it as the drum gives it, the hose disconnecting when the generator is fuelled — the cart keeps the rest. Carts cannot use
-  stairs, so in practice a cart reaches a generator only where it physically can; cans carried down the stairs are the dependable
-  source before the lift has power.
+  committing it as the drum gives it, the hose disconnecting when the generator is fuelled — the cart keeps the rest.
+
+Fuelling is PHYSICAL only (the user's decision, task studio-fuel-cart-stairs-20261110-004505-01): the player brings the fuel to the
+generator, in cans or in a cart. There is no remote draw from the train's tank, Lockbox or cargo. **A cart is dragged down and up the
+real stairs** (every version; see "Fuel carts on stairs" below), so one station cart can fuel all three generators before the lift has
+power (`tests/bunker-cart-fuel-e2e.test.ts`: from its planned platform spot through the vault door's threshold, down the stairs to
+gen-0 / gen-1 / gen-2, exactly three units, then back up by stair and lift). An earlier line here said carts could not use stairs; that
+was never true of the cart's controller and no test had checked it.
 Then the familiar 2 s turnkey start. The record (`bunker.state` version 2) stores each generator's PAID quantity; a version-1 record
 migrates as paid (fuelled / online = paid in full): no re-charge, no refund, an online generator never un-starts.
+
+### Fuel carts on stairs
+
+The fuel cart is the common cart of every level (`world/fuelCarts.ts`, `world/fuelCartPhysics.ts`); nothing here is Bunker-only.
+- **Movement**: a grabbed (or pushed) cart goes up and down stair runs and landings: a flight's walking surface is its continuous pitch
+  line and the cart's floor rule follows it. `tests/fuel-cart-stairs.test.ts` drives a cart over every flight of every level type both
+  ways and has the real Player drag one over a Subway station's stairs. The vault door's threshold (three 0.28 m steps each side) is
+  passable the same way.
+- **Look**: on steps the cart is drawn lying on the step edges (the nosing line), tilted with the slope; held by its handle while going
+  DOWN, it is tilted back toward the player with its wheels on the step behind; let go, it settles nose-down onto the steps. The aim
+  (grab / hose) and the hose's nozzle follow the drawn cart. A cart lying nose-down below the player is grabbed from close by.
+- **Let go on a stair** it stops within centimetres and stays (no coasting down a flight); shoved or shot there it barely moves.
+- **Lifts**: a cart in a lift car rides it; a cart standing in the doorway holds the doors like a body ("A fuel cart is in the lift
+  doorway — push it all the way in or out"); a world torn down while the car travels records the cart at the car's stop; a cart
+  recorded inside a shaft whose car stands elsewhere (an Office / Mall lift returns to its bottom stop) is put on the car.
+- **Saves**: a cart left on a stair or a landing comes back there (its record is its position, storey, facing, fuel and id: the
+  station's `fuel.station` lane, unchanged); old saves and old carts need nothing new.
 
 ### The objective title (fix 1)
 
