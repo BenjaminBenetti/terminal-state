@@ -66,6 +66,11 @@ export interface WeaponDef {
   recoil: {pitch: number; yaw: number; kick: number; recover: number};
   equipTime: number;
   aimFov: number;
+  /**
+   * Task studio-weapon-variety-production-20261109-224355-01: mouse-look multiplier while aiming (absent = the shared 0.65). A scoped gun
+   * whose aim FOV zooms far in sets it so the scope turns at the same rate on screen as the rifle's 52 deg aim (0.65 x aimFov / 52).
+   */
+  aimLook?: number;
   moveMult: number;
   /** Loudness radius (m) for alerting zombies. */
   noise: number;

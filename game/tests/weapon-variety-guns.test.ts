@@ -835,3 +835,12 @@ describe('casings and wiring', () => {
     expect(g).not.toMatch(/Math\.min\(0\.03, this\.bloom \+ 0\.0035\)/);
   });
 });
+
+describe('weapon variety: scoped mouse look (lead integration)', () => {
+  it('the Overwatch scope turns at the rifle aim\'s on-screen rate (0.65 x aimFov / 52); no other gun sets aimLook (the shared 0.65 stays)', () => {
+    const ow = WEAPONS.overwatch;
+    expect(ow.aimLook).toBeCloseTo(0.65 * ow.aimFov / 52, 12);
+    expect(ow.aimLook!).toBeLessThan(0.65);
+    for (const [id, d] of Object.entries(WEAPONS)) if (id !== 'overwatch') expect(d.aimLook, id).toBeUndefined();
+  });
+});

@@ -114,7 +114,7 @@ export const VARIETY_GUN_DEFS: Readonly<Record<VarietyGunId, WeaponDef>> = {
     recoil: firingRecoil({pitch: 0.035, yaw: 0.008, kick: 0.06, recover: 7}),
     aimSettle: {time: 0.6, extra: 0.02, shot: 0.8},
     bloom: {per: 0.006, max: 0.03, decay: 0.05},
-    equipTime: 0.75, aimFov: 30, moveMult: 0.9, noise: 34, sound: 'rifle',
+    equipTime: 0.75, aimFov: 30, aimLook: 0.65 * 30 / 52, moveMult: 0.9, noise: 34, sound: 'rifle', // aimLook: the scope turns like the rifle's aim on screen
     view: gunView('overwatch', 'long', [0.24, -0.35, -0.7], {sightRelief: 0.09, sightLift: 0, aim: [0, -0.16, -0.09],
       optic: {eyeRelief: 0.085, sightAperture: {radius: 0.016}}}),
   },

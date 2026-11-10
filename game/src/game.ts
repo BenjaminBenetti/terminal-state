@@ -2851,7 +2851,7 @@ export class Game {
     this.mods = combineModifiers(this.modifierSources); // Iteration 16: gear + injuries, from base values every frame
     const inp = this.input;
     const p = this.player;
-    applyMouseLook(p, inp.dx, inp.dy, this.settings, this.aiming ? 0.65 : 1); // task mouse-axis-invert: sensitivity (x 0.65 aiming), X / Y inverts, pitch clamp
+    applyMouseLook(p, inp.dx, inp.dy, this.settings, this.aiming ? this.weapon.def?.aimLook ?? 0.65 : 1); // task mouse-axis-invert: sensitivity (x 0.65 aiming; a scoped gun's own aimLook: weapon variety), X / Y inverts, pitch clamp
 
     this.slotKeys(inp); // 1-5 / wheel / ~ (melee slot)
     if (inp.hit('KeyQ')) this.gasMask.press(); // Task gasmask-breach-20261030 (mask lane): Q = gas mask on / off (last-item cycling removed)
