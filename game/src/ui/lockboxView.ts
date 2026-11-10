@@ -15,7 +15,7 @@
 // storeQuick / storeWornBag moves over its own slot list. The 1337 drop stays the Lockbox's (LockboxSystem only).
 
 import type {Game} from '../game';
-import {itemIconHtml} from './itemIcons';
+import {itemIconHtml, onItemIconsChanged} from './itemIcons';
 import {itemDef} from '../items/items';
 import {itemTip} from './itemTip'; // (task studio-ui-subway-maps-20261108-074144-01)
 import {hideTooltip, refreshTooltip, setTip, tipAttrs} from './tooltip';
@@ -147,7 +147,11 @@ export class LockboxView {
   /** Last action (QA / tests). */
   last: {kind: string; from?: StoreSideRef; to?: StoreSideRef | null; result: string} | null = null;
 
-  constructor(private readonly host: LockboxViewHost, readonly opts: Readonly<StoreViewOptions> = LOCKBOX_VIEW) {}
+  constructor(private readonly host: LockboxViewHost, readonly opts: Readonly<StoreViewOptions> = LOCKBOX_VIEW) {
+    // (task studio-weapon-runtime-fix-20261110-022206-01) item icons were (re)rendered — a weapon model that arrived while this view shows
+    // the weapon: redraw, so its glyph becomes the rendered preview at once (never mid-drag: the drop redraws)
+    onItemIconsChanged(() => { if (this.visible && !this.drag?.active) this.render(); });
+  }
 
   get visible(): boolean {
     return !!this.root && !this.root.classList.contains('hidden');

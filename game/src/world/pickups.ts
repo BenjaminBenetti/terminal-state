@@ -24,7 +24,7 @@ import {isBeer} from '../items/beers'; // task studio-market-bar-20261108-225231
 import {beerModel, beerModelSource} from '../market/beer/beerModel';
 import {isPantryItem} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
 import {pantryFallbackModel, pantryGltf, pantryModelSource} from './pantryModels';
-import {weaponVarietyGltf} from './weaponVarietyModels'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the lazily loaded new weapons
+import {requestWeaponVarietyModel, weaponVarietyGltf, weaponVarietyModelUrl} from './weaponVarietyModels'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the lazily loaded new weapons (+ task studio-weapon-runtime-fix-20261110-022206-01: asked for on demand)
 import {Grid} from '../gen/grid';
 import type {Levels} from '../gen/levels';
 import type {MarketStallId} from '../gen/market/marketTypes';
@@ -415,6 +415,63 @@ export class PickupManager {
     this.group.name = 'pickups';
   }
 
+  /**
+   * Task studio-weapon-runtime-fix-20261110-022206-01: objects handed out by meshFor as a STAND-IN while a weapon's lazily loaded model
+   * was not resident (a weapon that arrived mid-play and was dropped / shown before its file came in), by item id. Weak: a stand-in
+   * that nobody kept is simply forgotten. reskin() gives each one its real model in place.
+   */
+  private readonly awaiting = new Map<string, WeakRef<THREE.Object3D>[]>();
+  /** QA / tests: reskin counts. */
+  readonly reskinCounts = {requested: 0, objects: 0, pickups: 0};
+  /** A pickup's object got its real model (its bounds changed): the physics forgets its cached size (set by the game). */
+  onReskin: ((p: Pickup) => void) | null = null;
+
+  /** Stand-ins still waiting for their model (QA / tests). */
+  awaitingModels(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [id, refs] of this.awaiting) { const n = refs.filter(r => r.deref()).length; if (n) out[id] = n; }
+    return out;
+  }
+
+  /**
+   * The models of `ids` arrived (world/weaponVarietyModels.ts onWeaponVarietyReady): every stand-in handed out for them — a world pickup,
+   * a riding cargo copy, a ware — gets the real model IN PLACE: the same root object (its transform, its parent, every reference to it
+   * stay), new children, a pickup's own material copies redone. Returns the pickups changed.
+   */
+  reskin(ids: Iterable<string>): number {
+    let n = 0;
+    for (const id of ids) {
+      const refs = this.awaiting.get(id);
+      if (!refs || !weaponVarietyGltf(id)) continue;
+      this.awaiting.delete(id);
+      for (const ref of refs) {
+        const root = ref.deref();
+        if (!root || root.userData.awaitingModel !== id) continue;
+        const p = this.list.find(q => q.obj === root);
+        if (p) { for (const m of p.mats) m.dispose(); p.mats.length = 0; }
+        root.clear(); // (the stand-in's meshes share the cached template's geometry: nothing to dispose)
+        const real = this.meshFor(id);
+        for (const c of [...real.children]) root.add(c);
+        delete root.userData.awaitingModel;
+        if (p) {
+          root.traverse(o => {
+            const m = o as THREE.Mesh;
+            if (!m.isMesh) return;
+            const list = Array.isArray(m.material) ? m.material : [m.material];
+            const cloned = list.map(mm => { const c = (mm as THREE.MeshStandardMaterial).clone(); p.mats.push(c); return c; });
+            m.material = Array.isArray(m.material) ? cloned : cloned[0];
+          });
+          this.reskinCounts.pickups++;
+          n++;
+          try { this.onReskin?.(p); } catch (err) { console.warn('pickups: a reskin hook failed', err); }
+        }
+        root.updateMatrixWorld(true);
+        this.reskinCounts.objects++;
+      }
+    }
+    return n;
+  }
+
   /** The object an item is drawn with (a gun on its side, else the shared item template's copy). Task train-loose-cargo: also its riding cargo. */
   meshFor(itemId: string): THREE.Object3D {
     const def = itemDef(itemId);
@@ -434,7 +491,18 @@ export class PickupManager {
       gun.position.z -= (box.min.z + box.max.z) / 2;
       return wrap;
     }
-    return makeSupplyMesh(itemId);
+    const standIn = makeSupplyMesh(itemId);
+    // (task studio-weapon-runtime-fix-20261110-022206-01) a weapon whose lazily loaded model is not resident: ask for it now and remember
+    // this stand-in — reskin() swaps the real model in when it arrives (it used to stay a stand-in until the next station)
+    if (def.kind === 'weapon' && weaponVarietyModelUrl(itemId)) {
+      requestWeaponVarietyModel(itemId);
+      standIn.userData.awaitingModel = itemId;
+      const refs = (this.awaiting.get(itemId) ?? []).filter(r => r.deref());
+      refs.push(new WeakRef(standIn));
+      this.awaiting.set(itemId, refs);
+      this.reskinCounts.requested++;
+    }
+    return standIn;
   }
 
   /**
@@ -476,6 +544,7 @@ export class PickupManager {
     this.group.remove(p.obj);
     p.obj.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh && !m.userData.shared && !this.isShared(m)) m.geometry.dispose(); });
     for (const m of p.mats) m.dispose();
+    delete p.obj.userData.awaitingModel; // (a removed stand-in is never re-skinned)
     if (this.highlighted === p) this.highlighted = null;
     if (this.hover === p) this.hover = null;
   }
