@@ -135,8 +135,8 @@ describe('the fog composite with the AO lookup', () => {
       for (const msaa of [0, 4]) {
         const u = createFogUniforms(), scene = sceneDepth(msaa);
         const fog = new RenderTarget(4, 4, {count: 2, type: THREE.HalfFloatType});
-        const base = quiet(() => compileOutputNode(createCompositeNode(u, texture(scene.texture), texture(scene.depthTexture), texture(fog.textures[0]), texture(fog.textures[1])), backend));
-        const withAo = quiet(() => compileOutputNode(createCompositeNode(u, texture(scene.texture), texture(scene.depthTexture), texture(fog.textures[0]), texture(fog.textures[1]),
+        const base = quiet(() => compileOutputNode(createCompositeNode(u, texture(scene.texture), texture(scene.depthTexture!), texture(fog.textures[0]), texture(fog.textures[1])), backend));
+        const withAo = quiet(() => compileOutputNode(createCompositeNode(u, texture(scene.texture), texture(scene.depthTexture!), texture(fog.textures[0]), texture(fog.textures[1]),
           {u: createAoUniforms(), tex: texture(aoTarget().texture)}), backend));
         dump(`composite ${backend} msaa ${msaa}`, withAo);
         const b0 = withinLimits(base, backend, `composite (no AO) ${backend} msaa ${msaa}`);

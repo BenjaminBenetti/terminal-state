@@ -392,38 +392,44 @@ export class AmbientOcclusionPass {
 
   /**
    * The pass body (AoPassNode.updateBefore, after this frame's scene pass): raw -> A, blur x -> B, blur y -> A. Nothing while AO is
-   * off. The first frames after a program (re)build run inside a WebGPU validation error scope: a rejection turns AO off.
+   * off. The first frames after a program (re)build run inside a WebGPU validation error scope: a rejection turns AO off; so does
+   * anything thrown while building or drawing them (caught here: the composite still draws this frame, without AO).
    */
   run(renderer: WebGPURenderer, fu: FogUniforms, depth: THREE.Texture | null): void {
     if (!this.on || this.failed || !this.rtA || !this.rtB || !depth || !this.quality) return;
-    const q = AO_QUALITY[this.quality];
-    const key = `${depth.id}|${q.slices}x${q.steps}`;
-    if (!this.rawMat || this.rawKey !== key) {
-      this.rawMat?.dispose();
-      this.rawMat = createAoRawMaterial(fu, this.u, depth, q);
-      this.rawKey = key;
-      this.builds++;
-      this.errorChecks = 3;
-    }
-    if (!this.blurX || !this.blurY) {
-      this.blurX = createAoBlurMaterial(this.u, this.rtA.texture, 0);
-      this.blurY = createAoBlurMaterial(this.u, this.rtB.texture, 1);
-      this.builds += 2;
-      this.errorChecks = 3;
-    }
-    aoRendererState = RendererUtils.resetRendererState(renderer, aoRendererState as never);
     const device = (renderer.backend as unknown as {device?: WebGPUDeviceLike}).device;
-    const scoped = !!device && this.errorChecks > 0;
-    if (scoped) device!.pushErrorScope('validation');
+    let scoped = false, saved = false;
     try {
+      const q = AO_QUALITY[this.quality];
+      const key = `${depth.id}|${q.slices}x${q.steps}`;
+      if (!this.rawMat || this.rawKey !== key) {
+        this.rawMat?.dispose();
+        this.rawMat = null;
+        this.rawMat = createAoRawMaterial(fu, this.u, depth, q);
+        this.rawKey = key;
+        this.builds++;
+        this.errorChecks = 3;
+      }
+      if (!this.blurX || !this.blurY) {
+        this.blurX = createAoBlurMaterial(this.u, this.rtA.texture, 0);
+        this.blurY = createAoBlurMaterial(this.u, this.rtB.texture, 1);
+        this.builds += 2;
+        this.errorChecks = 3;
+      }
+      aoRendererState = RendererUtils.resetRendererState(renderer, aoRendererState as never);
+      saved = true;
+      scoped = !!device && this.errorChecks > 0;
+      if (scoped) device!.pushErrorScope('validation');
       for (const [mat, dst] of [[this.rawMat, this.rtA], [this.blurX, this.rtB], [this.blurY, this.rtA]] as const) {
         renderer.setRenderTarget(dst);
         this.quad.material = mat;
         this.quad.render(renderer);
       }
       this.runs++;
+    } catch (err) {
+      this.fail(`ambient occlusion pass failed: ${String((err as Error)?.message ?? err).slice(0, 300)}`);
     } finally {
-      RendererUtils.restoreRendererState(renderer, aoRendererState as never);
+      if (saved) RendererUtils.restoreRendererState(renderer, aoRendererState as never);
       if (scoped) {
         this.errorChecks--;
         device!.popErrorScope().then(err => { if (err) this.fail(`ambient occlusion pass rejected by WebGPU: ${err.message.slice(0, 300)}`); }).catch(() => {});
