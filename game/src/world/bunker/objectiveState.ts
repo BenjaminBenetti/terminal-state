@@ -10,6 +10,16 @@
 // Generator states only ever move off -> fuelled (a committed pour: exactly one can taken) -> online (a completed turnkey start); a
 // record never goes back (no refund, no re-fuel). `intel` is written once, at the claim, and is never re-rolled.
 //
+// Task studio-bunker-rework-20261109-205115-01 (USER-CORRECTED FUEL CONTRACT, superseding the can-only rule): a generator needs ONE
+// QUARTER-TANK fuel unit (BUNKER_GEN_FUEL_UNITS = FUEL.tankUnits / 4 = 1, the fuel system's own unit) from ANY common train-style source —
+// a fuel can poured at its filler (one can = FUEL.canUnits = one unit) or a FUEL CART's hose (one unit per transfer tick, world/fuelCarts.ts
+// FuelHoseTarget). The record becomes version 2 and stores the PAID QUANTITY:
+//   {v: 2, gens: {[id]: state}, fuel: {[id]: units paid 0..BUNKER_GEN_FUEL_UNITS}, intel?, lift?: {stop}}
+//   - 'fuelled' / 'online' <=> fuel[id] === BUNKER_GEN_FUEL_UNITS (paid in full); 'off' <=> less (a partial quantity stays recorded);
+//   - a version-1 record migrates on load to the equivalent PAID quantity (fuelled / online = paid in full, off = 0): never charged
+//     again, never refunded, an online generator never un-starts; the save validator keeps accepting version 1;
+//   - lift: the version-2 Bunker's cargo lift's stop (world/bunker/cargoLift.ts), so a revisit / load finds the car where it was left.
+//
 // INTEL (chooseBunkerIntel, chosen AT CLAIM TIME from the current campaign knowledge, map KNOWLEDGE only — revealStations adds the node
 // to CampaignState.known; never visited / current / transit / loot / fuel):
 //   1. the Reactor node's location, if it is not known yet;
@@ -18,6 +28,7 @@
 //   4. else 'charted' — the network is already charted: no invented reward.
 
 import {hashString} from '../../core/rng';
+import {FUEL} from '../../fuel/fuel';
 import type {CampaignState, StationId, SubwayNetwork} from '../../campaign/types';
 import {archetypeLabel} from '../../campaign/network';
 
@@ -32,8 +43,15 @@ export const BUNKER_INTEL_KINDS: readonly BunkerIntelKind[] = ['reactor', 'marke
 /** The one claim of a Bunker station (ISO time of the claim, what was revealed). */
 export interface BunkerIntelJSON { claimedAt: string; kind: BunkerIntelKind; nodeId?: StationId }
 
-/** The lane record. */
-export interface BunkerStateJSON { v: 1; gens: Record<string, BunkerGenState>; intel?: BunkerIntelJSON }
+/** The lane record (version 2; a stored version-1 record is read through loadBunkerState's migration). */
+export interface BunkerStateJSON { v: 2; gens: Record<string, BunkerGenState>; fuel: Record<string, number>; intel?: BunkerIntelJSON; lift?: {stop: number} }
+/** The first release's record (still valid in saves; migrated on load). */
+export interface BunkerStateV1JSON { v: 1; gens: Record<string, BunkerGenState>; intel?: BunkerIntelJSON }
+
+/** Fuel one generator needs: ONE quarter of a standard tank = one of the fuel system's units (fuel/fuel.ts FUEL.tankUnits = 4). */
+export const BUNKER_GEN_FUEL_UNITS = FUEL.tankUnits / 4;
+/** Most stops a lift record names (the version-2 Bunker has six). */
+const LIFT_STOPS_MAX = 16;
 
 /** A generator id ('gen-0' .. ; the contract's stable per-layout ids). */
 export const BUNKER_GEN_ID = /^gen-\d{1,2}$/;
@@ -49,14 +67,30 @@ const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 
 /** Why a 'bunker.state' lane record is malformed (null = fine). Strict: unknown fields, versions, ids and states are refused. */
 export function bunkerStateProblem(v: unknown): string | null {
   if (!isObj(v)) return 'the bunker objective record must be an object';
-  for (const k of Object.keys(v)) if (!['v', 'gens', 'intel'].includes(k)) return `unexpected bunker objective field '${k}'`;
-  if (v.v !== 1) return 'unsupported bunker objective version';
+  const fields = v.v === 2 ? ['v', 'gens', 'fuel', 'intel', 'lift'] : ['v', 'gens', 'intel'];
+  for (const k of Object.keys(v)) if (!fields.includes(k)) return `unexpected bunker objective field '${k}'`;
+  if (v.v !== 1 && v.v !== 2) return 'unsupported bunker objective version';
   if (!isObj(v.gens)) return 'bunker generators must be an object';
   const ids = Object.keys(v.gens);
   if (ids.length > BUNKER_GENS_MAX) return `at most ${BUNKER_GENS_MAX} bunker generators`;
   for (const id of ids) {
     if (!BUNKER_GEN_ID.test(id)) return `a malformed bunker generator id '${id.slice(0, 24)}'`;
     if (!BUNKER_GEN_STATES.includes(v.gens[id] as BunkerGenState)) return `bunker generator ${id} has an unknown state`;
+  }
+  if (v.v === 2) {
+    // the paid quantity: one entry per generator, whole units within the need, consistent with the state (in full <=> fuelled / online)
+    if (!isObj(v.fuel)) return 'bunker generator fuel must be an object';
+    for (const id of Object.keys(v.fuel)) if (!(id in v.gens)) return `bunker fuel for an unknown generator '${id.slice(0, 24)}'`;
+    for (const id of ids) {
+      const u = v.fuel[id];
+      if (typeof u !== 'number' || !Number.isInteger(u) || u < 0 || u > BUNKER_GEN_FUEL_UNITS) return `bunker generator ${id} has a malformed fuel quantity`;
+      if ((v.gens[id] !== 'off') !== (u === BUNKER_GEN_FUEL_UNITS)) return `bunker generator ${id}: state and fuel disagree`;
+    }
+    if (v.lift !== undefined) {
+      if (!isObj(v.lift) || Object.keys(v.lift).some(k => k !== 'stop')) return 'a malformed bunker lift record';
+      const st = v.lift.stop;
+      if (typeof st !== 'number' || !Number.isInteger(st) || st < 0 || st >= LIFT_STOPS_MAX) return 'a malformed bunker lift stop';
+    }
   }
   if (v.intel !== undefined) {
     const i = v.intel;
@@ -72,9 +106,9 @@ export function bunkerStateProblem(v: unknown): string | null {
 
 /** A fresh record: every generator of the layout off, no claim. */
 export function freshBunkerState(ids: readonly string[]): BunkerStateJSON {
-  const gens: Record<string, BunkerGenState> = {};
-  for (const id of ids) gens[id] = 'off';
-  return {v: 1, gens};
+  const gens: Record<string, BunkerGenState> = {}, fuel: Record<string, number> = {};
+  for (const id of ids) { gens[id] = 'off'; fuel[id] = 0; }
+  return {v: 2, gens, fuel};
 }
 
 /**
@@ -84,11 +118,30 @@ export function freshBunkerState(ids: readonly string[]): BunkerStateJSON {
  */
 export function loadBunkerState(raw: unknown, ids: readonly string[]): BunkerStateJSON {
   if (raw === undefined || bunkerStateProblem(raw) !== null) return freshBunkerState(ids);
-  const r = raw as BunkerStateJSON;
-  const out: BunkerStateJSON = {v: 1, gens: {...r.gens}};
-  for (const id of ids) out.gens[id] ??= 'off';
+  const r = raw as BunkerStateJSON | BunkerStateV1JSON;
+  const out: BunkerStateJSON = {v: 2, gens: {...r.gens}, fuel: {}};
+  // (version 1 -> 2: a fuelled / online generator was PAID in full — its can was poured; an off one paid nothing)
+  for (const id of Object.keys(out.gens)) out.fuel[id] = r.v === 2 ? r.fuel[id] : out.gens[id] === 'off' ? 0 : BUNKER_GEN_FUEL_UNITS;
+  for (const id of ids) { out.gens[id] ??= 'off'; out.fuel[id] ??= 0; }
   if (r.intel) out.intel = {...r.intel};
+  if (r.v === 2 && r.lift) out.lift = {...r.lift};
   return out;
+}
+
+/** Units generator `id` still needs (0: paid in full — fuelled or online). */
+export const fuelNeeded = (s: BunkerStateJSON, id: string): number => (s.gens[id] === 'off' ? Math.max(0, BUNKER_GEN_FUEL_UNITS - (s.fuel[id] ?? 0)) : 0);
+
+/**
+ * Commits `units` of fuel delivered to generator `id` (a completed can pour or one hose tick): never past its need; fuelled once paid in
+ * full. Returns the units taken (0: nothing — not off / already paid; the caller then debits nothing).
+ */
+export function addGenFuel(s: BunkerStateJSON, id: string, units: number): number {
+  const need = fuelNeeded(s, id);
+  const take = Math.max(0, Math.min(need, Math.floor(units)));
+  if (!take) return 0;
+  s.fuel[id] = (s.fuel[id] ?? 0) + take;
+  if (s.fuel[id] >= BUNKER_GEN_FUEL_UNITS) s.gens[id] = 'fuelled';
+  return take;
 }
 
 /** A JSON copy of the record (what the lane stores). */

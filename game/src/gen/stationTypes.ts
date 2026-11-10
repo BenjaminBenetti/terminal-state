@@ -135,6 +135,11 @@ export interface Door extends Rect {
   shopfront?: boolean;
   /** Iteration 08 (Lane A): level the opening is carved on (= areas[a].level; default 0). `height` stays relative to its floor. */
   level?: number;
+  /**
+   * Task studio-bunker-rework-20261109-205115-01: no door-frame trim (world/builder.ts) — the opening is framed by a model standing in
+   * it (the Bunker v2 vault lane inside the blast door's round bore).
+   */
+  noFrame?: true;
 }
 
 /** power: output multiplier (aged tubes < 0.8); dying: mostly-dead tube that sputters in bursts. */

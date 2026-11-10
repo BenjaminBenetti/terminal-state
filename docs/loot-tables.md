@@ -776,6 +776,14 @@ and crates (`gen/market/dress.ts`). It carries `MARKET_WORKSHOP_KEY` (`'market-w
 
 <!-- Task studio-bunker-level-20261109-072224-01 (lane LEVEL). -->
 
+**Layout version 2** (task studio-bunker-rework-20261109-205115-01): the same tables; each storey's designer put its openable /
+surface holders in rooms whose purpose carries the storey's programme, so the finds DIFFER by floor (holders by purpose theme, 6 seeds):
+the station security / service / personal / medical, the entry storey mostly security and personal, the habitation storey mostly
+personal (+ its kitchen / pantry / mess food), the services storey service and medical (+ the restored ration store), the maintenance
+storey service and crew, the core storey technical / records. Loot QUANTITY matches the first Bunker (~414 holders per level vs ~400;
+`tests/bunker-v2-level.test.ts` keeps it within -12 % / +15 %) and food holders never exceed it (36 vs 40 per level, before the shared
+natural-food half); no new tables, no literal item lists.
+
 `PROFILES.bunker` = today's shared `BASE_TABLES` with **no overrides** (like Skyways): the civil-defence shelter's rooms carry existing
 station purposes plus the Reactor shelter's own bunker purposes (`gen/reactor/complex/bunkerPurposes.ts`: blast-door lock,
 decontamination, dormitory, radio room, armoury), so every holder stocks by its purpose / theme through the base tables — the finite

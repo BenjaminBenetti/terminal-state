@@ -365,6 +365,12 @@ run; there is no horde pool, no eligibility rule (no Siren) and no service annex
 
 <!-- Task studio-bunker-level-20261109-072224-01 (lane LEVEL): a civil-defence shelter descending under its station. -->
 
+**Layout version 2** (task studio-bunker-rework-20261109-205115-01, docs/bunker.md "Version 2"): the same profile, contexts, pools,
+Siren eligibility / spacing and damp-only Strainer run over the rebuilt storeys (`gen/bunker/v2/index.ts`: the shared
+`placeBunkerEnemies`); census over 16 levels (`tests/bunker-v2-level.test.ts`): 40.9 enemies per level (budget 46), Sirens 1.8 per level
+(on 15 of 16, at most 3), Strainers on 3 of 16 (at most one, damp areas only). The lift-apron centres join the arrival keep-offs; no
+enemy calls or rides the cargo lift on purpose (the pathfinder uses the stairs).
+
 `BUNKER_SPAWN_PROFILE` (`SPAWN_PROFILES.bunker`, `LEVELS.bunker.tier = 2`) is ONE logical level, `LevelId` `bunker`
 (`game/src/gen/bunker/index.ts` `generateBunkerLevel`): a buried station at the vault door of a civil-defence shelter, and the shelter's
 storeys going DOWN below it to the central processing core. Existing families only, depth-graded like the Reactor but never denser. The

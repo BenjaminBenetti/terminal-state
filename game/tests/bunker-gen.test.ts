@@ -1,6 +1,7 @@
 // Task studio-bunker-level-20261109-072224-01: THE BUNKER generator over a bounded seed set — validity (bunkerIssues: reachability,
 // stairs + loops, objectives, hazards, levelIssues / traversal / doorways / railings), descending storeys, the storey programmes, the
 // generators / core placement, determinism and the generation budget.
+// (Task studio-bunker-rework-20261109-205115-01: these pin VERSION 1 explicitly — an entered station keeps it; version 2 has its own tests.)
 
 import {describe, expect, it} from 'vitest';
 import {appendFileSync, writeFileSync} from 'node:fs';
@@ -27,7 +28,7 @@ describe('bunker generation', () => {
   const gen = (seed: number) => {
     let l = layouts.get(seed);
     if (!l) {
-      try { l = generateBunkerLevel({levelSeed: seed}); } catch (e) {
+      try { l = generateBunkerLevel({levelSeed: seed, layoutVersion: 1}); } catch (e) {
         log(`seed ${seed} FAILED: carve ${JSON.stringify(BUNKER_CARVE_FAILS)} plan ${JSON.stringify(BUNKER_PLAN_FAILS)} dress ${JSON.stringify(BUNKER_DRESS_STATS.skipped)} hero ${JSON.stringify(HERO_FAILS)}`);
         throw e;
       }
@@ -135,14 +136,14 @@ describe('bunker generation', () => {
 
   it('stays inside the generation budget', () => {
     let worst = 0;
-    for (const s of SEEDS.slice(0, 6)) { const t0 = performance.now(); generateBunkerLevel({levelSeed: s}); worst = Math.max(worst, performance.now() - t0); }
+    for (const s of SEEDS.slice(0, 6)) { const t0 = performance.now(); generateBunkerLevel({levelSeed: s, layoutVersion: 1}); worst = Math.max(worst, performance.now() - t0); }
     log(`worst generation ${worst.toFixed(0)} ms`);
     expect(worst).toBeLessThan(6000);
   });
 
   it('is deterministic (same seed, same layout)', () => {
     const s = SEEDS[0];
-    const a = gen(s), b = generateBunkerLevel({levelSeed: s});
+    const a = gen(s), b = generateBunkerLevel({levelSeed: s, layoutVersion: 1});
     expect(JSON.stringify({areas: b.areas, doors: b.doors, props: b.props, zombies: b.zombies, pickups: b.pickups, bunker: b.bunker}))
       .toBe(JSON.stringify({areas: a.areas, doors: a.doors, props: a.props, zombies: a.zombies, pickups: a.pickups, bunker: a.bunker}));
   });

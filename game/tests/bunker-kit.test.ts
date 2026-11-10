@@ -7,6 +7,7 @@
 //    its provenance (no URL / token / local path), grounded at its real size (0.90 x 1.90 x 0.52 m), loaded on the Bunker only;
 //  - placement on generated Bunkers: mainframe banks in the processing hall's rows (the cluster's 3 m front clear), the control room's
 //    console / CRT terminal / data cabinets / mainframes, the decontamination showers, the maintenance storey's water plant.
+// (Task studio-bunker-rework-20261109-205115-01: these pin VERSION 1 explicitly — an entered station keeps it; version 2 has its own tests.)
 import {describe, expect, it} from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -78,7 +79,7 @@ describe('bunker kit: the model-backed flavour kinds', () => {
     const seeds = [9001, 24839, 56515, 72353];
     let shower = 0, consoles = 0, crts = 0, pumps = 0, plant = 0;
     for (const s of seeds) {
-      const L = generateBunkerLevel({levelSeed: s}), b = L.bunker!;
+      const L = generateBunkerLevel({levelSeed: s, layoutVersion: 1}), b = L.bunker!;
       expect(bunkerModelKindKeysFor(L)).toContain(BUNKER_KIT.mainframe.key);
       const hall = L.areas[b.core.area];
       const inHall = L.props.filter(p => p.area === hall.id);

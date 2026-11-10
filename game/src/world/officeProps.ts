@@ -223,7 +223,7 @@ export function cutOfficeShaftDoors<F extends FaceLike>(faces: F[], layout: Pick
     const n = fAlongX ? f.nz : f.nx;
     if (n !== undefined && Math.sign(n) !== out) return f;
     const a0 = Math.min(fAlongX ? f.x0 : f.z0, fAlongX ? f.x1 : f.z1), a1 = Math.max(fAlongX ? f.x0 : f.z0, fAlongX ? f.x1 : f.z1);
-    const s0 = Math.max(a0, d0), s1 = Math.min(a1, d1), top = y + SHAFT_DOOR_H;
+    const s0 = Math.max(a0, d0), s1 = Math.min(a1, d1), top = y + ((e as {doorHeight?: number}).doorHeight ?? SHAFT_DOOR_H); // (a record's own gate height: the Bunker's cargo lift)
     if (s1 - s0 < 1e-4 || f.y0 >= top - 1e-4 || f.y1 <= y + 1e-4) return f;
     return {...f, openings: [...f.openings, {s0: s0 - a0, s1: s1 - a0, top: Math.min(top, f.y1)}]};
   });

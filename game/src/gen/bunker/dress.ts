@@ -59,7 +59,7 @@ export function shelterDx(layout: StationLayout, lv: number, rng: Rng, areas: re
 }
 
 /** Lift every prop of storey lv >= 1 placed since `from` onto its cell floor (the placeKit local height frame; storey 0: finishTraversal). */
-function liftFrom(layout: StationLayout, lv: number, from: number): void {
+export function liftFrom(layout: StationLayout, lv: number, from: number): void {
   if (!lv) return;
   const g = layout.levels[lv].grid;
   for (let i = from; i < layout.props.length; i++) {
@@ -110,7 +110,7 @@ export function heroFront(layout: StationLayout, p: PropPlacement, depth: number
  * all free floor of the room outside every doorway, the room still connected — each try in a placeKit transaction (a refused try
  * leaves no mask behind). Null when nothing fits.
  */
-function heroAgainstWall(D: Dx, a: Area, kind: PropKind, sides: readonly Side[], front: number, keep: number, prefer?: (s: Side) => number): PropPlacement | null {
+export function heroAgainstWall(D: Dx, a: Area, kind: PropKind, sides: readonly Side[], front: number, keep: number, prefer?: (s: Side) => number): PropPlacement | null {
   const w = PROP_DEFS[kind].w;
   for (const sd of sides) {
     const [lo, hi] = wallRange(a, sd);
@@ -143,7 +143,7 @@ function heroAgainstWall(D: Dx, a: Area, kind: PropKind, sides: readonly Side[],
 }
 
 /** The walls of `a` ordered for a hero piece: no door first, then the wall opposite the main door, then by fewest doors. */
-function heroWalls(D: Dx, a: Area): Side[] {
+export function heroWalls(D: Dx, a: Area): Side[] {
   const doors = D.doors(a);
   const main = doors.find(d => d.a === a.parent || d.b === a.parent) ?? doors[0];
   const ms = main ? doorSide(main, a) : 'S';

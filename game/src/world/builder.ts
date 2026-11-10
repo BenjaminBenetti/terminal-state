@@ -559,6 +559,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   const extDoors = new Set(ext ? [...ext.doorIds].map(i => layout.doors[i]) : []);
   for (const d of layout.doors) {
     if (d.shopfront) continue; // storefront frames are built by storefrontBuilder
+    if (d.noFrame) continue; // (task studio-bunker-rework-20261109-205115-01: framed by a model standing in it — the Bunker v2 vault bore)
     if (extDoors.has(d)) continue; // Track 2 (VIS): tunnel entry doors are framed by the shell (world/trackExt/shell.ts)
     const g = gridOf((d as {level?: number}).level ?? levelOf(layout.areas[d.a]));
     const i = g.idx(d.x, d.y), df = g.floorOf(i);
@@ -573,7 +574,23 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
       ?? mall?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a])
       ?? reactor?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a])
       ?? sky?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? mkt?.doorTrimKey() ?? bunk?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? 'steel'; // task track3 (lane ARCH) (+ reactor-build: lane ARCH; + sky: lane VIEW)
-    if (d.h === 1) { // wall runs along X; jambs at both X ends of the opening
+    // Task studio-bunker-rework-20261109-205115-01: a THICK opening (both spans > 1 cell: the 2-row vault / Reactor bulkhead lanes) runs
+    // along the wall its two areas share — areas apart in Z = a wall along X — and its jambs / head span its whole depth. (Before, it
+    // was framed as a wall along Z through its first column: two steel slabs and a bar standing across the lane, walked through.)
+    const thick = d.w > 1 && d.h > 1;
+    const A = layout.areas[d.a], B = layout.areas[d.b];
+    const alongX = d.h === 1 || (thick && !!A && !!B && (A.y + A.h <= d.y || B.y + B.h <= d.y || A.y >= d.y + d.h || B.y >= d.y + d.h));
+    if (thick && alongX) {
+      const xa = d.x * CELL, xb = (d.x + d.w) * CELL, za = d.y * CELL, zb = (d.y + d.h) * CELL, zc = (za + zb) / 2, dd = zb - za + 0.06;
+      addBox(fm, xa + ft / 2, df + h / 2, zc, ft, h, dd);
+      addBox(fm, xb - ft / 2, df + h / 2, zc, ft, h, dd);
+      addBox(fm, (xa + xb) / 2, df + h - 0.05, zc, xb - xa, 0.1, dd);
+    } else if (thick) {
+      const za = d.y * CELL, zb = (d.y + d.h) * CELL, xa = d.x * CELL, xb = (d.x + d.w) * CELL, xc = (xa + xb) / 2, dd = xb - xa + 0.06;
+      addBox(fm, xc, df + h / 2, za + ft / 2, dd, h, ft);
+      addBox(fm, xc, df + h / 2, zb - ft / 2, dd, h, ft);
+      addBox(fm, xc, df + h - 0.05, (za + zb) / 2, dd, 0.1, zb - za);
+    } else if (d.h === 1) { // wall runs along X; jambs at both X ends of the opening
       const z = (d.y + 0.5) * CELL;
       const xa = d.x * CELL, xb = (d.x + d.w) * CELL;
       addBox(fm, xa + ft / 2, df + h / 2, z, ft, h, fd);
