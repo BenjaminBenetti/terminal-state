@@ -130,13 +130,15 @@ export const aoProjScale = (v: {h: number; tanY: number}): number => 0.5 * v.h /
 /**
  * View normal at full-res pixel (cx, cy) from neighbouring depths: per axis, the neighbour whose 1 / z is closer to the pixel's (a
  * plane is linear in 1 / z on screen, so on a plane both sides tie; at a silhouette the far side loses and the normal does not smear).
- * Faces the eye. At the buffer's edge the inner neighbour is used.
+ * A sky neighbour (nothing drawn) is never picked while the other one is a surface (a far pixel's 1 / z is close to the sky's 0: a roof
+ * edge against the sky kept a normal of the view vector). Faces the eye. At the buffer's edge the inner neighbour is used.
  */
 export function aoNormal(v: AoView, cx: number, cy: number, z: number, P: V3 = aoViewPos(v, cx, cy, z)): V3 {
   const pick = (ax: 0 | 1): V3 => {
     const lim = ax ? v.h - 1 : v.w - 1, c = ax ? cy : cx;
     const zm = c > 0 ? (ax ? v.z(cx, cy - 1) : v.z(cx - 1, cy)) : Infinity, zp = c < lim ? (ax ? v.z(cx, cy + 1) : v.z(cx + 1, cy)) : Infinity;
-    const minus = c >= lim || (c > 0 && Math.abs(1 / zm - 1 / z) < Math.abs(1 / zp - 1 / z));
+    const okm = Number.isFinite(zm), okp = Number.isFinite(zp);
+    const minus = okm && (!okp || Math.abs(1 / zm - 1 / z) < Math.abs(1 / zp - 1 / z));
     const zq = minus ? zm : zp, s = minus ? -1 : 1;
     if (!Number.isFinite(zq)) return [0, 0, 0];
     const Q = aoViewPos(v, cx + (ax ? 0 : s), cy + (ax ? s : 0), zq);
@@ -291,7 +293,7 @@ export const aoLuminance = (c: readonly number[]): number => 0.2126 * c[0] + 0.7
 export function aoFactor(ao: number, lum: number, look: AoLook = AO_LOOK, on = true, sky = false): number {
   if (!on || sky) return 1;
   const k = look.strength * (1 - smooth(look.guard[0], look.guard[1], lum));
-  return 1 + (Math.pow(clamp(ao, 0, 1), look.power) - 1) * k;
+  return 1 + (Math.pow(clamp(ao, 1e-4, 1), look.power) - 1) * k; // (1e-4: the shader's pow never sees 0)
 }
 
 /** Texture loads per frame of each AO stage for a drawing buffer (the cost arithmetic of docs/ambient-occlusion.md; not a time). */
