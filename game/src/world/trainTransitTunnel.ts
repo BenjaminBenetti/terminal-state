@@ -14,9 +14,19 @@
 //    the car's speed). Instanced emissive fixtures only (housing, lens, glow card: three draws for all of them) — no lights, no shadow
 //    casters, no new fog uniforms (the lens takes the tubes' existing glow fog, the card is the station glow-card material).
 //    Signals repeat with their own period (they scroll in a sub-group: travelled mod step), independent of the 48 m pattern.
-//  - item 16: the group takes the car's yaw (no 180-degree world-yaw snap at the hand-overs) and can stand in a STATION as a STUB:
-//    the box continuing a clear bed end (placeStub), the car running through the hidden end plane into it / out of it; a departure
-//    leaves the stub for the transit seamlessly (handOver: same pattern and signals around the car).
+//  - item 16: the group takes the car's yaw (no 180-degree world-yaw snap at the hand-overs) and can stand in a STATION as a STUB.
+//
+// Task studio-perf-ao-train-continuity-20261110-022206-01 (lane RIDE): the box IS the RIDE TUNNEL of a station's ride portal
+// (world/ridePortal.ts): the same cross-section (RIDE_BOX: ±1.95 m, 4.8 m above the bed), placed as a stub that STARTS exactly at the
+// portal plane and runs outward (placeStub: a departure; handBack: an arrival). The hand-overs change nothing around the car:
+//  - stub -> transit (handOver): the group re-anchors on the car with the same pattern phase and the same signals (track-fixed
+//    identity: the ones the stub hid on the station side of the plane stay hidden);
+//  - transit -> stub (handBack): the ride hands back at the moment the car's place in the 48 m pattern is the one the stub gives it
+//    (arrivalGap = 0), so the box ends exactly at the plane AND the sleepers / wall boards / signals stay where they are in the car's
+//    frame. No geometry is edited and no buffer is written at either hand-over (group transforms, a draw range, signal matrices).
+//  A stub's FAR end (192 m beyond the plane) is closed by a wall quad of the wall mesh (draw range: no extra draw): from a station with
+//  a thin haze and a long far plane the open gate never shows a hole to the sky / the clear colour. In transit both ends are open
+//  (beyond the murk's sight, as before).
 //
 // Existing materials only, no new art: the station tunnels' board-formed shell wall (trackExt/wallFinish.ts), the world 'ceiling' /
 // 'ballast' / 'rail' / 'sleeper' materials; the signal lens is a flat red emissive (code colour, like the light tubes), its glow the
@@ -29,6 +39,7 @@ import type {WorldMaterials} from './materials';
 import {BOARD_SPAN, tunnelShellMaterial} from './trackExt/wallFinish';
 import {RAIL_TOP_ABOVE_BED, RAIL_GAUGE_HALF} from '../gen/playerTrain';
 import {displayReferred, glowFog, glowMaterial} from './lights';
+import {RIDE_BOX, type Box3} from './ridePortal';
 
 export const TRANSIT = {
   /** World position of the riding car's local origin (rail top at the car centre) while in transit. */
@@ -37,24 +48,28 @@ export const TRANSIT = {
   period: 48,
   /** Drawn half length either side of the car (m); the fog closes the ends. A multiple of the period. */
   half: 96,
-  /** Inner wall offset from the track centre (m): a single-track box tunnel. */
-  halfWidth: 2.4,
+  /** Inner wall offset from the track centre (m): the ride box (world/ridePortal.ts RIDE_BOX; was a 2.4 m box before the portals). */
+  halfWidth: RIDE_BOX.half,
   /** Ceiling above the bed (m). */
-  ceil: 4.8,
+  ceil: RIDE_BOX.ceil,
   sleeperStep: 0.6, sleeper: [0.24, 0.14, 2.5] as const,
-  rail: {w: 0.07, h: 0.15}, third: {z: 1.4, y: 0.3, h: 0.12, w: 0.08}, tray: {y: 3.25, w: 0.28, h: 0.06},
+  /** Rails, the third rail (the station beds' own offset) and the cable tray: the tray 0.2 m wide in the narrower box (0.2 m off the car's side). */
+  rail: {w: 0.07, h: 0.15}, third: {z: 1.4, y: 0.3, h: 0.12, w: 0.08}, tray: {y: 3.25, w: 0.2, h: 0.06},
   /**
    * Item 15: the red signals. `step` m apart (a metro block section; at the 15 m/s cruise one passes every ~7 s), on the `side` wall
    * (-1: local -Z, opposite the third rail), the lens centre `lensY` above the rail top (window / windscreen height). Housing / lens
-   * sizes (along x, height y, depth z, m); the lens sits `lensUp` above the housing centre on its -X face (toward the oncoming car).
+   * sizes (along x, height y, depth z, m; the housing 0.2 m deep: 0.2 m off the car's side in the ride box); the lens sits `lensUp`
+   * above the housing centre on its -X face (toward the oncoming car).
    * `count` instances cover the drawn length; `ahead` = the next signal's distance ahead of the car when the transit starts.
    * Sight: the lens takes the full scene fog (`fog` x density: ~10 % left at 35 m, ~1 % at 48 m in the indoor murk) and the glow card
    * fades out by `glowFar` m (the station glow-card material's far fade): a signal emerges from the dark ~40 m ahead and is gone from
    * sight ~48 m away — the ride's hand-over band (RIDE.signalBand) relies on it.
+   * `planeClear`: no signal stands this close to a stub's portal plane (the gate's leaves fold against the walls there).
    */
   signal: {
-    step: 110, side: -1, lensY: 2.55, housing: [0.3, 0.62, 0.26] as const, lens: [0.05, 0.17, 0.17] as const, lensUp: 0.14, wallGap: 0.03,
+    step: 110, side: -1, lensY: 2.55, housing: [0.3, 0.62, 0.2] as const, lens: [0.05, 0.17, 0.17] as const, lensUp: 0.14, wallGap: 0.03,
     lensColor: 0xff2a12, glowColor: [2.4, 0.16, 0.06] as const, glowCard: [0.6, 1.2] as const, count: 4, ahead: 60, fog: 1, glowFar: 48,
+    planeClear: 4,
   },
 } as const;
 
@@ -128,6 +143,18 @@ export type TransitMode = 'hidden' | 'transit' | 'stub';
 /** A whole number of texture repeats per period: uv = x * k / period (k = round(period / tile)). */
 const repeats = (tile: number | undefined, period: number): number => Math.max(1, Math.round(period / Math.max(0.05, tile ?? 2)));
 
+/** The wall mesh's index layout (see build): the -X end cap, the two walls, the +X end cap. */
+const WALL_INDEX = {capBack: 0, walls: 6, capFront: 18, end: 24} as const;
+
+/**
+ * The world-axis-aligned volume the tunnel can occupy around the transit origin at ANY yaw (the car turns toward the arrival heading
+ * in there): the ride's light mask while in transit (world/rideMask.ts; open face NaN: the whole box is dark).
+ */
+export function transitMaskBox(origin: {x: number; y: number; z: number} = TRANSIT.origin): Box3 {
+  const r = TRANSIT.half + TRANSIT.period + 2, bed = origin.y - RAIL_TOP_ABOVE_BED, k = 0.03;
+  return {x0: origin.x - r, x1: origin.x + r, y0: bed - k, y1: bed + TRANSIT.ceil + k, z0: origin.z - r, z1: origin.z + r};
+}
+
 export class TrainTransitTunnel {
   readonly group = new THREE.Group();
   /** The signals (housings / lenses / glow cards): scrolled inside the group by the signal phase. */
@@ -146,15 +173,22 @@ export class TrainTransitTunnel {
   /** Draw calls (meshes) and instances (QA / tests). */
   readonly stats = {meshes: 0, instances: 0};
   private built = false;
+  private walls: THREE.Mesh | null = null;
   private housings: THREE.InstancedMesh | null = null;
   private lenses: THREE.InstancedMesh | null = null;
   private glows: THREE.InstancedMesh | null = null;
   private readonly ownMats: THREE.Material[] = [];
-  /** Signal instances shown (stub mode hides those on the station side of the end face). */
+  /** Signal instances shown (stub mode hides those on the station side of the plane / beyond the box). */
   readonly signalShown: boolean[] = Array.from({length: TRANSIT.signal.count}, () => true);
   private readonly mx = new THREE.Matrix4();
-  /** The arrival's signal cut (hideSignalsOutside): the last signal shown and the band's trailing edge. */
-  private cut: {gMax: number; lo: number} | null = null;
+  /**
+   * Which track-fixed signals show in transit (g = floor((travelled + sig0) / step) + k - 1): g in [gMin, gMax] and not further behind
+   * the car than `lo`. gMin: a departure stub's first signal (handOver: the ones behind it stood on the station side of the plane);
+   * gMax / lo: the arrival's cut (hideSignalsOutside).
+   */
+  private readonly vis = {gMin: -Infinity, gMax: Infinity, lo: -Infinity};
+  /** A stub: +1 = the group's +X points outward from the portal plane (a departure), -1 = toward it (an arrival). */
+  private stubSign: 1 | -1 = 1;
 
   constructor(readonly origin: {x: number; y: number; z: number} = TRANSIT.origin) {
     this.group.name = 'train-transit-tunnel';
@@ -184,10 +218,14 @@ export class TrainTransitTunnel {
     };
     // walls (inner faces), u along the tunnel in board spans, v from the bed: P is a whole number of BOARD_SPANs
     const kw = repeats(BOARD_SPAN, P), wall = new Boxes();
-    const wu = (x: number) => (x * kw) / P, wv = (y: number) => (y - bed) / BOARD_SPAN;
+    const wu = (x: number) => (x * kw) / P, wv = (y: number) => (y - bed) / BOARD_SPAN, cu = (z: number) => z / BOARD_SPAN;
+    // (task studio-perf-ao-train-continuity-20261110-022206-01, lane RIDE) the end caps are the wall mesh's first / last quad: a stub
+    // draws the one at its far end (setEnds: a draw range); in transit neither (WALL_INDEX)
+    wall.quad([-H, bed, hw], [-H, bed, -hw], [-H, top, -hw], [-H, top, hw], [1, 0, 0], [[cu(hw), wv(bed)], [cu(-hw), wv(bed)], [cu(-hw), wv(top)], [cu(hw), wv(top)]]);
     wall.quad([-H, bed, -hw], [H, bed, -hw], [H, top, -hw], [-H, top, -hw], [0, 0, 1], [[wu(-H), wv(bed)], [wu(H), wv(bed)], [wu(H), wv(top)], [wu(-H), wv(top)]]);
     wall.quad([H, bed, hw], [-H, bed, hw], [-H, top, hw], [H, top, hw], [0, 0, -1], [[wu(H), wv(bed)], [wu(-H), wv(bed)], [wu(-H), wv(top)], [wu(H), wv(top)]]);
-    add(wall.geometry(), m.wall, 'transit-walls');
+    wall.quad([H, bed, -hw], [H, bed, hw], [H, top, hw], [H, top, -hw], [-1, 0, 0], [[cu(-hw), wv(bed)], [cu(hw), wv(bed)], [cu(hw), wv(top)], [cu(-hw), wv(top)]]);
+    this.walls = add(wall.geometry(), m.wall, 'transit-walls');
     // ballast floor and ceiling (world-planar style uvs with a whole number of repeats per period)
     const kf = repeats(m.floorTile?.u, P), kc = repeats(m.ceilTile?.u, P);
     const fz = (z: number) => z / (m.floorTile?.v ?? 2), cz = (z: number) => z / (m.ceilTile?.v ?? 2);
@@ -238,6 +276,7 @@ export class TrainTransitTunnel {
     for (let k = 0; k < n; k++) this.glows.setColorAt(k, c);
     if (this.glows.instanceColor) this.glows.instanceColor.needsUpdate = true;
     this.writeSignals();
+    this.setEnds();
     this.group.traverse(o => { o.userData.trainTransit = true; });
     return this;
   }
@@ -245,6 +284,22 @@ export class TrainTransitTunnel {
   private own<M extends THREE.Material>(mat: M): M {
     this.ownMats.push(mat);
     return mat;
+  }
+
+  /** Which end caps of the wall mesh are drawn: a stub's far end only (a draw range of the one wall mesh; nothing is uploaded). */
+  private setEnds(): void {
+    const g = this.walls?.geometry, W = WALL_INDEX;
+    if (!g) return;
+    if (this.mode !== 'stub') g.setDrawRange(W.walls, W.capFront - W.walls);
+    else if (this.stubSign > 0) g.setDrawRange(W.walls, W.end - W.walls);
+    else g.setDrawRange(W.capBack, W.capFront - W.capBack);
+  }
+
+  /** The far-end cap drawn now: +1 the +X end, -1 the -X end, 0 none (QA / tests). */
+  get endCap(): 1 | -1 | 0 {
+    const r = this.walls?.geometry.drawRange, W = WALL_INDEX;
+    if (!r) return 0;
+    return r.start === W.capBack ? -1 : r.start + r.count === W.end ? 1 : 0;
   }
 
   /** Signal instance k's local position (in the signal sub-group): x along the tunnel, the lens centre height / wall offset. */
@@ -282,6 +337,12 @@ export class TrainTransitTunnel {
     return out;
   }
 
+  /** World x / z of the SHOWN signals (their housings' track positions; QA / tests: the same before and after a hand-over, car frame). */
+  signalPoints(): {x: number; z: number}[] {
+    const [ax, az] = this.axis();
+    return this.signalOffsets().map(s => ({x: this.anchor.x + ax * s, z: this.anchor.z + az * s}));
+  }
+
   /** Shown signals standing within [lo, hi] m of the anchor along +X (in transit: of the car). */
   signalsWithin(lo: number, hi: number): number {
     let n = 0;
@@ -297,23 +358,23 @@ export class TrainTransitTunnel {
    */
   hideSignalsOutside(lo: number, hi: number): void {
     if (this.mode !== 'transit') return;
-    if (!this.cut) {
+    if (this.vis.gMax === Infinity) {
       const S = TRANSIT.signal, ph = this.signalPhase, base = Math.floor((this.travelled + this.sig0) / S.step);
       let gMax = base - 2;
       for (let k = 0; k < S.count; k++) if ((k - 1) * S.step - ph <= hi) gMax = Math.max(gMax, base + k - 1);
-      this.cut = {gMax, lo};
+      this.vis.gMax = gMax;
+      this.vis.lo = lo;
     }
-    this.applyCut();
+    this.applyVis();
   }
 
-  /** The cut's visibility per instance (track-fixed signal identity). */
-  private applyCut(): void {
-    const c = this.cut;
-    if (!c) return;
+  /** The visibility per instance in transit (track-fixed signal identity). */
+  private applyVis(): void {
+    const c = this.vis;
     const S = TRANSIT.signal, ph = this.signalPhase, base = Math.floor((this.travelled + this.sig0) / S.step);
     let changed = false;
     for (let k = 0; k < S.count; k++) {
-      const want = base + k - 1 <= c.gMax && (k - 1) * S.step - ph >= c.lo;
+      const g = base + k - 1, want = g >= c.gMin && g <= c.gMax && (k - 1) * S.step - ph >= c.lo;
       if (this.signalShown[k] !== want) { this.signalShown[k] = want; changed = true; }
     }
     if (changed) this.writeSignals();
@@ -331,42 +392,89 @@ export class TrainTransitTunnel {
     this.mode = 'transit';
     this.yaw = yaw;
     this.anchor.set(this.origin.x, this.origin.y, this.origin.z);
-    this.cut = null;
-    this.showAllSignals();
+    this.vis.gMin = -Infinity; this.vis.gMax = Infinity; this.vis.lo = -Infinity;
     this.group.visible = true;
+    this.setEnds();
     this.place();
   }
 
   /**
-   * Stub -> transit without a visible change (item 16, a clear bed end's departure): the car at world (x, z) in the stub keeps the same
-   * pattern / signals around it when the group re-anchors on it at the transit origin (same yaw: the car runs straight along the bed).
+   * Stub -> transit without a visible change (a departure): the car at world (x, z) in the stub keeps the same pattern / signals
+   * around it when the group re-anchors on it at the transit origin (same yaw: the car runs straight along its track). The signals the
+   * stub hid on the station side of the plane stay hidden (they are behind the car for good: it never reverses).
    */
   handOver(carX: number, carZ: number): void {
     const [ax, az] = this.axis(), gx = this.group.position.x, gz = this.group.position.z;
     const xL = (carX - gx) * ax + (carZ - gz) * az; // the car's x in the group
+    // the stub's first shown signal by its place on the track (a stub stands still: travelled is its own constant)
+    const S = TRANSIT.signal, base = Math.floor((this.travelled + this.sig0) / S.step);
+    let gMin = base + S.count - 1;
+    if (this.mode === 'stub') { for (let k = S.count - 1; k >= 0; k--) if (this.signalShown[k]) gMin = base + k - 1; } else gMin = -Infinity;
     this.travelled = this.travelled - this.offset + xL;
     this.enterTransit(this.yaw);
+    this.vis.gMin = gMin;
+    this.applyVis();
   }
 
   /**
-   * A STUB in a station (item 16): the box continuing a clear bed end from its end face `plane` (world, the track centre on the bed end
-   * face at rail-top height) outward along the unit `out` (x, z), with the group's +X = the car's front (`yaw`), the pattern at
-   * travelled 0 and the first signal `firstSignal` m beyond the face (signals on the station side of the face hidden).
+   * A STUB in a station: the ride tunnel of a portal, from its plane `plane` (world: the track centre in the portal plane at rail-top
+   * height) outward along the unit `out` (x, z), with the group's +X = the car's front (`yaw`), the pattern at travelled 0. The box
+   * starts exactly at the plane (nothing pokes through it toward the station); its far end is capped.
+   * `firstSignal` = the first shown signal's distance beyond the plane (null: none); signals on the station side of the plane, closer
+   * than TRANSIT.signal.planeClear to it or beyond the box are hidden.
    */
-  placeStub(plane: {x: number; y: number; z: number}, out: {x: number; z: number}, yaw: number, firstSignal: number): void {
+  placeStub(plane: {x: number; y: number; z: number}, out: {x: number; z: number}, yaw: number, firstSignal: number | null): void {
     const H = TRANSIT.half, S = TRANSIT.signal;
     this.mode = 'stub';
     this.yaw = yaw;
     this.travelled = 0;
-    this.cut = null;
+    this.vis.gMin = -Infinity; this.vis.gMax = Infinity; this.vis.lo = -Infinity;
     this.anchor.set(plane.x + out.x * H, plane.y, plane.z + out.z * H);
     const [ax, az] = this.axis(), sigma = ax * out.x + az * out.z >= 0 ? 1 : -1;
-    // signal k at out-distance s_k = H + sigma * ((k - 1) * step - phase): pick the phase for s = firstSignal at the nearest slot
-    const want = sigma > 0 ? mod(H - firstSignal, S.step) : mod(firstSignal - H, S.step);
-    this.sig0 = want;
-    for (let k = 0; k < S.count; k++) this.signalShown[k] = H + sigma * ((k - 1) * S.step - want) >= firstSignal - 0.5;
+    this.stubSign = sigma;
+    if (firstSignal === null) this.signalShown.fill(false);
+    else {
+      // signal k at out-distance s_k = H + sigma * ((k - 1) * step - phase): pick the phase for s = firstSignal at the nearest slot
+      const want = sigma > 0 ? mod(H - firstSignal, S.step) : mod(firstSignal - H, S.step);
+      this.sig0 = want;
+      for (let k = 0; k < S.count; k++) {
+        const s = H + sigma * ((k - 1) * S.step - want);
+        this.signalShown[k] = s >= firstSignal - 0.5 && s >= S.planeClear && s <= 2 * H - 1;
+      }
+    }
     this.writeSignals();
     this.group.visible = true;
+    this.setEnds();
+    this.place();
+  }
+
+  /**
+   * How far (m, 0 .. period) the car still has to run in TRANSIT until its place in the pattern is the one an arrival stub gives a car
+   * `dist` m before the stub's portal plane (handBack): there the group's +X end lies exactly in the plane.
+   */
+  arrivalGap(dist: number): number {
+    return mod(TRANSIT.half - dist - this.travelled, TRANSIT.period);
+  }
+
+  /**
+   * Transit -> stub without a visible change (an arrival; the ride calls it when arrivalGap(dist) is 0): the tunnel becomes the stub of
+   * the portal plane `plane` (outward along `out`), the car `dist` m beyond the plane heading toward it (`yaw`: the group's +X). The
+   * pattern keeps its phase around the car and every signal shown within the box keeps its place; none is added.
+   */
+  handBack(plane: {x: number; y: number; z: number}, out: {x: number; z: number}, yaw: number, dist: number): void {
+    const H = TRANSIT.half, S = TRANSIT.signal;
+    // the shown signals relative to the car (in transit the anchor is the car)
+    const shown = this.mode === 'transit' ? this.signalOffsets() : [];
+    this.placeStub(plane, out, yaw, null);
+    if (!shown.length) return;
+    // the car stands at xc from the stub's anchor along +X (+X = toward the plane); slot k at (k - 1) * step - sig0
+    const sigma = this.stubSign, xc = sigma * (dist - H);
+    this.sig0 = mod(-(xc + shown[0]), S.step);
+    for (let k = 0; k < S.count; k++) {
+      const x = (k - 1) * S.step - this.sig0, s = H + sigma * x;
+      this.signalShown[k] = shown.some(r => Math.abs(xc + r - x) < 1e-6) && s >= S.planeClear && s <= 2 * H - 1;
+    }
+    this.writeSignals();
     this.place();
   }
 
@@ -390,15 +498,21 @@ export class TrainTransitTunnel {
     this.place();
   }
 
-  private showAllSignals(): void {
-    if (this.signalShown.every(v => v)) return;
-    this.signalShown.fill(true);
-    this.writeSignals();
-  }
-
   /** Unit +X of the group in world (three.js R_y maps +X to (cos, -sin)). */
   axis(): [number, number] {
     return [Math.cos(this.yaw), -Math.sin(this.yaw)];
+  }
+
+  /** Where world point (x, z) lies in the 48 m pattern (0 .. period: sleepers, wall boards, floor / ceiling repeats; QA / tests). */
+  patternAt(x: number, z: number): number {
+    const [ax, az] = this.axis(), g = this.group.position;
+    return mod((x - g.x) * ax + (z - g.z) * az, TRANSIT.period);
+  }
+
+  /** The drawn box's reach from world point (x, z) along the group's +X: metres of tunnel ahead of / behind it (QA / tests). */
+  reach(x: number, z: number): {ahead: number; behind: number} {
+    const [ax, az] = this.axis(), g = this.group.position, xl = (x - g.x) * ax + (z - g.z) * az;
+    return {ahead: TRANSIT.half - xl, behind: xl + TRANSIT.half};
   }
 
   private place(): void {
@@ -408,7 +522,7 @@ export class TrainTransitTunnel {
     this.group.position.set(this.anchor.x - ax * this.offset, this.anchor.y, this.anchor.z - az * this.offset);
     this.group.rotation.set(0, this.yaw, 0);
     this.signals.position.set(this.offset - this.signalPhase, 0, 0);
-    if (this.cut && this.mode === 'transit') this.applyCut();
+    if (this.mode === 'transit') this.applyVis();
     this.group.updateMatrixWorld(true);
   }
 
@@ -419,5 +533,6 @@ export class TrainTransitTunnel {
     this.geometries.length = 0;
     this.ownMats.length = 0;
     this.built = false;
+    this.walls = null;
   }
 }
