@@ -6,9 +6,36 @@ import {ammoItemFor, CALIBERS, type Caliber} from '../items/calibers';
 import type {OpticSpec} from './optic';
 import {KNIFE_RAYS} from '../combat/melee'; // lane KNIFE
 import {carryView, KNIFE_POSES} from './meleeView'; // lane FEEL: the knife's upright carry pose
+import {RECOIL_SCALE, firingRecoil} from './recoil';
+import {VARIETY_GUN_DEFS} from './varietyGuns'; // task studio-weapon-variety-production-20261109-224355-01: the six new guns
+import {VARIETY_MELEE_DEFS} from './varietyMelee'; // task studio-weapon-variety-production-20261109-224355-01: the six new melee weapons
 
 export interface MagazineReload { kind: 'magazine'; time: number; emptyTime: number }
 export interface ShellReload { kind: 'shell'; start: number; each: number; end: number }
+/**
+ * Task studio-weapon-variety-production-20261109-224355-01 (lane GUNS): a BREAK action (the coach gun). R opens the action
+ * (`start` s: the spent hulls are thrown out `eject` s in, once it is fully open) -> loads shells one at a time (`each` s,
+ * up to `magazine`, fewer when the reserve runs out) -> closes (`end` s). Nothing fires while it is open; a trigger press
+ * (with a shell loaded) stops the loading after the current shell and closes it; a weapon switch mid-reload keeps exactly
+ * the shells already loaded (each was taken from the reserve as it went in). Same shape as ShellReload (start / each / end).
+ */
+export interface BreakReload { kind: 'break'; start: number; eject: number; each: number; end: number }
+
+/**
+ * Lane GUNS: optional handling extensions (weapon variety). Absent on the baseline pistol / rifle / shotgun / knife, whose
+ * behaviour is therefore exactly as before (tests/weapon-variety-guns.test.ts snapshots their defs).
+ *  - AimSettle: aiming down sights steadies over `time` s — the aimed cone starts `extra` rad wider and eases to `spreadAim`;
+ *    each shot sets the settle back by `shot` x `time` (a follow-up waits for the hold to steady again).
+ *  - RecoilClimb: sustained fire climbs — shot n of a string (the next shot within the interval + 0.1 s) kicks the camera
+ *    1 + `climb` x min(n, `cap`) times the def's pitch; `jitter` adds a further random sideways kick (rad) per shot.
+ *  - Bloom: per-shot spread growth (`per` rad up to `max`) and its recovery (`decay` rad/s); absent = the shared rule
+ *    (single-projectile guns +0.0035 up to 0.03, recovering 0.06 rad/s).
+ */
+export interface AimSettle { time: number; extra: number; shot: number }
+export interface RecoilClimb { climb: number; cap: number; jitter: number }
+export interface Bloom { per: number; max: number; decay: number }
+/** Lane GUNS: the existing gun cue sets (audio/sfx.ts); a variety gun reuses one of them (no new audio). */
+export type GunCue = 'rifle' | 'shotgun' | 'pistol';
 
 export interface WeaponDef {
   id: string;
@@ -35,14 +62,27 @@ export interface WeaponDef {
   limbMult: number;
   /** Push applied to zombies per pellet (m/s). */
   knockback: number;
-  reload: MagazineReload | ShellReload;
+  reload: MagazineReload | ShellReload | BreakReload;
   recoil: {pitch: number; yaw: number; kick: number; recover: number};
   equipTime: number;
   aimFov: number;
+  /**
+   * Task studio-weapon-variety-production-20261109-224355-01: mouse-look multiplier while aiming (absent = the shared 0.65). A scoped gun
+   * whose aim FOV zooms far in sets it so the scope turns at the same rate on screen as the rifle's 52 deg aim (0.65 x aimFov / 52).
+   */
+  aimLook?: number;
   moveMult: number;
   /** Loudness radius (m) for alerting zombies. */
   noise: number;
-  sound: 'rifle' | 'shotgun' | 'pistol';
+  sound: GunCue;
+  // ---- lane GUNS (weapon variety): optional handling, all absent on the baseline guns (see AimSettle / RecoilClimb / Bloom) ----
+  aimSettle?: AimSettle;
+  recoilClimb?: RecoilClimb;
+  bloom?: Bloom;
+  /** The cue set of the reload sounds (default `sound`): e.g. a box-magazine shotgun uses the magazine cues. */
+  reloadCue?: GunCue;
+  /** The action cue after a shot: 'pump' = the pump-action rack, 'none' = semi-auto / break action. Default: a pump for 'shotgun'. */
+  shotCycle?: 'pump' | 'none';
   /**
    * Viewmodel placement in camera space, pivoting at the model's Grip marker. Aim offsets come
    * from measured derivative geometry: shotgun rib ~0.07 m above the stock wrist (iron sights).
@@ -59,7 +99,8 @@ export interface WeaponDef {
    * part: the user rifle's red dot has an opaque lens, so the optic sits just under the crosshair instead of filling the view.
    * `aim` stays the fallback for a model without a Sight marker.
    */
-  view: {model: 'rifle' | 'shotgun' | 'pistol' | 'knife'; hip: [number, number, number]; aim: [number, number, number]; hipYaw: number; hipPitch: number; hipRoll: number; length: number; optic?: OpticSpec; sightRelief?: number; sightLift?: number};
+  view: {model: string; // the held model key: the baseline 'rifle' | 'shotgun' | 'pistol' | 'knife', or a weapon-variety id (weapons/varietyIds.ts)
+    hip: [number, number, number]; aim: [number, number, number]; hipYaw: number; hipPitch: number; hipRoll: number; length: number; optic?: OpticSpec; sightRelief?: number; sightLift?: number};
   /**
    * Lane KNIFE (knife-melee-20261030): a MELEE weapon. Its swing replaces the gun's fire / magazine / reload cycle in
    * WeaponController (no ammo is ever counted or taken, R does nothing, no ADS). The shared fields keep their meaning:
@@ -96,6 +137,39 @@ export interface MeleeSpec {
   recovery: number;
   /** Sweep rays: [yaw, pitch] offsets (radians) from the crosshair, tried centre first (combat/melee.ts KNIFE_RAYS). */
   rays: readonly (readonly [number, number])[];
+  // ---- Task studio-weapon-variety-production-20261109-224355-01 (lane MELEE): generic, data-driven extensions. Every field is
+  // optional; absent = the knife's behaviour exactly (one target, no knockback / stagger / stamina / charge, chips-only world hits).
+  /** Distinct targets one swing may strike (the per-swing hit set: each at most once; combat/melee.ts resolveMeleeSweep). Default 1. */
+  maxTargets?: number;
+  /** Damage multiplier for the 2nd+ target of a sweep (the first, centre-most target takes the full hit). Default 1. */
+  secondaryMult?: number;
+  /** Push (m) given to a standard-mass target (an ordinary zombie) along the swing; scaled by the target's mass (combat/meleeImpact.ts). */
+  knockback?: number;
+  /** Share of the push turned sideways along a horizontal sweep (to the left: the swings run right -> left). Default 0. */
+  knockSide?: number;
+  /** Hit stagger (s) on a target the brain lets stagger (its own cooldown / attack / boss rules). Absent = never staggers (as the knife). */
+  stagger?: number;
+  /** Stamina meter % one swing costs (paid at the contact; a short meter = a winded swing: combat/meleeImpact.ts MELEE_WINDED). */
+  stamina?: number;
+  /** Held in both hands (two-handed carry / swing poses: weapons/meleeView.ts). */
+  twoHanded?: boolean;
+  /** A CHARGE swing: holding the wound-up (ready) pose charges it over `time` s; the release's charge 0..1 scales the hit. */
+  charge?: MeleeCharge;
+  /** Struck props / loose items take the normal hit interaction (per-instance damage, a shove of a movable prop); absent = chips only. */
+  propHits?: boolean;
+}
+
+/**
+ * Lane MELEE (weapon variety): a charge swing's scaling. `k` = seconds held in the ready pose / `time` (0 = a tap, 1 = full charge;
+ * holding longer keeps 1). Each pair is [at a tap, at full charge], linear in between: damage and knockback MULTIPLY the def's
+ * damage / `knockback`, `stagger` is the stagger in seconds (absent: the spec's `stagger`), `stamina` multiplies the spec's cost.
+ */
+export interface MeleeCharge {
+  time: number;
+  damage: readonly [number, number];
+  knockback: readonly [number, number];
+  stagger?: readonly [number, number];
+  stamina?: readonly [number, number];
 }
 
 /** Lane FEEL: the stage of a melee weapon's cycle (null = the carry pose, nothing under way). */
@@ -106,6 +180,11 @@ export function meleeCadence(m: Pick<MeleeSpec, 'windup' | 'sweep' | 'recovery'>
   return m.windup + m.sweep + m.recovery;
 }
 
+/** Lane MELEE (weapon variety): the charge 0..1 after holding a charge weapon's ready pose for `heldS` s (full at `time`, then kept). */
+export function meleeChargeK(c: Pick<MeleeCharge, 'time'>, heldS: number): number {
+  return Math.max(0, Math.min(1, heldS / c.time));
+}
+
 /**
  * Iteration 15 (user: "increase the recoil a little bit basically across the board ... fifty percent recoil to
  * everything"): every gun's FIRING recoil amplitudes x1.5, applied ONCE here at the definition — camera kick (pitch, yaw)
@@ -113,10 +192,7 @@ export function meleeCadence(m: Pick<MeleeSpec, 'windup' | 'sweep' | 'recovery'>
  * scaled twice. Recovery rate, damage, spread, fire rate, ammo, knockback and every other motion are unchanged.
  * Base values (iteration 14) stay readable at each def.
  */
-export const RECOIL_SCALE = 1.5;
-export function firingRecoil(base: WeaponDef['recoil']): WeaponDef['recoil'] {
-  return {pitch: base.pitch * RECOIL_SCALE, yaw: base.yaw * RECOIL_SCALE, kick: base.kick * RECOIL_SCALE, recover: base.recover};
-}
+export {RECOIL_SCALE, firingRecoil}; // (task studio-weapon-variety-production-20261109-224355-01: defined in weapons/recoil.ts, a leaf module the variety defs share)
 
 export const WEAPONS: Record<string, WeaponDef> = {
   rifle: {
@@ -178,6 +254,9 @@ export const WEAPONS: Record<string, WeaponDef> = {
     // forward (was carried sideways: blade up-left, flat to the eye). Windup / ready / swing / recovery: weapons/meleeView.ts.
     view: {model: 'knife', ...carryView(KNIFE_POSES.carry), length: 0.32},
   },
+  // task studio-weapon-variety-production-20261109-224355-01: the twelve user-approved additions (the baseline four above are unchanged)
+  ...VARIETY_GUN_DEFS,
+  ...VARIETY_MELEE_DEFS,
 };
 
 /** Lane KNIFE: the weapon def of an item id when it is a melee weapon (knife), else null. */
@@ -224,8 +303,9 @@ export type WeaponEvent =
   // Lane KNIFE / FEEL (melee only): the release committed ONE swing (whoosh / sweep) and — exactly once per swing,
   // `melee.strike` s later unless cancelled first — the blade's contact moment, when the game resolves the hit
   // (game.ts meleeContact). `swing` numbers them.
-  | {type: 'swing'; def: WeaponDef; swing: number}
-  | {type: 'contact'; def: WeaponDef; swing: number};
+  // (lane MELEE, weapon variety: a CHARGE weapon's swing / contact also carry the release's `charge` 0..1; absent for the others)
+  | {type: 'swing'; def: WeaponDef; swing: number; charge?: number}
+  | {type: 'contact'; def: WeaponDef; swing: number; charge?: number};
 
 export interface TriggerInput {
   /** Trigger currently held. */
@@ -240,10 +320,14 @@ export interface TriggerInput {
    * while a melee windup / ready hold is under way cancels it (the wiped button must not read as a release that swings).
    */
   clears?: number;
+  /** Lane GUNS: aiming down sights this frame (game.aiming) — drives a def's AimSettle; absent = not aiming. */
+  aiming?: boolean;
 }
 
 /** Lane FEEL: frame-sum tolerance for the melee stage timers (60 fps steps hit the stage lengths exactly). */
 const MELEE_EPS = 1e-6;
+/** Lane GUNS: a shot within the def's interval + this gap (s) of the previous one continues a string (RecoilClimb). */
+export const STREAK_GAP = 0.1;
 
 export class WeaponController {
   def: WeaponDef | null = null;
@@ -271,6 +355,11 @@ export class WeaponController {
   private pressQueued = false;
   /** Lane FEEL: TriggerInput.clears seen last frame (a change = the held input was wiped: a windup cancels, never swings). */
   private seenClears: number | undefined;
+  /** Lane GUNS: shots so far in the current string (0 = the first shot of a string; RecoilClimb) and seconds since the last shot. */
+  streak = 0;
+  private sinceShot = Infinity;
+  /** Lane GUNS: seconds of steady aiming counted toward the def's AimSettle (0 when not aiming; shots set it back). */
+  aimT = 0;
 
   equip(stack: ItemStack | null, defs = WEAPONS): void {
     if (stack === this.stack && stack) return;
@@ -280,7 +369,32 @@ export class WeaponController {
     this.phaseT = this.def ? this.def.equipTime : 0;
     this.cooldown = 0;
     this.progress = 0;
+    this.streak = 0; this.sinceShot = Infinity; this.aimT = 0; // lane GUNS: a new weapon starts a fresh string, unsettled
     this.resetMelee(); // lane KNIFE / FEEL: a windup, ready hold or swing never survives a weapon change (no stale contact)
+  }
+
+  /**
+   * Lane GUNS: the extra aimed cone (rad) the def's AimSettle still adds now — `extra` at the start of ADS, eased to 0 after
+   * `time` s of steady aim. 0 for a def without one (the baseline guns) or while not aiming.
+   */
+  get settleSpread(): number {
+    const a = this.def?.aimSettle;
+    if (!a) return 0;
+    const k = Math.min(1, this.aimT / Math.max(1e-6, a.time));
+    return a.extra * (1 - k * k * (3 - 2 * k));
+  }
+
+  /**
+   * Lane GUNS: how far a BREAK action is open (0 closed .. 1 fully open): opening over the first `eject` s of the reload,
+   * open while shells go in, closing over `end`. 0 for every other weapon / phase (the viewmodel turns the model's Barrels).
+   */
+  get actionOpen(): number {
+    const d = this.def;
+    if (!d || d.reload.kind !== 'break' || this.phase !== 'reloading') return 0;
+    const r = d.reload, clamp = (x: number) => Math.min(1, Math.max(0, x));
+    if (this.shellStage === 'start') return clamp((r.start - this.phaseT) / Math.max(1e-6, r.eject));
+    if (this.shellStage === 'load') return 1;
+    return clamp(this.phaseT / Math.max(1e-6, r.end));
   }
 
   get reloading(): boolean {
@@ -304,10 +418,26 @@ export class WeaponController {
     return this.phase === 'swinging' && (this.meleeStage === 'windup' || this.meleeStage === 'ready') && !this.releaseQueued;
   }
 
-  /** Lane FEEL: the viewmodel's melee pose input (weapons/meleeView.ts meleePoseOffset). */
-  get meleePose(): {stage: MeleeStage | null; t: number} {
-    return {stage: this.phase === 'swinging' ? this.meleeStage : null, t: this.stageT};
+  /**
+   * Lane FEEL: the viewmodel's melee pose input (weapons/meleeView.ts meleePoseOffset). Lane MELEE (weapon variety): + `charge` 0..1 —
+   * the live charge while a CHARGE weapon's ready pose is held, the committed swing's charge during its swing / recovery (0 otherwise).
+   */
+  get meleePose(): {stage: MeleeStage | null; t: number; charge: number} {
+    const stage = this.phase === 'swinging' ? this.meleeStage : null;
+    return {stage, t: this.stageT, charge: stage === 'ready' ? this.chargeLevel : stage === 'swing' || stage === 'recover' ? this.swingCharge : 0};
   }
+
+  /**
+   * Lane MELEE (weapon variety): the CHARGE built so far (0..1) while a charge weapon's wound-up pose is held (the HUD cue, the pose);
+   * 0 for a weapon without `melee.charge`, before the windup is complete and once released.
+   */
+  get chargeLevel(): number {
+    const c = this.def?.melee?.charge;
+    return c && this.phase === 'swinging' && this.meleeStage === 'ready' && !this.releaseQueued ? meleeChargeK(c, this.stageT) : 0;
+  }
+
+  /** Lane MELEE (weapon variety): the charge 0..1 the running / last committed swing was released with (0 without `melee.charge`). */
+  swingCharge = 0;
 
   /**
    * Lane KNIFE / FEEL: abort the melee cycle (menus / pause / focus or pointer-lock loss / death / travel / restart, and
@@ -328,6 +458,7 @@ export class WeaponController {
   private resetMelee(): void {
     this.meleeStage = null;
     this.stageT = 0;
+    this.swingCharge = 0; // lane MELEE: a cancelled / finished swing leaves no charge behind
     this.contactPending = false;
     this.releaseQueued = false;
     this.pressQueued = false;
@@ -344,6 +475,8 @@ export class WeaponController {
     const d = this.def, s = this.stack;
     if (!d || !s) return ev;
     this.cooldown = Math.max(0, this.cooldown - dt);
+    this.sinceShot += dt; // lane GUNS: string timing (RecoilClimb)
+    if (d.aimSettle) this.aimT = input.aiming ? this.aimT + dt : 0; // lane GUNS: the hold steadies while aiming
     if (this.phase === 'equipping') {
       this.phaseT -= dt;
       this.progress = 1 - Math.max(0, this.phaseT) / d.equipTime;
@@ -355,7 +488,7 @@ export class WeaponController {
     }
     if (d.melee) return this.updateMelee(dt, input, ev); // lane KNIFE: swing cycle instead of fire / magazine / reload
     if (this.phase === 'reloading') {
-      if (input.pressed && d.reload.kind === 'shell' && (s.mag ?? 0) > 0) this.interruptReload = true;
+      if (input.pressed && (d.reload.kind === 'shell' || d.reload.kind === 'break') && (s.mag ?? 0) > 0) this.interruptReload = true; // (lane GUNS: + break)
       this.phaseT -= dt / Math.max(0.25, this.handling); // Iteration 16: handling scales the whole reload (magazine and shell by shell)
       if (d.reload.kind === 'magazine') {
         const total = (s.mag ?? 0) === 0 ? d.reload.emptyTime : d.reload.time;
@@ -367,6 +500,8 @@ export class WeaponController {
           this.phase = 'idle';
           ev.push({type: 'reloadEnd', def: d});
         }
+      } else if (d.reload.kind === 'break') {
+        this.updateBreak(d, d.reload, s, inv, ev); // lane GUNS: open -> load up to `magazine` -> close
       } else {
         const r = d.reload;
         while (this.phaseT <= 0 && this.phase === 'reloading') {
@@ -405,6 +540,10 @@ export class WeaponController {
         s.mag = (s.mag ?? 0) - 1;
         inv.version++;
         this.cooldown = d.interval;
+        // lane GUNS: string count for RecoilClimb; a shot sets an AimSettle hold back (both unused by the baseline guns)
+        this.streak = this.sinceShot <= d.interval + STREAK_GAP ? this.streak + 1 : 0;
+        this.sinceShot = 0;
+        if (d.aimSettle) this.aimT = Math.max(0, this.aimT - d.aimSettle.shot * d.aimSettle.time);
         ev.push({type: 'fire', def: d});
       } else if (input.pressed) {
         this.cooldown = 0.25;
@@ -423,6 +562,33 @@ export class WeaponController {
     if (d.reload.kind === 'magazine') this.phaseT = (s.mag ?? 0) === 0 ? d.reload.emptyTime : d.reload.time;
     else { this.shellStage = 'start'; this.phaseT = d.reload.start; }
     ev.push({type: 'reloadStart', def: d, empty: (s.mag ?? 0) === 0});
+  }
+
+  /**
+   * Lane GUNS: the BREAK action's reload stages (BreakReload), carried across frame boundaries like the shell reload:
+   * 'start' = opening (the hulls leave at `eject` s) -> 'load' one shell per `each` s (taken from the reserve as it goes
+   * in; never past `magazine`) -> 'end' = closing, then idle. A trigger press (interruptReload, with a shell loaded)
+   * closes it after the current shell — or straight after opening. Firing is only possible once it is closed (idle).
+   */
+  private updateBreak(d: WeaponDef, r: BreakReload, s: ItemStack, inv: Inventory, ev: WeaponEvent[]): void {
+    const full = () => (s.mag ?? 0) >= d.magazine || reserveFor(d, inv) === 0 || this.interruptReload;
+    while (this.phaseT <= 0 && this.phase === 'reloading') {
+      if (this.shellStage === 'start') {
+        if (full()) { this.shellStage = 'end'; this.phaseT += r.end; } else { this.shellStage = 'load'; this.phaseT += r.each; }
+      } else if (this.shellStage === 'load') {
+        const ammo = weaponAmmoItem(d);
+        if (ammo && (s.mag ?? 0) < d.magazine && inv.take(ammo, 1) === 1) {
+          s.mag = (s.mag ?? 0) + 1;
+          inv.version++;
+          ev.push({type: 'shellIn', def: d});
+        }
+        if (full()) { this.shellStage = 'end'; this.phaseT += r.end; } else this.phaseT += r.each;
+      } else {
+        this.phase = 'idle';
+        ev.push({type: 'reloadEnd', def: d});
+      }
+    }
+    this.progress = (s.mag ?? 0) / d.magazine;
   }
 
   /**
@@ -472,7 +638,7 @@ export class WeaponController {
       } else if (st === 'swing') {
         if (this.contactPending && this.stageT + rem + MELEE_EPS >= m.strike) {
           this.contactPending = false;
-          ev.push({type: 'contact', def: d, swing: this.swingId});
+          ev.push(m.charge ? {type: 'contact', def: d, swing: this.swingId, charge: this.swingCharge} : {type: 'contact', def: d, swing: this.swingId});
         }
         const need = m.sweep - this.stageT;
         if (rem + MELEE_EPS < need) { this.stageT += rem; rem = 0; break; }
@@ -505,13 +671,15 @@ export class WeaponController {
   /** Lane FEEL: the release commits ONE swing (whoosh / sweep now, contact `strike` s later); the cooldown covers sweep + recovery. */
   private startSwing(ev: WeaponEvent[]): void {
     const d = this.def!, m = d.melee!;
+    // lane MELEE (weapon variety): a CHARGE weapon's release keeps the charge built in the ready pose (startSwing runs from 'ready')
+    this.swingCharge = m.charge && this.meleeStage === 'ready' ? meleeChargeK(m.charge, this.stageT) : 0;
     this.meleeStage = 'swing';
     this.stageT = 0;
     this.releaseQueued = false;
     this.contactPending = true;
     this.cooldown = m.sweep + m.recovery;
     this.swingId++;
-    ev.push({type: 'swing', def: d, swing: this.swingId});
+    ev.push(m.charge ? {type: 'swing', def: d, swing: this.swingId, charge: this.swingCharge} : {type: 'swing', def: d, swing: this.swingId});
   }
 
   /** Lane FEEL: back to the carry at the natural end of a recovery (keeps a press remembered meanwhile). */

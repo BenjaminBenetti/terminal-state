@@ -311,7 +311,7 @@ export class Inventory {
     if (ref.bar === 'melee') return this.meleeSlot[ref.index] ? 'none' : this.refuse('bad-ref', 'The melee slot is empty.');
     const st = this.get(ref);
     if (!st) return 'none';
-    if (!isMeleeItem(st.itemId)) return this.refuse('wrong-slot', `Only melee weapons (the knife) go in the melee slot (~) — not the ${itemDef(st.itemId).short.toLowerCase()}.`);
+    if (!isMeleeItem(st.itemId)) return this.refuse('wrong-slot', `Only melee weapons go in the melee slot (~) — not the ${itemDef(st.itemId).short.toLowerCase()}.`);
     return this.moveCount(ref, MELEE_REF);
   }
   /** The melee slot was emptied: a melee selection falls back to the remembered quick slot (no stale weapon, no auto-draw later). */
@@ -754,7 +754,7 @@ export class Inventory {
     // Task office-overhaul-20261030 (INTERACT): the grenade slot takes throwables only
     if (e.kind === 'throw' && def.kind !== 'throwable') return {code: 'wrong-slot', text: `Only throwables (flares) go in the grenade slot (G) — not the ${def.short.toLowerCase()}.`};
     // Task knife-windup-20261030 (SLOT): the melee slot takes melee weapons only
-    if (e.kind === 'melee' && !isMeleeItem(itemId)) return {code: 'wrong-slot', text: `Only melee weapons (the knife) go in the melee slot (~) — not the ${def.short.toLowerCase()}.`};
+    if (e.kind === 'melee' && !isMeleeItem(itemId)) return {code: 'wrong-slot', text: `Only melee weapons go in the melee slot (~) — not the ${def.short.toLowerCase()}.`};
     if (e.kind === 'gear') {
       const slot = GEAR_SLOTS[e.index];
       const spec = def.gear;

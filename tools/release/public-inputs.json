@@ -2629,6 +2629,66 @@
       "sha256": "b6703fcbaf5fce1ce404bdfa9ddf68f9f64937f7c0ce6d34e51b7ff76667d4db"
     },
     {
+      "path": "assets/derivatives/weapon-variety-coach-gun.json",
+      "bytes": 18201,
+      "sha256": "ac190ff7f7b42293a30141ce65ee50ed9ee4c48dfe54743186cffd1ee30d090d"
+    },
+    {
+      "path": "assets/derivatives/weapon-variety-crowbar.json",
+      "bytes": 11060,
+      "sha256": "e34e20aa5a1576dd6d6f91b39a1626510b5d10027f75565e8e681c9af587be8e"
+    },
+    {
+      "path": "assets/derivatives/weapon-variety-fire-axe.json",
+      "bytes": 10971,
+      "sha256": "f6e35fcbffeb24a5d24e3a6e7a6dfa8c245907859bd4952047550543f81baa28"
+    },
+    {
+      "path": "assets/derivatives/weapon-variety-hornet.json",
+      "bytes": 11949,
+      "sha256": "e6496dffe53bdd888bbba7fbd5dfd7369770bee5d304136d8e8449aa8f58e94d"
+    },
+    {
+      "path": "assets/derivatives/weapon-variety-longslide.json",
+      "bytes": 11187,
+      "sha256": "bd35d52201b8229344a262ac54b47c7dabb1068923efa843036d39dcb50a8fa9"
+    },
+    {
+      "path": "assets/derivatives/weapon-variety-machete.json",
+      "bytes": 11749,
+      "sha256": "f9835062e430bef91fd967d989053bed72b01e44e9f632f43cd223ef9a6c7b66"
+    },
+    {
+      "path": "assets/derivatives/weapon-variety-overwatch.json",
+      "bytes": 12842,
+      "sha256": "8f9d6884712a40032e190996ba0fff5622f5cb0169139fa3217aee864218b93a"
+    },
+    {
+      "path": "assets/derivatives/weapon-variety-sledgehammer.json",
+      "bytes": 10775,
+      "sha256": "bfa430db0fef0950032bc4995b8604a443fcaf1c680493fb06b819fbc542ce99"
+    },
+    {
+      "path": "assets/derivatives/weapon-variety-slugger.json",
+      "bytes": 10670,
+      "sha256": "298bea41374ec7e4874f49f79234b87a082ac1ea0879a028aa5c9fe0db58d4da"
+    },
+    {
+      "path": "assets/derivatives/weapon-variety-stub.json",
+      "bytes": 11457,
+      "sha256": "b604ff62a874da88ca71bcca623f823bcfd6badcd5f91bc11a794fe41bd8a595"
+    },
+    {
+      "path": "assets/derivatives/weapon-variety-thresher.json",
+      "bytes": 12037,
+      "sha256": "dfd71dc73ae801b086d9e7e3d30fce897a887f24193b797fd876c9e979ce198b"
+    },
+    {
+      "path": "assets/derivatives/weapon-variety-track-shovel.json",
+      "bytes": 11156,
+      "sha256": "a6d183b9b13c2e24577f37de3393a8e329bdb0b929cdb02098914b82fd085e11"
+    },
+    {
       "path": "assets/derivatives/zombie-body-agent.json",
       "bytes": 39731,
       "sha256": "d679ffc281d60a2fae73bacfc43497976f2b59b3555719f8a3bc7d05285b2bd7"
@@ -4937,6 +4997,66 @@
       "path": "assets/models/vending-t25.glb",
       "bytes": 316428,
       "sha256": "2bfc85c2d8d99a8a785b4406809d8b237db1661f96895f7c145e5680ee4758e3"
+    },
+    {
+      "path": "assets/models/weapon-coach-gun.glb",
+      "bytes": 3173172,
+      "sha256": "fd9a3e400a67c6ffe34602a1b84dc51fa0821b5ab899a0f61ff30829729e123b"
+    },
+    {
+      "path": "assets/models/weapon-crowbar.glb",
+      "bytes": 756836,
+      "sha256": "2fe8e8e0d965fe9117da25c971f6e43f849cf23cd5de1aaf8cd672594e01148f"
+    },
+    {
+      "path": "assets/models/weapon-fire-axe.glb",
+      "bytes": 980448,
+      "sha256": "2514a89c7bd05deafc404530d863a3856351913be9a2c2b65fa74a9ba146c2ff"
+    },
+    {
+      "path": "assets/models/weapon-hornet.glb",
+      "bytes": 3683972,
+      "sha256": "5d75fb3fc9e88b13d897638514feddee1143f82187b735e4d50768228321aa62"
+    },
+    {
+      "path": "assets/models/weapon-longslide.glb",
+      "bytes": 3587428,
+      "sha256": "c84088ccbbea40d6016d6aace8881df51a01b266c4ffd79735fc17fa0e835acf"
+    },
+    {
+      "path": "assets/models/weapon-machete.glb",
+      "bytes": 777728,
+      "sha256": "6da5276e9e86ee217e94f7669f6261140b1aaac21bf815a075f5561f4eafa2e2"
+    },
+    {
+      "path": "assets/models/weapon-overwatch.glb",
+      "bytes": 3913816,
+      "sha256": "577e853ada33e7d5c47a04ee0f969d49d7106706f4678053743a35eba1948a77"
+    },
+    {
+      "path": "assets/models/weapon-sledgehammer.glb",
+      "bytes": 855888,
+      "sha256": "901238957542e9d400c9d00f2f7458c969d63f513669568b6bb1d0790ff2b181"
+    },
+    {
+      "path": "assets/models/weapon-slugger.glb",
+      "bytes": 723276,
+      "sha256": "2aebebcbe3032695468cf29fcbce38ffb38213afb25cca4988e6824b5e47ebd7"
+    },
+    {
+      "path": "assets/models/weapon-stub.glb",
+      "bytes": 3872276,
+      "sha256": "b70ca7dc24b2aad07c1b1307f1c3edf34ff4a139e65b252ec947f986eb169b33"
+    },
+    {
+      "path": "assets/models/weapon-thresher.glb",
+      "bytes": 3608204,
+      "sha256": "67959226cad2687d5cee62a60044c453ddf915a8d8c4bc4444e7f5d7b241bf66"
+    },
+    {
+      "path": "assets/models/weapon-track-shovel.glb",
+      "bytes": 722520,
+      "sha256": "341a1ab011ab1be83cc3f04638a9ce801357f7b076f0cd440d7b533f4acdc4d5"
     },
     {
       "path": "assets/models/zombie-body-agent-t25.glb",

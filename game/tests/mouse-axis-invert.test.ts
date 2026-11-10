@@ -133,7 +133,8 @@ describe('settings: invertX next to invertY, off by default, persisted in the br
 describe('only the player LOOK reads them (game.ts both look paths + the sway), nothing else', () => {
   it('both look paths go through applyMouseLook (no inline look math left); the sway follows the effective turn', () => {
     const g = src('../src/game.ts');
-    expect(g.match(/applyMouseLook\(p, inp\.dx, inp\.dy, this\.settings(, this\.aiming \? 0\.65 : 1)?\)/g)).toHaveLength(2);
+    // (task studio-weapon-variety-production-20261109-224355-01: the aiming scale may come from the held gun's own aimLook, default 0.65)
+    expect(g.match(/applyMouseLook\(p, inp\.dx, inp\.dy, this\.settings(, this\.aiming \? (this\.weapon\.def\?\.aimLook \?\? )?0\.65 : 1)?\)/g)).toHaveLength(2);
     expect(g).not.toMatch(/p\.yaw -= inp\.dx/);
     expect(g).not.toMatch(/inp\.dy \* sens/);
     expect(g).toMatch(/lookDX: inp\.dx \* lookSigns\(this\.settings\)\.x, lookDY: inp\.dy \* lookSigns\(this\.settings\)\.y/);

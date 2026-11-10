@@ -8,6 +8,7 @@ import {WEAPONS, type MeleeStage, type WeaponDef} from './weapons';
 import {canvasTexture} from '../world/canvasTextures';
 import {OPTIC_ADS_KICK, RifleOptic, opticAimPosition} from './optic';
 import {KNIFE_POSES, MELEE_POSES, meleePoseOffset, type PoseOffset} from './meleeView'; // lane KNIFE / FEEL
+import {GunParts} from './gunParts'; // task studio-weapon-variety-production-20261109-224355-01 (lane GUNS): visible reloads
 
 interface HeldModel {
   root: THREE.Object3D;
@@ -24,6 +25,8 @@ interface HeldModel {
   /** User weapon models (2026-10-28): `Sight` / `Eject` markers relative to the Grip pivot (holder frame), when present. */
   sightPoint?: THREE.Vector3;
   eject?: THREE.Vector3;
+  /** Lane GUNS (weapon variety): the model's movable reload parts ('Magazine', 'Barrels' + 'Hinge'), when it has any. */
+  parts?: GunParts;
 }
 
 /** Sight relief used when a model has a `Sight` marker but its WeaponDef sets no `view.sightRelief`. */
@@ -62,7 +65,9 @@ export interface ViewState {
    * Lane FEEL (knife-windup-20261030): the held melee weapon's cycle stage and seconds into it (weapons.ts
    * WeaponController.meleePose: windup / ready / swing / recover; stage null / absent = the carry pose).
    */
-  melee?: {stage: MeleeStage | null; t: number};
+  melee?: {stage: MeleeStage | null; t: number; charge?: number}; // (lane MELEE, weapon variety: + a charge weapon's charge 0..1)
+  /** Lane GUNS: how far the held gun's BREAK action is open (WeaponController.actionOpen, 0 closed .. 1 open; absent = 0). */
+  actionOpen?: number;
 }
 
 export class Viewmodel {
@@ -98,29 +103,7 @@ export class Viewmodel {
     for (const [id, gltf] of Object.entries(models) as [string, Pick<GLTF, 'scene'> | undefined][]) {
       const def = WEAPONS[id];
       if (!gltf || !def) continue;
-      const root = gltf.scene.clone(true);
-      root.updateMatrixWorld(true);
-      const grip = root.getObjectByName('Grip');
-      const muzzleObj = root.getObjectByName('Muzzle');
-      const gp = grip ? grip.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3();
-      const mp = muzzleObj ? muzzleObj.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(0, 0, -def.view.length / 2);
-      // see-through optic (model space, before the Grip shift); without one a `Sight` marker drives ADS, else the legacy view.aim
-      const optic = def.view.optic ? RifleOptic.attach(root, def.view.optic) : null;
-      const sightObj = optic ? undefined : root.getObjectByName('Sight');
-      const sightPoint = sightObj ? sightObj.getWorldPosition(new THREE.Vector3()).sub(gp) : undefined;
-      const ejectObj = root.getObjectByName('Eject');
-      const eject = ejectObj ? ejectObj.getWorldPosition(new THREE.Vector3()).sub(gp) : undefined;
-      const holder = new THREE.Group();
-      root.position.sub(gp);
-      holder.add(root);
-      root.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) { m.frustumCulled = false; if (m.renderOrder === 0) m.renderOrder = 1; } });
-      holder.visible = false;
-      this.pivot.add(holder);
-      const opticPoint = optic ? optic.rear.sub(gp) : undefined;
-      const aim = optic ? opticAimPosition(opticPoint!, def.view.optic!)
-        : sightPoint ? sightAimPosition(sightPoint.clone().setY(sightPoint.y + (def.view.sightLift ?? 0)), def.view.sightRelief ?? SIGHT_RELIEF_DEFAULT) // sightLift: eye just over a solid optic/receiver
-        : new THREE.Vector3(...def.view.aim);
-      this.items.set(id, {root: holder, muzzle: mp.sub(gp), def, hip: new THREE.Vector3(...def.view.hip), aim, hipYaw: def.view.hipYaw, hipPitch: def.view.hipPitch, hipRoll: def.view.hipRoll, optic: optic?.optic, opticPoint, sightPoint, eject});
+      this.registerWeaponModel(id, def, gltf);
     }
     for (const [id, obj] of Object.entries(consumables)) {
       const holder = new THREE.Group();
@@ -152,6 +135,58 @@ export class Viewmodel {
   }
 
   /**
+   * A held weapon model (constructor models and addModel): a clone pivoting at its `Grip` marker, the muzzle flash at
+   * `Muzzle`, ADS from a see-through optic, else the `Sight` marker (sightRelief / sightLift), else `view.aim`; the
+   * `Eject` marker for casings; (lane GUNS) its movable reload parts. The constructor path is unchanged by the move here.
+   */
+  private registerWeaponModel(id: string, def: WeaponDef, gltf: Pick<GLTF, 'scene'>): void {
+    const root = gltf.scene.clone(true);
+    root.updateMatrixWorld(true);
+    const grip = root.getObjectByName('Grip');
+    const muzzleObj = root.getObjectByName('Muzzle');
+    const gp = grip ? grip.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3();
+    const mp = muzzleObj ? muzzleObj.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(0, 0, -def.view.length / 2);
+    // see-through optic (model space, before the Grip shift); without one a `Sight` marker drives ADS, else the legacy view.aim
+    const optic = def.view.optic ? RifleOptic.attach(root, def.view.optic) : null;
+    const sightObj = optic ? undefined : root.getObjectByName('Sight');
+    const sightPoint = sightObj ? sightObj.getWorldPosition(new THREE.Vector3()).sub(gp) : undefined;
+    const ejectObj = root.getObjectByName('Eject');
+    const eject = ejectObj ? ejectObj.getWorldPosition(new THREE.Vector3()).sub(gp) : undefined;
+    const parts = GunParts.find(root) ?? undefined; // lane GUNS: before the Grip shift (model frame); none on the baseline models
+    const holder = new THREE.Group();
+    root.position.sub(gp);
+    holder.add(root);
+    root.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) { m.frustumCulled = false; if (m.renderOrder === 0) m.renderOrder = 1; } });
+    holder.visible = false;
+    this.pivot.add(holder);
+    const opticPoint = optic ? optic.rear.sub(gp) : undefined;
+    const aim = optic ? opticAimPosition(opticPoint!, def.view.optic!)
+      : sightPoint ? sightAimPosition(sightPoint.clone().setY(sightPoint.y + (def.view.sightLift ?? 0)), def.view.sightRelief ?? SIGHT_RELIEF_DEFAULT) // sightLift: eye just over a solid optic/receiver
+      : new THREE.Vector3(...def.view.aim);
+    this.items.set(id, {root: holder, muzzle: mp.sub(gp), def, hip: new THREE.Vector3(...def.view.hip), aim, hipYaw: def.view.hipYaw, hipPitch: def.view.hipPitch, hipRoll: def.view.hipRoll, optic: optic?.optic, opticPoint, sightPoint, eject, parts});
+  }
+
+  /**
+   * Task studio-weapon-variety-production-20261109-224355-01 (lane GUNS): register a held weapon model LATE — any WEAPONS id
+   * (guns and melee; the weapon-variety models load lazily per section). Same placement rules as the constructor's models
+   * (registerWeaponModel). Replaces an earlier model of that id; when `id` is the item the game asked to hold (setItem
+   * before the model had arrived, or the replaced one in hand), it is shown at once (raised like an equip). Its root is
+   * one of warmRoots() from then on: the caller's warm-up compiles it before it is first seen. False = no such weapon.
+   */
+  addModel(id: string, gltf: Pick<GLTF, 'scene'>): boolean {
+    const def = WEAPONS[id];
+    if (!def || !gltf?.scene) return false;
+    const old = this.items.get(id);
+    if (old) {
+      if (this.current === id) { old.root.visible = false; this.current = null; }
+      this.pivot.remove(old.root);
+    }
+    this.registerWeaponModel(id, def, gltf);
+    if (this.wanted === id && this.current !== id) this.setItem(id);
+    return true;
+  }
+
+  /**
    * Task office-overhaul-20261030 (lane INTERACT, #1): an extra held item with its own hand pose — the worn backpack readied
    * with 6 is held in front of you (gear/system.ts adds it once, before the warm-up, so its pipelines compile on the loading
    * screen). `hip` = holder position in viewmodel camera space; no ADS pose (aim = hip). Replaces an earlier one of that id.
@@ -179,7 +214,11 @@ export class Viewmodel {
     return this.current;
   }
 
+  /** Lane GUNS: the item last asked for by setItem, even when its model was not registered yet (addModel shows it on arrival). */
+  private wanted: string | null = null;
+
   setItem(itemId: string | null): void {
+    this.wanted = itemId;
     if (this.current === itemId) return;
     if (this.current) this.items.get(this.current)!.root.visible = false;
     this.current = itemId && this.items.has(itemId) ? itemId : null;
@@ -338,7 +377,7 @@ export class Viewmodel {
     const e = 1 - ease(this.equipT);
     pos.y -= e * 0.32;
     rot.x -= e * 0.7;
-    // reload choreography (whole-model motion; no magazine/shell geometry is animated)
+    // reload choreography (whole-model motion; lane GUNS: + the model's movable parts, when it has any — see below)
     if (s.reloading && it.def) {
       const p = s.reloadProgress;
       if (it.def.reload.kind === 'magazine') {
@@ -348,12 +387,21 @@ export class Viewmodel {
         rot.x += tilt * 0.22 - jolt * 0.12;
         pos.y -= tilt * 0.05 - jolt * 0.015;
         pos.x -= tilt * 0.03;
+      } else if (it.def.reload.kind === 'break') {
+        // lane GUNS: a break action — the open breech presented up toward the eye (muzzle down, canted), a nudge per shell
+        const k = ease(Math.max(0, Math.min(1, s.actionOpen ?? 0)));
+        rot.x -= k * 0.34 - this.bump * 0.06;
+        rot.z += k * 0.24;
+        pos.y += k * 0.035 - this.bump * 0.01;
+        pos.x -= k * 0.035;
       } else {
         rot.z += 0.4;
         rot.x += 0.18 - this.bump * 0.08;
         pos.y -= 0.03 - this.bump * 0.012;
       }
     }
+    // lane GUNS: the magazine out -> in during a magazine reload, the barrels turning about the hinge with a break action
+    it.parts?.apply(s.reloading && it.def?.reload.kind === 'magazine' ? s.reloadProgress : null, s.actionOpen ?? 0);
     if (s.using) {
       const p = s.useProgress;
       pos.y += Math.sin(p * Math.PI) * 0.06;
@@ -379,7 +427,9 @@ export class Viewmodel {
     // eases back to the carry instead of snapping (no pop).
     if (it.def?.melee) {
       const st = s.melee?.stage ?? null;
-      const k = meleePoseOffset(st, s.melee?.t ?? 0, it.def.melee, MELEE_POSES[it.def.view.model] ?? KNIFE_POSES, this.swingPose);
+      // (lane MELEE, weapon variety: each weapon's own key poses by its model key = weapon id; a charge weapon's ready pose / swing
+      // start follow its charge)
+      const k = meleePoseOffset(st, s.melee?.t ?? 0, it.def.melee, MELEE_POSES[it.def.view.model] ?? KNIFE_POSES, this.swingPose, s.melee?.charge ?? 0);
       const a = this.meleeApplied, f = st ? 1 : Math.min(1, dt * 14);
       a.x += (k.x - a.x) * f; a.y += (k.y - a.y) * f; a.z += (k.z - a.z) * f;
       a.rx += (k.rx - a.rx) * f; a.ry += (k.ry - a.ry) * f; a.rz += (k.rz - a.rz) * f;

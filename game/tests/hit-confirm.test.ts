@@ -218,7 +218,12 @@ describe('foreground player hit confirm: aggregation and bounds', () => {
     expect(melee.length).toBe(1);
     expect(melee[0][1].split(',').map(s => s.trim())).toEqual(['point.x', 'point.y', 'point.z', 'z', "res.part === 'head'"]); // (+ the confirmed head part: task studio-general-armor-20261107-231448-01)
     const inMelee = src.slice(src.lastIndexOf('private meleeContact(', melee[0].index), melee[0].index);
-    expect(inMelee).not.toContain('for (');
+    // task studio-weapon-variety-production-20261109-224355-01 (lane MELEE, re-pin): the wide sweeps (machete / track shovel) strike up
+    // to MeleeSpec.maxTargets DISTINCT targets — still one confirm per damaged enemy per swing: the ONLY enclosing loop is the per-swing
+    // hit set (combat/melee.ts resolveMeleeSweep: each target at most once — weapon-variety-melee.test.ts proves it); the knife's set is
+    // its one target (resolveMelee). No per-ray loop encloses the call.
+    expect(inMelee.match(/for \(/g)?.length).toBe(1);
+    expect(inMelee.lastIndexOf('for (')).toBe(inMelee.lastIndexOf('for (const [i, res] of sweep.hits.entries())'));
     const calls = all.filter(c => !melee.includes(c));
     expect(calls.length).toBe(1);
     expect(calls[0][1].split(',').map(s => s.trim())).toEqual(['e.point.x', 'e.point.y', 'e.point.z', 'z', 'e.head']);

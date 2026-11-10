@@ -3,6 +3,9 @@
 // slabs of every storey / prop boxes: combat/hitscan.ts raycastWorld), enemy hit volumes via rayCapsule / raySphere
 // (zombie head / torso / limb), corpses as blockers. Misses stay misses, nothing is hit through geometry, and at most ONE
 // enemy takes damage per swing (the centre-most ray that reaches one decides; no area clear). Pure: no THREE, no DOM.
+// Task studio-weapon-variety-production-20261109-224355-01 (lane MELEE): + resolveMeleeSweep, the per-swing HIT SET of the wide
+// weapon-variety sweeps (up to MeleeSpec.maxTargets DISTINCT targets, each once, through the same rays / occlusion); the knife keeps
+// resolveMelee.
 
 import {rayCapsule, raySphere, type Vec3} from './hitscan';
 
@@ -88,6 +91,61 @@ export function resolveMelee<T, C = unknown, W extends {t: number; kind: string}
     if (wh.kind !== 'none' && wh.t <= reach) contact ??= {kind: 'world', surface: wh.kind, t: wh.t, point: at(wh.t), dir: d, ray: i, hit: wh};
   }
   return contact;
+}
+
+/** Lane MELEE (weapon variety): the outcome of one swing — the struck targets (distinct, centre-most first) or, with none, a contact. */
+export interface MeleeSweep<T, C = unknown, W = {t: number; kind: string}> {
+  /** Each target at most ONCE, in pattern order of the ray that first reached it (hits[0] = the centre-most). At most `maxTargets`. */
+  hits: MeleeHit<T>[];
+  /** Without a hit: the first corpse / surface a ray struck (feedback only); null = a clean miss (or there were hits). */
+  contact: MeleeCorpseContact<C> | MeleeWorldContact<W> | null;
+}
+
+/**
+ * Task studio-weapon-variety-production-20261109-224355-01 (lane MELEE): one swing resolved ONCE at contact into a PER-SWING HIT SET
+ * of up to `maxTargets` DISTINCT live targets (a wide machete / shovel sweep catches two). Every ray is the knife's: it stops at the
+ * first world surface (walls / props / slabs: Levels.raycast through `world`) and at the nearest corpse, and strikes the nearest live
+ * volume before those — a target already in the set still BLOCKS the ray (a body shields the one behind it; nothing passes through
+ * it), it is just not struck twice. Rays run in pattern order (centre first), so hits[0] is what the knife's resolveMelee would pick:
+ * with maxTargets 1 this is resolveMelee exactly (tests: weapon-variety-melee.test.ts). Nothing outside the pattern's forward fan and
+ * nothing behind geometry is ever struck (no 360-degree / through-wall hits).
+ */
+export function resolveMeleeSweep<T, C = unknown, W extends {t: number; kind: string} = {t: number; kind: string}>(o: Vec3, dirs: readonly Vec3[], reach: number,
+  targets: Iterable<MeleeTarget<T>>, world: MeleeWorldRay<W>, corpse?: MeleeCorpseRay<C>, maxTargets = 1): MeleeSweep<T, C, W> {
+  const max = Math.max(1, Math.floor(maxTargets));
+  const live = [...targets].filter(t => t.alive && Math.hypot(t.x - o.x, t.z - o.z) <= reach + 1.5); // bodies are < 1.5 m from their feet
+  const hits: MeleeHit<T>[] = [];
+  const struck = new Set<T>();
+  let contact: MeleeCorpseContact<C> | MeleeWorldContact<W> | null = null;
+  for (let i = 0; i < dirs.length && hits.length < max; i++) {
+    const d = dirs[i];
+    const wh = world(o, d, reach);
+    let bestT = Math.min(reach, wh.t);
+    let best: {id: T; part: MeleePart} | null = null;
+    for (const tg of live) {
+      for (const v of tg.volumes) {
+        const t = v.b ? rayCapsule(o, d, v.a, v.b, v.r) : raySphere(o, d, v.a, v.r);
+        if (t < bestT) { bestT = t; best = {id: tg.id, part: v.part}; }
+      }
+    }
+    const c = corpse?.(o, d, bestT) ?? null;
+    const at = (t: number): Vec3 => ({x: o.x + d.x * t, y: o.y + d.y * t, z: o.z + d.z * t});
+    if (c && c.t < bestT) {
+      contact ??= {kind: 'corpse', corpse: c, t: c.t, point: at(c.t), dir: d, ray: i};
+      continue;
+    }
+    if (best) {
+      if (!struck.has(best.id)) { struck.add(best.id); hits.push({kind: 'enemy', target: best.id, part: best.part, t: bestT, point: at(bestT), dir: d, ray: i}); }
+      continue; // (an already struck body shields what is behind it on this ray)
+    }
+    if (wh.kind !== 'none' && wh.t <= reach) contact ??= {kind: 'world', surface: wh.kind, t: wh.t, point: at(wh.t), dir: d, ray: i, hit: wh};
+  }
+  return {hits, contact: hits.length ? null : contact};
+}
+
+/** The knife's single-target result (resolveMelee) in the sweep's shape: its one hit, or its contact / clean miss. */
+export function asMeleeSweep<T, C, W>(r: MeleeResult<T, C, W>): MeleeSweep<T, C, W> {
+  return r?.kind === 'enemy' ? {hits: [r], contact: null} : {hits: [], contact: r};
 }
 
 /** Damage of one melee hit on a body part (no range falloff: the reach is the range). */

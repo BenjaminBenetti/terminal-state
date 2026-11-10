@@ -24,6 +24,7 @@ import {isBeer} from '../items/beers'; // task studio-market-bar-20261108-225231
 import {beerModel, beerModelSource} from '../market/beer/beerModel';
 import {isPantryItem} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
 import {pantryFallbackModel, pantryGltf, pantryModelSource} from './pantryModels';
+import {weaponVarietyGltf} from './weaponVarietyModels'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the lazily loaded new weapons
 import {Grid} from '../gen/grid';
 import type {Levels} from '../gen/levels';
 import type {MarketStallId} from '../gen/market/marketTypes';
@@ -417,10 +418,13 @@ export class PickupManager {
   /** The object an item is drawn with (a gun on its side, else the shared item template's copy). Task train-loose-cargo: also its riding cargo. */
   meshFor(itemId: string): THREE.Object3D {
     const def = itemDef(itemId);
-    if (def.kind === 'weapon' && this.guns[itemId]) {
+    // (task studio-weapon-variety-production-20261109-224355-01, lane LOOT-UI: + the twelve new weapons once their lazy model is resident —
+    // world/weaponVarietyModels.ts; its meshes are flagged userData.shared, so remove() never disposes them)
+    const model = def.kind === 'weapon' ? this.guns[itemId] ?? weaponVarietyGltf(itemId) : undefined;
+    if (model) {
       // Lay the gun on its side: muzzle along -X, detailed side facing up.
       const wrap = new THREE.Group();
-      const gun = this.guns[itemId].scene.clone(true);
+      const gun = model.scene.clone(true);
       gun.rotation.set(0, Math.PI / 2, Math.PI / 2);
       wrap.add(gun);
       wrap.updateMatrixWorld(true);

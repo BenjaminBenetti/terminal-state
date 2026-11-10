@@ -261,7 +261,9 @@ describe('shot / hit spans (debug/updateProfile.ts)', () => {
     // then the shelf stock inside open shelving it passed; one more comment line)
     expect(game).toMatch(/prof\.begin\(SPAN\.fireRays\);\s*\/\/ Lane B[^\n]*\n(\s*\/\/[^\n]*\n)*\s*const wh = raycastShot\(/);
     expect(game).toMatch(/const fh = this\.stock\.pelletHit\([^\n]*\n\s*prof\.end\(SPAN\.fireRays\);/);
-    expect(game).toMatch(/prof\.begin\(SPAN\.fireFx\);\s*this\.sfx\.shot\(def\.sound\);/);
+    // (task studio-weapon-variety-production-20261109-224355-01: the shot cue may take the gun's shot cycle — no pump rack after a
+    // semi-auto / break-action shotgun; the span still opens at the shot sound)
+    expect(game).toMatch(/prof\.begin\(SPAN\.fireFx\);\s*this\.sfx\.shot\(def\.sound(, def\.shotCycle)?\);/);
     expect(game).toMatch(/this\.physics\.onFire\([^\n]*\n\s*prof\.end\(SPAN\.fireFx\);/);
     expect((game.match(/prof\.begin\(SPAN\.ragdoll\);\s*this\.physics\.ragdoll\(/g) ?? []).length).toBe(2); // fire + melee kills
     expect(game).toMatch(/private alertZombies\(radius: number\): void \{\s*this\.prof\.begin\(SPAN\.alert\);/);

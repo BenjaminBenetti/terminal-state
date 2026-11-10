@@ -28,6 +28,7 @@
 import {Rng, hashString} from '../../core/rng';
 import {ITEMS, type ItemDef} from '../../items/items';
 import {WEAPONS} from '../../weapons/weapons';
+import {isVarietyWeapon} from '../../weapons/varietyIds'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI)
 import {gearSpec, isAirtank, isFilterMask} from '../../items/gear';
 import {BOX_COUNT, GEAR_WEIGHTS, GLOBAL_POOL, LIMB_ECONOMY, type ItemRows, type LotRange} from '../../items/lootTables';
 import {FUEL} from '../../fuel/fuel';
@@ -75,8 +76,12 @@ function lots(rng: Rng, rows: ItemRows, range: LotRange, count: (d: ItemDef) => 
 const small = (rng: Rng, hi: number) => (d: ItemDef) => rng.int(1, Math.max(1, Math.min(hi, d.stackMax)));
 const box = (rng: Rng) => (d: ItemDef) => { const b = BOX_COUNT[d.id]; return b ? rng.int(b.big[0], b.big[1]) : rng.int(1, d.stackMax); };
 
-/** The weapons the item registry holds (guns first; melee half as often). */
-const weaponRows = (): ItemRows => Object.values(ITEMS).filter(d => d.kind === 'weapon' && d.weaponId && WEAPONS[d.weaponId])
+/**
+ * The weapons the item registry holds (guns first; melee half as often). Task studio-weapon-variety-production-20261109-224355-01 (lane
+ * LOOT-UI, the lead's loot decision: vendor / market stock UNCHANGED): the twelve variety weapons (weapons/varietyIds.ts) are never seeded
+ * here — the gunsmith keeps exactly its baseline rows and draws (they arrive only as diversified weapon finds; a player may still sell one).
+ */
+const weaponRows = (): ItemRows => Object.values(ITEMS).filter(d => d.kind === 'weapon' && d.weaponId && WEAPONS[d.weaponId] && !isVarietyWeapon(d.id))
   .map(d => [d.id, WEAPONS[d.weaponId!].melee ? 0.5 : 1] as const);
 
 /** What one stall stocks (the draws of its own stream; counts before merging). */

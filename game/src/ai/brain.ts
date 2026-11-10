@@ -382,8 +382,11 @@ export class ZombieBrain {
    * Returns true if this hit killed the zombie (iteration 08: `fromY` = the shooter's feet height). Lane KNIFE
    * (knife-melee-20261030): `o.stagger === false` skips the hit stagger (melee hits: no stun-lock — a zombie hit by the knife
    * keeps closing / swinging, so getting close stays a trade); everything else (aware, chase, death) is the same.
+   * Task studio-weapon-variety-production-20261109-224355-01 (lane MELEE): `o.staggerS` = a heavy melee hit's stagger length (s; default
+   * 0.35 as every hit before) under the SAME rules (>= 20 damage, never mid-attack, the cooldown); the cooldown is at least 0.9 s as
+   * before and covers a longer stagger + 0.55 s, so no weapon can stun-lock (combat/meleeImpact.ts).
    */
-  damage(amount: number, fromX: number, fromZ: number, fromY?: number, o: {stagger?: boolean} = {}): boolean {
+  damage(amount: number, fromX: number, fromZ: number, fromY?: number, o: {stagger?: boolean; staggerS?: number} = {}): boolean {
     if (!this.alive) return false;
     this.hp -= amount;
     this.lastKnown = [fromX, fromZ, fromY];
@@ -395,8 +398,9 @@ export class ZombieBrain {
     }
     if (this.state === 'climb') { if (this.climb) this.climb.resume = 'chase'; }
     else if (this.state !== 'attack' && amount >= 20 && this.staggerCd <= 0 && o.stagger !== false) {
-      this.setState('stagger', 0.35);
-      this.staggerCd = 0.9;
+      const s = o.staggerS ?? 0.35; // (lane MELEE: a heavy melee hit's own stagger length; every other hit 0.35 s / 0.9 s exactly as before)
+      this.setState('stagger', s);
+      this.staggerCd = Math.max(0.9, s + 0.55);
     } else if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate' || this.state === 'patrol') {
       this.setState('chase');
       this.path = []; // lane SCHED: as in hear()
