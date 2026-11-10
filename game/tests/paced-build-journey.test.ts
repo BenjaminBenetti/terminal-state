@@ -39,6 +39,7 @@ describe('the journey builds the next station paced (lane BUILD)', async () => {
       run: createRun({seeds: SEEDS, start: key(0), levels: LEVELS, campaign: fixtureCampaign()}),
       saveValidate, saves: new SaveSlots({storage, validate: saveValidate, listen: false}), currentSlot: null, saveRevision: 0, saveRunId: -1,
       lifecycle: new SingleFlight(), warmRun: Promise.resolve(), campaignListeners: [], transitGap: false, mapBack: null, retired: [],
+      lifecycleCounts: {generate: 0, prepare: 0, build: 0, leave: 0, loading: 0}, // (the real generateSection counts)
       hud: {toast: (t: string) => log.push(`toast:${t}`)},
       sfx: {engineStall: () => log.push('stall'), denied: () => log.push('denied')},
       trainRide: {

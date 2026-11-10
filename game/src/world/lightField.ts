@@ -651,6 +651,7 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
   }
   const depth = fieldDepth(S) + hdr, gs0 = fieldDepth(S);
   const data = new Uint8Array(W * H * depth * 4);
+  yield;
   // Packed slot choice (no per-slot loop in the shader). Legacy columns (the iteration-08 texel, byte for byte): R = slot
   // mask, G / B = heights between consecutive bands (mid-slab), A = band count << 6 | slot of band k in bits 2k. Extended
   // columns: A = band count, R / G / B = the splits above bands 2 / 5 / 8; group texel g (slice gs0 + g) = the splits above
@@ -695,6 +696,7 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
       }
     }
   }
+  yield;
   // Slot header height ranges: the global range in a legacy field (iteration-08 bytes and maths), each slot's own range
   // (its open floors / ceilings and the closed-cell default band) in an extended one.
   const slotY = new Float64Array(2 * S);

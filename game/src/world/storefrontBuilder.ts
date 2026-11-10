@@ -74,6 +74,7 @@ export function* buildStorefrontsSteps(group: THREE.Group, layout: StationLayout
     boxes.push(...p.boxes);
     faces.push(...p.faces);
   }
+  yield 'world.storefronts.blocks';
   // --- Architectural blocks: one merged mesh per material key -------------------------------
   const byMat = new Map<string, ShopBox[]>();
   for (const b of boxes) { let l = byMat.get(b.m); if (!l) byMat.set(b.m, (l = [])); l.push(b); }
@@ -86,7 +87,7 @@ export function* buildStorefrontsSteps(group: THREE.Group, layout: StationLayout
     mesh.updateMatrix();
     group.add(mesh);
   }
-  yield;
+  yield 'world.storefronts.fascia';
   // --- Fascia lettering (atlas) and leasing hoardings ------------------------------------------
   const fascias = faces.filter(f => f.kind === 'fascia');
   if (fascias.length) group.add(faceMesh(fascias, fasciaAtlas(layout.storefronts, fascias), 'shopfront-fascia'));
@@ -95,7 +96,7 @@ export function* buildStorefrontsSteps(group: THREE.Group, layout: StationLayout
   // --- Furniture holders --------------------------------------------------------------------
   let instances = 0;
   for (const kind of SHOP_HOLDERS) {
-    yield;
+    yield `world.storefronts.${kind}`;
     if (rendersOwnBody(kind, deps.models)) continue; // iteration 08 (Lane I): openable (glass-door cooler) drawn by world/openables.ts
     const list = layout.props.filter(p => p.kind === kind);
     if (!list.length) continue;
@@ -117,10 +118,10 @@ export function* buildStorefrontsSteps(group: THREE.Group, layout: StationLayout
     }
     instances += proceduralFurniture(group, kind, list, placements, layout.storefronts, deps);
   }
-  yield;
+  yield 'world.storefronts.purpose';
   // --- Purpose props (iteration 05): store fixtures, kitchen lines, back-of-house furniture ------
-  instances += buildPurposeProps(group, layout, deps);
-  yield;
+  instances += yield* buildPurposeProps(group, layout, deps);
+  yield 'world.storefronts.p7';
   // --- Iteration 07 (Lane P2): NEW generated prop types (lazy per-station models) ---------------------------------------------
   instances += buildP7Props(group, layout, deps);
   return instances + boxes.length;
@@ -190,8 +191,8 @@ function accentVertexColored(): THREE.Material {
  * many fixtures stand there, frustum-culled by chunk. `accent` parts take the storefront brand
  * colour, else the kind's palette (vertex colours).
  */
-function buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: StorefrontDeps): number {
-  let instances = 0;
+function* buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: StorefrontDeps): BuildSteps<number> { // (task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): steps — per kind, every 16 props, per merged mesh)
+  let instances = 0, step = 0;
   const buckets = new Map<string, {mat: string; geos: THREE.BufferGeometry[]; level?: number}>();
   const parts0: {level: number; x: number; z: number; mk: string; geo: THREE.BufferGeometry}[] = [];
   const shapes = new Map<string, PurposePart[]>();
@@ -200,6 +201,7 @@ function buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: Stor
   // (task studio-skywalk-variety-20261107-231448-01, lane PERF: + the Skyways — fine chunks are what its occlusion culls with)
   const byStorey = !!(layout as {mall?: unknown}).mall || !!(layout as {reactor?: unknown}).reactor || !!(layout as {skyways?: unknown}).skyways;
   for (const kind of PURPOSE_PROP_KINDS) {
+    yield;
     if (rendersOwnBody(kind, deps.models)) continue; // iteration 08 (Lane I): openable (lockers, safe) drawn by world/openables.ts
     const list = layout.props.filter(p => p.kind === kind);
     if (!list.length) continue;
@@ -220,6 +222,7 @@ function buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: Stor
     if (stockOnly) instances += deps.instanceModel(group, deps.models.shelf!, list.map(placeM), {w: def.w, h: def.h, d: def.d, anchor: 'bottom'}, 'stockShelf-frame');
     const palette = PURPOSE_ACCENT[kind];
     for (const p of list) {
+      if (++step % 16 === 0) yield;
       const v = shapeVariant(kind, p.variant);
       const bare = isMerchBare(kind, p.variant); // (lane MERCH: a bare demo table — its devices are separate props in Skyways version 4)
       const sk = `${kind}:${v}:${stockOnly ? 's' : 'f'}${bare ? ':bare' : ''}`;
@@ -272,7 +275,9 @@ function buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: Stor
       for (const e of es) bk.geos.push(e.geo);
     }
   }
+  yield;
   for (const [key, bk] of buckets) {
+    yield;
     const geo = mergeGeometries(bk.geos);
     const mesh = new THREE.Mesh(geo, bk.mat === 'accent' ? accentVertexColored() : materialFor(deps, bk.mat));
     mesh.name = `purpose-${key}`;

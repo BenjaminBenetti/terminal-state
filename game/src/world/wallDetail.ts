@@ -137,7 +137,7 @@ export function* buildWallDetailSteps(world: THREE.Group, layout: StationLayout,
   const existing = world.children.find(c => c.name === 'wall-detail') as THREE.Group | undefined;
   if (existing?.userData.wallDetailResult) return existing.userData.wallDetailResult as WallDetailResult; // already treated (never cut twice)
   const plan = planWallDetail(layout, {faces});
-  yield;
+  yield 'world.wallDetail.prepare';
   const tPlan = performance.now();
   const group = new THREE.Group();
   group.name = 'wall-detail';
@@ -166,7 +166,7 @@ export function* buildWallDetailSteps(world: THREE.Group, layout: StationLayout,
     return {axis: F.axis, plane: F.plane, nSign: F.axis === 'z' ? F.f.nz : F.f.nx, poly: cutPolyC(F, f)};
   });
   const cuts = prepareCuts(baseMeshes, specs);
-  yield;
+  yield 'world.wallDetail.insets';
 
   // --- insets (all-or-nothing per cut), then the walls are cut for the insets that exist -----------
   for (let i = 0; i < cutFeatures.length; i++) {
@@ -180,11 +180,11 @@ export function* buildWallDetailSteps(world: THREE.Group, layout: StationLayout,
       for (const [k, b] of local) B(k).append(b);
     } catch (e) { specs[i].applied = false; console.warn('wall detail: cut skipped', f.kind, e); }
   }
-  yield;
+  yield 'world.wallDetail.commit';
   const tInsets = performance.now();
   const cutRes = cuts.commit();
   const tCut = performance.now();
-  yield;
+  yield 'world.wallDetail.flat';
 
   // --- flat layers, fittings ---------------------------------------------------------------------
   let step = 0;
@@ -199,7 +199,7 @@ export function* buildWallDetailSteps(world: THREE.Group, layout: StationLayout,
     } catch (e) { console.warn('wall detail: feature skipped', f.kind, e); }
   }
 
-  yield;
+  yield 'world.wallDetail.meshes';
   const tFlat = performance.now();
   // --- meshes ----------------------------------------------------------------------------------------
   const matFor: Record<DetailMat, () => THREE.Material | null> = {

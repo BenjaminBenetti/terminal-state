@@ -258,8 +258,13 @@ function* buildFieldOf(layout: StationLayout, levels: readonly Level[]): BuildSt
   const sources: number[] = [], leaks: number[] = [];
   const doors = layout.doors ?? [];
   const links = (layout as {levelLinks?: {kind: string; lower: number; upper: number; bottom: {x: number; z: number}; top: {x: number; z: number}}[]}).levelLinks ?? [];
-  // (lane BUILD) one level per step; its loops stay in a plain function (out of the generator body)
-  const fillLevel = (L: number): void => {
+  for (let L = 0; L < S; L++) { fillDecayLevel(layout, levels, L, W, H, n, data, seed, sources, leaks, doors, links); yield; } // (lane BUILD: one level per step)
+  return {w: W, h: H, levels: S, data, stats: {ms: (typeof performance !== 'undefined' ? performance.now() : 0) - t0, sources, leaks}};
+}
+
+/** task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): one level of buildFieldOf (its body, unchanged; a plain function so its loops run on locals, not captured variables). */
+function fillDecayLevel(layout: StationLayout, levels: readonly Level[], L: number, W: number, H: number, n: number, data: Uint8Array, seed: number, sources: number[], leaks: number[],
+  doors: StationLayout['doors'], links: {kind: string; lower: number; upper: number; bottom: {x: number; z: number}; top: {x: number; z: number}}[]): void {
     const g = levels[L].grid, role = levels[L].role, id = levels[L].id;
     const rnd = mulberry32(seed ^ Math.imul(L + 1, 0x9e3779b1));
     const walk = new Uint8Array(n), open = new Uint8Array(n);
@@ -395,9 +400,6 @@ function* buildFieldOf(layout: StationLayout, levels: readonly Level[]): BuildSt
       data[o + 2] = Math.round(Math.min(WET_CAP, wet[i]) * 255);
       data[o + 3] = Math.round(neg * 255);
     }
-  };
-  for (let L = 0; L < S; L++) { fillLevel(L); yield; }
-  return {w: W, h: H, levels: S, data, stats: {ms: (typeof performance !== 'undefined' ? performance.now() : 0) - t0, sources, leaks}};
 }
 
 /** Field channels at a world point of a level (bilinear like the shader; 0..1). Tests / QA. */

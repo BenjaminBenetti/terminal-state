@@ -27,7 +27,7 @@ import {buildStorefrontsSteps} from './storefrontBuilder';
 import {buildTraversal} from './traversalBuilder';
 import {SIGN_SIZE, passageRails, signDims} from '../gen/doorways';
 import {
-  CHUNK_M, LevelColumns, RAIL_HEIGHT, cellCeil as cellCeilAt, ceilingRuns, chunkKey, extractWallFaces, levelOf, rampsEqual, stationLevels, stationRails,
+  CHUNK_M, LevelColumns, RAIL_HEIGHT, cellCeil as cellCeilAt, ceilingRuns, chunkKey, extractWallFacesSteps, levelOf, rampsEqual, stationLevels, stationRails,
   type BuiltFace, type RailRun,
 } from './levelGeometry';
 import {planCohorts, trianglesOf} from './staticCohorts'; // task static-batching-warmup-20261105
@@ -340,18 +340,18 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   // --- Walls: union-of-open-columns faces, merged per straight run and level band ----------
   // Iteration 16 (WORLD-GEN): office window spans are cut out of the facade faces (no-op without layout.office).
   // Task studio-skyways-level-20261106-054448 (lane GAS): + the Skyways glazed spans (world/skywaysWindows.ts; no-op without layout.skyways).
-  const extracted = extractWallFaces(layout, levels, cols, {tileLowerHeight: mats.tileLowerHeight});
-  yield;
+  const extracted = yield* extractWallFacesSteps(layout, levels, cols, {tileLowerHeight: mats.tileLowerHeight});
+  yield 'world.faces.cut';
   const cutFaces: BuiltFace[] = cutSkywaysWindows(cutOfficeWindows(extracted, layout), layout);
-  yield;
+  yield 'world.faces.remap';
   // Task office-overhaul-20261030 (lane ARCH): office storey walls get office finishes (drywall, accent, wet-room tile, core, roof).
   const remapped: BuiltFace[] = office ? office.remapFaces(cutFaces, mats.tileLowerHeight) : mall ? mall.remapFaces(cutFaces, mats.tileLowerHeight) : reactor ? reactor.remapFaces(cutFaces) : sky ? sky.remapFaces(cutFaces, mats.tileLowerHeight) : mkt ? mkt.remapFaces(cutFaces) : bunk ? bunk.remapFaces(cutFaces) : cutFaces; // (+ reactor: lane ARCH; + sky: lane VIEW)
   // Track 2 (VIS): where a track tunnel continues a bed, its smooth shell replaces the grid geometry inside the corridor
   // (no stair-stepped walls, bed end-face stubs or door reveals inside the shell; world/trackExt/view.ts). Null = unchanged.
-  yield;
+  yield 'world.faces.clip';
   const ext = TrackExtView.of(layout);
   const faces: BuiltFace[] = ext ? ext.clipFaces(remapped) : remapped;
-  yield;
+  yield 'world.walls.emit';
   const emitFace = (f: BuiltFace) => {
     const alongX = Math.abs(f.z0 - f.z1) < 1e-9;
     const plane = alongX ? f.z0 : f.x0;
@@ -529,6 +529,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     group.add(mesh);
     archMeshes++;
   }
+  yield 'world.meshes.shop';
   for (const [key, e] of shopAcc) {
     const geo = e.a.geometry();
     if (!geo) continue;
@@ -735,7 +736,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   const TURNSTILE_CABINET_OFFSET = new THREE.Matrix4().makeTranslation(-0.31, 0, 0);
   const placeM = (p: PropPlacement) => new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y, p.z), new THREE.Quaternion().setFromAxisAngle(UP, p.rot), new THREE.Vector3(1, 1, 1));
   for (const [kind, list] of byKind) {
-    yield;
+    yield `world.props.${kind}`;
     // Cabinets and crates are searchable containers: built and animated by world/containers.ts.
     if (isContainerKind(kind)) continue;
     // Iteration 16 (WORLD-GEN): office furniture (Meshy models / procedural fallbacks; the office desk inside office sections).
@@ -822,15 +823,15 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   yield 'world.levelKit';
   // Task track3-eaton-centre-20261031 (lane ARCH): the mall atrium — glass vault + steel arches, glass balustrades, columns, the
   // glass shaft tower, shopfront / blade / level signage, banners, escalator soffits (world/mallArch.ts).
-  if (mall) mall.buildAtrium(group, rails);
-  yield;
+  if (mall) yield* mall.buildAtriumSteps(group, rails);
+  yield 'world.levelKit.reactor';
   // Task reactor-build-20261101 (lane ARCH): the Reactor's industrial kit (deck steel, towers, crane, pipe banks, fans, generators, the
   // vessel, site machines, bands, lamps, railings; world/reactor/arch.ts) + its ReactorVisuals (null for every other world).
-  if (reactor) reactor.build(group, rails, models);
-  yield;
+  if (reactor) yield* reactor.buildSteps(group, rails, models);
+  yield 'world.levelKit.waste';
   if (reactor) buildWasteVisuals(group, layout, mats, models); // task reactor-expansion-20261101 (lane WASTE): the waste repository's racks / casks / kit
   registerReactorArchVisuals(reactor ? reactor.visuals : null);
-  yield;
+  yield 'world.levelKit.bunker';
   if (bunk) bunk.build(group, models); // task studio-bunker-level-20261109-072224-01: the shelter's hero props (REACTOR_X_KIT models)
 
   yield 'world.trimMerge';
@@ -871,7 +872,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   // back rooms / holders behind walls were all submitted: "looking in some directions causes lag"); the glazed spans and the street air
   // are see-through, and a storey seen through a glazed span is a candidate as a whole (world/skywaysOcclusion.ts, levelCulling.ts)
   yield 'world.culler';
-  const culler = new LevelCuller(levels, cols, levelAt, mall ? {atrium: mall.atrium, slabs: {see: (layout.mall?.elevators ?? []).map(e => e.shaft)}}
+  const culler = yield* LevelCuller.steps(levels, cols, levelAt, mall ? {atrium: mall.atrium, slabs: {see: (layout.mall?.elevators ?? []).map(e => e.shaft)}}
     : reactor ? {atrium: reactor.pitMask, slabs: {see: reactor.occlusionSee(), glass: []}}
     : layout.skyways ? {slabs: {see: skywaysOcclusionSee(layout), windows: skywaysWindowSpans(layout)}}
     : mkt ? {atrium: mkt.atrium} : undefined); // (task studio-survivor-market-20261108-005807-01: the open shed as atrium tiles, no slabs)

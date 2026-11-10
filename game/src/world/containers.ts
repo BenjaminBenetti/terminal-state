@@ -508,11 +508,12 @@ export class ContainerManager {
     this.openables.setModels(allModels, this.mats);
     const fit = new FitIndex(layout);
     const openIdx = new Map<string, number>();
+    yield 'holders.place';
     let step = 0; // (lane BUILD)
     for (const p of layout.props) {
       const kind = p.kind as string;
       if (!isLootHolderKind(kind)) continue;
-      if (++step % 6 === 0) yield;
+      if (++step > 1) yield; // (one holder per step: a kind's first holder splits its model)
       const isC = isContainerKind(kind);
       const def = holderDims(kind);
       // Iteration 07 (Lane P2): spans taken by on-top decor (register, lamp ...) are not loot surface.

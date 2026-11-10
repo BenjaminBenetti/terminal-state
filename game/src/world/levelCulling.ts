@@ -103,6 +103,7 @@ import {CELL, FLOOR, VOID, type Grid} from '../gen/grid';
 import type {Level} from '../gen/levels';
 import {LevelColumns, cellCeil, rampsEqual} from './levelGeometry';
 import type {LevelResolver} from './builder';
+import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 
 /** Layer that no camera renders: culled meshes live here. */
 export const CULL_LAYER = 31;
@@ -446,16 +447,34 @@ export class LevelCuller {
 
   constructor(private readonly levels: readonly Level[], private readonly cols: LevelColumns, private readonly levelAt: LevelResolver,
     opts?: {atrium?: Uint8Array; slabs?: {see?: readonly SeeRect[]; glass?: readonly {x0: number; z0: number; x1: number; z1: number}[]; everyStorey?: boolean;
-      windows?: readonly WindowSpan[]}}) {
+      windows?: readonly WindowSpan[]}}, deferBuild = false) {
     this.levelIds = levels.map(l => l.id);
     this.allLevelIds = new Set(this.levelIds);
-    if (levels.length > 1) this.buildPortals(opts?.atrium);
-    if (levels.length > 1 && opts?.slabs) this.buildSlabs(opts.slabs.see ?? []);
-    if (levels.length > 1 && opts?.slabs) this.buildOcclusion(opts.slabs.see ?? []);
     this.everyStorey = levels.length > 1 && !!opts?.slabs?.everyStorey;
-    if (levels.length > 1 && opts?.slabs?.windows?.length) this.buildWindows(opts.slabs.windows, opts.slabs.see ?? []);
     // (task studio-reactor-submit, lane CPU: `glass` when given — the Reactor's see-through vessel column is no lift shaft — else `see`)
     this.glassShafts = opts?.atrium ? [...(opts.slabs?.glass ?? opts.slabs?.see ?? [])] : [];
+    if (!deferBuild) drainSync(this.buildSteps(opts)); // (task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): `deferBuild` = LevelCuller.steps runs them)
+  }
+
+  /**
+   * task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): `new LevelCuller(...)` as steps (core/pacedBuild.ts) — its build phases (portals, slabs, occlusion, windows; none reads
+   * everyStorey / glassShafts) one per step, where the journey's paced build may let a frame be drawn. The same culler.
+   */
+  static *steps(levels: readonly Level[], cols: LevelColumns, levelAt: LevelResolver, opts?: ConstructorParameters<typeof LevelCuller>[3]): BuildSteps<LevelCuller> {
+    const c = new LevelCuller(levels, cols, levelAt, opts, true);
+    yield* c.buildSteps(opts);
+    return c;
+  }
+
+  private *buildSteps(opts?: ConstructorParameters<typeof LevelCuller>[3]): BuildSteps<void> {
+    const levels = this.levels;
+    if (levels.length > 1) this.buildPortals(opts?.atrium);
+    yield 'world.culler.slabs';
+    if (levels.length > 1 && opts?.slabs) yield* this.buildSlabs(opts.slabs.see ?? []);
+    yield 'world.culler.occlusion';
+    if (levels.length > 1 && opts?.slabs) yield* this.buildOcclusion(opts.slabs.see ?? []);
+    yield 'world.culler.windows';
+    if (levels.length > 1 && opts?.slabs?.windows?.length) this.buildWindows(opts.slabs.windows, opts.slabs.see ?? []);
   }
 
   /**
@@ -624,10 +643,10 @@ export class LevelCuller {
    * Task mall-round2 (lane PERF): per storey, its closed columns (no free band of any level over the storey's height range; `see`
    * rects open), their summed-area table of OPEN cells and the boundary runs between open and closed columns.
    */
-  private buildOcclusion(see: readonly SeeRect[]): void {
+  private *buildOcclusion(see: readonly SeeRect[]): BuildSteps<void> { // (lane BUILD: one storey per step, its loops in a plain function)
     const {W, H} = this.cols;
     const minBase = Math.min(...this.levels.map(l => l.baseY));
-    for (const L of this.levels) {
+    const storey = (L: Level): void => {
       const above = this.levels.filter(o => o.baseY > L.baseY + 1).map(o => o.baseY);
       // (the lowest storey's range is open below — floors / pits enclose everything under it; the top storey's ends OCCL_TOP above
       // its floor, under the roof vault's glass, above which a ray can leave the building over columns nothing is drawn on)
@@ -675,7 +694,8 @@ export class LevelCuller {
       }
       this.occl.push({lo, hi, closed, openSat, runs: Float64Array.from(runs)});
       this.occlTopHi = Math.max(this.occlTopHi, hi);
-    }
+    };
+    for (const L of this.levels) { storey(L); yield; }
   }
 
   /**
@@ -1031,12 +1051,12 @@ export class LevelCuller {
   }
 
   /** Task track3 (lane PERF): per storey floor plane, the cells open across it (summed-area table, (W + 1) x (H + 1)). */
-  private buildSlabs(see: readonly SeeRect[]): void {
+  private *buildSlabs(see: readonly SeeRect[]): BuildSteps<void> { // (lane BUILD: one floor plane per step, its loops in a plain function)
     const {W, H} = this.cols;
     const base = Math.min(...this.levels.map(l => l.baseY));
     const planes = [...new Set(this.levels.map(l => l.baseY).filter(y => y > base + 1))].sort((a, b) => a - b);
     const lo: number[] = [], hi: number[] = [], ord: number[] = [];
-    for (const Y0 of planes) {
+    const plane = (Y0: number): void => {
       // Task track3 (lane ARCH): the plane lies SLAB_DROP inside the slab under storey floor Y0 (a mesh starting on that floor is
       // strictly above it, so the storey right above the eye can be slab-culled too); a band reaching into it stays open below.
       const Y = Y0 - SLAB_DROP;
@@ -1070,7 +1090,8 @@ export class LevelCuller {
       }
       this.slabPlanes.push(Y);
       this.slabOpen.push(sat);
-    }
+    };
+    for (const Y0 of planes) { plane(Y0); yield; }
   }
 
   /** Task track3 (lane PERF): whether a floor plane between the eye and the whole box blocks every ray to it (see SLAB_EPS). */

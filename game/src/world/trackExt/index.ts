@@ -17,7 +17,7 @@ import type {StationLayout} from '../../gen/station';
 import type {WorldMaterials} from '../materials';
 import {hazardMaterial} from '../traversalBuilder';
 import {Acc} from './mesh';
-import {buildShells, type ShellBuild} from './shell';
+import {buildShellsSteps, type ShellBuild} from './shell';
 import {cacheMarkDecals, graffitiDecals, graffitiMaterial, stationArtDecals, type CacheMarkDecal, type GraffitiDecal, type StationArtDecal} from './graffiti';
 import {hatchGraffiti, hatchPlates, type HatchPlate} from './hatch';
 import {serviceSignMaterial} from './shell';
@@ -85,8 +85,8 @@ export function buildTrackExtensions(group: THREE.Group, view: TrackExtView, lay
 
 /** task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): buildTrackExtensions as steps (core/pacedBuild.ts): the same code, a `yield` between its phases (shells, graffiti, plates, machines). */
 export function* buildTrackExtensionsSteps(group: THREE.Group, view: TrackExtView, layout: StationLayout, mats: WorldMaterials, o: {gensetModel?: boolean} = {}): BuildSteps<TrackExtBuilt> {
-  const shells = buildShells(group, view, layout, mats, {hazard: hazardMaterial(mats), void: voidMaterial(mats)});
-  yield;
+  const shells = yield* buildShellsSteps(group, view, layout, mats, {hazard: hazardMaterial(mats), void: voidMaterial(mats)});
+  yield 'world.trackExt.graffiti';
   // Graffiti: one merged decal mesh for the level (shared atlas material).
   const acc = new Acc();
   const decals: GraffitiDecal[] = [];
@@ -100,7 +100,7 @@ export function* buildTrackExtensionsSteps(group: THREE.Group, view: TrackExtVie
   const artDecals = stationArtDecals(acc, view.ext.art ?? [], layout.trenches, layout.seed >>> 0);
   // (round 3, lane HIDEOUT) the survivor's trail to each annex's hideout, on the annex walls: the same mesh
   const markDecals = cacheMarkDecals(acc, view.ext.cacheMarks ?? []);
-  yield;
+  yield 'world.trackExt.plates';
   const steel = new Acc(), sign = new Acc();
   const plates = hatchPlates(steel, sign, view.hatches);
   const hatchMeshes: THREE.Mesh[] = [];
@@ -127,7 +127,7 @@ export function* buildTrackExtensionsSteps(group: THREE.Group, view: TrackExtVie
     group.add(mesh);
     decalTris = acc.triangleCount;
   }
-  yield;
+  yield 'world.trackExt.machines';
   // (lane ROOMS) the annexes' anchored machinery: merged procedural geometry, one mesh per annex and material
   const machines = buildAnnexMachines(group, layout, mats, o); // (round 2, R3) gensetModel: the generated genset replaces the procedural body
   const lengthM = view.tunnels.reduce((n, v) => n + v.f.length, 0);

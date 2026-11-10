@@ -409,8 +409,7 @@ export class ShelfStock implements FillerView {
     yield 'stock.bake';
     for (let ci = 0; ci < chunkPieces.length; ci++) {
       const ids = chunkPieces[ci];
-      for (const f of [0, 1] as const) { const fi = ids.filter(id => this.fam[id] === f); if (fi.length) this.bakePart(ci, f, fi, pieces); }
-      yield; // (lane BUILD: one chunk per step)
+      for (const f of [0, 1] as const) { const fi = ids.filter(id => this.fam[id] === f); if (fi.length) this.bakePart(ci, f, fi, pieces); yield; } // (lane BUILD: one rest mesh per step)
     }
     // the moving sets of the modelled archetypes present, prepared now (hidden) so the warm-up compiles them (warmRoots)
     if (junk) {
