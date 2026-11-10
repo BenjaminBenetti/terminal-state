@@ -173,6 +173,23 @@ export function handU(q: Pick<RidePortal, 'x'>, p: Pick<TrainPlacement, 'x' | 'l
   return planeU(q, p) + p.length / 2 + RIDE_PORTAL.dark;
 }
 
+/** How far on the station side of the plane the culling stand-in stands (m), and its margin inside the opening's edges. */
+export const PORTAL_EYE = {back: 0.5, inset: 0.25} as const;
+
+/**
+ * The level culler's stand-in for an eye beyond portal `q`'s plane (world/levelCulling.ts LevelCuller.eyeProxy): the point of the
+ * portal's opening nearest to the eye, PORTAL_EYE.back on the station side — what the eye can still see of the station it sees
+ * through that opening. An eye on the station side of the plane is left alone. Moves `eye` in place; true when it did.
+ */
+export function portalEye(q: Pick<RidePortal, 'x' | 'out' | 'opening'>, eye: {x: number; y: number; z: number}): boolean {
+  if ((eye.x - q.x) * q.out <= 0) return false;
+  const o = q.opening, k = PORTAL_EYE.inset;
+  eye.x = q.x - q.out * PORTAL_EYE.back;
+  eye.y = Math.min(o.y1 - k, Math.max(o.y0 + k, eye.y));
+  eye.z = Math.min(o.z1 - k, Math.max(o.z0 + k, eye.z));
+  return true;
+}
+
 /** Is world point (x, y, z) inside box `b`? */
 export function inBox(b: Box3, x: number, y: number, z: number): boolean {
   return x > b.x0 && x < b.x1 && y > b.y0 && y < b.y1 && z > b.z0 && z < b.z1;
