@@ -128,8 +128,40 @@ AO has its own failure flag, `atmosphere.occlusion.failed`. It never sets `Volum
 In every case: AO is turned off (the gate closes at once), one console error is logged, and
 `debug().ao.failed` / `.reason` say why. The fog, the gas visibility and the frame continue.
 
-If a blur program fails, the composite falls back gracefully. Its target either still holds the raw AO, or holds no
-surface depth, which reads as open (1), so a failed frame is never darkened.
+If a blur program fails, the composite falls back gracefully. Its target either still holds the raw AO, or holds texels
+without data, which read as open (1), so a failed frame is never darkened.
+
+## NaN safety and texels without data
+
+A browser check (WebGL 2 on llvmpipe, quality High, the real Subway seed 4242) once drew the **whole frame black** with AO
+on. The camera was 1–2 m from a flat wall; there was no error, and AO reported itself active.
+
+In Node, neither the CPU mirror nor the generated GLSL produced a NaN or a dark value on that wall. Both were run on the
+real pose's depth (CPU rasteriser, 24-bit depth) and on synthetic walls at 0.3–2 m, and they agree to within 1e-3.
+
+What could turn a bad AO target into a black frame was the composite's fallback:
+- When none of the four upsample taps matched the pixel's depth, the composite took the "nearest-depth" texel's ao.
+- It did that even when the texel had **no data**: a cleared or never-written texel (0, 0), or NaN.
+- An ao of 0 multiplied every pixel by 1 − strength (0.2), which is black after ACES. A NaN, or an llvmpipe
+  `clamp(NaN)` → 0, did the same.
+
+Every stage is now bounded, and it treats anything that is not a valid value as no data, never as darkness:
+- **raw**:
+  - every division and normalisation has a floor;
+  - a horizon sample counts only when it is a finite cosine (`within(h, -1.001, 1.001)`);
+  - the output is a finite ao in [0, 1] (else 1) and a finite g in (0, `AO_G_MAX`] (else 0, meaning no surface).
+- **blur**: a tap counts only with a valid (ao, g). No valid tap, or a centre without a surface, gives open (1).
+- **composite**:
+  - a texel counts only with a valid (ao, g), both in the weights and as the fallback;
+  - if no texel is valid, AO is 1;
+  - the factor is clamped to [1 − strength, 1], with strength ≤ 1, behind a NaN guard.
+- **Look values** edited live are clamped to safe ranges in `sync`.
+
+Validity tests are comparisons (`x >= lo && x <= hi`), which are false for NaN on IEEE hardware.
+`tests/ambient-occlusion-nan.test.ts` pins this by running the generated GLSL itself on the CPU.
+
+For QA, `await __game.atmosphere.aoProbe()` reads both AO targets back. It reports texels, NaN, texels without data,
+no-surface texels, and the min / mean of the valid ao, for checking a suspicious view in the browser.
 
 ## Cost (arithmetic, not a GPU time)
 
@@ -166,6 +198,7 @@ With AO off: no draws, and only the `aoOn` uniform branch in the composite.
 | `ambient-occlusion-tsl.test.ts` | The raw / blur / composite graphs compile to WGSL and GLSL with no three warning. Depth is read by `textureLoad` only, no gather / derivatives, loop bounds are literal. The binding budget for every variant (msaa 0 / 4, both presets): the composite gains one sampled texture and no uniform buffer |
 | `ambient-occlusion-pipeline.test.ts` | three's real `WebGPURenderer` on a no-op device, both backends: target sizes, draw order, resize / pixel ratio / quality / FOV, AO off builds nothing, toggling rebuilds nothing, no builds after the warm-up frames, failure isolation |
 | `ambient-occlusion-settings.test.ts` | The setting, its menu choice and help line, the plumbing, `?ao=`, availability |
+| `ambient-occlusion-nan.test.ts` | Near walls (0.3–2 m) stay finite and bounded in the mirror. Garbage AO targets read open. The **generated GLSL** run on the CPU: the raw pass equals the mirror; the composite on garbage texels returns exactly the AO-off colour and is never NaN or below 1 − strength |
 
 ## Limits
 

@@ -465,6 +465,11 @@ export class VolumetricAtmosphere {
       : this.quality === 'off' ? 'atmosphere quality off' : !this.enabled ? 'the volumetric pass is disabled' : !this.densityMap ? 'no station yet' : 'not active';
   }
 
+  /** (lane AO, QA) the AO targets read back and summarised (NaN / texels without data / min / mean): AmbientOcclusionPass.probe. */
+  aoProbe(): ReturnType<AmbientOcclusionPass['probe']> | null {
+    return this.renderer ? this.occlusion.probe(this.renderer) : null;
+  }
+
   /** The AO pass body (its node's updateBefore, after this frame's scene pass). */
   private runAo(renderer: WebGPURenderer): void {
     const depthTex = (this.scenePass as unknown as {getTexture(n: string): THREE.Texture} | null)?.getTexture('depth') ?? null;
