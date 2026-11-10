@@ -3600,7 +3600,7 @@ export class Game {
    * enemy's hearing is untouched (gunfire through alertZombies, which Screachers also hear). No level without a Screacher pays for it;
    * impact / drag bursts are merged (at most one delivery per kind per 0.08 s).
    */
-  private worldNoise(x: number, y: number, z: number, radius: number, kind: ScreacherNoiseKind): void {
+  worldNoise(x: number, y: number, z: number, radius: number, kind: ScreacherNoiseKind): void {
     if (!(radius > 0) || !this.screacherBrains.length || !this.layout) return;
     if ((kind === 'impact' || kind === 'drag') && this.time - (this.noiseAt[kind] ?? -1) < 0.08) return;
     this.noiseAt[kind] = this.time;
