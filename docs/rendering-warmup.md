@@ -208,7 +208,8 @@ Limits:
   arrival.
 - Things created on use after the warm-up, outside pools, still build cold: shelf-stock pieces knocked loose
   (`shelfStock.ts` creates their InstancedMesh then) and a dropped item's pickup (its own material clones). Loot
-  highlight copies are prepared since task runtime-variant-warmup-20261105 (below).
+  highlight copies are prepared since task runtime-variant-warmup-20261105 (below); the shelf-stock moving sets and the
+  pickups since task studio-perf-ao-train-continuity-20261110-022206-01 ("Stutter during ordinary play", below).
 - Harnesses: `rendercpu-submit-investigate.test.ts` (`LL_RCPU_SUBMIT_OUT=…`, `LL_RCPU_LEVEL=reactor`,
   `LL_RCPU_ROUTE=journey-old|journey-new|journey-sliced`, `LL_RCPU_RIDE_FRAMES`, `LL_RCPU_IDLE_MS`, `LL_RCPU_SHADOW_FIX=1`, `LL_RCPU_NO_DEPTH=1`) and
   `rendercpu-cullprof-investigate.test.ts` (`LL_RCPU_PROF_OUT=…`). Both are env-gated and skipped in CI.
@@ -227,6 +228,7 @@ rebuilds it just before each warm-up and before the journey's preparation, so bo
 | `highlight` | `ContainerManager.runtimeVariantPrototypes()` (`world/containers.ts`) | The aim highlight: the same cached clone gameplay uses (`highlightOf`), on the aimable meshes and on one legacy container per kind |
 | `damaged` | `PropDamage.variantPrototypes()` (`damage/propDamage.ts`) | Detached shared instances (non-instanced), merged-chunk extracts (non-indexed) and holders' own meshes, each with **the damage material the first hit will use** |
 | `flesh` | `PhysChunks.fleshPrototypes()` (`physics/chunks.ts`) | `chunkMaterial` per distinct enemy layer-material signature, on the patch / flap layout (position, normal, uv, colour; non-indexed) |
+| `pickup` | `PickupManager.pickupPrototypes()` (`world/pickups.ts`) | A pickup of every item of the registry except the twelve variety weapons (their own `'weapon-variety'` pool), built as `add()` builds it: the item's mesh and its own material copies (task studio-perf-ao-train-continuity-20261110-022206-01) |
 
 Rules the pool follows, each found by the real-Mall A/B test below:
 - **Real factories only.** No stand-in boxes: the same geometry, material instance and shadow flags the play code
@@ -280,7 +282,8 @@ cached highlight copy of every item type allocated in the station. They sit hidd
 (the #12 rule in `lootDisplay.ts`). In the test, the first aim at a lot builds 0 variants.
 
 Not covered (still cold on first use): shelf-stock pieces knocked loose, a dropped item's pickup (its own material
-clones), and anything a subsystem creates without a prototype method. Driver-side work, GC and the unexplained 367 ms freeze in the GAME69
+clones), and anything a subsystem creates without a prototype method. (The first two are covered since task
+studio-perf-ao-train-continuity-20261110-022206-01: see "Stutter during ordinary play" below.) Driver-side work, GC and the unexplained 367 ms freeze in the GAME69
 recording are outside this pool.
 
 ## Horde views: per-frame uniform uploads (task mall-horde-performance-20261105)
@@ -392,6 +395,140 @@ Warm-up representatives drop with the batch count: Subway 777 → 696, Office 94
 - Coarse cohorts draw slightly more triangles: Subway +7 %, against GPU headroom in that trace.
 - If 120 s still does not cover a slow CPU, the long tail builds on first use as before. The cut is now visible in captures.
 - No post-load continuation job: its overdue rule would bring back the periodic forced-step hitches.
+
+## Stutter during ordinary play (task studio-perf-ao-train-continuity-20261110-022206-01, lane PLAY)
+
+The user asked for less stutter. There is no native trace of the current build, so this pass measured the current source in
+Node and fixed only what those measurements could attribute. Every number here is a Node figure: three r186's real
+`WebGPURenderer` on the no-op device (`tests/helpers/fakeWebgpu.ts`), V8 in Node, a shared pod. None of it is a native frame
+time.
+
+**The first-use census.** Every level kind was built the way `Game.buildSection` builds it (Subway 7, Office 4242, Mall t3a,
+Market 42, Bunker 9001 on layout v2, Skyways 80, Reactor 9100), with its holders, shelf stock, floor pickups and enemies. The
+game's complete `full` warm-up ran first. Then the census counted the node builds, render pipelines and new render objects
+that three still created for:
+- 16 yaws at the start pose and six enemy spawns spread over the storeys, and a walk between those poses;
+- one holder of each openable kind aimed at, opened and shot loose, and one of each other prop kind detached;
+- every effect, crater and debris class, and both casing kinds;
+- a drop of every item;
+- one shelf-filler piece of every moving set knocked loose;
+- a flare thrown;
+- each enemy type shot, a flesh chunk torn and the body ragdolled;
+- a last sweep at the start.
+
+Builds / pipelines that three still made after the warm-up (only rows that were not 0 / 0 everywhere):
+
+| Event | Subway | Office | Mall | Market | Bunker | Skyways | Reactor |
+|---|---|---|---|---|---|---|---|
+| Turning at 7 poses, before | 0 / 18 | 0 / 14 | 0 / 4 | 0 / 0 | 0 / 14 | 0 / 54 | 0 / 2 |
+| Walking between them, before | 0 / 0 | 0 / 6 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 72 | 0 / 0 |
+| A drop of every item, before | 20 / 16 | 16 / 3 | 14 / 10 | 45 / 30 | 14 / 10 | 6 / 3 | 29 / 18 |
+| Shelf filler knocked loose, before | 67 / 67 | 7 / 7 | 81 / 1 | 13 / 13 | 10 / 10 | 123 / 123 | 19 / 1 |
+| Enemy shot / torn / ragdolled, before | 1 / 1 | 0 / 0 | 0 / 0 | – | 0 / 0 | 0 / 0 | 0 / 0 |
+| **Every row, after** | **0 / 0** | **0 / 0** | **0 / 0** | **0 / 0** | **0 / 0** | **0 / 0** | **0 / 0** |
+
+The enemy row's one build on the Subway was a shelf-filler set outgrowing its capacity (see 3 below).
+
+**What was cold, and the fixes:**
+1. **Glass drawn in two passes.** A transparent DoubleSide material is drawn twice, back faces then front faces. `compileAsync`
+   only prepares its DoubleSide state, so the first real view of every glass batch asked for two more pipelines.
+   - The loading warm-up now gives such non-caster representatives a hidden frame.
+   - The journey preparation draws each one off-screen after its compile, one per step, into the scene pass's own target.
+   - Test: `play-stutter-warmup-two-pass.test.ts`.
+2. **Pickups that appear in play.** A dropped item, a lot shot off its holder and a stolen ware are each a new object with its own
+   material copies (`PickupManager.add`). Unless a pickup with the same material values and geometry layout lay in the station at
+   warm-up, its first frame built a node variant.
+   - `PickupManager.pickupPrototypes` now offers a pickup of every item to the runtime-variant pool (family `pickup`), built exactly
+     as `add()` builds it. The twelve variety weapons stay in their own pool.
+   - Per level: 114 meshes are offered and 19 kept after de-duplication.
+3. **Shelf filler knocked loose.** A moving piece is drawn by an InstancedMesh per (family, archetype, label). The authored
+   filler's sets were made by the first piece of each that moved, and a set that was too small was replaced by a bigger one.
+   three gives every InstancedMesh its own node build.
+   - `world/shelfStockWarm.ts` `prepareStockMovingSets` now makes every set hidden and empty before the warm-up, through the
+     stock's own `frame` (the real factory, material, colours and flags). The sets are the `'shelf-stock-moving'` pool.
+   - Each set has room for up to `FILLER_TUNING.maxActive` (64) pieces, the rule the modelled props' sets already follow. A
+     set's whole instance buffer is written on every frame it draws, so sets sized for every piece of a big archetype would cost
+     a bigger upload while anything of them moves. More than 64 moving or frozen pieces of one set still replace it, as before.
+   - Test: `play-stutter-first-use-prototypes.test.ts` (A/B: the prepared half builds 0, the control builds).
+
+**Warm-up cost** (Node build speed, no-op GPU, single runs on a shared pod; "before" is before all three fixes):
+
+| Level | Plan items | Warm-up |
+|---|---|---|
+| Subway | 1,082 → 1,165 | 18.9 → 20.2 s |
+| Office | 1,355 → 1,381 | 22.2 → 23.1 s |
+| Mall | 1,660 → 1,767 | 26.4 → 29.6 s |
+| Market | 373 → 402 | 6.9 → 7.1 s |
+| Bunker | 1,310 → 1,337 | 20.8 → 22.1 s |
+| Skyways | 2,170 → 2,334 | 35.6 → 41.4 s |
+| Reactor | 1,462 → 1,497 | 23.3 → 23.2 s |
+
+Building the pickup prototypes takes about 50 ms of main thread and preparing the moving sets about 5 ms, once per warm-up.
+Both run in `full` mode only.
+
+**Still created on first use** (no node build, no pipeline: the render objects only):
+- the meshes a holder takes over when aimed at, opened or shot, and detached prop parts: new render objects per event
+  class and level (31 on the Market to 335 on the Mall; one holder or prop of each kind);
+- a thrown flare: 6;
+- a ragdolled enemy: 2.
+
+A render object exists per object, so a new object needs its own. Not covered by the census rig: Market people and wares
+being handled, the fuel cart and its hose, the Bunker's objective objects, the Siren, Strainer and Blightbelly.
+
+**The reverb kernels** (`audio/reverb.ts`, `audio/sfx.ts`). Each room kind's stereo impulse response was built in one go:
+- the current room at audio start;
+- three others in later timer tasks, one whole kernel each;
+- `medium` only when first needed.
+
+Node V8 at 48 kHz, from a cold process: tunnel 45 ms in one task, large 9 ms, small 1.8 ms; warm, tunnel ≈ 10 ms. When the
+first gesture entered play, those tasks fell in the first play frames.
+- Now `startIR` generates a kernel in slices of at most `IR_SLICE_SAMPLES` (16,384) noise samples: the same loops on the same
+  random stream, bit for bit `makeIR`'s buffer (tested on every kind at 44.1 and 48 kHz with any slice sizes).
+- From audio start, every kind is pre-generated, the current room first, one slice per timer task (30 ms, then every 16 ms).
+- A kind needed before its slices are done is finished at once, as before, and counted (`debugState().ir.sync`). Once every kind
+  is ready, a room change only swaps buffers.
+- Slices measured PENDING_IR.
+- Not measurable here: what the browser does when a buffer is assigned to a `ConvolverNode`.
+- Test: `play-stutter-reverb-ir.test.ts`.
+
+**Per-frame allocations** (they feed the periodic collections). The whole `Game` cannot run in Node, so the systems that can were
+run on the real Subway, each on its own. V8's sampling heap profiler (collected objects included) measured the bytes per frame:
+
+| System | Bytes / frame | Main sites |
+|---|---|---|
+| Level culler, turning 3° a frame (a full update every frame) | ~132,000 | ~120,000 in `LevelCuller.update`'s own loop over 1,065 entries; not changed (below) |
+| AI step, 23 enemies (`tests/helpers/aiCpuSim.ts`, its own per-frame record included) | ~186,000 | hit volumes rebuilt per enemy (`updateVolumes` / `bonePos` ~32,000), three's animation mixer ~25,000, `Math.hypot` ~24,000, brain / motor / support ~20,000 |
+| `ContainerManager.target` + `update` | ~29,000 | `world/containers.ts` `update` / `target` (lane BUILD's file) |
+| `PhysicsSystem.update`, idle | ~4,100 | the filler's per-frame entry (`shelfStock.ts` `frame`) |
+| `PickupManager.target` ×2 + `update` | PENDING_PICKUP | |
+| Effects / Survival / `combineModifiers` | ~110 / ~280 / ~440 | small |
+| three's scene + shadow frame | ~2,470,000 with the fake device, of which ~1,960,000 is the fake device itself | three's own: cache keys, bindings, projection, sort |
+
+`Game.update` itself was fixed by reading:
+- the frame's eye and look vectors and the unreachable eye are scratch fields;
+- the live-enemy count is a loop, not a filtered array twice a frame;
+- the enemy cue distance is computed inline instead of a tuple per enemy;
+- `PickupManager.target` uses one scratch vector.
+
+Not changed, with the reason:
+- **The culler's loop.** The function is TurboFan-optimised and still allocates about 100 bytes per entry per full update, with or
+  without inlining. The likely cause is the double-valued `level` field (NaN for multi-level entries) passed to `Set` / `Map` look-ups,
+  which boxes it. That is unconfirmed, and the fix would change the entry layout of a much-tested decision path that another lane
+  changed in this task.
+- **Hit volumes.** Six actor classes rebuild arrays and points every frame. Reusing them needs an audit of every reader that might
+  keep a volume across frames.
+- **Lane BUILD's files.** `containers.ts` and `shelfStock.ts` belong to lane BUILD.
+- **three's own allocations.** Not ours to change without patching three.
+
+**three's submission in our scenes** (Subway sweep, scene pass + torch shadow pass):
+- Per frame: about 10.6 ms of three's JavaScript in Node, 452 draws on both passes, 1,216 objects visited per pass.
+- World matrices are 7.3 % of the frame. three calls `scene.updateMatrixWorld()` once per pass. The holders root is 539 of the 545
+  matrices composed each time; the world root is already static.
+- Mitigations tried (interleaved A / B, medians): PENDING_C.
+
+**Limits.**
+- Node only, and no native GPU. GPU-side pipeline creation, driver work and GC pause lengths need a native capture.
+- The census covers the rig's events, not every play path (see the list above).
 
 ## Lifecycle and guarantees
 
