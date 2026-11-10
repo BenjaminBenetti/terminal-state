@@ -21,13 +21,13 @@ import {BEERS, BEER_TUNING, isBeer} from '../items/beers'; // task studio-market
 //  - the OVERFILL of food / water (Second Supper Bock, up to 200 %): a GREEN band overlapping the top of the full bar for the part above
 //    100 (its width = overfill / 100 of the bar), the base bar still showing beneath it; the percentage reads green;
 //  - the TEMPORARY armour pips (Ironclad Stout, HudState.armorTemp): the top-most pips of the effective pool get the class `temp` (a pale
-//    blue, the same pip shape);
+//    blue, the same pip shape); its glow 2 px = 4 px x ARMOR_PIP_SCALE, the half-size pips: task studio-armor-pip-half-size-20261110-022206-01);
 //  - the ACTIVE timed beer: a compact row under the water bar — the beer's short name, its effect and the minutes : seconds left.
 const BEER_CSS = `
 #vitals .surv .bar { position: relative; }
 #vitals .surv .bar .over { position: absolute; left: 0; top: 0; height: 55%; width: 0; background: #5ccf5f; box-shadow: 0 0 4px rgba(92, 207, 95, 0.65); transition: width 0.7s ease-out; pointer-events: none; }
 #vitals .surv.overfill .pct { color: #7fe081; }
-#armor-pips i.temp { background: #a9dcff; border-color: #24496e; box-shadow: 0 0 4px rgba(169, 220, 255, 0.7); }
+#armor-pips i.temp { background: #a9dcff; border-color: #24496e; box-shadow: 0 0 2px rgba(169, 220, 255, 0.7); }
 #vitals #beer-tag { margin-top: 5px; font-size: 10.5px; letter-spacing: 0.12em; white-space: nowrap; color: #e6b65c; }
 #vitals #beer-tag.none { display: none; }
 #beer-tag .tag { display: flex; justify-content: center; color: #e6b65c; }
@@ -57,24 +57,32 @@ const BEER_FX: Readonly<Record<string, string>> = {
 // is the same circle filled on its left half. Rows stack upward (flex column-reverse), each further row overlapping the one below by
 // ARMOR.rowOverlap of a pip's height (a negative margin in % of the row width: a pip's diameter is (width - gaps) / ten). Presentation
 // only: the counts are still pipRows(pool) (player/armor.ts), unchanged.
-export const ARMOR_PIP_GAP = 3, ARMOR_PIP_COL_GAP = 2;
-/** CSS length of one pip's diameter inside #armor-pips (`100%` = the row width = the health bar's border box). */
+// Task studio-armor-pip-half-size-20261110-022206-01 (user: "the pips are simply to large. make them half as big"): every pip is HALF
+// its previous width and height (ARMOR_PIP_SCALE): the row is half the bar's border-box width, anchored at the bar's left edge, with the
+// column gap, the gap over the bar, the rim and the glow halved too, so ten circles + nine gaps still fill the row exactly and a wrapped
+// row still overlaps by ARMOR.rowOverlap of a (now smaller) pip. The HP row reserves only the smaller stack. Counts / maths unchanged.
+export const ARMOR_PIP_SCALE = 0.5;
+/** The stack's offset above the bar's padding box: its 1 px border + the visible gap (2 px before, now 1 px); the column gap 2 -> 1 px. */
+export const ARMOR_PIP_GAP = 1 + 2 * ARMOR_PIP_SCALE, ARMOR_PIP_COL_GAP = 2 * ARMOR_PIP_SCALE;
+/** The HP row's fixed number width (styles.css `#hp-num { width: 34px }`): the bar = the row less the tag, two gaps and this. */
+export const ARMOR_HP_NUM_W = 34;
+/** CSS length of one pip's diameter inside #armor-pips (`100%` = the row width = ARMOR_PIP_SCALE x the health bar's border box). */
 const PIP_D = `(100% - ${(ARMOR.pipsPerRow - 1) * ARMOR_PIP_COL_GAP}px) / ${ARMOR.pipsPerRow}`;
 /** The HP row's top margin for `rows` pip rows: its own 6 px + the gap + the stack (one pip + (rows - 1) x (1 - overlap) pips). The
- * pip size follows the BAR's width, which the row's margin cannot reference: it is bounded by #vitals' width less the row's HP tag
- * (20 px) and two 8 px gaps (styles.css), so the reserve is at most a few px generous (the HP number's width), never short. */
-export const armorRowMargin = (rows: number) => `calc(${6 + ARMOR_PIP_GAP}px + ${1 + (rows - 1) * (1 - ARMOR.rowOverlap)} * (100% - ${20 + 2 * 8 + (ARMOR.pipsPerRow - 1) * ARMOR_PIP_COL_GAP}px) / ${ARMOR.pipsPerRow})`;
+ * pip size follows the BAR's width, which the row's margin cannot reference: it is #vitals' width less the row's HP tag (20 px), two
+ * 8 px gaps and the fixed 34 px HP number (styles.css), so the reserve fits the stack (no empty band over the smaller pips). */
+export const armorRowMargin = (rows: number) => `calc(${6 + ARMOR_PIP_GAP}px + ${1 + (rows - 1) * (1 - ARMOR.rowOverlap)} * (${ARMOR_PIP_SCALE} * (100% - ${20 + 2 * 8 + ARMOR_HP_NUM_W}px) - ${(ARMOR.pipsPerRow - 1) * ARMOR_PIP_COL_GAP}px) / ${ARMOR.pipsPerRow})`;
 /** The pip rows' markup (pipRows: bottom row first): one `.arow` per row, an `<i>` per pip, `<i class="half">` for a half pip. */
 export const armorPipsHtml = (rows: readonly (readonly ('full' | 'half')[])[],
   cls: (p: 'full' | 'half', index: number) => string = p => (p === 'half' ? 'half' : '')): string =>
   rows.map((r, k) => `<div class="arow">${r.map((p, j) => { const c = cls(p, k * ARMOR.pipsPerRow + j); return c ? `<i class="${c}"></i>` : '<i></i>'; }).join('')}</div>`).join('');
 export const ARMOR_CSS = `
 #vitals .bar.health { position: relative; }
-#armor-pips { position: absolute; left: -1px; right: -1px; bottom: calc(100% + ${ARMOR_PIP_GAP}px); display: flex; flex-direction: column-reverse; pointer-events: none; }
+#armor-pips { position: absolute; left: -1px; width: calc((100% + 2px) * ${ARMOR_PIP_SCALE}); bottom: calc(100% + ${ARMOR_PIP_GAP}px); display: flex; flex-direction: column-reverse; pointer-events: none; }
 #armor-pips.none { display: none; }
 #armor-pips .arow { display: grid; grid-template-columns: repeat(${ARMOR.pipsPerRow}, 1fr); column-gap: ${ARMOR_PIP_COL_GAP}px; }
 #armor-pips .arow + .arow { margin-bottom: calc(-${ARMOR.rowOverlap} * ${PIP_D}); }
-#armor-pips i { display: block; width: 100%; aspect-ratio: 1 / 1; border-radius: 50%; box-sizing: border-box; background: #3d8fe0; border: 1px solid #0d1d30; box-shadow: 0 0 3px rgba(61, 143, 224, 0.45); }
+#armor-pips i { display: block; width: 100%; aspect-ratio: 1 / 1; border-radius: 50%; box-sizing: border-box; background: #3d8fe0; border: ${ARMOR_PIP_SCALE}px solid #0d1d30; box-shadow: 0 0 ${3 * ARMOR_PIP_SCALE}px rgba(61, 143, 224, 0.45); }
 #armor-pips i.half { background: linear-gradient(90deg, #3d8fe0 50%, rgba(13, 29, 48, 0.6) 50%); }
 #armor-pips i.half.temp { background: linear-gradient(90deg, #a9dcff 50%, rgba(13, 29, 48, 0.6) 50%); }`;
 
