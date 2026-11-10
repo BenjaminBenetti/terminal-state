@@ -16,6 +16,18 @@ function mulberry(seed: number): () => number {
   };
 }
 
+/**
+ * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): mulberry()'s step on a state held in `s[0]` (the same
+ * stream) — ONE function for every sliced kernel (SlicedIR), where mulberry() makes a new closure per kernel.
+ */
+function mulberryStep(s: Uint32Array): number {
+  s[0] = (s[0] + 0x6d2b79f5) >>> 0;
+  let t = s[0];
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
 /** Stereo room impulse response: early reflections + darkening exponential tail (+ flutter for tunnels). */
 export function makeIR(ctx: BaseAudioContext, r: {len: number; rt: number; pre: number; er: number; flutter: number; damp: number}): AudioBuffer {
   const sr = ctx.sampleRate, n = Math.max(16, Math.floor(r.len * sr));
@@ -72,8 +84,9 @@ export interface IrJob {
 
 /**
  * `makeIR` as a resumable job: the same loops in the same order on the same random stream (per channel: the noise tail, then its
- * early reflections, then its flutter taps), stopped and resumed inside the noise loop. The loops are prototype methods, not
- * closures made per kernel, so every kernel runs the code the first one optimised.
+ * early reflections, then its flutter taps), stopped and resumed inside the noise loop. The loops are prototype methods and the
+ * random stream one shared step function on the job's state, not closures made per kernel: a new closure per kernel made the
+ * optimised loop of the previous kernel bail out on the next kernel's first slice (Node: 4.6-6.1 ms for that slice, ~0.6 ms others).
  */
 class SlicedIR implements IrJob {
   readonly buffer: AudioBuffer;
@@ -83,7 +96,8 @@ class SlicedIR implements IrJob {
   private readonly n: number;
   private readonly k: number;
   private readonly onset: number;
-  private readonly rand: () => number;
+  /** mulberry()'s state (mulberryStep on it: the same stream). */
+  private readonly seed = new Uint32Array(1);
   // where the job stands: the channel, the next noise sample of it, and the noise loop's filter state
   private c = 0;
   private at = 0;
@@ -97,7 +111,7 @@ class SlicedIR implements IrJob {
     this.buffer = ctx.createBuffer(2, this.n, this.sr);
     this.total = 2 * this.n;
     this.k = 6.91 / r.rt; // 60 dB decay over rt
-    this.rand = mulberry(Math.floor(r.len * 1000 + r.rt * 77));
+    this.seed[0] = Math.floor(r.len * 1000 + r.rt * 77) >>> 0;
     this.onset = Math.max(1, Math.floor(r.er * this.sr));
   }
 
@@ -129,14 +143,14 @@ class SlicedIR implements IrJob {
 
   /** makeIR's noise loop over samples [from, to) of one channel (the filter state rides on the job between slices). */
   private noise(d: Float32Array, from: number, to: number): void {
-    const r = this.r, sr = this.sr, k = this.k, onset = this.onset, rand = this.rand;
+    const r = this.r, sr = this.sr, k = this.k, onset = this.onset, seed = this.seed;
     let lp = this.lp, a = this.a;
     for (let i = from; i < to; i++) {
       if ((i & 63) === 0) {
         const t = i / sr, fc = Math.max(500, 9000 * Math.exp(-t * r.damp * 2));
         a = 1 - Math.exp(-2 * Math.PI * Math.min(fc, sr * 0.45) / sr);
       }
-      lp += a * ((rand() * 2 - 1) - lp);
+      lp += a * ((mulberryStep(seed) * 2 - 1) - lp);
       d[i] = lp * Math.exp(-k * i / sr) * Math.min(1, i / onset) * 0.6;
     }
     this.lp = lp;
@@ -145,18 +159,18 @@ class SlicedIR implements IrJob {
 
   /** makeIR's single-sample taps that close a channel. */
   private taps(d: Float32Array): void {
-    const r = this.r, sr = this.sr, n = this.n, k = this.k, rand = this.rand;
+    const r = this.r, sr = this.sr, n = this.n, k = this.k, seed = this.seed;
     // early reflections (different per ear -> width)
     const taps = 10;
     for (let j = 0; j < taps; j++) {
-      const t = r.er * 0.15 + rand() * r.er * 1.6;
+      const t = r.er * 0.15 + mulberryStep(seed) * r.er * 1.6;
       const i = Math.floor(t * sr);
-      if (i < n) d[i] += (rand() < 0.5 ? -1 : 1) * 0.7 * Math.exp(-k * t) * (1 - j / (taps * 1.3));
+      if (i < n) d[i] += (mulberryStep(seed) < 0.5 ? -1 : 1) * 0.7 * Math.exp(-k * t) * (1 - j / (taps * 1.3));
     }
     if (r.flutter > 0) {
-      for (let t = r.flutter * (0.8 + rand() * 0.4); t < r.len * 0.6; t += r.flutter * (0.94 + rand() * 0.12)) {
+      for (let t = r.flutter * (0.8 + mulberryStep(seed) * 0.4); t < r.len * 0.6; t += r.flutter * (0.94 + mulberryStep(seed) * 0.12)) {
         const i = Math.floor(t * sr);
-        if (i < n) d[i] += (rand() < 0.5 ? -1 : 1) * 0.35 * Math.exp(-k * 1.25 * t);
+        if (i < n) d[i] += (mulberryStep(seed) < 0.5 ? -1 : 1) * 0.35 * Math.exp(-k * 1.25 * t);
       }
     }
   }
