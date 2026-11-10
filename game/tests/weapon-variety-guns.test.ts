@@ -961,8 +961,9 @@ describe('casings and wiring', () => {
     expect(g).toMatch(/this\.bloom = shotBloom\(def, this\.bloom\);/);
     expect(g).toMatch(/this\.bloom = Math\.max\(0, this\.bloom - dt \* bloomDecay\(wdef\)\);/);
     expect(g).toMatch(/baseSpread\(def, this\.aiming, this\.weapon\.def === def \? this\.weapon\.settleSpread : 0\)/);
-    expect(g).toMatch(/this\.sfx\.shot\(def\.sound, def\.shotCycle\);/);
-    expect(g).toMatch(/this\.sfx\.reloadStart\(e\.def\.reloadCue \?\? e\.def\.sound, e\.empty, reloadCueTime\(e\.def, e\.empty\)\)/);
+    // (+ task studio-weapon-soundlab-audio-20261110-063407-01: each call also passes the held gun's id — its own Sound Lab cues, audio/gunVoices.ts)
+    expect(g).toMatch(/this\.sfx\.shot\(def\.sound, def\.shotCycle, def\.id\);/);
+    expect(g).toMatch(/this\.sfx\.reloadStart\(e\.def\.reloadCue \?\? e\.def\.sound, e\.empty, reloadCueTime\(e\.def, e\.empty\), e\.def\.id\)/);
     // the old inline recoil / bloom lines are gone (one source of truth)
     expect(g).not.toMatch(/this\.recoilPitch \+= def\.recoil\.pitch \* kickMul/);
     expect(g).not.toMatch(/Math\.min\(0\.03, this\.bloom \+ 0\.0035\)/);

@@ -23,6 +23,7 @@
 // 2 convolvers total.
 
 import {ClipBank, type Clip, type CueId} from './bank';
+import {GUN_VOICE_GAINS, gunCue} from './gunVoices'; // task studio-weapon-soundlab-audio-20261110-063407-01: a gun's own shot / reload cues by weapon id
 import {FAN_SOUND, audibleFans, type FanSource} from './fanSound'; // task studio-alpha-track2-round2-20261031-01 (R4): fan noise
 import {makeIR} from './reverb';
 import type {ImpactFamily} from '../physics/chunks';
@@ -162,6 +163,10 @@ export const CUE_GAIN: Record<CueId, number> = {
   // -28 (SUBTLE: under the cough -25.9), each murmur loop -31 LUFS integrated at its panner's reference distance (a low bed). First
   // estimates for the ear pass (not auditioned).
   marketCash: 0.24, marketChatter: 0.33, marketBarChatter: 0.3, marketScream: 0.58, marketGrunt: 0.71, marketRetch: 0.35,
+  // Task studio-weapon-soundlab-audio-20261110-063407-01 (tools/audio-pipeline/gun-variety-build.mjs): the weapon-variety guns' own shots /
+  // reload mechanics, peak -1 dBFS; each gain sets the cue's loudness at the source to its baseline family's (pistol / rifle / shotgun
+  // shot, rifle magazine out / in; derivatives/audio-gun-variety.json mixCalibration), never above 1. Not auditioned.
+  ...GUN_VOICE_GAINS,
 };
 
 const TYPE_ROOM: Record<string, RoomKind> = {
@@ -1395,8 +1400,10 @@ export class Sfx {
   // Weapons (player-local)
 
   /** `cycle` (task studio-weapon-variety-production-20261109-224355-01, lane GUNS): the action cue after the shot — 'pump' racks
-   *  the pump action, 'none' (semi-auto / break action) nothing; absent = a pump for the 'shotgun' set (the baseline shotgun). */
-  shot(kind: WeaponSoundKind, cycle?: 'pump' | 'none'): void {
+   *  the pump action, 'none' (semi-auto / break action) nothing; absent = a pump for the 'shotgun' set (the baseline shotgun).
+   *  `gun` (task studio-weapon-soundlab-audio-20261110-063407-01): the fired weapon's id — its own shot cue when it has one
+   *  (audio/gunVoices.ts), at its measured level; the set's shared cue otherwise. Kind still sets ducking / the cycle / slap-backs. */
+  shot(kind: WeaponSoundKind, cycle?: 'pump' | 'none', gun?: string): void {
     const v = this.voice({send: 1, pri: 2});
     if (!v) return;
     // Iteration 12: a new shot — the hit confirms of THIS shot are timed from its onset and de-duplicated per enemy.
@@ -1404,7 +1411,8 @@ export class Sfx {
     this.shotVoice = v;
     this.shotConfirms = 0;
     this.shotConfirmed = new WeakSet();
-    const big = kind === 'shotgun', map = WEAPON_SHOT_CUES[kind] ?? WEAPON_SHOT_CUES.rifle, cue: CueId = map.cue;
+    const own = gunCue(gun, 'Shot'), shared = WEAPON_SHOT_CUES[kind] ?? WEAPON_SHOT_CUES.rifle;
+    const big = kind === 'shotgun', map = own ? {cue: own, rate: 1, gain: 1} : shared, cue: CueId = map.cue;
     const clip = this.bank.pick(cue);
     if (clip) {
       const rate = rnd(0.97, 1.03) * map.rate;
@@ -1434,12 +1442,22 @@ export class Sfx {
   }
   /** `time` (lane GUNS): the gun's own magazine reload seconds, so the magazine-in cue lands mid-reload for every gun of the set
    *  (absent = the baseline pistol's / rifle's times, which are also what the baseline guns pass). */
-  reloadStart(kind: WeaponSoundKind, empty = false, time?: number): void {
+  reloadStart(kind: WeaponSoundKind, empty = false, time?: number, gun?: string): void {
     this.stopReload();
     this.lastReloadEmpty = empty;
     const v = this.voice({send: 0.15, pri: 1});
     this.reloadVoice = v;
-    if (kind === 'pistol') {
+    // `gun` (task studio-weapon-soundlab-audio-20261110-063407-01): the weapon's own magazine out / in (timed like its set's), or a break
+    // action's barrels swinging open; the set's shared cues otherwise.
+    const out = gunCue(gun, 'MagOut'), inn = gunCue(gun, 'MagIn'), open = gunCue(gun, 'BreakOpen');
+    if (out && inn) {
+      const T = time ?? (kind === 'pistol' ? (empty ? 1.65 : 1.4) : (empty ? 2.55 : 2.1));
+      this.play(v, out, {delay: 0.04});
+      if (empty) this.play(v, 'rifleMagDrop', kind === 'pistol' ? {delay: 0.42, gain: 0.6, rate: 1.3} : {delay: 0.62, gain: 0.8});
+      this.play(v, inn, {delay: T * 0.5});
+    } else if (open) {
+      this.play(v, open, {delay: 0.02});
+    } else if (kind === 'pistol') {
       // Pistol lane: the existing Sound Lab rifle magazine cues, pitched up and timed to the 1.4 s / 1.65 s reload.
       const T = time ?? (empty ? 1.65 : 1.4);
       this.play(v, 'rifleMagOut', {delay: 0.04, rate: 1.25, gain: 0.85});
@@ -1460,6 +1478,15 @@ export class Sfx {
     const v = this.voice({send: 0.2});
     if (this.lastReloadEmpty) this.play(v, 'rifleCharge', kind === 'pistol' ? {rate: 1.35, gain: 0.8} : {}); // charging handle / slide release
     else this.play(v, 'dryFire', {gain: 0.6, rate: 1.15}); // small seat/tap click
+  }
+  /** A break action closing (task studio-weapon-soundlab-audio-20261110-063407-01): the weapon's own barrels-snapped-shut cue, or the
+   *  set's dry click (what every break-action reload ended on before). */
+  breakClose(kind: WeaponSoundKind, gun?: string): void {
+    const close = gunCue(gun, 'BreakClose');
+    if (close) {
+      this.reloadVoice = null;
+      this.play(this.voice({send: 0.2}), close);
+    } else this.dry(kind);
   }
   shellIn(): void {
     this.play(this.voice({send: 0.12}), 'shellInsert', {delay: rnd(0, 0.015), jitter: 0.05});

@@ -2947,9 +2947,9 @@ export class Game {
         else if (e.type === 'swing') this.sfx.meleeSwing(); // lane KNIFE / FEEL: the whoosh at the RELEASE (no gunfire, bullets, flash or recoil)
         else if (e.type === 'contact') { prof.begin(SPAN.melee); this.meleeContact(e.def); prof.end(SPAN.melee); }
         else if (e.type === 'dry') { this.sfx.dry(e.def.sound); if (e.def.caliber && reserveFor(e.def, this.inv) === 0) this.hud.toast(`Out of ${caliberLabel(e.def)} ${CALIBERS[e.def.caliber].unit[1]}`, true); }
-        else if (e.type === 'reloadStart') this.sfx.reloadStart(e.def.reloadCue ?? e.def.sound, e.empty, reloadCueTime(e.def, e.empty)); // (lane GUNS: the gun's cue set + timing)
+        else if (e.type === 'reloadStart') this.sfx.reloadStart(e.def.reloadCue ?? e.def.sound, e.empty, reloadCueTime(e.def, e.empty), e.def.id); // (lane GUNS: the gun's cue set + timing; + its own reload cues by id)
         else if (e.type === 'shellIn') { this.sfx.shellIn(); this.viewmodel.shellBump(); }
-        else if (e.type === 'reloadEnd') { if (e.def.reload.kind === 'break') this.sfx.dry(e.def.sound); else this.sfx.reloadEnd(e.def.reloadCue ?? e.def.sound); } // (lane GUNS: a break action closes with a click)
+        else if (e.type === 'reloadEnd') { if (e.def.reload.kind === 'break') this.sfx.breakClose(e.def.sound, e.def.id); else this.sfx.reloadEnd(e.def.reloadCue ?? e.def.sound); } // (lane GUNS: a break action closes — its own barrels-shut cue by id, else a click)
       }
     } else if (heldDef?.kind === 'consumable' && inp.mousePressed[0] && !this.use && !flareOwns) {
       this.startUse(this.inv.selectedRef());
@@ -3167,7 +3167,7 @@ export class Game {
     this.damage.beginShot();
     this.shotCounter++;
     prof.begin(SPAN.fireFx);
-    this.sfx.shot(def.sound, def.shotCycle); // (lane GUNS: no pump rack after a semi-auto / break-action shotgun's shot)
+    this.sfx.shot(def.sound, def.shotCycle, def.id); // (lane GUNS: no pump rack after a semi-auto / break-action shotgun's shot; the held gun's own shot by id)
     this.viewmodel.fire(def, stanceRecoilMult(this.player.crouched));
     this.muzzleT = 0.05;
     const f0 = this.forward();
