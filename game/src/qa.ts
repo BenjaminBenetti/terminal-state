@@ -108,7 +108,7 @@ export function installQaHooks(game: Game): void {
         // Iteration 13 (CORE): the backend that actually initialized ({backend: 'webgpu' | 'webgl2-fallback', adapter, reason, label, …})
         gpu: gpuQa(),
         memory: {...game.renderer.info.memory},
-        world: game.world?.stats, genMs: game.genMs,
+        world: game.world?.stats, genMs: game.genMs, journeyBuild: game.journeyBuildStats, // (task studio-perf-ao-train-continuity-20261110-022206-01: the journey's paced build)
         // Lighting debug: current area profile, hemi (ambient) intensity, pool and fixture states.
         lighting: game.lightPool ? {...game.lightPool.debug(), flashlightOn: game.flashlightOn, areaProfiles: game.layout.areas.map(a => a.lighting)} : null,
         // Iteration 06 (Lane F): volumetric atmosphere (quality, active, march resolution/steps, shadow map, ms).
