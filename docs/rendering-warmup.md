@@ -487,7 +487,13 @@ first gesture entered play, those tasks fell in the first play frames.
 - From audio start, every kind is pre-generated, the current room first, one slice per timer task (30 ms, then every 16 ms).
 - A kind needed before its slices are done is finished at once, as before, and counted (`debugState().ir.sync`). Once every kind
   is ready, a room change only swaps buffers.
-- Slices measured PENDING_IR.
+- Measured (Node, cold processes, 48 kHz): a slice took 0.4–0.9 ms in most runs, at most 2.1 ms over four runs. The whole
+  pre-generation is 36 timer tasks from a `medium` start, about 0.6 s. A first version drew its random numbers through a new
+  closure per kernel, which made the second kernel's first slice run unoptimised (4.6–6.1 ms); one shared step function on a
+  `Uint32Array` state removed that.
+- The kernel needed at audio start is still built at once: 10–31 ms cold in these runs (the old whole kernel: about 35 ms). It is
+  the convolver's current room, so audio has no reverb until it exists. Unchanged: a room change before the slices finish builds
+  that one kernel at once, as before.
 - Not measurable here: what the browser does when a buffer is assigned to a `ConvolverNode`.
 - Test: `play-stutter-reverb-ir.test.ts`.
 
@@ -500,15 +506,17 @@ run on the real Subway, each on its own. V8's sampling heap profiler (collected 
 | AI step, 23 enemies (`tests/helpers/aiCpuSim.ts`, its own per-frame record included) | ~186,000 | hit volumes rebuilt per enemy (`updateVolumes` / `bonePos` ~32,000), three's animation mixer ~25,000, `Math.hypot` ~24,000, brain / motor / support ~20,000 |
 | `ContainerManager.target` + `update` | ~29,000 | `world/containers.ts` `update` / `target` (lane BUILD's file) |
 | `PhysicsSystem.update`, idle | ~4,100 | the filler's per-frame entry (`shelfStock.ts` `frame`) |
-| `PickupManager.target` ×2 + `update` | PENDING_PICKUP | |
+| `PickupManager.target` ×2 + `update` | ~2,300 | mostly the harness's own camera math; `target` makes one vector per call |
 | Effects / Survival / `combineModifiers` | ~110 / ~280 / ~440 | small |
 | three's scene + shadow frame | ~2,470,000 with the fake device, of which ~1,960,000 is the fake device itself | three's own: cache keys, bindings, projection, sort |
 
-`Game.update` itself was fixed by reading:
+None of these systems was changed, so their numbers are the same after (within sampling noise). `Game.update` itself cannot
+run here; it was fixed by reading:
 - the frame's eye and look vectors and the unreachable eye are scratch fields;
 - the live-enemy count is a loop, not a filtered array twice a frame;
-- the enemy cue distance is computed inline instead of a tuple per enemy;
-- `PickupManager.target` uses one scratch vector.
+- the enemy cue distance is computed inline instead of a tuple per enemy.
+
+That is an estimated 1–2 kB a frame on a level with 40 enemies (not measured).
 
 Not changed, with the reason:
 - **The culler's loop.** The function is TurboFan-optimised and still allocates about 100 bytes per entry per full update, with or
@@ -521,10 +529,23 @@ Not changed, with the reason:
 - **three's own allocations.** Not ours to change without patching three.
 
 **three's submission in our scenes** (Subway sweep, scene pass + torch shadow pass):
-- Per frame: about 10.6 ms of three's JavaScript in Node, 452 draws on both passes, 1,216 objects visited per pass.
+- Per frame: 8.8–10.6 ms of three's JavaScript in Node (pod load varies), 452 draws on both passes, 1,216 objects visited per
+  pass.
 - World matrices are 7.3 % of the frame. three calls `scene.updateMatrixWorld()` once per pass. The holders root is 539 of the 545
   matrices composed each time; the world root is already static.
-- Mitigations tried (interleaved A / B, medians): PENDING_C.
+- Mitigations tried, each A / B over 48 frames (3 poses × 16 yaws), interleaved runs in one process, medians:
+
+  | Mitigation | Run 1 (10 runs each) | Run 2 (12 runs each) | Kept? |
+  |---|---|---|---|
+  | `scene.updateMatrixWorld()` once per frame by the game, `matrixWorldAutoUpdate` off for the frame's render | −4.8 % | −4.5 % | no: under 5 % |
+  | Every holder matrix static (an upper bound: holders' doors / drawers move, so not shippable as is) | +0.1 % | −3.7 % | no |
+  | Both | −7.0 % | −5.8 % | no: it needs the second, which is not identical |
+
+  Spread within a variant (p25–p75) was about ±2–3 %. The drawn-set comparison could not decide identity here: two consecutive
+  sweeps of the unchanged frame already differ by one or two objects on a few frames (state the sweep itself changes), exactly
+  like the variants. The first mitigation is identical by construction (nothing moves between the scene pass and the shadow
+  pass), and it would save one more traversal for every further pass that renders the station scene. It is worth re-measuring
+  if the ambient-occlusion work adds such a pass.
 
 **Limits.**
 - Node only, and no native GPU. GPU-side pipeline creation, driver work and GC pause lengths need a native capture.
