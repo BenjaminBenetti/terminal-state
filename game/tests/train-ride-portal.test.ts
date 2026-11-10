@@ -103,7 +103,7 @@ class FakePortals {
       if (!s.engaged || !q) continue;
       if (q.kind === 'gate') {
         const d = dt / 1.3;
-        s.gate = s.want > s.gate ? Math.min(1, s.gate + d) : Math.max(0, s.gate - d);
+        s.gate = s.want > s.gate ? Math.min(s.want, s.gate + d) : Math.max(s.want, s.gate - d);
         if (s.releasing && s.gate <= 0) this.finish(which);
       } else if (s.releasing) {
         s.t += dt;
@@ -461,9 +461,11 @@ describe('the ride tunnel in the car\'s frame: the same for both yaws, symmetric
     // the walls / floor / ceiling: a box symmetric about the track centre line, from the bed to the ride box's ceiling
     const box = new THREE.Box3();
     for (const name of ['transit-walls', 'transit-floor', 'transit-ceiling']) box.union(new THREE.Box3().setFromBufferAttribute((tt.group.getObjectByName(name) as THREE.Mesh).geometry.getAttribute('position') as THREE.BufferAttribute));
-    expect([box.min.z, box.max.z]).toEqual([-hw, hw]);
-    expect(box.min.y).toBeCloseTo(bed, 12);
-    expect(box.max.y).toBeCloseTo(bed + RIDE_BOX.ceil, 12);
+    // (the positions are float32: 1.95 is stored as 1.9500000476837158)
+    expect(box.min.z).toBeCloseTo(-hw, 6);
+    expect(box.max.z).toBeCloseTo(hw, 6);
+    expect(box.min.y).toBeCloseTo(bed, 6);
+    expect(box.max.y).toBeCloseTo(bed + RIDE_BOX.ceil, 6);
     expect([box.min.x, box.max.x]).toEqual([-T.half, T.half]);
     // the car's swept body: half its width + the jostle's sway and roll at roof height
     const jb = jostleBounds(1), swept = HW + jb.lateral + jb.roll * SPEC.roofY;
