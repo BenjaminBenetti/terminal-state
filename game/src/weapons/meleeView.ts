@@ -154,18 +154,18 @@ export function varietyLength(id: VarietyMeleeId): number {
  */
 export const VARIETY_MELEE_AIMS: Readonly<Record<VarietyMeleeId, MeleeAims>> = {
   // OVERHEAD CHOP, two-handed: haft diagonal across the body, head up right (its flat to the eye, edge forward-in) -> raised up the
-  // right side, the head just over the top edge (edge forward) -> down through the crosshair (edge leading, a slight cant) -> low
+  // right side, the head at the top edge, partly in view (edge forward) -> down through the crosshair (edge leading, a slight cant) -> low
   // centre-left follow-through
   fire_axe: {
     carry: {grip: [0.0, -0.40, -0.40], tip: [0.46, 0.46], up: [0.8, -0.3, 0.5]},
-    raised: {grip: [0.15, -0.16, -0.36], tip: [0.62, 1.35], up: [0.2, -0.2, 1]},
+    raised: {grip: [0.15, -0.16, -0.36], tip: [0.60, 1.05], up: [0.2, -0.2, 1]},
     contact: {grip: [0.06, -0.30, -0.46], tip: [0, 0], up: [0.35, 1, 0.1]},
     through: {grip: [-0.02, -0.40, -0.36], tip: [-0.25, -1.1], up: [0.2, 0.3, -1]},
   },
   // the same chop, heavier: the head rests lower out at the right, a higher draw back
   sledgehammer: {
     carry: {grip: [0.0, -0.44, -0.40], tip: [0.52, 0.30], up: [0.8, -0.3, 0.5]},
-    raised: {grip: [0.15, -0.18, -0.36], tip: [0.62, 1.25], up: [0.2, -0.2, 1]},
+    raised: {grip: [0.15, -0.18, -0.36], tip: [0.60, 1.05], up: [0.2, -0.2, 1]},
     contact: {grip: [0.06, -0.32, -0.48], tip: [0, 0], up: [0.35, 1, 0.1]},
     through: {grip: [-0.02, -0.42, -0.36], tip: [-0.20, -1.2], up: [0.2, 0.3, -1]},
   },
@@ -182,17 +182,19 @@ export const VARIETY_MELEE_AIMS: Readonly<Record<VarietyMeleeId, MeleeAims>> = {
   // leading) -> low left
   crowbar: {
     carry: {grip: [0.18, -0.26, -0.38], tip: [0.36, 0.52], up: [0.6, 0, 1]},
-    raised: {grip: [0.26, -0.06, -0.32], tip: [0.72, 1.15], up: [-0.4, 0.2, 1]},
+    raised: {grip: [0.26, -0.06, -0.32], tip: [0.68, 0.86], up: [-0.4, 0.2, 1]},
     contact: {grip: [0.12, -0.14, -0.36], tip: [0, 0], up: [0.7, 0.6, 0.2]},
     through: {grip: [-0.06, -0.26, -0.34], tip: [-0.80, -0.75], up: [0.5, 0.4, 0.6]},
     dip: 1.8,
   },
   // HORIZONTAL SWEEP with a CHARGE, two-handed: the bat up at the right shoulder -> cocked back right; the CHARGE draws it further
-  // back and up (still in view at the right edge: the visible charge) -> level through the crosshair -> wrapped round to the left
+  // back and up — the hands rise into view, the barrel climbs toward the top-right corner but stays IN FRAME (lead QA 2026-11-10: the
+  // old full-charge pose left only a strip of the bat at the edge), with the full-charge tremble -> level through the crosshair ->
+  // wrapped round to the left
   slugger: {
     carry: {grip: [0.12, -0.38, -0.38], tip: [0.45, 0.55], up: [0, 0, 1]},
-    raised: {grip: [0.22, -0.20, -0.32], tip: [0.88, 0.80], up: [0, 1, 0]},
-    charged: {grip: [0.24, -0.16, -0.29], tip: [1.02, 1.15], up: [0, 1, 0]},
+    raised: {grip: [0.21, -0.20, -0.32], tip: [0.72, 0.62], up: [0, 1, 0]},
+    charged: {grip: [0.21, -0.11, -0.25], tip: [0.82, 0.86], up: [0, 1, 0]},
     contact: {grip: [0.18, -0.12, -0.36], tip: [0, 0], up: [0, 1, 0]},
     through: {grip: [-0.10, -0.18, -0.34], tip: [-1.10, 0.10], up: [0, 1, 0]},
     dip: 2.6,
