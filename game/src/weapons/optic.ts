@@ -46,8 +46,12 @@ export interface OpticSpec {
    * from the geometry within `radius` x 1.6 of the axis and ±SIGHT_APERTURE_DEPTH m of the marker. No scope body around the
    * marker's axis = no lens (the `Sight` ADS fallback). The main camera's narrow `aimFov` is the magnification the lens shows;
    * the reticle is the optic's.
+   * `depth` (m, default SIGHT_APERTURE_DEPTH): how far along the axis the rear surface is searched. An open REFLEX sight (the
+   * Stub's red-dot hoop, `Sight` = the window centre) sets it to its hoop's own depth, so the glass sits in the window just
+   * eye-side of the hoop — not behind the mount further back — with a `radius` inside the window's clear opening (the depth mask
+   * then hides nothing of the frame). No magnification there: that gun keeps a mild `aimFov`.
    */
-  sightAperture?: {radius: number};
+  sightAperture?: {radius: number; depth?: number};
 }
 
 /** Lane GUNS: gap (m) between a scope's rear surface and the runtime glass (as the user rifle's 2.2 mm). */
@@ -230,7 +234,7 @@ export class RifleOptic {
     }
     if ((!glass?.isMesh || !anchor) && spec.sightAperture) {
       // lane GUNS: a scope on the `Sight` axis (weapon variety)
-      const a = RifleOptic.sightApertureSpec(model, spec.sightAperture.radius);
+      const a = RifleOptic.sightApertureSpec(model, spec.sightAperture.radius, spec.sightAperture.depth);
       const made = a ? RifleOptic.runtimeAperture(model, a) : null;
       if (made) ({glass, anchor} = made);
     }
@@ -258,10 +262,10 @@ export class RifleOptic {
 
   /**
    * Lane GUNS: the runtime aperture of a scope on the model's `Sight` axis (OpticSpec.sightAperture): x / y = the marker,
-   * z = the rear-most vertex within radius x 1.6 of that axis and ±SIGHT_APERTURE_DEPTH of the marker, + APERTURE_GAP.
-   * Null without a `Sight` marker, or with no scope body around its axis (SIGHT_APERTURE_MIN_VERTS).
+   * z = the rear-most vertex within radius x 1.6 of that axis and ±`depth` (default SIGHT_APERTURE_DEPTH) of the marker,
+   * + APERTURE_GAP. Null without a `Sight` marker, or with no sight body around its axis (SIGHT_APERTURE_MIN_VERTS).
    */
-  static sightApertureSpec(model: THREE.Object3D, radius: number): NonNullable<OpticSpec['aperture']> | null {
+  static sightApertureSpec(model: THREE.Object3D, radius: number, depth = SIGHT_APERTURE_DEPTH): NonNullable<OpticSpec['aperture']> | null {
     model.updateMatrixWorld(true);
     const sight = model.getObjectByName('Sight');
     if (!sight) return null;
@@ -274,7 +278,7 @@ export class RifleOptic {
       if (!pos) return;
       for (let i = 0; i < pos.count; i++) {
         v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
-        if ((v.x - s.x) ** 2 + (v.y - s.y) ** 2 <= r2 && Math.abs(v.z - s.z) <= SIGHT_APERTURE_DEPTH) { around++; if (v.z > zRear) zRear = v.z; }
+        if ((v.x - s.x) ** 2 + (v.y - s.y) ** 2 <= r2 && Math.abs(v.z - s.z) <= depth) { around++; if (v.z > zRear) zRear = v.z; }
       }
     });
     // no scope body around the marker's axis (a marker placed over the scope, not on its axis): no lens — the Sight ADS fallback

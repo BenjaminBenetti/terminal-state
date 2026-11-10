@@ -90,7 +90,11 @@ export const VARIETY_GUN_DEFS: Readonly<Record<VarietyGunId, WeaponDef>> = {
   // G03 STUB — 5.56 bullpup carbine for corridors. AUTO a touch faster than the rifle (0.09 s) at slightly less per round (22: ~244 dps,
   // 8 % less per 5.56 round); a BETTER hip cone and quicker handling (equip 0.42 s, moveMult 0.98) but a WORSE aimed cone (0.008 vs 0.004)
   // through its small red dot, more sideways recoil jitter, a shorter barrel (falloff 30 -> 75 m) and a slow magazine change (2.6 / 3.0 s:
-  // the magazine sits behind the grip).
+  // the magazine sits behind the grip). ADS looks THROUGH the open red-dot window like the rifle's optic (no magnification: aimFov 56):
+  // weapon-stub.glb's `Sight` is the window centre; the hoop's clear opening is >= 13.7 mm from that axis (down; 16.8 up, 18.8 to
+  // the sides) and spans 12.8 mm ahead of it to 9.5 mm behind it, so the runtime glass (optic.ts sightAperture, searched only that
+  // deep) sits 11.7 mm eye-side of the marker with a 12 mm radius — inside the opening, so its depth mask hides none of the frame —
+  // and the eye 0.248 m behind it (the former 0.26 m sight relief). The lens draws the red dot on the aim line; the HUD crosshair hides.
   stub: {
     ...base('stub'), magazine: 30, auto: true, interval: 0.09,
     damage: 22, pellets: 1, spreadHip: 0.02, spreadAim: 0.008, spreadMove: 0.024,
@@ -99,7 +103,8 @@ export const VARIETY_GUN_DEFS: Readonly<Record<VarietyGunId, WeaponDef>> = {
     recoil: firingRecoil({pitch: 0.011, yaw: 0.009, kick: 0.032, recover: 9}),
     recoilClimb: {climb: 0.04, cap: 8, jitter: 0.008},
     equipTime: 0.42, aimFov: 56, moveMult: 0.98, noise: 30, sound: 'rifle',
-    view: gunView('stub', 'long', [0.24, -0.3, -0.7], {sightRelief: 0.26, sightLift: 0.035, aim: [0, -0.145, -0.26]}),
+    view: gunView('stub', 'long', [0.24, -0.3, -0.7], {sightRelief: 0.26, sightLift: 0, aim: [0, -0.145, -0.26],
+      optic: {eyeRelief: 0.248, sightAperture: {radius: 0.012, depth: 0.015}}}),
   },
   // G04 OVERWATCH — 5.56 designated marksman rifle, SCOPED. SEMI at a slow 0.36 s with heavy rounds (46, head x3 = one head shot drops
   // a standard zombie; ~128 dps) from a 12-round magazine. A poor hip cone, a very tight aimed cone after a LONGER settle (0.6 s; a shot
