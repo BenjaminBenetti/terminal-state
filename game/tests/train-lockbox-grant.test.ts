@@ -6,6 +6,7 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {ITEMS, itemDef} from '../src/items/items';
 import {WEAPONS} from '../src/weapons/weapons';
+import {VARIETY_GUN_IDS} from '../src/weapons/varietyIds';
 import {Inventory} from '../src/items/inventory';
 import {DEV_GRANT_SEQUENCE, SequenceMatcher, devGrantBundle, digitOfCode, grantAllOrNothing, grantText, planGrant} from '../src/items/devGrant';
 import {LOCKBOX_SLOTS, TrainLockbox} from '../src/run/trainLockbox';
@@ -19,8 +20,13 @@ import {installFakeDom, type FakeDom} from './helpers/fakeDom';
 
 installCanvasShim(false);
 
+// Task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the bundle is registry-derived BY DESIGN ("the current ranged
+// guns"), so the six new guns join it once their WeaponDefs exist (weapons/varietyGuns.ts, lane GUNS): 3 + 6 guns, N = 19 slots (13 before;
+// with the defs absent every number below is exactly the old pin). Gear and ammo are unchanged.
+const GUNS = ['rifle', 'shotgun', 'pistol', ...VARIETY_GUN_IDS.filter(id => WEAPONS[id] && !WEAPONS[id].melee)];
+const G = GUNS.length, N = G + 10, K = Math.floor(LOCKBOX_SLOTS / N);
 const EXPECTED = [
-  {itemId: 'rifle', count: 1}, {itemId: 'shotgun', count: 1}, {itemId: 'pistol', count: 1},
+  ...GUNS.map(itemId => ({itemId, count: 1})),
   {itemId: 'armor_vest', count: 1}, {itemId: 'chest_rig', count: 1}, {itemId: 'backpack', count: 1}, {itemId: 'helmet', count: 1},
   {itemId: 'boots', count: 1}, {itemId: 'gloves', count: 1}, {itemId: 'gas_mask', count: 1},
   {itemId: 'ammo_9mm', count: 120}, {itemId: 'ammo_556', count: 120}, {itemId: 'ammo_12ga', count: 32},
@@ -28,57 +34,59 @@ const EXPECTED = [
 const fillWith = (box: TrainLockbox, inv: Inventory, n: number) => { for (let i = 0; i < n; i++) box.slots[i] = inv.makeStack('water', 1); };
 
 describe('the gear drop bundle (registry-derived)', () => {
-  it('is exactly the 3 ranged guns, the 7 gear items and one full stack of each of the 3 calibers — 13 slots', () => {
+  it('is exactly the ranged guns (3 + the 6 new guns once defined), the 7 gear items and one full stack of each of the 3 calibers — 13 / 19 slots', () => {
     expect(devGrantBundle()).toEqual(EXPECTED);
     // derived, not listed: every weapon item that is not melee, every gear item, every caliber ammo item — nothing else
     for (const d of Object.values(ITEMS)) {
       // (task filter-tension-airtank-20261104-072836: the bundle stays exactly as it was — the new Airtank Backpack is not in it)
-      const want = (d.kind === 'weapon' && !WEAPONS[d.weaponId!].melee) || (d.kind === 'gear' && !!d.gear && d.id !== 'airtank_backpack') || d.kind === 'ammo';
+      const want = (d.kind === 'weapon' && !!WEAPONS[d.weaponId!] && !WEAPONS[d.weaponId!].melee) || (d.kind === 'gear' && !!d.gear && d.id !== 'airtank_backpack') || d.kind === 'ammo';
       expect([d.id, devGrantBundle().some(l => l.itemId === d.id)]).toEqual([d.id, want]);
     }
     expect(devGrantBundle().some(l => l.itemId === 'knife')).toBe(false); // melee: not a gun, not gear
     for (const l of devGrantBundle().filter(x => itemDef(x.itemId).kind === 'ammo')) expect(l.count).toBe(itemDef(l.itemId).stackMax);
-    expect(planGrant(new TrainLockbox().slots)).toEqual({ok: true, need: 13, free: 40});
-    expect(grantText()).toBe('Rifle, Shotgun, Pistol, Armor vest, Chest rig, Backpack, Hard hat, Work boots, Work gloves, Gas mask, 120 × 9mm, 120 × 5.56mm, 32 × 12-gauge');
+    expect(planGrant(new TrainLockbox().slots)).toEqual({ok: true, need: N, free: 40});
+    expect([13, 19]).toContain(N);
+    expect(grantText()).toBe(`${GUNS.map(id => itemDef(id).short).join(', ')}, Armor vest, Chest rig, Backpack, Hard hat, Work boots, Work gloves, Gas mask, 120 × 9mm, 120 × 5.56mm, 32 × 12-gauge`);
   });
 
   it('success with room: factory stacks (full magazines, empty 12-slot bag, mask without charge), fresh unique uids from the run counter', () => {
     const inv = starterInventory('pistol'), box = new TrainLockbox();
     const next = inv.makeStack('water', 1).uid + 1;
-    expect(grantAllOrNothing(box.slots, inv)).toEqual({ok: true, need: 13, free: 40});
-    expect(box.used).toBe(13);
-    expect(box.summary()).toEqual(['0:riflex1@30', '1:shotgunx1@6', '2:pistolx1@15', '3:armor_vestx1', '4:chest_rigx1', '5:backpackx1[0]', '6:helmetx1',
-      '7:bootsx1', '8:glovesx1', '9:gas_maskx1', '10:ammo_9mmx120', '11:ammo_556x120', '12:ammo_12gax32']);
-    expect(box.slots[5]!.bag).toEqual(new Array(12).fill(null));
-    expect(box.slots[9]!.filter).toBeUndefined();
-    expect(box.slots.slice(0, 13).map(s => s!.uid)).toEqual(Array.from({length: 13}, (_, i) => next + i));
+    expect(grantAllOrNothing(box.slots, inv)).toEqual({ok: true, need: N, free: 40});
+    expect(box.used).toBe(N);
+    expect(box.summary()).toEqual([...GUNS.map((id, i) => `${i}:${id}x1@${WEAPONS[id].magazine}`), `${G}:armor_vestx1`, `${G + 1}:chest_rigx1`, `${G + 2}:backpackx1[0]`, `${G + 3}:helmetx1`,
+      `${G + 4}:bootsx1`, `${G + 5}:glovesx1`, `${G + 6}:gas_maskx1`, `${G + 7}:ammo_9mmx120`, `${G + 8}:ammo_556x120`, `${G + 9}:ammo_12gax32`]);
+    expect(box.summary().slice(0, 3)).toEqual(['0:riflex1@30', '1:shotgunx1@6', '2:pistolx1@15']);
+    expect(box.slots[G + 2]!.bag).toEqual(new Array(12).fill(null));
+    expect(box.slots[G + 6]!.filter).toBeUndefined();
+    expect(box.slots.slice(0, N).map(s => s!.uid)).toEqual(Array.from({length: N}, (_, i) => next + i));
     expect(box.invariants()).toEqual([]);
   });
 
   it('all or nothing: too little room grants NOTHING (slots and uid counter untouched); merges onto partial stacks count with the real rules', () => {
     const inv = new Inventory(), box = new TrainLockbox();
-    fillWith(box, inv, 28); // 12 free < 13
+    fillWith(box, inv, LOCKBOX_SLOTS - N + 1); // N - 1 free < N (13: 28 filled, 12 free)
     const before = JSON.stringify(box.toJSON()), uid = inv.makeStack('water', 1).uid;
-    expect(grantAllOrNothing(box.slots, inv)).toEqual({ok: false, need: 13, free: 12});
+    expect(grantAllOrNothing(box.slots, inv)).toEqual({ok: false, need: N, free: N - 1});
     expect(JSON.stringify(box.toJSON())).toBe(before);
     expect(inv.makeStack('water', 1).uid).toBe(uid + 1); // makeStack never ran
-    box.slots[27] = null; // exactly 13 free
+    box.slots[LOCKBOX_SLOTS - N] = null; // exactly N free
     box.slots[0] = inv.makeStack('ammo_9mm', 50); // a partial 9mm stack: 70 merge onto it, 50 need a new slot
-    expect(grantAllOrNothing(box.slots, inv)).toEqual({ok: true, need: 13, free: 13});
+    expect(grantAllOrNothing(box.slots, inv)).toEqual({ok: true, need: N, free: N});
     expect(box.used).toBe(40);
     const nine = box.slots.filter(s => s?.itemId === 'ammo_9mm').map(s => s!.count);
     expect(nine).toEqual([120, 50]); // exactly one full stack (120) added in total
     expect(box.invariants()).toEqual([]);
   });
 
-  it('repeating is allowed while there is room: 3 drops fit 40 slots, the 4th is refused with nothing changed', () => {
+  it('repeating is allowed while there is room: K drops fit 40 slots (3 of 13, 2 of 19), the next is refused with nothing changed', () => {
     const inv = new Inventory(), box = new TrainLockbox();
-    for (const used of [13, 26, 39]) {
+    for (const used of Array.from({length: K}, (_, i) => (i + 1) * N)) {
       expect(grantAllOrNothing(box.slots, inv).ok).toBe(true);
       expect(box.used).toBe(used);
     }
     const before = JSON.stringify(box.toJSON());
-    expect(grantAllOrNothing(box.slots, inv)).toEqual({ok: false, need: 13, free: 1});
+    expect(grantAllOrNothing(box.slots, inv)).toEqual({ok: false, need: N, free: LOCKBOX_SLOTS - K * N});
     expect(JSON.stringify(box.toJSON())).toBe(before);
   });
 });
@@ -175,9 +183,9 @@ describe('LockboxSystem: open / close rules, digits never leak, the drop from th
     expect([input.hit('Digit2'), input.hit('Digit5'), input.hit('Digit1'), keysSeen, shell.inv.selected]).toEqual([false, false, false, [], 0]);
     sys.matcher.reset();
     type('1337');
-    expect([box.used, sys.lastGrant, sys.view.noteBad]).toEqual([13, {ok: true, need: 13, free: 40}, false]);
+    expect([box.used, sys.lastGrant, sys.view.noteBad]).toEqual([N, {ok: true, need: N, free: 40}, false]);
     expect(sys.view.note).toMatch(/^Gear drop added to the Lockbox: Rifle, Shotgun, Pistol/);
-    expect(dom.el('.lb-title').textContent).toBe('Lockbox · 13/40 slots used');
+    expect(dom.el('.lb-title').textContent).toBe(`Lockbox · ${N}/40 slots used`);
     expect([input.pressed.size, keysSeen]).toEqual([0, []]); // not one digit reached player/input.ts
     expect(key('KeyW').stopped).toBe(false); // WASD still walks
     expect(input.hit('KeyW')).toBe(true);
@@ -188,7 +196,7 @@ describe('LockboxSystem: open / close rules, digits never leak, the drop from th
     expect(key('Digit2').stopped).toBe(false);
     expect(input.hit('Digit2')).toBe(true);
     type('1337');
-    expect(box.used).toBe(13);
+    expect(box.used).toBe(N);
   });
 
   it('the code resets on close, blur, a hidden tab and a wrong key; a typing target is ignored; repeats need the whole code; no room = nothing', () => {
@@ -214,13 +222,13 @@ describe('LockboxSystem: open / close rules, digits never leak, the drop from th
     key('Digit3', {target: {tagName: 'INPUT'}}); // typing in a field: not the view's
     expect(sys.matcher.progress).toBe(1);
     type('337');
-    expect(box.used).toBe(13);
-    type('1313371337'); // the second '1' restarts the attempt: two drops
-    expect(box.used).toBe(39);
+    expect(box.used).toBe(N);
+    type('1313371337'); // the second '1' restarts the attempt: two more drops while there is room (13: 39 used; 19: the second is refused, 38)
+    expect(box.used).toBe(Math.min(3, K) * N);
     const before = JSON.stringify(box.toJSON());
     type('1337');
-    expect([JSON.stringify(box.toJSON()) === before, sys.lastGrant, sys.view.noteBad]).toEqual([true, {ok: false, need: 13, free: 1}, true]);
-    expect(sys.view.note).toBe('Not enough space in the Lockbox for the gear drop (needs 13 free slots, 1 free) — nothing was added');
+    expect([JSON.stringify(box.toJSON()) === before, sys.lastGrant, sys.view.noteBad]).toEqual([true, {ok: false, need: N, free: LOCKBOX_SLOTS - K * N}, true]);
+    expect(sys.view.note).toBe(`Not enough space in the Lockbox for the gear drop (needs ${N} free slots, ${LOCKBOX_SLOTS - K * N} free) — nothing was added`);
   });
 
   it('closes (lid down) on a hit, pause / any state, travel teardown, walking out of reach, death and the train unloading; refuses to open without a box', () => {

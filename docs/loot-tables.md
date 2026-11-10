@@ -232,10 +232,79 @@ every food / drink: the old items, bakery bread, the Skyways ramen food and the 
 | Reactor | 16 → 6 | 19 → 12 | ×0.51 |
 | All | 443 → 222 (×0.50) | 597 → 291 (×0.49) | ×0.49 |
 
+## Weapon variety (every level)
+
+<!-- Task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve approved weapons as diversified weapon finds. -->
+
+The twelve new weapons (`weapons/varietyIds.ts`: six guns, two per existing caliber, and six melee weapons) are never new spawn rows.
+They take the IDENTITY of existing weapon finds (`items/weaponVariety.ts`), so the find count and the ammo supply stay exactly as before.
+
+- **The opportunities** (the census lists them all): every generated layout pickup of a baseline gun that is not a curated reward.
+  Each producer lays the gun and then, at the next layout index, one box of its own caliber (`WEAPON_FIND_AMMO`):
+  - `gen/weaponFinds.ts` `placeWeaponFinds`: the Subway, the Bunker, Skyways and the Reactor (shotgun + rifle for the shipped pistol
+    start; shotgun only for a rifle start);
+  - `gen/office/spawns.ts` `placeOfficeWeapons` (`officeWeaponPlan`): the Office storeys;
+  - `gen/mall/shopsWeapons.ts` `placeMallWeapons`: the mall gun shops' bench, rack or floor stock (the only pistol finds).
+  Not opportunities: the Office roof find (`reward`), the starter kit, market vendor stock (`market/trade/stock.ts` keeps its baseline
+  weapon rows), NPC loadouts. No loot table holds a gun, and the Survivor Market places no weapon pickup.
+- **The choice.** At a section's first spawn (`game.ts` buildSection, memory pickups `null`), a stable hash of the find's origin
+  (section id, layout index, rolled baseline; seeded by the layout seed) picks the identity. No RNG stream is read, so every other
+  draw, yaw, lot and position is unchanged. Shares per family (`WEAPON_VARIETY_FAMILIES`, `MELEE_SHARE`):
+
+  | Family | Baseline | Variant A | Variant B | Melee (all six) |
+  |---|---|---|---|---|
+  | pistol finds | pistol 0.40 | hornet 0.20 | longslide 0.22 | 0.18 |
+  | rifle finds | rifle 0.40 | stub 0.23 | overwatch 0.19 | 0.18 |
+  | shotgun finds | shotgun 0.40 | coach_gun 0.23 | thresher 0.19 | 0.18 |
+
+  The melee share is split by base weights (`MELEE_BASE`) with place leans: a track shovel in Subway / Bunker / Reactor work and
+  storage rooms, a crowbar or sledgehammer in workshops and stores, a fire axe in security rooms and the Office / Reactor, a machete in
+  a gun shop, a slugger in locker and staff rooms.
+- **Eligibility.** A pick is realized only when the identity is playable and fits; otherwise the find stays its baseline gun:
+  - its WeaponDef exists and its model is delivered (`assets/weaponVarietyModels.generated.ts`; no stand-in is ever shown);
+  - a gun of the family's own caliber, or a melee weapon;
+  - a weapon longer than the baseline (fixed approved lengths, `VARIETY_LENGTH_M`) must not lie into its paired box
+    (half-length + 0.08 m ≤ the gap) or past a display bench (`HOST_MAX_M` 1.1 m: the track shovel never lies on a gun-shop bench);
+  - the rounds rule below must hold exactly.
+- **Rounds are never minted or lost.** The original find loads its baseline's full magazine. The realized gun loads min(those
+  rounds, its capacity); the coach gun holds at most 2. The rest, or all of them for a melee weapon, go into the paired box: the same
+  caliber item, its count plus the rest, within its stack limit.
+- **Saves.** A realized find is an ordinary layout pickup: run memory records its whole stack (item, count, loaded rounds). A
+  remembered pickup list, from any save, is restored exactly. Nothing is converted, rerolled or migrated. New identities appear only in
+  sections whose pickups were never realized, including the unvisited areas of an old campaign. No id encoding is needed.
+- **Measured** (`tests/weapon-variety-loot.test.ts`; real layouts of every level, pistol start plus two rifle-start seeds each;
+  `/tmp/weapon-variety-loot/census.json`), with every identity eligible (all defs and models present). The weapon find count and the
+  ammo units per caliber (boxes plus loaded rounds) are identical, and every other pickup is unchanged. The rounds moved into boxes
+  depend on the new guns' magazine sizes (their WeaponDefs).
+
+  | Level (layouts) | Weapon finds, before = after | Realized as: baseline / new gun / melee | Ammo units 9mm / 5.56 / 12-gauge, before = after | Rounds moved into boxes |
+  |---|---|---|---|---|
+  | Subway (18) | 36 | 10 / 20 / 6 | 795 / 2770 / 564 | 216 |
+  | Office (6) | 10 | 4 / 3 / 3 | 255 / 820 / 200 | 62 |
+  | Mall (26) | 30 | 12 / 16 / 2 | 1350 / 1940 / 304 | 91 |
+  | Market (2) | 0 | (no weapon finds) | 0 | 0 |
+  | Bunker (14) | 31 | 13 / 13 / 5 | 1680 / 1800 / 352 | 142 |
+  | Skyways (5) | 8 | 4 / 4 / 0 | 165 / 150 / 60 | 8 |
+  | Reactor (5) | 9 | 3 / 6 / 0 | 495 / 570 / 120 | 0 |
+  | All (76) | 124 | 46 / 62 / 16 | 4740 / 8050 / 1600 | 519 |
+
+  Possible vs sampled family shares:
+
+  | Family | Possible: baseline / A / B / melee | Real census (finds) | 30 000 synthetic finds |
+  |---|---|---|---|
+  | pistol | 0.40 / 0.20 / 0.22 / 0.18 | 0.44 / 0.22 / 0.22 / 0.11 (9) | each within 0.02 of its weight |
+  | rifle | 0.40 / 0.23 / 0.19 / 0.18 | 0.31 / 0.39 / 0.14 / 0.16 (49) | each within 0.02 |
+  | shotgun | 0.40 / 0.23 / 0.19 / 0.18 | 0.41 / 0.27 / 0.21 / 0.11 (66) | each within 0.02 |
+
+  The real census is small, so its shares scatter (one standard deviation is 5–16 points at these counts). The synthetic check in
+  the same test runs the real plan over 10 000 finds per family. The baseline also takes every pick that was not eligible, such as
+  an Overwatch whose box lies in the same cell.
+
 ## Explicit exceptions (not table-driven)
 
 - **Weapon finds and their paired ammo.** In `gen/weaponFinds.ts` this includes the `ammo_9mm` floor boxes for a pistol start.
-  In `gen/office/spawns.ts` it is the weapon plan and placement.
+  In `gen/office/spawns.ts` it is the weapon plan and placement. Their identities are diversified at realization (see "Weapon
+  variety" above); their count, spots and boxes are not.
 - **The starter kit** (`run/starter.ts`).
 - **Fixtures with baked contents.** Fire and AED cabinets: `loot: null`.
 - **Vending pry / spill and bin spill mechanics.** These move existing lots; they do not roll new ones.

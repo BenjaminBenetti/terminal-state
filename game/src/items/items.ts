@@ -31,7 +31,8 @@ export type IconKey =
   | PantryIconKey // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the 24 pantry foods / drinks (items/pantryFood.ts)
   | 'reactorKey' | 'fuseCartridge' // task reactor-build-20261101 (lane RESTART): the reactor restart parts
   | 'railTies' // task studio-market-rework-20261108-074144-01 (lane TRADE): the market's Rail Ties (items/railTies.ts)
-  | BeerIconKey; // task studio-market-bar-20261108-225231-01 (lane BEER): the market bar's beers (items/beers.ts)
+  | BeerIconKey // task studio-market-bar-20261108-225231-01 (lane BEER): the market bar's beers (items/beers.ts)
+  | WeaponVarietyIconKey; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve new weapons (ui/weaponVarietyIcons.ts)
 
 /** How a consumable is used: wording, sound and the stat it mainly restores ('use': the flashlight battery). */
 export type ConsumeVerb = 'apply' | 'eat' | 'drink' | 'use';
@@ -70,7 +71,7 @@ import {SKYWAYS_DRINK_IDS, SKYWAYS_FOOD_DIMS, SKYWAYS_FOOD_IDS, SKYWAYS_FOOD_ITE
 import {RAIL_TIES_DIMS, RAIL_TIES_ITEMS} from './railTies'; // task studio-market-rework-20261108-074144-01 (lane TRADE)
 import {BEER_DIMS, BEER_ITEMS, beerEffectText, isBeer, type BeerIconKey} from './beers'; // task studio-market-bar-20261108-225231-01: the market bar's beers
 import {PANTRY_DIMS, PANTRY_DRINK_IDS, PANTRY_FOOD_IDS, PANTRY_ITEMS, type PantryIconKey} from './pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
-import {VARIETY_WEAPON_ITEMS} from './weaponVarietyItems'; // task studio-weapon-variety-production-20261109-224355-01: the twelve new weapons
+import {VARIETY_WEAPON_ITEMS, type WeaponVarietyIconKey} from './weaponVarietyItems'; // task studio-weapon-variety-production-20261109-224355-01: the twelve new weapons
 
 // + bread (task office-props-physics-scale-20261030, lane FURN): only bakery display cases hold it (items/lootTables.ts BAKERY_ROWS)
 // + the Skyways ramen restaurant's ramen bowls / bento and bubble tea (task studio-skyways-level-20261106-054448, lane FOOD: items/skywaysFood.ts)
@@ -93,11 +94,11 @@ export const ITEMS: Record<string, ItemDef> = {
   // Lane AMMO (knife-melee-20261030): ammo items ARE calibers (items/calibers.ts); any weapon chambering that caliber loads from
   // them. Old ids ammo_pistol / ammo_rifle / ammo_shells migrate 1:1 (LEGACY_AMMO_IDS); stack limits unchanged (120 / 120 / 32).
   ammo_9mm: {id: 'ammo_9mm', name: '9mm rounds (9×19mm)', short: '9mm', kind: 'ammo', stackMax: 120, icon: 'ammo9mm', caliber: '9x19mm',
-    description: 'Loose 9×19mm pistol cartridges. Loads any 9mm weapon — today the service pistol.'},
+    description: 'Loose 9×19mm pistol cartridges. Loads any 9mm weapon — the service pistol, the Hornet SMG and the Longslide.'},
   ammo_556: {id: 'ammo_556', name: '5.56×45mm rounds', short: '5.56mm', kind: 'ammo', stackMax: 120, icon: 'ammo556', caliber: '5.56x45mm',
-    description: 'Loose 5.56×45mm rifle cartridges. Loads any 5.56mm weapon — today the automatic rifle.'},
+    description: 'Loose 5.56×45mm rifle cartridges. Loads any 5.56mm weapon — the automatic rifle, the Stub carbine and the Overwatch.'},
   ammo_12ga: {id: 'ammo_12ga', name: '12-gauge shells', short: '12-gauge', kind: 'ammo', stackMax: 32, icon: 'ammo12ga', caliber: '12ga',
-    description: 'Buckshot shells. Loads any 12-gauge weapon — today the pump shotgun.'},
+    description: 'Buckshot shells. Loads any 12-gauge weapon — the pump shotgun, the Coach Gun and the Thresher.'},
   medkit: {id: 'medkit', name: 'First-aid kit', short: 'Med kit', kind: 'consumable', stackMax: 3, heal: 50, useTime: 2.2, verb: 'apply', icon: 'medkit',
     description: 'Restores 50 health. Takes a couple of seconds to apply.'},
   bandage: {id: 'bandage', name: 'Bandage roll', short: 'Bandage', kind: 'consumable', stackMax: 5, heal: 20, useTime: 1.1, verb: 'apply', icon: 'bandage',

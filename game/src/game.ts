@@ -20,6 +20,8 @@ import {VolumetricAtmosphere} from './render/volumetric';
 import {PickupManager, makeSupplyMesh, refreshItemTemplates, registerItemModels, type Pickup} from './world/pickups';
 import {levelPreloadPantryIds, pantryHolderRealizer, pantryIdsIn, pantryPickupItem} from './items/pantryVariety'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): food variety
 import {ensurePantryModels} from './world/pantryModels'; // (lane ITEMS) the pantry items' lazy models
+import {plannedVarietyIds, varietyIdsIn, weaponFindPlan} from './items/weaponVariety'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): weapon find identities
+import {WEAPON_VARIETY_WARM_GROUP, ensureWeaponVarietyModels, weaponVarietyGltf, weaponVarietyWarmRoots} from './world/weaponVarietyModels'; // (lane LOOT-UI) the new weapons' lazy models
 import {Survival, survivalTicks} from './player/survival';
 import {ContainerManager, type ContainerEvent, type ContainerTarget} from './world/containers';
 import {SoundGate} from './world/openables';
@@ -125,7 +127,7 @@ import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, levelDisplayName, sectionLabel, storeyLabel} from './levels/registry';
 import {rollLevelGear} from './levels/gearAdapter';
 import {lootProfile} from './items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
-import type {Arrival, LevelId, SectionKey, TravelRequest} from './levels/types';
+import {sectionId, type Arrival, type LevelId, type SectionKey, type TravelRequest} from './levels/types';
 import type {CampaignState} from './campaign/types'; // Task studio-alpha-campaign-foundation-20261102-230708-01 (primary)
 import {archetypeLabel, generateNetwork, validateNetwork} from './campaign/network';
 import {arrive as arriveCampaign, enableCheat, newCampaign, revealAround, transitOf, travelPlan, upgradeCampaign} from './campaign/discovery';
@@ -619,6 +621,10 @@ export class Game {
     // the aim highlight, damaged parts, flesh chunks — as hidden prototypes built by their real factories (refreshRuntimeVariants)
     this.scene.add(this.runtimeVariants.root);
     this.warmRegistry.addPool('runtime-variants', () => [this.runtimeVariants.root]);
+    // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the resident new weapons in pickup form (hidden prototypes),
+    // so a dropped / found one compiles nothing in play (their held copies are the viewmodel pass's)
+    this.scene.add(WEAPON_VARIETY_WARM_GROUP);
+    this.warmRegistry.addPool('weapon-variety', () => weaponVarietyWarmRoots());
     this.input = new Input(canvas, qa);
     this.input.onLockChange = locked => {
       if (!locked && this.state === 'playing' && !this.qa) this.setState('paused');
@@ -885,7 +891,29 @@ export class Game {
       try { await pre(layout); } catch (err) { console.warn('Iteration 16: a section preload failed', err); }
     }
     await this.preparePantry(key, run); // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the pantry models this section can show
+    await this.prepareWeaponVariety(layout, key, run); // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the new weapons it can show
     return layout;
+  }
+
+  /**
+   * Task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): fetch (behind the loading screen) the new weapons' models this
+   * section can show — what its first spawn realizes (items/weaponVariety.ts), what its memory holds and everything the player carries
+   * (inventory, Lockbox, train cargo) — and hand fresh ones to the held view (Viewmodel.addModel, lane GUNS; guarded until it exists) and
+   * the icons. World pickups find them through world/weaponVarietyModels.ts. `late` (after a build: a save's carried items, installed
+   * after the prepare): no first-spawn plan (the build has realized it), counted as a late fetch.
+   */
+  private async prepareWeaponVariety(layout: StationLayout | null, key: SectionKey | null, run: RunState = this.run, late = false): Promise<void> {
+    try {
+      const mem = key ? run.peekMemory(key) ?? null : null;
+      const ids = varietyIdsIn([this.inv.toJSON(), this.playerTrain.lockbox.toJSON(), this.playerTrain.cargo.toJSON(), mem]);
+      if (layout && key && !late && !mem?.pickups) for (const id of plannedVarietyIds(layout, key.level, mem?.id ?? sectionId(key))) ids.add(id);
+      const fresh = await ensureWeaponVarietyModels(ids, {late});
+      if (!fresh.length) return;
+      const vm = this.viewmodel as unknown as {addModel?: (id: string, g: Pick<import('three/addons/loaders/GLTFLoader.js').GLTF, 'scene'>) => void} | undefined;
+      for (const id of fresh) { const g = weaponVarietyGltf(id); if (g) vm?.addModel?.(id, g); }
+      if (this.world) this.syncHeld();
+      if (this.gpuInit) await refreshItemIcons(this.renderer, fresh);
+    } catch (err) { console.warn('weapon variety: model preparation failed', err); }
   }
 
   /**
@@ -1189,6 +1217,9 @@ export class Game {
     } else this.hordes = null;
     // Iteration 16 (RUN): first visit: the generated pickups; afterwards exactly the remembered loose items (dropped ones too)
     const plan = pickupPlan(this.layout.pickups.length, mem);
+    // (task studio-weapon-variety-production-20261109-224355-01, lane LOOT-UI) a first spawn's weapon find identities, their loaded rounds and
+    // the paired boxes' extra rounds (items/weaponVariety.ts: a stable hash of each find's origin, no RNG stream; remembered pickups never)
+    const weaponFinds = plan.fromLayout.length ? weaponFindPlan(this.layout, key.level, mem.id).changes : null;
     for (const i of plan.fromLayout) {
       const p = this.layout.pickups[i];
       // Task mall-playtest-revision-20261031 (lane SHOPS, U11): a placement's own yaw (a gun lying along its gun-shop bench) wins; the
@@ -1197,7 +1228,8 @@ export class Game {
       // (task studio-food-drink-half-20261109-201124-01) half the natural food / drink floor finds stay (a stable hash of the layout index;
       // drawn after the yaw, so every other pickup keeps its stream); a skipped one is simply not there (the pickup memory records the rest)
       if (!keepLayoutPickup(this.layout.seed, mem.id, i, p)) continue;
-      const st = this.inv.makeStack(pantryPickupItem(this.layout, i, key.level), p.count); // (lane ITEMS: a first spawn's food variety; same count)
+      const wf = weaponFinds?.get(i); // (lane LOOT-UI: a diversified weapon find / its paired box — same count of finds, same rounds in total)
+      const st = wf ? this.inv.makeStack(wf.itemId, wf.count, wf.mag) : this.inv.makeStack(pantryPickupItem(this.layout, i, key.level), p.count); // (lane ITEMS: a first spawn's food variety; same count)
       if (p.filter !== undefined) st.filter = p.filter; // mask lane: a found gas mask's seeded, partly used filter (gen/maskLoot.ts)
       this.layoutPickup.set(this.pickups.add(st, p.x, p.y, p.z, p.yaw ?? yaw), i);
     }
@@ -1220,6 +1252,7 @@ export class Game {
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.propModels.sealed = this.levelResources.sealed = true; // lane PACKAGE (track3): the level is built; a later fetch counts as `late`
     void this.preparePantry(null, this.run, true); // (lane ITEMS: carried pantry items restored after the prepare — a loaded save — get their models; usually a no-op)
+    void this.prepareWeaponVariety(null, key, this.run, true); // (lane LOOT-UI: likewise carried / remembered new weapons; usually a no-op)
     this.updateCamera(0);
   }
   genMs = 0;

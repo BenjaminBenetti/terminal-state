@@ -30,6 +30,7 @@ const {KNIFE_POSES, meleePoseOffset} = await import('../src/weapons/meleeView');
 const {Viewmodel} = await import('../src/weapons/viewmodel');
 const {Inventory, MELEE_REF} = await import('../src/items/inventory');
 const {ITEMS, itemDef} = await import('../src/items/items');
+const {VARIETY_MELEE_IDS} = await import('../src/weapons/varietyIds'); // (task studio-weapon-variety-production-20261109-224355-01, lane LOOT-UI)
 const {ICONS} = await import('../src/ui/icons');
 const {MODEL_FILES} = await import('../src/assets/manifest');
 // task knife-windup-20261030 (lane SLOT): the knife lives in the dedicated melee slot (MELEE_REF, key ~), no longer quick slot 3
@@ -460,7 +461,9 @@ describe('ammo independence: the knife never needs, counts or takes ammo', () =>
   it('melee helpers: meleeDefOf finds only the knife', () => {
     expect(meleeDefOf('knife')).toBe(KNIFE);
     for (const id of ['pistol', 'rifle', 'shotgun', 'bandage', null]) expect(meleeDefOf(id)).toBeNull();
-    expect(Object.values(ITEMS).filter(d => d.kind === 'weapon' && meleeDefOf(d.id)).map(d => d.id)).toEqual(['knife']);
+    // (task studio-weapon-variety-production-20261109-224355-01, lane LOOT-UI: + the six approved melee weapons once their defs exist —
+    // weapons/varietyMelee.ts; ['knife'] alone without them)
+    expect(Object.values(ITEMS).filter(d => d.kind === 'weapon' && meleeDefOf(d.id)).map(d => d.id)).toEqual(['knife', ...VARIETY_MELEE_IDS.filter(id => WEAPONS[id]?.melee)]);
   });
 });
 
