@@ -401,9 +401,6 @@ function legacySupplyMesh(itemId: string): THREE.Object3D {
   return g;
 }
 
-/** PickupManager.target's eye-to-item vector (used only inside one call). */
-const _toItem = new THREE.Vector3();
-
 export class PickupManager {
   readonly group = new THREE.Group();
   readonly list: Pickup[] = [];
@@ -572,7 +569,7 @@ export class PickupManager {
     const grid = world instanceof Grid ? world : null;
     const levels = grid ? null : (world as Levels);
     let best: Pickup | null = null, bestScore = Infinity;
-    const v = _toItem; // (task studio-perf-ao-train-continuity-20261110-022206-01, lane PLAY: a scratch vector, was a new one per call)
+    const v = new THREE.Vector3();
     for (const p of this.list) {
       if (p.owner) continue; // (lane WARES: a stall's ware is aimed at by market/wares — never a plain Take)
       v.set(p.x - eye.x, p.y + 0.08 - eye.y, p.z - eye.z);
