@@ -73,6 +73,7 @@ import {ANNEX_GENSET, gensetModelKeysFor} from './assets/annexGenset';
 import {PhysicsSystem, killImpulseStrength} from './physics/world';
 import {DamageSystem} from './damage/system';
 import {ShelfStock, SHELF_JUNK_KEY, SHELF_JUNK_MODEL_FILES, shelfJunkModelKeysFor} from './world/shelfStock'; // (+ task studio-food-shelf-production-20261109-002816-01: the Meshy shelf-junk atlas)
+import {prepareStockMovingSets, stockMovingSets} from './world/shelfStockWarm'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): the filler's moving sets before the warm-up
 import {LightSources} from './world/lightSources';
 import {PlayerLight, applyBatteryItem} from './player/flashlight'; // Iteration 12 (LIGHT): flashlight battery + body glow
 import {FlareSystem, throwOneFlare, type FlareSmokeHost} from './weapons/throwables'; // Iteration 12 (LIGHT): thrown road flares (grenade slot)
@@ -617,6 +618,9 @@ export class Game {
     this.warmRegistry.addPool('effects', () => [this.fx.group]);
     this.warmRegistry.addPool('flares', () => this.flares.warmPrototypes());
     this.warmRegistry.addPool('shelf-junk-moving', () => this.stock.warmRoots()); // (task studio-food-shelf-production-20261109-002816-01) the moving shelf-junk instanced meshes compile behind the loading screen
+    // Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): every moving set of the shelf filler — the authored filler's
+    // too, made hidden before each warm-up by refreshRuntimeVariants (world/shelfStockWarm.ts), not on the first shot into a shelf
+    this.warmRegistry.addPool('shelf-stock-moving', () => stockMovingSets(this.stock));
     // Task studio-performance-recorder-20261103 (lane RENDER-CPU): the holders' contents hidden until used — the loot display's
     // batches (one InstancedMesh = one node build per item x storey, shown when a lot comes within view distance) and the holders'
     // interiors (shown when opened) — compile with the station instead of on first sight
@@ -2030,6 +2034,9 @@ export class Game {
    * variant (physics/chunks.ts). 'full' only: a software rasterizer's 'view' warm-up keeps its bounded neighbourhood (every variant's
    * programs would land in system RAM) and the pool is cleared. The pool supersedes the flag-less damage pre-warm meshes. A failure
    * leaves the pool empty (the warm-up runs as before); nothing of the world, its holders, loot, damage, physics or RNG changes.
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): + a pickup of every item (world/pickups.ts pickupPrototypes:
+   * a dropped item, a lot shot off its holder or a stolen ware is a new object with its own material copies) and every moving set of
+   * the shelf filler (world/shelfStockWarm.ts, the 'shelf-stock-moving' pool: made on the first piece of each archetype knocked loose).
    */
   private refreshRuntimeVariants(mode: WarmupMode): void {
     const retire = (fn: () => void) => this.retire(fn);
@@ -2040,12 +2047,15 @@ export class Game {
       const layers: THREE.Material[] = [];
       for (const z of this.zombies) for (const l of woundsOf(z as unknown as Parameters<typeof woundsOf>[0])?.layers ?? []) layers.push(l.material);
       const flesh = this.physics.chunks.fleshPrototypes(layers);
+      const pickup = this.pickups.pickupPrototypes(Object.keys(ITEMS)); // (lane PLAY: the variety weapons are their own pool's)
+      const movingSets = prepareStockMovingSets(this.stock); // (lane PLAY: hidden, empty; the 'shelf-stock-moving' pool)
       this.damage.props.dropWarmup();
       const st = this.runtimeVariants.rebuild([
         {name: 'takeover', meshes: cm.takeover}, {name: 'highlight', meshes: cm.highlight}, {name: 'damaged', meshes: dmg.meshes}, {name: 'flesh', meshes: flesh.meshes},
-      ], {geometries: [...dmg.geometries, ...flesh.geometries]}, retire);
+        {name: 'pickup', meshes: pickup.meshes},
+      ], {geometries: [...dmg.geometries, ...flesh.geometries], materials: pickup.materials}, retire);
       const f = st.families, n = (k: string) => `${f[k]?.kept ?? 0}/${f[k]?.offered ?? 0}`;
-      console.info(`Terminal State: runtime variants ${st.prototypes} prototypes (${st.casters} casters, ${st.sideProxies} side copies) · takeover ${n('takeover')} · highlight ${n('highlight')} · damaged ${n('damaged')} · flesh ${n('flesh')} · loot highlight copies ${cm.lotHighlights} · ${st.ms.toFixed(1)} ms`);
+      console.info(`Terminal State: runtime variants ${st.prototypes} prototypes (${st.casters} casters, ${st.sideProxies} side copies) · takeover ${n('takeover')} · highlight ${n('highlight')} · damaged ${n('damaged')} · flesh ${n('flesh')} · pickup ${n('pickup')} · loot highlight copies ${cm.lotHighlights} · shelf moving sets ${movingSets} · ${st.ms.toFixed(1)} ms`);
     } catch (err) {
       console.warn('runtime variants: building the prototypes failed (the warm-up continues without them)', err);
       this.runtimeVariants.clear(retire);
