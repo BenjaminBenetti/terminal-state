@@ -154,7 +154,7 @@ describe('attribute instancing (render/instancing.ts)', () => {
   // (task reactor-build-20261101: + the Reactor's open pit — every tier in view — exactly like the mall's atrium)
   it('the game turns it on for the mall and the Reactor only, before the world is built (Subway / Office keep three\'s default path)', () => {
     const src = readFileSync(fileURLToPath(new URL('../src/game.ts', import.meta.url)), 'utf8');
-    const i = src.indexOf('setAttributeInstancing(!!this.layout.mall || !!this.layout.reactor)'), w = src.indexOf('this.world = buildWorld(');
+    const i = src.indexOf('setAttributeInstancing(!!this.layout.mall || !!this.layout.reactor)'), w = src.indexOf('this.world = yield* buildWorldSteps('); // (lane BUILD: the stepped world builder)
     expect(i).toBeGreaterThan(0);
     expect(i).toBeLessThan(w);
   });

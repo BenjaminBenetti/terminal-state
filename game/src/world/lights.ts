@@ -28,9 +28,10 @@ import {
 import type {Area, LightProfile, StationLayout} from '../gen/station';
 import type {Fixture} from './builder';
 import {
-  DEFAULT_FIELD, LightFieldVolume, bakeLightField, downsampleField, fixtureTint, groupLevel, sampleField,
-  type BakedField, type FieldParams, type FieldSample,
+  DEFAULT_FIELD, LightFieldVolume, bakeLightField, bakeLightFieldSteps, downsampleField, fixtureTint, groupLevel, sampleField,
+  type BakedField, type FieldParams, type FieldSample, type FieldSource,
 } from './lightField';
+import type {BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {LF, activeLightField, bindLightField, installLightFieldNode, setLightFieldLevels, stationFieldLight, type LightFieldLight} from './lightFieldNode';
 import {addNodeHook} from '../render/nodeHooks';
 import {stationLevels} from './levelGeometry';
@@ -106,6 +107,18 @@ export interface StationLightingOptions {
   maxFieldBytes?: number;
   /** Iteration 13: the (initialised) WebGPURenderer: registers the light-field node and reads the 3D texture limit. */
   renderer?: LightingRenderer | null;
+  /**
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): this station's full bake, made ahead by StationLighting.steps
+   * (the identical bake of the same source and parameters, run in paced steps); absent = baked here.
+   */
+  baked?: BakedField;
+}
+
+/** The light field source of a station (StationLighting's bake input). */
+function stationFieldSource(layout: StationLayout): FieldSource {
+  // Iteration 08: one level slot per station level (upper deck / main / lower crossing).
+  // Task track3-eaton-centre-20261031 (lane ARCH): + the mall's daylight through the glass roof ({} for every other level).
+  return {grid: layout.grid, lights: layout.lights, trenchFloorY: layout.trench.floorY, levels: stationLevels(layout), ...mallSkyField(layout, CELL)};
 }
 
 /**
@@ -282,10 +295,7 @@ export class StationLighting {
 
   constructor(private readonly scene: THREE.Scene, private readonly layout: StationLayout, private readonly fixtures: Fixture[],
     private readonly tubes: THREE.InstancedMesh | null, private readonly opts: StationLightingOptions = {}) {
-    const params: FieldParams = {...DEFAULT_FIELD, gain: DEFAULT_FIELD.gain * MOOD.fixtureGain, bounce: MOOD.bounce, ...opts.params};
-    // Iteration 08: one level slot per station level (upper deck / main / lower crossing).
-    // Task track3-eaton-centre-20261031 (lane ARCH): + the mall's daylight through the glass roof ({} for every other level).
-    const full = bakeLightField({grid: layout.grid, lights: layout.lights, trenchFloorY: layout.trench.floorY, levels: stationLevels(layout), ...mallSkyField(layout, CELL)}, params);
+    const full = opts.baked ?? bakeLightField(stationFieldSource(layout), StationLighting.fieldParams(opts));
     const max = this.max3D = opts.max3DTextureSize ?? max3DTextureSize(opts.renderer);
     const budget = opts.maxFieldBytes ?? 32e6;
     const k = Math.max(1, Math.ceil(Math.max(full.w, full.h) / max), Math.ceil(Math.sqrt(full.stats.bytes / budget)));
@@ -333,6 +343,25 @@ export class StationLighting {
     for (let g = 0; g < 3; g++) this.levels[g] = groupLevel(g, 0);
     this.setFieldLevels();
     this.applyLevels(true);
+  }
+
+  /** Field bake parameters: DEFAULT_FIELD with the MOOD gain / bounce, then `opts.params`. */
+  static fieldParams(opts: StationLightingOptions): FieldParams {
+    return {...DEFAULT_FIELD, gain: DEFAULT_FIELD.gain * MOOD.fixtureGain, bounce: MOOD.bounce, ...opts.params};
+  }
+
+  /**
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): the constructor as steps (core/pacedBuild.ts) — the field bake
+   * in paced steps (lightField.ts bakeLightFieldSteps: nothing is bound or added to the scene meanwhile), then the constructor with that
+   * bake, at once (binding, scene light, glow cards: one step). The same station lighting as `new StationLighting(...)`.
+   */
+  static *steps(scene: THREE.Scene, layout: StationLayout, fixtures: Fixture[], tubes: THREE.InstancedMesh | null, opts: StationLightingOptions = {}): BuildSteps<StationLighting> {
+    const baked = opts.baked ?? (yield* bakeLightFieldSteps(stationFieldSource(layout), StationLighting.fieldParams(opts)));
+    yield 'lighting.install';
+    const o: StationLightingOptions = {...opts, baked};
+    const lighting = new StationLighting(scene, layout, fixtures, tubes, o);
+    delete o.baked; // (the bake is the field now or was downsampled into it: never kept twice)
+    return lighting;
   }
 
   /**

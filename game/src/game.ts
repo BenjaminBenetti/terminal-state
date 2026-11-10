@@ -12,7 +12,7 @@ import {foreignTo, levelWorkingSet, selectLevelKeys} from './assets/levelAssets'
 import {adoptStationName} from './campaign/stationName';
 import {LevelResources} from './assets/levelResources'; // lane PACKAGE (track3): level textures / GPU resources released with their level
 import {P7_FILES, dropUnloadedP7, p7ModelKeysFor} from './gen/props07';
-import {buildWorld, type BuiltWorld} from './world/builder';
+import {buildWorldSteps, type BuiltWorld} from './world/builder';
 import {fogCullDistance} from './world/levelCulling';
 import {WorldMaterials} from './world/materials';
 import {MOOD, StationLighting} from './world/lights';
@@ -42,6 +42,7 @@ import {StrainerWetTrail} from './ai/strainerTrail';
 import {createEnemyActor, enemyCues, type EnemyActor} from './ai/creatureArchetypes'; // iteration 07 (Lane Q): generic enemy archetypes (rat/dog)
 import {VocalReach} from './ai/vocalReach'; // Task office-overhaul-20261030 (lane AUDIO): enemy vocals by navigable route
 import {FrameBudget} from './core/frameBudget'; // Task frame-budget-deferral-20261030 (lane SCHED): deferred background work
+import {PacedBuildCancelled, drainSync, newPacedStats, runPaced, type BuildSteps, type PacedBuildOptions, type PacedBuildStats} from './core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): the journey's paced station build
 import {PathService, nearPlayerRule, PATH_DEFER} from './ai/pathService'; // lane SCHED: far, not-in-sight chase re-plans through the frame budget
 import {HordeDirector} from './ai/horde'; // Task track3-eaton-centre-20261031 (lane HORDE): roaming hordes (layout.hordes)
 import {ChaseShare, atriumNearRule, atriumPathOptions, searchExpand} from './ai/chaseShare'; // lane HORDE (atrium AI): open-atrium chase relief (layout.mall only)
@@ -128,7 +129,7 @@ import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, levelDisplayName, sectionLabel, storeyLabel} from './levels/registry';
 import {rollLevelGear} from './levels/gearAdapter';
 import {lootProfile} from './items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
-import {sectionId, type Arrival, type LevelId, type SectionKey, type TravelRequest} from './levels/types';
+import {sectionId, type Arrival, type LevelId, type SectionGenContext, type SectionKey, type TravelRequest} from './levels/types';
 import type {CampaignState} from './campaign/types'; // Task studio-alpha-campaign-foundation-20261102-230708-01 (primary)
 import {archetypeLabel, generateNetwork, validateNetwork} from './campaign/network';
 import {arrive as arriveCampaign, enableCheat, newCampaign, revealAround, transitOf, travelPlan, upgradeCampaign} from './campaign/discovery';
@@ -878,12 +879,43 @@ export class Game {
     // build keeps version 1 forever, an unvisited / new one builds the container settlement (gen/market/layoutVersion.ts)
     // (task studio-bunker-level-20261109-072224-01, lane LEVEL) and a Bunker: version 1 from its first release (gen/bunker/layoutVersion.ts)
     const versionLane = key.level === 'skyways' ? SKYWAYS_LAYOUT_LANE : key.level === 'market' ? MARKET_LAYOUT_LANE : key.level === 'bunker' ? BUNKER_LAYOUT_LANE : null;
-    const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : key.level === 'bunker' ? bunkerLayoutVersionFor(run.peekMemory(key)) : undefined;
-    const layout = LEVELS[key.level].generate(key.section, {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {})}); // (campaign: the node's own seed)
+    const {layoutVersion, ctx} = this.sectionGenInputs(key, run);
+    // (campaign: the node's own seed; lane BUILD: a journey's destination comes pre-generated from the same inputs — takePregenerated)
+    const layout = this.takePregenerated(key, run, ctx) ?? LEVELS[key.level].generate(key.section, ctx);
     if (layoutVersion !== undefined && versionLane && run.laneStore(versionLane, key) === undefined) run.setLaneStore(versionLane, {v: layoutVersion}, key);
     const node = key.station ? run.node(key.station) : null;
     if (node) adoptStationName(layout, node.name); // campaign: the map's / save's name is the one on the signs and the HUD
     return layout;
+  }
+
+  /** generateSection's generator inputs for `key` of `run` (the layout version of a versioned level, see above; lane BUILD: + the journey's pre-generation). */
+  private sectionGenInputs(key: SectionKey, run: RunState): {layoutVersion: number | undefined; ctx: SectionGenContext} {
+    const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : key.level === 'bunker' ? bunkerLayoutVersionFor(run.peekMemory(key)) : undefined;
+    return {layoutVersion, ctx: {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {})}};
+  }
+
+  /**
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): a journey's destination layout, generated when the destination
+   * is CONFIRMED (travelToStation, before the car departs). The layout generator is one deep synchronous algorithm the paced build cannot
+   * slice: a one-off block at the click (the travel map closing) instead of frozen frames in the moving ride. generateSection takes it in
+   * place of generating again only when the run, the section and every generator input still match (else it generates as before; it is
+   * dropped either way), so its lane-store write and the station name stay at prepare time and the layout is the one the old path made.
+   */
+  private pregenerated: {run: RunState; key: string; inputs: string; layout: StationLayout} | null = null;
+
+  private pregenerateSection(key: SectionKey, run: RunState): void {
+    this.pregenerated = null;
+    try {
+      const {ctx} = this.sectionGenInputs(key, run);
+      this.pregenerated = {run, key: `${key.level}/${sectionId(key)}`, inputs: JSON.stringify(ctx), layout: LEVELS[key.level].generate(key.section, ctx)};
+    } catch (err) { console.warn('journey: pre-generating', key, 'failed (the prepare generates it again)', err); }
+  }
+
+  /** The pre-generated layout when it was made for exactly this run, section and inputs (taken once; null otherwise). */
+  private takePregenerated(key: SectionKey, run: RunState, ctx: SectionGenContext): StationLayout | null {
+    const p = this.pregenerated;
+    this.pregenerated = null;
+    return p && p.run === run && p.key === `${key.level}/${sectionId(key)}` && p.inputs === JSON.stringify(ctx) ? p.layout : null;
   }
 
   /**
@@ -1066,7 +1098,14 @@ export class Game {
    * state are NOT touched here (callers: newGame resets them before, retryLevel restores them before, travel keeps them).
    * The section's memory is applied: killed enemies stay dead, taken loot stays taken, dropped items come back once.
    */
-  private buildSection(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean): void {
+  private buildSection(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean): void { drainSync(this.buildSectionSteps(key, layout, arrival, fresh)); }
+  /**
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): buildSection as steps (core/pacedBuild.ts) — the same lines in the
+   * same order; each `yield` is a point where the journey's paced build (buildSectionPaced) lets the riding car's frame be drawn. Those
+   * frames run only the transit gap (updateTransitGap; render() skips the level culler while transitGap) and draw the scene, where the
+   * station's parts stand far outside the riding camera's view; every other route drains it at once (buildSection).
+   */
+  private *buildSectionSteps(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean): BuildSteps<void> {
     this.lifecycleCounts.build++;
     const t0 = performance.now();
     this.layout = layout;
@@ -1088,7 +1127,8 @@ export class Game {
       for (const k of keep) { const g = this.propModels.get(k); if (g) releaseModelTexturesAfterUpload(g); }
       for (const g of Object.values(this.assets.models)) releaseModelTexturesAfterUpload(g);
     }
-    this.world = buildWorld(this.layout, this.mats, {...this.assets.models, ...this.propModels.record()} as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>);
+    yield 'world';
+    this.world = yield* buildWorldSteps(this.layout, this.mats, {...this.assets.models, ...this.propModels.record()} as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>);
     requestArchitectureAnisotropy(this.world.group); // lane FIX (U08): every floor / wall / ceiling map asks for 16x before the first frame
     this.scene.add(this.world.group);
     this.steamVents = new SteamVents(this.fx, annexVents(this.layout), this.layout.seed >>> 0); // Track 2 (VIS)
@@ -1097,18 +1137,22 @@ export class Game {
       this.containers.onEvent = e => this.onContainerEvent(e);
       this.scene.add(this.containers.group);
     }
+    yield 'holders';
     // Searchable cabinets/crates; loot is rolled from the station seed + container index.
     // Task loot-tables-20261030 (lane LOOT): under the logical level's loot profile (items/lootTables.ts PROFILES; one per level).
     // (task studio-food-shelf-production-20261109-002816-01, lane ITEMS: + the food-variety realization of every holder's rolled lots, a
     // remembered holder exactly as its record names it — items/pantryVariety.ts)
-    this.containers.build(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>, lootProfile(key.level),
+    yield* this.containers.buildSteps(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>, lootProfile(key.level),
       pantryHolderRealizer(key.level, this.run.peekMemory(key)?.holders ?? {}, lootProfile(key.level))); // iteration 08 (Lane I): openables split the lazy p7 models too
     dropUnrecordedSalvage(this.containers, this.run.peekMemory(key)?.holders ?? {}); // (task base-salvage: a remembered holder never gains the base salvage lot)
     for (const h of this.sectionHooks) h.holders?.(this.layout); // task fuel-feedback: fuel cans as loot lots (before the filler / memory)
+    yield 'navigation';
     applySkywaysStageSupport(this.layout); // (lane VENUE) after the world is drawn, before levels / prop index / paths / physics read the grid
     this.levels = levelsOf(this.layout);
     this.propIndex = new PropIndex(this.levels, this.layout.props);
-    this.pathfinder = new PathFinder(this.levels); // Lane B: (level, cell) nodes; stairs join levels
+    yield;
+    this.pathfinder = yield* PathFinder.steps(this.levels); // Lane B: (level, cell) nodes; stairs join levels
+    yield;
     this.vocalReach = new VocalReach(this.levels); // lane AUDIO: one bounded, time-sliced route field from the player (no search here)
     this.vocalReach.attachScheduler(this.frameBudget); // lane SCHED: its build slices run in spare frame time (this world's generation)
     // lane SCHED: the same search as below (brainWorld findPath); only far, not-in-sight chase re-plans are queued — and run
@@ -1123,6 +1167,7 @@ export class Game {
       (ax, az, bx, bz, o, chunk) => farFinder.search(ax, az, bx, bz, 0.34, searchExpand(o), o, chunk), this.frameBudget, near, atrium);
     this.chaseShare = this.layout.mall || this.layout.reactor ? new ChaseShare(this.levels) : null; // task reactor-build-20261101 (lane ARCH): + the Reactor's open pit (chase search cap / atrium path options above)
     this.sfx.setVocalReach(this.vocalReach);
+    yield 'physics';
     this.physics.build(this.layout); // disposes the previous station's bodies and casings
     // Lane D: index the shared prop renderables for per-instance damage; breaks update holders + ragdoll statics.
     const cm = this.containers;
@@ -1131,9 +1176,11 @@ export class Game {
     this.physics.holderBoxes = p => this.stock.physicsBoxes(p, cm.physicsBoxes(p));
     // Iteration 08 (Lane S): 3D filler stock dressed around the real loot lots (rest meshes + bodies on demand; no respawn per station).
     if (!this.stock.group.parent) { this.scene.add(this.stock.group); this.stock.filler.attach(this.physics); }
+    yield 'stock';
     // (task studio-food-shelf-production-20261109-002816-01) + the shelf-junk atlas (lazy prop model; absent -> the same layout with the procedural fallbacks)
-    this.stock.build(this.layout, {models: {...this.assets.models, [SHELF_JUNK_KEY]: this.propModels.get(SHELF_JUNK_KEY)} as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>,
+    yield* this.stock.buildSteps(this.layout, {models: {...this.assets.models, [SHELF_JUNK_KEY]: this.propModels.get(SHELF_JUNK_KEY)} as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>,
       lotsOf: p => cm.holderFor(p)?.state.lots.map(l => placementBox(l.itemId, l)) ?? []});
+    yield 'damage';
     // Iteration 16 (RUN): holders as the player left them (taken lots stay taken; the shelf filler keeps the gaps)
     const mem = this.run.memory(key);
     applyHolders(cm, mem.holders);
@@ -1168,12 +1215,13 @@ export class Game {
     // Audio: occlusion-lite (no line of sight -> muffled) + humming vending/stall emitters. Same Sfx/context.
     // (R4, round 2) + the service annexes' fans (audio/fanSound.ts; an empty list without annexes releases the previous world's fans)
     this.sfx.setWorld({occlusion: (x, z, y) => this.soundOccluded(x, z, y) ? 1 : 0, emitters: humEmitters(this.layout.props), fans: fanSources(this.layout)});
+    yield 'lighting';
     // Iteration 05: every fixture baked into a persistent light field (camera-independent; no pooled lights).
     const max3D = maxTexture3DSize(this.renderer.backend as never); // Iteration 13 (CORE): WebGPU device limit / WebGL 2 MAX_3D_TEXTURE_SIZE
     // Iteration 13 (LIGHTING): `renderer` registers the TSL light-field node (world/lightFieldNode.ts) in its node library.
-    this.lightPool = new StationLighting(this.scene, this.layout, this.world.fixtures, this.world.tubes, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer});
+    this.lightPool = yield* StationLighting.steps(this.scene, this.layout, this.world.fixtures, this.world.tubes, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer});
     // Iteration 06 (Lane F): haze density map + light-field rebind; station structure/containers cast the flashlight shadow.
-    this.atmosphere.setStation(this.layout, this.lightPool.volume);
+    yield* this.atmosphere.setStationSteps(this.layout, this.lightPool.volume);
     this.atmosphere.markShadows(this.world.group, true);
     this.atmosphere.markShadows(this.containers.group, true);
     this.atmosphere.markShadows(this.stock.group, false); // Lane S: shelf stock casts the flashlight shadow too
@@ -1184,6 +1232,7 @@ export class Game {
     // Task mall-round2-20261031 (lane PERF): the mall's same-storey occlusion keeps whatever the flashlight sees too (its shadow pass
     // draws with the culler's layers); read only by that rule (world/levelCulling.ts OCCL_*), so Subway / Office are unaffected.
     this.world.culler.viewpoints = [this.flashlight];
+    yield 'arrival';
 
     // Iteration 16 (RUN) / 17: the level's world is now the run's current one; the player starts at its start pose
     this.run.current = {...key};
@@ -1216,7 +1265,9 @@ export class Game {
     // Iteration 07 (Lane Q): each spawn's archetype comes from the layout (~5 % rat/dog, ai/creatureSpawn.ts).
     // Iteration 16 (RUN): enemies killed earlier in this run stay dead (not spawned again).
     this.enemyFallbacks = 0;
+    yield 'enemies';
     for (const i of enemiesToSpawn(this.layout.zombies.length, mem)) {
+      yield;
       if (this.sirens.skip(this.layout.zombies[i])) continue; // Task track1-siren-blightbelly-20261031 (lane SIREN): no Siren without her model (never a zombie stand-in)
       this.enemyIndex.set(this.spawnEnemy(this.layout.zombies[i], i), i);
     }
@@ -1228,6 +1279,7 @@ export class Game {
       // (task studio-skywalk-encounters-20261108-074144-01: Skyways version 5 hordes walk the Skyways patrol graph; the Mall's otherwise)
       this.hordes = new HordeDirector(this.layout, this.levels, i => byIndex.get(i)?.brain, spawnProfile(key.level).horde?.patrol, this.layout.skyways?.patrol);
     } else this.hordes = null;
+    yield 'pickups';
     // Iteration 16 (RUN): first visit: the generated pickups; afterwards exactly the remembered loose items (dropped ones too)
     const plan = pickupPlan(this.layout.pickups.length, mem);
     // (task studio-weapon-variety-production-20261109-224355-01, lane LOOT-UI) a first spawn's weapon find identities, their loaded rounds and
@@ -1263,6 +1315,7 @@ export class Game {
     // scavenge for resources and return to the train when done"): no kill goal anywhere; the Reactor keeps its real endgame chain.
     // (task studio-bunker-rework-20261109-205115-01: a long title — the Bunker's — on two balanced lines: ui/objectiveTitle.ts)
     if (obj) setObjectiveTitle(obj, key.level === 'reactor' ? 'Restart the reactor' : key.level === 'market' ? MARKET_OBJECTIVE : key.level === 'bunker' ? BUNKER_OBJECTIVE : SCAVENGE_OBJECTIVE); // (+ the market's: task studio-survivor-market-20261108-005807-01; + the bunker's: task studio-bunker-level-20261109-072224-01)
+    yield 'hooks';
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.propModels.sealed = this.levelResources.sealed = true; // lane PACKAGE (track3): the level is built; a later fetch counts as `late`
     void this.preparePantry(null, this.run, true); // (lane ITEMS: carried pantry items restored after the prepare — a loaded save — get their models; usually a no-op)
@@ -1647,6 +1700,24 @@ export class Game {
   }
 
   /**
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD; user: less stutter): the journey's build of the next station,
+   * PACED — buildSectionSteps drained in slices of a few ms between the riding car's frames (core/pacedBuild.ts) instead of seconds of
+   * frozen frames. The ONLY paced caller is travelToStation, inside the transit gap (Game.update runs only updateTransitGap; render() leaves
+   * the level culler alone); the identical steps as buildSection. A teardown meanwhile (stationGen moved: the journey's single flight never
+   * lets one start) abandons it (PacedBuildCancelled). `genMs` = its main-thread work, not the ride's wall time.
+   */
+  private async buildSectionPaced(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean): Promise<void> {
+    const gen = this.stationGen, stats = (this.journeyBuild = newPacedStats());
+    await runPaced(this.buildSectionSteps(key, layout, arrival, fresh), {...this.buildPacing, stats, alive: () => gen === this.stationGen});
+    this.genMs = stats.workMs;
+  }
+  /** Lane BUILD: the paced build's options (core/pacedBuild.ts PACED_BUILD defaults; tests / QA may override). */
+  buildPacing: PacedBuildOptions = {};
+  private journeyBuild: PacedBuildStats | null = null;
+  /** Lane BUILD: the last journey build's slices / steps / main-thread ms (QA). */
+  get journeyBuildStats(): PacedBuildStats | null { return this.journeyBuild; }
+
+  /**
    * THE JOURNEY (campaign): the occupied train leaves the current station for `to` (adjacent, or any node with the 1337 cheat, or —
    * campaign-polish lane MAP — a VISITED station over a route of visited stations: campaign/discovery.ts travelPlan). A multi-hop trip
    * is ONE continuous journey: one departure, one transit (the ride gets the route), only the destination prepared / built / arrived
@@ -1674,9 +1745,11 @@ export class Game {
     const debit = fuel.debit;
     this.playerTrain.fuel.tank = applyDebit(debit, this.playerTrain.fuel.tank, fuel.carts, this.playerTrain.lockbox.slots);
     this.fuelCartsLike()?.captureCargo();
+    // (lane BUILD) the destination's layout now, at the confirmation: the generator cannot be sliced, the moving ride must not freeze
+    this.pregenerateSection({level: target.archetype, section: 'main', station: target.id}, run);
     // the ride's route (lane TRAIN: world/trainRide.ts depart(journey?: RideJourney); bounded extra transit time per extra hop)
     const d = await this.trainRide.depart({route: plan.route});
-    if (d.status !== 'in-tunnel') { this.fuelCartsLike()?.releaseCargo(); this.refundFuel(debit, fuel.carts); this.hud.toast(d.message, true); return {ok: false, error: d.message}; }
+    if (d.status !== 'in-tunnel') { this.pregenerated = null; this.fuelCartsLike()?.releaseCargo(); this.refundFuel(debit, fuel.carts); this.hud.toast(d.message, true); return {ok: false, error: d.message}; }
     if (fuel.cost) this.hud.toast(`${plan.hops > 1 ? `${plan.hops} stops` : 'One stop'}: ${tanksText(fuel.cost)} of fuel burnt`);
     const flight = this.lifecycle.run(async (): Promise<{ok: true} | {ok: false; error: string}> => {
       const from = run.campaign!.current;
@@ -1702,7 +1775,8 @@ export class Game {
       }
       if (!layout) { this.transitGap = false; this.lifecycleFailed(new Error('no station could be prepared'), 'playing', titleWarmupUi()); return {ok: false, error: 'No station could be prepared.'}; }
       await this.warmRun;
-      this.buildSection(key, layout, {kind: 'start'}, false); // the riding car is adopted at the new placement (lane RIDE)
+      // (lane BUILD) paced: the riding car keeps being drawn while the station is built; the riding car is adopted at the new placement (lane RIDE)
+      try { await this.buildSectionPaced(key, layout, {kind: 'start'}, false); } catch (err) { if (!(err instanceof PacedBuildCancelled)) throw err; this.transitGap = false; return {ok: false, error: 'The journey was interrupted.'}; }
       this.transitGap = false;
       await this.backgroundCompile();
       const a = await this.trainRide.arrive();
@@ -2408,7 +2482,7 @@ export class Game {
   render(): boolean {
     if (this.gpu?.deviceLost || !this.renderer.initialized) return false; // Iteration 13 (CORE): lost device / not initialized: nothing to draw with
     this.prof.lap(SPAN.cull); // lane MEASURE
-    this.world?.culler.update(this.camera); // Iteration 08 (Lane G): level / fog culling (cheap; skipped while still)
+    if (!this.transitGap) this.world?.culler.update(this.camera); // Iteration 08 (Lane G): level / fog culling (cheap; skipped while still); (lane BUILD) never in the transit gap: no station is live (a paced build is in progress)
     this.prof.lap(SPAN.draw); // lane MEASURE
     this.drawFrame();
     return true;

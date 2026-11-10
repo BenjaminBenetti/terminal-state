@@ -59,6 +59,10 @@ describe('campaign journey (real orchestration, recorded fakes)', async () => {
         return {station: k.station};
       },
       buildSection(this: {run: ReturnType<typeof createRun>}, k: SectionKey) { log.push(`build:${k.station}`); this.run.current = {...k}; },
+      // (task studio-perf-ao-train-continuity-20261110-022206-01, lane BUILD: the journey builds through the real paced runner — Game.buildSectionPaced —
+      // which drains buildSectionSteps between frames; this shell's steps are its recorded build, with pauses around it)
+      *buildSectionSteps(this: {buildSection(k: SectionKey): void}, k: SectionKey) { yield; this.buildSection(k); yield; },
+      pregenerateSection: () => {}, // (lane BUILD: the destination's layout at the confirmation — this shell's prepare is recorded, it never generates)
       updateStationIntro: () => {},
       lifecycleFailed: () => log.push('lifecycleFailed'),
       beginGesture: () => Promise.resolve(true),

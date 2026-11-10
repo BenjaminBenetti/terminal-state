@@ -48,11 +48,12 @@ import {SOLID, type Grid} from '../gen/grid';
 import {MAX_SLOTS, type LightFieldVolume} from '../world/lightField';
 import {stationLevels} from '../world/levelGeometry';
 import {
-  ATMOSPHERE_QUALITY, NOISE_CHANNELS, NOISE_SIZE, SHADOW_NEAR, SHADOW_NORMAL_BIAS, atmosphereFor, buildAirMap, buildDensityMap,
+  ATMOSPHERE_QUALITY, NOISE_CHANNELS, NOISE_SIZE, SHADOW_NEAR, SHADOW_NORMAL_BIAS, atmosphereFor, buildAirMap, buildAirMapSteps, buildDensityMap, buildDensityMapSteps,
   buildNoiseVolume, densityLayerRange, densitySlot, fieldOffsets, fogMotion, marchSize, mediumAt, mediumStats, noiseScales, sampleAirMap, shadowBiasFor,
   type AirMap, type AreaClass, type AtmosphereParams, type AtmosphereQuality, type DensityMap, type FogMotion, type MediumMaps,
   type QualityPreset,
 } from './atmosphere';
+import type {BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {
   SMOKE_LIMITS, ScatterLights, SmokeField, VIS_EMITTER_SPAN, VIS_RES, VIS_TEXEL, VIS_WINDOWS, computeVisWindow, computeVisWindowFan, windowStale,
   type SmokeEmitterOptions, type SmokeHandle, type VisLookup,
@@ -470,12 +471,27 @@ export class VolumetricAtmosphere {
     this.occlusion.run(renderer, this.u, depthTex);
   }
 
-  /** New station: per-level tunables, density + air maps, seeded motion, the baked light field; drops smoke; restarts the fog clock. */
-  setStation(layout: StationLayout, field: LightFieldVolume | null): void {
+  /**
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): setStation with its density + air maps built first in paced
+   * steps (render/atmosphere.ts buildDensityMapSteps / buildAirMapSteps, from the same atmosphereFor(layout) tunables), then the station
+   * set at once: nothing of the atmosphere changes before the last step. The same result as setStation(layout, field).
+   */
+  *setStationSteps(layout: StationLayout, field: LightFieldVolume | null): BuildSteps<void> {
+    const density = yield* buildDensityMapSteps(layout, atmosphereFor(layout));
+    const air = yield* buildAirMapSteps(layout);
+    yield 'fog.install';
+    this.setStation(layout, field, {density, air});
+  }
+
+  /**
+   * New station: per-level tunables, density + air maps, seeded motion, the baked light field; drops smoke; restarts the fog clock.
+   * `maps` (lane BUILD): this layout's maps already built (setStationSteps).
+   */
+  setStation(layout: StationLayout, field: LightFieldVolume | null, maps?: {density: DensityMap; air: AirMap}): void {
     this.layout = layout;
     this.params = atmosphereFor(layout);
-    this.densityMap = buildDensityMap(layout, this.params);
-    this.airMap = buildAirMap(layout);
+    this.densityMap = maps?.density ?? buildDensityMap(layout, this.params);
+    this.airMap = maps?.air ?? buildAirMap(layout);
     this.motion = fogMotion(layout.seed, this.params);
     // Task office-seamless-20261029: every storey (the density map's layers = light-field slots; was capped at 4, so a flare
     // on storey 4+ had no occlusion window: no storey band, glow through the slabs).

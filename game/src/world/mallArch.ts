@@ -51,6 +51,7 @@ import {MALL_EXT_ORDER, buildMallExteriorGas, hazeSat, mallSkyMaterial} from './
 import {adArtOf, adAtlasMaterial, adGlowOf, adTexture, adsOf, planGalleryAds, type AdWall, type MallAd} from './mallAds'; // task mall-playtest-revision (D06); R5: + backlight; mall-round4 (ADS): + art
 import {AD_ART_IDS, mallAdArt, releaseMallAdArt, type AdArtId} from '../assets/mallAdArt'; // task mall-round4 (lane ADS): the Codex ad artwork, released after the atlas
 import {buildStreetExit, cutExitOpenings, setStreetHaze, streetExitSpecs, streetExitTune, type StreetExitSpec, type StreetExitStats, type StreetExitTune} from './mallStreetExit'; // task mall-round2 (M09)
+import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {FOUNTAIN, PYLON} from '../gen/mall/landmarks'; // landmark dimensions (placement: gen/mall/landmarks.ts)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -843,6 +844,11 @@ export class MallArch {
 
   /** Builds the atrium architecture and dressing into `group` (before the warm-up). Returns its stats. */
   buildAtrium(group: THREE.Group, rails: readonly RailRun[]): AtriumStats {
+    return drainSync(this.buildAtriumSteps(group, rails));
+  }
+
+  /** task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): buildAtrium as steps (core/pacedBuild.ts): the same parts in the same order, one per step (stats.ms: wall time). */
+  *buildAtriumSteps(group: THREE.Group, rails: readonly RailRun[]): BuildSteps<AtriumStats> {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     const add = (m: THREE.Mesh | null) => {
       if (!m) return;
@@ -856,6 +862,7 @@ export class MallArch {
       () => this.buildFountain(add), () => this.buildAds(group, add), () => this.buildStreetExits(add),
     ]) {
       try { fn(); } catch (e) { console.warn('mall atrium: part skipped', e); }
+      yield;
     }
     this.stats.ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
     return this.stats;

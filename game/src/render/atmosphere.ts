@@ -35,6 +35,7 @@ import {cellFloorFn} from '../world/lightField';
 import {stationLevels} from '../world/levelGeometry';
 import {MAX_SLOTS} from '../world/lightField';
 import {RIDE_MASK_SKIN, inRideMask, type RideMaskState} from '../world/rideMask'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane PORTAL)
+import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {REACTOR_ATMOSPHERE, reactorRockRooms} from '../world/reactor/archHaze'; // task reactor-build-20261101 (lane ARCH); (+ rock rooms: task reactor-playtest-round2-20261102, lane GAS)
 
 export type AtmosphereQuality = 'off' | 'low' | 'high';
@@ -525,10 +526,18 @@ export function areaMultiplier(layout: StationLayout, i: number, p: Pick<Atmosph
 }
 
 export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams, 'areaDensity'> & Partial<Pick<AtmosphereParams, 'levelDensity' | 'classDensity' | 'classOdds' | 'rockRoom'>>): DensityMap {
+  return drainSync(buildDensityMapSteps(layout, p));
+}
+
+/**
+ * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): buildDensityMap as steps (core/pacedBuild.ts): the same code,
+ * one level per step, where the journey's paced build may let a frame be drawn (nothing reads the map before it returns).
+ */
+export function* buildDensityMapSteps(layout: StationLayout, p: Pick<AtmosphereParams, 'areaDensity'> & Partial<Pick<AtmosphereParams, 'levelDensity' | 'classDensity' | 'classOdds' | 'rockRoom'>>): BuildSteps<DensityMap> {
   // Task office-seamless-20261029: every level (the light field's slots; was capped at 4).
   const levels = stationLevels(layout).slice(0, MAX_SLOTS);
   const g0 = layout.grid, W = g0.w, H = g0.h, n = W * H, S = levels.length;
-  const per = levels.map(L => {
+  const perLevel = (L: (typeof levels)[number]) => {
     const g = L.grid;
     const floorOf = cellFloorFn(g, layout.trench.floorY);
     const lm = p.levelDensity?.[L.role] ?? 1;
@@ -577,7 +586,9 @@ export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams,
       mult = nm;
     }
     return {open, known, mult, floor, ceil, base: L.baseY};
-  });
+  };
+  const per: ReturnType<typeof perLevel>[] = [];
+  for (const L of levels) { per.push(perLevel(L)); yield; } // (lane BUILD: one level per step)
   let yMin = Infinity, yMax = -Infinity;
   for (const q of per) for (let i = 0; i < n; i++) if (q.open[i]) { yMin = Math.min(yMin, q.floor[i]); yMax = Math.max(yMax, q.ceil[i]); }
   if (!Number.isFinite(yMin)) { yMin = 0; yMax = 3; }
@@ -681,10 +692,15 @@ export function stationDraft(seed: number): 1 | -1 {
 }
 
 export function buildAirMap(layout: StationLayout): AirMap {
+  return drainSync(buildAirMapSteps(layout));
+}
+
+/** Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): buildAirMap as steps (one level per step), like buildDensityMapSteps. */
+export function* buildAirMapSteps(layout: StationLayout): BuildSteps<AirMap> {
   const levels = stationLevels(layout).slice(0, MAX_SLOTS);
   const g0 = layout.grid, W = g0.w, H = g0.h, n = W * H, S = levels.length;
   const data = new Uint8Array(n * S);
-  levels.forEach((L, s) => {
+  const fillLevel = (L: (typeof levels)[number], s: number) => {
     const g = L.grid;
     let wt = new Float32Array(n);
     const open = new Uint8Array(n);
@@ -713,7 +729,8 @@ export function buildAirMap(layout: StationLayout): AirMap {
       wt = nw;
     }
     for (let i = 0; i < n; i++) data[s * n + i] = Math.round(Math.min(1, Math.max(0, wt[i])) * 255);
-  });
+  };
+  for (let s = 0; s < levels.length; s++) { fillLevel(levels[s], s); yield; } // (lane BUILD: one level per step)
   return {w: W, h: H, slots: S, data, draft: stationDraft(layout.seed)};
 }
 

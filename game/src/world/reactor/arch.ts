@@ -39,6 +39,7 @@ import {CORE_CELL, coreCellKinds, coreHeroOf} from './coreHero';
 import {buildCoreLiquids, type CoreBuilt} from './coreLiquids';
 import {CoreVisuals, setActiveCoreVisuals} from './coreVisuals';
 import {buildMinesVisuals, minesRecord, type MinesBuildStats} from './minesVisuals'; // task reactor-expansion-20261101 (lane MINES): the old mine workings' look
+import {drainSync, type BuildSteps} from '../../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {buildBunkerModels} from './bunkerModels'; // task reactor-expansion-20261101 (lane BUNKER): the bunker's hero props
 
 export interface ReactorArchStats {
@@ -353,6 +354,14 @@ export class ReactorArch {
 
   /** The industrial kit into `group` (before the warm-up): plan -> instanced meshes; registers nothing (the builder does). */
   build(group: THREE.Group, rails: readonly RailRun[], models: Readonly<Record<string, GLTF | undefined>>): ReactorArchStats {
+    return drainSync(this.buildSteps(group, rails, models));
+  }
+
+  /**
+   * task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): build as steps (core/pacedBuild.ts) — the same parts in the same order, a `yield` between them (plan, kit meshes, lamps,
+   * core, roof, sky, mines, bunker), where the journey's paced build may let a frame be drawn (the group is not in the scene yet).
+   */
+  *buildSteps(group: THREE.Group, rails: readonly RailRun[], models: Readonly<Record<string, GLTF | undefined>>): BuildSteps<ReactorArchStats> {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     const loaded = new Set<ReactorPiece>(REACTOR_PIECES.filter(p => REACTOR_MODELS[p].delivered && !!models[REACTOR_MODELS[p].key]));
     try {
@@ -361,8 +370,10 @@ export class ReactorArch {
       // task reactor-expansion-20261101 (lane PATHS): + the walkable body volume — the kit keeps its steel out of every walkway
       this.plan = planReactorKit(this.info, {models: loaded, rails: rails.filter(r => !(r as {hidden?: boolean}).hidden && this.ownsRail(r)), fixtures, walk: new WalkVolume(this.layout, {regions: kitWalkRegions(this.info)})});
       this.mountedLamps = fixtures ? planMountedLamps(this.plan, this.layout.lights, this.mats.fixture) : [];
+      yield 'world.levelKit.reactorMeshes';
       const dress = reactorDress(this.mats);
       this.built = buildKitMeshes(group, this.plan, k => dress[k], models);
+      yield 'world.levelKit.reactorLamps';
       if (fixtures) this.stats.lamps = applyMountedLenses(group.getObjectByName('light-tubes') as THREE.InstancedMesh | null ?? null, this.mountedLamps);
       // task reactor-playtest-round2-20261102 (lane PROPS): the glass of every pit / mine lamp is a jar INSIDE its cage (the mounted
       // lamps' planned glass, the pendant cages' below their hangers), sharing the tubes' colour; their flat tube boxes collapse
@@ -371,6 +382,7 @@ export class ReactorArch {
       this.lampGlass = buildLampGlass(group, group.getObjectByName('light-tubes') as THREE.InstancedMesh | null ?? null, glass);
       this.visuals = new ReactorArchVisuals(this.built, this.plan, dress.glow as MeshBasicNodeMaterial);
       // task reactor-expansion-20261101 (lane CORE): the hero's dynamic layer + its staged visuals (setRestartState lands there)
+      yield 'world.levelKit.reactorCore';
       const hero = coreHeroOf(this.plan);
       if (hero) {
         try {
@@ -388,16 +400,20 @@ export class ReactorArch {
     } catch (e) {
       console.warn('reactor arch: kit skipped', e);
     }
+    yield 'world.levelKit.reactorRoof';
     // task reactor-submit-roof-fog-20261102 (lane ROOF): the roof slab — one mesh over the pit, the opening's round hole (ceilKey skips
     // the builder's roof-line runs)
     try {
       const slab = this.roofSlab ? buildRoofSlab(this.info, reactorSurfaceMaterial(this.mats, 'reactor-roof'), reactorSurfaceScale(this.mats, 'reactor-roof'), this.levels.map(l => l.id)) : null;
       if (slab) { group.add(slab); this.count('reactor-roof'); }
     } catch (e) { console.warn('reactor arch: roof slab skipped', e); }
+    yield;
     // (lane GASLIGHT) the toxic sky + the outside gas sheets above the roof line, seen through the opening (lane ROOF: only through it)
     try { this.pitSky = buildPitSky(group, this.info, this.levels.map(l => l.id)); } catch (e) { console.warn('reactor arch: pit sky skipped', e); }
+    yield 'world.levelKit.reactorMines';
     // task reactor-expansion-20261101 (lane MINES): timber sets, rail line, carts / winch / drill, winze headframe, cribs, rubble, water
     try { if (this.mineAreas.size) this.stats.mines = buildMinesVisuals(group, this.layout, this.mats, models); } catch (e) { console.warn('reactor arch: mines skipped', e); }
+    yield 'world.levelKit.reactorBunker';
     // task reactor-expansion-20261101 (lane BUNKER): the bunker's hero props (REACTOR_X_KIT models on their prop placements)
     try { buildBunkerModels(group, this.layout, models); } catch (e) { console.warn('reactor arch: bunker models skipped', e); }
     this.stats.ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
