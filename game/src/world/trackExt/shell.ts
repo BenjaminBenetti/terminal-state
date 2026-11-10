@@ -22,6 +22,7 @@ import {Acc, basisOf, hashOf, prng, type V3} from './mesh';
 import {BOARD_SPAN, tunnelShellMaterial} from './wallFinish';
 import {CELL_BUILDER, type TrackExtView, type TunnelView} from './view';
 import {buildCap, capSpan, type CapSpan} from './caps';
+import {breachStations} from '../ridePortal'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane PORTAL): the shell's ring at a ride breach
 
 /** Shell layout constants (m). */
 export const SHELL = {
@@ -273,7 +274,9 @@ function buildTunnel(sink: ShellSink, sleepers: Map<string, {tunnel: number; lis
   const {t, f} = v;
   const y0 = t.floorY, y1 = t.ceilY, half = f.half;
   const end = f.length;
-  const cuts = openings.flatMap(o => [o.s0, o.s1]);
+  // task studio-perf-ao-train-continuity-20261110-022206-01 (lane PORTAL): + a ring at the breach plane of a tunnel the parked car's
+  // track leaves through (world/ridePortal.ts breachStations), so a ride can cut the shell exactly there; every other tunnel: none
+  const cuts = openings.flatMap(o => [o.s0, o.s1]).concat(breachStations(layout, t));
   // Track members run to the path end; the shell (walls / ceiling / floor) on to the back of the cap.
   const tr = renderStations(f, cuts, SHELL.chunk);
   const st = shellEnd > end + 1e-6 ? [...tr, shellEnd] : tr;
