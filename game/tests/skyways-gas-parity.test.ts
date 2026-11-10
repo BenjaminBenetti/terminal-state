@@ -522,7 +522,8 @@ describe('skyways gas: persistence, contact breaks, the Office path, the wiring'
     expect(iGas).toBeGreaterThan(iSky);
     expect(src.indexOf('this.gas.windowSources.push(() => this.skywaysWindows.gasSource())')).toBeGreaterThan(iGas);
     const b = fs.readFileSync(path.join(GAME, 'src/world/builder.ts'), 'utf8');
-    expect(b).toContain('cutSkywaysWindows(cutOfficeWindows(extractWallFaces(');
+    // (task studio-perf-ao-train-continuity-20261110-022206-01, lane BUILD: the faces come from the stepped extractor first, then the same cuts)
+    expect(b).toMatch(/const extracted = yield\* extractWallFacesSteps\([^\n]*\n[^\n]*\n\s*const cutFaces: BuiltFace\[\] = cutSkywaysWindows\(cutOfficeWindows\(extracted, layout\), layout\);/);
   });
 });
 
