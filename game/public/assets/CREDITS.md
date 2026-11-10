@@ -643,3 +643,22 @@ reviewed by ear on the build worker. Raw takes are kept outside Git.
 - `assets/audio/gun-hornet-shot-01.mp3` — gunHornetShot (Sound Lab job 20261110T064738-1979131141)
 - `assets/audio/gun-hornet-shot-02.mp3` — gunHornetShot (Sound Lab job 20261110T065448-1388891472)
 <!-- END gun-variety-audio-20261110 -->
+
+<!-- BEGIN screacher-audio-20261110 (screacher-build.mjs) -->
+## Screacher audio (echo scream, frenzy shriek, idle wheeze, death gurgle)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the Screacher
+task's local Sound Lab allowance (11 jobs of a 12-job cap). Powered by Stability AI. Stability AI Community License +
+Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades,
+levelling, MP3) built by `tools/audio-pipeline/screacher-build.mjs` (provenance: `assets/derivatives/audio-screacher.json`). Not
+reviewed by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/screacher-scream-01.mp3` — screacherScream (Sound Lab job 20261110T225101-1517457293)
+- `assets/audio/screacher-scream-02.mp3` — screacherScream (Sound Lab job 20261110T225445-2120082079)
+- `assets/audio/screacher-scream-03.mp3` — screacherScream (Sound Lab job 20261110T225449-1208249476)
+- `assets/audio/screacher-shriek-01.mp3` — screacherShriek (Sound Lab job 20261110T225459-1708136229)
+- `assets/audio/screacher-shriek-02.mp3` — screacherShriek (Sound Lab job 20261110T225645-1982763445)
+- `assets/audio/screacher-wheeze-01.mp3` — screacherWheeze (Sound Lab job 20261110T225115-1531970516)
+- `assets/audio/screacher-wheeze-02.mp3` — screacherWheeze (Sound Lab job 20261110T225503-1765310184)
+- `assets/audio/screacher-wheeze-03.mp3` — screacherWheeze (Sound Lab job 20261110T225503-1765310184)
+- `assets/audio/screacher-death-01.mp3` — screacherDeath (Sound Lab job 20261110T225119-1271740027)
+<!-- END screacher-audio-20261110 -->

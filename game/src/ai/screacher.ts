@@ -181,6 +181,23 @@ export const SCREACHER_ECHO = {periodS: 60, jitterS: 6, firstMinS: 10, firstSpan
 /** Feet-to-stump height (m) of the standing Screacher: its positional voice (ENEMY_ARCHETYPES.screacher.voiceHeight). */
 export const SCREACHER_VOICE_Y = 1.9;
 
+/**
+ * THE ECHO'S LINE RULE (pure; the game's BrainWorld.echo is exactly this with the bullet line as `clear`): from the stump of a
+ * Screacher standing at `body` (feet), the player (feet x / y / z and the absolute eye height: crouching lowers it) is located when
+ * the chest or the head is within `range` (3D) AND `clear(from, to)` — a straight line with no solid geometry between. Returns the
+ * player's position at this instant (the snapshot), else null. Within arm's length (0.6 m) nothing can be between.
+ */
+export function echoLocate(body: {x: number; y: number; z: number}, player: {x: number; y: number; z: number; eye: number}, range: number,
+  clear: (from: {x: number; y: number; z: number}, to: {x: number; y: number; z: number}) => boolean): {x: number; z: number; y: number} | null {
+  const from = {x: body.x, y: body.y + SCREACHER_VOICE_Y, z: body.z};
+  for (const ty of [player.y + (player.eye - player.y) * 0.62, player.eye - 0.08]) {
+    const to = {x: player.x, y: ty, z: player.z}, d = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z);
+    if (d > range) continue;
+    if (d <= 0.6 || clear(from, to)) return {x: player.x, z: player.z, y: player.y};
+  }
+  return null;
+}
+
 export interface ScreacherBelief {
   x: number; z: number; y: number;
   /** Brain clock (s) the belief was formed at, its sound class and what it was. */

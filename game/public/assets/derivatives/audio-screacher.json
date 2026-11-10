@@ -1,0 +1,1641 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "audio-screacher-20261110",
+ "task": "studio-screacher-production-20261110-221858-01",
+ "lane": "AUDIO",
+ "generatedBy": "the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (the task's local Sound Lab allowance: 11 jobs of a 12-job cap including retries — 8 takes accepted, 3 structurally rejected and replaced; the rest of the allowance closed unused)",
+ "soundLab": {
+  "allowance": 12,
+  "jobs": 11,
+  "accepted": 8,
+  "rejected": 3,
+  "unusedClosed": 1,
+  "paidOrExternal": 0
+ },
+ "plannedBy": "a plan kept with the private raw archive (the prompts stay private)",
+ "rebuild": "SOUND_LAB_AUDIO_DIR=<raw dir> node tools/audio-pipeline/screacher-build.mjs",
+ "privacy": "This public record names each raw take by its Sound Lab job id, seed and SHA-256 (raw take, lab sidecar, prompt). The prompt text, the raw takes and their paths stay in the private raw archive (independent backup), not in Git.",
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (5 ms / 50 ms envelopes, onsets, time to the loud part, quiet fraction, spectrogram images, spectral centroid / bands / flatness, YIN voicing, peak, DC, slice-edge levels, BS.1770 loudness). `metrics` / `gate` describe signal structure only, never how a clip sounds. The user taste-tests in game.",
+  "gameReady": false,
+  "approved": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "design": {
+  "screacherScream": "Three takes of ONE request (three seeds), one family: a single sustained event with a dominant partial near 1.33 kHz and broadband roughness. Each clip starts about 0.1 s into the take's own rise, so it is within 6 dB of its loudest moment inside 0.1 s (the hard onset of the tell), and ends in the take's own decline under a long fade.",
+  "screacherShriek": "Two takes of one request (two seeds): one short unvoiced rasp burst each. Every shriek take the generator returned swells into its loud part; the accepted pair reaches it about 0.15 s after the clip start (the quiet first step is trimmed) and ends on the take's own fast decay. A harder bark attack was not obtained within the allowance.",
+  "screacherWheeze": "Three breaths from two takes: a 2 s rattling low-mid noise with a natural pause (two breaths) and a pair of short bursts with a silence between (one double breath).",
+  "screacherDeath": "One take: the whole gurgle (two sputtering phrases), from inside its quiet rising start to its own end.",
+  "reused": "Footsteps, body falls and hit impacts reuse the existing cues (no clips in this set).",
+  "flag": "The scream sits in the register of the Siren's wake scream (dominant partial 1.3 kHz vs 1.1-1.6 kHz) and is rougher by the numbers (flatness 0.03-0.05 vs 0.017-0.02); whether the two read as different creatures needs an ear."
+ },
+ "loudness": {
+  "method": "ITU-R BS.1770-4 K-weighting, 400 ms blocks / 75 % overlap (one-shots zero-padded to one block), maximum momentary loudness, mono; sample peak (no true-peak oversampling)"
+ },
+ "mixCalibration": {
+  "note": "CUE_GAIN (audio/sfx.ts; the same numbers as SCREACHER_CUE_GAIN in the generated manifest) per cue = 10^((target - measured) / 20), capped at 1 (no boost): the target is the cue's momentary-max loudness AT THE SOURCE (derivative x CUE_GAIN, before distance / occlusion / master), set against the existing cues' calibration (derivatives/audio-track1.json mixCalibration). Never above the -1 dBFS ceiling. First estimates for the ear pass (not auditioned).",
+  "references": {
+   "zombieGroan": -18.5,
+   "zombieDeath": -17.1,
+   "zombieAttack": -20.3,
+   "hurt": -24,
+   "sirenScream": -15.8,
+   "sirenHum": -24.3
+  },
+  "cues": {
+   "screacherScream": {
+    "basis": "sirenScream",
+    "why": "as loud at the source as the Siren's wake scream (the loudest enemy vocal)",
+    "targetLufs": -15.8,
+    "measuredLufs": -11.6,
+    "cueGain": 0.62,
+    "atSourceLufs": -15.8,
+    "atSourcePeakDbfs": -5.2,
+    "vsReferenceLu": 0,
+    "variants": 3
+   },
+   "screacherShriek": {
+    "basis": "zombieGroan",
+    "why": "1 LU over a zombie groan, 1.7 LU under the echo scream",
+    "targetLufs": -17.5,
+    "measuredLufs": -17.7,
+    "cueGain": 1,
+    "atSourceLufs": -17.7,
+    "atSourcePeakDbfs": -1,
+    "vsReferenceLu": 0.8,
+    "variants": 2
+   },
+   "screacherWheeze": {
+    "basis": "zombieGroan",
+    "why": "6 LU under a zombie groan (about the Siren's hum)",
+    "targetLufs": -24.5,
+    "measuredLufs": -17.3,
+    "cueGain": 0.44,
+    "atSourceLufs": -24.4,
+    "atSourcePeakDbfs": -8.1,
+    "vsReferenceLu": -5.9,
+    "variants": 3
+   },
+   "screacherDeath": {
+    "basis": "zombieGroan",
+    "why": "1 LU under a zombie groan, 2.4 LU under a zombie death",
+    "targetLufs": -19.5,
+    "measuredLufs": -17.9,
+    "cueGain": 0.83,
+    "atSourceLufs": -19.5,
+    "atSourcePeakDbfs": -2.6,
+    "vsReferenceLu": -1,
+    "variants": 1
+   }
+  },
+  "hurt": {
+   "takesOf": "screacherShriek",
+   "callGain": 0.55,
+   "rate": 1.15,
+   "atSourceLufs": -22.9,
+   "note": "the hurt yelp is the shriek takes at the Sfx call gain / playback rate (audio/sfx.ts SCREACHER_AUDIO.hurt): quieter and higher"
+  }
+ },
+ "derivatives": [
+  {
+   "cue": "screacherScream",
+   "url": "assets/audio/screacher-scream-01.mp3",
+   "bytes": 30511,
+   "sha256": "9d6943d247508b0c141d6b4f4a2106633334a8acc2fd524ff5969662466ddfc4",
+   "dur": 1.87,
+   "window": {
+    "startS": 0.13,
+    "endS": 2
+   },
+   "ops": [
+    "mono",
+    "remove DC (-8.1e-5)",
+    "trim 0.13-2 s",
+    "cosine fades 0.006 / 0.3 s",
+    "peak -1 dBFS (2.0 dB)",
+    "matched to the cue's quietest take (-0.6 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "kind": "scream",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.085,
+    "levelSpread20msDb": 6.65,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 6.51,
+       "flatness": 0.047,
+       "voicedFrac": 0.597
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1.6
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 0.00002,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "long (1.4-1.9 s)",
+      "ok": true,
+      "value": 1.87,
+      "need": "1.4-1.9 s"
+     },
+     {
+      "name": "hard onset",
+      "ok": true,
+      "value": 0.085,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.1 s after the clip start"
+     },
+     {
+      "name": "one sustained event",
+      "ok": true,
+      "value": 0.064,
+      "need": "quiet <= 0.25"
+     },
+     {
+      "name": "piercing",
+      "ok": true,
+      "value": {
+       "centroidHz": 1524,
+       "shareAbove1k": 0.96
+      },
+      "need": "centroid >= 1200 Hz, >= 50 % above 1 kHz"
+     },
+     {
+      "name": "a voice (pitched), not a hiss",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.597,
+       "f0MedianHz": 1339
+      },
+      "need": "voiced >= 0.2"
+     },
+     {
+      "name": "rough, not a pure tone",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.597,
+       "flatness": 0.047
+      },
+      "need": "NOT (voiced >= 0.8 AND flatness <= 0.025)"
+     },
+     {
+      "name": "falls off at the end",
+      "ok": true,
+      "value": -10.5,
+      "need": "last quarter >= 6 dB under the first quarter"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.87,
+    "peakDbfs": -1.6,
+    "rmsDbfs": -15.7,
+    "crestDb": 14.1,
+    "clippedFrac": 0,
+    "quietFrac": 0.064,
+    "activeFrac": 0.973,
+    "levelSpreadDb": 6.51,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.25,
+     "riseMs": 135
+    },
+    "decay": {
+     "firstQuarterDb": -13.7,
+     "lastQuarterDb": -24.2,
+     "lastMinusFirstDb": -10.5,
+     "slopeDbPerS": -16,
+     "activeEndS": 1.8
+    },
+    "spectral": {
+     "centroidHz": 1524,
+     "flatness": 0.047,
+     "rolloff85Hz": 1709,
+     "bands": {
+      "0-300Hz": 0.002,
+      "300-1000Hz": 0.034,
+      "1000-3000Hz": 0.921,
+      "3000-8000Hz": 0.038,
+      "8000-22050Hz": 0.005
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.597,
+     "f0MedianHz": 1339,
+     "f0P5Hz": 654,
+     "f0P95Hz": 1404,
+     "rangeSt": 13.24,
+     "notes": 4,
+     "noteSteps": 0,
+     "movementSt": 1.18
+    },
+    "loudness": {
+     "integratedLufs": -13.8,
+     "momentaryMaxLufs": -11.6
+    },
+    "edgesDb": {
+     "startDb": -15,
+     "endDb": -25
+    }
+   },
+   "source": {
+    "clip": "screacher-scream-01",
+    "jobId": "20261110T225101-1517457293",
+    "seed": 1517457293,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "ee38482a48729c4f3e70040c142535f68519e5971d04e37bea5be0a14ad8e925",
+    "rawBytes": 529244,
+    "labSidecarSha256": "ed809e170c0c0ce4adcf7b3d0702999c827030617fd9c771ea77472e27da72ba",
+    "promptSha256": "b1b81706e99e9ef89bf90d43d39d0b7719907b6d46a6581f3f00e7f4e05f7f85"
+   }
+  },
+  {
+   "cue": "screacherScream",
+   "url": "assets/audio/screacher-scream-02.mp3",
+   "bytes": 30929,
+   "sha256": "110c4677dc66bcf087eba53366f346a93088a9b3ccdeba86fffb59755c9c41ed",
+   "dur": 1.89,
+   "window": {
+    "startS": 0.11,
+    "endS": 2
+   },
+   "ops": [
+    "mono",
+    "remove DC (9.0e-6)",
+    "trim 0.11-2 s",
+    "cosine fades 0.006 / 0.5 s",
+    "peak -1 dBFS (3.3 dB)",
+    "matched to the cue's quietest take (-1.2 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "kind": "scream",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.06,
+    "levelSpread20msDb": 6.88,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 6.68,
+       "flatness": 0.027,
+       "voicedFrac": 0.747
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -2.2
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 0.000058,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "long (1.4-1.9 s)",
+      "ok": true,
+      "value": 1.89,
+      "need": "1.4-1.9 s"
+     },
+     {
+      "name": "hard onset",
+      "ok": true,
+      "value": 0.06,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.1 s after the clip start"
+     },
+     {
+      "name": "one sustained event",
+      "ok": true,
+      "value": 0.077,
+      "need": "quiet <= 0.25"
+     },
+     {
+      "name": "piercing",
+      "ok": true,
+      "value": {
+       "centroidHz": 1442,
+       "shareAbove1k": 0.95
+      },
+      "need": "centroid >= 1200 Hz, >= 50 % above 1 kHz"
+     },
+     {
+      "name": "a voice (pitched), not a hiss",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.747,
+       "f0MedianHz": 1339
+      },
+      "need": "voiced >= 0.2"
+     },
+     {
+      "name": "rough, not a pure tone",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.747,
+       "flatness": 0.027
+      },
+      "need": "NOT (voiced >= 0.8 AND flatness <= 0.025)"
+     },
+     {
+      "name": "falls off at the end",
+      "ok": true,
+      "value": -6.7,
+      "need": "last quarter >= 6 dB under the first quarter"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.89,
+    "peakDbfs": -2.2,
+    "rmsDbfs": -15,
+    "crestDb": 12.8,
+    "clippedFrac": 0,
+    "quietFrac": 0.077,
+    "activeFrac": 0.973,
+    "levelSpreadDb": 6.68,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.275,
+     "riseMs": 150
+    },
+    "decay": {
+     "firstQuarterDb": -13.5,
+     "lastQuarterDb": -20.2,
+     "lastMinusFirstDb": -6.7,
+     "slopeDbPerS": -13.4,
+     "activeEndS": 1.8
+    },
+    "spectral": {
+     "centroidHz": 1442,
+     "flatness": 0.027,
+     "rolloff85Hz": 1495,
+     "bands": {
+      "0-300Hz": 0.002,
+      "300-1000Hz": 0.054,
+      "1000-3000Hz": 0.919,
+      "3000-8000Hz": 0.022,
+      "8000-22050Hz": 0.004
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.747,
+     "f0MedianHz": 1339,
+     "f0P5Hz": 1248,
+     "f0P95Hz": 1410,
+     "rangeSt": 2.11,
+     "notes": 4,
+     "noteSteps": 0,
+     "movementSt": 0.69
+    },
+    "loudness": {
+     "integratedLufs": -13.3,
+     "momentaryMaxLufs": -11.6
+    },
+    "edgesDb": {
+     "startDb": -15.9,
+     "endDb": -17.9
+    }
+   },
+   "source": {
+    "clip": "screacher-scream-03",
+    "jobId": "20261110T225445-2120082079",
+    "seed": 2120082079,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "d5c0e66a6f88f342a1b727ae13c3d60f5ee6f842cc050f2a0e820c6f876db042",
+    "rawBytes": 529244,
+    "labSidecarSha256": "3bac69282e47aeb4f9d3b54ca6a97cca087485f1b49e78346577c0dfd7441566",
+    "promptSha256": "b1b81706e99e9ef89bf90d43d39d0b7719907b6d46a6581f3f00e7f4e05f7f85"
+   }
+  },
+  {
+   "cue": "screacherScream",
+   "url": "assets/audio/screacher-scream-03.mp3",
+   "bytes": 30511,
+   "sha256": "c9fb44dd7fe2b889e168cff0f91d0004b996f2a8dd5fd684b48a4f729531103b",
+   "dur": 1.88,
+   "window": {
+    "startS": 0.12,
+    "endS": 2
+   },
+   "ops": [
+    "mono",
+    "remove DC (-5.5e-4)",
+    "trim 0.12-2 s",
+    "cosine fades 0.006 / 0.3 s",
+    "peak -1 dBFS (1.8 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "kind": "scream",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.09,
+    "levelSpread20msDb": 6.53,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 7.45,
+       "flatness": 0.029,
+       "voicedFrac": 0.353
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.000069,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "long (1.4-1.9 s)",
+      "ok": true,
+      "value": 1.88,
+      "need": "1.4-1.9 s"
+     },
+     {
+      "name": "hard onset",
+      "ok": true,
+      "value": 0.09,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.1 s after the clip start"
+     },
+     {
+      "name": "one sustained event",
+      "ok": true,
+      "value": 0.048,
+      "need": "quiet <= 0.25"
+     },
+     {
+      "name": "piercing",
+      "ok": true,
+      "value": {
+       "centroidHz": 1400,
+       "shareAbove1k": 0.88
+      },
+      "need": "centroid >= 1200 Hz, >= 50 % above 1 kHz"
+     },
+     {
+      "name": "a voice (pitched), not a hiss",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.353,
+       "f0MedianHz": 1338
+      },
+      "need": "voiced >= 0.2"
+     },
+     {
+      "name": "rough, not a pure tone",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.353,
+       "flatness": 0.029
+      },
+      "need": "NOT (voiced >= 0.8 AND flatness <= 0.025)"
+     },
+     {
+      "name": "falls off at the end",
+      "ok": true,
+      "value": -10.1,
+      "need": "last quarter >= 6 dB under the first quarter"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.88,
+    "peakDbfs": -1,
+    "rmsDbfs": -15.2,
+    "crestDb": 14.2,
+    "clippedFrac": 0,
+    "quietFrac": 0.048,
+    "activeFrac": 1,
+    "levelSpreadDb": 7.45,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.42,
+     "riseMs": 115
+    },
+    "decay": {
+     "firstQuarterDb": -13.9,
+     "lastQuarterDb": -24.1,
+     "lastMinusFirstDb": -10.1,
+     "slopeDbPerS": -17.8,
+     "activeEndS": 1.85
+    },
+    "spectral": {
+     "centroidHz": 1400,
+     "flatness": 0.029,
+     "rolloff85Hz": 1509,
+     "bands": {
+      "0-300Hz": 0.003,
+      "300-1000Hz": 0.116,
+      "1000-3000Hz": 0.863,
+      "3000-8000Hz": 0.016,
+      "8000-22050Hz": 0.003
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.353,
+     "f0MedianHz": 1338,
+     "f0P5Hz": 1249,
+     "f0P95Hz": 1393,
+     "rangeSt": 1.88,
+     "notes": 3,
+     "noteSteps": 0,
+     "movementSt": 0.96
+    },
+    "loudness": {
+     "integratedLufs": -13.6,
+     "momentaryMaxLufs": -11.6
+    },
+    "edgesDb": {
+     "startDb": -17,
+     "endDb": -22.2
+    }
+   },
+   "source": {
+    "clip": "screacher-scream-04",
+    "jobId": "20261110T225449-1208249476",
+    "seed": 1208249476,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "132da485810914c67e581a5777942fd4b07af94d98ff2926ec70848e519c980e",
+    "rawBytes": 529244,
+    "labSidecarSha256": "02c64532f0cbff626927d8ada9800b8beabe41e24e2c14c45f076ec3859656eb",
+    "promptSha256": "b1b81706e99e9ef89bf90d43d39d0b7719907b6d46a6581f3f00e7f4e05f7f85"
+   }
+  },
+  {
+   "cue": "screacherShriek",
+   "url": "assets/audio/screacher-shriek-01.mp3",
+   "bytes": 8777,
+   "sha256": "2b495898e4da936ba32445e3dc2b4109de8fe99d1aae6a2ab7f8651781541704",
+   "dur": 0.52,
+   "window": {
+    "startS": 0.17,
+    "endS": 0.69
+   },
+   "ops": [
+    "mono",
+    "remove DC (3.5e-4)",
+    "trim 0.17-0.69 s",
+    "cosine fades 0.005 / 0.03 s",
+    "peak -1 dBFS (-0.5 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "kind": "shriek",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.16,
+    "levelSpread20msDb": 8.28,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 8.09,
+       "flatness": 0.16,
+       "voicedFrac": 0.073
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 0.0000092,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "short (0.5-0.9 s)",
+      "ok": true,
+      "value": 0.52,
+      "need": "0.5-0.9 s"
+     },
+     {
+      "name": "loud quickly (no slow swell)",
+      "ok": true,
+      "value": 0.16,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.2 s after the clip start"
+     },
+     {
+      "name": "bright",
+      "ok": true,
+      "value": {
+       "centroidHz": 2616,
+       "shareAbove1k": 0.77
+      },
+      "need": "centroid >= 1200 Hz, >= 50 % above 1 kHz"
+     },
+     {
+      "name": "a rasp (unvoiced)",
+      "ok": true,
+      "value": 0.073,
+      "need": "voiced <= 0.3"
+     },
+     {
+      "name": "ends in silence",
+      "ok": true,
+      "value": -52.9,
+      "need": "the cut end >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.52,
+    "peakDbfs": -1,
+    "rmsDbfs": -20.5,
+    "crestDb": 19.5,
+    "clippedFrac": 0,
+    "quietFrac": 0.117,
+    "activeFrac": 1,
+    "levelSpreadDb": 8.09,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.335,
+     "riseMs": 315
+    },
+    "decay": {
+     "firstQuarterDb": -28.9,
+     "lastQuarterDb": -32.6,
+     "lastMinusFirstDb": -3.7,
+     "slopeDbPerS": -201.1,
+     "activeEndS": 0.5
+    },
+    "spectral": {
+     "centroidHz": 2616,
+     "flatness": 0.16,
+     "rolloff85Hz": 4073,
+     "bands": {
+      "0-300Hz": 0.004,
+      "300-1000Hz": 0.229,
+      "1000-3000Hz": 0.513,
+      "3000-8000Hz": 0.213,
+      "8000-22050Hz": 0.041
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.073,
+     "f0MedianHz": 579,
+     "f0P5Hz": 579,
+     "f0P95Hz": 1638,
+     "rangeSt": 18,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -17.7,
+     "momentaryMaxLufs": -17.7
+    },
+    "edgesDb": {
+     "startDb": -19.9,
+     "endDb": -52.9
+    }
+   },
+   "source": {
+    "clip": "screacher-shriek-03",
+    "jobId": "20261110T225459-1708136229",
+    "seed": 1708136229,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "737e85213980f1363ebd1962f39c2462103d527e3db567a99d57b6e0ff75f094",
+    "rawBytes": 352844,
+    "labSidecarSha256": "62f12f1449c3cbcf6f2ac1eb8fb564204745b743055e63fee2b0cb4b41e30d80",
+    "promptSha256": "9a69b1f59f4e12d09983a3200aad805d78b3bc3d8c0fdce1f308bc4279765c71"
+   }
+  },
+  {
+   "cue": "screacherShriek",
+   "url": "assets/audio/screacher-shriek-02.mp3",
+   "bytes": 8777,
+   "sha256": "97f9fb11587fcc702a6fb5e5d5b4fd268ddb836ab951284793dd14913851fed9",
+   "dur": 0.51,
+   "window": {
+    "startS": 0.14,
+    "endS": 0.65
+   },
+   "ops": [
+    "mono",
+    "remove DC (-2.1e-4)",
+    "trim 0.14-0.65 s",
+    "cosine fades 0.005 / 0.03 s",
+    "peak -1 dBFS (2.7 dB)",
+    "matched to the cue's quietest take (-3.2 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "kind": "shriek",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.165,
+    "levelSpread20msDb": 5.58,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 6.3,
+       "flatness": 0.252,
+       "voicedFrac": 0
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -4.2
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.000016,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "short (0.5-0.9 s)",
+      "ok": true,
+      "value": 0.51,
+      "need": "0.5-0.9 s"
+     },
+     {
+      "name": "loud quickly (no slow swell)",
+      "ok": true,
+      "value": 0.165,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.2 s after the clip start"
+     },
+     {
+      "name": "bright",
+      "ok": true,
+      "value": {
+       "centroidHz": 3871,
+       "shareAbove1k": 0.96
+      },
+      "need": "centroid >= 1200 Hz, >= 50 % above 1 kHz"
+     },
+     {
+      "name": "a rasp (unvoiced)",
+      "ok": true,
+      "value": 0,
+      "need": "voiced <= 0.3"
+     },
+     {
+      "name": "ends in silence",
+      "ok": true,
+      "value": -48.6,
+      "need": "the cut end >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.51,
+    "peakDbfs": -4.2,
+    "rmsDbfs": -21,
+    "crestDb": 16.8,
+    "clippedFrac": 0,
+    "quietFrac": 0.089,
+    "activeFrac": 1,
+    "levelSpreadDb": 6.3,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.185,
+     "riseMs": 180
+    },
+    "decay": {
+     "firstQuarterDb": -26.2,
+     "lastQuarterDb": -25.9,
+     "lastMinusFirstDb": 0.3,
+     "slopeDbPerS": -210.4,
+     "activeEndS": 0.5
+    },
+    "spectral": {
+     "centroidHz": 3871,
+     "flatness": 0.252,
+     "rolloff85Hz": 6638,
+     "bands": {
+      "0-300Hz": 0.003,
+      "300-1000Hz": 0.039,
+      "1000-3000Hz": 0.548,
+      "3000-8000Hz": 0.295,
+      "8000-22050Hz": 0.114
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -17.7,
+     "momentaryMaxLufs": -17.7
+    },
+    "edgesDb": {
+     "startDb": -15.5,
+     "endDb": -48.6
+    }
+   },
+   "source": {
+    "clip": "screacher-shriek-04",
+    "jobId": "20261110T225645-1982763445",
+    "seed": 1982763445,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "6f48d7ec6154af654cdbbe9ca0084527aa1c588b284ef9e2f6620327894f7b08",
+    "rawBytes": 352844,
+    "labSidecarSha256": "1b15979f9028361af33b57f676f0bc1485c9a0c03b259a53db9e0f2c9e3fa234",
+    "promptSha256": "9a69b1f59f4e12d09983a3200aad805d78b3bc3d8c0fdce1f308bc4279765c71"
+   }
+  },
+  {
+   "cue": "screacherWheeze",
+   "url": "assets/audio/screacher-wheeze-01.mp3",
+   "bytes": 16300,
+   "sha256": "b38d8f54418669fd77cf243024d740fd96b51375463b7c65cb37012e332fd200",
+   "dur": 1.33,
+   "window": {
+    "startS": 0.095,
+    "endS": 1.425
+   },
+   "ops": [
+    "mono",
+    "remove DC (-1.9e-4)",
+    "trim 0.095-1.425 s",
+    "cosine fades 0.01 / 0.02 s",
+    "peak -1 dBFS (7.3 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "wheeze",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.27,
+    "levelSpread20msDb": 6.26,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 4.68,
+       "flatness": 0.036,
+       "voicedFrac": 0.044
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.0000043,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "a breath (0.8-1.6 s)",
+      "ok": true,
+      "value": 1.33,
+      "need": "0.8-1.6 s"
+     },
+     {
+      "name": "breath noise (unvoiced)",
+      "ok": true,
+      "value": 0.044,
+      "need": "voiced <= 0.3"
+     },
+     {
+      "name": "low-mid rasp (not a hiss, not a scream)",
+      "ok": true,
+      "value": {
+       "centroidHz": 763,
+       "shareUnder1k": 0.88
+      },
+      "need": "centroid <= 1.5 kHz, >= 60 % under 1 kHz"
+     },
+     {
+      "name": "fluctuating level (wet / rattling)",
+      "ok": true,
+      "value": 6.26,
+      "need": "20 ms level spread >= 3 dB (a steady hiss reads < 2 dB)"
+     },
+     {
+      "name": "starts and ends in silence",
+      "ok": true,
+      "value": {
+       "startDb": -52.6,
+       "endDb": -49.4
+      },
+      "need": "both cuts >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.33,
+    "peakDbfs": -1,
+    "rmsDbfs": -19.4,
+    "crestDb": 18.4,
+    "clippedFrac": 0,
+    "quietFrac": 0.26,
+    "activeFrac": 0.808,
+    "levelSpreadDb": 4.68,
+    "attack": {
+     "onsetS": 0.02,
+     "peakS": 0.31,
+     "riseMs": 290
+    },
+    "decay": {
+     "firstQuarterDb": -19.9,
+     "lastQuarterDb": -18.2,
+     "lastMinusFirstDb": 1.7,
+     "slopeDbPerS": -5.7,
+     "activeEndS": 1.3
+    },
+    "spectral": {
+     "centroidHz": 763,
+     "flatness": 0.036,
+     "rolloff85Hz": 1365,
+     "bands": {
+      "0-300Hz": 0.06,
+      "300-1000Hz": 0.822,
+      "1000-3000Hz": 0.097,
+      "3000-8000Hz": 0.017,
+      "8000-22050Hz": 0.004
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.044,
+     "f0MedianHz": 1015,
+     "f0P5Hz": 546,
+     "f0P95Hz": 1030,
+     "rangeSt": 10.99,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -19.8,
+     "momentaryMaxLufs": -17.3
+    },
+    "edgesDb": {
+     "startDb": -52.6,
+     "endDb": -49.4
+    }
+   },
+   "source": {
+    "clip": "screacher-wheeze-01",
+    "jobId": "20261110T225115-1531970516",
+    "seed": 1531970516,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "9abda0a6633c03697e2d0e3ed05ff0d8b45353956b3f927ffd1e38554f236b04",
+    "rawBytes": 529244,
+    "labSidecarSha256": "e57af2fa48f1be7d5a36c1f71240b53b200f80fb6a66274c8c5eb049882c3b9d",
+    "promptSha256": "9f55a84477ef651b5c0a1f31f9a27ee1477671569f526f3cbbcf96973ec8fce5"
+   }
+  },
+  {
+   "cue": "screacherWheeze",
+   "url": "assets/audio/screacher-wheeze-02.mp3",
+   "bytes": 10971,
+   "sha256": "c6f9462e88b6b1a7ca98bb0b745c335a1520421cd71b1f6018f7895c00896d4d",
+   "dur": 0.87,
+   "window": {
+    "startS": 0.045,
+    "endS": 0.915
+   },
+   "ops": [
+    "mono",
+    "remove DC (-1.3e-4)",
+    "trim 0.045-0.915 s",
+    "cosine fades 0.02 / 0.03 s",
+    "peak -1 dBFS (6.8 dB)",
+    "matched to the cue's quietest take (-3.0 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "wheeze",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.3,
+    "levelSpread20msDb": 4.51,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 4.02,
+       "flatness": 0.004,
+       "voicedFrac": 0.141
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -4
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.000033,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "a breath (0.8-1.6 s)",
+      "ok": true,
+      "value": 0.87,
+      "need": "0.8-1.6 s"
+     },
+     {
+      "name": "breath noise (unvoiced)",
+      "ok": true,
+      "value": 0.141,
+      "need": "voiced <= 0.3"
+     },
+     {
+      "name": "low-mid rasp (not a hiss, not a scream)",
+      "ok": true,
+      "value": {
+       "centroidHz": 509,
+       "shareUnder1k": 0.97
+      },
+      "need": "centroid <= 1.5 kHz, >= 60 % under 1 kHz"
+     },
+     {
+      "name": "fluctuating level (wet / rattling)",
+      "ok": true,
+      "value": 4.51,
+      "need": "20 ms level spread >= 3 dB (a steady hiss reads < 2 dB)"
+     },
+     {
+      "name": "starts and ends in silence",
+      "ok": true,
+      "value": {
+       "startDb": -45.8,
+       "endDb": -34
+      },
+      "need": "both cuts >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.87,
+    "peakDbfs": -4,
+    "rmsDbfs": -18,
+    "crestDb": 14,
+    "clippedFrac": 0,
+    "quietFrac": 0.04,
+    "activeFrac": 1,
+    "levelSpreadDb": 4.02,
+    "attack": {
+     "onsetS": 0.01,
+     "peakS": 0.805,
+     "riseMs": 290
+    },
+    "decay": {
+     "firstQuarterDb": -21.4,
+     "lastQuarterDb": -16.3,
+     "lastMinusFirstDb": 5.1,
+     "slopeDbPerS": -0.6,
+     "activeEndS": 0.85
+    },
+    "spectral": {
+     "centroidHz": 509,
+     "flatness": 0.004,
+     "rolloff85Hz": 571,
+     "bands": {
+      "0-300Hz": 0.109,
+      "300-1000Hz": 0.864,
+      "1000-3000Hz": 0.024,
+      "3000-8000Hz": 0.002,
+      "8000-22050Hz": 0
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.141,
+     "f0MedianHz": 330,
+     "f0P5Hz": 189,
+     "f0P95Hz": 643,
+     "rangeSt": 21.23,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -18.2,
+     "momentaryMaxLufs": -17.3
+    },
+    "edgesDb": {
+     "startDb": -45.8,
+     "endDb": -34
+    }
+   },
+   "source": {
+    "clip": "screacher-wheeze-02",
+    "jobId": "20261110T225503-1765310184",
+    "seed": 1765310184,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "6ff36e33955579a84c23571c56c36f58c4a4571a41abd22990d010b6c59d5277",
+    "rawBytes": 529244,
+    "labSidecarSha256": "b16f4caee55ad89a46a6713bd03006d5ae68c2c5547f3cee2dbc0212ce379598",
+    "promptSha256": "0052174fe16392f2515e81be75fa874184b78ed24a36ab5aee3424d1d18ac099"
+   }
+  },
+  {
+   "cue": "screacherWheeze",
+   "url": "assets/audio/screacher-wheeze-03.mp3",
+   "bytes": 14106,
+   "sha256": "e4fc7efb8ac8ce573c1712fef80f3a1d62592e49b5eaa232a414bd7c71df5121",
+   "dur": 1.14,
+   "window": {
+    "startS": 0.925,
+    "endS": 2.065
+   },
+   "ops": [
+    "mono",
+    "remove DC (-7.2e-4)",
+    "trim 0.925-2.065 s",
+    "cosine fades 0.01 / 0.03 s",
+    "peak -1 dBFS (5.3 dB)",
+    "matched to the cue's quietest take (-0.2 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "wheeze",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.085,
+    "levelSpread20msDb": 5.16,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 2.7,
+       "flatness": 0.005,
+       "voicedFrac": 0.042
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1.2
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.000032,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "a breath (0.8-1.6 s)",
+      "ok": true,
+      "value": 1.14,
+      "need": "0.8-1.6 s"
+     },
+     {
+      "name": "breath noise (unvoiced)",
+      "ok": true,
+      "value": 0.042,
+      "need": "voiced <= 0.3"
+     },
+     {
+      "name": "low-mid rasp (not a hiss, not a scream)",
+      "ok": true,
+      "value": {
+       "centroidHz": 751,
+       "shareUnder1k": 0.91
+      },
+      "need": "centroid <= 1.5 kHz, >= 60 % under 1 kHz"
+     },
+     {
+      "name": "fluctuating level (wet / rattling)",
+      "ok": true,
+      "value": 5.16,
+      "need": "20 ms level spread >= 3 dB (a steady hiss reads < 2 dB)"
+     },
+     {
+      "name": "starts and ends in silence",
+      "ok": true,
+      "value": {
+       "startDb": -31.9,
+       "endDb": -42.8
+      },
+      "need": "both cuts >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.14,
+    "peakDbfs": -1.2,
+    "rmsDbfs": -18.7,
+    "crestDb": 17.5,
+    "clippedFrac": 0,
+    "quietFrac": 0.031,
+    "activeFrac": 1,
+    "levelSpreadDb": 2.7,
+    "attack": {
+     "onsetS": 0.005,
+     "peakS": 0.45,
+     "riseMs": 275
+    },
+    "decay": {
+     "firstQuarterDb": -19.2,
+     "lastQuarterDb": -22.2,
+     "lastMinusFirstDb": -3,
+     "slopeDbPerS": -15.3,
+     "activeEndS": 1.1
+    },
+    "spectral": {
+     "centroidHz": 751,
+     "flatness": 0.005,
+     "rolloff85Hz": 935,
+     "bands": {
+      "0-300Hz": 0.008,
+      "300-1000Hz": 0.906,
+      "1000-3000Hz": 0.085,
+      "3000-8000Hz": 0.001,
+      "8000-22050Hz": 0.001
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.042,
+     "f0MedianHz": 798,
+     "f0P5Hz": 794,
+     "f0P95Hz": 820,
+     "rangeSt": 0.55,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -18.4,
+     "momentaryMaxLufs": -17.3
+    },
+    "edgesDb": {
+     "startDb": -31.9,
+     "endDb": -42.8
+    }
+   },
+   "source": {
+    "clip": "screacher-wheeze-02",
+    "jobId": "20261110T225503-1765310184",
+    "seed": 1765310184,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "6ff36e33955579a84c23571c56c36f58c4a4571a41abd22990d010b6c59d5277",
+    "rawBytes": 529244,
+    "labSidecarSha256": "b16f4caee55ad89a46a6713bd03006d5ae68c2c5547f3cee2dbc0212ce379598",
+    "promptSha256": "0052174fe16392f2515e81be75fa874184b78ed24a36ab5aee3424d1d18ac099"
+   }
+  },
+  {
+   "cue": "screacherDeath",
+   "url": "assets/audio/screacher-death-01.mp3",
+   "bytes": 21002,
+   "sha256": "db208eb94ed0b62dcdb84f1cee5389b4c76b5c22bd94d5fcfd776c53bb5b5359",
+   "dur": 1.7,
+   "window": {
+    "startS": 0.23,
+    "endS": 1.93
+   },
+   "ops": [
+    "mono",
+    "remove DC (-2.2e-4)",
+    "trim 0.23-1.93 s",
+    "cosine fades 0.01 / 0.04 s",
+    "peak -1 dBFS (4.1 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "death",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.175,
+    "levelSpread20msDb": 8.33,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 7.82,
+       "flatness": 0.126,
+       "voicedFrac": 0.104
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.0000084,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "one collapse (1.0-1.8 s)",
+      "ok": true,
+      "value": 1.7,
+      "need": "1.0-1.8 s"
+     },
+     {
+      "name": "a gurgle (mostly unvoiced)",
+      "ok": true,
+      "value": 0.104,
+      "need": "voiced <= 0.4"
+     },
+     {
+      "name": "low-mid (wet), not a hiss",
+      "ok": true,
+      "value": 0.84,
+      "need": ">= 50 % under 1 kHz"
+     },
+     {
+      "name": "sputtering level",
+      "ok": true,
+      "value": 7.82,
+      "need": "50 ms level spread >= 4 dB"
+     },
+     {
+      "name": "ends in silence",
+      "ok": true,
+      "value": -44.1,
+      "need": "the cut end >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.7,
+    "peakDbfs": -1,
+    "rmsDbfs": -21,
+    "crestDb": 20,
+    "clippedFrac": 0,
+    "quietFrac": 0.274,
+    "activeFrac": 0.941,
+    "levelSpreadDb": 7.82,
+    "attack": {
+     "onsetS": 0.005,
+     "peakS": 0.19,
+     "riseMs": 170
+    },
+    "decay": {
+     "firstQuarterDb": -18.3,
+     "lastQuarterDb": -23.6,
+     "lastMinusFirstDb": -5.2,
+     "slopeDbPerS": -10.6,
+     "activeEndS": 1.7
+    },
+    "spectral": {
+     "centroidHz": 881,
+     "flatness": 0.126,
+     "rolloff85Hz": 3571,
+     "bands": {
+      "0-300Hz": 0.138,
+      "300-1000Hz": 0.703,
+      "1000-3000Hz": 0.111,
+      "3000-8000Hz": 0.028,
+      "8000-22050Hz": 0.021
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.104,
+     "f0MedianHz": 490,
+     "f0P5Hz": 188,
+     "f0P95Hz": 1371,
+     "rangeSt": 34.41,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -21.3,
+     "momentaryMaxLufs": -17.9
+    },
+    "edgesDb": {
+     "startDb": -26.9,
+     "endDb": -44.1
+    }
+   },
+   "source": {
+    "clip": "screacher-death-01",
+    "jobId": "20261110T225119-1271740027",
+    "seed": 1271740027,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "d7a1a220169d32aa421af28266fb09a9d8e14055de0e8ac73c56aac2c5aee687",
+    "rawBytes": 529244,
+    "labSidecarSha256": "2d28868198fb89ef9464a47ae9c807015a316001841d8bb37ad485fd3a64403b",
+    "promptSha256": "66bf210b47c8fed820ccf6294beb38d1d2707c8a13d7eba79c809b9f622ddfcd"
+   }
+  }
+ ],
+ "rejectedRaws": [
+  {
+   "cue": "screacherScream",
+   "clip": "screacher-scream-02",
+   "jobId": "20261110T225105-1977974568",
+   "seed": 1977974568,
+   "seconds": 3,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "32f79fdb6d146a51ef681bf13a78480e2f2961ecc1fec72b5ddb10e9a182c5ec",
+   "rawBytes": 529244,
+   "labSidecarSha256": "b6699b16d2bb61d2abe5127f08ce59b2b86a943918d025328c8949edb3b82d71",
+   "promptSha256": "a3f81044c1cd8707785039ef0d4c10da114627dab0392a1b7e1326e9e14630dc",
+   "reason": "a nearly pure steady tone (f0 1.63 kHz within 1.1 semitones, voiced 83 %, spectral flatness 0.021: the register and tonality of the Siren's wake scream, whose take 01 measures f0 1.57 kHz / flatness 0.017) in a two-stage swell (loudest 1.1 s after its start, rise 685 ms): it fails the rough-voice criterion and, untrimmed, the hard onset; the cue ships three takes of the other request instead"
+  },
+  {
+   "cue": "screacherShriek",
+   "clip": "screacher-shriek-01",
+   "jobId": "20261110T225110-997390778",
+   "seed": 997390778,
+   "seconds": 2,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "7978c1f30f3b8e0cacd2a225d78b59f6b7e6827d6a118724f19369f142f78015",
+   "rawBytes": 352844,
+   "labSidecarSha256": "4a3b0f89adfb9acb0c49cca9945c2e1e6a7f4ccf5d5ab14955d3e9e2562ed1d4",
+   "promptSha256": "99651dd793236ea61eee9f437543d043ebe0724df3a1f0d53578400f0aed7ca6",
+   "reason": "a 0.84 s rasp that swells for 0.7 s and stops at its loudest moment (rise 565 ms: no bark attack), in a darker band than the accepted pair (centroid 1.19 kHz, 41 % of the energy under 1 kHz: fails the bright criterion): replaced by takes 03 / 04"
+  },
+  {
+   "cue": "screacherShriek",
+   "clip": "screacher-shriek-02",
+   "jobId": "20261110T225454-817894369",
+   "seed": 817894369,
+   "seconds": 2,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "7add5616d6de64dfba0178c6f61aa51036e9022fd515865151e39683c3114ff2",
+   "rawBytes": 352844,
+   "labSidecarSha256": "f45941f3b7eeba931c3f7b3314a29411ec17b5033de47c7d7fdd9274399a0776",
+   "promptSha256": "a8d92889e092334e0f40ca584635a24c35a7dc7632115b7f647c0df8b1f9d0c6",
+   "reason": "its loud event is only 0.25 s long (under the 0.5-0.9 s cue), after a 24 dB quieter pre-sound 0.3 s earlier: replaced by takes 03 / 04"
+  }
+ ]
+}

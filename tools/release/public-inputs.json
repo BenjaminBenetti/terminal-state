@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 68257,
-      "sha256": "b3f84877115e758a37d932f8931c5f461df42b133d8ed88f0624fc85e3f627fc"
+      "bytes": 69940,
+      "sha256": "99302e158ad03a967b7b18366294a29cf6aa60e41f44d948323b7e43c31e01da"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 3070,
-      "sha256": "d27343e7709f683d55a7fbc5bcd8e49dc47e413ca68f658aacfe066449babfcc"
+      "bytes": 3273,
+      "sha256": "d56e0e43f7689989324fc5829991a629edc8775847cdc75f38b4e99968dd4f1b"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -1234,6 +1234,51 @@
       "sha256": "16e6e4f19630c57e0564cb42ef03de86491ade07abaf78ec1c699b7f01bf394b"
     },
     {
+      "path": "assets/audio/screacher-death-01.mp3",
+      "bytes": 21002,
+      "sha256": "db208eb94ed0b62dcdb84f1cee5389b4c76b5c22bd94d5fcfd776c53bb5b5359"
+    },
+    {
+      "path": "assets/audio/screacher-scream-01.mp3",
+      "bytes": 30511,
+      "sha256": "9d6943d247508b0c141d6b4f4a2106633334a8acc2fd524ff5969662466ddfc4"
+    },
+    {
+      "path": "assets/audio/screacher-scream-02.mp3",
+      "bytes": 30929,
+      "sha256": "110c4677dc66bcf087eba53366f346a93088a9b3ccdeba86fffb59755c9c41ed"
+    },
+    {
+      "path": "assets/audio/screacher-scream-03.mp3",
+      "bytes": 30511,
+      "sha256": "c9fb44dd7fe2b889e168cff0f91d0004b996f2a8dd5fd684b48a4f729531103b"
+    },
+    {
+      "path": "assets/audio/screacher-shriek-01.mp3",
+      "bytes": 8777,
+      "sha256": "2b495898e4da936ba32445e3dc2b4109de8fe99d1aae6a2ab7f8651781541704"
+    },
+    {
+      "path": "assets/audio/screacher-shriek-02.mp3",
+      "bytes": 8777,
+      "sha256": "97f9fb11587fcc702a6fb5e5d5b4fd268ddb836ab951284793dd14913851fed9"
+    },
+    {
+      "path": "assets/audio/screacher-wheeze-01.mp3",
+      "bytes": 16300,
+      "sha256": "b38d8f54418669fd77cf243024d740fd96b51375463b7c65cb37012e332fd200"
+    },
+    {
+      "path": "assets/audio/screacher-wheeze-02.mp3",
+      "bytes": 10971,
+      "sha256": "c6f9462e88b6b1a7ca98bb0b745c335a1520421cd71b1f6018f7895c00896d4d"
+    },
+    {
+      "path": "assets/audio/screacher-wheeze-03.mp3",
+      "bytes": 14106,
+      "sha256": "e4fc7efb8ac8ce573c1712fef80f3a1d62592e49b5eaa232a414bd7c71df5121"
+    },
+    {
       "path": "assets/audio/search-rummage-01-w01.mp3",
       "bytes": 11285,
       "sha256": "670897b8b43feecfa3a49c908f1f708a57e622381011534149c609edb5ef3dc2"
@@ -1872,6 +1917,11 @@
       "path": "assets/derivatives/audio-reactor.json",
       "bytes": 11595,
       "sha256": "21a667dd4d7f84cf902ca3ca424c17d8d77a7755739524479b9b3c0b3b5a116d"
+    },
+    {
+      "path": "assets/derivatives/audio-screacher.json",
+      "bytes": 42045,
+      "sha256": "8fb0634177b1403b4fb56e12e31eda779273620b6ed0a8257efb02dd3ec955cd"
     },
     {
       "path": "assets/derivatives/audio-skyways-car.json",

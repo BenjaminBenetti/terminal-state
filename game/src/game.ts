@@ -125,7 +125,7 @@ import {installReactorCpuCulling} from './world/reactor/cpuActorCulling'; // tas
 import {installBunkerObjective} from './world/bunker/objective'; // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE): the Bunker's optional generators + core intel
 import {installReactorMapBoards} from './world/reactor/mapBoard'; // task reactor-expansion-20261101 (lane CONTROLS) // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
-import {SCREACHER_NOISE, SCREACHER_VOICE_Y, ScreacherBrain, deliverNoise, impactNoise, landNoise, type ScreacherNoiseKind} from './ai/screacher'; // task studio-screacher-production-20261110-221858-01: the blind, sound-hunting family
+import {SCREACHER_NOISE, ScreacherBrain, deliverNoise, echoLocate, impactNoise, landNoise, type ScreacherNoiseKind} from './ai/screacher'; // task studio-screacher-production-20261110-221858-01: the blind, sound-hunting family
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 // Iteration 16 (lane RUN): logical levels / sections, travel, run carryover (levels/registry.ts, run/*)
 import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, levelDisplayName, sectionLabel, storeyLabel} from './levels/registry';
@@ -3613,22 +3613,26 @@ export class Game {
   /**
    * Task studio-screacher-production-20261110-221858-01: the Screacher's ECHO scan (BrainWorld.echo; asked once per scream, at its cue
    * instant). The player is located only when within `range` (3D, from the stump) AND a straight line from the stump to the player's
-   * chest or head is clear of solid geometry — the bullet line's rule (combat/hitscan.ts raycastWorld: walls, floors and ceilings,
-   * closed gates and doors, and solid props such as counters, cabinets and the parked train's shell): behind a wall, on another
-   * storey through a slab, or crouched behind solid cover the scream finds nothing. Returns the position at THIS instant (a snapshot).
+   * chest or head is clear of solid geometry (ai/screacher.ts echoLocate) — BOTH the enemies' sight line (walls, floors and ceilings,
+   * closed stall doors and elevator gates) AND the bullet line (combat/hitscan.ts raycastWorld: + solid props such as counters,
+   * cabinets and the parked train's shell and closed doors): behind a wall, on another storey through a slab, or crouched behind
+   * solid cover the scream finds nothing. Returns the position at THIS instant (a snapshot).
    */
   private echoScan(x: number, y: number, z: number, range: number): {x: number; z: number; y: number} | null {
     const p = this.player;
     this.noiseCounts.echoScans++;
     if (!p.alive || this.trainRide.riding || this.skywaysCar.driving) return null;
-    const from = {x, y: y + SCREACHER_VOICE_Y, z};
-    for (const ty of [p.y + (p.eye - p.y) * 0.62, p.eye - 0.08]) {
-      const dx = p.x - from.x, dy = ty - from.y, dz = p.z - from.z, d = Math.hypot(dx, dy, dz);
-      if (d > range) continue;
-      const h = d > 0.6 ? raycastWorld(this.levels, this.layout.props, from, {x: dx / d, y: dy / d, z: dz / d}, d, this.layout.trench.floorY) : null;
-      if (!h || h.kind === 'none' || h.t >= d - 0.05) { this.noiseCounts.echoHits++; return {x: p.x, z: p.z, y: p.y}; }
-    }
-    return null;
+    const L = this.levels, multi = L.count > 1;
+    const hit = echoLocate({x, y, z}, p, range, (from, to) => {
+      // sight-blocking structure first (walls, slabs, closed stall doors and elevator gates: the enemies' own sight line) ...
+      if (!(multi ? L.lineOfSight(from, to) : this.layout.grid.lineOfSight(from.x, from.z, to.x, to.z))) return false;
+      // ... then the bullet line (solid props too: counters, cabinets, the parked train's shell and closed doors)
+      const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z, d = Math.hypot(dx, dy, dz);
+      const h = raycastWorld(L, this.layout.props, from, {x: dx / d, y: dy / d, z: dz / d}, d, this.layout.trench.floorY);
+      return h.kind === 'none' || h.t >= d - 0.05;
+    });
+    if (hit) this.noiseCounts.echoHits++;
+    return hit;
   }
 
   private brainWorld(): BrainWorld {
