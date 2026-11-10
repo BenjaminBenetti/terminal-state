@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {ARMOR, ARMOR_WEAR_PER_HIT, armorHit, displayHalfPips, pipRows, pipsText} from '../src/player/armor';
-import {ARMOR_CSS, ARMOR_PIP_COL_GAP, ARMOR_PIP_GAP, armorPipsHtml, armorRowMargin} from '../src/ui/hud';
+import {ARMOR_CSS, ARMOR_HP_NUM_W, ARMOR_PIP_COL_GAP, ARMOR_PIP_GAP, ARMOR_PIP_SCALE, armorPipsHtml, armorRowMargin} from '../src/ui/hud';
 import type {PlayerHit} from '../src/player/hits';
 import type {ItemStack} from '../src/items/inventory';
 import {FakeEl, installFakeDom, type FakeDom} from './helpers/fakeDom';
@@ -31,6 +31,10 @@ function px(expr: string, pct: number): number {
 
 /** The pip diameter for a row `w` px wide: ten columns, nine gaps (the grid's 1fr columns). */
 const diameter = (w: number) => (w - (ARMOR.pipsPerRow - 1) * ARMOR_PIP_COL_GAP) / ARMOR.pipsPerRow;
+/** Task studio-armor-pip-half-size-20261110-022206-01: the row is ARMOR_PIP_SCALE (½) of the bar's border-box width `bar`. */
+const rowWidth = (bar: number) => ARMOR_PIP_SCALE * bar;
+/** The circle BEFORE the half-size change (ten pips + nine 2 px gaps spanning the whole bar), for the "half as big" check. */
+const previousDiameter = (bar: number) => (bar - 9 * 2) / 10;
 
 describe('armor pips: true circles', () => {
   it('each pip is a circle: as wide as its column, aspect-ratio 1 / 1, border-radius 50 %, no fixed height; still blue', () => {
@@ -52,18 +56,21 @@ describe('armor pips: true circles', () => {
     expect(html).toBe(`<div class="arow">${'<i></i>'.repeat(3)}<i class="half"></i></div>`);
   });
 
-  it('ten per row spanning exactly the health bar (its border box): 10 circles + 9 gaps = the bar width', () => {
+  it('ten per row spanning exactly HALF the health bar (its border box) from its left edge: 10 circles + 9 gaps = half the bar', () => {
     expect(decl('#armor-pips .arow', 'grid-template-columns')).toBe(`repeat(${ARMOR.pipsPerRow}, 1fr)`);
     expect(ARMOR.pipsPerRow).toBe(10);
     expect(decl('#armor-pips .arow', 'column-gap')).toBe(`${ARMOR_PIP_COL_GAP}px`);
-    // #armor-pips is the bar's child, 1 px past each side = over the bar's 1 px border: the row is the bar's border-box width
-    expect([decl('#armor-pips', 'left'), decl('#armor-pips', 'right')]).toEqual(['-1px', '-1px']);
+    // #armor-pips is the bar's child, 1 px past its left side (over the bar's 1 px border), as wide as half the bar's border box
+    // (an absolute box's % width = the bar's padding box = border box - 2 px)
+    expect(ARMOR_PIP_SCALE).toBe(0.5);
+    expect([decl('#armor-pips', 'left'), decl('#armor-pips', 'right'), decl('#armor-pips', 'width')]).toEqual(['-1px', undefined, 'calc((100% + 2px) * 0.5)']);
     expect(styles).toMatch(/#vitals \.bar \{[^}]*border: 1px solid/);
     expect(decl('#vitals .bar.health', 'position')).toBe('relative');
     for (const w of [150, 177, 202, 217, 260]) {
-      const d = diameter(w);
-      expect(10 * d + 9 * ARMOR_PIP_COL_GAP).toBeCloseTo(w, 9);
-      expect(d).toBeGreaterThan(10); // a readable circle at every vitals width (220 / 260 px panels)
+      expect(px(decl('#armor-pips', 'width')!, w - 2)).toBeCloseTo(rowWidth(w), 9);
+      const d = diameter(rowWidth(w));
+      expect(10 * d + 9 * ARMOR_PIP_COL_GAP).toBeCloseTo(rowWidth(w), 9);
+      expect(d).toBeGreaterThan(5); // still a readable circle at every vitals width (220 / 260 px panels)
     }
     // the markup: pipRows' rows, ten pips a row, bottom row first
     const html = armorPipsHtml(pipRows(0.2625)); // 10½ pips
@@ -87,20 +94,47 @@ describe('armor pips: true circles', () => {
     }
   });
 
-  it('the HP row reserves the whole stack above the bar: never short, at most the HP number\'s share generous', () => {
+  it('the HP row reserves exactly the stack above the bar (the bar = vitals - HP tag - two gaps - the fixed 34 px HP number)', () => {
     const vitals = /#vitals \{[^}]*width: (\d+)px/.exec(styles)!, narrow = /#vitals \{ width: (\d+)px; \}/.exec(styles);
     const widths = [Number(vitals[1]), ...(narrow ? [Number(narrow[1])] : [])];
     expect(widths).toEqual([260, 220]);
     expect(styles).toMatch(/#vitals \.tag \{[^}]*width: 20px/); // the HP tag
     expect(styles).toMatch(/#vitals \.row \{[^}]*gap: 8px/); // tag | bar | number
-    for (const wv of widths) for (const hpNum of [0, 7, 22]) {
-      const bar = wv - 20 - 2 * 8 - hpNum, d = diameter(bar);
+    expect(styles).toMatch(new RegExp(`#hp-num \\{ width: ${ARMOR_HP_NUM_W}px;`)); // (task studio-armor-pip-half-size-20261110-022206-01: fixed width)
+    for (const wv of widths) {
+      const bar = wv - 20 - 2 * 8 - ARMOR_HP_NUM_W, d = diameter(rowWidth(bar));
       for (const rows of [1, 2, 3, 4]) {
         const k = 1 + 0.75 * (rows - 1), need = 6 + ARMOR_PIP_GAP + d * k, got = px(armorRowMargin(rows), wv);
-        expect(got).toBeGreaterThanOrEqual(need - 1e-9);
-        expect(got - need).toBeLessThanOrEqual(k * hpNum / 10 + 1e-9);
+        expect(got).toBeCloseTo(need, 9); // never short, no empty band
       }
     }
+  });
+});
+
+describe('armor pips: half as big (task studio-armor-pip-half-size-20261110-022206-01, user: "make them half as big")', () => {
+  it('each circle is exactly HALF its previous width and height at every bar width; the gaps, rim and glow are halved with it', () => {
+    for (const bar of [150, 162, 177, 202, 217, 224]) {
+      const d = diameter(rowWidth(bar));
+      expect(d).toBeCloseTo(previousDiameter(bar) / 2, 9); // width (the column) and height (aspect-ratio 1 / 1) alike
+    }
+    expect(decl('#armor-pips i', 'aspect-ratio')).toBe('1 / 1');
+    expect([ARMOR_PIP_GAP, ARMOR_PIP_COL_GAP]).toEqual([2, 1]); // were 3 / 2 px: the visible gap over the bar's 1 px border 2 -> 1 px
+    expect(decl('#armor-pips i', 'border')).toBe('0.5px solid #0d1d30'); // was 1 px
+    expect(decl('#armor-pips i', 'box-shadow')).toBe('0 0 1.5px rgba(61, 143, 224, 0.45)'); // was 3 px
+    expect(ARMOR_CSS).not.toMatch(/transform|scale\(|zoom/); // the pips themselves are smaller, nothing is scaled around them
+  });
+
+  it('the stack above the bar (one pip + 75 % per further row) is half the previous one, so no empty band is left above the vitals', () => {
+    for (const bar of [162, 202, 224]) {
+      const d = diameter(rowWidth(bar)), old = previousDiameter(bar);
+      for (const rows of [1, 2, 3, 4]) {
+        const k = 1 + 0.75 * (rows - 1);
+        expect(d * k).toBeCloseTo((old * k) / 2, 9);
+      }
+    }
+    // the HP row's reserve (vitals 260 px) shrinks with the pips: at 4 rows (1 + 3 x 0.75 pips) it holds half the stack's real height
+    const bar = 260 - 20 - 16 - ARMOR_HP_NUM_W, now4 = px(armorRowMargin(4), 260);
+    expect(now4).toBeCloseTo(6 + ARMOR_PIP_GAP + 3.25 * previousDiameter(bar) / 2, 9);
   });
 });
 
