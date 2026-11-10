@@ -4,8 +4,8 @@
 //  - ride mode's car-local collision model: walls (closed side doors), end walls, both partitions and their doorways, the console, the
 //    Lockbox; feet on the car floor (no drop), crouch / jump / landing through Player.update itself;
 //  - the car pose maps: exact for the parked yaws 0 / PI (= trainToWorld / worldToTrain), inverse round trips for any pose;
-//  - the sequence: depart refused outside the car / with a blocked door; doors closed before the car moves; the car runs into its bed
-//    end's tunnel (or the bed-end fallback), is handed to the transit loop, re-arrives and stops EXACTLY at the placement with the
+//  - the sequence: depart refused outside the car / with a blocked door; doors closed before the car moves; the car runs straight
+//    through its front ride portal (task train-continuity, lane RIDE), is handed to the transit loop, re-arrives and stops EXACTLY at the placement with the
 //    player at the same car-local pose (rideDemo's same-station path) — and across a world teardown / a NEW station's build the
 //    runtime adopts the riding car's view (one TrainView, no duplicate); no drift over a long transit; a 2 s hitch only advances the
 //    clamped dt (no teleport); the jostle stays bounded; weapons / drops refused while riding.
@@ -29,9 +29,9 @@ import {
   worldToCar, type CarPose,
 } from '../src/world/trainRideLocal';
 import {RIDE_ROUTE, arrivalPlan, arriveDir, departDir, departurePlan, routePose} from '../src/world/trainRideRoute';
+import {RIDE_PORTAL, planeU, ridePortals} from '../src/world/ridePortal';
 import {TRANSIT, TrainTransitTunnel} from '../src/world/trainTransitTunnel';
 import {RIDE, TrainRide, installTrainRide, rideQaApi} from '../src/world/trainRide';
-import {TunnelFrame} from '../src/world/trackExt/frame';
 
 installCanvasShim(false);
 
@@ -266,34 +266,50 @@ describe('the car pose: local <-> world maps, the jostle', () => {
 
 describe('routes: departure / arrival plans', () => {
   // task campaign-polish (lane TRAIN, item 16): FRONT FIRST both ways — the departure always takes the FRONT end, the arrival always comes
-  // out of the REAR end (the car never runs rear first and never reverses); a tunnel when one continues that end, else its bed end
-  it('Subway / Office / Mall / island-ends: the departure takes the FRONT end, the arrival comes out of the REAR end (tunnel, else bed end)', () => {
+  // out of the REAR end (the car never runs rear first and never reverses).
+  // task studio-perf-ao-train-continuity-20261110-022206-01 (lane RIDE): a plan is the STRAIGHT line through that end's ride portal
+  // (world/ridePortal.ts) — it replaced the tunnel polyline (bends to the cap), the hand-over 4 m into the dark (uDark) and the bed
+  // end's edge (uEdge): the pins of those are gone with them
+  it('Subway / Office / Mall / island-ends: the departure takes the FRONT portal, the arrival comes in through the REAR portal, straight along the track', () => {
     for (const [tag, L] of [['subway', SUBWAY()], ['office', OFFICE()], ['mall', MALL()], ['island-ends', ISLAND()]] as const) {
       const p = playerTrainPlacement(L)!;
-      const d = departurePlan(L, p), a = arrivalPlan(L, p);
+      const d = departurePlan(L, p), a = arrivalPlan(L, p), portals = ridePortals(L, p);
       const frontEnd = p.front > 0 ? 'x1' : 'x0', rearEnd = p.front > 0 ? 'x0' : 'x1';
       expect(d.end, `${tag}: departure end`).toBe(frontEnd);
       expect(a.end, `${tag}: arrival end`).toBe(rearEnd);
+      expect(d.portal, tag).toBe(portals.front);
+      expect(a.portal, tag).toBe(portals.rear);
       expect(departDir(d), tag).toBe(1);
       expect(arriveDir(a), tag).toBe(1);
       const tunnels = (L.extensions?.tunnels ?? []).filter(t => t.trench === p.trenchIndex);
       expect(d.kind, `${tag}: departure kind`).toBe(tunnels.some(t => t.from === frontEnd) ? 'tunnel' : 'bed-end');
       expect(a.kind, `${tag}: arrival kind`).toBe(tunnels.some(t => t.from === rearEnd) ? 'tunnel' : 'bed-end');
-      for (const pl of [d, a]) if (pl.kind === 'bed-end') expect(pl.uEdge).toBeCloseTo(pl.uMouth - SPEC.length / 2 - RIDE_ROUTE.planeClear, 9);
-      if (d.kind !== 'tunnel') continue;
-      // the route starts at the car centre, runs along the bed to the mouth, then inside the tunnel corridor at the track's offset
-      const s0 = d.route.at(0);
-      expect(Math.hypot(s0.x - p.x, s0.z - p.z)).toBeLessThan(1e-9);
-      const tn = L.extensions!.tunnels.find(t => t.id === d.tunnel)!, f = new TunnelFrame(tn);
-      expect(tn.rails).toContain(d.lat);
-      for (let u = d.uMouth + 1; u <= d.uMax; u += 2) { const q = d.route.at(u); expect(f.inside(q.x, q.z, 0.5), `${tag} u ${u}`).toBe(true); }
-      // the hand-over: the whole car past the mouth (darkS) unless the cap is nearer; never beyond the cap clearance
-      expect(d.uDark).toBeLessThanOrEqual(d.uMax + 1e-9);
-      expect(d.uDark - SPEC.length / 2).toBeGreaterThanOrEqual(Math.min(d.uMouth + RIDE_ROUTE.darkS, d.uMax - SPEC.length / 2) - 1e-9);
-      // the body (chord) at the start is the parked car exactly enough
-      const rp = routePose(d, 0, RIDE.bogie);
-      expect(Math.hypot(rp.x - p.x, rp.z - p.z)).toBeLessThan(1e-9);
-      expect(rp.ax).toBeCloseTo(p.front, 12);
+      for (const pl of [d, a]) {
+        // the plane beyond the bed end face (a breach: at the end of the tunnel's first straight), the hand-over with the whole car
+        // RIDE_PORTAL.dark beyond it, a short run-out
+        expect(pl.uPlane, tag).toBeCloseTo(planeU(pl.portal, p), 12);
+        expect(pl.uMouth, tag).toBeLessThanOrEqual(pl.uPlane + 1e-9);
+        expect(pl.kind === 'bed-end' ? pl.uPlane - pl.uMouth : 0, tag).toBeCloseTo(0, 9);
+        expect(pl.uHand, tag).toBeCloseTo(pl.uPlane + SPEC.length / 2 + RIDE_PORTAL.dark, 9);
+        expect(pl.uMax, tag).toBeCloseTo(pl.uHand + RIDE_ROUTE.runOut, 9);
+        // the route starts at the car centre and is the track line: world X at the placement's z, outward through the plane
+        const s0 = pl.route.at(0);
+        expect(Math.hypot(s0.x - p.x, s0.z - p.z)).toBeLessThan(1e-9);
+        for (const u of [0, pl.uMouth, pl.uPlane, pl.uHand, pl.uMax]) {
+          const q = pl.route.at(u);
+          expect(q.z, `${tag} u ${u}`).toBe(p.z);
+          expect(q.x, `${tag} u ${u}`).toBeCloseTo(p.x + pl.portal.out * u, 9);
+        }
+        // the body (chord) is the line: the parked car at the start, the cab leading everywhere
+        const rp = routePose(pl, 0, RIDE.bogie);
+        expect(Math.hypot(rp.x - p.x, rp.z - p.z)).toBeLessThan(1e-9);
+        for (const u of [0, pl.uPlane, pl.uHand]) {
+          const q = routePose(pl, u, RIDE.bogie);
+          expect(q.ax, tag).toBeCloseTo(p.front, 12);
+          expect(q.az, tag).toBeCloseTo(0, 12);
+          expect(q.z, tag).toBeCloseTo(p.z, 12);
+        }
+      }
       expect(departDir(d)).toBe(d.sgn);
     }
   });
@@ -399,7 +415,7 @@ describe('the ride: depart / transit / arrive', () => {
     await Promise.resolve();
     expect(dep).toMatchObject({status: 'in-tunnel'});
     expect(ride.phase).toBe('transit');
-    expect(maxJump).toBeLessThan(RIDE.departMax * DT + 0.05);
+    expect(maxJump).toBeLessThan(RIDE.cruise * DT + 0.05); // (the tunnel's speed once the whole car is beyond the portal plane)
     expect(maxSpeed).toBeGreaterThan(2);
     const st = qa.ride() as {plan: unknown; transit: {active: boolean}};
     expect(st.transit.active).toBe(true);
