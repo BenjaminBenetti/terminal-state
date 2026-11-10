@@ -33,6 +33,10 @@ async function rig(backend: Backend, o: {ao: boolean; quality?: 'low' | 'high'})
   const {VolumetricAtmosphere} = await import('../src/render/volumetric');
   const r = new W.WebGPURenderer({canvas, forceWebGL: backend === 'webgl2'});
   await r.init();
+  if (backend === 'webgl2') { // the inert GL lists no extensions: report the float colour targets the atmosphere needs (as real WebGL 2 drivers do)
+    const ext = (r.backend as unknown as {extensions: {has(n: string): boolean}}).extensions, has = ext.has.bind(ext);
+    ext.has = (nm: string) => nm === 'EXT_color_buffer_float' || has(nm);
+  }
   r.shadowMap.enabled = true;
   const R = r as unknown as {backend: {createNodeBuilder: (...a: unknown[]) => {material?: THREE.Material}}; _nodes: {nodeFrame: {update(): void}}};
   const built: {material?: THREE.Material}[] = [];

@@ -300,6 +300,7 @@ export function aoFactor(ao: number, lum: number, look: AoLook = AO_LOOK, on = t
 export function aoCost(fw: number, fh: number, q: AoPreset): {size: [number, number]; rawPerPixel: number; raw: number; blur: number; apply: number; total: number} {
   const size = aoSize(fw, fh, q), px = size[0] * size[1];
   const rawPerPixel = 1 + 4 + q.slices * q.steps * 2; // the pixel's depth, the normal's four neighbours, the horizon samples
-  const raw = px * rawPerPixel, blur = px * AO_BLUR_TAPS.length * 2, apply = fw * fh * 4;
+  // blur: per pass the pixel, its two neighbours (the depth-plane gradient) and the 7 taps; apply: the 2 x 2 upsample per full-res pixel
+  const raw = px * rawPerPixel, blur = px * (3 + AO_BLUR_TAPS.length) * 2, apply = fw * fh * 4;
   return {size, rawPerPixel, raw, blur, apply, total: raw + blur + apply};
 }
