@@ -22,13 +22,24 @@
 // this pass's three small programs (raw, blur x, blur y), during the loading screen's warm-up frames when AO is on at load.
 // Failure isolation: a rejected AO program (WebGPU: the validation error scope around its first frames; WebGL 2: the shader-error
 // hook, AO_MARK) turns AO off — console error once, debug().ao.failed says why — and never fails the fog or the frame.
+//
+// NaN SAFETY (lead browser finding, WebGL 2 on llvmpipe: one close-up view of a flat wall drew the WHOLE frame black with AO on, no
+// error). Every stage is bounded and treats anything that is not a valid value as "no data", never as darkness:
+//  - raw: every division / normalize has a floor, a horizon sample is used only when it is a finite cosine, and the pixel's output is
+//    a finite ao in [0, 1] (else 1) with a finite g in (0, G_MAX) (else 0 = no surface);
+//  - blur: a tap counts only with a valid (ao, g); no valid tap (or a centre without a surface) = open, 1;
+//  - composite: a texel counts only with a valid (ao, g) — a never-written / cleared texel (0, 0), NaN or Inf is NOT "the nearest
+//    depth" any more (the previous fallback took its ao = 0: x (1 - strength) on every pixel = a black frame); none valid = 1; the
+//    factor is finally clamped to [1 - strength, 1] (strength itself <= 1) with a NaN guard, so the scene colour is never multiplied by
+//    NaN or by less than (1 - strength).
+// Validity tests are comparisons (x >= lo && x <= hi), which are false for NaN on IEEE hardware.
 
 import * as THREE from 'three';
 import {NodeMaterial, NodeUpdateType, QuadMesh, RenderTarget, RendererUtils, TempNode, type PassNode, type WebGPURenderer} from 'three/webgpu';
 import * as TSL from 'three/tsl';
 import {passTexture} from 'three/tsl';
 import {
-  AO_BLUR_TAPS, AO_BLUR_WEIGHTS, AO_EDGE_ON, AO_LOOK, AO_MIN_STEP_PX, AO_QUALITY, aoCost, aoSize, type AoLook, type AoPreset,
+  AO_BLUR_TAPS, AO_BLUR_WEIGHTS, AO_EDGE_ON, AO_LOOK, AO_MIN_STEP_PX, AO_QUALITY, aoCost, aoSize, aoTexelValid, type AoLook, type AoPreset,
 } from './ambientOcclusionMath';
 import type {FogUniforms} from './volumetricShaders';
 
@@ -37,7 +48,7 @@ import type {FogUniforms} from './volumetricShaders';
 type N = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const n = (x: unknown): N => x;
 const {
-  Fn, If, Loop, abs, acos, clamp, cos, cross, dot, exp, float, floor, getViewPosition, int, ivec2, length, max, min, normalize, pow,
+  Fn, If, Loop, abs, acos, clamp, cos, cross, dot, exp, float, floor, getViewPosition, int, ivec2, length, max, min, pow,
   select, sin, smoothstep, sqrt, texture, textureSize, uniform, uv, vec2, vec3, vec4,
 } = TSL as unknown as Record<string, N>;
 
@@ -52,17 +63,18 @@ export function aoOverrideFromUrl(search: string | undefined = (globalThis as {l
 
 /** The AO uniforms (plain uniform() nodes only: they share the stage's existing uniform buffer; set by AmbientOcclusionPass.sync). */
 export function createAoUniforms() {
+  // (named: the generated WGSL / GLSL reads aoOn / aoShape / ... — browser shader dumps and tests/ambient-occlusion-nan.test.ts)
   return {
     /** 1 = the composite applies the AO target (0: AO off / failed / not run: the lookup is skipped). */
-    aoOn: uniform(0),
+    aoOn: uniform(0).setName('aoOn'),
     /** [world radius, screen clamp as a fraction of the height, thickness, camera projection[1][1]]. */
-    aoShape: uniform(new THREE.Vector4(AO_LOOK.radius, AO_LOOK.maxRadiusFrac, AO_LOOK.thickness, 1)),
+    aoShape: uniform(new THREE.Vector4(AO_LOOK.radius, AO_LOOK.maxRadiusFrac, AO_LOOK.thickness, 1)).setName('aoShape'),
     /** [distance fade start, end, blur depth sharpness, upsample depth sharpness]. */
-    aoFilter: uniform(new THREE.Vector4(AO_LOOK.fade[0], AO_LOOK.fade[1], AO_LOOK.blurK, AO_LOOK.upsampleK)),
+    aoFilter: uniform(new THREE.Vector4(AO_LOOK.fade[0], AO_LOOK.fade[1], AO_LOOK.blurK, AO_LOOK.upsampleK)).setName('aoFilter'),
     /** [strength, power, bright guard start, end] (linear HDR luminance). */
-    aoApply: uniform(new THREE.Vector4(AO_LOOK.strength, AO_LOOK.power, AO_LOOK.guard[0], AO_LOOK.guard[1])),
+    aoApply: uniform(new THREE.Vector4(AO_LOOK.strength, AO_LOOK.power, AO_LOOK.guard[0], AO_LOOK.guard[1])).setName('aoApply'),
     /** The AO targets' size in pixels. */
-    aoSize: uniform(new THREE.Vector2(1, 1)),
+    aoSize: uniform(new THREE.Vector2(1, 1)).setName('aoSize'),
   };
 }
 export type AoUniforms = ReturnType<typeof createAoUniforms>;
@@ -71,6 +83,12 @@ export type AoUniforms = ReturnType<typeof createAoUniforms>;
 const texSize = (t: N): N => ivec2(textureSize(t)).toVar();
 
 const PI = Math.PI, HALF_PI = Math.PI / 2;
+/** Largest 1 / view depth the AO targets hold (RG16F: finite up to 65504; the near plane 0.05 m gives 20). */
+export const AO_G_MAX = 1e4;
+/** x is a finite number within [lo, hi] (false for NaN / Inf: IEEE comparisons). */
+const within = (x: N, lo: number, hi: number): N => n(x).greaterThanEqual(lo).and(n(x).lessThanEqual(hi));
+/** A texel of an AO target holds data: ao in [0, 1] and a surface (0 < g <= AO_G_MAX). */
+const validTexel = (s: N): N => within(n(s).r, 0, 1).and(n(s).g.greaterThan(0)).and(n(s).g.lessThanEqual(AO_G_MAX));
 
 /**
  * The raw pass (mirror: ambientOcclusionMath.ts aoRawAt), rendered into the AO target: out = (ao, 1 / view depth, 0, 1); sky = (1, 0).
@@ -100,7 +118,7 @@ export function createAoRawMaterial(fu: FogUniforms, au: AoUniforms, depth: THRE
       const g = float(1).div(max(z, 1e-6)).toVar();
       const aoV = n(float(1)).toVar();
       If(z.lessThan(n(au.aoFilter).y), () => {
-        const V = normalize(n(P).negate()).toVar();
+        const V = n(P).negate().div(max(length(P), 1e-6)).toVar();
         // the normal from neighbouring depths (aoNormal): per axis the neighbour whose 1 / z is closer to the pixel's, never the sky
         // while the other side is a surface, never outside the buffer
         const side = (dx: number, dy: number) => {
@@ -118,9 +136,10 @@ export function createAoRawMaterial(fu: FogUniforms, au: AoUniforms, depth: THRE
         const N0 = n(select(cl.greaterThan(1e-24), n(cr).div(max(cl, 1e-24)), V)).toVar();
         const Nn = n(select(dot(N0, V).lessThan(0), n(N0).negate(), N0)).toVar();
         const proj = n(fs).y.mul(0.5).mul(n(au.aoShape).w).toVar(); // full-res pixels per metre at view depth 1
-        const R = min(n(au.aoShape).x, n(au.aoShape).y.mul(n(fs).y).mul(z).div(proj)).toVar();
+        const R = max(min(n(au.aoShape).x, n(au.aoShape).y.mul(n(fs).y).mul(z).div(max(proj, 1e-6))), 1e-4).toVar();
         // slices evenly spaced AROUND THE VIEW VECTOR: e1 / e2 span the plane perpendicular to V
-        const e1 = normalize(vec3(float(1).sub(n(V).x.mul(n(V).x)), n(V).y.mul(n(V).x).negate(), n(V).z.mul(n(V).x).negate())).toVar();
+        const e0 = vec3(float(1).sub(n(V).x.mul(n(V).x)), n(V).y.mul(n(V).x).negate(), n(V).z.mul(n(V).x).negate()).toVar();
+        const e1 = n(e0).div(max(length(e0), 1e-6)).toVar();
         const e2 = cross(V, e1).toVar();
         // the 4 x 4 pattern (aoNoise)
         const mx = n(ix).mod(4);
@@ -134,7 +153,7 @@ export function createAoRawMaterial(fu: FogUniforms, au: AoUniforms, depth: THRE
           const axis = cross(T, V).toVar();
           const wl = sqrt(max(float(1).sub(n(axis).z.mul(n(axis).z)), 1e-6)).toVar();
           const dirPx = vec2(n(axis).y.negate(), n(axis).x.negate()).div(wl).toVar(); // the slice's line on screen (+y down)
-          const rPx = n(R).mul(proj).div(z).mul(wl).div(max(n(V).z, 1e-4)).toVar();
+          const rPx = min(n(R).mul(proj).div(max(z, 1e-4)).mul(wl).div(max(n(V).z, 1e-4)), n(fs).y).toVar();
           const na = dot(Nn, axis);
           const pn = n(Nn).sub(n(axis).mul(na)).toVar();
           const pnLen = length(pn).toVar();
@@ -162,7 +181,8 @@ export function createAoRawMaterial(fu: FogUniforms, au: AoUniforms, depth: THRE
               const along = length(vec2(dot(d0, L), dot(d0, B).sub(n(up).mul(kb)))).toVar();
               const low = sd ? n(sinN) : n(sinN).negate();
               const h = n(low).add(n(low).mul(along).add(n(cosN).mul(up)).div(max(length(vec2(along, up)), 1e-6)).sub(low).mul(w));
-              const ok = n(inside(qp)).and(qd.lessThan(1)); // off screen / sky: unknown, never an occluder
+              // off screen / sky: unknown, never an occluder; a horizon that is not a finite cosine (NaN guard) is ignored too
+              const ok = n(inside(qp)).and(qd.lessThan(1)).and(within(h, -1.001, 1.001));
               hc[sd].assign(select(ok, max(hc[sd], h), hc[sd]));
             }
           });
@@ -175,7 +195,8 @@ export function createAoRawMaterial(fu: FogUniforms, au: AoUniforms, depth: THRE
         const fade = float(1).sub(smoothstep(n(au.aoFilter).x, n(au.aoFilter).y, z));
         aoV.assign(float(1).add(n(visF).sub(1).mul(fade)));
       });
-      out.assign(vec4(aoV, g, 0, 1));
+      // NaN guard: a finite ao in [0, 1] (else open) and a finite g (else no surface)
+      out.assign(vec4(select(within(aoV, 0, 1), aoV, float(1)), select(n(g).greaterThan(0).and(n(g).lessThanEqual(AO_G_MAX)), g, float(0)), 0, 1));
     });
     return out;
   });
@@ -199,8 +220,9 @@ export function createAoBlurMaterial(au: AoUniforms, src: THREE.Texture, axis: 0
     const p = ivec2(floor(n(uv()).mul(vec2(size)))).toVar();
     const cur = n(srcT.load(p)).toVar();
     const gc = n(cur).g.toVar();
-    const out = n(vec4(1, gc, 0, 1)).toVar(AO_MARK.blur);
-    If(gc.greaterThan(0), () => {
+    // no surface (sky, a never-written texel) or no valid g: open, no surface
+    const out = n(vec4(1, 0, 0, 1)).toVar(AO_MARK.blur);
+    If(gc.greaterThan(0).and(gc.lessThanEqual(AO_G_MAX)), () => {
       const c = axis ? n(p).y : n(p).x, lim = axis ? n(hi).y : n(hi).x;
       const at = (k: N): N => n(srcT.load(axis ? ivec2(n(p).x, k) : ivec2(k, n(p).y)));
       const a = n(gc).sub(n(at(clamp(n(c).sub(int(1)), int(0), lim))).g);
@@ -211,11 +233,12 @@ export function createAoBlurMaterial(au: AoUniforms, src: THREE.Texture, axis: 0
         const qc = clamp(n(c).add(int(tap)), int(0), lim).toVar();
         const s = n(at(qc)).toVar();
         const plane = n(gc).add(n(grad).mul(float(n(qc).sub(c))));
-        const wt = n(float(AO_BLUR_WEIGHTS[k])).mul(exp(abs(n(s).g.sub(plane)).div(gc).mul(n(au.aoFilter).z).negate())).toVar();
-        sum.addAssign(n(s).r.mul(wt));
+        const wt = n(select(validTexel(s), n(float(AO_BLUR_WEIGHTS[k])).mul(exp(abs(n(s).g.sub(plane)).div(gc).mul(n(au.aoFilter).z).negate())), float(0))).toVar();
+        sum.addAssign(n(select(validTexel(s), n(s).r, float(0))).mul(wt));
         ws.addAssign(wt);
       });
-      out.assign(vec4(clamp(n(sum).div(max(ws, 1e-6)), 0, 1), gc, 0, 1));
+      const avg = n(sum).div(max(ws, 1e-6)).toVar();
+      out.assign(vec4(select(n(ws).greaterThan(1e-6).and(within(avg, 0, 1)), avg, float(1)), gc, 0, 1));
     });
     return out;
   });
@@ -251,16 +274,23 @@ export function applyAmbientOcclusion(ao: AoComposite, rgb: N, d: N, z: N, uvN: 
       const q = clamp(ivec2(int(n(lb).x).add(i), int(n(lb).y).add(j)), ivec2(0, 0), bhi);
       const s = n(n(aoT).load(q)).toVar();
       const wb = n(i ? n(fr).x : float(1).sub(n(fr).x)).mul(j ? n(fr).y : float(1).sub(n(fr).y));
+      // a texel without data (never written / cleared: (0, 0); no surface; NaN / Inf) never counts — neither in the weights nor as
+      // the "nearest depth" fallback (that fallback took a cleared texel's ao = 0 before: the whole frame at 1 - strength)
+      const ok = validTexel(s).toVar();
       const dz = abs(n(s).g.sub(g)).div(g).toVar();
-      const wt = max(wb, 1e-3).mul(exp(n(dz).mul(n(au.aoFilter).w).negate())).toVar();
-      acc.addAssign(n(s).r.mul(wt));
+      const wt = n(select(ok, max(wb, 1e-3).mul(exp(n(dz).mul(n(au.aoFilter).w).negate())), float(0))).toVar();
+      acc.addAssign(n(select(ok, n(s).r, float(0))).mul(wt));
       ws.addAssign(wt);
-      If(dz.lessThan(bestD), () => { bestD.assign(dz); best.assign(n(s).r); });
+      If(n(ok).and(dz.lessThan(bestD)), () => { bestD.assign(dz); best.assign(n(s).r); });
     }
-    const aoV = clamp(select(n(ws).greaterThan(1e-4), n(acc).div(max(ws, 1e-4)), best), 1e-4, 1);
+    const a0 = n(select(n(ws).greaterThan(1e-4), n(acc).div(max(ws, 1e-4)), best)).toVar();
+    const aoV = clamp(select(within(a0, 0, 1), a0, float(1)), 1e-4, 1);
     const lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
     const k = n(au.aoApply).x.mul(float(1).sub(smoothstep(n(au.aoApply).z, n(au.aoApply).w, lum)));
-    f.assign(float(1).add(pow(aoV, n(au.aoApply).y).sub(1).mul(k)));
+    const f0 = float(1).add(pow(aoV, n(au.aoApply).y).sub(1).mul(k)).toVar();
+    // bounded and NaN-proof: never below 1 - strength, never above 1, never NaN
+    const floorF = float(1).sub(n(au.aoApply).x);
+    f.assign(select(within(f0, 0, 1), max(f0, floorF), float(1)));
   });
   return n(rgb).mul(f);
 }
@@ -385,9 +415,15 @@ export class AmbientOcclusionPass {
     this.on = on && !this.failed;
     const u = this.u, l = this.look;
     u.aoOn.value = this.on ? 1 : 0;
-    u.aoShape.value.set(l.radius, l.maxRadiusFrac, Math.max(l.thickness, 1e-3), camera.projectionMatrix.elements[5]);
-    u.aoFilter.value.set(l.fade[0], Math.max(l.fade[1], l.fade[0] + 1e-3), l.blurK, l.upsampleK);
-    u.aoApply.value.set(l.strength, l.power, l.guard[0], Math.max(l.guard[1], l.guard[0] + 1e-3));
+    // (bounded: a QA edit of the look can never make a shader divide by zero, pow a negative or darken past black)
+    const fin = (v: number, d: number, lo: number, hi: number) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
+    const p11 = camera.projectionMatrix.elements[5];
+    u.aoShape.value.set(fin(l.radius, AO_LOOK.radius, 1e-3, 10), fin(l.maxRadiusFrac, AO_LOOK.maxRadiusFrac, 1e-3, 1), fin(l.thickness, AO_LOOK.thickness, 1e-3, 10),
+      Number.isFinite(p11) && p11 > 0 ? p11 : 1);
+    const f0 = fin(l.fade[0], AO_LOOK.fade[0], 0, 1e4);
+    u.aoFilter.value.set(f0, Math.max(fin(l.fade[1], AO_LOOK.fade[1], 0, 1e4), f0 + 1e-3), fin(l.blurK, AO_LOOK.blurK, 0, 1e3), fin(l.upsampleK, AO_LOOK.upsampleK, 0, 1e3));
+    const g0 = fin(l.guard[0], AO_LOOK.guard[0], 0, 1e4);
+    u.aoApply.value.set(fin(l.strength, AO_LOOK.strength, 0, 1), fin(l.power, AO_LOOK.power, 0.1, 8), g0, Math.max(fin(l.guard[1], AO_LOOK.guard[1], 0, 1e4), g0 + 1e-3));
   }
 
   /**
@@ -444,6 +480,32 @@ export class AmbientOcclusionPass {
     this.on = false;
     this.u.aoOn.value = 0;
     console.error(reason);
+  }
+
+  /**
+   * QA (browser checks of a suspicious view): read the two AO targets back and summarise them — texels, NaN, texels without data
+   * (aoTexelValid false), open sky / no-surface texels, and the valid ao's min / mean. A = what the composite reads (raw, then blur y),
+   * B = blur x. Null while AO is off or not yet run. Not used by the game.
+   */
+  async probe(renderer: WebGPURenderer): Promise<Record<'A' | 'B', {size: [number, number]; texels: number; nan: number; invalid: number; noSurface: number; min: number; mean: number}> | null> {
+    if (!this.on || !this.rtA || !this.rtB) return null;
+    const one = async (rt: RenderTarget) => {
+      const [w, h] = [rt.width, rt.height];
+      const raw = await (renderer as unknown as {readRenderTargetPixelsAsync(t: RenderTarget, x: number, y: number, w: number, h: number): Promise<ArrayLike<number>>})
+        .readRenderTargetPixelsAsync(rt, 0, 0, w, h);
+      const half = raw instanceof Uint16Array, stride = Math.max(1, Math.round(raw.length / (w * h)));
+      const val = (i: number) => (half ? THREE.DataUtils.fromHalfFloat(raw[i]) : raw[i]);
+      let nan = 0, invalid = 0, noSurface = 0, min = 1, sum = 0, n = 0;
+      for (let t = 0; t < w * h; t++) {
+        const ao = val(t * stride), g = val(t * stride + 1);
+        if (Number.isNaN(ao) || Number.isNaN(g)) nan++;
+        if (g === 0 && ao === 1) noSurface++;
+        else if (!aoTexelValid(ao, g)) invalid++;
+        else { min = Math.min(min, ao); sum += ao; n++; }
+      }
+      return {size: [w, h] as [number, number], texels: w * h, nan, invalid, noSurface, min: Math.round(min * 1e4) / 1e4, mean: n ? Math.round(sum / n * 1e4) / 1e4 : 1};
+    };
+    return {A: await one(this.rtA), B: await one(this.rtB)};
   }
 
   /** Release the targets and programs (recreated on demand). */

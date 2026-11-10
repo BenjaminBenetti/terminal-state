@@ -59,6 +59,13 @@ export const AO_LOOK = {
 };
 export type AoLook = typeof AO_LOOK;
 
+/** Largest 1 / view depth an AO target holds (render/ambientOcclusion.ts AO_G_MAX; RG16F is finite up to 65504). */
+export const AO_G_MAX = 1e4;
+/** x is a finite number within [lo, hi] (the shaders' NaN guard: IEEE comparisons are false for NaN). */
+const within = (x: number, lo: number, hi: number) => x >= lo && x <= hi;
+/** An AO texel holds data: ao in [0, 1] and a surface (0 < g <= AO_G_MAX). A never-written / cleared texel (0, 0) does not. */
+export const aoTexelValid = (ao: number, g: number): boolean => within(ao, 0, 1) && g > 0 && g <= AO_G_MAX;
+
 /** Closest depth sample to the pixel, in full-resolution pixels (1.5 px always rounds to another pixel: never the pixel itself). */
 export const AO_MIN_STEP_PX = 1.5;
 /** |projected normal|^2 of a slice below which it takes no samples / from which it takes them fully (the surface edge-on in the slice). */
@@ -164,7 +171,7 @@ export function aoRawAt(v: AoView, ix: number, iy: number, aw: number, ah: numbe
   const pl = Math.hypot(P[0], P[1], P[2]) || 1, V: V3 = [-P[0] / pl, -P[1] / pl, -P[2] / pl];
   const proj = aoProjScale(v);
   // the world radius actually covered: look.radius, less where its screen size would pass the clamp (near surfaces)
-  const R = Math.min(look.radius, look.maxRadiusFrac * v.h * z / proj);
+  const R = Math.max(Math.min(look.radius, look.maxRadiusFrac * v.h * z / Math.max(proj, 1e-6)), 1e-4);
   // slices are spaced evenly AROUND THE VIEW VECTOR (not around the screen's z axis: off-centre those differ by up to the half FOV,
   // and the arc integral is only exact — an open surface reads 1 at any tilt — for an even spacing around V): e1 / e2 span the plane
   // perpendicular to V
@@ -177,7 +184,7 @@ export function aoRawAt(v: AoView, ix: number, iy: number, aw: number, ah: numbe
     const T: V3 = [e1[0] * cp + e2[0] * sp, e1[1] * cp + e2[1] * sp, e1[2] * cp + e2[2] * sp], axis = cross(T, V);
     // T's direction on screen in pixels (+y is down) and how many pixels one metre along T covers there
     const wl = Math.sqrt(Math.max(1 - axis[2] * axis[2], 1e-6)), cs = -axis[1] / wl, sn = -axis[0] / wl;
-    const rPx = R * proj / z * wl / V[2];
+    const rPx = Math.min(R * proj / Math.max(z, 1e-4) * wl / Math.max(V[2], 1e-4), v.h);
     const na = dot(N, axis), pn: V3 = [N[0] - axis[0] * na, N[1] - axis[1] * na, N[2] - axis[2] * na];
     const pnLen = Math.hypot(pn[0], pn[1], pn[2]);
     const cosN = clamp(dot(pn, V) / Math.max(pnLen, 1e-5), 0, 1);
@@ -209,6 +216,7 @@ export function aoRawAt(v: AoView, ix: number, iy: number, aw: number, ah: numbe
         const w = (1 - fr * fr) * (1 - smooth(look.thickness * 0.5, look.thickness, d0[2])) * sure;
         const up = dot(d0, N) / Math.max(pnLen, 1e-3), along = Math.hypot(dot(d0, L), dot(d0, B) - up * kb);
         const low = side ? sinN : -sinN, hc = low + ((low * along + cosN * up) / Math.max(Math.hypot(along, up), 1e-6) - low) * w;
+        if (!within(hc, -1.001, 1.001)) continue; // not a finite cosine (the shader's NaN guard)
         if (side) hc1 = Math.max(hc1, hc); else hc0 = Math.max(hc0, hc);
       }
     }
@@ -220,7 +228,8 @@ export function aoRawAt(v: AoView, ix: number, iy: number, aw: number, ah: numbe
   // few slices of one pixel do not average the open arc to 1 on a tilted surface; their ratio needs no averaging)
   vis = clamp(vis / Math.max(open, 1e-4), 0, 1);
   const fade = 1 - smooth(look.fade[0], look.fade[1], z);
-  return {ao: 1 + (vis - 1) * fade, g: 1 / z};
+  const ao = 1 + (vis - 1) * fade, g = 1 / Math.max(z, 1e-6);
+  return {ao: within(ao, 0, 1) ? ao : 1, g: g > 0 && g <= AO_G_MAX ? g : 0}; // (NaN guard: open / no surface)
 }
 
 /** A low-res AO target on the CPU: `ao` and `g` (1 / view depth; 0 = sky) per pixel, row-major. */
@@ -242,16 +251,18 @@ export function aoBlurAt(src: AoBuffer, ix: number, iy: number, axis: 0 | 1, loo
   const {w} = src, lim = axis ? src.h - 1 : w - 1, c = axis ? iy : ix;
   const at = (q: number) => (axis ? q * w + ix : iy * w + q);
   const gc = src.g[at(c)];
-  if (!(gc > 0)) return 1;
+  if (!(gc > 0 && gc <= AO_G_MAX)) return 1; // sky / never written / invalid: open
   const a = gc - src.g[at(clampi(c - 1, 0, lim))], b = src.g[at(clampi(c + 1, 0, lim))] - gc;
   const grad = c >= lim || (c > 0 && Math.abs(a) < Math.abs(b)) ? a : b;
   let sum = 0, ws = 0;
   for (let k = 0; k < AO_BLUR_TAPS.length; k++) {
     const q = clampi(c + AO_BLUR_TAPS[k], 0, lim), i = at(q);
+    if (!aoTexelValid(src.ao[i], src.g[i])) continue; // a tap without data never counts (the shader's validTexel)
     const wt = AO_BLUR_WEIGHTS[k] * Math.exp(-look.blurK * Math.abs(src.g[i] - (gc + grad * (q - c))) / gc);
     sum += src.ao[i] * wt; ws += wt;
   }
-  return clamp(sum / ws, 0, 1); // (the pixel's own tap has weight 4: ws >= 4)
+  const avg = sum / Math.max(ws, 1e-6);
+  return ws > 1e-6 && within(avg, 0, 1) ? avg : 1;
 }
 
 /** The two blur passes over a whole target (`g` is passed through). */
@@ -271,16 +282,19 @@ export function aoBlur(raw: AoBuffer, look: AoLook = AO_LOOK): AoBuffer {
  */
 export function aoUpsampleAt(b: AoBuffer, fw: number, fh: number, x: number, y: number, z: number, look: AoLook = AO_LOOK): number {
   if (!Number.isFinite(z)) return 1;
-  const g = 1 / z, px = (x + 0.5) / fw * b.w - 0.5, py = (y + 0.5) / fh * b.h - 0.5, bx = Math.floor(px), by = Math.floor(py), fx = px - bx, fy = py - by;
+  const g = 1 / Math.max(z, 1e-6), px = (x + 0.5) / fw * b.w - 0.5, py = (y + 0.5) / fh * b.h - 0.5, bx = Math.floor(px), by = Math.floor(py), fx = px - bx, fy = py - by;
   let acc = 0, ws = 0, best = 1, bestD = Infinity;
   for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
     const k = clampi(by + j, 0, b.h - 1) * b.w + clampi(bx + i, 0, b.w - 1);
+    // a texel without data (never written / cleared (0, 0), sky, NaN) is never used — not even as the nearest-depth fallback
+    if (!aoTexelValid(b.ao[k], b.g[k])) continue;
     const dz = Math.abs(b.g[k] - g) / g;
     const wt = Math.max((i ? fx : 1 - fx) * (j ? fy : 1 - fy), 1e-3) * Math.exp(-look.upsampleK * dz);
     acc += b.ao[k] * wt; ws += wt;
     if (dz < bestD) { bestD = dz; best = b.ao[k]; }
   }
-  return clamp(ws > 1e-4 ? acc / ws : best, 0, 1);
+  const a = ws > 1e-4 ? acc / ws : best;
+  return within(a, 0, 1) ? a : 1;
 }
 
 /** Rec. 709 luminance of a linear colour. */
@@ -292,8 +306,10 @@ export const aoLuminance = (c: readonly number[]): number => 0.2126 * c[0] + 0.7
  */
 export function aoFactor(ao: number, lum: number, look: AoLook = AO_LOOK, on = true, sky = false): number {
   if (!on || sky) return 1;
-  const k = look.strength * (1 - smooth(look.guard[0], look.guard[1], lum));
-  return 1 + (Math.pow(clamp(ao, 1e-4, 1), look.power) - 1) * k; // (1e-4: the shader's pow never sees 0)
+  const strength = clamp(look.strength, 0, 1);
+  const k = strength * (1 - smooth(look.guard[0], look.guard[1], lum));
+  const f = 1 + (Math.pow(clamp(within(ao, 0, 1) ? ao : 1, 1e-4, 1), look.power) - 1) * k; // (1e-4: the shader's pow never sees 0)
+  return within(f, 0, 1) ? Math.max(f, 1 - strength) : 1; // bounded, NaN-proof (the shader's guard)
 }
 
 /** Texture loads per frame of each AO stage for a drawing buffer (the cost arithmetic of docs/ambient-occlusion.md; not a time). */
