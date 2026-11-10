@@ -322,7 +322,8 @@ describe('U08 game wiring (source guards)', () => {
   it('the build-time pass runs right after buildWorld (before the scene / warm-up sees the level); the observer after the software cap', async () => {
     const fs = await import('node:fs');
     const src = fs.readFileSync(new URL('../src/game.ts', import.meta.url), 'utf8');
-    expect(src).toMatch(/this\.world = buildWorld\([^\n]*\n\s*requestArchitectureAnisotropy\(this\.world\.group\);[^\n]*\n\s*this\.scene\.add\(this\.world\.group\);/);
+    // (task studio-perf-ao-train-continuity-20261110-022206-01, lane BUILD: Game.buildSectionSteps delegates to the stepped world builder)
+    expect(src).toMatch(/this\.world = yield\* buildWorldSteps\([^\n]*\n\s*requestArchitectureAnisotropy\(this\.world\.group\);[^\n]*\n\s*this\.scene\.add\(this\.world\.group\);/);
     expect(src).toMatch(/this\.softwareGl = adaptToSoftwareGl\(this\.renderer\);[^\n]*\n\s*observeBackendAnisotropy\(this\.renderer\.backend\);/);
     const qa = fs.readFileSync(new URL('../src/qa.ts', import.meta.url), 'utf8');
     expect(qa).toMatch(/anisotropy: \(\) => anisotropyReport\(anisotropyCapability\(game\.softwareGl\)/);

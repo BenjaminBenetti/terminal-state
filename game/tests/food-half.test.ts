@@ -167,7 +167,7 @@ describe('natural food half: game.ts wiring (source order)', () => {
     const at = (s: string) => { const i = src.indexOf(s); expect(i, s).toBeGreaterThan(0); return i; };
     const gate = at('dropNaturalFood(cm, mem.holders, this.layout.seed, mem.id, lootProfile(key.level));');
     expect(at('h.holders?.(this.layout)')).toBeLessThan(gate);
-    expect(at('this.stock.build(this.layout')).toBeLessThan(gate);
+    expect(at('this.stock.buildSteps(this.layout')).toBeLessThan(gate); // (lane BUILD: the stepped shelf-stock build)
     expect(at('applyHolders(cm, mem.holders);')).toBeLessThan(gate);
   });
   it('floor pickups: the yaw is drawn before the skip (every other pickup keeps its stream); first spawns only', () => {
