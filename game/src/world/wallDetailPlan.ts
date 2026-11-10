@@ -26,6 +26,7 @@ import type {WallFace, WallZone} from './wallFaces';
 import {faceFrame, normalizeFaces, stationWallFaces, type TreatFace} from './wallDetailFaces';
 import {CHUNK_M, stationLevels} from './levelGeometry';
 import {FRIEZE_SIZE, type AtlasCell} from './wallDetailAtlas';
+import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {stationArtKeepouts, type ArtKeepout} from '../gen/trackExt/art'; // Track 2 playtest revision (lane ART)
 
 export type Treatment = 'platformTile' | 'trackTunnel' | 'trackFace' | 'concourseTile' | 'shopTile' | 'servicePaint' | 'stairCore' | 'upperFinish' | 'lowerConcrete'
@@ -246,6 +247,14 @@ export interface PlanOptions {
 
 /** Plan the wall treatment of a station. Deterministic for (layout, faces). */
 export function planWallDetail(layout: StationLayout, opts: PlanOptions = {}): WallDetailPlan {
+  return drainSync(planWallDetailSteps(layout, opts));
+}
+
+/**
+ * task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): planWallDetail as steps (core/pacedBuild.ts) — the same code in the same order (every face's own seeded stream; the station
+ * stream drawn in the same order), a `yield` between its phases and every few faces, where the journey's paced build may pause.
+ */
+export function* planWallDetailSteps(layout: StationLayout, opts: PlanOptions = {}): BuildSteps<WallDetailPlan> {
   // Track 2 (lane GEN): track-extension walls (tunnels / annexes) are not part of the core plan — its per-station caps, breaches
   // and seeds stay exactly the core's; the extensions' presentation plans their own walls (lane VIS).
   // Track 2: extension faces (tunnels / annexes) stay in; they are re-ordered AFTER the core's below and planned on their own
@@ -261,7 +270,9 @@ export function planWallDetail(layout: StationLayout, opts: PlanOptions = {}): W
   const hallAccent = new Map<number, string>();
   const ctx: PlanCtx = {layout, levels, features: [], hot: 0, rails: passageRails(layout), shopBoxes: shopBoxes(layout), art: stationArtKeepouts(layout)};
   const planned: PlannedFace[] = [];
+  let step = 0;
   for (const face0 of faces) {
+    if (++step % 64 === 0) yield;
     const sl = face0.slope;
     let face: TreatFace = sl ? {...face0, y0: Math.max(sl.b0, sl.b1), y1: Math.max(Math.max(sl.b0, sl.b1), Math.min(sl.t0, sl.t1))} : face0;
     // Only the part of the face that actually borders open space of its level gets detail.
@@ -293,17 +304,21 @@ export function planWallDetail(layout: StationLayout, opts: PlanOptions = {}): W
   const nCore = planned.findIndex(isExtFace) < 0 ? planned.length : planned.findIndex(isExtFace);
   ctx.near = new PlaneIndex(ctx);
   if (nCore < planned.length) ctx.extDoors = doorClearVolumes(layout);
-  planned.forEach((pf, i) => { pf.keepouts = keepoutsFor(ctx, pf); planFace(ctx, pf, i, {bayPhase, jointEvery}); });
+  yield;
+  for (let i = 0; i < planned.length; i++) { const pf = planned[i]; pf.keepouts = keepoutsFor(ctx, pf); planFace(ctx, pf, i, {bayPhase, jointEvery}); if (i % 16 === 15) yield; }
+  yield;
   const byFace: Feature[][] = planned.map(() => []);
   for (const f of ctx.features) byFace[f.face].push(f);
   planBreaches(ctx, planned, srng.fork('breach'), byFace, 0, nCore);
   const extCapsAll = extWallDetailCaps(layout);
   if (nCore < planned.length) planBreaches(ctx, planned, srng.fork('breach-ext'), byFace, nCore, planned.length, extCapsAll.breach);
+  yield;
   // Iteration 12 (ARCH): rust bleeding down the finish from wall-mounted steel (after every cut is final).
   planned.forEach((pf, i) => rustBleed({pf, idx: i, rng: new Rng(pf.face.seed ^ 0x7e57), placed: byFace[i]}, ctx));
   // Board-formed concrete last: its pattern runs around every cut, keep-out and other flush finish.
   // (Track 2 playtest revision, lane ART: not over the annexes' own board-formed finish, which carries its panels at 427 texels / m)
   planned.forEach((pf, i) => { if (RECIPES[pf.treatment].formwork && pf.finish === 'concrete' && pf.face.finish !== 'annexWall' && !pf.sloped && pf.face.y1 - pf.face.y0 > 1.2) formworkRun({pf, idx: i, rng: new Rng(pf.face.seed ^ 0xf0f0), placed: byFace[i]}, ctx); });
+  yield;
   const coreCaps = applyCaps(ctx.features.filter(f => f.face < nCore), planned);
   // The annexes' many short walls plan far more detail than their budget: keep whole faces in a seeded shuffled order, so the
   // bare walls are spread over every annex instead of the last-planned annex losing all of its detail.

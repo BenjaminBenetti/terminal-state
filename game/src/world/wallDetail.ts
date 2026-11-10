@@ -19,7 +19,7 @@ import type {WallFace} from './wallFaces';
 import {SurfaceNodeMaterial, cloneSurfaceMaterial, thinTrim, type WorldMaterials, type MatKey} from './materials';
 import {shapeMaterial} from './shapeMaterials';
 import {archShopMaterial} from './decay';
-import {planWallDetail, type FeatureKind, type Treatment, type WallDetailPlan, type Feature} from './wallDetailPlan';
+import {planWallDetailSteps, type FeatureKind, type Treatment, type WallDetailPlan, type Feature} from './wallDetailPlan';
 import {FRIEZE_SIZE, atlasCells, friezeTexture, wallDetailTextures, type CellRect} from './wallDetailAtlas';
 import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {Buf, LAYER_OFFSET, cutPolyC, cylinder, faceBox, flatFeature, frameOf, insetPrism, prepareCuts, pt, rimRing, rubble, type CutSpec, type DetailMat, type Frame} from './wallDetailGeometry';
@@ -136,7 +136,7 @@ export function* buildWallDetailSteps(world: THREE.Group, layout: StationLayout,
   const t0 = performance.now();
   const existing = world.children.find(c => c.name === 'wall-detail') as THREE.Group | undefined;
   if (existing?.userData.wallDetailResult) return existing.userData.wallDetailResult as WallDetailResult; // already treated (never cut twice)
-  const plan = planWallDetail(layout, {faces});
+  const plan = yield* planWallDetailSteps(layout, {faces});
   yield 'world.wallDetail.prepare';
   const tPlan = performance.now();
   const group = new THREE.Group();
