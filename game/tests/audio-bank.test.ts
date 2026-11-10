@@ -22,6 +22,7 @@ import {CLIP_BYTES_SKYWAYS_CAR, CLIP_GAPS_SKYWAYS_CAR, CLIP_MANIFEST_SKYWAYS_CAR
 import {CLIP_BYTES_SKYWAYS_DESTINATIONS, CLIP_GAPS_SKYWAYS_DESTINATIONS, CLIP_MANIFEST_SKYWAYS_DESTINATIONS} from '../src/audio/manifest.skywaysDestinations.generated'; // task skyways-destinations-20261106 (lane AUDIO)
 import {CLIP_BYTES_HEAD_HIT, CLIP_GAPS_HEAD_HIT, CLIP_MANIFEST_HEAD_HIT} from '../src/audio/manifest.headHit.generated'; // task studio-general-armor-20261107-231448-01: the head-hit skull crack
 import {CLIP_BYTES_MARKET_BAR, CLIP_GAPS_MARKET_BAR, CLIP_MANIFEST_MARKET_BAR} from '../src/audio/manifest.marketBar.generated'; // task studio-market-bar-20261108-225231-01 (lane AUDIO): the market set
+import {CLIP_BYTES_GUN_VARIETY, CLIP_GAPS_GUN_VARIETY, CLIP_MANIFEST_GUN_VARIETY} from '../src/audio/manifest.gunVariety.generated'; // task studio-weapon-soundlab-audio-20261110-063407-01: the new guns' own shots / reloads
 
 // Iteration 06 (Lane D): the runtime bank = iteration-05 manifest + the iteration-06 breaking cues.
 // Iteration 07 (Lane K): + shot item / chunk / light prop landing cues (i07k).
@@ -29,9 +30,9 @@ import {CLIP_BYTES_MARKET_BAR, CLIP_GAPS_MARKET_BAR, CLIP_MANIFEST_MARKET_BAR} f
 // Iteration 11: + the dedicated pistol shot. Iteration 12 (AUDIO): + battery insert, flare ignite / burn loop / out, flashlight flicker.
 // Task track1-siren-blightbelly-20261031 (lane AUDIO): + Siren hum / scream, Blightbelly burst / gas hiss (t1).
 // Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO): + the Strainer's wet footfalls / swing / contact / squish.
-const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT, ...CLIP_MANIFEST_MARKET_BAR};
-const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q, ...CLIP_GAPS_I11, ...CLIP_GAPS_I12, ...CLIP_GAPS_COUGH, ...CLIP_GAPS_T1, ...CLIP_GAPS_STRAINER, ...CLIP_GAPS_REACTOR, ...CLIP_GAPS_REACTOR_STARTUP, ...CLIP_GAPS_REACTOR_ENDING, ...CLIP_GAPS_FUEL, ...CLIP_GAPS_SKYWAYS_CAR, ...CLIP_GAPS_SKYWAYS_DESTINATIONS, ...CLIP_GAPS_HEAD_HIT, ...CLIP_GAPS_MARKET_BAR];
-const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q + CLIP_BYTES_I11 + CLIP_BYTES_I12 + CLIP_BYTES_COUGH + CLIP_BYTES_T1 + CLIP_BYTES_STRAINER + CLIP_BYTES_REACTOR + CLIP_BYTES_REACTOR_STARTUP + CLIP_BYTES_REACTOR_ENDING + CLIP_BYTES_FUEL + CLIP_BYTES_SKYWAYS_CAR + CLIP_BYTES_SKYWAYS_DESTINATIONS + CLIP_BYTES_HEAD_HIT + CLIP_BYTES_MARKET_BAR;
+const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT, ...CLIP_MANIFEST_MARKET_BAR, ...CLIP_MANIFEST_GUN_VARIETY};
+const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q, ...CLIP_GAPS_I11, ...CLIP_GAPS_I12, ...CLIP_GAPS_COUGH, ...CLIP_GAPS_T1, ...CLIP_GAPS_STRAINER, ...CLIP_GAPS_REACTOR, ...CLIP_GAPS_REACTOR_STARTUP, ...CLIP_GAPS_REACTOR_ENDING, ...CLIP_GAPS_FUEL, ...CLIP_GAPS_SKYWAYS_CAR, ...CLIP_GAPS_SKYWAYS_DESTINATIONS, ...CLIP_GAPS_HEAD_HIT, ...CLIP_GAPS_MARKET_BAR, ...CLIP_GAPS_GUN_VARIETY];
+const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q + CLIP_BYTES_I11 + CLIP_BYTES_I12 + CLIP_BYTES_COUGH + CLIP_BYTES_T1 + CLIP_BYTES_STRAINER + CLIP_BYTES_REACTOR + CLIP_BYTES_REACTOR_STARTUP + CLIP_BYTES_REACTOR_ENDING + CLIP_BYTES_FUEL + CLIP_BYTES_SKYWAYS_CAR + CLIP_BYTES_SKYWAYS_DESTINATIONS + CLIP_BYTES_HEAD_HIT + CLIP_BYTES_MARKET_BAR + CLIP_BYTES_GUN_VARIETY;
 import {Sfx} from '../src/audio/sfx';
 import {FakeCtx, fakeBank, fakeBuffer} from './helpers/fakeAudio';
 
@@ -97,7 +98,7 @@ describe('Sound Lab clip manifest + bundled assets', () => {
   });
 
   it('provenance names a raw Sound Lab source (prompt, seed, hash) for every bundled clip', () => {
-    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json', 'audio-iteration11-pistol.json', 'audio-iteration12.json', 'audio-cough.json', 'audio-track1.json', 'audio-strainer.json', 'audio-reactor.json', 'audio-reactor-startup.json', 'audio-reactor-ending.json', 'audio-fuel.json', 'audio-skyways-car.json', 'audio-skyways-destinations.json', 'audio-head-hit.json', 'audio-market-bar.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
+    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json', 'audio-iteration11-pistol.json', 'audio-iteration12.json', 'audio-cough.json', 'audio-track1.json', 'audio-strainer.json', 'audio-reactor.json', 'audio-reactor-startup.json', 'audio-reactor-ending.json', 'audio-fuel.json', 'audio-skyways-car.json', 'audio-skyways-destinations.json', 'audio-head-hit.json', 'audio-market-bar.json', 'audio-gun-variety.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
     for (const prov of provs) {
       expect(prov.license.gameReady).toBe(false);
       expect(prov.license.status).toMatch(/Conditional prototype/);
@@ -106,7 +107,8 @@ describe('Sound Lab clip manifest + bundled assets', () => {
     const byUrl = new Map<string, {sha256: string; source: {clip: string; rawSha256: string; rawFile?: string; prompt?: string; promptSha256?: string; seed: number; jobId: string | null}}>(prov.derivatives.map((d: {url: string}) => [d.url, d]));
     // task studio-market-bar-20261108-225231-01 (lane AUDIO): the market set's public record names its raw takes by hashes only (the lane brief:
     // no prompts / paths) — the prompt's SHA-256 instead of its text, no raw path; its builder verified each raw against the runner sidecar
-    const hashOnly = new Set<string>(provs.find(p => p.asset === 'audio-market-bar-20261108')!.derivatives.map((d: {url: string}) => d.url));
+    // (+ task studio-weapon-soundlab-audio-20261110-063407-01: the weapon-variety gun set's record is hash-only too — its brief: the prompts stay private)
+    const hashOnly = new Set<string>(provs.filter(p => p.asset === 'audio-market-bar-20261108' || p.asset === 'audio-gun-variety-20261110').flatMap(p => p.derivatives.map((d: {url: string}) => d.url)));
     const rawChecked = new Set<string>();
     for (const refs of Object.values(CLIP_MANIFEST)) {
       for (const r of refs) {
@@ -169,8 +171,10 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
     await settle();
     const ctx = made[0], at = {x: 2, y: 1, z: 2}, z = {};
     const calls: Record<string, () => void> = {
-      shot: () => { sfx.shot('rifle'); sfx.shot('shotgun'); }, dry: () => { sfx.dry('rifle'); sfx.dry('shotgun'); }, click: () => sfx.click(1.4),
-      reloadStart: () => { sfx.reloadStart('rifle', true); sfx.reloadStart('rifle', false); sfx.reloadStart('shotgun'); },
+      shot: () => { sfx.shot('rifle'); sfx.shot('shotgun'); sfx.shot('pistol', undefined, 'hornet'); sfx.shot('shotgun', 'none', 'coach_gun'); }, dry: () => { sfx.dry('rifle'); sfx.dry('shotgun'); }, click: () => sfx.click(1.4),
+      reloadStart: () => { sfx.reloadStart('rifle', true); sfx.reloadStart('rifle', false); sfx.reloadStart('shotgun'); sfx.reloadStart('rifle', true, 2.9, 'overwatch'); sfx.reloadStart('shotgun', false, undefined, 'coach_gun'); },
+      // task studio-weapon-soundlab-audio-20261110-063407-01: a break action closing — the gun's own barrels-shut cue, else the dry click
+      breakClose: () => { sfx.breakClose('shotgun', 'coach_gun'); sfx.breakClose('shotgun'); },
       reloadEnd: () => { sfx.reloadStart('rifle', true); sfx.reloadEnd('rifle'); sfx.reloadStart('rifle'); sfx.reloadEnd('rifle'); sfx.reloadEnd('shotgun'); },
       shellIn: () => sfx.shellIn(), pump: () => sfx.pump(0.1), equip: () => sfx.equip(), pickup: () => sfx.pickup(), denied: () => sfx.denied(), heal: () => sfx.heal(),
       footstep: () => { for (const s of [false, true]) for (const c of [false, true]) sfx.footstep(s, c); }, ladder: () => { sfx.ladder(); sfx.ladder(at); },
