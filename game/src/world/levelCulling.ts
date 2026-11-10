@@ -333,6 +333,15 @@ export class LevelCuller {
    * station.
    */
   eyeOverride: number | null = null;
+  /**
+   * Task studio-perf-ao-train-continuity-20261110-022206-01 (lead): the eye's STAND-IN position for every position-based rule (its
+   * storey, the portal / atrium / window sight tests, slab and same-storey occlusion, the fog distance, the tracked movers), or null.
+   * Called with the eye's world position each update; it may move the point in place. The ride portals set it (world/ridePortalRuntime
+   * .ts): an eye riding inside the ride tunnel is beyond the station's grid (in rock, or in rooms the tunnel is drawn through), where
+   * those rules would hide the station it still sees through the portal's opening — so the station is decided from the opening
+   * instead. The view frustum stays the camera's own. Null (always, outside a ride): exactly as before.
+   */
+  eyeProxy: ((eye: THREE.Vector3) => void) | null = null;
   /** Task track3 (lane ARCH): atrium tiles (mall only; empty elsewhere) and the last update's atrium diagnostics. */
   private readonly atriumTiles: AtriumTile[] = [];
   /** Task mall-playtest-revision (lane ARCH): the glazed lift shafts (mall only: the builder's slabs.see rects). */
@@ -1255,6 +1264,7 @@ export class LevelCuller {
     if (!this.entries.length) return;
     camera.updateMatrixWorld();
     const e = this.eye.setFromMatrixPosition(camera.matrixWorld);
+    if (this.eyeProxy) this.eyeProxy(e); // (task studio-perf-ao-train-continuity-20261110-022206-01: an eye in the ride tunnel decides from the portal's opening)
     const q = camera.quaternion, l = this.last;
     const ov = this.eyeOverride !== null && this.levelIds.includes(this.eyeOverride) ? this.eyeOverride : null;
     if (!force && ov === l.ov && Math.abs(e.x - l.x) < 0.25 && Math.abs(e.y - l.y) < 0.15 && Math.abs(e.z - l.z) < 0.25
