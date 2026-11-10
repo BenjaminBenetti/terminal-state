@@ -279,14 +279,14 @@ They take the IDENTITY of existing weapon finds (`items/weaponVariety.ts`), so t
 
   | Level (layouts) | Weapon finds, before = after | Realized as: baseline / new gun / melee | Ammo units 9mm / 5.56 / 12-gauge, before = after | Rounds moved into boxes |
   |---|---|---|---|---|
-  | Subway (18) | 36 | 10 / 20 / 6 | 795 / 2770 / 564 | 216 |
-  | Office (6) | 10 | 4 / 3 / 3 | 255 / 820 / 200 | 62 |
-  | Mall (26) | 30 | 12 / 16 / 2 | 1350 / 1940 / 304 | 91 |
+  | Subway (18) | 36 | 10 / 20 / 6 | 795 / 2770 / 564 | 210 |
+  | Office (6) | 10 | 4 / 3 / 3 | 255 / 820 / 200 | 60 |
+  | Mall (26) | 30 | 12 / 16 / 2 | 1350 / 1940 / 304 | 87 |
   | Market (2) | 0 | (no weapon finds) | 0 | 0 |
-  | Bunker (14) | 31 | 13 / 13 / 5 | 1680 / 1800 / 352 | 142 |
+  | Bunker (14) | 31 | 13 / 13 / 5 | 1680 / 1800 / 352 | 140 |
   | Skyways (5) | 8 | 4 / 4 / 0 | 165 / 150 / 60 | 8 |
   | Reactor (5) | 9 | 3 / 6 / 0 | 495 / 570 / 120 | 0 |
-  | All (76) | 124 | 46 / 62 / 16 | 4740 / 8050 / 1600 | 519 |
+  | All (76) | 124 | 46 / 62 / 16 | 4740 / 8050 / 1600 | 505 |
 
   Possible vs sampled family shares:
 
