@@ -44,12 +44,16 @@ export const WEAPON_VARIETY_RETRY = {delaysMs: [1500, 4000, 10000, 30000] as num
 
 /** How a model file is fetched and decoded: the browser's GLTFLoader over the page's base URL (assets/loader.ts assetUrl). */
 type ModelLoader = (id: string, url: string) => Promise<Model>;
-const browserLoader: ModelLoader | null = typeof window === 'undefined' ? null : (_id, url) => new GLTFLoader().loadAsync(assetUrl(url));
-let loader: ModelLoader | null = browserLoader;
-/** Swap the loader (tests / a QA harness; null = the default: the browser loader, none without a browser). Returns the previous one. */
+const browserLoader: ModelLoader = (_id, url) => new GLTFLoader().loadAsync(assetUrl(url));
+/** A real page (a base URL to resolve the relative asset path against)? Node — also with a test's stub window / document — has none. */
+const inBrowser = (): boolean => typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.baseURI === 'string' && document.baseURI.length > 0;
+let customLoader: ModelLoader | null = null;
+/** The loader in force: a swapped-in one, else the browser's; null without a browser (nothing is ever fetched then). */
+const activeLoader = (): ModelLoader | null => customLoader ?? (inBrowser() ? browserLoader : null);
+/** Swap the loader (tests / a QA harness; null = back to the default). Returns the previous swapped-in one. */
 export function setWeaponVarietyLoader(fn: ModelLoader | null): ModelLoader | null {
-  const prev = loader;
-  loader = fn ?? browserLoader;
+  const prev = customLoader;
+  customLoader = fn;
   return prev;
 }
 
@@ -125,7 +129,7 @@ export function weaponVarietyModelSource(id: string): string {
 function fetchOne(id: string, late: boolean): Promise<boolean> {
   let p = pending.get(id);
   if (p) return p;
-  const url = weaponVarietyModelUrl(id), load = loader;
+  const url = weaponVarietyModelUrl(id), load = activeLoader();
   if (!url || !load) return Promise.resolve(false);
   if (late) WEAPON_VARIETY_MODEL_STATS.late++;
   let attempt: Promise<Model>;
@@ -179,7 +183,7 @@ function scheduleRetry(): void {
  */
 export function requestWeaponVarietyModel(id: string): WeaponVarietyModelState {
   const st = weaponVarietyModelState(id);
-  if (st === 'resident' || st === 'undelivered' || !loader) return st;
+  if (st === 'resident' || st === 'undelivered' || !activeLoader()) return st;
   wanted.add(id);
   if (st === 'loading') return st;
   const f = failures.get(id);
@@ -198,7 +202,7 @@ export function requestWeaponVarietyModel(id: string): WeaponVarietyModelState {
  * retried on its own (the section realized the weapon whatever the network did) and arrives through onWeaponVarietyReady.
  */
 export async function ensureWeaponVarietyModels(ids: Iterable<string>, o: {late?: boolean} = {}): Promise<string[]> {
-  if (!loader) return [];
+  if (!activeLoader()) return [];
   const want = [...new Set(ids)].filter(id => isVarietyWeapon(id) && !loaded.has(id) && weaponVarietyModelUrl(id));
   if (!want.length) return [];
   const fresh: string[] = [];
