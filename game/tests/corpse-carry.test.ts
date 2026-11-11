@@ -379,7 +379,8 @@ describe('corpses: hands busy elsewhere', () => {
     const src = readFileSync(fileURLToPath(new URL('../src/game.ts', import.meta.url)), 'utf8');
     expect(src).toMatch(/if \(this\.laneOwnedLast && !laneOwns && inp\.mouse\[0\]\) this\.lmbLatch = true;/);
     expect(src).toMatch(/this\.corpses\?\.refuseUse\(\)/);
-    expect(src).toMatch(/!!this\.corpses\?\.carrying/);
+    expect(src).toMatch(/!this\.corpses\?\.carrying,/); // (no reload while carrying)
+    expect(src).toMatch(/const carryHolster = this\.corpses\?\.holster \?\? 0;/);
   });
 });
 
@@ -482,6 +483,12 @@ describe('corpses: the station, the train, the journey', () => {
     press(h, 'KeyE');
     const heldId = c.sys.held()!.record.id;
     standIn(c, mid - 3.2, -0.4);
+    // the driving console stays usable with a body in the hands (its map starts the journey); every other E is the body's
+    (rt as unknown as {consoleAimed: boolean}).consoleAimed = true;
+    expect(prompt(c)).not.toBe(CORPSE_TEXT.drop);
+    expect(h.interactHandlers[0]()).toBe(false); // (the carry handler goes first and lets the console's E through)
+    (rt as unknown as {consoleAimed: boolean}).consoleAimed = false;
+    expect(prompt(c)).toBe(CORPSE_TEXT.drop);
     void ride.depart();
     run(h, 80, () => ride.phase === 'transit');
     expect(ride.phase).toBe('transit');

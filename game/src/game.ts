@@ -3047,7 +3047,7 @@ export class Game {
     // A fresh sprint (Shift while moving forward) interrupts a timed use. Until the consume view has
     // brought the gun back up it stays lowered: no aiming, firing or reloading.
     if (this.use && (inp.hit('ShiftLeft') || inp.hit('ShiftRight')) && (inp.down('KeyW') || inp.down('ArrowUp'))) this.cancelUse('sprint');
-    const vmBusy = !!this.use || this.consumeView.busy || !!this.vomit?.active || !!this.corpses?.carrying; // (lane SHELVES: throwing up — no aim / reload, the gun lowered; lane CORPSE: so while carrying a body)
+    const vmBusy = !!this.use || this.consumeView.busy || !!this.vomit?.active; // (lane SHELVES: throwing up — no aim / reload, the gun lowered)
     this.aiming = !!wdef && !wdef.melee && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active && !laneOwns;
     const moveOpts = {aiming: this.aiming, speedMult: (this.use ? 0.6 : wdef?.moveMult ?? 1) * this.mods.speedMult, canSprint: !this.use && !inp.mouse[0]};
     // (lane RIDE) riding: car pose -> the player's car-local step -> the world pose (TrainRide.stepPlayer); else the world body as ever
@@ -3065,7 +3065,7 @@ export class Game {
       // buttons, or the button being latched away from it mid-windup, cancels (never a release that swings); wiped input
       // (`clears`: menus / blur / pointer unlock) cancels a windup too. `pressed` is Input's per-frame latch: a down + up inside
       // one frame still starts the full windup -> swing -> recovery.
-      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns && !rideHolster, pressed: inp.mousePressed[0] && !flareOwns && !rideHolster, reload: inp.hit('KeyR') && !vmBusy && !this.skywaysCar.driving, // (lane RIDE: holstered; lane CAR: no reload while driving)
+      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns && !rideHolster, pressed: inp.mousePressed[0] && !flareOwns && !rideHolster, reload: inp.hit('KeyR') && !vmBusy && !this.skywaysCar.driving && !this.corpses?.carrying, // (lane RIDE: holstered; lane CAR: no reload while driving)
         aiming: this.aiming, lowered: p.sprinting || vmBusy || p.climbing || (!!wdef.melee && (laneOwns || (this.lmbLatch && this.weapon.winding))), clears: inp.clears}, this.inv); // (lane GUNS: + aiming, an AimSettle)
       for (const e of ev) {
         // (task hitch-attribution-recorder-20261105: weapon.fire / weapon.melee spans — timing only, a no-op unless profiling)
@@ -3161,8 +3161,10 @@ export class Game {
     prof.lap(SPAN.view);
     this.consumeView.update(dt); // item-to-face pose + gun holster level, before the gun pose
     if (this.skywaysCar.holster > 0) this.viewmodel.setHolstered(this.skywaysCar.holster); // (lane CAR) hands on the wheel: the held item lowered
-    const vomitHolster = Math.max(this.vomitAction?.holster ?? 0, this.corpses?.holster ?? 0); // (lane SHELVES) throwing up: the held item lowered (whichever lowers it more wins; lane CORPSE: + carrying a body)
+    const vomitHolster = this.vomitAction?.holster ?? 0; // (lane SHELVES) throwing up: the held item lowered (whichever lowers it more wins)
     if (vomitHolster > 0) this.viewmodel.setHolstered(Math.max(vomitHolster, this.consumeView.holster, this.skywaysCar.holster));
+    const carryHolster = this.corpses?.holster ?? 0; // (task corpse-chipper, lane CORPSE) carrying a body: the held item lowered too (whichever lowers it more wins)
+    if (carryHolster > 0) this.viewmodel.setHolstered(Math.max(carryHolster, vomitHolster, this.consumeView.holster, this.skywaysCar.holster));
     this.viewmodel.update(dt, {
       // (task mouse-axis-invert: the sway follows the EFFECTIVE turn, so an inverted axis sways with the view, not against it)
       moving: Math.min(1, p.speed / WALK_SPEED), sprint: p.sprinting, aiming: this.aiming, lookDX: inp.dx * lookSigns(this.settings).x, lookDY: inp.dy * lookSigns(this.settings).y,

@@ -19,7 +19,8 @@
 // body leaves the hands (Game's laneOwnedLast latch).
 // E WHILE CARRYING: each registered sink (addSink, in order) is offered the body — an ok offer's E hands it over (take() true: the sink
 // owns record + object from that call on); a refusal is shown and keeps it. Otherwise E lays it down in the 'lying' pose (its Death clip's
-// end frame: grounded by the asset contract) on a free, level floor spot in front of the player (refused while the train moves).
+// end frame, its lowest vertex exactly on the floor) on a free, level floor spot in front of the player (refused while the train moves).
+// The one other E use while carrying is the train's driving console (aimed: its map / a journey with the body in the hands).
 //
 // OWNERSHIP (one body, one place; every move is one synchronous call):
 //  - hands: run participant 'corpse-carry' (corpse/bodyLanes.ts): saved / loaded / Retry / NewGame; the object survives teardowns (it
@@ -154,7 +155,7 @@ export interface CorpseHost {
   physics?: {forgetRagdoll?(target: object): boolean} | null;
   damage?: {releaseZombie?(z: object): boolean} | null;
   atmosphere?: {markShadows(root: THREE.Object3D, structure: boolean): void} | null;
-  trainRuntime?: {spec: PlayerTrainSpec; view: {root: THREE.Object3D} | null; train: {placement: TrainPlacement} | null} | null;
+  trainRuntime?: {spec: PlayerTrainSpec; view: {root: THREE.Object3D} | null; train: {placement: TrainPlacement} | null; consoleAimed?: boolean} | null;
   trainRide?: {riding: boolean; phase: string} | null;
   playerTrain: {cargo: {liveBodies: {bodies(): BodyRecordJSON[]; restoreBodies(b: BodyRecordJSON[]): void} | null}; chipper?: {state: {job: {body: BodyRecordJSON} | null}}};
   hud: {toast(text: string, warn?: boolean): void};
@@ -487,6 +488,7 @@ export class CorpseSystem implements CorpseSystemApi {
     if (!this.hand) return CORPSE_TEXT.notReady;
     const o = this.offers();
     if (o) return o.offer.text;
+    if (this.host.trainRuntime?.consoleAimed) return null; // (the driving console's own prompt: a journey with a body in the hands)
     return this.host.trainRide?.riding ? CORPSE_TEXT.riding : CORPSE_TEXT.drop;
   }
 
@@ -503,6 +505,8 @@ export class CorpseSystem implements CorpseSystemApi {
       this.toSink(o.sink);
       return true;
     }
+    // the one other E use while carrying: the train's driving console (its map / the journey — the body stays in the hands)
+    if (h.trainRuntime?.consoleAimed) return false;
     this.putDown();
     return true;
   }
