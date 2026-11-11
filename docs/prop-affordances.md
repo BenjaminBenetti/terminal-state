@@ -603,6 +603,15 @@ they sit outside the two audits; their classification is recorded here.
   - No baked clutter: the model is just the box, its lid, latches, hinge and handles.
   - Scale (rule 5): `scale-check.mjs --prop game/public/assets/models/player-train-lockbox.glb`, viewed. 1.03 × 0.556 × 0.614 m,
     grounded on 4 skid contacts, top at 0.55 m (a footlocker below the 0.98 m window sills).
+- **Chipper** (task corpse-chipper-fuel-20261110-235304; model `assets/models/train-chipper.glb`, contract `world/chipperSpec.ts`,
+  cooked by `tools/asset-pipeline/props/build-train-chipper.mjs`):
+  - Not storage: the hopper is a feed mouth (a fed body is ground, never kept), the collection tanks are sealed parts of the machine
+    and its fuel credit is the machine's own counter (`fuel/chipperFuel.ts`). Nothing to open, no loot table.
+  - Physics: static, `anchored`: heavy machinery bolted to the car floor by its base frame, no physics body.
+  - No baked clutter: the hose, tanks, gauge, valves, cable and the hopper's flap curtain are permanent parts of the machine.
+  - Scale (rule 5): `scale-check.mjs --prop game/public/assets/models/train-chipper.glb`, viewed beside zombie lastshift (1.78 m,
+    runtime scale 1). 1.36 × 0.832 × 0.616 m, grounded on 6 base-frame feet (span 1.15 × 0.46 m); hopper floor 0.47 m, side lips
+    0.53 m, top frame 0.78 m (upper thigh on the zombie), motor top 0.83 m: below the 0.98 m window sills.
 
 ## 7. Reactor mines set pieces (not layout prop kinds)
 Task reactor-expansion-20261101 (lane MINES). The old mine workings off tier 2 (`gen/reactor/complex/mines*.ts`) dress their drifts

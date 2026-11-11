@@ -1,0 +1,193 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "train-chipper",
+ "what": "the train CHIPPER: a compact electric corpse woodchipper bolted inside the player train (feed hopper with a flap curtain, guarded rotor housing with an inspection grille, motor + belt guard, control box with stop button and lever, discharge spout + hose, twin collection tanks, welded base frame)",
+ "task": "studio-corpse-chipper-fuel-20261110-235304-01",
+ "approval": "task-specific user generation approval (sha256 b2ffae0f5c83438e69fe84ae52f4361ce5d5269a5eb661558f3fcb1958f09bfa): one woodchipper model and supported processing, up to 100 Meshy credits / 6 generation attempts",
+ "accepted": true,
+ "route": "Codex native image_gen INITIAL design / conditioning image (flat side elevation) -> Meshy T2.5 image-to-3D (smart topology, 2K PBR); the Meshy model keeps its own PBR maps (re-encoded only)",
+ "conditioningImage": {
+  "sha256": "00fd014c1bb60eb50bed19d037fefc6380c25d12401a7f9cbd78620299f24b85",
+  "bytes": 2273590,
+  "size": "1536x1024",
+  "generator": "Codex CLI 0.163.0 built-in image_gen (model id not reported)",
+  "file": "reference/tasks/corpse-chipper-fuel-20261110-235304/gen/out/CH-a1.png (raw original, outside Git)"
+ },
+ "meshy": {
+  "tool": "mcp__meshy__meshy_image_to_3d (@meshy-ai/meshy-mcp-server 0.6.6)",
+  "request": {
+   "ai_model": "meshy-t2.5",
+   "enable_pbr": true,
+   "model_type": "smart-topology",
+   "should_texture": true,
+   "target_formats": [
+    "glb"
+   ],
+   "target_polycount": 20000,
+   "texture_resolution": "2k"
+  },
+  "task": "01a1c7ea-aad4-744e-8734-a75af09b66ec",
+  "status": "SUCCEEDED",
+  "billedCredits": 15,
+  "budget": {
+   "attempts": 1,
+   "billedTotal": 15,
+   "caps": {
+    "credits": 100,
+    "attempts": 6,
+    "posts": 10
+   }
+  },
+  "evidence": "the exact create arguments are in the fsynced ledger reserve line before the POST; the 15-credit charge is the T2 / T2.5 single-image textured price"
+ },
+ "source": {
+  "file": "reference/tasks/corpse-chipper-fuel-20261110-235304/gen/raw/CHIPPER-R001-01a1c7ea-aad4-744e-8734-a75af09b66ec.glb (raw original, outside Git)",
+  "sha256": "65cdc4b991f7f6928f6d021691f0b907836403ea89d1b42a422d7f7e6316237c",
+  "bytes": 7882248,
+  "triangles": 18338,
+  "extent": [
+   0.9482,
+   0.5801,
+   0.4292
+  ],
+  "textures": [
+   {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2801499
+   },
+   {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2159353
+   },
+   {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 1958923
+   }
+  ]
+ },
+ "output": {
+  "file": "game/public/assets/models/train-chipper.glb",
+  "url": "assets/models/train-chipper.glb",
+  "sha256": "e607cb8f8c6bc36ab503560967a8e4efbda30c8b47d59a32182e3ebe952df5d2",
+  "bytes": 1316080,
+  "triangles": 18338,
+  "dims": [
+   1.36,
+   0.832,
+   0.6156
+  ]
+ },
+ "lengthM": 1.36,
+ "scale": 1.434232,
+ "orientation": {
+  "upAxis": "y",
+  "baseSpanX": 0.842,
+  "baseSpanZ": 0.751,
+  "negXEndTop": 0.96,
+  "posXEndTop": 0.389,
+  "result": "Meshy native frame kept (no rotation): +Y up, hopper -X, so the conditioning side elevation is the +Z face"
+ },
+ "transform": "uniform scale to the runtime length, grounded (min y = 0), centred on x / z, baked into the vertices (identity node); no rotation, no geometry simplification (Smart Topology made the approved target count)",
+ "convention": "metres at runtime size, +Y up, origin at the bottom centre of the base frame; +Z = the front (rotor housing inspection grille, control box face), -X = the feed hopper end, +X = the twin collection tanks",
+ "anchors": {
+  "hopper": {
+   "x": -0.435,
+   "y": 0.784,
+   "z": 0
+  },
+  "hopperMouth": {
+   "x": 0.38,
+   "z": 0.545
+  },
+  "outlet": {
+   "x": 0.213,
+   "y": 0.33,
+   "z": 0
+  },
+  "panel": {
+   "x": 0.205,
+   "y": 0.54,
+   "z": 0.165
+  }
+ },
+ "measured": {
+  "hopper": {
+   "floorY": 0.467,
+   "rimY": 0.784,
+   "lipY": 0.525,
+   "inner": {
+    "x0": -0.625,
+    "x1": -0.245,
+    "z0": -0.273,
+    "z1": 0.272
+   }
+  },
+  "outlet": {
+   "ring": {
+    "diameterY": 0.108,
+    "diameterZ": 0.118,
+    "segments": 43
+   }
+  },
+  "panel": {
+   "face": {
+    "x0": 0.145,
+    "x1": 0.265,
+    "y0": 0.485,
+    "y1": 0.595
+   },
+   "faceZ": 0.165
+  }
+ },
+ "anchorMethod": {
+  "hopper": "top-down height map (5 mm) of the -X 40 % slab: floor = its most populated 1 cm band, rim = the highest band holding >= 4 % of the cells (the end walls + the top rails across the box); inner X = the end walls' inner faces along the centre line z = 0, inner Z = the extent of every cell between them that sees the floor; anchor = the inner rectangle's centre at the rim height",
+  "outlet": "section planes x = const every 2.5 mm from x 0.1 m inside the spout lane y 0.2..0.46, z -0.1..0.1 m: the first one cut as a single closed ring <= 0.15 m across (past the rotor housing / flange plates) = the spout root; anchor = the ring centre",
+  "panel": "front depth map (5 mm) in x 0.1..0.34, y 0.42..0.68 m: the most common 1 cm depth band = the control box face; anchor = its largest connected patch's centre on the face plane (mean depth)"
+ },
+ "texturePolicy": "Meshy maps kept channel for channel (base colour, packed metallic-roughness, normal), Lanczos downsize + JPEG: base 1024 px q85, metallic-roughness 512 px q85, normal 1024 px q90; no reprojection / retexture / repaint",
+ "textures": [
+  {
+   "slot": "baseColor",
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 215805,
+   "sha256": "8cae5a5c09c802883a637da7f15a046ce22f96925c7f924224866bfa30512ceb"
+  },
+  {
+   "slot": "metallicRoughness",
+   "size": [
+    512,
+    512
+   ],
+   "mime": "image/jpeg",
+   "bytes": 71369,
+   "sha256": "222e947a36819d89eff5e6496fb3637085352247364e139509b582339069c1a8"
+  },
+  {
+   "slot": "normal",
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 176964,
+   "sha256": "27330e5cf015c8c480523c2135e3b239aa85d1ee0e863c8d468a13c5c7d2cfac"
+  }
+ ],
+ "licence": "generated for this project under the existing provider accounts; no blanket licence or commercial clearance implied (assets/CREDITS.md)"
+}

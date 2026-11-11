@@ -408,6 +408,14 @@ Generated for this project from a Codex INITIAL concept image (the owned Codex C
 - The train's fuel cart is a composition of two existing models (`assets/models/p7-hand-truck-t25.glb` and `assets/models/reactor-waste-drum.glb`); nothing new was generated for it.
 <!-- END train-fuel-and-airtank-models -->
 
+<!-- BEGIN train-chipper-model (build-train-chipper.mjs) -->
+## Train chipper
+
+Generated for this project from one Codex INITIAL design image (the owned Codex CLI's built-in image_gen tool) turned into a model with Meshy T2.5 image-to-3D (smart topology, 2K PBR) through the Meshy MCP; the model keeps Meshy's own PBR maps (re-encoded only). Task studio-corpse-chipper-fuel-20261110-235304-01 under the user's chipper authorization (15 of up to 100 credits, 1 attempt). AI-generated asset: unapproved prototype, no licence or commercial clearance implied. The raw master, conditioning image and job ledger are kept outside Git.
+
+- `assets/models/train-chipper.glb` — the train's corpse woodchipper (feed hopper, rotor housing, motor, control box, spout and hose, twin collection tanks on a welded base frame) (Meshy task 01a1c7ea-aad4-744e-8734-a75af09b66ec); runtime derivative by `tools/asset-pipeline/props/build-train-chipper.mjs` (provenance: `assets/derivatives/train-chipper.json`).
+<!-- END train-chipper-model -->
+
 <!-- BEGIN train-fuel-audio-20261106 (fuel-build.mjs) -->
 ## Train fuel audio (engine stall, fuel pour, fuel cart rolling)
 Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the train-fuel
