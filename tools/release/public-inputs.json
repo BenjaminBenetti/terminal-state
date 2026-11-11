@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 69497,
-      "sha256": "ff42a4010808e7f6b8bd679e426ec4e35fab068736361b606c4ce1b5150ce934"
+      "bytes": 70523,
+      "sha256": "341b614ecce2191ff88df43a3adf4fab36da89671b85ad3dc43f897ffc037176"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -2749,6 +2749,11 @@
       "sha256": "50abde035753fad48aab8779a12817435178c1a5d720eecf4105c22a4d3dbdf9"
     },
     {
+      "path": "assets/derivatives/train-chipper.json",
+      "bytes": 6155,
+      "sha256": "b6377b944c7d93605d33a1e42911d3b0ee4b990f01b96de0d05fa7d76eeb74ab"
+    },
+    {
       "path": "assets/derivatives/train-fuel-can.json",
       "bytes": 5654,
       "sha256": "64c7f770c0e85edccfa2e3f6d0c5189b31e53cdb89c412237446bd61d6cd47ac"
@@ -5112,6 +5117,11 @@
       "path": "assets/models/tech-display-t25.glb",
       "bytes": 500576,
       "sha256": "014bc3ef3c6cbc59661b6d51f85f556afd608e33678a058a01ce8261b8e3208e"
+    },
+    {
+      "path": "assets/models/train-chipper.glb",
+      "bytes": 1316080,
+      "sha256": "e607cb8f8c6bc36ab503560967a8e4efbda30c8b47d59a32182e3ebe952df5d2"
     },
     {
       "path": "assets/models/train-fuel-can.glb",
