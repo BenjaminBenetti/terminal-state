@@ -2,8 +2,9 @@
 // (no animation mixer, no ragdoll simulation: world/corpses.ts stops both first with EnemyActor.beginRagdoll()).
 //  - 'lying' (the record's BODY_POSES rest pose): the END FRAME of the actor's own Death clip — every humanoid enemy derivative ends it
 //    supine on the floor with its root (the model origin) at floor height, and each asset's verification pins that lowest point at the
-//    floor (zombie-rigged.json Death finalPose.lowestPointPerRegionM; the Blightbelly / Siren / Strainer cpuSkinningFloor checks). So a body
-//    lying with its root on a floor is grounded — never floating, never sunk — whatever its look. Without a Death clip: a supine bind pose.
+//    floor (zombie-rigged.json Death finalPose.lowestPointPerRegionM; the Blightbelly / Siren / Strainer cpuSkinningFloor checks); the
+//    corpse system still measures each look's lowest skinned vertex once (restingLift: a garment may hang lower) and puts exactly that on
+//    the floor — never floating, never sunk. Without a Death clip: a supine bind pose.
 //  - 'carry' (a body over the shoulder): the pelvis face-down on the carrier's shoulder, the torso and arms hanging down the back, the
 //    thighs down the front (hip flexion ~75 deg, knees a little bent). Rotations are relative to the BIND pose (every bind-pose local rotation
 //    of the shared 18-joint rig is identity: bone frames are model-aligned, +Y up, +Z forward, +X the character's left), applied on top of
@@ -107,6 +108,29 @@ export function poseCarry(actor: PosedActor): void {
     if (r) b.quaternion.copy(l.q).multiply(Q.setFromEuler(E.set(r[0], r[1], r[2])));
   }
   actor.root.updateMatrixWorld(true);
+}
+
+/**
+ * The lift (unscaled model metres; + up) that puts the CURRENT pose's lowest skinned vertex exactly on the root's floor: CPU skinning of
+ * every `stride`-th bind-space vertex (three's SkinnedMesh.applyBoneTransform, the shader's maths) measured in the root's frame. The
+ * authored deaths end within millimetres of the floor; a flowing garment (the Siren's dress) may sink a few centimetres — this keeps
+ * every body grounded, never floating or sunk. Bounded to +-0.25 m.
+ */
+export function restingLift(root: THREE.Object3D, stride = 1): number {
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), v = new THREE.Vector3();
+  let lo = Infinity;
+  root.traverse(o => {
+    const m = o as THREE.SkinnedMesh;
+    if (!m.isSkinnedMesh || !m.visible) return;
+    const pos = m.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i += stride) {
+      v.fromBufferAttribute(pos, i);
+      m.applyBoneTransform(i, v);
+      lo = Math.min(lo, v.applyMatrix4(m.matrixWorld).applyMatrix4(inv).y);
+    }
+  });
+  return Number.isFinite(lo) ? Math.max(-0.25, Math.min(0.25, -lo)) : 0;
 }
 
 /** A bone's position in the root's own frame (unscaled by the root's transform: its matrix is undone). */

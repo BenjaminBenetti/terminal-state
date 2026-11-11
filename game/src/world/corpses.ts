@@ -43,7 +43,7 @@ import {cosplayModelKeysFor, lingerieModelKeysFor} from '../ai/spawnLook';
 import {BODIES, bodyId, copyBody, type BodyRecordJSON} from '../corpse/bodyRecord';
 import {CORPSE_CARRY_PARTICIPANT, STATION_BODIES_LANE, carriedBodyOf, heldRecord, stationBodiesOf, type CorpseCarryJSON} from '../corpse/bodyLanes';
 import type {BodyOffer, BodySink, CorpseSystemApi, HeldBody} from '../corpse/api';
-import {boneInRoot, bodyPoints, poseCarry, poseLying} from '../corpse/bodyPose';
+import {boneInRoot, bodyPoints, poseCarry, poseLying, restingLift} from '../corpse/bodyPose';
 import {corpseVolumes, type DamageZombie} from '../damage/system';
 import {raySphere, rayCapsule} from '../combat/hitscan';
 import {hashString, mulberry32} from '../core/rng';
@@ -565,11 +565,28 @@ export class CorpseSystem implements CorpseSystemApi {
     return true;
   }
 
-  /** Pose `b` lying with its root at (x, y, z) / yaw (world, a child of the scene) and record that pose. */
+  /** The lying pose's grounding lift of a body's look (unscaled m; measured once per look: restingLift). */
+  private lift(b: Body): number {
+    const key = `${b.rec.arch}|${b.rec.look ?? ''}|${b.actor.root.name}`;
+    let l = this.lifts.get(key);
+    if (l === undefined) {
+      const root = b.actor.root, parent = root.parent, pos = root.position.clone(), q = root.quaternion.clone();
+      root.position.set(0, 0, 0); root.quaternion.identity(); // (its own frame; the bones already lie)
+      if (parent) root.updateMatrixWorld(true);
+      l = restingLift(root);
+      root.position.copy(pos); root.quaternion.copy(q);
+      this.lifts.set(key, l);
+    }
+    return l;
+  }
+  private readonly lifts = new Map<string, number>();
+
+  /** Pose `b` lying with its root's floor at (x, y, z) / yaw (world, a child of the scene) and record that pose (the root: lifted). */
   private lieAt(b: Body, x: number, y: number, z: number, yaw: number, level: number): void {
     const root = b.actor.root, s = b.rec.scale ?? b.actor.scale;
     poseLying(b.actor);
     root.scale.setScalar(s);
+    y += this.lift(b) * s; // (its lowest vertex exactly on the floor)
     root.position.set(x, y, z);
     root.quaternion.setFromAxisAngle(UP, yaw);
     this.settle(b);
@@ -973,8 +990,8 @@ export class CorpseSystem implements CorpseSystemApi {
     else if (this.captured || this.riding.length) this.release();
     if (!this.hand && this.handRec && this.here && (this.retryT -= dt) <= 0) { this.retryT = 1; this.buildHeld(); } // (a model that arrived late)
     if (this.hand) this.followView();
-    const target = this.owner() ? 1 : 0;
-    this.holster = target > this.holster ? Math.min(1, this.holster + dt / CORPSE.holsterS) : Math.max(0, this.holster - dt / CORPSE.holsterS);
+    const step = dt / CORPSE.holsterS;
+    this.holster = this.owner() ? Math.min(1, this.holster + step) : Math.max(0, this.holster - step);
   }
 
   /** QA: a compact state report. */
