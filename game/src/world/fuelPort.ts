@@ -434,7 +434,7 @@ export class FuelPortSystem {
       const inBag = (g.inv.wornBag()?.bag ?? []).some(s => s?.itemId === FUEL.canItem);
       return refuse(inBag ? 'No fuel can at hand — the ones in your backpack need it set down' : 'No fuel can', 'no-can');
     }
-    if (g.player.climbing || g.consumeView?.busy || g.gasMask?.transitioning || g.gear?.readied) return refuse('Hands busy', 'busy');
+    if (g.player.climbing || g.consumeView?.busy || g.gasMask?.transitioning || g.gear?.readied || g.corpses?.carrying) return refuse('Hands busy', 'busy'); // (task corpse-chipper, lane CORPSE: + carrying a body)
     this.pour = {t: 0, total: FUEL_PORT.pourS, clears: g.input.clears, away: 0};
     (g.sfx as {fuelPour?: () => number}).fuelPour?.();
     this.showPour(true);

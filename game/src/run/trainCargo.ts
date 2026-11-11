@@ -14,8 +14,14 @@
 // (kind, variant, size, purpose), its integrity and the decor riding it, at its train-local pose. A station keeps the other half of the
 // ownership (STATION_PROPS_LANE): the layout props it lost (`gone`, never respawned) and the props left lying there (`here`, world poses).
 // A v1 record (items only) loads with no props.
+//
+// Task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): v3 adds the DEAD BODIES lying in the car (`bodies`: corpse/bodyRecord.ts
+// records at train-local poses, each identity once; world/corpses.ts is the live system, `liveBodies`). More than BODIES.maxAboard refuses
+// the departure (world/corpses.ts departBlock), never a cut. A v1 / v2 record loads with no bodies; the record always writes v3.
 
 import type {StackJSON} from '../items/inventory';
+import {BODIES, bodiesProblem, copyBody, type BodyRecordJSON} from '../corpse/bodyRecord';
+import {corpseFeedable} from '../ai/corpseTrait';
 
 /**
  * Limits (items / props; train-local metres; a station's lists) — input-safety bounds of the save format, never truncation points.
@@ -75,7 +81,7 @@ export interface CargoPropJSON {
   riders?: CargoRiderJSON[];
 }
 
-export interface TrainCargoJSON { v: 1 | 2; items: CargoItemJSON[]; props?: CargoPropJSON[] }
+export interface TrainCargoJSON { v: 1 | 2 | 3; items: CargoItemJSON[]; props?: CargoPropJSON[]; /** Task corpse-chipper (v3): the bodies aboard. */ bodies?: BodyRecordJSON[] }
 
 /** Task train-all-cargo: a station's half of the prop ownership (its section memory lane STATION_PROPS_LANE). */
 export const STATION_PROPS_LANE = 'train-cargo.props';
@@ -173,8 +179,8 @@ export function stationPropsProblem(v: unknown): string | null {
 export function cargoProblem(v: unknown): string | null {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return 'the train cargo must be an object';
   const o = v as Record<string, unknown>;
-  if (o.v !== 1 && o.v !== 2) return 'unsupported train cargo version';
-  for (const k of Object.keys(o)) if (k !== 'v' && k !== 'items' && !(k === 'props' && o.v === 2)) return `unexpected train cargo field '${k}'`;
+  if (o.v !== 1 && o.v !== 2 && o.v !== 3) return 'unsupported train cargo version';
+  for (const k of Object.keys(o)) if (k !== 'v' && k !== 'items' && !(k === 'props' && o.v >= 2) && !(k === 'bodies' && o.v === 3)) return `unexpected train cargo field '${k}'`;
   if (!Array.isArray(o.items) || o.items.length > CARGO.maxItems) return `train cargo must list at most ${CARGO.maxItems} items`;
   const ids = new Set<string>();
   for (const it of o.items) {
@@ -194,7 +200,8 @@ export function cargoProblem(v: unknown): string | null {
     const n = Math.hypot(q[0], q[1], q[2], q[3]);
     if (Math.abs(n - 1) > 1e-3) return 'a train cargo orientation must be a unit quaternion';
   }
-  if (o.v === 2) return propsProblem(o.props, {world: false, max: CARGO.maxProps}); // task train-all-cargo
+  if (o.v >= 2) { const pp = propsProblem(o.props, {world: false, max: CARGO.maxProps}); if (pp) return pp; } // task train-all-cargo
+  if (o.v === 3) return bodiesProblem(o.bodies, {world: false, max: BODIES.maxAboard, feedable: corpseFeedable}); // task corpse-chipper
   return null;
 }
 
@@ -211,6 +218,9 @@ export class TrainCargo {
   live: {cargo(): CargoItemJSON[]; restore(items: CargoItemJSON[]): void; add?(item: CargoItemJSON): void} | null = null;
   /** Task train-all-cargo: the live prop cargo (world/trainPropCargo.ts), like `live`. */
   liveProps: {props(): CargoPropJSON[]; restoreProps(props: CargoPropJSON[]): void} | null = null;
+  /** Task corpse-chipper: the bodies aboard (stored records) and the live corpse system (world/corpses.ts), like `liveProps`. */
+  private bodyRecs: BodyRecordJSON[] = [];
+  liveBodies: {bodies(): BodyRecordJSON[]; restoreBodies(bodies: BodyRecordJSON[]): void} | null = null;
 
   /** The items aboard (live when attached, else the stored records). Copies. */
   records(): CargoItemJSON[] {
@@ -241,30 +251,48 @@ export class TrainCargo {
     this.propRecs = props.map(copy);
   }
 
-  toJSON(): TrainCargoJSON {
-    return {v: 2, items: this.records(), props: this.props()};
+  /** Task corpse-chipper: the bodies aboard (live when attached, else the stored records). Copies. */
+  bodies(): BodyRecordJSON[] {
+    return (this.liveBodies ? this.liveBodies.bodies() : this.bodyRecs).map(copyBody);
   }
 
-  /** Exact load (absent / malformed: EMPTY — an older save; never invented items). A v1 record: its items, no props. */
+  setBodies(bodies: readonly BodyRecordJSON[]): void {
+    this.bodyRecs = bodies.map(copyBody);
+  }
+
+  toJSON(): TrainCargoJSON {
+    return {v: 3, items: this.records(), props: this.props(), bodies: this.bodies()};
+  }
+
+  /** Exact load (absent / malformed: EMPTY — an older save; never invented items). A v1 record: its items, no props; v1 / v2: no bodies. */
   load(d: unknown): void {
     const ok = d !== undefined && cargoProblem(d) === null;
     this.items = ok ? (d as TrainCargoJSON).items.map(copy) : [];
     this.propRecs = ok ? ((d as TrainCargoJSON).props ?? []).map(copy) : [];
+    this.bodyRecs = ok ? ((d as TrainCargoJSON).bodies ?? []).map(copyBody) : [];
     this.live?.restore(this.items.map(copy));
     this.liveProps?.restoreProps(this.propRecs.map(copy));
+    this.liveBodies?.restoreBodies(this.bodyRecs.map(copyBody));
   }
 
   reset(): void {
     this.items = [];
     this.propRecs = [];
+    this.bodyRecs = [];
     this.live?.restore([]);
     this.liveProps?.restoreProps([]);
+    this.liveBodies?.restoreBodies([]);
   }
 }
 
 /** Task train-all-cargo: the props listed in a raw (validated or not) cargo record — model prefetch for a save not yet installed. */
 export function cargoPropsOf(d: unknown): CargoPropJSON[] {
   return d !== undefined && cargoProblem(d) === null ? ((d as TrainCargoJSON).props ?? []).map(copy) : [];
+}
+
+/** Task corpse-chipper: the bodies listed in a raw (validated or not) cargo record — model prefetch for a save not yet installed. */
+export function cargoBodiesOf(d: unknown): BodyRecordJSON[] {
+  return d !== undefined && cargoProblem(d) === null ? ((d as TrainCargoJSON).bodies ?? []).map(copyBody) : [];
 }
 
 /** Task train-all-cargo: a station's prop record (absent / malformed: none — nothing hidden, nothing invented). */

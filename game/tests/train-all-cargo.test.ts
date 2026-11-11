@@ -203,7 +203,7 @@ describe('train prop cargo: records and validation', () => {
     expect(cargoProblem({v: 1, items: []})).toBeNull();
     expect(cargoProblem({v: 2, items: [], props: [rec('st-01:main#12')]})).toBeNull();
     expect(cargoProblem({v: 1, items: [], props: []})).toMatch(/unexpected train cargo field 'props'/);
-    expect(cargoProblem({v: 3, items: []})).toMatch(/version/);
+    expect(cargoProblem({v: 4, items: []})).toMatch(/version/); // (task corpse-chipper: v3 = + the bodies aboard, the current format)
     const bad: [Partial<CargoPropJSON> & Record<string, unknown>, RegExp][] = [
       [{id: 'chair'}, /identity/], [{kind: '1x'}, /kind/], [{variant: -1}, /variant/], [{w: 0}, /size w/], [{h: 99}, /size h/], [{x: 1e3}, /x out of range/],
       [{q: [0, 0, 0, 2]}, /quaternion/], [{q: [0, 0, 0.5, 0.5]}, /unit quaternion/], [{level: 0}, /no storey/], [{hp: 2}, /integrity/], [{riders: []}, /riders/], [{extra: 1} as never, /unexpected/],
@@ -228,7 +228,7 @@ describe('train prop cargo: records and validation', () => {
     const base = hs.file('arrival', 1) as any;
     const good = validateSaveFile(structuredClone(base));
     expect(good.ok, good.ok ? '' : (good as {error: string}).error).toBe(true);
-    expect(base.run.participants['player-train'].cargo.v).toBe(2);
+    expect(base.run.participants['player-train'].cargo.v).toBe(3); // (task corpse-chipper: written as v3 — + the bodies aboard)
     const refuse = (mut: (f: typeof base) => void, re: RegExp) => {
       const f = structuredClone(base);
       mut(f);
@@ -470,8 +470,8 @@ describe('train prop cargo: saves, refused and failed-back departures', () => {
     const I = SPEC.interior;
     const a = pick(w, ['rollingSuitcase', 'foldingChair', 'babyStroller', 'plasticStackChair', 'wetFloorSign']);
     pushIn(c, w, a, I.x0 + 2, 0.1, 1.0);
-    const rec = c.h.playerTrain.participant().save() as {cargo: {v: 2; props: CargoPropJSON[]}};
-    expect(rec.cargo.v).toBe(2);
+    const rec = c.h.playerTrain.participant().save() as {cargo: {v: 3; props: CargoPropJSON[]}};
+    expect(rec.cargo.v).toBe(3); // (task corpse-chipper: written as v3 — + the bodies aboard)
     expect(rec.cargo.props.map(r => r.id)).toEqual([`${sectionId(KA)}#${a.i}`]);
     leave(c);
     // a fresh game: Continue loads the record, then builds the station
