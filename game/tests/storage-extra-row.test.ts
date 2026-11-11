@@ -1,7 +1,7 @@
 // Task gameplay-feedback-20261111 (lane STORAGE; user: "Add one extra row to the player inventory, backpack inventory and train chest.
 // Keep their existing column counts unchanged. Make this real usable storage, not just a visual resize."):
 //  - the shapes: pockets POCKET_GRID 6 × 3 (12 -> 18; a chest rig still adds 4: 16 -> 22), a backpack's own slots BACKPACK_GRID 6 × 3
-//    (12 -> 18), the Lockbox LOCKBOX_GRID 10 × 5 (40 -> 50); the Skyways trunk keeps its 16; quick / gear / grenade / melee slots unchanged;
+//    (12 -> 18), the Lockbox LOCKBOX_GRID 10 × 5 (40 -> 50); another store on the Lockbox class keeps its own size; quick / gear / grenade / melee slots unchanged;
 //  - REAL storage: every inventory path reaches the new slots (add / pick up, take-all from a holder, set, drag-move / split / merge /
 //    swap, 1-5 assign, bag click / drag, Lockbox click / drag / stow, the 1337 drop's room check) and the capacity checks use the
 //    constants (full exactly at the new sizes);
@@ -41,7 +41,7 @@ const SRC = (p: string) => readFileSync(fileURLToPath(new URL(`../src/${p}`, imp
 const rigged = () => { const inv = new Inventory(); expect(inv.add(inv.makeStack('chest_rig', 1))).toBe(0); return inv; };
 
 describe('the shapes: one more row each, the same columns; nothing else resized', () => {
-  it('pockets 6 × 3 = 18 (+ the chest rig\'s 4 = 22), backpack 6 × 3 = 18, Lockbox 10 × 5 = 50; the trunk and the other slots unchanged', () => {
+  it('pockets 6 × 3 = 18 (+ the chest rig\'s 4 = 22), backpack 6 × 3 = 18, Lockbox 10 × 5 = 50; the other slots and stores unchanged', () => {
     expect([POCKET_GRID.columns, POCKET_GRID.rows, PACK_SIZE]).toEqual([6, 3, 18]);
     expect([BACKPACK_GRID.columns, BACKPACK_GRID.rows, BACKPACK_SLOTS]).toEqual([6, 3, 18]);
     expect([LOCKBOX_GRID.columns, LOCKBOX_GRID.rows, LOCKBOX_SLOTS]).toEqual([10, 5, 50]);
@@ -50,7 +50,7 @@ describe('the shapes: one more row each, the same columns; nothing else resized'
     expect([LEGACY_PACK_SIZE % POCKET_GRID.columns, LEGACY_BACKPACK_SLOTS % BACKPACK_GRID.columns, 40 % LOCKBOX_GRID.columns]).toEqual([0, 0, 0]);
     expect(gearSpec('chest_rig')!.pockets).toBe(4);
     expect(gearSpec('backpack')!.bagSlots).toBe(BACKPACK_SLOTS);
-    expect(TRUNK_SLOTS).toBe(16); // the Skyways trunk shares the store class with its own size: unchanged
+    expect(TRUNK_SLOTS).toBe(16); // (a store sharing the class keeps its own size)
     expect([HOTBAR_SIZE, THROW_SLOTS, MELEE_SLOTS, GEAR_SLOTS.length]).toEqual([5, 1, 1, 6]);
     expect(LOCKBOX_VIEW).toMatchObject({slots: LOCKBOX_SLOTS, columns: 10});
     const inv = new Inventory();

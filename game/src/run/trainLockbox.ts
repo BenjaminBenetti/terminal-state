@@ -22,7 +22,7 @@ import {WEAPONS} from '../weapons/weapons';
 
 /**
  * The Lockbox's shape (its view lays the slots out in LOCKBOX_GRID.columns). Task gameplay-feedback-20261111 (lane STORAGE): one more
- * row, the same columns — 10 × 4 -> 10 × 5. Change the shape HERE only (the Skyways trunk has its own TRUNK_SLOTS).
+ * row, the same columns — 10 × 4 -> 10 × 5. Change the shape HERE only (another store on this class passes its own size).
  */
 export const LOCKBOX_GRID: Readonly<{columns: number; rows: number}> = Object.freeze({columns: 10, rows: 5});
 export const LOCKBOX_SLOTS = LOCKBOX_GRID.columns * LOCKBOX_GRID.rows;
