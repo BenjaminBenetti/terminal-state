@@ -507,18 +507,28 @@ export class CorpseSystem implements CorpseSystemApi {
     return true;
   }
 
-  /** Hand the body to `sink` (one call: true = the sink owns record + object now; the hands are free). */
+  /**
+   * Hand the body to `sink` (one call: true = the sink owns record + object now; the hands are free). The object is handed over as a
+   * body at rest — the 'lying' pose (straight, head to feet: what buildBody gives a sink too), its meshes' own culling / shadow flags with
+   * a cull sphere round the whole body (a sink moves only its root) — still under the carry frame: the sink re-parents it in take(). After
+   * a true take() nothing here touches the object again (no frame update, re-parenting or disposal: the sink calls disposeBody).
+   */
   private toSink(sink: BodySink): boolean {
     const b = this.hand;
-    const held = this.held();
-    if (!b || !held) return false;
+    if (!b) return false;
+    this.restoreFlags(b);
+    poseLying(b.actor);
+    const hips = b.actor.root.getObjectByName('Hips');
+    if (hips) b.actor.setCullSphere(hips.getWorldPosition(V), 1.9 * (b.rec.scale ?? b.actor.scale));
+    const held: HeldBody = {record: heldRecord(b.rec), object: b.actor.root};
     let took = false;
     try { took = sink.take(held); } catch (err) { console.warn('corpses: a sink take failed', err); }
-    if (!took) { this.host.sfx?.denied?.(); this.counts.refused++; return false; }
-    this.restoreFlags(b);
-    // (the sink re-poses it: its skinned bounds would not follow — it stays unculled, as carried)
-    b.actor.root.traverse(o => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) o.frustumCulled = false; });
-    if (b.actor.root.parent === this.carry) this.host.scene.attach(b.actor.root); // (out of the hands; the sink places it)
+    if (!took) { // (it stays in the hands, in the carry pose)
+      if (this.hand === b) { this.carryPose(b); this.keepFlags(b); }
+      this.host.sfx?.denied?.();
+      this.counts.refused++;
+      return false;
+    }
     this.hand = null;
     this.handRec = null;
     this.counts.sunk++;

@@ -3,15 +3,20 @@
 // anchors the runtime uses (world/chipper.ts). Pure data.
 //
 // MODEL FRAME (the runtime GLB, metres at runtime size): origin at the bottom centre of the base frame, Y up; +X = the collection-tank
-// end, -X = the feed-hopper end; +Z = the FRONT (the face with the rotor housing's inspection grille, the design's side view). The car
-// mounts it with its front toward the aisle.
-// ANCHORS (model frame): measured from the cooked mesh by the cook (assets/trainChipper.generated.ts replaces these estimates when the
-// cooked model lands; the runtime reads CHIPPER_ANCHORS only).
+// end, -X = the feed-hopper end; +Z = the FRONT (the face with the rotor housing's inspection grille and the control box, the design's
+// side view). The car mounts it with its front toward the aisle.
+// SIZE / ANCHORS (model frame): measured on the cooked mesh by the cook (assets/trainChipper.generated.ts; methods in the provenance
+// assets/derivatives/train-chipper.json). The runtime reads CHIPPER_SIZE / CHIPPER_ANCHORS only.
+// Hopper shape (TRAIN_CHIPPER_MEASURED.hopper): a box with a floor at ~0.47 m, tall end walls, LOW side lips (~0.53 m, front and back)
+// and a top frame at the rim height (~0.78 m: the end-wall peaks and two rails across the box; the rubber flap curtain hangs from the
+// front rail). The spout leaves the rotor housing's +X side on the machine's middle plane (z ~0), under the control box.
 
-export const CHIPPER_MODEL = {key: 'train-chipper', url: 'assets/models/train-chipper.glb'} as const;
+import {TRAIN_CHIPPER, TRAIN_CHIPPER_ANCHORS, TRAIN_CHIPPER_SIZE} from '../assets/trainChipper.generated';
 
-/** Runtime size target (m): length along X, height, depth along Z (the car's bay pocket: <= 1.40 long, <= 0.64 deep, below the sill). */
-export const CHIPPER_SIZE = {l: 1.36, h: 0.83, d: 0.62} as const;
+export const CHIPPER_MODEL = {key: 'train-chipper', url: 'assets/models/train-chipper.glb', bytes: TRAIN_CHIPPER.bytes} as const;
+
+/** Runtime size (m): length along X, height, depth along Z (the car's bay pocket: <= 1.40 long, <= 0.64 deep, below the sill). */
+export const CHIPPER_SIZE: {readonly l: number; readonly h: number; readonly d: number} = TRAIN_CHIPPER_SIZE;
 
 export interface ChipperAnchors {
   /** Centre of the hopper's open mouth (at the rim height) — where a fed body goes in. */
@@ -24,10 +29,5 @@ export interface ChipperAnchors {
   panel: {x: number; y: number; z: number};
 }
 
-/** Estimates until the cooked model's measured anchors land. */
-export const CHIPPER_ANCHORS: ChipperAnchors = {
-  hopper: {x: -0.47, y: 0.78, z: 0},
-  hopperMouth: {x: 0.36, z: 0.4},
-  outlet: {x: 0.07, y: 0.35, z: 0.2},
-  panel: {x: 0.2, y: 0.6, z: 0.24},
-};
+/** Measured on the cooked model (assets/trainChipper.generated.ts). */
+export const CHIPPER_ANCHORS: ChipperAnchors = TRAIN_CHIPPER_ANCHORS;

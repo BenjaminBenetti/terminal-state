@@ -189,6 +189,7 @@ import {installRidePortals, type RidePortalRuntime} from './world/ridePortalRunt
 import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // task train-loose-cargo: every loose item / bag aboard travels with the train
 import {carriedModelKeys, installTrainPropCargo, type TrainPropCargo} from './world/trainPropCargo'; // task train-all-cargo: every movable prop aboard travels too
 import {installCorpses, type CorpseSystem} from './world/corpses'; // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): carried dead bodies
+import {installChipper, type ChipperSystem} from './world/chipper'; // task corpse-chipper (lane CHIPPER): the woodchipper fixed in the train
 import type {PropPlacement} from './gen/props';
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
@@ -411,6 +412,8 @@ export class Game {
   trainPropCargo!: TrainPropCargo;
   /** Task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): dead bodies picked up / carried / put down / aboard (world/corpses.ts). */
   corpses!: CorpseSystem;
+  /** Task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): the woodchipper fixed in the train (world/chipper.ts): feed dead bodies, fuel. */
+  readonly chipper: ChipperSystem;
   /** Task studio-survivor-market-20261108-005807-01 (lane TRADE): market trade (market/trade/tradeSystem.ts); since the rework Rail Ties are a physical item. */
   trade!: TradeSystem;
   /** Task studio-weapon-runtime-fix-20261110-022206-01: the delivery of the new weapons' lazily loaded models (world/weaponVarietyDelivery.ts). */
@@ -805,6 +808,10 @@ export class Game {
     // E / prompt while carrying go first (unshift), the pickup's after every lane's; the train chipper registers its sink (addSink)
     this.corpses = installCorpses(this, {enemyIndex: z => this.enemyIndex.get(z), forgetEnemy: z => { this.enemyIndex.delete(z); }, cancelUse: r => this.cancelUse(r), targets: () => ({pickup: this.currentTarget, container: this.containerTarget})});
     hookName('corpses');
+    // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): after the train, ride and cargo (its section build attaches to the car's
+    // view; its teardown keeps a riding car's machine) — the corpse sink, the grind / transfer / blood / noise, the look-at line, warm pool 'train-chipper'
+    this.chipper = installChipper(this);
+    hookName('chipper');
     this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionModelKeys.push(skywaysKitchenModelKeysFor); // task studio-skyways-level-20261106-054448 (lane FOOD): the ramen restaurant's skyways-* models
     this.sectionModelKeys.push(skywaysAddonModelKeysFor); // task studio-skyways-level-20261106-054448 (lane ADDON): the add-on's skyways-* models

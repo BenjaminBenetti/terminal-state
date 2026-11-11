@@ -23,6 +23,7 @@ import {CLIP_BYTES_SKYWAYS_DESTINATIONS, CLIP_GAPS_SKYWAYS_DESTINATIONS, CLIP_MA
 import {CLIP_BYTES_HEAD_HIT, CLIP_GAPS_HEAD_HIT, CLIP_MANIFEST_HEAD_HIT} from '../src/audio/manifest.headHit.generated'; // task studio-general-armor-20261107-231448-01: the head-hit skull crack
 import {CLIP_BYTES_MARKET_BAR, CLIP_GAPS_MARKET_BAR, CLIP_MANIFEST_MARKET_BAR} from '../src/audio/manifest.marketBar.generated'; // task studio-market-bar-20261108-225231-01 (lane AUDIO): the market set
 import {CLIP_BYTES_GUN_VARIETY, CLIP_GAPS_GUN_VARIETY, CLIP_MANIFEST_GUN_VARIETY} from '../src/audio/manifest.gunVariety.generated'; // task studio-weapon-soundlab-audio-20261110-063407-01: the new guns' own shots / reloads
+import {CLIP_BYTES_CHIPPER, CLIP_GAPS_CHIPPER, CLIP_MANIFEST_CHIPPER} from '../src/audio/manifest.chipper.generated'; // task studio-corpse-chipper-fuel-20261110-235304-01 (lane AUDIO): the train chipper set
 
 // Iteration 06 (Lane D): the runtime bank = iteration-05 manifest + the iteration-06 breaking cues.
 // Iteration 07 (Lane K): + shot item / chunk / light prop landing cues (i07k).
@@ -30,9 +31,9 @@ import {CLIP_BYTES_GUN_VARIETY, CLIP_GAPS_GUN_VARIETY, CLIP_MANIFEST_GUN_VARIETY
 // Iteration 11: + the dedicated pistol shot. Iteration 12 (AUDIO): + battery insert, flare ignite / burn loop / out, flashlight flicker.
 // Task track1-siren-blightbelly-20261031 (lane AUDIO): + Siren hum / scream, Blightbelly burst / gas hiss (t1).
 // Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO): + the Strainer's wet footfalls / swing / contact / squish.
-const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT, ...CLIP_MANIFEST_MARKET_BAR, ...CLIP_MANIFEST_GUN_VARIETY};
-const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q, ...CLIP_GAPS_I11, ...CLIP_GAPS_I12, ...CLIP_GAPS_COUGH, ...CLIP_GAPS_T1, ...CLIP_GAPS_STRAINER, ...CLIP_GAPS_REACTOR, ...CLIP_GAPS_REACTOR_STARTUP, ...CLIP_GAPS_REACTOR_ENDING, ...CLIP_GAPS_FUEL, ...CLIP_GAPS_SKYWAYS_CAR, ...CLIP_GAPS_SKYWAYS_DESTINATIONS, ...CLIP_GAPS_HEAD_HIT, ...CLIP_GAPS_MARKET_BAR, ...CLIP_GAPS_GUN_VARIETY];
-const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q + CLIP_BYTES_I11 + CLIP_BYTES_I12 + CLIP_BYTES_COUGH + CLIP_BYTES_T1 + CLIP_BYTES_STRAINER + CLIP_BYTES_REACTOR + CLIP_BYTES_REACTOR_STARTUP + CLIP_BYTES_REACTOR_ENDING + CLIP_BYTES_FUEL + CLIP_BYTES_SKYWAYS_CAR + CLIP_BYTES_SKYWAYS_DESTINATIONS + CLIP_BYTES_HEAD_HIT + CLIP_BYTES_MARKET_BAR + CLIP_BYTES_GUN_VARIETY;
+const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT, ...CLIP_MANIFEST_MARKET_BAR, ...CLIP_MANIFEST_GUN_VARIETY, ...CLIP_MANIFEST_CHIPPER};
+const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q, ...CLIP_GAPS_I11, ...CLIP_GAPS_I12, ...CLIP_GAPS_COUGH, ...CLIP_GAPS_T1, ...CLIP_GAPS_STRAINER, ...CLIP_GAPS_REACTOR, ...CLIP_GAPS_REACTOR_STARTUP, ...CLIP_GAPS_REACTOR_ENDING, ...CLIP_GAPS_FUEL, ...CLIP_GAPS_SKYWAYS_CAR, ...CLIP_GAPS_SKYWAYS_DESTINATIONS, ...CLIP_GAPS_HEAD_HIT, ...CLIP_GAPS_MARKET_BAR, ...CLIP_GAPS_GUN_VARIETY, ...CLIP_GAPS_CHIPPER];
+const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q + CLIP_BYTES_I11 + CLIP_BYTES_I12 + CLIP_BYTES_COUGH + CLIP_BYTES_T1 + CLIP_BYTES_STRAINER + CLIP_BYTES_REACTOR + CLIP_BYTES_REACTOR_STARTUP + CLIP_BYTES_REACTOR_ENDING + CLIP_BYTES_FUEL + CLIP_BYTES_SKYWAYS_CAR + CLIP_BYTES_SKYWAYS_DESTINATIONS + CLIP_BYTES_HEAD_HIT + CLIP_BYTES_MARKET_BAR + CLIP_BYTES_GUN_VARIETY + CLIP_BYTES_CHIPPER;
 import {Sfx} from '../src/audio/sfx';
 import {FakeCtx, fakeBank, fakeBuffer} from './helpers/fakeAudio';
 
@@ -98,7 +99,7 @@ describe('Sound Lab clip manifest + bundled assets', () => {
   });
 
   it('provenance names a raw Sound Lab source (prompt, seed, hash) for every bundled clip', () => {
-    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json', 'audio-iteration11-pistol.json', 'audio-iteration12.json', 'audio-cough.json', 'audio-track1.json', 'audio-strainer.json', 'audio-reactor.json', 'audio-reactor-startup.json', 'audio-reactor-ending.json', 'audio-fuel.json', 'audio-skyways-car.json', 'audio-skyways-destinations.json', 'audio-head-hit.json', 'audio-market-bar.json', 'audio-gun-variety.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
+    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json', 'audio-iteration11-pistol.json', 'audio-iteration12.json', 'audio-cough.json', 'audio-track1.json', 'audio-strainer.json', 'audio-reactor.json', 'audio-reactor-startup.json', 'audio-reactor-ending.json', 'audio-fuel.json', 'audio-skyways-car.json', 'audio-skyways-destinations.json', 'audio-head-hit.json', 'audio-market-bar.json', 'audio-gun-variety.json', 'audio-chipper.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
     for (const prov of provs) {
       expect(prov.license.gameReady).toBe(false);
       expect(prov.license.status).toMatch(/Conditional prototype/);
@@ -108,7 +109,8 @@ describe('Sound Lab clip manifest + bundled assets', () => {
     // task studio-market-bar-20261108-225231-01 (lane AUDIO): the market set's public record names its raw takes by hashes only (the lane brief:
     // no prompts / paths) — the prompt's SHA-256 instead of its text, no raw path; its builder verified each raw against the runner sidecar
     // (+ task studio-weapon-soundlab-audio-20261110-063407-01: the weapon-variety gun set's record is hash-only too — its brief: the prompts stay private)
-    const hashOnly = new Set<string>(provs.filter(p => p.asset === 'audio-market-bar-20261108' || p.asset === 'audio-gun-variety-20261110').flatMap(p => p.derivatives.map((d: {url: string}) => d.url)));
+    // (+ task studio-corpse-chipper-fuel-20261110-235304-01, lane AUDIO: the train chipper set's record is hash-only too)
+    const hashOnly = new Set<string>(provs.filter(p => p.asset === 'audio-market-bar-20261108' || p.asset === 'audio-gun-variety-20261110' || p.asset === 'audio-chipper-20261111').flatMap(p => p.derivatives.map((d: {url: string}) => d.url)));
     const rawChecked = new Set<string>();
     for (const refs of Object.values(CLIP_MANIFEST)) {
       for (const r of refs) {
@@ -199,10 +201,10 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       flareIgnite: () => sfx.flareIgnite(2, 1.2, 2), flareOut: () => sfx.flareOut(6, 0.1, 6),
       flareBurnStart: () => { const h = sfx.flareBurnStart(6, 0.1, 6); h.setPos(6.5, 0.1, 6); h.stop(); },
       // task reactor-build-20261101 (primary): the Reactor's machine one-shots + loops
-      reactorCue: () => { for (const c of ['reactorGeneratorStart', 'reactorBreaker', 'reactorFuse', 'reactorValve', 'reactorPump', 'reactorStartup', 'reactorSurge', 'reactorOnline', 'reactorRodStop', 'reactorStage', 'reactorBeam'] as const) { ctx.currentTime += 1; sfx.reactorCue(c, 4, 1, 4, {gain: 0.8, rate: 0.9, delay: 0.1, ref: 8, maxDist: 120, pri: 2, filter: c === 'reactorBeam' ? {type: 'highpass', freq: 120} : undefined}); } },
+      reactorCue: () => { for (const c of ['reactorGeneratorStart', 'reactorBreaker', 'reactorFuse', 'reactorValve', 'reactorPump', 'reactorStartup', 'reactorSurge', 'reactorOnline', 'reactorRodStop', 'reactorStage', 'reactorBeam', 'chipperFeed', 'chipperStart', 'chipperStop'] as const) { ctx.currentTime += 1; sfx.reactorCue(c, 4, 1, 4, {gain: 0.8, rate: 0.9, delay: 0.1, ref: 8, maxDist: 120, pri: 2, filter: c === 'reactorBeam' ? {type: 'highpass', freq: 120} : undefined}); } },
       // task reactor-surface-ending-20261102 (lane AUDIO): the surface rain bed (one looping channel, created on first use)
       rainBed: () => { sfx.rainBed(1, 0); sfx.rainBed(0.5, 1); },
-      reactorLoop: () => { for (const c of ['reactorGeneratorLoop', 'reactorFanLoop', 'reactorHum', 'reactorBed', 'reactorRodLoop', 'reactorBeacon'] as const) { const h = sfx.reactorLoop(c, 5, 1, 5, {level: 0.5, rate: 0.9}); h?.setPos(5.5, 1, 5); h?.setLevel(1, 0.2); h?.setRate(1.05, 0.2); h?.stop(); } },
+      reactorLoop: () => { for (const c of ['reactorGeneratorLoop', 'reactorFanLoop', 'reactorHum', 'reactorBed', 'reactorRodLoop', 'reactorBeacon', 'chipperMotor', 'chipperGrind'] as const) { const h = sfx.reactorLoop(c, 5, 1, 5, {level: 0.5, rate: 0.9}); h?.setPos(5.5, 1, 5); h?.setLevel(1, 0.2); h?.setRate(1.05, 0.2); h?.stop(); } },
       breakage: () => { for (const c of ['breakGlass', 'breakWood', 'debrisFall', 'fleshTear'] as const) { ctx.currentTime += 1; sfx.breakage(c, 3, 1, 3, 0.8); } },
       casing: () => { ctx.currentTime += 1; sfx.casing(1, 0, 1, 3, 'rifle'); sfx.casing(1, 0, 1, 3, 'shell'); }, bodyFall: () => { ctx.currentTime += 1; sfx.bodyFall(1, 0, 1, 0.9); },
       physImpact: () => { for (const f of ['can', 'light', 'heavy', 'prop', 'cardboard', 'flesh', 'stone', 'wood', 'glass', 'metal'] as const) { ctx.currentTime += 1; sfx.physImpact(2, 0.1, 2, 3, f); } },

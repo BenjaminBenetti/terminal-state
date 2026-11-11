@@ -10,9 +10,13 @@ import type {BodyRecordJSON} from './bodyRecord';
 
 /** The body in the player's hands. */
 export interface HeldBody {
-  /** Identity + look; the pose fields are its last resting pose (the sink re-poses it). */
+  /** Identity + look (+ size); the pose fields are zero — a carried body has no resting pose (the sink sets its own). */
   readonly record: BodyRecordJSON;
-  /** The body's real model (its actor's root: skinned meshes, wardrobe, wounds), in the carry pose, in the scene. */
+  /**
+   * The body's real model: its actor's ROOT (skinned meshes, wardrobe, wounds; bones by name: 'Hips', 'Head', 'L_Foot' …), in the scene
+   * under the corpse system's carry frame. offer(): in the carry pose; take(): at rest in the 'lying' pose (straight, culled round the
+   * whole body), still under the carry frame — the sink re-parents it; after a true take() the corpse system never touches it again.
+   */
   readonly object: THREE.Object3D;
 }
 

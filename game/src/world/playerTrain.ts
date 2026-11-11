@@ -58,11 +58,13 @@ import {TRAIN_GLASS, TRAIN_VIEW, TrainMaterials, buildTrainView, glassSheet, jam
 import {rayBox, towerCue, type P3} from './towerShared';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {PLAYER_TRAIN_MODELS} from '../assets/playerTrain.generated';
+import {CHIPPER_MODEL} from './chipperSpec'; // task corpse-chipper (lane ASSET): the chipper joins the car's model catalogue
 import {assetUrl} from '../assets/loader';
 import {requestSurfaceAnisotropy, type SurfaceRole} from '../render/anisotropy';
 import {highlightMaterial, highlightPulse} from './highlight';
 import {LOCKBOX_MODEL_KEY, LockboxLid, buildLockboxView, lockboxFootprint, poseLid, type LockboxView} from './trainLockbox';
 import {CONSOLE_PROMPT, consoleLocalRect, type ConsoleRect} from './trainConsole'; // task campaign-foundation (lane RIDE): the driving console
+import {chipperFootprint, chipperPlacement} from './chipperPlace'; // task corpse-chipper: the train's woodchipper (a fixed component)
 
 /**
  * Task studio-alpha-campaign-foundation-20261102-230708-01 (lane RIDE): the link a MOVING car (world/trainRide.ts) gives the runtime.
@@ -85,9 +87,10 @@ export interface TrainRideLink {
 // every level, fetched behind the loading screen of the first level with a train, kept while levels place one); the Codex interior
 // textures through a module cache (shared by every level, never level-scoped).
 
-/** The prop library file map of the train models (game.ts propModels catalogue). */
+/** The prop library file map of the train models (game.ts propModels catalogue). Task corpse-chipper (lane ASSET): + the chipper fixture
+ *  (world/chipperSpec.ts CHIPPER_MODEL, its own cook: assets/trainChipper.generated.ts) — fetched with the car's other models. */
 export const PLAYER_TRAIN_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> =
-  Object.fromEntries(Object.values(PLAYER_TRAIN_MODELS).map(m => [m.key, {url: m.url, bytes: m.bytes}]));
+  Object.fromEntries([...Object.values(PLAYER_TRAIN_MODELS), CHIPPER_MODEL].map(m => [m.key, {url: m.url, bytes: m.bytes}]));
 
 /** Game.sectionModelKeys: the train models for a level that parks the car (playerTrainPlacement is pure and memoized per layout). */
 export function playerTrainModelKeys(layout: StationLayout): string[] {
@@ -329,6 +332,9 @@ export function trainColliders(spec: PlayerTrainSpec, p: Pose, levels: Levels | 
   // task train-lockbox: the Lockbox — a solid, anchored box (player / enemy collision, bullets, ragdoll statics) to its closed top
   const lb = spec.lockbox;
   if (lb) { const fp = lockboxFootprint(lb); statics.push(propBox(p, area, fp.x0, fp.x1, fp.z0, fp.z1, bedY, floorY + lb.height - bedY)); }
+  // task corpse-chipper: the woodchipper fixed in the +Z bay between the middle and front doors (world/chipperPlace.ts) — solid to its top
+  const ch = chipperPlacement(spec);
+  if (ch) { const fp = chipperFootprint(ch); statics.push(propBox(p, area, fp.x0, fp.x1, fp.z0, fp.z1, bedY, floorY + ch.height - bedY)); }
   statics.push(propBox(p, area, -L2, L2, -out, out, bedY, floorY - bedY)); // underframe: the floor for bullets, the body for the bed
   shoot.push(...statics.slice(wallsAndEnds), ...glass); // partitions, desk, underframe as they are; the window glass
   // --- overhead (layout.props only) ---
