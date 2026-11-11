@@ -4,7 +4,7 @@
 //    colliders / DynamicVolume stay where the car was parked, so the ride steps the player against its own small model of the car
 //    interior, built once from PLAYER_TRAIN_SPEC: a Grid (0.5 m cells, floor = spec.floorY, ceiling = spec.ceilingY, the partition
 //    doorways' heads lower) wrapped as a one-level Levels, and exact prop boxes for the side walls (the closed side doors ARE wall),
-//    end walls, the cab partition and the rear partition with their open doorways, the console and the Lockbox. Player.update runs
+//    end walls, the cab partition and the rear partition with their open doorways, the console, the Lockbox and the chipper. Player.update runs
 //    unchanged against it (same speeds, stance, crouch headroom, jump / landing; no ladders; the floor never drops), so ride mode
 //    reuses player.ts' logic rather than re-implementing it. The STEP frame = train-local + (RIDE_FRAME.ox, RIDE_FRAME.oz) (grid
 //    indices are non-negative); y is train-local (rail top = 0, the floor at spec.floorY).
@@ -22,6 +22,7 @@ import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from './playerTrainSpec';
 import {TRAIN_VIEW, partitionsOf} from './playerTrainView';
 import {lockboxFootprint} from './trainLockbox';
 import {consoleLocalRect, type ConsoleRect} from './trainConsole';
+import {chipperFootprint, chipperPlacement} from './chipperPlace';
 
 export interface P3 { x: number; y: number; z: number }
 
@@ -36,7 +37,7 @@ export interface RideLocalModel {
   /** The collision boxes (step frame; grounded below the floor, taller than the ceiling: solid columns). */
   props: PropIndex;
   boxes: PropPlacement[];
-  /** Named boxes (tests / QA): side walls, end walls, partitions, console, lockbox. */
+  /** Named boxes (tests / QA): side walls, end walls, partitions, console, lockbox, chipper. */
   named: Record<string, PropPlacement>;
   /** The console box used (train-local). */
   console: ConsoleRect;
@@ -104,6 +105,8 @@ export function buildRideLocalModel(spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC, c
   const cr = consoleLocalRect(spec, consoleRect);
   named.console = box(cr.x0, cr.x1, cr.z0, cr.z1, H);
   if (spec.lockbox) { const fp = lockboxFootprint(spec.lockbox); named.lockbox = box(fp.x0, fp.x1, fp.z0, fp.z1, H); }
+  const ch = chipperPlacement(spec); // task corpse-chipper: the woodchipper (world/chipperPlace.ts)
+  if (ch) { const fp = chipperFootprint(ch); named.chipper = box(fp.x0, fp.x1, fp.z0, fp.z1, H); }
   const boxes = Object.values(named);
   const levels = new Levels([{id: 0, role: 'main', grid, baseY: 0}], [], []);
   return {spec, levels, grid, props: new PropIndex(levels, boxes), boxes, named, console: cr};

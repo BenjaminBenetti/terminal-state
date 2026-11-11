@@ -63,6 +63,7 @@ import {requestSurfaceAnisotropy, type SurfaceRole} from '../render/anisotropy';
 import {highlightMaterial, highlightPulse} from './highlight';
 import {LOCKBOX_MODEL_KEY, LockboxLid, buildLockboxView, lockboxFootprint, poseLid, type LockboxView} from './trainLockbox';
 import {CONSOLE_PROMPT, consoleLocalRect, type ConsoleRect} from './trainConsole'; // task campaign-foundation (lane RIDE): the driving console
+import {chipperFootprint, chipperPlacement} from './chipperPlace'; // task corpse-chipper: the train's woodchipper (a fixed component)
 
 /**
  * Task studio-alpha-campaign-foundation-20261102-230708-01 (lane RIDE): the link a MOVING car (world/trainRide.ts) gives the runtime.
@@ -329,6 +330,9 @@ export function trainColliders(spec: PlayerTrainSpec, p: Pose, levels: Levels | 
   // task train-lockbox: the Lockbox — a solid, anchored box (player / enemy collision, bullets, ragdoll statics) to its closed top
   const lb = spec.lockbox;
   if (lb) { const fp = lockboxFootprint(lb); statics.push(propBox(p, area, fp.x0, fp.x1, fp.z0, fp.z1, bedY, floorY + lb.height - bedY)); }
+  // task corpse-chipper: the woodchipper fixed in the +Z bay between the middle and front doors (world/chipperPlace.ts) — solid to its top
+  const ch = chipperPlacement(spec);
+  if (ch) { const fp = chipperFootprint(ch); statics.push(propBox(p, area, fp.x0, fp.x1, fp.z0, fp.z1, bedY, floorY + ch.height - bedY)); }
   statics.push(propBox(p, area, -L2, L2, -out, out, bedY, floorY - bedY)); // underframe: the floor for bullets, the body for the bed
   shoot.push(...statics.slice(wallsAndEnds), ...glass); // partitions, desk, underframe as they are; the window glass
   // --- overhead (layout.props only) ---
