@@ -126,7 +126,7 @@ describe('Skyways outfitter: THE REAL BACKPACK (no fake display packs)', () => {
     const store = new MemoryBagStore();
     const s = shell(h.layout, store);
     build(s);
-    // generated backpack finds lie as bags: this one is `found:<its layout pickup index>`, an EMPTY 12-slot backpack, at its display pose
+    // generated backpack finds lie as bags: this one is `found:<its layout pickup index>`, an EMPTY BACKPACK_SLOTS backpack, at its display pose
     expect(s.g.pickups.list.filter(p => p.stack.itemId === 'backpack')).toHaveLength(0);
     expect(s.sys.bags).toHaveLength(1);
     const bag = s.sys.bags[0];

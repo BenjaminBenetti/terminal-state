@@ -747,6 +747,24 @@ cartons 38 %, totes 42 %, dressers 48 %, tall / low cabinets 58 % / 51 %, desks 
 drawers 27 %, staff lockers 37 %, kitchenettes 30 %, tool chests 22 %, pill drawers 23 % (SHOPS' first fill: 17 % overall; before it
 ~5 %). What the fill puts inside per run: materials 84 units, dressings 11, food 6, drink 4, torch cells 6, flares 2.5.
 
+### Station fuel and Mall ammo (check, 2026-11-11)
+
+<!-- Task gameplay-feedback-20261111 (lane FUEL-LOOT): "does fuel displace too much ammo in Mall loot?" -->
+
+Not confirmed; nothing was changed. The station fuel cans are ADDED lots (`gen/fuelHolders.ts` free spots +
+`ContainerManager.addLots`). No rolled lot moves or vanishes, ammo included; only the additive base salvage lot yields to a can. The
+fuel plan is the same per station on every level (`fuel/fuel.ts` `stationFuelPlan`: 18.2 units, 17.4 cans a station on average).
+Measured on 6 Mall seeds (11 / 222 / 3333 / 44444 / 5150 / 9090) with 10 station plans each:
+
+- ammo per Mall run: ~189 rounds in holders (34.8 lots) + ~129 rounds on the floor (7.7 boxes) = ~318. The pre-fuel census above
+  gives ~313 (4.73 per 100 m² x ~6,620 m²).
+- 0 rolled lots changed by the fuel cans, on 14 layouts of four levels.
+- placed cans that sit in an ammo-capable holder: Mall 0.10, Skyways 0.11, Subway 0.46, Office 0.43. Beside rolled ammo: Mall 0.045.
+  In a gun shop: Mall 0.035.
+
+`tests/mall-fuel-ammo.test.ts` guards additivity and the small share. If the Mall still reads ammo-poor, the lever is the Mall's ammo,
+not its fuel: its ammo per 100 m² is 0.9x the Office's (table above).
+
 
 ## The Reactor (`reactor`)
 
@@ -797,6 +815,32 @@ personal (+ its kitchen / pantry / mess food), the services storey service and m
 storey service and crew, the core storey technical / records. Loot QUANTITY matches the first Bunker (~414 holders per level vs ~400;
 `tests/bunker-v2-level.test.ts` keeps it within -12 % / +15 %) and food holders never exceed it (36 vs 40 per level, before the shared
 natural-food half); no new tables, no literal item lists.
+
+**Layout version 3** (task gameplay-feedback-20261111, lane FUEL-LOOT; user: "On platform/elevator level S ONLY, replace half the
+ammo spawn opportunities with increased food/drink spawns"): the version-2 generator plus `gen/bunker/v2/stationRations.ts`. On storey
+S, floor(N / 2) of the N ammo opportunities are converted. An opportunity is a holder whose resolved table (exposed or compartment)
+has an ammo row or whose theme stocks ammo, or an S floor-program ammo box. Only the ammo changes; no other supply moves to compensate.
+
+- A converted holder keeps its loot key, table, theme, lot count and empty chance. Its placement carries the ammo swap
+  `bunker-station-rations` (`PropPlacement.ammoSwap`, `items/loot.ts` `AMMO_SWAPS` / `swapAmmoLots`), which runs on the finished roll.
+  Every AMMO lot (from an ammo row, the security theme's re-themed finds or a compartment roll) becomes one serving of the named
+  `BUNKER_STATION_RATIONS_ROWS` (= `ANNEX_CACHE_PANTRY_ROWS`), drawn by weight on the holder's own stream
+  `loot:<kind>:<index>:ammo-swap`. It keeps the lot's id and lies in a free spot (its own surface first). Every other lot keeps its id,
+  item, count and spot. A serving that fits nowhere tries the other rows, else is left out (0 over the 8-seed census).
+- A converted box becomes one serving of the same rows on the same spot: the loot reference's `bunker-station-rations` source.
+- Gun lockers (no food allowed) and weapon finds keep their ammo.
+- Storeys 1-5 are byte-identical to version 2. Stations entered under version 1 or 2 keep their version.
+
+Measured, S per level (8 seeds, 4401 + k x 7919; holders + floor):
+
+| | ammo opportunities | ammo finds (lots + boxes) | ammo rounds | food / drink (before / after the half) | dressings / batteries / flares / materials |
+|---|---|---|---|---|---|
+| v2 | 21.1 | 17.5 | 122.5 | 4.9 / 2.75 | 1.63 / 1.75 / 1.13 / 1.75 |
+| v3 | 10.75 | 11.0 (x0.63) | 79.1 (x0.65) | 11.4 / 5.5 | 1.63 / 1.75 / 1.13 / 1.75 (unchanged) |
+
+Per level ~10.4 holders convert, and their ~6 ammo lots become servings. Over 24 seeds the ammo ratio is x0.60 (finds 17.9 -> 10.7,
+rounds 128.9 -> 77.0). The holders' loot keys are unchanged, so the food-holder count stays version 2's (36 vs the first Bunker's 40,
+`tests/bunker-v2-level.test.ts`).
 
 `PROFILES.bunker` = today's shared `BASE_TABLES` with **no overrides** (like Skyways): the civil-defence shelter's rooms carry existing
 station purposes plus the Reactor shelter's own bunker purposes (`gen/reactor/complex/bunkerPurposes.ts`: blast-door lock,

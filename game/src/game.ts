@@ -52,6 +52,7 @@ import {HOOK_SLOTS, S as SPAN, UpdateProfiler} from './debug/updateProfile'; // 
 import type {ZombieSpawn} from './gen/station';
 import {ZombieLookLibrary} from './ai/outfits';
 import {chooseSpawnLook, cosplayModelKeysFor, lingerieModelKeysFor} from './ai/spawnLook'; // task mall-lingerie-20261102-221554 (lane CONTEXT): ordinary pick, or the lingerie store's variants' set
+import {homeWorld, wanderHomesFor, type WanderHome} from './ai/wanderHome'; // task gameplay-feedback-20261111 (lane SPAWNS): zone-local wander homes
 import {LINGERIE_MODEL_FILES, createLingerieLibrary} from './ai/lingerie'; // (lane FIT's lazy garments + their separate look library)
 import {COSPLAY_MODEL_FILES, createCosplayLibrary} from './ai/cosplay'; // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): the convention's lazy costumes + their separate look library
 import type {WardrobeLibrary} from './ai/wardrobe';
@@ -394,8 +395,9 @@ export class Game {
   /**
    * … `holders` (task fuel-feedback, world/fuelStations.ts): runs right after the loot holders are built — before the shelf filler is
    * dressed around their lots and before the section memory removes the taken ones (extra lots that must behave like rolled loot).
+   * It gets the section being BUILT: during a journey run.current is still the station being left until the 'arrival' step.
    */
-  readonly sectionHooks: {holders?(layout: Iter16Layout): void; build?(layout: Iter16Layout): void; teardown?(): void}[] = [];
+  readonly sectionHooks: {holders?(layout: Iter16Layout, key: SectionKey): void; build?(layout: Iter16Layout): void; teardown?(): void}[] = [];
   /** Aim offset (radians) added to the camera every frame (lane INJURY: restrained arm-injury sway). Shots use the camera, so it is honest. */
   readonly aimOffset = {yaw: 0, pitch: 0};
   /** Per-frame lane updates while playing (after the player moved, before the camera update). */
@@ -518,6 +520,8 @@ export class Game {
   private readonly layoutPickup = new Map<Pickup, number>();
   /** Live enemies -> their layout.zombies index (kills are remembered per index). */
   private readonly enemyIndex = new Map<EnemyActor, number>();
+  /** Task gameplay-feedback-20261111 (lane SPAWNS): zone-local enemies -> their wander home (ai/wanderHome.ts; lingerie store, damp Strainer). */
+  private wanderHomes = new Map<EnemyActor, WanderHome>();
   /** The current section was already cleared in this run (no second clear moment). */
   private sectionCleared = false;
   /** Flashlight switched on (Iteration 12: backed by the battery; a flat battery keeps it off). */
@@ -1202,7 +1206,7 @@ export class Game {
     yield* this.containers.buildSteps(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>, lootProfile(key.level),
       pantryHolderRealizer(key.level, this.run.peekMemory(key)?.holders ?? {}, lootProfile(key.level))); // iteration 08 (Lane I): openables split the lazy p7 models too
     dropUnrecordedSalvage(this.containers, this.run.peekMemory(key)?.holders ?? {}); // (task base-salvage: a remembered holder never gains the base salvage lot)
-    for (const h of this.sectionHooks) h.holders?.(this.layout); // task fuel-feedback: fuel cans as loot lots (before the filler / memory)
+    for (const h of this.sectionHooks) h.holders?.(this.layout, key); // task fuel-feedback: fuel cans as loot lots (before the filler / memory); `key`: run.current is still the departure here
     yield 'navigation';
     applySkywaysStageSupport(this.layout); // (lane VENUE) after the world is drawn, before levels / prop index / paths / physics read the grid
     this.levels = levelsOf(this.layout);
@@ -1328,6 +1332,7 @@ export class Game {
       if (this.sirens.skip(this.layout.zombies[i])) continue; // Task track1-siren-blightbelly-20261031 (lane SIREN): no Siren without her model (never a zombie stand-in)
       this.enemyIndex.set(this.spawnEnemy(this.layout.zombies[i], i), i);
     }
+    this.wanderHomes = wanderHomesFor(this.layout, this.enemyIndex); // (lane SPAWNS: the lingerie store's variants / the damp Strainer keep their zone)
     // Task track3-eaton-centre-20261031 (lane HORDE): the roaming hordes walk the living members of their placed groups (killed
     // members stayed dead above; a group with none left stays dead). No spawning here: members are layout.zombies entries.
     if (this.layout.hordes?.length) {
@@ -1777,7 +1782,8 @@ export class Game {
 
   /**
    * THE JOURNEY (campaign): the occupied train leaves the current station for `to` (adjacent, or any node with the 1337 cheat, or —
-   * campaign-polish lane MAP — a VISITED station over a route of visited stations: campaign/discovery.ts travelPlan). A multi-hop trip
+   * campaign-polish lane MAP, widened by task gameplay-feedback lane TRAVEL — any KNOWN station over the cheapest route of known track:
+   * campaign/discovery.ts travelPlan; fuelCheck charges the complete route, hops x one tank, or refuses with the numbers). A multi-hop trip
    * is ONE continuous journey: one departure, one transit (the ride gets the route), only the destination prepared / built / arrived
    * at — the stations passed are never loaded, looted, revealed or healed at; one departure autosave (the transit carries its route),
    * one arrival autosave.
@@ -3739,7 +3745,8 @@ export class Game {
       const b = z.brain;
       const seqBefore = b.attackSeq;
       prof.begin(SPAN.brain);
-      const out = b.update(dt, w);
+      const home = this.wanderHomes.get(z); // (lane SPAWNS: a zone-local enemy's random walk targets stay in its zone while it stands there)
+      const out = b.update(dt, home ? homeWorld(w, home, this.levels, b) : w);
       prof.end(SPAN.brain);
       if (H && out.alerted) H.alerted(b, p.y); // lane HORDE: group mates within earshot hear the call (brain.hear; never group-wide); lane ENEMY (mall R2): a cross-storey sighting calls at most 2
       prof.begin(SPAN.motor);

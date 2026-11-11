@@ -35,6 +35,7 @@ import {
 } from './lootTables';
 import {rewardTable, type RewardTable} from './lootTables'; // Task office-interactions-layout-20261030 (lane ROOF): curated rewards
 import {CONTAINER_THEMED} from './lootTables'; // Task office-interactions-layout-20261030 (lane OPEN): container-themed storage
+import {BUNKER_STATION_RATIONS_ROWS} from './lootTables'; // task gameplay-feedback-20261111 (lane FUEL-LOOT): AMMO_SWAPS
 import {HOLDER_ALLOW, STORAGE_FILL_CATS, STORAGE_FILL_FALLBACK, STORAGE_FILL_STOCK_THEMES, STORAGE_FILL_WEIGHTS, econCat, type EconCat} from './lootTables'; // Task mall-playtest-revision-20261031 (lane SHOPS, U10): storage fill
 import {
   OPENABLE_CONTAINER_KINDS, OPENABLE_META, containerLoot, openableSpec, separateCompartmentLoot, type OpenableContainerKind,
@@ -375,8 +376,54 @@ export function rollLootItems(seed: number, index: number, kind: HolderKind, are
   return sv ? [...out, sv.entry] : out;
 }
 
-/** Deterministic contents placed on the holder's surfaces (items that fit nowhere are dropped). */
-export function rollHolderLots(seed: number, index: number, kind: HolderKind, areaType: string, surfaces: readonly Surface[], profile: LootProfile = BASELINE_PROFILE): Lot[] {
+/**
+ * Deterministic contents placed on the holder's surfaces (items that fit nowhere are dropped). Task gameplay-feedback-20261111 (lane
+ * FUEL-LOOT): `swap` (AMMO_SWAPS rows; absent on every holder but the Bunker storey S's converted ones) turns the finished roll's ammo
+ * lots into those rows (swapAmmoLots); a curated reward is never swapped.
+ */
+export function rollHolderLots(seed: number, index: number, kind: HolderKind, areaType: string, surfaces: readonly Surface[], profile: LootProfile = BASELINE_PROFILE, swap?: ItemRows): Lot[] {
+  const lots = rolledHolderLots(seed, index, kind, areaType, surfaces, profile);
+  return swap && holderTable(kind, areaType, profile).source !== 'reward' ? swapAmmoLots(seed, index, kind, surfaces, lots, swap, profile) : lots;
+}
+
+/** Task gameplay-feedback-20261111 (lane FUEL-LOOT): the named ammo swaps a placement may carry (gen/props.ts PropPlacement.ammoSwap). */
+export const AMMO_SWAPS: Readonly<Record<string, ItemRows>> = {'bunker-station-rations': BUNKER_STATION_RATIONS_ROWS};
+/** The Bunker storey S's station rations (lootTables BUNKER_STATION_RATIONS_ROWS; gen/bunker/v2/stationRations.ts). */
+export const AMMO_SWAP_STATION_RATIONS = 'bunker-station-rations';
+
+/**
+ * Task gameplay-feedback-20261111 (lane FUEL-LOOT; user: replace the AMMO spawn opportunities with food / drink, no other supply moves):
+ * every AMMO lot of a finished holder roll becomes ONE of `rows` (weighted, the profile's item weights applied, only categories the
+ * holder kind may hold: HOLDER_ALLOW), drawn on the holder's own swap stream `loot:<kind>:<index>:ammo-swap` (no other stream moves).
+ * Every other lot keeps its id, item, count and spot exactly; a swapped lot keeps its id and rests in a free spot clear of every other
+ * lot (its own surface first, else any of the holder's: items/lootLayout.ts freeLotSpot); an item that fits nowhere tries the other rows
+ * in weight order, else that lot is left out (as any lot that does not fit).
+ */
+export function swapAmmoLots(seed: number, index: number, kind: HolderKind, surfaces: readonly Surface[], lots: readonly Lot[], rows: ItemRows, profile: LootProfile = BASELINE_PROFILE): Lot[] {
+  if (!lots.some(l => econCat(l.itemId) === 'ammo')) return [...lots];
+  const allow = HOLDER_ALLOW[kind];
+  const pool = resolveRows(profile, rows).filter(([id, w]) => w > 0 && (!allow || allow.includes(econCat(id) as EconCat)));
+  if (!pool.length) return [...lots];
+  const r = mulberry32(hashString(`loot:${kind}:${index}:ammo-swap`, seed >>> 0));
+  const out: (Lot | null)[] = [...lots];
+  out.forEach((l, i) => {
+    if (!l || econCat(l.itemId) !== 'ammo') return;
+    const first = pick(pool, r);
+    const tries = [first, ...[...pool].sort((a, b) => b[1] - a[1]).map(x => x[0]).filter(id => id !== first)];
+    const taken = out.filter((o, j): o is Lot => !!o && j !== i).map(o => placementBox(o.itemId, o));
+    out[i] = null;
+    for (const itemId of tries) {
+      const own = surfaces[l.surface] ? freeLotSpot(itemId, [surfaces[l.surface]], taken, r) : null;
+      const p = own ? {...own, surface: l.surface} : freeLotSpot(itemId, surfaces, taken, r);
+      if (!p) continue;
+      out[i] = tagPart({id: l.id, itemId, count: lotCount(itemId, kind, r, profile), ...p}, surfaces);
+      break;
+    }
+  });
+  return out.filter((l): l is Lot => !!l);
+}
+
+function rolledHolderLots(seed: number, index: number, kind: HolderKind, areaType: string, surfaces: readonly Surface[], profile: LootProfile): Lot[] {
   const t = holderTable(kind, areaType, profile);
   // Lane ROOF (office-interactions-layout-20261030): a curated reward — rolled exactly, every lot placed (packReward).
   if (t.source === 'reward') {
@@ -555,8 +602,8 @@ function rollOn(r: () => number, idBase: number, roll: (r: () => number) => Loot
 }
 
 /** A holder's runtime state: its lots rolled ONCE (finite; never re-rolled) under the level's loot `profile`, or the given `lots`. */
-export function createHolderState(seed: number, index: number, kind: HolderKind, areaType: string, surfaces: readonly Surface[], lots?: Lot[], profile: LootProfile = BASELINE_PROFILE): HolderState {
-  const list = (lots ?? rollHolderLots(seed, index, kind, areaType, surfaces, profile)).map(l => ({...l}));
+export function createHolderState(seed: number, index: number, kind: HolderKind, areaType: string, surfaces: readonly Surface[], lots?: Lot[], profile: LootProfile = BASELINE_PROFILE, swap?: ItemRows): HolderState {
+  const list = (lots ?? rollHolderLots(seed, index, kind, areaType, surfaces, profile, swap)).map(l => ({...l})); // (swap: rollHolderLots)
   const alwaysOpen = isSurfaceKind(kind) && kind !== 'vending';
   const st: HolderState = {index, kind, areaType, open: alwaysOpen, searched: alwaysOpen, lots: list, rolled: list.length};
   const spec = openableSpec(kind);

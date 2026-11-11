@@ -8,7 +8,7 @@
 // installFuelStations(game) only registers a section hook (Game.buildSection runs `holders` right after the loot holders are built —
 // before the shelf filler and the section memory — and `build` at the end of the build, after the memory was applied):
 //  - holders: the station's fuel slots (fuelHolderSlots: a fixed order for this layout) are computed and the REALIZED ones placed into
-//    their holders as lots (ContainerManager.addLots): a realized v2 station gets exactly its recorded lots back (the holder memory then
+//    their holders as lots (ContainerManager.addLots): a realized v3 station gets exactly its recorded lots back (the holder memory then
 //    removes the taken ones, like any lot); an unrealized station (first visit, or visited before fuel existed) realizes its v2 plan
 //    (chooseFuelSlots: spread over the rooms; a visited station's already-searched containers are left out); a station a v1 save
 //    realized gets ONE additive delta (v2 units - v1 units, never negative; its v1 cans / cart are untouched). Newly realized lots are
@@ -16,7 +16,7 @@
 //  - build: the plan's optional cart (world/fuelCarts.ts spawn) and the cans no holder could take (gen/fuelPlacement.ts: one per spot);
 //    a realized station's remembered carts come back (loadStation); any loose fuel pickup holding more than one can is split into
 //    single cans side by side (v1 saves laid two cans as one pickup: one visible can = one can, the quantity kept exactly).
-//  - teardown: the record {v: 2, realized: true, carts, lots} is written into the station's memory together with the normal memory flush
+//  - teardown: the record {v: 3, realized: true, carts, lots} is written into the station's memory together with the normal memory flush
 //    (Game.leaveSection: hooks first, then saveSectionMemory) — a save taken before the first departure (new-game / arrival) regenerates
 //    the same realization on load, never twice and never lost; a Retry rebuilds the entry state the same way. The ending save's
 //    non-destructive memory capture writes it too (flush), so its Continue never realizes the station twice.
@@ -25,16 +25,39 @@
 // outside the car); a visited station with a realized record from its memory (recorded lots its holders still list, remembered fuel
 // cans, cans in remembered bags, its carts; a v1 station + its pending delta); otherwise (known, never built, or visited before fuel
 // existed) its PLAN. Fuel moved aboard the train is not the station's any more.
+//
+// Task gameplay-feedback-20261111 (lane FUEL-LOOT; user: fuel is scarce at the first station after the start). The `holders` phase runs
+// BEFORE Game.buildSectionSteps moves run.current to the station being built ('arrival' step), and v2 read run.current: every journey's
+// destination was realized under the DEPARTURE station's key. Measured (6 real networks, Game's order): the first station after the start
+// realized 0 of its 6-25 planned units every time (the start's own record matched against the new layout: 'kept', no key in common), each
+// later station got the PREVIOUS station's plan, a revisit could refill, and the teardown wrote the record under the departure's key.
+// Now Game passes the key being built (`holders(layout, key)`), and the record says so: v3. Saves of the v2 releases (legacy, below):
+//  - a v3 record: exactly its lots (kept); a v1 record: the one additive delta (v1 realized in the build phase: correctly keyed);
+//  - a station some v2 record lists holders of (it WAS realized, whichever key that record has: the start, every station a v2 release
+//    built with a plan): exactly the fuel lots its own holder memory still lists (the cans left there), in the same holders with the same
+//    lot ids — at this station's own slot for the lot, else a free spot in that holder (gen/fuelHolders.ts refitFuelLot), else loose — and
+//    its own record's carts (a cart whose pose is not on this layout's floor is re-placed on the cart spot, else laid as cans). No new fuel;
+//  - a visited station no record lists (never realized: before fuel existed, or a v2 release's first station after the start, which got
+//    none): its plan once, the searched containers left out (the existing rule for stations visited before fuel existed).
+// The next teardown writes a v3 record; from then on the station is kept exactly.
 import type {Game} from '../game';
 import type {SectionKey} from '../levels/types';
 import type {StationLayout} from '../gen/stationTypes';
-import {FUEL, FUEL_LANE, FUEL_LOTS_MAX, stationFuelPlan, stationFuelPlanV1, stationFuelProblem, stationFuelRemaining, type StationCartJSON, type StationFuelJSON} from '../fuel/fuel';
+import {FUEL, FUEL_LANE, FUEL_LOTS_MAX, parseFuelLotKey, stationFuelPlan, stationFuelPlanV1, stationFuelProblem, stationFuelRemaining, type StationCartJSON, type StationFuelJSON} from '../fuel/fuel';
 import {placeStationFuel} from '../gen/fuelPlacement';
-import {chooseFuelSlots, fuelHolderSlots, type FuelHolderIn, type FuelSlot} from '../gen/fuelHolders';
+import {FUEL_HOLDERS, chooseFuelSlots, fuelHolderSlots, isFuelLotId, refitFuelLot, type FuelHolderIn, type FuelSlot} from '../gen/fuelHolders';
 import {BAG_LANE} from '../run/bagStore';
 import {holderKeyOf} from '../run/worldMemory';
 import type {ContainerManager, Holder} from './containers';
 import type {ItemStack} from '../items/inventory';
+
+/**
+ * Section-memory lane: {v: 1} = this station's fuel was realized by a release writing v2 station records (see the header); read until its
+ * v3 record is written (the flush then drops it).
+ */
+export const FUEL_LEGACY_LANE = 'fuel.legacy';
+/** Runs whose v2 evidence was already read (markLegacy). */
+const legacyMarked = new WeakSet<object>();
 
 /** What world/fuelCarts.ts offers the station coordinator (optional: absent = no carts). */
 export interface StationCartsApi {
@@ -46,8 +69,8 @@ export interface StationCartsApi {
 /** A station's fuel for the map: quarter units and where the number comes from. */
 export interface NodeFuel { units: number; source: 'planned' | 'remaining' | 'live' }
 
-/** How this build treats the station's fuel. */
-type Mode = 'kept' | 'plan' | 'delta';
+/** How this build treats the station's fuel ('legacy': a station a v2 release realized — see the header). */
+type Mode = 'kept' | 'plan' | 'delta' | 'legacy';
 
 interface PickupLike { stack: ItemStack; x: number; y: number; z: number; obj?: {rotation?: {y: number}} }
 
@@ -63,7 +86,7 @@ export class FuelStations {
 
   install(): this {
     this.game.sectionHooks.push({
-      holders: layout => this.holders(layout as unknown as StationLayout),
+      holders: (layout, key) => this.holders(layout as unknown as StationLayout, key),
       build: layout => this.build(layout as unknown as StationLayout),
       teardown: () => this.teardown(),
     });
@@ -102,9 +125,97 @@ export class FuelStations {
     return {ins, byKey};
   }
 
-  /** Phase 1 (right after the holders are built): decide the realization and place the fuel lots. */
-  holders(layout: StationLayout): void {
-    const key = this.game.run.current, seed = this.networkSeed();
+  /**
+   * ONCE per run, before any v3 record replaces a v2 one: every visited station some v2 record lists holders of (whichever key that
+   * record has) was realized by a v2 release — marked in its own memory (FUEL_LEGACY_LANE), so the evidence outlives the v2 records.
+   */
+  private markLegacy(): void {
+    const run = this.game.run, c = run.campaign;
+    if (!c || legacyMarked.has(run)) return;
+    legacyMarked.add(run);
+    const keyOf = (n: {id: string; archetype: SectionKey['level']}): SectionKey => ({level: n.archetype, section: 'main', station: n.id});
+    const v2 = new Set<string>();
+    for (const n of c.network.nodes) {
+      const r = this.record(keyOf(n));
+      if (r?.v === 2) for (const k of r.lots ?? []) v2.add(parseFuelLotKey(k).holder);
+    }
+    if (!v2.size) return;
+    for (const n of c.network.nodes) {
+      const key = keyOf(n), mem = run.peekMemory(key);
+      if (!mem || mem.lanes[FUEL_LEGACY_LANE] !== undefined || this.record(key)?.v === 3) continue;
+      if (Object.keys(mem.holders).some(hk => v2.has(hk))) run.setLaneStore(FUEL_LEGACY_LANE, {v: 1}, key);
+    }
+  }
+
+  /** A station a v2 release realized whose record is not v3 yet (see the header). */
+  private legacyAt(key: SectionKey, rec: StationFuelJSON | null): boolean {
+    this.markLegacy();
+    return rec?.v !== 3 && this.game.run.laneStore(FUEL_LEGACY_LANE, key) !== undefined;
+  }
+
+  /**
+   * The lots `keys` (`<holderKey>#<lotId>`) on this build: this layout's slot for the key, else a free spot in that holder (a lot an
+   * older release placed under another station's id: gen/fuelHolders.ts refitFuelLot); `short` = the ones no holder can take (laid loose).
+   */
+  private placeKeys(keys: readonly string[], slots: readonly FuelSlot[], ins: readonly FuelHolderIn[], layoutSeed: number): {chosen: FuelSlot[]; short: number} {
+    const bySlot = new Map(slots.map(s => [s.key, s])), byHolder = new Map(ins.map(h => [h.key, h]));
+    const chosen: FuelSlot[] = [], placed = new Map<string, FuelSlot['lot'][]>();
+    let short = 0;
+    const missing: string[] = [];
+    for (const k of keys) {
+      const s = bySlot.get(k);
+      if (s) { chosen.push(s); placed.set(s.holder, [...(placed.get(s.holder) ?? []), s.lot]); } else missing.push(k);
+    }
+    for (const k of missing) {
+      const {holder, lot: id} = parseFuelLotKey(k), h = byHolder.get(holder);
+      const lot = h ? refitFuelLot(h, id, placed.get(holder) ?? [], layoutSeed) : null;
+      if (!h || !lot) { short++; continue; }
+      chosen.push({key: k, holder, lot, area: h.area, pass: id % 1000 - FUEL_HOLDERS.lotBase});
+      placed.set(holder, [...(placed.get(holder) ?? []), lot]);
+    }
+    return {chosen, short};
+  }
+
+  /**
+   * A legacy record's carts on this layout: a cart standing on this layout's floor (its storey's walkable cell, about its height) stays;
+   * another is re-placed on the station's cart spot (gen/fuelPlacement.ts), else its units become loose cans (`cans`). Never lost.
+   */
+  private legacyCarts(layout: StationLayout, carts: readonly StationCartJSON[], station: string): {carts: StationCartJSON[]; cans: number} {
+    const out: StationCartJSON[] = [];
+    let cans = 0;
+    for (const c of carts) {
+      const g = layout.levels?.[c.level]?.grid ?? (c.level === 0 ? layout.grid : null);
+      const [cx, cy] = g ? g.cellOf(c.x, c.z) : [0, 0];
+      if (g && g.inBounds(cx, cy) && g.walkable(cx, cy) && Math.abs(g.floorOf(g.idx(cx, cy)) - c.y) < 0.6) { out.push({...c}); continue; }
+      const spot = placeStationFuel(layout, {units: c.units, cans: 0, cart: c.units}, `${station}:${c.uid}`).cart;
+      if (spot) out.push({uid: c.uid, units: c.units, ...spot});
+      else cans += c.units / FUEL.canUnits;
+    }
+    return {carts: out, cans};
+  }
+
+  /**
+   * A run-wide unique id for a newly realized cart: `cart:<station>`, unless the train carries that id or another station's record lists
+   * it (a v2 release named the cart it realized at a journey's destination after the DEPARTURE station).
+   */
+  private freshCartUid(station: string): string {
+    const used = new Set<string>();
+    const cargo = (this.game as unknown as {fuelCarts?: {cargo?(): {uid: string}[]}}).fuelCarts;
+    for (const c of typeof cargo?.cargo === 'function' ? cargo.cargo() : []) used.add(c.uid);
+    for (const n of this.game.run.campaign?.network.nodes ?? []) {
+      if (n.id !== station) for (const c of this.record({level: n.archetype, section: 'main', station: n.id})?.carts ?? []) used.add(c.uid);
+    }
+    const base = `cart:${station}`;
+    if (!used.has(base)) return base;
+    for (let k = 2; ; k++) if (!used.has(`${base}~${k}`)) return `${base}~${k}`;
+  }
+
+  /**
+   * Phase 1 (right after the holders are built): decide the realization and place the fuel lots. `buildKey` = the section being built
+   * (Game passes it: run.current is still the departure during a journey's build); absent = run.current (a build outside a journey).
+   */
+  holders(layout: StationLayout, buildKey?: SectionKey): void {
+    const key = buildKey ?? this.game.run.current, seed = this.networkSeed();
     this.live = null;
     this.stage = null;
     if (!key.station || seed === null) return; // fuel exists in campaign runs only
@@ -114,22 +225,34 @@ export class FuelStations {
     const slots = cm ? fuelHolderSlots(layout, ins, key.station) : [];
     const rec = this.record(key);
     const mem = this.game.run.peekMemory(key);
+    const recs = mem?.holders ?? {};
+    const legacy = this.legacyAt(key, rec);
     let chosen: FuelSlot[];
-    if (rec?.realized && rec.v === 2) {
-      const keep = new Set(rec.lots ?? []);
-      chosen = slots.filter(s => keep.has(s.key));
+    if (rec?.realized && rec.v === 3) {
+      // (a recorded lot no holder can take any more is dropped, never laid loose: a kept build adds nothing)
+      chosen = this.placeKeys(rec.lots ?? [], slots, ins, layout.seed).chosen;
       this.stage = {mode: 'kept', lots: [...(rec.lots ?? [])], short: 0, cart: 0, carts: rec.carts};
+    } else if (legacy) {
+      // a v2 release realized it: the cans its holders still remember, no new fuel (see the header)
+      const keys: string[] = [];
+      for (const [hk, hr] of Object.entries(recs)) for (const id of hr.lots) if (isFuelLotId(id)) keys.push(`${hk}#${id}`);
+      const p = this.placeKeys(keys.slice(0, FUEL_LOTS_MAX), slots, ins, layout.seed);
+      chosen = p.chosen;
+      const lc = this.legacyCarts(layout, rec?.carts ?? [], key.station);
+      this.stage = {mode: 'legacy', lots: chosen.map(s => s.key), short: p.short + lc.cans, cart: 0, carts: lc.carts};
     } else {
       const plan = stationFuelPlan(seed, key.station);
-      const delta = !!rec?.realized; // a v1 station: ONE additive delta, its v1 cans / cart untouched
+      const delta = rec?.realized === true && rec.v === 1; // a v1 station: ONE additive delta, its v1 cans / cart untouched
       const n = delta ? Math.max(0, plan.units - stationFuelPlanV1(seed, key.station).units) / FUEL.canUnits : plan.cans;
+      // a v2 record of a station never realized (a v2 release's first station after the start) holds the carts left at the station built
+      // after it: they stay in the world (here), never lost
+      const lc = !delta && rec?.v === 2 ? this.legacyCarts(layout, rec.carts, key.station) : null;
       // a visited station: containers the player already opened (searched) are left out (no fuel appears in an emptied cupboard)
-      const recs = mem?.holders ?? {};
       const skip = (hk: string) => !!recs[hk]?.searched && byKey.get(hk)?.group === 'container';
       const inLots = Math.min(n, FUEL_LOTS_MAX); // (the record lists at most FUEL_LOTS_MAX lots; a plan has at most 28 cans)
       const pick = chooseFuelSlots(slots, inLots, skip);
       chosen = pick.chosen;
-      this.stage = {mode: delta ? 'delta' : 'plan', lots: chosen.map(s => s.key), short: pick.short + n - inLots, cart: delta ? 0 : plan.cart, carts: delta ? rec!.carts : null};
+      this.stage = {mode: delta ? 'delta' : 'plan', lots: chosen.map(s => s.key), short: pick.short + n - inLots + (lc?.cans ?? 0), cart: delta ? 0 : plan.cart, carts: delta ? rec!.carts : lc ? lc.carts : null};
       // the memory must keep the newly realized lots (Game.applyHolders keeps only listed lot ids of a remembered holder)
       for (const s of chosen) {
         const hr = recs[s.holder];
@@ -160,7 +283,7 @@ export class FuelStations {
       for (const s of place.cans) loose += this.addCans(s.count, s.x, s.y, s.z, (s.x * 7.13 + s.z * 3.71) % (Math.PI * 2));
       if (place.cart) {
         const c = this.carts;
-        if (c) { c.spawn({uid: `cart:${key.station}`, units: st.cart, ...place.cart}); cart = true; }
+        if (c) { c.spawn({uid: this.freshCartUid(key.station), units: st.cart, ...place.cart}); cart = true; }
         else loose += this.addCans(st.cart, place.cart.x, place.cart.y, place.cart.z, 0); // no cart system (Node shells): its units as cans (never lost)
       }
     }
@@ -215,8 +338,9 @@ export class FuelStations {
   flush(): void {
     const key = this.live, st = this.stage;
     if (!key || !st) return;
-    const rec: StationFuelJSON = {v: 2, realized: true, carts: this.carts?.stationRecords() ?? [], lots: st.lots};
+    const rec: StationFuelJSON = {v: 3, realized: true, carts: this.carts?.stationRecords() ?? [], lots: st.lots};
     this.game.run.setLaneStore(FUEL_LANE, rec, key);
+    this.game.run.setLaneStore(FUEL_LEGACY_LANE, undefined, key); // (a v3 record now: the legacy mark has done its job)
   }
 
   /** Fuel units in the live station right now (its fuel lots in holders, pickups, cans in its grounded bags, its carts outside the car). */
@@ -244,8 +368,14 @@ export class FuelStations {
     const mem = key ? run.peekMemory(key) : undefined;
     if (key && mem) {
       const rec = this.record(key);
-      if (rec?.realized) {
-        const bags = (run.laneStore<{bags?: {stack: {bag?: ({itemId: string; count: number} | null)[]}}[]}>(BAG_LANE, key)?.bags) ?? [];
+      const bags = (run.laneStore<{bags?: {stack: {bag?: ({itemId: string; count: number} | null)[]}}[]}>(BAG_LANE, key)?.bags) ?? [];
+      if (this.legacyAt(key, rec)) {
+        // realized by a v2 release (legacy, see the header): the fuel lots its holders still list + loose / bagged cans + its record's carts
+        let lots = 0;
+        for (const hr of Object.values(mem.holders)) for (const id of hr.lots) if (isFuelLotId(id)) lots += FUEL.canUnits;
+        return {units: lots + stationFuelRemaining({pickups: mem.pickups as never, bags, carts: rec?.carts ?? []}), source: 'remaining'};
+      }
+      if (rec?.realized && rec.v !== 2) { // (a v2 record nothing realized here: the plan its next build realizes)
         const left = stationFuelRemaining({pickups: mem.pickups as never, bags, carts: rec.carts, lots: rec.lots ?? [], holders: mem.holders});
         // a v1 station: + the delta its next build adds
         const delta = rec.v === 1 ? Math.max(0, stationFuelPlan(seed, station).units - stationFuelPlanV1(seed, station).units) : 0;

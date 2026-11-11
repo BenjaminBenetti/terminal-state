@@ -595,7 +595,7 @@ foliage sunk into the soil bed). No new model or texture.
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
 they sit outside the two audits; their classification is recorded here.
 - **Lockbox** (`world/trainLockbox.ts` world object, `run/trainLockbox.ts` store, `ui/lockboxView.ts` view):
-  - Storage opens: [E] raises its hinged lid and opens a 40-slot transfer view.
+  - Storage opens: [E] raises its hinged lid and opens a 50-slot (10 × 5) transfer view.
   - Contents: the player's own storage. It starts EMPTY each run and is never seeded or refilled, so there's no loot table.
     It is finite, persistent and carried by the run's player-train record: Travel keeps it, Retry restores the level-entry
     state, New game empties it. The developer code 1337 adds gear only on purpose (`items/devGrant.ts`).

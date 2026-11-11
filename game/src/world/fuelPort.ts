@@ -39,7 +39,8 @@
 // The model loads with the boot assets (preloadFuelCanModel: started here, awaited by Game.load before item templates / icons).
 //
 // HUD (ui/hud.ts setFuel; DOM written only on change): shown while the player is inside or within FUEL_PORT.hudNear of the parked car,
-// and while riding — the tank as four quarter pips + "Fuel ¾ tank · aboard +2 tanks (chest 1, carts 1)" (fuel/fuel.ts reservesOf: the
+// and while riding — the tank as quarter pips (four per tank, FUEL.trainTankUnits in all: four tanks since task gameplay-feedback lane
+// TRAVEL) + "Fuel ¾ tank · aboard +2 tanks (chest 1, carts 1)" (fuel/fuel.ts reservesOf: the
 // train chest = the Lockbox's slots, carts = game.fuelCarts?.aboard?.(), optional: the cart system may be absent).
 
 import * as THREE from 'three';
@@ -93,7 +94,7 @@ export function fuelNeckMouthLocal(spec = PLAYER_TRAIN_SPEC): {x: number; y: num
 
 /** The HUD readout (ui/hud.ts setFuel). */
 export interface FuelHudView {
-  /** Quarter pips lit (0..FUEL.trainTankUnits: two tanks of four). */
+  /** Quarter pips lit (0..FUEL.trainTankUnits: four tanks of four). */
   pips: number;
   /** The tank in quarter units. */
   tank: number;

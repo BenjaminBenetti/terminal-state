@@ -36,7 +36,7 @@ import {rayAabb} from '../combat/hitscan';
 import type {Inventory} from '../items/inventory';
 import {itemDims} from '../items/items';
 import {
-  HOLDER_LABEL, createHolderState, holderPrompt, isContainerKind, isLootHolderKind, isSalvageLotId, lotEntries, lotPrompt,
+  AMMO_SWAPS, HOLDER_LABEL, createHolderState, holderPrompt, isContainerKind, isLootHolderKind, isSalvageLotId, lotEntries, lotPrompt,
   nextHolderAction, openMessage, partAction, partOpenMessage, partPrompt, remainingCount, takeAll, takeLot, takeLots, transferMessage,
   type HolderKind, type HolderState, type Lot, type PartInfo, type SurfaceKind, type TransferResult,
 } from '../items/loot';
@@ -530,7 +530,7 @@ export class ContainerManager {
       const matrix = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y + (openable ? p.lift ?? 0 : 0), p.z), new THREE.Quaternion().setFromAxisAngle(UP, p.rot), new THREE.Vector3(1, 1, 1));
       const h: Holder = {
         group: isC ? 'container' : 'surface', index, serial: this.all.length, kind, prop: p,
-        state: createHolderState(layout.seed, index, kind, areaType, surfaces, undefined, loot), surfaces, support, matrix,
+        state: createHolderState(layout.seed, index, kind, areaType, surfaces, undefined, loot, p.ammoSwap ? AMMO_SWAPS[p.ammoSwap] : undefined), surfaces, support, matrix, // (task gameplay-feedback-20261111: + a placement's ammo swap)
         root: null, hinges: [], leafMeshes: [], inner: [], t: 0, pryT: 0,
         min: new THREE.Vector3(p.x - p.hx, p.y, p.z - p.hz), max: new THREE.Vector3(p.x + p.hx, p.y + p.h, p.z + p.hz),
         lotMats: new Map(), lotBoxes: new Map(), shown: false,

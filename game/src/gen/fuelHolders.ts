@@ -141,6 +141,28 @@ export function fuelHolderSlots(layout: StationLayout, holders: readonly FuelHol
   return out;
 }
 
+/** A holder lot id in the fuel range (holder.index * 1000 + lotBase + k, k < perHolder; food-variety ids keep `id % 1000`, never here). */
+export function isFuelLotId(id: number): boolean {
+  const r = id % 1000;
+  return id >= 0 && r >= FUEL_HOLDERS.lotBase && r < FUEL_HOLDERS.lotBase + FUEL_HOLDERS.perHolder;
+}
+
+/**
+ * Task gameplay-feedback-20261111 (lane FUEL-LOOT): a spot for a REMEMBERED fuel lot that this layout's slot order does not offer (a
+ * station a release before the v3 station record realized under another station's id: world/fuelStations.ts) — a free spot on any
+ * surface of the holder, clear of its rolled lots and `others` (the fuel lots already placed there). Deterministic (its own stream over
+ * the lot key and the layout seed). Null: no room (the caller lays the can loose: never lost).
+ */
+export function refitFuelLot(h: FuelHolderIn, lotId: number, others: readonly Lot[], layoutSeed: number): Lot | null {
+  const r = new Rng(hashString(`fuel-refit:${h.key}#${lotId}`, (layoutSeed >>> 0) ^ 0x1b873593)), rnd = () => r.next();
+  const taken = [...h.lots.filter(l => !isSalvageLotId(l.id)), ...others].map(l => placementBox(l.itemId, l));
+  for (let si = 0; si < h.surfaces.length; si++) {
+    const lot = freeCanSpot(h.surfaces, si, taken, rnd);
+    if (lot) { lot.id = lotId; return lot; }
+  }
+  return null;
+}
+
 /** The first `n` slots of the order, spread over the rooms (see the header); `short` = cans no holder took. */
 export function chooseFuelSlots(slots: readonly FuelSlot[], n: number, skip?: (holderKey: string) => boolean): {chosen: FuelSlot[]; short: number} {
   const cap = Math.max(2, Math.ceil(n / FUEL_HOLDERS.roomShare));

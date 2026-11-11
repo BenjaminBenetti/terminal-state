@@ -28,7 +28,7 @@ that case: lockers, shelving, a tall cabinet and cartons along the cash desk's w
 ## The real backpack (user: "camping store fake backpack unacceptable")
 
 - **The item.** The v3 store places no `skyDBackpack` decoration-only lookalike. The pack wall shows ONE genuine `backpack` gear item
-  (`items/gear.ts`: slot `backpack`, its own 12 slots). It is not the airtank.
+  (`items/gear.ts`: slot `backpack`, its own `BACKPACK_SLOTS` = 18 slots). It is not the airtank.
 - **How it is placed.** It is a layout pickup (`layout.pickups`, count 1, with its own yaw facing the aisle) standing on the top plank
   of a static holder. Its span is cut from the plank's loot surface, so no lot overlaps it.
 - **What the game does with it.** `gear/system.ts` turns it into a grounded bag `found:<layout pickup index>` on the section's first

@@ -9,11 +9,13 @@ spray, and becomes a tenth of a standard fuel tank. Normal fuel loot, spawn weig
 | Bodies | Fuel | Existing quarter units |
 |---|---|---|
 | 1 | 0.1 standard tank | 0.4 |
-| 10 | 1 standard tank = one hop | 4 (half the train's capacity) |
-| 20 | 2 standard tanks = a full empty train | 8 |
+| 10 | 1 standard tank = one hop | 4 (a quarter of the train's capacity) |
+| 20 | 2 standard tanks | 8 |
+| 40 | 4 standard tanks = a full empty train | 16 |
 
-- Every existing fuel quantity stays in whole quarters: a can 1, a fuel cart 8, a Bunker generator 1 each, a hop 4, the train 8
-  (`fuel/fuel.ts FUEL`).
+- Every existing fuel quantity stays in whole quarters: a can 1, a fuel cart 8, a Bunker generator 1 each, a hop 4, the train 16
+  (`fuel/fuel.ts FUEL`). The train's tank grew from two to four standard tanks (task gameplay-feedback-20261111); the yield per body
+  and the machine's own buffer did not change.
 - The chipper keeps its own credit in integer **ticks** of a fifth of a quarter (`fuel/chipperFuel.ts`). One body = 2 ticks, so no
   fraction ever exists in the tank, a cart, a can, a fare or a save.
 - Whole quarters (5 ticks) move into the train's tank while it has room, and only while the train is parked with no journey pending.

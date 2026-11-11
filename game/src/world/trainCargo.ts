@@ -21,6 +21,9 @@
 // Not covered: the fuel carts (their own cargo) and the Lockbox (its slots) — never captured twice. Layout props knocked loose into the car
 // travel too, as the train's PROP cargo (task studio-beta-train-all-cargo-20261107-184244-01: world/trainPropCargo.ts).
 // Fuel: loose fuel cans travel like any item; the automatic burn stays tank -> carts aboard -> chest cans (fuel/fuel.ts planDebit).
+// Lane CARGO (user: "Backpacks must be placeable aboard the train and travel with it like other items"): the car's floor is a dynamic
+// volume, which the backpack set-down refused as a lift cab; this system is the gear's volume CARRIER (carries(): inside the parked car =
+// an ordinary floor), so a bag set down aboard is the train's by the rule above and travels on this same path.
 
 import * as THREE from 'three';
 import type {Game} from '../game';
@@ -72,8 +75,10 @@ export interface CargoHost {
   player: {x: number; y: number; z: number; yaw: number; alive: boolean};
   inv: {add(s: ItemStack): number; wornBag(): ItemStack | null; wearBag(s: ItemStack): boolean; reserveUids(max: number): void; makeStack(id: string, count: number): ItemStack; refusal?: {text: string} | null};
   pickups: {list: Pickup[]; addAt(stack: ItemStack, m: THREE.Matrix4): Pickup; remove(p: Pickup): void; meshFor(itemId: string): THREE.Object3D};
-  gear?: {bags: GroundBag[]; releaseBag(b: GroundBag): ItemStack | null; adoptBag(id: string, stack: ItemStack, pose: {x: number; y: number; z: number; yaw: number; level: number}): GroundBag; recordFilter: ((b: GroundBag) => boolean) | null} | null;
-  trainRuntime?: {spec: PlayerTrainSpec; view: {root: THREE.Object3D} | null; train: {placement: TrainPlacement} | null; carLocal(x: number, y: number, z: number): {x: number; y: number; z: number} | null; carDir(x: number, y: number, z: number): {x: number; y: number; z: number} | null} | null;
+  gear?: {bags: GroundBag[]; releaseBag(b: GroundBag): ItemStack | null; adoptBag(id: string, stack: ItemStack, pose: {x: number; y: number; z: number; yaw: number; level: number}): GroundBag; recordFilter: ((b: GroundBag) => boolean) | null;
+    /** Lane CARGO: gear/system.ts VolumeCarrier — the parked car's floor carries a set-down bag (installed here). */
+    carrier?: ((v: unknown, x: number, y: number, z: number, r?: number) => boolean | null) | null} | null;
+  trainRuntime?: {spec: PlayerTrainSpec; view: {root: THREE.Object3D} | null; train: {placement: TrainPlacement; col?: {volume: unknown}} | null; carLocal(x: number, y: number, z: number): {x: number; y: number; z: number} | null; carDir(x: number, y: number, z: number): {x: number; y: number; z: number} | null} | null;
   trainRide?: {riding: boolean; phase: string; moving: boolean; local: {x: number; y: number; z: number; yaw: number}} | null;
   playerTrain: {cargo: {live: {cargo(): CargoItemJSON[]; restore(items: CargoItemJSON[]): void; add?(item: CargoItemJSON): void} | null}};
   hud: {toast(text: string, warn?: boolean): void};
@@ -115,7 +120,7 @@ export class TrainCargoSystem {
     h.interactHandlers.push(() => this.onInteract());
     h.promptProviders?.push(() => this.prompt);
     h.playerTrain.cargo.live = {cargo: () => this.cargo(), restore: items => this.restore(items), add: item => this.addPending(item)};
-    if (h.gear) h.gear.recordFilter = b => this.ownsBag(b);
+    if (h.gear) { h.gear.recordFilter = b => this.ownsBag(b); h.gear.carrier = (v, x, y, z, r) => this.carries(v, x, y, z, r); }
     return this;
   }
 
@@ -155,6 +160,21 @@ export class TrainCargoSystem {
     if (!pl) return false;
     const q = worldToTrain(pl, b.pose.x, b.pose.y, b.pose.z);
     return this.insideCar(q.x, q.y, q.z);
+  }
+
+  /**
+   * Lane CARGO (user: "Backpacks must be placeable aboard the train and travel with it like other items"; GearSystem.carrier): a world
+   * point on dynamic volume `v` — the parked car's interior volume: true when it lies inside the car, at least `r` (m) inside its lining
+   * (by the ownership rule above: a bag set down there is the train's and travels as its cargo), false when not (its doorways / the
+   * walls, or the car is riding); null: not the car's volume (a lift cab). The set-down's spot and collider checks stay the gear's.
+   */
+  carries(v: unknown, x: number, y: number, z: number, r = 0): boolean | null {
+    const t = this.host.trainRuntime?.train;
+    if (!t?.col || v !== t.col.volume) return null;
+    const pl = this.parked();
+    if (!pl) return false;
+    const q = worldToTrain(pl, x, y, z), I = this.spec!.interior;
+    return this.insideCar(q.x, q.y, q.z) && q.x > I.x0 + r && q.x < I.x1 - r && Math.abs(q.z) < I.halfWidth - r;
   }
 
   // ---------------------------------------------------------------------------------------------------------------------

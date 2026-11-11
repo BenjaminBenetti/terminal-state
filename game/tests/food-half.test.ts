@@ -166,7 +166,7 @@ describe('natural food half: game.ts wiring (source order)', () => {
   it('holders: gated after the fuel lots, the shelf filler and applyHolders (both see the holder as before)', () => {
     const at = (s: string) => { const i = src.indexOf(s); expect(i, s).toBeGreaterThan(0); return i; };
     const gate = at('dropNaturalFood(cm, mem.holders, this.layout.seed, mem.id, lootProfile(key.level));');
-    expect(at('h.holders?.(this.layout)')).toBeLessThan(gate);
+    expect(at('h.holders?.(this.layout, key)')).toBeLessThan(gate); // (task gameplay-feedback-20261111, lane FUEL-LOOT: the hook gets the section built)
     expect(at('this.stock.buildSteps(this.layout')).toBeLessThan(gate); // (lane BUILD: the stepped shelf-stock build)
     expect(at('applyHolders(cm, mem.holders);')).toBeLessThan(gate);
   });

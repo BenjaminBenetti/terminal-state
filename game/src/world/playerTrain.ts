@@ -560,7 +560,7 @@ export class PlayerTrainRuntime {
   private heldView: {view: TrainView; lockboxView: LockboxView | null; lockboxLid: LockboxLid} | null = null;
   private readonly hiMats = new Map<THREE.Material, THREE.MeshStandardMaterial>();
   // ---- task train-lockbox-windows-20261101-232156 (lane TRAIN): the Lockbox world object (world/trainLockbox.ts) — API for lane BOX ----
-  /** Called on [E] while the Lockbox is aimed (closed or open): lane BOX opens its 40-slot view. Null: [E] just toggles the lid. */
+  /** Called on [E] while the Lockbox is aimed (closed or open): lane BOX opens its LOCKBOX_SLOTS view. Null: [E] just toggles the lid. */
   onLockboxInteract: (() => void) | null = null;
   /** The Lockbox is under the crosshair right now (within reach, unobstructed: the doors' aim rules). */
   lockboxAimed = false;
@@ -1138,7 +1138,7 @@ export class PlayerTrainRuntime {
   }
 
   // -------------------------------------------------------------------------------------------
-  // Task train-lockbox-windows-20261101-232156: the Lockbox (the world object; lane BOX owns its 40 slots and its view)
+  // Task train-lockbox-windows-20261101-232156: the Lockbox (the world object; lane BOX owns its LOCKBOX_SLOTS slots and its view)
 
   private lockboxPrompt(): string {
     return this.lockboxLid.target === 0 ? '<b>[E]</b> Open Lockbox' : '<b>[E]</b> Close Lockbox'; // open lid = the view is open (E closes it)

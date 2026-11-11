@@ -198,7 +198,7 @@ describe('the card on the overlay', () => {
     expect([map.selected, map.viewState]).toEqual([target, v]);
   });
 
-  it('a visited station far away: the card names the route over visited stations; a cut-off one says "not available"', () => {
+  it('a visited station far away: the card names the route over known stations; a cut-off one says "not available"', () => {
     const n = net;
     const s = nearReactor(n);
     const far = s.visited.find(v => v !== s.current && !neighbors(n, s.current).includes(v))!;
@@ -210,9 +210,11 @@ describe('the card on the overlay', () => {
     expect(panel().querySelector('.pm-depart')).not.toBeNull();
     expect(dom.doc.querySelector('.pm-route')).not.toBeNull();
     expect(map.qa().route).toEqual(plan.route);
-    // the same station when the track there was never travelled (not visited in between): not available, no fake path
+    // the same station when the track there is not on the map (the stations in between unknown): not available, no fake path
+    // (task gameplay-feedback lane TRAVEL: known but unvisited stations in between no longer cut it off — only unknown track does)
     map.cancel();
-    const cut: CampaignState = {...s, visited: [s.current, far, n.start].filter((x, i, a) => a.indexOf(x) === i)};
+    const only = [s.current, far, n.start].filter((x, i, a) => a.indexOf(x) === i);
+    const cut: CampaignState = {...s, visited: only, known: only};
     expect(travelPlan(cut, far)).toBeNull();
     map.update(cut);
     dom.click(hit(far));

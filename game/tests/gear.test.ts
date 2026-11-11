@@ -14,6 +14,8 @@ import {gearItemModel, gearModelSource, registerGearModel} from '../src/gear/mod
 const G = (slot: (typeof GEAR_SLOTS)[number]): SlotRef => ({bar: 'gear', index: GEAR_SLOTS.indexOf(slot)});
 const P = (index: number): SlotRef => ({bar: 'pack', index});
 const H = (index: number): SlotRef => ({bar: 'hotbar', index});
+/** The chest rig's first pocket (its 4 follow the base pockets). */
+const RIG = PACK_SIZE;
 const mods = (inv: Inventory) => combineModifiers([() => gearModifiersFor(inv.gear)]);
 
 describe('base-tier gear items', () => {
@@ -151,21 +153,22 @@ describe('gear slots: validation and refusals', () => {
 });
 
 describe('chest rig: dynamic pockets, refused removal, nothing lost', () => {
+  // (task gameplay-feedback-20261111, lane STORAGE: the rig's 4 pockets follow the PACK_SIZE base pockets — 18..21 now, 12..15 before)
   const setup = () => {
     const inv = new Inventory();
     const rig = inv.makeStack('chest_rig', 1);
     expect(inv.add(rig)).toBe(0);
     for (let i = 0; i < PACK_SIZE; i++) inv.set(P(i), inv.makeStack('bandage', 1));
     const extra = inv.makeStack('ammo_9mm', 30);
-    inv.set(P(13), extra);
+    inv.set(P(RIG + 1), extra);
     return {inv, rig, extra};
   };
 
-  it('wearing it grows the pockets to 16 in place; extra pockets hold items', () => {
+  it('wearing it grows the pockets to PACK_SIZE + 4 (22) in place; extra pockets hold items', () => {
     const {inv, extra} = setup();
-    expect(inv.capacity).toBe(16);
-    expect(inv.pack.length).toBe(16);
-    expect(inv.get(P(13))).toBe(extra);
+    expect(inv.capacity).toBe(RIG + 4);
+    expect(inv.pack.length).toBe(RIG + 4);
+    expect(inv.get(P(RIG + 1))).toBe(extra);
     expect(inv.invariants()).toEqual([]);
   });
 
@@ -177,9 +180,9 @@ describe('chest rig: dynamic pockets, refused removal, nothing lost', () => {
     inv.set(P(0), null); // free a base pocket
     expect(inv.takeOff('chest')).toBe('refused');
     expect(inv.refusal?.code).toBe('pockets-occupied');
-    expect(inv.refusal?.text).toMatch(/13–16/);
+    expect(inv.refusal?.text).toMatch(/19–22/);
     expect(inv.moveCount(G('chest'), P(0))).toBe('refused');
-    expect(inv.moveCount(G('chest'), P(14))).toBe('refused'); // into its own vanishing pocket
+    expect(inv.moveCount(G('chest'), P(RIG + 2))).toBe('refused'); // into its own vanishing pocket
     expect(inv.detach(G('chest'))).toBeNull();
     expect(inv.remove(G('chest'))).toBeNull();
     inv.set(G('chest'), null);
@@ -188,18 +191,18 @@ describe('chest rig: dynamic pockets, refused removal, nothing lost', () => {
     inv.set(P(0), vest);
     expect(inv.moveCount(P(0), G('chest'))).toBe('refused'); // the vest would shrink the pockets over the 9 mm
     expect(inv.worn('chest')).toBe(rig);
-    expect(inv.get(P(13))).toBe(extra);
-    expect(inv.pack.length).toBe(16);
+    expect(inv.get(P(RIG + 1))).toBe(extra);
+    expect(inv.pack.length).toBe(RIG + 4);
     expect(JSON.stringify(inv.toJSON())).not.toBe(before);
     expect(inv.invariants()).toEqual([]);
   });
 
-  it('once the extra pockets are empty the rig comes off and the pockets shrink back to 12 (nothing dropped)', () => {
+  it('once the extra pockets are empty the rig comes off and the pockets shrink back to PACK_SIZE (18) (nothing dropped)', () => {
     const {inv, rig, extra} = setup();
     inv.set(P(0), null);
-    expect(inv.moveCount(P(13), P(0))).toBe('moved');
+    expect(inv.moveCount(P(RIG + 1), P(0))).toBe('moved');
     expect(inv.get(P(0))).toBe(extra);
-    expect(inv.moveCount(G('chest'), P(15))).toBe('refused'); // still not into an extra pocket
+    expect(inv.moveCount(G('chest'), P(RIG + 3))).toBe('refused'); // still not into an extra pocket
     // swap with a vest from a base pocket: allowed now
     inv.set(P(5), null);
     const vest = inv.makeStack('armor_vest', 1);
@@ -217,10 +220,10 @@ describe('chest rig: dynamic pockets, refused removal, nothing lost', () => {
     const inv = new Inventory();
     inv.add(inv.makeStack('chest_rig', 1));
     const vest = inv.makeStack('armor_vest', 1);
-    inv.set(P(14), vest);
-    expect(inv.moveCount(P(14), G('chest'))).toBe('refused');
+    inv.set(P(RIG + 2), vest);
+    expect(inv.moveCount(P(RIG + 2), G('chest'))).toBe('refused');
     expect(inv.refusal?.code).toBe('pockets-occupied');
-    expect(inv.get(P(14))).toBe(vest);
+    expect(inv.get(P(RIG + 2))).toBe(vest);
     expect(inv.invariants()).toEqual([]);
   });
 });
@@ -232,7 +235,7 @@ describe('inventory snapshots (lane RUN: carryover / Retry level)', () => {
     inv.add(inv.makeStack('ammo_9mm', 45));
     inv.add(inv.makeStack('chest_rig', 1));
     inv.add(inv.makeStack('helmet', 1));
-    inv.set(P(14), inv.makeStack('bandage', 3));
+    inv.set(P(RIG + 2), inv.makeStack('bandage', 3));
     const bag = inv.makeStack('backpack', 1);
     bag.bag![2] = inv.makeStack('medkit', 2);
     bag.bag![7] = inv.makeStack('shotgun', 1, 3);
@@ -249,7 +252,7 @@ describe('inventory snapshots (lane RUN: carryover / Retry level)', () => {
     expect(j.v).toBe(3);
     expect(j.throw).toEqual([null]);
     expect(j.melee).toEqual([null]);
-    expect(j.pack.length).toBe(16);
+    expect(j.pack.length).toBe(RIG + 4);
     expect(j.gear.backpack?.bag?.[7]?.mag).toBe(3);
     const c = inv.clone(), f = Inventory.fromJSON(JSON.parse(JSON.stringify(j)));
     for (const x of [c, f]) {
@@ -289,7 +292,7 @@ describe('inventory snapshots (lane RUN: carryover / Retry level)', () => {
   it('a malformed snapshot never loses items silently (strays go back in through add)', () => {
     const inv = sample();
     const j = inv.toJSON();
-    j.gear.chest = null; // pockets 13-16 now beyond capacity: the bandage there must survive
+    j.gear.chest = null; // pockets 19-22 (RIG..RIG + 3) now beyond capacity: the bandage there must survive
     const r = Inventory.fromJSON(j);
     expect(r.count('bandage')).toBe(3);
     expect(r.invariants()).toEqual([]);

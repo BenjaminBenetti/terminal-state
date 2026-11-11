@@ -3,7 +3,7 @@
 // cooked Meshy model, two nodes 'lockbox-body' / 'lockbox-lid' with the lid's origin on the back-top hinge line, front +Z, baked at
 // runtime size — or a plain placeholder box while that model is missing), the hinged lid animation, an untextured dark liner in the
 // open cavity, the pick box for aim + [E]. Its collision is a solid box among the car's colliders (world/playerTrain.ts
-// trainColliders: game.propIndex + layout.props, like the train walls); the 40-slot contents are lane BOX's (run/trainLockbox.ts,
+// trainColliders: game.propIndex + layout.props, like the train walls); the LOCKBOX_SLOTS contents are lane BOX's (run/trainLockbox.ts,
 // ui/lockboxView.ts), reached through PlayerTrainRuntime.onLockboxInteract / setLockboxOpen / lockboxWorld / lockboxAimed.
 //
 // Prop rules (root CLAUDE.md): an ANCHORED fixture — bolted to the car floor, no physics body, never knocked about (rule 3 exception,
