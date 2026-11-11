@@ -20,6 +20,9 @@
 //    wardrobe look, kill memory — is unchanged; on its own rng fork (drawn from only when a store exists), so a mall WITHOUT a lingerie
 //    store is byte-identical to one generated without this pass.
 // The AI is the ordinary zombie's: no leash, despawn or teleport — after aggro a variant may follow the player out of the store.
+// (Task gameplay-feedback-20261111, lane SPAWNS: while a variant stands inside the store its random walk targets — idle wander,
+// search spots — stay in the store: its wander home, ai/wanderHome.ts; before, the unbounded idle wander walked most variants out
+// of the store within ~3 minutes with nobody near.)
 
 import type {Rng} from '../../core/rng';
 import {CELL, FLOOR} from '../grid';
@@ -69,6 +72,20 @@ export function isLingerieStore(s: MallShop): boolean {
 /** The lingerie stores of a layout (0 or 1: the program is optional and capped at one per mall). */
 export function lingerieStores(layout: Pick<StationLayout, 'mall'>): LingerieShop[] {
   return (layout.mall?.shops ?? []).filter(isLingerieStore) as LingerieShop[];
+}
+
+/**
+ * The store's OWN areas (task gameplay-feedback-20261111, lane SPAWNS: its variants' wander home, ai/wanderHome.ts): its sales floor
+ * + every area of its purpose on its storey (a changing area carved as its own room) — never its stock room or a public walkway
+ * (the floor placeStore's `own` set may place on).
+ */
+export function lingerieStoreAreas(layout: Pick<StationLayout, 'areas'>, shop: LingerieShop): Set<number> {
+  const own = new Set<number>([shop.area]);
+  const purpose = shop.fit?.purpose ?? layout.areas[shop.area]?.purpose;
+  if (purpose !== undefined) {
+    for (const a of layout.areas) if (a.purpose === purpose && (a.level ?? 0) === shop.level && a.id !== shop.backroom && !a.publicSpace) own.add(a.id);
+  }
+  return own;
 }
 
 /** One store run (QA / tests). */
