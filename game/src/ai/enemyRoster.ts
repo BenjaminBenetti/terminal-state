@@ -137,7 +137,7 @@ export const FAMILY_ROSTER: Readonly<Record<EnemyFamilyId, RosterRule>> = {
     slots: {
       contexts: ['station', 'street', 'floor', 'roof', 'pit', 'ring'],
       excludeKinds: ['closet'],
-      excludeRooms: ['exit-stair', 'washroom', 'office-stair', 'stair-core', 'office-elevator', 'supply-closet', 'janitor-closet'],
+      excludeRooms: ['exit-stair', 'washroom', 'office-stair', 'stair-core', 'office-elevator', 'supply-closet', 'janitor-closet', 'electrical-closet'],
       minSideCells: 6, minAreaCells: 80,
     },
     spacingM: 14,
@@ -212,6 +212,12 @@ function pickCount(rows: readonly (readonly [number, number])[], roll: number): 
   return rows[rows.length - 1][0];
 }
 
+/**
+ * The order present families are placed in (lower first; ties in ENEMY_FAMILY_IDS order): the MOST CONSTRAINED FIRST — the
+ * context-locked one, the room-eligible one, the counted one, then the share top-ups (which may stand anywhere their pools allow).
+ */
+export const ROSTER_PLACE_PRIORITY: Readonly<Record<RosterPlacement['place'], number>> = {'context-one': 0, 'eligible-min-one': 1, count: 2, 'share-topup': 3};
+
 /** A family's share of a pool (0 for an empty pool). */
 function shareOf(pool: FamilyPool, family: EnemyFamilyId): number {
   let total = 0, w = 0;
@@ -277,7 +283,7 @@ export function applyEnemyRoster(layout: RosterLayout, level: LevelId, levelSeed
 
   // PHASE 2 — the present families, the MOST CONSTRAINED FIRST (a family that may only stand in a few places claims its place before
   // the families that may stand anywhere): the context-locked one, the room-eligible one, the counted one, then the share top-ups.
-  const PRIORITY: Record<RosterPlacement['place'], number> = {'context-one': 0, 'eligible-min-one': 1, count: 2, 'share-topup': 3};
+  const PRIORITY = ROSTER_PLACE_PRIORITY;
   const ordered = seededFamilies.map((f, k) => [f, k] as const).sort((a, b) => {
     const pa = PRIORITY[(FAMILY_ROSTER[a[0]] as Extract<RosterRule, {mode: 'seeded'}>).place], pb = PRIORITY[(FAMILY_ROSTER[b[0]] as Extract<RosterRule, {mode: 'seeded'}>).place];
     return pa - pb || a[1] - b[1];
@@ -298,6 +304,15 @@ export function applyEnemyRoster(layout: RosterLayout, level: LevelId, levelSeed
         for (const i of zombieSlots) {
           if (rosterRoll(levelSeed, `${rule.key}:topup:${i}`) < Math.min(1, shareOf(poolOf(i), family) * k)) { Z[i].archetype = family; rep.added++; }
         }
+      }
+      if (count(family) === 0) {
+        // PRESENT MEANS AT LEAST ONE: a level whose per-spawn rolls (and top-ups) all missed gets one, in an ordinary zombie's slot
+        // whose pool gives the family weight — picked by weight (the smallest -ln(u) / share), so it stands where it usually does
+        const cand = Z.map((s, i) => (ordinary(s) && shareOf(poolOf(i), family) > 0 ? i : -1)).filter(i => i >= 0)
+          .map(i => [-Math.log(1 - rosterRoll(levelSeed, `${rule.key}:one:${i}`)) / shareOf(poolOf(i), family), i] as const)
+          .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+        if (cand.length) { Z[cand[0][1]].archetype = family; rep.added++; }
+        else rep.noSlot = true; // no ordinary zombie stands where its pools give it weight
       }
     } else if (rule.place === 'eligible-min-one') {
       const er = profile.eligibility?.[family];

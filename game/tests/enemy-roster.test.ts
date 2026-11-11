@@ -144,7 +144,7 @@ describe('seeded roster: placement policies (synthetic levels: the pass itself, 
       expect(on / off, `${f}: total with the roster / without`).toBeGreaterThan(0.9);
       expect(on / off, `${f}: total with the roster / without`).toBeLessThan(1.1);
       expect(offWith / N).toBeGreaterThan(0.7); // before: in most levels by accident
-      expect(presentWith / present).toBeGreaterThan(0.85); // now: a present level really has them (30 slots)
+      expect(presentWith).toBe(present); // now: PRESENT MEANS AT LEAST ONE (a level whose rolls all missed is given one)
     }
   });
 
@@ -200,6 +200,8 @@ describe('seeded roster: real levels through the registry', () => {
           const R = rep.families[f]!, n = countOf(b, f);
           expect(R.present).toBe(R.eligible && familyInRoster(f, level, seed));
           if (!R.present) expect(n, `${level} ${seed}: absent ${f}`).toBe(0);
+          // present means at least one — unless the level has no slot the family may take at all (reported, never silent)
+          else if (!R.noSlot) expect(n, `${level} ${seed}: present ${f}`).toBeGreaterThanOrEqual(1);
           expect(R.after).toBe(b.zombies.filter(z => z.horde === undefined && z.look === undefined && arch(z) === f).length);
         }
         // the Screacher: 1-3 in an ordinary combat space of the core contexts, each with an approved body
@@ -216,6 +218,8 @@ describe('seeded roster: real levels through the registry', () => {
             expect(rule.slots.contexts).toContain(spawnContextOf(b, P, i));
             const area = b.areas[z.area];
             expect(area.kind).not.toBe('closet');
+            expect(rule.slots.excludeRooms).not.toContain(area.type);
+            if (area.purpose !== undefined) expect(rule.slots.excludeRooms, `${level} ${seed}: a Screacher in ${area.purpose}`).not.toContain(area.purpose);
             expect(Math.min(area.w, area.h)).toBeGreaterThanOrEqual(rule.slots.minSideCells);
             const was = arch(a.zombies[i]); // an ordinary zombie as rolled, or a family this level's roster excludes (cleared first)
             expect(was === 'zombie' || rep.families[was]?.present === false, `${level} ${seed} #${i} was ${was}`).toBe(true);

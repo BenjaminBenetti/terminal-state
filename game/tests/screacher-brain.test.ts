@@ -433,4 +433,30 @@ describe('Screacher brain: the echo', () => {
     run(b, {px: 2, pz: 0, alive: false, echo: () => { asked++; return {x: 2, z: 0, y: 0}; }}, SCREACHER_ECHO.holdS + 0.5);
     expect([asked, b.belief]).toEqual([0, null]);
   });
+
+  it('a corpse is inert: dead, it never screams, scans, hears or moves again — also when it died mid-scream and its body is moved', () => {
+    const b = new ScreacherBrain(0, 0, 0), mid = quiet(5, 0, 0);
+    b.echoT = 30;
+    expect(b.damage(SCREACHER_STATS.hp, 60, 0, 0)).toBe(true);
+    mid.echoT = 0.01;
+    let asked = 0;
+    const s: Sim = {px: 3, pz: 0, echo: () => { asked++; return {x: 3, z: 0, y: 0}; }};
+    run(mid, s, SCREACHER_ECHO.cueS * 0.5);
+    expect(mid.screaming).toBe(true);
+    expect(mid.damage(SCREACHER_STATS.hp, 60, 0, 0)).toBe(true);
+    expect(mid.screaming).toBe(false);
+    const before = [b.screamSeq, mid.screamSeq, b.echoScans, mid.echoScans, asked];
+    for (const c of [b, mid]) {
+      // three minutes as a corpse, carried somewhere else half-way through, with every kind of noise beside it
+      for (let t = 0; t < 180; t += 0.1) {
+        if (Math.abs(t - 90) < 0.05) { c.x += 25; c.z -= 12; }
+        const x = c.x, z = c.z, out = c.update(0.1, world(s));
+        expect([out.anim, out.speed, out.attackHit, c.x, c.z]).toEqual(['Death', 0, false, x, z]);
+        expect(c.hearNoise(c.x + 1, c.z, 30, 0, t % 2 < 1 ? 'gunshot' : 'impact')).toBe(false);
+      }
+      expect(c.screaming).toBe(false);
+    }
+    expect(deliverNoise([b, mid], {x: b.x, y: 0, z: b.z}, 40, 'impact', () => true, [0])).toBe(0);
+    expect([b.screamSeq, mid.screamSeq, b.echoScans, mid.echoScans, asked]).toEqual(before);
+  });
 });

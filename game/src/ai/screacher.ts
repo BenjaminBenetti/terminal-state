@@ -108,7 +108,7 @@ export const SCREACHER_STATS: ZombieStats = {
 export type ScreacherNoiseKind = 'gunshot' | 'run' | 'land' | 'impact' | 'drag' | 'touch' | 'echo' | 'pain';
 
 /**
- * LOUDNESS (source radius, m; walls x0.6 and floor slabs x0.35 each on top: brain.ts HEARING, the gunfire rule) of the sounds the
+ * LOUDNESS (source radius, m; a wall between x0.6, or — across floors — x0.35 per slab instead: brain.ts HEARING, the gunfire rule) of the sounds the
  * game reports to Screachers. Gunshots / melee contact / explosions keep their existing radii (WeaponDef.noise 24-40 m, melee 5-9 m).
  *  - run: ONE sprinting footstep (walking and crouch-walking make no qualifying sound: sneaking past is possible);
  *  - land: a landing of at least landMinSpeed m/s (a jump lands at ~4.1 m/s: 8.9 m; a step off a kerb does not count);
