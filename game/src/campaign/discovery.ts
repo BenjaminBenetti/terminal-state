@@ -4,9 +4,10 @@
 //
 //  - A new campaign knows and has visited only the start; the train stands there.
 //  - The train console reveals the current station and every one-hop neighbour (revealAround); known stations are never forgotten.
-//  - Travel goes to a KNOWN station adjacent to the current one (never the current station itself), or (campaign-polish lane MAP) to
-//    a VISITED station over a route of visited stations (travelPlan: one continuous journey) — unless the 1337 map cheat is on for
-//    this run (enableCheat: the whole network becomes known and any station is a direct destination).
+//  - Travel goes to a KNOWN station adjacent to the current one (never the current station itself), or (campaign-polish lane MAP;
+//    widened by task gameplay-feedback-20261111, lane TRAVEL) to any KNOWN station over the known track the map prints (travelPlan /
+//    knownRoute: the cheapest route, one continuous journey; the fuel rules decide whether the train can pay it) — unless the 1337 map
+//    cheat is on for this run (enableCheat: the whole network becomes known and any station is a direct destination).
 //  - Saves made before the Maintenance Route existed get it once on load (upgradeCampaign: a minimal, deterministic graph update).
 //  - Arrival marks the station visited (and known) and makes it current.
 //  - The map shows the known stations and every edge whose two ends are known (with the cheat: everything).
@@ -61,27 +62,78 @@ export function revealStations(state: CampaignState, ids: readonly StationId[]):
 
 /**
  * Whether the train may travel to `to` now: a known neighbour of the current station, or (task campaign-polish-20261103-063841, lane
- * MAP) a VISITED station reachable over visited stations (travelPlan); any other station with the cheat.
+ * MAP; widened by task gameplay-feedback-20261111, lane TRAVEL) any KNOWN station over known track (travelPlan); any other station with
+ * the cheat. Fuel is not part of this: the departure's fuel check pays (or refuses) the whole route.
  */
 export function canTravel(state: CampaignState, to: StationId): boolean {
   return travelPlan(state, to) !== null;
 }
 
-// --- multi-hop travel (task campaign-polish-20261103-063841, lane MAP) --------------------------------------------------------------
+// --- multi-hop travel (task campaign-polish-20261103-063841, lane MAP; task gameplay-feedback-20261111, lane TRAVEL) -----------------
 //
-// User: "Allow travel across multiple nodes when those nodes are already explored." 'Explored' = VISITED (the stable flag), never merely
-// revealed one hop away. A visited destination is reached over connected track whose every station after the current one is visited
-// (the current station is visited by definition); the shortest such route, ties broken by station id (the lexicographically smallest
-// id sequence among the shortest). Never across an unvisited / unknown station, never ignoring the track. Adjacent unexplored travel is
-// unchanged; the 1337 cheat stays its own separate permission (a direct cheat trip, no route).
+// History: campaign-polish (user: "Allow travel across multiple nodes when those nodes are already explored") allowed a multi-hop trip
+// only to a VISITED station over visited stations, so a known but unvisited station was reachable only from one stop away.
+// Task gameplay-feedback-20261111 (user: "Fix map travel beyond adjacent nodes: allow connected multi-hop routes whenever the existing
+// fuel rules can pay the complete route cost"): a destination is ANY KNOWN station reached over KNOWN TRACK — the edges the map prints
+// (both ends known: visibleEdges). That is exactly a chain of trips the one-hop rule already allows (a known neighbour of where the
+// train stands), made as one journey; never over track the map does not print (an unknown station / edge), never ignoring the track.
+//  - The route is the CHEAPEST: fewest hops (fuel: one standard tank per hop, fuel/fuel.ts routeCost — the existing per-hop price);
+//    among equally short routes the one passing the fewest never-visited stations (an explored route wins a tie, so every route the
+//    visited-only rule chose is unchanged when it was already the shortest); then the lexicographically smallest id sequence.
+//  - One exception keeps the endgame where it is: the Reactor is never PASSED before it was visited (it may be the destination; the
+//    Maintenance Route is the way past it, campaign/network.ts) — the visited-only rule never passed an unvisited Reactor either.
+//  - Passing a station by rail is NOT a visit (unchanged from campaign-polish): only the destination is prepared / built / arrived at
+//    and marked visited; a station passed is never loaded, looted, revealed around (no console reveal) or healed at, and it stays
+//    "not visited yet" on the map. Fuel decides the rest at departure (Game.fuelCheck: the complete route cost, refused with the numbers).
+// Adjacent travel is unchanged (one hop to a known neighbour); the 1337 cheat stays its own separate permission (a direct cheat trip).
 
 /** A trip the console may start: `route` = [current, ..., to] (2 stations: one hop). */
 export interface TravelPlan { to: StationId; route: StationId[]; hops: number; cheat: boolean }
 
-/** Why `to` is not a destination: the current station, not a station on the map, not visited and not one stop away, no visited route. */
-export type TravelBlock = 'here' | 'unknown' | 'not-explored' | 'no-route';
+/** Why `to` is not a destination: the current station, not a station on the map, no known track from here. */
+export type TravelBlock = 'here' | 'unknown' | 'no-route';
 
-/** The shortest route current -> `to` over VISITED stations only (ties: smallest ids), or null (unvisited target / no such route). */
+/**
+ * The cheapest route current -> `to` over KNOWN track (task gameplay-feedback, lane TRAVEL; the rules above): every station on it
+ * known, consecutive stations joined by track, the Reactor passed only once visited; fewest hops, then fewest never-visited stations
+ * passed, then the smallest id sequence. [current] for the current station; null when `to` is not a known network station or no known
+ * track leads there.
+ */
+export function knownRoute(state: CampaignState, to: StationId): StationId[] | null {
+  const net = state.network, from = state.current;
+  const known = new Set(state.known), visited = new Set(state.visited);
+  if (!hasNode(net, to) || !known.has(to) || !known.has(from)) return null;
+  if (from === to) return [from];
+  // a station the train may run THROUGH: known, and never the Reactor before it was visited
+  const passable = (id: StationId) => known.has(id) && (id !== net.reactor || visited.has(id));
+  // hops to `to` (breadth first from the destination; only the destination and passable stations lead on), until the current station
+  const d = new Map<StationId, number>([[to, 0]]);
+  const q = [to];
+  for (let i = 0; i < q.length && !d.has(from); i++) {
+    for (const n of neighbors(net, q[i])) if (!d.has(n) && (n === from || passable(n))) { d.set(n, d.get(q[i])! + 1); q.push(n); }
+  }
+  if (!d.has(from)) return null;
+  // never-visited stations passed from each station on to `to` along a shortest route (the destination itself is not passed)
+  const f = new Map<StationId, number>([[to, 0]]);
+  const nearer = (c: StationId) => neighbors(net, c).filter(n => d.get(n) === d.get(c)! - 1 && f.has(n)); // id-sorted
+  for (const c of q.slice(1)) {
+    const best = Math.min(...nearer(c).map(n => f.get(n)!));
+    f.set(c, best + (c !== from && !visited.has(c) ? 1 : 0));
+  }
+  const route = [from];
+  for (let c = from; c !== to;) {
+    const next = nearer(c);
+    const least = Math.min(...next.map(n => f.get(n)!));
+    c = next.find(n => f.get(n) === least)!;
+    route.push(c);
+  }
+  return route;
+}
+
+/**
+ * The campaign-polish rule's route (kept for reference / tests; travelPlan uses knownRoute): the shortest route current -> `to` over
+ * VISITED stations only (ties: smallest ids), or null (unvisited target / no such route).
+ */
 export function visitedRoute(state: CampaignState, to: StationId): StationId[] | null {
   const from = state.current;
   const ok = new Set(state.visited);
@@ -101,22 +153,24 @@ export function visitedRoute(state: CampaignState, to: StationId): StationId[] |
   return route;
 }
 
-/** The trip to `to` the console allows now (one hop to a known neighbour, a visited multi-hop route, or the cheat), else null. */
+/**
+ * The trip to `to` the console allows now (one hop to a known neighbour, a multi-hop route over known track: knownRoute, or the cheat),
+ * else null. A known neighbour is always the one-hop trip (the shortest route).
+ */
 export function travelPlan(state: CampaignState, to: StationId): TravelPlan | null {
   if (to === state.current || !hasNode(state.network, to)) return null;
   const adjacent = neighbors(state.network, state.current).includes(to);
   if (state.cheat) return {to, route: [state.current, to], hops: 1, cheat: !adjacent};
-  if (adjacent && state.known.includes(to)) return {to, route: [state.current, to], hops: 1, cheat: false};
-  const route = visitedRoute(state, to);
+  const route = knownRoute(state, to);
   return route ? {to, route, hops: route.length - 1, cheat: false} : null;
 }
 
-/** Why travelPlan(state, to) is null (null when it is not). */
+/** Why travelPlan(state, to) is null (null when it is not): the current station, not on the map, no known track from here. */
 export function travelBlock(state: CampaignState, to: StationId): TravelBlock | null {
   if (travelPlan(state, to)) return null;
   if (to === state.current) return 'here';
   if (!hasNode(state.network, to) || !(state.cheat || state.known.includes(to))) return 'unknown';
-  return state.visited.includes(to) ? 'no-route' : 'not-explored';
+  return 'no-route';
 }
 
 /** The pending transit record of a plan (departure autosave): a multi-hop trip carries its route. */
@@ -126,17 +180,21 @@ export function transitOf(state: CampaignState, plan: TravelPlan): NonNullable<C
 
 /**
  * A transit's route problem (null = fine): [from, ..., to], >= 3 stations, no repeats, consecutive pairs on the track, every station
- * after `from` visited, never with the cheat flag. Shared by validateCampaign and the save validator (save/validate.ts).
+ * after `from` on the map (known; task gameplay-feedback lane TRAVEL — was: visited, so every route an older save holds stays valid: a
+ * visited station counts too), the Reactor never passed before it was visited, never with the cheat flag. Structural only (not "the
+ * cheapest"). Shared by validateCampaign and the save validator (save/validate.ts). `visited` defaults to `known`.
  */
-export function transitRouteProblem(net: SubwayNetwork, t: {from: unknown; to: unknown; cheat: unknown; route?: unknown}, visited: ReadonlySet<string>): string | null {
+export function transitRouteProblem(net: SubwayNetwork, t: {from: unknown; to: unknown; cheat: unknown; route?: unknown}, known: ReadonlySet<string>, visited: ReadonlySet<string> = known): string | null {
   const r = t.route;
   if (!Array.isArray(r) || r.length < 3 || r.length > net.nodes.length || r.some(x => typeof x !== 'string')) return 'a journey route must list 3 or more stations';
   if (t.cheat === true) return 'a cheat journey has no route';
   if (r[0] !== t.from || r[r.length - 1] !== t.to) return 'a journey route must run from its start to its destination';
   if (new Set(r).size !== r.length) return 'a journey route repeats a station';
   for (let i = 1; i < r.length; i++) {
-    if (!neighbors(net, r[i - 1] as string).includes(r[i] as string)) return `a journey route has no track ${String(r[i - 1])} - ${String(r[i])}`;
-    if (!visited.has(r[i] as string)) return `a journey route passes ${String(r[i])}, which was never visited`;
+    const id = r[i] as string, passed = i < r.length - 1;
+    if (!neighbors(net, r[i - 1] as string).includes(id)) return `a journey route has no track ${String(r[i - 1])} - ${id}`;
+    if (!known.has(id) && !visited.has(id)) return `a journey route ${passed ? 'passes' : 'ends at'} ${id}, which is not on the map`;
+    if (passed && id === net.reactor && !visited.has(id)) return `a journey route passes the Reactor ${id} before it was visited`;
   }
   return null;
 }
@@ -219,7 +277,7 @@ export function validateCampaign(state: unknown): string[] {
     const tr = t as Record<string, unknown> | undefined;
     if (!tr || typeof tr !== 'object' || !ids.has(tr.from as string) || !ids.has(tr.to as string) || tr.from === tr.to || tr.phase !== 'departing' || typeof tr.cheat !== 'boolean') errs.push('campaign: bad transit');
     else if (tr.from !== s.current) errs.push('campaign: a transit must leave the current station');
-    else if (tr.route !== undefined) { const p = transitRouteProblem(net, tr as {from: unknown; to: unknown; cheat: unknown; route: unknown}, new Set(visited ?? [])); if (p) errs.push(`campaign: ${p}`); }
+    else if (tr.route !== undefined) { const p = transitRouteProblem(net, tr as {from: unknown; to: unknown; cheat: unknown; route: unknown}, new Set(known ?? []), new Set(visited ?? [])); if (p) errs.push(`campaign: ${p}`); }
     else if (!tr.cheat && !neighbors(net, tr.from as string).includes(tr.to as string)) errs.push('campaign: a non-cheat transit must go to a neighbour');
   }
   return errs;

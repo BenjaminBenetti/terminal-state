@@ -7,8 +7,8 @@
 // Base-tier stats (exact; documented in reference/tasks/office-space-survival-20261029/lanes/gear.done):
 //   armor_vest  chest     armor 4 pips = 10 % (task studio-general-armor-20261107-231448-01: the pooled armour of player/armor.ts — any enemy hit; was torso-only 20 % on
 //                         the ~50 % of melee hits that land on the torso: the same 10 % on average)
-//   chest_rig   chest     +4 pocket slots (12 -> 16); refused off while those 4 pockets hold anything
-//   backpack    backpack  its own 12-slot container, only reachable while it lies on the ground (6, click, then E)
+//   chest_rig   chest     +4 pocket slots (PACK_SIZE 18 -> 22; 12 -> 16 before task gameplay-feedback-20261111); refused off while those 4 pockets hold anything
+//   backpack    backpack  its own BACKPACK_SLOTS container (6 × 3 = 18; 12 before task gameplay-feedback-20261111), only reachable while it lies on the ground (6, click, then E)
 //   helmet      helmet    armor 1 pip = 2.5 % (was head-only 25 % on the ~10 % of hits that land on the head: the same 2.5 % on average)
 //   boots       boots     move speed x1.05 (walk / sprint / crouch)
 //   gloves      gloves    weapon spread x0.92 · reload / item-use time x0.92
@@ -72,8 +72,18 @@ export type GearIconKey = 'vest' | 'rig' | 'backpack' | 'helmet' | 'boots' | 'gl
 /** Slot display names (inventory gear panel). */
 export const GEAR_SLOT_NAMES: Record<GearSlot, string> = {helmet: 'Head', chest: 'Chest', gloves: 'Hands', boots: 'Feet', backpack: 'Back', mask: 'Face'};
 
-/** Base-tier backpack size (its own container). */
-export const BACKPACK_SLOTS = 12;
+/**
+ * The base-tier backpack's own container shape (the bag view lays its slots out in BACKPACK_GRID.columns). Task gameplay-feedback-20261111
+ * (lane STORAGE; user: one extra row, the same columns): 6 × 2 -> 6 × 3. Change the shape HERE only.
+ */
+export const BACKPACK_GRID: Readonly<{columns: number; rows: number}> = Object.freeze({columns: 6, rows: 3});
+/** Base-tier backpack size (its own container): BACKPACK_GRID columns × rows. */
+export const BACKPACK_SLOTS = BACKPACK_GRID.columns * BACKPACK_GRID.rows;
+/**
+ * The backpack size saves were written with before task gameplay-feedback-20261111: such a bag's contents list loads padded to
+ * BACKPACK_SLOTS with empty slots at the end (items/inventory.ts fitBagContents); save/validate.ts accepts both lengths.
+ */
+export const LEGACY_BACKPACK_SLOTS = 12;
 
 const gear = (id: string, name: string, short: string, icon: GearIconKey, spec: GearSpec, description: string): ItemDef =>
   ({id, name, short, kind: 'gear', stackMax: 1, icon, gear: spec, description});

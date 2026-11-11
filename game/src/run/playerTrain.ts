@@ -7,7 +7,7 @@
 // It owns no player inventory, health, survival, injuries or ammo: spawning in the train refills nothing. Later movement / upgrades extend
 // this record. Pure (no three.js / DOM).
 //
-// Task train-lockbox-windows-20261101-232156 (lane BOX): the record also holds the train's LOCKBOX (run/trainLockbox.ts, 40 slots): saved
+// Task train-lockbox-windows-20261101-232156 (lane BOX): the record also holds the train's LOCKBOX (run/trainLockbox.ts, LOCKBOX_SLOTS): saved
 // with the record (`lockbox` in the participant data; an old save without it loads an empty box), emptied by NewGame, kept by Travel.
 // `state` stays the train identity only.
 //
@@ -118,7 +118,7 @@ function valid(d: unknown): d is PlayerTrainState {
 
 export class PlayerTrainRecord {
   private s: PlayerTrainState = fresh();
-  /** Lane BOX: the train's 40-slot Lockbox (the same object for the whole session; load / reset write it in place). */
+  /** Lane BOX: the train's LOCKBOX_SLOTS-slot Lockbox (the same object for the whole session; load / reset write it in place). */
   readonly lockbox = new TrainLockbox();
   /** Task train-fuel-system: the tank + the carts aboard (the same object for the whole session). */
   readonly fuel = new TrainFuel();

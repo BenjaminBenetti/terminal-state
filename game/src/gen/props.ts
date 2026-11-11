@@ -347,6 +347,11 @@ export interface PropPlacement {
   shop?: number;
   /** Purpose override for loot/QA (e.g. a hot-dog cart standing in a hall); else the area's purpose. */
   purpose?: string;
+  /**
+   * Task gameplay-feedback-20261111 (lane FUEL-LOOT): a loot holder whose AMMO finds become another category — a key of items/loot.ts
+   * AMMO_SWAPS (the Bunker storey S's station rations, gen/bunker/v2/stationRations.ts). Its table, theme and every other find stay.
+   */
+  ammoSwap?: string;
   /** Iteration 07 (P2): on-top decor — index (in layout.props) of the host prop it stands on. */
   host?: number;
   /** Iteration 07 (P2): spans of this host's top taken by on-top decor (host-local x, at height y); loot surfaces skip them. */

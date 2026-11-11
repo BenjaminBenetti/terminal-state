@@ -61,7 +61,7 @@ describe('neighbours and the reveal', () => {
 });
 
 describe('travel', () => {
-  it('only to a known neighbour of the current station (or a visited station over visited track), never to the current station', () => {
+  it('only to a known neighbour of the current station (or a known station over known track), never to the current station', () => {
     const s0 = newCampaign(net);
     const nb = neighbors(net, net.start);
     for (const id of nb) expect(canTravel(s0, id)).toBe(false); // adjacent but not on the map yet
@@ -76,9 +76,9 @@ describe('travel', () => {
     const notAdj = s2.known.filter(k => k !== n2 && !neighbors(net, n2).includes(k));
     expect(notAdj).toContain(net.start);
     expect(notAdj.length).toBeGreaterThan(0);
-    // campaign-polish (lane MAP): a known station that is neither one stop away nor VISITED is no destination; a visited one is, over the
-    // visited route (campaign-multihop.test.ts covers the rules)
-    for (const k of notAdj) expect(canTravel(s2, k)).toBe(s2.visited.includes(k));
+    // campaign-polish (lane MAP) let a VISITED station further away be a destination; task gameplay-feedback-20261111 (lane TRAVEL):
+    // every station the console revealed here is reached over the known track (campaign-multihop / travel-multihop tests cover the rules)
+    for (const k of notAdj) expect(canTravel(s2, k)).toBe(true);
     expect(travelPlan(s2, net.start)?.route).toEqual([n2, nb[0], net.start]);
     expect(canTravel(s2, 'st-99')).toBe(false);
   });

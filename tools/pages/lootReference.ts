@@ -1417,6 +1417,15 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
     knobs: [{what: 'the table snacks', value: 'CON_SNACKS / CON_TABLE_SNACK_ROWS / CON_PANEL_DRINK_ROWS', at: B.src.at(F.tables, 'CON_TABLE_SNACK_ROWS'), overrides: ['none']}],
     at: [B.src.at(F.tables, 'CON_TABLE_SNACK_ROWS'), B.src.at(F.tables, 'CON_PANEL_DRINK_ROWS')],
   });
+  // --- task gameplay-feedback-20261111 (lane FUEL-LOOT): the Bunker storey S's station rations (layout version 3): ammo finds -> food / drink
+  if (levels.includes('bunker')) add({
+    id: 'bunker-station-rations', family: 'fixture', label: 'Bunker storey S: station rations in place of ammo finds', class: 'conditional', levels: ['bunker'],
+    summary: 'Layout version 3 (gen/bunker/v2/stationRations.ts placeStationRations): on the platform / elevator storey S only, floor(N / 2) of the storey\'s N ammo opportunities (its ammo-capable holders + the S floor program\'s ammo boxes) become food / drink, in a stable hash order. A converted holder keeps its loot key, table, theme, lot count and empty chance; only its AMMO lots become one serving each of BUNKER_STATION_RATIONS_ROWS (the placement\'s ammo swap, items/loot.ts swapAmmoLots: same lot id, a free spot, every other lot exactly as rolled). The holder contexts above show the unswapped tables. A converted floor box becomes ONE serving of the same rows on the same spot. Gun lockers and weapon finds keep their ammo. Storeys 1-5 and stations first built as version 1 / 2: unchanged. The natural food half applies on first spawn.',
+    items: LT.BUNKER_STATION_RATIONS_ROWS.map(([itemId, w]) => ({itemId, count: 1, note: `weight ${w}`})),
+    probability: 'Seeded: per level ~10 converted S holders (their ~6 ammo lots become servings) and ~0.5 converted S floor ammo boxes (the S floor program places ~1.4).',
+    knobs: [{what: 'the rations rows', value: 'BUNKER_STATION_RATIONS_ROWS', at: B.src.at(F.tables, 'BUNKER_STATION_RATIONS_ROWS'), overrides: ['none']}],
+    at: [B.src.at(F.tables, 'BUNKER_STATION_RATIONS_ROWS'), B.src.at('game/src/gen/bunker/v2/stationRations.ts', 'placeStationRations'), B.src.at(F.loot, 'swapAmmoLots')],
+  });
 
   // --- task reactor-build-20261101: the Reactor's restart parts (guaranteed, placed ONCE by its generator; never in a loot table)
   if (levels.includes('reactor')) add({

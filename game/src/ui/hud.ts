@@ -12,7 +12,7 @@ import {CRITICAL, LOW} from '../player/survival';
 import type {LimbInjury} from '../player/injuries'; // Iteration 16 (lane INJURY)
 import type {MaskHudView} from '../gear/gasMask'; // task gasmask-breach-20261030 (mask lane)
 import type {FuelHudView} from '../world/fuelPort'; // task train-fuel-system (lane PORT)
-import {FUEL} from '../fuel/fuel'; // task studio-general-armor-20261107-231448-01 (the two-tank pip row)
+import {FUEL} from '../fuel/fuel'; // task studio-general-armor-20261107-231448-01 (the tank's pip row: one group per tank)
 import {ARMOR, displayHalfPips, pipRows, pipsText, tempHalfPips} from '../player/armor'; // task studio-general-armor-20261107-231448-01 (the armour pips)
 import {SURVIVAL_MAX} from '../player/survival';
 import {BEERS, BEER_TUNING, isBeer} from '../items/beers'; // task studio-market-bar-20261108-225231-01 (lane BEER)
@@ -87,12 +87,14 @@ export const ARMOR_CSS = `
 #armor-pips i.half.temp { background: linear-gradient(90deg, #a9dcff 50%, rgba(13, 29, 48, 0.6) 50%); }`;
 
 // Task studio-beta-train-fuel-system-20261106-024923-01 (lane PORT): the train FUEL readout — a row at the top of the light panel in the
-// battery meter's style (icon, label, four quarter pips like the battery bar's cells, cream text; amber when the train cannot make one
-// hop). Built on first use (no index.html markup), written only when what it shows changes (world/fuelPort.ts decides when it shows).
+// battery meter's style (icon, label, four quarter pips per tank like the battery bar's cells, cream text; amber when the train cannot
+// make one hop). Built on first use (no index.html markup), written only when what it shows changes (world/fuelPort.ts decides when it
+// shows). Task gameplay-feedback-20261111 (lane TRAVEL): the four-tank train's sixteen pips are narrower (5 px, 1 px apart) so the row
+// stays about as wide as the two-tank row was (~140 px).
 const FUEL_CSS = `
 #fuel-tag.none { display: none; }
-#fuel-tag .pips { display: flex; gap: 2px; }
-#fuel-tag .pips i { width: 11px; height: 7px; background: #111315; border: 1px solid #3a3f44; }
+#fuel-tag .pips { display: flex; gap: 1px; }
+#fuel-tag .pips i { width: 5px; height: 7px; background: #111315; border: 1px solid #3a3f44; }
 #fuel-tag .pips i.on { background: var(--cream); }
 #fuel-tag .pips i.gap { margin-left: 4px; }
 #fuel-tag .txt { color: var(--cream); white-space: nowrap; }
@@ -475,7 +477,8 @@ export class Hud {
     if (!v) return;
     el.classList.toggle('low', v.low);
     el.title = 'Train fuel: one tank = one stop. Pour fuel cans in at the fuel cap (E); fuel cans in the train chest and fuel carts inside the car are burnt by themselves when the train departs.';
-    // (task studio-general-armor-20261107-231448-01) the train's two-tank reserve: two groups of four quarter pips (one group = one hop)
+    // (task studio-general-armor-20261107-231448-01; four tanks since task gameplay-feedback lane TRAVEL) the train's reserve: one group
+    // of four quarter pips per tank (one group = one hop), FUEL.trainTankUnits pips in all
     const pips = Array.from({length: FUEL.trainTankUnits}, (_, i) => `<i class="${i < v.pips ? 'on' : ''}${i > 0 && i % FUEL.tankUnits === 0 ? ' gap' : ''}"></i>`).join('');
     el.innerHTML = `<span class="ico">${ICONS.fuelCan}</span><span class="pips">${pips}</span><span class="txt">${v.text.replace(/[&<>]/g, c => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'))}</span>`;
   }

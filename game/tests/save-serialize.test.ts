@@ -1,6 +1,6 @@
 // Task studio-alpha-campaign-foundation-20261102-230708-01 (lane SAVE): save/serialize.ts — a POPULATED campaign run survives
 // capture -> JSON text -> validation -> restore into fresh live objects: every station's memory (two different Subway stations stay
-// distinct), the carried inventory with nested backpack contents and uids, the 40-slot Lockbox, the participants (train, injuries,
+// distinct), the carried inventory with nested backpack contents and uids, the 50-slot Lockbox, the participants (train, injuries,
 // gas mask), the Retry snapshot, playtime, the game clock; nothing is duplicated, healed or refilled; later uids never collide.
 import {describe, expect, it} from 'vitest';
 import {createMemory, type SectionMemory} from '../src/run/memory';
@@ -18,6 +18,7 @@ import type {RestoreHandoff, TrainLocalPose} from '../src/save/serialize';
 import type {RunState} from '../src/run/runState';
 import {Inventory} from '../src/items/inventory';
 import {PlayerTrainRecord} from '../src/run/playerTrain';
+import {LOCKBOX_SLOTS} from '../src/run/trainLockbox';
 import {Survival} from '../src/player/survival';
 import {installCanvasShim} from './helpers/canvas2d';
 
@@ -112,9 +113,9 @@ describe('save/serialize: a populated campaign run round-trips', () => {
     expect(b.battery).toEqual({charge: 0.4375, on: true, died: false});
     expect(b.batteryResets).toEqual([0.4375]);
     expect(b.stats).toEqual(a.stats);
-    // participants: the train record + 40-slot Lockbox (nested bags), injuries, gas mask
+    // participants: the train record + the full LOCKBOX_SLOTS (50) Lockbox (nested bags), injuries, gas mask
     expect(b.train.lockbox.toJSON()).toEqual(a.train.lockbox.toJSON());
-    expect(b.train.lockbox.used).toBe(40);
+    expect(b.train.lockbox.used).toBe(LOCKBOX_SLOTS);
     expect(b.train.lockbox.invariants()).toEqual([]);
     expect(b.train.state).toEqual(a.train.state);
     expect(b.injuries.snapshot()).toEqual({v: 1, arm: {side: 'left', cause: 'bite'}, leg: null, cooldown: 3.5});
@@ -176,7 +177,7 @@ describe('save/serialize: a populated campaign run round-trips', () => {
     expect(p.run.peekMemory(key(1))).toBeDefined();
     installRestore(p, b.target());
     expect(b.run).toBe(p.run);
-    expect(b.train.lockbox.used).toBe(40);
+    expect(b.train.lockbox.used).toBe(LOCKBOX_SLOTS);
   });
 
   it('compact codecs: holders (flags, compartments seen) and loose items (11 / 12 / 14 tuples) decode exactly', () => {

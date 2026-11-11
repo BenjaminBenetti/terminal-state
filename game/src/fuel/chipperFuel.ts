@@ -2,9 +2,11 @@
 // train"): the train CHIPPER'S FUEL — an emergency source, deliberately slow. The player carries one real dead undead body at a time to
 // the woodchipper fixed in the train (world/chipper.ts) and feeds it; about 20 active seconds later it is ground and its blood is fuel.
 //
-// UNITS. Every existing fuel quantity stays in whole QUARTERS (fuel/fuel.ts FUEL: a can 1, the train tank 8, a hop 4, a cart 8). The
-// chipper keeps its own credit in integer TICKS of 1/5 quarter (a standard 4-quarter tank = 20 ticks), so one body = 0.1 standard tank =
-// 0.4 quarter = EXACTLY 2 ticks: 10 bodies = 20 ticks = 4 quarters (one hop), 20 bodies = 40 ticks = 8 quarters (a full empty train).
+// UNITS. Every existing fuel quantity stays in whole QUARTERS (fuel/fuel.ts FUEL: a can 1, the train tank 16 — four tanks since task
+// gameplay-feedback-20261111 lane TRAVEL, was 8 —, a hop 4, a cart 8). The chipper keeps its own credit in integer TICKS of 1/5 quarter
+// (a standard 4-quarter tank = 20 ticks), so one body = 0.1 standard tank = 0.4 quarter = EXACTLY 2 ticks: 10 bodies = 20 ticks =
+// 4 quarters (one hop), 20 bodies = 40 ticks = 8 quarters (two tanks), 40 bodies = a full empty four-tank train. The yield per body and
+// the machine's own buffer (bufferMaxTicks) did NOT change with the bigger tank; only the transfer's room (FUEL.trainTankUnits) did.
 // No fractional quarter ever exists in the tank, a cart, a can, a debit or a save; the machine's remainder (0..4 ticks below a whole
 // quarter, or more while the tank is full) waits in the machine, persistent, and is never floored away, clamped off or counted twice.
 //
@@ -29,7 +31,7 @@ export const CHIPPER = {
   ticksPerQuarter: 5,
   /** One body = 0.1 standard tank = 0.4 quarter. */
   bodyTicks: 2,
-  /** Finite credit the machine can hold (ticks): two standard tanks waiting while the train's tank is full. */
+  /** Finite credit the machine can hold (ticks): two standard tanks waiting while the train's tank is full (the machine's own size: not the tank's). */
   bufferMaxTicks: 40,
   /** Active grinding per body (ms; the train parked). */
   grindMs: 20000,

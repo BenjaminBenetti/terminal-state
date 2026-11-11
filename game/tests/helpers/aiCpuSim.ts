@@ -31,6 +31,7 @@ import {ENEMY_MODEL_FILES, withEnemyModels} from '../../src/ai/enemyModels';
 import {ZombieLookLibrary} from '../../src/ai/outfits';
 import {LINGERIE_MODEL_FILES, createLingerieLibrary} from '../../src/ai/lingerie';
 import {chooseSpawnLook} from '../../src/ai/spawnLook';
+import {homeWorld, wanderHomeOf, type WanderHome} from '../../src/ai/wanderHome';
 import {ZombieActor} from '../../src/ai/zombieActor';
 import {archetypeOf, createEnemyActor, enemyCues, type EnemyActor} from '../../src/ai/creatureArchetypes';
 import {STAND_EYE} from '../../src/player/player';
@@ -97,6 +98,8 @@ export interface AiCpuSimOpts {
   clock?: 'real' | 'virtual';
   /** A/B: other Levels / PathFinder implementations with the same API (e.g. a pre-change copy); default the game's. */
   impl?: {Levels: new (levels: never, links: never, rails: never) => Levels; PathFinder: new (src: never) => PathFinder};
+  /** The zone-local wander homes (ai/wanderHome.ts, as Game.updateZombies); false = the pre-home world for every enemy (A/B). */
+  wanderHomes?: boolean;
 }
 
 export function aiCpuSim(layout: StationLayout, o: AiCpuSimOpts) {
@@ -171,6 +174,9 @@ export function aiCpuSim(layout: StationLayout, o: AiCpuSimOpts) {
     zombies.push(actor);
     brains.push(actor.brain);
   });
+  // (task gameplay-feedback-20261111, lane SPAWNS: Game.buildSection's wander homes — the lingerie store's variants, the damp Strainer)
+  const homeCache = new Map<string, WanderHome>();
+  const homes = layout.zombies.map(s => (o.wanderHomes === false ? null : wanderHomeOf(layout, s, homeCache)));
   const director = layout.hordes?.length ? new HordeDirector(layout, L, i => brains[i], spawnProfile('mall').horde?.patrol) : null;
   // --- lights (the flashlight: world/lightSources.ts contract, player/flashlight.ts beam) ---
   const beam: LightSource = {id: 1, kind: 'flashlight', active: !!o.flashlight, x: 0, y: 0, z: 0, dir: {x: 0, y: 0, z: -1}, cosHalfAngle: Math.cos(0.58), spot: null, attractRange: 20, intensity: 1};
@@ -280,7 +286,8 @@ export function aiCpuSim(layout: StationLayout, o: AiCpuSimOpts) {
         reqActor = z;
         const seqBefore = b.attackSeq;
         let c2 = now();
-        const out: BrainOutput = b.update(dt, w);
+        const home = homes[zi];
+        const out: BrainOutput = b.update(dt, home ? homeWorld(w, home, L, b) : w);
         let c3 = now();
         cost.brain += c3 - c2; // (includes its synchronous path searches, as the game's ai.brain span; `path` is their share)
         reqActor = null;

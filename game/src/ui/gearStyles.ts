@@ -1,8 +1,23 @@
 // Iteration 16 (lane GEAR): styles of the inventory gear panel, the grounded-bag transfer view and the 'click to aim' prompt.
 // Injected once from JS (no edits to the shared stylesheet / index.html); uses the game's CSS variables and .slot look.
+// Task gameplay-feedback-20261111 (lane STORAGE): the pockets grids (inventory screen, bag view) and the bag's own grid take their
+// columns from POCKET_GRID / BACKPACK_GRID (one more row each, the same 6 columns) — a column count without a static rule gets one.
+
+import {POCKET_GRID} from '../items/inventory';
+import {BACKPACK_GRID} from '../items/gear';
+
+/**
+ * Grid columns of the pockets / a backpack's slots (the shape constants: items/inventory.ts POCKET_GRID, items/gear.ts BACKPACK_GRID):
+ * the inventory screen's pockets, and a .bv-gN rule for a bag-view column count the static rules below (4-7) do not have.
+ */
+export const gridRules = (): string => {
+  const cols = (n: number) => `grid-template-columns: repeat(${n}, 1fr);`;
+  const extra = [...new Set([POCKET_GRID.columns, BACKPACK_GRID.columns])].filter(n => n < 4 || n > 7);
+  return `#inv-pack { ${cols(POCKET_GRID.columns)} }\n${extra.map(n => `#bagview .bv-g${n} { ${cols(n)} }\n`).join('')}`;
+};
 
 const CSS = `
-#inventory.screen { align-items: safe center; } /* the taller panel (gear row, 16 pockets) scrolls from its top on short screens */
+#inventory.screen { align-items: safe center; } /* the taller panel (gear row, 18 pockets + a chest rig's 4) scrolls from its top on short screens */
 #inv-gear-wrap { margin: 6px 0 2px; }
 #inv-gear-wrap h3 { display: flex; align-items: baseline; gap: 10px; }
 #inv-gear-wrap h3 .gear-sum { font-size: 12px; font-weight: 400; color: var(--cream-dim); letter-spacing: 0; text-transform: none; }
@@ -86,6 +101,6 @@ export function ensureGearStyles(): void {
   injected = true;
   const el = document.createElement('style');
   el.id = 'gear-styles';
-  el.textContent = CSS;
+  el.textContent = CSS + gridRules(); // (lane STORAGE: + the pockets / bag grid columns from the shape constants)
   document.head.appendChild(el);
 }

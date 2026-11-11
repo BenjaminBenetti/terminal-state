@@ -2,9 +2,12 @@
 //
 // Units: one QUARTER of the train's tank is the unit everything counts in (integers only: no partial cans, no float drift).
 //   - one TANK is FUEL.tankUnits (4 quarters = ONE hop); the train's built-in tank holds FUEL.trainTankUnits (task
-//     studio-general-armor-20261107-231448-01, user: "train should be able to hold 2 tanks of fuel internally": 8 = two tanks; was one);
-//     a New Game starts EMPTY (0);
-//   - every actual track EDGE travelled costs FUEL.hopUnits (4), a multi-hop route hops x 4 — paid once, at departure;
+//     studio-general-armor-20261107-231448-01, user: "train should be able to hold 2 tanks of fuel internally": 8 = two tanks; was one;
+//     task gameplay-feedback-20261111 lane TRAVEL, user: "Increase the train tank from two to four standard tanks": 16 = four tanks —
+//     the capacity only: a hop, a can, a cart, the chipper's yield, station / market fuel are unchanged, and a saved tank loads with its
+//     exact amount, never topped up); a New Game starts EMPTY (0);
+//   - every actual track EDGE travelled costs FUEL.hopUnits (4), a multi-hop route hops x 4 — paid once, at departure (the complete
+//     route: campaign/discovery.ts travelPlan picks the cheapest route over known track; Game.fuelCheck pays or refuses it whole);
 //   - a fuel CAN (`fuel_can`, an ordinary inventory item: pockets / quick slots / bags / the train chest) holds FUEL.canUnits (1),
 //     stacks to FUEL.canStackMax (2): two slots carry a full tank;
 //   - an optional FUEL CART (a hand truck with a drum: a physical, wheeled world object; never an inventory item) holds up to
@@ -29,10 +32,11 @@ export const FUEL = {
   /** One tank in quarter units (= one hop: the unit the HUD / map count tanks in). */
   tankUnits: 4,
   /**
-   * The train's built-in tank capacity in quarter units: TWO tanks (task studio-general-armor-20261107-231448-01; was one). The ONE
-   * capacity every clamp / validator / pour / refund / gauge reads; a hop still costs FUEL.hopUnits.
+   * The train's built-in tank capacity in quarter units: FOUR tanks (task gameplay-feedback-20261111 lane TRAVEL; was two — task
+   * studio-general-armor-20261107-231448-01 — and one before that). The ONE capacity every clamp / validator / pour / refund / chipper
+   * transfer / gauge reads; a hop still costs FUEL.hopUnits. Fuel supply (station plans, the market's fuel stall) never follows it.
    */
-  trainTankUnits: 8,
+  trainTankUnits: 16,
   /** Cost of one track edge (one hop), quarter units. */
   hopUnits: 4,
   /** One fuel can, quarter units. */
@@ -179,8 +183,11 @@ export interface TrainFuelJSON { v: 1; tank: number; cargo: CargoCartJSON[] }
  * — the fuel cans realized as loot lots in the station's holders (`<holderKey>#<lotId>`, gen/fuelHolders.ts), re-placed on every build
  * (the holder memory then removes the taken ones like any lot). A v1 record (released train-fuel-system saves) has no lots: its
  * station gets the one-time v2 delta on its next build (world/fuelStations.ts).
+ * v3 (task gameplay-feedback-20261111, lane FUEL-LOOT): the v2 shape, written by the coordinator that keys the realization by the station
+ * being BUILT. Releases writing v2 realized a journey's destination under the DEPARTURE station's key (Game's `holders` phase ran before
+ * run.current moved on): a v2 record may describe another station, so world/fuelStations.ts reads v2 records as legacy.
  */
-export interface StationFuelJSON { v: 1 | 2; realized: boolean; carts: StationCartJSON[]; lots?: string[] }
+export interface StationFuelJSON { v: 1 | 2 | 3; realized: boolean; carts: StationCartJSON[]; lots?: string[] }
 export const FUEL_LANE = 'fuel.station';
 /** A realized fuel lot's key: the holder's memory key + the lot id. */
 export const FUEL_LOT_KEY = /^[A-Za-z][A-Za-z0-9_]{0,47}@-?\d{1,4}:-?\d{1,9},-?\d{1,9}#\d{1,9}$/;
@@ -234,10 +241,10 @@ export function stationFuelProblem(v: unknown): string | null {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return 'the station fuel record must be an object';
   const o = v as Record<string, unknown>;
   for (const k of Object.keys(o)) if (!['v', 'realized', 'carts', 'lots'].includes(k)) return `unexpected station fuel field '${k}'`;
-  if (o.v !== 1 && o.v !== 2) return 'unsupported station fuel version';
+  if (o.v !== 1 && o.v !== 2 && o.v !== 3) return 'unsupported station fuel version';
   if (typeof o.realized !== 'boolean') return 'station fuel needs a realized flag';
   if (o.v === 1 && o.lots !== undefined) return 'a v1 station fuel record has no lots';
-  if (o.v === 2) {
+  if (o.v === 2 || o.v === 3) {
     if (!Array.isArray(o.lots) || o.lots.length > FUEL_LOTS_MAX) return `station fuel lots must be a list of at most ${FUEL_LOTS_MAX}`;
     const seen = new Set<string>();
     for (const k of o.lots) {
