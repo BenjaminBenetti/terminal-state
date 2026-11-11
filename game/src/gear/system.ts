@@ -54,10 +54,11 @@ export type PlaceRule = (x: number, y: number, z: number, level: number) => stri
 /**
  * Lane CARGO (user: "Backpacks must be placeable aboard the train and travel with it like other items"): a dynamic-volume floor whose
  * owner CARRIES what lies on it (world/trainCargo.ts: the parked player train — its loose items and bags travel with it). For a point on
- * volume `v`: true = inside the carrier (a floor like any other; its cargo takes the bag along), false = the carrier's volume but not
- * inside it (a doorway, its walls: no room), null = not a carrier's volume (a lift cab: it moves — refused).
+ * volume `v`: true = inside the carrier, at least `r` (m) inside its walls (a floor like any other; its cargo takes the bag along),
+ * false = the carrier's volume but not inside it (a doorway, its walls: no room), null = not a carrier's volume (a lift cab: it moves —
+ * refused).
  */
-export type VolumeCarrier = (v: DynamicVolume, x: number, y: number, z: number) => boolean | null;
+export type VolumeCarrier = (v: DynamicVolume, x: number, y: number, z: number, r?: number) => boolean | null;
 
 const IN_LIFT = 'Not inside the elevator — set the backpack down on a floor.';
 /** Clear radius of a set-down bag (m): the circleClear radius, against a carrier's own colliders too (lane CARGO). */
@@ -409,7 +410,7 @@ export class GearSystem {
       if (!Number.isFinite(y) || Math.abs(y - p.y) > 0.2) continue;
       if (!L.lineOfSight({x: p.x, y: p.y + 0.6, z: p.z}, {x, y: p.y + 0.6, z}) || L.railCrosses(p.x, p.z, x, z, 0.05, p.y)) continue;
       if (!L.circleClear(x, z, BAG_CLEAR, y)) continue;
-      const carried = s.volume ? this.carried(s.volume, x, y, z) : null; // (lane CARGO)
+      const carried = s.volume ? this.carried(s.volume, x, y, z, BAG_CLEAR) : null; // (lane CARGO: the whole bag inside the car)
       if ((s.volume && carried === null) || this.inCab(x, z, s.level, y)) { why = IN_LIFT; continue; }
       if (this.bags.some(b => Math.hypot(b.pose.x - x, b.pose.z - z) < 0.45 && Math.abs(b.pose.y - y) < 0.5)) { why = 'Another bag is already lying there.'; continue; }
       let ruled: string | null = null;
@@ -477,8 +478,8 @@ export class GearSystem {
   /** Lane CARGO: the volume floors that carry what is set down on them (world/trainCargo.ts installs the parked train's); null = none. */
   carrier: VolumeCarrier | null = null;
 
-  private carried(v: DynamicVolume, x: number, y: number, z: number): boolean | null {
-    return this.carrier?.(v, x, y, z) ?? null;
+  private carried(v: DynamicVolume, x: number, y: number, z: number, r = 0): boolean | null {
+    return this.carrier?.(v, x, y, z, r) ?? null;
   }
 
   /**

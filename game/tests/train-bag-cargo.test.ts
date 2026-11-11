@@ -220,7 +220,7 @@ describe('train bag cargo: setting a backpack down aboard the parked train', () 
     const inFixture = (x: number, z: number, rr: number) => fixtures.find(f => Math.abs(x - f.x) < f.hx + rr && Math.abs(z - f.z) < f.hz + rr)?.name ?? null;
     let accepted = 0, refused = 0;
     const texts = new Set<string>();
-    for (let lx = I.x0 + 0.35; lx < I.x1 - 0.3; lx += 0.5) for (let lz = -I.halfWidth + 0.32; lz <= I.halfWidth - 0.32; lz += 0.3) {
+    const sweep = () => { for (let lx = I.x0 + 0.35; lx < I.x1 - 0.3; lx += 0.5) for (let lz = -I.halfWidth + 0.32; lz <= I.halfWidth - 0.32; lz += 0.3) {
       if (inFixture(lx, lz, 0.3)) continue; // (the player cannot stand there)
       const wp = trainToWorld(p, lx, SPEC.floorY, lz);
       w.h.player.spawn(wp.x, wp.z, p.yaw, wp.y);
@@ -238,9 +238,21 @@ describe('train bag cargo: setting a backpack down aboard the parked train', () 
         for (let t = 0.1; t < 1; t += 0.1) expect(inFixture(lx + (q.x - lx) * t, lz + (q.z - lz) * t, 0), 'set down through a fixture').toBeNull();
         expect(w.cargo.carries(w.h.levels!.supportIn(s.x, s.z, s.y + 0.05)!.volume, s.x, s.y, s.z)).toBe(true);
       }
-    }
+    } };
+    sweep(); // (the doors shut, as built)
     expect(accepted).toBeGreaterThan(200);
     expect(refused).toBeGreaterThan(20); // (facing a wall / a fixture up close)
+    for (const t of texts) expect(t).not.toMatch(LIFT_TEXT);
+    // every door open: the doorway thresholds and the platform bridges never take a bag (it would stay behind, floating, when the car left)
+    const doors = w.rt.train!.doors;
+    doors.forEach((_d, i) => { w.rt.setDoor(i, true); });
+    run(w.h, 3);
+    expect(doors.every(d => d.t === 1)).toBe(true);
+    expect(doors.some(d => d.col.gate?.open)).toBe(true);
+    const shut = {accepted, refused};
+    sweep();
+    expect(accepted - shut.accepted).toBeGreaterThan(200);
+    expect(refused - shut.refused).toBeGreaterThan(20);
     for (const t of texts) expect(t).not.toMatch(LIFT_TEXT);
   });
 
