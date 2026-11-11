@@ -10,18 +10,20 @@
 // Task office-overhaul-20261030 (lane INTERACT): the grenade slot (G) sits after the quick slots (throwables only; the
 // inventory validates every move). The view opens on a TAP of E (a held E picks the bag up instead: gear/system.ts).
 // Task knife-windup-20261030 (lane SLOT): + the melee slot (~; melee weapons only, validated by the inventory), shown first.
+// Task gameplay-feedback-20261111 (lane STORAGE): the pockets (POCKET_GRID: 6 × 3, + a chest rig's 4) and the bag's own slots
+// (BACKPACK_GRID: 6 × 3 = 18) each gained a row in the same columns; a bag saved with 12 slots shows its new row empty.
 
 import {itemIconHtml, onItemIconsChanged} from './itemIcons';
 import {itemDef} from '../items/items';
 import {itemTip} from './itemTip'; // (task studio-ui-subway-maps-20261108-074144-01)
 import {hideTooltip, refreshTooltip, setTip, tipAttrs} from './tooltip';
-import {PACK_SIZE, type AnyRef, type Inventory, type ItemStack} from '../items/inventory';
+import {PACK_SIZE, POCKET_GRID, type AnyRef, type Inventory, type ItemStack} from '../items/inventory';
 import {ICONS} from './icons';
 import {WEAPONS} from '../weapons/weapons';
 import type {BagSession} from '../gear/bagSession';
 import {ensureGearStyles} from './gearStyles';
 import {DRAG_THRESHOLD} from './inventoryUI';
-import {isBagItem} from '../items/gear';
+import {BACKPACK_GRID, isBagItem} from '../items/gear';
 
 export interface BagViewHost {
   inv(): Inventory;
@@ -81,9 +83,9 @@ export class BagView {
     el.innerHTML = `<div class="bv-panel">
       <div class="bv-head"><b>Backpack on the ground</b><span class="bv-live">● Not paused — keep an eye out</span></div>
       <div class="bv-cols">
-        <div class="bv-side"><h4>Melee · quick slots · grenade slot</h4><div class="slots bv-g7" data-side="hotbar"></div><h4 class="bv-pockets">Pockets</h4><div class="slots bv-g6" data-side="pack"></div></div>
+        <div class="bv-side"><h4>Melee · quick slots · grenade slot</h4><div class="slots bv-g7" data-side="hotbar"></div><h4 class="bv-pockets">Pockets</h4><div class="slots bv-g${POCKET_GRID.columns}" data-side="pack"></div></div>
         <div class="bv-arrow">⇄</div>
-        <div class="bv-side"><h4 class="bv-bagtitle">Backpack</h4><div class="slots bv-g6" data-side="bag"></div></div>
+        <div class="bv-side"><h4 class="bv-bagtitle">Backpack</h4><div class="slots bv-g${BACKPACK_GRID.columns}" data-side="bag"></div></div>
       </div>
       <div class="bv-note"></div>
       <div class="bv-actions"><button class="bv-wear" type="button">Wear it (pick up)</button><button class="bv-close primary" type="button">Close (E)</button></div>

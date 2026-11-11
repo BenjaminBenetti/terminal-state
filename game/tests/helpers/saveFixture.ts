@@ -142,7 +142,7 @@ export class Harness {
   }
 }
 
-/** A full carried inventory: every quick slot, the 16 pockets (chest rig), every gear slot (a full backpack, a gas mask), flare, knife. */
+/** A full carried inventory: every quick slot, the 22 pockets (PACK_SIZE 18 + the chest rig's 4), every gear slot (a full backpack, a gas mask), flare, knife. */
 export function fillInventory(h: Harness, seed = 7): void {
   const r = mulberry32(seed), inv = h.inv;
   for (const slot of GEAR_SLOTS) {
@@ -159,7 +159,7 @@ export function fillInventory(h: Harness, seed = 7): void {
   inv.meleeSlot[0] = inv.makeStack('knife', 1);
 }
 
-/** A full 40-slot Lockbox: `bags` backpacks with every slot filled, the rest assorted stacks. Uids come from the inventory. */
+/** A full Lockbox (every LOCKBOX_SLOTS slot): `bags` backpacks with every slot filled, the rest assorted stacks. Uids come from the inventory. */
 export function fillLockbox(h: Harness, bags = 8, seed = 8): void {
   const r = mulberry32(seed);
   for (let i = 0; i < h.train.lockbox.slots.length; i++) {

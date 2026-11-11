@@ -24,7 +24,7 @@ import {ICONS} from '../../ui/icons';
 import {ITEMS} from '../../items/items';
 import {GEAR_SLOTS, GEAR_SLOT_NAMES} from '../../items/gear';
 import {WEAPONS} from '../../weapons/weapons';
-import {PACK_SIZE, type ItemStack, type SlotRef} from '../../items/inventory';
+import {PACK_SIZE, POCKET_GRID, type ItemStack, type SlotRef} from '../../items/inventory';
 import {FUEL, tanksText} from '../../fuel/fuel';
 import {RAIL_TIES, TIE_GLYPH, tiesHtml, tiesText} from './ties';
 import {betterStall, buyPrice} from './stalls';
@@ -141,7 +141,7 @@ export class TradeView {
       styled = true;
       const st = document.createElement('style');
       st.id = `${VIEW_ID}-styles`;
-      st.textContent = CSS;
+      st.textContent = CSS + (POCKET_GRID.columns === 6 || POCKET_GRID.columns === 7 ? '' : `#tradeview .tr-g${POCKET_GRID.columns} { grid-template-columns: repeat(${POCKET_GRID.columns}, 1fr); }\n`); // (task gameplay-feedback-20261111, lane STORAGE: the pockets' columns)
       document.head.appendChild(st);
     }
     const el = document.createElement('section');
@@ -151,7 +151,7 @@ export class TradeView {
     el.innerHTML = `<div class="tr-panel">
       <div class="tr-head"><b class="tr-title"></b><span class="tr-wallet"></span><span class="tr-live">● Not paused — keep an eye out</span></div>
       <div class="tr-cols">
-        <div class="tr-side"><h4>Your items · sell</h4><div class="slots tr-g7" data-side="carry"></div><h4 class="tr-pockets">Pockets</h4><div class="slots tr-g6" data-side="pack"></div><h4>Worn</h4><div class="slots tr-g6" data-side="worn"></div></div>
+        <div class="tr-side"><h4>Your items · sell</h4><div class="slots tr-g7" data-side="carry"></div><h4 class="tr-pockets">Pockets</h4><div class="slots tr-g${POCKET_GRID.columns}" data-side="pack"></div><h4>Worn</h4><div class="slots tr-g6" data-side="worn"></div></div>
         <div class="tr-arrow">⇄</div>
         <div class="tr-side"><h4 class="tr-stock-h">Stall stock · buy</h4><div class="slots tr-g8" data-side="stock"></div></div>
       </div>

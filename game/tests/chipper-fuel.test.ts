@@ -30,19 +30,23 @@ describe('chipper fuel: exact integer yield', () => {
     expect(TANK_TICKS).toBe(FUEL.tankUnits * CHIPPER.ticksPerQuarter);
     expect(CHIPPER.bodyTicks / TANK_TICKS).toBe(0.1);
     expect(CHIPPER.bodyTicks / CHIPPER.ticksPerQuarter).toBe(0.4);
-    // the existing units are unchanged
-    expect(FUEL).toMatchObject({tankUnits: 4, trainTankUnits: 8, hopUnits: 4, canUnits: 1, cartUnits: 8});
+    // the existing units are unchanged (task gameplay-feedback-20261111 lane TRAVEL: but the train's tank holds four tanks = 16; was 8)
+    expect(FUEL).toMatchObject({tankUnits: 4, trainTankUnits: 16, hopUnits: 4, canUnits: 1, cartUnits: 8});
   });
 
-  it('10 bodies = exactly 4 quarters (one hop); 20 bodies = exactly 8 (a full empty train)', () => {
+  it('10 bodies = exactly 4 quarters (one hop); 20 bodies = exactly 8 (two tanks); 40 bodies = exactly 16 (a full empty four-tank train)', () => {
     const c = freshChipper(), fuel = {tank: 0};
     for (let i = 0; i < 10; i++) { chipOne(c, i); transferToTank(c, fuel); }
     expect(fuel.tank).toBe(FUEL.hopUnits);
     expect(c.ticks).toBe(0);
     for (let i = 10; i < 20; i++) { chipOne(c, i); transferToTank(c, fuel); }
-    expect(fuel.tank).toBe(FUEL.trainTankUnits);
+    expect(fuel.tank).toBe(2 * FUEL.tankUnits); // (the two-tank train's "full": task gameplay-feedback lane TRAVEL — the yield is unchanged)
     expect(c.ticks).toBe(0);
     expect(c.done).toBe(20);
+    for (let i = 20; i < 40; i++) { chipOne(c, i); transferToTank(c, fuel); }
+    expect(fuel.tank).toBe(FUEL.trainTankUnits);
+    expect(c.ticks).toBe(0);
+    expect(c.done).toBe(40);
     expect(Number.isInteger(fuel.tank)).toBe(true);
   });
 
@@ -63,9 +67,9 @@ describe('chipper fuel: exact integer yield', () => {
     expect(chipperRefusal(c)).toBe(CHIPPER_REFUSAL.full);
     expect(() => startJob(c, body(99))).toThrow();
     expect(c.job).toBeNull();
-    fuel.tank = 3; // a hop later: room for 5 quarters
+    fuel.tank = FUEL.trainTankUnits - 5; // a hop later: room for 5 quarters (lane TRAVEL: 11 of the four-tank 16; was 3 of 8)
     expect(transferToTank(c, fuel)).toBe(5);
-    expect(fuel.tank).toBe(8);
+    expect(fuel.tank).toBe(FUEL.trainTankUnits);
     expect(c.ticks).toBe(CHIPPER.bufferMaxTicks - 25);
     expect(chipperRefusal(c)).toBeNull();
   });

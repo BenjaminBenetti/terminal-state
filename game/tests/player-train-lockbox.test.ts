@@ -95,7 +95,7 @@ describe('the Lockbox: placement (spec.lockbox)', () => {
   it('stands in the rear compartment, centred along it, its back on the far-side lining, front to the aisle, clear of doorway / doors / walls', () => {
     const rear = SPEC.rear!, hw = SPEC.interior.halfWidth;
     expect(PARTITION_HALF).toBe(TRAIN_VIEW.partition / 2);
-    // the cooked model's measured size (lane ASSETS; the provisional box only without it): ~1.03 x 0.56 x 0.61 m — substantial (40 slots)
+    // the cooked model's measured size (lane ASSETS; the provisional box only without it): ~1.03 x 0.56 x 0.61 m — substantial (LOCKBOX_SLOTS)
     const M = (PLAYER_TRAIN_MEASURED as {lockbox?: typeof LOCKBOX_PROVISIONAL}).lockbox ?? LOCKBOX_PROVISIONAL;
     expect([LB.length, LB.height, LB.depth]).toEqual([M.length, M.height, M.depth]);
     expect(LB.seamY).toBe(M.seamY);

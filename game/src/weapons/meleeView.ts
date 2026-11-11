@@ -36,6 +36,16 @@ export interface MeleePoses {
   charged?: HeldPose;
   /** Lane MELEE (weapon variety): recovery dip scale (x RECOVER_DIP; default 1) — a long weapon dips lower so its head passes under the aim point. */
   dip?: number;
+  /**
+   * Lane MELEE (gameplay feedback 2026-11-11; user: "Improve large-melee wind-ups, especially the axe: draw the weapon back over the
+   * shoulder so its tip naturally leaves view"): a LARGE weapon's over-the-shoulder draw — the wind-up peak and the held ready pose,
+   * the head up and BEHIND the eye (out of view). With it the windup arcs carry -> `raised` -> `back` (lifted, then cocked back over
+   * the right shoulder) and the swing arcs `back` -> `raised` -> `contact` (the head comes over the top and down onto the crosshair):
+   * `raised` becomes the pass-through point of both arcs. Only the visual curve changes: the contact key is still reached exactly
+   * `strike` s after the release (the hit moment), and no timing / damage / reach number reads it. Absent (the knife and the other
+   * weapons): the windup / ready / swing are exactly as before.
+   */
+  back?: HeldPose;
 }
 
 /**
@@ -77,7 +87,19 @@ export interface MeleeAim {
   /** Camera-space direction the model's +Y (the top of its side view) is turned toward (orthogonalised against the shaft). */
   up: readonly [number, number, number];
 }
-export interface MeleeAims { carry: MeleeAim; raised: MeleeAim; contact: MeleeAim; through: MeleeAim; charged?: MeleeAim; dip?: number }
+/**
+ * Lane MELEE (gameplay feedback 2026-11-11): a key held BEYOND the view — the large weapons' over-the-shoulder draw (MeleePoses.back), the
+ * head up and behind the eye, where a screen point means nothing (a point behind the camera has no NDC) — aimed by the shaft's direction.
+ */
+export interface MeleeShoulderAim {
+  /** The Grip (main hand) in viewmodel camera space (m), as MeleeAim.grip. */
+  grip: readonly [number, number, number];
+  /** Camera-space direction of the shaft, Grip -> Tip (x right, y up, z BACK toward / past the eye): up and back over the right shoulder. */
+  dir: readonly [number, number, number];
+  /** Camera-space direction the model's +Y is turned toward (orthogonalised against the shaft), as MeleeAim.up. */
+  up: readonly [number, number, number];
+}
+export interface MeleeAims { carry: MeleeAim; raised: MeleeAim; contact: MeleeAim; through: MeleeAim; charged?: MeleeAim; back?: MeleeShoulderAim; dip?: number }
 
 type V3 = readonly [number, number, number];
 const norm = (v: V3): [number, number, number] => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
@@ -104,9 +126,23 @@ export function aimPose(a: MeleeAim, tipModel: V3, ref: V3 = [0, 0, 0]): HeldPos
   const qa = ux * ux + uy * uy + 1, qb = -2 * (ux * gx + uy * gy - gz), qc = gx * gx + gy * gy + gz * gz - L * L;
   const disc = qb * qb - 4 * qa * qc;
   const z = disc >= 0 ? (-qb + Math.sqrt(disc)) / (2 * qa) : -qb / (2 * qa);
-  const dc = norm([ux * z - gx, uy * z - gy, -z - gz]);
+  return orientPose(a.grip, norm([ux * z - gx, uy * z - gy, -z - gz]), a.up, tipModel, ref);
+}
+
+/**
+ * Lane MELEE (gameplay feedback 2026-11-11): the absolute held pose of an over-the-shoulder aim — the model's tip direction turned onto
+ * the camera-space shaft direction `dir` (the Tip lands |Tip| m along it from the Grip, behind / above the eye), its +Y toward `up`; the
+ * Euler set nearest `ref`, as aimPose.
+ */
+export function shoulderPose(a: MeleeShoulderAim, tipModel: V3, ref: V3 = [0, 0, 0]): HeldPose {
+  return orientPose(a.grip, norm(a.dir), a.up, tipModel, ref);
+}
+
+/** The rotation of aimPose / shoulderPose: the model tip direction onto unit camera-space `dc`, model +Y toward `up`, as Euler XYZ nearest `ref`. */
+function orientPose(grip: V3, dc: [number, number, number], up: V3, tipModel: V3, ref: V3): HeldPose {
+  const [gx, gy, gz] = grip;
   const am = norm(tipModel), bm = ortho([0, 1, 0], am, [0, 0, 1]), cm = cross(am, bm);
-  const bc = ortho(a.up, dc, [0, 1, 0]), cc = cross(dc, bc);
+  const bc = ortho(up, dc, [0, 1, 0]), cc = cross(dc, bc);
   // R = [dc bc cc] [am bm cm]^T: model tip -> dc, model +Y (orthogonalised) -> bc
   const R = (i: number, j: number) => dc[i] * am[j] + bc[i] * bm[j] + cc[i] * cm[j];
   const m13 = Math.max(-1, Math.min(1, R(0, 2)));
@@ -126,7 +162,8 @@ export function aimPoses(aims: MeleeAims, tipModel: V3): MeleePoses {
   const charged = aims.charged ? aimPose(aims.charged, tipModel, raised.rot) : undefined;
   const contact = aimPose(aims.contact, tipModel, raised.rot);
   const through = aimPose(aims.through, tipModel, contact.rot);
-  return {carry, raised, contact, through, ...(charged ? {charged} : {}), ...(aims.dip !== undefined ? {dip: aims.dip} : {})};
+  const back = aims.back ? shoulderPose(aims.back, tipModel, raised.rot) : undefined; // (lane MELEE, gameplay feedback: continues from `raised`)
+  return {carry, raised, contact, through, ...(charged ? {charged} : {}), ...(aims.dip !== undefined ? {dip: aims.dip} : {}), ...(back ? {back} : {})};
 }
 
 /** The approved real lengths (m; PLAN: M01..M06) — the tip distance until the delivered model's Tip marker replaces it. */
@@ -151,23 +188,30 @@ export function varietyLength(id: VarietyMeleeId): number {
  * The aims of the six weapons. Screen notes (16:9, 54 deg viewmodel camera): the carry keeps the head in the upper right with the shaft
  * running out of the bottom edge (two-handed: more central, the haft diagonal across the body); every swing puts the Tip ON the
  * crosshair at contact (`tip: [0, 0]`).
+ * Lane MELEE (gameplay feedback 2026-11-11): the LARGE melee weapons — the heavy two-handed fire axe, sledgehammer and track shovel
+ * (LARGE_MELEE_IDS) — wind up over the right shoulder (`back`). The slugger keeps its in-frame charge pose (its visible charge cue, lead
+ * QA 2026-11-10); the one-handed machete / crowbar and the knife are unchanged.
  */
 export const VARIETY_MELEE_AIMS: Readonly<Record<VarietyMeleeId, MeleeAims>> = {
   // OVERHEAD CHOP, two-handed: haft diagonal across the body, head up right (its flat to the eye, edge forward-in) -> raised up the
-  // right side, the head at the top edge, partly in view (edge forward) -> down through the crosshair (edge leading, a slight cant) -> low
-  // centre-left follow-through
+  // right side (the head at the top edge, edge forward) and on, BACK OVER THE RIGHT SHOULDER (lane MELEE, gameplay feedback 2026-11-11:
+  // the head ~0.5 m up and ~0.2 m behind the eye, out of view; the hands at the right shoulder with the grip end of the haft in the lower
+  // right, the haft leaving the top-right edge; edge toward the coming chop) -> over the top through the raised pose, down through the
+  // crosshair (edge leading, a slight cant) -> low centre-left follow-through
   fire_axe: {
     carry: {grip: [0.0, -0.40, -0.40], tip: [0.46, 0.46], up: [0.8, -0.3, 0.5]},
     raised: {grip: [0.15, -0.16, -0.36], tip: [0.60, 1.05], up: [0.2, -0.2, 1]},
     contact: {grip: [0.06, -0.30, -0.46], tip: [0, 0], up: [0.35, 1, 0.1]},
     through: {grip: [-0.02, -0.40, -0.36], tip: [-0.25, -1.1], up: [0.2, 0.3, -1]},
+    back: {grip: [0.17, -0.10, -0.32], dir: [0.15, 0.75, 0.65], up: [0.1, -0.6, 0.8]},
   },
-  // the same chop, heavier: the head rests lower out at the right, a higher draw back
+  // the same chop, heavier: the head rests lower out at the right; drawn back over the shoulder a little lower and further back
   sledgehammer: {
     carry: {grip: [0.0, -0.44, -0.40], tip: [0.52, 0.30], up: [0.8, -0.3, 0.5]},
     raised: {grip: [0.15, -0.18, -0.36], tip: [0.60, 1.05], up: [0.2, -0.2, 1]},
     contact: {grip: [0.06, -0.32, -0.48], tip: [0, 0], up: [0.35, 1, 0.1]},
     through: {grip: [-0.02, -0.42, -0.36], tip: [-0.20, -1.2], up: [0.2, 0.3, -1]},
+    back: {grip: [0.17, -0.12, -0.32], dir: [0.16, 0.68, 0.72], up: [0.1, -0.6, 0.8]},
   },
   // HORIZONTAL SWEEP, one-handed (a long knife): blade up right, edge forward -> cocked back to the right at shoulder height, the
   // point out past the right edge (edge toward the coming slash) -> level through the crosshair, edge leading left -> far left
@@ -200,15 +244,21 @@ export const VARIETY_MELEE_AIMS: Readonly<Record<VarietyMeleeId, MeleeAims>> = {
     dip: 2.6,
   },
   // WIDE FLAT SWEEP, two-handed: the long haft diagonal across the body, the blade up right with its face to the eye -> drawn back to
-  // the right edge -> flat through the crosshair (the blade's face leading left) -> far left
+  // the right edge and on, up and BACK OVER THE RIGHT SHOULDER (lane MELEE, gameplay feedback 2026-11-11: the blade behind the eye, out
+  // of view; the rear end of the haft in the lower right) -> down past the right edge, flat through the crosshair (the blade's face
+  // leading left) -> far left
   track_shovel: {
     carry: {grip: [0.0, -0.48, -0.34], tip: [0.55, 0.62], up: [-1, 1, 0]},
     raised: {grip: [0.18, -0.30, -0.30], tip: [0.92, 0.32], up: [-0.3, 1, 0]},
     contact: {grip: [0.12, -0.26, -0.36], tip: [0, 0], up: [0, 1, 0]},
     through: {grip: [-0.10, -0.30, -0.32], tip: [-1.05, -0.05], up: [0, 1, 0]},
+    back: {grip: [0.17, -0.13, -0.34], dir: [0.3, 0.62, 0.72], up: [-0.3, 0.3, 1]},
     dip: 2.6,
   },
 };
+
+/** Lane MELEE (gameplay feedback 2026-11-11): the LARGE melee weapons — those drawn back over the shoulder (an aimed `back` pose). */
+export const LARGE_MELEE_IDS: readonly VarietyMeleeId[] = VARIETY_MELEE_IDS.filter(id => VARIETY_MELEE_AIMS[id].back);
 
 /** The six weapons' key poses, solved for each model's length / Tip at load (weapon variety). */
 export const VARIETY_MELEE_POSES: Readonly<Record<VarietyMeleeId, MeleePoses>> = Object.fromEntries(
@@ -246,13 +296,29 @@ function mix(a: PoseOffset, b: PoseOffset, k: number, out: PoseOffset): PoseOffs
   out.rx = a.rx + (b.rx - a.rx) * k; out.ry = a.ry + (b.ry - a.ry) * k; out.rz = a.rz + (b.rz - a.rz) * k;
   return out;
 }
-const tmpA: PoseOffset = {...ZERO}, tmpB: PoseOffset = {...ZERO};
+/**
+ * Lane MELEE (gameplay feedback 2026-11-11): the smooth arc a -> b at k (0..1) passing THROUGH `via` at k = 0.5 — a quadratic Bezier with
+ * the control point 2 via - (a + b) / 2: continuous, no corner at `via`, exactly a at 0 and b at 1. (A large weapon's over-the-shoulder
+ * windup / swing go through its `raised` pose this way: lifted then cocked back; over the top then down.)
+ */
+function arc(a: PoseOffset, via: PoseOffset, b: PoseOffset, k: number, out: PoseOffset): PoseOffset {
+  const u = 1 - k, w0 = u * u, w1 = 2 * k * u, w2 = k * k;
+  const f = (p: number, v: number, q: number) => w0 * p + w1 * (2 * v - (p + q) / 2) + w2 * q;
+  const x = f(a.x, via.x, b.x), y = f(a.y, via.y, b.y), z = f(a.z, via.z, b.z);
+  const rx = f(a.rx, via.rx, b.rx), ry = f(a.ry, via.ry, b.ry), rz = f(a.rz, via.rz, b.rz);
+  out.x = x; out.y = y; out.z = z; out.rx = rx; out.ry = ry; out.rz = rz;
+  return out;
+}
+const tmpA: PoseOffset = {...ZERO}, tmpB: PoseOffset = {...ZERO}, tmpC: PoseOffset = {...ZERO};
 
 /**
  * Offset from the carry pose for a melee stage (WeaponController.meleePose): `t` = seconds into that stage. null stage = the
  * carry (zero). Windup: smooth raise over `windup` s; ready: the raised pose plus a slight breathing sway; swing: raised ->
  * contact accelerating over `strike` s (the tip reaches the crosshair exactly at contact), contact -> through decelerating
  * until `sweep` s; recover: through -> carry over `recovery` s with a low dip (ends exactly at zero: no pop into the carry).
+ * Lane MELEE (gameplay feedback 2026-11-11): with a `back` pose (LARGE_MELEE_IDS) the windup arcs carry -> raised -> back, the ready
+ * pose is `back`, and the swing arcs back -> raised -> contact over the same `strike` s (contact still exactly at `strike`); the
+ * follow-through and recovery are unchanged. Stage lengths come from the MeleeSpec only: nothing here moves the hit moment.
  */
 export function meleePoseOffset(stage: MeleeStage | null, t: number, m: Pick<MeleeSpec, 'windup' | 'strike' | 'sweep' | 'recovery'>,
   poses: MeleePoses = KNIFE_POSES, out: PoseOffset = {...ZERO}, charge = 0): PoseOffset {
@@ -260,9 +326,15 @@ export function meleePoseOffset(stage: MeleeStage | null, t: number, m: Pick<Mel
   // lane MELEE (weapon variety): `charge` 0..1 (WeaponController.meleePose) draws a CHARGE weapon's ready pose from `raised` toward
   // `charged`, and its swing starts from wherever the release left it; without a `charged` pose (the knife) it changes nothing
   const ck = poses.charged ? easeOut(charge) : 0;
-  if (stage === 'windup') return mix(ZERO, rel(poses.raised, c, tmpA), smooth(t / m.windup), out);
+  // lane MELEE (gameplay feedback 2026-11-11): a large weapon's over-the-shoulder draw — the windup arcs up through `raised` and back
+  // over the shoulder, the ready pose holds it there, the swing arcs over the top through `raised` onto the contact (still at `strike`)
+  const bk = poses.back;
+  if (stage === 'windup') {
+    if (bk) return arc(ZERO, rel(poses.raised, c, tmpA), rel(bk, c, tmpB), smooth(t / m.windup), out);
+    return mix(ZERO, rel(poses.raised, c, tmpA), smooth(t / m.windup), out);
+  }
   if (stage === 'ready') {
-    rel(poses.raised, c, out);
+    rel(bk ?? poses.raised, c, out);
     if (ck > 0) mix(out, rel(poses.charged!, c, tmpB), ck, out);
     const s = Math.sin(t * Math.PI * 2 * READY_SWAY.hz);
     out.y += s * READY_SWAY.pos; out.rx += s * READY_SWAY.rot;
@@ -271,7 +343,8 @@ export function meleePoseOffset(stage: MeleeStage | null, t: number, m: Pick<Mel
   }
   if (stage === 'swing') {
     if (t < m.strike) {
-      const start = ck > 0 ? mix(rel(poses.raised, c, tmpA), rel(poses.charged!, c, tmpB), ck, tmpA) : rel(poses.raised, c, tmpA);
+      const start = ck > 0 ? mix(rel(bk ?? poses.raised, c, tmpA), rel(poses.charged!, c, tmpB), ck, tmpA) : rel(bk ?? poses.raised, c, tmpA);
+      if (bk) return arc(start, rel(poses.raised, c, tmpC), rel(poses.contact, c, tmpB), easeIn(t / m.strike), out);
       return mix(start, rel(poses.contact, c, tmpB), easeIn(t / m.strike), out);
     }
     return mix(rel(poses.contact, c, tmpA), rel(poses.through, c, tmpB), easeOut((t - m.strike) / Math.max(1e-6, m.sweep - m.strike)), out);

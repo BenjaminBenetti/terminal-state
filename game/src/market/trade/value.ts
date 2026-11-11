@@ -29,7 +29,7 @@
 import {ITEMS, type ItemDef} from '../../items/items';
 import {WEAPONS, type WeaponDef} from '../../weapons/weapons';
 import {CALIBERS, type Caliber} from '../../items/calibers';
-import {FILTER_LIFE_S, gearSpec, isAirtank, isFilterMask, type GearSpec} from '../../items/gear';
+import {FILTER_LIFE_S, LEGACY_BACKPACK_SLOTS, gearSpec, isAirtank, isFilterMask, type GearSpec} from '../../items/gear';
 import {GEAR_WEIGHTS, GLOBAL_POOL, LIMB_ECONOMY, econCat, type ItemRows} from '../../items/lootTables';
 import {FUEL} from '../../fuel/fuel';
 import type {ItemKind} from '../../items/items';
@@ -105,10 +105,14 @@ function consumableTies(d: ItemDef): number {
     + (d.recharge ?? 0) * k.recharge + (d.treats?.length ?? 0) * k.limb;
 }
 
-/** A gear piece's intrinsic stats in ties (base + armor at full + pockets / bag / mobility; a mask's face piece; NOT its filter / air). */
+/**
+ * A gear piece's intrinsic stats in ties (base + armor at full + pockets / bag / mobility; a mask's face piece; NOT its filter / air).
+ * Task gameplay-feedback-20261111 (lane STORAGE): bag slots are priced up to LEGACY_BACKPACK_SLOTS (12) — the size the user's gear prices
+ * were set at (backpack 78 ties) — so the backpack's extra row of storage does not reprice it.
+ */
 function gearTies(g: GearSpec): number {
   const k = VALUE.gear;
-  return k.base + (g.armor ?? 0) * k.armor + (g.pockets ?? 0) * k.pocket + (g.bagSlots ?? 0) * k.bagSlot + pos((g.speedMult ?? 1) - 1) * k.speed
+  return k.base + (g.armor ?? 0) * k.armor + (g.pockets ?? 0) * k.pocket + Math.min(g.bagSlots ?? 0, LEGACY_BACKPACK_SLOTS) * k.bagSlot + pos((g.speedMult ?? 1) - 1) * k.speed
     + pos(1 - (g.spreadMult ?? 1)) * k.spread + pos(1 - (g.handlingMult ?? 1)) * k.handling + (g.filterLife ? k.mask : 0);
 }
 

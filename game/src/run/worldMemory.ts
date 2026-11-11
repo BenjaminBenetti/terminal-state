@@ -4,7 +4,7 @@
 // filtered (a taken lot never comes back, a remembered id that is not in the rolled holder is ignored).
 
 import * as THREE from 'three';
-import type {Inventory, ItemStack} from '../items/inventory';
+import {fitBagContents, type Inventory, type ItemStack} from '../items/inventory';
 import {canonicalItemId} from '../items/calibers';
 import type {ContainerManager} from '../world/containers';
 import type {Pickup, PickupManager} from '../world/pickups';
@@ -25,7 +25,7 @@ export function stackFromRecord(inv: Inventory, rec: StackRecord): ItemStack {
   const st = inv.makeStack(rec.itemId, 1, rec.mag);
   Object.assign(st, structuredClone(rec)); // the record has no uid: the fresh one stays
   st.itemId = canonicalItemId(st.itemId); // lane AMMO: a remembered legacy ammo id comes back as its caliber item (same count)
-  if (st.bag) st.bag = st.bag.map(c => (c ? {...c, itemId: canonicalItemId(c.itemId)} : null));
+  if (st.bag) st.bag = fitBagContents(st.itemId, st.bag.map(c => (c ? {...c, itemId: canonicalItemId(c.itemId)} : null))); // (lane STORAGE: an older 12-slot bag gains its new empty slots)
   return st;
 }
 

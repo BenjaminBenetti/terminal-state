@@ -45,7 +45,7 @@ Ctrl+Shift+P toggles the performance overlay (see below). Drop an item by draggi
 is not supported.
 
 Train Lockbox (task train-lockbox-windows-20261101-232156): the big steel box in the player train's rear compartment is your own
-**40-slot storage that travels with the train**. Aim + **E** opens it: your slots on the left, the box on the right; click moves an
+**50-slot storage (10 × 5) that travels with the train**. Aim + **E** opens it: your slots on the left, the box on the right; click moves an
 item across, drag / Shift-drag work as in a grounded backpack. The world is not paused. E / 6 / Esc / Tab, walking away or getting hit
 closes it. The contents carry between levels. Retry restores them to the level-entry state with your inventory; New game empties it.
 **Developer code:** with the Lockbox open, type **1 3 3 7** to add the three guns, one of each gear item and a full stack of each ammo
@@ -56,7 +56,7 @@ Aim at the body of an undead enemy you killed and press **E** to pick it up (one
 you move slower). **E** puts it down again. In the parked train, aim at the woodchipper on the far side between the middle and front
 doors and press **E** to feed the body in. The body goes limp in the hopper and its arms and legs flop as the machine draws it in,
 head first. About 20 s later it is ground (with a lot of blood) into **0.1 of a standard tank**: 10
-bodies = one hop, 20 = a full empty train. The machine runs with an empty tank, is loud enough to draw the infected, and only grinds
+bodies = one hop, 40 = a full empty train (the train's tank holds four standard tanks). The machine runs with an empty tank, is loud enough to draw the infected, and only grinds
 while the train is parked.
 
 Light survival (iteration 12, `player/flashlight.ts`, `weapons/throwables.ts`): the flashlight runs on a **battery**
@@ -224,8 +224,11 @@ seed) as well.
 - **Map and console** (`src/ui/paperMap.ts`, `src/world/trainConsole.ts`): the map is a crumpled paper sheet (Codex
   source art, `assets/textures/paper-map.jpg`) with code-drawn lines and names. New game shows only the starting stop.
   The driving console in the train's front cab (E) opens it and reveals the current stop and its neighbours. The Reactor
-  appears only once discovered. Pick an adjacent stop, or any visited station reachable over visited track (one continuous
-  journey along the shortest such route, ties by id; nothing on the way is loaded), and confirm to travel. The details card sits
+  appears only once discovered. Pick an adjacent stop, or any station on the map that the printed (known) track reaches: one
+  continuous journey along the cheapest route (fewest stops; a tie prefers stations you have visited, then goes by id; the Reactor
+  is never passed before you have been there). The card names the stops on the way and shows one tank per stop. Nothing on the way
+  is loaded, looted, revealed or marked visited. Confirm to travel. The departure burns the whole route's fuel at once (one standard
+  tank per stop); if the train is short, the engine stalls and says how many tanks the route needs and how many the train has. The details card sits
   beside the selected node; each stop prints its type icon (Subway, Office, Mall, Reactor, Maintenance Route). Typing `1337` while the map is open reveals
   everything and allows travel anywhere for the rest of that run (it is saved with the run; separate from the Lockbox code).
 - **The journey** (`Game.travelToStation`, `src/world/trainRide.ts`): the occupied train closes its doors and pulls into a dark
