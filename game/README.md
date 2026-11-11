@@ -273,8 +273,12 @@ Campaign polish (task campaign-polish-20261103, lane MENU): the side column list
 **Controls** / Dev start; every submenu opens as a centred dialog over a light dimmer (Esc / Back step back). Controls shows the
 game's actual bindings (`CONTROLS` in `src/ui/hud.ts`) plus a one-line hint about the two `1337` developer codes. Save slots are
 one grid row each (slot, name + metadata ellipsized, actions), stacked on narrow screens. The title camera opens at the framing its
-slow orbit reached about 25 s in (`MENU_SCENE.orbit.startAt`) and keeps orbiting from there. The loading screen shows only the
-destination's location name over the progress bar.
+slow orbit reached about 25 s in (`MENU_SCENE.orbit.startAt`) and keeps orbiting from there. The loading screen (New game /
+Continue / Load save; never the train journey) is opaque and shows the destination's location name over a small decorative subway
+map with the line `The Reactor .... Restart the Reactor` under it (`src/ui/loadingMap.ts`). The map is a fixed drawing, not the
+campaign's network: its lines, branches and stations fill in with the load's own progress (props, textures, graphics warm-up) and
+it is complete only when the load is. It replaces the progress bar; nothing waits for it. The screen stays up until the first
+play frame is drawn.
 - **Fog, shadows & anti-aliasing** (the stored `quality`, High / Low): exactly the volumetric fog march (High ½ of the drawing
   buffer up to 960 × 540, 24 steps; Low ¼ up to 480 × 270, 14 steps — `ATMOSPHERE_QUALITY` in `src/render/atmosphere.ts`), the
   flashlight's shadow map (1024 / 512 px), the scene pass MSAA (4× / none; the fog and the MSAA only while the volumetric pass

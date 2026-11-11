@@ -222,6 +222,7 @@ import {installUploadDedupe} from './render/uploadDedupe'; // task mall-horde-pe
 import {JourneyCompile, type JourneyCompileOptions} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
 import {loadingPlaceName, type LastSaveStatus} from './ui/loadingScreen'; // task studio-beta-campaign-polish-20261103-063841-01 (lane MENU): loading name only; Load last save
+import type {LoadMeter} from './ui/loadingMap'; // task studio-initial-loading-subway-graphic-20261111-070741-01: the loading screen's map takes the load's progress
 import {applyMouseLook, lookSigns} from './player/mouseLook'; // task studio-beta-mouse-axis-invert-20261105-005156-01: the one mouse-look step (X / Y inverts)
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error' | 'map'; // ('map': the campaign's paper map overlay — the world holds)
@@ -244,9 +245,12 @@ const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
  * Iteration 14: warm-up scope. `?warmup=off|view|full` overrides; otherwise the whole station on a hardware GPU and only
  * the spawn neighbourhood on a software rasterizer (it JITs every program into system memory; render/warmup.ts).
  */
-/** Iteration 14: where a warm-up shows its progress (the title's loading bar, or the pause panel's status line). */
-export interface WarmupUi { bar: HTMLElement | null; label: HTMLElement; button: HTMLButtonElement | null }
-const titleWarmupUi = (): WarmupUi => ({bar: $('#load .fill'), label: $('#load .label'), button: $('#btn-start') as HTMLButtonElement});
+/**
+ * Iteration 14: where a warm-up shows its progress (the loading screen, or the pause panel's status line). Task
+ * studio-initial-loading-subway-graphic-20261111-070741-01: `meter` = the loading screen's map (ui/loadingMap.ts), which took the
+ * progress bar's place; it is told each stage's real progress and that the load is ready, nothing else.
+ */
+export interface WarmupUi { meter: LoadMeter | null; label: HTMLElement; button: HTMLButtonElement | null }
 /** Iteration 16: let the browser paint a loading screen / overlay before a long synchronous generation. */
 const nextPaint = () => new Promise<void>(r => setTimeout(r, 30));
 
@@ -297,6 +301,8 @@ export class Game {
   /** A setting changed inside the game (the M mute toggle): main.ts writes it back to the settings store. */
   onSettingsChanged: ((key: keyof Settings) => void) | null = null;
   // ==== end lane MENU ====
+  /** Task studio-initial-loading-subway-graphic-20261111-070741-01: the loading screen's map (ui/loadingMap.ts; main.ts mounts it). */
+  loadMeter: LoadMeter | null = null;
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
@@ -1837,7 +1843,7 @@ export class Game {
         }
         try { layout = await this.prepareSection(key, run); break; } catch (err) { console.warn('campaign: preparing', key, 'failed', err); this.trainRide.transitFailed(String((err as Error)?.message ?? err)); }
       }
-      if (!layout) { this.transitGap = false; this.lifecycleFailed(new Error('no station could be prepared'), 'playing', titleWarmupUi()); return {ok: false, error: 'No station could be prepared.'}; }
+      if (!layout) { this.transitGap = false; this.lifecycleFailed(new Error('no station could be prepared'), 'playing', this.titleWarmupUi()); return {ok: false, error: 'No station could be prepared.'}; }
       await this.warmRun;
       // (lane BUILD) paced: the riding car keeps being drawn while the station is built; the riding car is adopted at the new placement (lane RIDE)
       try { await this.buildSectionPaced(key, layout, {kind: 'start'}, false); } catch (err) { if (!(err instanceof PacedBuildCancelled)) throw err; this.transitGap = false; return {ok: false, error: 'The journey was interrupted.'}; }
@@ -1959,16 +1965,21 @@ export class Game {
     return this.input.lock();
   }
 
+  /** The loading screen as a warm-up UI: its map, its (visually hidden) progress line and the QA start button. */
+  private titleWarmupUi(): WarmupUi {
+    return {meter: this.loadMeter ?? null, label: $('#load .label'), button: $('#btn-start') as HTMLButtonElement};
+  }
+
   /**
    * Iteration 16: the title panel as the loading screen (menu travel, new game, retry, Continue). Lane MENU (campaign polish item 9):
-   * `place` = the destination's location name, the screen's only text; `label` = the progress line (kept for the hooks, visually
-   * hidden).
+   * `place` = the destination's location name; `label` = the progress line (kept for the hooks, visually hidden). The map starts
+   * over with every load.
    */
   private showLoading(place: string, label: string): WarmupUi {
     this.lifecycleCounts.loading++;
-    const ui = titleWarmupUi();
+    const ui = this.titleWarmupUi();
     $('#station-intro').textContent = place;
-    if (ui.bar) ui.bar.style.width = '0%';
+    ui.meter?.reset();
     ui.label.textContent = label;
     if (ui.button) ui.button.disabled = true;
     $('#title').dataset.mode = 'loading';
@@ -1978,14 +1989,14 @@ export class Game {
 
   /** Iteration 16: lazy-model progress on a warm-up UI. */
   private progressTo(ui: WarmupUi, what: string): (f: number, file: string) => void {
-    return (f, file) => { if (ui.bar) ui.bar.style.width = `${Math.round(f * 100)}%`; ui.label.textContent = `${what} · ${file} · ${Math.round(f * 100)}%`; };
+    return (f, file) => { ui.meter?.stage('props', f); ui.label.textContent = `${what} · ${file} · ${Math.round(f * 100)}%`; };
   }
 
   /** Iteration 16: the warm-up is done — the loading screen's ready line (and the start button). */
   private readyLine(ui: WarmupUi, w: WarmupResult): void {
     const note = warmupNote(w);
     ui.label.textContent = `Ready · ${this.layout.areas.length} spaces generated${note ? ` · ${note}` : ''}`;
-    if (ui.bar) ui.bar.style.width = '100%';
+    ui.meter?.complete();
     if (ui.button) ui.button.disabled = false;
   }
 
@@ -1996,7 +2007,7 @@ export class Game {
    * warm-up; otherwise the caller shows the title (boot, the title's level choice). Single flight with travel / retry:
    * resolves null if another lifecycle operation is running.
    */
-  newGame(level: LevelId, o: {seeds?: Partial<Record<LevelId, number>>; enter?: boolean; onProgress?: (frac: number, label: string) => void; campaign?: CampaignState} = {}): Promise<WarmupResult | null> {
+  newGame(level: LevelId, o: {seeds?: Partial<Record<LevelId, number>>; enter?: boolean; campaign?: CampaignState} = {}): Promise<WarmupResult | null> {
     if (this.lifecycle.busy) return Promise.resolve(null);
     const lock = o.enter ? this.beginGesture() : null;
     const back = this.state;
@@ -2013,7 +2024,7 @@ export class Game {
       const ui = this.showLoading(shown, `Generating ${shown}…`); // (lane MENU, campaign polish item 9: the location name only)
       await nextPaint();
       let layout: StationLayout;
-      try { layout = await this.prepareSection(key, run, o.onProgress ?? this.progressTo(ui, 'Loading station props')); } catch (err) { this.lifecycleFailed(err, back, ui); return null; }
+      try { layout = await this.prepareSection(key, run, this.progressTo(ui, 'Loading station props')); } catch (err) { this.lifecycleFailed(err, back, ui); return null; }
       await this.warmRun; // Iteration 14: never rebuild under a running warm-up (it owns the renderer state)
       this.leaveSection(false); // the old run is discarded (lane teardown still runs against it)
       this.run = run;
@@ -2148,7 +2159,7 @@ export class Game {
     if (!this.world || this.state !== 'paused') return;
     const line = $('#pause .fine'), resume = $('#btn-resume') as HTMLButtonElement;
     const was = line.textContent;
-    const w = await this.prepareGraphics({bar: null, label: line, button: resume});
+    const w = await this.prepareGraphics({meter: null, label: line, button: resume});
     const note = warmupNote(w);
     line.textContent = w.status === 'complete' || !note ? was : `${was} (${note})`;
   }
@@ -2258,13 +2269,13 @@ export class Game {
 
   /**
    * Iteration 14 (primary): the loading-screen render warm-up for the current station (render/warmup.ts) on the
-   * backend / quality that will actually run, with its truthful progress on the loading bar. Single flight (a second
+   * backend / quality that will actually run, with its truthful progress on the loading screen's map. Single flight (a second
    * call while one runs gets the same promise); resolves (never rejects) once the renderer state is restored, with the
    * status — complete / partial (time budget) / cancelled (station replaced, device lost) / failed / skipped. Only
    * renderer-side preparation: no update tick, AI, physics, loot, battery / flare timers or sound. A later quality
    * change rebuilds the atmosphere's targets (a new render context), so those first frames compile again.
    */
-  prepareGraphics(ui: WarmupUi = titleWarmupUi()): Promise<WarmupResult> {
+  prepareGraphics(ui: WarmupUi = this.titleWarmupUi()): Promise<WarmupResult> {
     if (this.warmRun) return this.warmRun;
     const run = this.runWarmup(ui).finally(() => { this.warming = false; this.warmRun = null; this.flushRetired(); });
     this.warmRun = run;
@@ -2285,14 +2296,14 @@ export class Game {
     this.warming = true;
     ui.label.textContent = 'Preparing textures…';
     await stageUploads(t => this.renderer.initTexture(t), textures, {
-      progress: (done, total) => { if (ui.bar) ui.bar.style.width = `${Math.floor(done / Math.max(1, total) * 100)}%`; },
+      progress: (done, total) => { ui.meter?.stage('textures', done / Math.max(1, total)); },
       alive: () => gen === this.stationGen && !this.gpu?.deviceLost,
     });
   }
 
   private async runWarmup(ui: WarmupUi): Promise<WarmupResult> {
     this.lifecycleCounts.warmup++;
-    const {bar, label, button} = ui;
+    const {meter, label, button} = ui;
     await this.stageLevelTextures(ui); // Task track3-eaton-centre-20261031 (lane PERF): mall only; runs with ?warmup=off too
     const mode = warmupMode(location.search, this.softwareGl?.software === true);
     if (mode === 'off') return (this.warmup = skippedWarmup('disabled by ?warmup=off'));
@@ -2304,7 +2315,7 @@ export class Game {
     const quality = document.querySelector<HTMLSelectElement>('#set-quality');
     const qualityWas = quality?.disabled ?? false;
     if (quality) quality.disabled = true;
-    if (bar) bar.style.width = '0%';
+    meter?.stage('graphics', 0);
     label.textContent = 'Preparing graphics…';
     const gen = this.stationGen;
     const res = await runWarmup({
@@ -2319,7 +2330,7 @@ export class Game {
       alive: () => gen === this.stationGen && !this.gpu?.deviceLost,
       sceneDepth: () => this.sceneDepth(true), // lane RENDER-CPU: compile into the context the real frame draws the station in
     }, {
-      onProgress: (p: WarmupProgress) => { if (bar) bar.style.width = `${Math.floor(p.done / Math.max(1, p.total) * 100)}%`; label.textContent = warmupLabel(p); },
+      onProgress: (p: WarmupProgress) => { meter?.stage('graphics', p.done / Math.max(1, p.total)); label.textContent = warmupLabel(p); },
     });
     this.warmup = res;
     const st = res.stages;

@@ -66,7 +66,7 @@ describe('campaign journey (real orchestration, recorded fakes)', async () => {
       updateStationIntro: () => {},
       lifecycleFailed: () => log.push('lifecycleFailed'),
       beginGesture: () => Promise.resolve(true),
-      showLoading: () => ({bar: null, label: {textContent: ''}, button: null}),
+      showLoading: () => ({meter: null, label: {textContent: ''}, button: null}),
       progressTo: () => () => {},
       prepareGraphics: async () => ({status: 'done'}),
       readyLine: () => {},

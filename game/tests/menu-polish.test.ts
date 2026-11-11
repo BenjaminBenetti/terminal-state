@@ -657,6 +657,7 @@ import {PlayerTrainRecord} from '../src/run/playerTrain';
 import {Survival} from '../src/player/survival';
 import {FakeStorage, SEEDS, fixtureCampaign, sid} from './helpers/saveFixture';
 import {lastSaveNote, loadingPlaceName} from '../src/ui/loadingScreen';
+import type {LoadMeter} from '../src/ui/loadingMap';
 import type {SectionKey} from '../src/levels/types';
 
 describe('item 9 / DEATH (real Game methods, recorded fakes)', async () => {
@@ -704,7 +705,7 @@ describe('item 9 / DEATH (real Game methods, recorded fakes)', async () => {
       readyLine: () => {},
       enterPlay(this: {state: string}) { log.push('enterPlay'); this.state = 'playing'; return Promise.resolve(); },
     };
-    if (!o.realLoading) { s.updateStationIntro = () => {}; s.showLoading = () => ({bar: null, label: {textContent: ''}, button: null}); }
+    if (!o.realLoading) { s.updateStationIntro = () => {}; s.showLoading = () => ({meter: null, label: {textContent: ''}, button: null}); }
     Object.setPrototypeOf(s, Game.prototype);
     const g = s as unknown as InstanceType<typeof Game> & {run: ReturnType<typeof createRun>; saves: SaveSlots; player: {hp: number; alive: boolean}; state: string};
     (g as unknown as {wireRunLanes(): void}).wireRunLanes();
@@ -725,7 +726,7 @@ describe('item 9 / DEATH (real Game methods, recorded fakes)', async () => {
       const name = g.run.node(sid(1))!.name;
       expect(page.el('#station-intro').textContent).toBe(name);
       expect(page.el('#station-intro').textContent).not.toMatch(/infected|clear them out|reported|Continue/i);
-      expect(page.el('#title').dataset.mode).toBe('loading'); // the progress bar's card was shown
+      expect(page.el('#title').dataset.mode).toBe('loading'); // the loading card was shown
       expect(page.el('#load .label').textContent).toMatch(/Preparing/); // the progress line is still written (hooks)
       expect((g as unknown as {lifecycleCounts: {loading: number}}).lifecycleCounts.loading).toBe(loadsBefore + 1); // perf / lifecycle hook kept
       expect(log).toContain('state:loading');
@@ -734,6 +735,43 @@ describe('item 9 / DEATH (real Game methods, recorded fakes)', async () => {
       g.updateStationIntro();
       expect(page.el('#station-intro').textContent).toBe(name);
     } finally { page.restore(); }
+  });
+
+  // Task studio-initial-loading-subway-graphic-20261111-070741-01: the loading screen's map (ui/loadingMap.ts) is fed by the real load
+  it('the loading map follows the real load: reset with the screen, the models, the warm-up, finished only once that has resolved — and play follows at once', async () => {
+    const page = fakePage();
+    const calls: string[] = [];
+    const realTimeout = globalThis.setTimeout;
+    const timers = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number) => { calls.push(`timer:${ms}`); return realTimeout(fn, ms); }) as typeof setTimeout);
+    try {
+      const {g} = shell(new FakeStorage(), {realLoading: true});
+      expect(g.commitSave('new-game', {slot: 1})).toMatchObject({ok: true});
+      const s = g as unknown as Record<string, unknown>;
+      const meter: LoadMeter = {reset: () => calls.push('reset'), stage: (st, f) => calls.push(`${st}:${f}`), complete: () => calls.push('complete')};
+      s.loadMeter = meter;
+      delete s.progressTo; // the real Game.progressTo / readyLine (the shell's own stubs go)
+      delete s.readyLine;
+      s.prepareSection = async (k: SectionKey, _run: unknown, onProgress?: (f: number, file: string) => void) => { calls.push('prepare'); onProgress?.(0.5, 'a.glb'); onProgress?.(1, 'b.glb'); return {station: k.station}; };
+      s.prepareGraphics = async (ui: {meter: LoadMeter | null}) => {
+        calls.push('warm-up'); ui.meter?.stage('graphics', 0);
+        await Promise.resolve();
+        ui.meter?.stage('graphics', 1); calls.push('warmed');
+        return {status: 'complete', ms: 1200, reason: null};
+      };
+      s.enterPlay = function (this: {state: string}) { calls.push('enterPlay'); this.state = 'playing'; return Promise.resolve(); };
+      calls.length = 0;
+      expect(await g.continueCampaign(1)).toEqual({ok: true});
+      await Promise.resolve();
+      // the one timer is the existing paint before the generation (game.ts nextPaint); nothing waits between "ready" and play
+      expect(calls).toEqual(['reset', 'timer:30', 'prepare', 'props:0.5', 'props:1', 'warm-up', 'graphics:0', 'graphics:1', 'warmed', 'complete', 'enterPlay']);
+      expect(page.el('#load .label').textContent).toBe('Ready · 0 spaces generated · graphics prepared in 1.2 s');
+      expect(g.state).toBe('playing');
+      // a load that fails before the build never finishes the map
+      calls.length = 0;
+      s.prepareSection = async () => { calls.push('prepare'); throw new Error('no models'); };
+      expect(await g.continueCampaign(1)).toMatchObject({ok: false});
+      expect(calls).toEqual(['reset', 'timer:30', 'prepare']);
+    } finally { timers.mockRestore(); page.restore(); }
   });
 
   it('item 9: loadingPlaceName — node name first, then the mall\'s / layout\'s name, then the level name', () => {
