@@ -23,6 +23,7 @@ import {CLIP_MANIFEST_SKYWAYS_DESTINATIONS} from './manifest.skywaysDestinations
 import {CLIP_MANIFEST_MARKET_BAR} from './manifest.marketBar.generated'; // task studio-market-bar-20261108-225231-01 (lane AUDIO): the market set
 import {CLIP_MANIFEST_GUN_VARIETY, GUN_VARIETY_CUES} from './manifest.gunVariety.generated'; // task studio-weapon-soundlab-audio-20261110-063407-01: the six new guns' own shots / reloads (audio/gunVoices.ts)
 import {CLIP_MANIFEST_HEAD_HIT} from './manifest.headHit.generated'; // task studio-general-armor-20261107-231448-01: the head-hit skull crack // task skyways-destinations-20261106 (lane AUDIO): clock tick / chime, arcade, projector
+import {CLIP_MANIFEST_CHIPPER} from './manifest.chipper.generated'; // task studio-corpse-chipper-fuel-20261110-235304-01 (lane AUDIO): the train chipper set
 
 /**
  * Runtime manifest: the iteration-05 bank plus the iteration-06 material-breaking cues
@@ -33,7 +34,7 @@ import {CLIP_MANIFEST_HEAD_HIT} from './manifest.headHit.generated'; // task stu
  * 20261101-201110-01 (lane AUDIO): + the Strainer's wet footfalls / arm swing / claw contact / hit squish (tools/audio-pipeline/
  * strainer-build.mjs; provenance derivatives/audio-strainer.json).
  */
-export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT, ...CLIP_MANIFEST_MARKET_BAR, ...CLIP_MANIFEST_GUN_VARIETY};
+export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT, ...CLIP_MANIFEST_MARKET_BAR, ...CLIP_MANIFEST_GUN_VARIETY, ...CLIP_MANIFEST_CHIPPER};
 
 /** Every cue the game can play, in decode-priority order (most frequent / important first). */
 export const CUES = [
@@ -67,6 +68,10 @@ export const CUES = [
   // Task studio-beta-train-fuel-system-20261106-024923-01 (lane PORT, tools/audio-pipeline/fuel-build.mjs): the engine stall (a departure
   // refused for fuel), the jerrycan pour at the fuel cap, the fuel cart's rolling loop.
   'engineStall', 'fuelPour', 'cartRoll',
+  // Task studio-corpse-chipper-fuel-20261110-235304-01 (lane AUDIO, tools/audio-pipeline/chipper-build.mjs): the train chipper — the
+  // electric motor's running loop, the wet grind loop over it, a body dropping into the hopper, the spin-up and the wind-down
+  // (audio/chipperAudio.ts).
+  'chipperMotor', 'chipperGrind', 'chipperFeed', 'chipperStart', 'chipperStop',
   // Task studio-skyways-level-20261106-054448-01 (tools/audio-pipeline/skyways-car-build.mjs): the prize car's engine idle / drive loops,
   // its tyre skid and its door; (round 2, task skyways-vehicle-20261107, lane AUDIO) its engine start, reverse-gear whine loop, brake stop.
   'carIdle', 'carDrive', 'carStart', 'carReverse', 'carBrake', 'carSkid', 'carDoor',

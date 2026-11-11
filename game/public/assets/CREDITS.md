@@ -643,3 +643,18 @@ reviewed by ear on the build worker. Raw takes are kept outside Git.
 - `assets/audio/gun-hornet-shot-01.mp3` — gunHornetShot (Sound Lab job 20261110T064738-1979131141)
 - `assets/audio/gun-hornet-shot-02.mp3` — gunHornetShot (Sound Lab job 20261110T065448-1388891472)
 <!-- END gun-variety-audio-20261110 -->
+
+<!-- BEGIN train-chipper-audio-20261111 (chipper-build.mjs) -->
+## Train chipper audio (motor loop, wet grind loop, body feed, spin-up, wind-down)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the chipper
+task's local Sound Lab allowance (5 jobs of a 12-job cap). Powered by Stability AI. Stability AI Community License +
+Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades, loop,
+levelling, MP3) built by `tools/audio-pipeline/chipper-build.mjs` (provenance: `assets/derivatives/audio-chipper.json`). Not reviewed
+by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/chipper-motor-loop.mp3` — chipperMotor (Sound Lab job 20261111T004007-1737009476)
+- `assets/audio/chipper-grind-loop.mp3` — chipperGrind (Sound Lab job 20261111T004011-142679025)
+- `assets/audio/chipper-feed.mp3` — chipperFeed (Sound Lab job 20261111T004016-858651419)
+- `assets/audio/chipper-start.mp3` — chipperStart (Sound Lab job 20261111T004021-456234135)
+- `assets/audio/chipper-stop.mp3` — chipperStop (Sound Lab job 20261111T004025-1134923694)
+<!-- END train-chipper-audio-20261111 -->
