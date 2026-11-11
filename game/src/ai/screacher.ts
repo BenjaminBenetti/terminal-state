@@ -79,8 +79,8 @@ export const SCREACHER_SPEED = {investigate: SCREACHER_ASSET.walkGroundSpeed, hu
 /**
  * Screacher stats (brain.ts ZombieStats), relative to the ordinary zombie (ZOMBIE_STATS.shambler: hp 100, chase 2.55, range 1.35,
  * damage 10, swing 1.1 s / impact 0.45 s, cooldown 0.45 s, radius 0.33):
- *  - hp 150: a body with no head has no weak spot (every hit is a body hit), so it soaks more rounds than a zombie — and every shot
- *    is a sound it hears;
+ *  - hp 600 (user retune 2026-11-11: 4x the first 150, every body): a body with no head has no weak spot (every hit is a body hit),
+ *    so it soaks far more rounds than a zombie — and every shot is a sound it hears;
  *  - chaseSpeed = the frenzy pace (the top speed; the brain commands the pace of the current tier);
  *  - attackRange 1.55 (the long arm: visible contact 1.2 + 0.3 = 1.5), hitRange = contact + the usual 0.45 m step-away slack;
  *  - attackDamage 16 (between the shambler's 10 and the Strainer's 24); swing 1.0 s, impact 0.42 s (the Attack clip), cooldown 0.6 s;
@@ -89,7 +89,7 @@ export const SCREACHER_SPEED = {investigate: SCREACHER_ASSET.walkGroundSpeed, hu
  */
 export const SCREACHER_STATS: ZombieStats = {
   ...ZOMBIE_STATS.shambler,
-  hp: 150,
+  hp: 600,
   wanderSpeed: 0.5,
   chaseSpeed: SCREACHER_SPEED.frenzy,
   attackRange: 1.55,
