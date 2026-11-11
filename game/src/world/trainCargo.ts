@@ -21,6 +21,9 @@
 // Not covered: the fuel carts (their own cargo) and the Lockbox (its slots) — never captured twice. Layout props knocked loose into the car
 // travel too, as the train's PROP cargo (task studio-beta-train-all-cargo-20261107-184244-01: world/trainPropCargo.ts).
 // Fuel: loose fuel cans travel like any item; the automatic burn stays tank -> carts aboard -> chest cans (fuel/fuel.ts planDebit).
+// Lane CARGO (user: "Backpacks must be placeable aboard the train and travel with it like other items"): the car's floor is a dynamic
+// volume, which the backpack set-down refused as a lift cab; this system is the gear's volume CARRIER (carries(): inside the parked car =
+// an ordinary floor), so a bag set down aboard is the train's by the rule above and travels on this same path.
 
 import * as THREE from 'three';
 import type {Game} from '../game';

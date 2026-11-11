@@ -13,7 +13,8 @@
 //
 // Backpack flow (user: "cycle by hitting the six key … must be put on the ground before you can access it with E"):
 //   6 = take the worn backpack off into your hands (the gun lowers; the prompt line says what to do) · LEFT CLICK = set it down on the
-//   floor in front of you (refused on stairs, in the elevator cab, over a drop or against a wall) · 6 again (or 1-5 /
+//   floor in front of you (refused on stairs, in the elevator cab, over a drop or against a wall; aboard the parked player train it
+//   lies in the car and travels with it as the train's cargo — lane CARGO: GearSystem.carrier, world/trainCargo.ts) · 6 again (or 1-5 /
 //   wheel; Q slings it back on before the gas mask goes on: gear/gasMask.ts) = sling it back on.
 //   E on a bag lying on the ground opens the TRANSFER VIEW: the world keeps running (enemies
 //   keep coming), the mouse belongs to the view (no look / fire / aim), WASD still moves you; walking more than 2.5 m away,
