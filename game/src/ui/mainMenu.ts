@@ -584,7 +584,6 @@ const CSS = `
 #title.screen[data-mode="menu"] { background: none; backdrop-filter: none; justify-content: flex-start; align-items: stretch; padding: 0; overflow: hidden; }
 #title[data-mode="menu"] .loading-card { display: none; }
 #title[data-mode="loading"] .mm-side, #title[data-mode="loading"] .mm-overlay { display: none; }
-#title[data-mode="loading"].screen { background: rgba(6, 8, 7, 0.55); }
 #title-backdrop { position: absolute; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(ellipse at 68% 55%, #1d2a1b 0%, #0d130d 55%, #060806 100%); transition: opacity 1.4s ease; }
 #title-backdrop.faded { opacity: 0; }
 .mm-side { position: relative; z-index: 1; display: flex; flex-direction: column; width: min(400px, 100%); min-height: 100%; max-height: 100%; padding: 34px 30px 20px; overflow: auto;
@@ -644,11 +643,6 @@ const CSS = `
 .settings select { max-width: 62%; }
 .settings output { min-width: 3.4em; font-variant-numeric: tabular-nums; }
 .settings .set-readout { grid-column: 1 / -1; font-size: 11.5px; color: var(--cream-dim); margin-top: -4px; text-align: right; }
-/* the loading card (lane MENU, campaign polish item 9): the location name over the progress bar, nothing else visible; the progress
-   label (written / read by the warm-up, perf and QA hooks) stays in the DOM for screen readers only */
-.loading-card { position: relative; z-index: 1; margin: auto; width: min(560px, 100%); }
-.loading-card .loading-place { font-size: 30px; line-height: 1.15; margin: 8px 0 16px; overflow-wrap: anywhere; }
-.loading-card #load .label { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 760px) {
   .mm-side { width: 100%; background: rgba(10, 12, 11, 0.86); }
   .mm-overlay { padding: 10px; }

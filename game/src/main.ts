@@ -18,7 +18,8 @@ import {OFFICE_ASSETS, loadOfficeAsset, loadOfficeTexture, type OfficeAssetId} f
 import {setSkylineTexture} from './world/exterior';
 import {ATMOSPHERE_QUALITY} from './render/atmosphere'; // (lane MENU, campaign polish item 7: the quality setting's real numbers in its help line)
 import {installTooltips, setTip} from './ui/tooltip'; // task studio-ui-subway-maps-20261108-074144-01
-import {lastSaveNote} from './ui/loadingScreen'; // (lane MENU, DEATH: the death screen's last-save line)
+import {coverUntilPlayDrawn, lastSaveNote} from './ui/loadingScreen'; // (lane MENU, DEATH: the death screen's last-save line; + the loading screen's hand-off to play)
+import {LoadingMapView} from './ui/loadingMap'; // task studio-initial-loading-subway-graphic-20261111-070741-01: the loading screen's map
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 const params = new URLSearchParams(location.search);
@@ -310,6 +311,8 @@ async function boot(): Promise<void> {
     void startRun(dev?.level ?? 'subway', dev?.seeds ?? {}).catch(err => console.warn('QA quick start failed', err));
   });
   const bootUi = bootLine($('#mm-boot'));
+  // task studio-initial-loading-subway-graphic-20261111-070741-01: the loading screen's decorative map, fed by the game's load stages
+  game.loadMeter = new LoadingMapView($('#loading-map'));
   let menuScene: MenuScene | null = null, menuAudio = false, lastAmbience = 0;
   const disposeMenuScene = () => {
     game.menuRender = null;
@@ -323,6 +326,8 @@ async function boot(): Promise<void> {
     if (s === 'title') { titleEl.dataset.mode = 'menu'; if (prev !== 'title' && prev !== 'loading') menu.home(); else menu.refresh(); }
     // leaving the menu for a level build: the diorama goes first (its shared exterior uniforms restored before any level exterior)
     if (s === 'loading' && prev === 'title') disposeMenuScene();
+    // (task studio-initial-loading-subway-graphic-20261111-070741-01) a load ends in play: the loading screen stays until a frame of play is drawn
+    if (s === 'playing' && prev === 'loading') coverUntilPlayDrawn(titleEl, () => game.state === 'playing', fn => requestAnimationFrame(fn));
   });
   // menu ambience: an existing bed loop (the track bed: wind + rumble, distant trains) at the master volume, after a user gesture
   const startMenuAudio = () => {
@@ -429,7 +434,7 @@ async function boot(): Promise<void> {
   try {
     bootUi(0, 'Loading game files…', false);
     menu.setBoot(false, 0);
-    await game.load((f, file) => { bootUi(f, `Loading game files · ${Math.round(f * 100)} %`, false); menu.setBoot(false, f); if (qaPrebuild) { $('#load .fill').style.width = `${Math.round(f * 100)}%`; $('#load .label').textContent = `Loading ${file} · ${Math.round(f * 100)}%`; } });
+    await game.load((f, file) => { bootUi(f, `Loading game files · ${Math.round(f * 100)} %`, false); menu.setBoot(false, f); if (qaPrebuild) $('#load .label').textContent = `Loading ${file} · ${Math.round(f * 100)}%`; });
   } catch (err) {
     await fatal(err);
     return;
@@ -444,7 +449,7 @@ async function boot(): Promise<void> {
     const d = dev ?? {level: 'subway' as LevelId, seeds: {}};
     // Iteration 07 (Lane P2) / 14: the level's lazy prop models are fetched with progress, then its pipelines are prepared on the
     // loading screen before #btn-start becomes available; partial / failed results say so.
-    const warm = await game.newGame(d.level, {seeds: d.seeds, onProgress: (f, file) => { $('#load .fill').style.width = `${Math.round(f * 100)}%`; $('#load .label').textContent = `Loading station props · ${file} · ${Math.round(f * 100)}%`; }});
+    const warm = await game.newGame(d.level, {seeds: d.seeds});
     if ((game.state as GameState) === 'error' || !warm) return; // the device was lost meanwhile (error screen already shown)
     qaReady = true;
     qaButton.disabled = false;
