@@ -3378,7 +3378,8 @@ export class Game {
       let bestP: MarketCombatant | null = null;
       if (mh) { bestT = mh.t; bestZ = null; bestP = mh.person; bestPart = mh.part; }
       // Lane D: corpses stop (and tear under) bullets too; shots passing close knock loose pickups about.
-      const corpse = this.damage.corpseHit(this.zombies, o, d, bestT);
+      const corpse0 = this.damage.corpseHit(this.zombies, o, d, bestT);
+      const corpse = this.damage.corpseHit(this.corpses?.hitTargets() ?? [], o, d, corpse0?.t ?? bestT) ?? corpse0; // (lane CORPSE: + the handled bodies lying there)
       if (corpse) { bestT = corpse.t; bestZ = null; bestP = null; }
       // Iteration 08 (Lane S): a filler stock piece on the pellet line (exact per-piece test; inside a stocked shelf when its box is the
       // world hit) takes the pellet: its impulse at the hit point. Loot items / pickups in front of it still take it first (Lane K path).
@@ -3502,7 +3503,7 @@ export class Game {
     // (task studio-market-rework-20261108-074144-01, lane COMBAT: + the market's people, their own volumes)
     const targets = [...this.zombies.map(z => ({id: z as EnemyActor | MarketCombatant, alive: z.brain.alive, x: z.brain.x, y: z.brain.y, z: z.brain.z, volumes: z.hitVolumes})), ...this.marketCombat.meleeTargets()];
     const world = (ro: Vec3, rd: Vec3, max: number) => raycastWorld(L, props, ro, rd, max, trench);
-    const corpses = (ro: Vec3, rd: Vec3, maxT: number) => this.damage.corpseHit(this.zombies, ro, rd, maxT);
+    const corpses = (ro: Vec3, rd: Vec3, maxT: number) => { const c = this.damage.corpseHit(this.zombies, ro, rd, maxT); return this.damage.corpseHit(this.corpses?.hitTargets() ?? [], ro, rd, c?.t ?? maxT) ?? c; }; // (lane CORPSE: + the handled bodies lying there)
     // lane MELEE: a weapon-variety sweep's hit set; the knife: resolveMelee's one target, as ever
     const sweep = m.maxTargets ? resolveMeleeSweep(o, dirs, def.range, targets, world, corpses, m.maxTargets) : asMeleeSweep(resolveMelee(o, dirs, def.range, targets, world, corpses));
     // lane MELEE: the swing's stamina is paid at its contact (a cancelled swing costs nothing; the knife costs 0), then its scaling

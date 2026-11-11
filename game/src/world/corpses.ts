@@ -20,6 +20,8 @@
 // E WHILE CARRYING: each registered sink (addSink, in order) is offered the body — an ok offer's E hands it over (take() true: the sink
 // owns record + object from that call on); a refusal is shown and keeps it. Otherwise E lays it down in the 'lying' pose (its Death clip's
 // end frame, its lowest vertex exactly on the floor) on a free, level floor spot in front of the player (refused while the train moves).
+// A body lying there is a corpse for shots and swings (hitTargets: blood, and its wounds while it is still the actor that died here); never
+// a collider, like any corpse.
 // The one other E use while carrying is the train's driving console (aimed: its map / a journey with the body in the hands).
 //
 // OWNERSHIP (one body, one place; every move is one synchronous call):
@@ -267,6 +269,20 @@ export class CorpseSystem implements CorpseSystemApi {
     a.dispose();
   }
 
+  /**
+   * The handled bodies a bullet / melee swing can hit now — every body LYING in the live world (the station's and the parked car's;
+   * never the hands, the riding car or the hopper), as corpses (Game.fire / meleeContact: DamageSystem.corpseHit next to Game.zombies'
+   * corpses). The original actor keeps its wound controller (its wounds, tears); a rebuilt body has none (blood and flesh bits only:
+   * no new materials). One reused array (no allocation per shot); bounded by the bodies lying there.
+   */
+  hitTargets(): readonly EnemyActor[] {
+    const out = this.targetBuf;
+    out.length = 0;
+    for (const b of this.lying) out.push(b.actor);
+    return out;
+  }
+  private readonly targetBuf: EnemyActor[] = [];
+
   /** Game.startUse: no item use while the hands carry a body (true = refused, with the note). */
   refuseUse(): boolean {
     if (!this.owner()) return false;
@@ -290,6 +306,7 @@ export class CorpseSystem implements CorpseSystemApi {
     const a = built.actor;
     if (built.fallback || archetypeOf(a) !== rec.arch) { a.dispose(); this.counts.failed++; return null; } // (never another body standing in)
     a.beginRagdoll(); // the mixer stops; animate / syncTransform leave the bones alone
+    a.brain.damage(1e9, rec.x, rec.z); // (a corpse's brain: dead — a hit target like any corpse, never an enemy; it is in no AI list)
     const s = rec.scale ?? a.scale;
     a.root.scale.setScalar(s);
     (a as unknown as {scale: number}).scale = s;
