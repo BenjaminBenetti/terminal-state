@@ -654,8 +654,14 @@ describe('first-person key poses (aimed and solved for each model\'s length; thr
     const on = pts.filter(inView).length / pts.length;
     /** Share of the shaft from `from` (x the tip distance, from the grip) to the tip that is in view (e.g. 0.4: the bat's barrel). */
     const part = (from: number) => { const q = pts.filter((_, i) => -0.08 + i * 0.02 >= from - 1e-9); return q.filter(inView).length / q.length; };
-    return {tip: ndc(tip), grip: ndc(new THREE.Vector3().applyMatrix4(o.matrixWorld)), tipDepth: -tip.z, minDepth: Math.min(...pts.map(p => -p.z)), on, part};
+    // (lane MELEE, gameplay feedback 2026-11-11: + the camera-space tip, the nearest stick point to the eye and the nearest IN-VIEW one —
+    // a large weapon's over-the-shoulder hold puts the head behind the eye, where NDC / depth-in-front mean nothing)
+    const minEye = Math.min(...pts.map(p => p.length())), minInView = Math.min(...pts.filter(inView).map(p => -p.z));
+    return {tip: ndc(tip), grip: ndc(new THREE.Vector3().applyMatrix4(o.matrixWorld)), tipDepth: -tip.z, minDepth: Math.min(...pts.map(p => -p.z)), on, part,
+      tipCam: tip, tipInView: inView(tip), minEye, minInView};
   }
+  /** Lane MELEE (gameplay feedback 2026-11-11): the large weapons drawn back over the shoulder (MeleePoses.back; melee-windup-pose.test.ts). */
+  const LARGE = (id: VarietyMeleeId) => !!MELEE_POSES[id].back;
   /** NDC -> the QA renders' 960 x 540 pixels (lead QA, qa/fp metrics). */
   const px = (n: THREE.Vector3) => [(n.x + 1) / 2 * 960, (1 - n.y) / 2 * 540];
 
@@ -689,9 +695,12 @@ describe('first-person key poses (aimed and solved for each model\'s length; thr
     }
   });
 
-  it('the overhead / mid wind-ups (axe, sledgehammer, crowbar) keep the head partly in view at the top edge (lead QA tweak)', () => {
+  // re-pin (lane MELEE, gameplay feedback 2026-11-11; user: "draw the weapon back over the shoulder so its tip naturally leaves view"):
+  // the axe / sledgehammer no longer HOLD this top-edge pose — their windup passes it (the raised key, exactly at windup / 2) on the way
+  // back over the shoulder, and the swing passes it again coming over the top; their held peak is pinned in melee-windup-pose.test.ts
+  it('the overhead / mid wind-ups (axe, sledgehammer, crowbar) raise the head partly in view at the top edge (lead QA tweak; the axe / sledgehammer pass it on the way over the shoulder)', () => {
     for (const id of ['fire_axe', 'sledgehammer', 'crowbar'] as const) {
-      const r = view(id, 'ready', 0), c = view(id, null, 0);
+      const m = W(id).melee!, r = LARGE(id) ? view(id, 'windup', m.windup / 2) : view(id, 'ready', 0), c = view(id, null, 0);
       expect(r.part(0.75), id).toBeGreaterThan(0.5); // the outer quarter (the head) mostly in frame
       expect(r.tip.y, id).toBeGreaterThan(c.tip.y + 0.3); // still raised well above the carry
       expect(r.tip.y, id).toBeGreaterThan(0.8); // at the top edge: an overhead / high wind-up
@@ -706,7 +715,9 @@ describe('first-person key poses (aimed and solved for each model\'s length; thr
       expect(Math.max(Math.abs(c.tip.x), Math.abs(c.tip.y)), id).toBeLessThan(1);
       expect(c.on, id).toBeGreaterThan(0.6);
       expect(r.on, id).toBeGreaterThan(0.1);
-      expect(r.tip.x, id).toBeGreaterThan(c.tip.x); // drawn back to the right
+      // drawn back to the right (re-pin, lane MELEE gameplay feedback 2026-11-11: a large weapon's held tip is BEHIND the eye over the
+      // right shoulder, where its NDC means nothing — so in camera space: behind and to the right)
+      if (LARGE(id)) { expect(r.tipCam.z, id).toBeGreaterThan(0); expect(r.tipCam.x, id).toBeGreaterThan(0); } else expect(r.tip.x, id).toBeGreaterThan(c.tip.x);
       const grip = MELEE_POSES[id].carry.pos[0];
       if (W(id).melee!.twoHanded) expect(grip, id).toBeLessThan(KNIFE_POSES.carry.pos[0]);
     }
@@ -750,6 +761,19 @@ describe('first-person key poses (aimed and solved for each model\'s length; thr
       let prev = view(id, null, 0), minRec = Infinity;
       for (const [stage, t, c] of seq) {
         const v = view(id, stage, t, c), label = `${id} ${stage} ${t.toFixed(3)}`;
+        if (LARGE(id)) {
+          // re-pin (lane MELEE, gameplay feedback 2026-11-11): the over-the-shoulder hold puts the head BEHIND the eye by design, so
+          // "every point 0.15 m in front" becomes: every point 0.15 m from the eye and every IN-VIEW point 0.15 m deep (the 1 cm near
+          // plane never cuts the weapon where it shows); the screen-step rule while the tip is on screen, a camera-space step bound
+          // while it is not (the real-mesh version of all three: melee-windup-pose.test.ts)
+          expect(v.minEye, label).toBeGreaterThan(0.15);
+          expect(v.minInView, label).toBeGreaterThan(0.15);
+          if (v.tipInView && prev.tipInView) expect(v.tip.distanceTo(prev.tip), label).toBeLessThan(stage === 'swing' ? 0.5 : 0.25);
+          expect(v.tipCam.distanceTo(prev.tipCam), label).toBeLessThan(stage === 'swing' ? 0.25 : 0.32);
+          if (stage === 'recover' && t > 0.1 * m.recovery && t < 0.9 * m.recovery) minRec = Math.min(minRec, Math.hypot(v.tip.x, v.tip.y));
+          prev = v;
+          continue;
+        }
         expect(v.minDepth, label).toBeGreaterThan(0.15);
         expect(v.tip.distanceTo(prev.tip), label).toBeLessThan(stage === 'swing' ? 0.5 : 0.25);
         if (stage === 'recover' && t > 0.1 * m.recovery && t < 0.9 * m.recovery) minRec = Math.min(minRec, Math.hypot(v.tip.x, v.tip.y));
