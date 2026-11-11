@@ -316,7 +316,7 @@ export class ChipperSystem {
   }
 
   teardown(): void {
-    this.silenceMotor();
+    this.silenceMotor(true);
     this.clock.reset();
     this.aimed = false;
     this.settledPrev = false;
@@ -328,15 +328,16 @@ export class ChipperSystem {
 
   /** Leaving 'playing' (pause, menus, death): the spray goes, the machine falls silent (the job's progress stays in the record). */
   pause(): void {
-    this.silenceMotor();
+    this.silenceMotor(true);
     this.fx.clearAirborne();
     this.clock.reset();
     this.aimed = false;
     this.settledPrev = false;
   }
 
-  private silenceMotor(): void {
-    if (this.motor) this.audio.silence();
+  /** The motor's sound ends at once (`always`: also a wind-down cue still playing — pause / teardown / a replaced record). */
+  private silenceMotor(always = false): void {
+    if (this.motor || always) this.audio.silence();
     this.motor = false;
   }
 
@@ -482,7 +483,7 @@ export class ChipperSystem {
     this.ensureSink();
     const st = this.state;
     if (st !== this.rec) { // a load / reset replaced the record: nothing of the old job's visual / sound survives
-      if (this.rec) { this.silenceMotor(); this.clock.reset(); this.fx.clearAirborne(); this.dropBody(); this.settledPrev = false; }
+      if (this.rec) { this.silenceMotor(true); this.clock.reset(); this.fx.clearAirborne(); this.dropBody(); this.settledPrev = false; }
       this.rec = st;
     }
     const attached = this.attach();
