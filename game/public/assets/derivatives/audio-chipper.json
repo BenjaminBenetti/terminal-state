@@ -1,0 +1,227 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "audio-chipper-20261111",
+ "task": "studio-corpse-chipper-fuel-20261110-235304-01",
+ "lane": "AUDIO",
+ "generatedBy": "the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (the task's local Sound Lab allowance: 5 jobs of a 12-job cap including retries, every first take accepted; the rest of the allowance closed unused)",
+ "plannedBy": "tools/audio-pipeline/chipper-plan.py (ids, cues, durations, seeds; the prompt text stays with the private raw archive)",
+ "rebuild": "SOUND_LAB_AUDIO_DIR=<raw dir> node tools/audio-pipeline/chipper-build.mjs",
+ "reuse": "Checked first (audio/bank.ts): the Reactor / Bunker machine cues are a diesel generator, fan air, a servo ratchet, a beacon motor and a pump with water; bodyFall is a dry thud on concrete; nothing grinds wet flesh and bone. So five cues were generated, one take each.",
+ "privacy": "This public record names each raw take by its Sound Lab job id, seed and SHA-256 (raw WAV, lab sidecar, prompt). The prompt text, the raw takes and their paths stay in the private raw archive (independent backup), not in Git.",
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (per-0.1 s level, per-0.25 s spectral centroid, spectrogram images, band shares, flatness, peak, clipping, silence, loop-seam step / level jump, BS.1770 loudness). The user taste-tests in game.",
+  "gameReady": false,
+  "approved": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "loudness": {
+  "method": "ITU-R BS.1770-4 K-weighting, 400 ms blocks / 75 % overlap; one-shots: maximum momentary loudness (zero-padded to one block); loops: integrated loudness of the loop played twice; sample peak (no true-peak oversampling)"
+ },
+ "mixCalibration": {
+  "note": "CUE_GAIN (audio/sfx.ts) per cue = 10^((target - measured) / 20), capped at 1 (no boost): the target is the cue's loudness at the source (derivative x CUE_GAIN, before distance / room / master). First estimates for the ear pass.",
+  "cues": {
+   "chipperMotor": {
+    "measure": "integrated (loop x2)",
+    "measuredLufs": -20.4,
+    "targetLufs": -28,
+    "cueGain": 0.42,
+    "atSourceLufs": -27.9,
+    "why": "the running motor: a bed in the car the player stands in, above the market murmur beds (-31), under every combat cue"
+   },
+   "chipperGrind": {
+    "measure": "integrated (loop x2)",
+    "measuredLufs": -19.4,
+    "targetLufs": -25,
+    "cueGain": 0.52,
+    "atSourceLufs": -25.1,
+    "why": "the wet grind over the motor while a body is processed: clearly heard, under combat"
+   },
+   "chipperFeed": {
+    "measure": "max momentary",
+    "measuredLufs": -16.5,
+    "targetLufs": -21,
+    "cueGain": 0.6,
+    "atSourceLufs": -20.9,
+    "why": "a heavy body landing in the hopper: about an enemy attack (-20.3) / a market grunt (-21)"
+   },
+   "chipperStart": {
+    "measure": "max momentary",
+    "measuredLufs": -14.7,
+    "targetLufs": -26,
+    "cueGain": 0.27,
+    "atSourceLufs": -26.1,
+    "why": "the switch clunk + spin-up: its steady part hands over to the motor loop (-28) as it fades, ~2 dB above it (no step)"
+   },
+   "chipperStop": {
+    "measure": "max momentary",
+    "measuredLufs": -16.1,
+    "targetLufs": -26,
+    "cueGain": 0.32,
+    "atSourceLufs": -26,
+    "why": "the switch clunk + coast-down to silence: its running part takes over from the fading motor loop (-28) at about its level"
+   }
+  }
+ },
+ "kbps": 64,
+ "derivatives": [
+  {
+   "cue": "chipperMotor",
+   "url": "assets/audio/chipper-motor-loop.mp3",
+   "bytes": 45975,
+   "sha256": "6e248f36e23738aaa5fc4539dc6495ca1b09b84b35065736320e9e58ee20594f",
+   "dur": 5.7,
+   "loop": {
+    "start": 0.1,
+    "length": 5.5
+   },
+   "seam": {
+    "wrapStep": 0.005672,
+    "medianStep": 0.0108,
+    "wrapOverMedian": 0.53,
+    "wrapOverP99": 0.09,
+    "levelJumpDb": 2,
+    "adjacentJumpP95Db": 2.22
+   },
+   "ops": [
+    "mono",
+    "stationary window from 1 s (std 1.42 dB over 0.5 s blocks, searched from 0.8 s, end guard 1.6 s)",
+    "loop 5.5 s, equal-power crossfade 0.5 s",
+    "margins 0.1 s",
+    "rms -20 dBFS (-1.6 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "chipper-motor-loop-01",
+    "jobId": "20261111T004007-1737009476",
+    "seed": 1737009476,
+    "seconds": 10,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "1a290bfa0be96de440c8b632ab9ead0348f331b23497542d84e6d31f17e157bf",
+    "rawBytes": 1764044,
+    "labSidecarSha256": "6affb64404aaa1a86968a540870a98427c25ee2ca19775e08e66c58f05f030d6",
+    "promptSha256": "5fd196ae64242b344c49fbf08a2d52248931fadfe4a00065586f95a15300936f"
+   }
+  },
+  {
+   "cue": "chipperGrind",
+   "url": "assets/audio/chipper-grind-loop.mp3",
+   "bytes": 45975,
+   "sha256": "04a5648acd3eb325b4e16e3f3b8bec0158402f5a04f711bc4fabd329d41f0187",
+   "dur": 5.7,
+   "loop": {
+    "start": 0.1,
+    "length": 5.5
+   },
+   "seam": {
+    "wrapStep": 0.02184,
+    "medianStep": 0.01521,
+    "wrapOverMedian": 1.44,
+    "wrapOverP99": 0.2,
+    "levelJumpDb": -2.41,
+    "adjacentJumpP95Db": 6.58
+   },
+   "ops": [
+    "mono",
+    "stationary window from 1.5 s (std 2.02 dB over 0.5 s blocks, searched from 1.5 s, end guard 2.1 s)",
+    "loop 5.5 s, equal-power crossfade 0.5 s",
+    "margins 0.1 s",
+    "rms -20 dBFS (2.6 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "chipper-grind-loop-01",
+    "jobId": "20261111T004011-142679025",
+    "seed": 142679025,
+    "seconds": 10,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "ee89bcf201a2688d0b787dafb56f8c2c82c18c992aa66cb5b2d272e05dd99229",
+    "rawBytes": 1764044,
+    "labSidecarSha256": "6c4c4b41fba582c51061882e1891c25a38c48d0c397ca206969a0f2d8338fa21",
+    "promptSha256": "ab1980585b3482bd896c6b4955e4f665f22aeed26f0d9fa5beb8ba2670890e1b"
+   }
+  },
+  {
+   "cue": "chipperFeed",
+   "url": "assets/audio/chipper-feed.mp3",
+   "bytes": 15464,
+   "sha256": "f1072b78b83dedfdf6c448a6b3a82ed7c8f9cd4d728d53f693a4059e050f0ebe",
+   "dur": 1.9,
+   "ops": [
+    "mono",
+    "trim 0.1-2 s",
+    "cosine fades 0.01 / 0.5 s",
+    "peak -1 dBFS (-0.7 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "chipper-feed-01",
+    "jobId": "20261111T004016-858651419",
+    "seed": 858651419,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "8e205e4551506d0d3f41d4f931de4080a4c16b5e18ba808209e6df994155a744",
+    "rawBytes": 529244,
+    "labSidecarSha256": "8a8989283fb3b42ae7464570519946831d52c57897398e1b596befdfdd0a6bb0",
+    "promptSha256": "b4211afba7c164f40abf62594aff79c4932cc598b41ef2b253dc236026ed6c3b"
+   }
+  },
+  {
+   "cue": "chipperStart",
+   "url": "assets/audio/chipper-start.mp3",
+   "bytes": 25913,
+   "sha256": "26afdbabdbadd9c8c7362dacb2979c83f6025e1806e93ef428a9abbf5853dadd",
+   "dur": 3.2,
+   "ops": [
+    "mono",
+    "trim 0-3.2 s",
+    "cosine fades 0.005 / 1 s",
+    "peak -1 dBFS (-0.2 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "chipper-start-01",
+    "jobId": "20261111T004021-456234135",
+    "seed": 456234135,
+    "seconds": 5,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "c824aab92b95029eed0bea8debf2cbcd2b03cf902bfa478d2e778908e5958ee3",
+    "rawBytes": 882044,
+    "labSidecarSha256": "0bb8223b6580b48f4830877a24ab0773dc6e8277ebd396e361d05c6ad834f6e5",
+    "promptSha256": "260f31d9089812cf4cf7c03a443a4219f39604522b064ad8862d7656dc700405"
+   }
+  },
+  {
+   "cue": "chipperStop",
+   "url": "assets/audio/chipper-stop.mp3",
+   "bytes": 42004,
+   "sha256": "99601caa0e8c51d88c12ee4b64a6bb88acba60a021d2ddb6ef6704c4dc7b8567",
+   "dur": 5.2,
+   "ops": [
+    "mono",
+    "trim 0-5.2 s",
+    "cosine fades 0.005 / 0.35 s",
+    "peak -1 dBFS (2.0 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "chipper-stop-01",
+    "jobId": "20261111T004025-1134923694",
+    "seed": 1134923694,
+    "seconds": 6,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "44da520233d84f2c66305a9498ad6e4faf56ee9231a5cef0d08eb9562bf9a3f1",
+    "rawBytes": 1058444,
+    "labSidecarSha256": "1e37fd9df7455af70d23cf3949806469b5e646f1fbe801d0bd0eab5340ddcdab",
+    "promptSha256": "4a4fc076b186b8854523e73b8b33df21caca6d0a5049ba3212424436f6de4ab2"
+   }
+  }
+ ],
+ "rejectedRaws": []
+}

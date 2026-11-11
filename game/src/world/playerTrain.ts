@@ -58,6 +58,7 @@ import {TRAIN_GLASS, TRAIN_VIEW, TrainMaterials, buildTrainView, glassSheet, jam
 import {rayBox, towerCue, type P3} from './towerShared';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {PLAYER_TRAIN_MODELS} from '../assets/playerTrain.generated';
+import {CHIPPER_MODEL} from './chipperSpec'; // task corpse-chipper (lane ASSET): the chipper joins the car's model catalogue
 import {assetUrl} from '../assets/loader';
 import {requestSurfaceAnisotropy, type SurfaceRole} from '../render/anisotropy';
 import {highlightMaterial, highlightPulse} from './highlight';
@@ -86,9 +87,10 @@ export interface TrainRideLink {
 // every level, fetched behind the loading screen of the first level with a train, kept while levels place one); the Codex interior
 // textures through a module cache (shared by every level, never level-scoped).
 
-/** The prop library file map of the train models (game.ts propModels catalogue). */
+/** The prop library file map of the train models (game.ts propModels catalogue). Task corpse-chipper (lane ASSET): + the chipper fixture
+ *  (world/chipperSpec.ts CHIPPER_MODEL, its own cook: assets/trainChipper.generated.ts) — fetched with the car's other models. */
 export const PLAYER_TRAIN_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> =
-  Object.fromEntries(Object.values(PLAYER_TRAIN_MODELS).map(m => [m.key, {url: m.url, bytes: m.bytes}]));
+  Object.fromEntries([...Object.values(PLAYER_TRAIN_MODELS), CHIPPER_MODEL].map(m => [m.key, {url: m.url, bytes: m.bytes}]));
 
 /** Game.sectionModelKeys: the train models for a level that parks the car (playerTrainPlacement is pure and memoized per layout). */
 export function playerTrainModelKeys(layout: StationLayout): string[] {

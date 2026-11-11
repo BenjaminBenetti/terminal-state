@@ -603,20 +603,20 @@ they sit outside the two audits; their classification is recorded here.
   - No baked clutter: the model is just the box, its lid, latches, hinge and handles.
   - Scale (rule 5): `scale-check.mjs --prop game/public/assets/models/player-train-lockbox.glb`, viewed. 1.03 × 0.556 × 0.614 m,
     grounded on 4 skid contacts, top at 0.55 m (a footlocker below the 0.98 m window sills).
-- **Chipper** (task studio-corpse-chipper-fuel-20261110-235304-01; `world/chipper.ts` runtime, `world/chipperPlace.ts` placement,
-  `fuel/chipperFuel.ts` credit): the woodchipper fixed in the +Z bay between the middle and front door pairs, its front to the aisle.
-  - Storage opens: **not storage** (`none`). The open hopper takes one dead undead body at a time (the corpse system's sink) and
-    grinds it into fuel credit. It holds no items and nothing is seeded, so there's no loot table. Its only state is the record's job
-    and its credit (`run/playerTrain.ts` `chipper`).
-  - Physics: static, `anchored` / `machinery`. It's bolted to the car floor and is part of the car on every train, never cargo or
-    loot. It's a solid box for player / enemy / hitscan, parked and riding (`trainColliders`, `buildRideLocalModel`), with no
-    physics body. It doesn't move when shot or bumped, apart from a few millimetres of visual vibration while it grinds. The
-    collider doesn't vibrate.
-  - No baked clutter: the model is the machine (hopper, rotor housing, outlet, control box, frame). The fed body is the corpse
-    system's own model, not part of the chipper. The gauge, blood and stains are runtime effects.
-  - Scale (rule 5): runtime target 1.36 × 0.83 × 0.62 m (`world/chipperSpec.ts` `CHIPPER_SIZE`), grounded on the car floor. Its top
-    sits 1.81 m above rail top, below the bay window's 1.93 m sill. The scale-check render beside a zombie is lane ASSET's, with the
-    cooked GLB.
+- **Chipper** (task corpse-chipper-fuel-20261110-235304; model `assets/models/train-chipper.glb`, contract `world/chipperSpec.ts`,
+  cooked by `tools/asset-pipeline/props/build-train-chipper.mjs`):
+  - Not storage: the hopper is a feed mouth (a fed body is ground, never kept), the collection tanks are sealed parts of the machine
+    and its fuel credit is the machine's own counter (`fuel/chipperFuel.ts`). Nothing to open, no loot table.
+  - Physics: static, `anchored`: heavy machinery bolted to the car floor by its base frame, no physics body.
+  - No baked clutter: the hose, tanks, gauge, valves, cable and the hopper's flap curtain are permanent parts of the machine.
+  - Scale (rule 5): `scale-check.mjs --prop game/public/assets/models/train-chipper.glb`, viewed beside zombie lastshift (1.78 m,
+    runtime scale 1). 1.36 × 0.832 × 0.616 m, grounded on 6 base-frame feet (span 1.15 × 0.46 m); hopper floor 0.47 m, side lips
+    0.53 m, top frame 0.78 m (upper thigh on the zombie), motor top 0.83 m: below the 0.98 m window sills.
+  - Runtime (lane CHIPPER: `world/chipper.ts`, placement `world/chipperPlace.ts`): a fixed part of every train, never cargo or
+    loot. It stands in the +Z bay between the middle and front door pairs with its front to the aisle. It is a solid box for player,
+    enemy and hitscan, both parked and riding (`trainColliders`, `buildRideLocalModel`). Shots and bumps don't move it. It has a few
+    millimetres of visual vibration while it grinds, and the collider doesn't vibrate. The fed body is the corpse system's own model,
+    not part of the chipper. The gauge, blood spray and floor stains are runtime effects.
 
 ## 7. Reactor mines set pieces (not layout prop kinds)
 Task reactor-expansion-20261101 (lane MINES). The old mine workings off tier 2 (`gen/reactor/complex/mines*.ts`) dress their drifts

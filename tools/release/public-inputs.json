@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 68257,
-      "sha256": "b3f84877115e758a37d932f8931c5f461df42b133d8ed88f0624fc85e3f627fc"
+      "bytes": 70523,
+      "sha256": "341b614ecce2191ff88df43a3adf4fab36da89671b85ad3dc43f897ffc037176"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 3070,
-      "sha256": "d27343e7709f683d55a7fbc5bcd8e49dc47e413ca68f658aacfe066449babfcc"
+      "bytes": 3354,
+      "sha256": "2728d2c15fdbdaddb00880db25dc9a02f5c561448f946b450d8201aa69a7d52f"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -202,6 +202,31 @@
       "path": "assets/audio/cc1-cough-10-bark.mp3",
       "bytes": 22256,
       "sha256": "b51fc1195c01c47f4346565dec9ca2b043b9580bdda6e23afdac718023b63627"
+    },
+    {
+      "path": "assets/audio/chipper-feed.mp3",
+      "bytes": 15464,
+      "sha256": "f1072b78b83dedfdf6c448a6b3a82ed7c8f9cd4d728d53f693a4059e050f0ebe"
+    },
+    {
+      "path": "assets/audio/chipper-grind-loop.mp3",
+      "bytes": 45975,
+      "sha256": "04a5648acd3eb325b4e16e3f3b8bec0158402f5a04f711bc4fabd329d41f0187"
+    },
+    {
+      "path": "assets/audio/chipper-motor-loop.mp3",
+      "bytes": 45975,
+      "sha256": "6e248f36e23738aaa5fc4539dc6495ca1b09b84b35065736320e9e58ee20594f"
+    },
+    {
+      "path": "assets/audio/chipper-start.mp3",
+      "bytes": 25913,
+      "sha256": "26afdbabdbadd9c8c7362dacb2979c83f6025e1806e93ef428a9abbf5853dadd"
+    },
+    {
+      "path": "assets/audio/chipper-stop.mp3",
+      "bytes": 42004,
+      "sha256": "99601caa0e8c51d88c12ee4b64a6bb88acba60a021d2ddb6ef6704c4dc7b8567"
     },
     {
       "path": "assets/audio/clank-01.mp3",
@@ -1804,6 +1829,11 @@
       "sha256": "4a8f1dac0a1e97f52187b72124d3117386e4bae510cac2eb039e8ed9930928c8"
     },
     {
+      "path": "assets/derivatives/audio-chipper.json",
+      "bytes": 8511,
+      "sha256": "9582c4da9e942826bce57abc1f56482879ee69c82f4a558da429236b1bf38de1"
+    },
+    {
       "path": "assets/derivatives/audio-cough.json",
       "bytes": 24088,
       "sha256": "60204bf7da17a1eee224268875d11ac91d329933e88cedc3eb4c4058ee3b2212"
@@ -2717,6 +2747,11 @@
       "path": "assets/derivatives/skyways-wreck-suv.json",
       "bytes": 5302,
       "sha256": "50abde035753fad48aab8779a12817435178c1a5d720eecf4105c22a4d3dbdf9"
+    },
+    {
+      "path": "assets/derivatives/train-chipper.json",
+      "bytes": 6155,
+      "sha256": "b6377b944c7d93605d33a1e42911d3b0ee4b990f01b96de0d05fa7d76eeb74ab"
     },
     {
       "path": "assets/derivatives/train-fuel-can.json",
@@ -5082,6 +5117,11 @@
       "path": "assets/models/tech-display-t25.glb",
       "bytes": 500576,
       "sha256": "014bc3ef3c6cbc59661b6d51f85f556afd608e33678a058a01ce8261b8e3208e"
+    },
+    {
+      "path": "assets/models/train-chipper.glb",
+      "bytes": 1316080,
+      "sha256": "e607cb8f8c6bc36ab503560967a8e4efbda30c8b47d59a32182e3ebe952df5d2"
     },
     {
       "path": "assets/models/train-fuel-can.glb",
