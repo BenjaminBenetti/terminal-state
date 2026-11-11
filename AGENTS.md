@@ -13,10 +13,19 @@ source. `game/README.md` has detailed gameplay notes and some historical command
   preserve existing history, and reconcile concurrent changes without discarding
   anyone's work. Never force push, rewrite published history or use destructive
   reset/clean operations.
-- Run `npm ci`, `npm run build`, `npm test`, `npm run ci:check`,
-  `npm run ci:test` and `npm run ci:package` before pushing. Inspect the diff and
-  secret/asset checks. A blocked check or authentication is a blocker to report,
-  not a reason to claim the push succeeded or silently change dependencies.
+- Before pushing, run focused local checks that fit the change (user decision,
+  2026-11-11). Run the Vitest files that cover or import what changed on one
+  worker (`./node_modules/.bin/vitest run --config game/vitest.config.ts
+  --maxWorkers=1 --no-file-parallelism <test files>`). Run `npm run build`
+  (typecheck + build) for code changes. Add `npm run ci:check`, `npm run ci:test`
+  and `npm run ci:package` when workflows, release/deploy tooling, `game/public/`
+  inputs or bundled asset paths change. Run `npm ci` when dependencies are missing
+  or stale. The full local suite (`npm test`) is **not** a pre-push or pre-PR
+  requirement: the required GitHub CI `build` check runs the whole suite on every
+  pull request, and that result gates the merge. Report which checks ran locally
+  and that the full suite was left to CI. Inspect the diff and secret/asset
+  checks. A blocked check or authentication is a blocker to report, not a reason
+  to claim the push succeeded or silently change dependencies.
 - GitHub Actions is the authoritative release build. Everything publication must
   use the **successful GitHub CI artifact for that exact main commit**, never a
   locally built folder. Main downloads, validates the manifest and publishes
