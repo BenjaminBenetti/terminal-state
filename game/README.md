@@ -51,6 +51,13 @@ closes it. The contents carry between levels. Retry restores them to the level-e
 **Developer code:** with the Lockbox open, type **1 3 3 7** to add the three guns, one of each gear item and a full stack of each ammo
 type (13 slots). It adds all of it or nothing: if there isn't room, nothing changes and a note says how many free slots it needs.
 
+Train corpse chipper (task studio-corpse-chipper-fuel-20261110-235304-01, `docs/corpse-chipper.md`): an emergency fuel source.
+Aim at the body of an undead enemy you killed and press **E** to pick it up (one at a time, over the shoulder: your hands are busy and
+you move slower). **E** puts it down again. In the parked train, aim at the woodchipper on the far side between the middle and front
+doors and press **E** to feed the body in. About 20 s later it is ground (with a lot of blood) into **0.1 of a standard tank**: 10
+bodies = one hop, 20 = a full empty train. The machine runs with an empty tank, is loud enough to draw the infected, and only grinds
+while the train is parked.
+
 Light survival (iteration 12, `player/flashlight.ts`, `weapons/throwables.ts`): the flashlight runs on a **battery**
 (HUD meter bottom right, above the weapon panel). It starts at 80 % and drains only while the light is on: a full battery
 gives 7 min of continuous light. Above 25 % the beam is steady; below 25 % it flickers — soft irregular dips whose share of
