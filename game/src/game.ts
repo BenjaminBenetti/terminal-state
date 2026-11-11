@@ -52,6 +52,7 @@ import {HOOK_SLOTS, S as SPAN, UpdateProfiler} from './debug/updateProfile'; // 
 import type {ZombieSpawn} from './gen/station';
 import {ZombieLookLibrary} from './ai/outfits';
 import {chooseSpawnLook, cosplayModelKeysFor, lingerieModelKeysFor} from './ai/spawnLook'; // task mall-lingerie-20261102-221554 (lane CONTEXT): ordinary pick, or the lingerie store's variants' set
+import {homeWorld, wanderHomesFor, type WanderHome} from './ai/wanderHome'; // task gameplay-feedback-20261111 (lane SPAWNS): zone-local wander homes
 import {LINGERIE_MODEL_FILES, createLingerieLibrary} from './ai/lingerie'; // (lane FIT's lazy garments + their separate look library)
 import {COSPLAY_MODEL_FILES, createCosplayLibrary} from './ai/cosplay'; // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): the convention's lazy costumes + their separate look library
 import type {WardrobeLibrary} from './ai/wardrobe';
@@ -518,6 +519,8 @@ export class Game {
   private readonly layoutPickup = new Map<Pickup, number>();
   /** Live enemies -> their layout.zombies index (kills are remembered per index). */
   private readonly enemyIndex = new Map<EnemyActor, number>();
+  /** Task gameplay-feedback-20261111 (lane SPAWNS): zone-local enemies -> their wander home (ai/wanderHome.ts; lingerie store, damp Strainer). */
+  private wanderHomes = new Map<EnemyActor, WanderHome>();
   /** The current section was already cleared in this run (no second clear moment). */
   private sectionCleared = false;
   /** Flashlight switched on (Iteration 12: backed by the battery; a flat battery keeps it off). */
@@ -1328,6 +1331,7 @@ export class Game {
       if (this.sirens.skip(this.layout.zombies[i])) continue; // Task track1-siren-blightbelly-20261031 (lane SIREN): no Siren without her model (never a zombie stand-in)
       this.enemyIndex.set(this.spawnEnemy(this.layout.zombies[i], i), i);
     }
+    this.wanderHomes = wanderHomesFor(this.layout, this.enemyIndex); // (lane SPAWNS: the lingerie store's variants / the damp Strainer keep their zone)
     // Task track3-eaton-centre-20261031 (lane HORDE): the roaming hordes walk the living members of their placed groups (killed
     // members stayed dead above; a group with none left stays dead). No spawning here: members are layout.zombies entries.
     if (this.layout.hordes?.length) {
@@ -3740,7 +3744,8 @@ export class Game {
       const b = z.brain;
       const seqBefore = b.attackSeq;
       prof.begin(SPAN.brain);
-      const out = b.update(dt, w);
+      const home = this.wanderHomes.get(z); // (lane SPAWNS: a zone-local enemy's random walk targets stay in its zone while it stands there)
+      const out = b.update(dt, home ? homeWorld(w, home, this.levels, b) : w);
       prof.end(SPAN.brain);
       if (H && out.alerted) H.alerted(b, p.y); // lane HORDE: group mates within earshot hear the call (brain.hear; never group-wide); lane ENEMY (mall R2): a cross-storey sighting calls at most 2
       prof.begin(SPAN.motor);
