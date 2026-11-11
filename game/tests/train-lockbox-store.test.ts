@@ -1,4 +1,4 @@
-// Task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox store — run/trainLockbox.ts (slots, JSON, the
+// Task train-lockbox-windows-20261101-232156 (lane BOX): the train's 50-slot Lockbox store (40 before task gameplay-feedback-20261111's extra row) — run/trainLockbox.ts (slots, JSON, the
 // malformed / old-save loads), run/playerTrain.ts (the RunParticipant: save / load / reset), items/inventory.ts storeMove /
 // storeQuick / storeWornBag (atomic transfers both ways, backpacks in / out) and the Game's real carry methods (wireRunLanes /
 // resetCarry / levelEntrySnapshot / restoreCarryFrom on a minimal shell): Travel keeps it, Retry restores it with the inventory
@@ -8,6 +8,7 @@ import {describe, expect, it} from 'vitest';
 import {Inventory, type ItemStack, type SlotRef, type StoreRef} from '../src/items/inventory';
 import {WEAPONS} from '../src/weapons/weapons';
 import {LOCKBOX_SLOTS, TrainLockbox} from '../src/run/trainLockbox';
+import {BACKPACK_SLOTS} from '../src/items/gear';
 import {PLAYER_TRAIN_PARTICIPANT, PlayerTrainRecord} from '../src/run/playerTrain';
 import {resetParticipants, restoreParticipants, type RunSnapshot} from '../src/run/snapshot';
 import {createRun} from '../src/run/runState';
@@ -25,10 +26,10 @@ const json = (v: unknown) => JSON.stringify(v);
 const both = (inv: Inventory, box: TrainLockbox) => json({inv: inv.toJSON(), box: box.toJSON()});
 const uidsOf = (inv: Inventory, box: TrainLockbox) => [...inv.allStacks(true), ...box.slots.flatMap(s => (s ? [s, ...(s.bag ?? []).filter((x): x is ItemStack => !!x)] : []))].map(s => s.uid);
 
-describe('TrainLockbox: 40 ordinary slots, exact JSON, malformed data never crashes', () => {
-  it('starts empty with 40 slots; toJSON / load round-trip keeps uid, count, magazine, backpack contents and the mask filter', () => {
+describe('TrainLockbox: 50 ordinary slots, exact JSON, malformed data never crashes', () => {
+  it('starts empty with 50 slots; toJSON / load round-trip keeps uid, count, magazine, backpack contents and the mask filter', () => {
     const box = new TrainLockbox(), inv = new Inventory();
-    expect([box.slots.length, box.used, box.free, LOCKBOX_SLOTS]).toEqual([40, 0, 40, 40]);
+    expect([box.slots.length, box.used, box.free, LOCKBOX_SLOTS]).toEqual([50, 0, 50, 50]);
     const rifle = inv.makeStack('rifle', 1, 7);
     const bag = inv.makeStack('backpack', 1);
     bag.bag![3] = inv.makeStack('water', 3);
@@ -55,7 +56,7 @@ describe('TrainLockbox: 40 ordinary slots, exact JSON, malformed data never cras
     for (const d of [undefined, null, 42, 'x', {}, {slots: 'nope'}, {slots: [null, 7, 'a']}]) {
       expect(() => box.load(d)).not.toThrow();
       expect(box.used).toBe(0);
-      expect(box.slots.length).toBe(40);
+      expect(box.slots.length).toBe(LOCKBOX_SLOTS);
     }
     box.load({v: 1, slots: [
       {uid: 1, itemId: 'not_an_item', count: 1}, // unknown item
@@ -68,12 +69,12 @@ describe('TrainLockbox: 40 ordinary slots, exact JSON, malformed data never cras
       {uid: 1.5, itemId: 'water', count: 1}, // non-integer uid
     ]});
     expect(box.summary()).toEqual(['3:ammo_9mmx30', '5:pistolx1@15', '6:backpackx1[1]']);
-    expect(box.slots[6]!.bag!.length).toBe(12);
+    expect(box.slots[6]!.bag!.length).toBe(BACKPACK_SLOTS);
     expect(box.slots[6]!.bag![1]).toMatchObject({uid: 9, itemId: 'bandage', count: 2});
     expect(box.invariants()).toEqual([]);
     const many = {slots: Array.from({length: 55}, (_, i) => ({uid: i + 1, itemId: 'water', count: 1}))};
-    box.load(many); // more than 40 entries: only 40 slots exist
-    expect([box.slots.length, box.used]).toEqual([40, 40]);
+    box.load(many); // more than LOCKBOX_SLOTS (50) entries: only 50 slots exist
+    expect([box.slots.length, box.used]).toEqual([LOCKBOX_SLOTS, LOCKBOX_SLOTS]);
   });
 });
 
@@ -96,11 +97,11 @@ describe('the player-train record owns the Lockbox (RunParticipant save / load /
     expect(rec.lockbox.used).toBe(0);
   });
 
-  it('an old save without a lockbox (the PR #33 record) loads an empty 40-slot box; garbage never yields a broken box', () => {
+  it('an old save without a lockbox (the PR #33 record) loads an empty 50-slot box; garbage never yields a broken box', () => {
     const rec = new PlayerTrainRecord(), part = rec.participant(), inv = new Inventory();
     rec.lockbox.slots[3] = inv.makeStack('boots', 1);
     part.load({id: 'player-train-l1', tier: 1, at: {level: 'office', section: 'main'}});
-    expect([rec.state.at, rec.lockbox.used, rec.lockbox.slots.length]).toEqual([{level: 'office', section: 'main'}, 0, 40]);
+    expect([rec.state.at, rec.lockbox.used, rec.lockbox.slots.length]).toEqual([{level: 'office', section: 'main'}, 0, LOCKBOX_SLOTS]);
     rec.lockbox.slots[3] = inv.makeStack('boots', 1);
     part.load({id: 'player-train-l1', tier: 1, at: null, lockbox: {slots: [{uid: 'x'}, {uid: 2, itemId: 'boots', count: 1}]}});
     expect(rec.lockbox.summary()).toEqual(['1:bootsx1']);
@@ -162,7 +163,7 @@ describe('Inventory store transfers: atomic, finite, every kind (lane BOX)', () 
     expect(inv.storeMove(box.slots, {bar: 'throw', index: 0}, S(0))).toBe('refused'); // a swap would put the knife in the grenade slot
     expect(inv.refusal?.code).toBe('wrong-slot');
     const snap = both(inv, box);
-    for (const [from, to] of [[{bar: 'gear', index: 1}, S(1)], [S(1), {bar: 'gear', index: 0}], [S(40), P(0)], [S(-1), P(0)], [{bar: 'bag', index: 0}, S(0)]] as const) {
+    for (const [from, to] of [[{bar: 'gear', index: 1}, S(1)], [S(1), {bar: 'gear', index: 0}], [S(LOCKBOX_SLOTS), P(0)], [S(-1), P(0)], [{bar: 'bag', index: 0}, S(0)]] as const) {
       expect(inv.storeMove(box.slots, from as never, to as never)).toBe('refused');
       expect(both(inv, box)).toBe(snap);
     }
@@ -256,7 +257,7 @@ describe('Game carry: Travel keeps the Lockbox, Retry restores it with the inven
     expect(box.summary()).toEqual(want);
     // NewGame: an empty box, the starter kit again
     g.resetCarry();
-    expect([box.used, box.slots.length, g.inv.count('ammo_9mm')]).toEqual([0, 40, 45]);
+    expect([box.used, box.slots.length, g.inv.count('ammo_9mm')]).toEqual([0, LOCKBOX_SLOTS, 45]);
   });
 
   it('Retry keeps the inventory uid counter above the Lockbox uids (Inventory.reserveUids)', () => {

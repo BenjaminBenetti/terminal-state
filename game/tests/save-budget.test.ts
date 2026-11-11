@@ -1,7 +1,7 @@
 // Task studio-alpha-campaign-foundation-20261102-230708-01 (lane SAVE): the localStorage SIZE BUDGET — three slots of a heavily
 // played campaign (all 40 stations visited, every loot holder of REAL generated layouts remembered as captureHolders records them,
 // every generated pickup + 30 dropped / spilled items per station with full-precision poses, kills, two full grounded backpacks per
-// station, office windows / sirens / reactor lane stores, a full carried kit, a 40-slot Lockbox of full backpacks, the Retry
+// station, office windows / sirens / reactor lane stores, a full carried kit, a full 50-slot Lockbox of full (18-slot) backpacks, the Retry
 // entry) must fit Chrome's ~5 Mi UTF-16 code units per origin (keys + values) with the settings, with margin, and every slot must
 // stay under the 2 MiB import limit (so an export always imports again). Sizes are written to /tmp/save-lane/budget.json.
 import {describe, expect, it} from 'vitest';
@@ -19,6 +19,7 @@ import type {LevelId} from '../src/levels/types';
 import {saveFileText} from '../src/save/serialize';
 import {SAVE_LIMITS} from '../src/save/validate';
 import {SaveSlots, STORAGE_BUDGET_CHARS} from '../src/save/slots';
+import {LOCKBOX_SLOTS} from '../src/run/trainLockbox';
 import {utf8Bytes} from '../src/save/checksum';
 import {FakeStorage, Harness, archetypeOf, fillInventory, fillLockbox, fixtureNetwork, populateStation, sid, type RolledHolder} from './helpers/saveFixture';
 
@@ -58,7 +59,7 @@ function heavyRun(counts: Record<string, LayoutCounts[]>, seed: number): Harness
   const campaign: CampaignState = {v: 1, network, current: sid(38), known: all, visited: all, cheat: false, won: null, transit: {from: sid(38), to: sid(39), phase: 'departing', cheat: false}};
   const h = new Harness(campaign);
   fillInventory(h, seed);
-  fillLockbox(h, 40, seed + 1); // all 40 slots: full backpacks (nested items)
+  fillLockbox(h, LOCKBOX_SLOTS, seed + 1); // every Lockbox slot (50; 40 before task gameplay-feedback-20261111): full backpacks (nested items)
   for (let i = 0; i < 40; i++) {
     const level = archetypeOf(i), c = counts[level][i % counts[level].length];
     const lanes: Record<string, unknown> = {};
