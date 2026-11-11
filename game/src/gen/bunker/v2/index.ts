@@ -28,7 +28,7 @@ import {applyFamilySpacing} from '../../../ai/familySpacing';
 import {spawnProfile, type SpawnProfile} from '../../../ai/spawnTables';
 import {lootProfile, type LootProfile} from '../../../items/lootTables';
 import type {LevelId, SectionGenContext} from '../../../levels/types';
-import {TRENCH_DEPTH, type Area, type LightPlacement, type Rect, type StationLayout} from '../../stationTypes';
+import {TRENCH_DEPTH, type Area, type LightPlacement, type PickupPlacement, type Rect, type StationLayout} from '../../stationTypes';
 import {BUNKER_CORE_KIND, BUNKER_GENERATOR_KIND, type BunkerGasZone, type BunkerInfo} from '../bunkerTypes';
 import {bunkerNameOf} from '../names';
 import {heroAgainstWall, heroFront, heroWalls, liftFrom, shelterDx} from '../dress';
@@ -41,6 +41,8 @@ import {bunkerSpine, rectInside, rectsOverlap, V2, V2_BASES, V2_CORE_LEVEL, V2_G
 import {carveVaultLane, placeVaultDoor, type VaultCarve} from './vault';
 import {liftRecord} from './liftPlan';
 import {bunkerV2Issues} from './validate';
+import {BUNKER_LAYOUT_VERSION} from '../layoutVersion';
+import {BUNKER_S_RATIONS_VERSION, placeStationRations} from './stationRations'; // (task gameplay-feedback-20261111, lane FUEL-LOOT)
 
 const BUNKER_ID: LevelId = 'bunker';
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -315,8 +317,15 @@ function tryLevel(genSeed: number, seed: number, attempt: number, ctx: SectionGe
   for (let L = 0; L < V2_LEVELS; L++) { const an = sp.storeys[L].anchors.find(a => a.id === 'lift')!; keep.push({level: L, x: (an.apron.x + an.apron.w / 2) * CELL, z: (an.apron.y + an.apron.h / 2) * CELL}); }
   const field: SpawnField = {dist: levelDistance(layout.levels, sx, sy, 0, layout.levelLinks), keep};
   placeBunkerEnemies(layout, rng.fork('bunker-enemies'), field, spawns, hz.damp);
-  for (let lv = 0; lv < V2_LEVELS; lv++) placeMallSupplies(layout, rng.fork(`bunker-supplies-${lv}`), field, [lv], lv === 0 ? 'pit' : 'ring', loot);
+  let stationFloor: PickupPlacement[] = [];
+  for (let lv = 0; lv < V2_LEVELS; lv++) {
+    const placed = placeMallSupplies(layout, rng.fork(`bunker-supplies-${lv}`), field, [lv], lv === 0 ? 'pit' : 'ring', loot);
+    if (lv === 0) stationFloor = placed;
+  }
   placeWeaponFinds(layout, rng.fork('weaponFinds'), layout.startWeapon ?? 'rifle');
+  // (task gameplay-feedback-20261111, lane FUEL-LOOT) layout version 3: storey S trades half its ammo opportunities for food / drink
+  // (./stationRations.ts; no random stream read: storeys 1-5 and every other draw stay version 2's)
+  if ((ctx.layoutVersion ?? BUNKER_LAYOUT_VERSION) >= BUNKER_S_RATIONS_VERSION) placeStationRations(layout, loot, stationFloor, layout.seed);
 
   // --- lighting, traversal, the record -------------------------------------------------------------------------------------------
   applyLighting(layout, rng.fork('lighting'));
