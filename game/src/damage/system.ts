@@ -172,6 +172,19 @@ export class DamageSystem {
     this.actors.push(installWounds(z));
   }
 
+  /**
+   * Task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): `z` leaves this station's damage bookkeeping (a picked-up body: the
+   * corpse system owns it and disposes its materials with the actor) — its wound controller is no longer released by clear(). False when
+   * it was not installed here.
+   */
+  releaseZombie(z: WoundableActor): boolean {
+    const w = woundsOf(z);
+    const i = w ? this.actors.indexOf(w) : -1;
+    if (i < 0) return false;
+    this.actors.splice(i, 1);
+    return true;
+  }
+
   /** Call once per trigger pull (groups pellets: one tear cue per zombie per shot). */
   beginShot(): void {
     this.shot++;

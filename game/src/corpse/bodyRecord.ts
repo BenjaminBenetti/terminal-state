@@ -24,6 +24,8 @@ export const BODIES = {
   maxAboard: 64,
   /** Train-local / world coordinate bounds (m). */
   pos: 40, world: 1e5,
+  /** Task corpse-chipper (lane CORPSE): the body's uniform size factor bounds (EnemyActor.scale; input safety). */
+  scaleMin: 0.5, scaleMax: 2,
 } as const;
 
 /** The resting poses a body record can name (the corpse system owns their shapes). */
@@ -48,6 +50,11 @@ export interface BodyRecordJSON {
   q: [number, number, number, number];
   /** Storey (station records only). */
   level?: number;
+  /**
+   * Task corpse-chipper (lane CORPSE): the body's uniform size factor (EnemyActor.scale: its root scale, drawn once from the spawn's
+   * stream) — a rebuilt body keeps the exact size it died with. Absent = 1.
+   */
+  scale?: number;
 }
 
 /** '<section id>#<layout enemy index>'. */
@@ -55,7 +62,7 @@ export const BODY_ID_RE = /^[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{1,32}#\d{1,6}$/;
 export const bodyId = (section: string, index: number): string => `${section}#${index}`;
 
 const finite = (v: unknown, lim: number): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= lim;
-const BODY_KEYS = ['id', 'arch', 'seed', 'type', 'look', 'pose', 'x', 'y', 'z', 'q', 'level'];
+const BODY_KEYS = ['id', 'arch', 'seed', 'type', 'look', 'pose', 'x', 'y', 'z', 'q', 'level', 'scale'];
 
 /**
  * Why one body record is malformed (null = fine). `world`: a station record (world pose + storey); else train-local (aboard / a job).
@@ -78,6 +85,7 @@ export function bodyProblem(v: unknown, o: {world: boolean; feedable: (arch: str
   if (Math.abs(Math.hypot(q[0], q[1], q[2], q[3]) - 1) > 1e-3) return `body ${b.id} orientation must be a unit quaternion`;
   if (o.world) { if (typeof b.level !== 'number' || !Number.isInteger(b.level) || b.level < 0 || b.level > 64) return `body ${b.id} needs its storey`; }
   else if (b.level !== undefined) return `body ${b.id} aboard has no storey`;
+  if (b.scale !== undefined && (typeof b.scale !== 'number' || !Number.isFinite(b.scale) || b.scale < BODIES.scaleMin || b.scale > BODIES.scaleMax)) return `body ${b.id} size out of range`;
   return null;
 }
 

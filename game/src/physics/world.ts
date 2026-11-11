@@ -374,6 +374,21 @@ export class PhysicsSystem implements BodyHost {
     return true;
   }
 
+  /**
+   * Task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): the body of `target` leaves physics for good (picked up: the corpse
+   * system owns it now) — a simulating ragdoll is frozen at its current pose, then forgotten with the frozen ones (no elevator carry, no
+   * stats entry). False when it had no ragdoll. A frozen ragdoll is never simulated again (the corpse system poses the bones itself).
+   */
+  forgetRagdoll(target: RagdollTarget): boolean {
+    const r = this.ragdolls.find(x => x.target === target) ?? this.frozen.find(x => x.target === target);
+    if (!r) return false;
+    r.freeze();
+    this.ragdolls = this.ragdolls.filter(x => x !== r);
+    this.frozen = this.frozen.filter(x => x !== r);
+    if (!this.ragdolls.length) this.refreshChunks();
+    return true;
+  }
+
   private retire(r: Ragdoll): void {
     r.freeze();
     this.ragdolls = this.ragdolls.filter(x => x !== r);

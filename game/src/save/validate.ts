@@ -29,6 +29,7 @@ import {FUEL, FUEL_LANE, debitProblem, debitUnits, stationFuelProblem, trainFuel
 import {SKYWAYS_CAR_LANE, TRUNK_SLOTS, skywaysCarProblem} from '../world/skywaysCarStore'; // task skyways-level-20261106 (lane CAR): the prize car's pose
 import {chipperProblem} from '../fuel/chipperFuel'; // task studio-corpse-chipper-fuel-20261110-235304-01: the train chipper's record
 import {corpseFeedable} from '../ai/corpseTrait';
+import {CORPSE_CARRY_PARTICIPANT, STATION_BODIES_LANE, carryProblem, stationBodiesProblem} from '../corpse/bodyLanes'; // (lane CORPSE) the carried body, a station's bodies
 import {STATION_PROPS_LANE, cargoProblem, stationPropsProblem, type CargoPropJSON} from '../run/trainCargo'; // task train-loose-cargo: the train's loose items (+ train-all-cargo: props)
 import {PROP_DEFS} from '../gen/props'; // task train-all-cargo: carried props are of real kinds
 import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
@@ -218,6 +219,21 @@ let propScope = new Set<string>();
  * may never share a uid with a carried / stored one or with another stall's.
  */
 let uidScope = new Set<number>();
+/**
+ * Task corpse-chipper (lane CORPSE): the body identities seen in the scope being checked (the run: its memories + the hands, the train's
+ * cargo and the chipper's job; the Retry snapshot: its own) — one body, one place: never held AND aboard, in the hopper or in a station.
+ */
+let bodyScope = new Set<string>();
+
+/** Task corpse-chipper: each body identity once per scope (the records' shapes are checked by their own problem functions first). */
+function bodiesIn(list: readonly unknown[], path: string): void {
+  list.forEach((b, i) => {
+    const id = (b as {id?: unknown} | null)?.id;
+    if (typeof id !== 'string') return;
+    if (bodyScope.has(id)) bad(`${path}[${i}].id`, `body ${id} is in two places`);
+    bodyScope.add(id);
+  });
+}
 
 /** Task train-all-cargo: carried props / riders of real prop kinds, each identity once per scope. */
 function carriedProps(list: readonly CargoPropJSON[], path: string): void {
@@ -495,8 +511,18 @@ function participants(v: unknown, path: string, seen: Set<number>): void {
       if (cp) bad(`${p}.cargo`, cp);
       (r.cargo as {items: {stack: unknown}[]}).items.forEach((it, i) => stack(it.stack, `${p}.cargo.items[${i}].stack`, {uid: true, inBag: false, seen, needBag: true}));
       carriedProps((r.cargo as {props?: CargoPropJSON[]}).props ?? [], `${p}.cargo.props`); // task train-all-cargo: v2's movable props aboard
+      bodiesIn((r.cargo as {bodies?: unknown[]}).bodies ?? [], `${p}.cargo.bodies`); // (lane CORPSE) v3's bodies aboard
     }
     if (r.chipper !== undefined) { const kp = chipperProblem(r.chipper, corpseFeedable); if (kp) bad(`${p}.chipper`, kp); } // task corpse-chipper: the machine's credit + job
+    const job = (r.chipper as {job?: {body?: unknown} | null} | undefined)?.job;
+    if (job?.body) bodiesIn([job.body], `${p}.chipper.job.body`); // (lane CORPSE) the body being ground is in no other place
+  }
+  const cc = o[CORPSE_CARRY_PARTICIPANT]; // (lane CORPSE) the body in the player's hands
+  if (cc !== undefined) {
+    const cp = carryProblem(cc, corpseFeedable);
+    if (cp) bad(`${path}.${CORPSE_CARRY_PARTICIPANT}`, cp);
+    const held = (cc as {held: unknown}).held;
+    if (held) bodiesIn([held], `${path}.${CORPSE_CARRY_PARTICIPANT}.held`);
   }
 }
 
@@ -558,6 +584,11 @@ function lanes(v: unknown, path: string): void {
     const sp = stationPropsProblem(o[STATION_PROPS_LANE]);
     if (sp) bad(`${path}.${STATION_PROPS_LANE}`, sp);
     carriedProps((o[STATION_PROPS_LANE] as {here: CargoPropJSON[]}).here, `${path}.${STATION_PROPS_LANE}.here`);
+  }
+  if (has(o, STATION_BODIES_LANE)) { // task corpse-chipper (lane CORPSE): the handled bodies lying in the station
+    const bp = stationBodiesProblem(o[STATION_BODIES_LANE], corpseFeedable);
+    if (bp) bad(`${path}.${STATION_BODIES_LANE}`, bp);
+    bodiesIn((o[STATION_BODIES_LANE] as {here: unknown[]}).here, `${path}.${STATION_BODIES_LANE}.here`);
   }
 }
 
@@ -640,14 +671,15 @@ function entry(v: unknown, path: string, net: SubwayNetwork): void {
   survival(e.survival, `${path}.survival`);
   battery(e.battery, `${path}.battery`);
   const seen = new Set<number>();
-  const outer = propScope, outerUids = uidScope;
+  const outer = propScope, outerUids = uidScope, outerBodies = bodyScope;
   propScope = new Set(); // (task train-all-cargo: the snapshot is its own world)
   uidScope = seen; // (lane TRADE: its station's stall stock shares the snapshot's uid set)
+  bodyScope = new Set(); // (lane CORPSE: so are its bodies)
   try {
     inventory(e.inventory, `${path}.inventory`, seen);
     participants(e.lanes, `${path}.lanes`, seen);
     memories(e.memories, `${path}.memories`, ids, scope ?? '\u0000');
-  } finally { propScope = outer; uidScope = outerUids; }
+  } finally { propScope = outer; uidScope = outerUids; bodyScope = outerBodies; }
   stats(e.stats, `${path}.stats`);
 }
 
@@ -661,10 +693,11 @@ export function validateRunData(v: unknown, o: ValidateOptions = {}, path = 'run
   if (r.v !== 1) bad(`${path}.v`, 'unsupported run version');
   const prevCap = filterCapS;
   filterCapS = has(r, 'filterLifeS') ? num(r.filterLifeS, `${path}.filterLifeS`, 1, 3600) : LEGACY_FILTER_LIFE_S;
-  const prevProps = propScope, prevUids = uidScope;
+  const prevProps = propScope, prevUids = uidScope, prevBodies = bodyScope;
   propScope = new Set();
   uidScope = new Set(); // (lane TRADE: the run's one uid set — memories' stall stock, carry, Lockbox, cargo)
-  try { return validateRunBody(r, o, path); } finally { filterCapS = prevCap; propScope = prevProps; uidScope = prevUids; }
+  bodyScope = new Set(); // (lane CORPSE: the run's one body set — memories' station bodies, the hands, the train's cargo, the chipper)
+  try { return validateRunBody(r, o, path); } finally { filterCapS = prevCap; propScope = prevProps; uidScope = prevUids; bodyScope = prevBodies; }
 }
 
 function validateRunBody(r: Record<string, unknown>, o: ValidateOptions, path: string): SerializedRunV1 {

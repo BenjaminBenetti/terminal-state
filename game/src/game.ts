@@ -188,6 +188,7 @@ import {installTrainRide, type TrainRide} from './world/trainRide'; // task camp
 import {installRidePortals, type RidePortalRuntime} from './world/ridePortalRuntime'; // task studio-perf-ao-train-continuity-20261110-022206-01: the ride portals (gates / breaches) the moving train uses
 import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // task train-loose-cargo: every loose item / bag aboard travels with the train
 import {carriedModelKeys, installTrainPropCargo, type TrainPropCargo} from './world/trainPropCargo'; // task train-all-cargo: every movable prop aboard travels too
+import {installCorpses, type CorpseSystem} from './world/corpses'; // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): carried dead bodies
 import type {PropPlacement} from './gen/props';
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
@@ -408,6 +409,8 @@ export class Game {
   trainCargo!: TrainCargoSystem;
   /** Task studio-beta-train-all-cargo-20261107-184244-01: the movable props aboard (world/trainPropCargo.ts). */
   trainPropCargo!: TrainPropCargo;
+  /** Task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): dead bodies picked up / carried / put down / aboard (world/corpses.ts). */
+  corpses!: CorpseSystem;
   /** Task studio-survivor-market-20261108-005807-01 (lane TRADE): market trade (market/trade/tradeSystem.ts); since the rework Rail Ties are a physical item. */
   trade!: TradeSystem;
   /** Task studio-weapon-runtime-fix-20261110-022206-01: the delivery of the new weapons' lazily loaded models (world/weaponVarietyDelivery.ts). */
@@ -798,6 +801,10 @@ export class Game {
     // — unshifted —, its holders hook after the fuel holders', its build last, after the train's floor colliders)
     this.trainPropCargo = installTrainPropCargo(this);
     hookName('trainPropCargo');
+    // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): after the cargo systems (teardown first — unshifted —, build last); its
+    // E / prompt while carrying go first (unshift), the pickup's after every lane's; the train chipper registers its sink (addSink)
+    this.corpses = installCorpses(this, {enemyIndex: z => this.enemyIndex.get(z), forgetEnemy: z => { this.enemyIndex.delete(z); }, cancelUse: r => this.cancelUse(r), targets: () => ({pickup: this.currentTarget, container: this.containerTarget})});
+    hookName('corpses');
     this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionModelKeys.push(skywaysKitchenModelKeysFor); // task studio-skyways-level-20261106-054448 (lane FOOD): the ramen restaurant's skyways-* models
     this.sectionModelKeys.push(skywaysAddonModelKeysFor); // task studio-skyways-level-20261106-054448 (lane ADDON): the add-on's skyways-* models
@@ -1490,7 +1497,7 @@ export class Game {
    */
   commitEndingSave(): CommitResult | null {
     if (!this.run.campaign) return null;
-    if (this.world) { this.saveSectionMemory(); this.gear.flush(); this.fuelStations?.flush(); this.trainPropCargo?.flush(); } // (task fuel-feedback: the station's fuel record with its memory; task train-all-cargo: its carried / lost props)
+    if (this.world) { this.saveSectionMemory(); this.gear.flush(); this.fuelStations?.flush(); this.trainPropCargo?.flush(); this.corpses?.flush(); } // (lane CORPSE: the bodies lying in the station) // (task fuel-feedback: the station's fuel record with its memory; task train-all-cargo: its carried / lost props)
     return this.commitSave('ending', {pose: {...trainSpawnLocal(), yaw: 0, pitch: 0, crouched: false}});
   }
 
@@ -1514,6 +1521,7 @@ export class Game {
         return u.state;
       });
       this.trainPropCargo?.notePrepared(p.run, p.data.participants as Record<string, unknown> | undefined); // (task train-all-cargo: their models are prepared too)
+      this.corpses?.notePrepared(p.run, p.data.participants as Record<string, unknown> | undefined); // (lane CORPSE: the save's bodies' models too)
       return {ok: true, restore: {...p, slot: v.value.meta.slot, revision: v.value.meta.revision}};
     } catch (err) { return {ok: false, error: `This save cannot be loaded (${String((err as Error)?.message ?? err).slice(0, 160)}).`}; }
   }
@@ -1836,7 +1844,7 @@ export class Game {
     const cheat = !!this.run.campaign?.cheat, cost = routeCost(hops, cheat);
     const carts = this.fuelCartsLike();
     // (task train-all-cargo: nor a prop in a doorway; task cargo-overflow: nor more aboard than can travel — props, then loose items / bags)
-    const block = carts?.departBlock() ?? this.trainPropCargo?.departBlock() ?? this.trainCargo?.departBlock?.() ?? null;
+    const block = carts?.departBlock() ?? this.trainPropCargo?.departBlock() ?? this.trainCargo?.departBlock?.() ?? this.corpses?.departBlock() ?? null; // (lane CORPSE: + a body in a doorway / too many aboard)
     if (block) { this.hud.toast(block, true); this.sfx?.denied(); return {ok: false, error: block}; }
     const aboard = carts?.aboard() ?? [], tf = this.playerTrain.fuel, chest = this.playerTrain.lockbox.slots;
     const debit = planDebit(cost, tf.tank, aboard, chest);
@@ -2328,19 +2336,7 @@ export class Game {
   }
 
   spawnEnemy(s: ZombieSpawn, i: number): EnemyActor {
-    const models = this.assets.models as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>;
-    const looks = (this.zombieLooks ??= new ZombieLookLibrary(models));
-    // Task track1-siren-blightbelly-20261031 (lane BLIGHT): + the lazily loaded enemy models of this layout (ai/enemyModels.ts)
-    const {actor: z, fallback} = createEnemyActor(s, withEnemyModels(models, k => this.propModels.get(k)), this.rand, () => {
-      // task mall-lingerie-20261102-221554 (lane CONTEXT): a spawn tagged look 'lingerie' (the mall lingerie store's variants only)
-      // wears its fitted set (ai/lingerie.ts lingerieLook(seed, i), when buildable top + bottom); every other spawn the ordinary pick
-      // (lane COSPLAY: + a spawn tagged look 'cosplay' — the Skyways convention's costumed zombies — wears its costume the same way)
-      const special = s.look === 'lingerie' ? this.lingerieLookLibrary(models) : s.look === 'cosplay' ? this.cosplayLookLibrary(models) : null;
-      const pick = looks.bodies.length ? chooseSpawnLook(this.currentSeed, i, s, looks, special) : null;
-      const source = pick ? (pick.library === 'ordinary' ? looks : special!).build(pick.look) : models.zombie;
-      if (!source) throw new Error('no zombie body model loaded (registry bodies and legacy zombie-rigged.glb both missing)');
-      return new ZombieActor(source, s, this.rand);
-    });
+    const {actor: z, fallback} = this.buildEnemyActor(s, i, this.currentSeed, this.rand);
     if (fallback) this.enemyFallbacks++;
     this.damage.installZombie(z); // Lane D: own wound-patched material clones (body + every wearable)
     this.blight.adopt(z); // Task track1-siren-blightbelly-20261031 (lane BLIGHT): a Blightbelly reports its single death to the burst (others: no-op)
@@ -2351,6 +2347,27 @@ export class Game {
     this.scene.add(z.root);
     this.atmosphere.markShadows(z.root, false); // Lane F: enemies block the flashlight beam
     return z;
+  }
+
+  /**
+   * The actor of spawn `s` (layout index `i`) of a layout seeded `seed`, built as spawnEnemy builds it — its look by chooseSpawnLook, the
+   * lazily loaded enemy models — but registered nowhere; `rand` = the caller's stream. Task studio-corpse-chipper-fuel-20261110-235304-01
+   * (lane CORPSE): also a carried body's rebuild at any station (world/corpses.ts buildBody, with its own stream: never this.rand).
+   */
+  buildEnemyActor(s: ZombieSpawn, i: number, seed: number, rand: () => number): {actor: EnemyActor; fallback: boolean} {
+    const models = this.assets.models as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>;
+    const looks = (this.zombieLooks ??= new ZombieLookLibrary(models));
+    // Task track1-siren-blightbelly-20261031 (lane BLIGHT): + the lazily loaded enemy models of this layout (ai/enemyModels.ts)
+    return createEnemyActor(s, withEnemyModels(models, k => this.propModels.get(k)), rand, () => {
+      // task mall-lingerie-20261102-221554 (lane CONTEXT): a spawn tagged look 'lingerie' (the mall lingerie store's variants only)
+      // wears its fitted set (ai/lingerie.ts lingerieLook(seed, i), when buildable top + bottom); every other spawn the ordinary pick
+      // (lane COSPLAY: + a spawn tagged look 'cosplay' — the Skyways convention's costumed zombies — wears its costume the same way)
+      const special = s.look === 'lingerie' ? this.lingerieLookLibrary(models) : s.look === 'cosplay' ? this.cosplayLookLibrary(models) : null;
+      const pick = looks.bodies.length ? chooseSpawnLook(seed, i, s, looks, special) : null;
+      const source = pick ? (pick.library === 'ordinary' ? looks : special!).build(pick.look) : models.zombie;
+      if (!source) throw new Error('no zombie body model loaded (registry bodies and legacy zombie-rigged.glb both missing)');
+      return new ZombieActor(source, s, rand);
+    });
   }
 
   // ---------------------------------------------------------------------------------------
@@ -2763,6 +2780,7 @@ export class Game {
     if (this.gasMask.transitioning) return; // mask lane: no use starts while the gas mask goes on / comes off (H, click)
     if (this.skywaysCar?.refuseUse()) return; // (lane CAR) no item use while driving the Skyways car
     if (this.vomit?.active) return; // (lane SHELVES) no timed use starts while throwing up (H / a click)
+    if (this.corpses?.refuseUse()) return; // (task corpse-chipper, lane CORPSE) no item use while the hands carry a body (H, the inventory)
     // Iteration 12 (LIGHT): a battery is refused at >= 99 % charge (nothing used)
     // Iteration 16 (lane INJURY): a limb treatment needs its injury ("No leg injury to treat"); it heals no HP, so the HP check is skipped
     const blocked = (def.recharge ? this.torch.battery.refuseReason() : null)
@@ -3022,7 +3040,7 @@ export class Game {
     // A fresh sprint (Shift while moving forward) interrupts a timed use. Until the consume view has
     // brought the gun back up it stays lowered: no aiming, firing or reloading.
     if (this.use && (inp.hit('ShiftLeft') || inp.hit('ShiftRight')) && (inp.down('KeyW') || inp.down('ArrowUp'))) this.cancelUse('sprint');
-    const vmBusy = !!this.use || this.consumeView.busy || !!this.vomit?.active; // (lane SHELVES: throwing up — no aim / reload, the gun lowered)
+    const vmBusy = !!this.use || this.consumeView.busy || !!this.vomit?.active || !!this.corpses?.carrying; // (lane SHELVES: throwing up — no aim / reload, the gun lowered; lane CORPSE: so while carrying a body)
     this.aiming = !!wdef && !wdef.melee && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active && !laneOwns;
     const moveOpts = {aiming: this.aiming, speedMult: (this.use ? 0.6 : wdef?.moveMult ?? 1) * this.mods.speedMult, canSprint: !this.use && !inp.mouse[0]};
     // (lane RIDE) riding: car pose -> the player's car-local step -> the world pose (TrainRide.stepPlayer); else the world body as ever
@@ -3136,7 +3154,7 @@ export class Game {
     prof.lap(SPAN.view);
     this.consumeView.update(dt); // item-to-face pose + gun holster level, before the gun pose
     if (this.skywaysCar.holster > 0) this.viewmodel.setHolstered(this.skywaysCar.holster); // (lane CAR) hands on the wheel: the held item lowered
-    const vomitHolster = this.vomitAction?.holster ?? 0; // (lane SHELVES) throwing up: the held item lowered (whichever lowers it more wins)
+    const vomitHolster = Math.max(this.vomitAction?.holster ?? 0, this.corpses?.holster ?? 0); // (lane SHELVES) throwing up: the held item lowered (whichever lowers it more wins; lane CORPSE: + carrying a body)
     if (vomitHolster > 0) this.viewmodel.setHolstered(Math.max(vomitHolster, this.consumeView.holster, this.skywaysCar.holster));
     this.viewmodel.update(dt, {
       // (task mouse-axis-invert: the sway follows the EFFECTIVE turn, so an inverted axis sways with the view, not against it)

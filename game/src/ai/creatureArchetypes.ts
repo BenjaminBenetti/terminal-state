@@ -50,6 +50,8 @@ export interface EnemyActor extends RagdollTarget, WoundableActor {
   readonly archetype?: EnemyArchetypeId;
   /** Corpse hit volumes for non-humanoid rigs (damage/system.ts uses humanoid bones otherwise). */
   corpseVolumes?(): HitVolume[];
+  /** Task corpse-chipper (lane CORPSE): an authored clip by name (the humanoid actors; world/corpses.ts poses a body by its Death clip). */
+  authoredClip?(name: string): THREE.AnimationClip | null;
 }
 
 export function archetypeOf(z: {archetype?: EnemyArchetypeId}): EnemyArchetypeId {
