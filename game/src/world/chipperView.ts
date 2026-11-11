@@ -145,7 +145,7 @@ export interface BodyFrame { crown: THREE.Vector3; axis: THREE.Vector3; len: num
 /** Measure a body's head / feet in its own frame (bones first, else its bounds' longest axis). */
 export function measureBody(obj: THREE.Object3D): BodyFrame {
   const B = CHIPPER_VIEW.body;
-  obj.updateMatrixWorld(true);
+  obj.updateWorldMatrix(true, true); // its ancestors too: the bones' world points and the inverse agree
   const inv = new THREE.Matrix4().copy(obj.matrixWorld).invert();
   const local = (o: THREE.Object3D | undefined): THREE.Vector3 | null => o ? o.getWorldPosition(v()).applyMatrix4(inv).multiply(obj.scale) : null;
   const head = local(obj.getObjectByName('Head'));
