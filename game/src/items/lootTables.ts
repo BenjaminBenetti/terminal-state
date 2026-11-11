@@ -781,6 +781,14 @@ export const ANNEX_CACHE_CRATE: LootSpec = {items: ANNEX_CACHE_CRATE_ROWS, lots:
 /** (round 3, lane HIDEOUT) The hideout's footlocker: personal kit + spare rounds, never empty, 2-3 lots (exact, no salvage). */
 export const ANNEX_CACHE_LOCKER: LootSpec = {items: ANNEX_CACHE_LOCKER_ROWS, lots: [2, 3], empty: 0, exact: true, salvage: false};
 /**
+ * Task gameplay-feedback-20261111 (lane FUEL-LOOT; user: on the Bunker's platform / elevator storey S, half the ammo spawn
+ * opportunities become food / drink): the STATION RATIONS a converted S holder rolls (gen/bunker/v2/stationRations.ts, Bunker layout
+ * version 3) — the survivor pantry's rows (ANNEX_CACHE_PANTRY_ROWS: tins, noodles, chocolate, bottled water, a soda), ONE lot with
+ * empty 0.2 = 0.8 food / drink lots per converted holder, about the 0.79 ammo lots an S ammo opportunity averaged (v2 census). Exact
+ * (its own odds; no scarcity cut, no salvage lot); the natural food half (items/naturalFood.ts) still applies when it is realized.
+ */
+export const BUNKER_STATION_RATIONS: LootSpec = {items: ANNEX_CACHE_PANTRY_ROWS, lots: [1, 1], empty: 0.2, exact: true, salvage: false};
+/**
  * (round 3, lane HIDEOUT; user: "perhaps a boosted chance of gear spawning") the hideout's GEAR piece: with `chance` per hideout (each
  * annex's FIRST cache only) ONE piece of rare gear lies in the hideout — drawn from the level profile's gear pool (gearParams(profile)
  * .weights: the level's own GEAR_WEIGHTS with its overrides) plus the gas mask at `gasMask` (its filter charge seeded like the level's

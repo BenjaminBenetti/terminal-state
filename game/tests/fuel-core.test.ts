@@ -166,7 +166,10 @@ describe('records and validators', () => {
     expect(stationFuelProblem({v: 2, realized: true, carts: [], lots: ['shelf@0:1,2#900', 'shelf@0:1,2#900']})).toMatch(/duplicate/);
     expect(stationFuelProblem({v: 2, realized: true, carts: [], lots: ['shelf 900']})).toMatch(/malformed/);
     expect(stationFuelProblem({v: 1, realized: true, carts: [], lots: []})).toMatch(/v1/);
-    expect(stationFuelProblem({v: 3, realized: true, carts: [], lots: []})).toMatch(/version/);
+    // v3 (task gameplay-feedback-20261111, lane FUEL-LOOT): the v2 shape, keyed by the station being built; v2 records are read as legacy
+    expect(stationFuelProblem({v: 3, realized: true, carts: [], lots: ['crate@1:5,6#900']})).toBeNull();
+    expect(stationFuelProblem({v: 3, realized: true, carts: []})).toMatch(/lots/);
+    expect(stationFuelProblem({v: 4, realized: true, carts: [], lots: []})).toMatch(/version/);
     expect(debitProblem({tank: 1, carts: [{uid: 'c', units: 2}], chest: [{uid: 7, count: 2}]})).toBeNull();
     expect(debitProblem({tank: 1, carts: [], chest: [{uid: 7, count: 3}]})).toMatch(/chest/);
   });

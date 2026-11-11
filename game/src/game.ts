@@ -395,8 +395,9 @@ export class Game {
   /**
    * … `holders` (task fuel-feedback, world/fuelStations.ts): runs right after the loot holders are built — before the shelf filler is
    * dressed around their lots and before the section memory removes the taken ones (extra lots that must behave like rolled loot).
+   * It gets the section being BUILT: during a journey run.current is still the station being left until the 'arrival' step.
    */
-  readonly sectionHooks: {holders?(layout: Iter16Layout): void; build?(layout: Iter16Layout): void; teardown?(): void}[] = [];
+  readonly sectionHooks: {holders?(layout: Iter16Layout, key: SectionKey): void; build?(layout: Iter16Layout): void; teardown?(): void}[] = [];
   /** Aim offset (radians) added to the camera every frame (lane INJURY: restrained arm-injury sway). Shots use the camera, so it is honest. */
   readonly aimOffset = {yaw: 0, pitch: 0};
   /** Per-frame lane updates while playing (after the player moved, before the camera update). */
@@ -1205,7 +1206,7 @@ export class Game {
     yield* this.containers.buildSteps(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>, lootProfile(key.level),
       pantryHolderRealizer(key.level, this.run.peekMemory(key)?.holders ?? {}, lootProfile(key.level))); // iteration 08 (Lane I): openables split the lazy p7 models too
     dropUnrecordedSalvage(this.containers, this.run.peekMemory(key)?.holders ?? {}); // (task base-salvage: a remembered holder never gains the base salvage lot)
-    for (const h of this.sectionHooks) h.holders?.(this.layout); // task fuel-feedback: fuel cans as loot lots (before the filler / memory)
+    for (const h of this.sectionHooks) h.holders?.(this.layout, key); // task fuel-feedback: fuel cans as loot lots (before the filler / memory); `key`: run.current is still the departure here
     yield 'navigation';
     applySkywaysStageSupport(this.layout); // (lane VENUE) after the world is drawn, before levels / prop index / paths / physics read the grid
     this.levels = levelsOf(this.layout);
