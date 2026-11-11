@@ -154,6 +154,12 @@ export const CUE_GAIN: Record<CueId, number> = {
   // stands in (a refused departure: clearly heard, under a gunshot); the pour is at the hands (between pickup and heal); the cart rumble
   // sits in the footsteps' level band at walking pace.
   engineStall: 0.55, fuelPour: 0.42, cartRoll: 0.4,
+  // Task studio-corpse-chipper-fuel-20261110-235304-01 (lane AUDIO, tools/audio-pipeline/chipper-build.mjs; audio/chipperAudio.ts): the
+  // train chipper. One-shots peak -1 dBFS, loops RMS -20 dBFS. These gains = derivatives/audio-chipper.json mixCalibration (loudness AT THE
+  // SOURCE): the motor loop -28 LUFS integrated (a bed in the car, above the market murmur -31), the wet grind -25 over it, the body feed
+  // -21 (about an enemy attack), the spin-up / wind-down -26 (their running parts meet the motor loop without a step). First estimates for
+  // the ear pass (not auditioned).
+  chipperMotor: 0.42, chipperGrind: 0.52, chipperFeed: 0.6, chipperStart: 0.27, chipperStop: 0.32,
   // (task studio-skyways-level-20261106-054448-01: the prize car; round 2, task skyways-vehicle-20261107 lane AUDIO — see CAR_AUDIO: the
   // engine loops are RMS -20 dBFS mid-range layers now (idle 0.42 -> 0.55, drive 0.5 -> 0.6); start / brake peak -1 dBFS, the reverse whine
   // loop RMS -20 dBFS (a layer over the engine))
@@ -425,13 +431,17 @@ interface FlareLoop {
  * (fade -> level -> air / occlusion lowpass -> panner -> master + reverb send) with a bigger reference distance: machines are loud.
  * Bounded: at most MACHINE_LOOP.max loops (the oldest fades to make room); every loop stops on a new world (setWorld).
  */
-export const MACHINE_LOOP = {max: 10, ref: 4, rolloff: 1, fadeIn: 1.2, fadeOut: 1.5, send: 0.3, far: 70, maxDist: 80} as const;
+export const MACHINE_LOOP = {max: 12, ref: 4, rolloff: 1, fadeIn: 1.2, fadeOut: 1.5, send: 0.3, far: 70, maxDist: 80} as const;
 // (task reactor-playtest-round2-20261102, lane STARTUP: max 6 -> 10 — three running generators + three fan zones already filled 6, so the
 // restarted core's hum evicted a generator loop that re-requested itself and evicted the next; the startup director adds at most three
 // bounded loops: the machine bed, the rod drive while the rods move, one beacon motor.)
-export type MachineLoopCue = 'reactorGeneratorLoop' | 'reactorFanLoop' | 'reactorHum' | 'reactorBed' | 'reactorRodLoop' | 'reactorBeacon';
+// (task studio-corpse-chipper-fuel-20261110-235304-01, lane AUDIO: max 10 -> 12 — the train chipper adds at most two bounded loops, its
+// motor and its wet grind, and re-requests a stopped one like the generators do: at 10 a full Reactor would evict back and forth.)
+export type MachineLoopCue = 'reactorGeneratorLoop' | 'reactorFanLoop' | 'reactorHum' | 'reactorBed' | 'reactorRodLoop' | 'reactorBeacon'
+  | 'chipperMotor' | 'chipperGrind';
 export type MachineCue = 'reactorGeneratorStart' | 'reactorBreaker' | 'reactorFuse' | 'reactorValve' | 'reactorPump' | 'reactorStartup'
-  | 'reactorSurge' | 'reactorOnline' | 'reactorRodStop' | 'reactorStage' | 'reactorBeam';
+  | 'reactorSurge' | 'reactorOnline' | 'reactorRodStop' | 'reactorStage' | 'reactorBeam'
+  | 'chipperFeed' | 'chipperStart' | 'chipperStop';
 /** Task reactor-playtest-round2-20261102 (lane STARTUP): a machine one-shot's mix (gain x CUE_GAIN, playback rate, start delay s, panner
  *  reference distance / audible range m, priority: 2 = never dropped by the voice cap — the win's surge / ONLINE impact).
  *  Task reactor-surface-ending-20261102 (lane AUDIO): + an optional filter on the clip (the beam ignition is high-passed: processing). */

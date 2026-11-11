@@ -67,8 +67,21 @@ function particleMaterial(tex: THREE.Texture, additive: boolean, attrs: {pos: TH
 /** Scene fog as seen by the particle shader (FogExp2: mode 1, density; Fog: mode 2, near / far). */
 interface ParticleFog { mode: TNode; density: TNode; near: TNode; far: TNode; color: TNode }
 
+/**
+ * The soft round particle texture of the alpha ring (Effects' dust / blood mist / smoke puffs): a radial white -> clear disc. Task
+ * studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): exported, with Particles, for the train chipper's blood mist.
+ */
+export function softDiscTexture(): THREE.CanvasTexture {
+  return canvasTexture(64, 64, 3, (ctx, w, h) => {
+    const gr = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    for (const [o, c] of [[0, 'rgba(255,255,255,0.95)'], [0.45, 'rgba(255,255,255,0.45)'], [1, 'rgba(255,255,255,0)']] as const) gr.addColorStop(o, c);
+    ctx.fillStyle = gr;
+    ctx.fillRect(0, 0, w, h);
+  });
+}
+
 /** Fixed-capacity point particle ring rendered in one draw call. */
-class Particles {
+export class Particles {
   /** Iteration 13 (MAT-B): an instanced sprite (one quad per particle), not THREE.Points. */
   readonly points: THREE.Sprite;
   private readonly pos: Float32Array;
@@ -340,7 +353,7 @@ export class Effects {
       ctx.fillStyle = gr;
       ctx.fillRect(0, 0, w, h);
     });
-    const softTex = disc([[0, 'rgba(255,255,255,0.95)'], [0.45, 'rgba(255,255,255,0.45)'], [1, 'rgba(255,255,255,0)']]);
+    const softTex = softDiscTexture();
     const glowTex = disc([[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,255,255,0.7)'], [1, 'rgba(255,255,255,0)']]);
     this.soft = new Particles(320, softTex, false);
     this.glow = new Particles(160, glowTex, true);

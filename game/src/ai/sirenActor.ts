@@ -139,6 +139,11 @@ export class SirenActor {
   }
 
   /** Every contract bone and clip is present. */
+  /** Task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): an authored clip by name (a carried body's resting pose: the Death clip's end frame). */
+  authoredClip(name: string): THREE.AnimationClip | null {
+    return this.actions.get(name as ClipKey)?.getClip() ?? null;
+  }
+
   get hasRig(): boolean {
     return this.bones.size === BONES.length && SIREN_CLIPS.every(c => this.actions.has(c));
   }

@@ -408,6 +408,14 @@ Generated for this project from a Codex INITIAL concept image (the owned Codex C
 - The train's fuel cart is a composition of two existing models (`assets/models/p7-hand-truck-t25.glb` and `assets/models/reactor-waste-drum.glb`); nothing new was generated for it.
 <!-- END train-fuel-and-airtank-models -->
 
+<!-- BEGIN train-chipper-model (build-train-chipper.mjs) -->
+## Train chipper
+
+Generated for this project from one Codex INITIAL design image (the owned Codex CLI's built-in image_gen tool) turned into a model with Meshy T2.5 image-to-3D (smart topology, 2K PBR) through the Meshy MCP; the model keeps Meshy's own PBR maps (re-encoded only). Task studio-corpse-chipper-fuel-20261110-235304-01 under the user's chipper authorization (15 of up to 100 credits, 1 attempt). AI-generated asset: unapproved prototype, no licence or commercial clearance implied. The raw master, conditioning image and job ledger are kept outside Git.
+
+- `assets/models/train-chipper.glb` — the train's corpse woodchipper (feed hopper, rotor housing, motor, control box, spout and hose, twin collection tanks on a welded base frame) (Meshy task 01a1c7ea-aad4-744e-8734-a75af09b66ec); runtime derivative by `tools/asset-pipeline/props/build-train-chipper.mjs` (provenance: `assets/derivatives/train-chipper.json`).
+<!-- END train-chipper-model -->
+
 <!-- BEGIN train-fuel-audio-20261106 (fuel-build.mjs) -->
 ## Train fuel audio (engine stall, fuel pour, fuel cart rolling)
 Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the train-fuel
@@ -673,3 +681,18 @@ One enemy with four approved bodies. Each was generated for this project with Me
 - `assets/models/enemy-screacher-sc03.glb` — Screacher SC03 "Lopsided Sleeper": a headless, lopsided sleeper in a vest and striped pyjama trousers, barefoot (Meshy task 01a1c79e-b350-7726-8c6b-9ed1cccd1ef8)
 - `assets/models/enemy-screacher-sc04.glb` — Screacher SC04 "Long-Stride Runner": a headless runner in a track jacket, shorts and trainers (Meshy task 01a1c79d-2dc8-7345-b577-f12daca5f86f)
 <!-- END enemy-screacher-20261110 -->
+
+<!-- BEGIN train-chipper-audio-20261111 (chipper-build.mjs) -->
+## Train chipper audio (motor loop, wet grind loop, body feed, spin-up, wind-down)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the chipper
+task's local Sound Lab allowance (5 jobs of a 12-job cap). Powered by Stability AI. Stability AI Community License +
+Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades, loop,
+levelling, MP3) built by `tools/audio-pipeline/chipper-build.mjs` (provenance: `assets/derivatives/audio-chipper.json`). Not reviewed
+by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/chipper-motor-loop.mp3` — chipperMotor (Sound Lab job 20261111T004007-1737009476)
+- `assets/audio/chipper-grind-loop.mp3` — chipperGrind (Sound Lab job 20261111T004011-142679025)
+- `assets/audio/chipper-feed.mp3` — chipperFeed (Sound Lab job 20261111T004016-858651419)
+- `assets/audio/chipper-start.mp3` — chipperStart (Sound Lab job 20261111T004021-456234135)
+- `assets/audio/chipper-stop.mp3` — chipperStop (Sound Lab job 20261111T004025-1134923694)
+<!-- END train-chipper-audio-20261111 -->
