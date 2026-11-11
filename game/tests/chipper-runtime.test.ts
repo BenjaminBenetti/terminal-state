@@ -60,7 +60,9 @@ function bodyObject(): THREE.Object3D {
   const g = new THREE.Group();
   g.name = 'fake-body';
   const bone = (name: string, x: number, y: number, z: number) => { const b = new THREE.Bone(); b.name = name; b.position.set(x, y, z); g.add(b); };
-  bone('Hips', 0, 0.95, 0); bone('Head', 0, 1.6, 0); bone('L_Foot', -0.1, 0.08, 0); bone('R_Foot', 0.1, 0.08, 0);
+  bone('Hips', 0, 0.95, 0); bone('Head', 0, 1.6, 0); bone('L_Foot', 0.1, 0.08, 0); bone('R_Foot', -0.1, 0.08, 0);
+  bone('L_UpperArm', 0.2, 1.42, 0); bone('R_UpperArm', -0.2, 1.42, 0); // (the rig's left is +X), arms out (a T)
+  for (const sd of ['L', 'R'] as const) { const h = new THREE.Bone(); h.name = `${sd}_Hand`; h.position.set(sd === 'L' ? 0.55 : -0.55, 0, 0); g.getObjectByName(`${sd}_UpperArm`)!.add(h); }
   g.add(new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.75, 0.3).translate(0, 0.875, 0), new THREE.MeshStandardMaterial()));
   return g;
 }
@@ -306,6 +308,31 @@ describe('chipper: feeding through the corpse sink', () => {
     expect(head().y).toBeLessThan(rim()); // head first, in the mouth
     expect(feet().y).toBeGreaterThan(rim() + 0.4); // the legs still out
     expect(feet().y).toBeLessThan(trainToWorld(s.p, 0, SPEC.ceilingY, 0).y - 0.3); // below the ceiling
+    // the shoulders lie along the mouth's long side (model Z = train-local z here; in the plane of the body's line and that side): no
+    // arm across the short side, at every progress
+    const across = () => obj.getObjectByName('L_UpperArm')!.getWorldPosition(new THREE.Vector3()).sub(obj.getObjectByName('R_UpperArm')!.getWorldPosition(new THREE.Vector3()));
+    const wp = (n: string) => obj.getObjectByName(n)!.getWorldPosition(new THREE.Vector3());
+    for (const p of [0, 0.3, 0.7]) {
+      s.host.playerTrain.chipper.state.job!.ms = Math.round(p * CHIPPER.grindMs);
+      s.ch.update(0);
+      const d = across();
+      const h0 = wp('Head'), line = wp('L_Foot').add(wp('R_Foot')).multiplyScalar(0.5).sub(h0).normalize();
+      const n = new THREE.Vector3().crossVectors(line, new THREE.Vector3(0, 0, 1)).normalize();
+      expect(Math.abs(d.clone().normalize().dot(n)), `p ${p}`).toBeLessThan(1e-3);
+      expect(Math.abs(d.dot(line))).toBeLessThan(1e-3);
+      expect(d.length()).toBeCloseTo(0.4, 3);
+      // the legs lean out over the hopper's own end (model -X): the part already in goes toward the rotor housing (model +X)
+      const endDir = trainToWorld(s.p, 1, 0, 0).x - trainToWorld(s.p, 0, 0, 0).x; // world x of train-local +X (= model -X here)
+      expect(line.x * endDir).toBeGreaterThan(0.3);
+      // the arms are tucked along the body: each hand near the head -> feet line, toward the feet from its shoulder
+      for (const sd of ['L', 'R']) {
+        const hand = wp(`${sd}_Hand`).sub(h0), off = hand.clone().addScaledVector(line, -hand.dot(line));
+        expect(off.length(), `${sd} hand off the body line`).toBeLessThan(0.25);
+        expect(hand.dot(line)).toBeGreaterThan(wp(`${sd}_UpperArm`).sub(h0).dot(line) + 0.5);
+      }
+    }
+    s.host.playerTrain.chipper.state.job!.ms = 0;
+    s.ch.update(0);
     const top0 = b.exposedTop(0), topMid = b.exposedTop(0.5);
     expect(topMid).toBeLessThan(top0);
     expect(b.exposedTop(1)).toBeLessThan(0); // gone below the rim at the end
@@ -453,7 +480,7 @@ describe('chipper: blood pools, teardown, save / load', () => {
       const st = s.ch.fx.stats();
       for (const k of Object.keys(peak) as (keyof typeof peak)[]) peak[k] = Math.max(peak[k], st[k]);
     }
-    expect(count()).toBe(n0 + 6); // + the fed body (its group, 4 bones, 1 mesh) only
+    expect(count()).toBe(n0 + 10); // + the fed body (its group, 8 bones, 1 mesh) only
     expect(s.ch.fx.meshes).toEqual(meshes);
     expect(s.ch.fx.meshes.map(m => m.instanceMatrix.array)).toEqual(arrays);
     const caps = s.ch.fx.caps;
