@@ -7,7 +7,8 @@
 //    first, straightening as it sinks with the job's progress in small lunges (a monotonic staircase: never back out), legs last; at
 //    completion the runtime disposes it. Its head / feet are found from the rig's bones ('Head', 'L_Foot' / 'R_Foot', 'Hips': the enemy
 //    rigs' names) in its own frame, whatever pose it arrives in (carry pose, or a rebuilt resting body after a load); a model without
-//    those bones falls back to its bounds' longest axis. What sinks below the rim is hidden by the machine's casing and the car floor.
+//    those bones falls back to its bounds' longest axis. It goes in through the hopper's mouth between the top frame's rails (the
+//    hopper is shallow: past its floor the body is inside the feed chute's casing, then under the car floor).
 
 import * as THREE from 'three';
 import {CHIPPER_ANCHORS} from './chipperSpec';
@@ -17,8 +18,12 @@ import type {ChipperPlacement} from './chipperPlace';
 export const CHIPPER_VIEW = {
   /** Vibration while grinding: position (m) and yaw (rad) amplitudes; a few incommensurate frequencies (Hz). */
   shake: {pos: 0.0022, y: 0.0012, yaw: 0.0028, hz: [23, 31, 17] as const},
-  /** The gauge (m, model frame on the control box face): plate, bar, lamps. */
-  gauge: {plateW: 0.15, plateH: 0.06, plateD: 0.012, barW: 0.13, barH: 0.018, barD: 0.006, lamp: 0.014},
+  /**
+   * The gauge (m, model frame, on the control box face: 0.12 x 0.11 m around CHIPPER_ANCHORS.panel with the stop button left and the
+   * lever right at mid-height): a slim backing strip + bar along the face's bottom edge (`barY` below the anchor), the run and credit
+   * lamps in its top corners (`lampY` above, `lampX` either side); everything `proud` m in front of the face plane.
+   */
+  gauge: {plateW: 0.11, plateH: 0.024, plateD: 0.004, barW: 0.098, barH: 0.011, barD: 0.003, barY: -0.042, lamp: 0.011, lampX: 0.046, lampY: 0.043, proud: 0.001},
   /** The fed body: tilt from vertical toward the aisle at first / at the end (rad), lunges over the job, first / last depth past the
    *  crown (m), the crown above the 'Head' bone and the sole below the foot bones (m). */
   body: {tilt0: 0.9, tilt1: 0.08, straightBy: 0.55, lunges: 8, lungeDepth: 0.8, s0: 0.22, past: 0.1, crown: 0.12, sole: 0.08, shake: 0.012},
@@ -61,30 +66,26 @@ export class ChipperView {
     this.root.add(this.shake);
     // --- the gauge on the control box face (+Z of the model frame) ---
     const G = CHIPPER_VIEW.gauge, P = CHIPPER_ANCHORS.panel;
-    const plateMat = new THREE.MeshStandardMaterial({name: 'chipper-gauge-plate', color: 0x1b1d1f, roughness: 0.7, metalness: 0.3});
-    const trackMat = new THREE.MeshStandardMaterial({name: 'chipper-gauge-track', color: 0x0c0d0e, roughness: 0.9, metalness: 0});
+    const plateMat = new THREE.MeshStandardMaterial({name: 'chipper-gauge-plate', color: 0x121314, roughness: 0.8, metalness: 0.2});
     this.barMat = new THREE.MeshStandardMaterial({name: 'chipper-gauge-bar', color: 0x3a2a12, roughness: 0.5, metalness: 0, emissive: 0xff9a2a, emissiveIntensity: 0});
     this.runMat = new THREE.MeshStandardMaterial({name: 'chipper-gauge-run', color: 0x3a1210, roughness: 0.5, metalness: 0, emissive: 0xff3a1a, emissiveIntensity: 0});
     this.creditMat = new THREE.MeshStandardMaterial({name: 'chipper-gauge-credit', color: 0x123a16, roughness: 0.5, metalness: 0, emissive: 0x4dff5a, emissiveIntensity: 0});
-    this.mats.push(plateMat, trackMat, this.barMat, this.runMat, this.creditMat);
+    this.mats.push(plateMat, this.barMat, this.runMat, this.creditMat);
     const plate = new THREE.BoxGeometry(G.plateW, G.plateH, G.plateD);
-    plate.translate(0, 0, G.plateD / 2);
-    const track = new THREE.BoxGeometry(G.barW, G.barH, G.barD * 0.5);
-    track.translate(0, -0.008, G.plateD + G.barD * 0.25);
-    const bar = new THREE.BoxGeometry(G.barW, G.barH * 0.8, G.barD);
+    plate.translate(0, G.barY, G.proud + G.plateD / 2);
+    const bar = new THREE.BoxGeometry(G.barW, G.barH, G.barD);
     bar.translate(G.barW / 2, 0, 0); // grows from its left end (the viewer's left: model -X)
     const lamp = new THREE.BoxGeometry(G.lamp, G.lamp, G.barD);
-    this.geos.push(plate, track, bar, lamp);
+    this.geos.push(plate, bar, lamp);
     const mk = (g: THREE.BufferGeometry, m: THREE.Material, name: string) => { const o = new THREE.Mesh(g, m); o.name = name; o.raycast = () => {}; this.gauge.add(o); return o; };
     mk(plate, plateMat, 'chipper-gauge-plate');
-    mk(track, trackMat, 'chipper-gauge-track');
     this.bar = mk(bar, this.barMat, 'chipper-gauge-bar');
-    this.bar.position.set(-G.barW / 2, -0.008, G.plateD + G.barD / 2 + 0.0005);
+    this.bar.position.set(-G.barW / 2, G.barY, G.proud + G.plateD + G.barD / 2);
     this.bar.scale.x = 0.001;
-    const run = mk(lamp, this.runMat, 'chipper-gauge-run');
-    run.position.set(G.plateW / 2 - 0.022, 0.016, G.plateD + G.barD / 2);
     const credit = mk(lamp, this.creditMat, 'chipper-gauge-credit');
-    credit.position.set(G.plateW / 2 - 0.044, 0.016, G.plateD + G.barD / 2);
+    credit.position.set(-G.lampX, G.lampY, G.proud + G.barD / 2);
+    const run = mk(lamp, this.runMat, 'chipper-gauge-run');
+    run.position.set(G.lampX, G.lampY, G.proud + G.barD / 2);
     this.gauge.name = 'train-chipper-gauge';
     this.gauge.position.set(P.x, P.y, P.z);
     this.gauge.visible = false; // mounted on the model's control box: shown with the model

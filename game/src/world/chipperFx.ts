@@ -1,7 +1,7 @@
 // Task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER; user: "it grinds each body … with LOTS of blood spray"): the train
 // chipper's BLOOD — fixed-capacity pools, ONE draw each (4 draws), created once and recycled oldest-first, nothing grows:
 //  - DROPS: dark red droplets (an instanced icosahedron, streaked along their velocity) thrown up out of the hopper mouth and jetted out
-//    of the outlet into the aisle; gravity; on the car floor they flatten into specks for the rest of their short life;
+//    of the discharge spout's flange into the aisle; gravity; on the car floor they flatten into specks for the rest of their short life;
 //  - MIST: a few slow, rising, fading puffs over the hopper (per-instance fade, the existing blood mist colour);
 //  - CHUNKS: a few small tumbling dark gobbets out of the hopper (pulp, not body parts);
 //  - STAINS: glossy floor pools on the car floor in front of the machine, spreading over STAINS.growS and fading out at the end of
@@ -38,12 +38,12 @@ interface V3 { x: number; y: number; z: number }
 export interface ChipperFxFrame {
   /** The hopper mouth (rim centre) and its inner half extents (x / z). */
   hopper: V3; mouthHx: number; mouthHz: number;
-  /** The wet outlet (on the front face) and the unit direction out of the front (toward the aisle). */
-  outlet: V3; front: V3;
+  /** The wet outlet (the discharge spout's flange), the spout's direction and the unit direction out of the front (toward the aisle). */
+  outlet: V3; spout: V3; front: V3;
   /** The car floor (train-local y). */
   floorY: number;
-  /** The machine's box (droplets falling back into it vanish), its rim height. */
-  box: {x0: number; x1: number; z0: number; z1: number}; rimY: number;
+  /** The machine's footprint (no stain under it), the hopper's inner rect (spray falling back into it below the rim vanishes), the rim. */
+  box: {x0: number; x1: number; z0: number; z1: number}; mouth: {x0: number; x1: number; z0: number; z1: number}; rimY: number;
   /** The interior's half width (spray stops at the lining). */
   halfWidth: number;
 }
@@ -215,10 +215,10 @@ export class ChipperFx {
       this.drop(f.hopper.x + ox, f.hopper.y + 0.02, f.hopper.z + oz, this.r(-0.7, 0.7) + f.front.x * out, this.r(1.4, 3.1), this.r(-0.5, 0.5) + f.front.z * out);
     }
     for (let i = n('outlet', R.outlet); i > 0; i--) {
-      // a wet jet out of the front into the aisle, low
-      const sp = this.r(1.4, 3.0);
-      this.drop(f.outlet.x + this.r(-0.03, 0.03), f.outlet.y + this.r(-0.02, 0.02), f.outlet.z + f.front.z * 0.02,
-        f.front.x * sp + this.r(-0.5, 0.5), this.r(-0.3, 0.9), f.front.z * sp + this.r(-0.35, 0.35));
+      // the leaking spout flange: a wet jet out toward the aisle (and a little along the spout), low
+      const sp = this.r(1.4, 3.0), al = this.r(0, 0.8);
+      this.drop(f.outlet.x + this.r(-0.03, 0.03), f.outlet.y + this.r(-0.03, 0.03), f.outlet.z + this.r(-0.03, 0.03),
+        f.front.x * sp + f.spout.x * al + this.r(-0.4, 0.4), this.r(-0.3, 0.9), f.front.z * sp + f.spout.z * al + this.r(-0.3, 0.3));
     }
     for (let i = n('mist', R.mist); i > 0; i--) this.puff(f.hopper.x + this.r(-0.12, 0.12), f.hopper.y + 0.05, f.hopper.z + this.r(-0.12, 0.12), f.front);
     for (let i = n('chunks', R.chunks); i > 0; i--) {
@@ -425,10 +425,10 @@ export class ChipperFx {
     }
   }
 
-  /** A particle falling back into the machine below its rim (inside the footprint) is swallowed. */
+  /** A particle falling back into the hopper below its rim is swallowed (the rest of the machine is open frame: it falls through). */
   private swallowed(pos: Float32Array, j: number, vy: number, f: ChipperFxFrame): boolean {
-    const b = f.box, x = pos[j], z = pos[j + 2];
-    return vy < 0 && pos[j + 1] < f.rimY - 0.02 && x > b.x0 + 0.02 && x < b.x1 - 0.02 && z > b.z0 + 0.02 && z < b.z1 - 0.02;
+    const b = f.mouth, x = pos[j], z = pos[j + 2];
+    return vy < 0 && pos[j + 1] < f.rimY - 0.02 && x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1;
   }
 
   /** The car's side lining stops the spray (it runs down the wall). */

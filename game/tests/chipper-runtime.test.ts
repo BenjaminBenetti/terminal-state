@@ -27,13 +27,17 @@ import {CHIPPER_SIZE, CHIPPER_ANCHORS} from '../src/world/chipperSpec';
 import {chipperDirToLocal, chipperFootprint, chipperPlacement, chipperToLocal} from '../src/world/chipperPlace';
 import {CHIPPER_RT, CHIPPER_TEXT, ChipperSystem, type ChipperAudioLike, type ChipperHost} from '../src/world/chipper';
 import {CHIPPER_FX} from '../src/world/chipperFx';
-import {CHIPPER_VIEW, lungeCurve} from '../src/world/chipperView';
+import {CHIPPER_VIEW, ChipperView, lungeCurve} from '../src/world/chipperView';
 import {CHIPPER, CHIPPER_REFUSAL} from '../src/fuel/chipperFuel';
 import {FUEL} from '../src/fuel/fuel';
 import {PlayerTrainRecord} from '../src/run/playerTrain';
 import type {BodyRecordJSON} from '../src/corpse/bodyRecord';
 import type {BodySink, CorpseSystemApi, HeldBody} from '../src/corpse/api';
 import type {WorldNoise} from '../src/ai/worldNoise';
+import {readFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {NodeIO} from '@gltf-transform/core';
+import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 
 installCanvasShim(false);
 
@@ -535,5 +539,90 @@ describe('chipper: blood pools, teardown, save / load', () => {
       expect(w.distanceTo(new THREE.Vector3(want.x, want.y, want.z))).toBeLessThan(1e-6);
       s.ch.teardown(); s.rt.teardown(); live.pop();
     }
+  });
+});
+
+describe('chipper: the cooked model mounted', () => {
+  type V3 = [number, number, number];
+  /** The cooked GLB's triangles (model frame: the cook bakes the runtime size, identity node). */
+  async function tris(): Promise<V3[][]> {
+    const bytes = readFileSync(fileURLToPath(new URL('../public/assets/models/train-chipper.glb', import.meta.url)));
+    const doc = await new NodeIO().registerExtensions(ALL_EXTENSIONS).readBinary(new Uint8Array(bytes));
+    const out: V3[][] = [];
+    for (const m of doc.getRoot().listMeshes()) for (const p of m.listPrimitives()) {
+      const P = p.getAttribute('POSITION')!.getArray()!, I = p.getIndices()!.getArray()!;
+      for (let t = 0; t < I.length; t += 3) out.push([0, 1, 2].map(k => [P[I[t + k] * 3], P[I[t + k] * 3 + 1], P[I[t + k] * 3 + 2]] as V3));
+    }
+    return out;
+  }
+  /** Nearest hit of o + t d (t > 0) on the triangles (Moller-Trumbore), or Infinity. */
+  function cast(T: V3[][], o: V3, d: V3): number {
+    let best = Infinity;
+    for (const [a, b, c] of T) {
+      const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      const p = [d[1] * e2[2] - d[2] * e2[1], d[2] * e2[0] - d[0] * e2[2], d[0] * e2[1] - d[1] * e2[0]];
+      const det = e1[0] * p[0] + e1[1] * p[1] + e1[2] * p[2];
+      if (Math.abs(det) < 1e-12) continue;
+      const tv = [o[0] - a[0], o[1] - a[1], o[2] - a[2]], u = (tv[0] * p[0] + tv[1] * p[1] + tv[2] * p[2]) / det;
+      if (u < 0 || u > 1) continue;
+      const q = [tv[1] * e1[2] - tv[2] * e1[1], tv[2] * e1[0] - tv[0] * e1[2], tv[0] * e1[1] - tv[1] * e1[0]];
+      const v = (d[0] * q[0] + d[1] * q[1] + d[2] * q[2]) / det;
+      if (v < 0 || u + v > 1) continue;
+      const t = (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) / det;
+      if (t > 1e-6 && t < best) best = t;
+    }
+    return best;
+  }
+
+  it('the gauge sits flush on the control box face (bar and lamps: the face right behind, nothing in front)', async () => {
+    const T = await tris(), v = new ChipperView(C);
+    v.setModel(new THREE.Group());
+    expect(v.gauge.visible).toBe(true);
+    // the piece's box in the model frame (the gauge group is a direct child of the unshaken model frame)
+    const box = (name: string) => {
+      const m = v.gauge.getObjectByName(name) as THREE.Mesh;
+      m.geometry.computeBoundingBox();
+      return m.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().compose(m.position, m.quaternion, m.scale)).translate(v.gauge.position);
+    };
+    for (const name of ['chipper-gauge-plate', 'chipper-gauge-run', 'chipper-gauge-credit']) {
+      const bb = box(name), c = bb.getCenter(new THREE.Vector3()), back = bb.min.z;
+      // the face is right behind its back (within 4 mm) and no part of the machine is in front of it
+      expect(cast(T, [c.x, c.y, back + 0.0005], [0, 0, -1]), name).toBeLessThan(0.004);
+      expect(cast(T, [c.x, c.y, back + 0.0005], [0, 0, 1]), name).toBe(Infinity);
+    }
+    // the bar lies on the backing strip, inside its outline
+    const plate = box('chipper-gauge-plate');
+    const bar = new THREE.Mesh().copy(v.gauge.getObjectByName('chipper-gauge-bar') as THREE.Mesh);
+    bar.scale.x = 1; // full
+    bar.geometry.computeBoundingBox();
+    const full = bar.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().compose(bar.position, bar.quaternion, bar.scale)).translate(v.gauge.position);
+    expect(full.min.z).toBeCloseTo(plate.max.z, 6);
+    for (const k of ['x', 'y'] as const) { expect(full.min[k]).toBeGreaterThan(plate.min[k]); expect(full.max[k]).toBeLessThan(plate.max[k]); }
+    v.dispose();
+  });
+
+  it('mounts a library model once (a clone, not a pick target) and keeps the vibration bounded', () => {
+    const s = setup();
+    const src = new THREE.Group();
+    src.add(new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.83, 0.62).translate(0, 0.415, 0), new THREE.MeshStandardMaterial()));
+    const ch = new ChipperSystem(s.host as unknown as ChipperHost, {audio: new CountingAudio(), model: () => src}).install();
+    live.push({rt: s.rt, ch});
+    ch.build();
+    expect(ch.view!.model).not.toBeNull();
+    expect(ch.view!.model).not.toBe(src);
+    expect(ch.view!.gauge.visible).toBe(true);
+    const ray = new THREE.Raycaster(new THREE.Vector3(0, 50, 0), new THREE.Vector3(0, -1, 0));
+    const hits: THREE.Intersection[] = [];
+    ch.view!.model!.traverse(o => o.raycast(ray, hits));
+    expect(hits.length).toBe(0);
+    const m0 = ch.view!.model;
+    ch.update(DT); ch.update(DT);
+    expect(ch.view!.model).toBe(m0); // cloned once
+    for (let t = 0; t < 2; t += 0.013) {
+      ch.view!.vibrate(t, true);
+      expect(ch.view!.shake.position.length()).toBeLessThan(0.005);
+    }
+    ch.view!.vibrate(1, false);
+    expect(ch.view!.shake.position.length()).toBe(0);
   });
 });

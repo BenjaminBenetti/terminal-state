@@ -10,12 +10,13 @@
 // - frameHooks (only while playing): the corpse sink's registration (Game.corpses may install later), the aim, the GRIND, the transfer,
 //   the gauge / vibration / blood, the sound's position; promptProviders: the look-at status line; stateListeners: leaving 'playing'
 //   (pause, menus, death) clears the spray and silences the machine; warmRegistry pool 'train-chipper' (model, gauge, the four blood
-//   pools: compiled on the loading screen, never on the first feed); sectionModelKeys: the cooked model with the car.
+//   pools: compiled on the loading screen, never on the first feed). The cooked model loads with the car's other models
+//   (world/playerTrain.ts PLAYER_TRAIN_MODEL_FILES, lane ASSET) and is mounted here.
 //
 // FIXTURE: every train has one (a fixed component, never cargo / loot): world/chipperPlace.ts places it in the car's +Z bay between the
 // middle and front door pairs, its front to the aisle; world/playerTrain.ts trainColliders / world/trainRideLocal.ts give it its solid box
 // (parked and riding). The cooked GLB (CHIPPER_MODEL) comes from the prop library; without it there is no machine visual and everything
-// else works (tests never need it).
+// else works (tests never need it). The blood comes out of the hopper mouth and the discharge spout's flange (CHIPPER_ANCHORS.outlet).
 // FEEDING (a BodySink of Game.corpses; corpse/api.ts): while a body is held, the eye inside the car within CHIPPER_RT.reach of the hopper
 // mouth and the crosshair on the machine -> '[E] Feed the body into the chipper', or a refusal (chipperRefusal: busy / full; riding: not
 // while the train moves) — refused bodies stay in the hands. take() converts the record to a train-local 'lying' record and startJob()s
@@ -49,7 +50,6 @@ import {chipperDirToLocal, chipperFootprint, chipperPlacement, chipperToLocal, t
 import {ChipperFx, type ChipperFxFrame} from './chipperFx';
 import {ChipperView, FedBody, lungeRate} from './chipperView';
 import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from './playerTrainSpec';
-import {playerTrainPlacement} from '../gen/playerTrain';
 import type {StationLayout} from '../gen/stationTypes';
 import type {WarmupRegistry} from '../render/warmup';
 
@@ -78,12 +78,6 @@ export const CHIPPER_TEXT = {
   ground: (credit: string) => `Body ground — +0.1 tank of fuel${credit !== '0.0' ? ` · ${credit} tank waiting` : ''}`,
   transfer: (tank: string) => `Chipper fuel into the tank — ${tank}`,
 } as const;
-
-/**
- * The prop library file map of the cooked chipper model (game.ts propModels catalogue). EMPTY until lane ASSET delivers the GLB: then
- * `{[CHIPPER_MODEL.key]: {url: CHIPPER_MODEL.url, bytes}}` (its cooked size) — the section key below is ignored while it is absent.
- */
-export const CHIPPER_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = {};
 
 /** The chipper's sound (audio/chipperAudio.ts ChipperAudio; structural for tests). */
 export interface ChipperAudioLike {
@@ -122,7 +116,6 @@ export interface ChipperHost extends WorldNoiseHost {
   sectionHooks: {build?(layout: StationLayout): void; teardown?(): void}[];
   promptProviders?: (() => string | null)[];
   stateListeners?: ((s: never, prev: never) => void)[];
-  sectionModelKeys?: ((layout: StationLayout) => readonly string[])[];
   warmRegistry: WarmupRegistry;
 }
 
@@ -213,10 +206,13 @@ export class ChipperSystem {
       this.fp = fp;
       this.hopper = chipperToLocal(c, A.hopper.x, A.hopper.y, A.hopper.z);
       this.aisle = {x: front.x, z: front.z};
-      // the outlet on the front face (never inside the box), the mouth's half extents in the car frame (yaw PI: the same axes)
-      const out = chipperToLocal(c, A.outlet.x, A.outlet.y, Math.max(A.outlet.z, c.depth / 2));
-      this.frame = {hopper: this.hopper, mouthHx: A.hopperMouth.x / 2, mouthHz: A.hopperMouth.z / 2, outlet: out, front, floorY: c.floorY,
-        box: fp, rimY: this.hopper.y, halfWidth: this.spec.interior.halfWidth};
+      // the spout's flange (on the machine's middle plane: the spray leaves it toward the aisle and along the spout, model +X); the
+      // mouth's half extents in the car frame (yaw PI: the same axes)
+      const out = chipperToLocal(c, A.outlet.x, A.outlet.y, A.outlet.z), along = chipperDirToLocal(c, 1, 0, 0);
+      const hx = A.hopperMouth.x / 2, hz = A.hopperMouth.z / 2;
+      this.frame = {hopper: this.hopper, mouthHx: hx, mouthHz: hz, outlet: out, spout: along, front, floorY: c.floorY,
+        box: fp, mouth: {x0: this.hopper.x - hx, x1: this.hopper.x + hx, z0: this.hopper.z - hz, z1: this.hopper.z + hz}, rimY: this.hopper.y,
+        halfWidth: this.spec.interior.halfWidth};
     } else {
       this.view = null;
       this.fp = null;
@@ -235,7 +231,6 @@ export class ChipperSystem {
     h.promptProviders?.push(() => this.prompt());
     h.stateListeners?.push(((s: string) => { if (s !== 'playing') this.pause(); }) as (s: never, p: never) => void);
     h.sectionHooks.push({build: () => this.build(), teardown: () => this.teardown()});
-    h.sectionModelKeys?.push(layout => (this.place && CHIPPER_MODEL_FILES[CHIPPER_MODEL.key] && playerTrainPlacement(layout) ? [CHIPPER_MODEL.key] : []));
     h.warmRegistry.addPool('train-chipper', () => this.warmRoots());
     this.ensureSink();
     return this;
