@@ -198,14 +198,14 @@ describe('fuel cap: the pour', () => {
     const s = shell();
     s.give(2);
     s.standAtCap();
-    s.g.playerTrain.fuel.tank = FUEL.trainTankUnits; // (task studio-general-armor-20261107-231448-01: the train holds two tanks)
+    s.g.playerTrain.fuel.tank = FUEL.trainTankUnits; // (task studio-general-armor-20261107-231448-01: two tanks; task gameplay-feedback lane TRAVEL: four)
     s.step();
-    expect(s.prompt()).toBe('Fuel cap · the tank is full (2 tanks)');
+    expect(s.prompt()).toBe('Fuel cap · the tank is full (4 tanks)');
     expect(s.press()).toBe(true);
-    expect(s.toasts.at(-1)).toEqual({text: 'The tank is full — 2 tanks', warn: true});
+    expect(s.toasts.at(-1)).toEqual({text: 'The tank is full — 4 tanks', warn: true});
     expect(s.sys.pour).toBeNull();
     expect(s.g.inv.count(FUEL.canItem)).toBe(2);
-    expect(s.g.playerTrain.fuel.tank).toBe(8);
+    expect(s.g.playerTrain.fuel.tank).toBe(16);
     s.g.playerTrain.fuel.tank = 3;
     s.g.trainRide.riding = true;
     expect(s.press()).toBe(true);
@@ -224,16 +224,16 @@ describe('fuel cap: the pour', () => {
   it('a full tank by the end of the pour (filled meanwhile) refuses at completion: nothing used', () => {
     const s = shell();
     s.give(1);
-    s.g.playerTrain.fuel.tank = 7;
+    s.g.playerTrain.fuel.tank = 15;
     s.standAtCap();
     s.step();
     s.press();
     s.step(0.5);
-    s.g.playerTrain.fuel.tank = 8; // e.g. a cart's hose filled it (task studio-general-armor-20261107-231448-01: the train holds two tanks)
+    s.g.playerTrain.fuel.tank = 16; // e.g. a cart's hose filled it (task gameplay-feedback lane TRAVEL: the train holds four tanks; was 7 -> 8 of two)
     s.step(FUEL_PORT.pourS);
-    expect(s.g.playerTrain.fuel.tank).toBe(8);
+    expect(s.g.playerTrain.fuel.tank).toBe(16);
     expect(s.g.inv.count(FUEL.canItem)).toBe(1);
-    expect(s.toasts.at(-1)!.text).toBe('The tank is full — 2 tanks');
+    expect(s.toasts.at(-1)!.text).toBe('The tank is full — 4 tanks');
   });
 
   it('cancel mid-pour (hit, sprint, walking away, looking away, a menu, input cleared, riding, teardown): nothing used', () => {
@@ -771,7 +771,7 @@ describe('HUD fuel readout', () => {
     let dom: FakeDom;
     beforeAll(() => { dom = installFakeDom(); });
     afterAll(() => dom.uninstall());
-    it('a row at the top of the light panel: eight pips (two tanks of four), the text, amber when low; DOM written only on change', async () => {
+    it('a row at the top of the light panel: sixteen pips (four tanks of four), the text, amber when low; DOM written only on change', async () => {
       const {Hud} = await import('../src/ui/hud');
       const hud = new Hud();
       const panel = dom.el('#light-panel');
@@ -781,9 +781,10 @@ describe('HUD fuel readout', () => {
       expect(row.classList.contains('none')).toBe(false);
       expect(row.classList.contains('low')).toBe(false);
       expect((row.innerHTML.match(/<i class="on">/g) ?? []).length).toBe(3);
-      // (task studio-general-armor-20261107-231448-01: the train holds two tanks): 8 quarter pips, the second tank's group set off by a gap
-      expect((row.innerHTML.match(/<i class="(?:on)?(?: gap)?">/g) ?? []).length).toBe(8);
-      expect((row.innerHTML.match(/<i class=" gap">/g) ?? []).length).toBe(1);
+      // (task studio-general-armor-20261107-231448-01: two tanks; task gameplay-feedback-20261111 lane TRAVEL: four): 16 quarter pips, each
+      // further tank's group set off by a gap
+      expect((row.innerHTML.match(/<i class="(?:on)?(?: gap)?">/g) ?? []).length).toBe(16);
+      expect((row.innerHTML.match(/<i class=" gap">/g) ?? []).length).toBe(3);
       expect(row.innerHTML).toContain('<span class="txt">Fuel ¾ tank · aboard +2 tanks (chest 1, carts 1)</span>');
       const html = row.innerHTML;
       row.innerHTML = 'sentinel';

@@ -1777,7 +1777,8 @@ export class Game {
 
   /**
    * THE JOURNEY (campaign): the occupied train leaves the current station for `to` (adjacent, or any node with the 1337 cheat, or —
-   * campaign-polish lane MAP — a VISITED station over a route of visited stations: campaign/discovery.ts travelPlan). A multi-hop trip
+   * campaign-polish lane MAP, widened by task gameplay-feedback lane TRAVEL — any KNOWN station over the cheapest route of known track:
+   * campaign/discovery.ts travelPlan; fuelCheck charges the complete route, hops x one tank, or refuses with the numbers). A multi-hop trip
    * is ONE continuous journey: one departure, one transit (the ride gets the route), only the destination prepared / built / arrived
    * at — the stations passed are never loaded, looted, revealed or healed at; one departure autosave (the transit carries its route),
    * one arrival autosave.

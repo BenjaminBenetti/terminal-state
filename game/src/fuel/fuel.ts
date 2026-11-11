@@ -2,9 +2,12 @@
 //
 // Units: one QUARTER of the train's tank is the unit everything counts in (integers only: no partial cans, no float drift).
 //   - one TANK is FUEL.tankUnits (4 quarters = ONE hop); the train's built-in tank holds FUEL.trainTankUnits (task
-//     studio-general-armor-20261107-231448-01, user: "train should be able to hold 2 tanks of fuel internally": 8 = two tanks; was one);
-//     a New Game starts EMPTY (0);
-//   - every actual track EDGE travelled costs FUEL.hopUnits (4), a multi-hop route hops x 4 — paid once, at departure;
+//     studio-general-armor-20261107-231448-01, user: "train should be able to hold 2 tanks of fuel internally": 8 = two tanks; was one;
+//     task gameplay-feedback-20261111 lane TRAVEL, user: "Increase the train tank from two to four standard tanks": 16 = four tanks —
+//     the capacity only: a hop, a can, a cart, the chipper's yield, station / market fuel are unchanged, and a saved tank loads with its
+//     exact amount, never topped up); a New Game starts EMPTY (0);
+//   - every actual track EDGE travelled costs FUEL.hopUnits (4), a multi-hop route hops x 4 — paid once, at departure (the complete
+//     route: campaign/discovery.ts travelPlan picks the cheapest route over known track; Game.fuelCheck pays or refuses it whole);
 //   - a fuel CAN (`fuel_can`, an ordinary inventory item: pockets / quick slots / bags / the train chest) holds FUEL.canUnits (1),
 //     stacks to FUEL.canStackMax (2): two slots carry a full tank;
 //   - an optional FUEL CART (a hand truck with a drum: a physical, wheeled world object; never an inventory item) holds up to
@@ -29,10 +32,11 @@ export const FUEL = {
   /** One tank in quarter units (= one hop: the unit the HUD / map count tanks in). */
   tankUnits: 4,
   /**
-   * The train's built-in tank capacity in quarter units: TWO tanks (task studio-general-armor-20261107-231448-01; was one). The ONE
-   * capacity every clamp / validator / pour / refund / gauge reads; a hop still costs FUEL.hopUnits.
+   * The train's built-in tank capacity in quarter units: FOUR tanks (task gameplay-feedback-20261111 lane TRAVEL; was two — task
+   * studio-general-armor-20261107-231448-01 — and one before that). The ONE capacity every clamp / validator / pour / refund / chipper
+   * transfer / gauge reads; a hop still costs FUEL.hopUnits. Fuel supply (station plans, the market's fuel stall) never follows it.
    */
-  trainTankUnits: 8,
+  trainTankUnits: 16,
   /** Cost of one track edge (one hop), quarter units. */
   hopUnits: 4,
   /** One fuel can, quarter units. */

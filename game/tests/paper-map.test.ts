@@ -7,7 +7,7 @@
 
 import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 import {archetypeLabel, generateNetwork} from '../src/campaign/network';
-import {arrive, destinations, enableCheat, neighbors, newCampaign, reactorKnown, revealAround} from '../src/campaign/discovery';
+import {arrive, destinations, enableCheat, neighbors, newCampaign, reactorKnown, revealAround, revealStations} from '../src/campaign/discovery';
 import type {CampaignState, StationId, SubwayNetwork} from '../src/campaign/types';
 import {DEFAULT_PAPER_TEXTURE, PAPER, PaperMap, buildMapModel, paperLayout, paperMapKeyAction, pickByDirection, rectsOverlap} from '../src/ui/paperMap';
 import {Input} from '../src/player/input';
@@ -180,7 +180,7 @@ describe('the overlay', () => {
     expect([esc.defaultPrevented, map.isOpen, calls.close, calls.confirm]).toEqual([true, false, 1, []]);
   });
 
-  it('known stations that are not one stop away (and never visited) are printed but not selectable (unless the cheat is on)', () => {
+  it('known stations further away are destinations over the known track; one no known track reaches is printed but not selectable (unless the cheat is on)', () => {
     const a = neighbors(net, net.start)[0], b = neighbors(net, a).find(x => x !== net.start && !neighbors(net, x).includes(net.start))!;
     const s = walk(start(), [a, b]);
     // campaign-polish (lane MAP): a VISITED station two stops back IS a destination (over the visited route; the card names it)
@@ -196,15 +196,26 @@ describe('the overlay', () => {
     expect(far).toBeDefined();
     open(s);
     expect(hits()).toContain(far);
-    expect(hit(far)!.classList.contains('pm-can')).toBe(false);
-    dom.click(hit(far));
-    expect(map.selected).toBeNull();
-    expect(map.note).toMatch(/not one stop from here/);
-    dom.click(hit(s.current));
-    expect(map.selected).toBeNull();
-    map.update(enableCheat(s));
+    // (task gameplay-feedback-20261111 lane TRAVEL: a known, never-visited station further away IS a destination — was: not selectable)
+    expect(hit(far)!.classList.contains('pm-can')).toBe(true);
     dom.click(hit(far));
     expect(map.selected).toBe(far);
+    expect(panel().textContent).toMatch(/Not visited yet · \d stops via/);
+    map.cancel();
+    // a station on the map that no known track reaches (map intel, far from everything known): printed, not selectable
+    const lone = net.nodes.find(n => n.id !== net.reactor && !s.known.includes(n.id) && !neighbors(net, n.id).some(x => s.known.includes(x)))!.id;
+    const intel = revealStations(s, [lone]);
+    open(intel);
+    expect(hits()).toContain(lone);
+    expect(hit(lone)!.classList.contains('pm-can')).toBe(false);
+    dom.click(hit(lone));
+    expect(map.selected).toBeNull();
+    expect(map.note).toMatch(/not available — no known track from here/);
+    dom.click(hit(s.current));
+    expect(map.selected).toBeNull();
+    map.update(enableCheat(intel));
+    dom.click(hit(lone));
+    expect(map.selected).toBe(lone);
     expect(panel().querySelector('.pm-depart')).not.toBeNull();
   });
 

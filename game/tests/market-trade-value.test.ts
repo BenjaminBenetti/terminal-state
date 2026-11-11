@@ -19,7 +19,7 @@ import {FUEL} from '../src/fuel/fuel';
 import {MARKET_STALLS, type MarketShopId, type MarketStallId} from '../src/gen/market/marketTypes';
 import {CENTS, GAS_FILTER_ID, VALUE, baseCents, isTradeable, rarityFactor, roundCents, stackUnitCents} from '../src/market/trade/value';
 import {STALL_TRADE, TRADE_RATES, betterStall, buyBackPct, buyPrice, sellQuote} from '../src/market/trade/stalls';
-import {MarketStock, stallDraws, stockRng, trainCapacityUnits} from '../src/market/trade/stock';
+import {FUEL_STALL_UNITS, MarketStock, stallDraws, stockRng, trainCapacityUnits} from '../src/market/trade/stock';
 
 const inv = new Inventory();
 const ALL = Object.values(ITEMS);
@@ -202,30 +202,35 @@ describe('market stalls: who buys what', () => {
     expect(stackUnitCents(bag)).toBe(baseCents('backpack')); // contents add nothing to the bag's value
   });
 
-  it('the fuel stall: ordinary fuel cans in the common units, one hop up to the train\'s capacity read from FUEL (never a literal tank)', () => {
+  it('the fuel stall: ordinary fuel cans in the common units, one hop up to two tanks read from FUEL (never a literal tank), not the train\'s capacity', () => {
     expect(STALL_TRADE.fuel.deals(ITEMS[FUEL.canItem])).toBe(true);
     // a can's price is its units of fuel; two cans (a stack) twice that
     const can = inv.makeStack(FUEL.canItem, FUEL.canStackMax);
     expect(buyPrice(can, 1)).toBe(FUEL.canUnits * VALUE.fuelPerUnit);
     expect(buyPrice(can, FUEL.canStackMax)).toBe(FUEL.canStackMax * FUEL.canUnits * VALUE.fuelPerUnit);
     const canUnitsStocked = (seed: number) => stallDraws('fuel', stockRng('st-09', seed, 'fuel')).filter(d => d.itemId === FUEL.canItem).reduce((n, d) => n + d.count * FUEL.canUnits, 0);
-    // the train's capacity is FUEL.trainTankUnits (two tanks), not one tank
+    // the train's capacity is FUEL.trainTankUnits (task gameplay-feedback-20261111 lane TRAVEL: four tanks; was two) — the trade view's
+    // wording reads it; the stall's stock does NOT (user: "Do not couple the capacity increase to a general fuel-loot increase"): one hop
+    // .. two tanks (FUEL_STALL_UNITS, the two-tank train's range when the stall was made), the same draws as before
     const own = FUEL.trainTankUnits;
     expect(trainCapacityUnits()).toBe(own);
-    expect(own).toBe(2 * FUEL.tankUnits);
-    for (let seed = 1; seed < 40; seed++) {
+    expect(own).toBe(4 * FUEL.tankUnits);
+    expect(FUEL_STALL_UNITS).toEqual({min: FUEL.hopUnits, max: 2 * FUEL.tankUnits});
+    const seen0 = new Set<number>();
+    for (let seed = 1; seed < 80; seed++) {
       const u = canUnitsStocked(seed);
       expect(u).toBeGreaterThanOrEqual(FUEL.hopUnits);
-      expect(u).toBeLessThanOrEqual(trainCapacityUnits());
+      expect(u).toBeLessThanOrEqual(2 * FUEL.tankUnits);
+      seen0.add(u);
     }
-    // a bigger train (three tanks, a value no build uses): the stall follows the constant, never a magic number
+    expect(Math.max(...seen0)).toBe(2 * FUEL.tankUnits); // the whole range is used
+    // another train size (three tanks, a value no build uses): the stall's stock is unchanged — it never follows the capacity
+    const before = Array.from({length: 40}, (_, i) => canUnitsStocked(i + 1));
     const desc = Object.getOwnPropertyDescriptor(FUEL, 'trainTankUnits');
     Object.defineProperty(FUEL, 'trainTankUnits', {value: 12, configurable: true, enumerable: true, writable: true});
     try {
       expect(trainCapacityUnits()).toBe(12);
-      const seen = new Set<number>();
-      for (let seed = 1; seed < 80; seed++) { const u = canUnitsStocked(seed); expect(u).toBeGreaterThanOrEqual(FUEL.hopUnits); expect(u).toBeLessThanOrEqual(12); seen.add(u); }
-      expect(Math.max(...seen)).toBeGreaterThan(2 * FUEL.tankUnits);
+      expect(Array.from({length: 40}, (_, i) => canUnitsStocked(i + 1))).toEqual(before);
     } finally { Object.defineProperty(FUEL, 'trainTankUnits', desc!); }
     expect(trainCapacityUnits()).toBe(own);
   });

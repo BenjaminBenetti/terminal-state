@@ -51,10 +51,13 @@ function setup(units: number = FUEL.cartUnits, tank = 0, lz = -2.5, dx = 0) {
 
 describe('fuel cart hose', () => {
   it('E on the drum near the cap connects; whole units every 1.2 s, conserved exactly; stops at a full tank (no overfill)', () => {
-    const {h, carts, aimDrum, capW, cartUnits} = setup(FUEL.cartUnits, 1);
+    // (task gameplay-feedback-20261111 lane TRAVEL: the train holds four tanks — the tank starts 7 short of full, as the two-tank
+    // train's 1 of 8 did, so a full cart of 8 still fills it with one unit left)
+    const start = FUEL.trainTankUnits - 7;
+    const {h, carts, aimDrum, capW, cartUnits} = setup(FUEL.cartUnits, start);
     aimDrum();
     frame(h);
-    expect(carts.prompt).toMatch(/Connect the hose · cart 2 tanks · train tank ¼ tank/);
+    expect(carts.prompt).toMatch(/Connect the hose · cart 2 tanks · train tank 2¼ tanks/);
     const geo = carts.hose.geometry;
     press(h, 'KeyE');
     expect(carts.hoseOn).not.toBeNull();
@@ -64,7 +67,7 @@ describe('fuel cart hose', () => {
     const total = h.playerTrain.fuel.tank + cartUnits();
     // nothing flows before the first 1.2 s
     run(h, FUEL_CART.transferEvery - 0.1);
-    expect(h.playerTrain.fuel.tank).toBe(1);
+    expect(h.playerTrain.fuel.tank).toBe(start);
     let maxTank = 0;
     run(h, 10, () => {
       const t = h.playerTrain.fuel.tank;
@@ -73,14 +76,14 @@ describe('fuel cart hose', () => {
       expect(t + cartUnits()).toBe(total); // conserved exactly
       return false;
     });
-    expect(h.playerTrain.fuel.tank).toBe(FUEL.trainTankUnits); // (task studio-general-armor-20261107-231448-01: the train holds two tanks)
+    expect(h.playerTrain.fuel.tank).toBe(FUEL.trainTankUnits); // (task studio-general-armor-20261107-231448-01: two tanks; lane TRAVEL: four)
     expect(maxTank).toBe(FUEL.trainTankUnits); // never past the tank
     expect(cartUnits()).toBe(total - FUEL.trainTankUnits);
     expect(carts.hoseOn).toBeNull();
     expect(carts.hose.mesh.visible).toBe(false);
     expect(h.toasts).toContain(CART_TEXT.full);
-    expect(carts.counts.transfers).toBe(FUEL.trainTankUnits - 1);
-    expect(h.sfxCalls.filter(c => c === 'pour')).toHaveLength(FUEL.trainTankUnits - 1);
+    expect(carts.counts.transfers).toBe(FUEL.trainTankUnits - start);
+    expect(h.sfxCalls.filter(c => c === 'pour')).toHaveLength(FUEL.trainTankUnits - start);
     // the hose was one pooled geometry rewritten in place, its sag above the floor, ending at the cap
     expect(carts.hose.geometry).toBe(geo);
     expect(carts.hose.updates).toBeGreaterThan(100);
@@ -92,7 +95,7 @@ describe('fuel cart hose', () => {
     // a full tank: E on the drum grabs instead (the prompt says why)
     aimDrum();
     frame(h);
-    expect(carts.prompt).toMatch(/Grab the fuel cart · ¼ tank · train tank full/); // (the two-tank train took 7 of the 8: task studio-general-armor-20261107-231448-01)
+    expect(carts.prompt).toMatch(/Grab the fuel cart · ¼ tank · train tank full/); // (the tank took 7 of the 8: task studio-general-armor-20261107-231448-01 / lane TRAVEL)
   });
 
   it('an empty cart stops the flow ("Cart empty"); the tank keeps what it got', () => {
