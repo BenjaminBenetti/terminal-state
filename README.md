@@ -138,13 +138,14 @@ and data, never the game or its source.
   (workspace paths, `reference/`, env files, key-like secrets), links (all internal links and #fragments resolve; no
   root-absolute or unlabelled external URLs; the site navigation of every page reaches every section), page structure,
   enemy-section coverage against `data/enemies.json` and the `data/manifest.json` hashes and data digests.
-  `npm run pages:test` runs `game/tests/pages-output.test.ts` and `game/tests/loot-reference.test.ts`. Both also run in the
-  normal `npm test`.
+  `npm run pages:test` runs `game/tests/pages-output.test.ts`, `game/tests/loot-reference.test.ts` and
+  `game/tests/enemy-spawn-reference.test.ts`. All three also run in the normal `npm test` (and so in the game shards).
 - **Preview.** `npm run pages:preview` serves `dist/pages/` at http://127.0.0.1:4190/terminal-state/ (the published
   sub-path). Opening `dist/pages/index.html` directly also works.
 - **Publication.** [`.github/workflows/pages.yml`](.github/workflows/pages.yml) runs separately from the game build. Its
   `pages-build` job runs on every push and pull request into main and on manual runs, with a read-only token: `npm ci`, build,
-  check, tests. It uploads the Pages artifact **only for main**. The `pages-deploy` job runs only for pushes / manual runs on
+  check, then the tests **on pull requests only** (main builds, checks and deploys without rerunning them). It uploads the
+  Pages artifact **only for main**. The `pages-deploy` job runs only for pushes / manual runs on
   main, after `pages-build` passed for that exact commit. It is the only job with `pages: write` / `id-token: write`, uses the
   `github-pages` environment and one non-cancelling `pages-deploy` concurrency group. It skips the deployment if main has
   already moved past the commit, so an older run never overwrites a newer site. **Pull-request builds never publish.**

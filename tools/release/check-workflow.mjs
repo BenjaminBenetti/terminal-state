@@ -141,9 +141,18 @@ assert(/^  pages-build:\n(?:    #.*\n)*    name: pages-build\n    runs-on:/.test
 assert(!/\b(?:pages|id-token):\s*write|environment:/.test(buildJob),'pages.yml: pages-build must stay read-only');
 for (const required of ['persist-credentials: false',"node-version: '22.16.0'","PUPPETEER_SKIP_DOWNLOAD: 'true'",'run: npm ci',
   'run: npm run pages:build','run: npm run pages:check','run: npm run pages:test','path: dist/pages/']) assert(buildJob.includes(required),`pages.yml: missing ${required}`);
-const upload = buildJob.split(/\n      - /).find(st => /uses:\s*actions\/upload-pages-artifact@/.test(st));
+const pagesSteps = buildJob.split(/\n      - /).slice(1);
+const upload = pagesSteps.find(st => /uses:\s*actions\/upload-pages-artifact@/.test(st));
 assert(upload?.includes(`\n        if: ${mainOnly}\n`),'pages.yml: the Pages artifact upload must be limited to main');
-assert.equal((buildJob.match(/^\s*if:/gm) ?? []).length,1,'pages.yml: only the upload step of pages-build may be conditional');
+// PR-only tests (user, 2026-11-11): pages:build and pages:check (site validation) run for every trigger, so main still builds, checks
+// and deploys; the pages:test step carries exactly PR_ONLY. Its three files are game/tests files, also run by the game shards.
+assert.deepEqual(pagesSteps.slice(2).map(st => st.trim()).slice(0,3),['run: npm ci','run: npm run pages:build','run: npm run pages:check'],
+  'pages.yml: npm ci -> pages:build -> pages:check, unconditional');
+const pagesTest = pagesSteps.filter(st => st.includes('npm run pages:test'));
+assert(pagesTest.length === 1 && pagesTest[0].includes(`\n        ${PR_ONLY}\n        run: npm run pages:test`) && pagesSteps.indexOf(pagesTest[0]) === 5,
+  'pages.yml: the reference-site tests run after pages:check, on pull requests only');
+assert.deepEqual((buildJob.match(/^\s*if:.*$/gm) ?? []).map(l => l.trim()).sort(),[PR_ONLY,`if: ${mainOnly}`].sort(),
+  'pages.yml: only the pull-request-only tests and the main-only upload of pages-build may be conditional');
 for (const required of ['    needs: pages-build\n',`    if: ${mainOnly}\n`,'    permissions:\n      contents: read\n      pages: write\n      id-token: write\n',
   '    environment:\n      name: github-pages\n      url: ${{ steps.deployment.outputs.page_url }}\n',
   '    concurrency:\n      group: pages-deploy\n      cancel-in-progress: false\n',
@@ -153,7 +162,8 @@ assert(!pages.includes('dist/game'),'pages.yml must not publish the game build')
 for (const [script,cmd] of Object.entries({'pages:build':'node tools/pages/run.mjs build','pages:check':'node tools/pages/run.mjs check'})) {
   assert.equal(pkg.scripts[script],cmd,`package.json ${script}`);
 }
-assert(/^vitest run --config game\/vitest\.config\.ts .*tests\/pages-output\.test\.ts.*tests\/loot-reference\.test\.ts/.test(pkg.scripts['pages:test'] ?? ''),'package.json pages:test');
+assert(/^vitest run --config game\/vitest\.config\.ts .*tests\/pages-output\.test\.ts.*tests\/loot-reference\.test\.ts.*tests\/enemy-spawn-reference\.test\.ts/.test(pkg.scripts['pages:test'] ?? ''),
+  'package.json pages:test (all three reference-site test files)');
 // Production is separate: a SemVer tag selects a successful main CI artifact;
 // no privileged PR trigger, rebuild or third-party SSH action.
 const prod = fs.readFileSync(new URL('.github/workflows/deploy-prod.yml', root), 'utf8');
