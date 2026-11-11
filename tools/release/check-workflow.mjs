@@ -27,7 +27,12 @@ assert(/^on:\n  push:\n    branches: \[main\]\n(?:  #.*\n)*  pull_request:\n    
 // that always runs after all of them and FAILS CLOSED — its first, unconditional step requires every result to be success (a job
 // skipped by a failed `needs` would read as a passing required check), then the inventory step proves the shards ran every test file
 // exactly once (tools/release/test-shards.mjs).
+// PR-only tests (user, 2026-11-11: "tests run on pull requests only"): the shards and `checks` (this validator + ci:test) carry exactly
+// PR_ONLY and run on pull requests, where `build` still requires every one of them to succeed and the inventory to hold before the
+// merge. Runs on main (push / manual) only build, package and upload: `bundle` stays unconditional, and `build` then requires the bundle
+// to succeed with the checks and every shard exactly `skipped` (a test job that ran, failed or was cancelled on main fails it).
 const SHARDS = 6;
+const PR_ONLY = "if: github.event_name == 'pull_request'";
 const gameJobs = workflow.slice(workflow.indexOf('\njobs:\n') + 1).split(/\n(?=  [a-z][\w-]*:\n)/).slice(1);
 const gameJob = id => gameJobs.find(j => j.startsWith(`  ${id}:\n`)) ?? assert.fail(`game-build.yml: missing job ${id}`);
 const shardIds = Array.from({length: SHARDS}, (_, k) => `test-${k + 1}`);
@@ -36,8 +41,8 @@ assert.equal(pkg0.scripts['game:test'],'vitest run --config game/vitest.config.t
 const common = ['persist-credentials: false',"node-version: '22.16.0'"];
 for (let i = 1; i <= SHARDS; i++) {
   const t = gameJob(`test-${i}`);
-  assert(new RegExp(`^  test-${i}:\\n(?:    #.*\\n)*    name: test \\(shard ${i}/${SHARDS}\\)\\n    runs-on: ubuntu-24\\.04\\n    timeout-minutes: 30\\n`).test(t),`test-${i}: name / standard runner / 30 min`);
-  assert(!/^\s*(?:if|needs):/m.test(t),`test-${i}: no condition / dependency (every shard always runs)`);
+  assert(new RegExp(`^  test-${i}:\\n(?:    #.*\\n)*    name: test \\(shard ${i}/${SHARDS}\\)\\n    ${PR_ONLY}\\n    runs-on: ubuntu-24\\.04\\n    timeout-minutes: 30\\n`).test(t),`test-${i}: name / pull requests only / standard runner / 30 min`);
+  assert(!/^\s*needs:/m.test(t) && (t.match(/^\s*if:/gm) ?? []).length === 1,`test-${i}: no dependency and no condition but the pull-request one (every shard runs on every pull request)`);
   for (const required of [...common,"PUPPETEER_SKIP_DOWNLOAD: 'true'",'      - run: npm ci\n',
     `      - run: npm run game:test -- --shard=${i}/${SHARDS} --maxWorkers=1 --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest-shard.json"\n`,
     `      - id: shard\n        run: node tools/release/test-shards.mjs verify ${i} ${SHARDS} "$RUNNER_TEMP/vitest-shard.json"\n`,
@@ -46,10 +51,12 @@ for (let i = 1; i <= SHARDS; i++) {
 }
 const stepsOf = job => job.split(/\n      - /).slice(1);
 const checksJob = gameJob('checks');
-assert(/^  checks:\n(?:    #.*\n)*    name: checks\n    runs-on: ubuntu-24\.04\n    timeout-minutes: 30\n/.test(checksJob) && !/^\s*(?:if|needs):/m.test(checksJob),'checks: unconditional, standard runner, 30 min');
+assert(new RegExp(`^  checks:\\n(?:    #.*\\n)*    name: checks\\n    ${PR_ONLY}\\n    runs-on: ubuntu-24\\.04\\n    timeout-minutes: 30\\n`).test(checksJob)
+  && !/^\s*needs:/m.test(checksJob) && (checksJob.match(/^\s*if:/gm) ?? []).length === 1,'checks: pull requests only, standard runner, 30 min');
 assert.deepEqual(stepsOf(checksJob).map(x => x.trim()).slice(2),['run: npm ci','run: npm run ci:check','run: npm run ci:test'],'checks: npm ci -> ci:check -> ci:test');
 const bundle = gameJob('bundle');
-assert(/^  bundle:\n(?:    #.*\n)*    name: bundle\n    runs-on: ubuntu-24\.04\n    timeout-minutes: 30\n/.test(bundle) && !/^\s*needs:/m.test(bundle),'bundle: no needs (parallel with the tests), standard runner, 30 min');
+assert(/^  bundle:\n(?:    #.*\n)*    name: bundle\n    runs-on: ubuntu-24\.04\n    timeout-minutes: 30\n/.test(bundle) && !/^\s*needs:/m.test(bundle) && !/^    if:/m.test(bundle),
+  'bundle: no needs (parallel with the tests) and no job condition (builds / packages for every trigger), standard runner, 30 min');
 const bundleSteps = stepsOf(bundle);
 assert.deepEqual(bundleSteps.slice(2,5).map(x => x.trim()),['run: npm ci','run: npm run build','run: npm run ci:package'],'bundle: npm ci -> build -> ci:package');
 assert(!/vitest|game:test|npm test|ci:test|test-shards/.test(bundle),'bundle: no test execution in the compile / package job');
@@ -63,17 +70,33 @@ assert(new RegExp(`^  build:\\n(?:    #.*\\n)*    name: build\\n    needs: \\[${
   'The required job must be named build, need the bundle, the checks and all six shards, and always run (fail-closed aggregate)');
 const steps = stepsOf(build);
 assert.equal(steps.length,4,'build: gate, checkout, setup-node, inventory only (lightweight aggregate)');
-assert(steps[0].startsWith(`name: Require the bundle, the checks and every test shard\n        env:\n          RESULTS: ${needIds.map(j => `\${{ needs.${j}.result }}`).join(' ')}\n`)
-  && steps[0].includes(`[ "$RESULTS" = '${needIds.map(() => 'success').join(' ')}' ] || {`) && steps[0].includes('exit 1; }') && !/\n\s*if:/.test(steps[0]),
-  'build: the first step must fail unless the bundle, the checks and every shard succeeded');
+// The gate's two branches, each fail-closed: a pull request needs every job `success`; any other event (main push / manual run) needs
+// the bundle `success` and every test job exactly `skipped`.
+const gateIf = (expected, msg) => `[ "$RESULTS" = '${expected.join(' ')}' ] || { echo "::error::${msg} (got: $RESULTS)"; exit 1; }`;
+assert(steps[0] === `name: Require the bundle, the checks and every test shard
+        env:
+          EVENT: \${{ github.event_name }}
+          RESULTS: ${needIds.map(j => `\${{ needs.${j}.result }}`).join(' ')}
+        run: |
+          echo "$EVENT: bundle checks test-1..6: $RESULTS"
+          if [ "$EVENT" = 'pull_request' ]; then
+            ${gateIf(needIds.map(() => 'success'),'the bundle, the checks and every test shard must succeed')}
+          else
+            ${gateIf(needIds.map(j => j === 'bundle' ? 'success' : 'skipped'),'$EVENT runs build and package only: the bundle must succeed with the checks and every test shard skipped')}
+          fi`,
+  'build: the unconditional first step must require every job to succeed on a pull request, and the bundle to succeed with the tests skipped otherwise');
 const inv = steps[3];
-assert(inv.startsWith('name: Prove the shards ran the whole test inventory\n'),'build: the last step is the inventory proof');
+assert(inv.startsWith(`name: Prove the shards ran the whole test inventory\n        ${PR_ONLY}\n        env:\n`),'build: the last step is the pull-request inventory proof');
 for (let i = 1; i <= SHARDS; i++) for (const [k,o] of [['FILES','files'],['TESTS','tests'],['SKIPPED','skipped'],['SKIPPED_FILES','skippedFiles']])
   assert(inv.includes(`          SHARD_${i}_${k}: \${{ needs.test-${i}.outputs.${o} }}\n`),`build: inventory step lacks SHARD_${i}_${k}`);
-assert(inv.includes(`\n        run: node tools/release/test-shards.mjs inventory ${SHARDS}`) && !/\n\s*if:/.test(inv),`build: unconditional inventory ${SHARDS}`);
+assert(inv.includes(`\n        run: node tools/release/test-shards.mjs inventory ${SHARDS}`) && (inv.match(/\n\s*if:/g) ?? []).length === 1,`build: inventory ${SHARDS} on every pull request`);
 assert(!/npm (?:ci|test|run)|vitest/.test(build),'build: aggregate only (no install / build / tests)');
 assert(!/\brun: npm test\b/.test(workflow),'game-build.yml: the suite runs only in the shards');
-assert.equal((workflow.match(/^\s*if:/gm) ?? []).length,3,"Only build's always() gate and the two upload steps may be conditional (validation always runs)");
+// Every condition in the workflow: the six shards, checks and the inventory proof are pull-request only; build's always() gate and the
+// two main-only uploads. Nothing else is conditional (bundle and the gate always run).
+assert.deepEqual((workflow.match(/^\s*if:.*$/gm) ?? []).map(l => l.trim()).sort(),
+  [...Array(SHARDS + 2).fill(PR_ONLY),'if: ${{ always() }}',"if: github.ref == 'refs/heads/main'","if: github.ref == 'refs/heads/main'"].sort(),
+  "game-build.yml: only the tests (shards, checks, inventory) are pull-request only, plus build's always() gate and the two main-only uploads");
 assert.deepEqual([...workflow.matchAll(/^\s*timeout-minutes:\s*(\d+)\s*$/gm)].map(m => m[1]),Array(SHARDS + 3).fill('30'),'game-build.yml: every job keeps the 30 min cap');
 const pkg=JSON.parse(fs.readFileSync(new URL('package.json',root),'utf8'));
 assert.equal(pkg.name,'terminal-state');

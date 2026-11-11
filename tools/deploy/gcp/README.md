@@ -3,7 +3,10 @@
 Push a SemVer tag such as `v1.2.3` pointing to a commit on main. The separate
 [`deploy-prod.yml`](../../../.github/workflows/deploy-prod.yml) workflow waits up
 to 25 minutes for **the whole game-build workflow** to succeed on main at that
-exact commit, then downloads `terminal-state-web-<sha>`. It never publishes a
+exact commit, then downloads `terminal-state-web-<sha>`. On main that workflow
+builds and packages only: its test shards and `checks` are skipped by design,
+because the change passed them in its pull request's required `build` before
+the merge. It never publishes a
 local build, a PR artifact, a failed build or a different commit. Re-run a failed
 deployment after CI succeeds; artifacts expire after 30 days.
 
@@ -139,7 +142,8 @@ the intended value and re-run. **Do not delete usage state to test it.**
 `npm run ci:test` covers SemVer/settings, artifact selection, original and sidecar
 integrity, bad paths/hashes/symlinks, monthly rollover, Pacific boundaries, crash
 recovery, counter resets and the cutoff flag. Shell scripts get syntax checks.
-The main build's `checks` job runs these before any artifact is releasable.
+The pull request's `checks` job runs these before the merge (required `build`).
+Main's run skips them by design and only builds and packages the artifact.
 
 Optional real nginx integration test (Rocky Linux 10 + EPEL):
 

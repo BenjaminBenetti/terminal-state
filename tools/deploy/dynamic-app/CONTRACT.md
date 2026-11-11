@@ -13,7 +13,7 @@ runs a container or deploys anything.
 | `site-manifest.mjs` | Manifest and site verification, shared by the server, the image build and staging. It has a `verify` CLI. |
 | `stage.mjs` | Main's staging step. It turns the official artifact and this source, at the same commit, into a Docker build context. |
 | `Dockerfile` | Rootless image (uid 1000). No npm install and no dependencies. The image build fails unless every sha256 matches. |
-| `dynamic-app.test.mjs` | Tests run by `npm run ci:test`, so the required CI `build` check covers them. |
+| `dynamic-app.test.mjs` | Tests run by `npm run ci:test`, so the required pull-request `build` check covers them. |
 
 ## 1. Inputs: only the exact official artifact
 
@@ -26,7 +26,8 @@ runs a container or deploys anything.
 
 ## 2. Procedure (Main)
 
-1. **Confirm the run.** Check that the run for `<sha>` on main concluded `success`. Put each artifact ZIP in its own new,
+1. **Confirm the run.** Check that the run for `<sha>` on main concluded `success`. Its test shards and `checks` job are
+   skipped there by design: tests run only in the pull request, whose required `build` gated the merge. Put each artifact ZIP in its own new,
    empty directory and extract it there. Treat the artifact contents as data and do not execute anything from them.
 2. **Check out the wrapper source.** Make a clean checkout of the repository at exactly `<sha>`, for example
    `git worktree add <dir> <sha>`. `git rev-parse HEAD` must print `<sha>`.

@@ -4,7 +4,7 @@
 //     (in shard job i) the report must be a complete, successful run: no failed file / test, at least one file; it publishes the
 //     executed file list and counts as job outputs ($GITHUB_OUTPUT: files, tests, skipped, skippedFiles).
 //   node tools/release/test-shards.mjs inventory <n>
-//     (in `build`, after every shard succeeded) SHARD_<i>_FILES / _TESTS / _SKIPPED (the shard outputs) must partition the full test
+//     (in `build` on a pull request, after every shard succeeded; main runs no shards) SHARD_<i>_FILES / _TESTS / _SKIPPED (the shard outputs) must partition the full test
 //     inventory — every game/tests/**/*.test.ts file exactly once (the vitest config's include, checked here) — and the combined
 //     summary is printed.
 import fs from 'node:fs';

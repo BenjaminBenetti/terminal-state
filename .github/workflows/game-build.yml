@@ -3,8 +3,9 @@ name: Build static game
 on:
   push:
     branches: [main]
-  # Pull requests into main run the same validation BEFORE merge (required check `build`). Plain pull_request:
-  # read-only token, no secrets; never the privileged target-branch variant.
+  # Pull requests into main run the whole validation, every test included, BEFORE merge (required check `build`). Plain
+  # pull_request: read-only token, no secrets; never the privileged target-branch variant. Runs on main (the merged commit's push or
+  # a manual run) only build, package and upload the release artifact: the tests already passed in the pull request.
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -20,7 +21,10 @@ jobs:
     # the 4-CPU public runner doubled them). Each shard proves from its JSON report that it ran its files completely without a
     # failure and publishes the list; `bundle` compiles / packages in parallel with NO tests, `checks` runs the workflow / packager
     # validators, and the required `build` is a lightweight fail-closed aggregate of all of them (tools/release/test-shards.mjs).
+    # Pull requests only (user, 2026-11-11: "tests run on pull requests only"): the shards and `checks` are skipped on main, where the
+    # merged change already passed them in its pull request's required `build` (branch protection: required, strict, admins enforced).
     name: test (shard 1/6)
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -49,6 +53,7 @@ jobs:
 
   test-2:
     name: test (shard 2/6)
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -77,6 +82,7 @@ jobs:
 
   test-3:
     name: test (shard 3/6)
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -105,6 +111,7 @@ jobs:
 
   test-4:
     name: test (shard 4/6)
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -133,6 +140,7 @@ jobs:
 
   test-5:
     name: test (shard 5/6)
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -161,6 +169,7 @@ jobs:
 
   test-6:
     name: test (shard 6/6)
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -189,7 +198,9 @@ jobs:
 
   checks:
     # The workflow / pin validator and the node --test suites of the release tooling (packager, dynamic-app wrapper, shard proof).
+    # Pull requests only, like the shards.
     name: checks
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -211,10 +222,11 @@ jobs:
       - run: npm run ci:test
 
   bundle:
-    # The compile / package / assets job: no test execution and no `needs`, so it runs in parallel with the shards. Only runs on main
-    # itself (the exact merged commit, or a manual run on main) upload the release artifacts — see the upload steps. An artifact
-    # uploaded here is not a release by itself: Main publishes only the artifact of a commit whose WHOLE workflow succeeded
-    # (required check `build` included).
+    # The compile / package / assets job: no test execution, no condition and no `needs`, so it runs for every trigger, in parallel
+    # with the shards on a pull request. `npm run build` (typecheck + build) and `ci:package` (the public-input allowlist / artifact
+    # policy) are the release validation that main still runs. Only runs on main itself (the exact merged commit, or a manual run on
+    # main) upload the release artifacts — see the upload steps. An artifact uploaded here is not a release by itself: Main publishes
+    # only the artifact of a commit whose WHOLE workflow succeeded (required check `build` included).
     name: bundle
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -260,8 +272,10 @@ jobs:
 
   build:
     # Stable check name (required status check on main): a lightweight FAIL-CLOSED aggregate. It always runs once the bundle, the
-    # checks and all six shards finished (a job skipped by a failed `needs` would read as a passing required check); its first step
-    # fails unless every one of them succeeded, then the inventory step proves the shards ran every test file exactly once.
+    # checks and all six shards finished (a job skipped by a failed `needs` would read as a passing required check). On a pull
+    # request its first step fails unless every one of them succeeded, then the inventory step proves the shards ran every test file
+    # exactly once. On main (push / manual run) the tests are skipped by design: the first step then requires the bundle to succeed
+    # and the checks and every shard to be exactly `skipped`, and there is no inventory to prove.
     name: build
     needs: [bundle, checks, test-1, test-2, test-3, test-4, test-5, test-6]
     if: ${{ always() }}
@@ -270,10 +284,15 @@ jobs:
     steps:
       - name: Require the bundle, the checks and every test shard
         env:
+          EVENT: ${{ github.event_name }}
           RESULTS: ${{ needs.bundle.result }} ${{ needs.checks.result }} ${{ needs.test-1.result }} ${{ needs.test-2.result }} ${{ needs.test-3.result }} ${{ needs.test-4.result }} ${{ needs.test-5.result }} ${{ needs.test-6.result }}
         run: |
-          echo "bundle checks test-1..6: $RESULTS"
-          [ "$RESULTS" = 'success success success success success success success success' ] || { echo "::error::the bundle, the checks and every test shard must succeed (got: $RESULTS)"; exit 1; }
+          echo "$EVENT: bundle checks test-1..6: $RESULTS"
+          if [ "$EVENT" = 'pull_request' ]; then
+            [ "$RESULTS" = 'success success success success success success success success' ] || { echo "::error::the bundle, the checks and every test shard must succeed (got: $RESULTS)"; exit 1; }
+          else
+            [ "$RESULTS" = 'success skipped skipped skipped skipped skipped skipped skipped' ] || { echo "::error::$EVENT runs build and package only: the bundle must succeed with the checks and every test shard skipped (got: $RESULTS)"; exit 1; }
+          fi
       - name: Check out source
         # Official actions/checkout v7.0.1 (node24), SHA verified with git ls-remote.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -286,6 +305,7 @@ jobs:
           node-version: '22.16.0'
           cache: npm
       - name: Prove the shards ran the whole test inventory
+        if: github.event_name == 'pull_request'
         env:
           SHARD_1_FILES: ${{ needs.test-1.outputs.files }}
           SHARD_1_TESTS: ${{ needs.test-1.outputs.tests }}

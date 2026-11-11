@@ -52,13 +52,18 @@ to main, on **pull requests into main** (check `build`, required before merging)
 on manual dispatch. It uses Node 22.16.0, `npm ci` (browser download off). Jobs run in
 parallel: six full-suite Vitest shards (`test (shard i/6)`, `vitest --shard`), `checks`
 (workflow/packager validators, `ci:test`) and `bundle` (`npm run build` = typecheck + build,
-then the portable CI packager; no tests). The required `build` check is a lightweight
-aggregate that always runs after all of them and fails unless every one succeeded and the
-shards' executed file lists cover the whole test inventory exactly once
-(`tools/release/test-shards.mjs`). All third-party actions are pinned to verified
-official-repository commit SHAs. Pull-request runs validate only: release artifacts
-are uploaded only by runs on main itself (by `bundle`), and are a release only when that
-commit's whole workflow, `build` included, succeeded.
+then the portable CI packager; no tests). **Tests run on pull requests only.** On a pull
+request the required `build` check is a lightweight aggregate that always runs after all
+of them and fails unless every one succeeded and the shards' executed file lists cover
+the whole test inventory exactly once (`tools/release/test-shards.mjs`); branch
+protection (strict, admins included) makes that green PR `build` the gate for every
+merge. Runs on main (the merged commit's push, or a manual run) do not test again: the
+shards and `checks` show as **skipped by design**, and `build` there requires `bundle` to
+succeed with every test job skipped. Runs from other triggers likewise build and
+package only. All third-party actions are pinned to verified official-repository commit
+SHAs. Pull-request runs validate only: release artifacts are uploaded only by runs on
+main itself (by `bundle`), and are a release only when that commit's whole workflow,
+`build` included, succeeded.
 
 A successful run on main uploads **`terminal-state-web-<full commit SHA>`**, containing:
 
