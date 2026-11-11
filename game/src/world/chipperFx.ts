@@ -1,8 +1,11 @@
 // Task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER; user: "it grinds each body … with LOTS of blood spray"): the train
 // chipper's BLOOD — fixed-capacity pools, ONE draw each (4 draws), created once and recycled oldest-first, nothing grows:
-//  - DROPS: dark red droplets (an instanced icosahedron, streaked along their velocity) thrown up out of the hopper mouth and jetted out
-//    of the discharge spout's flange into the aisle; gravity; on the car floor they flatten into specks for the rest of their short life;
-//  - MIST: a few slow, rising, fading puffs over the hopper (per-instance fade, the existing blood mist colour);
+//  - DROPS: dark red droplets (an instanced icosahedron, streaked along their velocity): a PLUME thrown 0.4-1.2 m up out of the hopper
+//    mouth and a JET out of the discharge spout's flange into the aisle — a steady base, with BURSTS at the fed body's lunges
+//    (world/chipperView.ts lungeRate, sharpened: rate^3); gravity, the ceiling and the lining stop them; on the car floor they flatten
+//    into specks for the rest of their short life;
+//  - MIST: soft camera-facing puffs over the hopper and the spout — the game's own blood mist (world/fx.ts Particles: the alpha ring's
+//    PointsNodeMaterial sprite quads with the soft disc texture, colour 0x5c1410), low opacity, growing and fading out;
 //  - CHUNKS: a few small tumbling dark gobbets out of the hopper (pulp, not body parts);
 //  - STAINS: glossy floor pools on the car floor in front of the machine, spreading over STAINS.growS and fading out at the end of
 //    their bounded life (a deterministic runtime blob mask: a dynamic data texture, no authored art).
@@ -12,23 +15,35 @@
 // pause / ride (clearAirborne), everything at teardown (clear). The materials are warmed with the 'train-chipper' pool (hidden meshes).
 
 import * as THREE from 'three';
-import {MeshLambertNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu';
+import {MeshStandardNodeMaterial} from 'three/webgpu';
 import {attribute, materialOpacity} from 'three/tsl';
+import {Particles, softDiscTexture} from './fx';
 
 // biome-ignore lint: loosely typed TSL nodes
 type TNode = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-/** Tuning (one place). Rates are per second while grinding, before the lunge factor (0.5 .. 1.5). */
+/**
+ * Tuning (one place). Rates are per second while grinding: `base + burst * pulse`, pulse = the body's lunge rate (0..1) ^ `pulse` (a
+ * sharp peak at each lunge). Speeds in m/s, sizes in m.
+ */
 export const CHIPPER_FX = {
-  drops: {cap: 256, size: [0.007, 0.017] as const, life: [0.6, 1.15] as const, restS: 0.7, color: 0x5a0b08},
-  mist: {cap: 40, size: [0.05, 0.09] as const, life: [0.9, 1.5] as const, grow: 1.6, opacity: 0.5, color: 0x5c1410},
+  /** Drops: radius range, life (s; a resting speck is extended by restS), streak length cap (x radius), the resting speck's spread (x radius). */
+  drops: {cap: 768, size: [0.008, 0.02] as const, life: [1.0, 1.6] as const, restS: 0.7, streak: 3, speck: 0.9, color: 0x4a0a07, roughness: 0.4},
+  /** The hopper plume: up speed (2.6-3.8 m/s rises 0.35-0.75 m; at a lunge peak + ~1.1 m/s: up to ~1.2 m), out toward the aisle, sideways. */
+  plume: {vy: [2.6, 3.8] as const, vyBurst: 1.1, out: [0.1, 1.2] as const, side: 0.6},
+  /** The spout jet: speed out into the aisle (+ burst), up / down, along the spout, sideways. */
+  jet: {speed: [2.2, 3.2] as const, burst: 1.1, vy: [-0.2, 1.1] as const, along: 0.8, side: 0.35},
+  /** Mist (world/fx.ts Particles): world size, life (s), growth (per s), opacity, rise (m/s^2 up), drag. */
+  mist: {cap: 72, size: [0.14, 0.24] as const, life: [1.0, 1.7] as const, grow: 0.7, alpha: 0.28, rise: 0.06, drag: 2.2, color: 0x5c1410},
   chunks: {cap: 36, size: [0.012, 0.026] as const, life: [0.7, 1.2] as const, restS: 1.2, color: 0x2e0605},
   stains: {cap: 32, lifeS: 90, growS: 1.4, fadeS: 12, big: [0.32, 0.6] as const, small: [0.08, 0.2] as const, color: 0x3a0705, roughness: 0.16, opacity: 0.92},
-  rate: {hopper: 64, outlet: 52, mist: 7, chunks: 4.5, pool: 0.45},
-  /** A floor-landing drop leaves a small stain with this chance. */
-  smallStain: 0.012,
+  rate: {hopper: 110, hopperBurst: 260, outlet: 90, outletBurst: 160, mist: 10, mistBurst: 18, spoutMist: 4, chunks: 4.5, chunksBurst: 6, pool: 0.45},
+  /** The burst's sharpness: pulse = lunge rate ^ this. */
+  pulse: 3,
+  /** A floor-landing drop leaves a small stain with this chance (scaled with the drop rate: the floor reads as before). */
+  smallStain: 0.0045,
   /** At most this many spawns per emitter per frame (a long frame never dumps a burst). */
-  maxPerFrame: 24,
+  maxPerFrame: 48,
   gravity: 9.8,
 } as const;
 
@@ -40,8 +55,8 @@ export interface ChipperFxFrame {
   hopper: V3; mouthHx: number; mouthHz: number;
   /** The wet outlet (the discharge spout's flange), the spout's direction and the unit direction out of the front (toward the aisle). */
   outlet: V3; spout: V3; front: V3;
-  /** The car floor (train-local y). */
-  floorY: number;
+  /** The car floor and ceiling (train-local y). */
+  floorY: number; ceilY: number;
   /** The machine's footprint (no stain under it), the hopper's inner rect (spray falling back into it below the rim vanishes), the rim. */
   box: {x0: number; x1: number; z0: number; z1: number}; mouth: {x0: number; x1: number; z0: number; z1: number}; rimY: number;
   /** The interior's half width (spray stops at the lining). */
@@ -134,14 +149,18 @@ export class ChipperFx {
   /** Train-local root (a child of the chipper's group). */
   readonly root = new THREE.Group();
   private readonly drops: Ring;
-  private readonly mist: Ring;
+  /** The soft mist: the game's alpha particle ring (world/fx.ts), its own instance. */
+  private readonly mist: Particles;
+  private readonly mistTex: THREE.Texture;
+  private readonly mistColor = new THREE.Color(CHIPPER_FX.mist.color);
+  private readonly at = {x: 0, y: 0, z: 0};
   private readonly chunks: Ring;
   private readonly stains: Ring;
   private readonly geos: THREE.BufferGeometry[] = [];
   private readonly mats: THREE.Material[] = [];
   private readonly mask: THREE.DataTexture;
   private readonly rand: () => number;
-  private readonly acc = {hopper: 0, outlet: 0, mist: 0, chunks: 0, pool: 0};
+  private readonly acc = {hopper: 0, outlet: 0, mist: 0, spoutMist: 0, chunks: 0, pool: 0};
   private time = 0;
   // scratch (no per-frame allocation)
   private readonly m = new THREE.Matrix4();
@@ -171,15 +190,15 @@ export class ChipperFx {
       return new Ring(cap, mesh, fa);
     };
     // droplets / chunks: wet, lit, opaque (they catch the car's lamps and the flashlight)
-    const dropMat = new THREE.MeshStandardMaterial({name: 'chipper-blood-drops', color: F.drops.color, roughness: 0.28, metalness: 0});
-    this.drops = inst(new THREE.IcosahedronGeometry(1, 0), dropMat, F.drops.cap, 'train-chipper-drops', false);
+    const dropMat = new THREE.MeshStandardMaterial({name: 'chipper-blood-drops', color: F.drops.color, roughness: F.drops.roughness, metalness: 0});
+    this.drops = inst(new THREE.IcosahedronGeometry(1, 1), dropMat, F.drops.cap, 'train-chipper-drops', false); // (smooth normals: a drop, not a gem)
     const chunkMat = new THREE.MeshStandardMaterial({name: 'chipper-blood-chunks', color: F.chunks.color, roughness: 0.45, metalness: 0});
     this.chunks = inst(new THREE.DodecahedronGeometry(1, 0), chunkMat, F.chunks.cap, 'train-chipper-chunks', false);
-    // mist: soft, unlit-ish (Lambert), per-instance fade (world/fx.ts Decals' opacity route)
-    const mistMat = new MeshLambertNodeMaterial({color: F.mist.color, transparent: true, depthWrite: false, opacity: F.mist.opacity});
-    mistMat.name = 'chipper-blood-mist';
-    mistMat.opacityNode = (materialOpacity as TNode).mul(attribute('aFade', 'float'));
-    this.mist = inst(new THREE.IcosahedronGeometry(1, 1), mistMat as unknown as THREE.Material, F.mist.cap, 'train-chipper-mist', true);
+    // mist: the game's soft blood mist (camera-facing sprite quads, the soft disc, fog-aware; positions in this root's frame)
+    this.mistTex = softDiscTexture();
+    this.mist = new Particles(F.mist.cap, this.mistTex, false);
+    this.mist.points.name = 'train-chipper-mist';
+    this.root.add(this.mist.points);
     // stains: a glossy dark film on the floor, the blob mask in the alpha, per-instance fade
     this.mask = stainMask();
     const stainMat = new MeshStandardNodeMaterial({map: this.mask, color: F.stains.color, roughness: F.stains.roughness, metalness: 0, transparent: true, depthWrite: false,
@@ -190,45 +209,47 @@ export class ChipperFx {
     plane.rotateX(-Math.PI / 2); // faces up (+Y)
     this.stains = inst(plane, stainMat as unknown as THREE.Material, F.stains.cap, 'train-chipper-stains', true);
     this.stains.mesh.renderOrder = 1;
-    this.mist.mesh.renderOrder = 2;
   }
 
   private r(a: number, b: number): number { return a + (b - a) * this.rand(); }
 
   /**
-   * Spray for `dt` seconds of grinding (`k` = the lunge factor, 0.5 .. 1.5: a body jerking deeper throws more): drops out of the hopper
-   * and the outlet, mist, chunks, and now and then a pool on the floor in front.
+   * Spray for `dt` seconds of grinding. `lunge` (0..1): how hard the body is being pulled in right now (world/chipperView.ts lungeRate) —
+   * its sharpened pulse bursts the plume, the jet and the mist at every lunge over a steady base; now and then a pool on the floor.
    */
-  emit(dt: number, f: ChipperFxFrame, k = 1): void {
-    const R = CHIPPER_FX.rate, A = this.acc, cap = CHIPPER_FX.maxPerFrame;
+  emit(dt: number, f: ChipperFxFrame, lunge = 0.5): void {
+    const F = CHIPPER_FX, R = F.rate, A = this.acc, cap = F.maxPerFrame;
+    const pulse = Math.pow(Math.max(0, Math.min(1, lunge)), F.pulse);
     const n = (key: keyof typeof A, rate: number): number => {
-      A[key] += rate * k * Math.max(0, dt);
+      A[key] += rate * Math.max(0, dt);
       const c = Math.min(cap, Math.floor(A[key]));
       A[key] -= c;
       if (A[key] > cap) A[key] = 0; // a hitch never queues a burst
       return c;
     };
-    for (let i = n('hopper', R.hopper); i > 0; i--) {
-      // up out of the mouth (a fountain), leaning out toward the aisle
-      const ox = this.r(-f.mouthHx, f.mouthHx) * 0.8, oz = this.r(-f.mouthHz, f.mouthHz) * 0.8;
-      const out = this.r(0.1, 1.5);
-      this.drop(f.hopper.x + ox, f.hopper.y + 0.02, f.hopper.z + oz, this.r(-0.7, 0.7) + f.front.x * out, this.r(1.4, 3.1), this.r(-0.5, 0.5) + f.front.z * out);
+    const P = F.plume, J = F.jet;
+    for (let i = n('hopper', R.hopper + R.hopperBurst * pulse); i > 0; i--) {
+      // the plume: up out of the mouth, leaning out toward the aisle; higher at a lunge
+      const ox = this.r(-f.mouthHx, f.mouthHx) * 0.8, oz = this.r(-f.mouthHz, f.mouthHz) * 0.8, out = this.r(P.out[0], P.out[1]);
+      this.drop(f.hopper.x + ox, f.hopper.y + 0.02, f.hopper.z + oz, this.r(-P.side, P.side) + f.front.x * out,
+        this.r(P.vy[0], P.vy[1]) + P.vyBurst * pulse * this.r(0.5, 1), this.r(-P.side, P.side) * 0.7 + f.front.z * out);
     }
-    for (let i = n('outlet', R.outlet); i > 0; i--) {
-      // the leaking spout flange: a wet jet out toward the aisle (and a little along the spout), low
-      const sp = this.r(1.4, 3.0), al = this.r(0, 0.8);
+    for (let i = n('outlet', R.outlet + R.outletBurst * pulse); i > 0; i--) {
+      // the leaking spout flange: a strong wet jet out into the aisle (and a little along the spout), pulsing with the lunges
+      const sp = this.r(J.speed[0], J.speed[1]) + J.burst * pulse, al = this.r(0, J.along);
       this.drop(f.outlet.x + this.r(-0.03, 0.03), f.outlet.y + this.r(-0.03, 0.03), f.outlet.z + this.r(-0.03, 0.03),
-        f.front.x * sp + f.spout.x * al + this.r(-0.4, 0.4), this.r(-0.3, 0.9), f.front.z * sp + f.spout.z * al + this.r(-0.3, 0.3));
+        f.front.x * sp + f.spout.x * al + this.r(-J.side, J.side), this.r(J.vy[0], J.vy[1]), f.front.z * sp + f.spout.z * al + this.r(-J.side, J.side));
     }
-    for (let i = n('mist', R.mist); i > 0; i--) this.puff(f.hopper.x + this.r(-0.12, 0.12), f.hopper.y + 0.05, f.hopper.z + this.r(-0.12, 0.12), f.front);
-    for (let i = n('chunks', R.chunks); i > 0; i--) {
+    for (let i = n('mist', R.mist + R.mistBurst * pulse); i > 0; i--) this.puff(f.hopper.x + this.r(-0.12, 0.12), f.hopper.y + this.r(0.03, 0.25), f.hopper.z + this.r(-0.12, 0.12), f.front, 1);
+    for (let i = n('spoutMist', R.spoutMist * (1 + pulse)); i > 0; i--) this.puff(f.outlet.x + f.front.x * 0.12, f.outlet.y + 0.02, f.outlet.z + f.front.z * 0.12, f.front, 0.7);
+    for (let i = n('chunks', R.chunks + R.chunksBurst * pulse); i > 0; i--) {
       const out = this.r(0.2, 1.1);
       this.chunk(f.hopper.x + this.r(-0.1, 0.1), f.hopper.y + 0.03, f.hopper.z + this.r(-0.1, 0.1), this.r(-0.5, 0.5) + f.front.x * out, this.r(1.0, 2.2), this.r(-0.3, 0.3) + f.front.z * out);
     }
     for (let i = n('pool', R.pool); i > 0; i--) {
       // the pool under the outlet spreads into the aisle
       const d = this.r(0.05, 0.75);
-      this.stain(f.outlet.x + f.front.x * d + this.r(-0.35, 0.35), f.floorY, f.box.z0 + f.front.z * d, this.r(CHIPPER_FX.stains.big[0], CHIPPER_FX.stains.big[1]), f);
+      this.stain(f.outlet.x + f.front.x * d + this.r(-0.35, 0.35), f.floorY, f.box.z0 + f.front.z * d, this.r(F.stains.big[0], F.stains.big[1]), f);
     }
   }
 
@@ -243,13 +264,13 @@ export class ChipperFx {
     this.counts.drops++;
   }
 
-  private puff(x: number, y: number, z: number, front: V3): void {
-    const M = CHIPPER_FX.mist, R = this.mist, i = R.take();
-    R.pos[i * 3] = x; R.pos[i * 3 + 1] = y; R.pos[i * 3 + 2] = z;
-    R.vel[i * 3] = front.x * this.r(0, 0.25) + this.r(-0.08, 0.08); R.vel[i * 3 + 1] = this.r(0.15, 0.45); R.vel[i * 3 + 2] = front.z * this.r(0, 0.25) + this.r(-0.08, 0.08);
-    R.size[i] = this.r(M.size[0], M.size[1]);
-    R.life[i] = R.max[i] = this.r(M.life[0], M.life[1]);
-    R.mesh.visible = true;
+  /** One soft mist puff (`k` scales its size), drifting out toward the aisle and rising. */
+  private puff(x: number, y: number, z: number, front: V3, k: number): void {
+    const M = CHIPPER_FX.mist, at = this.at;
+    at.x = x; at.y = y; at.z = z;
+    const out = this.r(0, 0.3);
+    this.mist.spawn(at, front.x * out + this.r(-0.1, 0.1), this.r(0.1, 0.4), front.z * out + this.r(-0.1, 0.1), this.r(M.size[0], M.size[1]) * k,
+      this.r(M.life[0], M.life[1]), this.mistColor, M.alpha, M.grow, -M.rise, M.drag);
     this.counts.mist++;
   }
 
@@ -303,6 +324,7 @@ export class ChipperFx {
             R.pos[j] += R.vel[j] * dt; R.pos[j + 1] += R.vel[j + 1] * dt; R.pos[j + 2] += R.vel[j + 2] * dt;
             if (this.swallowed(R.pos, j, R.vel[j + 1], f)) { R.life[i] = 0; R.hide(i); continue; }
             this.lining(R.pos, R.vel, j, f);
+            if (R.pos[j + 1] > f.ceilY - 0.02) { R.pos[j + 1] = f.ceilY - 0.02; R.vel[j + 1] = -Math.abs(R.vel[j + 1]) * 0.2; }
             if (R.pos[j + 1] <= f.floorY + 0.002) {
               R.pos[j + 1] = f.floorY + 0.002;
               R.rest[i] = 1;
@@ -312,16 +334,16 @@ export class ChipperFx {
             }
           }
           if (R.rest[i]) {
-            const k = Math.min(1, R.life[i] / 0.25); // shrink away at the end
-            a[o] = s * 1.7 * k; a[o + 1] = 0; a[o + 2] = 0;
-            a[o + 4] = 0; a[o + 5] = s * 0.22 * k; a[o + 6] = 0;
-            a[o + 8] = 0; a[o + 9] = 0; a[o + 10] = s * 1.7 * k;
+            const k = Math.min(1, R.life[i] / 0.25), w = s * CHIPPER_FX.drops.speck * k; // shrink away at the end
+            a[o] = w; a[o + 1] = 0; a[o + 2] = 0;
+            a[o + 4] = 0; a[o + 5] = s * 0.18 * k; a[o + 6] = 0;
+            a[o + 8] = 0; a[o + 9] = 0; a[o + 10] = w;
           } else {
             // the icosahedron's Y along the velocity (a streak), X / Z perpendicular
             let vx = R.vel[j], vy = R.vel[j + 1], vz = R.vel[j + 2];
             const sp = Math.hypot(vx, vy, vz) || 1;
             vx /= sp; vy /= sp; vz /= sp;
-            const st = s * (1 + Math.min(2.4, sp * 0.45));
+            const st = s * (1 + Math.min(CHIPPER_FX.drops.streak, sp * 0.5));
             // b = normalize(v x up-ish), c = b x v
             let hx = 0, hy = 1, hz = 0;
             if (Math.abs(vy) > 0.9) { hx = 1; hy = 0; }
@@ -375,30 +397,8 @@ export class ChipperFx {
         if (!live) R.mesh.visible = false;
       }
     }
-    // --- mist (rising, growing, fading) ---
-    {
-      const R = this.mist, a = R.mesh.instanceMatrix.array as Float32Array, M = CHIPPER_FX.mist;
-      if (R.live > 0) {
-        let live = 0;
-        for (let i = 0; i < R.cap; i++) {
-          if (R.life[i] <= 0) continue;
-          R.life[i] -= dt;
-          if (R.life[i] <= 0) { R.hide(i); continue; }
-          const j = i * 3, o = i * 16, k = Math.max(0, 1 - 1.4 * dt);
-          R.vel[j] *= k; R.vel[j + 2] *= k; R.vel[j + 1] = R.vel[j + 1] * k + 0.05 * dt;
-          R.pos[j] += R.vel[j] * dt; R.pos[j + 1] += R.vel[j + 1] * dt; R.pos[j + 2] += R.vel[j + 2] * dt;
-          const age = 1 - R.life[i] / R.max[i], s = R.size[i] * (1 + M.grow * age);
-          a[o] = s; a[o + 1] = 0; a[o + 2] = 0; a[o + 4] = 0; a[o + 5] = s; a[o + 6] = 0; a[o + 8] = 0; a[o + 9] = 0; a[o + 10] = s;
-          a[o + 12] = R.pos[j]; a[o + 13] = R.pos[j + 1]; a[o + 14] = R.pos[j + 2]; a[o + 15] = 1;
-          R.fade!.setX(i, Math.min(1, age * 6) * Math.min(1, (R.life[i] / R.max[i]) * 1.8));
-          live++;
-        }
-        R.live = live;
-        R.mesh.instanceMatrix.needsUpdate = true;
-        R.fade!.needsUpdate = true;
-        if (!live) R.mesh.visible = false;
-      }
-    }
+    // --- mist (the ring integrates its own drift / growth / fade) ---
+    this.mist.update(dt);
     // --- stains (spreading, then fading at the end of their life) ---
     {
       const R = this.stains, S = CHIPPER_FX.stains;
@@ -448,15 +448,20 @@ export class ChipperFx {
     return {drops: this.drops.cap, mist: this.mist.cap, chunks: this.chunks.cap, stains: this.stains.cap};
   }
 
-  /** The four pooled meshes (tests / warm-up). */
+  /** The three pooled instanced meshes: drops, chunks, stains (tests / warm-up). */
   get meshes(): THREE.InstancedMesh[] {
-    return [this.drops.mesh, this.mist.mesh, this.chunks.mesh, this.stains.mesh];
+    return [this.drops.mesh, this.chunks.mesh, this.stains.mesh];
+  }
+
+  /** The mist's one sprite draw (tests / warm-up). */
+  get mistSprite(): THREE.Sprite {
+    return this.mist.points;
   }
 
   /** The spray in the air goes (pause / ride); the floor stains stay (they lie in the car and fade on their own clock). */
   clearAirborne(): void {
     this.drops.clear(); this.mist.clear(); this.chunks.clear();
-    this.acc.hopper = this.acc.outlet = this.acc.mist = this.acc.chunks = this.acc.pool = 0;
+    this.acc.hopper = this.acc.outlet = this.acc.mist = this.acc.spoutMist = this.acc.chunks = this.acc.pool = 0;
   }
 
   /** Everything goes (teardown). */
@@ -469,6 +474,8 @@ export class ChipperFx {
     this.clear();
     for (const g of this.geos) g.dispose();
     for (const m of this.mats) m.dispose();
+    (this.mist.points.material as THREE.Material).dispose();
+    this.mistTex.dispose();
     this.mask.dispose();
     this.root.removeFromParent();
   }
