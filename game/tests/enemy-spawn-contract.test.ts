@@ -75,13 +75,15 @@ describe('family pools: defaults, opt-in, eligibility validation', () => {
   it('familyPool: every family in registry order, Blightbelly 5 % ON, Siren OFF, rat/dog 5 %, zombie the remainder', () => {
     expect(OPT_IN_FAMILIES).toEqual(['siren']);
     // task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): + the Strainer, listed explicitly at 0 (service annexes only)
-    expect(DEFAULT_FAMILY_SHARES).toEqual({blightbelly: 0.05, siren: 0, ratdog: 0.05, strainer: 0});
+    // task studio-screacher-production-20261110-221858-01: + the Screacher, listed explicitly at 0 in every pool (roster-only: placed by
+    // ai/enemyRoster.ts, never by a per-spawn roll) — appended last, so the older bands are the same numbers
+    expect(DEFAULT_FAMILY_SHARES).toEqual({blightbelly: 0.05, siren: 0, ratdog: 0.05, strainer: 0, screacher: 0});
     expect(familyPool().map(([f]) => f)).toEqual([...ENEMY_FAMILY_IDS]);
-    expect(familyPool()).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.05], ['strainer', 0]]);
+    expect(familyPool()).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.05], ['strainer', 0], ['screacher', 0]]);
     expect(ENEMY_POOL).toEqual(familyPool());
     expect(SUBWAY.families).toBe(ENEMY_POOL);
     expect(OFFICE.families).toBe(OFFICE_ENEMY_POOL);
-    expect(OFFICE_ENEMY_POOL).toEqual([['zombie', 0.71], ['blightbelly', 0.05], ['siren', OFFICE_SIREN_WEIGHT], ['ratdog', 0.05], ['strainer', 0]]);
+    expect(OFFICE_ENEMY_POOL).toEqual([['zombie', 0.71], ['blightbelly', 0.05], ['siren', OFFICE_SIREN_WEIGHT], ['ratdog', 0.05], ['strainer', 0], ['screacher', 0]]); // (+ the roster-only Screacher at 0: task studio-screacher-production-20261110-221858-01)
     for (const p of [SUBWAY, OFFICE]) expect(p.families.reduce((t, [, w]) => t + w, 0)).toBeCloseTo(1, 12);
     expect(() => familyPool({siren: 0.95})).toThrow(/exceed 1/);
     // the Subway never opts in; the Office does, with its eligibility rule

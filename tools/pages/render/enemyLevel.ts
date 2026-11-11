@@ -4,12 +4,16 @@
 // room modifier table (missing = 1×), the sampled census labelled with its corpus, and where each value is tuned.
 // Task track1-siren-blightbelly-20261031 (lane SPAWN), schema 2: + the difficulty tier, the profile's family eligibility rules and
 // the sampled eligibility census (draws vs placed per level of a restricted family).
+// Task studio-screacher-production-20261110-221858-01 (lane REGISTRY-DOCS), schema 3: + the seeded roster on this level (section
+// `roster`, one row `roster-<family>` per registered family: can the level hold it, the chance per level map seed, the sampled roster
+// census). The sampled census is measured with the roster applied; the eligibility census is labelled "before the roster pass".
 import type {EligibilityCensus, EnemyLevelInfo, LevelCensus, PlacementInfo, SpawnContextInfo} from '../enemyReferenceTypes';
-import {badge, esc, filterBox, href, num, range, renderPage, searchAttr, table} from './html';
+import {badge, esc, filterBox, href, num, pct, range, renderPage, searchAttr, table} from './html';
 import {probCell, prose, shareCell} from './common';
 import {
-  ALL_FAMILIES_KEY, ctxAnchor, eligAnchor, ENEMIES_HOW_TO, enemyCrumbs, enemyLevelPage, enemySourceLoc, expectedCell, familyAnchor, familyCell, familyLabel,
-  keyKindLabel, labelWithId, modifierFieldLabel, modifierStatus, mult, poolShareCell, roomAnchor, uniform, ZOMBIE_FAMILY, type EnemySite,
+  ALL_FAMILIES_KEY, ctxAnchor, eligAnchor, ENEMIES_FAMILIES, ENEMIES_HOW_TO, ENEMIES_INDEX, enemyCrumbs, enemyLevelPage, enemySourceLoc, expectedCell, familyAnchor, familyCell, familyLabel,
+  keyKindLabel, labelWithId, modifierFieldLabel, modifierStatus, mult, poolShareCell, roomAnchor, rosterAnchor, rosterEligibilityLabel, rosterPlaceLabel, rosterRateCell,
+  rosterRow, rosterSampleCell, ROSTER_SECTION, uniform, ZOMBIE_FAMILY, type EnemySite,
 } from './enemies';
 
 const SECTIONS: Array<[string, string]> = [
@@ -17,6 +21,7 @@ const SECTIONS: Array<[string, string]> = [
   ['families', 'Enemy families'],
   ['eligibility', 'Family eligibility'],
   ['horde', 'Roaming hordes (separate pool)'],
+  ['roster', 'Seeded roster'],
   ['zombie-types', 'Zombie types'],
   ['placement', 'Placement rules'],
   ['storey-moves', 'Storey moves'],
@@ -135,25 +140,30 @@ function familiesSection(es: EnemySite, level: EnemyLevelInfo, p: string): strin
   const rows = es.ref.families.map(f => {
     const row = pool.rows.find(r => r.family === f.id);
     const expected = pool.expectedPerLevel.find(e => e.family === f.id);
-    if (!row) return [familyCell(es, p, f.id), '<span class="muted">not in pool</span>', '<span class="muted">never spawns in this level</span>', '0'];
-    return [familyCell(es, p, f.id), num(row.weight), poolShareCell(level, row), expectedCell(expected)];
+    // (task studio-screacher-production-20261110-221858-01) + the seeded roster: the chance this level holds the family at all, and what the sample levels hold
+    const rosterCells = [rosterRateCell(es, level, f.id), rosterSampleCell(level, f.id)];
+    if (!row) return [familyCell(es, p, f.id), '<span class="muted">not in pool</span>', '<span class="muted">never drawn in this level</span>', '0', ...rosterCells];
+    return [familyCell(es, p, f.id), num(row.weight), poolShareCell(es, level, row), expectedCell(expected), ...rosterCells];
   });
   // Pool rows the registry does not know were rejected by makeEnemySite; every registry family has a row here.
   return `<h2 id="families">Enemy families</h2>
 <p>Every placed spawn is one enemy family. A family's <em>conditional share</em> = weight / Σ weights (denominator
-${num(pool.denominator)}) is the chance that one placed spawn is that family. It changes the mix, not how many spawns are placed.</p>
+${num(pool.denominator)}) is the chance that the per-spawn roll of one placed spawn draws that family. It changes the mix, not how many
+spawns are placed. The <a href="#${ROSTER_SECTION}">seeded roster</a> then decides whether this level holds each special family at all.</p>
 <p>${prose(pool.roll)}</p>
 ${table({
-    caption: `${level.name}: family pool (shares conditional on one placed spawn; denominator ${num(pool.denominator)})`,
-    head: ['Family', 'Weight', 'Conditional share', 'Expected per level'],
+    caption: `${level.name}: family pool (per-spawn roll: shares conditional on one placed spawn; denominator ${num(pool.denominator)}) and the seeded roster on top`,
+    head: ['Family', 'Weight', 'Conditional share (per-spawn roll)', 'Expected per level by the per-spawn roll alone (before the roster)', 'Seeded roster: chance the level\'s roll includes it', 'Per level with the roster (sampled)'],
     numeric: [1, 3],
     rowHeader: 0,
     rows,
     rowAttrs: es.ref.families.map(f => `id="${esc(familyAnchor(f.id))}"`),
     className: 'rows',
   })}
-<p class="note">Expected per level = share × spawns tried per level (E = ${num(level.total.mean)}), with neutral room modifiers and before
-any placement shortfall${pool.eligibility.length ? '; a family with an eligibility rule and its fallback family are measured instead (sampled placed per level, see <a href="#eligibility">family eligibility</a>)' : ''}.
+<p class="note">Expected per level by the per-spawn roll alone = share × spawns tried per level (E = ${num(level.total.mean)}), with neutral room
+modifiers and before any placement shortfall${pool.eligibility.length ? '; a family with an eligibility rule and its fallback family are measured instead (sampled placed per level, see <a href="#eligibility">family eligibility</a>)' : ''}.
+That is the stage before the roster pass. The last two columns are the <a href="#${ROSTER_SECTION}">seeded roster</a>: a level either
+holds a family or has none of it, so the per-level figure of a level that holds it is higher than the long-run mean.
 Defined at ${enemySourceLoc(es, pool.at)}.</p>`;
 }
 
@@ -163,20 +173,20 @@ function eligibilityCensusBlock(es: EnemySite, level: EnemyLevelInfo, p: string,
   if (!c) return '<p class="note">This build contains no eligibility census: the placed share of a restricted family is not measured here.</p>';
   const ctxLabel = (id: string) => level.contexts.find(x => x.id === id)?.label ?? id;
   const placed = table({
-    caption: `${level.name}: placed spawns per family (sampled eligibility census: ${c.layouts} layouts)`,
+    caption: `${level.name}: placed spawns per family by the per-spawn roll and the eligibility rule, before the roster pass (sampled eligibility census: ${c.layouts} layouts)`,
     head: ['Family', 'Placed over the sample', 'Mean per level', 'Placed share'],
     numeric: [1, 2],
     rowHeader: 0,
     rows: c.placed.map(r => [familyCell(es, p, r.family), num(r.total), num(r.perLevel), probCell(r.share)]),
   });
   const restricted = c.restricted.map(r => `${table({
-    caption: `${level.name}: ${familyLabel(es, r.family)} draws vs placed (sampled: ${c.layouts} layouts)`,
+    caption: `${level.name}: ${familyLabel(es, r.family)} draws vs placed, before the roster pass (sampled: ${c.layouts} layouts)`,
     head: ['Draws (roll landed on it)', 'Placed', 'Placed per level (mean)', 'Levels with none', 'Most in one level'],
     numeric: [0, 1, 2, 3, 4],
     rows: [[num(r.draws), num(r.placed), num(r.perLevel.mean), `${num(r.perLevel.none)} of ${num(c.layouts)}`, num(r.perLevel.max)]],
   })}
 ${table({
-    caption: `${level.name}: ${familyLabel(es, r.family)} per generated level (sampled histogram)`,
+    caption: `${level.name}: ${familyLabel(es, r.family)} per generated level, before the roster pass (sampled histogram)`,
     head: ['Placed in one level', 'Layouts'],
     numeric: [0, 1],
     rows: r.perLevel.histogram.map(h => [num(h.count), num(h.layouts)]),
@@ -189,6 +199,8 @@ ${r.fallbacks.length ? table({
   }) : ''}
 ${r.byContext.length ? `<p>Placed by context: ${r.byContext.map(x => `<a href="#${esc(ctxAnchor(x.context))}">${esc(ctxLabel(x.context))}</a> ${num(x.placed)}`).join(' · ')}.</p>` : ''}`).join('\n');
   return `<div class="callout"><p>${badge('sampled', 'info')} <strong>Observed, not a rule.</strong> ${prose(c.note)}</p></div>
+<p>These tables measure the per-spawn roll and the eligibility rule alone. What the same levels hold after the roster pass is in the
+<a href="#${ROSTER_SECTION}">seeded roster</a> census.</p>
 ${placed}
 ${restricted}`;
 }
@@ -205,9 +217,87 @@ ${e.spacing ? `<p>Whole-level spacing ${num(e.spacing.metres)} m: ${prose(e.spac
   return `<h2 id="eligibility">Family eligibility</h2>
 <p>A family with an eligibility rule takes a placed slot only where its rule holds. Its <em>draw</em> share (weight / Σ weights)
 is exact; a draw where the rule fails becomes the fallback family, so the family's <em>placed</em> share is lower and is measured
-below. The other families' draws never change (the roll is the same; nothing is renormalised).</p>
+below. The other families' draws never change (the roll is the same; nothing is renormalised). The
+<a href="#${ROSTER_SECTION}">seeded roster</a> runs after this rule and decides whether the level holds the family at all.</p>
 ${blocks}
 ${eligibilityCensusBlock(es, level, p, level.eligibilityCensus)}`;
+}
+
+// ------------------------------------------------------------------------------------------------------------- seeded roster
+// Task studio-screacher-production-20261110-221858-01: which special families this level holds at all (one roll per family per level
+// map seed), every registered family's row (id roster-<family>) and the sampled roster census (what the sample levels hold).
+
+function rosterSection(es: EnemySite, level: EnemyLevelInfo, p: string): string {
+  const R = es.ref.roster, lr = level.roster, fams = es.ref.families;
+  const rule = (id: string) => es.roster.get(id)!;
+  const ruleTable = table({
+    caption: `${level.name}: seeded roster — whether the level can hold each family, and the chance that a map's roll includes it`,
+    head: ['Family', 'Can this level hold it', 'Chance the roll includes it', 'On this level', `The roll itself over level seeds 1 to ${num(R.rollCheckSeeds)}`, 'Sample levels with the roster (sampled)'],
+    rowHeader: 0,
+    rows: fams.map(f => {
+      const row = rosterRow(level, f.id);
+      return [
+        `${familyCell(es, p, f.id)}${rule(f.id).rosterOnly ? ` ${badge('roster-only', 'special')}` : ''}`,
+        esc(rosterEligibilityLabel(row.eligibility)),
+        rosterRateCell(es, level, f.id),
+        prose(row.status),
+        row.rolled ? `${num(row.rolled.present)} of ${num(row.rolled.seeds)} include it<span class="denom">${pct(row.rolled.present / row.rolled.seeds)} of those seeds</span>` : '<span class="muted">not rolled</span>',
+        rosterSampleCell(level, f.id),
+      ];
+    }),
+    rowAttrs: fams.map(f => `id="${esc(rosterAnchor(f.id))}"`),
+    className: 'rows',
+  });
+  const rolled = fams.filter(f => rosterRow(level, f.id).rolled);
+  const policies = rolled.length
+    ? `<h3>How a family this level holds is placed</h3>
+<ul>${rolled.map(f => `<li><strong>${esc(f.label)}</strong> (${esc(rosterPlaceLabel(rule(f.id).place ?? ''))}). ${prose(rule(f.id).placement)} <a href="${esc(href(p, `${ENEMIES_FAMILIES}#${rosterAnchor(f.id)}`))}">Its rule</a>.</li>`).join('\n')}</ul>
+<p>Order: ${R.order.filter(id => rolled.some(f => f.id === id)).map(id => esc(familyLabel(es, id))).join(', then ')} — the most constrained first, each on the ordinary zombie slots still left.</p>`
+    : '';
+  const c = lr.census;
+  let census: string;
+  if (lr.zombieFree) census = '<p>There is nothing to sample: a zombie-free level holds no enemy before or after the pass.</p>';
+  else if (!c) census = '<p class="note">This build contains no sampled roster census: the chances above are the rule; what generated levels hold is not measured here.</p>';
+  else {
+    const row = (id: string) => c.families.find(x => x.family === id);
+    const longRun = rolled.map(f => {
+      const r = row(f.id), lrow = rosterRow(level, f.id);
+      if (!r) return '';
+      return lrow.eligibility === 'layout'
+        ? `<li><strong>${esc(f.label)}</strong>: ${num(r.eligible)} of the ${num(c.layouts)} sample levels could hold it (a map with a spawn in its contexts); ${num(r.present)} of those rolled it present and ${num(r.holding)} hold it. Long-run rate: ${pct(lrow.rate)} of such maps.</li>`
+        : `<li><strong>${esc(f.label)}</strong>: rolled present in ${num(r.present)} of the ${num(c.layouts)} sample levels; ${num(r.holding)} of them hold it. Long-run rate: ${pct(lrow.rate)} of level map seeds.</li>`;
+    }).join('\n');
+    census = `<h3>Sampled roster census</h3>
+<div class="callout"><p>${badge('sampled', 'info')} <strong>Observed, not a rule.</strong> ${prose(c.note)}</p></div>
+${longRun ? `<ul>${longRun}</ul>` : ''}
+${table({
+      caption: `${level.name}: the seeded roster pass on the sample levels (sampled: ${c.layouts} layouts; ${num(c.ambient)} ambient spawns, ${num(c.ambientPerLevel)} per level, before and after)`,
+      head: ['Family', 'Levels that could hold it', 'Levels whose roll included it', 'Levels that hold it', 'Placed by the per-spawn roll alone (before the pass)', 'Slots the pass took from it', 'Slots the pass gave it',
+        'With the roster (after the pass)', 'Mean per level', 'Mean per level that holds it', 'Most in one level', 'Share of the ambient enemies', 'Present without a legal slot', 'Levels by number held (number: levels)'],
+      numeric: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12],
+      rowHeader: 0,
+      rows: fams.map(f => {
+        const r = row(f.id);
+        if (!r) return [familyCell(es, p, f.id), ...Array.from({length: 13}, () => '<span class="muted">—</span>')];
+        const seeded = rule(f.id).mode === 'seeded';
+        return [
+          familyCell(es, p, f.id), num(r.eligible), num(r.present), num(r.holding), num(r.before), num(r.removed), num(r.added), num(r.after), num(r.perLevel),
+          r.perHoldingLevel === null ? '<span class="muted">—</span>' : num(r.perHoldingLevel), num(r.max), probCell(r.share), num(r.noSlot),
+          seeded ? r.histogram.map(h => `${num(h.count)}: ${num(h.layouts)}`).join(' · ') : '<span class="muted">—</span>',
+        ];
+      }),
+    })}
+<p class="note">“Slots the pass took from it”: spawns the per-spawn roll made this family that are another family after the pass (an
+absent family's all become ordinary zombies). “Slots the pass gave it”: spawns that became this family in the pass. For the baseline
+family the two are the slots the other families took and gave back.</p>`;
+  }
+  return `<h2 id="${ROSTER_SECTION}">Seeded roster <span class="summary-meta">(which families this level holds at all)</span></h2>
+<p>${prose(lr.note)}</p>
+${ruleTable}
+${policies}
+${census}
+<p class="note">Roster version ${num(R.version)}; the rules of the pass and every family's rule: <a href="${esc(href(p, `${ENEMIES_INDEX}#${ROSTER_SECTION}`))}">the seeded roster</a>.
+Defined at ${enemySourceLoc(es, R.at)}.</p>`;
 }
 
 function zombieTypesSection(es: EnemySite, level: EnemyLevelInfo): string {
@@ -403,11 +493,11 @@ function censusSection(es: EnemySite, level: EnemyLevelInfo, p: string, census: 
   const ctxLabel = (id: string) => level.contexts.find(c => c.id === id)?.label ?? id;
   const corpus = `${plural(census.layouts, 'generated layout')} from seeds ${esc(census.seeds.join(', '))}, ${esc(census.startWeapon)} start`;
   const byFamily = table({
-    caption: `${level.name}: placed spawns per family (sampled: ${census.layouts} layouts)`,
-    head: ['Family', 'Placed over the sample', 'Mean per level', 'Per 100 m² eligible floor (sampled)'],
-    numeric: [1, 2, 3],
+    caption: `${level.name}: placed spawns per family with the seeded roster applied (sampled: ${census.layouts} layouts)`,
+    head: ['Family', 'Placed over the sample (with the roster)', 'Mean per level', 'Sample levels that hold it', 'Per 100 m² eligible floor (sampled)', 'Placed by the per-spawn roll alone (before the roster pass)'],
+    numeric: [1, 2, 3, 4, 5],
     rowHeader: 0,
-    rows: census.placed.map(r => [familyCell(es, p, r.family), num(r.total), num(r.perLevel), num(r.per100m2)]),
+    rows: census.placed.map(r => [familyCell(es, p, r.family), num(r.total), num(r.perLevel), `${num(r.levels)} of ${num(census.layouts)}`, num(r.per100m2), num(r.rollTotal)]),
   });
   const byContext = census.byContext.length
     ? table({
@@ -464,7 +554,9 @@ function censusSection(es: EnemySite, level: EnemyLevelInfo, p: string, census: 
 <div class="callout"><p>${badge('sampled', 'info')} <strong>Observed, not a rule.</strong> These figures come from running the real
 ${esc(level.name)} generator on a small fixed corpus: ${corpus}. Eligible floor is the floor the generator's own candidate filter
 accepted (${num(census.eligibleCells)} cells of ${num(census.cellM2)} m², ${num(census.eligibleM2)} m² in total), not the map's bounding
-box. Densities are placed spawns per 100 m² of that eligible floor over this sample only.</p></div>
+box. Densities are placed spawns per 100 m² of that eligible floor over this sample only. Families are counted with the
+<a href="#${ROSTER_SECTION}">seeded roster</a> applied: what these levels hold. The roster changes families only, so the totals are
+the generator's.</p></div>
 <p>${prose(census.note)}</p>
 ${byFamily}
 ${byContext}
@@ -513,6 +605,7 @@ ${contextsSection(es, level)}
 ${familiesSection(es, level, p)}
 ${eligibilitySection(es, level, p)}
 ${hordeSection(es, level, p)}
+${rosterSection(es, level, p)}
 ${zombieTypesSection(es, level)}
 ${placementSection(es, level)}
 ${storeyMovesSection(es, level)}
@@ -523,6 +616,7 @@ ${censusSection(es, level, p, level.census)}
 <ul>
 <li><strong>Count range</strong> = intensity: how many spawns one run of a context tries to place, drawn uniformly. E[count] = (lo + hi) / 2.</li>
 <li><strong>Conditional share</strong> = weight / Σ weights: the chance that one <em>placed</em> spawn draws that family. It sets the mix, not the number. A family with an eligibility rule places fewer than it draws (measured, sampled).</li>
+<li><strong>Seeded roster</strong> = the chance that this level holds a special family at all, rolled once per family from the level seed, after the per-spawn roll. A level has the family or has none of it; the enemy count never changes.</li>
 <li><strong>Area weights and caps</strong> decide where spawns go and are not chances. Eligibility, spacing, caps and tries can leave a
 level with fewer spawns than the count drew.</li>
 <li><strong>Per 100 m²</strong> figures are sampled over eligible floor of a named corpus, never a runtime rule.</li>

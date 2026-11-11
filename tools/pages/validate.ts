@@ -15,6 +15,9 @@
 // navigation reaches every section; COVERAGE: every level, generation context, family, room key and vocabulary term of
 // data/enemies.json has its rendered anchor, and no enemies/ page exists without a level; the manifest's data digests match the
 // published data files.
+// Task studio-screacher-production-20261110-221858-01 (lane REGISTRY-DOCS): + THE SEEDED ROSTER: the index and the how-to-read page
+// have the roster section, every level page has it with a row for every registered family (a roster-only family included: it has
+// no band in any pool, so the roster is its only rendered rule), and the families page has every family's roster block.
 import crypto from 'node:crypto';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -22,6 +25,7 @@ import type {EnemyReference} from './enemyReferenceTypes';
 import {
   ctxAnchor, ENEMIES_FAMILIES, ENEMIES_HOW_TO, ENEMIES_INDEX, enemyLevelPage, familyAnchor, RESERVED_ENEMY_PAGES, roomAnchor, termAnchor,
   eligAnchor, // task track3-eaton-centre-20261031 (lane INTEG)
+  rosterAnchor, ROSTER_SECTION, // task studio-screacher-production-20261110-221858-01: the seeded roster
 } from './render/enemies';
 import {ACCESS_LABEL, href, NAV, SOURCE_REPO_URL} from './render/html';
 
@@ -335,6 +339,17 @@ function checkEnemyCoverage(files: SiteFiles, idCache: Map<string, Set<string>>,
       for (const e of elig) need(page, eligAnchor(e.family), `eligibility rule ${level.id}/${e.family}`);
       if (level.horde) need(page, 'horde', `horde pool of ${level.id}`);
       if (level.budgets) need(page, 'ambient-budget', `ambient budget of ${level.id}`);
+      // task studio-screacher-production-20261110-221858-01: the seeded roster on this level — the section and one row per registered
+      // family (also a family the level never holds, and the families the data's own roster rows name)
+      need(page, ROSTER_SECTION, `seeded roster of ${level.id}`);
+      for (const id of new Set([...ref.families.map(f => f.id), ...(level.roster?.rows ?? []).map(r => r.family)])) need(page, rosterAnchor(id), `seeded roster row ${level.id}/${id}`);
+    }
+    // the seeded roster's rules (index + how-to-read), every family's chance per level (index) and every family's rule (families page)
+    need(ENEMIES_INDEX, ROSTER_SECTION, 'the seeded roster');
+    need(ENEMIES_HOW_TO, ROSTER_SECTION, 'the seeded roster (how to read it)');
+    for (const id of new Set([...ref.families.map(f => f.id), ...(ref.roster?.families ?? []).map(r => r.family)])) {
+      need(ENEMIES_INDEX, rosterAnchor(id), `seeded roster chance of ${id}`);
+      need(ENEMIES_FAMILIES, rosterAnchor(id), `seeded roster rule of ${id}`);
     }
     for (const f of ref.families) need(ENEMIES_FAMILIES, familyAnchor(f.id), `family ${f.id}`);
     for (const v of ref.vocabulary) need(ENEMIES_HOW_TO, termAnchor(v.term), `term ${v.term}`);

@@ -6,6 +6,9 @@
 //  - exact maths (E[count], shares, expected coated share vs the real type roll), determinism, source links, docs agreement.
 //  - task track1-siren-blightbelly-20261031 (lane SPAWN), schema 2: tiers === the registry, family stats / rules === the exported
 //    constants (Siren hp = 2 x the shambler's), eligibility rules === the profile, the eligibility census === a fresh generation.
+//  - task studio-screacher-production-20261110-221858-01 (lane REGISTRY-DOCS), schema 3: THE SEEDED ROSTER === ai/enemyRoster.ts
+//    (FAMILY_ROSTER, rosterRate, familyInRoster, the pass's own report), the roster-only Screacher (weight 0 in every pool, its
+//    variants), and every sampled "what a level holds" figure === a fresh generation THROUGH THE REGISTRY with the roster version on.
 
 import {beforeAll, describe, expect, it} from 'vitest';
 import {LINGERIE_STORES_MAX} from '../src/gen/mall/lingerieSpawns'; // task mall-lingerie-20261102-221554 (lane CONTEXT): the mall's lingerie store zone
@@ -16,10 +19,18 @@ import {LEVELS, LEVEL_IDS} from '../src/levels/registry';
 import type {LevelId} from '../src/levels/types';
 import {ENEMY_ARCHETYPES} from '../src/ai/creatureArchetypes';
 import {
-  ENEMY_FAMILY_IDS, SPAWN_CONTEXT_IDS, rollZombieTypes, roomFamilyPool, roomKey, setSpawnCensusHook, spawnProfile, type SpawnCandidateReport, type SpawnProfile,
+  ENEMY_FAMILY_IDS, ROSTER_ONLY_FAMILIES, SPAWN_CONTEXT_IDS, rollZombieTypes, roomFamilyPool, roomKey, setSpawnCensusHook, spawnProfile, type SpawnCandidateReport, type SpawnProfile,
 } from '../src/ai/spawnTables';
+// task studio-screacher-production-20261110-221858-01: the seeded roster and the Screacher's exported constants
+import {FAMILY_ROSTER, ROSTER_LANE, ROSTER_PLACE_PRIORITY, ROSTER_VERSION, ZOMBIE_FREE_LEVELS, familyInRoster, rosterOf, rosterRate} from '../src/ai/enemyRoster';
+import {
+  IMPACT_FAMILY_LOUDNESS, SCREACHER_AGGRO, SCREACHER_ASSET, SCREACHER_ECHO, SCREACHER_MAX_TOP_M, SCREACHER_NOISE, SCREACHER_SCALE, SCREACHER_SENSE, SCREACHER_SPEED, SCREACHER_STATS,
+  SCREACHER_VARIANTS, SCREACHER_VOICE_Y,
+} from '../src/ai/screacher';
+import {ENEMY_MODEL_FILES} from '../src/ai/enemyModels';
+import {MELEE_MASS} from '../src/combat/meleeImpact';
 import {pickEnemyArchetype} from '../src/ai/creatureSpawn';
-import {ZOMBIE_STATS} from '../src/ai/brain';
+import {HEARING, ZOMBIE_STATS} from '../src/ai/brain';
 import {SIREN_STATS, SIREN_WAKE} from '../src/ai/siren';
 import {BLIGHTBELLY_BURST, BLIGHTBELLY_STATS} from '../src/ai/blightbelly';
 import {Rng} from '../src/core/rng';
@@ -27,8 +38,8 @@ import {CELL} from '../src/gen/grid';
 import {OFFICE_FLOORS} from '../src/gen/office/frame';
 import {startWeaponFor} from '../src/weapons/pistol';
 import {
-  BUNKER_DAMP_RUNS_MAX, ENEMY_CENSUS_SEEDS, ENEMY_ELIGIBILITY_SEEDS, ENEMY_FAMILY_ADAPTER, ENEMY_GENERATED_FROM, ENEMY_LEVEL_ADAPTER, buildEnemyReference, eligibilityCensus,
-  enemyCensus, expectedCoatedShare, ruleRows,
+  BUNKER_DAMP_RUNS_MAX, ENEMY_CENSUS_SEEDS, ENEMY_ELIGIBILITY_SEEDS, ENEMY_FAMILY_ADAPTER, ENEMY_GENERATED_FROM, ENEMY_LEVEL_ADAPTER, ENEMY_ROSTER_SEEDS, ROSTER_ROLL_CHECK_SEEDS,
+  buildEnemyReference, eligibilityCensus, enemyCensus, expectedCoatedShare, rosterCensus, ruleRows,
 } from '../../tools/pages/enemyReference';
 import {ENEMY_REFERENCE_SCHEMA, type EnemyReference, type SourceLoc} from '../../tools/pages/enemyReferenceTypes';
 import {FRESH} from './helpers/btsArea';
@@ -66,6 +77,11 @@ describe('enemy spawn reference: coverage', () => {
     for (const f of r.families) {
       const d = ENEMY_ARCHETYPES[f.id as keyof typeof ENEMY_ARCHETYPES];
       expect([f.label, f.model]).toEqual([d.label, d.model]);
+      // task studio-screacher-production-20261110-221858-01: a family with several bodies lists every variant model of the registry
+      expect(f.variantModels?.map(v => [v.variant, v.model]) ?? null, f.id).toEqual(d.variantModels ? Object.entries(d.variantModels) : null);
+      expect(f.rosterOnly, f.id).toBe(ROSTER_ONLY_FAMILIES.includes(f.id as never));
+      // a family is never said to spawn in a zombie-free level
+      for (const l of f.levels) expect(ZOMBIE_FREE_LEVELS as readonly string[], `${f.id} in ${l}`).not.toContain(l);
     }
     expect(r.families.find(f => f.id === 'zombie')!.variants).toMatch(/not separate families/);
     for (const L of r.levels) {
@@ -170,13 +186,22 @@ describe('enemy spawn reference: runtime agreement', () => {
 
   it('the sampled census is the registered generator: placed / eligible floor agree with a fresh generation', () => {
     const r = ref();
-    // the room census for every level, then the eligibility census for every level whose profile restricts a family (Office)
+    // the room census for every level, then the 20-level sample pass: the eligibility census for every level whose profile restricts a
+    // family (Office) and — task studio-screacher-production-20261110-221858-01 — the roster census for EVERY level that can hold
+    // enemies (was: only the levels with an eligibility rule had the 20-level sample), on the same seeds
+    expect(ENEMY_ROSTER_SEEDS).toEqual(ENEMY_ELIGIBILITY_SEEDS);
     expect(r.meta.census.map(c => [c.level, c.seeds])).toEqual(LEVEL_IDS.flatMap(l => [[l, [...ENEMY_CENSUS_SEEDS]],
-      ...(Object.keys(spawnProfile(l).eligibility ?? {}).length ? [[l, [...ENEMY_ELIGIBILITY_SEEDS]]] : [])]));
+      ...(Object.keys(spawnProfile(l).eligibility ?? {}).length || !ZOMBIE_FREE_LEVELS.includes(l) ? [[l, [...ENEMY_ELIGIBILITY_SEEDS]]] : [])]));
+    for (const c of r.meta.census) if (!ZOMBIE_FREE_LEVELS.includes(c.level as LevelId)) expect(c.note, c.level).toMatch(/roster/);
     for (const L of r.levels) {
       const c = L.census!;
       expect(c.layouts).toBe(ENEMY_CENSUS_SEEDS.length);
       expect(c.note).toMatch(/^SAMPLED/);
+      expect(c.note).toMatch(/WITH THE SEEDED ROSTER APPLIED/); // (schema 3: the census reports what a level holds)
+      // the roster changes families only: both stages count the same spawns; a roster-only family is never placed by the per-spawn roll
+      expect(c.placed.reduce((s, x) => s + x.rollTotal, 0)).toBe(c.placed.reduce((s, x) => s + x.total, 0));
+      for (const f of ROSTER_ONLY_FAMILIES) expect(c.placed.find(p => p.family === f)!.rollTotal, `${L.id} ${f}`).toBe(0);
+      for (const p of c.placed) expect(p.levels > 0, `${L.id} ${p.family}`).toBe(p.total > 0);
       expect(c.cellM2).toBe(CELL * CELL);
       expect(c.eligibleM2).toBeCloseTo(c.eligibleCells * CELL * CELL, 6);
       const rows = L.rooms.rows.filter(x => x.observed);
@@ -184,11 +209,17 @@ describe('enemy spawn reference: runtime agreement', () => {
       for (const f of ENEMY_FAMILY_IDS) expect(rows.reduce((s, x) => s + x.observed!.placed[f], 0)).toBe(c.placed.find(p => p.family === f)!.total);
       expect(c.byContext.reduce((s, x) => s + x.placed, 0)).toBe(c.placed.reduce((s, x) => s + x.total, 0));
     }
-    // one seed per level against a fresh generation of the registered generator
+    // one seed per level against a fresh generation of the registered generator — task studio-screacher-production-20261110-221858-01:
+    // THROUGH THE REGISTRY WITH THE ROSTER ON (rosterVersion: what the game passes for a new station), since the census reports what a
+    // level holds; `plain` = the same seed without a roster version (the per-spawn roll alone: the census's "before the pass" stage)
     for (const l of LEVEL_IDS) {
       const seed = ENEMY_CENSUS_SEEDS[1];
-      const fresh = LEVELS[l].generate('main', {levelSeed: seed, startWeapon: startWeaponFor(false)});
+      const fresh = LEVELS[l].generate('main', {levelSeed: seed, startWeapon: startWeaponFor(false), rosterVersion: ROSTER_VERSION});
+      const plain = LEVELS[l].generate('main', {levelSeed: seed, startWeapon: startWeaponFor(false)});
       const cen = enemyCensus(l, [seed]);
+      expect(cen.spawns.map(s => s.rolled), `${l} before the pass`).toEqual(plain.zombies.filter(z => z.horde === undefined).map(z => z.archetype ?? 'zombie'));
+      // the pass keeps every spawn where it is: only family / variant differ between the two generations
+      expect(fresh.zombies.map(z => [z.x, z.z, z.y, z.area, z.type, z.horde])).toEqual(plain.zombies.map(z => [z.x, z.z, z.y, z.area, z.type, z.horde]));
       // task track3-eaton-centre-20261031 (lane PROFILES): horde members are the separate pool (census.horde), not ambient spawns
       const ambient = fresh.zombies.filter(z => z.horde === undefined);
       expect(cen.spawns.length).toBe(ambient.length);
@@ -225,12 +256,37 @@ describe('enemy spawn reference: tiers, family stats, eligibility (task track1, 
     expect(burst.rows.find(r => r.what.startsWith('toxic gas cloud life'))!.value).toBe(BLIGHTBELLY_BURST.gasDurationS);
     // every leaf of every rules constant is listed (labelled, else by its key path): nothing silently dropped
     for (const id of ENEMY_FAMILY_IDS) {
-      for (const [k, r] of ENEMY_FAMILY_ADAPTER[id].rules.entries()) expect(fam(id).rules[k].rows).toEqual(ruleRows(r.value));
+      for (const [k, r] of ENEMY_FAMILY_ADAPTER[id].rules.entries()) expect(fam(id).rules[k].rows).toEqual(ruleRows(r.value, '', r.labels)); // (+ the constant's own labels: task studio-screacher-production-20261110-221858-01)
       const d = ENEMY_ARCHETYPES[id];
       if (d.stats) expect(ENEMY_FAMILY_ADAPTER[id].stats.some(v => v.stats === d.stats), `${id} registry stats`).toBe(true);
     }
     const leaves = (o: object): number => Object.values(o).reduce((n: number, v) => n + (v && typeof v === 'object' && !Array.isArray(v) ? leaves(v) : 1), 0);
     expect(ruleRows(SIREN_WAKE).length).toBe(leaves(SIREN_WAKE));
+    // task studio-screacher-production-20261110-221858-01: the Screacher — stats and every behaviour constant are the exported ones,
+    // every leaf has its OWN label (no bare key path, none borrowed from another family's constant of the same key)
+    const sc = fam('screacher');
+    expect(sc.stats).toHaveLength(1);
+    expect(sc.stats[0]).toMatchObject({variant: null, hp: SCREACHER_STATS.hp, chaseSpeed: SCREACHER_STATS.chaseSpeed, attackRange: SCREACHER_STATS.attackRange,
+      attackDamage: SCREACHER_STATS.attackDamage, sightRange: 0, radius: SCREACHER_STATS.radius});
+    expect(ENEMY_ARCHETYPES.screacher.stats).toBe(SCREACHER_STATS);
+    const rule = (title: RegExp) => sc.rules.find(g => title.test(g.title))!;
+    const value = (g: {rows: readonly {what: string; value: number | string}[]}, what: RegExp) => g.rows.find(r => what.test(r.what))!.value;
+    expect(value(rule(/^Echolocation scream/), /^time between screams/)).toBe(SCREACHER_ECHO.periodS);
+    expect(value(rule(/^Echolocation scream/), /^the scan finds the player within/)).toBe(SCREACHER_ECHO.rangeM);
+    expect(value(rule(/^Paces/), /^FRENZY pace/)).toBe(SCREACHER_SPEED.frenzy);
+    expect(value(rule(/^Aggression/), /^heat from which it is frenzied/)).toBe(SCREACHER_AGGRO.frenzyAt);
+    expect(value(rule(/^What it hears besides gunfire/), /^one sprinting footstep/)).toBe(SCREACHER_NOISE.run);
+    expect(value(rule(/^Touch and memory/), /^it feels the player/)).toBe(SCREACHER_SENSE.touchM);
+    expect(value(rule(/^Body, reach and clip timing/), /^bind height \(feet to the top of the neck stump/)).toBe(SCREACHER_ASSET.heightM);
+    for (const [k, r] of ENEMY_FAMILY_ADAPTER.screacher.rules.entries()) {
+      expect(sc.rules[k].rows.length, r.symbol).toBe(leaves(r.value));
+      for (const row of sc.rules[k].rows) expect(row.what, `${r.symbol}: an unlabelled leaf`).toMatch(/ /); // a label, never a bare key path
+    }
+    // the same key means different things in two constants (holdS: the hold rule / the scream's length): each constant's own label wins
+    expect(rule(/^Touch and memory/).rows.find(r => r.value === SCREACHER_SENSE.holdS)!.what).toMatch(/quieter class of sound/);
+    expect(rule(/^Echolocation scream/).rows.find(r => r.value === SCREACHER_ECHO.holdS)!.what).toMatch(/stands still/);
+    expect(sc.variantModels!.map(v => [v.variant, v.name])).toEqual(Object.entries(SCREACHER_VARIANTS).map(([id, v]) => [id, v.name]));
+    expect(sc.variants).toMatch(/ONE enemy type/);
   });
 
   it('eligibility rules === the profile; the eligibility census === a fresh generation (draws, placed, fallbacks)', () => {
@@ -258,6 +314,170 @@ describe('enemy spawn reference: tiers, family stats, eligibility (task track1, 
     const one = eligibilityCensus('office', [seed]).restricted[0];
     expect(one.placed).toBe(fresh.zombies.filter(z => z.archetype === 'siren').length);
     expect(one.draws).toBe(fresh.zombies.filter((z, i) => pickEnemyArchetype(fresh.seed, i, roomFamilyPool(P, fresh.areas[z.area])) === 'siren').length);
+  });
+});
+
+// Task studio-screacher-production-20261110-221858-01 (lane REGISTRY-DOCS), schema 3.
+describe('enemy spawn reference: the seeded roster (ai/enemyRoster.ts)', () => {
+  const combat = LEVEL_IDS.filter(l => !ZOMBIE_FREE_LEVELS.includes(l));
+
+  it('every family\'s roster rule is FAMILY_ROSTER (no copied numbers); the Screacher is roster-only: weight 0 in every pool', () => {
+    const r = ref();
+    expect([r.roster.version, r.roster.lane]).toEqual([ROSTER_VERSION, ROSTER_LANE]);
+    expect(r.roster.zombieFreeLevels).toEqual([...ZOMBIE_FREE_LEVELS]);
+    expect(r.roster.rosterOnly).toEqual([...ROSTER_ONLY_FAMILIES]);
+    expect(r.roster.families.map(f => f.family)).toEqual([...ENEMY_FAMILY_IDS]); // every registered family decides, in registry order
+    for (const f of r.roster.families) {
+      const rule = FAMILY_ROSTER[f.family as keyof typeof FAMILY_ROSTER];
+      expect([f.mode, f.why], f.family).toEqual([rule.mode, rule.why]);
+      expect(f.rosterOnly, f.family).toBe(ROSTER_ONLY_FAMILIES.includes(f.family as never));
+      if (rule.mode === 'baseline') { expect([f.rate, f.place, f.since, f.key, f.counts, f.slots]).toEqual([null, null, null, null, null, null]); continue; }
+      expect([f.rate, f.place, f.since, f.key], f.family).toEqual([rule.rate, rule.place, rule.since, rule.key]);
+      expect(f.levelRates, f.family).toEqual(Object.entries(rule.levelRates ?? {}).map(([level, rate]) => ({level, rate})));
+      expect(f.contexts, f.family).toEqual(rule.place === 'context-one' ? [...rule.contexts] : null);
+      if (rule.place === 'count') {
+        expect(f.counts!.map(c => [c.count, c.weight])).toEqual(rule.counts.map(c => [...c]));
+        expect(f.counts!.reduce((t, c) => t + c.share, 0)).toBeCloseTo(1, 9);
+        expect(f.countMean!).toBeCloseTo(rule.counts.reduce((t, [n, w]) => t + n * w, 0) / rule.counts.reduce((t, [, w]) => t + w, 0), 9);
+        expect(f.slots).toMatchObject({contexts: [...rule.slots.contexts], excludeKinds: [...rule.slots.excludeKinds], excludeRooms: [...rule.slots.excludeRooms],
+          minSideCells: rule.slots.minSideCells, minSideM: rule.slots.minSideCells * CELL, minAreaCells: rule.slots.minAreaCells, minAreaM2: rule.slots.minAreaCells * CELL * CELL});
+        expect([f.spacingM, f.variants]).toEqual([rule.spacingM, [...rule.variants]]);
+        // the rule's numbers are in its plain-language policy too
+        for (const n of [rule.spacingM, rule.slots.minSideCells, rule.slots.minAreaCells]) expect(f.placement, f.family).toContain(String(n));
+      } else expect([f.counts, f.slots, f.spacingM, f.variants], f.family).toEqual([null, null, null, null]);
+    }
+    // the present families are placed the most constrained first; every seeded family is in the order exactly once
+    expect([...r.roster.order].sort()).toEqual(ENEMY_FAMILY_IDS.filter(f => FAMILY_ROSTER[f].mode === 'seeded').sort());
+    // the order is the source's own exported priority (ROSTER_PLACE_PRIORITY; the reference keeps no copy): families sorted by it,
+    // ties in registry order
+    const prio = (f: string) => { const rule = FAMILY_ROSTER[f as keyof typeof FAMILY_ROSTER]; return rule.mode === 'seeded' ? ROSTER_PLACE_PRIORITY[rule.place] : -1; };
+    const want = ENEMY_FAMILY_IDS.map((f, k) => [f, k] as const).filter(([f]) => FAMILY_ROSTER[f].mode === 'seeded').sort((a, b) => prio(a[0]) - prio(b[0]) || a[1] - b[1]).map(x => x[0]);
+    expect(r.roster.order).toEqual(want);
+    expect(readSource('tools/pages/enemyReference.ts')!).not.toMatch(/'context-one': \d/); // no priority table of its own
+    // a share top-up says what "present" guarantees: at least one (the source's min-one step), none only without a slot
+    for (const f of r.roster.families.filter(x => x.place === 'share-topup')) expect(f.placement, f.family).toMatch(/PRESENT MEANS AT LEAST ONE[\s\S]*no slot/);
+    expect(r.roster.rules.join(' ')).toMatch(/PRESENT MEANS AT LEAST ONE for every policy/);
+    expect(r.roster.rules.join(' ')).toMatch(new RegExp(`version ${ROSTER_VERSION}`));
+    expect(r.roster.rules.join(' ')).toContain(ROSTER_LANE);
+    // THE SCREACHER: registered, roster-only, no band in any pool of any level — level pool, a context's own pool, the horde pool
+    const sc = r.families.find(f => f.id === 'screacher')!;
+    expect([sc.rosterOnly, sc.model, sc.levels]).toEqual([true, null, combat]);
+    for (const L of r.levels) {
+      expect(L.pool.rows.find(x => x.family === 'screacher'), L.id).toMatchObject({weight: 0, share: 0});
+      expect(L.pool.expectedPerLevel.find(x => x.family === 'screacher'), L.id).toEqual({family: 'screacher', mean: 0, basis: 'exact'});
+      for (const c of L.contexts) if (c.families) expect(c.families.rows.find(x => x.family === 'screacher'), `${L.id} ${c.id}`).toMatchObject({weight: 0, share: 0});
+      if (L.horde) expect(L.horde.pool.rows.find(x => x.family === 'screacher'), `${L.id} horde`).toMatchObject({weight: 0, share: 0});
+      expect(L.generator.note, L.id).toMatch(/seeded roster/i);
+    }
+  });
+
+  it('every level states every family: rate === rosterRate, eligibility === the profile, the roll check === familyInRoster', () => {
+    const r = ref();
+    expect(r.roster.rollCheckSeeds).toBe(ROSTER_ROLL_CHECK_SEEDS);
+    for (const L of r.levels) {
+      const id = L.id as LevelId, P = spawnProfile(id);
+      expect(L.roster.rows.map(x => x.family), id).toEqual([...ENEMY_FAMILY_IDS]);
+      expect(L.roster.zombieFree, id).toBe(ZOMBIE_FREE_LEVELS.includes(id));
+      for (const row of L.roster.rows) {
+        const f = row.family as keyof typeof FAMILY_ROSTER, what = `${id} ${f}`;
+        if (ZOMBIE_FREE_LEVELS.includes(id)) { expect([row.eligibility, row.rate, row.rolled], what).toEqual(['zombie-free', 0, null]); continue; }
+        if (FAMILY_ROSTER[f].mode === 'baseline') { expect([row.eligibility, row.rate, row.rolled], what).toEqual(['baseline', 0, null]); continue; }
+        if (row.eligibility === 'never') { expect([row.rate, row.rolled], what).toEqual([0, null]); continue; }
+        expect(['every-map', 'layout'], what).toContain(row.eligibility);
+        expect(row.rate, what).toBe(rosterRate(f, id));
+        expect(row.rolled!.seeds, what).toBe(ROSTER_ROLL_CHECK_SEEDS);
+        expect(row.status, what).toContain(`${Math.round(row.rate * 1000) / 10} %`);
+      }
+      // the knob list names every rolled family's rate
+      for (const row of L.roster.rows.filter(x => x.rolled)) expect(L.knobs.find(k => k.what === `seeded roster rate (${row.family})`)!.value, `${id} ${row.family}`).toBe(row.rate);
+      // which families a level is never rolled into: the Siren without an eligibility rule (the Subway), the Strainer without a context that runs
+      const row = (f: string) => L.roster.rows.find(x => x.family === f)!;
+      if (!ZOMBIE_FREE_LEVELS.includes(id)) {
+        expect(row('siren').eligibility, id).toBe(P.eligibility?.siren ? 'every-map' : 'never');
+        expect(row('screacher').eligibility, id).toBe('every-map');
+        // the Strainer depends on the map (an ambient spawn in a service annex / the damp zone), never "every map"; where the sample
+        // found such a map the row cannot say never
+        expect(['layout', 'never'], id).toContain(row('strainer').eligibility);
+        if ((L.roster.census?.families.find(x => x.family === 'strainer')?.eligible ?? 0) > 0) expect(row('strainer').eligibility, id).toBe('layout');
+      }
+    }
+    expect(level('subway').roster.rows.find(x => x.family === 'siren')!.eligibility).toBe('never');
+    expect(level('bunker').roster.rows.find(x => x.family === 'strainer')!).toMatchObject({eligibility: 'layout', rate: rosterRate('strainer', 'bunker')}); // its damp zone
+    expect(level('reactor').roster.rows.filter(x => x.rate === 1).map(x => x.family)).toEqual(['blightbelly', 'ratdog']); // the Reactor always has both
+    // the roll check is the real roll: recount two rows (a default rate, a per-level override) over the same seeds
+    for (const [l, f] of [['subway', 'screacher'], ['reactor', 'ratdog'], ['office', 'siren']] as const) {
+      let n = 0;
+      for (let seed = 1; seed <= ROSTER_ROLL_CHECK_SEEDS; seed++) if (familyInRoster(f, l, seed)) n++;
+      expect(level(l).roster.rows.find(x => x.family === f)!.rolled!.present, `${l} ${f}`).toBe(n);
+      // 10,000 seeds: the share is the rate within sampling error (3.5 sigma of a binomial)
+      const rate = rosterRate(f, l);
+      expect(Math.abs(n / ROSTER_ROLL_CHECK_SEEDS - rate), `${l} ${f}`).toBeLessThanOrEqual(3.5 * Math.sqrt(rate * (1 - rate) / ROSTER_ROLL_CHECK_SEEDS));
+    }
+  });
+
+  it('the roster census is the pass itself: counts conserved, absent = none, Strainer exactly one, Screachers 1-3, zombie-free = nothing', () => {
+    const r = ref();
+    for (const L of r.levels) {
+      const id = L.id as LevelId, c = L.roster.census;
+      if (ZOMBIE_FREE_LEVELS.includes(id)) {
+        expect(c, id).toBeNull();
+        expect(L.census!.placed.every(p => p.total === 0 && p.rollTotal === 0), id).toBe(true); // no enemy of any family, before or after
+        continue;
+      }
+      expect([c!.seeds, c!.layouts], id).toEqual([[...ENEMY_ROSTER_SEEDS], ENEMY_ROSTER_SEEDS.length]);
+      expect(c!.note).toMatch(/^SAMPLED/);
+      expect(c!.note).toMatch(/SMALL sample/);
+      expect(c!.families.map(f => f.family), id).toEqual([...ENEMY_FAMILY_IDS]);
+      const sum = (k: 'before' | 'after' | 'removed' | 'added') => c!.families.reduce((t, f) => t + f[k], 0);
+      // the pass never adds or removes a spawn: both stages count the same ambient spawns, and every slot taken is a slot given
+      expect([sum('before'), sum('after')], id).toEqual([c!.ambient, c!.ambient]);
+      expect(sum('removed'), id).toBe(sum('added'));
+      for (const f of c!.families) {
+        const what = `${id} ${f.family}`, rule = FAMILY_ROSTER[f.family as keyof typeof FAMILY_ROSTER];
+        expect(f.after, what).toBe(f.before - f.removed + f.added);
+        expect(f.holding <= f.present && f.present <= f.eligible && f.eligible <= c!.layouts, what).toBe(true);
+        expect(f.histogram.reduce((t, h) => t + h.layouts, 0), what).toBe(c!.layouts);
+        expect(f.histogram.reduce((t, h) => t + h.count * h.layouts, 0), what).toBe(f.after);
+        expect(f.histogram[0].layouts, what).toBe(c!.layouts - f.holding);
+        if (rule.mode === 'baseline') { expect([f.eligible, f.present, f.holding], what).toEqual([c!.layouts, c!.layouts, c!.layouts]); continue; }
+        // the sample's present / absent pattern is the roll of those seeds on this level (an ineligible map is never rolled into it)
+        const rolled = ENEMY_ROSTER_SEEDS.filter(seed => familyInRoster(f.family as never, id, seed)).length;
+        if (L.roster.rows.find(x => x.family === f.family)!.eligibility === 'every-map') expect(f.present, what).toBe(rolled);
+        else expect(f.present, what).toBeLessThanOrEqual(rolled);
+        // PRESENT MEANS AT LEAST ONE, for every policy: a level whose roll includes the family holds it unless the pass reported that it
+        // has no slot for it (the Siren without an enemy in an eligible room; a share top-up without a zombie slot of its pools)
+        expect(f.holding, `${what}: present = at least one unless no slot`).toBe(f.present - f.noSlot);
+        if (rule.place === 'context-one') expect([f.holding, f.max <= 1, f.noSlot], what).toEqual([f.present, true, 0]); // a selected Strainer: exactly one
+        if (rule.place === 'count') {
+          expect([f.before, f.removed, f.holding, f.noSlot], what).toEqual([0, 0, f.present, 0]); // only the roster places it; a selected level has it
+          expect(f.max, what).toBeLessThanOrEqual(Math.max(...rule.counts.map(([n]) => n)));
+          expect(f.after, what).toBeGreaterThanOrEqual(f.present); // at least one per selected level
+        }
+      }
+    }
+    // one seed per combat level against the REGISTRY with the roster version on (what the game runs) and its own report
+    for (const id of combat) {
+      const seed = ENEMY_ROSTER_SEEDS[2];
+      const on = LEVELS[id].generate('main', {levelSeed: seed, startWeapon: startWeaponFor(false), rosterVersion: ROSTER_VERSION});
+      const off = LEVELS[id].generate('main', {levelSeed: seed, startWeapon: startWeaponFor(false)});
+      const rep = rosterOf(on)!, one = rosterCensus(id, [seed]);
+      expect(rosterOf(off), id).toBeUndefined(); // no roster version = no pass (the pinned fingerprints' path)
+      expect(rep.version).toBe(ROSTER_VERSION);
+      const count = (l: typeof on, f: string) => l.zombies.filter(z => z.horde === undefined && (z.archetype ?? 'zombie') === f).length;
+      for (const f of one.families) {
+        const what = `${id} ${seed} ${f.family}`, fr = rep.families[f.family as keyof typeof rep.families];
+        expect([f.before, f.after], what).toEqual([count(off, f.family), count(on, f.family)]);
+        if (fr) expect([f.eligible, f.present, f.noSlot], what).toEqual([fr.eligible ? 1 : 0, fr.present ? 1 : 0, fr.noSlot ? 1 : 0]);
+      }
+      // the 4-seed census of the same seed agrees with it too (one pass, two views)
+      const cen = enemyCensus(id, [seed]);
+      for (const f of ENEMY_FAMILY_IDS) expect(cen.spawns.filter(s => s.family === f).length, `${id} ${f}`).toBe(count(on, f));
+      // a Screacher carries one of its approved variants; nothing else carries one
+      for (const z of on.zombies) expect(z.variant !== undefined, id).toBe(z.archetype === 'screacher');
+      for (const z of on.zombies) if (z.variant !== undefined) expect(Object.keys(SCREACHER_VARIANTS)).toContain(z.variant);
+    }
+    // the eligibility census is the stage BEFORE the pass (the plain generator): its note says so
+    expect(level('office').eligibilityCensus!.note).toMatch(/BEFORE the seeded roster pass/);
   });
 });
 
@@ -307,10 +527,92 @@ describe('enemy spawn reference: maths, determinism, failures, docs', () => {
     const doc = readSource('docs/enemy-spawns.md');
     expect(doc).not.toBeNull();
     for (const s of [...LEVEL_IDS, ...SPAWN_CONTEXT_IDS, ...ENEMY_FAMILY_IDS, 'density', 'weight', '`all`', 'SPAWN_PROFILES', 'validateSpawnProfile',
-      'game/src/ai/spawnTables.ts', 'tools/pages/enemyReference.ts', 'tools/pages/enemyReferenceTypes.ts', 'enemies/index.html']) {
+      'game/src/ai/spawnTables.ts', 'tools/pages/enemyReference.ts', 'tools/pages/enemyReferenceTypes.ts', 'enemies/index.html',
+      // task studio-screacher-production-20261110-221858-01: the seeded roster and the Screacher's own page
+      'game/src/ai/enemyRoster.ts', 'FAMILY_ROSTER', 'ROSTER_ONLY_FAMILIES', 'ZOMBIE_FREE_LEVELS', 'ROSTER_VERSION', 'applyEnemyRoster', 'docs/screacher.md']) {
       expect(doc!.includes(s), s).toBe(true);
     }
+    // the roster section states every seeded family's rate as the source has it (a rate change must reach the page)
+    const lines = doc!.split('\n');
+    const from = lines.findIndex(l => l.startsWith('## The seeded roster'));
+    expect(from, 'docs/enemy-spawns.md has a "## The seeded roster" section').toBeGreaterThanOrEqual(0);
+    const to = lines.findIndex((l, i) => i > from && l.startsWith('## '));
+    const rosterDoc = lines.slice(from, to < 0 ? lines.length : to);
+    const percent = (rate: number) => `${Math.round(rate * 1000) / 10} %`;
+    for (const f of ENEMY_FAMILY_IDS) {
+      const rule = FAMILY_ROSTER[f];
+      const row = rosterDoc.find(l => l.startsWith(`| \`${f}\` |`)); // the family's row of the roster table
+      expect(row, `roster table row of ${f}`).toBeTruthy();
+      if (rule.mode !== 'seeded') continue;
+      expect(row!, f).toContain(percent(rule.rate));
+      for (const [l, rate] of Object.entries(rule.levelRates ?? {})) expect(row!, `${f} ${l}`).toContain(percent(rate as number));
+    }
+    expect(existsSync(new URL('../../docs/screacher.md', import.meta.url))).toBe(true);
     for (const f of (doc!.match(/`((?:game|tools|docs)\/[A-Za-z0-9_./-]+\.(?:ts|md))`/g) ?? []).map(m => m.slice(1, -1))) {
+      expect(existsSync(new URL(`../../${f}`, import.meta.url)), f).toBe(true);
+    }
+  });
+
+  // Task studio-screacher-production-20261110-221858-01 (lane REGISTRY-DOCS): docs/screacher.md states its numbers in tables whose last
+  // cell names the constant(s) they come from. Every such row is checked against the live constant: a retune that does not reach the
+  // page fails here (the page never holds a number the source has moved away from).
+  it('docs/screacher.md: every constant table row === the exported constant; its derived statements and its file names hold', () => {
+    const doc = readSource('docs/screacher.md');
+    expect(doc).not.toBeNull();
+    const ROOTS: Record<string, unknown> = {
+      SCREACHER_STATS, SCREACHER_ASSET, SCREACHER_SPEED, SCREACHER_AGGRO, SCREACHER_NOISE, SCREACHER_SENSE, SCREACHER_ECHO, SCREACHER_SCALE, SCREACHER_MAX_TOP_M,
+      SCREACHER_VOICE_Y, IMPACT_FAMILY_LOUDNESS, HEARING, FAMILY_ROSTER, MELEE_MASS,
+    };
+    const resolve = (path: string): unknown => path.split('.').reduce<unknown>((o, k, i) => (i === 0 ? ROOTS[k] : (o as Record<string, unknown> | undefined)?.[k]), undefined);
+    const shown = (v: number) => String(Math.round(v * 1e6) / 1e6);
+    const hasNumber = (cell: string, v: number) => new RegExp(`(?<![\\d.])${shown(v).replace('.', '\\.')}(?![\\d]|\\.\\d)`).test(cell);
+    let rows = 0;
+    const roots = new Set<string>();
+    for (const line of doc!.split('\n')) {
+      if (!line.startsWith('|')) continue;
+      const cells = line.split('|').slice(1, -1).map(c => c.trim());
+      if (cells.length < 3) continue;
+      const symbols = [...cells[cells.length - 1].matchAll(/`([A-Z][A-Z_]*(?:\.[A-Za-z0-9_]+)*)`/g)].map(m => m[1]).filter(sym => sym.split('.')[0] in ROOTS);
+      if (!symbols.length) continue;
+      const valueCell = cells[cells.length - 2];
+      for (const sym of symbols) {
+        const v = resolve(sym);
+        expect(typeof v, `${sym} is a number constant (row: ${line})`).toBe('number');
+        expect(hasNumber(valueCell, v as number), `${sym} = ${shown(v as number)} in "${valueCell}"`).toBe(true);
+        roots.add(sym.split('.')[0]);
+      }
+      rows++;
+    }
+    // the page really carries its tables: the stats, the senses, every noise, the heat rules, the paces, the echo, the roster rule
+    expect(rows).toBeGreaterThanOrEqual(50);
+    for (const r of ['SCREACHER_STATS', 'SCREACHER_SENSE', 'SCREACHER_NOISE', 'SCREACHER_AGGRO', 'SCREACHER_SPEED', 'SCREACHER_ECHO', 'HEARING', 'FAMILY_ROSTER']) expect(roots, r).toContain(r);
+    // every leaf of the constants a player's choices depend on has its row (nothing of them is left to prose)
+    const leafPaths = (name: string, o: object): string[] => Object.entries(o).flatMap(([k, v]) => (v && typeof v === 'object' ? leafPaths(`${name}.${k}`, v) : [`${name}.${k}`]));
+    for (const [name, o] of [['SCREACHER_NOISE', SCREACHER_NOISE], ['SCREACHER_SENSE', SCREACHER_SENSE], ['SCREACHER_ECHO', SCREACHER_ECHO], ['SCREACHER_SPEED', SCREACHER_SPEED], ['HEARING', HEARING]] as const) {
+      for (const p of leafPaths(name, o)) expect(doc!.includes(`\`${p}\``), `${p} has a row`).toBe(true);
+    }
+    // the derived statements, recomputed from the constants
+    const A = SCREACHER_AGGRO, tier = (heat: number) => (heat >= A.frenzyAt ? 'frenzy' : heat >= A.huntAt ? 'hunt' : 'investigate');
+    expect([tier(A.weight.gunshot), tier(2 * A.weight.gunshot), tier(3 * A.weight.gunshot), tier(2 * A.weight.run)]).toEqual(['investigate', 'hunt', 'frenzy', 'hunt']);
+    expect(doc!).toContain(`${shown(A.quietHoldS + (A.heatMax - A.huntAt) / A.decayPerS)} s of silence bring it back to the walking tier and ${shown(A.quietHoldS + A.heatMax / A.decayPerS)} s to no heat`);
+    const rule = FAMILY_ROSTER.screacher;
+    if (rule.mode !== 'seeded' || rule.place !== 'count') throw new Error('the Screacher is a counted roster family');
+    const total = rule.counts.reduce((t, [, w]) => t + w, 0);
+    expect(doc!).toContain(`holds ${rule.counts.map(([n]) => n).join(', ').replace(/, (\d+)$/, ' or $1')} (\`FAMILY_ROSTER.screacher.counts\`: ${rule.counts.map(([, w]) => `${Math.round(1000 * w / total) / 10} %`).join(', ').replace(/, ([\d.]+ %)$/, ' and $1')} of those`);
+    expect(doc!).toContain(`The other ${Math.round(1000 * (1 - rule.rate)) / 10} % of levels hold none.`);
+    // where it does not stand: every context, excluded area kind and excluded room of the rule is named on this page and in the
+    // roster section of docs/enemy-spawns.md (an exclusion added to the rule must reach both)
+    const spawnsDoc = readSource('docs/enemy-spawns.md')!;
+    for (const name of [...rule.slots.contexts, ...rule.slots.excludeKinds, ...rule.slots.excludeRooms]) {
+      expect(doc!.includes(`\`${name}\``), `docs/screacher.md names ${name}`).toBe(true);
+      expect(spawnsDoc.includes(`\`${name}\``), `docs/enemy-spawns.md names ${name}`).toBe(true);
+    }
+    // the four bodies: every variant with its name, lazy model key and file
+    for (const [id, v] of Object.entries(SCREACHER_VARIANTS)) {
+      expect(doc!, id).toContain(`| \`${id}\` | ${v.name} | \`${v.model}\` | \`${ENEMY_MODEL_FILES[v.model].url}\` |`);
+    }
+    // every repository file the page names exists
+    for (const f of (doc!.match(/`((?:game|tools|docs)\/[A-Za-z0-9_./-]+\.(?:ts|md|mjs|json))`/g) ?? []).map(m => m.slice(1, -1))) {
       expect(existsSync(new URL(`../../${f}`, import.meta.url)), f).toBe(true);
     }
   });

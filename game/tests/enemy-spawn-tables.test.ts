@@ -63,8 +63,9 @@ describe('spawn profiles: registry coverage', () => {
     expect([OFFICE.contexts.street!.count, OFFICE.contexts.floor!.count, OFFICE.contexts.roof!.count]).toEqual([[5, 8], [3, 6], [0, 2]]);
     // task track1-siren-blightbelly-20261031: Blightbelly 5 % on both, the Siren opted in on the Office only (draw weight 0.19)
     // task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): + the Strainer listed explicitly at 0 (service annexes only)
-    expect(SUBWAY.families).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.05], ['strainer', 0]]);
-    expect(OFFICE.families).toEqual([['zombie', 0.71], ['blightbelly', 0.05], ['siren', 0.19], ['ratdog', 0.05], ['strainer', 0]]);
+    // task studio-screacher-production-20261110-221858-01: + the Screacher listed explicitly at 0, appended last (roster-only: ai/enemyRoster.ts places it)
+    expect(SUBWAY.families).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.05], ['strainer', 0], ['screacher', 0]]);
+    expect(OFFICE.families).toEqual([['zombie', 0.71], ['blightbelly', 0.05], ['siren', 0.19], ['ratdog', 0.05], ['strainer', 0], ['screacher', 0]]);
     expect(SUBWAY.zombieTypes).toEqual({coatedChance: 0.4, atLeastOneEach: true});
   });
 
@@ -207,7 +208,8 @@ describe('room modifiers (TEST-ONLY profiles; the shipped profiles stay neutral)
     const a = {type: 'platform' as const};
     const R0 = withRooms(SUBWAY, {platform: {ratdog: {density: 0}}});
     expect(roomIntensity(R0, a)).toBeCloseTo(0.95, 12);
-    expect(roomFamilyPool(R0, a)).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0], ['strainer', 0]]);
+    // (task studio-screacher-production-20261110-221858-01: the room pool lists every registered family — + the roster-only Screacher's 0 row, here and below)
+    expect(roomFamilyPool(R0, a)).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0], ['strainer', 0], ['screacher', 0]]);
     const R2 = withRooms(SUBWAY, {platform: {ratdog: {density: 2}}});
     expect(roomIntensity(R2, a)).toBeCloseTo(1.05, 12);
     // family intensity in the room = D x its share of the room mix: zombies keep 0.9 (first order), rat/dogs double 0.05 -> 0.1
@@ -216,7 +218,7 @@ describe('room modifiers (TEST-ONLY profiles; the shipped profiles stay neutral)
     expect(roomIntensity(R2, a) * pool2[3][1] / mix).toBeCloseTo(0.1, 12);
     const A = withRooms(SUBWAY, {platform: {all: {density: 3}, ratdog: {weight: 0}}});
     expect(roomIntensity(A, a)).toBe(3); // weight alone never changes the intensity
-    expect(roomFamilyPool(A, a)).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0], ['strainer', 0]]);
+    expect(roomFamilyPool(A, a)).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0], ['strainer', 0], ['screacher', 0]]);
     expect(roomModifier(A, a, 'zombie')).toEqual({density: 3, weight: 1});
     // purpose entry first, then the room type, per field; missing = 1
     const F = withRooms(SUBWAY, {'first-aid-room': {ratdog: {weight: 0}}, 'stock-room': {ratdog: {weight: 4, density: 2}}});
@@ -272,7 +274,8 @@ describe('validation', () => {
     for (const [what, p] of bad) expect(validateSpawnProfile(p).length, what).toBeGreaterThan(0);
     // explicit zeros ARE valid (the documented way to disable a room / a family there); an all-zero pool with count [0, 0] = no enemies
     expect(validateSpawnProfile(withRooms(SUBWAY, {platform: {all: {density: 0}, ratdog: {weight: 0, density: 0}}}))).toEqual([]);
-    expect(validateSpawnProfile({...OFFICE, families: [['zombie', 0], ['blightbelly', 0], ['siren', 0], ['ratdog', 0], ['strainer', 0]],
+    // (task studio-screacher-production-20261110-221858-01: a valid pool lists EVERY registered family — the all-zero one now names the Screacher too)
+    expect(validateSpawnProfile({...OFFICE, families: [['zombie', 0], ['blightbelly', 0], ['siren', 0], ['ratdog', 0], ['strainer', 0], ['screacher', 0]],
       contexts: Object.fromEntries(Object.entries(OFFICE.contexts).map(([k, c]) => [k, {...c!, count: [0, 0] as const}]))})).toEqual([]);
   });
 });
