@@ -475,20 +475,51 @@ describe('chipper: blood pools, teardown, save / load', () => {
     const n0 = count();
     s.corpses.pressE();
     let peak = {drops: 0, mist: 0, chunks: 0, stains: 0};
+    // the plume's height over the rim, the spray inside the car, and the drop spawns per frame (the lunge bursts)
+    const rimY = chipperToLocal(C, 0, CHIPPER_ANCHORS.hopper.y, 0).y, drops = s.ch.fx.meshes[0], dm = drops.instanceMatrix.array as Float32Array;
+    const local = new THREE.Vector3(), spawns: number[] = [];
+    let plumeTop = -Infinity, outside = 0, aboveCeiling = 0;
     for (let i = 0; i < 1100; i++) {
+      const c0 = s.ch.fx.counts.drops;
       s.ch.update(DT);
+      spawns.push(s.ch.fx.counts.drops - c0);
       const st = s.ch.fx.stats();
       for (const k of Object.keys(peak) as (keyof typeof peak)[]) peak[k] = Math.max(peak[k], st[k]);
+      for (let k = 0; k < drops.count; k++) {
+        const o = k * 16;
+        if (dm[o] === 0 && dm[o + 1] === 0 && dm[o + 4] === 0 && dm[o + 5] === 0) continue; // collapsed (dead)
+        local.set(dm[o + 12], dm[o + 13], dm[o + 14]); // the FX root is train-local
+        plumeTop = Math.max(plumeTop, local.y - rimY);
+        if (Math.abs(local.z) > SPEC.interior.halfWidth + 1e-6) outside++;
+        if (local.y > SPEC.ceilingY) aboveCeiling++;
+      }
     }
+    // a visible plume (0.6 .. ~1.3 m over the rim), never through the lining or the ceiling
+    expect(plumeTop).toBeGreaterThan(0.6);
+    expect(plumeTop).toBeLessThan(1.35);
+    expect(outside).toBe(0);
+    expect(aboveCeiling).toBe(0);
+    // bursts at the lunges: the drop spawns over the half second round a lunge peak (p = 1.5 / 8: t = 3.75 s) vs a trough (t = 2.5 s)
+    const sum = (t: number) => spawns.slice(Math.round((t - 0.25) * 60), Math.round((t + 0.25) * 60)).reduce((a, b) => a + b, 0);
+    expect(sum(3.75)).toBeGreaterThan(2 * sum(2.5));
+    expect(sum(2.5)).toBeGreaterThan(80); // a steady base between (~200/s)
     expect(count()).toBe(n0 + 10); // + the fed body (its group, 8 bones, 1 mesh) only
     expect(s.ch.fx.meshes).toEqual(meshes);
     expect(s.ch.fx.meshes.map(m => m.instanceMatrix.array)).toEqual(arrays);
     const caps = s.ch.fx.caps;
     expect(caps).toEqual({drops: CHIPPER_FX.drops.cap, mist: CHIPPER_FX.mist.cap, chunks: CHIPPER_FX.chunks.cap, stains: CHIPPER_FX.stains.cap});
     for (const k of Object.keys(peak) as (keyof typeof peak)[]) { expect(peak[k], k).toBeGreaterThan(0); expect(peak[k], k).toBeLessThanOrEqual(caps[k]); }
-    expect(peak.drops).toBeGreaterThan(80); // abundant
+    expect(peak.drops).toBeGreaterThan(300); // abundant
+    // the mist is the game's soft blood mist: camera-facing sprite quads (one draw), soft disc, see-through, no depth write
+    const mist = s.ch.fx.mistSprite, mm = mist.material as THREE.Material & {map?: THREE.Texture | null};
+    expect(mist.isSprite).toBe(true);
+    expect(mist.parent).toBe(s.ch.fx.root);
+    expect(mm.transparent).toBe(true);
+    expect(mm.depthWrite).toBe(false);
+    expect(mm.blending).toBe(THREE.NormalBlending);
+    expect(CHIPPER_FX.mist.alpha).toBeLessThanOrEqual(0.3);
     // the stains lie on the car floor in front of the machine (train-local), never under it
-    const pos = new THREE.Vector3(), m4 = new THREE.Matrix4(), stains = s.ch.fx.meshes[3];
+    const pos = new THREE.Vector3(), m4 = new THREE.Matrix4(), stains = s.ch.fx.meshes[2];
     for (let i = 0; i < stains.count; i++) {
       stains.getMatrixAt(i, m4);
       if (Math.abs(m4.elements[0]) + Math.abs(m4.elements[2]) < 1e-9) continue;

@@ -218,7 +218,7 @@ export class ChipperSystem {
       // mouth's half extents in the car frame (yaw PI: the same axes)
       const out = chipperToLocal(c, A.outlet.x, A.outlet.y, A.outlet.z), along = chipperDirToLocal(c, 1, 0, 0);
       const hx = A.hopperMouth.x / 2, hz = A.hopperMouth.z / 2;
-      this.frame = {hopper: this.hopper, mouthHx: hx, mouthHz: hz, outlet: out, spout: along, front, floorY: c.floorY,
+      this.frame = {hopper: this.hopper, mouthHx: hx, mouthHz: hz, outlet: out, spout: along, front, floorY: c.floorY, ceilY: this.spec.ceilingY,
         box: fp, mouth: {x0: this.hopper.x - hx, x1: this.hopper.x + hx, z0: this.hopper.z - hz, z1: this.hopper.z + hz}, rimY: this.hopper.y,
         halfWidth: this.spec.interior.halfWidth};
     } else {
@@ -527,7 +527,7 @@ export class ChipperSystem {
       this.view.vibrate(this.grindT, grinding);
     }
     if (this.frame) {
-      if (grinding) this.fx.emit(dt, this.frame, 0.5 + lungeRate(jobProgress(st)));
+      if (grinding) this.fx.emit(dt, this.frame, lungeRate(jobProgress(st)));
       this.fx.update(dt, this.frame);
     }
     if (attached) { const w = this.machineWorld(); if (w) this.audio.frame(w.x, w.y, w.z); }
