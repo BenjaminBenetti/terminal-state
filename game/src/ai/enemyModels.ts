@@ -19,10 +19,10 @@ export const ENEMY_MODEL_FILES: Readonly<Record<string, {url: string; bytes: num
   // Task studio-screacher-production-20261110-221858-01: THE SCREACHER's four approved bodies (one enemy type; a layout loads exactly
   // the variants its roster placed: 1-3 of them, on the 40 % of levels that hold Screachers at all). `bytes` = each GLB's size
   // (tests/screacher-contract.test.ts checks it). A model that failed to load -> the counted zombie stand-in.
-  enemy_screacher_sc01: {url: 'assets/models/enemy-screacher-sc01.glb', bytes: 2_400_000},
-  enemy_screacher_sc02: {url: 'assets/models/enemy-screacher-sc02.glb', bytes: 2_400_000},
-  enemy_screacher_sc03: {url: 'assets/models/enemy-screacher-sc03.glb', bytes: 2_400_000},
-  enemy_screacher_sc04: {url: 'assets/models/enemy-screacher-sc04.glb', bytes: 2_400_000},
+  enemy_screacher_sc01: {url: 'assets/models/enemy-screacher-sc01.glb', bytes: 1_861_136},
+  enemy_screacher_sc02: {url: 'assets/models/enemy-screacher-sc02.glb', bytes: 1_976_432},
+  enemy_screacher_sc03: {url: 'assets/models/enemy-screacher-sc03.glb', bytes: 1_941_068},
+  enemy_screacher_sc04: {url: 'assets/models/enemy-screacher-sc04.glb', bytes: 2_125_488},
 };
 
 /** The lazy enemy model keys a layout's spawns use (sorted; families without a lazy model contribute none). */

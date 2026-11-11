@@ -98,6 +98,8 @@ export class ScreacherActor {
   private lastDt = 0;
   private volumes: HitVolume[] = [];
   private readonly hit: {torso: number; arm: number; leg: number};
+  /** How far (model m) below the Neck joint the torso capsule ends, so its round cap just reaches the stump's top and never the air above it. */
+  private readonly torsoPull: number;
   private readonly tmp = new THREE.Vector3();
   private readonly tmpInv = new THREE.Matrix4();
 
@@ -133,6 +135,11 @@ export class ScreacherActor {
     this.root.traverse(o => { if ((o as THREE.Bone).isBone && !this.allBones.has(o.name)) { this.allBones.set(o.name, o); this.boneList.push(o); } });
     this.histCur = new Float32Array(this.boneList.length * 3);
     this.histPrev = new Float32Array(this.boneList.length * 3);
+    // (the clone is still in its rest pose here, at the origin: the Neck joint's own height under the stump's top)
+    this.root.updateMatrixWorld(true);
+    const neck = this.allBones.get('Neck');
+    const gap = neck ? Math.max(0, (this.extras.stump?.top?.[1] ?? SCREACHER_ASSET.heightM) - this.tmp.setFromMatrixPosition(neck.matrixWorld).y / this.scale) : this.hit.torso;
+    this.torsoPull = Math.max(0, this.hit.torso - gap);
     this.mixer = new THREE.AnimationMixer(this.root);
     for (const clip of gltf.animations) {
       const a = this.mixer.clipAction(clip);
@@ -233,12 +240,21 @@ export class ScreacherActor {
     return {x: this.tmp.x, y: this.tmp.y, z: this.tmp.z};
   }
 
-  /** Hips -> Neck torso (Neck = the base of the stump), arms, legs from the current pose (matrixWorld fresh). NO head volume. */
+  /**
+   * Hips -> Neck torso (Neck = the base of the stump), arms, legs from the current pose (matrixWorld fresh). NO head volume: the
+   * torso capsule stops short of the Neck joint by torsoPull, so its cap ends at the stump's top — a shot over the stump hits nothing.
+   */
   private computeVolumes(): HitVolume[] {
     const s = this.scale, H = this.hit;
     const v = (part: HitPart, a: Vec3, b: Vec3 | null, r: number): HitVolume => ({part, a, b, r: r * s});
+    const hips = this.at('Hips'), top = this.at('Neck');
+    const dx = top.x - hips.x, dy = top.y - hips.y, dz = top.z - hips.z, len = Math.hypot(dx, dy, dz);
+    if (len > 1e-6) {
+      const k = Math.max(0, 1 - this.torsoPull * s / len);
+      top.x = hips.x + dx * k; top.y = hips.y + dy * k; top.z = hips.z + dz * k;
+    }
     return [
-      v('torso', this.at('Hips'), this.at('Neck'), H.torso),
+      v('torso', hips, top, H.torso),
       v('limb', this.at('L_UpperArm'), this.at('L_Hand'), H.arm),
       v('limb', this.at('R_UpperArm'), this.at('R_Hand'), H.arm),
       v('limb', this.at('L_Thigh'), this.at('L_Foot'), H.leg),

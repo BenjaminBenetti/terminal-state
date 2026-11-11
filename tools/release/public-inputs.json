@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 69940,
-      "sha256": "99302e158ad03a967b7b18366294a29cf6aa60e41f44d948323b7e43c31e01da"
+      "bytes": 71700,
+      "sha256": "b0123aa2dd392bd9dca70235092691f6c9e1e9162807d21d3e6e27f900772fa7"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1964,6 +1964,26 @@
       "sha256": "134a1b58ae19723855cab13eb6c9a96f6325dccf964cea9e66fcdf4aec6f7ff1"
     },
     {
+      "path": "assets/derivatives/enemy-screacher-sc01.json",
+      "bytes": 50037,
+      "sha256": "d90711679b04faf0bfc0d29255abdda2ccd0445414a48ee1faf26e1ead412646"
+    },
+    {
+      "path": "assets/derivatives/enemy-screacher-sc02.json",
+      "bytes": 50086,
+      "sha256": "f29425fbc001bdfa49b694805e059b52a3e52a0a39374fd7751b90ba267130b6"
+    },
+    {
+      "path": "assets/derivatives/enemy-screacher-sc03.json",
+      "bytes": 49611,
+      "sha256": "17916a09237bb4037a79c8ff26bc2ec2795531f1b837743e4c84cd4cd8f11c73"
+    },
+    {
+      "path": "assets/derivatives/enemy-screacher-sc04.json",
+      "bytes": 49072,
+      "sha256": "2d8719f2725da71ba2c5cd2844ba60b2b031fe721666e9e866dd342ae0d384c0"
+    },
+    {
       "path": "assets/derivatives/enemy-siren.json",
       "bytes": 39019,
       "sha256": "45f8fb48e7c9a59073bf85bee544c37e5775bb3f4652a0945fff506f22fbcb39"
@@ -2967,6 +2987,26 @@
       "path": "assets/models/enemy-blightbelly.glb",
       "bytes": 2221420,
       "sha256": "20c5ecff63c4d1bcd76cb883a923dc17202efd618e4263b7d7425756deff5f77"
+    },
+    {
+      "path": "assets/models/enemy-screacher-sc01.glb",
+      "bytes": 1861136,
+      "sha256": "05a72ec96c3aa1336bc6469d8a5fffd13fd24b98610a9f22aaf94ecb5925c1c9"
+    },
+    {
+      "path": "assets/models/enemy-screacher-sc02.glb",
+      "bytes": 1976432,
+      "sha256": "7d669b35b52e1e57eac2063fe4961655875a101e6bcdc58e52bdb981b69f64af"
+    },
+    {
+      "path": "assets/models/enemy-screacher-sc03.glb",
+      "bytes": 1941068,
+      "sha256": "a8f0894e9e647ebf83ac8a92c79d6bae53c77ad183c9f03e6a02eddd3d4686d6"
+    },
+    {
+      "path": "assets/models/enemy-screacher-sc04.glb",
+      "bytes": 2125488,
+      "sha256": "5e5f1fb089bfe699654fdf70c878292baded4620f59f78c89c38f7f250566a4f"
     },
     {
       "path": "assets/models/enemy-siren.glb",

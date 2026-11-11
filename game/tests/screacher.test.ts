@@ -147,7 +147,8 @@ describe('Screacher: the headless actor', () => {
     expect(vols.some(v => v.part === 'head')).toBe(false);
     const torso = vols[0];
     expect(torso.b).not.toBeNull();
-    expect(torso.b!.y).toBeCloseTo(1.93 * a.scale, 2); // ends at the stump's base (the Neck joint), not above it
+    expect(torso.b!.y).toBeLessThanOrEqual(1.93 * a.scale + 1e-6); // ends at or under the stump's base (the Neck joint) ...
+    expect(torso.b!.y + torso.r).toBeCloseTo(2.0 * a.scale, 2); // ... so that its round cap just reaches the stump's top, never the air above
     expect(a.corpseVolumes().some(v => v.part === 'head')).toBe(false);
     // dead: no live volumes at all
     a.brain.damage(1e6, 0, 0, 0);
