@@ -43,10 +43,24 @@ import {defaultBagStore, readSectionBags, type BagRecord, type BagStore, type Se
 import {BagView} from '../ui/bagView';
 import {ensureGearStyles} from '../ui/gearStyles';
 import type {StationLayout} from '../gen/stationTypes';
+import type {DynamicVolume} from '../gen/levels';
+import type {PropIndex} from '../core/physics';
 import type {ResolvedHit} from '../player/hits';
 
 /** A placement rule another lane can add (TOWER: e.g. "not in the cab"); returns a refusal text or null. */
 export type PlaceRule = (x: number, y: number, z: number, level: number) => string | null;
+
+/**
+ * Lane CARGO (user: "Backpacks must be placeable aboard the train and travel with it like other items"): a dynamic-volume floor whose
+ * owner CARRIES what lies on it (world/trainCargo.ts: the parked player train — its loose items and bags travel with it). For a point on
+ * volume `v`: true = inside the carrier (a floor like any other; its cargo takes the bag along), false = the carrier's volume but not
+ * inside it (a doorway, its walls: no room), null = not a carrier's volume (a lift cab: it moves — refused).
+ */
+export type VolumeCarrier = (v: DynamicVolume, x: number, y: number, z: number) => boolean | null;
+
+const IN_LIFT = 'Not inside the elevator — set the backpack down on a floor.';
+/** Clear radius of a set-down bag (m): the circleClear radius, against a carrier's own colliders too (lane CARGO). */
+const BAG_CLEAR = 0.15;
 
 type CloseReason = 'user' | 'wear' | 'hit' | 'distance' | 'state' | 'travel' | 'reset' | 'gone';
 
@@ -376,7 +390,8 @@ export class GearSystem {
     const here = L.supportIn(p.x, p.z, p.y + 0.05);
     if (!here) return 'You cannot set the backpack down here.';
     if (L.grid(here.level).rampIdx[here.cell] >= 0) return 'Not on the stairs — set the backpack down on level floor.';
-    if (here.volume || this.inCab(p.x, p.z, here.level, p.y)) return 'Not inside the elevator — set the backpack down on a floor.';
+    // (lane CARGO: a carrier's floor — the parked train — is no lift: the spots in front are checked one by one below)
+    if ((here.volume && this.carried(here.volume, p.x, here.floor, p.z) === null) || this.inCab(p.x, p.z, here.level, p.y)) return IN_LIFT;
     const f = g.camera.getWorldDirection(new THREE.Vector3());
     const len = Math.hypot(f.x, f.z);
     const fx = len > 1e-3 ? f.x / len : -Math.sin(p.yaw), fz = len > 1e-3 ? f.z / len : -Math.cos(p.yaw);
@@ -392,12 +407,16 @@ export class GearSystem {
       const y = L.stepAt(x, z, p.y + 0.05);
       if (!Number.isFinite(y) || Math.abs(y - p.y) > 0.2) continue;
       if (!L.lineOfSight({x: p.x, y: p.y + 0.6, z: p.z}, {x, y: p.y + 0.6, z}) || L.railCrosses(p.x, p.z, x, z, 0.05, p.y)) continue;
-      if (!L.circleClear(x, z, 0.15, y)) continue;
-      if (s.volume || this.inCab(x, z, s.level, y)) { why = 'Not inside the elevator — set the backpack down on a floor.'; continue; }
+      if (!L.circleClear(x, z, BAG_CLEAR, y)) continue;
+      const carried = s.volume ? this.carried(s.volume, x, y, z) : null; // (lane CARGO)
+      if ((s.volume && carried === null) || this.inCab(x, z, s.level, y)) { why = IN_LIFT; continue; }
       if (this.bags.some(b => Math.hypot(b.pose.x - x, b.pose.z - z) < 0.45 && Math.abs(b.pose.y - y) < 0.5)) { why = 'Another bag is already lying there.'; continue; }
       let ruled: string | null = null;
       for (const r of this.placeRules) { ruled = r(x, y, z, s.level); if (ruled) break; }
       if (ruled) { why = ruled; continue; }
+      // lane CARGO: on a carrier's floor (the parked train) the spot must lie inside it, clear of its own colliders (walls, door leaves,
+      // partitions, console, Lockbox: prop boxes, not grid walls) and not reached through one — then its cargo takes the bag along
+      if (carried === false || (carried && this.colliderBetween(p.x, p.z, x, z, y))) continue;
       return {x, y, z, yaw: p.yaw, level: s.level};
     }
     return why;
@@ -410,7 +429,8 @@ export class GearSystem {
    */
   private inCab(x: number, z: number, level: number, y?: number): boolean {
     const L = this.game.levels;
-    if (L?.dynamicVolumes?.length && L.volumeAt(x, z, y)) return true;
+    const v = L?.dynamicVolumes?.length ? L.volumeAt(x, z, y) : null;
+    if (v && this.carried(v, x, y ?? v.floorY, z) === null) return true; // (lane CARGO: a carrier's volume is no cab)
     const o = (this.game.layout as StationLayout & {office?: OfficeInfoLike}).office;
     const r = o?.elevator?.shaft ?? o?.elevator?.cab;
     if (!r) return false;
@@ -452,6 +472,35 @@ export class GearSystem {
 
   /** Task train-loose-cargo-20261107: bags the section's record leaves out (the train's own: saved with the train). */
   recordFilter: ((b: GroundBag) => boolean) | null = null;
+
+  /** Lane CARGO: the volume floors that carry what is set down on them (world/trainCargo.ts installs the parked train's); null = none. */
+  carrier: VolumeCarrier | null = null;
+
+  private carried(v: DynamicVolume, x: number, y: number, z: number): boolean | null {
+    return this.carrier?.(v, x, y, z) ?? null;
+  }
+
+  /**
+   * Lane CARGO: a collider of the world (Game.propIndex: on a carrier's floor its walls, closed door leaves, partitions, console, Lockbox)
+   * at floor height `y` covers the bag's circle at (x, z), or stands on the way from the player's (px, pz) to it (as world/corpses.ts
+   * propBlocks reads the boxes).
+   */
+  private colliderBetween(px: number, pz: number, x: number, z: number, y: number): boolean {
+    const pi = (this.game as unknown as {propIndex?: PropIndex | null}).propIndex;
+    if (!pi) return false;
+    const hit = (qx: number, qz: number, r: number) => {
+      for (const i of pi.near(qx - r, qz - r, qx + r, qz + r, new Set())) {
+        const q = pi.props[i];
+        if (!q || q.h <= 0.02 || q.y > y + 0.35 || q.y + q.h < y + 0.05) continue;
+        if (q.round ? (qx - q.x) ** 2 + (qz - q.z) ** 2 < (q.hx + r) ** 2 : Math.abs(qx - q.x) < q.hx + r && Math.abs(qz - q.z) < q.hz + r) return true;
+      }
+      return false;
+    };
+    if (hit(x, z, BAG_CLEAR)) return true;
+    const n = Math.max(1, Math.ceil(Math.hypot(x - px, z - pz) / 0.1));
+    for (let i = 1; i < n; i++) if (hit(px + (x - px) * i / n, pz + (z - pz) * i / n, 0)) return true;
+    return false;
+  }
 
   private disposeBags(): void {
     for (const b of this.bags) b.dispose();
