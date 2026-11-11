@@ -212,6 +212,12 @@ export interface ZombieSpawn {
    * (every other spawn of every level). Generation data only — the look itself is recomputed from (layout seed, spawn index).
    */
   look?: SpawnLook;
+  /**
+   * Task studio-screacher-production-20261110-221858-01: the MODEL VARIANT of a family with several approved bodies (the Screacher's
+   * 'sc01'..'sc04': one enemy type, four looks, the same AI and stats), set by the roster pass that placed it (ai/enemyRoster.ts).
+   * Absent = the family's one body (every other spawn).
+   */
+  variant?: string;
 }
 /**
  * Task mall-lingerie-20261102-221554 (lane CONTEXT): store-local look selectors of ZombieSpawn.look. (Task

@@ -23,6 +23,7 @@ import {CLIP_MANIFEST_SKYWAYS_DESTINATIONS} from './manifest.skywaysDestinations
 import {CLIP_MANIFEST_MARKET_BAR} from './manifest.marketBar.generated'; // task studio-market-bar-20261108-225231-01 (lane AUDIO): the market set
 import {CLIP_MANIFEST_GUN_VARIETY, GUN_VARIETY_CUES} from './manifest.gunVariety.generated'; // task studio-weapon-soundlab-audio-20261110-063407-01: the six new guns' own shots / reloads (audio/gunVoices.ts)
 import {CLIP_MANIFEST_HEAD_HIT} from './manifest.headHit.generated'; // task studio-general-armor-20261107-231448-01: the head-hit skull crack // task skyways-destinations-20261106 (lane AUDIO): clock tick / chime, arcade, projector
+import {CLIP_MANIFEST_SCREACHER, SCREACHER_CUES} from './manifest.screacher.generated'; // task studio-screacher-production-20261110-221858-01 (lane AUDIO): the Screacher's voice (echo scream, shriek, wheeze, death)
 import {CLIP_MANIFEST_CHIPPER} from './manifest.chipper.generated'; // task studio-corpse-chipper-fuel-20261110-235304-01 (lane AUDIO): the train chipper set
 
 /**
@@ -34,7 +35,7 @@ import {CLIP_MANIFEST_CHIPPER} from './manifest.chipper.generated'; // task stud
  * 20261101-201110-01 (lane AUDIO): + the Strainer's wet footfalls / arm swing / claw contact / hit squish (tools/audio-pipeline/
  * strainer-build.mjs; provenance derivatives/audio-strainer.json).
  */
-export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT, ...CLIP_MANIFEST_MARKET_BAR, ...CLIP_MANIFEST_GUN_VARIETY, ...CLIP_MANIFEST_CHIPPER};
+export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT, ...CLIP_MANIFEST_MARKET_BAR, ...CLIP_MANIFEST_GUN_VARIETY, ...CLIP_MANIFEST_SCREACHER, ...CLIP_MANIFEST_CHIPPER};
 
 /** Every cue the game can play, in decode-priority order (most frequent / important first). */
 export const CUES = [
@@ -56,6 +57,10 @@ export const CUES = [
   // Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO, tools/audio-pipeline/strainer-build.mjs): the Strainer's
   // wet squelching footfalls, wet arm-swing whoosh, fleshy claw-contact squelch and the short wet squish when it is shot.
   'strainerStep', 'strainerSwing', 'strainerContact', 'strainerSquish',
+  // Task studio-screacher-production-20261110-221858-01 (lane AUDIO, tools/audio-pipeline/screacher-build.mjs): the headless Screacher's
+  // voice out of its open throat — the echolocation scream (the tell of each echo pulse), the frenzy shriek (also its hurt, quieter),
+  // the idle wheeze, the death gurgle.
+  ...SCREACHER_CUES,
   // Task reactor-build-20261101 (primary, tools/audio-pipeline/reactor-build.mjs): the Reactor's machines — auxiliary generator start +
   // running loop, extraction-fan loop, switchgear breaker / fuse, coolant valve / pump, the core's startup swell + running hum loop.
   'reactorGeneratorStart', 'reactorGeneratorLoop', 'reactorFanLoop', 'reactorBreaker', 'reactorFuse', 'reactorValve', 'reactorPump', 'reactorStartup', 'reactorHum',

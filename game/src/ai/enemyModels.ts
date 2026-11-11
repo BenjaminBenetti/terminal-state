@@ -16,14 +16,24 @@ export const ENEMY_MODEL_FILES: Readonly<Record<string, {url: string; bytes: num
   // roll placed one loads it). `bytes` = the GLB's size (tests/strainer-contract.test.ts checks it). A model that failed to load
   // -> the counted zombie stand-in.
   enemy_strainer: {url: 'assets/models/enemy-strainer.glb', bytes: 2_395_736},
+  // Task studio-screacher-production-20261110-221858-01: THE SCREACHER's four approved bodies (one enemy type; a layout loads exactly
+  // the variants its roster placed: 1-3 of them, on the 40 % of levels that hold Screachers at all). `bytes` = each GLB's size
+  // (tests/screacher-contract.test.ts checks it). A model that failed to load -> the counted zombie stand-in.
+  enemy_screacher_sc01: {url: 'assets/models/enemy-screacher-sc01.glb', bytes: 1_861_136},
+  enemy_screacher_sc02: {url: 'assets/models/enemy-screacher-sc02.glb', bytes: 1_976_432},
+  enemy_screacher_sc03: {url: 'assets/models/enemy-screacher-sc03.glb', bytes: 1_941_068},
+  enemy_screacher_sc04: {url: 'assets/models/enemy-screacher-sc04.glb', bytes: 2_125_488},
 };
 
 /** The lazy enemy model keys a layout's spawns use (sorted; families without a lazy model contribute none). */
-export function enemyModelKeysFor(layout: {zombies: readonly {archetype?: string}[]}): string[] {
+export function enemyModelKeysFor(layout: {zombies: readonly {archetype?: string; variant?: string}[]}): string[] {
   const s = new Set<string>();
   for (const z of layout.zombies) {
-    const def = z.archetype ? (ENEMY_ARCHETYPES as Record<string, {model: string | null} | undefined>)[z.archetype] : undefined;
+    const def = z.archetype ? (ENEMY_ARCHETYPES as Record<string, {model: string | null; variantModels?: Readonly<Record<string, string>>} | undefined>)[z.archetype] : undefined;
     if (def?.model && ENEMY_MODEL_FILES[def.model]) s.add(def.model);
+    // a family with several approved bodies (the Screacher): exactly the spawn's own variant (a spawn without one: the family's first)
+    const vm = def?.variantModels;
+    if (vm) { const k = (z.variant !== undefined && vm[z.variant]) || Object.values(vm)[0]; if (k && ENEMY_MODEL_FILES[k]) s.add(k); }
   }
   return [...s].sort();
 }

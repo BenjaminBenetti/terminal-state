@@ -377,7 +377,7 @@ export class DynamicItems {
       e.soundT = this.clock + 0.14;
       this.counts.impacts++;
       // task mall-round2-20261031 (lane AUDIO, M01): a prop's family is propImpactFamily ('prop' or 'cardboard'), set in entForProp
-      this.host.audio?.physImpact?.(body.position.x, body.position.y, body.position.z, v, e.fam, e.mass);
+      this.host.audio?.physImpact?.(body.position.x, body.position.y, body.position.z, v, e.fam, e.mass, 'item');
     });
     return body;
   }

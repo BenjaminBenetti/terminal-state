@@ -5,6 +5,9 @@
 // Task enemy-spawn-tables-20261030 (lane SITE): + the Enemy spawns section — routes, nav from every page, data/enemies.json and its
 // manifest digest, coverage of every level / context / family / room key (new entries appear automatically; unknown kinds or
 // unregistered references fail the build; missing anchors fail the validator), units and "sampled" labelling.
+// Task studio-screacher-production-20261110-221858-01 (lane REGISTRY-DOCS): + the seeded roster (every level page's roster section with
+// a row per registered family, the index's rules / chances, every family's roster rule; a roster-only family; "with the roster" /
+// "before the roster pass" labelling of the sampled figures; a family without a roster rule or a missing roster place fails).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -357,19 +360,30 @@ describe('enemy spawns section', () => {
     const fam = {...base.families[0]!, id: 'test-family', label: 'Test family', levels: ['test-level']};
     const ctx = {...lvl.contexts[0]!, id: 'test-context', label: 'Test context'};
     const room = {...lvl.rooms.rows[0]!, room: 'test-room', label: 'Test room'};
-    const level: EnemyLevelInfo = {
+    // task studio-screacher-production-20261110-221858-01: a registered family always has a roster rule (FAMILY_ROSTER is a Record over the
+    // family ids) and a roster row on every level — the new family brings both, like the game's own data would
+    const famRule = {...base.roster.families[0]!, family: 'test-family'};
+    const famRow = (l: EnemyLevelInfo) => ({...l.roster.rows[0]!, family: 'test-family'});
+    const withRow = (l: EnemyLevelInfo): EnemyLevelInfo => ({...l, roster: {...l.roster, rows: [...l.roster.rows, famRow(l)]}});
+    const level: EnemyLevelInfo = withRow({
       ...lvl,
       id: 'test-level',
       name: 'Test level',
       contexts: [...lvl.contexts, ctx],
       rooms: {...lvl.rooms, rows: [...lvl.rooms.rows, room]},
-    };
-    const next: EnemyReference = {...base, families: [...base.families, fam], levels: [...base.levels, level]};
+    });
+    const next: EnemyReference = {...base, roster: {...base.roster, families: [...base.roster.families, famRule]}, families: [...base.families, fam], levels: [...base.levels.map(withRow), level]};
     const out = renderSite(lootRef, next);
     expect(validateSite(out)).toEqual([]);
     const page = out.get('enemies/test-level.html')!;
     expect(page).toBeDefined();
-    for (const id of ['ctx-test-context', 'room-test-room', 'family-test-family']) expect(page).toContain(`id="${id}"`);
+    for (const id of ['ctx-test-context', 'room-test-room', 'family-test-family', 'roster', 'roster-test-family']) expect(page).toContain(`id="${id}"`);
+    for (const l of base.levels) expect(out.get(`enemies/${slug(l.id)}.html`), l.id).toContain('<tr id="roster-test-family">');
+    expect(out.get('enemies/families.html')).toContain('<section id="roster-test-family">');
+    expect(out.get('enemies/index.html')).toContain('<tr id="roster-test-family">');
+    // the same family WITHOUT a roster rule, or without its row on a level, fails the build (never silently "no rule")
+    expect(() => renderSite(lootRef, {...next, roster: base.roster})).toThrow(/test-family.*has no seeded roster rule/);
+    expect(() => renderSite(lootRef, {...next, levels: [...base.levels.map(withRow), {...level, roster: lvl.roster}]})).toThrow(/Level test-level has no seeded roster row for family "test-family"/);
     expect(out.get('enemies/families.html')).toContain('<section id="family-test-family">');
     expect(out.get('enemies/index.html')).toContain('href="test-level.html"');
     expect(out.get('index.html')).toContain('href="enemies/test-level.html"');
@@ -391,6 +405,84 @@ describe('enemy spawns section', () => {
     expect(() => renderSite(lootRef, {...clone(enemyRef), meta: {...enemyRef.meta, schema: 999}})).toThrow(/schema/);
     expect(() => renderSite(lootRef, {...clone(enemyRef), modifiers: {...enemyRef.modifiers, fields: [{...enemyRef.modifiers.fields[0]!, field: 'speed' as 'density'}]}}))
       .toThrow(/Unlabelled room modifier field speed/);
+    // task studio-screacher-production-20261110-221858-01: the seeded roster's own consistency
+    const withRoster = (patch: (r: EnemyReference['roster']) => EnemyReference['roster']): EnemyReference => { const base = clone(enemyRef); return {...base, roster: patch(base.roster)}; };
+    const seeded = enemyRef.roster.families.findIndex(f => f.mode === 'seeded');
+    expect(() => renderSite(lootRef, withRoster(r => ({...r, families: r.families.map((f, i) => (i === seeded ? {...f, place: 'teleport'} : f))})))).toThrow(/Unlabelled roster placement policy teleport/);
+    expect(() => renderSite(lootRef, withRoster(r => ({...r, families: [...r.families, {...r.families[0]!, family: 'ghoul'}]})))).toThrow(/enemy family "ghoul"/);
+    expect(() => renderSite(lootRef, withRoster(r => ({...r, families: r.families.slice(0, -1)})))).toThrow(/has no seeded roster rule/);
+    expect(() => renderSite(lootRef, withLevel(l => ({...l, roster: {...l.roster, rows: l.roster.rows.map((x, i) => (i ? x : {...x, eligibility: 'maybe' as 'never'}))}})))).toThrow(/Unlabelled roster eligibility maybe/);
+    // a roster-only family can have no band in any pool
+    const only = enemyRef.roster.rosterOnly[0]!;
+    expect(() => renderSite(lootRef, withLevel(l => ({...l, pool: {...l.pool, rows: l.pool.rows.map(x => (x.family === only ? {...x, weight: 0.1, share: 0.1} : x))}}))))
+      .toThrow(new RegExp(`gives the roster-only family ${only} weight`));
+  });
+
+  // Task studio-screacher-production-20261110-221858-01 (lane REGISTRY-DOCS).
+  it('shows the seeded roster: every level\'s chances and sampled census, every family\'s rule, the roster-only Screacher', () => {
+    const R = enemyRef.roster;
+    expect(R.families.map(f => f.family)).toEqual(enemyRef.families.map(f => f.id));
+    const index = site.get('enemies/index.html')!, families = site.get('enemies/families.html')!, howTo = site.get('enemies/how-to-read.html')!;
+    expect(index).toContain('<h2 id="roster">The seeded roster</h2>');
+    expect(howTo).toContain('<section id="roster">');
+    for (const rule of R.rules) { expect(index).toContain(`<li>${prose(rule)}</li>`); expect(howTo).toContain(`<li>${prose(rule)}</li>`); }
+    for (const f of R.families) {
+      expect(index, f.family).toContain(`<tr id="roster-${slug(f.family)}">`);
+      expect(families, f.family).toContain(`<section id="roster-${slug(f.family)}">`);
+      expect(families, f.family).toContain(`<p>${prose(f.placement)}</p>`);
+      if (f.rate !== null) expect(index, f.family).toContain(`${pct(f.rate)} <span class="denom">of `);
+    }
+    for (const level of enemyRef.levels) {
+      const html = site.get(levelPage(level.id))!;
+      expect(html, level.id).toContain('<h2 id="roster">Seeded roster');
+      expect(html, level.id).toContain('<li><a href="#roster">Seeded roster</a></li>');
+      expect(html, level.id).toContain(prose(level.roster.note));
+      for (const row of level.roster.rows) {
+        expect(html, `${level.id} ${row.family}`).toContain(`<tr id="roster-${slug(row.family)}">`);
+        expect(html, `${level.id} ${row.family}`).toContain(prose(row.status));
+        if (row.rolled) {
+          expect(html, `${level.id} ${row.family}`).toContain(`${pct(row.rate)}<span class="denom">of `);
+          expect(html, `${level.id} ${row.family}`).toContain(`${num(row.rolled.present)} of ${num(row.rolled.seeds)} include it`);
+        }
+      }
+      const c = level.roster.census;
+      if (level.roster.zombieFree) {
+        expect(c).toBeNull();
+        expect(html, level.id).toContain('a zombie-free level');
+        expect(html, level.id).toContain('There is nothing to sample');
+        continue;
+      }
+      // the sampled roster census: labelled sampled, its corpus named, and every family's "levels that hold it" stated with the long-run rate
+      expect(html, level.id).toContain('<h3>Sampled roster census</h3>');
+      expect(html, level.id).toContain(prose(c!.note));
+      expect(c!.note).toMatch(/SMALL sample/);
+      for (const f of c!.families) {
+        const row = level.roster.rows.find(x => x.family === f.family)!;
+        if (row.rolled) expect(html, `${level.id} ${f.family}`).toContain(`Long-run rate: ${pct(row.rate)} of `);
+        expect(html, `${level.id} ${f.family}`).toContain(`in ${num(f.holding)} of ${num(c!.layouts)} levels · ${num(f.perLevel)} per level`);
+      }
+      // the level census and the eligibility census name their stage
+      expect(html, level.id).toContain('placed spawns per family with the seeded roster applied (sampled:');
+      expect(html, level.id).toContain('Placed by the per-spawn roll alone (before the roster pass)');
+      if (level.eligibilityCensus) expect(html, level.id).toContain('draws vs placed, before the roster pass (sampled:');
+    }
+    // THE SCREACHER: a registered family with its page section, stats and rules; roster-only (weight 0 everywhere) and said so; four bodies
+    const sc = enemyRef.families.find(f => f.id === 'screacher')!;
+    expect(sc.rosterOnly).toBe(true);
+    expect(R.rosterOnly).toContain('screacher');
+    const section = /<section id="family-screacher">[\s\S]*?<section id="roster-screacher">[\s\S]*?<\/section>/.exec(families)![0];
+    expect(section).toContain('<span class="badge badge-special">roster-only</span> <strong>Weight 0 in every level, context and horde pool.</strong>');
+    expect(section).toContain('Echolocation scream');
+    expect(section).not.toContain('no registered level spawns it');
+    for (const v of sc.variantModels!) expect(section, v.variant).toContain(`<code>${v.model}</code>`);
+    for (const id of sc.levels) expect(section).toContain(enemyRef.levels.find(l => l.id === id)!.name.replace(/&/g, '&amp;').replace(/'/g, '&#39;'));
+    for (const level of enemyRef.levels) {
+      const row = level.pool.rows.find(r => r.family === 'screacher')!;
+      expect([row.weight, row.share], level.id).toEqual([0, 0]);
+      expect(site.get(levelPage(level.id))!, level.id).toContain('roster-only: no per-spawn roll draws it');
+    }
+    expect(howTo).toContain('id="term-seeded-roster"');
+    expect(howTo).toContain('id="term-roster-only-family"');
   });
 });
 
@@ -443,6 +535,29 @@ describe('reference site validator rejects unsafe or broken output', () => {
       const file = `enemies/${slug(level.id)}.html`;
       return mutated(file, site.get(file)!.replace(`id="elig-${slug(level.pool.eligibility[0]!.family)}"`, 'id="elig-gone"'));
     }, /no rendered place for eligibility rule mall\/siren/],
+    // task studio-screacher-production-20261110-221858-01: the seeded roster must have its places — the section and a row per family on
+    // every level page (a roster-only family has no band in any pool: the roster is its only rule), the rules, every family's rule
+    ['a level page missing its seeded roster section', () => {
+      const level = enemyRef.levels[0]!;
+      const file = `enemies/${slug(level.id)}.html`;
+      return mutated(file, site.get(file)!.replace('<h2 id="roster">', '<h2 id="roster-gone">').replace('href="#roster"', 'href="#roster-gone"'));
+    }, /no rendered place for seeded roster of/],
+    ['a level page missing a family\'s seeded roster row (the roster-only Screacher)', () => {
+      const level = enemyRef.levels[0]!;
+      const file = `enemies/${slug(level.id)}.html`;
+      return mutated(file, site.get(file)!.replace('<tr id="roster-screacher">', '<tr>'));
+    }, /no rendered place for seeded roster row [a-z]+\/screacher/],
+    ['a zombie-free level page missing a family\'s seeded roster row', () => {
+      const level = enemyRef.levels.find(l => l.roster.zombieFree)!;
+      const file = `enemies/${slug(level.id)}.html`;
+      return mutated(file, site.get(file)!.replace('<tr id="roster-zombie">', '<tr>'));
+    }, /no rendered place for seeded roster row [a-z]+\/zombie/],
+    ['the families page missing a family\'s seeded roster rule', () => mutated('enemies/families.html', site.get('enemies/families.html')!.replace('<section id="roster-screacher">', '<section>')),
+      /no rendered place for seeded roster rule of screacher/],
+    ['the index missing the seeded roster', () => mutated('enemies/index.html', site.get('enemies/index.html')!.replace('<h2 id="roster">', '<h2>').replace(/href="#roster"/g, 'href="#levels"')),
+      /no rendered place for the seeded roster/],
+    ['the index missing a family\'s seeded roster chance', () => mutated('enemies/index.html', site.get('enemies/index.html')!.replace('<tr id="roster-strainer">', '<tr>')),
+      /no rendered place for seeded roster chance of strainer/],
     ['enemy data that the manifest digest does not name', () => {
       const data = JSON.parse(site.get('data/enemies.json')!) as EnemyReference;
       return mutated('data/enemies.json', `${JSON.stringify({...data, meta: {...data.meta, dataHash: 'ffffffff'}})}\n`);

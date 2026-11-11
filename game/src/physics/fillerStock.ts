@@ -572,7 +572,7 @@ export class FillerStock implements BodySource {
       if (this.soundTokens < 1) return;
       this.soundTokens -= 1;
       this.counts.sounds++;
-      this.host?.audio?.physImpact?.(body.position.x, body.position.y, body.position.z, v, s.fam);
+      this.host?.audio?.physImpact?.(body.position.x, body.position.y, body.position.z, v, s.fam, undefined, 'stock');
     });
     return body;
   }

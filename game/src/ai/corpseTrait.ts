@@ -23,6 +23,7 @@ export const CORPSE_TRAITS: Record<EnemyArchetypeId, CorpseTrait> = {
   siren: {undead: true, humanoid: true, massKg: 45, note: 'pale undead apparition on the shared humanoid rig'},
   ratdog: {undead: false, humanoid: false, massKg: 25, note: 'tunnel scavenger animal: not undead, not a humanoid body'},
   strainer: {undead: true, humanoid: true, massKg: 90, note: 'tall clawed infected on a humanoid body plan'},
+  screacher: {undead: true, humanoid: true, massKg: 75, note: 'headless blind infected (four bodies, one type) on the humanoid rig'},
 };
 
 /** A dead body of this archetype can be carried and fed to the train's chipper (undead + humanoid). Unknown ids: no. */

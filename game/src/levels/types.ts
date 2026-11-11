@@ -71,6 +71,13 @@ export interface SectionGenContext {
    * gen/skyways/layoutVersion.ts — a station entered under an older build keeps its layout). Absent = the current version.
    */
   layoutVersion?: number;
+  /**
+   * Task studio-screacher-production-20261110-221858-01: the ENEMY ROSTER version the level is generated with (ai/enemyRoster.ts: the
+   * per-level seeded family roster, e.g. whether this map holds Screachers at all). The game ALWAYS passes it (the station's recorded
+   * version, or the current one for a station never entered: Game.sectionGenInputs). Absent = 0 = no roster pass: the plain generator
+   * output every pinned layout fingerprint and census was taken with — a direct registry caller opts in with ROSTER_VERSION.
+   */
+  rosterVersion?: number;
 }
 
 /**
