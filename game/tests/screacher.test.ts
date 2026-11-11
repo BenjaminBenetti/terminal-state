@@ -93,6 +93,20 @@ describe('Screacher: the family and its four variants (one enemy type)', () => {
     expect(MELEE_PROTECTED.has('screacher')).toBe(false);
   });
 
+  it('600 hp in every one of the four bodies (user retune 2026-11-11: four times the first 150); the old 150 no longer kills it', () => {
+    expect(SCREACHER_STATS.hp).toBe(600);
+    expect(SCREACHER_STATS.hp).toBe(4 * 150);
+    for (const id of SCREACHER_VARIANT_IDS) {
+      const {actor, fallback} = createEnemyActor(spawnAt(1, 2, id), {[SCREACHER_VARIANTS[id].model]: syntheticScreacher(id)}, rng(3), zombieStandIn);
+      expect(fallback, id).toBe(false);
+      expect((actor as ScreacherActor).variant, id).toBe(id);
+      expect(actor.brain.hp, id).toBe(600);
+      expect(actor.brain.damage(150, 1, 2), id).toBe(false); // a quarter: it stays standing
+      expect(actor.brain.hp, id).toBe(450);
+      expect(actor.brain.damage(450, 1, 2), id).toBe(true);
+    }
+  });
+
   it('a layout loads exactly the variant models its Screachers wear (nothing for a level without one)', () => {
     expect(enemyModelKeysFor({zombies: [{archetype: 'zombie'}, {}]})).toEqual([]);
     expect(enemyModelKeysFor({zombies: [{archetype: 'screacher', variant: 'sc03'}, {archetype: 'zombie'}]})).toEqual(['enemy_screacher_sc03']);

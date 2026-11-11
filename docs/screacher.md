@@ -19,7 +19,7 @@ constants (`enemies/families.html`, section Screacher).
 
 | What | Value | Constant |
 |---|---|---|
-| Health | 150 hp | `SCREACHER_STATS.hp` |
+| Health | 600 hp | `SCREACHER_STATS.hp` |
 | Claw damage per hit | 16 hp | `SCREACHER_STATS.attackDamage` |
 | Attack range (centre to centre) | 1.55 m | `SCREACHER_STATS.attackRange` |
 | The swing connects within | 1.95 m | `SCREACHER_STATS.hitRange` |
@@ -31,7 +31,9 @@ constants (`enemies/families.html`, section Screacher).
 | Runtime size jitter | 0.97 to 1.03 | `SCREACHER_SCALE.min`, `SCREACHER_SCALE.max` |
 
 For comparison (`ZOMBIE_STATS.shambler`, `game/src/ai/brain.ts`): the ordinary zombie has 100 hp, hits for 10 and chases at
-2.55 m/s. The Screacher has more health because it has no weak spot: every hit is a body hit.
+2.55 m/s. The Screacher has six times that health because it has no weak spot: every hit is a body hit. All four bodies share the
+one stats object, so every variant has the same 600 hp (a user retune on 2026-11-11: four times its first 150 hp; nothing else
+changed).
 
 - **No head.** It has no head hit volume, alive or as a corpse (`game/src/ai/screacherActor.ts`): a torso capsule from the hips up
   the spine whose round cap ends at the top of the stump, and arm and leg capsules. A shot through the air above the stump hits
