@@ -185,6 +185,10 @@ export class ChipperSystem {
   private readonly frame: ChipperFxFrame | null;
   private readonly hopper: V3;
   private readonly aisle: {x: number; z: number};
+  /** The hopper mouth's long side (train-local): the fed body's shoulders lie along it. The hopper's end (model -X, train-local):
+   *  the fed body's legs lean out over it, its part already in goes toward the rotor housing. */
+  private readonly mouthLong: {x: number; z: number};
+  private readonly hopperEnd: {x: number; z: number};
   private readonly fp: {x0: number; x1: number; z0: number; z1: number} | null;
   private readonly vEye = new THREE.Vector3();
   private readonly vDir = new THREE.Vector3();
@@ -206,6 +210,10 @@ export class ChipperSystem {
       this.fp = fp;
       this.hopper = chipperToLocal(c, A.hopper.x, A.hopper.y, A.hopper.z);
       this.aisle = {x: front.x, z: front.z};
+      const long = A.hopperMouth.z >= A.hopperMouth.x ? front : chipperDirToLocal(c, 1, 0, 0);
+      this.mouthLong = {x: long.x, z: long.z};
+      const end = chipperDirToLocal(c, -1, 0, 0);
+      this.hopperEnd = {x: end.x, z: end.z};
       // the spout's flange (on the machine's middle plane: the spray leaves it toward the aisle and along the spout, model +X); the
       // mouth's half extents in the car frame (yaw PI: the same axes)
       const out = chipperToLocal(c, A.outlet.x, A.outlet.y, A.outlet.z), along = chipperDirToLocal(c, 1, 0, 0);
@@ -219,6 +227,8 @@ export class ChipperSystem {
       this.frame = null;
       this.hopper = {x: 0, y: 0, z: 0};
       this.aisle = {x: 0, z: -1};
+      this.mouthLong = {x: 0, z: -1};
+      this.hopperEnd = {x: 1, z: 0};
     }
     this.sink = {offer: held => this.offer(held), take: held => this.take(held)};
   }
@@ -435,7 +445,7 @@ export class ChipperSystem {
 
   private poseBody(grinding: boolean): void {
     if (!this.body) return;
-    this.body.place(this.hopper, this.aisle, jobProgress(this.state), grinding ? this.grindT : null);
+    this.body.place(this.hopper, this.aisle, jobProgress(this.state), grinding ? this.grindT : null, this.mouthLong, this.hopperEnd);
   }
 
   // --- sound + noise -------------------------------------------------------------------------------------------------

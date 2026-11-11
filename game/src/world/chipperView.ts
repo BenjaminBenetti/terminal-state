@@ -7,8 +7,9 @@
 //    first, straightening as it sinks with the job's progress in small lunges (a monotonic staircase: never back out), legs last; at
 //    completion the runtime disposes it. Its head / feet are found from the rig's bones ('Head', 'L_Foot' / 'R_Foot', 'Hips': the enemy
 //    rigs' names) in its own frame, whatever pose it arrives in (carry pose, or a rebuilt resting body after a load); a model without
-//    those bones falls back to its bounds' longest axis. It goes in through the hopper's mouth between the top frame's rails (the
-//    hopper is shallow: past its floor the body is inside the feed chute's casing, then under the car floor).
+//    those bones falls back to its bounds' longest axis. It goes in through the hopper's mouth between the top frame's rails, its arms
+//    tucked along it and rolled so its shoulders lie along the mouth's long side (the hopper is shallow: past its floor the body is
+//    inside the feed chute's casing, then under the car floor).
 
 import * as THREE from 'three';
 import {CHIPPER_ANCHORS} from './chipperSpec';
@@ -26,7 +27,10 @@ export const CHIPPER_VIEW = {
   gauge: {plateW: 0.11, plateH: 0.024, plateD: 0.004, barW: 0.098, barH: 0.011, barD: 0.003, barY: -0.042, lamp: 0.011, lampX: 0.046, lampY: 0.043, proud: 0.001},
   /** The fed body: tilt from vertical toward the aisle at first / at the end (rad), lunges over the job, first / last depth past the
    *  crown (m), the crown above the 'Head' bone and the sole below the foot bones (m). */
-  body: {tilt0: 0.9, tilt1: 0.08, straightBy: 0.55, lunges: 8, lungeDepth: 0.8, s0: 0.22, past: 0.1, crown: 0.12, sole: 0.08, shake: 0.012},
+  body: {tilt0: 0.9, tilt1: 0.08, straightBy: 0.55, lunges: 8, lungeDepth: 0.8, s0: 0.22, past: 0.1, crown: 0.12, sole: 0.08, shake: 0.012,
+    /** The legs also lean out over the hopper's own end (rad), so the part already in goes down toward the rotor housing (behind its
+     *  drum, inside the casing) rather than straight down through the open base frame under the hopper. */
+    endLean: 0.35},
 } as const;
 
 const smooth = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -140,8 +144,11 @@ export class ChipperView {
 
 const v = () => new THREE.Vector3();
 
-/** The fed body's measured frame (its own, scale applied): crown point and the crown -> sole axis, its length. */
-export interface BodyFrame { crown: THREE.Vector3; axis: THREE.Vector3; len: number; bones: boolean }
+/**
+ * The fed body's measured frame (its own, scale applied): crown point and the crown -> sole axis, its length, and its right -> left
+ * direction across the shoulders (or hips) square to that axis (null: no rig) — the line that must fit the hopper mouth's long side.
+ */
+export interface BodyFrame { crown: THREE.Vector3; axis: THREE.Vector3; len: number; bones: boolean; side: THREE.Vector3 | null }
 
 /** Measure a body's head / feet in its own frame (bones first, else its bounds' longest axis). */
 export function measureBody(obj: THREE.Object3D): BodyFrame {
@@ -155,16 +162,54 @@ export function measureBody(obj: THREE.Object3D): BodyFrame {
   if (head && feet && head.distanceTo(feet) > 0.3) {
     const axis = feet.clone().sub(head).normalize();
     const crown = head.clone().addScaledVector(axis, -B.crown);
-    return {crown, axis, len: head.distanceTo(feet) + B.crown + B.sole, bones: true};
+    // across the body: right -> left shoulder (else hip), square to the axis
+    let side: THREE.Vector3 | null = null;
+    for (const [r, l] of [['R_UpperArm', 'L_UpperArm'], ['R_Thigh', 'L_Thigh']] as const) {
+      const a = local(obj.getObjectByName(r)), b = local(obj.getObjectByName(l));
+      if (!a || !b) continue;
+      const d = b.sub(a);
+      d.addScaledVector(axis, -d.dot(axis));
+      if (d.lengthSq() > 1e-4) { side = d.normalize(); break; }
+    }
+    return {crown, axis, len: head.distanceTo(feet) + B.crown + B.sole, bones: true, side};
   }
   // no rig: the bounds (own frame) — the longest axis; upright bodies keep their head up
   const box = new THREE.Box3().setFromObject(obj).applyMatrix4(inv);
-  if (box.isEmpty()) return {crown: new THREE.Vector3(0, 1.75 * obj.scale.y, 0), axis: new THREE.Vector3(0, -1, 0), len: 1.75 * obj.scale.y, bones: false};
+  if (box.isEmpty()) return {crown: new THREE.Vector3(0, 1.75 * obj.scale.y, 0), axis: new THREE.Vector3(0, -1, 0), len: 1.75 * obj.scale.y, bones: false, side: null};
   const size = box.getSize(v()).multiply(obj.scale), c = box.getCenter(v()).multiply(obj.scale), min = box.min.clone().multiply(obj.scale), max = box.max.clone().multiply(obj.scale);
   const k: 'x' | 'y' | 'z' = size.y >= size.x && size.y >= size.z ? 'y' : size.x >= size.z ? 'x' : 'z';
   const crown = c.clone(); crown[k] = max[k];
   const sole = c.clone(); sole[k] = min[k];
-  return {crown, axis: sole.clone().sub(crown).normalize(), len: size[k], bones: false};
+  return {crown, axis: sole.clone().sub(crown).normalize(), len: size[k], bones: false, side: null};
+}
+
+/**
+ * The arms along the body (each upper arm turned so its hand points from the shoulder toward the feet, whatever pose the body came in:
+ * a lying body's arms lie splayed): the body then fits the hopper mouth instead of an arm poking out through the hopper's walls. Bones
+ * of the fed body only (the sink owns its object until disposeBody); a body without the rig's arm / head / foot bones is left as it is.
+ */
+export function tuckArms(obj: THREE.Object3D): number {
+  obj.updateWorldMatrix(true, true);
+  const head = obj.getObjectByName('Head'), lf = obj.getObjectByName('L_Foot'), rf = obj.getObjectByName('R_Foot');
+  if (!head || !lf || !rf) return 0;
+  const down = lf.getWorldPosition(v()).add(rf.getWorldPosition(v())).multiplyScalar(0.5).sub(head.getWorldPosition(v()));
+  if (down.lengthSq() < 0.01) return 0;
+  down.normalize();
+  let n = 0;
+  const rw = new THREE.Quaternion(), wp = new THREE.Quaternion();
+  for (const side of ['L', 'R'] as const) {
+    const upper = obj.getObjectByName(`${side}_UpperArm`), hand = obj.getObjectByName(`${side}_Hand`);
+    if (!upper || !hand || !upper.parent) continue;
+    const d = hand.getWorldPosition(v()).sub(upper.getWorldPosition(v()));
+    if (d.lengthSq() < 1e-4) continue;
+    rw.setFromUnitVectors(d.normalize(), down); // the world turn of the whole arm
+    upper.parent.getWorldQuaternion(wp);
+    // local' = parent^-1 . turn . parent . local
+    upper.quaternion.premultiply(wp.clone().invert().multiply(rw).multiply(wp));
+    upper.updateWorldMatrix(false, true);
+    n++;
+  }
+  return n;
 }
 
 /** The fed body: its object, its measured frame, where it is going (train-local hopper mouth and the aisle direction). */
@@ -172,23 +217,44 @@ export class FedBody {
   readonly frame: BodyFrame;
   private readonly u = v();
   private readonly q = new THREE.Quaternion();
+  private readonly qRoll = new THREE.Quaternion();
   private readonly tip = v();
+  private readonly sd = v();
+  private readonly tl = v();
+  private readonly cr = v();
 
   constructor(readonly obj: THREE.Object3D, readonly uid: number) {
+    tuckArms(obj);
     this.frame = measureBody(obj);
   }
 
   /**
    * Pose for job progress `p` (0..1): the crown `s` m past the hopper mouth along the body's line, the line tilted from vertical toward
    * the aisle (`aisle`: a unit horizontal train-local direction) and straightening as it sinks; `shakeT` (s) jitters it while grinding.
+   * `long` (a unit horizontal train-local direction): the mouth's long side — the body is rolled about its line so its shoulders lie
+   * along it (they fit the mouth; a shoulder / arm across the short side would poke through the hopper's end walls).
    */
-  place(hopper: {x: number; y: number; z: number}, aisle: {x: number; z: number}, p: number, shakeT: number | null): void {
+  place(hopper: {x: number; y: number; z: number}, aisle: {x: number; z: number}, p: number, shakeT: number | null, long: {x: number; z: number} | null = null,
+    end: {x: number; z: number} | null = null): void {
     const B = CHIPPER_VIEW.body, f = this.frame;
     const tilt = B.tilt1 + (B.tilt0 - B.tilt1) * (1 - smooth(0, B.straightBy, p));
-    // u: from the crown (inside) out toward the soles — up, leaning over the lip into the aisle
+    // u: from the crown (inside) out toward the soles — up, leaning over the lip into the aisle (and over the hopper's end: `end`, a
+    // unit horizontal direction square to the aisle)
     this.u.set(aisle.x * Math.sin(tilt), Math.cos(tilt), aisle.z * Math.sin(tilt));
+    if (end) { const cb = Math.cos(B.endLean), sb = Math.sin(B.endLean); this.u.multiplyScalar(cb); this.u.x += end.x * sb; this.u.z += end.z * sb; }
     const s = B.s0 + (f.len + B.past - B.s0) * lungeCurve(p);
     this.q.setFromUnitVectors(f.axis, this.u);
+    if (f.side && long) {
+      // roll about u: the shoulder line onto the mouth's long side (projected square to u; either way round, the nearer)
+      const sd = this.sd.copy(f.side).applyQuaternion(this.q), t = this.tl.set(long.x, 0, long.z);
+      t.addScaledVector(this.u, -t.dot(this.u));
+      if (t.lengthSq() > 1e-6) {
+        t.normalize();
+        if (sd.dot(t) < 0) t.negate();
+        const ang = Math.atan2(this.cr.crossVectors(sd, t).dot(this.u), sd.dot(t));
+        this.q.premultiply(this.qRoll.setFromAxisAngle(this.u, ang));
+      }
+    }
     // the crown sits s m inside the mouth along -u
     this.tip.set(hopper.x, hopper.y, hopper.z).addScaledVector(this.u, -s);
     const o = this.obj;
@@ -202,11 +268,11 @@ export class FedBody {
     }
   }
 
-  /** The exposed end (soles) height above the mouth at progress p (m; tests: it ends inside). */
-  exposedTop(p: number): number {
+  /** The exposed end (soles) height above the mouth at progress p (m; tests: it ends inside), with or without the end lean. */
+  exposedTop(p: number, endLean = true): number {
     const B = CHIPPER_VIEW.body, f = this.frame;
     const tilt = B.tilt1 + (B.tilt0 - B.tilt1) * (1 - smooth(0, B.straightBy, p));
     const s = B.s0 + (f.len + B.past - B.s0) * lungeCurve(p);
-    return (f.len - s) * Math.cos(tilt);
+    return (f.len - s) * Math.cos(tilt) * (endLean ? Math.cos(B.endLean) : 1);
   }
 }
