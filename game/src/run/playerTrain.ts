@@ -19,12 +19,18 @@
 // Task studio-beta-train-loose-cargo-20261107-060450-01: the record also holds the train's LOOSE CARGO (run/trainCargo.ts TrainCargo:
 // every loose item / grounded bag lying in the car, exact stacks + train-local poses). Saved with the record (`cargo`); NewGame: none;
 // Travel keeps it; Retry restores the entry state. An old save without `cargo` loads none (its fuel carts / Lockbox untouched).
+//
+// Task studio-corpse-chipper-fuel-20261110-235304-01: the record also holds the train's CHIPPER (fuel/chipperFuel.ts: the credit waiting in
+// the machine in fifth-quarter ticks, its processing uid counter and the body being ground). Saved with the record (`chipper`); NewGame:
+// idle and empty; Travel keeps it; Retry restores the entry state. An old save without `chipper` loads an idle, empty machine.
 
 import type {RunParticipant} from './snapshot';
 import type {SectionKey} from '../levels/types';
 import {TrainLockbox} from './trainLockbox';
 import {FUEL, trainFuelProblem, type CargoCartJSON, type TrainFuelJSON} from '../fuel/fuel';
 import {TrainCargo} from './trainCargo';
+import {chipperProblem, copyChipper, freshChipper, type ChipperJSON} from '../fuel/chipperFuel';
+import {corpseFeedable} from '../ai/corpseTrait';
 
 /**
  * The train's fuel: the tank (quarter units, 0..FUEL.trainTankUnits) and the carts aboard. With a live cart system attached (`live`, the
@@ -66,6 +72,27 @@ export class TrainFuel {
   }
 }
 
+/**
+ * Task corpse-chipper: the train's chipper (fuel/chipperFuel.ts). `state` is THE record the machine's runtime mutates in place (startJob /
+ * grind / transferToTank); load / reset replace it (a runtime re-reads `state` after either).
+ */
+export class TrainChipper {
+  state: ChipperJSON = freshChipper();
+
+  toJSON(): ChipperJSON {
+    return copyChipper(this.state);
+  }
+
+  /** Exact load (absent / malformed: an idle, empty machine — never invented credit or bodies). */
+  load(d: unknown): void {
+    this.state = d !== undefined && chipperProblem(d, corpseFeedable) === null ? copyChipper(d as ChipperJSON) : freshChipper();
+  }
+
+  reset(): void {
+    this.state = freshChipper();
+  }
+}
+
 /** The level-one train every run starts with. */
 export const PLAYER_TRAIN_L1 = Object.freeze({id: 'player-train-l1', tier: 1});
 /** RunParticipant id of the record. */
@@ -97,6 +124,8 @@ export class PlayerTrainRecord {
   readonly fuel = new TrainFuel();
   /** Task train-loose-cargo: the loose items / bags aboard (the same object for the whole session). */
   readonly cargo = new TrainCargo();
+  /** Task corpse-chipper: the woodchipper fixed in the car (the same object for the whole session). */
+  readonly chipper = new TrainChipper();
 
   /** A copy of the current record. */
   get state(): PlayerTrainState {
@@ -119,14 +148,15 @@ export class PlayerTrainRecord {
   participant(): RunParticipant {
     return {
       id: PLAYER_TRAIN_PARTICIPANT,
-      save: () => ({...this.state, lockbox: this.lockbox.toJSON(), fuel: this.fuel.toJSON(), cargo: this.cargo.toJSON()}),
+      save: () => ({...this.state, lockbox: this.lockbox.toJSON(), fuel: this.fuel.toJSON(), cargo: this.cargo.toJSON(), chipper: this.chipper.toJSON()}),
       load: d => {
         this.s = valid(d) ? {id: d.id, tier: d.tier, at: d.at ? {level: d.at.level, section: d.at.section} : null} : fresh();
         this.lockbox.load(d && typeof d === 'object' ? (d as {lockbox?: unknown}).lockbox : undefined);
         this.fuel.load(d && typeof d === 'object' ? (d as {fuel?: unknown}).fuel : undefined);
         this.cargo.load(d && typeof d === 'object' ? (d as {cargo?: unknown}).cargo : undefined);
+        this.chipper.load(d && typeof d === 'object' ? (d as {chipper?: unknown}).chipper : undefined);
       },
-      reset: () => { this.s = fresh(); this.lockbox.clear(); this.fuel.reset(); this.cargo.reset(); },
+      reset: () => { this.s = fresh(); this.lockbox.clear(); this.fuel.reset(); this.cargo.reset(); this.chipper.reset(); },
     };
   }
 }

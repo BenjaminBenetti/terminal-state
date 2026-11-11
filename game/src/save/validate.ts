@@ -27,6 +27,8 @@ import {PLAYER_TRAIN_PARTICIPANT} from '../run/playerTrain';
 import {BAG_LANE} from '../run/bagStore';
 import {FUEL, FUEL_LANE, debitProblem, debitUnits, stationFuelProblem, trainFuelProblem, type FuelDebit} from '../fuel/fuel';
 import {SKYWAYS_CAR_LANE, TRUNK_SLOTS, skywaysCarProblem} from '../world/skywaysCarStore'; // task skyways-level-20261106 (lane CAR): the prize car's pose
+import {chipperProblem} from '../fuel/chipperFuel'; // task studio-corpse-chipper-fuel-20261110-235304-01: the train chipper's record
+import {corpseFeedable} from '../ai/corpseTrait';
 import {STATION_PROPS_LANE, cargoProblem, stationPropsProblem, type CargoPropJSON} from '../run/trainCargo'; // task train-loose-cargo: the train's loose items (+ train-all-cargo: props)
 import {PROP_DEFS} from '../gen/props'; // task train-all-cargo: carried props are of real kinds
 import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
@@ -494,6 +496,7 @@ function participants(v: unknown, path: string, seen: Set<number>): void {
       (r.cargo as {items: {stack: unknown}[]}).items.forEach((it, i) => stack(it.stack, `${p}.cargo.items[${i}].stack`, {uid: true, inBag: false, seen, needBag: true}));
       carriedProps((r.cargo as {props?: CargoPropJSON[]}).props ?? [], `${p}.cargo.props`); // task train-all-cargo: v2's movable props aboard
     }
+    if (r.chipper !== undefined) { const kp = chipperProblem(r.chipper, corpseFeedable); if (kp) bad(`${p}.chipper`, kp); } // task corpse-chipper: the machine's credit + job
   }
 }
 

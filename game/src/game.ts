@@ -391,6 +391,11 @@ export class Game {
   readonly promptProviders: (() => string | null)[] = [];
   /** Iteration 16 (lane GEAR): a lane UI / action owns the mouse buttons (readied / open backpack): no fire, ADS, item use or flare while any returns true. */
   readonly inputOwners: (() => boolean)[] = [];
+  /**
+   * Task studio-corpse-chipper-fuel-20261110-235304-01: listeners of WORLD noises (ai/worldNoise.ts emitWorldNoise: a machine's start /
+   * feed / grind at its own position, after the existing enemies heard it). A listener never re-emits.
+   */
+  readonly worldNoiseListeners: ((n: import('./ai/worldNoise').WorldNoise) => void)[] = [];
   /** Iteration 16 (lane GEAR): worn gear, the deployable backpack (6) and grounded bags (gear/system.ts). */
   readonly gear: GearSystem;
   /** Task gasmask-breach-20261030 (mask lane): the gas mask — Q on / off, filter charge + spares, Q HUD cell, the first-person mask view; protects() (gear/gasMask.ts). */

@@ -24,6 +24,7 @@ import {SIREN_STATS} from './siren'; // Task track1-siren-blightbelly-20261031 (
 import {SIREN_MODEL_KEY, SirenActor} from './sirenActor'; // Task track1-siren-blightbelly-20261031 (lane SIREN)
 import {SIREN_CUES} from './sirenCues'; // Task track1-siren-blightbelly-20261031 (lane SIREN)
 import {ENEMY_POOL, type EnemyArchetypeId} from './creatureSpawn';
+import {CORPSE_TRAITS, type CorpseTrait} from './corpseTrait'; // task studio-corpse-chipper-fuel-20261110-235304-01: what each dead body is
 
 export {ENEMY_POOL, type EnemyArchetypeId};
 
@@ -128,29 +129,31 @@ export interface EnemyArchetypeDef {
   /** Feet-to-voice height for positional audio (m). */
   voiceHeight: number;
   source: string;
+  /** Task corpse-chipper: its dead body (ai/corpseTrait.ts CORPSE_TRAITS: undead / humanoid / mass) — eligibility is this trait. */
+  corpse: CorpseTrait;
 }
 
 export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetypeDef> = {
-  zombie: {id: 'zombie', label: 'Infected', model: null, stats: null, climbsLadders: true, dropsIntoTrackBed: true, voiceHeight: 1.6,
+  zombie: {id: 'zombie', corpse: CORPSE_TRAITS.zombie, label: 'Infected', model: null, stats: null, climbsLadders: true, dropsIntoTrackBed: true, voiceHeight: 1.6,
     source: 'zombie wardrobe registry (ai/outfits.ts); stats ZOMBIE_STATS by shambler / coated type'},
   // Task track1-siren-blightbelly-20261031 (lane SPAWN): key order zombie, blightbelly, siren, ratdog = ENEMY_FAMILY_IDS (= roll order);
   // lane FAMILY (round 4): + strainer, appended last.
   // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the obese, pustule-covered zombie subtype that bursts once when killed
   // (ai/blightbelly.ts stats / burst, ai/blightbellyActor.ts, ai/blightBurst.ts); model lazily loaded per layout (ai/enemyModels.ts).
-  blightbelly: {id: 'blightbelly', label: 'Blightbelly', model: 'enemy_blightbelly', stats: BLIGHTBELLY_STATS, climbsLadders: true, dropsIntoTrackBed: true, voiceHeight: 1.5,
+  blightbelly: {id: 'blightbelly', corpse: CORPSE_TRAITS.blightbelly, label: 'Blightbelly', model: 'enemy_blightbelly', stats: BLIGHTBELLY_STATS, climbsLadders: true, dropsIntoTrackBed: true, voiceHeight: 1.5,
     source: 'Meshy T2.5 text-to-3D (Track 1 Blightbelly attempt 2, refine) -> derivative enemy-blightbelly.glb (lane RIGB: shared 18-joint rig, pustule domes, heavy procedural clips)'},
   // Task track1-siren-blightbelly-20261031 (lane SIREN): dormant floor-hunched humming apparition, woken only by ~2 m proximity, the
   // lit flashlight on her or a hit; then one scream, Rise, fast Run + claw swipes (ai/siren.ts, sirenActor.ts, sirenSystem.ts).
   // No ladder links (no climb clip); voice height = her hunched mouth (standing 1.5). Model lazily loaded per layout (ai/enemyModels.ts).
-  siren: {id: 'siren', label: 'Siren', model: SIREN_MODEL_KEY, stats: SIREN_STATS, climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: 0.5,
+  siren: {id: 'siren', corpse: CORPSE_TRAITS.siren, label: 'Siren', model: SIREN_MODEL_KEY, stats: SIREN_STATS, climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: 0.5,
     source: 'user-supplied Pale Apparition body + Ghost Dress GLBs (appearance locked) -> derivative enemy-siren.glb (lane RIGS: unit fit, dress attachment, shared 18-joint rig + clips)'},
-  ratdog: {id: 'ratdog', label: 'Tunnel scavenger (rat/dog)', model: 'creature_ratdog', stats: RATDOG_STATS, climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: 0.35,
+  ratdog: {id: 'ratdog', corpse: CORPSE_TRAITS.ratdog, label: 'Tunnel scavenger (rat/dog)', model: 'creature_ratdog', stats: RATDOG_STATS, climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: 0.35,
     source: 'Field Notes core asset quadruped-02 concept -> Meshy T2.5 replacement -> derivative creature-ratdog-t25.glb (new rig + procedural clips)'},
   // Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): THE STRAINER, APPENDED LAST (= ENEMY_FAMILY_IDS: every older
   // pool's roll bands unchanged) — a tall, long-reach clawed ordinary-melee infected (ai/strainer.ts stats, ai/strainerActor.ts),
   // weight > 0 only in the service-annex pool (spawnTables STRAINER_CONTEXTS). No ladder links (it lurks in the annex); model lazily
   // loaded per layout (ai/enemyModels.ts).
-  strainer: {id: 'strainer', label: 'Strainer', model: 'enemy_strainer', stats: STRAINER_STATS, climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: STRAINER_VOICE_Y,
+  strainer: {id: 'strainer', corpse: CORPSE_TRAITS.strainer, label: 'Strainer', model: 'enemy_strainer', stats: STRAINER_STATS, climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: STRAINER_VOICE_Y,
     source: 'user-picked Strainer concept (Beyond the Station) -> derivative enemy-strainer.glb (lane ASSET: shared 18-joint rig, clips Idle / Walk / Run / Attack / Hit / Death, extras enemyStrainer)'},
 };
 
