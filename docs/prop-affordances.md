@@ -617,6 +617,9 @@ they sit outside the two audits; their classification is recorded here.
     enemy and hitscan, both parked and riding (`trainColliders`, `buildRideLocalModel`). Shots and bumps don't move it. It has a few
     millimetres of visual vibration while it grinds, and the collider doesn't vibrate. The fed body is the corpse system's own model,
     not part of the chipper. The gauge, blood spray and floor stains are runtime effects.
+  - The fed body (task woodchipper-ragdoll-20261111-033048, `world/chipperRagdoll.ts`) is its own corpse ragdoll in a small private
+    physics world. That world holds only approximate boxes of the machine and the car floor. It never moves the machine, and the
+    machine's collider is unchanged.
 
 ## 7. Reactor mines set pieces (not layout prop kinds)
 Task reactor-expansion-20261101 (lane MINES). The old mine workings off tier 2 (`gen/reactor/complex/mines*.ts`) dress their drifts

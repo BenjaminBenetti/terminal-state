@@ -9,7 +9,10 @@
 //    rigs' names) in its own frame, whatever pose it arrives in (carry pose, or a rebuilt resting body after a load); a model without
 //    those bones falls back to its bounds' longest axis. It goes in through the hopper's mouth between the top frame's rails, its arms
 //    tucked along it and rolled so its shoulders lie along the mouth's long side (the hopper is shallow: past its floor the body is
-//    inside the feed chute's casing, then under the car floor).
+//    inside the feed chute's casing, then under the car floor). Task studio-woodchipper-ragdoll-20261111-033048-01: for a body with a
+//    ragdoll (every feedable corpse, through the corpse system) this pose is only the feed's START — the body then goes limp and is drawn
+//    in by world/chipperRagdoll.ts ChipperFeed along the same line and lunge depth (feedLine / feedDepth); the posed feed stays the
+//    fallback (no ragdoll target, or a failed feed).
 
 import * as THREE from 'three';
 import {CHIPPER_ANCHORS} from './chipperSpec';
@@ -44,6 +47,23 @@ export function lungeCurve(p: number, n: number = CHIPPER_VIEW.body.lunges, d: n
 /** How hard the body is being pulled in right now (0..1: the staircase's slope, normalised) — the spray's lunge factor. */
 export function lungeRate(p: number, n: number = CHIPPER_VIEW.body.lunges, d: number = CHIPPER_VIEW.body.lungeDepth): number {
   return (1 - d * Math.cos(2 * Math.PI * n * Math.max(0, Math.min(1, p)))) / (1 + d);
+}
+
+/** The crown's depth past the hopper mouth along the body's line at job progress p (m: the lunge staircase), for a body `len` m long. */
+export function feedDepth(p: number, len: number): number {
+  const B = CHIPPER_VIEW.body;
+  return B.s0 + (len + B.past - B.s0) * lungeCurve(p);
+}
+
+/**
+ * The fed body's line (unit, train-local: from the crown inside out toward the soles): up, tilted `tilt` rad from vertical toward the
+ * aisle (`aisle`: a unit horizontal direction) and, with `end` (a unit horizontal direction square to the aisle: the hopper's end), leaning
+ * CHIPPER_VIEW.body.endLean over it — so the part already in goes down toward the rotor housing.
+ */
+export function feedLine(aisle: {x: number; z: number}, tilt: number, end: {x: number; z: number} | null, out: THREE.Vector3): THREE.Vector3 {
+  out.set(aisle.x * Math.sin(tilt), Math.cos(tilt), aisle.z * Math.sin(tilt));
+  if (end) { const B = CHIPPER_VIEW.body, cb = Math.cos(B.endLean), sb = Math.sin(B.endLean); out.multiplyScalar(cb); out.x += end.x * sb; out.z += end.z * sb; }
+  return out;
 }
 
 export class ChipperView {
@@ -215,8 +235,9 @@ export function tuckArms(obj: THREE.Object3D): number {
 /** The fed body: its object, its measured frame, where it is going (train-local hopper mouth and the aisle direction). */
 export class FedBody {
   readonly frame: BodyFrame;
-  private readonly u = v();
-  private readonly q = new THREE.Quaternion();
+  /** The last place()'s line and turn (train-local). */
+  readonly u = v();
+  readonly q = new THREE.Quaternion();
   private readonly qRoll = new THREE.Quaternion();
   private readonly tip = v();
   private readonly sd = v();
@@ -238,23 +259,10 @@ export class FedBody {
     end: {x: number; z: number} | null = null): void {
     const B = CHIPPER_VIEW.body, f = this.frame;
     const tilt = B.tilt1 + (B.tilt0 - B.tilt1) * (1 - smooth(0, B.straightBy, p));
-    // u: from the crown (inside) out toward the soles — up, leaning over the lip into the aisle (and over the hopper's end: `end`, a
-    // unit horizontal direction square to the aisle)
-    this.u.set(aisle.x * Math.sin(tilt), Math.cos(tilt), aisle.z * Math.sin(tilt));
-    if (end) { const cb = Math.cos(B.endLean), sb = Math.sin(B.endLean); this.u.multiplyScalar(cb); this.u.x += end.x * sb; this.u.z += end.z * sb; }
-    const s = B.s0 + (f.len + B.past - B.s0) * lungeCurve(p);
-    this.q.setFromUnitVectors(f.axis, this.u);
-    if (f.side && long) {
-      // roll about u: the shoulder line onto the mouth's long side (projected square to u; either way round, the nearer)
-      const sd = this.sd.copy(f.side).applyQuaternion(this.q), t = this.tl.set(long.x, 0, long.z);
-      t.addScaledVector(this.u, -t.dot(this.u));
-      if (t.lengthSq() > 1e-6) {
-        t.normalize();
-        if (sd.dot(t) < 0) t.negate();
-        const ang = Math.atan2(this.cr.crossVectors(sd, t).dot(this.u), sd.dot(t));
-        this.q.premultiply(this.qRoll.setFromAxisAngle(this.u, ang));
-      }
-    }
+    // u: from the crown (inside) out toward the soles — up, leaning over the lip into the aisle (and over the hopper's end)
+    feedLine(aisle, tilt, end, this.u);
+    const s = feedDepth(p, f.len);
+    this.orient(this.u, long, this.q);
     // the crown sits s m inside the mouth along -u
     this.tip.set(hopper.x, hopper.y, hopper.z).addScaledVector(this.u, -s);
     const o = this.obj;
@@ -268,11 +276,33 @@ export class FedBody {
     }
   }
 
+  /**
+   * The turn (into `out`) that lays the body's crown -> sole axis along `u` (a unit train-local direction), rolled about `u` so its
+   * shoulder line lies along `long` (a unit horizontal train-local direction: the mouth's long side — the shoulders fit the mouth; across
+   * its short side they would poke through the hopper's end walls). The posed feed's turn; the feed physics' line pose (chipperRagdoll.ts).
+   */
+  orient(u: THREE.Vector3, long: {x: number; z: number} | null, out: THREE.Quaternion): THREE.Quaternion {
+    const f = this.frame;
+    out.setFromUnitVectors(f.axis, u);
+    if (f.side && long) {
+      // roll about u: the shoulder line onto the mouth's long side (projected square to u; either way round, the nearer)
+      const sd = this.sd.copy(f.side).applyQuaternion(out), t = this.tl.set(long.x, 0, long.z);
+      t.addScaledVector(u, -t.dot(u));
+      if (t.lengthSq() > 1e-6) {
+        t.normalize();
+        if (sd.dot(t) < 0) t.negate();
+        const ang = Math.atan2(this.cr.crossVectors(sd, t).dot(u), sd.dot(t));
+        out.premultiply(this.qRoll.setFromAxisAngle(u, ang));
+      }
+    }
+    return out;
+  }
+
   /** The exposed end (soles) height above the mouth at progress p (m; tests: it ends inside), with or without the end lean. */
   exposedTop(p: number, endLean = true): number {
     const B = CHIPPER_VIEW.body, f = this.frame;
     const tilt = B.tilt1 + (B.tilt0 - B.tilt1) * (1 - smooth(0, B.straightBy, p));
-    const s = B.s0 + (f.len + B.past - B.s0) * lungeCurve(p);
+    const s = feedDepth(p, f.len);
     return (f.len - s) * Math.cos(tilt) * (endLean ? Math.cos(B.endLean) : 1);
   }
 }

@@ -22,7 +22,10 @@
 // while the train moves) — refused bodies stay in the hands. take() converts the record to a train-local 'lying' record and startJob()s
 // it in the same call; the machine owns the body's object for the feed visual (world/chipperView.ts FedBody: head first, sinking with the
 // progress in small lunges, legs last) and disposes it (corpses.disposeBody) in the frame the job is credited. After a load mid-grind the
-// visual is rebuilt from the job's record (corpses.buildBody; null = no visual, the progress continues honestly).
+// visual is rebuilt from the job's record (corpses.buildBody; null = no visual, the progress continues honestly). Task studio-woodchipper-
+// ragdoll-20261111-033048-01: from that posed start the body goes LIMP — its own ragdoll (corpses.ragdollTarget) drawn in by the
+// machine's feed physics (world/chipperRagdoll.ts ChipperFeed, stepped only while grinding); the posed feed is the fallback (no target,
+// or a failed feed: the bones restored). The physics only moves the visual: the record alone grinds, credits and saves.
 // GRINDING: only while the car is PARKED (not riding: world/trainRide.ts phases) and the game plays; grind(state, clock.take(dt)). It is
 // electric / auxiliary: it runs at ZERO train fuel. Riding / paused: the progress stays in the record, the spray goes, the sound stops;
 // parked again, the motor restarts. TRANSFER: whole quarters go into the train's tank (transferToTank) only while parked with no journey
@@ -49,6 +52,7 @@ import {CHIPPER_ANCHORS, CHIPPER_MODEL} from './chipperSpec';
 import {chipperDirToLocal, chipperFootprint, chipperPlacement, chipperToLocal, type ChipperPlacement} from './chipperPlace';
 import {ChipperFx, type ChipperFxFrame} from './chipperFx';
 import {ChipperView, FedBody, lungeRate} from './chipperView';
+import {ChipperFeed} from './chipperRagdoll';
 import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from './playerTrainSpec';
 import type {StationLayout} from '../gen/stationTypes';
 import type {WarmupRegistry} from '../render/warmup';
@@ -164,13 +168,17 @@ export class ChipperSystem {
   readonly audio: ChipperAudioLike;
   /** The body in the hopper (its visual), null: none. */
   body: FedBody | null = null;
+  /** Its feed physics (world/chipperRagdoll.ts: limp, drawn in), null: none — the posed feed (no ragdoll target, or a failed feed). */
+  feed: ChipperFeed | null = null;
   /** The motor runs (sound started for the current job). */
   motor = false;
   /** The crosshair is on the machine within CHIPPER_RT.look (this frame), and the eye's distance to the hopper mouth. */
   aimed = false;
   hopperDist = Infinity;
   /** Counters (QA / tests). */
-  readonly counts = {fed: 0, refused: 0, credited: 0, disposed: 0, built: 0, transferred: 0, noises: 0, starts: 0, stops: 0, attached: 0};
+  readonly counts = {fed: 0, refused: 0, credited: 0, disposed: 0, built: 0, transferred: 0, noises: 0, starts: 0, stops: 0, attached: 0,
+    /** Body visuals fed limp (feed physics) / posed; feeds that failed and fell back to the posed feed. */
+    ragdolled: 0, posed: 0, feedFailed: 0};
   /** The last world noise emitted (QA). */
   lastNoise: WorldNoise | null = null;
   /** The last credit (QA / tests). */
@@ -411,7 +419,7 @@ export class ChipperSystem {
 
   // --- the body visual -----------------------------------------------------------------------------------------------
 
-  /** Own a body object as the hopper's visual (re-parented into the car frame, posed at the job's progress). */
+  /** Own a body object as the hopper's visual (re-parented into the car frame, posed at the job's progress, then limp: its feed physics). */
   private adoptBody(obj: THREE.Object3D, uid: number): void {
     this.dropBody();
     obj.removeFromParent();
@@ -420,13 +428,29 @@ export class ChipperSystem {
     this.body = new FedBody(obj, uid);
     this.levelMeshes();
     this.poseBody(false);
+    this.startFeed();
   }
 
-  /** Dispose the body visual (the corpse system frees its model). */
+  /** The fed body's own ragdoll in the machine's feed physics, from its posed start (no ragdoll target / none possible: the posed feed). */
+  private startFeed(): void {
+    const b = this.body, c = this.place, t = b ? this.host.corpses?.ragdollTarget?.(b.obj) ?? null : null;
+    if (!b || !c || !t) { this.counts.posed++; return; }
+    const I = this.spec.interior;
+    this.feed = ChipperFeed.create({fed: b, target: t, place: c, hopper: this.hopper, aisle: this.aisle, long: this.mouthLong, end: this.hopperEnd,
+      bounds: {x0: I.x0, x1: I.x1, halfWidth: I.halfWidth, floorY: c.floorY, ceilY: this.spec.ceilingY}, p: jobProgress(this.state)});
+    if (this.feed) { this.counts.ragdolled++; return; }
+    this.counts.feedFailed++;
+    this.counts.posed++;
+    this.poseBody(false);
+  }
+
+  /** Dispose the body visual (its feed physics go; the corpse system frees its model). */
   private dropBody(): void {
     const b = this.body;
     if (!b) return;
     this.body = null;
+    this.feed?.dispose();
+    this.feed = null;
     b.obj.removeFromParent();
     this.host.corpses?.disposeBody(b.obj);
     this.counts.disposed++;
@@ -443,9 +467,24 @@ export class ChipperSystem {
     this.adoptBody(obj, job.uid);
   }
 
-  private poseBody(grinding: boolean): void {
-    if (!this.body) return;
-    this.body.place(this.hopper, this.aisle, jobProgress(this.state), grinding ? this.grindT : null, this.mouthLong, this.hopperEnd);
+  /** The body follows the job: its feed physics step while grinding (else it hangs as it is), or the posed feed. */
+  private poseBody(grinding: boolean, dt = 0): void {
+    const b = this.body;
+    if (!b) return;
+    const f = this.feed;
+    if (f) {
+      if (!grinding) return;
+      let ok = false;
+      try { ok = f.step(dt, jobProgress(this.state), this.grindT); } catch (err) { console.warn('chipper: the feed physics failed (posed feed)', err); }
+      if (ok) return;
+      // a failed feed: the bones as they were, the posed feed from here on
+      f.restore();
+      f.dispose();
+      this.feed = null;
+      this.counts.feedFailed++;
+      this.counts.posed++;
+    }
+    b.place(this.hopper, this.aisle, jobProgress(this.state), grinding ? this.grindT : null, this.mouthLong, this.hopperEnd);
   }
 
   // --- sound + noise -------------------------------------------------------------------------------------------------
@@ -521,7 +560,7 @@ export class ChipperSystem {
     this.settledPrev = settled;
     // visuals: the body, the gauge, the vibration, the blood, the sound's position
     grinding = grinding && !!st.job;
-    this.poseBody(grinding);
+    this.poseBody(grinding, dt);
     if (this.view) {
       this.view.setGauge(jobProgress(st), grinding, st.ticks > 0, this.time);
       this.view.vibrate(this.grindT, grinding);
@@ -562,7 +601,8 @@ export class ChipperSystem {
   /** QA / tests: a compact state report. */
   qa(): {
     placed: boolean; attached: boolean; model: boolean; state: 'idle' | 'grinding' | 'paused'; progress: number; ticks: number; credit: string;
-    done: number; job: number | null; body: {visual: boolean; bones: boolean} | null; motor: boolean; aimed: boolean; hopperDist: number;
+    done: number; job: number | null; body: {visual: boolean; bones: boolean; ragdoll: boolean} | null; feed: ReturnType<ChipperFeed['qa']> | null;
+    motor: boolean; aimed: boolean; hopperDist: number;
     at: {x: number; z: number} | null; counts: ChipperSystem['counts']; fx: ReturnType<ChipperFx['stats']>; caps: ChipperFx['caps'];
     gauge: ReturnType<ChipperView['gaugeState']> | null; lastNoise: WorldNoise | null;
   } {
@@ -570,7 +610,8 @@ export class ChipperSystem {
     return {
       placed: !!this.place, attached: !!this.group.parent, model: !!this.view?.model,
       state: st.job ? (this.parked() ? 'grinding' : 'paused') : 'idle', progress: +jobProgress(st).toFixed(3), ticks: st.ticks, credit: creditTankText(st.ticks),
-      done: st.done, job: st.job?.uid ?? null, body: st.job ? {visual: !!this.body, bones: !!this.body?.frame.bones} : null, motor: this.motor,
+      done: st.done, job: st.job?.uid ?? null, body: st.job ? {visual: !!this.body, bones: !!this.body?.frame.bones, ragdoll: !!this.feed} : null,
+      feed: this.feed?.qa() ?? null, motor: this.motor,
       aimed: this.aimed, hopperDist: Number.isFinite(this.hopperDist) ? +this.hopperDist.toFixed(2) : -1,
       at: this.place ? {x: this.place.x, z: this.place.z} : null, counts: {...this.counts}, fx: this.fx.stats(), caps: this.fx.caps,
       gauge: this.view?.gaugeState() ?? null, lastNoise: this.lastNoise,

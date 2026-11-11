@@ -32,10 +32,13 @@ spray, and becomes a tenth of a standard fuel tank. Normal fuel loot, spawn weig
 4. In the parked train, stand within 1.4 m of the chipper's hopper (the far side of the car, between the middle and front door pairs).
    Look at it and press **E** (*Feed the body into the chipper*).
    - It refuses while the train moves, while it is still grinding, or when its credit is full.
-5. The motor starts and the body goes in head first, sinking with the progress. Blood sprays from the hopper and the discharge spout,
-   and pools on the car floor.
+5. The motor starts and the machine grabs the body head first. The body goes limp: its own ragdoll (the same parts and joint limits
+   as any corpse) flops over the rim and down the machine's front, and is drawn in a little at a time in lunges. Each part is pulled
+   in at its turn, crown first and feet last. Blood sprays from the hopper and the discharge spout, and pools on the car floor.
    - A gauge on the control box and the look-at line show the progress and the waiting credit.
    - About 20 active seconds later the body is gone and +0.1 tank is credited.
+   - The physics only moves the visual. The job's record alone sets the time, the credit and the save
+     (`world/chipperRagdoll.ts`, details under Limits).
 6. The machine runs at zero train fuel (electric/auxiliary). It only grinds while the train is parked. Riding or pausing keeps the
    progress, clears the airborne spray and stops the sound; it resumes when parked.
 
@@ -101,3 +104,14 @@ Blind Screachers hear it through the same path. Their belief is the machine's po
 - Old saves: a loose item, prop or fuel cart that was saved where the machine now stands is restored where it was. Nothing is moved
   or teleported, but such an object sits inside the machine's box.
 - The machine's sounds were checked structurally only (duration, level, loop seams), not by ear.
+- **The feed physics** (`world/chipperRagdoll.ts ChipperFeed`) is deliberately controlled:
+  - It runs in a small private physics world in the car's frame: a few boxes of the machine around the hopper's open mouth, and the
+    car floor. It never touches the game's physics, the player, the machine's collider or another body. It steps only while the
+    machine grinds; riding or paused, the body hangs as it is.
+  - A part is pulled in once it is inside the mouth, or anyway 0.3 m past its turn. From 90 % of the progress every part is pulled
+    in, so the body cannot stay stuck. A part pulled in by that deadline may clip briefly through a rim.
+  - Parts still outside have capped speeds and stay inside the car. A body that turns non-finite or runs away gets its bones back and
+    finishes with the old posed feed (`chipperView.ts FedBody`), as does a body without a ragdoll. The job is credited either way.
+  - The machine's boxes are approximations of the model (solid sides where the hopper has low lips and a flap curtain). A dangling
+    limb can rest a few centimetres off the real surface.
+  - After a load mid-grind, the rebuilt body starts limp from the saved progress, not from the exact pose it had.

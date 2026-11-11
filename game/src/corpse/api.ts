@@ -7,6 +7,7 @@
 
 import type * as THREE from 'three';
 import type {BodyRecordJSON} from './bodyRecord';
+import type {RagdollTarget} from '../physics/ragdoll';
 
 /** The body in the player's hands. */
 export interface HeldBody {
@@ -46,4 +47,9 @@ export interface CorpseSystemApi {
   buildBody(rec: BodyRecordJSON): THREE.Object3D | null;
   /** Free a model from buildBody / a taken HeldBody. */
   disposeBody(obj: THREE.Object3D): void;
+  /**
+   * The ragdoll target (its actor: bones, scale, rig) of a model from buildBody / a taken HeldBody, until disposeBody (null: not one of
+   * this system's bodies). A sink may run its own ragdoll on it (the chipper's feed, world/chipperRagdoll.ts); the object stays the sink's.
+   */
+  ragdollTarget?(obj: THREE.Object3D): RagdollTarget | null;
 }
