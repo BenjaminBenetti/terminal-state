@@ -1417,6 +1417,15 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
     knobs: [{what: 'the table snacks', value: 'CON_SNACKS / CON_TABLE_SNACK_ROWS / CON_PANEL_DRINK_ROWS', at: B.src.at(F.tables, 'CON_TABLE_SNACK_ROWS'), overrides: ['none']}],
     at: [B.src.at(F.tables, 'CON_TABLE_SNACK_ROWS'), B.src.at(F.tables, 'CON_PANEL_DRINK_ROWS')],
   });
+  // --- task gameplay-feedback-20261111 (lane FUEL-LOOT): the Bunker storey S's station rations on the floor (layout version 3)
+  if (levels.includes('bunker')) add({
+    id: 'bunker-station-rations', family: 'fixture', label: 'Bunker storey S: station rations in place of floor ammo', class: 'conditional', levels: ['bunker'],
+    summary: 'Layout version 3 (gen/bunker/v2/stationRations.ts placeStationRations): on the platform / elevator storey S only, floor(N / 2) of the storey\'s N ammo opportunities (its ammo-capable holders + the S floor program\'s ammo boxes) become food / drink, in a stable hash order. A converted holder rolls BUNKER_STATION_RATIONS (prop-level loot key reactor-bunker-rations); a converted floor box becomes ONE serving of the same rows on the same spot. Storeys 1-5 and stations first built as version 1 / 2: unchanged. The natural food half applies on first spawn.',
+    items: LT.BUNKER_STATION_RATIONS.items.map(([itemId, w]) => ({itemId, count: 1, note: `weight ${w}`})),
+    probability: 'Seeded: a converted S floor ammo box per level is ~0.5 (the S floor program places ~1.4 ammo boxes; the holders take most conversions).',
+    knobs: [{what: 'the rations rows', value: 'BUNKER_STATION_RATIONS', at: B.src.at(F.tables, 'BUNKER_STATION_RATIONS'), overrides: ['none']}],
+    at: [B.src.at(F.tables, 'BUNKER_STATION_RATIONS'), B.src.at('game/src/gen/bunker/v2/stationRations.ts', 'placeStationRations')],
+  });
 
   // --- task reactor-build-20261101: the Reactor's restart parts (guaranteed, placed ONCE by its generator; never in a loot table)
   if (levels.includes('reactor')) add({
