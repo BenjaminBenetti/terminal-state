@@ -19,7 +19,7 @@ import {SAVE_SLOTS} from '../campaign/types';
 import type {LevelId} from '../levels/types';
 import {ITEMS, type ItemDef} from '../items/items';
 import {LEGACY_AMMO_IDS} from '../items/calibers';
-import {FILTER_LIFE_S, GEAR_SLOTS, LEGACY_FILTER_LIFE_S, gearSpec, isAirtank, isFilterMask} from '../items/gear';
+import {FILTER_LIFE_S, GEAR_SLOTS, LEGACY_BACKPACK_SLOTS, LEGACY_FILTER_LIFE_S, gearSpec, isAirtank, isFilterMask} from '../items/gear';
 import {HOTBAR_SIZE, MELEE_SLOTS, THROW_SLOTS} from '../items/inventory';
 import {WEAPONS} from '../weapons/weapons';
 import {LOCKBOX_SLOTS} from '../run/trainLockbox';
@@ -283,7 +283,8 @@ function stack(v: unknown, path: string, o: {uid: boolean; inBag: boolean; seen?
   if (slots > 0 && o.inBag) bad(path, 'a backpack inside a backpack');
   if (has(s, 'bag')) {
     if (slots === 0) bad(`${path}.bag`, `${def.id} cannot hold items`);
-    const bag = arr(s.bag, `${path}.bag`, slots, slots);
+    // (task gameplay-feedback-20261111, lane STORAGE: a bag saved at the older 12 slots loads padded to today's size — both lengths are legal)
+    const bag = arr(s.bag, `${path}.bag`, slots, Math.min(slots, LEGACY_BACKPACK_SLOTS));
     bag.forEach((c, i) => { if (c !== null) stack(c, `${path}.bag[${i}]`, {uid: true, inBag: true, seen: o.seen}); });
   } else if (slots > 0 && o.needBag) bad(path, `backpack ${def.id} has no contents list`);
 }
@@ -291,13 +292,14 @@ function stack(v: unknown, path: string, o: {uid: boolean; inBag: boolean; seen?
 const slotList = (v: unknown, path: string, max: number, seen: Set<number> | undefined, needBag = true): void =>
   arr(v, path, max).forEach((s, i) => { if (s !== null) stack(s, `${path}[${i}]`, {uid: true, inBag: false, seen, needBag}); });
 
-/** InventoryJSON (v1–v3; Inventory.loadJSON migrates older ones). */
+/** InventoryJSON (v1–v3; Inventory.loadJSON migrates older ones). Lane STORAGE: + the optional `packBase` (absent = an older save's 12). */
 function inventory(v: unknown, path: string, seen: Set<number>): void {
   const j = obj(v, path);
-  only(j, path, ['v', 'hotbar', 'pack', 'gear', 'throw', 'melee', 'selected', 'meleeSelected', 'nextUid'], ['v', 'hotbar', 'pack', 'gear', 'selected', 'nextUid']);
+  only(j, path, ['v', 'hotbar', 'pack', 'packBase', 'gear', 'throw', 'melee', 'selected', 'meleeSelected', 'nextUid'], ['v', 'hotbar', 'pack', 'gear', 'selected', 'nextUid']);
   int(j.v, `${path}.v`, 1, 3);
   slotList(j.hotbar, `${path}.hotbar`, HOTBAR_SIZE, seen);
   slotList(j.pack, `${path}.pack`, 64, seen);
+  if (has(j, 'packBase')) int(j.packBase, `${path}.packBase`, 1, 64); // task gameplay-feedback-20261111: the base pockets it was written with
   const gear = obj(j.gear, `${path}.gear`);
   for (const [k, s] of Object.entries(gear)) {
     if (!(GEAR_SLOTS as readonly string[]).includes(k)) bad(`${path}.gear`, `unknown gear slot '${k}'`);

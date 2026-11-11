@@ -1,7 +1,9 @@
-// Task train-lockbox-windows-20261101-232156 (lane BOX): the LOCKBOX — a 40-slot store that belongs to the run's player train
+// Task train-lockbox-windows-20261101-232156 (lane BOX): the LOCKBOX — a LOCKBOX_SLOTS-slot store that belongs to the run's player train
 // (run/playerTrain.ts PlayerTrainRecord.lockbox), so it is the SAME container in every level (Subway / Office / Mall / Reactor).
 //
-// - 40 ordinary inventory slots (ItemStack, the item's own stackMax), not volume. Every item kind fits, a backpack whole with its
+// - LOCKBOX_SLOTS (LOCKBOX_GRID 10 × 5 = 50; 40 = 10 × 4 before task gameplay-feedback-20261111, lane STORAGE: one more row, the same
+//   columns) ordinary inventory slots (ItemStack, the item's own stackMax), not volume. An older 40-slot save loads into the first 40
+//   slots exactly as saved (load reads by index; the new row starts empty). Every item kind fits, a backpack whole with its
 //   contents (`bag`); stacks keep their uid, count, gun magazine `mag`, gas-mask `filter` charge and an airtank's `air`.
 // - It lives in the player-train RunParticipant: Travel keeps it (nothing touches the record), Retry restores it with the player's
 //   inventory from the level-entry snapshot, NewGame empties it. There is no on-disk run save (a page reload starts a new run).
@@ -18,7 +20,12 @@ import {gearSpec, isAirtank, isFilterMask} from '../items/gear';
 import {stackToJSON, stacksIn, type ItemStack, type StackJSON} from '../items/inventory';
 import {WEAPONS} from '../weapons/weapons';
 
-export const LOCKBOX_SLOTS = 40;
+/**
+ * The Lockbox's shape (its view lays the slots out in LOCKBOX_GRID.columns). Task gameplay-feedback-20261111 (lane STORAGE): one more
+ * row, the same columns — 10 × 4 -> 10 × 5. Change the shape HERE only (the Skyways trunk has its own TRUNK_SLOTS).
+ */
+export const LOCKBOX_GRID: Readonly<{columns: number; rows: number}> = Object.freeze({columns: 10, rows: 5});
+export const LOCKBOX_SLOTS = LOCKBOX_GRID.columns * LOCKBOX_GRID.rows;
 export const LOCKBOX_NAME = 'Lockbox';
 
 export interface TrainLockboxJSON { v: 1; slots: (StackJSON | null)[] }

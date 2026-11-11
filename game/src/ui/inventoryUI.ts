@@ -11,8 +11,8 @@
 // Iteration 16 (lane GEAR): a GEAR panel (head / chest / hands / feet / back). Drag gear onto its slot (or double-click /
 // right-click / Wear) to wear it, off again onto a pocket / quick slot (or Take off) or out of the panel to drop it.
 // Refusals are explained in the detail line (red): wrong slot, a chest rig whose extra pockets still hold items, a
-// backpack into the pockets. The pockets heading shows their live count (12, +4 with a chest rig; extra pockets are
-// dashed). The WORN BACKPACK's contents are never shown or reachable here: its slot says to put it down (6) to open it;
+// backpack into the pockets. The pockets heading shows their live count (PACK_SIZE, +4 with a chest rig; extra pockets are
+// dashed; task gameplay-feedback-20261111, lane STORAGE: 18 = POCKET_GRID 6 × 3, one row more than the old 12). The WORN BACKPACK's contents are never shown or reachable here: its slot says to put it down (6) to open it;
 // dragging it out of the panel sets it down on the ground (gear/system.ts), exactly like 6 + click.
 //
 // Task office-overhaul-20261030 (lane INTERACT, #6): the GRENADE SLOT (key G) is the 6th cell of the quick-slot row

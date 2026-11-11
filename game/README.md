@@ -45,7 +45,7 @@ Ctrl+Shift+P toggles the performance overlay (see below). Drop an item by draggi
 is not supported.
 
 Train Lockbox (task train-lockbox-windows-20261101-232156): the big steel box in the player train's rear compartment is your own
-**40-slot storage that travels with the train**. Aim + **E** opens it: your slots on the left, the box on the right; click moves an
+**50-slot storage (10 × 5) that travels with the train**. Aim + **E** opens it: your slots on the left, the box on the right; click moves an
 item across, drag / Shift-drag work as in a grounded backpack. The world is not paused. E / 6 / Esc / Tab, walking away or getting hit
 closes it. The contents carry between levels. Retry restores them to the level-entry state with your inventory; New game empties it.
 **Developer code:** with the Lockbox open, type **1 3 3 7** to add the three guns, one of each gear item and a full stack of each ammo
