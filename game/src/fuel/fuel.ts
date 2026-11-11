@@ -179,8 +179,11 @@ export interface TrainFuelJSON { v: 1; tank: number; cargo: CargoCartJSON[] }
  * — the fuel cans realized as loot lots in the station's holders (`<holderKey>#<lotId>`, gen/fuelHolders.ts), re-placed on every build
  * (the holder memory then removes the taken ones like any lot). A v1 record (released train-fuel-system saves) has no lots: its
  * station gets the one-time v2 delta on its next build (world/fuelStations.ts).
+ * v3 (task gameplay-feedback-20261111, lane FUEL-LOOT): the v2 shape, written by the coordinator that keys the realization by the station
+ * being BUILT. Releases writing v2 realized a journey's destination under the DEPARTURE station's key (Game's `holders` phase ran before
+ * run.current moved on): a v2 record may describe another station, so world/fuelStations.ts reads v2 records as legacy.
  */
-export interface StationFuelJSON { v: 1 | 2; realized: boolean; carts: StationCartJSON[]; lots?: string[] }
+export interface StationFuelJSON { v: 1 | 2 | 3; realized: boolean; carts: StationCartJSON[]; lots?: string[] }
 export const FUEL_LANE = 'fuel.station';
 /** A realized fuel lot's key: the holder's memory key + the lot id. */
 export const FUEL_LOT_KEY = /^[A-Za-z][A-Za-z0-9_]{0,47}@-?\d{1,4}:-?\d{1,9},-?\d{1,9}#\d{1,9}$/;
@@ -234,10 +237,10 @@ export function stationFuelProblem(v: unknown): string | null {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return 'the station fuel record must be an object';
   const o = v as Record<string, unknown>;
   for (const k of Object.keys(o)) if (!['v', 'realized', 'carts', 'lots'].includes(k)) return `unexpected station fuel field '${k}'`;
-  if (o.v !== 1 && o.v !== 2) return 'unsupported station fuel version';
+  if (o.v !== 1 && o.v !== 2 && o.v !== 3) return 'unsupported station fuel version';
   if (typeof o.realized !== 'boolean') return 'station fuel needs a realized flag';
   if (o.v === 1 && o.lots !== undefined) return 'a v1 station fuel record has no lots';
-  if (o.v === 2) {
+  if (o.v === 2 || o.v === 3) {
     if (!Array.isArray(o.lots) || o.lots.length > FUEL_LOTS_MAX) return `station fuel lots must be a list of at most ${FUEL_LOTS_MAX}`;
     const seen = new Set<string>();
     for (const k of o.lots) {

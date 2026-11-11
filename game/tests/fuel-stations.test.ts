@@ -227,7 +227,7 @@ describe('the station coordinator (world/fuelStations.ts) in Game\'s build order
     s.leave();
     const rec = s.run.laneStore<StationFuelJSON>(FUEL_LANE, s.key)!;
     expect(stationFuelProblem(rec)).toBeNull();
-    expect(rec).toMatchObject({v: 2, realized: true, carts: []});
+    expect(rec).toMatchObject({v: 3, realized: true, carts: []});
     expect(rec.lots!.length).toBe(plan.cans);
     // revisit: the same lots, nothing new
     s.enter();
@@ -328,7 +328,7 @@ describe('the station coordinator (world/fuelStations.ts) in Game\'s build order
     expect(s.stationUnits()).toBe(3 + delta);
     s.leave();
     const rec = s.run.laneStore<StationFuelJSON>(FUEL_LANE, s.key)!;
-    expect(rec).toMatchObject({v: 2, realized: true});
+    expect(rec).toMatchObject({v: 3, realized: true});
     expect(rec.lots!.length).toBe(delta);
     s.enter();
     expect(s.fs.last).toMatchObject({mode: 'kept', lots: 0, split: 0});
@@ -373,7 +373,7 @@ describe('the station coordinator (world/fuelStations.ts) in Game\'s build order
     s.fs.flush();
     const mem = s.run.memory(s.key);
     mem.pickups = capturePickups(s.pickups.list, () => undefined);
-    expect(s.run.laneStore<StationFuelJSON>(FUEL_LANE, s.key)).toMatchObject({v: 2, realized: true});
+    expect(s.run.laneStore<StationFuelJSON>(FUEL_LANE, s.key)).toMatchObject({v: 3, realized: true});
     // Continue: the station is built again from that memory
     s.enter();
     expect(s.fs.last).toMatchObject({mode: 'kept', loose: 0});
