@@ -31,6 +31,8 @@ import {corpseFeedable} from '../src/ai/corpseTrait';
 import {BODIES, bodyProblem, type BodyRecordJSON} from '../src/corpse/bodyRecord';
 import {CORPSE_CARRY_PARTICIPANT, STATION_BODIES_LANE, carryProblem, stationBodiesProblem, type StationBodiesJSON} from '../src/corpse/bodyLanes';
 import {poseLying, restingLift} from '../src/corpse/bodyPose';
+import {DamageSystem, corpseVolumes} from '../src/damage/system';
+import {woundsOf} from '../src/damage/wounds';
 import {CORPSE, CORPSE_TEXT, CorpseSystem} from '../src/world/corpses';
 import {CHIPPER_TEXT, ChipperSystem, type ChipperAudioLike, type ChipperHost} from '../src/world/chipper';
 import {CHIPPER_ANCHORS} from '../src/world/chipperSpec';
@@ -62,7 +64,7 @@ let zombieGltf: GLTF;
 const lazy: Record<string, GLTF> = {};
 beforeAll(async () => {
   zombieGltf = await loadStripped('assets/models/zombie-rigged.glb');
-  for (const k of ['enemy_blightbelly', 'enemy_strainer', 'enemy_siren']) lazy[k] = await loadStripped(ENEMY_MODEL_FILES[k].url);
+  for (const k of ['enemy_blightbelly', 'enemy_strainer', 'enemy_siren', 'enemy_screacher_sc01', 'enemy_screacher_sc03']) lazy[k] = await loadStripped(ENEMY_MODEL_FILES[k].url);
 }, 120000);
 
 const SUB = (): StationLayout => LEVELS.subway.generate('main', {levelSeed: 4242});
@@ -136,8 +138,9 @@ function leave(c: Rig): void {
 }
 
 /** A dead layout enemy `index` lying (its Death clip played out) with its root at a train-local floor point. */
-function deadEnemy(c: Rig, index: number, lx: number, lz: number, yaw = 0, o: {qa?: boolean} = {}): EnemyActor {
+function deadEnemy(c: Rig, index: number, lx: number, lz: number, yaw = 0, o: {qa?: boolean; spawn?: Partial<ZombieSpawn>} = {}): EnemyActor {
   const p = c.h.trainPlacement!, w = trainToWorld(p, lx, SPEC.floorY, lz);
+  if (o.spawn) Object.assign(c.h.layout.zombies[index], o.spawn); // (the layout's own spawn: the record reads its type / look / variant)
   const sp: ZombieSpawn = {...c.h.layout.zombies[index], x: w.x, z: w.z, yaw};
   const {actor: z} = createEnemyActor(sp, lazy, rng(index + 3), () => new ZombieActor(zombieGltf, sp, rng(index + 3)));
   z.brain.damage(999, w.x, w.z);
@@ -155,6 +158,13 @@ function standIn(c: Rig, lx: number, lz: number, at?: THREE.Vector3): void {
   const p = c.h.trainPlacement!, w = trainToWorld(p, lx, SPEC.floorY, lz);
   c.h.player.spawn(w.x, w.z, 0, w.y);
   if (at) lookAt(c.h, at.x, at.y, at.z); else syncCamera(c.h);
+}
+
+/** Face along the car (local +X: open floor ahead in the aisle). */
+function faceAlong(c: Rig): void {
+  c.h.player.yaw = Math.atan2(-c.h.trainPlacement!.front, 0);
+  c.h.player.pitch = 0;
+  syncCamera(c.h);
 }
 
 const hipsOf = (z: {root: THREE.Object3D}) => z.root.getObjectByName('Hips')!.getWorldPosition(new THREE.Vector3());
@@ -596,10 +606,134 @@ describe('corpses: the real chipper takes the body', () => {
   }, 180000);
 });
 
+const corpseVolumesOf = (z: EnemyActor) => corpseVolumes(z as never);
+
+/** Does `root` draw the meshes of the loaded model `key` (a skinned clone shares its geometry)? */
+function drawsModel(root: THREE.Object3D, key: string): boolean {
+  const geos = new Set<THREE.BufferGeometry>();
+  lazy[key].scene.traverse(o => { if ((o as THREE.Mesh).isMesh) geos.add((o as THREE.Mesh).geometry); });
+  let hit = false;
+  root.traverse(o => { if ((o as THREE.Mesh).isMesh && geos.has((o as THREE.Mesh).geometry)) hit = true; });
+  return hit;
+}
+
+describe('corpses: the Screacher (headless, four bodies of one type)', () => {
+  it('its variant is recorded at pickup, kept by a save, rebuilt as the SAME body; it lies grounded; no Head bone is needed', () => {
+    const L = SUB(), c = rig(L);
+    enter(c, L, KA);
+    const mid = (I.x0 + I.x1) / 2 - 3;
+    const z = deadEnemy(c, 2, mid + 0.6, 0.2, 0, {spawn: {archetype: 'screacher', variant: 'sc03'}});
+    expect(z.archetype).toBe('screacher');
+    expect(drawsModel(z.root, 'enemy_screacher_sc03')).toBe(true);
+    expect(corpseVolumesOf(z).some(v => v.part === 'head')).toBe(false); // headless: no head volume to aim at
+    standIn(c, mid - 1.0, 0.2, hipsOf(z));
+    expect(prompt(c)).toBe(CORPSE_TEXT.pickup);
+    press(c.h, 'KeyE');
+    const held = c.sys.held()!;
+    expect(held.record).toMatchObject({arch: 'screacher', variant: 'sc03'});
+    // a save keeps it (strictly valid), a load rebuilds the sc03 body — never the default sc01
+    const carry = structuredClone(c.sys.participant().save()) as {held: BodyRecordJSON};
+    expect(carryProblem(carry, corpseFeedable)).toBeNull();
+    expect(carry.held.variant).toBe('sc03');
+    const d = rig(SUB());
+    d.sys.participant().load(carry);
+    enter(d, SUB(), KA);
+    expect(d.sys.held()?.record.variant).toBe('sc03');
+    expect(drawsModel(d.sys.held()!.object, 'enemy_screacher_sc03')).toBe(true);
+    expect(drawsModel(d.sys.held()!.object, 'enemy_screacher_sc01')).toBe(false);
+    expect(CorpseSystem.modelKeys([carry.held])).toEqual(['enemy_screacher_sc03']);
+    // down on the platform: the station's record keeps the variant; the revisit rebuilds the sc03 body, grounded
+    const p = c.h.trainPlacement!, out = trainToWorld(p, mid, 0, -(SPEC.width / 2 + 1.6));
+    c.h.player.spawn(out.x, out.z, p.front === 1 ? 0 : Math.PI, 0);
+    syncCamera(c.h);
+    press(c.h, 'KeyE');
+    expect(c.h.run.here(KA).map(r => [r.id, r.arch, r.variant])).toEqual([[held.record.id, 'screacher', 'sc03']]);
+    expect(Math.abs(Math.min(...skinned(c.sys.lying[0].actor.root, 1).map(v => v.y)))).toBeLessThan(0.002);
+    leave(c);
+    const n0 = c.builds.length;
+    enter(c, SUB(), KA);
+    expect(c.builds[n0].s).toMatchObject({archetype: 'screacher', variant: 'sc03'});
+    const back = c.sys.lying[0].actor;
+    expect(back.archetype).toBe('screacher');
+    expect(drawsModel(back.root, 'enemy_screacher_sc03')).toBe(true);
+    expect(drawsModel(back.root, 'enemy_screacher_sc01')).toBe(false);
+    expect(Math.abs(Math.min(...skinned(back.root, 1).map(v => v.y)))).toBeLessThan(0.002);
+    expect(census(c)).toEqual([held.record.id]);
+    // a body WITHOUT a Head bone at all (keyed look-ups fall back): picked up, carried, put down, fed — nothing needs a head
+    const e = deadEnemy(c, 0, mid + 0.6, 0.2, 0, {spawn: {archetype: 'screacher', variant: 'sc01'}});
+    const head = e.root.getObjectByName('Head');
+    if (head) head.name = 'HeadGone';
+    expect(e.root.getObjectByName('Head')).toBeUndefined();
+    standIn(c, mid - 1.0, 0.2, hipsOf(e));
+    press(c.h, 'KeyE');
+    expect(c.sys.held()?.record).toMatchObject({arch: 'screacher', variant: 'sc01'});
+    standIn(c, mid - 1.0, 0.2);
+    faceAlong(c);
+    press(c.h, 'KeyE'); // down in the car
+    expect(c.sys.held()).toBeNull();
+    const lyingE = c.sys.lying.find(b => b.actor === e)!;
+    expect(lyingE.points.length).toBeGreaterThan(5);
+    expect(Math.abs(Math.min(...skinned(e.root, 1).map(v => v.y)) - p.floorY)).toBeLessThan(0.002);
+    expect(c.sys.departBlock()).toBeNull();
+  }, 180000);
+});
+
+describe('corpses: handled bodies take hits like corpses', () => {
+  it('a body lying in the station / the parked car is a corpse hit target (wounds while it is the actor that died; blood once rebuilt); never in the hands', () => {
+    const L = SUB(), c = rig(L), dmg = new DamageSystem(null, null);
+    enter(c, L, KA);
+    Object.assign(c.h, {damage: dmg});
+    const mid = (I.x0 + I.x1) / 2 - 3;
+    const z = deadEnemy(c, 0, mid + 0.6, 0.2);
+    dmg.installZombie(z); // (Game.spawnEnemy: its own wound materials)
+    const w = woundsOf(z)!;
+    expect(w).toBeTruthy();
+    standIn(c, mid - 1.0, 0.2, hipsOf(z));
+    press(c.h, 'KeyE');
+    expect(c.sys.hitTargets()).toEqual([]); // carried: no target
+    standIn(c, mid - 1.0, 0.2);
+    faceAlong(c);
+    press(c.h, 'KeyE'); // down in the parked car
+    expect(c.sys.hitTargets()).toEqual([z]);
+    expect(z.brain.alive).toBe(false);
+    const shoot = (target: EnemyActor) => {
+      lookAt(c.h, hipsOf(target).x, hipsOf(target).y, hipsOf(target).z);
+      const cam = c.h.camera, o = cam.getWorldPosition(new THREE.Vector3()), d = cam.getWorldDirection(new THREE.Vector3());
+      const hit = dmg.corpseHit(c.sys.hitTargets() as never, {x: o.x, y: o.y, z: o.z}, {x: d.x, y: d.y, z: d.z}, 10);
+      expect(hit?.z).toBe(target);
+      dmg.beginShot();
+      return dmg.hitZombie(hit!.z, o.clone().addScaledVector(d, hit!.t), d, hit!.part, {damage: 30, pellet: false, weapon: 'rifle'}, true);
+    };
+    const n0 = w.wounds.length;
+    expect(shoot(z).object).toBe('corpse');
+    expect(w.wounds.length).toBe(n0 + 1); // its own wound materials (installed when it spawned): a real wound, no new material
+    expect(dmg.counts.corpse).toBe(1);
+    // rebuilt from its record (Continue): still a target, blood and flesh bits, no wound controller (no new materials)
+    leave(c);
+    const d2 = rig(SUB()), dmg2 = new DamageSystem(null, null);
+    d2.h.playerTrain.participant().load(structuredClone(c.h.playerTrain.participant().save()));
+    enter(d2, SUB(), KA);
+    Object.assign(d2.h, {damage: dmg2});
+    const r = d2.sys.lying[0].actor;
+    expect(d2.sys.hitTargets()).toEqual([r]);
+    expect(woundsOf(r)).toBeUndefined();
+    standIn(d2, mid - 1.0, 0.2);
+    lookAt(d2.h, hipsOf(r).x, hipsOf(r).y, hipsOf(r).z);
+    const cam = d2.h.camera, o = cam.getWorldPosition(new THREE.Vector3()), dir = cam.getWorldDirection(new THREE.Vector3());
+    const hit = dmg2.corpseHit(d2.sys.hitTargets() as never, {x: o.x, y: o.y, z: o.z}, {x: dir.x, y: dir.y, z: dir.z}, 10);
+    expect(hit?.z).toBe(r);
+    expect(dmg2.hitZombie(hit!.z, o.clone().addScaledVector(dir, hit!.t), dir, hit!.part, {damage: 30, pellet: false, weapon: 'rifle'}, true).object).toBe('corpse');
+    expect(woundsOf(r)).toBeUndefined();
+    // Game wiring: shots and swings test the handled bodies after the world's corpses (the nearer wins)
+    const src = readFileSync(fileURLToPath(new URL('../src/game.ts', import.meta.url)), 'utf8');
+    expect(src.match(/this\.damage\.corpseHit\(this\.corpses\?\.hitTargets\(\) \?\? \[\]/g)?.length).toBe(2);
+  }, 180000);
+});
+
 describe('corpses: poses, models', () => {
-  it('the lying pose (each family\'s Death clip end) rests on the floor for the zombie, Blightbelly, Strainer and Siren', () => {
-    for (const arch of ['zombie', 'blightbelly', 'strainer', 'siren']) {
-      const sp: ZombieSpawn = {x: 0, z: 0, yaw: 0, type: 'shambler', area: 0, ...(arch !== 'zombie' ? {archetype: arch as never} : {})};
+  it('the lying pose (each family\'s Death clip end) rests on the floor for the zombie, Blightbelly, Strainer, Siren and Screacher', () => {
+    for (const [arch, variant] of [['zombie'], ['blightbelly'], ['strainer'], ['siren'], ['screacher', 'sc01'], ['screacher', 'sc03']]) {
+      const sp: ZombieSpawn = {x: 0, z: 0, yaw: 0, type: 'shambler', area: 0, ...(arch !== 'zombie' ? {archetype: arch as never} : {}), ...(variant ? {variant} : {})};
       const {actor, fallback} = createEnemyActor(sp, lazy, rng(), () => new ZombieActor(zombieGltf, sp, rng()));
       expect(fallback, arch).toBe(false);
       actor.root.position.set(3, 1.5, -2);

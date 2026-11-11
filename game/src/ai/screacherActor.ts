@@ -153,6 +153,11 @@ export class ScreacherActor {
     this.syncTransform();
   }
 
+  /** Task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): an authored clip by name (a carried body's resting pose: the Death clip's end frame). */
+  authoredClip(name: string): THREE.AnimationClip | null {
+    return this.actions.get(name)?.getClip() ?? null;
+  }
+
   get hasRig(): boolean {
     return this.bones.size === SCREACHER_BONES.length && SCREACHER_CLIPS.every(c => this.actions.has(c));
   }
