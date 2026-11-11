@@ -643,3 +643,33 @@ reviewed by ear on the build worker. Raw takes are kept outside Git.
 - `assets/audio/gun-hornet-shot-01.mp3` — gunHornetShot (Sound Lab job 20261110T064738-1979131141)
 - `assets/audio/gun-hornet-shot-02.mp3` — gunHornetShot (Sound Lab job 20261110T065448-1388891472)
 <!-- END gun-variety-audio-20261110 -->
+
+<!-- BEGIN screacher-audio-20261110 (screacher-build.mjs) -->
+## Screacher audio (echo scream, frenzy shriek, idle wheeze, death gurgle)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the Screacher
+task's local Sound Lab allowance (11 jobs of a 12-job cap). Powered by Stability AI. Stability AI Community License +
+Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades,
+levelling, MP3) built by `tools/audio-pipeline/screacher-build.mjs` (provenance: `assets/derivatives/audio-screacher.json`). Not
+reviewed by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/screacher-scream-01.mp3` — screacherScream (Sound Lab job 20261110T225101-1517457293)
+- `assets/audio/screacher-scream-02.mp3` — screacherScream (Sound Lab job 20261110T225445-2120082079)
+- `assets/audio/screacher-scream-03.mp3` — screacherScream (Sound Lab job 20261110T225449-1208249476)
+- `assets/audio/screacher-shriek-01.mp3` — screacherShriek (Sound Lab job 20261110T225459-1708136229)
+- `assets/audio/screacher-shriek-02.mp3` — screacherShriek (Sound Lab job 20261110T225645-1982763445)
+- `assets/audio/screacher-wheeze-01.mp3` — screacherWheeze (Sound Lab job 20261110T225115-1531970516)
+- `assets/audio/screacher-wheeze-02.mp3` — screacherWheeze (Sound Lab job 20261110T225503-1765310184)
+- `assets/audio/screacher-wheeze-03.mp3` — screacherWheeze (Sound Lab job 20261110T225503-1765310184)
+- `assets/audio/screacher-death-01.mp3` — screacherDeath (Sound Lab job 20261110T225119-1271740027)
+<!-- END screacher-audio-20261110 -->
+
+<!-- BEGIN enemy-screacher-20261110 (build-screacher.mjs) -->
+## The Screacher (enemy, four bodies)
+
+One enemy with four approved bodies. Each was generated for this project with Meshy T2.5 image-to-3D (smart topology, 2K PBR; 1 attempt and 15 credits each) through the Meshy MCP under the user's task authorization, conditioned on the project's own user-approved concept image of that body (a Codex native image generation). Rigged and animated locally on CPU by `tools/asset-pipeline/enemy/build-screacher.mjs`: the shared 18-joint skeleton, automatic skin weights and hand-authored procedural clips (not motion capture); the provider's texture maps are resized / re-encoded only (hash-only provenance: `assets/derivatives/enemy-screacher-<variant>.json`). AI-generated assets: provider terms apply; unapproved prototype, no licence or commercial clearance implied. Raw masters, provider maps and the input images are kept outside Git.
+
+- `assets/models/enemy-screacher-sc01.glb` — Screacher SC01 "Hollow Commuter": a headless commuter in a torn suit jacket, shirt and tie (Meshy task 01a1c79e-a37b-7105-bfd5-f5ccc500aa07)
+- `assets/models/enemy-screacher-sc02.glb` — Screacher SC02 "Track Ganger": a headless track worker in orange hi-vis coveralls and work boots (Meshy task 01a1c79e-ab85-767c-bb51-d32482b9d9cf)
+- `assets/models/enemy-screacher-sc03.glb` — Screacher SC03 "Lopsided Sleeper": a headless, lopsided sleeper in a vest and striped pyjama trousers, barefoot (Meshy task 01a1c79e-b350-7726-8c6b-9ed1cccd1ef8)
+- `assets/models/enemy-screacher-sc04.glb` — Screacher SC04 "Long-Stride Runner": a headless runner in a track jacket, shorts and trainers (Meshy task 01a1c79d-2dc8-7345-b577-f12daca5f86f)
+<!-- END enemy-screacher-20261110 -->

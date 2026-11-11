@@ -473,7 +473,13 @@ Both run in `full` mode only.
 - a ragdolled enemy: 2.
 
 A render object exists per object, so a new object needs its own. Not covered by the census rig: Market people and wares
-being handled, the fuel cart and its hose, the Bunker's objective objects, the Siren, Strainer and Blightbelly.
+being handled, the fuel cart and its hose, the Bunker's objective objects, the Siren, Strainer and Blightbelly, and the Screacher.
+
+The Screacher was added after this census (task studio-screacher-production-20261110-221858-01). Like the other lazily loaded
+enemy models it is not in the boot preload: its four bodies are `enemy_screacher_sc01` … `enemy_screacher_sc04` in
+`ENEMY_MODEL_FILES` (`game/src/ai/enemyModels.ts`), and `enemyModelKeysFor` selects exactly the variants the layout's Screachers
+carry (`ZombieSpawn.variant`). So only a level whose seeded roster placed Screachers loads any of them — one to three bodies — and
+a level without Screachers loads none. Their first-use render objects were not measured here.
 
 **The reverb kernels** (`audio/reverb.ts`, `audio/sfx.ts`). Each room kind's stereo impulse response was built in one go:
 - the current room at audio start;

@@ -16,21 +16,34 @@
 // its exported constants (ENEMY_FAMILY_ADAPTER: brain.ts ZOMBIE_STATS, ai/blightbelly.ts, ai/siren.ts, ai/creatureActor.ts), the
 // profiles' family ELIGIBILITY rules and a sampled ELIGIBILITY census (draws vs placed of a restricted family). A spawn's context
 // is the generator's own tag (spawnTables spawnContextOf), never inferred from the storey.
+//
+// Task studio-screacher-production-20261110-221858-01 (lane REGISTRY-DOCS), schema 3: THE SEEDED ROSTER (ai/enemyRoster.ts FAMILY_ROSTER
+// / applyEnemyRoster: which special families a level holds AT ALL, from its seed) — the rule of every family (EnemyReference.roster),
+// each level's rates / eligibility and a sampled roster census (EnemyLevelInfo.roster), the roster-only Screacher (weight 0 in every
+// pool) and its model variants. EVERY sampled "what a level holds" figure is now measured with the pass applied: a sample level is the
+// registered generator's plain output (roster version 0 = the per-spawn roll's outcome, kept as the labelled "before the roster pass"
+// stage) followed by applyEnemyRoster at ROSTER_VERSION on that same layout — exactly what the level registry runs for the game.
 
 import * as ST from '../../game/src/ai/spawnTables';
 import {
-  ALL_FAMILIES, ENEMY_FAMILY_IDS, HORDE_CONTEXT, PASSAGE_NOOK_CELLS, SPAWN_PROFILES, acceptedPlaced, baseAreaWeight, eligibilityFailure, roomFamilyPool,
+  ALL_FAMILIES, ENEMY_FAMILY_IDS, HORDE_CONTEXT, PASSAGE_NOOK_CELLS, ROSTER_ONLY_FAMILIES, SPAWN_PROFILES, acceptedPlaced, baseAreaWeight, eligibilityFailure, roomFamilyPool,
   roomIntensity, roomKey, roomModifier, setSpawnCensusHook, spawnContext, spawnContextOf, spawnProfile, validateSpawnProfile,
   type AreaCaps, type AreaMatch, type AreaWeights, type EnemyFamilyId, type FamilyEligibility, type SpawnCandidateReport, type SpawnContextId,
   type SpawnContextRule, type SpawnProfile,
 } from '../../game/src/ai/spawnTables';
 import {ENEMY_ARCHETYPES} from '../../game/src/ai/creatureArchetypes';
 import {pickEnemyArchetype} from '../../game/src/ai/creatureSpawn';
-import {ZOMBIE_STATS, type ZombieStats} from '../../game/src/ai/brain';
+import {HEARING, ZOMBIE_STATS, type ZombieStats} from '../../game/src/ai/brain';
 import {BLIGHTBELLY_BURST, BLIGHTBELLY_STATS} from '../../game/src/ai/blightbelly';
 import {SIREN_CLAW, SIREN_STATS, SIREN_WAKE} from '../../game/src/ai/siren';
 import {LUNGE as RATDOG_LUNGE, RATDOG_STATS} from '../../game/src/ai/creatureActor';
 import {STRAINER_ASSET, STRAINER_MAX_TOP_M, STRAINER_SCALE, STRAINER_STATS} from '../../game/src/ai/strainer'; // task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY)
+import {IMPACT_FAMILY_LOUDNESS, SCREACHER_AGGRO, SCREACHER_ASSET, SCREACHER_ECHO, SCREACHER_MAX_TOP_M, SCREACHER_NOISE, SCREACHER_SCALE, SCREACHER_SENSE, SCREACHER_SPEED, SCREACHER_STATS, SCREACHER_VARIANTS} from '../../game/src/ai/screacher'; // task studio-screacher-production-20261110-221858-01
+// task studio-screacher-production-20261110-221858-01: the seeded roster (the rule table, the pass itself, the roll, the version pin)
+import {
+  FAMILY_ROSTER, ROSTER_LANE, ROSTER_PLACE_PRIORITY, ROSTER_VERSION, ZOMBIE_FREE_LEVELS, applyEnemyRoster, familyInRoster, rosterRate,
+  type RosterReport, type RosterRule,
+} from '../../game/src/ai/enemyRoster';
 import {LEVELS, LEVEL_IDS} from '../../game/src/levels/registry';
 import {validateLevelRegistry} from '../../game/src/levels/levelContract';
 import type {LevelId} from '../../game/src/levels/types';
@@ -54,6 +67,7 @@ import {
   type FamilyRuleGroup, type FamilyStatsVariant, type LevelCensus, type LevelMovesInfo, type ModifierSemantics, type PlacementInfo, type RoomCensus,
   type RoomModifierTable, type RoomRow, type SourceLoc, type SpawnContextInfo, type VocabEntry, type ZombieTypeInfo,
   type AmbientBudgetInfo, type HordeInfo, // task track3-eaton-centre-20261031 (lane PROFILES)
+  type LevelRosterInfo, type LevelRosterRow, type RosterCensus, type RosterFamilyInfo, type RosterInfo, // task studio-screacher-production-20261110-221858-01
 } from './enemyReferenceTypes';
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -70,7 +84,10 @@ export interface EnemyReferenceOptions {
   censusSeeds?: readonly number[];
   /** TESTS ONLY: the profile a level resolves with (default: the registered spawnProfile(level)). Requires censusSeeds: []. */
   profileFor?: (level: LevelId) => SpawnProfile;
-  /** Eligibility census seeds per level with an eligibility rule (default ENEMY_ELIGIBILITY_SEEDS when the census is on). */
+  /**
+   * Eligibility census seeds per level with an eligibility rule (default ENEMY_ELIGIBILITY_SEEDS when the census is on) — and
+   * (task studio-screacher-production-20261110-221858-01) the ROSTER census seeds of every combat level: one sample pass serves both.
+   */
   eligibilitySeeds?: readonly number[];
 }
 
@@ -81,6 +98,14 @@ export const ENEMY_CENSUS_SEEDS: readonly number[] = [11, 222, 3333, 44444];
  * Siren): 20 generated levels, enough to show draws vs placed per level; the 400-run tuning census is in docs/enemy-spawns.md.
  */
 export const ENEMY_ELIGIBILITY_SEEDS: readonly number[] = Array.from({length: 20}, (_, k) => 5003 + 7919 * k);
+/**
+ * Task studio-screacher-production-20261110-221858-01: the fixed SAMPLED roster-census seeds — the SAME 20 generated levels as the
+ * eligibility census (one generation serves both), for every level that can hold enemies. A small sample: the long-run rates are the
+ * roster rule's (FAMILY_ROSTER), and the roll itself is also evaluated over ROSTER_ROLL_CHECK_SEEDS seeds without generating a level.
+ */
+export const ENEMY_ROSTER_SEEDS: readonly number[] = ENEMY_ELIGIBILITY_SEEDS;
+/** Level seeds 1..N the roster ROLL is evaluated for per family and level (familyInRoster: a pure hash; no level is generated). */
+export const ROSTER_ROLL_CHECK_SEEDS = 10_000;
 
 const F = {
   tables: 'game/src/ai/spawnTables.ts', spawn: 'game/src/ai/creatureSpawn.ts', archetypes: 'game/src/ai/creatureArchetypes.ts',
@@ -101,12 +126,14 @@ const F = {
   lingerieSpawns: 'game/src/gen/mall/lingerieSpawns.ts',
   // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): the Skyways convention's cosplay zone context
   cosplaySpawns: 'game/src/gen/skyways/cosplaySpawns.ts', cosplayContext: 'game/src/ai/cosplayContext.ts',
+  // task studio-screacher-production-20261110-221858-01: the Screacher and the seeded family roster
+  screacher: 'game/src/ai/screacher.ts', roster: 'game/src/ai/enemyRoster.ts',
 } as const;
 
 /** The game modules whose exported values the reference reads (this file's imports). Other files appear only as source links. */
 export const ENEMY_GENERATED_FROM: readonly string[] = [
   F.tables, F.archetypes, F.registry, F.frame, F.grid, F.stationKit, F.purposes, F.pistol, F.spawn, F.brain, F.blightbelly, F.siren, F.creatureActor,
-  F.contract, F.mallTypes, F.trackExt, F.strainer, F.lingerieSpawns, F.cosplaySpawns, F.cosplayContext,
+  F.contract, F.mallTypes, F.trackExt, F.strainer, F.lingerieSpawns, F.cosplaySpawns, F.cosplayContext, F.screacher, F.roster,
 ].slice().sort();
 
 /**
@@ -116,7 +143,10 @@ export const ENEMY_GENERATED_FROM: readonly string[] = [
  */
 export const ENEMY_FAMILY_ADAPTER: Readonly<Record<EnemyFamilyId, {
   stats: readonly {variant: string | null; stats: ZombieStats; file: string; symbol: string}[];
-  rules: readonly {title: string; value: object; file: string; symbol: string}[];
+  /** `labels`: this constant's own leaf labels (key path -> [label, unit]), read before the shared RULE_LABEL (the same key can mean another thing in another constant). */
+  rules: readonly {title: string; value: object; file: string; symbol: string; labels?: Readonly<Record<string, readonly [string, string]>>}[];
+  /** Names of the family's model variants (ENEMY_ARCHETYPES[id].variantModels keys), where it has several bodies. */
+  variantNames?: Readonly<Record<string, string>>;
 }>> = {
   zombie: {
     stats: [
@@ -146,6 +176,89 @@ export const ENEMY_FAMILY_ADAPTER: Readonly<Record<EnemyFamilyId, {
     rules: [
       {title: 'Body, reach and claw timing (asset contract enemy-strainer.glb; provisional until the GLB lands)', value: STRAINER_ASSET, file: F.strainer, symbol: 'STRAINER_ASSET'},
       {title: 'Runtime root scale (its own narrow jitter)', value: {scale: STRAINER_SCALE, maxTopM: STRAINER_MAX_TOP_M}, file: F.strainer, symbol: 'STRAINER_SCALE'},
+    ],
+  },
+  // task studio-screacher-production-20261110-221858-01: THE SCREACHER (headless, blind, sound-hunting; placed only by the seeded roster:
+  // its roster rule FAMILY_ROSTER.screacher is shown by the roster block every family has — EnemyReference.roster)
+  screacher: {
+    stats: [{variant: null, stats: SCREACHER_STATS, file: F.screacher, symbol: 'SCREACHER_STATS'}],
+    variantNames: Object.fromEntries(Object.entries(SCREACHER_VARIANTS).map(([id, v]) => [id, v.name])),
+    rules: [
+      {title: 'Paces of its three aggression tiers (it is blind: it walks or runs toward the last sound it believes in)', value: SCREACHER_SPEED, file: F.screacher, symbol: 'SCREACHER_SPEED', labels: {
+        investigate: ['INVESTIGATE pace (heat below the hunt threshold): a stalking walk toward the sound', 'm/s'],
+        hunt: ['HUNT pace (heat from the hunt threshold)', 'm/s'],
+        frenzy: ['FRENZY pace (heat from the frenzy threshold): a run', 'm/s'],
+      }},
+      {title: 'Aggression: every distinct sound adds heat, quiet cools it', value: SCREACHER_AGGRO, file: F.screacher, symbol: 'SCREACHER_AGGRO', labels: {
+        'weight.gunshot': ['heat added by a gunshot-class sound (gunfire, melee contact, explosions, machines)', 'heat'],
+        'weight.run': ['heat added by one sprinting footstep', 'heat'],
+        'weight.land': ['heat added by a landing', 'heat'],
+        'weight.impact': ['heat added by a prop / item impact', 'heat'],
+        'weight.drag': ['heat added by a pushed box scraping the floor', 'heat'],
+        'weight.touch': ['heat added by touching the player, or by a melee hit from touch range', 'heat'],
+        'weight.echo': ['heat added by a scream that found the player', 'heat'],
+        'weight.pain': ['heat added by a hit from beyond touch range (it feels pain, but learns no position from it)', 'heat'],
+        mergeS: ['sounds closer together than this count as one event (a shotgun blast, one crash)', 's'],
+        heatMax: ['heat cap', 'heat'],
+        huntAt: ['heat from which it hunts', 'heat'],
+        frenzyAt: ['heat from which it is frenzied', 'heat'],
+        quietHoldS: ['silence before the heat starts to fall', 's'],
+        decayPerS: ['heat lost per second of silence after that', 'heat per s'],
+      }},
+      {title: 'What it hears besides gunfire: loudness of each sound (radius around its source)', value: SCREACHER_NOISE, file: F.screacher, symbol: 'SCREACHER_NOISE', labels: {
+        run: ['one sprinting footstep (walking and crouch-walking make no sound it hears)', 'm'],
+        landMinSpeed: ['a landing counts from this landing speed', 'm/s'],
+        landBase: ['landing loudness: base radius', 'm'],
+        landPerMs: ['landing loudness: added per m/s of landing speed', 'm per m/s'],
+        landMax: ['landing loudness at most', 'm'],
+        impactMinSpeed: ['a prop / item impact counts from this impact speed', 'm/s'],
+        impactBase: ['impact loudness: base radius', 'm'],
+        impactPerMs: ['impact loudness: added per m/s of impact speed', 'm per m/s'],
+        impactMax: ['impact loudness at most', 'm'],
+        drag: ['a pushed box scraping along the floor', 'm'],
+      }},
+      {title: 'Impact loudness by what struck (the object\'s sound family: a factor on the impact radius; a family not listed counts 1)', value: IMPACT_FAMILY_LOUDNESS, file: F.screacher, symbol: 'IMPACT_FAMILY_LOUDNESS', labels: {
+        light: ['soft and light things (physics sound family light)', 'x'],
+        cardboard: ['cardboard (physics sound family cardboard)', 'x'],
+        can: ['a can (physics sound family can)', 'x'],
+        heavy: ['a heavy object (physics sound family heavy)', 'x'],
+        prop: ['an ordinary loose prop (physics sound family prop)', 'x'],
+        wood: ['wood (physics sound family wood)', 'x'],
+        stone: ['stone (physics sound family stone)', 'x'],
+        glass: ['glass (physics sound family glass)', 'x'],
+        metal: ['sheet metal (physics sound family metal)', 'x'],
+      }},
+      {title: 'How far a sound carries to it (the gunfire rule of every enemy: a factor on the loudness radius)', value: HEARING, file: F.brain, symbol: 'HEARING', labels: {
+        wall: ['no clear line between the sound and the listener, same storey', 'x'],
+        slab: ['per storey floor between the sound and the listener (instead of the wall factor)', 'x'],
+      }},
+      {title: 'Touch and memory', value: SCREACHER_SENSE, file: F.screacher, symbol: 'SCREACHER_SENSE', labels: {
+        touchM: ['it feels the player\'s body within this centre-to-centre distance (same floor)', 'm'],
+        painTouchM: ['a melee hit from within this distance tells it where the attacker stands', 'm'],
+        beliefTtlS: ['a believed position older than this, without a newer sound, is forgotten', 's'],
+        stallS: ['a chase without progress for this long gives the believed position up (an unreachable sound)', 's'],
+        holdS: ['a quieter class of sound does not move the believed position while a louder one is younger than this', 's'],
+      }},
+      {title: 'Echolocation scream (one position snapshot; no damage, no stun, calls nobody)', value: SCREACHER_ECHO, file: F.screacher, symbol: 'SCREACHER_ECHO', labels: {
+        periodS: ['time between screams, of active play (its own clock: no pause, menu or offline catch-up)', 's'],
+        jitterS: ['each period varies by up to this much either way', 's'],
+        firstMinS: ['its first scream comes no earlier than', 's'],
+        firstSpanS: ['the first scream is staggered over this span after that (from its spawn position: two never scream in unison)', 's'],
+        rangeM: ['the scan finds the player within this distance (3D) when no solid geometry is between', 'm'],
+        cueS: ['the scan happens this far into the scream', 's'],
+        holdS: ['it stands still for the length of the scream', 's'],
+        retryS: ['a scream cut short by a staggering hit before its scan is retried after', 's'],
+      }},
+      {title: 'Body, reach and clip timing (the asset contract numbers of enemy-screacher-sc01..sc04.glb that the gameplay reads; no head hit volume)', value: SCREACHER_ASSET, file: F.screacher, symbol: 'SCREACHER_ASSET', labels: {
+        heightM: ['bind height (feet to the top of the neck stump, scale 1)', 'm'],
+        reachM: ['horizontal reach of the striking hand at the Attack hit frame', 'm'],
+        attackHitTime: ['the hand lands this far into the Attack clip', 's'],
+        screamDuration: ['Scream clip length', 's'],
+        screamCueTime: ['the cry peaks (the echo scan) this far into the Scream clip', 's'],
+      }},
+      {title: 'Runtime root scale (its own narrow jitter)', value: {scale: SCREACHER_SCALE, maxTopM: SCREACHER_MAX_TOP_M}, file: F.screacher, symbol: 'SCREACHER_SCALE', labels: {
+        maxTopM: ['neck-stump height cap', 'm'],
+      }},
     ],
   },
 };
@@ -180,13 +293,16 @@ const RULE_LABEL: Readonly<Record<string, readonly [string, string]>> = {
   'scale.min': ['runtime root scale at least', 'x'], 'scale.max': ['runtime root scale at most', 'x'], maxTopM: ['crown height cap (annex doors are 2.3 m)', 'm'],
 };
 
-/** Every leaf of a rules constant as a row (nested objects flattened by key path; arrays: numbers joined, else their length). */
-export function ruleRows(value: object, prefix = ''): {what: string; value: number | string; unit: string}[] {
+/**
+ * Every leaf of a rules constant as a row (nested objects flattened by key path; arrays: numbers joined, else their length).
+ * `labels` (task studio-screacher-production-20261110-221858-01): the constant's own labels, read before the shared RULE_LABEL.
+ */
+export function ruleRows(value: object, prefix = '', labels: Readonly<Record<string, readonly [string, string]>> = {}): {what: string; value: number | string; unit: string}[] {
   const out: {what: string; value: number | string; unit: string}[] = [];
   for (const [k, v] of Object.entries(value)) {
     const key = prefix ? `${prefix}.${k}` : k;
-    const [label, unit] = RULE_LABEL[key] ?? [key, ''];
-    if (v && typeof v === 'object' && !Array.isArray(v)) { out.push(...ruleRows(v, key)); continue; }
+    const [label, unit] = labels[key] ?? RULE_LABEL[key] ?? [key, ''];
+    if (v && typeof v === 'object' && !Array.isArray(v)) { out.push(...ruleRows(v, key, labels)); continue; }
     let shown: number | string;
     if (Array.isArray(v)) shown = v.every(x => typeof x === 'number') ? v.join(', ') : v.every(x => typeof x === 'string') ? v.join(', ') : v.length;
     else if (typeof v === 'boolean') shown = v ? 'yes' : 'no';
@@ -198,13 +314,13 @@ export function ruleRows(value: object, prefix = ''): {what: string; value: numb
 }
 
 /** Track 2 (lane CONTENT): how the service-annex zone context relates to the level (shown with the context). */
-const SERVICE_ZONE_NOTE = 'A PER-ANNEX ZONE BUDGET: one run per seeded service annex (0 to TRACK_EXT.annex.max per level, a generation census quantity — see docs/enemy-spawns.md "Service annexes"), on the annex\'s own fork, appended after every core spawn and tagged \'service\'. It is additive to the core contexts and NOT in the whole-level total above; the level\'s zombie types apply; its spawns draw from the annexes\' OWN family pool (SERVICE_FAMILY_POOL: a configured 20 % rat/dog selection share, Blightbelly 5 %, Strainer 8 % (the only pool that enables it: STRAINER_CONTEXTS), no Siren — per-spawn probabilities, not quotas; the sampled census shows the placed outcome). No guarantee. Killed annex enemies stay dead for the run (per-index memory).';
+const SERVICE_ZONE_NOTE = 'A PER-ANNEX ZONE BUDGET: one run per seeded service annex (0 to TRACK_EXT.annex.max per level, a generation census quantity — see docs/enemy-spawns.md "Service annexes"), on the annex\'s own fork, appended after every core spawn and tagged \'service\'. It is additive to the core contexts and NOT in the whole-level total above; the level\'s zombie types apply; its spawns draw from the annexes\' OWN family pool (SERVICE_FAMILY_POOL: a configured 20 % rat/dog selection share, Blightbelly 5 %, Strainer 8 % (the only pool that enables it: STRAINER_CONTEXTS), no Siren — per-spawn probabilities, not quotas). The seeded roster pass then runs on the finished level (see the seeded roster): it fixes the level\'s Strainers at EXACTLY ONE on the maps whose seed rolled the Strainer present, and at none on the others, and it decides per level whether Blightbellies and rat/dogs are there at all (the Screacher\'s slot rule lists the core contexts, not the annex). The sampled census shows the outcome with the pass applied. Killed annex enemies stay dead for the run (per-index memory).';
 
 /**
  * Task mall-lingerie-20261102-221554 (lane CONTEXT): how the lingerie store's zone context relates to the mall (shown with the context),
  * the store-local eligibility line and the placement steps of gen/mall/lingerieSpawns.ts placeLingerieSpawns (not the generic area order).
  */
-const LINGERIE_ZONE_NOTE = `A STORE-LOCAL ZONE BUDGET: one run per lingerie store — the store is a seeded shop program on a LARGE lot (0 to ${LINGERIE_STORES_MAX} per mall, never guaranteed) — on its own fork (mall-lingerie-spawns), appended after EVERY other spawn of the mall (ambient, hordes, annex 'service') and tagged 'lingerie' (spawn context and ZombieSpawn.look). It is additive to the core contexts and NOT in the whole-level total or the ambient budget; its spawns draw from the store's OWN family pool (LINGERIE_FAMILY_POOL: ordinary zombies only — no Blightbelly, Siren, rat/dog or Strainer), are shamblers, and wear a fitted lingerie set at spawn time (ai/lingerie.ts lingerieLook(level seed, spawn index)) — a wardrobe look of the zombie family, never a new family. Every other spawn of every level keeps the ordinary wardrobe pick. No leash: after aggro they may follow the player out of the store. Killed variants stay dead for the run (per-index memory); a mall without a lingerie store has none.`;
+const LINGERIE_ZONE_NOTE = `A STORE-LOCAL ZONE BUDGET: one run per lingerie store — the store is a seeded shop program on a LARGE lot (0 to ${LINGERIE_STORES_MAX} per mall, never guaranteed) — on its own fork (mall-lingerie-spawns), appended after EVERY other spawn of the mall (ambient, hordes, annex 'service') and tagged 'lingerie' (spawn context and ZombieSpawn.look). It is additive to the core contexts and NOT in the whole-level total or the ambient budget; its spawns draw from the store's OWN family pool (LINGERIE_FAMILY_POOL: ordinary zombies only — no Blightbelly, Siren, rat/dog, Strainer or Screacher; the seeded roster never converts an outfit zombie), are shamblers, and wear a fitted lingerie set at spawn time (ai/lingerie.ts lingerieLook(level seed, spawn index)) — a wardrobe look of the zombie family, never a new family. Every other spawn of every level keeps the ordinary wardrobe pick. No leash: after aggro they may follow the player out of the store. Killed variants stay dead for the run (per-index memory); a mall without a lingerie store has none.`;
 const LINGERIE_ZONE_WHERE = `the lingerie store's own sales floor only (never its stock room, a gallery or another unit), ≥ ${LINGERIE_SPAWN_RULES.entryKeepM} m from its shopfront(s): in a BOOTH (a changing rect with 1-${LINGERIE_SPAWN_RULES.boothOpeningCells} opening cells — its curtain gap) the centre of a 2 × 2 patch of its walkable cells off the opening row (the booth's centre line); the aisle hosts nobody while the store has booths; on the sales floor a 3 × 3-clear cell > ${LINGERIE_SPAWN_RULES.changingMarginCells} cells off the changing area and ≥ ${LINGERIE_SPAWN_RULES.changingEntryKeepM} m from its mouth; everywhere a ${LINGERIE_SPAWN_RULES.passageRadiusM} m disc around the spawn never splits the storey (fair passage)`;
 const LINGERIE_ZONE_EXPLAIN: readonly string[] = [
   `Only when the mall has a lingerie store: draw count = U{${ST.LINGERIE_CONTEXT.count[0]}..${ST.LINGERIE_CONTEXT.count[1]}} (one draw per store, rng.int); every one a shambler (no coat roll: the look is a lingerie set).`,
@@ -224,8 +340,8 @@ const LINGERIE_ZONE_EXPLAIN: readonly string[] = [
  * flooded wing). The reference's zone ceiling.
  */
 export const BUNKER_DAMP_RUNS_MAX = 1;
-const BUNKER_DAMP_ZONE_NOTE = `A DAMP-SECTION ZONE BUDGET: one run per Bunker level (0 to ${BUNKER_DAMP_RUNS_MAX}: a level without a damp area has none) over the water-damaged areas only (layout.bunker.damp: the pump hall, the filtration plant, the flooded maintenance wing), on its own fork, appended after the storey runs and tagged 'damp'. It is additive to the core contexts and NOT in the whole-level total; its one spawn draws from the zone's OWN family pool (BUNKER_DAMP_SHARES: rat/dog 10 %, THE STRAINER 30 % — the only pool outside the service annexes that enables it: STRAINER_CONTEXTS — the zombie the remainder; no Siren, no Blightbelly). Per-spawn probabilities, not a quota: at most one Strainer per level, never guaranteed. Killed ones stay dead for the run (per-index memory).`;
-const COSPLAY_ZONE_NOTE = `A CONVENTION ZONE BUDGET (layout version 5+): one run when the level's one add-on is the anime convention (0 to ${COSPLAY_CONVENTIONS_MAX} per level, never guaranteed — the alternative add-on, the prize display, has none), on its own fork (skyways-cosplay-spawns), appended after EVERY other spawn of the level (ambient, hordes, annex 'service') and tagged 'cosplay' (spawn context and ZombieSpawn.look). It is additive to the core contexts and NOT in the whole-level total; its spawns draw from the convention's OWN family pool (COSPLAY_FAMILY_POOL: ordinary zombies only — no Blightbelly, Siren, rat/dog or Strainer), are shamblers, and wear a costume at spawn time (ai/cosplay.ts cosplayLook(level seed, spawn index): the mascot's bear-ear hat + wig, an oversized mascot head, a sushi hat, the alternate-palette wig with a uniform) — a wardrobe look of the zombie family, never a new family. Every other spawn keeps the ordinary wardrobe pick. No leash. Killed ones stay dead for the run (per-index memory). Layout versions 1-4 never run it.`;
+const BUNKER_DAMP_ZONE_NOTE = `A DAMP-SECTION ZONE BUDGET: one run per Bunker level (0 to ${BUNKER_DAMP_RUNS_MAX}: a level without a damp area has none) over the water-damaged areas only (layout.bunker.damp: the pump hall, the filtration plant, the flooded maintenance wing), on its own fork, appended after the storey runs and tagged 'damp'. It is additive to the core contexts and NOT in the whole-level total; its one spawn draws from the zone's OWN family pool (BUNKER_DAMP_SHARES: rat/dog 10 %, THE STRAINER 30 % — the only pool outside the service annexes that enables it: STRAINER_CONTEXTS — the zombie the remainder; no Siren, no Blightbelly) — a per-spawn probability. The seeded roster pass then decides (see the seeded roster): on the maps whose seed rolled the Strainer present the damp spawn IS the level\'s one Strainer (whatever the per-spawn roll drew there — a rat/dog drawn there is exchanged to an ordinary zombie slot elsewhere), on the others the level has none. Killed ones stay dead for the run (per-index memory).`;
+const COSPLAY_ZONE_NOTE = `A CONVENTION ZONE BUDGET (layout version 5+): one run when the level's one add-on is the anime convention (0 to ${COSPLAY_CONVENTIONS_MAX} per level, never guaranteed — the alternative add-on, the prize display, has none), on its own fork (skyways-cosplay-spawns), appended after EVERY other spawn of the level (ambient, hordes, annex 'service') and tagged 'cosplay' (spawn context and ZombieSpawn.look). It is additive to the core contexts and NOT in the whole-level total; its spawns draw from the convention's OWN family pool (COSPLAY_FAMILY_POOL: ordinary zombies only — no Blightbelly, Siren, rat/dog, Strainer or Screacher; the seeded roster never converts an outfit zombie), are shamblers, and wear a costume at spawn time (ai/cosplay.ts cosplayLook(level seed, spawn index): the mascot's bear-ear hat + wig, an oversized mascot head, a sushi hat, the alternate-palette wig with a uniform) — a wardrobe look of the zombie family, never a new family. Every other spawn keeps the ordinary wardrobe pick. No leash. Killed ones stay dead for the run (per-index memory). Layout versions 1-4 never run it.`;
 const COSPLAY_ZONE_WHERE = `the convention venue's public event floor only (its main hall, exhibitors' floor, photo lounge and panel rooms — never registration, the back of house, storage or the washrooms): a 3 × 3-clear walkable floor cell, never a ramp, ≥ ${COSPLAY_SPAWN_RULES.doorKeepM} m from every door of those areas and from the add-on's entry, ≥ ${COSPLAY_SPAWN_RULES.statueKeepM} m from every mascot statue (the greeter included), off the stage + ${COSPLAY_SPAWN_RULES.stageMarginM} m, a ${COSPLAY_SPAWN_RULES.passageRadiusM} m disc around the spawn never splitting the storey (fair passage)`;
 const COSPLAY_ZONE_EXPLAIN: readonly string[] = [
   `Only with the convention add-on (layout version 5+): draw count = U{${COSPLAY_CONTEXT.count[0]}..${COSPLAY_CONTEXT.count[1]}} (one draw, rng.int); every one a shambler (no coat roll: the look is a costume).`,
@@ -348,7 +464,16 @@ export const ENEMY_REPO = {
 /** Static explanation of each family's NON-family sub-distributions (keyed by registry id; a new family defaults to none). */
 const VARIANTS: Readonly<Partial<Record<EnemyFamilyId, string>>> = {
   zombie: 'Shambler / coated type (the profile\'s zombie type roll) and the wardrobe outfit chosen at spawn time from (level seed, spawn index, type) by ai/wardrobe.ts pickZombieLook — sub-distributions of the zombie family, not separate families.',
+  // task studio-screacher-production-20261110-221858-01: the Screacher's four approved bodies — ONE enemy type
+  screacher: `${Object.keys(SCREACHER_VARIANTS).length} approved bodies (${Object.entries(SCREACHER_VARIANTS).map(([id, v]) => `${id} "${v.name}"`).join(', ')}): model variants of ONE enemy type with the same AI, stats and sounds — not separate families. The roster pass that places a Screacher gives it its variant (ZombieSpawn.variant), dealt in turn from a seeded start, and a level loads only the bodies its Screachers use.`,
 };
+
+/**
+ * Task studio-screacher-production-20261110-221858-01: the seeded roster pass, appended to every level's generator note (it runs in the
+ * level registry on every level's finished layout, after everything the generator itself does).
+ */
+const ROSTER_GENERATOR_NOTE = `Last of all the level registry runs the SEEDED ROSTER pass on the finished layout (ai/enemyRoster.ts applyEnemyRoster, roster version ${ROSTER_VERSION}): from the level seed alone it decides which special families this map holds at all, and it only ever changes the family of ordinary ambient zombie slots — never a count, a position, an index, a horde member or an outfit zombie (see the seeded roster).`;
+const ROSTER_GENERATOR_NOTE_ZOMBIE_FREE = 'The seeded roster pass (ai/enemyRoster.ts applyEnemyRoster) does nothing here: a zombie-free level never holds any enemy family.';
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Source locations
@@ -448,8 +573,11 @@ interface CensusArea { key: string; keyKind: 'purpose' | 'room-type'; type: stri
 interface CensusLevel {
   seeds: number[];
   areas: CensusArea[];
-  /** One entry per placed AMBIENT spawn of every sample level. */
-  spawns: {family: string; type: string; key: string; kind: string; context: string}[];
+  /**
+   * One entry per placed AMBIENT spawn of every sample level. `family` = with the seeded roster applied (what the level holds);
+   * `rolled` = the family the per-spawn roll alone had placed there (before the roster pass); `sample` = its sample level.
+   */
+  spawns: {family: string; rolled: string; type: string; key: string; kind: string; context: string; sample: number}[];
   /** Task track3-eaton-centre-20261031 (lane PROFILES): horde members (the separate pool; layout.zombies tagged `horde`) and groups. */
   horde: {family: string; type: string; key: string; group: string; storey: number}[];
 }
@@ -464,9 +592,36 @@ function contextOfSpawn(layout: StationLayout, profile: SpawnProfile, i: number)
   return c;
 }
 
+/**
+ * Task studio-screacher-production-20261110-221858-01: THE SEEDED ROSTER PASS on a sample layout the registered generator just
+ * returned WITHOUT a roster version (= roster version 0, the plain per-spawn roll outcome): applyEnemyRoster at ROSTER_VERSION with
+ * the level's id and seed — exactly the call the level registry makes for `rosterVersion: ROSTER_VERSION` (game/tests/
+ * enemy-spawn-reference.test.ts checks the two give the same level). Returns each spawn's family BEFORE the pass and the pass's own
+ * report; throws when the pass touched a horde member or its report disagrees with the layout (the reference never shows a number
+ * the game's own report contradicts).
+ */
+export function applySampleRoster(layout: StationLayout, level: LevelId, seed: number): {rolled: EnemyFamilyId[]; report: RosterReport} {
+  const fam = (z: {archetype?: string}): EnemyFamilyId => (z.archetype ?? 'zombie') as EnemyFamilyId;
+  const rolled = layout.zombies.map(fam);
+  const report = applyEnemyRoster(layout, level, seed, ROSTER_VERSION);
+  layout.zombies.forEach((z, i) => {
+    if ((z.horde !== undefined || z.look !== undefined) && fam(z) !== rolled[i]) throw new Error(`level ${level} seed ${seed}: the roster pass changed spawn ${i}, a horde member / outfit zombie`);
+  });
+  for (const [f, r] of Object.entries(report.families)) {
+    const before = layout.zombies.filter((z, i) => z.horde === undefined && rolled[i] === f).length;
+    const after = layout.zombies.filter(z => z.horde === undefined && fam(z) === f).length;
+    if (r.before !== before || r.after !== after) throw new Error(`level ${level} seed ${seed}: roster report of ${f} (${r.before} -> ${r.after}) != the layout (${before} -> ${after})`);
+    if (!r.present && after !== 0) throw new Error(`level ${level} seed ${seed}: ${f} is absent from the roster but the level holds ${after}`);
+  }
+  return {rolled, report};
+}
+
 const censusCache = new Map<string, CensusLevel>();
 
-/** One level's census over `seeds` (the shipped start weapon, the registered generator). Cached per process. */
+/**
+ * One level's census over `seeds` (the shipped start weapon, the registered generator, then the seeded roster pass: what a level
+ * holds). Cached per process.
+ */
 export function enemyCensus(level: LevelId, seeds: readonly number[]): CensusLevel {
   const key = `${level}:${seeds.join(',')}`;
   const hit = censusCache.get(key);
@@ -499,10 +654,12 @@ export function enemyCensus(level: LevelId, seeds: readonly number[]): CensusLev
         const rules = a.level && profile.levelMoves && c.context === 'station' ? profile.levelMoves.areaWeights : ctx.placement.areaWeights;
         out.areas.push({key: roomKey(a), keyKind: a.purpose !== undefined ? 'purpose' : 'room-type', type: a.type, kind: a.kind, context: c.context, cells: c.cells, baseWeight: baseAreaWeight(rules, a), sample});
       }
+      // (task studio-screacher-production-20261110-221858-01) the seeded roster pass on the finished layout: the census reports what the level holds
+      const {rolled} = applySampleRoster(layout, level, seed);
       layout.zombies.forEach((z, i) => {
         const a: Area | undefined = layout.areas[z.area];
         if (z.horde !== undefined) { out.horde.push({family: z.archetype ?? 'zombie', type: z.type, key: a ? roomKey(a) : '?', group: `${sample}:${z.horde}`, storey: z.level ?? 0}); return; }
-        out.spawns.push({family: z.archetype ?? 'zombie', type: z.type, key: a ? roomKey(a) : '?', kind: a?.kind ?? '?', context: contextOfSpawn(layout, profile, i)});
+        out.spawns.push({family: z.archetype ?? 'zombie', rolled: rolled[i], type: z.type, key: a ? roomKey(a) : '?', kind: a?.kind ?? '?', context: contextOfSpawn(layout, profile, i), sample});
       });
     }
   });
@@ -524,7 +681,8 @@ function levelCensus(c: CensusLevel, families: readonly string[]): LevelCensus {
   for (const s of c.spawns) if (s.family === 'zombie') zombieTypes[s.type] = (zombieTypes[s.type] ?? 0) + 1;
   return {
     seeds: c.seeds, startWeapon: startWeaponFor(false), layouts, cellM2, eligibleCells, eligibleM2,
-    placed: families.map(f => ({family: f, total: byFamily(f), perLevel: rd(byFamily(f) / Math.max(1, layouts)), per100m2: per100(byFamily(f), eligibleCells * cellM2) ?? 0})),
+    placed: families.map(f => ({family: f, total: byFamily(f), perLevel: rd(byFamily(f) / Math.max(1, layouts)), per100m2: per100(byFamily(f), eligibleCells * cellM2) ?? 0,
+      levels: new Set(c.spawns.filter(s => s.family === f).map(s => s.sample)).size, rollTotal: c.spawns.filter(s => s.rolled === f).length})),
     byContext: ctxIds.map(id => {
       const m2 = c.areas.filter(a => a.context === id).reduce((s, a) => s + a.cells, 0) * cellM2;
       const n = c.spawns.filter(s => s.context === id).length;
@@ -547,7 +705,7 @@ function levelCensus(c: CensusLevel, families: readonly string[]): LevelCensus {
       byStorey: (() => { const m: Record<string, number> = {}; for (const h of c.horde) m[h.storey] = (m[h.storey] ?? 0) + 1; return m; })(),
       note: 'Horde members are the SEPARATE horde pool (profile.horde): not part of the ambient counts, contexts, eligible floor or room rows above.',
     } : null,
-    note: `SAMPLED: ${layouts} sample levels of the registered generator (seeds ${c.seeds.join(', ')}, shipped start weapon). Eligible floor = cells the generator's own candidate filter accepted (walking distance, clearance, storey, stair / landing keep-off, weight > 0) x ${cellM2} m² — never bounding boxes. Not exhaustive; not a runtime rule.`,
+    note: `SAMPLED: ${layouts} sample levels of the registered generator (seeds ${c.seeds.join(', ')}, shipped start weapon) WITH THE SEEDED ROSTER APPLIED (roster version ${ROSTER_VERSION}: what a level holds; the roster only changes families, so counts, positions and eligible floor are the generator's). Eligible floor = cells the generator's own candidate filter accepted (walking distance, clearance, storey, stair / landing keep-off, weight > 0) x ${cellM2} m² — never bounding boxes. Not exhaustive; not a runtime rule.`,
   };
 }
 
@@ -575,18 +733,27 @@ export function eligibilityCriteria(rule: FamilyEligibility, P: SpawnProfile, fa
   return out;
 }
 
-const eligibilityCache = new Map<string, EligibilityCensus>();
+interface SamplePass { eligibility: EligibilityCensus; roster: RosterCensus }
+const sampleCache = new Map<string, SamplePass>();
 
-/** Draws vs placed of every restricted family of a level over `seeds` (the registered generator). Cached per process. */
-export function eligibilityCensus(level: LevelId, seeds: readonly number[]): EligibilityCensus {
+/**
+ * ONE sample pass over `seeds` of a level's registered generator, serving two censuses of the SAME generated levels (cached per process):
+ *  - stage 1, the plain generator output (the per-spawn roll, the eligibility rules, cap and spacing — BEFORE the roster pass): the
+ *    ELIGIBILITY census (draws vs placed of every restricted family);
+ *  - stage 2 (task studio-screacher-production-20261110-221858-01), the seeded roster pass on that layout (applySampleRoster): the
+ *    ROSTER census (which sample levels hold each family, what the pass removed / added, what a level holds afterwards).
+ */
+function samplePass(level: LevelId, seeds: readonly number[]): SamplePass {
   const key = `${level}:${seeds.join(',')}`;
-  const hit = eligibilityCache.get(key);
+  const hit = sampleCache.get(key);
   if (hit) return hit;
   const def = LEVELS[level], P = spawnProfile(level), startWeapon = startWeaponFor(false);
   const rules = Object.entries(P.eligibility ?? {}) as [EnemyFamilyId, FamilyEligibility][];
   const placedBy = new Map<string, number>();
   let total = 0, layouts = 0;
   const R = rules.map(([family]) => ({family, draws: 0, placed: 0, per: [] as number[], fallbacks: new Map<string, number>(), byContext: new Map<string, number>()}));
+  // the roster census: per family, per layout
+  const T = ENEMY_FAMILY_IDS.map(family => ({family, eligible: 0, present: 0, before: 0, after: 0, removed: 0, added: 0, noSlot: 0, per: [] as number[]}));
   for (const seed of seeds) for (const section of def.sections(seed)) {
     const l = def.generate(section, {levelSeed: seed, startWeapon});
     layouts++;
@@ -616,30 +783,204 @@ export function eligibilityCensus(level: LevelId, seeds: readonly number[]): Eli
       });
     });
     perLayout.forEach((n, k) => R[k].per.push(n));
+    // stage 2: the seeded roster pass on this very layout
+    const {rolled, report} = applySampleRoster(l, level, seed);
+    for (const t of T) {
+      const rep = report.families[t.family];
+      let after = 0;
+      l.zombies.forEach((z, i) => {
+        if (z.horde !== undefined) return;
+        const was = rolled[i] === t.family, is = (z.archetype ?? 'zombie') === t.family;
+        if (was) t.before++;
+        if (is) { t.after++; after++; }
+        if (was && !is) t.removed++;
+        if (!was && is) t.added++;
+      });
+      t.per.push(after);
+      // the baseline family is never rolled: every level that can hold enemies holds it
+      if (rep ? rep.eligible : !report.zombieFree) t.eligible++;
+      if (rep ? rep.present : !report.zombieFree) t.present++;
+      if (rep?.noSlot) t.noSlot++;
+    }
   }
-  const out: EligibilityCensus = {
-    seeds: [...seeds], layouts,
-    note: `SAMPLED: ${layouts} generated levels of LEVELS.${level}.generate (seeds ${seeds[0]}..${seeds[seeds.length - 1]}, ${seeds.length} seeds, shipped start weapon). A draw is a spawn whose roll lands on the family; it is placed only where the eligibility rule holds, otherwise it becomes the fallback family. Ambient spawns only (horde members are the separate horde pool). Not exhaustive; not a runtime rule.`,
-    placed: ENEMY_FAMILY_IDS.map(f => ({family: f, total: placedBy.get(f) ?? 0, perLevel: rd((placedBy.get(f) ?? 0) / Math.max(1, layouts)), share: rd((placedBy.get(f) ?? 0) / Math.max(1, total))})),
-    restricted: R.map(r => {
-      const max = r.per.length ? Math.max(...r.per) : 0;
-      return {
-        family: r.family, draws: r.draws, placed: r.placed,
-        perLevel: {mean: rd(r.placed / Math.max(1, layouts)), none: r.per.filter(n => n === 0).length, max,
-          histogram: Array.from({length: max + 1}, (_, n) => ({count: n, layouts: r.per.filter(v => v === n).length}))},
-        fallbacks: [...r.fallbacks].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([reason, draws]) => ({reason, draws})),
-        byContext: [...r.byContext].sort((a, b) => a[0].localeCompare(b[0])).map(([context, placed]) => ({context, placed})),
-      };
-    }),
+  const out: SamplePass = {
+    eligibility: {
+      seeds: [...seeds], layouts,
+      note: `SAMPLED: ${layouts} generated levels of LEVELS.${level}.generate (seeds ${seeds[0]}..${seeds[seeds.length - 1]}, ${seeds.length} seeds, shipped start weapon), measured BEFORE the seeded roster pass: the per-spawn roll and the eligibility rule alone. A draw is a spawn whose roll lands on the family; it is placed only where the eligibility rule holds, otherwise it becomes the fallback family. Ambient spawns only (horde members are the separate horde pool). The roster pass then decides per level whether the family is there at all — the seeded roster census of the same levels shows what a level holds. Not exhaustive; not a runtime rule.`,
+      placed: ENEMY_FAMILY_IDS.map(f => ({family: f, total: placedBy.get(f) ?? 0, perLevel: rd((placedBy.get(f) ?? 0) / Math.max(1, layouts)), share: rd((placedBy.get(f) ?? 0) / Math.max(1, total))})),
+      restricted: R.map(r => {
+        const max = r.per.length ? Math.max(...r.per) : 0;
+        return {
+          family: r.family, draws: r.draws, placed: r.placed,
+          perLevel: {mean: rd(r.placed / Math.max(1, layouts)), none: r.per.filter(n => n === 0).length, max,
+            histogram: Array.from({length: max + 1}, (_, n) => ({count: n, layouts: r.per.filter(v => v === n).length}))},
+          fallbacks: [...r.fallbacks].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([reason, draws]) => ({reason, draws})),
+          byContext: [...r.byContext].sort((a, b) => a[0].localeCompare(b[0])).map(([context, placed]) => ({context, placed})),
+        };
+      }),
+    },
+    roster: {
+      seeds: [...seeds], layouts, ambient: total, ambientPerLevel: rd(total / Math.max(1, layouts)),
+      note: `SAMPLED: the same ${layouts} generated levels of LEVELS.${level}.generate (seeds ${seeds[0]}..${seeds[seeds.length - 1]}, ${seeds.length} seeds, shipped start weapon), each followed by the seeded roster pass at roster version ${ROSTER_VERSION} — what a level holds. "Before" = what the per-spawn roll alone had placed; "after" = with the pass applied. The pass never changes the ${rd(total / Math.max(1, layouts))} ambient spawns per level of this sample, only their families. A SMALL sample: the long-run share of levels that hold a family is its roster rate, not this count. The roll depends on the level seed and the family only, so these seeds roll the same families present on every level. Ambient spawns only (horde members are the separate horde pool). Not exhaustive.`,
+      families: T.map(t => {
+        const holding = t.per.filter(n => n > 0).length, max = t.per.length ? Math.max(...t.per) : 0;
+        return {
+          family: t.family, eligible: t.eligible, present: t.present, holding, before: t.before, after: t.after, removed: t.removed, added: t.added,
+          perLevel: rd(t.after / Math.max(1, layouts)), perHoldingLevel: holding ? rd(t.after / holding) : null, max, share: rd(t.after / Math.max(1, total)), noSlot: t.noSlot,
+          histogram: Array.from({length: max + 1}, (_, n) => ({count: n, layouts: t.per.filter(v => v === n).length})),
+        };
+      }),
+    },
   };
-  eligibilityCache.set(key, out);
+  sampleCache.set(key, out);
   return out;
+}
+
+/** Draws vs placed of every restricted family of a level over `seeds` (the registered generator, before the roster pass). Cached per process. */
+export function eligibilityCensus(level: LevelId, seeds: readonly number[]): EligibilityCensus {
+  return samplePass(level, seeds).eligibility;
+}
+
+/** Task studio-screacher-production-20261110-221858-01: the seeded roster pass on the same sample levels (what a level holds). Cached per process. */
+export function rosterCensus(level: LevelId, seeds: readonly number[]): RosterCensus {
+  return samplePass(level, seeds).roster;
 }
 
 function statsVariant(v: {variant: string | null; stats: ZombieStats}, at: SourceLoc): FamilyStatsVariant {
   const s = v.stats;
   return {variant: v.variant, hp: s.hp, wanderSpeed: s.wanderSpeed, chaseSpeed: s.chaseSpeed, attackRange: s.attackRange, attackDamage: s.attackDamage,
     attackDuration: s.attackDuration, attackImpact: s.attackImpact, attackCooldown: s.attackCooldown ?? null, sightRange: s.sightRange, radius: s.radius, at};
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Task studio-screacher-production-20261110-221858-01: THE SEEDED ROSTER (ai/enemyRoster.ts FAMILY_ROSTER / applyEnemyRoster)
+
+type SeededRule = Extract<RosterRule, {mode: 'seeded'}>;
+/** Every field of a roster rule the reference carries: a field it does not know fails the build instead of being silently dropped. */
+const ROSTER_RULE_FIELDS: readonly string[] = ['mode', 'why', 'since', 'key', 'rate', 'levelRates', 'place', 'contexts', 'counts', 'slots', 'spacingM', 'variants'];
+const ROSTER_SLOT_FIELDS: readonly string[] = ['contexts', 'excludeKinds', 'excludeRooms', 'minSideCells', 'minAreaCells'];
+/** A share as a percentage ("40 %"). */
+const pc = (x: number): string => `${rd(x * 100)} %`;
+
+/**
+ * How a PRESENT family is placed, in plain language; every number is read from the rule. The switch is exhaustive over the source's
+ * placement policies (the `never` default): a new policy fails to typecheck until it is described here. The ORDER the present
+ * families are placed in is the source's own ROSTER_PLACE_PRIORITY (ai/enemyRoster.ts), never a copy.
+ */
+function rosterPlacementText(rule: SeededRule): string {
+  switch (rule.place) {
+    case 'share-topup':
+      return 'Share top-up ("option B"), at least one. What the per-spawn roll placed stays; then every remaining ordinary ambient zombie slot whose pool gives the family weight converts with chance share × (1 / rate − 1) × (ambient slots whose pool gives it weight / the ordinary zombie slots among them). A level that holds the family so has about (the per-spawn roll\'s number) / rate of it, and over many levels the family total stays about what the per-spawn roll alone placed — concentrated on fewer levels. At rate 1 nothing is topped up. PRESENT MEANS AT LEAST ONE: if the per-spawn roll and the top-ups together left none, one ordinary ambient zombie slot whose pool gives the family weight becomes it (picked by weight: a slot with a larger share is more likely), also at rate 1. Only a level with no such slot at all holds none (the pass reports "no slot").';
+    case 'eligible-min-one':
+      return 'At least one where a room qualifies. Her per-spawn draw weight, room eligibility, per-level cap and spacing decide as before. Only if that left none: an ordinary ambient zombie standing where she is eligible becomes her — else a member of a share-top-up family standing there, which is exchanged to an ordinary zombie slot elsewhere. A level in which no such enemy stands in a room she is eligible in holds none (the pass reports "no slot").';
+    case 'context-one':
+      return `Exactly one, in its contexts (${rule.contexts.join(', ')}). Only a map that has an ambient spawn in one of them is rolled. Present: one the per-spawn roll placed there is kept and any others become ordinary zombies; with none, an ordinary ambient zombie slot there converts — else the slot of a share-top-up family's member there, which is exchanged to an ordinary zombie slot elsewhere. A level whose roll includes the family always holds exactly one.`;
+    case 'count': {
+      const S = rule.slots, total = rule.counts.reduce((t, [, w]) => t + Math.max(0, w), 0);
+      const counts = rule.counts.map(([n, w]) => `${n} in ${pc(total > 0 ? Math.max(0, w) / total : 0)}`).join(', ');
+      return `Counted: placed by the roster alone (no per-spawn roll can draw it). One count per level map — ${counts} of the levels that hold it — and that many ordinary ambient zombie slots of the contexts ${S.contexts.join(', ')} become the family: only in an area at least ${S.minSideCells} cells (${rd(S.minSideCells * CELL)} m) on its shorter side and ${S.minAreaCells} cells (${rd(S.minAreaCells * CELL * CELL)} m²) large, never area kind ${S.excludeKinds.join(' / ') || '(none)'} and never a room of type / purpose ${S.excludeRooms.join(', ') || '(none)'}; never a horde member, an outfit zombie or a spawn of another context. Slots are taken in a seeded order, each at least ${rule.spacingM} m (straight 3D line) from the ones already taken: where the level cannot space them out the level holds as many as fit, at least one. A level with no such slot at all relaxes the rule to any ordinary ambient zombie of those contexts, then to any ordinary ambient zombie.${rule.variants.length ? ` Each one takes a model variant (${rule.variants.join(', ')}), dealt in turn from a seeded start.` : ''}`;
+    }
+    default: {
+      const unknown: never = rule;
+      throw new Error(`unknown roster placement ${JSON.stringify(unknown)}`);
+    }
+  }
+}
+
+/** True when a pool of the profile — the level's or a context's own — gives the family weight (ai/enemyRoster.ts inSomePool). */
+function hasPoolWeight(P: SpawnProfile, family: EnemyFamilyId): boolean {
+  return P.families.some(([f, w]) => f === family && w > 0) || Object.values(P.contexts).some(c => c?.families?.some(([f, w]) => f === family && w > 0));
+}
+
+/** One family's roster rule as the reference shows it (every field of FAMILY_ROSTER[id]). */
+function rosterFamilyInfo(id: EnemyFamilyId, src: Sources): RosterFamilyInfo {
+  const rule = FAMILY_ROSTER[id];
+  for (const k of Object.keys(rule)) if (!ROSTER_RULE_FIELDS.includes(k)) throw new Error(`FAMILY_ROSTER.${id}: field '${k}' is not shown by the reference (add it to RosterFamilyInfo, tools/pages/enemyReferenceTypes.ts)`);
+  const rosterOnly = ROSTER_ONLY_FAMILIES.includes(id);
+  const at = src.at(F.roster, `FAMILY_ROSTER.${id}`);
+  if (rule.mode === 'baseline') {
+    if (rosterOnly) throw new Error(`family ${id}: roster-only (weight 0 in every pool) but its roster rule is the baseline — nothing could ever place it`);
+    return {family: id, mode: 'baseline', since: null, key: null, rate: null, levelRates: [], place: null,
+      placement: 'Baseline: always present and never rolled. Every other family only ever takes ordinary ambient zombie slots, so the ordinary zombie is whatever the others leave.',
+      contexts: null, counts: null, countMean: null, slots: null, spacingM: null, variants: null, rosterOnly, why: rule.why, at};
+  }
+  if (rosterOnly && rule.place !== 'count') throw new Error(`family ${id}: roster-only (weight 0 in every pool) needs a 'count' roster rule — policy '${rule.place}' builds on a per-spawn roll that can never draw it`);
+  let counts: RosterFamilyInfo['counts'] = null, countMean: number | null = null, slots: RosterFamilyInfo['slots'] = null;
+  if (rule.place === 'count') {
+    for (const k of Object.keys(rule.slots)) if (!ROSTER_SLOT_FIELDS.includes(k)) throw new Error(`FAMILY_ROSTER.${id}.slots: field '${k}' is not shown by the reference`);
+    const total = rule.counts.reduce((t, [, w]) => t + Math.max(0, w), 0);
+    counts = rule.counts.map(([count, weight]) => ({count, weight, share: total > 0 ? rd(Math.max(0, weight) / total) : 0}));
+    countMean = total > 0 ? rd(rule.counts.reduce((t, [n, w]) => t + n * Math.max(0, w), 0) / total) : 0;
+    const S = rule.slots;
+    slots = {contexts: [...S.contexts], excludeKinds: [...S.excludeKinds], excludeRooms: [...S.excludeRooms], minSideCells: S.minSideCells, minSideM: rd(S.minSideCells * CELL),
+      minAreaCells: S.minAreaCells, minAreaM2: rd(S.minAreaCells * CELL * CELL)};
+    // every variant the roster deals must be a body the archetype registry can load
+    const models = ENEMY_ARCHETYPES[id].variantModels ?? {};
+    for (const v of rule.variants) if (!(v in models)) throw new Error(`FAMILY_ROSTER.${id}: variant '${v}' has no model in ENEMY_ARCHETYPES.${id}.variantModels`);
+  }
+  return {
+    family: id, mode: 'seeded', since: rule.since, key: rule.key, rate: rule.rate,
+    levelRates: Object.entries(rule.levelRates ?? {}).map(([level, rate]) => ({level, rate: rate as number})),
+    place: rule.place, placement: rosterPlacementText(rule),
+    contexts: rule.place === 'context-one' ? [...rule.contexts] : null,
+    counts, countMean, slots,
+    spacingM: rule.place === 'count' ? rule.spacingM : null,
+    variants: rule.place === 'count' ? [...rule.variants] : null,
+    rosterOnly, why: rule.why, at,
+  };
+}
+
+const rollCheckCache = new Map<string, number>();
+/** How many of the level seeds 1..ROSTER_ROLL_CHECK_SEEDS roll the family present on the level (familyInRoster: a pure hash). */
+function rollCheck(family: EnemyFamilyId, level: LevelId): number {
+  const key = `${family}:${level}`;
+  let n = rollCheckCache.get(key);
+  if (n === undefined) {
+    n = 0;
+    for (let seed = 1; seed <= ROSTER_ROLL_CHECK_SEEDS; seed++) if (familyInRoster(family, level, seed, ROSTER_VERSION)) n++;
+    rollCheckCache.set(key, n);
+  }
+  return n;
+}
+
+/**
+ * One level's roster rows (every registered family, registry order). `runs(c)` = the level's generator can run context c at all (the
+ * adapter's runs / zone ceiling and the profile's count). Mirrors applyEnemyRoster's `eligible` (phase 1); buildEnemyReference checks
+ * it against the pass's own reports of every sampled level.
+ */
+function levelRosterRows(level: LevelId, name: string, P: SpawnProfile, runs: (c: SpawnContextId) => boolean): LevelRosterRow[] {
+  return ENEMY_FAMILY_IDS.map((family): LevelRosterRow => {
+    const rule = FAMILY_ROSTER[family];
+    if (ZOMBIE_FREE_LEVELS.includes(level)) {
+      return {family, eligibility: 'zombie-free', rate: 0, rolled: null, status: `Never: ${name} is a zombie-free level — it holds no enemy of any family, and the roster pass does nothing there.`};
+    }
+    if (rule.mode === 'baseline') return {family, eligibility: 'baseline', rate: 0, rolled: null, status: 'Always: the baseline family, never rolled. The other families only ever take ordinary ambient zombie slots.'};
+    const rate = rosterRate(family, level);
+    const never = (why: string): LevelRosterRow => ({family, eligibility: 'never', rate: 0, rolled: null, status: `Never rolled: ${why}.`});
+    const rolled = (): LevelRosterRow['rolled'] => ({seeds: ROSTER_ROLL_CHECK_SEEDS, present: rollCheck(family, level)});
+    switch (rule.place) {
+      case 'count':
+        return {family, eligibility: 'every-map', rate, rolled: rolled(), status: `The roll includes it in ${pc(rate)} of this level's map seeds: such a map holds its count. Every other map holds none.`};
+      case 'share-topup':
+        if (!hasPoolWeight(P, family)) return never('no pool of this level gives the family weight');
+        return {family, eligibility: 'every-map', rate, rolled: rolled(),
+          status: rate >= 1 ? 'The roll includes it on every map of this level (rate 100 %): what the per-spawn roll placed stays and nothing is topped up; a map on which that roll placed none still gets one.'
+            : `The roll includes it in ${pc(rate)} of this level's map seeds: there the per-spawn roll's placements stay and are topped up, and such a map holds at least one. Every other map holds none.`};
+      case 'eligible-min-one':
+        if (P.eligibility?.[family] === undefined || !hasPoolWeight(P, family)) return never('this level\'s profile gives the family no weight and no eligibility rule (it is opt-in per level)');
+        return {family, eligibility: 'every-map', rate, rolled: rolled(), status: `The roll includes her in ${pc(rate)} of this level's map seeds: such a map holds at least one when an enemy stands in a room where she is eligible (else none: "no slot"). Every other map holds none.`};
+      case 'context-one': {
+        const here = rule.contexts.filter(c => P.contexts[c] !== undefined && runs(c));
+        if (!here.length) return never(`none of its contexts (${rule.contexts.join(', ')}) ever runs in this level`);
+        return {family, eligibility: 'layout', rate, rolled: rolled(),
+          status: `The roll includes it in ${pc(rate)} of the map seeds whose map has an ambient spawn in its context here (${here.join(', ')}): such a map holds exactly one, there. A map without such a spawn is never rolled, and every other map holds none.`};
+      }
+      default: {
+        const unknown: never = rule;
+        throw new Error(`unknown roster placement ${JSON.stringify(unknown)}`);
+      }
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -651,7 +992,7 @@ const VOCABULARY: readonly VocabEntry[] = [
   {term: 'area weight', unit: 'relative (no unit)', definition: 'Relative preference of an area in the weighted area order (Efraimidis–Spirakis keys u^(1/w)): areas with more weight tend to be visited earlier in each cap pass. Never a chance and never a count.'},
   {term: 'cap', unit: 'spawns per area', definition: 'Most spawns an area may hold after each pass (passes 1, 2, 3); platforms hold one more, closets / closed exits / storefront units at most one.'},
   {term: 'family weight', unit: 'relative (no unit)', definition: 'Weight of an enemy family in the level pool; only meaningful against the denominator Σ weights.'},
-  {term: 'share', unit: 'conditional chance per placed spawn', definition: 'weight / denominator: the chance that the roll of ONE placed spawn draws that family (an independent per-spawn roll keyed on level seed + spawn index that REPLACES a zombie). For a family without an eligibility rule that is its placed share; a restricted family places fewer (see eligibility). Not a chance per area or per m².'},
+  {term: 'share', unit: 'conditional chance per placed spawn', definition: 'weight / denominator: the chance that the roll of ONE placed spawn draws that family (an independent per-spawn roll keyed on level seed + spawn index that REPLACES a zombie). For a family without an eligibility rule that is the share the per-spawn roll places; a restricted family places fewer (see eligibility). The seeded roster then decides per level whether the family is there at all (see seeded roster). Not a chance per area or per m².'},
   {term: 'eligibility', unit: 'rule per family and level', definition: 'Where a restricted family may take a placed slot (contexts, rooms, clearance, doorways, fair passage, a per-level cap). A draw that fails it becomes the fallback family (a zombie): the other families\' draws never change, and the restricted family\'s placed count is measured by the sampled eligibility census.'},
   {term: 'tier', unit: 'integer >= 0 per level', definition: 'The level\'s explicit difficulty tier (Subway 0 = the starting level). Metadata only: nothing scales counts, damage or loot by it, and no family is enabled by it.'},
   {term: 'family stats', unit: 'hp, m/s, m, s', definition: 'Health (hp), wander / chase speed (m/s), attack range (m, centre to centre) and damage per hit (hp), swing length / impact / recovery (s), sight range and body radius (m), read from each family\'s exported constants.'},
@@ -663,6 +1004,10 @@ const VOCABULARY: readonly VocabEntry[] = [
   {term: 'family spacing', unit: 'metres (straight 3D line)', definition: 'A whole-level minimum distance between placed spawns of a family that has an eligibility rule (lane INTEG, ai/familySpacing.ts): in spawn order an eligible draw is placed only while fewer than the rule\'s cap are placed and it is at least that far from every placed one; otherwise it becomes the fallback family. Never touches horde members.'},
   {term: 'horde pool', unit: 'groups per level × members per group', definition: 'The roaming hordes: a SEPARATE pool with its own explicit families, group count and group size ranges and budgets (members in the level, members and groups starting on one storey). Placed once at generation, after the ambient family roll; its members carry their own context tag (horde), never an ambient one; no respawn or top-up; never counted in the ambient contexts.'},
   {term: 'ambient budget', unit: 'ambient spawns per level / per storey run', definition: 'Explicit caps of the ambient pool (the contexts): the whole-level total and one storey run. The horde pool has its own budget.'},
+  // task studio-screacher-production-20261110-221858-01: the seeded per-level family roster
+  {term: 'seeded roster', unit: 'chance per level map seed, per family', definition: 'Which special enemy families a generated level holds AT ALL. One independent roll per family per level map, a hash of the level seed (no random stream is consumed; the same seed always gives the same roster), applied once to the finished level after the per-spawn family roll. A family rolled absent has exactly none in that level: what the per-spawn roll placed becomes ordinary zombies. A family rolled present is placed by its policy (a share top-up, at least one, exactly one, or a count). Only ordinary ambient zombie slots ever change family: the enemy count, positions and indices never change, and horde members and outfit zombies are never touched. The ordinary zombie is the baseline and is never rolled; a zombie-free level gets no family.'},
+  {term: 'roster-only family', unit: 'weight 0 in every pool', definition: 'A family no per-spawn roll can draw: its weight is 0 in every level, context and horde pool (validation rejects anything else), so its conditional share is 0 everywhere. It is placed only by the seeded roster: a level whose roll includes it gets its count in place of ordinary zombies, and every other level has exactly none.'},
+  {term: 'before / after the roster pass', unit: 'two stages of one sampled level', definition: 'Sampled figures name their stage. "Before the roster pass" = the per-spawn roll, eligibility, cap and spacing alone (the generator\'s own output). "After" / "with the roster" = the same level with the seeded roster applied: what a level holds. Counts and positions are identical in both; only families differ.'},
 ];
 
 function semantics(src: Sources): ModifierSemantics {
@@ -723,12 +1068,36 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
     // the registry's stats (when set) must be the very constant the adapter reads: the reference never shows other numbers
     if (d.stats && !ad.stats.some(v => v.stats === d.stats)) throw new Error(`family ${id}: ENEMY_ARCHETYPES.${id}.stats is not ${ad.stats.map(v => v.symbol).join(' / ')}`);
     const stats = ad.stats.map(v => statsVariant(v, src.at(v.file, v.symbol)));
-    const rules: FamilyRuleGroup[] = ad.rules.map(r => ({title: r.title, rows: ruleRows(r.value), at: src.at(r.file, r.symbol)}));
-    return {id, label: d.label, model: d.model, variants: VARIANTS[id] ?? null,
-      // lane FAMILY (round 4): + a context's OWN pool (the Strainer has weight only in the service annexes' pool)
-      levels: LEVEL_IDS.filter(l => profileOf(l).families.some(([f, w]) => f === id && w > 0)
-        || Object.values(profileOf(l).contexts).some(c => c?.families?.some(([f, w]) => f === id && w > 0))), at: src.at(F.archetypes, `ENEMY_ARCHETYPES.${id}`), stats, rules};
+    const rules: FamilyRuleGroup[] = ad.rules.map(r => ({title: r.title, rows: ruleRows(r.value, '', r.labels), at: src.at(r.file, r.symbol)}));
+    // task studio-screacher-production-20261110-221858-01: a roster-only family (weight 0 in every pool) appears where the roster places it
+    const rosterOnly = ROSTER_ONLY_FAMILIES.includes(id);
+    return {id, label: d.label, model: d.model,
+      variantModels: d.variantModels ? Object.entries(d.variantModels).map(([variant, model]) => ({variant, model, name: ad.variantNames?.[variant] ?? null})) : null,
+      variants: VARIANTS[id] ?? null,
+      // lane FAMILY (round 4): + a context's OWN pool (the Strainer has weight only in the service annexes' pool); never a zombie-free level
+      levels: LEVEL_IDS.filter(l => !ZOMBIE_FREE_LEVELS.includes(l) && (hasPoolWeight(profileOf(l), id) || (rosterOnly && rosterRate(id, l) > 0))),
+      rosterOnly, at: src.at(F.archetypes, `ENEMY_ARCHETYPES.${id}`), stats, rules};
   });
+
+  // --- task studio-screacher-production-20261110-221858-01: the seeded roster (one rule set for every level)
+  const rosterFamilies = ENEMY_FAMILY_IDS.map(id => rosterFamilyInfo(id, src));
+  const levelName = (l: LevelId) => LEVELS[l].name;
+  const seededOrder = ENEMY_FAMILY_IDS.map((f, k) => [f, k] as const).filter(([f]) => FAMILY_ROSTER[f].mode === 'seeded')
+    .sort((a, b) => ROSTER_PLACE_PRIORITY[(FAMILY_ROSTER[a[0]] as SeededRule).place] - ROSTER_PLACE_PRIORITY[(FAMILY_ROSTER[b[0]] as SeededRule).place] || a[1] - b[1]).map(r => r[0]);
+  const roster: RosterInfo = {
+    version: ROSTER_VERSION, lane: ROSTER_LANE, zombieFreeLevels: [...ZOMBIE_FREE_LEVELS], rosterOnly: [...ROSTER_ONLY_FAMILIES], order: seededOrder,
+    rules: [
+      'One independent roll per seeded family per generated level map: the family is PRESENT when its roll is below its rate on that level. The roll is a hash of the level seed and the family (no random stream is consumed), so the layout, the loot and every spawn\'s position, type and per-spawn family draw are bit-identical with or without the pass, and the same seed gives the same roster on every revisit, reload, Retry and import. One map = one roll: every storey of a level shares it; it is never per floor, per spawn or per campaign.',
+      'The pass runs once on the FINISHED layout — after every generation context, the one per-spawn family roll, the eligibility rules, cap and spacing, and the hordes — in the level registry, the same for every registered level.',
+      'It only swaps a family with an ORDINARY AMBIENT ZOMBIE slot: a spawn\'s family (and, for a family with several bodies, its model variant) changes and nothing else. No spawn is added, removed, moved or reordered, so the enemy count, the positions and the per-index kill memory keep their meaning. Roaming-horde members and store / convention outfit zombies are never touched.',
+      'A family rolled ABSENT has exactly none in that level: what its per-spawn roll placed becomes ordinary zombies. Nothing is renormalised and no other family\'s draw moves.',
+      `A family rolled PRESENT is placed by its policy, the most constrained first: ${seededOrder.map(f => `${ENEMY_ARCHETYPES[f].label} (${(FAMILY_ROSTER[f] as SeededRule).place})`).join(', ')} — each on the ordinary zombie slots still left. A constrained family whose only legal slot holds a member of a share-top-up family takes that slot, and the member is exchanged to an ordinary zombie slot elsewhere. PRESENT MEANS AT LEAST ONE for every policy: only a level with no slot at all where the family may stand holds none, and the pass reports that as "no slot".`,
+      `The ordinary zombie is the baseline: always present, never rolled.${ZOMBIE_FREE_LEVELS.length ? ` Zombie-free levels (${ZOMBIE_FREE_LEVELS.map(levelName).join(', ')}) never get any family.` : ''}`,
+      `Version pin (saves): a station records the roster version it was first built with (section-memory lane '${ROSTER_LANE}'). A station already visited before the roster existed regenerates with version 0 — no pass, so its enemies, kills and ids stay exact; a station never entered (a new campaign, or an unvisited node of an older one) is built with the current version ${ROSTER_VERSION}. A direct generator call without a roster version gets no pass.`,
+    ],
+    families: rosterFamilies, rollCheckSeeds: ROSTER_ROLL_CHECK_SEEDS,
+    at: src.at(F.roster, 'applyEnemyRoster'),
+  };
 
   const corpus: CensusCorpus[] = [];
   const levels: EnemyLevelInfo[] = LEVEL_IDS.map(l => {
@@ -798,7 +1167,12 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
     // family pool (task track1: + eligibility; a restricted family and its fallback are measured, not derived)
     const rules = Object.entries(P.eligibility ?? {}) as [EnemyFamilyId, FamilyEligibility][];
     const affected = new Set<string>(rules.flatMap(([f, r]) => [f, r.fallback]));
-    const elig = rules.length && eSeeds.length ? eligibilityCensus(l, eSeeds) : null;
+    // (task studio-screacher-production-20261110-221858-01) ONE sample pass: the eligibility census (levels with a rule; before the
+    // roster pass) and the roster census (every level that can hold enemies; what a level holds after it)
+    const zombieFree = ZOMBIE_FREE_LEVELS.includes(l);
+    const sample = eSeeds.length && (rules.length || !zombieFree) ? samplePass(l, eSeeds) : null;
+    const elig = sample && rules.length ? sample.eligibility : null;
+    const rosterCen = sample && !zombieFree ? sample.roster : null;
     const denominator = P.families.reduce((s, [, w]) => s + w, 0);
     const poolRows = P.families.map(([family, weight]) => ({family, weight, share: denominator > 0 ? rd(weight / denominator) : 0,
       ...(rules.some(([f]) => f === family) ? {restricted: true} : {})}));
@@ -811,7 +1185,7 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
     });
     const pool = {
       denominator, rows: poolRows,
-      roll: `Every placed spawn draws its family independently: roll = enemyRoll(level seed, spawn index) ∈ [0, 1), walked over the pool weights of the spawn's room (the level pool when the room has no modifier), in registry order (the rat/dog keeps the top band). A drawn family REPLACES a zombie; it never adds to the count.${rules.length ? ` Then the eligibility rule${rules.length === 1 ? '' : 's'} of ${rules.map(([f]) => f).join(', ')}: a draw where the rule fails becomes the fallback family — the other families' draws are untouched.` : ''}${P.spacing && Object.keys(P.spacing).length ? ` Then the whole-level spacing of ${Object.keys(P.spacing).join(', ')} (with the cap, in spawn order; a too-close draw becomes the fallback).` : ''}${P.horde ? ' Horde members are not rolled here: they are the separate horde pool.' : ''}`,
+      roll: `Every placed spawn draws its family independently: roll = enemyRoll(level seed, spawn index) ∈ [0, 1), walked over the pool weights of the spawn's room (the level pool when the room has no modifier), in registry order (the rat/dog keeps the top band; a family at weight 0 — the roster-only ${ROSTER_ONLY_FAMILIES.map(f => ENEMY_ARCHETYPES[f].label).join(' / ')} — has no band). A drawn family REPLACES a zombie; it never adds to the count.${rules.length ? ` Then the eligibility rule${rules.length === 1 ? '' : 's'} of ${rules.map(([f]) => f).join(', ')}: a draw where the rule fails becomes the fallback family — the other families' draws are untouched.` : ''}${P.spacing && Object.keys(P.spacing).length ? ` Then the whole-level spacing of ${Object.keys(P.spacing).join(', ')} (with the cap, in spawn order; a too-close draw becomes the fallback).` : ''}${P.horde ? ' Horde members are not rolled here: they are the separate horde pool.' : ''}${zombieFree ? '' : ` Last, the seeded roster pass (roster version ${ROSTER_VERSION}) runs once on the finished level: a family the level's seed rolled absent has exactly none there, a present one is placed by its policy (see the seeded roster).`}`,
       expectedPerLevel: poolRows.map(r => affected.has(r.family)
         ? {family: r.family, mean: elig ? elig.placed.find(x => x.family === r.family)!.perLevel : null, basis: 'sampled' as const}
         : {family: r.family, mean: rd(r.share * total.mean), basis: 'exact' as const}),
@@ -844,8 +1218,9 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
 
     // census + room modifiers
     const cen = seeds.length ? enemyCensus(l, seeds) : null;
-    if (cen) corpus.push({level: l, seeds: cen.seeds, startWeapon: startWeaponFor(false), note: `${cen.seeds.length} sample levels of LEVELS.${l}.generate (shipped start weapon); not exhaustive.`});
-    if (elig) corpus.push({level: l, seeds: elig.seeds, startWeapon: startWeaponFor(false), note: `Eligibility census: ${elig.layouts} sample levels of LEVELS.${l}.generate (draws vs placed of the restricted families); not exhaustive.`});
+    if (cen) corpus.push({level: l, seeds: cen.seeds, startWeapon: startWeaponFor(false), note: `${cen.seeds.length} sample levels of LEVELS.${l}.generate (shipped start weapon)${zombieFree ? '' : `, then the seeded roster pass (roster version ${ROSTER_VERSION})`}; not exhaustive.`});
+    if (sample) corpus.push({level: l, seeds: [...eSeeds], startWeapon: startWeaponFor(false),
+      note: `${[elig ? 'Eligibility census (draws vs placed of the restricted families, before the roster pass)' : '', rosterCen ? `Seeded roster census (the roster pass at version ${ROSTER_VERSION} on those levels: what a level holds)` : ''].filter(Boolean).join(' and ')}: ${sample.roster.layouts} sample levels of LEVELS.${l}.generate; not exhaustive.`});
     const entries: RoomModifierTable['entries'][number][] = [];
     for (const [room, mod] of Object.entries(P.rooms).sort(([a], [b]) => a.localeCompare(b))) {
       for (const [family, fm] of Object.entries(mod)) if (fm) entries.push({room, family, density: fm.density ?? null, weight: family === ALL_FAMILIES ? null : (fm as {weight?: number}).weight ?? null});
@@ -950,16 +1325,39 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
       ...(budgets ? [{what: 'ambient budget (total / per storey)', value: `${budgets.ambient.total} / ${budgets.ambient.perStorey}`, at: budgets.ambient.at}] : []),
     ];
 
+    // task studio-screacher-production-20261110-221858-01: the seeded roster on this level
+    const runsHere = (c: SpawnContextId): boolean => { const a = ad.contexts[c], pc2 = P.contexts[c]; return !!a && !!pc2 && pc2.count[1] > 0 && (a.zone ? a.zone.runsPerLevel[1] > 0 : a.runs > 0); };
+    const rosterRows = levelRosterRows(l, def.name, P, runsHere);
+    if (rosterCen) {
+      // the reference's own eligibility statement must agree with the pass's reports of every sampled level
+      for (const row of rosterRows) {
+        const c = rosterCen.families.find(x => x.family === row.family)!;
+        if ((row.eligibility === 'every-map' || row.eligibility === 'baseline') && c.eligible !== rosterCen.layouts) throw new Error(`level ${l}: roster row ${row.family} says every map is eligible, the pass reported ${c.eligible} of ${rosterCen.layouts}`);
+        if (row.eligibility === 'never' && (c.eligible !== 0 || c.after !== 0)) throw new Error(`level ${l}: roster row ${row.family} says never, the pass reported ${c.eligible} eligible levels / ${c.after} placed`);
+      }
+    }
+    const levelRoster: LevelRosterInfo = {
+      zombieFree, rows: rosterRows, census: rosterCen,
+      note: zombieFree
+        ? `${def.name} is a zombie-free level: it holds no enemy of any family, and the seeded roster pass does nothing here.`
+        : `The seeded roster pass (roster version ${ROSTER_VERSION}) runs once on the finished ${def.name} layout, after every generation context, the per-spawn family roll, the eligibility rules and the hordes. One roll per family per level map seed; every storey of the level shares it. It never changes how many enemies the level has or where they stand — only which family an ordinary ambient zombie slot is.`,
+    };
+    for (const row of rosterRows) {
+      if (row.eligibility !== 'every-map' && row.eligibility !== 'layout') continue;
+      const rf = rosterFamilies.find(x => x.family === row.family)!;
+      knobs.push({what: `seeded roster rate (${row.family})`, value: row.rate, at: rf.at, note: 'chance a level map holds the family at all; one roll per level seed'});
+    }
+
     return {
       id: l, name: def.name, blurb: def.blurb,
       tier: {value: def.tier, at: src.at(F.registry, `LEVELS.${l}.tier`),
         note: 'Explicit difficulty tier of the level (0 = the starting level). Metadata only: no automatic scaling of counts, damage or loot, and no enemy family is enabled by it.'},
       profile: {label: P.label, at: src.at(F.tables, base)},
-      generator: {fn: ad.generator.fn, at: src.at(ad.generator.file, ad.generator.fn), note: ad.generator.note},
+      generator: {fn: ad.generator.fn, at: src.at(ad.generator.file, ad.generator.fn), note: `${ad.generator.note} ${zombieFree ? ROSTER_GENERATOR_NOTE_ZOMBIE_FREE : ROSTER_GENERATOR_NOTE}`},
       total, contexts, pool, zombieTypes, levelMoves, rooms,
       census: cen ? levelCensus(cen, ENEMY_FAMILY_IDS) : null,
       eligibilityCensus: elig,
-      knobs, horde, budgets,
+      knobs, horde, budgets, roster: levelRoster,
     };
   });
 
@@ -967,6 +1365,7 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
     meta: {schema: ENEMY_REFERENCE_SCHEMA, commit: '', buildId: '', dataHash: '', generatedFrom: [], repo: ENEMY_REPO, census: corpus},
     vocabulary: VOCABULARY,
     modifiers: semantics(src),
+    roster,
     families, levels,
   });
   ref.meta.generatedFrom = [...ENEMY_GENERATED_FROM];

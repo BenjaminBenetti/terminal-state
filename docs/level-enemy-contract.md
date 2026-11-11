@@ -1,6 +1,7 @@
 # Level / enemy registration contract — tiers, spawn profiles, families, annex zones
 
-<!-- Task track1-siren-blightbelly-20261031 (lane SPAWN). Background on every spawn control: docs/enemy-spawns.md. -->
+<!-- Task track1-siren-blightbelly-20261031 (lane SPAWN). Background on every spawn control: docs/enemy-spawns.md.
+Task studio-screacher-production-20261110-221858-01: the Screacher (roster-only) and the seeded roster pass (§2d). -->
 
 How a new logical level (e.g. the mall, `LevelId` `mall`) or a same-world annex zone (e.g. track-tunnel service annexes) declares its enemies.
 Everything below is source-backed and validated: a missing tier, profile, family or context is a test / build **error**, never a
@@ -28,8 +29,12 @@ mall: {
 ```
 
    - **Every family listed**: build the pool with `familyPool(shares)` — `DEFAULT_FAMILY_SHARES` gives **blightbelly 0.05 (default
-     ON)**, **siren 0 (default OFF)**, ratdog 0.05, **strainer 0 (context-locked)**, the zombie the remainder, in `ENEMY_FAMILY_IDS`
-     roll order. Turning Blightbelly off for a level is `familyPool({blightbelly: 0})` with a written reason.
+     ON)**, **siren 0 (default OFF)**, ratdog 0.05, **strainer 0 (context-locked)**, **screacher 0 (roster-only)**, the zombie the
+     remainder, in `ENEMY_FAMILY_IDS` roll order (six families: `zombie`, `blightbelly`, `siren`, `ratdog`, `strainer`, `screacher`).
+     Turning Blightbelly off for a level is `familyPool({blightbelly: 0})` with a written reason.
+   - **The Screacher is roster-only** (`ROSTER_ONLY_FAMILIES = ['screacher']`): its weight is 0 in EVERY level pool, context pool
+     and horde pool (`validateSpawnProfile` rejects anything else; `HORDE_FORBIDDEN_FAMILIES` lists it). No per-spawn roll draws
+     it. A level gets Screachers only from the seeded roster pass (§2d), so a profile never mentions it beyond that 0.
    - **The Strainer is context-locked** (`CONTEXT_LOCKED_FAMILIES`, `STRAINER_CONTEXTS = ['service', 'damp']`): a positive weight is valid
      ONLY in the own pool of a listed context (the service annexes' `SERVICE_FAMILY_POOL`, 0.08; the Bunker's damp sections'
      `BUNKER_DAMP_CONTEXT` pool, 0.3 of its one spawn per level — see §2c); a level pool, any other
@@ -51,7 +56,13 @@ mall: {
      tag); an untagged spawn of a multi-context profile is never eligible for a context-restricted family and fails the coverage
      test and the reference build;
    - calls `assignEnemyArchetypes(layout, spawnProfile(id))` ONCE, after every context (annexes included) has placed.
+   - does NOT call the seeded roster pass. The level registry wraps every `LEVELS[id].generate` and runs it on the finished layout
+     (§2d): a new level gets it without any code of its own.
 5. Enemy models are loaded per layout (`game/src/ai/enemyModels.ts`, lane BLIGHT): a level that never places a Siren never loads her.
+   A family with several bodies (the Screacher's `variantModels`) loads exactly the variants its spawns carry (`ZombieSpawn.variant`).
+6. Decide the level's place in the seeded roster (`game/src/ai/enemyRoster.ts`, §2d): a calm level with no enemies goes into
+   `ZOMBIE_FREE_LEVELS`; a level that must always (or never) hold a family gets a `levelRates` entry on that family's rule, with a
+   written reason. Without either, the family rules' default rates apply.
 
 ## 2. Same-world annex zones (Track 2 "service" annexes and similar)
 
@@ -81,6 +92,11 @@ profile, family list, tier or guarantee.
 - Persistence: killed enemies are the generic per-index run memory (`game/src/run/memory.ts` `enemiesToSpawn`), so annex enemies
   die once per run like any other; nothing respawns on re-entry. Rare rewards (the level's gear roll, the roof cache / find) are
   per logical level and are not repeated by annexes (loot tables own that).
+- **The seeded roster in an annex (§2d).** An annex's Strainer comes from the per-spawn roll of its own pool (0.08) and is then
+  fixed by the roster: a level whose roll includes the Strainer holds **exactly one**, in a `STRAINER_CONTEXTS` spawn; every other
+  level holds none. The level's Blightbelly / rat-dog roll applies to annex spawns too (absent: they become ordinary zombies;
+  present: annex zombie slots can be topped up from the annex pool's own shares). The Screacher's slot rule lists the core contexts
+  only, so it does not take annex spawns.
 
 ## 2b. Separate pools and level-wide spacing (the mall, task track3-eaton-centre-20261031)
 
@@ -114,6 +130,41 @@ platform, arrival hall, vault vestibule), `'floor'` (storeys 1-3), `'ring'` (sto
   (`BUNKER_SIREN_SPACING`). Census: `docs/enemy-spawns.md` "The Bunker" / `docs/bunker.md`.
 - `'service'` is declared (`SERVICE_CONTEXT`, the shared annex contract) but never runs: `LEVELS.bunker.trackExtensions` is `'none'`.
 
+## 2d. The seeded roster pass (task studio-screacher-production-20261110-221858-01)
+
+`applyEnemyRoster(layout, level, levelSeed, version)` (`game/src/ai/enemyRoster.ts`) decides which special families a generated
+level holds **at all**, one independent roll per family per level map seed. Rates, placement policies and the maths:
+`docs/enemy-spawns.md` "The seeded roster (Screacher)". The contract a level and a family rely on:
+
+- **Where it runs.** In the level registry (`game/src/levels/registry.ts`): one wrapper over every `LEVELS[id].generate` calls it on
+  the layout the generator returned. So it runs after every generation context, the one family roll (`assignEnemyArchetypes`), the
+  eligibility rules, cap and spacing (`applyFamilySpacing`) and the hordes (`placeHordes`).
+- **What it may change.** Only `archetype` (and `variant`) of **ordinary ambient zombie slots**, and of a rolled-absent family's
+  spawns, which become ordinary zombies. It never adds, removes, moves or reorders a spawn: the count, the positions, the spawn
+  indices (so the per-index kill memory), the context tags and the zombie types are the generator's.
+- **What it never touches.** A roaming-horde member (`ZombieSpawn.horde`) and a store / convention outfit zombie
+  (`ZombieSpawn.look`).
+- **No RNG stream.** Every roster decision is `rosterRoll(levelSeed, key)`, a hash. The layout, the loot and every per-spawn family
+  draw are bit-identical with or without the pass, and a seed always gives the same roster.
+- **Every family decides.** `FAMILY_ROSTER` is a `Record<EnemyFamilyId, RosterRule>`: a new family does not typecheck until it has
+  a rule — `baseline` (the ordinary zombie: never rolled) or `seeded` with a rate and one placement policy (`share-topup`,
+  `eligible-min-one`, `context-one`, `count`).
+- **Absent means none; present means at least one.** A level whose roll excludes a family holds none of it. A level whose roll
+  includes it holds at least one, under every policy: a share top-up that left none converts one ordinary zombie slot whose pool
+  gives the family weight. The only exception is a level with no slot at all where the family may stand; the report then says
+  `noSlot` for it, never silently.
+- **Order.** Present families are placed the most constrained first: `ROSTER_PLACE_PRIORITY` (`context-one`, `eligible-min-one`,
+  `count`, `share-topup`; ties in `ENEMY_FAMILY_IDS` order). The reference reads that export.
+- **Zombie-free levels.** `ZOMBIE_FREE_LEVELS` (`['market']`) never get any family: `rosterRate` is 0 there and the pass changes
+  nothing.
+- **Version.** `SectionGenContext.rosterVersion` (`game/src/levels/types.ts`): absent = 0 = no pass. The game always passes
+  `rosterVersionFor(section memory)`: the version the station was first built with (lane `enemy.roster`), 0 for a station visited
+  before the roster existed, else the current `ROSTER_VERSION` (1). A test or tool that calls `LEVELS[id].generate` without a
+  roster version therefore sees the plain generator output — every pinned layout fingerprint and parity pin was taken that way and
+  stays valid. A caller that wants what a player meets passes `rosterVersion: ROSTER_VERSION`.
+- **The report.** `rosterOf(layout)` returns what the pass did per family (`eligible`, `present`, `before`, `after`, `removed`,
+  `added`, `noSlot`; for a counted family also `wanted` and `relaxed`). It is `undefined` for a layout no pass ran on.
+
 ## 3. What validation catches
 
 | Check | Where |
@@ -122,9 +173,13 @@ platform, arrival hall, vault vestibule), `'floor'` (storeys 1-3), `'ring'` (sto
 | A profile with the same id, every family listed once, known contexts / room keys / kinds, finite values | `validateSpawnProfile` |
 | Siren weight > 0 without an `eligibility.siren` rule; eligibility naming an undeclared context, an unknown room key, a fallback that is itself restricted | `validateSpawnProfile` |
 | Strainer weight > 0 outside the own pool of a `STRAINER_CONTEXTS` context (level pool, other contexts, hordes) | `validateSpawnProfile`, `game/tests/strainer.test.ts` |
+| A roster-only family (`ROSTER_ONLY_FAMILIES`: the Screacher) with weight > 0 in a level pool, a context's own pool or a horde pool | `validateSpawnProfile` |
+| A family without a roster rule | typecheck (`FAMILY_ROSTER` is a `Record<EnemyFamilyId, …>`); the reference build (`tools/pages/render/enemies.ts` `makeEnemySite`) |
+| The roster's own behaviour (rates, absent = none, the placement policies, the version pin, the Market) | `game/tests/enemy-roster.test.ts` |
 | Every spawn of every registered level carries a context its profile declares | `game/tests/enemy-spawn-contract.test.ts` |
 | Families = `ENEMY_ARCHETYPES` key order; `ENEMY_LEVEL_ADAPTER` / `ENEMY_FAMILY_ADAPTER` cover every level / family | `tools/pages/enemyReference.ts` (typecheck + build), `game/tests/enemy-spawn-reference.test.ts` |
-| Zero Sirens in the Subway, ≈ 2 per Office run, Blightbelly / rat-dog ≈ 5 % | `game/tests/enemy-spawn-contract.test.ts` |
+| The reference shows the roster rule of every family, a roster row for every family on every level, and roster-ON sampled numbers that equal a fresh generation with `rosterVersion: ROSTER_VERSION` | `game/tests/enemy-spawn-reference.test.ts`, `game/tests/pages-output.test.ts`, `tools/pages/validate.ts` |
+| Zero Sirens in the Subway, ≈ 2 per Office run, Blightbelly / rat-dog ≈ 5 % — the per-spawn roll alone (a direct generator call: no roster version, no pass) | `game/tests/enemy-spawn-contract.test.ts` |
 
 ## 4. Checklist
 
@@ -134,8 +189,12 @@ platform, arrival hall, vault vestibule), `'floor'` (storeys 1-3), `'ring'` (sto
       showing the level's target (report mean, share of runs with none, max).
 - [ ] Strainer: 0 in the level pool (`familyPool` does it); it appears only through the own pool of a `STRAINER_CONTEXTS` context
       (an annex `service` run, the Bunker's `damp` zone).
+- [ ] Screacher: 0 in every pool (`familyPool` does it). Nothing else to declare: the seeded roster places it.
+- [ ] Seeded roster: nothing to call (the registry runs the pass). Decide only whether the level is zombie-free
+      (`ZOMBIE_FREE_LEVELS`) or needs a `levelRates` override, and check its page's roster section in the reference.
 - [ ] Every context the generator runs declared with an explicit `count`; annex contexts too, appended last and tagged.
-- [ ] Every placement routine calls `markSpawnContext`; `assignEnemyArchetypes` once at the end.
+- [ ] Every placement routine calls `markSpawnContext`; `assignEnemyArchetypes` once at the end. (The roster's counted family —
+      the Screacher — and the Strainer read these context tags.)
 - [ ] `ENEMY_LEVEL_ADAPTER[id]` in `tools/pages/enemyReference.ts`.
 - [ ] Focused tests pass: `enemy-spawn-contract`, `enemy-spawn-tables`, `enemy-spawn-reference`, `enemy-spawn-parity` (pin only a
       new level's entries; never re-pin existing ones without a written cause), `pages-output`; `npm run pages:build && npm run

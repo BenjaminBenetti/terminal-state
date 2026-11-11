@@ -72,7 +72,7 @@ import {hideTooltip} from './ui/tooltip'; // task studio-ui-subway-maps-20261108
 import {Sfx, ambienceTypeFor, humEmitters, roomKindFor} from './audio/sfx';
 import {fanSources} from './audio/fanSound';
 import {ANNEX_GENSET, gensetModelKeysFor} from './assets/annexGenset';
-import {PhysicsSystem, killImpulseStrength} from './physics/world';
+import {PhysicsSystem, killImpulseStrength, type PhysicsAudio} from './physics/world';
 import {DamageSystem} from './damage/system';
 import {ShelfStock, SHELF_JUNK_KEY, SHELF_JUNK_MODEL_FILES, shelfJunkModelKeysFor} from './world/shelfStock'; // (+ task studio-food-shelf-production-20261109-002816-01: the Meshy shelf-junk atlas)
 import {prepareStockMovingSets, stockMovingSets} from './world/shelfStockWarm'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): the filler's moving sets before the warm-up
@@ -125,6 +125,7 @@ import {installReactorCpuCulling} from './world/reactor/cpuActorCulling'; // tas
 import {installBunkerObjective} from './world/bunker/objective'; // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE): the Bunker's optional generators + core intel
 import {installReactorMapBoards} from './world/reactor/mapBoard'; // task reactor-expansion-20261101 (lane CONTROLS) // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
+import {SCREACHER_NOISE, ScreacherBrain, deliverNoise, echoLocate, landNoise, type ScreacherNoiseKind} from './ai/screacher'; // task studio-screacher-production-20261110-221858-01: the blind, sound-hunting family
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 // Iteration 16 (lane RUN): logical levels / sections, travel, run carryover (levels/registry.ts, run/*)
 import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, levelDisplayName, sectionLabel, storeyLabel} from './levels/registry';
@@ -165,6 +166,8 @@ import {skywaysGardenModelKeysFor} from './world/skywaysGardens'; // (lane ARCH)
 import {SKYWAYS_LAYOUT_LANE, skywaysLayoutVersionFor} from './gen/skyways/layoutVersion'; // task studio-skyways-destinations-20261106-170011-01
 import {MARKET_LAYOUT_LANE, marketLayoutVersionFor} from './gen/market/layoutVersion'; // task studio-market-rework-20261108-074144-01 (lane LAYOUT)
 import {BUNKER_LAYOUT_LANE, bunkerLayoutVersionFor} from './gen/bunker/layoutVersion'; // task studio-bunker-level-20261109-072224-01 (lane LEVEL)
+import {ROSTER_LANE, rosterVersionFor} from './ai/enemyRoster'; // task studio-screacher-production-20261110-221858-01: the seeded family roster's version pin
+import {noisyPhysicsAudio} from './ai/screacherNoise'; // task studio-screacher-production-20261110-221858-01: prop / item contacts as world noise
 import {setObjectiveTitle} from './ui/objectiveTitle'; // task studio-bunker-rework-20261109-205115-01
 import {installSkywaysDestAudio} from './world/skywaysDestAudio'; // task skyways-destinations-20261106 (lane AUDIO): the destinations' location sounds
 import {installSubwayMapRead} from './world/subwayMapRead'; // task studio-ui-subway-maps-20261108-074144-01: the station map kiosks' close-up read
@@ -340,7 +343,15 @@ export class Game {
   readonly fx = new Effects();
   private readonly strainerTrail = new StrainerWetTrail(); // (Strainer wet-shine trail driver; marks live in fx)
   /** Ragdolls (cannon-es) + pooled casings; rebuilt per station, stepped only while playing. */
-  readonly physics = new PhysicsSystem(this.scene, this.sfx);
+  readonly physics = new PhysicsSystem(this.scene, this.physicsAudio());
+  /**
+   * Task studio-screacher-production-20261110-221858-01: the physics systems' audio sink — the Sfx, wrapped so that a loose object's
+   * contact (a prop the player walked into, a kicked can, shelf stock falling, a thrown flare landing) and a dragged box are ALSO
+   * raised as world noise where they happened (ai/screacherNoise.ts; only Screachers listen: worldNoise).
+   */
+  private physicsAudio(): PhysicsAudio {
+    return noisyPhysicsAudio(this.sfx, (x, y, z, radius, kind) => this.worldNoise(x, y, z, radius, kind));
+  }
   /** Iteration 06 (Lane D): material damage — craters, debris, per-instance prop damage / breaking, zombie wounds. */
   readonly damage = new DamageSystem(this.fx, this.sfx);
   /** Iteration 08 (Lane S): real 3D filler stock on retail shelving — physical on demand, never loot (world/shelfStock.ts). */
@@ -906,6 +917,9 @@ export class Game {
     // (campaign: the node's own seed; lane BUILD: a journey's destination comes pre-generated from the same inputs — takePregenerated)
     const layout = this.takePregenerated(key, run, ctx) ?? LEVELS[key.level].generate(key.section, ctx);
     if (layoutVersion !== undefined && versionLane && run.laneStore(versionLane, key) === undefined) run.setLaneStore(versionLane, {v: layoutVersion}, key);
+    // (task studio-screacher-production-20261110-221858-01) every level: the enemy-roster version this station was first built with
+    // (ai/enemyRoster.ts: a station visited before the roster existed stays at 0 — its enemies and kills exact; an unvisited one gets the current)
+    if (run.laneStore(ROSTER_LANE, key) === undefined) run.setLaneStore(ROSTER_LANE, {v: ctx.rosterVersion ?? 0}, key);
     const node = key.station ? run.node(key.station) : null;
     if (node) adoptStationName(layout, node.name); // campaign: the map's / save's name is the one on the signs and the HUD
     return layout;
@@ -914,7 +928,8 @@ export class Game {
   /** generateSection's generator inputs for `key` of `run` (the layout version of a versioned level, see above; lane BUILD: + the journey's pre-generation). */
   private sectionGenInputs(key: SectionKey, run: RunState): {layoutVersion: number | undefined; ctx: SectionGenContext} {
     const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : key.level === 'bunker' ? bunkerLayoutVersionFor(run.peekMemory(key)) : undefined;
-    return {layoutVersion, ctx: {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {})}};
+    return {layoutVersion, ctx: {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {}),
+      rosterVersion: rosterVersionFor(run.peekMemory(key))}}; // (the seeded enemy roster: always explicit — levels/types.ts SectionGenContext.rosterVersion)
   }
 
   /**
@@ -1083,6 +1098,7 @@ export class Game {
     }
     for (const z of this.zombies) { this.scene.remove(z.root); const old = z; this.retire(() => old.dispose()); }
     this.zombies = [];
+    this.screacherBrains.length = 0;
     this.enemyIndex.clear();
     this.hordes = null; // lane HORDE: the director belongs to the torn-down world
     this.chaseShare = null;
@@ -2342,6 +2358,7 @@ export class Game {
     // Lane T: spawn on the local floor height; Lane B (iteration 08): of the spawn's own level
     z.brain.y = z.root.position.y = s.y ?? this.levels.grid(s.level ?? 0).floorAt(s.x, s.z);
     this.sirens.adopt(z, s, i); // Task track1-siren-blightbelly-20261031 (lane SIREN): dormant (+ vein patch) or remembered awake (others: no-op)
+    if (z.brain instanceof ScreacherBrain) this.screacherBrains.push(z.brain); // (the listeners of worldNoise)
     this.zombies.push(z);
     this.scene.add(z.root);
     this.atmosphere.markShadows(z.root, false); // Lane F: enemies block the flashlight beam
@@ -3026,6 +3043,14 @@ export class Game {
     if (step) this.sfx.footstep(p.sprinting, p.crouched);
     if (p.justJumped) this.sfx.jump();
     if (p.justLanded) this.sfx.land(Math.min(1, p.landSpeed / 6));
+    // (task studio-screacher-production-20261110-221858-01) the player's own QUALIFYING sounds for the blind Screacher: a sprinting
+    // footstep and a real landing (walking, crouch-walking and standing still make none: sneaking past stays possible). The player's
+    // one detectability factor applies as it does to gunfire (lane BEER: Night Shift Porter).
+    if (this.screacherBrains.length && !this.trainRide.riding && !this.skywaysCar.driving) {
+      const k = this.beerEffects?.perceptionMult() ?? 1;
+      if (step && p.sprinting) this.worldNoise(p.x, p.y, p.z, SCREACHER_NOISE.run * k, 'run');
+      if (p.justLanded) this.worldNoise(p.x, p.y, p.z, landNoise(p.landSpeed) * k, 'land');
+    }
     if (p.justRung) this.sfx.ladder(); // Lane T: hand/foot on a ladder rung (Lane S: Sound Lab rung clip)
     if (p.stanceChanged) this.sfx.crouch(p.crouched);
 
@@ -3551,9 +3576,59 @@ export class Game {
     if (this.meleeLog.length > 8) this.meleeLog.shift();
   }
 
+  /** Task studio-screacher-production-20261110-221858-01: this section's living-or-dead Screacher brains (the only listeners of worldNoise). */
+  private readonly screacherBrains: ScreacherBrain[] = [];
+  /** Last worldNoise delivery per kind (s of game time): one crash's many contacts are a few events, not one per contact. */
+  private readonly noiseAt: Partial<Record<ScreacherNoiseKind, number>> = {};
+  /** QA / tests: world sounds raised and how many Screacher ears they reached. */
+  readonly noiseCounts = {raised: 0, heard: 0, echoScans: 0, echoHits: 0};
+
+  /**
+   * Task studio-screacher-production-20261110-221858-01: A WORLD SOUND at (x, feet-height y, z) of loudness `radius` (m) — a sprinting
+   * footstep, a landing, a prop / item impact, a dragged box. Only Screachers listen (ai/screacher.ts deliverNoise: muffled per
+   * listener like gunfire — a wall x0.6, each floor slab x0.35 — from a line between the SOURCE and that listener); every other
+   * enemy's hearing is untouched (gunfire through alertZombies, which Screachers also hear). No level without a Screacher pays for it;
+   * impact / drag bursts are merged (at most one delivery per kind per 0.08 s).
+   */
+  worldNoise(x: number, y: number, z: number, radius: number, kind: ScreacherNoiseKind): void {
+    if (!(radius > 0) || !this.screacherBrains.length || !this.layout) return;
+    if ((kind === 'impact' || kind === 'drag') && this.time - (this.noiseAt[kind] ?? -1) < 0.08) return;
+    this.noiseAt[kind] = this.time;
+    const L = this.levels, multi = L.count > 1, bases = multi ? L.list.map(l => l.baseY) : null;
+    this.noiseCounts.raised++;
+    this.noiseCounts.heard += deliverNoise(this.screacherBrains, {x, y, z}, radius, kind,
+      b => multi ? L.lineOfSight({x, y: y + 0.6, z}, {x: b.x, y: b.y + 1.5, z: b.z}) : this.layout.grid.lineOfSight(x, z, b.x, b.z), bases);
+  }
+
+  /**
+   * Task studio-screacher-production-20261110-221858-01: the Screacher's ECHO scan (BrainWorld.echo; asked once per scream, at its cue
+   * instant). The player is located only when within `range` (3D, from the stump) AND a straight line from the stump to the player's
+   * chest or head is clear of solid geometry (ai/screacher.ts echoLocate) — BOTH the enemies' sight line (walls, floors and ceilings,
+   * closed stall doors and elevator gates) AND the bullet line (combat/hitscan.ts raycastWorld: + solid props such as counters,
+   * cabinets and the parked train's shell and closed doors): behind a wall, on another storey through a slab, or crouched behind
+   * solid cover the scream finds nothing. Returns the position at THIS instant (a snapshot).
+   */
+  private echoScan(x: number, y: number, z: number, range: number): {x: number; z: number; y: number} | null {
+    const p = this.player;
+    this.noiseCounts.echoScans++;
+    if (!p.alive || this.trainRide.riding || this.skywaysCar.driving) return null;
+    const L = this.levels, multi = L.count > 1;
+    const hit = echoLocate({x, y, z}, p, range, (from, to) => {
+      // sight-blocking structure first (walls, slabs, closed stall doors and elevator gates: the enemies' own sight line) ...
+      if (!(multi ? L.lineOfSight(from, to) : this.layout.grid.lineOfSight(from.x, from.z, to.x, to.z))) return false;
+      // ... then the bullet line (solid props too: counters, cabinets, the parked train's shell and closed doors)
+      const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z, d = Math.hypot(dx, dy, dz);
+      const h = raycastWorld(L, this.layout.props, from, {x: dx / d, y: dy / d, z: dz / d}, d, this.layout.trench.floorY);
+      return h.kind === 'none' || h.t >= d - 0.05;
+    });
+    if (hit) this.noiseCounts.echoHits++;
+    return hit;
+  }
+
   private brainWorld(): BrainWorld {
     const g = this.layout.grid, L = this.levels, multi = L.count > 1;
     return {
+      echo: (x, y, z, range) => this.echoScan(x, y, z, range), // (the Screacher's scream; no other brain calls it)
       px: this.player.x, pz: this.player.z, playerAlive: this.player.alive,
       // Lane B (iteration 08): stacked levels — 3D sight between eye lines (1.5 m over the feet), so a slab between storeys blocks it.
       los: (ax, az, bx, bz, ay, by) => multi && ay !== undefined && by !== undefined ? L.lineOfSight({x: ax, y: ay + 1.5, z: az}, {x: bx, y: by + 1.5, z: bz}) : g.lineOfSight(ax, az, bx, bz),
@@ -3684,7 +3759,8 @@ export class Game {
     // Task track1-siren-blightbelly-20261031 (lane SIREN): the Siren's claw swipe is a standing humanoid melee hit (melee locations, 'zombie' source), attacker 'siren'
     // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly's fist slam too (an ordinary zombie hit: melee locations, 'zombie' source), attacker 'blightbelly'
     // Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): the Strainer's long claw swipe too (a standing humanoid melee hit), attacker 'strainer'
-    const claw = archetypeOf(z) === 'siren' || archetypeOf(z) === 'blightbelly' || archetypeOf(z) === 'strainer';
+    // Task studio-screacher-production-20261110-221858-01: the Screacher's long-arm rake too (a standing humanoid melee hit), attacker 'screacher'
+    const claw = archetypeOf(z) === 'siren' || archetypeOf(z) === 'blightbelly' || archetypeOf(z) === 'strainer' || archetypeOf(z) === 'screacher';
     const creature = archetypeOf(z) !== 'zombie' && !claw;
     const hit: PlayerHit = {amount: z.brain.stats.attackDamage, source: creature ? 'creature' : 'zombie', enemy: true,
       location: creature ? biteHitLocation(this.rand(), p.crouched) : meleeHitLocation(this.rand(), p.crouched), attacker: creature || claw ? archetypeOf(z) : z.brain.type};

@@ -26,13 +26,24 @@
 //  - tier            the level's explicit difficulty tier (levels/registry.ts LEVELS[id].tier): metadata, no scaling.
 //  - family stats    combat / behaviour figures read from each family's exported constants (health hp, speeds m/s, reach m, damage
 //                    hp per hit, times s); wake rules and the death burst where a family has them.
+//  - seeded roster   (task studio-screacher-production-20261110-221858-01, schema 3) WHICH special families a generated level holds
+//                    AT ALL: one independent hash roll per family per level map seed (game/src/ai/enemyRoster.ts FAMILY_ROSTER /
+//                    applyEnemyRoster), applied to the finished layout AFTER the per-spawn family roll. An absent family has exactly
+//                    none in that level; a present one is placed by its policy; only ordinary ambient zombie slots ever change
+//                    family. A ROSTER-ONLY family (the Screacher) has weight 0 in every pool and is placed by the roster alone.
+//                    Every sampled "what a level holds" figure is measured with the roster applied; a figure of the per-spawn roll
+//                    alone is labelled "before the roster pass".
 
 import type {SourceLoc} from './lootReferenceTypes';
 
 export type {SourceLoc};
 
-/** Bump when the shape changes incompatibly (the renderer may check it). 2 = task track1: tiers, family stats, eligibility. */
-export const ENEMY_REFERENCE_SCHEMA = 2;
+/**
+ * Bump when the shape changes incompatibly (the renderer may check it). 2 = task track1: tiers, family stats, eligibility.
+ * 3 = task studio-screacher-production-20261110-221858-01: the seeded family roster (EnemyReference.roster, EnemyLevelInfo.roster,
+ * EnemyFamilyInfo.variantModels / rosterOnly), censuses measured with the roster applied.
+ */
+export const ENEMY_REFERENCE_SCHEMA = 3;
 
 export type Range = readonly [lo: number, hi: number];
 
@@ -42,6 +53,8 @@ export interface EnemyReference {
   vocabulary: readonly VocabEntry[];
   /** What the room modifiers mean (same for every level). */
   modifiers: ModifierSemantics;
+  /** Task studio-screacher-production-20261110-221858-01 (schema 3): the seeded per-level family roster (the same rule for every level). */
+  roster: RosterInfo;
   /** Every enemy family of the archetype registry (ai/creatureArchetypes.ts ENEMY_ARCHETYPES), in registry order. */
   families: readonly EnemyFamilyInfo[];
   /** Every registered logical level (levels/registry.ts LEVEL_IDS order). */
@@ -117,15 +130,26 @@ export interface EnemyFamilyInfo {
   id: string;
   /** Registry label ('Infected', 'Tunnel scavenger (rat/dog)'). */
   label: string;
-  /** Model key (null = the zombie wardrobe). */
+  /** Model key (null = the zombie wardrobe, or a family with several bodies: see `variantModels`). */
   model: string | null;
+  /**
+   * Task studio-screacher-production-20261110-221858-01 (schema 3): the model variants of a family with several approved bodies (the
+   * Screacher: one enemy type, the same AI and stats), in registry order: the spawn's variant id, its lazy model key and its name.
+   * null = the family has one body (or the zombie wardrobe).
+   */
+  variantModels: readonly {variant: string; model: string; name: string | null}[] | null;
   /**
    * Sub-distributions INSIDE this family that are not families (zombie: the shambler / coated type roll and the wardrobe
    * outfits chosen at spawn time); null = none.
    */
   variants: string | null;
-  /** Levels whose pool — or one of its contexts' own pools (lane FAMILY, round 4: the service annexes') — gives this family weight > 0. */
+  /**
+   * Levels where the family can appear: a level whose pool — or one of its contexts' own pools (lane FAMILY, round 4: the service
+   * annexes') — gives it weight > 0, or (schema 3) where the seeded roster places a roster-only family; never a zombie-free level.
+   */
   levels: readonly string[];
+  /** Schema 3: a ROSTER-ONLY family — weight 0 in every level, context and horde pool; placed only by the seeded roster. */
+  rosterOnly: boolean;
   at: SourceLoc;
   /** Task track1 (schema 2): combat figures per variant, read from the family's exported stats (brain.ts ZombieStats shape). */
   stats: readonly FamilyStatsVariant[];
@@ -164,6 +188,131 @@ export interface FamilyRuleGroup {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
+// The seeded roster (task studio-screacher-production-20261110-221858-01, schema 3)
+
+/** The seeded per-level family roster: game/src/ai/enemyRoster.ts FAMILY_ROSTER / applyEnemyRoster (one rule set for every level). */
+export interface RosterInfo {
+  /** ROSTER_VERSION: the roster version a station built for the first time today records (0 = before the roster: no pass). */
+  version: number;
+  /** The section-memory lane holding a station's recorded roster version. */
+  lane: string;
+  /** Levels that never hold an enemy of any family (the pass does nothing there). */
+  zombieFreeLevels: readonly string[];
+  /** Families placed ONLY by the roster (weight 0 in every pool). */
+  rosterOnly: readonly string[];
+  /** The seeded families in the order the pass places the present ones (the most constrained first). */
+  order: readonly string[];
+  /** Plain-language rules of the pass (what it may change, the roll, the order, the version pin); numbers read from the source. */
+  rules: readonly string[];
+  /** One entry per registered family, in registry order. */
+  families: readonly RosterFamilyInfo[];
+  /** How many consecutive level seeds `rollCheck` evaluates the roll for (LevelRosterRow.rolled; a pure hash, no generation). */
+  rollCheckSeeds: number;
+  /** applyEnemyRoster. */
+  at: SourceLoc;
+}
+
+/** One family's roster rule (FAMILY_ROSTER[family]); every field of the rule is carried (an unknown field fails the build). */
+export interface RosterFamilyInfo {
+  family: string;
+  /** 'baseline' = always present, never rolled (the ordinary zombie); 'seeded' = one roll per level map seed. */
+  mode: 'baseline' | 'seeded';
+  /** The first roster version that applies the rule (null = baseline). */
+  since: number | null;
+  /** The stable hash key of the roll (null = baseline). */
+  key: string | null;
+  /** Chance that a generated level map's roll includes the family (null = baseline). `levelRates` overrides it per level. */
+  rate: number | null;
+  levelRates: readonly {level: string; rate: number}[];
+  /** Placement policy id: 'share-topup' | 'eligible-min-one' | 'context-one' | 'count' (null = baseline). */
+  place: string | null;
+  /** The policy in plain language (how a present family is placed), with its numbers read from the rule. */
+  placement: string;
+  /** 'context-one': the generation contexts where exactly one stands. */
+  contexts: readonly string[] | null;
+  /** 'count': how many of a present family — [count, weight] rows with their share — and the expected count. */
+  counts: readonly {count: number; weight: number; share: number}[] | null;
+  countMean: number | null;
+  /** 'count': which ordinary zombie slots qualify. */
+  slots: {contexts: readonly string[]; excludeKinds: readonly string[]; excludeRooms: readonly string[]; minSideCells: number; minSideM: number;
+    minAreaCells: number; minAreaM2: number} | null;
+  /** 'count': preferred straight-line distance (m, 3D) between two of the family in one level. */
+  spacingM: number | null;
+  /** 'count': the model variants dealt in turn from a seeded start. */
+  variants: readonly string[] | null;
+  rosterOnly: boolean;
+  why: string;
+  at: SourceLoc;
+}
+
+/** One level's view of the roster. */
+export interface LevelRosterInfo {
+  /** A zombie-free level: no enemies of any family; every row says 'zombie-free'. */
+  zombieFree: boolean;
+  /** One row per registered family, in registry order. */
+  rows: readonly LevelRosterRow[];
+  /** Sampled census of the pass on the registered generator's levels (null = disabled, or a zombie-free level). */
+  census: RosterCensus | null;
+  note: string;
+}
+
+export interface LevelRosterRow {
+  family: string;
+  /**
+   * Whether this level can hold the family:
+   *  - 'baseline'    always (the ordinary zombie; never rolled);
+   *  - 'every-map'   every generated map of the level is rolled at `rate`;
+   *  - 'layout'      only a map that has an ambient spawn where the family may stand is rolled at `rate` (the Strainer: a service
+   *                  annex / the damp zone); a map without one never holds it;
+   *  - 'never'       no pool / eligibility rule / running context of this level gives it a place: never rolled into it;
+   *  - 'zombie-free' the level never holds any enemy.
+   */
+  eligibility: 'baseline' | 'every-map' | 'layout' | 'never' | 'zombie-free';
+  /** rosterRate(family, level): the chance that an eligible map's roll includes the family (0 for 'baseline' / 'never' / 'zombie-free'). */
+  rate: number;
+  /** The row in plain language. */
+  status: string;
+  /**
+   * The roll itself over RosterInfo.rollCheckSeeds consecutive level seeds (familyInRoster: a pure hash, no level is generated): how
+   * many of them include the family. null = the family is not rolled on this level.
+   */
+  rolled: {seeds: number; present: number} | null;
+}
+
+/** SAMPLED: the roster pass on generated levels (the registered generator, then the pass at RosterInfo.version). */
+export interface RosterCensus {
+  seeds: readonly number[];
+  layouts: number;
+  /** Ambient spawns over the sample (the pass never changes it) and per level. */
+  ambient: number;
+  ambientPerLevel: number;
+  note: string;
+  /** One row per registered family, in registry order. */
+  families: readonly {
+    family: string;
+    /** Layouts that could hold the family / whose roll included it / that hold at least one after the pass. */
+    eligible: number;
+    present: number;
+    holding: number;
+    /** Ambient spawns of the family over the sample: placed by the per-spawn roll alone (before the pass) and after the pass. */
+    before: number;
+    after: number;
+    /** Per-spawn placements the pass turned into ordinary zombies / ordinary zombie slots it converted to the family. */
+    removed: number;
+    added: number;
+    /** After the pass: mean per level, mean per level that holds it (null = none does), the most in one level, share of the ambient spawns. */
+    perLevel: number;
+    perHoldingLevel: number | null;
+    max: number;
+    share: number;
+    /** Layouts where the family was present but no legal slot existed (reported by the pass, never silent). */
+    noSlot: number;
+    /** Layouts by the number of the family after the pass. */
+    histogram: readonly {count: number; layouts: number}[];
+  }[];
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
 // Levels
 
 export interface EnemyLevelInfo {
@@ -194,6 +343,8 @@ export interface EnemyLevelInfo {
   horde: HordeInfo | null;
   /** Lane PROFILES: explicit ambient-pool caps (null = the contexts' count ranges alone). */
   budgets: {ambient: AmbientBudgetInfo} | null;
+  /** Task studio-screacher-production-20261110-221858-01 (schema 3): the seeded roster on this level (rates, eligibility, sampled census). */
+  roster: LevelRosterInfo;
 }
 
 /** Lane PROFILES / HORDE: the roaming-horde pool of a level (ai/hordeSpec.ts HordeRules). */
@@ -290,9 +441,10 @@ export interface FamilyPoolInfo {
   /** How the roll works (independent per-spawn roll keyed on (level seed, spawn index), REPLACES a zombie). */
   roll: string;
   /**
-   * Expected spawns of each family per level, before placement shortfall. basis 'exact' = share × total.mean (no eligibility rule
-   * touches the family); 'sampled' = measured by the eligibility census (a restricted family and its fallback); mean null = not
-   * measured in this build (census disabled).
+   * Expected spawns of each family per level BY THE PER-SPAWN ROLL ALONE (before the seeded roster pass, schema 3), before placement
+   * shortfall. basis 'exact' = share × total.mean (no eligibility rule touches the family); 'sampled' = measured by the eligibility
+   * census (a restricted family and its fallback); mean null = not measured in this build (census disabled). What a level holds
+   * after the roster pass is EnemyLevelInfo.roster.census.
    */
   expectedPerLevel: readonly {family: string; mean: number | null; basis: 'exact' | 'sampled'}[];
   /** Task track1 (schema 2): the eligibility rules of the profile (one per restricted family; [] = none). */
@@ -318,11 +470,15 @@ export interface EligibilityInfo {
   at: SourceLoc;
 }
 
+/**
+ * SAMPLED: the per-spawn roll and the eligibility rule of the restricted families, measured BEFORE the seeded roster pass (schema 3:
+ * the same generated levels then take the pass — EnemyLevelInfo.roster.census shows what a level holds afterwards).
+ */
 export interface EligibilityCensus {
   seeds: readonly number[];
   layouts: number;
   note: string;
-  /** Placed spawns per family over the sample (all families). */
+  /** Placed spawns per family over the sample (all families), before the roster pass. */
   placed: readonly {family: string; total: number; perLevel: number; share: number}[];
   restricted: readonly {
     family: string;
@@ -412,8 +568,12 @@ export interface LevelCensus {
   cellM2: number;
   eligibleCells: number;
   eligibleM2: number;
-  /** Placed spawns per family: total over the sample, mean per level, per 100 m² eligible floor. SAMPLED. */
-  placed: readonly {family: string; total: number; perLevel: number; per100m2: number}[];
+  /**
+   * Placed spawns per family WITH THE SEEDED ROSTER APPLIED (schema 3: what a level holds): total over the sample, mean per level, per
+   * 100 m² eligible floor, `levels` = sample levels holding at least one, `rollTotal` = what the per-spawn roll alone had placed
+   * (before the roster pass). SAMPLED.
+   */
+  placed: readonly {family: string; total: number; perLevel: number; per100m2: number; levels: number; rollTotal: number}[];
   /** (R6) `byFamily`: the sampled PLACED outcome per family in that context (a census, never the configured share). */
   byContext: readonly {context: string; eligibleM2: number; placed: number; perLevel: number; per100m2: number | null; byFamily: Readonly<Record<string, number>>}[];
   byAreaKind: readonly {kind: string; eligibleM2: number; placed: Readonly<Record<string, number>>; per100m2: number | null}[];

@@ -108,7 +108,8 @@ Spare storerooms fill leftover voids (at most three per storey).
 - **`station`** (storey 0): U{2..3} spawns; a Siren drawn there is ineligible and stays a zombie.
 - **`floor`** (storeys 1–3): U{6..8} per storey.
 - **`ring`** (storeys 4–5): U{7..9} per storey.
-- **`damp`**: one spawn per level in the damp areas only, from its own pool (rat/dog 0.1, Strainer 0.3, otherwise a zombie).
+- **`damp`**: one spawn per level in the damp areas only, from its own pool (rat/dog 0.1, Strainer 0.3, otherwise a zombie). That
+  is the per-spawn roll; the seeded roster then decides whether the level has a Strainer at all (below).
 
 Further rules:
 
@@ -119,11 +120,27 @@ Further rules:
   room gates, at most 3 per level and 24 m apart.
 - No hordes. Normal outfits only. The arrival keep-off (36 cells from the start) holds on every storey.
 
-**Census** (32 levels, seeds 4401 + k × 7919, `tests/bunker-spawns.test.ts`):
+**The seeded roster on top** (task studio-screacher-production-20261110-221858-01; docs/enemy-spawns.md "The seeded roster
+(Screacher)"). After everything above, one roll per family per level seed decides which special families a Bunker holds at all.
+The enemy count and every position are unchanged; only families change.
 
-- Enemies: 40.9 per level (budget 46; the Reactor's is 54).
+- **Strainer:** a Bunker with a damp spawn is rolled at 35 %. A Bunker whose roll includes the Strainer holds **exactly one**, in
+  the damp zone — also when the per-spawn roll drew a zombie or a rat/dog there (the rat/dog is exchanged to an ordinary zombie
+  slot elsewhere). Every other Bunker has none.
+- **Siren:** a Bunker's roll includes her in 85 % of level seeds. Her draw, room eligibility, cap (3) and spacing decide as
+  before; a Bunker whose roll includes her has at least one when an enemy stands in a room where she is eligible. The other 15 %
+  have none.
+- **Blightbelly, rat/dog:** each in 60 % of level seeds, at least one there, topped up from the pool shares. **Screachers**
+  (docs/screacher.md): 1–3 in 40 % of level seeds, in place of ordinary zombies of the storey runs.
+
+**Census of the per-spawn roll, before the roster pass** (32 levels, seeds 4401 + k × 7919, `tests/bunker-spawns.test.ts`: a
+direct generator call, so no roster pass runs):
+
+- Enemies: 40.9 per level (budget 46; the Reactor's is 54). The roster does not change this.
 - Sirens: 1.47 per level; 31 of 32 levels have at least one; max 3.
 - Strainers: 0.38 per level; 12 of 32 levels have one; never more than one.
+
+What a Bunker holds with the roster applied is measured in docs/enemy-spawns.md "Census with the roster".
 
 ## Loot
 

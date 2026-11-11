@@ -288,7 +288,7 @@ export class FlareSystem implements BodySource {
       const v = Math.abs(ev.contact.getImpactVelocityAlongNormal());
       if (v < 0.7) return;
       f.soundT = 0.12;
-      this.host.audio?.physImpact?.(body.position.x, body.position.y, body.position.z, v, 'light');
+      this.host.audio?.physImpact?.(body.position.x, body.position.y, body.position.z, v, 'light', undefined, 'thrown');
     });
     w.addBody(body);
     this.host.bodiesChanged(); // static collision around the new body now

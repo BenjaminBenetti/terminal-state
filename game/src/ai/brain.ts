@@ -156,6 +156,13 @@ export interface BrainWorld {
    * the AI is never switched off and aggro is never dropped by it.
    */
   detect?: number;
+  /**
+   * Task studio-screacher-production-20261110-221858-01: the Screacher's ECHO scan (ai/screacher.ts SCREACHER_ECHO), asked ONCE per
+   * scream at its cue instant from the body at (x, feet y, z): the player's position snapshot when the player is within `range` m
+   * (3D) with NO solid geometry between (walls, floors, closed doors, solid props), else null. Absent: the echo finds nothing. No
+   * other brain calls it; it is not sight (nothing reads it between screams).
+   */
+  echo?(x: number, y: number, z: number, range: number): {x: number; z: number; y: number} | null;
 }
 
 /** (lane BEER) The detection factor in use: a finite positive BrainWorld.detect, else 1. */
@@ -409,7 +416,8 @@ export class ZombieBrain {
     return false;
   }
 
-  private sees(w: BrainWorld, dt: number): boolean {
+  /** (protected: the blind Screacher, ai/screacher.ts, replaces sight by "has a sound / echo belief"; every other brain uses this one.) */
+  protected sees(w: BrainWorld, dt: number): boolean {
     if (!w.playerAlive) { this.noticeT = 0; return false; }
     const dx = w.px - this.x, dz = w.pz - this.z;
     // lane ENEMY (mall round 3, R2): an unaware enemy and a player on another storey of an open-atrium level (ATRIUM_PERCEPTION)

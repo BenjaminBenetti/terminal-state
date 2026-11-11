@@ -684,12 +684,23 @@ start arrival spawns in the car. `layout.reactor.start` stays the platform start
 ticket-hall opening, facing it).
 
 ## Enemies
-Existing families only. Density and the nastier families rise with depth (`docs/enemy-spawns.md` "The Reactor"):
+No Reactor-specific enemy and no boss. Its spawn profile grades the density and the nastier families by depth
+(`docs/enemy-spawns.md` "The Reactor"):
 
 - rat/dogs flank on the catwalks;
 - Blightbellies are on the deep tiers;
 - at most two sleeping Sirens are in deep side rooms;
 - the Strainer appears only in the rim station's annex.
+
+The seeded roster (`docs/enemy-spawns.md` "The seeded roster (Screacher)") then decides per pit, from the level seed, which
+families that pit holds at all. Counts and positions are unchanged.
+
+- Blightbellies and rat/dogs: always. Their roster rate is 100 % on the Reactor (the depth grading is built on them), so every pit
+  has what the per-spawn roll placed, and at least one of each.
+- The Siren: a pit's roll includes her in 85 % of level seeds; the other pits have none.
+- The Strainer: exactly one in 35 % of the pits whose map has an annex spawn; none in the others.
+- Screachers (`docs/screacher.md`): 1–3 in 40 % of pits, in place of ordinary zombies of the rim, the walkway tiers or the core
+  floor. They are blind and hunt by sound, like on every level.
 
 ### Cross-storey hits (task reactor-playtest-round2-20261102, lane COMBAT; every level)
 User: enemies on another storey (down the stairs, across an atrium, in the pit) could not be damaged, on every level.
@@ -704,7 +715,8 @@ User: enemies on another storey (down the stairs, across an atrium, in the pit) 
   render input, so `CULL_LAYER` / `LevelCuller.track` (PR 39's culling, unchanged) never removes a target. The world hit stays
   the limit: walls, slabs, closed lift doors and props still stop bullets. Melee, noise, gas, blasts and AI are unchanged.
 - **Tests:** `game/tests/combat-cross-storey.test.ts` uses real Subway / Office / Mall / Reactor layouts and the real enemy
-  actors. It checks every stair link down and up, atrium and pit shots for all five families, slab and closed-door blocks, the
+  actors. It checks every stair link down and up, atrium and pit shots for five families (zombie, rat/dog, Blightbelly, Siren,
+  Strainer: the test's own list; the Screacher, registered later as the sixth family, is not in it), slab and closed-door blocks, the
   pistol / rifle / shotgun parts and pellets, a culled enemy still hit, brute-force parity and the wiring. On the same rays the
   pre-fix reject skipped 35 of 35 stair shots down, 33 of 35 up and 85 of 87 atrium / pit shots down.
 

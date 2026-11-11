@@ -505,7 +505,7 @@ describe('knockback by mass, protected bosses resist knockdown, stagger without 
     expect(meleeKnockFor(k, 'zombie', 'coated')).toBeCloseTo(1.1 / MELEE_MASS.coated, 9);
     expect(meleeKnockFor(k, 'blightbelly')).toBeLessThan(0.6);
     expect(meleeKnockFor(k, 'ratdog')).toBe(MELEE_KNOCK.maxM);
-    for (const a of ['zombie', 'blightbelly', 'ratdog', 'siren', 'strainer']) expect(meleeMassOf(a), a).toBeGreaterThan(0);
+    for (const a of ['zombie', 'blightbelly', 'ratdog', 'siren', 'strainer', 'screacher']) expect(meleeMassOf(a), a).toBeGreaterThan(0); // (+ the Screacher: task studio-screacher-production-20261110-221858-01)
     expect(Object.keys(ENEMY_ARCHETYPES).every(a => a in MELEE_MASS)).toBe(true); // every enemy family has a mass
     expect(meleeKnockFor(0, 'ratdog')).toBe(0);
   });

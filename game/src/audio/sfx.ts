@@ -119,6 +119,13 @@ export const CUE_GAIN: Record<CueId, number> = {
   // (~+2 dB over a heavy zombie step at its chase gain), swing -21.1 (~4 dB under the attack snarl), contact -19.3 (between the hurt
   // grunt -18.2 and the foreground hit confirm -20.0), squish -24.3 (~4.5 dB under that confirm, positional: quieter with distance).
   strainerStep: 0.38, strainerSwing: 0.36, strainerContact: 0.6, strainerSquish: 0.32,
+  // Task studio-screacher-production-20261110-221858-01 (lane AUDIO, tools/audio-pipeline/screacher-build.mjs; SCREACHER_AUDIO): the
+  // screacher-* clips are peak -1 dBFS with a cue's takes matched in loudness; these gains = derivatives/audio-screacher.json
+  // mixCalibration (momentary max AT THE SOURCE): the echo scream -15.8 LUFS = the Siren's wake scream (the loudest enemy vocal, +2.7 LU
+  // over a zombie groan; peak -5.2 dBFS), the frenzy shriek -17.7 (peak-bound at the -1 dBFS ceiling: +0.8 LU over a groan; the hurt
+  // yelp is the same takes x0.55), the wheeze -24.4 (soft: ~6 LU under a groan, about the Siren's hum), the death gurgle -19.5 (1 LU
+  // under a groan). First estimates for the ear pass (not auditioned).
+  screacherScream: 0.62, screacherShriek: 1, screacherWheeze: 0.44, screacherDeath: 0.83,
   // Task reactor-build-20261101 (primary): the Reactor's machine set (tools/audio-pipeline/reactor-build.mjs). One-shots are peak
   // -1 dBFS, the loops RMS -20 dBFS (the bed / flare-loop convention). The generator start is deliberately LOUD (it is the noise that
   // pulls the dead onto the landing); the running loops sit under combat; the core startup swell is the win's sound.
@@ -508,6 +515,38 @@ export const STRAINER_AUDIO = {
 export const STRAINER_CUE_IDS = ['strainerStep', 'strainerSwing', 'strainerContact', 'strainerSquish'] as const satisfies readonly CueId[];
 type StrainerVoiceKind = 'step' | 'swing' | 'contact' | 'squish';
 
+/**
+ * Task studio-screacher-production-20261110-221858-01 (lane AUDIO): the headless Screacher's VOICE out of its open throat (Sound Lab
+ * clips screacher-*.mp3, tools/audio-pipeline/screacher-build.mjs; provenance derivatives/audio-screacher.json, levels: its
+ * mixCalibration = CUE_GAIN). All world-placed ONE-SHOTS at the neck stump (distance, air / occlusion low-pass, HRTF while free, reverb
+ * send); nothing loops. Playing them is audio only: the AI never listens to them and nothing here calls back into it (ai/ owns the
+ * echo logic and calls Sfx at the pulse instant). Its footsteps, body fall and hit impacts reuse the existing cues.
+ *  - scream: THE echolocation scream — the player's tell of every echo pulse (Sfx.screacherScream). Not a vocal() voice: never
+ *    route-gated and outside the VOCAL_GATE.cap that thins groans; pri 2 (the shared voice cap never drops it, e.g. under gunfire);
+ *    heard to `maxDist` m in the open; `occMax` caps the occlusion so a wall / slab muffles it but it stays present round a corner.
+ *    At most `max` screams sound at once: past that the NEAREST win (the farthest sounding one gives way, a farther new one is dropped).
+ *  - shriek: the short frenzy bark-shriek (it turned aggressive): a combat cue like an attack snarl (never route-gated).
+ *  - hurt: the SAME shriek takes, quieter and higher (`gain` / `rate`: processing of the clip), when it is shot but not killed.
+ *  - wheeze: the quiet wet idle breath that tells a careful player one is close: an 'idle' enemy VOCAL (vocal(): navigable-route gate,
+ *    vocal cap, storey rules — no wheezing through the slab from another floor), audible to about `maxDist` m. Dropped while this
+ *    Screacher is still voicing anything (one throat: no breath under its own scream / shriek).
+ *  - death: the wet collapsing gurgle; it also fades everything this Screacher was still voicing (a killed one stops screaming).
+ * Bounded: per Screacher (`key`) and kind at most one cue per `minGapS`; at most `max` of a kind sounding at once.
+ * Levels: CUE_GAIN x `gain` (x the `gainJitter` dB spread) never exceeds the -1 dBFS ceiling of the clips — the shriek is peak-bound
+ * (CUE_GAIN 1), so it plays without gain jitter. Dry level by the panner law, from the calibrated source levels: the scream at 45 m
+ * about -38.5 LUFS (4.6 dB over a zombie groan at its 34 m limit), the shriek at 30 m about -39.6, the wheeze at 12 m about -45.8.
+ */
+export const SCREACHER_AUDIO = {
+  scream: {cue: 'screacherScream', ref: 3, rolloff: 0.9, maxDist: 50, send: 0.6, occMax: 0.75, pri: 2, max: 3, minGapS: 3, gain: 1, rate: 1, jitter: 0.02, gainJitter: 0.5},
+  shriek: {cue: 'screacherShriek', ref: 2.4, rolloff: 1, maxDist: 32, send: 0.5, occMax: 0.85, pri: 1, max: 2, minGapS: 2, gain: 1, rate: 1, jitter: 0.03, gainJitter: 0},
+  hurt: {cue: 'screacherShriek', ref: 2, rolloff: 1.1, maxDist: 26, send: 0.4, occMax: 1, pri: 1, max: 2, minGapS: 0.5, gain: 0.55, rate: 1.15, jitter: 0.05, gainJitter: 1.5},
+  wheeze: {cue: 'screacherWheeze', ref: 1.3, rolloff: 1.3, maxDist: 13, send: 0.25, occMax: 1, pri: 1, max: 2, minGapS: 2, gain: 1, rate: 1, jitter: 0.05, gainJitter: 1.5},
+  death: {cue: 'screacherDeath', ref: 2.2, rolloff: 1.1, maxDist: 36, send: 0.5, occMax: 1, pri: 1, max: 2, minGapS: 5, gain: 1, rate: 1, jitter: 0.05, gainJitter: 1},
+  /** Fades (s): a scream that gives way to a nearer one; a dying Screacher's own sounding voices. */
+  stealFadeS: 0.08, deathCutS: 0.12,
+} as const;
+type ScreacherVoiceKind = 'scream' | 'shriek' | 'hurt' | 'wheeze' | 'death';
+
 /** Weapon sound kinds (WeaponDef.sound). */
 /**
  * Task studio-beta-train-fuel-system-20261106-024923-01 (lane PORT): the train FUEL cues. engineStall / fuelPour play one Sound Lab take
@@ -757,6 +796,10 @@ export class Sfx {
   private sSquishAt = new WeakMap<object, number>();
   private sVoices: Record<StrainerVoiceKind, Voice[]> = {step: [], swing: [], contact: [], squish: []};
   private sStats = {steps: 0, swings: 0, contacts: 0, squishes: 0, capped: 0, limited: 0};
+  // Task studio-screacher-production-20261110-221858-01 (lane AUDIO): per Screacher (the caller's key, held weakly) the time of its last
+  // cue of each kind + the voices it is still sounding, and the sounding Screacher voices (kind, distance when started) for the per-kind caps.
+  private scrKeys = new WeakMap<object, {last: Partial<Record<ScreacherVoiceKind, number>>; vs: Voice[]}>();
+  private scrVoices: {v: Voice; kind: ScreacherVoiceKind; d: number}[] = [];
   /** Iteration 08 (Lane B): `y` = the source height (3D occlusion through slabs on stacked levels). */
   private occlusion: ((x: number, z: number, y?: number) => number) | null = null;
   // Task office-overhaul-20261030 (lane AUDIO): enemy vocal gate (navigable route) + counters (debugState().vocal).
@@ -2870,6 +2913,57 @@ export class Sfx {
     if (this.sLive(kind) >= STRAINER_AUDIO[kind].max) { this.sStats.capped++; return null; }
     const v = this.voice(o);
     if (v) this.sVoices[kind].push(v);
+    return v;
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Task studio-screacher-production-20261110-221858-01 (lane AUDIO): the Screacher's voice (Sound Lab clips screacher-*; silent no-ops
+  // when audio is paused / not started or a clip is missing — never a stand-in sound). See SCREACHER_AUDIO.
+
+  /** The Screacher's echolocation scream at its stump (world position). One per pulse; a new scream from the same `key` replaces nothing. */
+  screacherScream(key: object, x: number, y: number, z: number): void {
+    const S = SCREACHER_AUDIO.scream;
+    this.play(this.scrVoice('scream', key, x, y, z), S.cue, {gain: S.gain, rate: S.rate, jitter: S.jitter, gainJitter: S.gainJitter});
+  }
+
+  /** Its other vocals: 'wheeze' (idle breath: quiet, near), 'shriek' (frenzy), 'hurt' (the shriek, quieter / higher), 'death'. */
+  screacherVoice(kind: 'wheeze' | 'shriek' | 'hurt' | 'death', key: object, x: number, y: number, z: number): void {
+    const S = SCREACHER_AUDIO[kind];
+    this.play(this.scrVoice(kind, key, x, y, z), S.cue, {gain: S.gain, rate: S.rate, jitter: S.jitter, gainJitter: S.gainJitter});
+  }
+
+  /**
+   * A Screacher cue's voice within its bounds (SCREACHER_AUDIO[kind]): the per-Screacher rate limit (`minGapS` per `key` and kind), the
+   * one-throat rule (no wheeze under its own sounding voice), the range, the per-kind cap (`max` sounding; screams: the nearest win).
+   * Null = limited / capped / culled / gated / paused. Plays nothing itself.
+   */
+  private scrVoice(kind: ScreacherVoiceKind, key: object, x: number, y: number, z: number): Voice | null {
+    const ctx = this.live;
+    if (!ctx || ![x, y, z].every(Number.isFinite)) return null;
+    const S = SCREACHER_AUDIO[kind], now = ctx.currentTime, at = {x, y, z};
+    let k = this.scrKeys.get(key);
+    if (!k) this.scrKeys.set(key, (k = {last: {}, vs: []}));
+    const last = k.last[kind];
+    if (last !== undefined && now - last < S.minGapS) { this.dropped++; return null; }
+    const own = k.vs = k.vs.filter(v => v.end > now); // what this Screacher is still voicing
+    if (kind === 'wheeze' && own.length) return null;
+    const d = this.dist(at);
+    if (d > S.maxDist) { this.culled++; return null; }
+    const live = this.scrVoices = this.scrVoices.filter(e => e.v.end > now);
+    const same = live.filter(e => e.kind === kind);
+    if (same.length >= S.max) {
+      const far = same.reduce((p, e) => (e.d > p.d ? e : p));
+      if (kind !== 'scream' || d >= far.d) { this.dropped++; return null; }
+      this.fadeVoice(far.v, SCREACHER_AUDIO.stealFadeS);
+      live.splice(live.indexOf(far), 1); // (fading: it no longer counts)
+    }
+    const o = {at, hrtf: true, ref: S.ref, rolloff: S.rolloff, send: S.send, pri: S.pri, maxDist: S.maxDist, occMax: S.occMax};
+    const v = kind === 'wheeze' ? this.vocal('idle', o) : this.voice(o);
+    if (!v) return null;
+    if (kind === 'death') for (const u of own) this.fadeVoice(u, SCREACHER_AUDIO.deathCutS);
+    k.last[kind] = now;
+    own.push(v);
+    live.push({v, kind, d});
     return v;
   }
 
