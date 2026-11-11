@@ -67,6 +67,16 @@ export interface CartBody {
   level: number;
   /** Quarter units in the drum (mass). */
   units: number;
+  /**
+   * Task studio-train-crafting-v1-20261111-225628-01: OTHER bodies on this controller (the train equipment: devices on the same hand
+   * truck, a carried chest standing on the floor — world/trainEquipment.ts). Absent = the fuel cart's own values, unchanged:
+   * `kg` its mass (instead of the drum's fill), `r` its footprint radius, `h` its clear height, `decel` its free resistance on flat
+   * floor (m/s²: a box sliding on its base stops much sooner than a truck rolls).
+   */
+  kg?: number;
+  r?: number;
+  h?: number;
+  decel?: number;
 }
 
 export interface CartWorld { levels: Levels; props: PropIndex | null }
@@ -78,6 +88,14 @@ export const cartMass = (units: number): number => CART.emptyKg + CART.kgPerUnit
 
 /** Top push speed of a walking player (m/s): slower the fuller it is. */
 export const pushTop = (units: number): number => CART.push.maxEmpty + (CART.push.maxFull - CART.push.maxEmpty) * Math.max(0, Math.min(1, units / FUEL.cartUnits));
+
+/** A body's mass (kg): its own `kg`, else the fuel cart's by its fill. */
+export const bodyMass = (b: CartBody): number => b.kg ?? cartMass(b.units);
+/** A body's footprint radius (m): its own `r`, else the fuel cart's. */
+export const bodyRadius = (b: CartBody): number => b.r ?? CART.radius;
+/** Top push speed of a walking player against a body (m/s): a `kg` body between the empty and the full fuel cart's by its mass. */
+export const bodyPushTop = (b: CartBody): number => (b.kg === undefined ? pushTop(b.units)
+  : CART.push.maxEmpty + (CART.push.maxFull - CART.push.maxEmpty) * Math.max(0, Math.min(1, (b.kg - CART.emptyKg) / (CART.kgPerUnit * FUEL.cartUnits))));
 
 /** The floor under a point for a cart standing at height y: null when unsupported, too high (> step) or too deep (> drop). */
 export function cartFloorAt(L: Levels, x: number, z: number, y: number): {floor: number; level: number} | null {
@@ -132,7 +150,7 @@ export interface CartPose { dy: number; pitch: number; roll: number }
  * carried clear of the steps (how a hand truck is eased down a stair). Let go, it settles onto the steps (the rest pose).
  */
 export function cartRestPose(L: Levels, b: CartBody, out: CartPose = {dy: 0, pitch: 0, roll: 0}, held = false): CartPose {
-  const d = CART.radius * CART.rim, sy = Math.sin(b.yaw), cy = Math.cos(b.yaw);
+  const d = bodyRadius(b) * CART.rim, sy = Math.sin(b.yaw), cy = Math.cos(b.yaw);
   const hc = cartSurfaceAt(L, b.x, b.z, b.y) ?? b.y;
   const at = (ux: number, uz: number): number => cartSurfaceAt(L, b.x + ux * d, b.z + uz * d, b.y) ?? hc;
   const hf = at(sy, cy), hb = at(-sy, -cy), hr = at(cy, -sy), hl = at(-cy, sy);
@@ -151,10 +169,10 @@ export function cartRestPose(L: Levels, b: CartBody, out: CartPose = {dy: 0, pit
 const RIM: readonly (readonly [number, number])[] = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7071, 0.7071], [-0.7071, 0.7071], [0.7071, -0.7071], [-0.7071, -0.7071]];
 
 /** The footprint stands on walkable floor (centre + rim): the centre's floor, else null. */
-export function footprintFloor(L: Levels, x: number, z: number, y: number): {floor: number; level: number} | null {
+export function footprintFloor(L: Levels, x: number, z: number, y: number, radius: number = CART.radius): {floor: number; level: number} | null {
   const c = cartFloorAt(L, x, z, y);
   if (!c) return null;
-  const rr = CART.radius * CART.rim;
+  const rr = radius * CART.rim;
   for (const [ux, uz] of RIM) if (!cartFloorAt(L, x + ux * rr, z + uz * rr, y)) return null;
   return c;
 }
@@ -165,11 +183,11 @@ export function footprintFloor(L: Levels, x: number, z: number, y: number): {flo
  */
 export function moveCart(b: CartBody, w: CartWorld, dx: number, dz: number): boolean {
   if (dx === 0 && dz === 0) return false;
-  const L = w.levels;
+  const L = w.levels, r = bodyRadius(b);
   const tryMove = (mx: number, mz: number): boolean => {
-    const [nx, nz] = moveCircle(L, w.props, b.x, b.z, mx, mz, CART.radius, b.y, CART.height);
+    const [nx, nz] = moveCircle(L, w.props, b.x, b.z, mx, mz, r, b.y, b.h ?? CART.height);
     if (Math.abs(nx - b.x) < 1e-7 && Math.abs(nz - b.z) < 1e-7) return false;
-    const f = footprintFloor(L, nx, nz, b.y);
+    const f = footprintFloor(L, nx, nz, b.y, r);
     if (!f) return false;
     b.x = nx; b.z = nz; b.y = f.floor; b.level = f.level;
     return true;
@@ -194,7 +212,7 @@ export function stepCart(b: CartBody, w: CartWorld, dt: number, target: CartTarg
     const k = CART.grab.k, c = 2 * Math.sqrt(k);
     let ax = k * (target.x - b.x) + c * (target.vx - b.vx);
     let az = k * (target.z - b.z) + c * (target.vz - b.vz);
-    const amax = CART.grab.force / cartMass(b.units), a = Math.hypot(ax, az);
+    const amax = CART.grab.force / bodyMass(b), a = Math.hypot(ax, az);
     if (a > amax) { ax *= amax / a; az *= amax / a; }
     b.vx += ax * dt;
     b.vz += az * dt;
@@ -202,7 +220,7 @@ export function stepCart(b: CartBody, w: CartWorld, dt: number, target: CartTarg
     const v = Math.hypot(b.vx, b.vz);
     if (v > 0) {
       // (on a stair flight the cart rests on the step edges: it stops at once instead of coasting down the stair)
-      const nv = Math.max(0, v - (flightAt(w.levels, b.x, b.z, b.y) ? CART.stairDecel : CART.rollDecel) * dt);
+      const nv = Math.max(0, v - (flightAt(w.levels, b.x, b.z, b.y) ? CART.stairDecel : b.decel ?? CART.rollDecel) * dt);
       b.vx *= nv / v;
       b.vz *= nv / v;
     }
@@ -220,14 +238,14 @@ export function stepCart(b: CartBody, w: CartWorld, dt: number, target: CartTarg
 
 /** A free cart is pushed by a walking player overlapping it: velocity along the contact normal toward the player's (capped, by mass). */
 export function pushByPlayer(b: CartBody, p: CartPusher, dt: number): boolean {
-  const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz), min = p.radius + CART.radius;
+  const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz), min = p.radius + bodyRadius(b);
   if (d >= min + 0.02 || d < 1e-6) return false;
   const nx = dx / d, nz = dz / d;
   const vn = p.vx * nx + p.vz * nz;
   if (vn <= 0.02) return false;
-  const want = Math.min(vn, pushTop(b.units)), cur = b.vx * nx + b.vz * nz;
+  const want = Math.min(vn, bodyPushTop(b)), cur = b.vx * nx + b.vz * nz;
   if (want > cur) {
-    const dv = Math.min(want - cur, (CART.push.force / cartMass(b.units)) * dt);
+    const dv = Math.min(want - cur, (CART.push.force / bodyMass(b)) * dt);
     b.vx += nx * dv;
     b.vz += nz * dv;
   }
@@ -239,7 +257,7 @@ export function pushByPlayer(b: CartBody, p: CartPusher, dt: number): boolean {
  * never into a wall) and loses its velocity into the cart beyond the cart's own. Returns the overlap resolved (m).
  */
 export function separatePlayer(b: CartBody, p: CartPusher, w: CartWorld): number {
-  const dx = p.x - b.x, dz = p.z - b.z, d = Math.hypot(dx, dz), min = p.radius + CART.radius;
+  const dx = p.x - b.x, dz = p.z - b.z, d = Math.hypot(dx, dz), min = p.radius + bodyRadius(b);
   if (d >= min) return 0;
   const nx = d > 1e-6 ? dx / d : 1, nz = d > 1e-6 ? dz / d : 0, ov = min - d;
   const [x, z] = moveCircle(w.levels, w.props, p.x, p.z, nx * ov, nz * ov, p.radius, p.y, p.bodyHeight);
@@ -252,7 +270,7 @@ export function separatePlayer(b: CartBody, p: CartPusher, w: CartWorld): number
 
 /** Two carts apart (half each, through the world's collision); their normal velocities averaged (an inelastic bump). */
 export function separateCarts(a: CartBody, b: CartBody, w: CartWorld): boolean {
-  const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz), min = 2 * CART.radius;
+  const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz), min = bodyRadius(a) + bodyRadius(b);
   if (d >= min || Math.abs(a.y - b.y) > 1) return false;
   const nx = d > 1e-6 ? dx / d : 1, nz = d > 1e-6 ? dz / d : 0, half = (min - d) / 2 + 1e-4;
   moveCart(a, w, -nx * half, -nz * half);

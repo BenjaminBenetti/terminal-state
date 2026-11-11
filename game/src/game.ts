@@ -194,6 +194,10 @@ import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // 
 import {carriedModelKeys, installTrainPropCargo, type TrainPropCargo} from './world/trainPropCargo'; // task train-all-cargo: every movable prop aboard travels too
 import {installCorpses, type CorpseSystem} from './world/corpses'; // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): carried dead bodies
 import {installChipper, type ChipperSystem} from './world/chipper'; // task corpse-chipper (lane CHIPPER): the woodchipper fixed in the train
+import {installTrainEquipment, type TrainEquipmentSystem} from './world/trainEquipment'; // task train-crafting (lane EQUIP): the crafted chests / devices as physical cargo, the three plugs
+import {installCraftBench, type CraftBenchSystem} from './world/craftBench'; // task train-crafting (lane BENCH): the crafting bench + its recipe list
+import {installSentryTurret, type SentryTurretSystem} from './world/sentryTurret'; // task train-crafting (lane SENTRY): the sentry's ammo + roof turret
+import {installItemScanner, type ItemScannerSystem} from './world/itemScanner'; // task train-crafting (lane SCANNER): the scanner's scope
 import type {PropPlacement} from './gen/props';
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
@@ -433,6 +437,15 @@ export class Game {
   corpses!: CorpseSystem;
   /** Task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): the woodchipper fixed in the train (world/chipper.ts): feed dead bodies, fuel. */
   readonly chipper: ChipperSystem;
+  /**
+   * Task studio-train-crafting-v1-20261111-225628-01: the crafted train equipment (world/trainEquipment.ts: chests / devices as physical
+   * cargo, the three generic plugs), the crafting bench (world/craftBench.ts), the sentry's roof turret (world/sentryTurret.ts) and the
+   * item / enemy scanner (world/itemScanner.ts).
+   */
+  readonly trainEquipment: TrainEquipmentSystem;
+  readonly craftBench: CraftBenchSystem;
+  readonly sentryTurret: SentryTurretSystem;
+  readonly itemScanner: ItemScannerSystem;
   /** Task studio-survivor-market-20261108-005807-01 (lane TRADE): market trade (market/trade/tradeSystem.ts); since the rework Rail Ties are a physical item. */
   trade!: TradeSystem;
   /** Task studio-weapon-runtime-fix-20261110-022206-01: the delivery of the new weapons' lazily loaded models (world/weaponVarietyDelivery.ts). */
@@ -833,6 +846,17 @@ export class Game {
     // view; its teardown keeps a riding car's machine) — the corpse sink, the grind / transfer / blood / noise, the look-at line, warm pool 'train-chipper'
     this.chipper = installChipper(this);
     hookName('chipper');
+    // task studio-train-crafting-v1-20261111-225628-01: after the train, the ride, the fuel carts and the cargo systems — the crafted
+    // equipment (lane EQUIP: kinematic units on the fuel dolly's controller, the plugs, its own cargo capture / station lane; the train
+    // record's live hook), then the systems that read it: the bench (lane BENCH), the sentry (lane SENTRY), the scanner (lane SCANNER)
+    this.trainEquipment = installTrainEquipment(this);
+    hookName('trainEquipment');
+    this.craftBench = installCraftBench(this);
+    hookName('craftBench');
+    this.sentryTurret = installSentryTurret(this);
+    hookName('sentryTurret');
+    this.itemScanner = installItemScanner(this);
+    hookName('itemScanner');
     this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionModelKeys.push(skywaysKitchenModelKeysFor); // task studio-skyways-level-20261106-054448 (lane FOOD): the ramen restaurant's skyways-* models
     this.sectionModelKeys.push(skywaysAddonModelKeysFor); // task studio-skyways-level-20261106-054448 (lane ADDON): the add-on's skyways-* models
@@ -1447,6 +1471,7 @@ export class Game {
     this.player.alive = this.player.hp > 0;
     restoreParticipants(snap, this.runParticipants);
     this.inv.reserveUids(this.playerTrain.lockbox.maxUid()); // lane BOX: later stacks never reuse a Lockbox uid
+    this.inv.reserveUids(this.playerTrain.equipment?.maxUid() ?? 0); // task train-crafting: nor a crafted chest's
   }
 
   /** Iteration 16: the Retry-level snapshot of the level just entered (carry state + that level's section memories). */
@@ -1531,7 +1556,7 @@ export class Game {
    */
   commitEndingSave(): CommitResult | null {
     if (!this.run.campaign) return null;
-    if (this.world) { this.saveSectionMemory(); this.gear.flush(); this.fuelStations?.flush(); this.trainPropCargo?.flush(); this.corpses?.flush(); } // (task fuel-feedback: the station's fuel record with its memory; task train-all-cargo: its carried / lost props; lane CORPSE: the bodies lying in the station)
+    if (this.world) { this.saveSectionMemory(); this.gear.flush(); this.fuelStations?.flush(); this.trainPropCargo?.flush(); this.corpses?.flush(); this.trainEquipment?.flush(); } // (task fuel-feedback: the station's fuel record with its memory; task train-all-cargo: its carried / lost props; lane CORPSE: the bodies lying in the station; task train-crafting: the crafted equipment left in it)
     return this.commitSave('ending', {pose: {...trainSpawnLocal(), yaw: 0, pitch: 0, crouched: false}});
   }
 
@@ -1572,7 +1597,7 @@ export class Game {
     const {failed} = installRestore(p, {
       setRun: run => { this.run = run; },
       installInventory: inv => this.installInventory(inv),
-      reserveUids: max => { this.inv.reserveUids(max); this.inv.reserveUids(this.playerTrain.lockbox.maxUid()); },
+      reserveUids: max => { this.inv.reserveUids(max); this.inv.reserveUids(this.playerTrain.lockbox.maxUid()); this.inv.reserveUids(this.playerTrain.equipment?.maxUid() ?? 0); },
       player: this.player, survival: this.survival, battery: this.torch.battery,
       resetBattery: charge => this.torch.reset(charge),
       participants: this.runParticipants, stats: this.stats,
@@ -1704,11 +1729,14 @@ export class Game {
     return this.continueCampaign(st.slot);
   }
 
-  /** The train console: the paper map in TRAVEL mode (the current station + every one-hop neighbour revealed and remembered). */
+  /**
+   * The train console: the paper map in TRAVEL mode (the current station + every one-hop neighbour revealed and remembered; task
+   * train-crafting: every station within TWO stops while a route radar is plugged into the train — world/trainEquipment.ts routeRadius).
+   */
   openTravelMap(mode: 'travel' | 'view' = 'travel'): boolean {
     const run = this.run;
     if (!run.campaign || this.mapBack) return false;
-    if (mode === 'travel') run.campaign = revealAround(run.campaign, run.campaign.current);
+    if (mode === 'travel') run.campaign = revealAround(run.campaign, run.campaign.current, this.trainEquipment?.routeRadius() ?? 1);
     // (task studio-alpha-survival-controls-20261107-060450-01) E / Tab close the map too: the ones physically down now (the console's E)
     // close it only after a release; the key that closes it is kept from the game until released (no interact / inventory / depart)
     const heldKeys = ['KeyE', 'Tab'].filter(c => this.input.down(c));
@@ -1879,7 +1907,7 @@ export class Game {
     const cheat = !!this.run.campaign?.cheat, cost = routeCost(hops, cheat);
     const carts = this.fuelCartsLike();
     // (task train-all-cargo: nor a prop in a doorway; task cargo-overflow: nor more aboard than can travel — props, then loose items / bags)
-    const block = carts?.departBlock() ?? this.trainPropCargo?.departBlock() ?? this.trainCargo?.departBlock?.() ?? this.corpses?.departBlock() ?? null; // (lane CORPSE: + a body in a doorway / too many aboard)
+    const block = carts?.departBlock() ?? this.trainPropCargo?.departBlock() ?? this.trainCargo?.departBlock?.() ?? this.corpses?.departBlock() ?? this.trainEquipment?.departBlock() ?? null; // (lane CORPSE: + a body in a doorway / too many aboard; task train-crafting: + a crafted unit in a doorway / too many aboard)
     if (block) { this.hud.toast(block, true); this.sfx?.denied(); return {ok: false, error: block}; }
     const aboard = carts?.aboard() ?? [], tf = this.playerTrain.fuel, chest = this.playerTrain.lockbox.slots;
     const debit = planDebit(cost, tf.tank, aboard, chest);
