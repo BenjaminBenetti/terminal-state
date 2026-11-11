@@ -819,24 +819,28 @@ natural-food half); no new tables, no literal item lists.
 **Layout version 3** (task gameplay-feedback-20261111, lane FUEL-LOOT; user: "On platform/elevator level S ONLY, replace half the
 ammo spawn opportunities with increased food/drink spawns"): the version-2 generator plus `gen/bunker/v2/stationRations.ts`. On storey
 S, floor(N / 2) of the N ammo opportunities are converted. An opportunity is a holder whose resolved table (exposed or compartment)
-has an ammo row or whose theme stocks ammo, or an S floor-program ammo box.
+has an ammo row or whose theme stocks ammo, or an S floor-program ammo box. Only the ammo changes; no other supply moves to compensate.
 
-- A converted holder gets the prop-level loot key `reactor-bunker-rations`, which rolls the named `BUNKER_STATION_RATIONS`
-  (`ANNEX_CACHE_PANTRY_ROWS`, `lots` [1, 1], `empty` 0.2, exact, no salvage). That is 0.8 food / drink lots per holder, about the 0.79
-  ammo lots an S ammo opportunity averaged.
-- A converted box becomes one serving of the same rows: the loot reference's `bunker-station-rations` source.
+- A converted holder keeps its loot key, table, theme, lot count and empty chance. Its placement carries the ammo swap
+  `bunker-station-rations` (`PropPlacement.ammoSwap`, `items/loot.ts` `AMMO_SWAPS` / `swapAmmoLots`), which runs on the finished roll.
+  Every AMMO lot (from an ammo row, the security theme's re-themed finds or a compartment roll) becomes one serving of the named
+  `BUNKER_STATION_RATIONS_ROWS` (= `ANNEX_CACHE_PANTRY_ROWS`), drawn by weight on the holder's own stream
+  `loot:<kind>:<index>:ammo-swap`. It keeps the lot's id and lies in a free spot (its own surface first). Every other lot keeps its id,
+  item, count and spot. A serving that fits nowhere tries the other rows, else is left out (0 over the 8-seed census).
+- A converted box becomes one serving of the same rows on the same spot: the loot reference's `bunker-station-rations` source.
 - Gun lockers (no food allowed) and weapon finds keep their ammo.
 - Storeys 1-5 are byte-identical to version 2. Stations entered under version 1 or 2 keep their version.
 
-Measured, S per level (8 seeds, 4401 + k x 7919):
+Measured, S per level (8 seeds, 4401 + k x 7919; holders + floor):
 
-| | ammo opportunities | ammo finds (lots + boxes) | ammo rounds | food / drink lots (before / after the half) | batteries / flares / dressings |
+| | ammo opportunities | ammo finds (lots + boxes) | ammo rounds | food / drink (before / after the half) | dressings / batteries / flares / materials |
 |---|---|---|---|---|---|
-| v2 | 21.1 | 17.5 | 122.5 | 4.9 / 2.75 | 1.13 / 0.88 / 1.5 |
-| v3 | 10.75 | 11.1 (x0.64) | 79.4 (x0.65) | 11.5 / 5.25 | 0.75 / 0.38 / 1.38 |
+| v2 | 21.1 | 17.5 | 122.5 | 4.9 / 2.75 | 1.63 / 1.75 / 1.13 / 1.75 |
+| v3 | 10.75 | 11.0 (x0.63) | 79.1 (x0.65) | 11.4 / 5.5 | 1.63 / 1.75 / 1.13 / 1.75 (unchanged) |
 
-Over 24 seeds the ammo ratio is x0.60. Food holders (v3) per level: the version-2 generator's 36 plus ~10 rations holders on S, by the
-user's request. `tests/bunker-v2-level.test.ts` keeps "never more food holders than the first Bunker" for every other holder.
+Per level ~10.4 holders convert, and their ~6 ammo lots become servings. Over 24 seeds the ammo ratio is x0.60 (finds 17.9 -> 10.7,
+rounds 128.9 -> 77.0). The holders' loot keys are unchanged, so the food-holder count stays version 2's (36 vs the first Bunker's 40,
+`tests/bunker-v2-level.test.ts`).
 
 `PROFILES.bunker` = today's shared `BASE_TABLES` with **no overrides** (like Skyways): the civil-defence shelter's rooms carry existing
 station purposes plus the Reactor shelter's own bunker purposes (`gen/reactor/complex/bunkerPurposes.ts`: blast-door lock,

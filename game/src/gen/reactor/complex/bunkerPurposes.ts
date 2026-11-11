@@ -12,19 +12,13 @@
 // are empty (the station dresser only lights them).
 
 import type {RoomPurpose} from '../../purposes';
-import {BUNKER_STATION_RATIONS, CACHE_CRATE, GUN_SAFE_ROWS, PERSONAL_ROWS, TENANT_ARMS, TENANT_MEDS, TENANT_SUPPLY} from '../../../items/lootTables';
+import {CACHE_CRATE, GUN_SAFE_ROWS, PERSONAL_ROWS, TENANT_ARMS, TENANT_MEDS, TENANT_SUPPLY} from '../../../items/lootTables';
 
 /** The bunker purpose ids. */
 export const BUNKER_PURPOSE = {
   lock: 'reactor-bunker-lock', decon: 'reactor-bunker-decon', dorm: 'reactor-bunker-dormitory', armoury: 'reactor-bunker-armoury',
-  radio: 'reactor-bunker-radio', rations: 'reactor-bunker-rations',
+  radio: 'reactor-bunker-radio',
 } as const;
-
-/**
- * Task gameplay-feedback-20261111 (lane FUEL-LOOT): the own-table openable kinds the station rations key takes over (an own-table kind
- * rolls a purpose table only when the purpose names it: items/loot.ts holderTable) — the ones the Bunker's storey S furnishes.
- */
-export const BUNKER_RATIONS_OWN_KINDS = ['footlocker', 'filingCabinet', 'safe', 'desk', 'monitorDesk'] as const;
 
 export function REACTOR_BUNKER_PURPOSES(): Record<string, RoomPurpose> {
   const base = {category: 'back', slots: ['utility'], kinds: ['room'], weight: 0, max: 0} as const;
@@ -63,15 +57,6 @@ export function REACTOR_BUNKER_PURPOSES(): Record<string, RoomPurpose> {
       props: [],
       loot: {gunLocker: TENANT_ARMS, cabinetTall: {items: GUN_SAFE_ROWS, lots: [1, 3], empty: 0.15}, crate: CACHE_CRATE, default: TENANT_SUPPLY},
       floor: {ammo: 1.6, med: 0.4},
-    },
-    // Task gameplay-feedback-20261111 (lane FUEL-LOOT): a PROP-level loot key (never an area's), set only by the Bunker's layout version 3
-    // on storey S (gen/bunker/v2/stationRations.ts): the converted ammo opportunity rolls the station rations (lootTables
-    // BUNKER_STATION_RATIONS: food / drink, exact) — every kind it names plus `default`
-    [BUNKER_PURPOSE.rations]: {
-      ...base, id: BUNKER_PURPOSE.rations, theme: 'food', label: 'Station rations', light: [0, 0.3, 0.7],
-      props: [],
-      loot: {...Object.fromEntries(BUNKER_RATIONS_OWN_KINDS.map(k => [k, BUNKER_STATION_RATIONS])), default: BUNKER_STATION_RATIONS},
-      floor: {},
     },
   };
 }

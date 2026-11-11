@@ -10,18 +10,19 @@
 // An AMMO OPPORTUNITY on S: a loot holder whose resolved table (exposed or compartment roll) has an ammo row, or whose loot theme stocks
 // ammo (the security theme re-themes its finds into ammo: items/lootEconomy.ts scarceFinds), and every loose ammo pickup of the S floor
 // program (gen/mall/supplies.ts placeMallSupplies). Weapon finds and the ammo they bring are not opportunities (weaponFinds.ts keeps its
-// per-weapon rules). floor(N / 2) of the N opportunities, in a stable hash order over the convertible ones, are converted:
-//  - a holder gets the prop-level loot key BUNKER_PURPOSE.rations (gen/reactor/complex/bunkerPurposes.ts -> lootTables
-//    BUNKER_STATION_RATIONS: the pantry rows, exact). Convertible = its kind may hold food or drink (HOLDER_ALLOW) and the key really
-//    resolves to the rations table for it (the gun locker keeps its arms; an unnamed own-table kind keeps its table);
-//  - a floor ammo pickup becomes one food / drink item of the same rows (hash pick by weight), same spot.
+// per-weapon rules). floor(N / 2) of the N opportunities, in a stable hash order over the convertible ones, are converted. Only the
+// AMMO changes (lead / user: no other supply moves):
+//  - a holder keeps its loot key, table and theme and gets the placement's ammo swap AMMO_SWAP_STATION_RATIONS (gen/props.ts
+//    PropPlacement.ammoSwap -> items/loot.ts swapAmmoLots): each ammo lot its roll produces (ammo rows, the security theme's re-themed
+//    finds, a compartment's) becomes one serving of lootTables BUNKER_STATION_RATIONS_ROWS on the holder's own swap stream; every other
+//    lot keeps its id, item, count and spot. Convertible = its kind may hold food or drink (HOLDER_ALLOW: the gun locker keeps its arms);
+//  - a floor ammo pickup becomes one serving of the same rows (hash pick by weight), same spot.
 // The natural food half (items/naturalFood.ts) applies to both when they are first realized, as for every natural food find.
 
 import {hashString} from '../../../core/rng';
-import {compartmentTable, holderTable, isLootHolderKind} from '../../../items/loot';
+import {AMMO_SWAP_STATION_RATIONS, compartmentTable, holderTable, isLootHolderKind} from '../../../items/loot';
 import {holderTheme} from '../../../items/lootEconomy';
-import {BUNKER_STATION_RATIONS, HOLDER_ALLOW, econCat, type LootProfile} from '../../../items/lootTables';
-import {BUNKER_PURPOSE} from '../../reactor/complex/bunkerPurposes';
+import {BUNKER_STATION_RATIONS_ROWS, HOLDER_ALLOW, econCat, type LootProfile} from '../../../items/lootTables';
 import type {PickupPlacement, StationLayout} from '../../stationTypes';
 import type {PropPlacement} from '../../props';
 
@@ -48,13 +49,11 @@ export function isAmmoOpportunity(kind: string, key: string, profile: LootProfil
   return themed && (t.rows.length > 0 || (inside?.rows.length ?? 0) > 0) && !t.exact && t.source !== 'reward';
 }
 
-/** May a holder of `kind` take the station rations (it may hold food / drink, and the key resolves to the rations table for it)? */
-export function takesRations(kind: string, profile: LootProfile): boolean {
+/** May a holder of `kind` take the station rations in place of its ammo (a loot holder that may hold food or drink: HOLDER_ALLOW)? */
+export function takesRations(kind: string): boolean {
   if (!isLootHolderKind(kind)) return false;
   const allow = HOLDER_ALLOW[kind];
-  if (allow && !allow.includes('food') && !allow.includes('drink')) return false;
-  const t = holderTable(kind, BUNKER_PURPOSE.rations, profile), ids = new Set(BUNKER_STATION_RATIONS.items.map(r => r[0]));
-  return t.source === 'purpose' && t.exact === true && t.rows.length > 0 && t.rows.every(([id]) => ids.has(id));
+  return !allow || allow.includes('food') || allow.includes('drink');
 }
 
 /** The pass's record (QA / tests). */
@@ -75,15 +74,16 @@ const pos = (x: number, z: number) => `${Math.round(x * 100)}:${Math.round(z * 1
 
 /**
  * Convert floor(N / 2) of storey S's N ammo opportunities into food / drink ones (see the header). `floorAmmo`: the S floor program's
- * pickups (placeMallSupplies' return for storey 0; only its ammo ones count). `seed`: the layout seed. Mutates `layout` (prop purposes,
- * pickup items); reads no random stream.
+ * pickups (placeMallSupplies' return for storey 0; only its ammo ones count). `seed`: the layout seed. Mutates `layout` (the converted
+ * holders' ammoSwap, the converted pickups' item); reads no random stream.
  */
 export function placeStationRations(layout: StationLayout, profile: LootProfile, floorAmmo: readonly PickupPlacement[], seed: number): StationRationsResult {
   type Op = {order: number; holder?: number; pickup?: number; convertible: boolean};
   const ops: Op[] = [];
   layout.props.forEach((p, i) => {
     if ((p.level ?? 0) !== BUNKER_S_LEVEL || !isAmmoOpportunity(p.kind, lootKeyOf(layout, p), profile)) return;
-    ops.push({order: unit(`holder|${p.kind}|${pos(p.x, p.z)}|${i}`, seed), holder: i, convertible: takesRations(p.kind, profile)});
+    const key = lootKeyOf(layout, p), reward = holderTable(p.kind as never, key, profile).source === 'reward';
+    ops.push({order: unit(`holder|${p.kind}|${pos(p.x, p.z)}|${i}`, seed), holder: i, convertible: !reward && takesRations(p.kind)});
   });
   const mine = new Set(floorAmmo);
   layout.pickups.forEach((q, i) => {
@@ -93,9 +93,9 @@ export function placeStationRations(layout: StationLayout, profile: LootProfile,
   const want = Math.floor(ops.length * BUNKER_S_RATIONS_SHARE);
   const pick = ops.filter(o => o.convertible).sort((a, b) => a.order - b.order).slice(0, want);
   const out: StationRationsResult = {opportunities: ops.length, holders: [], pickups: []};
-  const rows = BUNKER_STATION_RATIONS.items, total = rows.reduce((s, r) => s + r[1], 0);
+  const rows = BUNKER_STATION_RATIONS_ROWS, total = rows.reduce((s, r) => s + r[1], 0);
   for (const o of pick) {
-    if (o.holder !== undefined) { layout.props[o.holder].purpose = BUNKER_PURPOSE.rations; out.holders.push(o.holder); continue; }
+    if (o.holder !== undefined) { layout.props[o.holder].ammoSwap = AMMO_SWAP_STATION_RATIONS; out.holders.push(o.holder); continue; }
     const q = layout.pickups[o.pickup!];
     let x = unit(`item|${o.pickup}|${pos(q.x, q.z)}`, seed) * total, itemId = rows[rows.length - 1][0];
     for (const [id, w] of rows) { if (x < w) { itemId = id; break; } x -= w; }
