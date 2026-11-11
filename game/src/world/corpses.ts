@@ -48,6 +48,7 @@ import {CORPSE_CARRY_PARTICIPANT, STATION_BODIES_LANE, carriedBodyOf, heldRecord
 import type {BodyOffer, BodySink, CorpseSystemApi, HeldBody} from '../corpse/api';
 import {boneInRoot, bodyPoints, poseCarry, poseLying, restingLift} from '../corpse/bodyPose';
 import {corpseVolumes, type DamageZombie} from '../damage/system';
+import type {RagdollTarget} from '../physics/ragdoll';
 import {raySphere, rayCapsule} from '../combat/hitscan';
 import {hashString, mulberry32} from '../core/rng';
 import {trainToWorld, worldToTrain, type TrainPlacement} from '../gen/playerTrain';
@@ -267,6 +268,10 @@ export class CorpseSystem implements CorpseSystemApi {
     if (!a) return;
     this.actors.delete(obj);
     a.dispose();
+  }
+
+  ragdollTarget(obj: THREE.Object3D): RagdollTarget | null {
+    return this.actors.get(obj) ?? null;
   }
 
   /**

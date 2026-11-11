@@ -54,7 +54,8 @@ type (13 slots). It adds all of it or nothing: if there isn't room, nothing chan
 Train corpse chipper (task studio-corpse-chipper-fuel-20261110-235304-01, `docs/corpse-chipper.md`): an emergency fuel source.
 Aim at the body of an undead enemy you killed and press **E** to pick it up (one at a time, over the shoulder: your hands are busy and
 you move slower). **E** puts it down again. In the parked train, aim at the woodchipper on the far side between the middle and front
-doors and press **E** to feed the body in. About 20 s later it is ground (with a lot of blood) into **0.1 of a standard tank**: 10
+doors and press **E** to feed the body in. The body goes limp in the hopper and its arms and legs flop as the machine draws it in,
+head first. About 20 s later it is ground (with a lot of blood) into **0.1 of a standard tank**: 10
 bodies = one hop, 20 = a full empty train. The machine runs with an empty tank, is loud enough to draw the infected, and only grinds
 while the train is parked.
 
