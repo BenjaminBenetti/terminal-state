@@ -13,8 +13,9 @@ replaces it on the signs.
 - Look: `world/bunkerArch.ts` (the Reactor's arch materials, varied by programme) and the Reactor bunker's hero models.
 - **Two layout versions** (`gen/bunker/layoutVersion.ts`): version 1 is the first Bunker, documented in the sections below and frozen
   for every station entered under it. **Version 2** is the inhabited rework (open communal halls and galleries, a strong identity per
-  storey, the powered cargo lift, the round vault bore), built for every unvisited station and every new campaign. See
-  [Version 2](#version-2-the-inhabited-shelter) below.
+  storey, the powered cargo lift, the round vault bore). **Version 3** is version 2 plus the storey-S station rations (half of the
+  platform / elevator storey's ammo opportunities become food / drink; storeys 1-5 unchanged), built for every unvisited station and
+  every new campaign. See [Version 2](#version-2-the-inhabited-shelter) below.
 
 ## Storeys
 
@@ -155,6 +156,21 @@ own (`REACTOR_BUNKER_PURPOSES`: decontamination, dormitory, radio, armoury), so 
 Loose floor supplies follow the Reactor's per-storey program, and weapon finds follow the station rule. Gas masks and filters use the
 Office's roll. There is no merchant stock or currency.
 
+**Station rations (layout version 3; task gameplay-feedback-20261111, lane FUEL-LOOT).** On storey S ONLY (the platform / elevator
+storey), half of the ammo spawn opportunities become food / drink ones (`gen/bunker/v2/stationRations.ts`). An opportunity is an S
+holder whose resolved table or loot theme can roll ammo, or an ammo box of the S floor program. floor(N / 2) of the N opportunities are
+converted in a stable hash order:
+
+- a holder gets the prop-level loot key `reactor-bunker-rations` (`lootTables.ts` `BUNKER_STATION_RATIONS`: the survivor-pantry rows
+  `ANNEX_CACHE_PANTRY_ROWS`, one lot, empty 0.2, exact);
+- an ammo box becomes one serving of the same rows on the same spot.
+
+Gun lockers cannot hold food (`HOLDER_ALLOW`) and keep their arms; weapon finds and their ammo are unchanged. The pass reads no random
+stream, so storeys 1-5 are byte-identical to version 2 (`tests/bunker-s-food.test.ts`). Measured over 8 seeds (4401 + k x 7919), S per
+level: ammo opportunities 21.1 -> 10.75; ammo finds (holder lots + floor boxes) 17.5 -> 11.1 (x0.64) and rounds 122.5 -> 79.4 (x0.65; the gun
+lockers' ~3.5 lots stay); food / drink lots 4.9 -> 11.5 before the natural half (2.75 -> 5.25 kept). Side effect: the converted
+holders' other finds go too (S batteries 1.13 -> 0.75, flares 0.88 -> 0.38, dressings 1.5 -> 1.38 a level).
+
 ## Saves and versions
 
 - New campaigns only: `ORDINARY_WEIGHTS` gives the Bunker 0.05, taken from the Subway's share and appended last, so a 37-station
@@ -162,7 +178,8 @@ Office's roll. There is no merchant stock or currency.
 - Existing saved networks are never retrofitted: `PRE_BUNKER_WEIGHTS` (the previous census) stays in `validateNetwork`'s census list.
 - `seeds.bunker` is backfilled in old saves the way `seeds.market` is.
 - Layout version lane `bunker.layout`: version 1 is stamped on a station's first build (`gen/bunker/layoutVersion.ts`), so a future
-  layout change can keep visited stations as they were.
+  layout change can keep visited stations as they were. A station entered under version 2 keeps version 2 (no station rations); only
+  unvisited stations build version 3.
 
 ## Tests
 
@@ -177,7 +194,8 @@ before the rework; the version-1 tests above pass `layoutVersion: 1`), `bunker-v
 determinism, budget, the record, the vault bore, voids and lift aprons, the architecture's change of scale, loot parity, the enemy
 census), `bunker-v2-floor0` … `bunker-v2-floor5` (each designer's storey), `bunker-cargo-lift` (record, power, the real player riding,
 riders, parking, the freight look), `bunker-fuel-sources` (a cart's hose fuelling a generator, the quarter unit), `bunker-objective-title`
-(the two-line title).
+(the two-line title). Version 3: `bunker-s-food` (version policy, version 2 pinned by a fingerprint taken before the change, storeys
+1-5 byte-identical, the S conversion count and census).
 
 ## Version 2: the inhabited shelter
 
@@ -305,7 +323,8 @@ other level's one-line title is unchanged.
 
 ### Version policy
 
-- Version 2 builds for every station never entered (and every new campaign's). A station entered under version 1 keeps version 1
-  exactly (`tests/bunker-v1-frozen.test.ts` pins its whole layout); it gets the HUD, vault-trim and fuel fixes (runtime only), never a
-  lift shaft cut through its saved rooms.
+- Version 3 (version 2 + the storey-S station rations) builds for every station never entered (and every new campaign's); a station
+  entered under version 2 keeps version 2 exactly.
+- A station entered under version 1 keeps version 1 exactly (`tests/bunker-v1-frozen.test.ts` pins its whole layout); it gets the
+  HUD, vault-trim and fuel fixes (runtime only), never a lift shaft cut through its saved rooms.
 - The network share (5 %, from the Subway only, new campaigns only) and every save rule are unchanged.
