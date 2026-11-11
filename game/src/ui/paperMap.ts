@@ -8,8 +8,8 @@
 // Rules (campaign/discovery.ts decides what is known / reachable):
 //  - Only KNOWN stations and edges with both ends known are printed (with the 1337 cheat: everything); the Reactor's mark and name
 //    appear only once it is known. The layout is fitted to the WHOLE network once, so the print never shifts as stations appear.
-//  - travel mode (the train console): known stations one stop away — and (lane MAP) visited stations over visited track — are
-//    selectable (any station with the cheat). Clicking (or
+//  - travel mode (the train console): known stations one stop away — and (lane MAP; task gameplay-feedback lane TRAVEL) any known
+//    station over the known track printed here (campaign/discovery.ts travelPlan) — are selectable (any station with the cheat). Clicking (or
 //    Enter on) a station SELECTS it and opens the details panel; travel happens only on the explicit "Depart" button (onConfirm);
 //    Cancel clears the selection. Hover never selects, a click never departs. view mode (title / pause "view map"): read-only.
 //  - Pan (drag), zoom (wheel at the cursor, + / - keys and buttons), F = fit the known stations, Home = the whole sheet.
@@ -29,8 +29,10 @@
 //  - every station prints its TYPE ICON (stationGlyph: Subway dot, Office tower, Mall bag, Reactor trefoil, Maintenance Route hex
 //    nut; filled = visited) with a concise key; only known stations print, so the discovery mask holds (no Reactor spoiler);
 //  - label placement never depends on the selection / keyboard focus: selecting never moves, wraps or hides a station name;
-//  - travel mode also selects VISITED stations reachable over visited track (campaign/discovery.ts travelPlan): the card names the
-//    route, a pencil line traces it; a cut-off visited station says "not available" (no fake path);
+//  - travel mode also selects stations further away (task gameplay-feedback-20261111, lane TRAVEL: any KNOWN station over the known
+//    track, the cheapest route — campaign/discovery.ts travelPlan; was: visited stations over visited track): the card names the route
+//    ("3 stops via …"), a pencil line traces it and the trip gauge shows one tank per stop filled by the fuel aboard (red where short:
+//    Depart then stalls with the numbers); a station no known track reaches says "not available" (no fake path);
 //  - the Maintenance Route's service line prints as a dashed graphite track (not an interchange ink).
 
 import type {CampaignState, StationId, StationNode, SubwayNetwork} from '../campaign/types';
@@ -370,10 +372,12 @@ export interface MapStation {
   reactor: boolean;
   /** The icon (lane MAP): archetype or the Maintenance Route. */
   kind: StationKind;
-  /** Selectable in this mode (travel: a destination — one stop away, or visited over visited track; view: any visible station but the current one). */
+  /** Selectable in this mode (travel: a destination — one stop away, or further over known track; view: any visible station but the current one). */
   can: boolean;
   /** Travel mode: a destination ONE stop away (the pencilled "one stop away" ring). */
   adjacent: boolean;
+  /** Travel mode: the stops of the trip there (travelPlan hops; 0 = not a destination / view mode). */
+  hops: number;
 }
 
 export interface MapModel {
@@ -410,11 +414,12 @@ export function buildMapModel(state: CampaignState, mode: MapMode, scale: number
     const hub = new Set(node.lines.filter(l => colourOf.has(l)).map(l => colourOf.get(l))).size > 1;
     const reactor = node.id === net.reactor;
     const current = node.id === state.current;
-    const can = mode === 'travel' ? travelPlan(state, node.id) !== null : !current;
+    const trip = mode === 'travel' ? travelPlan(state, node.id) : null;
+    const can = mode === 'travel' ? trip !== null : !current;
     return {
       node, p: layout.get(node.id)!, hub, reactor, current, visited: state.visited.includes(node.id), kind: stationKind(node, net),
       r: reactor ? REACTOR_R : hub ? HUB_R : DOT_R,
-      can, adjacent: mode === 'travel' && can && here.has(node.id),
+      can, adjacent: mode === 'travel' && can && here.has(node.id), hops: trip?.hops ?? 0,
     };
   });
   // track: per line, the runs of consecutive visible edges (the Maintenance Route's service line prints dashed)
@@ -594,7 +599,8 @@ export function renderInk(m: MapModel, net: SubwayNetwork, mode: MapMode, select
   o.push(`<g class="pm-hits">`);
   for (const s of m.stations) {
     const kindText = s.kind === 'maintenance' ? `${kindLabel(s.kind)} (${archetypeLabel(s.node.archetype)})` : archetypeLabel(s.node.archetype);
-    const status = s.current ? 'You are here' : s.adjacent ? 'One stop away' : s.can && mode === 'travel' ? 'Visited' : '';
+    // (task gameplay-feedback lane TRAVEL) a further destination says how far it is (was 'Visited': only visited stations were further)
+    const status = s.current ? 'You are here' : s.adjacent ? 'One stop away' : s.can && mode === 'travel' ? (s.hops > 1 ? `${s.hops} stops away` : m.cheat ? 'Open (cheat route)' : '') : '';
     const label = `${s.node.name}, ${kindText}${status ? `, ${status.toLowerCase()}` : ''}`;
     // (task studio-ui-subway-maps-20261108-074144-01) the game's tooltip (no SVG <title>: a native tooltip outlived the closed map); the label stays the accessible name
     o.push(`<circle class="pm-hit${s.can ? ' pm-can' : ''}" data-station="${esc(s.node.id)}" cx="${n1(s.p.x)}" cy="${n1(s.p.y)}" r="${n1(m.hitR)}" role="img" aria-label="${esc(label)}"${tipAttrs({head: s.node.name, lines: [kindText, status]})}></circle>`);
@@ -797,7 +803,7 @@ export class PaperMap {
     if (!this.selectable(id)) {
       const n = st.network.nodes.find(x => x.id === id);
       const why = this.mode === 'travel' ? travelBlock(st, id) : null;
-      if (n && visibleNodes(st).some(x => x.id === id)) this.say(id === st.current ? `You are here: ${n.name}` : why === 'no-route' ? `${n.name} is not available — no explored route from here` : `${n.name} is not one stop from here`);
+      if (n && visibleNodes(st).some(x => x.id === id)) this.say(id === st.current ? `You are here: ${n.name}` : why === 'no-route' ? `${n.name} is not available — no known track from here` : `${n.name} is not on the map yet`);
       return false;
     }
     this.selected = id;
@@ -1066,7 +1072,7 @@ export class PaperMap {
     if (mode) {
       const here = st.network.nodes.find(n => n.id === st.current);
       mode.textContent = this.mode === 'travel'
-        ? `${here ? `At ${here.name}` : ''} · pick a station one stop away or any visited station, then Depart${st.cheat ? ' · ALL STATIONS OPEN' : ''}`
+        ? `${here ? `At ${here.name}` : ''} · pick a station on the known track (one tank per stop), then Depart${st.cheat ? ' · ALL STATIONS OPEN' : ''}`
         : `View only — travel from the train's console${st.cheat ? ' · ALL STATIONS OPEN' : ''}`;
     }
   }

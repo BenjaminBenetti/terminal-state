@@ -11,7 +11,7 @@
 // station's stall stock — task studio-survivor-market-20261108-005807-01, lane TRADE: uidScope) -> the network graph
 // (structural checks here, plus lane NET's validateNetwork when injected) -> logical campaign checks (current / known / visited /
 // transit endpoints in the network, the transit leaves `current`, a non-cheat transit follows a track edge or — campaign-polish lane
-// MAP — a multi-hop `route` over visited stations: campaign/discovery.ts transitRouteProblem) -> the metadata
+// MAP — a multi-hop `route` over known track: campaign/discovery.ts transitRouteProblem) -> the metadata
 // matches the run. Pure.
 
 import type {CampaignState, SaveMeta, StationNode, SubwayNetwork} from '../campaign/types';
@@ -408,7 +408,7 @@ function campaign(v: unknown, path: string, inject?: NetworkValidator): Campaign
     });
     return out;
   };
-  set('known');
+  const known = set('known');
   const visited = set('visited');
   if (!visited.has(current)) bad(`${path}.current`, `the current station ${current} was never visited`);
   const cheat = bool(c.cheat, `${path}.cheat`);
@@ -436,9 +436,10 @@ function campaign(v: unknown, path: string, inject?: NetworkValidator): Campaign
       if (debitUnits(f.debit as FuelDebit) !== cost) bad(`${p}.fuel`, 'the fuel drawn does not match the journey cost');
     }
     if (has(t, 'route')) {
-      // (campaign-polish lane MAP) a multi-hop journey: its route over visited stations, checked like the campaign validator does
+      // (campaign-polish lane MAP) a multi-hop journey: its route over known track (task gameplay-feedback lane TRAVEL; was: visited
+      // stations — still valid), checked like the campaign validator does
       arr(t.route, `${p}.route`, ids.size, 3).forEach((s, i) => node(s, `${p}.route[${i}]`));
-      const problem = transitRouteProblem(net, {from, to, cheat: tc, route: t.route}, visited);
+      const problem = transitRouteProblem(net, {from, to, cheat: tc, route: t.route}, known, visited);
       if (problem) bad(`${p}.route`, problem);
     } else if (!tc && !net.edges.some(([a, b]) => (a === from && b === to) || (a === to && b === from))) bad(p, `no track between ${from} and ${to}`);
   }

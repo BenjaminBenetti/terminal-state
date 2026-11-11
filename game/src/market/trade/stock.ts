@@ -11,8 +11,10 @@
 // WHAT each stall stocks (bounded quantities, drawn from the loot-table foundation's pools — items/lootTables.ts — not a new item list):
 //  - gun: 1-2 guns (the weapons the item registry has) + 4-6 boxes of generic ammo (GLOBAL_POOL.ammo, BOX_COUNT big boxes);
 //  - medical: 4-6 lots of HP medicine (GLOBAL_POOL.med) and limb treatments (LIMB_ECONOMY.pool);
-//  - fuel: fuel cans for one hop up to the train's full capacity (FUEL.hopUnits .. trainCapacityUnits(), in FUEL.canUnits per can; never a
-//    hard-coded tank) + 1-2 lots of rail supplies (flares, cells). Ordinary cans: it is not a refuelling service;
+//  - fuel: fuel cans for one hop up to two tanks (FUEL_STALL_UNITS: FUEL.hopUnits .. 2 x FUEL.tankUnits, in FUEL.canUnits per can; never a
+//    hard-coded tank — the two-tank train's capacity when the stall was made; task gameplay-feedback-20261111 lane TRAVEL, user: "Do not
+//    couple the capacity increase to a general fuel-loot increase": the four-tank train did not grow the stall) + 1-2 lots of rail
+//    supplies (flares, cells). Ordinary cans: it is not a refuelling service;
 //  - general: 7-10 lots of food, drink, cells, flares (GLOBAL_POOL) and spare gas filters;
 //  - gear: 3-4 distinct pieces (GEAR_WEIGHTS + the gas mask), some part-used (a mask's fitted filter, an airtank's air);
 //  - scrap: 3-5 lots of crafting materials (GLOBAL_POOL.material);
@@ -50,10 +52,17 @@ export const BAR_BEER_COUNTS: Readonly<Record<BeerId, LotRange>> = {
   beer_lager: [3, 6], beer_pilsner: [3, 6], beer_stout: [3, 6], beer_porter: [3, 6], beer_bock: [2, 4],
 };
 
-/** The train's built-in fuel capacity in quarter units (FUEL.trainTankUnits: two tanks; FUEL.tankUnits is one tank = one hop). Never a literal. */
+/** The train's built-in fuel capacity in quarter units (FUEL.trainTankUnits: four tanks; FUEL.tankUnits is one tank = one hop). Never a literal. The trade view's wording only. */
 export function trainCapacityUnits(): number {
   return FUEL.trainTankUnits;
 }
+
+/**
+ * The fuel stall's seeded can stock in quarter units (inclusive): one hop .. two tanks — exactly the range it drew while the train held
+ * two tanks (task gameplay-feedback-20261111 lane TRAVEL: decoupled from FUEL.trainTankUnits, so the bigger tank is no fuel-supply increase
+ * and every market seed stocks what it stocked before).
+ */
+export const FUEL_STALL_UNITS = {min: FUEL.hopUnits, max: 2 * FUEL.tankUnits} as const;
 
 /** A stack factory with the run's uid counter (Inventory.makeStack). */
 export type MakeStack = (itemId: string, count: number) => ItemStack;
@@ -90,7 +99,7 @@ export function stallDraws(stall: MarketStallId, rng: Rng): Draw[] {
     case 'gun': return [...lots(rng, weaponRows(), [1, 2], () => 1, true), ...lots(rng, GLOBAL_POOL.ammo, [4, 6], box(rng))];
     case 'medical': return lots(rng, [...GLOBAL_POOL.med, ...LIMB_ECONOMY.pool], [4, 6], small(rng, 2));
     case 'fuel': {
-      const units = rng.int(FUEL.hopUnits, Math.max(FUEL.hopUnits, trainCapacityUnits()));
+      const units = rng.int(FUEL_STALL_UNITS.min, Math.max(FUEL_STALL_UNITS.min, FUEL_STALL_UNITS.max));
       const cans = Math.max(1, Math.floor(units / FUEL.canUnits));
       return [{itemId: FUEL.canItem, count: cans}, ...lots(rng, [...GLOBAL_POOL.flare, ...GLOBAL_POOL.battery], [1, 2], small(rng, 3))];
     }

@@ -102,8 +102,9 @@ export interface PendingTransit {
   cheat: boolean;
   /**
    * Task campaign-polish-20261103-063841 (lane MAP): a MULTI-HOP journey's route, [from, ..., to] (>= 3 stations; consecutive pairs
-   * are track edges; every station after `from` VISITED). Absent for a one-hop trip and for a cheat trip (old saves: absent). ONE
-   * continuous ride: only `to` is ever built / arrived at; the intermediate stations are passed in the tunnel, never loaded.
+   * are track edges; every station after `from` KNOWN — task gameplay-feedback-20261111 lane TRAVEL, was VISITED — and an unvisited
+   * Reactor never passed). Absent for a one-hop trip and for a cheat trip (old saves: absent). ONE continuous ride: only `to` is ever
+   * built / arrived at (and marked visited); the intermediate stations are passed in the tunnel, never loaded or visited.
    */
   route?: StationId[];
   /**
