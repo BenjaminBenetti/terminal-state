@@ -159,17 +159,23 @@ Office's roll. There is no merchant stock or currency.
 **Station rations (layout version 3; task gameplay-feedback-20261111, lane FUEL-LOOT).** On storey S ONLY (the platform / elevator
 storey), half of the ammo spawn opportunities become food / drink ones (`gen/bunker/v2/stationRations.ts`). An opportunity is an S
 holder whose resolved table or loot theme can roll ammo, or an ammo box of the S floor program. floor(N / 2) of the N opportunities are
-converted in a stable hash order:
+converted in a stable hash order. Only the AMMO changes; no other supply moves:
 
-- a holder gets the prop-level loot key `reactor-bunker-rations` (`lootTables.ts` `BUNKER_STATION_RATIONS`: the survivor-pantry rows
-  `ANNEX_CACHE_PANTRY_ROWS`, one lot, empty 0.2, exact);
+- a converted holder keeps its loot key, table, theme, lot count and empty chance. It gets the placement's ammo swap
+  (`PropPlacement.ammoSwap` -> `items/loot.ts` `swapAmmoLots`): each ammo lot its roll produces becomes one serving of
+  `lootTables.ts` `BUNKER_STATION_RATIONS_ROWS` (the survivor-pantry rows `ANNEX_CACHE_PANTRY_ROWS`). The serving keeps the lot's id
+  and lies in a free spot; every other lot keeps its id, item, count and spot;
 - an ammo box becomes one serving of the same rows on the same spot.
 
-Gun lockers cannot hold food (`HOLDER_ALLOW`) and keep their arms; weapon finds and their ammo are unchanged. The pass reads no random
-stream, so storeys 1-5 are byte-identical to version 2 (`tests/bunker-s-food.test.ts`). Measured over 8 seeds (4401 + k x 7919), S per
-level: ammo opportunities 21.1 -> 10.75; ammo finds (holder lots + floor boxes) 17.5 -> 11.1 (x0.64) and rounds 122.5 -> 79.4 (x0.65; the gun
-lockers' ~3.5 lots stay); food / drink lots 4.9 -> 11.5 before the natural half (2.75 -> 5.25 kept). Side effect: the converted
-holders' other finds go too (S batteries 1.13 -> 0.75, flares 0.88 -> 0.38, dressings 1.5 -> 1.38 a level).
+Gun lockers cannot hold food (`HOLDER_ALLOW`) and keep their arms; weapon finds and their ammo are unchanged. The pass and the swap read
+no main random stream (the swap has its own per-holder stream), so storeys 1-5 are byte-identical to version 2
+(`tests/bunker-s-food.test.ts`). Measured over 8 seeds (4401 + k x 7919), S per level:
+
+- ammo opportunities 21.1 -> 10.75;
+- ammo finds (holder lots + floor boxes) 17.5 -> 11.0 (x0.63) and rounds 122.5 -> 79.1 (x0.65). The gun lockers keep their ~3.5 lots;
+  over 24 seeds the ratio is x0.60;
+- food / drink 4.9 -> 11.4 before the natural half (2.75 -> 5.5 kept);
+- dressings / kits, batteries, flares and materials exactly as version 2 (holders + floor: 1.63 / 1.75 / 1.13 / 1.75).
 
 ## Saves and versions
 

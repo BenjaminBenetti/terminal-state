@@ -25,7 +25,6 @@ import {levelDistance} from '../src/gen/levelGen';
 import {CELL, FLOOR} from '../src/gen/grid';
 import {isLootHolderKind} from '../src/items/loot';
 import {ROOM_PURPOSES} from '../src/gen/purposes';
-import {BUNKER_PURPOSE} from '../src/gen/reactor/complex/bunkerPurposes';
 import type {StationLayout} from '../src/gen/stationTypes';
 
 const LOG = '/tmp/bunker-v2-level.log';
@@ -148,12 +147,11 @@ describe('Bunker v2: the whole level', () => {
   it('loot parity: the level carries about as many loot holders as version 1 (the rework is no loot cut), never more food holders', () => {
     const seeds = SEEDS.slice(0, 6);
     let v1 = 0, v2 = 0, f1 = 0, f2 = 0;
-    // (task gameplay-feedback-20261111, lane FUEL-LOOT: the storey-S station rations of layout version 3 are the user's deliberate trade of
-    // half of S's ammo opportunities for food / drink — "On platform/elevator level S ONLY, replace half the ammo spawn opportunities with
-    // increased food/drink spawns" — counted and bounded by tests/bunker-s-food.test.ts; every other holder keeps this guard)
+    // (task gameplay-feedback-20261111, lane FUEL-LOOT: layout version 3's storey-S station rations keep every holder's loot key / theme —
+    // only their ammo finds become food / drink, tests/bunker-s-food.test.ts — so this count is version 2's)
     const food = (l: StationLayout, p: StationLayout['props'][number]) => {
       const pu = (p as {purpose?: string}).purpose ?? l.areas[p.area]?.purpose ?? '';
-      return pu !== BUNKER_PURPOSE.rations && (ROOM_PURPOSES as Record<string, {theme?: string}>)[pu]?.theme === 'food';
+      return (ROOM_PURPOSES as Record<string, {theme?: string}>)[pu]?.theme === 'food';
     };
     for (const s of seeds) {
       const a = generateBunkerLevel({levelSeed: s, layoutVersion: 1}), b = gen(s);
