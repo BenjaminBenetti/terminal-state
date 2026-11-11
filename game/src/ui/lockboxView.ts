@@ -1,7 +1,8 @@
 // Task train-lockbox-windows-20261101-232156 (lane BOX): the LOCKBOX TRANSFER VIEW and its controller (LockboxSystem).
 //
 // [E] on the Lockbox in the train's rear compartment (lane TRAIN calls PlayerTrainRuntime.onLockboxInteract) opens it; the world is
-// NOT paused. Your melee / quick / grenade slots and pockets on the left, the Lockbox's 40 slots (run/trainLockbox.ts, owned by the
+// NOT paused. Your melee / quick / grenade slots and pockets on the left, the Lockbox's LOCKBOX_SLOTS (50: 10 columns × 5 rows since task
+// gameplay-feedback-20261111; the pockets in POCKET_GRID's columns) slots (run/trainLockbox.ts, owned by the
 // run's player-train record) on the right: click moves an item across (merging; a backpack in the Lockbox is worn when your back is
 // free), drag moves / merges / swaps, Shift-drag splits; "Stow worn backpack" puts yours in whole. Refusals show in red.
 // It closes on E / 6 / Esc / Tab / Close, walking out of reach, a hit, pause, travel, death or the train unloading; every close
@@ -20,13 +21,13 @@ import {itemDef} from '../items/items';
 import {itemTip} from './itemTip'; // (task studio-ui-subway-maps-20261108-074144-01)
 import {hideTooltip, refreshTooltip, setTip, tipAttrs} from './tooltip';
 import {isBagItem} from '../items/gear';
-import {PACK_SIZE, type Inventory, type ItemStack, type StoreSideRef} from '../items/inventory';
+import {PACK_SIZE, POCKET_GRID, type Inventory, type ItemStack, type StoreSideRef} from '../items/inventory';
 import {ICONS} from './icons';
 import {WEAPONS} from '../weapons/weapons';
 import {DRAG_THRESHOLD} from './inventoryUI';
 import {isTypingTarget} from '../player/input';
 import {CONTAINER_REACH} from '../world/containers';
-import {LOCKBOX_NAME, LOCKBOX_SLOTS, type TrainLockbox} from '../run/trainLockbox';
+import {LOCKBOX_GRID, LOCKBOX_NAME, LOCKBOX_SLOTS, type TrainLockbox} from '../run/trainLockbox';
 import {DEV_GRANT_SEQUENCE, SequenceMatcher, devGrantBundle, digitOfCode, grantAllOrNothing, grantText} from '../items/devGrant';
 
 /** What lane TRAIN's runtime offers (world/playerTrain.ts PlayerTrainRuntime; absent members = no Lockbox in this build). */
@@ -95,11 +96,14 @@ export interface StoreViewOptions {
 }
 
 export const LOCKBOX_VIEW: Readonly<StoreViewOptions> = Object.freeze({id: 'lockboxview', name: LOCKBOX_NAME, the: `the ${LOCKBOX_NAME}`, slots: LOCKBOX_SLOTS,
-  columns: 10, heading: 'Train storage · travels with you'});
+  columns: LOCKBOX_GRID.columns, heading: 'Train storage · travels with you'}); // (lane STORAGE: the grid's 10 columns, now 5 full rows)
 
 const capital = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
-/** The view's CSS scoped to its id (the Lockbox: exactly the original rules); the store grid takes its columns' share of the width. */
+/**
+ * The view's CSS scoped to its id (the Lockbox: exactly the original rules); the store grid takes its columns' share of the width.
+ * (lane STORAGE) A store / pockets column count without a static rule (POCKET_GRID, the store's grid) gets one generated at the end.
+ */
 const css = (id: string, columns: number) => `
 #lockboxview { position: fixed; inset: 0; z-index: 45; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 92px; pointer-events: auto; cursor: default; }
 #lockboxview.hidden { display: none; }
@@ -133,7 +137,7 @@ const css = (id: string, columns: number) => `
 #lockboxview-ghost { position: fixed; left: -40px; top: -27px; width: 80px; height: 54px; z-index: 61; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(21, 23, 26, 0.88); border: 1px solid var(--teal); color: var(--cream); font-size: 11px; }
 #lockboxview-ghost img.ico3d { width: 70px; height: 34px; object-fit: contain; }
 #lockboxview-ghost svg { width: 46px; height: 24px; }
-${columns === 6 || columns === 7 || columns === 10 ? '' : `#lockboxview .lb-g${columns} { grid-template-columns: repeat(${columns}, 1fr); }\n`}`.split('#lockboxview').join(`#${id}`);
+${[...new Set([columns, POCKET_GRID.columns])].filter(n => n !== 6 && n !== 7 && n !== 10).map(n => `#lockboxview .lb-g${n} { grid-template-columns: repeat(${n}, 1fr); }\n`).join('')}`.split('#lockboxview').join(`#${id}`);
 /** CSS injected once per view id. */
 const styled = new Set<string>();
 
@@ -189,7 +193,7 @@ export class LockboxView {
     el.innerHTML = `<div class="lb-panel">
       <div class="lb-head"><b class="lb-title">${o.name}</b><span class="lb-live">● Not paused — keep an eye out</span></div>
       <div class="lb-cols">
-        <div class="lb-side"><h4>Melee · quick slots · grenade slot</h4><div class="slots lb-g7" data-side="hotbar"></div><h4 class="lb-pockets">Pockets</h4><div class="slots lb-g6" data-side="pack"></div></div>
+        <div class="lb-side"><h4>Melee · quick slots · grenade slot</h4><div class="slots lb-g7" data-side="hotbar"></div><h4 class="lb-pockets">Pockets</h4><div class="slots lb-g${POCKET_GRID.columns}" data-side="pack"></div></div>
         <div class="lb-arrow">⇄</div>
         <div class="lb-side"><h4>${o.heading}</h4><div class="slots lb-g${o.columns}" data-side="store"></div></div>
       </div>

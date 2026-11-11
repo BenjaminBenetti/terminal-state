@@ -1,4 +1,4 @@
-// Inventory: five hotbar slots (keys 1-5) plus the pockets ("pack", 12 slots). Pure logic, no DOM.
+// Inventory: five hotbar slots (keys 1-5) plus the pockets ("pack", PACK_SIZE = POCKET_GRID 6 × 3 = 18 slots). Pure logic, no DOM.
 //
 // Iteration 16 (lane GEAR):
 // - GEAR SLOTS (helmet / chest / gloves / boots / backpack; items/gear.ts GEAR_SLOTS order) — SlotRef {bar: 'gear', index}.
@@ -41,7 +41,7 @@
 // - SNAPSHOT v3 (`melee` + `meleeSelected`). loadJSON migrates v1 / v2 snapshots: see migrateLegacyMelee() (exactly one carried melee
 //   weapon — quick slots first, then pockets — moves into the empty melee slot; never the worn backpack's contents).
 //
-// Task train-lockbox-windows-20261101-232156 (lane BOX): STORE transfers with the train's 40-slot Lockbox (run/trainLockbox.ts) —
+// Task train-lockbox-windows-20261101-232156 (lane BOX): STORE transfers with the train's Lockbox (run/trainLockbox.ts, LOCKBOX_SLOTS) —
 // storeMove / storeQuick / storeWornBag on a slot list the inventory does not own (StoreRef {bar: 'store', index}), through the same
 // move engine. The store takes every item kind (a backpack too, whole with its contents); a backpack leaves it only onto your back.
 //
@@ -51,6 +51,17 @@
 // makeStack makes a NEW tank full; a missing `air` reads as empty (never full), so no copy path can refill one. `wornBag()` is the
 // worn back item only when it is a real bag (the 6 / set-down / bag paths use it). Wearing it while a backpack is worn swaps
 // through the normal move engine, which refuses (a backpack never goes into the pockets): nothing is moved, dropped or lost.
+//
+// Task gameplay-feedback-20261111 (lane STORAGE; user: "Add one extra row to the player inventory, backpack inventory and train chest.
+// Keep their existing column counts unchanged. Make this real usable storage, not just a visual resize."): the pockets are POCKET_GRID
+// (6 columns × 3 rows: PACK_SIZE 12 -> 18; a worn chest rig still adds its 4 after them: 16 -> 22) and a backpack's own contents
+// BACKPACK_GRID (items/gear.ts, 6 × 3: 12 -> 18). Every capacity check reads these constants, so the new slots are real slots.
+// - SNAPSHOTS record `packBase` (the base pockets they were written with). A snapshot without it was written with LEGACY_PACK_SIZE (12)
+//   base pockets: loadJSON keeps pockets 0..11 where they are and moves its chest-rig pockets (12..15) to the rig's indices now
+//   (PACK_SIZE..PACK_SIZE + 3) — never into the new base pockets, which load empty (remapPockets). Still format v3 (an optional field,
+//   like the save's `filterLifeS`).
+// - BAGS: a backpack's contents list written at an older, smaller size (12) loads padded with empty slots at the end (fitBagContents:
+//   stackFromJSON, the Lockbox's loader, remembered loose items); every item keeps its slot, nothing is reordered.
 
 import {itemDef} from './items';
 import {canonicalItemId} from './calibers';
@@ -87,7 +98,15 @@ export interface StoreRef { bar: 'store'; index: number }
 export type StoreSideRef = SlotRef | StoreRef;
 
 export const HOTBAR_SIZE = 5;
-export const PACK_SIZE = 12;
+/**
+ * The pockets' shape: every pockets view lays them out in POCKET_GRID.columns (the chest rig's extra pockets continue the grid).
+ * Task gameplay-feedback-20261111 (lane STORAGE): one more row, the same columns — 6 × 2 -> 6 × 3. Change the shape HERE only.
+ */
+export const POCKET_GRID: Readonly<{columns: number; rows: number}> = Object.freeze({columns: 6, rows: 3});
+/** Base pockets (without a chest rig): POCKET_GRID columns × rows. */
+export const PACK_SIZE = POCKET_GRID.columns * POCKET_GRID.rows;
+/** The base pockets of every snapshot written before task gameplay-feedback-20261111 (no `packBase`): its chest-rig pockets follow them. */
+export const LEGACY_PACK_SIZE = 12;
 /** Task office-overhaul-20261030 (INTERACT): grenade slots (one; HUD key G). */
 export const THROW_SLOTS = 1;
 /** Task office-overhaul-20261030 (INTERACT): the grenade slot ref. */
@@ -121,6 +140,11 @@ export interface InventoryJSON {
   v: 1 | 2 | 3;
   hotbar: (StackJSON | null)[];
   pack: (StackJSON | null)[];
+  /**
+   * Task gameplay-feedback-20261111 (lane STORAGE): the base pockets `pack` was written with (PACK_SIZE then); a worn chest rig's
+   * pockets follow them. Absent: an older snapshot (LEGACY_PACK_SIZE base pockets) — loadJSON moves its rig pockets (remapPockets).
+   */
+  packBase?: number;
   gear: Record<GearSlot, StackJSON | null>;
   /** v2: the grenade slot (THROW_SLOTS entries). Absent in v1. */
   throw?: (StackJSON | null)[];
@@ -160,17 +184,58 @@ export function stackFromJSON(j: StackJSON | null | undefined): ItemStack | null
   if (!j) return null;
   const s: ItemStack = {uid: j.uid, itemId: canonicalItemId(j.itemId), count: j.count};
   if (j.mag !== undefined) s.mag = j.mag;
-  if (j.bag) s.bag = j.bag.map(stackFromJSON);
+  if (j.bag) s.bag = fitBagContents(s.itemId, j.bag.map(stackFromJSON)); // (lane STORAGE: an older 12-slot bag gains its new empty slots)
   if (j.filter !== undefined) s.filter = j.filter; // mask lane
   if (j.air !== undefined) s.air = j.air; // task filter-tension-airtank
   if (j.armor !== undefined) s.armor = j.armor; // task studio-general-armor-20261107-231448-01
   return s;
 }
 
+/**
+ * Task gameplay-feedback-20261111 (lane STORAGE): a backpack's contents list at its item's size today (gear bagSlots: BACKPACK_SLOTS) —
+ * a list written at an older, smaller size (12) gains empty slots at its END, so every item keeps its slot (nothing reordered, nothing
+ * lost). A longer list is left as it is (never truncated: nothing is dropped). Returns the same array (padded in place).
+ */
+export function fitBagContents<T>(itemId: string, list: (T | null)[]): (T | null)[] {
+  const n = gearSpec(itemId)?.bagSlots ?? 0;
+  while (list.length < n) list.push(null);
+  return list;
+}
+
 /** Every stack in a stack (itself + bag contents), for uid / count audits. */
 export function stacksIn(s: ItemStack | null | undefined): ItemStack[] {
   if (!s) return [];
   return [s, ...(s.bag ?? []).filter((x): x is ItemStack => !!x)];
+}
+
+/**
+ * Task gameplay-feedback-20261111 (lane STORAGE): the base pockets a snapshot's `pack` was written with. `packBase` when recorded;
+ * otherwise an older snapshot — LEGACY_PACK_SIZE, unless its list is exactly today's length for the worn chest gear (a snapshot built
+ * in today's layout without the field: tests / hand-made data).
+ */
+export function packBaseOf(j: Pick<InventoryJSON, 'pack' | 'packBase'>, extraPockets: number): number {
+  const b = j.packBase;
+  if (Number.isInteger(b) && (b as number) >= 1) return b as number;
+  return (j.pack?.length ?? 0) === PACK_SIZE + extraPockets ? PACK_SIZE : LEGACY_PACK_SIZE;
+}
+
+/**
+ * Task gameplay-feedback-20261111 (lane STORAGE): pockets written with `base` base pockets at their indices today — base pocket i stays
+ * at i, the chest rig's pocket k (written at base + k) goes to PACK_SIZE + k. The new base pockets in between stay empty: a rig item is
+ * never shuffled into a base pocket. (A base pocket that has no place any more — a smaller PACK_SIZE — is returned in `loose`; the
+ * caller puts it back in through add(), never lost.)
+ */
+export function remapPockets<T>(list: readonly (T | null)[], base: number): {pack: (T | null)[]; loose: T[]} {
+  if (base === PACK_SIZE) return {pack: [...list], loose: []};
+  const pack: (T | null)[] = [], loose: T[] = [];
+  list.forEach((s, i) => {
+    if (!s) return;
+    if (i >= base) pack[PACK_SIZE + (i - base)] = s;
+    else if (i < PACK_SIZE) pack[i] = s;
+    else loose.push(s);
+  });
+  for (let i = 0; i < pack.length; i++) pack[i] ??= null; // dense (no holes)
+  return {pack, loose};
 }
 
 /** Iteration 16: each inventory instance starts on its own version range, so a swapped-in restored one always redraws. */
@@ -879,7 +944,7 @@ export class Inventory {
   toJSON(): InventoryJSON {
     const gear = {} as Record<GearSlot, StackJSON | null>;
     GEAR_SLOTS.forEach((slot, i) => { gear[slot] = stackToJSON(this.gearSlots[i]); });
-    return {v: INVENTORY_JSON_VERSION, hotbar: this.hotbar.map(stackToJSON), pack: this.pack.map(stackToJSON), gear, throw: this.throwSlot.map(stackToJSON),
+    return {v: INVENTORY_JSON_VERSION, hotbar: this.hotbar.map(stackToJSON), pack: this.pack.map(stackToJSON), packBase: PACK_SIZE, gear, throw: this.throwSlot.map(stackToJSON), // (+ packBase: lane STORAGE)
       melee: this.meleeSlot.map(stackToJSON), selected: this.selected, meleeSelected: this.meleeSelected, nextUid: this.nextUid}; // + melee slot (v3, SLOT)
   }
 
@@ -895,12 +960,15 @@ export class Inventory {
    * Task office-overhaul-20261030 (INTERACT): v1 snapshots (no `throw`) load with an empty grenade slot (flares stay put).
    * Task knife-windup-20261030 (SLOT): v1 / v2 snapshots (no `melee`) migrate their carried knife into the melee slot
    * (migrateLegacyMelee); a non-melee item found in a v3 melee slot (malformed) goes back in through add(), never lost.
+   * Task gameplay-feedback-20261111 (STORAGE): pockets written with another base size (an older snapshot: 12) keep their base pockets in
+   * place and their chest-rig pockets move to the rig's indices now (remapPockets); the new base pockets load empty.
    */
   loadJSON(j: InventoryJSON): void {
     const v = j.v ?? 1;
     const hot = (j.hotbar ?? []).map(stackFromJSON);
     const gear = GEAR_SLOTS.map(slot => stackFromJSON(j.gear?.[slot] ?? null));
-    const pack = (j.pack ?? []).map(stackFromJSON);
+    const remapped = remapPockets((j.pack ?? []).map(stackFromJSON), packBaseOf(j, this.pocketsOf(gear[CHEST]))); // (chest gear that will be worn: pocketsOf checks its slot)
+    const pack = remapped.pack;
     const thr = (v >= 2 && Array.isArray(j.throw) ? j.throw : []).map(stackFromJSON);
     // (read whatever the version: a melee slot found already occupied in an older snapshot is kept, and nothing migrates into it)
     const mel = (Array.isArray(j.melee) ? j.melee : []).map(stackFromJSON);
@@ -918,7 +986,7 @@ export class Inventory {
     let maxUid = 0;
     const all = [...this.hotbar, ...this.pack, ...this.gearSlots, ...this.throwSlot, ...this.meleeSlot].flatMap(stacksIn);
     for (const s of all) maxUid = Math.max(maxUid, s.uid);
-    const stray = [...hot.slice(HOTBAR_SIZE), ...pack.slice(cap), ...gear.filter((s, i) => s && this.gearSlots[i] !== s), ...thr.filter((s, i) => s && this.throwSlot[i] !== s),
+    const stray = [...hot.slice(HOTBAR_SIZE), ...pack.slice(cap), ...remapped.loose, ...gear.filter((s, i) => s && this.gearSlots[i] !== s), ...thr.filter((s, i) => s && this.throwSlot[i] !== s),
       ...mel.filter((s, i) => s && this.meleeSlot[i] !== s)].filter((s): s is ItemStack => !!s);
     for (const s of stray) for (const x of stacksIn(s)) maxUid = Math.max(maxUid, x.uid);
     this.nextUid = Math.max(j.nextUid ?? 1, maxUid + 1);

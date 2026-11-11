@@ -13,7 +13,7 @@
 //    second one above it, crossing the void;
 //  - the PACK WALL (pipe-and-plank shelving on the back wall, else a flank): THE REAL BACKPACK stands on the middle unit's top plank —
 //    a genuine `backpack` gear find (items/gear.ts; layout pickup, turned into a grounded bag by gear/system.ts: open it, wear it, its
-//    own 12 slots), ONE per store, seeded with the layout and never refilled. No decoration-only lookalike packs anywhere (user:
+//    own BACKPACK_SLOTS), ONE per store, seeded with the layout and never refilled. No decoration-only lookalike packs anywhere (user:
 //    "camping store fake backpack unacceptable");
 //  - the BOOT WALL (the Mall's ledge wall) with a try-on ottoman, the OUTERWEAR bays (clothing wall units, garment groups on their
 //    rails), garment rails / round racks on the floor, a second display tent, tiered lantern tables, camp-kitchen plank shelving with
