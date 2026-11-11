@@ -284,7 +284,7 @@ export class CorpseSystem implements CorpseSystemApi {
     const h = this.host;
     if (!h.buildEnemyActor || !corpseFeedable(rec.arch)) return null;
     const index = Number(rec.id.slice(rec.id.lastIndexOf('#') + 1));
-    const spawn: ZombieSpawn = {x: 0, z: 0, yaw: 0, type: rec.type, area: 0, ...(rec.arch !== 'zombie' ? {archetype: rec.arch} : {}), ...(rec.look ? {look: rec.look} : {})};
+    const spawn: ZombieSpawn = {x: 0, z: 0, yaw: 0, type: rec.type, area: 0, ...(rec.arch !== 'zombie' ? {archetype: rec.arch} : {}), ...(rec.look ? {look: rec.look} : {}), ...(rec.variant !== undefined ? {variant: rec.variant} : {})};
     let built: {actor: EnemyActor; fallback: boolean};
     try { built = h.buildEnemyActor(spawn, index, rec.seed >>> 0, mulberry32((hashString(rec.id) ^ rec.seed) >>> 0)); } catch (err) { console.warn('corpses: a body could not be built', rec.id, err); this.counts.failed++; return null; }
     const a = built.actor;
@@ -426,6 +426,7 @@ export class CorpseSystem implements CorpseSystemApi {
     const rec: BodyRecordJSON = {id: bodyId(sectionId(key), index), arch: archetypeOf(z), seed: h.seed >>> 0, type: spawn?.type ?? z.brain.type, pose: 'lying',
       x: 0, y: 0, z: 0, q: [0, 0, 0, 1], scale: r5(z.scale)};
     if (spawn?.look) rec.look = spawn.look;
+    if (spawn?.variant !== undefined) rec.variant = spawn.variant; // (a family with several bodies: the Screacher's sc01..sc04)
     // the world forgets the enemy: no AI / hit list / identity; its kill is remembered now (never respawned, whatever happens to the body)
     const i = h.zombies.indexOf(z);
     if (i >= 0) h.zombies.splice(i, 1);
@@ -837,7 +838,7 @@ export class CorpseSystem implements CorpseSystemApi {
 
   /** The lazy model keys of a list of records (archetype models, lingerie / cosplay garments): the layout's section model keys. */
   static modelKeys(recs: readonly BodyRecordJSON[]): string[] {
-    const zs = recs.map(r => ({archetype: r.arch, look: r.look})) as unknown as ZombieSpawn[]; // (the keys read archetype / look only)
+    const zs = recs.map(r => ({archetype: r.arch, look: r.look, variant: r.variant})) as unknown as ZombieSpawn[]; // (the keys read archetype / look / variant only)
     return [...new Set([...enemyModelKeysFor({zombies: zs}), ...lingerieModelKeysFor({zombies: zs}), ...cosplayModelKeysFor({zombies: zs})])].sort();
   }
 

@@ -55,14 +55,22 @@ export interface BodyRecordJSON {
    * stream) — a rebuilt body keeps the exact size it died with. Absent = 1.
    */
   scale?: number;
+  /**
+   * The spawn's body variant (ZombieSpawn.variant: a family with several approved bodies, e.g. the Screacher's sc01..sc04 —
+   * ENEMY_ARCHETYPES[arch].variantModels): a rebuilt body is the same body. Absent = the family's only / default body.
+   */
+  variant?: string;
 }
+
+/** A body variant id (the archetype's own table decides which exist: an unknown one rebuilds as its default body). */
+export const BODY_VARIANT_RE = /^[a-z0-9_-]{1,16}$/;
 
 /** '<section id>#<layout enemy index>'. */
 export const BODY_ID_RE = /^[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{1,32}#\d{1,6}$/;
 export const bodyId = (section: string, index: number): string => `${section}#${index}`;
 
 const finite = (v: unknown, lim: number): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= lim;
-const BODY_KEYS = ['id', 'arch', 'seed', 'type', 'look', 'pose', 'x', 'y', 'z', 'q', 'level', 'scale'];
+const BODY_KEYS = ['id', 'arch', 'seed', 'type', 'look', 'pose', 'x', 'y', 'z', 'q', 'level', 'scale', 'variant'];
 
 /**
  * Why one body record is malformed (null = fine). `world`: a station record (world pose + storey); else train-local (aboard / a job).
@@ -85,6 +93,7 @@ export function bodyProblem(v: unknown, o: {world: boolean; feedable: (arch: str
   if (Math.abs(Math.hypot(q[0], q[1], q[2], q[3]) - 1) > 1e-3) return `body ${b.id} orientation must be a unit quaternion`;
   if (o.world) { if (typeof b.level !== 'number' || !Number.isInteger(b.level) || b.level < 0 || b.level > 64) return `body ${b.id} needs its storey`; }
   else if (b.level !== undefined) return `body ${b.id} aboard has no storey`;
+  if (b.variant !== undefined && (typeof b.variant !== 'string' || !BODY_VARIANT_RE.test(b.variant))) return `body ${b.id} has a malformed body variant`;
   if (b.scale !== undefined && (typeof b.scale !== 'number' || !Number.isFinite(b.scale) || b.scale < BODIES.scaleMin || b.scale > BODIES.scaleMax)) return `body ${b.id} size out of range`;
   return null;
 }
