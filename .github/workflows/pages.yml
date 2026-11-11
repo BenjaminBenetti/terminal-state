@@ -17,7 +17,8 @@ permissions:
 
 jobs:
   pages-build:
-    # Validation for every trigger. Only a push to main or a manual run on main uploads the Pages artifact.
+    # Build + site validation (pages:check) for every trigger; the reference-site tests run on pull requests only (user, 2026-11-11:
+    # tests run on pull requests only, as in game-build.yml). Only a push to main or a manual run on main uploads the Pages artifact.
     name: pages-build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -38,7 +39,11 @@ jobs:
       - run: npm ci
       - run: npm run pages:build
       - run: npm run pages:check
-      - run: npm run pages:test
+      - name: Reference-site tests
+        # Pull requests only: main's build / deploy does not rerun them. All three files are game/tests files, so the game shards
+        # behind the required `build` check run them on every pull request as well.
+        if: github.event_name == 'pull_request'
+        run: npm run pages:test
       - name: Upload Pages artifact
         # Pull requests (ref refs/pull/N/merge) and runs on other branches validate only and never publish.
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')

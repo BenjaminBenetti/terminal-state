@@ -52,13 +52,18 @@ to main, on **pull requests into main** (check `build`, required before merging)
 on manual dispatch. It uses Node 22.16.0, `npm ci` (browser download off). Jobs run in
 parallel: six full-suite Vitest shards (`test (shard i/6)`, `vitest --shard`), `checks`
 (workflow/packager validators, `ci:test`) and `bundle` (`npm run build` = typecheck + build,
-then the portable CI packager; no tests). The required `build` check is a lightweight
-aggregate that always runs after all of them and fails unless every one succeeded and the
-shards' executed file lists cover the whole test inventory exactly once
-(`tools/release/test-shards.mjs`). All third-party actions are pinned to verified
-official-repository commit SHAs. Pull-request runs validate only: release artifacts
-are uploaded only by runs on main itself (by `bundle`), and are a release only when that
-commit's whole workflow, `build` included, succeeded.
+then the portable CI packager; no tests). **Tests run on pull requests only.** On a pull
+request the required `build` check is a lightweight aggregate that always runs after all
+of them and fails unless every one succeeded and the shards' executed file lists cover
+the whole test inventory exactly once (`tools/release/test-shards.mjs`); branch
+protection (strict, admins included) makes that green PR `build` the gate for every
+merge. Runs on main (the merged commit's push, or a manual run) do not test again: the
+shards and `checks` show as **skipped by design**, and `build` there requires `bundle` to
+succeed with every test job skipped. Runs from other triggers likewise build and
+package only. All third-party actions are pinned to verified official-repository commit
+SHAs. Pull-request runs validate only: release artifacts are uploaded only by runs on
+main itself (by `bundle`), and are a release only when that commit's whole workflow,
+`build` included, succeeded.
 
 A successful run on main uploads **`terminal-state-web-<full commit SHA>`**, containing:
 
@@ -133,13 +138,14 @@ and data, never the game or its source.
   (workspace paths, `reference/`, env files, key-like secrets), links (all internal links and #fragments resolve; no
   root-absolute or unlabelled external URLs; the site navigation of every page reaches every section), page structure,
   enemy-section coverage against `data/enemies.json` and the `data/manifest.json` hashes and data digests.
-  `npm run pages:test` runs `game/tests/pages-output.test.ts` and `game/tests/loot-reference.test.ts`. Both also run in the
-  normal `npm test`.
+  `npm run pages:test` runs `game/tests/pages-output.test.ts`, `game/tests/loot-reference.test.ts` and
+  `game/tests/enemy-spawn-reference.test.ts`. All three also run in the normal `npm test` (and so in the game shards).
 - **Preview.** `npm run pages:preview` serves `dist/pages/` at http://127.0.0.1:4190/terminal-state/ (the published
   sub-path). Opening `dist/pages/index.html` directly also works.
 - **Publication.** [`.github/workflows/pages.yml`](.github/workflows/pages.yml) runs separately from the game build. Its
   `pages-build` job runs on every push and pull request into main and on manual runs, with a read-only token: `npm ci`, build,
-  check, tests. It uploads the Pages artifact **only for main**. The `pages-deploy` job runs only for pushes / manual runs on
+  check, then the tests **on pull requests only** (main builds, checks and deploys without rerunning them). It uploads the
+  Pages artifact **only for main**. The `pages-deploy` job runs only for pushes / manual runs on
   main, after `pages-build` passed for that exact commit. It is the only job with `pages: write` / `id-token: write`, uses the
   `github-pages` environment and one non-cancelling `pages-deploy` concurrency group. It skips the deployment if main has
   already moved past the commit, so an older run never overwrites a newer site. **Pull-request builds never publish.**

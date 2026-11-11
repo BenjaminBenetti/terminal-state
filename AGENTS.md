@@ -26,7 +26,12 @@ source. `game/README.md` has detailed gameplay notes and some historical command
   and that the full suite was left to CI. Inspect the diff and secret/asset
   checks. A blocked check or authentication is a blocker to report, not a reason
   to claim the push succeeded or silently change dependencies.
-- GitHub Actions is the authoritative release build. Everything publication must
+- GitHub Actions is the authoritative release build. Tests run on pull requests
+  only (user decision, 2026-11-11): main's run builds, packages and uploads the
+  artifact, and its test shards and `checks` job are **skipped by design** (the
+  Pages workflow likewise builds, checks and deploys without `pages:test`). The
+  merged change already passed them in its PR's required `build`; never count a
+  skipped or missing PR check as green. Everything publication must
   use the **successful GitHub CI artifact for that exact main commit**, never a
   locally built folder. Main downloads, validates the manifest and publishes
   only `site/`. Everything publication stays manual. The user-authorized Google
