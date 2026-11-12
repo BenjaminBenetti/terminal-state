@@ -134,6 +134,9 @@ export interface EquipmentView {
 
 type ModelLib = {get(key: string): {scene: THREE.Object3D} | undefined} | null | undefined;
 
+/** The carried box's template: the Lockbox source it was built from, the scaled view cloned per unit, the lid's stroke. */
+interface BoxTemplate { src: THREE.Object3D | null; group: THREE.Group; openAngle: number }
+
 /**
  * The models the views are built from: the prop library's (read each time it is polled: a model that arrives later upgrades the
  * stand-ins) and the fuel dolly's truck. One instance per equipment system.
@@ -143,7 +146,7 @@ export class EquipmentLook {
   gen = 0;
   private truckGen = cartModelsGen;
   private readonly scenes = new Map<string, THREE.Object3D | null>();
-  private chest: {src: THREE.Object3D | null; group: THREE.Group; openAngle: number} | null = null;
+  private chest: BoxTemplate | null = null;
   private mats: TrainMaterials | null = null;
 
   constructor(private readonly lib: () => ModelLib, readonly spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC) {}
@@ -170,7 +173,7 @@ export class EquipmentLook {
   }
 
   /** The chest template for the Lockbox model now known (built once per source; cloned per chest). */
-  private chestTemplate(): NonNullable<EquipmentLook['chest']> {
+  private chestTemplate(): BoxTemplate {
     const src = this.scenes.get(LOCKBOX_MODEL_KEY) ?? null;
     if (this.chest && this.chest.src === src) return this.chest;
     const lb = chestSource(this.spec);

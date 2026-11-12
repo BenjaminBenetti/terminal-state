@@ -246,6 +246,12 @@ type Mode = 'world' | 'cargo' | 'held';
 type AimPart = 'frame' | 'module' | 'body';
 
 const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
+/**
+ * A recorded yaw: wrapped, 4 decimals, and never beyond +-3.1415 — r4(PI) = 3.1416 lies past PI and would come back from the next
+ * wrap with the other sign: a record written twice is the same record.
+ */
+const YAW_MAX = 3.1415;
+const yawOut = (a: number): number => Math.max(-YAW_MAX, Math.min(YAW_MAX, r4(wrapYaw(a))));
 const NO_MODS = Object.freeze({});
 const DRAG_MODS = Object.freeze({speedMult: EQUIP.speedMult});
 const CARRY_MODS = Object.freeze({speedMult: EQUIP.carry.speedMult});
@@ -556,9 +562,9 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   /** The train's units as records (train-local; uid order): inside the parked car, riding cargo, in the hands, waiting for a world. */
   aboard(): EquipmentJSON[] {
     const out: EquipmentJSON[] = [];
-    const p = this.placement();
+    const p = this.placement(), over = this.overflow(p);
     for (const u of this.list) {
-      if (u.mode === 'world' && !(p && this.insideCar(u, p))) continue;
+      if (u.mode === 'world' && (!(p && this.insideCar(u, p)) || over?.has(u))) continue;
       out.push(this.aboardRecord(u, p));
     }
     for (const r of this.pending) out.push(copyEquipment(r));
@@ -568,9 +574,28 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   /** The station's units as records (world pose + storey; uid order). */
   stationRecords(): EquipmentJSON[] {
     const out: EquipmentJSON[] = [];
-    const p = this.placement();
-    for (const u of this.list) if (u.mode === 'world' && !(p && this.insideCar(u, p))) out.push(this.stationRecord(u));
+    const p = this.placement(), over = this.overflow(p);
+    for (const u of this.list) if (u.mode === 'world' && (!(p && this.insideCar(u, p)) || over?.has(u))) out.push(this.stationRecord(u));
     return out.sort(bySeq);
+  }
+
+  /**
+   * World units standing in the car BEYOND the save format's bound (EQUIPMENT_LIMITS.aboard; the newest ones): recorded with the
+   * station, where they stand (the car parks on the same spot: they are in it again after a load). Null: none — the usual case. A
+   * departure is refused before it matters (departBlock); this keeps a save taken without one (the ending) valid.
+   */
+  private overflow(p: TrainPlacement | null): Set<LiveUnit> | null {
+    if (this.list.length + this.pending.length <= EQUIPMENT_LIMITS.aboard) return null;
+    let n = this.pending.length;
+    const inside: LiveUnit[] = [];
+    for (const u of this.list) {
+      if (u.mode !== 'world') n++;
+      else if (p && this.insideCar(u, p)) inside.push(u);
+    }
+    const room = Math.max(0, EQUIPMENT_LIMITS.aboard - n);
+    if (inside.length <= room) return null;
+    inside.sort((a, b) => a.seq - b.seq);
+    return new Set(inside.slice(room));
   }
 
   /** Retry / Load / Continue / New Game (TrainEquipment.load / reset): the train's units become exactly `recs` (idempotent). */
@@ -609,14 +634,14 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     if (u.mode === 'cargo') { x = u.local.x; y = u.local.y; z = u.local.z; yaw = u.local.yaw; }
     else if (u.mode === 'held' || !p) { const hl = this.heldLocal(u); x = hl.x; y = hl.y; z = hl.z; yaw = 0; }
     else { const q = this.toLocal(p, u.body.x, u.body.y, u.body.z); x = q.x; y = this.spec.floorY; z = q.z; yaw = u.body.yaw - p.yaw; }
-    const r: EquipmentJSON = {uid: u.uid, kind: u.kind, x: r4(x), y: r4(y), z: r4(z), yaw: r4(wrapYaw(yaw))};
+    const r: EquipmentJSON = {uid: u.uid, kind: u.kind, x: r4(x), y: r4(y), z: r4(z), yaw: yawOut(yaw)};
     if (u.def.plug && u.plug !== null) r.plug = u.plug;
     return this.stamp(u, r);
   }
 
   private stationRecord(u: LiveUnit): EquipmentJSON {
     const b = u.body;
-    return this.stamp(u, {uid: u.uid, kind: u.kind, x: r4(b.x), y: r4(b.y), z: r4(b.z), yaw: r4(wrapYaw(b.yaw)), level: Math.max(0, b.level)});
+    return this.stamp(u, {uid: u.uid, kind: u.kind, x: r4(b.x), y: r4(b.y), z: r4(b.z), yaw: yawOut(b.yaw), level: Math.max(0, b.level)});
   }
 
   /**
@@ -683,7 +708,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     this.prompt = null;
     this.setRoll(0);
     const keepCargo = this.riding && !!this.captured; // the riding car keeps its cargo through the teardown (the view is held)
-    const p = this.placement();
+    const p = this.placement(), over = this.overflow(p);
     const station: EquipmentJSON[] = [];
     for (let i = this.list.length - 1; i >= 0; i--) {
       const u = this.list[i];
@@ -691,7 +716,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
       if (u.mode === 'cargo') {
         if (keepCargo) continue;
         this.pending.push(this.aboardRecord(u, p));
-      } else if (p && this.insideCar(u, p)) this.pending.push(this.aboardRecord(u, p));
+      } else if (p && this.insideCar(u, p) && !over?.has(u)) this.pending.push(this.aboardRecord(u, p));
       else station.push(this.stationRecord(u));
       this.removeAt(i);
     }
@@ -996,6 +1021,9 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     this.list.push(u);
     this.sorted = null;
     this.counts.spawned++;
+    // (the run's counter is never below a live unit's number: a new unit never takes a living one's id, and a save stays valid)
+    const E = this.host.playerTrain.equipment;
+    if (u.seq > E.seq) E.seq = Math.min(EQUIPMENT_LIMITS.seq, u.seq);
     if (plug !== undefined && def.plug) this.restorePlug(u, plug);
     return u;
   }
