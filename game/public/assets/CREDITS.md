@@ -424,6 +424,18 @@ Generated for this project from one Codex INITIAL design image (the owned Codex 
 - `assets/models/train-chipper.glb` — the train's corpse woodchipper (feed hopper, rotor housing, motor, control box, spout and hose, twin collection tanks on a welded base frame) (Meshy task 01a1c7ea-aad4-744e-8734-a75af09b66ec); runtime derivative by `tools/asset-pipeline/props/build-train-chipper.mjs` (provenance: `assets/derivatives/train-chipper.json`).
 <!-- END train-chipper-model -->
 
+<!-- BEGIN train-equipment-models (build-train-equipment.mjs) -->
+## Train crafting equipment
+
+Generated for this project from one Codex INITIAL design image each (the owned Codex CLI's built-in image_gen tool) turned into models with Meshy T2.5 image-to-3D (smart topology, 2K PBR) through the Meshy MCP; every model keeps Meshy's own PBR maps (re-encoded only). Task studio-train-crafting-v1-20261111-225628-01 under the user's crafting-equipment authorization (75 of up to 150 credits, 5 generations, each a first attempt). AI-generated assets: unapproved prototypes, no licence or commercial clearance implied. The raw masters, conditioning images and job ledger are kept outside Git. Runtime derivatives by `tools/asset-pipeline/props/build-train-equipment.mjs` (provenance: `assets/derivatives/train-equipment.json`).
+
+- `assets/models/train-bench.glb` — the train's crafting bench (wooden top on a welded steel frame; bolted-down vise, bench grinder and gauge box; mesh lower shelf) (Meshy task 01a1cce3-149a-7359-bf98-f89607d03730).
+- `assets/models/train-radar.glb` — the route radar module (field cabinet with a mast-mounted antenna bar and whip aerial; stands on the existing hand truck) (Meshy task 01a1cce1-bfc8-7225-a764-fcd6efbafdae).
+- `assets/models/train-sentry.glb` — the sentry control module (field console with monitor and emergency stop under an open ammunition hopper; stands on the existing hand truck) (Meshy task 01a1cce3-ee24-739b-9925-b575f1ed6e7a).
+- `assets/models/train-scanner.glb` — the item / enemy scanner module (field console with a hooded round scope, beacon and whip aerial; stands on the existing hand truck) (Meshy task 01a1cce1-de50-72a5-a98f-47a1ec3b8878).
+- `assets/models/train-turret.glb` — the sentry's roof turret (machine gun with sensor pod and twin ammunition boxes in a U yoke on a slew-ring base; three nodes: base, yoke, head) (Meshy task 01a1cce2-d935-73da-b810-259aa1557993).
+<!-- END train-equipment-models -->
+
 <!-- BEGIN train-fuel-audio-20261106 (fuel-build.mjs) -->
 ## Train fuel audio (engine stall, fuel pour, fuel cart rolling)
 Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the train-fuel

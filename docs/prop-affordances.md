@@ -620,6 +620,46 @@ they sit outside the two audits; their classification is recorded here.
   - The fed body (task woodchipper-ragdoll-20261111-033048, `world/chipperRagdoll.ts`) is its own corpse ragdoll in a small private
     physics world. That world holds only approximate boxes of the machine and the car floor. It never moves the machine, and the
     machine's collider is unchanged.
+- **Crafting bench** (task train-crafting-v1-20261111-225628, `docs/train-crafting.md`; model `assets/models/train-bench.glb`, cooked
+  by `tools/asset-pipeline/props/build-train-equipment.mjs`; placement `craft/trainFixtures.ts benchPlacement`, runtime
+  `world/craftBench.ts`):
+  - Not storage: a work surface over an open, empty lower shelf. It holds nothing, so there is nothing to open and no loot table.
+  - Physics: static, `anchored`: bolted to the car floor in the rear compartment opposite the Lockbox. It is a solid box up to the
+    worktop for player, enemy and hitscan, parked and riding (`trainColliders`, `buildRideLocalModel`). Shots and bumps don't move it.
+  - No baked clutter: the vise, the bench grinder, the gauge box with its cable and the low back rail are bolted-down fixtures. The
+    rest of the worktop is bare. Anything lying on it is an ordinary pickup, which keeps its own [E].
+  - Scale (rule 5): `scale-check.mjs --prop game/public/assets/models/train-bench.glb`, viewed beside zombie lastshift (1.78 m,
+    runtime scale 1). 1.02 × 1.12 × 0.68 m, grounded on 4 feet; worktop 0.84 m (at the zombie's hip), fixture tops 1.12 m.
+- **Storage chest** (crafted at the bench; the Lockbox model at 0.8 scale, `world/trainEquipmentModel.ts CHEST_SCALE`; store view
+  `world/equipmentChestStore.ts`):
+  - Storage opens: a tap of [E] raises its hinged lid and opens the Lockbox's 50-slot transfer view over the chest's own slots.
+  - Contents: the player's own storage. Crafted EMPTY, never seeded or refilled, so there's no loot table. Finite, persistent and
+    saved with the unit: aboard the train or in the station it was left in.
+  - Physics: movable. Hold [E] to carry it in both hands and put it down on free floor; walking into it shoves it slowly; a bullet
+    stops on it and shoves it by its mass. One sleeping kinematic body on the fuel cart's controller, created with the unit.
+  - Scale (rule 5): `scale-check.mjs --prop game/public/assets/models/player-train-lockbox.glb --scale 0.8`, viewed. 0.82 × 0.44 ×
+    0.49 m, grounded on 4 skid contacts, lid top at 0.44 m (knee height: a box one person can carry).
+- **Devices: route radar, defense sentry, item scanner** (crafted at the bench; models `assets/models/train-{radar,sentry,scanner}.glb`
+  standing on the fuel dolly's hand truck, `world/trainEquipmentModel.ts`):
+  - Not storage: sealed equipment cabinets. The sentry's hopper is a round counter worked from its console (tap [E] loads the 5.56
+    rounds carried, hold [E] takes them back); it is not a container and has no door.
+  - Physics: movable, exactly like the fuel dolly: grabbed and dragged by the frame, pushed by walking into it, up and down stairs,
+    carried by lifts, stops bullets with a shove by its mass. Sleeping kinematic bodies on the same controller.
+  - No baked clutter: dish, antenna, hood, handles and leads are permanent parts of each module.
+  - Scale (rule 5): `scale-check.mjs` on each module composed with the hand truck, viewed. W × H × D with the truck: radar 0.56 ×
+    1.20 × 0.59 m, sentry 0.50 × 1.20 × 0.64 m, scanner 0.51 × 1.20 × 0.58 m. The truck's handle is the 1.20 m. The modules reach
+    1.00–1.10 m (chest height on the zombie) and their main top surfaces are at 0.81–0.92 m. Each stands grounded on the truck's two
+    wheels, the module on the nose plate (0.07 m).
+- **Roof turret** (the sentry's; model `assets/models/train-turret.glb`, runtime `world/sentryTurret.ts`, view
+  `world/sentryTurretView.ts`): equipment, not storage. Anchored on the car's middle roof hatch; no physics body and no collider (it is
+  out of reach on the roof). 0.42 × 0.52 × 0.96 m (W × H × L) at rest, grounded on its base ring. Base, yoke and head are three
+  nodes of one model so it can turn and tilt.
+- **Plug sockets** (three; `craft/trainFixtures.ts equipmentPlugs`): anchored wall fixtures on the lining (a 16 × 20 cm steel back
+  box, a round socket, an indicator lamp). Not storage, no body. A connected device's cable is the fuel hose's tube.
+- **Limits:** at most 24 crafted units in the car and 48 left in one station (`craft/equipment.ts EQUIPMENT_LIMITS`); a craft or a
+  departure beyond them is refused. Enemies walk through units on the floor, as they do through fuel carts.
+- **Tests:** `tests/train-equipment-*.test.ts`, `tests/equipment-chest-store.test.ts`, `tests/craft-bench.test.ts`,
+  `tests/train-equipment-asset.test.ts`, `tests/sentry-turret-model.test.ts`, `tests/train-crafting-session.test.ts`.
 
 ## 7. Reactor mines set pieces (not layout prop kinds)
 Task reactor-expansion-20261101 (lane MINES). The old mine workings off tier 2 (`gen/reactor/complex/mines*.ts`) dress their drifts

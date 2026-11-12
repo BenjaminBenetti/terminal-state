@@ -23,6 +23,11 @@
 // Task studio-corpse-chipper-fuel-20261110-235304-01: the record also holds the train's CHIPPER (fuel/chipperFuel.ts: the credit waiting in
 // the machine in fifth-quarter ticks, its processing uid counter and the body being ground). Saved with the record (`chipper`); NewGame:
 // idle and empty; Travel keeps it; Retry restores the entry state. An old save without `chipper` loads an idle, empty machine.
+//
+// Task studio-train-crafting-v1-20261111-225628-01: the record also holds the train's crafted EQUIPMENT (craft/equipment.ts
+// TrainEquipment: the additional chests with their contents and the devices — radar, sentry with its loaded rounds, scanner — aboard,
+// their train-local poses and plugs, and the run's unit counter). Saved with the record (`equipment`); NewGame: none; Travel keeps it;
+// Retry restores the entry state. An old save without `equipment` loads none.
 
 import type {RunParticipant} from './snapshot';
 import type {SectionKey} from '../levels/types';
@@ -31,6 +36,7 @@ import {FUEL, trainFuelProblem, type CargoCartJSON, type TrainFuelJSON} from '..
 import {TrainCargo} from './trainCargo';
 import {chipperProblem, copyChipper, freshChipper, type ChipperJSON} from '../fuel/chipperFuel';
 import {corpseFeedable} from '../ai/corpseTrait';
+import {TrainEquipment} from '../craft/equipment';
 
 /**
  * The train's fuel: the tank (quarter units, 0..FUEL.trainTankUnits) and the carts aboard. With a live cart system attached (`live`, the
@@ -126,6 +132,8 @@ export class PlayerTrainRecord {
   readonly cargo = new TrainCargo();
   /** Task corpse-chipper: the woodchipper fixed in the car (the same object for the whole session). */
   readonly chipper = new TrainChipper();
+  /** Task train-crafting: the crafted chests / devices aboard (the same object for the whole session). */
+  readonly equipment = new TrainEquipment();
 
   /** A copy of the current record. */
   get state(): PlayerTrainState {
@@ -148,15 +156,16 @@ export class PlayerTrainRecord {
   participant(): RunParticipant {
     return {
       id: PLAYER_TRAIN_PARTICIPANT,
-      save: () => ({...this.state, lockbox: this.lockbox.toJSON(), fuel: this.fuel.toJSON(), cargo: this.cargo.toJSON(), chipper: this.chipper.toJSON()}),
+      save: () => ({...this.state, lockbox: this.lockbox.toJSON(), fuel: this.fuel.toJSON(), cargo: this.cargo.toJSON(), chipper: this.chipper.toJSON(), equipment: this.equipment.toJSON()}),
       load: d => {
         this.s = valid(d) ? {id: d.id, tier: d.tier, at: d.at ? {level: d.at.level, section: d.at.section} : null} : fresh();
         this.lockbox.load(d && typeof d === 'object' ? (d as {lockbox?: unknown}).lockbox : undefined);
         this.fuel.load(d && typeof d === 'object' ? (d as {fuel?: unknown}).fuel : undefined);
         this.cargo.load(d && typeof d === 'object' ? (d as {cargo?: unknown}).cargo : undefined);
         this.chipper.load(d && typeof d === 'object' ? (d as {chipper?: unknown}).chipper : undefined);
+        this.equipment.load(d && typeof d === 'object' ? (d as {equipment?: unknown}).equipment : undefined);
       },
-      reset: () => { this.s = fresh(); this.lockbox.clear(); this.fuel.reset(); this.cargo.reset(); this.chipper.reset(); },
+      reset: () => { this.s = fresh(); this.lockbox.clear(); this.fuel.reset(); this.cargo.reset(); this.chipper.reset(); this.equipment.reset(); },
     };
   }
 }

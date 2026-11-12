@@ -31,6 +31,7 @@ import {chipperProblem} from '../fuel/chipperFuel'; // task studio-corpse-chippe
 import {corpseFeedable} from '../ai/corpseTrait';
 import {CORPSE_CARRY_PARTICIPANT, STATION_BODIES_LANE, carryProblem, stationBodiesProblem} from '../corpse/bodyLanes'; // (lane CORPSE) the carried body, a station's bodies
 import {STATION_PROPS_LANE, cargoProblem, stationPropsProblem, type CargoPropJSON} from '../run/trainCargo'; // task train-loose-cargo: the train's loose items (+ train-all-cargo: props)
+import {EQUIPMENT, STATION_EQUIPMENT_LANE, equipmentSeqOf, stationEquipmentProblem, trainEquipmentProblem, type EquipmentJSON} from '../craft/equipment'; // task train-crafting: the crafted chests / devices aboard and left in stations
 import {PROP_DEFS} from '../gen/props'; // task train-all-cargo: carried props are of real kinds
 import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
 import {MARKET_STOCK_LANE, STOCK_MAX} from '../market/trade/stock';
@@ -224,6 +225,35 @@ let uidScope = new Set<number>();
  * cargo and the chipper's job; the Retry snapshot: its own) — one body, one place: never held AND aboard, in the hopper or in a station.
  */
 let bodyScope = new Set<string>();
+
+/**
+ * Task studio-train-crafting-v1-20261111-225628-01: the crafted equipment units seen in the scope being checked (the run: every station's
+ * lane + the train; the Retry snapshot: its own) — one unit, one place — and the highest unit number among them (the train's counter
+ * `seq` must not be behind it: a new unit never takes a living unit's id).
+ */
+let equipScope = {ids: new Set<string>(), max: 0};
+
+/**
+ * Task train-crafting: equipment units (shapes already checked by craft/equipment.ts) — each uid once per scope, a chest's stacks as
+ * strictly as the Lockbox's with the scope's item uid set (one item, one uid run-wide).
+ */
+function equipmentUnits(list: readonly EquipmentJSON[], path: string, seen: Set<number>): void {
+  list.forEach((u, i) => {
+    if (equipScope.ids.has(u.uid)) bad(`${path}[${i}].uid`, `equipment unit ${u.uid} is in two places`);
+    equipScope.ids.add(u.uid);
+    equipScope.max = Math.max(equipScope.max, equipmentSeqOf(u.uid));
+    if (u.slots) slotList(u.slots, `${path}[${i}].slots`, EQUIPMENT[u.kind].slots, seen);
+  });
+}
+
+/**
+ * Task train-crafting: the train's unit counter (`equipment.seq` of the 'player-train' participant in `parts`) is never behind a unit
+ * that exists anywhere in the scope (its stations' lanes too). Call it once the scope's memories AND participants were walked.
+ */
+function equipmentCounter(parts: unknown, path: string): void {
+  const seq = (parts as Record<string, {equipment?: {seq?: unknown}} | null | undefined> | null)?.[PLAYER_TRAIN_PARTICIPANT]?.equipment?.seq;
+  if (equipScope.max > (typeof seq === 'number' ? seq : 0)) bad(`${path}.${PLAYER_TRAIN_PARTICIPANT}.equipment.seq`, `equipment unit eq-${equipScope.max} is newer than the train's counter`);
+}
 
 /** Task corpse-chipper: each body identity once per scope (the records' shapes are checked by their own problem functions first). */
 function bodiesIn(list: readonly unknown[], path: string): void {
@@ -519,6 +549,11 @@ function participants(v: unknown, path: string, seen: Set<number>): void {
     if (r.chipper !== undefined) { const kp = chipperProblem(r.chipper, corpseFeedable); if (kp) bad(`${p}.chipper`, kp); } // task corpse-chipper: the machine's credit + job
     const job = (r.chipper as {job?: {body?: unknown} | null} | undefined)?.job;
     if (job?.body) bodiesIn([job.body], `${p}.chipper.job.body`); // (lane CORPSE) the body being ground is in no other place
+    if (r.equipment !== undefined) { // task train-crafting: the crafted chests (their stacks) / devices aboard
+      const ep = trainEquipmentProblem(r.equipment);
+      if (ep) bad(`${p}.equipment`, ep);
+      equipmentUnits((r.equipment as {aboard: EquipmentJSON[]}).aboard, `${p}.equipment.aboard`, seen);
+    }
   }
   const cc = o[CORPSE_CARRY_PARTICIPANT]; // (lane CORPSE) the body in the player's hands
   if (cc !== undefined) {
@@ -592,6 +627,11 @@ function lanes(v: unknown, path: string): void {
     const bp = stationBodiesProblem(o[STATION_BODIES_LANE], corpseFeedable);
     if (bp) bad(`${path}.${STATION_BODIES_LANE}`, bp);
     bodiesIn((o[STATION_BODIES_LANE] as {here: unknown[]}).here, `${path}.${STATION_BODIES_LANE}.here`);
+  }
+  if (has(o, STATION_EQUIPMENT_LANE)) { // task train-crafting: the crafted chests / devices left lying in the station
+    const ep = stationEquipmentProblem(o[STATION_EQUIPMENT_LANE]);
+    if (ep) bad(`${path}.${STATION_EQUIPMENT_LANE}`, ep);
+    equipmentUnits((o[STATION_EQUIPMENT_LANE] as {here: EquipmentJSON[]}).here, `${path}.${STATION_EQUIPMENT_LANE}.here`, uidScope);
   }
 }
 
@@ -674,15 +714,17 @@ function entry(v: unknown, path: string, net: SubwayNetwork): void {
   survival(e.survival, `${path}.survival`);
   battery(e.battery, `${path}.battery`);
   const seen = new Set<number>();
-  const outer = propScope, outerUids = uidScope, outerBodies = bodyScope;
+  const outer = propScope, outerUids = uidScope, outerBodies = bodyScope, outerEquip = equipScope;
   propScope = new Set(); // (task train-all-cargo: the snapshot is its own world)
   uidScope = seen; // (lane TRADE: its station's stall stock shares the snapshot's uid set)
   bodyScope = new Set(); // (lane CORPSE: so are its bodies)
+  equipScope = {ids: new Set(), max: 0}; // (task train-crafting: so are its crafted units)
   try {
     inventory(e.inventory, `${path}.inventory`, seen);
     participants(e.lanes, `${path}.lanes`, seen);
     memories(e.memories, `${path}.memories`, ids, scope ?? '\u0000');
-  } finally { propScope = outer; uidScope = outerUids; bodyScope = outerBodies; }
+    equipmentCounter(e.lanes, `${path}.lanes`);
+  } finally { propScope = outer; uidScope = outerUids; bodyScope = outerBodies; equipScope = outerEquip; }
   stats(e.stats, `${path}.stats`);
 }
 
@@ -696,11 +738,12 @@ export function validateRunData(v: unknown, o: ValidateOptions = {}, path = 'run
   if (r.v !== 1) bad(`${path}.v`, 'unsupported run version');
   const prevCap = filterCapS;
   filterCapS = has(r, 'filterLifeS') ? num(r.filterLifeS, `${path}.filterLifeS`, 1, 3600) : LEGACY_FILTER_LIFE_S;
-  const prevProps = propScope, prevUids = uidScope, prevBodies = bodyScope;
+  const prevProps = propScope, prevUids = uidScope, prevBodies = bodyScope, prevEquip = equipScope;
   propScope = new Set();
   uidScope = new Set(); // (lane TRADE: the run's one uid set — memories' stall stock, carry, Lockbox, cargo)
   bodyScope = new Set(); // (lane CORPSE: the run's one body set — memories' station bodies, the hands, the train's cargo, the chipper)
-  try { return validateRunBody(r, o, path); } finally { filterCapS = prevCap; propScope = prevProps; uidScope = prevUids; bodyScope = prevBodies; }
+  equipScope = {ids: new Set(), max: 0}; // (task train-crafting: the run's crafted units — every station's lane + the train)
+  try { return validateRunBody(r, o, path); } finally { filterCapS = prevCap; propScope = prevProps; uidScope = prevUids; bodyScope = prevBodies; equipScope = prevEquip; }
 }
 
 function validateRunBody(r: Record<string, unknown>, o: ValidateOptions, path: string): SerializedRunV1 {
@@ -735,6 +778,7 @@ function validateRunBody(r: Record<string, unknown>, o: ValidateOptions, path: s
   survival(carry.survival, `${path}.carry.survival`);
   battery(carry.battery, `${path}.carry.battery`);
   participants(r.participants, `${path}.participants`, seen);
+  equipmentCounter(r.participants, `${path}.participants`); // (task train-crafting: after the memories' lanes and the train's own units)
   stats(r.stats, `${path}.stats`);
   const pl = obj(r.player, `${path}.player`);
   only(pl, `${path}.player`, ['trainLocal']);

@@ -2,12 +2,16 @@
 // Scrap metal (user #5: "the most common spawn items here will bee "electrical parts". As well as "scrap metal" these will be used later
 // in crafting") and Bio mater (user #6, the quoted label kept exactly; lab loot is lane FURN's). For FUTURE crafting: no recipes, no
 // crafting UI, no currency — passive stacks with honest descriptions, finite themed loot, pickup / drop / bag / carryover support.
+// Task studio-train-crafting-v1-20261111-225628-01 (lane BENCH): crafting exists now — the texts say what is true per material: Scrap
+// metal and Electrical parts are used at the train's crafting bench (craft/recipes.ts), Bio mater has no recipe yet.
 import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
 import {installCanvasShim, ShimContext} from './helpers/canvas2d';
 import {layoutHolders} from './helpers/lootEconomy';
 import {ITEMS, ITEM_DIMS, effectText, itemDef, isFoodOrDrink} from '../src/items/items';
-import {BIO_MATER, ELECTRICAL_PARTS, MATERIAL_IDS, MATERIAL_NOTE, SCRAP_METAL, isMaterialItem} from '../src/items/craftMaterials';
+import {BIO_MATER, ELECTRICAL_PARTS, MATERIAL_IDS, MATERIAL_NOTE, MATERIAL_NOTE_NO_RECIPE, SCRAP_METAL, isMaterialItem, materialNote} from '../src/items/craftMaterials';
+import {RECIPES, RECIPE_MATERIALS} from '../src/craft/recipes';
+import {itemTipLines} from '../src/ui/itemTip';
 import {Inventory, stacksIn, type AnyRef, type SlotRef} from '../src/items/inventory';
 import {GEAR_SLOTS} from '../src/items/gear';
 import {BagSession} from '../src/gear/bagSession';
@@ -37,18 +41,33 @@ describe('the three materials: stable ids, labels, passive kind, honest descript
       expect(isMaterialItem(id)).toBe(true);
       expect(d).toMatchObject({id, kind: 'material'});
       expect(d.stackMax).toBeGreaterThanOrEqual(10);
-      // nothing to use: no effect, verb, use time, weapon, gear slot or treatment — and the description says it is for later crafting
+      // nothing to use: no effect, verb, use time, weapon, gear slot or treatment — and the description says what it is for, truthfully:
+      // a material a recipe costs is "used at the train's crafting bench", one no recipe uses says so (task train-crafting, lane BENCH)
       for (const k of ['heal', 'hunger', 'thirst', 'verb', 'useTime', 'recharge', 'weaponId', 'gear', 'treats', 'caliber'] as const) expect(d[k], `${id}.${k}`).toBeUndefined();
       expect(effectText(d)).toBe('');
       expect(isFoodOrDrink(d)).toBe(false);
-      expect(d.description).toMatch(/crafting, which comes in a later update/);
+      const used = RECIPES.some(r => (r.cost as Record<string, number>)[id] > 0);
+      expect((RECIPE_MATERIALS as readonly string[]).includes(id), `${id}: a recipe material`).toBe(used);
+      expect(d.description).toMatch(/Nothing to use by hand: a crafting material/);
+      if (used) {
+        expect(d.description).toMatch(/used at the train's crafting bench\.$/);
+        expect(materialNote(id)).toBe(MATERIAL_NOTE);
+      } else {
+        expect(d.description).toMatch(/but no recipe uses it yet\.$/);
+        expect(d.description).not.toMatch(/crafting bench/);
+        expect(materialNote(id)).toBe(MATERIAL_NOTE_NO_RECIPE);
+      }
+      expect(d.description).not.toMatch(/later update/); // (crafting is in the game now)
+      expect(itemTipLines({uid: 1, itemId: id, count: 1})).toEqual([materialNote(id)]); // the tooltip's line is the same note
       expect(d.description).not.toMatch(/restores|heals|refill|\+\d/i);
       expect(ICONS[d.icon]).toMatch(/^<svg/);
       expect(ITEM_DIMS[id]).toBeTruthy();
       expect(ITEM_CLASS[id]).toBeTruthy();
       expect(ITEM_PHYSICS[id].mass).toBeGreaterThan(0.1);
     }
-    expect(MATERIAL_NOTE).toMatch(/nothing to use by hand yet/);
+    expect(MATERIAL_NOTE).toBe('Crafting material — nothing to use by hand: used at the train\'s crafting bench');
+    expect(MATERIAL_NOTE_NO_RECIPE).toBe('Crafting material — nothing to use by hand, and no recipe uses it yet');
+    expect([ELECTRICAL_PARTS, SCRAP_METAL, BIO_MATER].map(materialNote)).toEqual([MATERIAL_NOTE, MATERIAL_NOTE, MATERIAL_NOTE_NO_RECIPE]);
     // prompts / toasts name the count and nothing to use
     expect(lotPrompt({itemId: ELECTRICAL_PARTS, count: 2}, true).text).toBe('Take 2 × Electrical parts');
     expect(lotPrompt({itemId: BIO_MATER, count: 1}, false).text).toBe('Take Bio mater — no room');

@@ -255,7 +255,7 @@ const SLOT_TEXT: Readonly<Record<SlotCategory, [string, string]>> = {
 
 const GROUP_LABEL: Readonly<Record<ItemGroup, string>> = {
   food: 'Food', drink: 'Drink', med: 'Medicine', ammo: 'Ammunition', battery: 'Batteries', flare: 'Flares', supply: 'Supplies', gear: 'Gear', weapon: 'Weapons',
-  material: 'Crafting materials (no crafting yet)', // lane RACK (office-props-physics-scale-20261030)
+  material: 'Crafting materials', // lane RACK (office-props-physics-scale-20261030); recipes: game/src/craft/recipes.ts (train crafting bench)
 };
 const GROUP_ORDER: readonly ItemGroup[] = ['food', 'drink', 'med', 'ammo', 'battery', 'flare', 'material', 'supply', 'gear', 'weapon'];
 

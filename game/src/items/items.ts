@@ -8,8 +8,9 @@
 // Iteration 16: 'gear' = character gear worn in a gear slot (items/gear.ts; lane GEAR).
 // Task gasmask-breach-20261030 (mask lane): 'supply' = a PASSIVE supply that worn gear draws by itself (the gas-mask filter):
 // never used, equipped, held as a weapon or thrown; it stacks in the pockets first (like ammo).
-// Task office-props-physics-scale-20261030 (lane RACK): 'material' = collectible crafting salvage (items/craftMaterials.ts) for a
-// FUTURE crafting system: passive like 'supply' (never used / equipped / thrown; pockets first), nothing consumes it yet.
+// Task office-props-physics-scale-20261030 (lane RACK): 'material' = collectible crafting salvage (items/craftMaterials.ts): passive
+// like 'supply' (never used / equipped / thrown; pockets first). Since task studio-train-crafting-v1-20261111-225628-01 the train's
+// crafting bench consumes scrap metal and electrical parts (craft/recipes.ts); nothing consumes Bio mater yet.
 // Task reactor-build-20261101 (lane RESTART): 'part' = a finite restart part of THE REACTOR (startup key, fuse cartridge): passive
 // (never used / equipped / thrown; pockets first), placed once by the level generator, never in a loot table; a control consumes it.
 // Task studio-market-rework-20261108-074144-01 (lane TRADE): 'currency' = the survivor market's Rail Ties (items/railTies.ts): passive
@@ -139,7 +140,7 @@ export const ITEMS: Record<string, ItemDef> = {
   // --- Iteration 16: character gear (lane GEAR, items/gear.ts) and limb-treatment items (lane INJURY, items/medical.ts) ---
   ...GEAR_ITEMS,
   ...MEDICAL_ITEMS,
-  // --- Task office-props-physics-scale-20261030 (lane RACK): crafting materials (items/craftMaterials.ts; no crafting yet) ---
+  // --- Task office-props-physics-scale-20261030 (lane RACK): crafting materials (items/craftMaterials.ts; recipes: craft/recipes.ts) ---
   ...MATERIAL_ITEMS,
   // --- Task reactor-build-20261101 (lane RESTART): THE REACTOR's restart parts (world/reactor/restartLogic.ts) — finite, placed once by
   // the Reactor generator (layout.pickups + layout.reactor.components), never in a loot table, never refilled ---

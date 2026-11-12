@@ -9,7 +9,7 @@ import type {Inventory, ItemStack} from '../items/inventory';
 import {AIRTANK_AIR_S, FILTER_LIFE_S, gearStatText, isAirtank, isFilterMask} from '../items/gear';
 import {WEAPONS, caliberLabel, reserveFor, weaponsForCaliber} from '../weapons/weapons';
 import {CALIBERS} from '../items/calibers';
-import {MATERIAL_NOTE} from '../items/craftMaterials';
+import {materialNote} from '../items/craftMaterials';
 import type {TipContent, TipTone} from './tooltip';
 import {CURRENCY_NOTE} from '../items/railTies'; // task studio-market-rework-20261108-074144-01: the market's physical Rail Ties
 import {BEER_RULE_NOTE, isTimedBeer} from '../items/beers'; // task studio-market-bar-20261108-225231-01 (lane BEER)
@@ -40,7 +40,7 @@ export function itemTipLines(st: ItemStack, o: {inv?: Inventory} = {}): string[]
     if (st.bag) out.push(`${st.bag.filter(Boolean).length} of ${st.bag.length} slots used inside`);
   }
   if (def.kind === 'supply') out.push('A worn gas mask fits one by itself when its filter runs out');
-  if (def.kind === 'material') out.push(MATERIAL_NOTE);
+  if (def.kind === 'material') out.push(materialNote(def.id)); // (task train-crafting, lane BENCH: per material — the bench's two, or no recipe yet)
   if (def.kind === 'part') out.push('Reactor restart part — take it to its control and press E there');
   if (def.kind === 'currency') out.push(CURRENCY_NOTE);
   return out.filter(Boolean);

@@ -162,3 +162,40 @@ body #hotbar .slot.maskslot img.ico3d { width: 54px; height: 30px; }
 .dmg-arc { position: absolute; width: 180px; height: 180px; left: -90px; top: -90px; border-radius: 50%; border-top: 6px solid rgba(210, 50, 40, 0.85); animation: fade 0.9s forwards; }
 @keyframes fade { from { opacity: 1; } to { opacity: 0; } }
 #flashlight-tag { position: absolute; right: 26px; bottom: 108px; font-size: 11px; letter-spacing: 0.12em; color: var(--cream-dim); }
+/* ==== Task studio-train-crafting-v1-20261111-225628-01 (lane SCANNER): the item / enemy scanner's scope (ui/scannerView.ts) ====
+   One canvas centred over the game, above the HUD (10) and under the menus (20). pointer-events none: it never takes the mouse; the
+   game keeps running behind it. ui/scannerView.ts sets the canvas's size (px) and shows / hides the holder. */
+#scanner-scope { position: fixed; inset: 0; z-index: 15; display: none; align-items: center; justify-content: center; pointer-events: none; background: rgba(2, 6, 4, 0.5); }
+#scanner-scope canvas { display: block; max-width: 96vmin; max-height: 96vmin; border-radius: 14px; box-shadow: 0 0 0 6px #1c2420, 0 0 0 9px #0b0f0d, 0 14px 44px rgba(0, 0, 0, 0.65); }
+/* ==== end of lane SCANNER ==== */
+
+
+/* ---------- crafting bench view: BEGIN (task studio-train-crafting-v1-20261111-225628-01, lane BENCH; ui/craftView.ts) ----------
+   The recipe list [E] on the train's crafting bench opens: the Lockbox view's panel (dark, teal top edge, the red "not paused" line),
+   14-16 px text. One row per recipe: key, name + blurb, cost lines (green: enough / red: short), the Craft button and why it is off. */
+#craftview { position: fixed; inset: 0; z-index: 45; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 92px; pointer-events: auto; cursor: default; }
+#craftview .cv-panel { width: min(1040px, calc(100vw - 24px)); max-height: calc(100vh - 110px); overflow-y: auto; background: rgba(16, 18, 20, 0.92); border: 1px solid #3a3f44; border-top: 3px solid var(--teal); padding: 12px 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); color: var(--cream); font-size: 14px; line-height: 1.35; }
+#craftview .cv-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+#craftview .cv-head b { font-size: 16px; letter-spacing: 0.04em; }
+#craftview .cv-live { color: var(--red); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+#craftview .cv-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) 336px 200px; gap: 14px; align-items: center; padding: 8px 0; border-top: 1px solid #2f3438; }
+#craftview .cv-key { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--teal); color: var(--teal); font-size: 15px; font-weight: 700; }
+#craftview .cv-row.cv-cant .cv-key { border-color: #4a5157; color: #7d848a; }
+#craftview .cv-name { font-size: 16px; letter-spacing: 0.02em; }
+#craftview .cv-blurb { margin-top: 2px; color: var(--cream-dim); font-size: 14px; }
+#craftview .cv-cost { font-size: 14px; overflow-wrap: anywhere; }
+#craftview .cv-cost.ok { color: #8cc97f; }
+#craftview .cv-cost.short { color: #e8776a; font-weight: 700; }
+#craftview .cv-cost.none { color: #7d848a; }
+#craftview .cv-do { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+#craftview .cv-do button { padding: 7px 10px; font-size: 15px; }
+#craftview .cv-why { color: #e8776a; font-size: 14px; }
+#craftview .cv-foot { display: flex; flex-wrap: wrap; gap: 4px 30px; padding-top: 8px; border-top: 1px solid #2f3438; font-size: 14px; }
+#craftview .cv-total span { color: var(--cream-dim); }
+#craftview .cv-note { min-height: 1.35em; margin-top: 6px; color: var(--mustard); font-size: 14px; }
+#craftview .cv-note.refused { color: #e8776a; font-weight: 700; }
+#craftview .cv-actions { display: flex; gap: 14px; justify-content: space-between; align-items: center; margin-top: 6px; }
+#craftview .cv-help { color: var(--cream-dim); font-size: 14px; }
+#craftview .cv-actions button { padding: 6px 12px; white-space: nowrap; }
+@media (max-width: 900px) { #craftview .cv-row { grid-template-columns: 28px minmax(0, 1fr) 200px; } #craftview .cv-costs { grid-column: 2; grid-row: 2; } #craftview .cv-do { grid-column: 3; grid-row: 1 / span 2; } }
+/* ---------- crafting bench view: END ---------- */

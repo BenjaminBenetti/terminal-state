@@ -23,6 +23,7 @@ import {TRAIN_VIEW, partitionsOf} from './playerTrainView';
 import {lockboxFootprint} from './trainLockbox';
 import {consoleLocalRect, type ConsoleRect} from './trainConsole';
 import {chipperFootprint, chipperPlacement} from './chipperPlace';
+import {benchFootprint, benchPlacement} from '../craft/trainFixtures';
 
 export interface P3 { x: number; y: number; z: number }
 
@@ -37,7 +38,7 @@ export interface RideLocalModel {
   /** The collision boxes (step frame; grounded below the floor, taller than the ceiling: solid columns). */
   props: PropIndex;
   boxes: PropPlacement[];
-  /** Named boxes (tests / QA): side walls, end walls, partitions, console, lockbox, chipper. */
+  /** Named boxes (tests / QA): side walls, end walls, partitions, console, lockbox, chipper, bench. */
   named: Record<string, PropPlacement>;
   /** The console box used (train-local). */
   console: ConsoleRect;
@@ -107,6 +108,8 @@ export function buildRideLocalModel(spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC, c
   if (spec.lockbox) { const fp = lockboxFootprint(spec.lockbox); named.lockbox = box(fp.x0, fp.x1, fp.z0, fp.z1, H); }
   const ch = chipperPlacement(spec); // task corpse-chipper: the woodchipper (world/chipperPlace.ts)
   if (ch) { const fp = chipperFootprint(ch); named.chipper = box(fp.x0, fp.x1, fp.z0, fp.z1, H); }
+  const bn = benchPlacement(spec); // task train-crafting: the crafting bench (craft/trainFixtures.ts)
+  if (bn) { const fp = benchFootprint(bn); named.bench = box(fp.x0, fp.x1, fp.z0, fp.z1, H); }
   const boxes = Object.values(named);
   const levels = new Levels([{id: 0, role: 'main', grid, baseY: 0}], [], []);
   return {spec, levels, grid, props: new PropIndex(levels, boxes), boxes, named, console: cr};

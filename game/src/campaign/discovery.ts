@@ -3,7 +3,8 @@
 // state (or the same object when nothing changes). No DOM.
 //
 //  - A new campaign knows and has visited only the start; the train stands there.
-//  - The train console reveals the current station and every one-hop neighbour (revealAround); known stations are never forgotten.
+//  - The train console reveals the current station and every one-hop neighbour (revealAround; two hops while a route radar is plugged
+//    into the train: task train-crafting); known stations are never forgotten.
 //  - Travel goes to a KNOWN station adjacent to the current one (never the current station itself), or (campaign-polish lane MAP;
 //    widened by task gameplay-feedback-20261111, lane TRAVEL) to any KNOWN station over the known track the map prints (travelPlan /
 //    knownRoute: the cheapest route, one continuous journey; the fuel rules decide whether the train can pay it) — unless the 1337 map
@@ -43,10 +44,24 @@ function union(list: readonly StationId[], add: readonly StationId[]): StationId
   return extra.length ? [...list, ...extra] : (list as StationId[]);
 }
 
-/** The console's reveal: station `id` and every one-hop neighbour become known (previously known stations stay known). */
-export function revealAround(state: CampaignState, id: StationId): CampaignState {
+/**
+ * The console's reveal: station `id` and every one-hop neighbour become known (previously known stations stay known).
+ * Task studio-train-crafting-v1-20261111-225628-01 (the route radar): `radius` = how many stops out the reveal reaches (1 = the console
+ * alone; 2 while a route radar is plugged into the train — Game.openTravelMap): ring by ring, each ring's stations in id order, so
+ * radius 1 is exactly the old reveal. What was revealed stays known (unplugging the radar forgets nothing).
+ */
+export function revealAround(state: CampaignState, id: StationId, radius = 1): CampaignState {
   if (!hasNode(state.network, id)) return state;
-  const known = union(state.known, [id, ...neighbors(state.network, id)]);
+  const found: StationId[] = [id], seen = new Set<StationId>(found);
+  let ring: StationId[] = [id];
+  for (let hop = 0; hop < Math.max(1, Math.floor(radius)) && ring.length; hop++) {
+    const next: StationId[] = [];
+    for (const from of ring) for (const n of neighbors(state.network, from)) if (!seen.has(n)) { seen.add(n); next.push(n); }
+    next.sort();
+    found.push(...next);
+    ring = next;
+  }
+  const known = union(state.known, found);
   return known === state.known ? state : {...state, known};
 }
 

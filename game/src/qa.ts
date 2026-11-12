@@ -44,9 +44,13 @@ import {screacherQaApi} from './ai/screacherQa'; // task studio-screacher-produc
 import {reactorRestartQaApi} from './world/reactor/restartQa'; // task reactor-build-20261101 (lane RESTART): restart state / controls / win spot-check hooks
 import {trainQaApi} from './world/playerTrain'; // Task player-train-shell-20261101-202805 (lane TRAIN): train(), trainDoor(i, open), trainFaceDoor(i?), trainLights()
 import {chipperQaApi} from './world/chipper'; // task corpse-chipper (lane CHIPPER): chipper(), chipperGo()
+import {trainEquipmentQaApi} from './world/trainEquipment'; // task train-crafting (lane EQUIP): equipment(), equipmentCraft(), equipmentToPlug()
+import {craftBenchQaApi} from './world/craftBench'; // task train-crafting (lane BENCH): bench(), benchGo(), benchOpen(), benchClose(), benchCraft(kind)
+import {sentryQaApi} from './world/sentryTurret'; // task train-crafting-v1 (lane SENTRY): sentry()
 import {rideQaApi} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): ride(), rideDepart(), rideArrive(), rideDemo(seconds?), rideReset()
 import {lockboxQaApi} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): lockbox(), lockboxOpen(), lockboxType('1337'), lockboxQuick / Move / Stow / Close
 import {trunkQaApi} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): trunk(), trunkOpen(), trunkClose(), trunkQuick / Move / Stow
+import {scannerQaApi} from './world/itemScanner'; // task train-crafting (lane SCANNER): scanner(), DEBUG scannerSweep()
 import {floorPlanPose, roofLadderPose, roofRewardPose, transitPose} from './gen/office'; // Task office-overhaul-20261030 (lane STRUCT) / office-interactions-layout-20261030: roof ladder / transit / roof cache / floor-plan poses
 import {mallShopPose} from './gen/mall/shopsWeapons'; // Task track3-eaton-centre-20261031 (primary): goShop
 import {MALL_POSE_NAMES, mallQaPose, type MallPoseName} from './gen/mall/qa'; // Task track3-eaton-centre-20261031 (lane GEN): mall QA poses
@@ -404,9 +408,13 @@ export function installQaHooks(game: Game): void {
     ...fuelQaApi(game), // task train-fuel-system: fuel(), fuelSetTank(units)
     ...trainQaApi(game), // Task player-train-shell-20261101-202805 (lane TRAIN): train(), trainDoor(i, open), trainFaceDoor(i?), trainLights(); train-shell-followup: trainGo('cab' | 'rear' | 'spawn'); train-lockbox: trainGo('lockbox')
     ...chipperQaApi(game), // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): chipper() — state / progress / credit / pools; chipperGo() — stand at the hopper
+    ...trainEquipmentQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane EQUIP): equipment() — units / plugs / grab / carry / counters; equipmentCraft(kind) — a unit on the car floor; equipmentToPlug(uid, i) — stand it beside a plug
+    ...craftBenchQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane BENCH): bench() — placement / model / prompt / the open list's rows / material counts; benchGo() — stand at it; benchOpen() / benchClose(); benchCraft(kind) — craft from the open list
+    ...sentryQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane SENTRY): sentry() — the active unit / rounds, turret (deployed, pose, headroom), target, shots
     ...rideQaApi(game), // task campaign-foundation-20261102 (lane RIDE): ride(), rideDepart(), rideArrive(), rideDemo(seconds?) (dev: depart + loop + re-arrive at the same station), rideReset()
     ...lockboxQaApi(game), // task train-lockbox-windows-20261101-232156 (lane BOX): lockbox(), lockboxOpen(), lockboxClose(), lockboxType(keys), lockboxQuick(spec), lockboxMove(from, to, n?), lockboxStow()
     ...trunkQaApi(game), // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): trunk(), trunkOpen(), trunkClose(), trunkQuick(spec), trunkMove(from, to, n?), trunkStow()
+    ...scannerQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane SCANNER): scanner() — active / scope open / seconds to the next sweep / blip counts; DEBUG scannerSweep() — a sweep now
     // Task office-overhaul-20261030 (lane STRUCT): stand at the roof access ladder (then the game's own "[E] Climb ladder") or on a transit-hall lane (0 / 2 escalators, 1 stair)
     goRoofLadder: (end: 'bottom' | 'top' = 'bottom') => {
       const q = roofLadderPose(game.layout, end);
