@@ -410,6 +410,8 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
       if (s === 'playing') return;
       if (this.grab) this.letGo('menu');
       this.endHold();
+      // (a death decided AFTER this frame's hook ran — a later lane's damage: Game stops updating, so the chest goes down here)
+      if (this.held && !this.host.player.alive && !this.riding) this.dropHeld();
       this.aim = null;
       this.prompt = null;
       this.setRoll(0);
@@ -421,7 +423,10 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
       : Promise.resolve())) as (layout: never) => Promise<void>);
     h.warmRegistry.addPool('train-equipment', () => this.warmRoots());
     h.bulletHitHandlers?.push(((wh: {t: number}, point: THREE.Vector3, dir: THREE.Vector3, _shot: number, damage: number) => this.bulletHit(wh, point, dir, damage)) as never);
-    h.playerTrain.equipment.live = {aboard: () => this.aboard(), restore: a => this.restore(a)};
+    // (a record loaded BEFORE this system existed: its units are adopted — from here on the live units are the record's truth)
+    const E = h.playerTrain.equipment, stored = E.live ? [] : E.records();
+    E.live = {aboard: () => this.aboard(), restore: a => this.restore(a)};
+    if (stored.length) this.restore(stored);
     return this;
   }
 
@@ -623,6 +628,9 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     }
     // the train's record wins a uid clash with a station unit of the old world (never two live units with one id)
     for (let i = this.list.length - 1; i >= 0; i--) if (seen.has(this.list[i].uid)) this.removeAt(i);
+    // (the record's counter was just loaded: it is never behind a station unit still standing in this world)
+    const E = this.host.playerTrain.equipment;
+    for (const u of this.list) if (u.seq > E.seq) E.seq = Math.min(EQUIPMENT_LIMITS.seq, u.seq);
     this.spawnPending();
     this.reserveUids();
   }
