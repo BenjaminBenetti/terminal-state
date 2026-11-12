@@ -20,6 +20,15 @@ local assistant settings. Main backs up old .git/root docs and verifies GitHub
 source/asset hashes before adoption. Never git clean/reset away existing work or
 stage external archives. Never reuse old generation budgets.
 
+## Claude Code subagent routing
+
+Use the repo-defined agents when delegating:
+- `.claude/agents/repo-explorer.md`: quick repository discovery/navigation, **Sonnet 5.5 / xhigh**, instead of the built-in `Explore`.
+- `.claude/agents/research.md`: deeper investigations/comparisons, **Opus 5.5 / xhigh**.
+- `.claude/agents/implementation.md`: implementation, planning, review, tests/QA, integration, assets and other delegated work; **inherit the main session's model and effort**.
+
+Select the appropriate agent type and omit per-call model/effort overrides so its definition applies. Explicit user overrides take precedence. A native `fork` always inherits the parent model and effort: use it only for inherited-model work, not exploration or research. These subagent defaults do not change any studio's main model/effort, authorize automatic model fallback/overage, or alter task, permission or QA requirements.
+
 ## Textures — Codex for INITIAL sources; Meshy keeps its model maps (standing user rule, 2026-11-01, user-corrected)
 
 User: "codex is to be used to generate all textures. Except for dynamic stuff ofc". Correction (2026-11-01): "Of course the meshy model
