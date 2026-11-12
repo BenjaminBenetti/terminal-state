@@ -297,7 +297,7 @@ describe('sentry feed: [E] opens its own store view (the one controller of every
   it('a tap opens the sentry\'s view: its four slots in one row, the rounds named, no backpack stow; [E] closes it', () => {
     const s = setup(), inv = s.host.inv;
     const opts = storeViewOptions(DEF);
-    expect(opts).toMatchObject({id: 'sentryview', name: 'Defense sentry', the: 'the defense sentry', slots: 4, columns: 4, stow: false, heading: 'Ammunition · 5.56×45mm rounds only'});
+    expect(opts).toMatchObject({id: 'sentryview', name: 'Defense sentry', the: 'the defense sentry', slots: 4, columns: 4, stow: false, heading: '5.56×45mm rounds only'});
     expect(storeViewOptions(DEF)).toBe(opts);
     expect(storeViewOptions(EQUIPMENT.chest)).toBe(CHEST_VIEW);
     expect(new Set([opts.id, CHEST_VIEW.id, LOCKBOX_VIEW.id]).size).toBe(3);
@@ -308,7 +308,7 @@ describe('sentry feed: [E] opens its own store view (the one controller of every
     const root = dom.el('#app').children.find(c => c.id === 'sentryview')!;
     expect(root).toBeTruthy();
     expect(root.classList.contains('hidden')).toBe(false);
-    expect(root.innerHTML).toContain('Ammunition · 5.56×45mm rounds only');
+    expect(root.innerHTML).toContain('5.56×45mm rounds only');
     expect(root.innerHTML).toContain('lb-g4" data-side="store"');
     expect(root.innerHTML).toContain('only 5.56×45mm rounds go in');
     expect(root.innerHTML).not.toContain('Stow worn backpack');

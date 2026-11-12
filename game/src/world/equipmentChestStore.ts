@@ -94,7 +94,7 @@ export function storeViewOptions(def: EquipmentDef): Readonly<StoreViewOptions> 
     const item = itemDef(def.slotItem);
     o = Object.freeze({
       id: `${def.kind}view`, name: def.name, the: def.the, slots: def.slots, columns: Math.min(def.slots, LOCKBOX_GRID.columns),
-      heading: `Ammunition · ${item.name} only`, stow: false,
+      heading: `${item.name} only`, stow: false,
       help: `Click a stack to move it across · drag onto a slot · Shift-drag splits · only ${item.name} go in · walking away or getting hit closes ${def.the}`,
     });
     FEED_VIEWS.set(def.kind, o);
