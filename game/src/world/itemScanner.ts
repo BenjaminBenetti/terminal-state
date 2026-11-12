@@ -8,7 +8,8 @@
 // a unit's plug / worldPose) and registers its own use (`uses.scanner`) and a plug listener there.
 //
 // installItemScanner(game) is called ONCE from the Game constructor (after the train equipment); it only REGISTERS:
-//  - trainEquipment.uses.scanner: E on the console face — the prompt and the tap that opens / closes the scope;
+//  - trainEquipment.uses.scanner: a TAP of E anywhere on the unit — the prompt line and the tap that opens / closes the scope
+//    (holding E drags the hand truck: the equipment system's own rule, never asked here);
 //  - frameHooks (they run in active play only: not paused, not in a menu, not in the gap between two stations): the sweep clock ticks
 //    while a scanner is ACTIVE (plugged into the PARKED train in a live world: not unplugged, not on the ride) and takes one snapshot
 //    when a sweep is due; the open scope's close rules and its redraw;
@@ -25,7 +26,7 @@
 // THE SCOPE (a DOM canvas over the game, pointer-events none): it does NOT pause the game and takes neither the mouse nor the movement
 // keys — the player keeps full control. It closes on E (captured), Esc / Tab / any menu (the state leaves 'playing'), walking more than
 // SCANNER.closeDist from the scanner, a hit, death, the scanner no longer active (unplugged / grabbed / the ride starting) and a
-// teardown. A scanner that is not plugged in has no scope: its console says so and E grabs the hand truck as everywhere else on it.
+// teardown. A scanner that is not plugged in has no scope: its prompt says so and a tap of E does nothing (holding E drags it, as ever).
 
 import type {Game} from '../game';
 import type {EquipmentSystemLike, EquipmentUnit} from '../craft/equipmentApi';
@@ -185,7 +186,7 @@ export class ItemScannerSystem {
     return this.unitActive(u) ? SCANNER_TEXT.open(this.clock.seconds) : SCANNER_TEXT.unplugged;
   }
 
-  /** E tapped on the console (EquipmentUse.tap): toggle the scope. False (not plugged in): the default action — grab the hand truck. */
+  /** E tapped on the unit (EquipmentUse.tap): toggle the scope. False (not plugged in): nothing happens. */
   tap(u: EquipmentUnit): boolean {
     if (this.openUnit === u) { this.close('key'); return true; }
     if (!this.unitActive(u)) return false;

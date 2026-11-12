@@ -40,7 +40,7 @@ export const CHEST_STORE_RT = {
 
 export const CHEST_STORE_TEXT = {
   /** (a runtime count on both sides of the slash: no bundled fragment that reads like a root-absolute URL) */
-  prompt: (used: number, slots: number) => `<b>[E]</b> Open the storage chest (${used}/${slots}) · hold <b>[E]</b> to carry it`,
+  prompt: (used: number, slots: number) => `<b>[E]</b> Open the storage chest (${used}/${slots})`,
   close: '<b>[E]</b> Close the storage chest',
   moving: 'Not while the train is moving',
   hit: 'Hit! You let go of the chest',

@@ -148,8 +148,11 @@ export interface CartPose { dy: number; pitch: number; roll: number }
  * `held` (grabbed by its handle): where the surface FALLS AWAY ahead — going down a stair, the cart leading — the cart is held tilted
  * BACK toward the handler by the same angle instead of nosing down the steps: its wheels stand on the step behind, the nose plate is
  * carried clear of the steps (how a hand truck is eased down a stair). Let go, it settles onto the steps (the rest pose).
+ * `front` (task train-interaction-ux-20261112, lane DRAG: a device turned round with R is held from its FRONT — world/
+ * trainEquipment.ts): the same rule mirrored — where the surface falls away BEHIND it (down a stair, its back leading) it is tilted
+ * toward the handler at its front. A held body never leans away from the hands. Absent / false: exactly the pose it always was.
  */
-export function cartRestPose(L: Levels, b: CartBody, out: CartPose = {dy: 0, pitch: 0, roll: 0}, held = false): CartPose {
+export function cartRestPose(L: Levels, b: CartBody, out: CartPose = {dy: 0, pitch: 0, roll: 0}, held = false, front = false): CartPose {
   const d = bodyRadius(b) * CART.rim, sy = Math.sin(b.yaw), cy = Math.cos(b.yaw);
   const hc = cartSurfaceAt(L, b.x, b.z, b.y) ?? b.y;
   const at = (ux: number, uz: number): number => cartSurfaceAt(L, b.x + ux * d, b.z + uz * d, b.y) ?? hc;
@@ -159,7 +162,7 @@ export function cartRestPose(L: Levels, b: CartBody, out: CartPose = {dy: 0, pit
   const m = Math.tan(CART.maxTilt);
   let tp = Math.max(-m, Math.min(m, (hf - hb) / (2 * d)));
   const tr = Math.max(-m, Math.min(m, (hr - hl) / (2 * d)));
-  if (held && tp < 0) tp = -tp;
+  if (held && (front ? tp > 0 : tp < 0)) tp = -tp;
   out.pitch = Math.atan(tp);
   out.roll = Math.atan(tr);
   out.dy = Math.max(hc, hf - d * tp, hb + d * tp, hr - d * tr, hl + d * tr) - b.y;

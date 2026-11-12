@@ -5,15 +5,16 @@
 //  - planCartRoute(): Dijkstra over a 0.25 m lattice whose every edge is the real controller move (world/fuelCartPhysics.ts moveCart:
 //    the player's collision + the cart's floor rule) — stair runs, landings, doorways and thresholds are passable exactly where the cart
 //    itself passes; nodes away from walls are preferred (a person steers a cart down the middle). Null = no physical route.
-//  - CartBot: grab (look at the handle, E), drag along a route (the player walks the route, the cart held ahead), let go, connect the hose
-//    (look at the drum, E), walk without a cart. A let-go the game forces ('stuck') is counted and re-grabbed like a player would.
+//  - CartBot: grab (look at the handle, HOLD E: task train-interaction-ux-20261112 — a drag starts with a hold, never a tap), drag along
+//    a route (the player walks the route, the cart held ahead), let go (E), connect the hose (look at the drum, TAP E), walk without a
+//    cart. A let-go the game forces ('stuck') is counted and re-grabbed like a player would.
 
 import * as THREE from 'three';
 import {moveCircle} from '../../src/core/physics';
 import {CART, footprintFloor, moveCart, type CartBody, type CartWorld} from '../../src/world/fuelCartPhysics';
 import {CART_LOOK} from '../../src/world/fuelCartModel';
 import {FUEL_CART, type FuelCarts} from '../../src/world/fuelCarts';
-import {DT, frame, lookAt, type CartTestHost} from './fuelCartsHost';
+import {DT, HOLD_E_S, frame, lookAt, type CartTestHost} from './fuelCartsHost';
 
 export interface RouteNode { x: number; y: number; z: number; level: number }
 
@@ -204,12 +205,31 @@ export class CartBot {
     for (let t = 0; t < seconds - 1e-9; t += DT) frame(this.h);
   }
 
-  /** Look at a world point at once and press E (one frame). */
+  /** Look at a world point at once and TAP E (pressed and released inside one frame: a cart's hose, never a grab). */
   pressAt(x: number, y: number, z: number): void {
     this.h.keys.held.delete('KeyW');
     lookAt(this.h, x, y, z);
     frame(this.h); // (the aim reads last frame's camera)
     this.h.keys.hits.add('KeyE');
+    frame(this.h);
+  }
+
+  /**
+   * Look at a world point at once and HOLD E until the drag starts (standing still, the aim kept there), then release it. Stops early
+   * when the press met no cart / the hold was dropped.
+   */
+  holdAt(x: number, y: number, z: number): void {
+    const k = this.h.keys;
+    k.held.delete('KeyW');
+    lookAt(this.h, x, y, z);
+    frame(this.h); // (the aim reads last frame's camera)
+    k.held.add('KeyE');
+    k.hits.add('KeyE');
+    for (let t = 0; t < HOLD_E_S - 1e-9; t += DT) {
+      frame(this.h);
+      if (this.carts.grab || !this.carts.eHold.pending) break;
+    }
+    k.held.delete('KeyE');
     frame(this.h);
   }
 
@@ -251,9 +271,9 @@ export class CartBot {
   }
 
   /**
-   * Grab the cart like a player: aim at a part of it that is in reach — the handle, else its frame, else the drum (E on the drum grabs
-   * when no hose can connect) — stepping up to the cart first when nothing is (a cart lying nose-down on a stair has its handle on
-   * its far side).
+   * Grab the cart like a player: aim at a part of it that is in reach — the handle, else its frame, else the drum (holding E grabs
+   * from any part) — and HOLD E; stepping up to the cart first when nothing is in reach (a cart lying nose-down on a stair has its
+   * handle on its far side).
    */
   grab(uid: string): boolean {
     const P = this.h.player, K = CART_LOOK;
@@ -265,9 +285,9 @@ export class CartBot {
     const tryParts = (): boolean => {
       for (const p of parts()) {
         if (Math.hypot(p.x - P.x, p.y - P.eye, p.z - P.z) > FUEL_CART.drumReach + 0.6) continue;
-        this.pressAt(p.x, p.y, p.z);
+        this.holdAt(p.x, p.y, p.z);
         if (this.carts.grab?.cart.uid === uid) return true;
-        if (this.carts.hoseOn?.cart.uid === uid) this.pressAt(p.x, p.y, p.z); // (the drum with a hose target in reach: connected — disconnect again)
+        if (this.carts.grab) this.letGo(); // (another cart stood in the way: not that one)
       }
       return false;
     };
@@ -339,7 +359,7 @@ export class CartBot {
     return res;
   }
 
-  /** Let go, then connect the hose: look at the drum (stepping into reach), E. True when a hose is connected to this cart. */
+  /** Let go, then connect the hose: look at the drum (stepping into reach), TAP E. True when a hose is connected to this cart. */
   connectHose(uid: string): boolean {
     this.letGo();
     const P = this.h.player;
@@ -352,7 +372,6 @@ export class CartBot {
       const dd = this.drumOf(uid);
       this.pressAt(dd.x, dd.y, dd.z);
       if (this.carts.hoseOn?.cart.uid === uid) return true;
-      if (this.carts.grab) this.letGo(); // (the aim met the frame: it grabbed instead)
     }
     return false;
   }

@@ -261,7 +261,7 @@ export class SentryTurretSystem {
   private ensureUse(): void {
     const eq = this.host.trainEquipment ?? null;
     if (!eq || eq === this.useOwner) return;
-    eq.uses.sentry = {prompt: u => this.prompt(u), tap: u => this.tap(u), hold: u => this.hold(u)};
+    eq.uses.sentry = {prompt: u => this.prompt(u), tap: u => this.tap(u)};
     eq.plugListeners.push((u, on) => this.onPlug(u, on));
     this.useOwner = eq;
   }
