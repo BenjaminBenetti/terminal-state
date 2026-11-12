@@ -49,7 +49,7 @@ export const SCAN_COLORS: Readonly<Record<ScanClass, string>> = {enemy: '#ff4b3e
 /** The scope's own greens / glass. */
 export const SCOPE_COLORS = {
   bg: '#000000', glass: '#03100a', glassEdge: '#010503', ring: '#1c7a3c', ringOuter: '#35c765', reticle: '#0f4222', label: '#2f9a50', text: '#7df5a0', dimText: '#3fae62',
-  hand: '#9dffba', trail: '120, 255, 160', train: '#d6ffe2', warn: '#ffb347',
+  hand: '#9dffba', trail: '120, 255, 160', train: '#d6ffe2',
 } as const;
 
 /** The trail's wedges, the newest (at the hand) first: fading to nothing. */
@@ -63,7 +63,7 @@ const TAU = Math.PI * 2;
 export interface ScopeGeometry { cx: number; cy: number; r: number; s: number }
 export function scopeGeometry(w: number, h: number): ScopeGeometry {
   const s = Math.min(w, h);
-  return {cx: w / 2, cy: h * 0.485, r: s * 0.385, s};
+  return {cx: w / 2, cy: h * 0.47, r: s * 0.375, s};
 }
 
 /** How far marks of a class are moved inside their cell (fractions of a cell: right, down) so classes sharing a cell stay visible. */
@@ -71,13 +71,16 @@ const NUDGE: Readonly<Record<ScanClass, readonly [number, number]>> = {enemy: [0
 
 /**
  * A blip's point on the canvas: the train's frame seen from above with the car's FRONT UP — local +x (ahead) is up, local +z (the car's
- * right) is right; a cell centre past the outer ring is drawn on it. `out` is filled and returned (the draw passes one scratch point).
+ * right) is right; with a class, nudged inside its cell. Never past the outer ring (a cell centre at the edge of the range is drawn
+ * on it). `out` is filled and returned (the draw passes one scratch point).
  */
 export function blipPoint(g: ScopeGeometry, b: {x: number; z: number}, cls?: ScanClass, out: {x: number; y: number} = {x: 0, y: 0}): {x: number; y: number} {
-  const d = Math.hypot(b.x, b.z), k = (d > SCANNER.range ? SCANNER.range / d : 1) * g.r / SCANNER.range;
-  const n = cls ? NUDGE[cls] : null, cell = SCANNER.cell * g.r / SCANNER.range;
-  out.x = g.cx + b.z * k + (n ? n[0] * cell : 0);
-  out.y = g.cy - b.x * k + (n ? n[1] * cell : 0);
+  const k = g.r / SCANNER.range, n = cls ? NUDGE[cls] : null, cell = SCANNER.cell * k;
+  let dx = b.z * k + (n ? n[0] * cell : 0), dy = -b.x * k + (n ? n[1] * cell : 0);
+  const d = Math.hypot(dx, dy);
+  if (d > g.r) { dx *= g.r / d; dy *= g.r / d; }
+  out.x = g.cx + dx;
+  out.y = g.cy + dy;
   return out;
 }
 const POINT = {x: 0, y: 0};
@@ -184,7 +187,7 @@ export function drawScanner(ctx: Ctx, m: ScannerModel, w: number, h: number): vo
     text(ctx, SCOPE_TEXT.next(secondsLeft(m.left)), w / 2, h - s * 0.038, s * 0.026, C.text, 'center');
     if (!m.snap) text(ctx, SCOPE_TEXT.first, cx, cy + r * 0.4, s * 0.024, C.dimText, 'center');
   } else {
-    text(ctx, SCOPE_TEXT.noSignal, cx, cy - r * 0.32, s * 0.044, C.warn, 'center');
+    text(ctx, SCOPE_TEXT.noSignal, cx, cy - r * 0.32, s * 0.044, C.text, 'center');
     text(ctx, SCOPE_TEXT.paused, w / 2, h - s * 0.038, s * 0.026, C.dimText, 'center');
   }
   ctx.restore();

@@ -236,9 +236,9 @@ export class ItemScannerSystem {
   }
 }
 
-/** Installs the scanner (one call in the Game constructor, after the train equipment; registries only). */
+/** Installs the scanner (one call in the Game constructor, after the train equipment; registries only). No cast: the compiler checks Game against ScannerHost. */
 export function installItemScanner(game: Game): ItemScannerSystem {
-  return new ItemScannerSystem(game as unknown as ScannerHost).install();
+  return new ItemScannerSystem(game).install();
 }
 
 /** QA (window.__LL, qa.ts): scanner() — the state; DEBUG scannerSweep() — a sweep now around the parked train (the countdown restarts). */
