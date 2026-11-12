@@ -101,10 +101,7 @@ export interface CraftBenchHost {
   qa?: boolean;
   /** An item use in progress (Game.use). */
   use?: unknown;
-  /**
-   * The loose item under the crosshair (Game's pickup target; TODO(lead): Game.currentTarget is private — read structurally here, like
-   * the Skyways car reads `use`; a public getter or an install option would be the cleaner seam).
-   */
+  /** The loose item under the crosshair when no `pickupTarget` option is given (fake hosts in tests; Game passes the option). */
   currentTarget?: unknown;
   hud: {toast(text: string, warn?: boolean): void};
   sfx: unknown;
@@ -137,6 +134,8 @@ export interface CraftBenchHost {
 export interface CraftBenchOptions {
   /** The cooked model's scene (default: the prop library's TRAIN_EQUIPMENT_MODELS.bench; null = none yet -> the stand-in). */
   model?: () => THREE.Object3D | null;
+  /** The loose item under the crosshair (Game's pickup target, passed at install like world/corpses.ts `targets`): the bench yields to it. */
+  pickupTarget?: () => unknown;
 }
 
 const now = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -403,7 +402,7 @@ export class CraftBenchSystem {
 
   /** A loose item is under the crosshair (the game's pickup target): it keeps its own prompt and [E]. */
   private pickupAimed(): boolean {
-    return !!this.host.currentTarget;
+    return !!(this.opts.pickupTarget ? this.opts.pickupTarget() : this.host.currentTarget);
   }
 
   /** The look-at prompt (null: not aimed / not usable / the train moving / a loose item under the crosshair / the view open). */
