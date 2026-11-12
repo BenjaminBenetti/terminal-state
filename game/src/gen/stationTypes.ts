@@ -218,6 +218,11 @@ export interface ZombieSpawn {
    * Absent = the family's one body (every other spawn).
    */
   variant?: string;
+  /**
+   * Task studio-sprinter-zombies-20261112-033210-01: an ordinary zombie that RUNS at the player while it pursues (ai/sprinter.ts: a seeded
+   * 10 % of eligible spawns), set by the roster pass from roster version 2. Absent = the ordinary chase pace (every other spawn).
+   */
+  sprinter?: true;
 }
 /**
  * Task mall-lingerie-20261102-221554 (lane CONTEXT): store-local look selectors of ZombieSpawn.look. (Task

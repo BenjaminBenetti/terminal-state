@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import {ZombieBrain, type AnimName} from './brain';
+import {ZombieBrain, spawnStats, type AnimName, type ZombieStats} from './brain';
 import type {ZombieSpawn} from '../gen/station';
 import type {Vec3} from '../combat/hitscan';
 import type {RagdollTarget} from '../physics/ragdoll';
@@ -20,6 +20,21 @@ export interface HitVolume { part: HitPart; a: Vec3; b: Vec3 | null; r: number }
 
 /** Ground speed (m/s) each in-place locomotion clip was authored for at timeScale 1. */
 export const CLIP_GROUND_SPEED: Record<string, number> = {Walk: 0.55, Run: 2.3}; // from derivatives/zombie-rigged.json
+
+/** Playback range of a locomotion clip (x its authored rate). */
+export const GAIT_TIME_SCALE = {min: 0.35, max: 1.8} as const;
+
+/**
+ * The time scale of locomotion clip `clip` for a body of `scale` moving at `speed` m/s: the ground speed the clip covers matches the
+ * real one, within GAIT_TIME_SCALE. Task studio-sprinter-zombies-20261112-033210-01: the Run clip's ceiling also reaches the body's own
+ * chase pace, so a sprinter (brain.ts SPRINTER_STATS, 4.3 m/s: up to ~1.97x on the smallest body) runs without sliding; for every
+ * other zombie that is below the usual 1.8 (shambler 2.55 m/s: <= 1.17x, coated 1.75: <= 0.8x), so its playback is unchanged.
+ */
+export function gaitTimeScale(clip: 'Walk' | 'Run', speed: number, scale: number, stats: Pick<ZombieStats, 'chaseSpeed'>): number {
+  const ground = CLIP_GROUND_SPEED[clip] * scale;
+  const max = clip === 'Run' ? Math.max(GAIT_TIME_SCALE.max, stats.chaseSpeed / ground) : GAIT_TIME_SCALE.max;
+  return Math.max(GAIT_TIME_SCALE.min, Math.min(max, speed / ground)) || 1;
+}
 
 /** Iteration 01-04 volumes (single Last-shift body; coat on/off) for the legacy template path. */
 const LEGACY_HIT = {plain: {head: 0.135, torso: 0.2, arm: 0.075, leg: 0.1}, coated: {head: 0.135, torso: 0.24, arm: 0.09, leg: 0.1}} as const;
@@ -76,7 +91,8 @@ export class ZombieActor implements RagdollTarget {
     this.hit = app ? app.hit : LEGACY_HIT[spawn.type === 'coated' ? 'coated' : 'plain'];
     this.girth = app?.girth;
     this.root.name = app ? `zombie-${spawn.type}-${lookKey(app.look)}` : `zombie-${spawn.type}`;
-    this.brain = new ZombieBrain(spawn.type, spawn.x, spawn.z, spawn.yaw);
+    // (task studio-sprinter-zombies-20261112-033210-01: a sprinter spawn's faster pursuit — ai/sprinter.ts; every other spawn its type's stats)
+    this.brain = new ZombieBrain(spawn.type, spawn.x, spawn.z, spawn.yaw, spawnStats(spawn));
     this.scale = 0.95 + rand() * 0.1;
     this.root.scale.setScalar(this.scale);
     const coat = app ? null : this.root.getObjectByName('ZombieCoat');
@@ -184,7 +200,7 @@ export class ZombieActor implements RagdollTarget {
     }
     const a = this.current ? this.actions.get(this.current) : null;
     if (a && (this.current === 'Walk' || this.current === 'Run')) {
-      a.setEffectiveTimeScale(Math.max(0.35, Math.min(1.8, speed / (CLIP_GROUND_SPEED[this.current] * this.scale))) || 1);
+      a.setEffectiveTimeScale(gaitTimeScale(this.current, speed, this.scale, this.brain.stats));
     }
     this.mixer.update(dt);
     this.fadeFlash(dt);
