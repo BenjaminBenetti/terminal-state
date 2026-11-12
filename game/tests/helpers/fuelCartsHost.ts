@@ -16,8 +16,11 @@ import {installPlayerTrain, type PlayerTrainRuntime} from '../../src/world/playe
 import {installTrainRide, type TrainRide} from '../../src/world/trainRide';
 import {FuelCarts, type FuelCartHost} from '../../src/world/fuelCarts';
 import {BASE_MODIFIERS, combineModifiers} from '../../src/player/modifiers';
+import {DRAG_HOLD_S} from '../../src/core/holdGesture';
 
 export const DT = 1 / 60;
+/** E held this long (s) surely starts a drag / a carry (the hold time + a margin of frames). */
+export const HOLD_E_S = DRAG_HOLD_S + 0.1;
 
 export class Keys implements MoveInput {
   held = new Set<string>();
@@ -47,6 +50,10 @@ export interface CartTestHost extends FuelCartHost {
   player: Player;
   playerTrain: PlayerTrainRecord;
   keys: Keys;
+  /** Game.input: the same object as `keys` (E held / released for the hold gesture, the clear counter). */
+  input: Keys;
+  /** Every hud.setHoldRing call (the crosshair hold ring), in order. */
+  rings: (number | null)[];
   toasts: string[];
   sfxCalls: string[];
   modifierSources: (() => {speedMult?: number})[];
@@ -64,11 +71,12 @@ function baseHost(levels: Levels, layout: StationLayout | null, placement: Train
   camera.rotation.order = 'YXZ';
   scene.add(camera);
   const toasts: string[] = [], sfxCalls: string[] = [], pools: Record<string, () => readonly THREE.Object3D[]> = {};
+  const keys = new Keys(), rings: (number | null)[] = [];
   const warm = new WarmupRegistry();
   const add = warm.addPool.bind(warm);
   warm.addPool = (n: string, f: () => readonly THREE.Object3D[]) => { pools[n] = f; add(n, f); };
   const host = {
-    scene, camera, player: new Player(), keys: new Keys(), zombies: [] as never[],
+    scene, camera, player: new Player(), keys, input: keys, zombies: [] as never[],
     levels, layout, propIndex: layout ? new PropIndex(levels, layout.props) : null, trainPlacement: placement,
     trainRuntime: null as PlayerTrainRuntime | null, trainRide: null as TrainRide | null,
     playerTrain: new PlayerTrainRecord(),
@@ -76,7 +84,7 @@ function baseHost(levels: Levels, layout: StationLayout | null, placement: Train
       hoseConnect: (on: boolean) => { sfxCalls.push(`hose:${on}`); }, fuelPour: () => { sfxCalls.push('pour'); },
       cartRoll: (v: number) => { sfxCalls.push(`roll:${v}`); }, denied: () => { sfxCalls.push('denied'); },
     },
-    hud: {toast: (t: string) => { toasts.push(t); }}, toasts, sfxCalls, pools,
+    hud: {toast: (t: string) => { toasts.push(t); }, setHoldRing: (v: number | null) => { rings.push(v); }}, rings, toasts, sfxCalls, pools,
     warmRegistry: warm, physics: {propsChanged: () => {}},
     interactHandlers: [] as (() => boolean)[], frameHooks: [] as ((dt: number) => void)[], sectionHooks: [] as {holders?(l: never): void; build?(l: never): void; teardown?(): void}[],
     promptProviders: [] as (() => string | null)[], stateListeners: [] as ((s: never, p: never) => void)[], sectionPreloads: [] as ((l: never) => Promise<void>)[],
@@ -161,6 +169,23 @@ export function run(h: CartTestHost, seconds: number, until?: () => boolean): nu
 export function press(h: CartTestHost, code: string): void {
   h.keys.hits.add(code);
   frame(h);
+}
+
+/** E TAPPED: pressed and released inside one frame (a draggable's normal interaction; never a drag). */
+export function tapE(h: CartTestHost): void {
+  press(h, 'KeyE');
+}
+
+/**
+ * E pressed and HELD for `seconds`, then released (one more frame). The default surely starts a drag / a carry of the draggable under
+ * the crosshair (core/holdGesture.ts DRAG_HOLD_S); a short time is a tap that acts on the release.
+ */
+export function holdE(h: CartTestHost, seconds: number = HOLD_E_S, dt = DT): void {
+  h.keys.held.add('KeyE');
+  h.keys.hits.add('KeyE');
+  for (let t = 0; t < seconds - 1e-9; t += dt) frame(h, dt);
+  h.keys.held.delete('KeyE');
+  frame(h, dt);
 }
 
 /** Turn the player to look at a world point (yaw / pitch) and sync the camera. */

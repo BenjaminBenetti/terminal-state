@@ -856,7 +856,9 @@ export class Game {
     // record's live hook), then the systems that read it: the bench (lane BENCH), the sentry (lane SENTRY), the scanner (lane SCANNER)
     this.trainEquipment = installTrainEquipment(this, {cancelUse: r => this.cancelUse(r)});
     hookName('trainEquipment');
-    this.craftBench = installCraftBench(this, {pickupTarget: () => this.currentTarget}); // (a loose item under the crosshair wins [E] over the bench)
+    this.craftBench = installCraftBench(this, {pickupTarget: () => this.currentTarget, // (a loose item under the crosshair wins [E] over the bench)
+      // task train-interaction-ux-20261112-063646 (lane CRAFT-UI): the recipe rows' 3D previews go through the inventory's icon pass
+      refreshIcons: ids => refreshItemIcons(this.renderer, ids), rendererReady: () => !!this.gpu && this.renderer.initialized === true, rendererFree: () => this.warmRun});
     hookName('craftBench');
     this.sentryTurret = installSentryTurret(this, {rand: () => this.rand()}); // (its spread draws from the level's own random stream)
     hookName('sentryTurret');
@@ -3152,7 +3154,7 @@ export class Game {
       // buttons, or the button being latched away from it mid-windup, cancels (never a release that swings); wiped input
       // (`clears`: menus / blur / pointer unlock) cancels a windup too. `pressed` is Input's per-frame latch: a down + up inside
       // one frame still starts the full windup -> swing -> recovery.
-      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns && !rideHolster, pressed: inp.mousePressed[0] && !flareOwns && !rideHolster, reload: inp.hit('KeyR') && !vmBusy && !this.skywaysCar.driving && !this.trainEquipment?.carrying && !this.corpses?.carrying, // (lane RIDE: holstered; lane CAR: no reload while driving)
+      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns && !rideHolster, pressed: inp.mousePressed[0] && !flareOwns && !rideHolster, reload: inp.hit('KeyR') && !vmBusy && !this.skywaysCar.driving && !this.trainEquipment?.carrying && !this.trainEquipment?.dragging && !this.corpses?.carrying, // (lane RIDE: holstered; lane CAR: no reload while driving; lane DRAG: R turns a dragged device round instead)
         aiming: this.aiming, lowered: p.sprinting || vmBusy || p.climbing || (!!wdef.melee && (laneOwns || (this.lmbLatch && this.weapon.winding))), clears: inp.clears}, this.inv); // (lane GUNS: + aiming, an AimSettle)
       for (const e of ev) {
         // (task hitch-attribution-recorder-20261105: weapon.fire / weapon.melee spans — timing only, a no-op unless profiling)

@@ -21,7 +21,7 @@ export interface Recipe {
   readonly kind: EquipmentKind;
   /** Units of each material (0: none). */
   readonly cost: Readonly<Record<RecipeMaterial, number>>;
-  /** What it does, in a sentence or two (the recipe list). */
+  /** What it does, in ONE short plain sentence (the recipe list's only line of text under the name). */
   readonly blurb: string;
 }
 
@@ -29,10 +29,11 @@ const recipe = (kind: EquipmentKind, scrap: number, elec: number, blurb: string)
   Object.freeze({kind, cost: Object.freeze({[SCRAP_METAL]: scrap, [ELECTRICAL_PARTS]: elec} as Record<RecipeMaterial, number>), blurb});
 
 export const RECIPES: readonly Recipe[] = Object.freeze([
-  recipe('chest', 2, 0, 'A second chest with the same 50 slots as the Lockbox. Carry it anywhere, put it down and pick it up again with everything in it. Needs no plug.'),
-  recipe('radar', 4, 3, 'A radar set on a hand truck. While it is plugged into the train, the network map shows stations two stops away instead of one.'),
-  recipe('sentry', 8, 6, 'A fire-control console on a hand truck. Plugged in and loaded with 5.56mm rounds, a turret on the roof shoots the zombies it can see near the train. Built empty: it fires only the rounds you load.'),
-  recipe('scanner', 5, 5, 'A scope console on a hand truck. While it is plugged in, it sweeps about 100 m around the train every 30 seconds: enemies red, items green, weapons and gear gold.'),
+  // (task train-interaction-ux-20261112-063646, lane CRAFT-UI: one short sentence each — the costs, kinds and what the units do are unchanged)
+  recipe('chest', 2, 0, 'A 50-slot chest you can carry and put down anywhere.'),
+  recipe('radar', 4, 3, 'Plugged in, the network map shows stations two stops away.'),
+  recipe('sentry', 8, 6, 'Plugged in and loaded with 5.56mm rounds, its roof turret shoots enemies near the train.'),
+  recipe('scanner', 5, 5, 'Plugged in, its scope shows enemies and items around the train.'),
 ]);
 
 export const recipeFor = (kind: EquipmentKind): Recipe | null => RECIPES.find(r => r.kind === kind) ?? null;

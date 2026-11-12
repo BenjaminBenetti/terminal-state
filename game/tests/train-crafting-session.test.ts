@@ -16,7 +16,7 @@ import {installCanvasShim} from './helpers/canvas2d';
 import {installFakeDom} from './helpers/fakeDom';
 import {LEVELS} from '../src/levels/registry';
 import type {StationLayout} from '../src/gen/stationTypes';
-import {EQUIPMENT, trainEquipmentProblem, type EquipmentJSON, type TrainEquipmentJSON} from '../src/craft/equipment';
+import {EQUIPMENT, equipmentRounds, trainEquipmentProblem, type EquipmentJSON, type TrainEquipmentJSON} from '../src/craft/equipment';
 import {countMaterials} from '../src/craft/crafting';
 import {RECIPES, RECIPE_MATERIALS} from '../src/craft/recipes';
 import {SCANNER} from '../src/craft/scanner';
@@ -152,19 +152,23 @@ describe('train crafting: one session, every system real', () => {
 
     // --- the sentry: crafted empty, so no turret and no shot with a zombie in plain view; then real rounds from the pockets, the
     // turret rises and shoots it dead — one round per shot, none made
-    const item = EQUIPMENT.sentry.ammoItem!;
+    const item = EQUIPMENT.sentry.slotItem!;
     const m = turretMount(SPEC);
     const z1 = zombieAt(h, m.x, -(SPEC.width / 2 + 6)); // on the platform, well past the strip under the eaves
     run(h, 2.5);
     expect([sentry.qa().deployed, sentry.counts.shots, hits.length, z1.brain.alive]).toEqual([false, 0, 0, true]);
-    inv.add(inv.makeStack(item, 40));
-    expect(eq.uses.sentry!.tap(made.sentry)).not.toBe(false);
-    expect([made.sentry.ammo, inv.count(item)]).toEqual([40, 0]);
+    const rounds = inv.makeStack(item, 40);
+    inv.add(rounds);
+    // (what a click in the sentry's own store view does: the real stack out of the pockets into its first slot)
+    expect(inv.storeQuick(made.sentry.slots!, inv.find(rounds.uid)!)).toBe(40);
+    made.sentry.touchStore();
+    expect([made.sentry.ammo, inv.count(item), made.sentry.slots![0] === rounds]).toEqual([40, 0, true]);
     run(h, 20, () => !z1.brain.alive);
     const shotsA = sentry.counts.shots;
     expect([z1.brain.alive, z1.ragdolled, h.stats.kills, sentry.counts.kills]).toEqual([false, true, 1, 1]);
     expect(shotsA).toBeGreaterThanOrEqual(1);
     expect(made.sentry.ammo).toBe(40 - shotsA); // one real round per shot, none made
+    expect([rounds.count, made.sentry.slots![0] === rounds, inv.count(item)]).toEqual([40 - shotsA, true, 0]); // out of that very stack
     expect(hits.length).toBeGreaterThan(0);
     expect(hits.every(x => x.weapon === SENTRY.weapon && x.damage > 0)).toBe(true);
     expect(sentry.counts.hits).toBe(hits.length);
@@ -197,7 +201,7 @@ describe('train crafting: one session, every system real', () => {
     expect(trainEquipmentProblem(rec)).toBeNull();
     const R = byKind(rec.aboard);
     expect([R.radar.plug, R.sentry.plug, R.scanner.plug, R.chest.plug]).toEqual([0, 1, 2, undefined]);
-    expect(R.sentry.ammo).toBe(kept);
+    expect([R.sentry.ammo, equipmentRounds(R.sentry)]).toEqual([undefined, kept]); // (the rounds are the stack in its slot)
     expect(R.chest.slots![4]).toMatchObject({itemId: 'bandage', count: 3});
     expect(rec.aboard).toHaveLength(4);
 

@@ -32,7 +32,7 @@ import type {PlayerTrainRuntime} from '../src/world/playerTrain';
 import {EQUIP, EQUIPMENT_TEXT, type LiveUnit, type TrainEquipmentSystem} from '../src/world/trainEquipment';
 import {build, flatRoom, frame, press, run, teardown} from './helpers/fuelCartsHost';
 import {
-  aboardRec, equipRoom, equipStation, fakePlacement, loadAboard, localOf, lookAtUnit, platformWorld, plugSpot, putLocal, stand, stationRec,
+  aboardRec, equipRoom, equipStation, fakePlacement, holdE, loadAboard, localOf, lookAtUnit, platformWorld, plugSpot, putLocal, stand, stationRec,
   type EquipTestHost,
 } from './helpers/trainEquipmentHost';
 
@@ -54,7 +54,7 @@ function station(L = SUBWAY(), o: Parameters<typeof equipStation>[1] = {}) {
 const dollyKinds = EQUIPMENT_KINDS.filter(k => EQUIPMENT[k].move === 'dolly');
 const carryKinds = EQUIPMENT_KINDS.filter(k => EQUIPMENT[k].move === 'carry');
 const plugKinds = EQUIPMENT_KINDS.filter(k => EQUIPMENT[k].plug);
-const hopperKinds = EQUIPMENT_KINDS.filter(k => EQUIPMENT[k].ammoCap > 0);
+const feedKinds = EQUIPMENT_KINDS.filter(k => EQUIPMENT[k].slotItem !== null);
 const storeKinds = EQUIPMENT_KINDS.filter(k => EQUIPMENT[k].slots > 0);
 
 /** `n` legal stacks in a store of `size` slots (uids from `uid0`), scattered over the slots. */
@@ -68,11 +68,16 @@ function stacks(size: number, uid0: number, n = 4): (StackJSON | null)[] {
   return out;
 }
 
-/** Data a record of `kind` can carry (whatever its traits allow): rounds in the hopper, stacks in the store. */
+/** Data a record of `kind` can carry (whatever its traits allow): stacks in its slots — a feed's are all its one item (137 rounds
+ *  over two stacks), a general store's are mixed. */
 function loaded(kind: EquipmentKind, uid0: number): Partial<EquipmentJSON> {
   const def = EQUIPMENT[kind], x: Partial<EquipmentJSON> = {};
-  if (def.ammoCap) x.ammo = Math.min(def.ammoCap, 137);
-  if (def.slots) x.slots = stacks(def.slots, uid0);
+  if (def.slots && def.slotItem) {
+    const feed = new Array<StackJSON | null>(def.slots).fill(null);
+    feed[0] = {uid: uid0, itemId: def.slotItem, count: 120};
+    feed[def.slots - 1] = {uid: uid0 + 1, itemId: def.slotItem, count: 17};
+    x.slots = feed;
+  } else if (def.slots) x.slots = stacks(def.slots, uid0);
   return x;
 }
 
@@ -333,7 +338,7 @@ describe('train equipment: capture / release and the ride', () => {
     const {h, eq, rt, ride} = station(A, {here: left});
     // aboard: a device on each of two plugs, one out of every plug's reach, a filled chest
     const s0 = plugSpot(0), s2 = plugSpot(2);
-    const kA = plugKinds[0], kB = hopperKinds.find(k => EQUIPMENT[k].plug) ?? plugKinds[plugKinds.length - 1], kC = plugKinds[1 % plugKinds.length];
+    const kA = plugKinds[0], kB = feedKinds.find(k => EQUIPMENT[k].plug) ?? plugKinds[plugKinds.length - 1], kC = plugKinds[1 % plugKinds.length];
     const recs = [
       aboardRec(kA, 1, s0.x, s0.z, 0, loaded(kA, 100)),
       aboardRec(kB, 2, s2.x, s2.z, 3.1, loaded(kB, 110)),
@@ -450,7 +455,7 @@ describe('train equipment: capture / release and the ride', () => {
     for (const e of equipmentPlugs(SPEC)) expect(eq.fixtures.cables[e.index].mesh.visible).toBe(e.index !== 1);
     expect(eq.fixtures.group.parent).toBe(rt.view!.root);
     onceEach(eq);
-    // and they are normal units again: the player grabs one
+    // and they are normal units again: the player grabs one (holding E)
     const u = eq.unit('eq-3')!;
     const near = trainToWorld(p2, recs[2].x + 1.2, SPEC.floorY, recs[2].z);
     u.body.yaw = Math.atan2(u.body.x - near.x, u.body.z - near.z);
@@ -458,8 +463,8 @@ describe('train equipment: capture / release and the ride', () => {
     frame(h);
     lookAtUnit(h, u, 0, CART_LOOK.handle.y, CART_LOOK.handle.z);
     frame(h);
-    expect(eq.prompt).toBe(EQUIPMENT_TEXT.grab(u.def.the, EQUIPMENT_TEXT.plugHint));
-    press(h, 'KeyE');
+    expect(eq.prompt).toBe(EQUIPMENT_TEXT.drag(u.def.the, EQUIPMENT_TEXT.plugHint));
+    holdE(h);
     expect(eq.grab?.unit).toBe(u);
     press(h, 'KeyE');
 
@@ -511,7 +516,7 @@ describe('train equipment: capture / release and the ride', () => {
     stand(h, at.x, at.z, 0, p.floorY);
     frame(h);
     lookAtUnit(h, a, 0, CART_LOOK.handle.y, CART_LOOK.handle.z);
-    press(h, 'KeyE');
+    holdE(h);
     expect(eq.grab?.unit).toBe(a);
     void ride.depart();
     frame(h);
@@ -540,13 +545,15 @@ describe('train equipment: one mechanism for every kind (no per-kind lists)', ()
       expect(u.kind).toBe(kind);
       expect(u.def).toBe(EQUIPMENT[kind]);
       const data = loaded(kind, 1000 + i * 10);
-      if (data.ammo !== undefined) expect(u.setAmmo(data.ammo)).toBe(data.ammo);
       if (data.slots) { u.store!.load({v: 1, slots: data.slots}); u.touchStore(); }
       want.set(u.uid, data);
       // the traits, not the kind, decide what a unit has
       expect(u.slots === null).toBe(EQUIPMENT[kind].slots === 0);
-      expect(u.setAmmo(1e9)).toBe(EQUIPMENT[kind].ammoCap);
-      u.setAmmo(data.ammo ?? 0);
+      expect(u.slots?.length ?? 0).toBe(EQUIPMENT[kind].slots);
+      // rounds are the feed item's stacks in the slots, nothing else: a general store's 5.56 is not a device's ammunition
+      const item = EQUIPMENT[kind].slotItem;
+      expect(u.ammo).toBe(item ? (data.slots ?? []).reduce((n, st) => n + (st && st.itemId === item ? st.count : 0), 0) : 0);
+      if (item) expect(u.ammo).toBe(137);
     }
     const same = (recs: EquipmentJSON[]) => {
       for (const r of recs) {

@@ -7,9 +7,15 @@ chest and three devices that plug into the train. Material supply is unchanged; 
 
 - Every train has the bench. It stands in the rear compartment on the side opposite the Lockbox, front to the aisle. It is a fixed
   part of the car: not storage, not cargo, not loot.
-- Aim at it and press **E** to open the recipe list. The game does not pause. Each row shows the cost, what you have, and what is
-  missing. Press **1–4** or the row's button to craft. **E**, **Esc**, **Tab**, **I**, walking away, a hit or the train starting to
-  move closes the list.
+- Aim at it and press **E** to open the recipe list. The game does not pause. **E**, **Esc**, **Tab**, **I**, walking away, a hit
+  or the train starting to move closes the list.
+- Each row shows, left to right: a 3D picture of the thing, its name with one line about it, one chip per material it costs, and
+  the **Craft** button. Crafting is the button only. There is no key shortcut: number keys do nothing while the list is open.
+- A material chip is the material's inventory icon over `have / need`: green when there is enough, red when short. `have` counts
+  exactly what a craft can take (the four places below). The chip's tooltip names the material and says where it is.
+- The picture is the real unit as it stands in the car (the chest with its lid shut), drawn by the inventory's icon renderer into
+  the same icon cache (`world/craftPreview.ts`, `ui/itemIcons.ts registerIconSource`). It is rendered once when the unit's models
+  are loaded, not per frame and not on every open. Until then the frame stays empty: no stand-in is ever pictured.
 - The bench works only while the train is parked.
 
 | Recipe | Scrap metal | Electrical parts | What it is |
@@ -22,19 +28,33 @@ chest and three devices that plug into the train. Material supply is unchanged; 
 - **Where materials are taken from**, in this order: what you carry, the backpack you wear, the Lockbox, then crafted chests
   standing in the car. Nothing else counts (not the floor, not a backpack stored inside a box).
 - **A craft is all or nothing.** The materials are taken and the new thing appears on the car floor in one step. If there is no
-  free floor, the car already holds 24 pieces of equipment, or a material is short, nothing changes and the list says why.
+  free floor, the car already holds 24 pieces of equipment, or a material is short, nothing changes and the button is off. A
+  short material is its red chip; when the car cannot take the unit, a red line under the row says why.
 - The new unit is a real object with its own number (`eq-1`, `eq-2`, …) that it keeps for good. It starts empty, unplugged and with
   no ammunition.
 
 ## Moving equipment
 
-- **Devices** (radar, sentry, scanner) stand on the fuel dolly's hand truck and move exactly like it. **E** on the frame or handle
-  grabs; walk to drag; **E** lets go. Walking into one pushes it. It goes up and down stairs, rides lifts and stops bullets. A
+- **Hold E to move a thing.** Aim at a device, the chest or a fuel cart and hold **E** for half a second. The ring at the crosshair
+  fills while you hold. A quick tap never moves anything. A tap does the thing's own action instead (open the chest, work a console,
+  connect a fuel cart's hose), or nothing if it has none.
+- **An unfinished hold is dropped**, with nothing done, when you look away from the thing, step out of reach, open a menu, die,
+  climb a ladder, take something else in your hands, the window loses focus, or the train starts to move.
+- **Once the drag or carry has started you can release E.** The next **E** press lets go or puts it down, as before.
+- **Devices** (radar, sentry, scanner) stand on the fuel dolly's hand truck and move exactly like it. Hold **E** anywhere on one to
+  grab it; walk to drag; **E** lets go. Walking into one pushes it. It goes up and down stairs, rides lifts and stops bullets. A
   heavier device is slower.
-- **The chest** is carried in both hands. Tap **E** to open it; hold **E** for half a second to pick it up; **E** puts it down on
-  free floor in front of you. While you carry it you walk slower, cannot sprint, and cannot fire, reload or use items. Dying puts it
-  down at your feet. On the floor it can be shoved slowly.
+- **R turns a dragged device round.** While you drag a device, **R** turns it half a turn, so its front faces you instead of away.
+  Your own view and position do not change, and **R** does not reload while you drag. Use it to back a device flush against a wall
+  with its console facing the room. A device grabbed from its front starts facing you. It keeps the facing you leave it with: on
+  the floor, plugged in, riding the train, and through saves and Retry. Only devices turn: the fuel cart and the carried chest do
+  not.
+- **The chest** is carried in both hands. Tap **E** to open it; hold **E** to pick it up; **E** puts it down on free floor in front
+  of you. While you carry it you walk slower, cannot sprint, and cannot fire, reload or use items. Dying puts it down at your feet.
+  On the floor it can be shoved slowly.
 - Only one thing is held at a time: a dolly, a chest, a fuel cart or a body.
+- One mechanism covers every draggable thing (`core/holdGesture.ts`). The code has no per-kind rule: a unit is dragged or carried
+  by its trait (`craft/equipment.ts EQUIPMENT`, `move`).
 - There is no interaction with equipment while the train is moving.
 
 ## The three plugs
@@ -55,8 +75,11 @@ chest and three devices that plug into the train. Material supply is unchanged; 
 
 ## Defense sentry
 
-- **Ammunition.** Aim at the console face. Tap **E** to load every 5.56 round you carry (up to 300 in the hopper). Hold **E** to take
-  the loaded rounds back. Rounds are only ever moved: none is created, and the count is saved with the unit.
+- **Ammunition.** The sentry has its own inventory of **four slots** that take 5.56 rounds only (up to 4 × 120). Tap **E** on the
+  sentry to open it beside your quick slots and pockets, like a chest: click a stack to move it across, drag it onto a slot, Shift-drag to
+  split. Stacks merge and split by the usual inventory rules. Anything that is not 5.56 is refused and stays where it was.
+- The turret fires only the rounds in those slots, one per shot, last slot first. Rounds you carry are never used. Rounds are only
+  ever moved: none is created, and the stacks are saved with the unit.
 - **The turret** stands on the middle roof hatch. It rises when the sentry is plugged into the parked train, loaded, and there is
   headroom over the roof. It sinks when the sentry is unplugged or empty, or when the train leaves.
 - **Targets.** Living, awake enemies within 28 m, the nearest with a clear shot first. Market people are never targets.
@@ -96,7 +119,7 @@ belongs to the station it was left in. One mechanism covers every kind; the code
 |---|---|---|---|
 | Unit number, kind, position | train record (`equipment`) or the station's lane (`train-equipment.here`) | rides in the car to the next station | restored exactly |
 | Chest contents | with the unit (ordinary item stacks) | ride along | restored exactly, never refilled |
-| Sentry rounds | with the unit | ride along | restored exactly |
+| Sentry rounds | with the unit (ordinary 5.56 stacks in its four slots) | ride along | restored exactly |
 | Which socket a device is on | with the unit (train only) | kept; working again on arrival | restored when still in reach |
 | Scanner snapshot, turret pose | not saved | cleared at each station | cleared |
 
@@ -105,6 +128,10 @@ belongs to the station it was left in. One mechanism covers every kind; the code
   nothing is ever dropped from a save.
 - A chest in your hands when the train leaves or the game saves is recorded as the train's.
 - A damaged equipment record loads as no equipment. It never produces a free device, item or round.
+- **Saves from before the sentry had slots** recorded a round count (0–300) instead of stacks. Such a save stays valid. The first
+  time the unit stands in a played station its count becomes real 5.56 stacks in its slots: the same number of rounds, each stack
+  with a new item number. Until then the count is written back unchanged, so a unit left in a station you never revisit keeps its
+  rounds. Retry, Load and export–import of such a save give the same rounds again, never more.
 
 ## Assets
 
@@ -137,16 +164,18 @@ belongs to the station it was left in. One mechanism covers every kind; the code
 | Recipes, records, traits | `craft/recipes.ts`, `craft/equipment.ts`, `craft/equipmentApi.ts` |
 | Placements in the car, roof outline | `craft/trainFixtures.ts` |
 | Atomic craft | `craft/crafting.ts` |
-| Bench and recipe list | `world/craftBench.ts`, `ui/craftView.ts` |
+| Bench and recipe list | `world/craftBench.ts`, `ui/craftView.ts`, `world/craftPreview.ts` |
 | Units, plugs, cargo, saves | `world/trainEquipment.ts`, `world/trainEquipmentModel.ts` |
-| Chest view | `world/equipmentChestStore.ts` |
+| Store view of a chest or a sentry | `world/equipmentChestStore.ts`, `ui/lockboxView.ts` |
 | Sentry | `craft/sentry.ts`, `world/sentryTurret.ts`, `world/sentryTurretView.ts` |
 | Scanner | `craft/scanner.ts`, `world/itemScanner.ts`, `ui/scannerView.ts` |
 | Save validation | `save/validate.ts` |
 
-QA hooks (`?qa=1`): `__LL.bench()`, `benchGo()`, `benchOpen()`, `benchCraft(kind)`, `equipment()`, `equipmentCraft(kind)`,
-`equipmentToPlug(uid, i)`, `sentry()`, `scanner()`, `scannerSweep()`.
+QA hooks (`?qa=1`): `__LL.bench()` (each row's material chips as `needs`, the 3D previews' state as `previews`), `benchGo()`,
+`benchOpen()`, `benchCraft(kind)`, `equipment()`, `equipmentCraft(kind)`, `equipmentToPlug(uid, i)`, `sentry()`, `scanner()`,
+`scannerSweep()`. The store view of any unit with slots (a chest or a sentry, by unit number): `chestStore()`, `chestTap(uid)`,
+`chestQuick(ref)`, `chestMove(from, to, count)`, `chestClose()`.
 
 Tests: `tests/train-crafting-session.test.ts` runs the whole chain with every system real. Each part has its own files:
 `craft-*`, `train-equipment-*`, `equipment-chest-store`, `sentry-*`, `scanner-*`, `route-radar`, `train-crafting-contract`,
-`train-roof-profile`.
+`train-roof-profile`; the hold-to-drag rule and the turn: `hold-gesture`, `drag-hold-*`, `equipment-flip`.

@@ -24,7 +24,7 @@ import {CART} from '../src/world/fuelCartPhysics';
 import {CART_TEXT, FUEL_CART, FuelCarts} from '../src/world/fuelCarts';
 import {carToWorld, fromStep} from '../src/world/trainRideLocal';
 import type {PlayerTrainRuntime} from '../src/world/playerTrain';
-import {DT, Keys, build, flatRoom, frame, lookAt, press, run, stationHost, teardown, type CartTestHost} from './helpers/fuelCartsHost';
+import {DT, Keys, build, flatRoom, frame, holdE, lookAt, press, run, stationHost, teardown, type CartTestHost} from './helpers/fuelCartsHost';
 import {Player} from '../src/player/player';
 
 installCanvasShim(false);
@@ -147,7 +147,7 @@ describe('fuel carts: the ownership rule on a generated station (real parked tra
     frame(h);
     const b = carts.bodyOf('cart:A')!;
     lookAt(h, b.x + Math.sin(b.yaw) * CART_LOOK.handle.z, b.y + CART_LOOK.handle.y, b.z + Math.cos(b.yaw) * CART_LOOK.handle.z);
-    press(h, 'KeyE');
+    holdE(h); // (E HELD starts the drag: task train-interaction-ux-20261112)
     expect(carts.grab).not.toBeNull();
     h.player.pitch = 0;
     h.keys.held.add('KeyW');
@@ -173,7 +173,7 @@ describe('fuel carts: the ownership rule on a generated station (real parked tra
     onceEach(carts);
     // ... and back out (grab, walk backwards onto the platform)
     lookAt(h, b.x + Math.sin(b.yaw) * CART_LOOK.handle.z, b.y + CART_LOOK.handle.y, b.z + Math.cos(b.yaw) * CART_LOOK.handle.z);
-    press(h, 'KeyE');
+    holdE(h);
     expect(carts.grab).not.toBeNull();
     h.player.pitch = 0;
     h.keys.held.add('KeyS');
@@ -395,7 +395,7 @@ describe('fuel carts: capture / release and the ride', () => {
     frame(h);
     lookAt(h, b.x + Math.sin(b.yaw) * CART_LOOK.handle.z, b.y + CART_LOOK.handle.y, b.z + Math.cos(b.yaw) * CART_LOOK.handle.z);
     frame(h);
-    expect(carts.prompt).toMatch(/Grab the fuel cart · ½ tank/);
+    expect(carts.prompt).toMatch(/Hold \[E\]<\/b> Drag the fuel cart · ½ tank/);
     void DT;
   }, 120000);
 

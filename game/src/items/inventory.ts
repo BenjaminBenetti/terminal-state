@@ -44,6 +44,9 @@
 // Task train-lockbox-windows-20261101-232156 (lane BOX): STORE transfers with the train's Lockbox (run/trainLockbox.ts, LOCKBOX_SLOTS) —
 // storeMove / storeQuick / storeWornBag on a slot list the inventory does not own (StoreRef {bar: 'store', index}), through the same
 // move engine. The store takes every item kind (a backpack too, whole with its contents); a backpack leaves it only onto your back.
+// Task train-interaction-ux-20261112-063646 (lane SENTRY): a store may carry a RULE (setStoreRule on its slot list: the sentry's four
+// feed slots take only its rounds) — every way INTO that list (a move, a swap, a click-transfer, the worn-backpack stow) asks it and
+// refuses with its text; nothing else about a store transfer changes, and a list without a rule takes everything as before.
 //
 // Task filter-tension-airtank-20261104-072836: the AIRTANK BACKPACK (items/gear.ts `airtank_backpack`) is back-slot gear WITHOUT
 // storage — not a bag (isBagItem false): no contents list, it can ride in the pockets / a bag like a vest, and it never becomes a
@@ -169,6 +172,20 @@ const CHEST = GEAR_SLOTS.indexOf('chest');
 const BACK = GEAR_SLOTS.indexOf('backpack');
 /** Lane BOX: a backpack dragged from the Lockbox to a pocket / quick slot. */
 const STORE_BAG_TEXT = 'A backpack does not go in your pockets — click it in the Lockbox to wear it (your back slot must be free).';
+
+/** What a store's slot list takes (lane SENTRY): the refusal text for an item it does not take, or null (it does). */
+export interface StoreRule { accepts(itemId: string): string | null }
+/** The rules of the slot lists that have one (keyed by the live list itself: a list that is gone takes its rule with it). */
+const STORE_RULES = new WeakMap<(ItemStack | null)[], StoreRule>();
+/** Give a store's slot list a rule (null: none again). Asked by every Inventory.store* transfer into that list. */
+export function setStoreRule(slots: (ItemStack | null)[], rule: StoreRule | null): void {
+  if (rule) STORE_RULES.set(slots, rule);
+  else STORE_RULES.delete(slots);
+}
+/** Why `slots` does not take `itemId` (its rule's text), or null: it does. */
+export function storeRefusal(slots: (ItemStack | null)[], itemId: string): string | null {
+  return STORE_RULES.get(slots)?.accepts(itemId) ?? null;
+}
 
 /** Deep plain copy of a stack (bag contents included). */
 export function stackToJSON(s: ItemStack | null | undefined): StackJSON | null {
@@ -767,6 +784,8 @@ export class Inventory {
       this.version++;
       return before - left;
     }
+    const no = storeRefusal(slots, st.itemId); // (lane SENTRY: a store with a rule — the sentry's feed takes only its rounds)
+    if (no) { this.refuse('wrong-slot', no); return 0; }
     const def = itemDef(st.itemId), before = st.count;
     let left = before;
     if (def.stackMax > 1) for (const s of slots) {
@@ -794,6 +813,8 @@ export class Inventory {
     if (this.storeGuard(slots)) return false;
     const st = this.gearSlots[BACK];
     if (!st) { this.refuse('not-a-bag', 'You are not wearing a backpack.'); return false; }
+    const no = storeRefusal(slots, st.itemId); // (lane SENTRY)
+    if (no) { this.refuse('wrong-slot', no); return false; }
     const i = slots.indexOf(null);
     if (i < 0) { this.refuse('no-room', 'The Lockbox is full.'); return false; }
     slots[i] = st;
@@ -822,7 +843,10 @@ export class Inventory {
   }
 
   private acceptsText(e: End, itemId: string): Refusal | null {
-    if (e.kind === 'store') return null; // lane BOX: the Lockbox takes every item kind (a backpack whole, with its contents)
+    if (e.kind === 'store') { // lane BOX: the Lockbox takes every item kind (a backpack whole, with its contents) — lane SENTRY: unless the list has a rule
+      const no = storeRefusal(e.list, itemId);
+      return no ? {code: 'wrong-slot', text: no} : null;
+    }
     const def = itemDef(itemId);
     // Task office-overhaul-20261030 (INTERACT): the grenade slot takes throwables only
     if (e.kind === 'throw' && def.kind !== 'throwable') return {code: 'wrong-slot', text: `Only throwables (flares) go in the grenade slot (G) — not the ${def.short.toLowerCase()}.`};

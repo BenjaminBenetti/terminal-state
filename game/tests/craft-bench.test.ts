@@ -6,10 +6,13 @@
 //  - aim + prompt + [E]: only parked, playing, alive, hands free, the eye in the car, no partition in between, no loose item aimed;
 //  - the recipe list opens without pausing, owns the mouse and its keys, crafts through the atomic craft, redraws on changes, and
 //    closes on the user, a hit, walking away, any other state, death, the ride starting, teardown.
+// Task train-interaction-ux-20261112-063646 (lane CRAFT-UI): crafting is the row's Craft button only — there is no key shortcut, and
+// while the list is open every digit key is swallowed (never a quick slot) and does nothing; the rows' 3D previews are asked for once
+// per look generation while the car stands parked, never per frame, and on an open only when one is missing.
 import {afterAll, afterEach, describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
 import {installCanvasShim} from './helpers/canvas2d';
-import {installFakeDom} from './helpers/fakeDom';
+import {installFakeDom, type FakeEl} from './helpers/fakeDom';
 import {fakeEquipment, fakeUnit, worldSnapshot} from './helpers/craftBenchFakes';
 import {LEVELS} from '../src/levels/registry';
 import {levelsOf} from '../src/gen/levels';
@@ -30,7 +33,9 @@ import {RECIPES} from '../src/craft/recipes';
 import {CRAFT_TEXT} from '../src/craft/crafting';
 import {BENCH_RT, BENCH_TEXT, CraftBenchSystem, craftBenchQaApi, craftedHint, installCraftBench, type CraftBenchOptions} from '../src/world/craftBench';
 import {EquipmentChestStore} from '../src/world/equipmentChestStore';
-import {EQUIPMENT} from '../src/craft/equipment';
+import {EQUIPMENT, type EquipmentDef} from '../src/craft/equipment';
+import {craftPreviewId} from '../src/ui/craftView';
+import type {EquipmentView} from '../src/world/trainEquipmentModel';
 
 // the train's view needs the canvas shim, the recipe list a (tiny, fake) DOM: one document that serves both
 installCanvasShim(false);
@@ -154,6 +159,18 @@ function openBench(s: Setup): void {
   expect(s.host.interactHandlers.some(h => h())).toBe(true);
   expect(s.bench.isOpen).toBe(true);
 }
+/**
+ * Click a row's Craft button as the mouse does: the view's own click listener on its section (the bench opened last mounted the last
+ * section), the button disabled exactly as the rendered row has it.
+ */
+function clickCraft(s: Setup, kind: string): void {
+  const root = dom.el('#app').children.at(-1) as FakeEl;
+  const row = s.bench.view.last!.rows.find(r => r.kind === kind)!;
+  root.listeners.get('click')![0]({target: {closest: (sel: string) => (sel === '.cv-craft' ? {disabled: !row.can, dataset: {kind}} : null)}});
+}
+const DIGITS = [...'0123456789'].flatMap(d => [`Digit${d}`, `Numpad${d}`]);
+/** What a row's chips say: [material, have, need, state] each. */
+const chips = (s: Setup, kind: string) => s.bench.view.last!.rows.find(r => r.kind === kind)!.needs.map(n => [n.material, n.have, n.need, n.state]);
 
 describe('crafting bench: the fixture in the car', () => {
   it('stands in the rear compartment opposite the Lockbox, its front to the aisle, at the measured size', () => {
@@ -461,52 +478,87 @@ describe('crafting bench: aim, prompt and [E]', () => {
 });
 
 describe('crafting bench: the recipe list — keys, crafting, redraws', () => {
-  it('1–4 craft through the atomic craft: one real unit, the exact cost gone, the toast + note + cue, the list redrawn', () => {
+  it('the row\'s Craft button crafts through the atomic craft: one real unit, the exact cost gone, the toast + note + cue, the list redrawn', () => {
     const s = setup();
     give(s, 9, 4);
     openBench(s);
     const renders = s.bench.view.renders;
     expect(s.bench.view.last!.rows.map(r => r.can)).toEqual([true, true, false, false]);
-    // 2 = the route radar (4 scrap / 3 electrical)
-    const e = key('Digit2');
-    s.bench.onKeyCapture(e);
-    expect([e.prevented, e.stopped]).toEqual([1, 1]); // never reaches the quick slots
+    // the route radar's button (4 scrap / 3 electrical)
+    clickCraft(s, 'radar');
     expect(s.eq.made.map(u => u.kind)).toEqual(['radar']);
     expect(s.eq.calls.craft).toEqual(['radar']);
     expect(s.host.inv.count(SCRAP_METAL)).toBe(5);
     expect(s.host.inv.count(ELECTRICAL_PARTS)).toBe(1);
-    expect(s.toasts).toEqual(['Crafted: Route radar — roll it to a free plug']);
-    expect([s.bench.view.note, s.bench.view.noteBad]).toEqual(['Crafted: Route radar — roll it to a free plug', false]);
+    expect(s.toasts).toEqual(['Crafted: Route radar — hold E to drag it to a free plug']);
+    expect([s.bench.view.note, s.bench.view.noteBad]).toEqual(['Crafted: Route radar — hold E to drag it to a free plug', false]);
     expect(s.sfx.calls).toEqual(['pickup', 'cue:clank']); // existing cues only
     expect(s.bench.view.renders).toBeGreaterThan(renders);
-    expect(s.bench.view.last!.rows[1].costs.map(c => c.text)).toEqual(['Scrap metal 4 · have 5', 'Electrical parts 3 · have 1 — need 2 more']);
-    expect(s.bench.view.last!.totals.map(t => t.text)).toEqual([
-      'Scrap metal 5 — carried 5 · backpack 0 · Lockbox 0 · chests 0', 'Electrical parts 1 — carried 1 · backpack 0 · Lockbox 0 · chests 0',
-    ]);
+    expect(chips(s, 'radar')).toEqual([[SCRAP_METAL, 5, 4, 'ok'], [ELECTRICAL_PARTS, 1, 3, 'short']]);
+    expect(s.bench.view.last!.rows[1].needs.map(n => n.where)).toEqual(['5 carried', '1 carried']);
     expect(s.syncs()).toBe(1);
     expect(s.bench.isOpen).toBe(true); // crafting does not close the list
-    // 1 = the storage chest (2 scrap): the carry hint
-    s.bench.onKeyCapture(key('Digit1'));
+    // the storage chest's button (2 scrap): the carry hint
+    clickCraft(s, 'chest');
     expect(s.eq.made.map(u => u.kind)).toEqual(['radar', 'chest']);
     expect(s.toasts[1]).toBe('Crafted: Storage chest — hold E to carry it');
     expect(s.host.inv.count(SCRAP_METAL)).toBe(3);
-    // a held key crafts once; 5 / 6 / 0 are swallowed, never a quick slot; W passes (walking)
-    for (const code of ['Digit5', 'Digit6', 'Digit0']) { const k = key(code); s.bench.onKeyCapture(k); expect([k.prevented, k.stopped], code).toEqual([1, 1]); }
-    const rep = key('Digit1', {repeat: true});
-    s.bench.onKeyCapture(rep);
-    expect(rep.prevented).toBe(1);
-    const w = key('KeyW');
-    s.bench.onKeyCapture(w);
-    expect([w.prevented, w.stopped]).toEqual([0, 0]);
+    // a row that is short has a disabled button: the click does nothing (no craft, no sound, no note)
+    const note = s.bench.view.note, cues = s.sfx.calls.length;
+    expect(s.bench.view.last!.rows.find(r => r.kind === 'radar')!.can).toBe(false);
+    clickCraft(s, 'radar');
     expect(s.eq.made.length).toBe(2);
-    expect(s.host.inv.count(SCRAP_METAL)).toBe(3);
+    expect([s.bench.view.note, s.sfx.calls.length]).toEqual([note, cues]);
     expect(s.bench.counts).toMatchObject({crafted: 2, refused: 0});
     expect(s.host.inv.invariants()).toEqual([]);
   });
 
+  it('there is NO crafting shortcut: while the list is open every digit is swallowed and does nothing — never a craft, never a quick slot', () => {
+    const s = setup();
+    give(s, 20, 20); // every recipe could be crafted
+    openBench(s);
+    expect(s.bench.view.last!.rows.map(r => r.can)).toEqual([true, true, true, true]);
+    const inv = s.host.inv, before = worldSnapshot(inv, [s.host.playerTrain.lockbox.slots]);
+    const selected = JSON.stringify(inv.selectedRef()), version = inv.version, renders = s.bench.view.renders;
+    for (const code of DIGITS) {
+      for (const repeat of [false, true]) {
+        const k = key(code, {repeat});
+        s.bench.onKeyCapture(k);
+        expect([k.prevented, k.stopped], `${code}${repeat ? ' (held)' : ''}`).toEqual([1, 1]); // consumed: it never reaches player/input.ts (quick slots 1–5, the bag key 6)
+      }
+    }
+    expect(s.eq.made).toEqual([]);
+    expect(s.eq.calls.craft).toEqual([]);
+    expect(worldSnapshot(inv, [s.host.playerTrain.lockbox.slots]).json).toBe(before.json);
+    expect([JSON.stringify(inv.selectedRef()), inv.version]).toEqual([selected, version]); // the held quick slot is the one it was
+    expect(s.bench.counts).toMatchObject({crafted: 0, refused: 0});
+    expect([s.sfx.calls, s.toasts, s.bench.view.note]).toEqual([[], [], '']);
+    expect(s.bench.view.renders).toBe(renders);
+    expect(s.bench.isOpen).toBe(true);
+    expect(s.bench.lastCraft).toBeNull();
+    // the system has no by-number craft at all
+    expect('craftIndex' in s.bench).toBe(false);
+    // W passes (walking); a browser chord with a digit stays the browser's
+    const w = key('KeyW');
+    s.bench.onKeyCapture(w);
+    expect([w.prevented, w.stopped]).toEqual([0, 0]);
+    const chord = key('Digit1');
+    chord.ctrlKey = true;
+    s.bench.onKeyCapture(chord);
+    expect([chord.prevented, chord.stopped]).toEqual([0, 0]);
+    // E still closes (the standard control), and then the digits are the game's again
+    const e = key('KeyE');
+    s.bench.onKeyCapture(e);
+    expect([e.prevented, s.bench.isOpen, s.bench.lastClose]).toEqual([1, false, 'user']);
+    const d = key('Digit2');
+    s.bench.onKeyCapture(d);
+    expect([d.prevented, d.stopped]).toEqual([0, 0]);
+    expect(s.eq.made).toEqual([]);
+  });
+
   it('the hints come from the unit\'s traits', () => {
     expect(craftedHint(EQUIPMENT.chest)).toBe('hold E to carry it');
-    for (const k of ['radar', 'sentry', 'scanner'] as const) expect(craftedHint(EQUIPMENT[k])).toBe('roll it to a free plug');
+    for (const k of ['radar', 'sentry', 'scanner'] as const) expect(craftedHint(EQUIPMENT[k])).toBe('hold E to drag it to a free plug');
     expect(craftedHint({move: 'dolly', plug: false})).toBe('');
     expect(BENCH_TEXT.crafted('Thing', '')).toBe('Crafted: Thing');
   });
@@ -518,8 +570,10 @@ describe('crafting bench: the recipe list — keys, crafting, redraws', () => {
     openBench(s);
     const snap = () => worldSnapshot(s.host.inv, [s.host.playerTrain.lockbox.slots]);
     const before = snap();
-    // missing
-    const r1 = s.bench.craftIndex(1)!;
+    // missing (the row's button is disabled and its ratios are red, without a sentence; asked anyway — the QA hook — the craft says it)
+    expect(chips(s, 'radar')).toEqual([[SCRAP_METAL, 3, 4, 'short'], [ELECTRICAL_PARTS, 2, 3, 'short']]);
+    expect(s.bench.view.last!.rows.map(r => [r.kind, r.can, r.reason])).toEqual([['chest', true, ''], ['radar', false, ''], ['sentry', false, ''], ['scanner', false, '']]);
+    const r1 = s.bench.craftKind('radar')!;
     expect(r1).toMatchObject({ok: false, reason: 'missing', text: 'Need 1 more Scrap metal and 1 more Electrical parts'});
     expect([s.bench.view.note, s.bench.view.noteBad]).toEqual(['Need 1 more Scrap metal and 1 more Electrical parts', true]);
     expect(s.sfx.calls).toEqual(['denied']);
@@ -527,7 +581,7 @@ describe('crafting bench: the recipe list — keys, crafting, redraws', () => {
     // the equipment system refuses (its text is shown on the row and in the note)
     s.eq.block = 'No room on the car floor — move something first';
     frames(s, BENCH_RT.refreshS + 0.05);
-    expect(s.bench.view.last!.rows.map(r => r.reason)).toEqual(new Array(4).fill('No room on the car floor — move something first'));
+    expect(s.bench.view.last!.rows.map(r => [r.can, r.reason])).toEqual(new Array(4).fill([false, 'No room on the car floor — move something first']));
     const r2 = s.bench.craftKind('chest')!;
     expect(r2).toEqual({ok: false, reason: 'blocked', text: 'No room on the car floor — move something first'});
     expect(s.bench.view.noteBad).toBe(true);
@@ -571,7 +625,9 @@ describe('crafting bench: the recipe list — keys, crafting, redraws', () => {
     s.eq.list.push(chest, away);
     s.eq.seq = 100;
     openBench(s);
-    expect(s.bench.view.last!.totals[0].text).toBe('Scrap metal 8 — carried 1 · backpack 1 · Lockbox 1 · chests 5');
+    expect(chips(s, 'chest')).toEqual([[SCRAP_METAL, 8, 2, 'ok']]);
+    expect(s.bench.view.last!.rows[0].needs[0].where).toBe('1 carried · 1 in your backpack · 1 in the Lockbox · 5 in chests');
+    expect(s.bench.qa().materials).toMatchObject({[SCRAP_METAL]: {total: 8, carried: 1, backpack: 1, lockbox: 1, chests: 5}});
     const v0 = {inv: inv.version, box: box.version, chest: chest.storeVersion};
     // the scanner needs 5 scrap + 5 electrical: short on electrical -> nothing moves
     expect(s.bench.craftKind('scanner')).toMatchObject({ok: false, reason: 'missing'});
@@ -586,7 +642,8 @@ describe('crafting bench: the recipe list — keys, crafting, redraws', () => {
     expect(box.version).toBeGreaterThan(v0.box);
     expect(chest.storeVersion).toBe(v0.chest + 1);
     expect(away.storeVersion).toBe(0);
-    expect(s.bench.view.last!.totals[0].text).toBe('Scrap metal 4 — carried 0 · backpack 0 · Lockbox 0 · chests 4');
+    expect(chips(s, 'chest')).toEqual([[SCRAP_METAL, 4, 2, 'ok']]);
+    expect(s.bench.view.last!.rows[0].needs[0].where).toBe('4 in chests');
     // (the two new, empty chests are aboard now too: they add nothing)
     expect(s.eq.made.map(u => u.kind)).toEqual(['chest', 'chest']);
     expect(s.eq.made.every(u => u.slots!.every(x => x === null))).toBe(true);
@@ -614,7 +671,8 @@ describe('crafting bench: the recipe list — keys, crafting, redraws', () => {
     chest.slots![3] = s.host.inv.makeStack(ELECTRICAL_PARTS, 3);
     frames(s, BENCH_RT.refreshS + 0.05);
     expect(s.bench.view.renders).toBe(n + 1);
-    expect(s.bench.view.last!.totals[1].text).toBe('Electrical parts 3 — carried 0 · backpack 0 · Lockbox 0 · chests 3');
+    expect(chips(s, 'radar')).toEqual([[SCRAP_METAL, 2, 4, 'short'], [ELECTRICAL_PARTS, 3, 3, 'ok']]);
+    expect(s.bench.view.last!.rows[1].needs[1].where).toBe('3 in chests');
     n = s.bench.view.renders;
     frames(s, 1);
     expect(s.bench.view.renders).toBe(n);
@@ -633,7 +691,6 @@ describe('crafting bench: the recipe list — keys, crafting, redraws', () => {
     const s = setup();
     give(s, 20, 20);
     expect(s.bench.craftKind('chest')).toBeNull();
-    expect(s.bench.craftIndex(0)).toBeNull();
     const e = key('Digit1');
     s.bench.onKeyCapture(e); // closed: the key is the game's (a quick slot)
     expect([e.prevented, e.stopped]).toEqual([0, 0]);
@@ -743,5 +800,80 @@ describe('crafting bench: the recipe list closes', () => {
     api.benchClose();
     expect(api.bench()).toMatchObject({open: false, lastClose: 'user'});
     expect(api.chestStore()).toMatchObject({open: false, registered: true});
+  });
+});
+
+describe('crafting bench: the recipe rows\' 3D previews (when they are asked for)', () => {
+  /** A look whose CHEST view is real (a carried kind: no hand truck involved); the devices' are stand-ins. The test moves `gen`. */
+  function fakeLook() {
+    const look = {
+      gen: 1, builds: 0,
+      build(def: EquipmentDef): EquipmentView {
+        look.builds++;
+        const group = new THREE.Group(), body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 0.5), new THREE.MeshStandardMaterial());
+        group.add(body);
+        return {group, body, gen: look.gen, standIn: def.move !== 'carry', lid: null, lidRest: 0, lidOpen: 0};
+      },
+    };
+    return look;
+  }
+
+  it('without a renderer (every other test here): nothing is asked; the rows keep their empty frames', () => {
+    const s = setup();
+    frames(s, 0.5);
+    openBench(s);
+    expect(s.bench.qa().previews).toMatchObject({renderer: false, busy: false, counts: {requests: 0, built: 0}});
+    expect(Object.values(s.bench.qa().previews.shown)).toEqual(RECIPES.map(() => false));
+    expect(s.bench.previews.ids).toEqual(RECIPES.map(r => craftPreviewId(r.kind)));
+    const html = dom.el('.cv-list').innerHTML;
+    expect(html.match(/<div class="cv-preview cv-empty"><\/div>/g)).toHaveLength(RECIPES.length);
+    expect(html).not.toContain('<img class="cv-img"');
+  });
+
+  it('once per look generation while the car stands parked: not per frame, not while riding; an open asks only for what is still missing', async () => {
+    const look = fakeLook(), asked: string[][] = [];
+    // (this host's "renderer" records the request and renders nothing: the picture stays missing)
+    const s = setup({bench: {look: () => look, refreshIcons: ids => { asked.push([...ids]); }}});
+    expect(asked).toEqual([]); // installing and building the station asks nothing by itself
+    s.bench.update(DT); // the first frame of the live world
+    await s.bench.previews.settled();
+    expect(asked).toEqual([[craftPreviewId('chest')]]); // only the kind whose real model is there — a stand-in is never sent
+    const builds = look.builds;
+    frames(s, 3);
+    await s.bench.previews.settled();
+    expect(asked).toHaveLength(1);
+    expect(look.builds).toBe(builds); // a frame builds no view
+    // the models change while the train rides: nothing is asked until it stands parked again
+    s.host.trainRide.riding = true;
+    look.gen++;
+    frames(s, 1);
+    await s.bench.previews.settled();
+    expect(asked).toHaveLength(1);
+    s.host.trainRide.riding = false;
+    frames(s, 1);
+    await s.bench.previews.settled();
+    expect(asked).toEqual([[craftPreviewId('chest')], [craftPreviewId('chest')]]);
+    // opening: the chest's picture is still missing (nothing was rendered) -> asked once more, for it alone; frames with the list
+    // open ask nothing
+    openBench(s);
+    await s.bench.previews.settled();
+    expect(asked).toHaveLength(3);
+    expect(asked[2]).toEqual([craftPreviewId('chest')]);
+    frames(s, 1);
+    await s.bench.previews.settled();
+    expect(asked).toHaveLength(3);
+    expect(s.bench.isOpen).toBe(true);
+    expect(s.bench.qa().previews).toMatchObject({renderer: true, lookGen: 2, askedGen: 2, counts: {requests: 3}});
+  });
+
+  it('by default the previews are built by the live equipment system\'s own look', () => {
+    const s = setup();
+    const look = fakeLook();
+    (s.eq as unknown as {look: unknown}).look = look;
+    expect(s.bench.previews.build(craftPreviewId('chest'))).toBeInstanceOf(THREE.Group);
+    expect(s.bench.previews.build(craftPreviewId('radar'))).toBeNull(); // its view is a stand-in
+    expect(look.builds).toBe(1); // (a device without the hand truck's model is not even built)
+    s.host.trainEquipment = null;
+    expect(s.bench.previews.build(craftPreviewId('chest'))).toBeNull();
   });
 });

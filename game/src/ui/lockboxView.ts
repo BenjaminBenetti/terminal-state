@@ -14,6 +14,10 @@
 // name in the title and in running text, the slot count, the store side's columns and heading; default LOCKBOX_VIEW = the Lockbox
 // exactly as before) so the Skyways prize car's trunk (world/skywaysCarTrunk.ts) is the same view and the same Inventory.storeMove /
 // storeQuick / storeWornBag moves over its own slot list. The 1337 drop stays the Lockbox's (LockboxSystem only).
+//
+// Task train-interaction-ux-20261112-063646 (lane SENTRY): two optional StoreViewOptions for a store that is not general storage (the
+// sentry's four feed slots, world/equipmentChestStore.ts): `stow: false` leaves the "Stow worn backpack" button out, `help` replaces
+// the help line. Absent = the Lockbox / trunk / chest exactly as before.
 
 import type {Game} from '../game';
 import {itemIconHtml, onItemIconsChanged} from './itemIcons';
@@ -93,6 +97,10 @@ export interface StoreViewOptions {
   columns: number;
   /** The store side's heading. */
   heading: string;
+  /** false: no "Stow worn backpack" button (a store that takes no backpack). Default: shown. */
+  stow?: boolean;
+  /** The help line under the actions (default: the Lockbox's, naming `the`). */
+  help?: string;
 }
 
 export const LOCKBOX_VIEW: Readonly<StoreViewOptions> = Object.freeze({id: 'lockboxview', name: LOCKBOX_NAME, the: `the ${LOCKBOX_NAME}`, slots: LOCKBOX_SLOTS,
@@ -198,8 +206,8 @@ export class LockboxView {
         <div class="lb-side"><h4>${o.heading}</h4><div class="slots lb-g${o.columns}" data-side="store"></div></div>
       </div>
       <div class="lb-note"></div>
-      <div class="lb-actions"><button class="lb-stow" type="button">Stow worn backpack</button><button class="lb-close primary" type="button">Close (E)</button></div>
-      <div class="lb-help">Click an item to move it across · drag onto a slot · Shift-drag splits · a backpack taken out is worn · walking away or getting hit closes ${o.the}</div>
+      <div class="lb-actions">${o.stow === false ? '' : '<button class="lb-stow" type="button">Stow worn backpack</button>'}<button class="lb-close primary" type="button">Close (E)</button></div>
+      <div class="lb-help">${o.help ?? `Click an item to move it across · drag onto a slot · Shift-drag splits · a backpack taken out is worn · walking away or getting hit closes ${o.the}`}</div>
     </div>`;
     (document.querySelector('#app') ?? document.body).appendChild(el);
     this.root = el;

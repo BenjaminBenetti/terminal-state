@@ -8,10 +8,12 @@
 //  - the CHEST's store view (world/equipmentChestStore.ts): a TAP of [E] opens it over the unit's live slots (the lid up, the store's
 //    own cue — the equipment system makes no sound), HOLDING [E] carries the chest and never asks the use; the open view closes when
 //    the chest is shoved, becomes cargo, or is replaced by a Retry;
-//  - the SENTRY's console (world/sentryTurret.ts): tap = load on the key's release, hold = unload once — real rounds, conserved; the
-//    handle still grabs; active('sentry') only while plugged into the parked car;
-//  - the item SCANNER's console (world/itemScanner.ts): its tap falls through to the grab while it is not plugged in, opens the scope
-//    while it is; unplugging closes the scope through the plug listener;
+//  - the SENTRY's feed (world/equipmentChestStore.ts over the unit's four slots; world/sentryTurret.ts): a TAP of [E] opens its own
+//    small store view; real rounds go in and come out by the inventory's own moves, conserved; nothing but its rounds goes in; an
+//    older save's round count is real stacks from the first frame; HOLDING [E] drags the hand truck (the system's own hold, never a
+//    use's); active('sentry') only while plugged into the parked car;
+//  - the item SCANNER's console (world/itemScanner.ts): its tap does nothing while it is not plugged in (a hold drags it), opens the
+//    scope while it is; unplugging closes the scope through the plug listener;
 //  - the route radar's reveal radius (routeRadius) follows the real plug.
 import {afterAll, afterEach, describe, expect, it} from 'vitest';
 import {installCanvasShim} from './helpers/canvas2d';
@@ -19,22 +21,23 @@ import {installFakeDom} from './helpers/fakeDom';
 import {LEVELS} from '../src/levels/registry';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {trainToWorld, worldToTrain} from '../src/gen/playerTrain';
-import {EQUIPMENT, EQUIPMENT_LIMITS, type EquipmentJSON} from '../src/craft/equipment';
+import {EQUIPMENT, EQUIPMENT_LIMITS, SENTRY_FEED_SLOTS, equipmentRounds, type EquipmentJSON} from '../src/craft/equipment';
 import {EQUIP_HOLD_S} from '../src/craft/equipmentApi';
 import {countMaterials, craft} from '../src/craft/crafting';
 import {RECIPES, RECIPE_MATERIALS} from '../src/craft/recipes';
 import {PLUG, craftSpots, equipmentPlugs} from '../src/craft/trainFixtures';
 import {cartAboard} from '../src/fuel/trainPort';
 import {ELECTRICAL_PARTS, SCRAP_METAL} from '../src/items/craftMaterials';
+import {itemDef} from '../src/items/items';
 import type {ScannerScope} from '../src/ui/scannerView';
 import {PLAYER_TRAIN_SPEC as SPEC} from '../src/world/playerTrainSpec';
 import {CART_LOOK} from '../src/world/fuelCartModel';
 import {chipperFootprint, chipperPlacement} from '../src/world/chipperPlace';
 import {BENCH_TEXT, craftBenchQaApi, craftedHint, installCraftBench, type CraftBenchSystem} from '../src/world/craftBench';
-import {CHEST_STORE_TEXT} from '../src/world/equipmentChestStore';
+import {CHEST_STORE_TEXT, STORE_TEXT} from '../src/world/equipmentChestStore';
 import {ItemScannerSystem, SCANNER_TEXT} from '../src/world/itemScanner';
 import {SENTRY_TEXT, SentryTurretSystem} from '../src/world/sentryTurret';
-import {EQUIPMENT_TEXT, type LiveUnit} from '../src/world/trainEquipment';
+import {EQUIPMENT_TEXT, feedRule, type LiveUnit} from '../src/world/trainEquipment';
 import {equipmentBox} from '../src/world/trainEquipmentModel';
 import {frame, press, run, teardown} from './helpers/fuelCartsHost';
 import {
@@ -134,9 +137,10 @@ describe('the bench and the equipment system: a craft is a real unit on the car 
     const uses = eq.uses;
     expect(uses.chest).toBe(store.use);
     expect(Object.keys(uses).sort()).toEqual(['chest', 'scanner', 'sentry']);
-    expect(typeof uses.sentry!.hold).toBe('function'); // tap = load on the release, hold = unload
-    expect(uses.scanner!.hold).toBeUndefined(); // its tap acts on the press
-    expect(uses.chest!.hold).toBeUndefined(); // holding E on a chest is the system's own (carry)
+    expect(uses.sentry).toBe(store.use); // every kind with slots opens through the one store controller
+    expect(eq.promptNotes).toHaveLength(1); // (the sentry's "not plugged in" / "no headroom")
+    // a use is a prompt line + a tap: HOLDING E is the system's own for every kind (drag / carry), never a use's
+    for (const use of Object.values(uses)) expect('hold' in use!).toBe(false);
     expect(eq.plugListeners).toHaveLength(2); // the sentry's and the scanner's
     expect(h.trainEquipment).toBe(eq);
     // a world going and coming, a Retry: the same record, the same entries
@@ -172,10 +176,10 @@ describe('the bench and the equipment system: a craft is a real unit on the car 
 
     const made: LiveUnit[] = [];
     const craftRow = (kind: string) => {
-      const i = RECIPES.findIndex(r => r.kind === kind), r = RECIPES[i];
+      const r = RECIPES.find(x => x.kind === kind)!;
       const before = counts(), seq = h.playerTrain.equipment.seq, n = eq.units().length;
       h.toasts.length = 0; h.sfxCalls.length = 0;
-      const res = bench.craftIndex(i)!;
+      const res = bench.craftKind(r.kind)!; // (the row's Craft button: there is no by-number shortcut any more)
       expect(res.ok, res.ok ? '' : res.text).toBe(true);
       if (!res.ok) throw new Error(res.text);
       // the result IS the live unit (identity), the run's next number
@@ -281,8 +285,8 @@ describe('the bench and the equipment system: a craft is a real unit on the car 
     for (const r of RECIPES) expect(bench.block(r.kind)).toBe(full);
     const L1 = ledger(h), units1 = eq.units().map(u => u.uid);
     h.sfxCalls.length = 0;
-    for (const [i, r] of RECIPES.entries()) {
-      const out = bench.craftIndex(i)!;
+    for (const r of RECIPES) {
+      const out = bench.craftKind(r.kind)!;
       expect(out).toMatchObject({ok: false, reason: 'blocked', text: full});
       expect(eq.craft(r.kind)).toBeNull();
     }
@@ -318,10 +322,10 @@ describe('the bench and the equipment system: a craft is a real unit on the car 
     run(h, 0.3);
     const radar = eq.unit('eq-1')!, chest = eq.unit('eq-2')!;
     expect(bench.handsFree()).toBe(true);
-    // no use registered for the radar: [E] on its console face grabs it
+    // no use registered for the radar: holding [E] on its console face drags it
     faceOf(h, radar);
     expect(aimOf(eq)).toEqual([radar.uid, 'module']);
-    press(h, 'KeyE');
+    holdE(h);
     expect(uidOf(eq.grab?.unit)).toBe(radar.uid);
     expect(bench.handsFree()).toBe(false);
     expect(bench.usable()).toBe(false);
@@ -365,7 +369,7 @@ describe('the chest\'s store view and the equipment system: tap opens, hold carr
     inv.set({bar: 'pack', index: 2}, beans);
     faceOf(h, chest);
     expect(aimOf(eq)).toEqual([chest.uid, 'body']);
-    expect(eq.prompt).toBe(CHEST_STORE_TEXT.prompt(0, EQUIPMENT.chest.slots));
+    expect(eq.prompt).toBe(CHEST_STORE_TEXT.prompt(0, EQUIPMENT.chest.slots) + EQUIPMENT_TEXT.carryHint);
     // the press alone does nothing yet (a chest's tap acts on the release)
     h.keys.held.add('KeyE'); h.keys.hits.add('KeyE');
     frame(h);
@@ -408,7 +412,7 @@ describe('the chest\'s store view and the equipment system: tap opens, hold carr
     expect(h.sfxCalls).toEqual(['cue:cabinetClose']);
     run(h, 1);
     expect(chest.lidT).toBe(0);
-    expect(eq.prompt).toBe(CHEST_STORE_TEXT.prompt(1, EQUIPMENT.chest.slots));
+    expect(eq.prompt).toBe(CHEST_STORE_TEXT.prompt(1, EQUIPMENT.chest.slots) + EQUIPMENT_TEXT.carryHint);
   });
 
   it('holding [E] carries the chest and never asks the use; the contents travel in the same slots', () => {
@@ -467,70 +471,97 @@ describe('the chest\'s store view and the equipment system: tap opens, hold carr
   });
 });
 
-describe('the sentry\'s console and the equipment system: tap loads, hold unloads, the handle grabs', () => {
-  it('[E] tapped on the console loads real rounds on the release; held, it unloads them once; rounds are conserved; the record keeps them', () => {
-    const {h, eq, sentry} = world();
-    const inv = h.inv, item = EQUIPMENT.sentry.ammoItem!, cap = EQUIPMENT.sentry.ammoCap;
+describe('the sentry\'s feed and the equipment system: [E] opens its four slots, real rounds go in and come out', () => {
+  it('[E] on the console opens the feed view over the unit\'s live slots; rounds move by the inventory\'s own rules and are conserved; the record keeps the stacks', () => {
+    const {h, eq, sentry, store} = world();
+    const inv = h.inv, def = EQUIPMENT.sentry, item = def.slotItem!, short = itemDef(item).short, max = itemDef(item).stackMax;
     loadAboard(h, [aboardRec('sentry', 1, -2.2, 0.3, Math.PI / 2)]);
     run(h, 0.3);
     const u = eq.unit('eq-1')!;
-    expect(u.plug).toBeNull(); // (out of every plug's reach: loading does not need a plug)
-    inv.add(inv.makeStack(item, 120));
-    inv.add(inv.makeStack(item, 80));
+    expect(u.plug).toBeNull(); // (out of every plug's reach: its slots do not need a plug)
+    expect(u.slots).toHaveLength(SENTRY_FEED_SLOTS);
+    const a = inv.makeStack(item, max), b = inv.makeStack(item, 80), nine = inv.makeStack('ammo_9mm', 30);
+    for (const st of [a, b, nine]) expect(inv.add(st)).toBe(0);
     const total = () => inv.count(item) + u.ammo;
-    expect(total()).toBe(200);
+    expect(total()).toBe(max + 80);
     faceOf(h, u);
     expect(aimOf(eq)).toEqual([u.uid, 'module']);
-    expect(eq.prompt).toBe(sentry.prompt(u));
-    expect(eq.prompt).toMatch(/Load .* \(200 carried\) · sentry 0\/300 rounds · not plugged in$/);
-    // the press: nothing yet (a use with `hold` acts on the release)
-    h.keys.held.add('KeyE'); h.keys.hits.add('KeyE');
-    frame(h);
-    expect([u.ammo, uidOf(eq.grab?.unit)]).toEqual([0, null]);
-    run(h, 0.1);
-    h.keys.held.clear();
-    h.toasts.length = 0;
-    frame(h);
-    expect(u.ammo).toBe(200);
-    expect(inv.count(item)).toBe(0);
-    expect(total()).toBe(200);
-    expect(h.toasts).toEqual([SENTRY_TEXT.loaded(200, 200, cap)]);
-    expect([uidOf(eq.grab?.unit), eq.counts.taps, eq.counts.holds, sentry.counts.loaded]).toEqual([null, 1, 0, 200]);
-    expect(eq.aboard()[0]).toMatchObject({uid: 'eq-1', ammo: 200});
-    // held: unloaded ONCE however long the key stays down; never a grab
-    holdE(h, 2);
-    expect(u.ammo).toBe(0);
-    expect(inv.count(item)).toBe(200);
-    expect([uidOf(eq.grab?.unit), eq.counts.taps, eq.counts.holds, sentry.counts.unloaded]).toEqual([null, 1, 1, 200]);
-    expect(eq.aboard()[0]).toMatchObject({uid: 'eq-1', ammo: 0});
-    // more than the hopper holds: it takes its cap, the rest stays carried
-    inv.add(inv.makeStack(item, 120));
-    inv.add(inv.makeStack(item, 30));
-    expect(total()).toBe(350);
+    expect(eq.prompt).toBe(store.prompt(u) + EQUIPMENT_TEXT.dragHint); // (the tap's line; the system adds its own hold)
+    expect(eq.prompt).toContain(`${STORE_TEXT.openFeed(def.the, 0, short)} · ${SENTRY_TEXT.unplugged}`);
+    // a tap opens the sentry's own view over ITS slots (never the chest's view, never a grab, nothing loaded by itself)
     tapE(h);
-    expect([u.ammo, inv.count(item)]).toEqual([cap, 50]);
-    expect(total()).toBe(350);
-    // the turret's own draw goes through setAmmo: whole rounds, never below zero
-    expect(u.setAmmo(u.ammo - 1)).toBe(cap - 1);
-    expect(u.setAmmo(-5)).toBe(0);
-    expect(u.setAmmo(cap + 40)).toBe(cap);
-    // the handle still grabs it (and loads nothing)
-    const taps = eq.counts.taps;
+    expect([store.isOpen, store.unit === u, store.qa().view]).toEqual([true, true, 'sentryview']);
+    expect(store.view.opts).toMatchObject({slots: SENTRY_FEED_SLOTS, stow: false, the: def.the});
+    expect([u.ammo, inv.count(item), uidOf(eq.grab?.unit)]).toEqual([0, max + 80, null]);
+    expect(eq.storesAboard().map(x => x.uid)).toEqual([]); // (a feed is not a store the bench crafts from)
+    // a click moves a carried stack across; a drag puts one into a chosen slot; the same stacks (uids), no round made or lost
+    const at = (st: {uid: number}) => inv.find(st.uid)!;
+    expect(store.view.quick(at(a))).toBe(max);
+    expect(u.slots![0]).toBe(a);
+    expect(store.view.move(at(b), {bar: 'store', index: 2})).toBe('moved');
+    expect(u.slots![2]).toBe(b);
+    expect([u.ammo, inv.count(item), total()]).toEqual([max + 80, 0, max + 80]);
+    expect(eq.aboard()[0].slots).toEqual([{uid: a.uid, itemId: item, count: max}, null, {uid: b.uid, itemId: item, count: 80}, null]);
+    expect(eq.aboard()[0].ammo).toBeUndefined();
+    expect(eq.maxUid()).toBe(Math.max(a.uid, b.uid));
+    // anything else is refused where it is, with the reason — by the click, by the drag, and as a swap onto a full slot
+    const where = at(nine);
+    expect(store.view.quick(where)).toBe(0);
+    expect(inv.refusal).toEqual({code: 'wrong-slot', text: feedRule(def).accepts('ammo_9mm')});
+    expect(store.view.move(where, {bar: 'store', index: 1})).toBe('refused');
+    expect(store.view.move(where, {bar: 'store', index: 0})).toBe('refused');
+    expect(inv.get(where)).toBe(nine);
+    expect(u.slots!.map(st => st?.uid ?? null)).toEqual([a.uid, null, b.uid, null]);
+    // half a stack back out (a split: the new stack has its own uid), then the rest by a click
+    const free = inv.pack.findIndex(st => st === null);
+    expect(store.view.move({bar: 'store', index: 0}, {bar: 'pack', index: free}, 50)).toBe('split');
+    expect([u.slots![0]!.count, inv.pack[free]!.count, inv.pack[free]!.uid === a.uid]).toEqual([max - 50, 50, false]);
+    expect(total()).toBe(max + 80);
+    expect(store.view.quick({bar: 'store', index: 2})).toBe(80);
+    expect([u.ammo, inv.count(item), total()]).toEqual([max - 50, 130, max + 80]);
+    expect(inv.invariants()).toEqual([]);
+    // the turret's own draw is the unit's takeAmmo: whole rounds out of the slots, an emptied slot free again, never below nothing
+    expect(u.takeAmmo(1)).toBe(1);
+    expect(u.takeAmmo(1e9)).toBe(max - 51);
+    expect([u.ammo, u.takeAmmo(1), u.slots!.every(st => st === null)]).toEqual([0, 0, true]);
+    expect(inv.count(item)).toBe(130); // (carried rounds are never the turret's)
+    // while its view is open the line is the view's alone: [E] is the view's key, a hold cannot start
+    frame(h);
+    expect(eq.prompt).toBe(STORE_TEXT.close(def.the));
+    // [E] (the view's own captured key) closes it
+    store.onKeyCapture(key('KeyE'));
+    expect(store.isOpen).toBe(false);
+    frame(h);
+    expect(eq.prompt).toBe(STORE_TEXT.openFeed(def.the, 0, short) + ` · ${SENTRY_TEXT.unplugged}` + EQUIPMENT_TEXT.dragHint);
+    expect(sentry.qa()).toMatchObject({unit: null, plugged: false});
+    // HELD, the hand truck is dragged (the system's own hold: the store is never asked) — nothing opens, the rounds stay in its slots
+    const back = inv.allStacks(false).find(st => st.itemId === item)!, n = back.count;
+    expect(inv.storeQuick(u.slots!, at(back))).toBe(n);
+    u.touchStore();
+    const opens = store.counts.opens, taps = eq.counts.taps;
+    holdE(h, 2);
+    expect([uidOf(eq.grab?.unit), store.isOpen, store.counts.opens, eq.counts.taps, u.ammo, inv.count(item)]).toEqual([u.uid, false, opens, taps, n, 130 - n]);
+    expect(eq.aboard()[0].slots!.filter(Boolean)).toEqual([{uid: back.uid, itemId: item, count: n}]);
+    press(h, 'KeyE');
+    expect(uidOf(eq.grab?.unit)).toBeNull();
+    run(h, 1);
+    // from the handle: the same line (the use is the unit's, whatever part is aimed at) — a tap there opens the slots too
     handleOf(h, u);
     expect(aimOf(eq)).toEqual([u.uid, 'frame']);
-    expect(eq.prompt).toBe(EQUIPMENT_TEXT.grab(u.def.the, EQUIPMENT_TEXT.plugHint));
-    press(h, 'KeyE');
-    expect(uidOf(eq.grab?.unit)).toBe(u.uid);
-    expect([eq.counts.taps, u.ammo]).toEqual([taps, cap]);
-    press(h, 'KeyE');
+    expect(eq.prompt).toBe(store.prompt(u) + EQUIPMENT_TEXT.dragHint);
+    tapE(h);
+    expect([store.isOpen, store.unit === u, store.qa().view, uidOf(eq.grab?.unit)]).toEqual([true, true, 'sentryview', null]);
+    store.close('user');
   });
 
   it('active(\'sentry\') is the unit plugged into the PARKED car: the turret system reads it; riding it is none (the rounds stay)', async () => {
     const {h, eq, sentry, ride} = world();
     const s0 = plugSpot(0);
+    // (an older save's record: a count of rounds — real stacks in its slots from the first frame)
     loadAboard(h, [aboardRec('sentry', 1, -2.2, 0.3, Math.PI / 2, {ammo: 40})]);
     run(h, 0.3);
     const u = eq.unit('eq-1')!;
+    expect(u.slots!.map(st => st && [st.itemId, st.count])).toEqual([[EQUIPMENT.sentry.slotItem, 40], null, null, null]);
     expect([uidOf(eq.active('sentry')), sentry.qa().unit, sentry.qa().plugged]).toEqual([null, null, false]);
     putLocal(h, u, s0.x, s0.z, Math.PI / 2);
     h.toasts.length = 0;
@@ -541,7 +572,7 @@ describe('the sentry\'s console and the equipment system: tap loads, hold unload
     expect(sentry.qa()).toMatchObject({unit: 'eq-1', plugged: true, ammo: 40});
     // on the console: the prompt no longer says "not plugged in"
     faceOf(h, u);
-    expect(eq.prompt).toBe(sentry.prompt(u));
+    expect(eq.prompt).toBe(STORE_TEXT.openFeed(u.def.the, 40, itemDef(EQUIPMENT.sentry.slotItem!).short) + EQUIPMENT_TEXT.dragHint);
     expect(eq.prompt).not.toMatch(/not plugged in/);
     // riding: plugged, not active; the console cannot be used; the rounds ride along
     void ride.depart();
@@ -552,7 +583,8 @@ describe('the sentry\'s console and the equipment system: tap loads, hold unload
     expect(eq.prompt).toBeNull();
     expect(eq.onInteract()).toBe(false);
     expect(u.ammo).toBe(40);
-    expect(eq.aboard()[0]).toMatchObject({uid: 'eq-1', ammo: 40, plug: 0});
+    expect(eq.aboard()[0]).toMatchObject({uid: 'eq-1', plug: 0});
+    expect([eq.aboard()[0].ammo, equipmentRounds(eq.aboard()[0])]).toEqual([undefined, 40]);
     ride.reset();
     await Promise.resolve();
     run(h, 0.3);
@@ -562,18 +594,20 @@ describe('the sentry\'s console and the equipment system: tap loads, hold unload
 });
 
 describe('the scanner\'s console, the radar and the equipment system', () => {
-  it('unplugged, the scanner\'s tap falls through to the grab; plugged in, it opens the scope; unplugging closes it through the listener', () => {
+  it('unplugged, the scanner\'s tap does nothing (a hold drags it); plugged in, it opens the scope; unplugging closes it through the listener', () => {
     const {h, eq, scanner, scope} = world();
     const s1 = plugSpot(1), e1 = equipmentPlugs(SPEC)[1];
     loadAboard(h, [aboardRec('scanner', 1, -3.9, 0.3, -Math.PI / 2)]);
     run(h, 0.3);
     const u = eq.unit('eq-1')!;
     expect(u.plug).toBeNull();
-    // unplugged: the console says so, and [E] on it grabs the hand truck (the scanner's tap answered false)
+    // unplugged: the console says so, and a tap of [E] does nothing (the scanner's tap answered false); holding [E] drags the hand truck
     faceOf(h, u);
     expect(aimOf(eq)).toEqual([u.uid, 'module']);
-    expect(eq.prompt).toBe(SCANNER_TEXT.unplugged);
+    expect(eq.prompt).toBe(SCANNER_TEXT.unplugged + EQUIPMENT_TEXT.dragHint);
     press(h, 'KeyE');
+    expect([uidOf(eq.grab?.unit), uidOf(scanner.openUnit), scope.opened, eq.counts.taps]).toEqual([null, null, 0, 1]);
+    holdE(h);
     expect(uidOf(eq.grab?.unit)).toBe(u.uid);
     expect([uidOf(scanner.openUnit), scope.opened, eq.counts.taps]).toEqual([null, 0, 1]);
     press(h, 'KeyE');
@@ -586,7 +620,7 @@ describe('the scanner\'s console, the radar and the equipment system', () => {
     expect(scanner.unitActive(u)).toBe(true);
     // [E] on the console opens the scope — no grab, still plugged
     faceOf(h, u);
-    expect(eq.prompt).toBe(SCANNER_TEXT.open(scanner.clock.seconds));
+    expect(eq.prompt).toBe(SCANNER_TEXT.open(scanner.clock.seconds) + EQUIPMENT_TEXT.dragHint);
     press(h, 'KeyE');
     expect(scanner.openUnit === u).toBe(true);
     expect([uidOf(eq.grab?.unit), u.plug, scope.opened]).toEqual([null, 1, 1]);
@@ -594,14 +628,14 @@ describe('the scanner\'s console, the radar and the equipment system', () => {
     const taps = eq.counts.taps;
     press(h, 'KeyE');
     expect([uidOf(scanner.openUnit), scanner.lastClose, uidOf(eq.grab?.unit), u.plug, eq.counts.taps]).toEqual([null, 'key', null, 1, taps]);
-    // open again, then the handle is grabbed: [E] first closes the scope, the next [E] grabs — unplugged with the note
+    // open again, then the handle is grabbed: [E] first closes the scope, the next [E] HELD drags — unplugged with the note
     press(h, 'KeyE');
     expect(scanner.openUnit === u).toBe(true);
     handleOf(h, u);
     press(h, 'KeyE');
     expect([uidOf(scanner.openUnit), uidOf(eq.grab?.unit)]).toEqual([null, null]);
-    press(h, 'KeyE');
-    expect(uidOf(eq.grab?.unit)).toBe(u.uid);
+    holdE(h);
+    expect([uidOf(scanner.openUnit), uidOf(eq.grab?.unit)]).toEqual([null, u.uid]);
     expect(u.plug).toBeNull();
     expect(h.toasts).toContain(EQUIPMENT_TEXT.unplugged(u.def.name));
     expect(uidOf(eq.active('scanner'))).toBeNull();
@@ -646,7 +680,7 @@ describe('the scanner\'s console, the radar and the equipment system', () => {
     run(h, 0.3);
     // grabbed: unplugged, one stop again
     handleOf(h, radar);
-    press(h, 'KeyE');
+    holdE(h);
     expect(uidOf(eq.grab?.unit)).toBe(radar.uid);
     expect([radar.plug, eq.routeRadius()]).toEqual([null, 1]);
     press(h, 'KeyE');

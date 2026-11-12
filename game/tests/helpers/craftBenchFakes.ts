@@ -3,12 +3,12 @@
 // view are written against the interface only (the real system is lane EQUIP's world/trainEquipment.ts).
 import {EQUIPMENT, equipmentSeqOf, type EquipmentKind} from '../../src/craft/equipment';
 import type {EquipmentStore, EquipmentSystemLike, EquipmentUnit, EquipmentUse} from '../../src/craft/equipmentApi';
-import {stackToJSON, type Inventory, type ItemStack} from '../../src/items/inventory';
+import {setStoreRule, stackToJSON, type Inventory, type ItemStack} from '../../src/items/inventory';
+import {feedRule} from '../../src/world/trainEquipment';
 
 export interface FakeUnit extends EquipmentUnit {
   mode: 'world' | 'cargo' | 'held';
   plug: number | null;
-  ammo: number;
   storeVersion: number;
   /** The pose worldPose() returns (null: no world / carried). */
   pose: {x: number; y: number; z: number; yaw: number; level: number} | null;
@@ -17,12 +17,34 @@ export interface FakeUnit extends EquipmentUnit {
   lidCalls: boolean[];
 }
 
-/** One fake unit (a chest gets its def.slots empty slots). */
+/**
+ * One fake unit (a kind with def.slots gets them, empty; a feed kind's take only its item, by the real rule, and its `ammo` /
+ * takeAmmo read and use up those stacks exactly as world/trainEquipment.ts LiveUnit does).
+ */
 export function fakeUnit(kind: EquipmentKind, uid: string, pose: FakeUnit['pose'] = {x: 0, y: 0, z: 0, yaw: 0, level: 0}): FakeUnit {
   const def = EQUIPMENT[kind];
   const u: FakeUnit = {
-    uid, kind, def, mode: 'world', plug: null, ammo: 0,
-    setAmmo(n: number) { u.ammo = Math.max(0, Math.min(def.ammoCap, Math.floor(n))); return u.ammo; },
+    uid, kind, def, mode: 'world', plug: null,
+    get ammo(): number {
+      let n = 0;
+      if (def.slotItem) for (const st of u.slots ?? []) if (st?.itemId === def.slotItem) n += st.count;
+      return n;
+    },
+    takeAmmo(n = 1) {
+      let took = 0;
+      const slots = u.slots;
+      if (!def.slotItem || !slots) return 0;
+      for (let i = slots.length - 1; i >= 0 && took < n; i--) {
+        const st = slots[i];
+        if (!st || st.itemId !== def.slotItem) continue;
+        const k = Math.min(n - took, st.count);
+        st.count -= k;
+        took += k;
+        if (st.count <= 0) slots[i] = null;
+      }
+      if (took) u.storeVersion++;
+      return took;
+    },
     slots: def.slots ? new Array<ItemStack | null>(def.slots).fill(null) : null,
     storeVersion: 0,
     touchStore() { u.storeVersion++; },
@@ -31,6 +53,7 @@ export function fakeUnit(kind: EquipmentKind, uid: string, pose: FakeUnit['pose'
     pose,
     worldPose() { return u.mode === 'held' ? null : u.pose; },
   };
+  if (u.slots && def.slotItem) setStoreRule(u.slots, feedRule(def));
   return u;
 }
 
@@ -48,7 +71,7 @@ export interface FakeEquipment extends EquipmentSystemLike {
   calls: {block: EquipmentKind[]; craft: EquipmentKind[]};
   /** Where craft() puts a new unit (world). */
   spot: {x: number; y: number; z: number; yaw: number; level: number};
-  /** Which chests count as standing in the parked car (default: every chest in mode 'world'). */
+  /** Which chests count as standing in the parked car (default: every chest in mode 'world'; never a feed's slots). */
   aboard: (u: FakeUnit) => boolean;
   seq: number;
 }
@@ -61,6 +84,7 @@ export function fakeEquipment(): FakeEquipment {
     aboard: u => u.mode === 'world',
     uses: {} as Partial<Record<EquipmentKind, EquipmentUse>>,
     plugListeners: [],
+    promptNotes: [],
     units: () => [...sys.list].sort((a, b) => equipmentSeqOf(a.uid) - equipmentSeqOf(b.uid)),
     plugged: kind => sys.units().filter(u => u.kind === kind && u.plug !== null).sort((a, b) => a.plug! - b.plug!)[0] ?? null,
     active: kind => sys.plugged(kind),
@@ -74,7 +98,7 @@ export function fakeEquipment(): FakeEquipment {
       sys.made.push(u);
       return u;
     },
-    storesAboard: (): EquipmentStore[] => (sys.units() as FakeUnit[]).filter(u => u.slots && sys.aboard(u)).map(u => ({uid: u.uid, slots: u.slots!, touch: () => u.touchStore()})),
+    storesAboard: (): EquipmentStore[] => (sys.units() as FakeUnit[]).filter(u => u.slots && !u.def.slotItem && sys.aboard(u)).map(u => ({uid: u.uid, slots: u.slots!, touch: () => u.touchStore()})),
   };
   return sys;
 }

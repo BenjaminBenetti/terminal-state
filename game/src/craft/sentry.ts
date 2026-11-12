@@ -1,14 +1,15 @@
 // Task studio-train-crafting-v1-20261111-225628-01 (lane SENTRY): the defense sentry — a movable console that plugs into the train and is
 // fed real 5.56 mm rounds, and a roof turret that fires them at nearby enemies through the game's normal line-of-sight combat. It is
 // crafted empty; no round is ever made here.
-// THE SENTRY'S RULES — pure (no three.js, no Game, no DOM): every tuning number (SENTRY), the hopper's load / unload, the turret's
+// THE SENTRY'S RULES — pure (no three.js, no Game, no DOM): every tuning number (SENTRY), the turret's
 // geometry on the roof (pivot, muzzle, aim angles), the OWN-HULL rule and the VIRTUAL ORIGIN of its line of fire, the target order and
 // the small vector helpers. world/sentryTurret.ts runs them against the live game (the equipment unit, the enemies, the level's rays).
 //
-// AMMO: the hopper holds real 5.56 mm rounds (craft/equipment.ts EQUIPMENT.sentry: ammoItem / ammoCap; the unit's `ammo`). A round only
-// ever enters it out of the carried inventory (loadHopper: exactly min(carried, room)) and only ever leaves it as a shot (one per shot) or
-// back into the inventory (unloadHopper: stack by stack, as many as fit — what does not fit stays loaded). Inventory + hopper is constant
-// through any sequence of loads / unloads; nothing here makes a round.
+// AMMO (task train-interaction-ux-20261112-063646: a real four-slot inventory instead of the old take-all hopper): the sentry holds
+// real 5.56 mm rounds as ordinary stacks in its own SENTRY_FEED_SLOTS slots (craft/equipment.ts EQUIPMENT.sentry: slots / slotItem;
+// the unit's `ammo` counts them). The player puts them in and takes them out through the store view (world/equipmentChestStore.ts:
+// Inventory.storeMove / storeQuick — the Lockbox's transfers, with the feed's rule that only its rounds go in); the only other way
+// one leaves is a shot (EquipmentUnit.takeAmmo, one per shot). Nothing here or there makes a round.
 //
 // THE TURRET stands on the car's middle roof hatch (craft/trainFixtures.ts turretMount: the yaw axis, the underside of the base ring).
 // Its tilt axis is NOT on the yaw axis: the cooked model's pitch pivot (assets/trainEquipment.generated.ts TRAIN_TURRET_MEASURED.
@@ -29,7 +30,6 @@
 // Everything past the virtual origin is the game's normal combat (world/sentryTurret.ts): Levels.lineOfSight + the bullet's world ray, the
 // enemies' own hit volumes, the rifle's damage / falloff / part multipliers.
 
-import type {ItemStack} from '../items/inventory';
 import {TRAIN_TURRET_MEASURED} from '../assets/trainEquipment.generated';
 import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from '../world/playerTrainSpec';
 import {TRAIN_ROOF, roofTopAtPoint, turretMount} from './trainFixtures';
@@ -97,71 +97,6 @@ export const SENTRY = {
 export interface V3 { x: number; y: number; z: number }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-
-// ---------------------------------------------------------------------------------------------------------------------------------
-// The hopper: loading / unloading real rounds
-
-/** What the hopper needs of the carried inventory (items/inventory.ts Inventory: pockets + quick slots). */
-export interface AmmoInventory {
-  count(itemId: string): number;
-  /** Removes up to n; returns how many were removed. */
-  take(itemId: string, n: number): number;
-  makeStack(itemId: string, count: number): ItemStack;
-  /** Adds as much of the stack as fits; returns the count that did NOT fit. */
-  add(stack: ItemStack): number;
-}
-
-/** What the hopper is (craft/equipmentApi.ts EquipmentUnit). */
-export interface AmmoHopper {
-  readonly ammo: number;
-  setAmmo(n: number): number;
-  readonly def: {readonly ammoCap: number; readonly ammoItem: string | null};
-}
-
-/** Rounds a load moves: every carried round the hopper has room for (whole, never negative). */
-export function planLoad(carried: number, ammo: number, cap: number): number {
-  return Math.max(0, Math.min(Math.floor(carried), Math.floor(cap) - Math.floor(ammo)));
-}
-
-/** The next stack an unload hands back: at most one full stack of what is loaded. */
-export function planUnload(ammo: number, stackMax: number): number {
-  return Math.max(0, Math.min(Math.floor(ammo), Math.max(1, Math.floor(stackMax))));
-}
-
-/**
- * LOAD: every carried round the hopper has room for goes in. Returns the rounds moved (0: nothing carried / full / no hopper). The
- * rounds leave the inventory first; a round the hopper did not take (never, by planLoad) goes back, so the total is exact either way.
- */
-export function loadHopper(inv: AmmoInventory, unit: AmmoHopper): number {
-  const item = unit.def.ammoItem;
-  if (!item) return 0;
-  const before = unit.ammo;
-  const n = planLoad(inv.count(item), before, unit.def.ammoCap);
-  if (n <= 0) return 0;
-  const taken = inv.take(item, n);
-  if (taken <= 0) return 0;
-  const moved = unit.setAmmo(before + taken) - before;
-  if (moved < taken) inv.add(inv.makeStack(item, taken - moved));
-  return Math.max(0, moved);
-}
-
-/**
- * UNLOAD: the loaded rounds go back into the inventory as ordinary stacks, stack by stack, as many as fit; what does not fit stays
- * loaded. Returns the rounds moved.
- */
-export function unloadHopper(inv: AmmoInventory, unit: AmmoHopper, stackMax: number): number {
-  const item = unit.def.ammoItem;
-  if (!item) return 0;
-  let total = 0;
-  for (let guard = 0; guard < 64 && unit.ammo > 0; guard++) {
-    const n = planUnload(unit.ammo, stackMax);
-    const left = inv.add(inv.makeStack(item, n));
-    const moved = n - Math.max(0, Math.min(n, left));
-    if (moved > 0) { unit.setAmmo(unit.ammo - moved); total += moved; }
-    if (moved < n) break;
-  }
-  return total;
-}
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // The turret on the roof (train-local)
