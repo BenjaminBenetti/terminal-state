@@ -7,6 +7,8 @@
 // the downsized PBR maps, no source names); and the pools (the shotgun category, the Gun and Weapon slots, uniform, one bundle of
 // 12-gauge). The save / memory / delivery / Lockbox paths are registry-driven (weapon-variety-loot, weapon-runtime-delivery,
 // train-lockbox-grant). No browser, no git history.
+// + task studio-turnstile-cylinder-rotation-20261112-034833-01 (the user: "I want it to rotate as you shoot!"): the Cylinder part (a child of
+// Barrels on the cylinder's own axis) turns one chamber per actual shot in the real Viewmodel, and only there.
 import {describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
 import fs from 'node:fs';
@@ -23,7 +25,8 @@ type TriggerInput = import('../src/weapons/weapons').TriggerInput;
 const {VARIETY_GUN_LENGTHS} = await import('../src/weapons/varietyGuns');
 const {VARIETY_WEAPONS, VARIETY_GUN_IDS} = await import('../src/weapons/varietyIds');
 const {WEAPON_VARIETY_MODELS} = await import('../src/assets/weaponVarietyModels.generated');
-const {GunParts, BREAK_ANGLE} = await import('../src/weapons/gunParts');
+const {GunParts, BREAK_ANGLE, CYLINDER_INDEX, cylinderTurn} = await import('../src/weapons/gunParts');
+const {Viewmodel} = await import('../src/weapons/viewmodel');
 const {reloadCueTime} = await import('../src/weapons/gunHandling');
 const {Inventory} = await import('../src/items/inventory');
 const {ITEMS} = await import('../src/items/items');
@@ -248,22 +251,23 @@ describe('the Turnstile: existing sounds only', () => {
 });
 
 // ------------------------------------------------------------------------------------------------------------------------------
-describe('the Turnstile: the user\'s model, cooked', () => {
-  const M = WEAPON_VARIETY_MODELS.turnstile!;
-  const file = path.join(PUBLIC, M.url);
-  async function parsed(): Promise<{gltf: GLTF; doc: Awaited<ReturnType<NodeIO['read']>>}> {
-    const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
-    const doc = await io.read(file);
-    const stripped = await io.read(file);
-    for (const t of stripped.getRoot().listTextures()) t.dispose();
-    const bin = await io.writeBinary(stripped);
-    const gltf = await new Promise<GLTF>((res, rej) => new GLTFLoader().parse(bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength) as ArrayBuffer, '', res, rej));
-    return {gltf, doc};
-  }
+const M = WEAPON_VARIETY_MODELS.turnstile!;
+const file = path.join(PUBLIC, M.url);
+/** The shipped GLB: its document, and a three.js load of it without the maps (Node has no image decoder). */
+async function parsed(): Promise<{gltf: GLTF; doc: Awaited<ReturnType<NodeIO['read']>>}> {
+  const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
+  const doc = await io.read(file);
+  const stripped = await io.read(file);
+  for (const t of stripped.getRoot().listTextures()) t.dispose();
+  const bin = await io.writeBinary(stripped);
+  const gltf = await new Promise<GLTF>((res, rej) => new GLTFLoader().parse(bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength) as ArrayBuffer, '', res, rej));
+  return {gltf, doc};
+}
 
-  it('registry: G07 at 0.80 m, the five markers, one Barrels part, the hinge inside the model', () => {
+describe('the Turnstile: the user\'s model, cooked', () => {
+  it('registry: G07 at 0.80 m, the five markers, the Barrels + Cylinder parts, the hinge inside the model', () => {
     expect([M.id, M.itemId, M.kind, M.url, M.length, VARIETY_GUN_LENGTHS.turnstile, weaponLength('turnstile')]).toEqual(['G07', 'turnstile', 'gun', 'assets/models/weapon-turnstile.glb', 0.8, 0.8, 0.8]);
-    expect(M.parts).toEqual(['Barrels']);
+    expect(M.parts).toEqual(['Barrels', 'Cylinder']);
     expect(Object.keys(M.markers).sort()).toEqual(['Eject', 'Grip', 'Hinge', 'Muzzle', 'Sight']);
     for (const [name, p] of Object.entries(M.markers)) for (let k = 0; k < 3; k++) {
       expect(p![k], `${name}[${k}]`).toBeGreaterThanOrEqual(M.bounds.min[k] - 1e-6);
@@ -284,8 +288,8 @@ describe('the Turnstile: the user\'s model, cooked', () => {
     const size = (t: ReturnType<typeof mat.getBaseColorTexture>) => [ImageUtils.getSize(t!.getImage()!, t!.getMimeType()), t!.getMimeType()];
     expect([size(mat.getBaseColorTexture()), size(mat.getMetallicRoughnessTexture()), size(mat.getNormalTexture())])
       .toEqual([[[2048, 2048], 'image/jpeg'], [[1024, 1024], 'image/jpeg'], [[1024, 1024], 'image/jpeg']]);
-    expect(root.listNodes().map(n => n.getName()).sort()).toEqual(['Barrels', 'Eject', 'Grip', 'Hinge', 'Muzzle', 'Sight', 'turnstile']);
-    expect(root.listMeshes().map(m => m.getName()).sort()).toEqual(['Barrels', 'turnstile']);
+    expect(root.listNodes().map(n => n.getName()).sort()).toEqual(['Barrels', 'Cylinder', 'Eject', 'Grip', 'Hinge', 'Muzzle', 'Sight', 'turnstile']);
+    expect(root.listMeshes().map(m => m.getName()).sort()).toEqual(['Barrels', 'Cylinder', 'turnstile']);
     // every other name (scene, material, textures) is the cook's own; the generator string is the repo script
     const names = [...root.listScenes(), ...root.listMaterials(), ...root.listTextures()].map(o => o.getName());
     for (const n of names) expect(n).toMatch(/^weapon-turnstile(-[A-Za-z]+)?$/);
@@ -320,6 +324,152 @@ describe('the Turnstile: the user\'s model, cooked', () => {
     expect(boxOf(frame).equals(frameBox)).toBe(true);
     parts.apply(null, 0);
     expect(boxOf(bar).min.distanceTo(closed.min)).toBeLessThan(1e-9);
+  });
+});
+
+// ------------------------------------------------------------------------------------------------------------------------------
+describe('the Turnstile: the cylinder turns as it fires (one chamber per actual shot)', () => {
+  const STEP = 2 * Math.PI / T.magazine; // six chambers: 60 deg
+  const view = {moving: 0, sprint: false, aiming: false, lookDX: 0, lookDY: 0, reloading: false, reloadProgress: 0, using: false, useProgress: 0, bobT: 0};
+  /** A node's turn about its own +Z (its rest has no rotation), in (-pi, pi]. */
+  const turnOf = (o: THREE.Object3D) => {
+    expect(Math.hypot(o.quaternion.x, o.quaternion.y)).toBeLessThan(1e-9);
+    const a = 2 * Math.atan2(o.quaternion.z, o.quaternion.w);
+    return Math.atan2(Math.sin(a), Math.cos(a));
+  };
+  const near = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b))) < 1e-9;
+  /** The real Viewmodel holding the shipped model (its own clone), settled at the hip. */
+  async function held() {
+    const {gltf} = await parsed();
+    const vm = new Viewmodel({} as never, {});
+    expect(vm.addModel('turnstile', gltf)).toBe(true);
+    vm.setItem('turnstile');
+    for (let i = 0; i < 20; i++) vm.update(0.05, view);
+    return {gltf, vm, cyl: vm.scene.getObjectByName('Cylinder')!, bar: vm.scene.getObjectByName('Barrels')!, body: vm.scene.getObjectByName('turnstile')!};
+  }
+
+  it('the GLB: the cylinder + its ratchet are a Cylinder child of Barrels, its node on the cylinder\'s measured axis; no triangle added or lost', async () => {
+    const {gltf} = await parsed();
+    const s = gltf.scene, bar = s.getObjectByName('Barrels')!, cyl = s.getObjectByName('Cylinder')!, body = s.getObjectByName('turnstile')!;
+    expect(cyl.parent).toBe(bar);
+    const tris = (o: THREE.Object3D) => (o as THREE.Mesh).geometry.index!.count / 3;
+    expect([tris(cyl), tris(bar) + tris(cyl) + tris(body)]).toEqual([3079 + 103, M.tris]);
+    expect(cyl.quaternion.equals(new THREE.Quaternion())).toBe(true);
+    s.updateMatrixWorld(true);
+    const at = cyl.getWorldPosition(new THREE.Vector3());
+    const prov = JSON.parse(fs.readFileSync(path.join(PUBLIC, 'assets/derivatives/weapon-turnstile.json'), 'utf8'));
+    expect(at.distanceTo(new THREE.Vector3(...prov.processing.cylinderAxis.at as [number, number, number]))).toBeLessThan(1e-6);
+    expect(prov.processing.cylinderAxis.radius).toBeCloseTo(0.039, 3); // 78 mm across
+    // the round body is centred on that axis (its box within 1 mm), which lies between the cylinder's faces
+    const box = new THREE.Box3().setFromObject(cyl);
+    expect(Math.hypot((box.min.x + box.max.x) / 2 - at.x, (box.min.y + box.max.y) / 2 - at.y)).toBeLessThan(0.001);
+    expect(at.z).toBeGreaterThan(box.min.z);
+    expect(at.z).toBeLessThan(M.markers.Eject![2]); // the rear face
+    expect(prov.revisions.map((r: {task: string}) => r.task)).toEqual(['studio-turnstile-cylinder-rotation-20261112-034833-01']);
+    expect(prov.limitations.join(' ')).toMatch(/eight flutes for six shells/);
+  });
+
+  it('a turn is rigid about that axis, clockwise seen from behind; the frame and the Barrels stay where they are', async () => {
+    const {gltf} = await parsed();
+    const s = gltf.scene, cyl = s.getObjectByName('Cylinder')!, bar = s.getObjectByName('Barrels')!, body = s.getObjectByName('turnstile')!;
+    const parts = GunParts.find(s, T.magazine)!;
+    expect(parts.cylinder).not.toBeNull();
+    s.updateMatrixWorld(true);
+    const at = cyl.getWorldPosition(new THREE.Vector3()), before = cyl.matrixWorld.clone(), barM = bar.matrixWorld.clone(), bodyM = body.matrixWorld.clone();
+    const top = cyl.worldToLocal(at.clone().add(new THREE.Vector3(0, 0.039, 0)));
+    parts.index();
+    parts.apply(null, 0, CYLINDER_INDEX.delay + CYLINDER_INDEX.time);
+    s.updateMatrixWorld(true);
+    const want = new THREE.Matrix4().makeTranslation(at.x, at.y, at.z).multiply(new THREE.Matrix4().makeRotationZ(-STEP))
+      .multiply(new THREE.Matrix4().makeTranslation(-at.x, -at.y, -at.z)).multiply(before);
+    for (let i = 0; i < 16; i++) expect(Math.abs(cyl.matrixWorld.elements[i] - want.elements[i]), `element ${i}`).toBeLessThan(1e-9);
+    expect(cyl.localToWorld(top.clone()).x).toBeGreaterThan(at.x + 0.03); // the top went right (+X), seen from behind
+    expect([bar.matrixWorld.equals(barM), body.matrixWorld.equals(bodyM)]).toEqual([true, true]);
+  });
+
+  it('held (the real Viewmodel): each shot turns it one chamber as the kick comes down and it rests there; six shots = one turn; the loaded model never turns', async () => {
+    const {gltf, vm, cyl, bar, body} = await held();
+    const src = gltf.scene.getObjectByName('Cylinder')!;
+    const barQ = bar.quaternion.clone(), barP = bar.position.clone(), bodyQ = body.quaternion.clone(), bodyP = body.position.clone();
+    expect(turnOf(cyl)).toBe(0);
+    for (let k = 1; k <= 6; k++) {
+      vm.fire(T);
+      vm.update(CYLINDER_INDEX.delay - 0.01, view);
+      expect(near(turnOf(cyl), -(k - 1) * STEP), `shot ${k} kicking`).toBe(true); // not yet: the gun is still thrown up
+      vm.update(0.01 + CYLINDER_INDEX.time / 2, view);
+      expect(near(turnOf(cyl), -(k - 0.5) * STEP), `shot ${k} halfway`).toBe(true);
+      vm.update(CYLINDER_INDEX.time / 2 + 0.01, view);
+      expect(near(turnOf(cyl), -k * STEP), `shot ${k} done`).toBe(true);
+      vm.update(0.3, view);
+      expect(near(turnOf(cyl), -k * STEP), `shot ${k} resting`).toBe(true);
+    }
+    expect(Math.abs(turnOf(cyl))).toBeLessThan(1e-9);
+    expect([bar.quaternion.equals(barQ), bar.position.equals(barP), body.quaternion.equals(bodyQ), body.position.equals(bodyP)]).toEqual([true, true, true, true]);
+    expect(src.quaternion.equals(new THREE.Quaternion())).toBe(true); // the shared loaded model (pickups / warm-up clone it) stays at rest
+    vm.fire(WEAPONS.shotgun); // a shot that is not the held gun's turns nothing
+    vm.update(0.5, view);
+    expect(Math.abs(turnOf(cyl))).toBeLessThan(1e-9);
+  });
+
+  it('actual shots only: the controller\'s fire events turn it, a dry press does not; broken open for the reload it goes with the barrels and keeps its turn', async () => {
+    const {vm, cyl, bar, body} = await held();
+    const inFrame = () => body.worldToLocal(cyl.getWorldPosition(new THREE.Vector3())); // the cylinder's place on the gun (not the moving hands)
+    const drive = (r: ReturnType<typeof rig>, seconds: number, input: (i: number) => Partial<TriggerInput> = () => ({})) => {
+      const ev = {fire: 0, dry: 0, shellIn: 0, open: 0};
+      for (let i = 0; i < Math.round(seconds / DT); i++) {
+        for (const e of r.wc.update(DT, {...idle, ...input(i)}, r.inv)) {
+          if (e.type === 'fire') { ev.fire++; vm.fire(e.def); } // as game.ts: a 'fire' event -> Game.fire -> Viewmodel.fire
+          else if (e.type === 'dry') ev.dry++;
+          else if (e.type === 'shellIn') ev.shellIn++;
+        }
+        vm.update(DT, {...view, reloading: r.wc.reloading, reloadProgress: r.wc.progress, actionOpen: r.wc.actionOpen});
+        ev.open = Math.max(ev.open, r.wc.actionOpen);
+      }
+      return ev;
+    };
+    const press = (i: number) => ({pressed: i % 36 === 0, held: i % 36 === 0}); // a press every 0.6 s
+    const one = rig(1, 0);
+    expect(drive(one, 1.8, press)).toMatchObject({fire: 1, dry: 2});
+    expect(near(turnOf(cyl), -STEP)).toBe(true);
+    // a fresh six with a reserve: two shots, then the break reload
+    const r = rig(6, 6);
+    expect(drive(r, 1.2, press).fire).toBe(2);
+    expect(near(turnOf(cyl), -3 * STEP)).toBe(true);
+    r.wc.update(DT, {...idle, reload: true}, r.inv);
+    const atRest = inFrame();
+    let seenOpen = false;
+    for (let i = 0; i < 400 && r.wc.reloading; i++) {
+      drive(r, DT);
+      if (r.wc.actionOpen === 1 && !seenOpen) {
+        seenOpen = true;
+        expect(bar.quaternion.angleTo(new THREE.Quaternion())).toBeCloseTo(BREAK_ANGLE, 6); // the barrels are down
+        expect(inFrame().distanceTo(atRest)).toBeGreaterThan(0.02); // ... and the cylinder with them
+        expect(near(turnOf(cyl), -3 * STEP)).toBe(true); // shells going in do not turn it
+      }
+    }
+    expect([seenOpen, r.wc.reloading, r.stack.mag]).toEqual([true, false, 6]);
+    expect(near(turnOf(cyl), -3 * STEP)).toBe(true);
+    expect(inFrame().distanceTo(atRest)).toBeLessThan(1e-9);
+  });
+
+  it('no other gun has a Cylinder; a model without one ignores shots; each index ends before the next shot', () => {
+    expect(Object.values(WEAPON_VARIETY_MODELS).filter(m => m!.parts.includes('Cylinder')).map(m => m!.itemId)).toEqual(['turnstile']);
+    // a break action without a cylinder (the Coach Gun's layout): a shot moves nothing
+    const root = new THREE.Group(), barrels = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.4)), hinge = new THREE.Object3D();
+    barrels.name = 'Barrels';
+    barrels.position.set(0, -0.02, -0.1);
+    hinge.name = 'Hinge';
+    hinge.position.copy(barrels.position);
+    root.add(barrels, hinge);
+    const parts = GunParts.find(root, 2)!;
+    expect(parts.cylinder).toBeNull();
+    const q = barrels.quaternion.clone(), p = barrels.position.clone();
+    parts.index();
+    parts.apply(null, 0, 1);
+    expect([parts.cylinderAngle, barrels.quaternion.equals(q), barrels.position.equals(p)]).toEqual([0, true, true]);
+    const {delay, time} = CYLINDER_INDEX;
+    expect([cylinderTurn(0, 1, 0), cylinderTurn(0, 1, delay), cylinderTurn(0, 1, delay + time / 2), cylinderTurn(0, 1, delay + time), cylinderTurn(0, 1, 9)].map(v => +v.toFixed(12))).toEqual([0, 0, 0.5, 1, 1]);
+    expect(delay + time).toBeLessThan(T.interval - 0.1); // it rests on the chamber before the next shot can come
   });
 });
 

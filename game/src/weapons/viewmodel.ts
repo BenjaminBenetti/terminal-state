@@ -152,7 +152,7 @@ export class Viewmodel {
     const sightPoint = sightObj ? sightObj.getWorldPosition(new THREE.Vector3()).sub(gp) : undefined;
     const ejectObj = root.getObjectByName('Eject');
     const eject = ejectObj ? ejectObj.getWorldPosition(new THREE.Vector3()).sub(gp) : undefined;
-    const parts = GunParts.find(root) ?? undefined; // lane GUNS: before the Grip shift (model frame); none on the baseline models
+    const parts = GunParts.find(root, def.magazine) ?? undefined; // lane GUNS: before the Grip shift (model frame); none on the baseline models
     const holder = new THREE.Group();
     root.position.sub(gp);
     holder.add(root);
@@ -279,6 +279,9 @@ export class Viewmodel {
     const s = (def.pellets > 1 ? 1.5 : 1) * (0.8 + Math.random() * 0.4);
     this.flash.scale.setScalar(s);
     this.flashLight.intensity = def.pellets > 1 ? 6 : 3.5;
+    // (task studio-turnstile-cylinder-rotation-20261112-034833-01) the held revolver's cylinder turns to the next chamber
+    const it = this.current ? this.items.get(this.current) : undefined;
+    if (it?.def?.id === def.id) it.parts?.index();
   }
 
   shellBump(): void {
@@ -415,7 +418,8 @@ export class Viewmodel {
       }
     }
     // lane GUNS: the magazine out -> in during a magazine reload, the barrels turning about the hinge with a break action
-    it.parts?.apply(s.reloading && it.def?.reload.kind === 'magazine' ? s.reloadProgress : null, s.actionOpen ?? 0);
+    // (+ a revolver cylinder's per-shot index running on)
+    it.parts?.apply(s.reloading && it.def?.reload.kind === 'magazine' ? s.reloadProgress : null, s.actionOpen ?? 0, dt);
     if (s.using) {
       const p = s.useProgress;
       pos.y += Math.sin(p * Math.PI) * 0.06;
