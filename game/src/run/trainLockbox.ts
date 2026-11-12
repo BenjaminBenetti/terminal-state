@@ -46,6 +46,10 @@ function stackFrom(j: unknown, inBag: boolean, seen: Set<number>): ItemStack | n
   if (def.kind === 'weapon') {
     const mag = WEAPONS[def.weaponId!]?.magazine ?? 0;
     s.mag = Number.isFinite(o.mag) ? Math.max(0, Math.min(mag, Math.floor(o.mag as number))) : 0;
+    // task studio-turnstile-reload-visuals-20261112-063646-01: a revolver's spent hulls stay in it (only a hull-keeping gun, never past its free chambers)
+    const w = WEAPONS[def.weaponId!];
+    const spent = Number.isFinite(o.spent) ? Math.max(0, Math.min(mag - s.mag, Math.floor(o.spent as number))) : 0;
+    if (w?.reload.kind === 'break' && w.reload.spentHulls && spent > 0) s.spent = spent;
   }
   if (isFilterMask(itemId) && Number.isFinite(o.filter)) s.filter = Math.max(0, Math.min(gearSpec(itemId)!.filterLife!, o.filter as number));
   if (isAirtank(itemId) && Number.isFinite(o.air)) s.air = Math.max(0, Math.min(gearSpec(itemId)!.airLife!, o.air as number)); // task filter-tension-airtank
