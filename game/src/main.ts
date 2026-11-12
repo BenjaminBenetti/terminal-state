@@ -11,7 +11,7 @@ import {installPerfOverlay, type PerfOverlay} from './debug/overlay';
 import {installPerfRecorder} from './debug/perfRecorderUi'; // task studio-performance-recorder-20261103-043629 (lane RECORDER): the player's performance recorder
 import {milestoneBadge, readMilestones} from './run/milestones'; // task reactor-build-20261101 (lane RESTART): the title's earned badge
 // task campaign-foundation-20261102 (lane MENU): the main menu, its diorama and the persisted settings
-import {MainMenuController, MainMenuView, bootLine, mountControlsForm, mountSettingsForm, type DevStart, type MenuHost, type SlotView} from './ui/mainMenu';
+import {MainMenuController, MainMenuView, bootLine, mountControlsForm, mountSettingsForm, mountTutorialReset, type DevStart, type MenuHost, type SlotView} from './ui/mainMenu';
 import {SettingsStore, browserSettingsStorage, copySettingsInto} from './ui/settingsStore';
 import {MENU_TRAIN_KEYS, MenuScene, type MenuRenderer, type MenuSceneAssets} from './world/menuScene';
 import {OFFICE_ASSETS, loadOfficeAsset, loadOfficeTexture, type OfficeAssetId} from './assets/officeAssets';
@@ -180,6 +180,10 @@ async function boot(): Promise<void> {
   // (task studio-perf-ao-train-continuity-20261110-022206-01, lane AO: the AO line says when the atmosphere pass cannot run it)
   const aoUnavailable = () => game.atmosphere.aoUnavailable();
   mountSettingsForm($('#pause-settings'), settings, {idPrefix: 'set-', qualityPresets: ATMOSPHERE_QUALITY, aoUnavailable});
+  // task studio-first-player-onboarding-20261111-234657-01: "Reset tutorials" under the pause menu's Settings (and the main menu's, below):
+  // clears only the browser-global tutorial record; the current / next parked train shows its guide markers again
+  mountTutorialReset($('#pause-settings'), game.onboarding, {idPrefix: 'set-'});
+  window.addEventListener('storage', e => { if (e.key === null || e.key === game.onboarding.key) game.onboarding.reload(); }); // another tab
   // (task studio-alpha-survival-controls-20261107-060450-01) the input preferences live under Controls: the same store, ids set-*
   mountControlsForm($('#pause-controls-form'), settings, {idPrefix: 'set-'});
 
@@ -301,7 +305,7 @@ async function boot(): Promise<void> {
     qa: qa ? {label: qaPrebuild ? `QA quick start · ${LEVELS[dev?.level ?? 'subway'].name} (scratch, not saved)` : 'QA quick start (scratch build, not saved)', start: () => qaButton.click(), ready: () => qaReady || !qaPrebuild} : null,
   });
   const menuView = new MainMenuView($('#mm-view'), menu, {
-    settings: box => { mountSettingsForm(box, settings, {idPrefix: 'mm-set-', qualityPresets: ATMOSPHERE_QUALITY, aoUnavailable}); recorder.mountPanel(box, {idPrefix: 'mm-'}); }, // (+ lane RECORDER's Performance section; lane MENU: the quality help line)
+    settings: box => { mountSettingsForm(box, settings, {idPrefix: 'mm-set-', qualityPresets: ATMOSPHERE_QUALITY, aoUnavailable}); mountTutorialReset(box, game.onboarding, {idPrefix: 'mm-set-'}); recorder.mountPanel(box, {idPrefix: 'mm-'}); }, // (+ the tutorial reset; lane RECORDER's Performance section; lane MENU: the quality help line)
     controlsForm: box => { mountControlsForm(box, settings, {idPrefix: 'mm-set-'}); }, // (task studio-alpha-survival-controls-20261107-060450-01: input preferences under Controls)
     qaButton: qa ? qaButton : null,
     overlayHost: titleEl, // (lane MENU, campaign polish item 4: submenus open front and centre over the diorama)
