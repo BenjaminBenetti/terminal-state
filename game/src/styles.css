@@ -181,8 +181,8 @@ body #hotbar .slot.maskslot img.ico3d { width: 54px; height: 30px; }
 #craftview .cv-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
 #craftview .cv-head b { font-size: 16px; letter-spacing: 0.04em; }
 #craftview .cv-live { color: var(--red); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
-#craftview .cv-row { display: grid; grid-template-columns: 136px minmax(0, 1fr) 162px 136px; gap: 6px 14px; align-items: center; padding: 8px 0; border-top: 1px solid #2f3438; }
-#craftview .cv-preview { width: 136px; height: 85px; display: flex; align-items: center; justify-content: center; background: #15171a; border: 1px solid #3a3f44; }
+#craftview .cv-row { display: grid; grid-template-columns: 160px minmax(0, 1fr) 162px 120px; gap: 6px 14px; align-items: center; padding: 8px 0; border-top: 1px solid #2f3438; }
+#craftview .cv-preview { width: 160px; height: 100px; display: flex; align-items: center; justify-content: center; background: #15171a; border: 1px solid #3a3f44; }
 #craftview .cv-preview.cv-empty { border-style: dashed; }
 #craftview .cv-preview img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; -webkit-user-drag: none; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55)); }
 #craftview .cv-name { font-size: 16px; letter-spacing: 0.02em; }
@@ -203,5 +203,5 @@ body #hotbar .slot.maskslot img.ico3d { width: 54px; height: 30px; }
 #craftview .cv-note { min-height: 1.35em; color: var(--mustard); font-size: 14px; }
 #craftview .cv-note.refused { color: #e8776a; font-weight: 700; }
 #craftview .cv-actions button { padding: 6px 12px; white-space: nowrap; }
-@media (max-width: 900px) { #craftview .cv-row { grid-template-columns: 104px minmax(0, 1fr) 120px; } #craftview .cv-preview { width: 104px; height: 65px; grid-row: 1 / span 2; align-self: start; } #craftview .cv-mats { grid-column: 2; grid-row: 2; } #craftview .cv-do { grid-column: 3; grid-row: 1 / span 2; } #craftview .cv-why { grid-row: 3; } }
+@media (max-width: 900px) { #craftview .cv-row { grid-template-columns: 120px minmax(0, 1fr) 112px; } #craftview .cv-preview { width: 120px; height: 75px; grid-row: 1 / span 2; align-self: start; } #craftview .cv-mats { grid-column: 2; grid-row: 2; } #craftview .cv-do { grid-column: 3; grid-row: 1 / span 2; } #craftview .cv-why { grid-row: 3; } }
 /* ---------- crafting bench view: END ---------- */
