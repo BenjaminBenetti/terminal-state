@@ -19,6 +19,13 @@ asserted** for any generated source. Full per-file provenance: `assets/derivativ
   for the game; the upload file name mentions Meshy, but the generator, account, settings and licence are NOT verified and
   no clearance is implied). The game ships a re-oriented, re-scaled (0.32 m), simplified derivative with its PBR textures
   resized to 1024 px (derivatives/user-knife-20261030.json; tools/asset-pipeline/weapons/build-knife.mjs). No generation.
+- Turnstile (2026-11-12, G07, the revolving 12-gauge of the selected shotgun concept B): a user-uploaded textured model (the
+  user supplied and authorized it for the game; the upload file name mentions Meshy, but the generator, account, settings and
+  licence are NOT verified and no clearance is implied). The game ships a re-oriented, re-scaled (0.80 m) derivative with every
+  source triangle (its break-open part split along the model's own geometry) and its own PBR maps downsized and re-encoded
+  (base colour 2048 px, metallic-roughness / normal 1024 px; derivatives/weapon-turnstile.json;
+  tools/asset-pipeline/weapons/build-turnstile.mjs). The original stays outside the repository. No generation; its sounds
+  reuse the existing shotgun shot, shell insert and Coach Gun break open / close clips.
 - Zombie body + coat ("Last-shift body" / "Last-shift coat"), rifle ("Kept running"), shotgun
   ("Old reliable"), bench, ceiling light, tall and low cabinets: concept images made with native
   Codex/ChatGPT image generation (model not reported), reconstructed to 3D locally with Pixal3D

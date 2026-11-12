@@ -9,10 +9,13 @@
 // `parts` = named movable mesh nodes for reload / action visuals, each a separate node in the GLB whose translation is its pivot:
 // 'Magazine' (pivot = the top centre of the magazine, i.e. the well) and the coach gun's 'Barrels' (barrels + fore-end; pivot = its 'Hinge'
 // marker, the break-action axis parallel to X: a rotation.x < 0 drops the muzzles and opens the breech).
+// + the Turnstile (G07, the user's own model of shotgun concept B): cooked by tools/asset-pipeline/weapons/build-turnstile.mjs into
+// weaponTurnstileModel.generated.ts and added as the last entry (its 'Barrels' = the whole top-break assembly about its own 'Hinge').
 import type {VarietyWeaponId} from '../weapons/varietyIds';
+import {WEAPON_TURNSTILE_MODEL} from './weaponTurnstileModel.generated';
 
 export interface WeaponVarietyModel {
-  /** User-approved asset id (G01..G06, M01..M06). */
+  /** User-approved asset id (G01..G07, M01..M06). */
   id: string;
   itemId: VarietyWeaponId;
   kind: 'gun' | 'melee';
@@ -100,4 +103,5 @@ export const WEAPON_VARIETY_MODELS: Readonly<Partial<Record<VarietyWeaponId, Wea
     markers: {Grip: [0, 0, 0], Grip2: [0.00243, 0.00057, -0.31], Tip: [0.00257, 0.00024, -1.185]},
     parts: [],
   },
+  turnstile: WEAPON_TURNSTILE_MODEL,
 };

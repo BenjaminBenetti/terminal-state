@@ -23,7 +23,8 @@ installCanvasShim(false);
 
 // Task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the bundle is registry-derived BY DESIGN ("the current ranged
 // guns"), so the six new guns join it once their WeaponDefs exist (weapons/varietyGuns.ts, lane GUNS): 3 + 6 guns, N = 19 slots (13 before;
-// with the defs absent every number below is exactly the old pin). Gear and ammo are unchanged.
+// with the defs absent every number below is exactly the old pin). Gear and ammo are unchanged. (Task studio-turnstile-user-model-
+// 20261112-004550-01: the Turnstile is a current ranged gun too: 3 + 7 guns, N = 20.)
 const GUNS = ['rifle', 'shotgun', 'pistol', ...VARIETY_GUN_IDS.filter(id => WEAPONS[id] && !WEAPONS[id].melee)];
 const G = GUNS.length, N = G + 10, K = Math.floor(LOCKBOX_SLOTS / N);
 const EXPECTED = [
@@ -35,7 +36,7 @@ const EXPECTED = [
 const fillWith = (box: TrainLockbox, inv: Inventory, n: number) => { for (let i = 0; i < n; i++) box.slots[i] = inv.makeStack('water', 1); };
 
 describe('the gear drop bundle (registry-derived)', () => {
-  it('is exactly the ranged guns (3 + the 6 new guns once defined), the 7 gear items and one full stack of each of the 3 calibers — 13 / 19 slots', () => {
+  it('is exactly the ranged guns (3 + the 7 new guns once defined), the 7 gear items and one full stack of each of the 3 calibers — 13 / 20 slots', () => {
     expect(devGrantBundle()).toEqual(EXPECTED);
     // derived, not listed: every weapon item that is not melee, every gear item, every caliber ammo item — nothing else
     for (const d of Object.values(ITEMS)) {
@@ -46,7 +47,7 @@ describe('the gear drop bundle (registry-derived)', () => {
     expect(devGrantBundle().some(l => l.itemId === 'knife')).toBe(false); // melee: not a gun, not gear
     for (const l of devGrantBundle().filter(x => itemDef(x.itemId).kind === 'ammo')) expect(l.count).toBe(itemDef(l.itemId).stackMax);
     expect(planGrant(new TrainLockbox().slots)).toEqual({ok: true, need: N, free: LOCKBOX_SLOTS});
-    expect([13, 19]).toContain(N);
+    expect([13, 20]).toContain(N);
     expect(grantText()).toBe(`${GUNS.map(id => itemDef(id).short).join(', ')}, Armor vest, Chest rig, Backpack, Hard hat, Work boots, Work gloves, Gas mask, 120 × 9mm, 120 × 5.56mm, 32 × 12-gauge`);
   });
 
@@ -66,7 +67,7 @@ describe('the gear drop bundle (registry-derived)', () => {
 
   it('all or nothing: too little room grants NOTHING (slots and uid counter untouched); merges onto partial stacks count with the real rules', () => {
     const inv = new Inventory(), box = new TrainLockbox();
-    fillWith(box, inv, LOCKBOX_SLOTS - N + 1); // N - 1 free < N (19: 32 of the 50 filled, 18 free)
+    fillWith(box, inv, LOCKBOX_SLOTS - N + 1); // N - 1 free < N (20: 31 of the 50 filled, 19 free)
     const before = JSON.stringify(box.toJSON()), uid = inv.makeStack('water', 1).uid;
     expect(grantAllOrNothing(box.slots, inv)).toEqual({ok: false, need: N, free: N - 1});
     expect(JSON.stringify(box.toJSON())).toBe(before);
@@ -80,7 +81,7 @@ describe('the gear drop bundle (registry-derived)', () => {
     expect(box.invariants()).toEqual([]);
   });
 
-  it('repeating is allowed while there is room: K drops fit the 50 slots (3 of 13, 2 of 19), the next is refused with nothing changed', () => {
+  it('repeating is allowed while there is room: K drops fit the 50 slots (3 of 13, 2 of 20), the next is refused with nothing changed', () => {
     const inv = new Inventory(), box = new TrainLockbox();
     for (const used of Array.from({length: K}, (_, i) => (i + 1) * N)) {
       expect(grantAllOrNothing(box.slots, inv).ok).toBe(true);
@@ -224,7 +225,7 @@ describe('LockboxSystem: open / close rules, digits never leak, the drop from th
     expect(sys.matcher.progress).toBe(1);
     type('337');
     expect(box.used).toBe(N);
-    type('1313371337'); // the second '1' restarts the attempt: two more drops while there is room (13: 39 used; 19: the second is refused, 38)
+    type('1313371337'); // the second '1' restarts the attempt: two more drops while there is room (13: 39 used; 20: the second is refused, 40)
     expect(box.used).toBe(Math.min(3, K) * N);
     const before = JSON.stringify(box.toJSON());
     type('1337');

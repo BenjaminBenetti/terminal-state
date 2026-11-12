@@ -2,10 +2,12 @@
 // type, and six melee weapons). ONE source of truth for their ids, approved asset ids, ammo calibers and the existing weapon opportunity
 // family each one shares. The pistol / rifle / shotgun / knife stay exactly as they are; these are ADDITIONS that diversify the identity
 // of the EXISTING weapon finds (same find rate, same ammo supply), never new spawn rows.
+// Task studio-turnstile-user-model-20261112-004550-01: + the TURNSTILE (G07), the user-selected shotgun concept B (a six-shell top-break
+// revolving-cylinder 12-gauge) from the user's own model — a seventh gun in the same additions (shotgun family, the existing 12-gauge pool).
 import type {Caliber} from '../items/calibers';
 
-/** The six new guns (item id = weapon id = model key). */
-export const VARIETY_GUN_IDS = ['hornet', 'longslide', 'stub', 'overwatch', 'coach_gun', 'thresher'] as const;
+/** The new guns (item id = weapon id = model key): the six of the weapon-variety production + the Turnstile. */
+export const VARIETY_GUN_IDS = ['hornet', 'longslide', 'stub', 'overwatch', 'coach_gun', 'thresher', 'turnstile'] as const;
 /** The six new melee weapons (item id = weapon id = model key). */
 export const VARIETY_MELEE_IDS = ['fire_axe', 'machete', 'sledgehammer', 'crowbar', 'slugger', 'track_shovel'] as const;
 export const VARIETY_WEAPON_IDS = [...VARIETY_GUN_IDS, ...VARIETY_MELEE_IDS] as const;
@@ -17,7 +19,7 @@ export type VarietyWeaponId = (typeof VARIETY_WEAPON_IDS)[number];
 export type WeaponFamily = 'pistol' | 'rifle' | 'shotgun' | 'knife';
 
 export interface VarietyWeaponInfo {
-  /** The user-approved concept / asset id (weapon-variety board revision 2). */
+  /** The user-approved concept / asset id (weapon-variety board revision 2; G07 = the Turnstile, shotgun concept options B). */
   asset: string;
   name: string;
   family: WeaponFamily;
@@ -32,6 +34,7 @@ export const VARIETY_WEAPONS: Readonly<Record<VarietyWeaponId, VarietyWeaponInfo
   overwatch: {asset: 'G04', name: 'Overwatch', family: 'rifle', caliber: '5.56x45mm'},
   coach_gun: {asset: 'G05', name: 'Coach Gun', family: 'shotgun', caliber: '12ga'},
   thresher: {asset: 'G06', name: 'Thresher', family: 'shotgun', caliber: '12ga'},
+  turnstile: {asset: 'G07', name: 'Turnstile', family: 'shotgun', caliber: '12ga'},
   fire_axe: {asset: 'M01', name: 'Fire Axe', family: 'knife'},
   machete: {asset: 'M02', name: 'Machete', family: 'knife'},
   sledgehammer: {asset: 'M03', name: 'Sledgehammer', family: 'knife'},

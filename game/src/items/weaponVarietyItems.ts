@@ -36,6 +36,9 @@ export const VARIETY_WEAPON_ITEMS: Readonly<Record<VarietyWeaponId, ItemDef>> = 
     'Side-by-side 12-gauge break-action with outside hammers. Two barrels, two quick shots — then break it open and drop in two fresh shells.'),
   thresher: W('thresher', 'Thresher — "Clears the room"', 'Thresher',
     'Semi-automatic 12-gauge shotgun fed from a box magazine. Fires as fast as you pull and reloads a whole magazine at once; heavy, and it kicks hard.'),
+  // task studio-turnstile-user-model-20261112-004550-01: the Turnstile (G07)
+  turnstile: W('turnstile', 'Turnstile — "Keep moving"', 'Turnstile',
+    'Old transit-authority 12-gauge revolver with a six-shell cylinder and a taped tube stock. Double action: no pumping, just pull again — light and quick to swing, with a wide, short-range spread. Break it open to drop shells in one at a time.'),
   // --- melee ---
   fire_axe: W('fire_axe', 'Fire Axe — "Break glass"', 'Fire axe',
     `Red-headed fire axe from an emergency cabinet: a heavy two-handed chop with a pick on the back. ${MELEE}`),
@@ -53,19 +56,20 @@ export const VARIETY_WEAPON_ITEMS: Readonly<Record<VarietyWeaponId, ItemDef>> = 
 
 /** Impact class of each as a loose item (damage/materials.ts ITEM_CLASS): steel guns and tools; the aluminium bat rings like sheet metal. */
 export const WEAPON_VARIETY_CLASS: Readonly<Record<VarietyWeaponId, DamageClass>> = {
-  hornet: 'steel', longslide: 'steel', stub: 'steel', overwatch: 'steel', coach_gun: 'steel', thresher: 'steel',
+  hornet: 'steel', longslide: 'steel', stub: 'steel', overwatch: 'steel', coach_gun: 'steel', thresher: 'steel', turnstile: 'steel',
   fire_axe: 'steel', machete: 'steel', sledgehammer: 'steel', crowbar: 'steel', slugger: 'sheetMetal', track_shovel: 'steel',
 };
 
 /**
  * Rigid body of each as a loose item (physics/dynamicItems.ts; damage/materials.ts ITEM_PHYSICS): plausible real masses (kg) on a box
  * collider, like the baseline guns (rifle 3.4, pistol 0.9, knife 0.32): a compact SMG ~2.6, a target pistol ~1.1, a bullpup ~3.0, a
- * scoped DMR ~4.5, a side-by-side ~3.2, a box-fed shotgun ~4.2; a fire axe ~2.7, a machete ~0.6, a 4.5 kg sledge, a crowbar ~1.4, an
+ * scoped DMR ~4.5, a side-by-side ~3.2, a box-fed shotgun ~4.2, the short revolving Turnstile ~3.0; a fire axe ~2.7, a machete ~0.6, a 4.5 kg sledge, a crowbar ~1.4, an
  * aluminium bat ~0.9, a ballast shovel ~2.4.
  */
 export const WEAPON_VARIETY_PHYSICS: Readonly<Record<VarietyWeaponId, ItemPhysics>> = {
   hornet: {mass: 2.6, shape: 'box', mat: 'heavy'}, longslide: {mass: 1.1, shape: 'box', mat: 'heavy'}, stub: {mass: 3.0, shape: 'box', mat: 'heavy'},
   overwatch: {mass: 4.5, shape: 'box', mat: 'heavy'}, coach_gun: {mass: 3.2, shape: 'box', mat: 'heavy'}, thresher: {mass: 4.2, shape: 'box', mat: 'heavy'},
+  turnstile: {mass: 3.0, shape: 'box', mat: 'heavy'},
   fire_axe: {mass: 2.7, shape: 'box', mat: 'heavy'}, machete: {mass: 0.6, shape: 'box', mat: 'metal'}, sledgehammer: {mass: 4.5, shape: 'box', mat: 'heavy'},
   crowbar: {mass: 1.4, shape: 'box', mat: 'metal'}, slugger: {mass: 0.9, shape: 'box', mat: 'metal'}, track_shovel: {mass: 2.4, shape: 'box', mat: 'heavy'},
 };

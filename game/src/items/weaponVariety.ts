@@ -19,9 +19,12 @@
 // THE SLOT of an opportunity (slotKindOf): a find in a GUN STORE — an area whose purpose / type carries the `guns` tag (the Mall's
 // `mall-guns` shop programme on any level that builds it; the Skywalk's store pool has none) — is a GUN slot; every other ordinary find
 // is a WEAPON slot. The rows (slotRows):
-//   WEAPON  : 50 % gun (each of the 9 guns 1/18) + 50 % melee (each of the 7 melee weapons 1/14, the knife included)
-//   GUN     : each of the 9 guns 1/9            (pistol / Hornet / Longslide · rifle / Stub / Overwatch · shotgun / Coach Gun / Thresher)
-//   PISTOL / RIFLE / SHOTGUN : each of its 3 guns 1/3        MELEE : each of the 7 melee weapons 1/7
+//   WEAPON  : 50 % gun (each of the 10 guns 1/20) + 50 % melee (each of the 7 melee weapons 1/14, the knife included)
+//   GUN     : each of the 10 guns 1/10   (pistol / Hornet / Longslide · rifle / Stub / Overwatch · shotgun / Coach Gun / Thresher / Turnstile)
+//   PISTOL / RIFLE : each of its 3 guns 1/3   SHOTGUN : each of its 4 guns 1/4   MELEE : each of the 7 melee weapons 1/7
+// (Task studio-turnstile-user-model-20261112-004550-01: the Turnstile joined the gun group / the 12-gauge category under the SAME policy —
+// every gun type equally likely, the 50 / 50 Weapon split, one standard bundle per find — so the gun share and the ammo supply are
+// unchanged and each earlier gun's share went from 1/18 to 1/20 of a Weapon slot. Realized finds are remembered stacks and never change.)
 // (No generator lays an explicit category slot today; the kinds exist so one can be declared without a second rule.) The source family
 // no longer constrains the choice, and there is no context lean: an ordinary slot on any level can realize any of its leaves.
 //
@@ -50,6 +53,11 @@
 // restores EXACTLY what it was; a remembered pickup list (any save, old or new) is never realized again (no conversion, reroll or
 // migration). The new rules reach every section whose pickups were never realized, including the unvisited areas of an old campaign.
 // The food-half gate and every non-weapon origin are untouched.
+// THE POOL VERSION (task studio-turnstile-user-model-20261112-004550-01): a later pool only ADDS leaves (version 2: the Turnstile). A
+// section's first spawn records the version it used in its memory (lane WEAPON_POOL_LANE), so a section re-spawned before its loose
+// items were ever captured — the station an arrival / new-game autosave was made in (Continue), its Retry snapshot — realizes exactly
+// the same finds. A section an older build already spawned (entered before, nothing captured, no record) keeps version 1, whose rows
+// are exactly the pre-Turnstile ones; a section entered for the first time uses the current pool.
 import {hashString} from '../core/rng';
 import {ITEMS} from './items';
 import {ammoItemFor, type Caliber} from './calibers';
@@ -64,11 +72,11 @@ export type BaselineGun = 'pistol' | 'rifle' | 'shotgun';
 export const BASELINE_GUNS: readonly BaselineGun[] = ['pistol', 'rifle', 'shotgun'];
 
 /**
- * Real overall lengths (m) of the twelve approved weapons (the cook lane's target lengths: lane plan "Real lengths"): the fit rule reads
+ * Real overall lengths (m) of the approved weapons (the cook lane's target lengths: lane plan "Real lengths"): the fit rule reads
  * these fixed numbers, never the cooked bounds, so a re-cook never moves an unrecorded pick.
  */
 export const VARIETY_LENGTH_M: Readonly<Record<VarietyWeaponId, number>> = {
-  hornet: 0.62, longslide: 0.27, stub: 0.70, overwatch: 1.05, coach_gun: 0.95, thresher: 1.00,
+  hornet: 0.62, longslide: 0.27, stub: 0.70, overwatch: 1.05, coach_gun: 0.95, thresher: 1.00, turnstile: 0.80,
   fire_axe: 0.90, machete: 0.62, sledgehammer: 0.92, crowbar: 0.76, slugger: 0.84, track_shovel: 1.25,
 };
 /** Half-size (m) of an ammo box on the floor: a weapon's half-length + this must stay short of its paired box. */
@@ -88,23 +96,44 @@ export function identityAvailable(id: string): boolean {
   return !isVarietyWeapon(id) || !!WEAPON_VARIETY_MODELS[id];
 }
 
-/** The nine guns by category (catalogue order) and the seven melee weapons (the starter knife + the six new ones). */
+/** The ten guns by category (catalogue order) and the seven melee weapons (the starter knife + the six new ones). */
 export const GUN_CATEGORIES = {
   pistol: ['pistol', 'hornet', 'longslide'],
   rifle: ['rifle', 'stub', 'overwatch'],
-  shotgun: ['shotgun', 'coach_gun', 'thresher'],
+  shotgun: ['shotgun', 'coach_gun', 'thresher', 'turnstile'],
 } as const satisfies Readonly<Record<BaselineGun, readonly string[]>>;
 export const GUN_LEAVES: readonly string[] = [...GUN_CATEGORIES.pistol, ...GUN_CATEGORIES.rifle, ...GUN_CATEGORIES.shotgun];
 export const MELEE_LEAVES: readonly string[] = ['knife', ...VARIETY_MELEE_IDS];
+
+/** The current weapon pool version (see the header): 1 = the nine guns + seven melee weapons; 2 = + the Turnstile. */
+export const WEAPON_POOL_VERSION = 2;
+/** The version that added a leaf (absent: version 1). A new leaf is appended to its group with the next version. */
+const POOL_ADDED: Readonly<Record<string, number>> = {turnstile: 2};
+/** Section memory lane recording the pool version of the section's first spawn (run/memory.ts `lanes`; saved as opaque JSON). */
+export const WEAPON_POOL_LANE = 'weapon-pool';
+/** Is a leaf part of pool `version`? */
+export const inWeaponPool = (id: string, version: number): boolean => (POOL_ADDED[id] ?? 1) <= version;
+/**
+ * The pool a section's weapon finds are realized from: its recorded version; else version 1 when an older build already spawned it
+ * (`priorVisits` > 0: entered before, never captured — the version-1 builds recorded nothing); else the current version.
+ */
+export function sectionWeaponPool(lanes: Readonly<Record<string, unknown>> | undefined, priorVisits: number): number {
+  const v = lanes?.[WEAPON_POOL_LANE];
+  if (typeof v === 'number' && Number.isInteger(v) && v >= 1) return Math.min(v, WEAPON_POOL_VERSION);
+  return priorVisits > 0 ? 1 : WEAPON_POOL_VERSION;
+}
 
 /** The slot kinds (see the header). */
 export type SlotKind = 'weapon' | 'gun' | BaselineGun | 'melee';
 /** A Weapon slot's split between its two groups (user: 50 % gun / 50 % melee). */
 export const WEAPON_SLOT_SPLIT = {gun: 0.5, melee: 0.5} as const;
 
-/** The leaves of a slot kind with their probabilities (uniform inside each group; each kind sums to 1). */
-export function slotRows(kind: SlotKind): [string, number][] {
-  const even = (ids: readonly string[], total: number) => ids.map(id => [id, total / ids.length] as [string, number]);
+/** The leaves of a slot kind with their probabilities in pool `pool` (uniform inside each group; each kind sums to 1). */
+export function slotRows(kind: SlotKind, pool = WEAPON_POOL_VERSION): [string, number][] {
+  const even = (all: readonly string[], total: number) => {
+    const ids = all.filter(id => inWeaponPool(id, pool));
+    return ids.map(id => [id, total / ids.length] as [string, number]);
+  };
   if (kind === 'weapon') return [...even(GUN_LEAVES, WEAPON_SLOT_SPLIT.gun), ...even(MELEE_LEAVES, WEAPON_SLOT_SPLIT.melee)];
   if (kind === 'gun') return even(GUN_LEAVES, 1);
   if (kind === 'melee') return even(MELEE_LEAVES, 1);
@@ -213,6 +242,8 @@ export interface WeaponFindPlan {
 export interface WeaponFindOptions {
   /** Which identities this build can realize (default identityAvailable: def + delivered model). */
   available?: (id: string) => boolean;
+  /** The pool version (default the current one; a section's own: sectionWeaponPool). */
+  pool?: number;
 }
 
 /**
@@ -244,7 +275,7 @@ export function weaponFindPlan(layout: Pick<StationLayout, 'seed' | 'pickups' | 
       if (!bp) { const w = WEAPONS[id]; return !w.melee && w.caliber === base.caliber && w.magazine >= original; }
       return true;
     };
-    const rows = slotRows(slot).filter(([id]) => leafOk(id));
+    const rows = slotRows(slot, o.pool).filter(([id]) => leafOk(id));
     const picked = rows.length ? pickAt(rows, unit(findOrigin(section, i, p.itemId), layout.seed)) : family;
     const itemId = picked;
     const w = WEAPONS[itemId];

@@ -257,13 +257,14 @@ its "same rounds per caliber" rule for every NEW roll.
 
   | Slot | Leaves | Each leaf |
   |---|---|---|
-  | Weapon | 50 % gun: pistol, Hornet, Longslide, rifle, Stub, Overwatch, shotgun, Coach Gun, Thresher; 50 % melee: knife, Fire Axe, Machete, Sledgehammer, Crowbar, Slugger, Track Shovel | gun 1/18, melee 1/14 |
-  | Gun | the 9 guns | 1/9 |
-  | Pistol / Rifle / Shotgun (category) | its 3 guns | 1/3 |
+  | Weapon | 50 % gun: pistol, Hornet, Longslide, rifle, Stub, Overwatch, shotgun, Coach Gun, Thresher, Turnstile; 50 % melee: knife, Fire Axe, Machete, Sledgehammer, Crowbar, Slugger, Track Shovel | gun 1/20, melee 1/14 |
+  | Gun | the 10 guns | 1/10 |
+  | Pistol / Rifle (category) | its 3 guns | 1/3 |
+  | Shotgun (category) | shotgun, Coach Gun, Thresher, Turnstile | 1/4 |
   | Melee | the 7 melee weapons | 1/7 |
 
   No generator lays an explicit category slot today; the kinds exist for one to be declared. The source family no longer constrains
-  the pick and there is no place lean: an ordinary Weapon slot on any level can realize any of its 16 leaves.
+  the pick and there is no place lean: an ordinary Weapon slot on any level can realize any of its 17 leaves.
 - **The choice.** At a section's first spawn (`game.ts` buildSection, memory pickups `null`), a stable hash of the find's origin
   (section id, layout index, rolled baseline; seeded by the layout seed) picks the leaf. No RNG stream is read, so every other draw,
   yaw, lot and position is unchanged. Eligibility reads the delivered catalogue (WeaponDef + item + delivered model registry), never the
@@ -288,31 +289,39 @@ its "same rounds per caliber" rule for every NEW roll.
     | pistol | 15 | 15 | rifle | 30 | 20 | shotgun | 6 | 6 |
     | Hornet | 15 | 15 | Stub | 30 | 20 | Coach Gun | 2 | 10 |
     | Longslide | 10 | 20 | Overwatch | 12 | 38 | Thresher | 6 | 6 |
+    | | | | | | | Turnstile | 6 | 6 |
 
   Standalone ammo rows and every other pickup are untouched.
 - **Saves.** A realized find is an ordinary layout pickup: run memory records its whole stack (item, count, loaded rounds). A
   remembered pickup list, from any save, is restored exactly. Nothing is converted, rerolled or migrated; finds already realized under
   the old rule stay what they are. The new rule reaches every section whose pickups were never realized, including the unvisited
   areas of an old campaign.
+- **Pool versions.** A later pool only adds leaves: version 1 is the nine guns and seven melee weapons, and version 2 adds the
+  Turnstile. An autosave (arrival, new game) does not capture the loose items of the station it is made in. So a section's first spawn
+  records its pool version in the section memory (lane `weapon-pool`, `sectionWeaponPool`), and Continue or Retry at that station
+  realizes the same finds. A section an older build already spawned (entered before, nothing captured, no record) keeps version 1,
+  whose rows and picks are exactly the pre-Turnstile ones. A section entered for the first time uses the current pool.
 - **Measured** (`tests/weapon-variety-loot.test.ts`: 76 real layouts of every level, pistol start plus two rifle-start seeds each;
-  `/tmp/weapon-variety-loot/census.json`). The weapon find count and every other pickup are identical, and every find carries exactly
-  one standard bundle before and after (127.0 = 127.0). Raw rounds in the find bundles move with the new mix (melee results keep the
-  source caliber):
+  `/tmp/weapon-variety-loot/census.json`; re-measured with the Turnstile in the pool). The weapon find count and every other pickup are
+  identical, and every find carries exactly one standard bundle before and after (127.0 = 127.0). Raw rounds in the find bundles move
+  with the new mix (melee results keep the source caliber):
 
   | Level (layouts) | Finds (slots) | Realized: gun / melee | Bundle rounds before: 9mm / 5.56 / 12ga | After: 9mm / 5.56 / 12ga |
   |---|---|---|---|---|
   | Subway (18) | 36 (Weapon) | 11 / 25 | 0 / 850 / 228 | 90 / 700 / 228 |
-  | Office (6) | 10 (Weapon) | 4 / 6 | 0 / 200 / 72 | 0 / 400 / 24 |
-  | Mall (26) | 30 (Gun: gun shops) | 30 / 0 | 270 / 350 / 168 | 240 / 750 / 84 |
+  | Office (6) | 10 (Weapon) | 4 / 6 | 0 / 200 / 72 | 0 / 300 / 48 |
+  | Mall (26) | 30 (Gun: gun shops) | 30 / 0 | 270 / 350 / 168 | 210 / 650 / 120 |
   | Market (2) | 0 | — | — | — |
-  | Bunker (14) | 34 (Weapon) | 14 / 20 | 0 / 650 / 252 | 120 / 750 / 180 |
-  | Skyways (5) | 8 (Weapon) | 5 / 3 | 0 / 150 / 60 | 0 / 200 / 48 |
+  | Bunker (14) | 34 (Weapon) | 14 / 20 | 0 / 650 / 252 | 90 / 750 / 192 |
+  | Skyways (5) | 8 (Weapon) | 5 / 3 | 0 / 150 / 60 | 0 / 100 / 72 |
   | Reactor (5) | 9 (Weapon) | 4 / 5 | 0 / 150 / 72 | 0 / 200 / 60 |
-  | All (76) | 127 | 68 / 59 | 270 / 2350 / 852 | 450 / 3000 / 624 |
+  | All (76) | 127 | 68 / 59 | 270 / 2350 / 852 | 390 / 2700 / 720 |
 
-  All 16 leaves appear in the Weapon slots of these layouts and every gun category in the gun shops. The real census is small, so its
-  shares scatter (the Weapon slots came out 59 melee of 97). The same test's synthetic check runs the real plan over 36 000 finds: every
-  leaf within sampling error of 1/18, 1/14 or 1/9, whatever the source family.
+  All 17 leaves appear in the Weapon slots of these layouts (the Turnstile 4 of 97) and every gun category in the gun shops (the
+  Turnstile 1 of 30). The real census is small, so its shares scatter (the Weapon slots came out 59 melee of 97). The same test's
+  synthetic check runs the real plan over 36 000 finds: every leaf within sampling error of 1/20, 1/14 or 1/10, whatever the source
+  family. Adding the Turnstile changed the pick of not-yet-realized finds only (above: the same finds, slots and bundles); every
+  realized find is a remembered stack and stays what it is.
 
 ## Explicit exceptions (not table-driven)
 

@@ -1,5 +1,6 @@
 // Task studio-weapon-variety-production-20261109-224355-01 (lane GUNS): the six new guns' data-driven WeaponDefs (ids: weapons/varietyIds.ts
-// VARIETY_GUN_IDS). weapons.ts spreads them into WEAPONS after the baseline four, which stay exactly as they were.
+// VARIETY_GUN_IDS) + the Turnstile (task studio-turnstile-user-model-20261112-004550-01). weapons.ts spreads them into WEAPONS after the
+// baseline four, which stay exactly as they were.
 // A leaf module: import only TYPES from weapons.ts (runtime helpers: weapons/recoil.ts), never weapons.ts values (import cycle).
 //
 // User: "the different guns should have different handling! ofc this is obvious!" — every gun differs from its family's baseline in
@@ -25,7 +26,7 @@ import {WEAPON_VARIETY_MODELS, type WeaponVarietyModel} from '../assets/weaponVa
 
 /** Real overall lengths (m) of the approved guns (the cook lane scales the models to them; the registry's own length wins). */
 export const VARIETY_GUN_LENGTHS: Readonly<Record<VarietyGunId, number>> = {
-  hornet: 0.62, longslide: 0.27, stub: 0.7, overwatch: 1.05, coach_gun: 0.95, thresher: 1.0,
+  hornet: 0.62, longslide: 0.27, stub: 0.7, overwatch: 1.05, coach_gun: 0.95, thresher: 1.0, turnstile: 0.8,
 };
 
 /**
@@ -177,5 +178,25 @@ export const VARIETY_GUN_DEFS: Readonly<Record<VarietyGunId, WeaponDef>> = {
     bloom: {per: 0.008, max: 0.024, decay: 0.04},
     equipTime: 0.8, aimFov: 62, moveMult: 0.88, noise: 40, sound: 'shotgun', shotCycle: 'none', reloadCue: 'rifle',
     view: gunView('thresher', 'long', [0.192, -0.255, -0.36], {sightRelief: 0.28, sightLift: 0.015, aim: [0, -0.185, -0.28]}),
+  },
+  // G07 TURNSTILE — 12-gauge top-break revolver with a six-shell cylinder (task studio-turnstile-user-model-20261112-004550-01: the
+  // user-selected shotgun concept B, "Keep moving", on the user's own model). DOUBLE-ACTION: semi at 0.55 s with no pumping (between the
+  // Thresher's 0.45 s and the pump's 0.82 s), 9 x 14 per shell (126: ~7 % less than the pump's 9 x 15). A short barrel: the widest cone of
+  // the shotguns (hip 0.08, aimed 0.065) and the shortest reach (full damage only to 5 m, 25 % by 22 m), but the smallest moving penalty
+  // (0.012). A sharp kick with the quickest recovery of the shotguns; the lightest and shortest (0.8 m, ~3.0 kg): equip 0.4 s, moveMult
+  // 0.97 — close to a sidearm. Then the BREAK reload (the Coach Gun's): open + every hull out 0.6 s (fully open at 0.4 s), a shell 0.5 s
+  // each (up to six; only as many as are missing and in the reserve), close 0.3 s — 3.9 s for a full six (the pump's six: ~3.7 s). Nothing
+  // fires while it is open; a trigger press closes it after the current shell; a weapon switch keeps every shell already loaded. The
+  // whole top-break assembly (barrel, shroud, cylinder) turns about the model's own hinge pin (its `Barrels` part). Existing sounds only:
+  // the shotgun set's shot (no pump rack) and shell insert, the Coach Gun's break open / close (audio/gunVoices.ts GUN_VOICE_SHARES).
+  turnstile: {
+    ...base('turnstile'), magazine: 6, auto: false, interval: 0.55,
+    damage: 14, pellets: 9, spreadHip: 0.08, spreadAim: 0.065, spreadMove: 0.012,
+    range: 22, falloffStart: 5, falloffMin: 0.25, headMult: 1.8, limbMult: 0.75, knockback: 0.5,
+    reload: {kind: 'break', start: 0.6, eject: 0.4, each: 0.5, end: 0.3},
+    recoil: firingRecoil({pitch: 0.065, yaw: 0.018, kick: 0.09, recover: 8}),
+    equipTime: 0.4, aimFov: 62, moveMult: 0.97, noise: 38, sound: 'shotgun', shotCycle: 'none',
+    // sightLift: the eye line just over the top latch (it rises 2.8 mm above the rear sight, between the sights)
+    view: gunView('turnstile', 'long', [0.204, -0.245, -0.36], {sightRelief: 0.3, sightLift: 0.012, aim: [0, -0.152, -0.237]}),
   },
 };

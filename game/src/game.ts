@@ -20,7 +20,7 @@ import {VolumetricAtmosphere} from './render/volumetric';
 import {PickupManager, makeSupplyMesh, refreshItemTemplates, registerItemModels, type Pickup} from './world/pickups';
 import {levelPreloadPantryIds, pantryHolderRealizer, pantryIdsIn, pantryPickupItem} from './items/pantryVariety'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): food variety
 import {ensurePantryModels} from './world/pantryModels'; // (lane ITEMS) the pantry items' lazy models
-import {plannedVarietyIds, varietyIdsIn, weaponFindPlan} from './items/weaponVariety'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): weapon find identities
+import {WEAPON_POOL_LANE, plannedVarietyIds, sectionWeaponPool, varietyIdsIn, weaponFindPlan} from './items/weaponVariety'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): weapon find identities
 import {WEAPON_VARIETY_WARM_GROUP, ensureWeaponVarietyModels, weaponVarietyWarmRoots} from './world/weaponVarietyModels'; // (lane LOOT-UI) the new weapons' lazy models
 import {installWeaponVarietyDelivery, type WeaponVarietyDelivery} from './world/weaponVarietyDelivery'; // task studio-weapon-runtime-fix-20261110-022206-01: one delivery of a lazily loaded weapon model to the held view / pickups / icons
 import {Survival, survivalTicks} from './player/survival';
@@ -1056,7 +1056,7 @@ export class Game {
     try {
       const mem = key ? run.peekMemory(key) ?? null : null;
       const ids = varietyIdsIn([this.inv.toJSON(), this.playerTrain.lockbox.toJSON(), this.playerTrain.cargo.toJSON(), mem]);
-      if (layout && key && !late && !mem?.pickups) for (const id of plannedVarietyIds(layout, key.level, mem?.id ?? sectionId(key))) ids.add(id);
+      if (layout && key && !late && !mem?.pickups) for (const id of plannedVarietyIds(layout, key.level, mem?.id ?? sectionId(key), {pool: sectionWeaponPool(mem?.lanes, mem?.visits ?? 0)})) ids.add(id); // (before the entry: visits = earlier entries)
       await ensureWeaponVarietyModels(ids, {late});
       if (!late) await this.weaponVariety.settled();
     } catch (err) { console.warn('weapon variety: model preparation failed', err); }
@@ -1387,7 +1387,12 @@ export class Game {
     const plan = pickupPlan(this.layout.pickups.length, mem);
     // (task studio-weapon-variety-production-20261109-224355-01, lane LOOT-UI) a first spawn's weapon find identities, their loaded rounds and
     // the paired boxes' extra rounds (items/weaponVariety.ts: a stable hash of each find's origin, no RNG stream; remembered pickups never)
-    const weaponFinds = plan.fromLayout.length ? weaponFindPlan(this.layout, key.level, mem.id).changes : null;
+    // (task studio-turnstile-user-model-20261112-004550-01) from the pool this section's first spawn used (recorded in its memory, so a
+    // Continue / Retry of a station whose loose items were never captured realizes the same finds; visits already counts this entry)
+    const pool = sectionWeaponPool(mem.lanes, mem.visits - 1);
+    const findPlan = plan.fromLayout.length ? weaponFindPlan(this.layout, key.level, mem.id, {pool}) : null;
+    if (findPlan?.finds.length) mem.lanes[WEAPON_POOL_LANE] = pool;
+    const weaponFinds = findPlan?.changes ?? null;
     for (const i of plan.fromLayout) {
       const p = this.layout.pickups[i];
       // Task mall-playtest-revision-20261031 (lane SHOPS, U11): a placement's own yaw (a gun lying along its gun-shop bench) wins; the

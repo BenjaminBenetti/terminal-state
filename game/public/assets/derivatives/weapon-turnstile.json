@@ -1,0 +1,575 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "weapon-turnstile",
+ "itemId": "turnstile",
+ "asset": "G07",
+ "name": "Turnstile",
+ "kind": "gun",
+ "family": "shotgun",
+ "role": "held / pickup model of the Turnstile (12-gauge six-shell top-break revolving-cylinder shotgun): a weapon-variety ADDITION (every other weapon model is unchanged)",
+ "task": "studio-turnstile-user-model-20261112-004550-01",
+ "route": "the user's own textured model (made by the user with Meshy, per its export) of the selected concept B, supplied by the user for implementation and texture compression; cooked as-is: rotation, uniform scale to the design length, a lossless weld, one recorded local part separation and the model's own maps downsized / re-encoded (no generation, re-texture, projection or replacement)",
+ "concept": {
+  "id": "B",
+  "name": "Turnstile",
+  "tag": "Keep moving",
+  "sha256": "52d41497202f7f45ed829cbfd43bfc600ca6ab204530e95783d6f5b3a84a6adc",
+  "note": "the user-selected shotgun concept (outside Git): the design the user's model follows; a reference only, not an input of this cook"
+ },
+ "source": {
+  "kind": "user-supplied textured GLB: the private master stays outside Git, read-only and never shipped",
+  "sha256": "492e620ab13990ba49052af702c37f041e2c33334ca7dc538cf9f1ef19637652",
+  "bytes": 50133992,
+  "triangles": 30395,
+  "vertices": 32157,
+  "extent": [
+   0.957,
+   0.2061,
+   0.0952
+  ],
+  "axes": "muzzle at -X, +Y up, the weapon's right side (the concept's visible side) facing -Z",
+  "material": {
+   "baseColorFactor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "metallicFactor": 1,
+   "roughnessFactor": 1,
+   "emissiveFactor": [
+    0,
+    0,
+    0
+   ],
+   "normalScale": 1,
+   "doubleSided": true,
+   "alphaMode": "OPAQUE"
+  },
+  "maps": [
+   {
+    "slot": "baseColor",
+    "size": [
+     8192,
+     8192
+    ],
+    "mime": "image/jpeg",
+    "bytes": 33736666,
+    "sha256": "a887e6f18dcc2fd1e667c693c8d63f09d30bfb4a49c3093b005bbd1a1ff2ec9d"
+   },
+   {
+    "slot": "metallicRoughness",
+    "size": [
+     4096,
+     4096
+    ],
+    "mime": "image/jpeg",
+    "bytes": 6000781,
+    "sha256": "25862fb47ee13ec3382b2ed062628254783767850b2590ee15438e32ea6035f5"
+   },
+   {
+    "slot": "normal",
+    "size": [
+     4096,
+     4096
+    ],
+    "mime": "image/jpeg",
+    "bytes": 9000581,
+    "sha256": "bc6e5886668a9a43fa1fae3052714ec51b4036a579f7afd7bded35c6beca1cf1"
+   }
+  ],
+  "droppedAttributes": []
+ },
+ "processing": {
+  "weld": {
+   "verticesBefore": 32157,
+   "verticesAfter": 32157,
+   "unreferencedVerticesDropped": 0,
+   "degenerateTrianglesDropped": 0,
+   "rule": "exact-attribute weld (bitwise-equal position / normal / uv), degenerate triangles and unreferenced vertices dropped: lossless"
+  },
+  "simplify": "none: the model's triangle count is kept (held-weapon first-person density)",
+  "rotation": "rotateY(-90deg): (x, y, z) -> (-z, y, x); raw -X (muzzle) -> game -Z, raw -Z (the concept's visible = the weapon's RIGHT side) -> game +X",
+  "lengthM": 0.8,
+  "uniformScale": 0.835919,
+  "lengthRule": "uniform scale so the overall Z extent (muzzle to butt pad) = the selected design's length (concept B: ~0.80 m, the shortest shotgun); the six-shot cylinder is then 78 mm across and the length of pull ~0.34 m",
+  "thickness": {
+   "probe": {
+    "z": [
+     -0.4,
+     -0.32
+    ],
+    "y": [
+     0.02,
+     0.054
+    ],
+    "x": [
+     -0.02,
+     0.02
+    ]
+   },
+   "part": "the barrel ahead of the shroud (round)",
+   "after": {
+    "n": 347,
+    "x": 0.0286,
+    "y": 0.0298,
+    "ratioXY": 0.9589
+   },
+   "factorX": 1,
+   "band": [
+    0.85,
+    1.18
+   ]
+  },
+  "origin": "the bounding box (all parts) centred on the origin",
+  "ops": [
+   {
+    "op": "assign",
+    "why": "the break-open assembly's own islands (every island ahead of the standing breech and above the bottom strap): barrel, perforated shroud + its four screws, front sight, barrel collar, the cylinder with its front axis pin and rear ratchet, the top strap and the top latch",
+    "name": "Barrels",
+    "from": "body",
+    "islands": {
+     "rule": "whole position-connected islands lying inside the box min [-0.045,-0.018,-0.401] max [0.045,0.087,0.032] (m)",
+     "islands": 13,
+     "triangles": 12596,
+     "bounds": [
+      {
+       "tris": 5461,
+       "min": [
+        -0.0284,
+        0.0351,
+        -0.3086
+       ],
+       "max": [
+        0.028,
+        0.0629,
+        -0.0771
+       ]
+      },
+      {
+       "tris": 3079,
+       "min": [
+        -0.0398,
+        -0.0176,
+        -0.0567
+       ],
+       "max": [
+        0.0398,
+        0.0604,
+        0.0224
+       ]
+      },
+      {
+       "tris": 1120,
+       "min": [
+        -0.0271,
+        0.0718,
+        -0.0763
+       ],
+       "max": [
+        0.028,
+        0.0861,
+        -0.0359
+       ]
+      },
+      {
+       "tris": 827,
+       "min": [
+        -0.0059,
+        0.049,
+        -0.3967
+       ],
+       "max": [
+        0.0067,
+        0.0784,
+        -0.3727
+       ]
+      },
+      {
+       "tris": 364,
+       "min": [
+        -0.008,
+        0.0657,
+        -0.0759
+       ],
+       "max": [
+        0.0088,
+        0.0751,
+        0.0318
+       ]
+      },
+      {
+       "tris": 351,
+       "min": [
+        -0.0129,
+        0.022,
+        -0.4
+       ],
+       "max": [
+        0.0157,
+        0.0518,
+        -0.0837
+       ]
+      },
+      {
+       "tris": 279,
+       "min": [
+        -0.0169,
+        0.0184,
+        -0.091
+       ],
+       "max": [
+        0.0178,
+        0.0555,
+        -0.0767
+       ]
+      },
+      {
+       "tris": 261,
+       "min": [
+        0.0218,
+        0.0367,
+        -0.3029
+       ],
+       "max": [
+        0.028,
+        0.0445,
+        -0.2931
+       ]
+      },
+      {
+       "tris": 230,
+       "min": [
+        -0.028,
+        0.0367,
+        -0.302
+       ],
+       "max": [
+        -0.0239,
+        0.0445,
+        -0.2927
+       ]
+      },
+      {
+       "tris": 209,
+       "min": [
+        -0.03,
+        0.0367,
+        -0.0894
+       ],
+       "max": [
+        -0.0271,
+        0.0445,
+        -0.0812
+       ]
+      },
+      {
+       "tris": 199,
+       "min": [
+        0.0284,
+        0.0371,
+        -0.0894
+       ],
+       "max": [
+        0.0308,
+        0.0441,
+        -0.0812
+       ]
+      },
+      {
+       "tris": 113,
+       "min": [
+        -0.012,
+        0.0098,
+        -0.0645
+       ],
+       "max": [
+        0.0124,
+        0.0376,
+        -0.0543
+       ]
+      },
+      {
+       "tris": 103,
+       "min": [
+        -0.0112,
+        0.0094,
+        0.0167
+       ],
+       "max": [
+        0.0141,
+        0.0367,
+        0.0261
+       ]
+      }
+     ]
+    },
+    "detachedVertices": 0
+   },
+   {
+    "op": "assign",
+    "why": "the frame's cylinder window ahead of the standing breech (its front post and top bar) breaks with the barrel: the frame cut exactly at the breech face (z 0.0228, just ahead of its first vertex 0.0229 and behind the cylinder's rear face 0.0224) and just above the bottom strap (y -0.0165; the strap's top is -0.0167), which stays as the hinge carrier; the two hinge pin heads (their own islands) stay on the frame",
+    "name": "Barrels",
+    "from": "body",
+    "clip": {
+     "rule": "the body mesh clipped to the box min [-1,-0.0165,-1] max [1,1,0.0228] (m; 6 finite faces): triangles crossing a face are split exactly along it (interpolated position / normal / UV)",
+     "candidateTriangles": 1475,
+     "splitTriangles": 149,
+     "insideTriangles": 1554,
+     "exceptIslands": {
+      "rule": "whole position-connected islands lying inside the box min [-0.03,-0.024,-0.0715] max [0.03,-0.011,-0.0595] (m)",
+      "islands": 2,
+      "triangles": 324,
+      "bounds": [
+       {
+        "tris": 165,
+        "min": [
+         0.0251,
+         -0.0229,
+         -0.0706
+        ],
+        "max": [
+         0.0263,
+         -0.0114,
+         -0.06
+        ]
+       },
+       {
+        "tris": 159,
+        "min": [
+         -0.028,
+         -0.0233,
+         -0.0706
+        ],
+        "max": [
+         -0.0247,
+         -0.0114,
+         -0.06
+        ]
+       }
+      ]
+     }
+    },
+    "detachedVertices": 184
+   }
+  ],
+  "parts": [
+   {
+    "name": "Barrels",
+    "why": "the top-break reload: barrel + shroud + cylinder + top strap + latch + the window's front post / top bar turn about the Hinge (rotation.x < 0 drops the muzzle and lifts the cylinder's rear face toward the eye)",
+    "pivot": {
+     "rule": "the Hinge marker (the break-action axis, parallel to X)",
+     "at": [
+      -0.00044,
+      -0.01735,
+      -0.0653
+     ]
+    },
+    "triangles": 14150,
+    "bounds": {
+     "min": [
+      -0.0398,
+      -0.0176,
+      -0.4
+     ],
+     "max": [
+      0.0398,
+      0.0861,
+      0.0318
+     ]
+    }
+   }
+  ],
+  "markers": {
+   "Grip": {
+    "rule": "x = the middle of a ray along X at y / z [-0.057,0.132] (the mid-plane there)",
+    "spec": [
+     {
+      "mid": [
+       -0.057,
+       0.132
+      ]
+     },
+     -0.057,
+     0.132
+    ]
+   },
+   "Muzzle": {
+    "rule": "the front face: z = the minimum z within {\"y\":[0.02,0.052]}; x / y = the centre of the vertices within 0.004 m of it",
+    "spec": {
+     "front": {
+      "y": [
+       0.02,
+       0.052
+      ]
+     }
+    },
+    "faceVertices": 324
+   },
+   "Sight": {
+    "rule": "x = the middle of a ray along X at y / z [0.072,0.069] (the mid-plane there)",
+    "spec": [
+     {
+      "mid": [
+       0.072,
+       0.069
+      ]
+     },
+     0.0833,
+     0.069
+    ]
+   },
+   "Eject": {
+    "rule": "x = the middle of a ray along X at y / z (the outermost surfaces: the local mid-plane)",
+    "spec": [
+     "mid",
+     0.0214,
+     0.0224
+    ]
+   },
+   "Hinge": {
+    "rule": "x = the middle of a ray along X at y / z (the outermost surfaces: the local mid-plane)",
+    "spec": [
+     "mid",
+     -0.01735,
+     -0.0653
+    ]
+   }
+  },
+  "markerNotes": "Grip: the slanted rubber pistol grip at mid-hand height (its section at y -0.057 spans z 0.102 - 0.161); Muzzle: the barrel's front face (y 0.022 - 0.0518; the front sight starts 3 mm behind it); Sight: the eye line over the rear sight top (0.0833; the front post tip is 0.0784 and the top latch rises to 0.0861 between them, so ADS sets a sight lift); Eject: the cylinder's rear face on its axis (where the hulls leave when it is broken open; a revolver throws none per shot); Hinge: the centre of the model's own hinge pin at the lower front of the cylinder window (the pivot axis is parallel to X)"
+ },
+ "output": {
+  "url": "assets/models/weapon-turnstile.glb",
+  "file": "game/public/assets/models/weapon-turnstile.glb",
+  "bytes": 3159520,
+  "sha256": "19b3d44895a255e28d80b46444d2f2facea03af6cc71a9a332f8df61353baa19",
+  "triangles": 30693,
+  "vertices": 32525,
+  "dims": [
+   0.0796,
+   0.1722,
+   0.8
+  ],
+  "bounds": {
+   "min": [
+    -0.0398,
+    -0.0861,
+    -0.4
+   ],
+   "max": [
+    0.0398,
+    0.0861,
+    0.4
+   ]
+  },
+  "nodes": {
+   "body": "turnstile",
+   "parts": [
+    "Barrels"
+   ],
+   "markers": [
+    "Grip",
+    "Muzzle",
+    "Sight",
+    "Eject",
+    "Hinge"
+   ]
+  },
+  "markers": {
+   "Grip": [
+    0.00064,
+    -0.057,
+    0.132
+   ],
+   "Muzzle": [
+    0.00143,
+    0.03694,
+    -0.4
+   ],
+   "Sight": [
+    0.00031,
+    0.0833,
+    0.069
+   ],
+   "Eject": [
+    0.00066,
+    0.0214,
+    0.0224
+   ],
+   "Hinge": [
+    -0.00044,
+    -0.01735,
+    -0.0653
+   ]
+  }
+ },
+ "textures": [
+  {
+   "slot": "baseColor",
+   "source": {
+    "size": [
+     8192,
+     8192
+    ],
+    "mime": "image/jpeg",
+    "bytes": 33736666,
+    "sha256": "a887e6f18dcc2fd1e667c693c8d63f09d30bfb4a49c3093b005bbd1a1ff2ec9d"
+   },
+   "size": [
+    2048,
+    2048
+   ],
+   "mime": "image/jpeg",
+   "bytes": 1361474,
+   "sha256": "db94d18422dd4198980923181dc6c9cb2074dfa76440e4c4ae9e438f1fe82c11",
+   "note": "the model's 8192 px map downsized to 2048 (sharp lanczos3, JPEG q90 4:4:4)"
+  },
+  {
+   "slot": "metallicRoughness",
+   "source": {
+    "size": [
+     4096,
+     4096
+    ],
+    "mime": "image/jpeg",
+    "bytes": 6000781,
+    "sha256": "25862fb47ee13ec3382b2ed062628254783767850b2590ee15438e32ea6035f5"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 349703,
+   "sha256": "4a2e87f7c7727e2600f647d6ff9719d5ad12bb8f142be7f56c6798f35960db93",
+   "note": "the model's 4096 px map downsized to 1024 (sharp lanczos3, JPEG q90 4:4:4)"
+  },
+  {
+   "slot": "normal",
+   "source": {
+    "size": [
+     4096,
+     4096
+    ],
+    "mime": "image/jpeg",
+    "bytes": 9000581,
+    "sha256": "bc6e5886668a9a43fa1fae3052714ec51b4036a579f7afd7bded35c6beca1cf1"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 220507,
+   "sha256": "e44b6f701007fc9d0c1ea785d687061d9d528376b39cf6f26228be3e0b701211",
+   "note": "the model's 4096 px map downsized to 1024 (sharp lanczos3, JPEG q92 4:4:4)"
+  }
+ ],
+ "texturePolicy": "the model's own PBR maps kept slot for slot (base colour / metallic-roughness / normal), only downsized + re-encoded to the held-gun budget: base colour 8192 -> 2048 px, metallic-roughness / normal 4096 -> 1024 px (no recolour, tint, re-texture, projection or new art)",
+ "limitations": [
+  "the model's cylinder faces carry no modelled chambers (front / rear faces are flat with an unresolved texture) and its section is not six-fold symmetric: the open action shows the rear face as modelled, and the cylinder does not index per shot (turning it would show surfaces the model never resolved); nothing is invented in their place"
+ ],
+ "convention": "metres at real size, +Y up, muzzle toward -Z, the right side +X; bounding box centred on the origin; empty marker nodes Grip / Muzzle / Sight / Eject / Hinge; the Barrels part node translated to its pivot (the Hinge)",
+ "licence": "supplied by the user for this project (its upload file name mentions Meshy; the generator, account, settings and licence are not verified and the provider's terms may apply); unapproved prototype asset, no blanket licence or commercial clearance implied",
+ "rebuild": "node tools/asset-pipeline/weapons/build-turnstile.mjs [--master <the private master glb>]"
+}
