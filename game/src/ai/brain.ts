@@ -68,8 +68,9 @@ export const ZOMBIE_STATS: Record<ZombieType, ZombieStats> = {
 
 /**
  * Task studio-sprinter-zombies-20261112-033210-01: a SPRINTER (ai/sprinter.ts) is an ordinary zombie of either type with only its pursuit
- * pace raised — chaseSpeed (shambler 2.55, coated 1.75) -> SPRINTER.chaseSpeed (4.3 m/s) on the same Run clip (zombieActor.ts plays it
- * faster to match). Every other number is its type's: wander pace, hp, reach, damage, swing timing, sight, radius and turn rate.
+ * pace raised — chaseSpeed (shambler 2.55, coated 1.75) -> SPRINTER.chaseSpeed (4.3 m/s); chaseAnim stays 'Run' (task
+ * studio-sprinter-gait-20261112-063646-01: zombieActor.ts plays a sprinter's own Sprint clip for it, ai/sprintGait.ts). Every other
+ * number is its type's: wander pace, hp, reach, damage, swing timing, sight, radius and turn rate.
  */
 export const SPRINTER_STATS: Record<ZombieType, ZombieStats> = {
   shambler: {...ZOMBIE_STATS.shambler, chaseSpeed: SPRINTER.chaseSpeed},

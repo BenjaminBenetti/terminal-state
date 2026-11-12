@@ -216,6 +216,7 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       groan: () => { sfx.groan(4, 1.6, 4, false); sfx.groan(4, 1.6, 4, true); }, zombieAttack: () => sfx.zombieAttack(3, 1.5, 3), zombieDeath: () => sfx.zombieDeath(3, 1.4, 3),
       zombieGait: () => { for (let i = 0; i < 20; i++) { ctx.currentTime += 0.2; sfx.zombieGait(z, 2, 2, 1.5, 0.2, i % 2 === 0); } },
       zombieStep: () => { ctx.currentTime += 1; sfx.zombieStep(2, 2, true); sfx.zombieStep(2, 2, false, 1, -1.15); },
+      zombieFootfall: () => { ctx.currentTime += 1; sfx.zombieFootfall(2, 2, false, 4.3); }, // task studio-sprinter-gait-20261112-063646-01: a Sprint-clip foot strike
       zombieClimb: () => { for (let i = 0; i < 10; i++) { ctx.currentTime += 0.2; sfx.zombieClimb(z, 3, -0.5, 3, 0.2); } },
       // Iteration 07 (Lane Q): rat/dog vocals + paw scrabble
       creature: () => { for (const c of ['growl', 'snarl', 'bite', 'yelp', 'death'] as const) { ctx.currentTime += 1; sfx.creature(c, 3, 0.35, 3); } },

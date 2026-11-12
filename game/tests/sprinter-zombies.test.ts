@@ -229,7 +229,7 @@ describe('sprinters: the brain (only the pursuit pace changes)', () => {
   });
 });
 
-describe('sprinters: the actor (the same Run clip, played to match the pace)', () => {
+describe('sprinters: the actor (the Run fallback, played to match the pace; the Sprint clip: sprinter-gait.test.ts)', () => {
   it('gaitTimeScale: a sprinter\'s Run covers its 4.3 m/s on every body scale (0.95-1.05); every other zombie\'s playback is unchanged', () => {
     for (const scale of [0.95, 1, 1.05]) {
       const ground = CLIP_GROUND_SPEED.Run * scale;

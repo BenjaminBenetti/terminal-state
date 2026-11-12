@@ -785,12 +785,29 @@ pursues, instead of the usual chase gait.
 - **What changes.** Only the pursuit pace: `SPRINTER_STATS` (`game/src/ai/brain.ts`) is each type's own stats with
   `chaseSpeed` 4.3 m/s (shambler 2.55, coated 1.75). That is faster than a walking player (3.4) and slower than a sprinting one
   (5.8). Idle, wander, search, light investigation and horde patrol keep the type's wander pace. HP, damage, reach, swing timing,
-  sight, hearing, turn rate, look, cues and loot are the type's own. `gaitTimeScale` (`game/src/ai/zombieActor.ts`) plays the same
-  Run clip up to about 1.97x so the stride matches 4.3 m/s on every body scale. Every other zombie's playback is unchanged.
+  sight, hearing, turn rate, look, cues and loot are the type's own.
+- **The sprint gait.** While it pursues, a sprinter plays its own `Sprint` clip instead of the ordinary Run
+  (`game/src/ai/sprintGait.ts`, `game/src/ai/zombieActor.ts`). The clip is hand-authored procedural motion (periodic gait functions
+  and the zombie pipeline's own leg IK and arm aiming, ported). It is not motion capture and no art was generated. It is built at load
+  time on each body's own 18-joint rig, once per body model. It is authored at the sprint pace: 0.64 s per cycle at 4.3 m/s, so at
+  the sprinter's pace it plays at 1 / body scale (0.95–1.05x), never a sped-up cycle. That is about 3.1 steps/s with a 1.38 m step
+  (the old Run sped up to 4.3 m/s took about 5 steps/s). Each foot is down 28 % of a cycle, so the body flies between steps. The arms
+  pump against the legs with bent elbows, the hands passing the hips on the back swing. The knee drives forward, the heel kicks up
+  behind, and the trunk leans into the run with the head up. Hip and knee flexion stay inside the range the wardrobe's fitted garments
+  were validated in. A slowed sprinter (a sharp turn) brakes to at least half the sprint cadence. Its footsteps are the clip's own foot
+  strikes (`ZombieActor.sprintFootfalls`, `Sfx.zombieFootfall`), so they follow the visible stride on every body scale. Idle, wander,
+  investigation, attack, hit and death keep the ordinary clips, and attacks play at their authored rate. A sprinter's swing starts
+  clean: its Sprint fades out under the Attack, where an ordinary zombie's Run keeps running beneath its swing as before. While it
+  sprints, each bent arm's hit volume is two capsules (upper arm, forearm) instead of the shoulder-to-hand chord, so shots land on
+  the arm the player sees; every other clip and zombie keeps the six volumes. A rig the gait cannot read
+  keeps the old behaviour: `gaitTimeScale` plays the Run up to about 1.97x. Every other zombie's clips and playback are unchanged.
+  The look comes from the spawn's tag when the actor is built, so a saved sprinter shows it on Continue, Retry and import, and no
+  actor, station, kill or loot is rerolled.
 - **Saves.** A station recorded at version 1 (or visited before the roster) regenerates with no sprinters, exactly as before.
   Only stations first built at version 2 have them, and the same seed gives the same sprinters on every revisit, Continue,
   Retry and import.
-- **Tests.** `game/tests/sprinter-zombies.test.ts`.
+- **Tests.** `game/tests/sprinter-zombies.test.ts`; the gait on every shipped body (floor contact, no foot slide, flight, the
+  differences from the Run, the garment joint range, footsteps, the actor) in `game/tests/sprinter-gait.test.ts`.
 
 ### Census with the roster
 
