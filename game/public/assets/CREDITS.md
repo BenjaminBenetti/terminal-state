@@ -22,7 +22,8 @@ asserted** for any generated source. Full per-file provenance: `assets/derivativ
 - Turnstile (2026-11-12, G07, the revolving 12-gauge of the selected shotgun concept B): a user-uploaded textured model (the
   user supplied and authorized it for the game; the upload file name mentions Meshy, but the generator, account, settings and
   licence are NOT verified and no clearance is implied). The game ships a re-oriented, re-scaled (0.80 m) derivative with every
-  source triangle (its break-open part split along the model's own geometry) and its own PBR maps downsized and re-encoded
+  source triangle (its break-open part and, under it, its revolving cylinder split along the model's own geometry) and its
+  own PBR maps downsized and re-encoded
   (base colour 2048 px, metallic-roughness / normal 1024 px; derivatives/weapon-turnstile.json;
   tools/asset-pipeline/weapons/build-turnstile.mjs). The original stays outside the repository. No generation; its sounds
   reuse the existing shotgun shot, shell insert and Coach Gun break open / close clips.

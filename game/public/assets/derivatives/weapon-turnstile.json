@@ -8,7 +8,13 @@
  "family": "shotgun",
  "role": "held / pickup model of the Turnstile (12-gauge six-shell top-break revolving-cylinder shotgun): a weapon-variety ADDITION (every other weapon model is unchanged)",
  "task": "studio-turnstile-user-model-20261112-004550-01",
- "route": "the user's own textured model (made by the user with Meshy, per its export) of the selected concept B, supplied by the user for implementation and texture compression; cooked as-is: rotation, uniform scale to the design length, a lossless weld, one recorded local part separation and the model's own maps downsized / re-encoded (no generation, re-texture, projection or replacement)",
+ "revisions": [
+  {
+   "task": "studio-turnstile-cylinder-rotation-20261112-034833-01",
+   "change": "the user asked for the cylinder to turn as the gun fires: the cylinder island + its rear ratchet separated from the Barrels part into a Cylinder child node pivoting on the cylinder's measured axis (whole existing islands reparented; the triangles, UVs and maps are unchanged)"
+  }
+ ],
+ "route": "the user's own textured model (made by the user with Meshy, per its export) of the selected concept B, supplied by the user for implementation and texture compression; cooked as-is: rotation, uniform scale to the design length, a lossless weld, recorded local part separations (the break-open assembly; its cylinder reparented under it) and the model's own maps downsized / re-encoded (no generation, re-texture, projection or replacement)",
  "concept": {
   "id": "B",
   "name": "Turnstile",
@@ -351,12 +357,52 @@
      }
     },
     "detachedVertices": 184
+   },
+   {
+    "op": "assign",
+    "why": "the revolving cylinder (task studio-turnstile-cylinder-rotation-20261112-034833-01): the cylinder island and its rear ratchet (the extractor star turns with it), whole islands taken from the Barrels part unchanged; the front axis pin (the arbor it turns on) stays on Barrels",
+    "name": "Cylinder",
+    "from": "Barrels",
+    "islands": {
+     "rule": "whole position-connected islands lying inside the box min [-0.041,-0.019,-0.0575] max [0.041,0.062,0.027] (m)",
+     "islands": 2,
+     "triangles": 3182,
+     "bounds": [
+      {
+       "tris": 3079,
+       "min": [
+        -0.0398,
+        -0.0176,
+        -0.0567
+       ],
+       "max": [
+        0.0398,
+        0.0604,
+        0.0224
+       ]
+      },
+      {
+       "tris": 103,
+       "min": [
+        -0.0112,
+        0.0094,
+        0.0167
+       ],
+       "max": [
+        0.0141,
+        0.0367,
+        0.0261
+       ]
+      }
+     ]
+    },
+    "detachedVertices": 0
    }
   ],
   "parts": [
    {
     "name": "Barrels",
-    "why": "the top-break reload: barrel + shroud + cylinder + top strap + latch + the window's front post / top bar turn about the Hinge (rotation.x < 0 drops the muzzle and lifts the cylinder's rear face toward the eye)",
+    "why": "the top-break reload: barrel + shroud + top strap + latch + the window's front post / top bar, carrying the Cylinder, turn about the Hinge (rotation.x < 0 drops the muzzle and lifts the cylinder's rear face toward the eye)",
     "pivot": {
      "rule": "the Hinge marker (the break-action axis, parallel to X)",
      "at": [
@@ -365,21 +411,128 @@
       -0.0653
      ]
     },
-    "triangles": 14150,
+    "triangles": 10968,
     "bounds": {
      "min": [
-      -0.0398,
-      -0.0176,
+      -0.0349,
+      -0.0165,
       -0.4
      ],
      "max": [
-      0.0398,
+      0.0357,
       0.0861,
       0.0318
      ]
     }
+   },
+   {
+    "name": "Cylinder",
+    "why": "the revolving cylinder: a child of Barrels (it breaks open with it) turned about its own axis, +Z through the node (weapons/gunParts.ts: one chamber per shot)",
+    "parent": "Barrels",
+    "pivot": {
+     "rule": "on the cylinder's own axis (parallel to Z) at the middle of its length: processing.cylinderAxis",
+     "at": [
+      0.00041,
+      0.02113,
+      -0.01714
+     ]
+    },
+    "triangles": 3182,
+    "bounds": {
+     "min": [
+      -0.0398,
+      -0.0176,
+      -0.0567
+     ],
+     "max": [
+      0.0398,
+      0.0604,
+      0.0261
+     ]
+    }
    }
   ],
+  "cylinderAxis": {
+   "at": [
+    0.00041,
+    0.02113,
+    -0.01714
+   ],
+   "radius": 0.03903,
+   "rmsMm": 0.72,
+   "points": 141,
+   "slices": [
+    {
+     "z": [
+      -0.0449,
+      -0.0338
+     ],
+     "centre": [
+      -0.00024,
+      0.0207
+     ],
+     "offsetMm": 0.79
+    },
+    {
+     "z": [
+      -0.0338,
+      -0.0227
+     ],
+     "centre": [
+      0.00039,
+      0.02127
+     ],
+     "offsetMm": 0.13
+    },
+    {
+     "z": [
+      -0.0227,
+      -0.0116
+     ],
+     "centre": [
+      0.00041,
+      0.02115
+     ],
+     "offsetMm": 0.02
+    },
+    {
+     "z": [
+      -0.0116,
+      -0.0005
+     ],
+     "centre": [
+      0.00042,
+      0.02125
+     ],
+     "offsetMm": 0.12
+    },
+    {
+     "z": [
+      -0.0005,
+      0.0106
+     ],
+     "centre": [
+      0.00047,
+      0.02112
+     ],
+     "offsetMm": 0.06
+    }
+   ],
+   "bounds": {
+    "min": [
+     -0.0398,
+     -0.0176,
+     -0.0567
+    ],
+    "max": [
+     0.0398,
+     0.0604,
+     0.0224
+    ]
+   },
+   "triangles": 3079,
+   "rule": "a least-squares circle fit in XY of the cylinder island's outer surface (its middle 15 - 85 % of length; vertices with a radial normal >= 0.9 at >= 0.9 of the largest radius: the lands), 3 passes from its bounds centre; the axis is parallel to Z (the bore) and the pivot at the middle of its length; per-slice refits give the tilt"
+  },
   "markers": {
    "Grip": {
     "rule": "x = the middle of a ray along X at y / z [-0.057,0.132] (the mid-plane there)",
@@ -441,8 +594,8 @@
  "output": {
   "url": "assets/models/weapon-turnstile.glb",
   "file": "game/public/assets/models/weapon-turnstile.glb",
-  "bytes": 3159520,
-  "sha256": "19b3d44895a255e28d80b46444d2f2facea03af6cc71a9a332f8df61353baa19",
+  "bytes": 3160284,
+  "sha256": "b7a4333c1a23c3f0e250a1a5fd4dc4bfc3857d819a02f25bf7b36a8446acc02c",
   "triangles": 30693,
   "vertices": 32525,
   "dims": [
@@ -465,7 +618,8 @@
   "nodes": {
    "body": "turnstile",
    "parts": [
-    "Barrels"
+    "Barrels",
+    "Cylinder"
    ],
    "markers": [
     "Grip",
@@ -567,9 +721,11 @@
  ],
  "texturePolicy": "the model's own PBR maps kept slot for slot (base colour / metallic-roughness / normal), only downsized + re-encoded to the held-gun budget: base colour 8192 -> 2048 px, metallic-roughness / normal 4096 -> 1024 px (no recolour, tint, re-texture, projection or new art)",
  "limitations": [
-  "the model's cylinder faces carry no modelled chambers (front / rear faces are flat with an unresolved texture) and its section is not six-fold symmetric: the open action shows the rear face as modelled, and the cylinder does not index per shot (turning it would show surfaces the model never resolved); nothing is invented in their place"
+  "the model's cylinder faces carry no modelled chambers (front / rear faces are flat with an unresolved texture): the open action shows the rear face as modelled; nothing is invented in their place",
+  "the cylinder has eight flutes for six shells: it turns one chamber (60 deg) per shot about its measured axis, so between shots its flutes rest 0 / 15 / 30 deg off the modelled pose (a full turn every six shots); its rear ratchet (modelled ~2.4 mm off that axis) turns with it, inside the standing breech while closed",
+  "turned off the modelled pose, the cylinder's lands reach up to ~2.5 mm into the bottom strap's top face directly beneath it (1 mm as modelled), hidden under the cylinder in the held views; the front axis pin stays on the Barrels part, inside the cylinder's front face as modelled"
  ],
- "convention": "metres at real size, +Y up, muzzle toward -Z, the right side +X; bounding box centred on the origin; empty marker nodes Grip / Muzzle / Sight / Eject / Hinge; the Barrels part node translated to its pivot (the Hinge)",
+ "convention": "metres at real size, +Y up, muzzle toward -Z, the right side +X; bounding box centred on the origin; empty marker nodes Grip / Muzzle / Sight / Eject / Hinge; the Barrels part node translated to its pivot (the Hinge); its Cylinder child node translated (relative to the Hinge) to a point on the cylinder's own axis, which is parallel to Z",
  "licence": "supplied by the user for this project (its upload file name mentions Meshy; the generator, account, settings and licence are not verified and the provider's terms may apply); unapproved prototype asset, no blanket licence or commercial clearance implied",
  "rebuild": "node tools/asset-pipeline/weapons/build-turnstile.mjs [--master <the private master glb>]"
 }
