@@ -203,8 +203,6 @@ export class SentryTurretSystem {
   private roomFor: TrainPlacement | null = null;
   private shadowsFor: THREE.Object3D | null = null;
   private readonly rand: () => number;
-  private readonly stackMax: number;
-  private readonly ammoShort: string;
   // train-local constants and per-call scratch (nothing is allocated per frame)
   private readonly pivotL: V3;
   private readonly pivotW = v0();
@@ -234,9 +232,6 @@ export class SentryTurretSystem {
     this.view = new SentryTurretView(this.spec);
     this.pivotL = turretPivot(this.spec);
     this.rand = opts.rand ?? (() => (this.host.rand ? this.host.rand() : Math.random()));
-    const item = itemDef(SENTRY_AMMO);
-    this.stackMax = item.stackMax;
-    this.ammoShort = item.short ?? item.name;
   }
 
   // --- registration --------------------------------------------------------------------------------------------------
@@ -274,7 +269,7 @@ export class SentryTurretSystem {
     if (!item || !cap) return null;
     if (!this.usable(u)) return SENTRY_TEXT.ride(a, cap);
     const carried = this.host.inv.count(item);
-    let s = a >= cap ? SENTRY_TEXT.full(a, cap) : carried <= 0 ? SENTRY_TEXT.noneCarried(this.ammoShort, a, cap) : SENTRY_TEXT.load(this.ammoShort, carried, a, cap);
+    let s = a >= cap ? SENTRY_TEXT.full(a, cap) : carried <= 0 ? SENTRY_TEXT.noneCarried(ammoShort(u), a, cap) : SENTRY_TEXT.load(ammoShort(u), carried, a, cap);
     if (a > 0) s += ` · ${SENTRY_TEXT.unloadHint}`;
     if (u.plug === null) s += ` · ${SENTRY_TEXT.unplugged}`;
     else if (this.isActive(u) && !this.headroom().ok) s += ` · ${SENTRY_TEXT.noHeadroom}`;
@@ -291,7 +286,7 @@ export class SentryTurretSystem {
       this.counts.loaded += n;
       h.hud.toast(SENTRY_TEXT.loaded(n, u.ammo, cap));
       (h.sfx as Partial<Sfx> | null | undefined)?.shellIn?.();
-    } else this.deny(u.ammo >= cap ? SENTRY_TEXT.hopperFull(cap) : SENTRY_TEXT.nothingToLoad(this.ammoShort));
+    } else this.deny(u.ammo >= cap ? SENTRY_TEXT.hopperFull(cap) : SENTRY_TEXT.nothingToLoad(ammoShort(u)));
     return true;
   }
 
@@ -301,7 +296,7 @@ export class SentryTurretSystem {
     if (!u.def.ammoItem || !cap) return false;
     if (!this.usable(u)) { this.deny(SENTRY_TEXT.moving); return true; }
     if (u.ammo <= 0) { this.deny(SENTRY_TEXT.nothingToUnload); return true; }
-    const n = unloadHopper(h.inv, u, this.stackMax);
+    const n = unloadHopper(h.inv, u, itemDef(u.def.ammoItem).stackMax);
     if (n > 0) {
       this.counts.unloaded += n;
       h.hud.toast(SENTRY_TEXT.unloaded(n, u.ammo), u.ammo > 0);
@@ -451,9 +446,8 @@ export class SentryTurretSystem {
 
   /** The deployed turret: pick, track, fire. */
   private track(dt: number, unit: EquipmentUnit, p: TrainPlacement): void {
-    const h = this.host, L = this.pivotL;
-    this.pivotW.x = p.x + p.front * L.x; this.pivotW.y = p.railTopY + L.y; this.pivotW.z = p.z + p.front * L.z;
-    this.mountWX = this.pivotW.x; this.mountWZ = this.pivotW.z;
+    const h = this.host;
+    this.setPivot(p);
     let t = this.target;
     if (t && !this.valid(t)) { t = this.target = null; this.pickT = 0; }
     this.pickT -= dt;
@@ -479,8 +473,16 @@ export class SentryTurretSystem {
     this.fire(unit, t, p);
   }
 
+  /** The pivot in the world for the parked car at `p` (the mount's x / z with it). */
+  private setPivot(p: TrainPlacement): void {
+    const L = this.pivotL;
+    this.pivotW.x = p.x + p.front * L.x; this.pivotW.y = p.railTopY + L.y; this.pivotW.z = p.z + p.front * L.z;
+    this.mountWX = this.pivotW.x; this.mountWZ = this.pivotW.z;
+  }
+
   /** The line pivot -> `to` (world): its unit direction (world + train-local) and length into the scratch. False: no length. */
   private lineTo(to: V3, p: TrainPlacement): boolean {
+    this.setPivot(p);
     const o = this.pivotW, dx = to.x - o.x, dy = to.y - o.y, dz = to.z - o.z, d = Math.hypot(dx, dy, dz);
     if (d < 1e-3) return false;
     this.lineD = d;
@@ -599,7 +601,7 @@ export class SentryTurretSystem {
     if (left <= 0) {
       this.counts.emptied++;
       this.dropTarget();
-      h.hud.toast(SENTRY_TEXT.empty(this.ammoShort), true);
+      h.hud.toast(SENTRY_TEXT.empty(ammoShort(unit)), true);
     }
   }
 
@@ -659,8 +661,10 @@ export class SentryTurretSystem {
   }
 }
 
-/** The ammo item the sentry takes (craft/equipment.ts EQUIPMENT.sentry.ammoItem). */
-const SENTRY_AMMO = 'ammo_556';
+/** The short name of the rounds a unit takes (its def's ammo item: '5.56mm'). */
+function ammoShort(u: EquipmentUnit): string {
+  return u.def.ammoItem ? itemDef(u.def.ammoItem).short : 'ammunition';
+}
 const NO_ROOM: SentryHeadroom = Object.freeze({ok: false, ceil: -Infinity, clearance: -Infinity});
 
 /** Installs the sentry (one call in the Game constructor, after the train equipment; registries only). */
