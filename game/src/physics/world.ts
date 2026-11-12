@@ -411,13 +411,23 @@ export class PhysicsSystem implements BodyHost {
   private ejectNow(weaponId: string, port: EjectionPortSource, camera: THREE.PerspectiveCamera, shooter: {vx: number; vy?: number; vz: number}): void {
     const spec = EJECTION_PORTS[weaponId];
     if (!port.ejectionPort(camera, weaponId, port.ejectionMarker?.(weaponId) ?? spec.pos, spec.dir, this.tmpPos, this.tmpDir)) return;
+    this.ejectAt(this.tmpPos, this.tmpDir, spec.kind, camera, shooter);
+  }
+
+  /**
+   * A casing leaving at a world point along `dir` (+ the shooter's velocity; `speed` default: its kind's): a port's casing, or (task
+   * studio-turnstile-reload-visuals-20261112-063646-01) a revolver's hull thrown out of the held view (Viewmodel.flushHulls). Into the
+   * bounded casing pool (MAX_CASINGS, CASING_LIFETIME).
+   */
+  ejectAt(pos: THREE.Vector3, dir: THREE.Vector3, kind: CasingKind, camera: THREE.Camera, shooter: {vx: number; vy?: number; vz: number}, speed?: number): void {
+    if (pos !== this.tmpPos) this.tmpPos.copy(pos);
     // Pull the port back toward the eye if it lies inside a wall/prop (player hugging cover).
     const q = this.query;
     if (q) {
       camera.getWorldPosition(this.eyeTmp);
       for (let i = 0; i < 6 && q.blocked(this.tmpPos.x, this.tmpPos.y, this.tmpPos.z, 0.012); i++) this.tmpPos.lerp(this.eyeTmp, 0.35);
     }
-    this.casings.eject(this.tmpPos, this.tmpDir, spec.kind, {x: shooter.vx, y: shooter.vy ?? 0, z: shooter.vz});
+    this.casings.eject(this.tmpPos, dir, kind, {x: shooter.vx, y: shooter.vy ?? 0, z: shooter.vz}, speed);
   }
 
   // -------------------------------------------------------------------------------------------

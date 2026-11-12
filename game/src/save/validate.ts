@@ -202,7 +202,7 @@ function itemOf(v: unknown, path: string): ItemDef {
   return ITEMS[canon];
 }
 
-const STACK_KEYS = ['uid', 'itemId', 'count', 'mag', 'bag', 'filter', 'air', 'armor'] as const; // (+ armor: task studio-general-armor-20261107-231448-01)
+const STACK_KEYS = ['uid', 'itemId', 'count', 'mag', 'spent', 'bag', 'filter', 'air', 'armor'] as const; // (+ armor: task studio-general-armor-20261107-231448-01; + spent: task studio-turnstile-reload-visuals-20261112-063646-01)
 /**
  * Task filter-tension-airtank-20261104-072836: the largest fitted-filter charge a stack of the run being validated may hold = the
  * filter life that run was written with (run.filterLifeS; absent = LEGACY_FILTER_LIFE_S, a save from before 37.5 s filters).
@@ -295,6 +295,11 @@ function stack(v: unknown, path: string, o: {uid: boolean; inBag: boolean; seen?
   if (has(s, 'mag')) {
     if (def.kind !== 'weapon' || !def.weaponId || !has(WEAPONS, def.weaponId)) bad(`${path}.mag`, `${def.id} has no magazine`);
     int(s.mag, `${path}.mag`, 0, WEAPONS[def.weaponId!].magazine);
+  }
+  if (has(s, 'spent')) { // task studio-turnstile-reload-visuals-20261112-063646-01: fired hulls still in a revolver's chambers
+    const w = def.kind === 'weapon' && def.weaponId && has(WEAPONS, def.weaponId) ? WEAPONS[def.weaponId] : undefined;
+    if (!w || w.reload.kind !== 'break' || !w.reload.spentHulls) bad(`${path}.spent`, `${def.id} keeps no hulls`);
+    int(s.spent, `${path}.spent`, 0, w!.magazine - (typeof s.mag === 'number' ? s.mag : 0));
   }
   if (has(s, 'filter')) {
     if (!isFilterMask(def.id)) bad(`${path}.filter`, `${def.id} takes no filter`);

@@ -63,6 +63,18 @@ const Y = new THREE.Vector3(0, 1, 0);
 const ID = new THREE.Quaternion();
 const tv = new THREE.Vector3(), tv2 = new THREE.Vector3(), tq = new THREE.Quaternion(), tm = new THREE.Matrix4(), ts = new THREE.Vector3();
 
+/**
+ * The 12-gauge hull (a red plastic hull on a brass head, along +Y, centred on its 70 mm length): its parts' radius / length / centre (m)
+ * and materials. Task studio-turnstile-reload-visuals-20261112-063646-01: the Turnstile's chambered shells reuse them
+ * (weapons/cylinderRounds.ts).
+ */
+export const SHELL_PARTS = {
+  hull: {radius: 0.0103, length: 0.054, centre: 0.008},
+  head: {radius: 0.0108, length: 0.016, centre: -0.027},
+} as const;
+export const shellHullMaterial = (): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({color: 0x9e1f1a, metalness: 0.05, roughness: 0.55});
+export const brassMaterial = (): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({color: 0xc59a48, metalness: 0.65, roughness: 0.34, emissive: 0x140d04});
+
 function brassGeometry(): THREE.BufferGeometry {
   // bottlenecked rifle case profile (radius, height) around +Y, centred on its length
   const pts = [[0, 0], [0.0048, 0], [0.0048, 0.0012], [0.0042, 0.0016], [0.0047, 0.0022], [0.0045, 0.035], [0.0032, 0.0385], [0.0032, 0.0445], [0.0026, 0.0445]];
@@ -89,12 +101,13 @@ export class CasingSystem {
     for (let i = 0; i < MAX_CASINGS; i++) {
       this.pool.push({live: false, kind: 'rifle', pos: new THREE.Vector3(), vel: new THREE.Vector3(), q: new THREE.Quaternion(), w: new THREE.Vector3(), age: 0, mode: 0, sounds: 0, bounces: 0, serial: 0});
     }
-    const brass = new THREE.MeshStandardMaterial({color: 0xc59a48, metalness: 0.65, roughness: 0.34, emissive: 0x140d04});
-    const hullMat = new THREE.MeshStandardMaterial({color: 0x9e1f1a, metalness: 0.05, roughness: 0.55});
-    const hull = new THREE.CylinderGeometry(0.0103, 0.0103, 0.054, 10, 1, false);
-    hull.translate(0, 0.008, 0);
-    const head = new THREE.CylinderGeometry(0.0108, 0.0108, 0.016, 10, 1, false);
-    head.translate(0, -0.027, 0);
+    const brass = brassMaterial();
+    const hullMat = shellHullMaterial();
+    const {hull: H, head: D} = SHELL_PARTS;
+    const hull = new THREE.CylinderGeometry(H.radius, H.radius, H.length, 10, 1, false);
+    hull.translate(0, H.centre, 0);
+    const head = new THREE.CylinderGeometry(D.radius, D.radius, D.length, 10, 1, false);
+    head.translate(0, D.centre, 0);
     const add = (kind: CasingKind, geo: THREE.BufferGeometry, mat: THREE.Material) => {
       const mesh = new THREE.InstancedMesh(geo, mat, MAX_CASINGS);
       mesh.count = 0;

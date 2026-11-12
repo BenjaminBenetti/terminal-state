@@ -9,6 +9,7 @@ import {canvasTexture} from '../world/canvasTextures';
 import {OPTIC_ADS_KICK, RifleOptic, opticAimPosition} from './optic';
 import {KNIFE_POSES, MELEE_POSES, meleePoseOffset, type PoseOffset} from './meleeView'; // lane KNIFE / FEEL
 import {GunParts} from './gunParts'; // task studio-weapon-variety-production-20261109-224355-01 (lane GUNS): visible reloads
+import {CylinderRounds, ThrownHulls, type ChamberPose} from './cylinderRounds'; // task studio-turnstile-reload-visuals-20261112-063646-01
 
 interface HeldModel {
   root: THREE.Object3D;
@@ -27,6 +28,8 @@ interface HeldModel {
   eject?: THREE.Vector3;
   /** Lane GUNS (weapon variety): the model's movable reload parts ('Magazine', 'Barrels' + 'Hinge'), when it has any. */
   parts?: GunParts;
+  /** (task turnstile-reload-visuals) a revolver's chambered rounds on its `Cylinder` (weapons/cylinderRounds.ts), when it has one. */
+  rounds?: CylinderRounds;
 }
 
 /** Sight relief used when a model has a `Sight` marker but its WeaponDef sets no `view.sightRelief`. */
@@ -68,6 +71,19 @@ export interface ViewState {
   melee?: {stage: MeleeStage | null; t: number; charge?: number}; // (lane MELEE, weapon variety: + a charge weapon's charge 0..1)
   /** Lane GUNS: how far the held gun's BREAK action is open (WeaponController.actionOpen, 0 closed .. 1 open; absent = 0). */
   actionOpen?: number;
+  /**
+   * (task studio-turnstile-reload-visuals-20261112-063646-01) The held gun stack's live rounds (ItemStack.mag) and fired hulls still in it
+   * (ItemStack.spent): a revolver's cylinder shows exactly these. Absent = no gun stack (nothing is shown in its chambers).
+   */
+  live?: number;
+  spent?: number;
+  /**
+   * (task turnstile-reload-visuals) Seconds until the shell now being loaded goes in (WeaponController.shellDue), only while there is one
+   * to load (the reserve has a round): a revolver shows it sliding into its chamber, seated as it is counted. Absent = none going in.
+   */
+  shellDue?: number | null;
+  /** (task turnstile-reload-visuals) the world's down in camera space (thrown hulls fall along it); absent = (0, -1, 0). */
+  down?: THREE.Vector3;
 }
 
 export class Viewmodel {
@@ -153,6 +169,10 @@ export class Viewmodel {
     const ejectObj = root.getObjectByName('Eject');
     const eject = ejectObj ? ejectObj.getWorldPosition(new THREE.Vector3()).sub(gp) : undefined;
     const parts = GunParts.find(root, def.magazine) ?? undefined; // lane GUNS: before the Grip shift (model frame); none on the baseline models
+    // (task turnstile-reload-visuals) a revolver's chambers on this held copy's Cylinder (model frame, before the Grip shift), + the view's
+    // one pool of thrown hulls (camera space) the first time a gun has them
+    const rounds = CylinderRounds.attach(root, def.magazine) ?? undefined;
+    if (rounds && !this.thrown) { this.thrown = new ThrownHulls(); this.camera.add(this.thrown.root); }
     const holder = new THREE.Group();
     root.position.sub(gp);
     holder.add(root);
@@ -163,7 +183,7 @@ export class Viewmodel {
     const aim = optic ? opticAimPosition(opticPoint!, def.view.optic!)
       : sightPoint ? sightAimPosition(sightPoint.clone().setY(sightPoint.y + (def.view.sightLift ?? 0)), def.view.sightRelief ?? SIGHT_RELIEF_DEFAULT) // sightLift: eye just over a solid optic/receiver
       : new THREE.Vector3(...def.view.aim);
-    this.items.set(id, {root: holder, muzzle: mp.sub(gp), def, hip: new THREE.Vector3(...def.view.hip), aim, hipYaw: def.view.hipYaw, hipPitch: def.view.hipPitch, hipRoll: def.view.hipRoll, optic: optic?.optic, opticPoint, sightPoint, eject, parts});
+    this.items.set(id, {root: holder, muzzle: mp.sub(gp), def, hip: new THREE.Vector3(...def.view.hip), aim, hipYaw: def.view.hipYaw, hipPitch: def.view.hipPitch, hipRoll: def.view.hipRoll, optic: optic?.optic, opticPoint, sightPoint, eject, parts, rounds});
   }
 
   /**
@@ -232,6 +252,7 @@ export class Viewmodel {
     if (itemId && !this.items.has(itemId) && WEAPONS[itemId]) this.onMissing?.(itemId);
     if (this.current === itemId) return;
     if (this.current) this.items.get(this.current)!.root.visible = false;
+    this.pendingEject = 0;
     this.current = itemId && this.items.has(itemId) ? itemId : null;
     if (this.current) {
       const it = this.items.get(this.current)!;
@@ -289,12 +310,60 @@ export class Viewmodel {
   }
 
   /**
+   * (task studio-turnstile-reload-visuals-20261112-063646-01) The held revolver's reload is fully open and throws out its `hulls` fired hulls
+   * (the 'eject' event): they leave their chambers at the end of the next update and fly out of the view (thrownHulls), then into the world
+   * (flushHulls). Ignored unless `def` is the held gun with chambers (no model shown: nothing to see; the stack is already right).
+   */
+  ejectHulls(def: WeaponDef, hulls: number): void {
+    const it = this.current ? this.items.get(this.current) : undefined;
+    if (it?.def?.id === def.id && it.rounds) this.pendingEject += Math.max(0, hulls);
+  }
+  private pendingEject = 0;
+  /** The view's one pool of thrown hulls (created with the first held gun that has chambers). */
+  private thrown: ThrownHulls | null = null;
+  private readonly poses: ChamberPose[] = [];
+  private readonly downDefault = new THREE.Vector3(0, -1, 0);
+
+  /** QA / tests: the held item's chambered rounds (null: none) and the thrown-hull pool (null until a gun with chambers was registered). */
+  get heldRounds(): CylinderRounds | null {
+    return (this.current ? this.items.get(this.current)?.rounds : undefined) ?? null;
+  }
+  get thrownHulls(): ThrownHulls | null {
+    return this.thrown;
+  }
+
+  /**
+   * (task turnstile-reload-visuals) Hand the thrown hulls that left the view to the world: each as a world point re-projected like
+   * ejectionPort (its view depth kept, on the same screen spot despite the narrower viewmodel FOV), a world direction and a speed (m/s,
+   * relative to the eye) for `sink` (the game: PhysicsSystem.ejectAt into the bounded casing pool). Returns how many.
+   */
+  flushHulls(main: THREE.PerspectiveCamera, sink: (pos: THREE.Vector3, dir: THREE.Vector3, speed: number) => void): number {
+    if (!this.thrown) return 0;
+    const list = this.thrown.takeReleased();
+    if (!list.length) return 0;
+    const k = Math.tan(THREE.MathUtils.degToRad(main.fov) / 2) / Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2);
+    for (const r of list) {
+      const pos = this.tmpV.copy(r.pos);
+      pos.x *= k;
+      pos.y *= k;
+      main.localToWorld(pos);
+      const speed = r.vel.length();
+      const dir = this.tmpD.copy(r.vel).transformDirection(main.matrixWorld);
+      sink(pos, dir, speed);
+    }
+    return list.length;
+  }
+  private readonly tmpD = new THREE.Vector3();
+
+  /**
    * Iteration 14 (primary, render/warmup.ts): the roots hidden until used — every held-item holder (rifle / shotgun /
    * pistol, consumables, flare), the muzzle flash and the (holstered) pivot. The loading-screen warm-up makes them
    * visible for one compileAsync call (which draws nothing) and restores them, so equipping a found weapon, eating or
    * the first shot does not build its pipeline mid-play.
    */
   warmRoots(): THREE.Object3D[] {
+    // (task turnstile-reload-visuals: a revolver's chamber rounds and the thrown hulls need no root of their own: hidden mesh by mesh, the
+    // pass's own every-mesh sweep compiles them)
     return [this.pivot, this.flash, ...[...this.items.values()].map(i => i.root), ...this.faceRoots];
   }
 
@@ -358,6 +427,7 @@ export class Viewmodel {
     this.bump = Math.max(0, this.bump - dt * 6);
     this.flashT -= dt;
     if (this.flashT <= 0) { this.flash.visible = false; this.flashLight.intensity = 0; }
+    this.thrown?.update(dt, s.down ?? this.downDefault, this.camera); // (turnstile-reload-visuals) hulls in flight, whatever is held now
     if (!it) return;
     if (this.flash.visible) this.flashLight.position.copy(it.muzzle).applyMatrix4(it.root.matrixWorld);
 
@@ -411,6 +481,8 @@ export class Viewmodel {
         rot.z += k * 0.24;
         pos.y += k * 0.035 - this.bump * 0.01;
         pos.x -= k * 0.035;
+        const bp = it.def.view.breakPresent; // (task turnstile-reload-visuals) a gun's own extra turn: its whole rear face in view
+        if (bp) { rot.x += k * bp[0]; rot.y += k * bp[1]; rot.z += k * bp[2]; }
       } else {
         rot.z += 0.4;
         rot.x += 0.18 - this.bump * 0.08;
@@ -420,6 +492,9 @@ export class Viewmodel {
     // lane GUNS: the magazine out -> in during a magazine reload, the barrels turning about the hinge with a break action
     // (+ a revolver cylinder's per-shot index running on)
     it.parts?.apply(s.reloading && it.def?.reload.kind === 'magazine' ? s.reloadProgress : null, s.actionOpen ?? 0, dt);
+    // (task turnstile-reload-visuals) the chambers show the held stack's rounds: the live ones from the chamber under the barrel on
+    // + the shell being loaded sliding home
+    it.rounds?.update(s.live, s.spent, s.actionOpen ?? 0, it.parts?.chamberIndex ?? 0, s.reloading ? s.shellDue ?? null : null);
     if (s.using) {
       const p = s.useProgress;
       pos.y += Math.sin(p * Math.PI) * 0.06;
@@ -463,6 +538,13 @@ export class Viewmodel {
     this.pivot.rotation.copy(rot);
     // Lane D consume view: holstered = lowered out of view while an item is eaten/drunk/applied.
     if (this.holster > 0) { const h = ease(this.holster); this.pivot.position.y -= h * 0.42; this.pivot.position.x += h * 0.05; this.pivot.rotation.x -= h * 0.9; }
+    // (task turnstile-reload-visuals) the 'eject': the fired hulls leave their chambers from where they are drawn this frame
+    if (this.pendingEject > 0 && it.rounds && this.thrown) {
+      this.camera.updateMatrixWorld(true);
+      const n = it.rounds.spentPoses(this.pendingEject, this.camera, this.poses);
+      for (let i = 0; i < n; i++) this.thrown.throw(this.poses[i]);
+    }
+    this.pendingEject = 0;
     // optic lens uniforms from the final pose: exit pupil (eye vs axis) + reticle on the aim line
     it.optic?.update(this.pivot.position, this.pivot.quaternion, it.opticPoint!, aimK, this.light);
   }
