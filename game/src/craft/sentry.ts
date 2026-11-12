@@ -1,5 +1,6 @@
-// Task studio-train-crafting-v1-20261111-225628-01 (lane SENTRY; user: "Defense sentry … Interact to deposit real 5.56 ammunition; a roof
-// turret deploys and automatically fires at nearby zombies using normal line-of-sight combat. Craft it empty; do not create free ammo."):
+// Task studio-train-crafting-v1-20261111-225628-01 (lane SENTRY): the defense sentry — a movable console that plugs into the train and is
+// fed real 5.56 mm rounds, and a roof turret that fires them at nearby enemies through the game's normal line-of-sight combat. It is
+// crafted empty; no round is ever made here.
 // THE SENTRY'S RULES — pure (no three.js, no Game, no DOM): every tuning number (SENTRY), the hopper's load / unload, the turret's
 // geometry on the roof (pivot, muzzle, aim angles), the OWN-HULL rule and the VIRTUAL ORIGIN of its line of fire, the target order and
 // the small vector helpers. world/sentryTurret.ts runs them against the live game (the equipment unit, the enemies, the level's rays).
@@ -201,6 +202,11 @@ export function turnToward(cur: number, want: number, max: number): number {
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // The own-hull rule and the virtual origin (train-local)
+//
+// TODO(lead): TRAIN_ROOF_PROFILE is ONE outline for the whole car length, vent boxes included, so the crest (3.85 m) binds every line
+// although the turret stands between two vent boxes on a 3.70 m skin. Measured with the provisional turret constants (tests/sentry-hull):
+// a body on the platform can be shot in the chest from 3.25 m off the car's side, in the head from 2.33 m. An outline that knows where
+// along the car the vent boxes are, or a higher tilt axis, would narrow that strip; the rule below needs no change for either.
 
 const SPAN: [number, number] = [0, 0];
 

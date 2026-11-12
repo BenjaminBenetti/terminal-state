@@ -1,6 +1,6 @@
-// Task studio-train-crafting-v1-20261111-225628-01 (lane SENTRY; user: "Defense sentry: … A movable console that plugs into the train.
-// Interact to deposit real 5.56 ammunition; a roof turret deploys and automatically fires at nearby zombies using normal line-of-sight
-// combat. Craft it empty; do not create free ammo."): THE DEFENSE SENTRY'S RUNTIME (Game.sentryTurret). The rules and every number are
+// Task studio-train-crafting-v1-20261111-225628-01 (lane SENTRY): a movable console that plugs into the train and is fed real 5.56 mm
+// rounds; a roof turret deploys and fires them at nearby enemies through the game's normal line-of-sight combat; crafted empty, no free
+// round — THE DEFENSE SENTRY'S RUNTIME (Game.sentryTurret). The rules and every number are
 // craft/sentry.ts (SENTRY); the look is world/sentryTurretView.ts; the unit itself (the console on its hand truck, the plug, its saved
 // `ammo`) is the equipment system's (world/trainEquipment.ts) — this module only knows craft/equipmentApi.ts.
 //
@@ -116,7 +116,11 @@ export interface SentryHost {
   trainRuntime?: {view: {root: THREE.Object3D} | null; train?: {placement: TrainPlacement} | null; spec?: PlayerTrainSpec};
   trainRide?: {riding: boolean; moving?: boolean} | null;
   stats: {kills: number};
-  /** The level's random stream (Game.rand: re-seeded per level, so it is re-read per shot; absent: Math.random). */
+  /**
+   * The level's random stream (Game.rand: re-seeded per level, so it is re-read per shot; absent: Math.random).
+   * TODO(lead): Game.rand is `private` there — it is read structurally (tests/sentry-turret pins the member's name); make it public or
+   * hand a stream to installSentryTurret if that is preferred.
+   */
   rand?: () => number;
   sfx?: unknown;
   fx?: {
