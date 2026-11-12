@@ -4,7 +4,8 @@
 // craft/sentry.ts (SENTRY); the look is world/sentryTurretView.ts; the unit itself (the console on its hand truck, the plug, its saved
 // `ammo`) is the equipment system's (world/trainEquipment.ts) — this module only knows craft/equipmentApi.ts.
 //
-// installSentryTurret(game) is called ONCE from the Game constructor (after the train equipment); it only REGISTERS: the console's use
+// installSentryTurret(game, {rand}) is called ONCE from the Game constructor (after the train equipment; `rand` = the game's level random
+// stream, handed in the way installBlightBurst gets it); it only REGISTERS: the console's use
 // (EquipmentSystemLike.uses.sentry) and a plug listener, a frame hook (only while playing), section hooks (build = attach the turret to
 // the car's view root, everything transient reset; teardown = stowed and hidden), a state listener (leaving 'playing' drops the target)
 // and the warm pool 'train-turret' (the turret's materials compile on the loading screen; its flash / tracer / impacts are the existing
@@ -16,24 +17,27 @@
 // target and cooldown are transient and reset on every build.
 // THE TURRET exists (is drawn) only while the sentry is ACTIVE (plugged into the PARKED train in a live world: EquipmentSystemLike.
 // active), LOADED and there is HEADROOM over the roof mount (headroom(): the bed's ceiling over the swept disc — Levels.ceilingOver —
-// and any prop box hanging there; the placement only guarantees gen/playerTrain.ts TRAIN_CLEAR.ceiling above the roof). It rises out of
-// the roof in SENTRY.deployS, scans slowly, tracks its target and sinks again when the sentry is unplugged / empty / the doors close for
-// a departure; once the ride MOVES, at a teardown or without a parked car it is hidden at once.
+// and any prop box hanging there; the placement only guarantees gen/playerTrain.ts TRAIN_CLEAR.ceiling above the roof). It stands on the
+// car's middle roof hatch (craft/trainFixtures.ts turretMount), rises out of it in SENTRY.deployS, scans slowly, tracks its target and
+// sinks again when the sentry is unplugged / empty / the doors close for a departure; once the ride MOVES, at a teardown or without a
+// parked car it is hidden at once.
 // FIRE (single aimed shots, SENTRY.interval apart, one loaded round each — the round leaves the hopper BEFORE the shot):
 //  - targets: the living, standing, awake enemies (Game.zombies; never a ragdoll, a dormant / rising Siren, or anything that is not an
-//    enemy: market people are not in that list) within SENTRY.range of the turret on any storey; every SENTRY.repick s the NEAREST one
-//    with a clear shot (pickTarget: bounded — at most SENTRY.maxChecks enemies are refused by the world rays per pick; the ones under
-//    the eaves are refused by the roof rule for free and never hide a clear target behind them);
-//  - a clear shot from the pivot to the enemy's upper torso, else its head: the OWN-HULL rule, then from the VIRTUAL ORIGIN (craft/
-//    sentry.ts) the game's normal pair — Levels.lineOfSight and the bullet's world ray reaching the point (Game.echoScan's test) — and
-//    the player's body not within SENTRY.safeRadius of the line (it holds fire rather than shoot past the player);
-//  - the shot: the aim line + a small cone (the game's rand stream; a draw that would clip the hull falls back to the aim line), then
-//    exactly the player's bullet (Game.fire): physics/merchOnHost.ts raycastShot, combat/enemyRay.ts nearestEnemyHit — so it can miss,
-//    hit a limb / the head / another enemy in front, a wall, a prop or glass (Game.bulletHitHandlers) —, the rifle's damage x falloff
-//    (from the pivot) x part multiplier through brain.damage FROM THE TRAIN (the enemies come for the train as they would for a
-//    gunman standing in it), the wound / blood through the damage system, knockback, the hurt cue; a kill = stats.kills, the death cue
-//    and a ragdoll with the rifle's impulse. A world hit is the survivors' impact (market/combat/marketCombat.ts: the material's
-//    chips / mark / sound; no lasting damage). The player's own shot statistics, hit marker and hit confirm are never touched.
+//    enemy: market people are not in that list) within SENTRY.range of the turret's yaw axis on any storey; every SENTRY.repick s the
+//    NEAREST one with a clear shot (pickTarget: bounded — at most SENTRY.maxChecks enemies are refused by the world rays per pick; the
+//    ones under the eaves are refused by the roof rule / the elevation stops for free and never hide a clear target behind them);
+//  - a clear shot to the enemy's upper torso, else its head, from the PIVOT of the turret turned to point at it (the tilt axis is ahead
+//    of the yaw axis: craft/sentry.ts turretPivotToward): inside the elevation stops, the OWN-HULL rule, then from the VIRTUAL ORIGIN
+//    (craft/sentry.ts) the game's normal pair — Levels.lineOfSight and the bullet's world ray reaching the point (Game.echoScan's test)
+//    — and the player's body not within SENTRY.safeRadius of the line (it holds fire rather than shoot past the player);
+//  - the shot: tested again from the pivot AT THE YAW THE GUN HAS, then that aim line + a small cone (the random source handed in at
+//    install; a draw that would clip the hull falls back to the aim line), then exactly the player's bullet (Game.fire): physics/
+//    merchOnHost.ts raycastShot, combat/enemyRay.ts nearestEnemyHit — so it can miss, hit a limb / the head / another enemy in front,
+//    a wall, a prop or glass (Game.bulletHitHandlers) —, the rifle's damage x falloff (from the pivot) x part multiplier through
+//    brain.damage FROM THE TRAIN (the enemies come for the train as they would for a gunman standing in it under the turret), the
+//    wound / blood through the damage system, knockback, the hurt cue; a kill = stats.kills, the death cue and a ragdoll with the
+//    rifle's impulse. A world hit is the survivors' impact (market/combat/marketCombat.ts: the material's chips / mark / sound; no
+//    lasting damage). The player's own shot statistics, hit marker and hit confirm are never touched.
 //    Each shot: the positional rifle cue (Sfx.npcShot), flash + tracer + the shared muzzle light, and gunfire noise at the train
 //    (ai/brain.ts alertListeners, the rifle's radius).
 // It does not fire while the game is not 'playing' (frame hooks do not run), while riding, or with the player dead. Enemies do not
@@ -51,7 +55,7 @@ import {moveCircle, type PropIndex} from '../core/physics';
 import type {EquipmentSystemLike, EquipmentUnit} from '../craft/equipmentApi';
 import {
   SENTRY, aimAngles, aimPoint, barrelDir, clearOfBody, hullExit, loadHopper, ownHullClear, pickTarget, turnToward, turretMuzzle,
-  turretPivot, turretReach, turretSweep, unloadHopper, wrapAngle, type AmmoInventory, type V3,
+  turretPivot, turretPivotToward, turretReach, turretSweep, unloadHopper, wrapAngle, type AmmoInventory, type V3,
 } from '../craft/sentry';
 import {turretMount} from '../craft/trainFixtures';
 import {DAMAGE_MATERIALS, propDamageSpec} from '../damage/materials';
@@ -116,12 +120,6 @@ export interface SentryHost {
   trainRuntime?: {view: {root: THREE.Object3D} | null; train?: {placement: TrainPlacement} | null; spec?: PlayerTrainSpec};
   trainRide?: {riding: boolean; moving?: boolean} | null;
   stats: {kills: number};
-  /**
-   * The level's random stream (Game.rand: re-seeded per level, so it is re-read per shot; absent: Math.random).
-   * TODO(lead): Game.rand is `private` there — it is read structurally (tests/sentry-turret pins the member's name); make it public or
-   * hand a stream to installSentryTurret if that is preferred.
-   */
-  rand?: () => number;
   sfx?: unknown;
   fx?: {
     impact?(pos: THREE.Vector3, normal: THREE.Vector3, surface: never, opts?: object): void;
@@ -149,7 +147,10 @@ export interface SentryHost {
 export interface SentryOptions {
   /** The cooked turret's scene (default: the prop library's TRAIN_EQUIPMENT_MODELS.turret; null = none yet: the stand-in). */
   model?: () => THREE.Object3D | null;
-  /** The spread's random source (default: the host's level stream). */
+  /**
+   * The spread's random source, called twice per round. The game hands in its level stream (`{rand: () => this.rand()}`: re-seeded
+   * per level, so it is read through the closure at each shot). Default Math.random — Node tests that do not care.
+   */
   rand?: () => number;
 }
 
@@ -172,9 +173,10 @@ export interface SentryShot {
   damage: number;
   dist: number;
   killed: boolean;
-  /** The round's end point and the virtual origin (world). */
+  /** The round's end point, the virtual origin and the pivot its line started at (world). */
   end: V3;
   origin: V3;
+  pivot: V3;
   /** The rounds left after it. */
   ammo: number;
 }
@@ -197,7 +199,7 @@ export class SentryTurretSystem {
   readonly counts = {shots: 0, hits: 0, kills: 0, worldHits: 0, misses: 0, picks: 0, lineTests: 0, rayTests: 0, holds: 0, hullFallbacks: 0, noises: 0, loaded: 0, unloaded: 0, attached: 0, emptied: 0};
   /** The last shot (QA / tests; null: none since the last build). */
   lastShot: SentryShot | null = null;
-  private readonly shot: SentryShot = {result: 'none', part: null, damage: 0, dist: 0, killed: false, end: v0(), origin: v0(), ammo: 0};
+  private readonly shot: SentryShot = {result: 'none', part: null, damage: 0, dist: 0, killed: false, end: v0(), origin: v0(), pivot: v0(), ammo: 0};
   private cooldown = 0;
   private pickT = 0;
   private unitUid: string | null = null;
@@ -206,8 +208,9 @@ export class SentryTurretSystem {
   private roomFor: TrainPlacement | null = null;
   private shadowsFor: THREE.Object3D | null = null;
   private readonly rand: () => number;
-  // train-local constants and per-call scratch (nothing is allocated per frame)
-  private readonly pivotL: V3;
+  // per-call scratch (nothing is allocated per frame): the line of fire last asked for — its pivot (train-local / world), direction
+  // (world / train-local), length, and where it leaves the car's outline
+  private readonly pivotL = v0();
   private readonly pivotW = v0();
   private readonly dirW = v0();
   private readonly dirL = v0();
@@ -238,8 +241,7 @@ export class SentryTurretSystem {
   constructor(readonly host: SentryHost, readonly opts: SentryOptions = {}) {
     this.spec = host.trainRuntime?.spec ?? PLAYER_TRAIN_SPEC;
     this.view = new SentryTurretView(this.spec);
-    this.pivotL = turretPivot(this.spec);
-    this.rand = opts.rand ?? (() => (this.host.rand ? this.host.rand() : Math.random()));
+    this.rand = opts.rand ?? Math.random;
   }
 
   // --- registration --------------------------------------------------------------------------------------------------
@@ -456,7 +458,7 @@ export class SentryTurretSystem {
   /** The deployed turret: pick, track, fire. */
   private track(dt: number, unit: EquipmentUnit, p: TrainPlacement): void {
     const h = this.host;
-    this.setPivot(p);
+    this.setMount(p);
     let t = this.target;
     if (t && !this.valid(t)) { t = this.target = null; this.pickT = 0; }
     this.pickT -= dt;
@@ -482,32 +484,40 @@ export class SentryTurretSystem {
     this.fire(unit, t, p);
   }
 
-  /** The pivot in the world for the parked car at `p` (the mount's x / z with it). */
-  private setPivot(p: TrainPlacement): void {
-    const L = this.pivotL;
-    this.pivotW.x = p.x + p.front * L.x; this.pivotW.y = p.railTopY + L.y; this.pivotW.z = p.z + p.front * L.z;
-    this.mountWX = this.pivotW.x; this.mountWZ = this.pivotW.z;
+  /** The turret's yaw axis in the world for the parked car at `p`: the range is measured from it, the gunman's place is under it. */
+  private setMount(p: TrainPlacement): void {
+    const m = turretMount(this.spec);
+    this.mountWX = p.x + p.front * m.x; this.mountWZ = p.z + p.front * m.z;
   }
 
-  /** The line pivot -> `to` (world): its unit direction (world + train-local) and length into the scratch. False: no length. */
-  private lineTo(to: V3, p: TrainPlacement): boolean {
-    this.setPivot(p);
-    const o = this.pivotW, dx = to.x - o.x, dy = to.y - o.y, dz = to.z - o.z, d = Math.hypot(dx, dy, dz);
+  /**
+   * THE LINE OF FIRE to world point `to`, into the scratch: its pivot (train-local + world), unit direction (world + train-local) and
+   * length. The pivot is that of the turret turned to point at `to` (no `yaw`: a clear-shot test for a target the gun is not on yet),
+   * or of the turret turned `yaw` (the gun's own yaw: a shot). False: no length.
+   */
+  private lineTo(to: V3, p: TrainPlacement, yaw = NaN): boolean {
+    const L = this.pivotL, o = this.pivotW;
+    // (world <-> train-local is exact: the parked yaw is 0 / PI, `front` = +1 / -1)
+    if (Number.isNaN(yaw)) turretPivotToward((to.x - p.x) * p.front, (to.z - p.z) * p.front, this.spec, L);
+    else turretPivot(yaw, this.spec, L);
+    o.x = p.x + p.front * L.x; o.y = p.railTopY + L.y; o.z = p.z + p.front * L.z;
+    const dx = to.x - o.x, dy = to.y - o.y, dz = to.z - o.z, d = Math.hypot(dx, dy, dz);
     if (d < 1e-3) return false;
     this.lineD = d;
     this.dirW.x = dx / d; this.dirW.y = dy / d; this.dirW.z = dz / d;
-    this.dirL.x = this.dirW.x * p.front; this.dirL.y = this.dirW.y; this.dirL.z = this.dirW.z * p.front; // (exact: the parked yaw is 0 / PI)
+    this.dirL.x = this.dirW.x * p.front; this.dirL.y = this.dirW.y; this.dirL.z = this.dirW.z * p.front;
     return true;
   }
 
   /**
-   * A CLEAR SHOT from the pivot to world point `to`: within the elevation stops, over the car's own roof (ownHullClear), then from the
-   * virtual origin the sight line and the bullet's world ray reach it, and the player's body is not near the line.
+   * A CLEAR SHOT to world point `to` from the pivot of the turret turned to point at it (or turned `yaw`: the gun's own, at the
+   * trigger): within the elevation stops, over the car's own roof (ownHullClear), then from the virtual origin the sight line and the
+   * bullet's world ray reach it, and the player's body is not near the line.
    */
-  clearTo(to: V3, p: TrainPlacement): boolean {
+  clearTo(to: V3, p: TrainPlacement, yaw = NaN): boolean {
     const h = this.host;
     this.counts.lineTests++;
-    if (!this.lineTo(to, p)) return false;
+    if (!this.lineTo(to, p, yaw)) return false;
     const d = this.lineD, pitch = Math.asin(Math.max(-1, Math.min(1, this.dirL.y)));
     if (pitch < SENTRY.pitchMin || pitch > SENTRY.pitchMax) return false;
     if (!ownHullClear(this.pivotL, this.dirL, d, this.spec)) return false;
@@ -529,26 +539,30 @@ export class SentryTurretSystem {
     return true;
   }
 
-  /** A clear shot at an enemy: its upper torso, else its head (the part into `clearPart`, the point into `aim`). */
-  private clearShot(z: SentryEnemy): boolean {
+  /**
+   * A clear shot at an enemy: its upper torso, else its head (the part into `clearPart`, the point into `aim`, the line into the
+   * scratch) — for the turret turned to point at it, or turned `yaw`.
+   */
+  private clearShot(z: SentryEnemy, yaw = NaN): boolean {
     const p = this.host.trainRuntime?.train?.placement;
     if (!p) return false;
-    if (aimPoint(z.hitVolumes, 'torso', this.aim) && this.clearTo(this.aim, p)) { this.clearPart = 'torso'; return true; }
-    if (aimPoint(z.hitVolumes, 'head', this.aim) && this.clearTo(this.aim, p)) { this.clearPart = 'head'; return true; }
+    if (aimPoint(z.hitVolumes, 'torso', this.aim) && this.clearTo(this.aim, p, yaw)) { this.clearPart = 'torso'; return true; }
+    if (aimPoint(z.hitVolumes, 'head', this.aim) && this.clearTo(this.aim, p, yaw)) { this.clearPart = 'head'; return true; }
     return false;
   }
 
-  /** The gunman's place for the AI (where a hit / the noise came from): under the turret on the car's floor — a spot feet can go to. */
+  /** The gunman's place for the AI (where a hit / the noise came from): under the turret's axis on the car's floor — a spot feet can go to. */
   private from(p: TrainPlacement, out: V3): V3 {
-    out.x = this.pivotW.x; out.y = p.floorY; out.z = this.pivotW.z;
+    out.x = this.mountWX; out.y = p.floorY; out.z = this.mountWZ;
     return out;
   }
 
   /** One aimed shot at the tracked target (the barrel is on it, the cooldown is over). */
   private fire(unit: EquipmentUnit, t: SentryEnemy, p: TrainPlacement): void {
     const h = this.host, def = this.def;
-    // the line is tested again at the trigger: the target moved, a door closed, the player stepped in
-    if (!this.clearShot(t)) { this.dropTarget(); this.cooldown = SENTRY.repick; return; }
+    // the line is tested again at the trigger, from the pivot at the yaw the gun has now: the target moved, a door closed, the player
+    // stepped in
+    if (!this.clearShot(t, this.yaw)) { this.dropTarget(); this.cooldown = SENTRY.repick; return; }
     if (this.clearPart !== this.targetPart) { this.targetPart = this.clearPart; return; } // (the other part now: swing onto it first)
     // the round leaves the hopper FIRST: never a shot without one
     const before = unit.ammo;
@@ -579,6 +593,7 @@ export class SentryTurretSystem {
     const S = this.shot;
     S.result = 'none'; S.part = null; S.damage = 0; S.dist = dist; S.killed = false; S.ammo = left;
     S.end.x = end.x; S.end.y = end.y; S.end.z = end.z; S.origin.x = o.x; S.origin.y = o.y; S.origin.z = o.z;
+    S.pivot.x = this.pivotW.x; S.pivot.y = this.pivotW.y; S.pivot.z = this.pivotW.z;
     h.damage?.beginShot();
     if (eh) {
       const z = eh.enemy, part = eh.part;
@@ -666,7 +681,7 @@ export class SentryTurretSystem {
       deployed: this.deploy >= 1, deploy: n(this.deploy), visible: this.view.root.visible, yaw: n(this.yaw), pitch: n(this.pitch),
       headroom: r ? {ok: r.ok, ceil: n(r.ceil), clearance: n(r.clearance)} : null,
       target: t ? {x: n(t.brain.x), y: n(t.brain.y), z: n(t.brain.z), part: this.targetPart} : null,
-      cooldown: n(this.cooldown), shots: this.counts.shots, counts: {...this.counts}, lastShot: this.lastShot ? {...this.lastShot, end: {...this.lastShot.end}, origin: {...this.lastShot.origin}} : null,
+      cooldown: n(this.cooldown), shots: this.counts.shots, counts: {...this.counts}, lastShot: this.lastShot ? {...this.lastShot, end: {...this.lastShot.end}, origin: {...this.lastShot.origin}, pivot: {...this.lastShot.pivot}} : null,
     };
   }
 }
@@ -677,11 +692,13 @@ function ammoShort(u: EquipmentUnit): string {
 }
 const NO_ROOM: SentryHeadroom = Object.freeze({ok: false, ceil: -Infinity, clearance: -Infinity});
 
-/** Installs the sentry (one call in the Game constructor, after the train equipment; registries only). */
+/**
+ * Installs the sentry (one call in the Game constructor, after the train equipment; registries only). The game passes its level random
+ * stream: installSentryTurret(this, {rand: () => this.rand()}).
+ */
 export function installSentryTurret(game: Game, opts: SentryOptions = {}): SentryTurretSystem {
-  // (compile-time: Game really has every PUBLIC member the sentry reads; `rand` is Game's private level stream, read structurally)
-  const host: Omit<SentryHost, 'rand'> = game;
-  return new SentryTurretSystem(host as SentryHost, opts).install();
+  const host: SentryHost = game; // (compile-time: Game really has every member the sentry reads)
+  return new SentryTurretSystem(host, opts).install();
 }
 
 /** QA hook (spread into window.__LL) for the lead's short serial browser spot check. */

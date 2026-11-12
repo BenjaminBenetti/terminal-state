@@ -1,17 +1,20 @@
 // Task studio-train-crafting-v1-20261111-225628-01 (lane SENTRY): the sentry's ROOF TURRET as a thing you see (world/sentryTurret.ts
-// drives it) — train-local, a child of the car's view root at craft/trainFixtures.ts turretMount.
+// drives it) — train-local, a child of the car's view root at craft/trainFixtures.ts turretMount (on the car's middle roof hatch).
 //
 // THE MODEL: the cooked turret (assets/trainEquipment.generated.ts TRAIN_EQUIPMENT_MODELS.turret, a clone of the prop library's GLB; its
 // geometry / materials stay the library's, never disposed here). Its frame: origin on the yaw axis at the underside of the base ring,
-// +Z = the muzzle at rest; nodes 'turret-base' (fixed), 'turret-yoke' (turns about +Y through the origin), 'turret-head' (tilts about
-// the X axis through TRAIN_TURRET_MEASURED.pitchPivot; absent / unused when `pitch` is false). The nodes are re-parented under two
-// pivot groups placed in the MODEL frame (attach keeps every part where the cook put it), so the turn / tilt axes are the documented
-// ones whatever the nodes' own origins are. Without a yoke node the whole model turns; without a head it does not tilt.
-// THE STAND-IN (no model in the library yet: the cook has not landed, or a Node test): a plain base disc, pedestal, box head and barrel
-// at the measured size — authored geometry with two plain materials, replaced the moment the model is there.
+// +Z = the muzzle at rest; nodes 'turret-base' (fixed), 'turret-yoke' (turns about +Y through the origin), 'turret-head' (a child of
+// the yoke at TRAIN_TURRET_MEASURED.pitchPivot — ahead of the yaw axis — tilting about the X axis through it, rotation.x POSITIVE =
+// muzzle DOWN; absent / unused when `pitch` is false). The nodes are re-parented under two pivot groups placed in the MODEL frame
+// (attach keeps every part exactly where the cook put it: yaw 0 / pitch 0 is the cooked rest pose), so the turn / tilt axes are the
+// documented ones whatever the nodes' own origins are. Without a yoke node the whole model turns; without a head it does not tilt.
+// tests/sentry-turret-model.test.ts drives the REAL GLB through this.
+// THE STAND-IN (the model is not in the library: a missing file, or a Node test): a plain base disc, pedestal, box head and barrel at
+// the measured size — authored geometry with two plain materials, replaced the moment the model is there.
 //
-// POSE: deploy 0..1 — the turret sinks along Y into the roof cavity (at most down to the saloon's ceiling lining: never through it) and
-// is HIDDEN at 0 (the roof skin covers the stowed turret); yaw about +Y (0 = the car's +Z), pitch = elevation (up positive).
+// POSE: deploy 0..1 — the turret sinks along Y into the roof cavity under the hatch, down to just above the saloon's ceiling lining
+// (never through it): its whole height (any pitch) is below the hatch's top there, and it is HIDDEN at 0. Yaw about +Y (0 = the car's
+// +Z), pitch = elevation (up positive: the pitch pivot's rotation.x is its negative).
 
 import * as THREE from 'three';
 import {TRAIN_TURRET_MEASURED} from '../assets/trainEquipment.generated';
@@ -52,7 +55,8 @@ export class SentryTurretView {
   constructor(readonly spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC) {
     const m = turretMount(spec);
     this.mountY = m.y;
-    this.sink = Math.max(0.05, Math.min(TRAIN_TURRET_MEASURED.size.h, m.y - spec.ceilingY - SENTRY_VIEW.ceilingGap));
+    // the whole cavity: more than the turret's height at any pitch (craft/sentry.ts turretReach; pinned by tests/sentry-turret-model)
+    this.sink = Math.max(0.05, m.y - spec.ceilingY - SENTRY_VIEW.ceilingGap);
     this.root.name = 'train-turret';
     this.root.position.set(m.x, m.y - this.sink, m.z);
     this.root.visible = false;
@@ -75,7 +79,7 @@ export class SentryTurretView {
       parent.add(o);
       return o;
     };
-    const r = M.size.w / 2;
+    const r = M.baseRadius;
     mk(new THREE.CylinderGeometry(r * 0.92, r, S.base, 20).translate(0, S.base / 2, 0), steel, 'turret-base', this.frame);
     this.yawPivot = new THREE.Group();
     this.yawPivot.name = 'train-turret-yaw';

@@ -33,6 +33,8 @@ const SEEDS = [1, 2, 3] as const;
 interface Row {
   level: LevelId; seed: number; placed: boolean; ok: boolean; clearance: number; over: number; rayUp: number;
   samples: number; clear: number; platform: number; platformClear: number;
+  /** The clear-shot tests of the field of fire: how many went on to the world rays, the mean time of one (microseconds; the report only). */
+  rayed: number; us: number;
 }
 
 /** The free height straight up from the car's roof top at train-local (lx, lz), by the bullet's world ray (m above the MOUNT). */
@@ -44,7 +46,7 @@ function rayUp(s: SentryWorld, lx: number, lz: number): number {
 
 function census(level: LevelId, seed: number): Row {
   const s = sentryWorld({level, seed, ammo: 10});
-  const row: Row = {level, seed, placed: !!s.p, ok: false, clearance: NaN, over: NaN, rayUp: NaN, samples: 0, clear: 0, platform: 0, platformClear: 0};
+  const row: Row = {level, seed, placed: !!s.p, ok: false, clearance: NaN, over: NaN, rayUp: NaN, samples: 0, clear: 0, platform: 0, platformClear: 0, rayed: 0, us: 0};
   if (!s.p) return row;
   const m = turretMount(SPEC), r = turretSweep(), room = s.sys.headroom();
   row.ok = room.ok;
@@ -52,7 +54,8 @@ function census(level: LevelId, seed: number): Row {
   row.over = room.ceil - (s.p.railTopY + m.y);
   row.rayUp = Math.min(rayUp(s, m.x, m.z), rayUp(s, m.x + r, m.z), rayUp(s, m.x - r, m.z), rayUp(s, m.x, m.z + r * 0.98), rayUp(s, m.x, m.z - r * 0.98));
   // the field of fire: standing cells within range (every 3rd cell of every storey), a clear shot at chest height
-  const piv = s.pivot();
+  const piv = s.mount(); // (the range is measured from the yaw axis)
+  const rayed: {x: number; y: number; z: number}[] = [];
   for (const lv of s.levels.list) {
     const g = lv.grid;
     for (let cy = 1; cy < g.h; cy += 3) for (let cx = 1; cx < g.w; cx += 3) {
@@ -60,18 +63,31 @@ function census(level: LevelId, seed: number): Row {
       if (g.cells[i] !== FLOOR || g.blocked[i] || g.rampIdx[i] >= 0) continue;
       const x = (cx + 0.5) * CELL, z = (cy + 0.5) * CELL;
       if (Math.hypot(x - piv.x, z - piv.z) > SENTRY.range) continue;
-      const f = g.floorOf(i), on = Math.abs(f - s.p.floorY) < 0.6;
+      const f = g.floorOf(i), on = Math.abs(f - s.p.floorY) < 0.6, to = {x, y: f + 1.3, z};
       row.samples++;
       if (on) row.platform++;
-      if (s.sys.clearTo({x, y: f + 1.3, z}, s.p)) { row.clear++; if (on) row.platformClear++; }
+      const n = s.sys.counts.rayTests, clear = s.sys.clearTo(to, s.p);
+      if (s.sys.counts.rayTests !== n) rayed.push(to); // (it went on to the world rays: a costly test)
+      if (clear) { row.clear++; if (on) row.platformClear++; }
     }
+  }
+  // the cost of a costly test (the report only): the same lines again, timed as one pass
+  row.rayed = rayed.length;
+  if (OUT && rayed.length) {
+    const t0 = performance.now();
+    for (let k = 0; k < 3; k++) for (const to of rayed) s.sys.clearTo(to, s.p);
+    row.us = (performance.now() - t0) * 1000 / (3 * rayed.length);
   }
   return row;
 }
 
 const fmt = (v: number) => (Number.isFinite(v) ? v.toFixed(2) : String(v));
 
-/** What the census found (2026-11-12): the turret can deploy at every placed train of every level archetype, every seed. */
+/**
+ * What the census found (2026-11-12, the cooked turret on the middle hatch: its top 0.568 m over the mount at the lower stop): the
+ * turret can deploy at every placed train of every level archetype, every seed — the least clearance over the raised turret is
+ * 0.65 m (the 1.22 m ceilings over the mount: Subway seed 1, Office seed 2).
+ */
 const DEPLOYS: Record<LevelId, boolean> = {subway: true, office: true, mall: true, market: true, bunker: true, skyways: true, reactor: true};
 
 describe('sentry: headroom over the roof mount, every level archetype', () => {
@@ -87,13 +103,15 @@ describe('sentry: headroom over the roof mount, every level archetype', () => {
       for (const seed of SEEDS) {
         const row = census(level, seed);
         out(`${level.padEnd(8)} seed ${seed}: placed ${row.placed ? 'yes' : 'NO '} deploy ${row.ok ? 'yes' : 'NO '} ceiling over mount ${fmt(row.over)} m, clearance over the raised turret ${fmt(row.clearance)} m (ray up ${fmt(row.rayUp)} m)`
-          + ` | clear shots at chest height: ${row.clear}/${row.samples} standing samples in range, ${row.platformClear}/${row.platform} on the platform's height`);
+          + ` | clear shots at chest height: ${row.clear}/${row.samples} standing samples in range, ${row.platformClear}/${row.platform} on the platform's height`
+          + ` | ${row.rayed} tests went on to the world rays, ${row.us.toFixed(0)} us each: a pick's worst (${SENTRY.maxChecks} bodies refused by the rays, torso + head) ${(row.us * SENTRY.maxChecks * 2 / 1000).toFixed(2)} ms`);
         expect(row.placed, `${level} ${seed}: a train is placed`).toBe(true);
         // the report is consistent with itself and with the world ray
         expect(row.ok).toBe(row.clearance >= SENTRY.headroom);
         if (row.ok) expect(row.rayUp, `${level} ${seed}: nothing in the raised turret's way`).toBeGreaterThanOrEqual(turretReach() + SENTRY.headroom - 0.02);
         else expect(row.rayUp, `${level} ${seed}: the world ray agrees something is in the way`).toBeLessThan(turretReach() + SENTRY.headroom + 0.25);
         expect(row.ok, `${level} ${seed}: deploys`).toBe(DEPLOYS[level]);
+        if (row.ok) expect(row.clearance, `${level} ${seed}: the least clearance found`).toBeGreaterThan(0.6);
         if (row.ok) expect(row.platformClear, `${level} ${seed}: a field of fire on the platform`).toBeGreaterThan(0);
       }
     }, 240000);

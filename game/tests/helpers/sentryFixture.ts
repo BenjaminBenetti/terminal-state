@@ -25,7 +25,8 @@ import {ZombieActor} from '../../src/ai/zombieActor';
 import {createEnemyActor, type EnemyActor} from '../../src/ai/creatureArchetypes';
 import {EQUIPMENT, type EquipmentKind} from '../../src/craft/equipment';
 import type {EquipmentSystemLike, EquipmentUnit, EquipmentUse} from '../../src/craft/equipmentApi';
-import {turretPivot, type V3} from '../../src/craft/sentry';
+import {turretPivot, turretPivotToward, type V3} from '../../src/craft/sentry';
+import {turretMount} from '../../src/craft/trainFixtures';
 import {SentryTurretSystem, type SentryEnemy, type SentryHost, type SentryOptions} from '../../src/world/sentryTurret';
 
 export const DT = 1 / 60;
@@ -152,12 +153,13 @@ export function sentryWorld(o: SentryWorldOpts = {}) {
     sectionModelKeys: [] as ((l: StationLayout) => readonly string[])[],
     state: 'playing', world: null, input: {down: () => false}, run: {current: {level: o.level ?? 'subway', section: 'main'}, campaign: null},
     playerTrain: new PlayerTrainRecord(), trainRide: {riding: false, moving: false},
-    inv: new Inventory(), stats: {kills: 0, shots: 0, hits: 0, headshots: 0}, rand: mulberry32(0x5e7), trainEquipment: eq,
+    inv: new Inventory(), stats: {kills: 0, shots: 0, hits: 0, headshots: 0}, trainEquipment: eq,
     trainRuntime: undefined as unknown as PlayerTrainRuntime,
   };
   const rt = installPlayerTrain(host as never);
   host.trainRuntime = rt;
-  const sys = new SentryTurretSystem(host as unknown as SentryHost, {model: o.model ?? (() => null), rand: o.rand}).install();
+  // (the spread's stream is handed in, as the game does: a seeded one here unless the test brings its own)
+  const sys = new SentryTurretSystem(host as unknown as SentryHost, {model: o.model ?? (() => null), rand: o.rand ?? mulberry32(0x5e7)}).install();
   live.push({rt, sys});
   for (const s of host.sectionHooks) s.build?.(lay);
   const p = rt.train?.placement ?? null;
@@ -166,8 +168,14 @@ export function sentryWorld(o: SentryWorldOpts = {}) {
   if (p) { const at = trainToWorld(p, 5, SPEC.floorY, 0); player.spawn(at.x, at.z, 0, at.y); }
   const W = {
     host, lay, levels, rt, sys, eq, unit: unit as FakeUnit, p: p as TrainPlacement, player, toasts, sfx, fx, dmg, ragdolls, lights, shadows,
-    /** The pivot in the world. */
-    pivot(): V3 { const L = turretPivot(SPEC); return trainToWorld(p!, L.x, L.y, L.z); },
+    /** The turret's yaw axis at the mount's height, in the world (the range is measured from it; the gunman's place is under it). */
+    mount(): V3 { const m = turretMount(SPEC); return trainToWorld(p!, m.x, m.y, m.z); },
+    /** A world point in the train-local frame. */
+    local(w: V3): V3 { return {x: (w.x - p!.x) * p!.front, y: w.y - p!.railTopY, z: (w.z - p!.z) * p!.front}; },
+    /** The pivot (world) of the turret turned `yaw`. */
+    pivot(yaw: number): V3 { const L = turretPivot(yaw, SPEC); return trainToWorld(p!, L.x, L.y, L.z); },
+    /** The pivot (world) of the turret turned to point at world point `to`: where the line of fire to it starts. */
+    pivotToward(to: V3): V3 { const t = W.local(to), L = turretPivotToward(t.x, t.z, SPEC); return trainToWorld(p!, L.x, L.y, L.z); },
     /** A world point at train-local (lx, lz) standing on whatever floor is there near the car floor's height (null: nothing to stand on). */
     stand(lx: number, lz: number): V3 | null {
       const w = trainToWorld(p!, lx, 0, lz), f = levels.supportAt(w.x, w.z, p!.floorY + 0.25, 0.4)?.floor;
