@@ -140,6 +140,8 @@ export const STORAGE_KEYS = {
   slot: (n: number) => `terminal-state.save.slot${n}.v1`,
   lastSlot: 'terminal-state.save.last.v1',
   settings: 'terminal-state.settings.v1',
+  /** Task first-player-onboarding: the tutorial / onboarding record (ui/onboardingStore.ts) — browser-global, never in a save file. */
+  onboarding: 'terminal-state.onboarding.v1',
 } as const;
 
 /** Human-readable slot metadata (also inside the save file). */
