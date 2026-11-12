@@ -32,7 +32,7 @@ import {FUEL, FUEL_LANE, stationFuelProblem, type StationFuelJSON} from '../src/
 import type {PlayerTrainRuntime} from '../src/world/playerTrain';
 import {saveFileText, type SaveFileV1Like} from '../src/save/serialize';
 import {parseSaveText} from '../src/save/validate';
-import {DT, flatRoom, frame, lookAt, stationHost} from './helpers/fuelCartsHost';
+import {DT, flatRoom, frame, holdE, lookAt, stationHost} from './helpers/fuelCartsHost';
 import {CartBot, planCartRoute} from './helpers/cartBot';
 import {Harness, sid} from './helpers/saveFixture';
 
@@ -192,7 +192,7 @@ describe('the real Player drags a cart over a Subway station\'s stairs', () => {
     lookAt(h, drawn.x, drawn.y, drawn.z);
     frame(h);
     expect(carts.aim?.cart.uid).toBe('cart:s');
-    expect(carts.prompt).toMatch(/Grab the fuel cart/);
+    expect(carts.prompt).toMatch(/Hold \[E\]<\/b> Drag the fuel cart/);
     const eye = new THREE.Vector3(), dir = new THREE.Vector3();
     h.camera.getWorldPosition(eye); h.camera.getWorldDirection(dir);
     const hit = eye.clone().addScaledVector(dir, carts.aim!.t);
@@ -200,8 +200,7 @@ describe('the real Player drags a cart over a Subway station\'s stairs', () => {
     const toDrawn = Math.hypot(hit.x - drawn.x, hit.y - drawn.y, hit.z - drawn.z);
     expect(toDrawn).toBeLessThan(CART_LOOK.frame.r + 0.2);
     expect(toDrawn).toBeLessThan(Math.hypot(hit.x - upright.x, hit.y - upright.y, hit.z - upright.z));
-    h.keys.hits.add('KeyE');
-    frame(h);
+    holdE(h); // (E held: the drag starts with a hold)
     expect(carts.grab?.cart.uid).toBe('cart:s');
     // --- the same speed on flat floor still coasts on its rolling resistance (the existing feel, unchanged): the controller alone ---
     const room = flatRoom(), fb: CartBody = {x: 2, y: 0, z: 3, yaw: 0, vx: v0, vz: 0, level: 0, units: FUEL.cartUnits};

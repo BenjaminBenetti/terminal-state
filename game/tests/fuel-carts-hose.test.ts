@@ -1,8 +1,9 @@
 // Task studio-beta-train-fuel-system-20261106-024923-01 (lane CART): the fuel cart's HOSE on a generated station with the REAL parked
-// train (PlayerTrainRuntime + TrainRide): E on the drum within PORT.hoseMax of the fuel cap connects it (one pooled tube, rewritten in
-// place); one unit every FUEL_CART.transferEvery s from the drum into the train tank — whole units, conserved exactly, never past
+// train (PlayerTrainRuntime + TrainRide): a TAP of E on the drum within PORT.hoseMax of the fuel cap connects it (one pooled tube,
+// rewritten in place); one unit every FUEL_CART.transferEvery s from the drum into the train tank — whole units, conserved exactly, never past
 // FUEL.trainTankUnits; it disconnects (the unit in progress lost) on E, the tank full, the cart empty, the cart pushed out of reach, the
-// train departing and a world teardown; out of reach / with a full tank E grabs instead.
+// train departing and a world teardown; out of reach / with a full tank a tap does nothing (HOLDING E drags the cart: task
+// train-interaction-ux-20261112 — tests/drag-hold-fuel-cart.test.ts).
 import {afterEach, describe, expect, it} from 'vitest';
 import {installCanvasShim} from './helpers/canvas2d';
 import {LEVELS} from '../src/levels/registry';
@@ -13,7 +14,7 @@ import {PORT, fuelPortLocal} from '../src/fuel/trainPort';
 import {PLAYER_TRAIN_SPEC as SPEC} from '../src/world/playerTrainSpec';
 import {CART_LOOK, HOSE} from '../src/world/fuelCartModel';
 import {CART_TEXT, FUEL_CART} from '../src/world/fuelCarts';
-import {DT, frame, lookAt, press, run, stationHost, teardown} from './helpers/fuelCartsHost';
+import {DT, frame, holdE, lookAt, press, run, stationHost, teardown} from './helpers/fuelCartsHost';
 import type {PlayerTrainRuntime} from '../src/world/playerTrain';
 
 installCanvasShim(false);
@@ -92,10 +93,10 @@ describe('fuel cart hose', () => {
     let cx = 0, cy = 0, cz = 0;
     for (let j = 0; j < HOSE.sides; j++) { cx += pos[last + 3 * j]; cy += pos[last + 3 * j + 1]; cz += pos[last + 3 * j + 2]; }
     expect(Math.hypot(cx / HOSE.sides - capW.x, cy / HOSE.sides - capW.y, cz / HOSE.sides - capW.z)).toBeLessThan(0.01);
-    // a full tank: E on the drum grabs instead (the prompt says why)
+    // a full tank: no hose is offered on the drum (the prompt says why; holding E drags as everywhere)
     aimDrum();
     frame(h);
-    expect(carts.prompt).toMatch(/Grab the fuel cart · ¼ tank · train tank full/); // (the tank took 7 of the 8: task studio-general-armor-20261107-231448-01 / lane TRAVEL)
+    expect(carts.prompt).toMatch(/Hold \[E\]<\/b> Drag the fuel cart · ¼ tank · train tank full/); // (the tank took 7 of the 8: task studio-general-armor-20261107-231448-01 / lane TRAVEL)
   });
 
   it('an empty cart stops the flow ("Cart empty"); the tank keeps what it got', () => {
@@ -108,11 +109,13 @@ describe('fuel cart hose', () => {
     expect(h.playerTrain.fuel.tank).toBe(1);
     expect(carts.hoseOn).toBeNull();
     expect(h.toasts).toContain(CART_TEXT.empty);
-    // an empty cart offers no hose; it stays movable (E grabs)
+    // an empty cart offers no hose (a tap does nothing); it stays movable (E held drags)
     aimDrum();
     frame(h);
-    expect(carts.prompt).toMatch(/Grab the fuel cart · empty/);
+    expect(carts.prompt).toMatch(/Hold \[E\]<\/b> Drag the fuel cart · empty/);
     press(h, 'KeyE');
+    expect([carts.grab, carts.hoseOn]).toEqual([null, null]);
+    holdE(h);
     expect(carts.grab).not.toBeNull();
   });
 
@@ -134,11 +137,13 @@ describe('fuel cart hose', () => {
     expect(cartUnits()).toBe(FUEL.cartUnits - 1);
   });
 
-  it('out of the hose reach: no hose offered (E grabs); a connected cart pushed beyond PORT.hoseMax pulls free', () => {
+  it('out of the hose reach: no hose offered (the drag line only); a connected cart pushed beyond PORT.hoseMax pulls free', () => {
     const far = setup(FUEL.cartUnits, 0, -2.5, PORT.hoseMax + 0.5); // along the platform, beyond the hose's reach
     far.aimDrum();
     frame(far.h);
-    expect(far.carts.prompt).toMatch(/Grab the fuel cart/);
+    expect(far.carts.prompt).toMatch(/Hold \[E\]<\/b> Drag the fuel cart/);
+    press(far.h, 'KeyE');
+    expect([far.carts.grab, far.carts.hoseOn]).toEqual([null, null]); // a tap there does nothing
     const {h, carts, aimDrum} = setup(FUEL.cartUnits, 0);
     aimDrum();
     press(h, 'KeyE');
@@ -154,20 +159,22 @@ describe('fuel cart hose', () => {
   });
 
   it('grabbing the cart, the train departing and a world teardown disconnect safely', () => {
-    // grab (a second E after the disconnect grabs; startGrab itself drops a connected hose)
+    // grab (a tap on the connected cart only disconnects; a HOLD grabs it, and the grab itself drops a connected hose)
     {
       const {h, carts, aimDrum, aimHandle} = setup(FUEL.cartUnits, 0);
       aimDrum();
       press(h, 'KeyE');
       aimHandle();
-      press(h, 'KeyE'); // (E on the connected cart disconnects first)
-      expect(carts.hoseOn).toBeNull();
+      press(h, 'KeyE'); // (a tap on the connected cart disconnects, whatever part is aimed at)
+      expect([carts.hoseOn, carts.grab]).toEqual([null, null]);
       aimDrum();
       press(h, 'KeyE');
       expect(carts.hoseOn).not.toBeNull();
-      (carts as unknown as {startGrab(c: unknown): void}).startGrab((carts as unknown as {carts: unknown[]}).carts[0]);
+      aimHandle();
+      holdE(h);
       expect(carts.hoseOn).toBeNull();
       expect(carts.grab).not.toBeNull();
+      expect(h.toasts.filter(t => t === CART_TEXT.disconnected)).toHaveLength(2);
     }
     // departure: the player boards and the ride starts -> silently off, nothing more flows
     {

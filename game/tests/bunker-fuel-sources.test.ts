@@ -67,10 +67,10 @@ describe('a fuel cart fuels a Bunker generator through its hose (one quarter-tan
     expect(cartUnits()).toBe(FUEL.cartUnits - 1);
     expect(gen.takes()).toBe(1);
     expect(h.playerTrain.fuel.tank).toBe(0);
-    // fuelled: no more hose to it (E grabs; the prompt says why)
+    // fuelled: no more hose to it (the drag line only)
     aimDrum();
     frame(h);
-    expect(carts.prompt).toMatch(/Grab the fuel cart/);
+    expect(carts.prompt).toMatch(/Hold \[E\]<\/b> Drag the fuel cart/);
   });
 
   it('E before the tick disconnects: nothing moves; an empty cart offers no hose; out of reach offers none', () => {
@@ -88,13 +88,13 @@ describe('a fuel cart fuels a Bunker generator through its hose (one quarter-tan
     const empty = setup(0);
     empty.aimDrum();
     frame(empty.h);
-    expect(empty.carts.prompt).toMatch(/Grab the fuel cart · empty/);
+    expect(empty.carts.prompt).toMatch(/Hold \[E\]<\/b> Drag the fuel cart · empty/);
     const far = setup(FUEL.cartUnits, FUEL_CART.hoseMax + 0.6);
     far.aimDrum();
     frame(far.h);
-    expect(far.carts.prompt).toMatch(/Grab the fuel cart/);
+    expect(far.carts.prompt).toMatch(/Hold \[E\]<\/b> Drag the fuel cart/);
     press(far.h, 'KeyE');
-    expect(far.carts.hoseOn).toBeNull();
+    expect([far.carts.hoseOn, far.carts.grab]).toEqual([null, null]); // a tap out of reach does nothing (never a grab)
     run(far.h, 3);
     expect(far.gen.state.fuel['gen-0']).toBe(0);
   });

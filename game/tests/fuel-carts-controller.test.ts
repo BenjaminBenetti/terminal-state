@@ -1,8 +1,9 @@
 // Task studio-beta-train-fuel-system-20261106-024923-01 (lane CART): the fuel cart's kinematic controller (world/fuelCartPhysics.ts) and
 // the push / grab interaction (world/fuelCarts.ts) on a hand-built room (walls all round, a 1.15 m drop at x = 7 m like a platform
 // edge) with the REAL Player body: a cart never passes a wall or rolls off the edge, a walking player pushes it (slowly, slower full)
-// and never walks through it, a grabbed cart is pulled out of a corner and steered, carts never overlap, a grab is let go by E / a hit /
-// a menu / walking away, the drag slows the player and owns the mouse buttons; the composed cart's human-scale dimensions.
+// and never walks through it, a grabbed cart (E HELD: task train-interaction-ux-20261112; the hold's own cases are tests/
+// drag-hold-fuel-cart.test.ts) is pulled out of a corner and steered, carts never overlap, a grab is let go by E / a hit / a menu /
+// walking away, the drag slows the player and owns the mouse buttons; the composed cart's human-scale dimensions.
 import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
 import {CART, cartMass, footprintFloor, moveCart, pushTop, stepCart, type CartBody, type CartWorld} from '../src/world/fuelCartPhysics';
@@ -11,7 +12,7 @@ import {FUEL_CART} from '../src/world/fuelCarts';
 import {FUEL} from '../src/fuel/fuel';
 import {PORT} from '../src/fuel/trainPort';
 import {combineModifiers} from '../src/player/modifiers';
-import {DT, flatRoom, frame, lookAt, press, roomHost, run} from './helpers/fuelCartsHost';
+import {DT, flatRoom, frame, holdE, lookAt, press, roomHost, run} from './helpers/fuelCartsHost';
 
 const R = CART.radius;
 const WALL = 0.5; // the room's inner wall faces: x / z = 0.5 and x = 10.5 / z = 6.5
@@ -118,7 +119,7 @@ describe('fuel cart push / grab (system, real Player)', () => {
     expect(h.player.x - b.x).toBeGreaterThanOrEqual(h.player.radius + R - 1e-6);
   });
 
-  it('grab (E on the handle within reach): pulled out of a corner, steered, trailing the player; E lets go', () => {
+  it('grab (E HELD on the handle within reach): pulled out of a corner, steered, trailing the player; E lets go', () => {
     const {h, carts} = roomHost();
     carts.spawn(cart('c', WALL + R + 0.01, WALL + R + 0.01, FUEL.cartUnits, Math.PI)); // in the corner, handle toward +Z
     h.player.place(1.9, 2.3, 0);
@@ -136,8 +137,8 @@ describe('fuel cart push / grab (system, real Player)', () => {
     frame(h);
     lookAt(h, b.x + Math.sin(b.yaw) * CART_LOOK.handle.z, b.y + CART_LOOK.handle.y, b.z + Math.cos(b.yaw) * CART_LOOK.handle.z);
     frame(h);
-    expect(carts.prompt).toMatch(/\[E\]<\/b> Grab the fuel cart · 2 tanks/);
-    press(h, 'KeyE');
+    expect(carts.prompt).toMatch(/Hold \[E\]<\/b> Drag the fuel cart · 2 tanks/);
+    holdE(h);
     expect(carts.grab).not.toBeNull();
     expect(carts.prompt).toMatch(/Let go/);
     expect(h.inputOwners.some(f => f())).toBe(true); // no shot / ADS / item use while dragging
@@ -179,7 +180,7 @@ describe('fuel cart push / grab (system, real Player)', () => {
       frame(h);
       const b = carts.bodyOf('c')!;
       lookAt(h, b.x - 0.19, b.y + 1.0, b.z);
-      press(h, 'KeyE');
+      holdE(h);
       expect(carts.grab).not.toBeNull();
     };
     grabNow();
