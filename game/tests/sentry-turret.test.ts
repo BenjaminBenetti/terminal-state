@@ -9,6 +9,7 @@
 //    game's kill path once; the brain is hurt FROM THE TRAIN; gunfire noise at the train; the player's own shot statistics untouched;
 //  - lifecycle: stowed and silent when unplugged / riding / empty / the player dead / not playing; redeploys on arrival; hidden
 //    through a ride (it stays on the riding car); a rebuild keeps nothing stale; the warm pool; the view's pivots agree with the rules.
+import {readFileSync} from 'node:fs';
 import * as THREE from 'three';
 import {afterEach, beforeAll, describe, expect, it} from 'vitest';
 import {installCanvasShim} from './helpers/canvas2d';
@@ -450,6 +451,39 @@ describe('sentry turret: firing', () => {
     expect(s.sys.counts).toMatchObject({shots: 2, worldHits: 2});
     expect(offered.length).toBe(2); expect(offered[1].shot).toBe(-2);
     expect([s.fx.count('impact'), s.sfx.count('impact')]).toEqual([1, 1]);
+  });
+});
+
+describe('sentry turret: the spread', () => {
+  it("is drawn from the level's random stream (Game.rand, re-seeded per level: read at each shot), two draws per round, inside the cone", () => {
+    const s = sentryWorld({ammo: 12});
+    let draws = 0;
+    const R = s.host.rand;
+    s.host.rand = () => { draws++; return R(); };
+    const z = zombieAt(s, PIV.x, -9);
+    s.deploy();
+    expect(draws).toBe(0); // nothing is drawn while it only tracks
+    const ends: V3[] = [];
+    let n = 0;
+    s.until(() => { if (s.sys.counts.shots !== n) { n = s.sys.counts.shots; ends.push({...s.sys.lastShot!.end}); } return n >= 10; }, 10);
+    expect(n).toBe(10);
+    expect(draws).toBe(20);
+    // every round left inside the cone round the aim line (the body moved a little between shots: a generous bound), and they differ
+    const piv = s.pivot(), chest = aim(z, 'torso');
+    const dirs = ends.map(e => { const d = Math.hypot(e.x - piv.x, e.y - piv.y, e.z - piv.z); return {x: (e.x - piv.x) / d, y: (e.y - piv.y) / d, z: (e.z - piv.z) / d}; });
+    const dc = Math.hypot(chest.x - piv.x, chest.y - piv.y, chest.z - piv.z), c = {x: (chest.x - piv.x) / dc, y: (chest.y - piv.y) / dc, z: (chest.z - piv.z) / dc};
+    for (const d of dirs) expect(Math.acos(Math.min(1, d.x * c.x + d.y * c.y + d.z * c.z))).toBeLessThan(SENTRY.spread + 0.08);
+    expect(new Set(ends.map(e => e.x.toFixed(4))).size).toBeGreaterThan(5);
+    // a swapped stream (the next level's) is the one used from then on
+    let other = 0;
+    s.host.rand = () => { other++; return 0.5; };
+    s.until(() => s.sys.counts.shots >= 11);
+    expect([draws, other]).toEqual([20, 2]);
+    // the game's member the system reads is private there: pinned by name (a rename must come here too)
+    const src = readFileSync(new URL('../src/game.ts', import.meta.url), 'utf8');
+    expect(src).toMatch(/\n {2}private rand: \(\) => number = Math\.random;/);
+    expect(src).toMatch(/this\.rand = mulberry32\(layout\.seed \^ /);
+    expect(src).toMatch(/this\.sentryTurret = installSentryTurret\(this\)/);
   });
 });
 

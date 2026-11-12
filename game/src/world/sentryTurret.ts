@@ -74,8 +74,6 @@ export const SENTRY_TEXT = {
   noHeadroom: 'no headroom for the roof turret at this platform',
   unplugged: 'not plugged in',
   unloadHint: 'hold <b>[E]</b> to unload',
-  rounds: (n: number) => `${n} round${n === 1 ? '' : 's'}`,
-  state: (ammo: number, cap: number) => `${ammo}/${cap} rounds`,
   load: (short: string, carried: number, ammo: number, cap: number) => `<b>[E]</b> Load ${short} (${carried} carried) · sentry ${ammo}/${cap} rounds`,
   noneCarried: (short: string, ammo: number, cap: number) => `Sentry ${ammo}/${cap} rounds — no ${short} carried`,
   full: (ammo: number, cap: number) => `Sentry ${ammo}/${cap} rounds — full`,
@@ -677,7 +675,9 @@ const NO_ROOM: SentryHeadroom = Object.freeze({ok: false, ceil: -Infinity, clear
 
 /** Installs the sentry (one call in the Game constructor, after the train equipment; registries only). */
 export function installSentryTurret(game: Game, opts: SentryOptions = {}): SentryTurretSystem {
-  return new SentryTurretSystem(game as unknown as SentryHost, opts).install();
+  // (compile-time: Game really has every PUBLIC member the sentry reads; `rand` is Game's private level stream, read structurally)
+  const host: Omit<SentryHost, 'rand'> = game;
+  return new SentryTurretSystem(host as SentryHost, opts).install();
 }
 
 /** QA hook (spread into window.__LL) for the lead's short serial browser spot check. */
