@@ -424,6 +424,7 @@ export class SentryTurretSystem {
 
   update(dt: number): void {
     const h = this.host;
+    if (h.state !== 'playing') return; // (the frame hooks run in play only; a paused / ended game moves nothing here either way)
     const unit = h.trainEquipment?.active('sentry') ?? null;
     if (!unit && this.deploy === 0) { this.unitUid = null; this.target = null; return; } // no active sentry, nothing showing: nothing to do
     if ((unit?.uid ?? null) !== this.unitUid) { this.unitUid = unit?.uid ?? null; this.dropTarget(); this.cooldown = 0; }

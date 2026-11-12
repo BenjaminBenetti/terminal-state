@@ -8,7 +8,7 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {loadStripped} from './openablesFixture';
 import {LEVELS} from '../../src/levels/registry';
 import type {LevelId} from '../../src/levels/types';
-import {levelsOf, type Levels} from '../../src/gen/levels';
+import {levelsOf} from '../../src/gen/levels';
 import {PropIndex} from '../../src/core/physics';
 import {mulberry32} from '../../src/core/rng';
 import {Player} from '../../src/player/player';
@@ -181,6 +181,12 @@ export function sentryWorld(o: SentryWorldOpts = {}) {
         for (const z of host.zombies) syncBody(z);
         each?.((i + 1) * DT);
       }
+    },
+    /** Frames until `done()` (at most `max` seconds); returns the seconds run. */
+    until(done: () => boolean, max = 6): number {
+      let t = 0;
+      while (!done() && t < max) { W.run(DT); t += DT; }
+      return t;
     },
     /** Rise fully (the deploy time and a frame). */
     deploy(): void { W.run(1); },

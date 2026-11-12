@@ -12,9 +12,9 @@
 // THE LINE OF FIRE (train-local frame of world/playerTrainSpec.ts: +X front, +Y up, origin at rail-top height on the centre line): from
 // the turret's PIVOT (the yaw axis at the tilt axis' height, above craft/trainFixtures.ts turretMount) to the aim point.
 //  1. OWN HULL (ownHullClear): while the line is above the car's plan outline (|x| <= length / 2, |z| <= width / 2) it stays at least
-//     SENTRY.hullMargin above the roof outline (trainFixtures.ts roofTopAt: the cooked shell's highest roof point at or beyond that |z|,
-//     vent boxes included), sampled every SENTRY.hullStep along it. The turret never shoots through its own roof — which leaves a dead
-//     zone close beside the car (a target under the eaves), and fore / aft along the roof, and inside the car.
+//     SENTRY.hullMargin above the roof outline (trainFixtures.ts TRAIN_ROOF_PROFILE: the cooked shell's highest roof point at or beyond
+//     that |z|, vent boxes included; checked exactly against its steps). The turret never shoots through its own roof — which leaves a
+//     dead zone close beside the car (a target under the eaves), and fore / aft along the roof, and inside the car.
 //  2. THE VIRTUAL ORIGIN (hullExit): the parked car's colliders (world/playerTrain.ts trainColliders) include a ROOF BOX over the full
 //     outline up to the vents' top, coarser than the real roof — a ray cast from the pivot would stop in it. So the level's rays (sight,
 //     bullet) start where the line leaves the outline, SENTRY.hullPush outside it (every collider box of the car lies inside the outline).
@@ -25,7 +25,7 @@
 import type {ItemStack} from '../items/inventory';
 import {TRAIN_TURRET_MEASURED} from '../assets/trainEquipment.generated';
 import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from '../world/playerTrainSpec';
-import {roofTopAt, turretMount} from './trainFixtures';
+import {TRAIN_ROOF_PROFILE, roofTopAt, turretMount} from './trainFixtures';
 
 const DEG = Math.PI / 180;
 
@@ -46,9 +46,8 @@ export const SENTRY = {
   headAbove: 0.12,
   /** The bullet's world ray reaches the aim point within this (m): the game's clear-line tolerance (Game.echoScan). */
   reach: 0.05,
-  /** OWN HULL: the line stays this far above the roof outline (m), sampled this often along it (m). */
+  /** OWN HULL: the line stays this far above the roof outline (m). */
   hullMargin: 0.03,
-  hullStep: 0.1,
   /** THE VIRTUAL ORIGIN: this far outside the car's plan outline (m). */
   hullPush: 0.04,
   /** The turret: yaw / pitch rates (rad/s), the elevation stops (rad), the idle scan (rad/s, its pitch). */
@@ -222,17 +221,27 @@ export function planSpan(o: V3, d: V3, maxT: number, hx: number, hz: number, out
 }
 
 /**
- * OWN HULL: the ray o + d t (unit d, 0 <= t <= maxT) never comes within `margin` of the car's roof while it is above the car's plan
- * outline. False: the shot would go through the car's own roof (or starts under it).
+ * OWN HULL: the ray o + d t (unit d, 0 <= t <= maxT) never comes within `margin` of the car's roof outline while it is above the car's
+ * plan outline. False: the shot would go through the car's own roof (or starts under it). EXACT against the stepped outline (no
+ * sampling): the line is straight and the outline is constant between its steps, so the line is lowest against each step where it
+ * enters / leaves it — the ends of its span over the car and every crossing of a step's |z| (on either side of the centre line),
+ * where the higher (inner) step counts.
  */
 export function ownHullClear(o: V3, d: V3, maxT: number, spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC, margin: number = SENTRY.hullMargin): boolean {
   if (!planSpan(o, d, maxT, spec.length / 2, spec.width / 2, SPAN)) return true;
   const t0 = SPAN[0], t1 = SPAN[1];
-  for (let t = t0; ; t += SENTRY.hullStep) {
-    const u = t < t1 ? t : t1;
-    if (o.y + d.y * u < roofTopAt(o.z + d.z * u, spec) + margin) return false;
-    if (u >= t1) return true;
+  if (o.y + d.y * t0 < roofTopAt(o.z + d.z * t0, spec) + margin) return false;
+  if (o.y + d.y * t1 < roofTopAt(o.z + d.z * t1, spec) + margin) return false;
+  if (Math.abs(d.z) < 1e-12) return true; // along the car: the same step all the way
+  const P = TRAIN_ROOF_PROFILE;
+  for (let i = 1; i < P.length; i++) {
+    const z = P[i][0], inner = Math.max(P[i - 1][1], P[i][1]) + margin;
+    let t = (z - o.z) / d.z;
+    if (t > t0 && t < t1 && o.y + d.y * t < inner) return false;
+    t = (-z - o.z) / d.z;
+    if (t > t0 && t < t1 && o.y + d.y * t < inner) return false;
   }
+  return true;
 }
 
 /**
