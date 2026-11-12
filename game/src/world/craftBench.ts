@@ -26,27 +26,34 @@
 // item, and no other lane owns the hands (a carried body / chest, a grabbed cart, an open Lockbox / bag / chest view …: the same
 // inputOwners rule as the Skyways car's door). While the train moves there is no prompt and no [E] (v1).
 //
-// THE VIEW opens WITHOUT pausing (state stays 'playing'; the pointer is released like the Lockbox view's). 1–4 / the Craft buttons run
+// THE VIEW opens WITHOUT pausing (state stays 'playing'; the pointer is released like the Lockbox view's). A row's Craft button runs
 // craft/crafting.ts craft() over the four sources — the carried inventory, the worn backpack, the Lockbox, the chests standing in the
-// car — and the equipment system. A craft: the list is redrawn with the new counts, a toast + the view's note say
+// car — and the equipment system (task train-interaction-ux-20261112-063646: there is NO crafting shortcut; while the list is open
+// every digit key is swallowed and does nothing). A craft: the list is redrawn with the new counts, a toast + the view's note say
 // "Crafted: <Name> — <hint>" (the hint from the unit's traits: carried kinds "hold E to carry it", plug kinds "roll it to a free plug"),
 // the cue is the existing pickup sound + the existing metal 'clank' at the bench. A refusal: the note in red + the denied sound,
 // nothing changed. It CLOSES on E / Esc / Tab / I / Close (user), a hit, walking away (BENCH_RT.closeRange from the bench's footprint),
 // any state but playing, death, the train starting to move, the bench gone, teardown. It redraws when the inventory or the Lockbox
 // changes (their versions, every frame) and when the chests' contents or the equipment system's answers change (looked at
 // BENCH_RT.refreshS apart: craftBlock may test the floor).
+//
+// THE ROWS' 3D PREVIEWS (task train-interaction-ux-20261112-063646, lane CRAFT-UI): world/craftPreview.ts registers one source per recipe
+// with the inventory's icon pass (ui/itemIcons.ts) — the unit as the live equipment system's look builds it, real models only. The
+// bench only says WHEN: its update, while the car stands parked in a live world, costs one integer compare and asks for a render when
+// the look's models changed; an open asks again only for a preview still missing. The view redraws when the icon cache reports one.
 
 import * as THREE from 'three';
 import type {Game} from '../game';
 import {TRAIN_EQUIPMENT_MODELS} from '../assets/trainEquipment.generated';
-import {countMaterials, craft, craftSources, type CraftResult, type MaterialCounts, type MaterialSource} from '../craft/crafting';
+import {countMaterials, craft, craftSources, type CraftResult, type MaterialSource} from '../craft/crafting';
 import {EQUIPMENT, type EquipmentDef, type EquipmentKind} from '../craft/equipment';
 import type {EquipmentSystemLike} from '../craft/equipmentApi';
-import {RECIPES, RECIPE_MATERIALS, recipeFor} from '../craft/recipes';
+import {RECIPE_MATERIALS, recipeFor} from '../craft/recipes';
 import {benchFootprint, benchPlacement, type BenchPlacement} from '../craft/trainFixtures';
 import type {Inventory, ItemStack} from '../items/inventory';
 import type {WarmupRegistry} from '../render/warmup';
 import {CraftView, craftKeyAction, craftModel, type CraftViewModel} from '../ui/craftView';
+import {CraftPreviews, type PreviewLook} from './craftPreview';
 import {EquipmentChestStore, chestStoreQaApi, installEquipmentChestStore} from './equipmentChestStore';
 import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from './playerTrainSpec';
 import {TRAIN_VIEW, partitionsOf} from './playerTrainView';
@@ -136,6 +143,16 @@ export interface CraftBenchOptions {
   model?: () => THREE.Object3D | null;
   /** The loose item under the crosshair (Game's pickup target, passed at install like world/corpses.ts `targets`): the bench yields to it. */
   pickupTarget?: () => unknown;
+  /**
+   * The recipe rows' 3D previews (world/craftPreview.ts). `look`: the unit views they are rendered from (default: the live equipment
+   * system's own `look`; null: none). `refreshIcons`: render ids into the item-icon cache (Game: ui/itemIcons.ts refreshItemIcons with
+   * its renderer) — ABSENT in Node tests: nothing is rendered and every row keeps its empty frame. `rendererReady` / `rendererFree`:
+   * the renderer is initialised / resolves when no warm-up owns it (absent: ready, free).
+   */
+  look?: () => PreviewLook | null;
+  refreshIcons?: (ids: readonly string[]) => Promise<void> | void;
+  rendererReady?: () => boolean;
+  rendererFree?: () => Promise<unknown> | null | undefined;
 }
 
 const now = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -174,6 +191,8 @@ export class CraftBenchSystem {
   /** The stand-in shown while there is no model. */
   standIn: THREE.Group | null = null;
   readonly view: CraftView;
+  /** The recipe rows' 3D previews: their icon sources and when they are rendered (world/craftPreview.ts). */
+  readonly previews: CraftPreviews;
   /** The chest's store view (world/equipmentChestStore.ts; set by installCraftBench). */
   chestStore: EquipmentChestStore | null = null;
   /** The crosshair is on the bench and it may be opened (this frame). */
@@ -221,6 +240,10 @@ export class CraftBenchSystem {
       craft: kind => { this.craftKind(kind); },
       close: () => this.close('user'),
     });
+    this.previews = new CraftPreviews({
+      look: () => (opts.look ? opts.look() : (this.host.trainEquipment as {look?: PreviewLook} | null | undefined)?.look ?? null),
+      refreshIcons: opts.refreshIcons, rendererReady: opts.rendererReady, rendererFree: opts.rendererFree,
+    });
   }
 
   get isOpen(): boolean {
@@ -239,6 +262,7 @@ export class CraftBenchSystem {
     h.stateListeners?.push(((s: string) => { if (s !== 'playing') { this.aimed = false; this.close('state'); } }) as (s: never, p: never) => void);
     h.inputOwners?.push(this.ownsInput); // the mouse belongs to the view: no fire / ADS / item use / flare
     h.warmRegistry.addPool('train-bench', () => this.warmRoots());
+    this.previews.install(); // one icon source per recipe (rendered by the inventory's icon pass, when the models are there)
     const inp = h.input;
     if (inp) { // the view releases pointer lock WITHOUT pausing (like the Lockbox / bag view)
       const prev = inp.onLockChange;
@@ -438,20 +462,21 @@ export class CraftBenchSystem {
 
   /** The recipe list as it stands (and what the redraw check last saw). */
   private listModel(): CraftViewModel {
-    const counts = countMaterials(this.sources());
-    const m = craftModel(counts, kind => this.block(kind));
+    const m = craftModel(this.sources(), kind => this.block(kind));
     this.seenInv = this.host.inv.version;
     this.seenBox = this.host.playerTrain.lockbox.version;
-    this.seenSlow = this.slowKey(counts, m);
+    this.seenSlow = this.slowKey(m);
     this.slowT = 0;
     return m;
   }
 
-  /** Everything the list shows that has no version to watch: the counts per source and each row's refusal. */
-  private slowKey(counts: MaterialCounts, m: CraftViewModel): string {
+  /** Everything the list shows that has no version to watch: each row's button and refusal, each chip's count and where it is. */
+  private slowKey(m: CraftViewModel): string {
     let k = '';
-    for (const mat of RECIPE_MATERIALS) for (const s of counts[mat].sources) k += `${s.id}=${s.n};`;
-    for (const r of m.rows) k += `|${r.reason}`;
+    for (const r of m.rows) {
+      k += `|${r.can ? 1 : 0}${r.reason}`;
+      for (const n of r.needs) k += `;${n.have}:${n.where}`;
+    }
     return k;
   }
 
@@ -466,6 +491,7 @@ export class CraftBenchSystem {
     this.lockGraceUntil = now() + 500;
     if (!h.qa) h.input?.unlock();
     this.lastCraft = null;
+    this.previews.opened(); // (only when a preview is still missing: normally they were rendered right after the station was built)
     this.view.show();
     this.counts.opens++;
     return true;
@@ -489,7 +515,7 @@ export class CraftBenchSystem {
     void inp.lock().then(ok => { if (!ok && h.state === 'playing' && !inp.locked) h.gear?.showResume?.(); });
   }
 
-  /** Craft one unit of `kind` from the open list (a key 1–4, a Craft button, QA). Null: the view is closed. */
+  /** Craft one unit of `kind` from the open list (the row's Craft button, QA). Null: the view is closed. */
   craftKind(kind: EquipmentKind): CraftResult | null {
     if (!this.openFlag) return null;
     const h = this.host, recipe = recipeFor(kind), eq = this.equipment();
@@ -518,12 +544,6 @@ export class CraftBenchSystem {
     return res;
   }
 
-  /** Craft the n-th row (0-based: the number keys). */
-  craftIndex(i: number): CraftResult | null {
-    const r = RECIPES[i];
-    return r ? this.craftKind(r.kind) : null;
-  }
-
   // --- per frame ---------------------------------------------------------------------------------------------------------
 
   /** Per playing frame: the fixture stays on the car, the aim; the open view's close rules and redraw. */
@@ -531,6 +551,7 @@ export class CraftBenchSystem {
     const h = this.host, P = h.player;
     if (!this.attach()) { this.aimed = false; this.close('gone'); return; }
     const parked = this.parked();
+    if (parked) this.previews.tick(); // (one compare; a render only when the units' real models arrived / changed)
     if (this.openFlag) {
       this.aimed = false;
       if (!P.alive) { this.close('state'); return; }
@@ -544,8 +565,7 @@ export class CraftBenchSystem {
       this.slowT += dt;
       if (!stale && this.slowT >= BENCH_RT.refreshS) {
         this.slowT = 0;
-        const counts = countMaterials(this.sources());
-        stale = this.slowKey(counts, craftModel(counts, kind => this.block(kind))) !== this.seenSlow;
+        stale = this.slowKey(craftModel(this.sources(), kind => this.block(kind))) !== this.seenSlow;
       }
       if (stale) this.view.render();
       return;
@@ -557,7 +577,7 @@ export class CraftBenchSystem {
     this.aimed = ex * ex + ez * ez <= BENCH_RT.near * BENCH_RT.near && h.state === 'playing' && P.alive && this.aim() !== null;
   }
 
-  /** The keydown capture listener while open: E closes, Esc / Tab / I close and go on, 1–4 craft, other digits are swallowed. */
+  /** The keydown capture listener while open: E closes, Esc / Tab / I close and go on, every digit is swallowed (no shortcut, no quick slot). */
   onKeyCapture(e: Pick<KeyboardEvent, 'code' | 'repeat' | 'ctrlKey' | 'altKey' | 'metaKey' | 'target' | 'preventDefault' | 'stopPropagation'>): void {
     const a = craftKeyAction(e, this.openFlag);
     if (a.kind === 'pass') return;
@@ -565,7 +585,6 @@ export class CraftBenchSystem {
     e.preventDefault();
     e.stopPropagation(); // never reaches player/input.ts ([E] interact, quick slots 1-5, 6)
     if (a.kind === 'close') this.close('user');
-    else if (a.kind === 'craft') this.craftIndex(a.index);
   }
 
   // --- QA ----------------------------------------------------------------------------------------------------------------
@@ -579,7 +598,8 @@ export class CraftBenchSystem {
       aimed: this.aimed, usable: this.usable(), prompt: this.prompt(), open: this.openFlag, lastClose: this.lastClose,
       note: this.view.note, noteBad: this.view.noteBad,
       materials: counts ? Object.fromEntries(RECIPE_MATERIALS.map(m => [m, {total: counts[m].total, carried: counts[m].carried, backpack: counts[m].backpack, lockbox: counts[m].lockbox, chests: counts[m].chests}])) : null,
-      rows: this.view.last?.rows.map(r => ({kind: r.kind, can: r.can, reason: r.reason})) ?? null,
+      rows: this.view.last?.rows.map(r => ({kind: r.kind, can: r.can, reason: r.reason, needs: r.needs.map(n => ({material: n.material, have: n.have, need: n.need, state: n.state}))})) ?? null,
+      previews: this.previews.qa(),
       lastCraft: this.lastCraft ? (this.lastCraft.ok ? {ok: true, unit: this.lastCraft.unit.uid} : {ok: false, reason: this.lastCraft.reason, text: this.lastCraft.text}) : null,
       counts: {...this.counts},
     };
@@ -599,7 +619,7 @@ export function installCraftBench(game: Game, opts: CraftBenchOptions = {}): Cra
 export function craftBenchQaApi(game: unknown): Record<string, (...a: any[]) => unknown> {
   const g = game as {craftBench?: CraftBenchSystem; player: {x: number; y: number; z: number; yaw: number; pitch: number; vy: number; grounded: boolean}};
   return {
-    /** The bench: placement, model / stand-in, aim, prompt, the open view's rows, the material counts per source, the last craft. */
+    /** The bench: placement, model / stand-in, aim, prompt, the open view's rows (+ each chip's have / need), the 3D previews, the material counts per source, the last craft. */
     bench: () => g.craftBench?.qa() ?? null,
     /** Stand in the aisle in front of the bench, looking at its worktop (the prompt shows on the next frame). */
     benchGo: () => {

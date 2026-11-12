@@ -213,6 +213,38 @@ export function planCraft(recipe: Recipe, sources: readonly MaterialSource[]): C
   return short ? {ok: false, missing} : {ok: true, kind: recipe.kind, takes};
 }
 
+/**
+ * One material a recipe costs against what the sources hold (task train-interaction-ux-20261112-063646, lane CRAFT-UI: the recipe
+ * list's "have / need" ratios).
+ */
+export interface RecipeNeed {
+  id: RecipeMaterial;
+  /** recipe.cost[id] (always > 0: a material the recipe does not cost is not listed). */
+  need: number;
+  /** Everything the sources hold of it: exactly what planCraft may draw on, nothing else. */
+  have: number;
+  /** have >= need. */
+  ok: boolean;
+  /** Where `have` is (countMaterials' own record of this material: carried / backpack / Lockbox / chests, and per source). */
+  where: MaterialCount;
+}
+
+/**
+ * What `recipe` costs (RECIPE_MATERIALS order; only the materials it costs) against the SAME sources craft() pays from. ONE TRUTH with
+ * the craft: every need is ok exactly when planCraft(recipe, sources) finds a plan, and `have` is countMaterials(sources)' total.
+ * Changes nothing. `counts`: countMaterials(sources) when the caller has it already (several recipes over one source list).
+ */
+export function recipeNeeds(recipe: Recipe, sources: readonly MaterialSource[], counts: MaterialCounts = countMaterials(sources)): RecipeNeed[] {
+  const out: RecipeNeed[] = [];
+  for (const m of RECIPE_MATERIALS) {
+    const need = recipe.cost[m];
+    if (!(need > 0)) continue;
+    const where = counts[m];
+    out.push({id: m, need, have: where.total, ok: where.total >= need, where});
+  }
+  return out;
+}
+
 /** What applyCraft did: enough to put every unit back exactly. */
 export interface CraftReceipt {
   plan: CraftPlan;

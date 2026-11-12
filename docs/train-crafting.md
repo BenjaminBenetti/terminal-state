@@ -7,9 +7,15 @@ chest and three devices that plug into the train. Material supply is unchanged; 
 
 - Every train has the bench. It stands in the rear compartment on the side opposite the Lockbox, front to the aisle. It is a fixed
   part of the car: not storage, not cargo, not loot.
-- Aim at it and press **E** to open the recipe list. The game does not pause. Each row shows the cost, what you have, and what is
-  missing. Press **1–4** or the row's button to craft. **E**, **Esc**, **Tab**, **I**, walking away, a hit or the train starting to
-  move closes the list.
+- Aim at it and press **E** to open the recipe list. The game does not pause. **E**, **Esc**, **Tab**, **I**, walking away, a hit
+  or the train starting to move closes the list.
+- Each row shows, left to right: a 3D picture of the thing, its name with one line about it, one chip per material it costs, and
+  the **Craft** button. Crafting is the button only. There is no key shortcut: number keys do nothing while the list is open.
+- A material chip is the material's inventory icon over `have / need`: green when there is enough, red when short. `have` counts
+  exactly what a craft can take (the four places below). The chip's tooltip names the material and says where it is.
+- The picture is the real unit as it stands in the car (the chest with its lid shut), drawn by the inventory's icon renderer into
+  the same icon cache (`world/craftPreview.ts`, `ui/itemIcons.ts registerIconSource`). It is rendered once when the unit's models
+  are loaded, not per frame and not on every open. Until then the frame stays empty: no stand-in is ever pictured.
 - The bench works only while the train is parked.
 
 | Recipe | Scrap metal | Electrical parts | What it is |
@@ -22,7 +28,8 @@ chest and three devices that plug into the train. Material supply is unchanged; 
 - **Where materials are taken from**, in this order: what you carry, the backpack you wear, the Lockbox, then crafted chests
   standing in the car. Nothing else counts (not the floor, not a backpack stored inside a box).
 - **A craft is all or nothing.** The materials are taken and the new thing appears on the car floor in one step. If there is no
-  free floor, the car already holds 24 pieces of equipment, or a material is short, nothing changes and the list says why.
+  free floor, the car already holds 24 pieces of equipment, or a material is short, nothing changes and the button is off. A
+  short material is its red chip; when the car cannot take the unit, a red line under the row says why.
 - The new unit is a real object with its own number (`eq-1`, `eq-2`, …) that it keeps for good. It starts empty, unplugged and with
   no ammunition.
 
@@ -144,16 +151,17 @@ belongs to the station it was left in. One mechanism covers every kind; the code
 | Recipes, records, traits | `craft/recipes.ts`, `craft/equipment.ts`, `craft/equipmentApi.ts` |
 | Placements in the car, roof outline | `craft/trainFixtures.ts` |
 | Atomic craft | `craft/crafting.ts` |
-| Bench and recipe list | `world/craftBench.ts`, `ui/craftView.ts` |
+| Bench and recipe list | `world/craftBench.ts`, `ui/craftView.ts`, `world/craftPreview.ts` |
 | Units, plugs, cargo, saves | `world/trainEquipment.ts`, `world/trainEquipmentModel.ts` |
 | Store view of a chest or a sentry | `world/equipmentChestStore.ts`, `ui/lockboxView.ts` |
 | Sentry | `craft/sentry.ts`, `world/sentryTurret.ts`, `world/sentryTurretView.ts` |
 | Scanner | `craft/scanner.ts`, `world/itemScanner.ts`, `ui/scannerView.ts` |
 | Save validation | `save/validate.ts` |
 
-QA hooks (`?qa=1`): `__LL.bench()`, `benchGo()`, `benchOpen()`, `benchCraft(kind)`, `equipment()`, `equipmentCraft(kind)`,
-`equipmentToPlug(uid, i)`, `sentry()`, `scanner()`, `scannerSweep()`. The store view of any unit with slots (a chest or a sentry,
-by unit number): `chestStore()`, `chestTap(uid)`, `chestQuick(ref)`, `chestMove(from, to, count)`, `chestClose()`.
+QA hooks (`?qa=1`): `__LL.bench()` (each row's material chips as `needs`, the 3D previews' state as `previews`), `benchGo()`,
+`benchOpen()`, `benchCraft(kind)`, `equipment()`, `equipmentCraft(kind)`, `equipmentToPlug(uid, i)`, `sentry()`, `scanner()`,
+`scannerSweep()`. The store view of any unit with slots (a chest or a sentry, by unit number): `chestStore()`, `chestTap(uid)`,
+`chestQuick(ref)`, `chestMove(from, to, count)`, `chestClose()`.
 
 Tests: `tests/train-crafting-session.test.ts` runs the whole chain with every system real. Each part has its own files:
 `craft-*`, `train-equipment-*`, `equipment-chest-store`, `sentry-*`, `scanner-*`, `route-radar`, `train-crafting-contract`,

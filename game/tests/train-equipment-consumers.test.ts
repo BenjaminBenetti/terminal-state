@@ -175,10 +175,10 @@ describe('the bench and the equipment system: a craft is a real unit on the car 
 
     const made: LiveUnit[] = [];
     const craftRow = (kind: string) => {
-      const i = RECIPES.findIndex(r => r.kind === kind), r = RECIPES[i];
+      const r = RECIPES.find(x => x.kind === kind)!;
       const before = counts(), seq = h.playerTrain.equipment.seq, n = eq.units().length;
       h.toasts.length = 0; h.sfxCalls.length = 0;
-      const res = bench.craftIndex(i)!;
+      const res = bench.craftKind(r.kind)!; // (the row's Craft button: there is no by-number shortcut any more)
       expect(res.ok, res.ok ? '' : res.text).toBe(true);
       if (!res.ok) throw new Error(res.text);
       // the result IS the live unit (identity), the run's next number
@@ -284,8 +284,8 @@ describe('the bench and the equipment system: a craft is a real unit on the car 
     for (const r of RECIPES) expect(bench.block(r.kind)).toBe(full);
     const L1 = ledger(h), units1 = eq.units().map(u => u.uid);
     h.sfxCalls.length = 0;
-    for (const [i, r] of RECIPES.entries()) {
-      const out = bench.craftIndex(i)!;
+    for (const r of RECIPES) {
+      const out = bench.craftKind(r.kind)!;
       expect(out).toMatchObject({ok: false, reason: 'blocked', text: full});
       expect(eq.craft(r.kind)).toBeNull();
     }
