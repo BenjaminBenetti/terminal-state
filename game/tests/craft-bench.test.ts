@@ -192,8 +192,9 @@ describe('crafting bench: the fixture in the car', () => {
     // model frame: bottom centre origin
     const local = new THREE.Box3();
     st.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) { m.geometry.computeBoundingBox(); local.union(m.geometry.boundingBox!); } });
-    expect(local.min.toArray().map(v => +v.toFixed(6))).toEqual([-B.length / 2, 0, -B.depth / 2].map(v => +v.toFixed(6)));
-    expect(local.max.toArray().map(v => +v.toFixed(6))).toEqual([B.length / 2, B.height, B.depth / 2].map(v => +v.toFixed(6)));
+    const r6 = (v: number) => +v.toFixed(6) + 0; // (+ 0: a rounded -1e-17 is -0, which toEqual tells from 0)
+    expect(local.min.toArray().map(r6)).toEqual([-B.length / 2, 0, -B.depth / 2].map(r6));
+    expect(local.max.toArray().map(r6)).toEqual([B.length / 2, B.height, B.depth / 2].map(r6));
     const top = st.getObjectByName('train-bench-standin-worktop') as THREE.Mesh;
     expect(top.geometry.boundingBox!.max.y).toBeCloseTo(B.worktopY, 6);
     // in the world: the same footprint as the train's static box for the bench (solid to the worktop), standing on the car floor
