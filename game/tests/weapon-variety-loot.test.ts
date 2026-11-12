@@ -209,18 +209,19 @@ function synth(spots: readonly Spot[], seed = 4242): StationLayout {
 
 describe('weapon variety: the user\'s slot hierarchy and the matching ammo (synthetic finds)', () => {
   const sum = (rows: [string, number][]) => rows.reduce((t, [, w]) => t + w, 0);
-  it('the slot rows: Weapon = 50 % gun (each of 9 guns 1/18) + 50 % melee (each of 7 melee weapons 1/14, the knife included); Gun = 9 x 1/9; categories 3 x 1/3; Melee 7 x 1/7', () => {
+  it('the slot rows: Weapon = 50 % gun (each of 10 guns 1/20) + 50 % melee (each of 7 melee weapons 1/14, the knife included); Gun = 10 x 1/10; categories uniform (pistol / rifle 1/3, shotgun 1/4); Melee 7 x 1/7', () => {
     expect(WEAPON_SLOT_SPLIT).toEqual({gun: 0.5, melee: 0.5});
-    expect([...GUN_LEAVES]).toEqual(['pistol', 'hornet', 'longslide', 'rifle', 'stub', 'overwatch', 'shotgun', 'coach_gun', 'thresher']);
+    expect([...GUN_LEAVES]).toEqual(['pistol', 'hornet', 'longslide', 'rifle', 'stub', 'overwatch', 'shotgun', 'coach_gun', 'thresher', 'turnstile']);
     expect([...MELEE_LEAVES]).toEqual(['knife', 'fire_axe', 'machete', 'sledgehammer', 'crowbar', 'slugger', 'track_shovel']);
     const weapon = slotRows('weapon');
-    expect(weapon.length).toBe(16);
-    for (const [id, w] of weapon) expect(w, id).toBeCloseTo(GUN_LEAVES.includes(id) ? 1 / 18 : 1 / 14, 12);
+    expect(weapon.length).toBe(17);
+    for (const [id, w] of weapon) expect(w, id).toBeCloseTo(GUN_LEAVES.includes(id) ? 1 / 20 : 1 / 14, 12);
     expect(sum(weapon)).toBeCloseTo(1, 12);
-    expect(slotRows('gun')).toEqual(GUN_LEAVES.map(id => [id, 1 / 9]));
+    expect(slotRows('gun')).toEqual(GUN_LEAVES.map(id => [id, 1 / 10]));
     expect(slotRows('melee')).toEqual(MELEE_LEAVES.map(id => [id, 1 / 7]));
+    expect(BASELINE_GUNS.map(c => GUN_CATEGORIES[c].length)).toEqual([3, 3, 4]);
     for (const c of BASELINE_GUNS) {
-      expect(slotRows(c)).toEqual(GUN_CATEGORIES[c].map(id => [id, 1 / 3]));
+      expect(slotRows(c)).toEqual(GUN_CATEGORIES[c].map(id => [id, 1 / GUN_CATEGORIES[c].length]));
       for (const id of GUN_CATEGORIES[c]) { // a category = one caliber family (the categories are data, not a second item / render whitelist)
         expect(WEAPONS[id].caliber, id).toBe(WEAPONS[c].caliber);
         if (isVarietyWeapon(id)) expect(VARIETY_WEAPONS[id].family).toBe(c);
@@ -235,7 +236,7 @@ describe('weapon variety: the user\'s slot hierarchy and the matching ammo (synt
     expect([slotKindOf({purpose: 'mall-guns', type: 'shop'}), slotKindOf({purpose: 'workshop', type: 'storage'}), slotKindOf(undefined)]).toEqual(['gun', 'weapon', 'weapon']);
   });
 
-  it('shares over 36 000 synthetic finds: Weapon slots ~50 / 50, every leaf near 1/18 or 1/14 whatever the source family; Gun slots 1/9 each and never melee; pure + deterministic per origin', () => {
+  it('shares over 36 000 synthetic finds: Weapon slots ~50 / 50, every leaf near 1/20 or 1/14 whatever the source family; Gun slots 1/10 each and never melee; pure + deterministic per origin', () => {
     const N = 6000;
     const tol = (p: number, n: number) => 3.5 * Math.sqrt(p * (1 - p) / n) + 0.003;
     for (const area of ['storage', 'mall-guns']) {
@@ -271,7 +272,7 @@ describe('weapon variety: the user\'s slot hierarchy and the matching ammo (synt
     expect(table).toEqual({
       pistol: {loaded: 15, box: 15}, hornet: {loaded: 15, box: 15}, longslide: {loaded: 10, box: 20},
       rifle: {loaded: 30, box: 20}, stub: {loaded: 30, box: 20}, overwatch: {loaded: 12, box: 38},
-      shotgun: {loaded: 6, box: 6}, coach_gun: {loaded: 2, box: 10}, thresher: {loaded: 6, box: 6},
+      shotgun: {loaded: 6, box: 6}, coach_gun: {loaded: 2, box: 10}, thresher: {loaded: 6, box: 6}, turnstile: {loaded: 6, box: 6},
     });
     for (const id of GUN_LEAVES) {
       const w = WEAPONS[id], t = table[id], std = caliberBundle(w.caliber!);
@@ -322,7 +323,7 @@ describe('weapon variety: the user\'s slot hierarchy and the matching ammo (synt
       const w = WEAPONS[f.itemId];
       expect([!!w.melee, w.caliber, f.mag], f.itemId).toEqual([false, WEAPONS[f.family].caliber, f.original]);
     }
-    expect(new Set(lone.finds.map(f => f.itemId))).toEqual(new Set(['pistol', 'hornet', 'rifle', 'stub', 'shotgun', 'thresher']));
+    expect(new Set(lone.finds.map(f => f.itemId))).toEqual(new Set(['pistol', 'hornet', 'rifle', 'stub', 'shotgun', 'thresher', 'turnstile']));
   });
 
   it('fit: a long floor find is laid ACROSS its box direction (same spot), never swapped back; a display host only offers what fits its top', () => {
@@ -343,13 +344,13 @@ describe('weapon variety: the user\'s slot hierarchy and the matching ammo (synt
     }
     expect(across).toBeGreaterThan(0);
     expect(plan.finds.filter(f => f.itemId === 'track_shovel').length).toBeGreaterThan(0); // the longest one is realized on the floor too
-    // hosted (a gun-shop bench / rack, own yaw): Gun slots offer all nine guns (each fits); a Weapon slot on a host would only lose the shovel
+    // hosted (a gun-shop bench / rack, own yaw): Gun slots offer all ten guns (each fits); a Weapon slot on a host would only lose the shovel
     const shop = weaponFindPlan(synth(BASELINE_GUNS.flatMap(family => Array.from({length: 900}, () => ({family, yaw: 1.2, boxGap: 2, area: 'mall-guns'})))), 'mall', 'mall:main', ALL);
     expect(new Set(shop.finds.map(f => f.itemId))).toEqual(new Set(GUN_LEAVES));
     for (const f of shop.finds) expect([f.slot, f.yaw]).toEqual(['gun', undefined]);
     const hostedWeapon = weaponFindPlan(synth(BASELINE_GUNS.flatMap(family => Array.from({length: 900}, () => ({family, yaw: 1.2, boxGap: 2})))), 'mall', 'mall:main', ALL);
     for (const f of hostedWeapon.finds) expect(weaponLength(f.itemId), f.itemId).toBeLessThanOrEqual(HOST_MAX_M);
-    expect(new Set(hostedWeapon.finds.map(f => f.itemId)).size).toBe(15);
+    expect(new Set(hostedWeapon.finds.map(f => f.itemId)).size).toBe(16);
   });
 
   it('a curated reward (the Office roof find) and non-weapon pickups are never opportunities', () => {
@@ -461,9 +462,15 @@ describe('weapon variety: game.ts wiring (source order)', () => {
   const src = readFileSync(fileURLToPath(new URL('../src/game.ts', import.meta.url)), 'utf8');
   it('first spawns only: the plan is made from the pickup plan\'s layout list; the yaw and the food gate come first; same makeStack count', () => {
     const loopAt = src.indexOf('for (const i of plan.fromLayout) {');
-    const planAt = src.indexOf('const weaponFinds = plan.fromLayout.length ? weaponFindPlan(this.layout, key.level, mem.id).changes : null;');
+    const planAt = src.indexOf('const findPlan = plan.fromLayout.length ? weaponFindPlan(this.layout, key.level, mem.id, {pool}) : null;');
     expect(planAt).toBeGreaterThan(0);
     expect(planAt).toBeLessThan(loopAt);
+    // (task studio-turnstile-user-model-20261112-004550-01) the section's pool: after this entry is counted, recorded with the finds
+    const poolAt = src.indexOf('const pool = sectionWeaponPool(mem.lanes, mem.visits - 1);');
+    expect(poolAt).toBeGreaterThan(src.indexOf('mem.visits++;'));
+    expect(poolAt).toBeLessThan(planAt);
+    expect(src.indexOf('if (findPlan?.finds.length) mem.lanes[WEAPON_POOL_LANE] = pool;')).toBeGreaterThan(planAt);
+    expect(src).toContain('{pool: sectionWeaponPool(mem?.lanes, mem?.visits ?? 0)}'); // the preload: the same pool, before the entry
     const loop = src.slice(loopAt, src.indexOf('for (const rec of plan.restored) {'));
     const yaw = loop.indexOf('const yaw = this.rand() * Math.PI * 2;'), skip = loop.indexOf('if (!keepLayoutPickup(this.layout.seed, mem.id, i, p)) continue;');
     const make = loop.indexOf('const st = wf ? this.inv.makeStack(wf.itemId, wf.count, wf.mag) : this.inv.makeStack(pantryPickupItem(this.layout, i, key.level), p.count);');
@@ -547,11 +554,11 @@ describe('weapon variety: census over real generated layouts of every level (the
     expect(((census.mall as {slots: Record<string, number>}).slots.gun ?? 0)).toBeGreaterThan(10);
     // declared eligibility over these layouts: every Weapon-slot leaf and every gun-store gun appears (not a promise for every seed)
     for (const id of [...GUN_LEAVES, ...MELEE_LEAVES]) expect(leaves.weapon[id] ?? 0, `weapon slot ${id}`).toBeGreaterThan(0);
-    // gun stores (a few dozen finds here): all three categories appear and no leaf strays from 1/9 (the per-leaf uniformity itself is the
+    // gun stores (a few dozen finds here): all three categories appear and no leaf strays from 1/10 (the per-leaf uniformity itself is the
     // synthetic test's 36 000 finds); the counts go to the census
     const gunN = Object.values(leaves.gun).reduce((t, n) => t + n, 0);
     for (const c of BASELINE_GUNS) expect(GUN_CATEGORIES[c].reduce((t, id) => t + (leaves.gun[id] ?? 0), 0), `gun store ${c}`).toBeGreaterThan(0);
-    for (const id of GUN_LEAVES) expect(Math.abs((leaves.gun[id] ?? 0) - gunN / 9), `gun store ${id}`).toBeLessThan(3.5 * Math.sqrt(gunN * (1 / 9) * (8 / 9)) + 1);
+    for (const id of GUN_LEAVES) expect(Math.abs((leaves.gun[id] ?? 0) - gunN / 10), `gun store ${id}`).toBeLessThan(3.5 * Math.sqrt(gunN * (1 / 10) * (9 / 10)) + 1);
     const weaponN = Object.values(leaves.weapon).reduce((t, n) => t + n, 0);
     const meleeN = MELEE_LEAVES.reduce((t, id) => t + (leaves.weapon[id] ?? 0), 0);
     expect(Math.abs(meleeN / weaponN - 0.5), `melee ${meleeN} of ${weaponN}`).toBeLessThan(3.5 * Math.sqrt(0.25 / weaponN));

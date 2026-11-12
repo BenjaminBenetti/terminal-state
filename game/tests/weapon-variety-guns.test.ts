@@ -33,7 +33,7 @@ const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const src = (f: string) => fs.readFileSync(path.join(GAME, f), 'utf8');
 const DT = 1 / 60;
 const idle: TriggerInput = {held: false, pressed: false, reload: false, lowered: false};
-const FAMILY = {hornet: 'pistol', longslide: 'pistol', stub: 'rifle', overwatch: 'rifle', coach_gun: 'shotgun', thresher: 'shotgun'} as const;
+const FAMILY = {hornet: 'pistol', longslide: 'pistol', stub: 'rifle', overwatch: 'rifle', coach_gun: 'shotgun', thresher: 'shotgun', turnstile: 'shotgun'} as const;
 
 let uid = 70000;
 /** A held gun with `mag` loaded and `reserve` rounds of its caliber in the inventory, equipped and ready. */
@@ -167,6 +167,8 @@ describe('the six guns: distinct handling vs their family baseline (the table), 
       overwatch: {mode: 'semi', interval: 0.36, magazine: 12, reload: 'magazine', reloadTime: 2.4, perShot: 46, dps: 127.8, hip: 0.05, aim: 0.0012, settle: 0.6, pitch: 0.0525, climb: 0, moveMult: 0.9, equip: 0.75, range: 120, falloffStart: 70, aimFov: 30},
       coach_gun: {mode: 'semi', interval: 0.2, magazine: 2, reload: 'break', reloadTime: 1.74, perShot: 160, dps: 800, hip: 0.08, aim: 0.056, settle: 0, pitch: 0.1125, climb: 0, moveMult: 0.93, equip: 0.55, range: 26, falloffStart: 7, aimFov: 62},
       thresher: {mode: 'semi', interval: 0.45, magazine: 8, reload: 'magazine', reloadTime: 2.7, perShot: 112, dps: 248.9, hip: 0.08, aim: 0.058, settle: 0, pitch: 0.105, climb: 0, moveMult: 0.88, equip: 0.8, range: 28, falloffStart: 6, aimFov: 62},
+      // task studio-turnstile-user-model-20261112-004550-01: the selected concept B's handling (a full six-shell break reload = 3.9 s)
+      turnstile: {mode: 'semi', interval: 0.55, magazine: 6, reload: 'break', reloadTime: 3.9, perShot: 126, dps: 229.1, hip: 0.08, aim: 0.065, settle: 0, pitch: 0.0975, climb: 0, moveMult: 0.97, equip: 0.4, range: 22, falloffStart: 5, aimFov: 62},
     });
   });
 
@@ -236,6 +238,25 @@ describe('the six guns: distinct handling vs their family baseline (the table), 
       expect(W.thresher.equipTime, id).toBeGreaterThan(W[id].equipTime);
       expect(W.thresher.moveMult, id).toBeLessThan(W[id].moveMult);
     }
+    // turnstile (concept B "Keep moving"): six shells, double-action semi between the Thresher and the pump, a little less per shell than
+    // the pump, the widest cone / shortest reach of the shotguns but the smallest moving penalty, the quickest recovery, the lightest and
+    // quickest-handling shotgun; a break reload
+    expect(W.turnstile.magazine).toBe(6);
+    expect(W.turnstile.auto).toBe(false);
+    expect(W.turnstile.interval).toBeGreaterThan(W.thresher.interval);
+    expect(W.turnstile.interval).toBeLessThan(W.shotgun.interval);
+    expect(W.turnstile.damage * W.turnstile.pellets).toBeLessThan(W.shotgun.damage * W.shotgun.pellets);
+    expect(W.turnstile.reload.kind).toBe('break');
+    for (const id of ['shotgun', 'coach_gun', 'thresher']) {
+      expect(W.turnstile.spreadHip, id).toBeGreaterThanOrEqual(W[id].spreadHip);
+      expect(W.turnstile.spreadAim, id).toBeGreaterThan(W[id].spreadAim);
+      expect(W.turnstile.falloffStart, id).toBeLessThan(W[id].falloffStart);
+      expect(W.turnstile.range, id).toBeLessThan(W[id].range);
+      expect(W.turnstile.spreadMove, id).toBeLessThan(W[id].spreadMove);
+      expect(W.turnstile.recoil.recover, id).toBeGreaterThan(W[id].recoil.recover);
+      expect(W.turnstile.equipTime, id).toBeLessThan(W[id].equipTime);
+      expect(W.turnstile.moveMult, id).toBeGreaterThan(W[id].moveMult);
+    }
   });
 
   it('ids, calibers, cues and view keys: the contract (no new caliber, no new audio set)', () => {
@@ -255,7 +276,7 @@ describe('the six guns: distinct handling vs their family baseline (the table), 
       expect(d.recoil.recover).toBeGreaterThan(0);
     }
     // 12-gauge semi-autos / break actions never rack a pump after a shot; the pump keeps its rack (default by cue set)
-    expect([WEAPONS.coach_gun.shotCycle, WEAPONS.thresher.shotCycle, WEAPONS.shotgun.shotCycle]).toEqual(['none', 'none', undefined]);
+    expect([WEAPONS.coach_gun.shotCycle, WEAPONS.thresher.shotCycle, WEAPONS.turnstile.shotCycle, WEAPONS.shotgun.shotCycle]).toEqual(['none', 'none', 'none', undefined]);
     expect(WEAPONS.thresher.reloadCue).toBe('rifle'); // a box-magazine change uses the magazine cues
   });
 
@@ -277,7 +298,7 @@ describe('the six guns: distinct handling vs their family baseline (the table), 
       expect(better.length, `${id} better in ${better}`).toBeGreaterThanOrEqual(2);
     }
     // the two guns of a family differ from each other too (fire mode or cadence, magazine, reload, range)
-    for (const [a, b] of [['hornet', 'longslide'], ['stub', 'overwatch'], ['coach_gun', 'thresher']] as const) {
+    for (const [a, b] of [['hornet', 'longslide'], ['stub', 'overwatch'], ['coach_gun', 'thresher'], ['coach_gun', 'turnstile'], ['thresher', 'turnstile']] as const) {
       expect(WEAPONS[a].auto !== WEAPONS[b].auto || WEAPONS[a].interval !== WEAPONS[b].interval).toBe(true);
       expect(WEAPONS[a].magazine).not.toBe(WEAPONS[b].magazine);
     }
