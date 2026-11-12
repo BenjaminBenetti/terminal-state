@@ -854,7 +854,7 @@ export class Game {
     // task studio-train-crafting-v1-20261111-225628-01: after the train, the ride, the fuel carts and the cargo systems — the crafted
     // equipment (lane EQUIP: kinematic units on the fuel dolly's controller, the plugs, its own cargo capture / station lane; the train
     // record's live hook), then the systems that read it: the bench (lane BENCH), the sentry (lane SENTRY), the scanner (lane SCANNER)
-    this.trainEquipment = installTrainEquipment(this);
+    this.trainEquipment = installTrainEquipment(this, {cancelUse: r => this.cancelUse(r)});
     hookName('trainEquipment');
     this.craftBench = installCraftBench(this);
     hookName('craftBench');
@@ -2861,6 +2861,7 @@ export class Game {
     if (this.skywaysCar?.refuseUse()) return; // (lane CAR) no item use while driving the Skyways car
     if (this.vomit?.active) return; // (lane SHELVES) no timed use starts while throwing up (H / a click)
     if (this.corpses?.refuseUse()) return; // (task corpse-chipper, lane CORPSE) no item use while the hands carry a body (H, the inventory)
+    if (this.trainEquipment?.refuseUse()) return; // (task train-crafting, lane EQUIP) nor while they carry a storage chest
     // Iteration 12 (LIGHT): a battery is refused at >= 99 % charge (nothing used)
     // Iteration 16 (lane INJURY): a limb treatment needs its injury ("No leg injury to treat"); it heals no HP, so the HP check is skipped
     const blocked = (def.recharge ? this.torch.battery.refuseReason() : null)
@@ -3146,7 +3147,7 @@ export class Game {
       // buttons, or the button being latched away from it mid-windup, cancels (never a release that swings); wiped input
       // (`clears`: menus / blur / pointer unlock) cancels a windup too. `pressed` is Input's per-frame latch: a down + up inside
       // one frame still starts the full windup -> swing -> recovery.
-      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns && !rideHolster, pressed: inp.mousePressed[0] && !flareOwns && !rideHolster, reload: inp.hit('KeyR') && !vmBusy && !this.skywaysCar.driving && !this.corpses?.carrying, // (lane RIDE: holstered; lane CAR: no reload while driving)
+      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns && !rideHolster, pressed: inp.mousePressed[0] && !flareOwns && !rideHolster, reload: inp.hit('KeyR') && !vmBusy && !this.skywaysCar.driving && !this.trainEquipment?.carrying && !this.corpses?.carrying, // (lane RIDE: holstered; lane CAR: no reload while driving)
         aiming: this.aiming, lowered: p.sprinting || vmBusy || p.climbing || (!!wdef.melee && (laneOwns || (this.lmbLatch && this.weapon.winding))), clears: inp.clears}, this.inv); // (lane GUNS: + aiming, an AimSettle)
       for (const e of ev) {
         // (task hitch-attribution-recorder-20261105: weapon.fire / weapon.melee spans — timing only, a no-op unless profiling)
@@ -3246,6 +3247,8 @@ export class Game {
     if (vomitHolster > 0) this.viewmodel.setHolstered(Math.max(vomitHolster, this.consumeView.holster, this.skywaysCar.holster));
     const carryHolster = this.corpses?.holster ?? 0; // (task corpse-chipper, lane CORPSE) carrying a body: the held item lowered too (whichever lowers it more wins)
     if (carryHolster > 0) this.viewmodel.setHolstered(Math.max(carryHolster, vomitHolster, this.consumeView.holster, this.skywaysCar.holster));
+    const chestHolster = this.trainEquipment?.holster ?? 0; // (task train-crafting, lane EQUIP) carrying a storage chest: the same lowering
+    if (chestHolster > 0) this.viewmodel.setHolstered(Math.max(chestHolster, carryHolster, vomitHolster, this.consumeView.holster, this.skywaysCar.holster));
     this.viewmodel.update(dt, {
       // (task mouse-axis-invert: the sway follows the EFFECTIVE turn, so an inverted axis sways with the view, not against it)
       moving: Math.min(1, p.speed / WALK_SPEED), sprint: p.sprinting, aiming: this.aiming, lookDX: inp.dx * lookSigns(this.settings).x, lookDY: inp.dy * lookSigns(this.settings).y,

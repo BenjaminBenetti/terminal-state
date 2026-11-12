@@ -64,6 +64,14 @@ export interface TowerHost {
     /** Task studio-fuel-cart-stairs-20261110-004505-01: some cart's footprint (x, y, z, radius) satisfies the test (the doorway). */
     anyAt?(test: (x: number, y: number, z: number, r: number) => boolean): boolean;
   };
+  /**
+   * Task studio-train-crafting-v1-20261111-225628-01 (lane EQUIP): the crafted train equipment (world/trainEquipment.ts) rides the cab
+   * and holds its doors exactly as the fuel carts do.
+   */
+  trainEquipment?: {
+    carry?(inside: (x: number, y: number, z: number) => boolean, dy: number, level: number): number;
+    anyAt?(test: (x: number, y: number, z: number, r: number) => boolean): boolean;
+  };
   /** Loose pickups (world/pickups.ts): resting ones inside the cab ride along. */
   pickups?: {
     carry(inside: (x: number, y: number, z: number) => boolean, dy: number): number;
@@ -441,6 +449,7 @@ export class TowerRuntime {
       const h = this.host;
       h.pickups?.carry(e.insideLoose, dy);
       h.fuelCarts?.carry?.(e.insideLoose, dy, e.plan.info.stops[i]?.levelId ?? 0);
+      h.trainEquipment?.carry?.(e.insideLoose, dy, e.plan.info.stops[i]?.levelId ?? 0); // (task train-crafting, lane EQUIP)
       // (task studio-fuel-cart-stairs-20261110-004505-01: the car IS at that stop now — the fuel carts' teardown hook, which runs
       // before this runtime's, parks it first so the carts it records stand at the stop; this runtime's own call then moves nothing)
       this.placeCar(st.floor);
@@ -488,7 +497,7 @@ export class TowerRuntime {
     // (task studio-fuel-cart-stairs-20261110-004505-01: a fuel cart standing in the doorway holds the doors like a body: they never
     // shut on it and the cab never leaves it half in the wall)
     e.doorY = stopY;
-    e.cartBlocks = !Number.isNaN(stopY) && !!h.fuelCarts?.anyAt?.(e.cartInDoor);
+    e.cartBlocks = !Number.isNaN(stopY) && (!!h.fuelCarts?.anyAt?.(e.cartInDoor) || !!h.trainEquipment?.anyAt?.(e.cartInDoor)); // (task train-crafting, lane EQUIP: + a crafted unit in the doorway)
     if (e.cartBlocks) doorway = true;
     e.hintT += dt;
     let enemyInside = false;
@@ -523,6 +532,7 @@ export class TowerRuntime {
       }
       c.pickups = h.pickups?.carry(e.insideLoose, dy) ?? 0;
       h.fuelCarts?.carry?.(e.insideLoose, dy, near.levelId); // (task studio-bunker-rework-20261109-205115-01: fuel carts ride the cargo lift)
+      h.trainEquipment?.carry?.(e.insideLoose, dy, near.levelId); // (task train-crafting, lane EQUIP: so does the crafted equipment)
     }
     // --- views: doors, indicator, lit buttons / lanterns, emissive flicker ---
     e.view.setCab(L.y, L.door);

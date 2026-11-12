@@ -937,10 +937,7 @@ export class FuelCarts implements FuelCartsLike {
     if (!model || !this.captured) return;
     const orig = this.captured.swap?.orig ?? model.props;
     const H = this.spec.ceilingY + 3;
-    const boxes: PropPlacement[] = this.carts.filter(c => c.mode === 'cargo').map(c => ({
-      kind: 'column', x: c.local.x + RIDE_FRAME.ox, z: c.local.z + RIDE_FRAME.oz, y: -1, rot: 0, area: -1,
-      hx: CART.radius, hz: CART.radius, h: H, blocksSight: false, variant: 0, level: 0, round: true,
-    }));
+    const boxes: PropPlacement[] = this.carts.filter(c => c.mode === 'cargo').map(c => rideCargoColumn(c.local.x, c.local.z, CART.radius, H));
     // (task train-all-cargo: shared with the carried props' footprints — world/trainRideLocal.ts setRideCargoBoxes, by owner)
     setRideCargoBoxes(model, 'fuel-carts', boxes);
     this.captured.swap = {model, orig, mine: model.props};
@@ -1086,6 +1083,15 @@ export class FuelCarts implements FuelCartsLike {
     return false;
   }
 
+  /**
+   * Task studio-train-crafting-v1-20261111-225628-01 (lane EQUIP): the live carts' controller bodies for the OTHER bodies on this
+   * controller (world/trainEquipment.ts keeps its units and the carts apart; it sets `awake` on a cart it moved). The live list itself
+   * (no allocation): read `mode` ('world' = standing in the level), never add / remove entries.
+   */
+  bodies(): readonly CartBodyRef[] {
+    return this.carts;
+  }
+
   /** QA / tests: a live cart's drawn pose over its body (lift, pitch, roll), or null. */
   poseOf(uid: string): CartPose | null {
     const c = this.carts.find(k => k.uid === uid);
@@ -1164,6 +1170,17 @@ export class FuelCarts implements FuelCartsLike {
       tank: this.host.playerTrain.fuel.tank, prompt: this.prompt, counts: {...this.counts},
     };
   }
+}
+
+/** A live cart as another system on the same controller sees it (FuelCarts.bodies). */
+export interface CartBodyRef { readonly body: CartBody; readonly mode: 'world' | 'cargo'; awake: boolean }
+
+/**
+ * A riding cargo's footprint in the riding car's own collision model (world/trainRideLocal.ts: the step frame): a solid round column
+ * of radius r at the train-local (lx, lz), `h` tall. Shared with the train equipment's cargo (world/trainEquipment.ts).
+ */
+export function rideCargoColumn(lx: number, lz: number, r: number, h: number): PropPlacement {
+  return {kind: 'column', x: lx + RIDE_FRAME.ox, z: lz + RIDE_FRAME.oz, y: -1, rot: 0, area: -1, hx: r, hz: r, h, blocksSight: false, variant: 0, level: 0, round: true};
 }
 
 const byUid = (a: {uid: string}, b: {uid: string}) => (a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0);
