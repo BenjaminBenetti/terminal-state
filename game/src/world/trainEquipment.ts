@@ -75,7 +75,7 @@ import type {Levels} from '../gen/levels';
 import type {PropPlacement} from '../gen/props';
 import {moveCircle, type PropIndex} from '../core/physics';
 import {
-  EQUIPMENT, EQUIPMENT_KINDS, EQUIPMENT_LIMITS, STATION_EQUIPMENT_LANE, copyEquipment, equipmentProblem, equipmentSeqOf, freshEquipment,
+  EQUIPMENT, EQUIPMENT_KINDS, EQUIPMENT_LIMITS, STATION_EQUIPMENT_LANE, copyEquipment, equipmentProblem, equipmentSeqOf, isEquipmentKind, freshEquipment,
   stationEquipmentOf, type EquipmentDef, type EquipmentJSON, type EquipmentKind, type StationEquipmentJSON, type TrainEquipment,
 } from '../craft/equipment';
 import {EQUIP_HOLD_S, type EquipmentStore, type EquipmentSystemLike, type EquipmentUnit, type EquipmentUse} from '../craft/equipmentApi';
@@ -480,8 +480,8 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   }
 
   craftBlock(kind: EquipmentKind): string | null {
+    if (!isEquipmentKind(kind)) return EQUIPMENT_TEXT.noRoom; // (a registry kind only: never an inherited key)
     const def = EQUIPMENT[kind];
-    if (!def) return EQUIPMENT_TEXT.noRoom;
     if (this.riding) return EQUIPMENT_TEXT.moving;
     const p = this.parkedPlacement();
     if (!this.worldLive || !p || !this.host.levels) return EQUIPMENT_TEXT.noTrain;
@@ -1822,7 +1822,7 @@ export function trainEquipmentQaApi(game: unknown): Record<string, (...a: any[])
     /** Craft one unit of `kind` on the parked car's floor (no materials: QA): its uid, or the refusal text. */
     equipmentCraft: (kind: EquipmentKind) => {
       const s = g.trainEquipment;
-      if (!s || !EQUIPMENT[kind]) return 'unknown kind';
+      if (!s || !isEquipmentKind(kind)) return 'unknown kind';
       return s.craft(kind)?.uid ?? s.craftBlock(kind);
     },
     /** Put a unit at rest beside plug `index` (0..2) of the parked car: it plugs in on the next frames when that plug is free. */
