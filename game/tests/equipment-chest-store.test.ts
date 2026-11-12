@@ -83,7 +83,7 @@ describe('chest store: the registered use and the view\'s look', () => {
     expect(s.eq.uses.chest).toBe(s.store.use);
     expect(typeof s.store.use.prompt).toBe('function');
     expect(typeof s.store.use.tap).toBe('function');
-    expect(s.store.use.hold).toBeUndefined();
+    expect('hold' in s.store.use).toBe(false);
     // (every kind with slots opens through this one controller — the sentry's feed too: tests/sentry-ammo.test.ts; the others' uses are their own systems')
     expect(Object.keys(s.eq.uses).sort()).toEqual(EQUIPMENT_KINDS.filter(k => EQUIPMENT[k].slots > 0).sort());
     // a replaced / late equipment system gets it on the next frame
@@ -106,7 +106,7 @@ describe('chest store: the registered use and the view\'s look', () => {
     expect(s.a.slots!.length).toBe(50);
   });
 
-  it('the prompt counts the used slots and names its action (the equipment system adds the hold); null hands it back to the system', () => {
+  it('the prompt counts the used slots (the tap\'s line: the equipment system adds "hold [E] to carry it"); null hands it back to the equipment system', () => {
     const s = setup(), inv = s.host.inv;
     expect(s.store.use.prompt(s.a)).toBe('<b>[E]</b> Open the storage chest (0/50)');
     s.a.slots![0] = inv.makeStack(SCRAP_METAL, 5);

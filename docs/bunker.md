@@ -308,6 +308,9 @@ migrates as paid (fuelled / online = paid in full): no re-charge, no refund, an 
 ### Fuel carts on stairs
 
 The fuel cart is the common cart of every level (`world/fuelCarts.ts`, `world/fuelCartPhysics.ts`); nothing here is Bunker-only.
+- **Hands**: hold **E** on the cart for half a second to grab it; the crosshair ring fills while you hold (the same hold as every
+  draggable thing, `core/holdGesture.ts`). A tap never grabs: it connects the hose (aimed at the drum, with a filler in reach) or
+  disconnects it. Once the cart is grabbed the key can be released; the next **E** lets go.
 - **Movement**: a grabbed (or pushed) cart goes up and down stair runs and landings: a flight's walking surface is its continuous pitch
   line and the cart's floor rule follows it. `tests/fuel-cart-stairs.test.ts` drives a cart over every flight of every level type both
   ways and has the real Player drag one over a Subway station's stairs. The vault door's threshold (three 0.28 m steps each side) is

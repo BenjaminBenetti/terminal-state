@@ -8,11 +8,12 @@
 //  - the CHEST's store view (world/equipmentChestStore.ts): a TAP of [E] opens it over the unit's live slots (the lid up, the store's
 //    own cue — the equipment system makes no sound), HOLDING [E] carries the chest and never asks the use; the open view closes when
 //    the chest is shoved, becomes cargo, or is replaced by a Retry;
-//  - the SENTRY's feed (world/equipmentChestStore.ts over the unit's four slots; world/sentryTurret.ts): [E] opens its own small store
-//    view; real rounds go in and come out by the inventory's own moves, conserved; nothing but its rounds goes in; an older save's
-//    round count is real stacks from the first frame; active('sentry') only while plugged into the parked car;
-//  - the item SCANNER's console (world/itemScanner.ts): its tap falls through to the grab while it is not plugged in, opens the scope
-//    while it is; unplugging closes the scope through the plug listener;
+//  - the SENTRY's feed (world/equipmentChestStore.ts over the unit's four slots; world/sentryTurret.ts): a TAP of [E] opens its own
+//    small store view; real rounds go in and come out by the inventory's own moves, conserved; nothing but its rounds goes in; an
+//    older save's round count is real stacks from the first frame; HOLDING [E] drags the hand truck (the system's own hold, never a
+//    use's); active('sentry') only while plugged into the parked car;
+//  - the item SCANNER's console (world/itemScanner.ts): its tap does nothing while it is not plugged in (a hold drags it), opens the
+//    scope while it is; unplugging closes the scope through the plug listener;
 //  - the route radar's reveal radius (routeRadius) follows the real plug.
 import {afterAll, afterEach, describe, expect, it} from 'vitest';
 import {installCanvasShim} from './helpers/canvas2d';
@@ -138,8 +139,8 @@ describe('the bench and the equipment system: a craft is a real unit on the car 
     expect(Object.keys(uses).sort()).toEqual(['chest', 'scanner', 'sentry']);
     expect(uses.sentry).toBe(store.use); // every kind with slots opens through the one store controller
     expect(eq.promptNotes).toHaveLength(1); // (the sentry's "not plugged in" / "no headroom")
-    expect(uses.scanner!.hold).toBeUndefined(); // its tap acts on the press
-    expect(uses.chest!.hold).toBeUndefined(); // holding E on a chest is the system's own (carry)
+    // a use is a prompt line + a tap: HOLDING E is the system's own for every kind (drag / carry), never a use's
+    for (const use of Object.values(uses)) expect('hold' in use!).toBe(false);
     expect(eq.plugListeners).toHaveLength(2); // the sentry's and the scanner's
     expect(h.trainEquipment).toBe(eq);
     // a world going and coming, a Retry: the same record, the same entries
@@ -321,10 +322,10 @@ describe('the bench and the equipment system: a craft is a real unit on the car 
     run(h, 0.3);
     const radar = eq.unit('eq-1')!, chest = eq.unit('eq-2')!;
     expect(bench.handsFree()).toBe(true);
-    // no use registered for the radar: [E] on its console face grabs it
+    // no use registered for the radar: holding [E] on its console face drags it
     faceOf(h, radar);
     expect(aimOf(eq)).toEqual([radar.uid, 'module']);
-    press(h, 'KeyE');
+    holdE(h);
     expect(uidOf(eq.grab?.unit)).toBe(radar.uid);
     expect(bench.handsFree()).toBe(false);
     expect(bench.usable()).toBe(false);
@@ -368,7 +369,7 @@ describe('the chest\'s store view and the equipment system: tap opens, hold carr
     inv.set({bar: 'pack', index: 2}, beans);
     faceOf(h, chest);
     expect(aimOf(eq)).toEqual([chest.uid, 'body']);
-    expect(eq.prompt).toBe(CHEST_STORE_TEXT.prompt(0, EQUIPMENT.chest.slots));
+    expect(eq.prompt).toBe(CHEST_STORE_TEXT.prompt(0, EQUIPMENT.chest.slots) + EQUIPMENT_TEXT.carryHint);
     // the press alone does nothing yet (a chest's tap acts on the release)
     h.keys.held.add('KeyE'); h.keys.hits.add('KeyE');
     frame(h);
@@ -411,7 +412,7 @@ describe('the chest\'s store view and the equipment system: tap opens, hold carr
     expect(h.sfxCalls).toEqual(['cue:cabinetClose']);
     run(h, 1);
     expect(chest.lidT).toBe(0);
-    expect(eq.prompt).toBe(CHEST_STORE_TEXT.prompt(1, EQUIPMENT.chest.slots));
+    expect(eq.prompt).toBe(CHEST_STORE_TEXT.prompt(1, EQUIPMENT.chest.slots) + EQUIPMENT_TEXT.carryHint);
   });
 
   it('holding [E] carries the chest and never asks the use; the contents travel in the same slots', () => {
@@ -485,7 +486,7 @@ describe('the sentry\'s feed and the equipment system: [E] opens its four slots,
     expect(total()).toBe(max + 80);
     faceOf(h, u);
     expect(aimOf(eq)).toEqual([u.uid, 'module']);
-    expect(eq.prompt).toBe(store.prompt(u));
+    expect(eq.prompt).toBe(store.prompt(u) + EQUIPMENT_TEXT.dragHint); // (the tap's line; the system adds its own hold)
     expect(eq.prompt).toContain(`${STORE_TEXT.openFeed(def.the, 0, short)} · ${SENTRY_TEXT.unplugged}`);
     // a tap opens the sentry's own view over ITS slots (never the chest's view, never a grab, nothing loaded by itself)
     tapE(h);
@@ -524,12 +525,33 @@ describe('the sentry\'s feed and the equipment system: [E] opens its four slots,
     expect(u.takeAmmo(1e9)).toBe(max - 51);
     expect([u.ammo, u.takeAmmo(1), u.slots!.every(st => st === null)]).toEqual([0, 0, true]);
     expect(inv.count(item)).toBe(130); // (carried rounds are never the turret's)
+    // while its view is open the line is the view's alone: [E] is the view's key, a hold cannot start
+    frame(h);
+    expect(eq.prompt).toBe(STORE_TEXT.close(def.the));
     // [E] (the view's own captured key) closes it
     store.onKeyCapture(key('KeyE'));
     expect(store.isOpen).toBe(false);
     frame(h);
-    expect(eq.prompt).toContain(STORE_TEXT.openFeed(def.the, 0, short));
+    expect(eq.prompt).toBe(STORE_TEXT.openFeed(def.the, 0, short) + ` · ${SENTRY_TEXT.unplugged}` + EQUIPMENT_TEXT.dragHint);
     expect(sentry.qa()).toMatchObject({unit: null, plugged: false});
+    // HELD, the hand truck is dragged (the system's own hold: the store is never asked) — nothing opens, the rounds stay in its slots
+    const back = inv.allStacks(false).find(st => st.itemId === item)!, n = back.count;
+    expect(inv.storeQuick(u.slots!, at(back))).toBe(n);
+    u.touchStore();
+    const opens = store.counts.opens, taps = eq.counts.taps;
+    holdE(h, 2);
+    expect([uidOf(eq.grab?.unit), store.isOpen, store.counts.opens, eq.counts.taps, u.ammo, inv.count(item)]).toEqual([u.uid, false, opens, taps, n, 130 - n]);
+    expect(eq.aboard()[0].slots!.filter(Boolean)).toEqual([{uid: back.uid, itemId: item, count: n}]);
+    press(h, 'KeyE');
+    expect(uidOf(eq.grab?.unit)).toBeNull();
+    run(h, 1);
+    // from the handle: the same line (the use is the unit's, whatever part is aimed at) — a tap there opens the slots too
+    handleOf(h, u);
+    expect(aimOf(eq)).toEqual([u.uid, 'frame']);
+    expect(eq.prompt).toBe(store.prompt(u) + EQUIPMENT_TEXT.dragHint);
+    tapE(h);
+    expect([store.isOpen, store.unit === u, store.qa().view, uidOf(eq.grab?.unit)]).toEqual([true, true, 'sentryview', null]);
+    store.close('user');
   });
 
   it('active(\'sentry\') is the unit plugged into the PARKED car: the turret system reads it; riding it is none (the rounds stay)', async () => {
@@ -550,7 +572,7 @@ describe('the sentry\'s feed and the equipment system: [E] opens its four slots,
     expect(sentry.qa()).toMatchObject({unit: 'eq-1', plugged: true, ammo: 40});
     // on the console: the prompt no longer says "not plugged in"
     faceOf(h, u);
-    expect(eq.prompt).toContain(STORE_TEXT.openFeed(u.def.the, 40, itemDef(EQUIPMENT.sentry.slotItem!).short));
+    expect(eq.prompt).toBe(STORE_TEXT.openFeed(u.def.the, 40, itemDef(EQUIPMENT.sentry.slotItem!).short) + EQUIPMENT_TEXT.dragHint);
     expect(eq.prompt).not.toMatch(/not plugged in/);
     // riding: plugged, not active; the console cannot be used; the rounds ride along
     void ride.depart();
@@ -572,18 +594,20 @@ describe('the sentry\'s feed and the equipment system: [E] opens its four slots,
 });
 
 describe('the scanner\'s console, the radar and the equipment system', () => {
-  it('unplugged, the scanner\'s tap falls through to the grab; plugged in, it opens the scope; unplugging closes it through the listener', () => {
+  it('unplugged, the scanner\'s tap does nothing (a hold drags it); plugged in, it opens the scope; unplugging closes it through the listener', () => {
     const {h, eq, scanner, scope} = world();
     const s1 = plugSpot(1), e1 = equipmentPlugs(SPEC)[1];
     loadAboard(h, [aboardRec('scanner', 1, -3.9, 0.3, -Math.PI / 2)]);
     run(h, 0.3);
     const u = eq.unit('eq-1')!;
     expect(u.plug).toBeNull();
-    // unplugged: the console says so, and [E] on it grabs the hand truck (the scanner's tap answered false)
+    // unplugged: the console says so, and a tap of [E] does nothing (the scanner's tap answered false); holding [E] drags the hand truck
     faceOf(h, u);
     expect(aimOf(eq)).toEqual([u.uid, 'module']);
-    expect(eq.prompt).toBe(SCANNER_TEXT.unplugged);
+    expect(eq.prompt).toBe(SCANNER_TEXT.unplugged + EQUIPMENT_TEXT.dragHint);
     press(h, 'KeyE');
+    expect([uidOf(eq.grab?.unit), uidOf(scanner.openUnit), scope.opened, eq.counts.taps]).toEqual([null, null, 0, 1]);
+    holdE(h);
     expect(uidOf(eq.grab?.unit)).toBe(u.uid);
     expect([uidOf(scanner.openUnit), scope.opened, eq.counts.taps]).toEqual([null, 0, 1]);
     press(h, 'KeyE');
@@ -596,7 +620,7 @@ describe('the scanner\'s console, the radar and the equipment system', () => {
     expect(scanner.unitActive(u)).toBe(true);
     // [E] on the console opens the scope — no grab, still plugged
     faceOf(h, u);
-    expect(eq.prompt).toBe(SCANNER_TEXT.open(scanner.clock.seconds));
+    expect(eq.prompt).toBe(SCANNER_TEXT.open(scanner.clock.seconds) + EQUIPMENT_TEXT.dragHint);
     press(h, 'KeyE');
     expect(scanner.openUnit === u).toBe(true);
     expect([uidOf(eq.grab?.unit), u.plug, scope.opened]).toEqual([null, 1, 1]);
@@ -604,14 +628,14 @@ describe('the scanner\'s console, the radar and the equipment system', () => {
     const taps = eq.counts.taps;
     press(h, 'KeyE');
     expect([uidOf(scanner.openUnit), scanner.lastClose, uidOf(eq.grab?.unit), u.plug, eq.counts.taps]).toEqual([null, 'key', null, 1, taps]);
-    // open again, then the handle is grabbed: [E] first closes the scope, the next [E] grabs — unplugged with the note
+    // open again, then the handle is grabbed: [E] first closes the scope, the next [E] HELD drags — unplugged with the note
     press(h, 'KeyE');
     expect(scanner.openUnit === u).toBe(true);
     handleOf(h, u);
     press(h, 'KeyE');
     expect([uidOf(scanner.openUnit), uidOf(eq.grab?.unit)]).toEqual([null, null]);
-    press(h, 'KeyE');
-    expect(uidOf(eq.grab?.unit)).toBe(u.uid);
+    holdE(h);
+    expect([uidOf(scanner.openUnit), uidOf(eq.grab?.unit)]).toEqual([null, u.uid]);
     expect(u.plug).toBeNull();
     expect(h.toasts).toContain(EQUIPMENT_TEXT.unplugged(u.def.name));
     expect(uidOf(eq.active('scanner'))).toBeNull();
@@ -656,7 +680,7 @@ describe('the scanner\'s console, the radar and the equipment system', () => {
     run(h, 0.3);
     // grabbed: unplugged, one stop again
     handleOf(h, radar);
-    press(h, 'KeyE');
+    holdE(h);
     expect(uidOf(eq.grab?.unit)).toBe(radar.uid);
     expect([radar.plug, eq.routeRadius()]).toEqual([null, 1]);
     press(h, 'KeyE');

@@ -139,7 +139,7 @@ describe('the console: the scanner\'s use on the equipment system', () => {
     expect(Object.keys(w.eq.uses)).toEqual(['scanner']);
     expect(typeof w.use().prompt).toBe('function');
     expect(typeof w.use().tap).toBe('function');
-    expect(w.use().hold).toBeUndefined(); // a tap acts on the press
+    expect('hold' in w.use()).toBe(false); // (holding E is the equipment system's own: it drags the hand truck)
     expect(w.eq.plugListeners).toHaveLength(1);
     expect([w.host.frameHooks.length, w.host.interactHandlers.length, w.host.promptProviders.length, w.host.sectionHooks.length, w.host.stateListeners.length, w.host.hitListeners.length]).toEqual([1, 2, 2, 1, 1, 1]);
     expect([w.host.inputOwners.length, w.host.pointerHandlers.length, w.host.runParticipants.length, w.host.modifierSources.length]).toEqual([0, 0, 0, 0]);
@@ -165,9 +165,9 @@ describe('the console: the scanner\'s use on the equipment system', () => {
     expect(w.use().prompt(w.unit)).toBe(SCANNER_TEXT.unplugged);
   });
 
-  it('E on the console opens the scope only while the scanner is plugged in; not plugged in, the tap is the default action (grab)', () => {
+  it('E on the console opens the scope only while the scanner is plugged in; not plugged in, the tap does nothing (false)', () => {
     const w = world({scanner: 'loose'});
-    expect(w.use().tap(w.unit)).toBe(false); // false: the equipment system grabs the hand truck
+    expect(w.use().tap(w.unit)).toBe(false); // false: nothing happens (holding E drags the hand truck: the equipment system's own)
     expect([w.sys.openUnit, w.sys.scope.isOpen, w.pg.body.children.length]).toEqual([null, false, 0]);
     w.eq.plugIn(w.unit, 2);
     expect(w.use().tap(w.unit)).toBe(true);

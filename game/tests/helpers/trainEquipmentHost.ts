@@ -17,7 +17,7 @@ import type {FuelCarts} from '../../src/world/fuelCarts';
 import type {PlayerTrainRuntime} from '../../src/world/playerTrain';
 import type {TrainRide} from '../../src/world/trainRide';
 import {TrainEquipmentSystem, type LiveUnit, type TrainEquipmentDeps, type TrainEquipmentHost} from '../../src/world/trainEquipment';
-import {Keys, build, flatRoom, frame, roomHost, stationHost, type CartTestHost} from './fuelCartsHost';
+import {Keys, build, flatRoom, holdE as holdKeyE, roomHost, stationHost, type CartTestHost} from './fuelCartsHost';
 import {LEVELS_STUB, SEEDS} from './saveFixture';
 
 export type EquipTestHost = CartTestHost & {
@@ -140,14 +140,11 @@ export function stand(h: EquipTestHost, x: number, z: number, yaw = 0, y?: numbe
   h.player.vx = h.player.vz = 0;
 }
 
-/** E pressed and HELD for `seconds` (then released). */
-export function holdE(h: EquipTestHost, seconds: number, dt = 1 / 60): void {
-  h.keys.held.add('KeyE');
-  h.keys.hits.add('KeyE');
-  for (let t = 0; t < seconds - 1e-9; t += dt) frame(h, dt);
-  h.keys.held.delete('KeyE');
-  frame(h, dt);
-}
+/**
+ * E pressed and HELD for `seconds` (then released): helpers/fuelCartsHost.ts holdE — the default surely starts the drag / the carry of
+ * the unit under the crosshair; a short time is a tap that acts on the release.
+ */
+export const holdE: (h: EquipTestHost, seconds?: number, dt?: number) => void = holdKeyE;
 
 export const V3 = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 export const kinds = (): EquipmentKind[] => Object.keys(EQUIPMENT) as EquipmentKind[];

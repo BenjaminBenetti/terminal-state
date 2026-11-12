@@ -16,14 +16,19 @@
 //    on a stair it stops where it is and settles onto the steps. A cart inside a lift rides it (carry), holds
 //    the lift's doors while it stands in the doorway (anyAt) and is never left hanging in a shaft (seat).
 //  - PUSH: walking into a free cart shoves it (slowly: 150 kg full); the player never walks through it.
-//  - GRAB: aim at it within FUEL_CART.grabReach and press E: it follows a hand point FUEL_CART.hold m in front of the player on a damped
-//    spring (pull it out of a corner, steer it), turning to trail the player; the player walks at FUEL_CART.speedMult (a modifier
-//    source); the mouse buttons belong to the grab (inputOwners: no shot / ADS / item use / flare). E again, the player walking away /
-//    the cart stuck, a hit, death, a ladder, any menu, the train departing, a world teardown let go.
-//  - HOSE: with the cart within PORT.hoseMax of the parked train's fuel cap, E while aiming at the DRUM connects the hose (one pooled
-//    tube); one unit flows every FUEL_CART.transferEvery s into game.playerTrain.fuel.tank (integers, conserved exactly, never past
-//    FUEL.trainTankUnits); it disconnects on E, the tank full, the cart empty, the cart grabbed / pushed beyond the hose's reach, the train
-//    departing or a teardown (a unit in progress is simply not transferred).
+//  - GRAB (task train-interaction-ux-20261112, lane DRAG: user "ALL existing draggable items, including equipment and the fuel dolly,
+//    require HOLDING E to START dragging"): aim at it within FUEL_CART.grabReach and HOLD E for DRAG_HOLD_S (the shared gesture:
+//    core/holdGesture.ts — the crosshair ring fills; a quick tap never grabs; the hold is dropped when the aim leaves the cart, a menu
+//    wipes the keys, another input owner takes over, the player dies / climbs, the train departs): it then follows a hand point
+//    FUEL_CART.hold m in front of the player on a damped spring (pull it out of a corner, steer it), turning to trail the player; the
+//    player walks at FUEL_CART.speedMult (a modifier source); the mouse buttons belong to the pending hold and to the grab
+//    (inputOwners: no shot / ADS / item use / flare). Releasing E after the grab started does nothing. E again, the player walking
+//    away / the cart stuck, a hit, death, a ladder, any menu, the train departing, a world teardown let go.
+//  - HOSE: with the cart within PORT.hoseMax of the parked train's fuel cap, a TAP of E while aiming at the DRUM connects the hose (one
+//    pooled tube); one unit flows every FUEL_CART.transferEvery s into game.playerTrain.fuel.tank (integers, conserved exactly, never
+//    past FUEL.trainTankUnits); it disconnects on a tap of E on the cart, the tank full, the cart empty, the cart grabbed / pushed
+//    beyond the hose's reach, the train departing or a teardown (a unit in progress is simply not transferred). A tap that can do
+//    neither does nothing.
 //
 // OWNERSHIP (the rule): a cart wholly inside the PARKED car (trainPort.ts cartAboard on its train-local centre) at save / teardown time is
 // the TRAIN's (TrainFuel cargo: CargoCartJSON, train-local pose); otherwise it belongs to the STATION (StationCartJSON world pose, saved by
@@ -58,6 +63,7 @@ import * as THREE from 'three';
 import type {Game} from '../game';
 import type {Levels} from '../gen/levels';
 import type {PropPlacement} from '../gen/props';
+import {HoldGesture, foreignOwners} from '../core/holdGesture';
 import {PropIndex} from '../core/physics';
 import {FUEL, cartProblem, tanksText, type CargoCartJSON, type CartFuel, type StationCartJSON} from '../fuel/fuel';
 import {PORT, cartAboard, cartStraddles, fuelPortLocal, type FuelCartsLike} from '../fuel/trainPort';
@@ -106,6 +112,10 @@ export const CART_TEXT = {
   pulled: 'The hose pulled free',
   stuck: 'The cart is stuck — you let go',
   straddle: 'A fuel cart is in the doorway — push it all the way in or out',
+  /** Prompts (HTML): the look-at line of a cart with nothing to tap, the pending hold, the hint after a hose line. */
+  drag: (tanks: string, note: string) => `<b>Hold [E]</b> Drag the fuel cart · ${tanks}${note}`,
+  grabbing: '<b>Hold [E]</b> Grabbing the fuel cart…',
+  dragHint: ' · hold <b>[E]</b> to drag it',
 } as const;
 
 type Mode = 'world' | 'cargo';
@@ -184,7 +194,9 @@ export interface FuelCartHost {
   trainRuntime?: TrainRuntimeLike | null;
   trainRide?: TrainRideLike | null;
   playerTrain: {fuel: TrainFuelLike};
-  hud: {toast(text: string, warn?: boolean): void};
+  /** E held / released (the hold-to-drag gesture: core/holdGesture.ts); `clears` changes when the input was cleared (a menu / blur). */
+  input?: {down(code: string): boolean; clears?: number} | null;
+  hud: {toast(text: string, warn?: boolean): void; setHoldRing?(progress: number | null): void};
   sfx: unknown;
   state: string;
   frameHooks: ((dt: number) => void)[];
@@ -236,6 +248,11 @@ export class FuelCarts implements FuelCartsLike {
   worldLive = false;
   /** The grabbed cart (null: none). */
   grab: {cart: Cart; lag: number} | null = null;
+  /**
+   * E pressed on a cart and not yet decided (core/holdGesture.ts: released early = the TAP, the hose by the part aimed at the press;
+   * held DRAG_HOLD_S = the grab). Drives the crosshair ring.
+   */
+  readonly eHold = new HoldGesture<{cart: Cart; part: 'frame' | 'drum'}>(p => this.host.hud.setHoldRing?.(p));
   /** The connected hose (null: none); `target` null = the parked train's cap. */
   hoseOn: {cart: Cart; t: number; target: FuelHoseTarget | null} | null = null;
   /** Task studio-bunker-rework-20261109-205115-01: other fuel targets the hose can feed (the Bunker's generators; registered per world). */
@@ -246,11 +263,13 @@ export class FuelCarts implements FuelCartsLike {
   aim: {cart: Cart; part: 'frame' | 'drum'; t: number} | null = null;
   prompt: string | null = null;
   /** QA / tests. */
-  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, connects: 0, disconnects: 0, transfers: 0, pushes: 0, restores: 0, steps: 0, bullets: 0, carried: 0, seated: 0, poses: 0};
+  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, connects: 0, disconnects: 0, transfers: 0, pushes: 0, restores: 0, steps: 0, bullets: 0, carried: 0, seated: 0, poses: 0, taps: 0};
   private proto: THREE.Group | null = null;
   private protoGen = -1;
   private modelsGen = cartModelsGen;
   private roll01 = 0;
+  /** The mouse buttons are this system's: a cart grabbed, or a hold on one pending. */
+  private readonly owner = (): boolean => !!this.grab || this.eHold.pending;
   private readonly eye = new THREE.Vector3();
   private readonly dir = new THREE.Vector3();
   private readonly target: CartTarget = {x: 0, z: 0, vx: 0, vz: 0};
@@ -276,12 +295,13 @@ export class FuelCarts implements FuelCartsLike {
     h.frameHooks.push(dt => this.frame(dt));
     h.interactHandlers.push(() => this.onInteract());
     h.promptProviders?.push(() => this.prompt);
-    h.inputOwners?.push(() => !!this.grab);
+    h.inputOwners?.push(this.owner);
     h.modifierSources?.push(() => (this.grab ? DRAG_MODS : NO_MODS));
     h.hitListeners?.push((() => { if (this.grab) this.letGo('hit'); }) as (hit: never) => void);
     h.stateListeners?.push(((s: string) => {
       if (s === 'playing') return;
       if (this.grab) this.letGo('menu');
+      this.eHold.cancel();
       this.aim = null;
       this.prompt = null;
       this.setRoll(0);
@@ -346,6 +366,7 @@ export class FuelCarts implements FuelCartsLike {
     for (const c of this.carts) {
       if (c.mode !== 'world' || !this.insideCar(c, p)) continue;
       if (this.grab?.cart === c) this.letGo('capture');
+      if (this.eHold.target?.cart === c) this.eHold.cancel();
       const q = worldToTrain(p, c.body.x, c.body.y, c.body.z);
       c.local.x = q.x; c.local.y = this.spec.floorY; c.local.z = q.z; c.local.yaw = wrapYaw(c.body.yaw - p.yaw);
       c.body.vx = c.body.vz = 0;
@@ -390,6 +411,7 @@ export class FuelCarts implements FuelCartsLike {
   restore(c: readonly CargoCartJSON[]): void {
     this.counts.restores++;
     if (this.grab) this.letGo('restore');
+    this.eHold.cancel();
     if (this.hoseOn) this.disconnect(null);
     const p = this.placement();
     for (let i = this.carts.length - 1; i >= 0; i--) {
@@ -474,6 +496,7 @@ export class FuelCarts implements FuelCartsLike {
 
   private onTeardown(): void {
     if (this.grab) this.letGo('teardown');
+    this.eHold.cancel();
     if (this.hoseOn) this.disconnect(null);
     // (a lift car still travelling finishes its run with the carts in it first: this hook runs before the lift's own teardown)
     try { this.host.tower?.parkCar?.(); } catch (err) { console.warn('fuel carts: parking the lift failed', err); }
@@ -505,14 +528,14 @@ export class FuelCarts implements FuelCartsLike {
   // Per frame
 
   frame(dt: number): void {
-    if (!this.worldLive) { this.prompt = null; return; }
+    if (!this.worldLive) { this.eHold.cancel(); this.prompt = null; return; }
     if (this.modelsGen !== cartModelsGen) { this.modelsGen = cartModelsGen; for (const c of this.carts) refreshCartBody(c.view); }
     this.followRide(dt);
     if (this.pendingCargo.length) this.spawnPendingCargo();
     const h = this.host, P = h.player, riding = this.riding;
     this.world.levels = h.levels!;
     this.world.props = h.propIndex;
-    if (!h.levels) return;
+    if (!h.levels) { this.eHold.cancel(); return; }
     // a grab ends with the player out of action / riding / gone too far
     if (this.grab && (!P.alive || P.climbing || riding || this.grab.cart.mode !== 'world')) this.letGo(riding ? 'capture' : 'state');
     let fastest = 0;
@@ -567,6 +590,7 @@ export class FuelCarts implements FuelCartsLike {
     for (const c of this.carts) if (c.mode === 'cargo') setGauge(c.view, c.fuel.units);
     this.stepHose(dt);
     this.setRoll(Math.min(1, fastest / 2.2));
+    this.stepHold(dt);
     this.updateAim();
   }
 
@@ -785,22 +809,57 @@ export class FuelCarts implements FuelCartsLike {
     void c;
   }
 
-  /** [E]: let go; else on the aimed cart — the hose (drum, in reach) or the grab. Only when a cart is the aim target. */
+  /**
+   * [E] pressed: let go of the grabbed cart; else, with a cart under the crosshair, the hold gesture BEGINS (nothing happens on the
+   * press: stepHold decides between the tap and the grab). Only when a cart is the aim target.
+   */
   onInteract(): boolean {
     if (this.grab) { this.letGo('user'); return true; }
-    if (!this.worldLive || this.riding || this.host.state !== 'playing') return false;
+    const h = this.host;
+    if (!this.worldLive || this.riding || h.state !== 'playing' || !h.player.alive) return false;
+    if (this.eHold.pending) return true;
     const aim = this.pickAim();
     if (!aim) return false;
-    const c = aim.cart;
-    if (this.hoseOn?.cart === c) { this.disconnect(CART_TEXT.disconnected); return true; }
-    const choice = aim.part === 'drum' ? this.hoseChoice(c) : null;
-    if (choice && choice.block === null) {
-      if (this.hoseOn) this.disconnect(null);
-      this.connect(c, choice.target);
-      return true;
-    }
-    this.startGrab(c);
+    this.eHold.begin({cart: aim.cart, part: aim.part}, h.input?.clears ?? 0, foreignOwners(h.inputOwners, this.owner));
     return true;
+  }
+
+  /**
+   * The pending E on a cart (core/holdGesture.ts): released early = the TAP, held DRAG_HOLD_S = the grab; dropped with nothing done
+   * when the aim leaves THAT cart / its reach, the keys were wiped, another input owner took over, the player died / climbs, the train
+   * rides, the cart left the world.
+   */
+  private stepHold(dt: number): void {
+    const G = this.eHold, T = G.target;
+    if (!T) return;
+    const h = this.host, P = h.player, inp = h.input ?? null, c = T.cart;
+    const step = G.step(dt, {
+      down: !!inp?.down('KeyE'),
+      clears: inp?.clears ?? 0,
+      live: h.state === 'playing' && P.alive && !P.climbing && !this.riding && !this.grab && c.mode === 'world' && this.carts.includes(c),
+      aimed: this.pickAim()?.cart === c,
+      foreign: foreignOwners(h.inputOwners, this.owner),
+    });
+    if (step === 'hold') this.startGrab(c);
+    else if (step === 'tap') this.tap(c, T.part);
+  }
+
+  /**
+   * E TAPPED on a cart — its normal interaction, never the grab: the connected cart's hose comes off (any part); the drum of a cart
+   * whose hose can connect now connects it; anything else does nothing.
+   */
+  private tap(c: Cart, part: 'frame' | 'drum'): void {
+    this.counts.taps++;
+    if (this.hoseOn?.cart === c) { this.disconnect(CART_TEXT.disconnected); return; }
+    const choice = part === 'drum' ? this.hoseChoice(c) : null;
+    if (!choice || choice.block !== null) return;
+    if (this.hoseOn) this.disconnect(null);
+    this.connect(c, choice.target);
+  }
+
+  /** E held on a cart (0..1 of DRAG_HOLD_S), or null — QA / tests. */
+  get holdProgress(): number | null {
+    return this.eHold.progress;
   }
 
   /** The cart part under the crosshair within reach, nothing structural in between (null: none). */
@@ -863,19 +922,21 @@ export class FuelCarts implements FuelCartsLike {
     const h = this.host;
     if (this.riding || h.state !== 'playing' || !h.player.alive) { this.aim = null; this.prompt = null; return; }
     if (this.grab) { this.aim = null; this.prompt = `<b>[E]</b> Let go · ${tanksText(this.grab.cart.fuel.units)}`; return; }
+    if (this.eHold.pending) { this.aim = null; this.prompt = CART_TEXT.grabbing; return; }
     this.aim = this.pickAim();
     this.prompt = this.aim ? this.promptFor(this.aim.cart, this.aim.part) : null;
   }
 
+  /** The look-at line: the TAP's action (a hose line) with the hold hint after it, else the hold-to-drag line. */
   private promptFor(c: Cart, part: 'frame' | 'drum'): string {
-    const tank = this.host.playerTrain.fuel.tank;
-    if (this.hoseOn?.cart === c && this.hoseOn.target) return `<b>[E]</b> Disconnect the hose · fuelling the ${this.hoseOn.target.label} · cart ${tanksText(c.fuel.units)}`;
-    if (this.hoseOn?.cart === c) return `<b>[E]</b> Disconnect the hose · fuelling · train tank ${tanksText(tank)}`;
+    const tank = this.host.playerTrain.fuel.tank, hint = CART_TEXT.dragHint;
+    if (this.hoseOn?.cart === c && this.hoseOn.target) return `<b>[E]</b> Disconnect the hose · fuelling the ${this.hoseOn.target.label} · cart ${tanksText(c.fuel.units)}${hint}`;
+    if (this.hoseOn?.cart === c) return `<b>[E]</b> Disconnect the hose · fuelling · train tank ${tanksText(tank)}${hint}`;
     const choice = part === 'drum' ? this.hoseChoice(c) : null;
-    if (choice?.target && choice.block === null) return `<b>[E]</b> Connect the hose to the ${choice.target.label} · cart ${tanksText(c.fuel.units)} · needs ${tanksText(choice.target.room())}`;
-    if (choice && choice.block === null) return `<b>[E]</b> Connect the hose · cart ${tanksText(c.fuel.units)} · train tank ${tanksText(tank)}`;
+    if (choice?.target && choice.block === null) return `<b>[E]</b> Connect the hose to the ${choice.target.label} · cart ${tanksText(c.fuel.units)} · needs ${tanksText(choice.target.room())}${hint}`;
+    if (choice && choice.block === null) return `<b>[E]</b> Connect the hose · cart ${tanksText(c.fuel.units)} · train tank ${tanksText(tank)}${hint}`;
     const note = part === 'drum' && this.parkedPlacement() && this.nozzleToCap(c, this.parkedPlacement()!) <= FUEL_CART.hoseMax && tank >= FUEL.trainTankUnits ? ' · train tank full' : '';
-    return `<b>[E]</b> Grab the fuel cart · ${tanksText(c.fuel.units)}${note}`;
+    return CART_TEXT.drag(tanksText(c.fuel.units), note);
   }
 
   private setRoll(v: number): void {
@@ -1102,6 +1163,7 @@ export class FuelCarts implements FuelCartsLike {
     if (i < 0) return;
     const c = this.carts[i];
     if (this.grab?.cart === c) this.grab = null;
+    if (this.eHold.target?.cart === c) this.eHold.cancel();
     if (this.hoseOn?.cart === c) this.disconnect(null);
     c.view.group.removeFromParent();
     this.carts.splice(i, 1);
@@ -1165,6 +1227,7 @@ export class FuelCarts implements FuelCartsLike {
     return {
       worldLive: this.worldLive, carts: this.all(), pendingStation: this.pendingStation.map(s => ({...s})), snapshot: this.stationSnapshot?.length ?? null,
       grab: this.grab ? {uid: this.grab.cart.uid, lag: r4(this.grab.lag)} : null,
+      hold: this.eHold.target ? {uid: this.eHold.target.cart.uid, part: this.eHold.target.part, t: r4(this.eHold.t)} : null,
       hose: this.hoseOn ? {uid: this.hoseOn.cart.uid, t: r4(this.hoseOn.t), ...(this.hoseOn.target ? {target: this.hoseOn.target.id} : {})} : null,
       captured: this.captured ? {sawRide: this.captured.sawRide, idle: r4(this.captured.idle), swapped: !!this.captured.swap} : null,
       tank: this.host.playerTrain.fuel.tank, prompt: this.prompt, counts: {...this.counts},

@@ -35,13 +35,26 @@ chest and three devices that plug into the train. Material supply is unchanged; 
 
 ## Moving equipment
 
-- **Devices** (radar, sentry, scanner) stand on the fuel dolly's hand truck and move exactly like it. **E** on the frame or handle
-  grabs; walk to drag; **E** lets go. Walking into one pushes it. It goes up and down stairs, rides lifts and stops bullets. A
+- **Hold E to move a thing.** Aim at a device, the chest or a fuel cart and hold **E** for half a second. The ring at the crosshair
+  fills while you hold. A quick tap never moves anything. A tap does the thing's own action instead (open the chest, work a console,
+  connect a fuel cart's hose), or nothing if it has none.
+- **An unfinished hold is dropped**, with nothing done, when you look away from the thing, step out of reach, open a menu, die,
+  climb a ladder, take something else in your hands, the window loses focus, or the train starts to move.
+- **Once the drag or carry has started you can release E.** The next **E** press lets go or puts it down, as before.
+- **Devices** (radar, sentry, scanner) stand on the fuel dolly's hand truck and move exactly like it. Hold **E** anywhere on one to
+  grab it; walk to drag; **E** lets go. Walking into one pushes it. It goes up and down stairs, rides lifts and stops bullets. A
   heavier device is slower.
-- **The chest** is carried in both hands. Tap **E** to open it; hold **E** for half a second to pick it up; **E** puts it down on
-  free floor in front of you. While you carry it you walk slower, cannot sprint, and cannot fire, reload or use items. Dying puts it
-  down at your feet. On the floor it can be shoved slowly.
+- **R turns a dragged device round.** While you drag a device, **R** turns it half a turn, so its front faces you instead of away.
+  Your own view and position do not change, and **R** does not reload while you drag. Use it to back a device flush against a wall
+  with its console facing the room. A device grabbed from its front starts facing you. It keeps the facing you leave it with: on
+  the floor, plugged in, riding the train, and through saves and Retry. Only devices turn: the fuel cart and the carried chest do
+  not.
+- **The chest** is carried in both hands. Tap **E** to open it; hold **E** to pick it up; **E** puts it down on free floor in front
+  of you. While you carry it you walk slower, cannot sprint, and cannot fire, reload or use items. Dying puts it down at your feet.
+  On the floor it can be shoved slowly.
 - Only one thing is held at a time: a dolly, a chest, a fuel cart or a body.
+- One mechanism covers every draggable thing (`core/holdGesture.ts`). The code has no per-kind rule: a unit is dragged or carried
+  by its trait (`craft/equipment.ts EQUIPMENT`, `move`).
 - There is no interaction with equipment while the train is moving.
 
 ## The three plugs

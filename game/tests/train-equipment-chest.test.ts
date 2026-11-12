@@ -1,7 +1,7 @@
 // Task studio-train-crafting-v1-20261111-225628-01 (lane EQUIP): THE CARRIED CHEST (world/trainEquipment.ts; a 'carry' kind in the
 // hands) with the real train runtime + ride + Player (helpers/trainEquipmentHost.ts):
-//  - [E] on it: with no use registered a tap picks it up, with one the tap is the use's and only HOLDING [E] (EQUIP_HOLD_S) carries;
-//    the prompt and the hold ring say which;
+//  - [E] on it: only HOLDING [E] (EQUIP_HOLD_S) carries it (task train-interaction-ux-20261112: a carry starts with a hold, never a
+//    tap); a tap is the kind's use when one is registered, else nothing; the prompt and the hold ring say which;
 //  - in the hands: an input owner (`carrying`, the held item lowered over EQUIP.carry.holsterS, no item use — "Your hands are full",
 //    a use in progress cancelled), the walk at EQUIP.carry.speedMult and a sprint no faster, the view in the carry frame under the
 //    camera with no shadow, the lid shut; a hit or a menu never drops it;
@@ -33,7 +33,7 @@ import {EQUIP, EQUIPMENT_TEXT, type LiveUnit, type TrainEquipmentSystem} from '.
 import {equipmentBox} from '../src/world/trainEquipmentModel';
 import {DT, build, frame, press, run, teardown} from './helpers/fuelCartsHost';
 import {
-  aboardRec, equipStation, loadAboard, localOf, lookAtUnit, platformWorld, putLocal, stand, type EquipTestHost,
+  aboardRec, equipStation, holdE, loadAboard, localOf, lookAtUnit, platformWorld, putLocal, stand, type EquipTestHost,
 } from './helpers/trainEquipmentHost';
 
 installCanvasShim(false);
@@ -92,7 +92,7 @@ function playerLocal(h: EquipTestHost): {x: number; z: number} {
 }
 
 describe('the carried chest: [E] picks it up', () => {
-  it('no use registered: a tap picks it up (on the release); the prompt, the cue, the use in progress cancelled; [E] again puts it down', () => {
+  it('no use registered: a tap does nothing, holding [E] picks it up; the prompt, the cue, the use in progress cancelled; [E] again puts it down', () => {
     const {h, eq, chest} = station();
     faceOf(h, chest);
     expect(aimOf(eq)).toEqual(['eq-1', 'body']);
@@ -105,9 +105,17 @@ describe('the carried chest: [E] picks it up', () => {
     expect(eq.prompt).toBe(EQUIPMENT_TEXT.holding(THE));
     expect(h.inputOwners.some(f => f())).toBe(true); // (the hands are spoken for from the press)
     run(h, 0.1);
+    // released early = a tap: with no use nothing happens (never a pick-up)
     h.keys.held.clear();
     h.sfxCalls.length = 0;
     frame(h);
+    expect([uidOf(eq.held), chest.mode, eq.counts.pickups]).toEqual([null, 'world', 0]);
+    expect([h.sfxCalls, h.cancels, h.toasts]).toEqual([[], [], []]);
+    expect(eq.holdProgress).toBeNull();
+    expect(h.inputOwners.some(f => f())).toBe(false);
+    expect(eq.prompt).toBe(EQUIPMENT_TEXT.carry(THE));
+    // held EQUIP_HOLD_S: picked up
+    holdE(h);
     expect([uidOf(eq.held), chest.mode, eq.counts.pickups]).toEqual(['eq-1', 'held', 1]);
     expect(h.sfxCalls).toEqual(['pickup']);
     expect(h.cancels).toEqual(['carry']);
@@ -142,7 +150,7 @@ describe('the carried chest: [E] picks it up', () => {
     const use: EquipmentUse = {prompt: u => `use ${u.uid}`, tap: u => { calls.push(`tap ${u.uid}`); return answer; }};
     (eq.uses as Record<string, EquipmentUse>)[CARRY] = use;
     faceOf(h, chest);
-    expect(eq.prompt).toBe('use eq-1');
+    expect(eq.prompt).toBe('use eq-1' + EQUIPMENT_TEXT.carryHint);
     // tap, handled by the use: nothing is picked up
     h.keys.held.add('KeyE'); h.keys.hits.add('KeyE');
     frame(h);
@@ -173,16 +181,15 @@ describe('the carried chest: [E] picks it up', () => {
     expect(uidOf(eq.held)).toBe('eq-1');
     press(h, 'KeyE');
     expect(uidOf(eq.held)).toBeNull();
-    // a use that does not handle the tap (false): the default — picked up
+    // a use that does not handle the tap (false): nothing happens — never a pick-up
     answer = false;
     run(h, 0.3);
     faceOf(h, chest);
     press(h, 'KeyE');
     frame(h);
     expect(calls).toEqual(['tap eq-1', 'tap eq-1']);
-    expect(uidOf(eq.held)).toBe('eq-1');
+    expect(uidOf(eq.held)).toBeNull();
     // the aim leaving during the hold cancels it (neither the use nor a pick-up)
-    press(h, 'KeyE');
     run(h, 0.3);
     faceOf(h, chest);
     h.keys.held.add('KeyE'); h.keys.hits.add('KeyE');
@@ -332,7 +339,7 @@ describe('the carried chest: in the hands', () => {
     ];
     for (const [what, set, unset] of busy) { set(); refused(EQUIPMENT_TEXT.handsFull, what); unset(); }
     // a grabbed dolly
-    eq.grab = {unit: dolly, lag: 0};
+    eq.grab = {unit: dolly, lag: 0, flip: false};
     refused(EQUIPMENT_TEXT.handsFull, 'a grabbed dolly');
     eq.letGo('test');
     // on a ladder: its own reason
@@ -340,7 +347,7 @@ describe('the carried chest: in the hands', () => {
     refused(EQUIPMENT_TEXT.ladder, 'a ladder');
     onLadder(h, false);
     expect(h.player.climbing).toBe(false);
-    // a dolly kind is rolled, never carried (no note: [E] on it grabs)
+    // a dolly kind is rolled, never carried (no note: holding [E] on it drags)
     h.toasts.length = 0;
     expect(eq.pickUp(dolly)).toBe(false);
     expect([h.toasts, dolly.mode]).toEqual([[], 'world']);

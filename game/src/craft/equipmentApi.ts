@@ -3,11 +3,15 @@
 // turret (world/sentryTurret.ts), the item scanner (world/itemScanner.ts) and the route radar's map reveal (Game.openTravelMap) are
 // written against these, and their Node tests drive them with small fakes.
 
+import {DRAG_HOLD_S} from '../core/holdGesture';
 import type {ItemStack} from '../items/inventory';
 import type {EquipmentDef, EquipmentKind} from './equipment';
 
-/** E held this long on a unit is a HOLD (the grounded backpack's rule: gear BAG_HOLD_S); a shorter press is a TAP. */
-export const EQUIP_HOLD_S = 0.5;
+/**
+ * E held this long on a unit starts dragging / carrying it; a shorter press is a TAP (its use). The one shared hold-to-drag time
+ * (core/holdGesture.ts DRAG_HOLD_S: the fuel dolly's too).
+ */
+export const EQUIP_HOLD_S = DRAG_HOLD_S;
 
 /** One live unit. The object is stable for the unit's life in a world (compare by `uid` across worlds). */
 export interface EquipmentUnit {
@@ -46,17 +50,19 @@ export interface EquipmentUnit {
 }
 
 /**
- * What E on a unit does besides moving it (a kind's own system registers one: EquipmentSystemLike.uses). A 'dolly' kind: E on its
- * CONSOLE FACE (E on the hand truck's frame / handle always grabs it). A 'carry' kind (the chest): E anywhere on it — and HOLDING E
- * always picks it up (the system's own rule: `hold` is not asked).
+ * What a TAP of E on a unit does (a kind's own system registers one: EquipmentSystemLike.uses). Task train-interaction-ux-20261112
+ * (lane DRAG): the tap counts ANYWHERE on the unit — a device's console face, its hand truck's frame or handle, the chest's body.
+ * HOLDING E (EQUIP_HOLD_S) always drags the hand truck / carries the chest: that is the equipment system's own rule (the shared
+ * core/holdGesture.ts) and is never asked here. A tap never moves the unit.
  */
 export interface EquipmentUse {
-  /** The look-at prompt ('<b>[E]</b> …'); null: the unit's default prompt (grab / carry / plug hint). */
+  /**
+   * The TAP's look-at line ('<b>[E]</b> …', or a plain status line); null: none. The equipment system appends the hold hint itself
+   * (' · hold [E] to drag it' / '… to carry it') and shows its own 'Hold [E] Drag / Carry …' line when there is none.
+   */
   prompt(u: EquipmentUnit): string | null;
-  /** E tapped. True: handled. False: the default action (grab the hand truck / pick the chest up). */
+  /** E tapped (pressed and released before EQUIP_HOLD_S). True: handled. False: nothing happens. */
   tap(u: EquipmentUnit): boolean;
-  /** E held EQUIP_HOLD_S (optional, 'dolly' kinds; with it a tap acts on the key's release). True: handled. */
-  hold?(u: EquipmentUnit): boolean;
 }
 
 /** A chest standing in the parked car, as a store of materials the bench may draw from (general storage only: never a feed's slots). */
@@ -74,7 +80,7 @@ export interface EquipmentSystemLike {
   plugged(kind: EquipmentKind): EquipmentUnit | null;
   /** The unit of `kind` whose benefit works NOW: connected to a plug of the PARKED train in a live world; null: none. */
   active(kind: EquipmentKind): EquipmentUnit | null;
-  /** What E on a kind's console face does (set by that kind's system; absent: grab only). */
+  /** What a TAP of E on a unit of a kind does (set by that kind's system; absent: a tap does nothing — holding E still moves it). */
   readonly uses: Partial<Record<EquipmentKind, EquipmentUse>>;
   /** Called when a unit connects to / leaves a plug (after the state changed). */
   readonly plugListeners: ((u: EquipmentUnit, plugged: boolean) => void)[];

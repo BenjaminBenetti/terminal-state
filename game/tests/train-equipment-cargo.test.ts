@@ -32,7 +32,7 @@ import type {PlayerTrainRuntime} from '../src/world/playerTrain';
 import {EQUIP, EQUIPMENT_TEXT, type LiveUnit, type TrainEquipmentSystem} from '../src/world/trainEquipment';
 import {build, flatRoom, frame, press, run, teardown} from './helpers/fuelCartsHost';
 import {
-  aboardRec, equipRoom, equipStation, fakePlacement, loadAboard, localOf, lookAtUnit, platformWorld, plugSpot, putLocal, stand, stationRec,
+  aboardRec, equipRoom, equipStation, fakePlacement, holdE, loadAboard, localOf, lookAtUnit, platformWorld, plugSpot, putLocal, stand, stationRec,
   type EquipTestHost,
 } from './helpers/trainEquipmentHost';
 
@@ -455,7 +455,7 @@ describe('train equipment: capture / release and the ride', () => {
     for (const e of equipmentPlugs(SPEC)) expect(eq.fixtures.cables[e.index].mesh.visible).toBe(e.index !== 1);
     expect(eq.fixtures.group.parent).toBe(rt.view!.root);
     onceEach(eq);
-    // and they are normal units again: the player grabs one
+    // and they are normal units again: the player grabs one (holding E)
     const u = eq.unit('eq-3')!;
     const near = trainToWorld(p2, recs[2].x + 1.2, SPEC.floorY, recs[2].z);
     u.body.yaw = Math.atan2(u.body.x - near.x, u.body.z - near.z);
@@ -463,8 +463,8 @@ describe('train equipment: capture / release and the ride', () => {
     frame(h);
     lookAtUnit(h, u, 0, CART_LOOK.handle.y, CART_LOOK.handle.z);
     frame(h);
-    expect(eq.prompt).toBe(EQUIPMENT_TEXT.grab(u.def.the, EQUIPMENT_TEXT.plugHint));
-    press(h, 'KeyE');
+    expect(eq.prompt).toBe(EQUIPMENT_TEXT.drag(u.def.the, EQUIPMENT_TEXT.plugHint));
+    holdE(h);
     expect(eq.grab?.unit).toBe(u);
     press(h, 'KeyE');
 
@@ -516,7 +516,7 @@ describe('train equipment: capture / release and the ride', () => {
     stand(h, at.x, at.z, 0, p.floorY);
     frame(h);
     lookAtUnit(h, a, 0, CART_LOOK.handle.y, CART_LOOK.handle.z);
-    press(h, 'KeyE');
+    holdE(h);
     expect(eq.grab?.unit).toBe(a);
     void ride.depart();
     frame(h);

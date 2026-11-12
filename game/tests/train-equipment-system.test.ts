@@ -5,10 +5,12 @@
 //  - DOLLY PARITY: a device whose mass equals a fuel cart's behaves IDENTICALLY (the same controller, the same constants): grabbed and
 //    steered, pushed, coasting to a stop — frame by frame; mass matters (the sentry is slower than the radar); a chest is shoved
 //    slowly, stops at once and is never walked through; on a stair flight every kind lies on the steps and does not coast.
-//  - GRAB: E on the frame grabs, E lets go, the player walking away / a hit / a menu let go, the drag slows the player and owns the
-//    mouse; ONE thing grabbed at a time across fuel carts + equipment; units and fuel carts never overlap.
-//  - AIM / E: 'module' (the console face) vs 'frame'; uses[kind] with / without `hold` (tap on the press / on the release, hold once),
-//    a false answer grabs; the chest's tap / hold; the prompts.
+//  - GRAB: HOLDING E on the unit grabs (task train-interaction-ux-20261112: a drag starts with a hold, never a tap), E lets go, the
+//    player walking away / a hit / a menu let go, the drag slows the player and owns the mouse; ONE thing grabbed at a time across
+//    fuel carts + equipment; units and fuel carts never overlap.
+//  - AIM / E: 'module' (the console face) vs 'frame'; a TAP is uses[kind].tap on any part (no use / a false answer: nothing, never a
+//    grab), a HOLD drags; the gesture (nothing on the press, the ring, the aim leaving cancels); the prompts. More:
+//    drag-hold-equipment.test.ts, equipment-flip.test.ts.
 //  - PLUGS: connect at rest by position (toast, cue, listener, lamp, cable), a free plug only, one unit per plug, unplug by a grab /
 //    out of reach, a station unit never; plugged() / active().
 //  - BULLETS stop on a unit and shove it by its mass; LIFTS carry units and see them in a doorway.
@@ -80,7 +82,7 @@ function grabScript(w: {h: EquipTestHost; body: CartBody; grabbed(): boolean}): 
   stand(h, 3.5, 1.8, Math.PI, 0);
   frame(h);
   lookAt(h, b.x + Math.sin(b.yaw) * HANDLE.z, b.y + HANDLE.y, b.z + Math.cos(b.yaw) * HANDLE.z);
-  press(h, 'KeyE');
+  holdE(h);
   expect(w.grabbed()).toBe(true);
   h.player.pitch = 0;
   const go = (key: string, seconds: number) => { h.keys.held.add(key); run(h, seconds, () => { out.push(snap(h, b)); return false; }); h.keys.held.clear(); };
@@ -233,7 +235,7 @@ describe('train equipment: a device moves and stops like the fuel dolly', () => 
 });
 
 describe('train equipment: grab, let go, one thing in the hands', () => {
-  it('E on the frame grabs (slow walk, the mouse is the grab\'s), E lets go; walking away / a hit / a menu let go', () => {
+  it('holding E on the frame grabs (slow walk, the mouse is the grab\'s), E lets go; walking away / a hit / a menu let go', () => {
     const {h, eq, u, body: b} = unitWorld(LIGHT);
     const the = EQUIPMENT[LIGHT].the;
     stand(h, 3.5, 1.8, Math.PI, 0);
@@ -241,9 +243,9 @@ describe('train equipment: grab, let go, one thing in the hands', () => {
     lookAtUnit(h, u, 0, HANDLE.y, HANDLE.z);
     frame(h);
     expect(eq.aim).toMatchObject({unit: u, part: 'frame'});
-    expect(eq.prompt).toBe(EQUIPMENT_TEXT.grab(the, EQUIPMENT[LIGHT].plug ? EQUIPMENT_TEXT.plugHint : ''));
+    expect(eq.prompt).toBe(EQUIPMENT_TEXT.drag(the, EQUIPMENT[LIGHT].plug ? EQUIPMENT_TEXT.plugHint : ''));
     expect(h.promptProviders.map(f => f()).find(Boolean)).toBe(eq.prompt);
-    press(h, 'KeyE');
+    holdE(h);
     expect(eq.grab?.unit).toBe(u);
     expect(h.inputOwners.some(f => f())).toBe(true);
     expect(combineModifiers(h.modifierSources as never).speedMult).toBeCloseTo(FUEL_CART.speedMult, 12);
@@ -252,7 +254,7 @@ describe('train equipment: grab, let go, one thing in the hands', () => {
     expect(eq.grab).toBeNull();
     expect(h.inputOwners.some(f => f())).toBe(false);
     expect(combineModifiers(h.modifierSources as never).speedMult).toBe(1);
-    const grab = () => { stand(h, b.x, b.z - 1.2, Math.PI, 0); frame(h); lookAtUnit(h, u, 0, HANDLE.y, HANDLE.z); press(h, 'KeyE'); expect(eq.grab?.unit).toBe(u); };
+    const grab = () => { b.vx = b.vz = 0; stand(h, b.x, b.z - 1.2, Math.PI, 0); frame(h); lookAtUnit(h, u, 0, HANDLE.y, HANDLE.z); holdE(h); expect(eq.grab?.unit).toBe(u); };
     // the player gone too far: "stuck", with the note
     b.yaw = 0;
     grab();
@@ -291,30 +293,34 @@ describe('train equipment: grab, let go, one thing in the hands', () => {
     stand(h, 3.5, 1.8, Math.PI, 0);
     frame(h);
     lookAtUnit(h, u, 0, HANDLE.y, HANDLE.z);
-    press(h, 'KeyE');
+    holdE(h);
     expect(eq.grab?.unit).toBe(u);
     // E while a unit is grabbed is the unit's — even aiming at the fuel cart's handle: it lets go, the cart is not grabbed
+    // (held down as long as a grab takes: no hold starts on the cart either)
     lookAt(h, cb.x, cb.y + HANDLE.y, cb.z + HANDLE.z);
-    press(h, 'KeyE');
+    holdE(h);
     expect(eq.grab).toBeNull();
     expect(carts.grab).toBeNull();
+    expect(carts.eHold.pending).toBe(false);
     never();
     // now the cart; E aimed at the unit lets go of the cart, the unit is not grabbed
     stand(h, 5, 1.8, Math.PI, 0);
     frame(h);
     lookAt(h, cb.x, cb.y + HANDLE.y, cb.z + HANDLE.z);
-    press(h, 'KeyE');
+    holdE(h);
     expect(carts.grab).not.toBeNull();
     lookAtUnit(h, u, 0, HANDLE.y, HANDLE.z);
-    press(h, 'KeyE');
+    holdE(h);
     expect(carts.grab).toBeNull();
     expect(eq.grab).toBeNull();
+    expect(eq.eHold.pending).toBe(false);
     never();
     // drag the unit into the other unit and into the cart: footprints stay apart (the other bodies are shoved)
+    u.body.vx = u.body.vz = 0;
     stand(h, 3.5, 1.8, Math.PI, 0);
     frame(h);
     lookAtUnit(h, u, 0, HANDLE.y, HANDLE.z);
-    press(h, 'KeyE');
+    holdE(h);
     expect(eq.grab?.unit).toBe(u);
     h.player.pitch = 0;
     h.keys.held.add('KeyW');
@@ -384,50 +390,63 @@ describe('train equipment: aim parts and the E rules', () => {
     expect(w.eq.prompt).toBeNull();
   });
 
-  it('no use registered: E on the module grabs; a use without hold fires tap on the press (false -> grab); its prompt wins on the module only', () => {
+  it('no use registered: a tap does nothing, a hold drags (module or frame); a use: its tap on any part (false / a throw: nothing, never a grab), its line + the drag hint', () => {
     const w = world();
-    w.front();
-    press(w.h, 'KeyE');
-    expect(w.eq.grab?.unit).toBe(w.u);
-    w.reset();
+    const dragLine = EQUIPMENT_TEXT.drag(w.u.def.the, w.u.def.plug ? EQUIPMENT_TEXT.plugHint : '');
+    // no use: the same hold line on both parts; a tap does nothing; a hold drags
+    for (const side of [w.front, w.back]) {
+      side();
+      expect(w.eq.prompt).toBe(dragLine);
+      press(w.h, 'KeyE');
+      expect(w.eq.grab).toBeNull();
+      expect(w.eq.holdProgress).toBeNull();
+      holdE(w.h);
+      expect(w.eq.grab?.unit).toBe(w.u);
+      w.reset();
+    }
+    expect(w.eq.counts.taps).toBe(0);
+    expect(w.h.toasts).toEqual([]);
     const calls: string[] = [];
     let answer = true;
     w.eq.uses[w.u.kind] = {prompt: u => `<b>[E]</b> Use ${u.uid}`, tap: u => { calls.push(`tap:${u.uid}`); return answer; }};
     w.front();
-    expect(w.eq.prompt).toBe('<b>[E]</b> Use eq-1');
-    w.h.keys.held.add('KeyE'); // (held down: without `hold` the tap still fires on the press)
+    expect(w.eq.prompt).toBe('<b>[E]</b> Use eq-1' + EQUIPMENT_TEXT.dragHint);
     press(w.h, 'KeyE');
-    w.h.keys.held.clear();
     expect(calls).toEqual(['tap:eq-1']);
     expect(w.eq.grab).toBeNull();
     expect(w.eq.holdProgress).toBeNull();
-    // the frame keeps its grab prompt and action
+    // the frame (the handle, from behind): the same line and the same tap — the use is the unit's, whatever part is aimed at
     w.back();
-    expect(w.eq.prompt).toBe(EQUIPMENT_TEXT.grab(w.u.def.the, w.u.def.plug ? EQUIPMENT_TEXT.plugHint : ''));
+    expect(w.eq.aim).toMatchObject({unit: w.u, part: 'frame'});
+    expect(w.eq.prompt).toBe('<b>[E]</b> Use eq-1' + EQUIPMENT_TEXT.dragHint);
     press(w.h, 'KeyE');
-    expect(w.eq.grab?.unit).toBe(w.u);
-    expect(calls).toEqual(['tap:eq-1']);
-    w.reset();
-    // a false answer: the default action
+    expect(calls).toEqual(['tap:eq-1', 'tap:eq-1']);
+    expect(w.eq.grab).toBeNull();
+    // a false answer: nothing happens — never a grab; the hold still drags and never asks the use
     answer = false;
     w.front();
     press(w.h, 'KeyE');
-    expect(calls).toEqual(['tap:eq-1', 'tap:eq-1']);
+    expect(calls).toHaveLength(3);
+    expect(w.eq.grab).toBeNull();
+    expect(w.h.toasts).toEqual([]);
+    holdE(w.h);
+    expect(calls).toHaveLength(3);
     expect(w.eq.grab?.unit).toBe(w.u);
     w.reset();
     // a null prompt: the default text; a throwing use never breaks E
     w.eq.uses[w.u.kind] = {prompt: () => null, tap: () => { throw new Error('boom'); }};
     w.front();
-    expect(w.eq.prompt).toBe(EQUIPMENT_TEXT.grab(w.u.def.the, w.u.def.plug ? EQUIPMENT_TEXT.plugHint : ''));
+    expect(w.eq.prompt).toBe(dragLine);
     press(w.h, 'KeyE');
+    expect(w.eq.grab).toBeNull();
+    holdE(w.h);
     expect(w.eq.grab?.unit).toBe(w.u);
   });
 
-  it('a use with hold: a tap acts on the release, holding EQUIP_HOLD_S calls hold once; a false answer grabs; leaving the aim cancels', () => {
+  it('the gesture: nothing on the press, a tap acts on the release, holding EQUIP_HOLD_S drags (never the tap) and E let go afterwards keeps it; the ring; leaving the aim cancels', () => {
     const w = world();
     const calls: string[] = [];
-    const ans = {tap: true, hold: true};
-    w.eq.uses[w.u.kind] = {prompt: () => null, tap: () => { calls.push('tap'); return ans.tap; }, hold: () => { calls.push('hold'); return ans.hold; }};
+    w.eq.uses[w.u.kind] = {prompt: () => null, tap: () => { calls.push('tap'); return true; }};
     // a tap: nothing on the press, tap on the release
     w.front();
     w.h.keys.held.add('KeyE');
@@ -436,30 +455,25 @@ describe('train equipment: aim parts and the E rules', () => {
     expect(calls).toEqual([]);
     expect(w.eq.holdProgress).toBeGreaterThan(0);
     expect(w.h.inputOwners.some(f => f())).toBe(true);
+    expect(w.eq.prompt).toBe(EQUIPMENT_TEXT.grabbing(w.u.def.the));
     run(w.h, 0.2);
     expect(calls).toEqual([]);
+    expect(w.eq.grab).toBeNull();
     w.h.keys.held.clear();
     frame(w.h);
     expect(calls).toEqual(['tap']);
     expect(w.eq.holdProgress).toBeNull();
     expect(w.eq.grab).toBeNull();
-    // a hold: hold once, no tap; the ring ran and was cleared
+    expect(w.h.inputOwners.some(f => f())).toBe(false);
+    // a hold: the drag, no tap; the ring ran and was cleared; the key kept down and then released changes nothing
     w.h.rings.length = 0;
     holdE(w.h, EQUIP_HOLD_S + 0.2);
-    expect(calls).toEqual(['tap', 'hold']);
-    expect(w.eq.grab).toBeNull();
+    expect(calls).toEqual(['tap']);
+    expect(w.eq.grab?.unit).toBe(w.u);
+    expect(w.eq.counts.holds).toBe(1);
     expect(w.h.rings.some(v => v !== null && v > 0.3)).toBe(true);
     expect(w.h.rings[w.h.rings.length - 1]).toBeNull();
-    // false answers: the grab
-    ans.tap = false;
-    press(w.h, 'KeyE');
-    expect(calls).toEqual(['tap', 'hold', 'tap']);
-    expect(w.eq.grab?.unit).toBe(w.u);
-    w.reset();
-    ans.hold = false;
-    w.front();
-    holdE(w.h, EQUIP_HOLD_S + 0.1);
-    expect(calls).toEqual(['tap', 'hold', 'tap', 'hold']);
+    run(w.h, 0.3);
     expect(w.eq.grab?.unit).toBe(w.u);
     w.reset();
     // the aim leaves during the hold: nothing happens
@@ -471,7 +485,7 @@ describe('train equipment: aim parts and the E rules', () => {
     run(w.h, EQUIP_HOLD_S + 0.2);
     w.h.keys.held.clear();
     frame(w.h);
-    expect(calls).toEqual(['tap', 'hold', 'tap', 'hold']);
+    expect(calls).toEqual(['tap']);
     expect(w.eq.grab).toBeNull();
     expect(w.eq.holdProgress).toBeNull();
   });
@@ -545,7 +559,7 @@ describe('train equipment: the plugs', () => {
     frame(h);
     lookAtUnit(h, a, 0, HANDLE.y, HANDLE.z);
     h.toasts.length = 0;
-    press(h, 'KeyE');
+    holdE(h);
     expect(eq.grab?.unit).toBe(a);
     expect(a.plug).toBeNull();
     expect(h.toasts[0]).toBe(EQUIPMENT_TEXT.unplugged(EQUIPMENT[kindA].name));

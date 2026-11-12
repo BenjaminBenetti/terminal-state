@@ -18,11 +18,16 @@
 //    first PLAYED frame (every restore step is over by then; uids from the live inventory) — all of it or, without an inventory to
 //    make stacks, none: stamp() writes whatever is still aside back as `ammo`. No round is lost, none counted twice.
 //  - 'dolly' kinds (the devices: a module on the fuel dolly's hand truck) MOVE AND STOP LIKE THE FUEL DOLLY — the same controller calls
-//    with the same constants (FUEL_CART / CART): E on the frame / handle grabs (the hand point, the slow walk, the input owner, the
-//    let-go reasons, the break distance), walking into one pushes it, it sleeps, goes up and down stairs, lies on the steps, rides lifts
-//    (carry / anyAt), stops bullets (a metal impact, a shove by mass). Heavier = slower (bodyPushTop / the grip's acceleration cap).
-//  - 'carry' kinds (the chest): E TAP = its use (the store view: lane BENCH registers uses.chest) — with no use registered a tap picks it
-//    up —, E HELD EQUIP_HOLD_S = pick it up (always). In the hands: mode 'held' (no body in the world), drawn low in front of the camera,
+//    with the same constants (FUEL_CART / CART): E HELD EQUIP_HOLD_S anywhere on it grabs (the hand point, the slow walk, the input
+//    owner, the let-go reasons, the break distance), walking into one pushes it, it sleeps, goes up and down stairs, lies on the steps,
+//    rides lifts (carry / anyAt), stops bullets (a metal impact, a shove by mass). Heavier = slower (bodyPushTop / the grip's
+//    acceleration cap). While it is grabbed R TURNS IT ROUND (task train-interaction-ux-20261112, lane DRAG; user: "R flips its facing
+//    180 degrees so it faces the player instead of away, allowing placement flush to walls"): grab.flip — its front / console face
+//    toward the player instead of away, eased at the grab's own turn rate; the player's facing, the body's circle, the hand point and
+//    every stop reason are untouched, and the body's yaw is what is let go, plugged, captured as cargo and recorded, as ever. A grab
+//    starts with the flip NEAREST to how the unit stands (grabbed from its console side it stays facing the player).
+//  - 'carry' kinds (the chest): E TAP = its use (the store view: lane BENCH registers uses.chest; no use registered: a tap does
+//    nothing), E HELD EQUIP_HOLD_S = pick it up (always). In the hands: mode 'held' (no body in the world), drawn low in front of the camera,
 //    the hands busy (input owner, the held item lowered: Game reads `holster`; no reload / item use: `carrying` / refuseUse), a slow walk
 //    (EQUIP.carry.speedMult, no sprint), never picked up or put down on a ladder; E puts it down on FREE FLOOR in front of the player
 //    (the controller's own tests: floor under the footprint, no wall / prop / unit / fuel cart / player overlap, a clear way to the spot)
@@ -33,11 +38,16 @@
 //  - Units and fuel carts keep apart (separateCarts); the player never stands inside one (separatePlayer). ONE thing is grabbed at a
 //    time across fuel carts + equipment (E while a unit is grabbed / carried is this system's first: interactHandlers.unshift).
 //
-// AIM / E: pickAim() = the unit + part under the crosshair: a dolly kind's 'module' (the console face: the module's +Z face inside the
-// measured face band) or 'frame' (anything else of it); a carry kind's 'body'. Frame -> grab. Module -> uses[kind]: with `hold`, a TAP
-// (released before EQUIP_HOLD_S) calls tap(u) on the release and holding calls hold(u) once; without `hold`, tap(u) fires on the press;
-// a false answer (or no use) -> grab. Prompts: the use's prompt(u), else the defaults (EQUIPMENT_TEXT). While the train rides there is
-// no interaction with units (v1): prompts null.
+// AIM / E (task train-interaction-ux-20261112, lane DRAG; user: "ALL existing draggable items … require HOLDING E to START dragging …
+// Quick normal interaction must not accidentally start dragging"): THE ONE HOLD GESTURE (core/holdGesture.ts — the fuel dolly's too).
+// pickAim() = the unit + part under the crosshair: a dolly kind's 'module' (the console face) or 'frame' (anything else of it); a carry
+// kind's 'body' — the part only decides the reach. E pressed on a unit only BEGINS the gesture. Released before EQUIP_HOLD_S = the TAP:
+// uses[kind].tap(u), whatever part was aimed at (a false answer / no use registered: nothing happens — never a grab, never a pickup).
+// Held EQUIP_HOLD_S = the kind's `move` trait: 'dolly' -> grab, 'carry' -> pick up (the crosshair ring fills meanwhile). The gesture is
+// dropped with nothing done when the aim leaves THAT unit / its reach, the keys were wiped (a menu), another input owner took over,
+// the player died / climbs, the train rides, the unit left the world. After the grab started releasing E does nothing; the next E lets
+// go. Prompts: the use's TAP line + ' · hold [E] to drag it' / '… to carry it', else 'Hold [E] Drag … / Carry …' (EQUIPMENT_TEXT); the
+// same line for every aimed part. While the train rides there is no interaction with units (v1): prompts null.
 //
 // PLUGS (craft/trainFixtures.ts: three sockets): a plug-kind unit AT REST (asleep, not grabbed), wholly inside the PARKED car, within
 // PLUG.reach of a FREE socket connects to the nearest: unit.plug, the cable (one pooled tube per plug) and the green lamp, the
@@ -84,12 +94,13 @@ import * as THREE from 'three';
 import type {Game} from '../game';
 import type {Levels} from '../gen/levels';
 import type {PropPlacement} from '../gen/props';
+import {HoldGesture, foreignOwners} from '../core/holdGesture';
 import {moveCircle, type PropIndex} from '../core/physics';
 import {
   EQUIPMENT, EQUIPMENT_KINDS, EQUIPMENT_LIMITS, STATION_EQUIPMENT_LANE, copyEquipment, equipmentProblem, equipmentRounds, equipmentSeqOf, isEquipmentKind,
   freshEquipment, stationEquipmentOf, type EquipmentDef, type EquipmentJSON, type EquipmentKind, type StationEquipmentJSON, type TrainEquipment,
 } from '../craft/equipment';
-import {EQUIP_HOLD_S, type EquipmentStore, type EquipmentSystemLike, type EquipmentUnit, type EquipmentUse} from '../craft/equipmentApi';
+import type {EquipmentStore, EquipmentSystemLike, EquipmentUnit, EquipmentUse} from '../craft/equipmentApi';
 import {PLUG, craftSpots, plugInReach} from '../craft/trainFixtures';
 import {cartAboard, cartStraddles} from '../fuel/trainPort';
 import {playerTrainPlacement, trainSpawnLocal, trainToWorld, type TrainPlacement} from '../gen/playerTrain';
@@ -167,13 +178,17 @@ export const EQUIPMENT_TEXT = {
   handsFull: 'Your hands are full',
   noPutDown: 'No room to put it down here',
   ladder: 'Not on a ladder',
-  grab: (the: string, note: string) => `<b>[E]</b> Grab ${the}${note}`,
-  letGo: (the: string) => `<b>[E]</b> Let go of ${the}`,
+  /** The look-at line of a unit with no TAP line of its own (a use's line gets dragHint / carryHint appended instead). */
+  drag: (the: string, note: string) => `<b>Hold [E]</b> Drag ${the}${note}`,
+  carry: (the: string) => `<b>Hold [E]</b> Carry ${the}`,
+  dragHint: ' · hold <b>[E]</b> to drag it',
+  carryHint: ' · hold <b>[E]</b> to carry it',
   pluggedNote: ' · plugged in',
   plugHint: ' · roll it to a free plug',
-  open: (the: string) => `<b>[E]</b> Open · hold <b>[E]</b> Carry ${the}`,
-  carry: (the: string) => `<b>[E]</b> Carry ${the}`,
+  /** While the hold is pending. */
+  grabbing: (the: string) => `<b>Hold [E]</b> Grabbing ${the}…`,
   holding: (the: string) => `<b>Hold [E]</b> Picking up ${the}…`,
+  letGo: (the: string) => `<b>[E]</b> Let go of ${the} · <b>[R]</b> Turn it around`,
   putDown: (the: string) => `<b>[E]</b> Put down ${the}`,
 } as const;
 
@@ -207,8 +222,11 @@ export interface TrainEquipmentHost {
   run?: {current: SectionKeyLike; laneStore?(lane: string, key?: never): unknown; setLaneStore?(lane: string, data: unknown, key?: never): void} | null;
   /** The inventory's uid counter stays above every unit's stacks; it makes the stacks of a legacy record's rounds (adoptLegacyAmmo). */
   inv?: {reserveUids?(max: number): void; makeStack?(itemId: string, count: number): ItemStack} | null;
-  /** E held / released (the tap / hold rule); `clears` changes when the input was cleared (a menu). */
-  input?: {down(code: string): boolean; clears?: number} | null;
+  /**
+   * E held / released (the hold gesture: core/holdGesture.ts) and R pressed (a grabbed device turns round); `clears` changes when the
+   * input was cleared (a menu).
+   */
+  input?: {down(code: string): boolean; hit?(code: string): boolean; clears?: number} | null;
   hud: {toast(text: string, warn?: boolean): void; setHoldRing?(progress: number | null): void};
   sfx: unknown;
   state: string;
@@ -296,7 +314,8 @@ export class LiveUnit implements EquipmentUnit {
   /** The DRAWN pose over the body (steps / slopes) — the fuel carts' rest pose. */
   readonly pose: CartPose = {dy: 0, pitch: 0, roll: 0};
   poseSettled = false;
-  poseHeld = false;
+  /** How the pose was last solved: 0 free, 1 held from behind (by the handle), -1 held from its front (turned round). */
+  poseSide = 0;
   readonly solved = {x: NaN, y: NaN, z: NaN, yaw: NaN};
   readonly drawn = {x: NaN, y: NaN, z: NaN, yaw: NaN, pitch: NaN, roll: NaN};
   markedLevel = -1;
@@ -385,14 +404,20 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   /** A world is built (between this system's build and teardown hooks); the station it is (the lane's key). */
   worldLive = false;
   private here: {key: SectionKeyLike} | null = null;
-  /** The grabbed dolly (null: none). */
-  grab: {unit: LiveUnit; lag: number} | null = null;
+  /**
+   * The grabbed dolly (null: none). `flip`: turned round — its front / console face toward the player instead of away (R toggles it;
+   * a grab starts with the one nearest to how the unit stands).
+   */
+  grab: {unit: LiveUnit; lag: number; flip: boolean} | null = null;
   /** The chest in the hands (null: none). */
   held: LiveUnit | null = null;
   /** The held item's lowering while the hands carry (0..1; Game.update -> Viewmodel.setHolstered). */
   holster = 0;
-  /** E pressed on a unit whose action waits for the release / the hold time. */
-  private eHold: {unit: LiveUnit; part: AimPart; t: number; clears: number} | null = null;
+  /**
+   * E pressed on a unit and not yet decided (core/holdGesture.ts: released early = the TAP, its use; held EQUIP_HOLD_S = the grab /
+   * the pickup). Drives the crosshair ring.
+   */
+  readonly eHold = new HoldGesture<{unit: LiveUnit; part: AimPart}>(p => this.host.hud.setHoldRing?.(p));
   /** Captured cargo: whether a ride was seen, idle seconds without one, the ride model its footprints are in. */
   private captured: {sawRide: boolean; idle: number; swap: RideLocalModel | null} | null = null;
   /** The unit / part under the crosshair (this frame) and the prompt. */
@@ -404,14 +429,14 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   /** Lids in motion. */
   private readonly lids = new Set<LiveUnit>();
   /** QA / tests. */
-  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, pushes: 0, restores: 0, steps: 0, bullets: 0, carried: 0, seated: 0, poses: 0, plugged: 0, unplugged: 0, pickups: 0, putDowns: 0, refused: 0, crafted: 0, taps: 0, holds: 0, cables: 0, adopted: 0};
+  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, pushes: 0, restores: 0, steps: 0, bullets: 0, carried: 0, seated: 0, poses: 0, plugged: 0, unplugged: 0, pickups: 0, putDowns: 0, refused: 0, crafted: 0, taps: 0, holds: 0, cables: 0, adopted: 0, flips: 0};
   /** Live units still holding a legacy record's rounds aside (adoptLegacyAmmo runs while > 0). */
   private legacyUnits = 0;
   private proto: THREE.Group | null = null;
   private protoGen = -1;
   private pollIn = 0;
   private roll01 = 0;
-  private readonly owner = (): boolean => !!this.grab || !!this.held || !!this.eHold;
+  private readonly owner = (): boolean => !!this.grab || !!this.held || this.eHold.pending;
   private readonly eye = new THREE.Vector3();
   private readonly dir = new THREE.Vector3();
   private readonly target: CartTarget = {x: 0, z: 0, vx: 0, vz: 0};
@@ -605,6 +630,9 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
 
   /** The hands carry a chest. */
   get carrying(): boolean { return !!this.held; }
+
+  /** The hands drag a device (R turns it round then: Game.update's reload gate). */
+  get dragging(): boolean { return !!this.grab; }
 
   /** Game.startUse: no item use while the hands carry a chest (true = refused, with the note). */
   refuseUse(): boolean {
@@ -813,7 +841,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
 
   frame(dt: number): void {
     this.stepCarry(dt);
-    if (!this.worldLive) { this.prompt = null; return; }
+    if (!this.worldLive) { this.endHold(); this.prompt = null; return; }
     this.pollLook();
     this.attachFixtures();
     this.followRide(dt);
@@ -822,9 +850,11 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     const h = this.host, P = h.player, riding = this.riding;
     this.world.levels = h.levels!;
     this.world.props = h.propIndex;
-    if (!h.levels) return;
+    if (!h.levels) { this.endHold(); return; }
     // a grab ends with the player out of action / riding / gone too far
     if (this.grab && (!P.alive || P.climbing || riding || this.grab.unit.mode !== 'world')) this.letGo(riding ? 'capture' : 'state');
+    // R turns the grabbed device round (the turn itself is eased below: it swings, never snaps)
+    if (this.grab && h.input?.hit?.('KeyR')) { this.grab.flip = !this.grab.flip; this.counts.flips++; }
     // the chest goes down where its carrier dies
     if (this.held && !P.alive && !riding) this.dropHeld();
     let fastest = 0;
@@ -842,7 +872,8 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
         T.x = P.x + fx * EQUIP.hold; T.z = P.z + fz * EQUIP.hold; T.vx = P.vx; T.vz = P.vz;
         const moved = stepCart(b, this.world, dt, T);
         this.counts.steps++;
-        if (moved > 0 || d > 0.05) b.yaw = turnToward(b.yaw, Math.atan2(b.x - P.x, b.z - P.z), CART.grab.turnRate, dt);
+        // its front AWAY from the player — or, turned round (grab.flip), TOWARD the player; only the yaw differs
+        if (moved > 0 || d > 0.05) b.yaw = turnToward(b.yaw, grabYaw(b, P, this.grab!.flip), CART.grab.turnRate, dt);
         const lag = Math.hypot(T.x - b.x, T.z - b.z);
         this.grab!.lag = lag > CART.grab.breakDist ? this.grab!.lag + dt : 0;
         if (this.grab!.lag > CART.grab.breakTime || Math.hypot(b.x - P.x, b.z - P.z) > EQUIP.farDist) this.letGo('stuck');
@@ -953,7 +984,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     for (const u of this.list) {
       if (u.mode !== 'world' || !this.insideCar(u, p)) continue;
       if (this.grab?.unit === u) this.letGo('capture');
-      if (this.eHold?.unit === u) this.endHold();
+      if (this.eHold.target?.unit === u) this.endHold();
       const b = u.body, q = this.toLocal(p, b.x, b.y, b.z);
       u.local.x = q.x; u.local.y = this.spec.floorY; u.local.z = q.z; u.local.yaw = wrapYaw(b.yaw - p.yaw);
       b.vx = b.vz = 0;
@@ -1141,7 +1172,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     if (i < 0) return;
     const u = this.list[i];
     if (this.grab?.unit === u) this.grab = null;
-    if (this.eHold?.unit === u) this.endHold();
+    if (this.eHold.target?.unit === u) this.endHold();
     if (this.held === u) { this.held = null; this.restoreFlags(u); }
     if (this.aim?.unit === u) { this.aim = null; this.prompt = null; }
     this.lids.delete(u);
@@ -1386,7 +1417,10 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   private startGrab(u: LiveUnit): void {
     if (u.mode !== 'world') return;
     if (u.plug !== null) this.disconnect(u, EQUIPMENT_TEXT.unplugged(u.def.name));
-    this.grab = {unit: u, lag: 0};
+    // it keeps the way it stands: turned round (front toward the player) when that is the nearer of the two — a unit set down turned
+    // round and grabbed again from the same side does not swing round by itself
+    const off = wrapYaw(u.body.yaw - grabYaw(u.body, this.host.player, false));
+    this.grab = {unit: u, lag: 0, flip: Math.abs(off) > Math.PI / 2};
     u.awake = true;
     this.counts.grabs++;
   }
@@ -1561,29 +1595,24 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     return EQUIPMENT_TEXT.putDown(this.held.def.the);
   }
 
-  /** [E] on the aimed unit: see the header (AIM / E). Only when a unit is the aim target. */
+  /** [E] pressed on the aimed unit: the hold gesture BEGINS (the header: AIM / E) — nothing happens on the press. Only when a unit is the aim target. */
   onInteract(): boolean {
     const h = this.host;
     if (!this.worldLive || this.riding || h.state !== 'playing' || !h.player.alive) return false;
-    if (this.eHold) return true;
+    if (this.eHold.pending) return true;
     const aim = this.pickAim();
     if (!aim) return false;
-    const u = aim.unit, use = this.uses[u.kind];
-    if (u.def.move === 'carry' || (aim.part === 'module' && use?.hold)) {
-      // a tap acts on the release, a hold at EQUIP_HOLD_S (stepHold)
-      this.eHold = {unit: u, part: aim.part, t: 0, clears: h.input?.clears ?? 0};
-      return true;
-    }
-    if (aim.part === 'module' && use && this.callUse(use, 'tap', u)) return true;
-    this.startGrab(u);
+    this.eHold.begin({unit: aim.unit, part: aim.part}, h.input?.clears ?? 0, foreignOwners(h.inputOwners, this.owner));
     return true;
   }
 
-  private callUse(use: EquipmentUse, what: 'tap' | 'hold', u: LiveUnit): boolean {
+  /** E TAPPED on a unit: its kind's use, whatever part was aimed at. No use / a false answer: nothing happens (never a grab / a pickup). */
+  private tapUse(u: LiveUnit): boolean {
+    const use = this.uses[u.kind];
+    if (!use) return false;
+    this.counts.taps++;
     try {
-      if (what === 'tap') { this.counts.taps++; return use.tap(u) === true; }
-      this.counts.holds++;
-      return use.hold?.(u) === true;
+      return use.tap(u) === true;
     } catch (err) {
       console.warn(`train equipment: the ${u.kind} use failed`, err);
       return false;
@@ -1592,39 +1621,35 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
 
   /** E held on a unit (0..1 of EQUIP_HOLD_S), or null — QA / tests. */
   get holdProgress(): number | null {
-    return this.eHold ? Math.min(1, this.eHold.t / EQUIP_HOLD_S) : null;
+    return this.eHold.progress;
   }
 
+  /** Drop a pending E with nothing done (the ring cleared). */
   private endHold(): void {
-    if (!this.eHold) return;
-    this.eHold = null;
-    this.host.hud.setHoldRing?.(null);
+    this.eHold.cancel();
   }
 
-  /** The pending E on a unit: released early = the TAP, held EQUIP_HOLD_S = the HOLD; cancelled when the aim leaves it / a menu / death. */
+  /**
+   * The pending E on a unit (core/holdGesture.ts): released early = the TAP (its use), held EQUIP_HOLD_S = the HOLD by the kind's
+   * `move` trait (drag the hand truck / carry the chest); dropped with nothing done when the aim leaves THAT unit / its reach, the
+   * keys were wiped, another input owner took over, the player died / climbs, the train rides, the unit left the world.
+   */
   private stepHold(dt: number): void {
-    const H = this.eHold;
-    if (!H) return;
-    const h = this.host, inp = h.input ?? null, u = H.unit;
-    if (h.state !== 'playing' || !h.player.alive || h.player.climbing || this.riding || u.mode !== 'world' || this.grab || this.held
-      || (inp && inp.clears !== undefined && inp.clears !== H.clears)) { this.endHold(); return; }
-    const aim = this.pickAim();
-    if (!aim || aim.unit !== u) { this.endHold(); return; }
-    H.t += dt;
-    const use = this.uses[u.kind];
-    if (H.t >= EQUIP_HOLD_S) {
-      this.endHold();
-      if (u.def.move === 'carry') this.pickUp(u);
-      else if (!(use && this.callUse(use, 'hold', u))) this.startGrab(u);
-      return;
-    }
-    if (!inp || !inp.down('KeyE')) {
-      this.endHold();
-      if (use && this.callUse(use, 'tap', u)) return;
+    const G = this.eHold, T = G.target;
+    if (!T) return;
+    const h = this.host, P = h.player, inp = h.input ?? null, u = T.unit;
+    const step = G.step(dt, {
+      down: !!inp?.down('KeyE'),
+      clears: inp?.clears ?? 0,
+      live: h.state === 'playing' && P.alive && !P.climbing && !this.riding && u.mode === 'world' && !this.grab && !this.held,
+      aimed: this.pickAim()?.unit === u,
+      foreign: foreignOwners(h.inputOwners, this.owner),
+    });
+    if (step === 'tap') this.tapUse(u);
+    else if (step === 'hold') {
+      this.counts.holds++;
       if (u.def.move === 'carry') this.pickUp(u); else this.startGrab(u);
-      return;
     }
-    h.hud.setHoldRing?.(H.t >= 0.1 ? H.t / EQUIP_HOLD_S : null);
   }
 
   /** The camera ray against a unit's box in its own frame (its drawn frame when it lies tilted on steps): the distance, or null. */
@@ -1711,20 +1736,31 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   private updateAim(): void {
     const h = this.host;
     if (this.riding || h.state !== 'playing' || !h.player.alive || this.grab || this.held) { this.aim = null; this.prompt = null; return; }
-    if (this.eHold) { this.aim = null; this.prompt = this.eHold.unit.def.move === 'carry' ? EQUIPMENT_TEXT.holding(this.eHold.unit.def.the) : this.prompt; return; }
+    const T = this.eHold.target;
+    if (T) {
+      const def = T.unit.def;
+      this.aim = null;
+      this.prompt = def.move === 'carry' ? EQUIPMENT_TEXT.holding(def.the) : EQUIPMENT_TEXT.grabbing(def.the);
+      return;
+    }
     this.aim = this.pickAim();
-    this.prompt = this.aim ? this.promptFor(this.aim.unit, this.aim.part) : null;
+    this.prompt = this.aim ? this.promptFor(this.aim.unit) : null;
   }
 
-  private promptFor(u: LiveUnit, part: AimPart): string {
-    const use = this.uses[u.kind], def = u.def;
-    if (use && part !== 'frame') {
-      let text: string | null = null;
-      try { text = use.prompt(u); } catch (err) { console.warn(`train equipment: the ${u.kind} prompt failed`, err); }
-      if (text) return text;
+  /**
+   * The look-at line of a unit (the same for every aimed part): its use's TAP line with the hold hint after it, else the hold line
+   * alone (a device: + its plug note).
+   */
+  private promptFor(u: LiveUnit): string {
+    const use = this.uses[u.kind], def = u.def, carry = def.move === 'carry';
+    let tap: string | null = null;
+    if (use) {
+      try { tap = use.prompt(u); } catch (err) { console.warn(`train equipment: the ${u.kind} prompt failed`, err); }
     }
-    if (def.move === 'carry') return use ? EQUIPMENT_TEXT.open(def.the) : EQUIPMENT_TEXT.carry(def.the);
-    return EQUIPMENT_TEXT.grab(def.the, def.plug ? (u.plug !== null ? EQUIPMENT_TEXT.pluggedNote : EQUIPMENT_TEXT.plugHint) : '');
+    // (no hold hint while something else owns the input — the unit's own view is open: [E] is that view's key and a hold cannot start)
+    if (tap) return foreignOwners(this.host.inputOwners, this.owner) ? tap : tap + (carry ? EQUIPMENT_TEXT.carryHint : EQUIPMENT_TEXT.dragHint);
+    if (carry) return EQUIPMENT_TEXT.carry(def.the);
+    return EQUIPMENT_TEXT.drag(def.the, def.plug ? (u.plug !== null ? EQUIPMENT_TEXT.pluggedNote : EQUIPMENT_TEXT.plugHint) : '');
   }
 
   private setRoll(v: number): void {
@@ -1779,11 +1815,14 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   private solvePose(u: LiveUnit, dt: number, snap = false): void {
     const L = this.host.levels, b = u.body, q = u.solved;
     if (!L) return;
-    const held = this.grab?.unit === u;
-    const moved = q.x !== b.x || q.y !== b.y || q.z !== b.z || q.yaw !== b.yaw || held !== u.poseHeld;
+    // held: from behind (by the handle), or — turned round with R — from its FRONT: it is tilted back toward whichever side the
+    // handler stands on (the side is read off the two bodies, so it follows the turn itself)
+    const P = this.host.player;
+    const side = this.grab?.unit !== u ? 0 : Math.sin(b.yaw) * (P.x - b.x) + Math.cos(b.yaw) * (P.z - b.z) > 0 ? -1 : 1;
+    const moved = q.x !== b.x || q.y !== b.y || q.z !== b.z || q.yaw !== b.yaw || side !== u.poseSide;
     if (!snap && !moved && u.poseSettled) return;
-    u.poseHeld = held;
-    const T = cartRestPose(L, b, this.poseScratch, held), p = u.pose;
+    u.poseSide = side;
+    const T = cartRestPose(L, b, this.poseScratch, side !== 0, side < 0), p = u.pose;
     q.x = b.x; q.y = b.y; q.z = b.z; q.yaw = b.yaw;
     this.counts.poses++;
     const k = snap ? 1 : 1 - Math.exp(-CART.poseRate * dt);
@@ -1871,8 +1910,8 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   state() {
     return {
       worldLive: this.worldLive, units: this.all(), plugs: this.owners.map(u => u?.uid ?? null),
-      grab: this.grab ? {uid: this.grab.unit.uid, lag: r4(this.grab.lag)} : null, held: this.held?.uid ?? null, holster: +this.holster.toFixed(2),
-      hold: this.eHold ? {uid: this.eHold.unit.uid, part: this.eHold.part, t: r4(this.eHold.t)} : null,
+      grab: this.grab ? {uid: this.grab.unit.uid, lag: r4(this.grab.lag), flip: this.grab.flip} : null, held: this.held?.uid ?? null, holster: +this.holster.toFixed(2),
+      hold: this.eHold.target ? {uid: this.eHold.target.unit.uid, part: this.eHold.target.part, t: r4(this.eHold.t)} : null,
       captured: this.captured ? {sawRide: this.captured.sawRide, idle: r4(this.captured.idle), swapped: !!this.captured.swap} : null,
       fixtures: !!this.fixtures.group.parent, lookGen: this.look.gen, prompt: this.prompt, counts: {...this.counts},
     };
@@ -1905,6 +1944,15 @@ const ease = (t: number): number => t * t * (3 - 2 * t);
 const bySeq = (a: {uid: string}, b: {uid: string}) => equipmentSeqOf(a.uid) - equipmentSeqOf(b.uid);
 /** pickAim's scratch: whether the module ray met the console face. */
 const FACE = {front: false};
+/**
+ * The yaw a grabbed dolly turns to: its front AWAY from the player (the fuel dolly's: the handle toward the hands — exactly the
+ * angle it always was), or — `flip`, turned round with R — its front TOWARD the player (wrapped: the body's yaw stays a recordable
+ * angle).
+ */
+const grabYaw = (b: {x: number; z: number}, P: {x: number; z: number}, flip: boolean): number => {
+  const away = Math.atan2(b.x - P.x, b.z - P.z);
+  return flip ? wrapYaw(away + Math.PI) : away;
+};
 
 /** Installs the train equipment (one call in the Game constructor; registries only). */
 export function installTrainEquipment(game: Game, deps: TrainEquipmentDeps = {}): TrainEquipmentSystem {
@@ -1916,7 +1964,7 @@ export function installTrainEquipment(game: Game, deps: TrainEquipmentDeps = {})
 export function trainEquipmentQaApi(game: unknown): Record<string, (...a: any[]) => unknown> {
   const g = game as {trainEquipment?: TrainEquipmentSystem};
   return {
-    /** The train equipment: every unit (mode / owner / plug / ammo / stacks / pose), the plugs, the grab / carry / hold, counters. */
+    /** The train equipment: every unit (mode / owner / plug / ammo / stacks / pose), the plugs, the grab (+ its flip) / carry / pending hold, counters. */
     equipment: () => g.trainEquipment?.state() ?? null,
     /** Craft one unit of `kind` on the parked car's floor (no materials: QA): its uid, or the refusal text. */
     equipmentCraft: (kind: EquipmentKind) => {
