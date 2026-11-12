@@ -27,6 +27,10 @@
 // existed -> version 0 (no pass: its enemies, kills and ids stay exact); a station never entered (new campaign or an old campaign's
 // unvisited node) -> the current version, recorded when it is first built. A future rule change bumps ROSTER_VERSION and gates on
 // `since`, so a visited station keeps regenerating the roster it was built with.
+//
+// Task studio-sprinter-zombies-20261112-033210-01: version 2 = version 1's families, unchanged, + the SPRINTERS (ai/sprinter.ts): after the
+// families are placed, a seeded 10 % of the eligible ordinary zombies are tagged to run while they pursue. A station recorded at 1 (or 0)
+// regenerates exactly as before — no sprinters; only a station first built at 2 has them.
 
 import {hashString, mulberry32} from '../core/rng';
 import type {Area, AreaKind, ZombieSpawn} from '../gen/stationTypes';
@@ -35,14 +39,15 @@ import {
   ENEMY_FAMILY_IDS, STRAINER_CONTEXTS, eligibilityFailure, roomFamilyPool, spawnContextOf, spawnProfile,
   type EligibilityLayout, type EnemyFamilyId, type FamilyPool, type SpawnContextId, type SpawnProfile,
 } from './spawnTables';
+import {SPRINTER, applySprinters, type SprinterReport} from './sprinter';
 
 /** Section-memory lane holding {v}: the roster version a station was first built with. */
 export const ROSTER_LANE = 'enemy.roster';
 /**
  * 0 = before the roster (no pass); 1 = the seeded roster: the Screacher's 40 % and the user-approved rates of the existing families
- * (one version: it was finalised before its first release).
+ * (one version: it was finalised before its first release); 2 = the same families + the sprinters (ai/sprinter.ts SPRINTER.since).
  */
-export const ROSTER_VERSION = 1;
+export const ROSTER_VERSION = 2;
 
 /** The roster version a station regenerates with, from its section memory (undefined = never touched). */
 export function rosterVersionFor(mem: {visits: number; lanes: Record<string, unknown>} | undefined): number {
@@ -191,6 +196,8 @@ export interface RosterReport {
   level: LevelId;
   zombieFree: boolean;
   families: Partial<Record<EnemyFamilyId, RosterFamilyReport>>;
+  /** Version >= SPRINTER.since on a combat level: the sprinter tags of the finished layout (ai/sprinter.ts); absent = none rolled. */
+  sprinters?: SprinterReport;
 }
 
 const REPORTS = new WeakMap<object, RosterReport>();
@@ -374,5 +381,7 @@ export function applyEnemyRoster(layout: RosterLayout, level: LevelId, levelSeed
     }
   }
   for (const family of seededFamilies) report.families[family]!.after = count(family);
+  // last: the sprinters among the ordinary zombies the families left (their own per-spawn hash; no family, count or slot moves)
+  if (version >= SPRINTER.since) report.sprinters = applySprinters(Z, levelSeed);
   return report;
 }
