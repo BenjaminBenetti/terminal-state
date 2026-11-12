@@ -10,6 +10,8 @@ import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import {ZombieBrain, spawnStats, type AnimName, type ZombieStats} from './brain';
+import {isSprinter} from './sprinter';
+import {SPRINT_CLIP, sprintClipFor} from './sprintGait'; // task studio-sprinter-gait-20261112-063646-01
 import type {ZombieSpawn} from '../gen/station';
 import type {Vec3} from '../combat/hitscan';
 import type {RagdollTarget} from '../physics/ragdoll';
@@ -19,22 +21,37 @@ export type HitPart = 'head' | 'torso' | 'limb';
 export interface HitVolume { part: HitPart; a: Vec3; b: Vec3 | null; r: number }
 
 /** Ground speed (m/s) each in-place locomotion clip was authored for at timeScale 1. */
-export const CLIP_GROUND_SPEED: Record<string, number> = {Walk: 0.55, Run: 2.3}; // from derivatives/zombie-rigged.json
+export const CLIP_GROUND_SPEED: Record<string, number> = {Walk: 0.55, Run: 2.3, Sprint: SPRINT_CLIP.groundSpeed}; // from derivatives/zombie-rigged.json (Sprint: ai/sprintGait.ts)
 
 /** Playback range of a locomotion clip (x its authored rate). */
 export const GAIT_TIME_SCALE = {min: 0.35, max: 1.8} as const;
 
 /**
+ * Task studio-sprinter-gait-20261112-063646-01: the Sprint clip's playback floor. A sprinter slowed by a sharp turn (motor.ts: down to
+ * a quarter of its pace) brakes to half the sprint cadence instead of the usual 0.35x slow motion.
+ */
+export const SPRINT_MIN_TIME_SCALE = 0.5;
+
+/** A locomotion clip of the zombie actor: the body GLB's Walk / Run, or a sprinter's own Sprint (ai/sprintGait.ts). */
+export type GaitClip = 'Walk' | 'Run' | 'Sprint';
+
+/**
  * The time scale of locomotion clip `clip` for a body of `scale` moving at `speed` m/s: the ground speed the clip covers matches the
  * real one, within GAIT_TIME_SCALE. Task studio-sprinter-zombies-20261112-033210-01: the Run clip's ceiling also reaches the body's own
- * chase pace, so a sprinter (brain.ts SPRINTER_STATS, 4.3 m/s: up to ~1.97x on the smallest body) runs without sliding; for every
- * other zombie that is below the usual 1.8 (shambler 2.55 m/s: <= 1.17x, coated 1.75: <= 0.8x), so its playback is unchanged.
+ * chase pace, so a sprinter whose rig has no Sprint clip (the fallback) runs without sliding; for every other zombie that is below the
+ * usual 1.8 (shambler 2.55 m/s: <= 1.17x, coated 1.75: <= 0.8x), so its playback is unchanged. Task
+ * studio-sprinter-gait-20261112-063646-01: the Sprint clip is authored at the sprint pace, so at 4.3 m/s it plays at 1 / scale
+ * (0.95-1.05x), floored at SPRINT_MIN_TIME_SCALE.
  */
-export function gaitTimeScale(clip: 'Walk' | 'Run', speed: number, scale: number, stats: Pick<ZombieStats, 'chaseSpeed'>): number {
+export function gaitTimeScale(clip: GaitClip, speed: number, scale: number, stats: Pick<ZombieStats, 'chaseSpeed'>): number {
   const ground = CLIP_GROUND_SPEED[clip] * scale;
+  const min = clip === 'Sprint' ? SPRINT_MIN_TIME_SCALE : GAIT_TIME_SCALE.min;
   const max = clip === 'Run' ? Math.max(GAIT_TIME_SCALE.max, stats.chaseSpeed / ground) : GAIT_TIME_SCALE.max;
-  return Math.max(GAIT_TIME_SCALE.min, Math.min(max, speed / ground)) || 1;
+  return Math.max(min, Math.min(max, speed / ground)) || 1;
 }
+
+/** A clip the actor plays: the brain's animation, or the Sprint a sprinter plays for the brain's 'Run'. */
+type ActorClip = AnimName | 'Sprint';
 
 /** Iteration 01-04 volumes (single Last-shift body; coat on/off) for the legacy template path. */
 const LEGACY_HIT = {plain: {head: 0.135, torso: 0.2, arm: 0.075, leg: 0.1}, coated: {head: 0.135, torso: 0.24, arm: 0.09, leg: 0.1}} as const;
@@ -46,7 +63,14 @@ export class ZombieActor implements RagdollTarget {
   readonly brain: ZombieBrain;
   private readonly mixer: THREE.AnimationMixer;
   private readonly actions = new Map<string, THREE.AnimationAction>();
-  private current: AnimName | null = null;
+  private current: ActorClip | null = null;
+  /**
+   * Task studio-sprinter-gait-20261112-063646-01: a sprinter spawn's own Sprint clip plays whenever its brain asks for 'Run' (its pursuit;
+   * idle / roaming / attack keep the ordinary clips). False for every other zombie, and for a rig without one (it keeps the Run).
+   */
+  readonly sprints: boolean;
+  /** Foot strikes the Sprint clip passed since sprintFootfalls() last took them. */
+  private footfalls = 0;
   private lastAttackSeq = 0;
   private readonly bones = new Map<string, THREE.Object3D>();
   /** Material clones made for this actor at construction (disposed with the actor even if replaced since). */
@@ -138,6 +162,10 @@ export class ZombieActor implements RagdollTarget {
       }
       this.actions.set(clip.name, a);
     }
+    // (built once per body model from its rest pose, RNG-free: the caller's stream and every other actor are untouched)
+    const sprint = isSprinter(spawn) ? sprintClipFor(this.root, app ? app.animations : (source as GLTF).animations) : null;
+    if (sprint) this.actions.set(SPRINT_CLIP.name, this.mixer.clipAction(sprint));
+    this.sprints = !!sprint;
     this.groanT = 2 + rand() * 6;
     this.play('Idle', 0);
     // desync idle cycles
@@ -165,10 +193,10 @@ export class ZombieActor implements RagdollTarget {
   }
 
   get hasRig(): boolean {
-    return this.bones.size === BONES.length && this.actions.size >= 6;
+    return this.bones.size === BONES.length && this.actions.size - (this.sprints ? 1 : 0) >= 6; // (the body's own clips: not the built Sprint)
   }
 
-  play(name: AnimName, fade = 0.2): void {
+  play(name: ActorClip, fade = 0.2): void {
     const next = this.actions.get(name);
     if (!next) return;
     const prev = this.current ? this.actions.get(this.current) : null;
@@ -193,17 +221,41 @@ export class ZombieActor implements RagdollTarget {
     if (this.ragdolled) { this.fadeFlash(dt); return; }
     if (anim === 'Attack' && this.brain.attackSeq !== this.lastAttackSeq) {
       this.lastAttackSeq = this.brain.attackSeq;
+      // (task studio-sprinter-gait-20261112-063646-01: a sprinter's swing starts clean — its Sprint fades out under the Attack instead of
+      // running on beneath it, so it never swipes with half a sprint pose and its legs pumping in place; every other zombie as before)
+      const sprint = this.current === 'Sprint' ? this.actions.get('Sprint') : undefined;
       this.current = null;
       this.play('Attack', 0.12);
+      sprint?.fadeOut(0.12);
     } else if (anim !== 'Attack' || this.current !== 'Attack') {
-      this.play(anim, anim === 'Death' ? 0.12 : 0.22);
+      this.play(anim === 'Run' && this.sprints ? 'Sprint' : anim, anim === 'Death' ? 0.12 : 0.22);
     }
     const a = this.current ? this.actions.get(this.current) : null;
-    if (a && (this.current === 'Walk' || this.current === 'Run')) {
+    if (a && (this.current === 'Walk' || this.current === 'Run' || this.current === 'Sprint')) {
       a.setEffectiveTimeScale(gaitTimeScale(this.current, speed, this.scale, this.brain.stats));
     }
+    const t0 = this.current === 'Sprint' && a ? a.time : -1;
     this.mixer.update(dt);
+    if (t0 >= 0) this.countFootfalls(t0, a!.time, a!.getClip().duration);
     this.fadeFlash(dt);
+  }
+
+  /** The Sprint clip's foot strikes (SPRINT_CLIP.contacts: every half cycle) between clip times t0 and t1 (a loop wrap included). */
+  private countFootfalls(t0: number, t1: number, T: number): void {
+    const half = T / 2;
+    if (t1 < t0) t1 += T;
+    this.footfalls += Math.max(0, Math.floor(t1 / half) - Math.floor(t0 / half));
+  }
+
+  /**
+   * Task studio-sprinter-gait-20261112-063646-01: footfalls of the Sprint clip since the last call (ai/creatureArchetypes.ts ZOMBIE_CUES
+   * plays one on each foot strike, so the steps follow the visible stride at any body scale and playback rate); null while this actor is
+   * not sprinting — the ordinary distance-based footsteps then.
+   */
+  sprintFootfalls(): number | null {
+    const n = this.footfalls;
+    this.footfalls = 0;
+    return this.current === 'Sprint' ? n : null;
   }
 
   private fadeFlash(dt: number): void {
@@ -215,7 +267,7 @@ export class ZombieActor implements RagdollTarget {
   }
 
   private bonePos(name: string): Vec3 {
-    const b = this.bones.get(name);
+    const b = this.bones.get(name) ?? this.allBones.get(name);
     if (!b) return {x: this.brain.x, y: 1, z: this.brain.z};
     // Perf (iteration 09): only called from updateVolumes right after root.updateMatrixWorld(true), so the bone's
     // matrixWorld is fresh; getWorldPosition would re-walk and recompose its whole parent chain per bone (11 per zombie).
@@ -239,6 +291,12 @@ export class ZombieActor implements RagdollTarget {
       {part: 'limb', a: this.bonePos('L_Thigh'), b: this.bonePos('L_Foot'), r: H.leg * s},
       {part: 'limb', a: this.bonePos('R_Thigh'), b: this.bonePos('R_Foot'), r: H.leg * s},
     ];
+    if (this.current === 'Sprint') {
+      // task studio-sprinter-gait-20261112-063646-01: the Sprint's pumping arms bend ~55-100 deg at the elbow, far off the shoulder-hand
+      // chord: while it plays, one capsule per arm segment so shots land on the arm the player sees (every other clip: the chord as before)
+      const L = this.volumes[2], R = this.volumes[3], le = this.bonePos('L_Forearm'), re = this.bonePos('R_Forearm');
+      this.volumes.splice(2, 2, {...L, b: le}, {...L, a: le}, {...R, b: re}, {...R, a: re});
+    }
     return this.volumes;
   }
 
