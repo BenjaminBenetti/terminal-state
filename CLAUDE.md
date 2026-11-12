@@ -25,9 +25,12 @@ stage external archives. Never reuse old generation budgets.
 Use the repo-defined agents when delegating:
 - `.claude/agents/repo-explorer.md`: quick repository discovery/navigation, **Sonnet 5.5 / xhigh**, instead of the built-in `Explore`.
 - `.claude/agents/research.md`: deeper investigations/comparisons, **Opus 5.5 / xhigh**.
-- `.claude/agents/implementation.md`: implementation, planning, review, tests/QA, integration, assets and other delegated work; **inherit the main session's model and effort**.
+- `.claude/agents/qa.md`: delegated QA, code review and regression-check execution, **Sonnet 5.5 / xhigh**. Report findings to the lead; fixes and test-code changes stay with implementation.
+- `.claude/agents/implementation.md`: implementation, fixes, test-code changes, planning, integration, assets and other delegated work; **inherit the main session's model and effort**.
 
-Select the appropriate agent type and omit per-call model/effort overrides so its definition applies. Explicit user overrides take precedence. A native `fork` always inherits the parent model and effort: use it only for inherited-model work, not exploration or research. These subagent defaults do not change any studio's main model/effort, authorize automatic model fallback/overage, or alter task, permission or QA requirements.
+Select the appropriate agent type and omit per-call model/effort overrides so its definition applies. Explicit user overrides take precedence. A native `fork` always inherits the parent model and effort: use it only for inherited-model work, not exploration, research or QA/review.
+
+The lead still owns required checks and the normal handoff. This routing does not require an extra QA agent or approval gate, change any studio's main model/effort or permissions, authorize automatic model fallback/overage, or alter existing QA requirements.
 
 ## Textures — Codex for INITIAL sources; Meshy keeps its model maps (standing user rule, 2026-11-01, user-corrected)
 

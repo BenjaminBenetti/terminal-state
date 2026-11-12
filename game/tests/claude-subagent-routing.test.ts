@@ -33,18 +33,27 @@ describe('repository Claude Code subagent routing', () => {
     expect(body).toContain('evidence');
   });
 
+  it('pins delegated QA and code review to Sonnet 5.5 at xhigh', () => {
+    const { fields, body } = definition('qa');
+    expect(fields.name).toBe('qa');
+    expect(fields.model).toBe('claude-sonnet-5-5');
+    expect(fields.effort).toBe('xhigh');
+    expect(fields.description).toContain('code review');
+    expect(body).toContain('Leave implementation fixes and test-code changes');
+  });
+
   it('does not override the main model or effort for implementation and other work', () => {
     const { fields, body } = definition('implementation');
     expect(fields.model).toBe('inherit');
     expect(fields).not.toHaveProperty('effort');
     expect(body).toContain("main session's model and effort");
-    expect(fields.description).toContain('code review');
-    expect(fields.description).toContain('QA');
+    expect(fields.description).toContain('test-code changes');
+    expect(fields.description).toContain('planning');
   });
 
   it('supplies named agents and a routing rule instead of assuming builtin Explore is overridden', () => {
     const guidance = readFileSync(new URL('CLAUDE.md', root), 'utf8');
-    for (const name of ['repo-explorer', 'research', 'implementation']) {
+    for (const name of ['repo-explorer', 'research', 'qa', 'implementation']) {
       expect(guidance).toContain(`.claude/agents/${name}.md`);
     }
     expect(guidance).toContain('instead of the built-in `Explore`');
@@ -55,6 +64,7 @@ describe('repository Claude Code subagent routing', () => {
   it('keeps native forks in the inherited-model bucket', () => {
     const guidance = readFileSync(new URL('CLAUDE.md', root), 'utf8');
     expect(guidance).toContain('A native `fork` always inherits');
-    expect(guidance).toContain('not exploration or research');
+    expect(guidance).toContain('not exploration, research or QA/review');
+    expect(guidance).toContain('does not require an extra QA agent or approval gate');
   });
 });
