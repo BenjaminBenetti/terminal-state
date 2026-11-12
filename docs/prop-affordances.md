@@ -643,8 +643,9 @@ they sit outside the two audits; their classification is recorded here.
   standing on the fuel dolly's hand truck, `world/trainEquipmentModel.ts`):
   - Not storage: sealed equipment cabinets. The sentry's hopper is a round counter worked from its console (tap [E] loads the 5.56
     rounds carried, hold [E] takes them back); it is not a container and has no door.
-  - Physics: movable, exactly like the fuel dolly: grabbed and dragged by the frame, pushed by walking into it, up and down stairs,
-    carried by lifts, stops bullets with a shove by its mass. Sleeping kinematic bodies on the same controller.
+  - Physics: movable, exactly like the fuel dolly: hold [E] anywhere on one to grab and drag it (a tap never drags; [R] turns a
+    dragged device half a turn, and it keeps that facing), pushed by walking into it, up and down stairs, carried by lifts, stops
+    bullets with a shove by its mass. Sleeping kinematic bodies on the same controller.
   - No baked clutter: dish, antenna, hood, handles and leads are permanent parts of each module.
   - Scale (rule 5): `scale-check.mjs` on each module composed with the hand truck, viewed. W × H × D with the truck: radar 0.56 ×
     1.20 × 0.59 m, sentry 0.50 × 1.20 × 0.64 m, scanner 0.51 × 1.20 × 0.58 m. The truck's handle is the 1.20 m. The modules reach

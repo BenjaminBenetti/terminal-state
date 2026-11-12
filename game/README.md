@@ -66,8 +66,9 @@ car. **Storage chest** (2 / 0): 50 more slots in a box you carry (tap **E** open
 travel map shows two stops out. **Defense sentry** (8 / 6): tap **E** on its console to load your 5.56 rounds, and a roof turret shoots
 nearby enemies with them. **Item scanner** (5 / 5): **E** on its console opens a 100 m radar scope that sweeps about every 30 s (red
 enemies, green items, gold weapons and gear). The three devices roll like the fuel dolly and work only while plugged into one of the
-train's three wall sockets, which happens by itself when one is parked beside a free socket. Everything travels with the train and is
-saved with its contents, rounds and socket.
+train's three wall sockets, which happens by itself when one is parked beside a free socket. Hold **E** to drag a device or a fuel
+cart, or to carry the chest (a tap never moves one); **R** turns a dragged device round to face you. Everything travels with the train
+and is saved with its contents, rounds and socket.
 
 Light survival (iteration 12, `player/flashlight.ts`, `weapons/throwables.ts`): the flashlight runs on a **battery**
 (HUD meter bottom right, above the weapon panel). It starts at 80 % and drains only while the light is on: a full battery
