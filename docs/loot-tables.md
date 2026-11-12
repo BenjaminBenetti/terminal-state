@@ -528,9 +528,11 @@ Generic rows pick it up automatically. Weapon finds keep their matching box (`WE
 
 <!-- Task office-props-physics-scale-20261030 (lane RACK) -->
 
-Collectible salvage for a **future** crafting system (`items/craftMaterials.ts`, item kind `material`). There are no recipes,
-no crafting UI and no currency yet: the items are passive stacks (pockets first, like ammo; bags, ground bags, drop / pick up and
-level carryover work like any stack) and their descriptions say so.
+Collectible salvage for crafting (`items/craftMaterials.ts`, item kind `material`). Since task train-crafting (2026-11-11) Scrap
+metal and Electrical parts are what the recipes of the train's crafting bench cost (`craft/recipes.ts`; the supply described here
+did not change for it: no row, weight or roll moved); Bio mater has no recipe yet. Nothing uses a material by hand: the items are
+passive stacks (pockets first, like ammo; bags, ground bags, drop / pick up and level carryover work like any stack) and their
+descriptions say so.
 
 | Item id | Name | Stack | Count per lot (`BOX_COUNT` small / big) | Where it is found |
 |---|---|---|---|---|
