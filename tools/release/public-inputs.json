@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 74774,
-      "sha256": "e53545a80448d25df709d3518eb27937ce0de24daf191dc7b2e02d0ea652cfb2"
+      "bytes": 74814,
+      "sha256": "07a5faca02e1ff3a276e5c3b07741e659a629510ed67df9d69c12750f842e4f2"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -2840,8 +2840,8 @@
     },
     {
       "path": "assets/derivatives/weapon-turnstile.json",
-      "bytes": 14083,
-      "sha256": "a39739cb3d7641dedc5691edaad0735a10369238c8e7111f34551197664a457a"
+      "bytes": 18079,
+      "sha256": "da6c54b06c70b3f09c3ea1cba28d19da5e0538cf041e4d2f228d7c7d0e9f1318"
     },
     {
       "path": "assets/derivatives/weapon-variety-coach-gun.json",
@@ -5300,8 +5300,8 @@
     },
     {
       "path": "assets/models/weapon-turnstile.glb",
-      "bytes": 3159520,
-      "sha256": "19b3d44895a255e28d80b46444d2f2facea03af6cc71a9a332f8df61353baa19"
+      "bytes": 3160284,
+      "sha256": "b7a4333c1a23c3f0e250a1a5fd4dc4bfc3857d819a02f25bf7b36a8446acc02c"
     },
     {
       "path": "assets/models/zombie-body-agent-t25.glb",

@@ -3,7 +3,9 @@
 // metallic-roughness / normal 1024 px). Provenance in assets/derivatives/weapon-turnstile.json. The held-weapon convention of the weapon-variety
 // models (metres, +Y up, muzzle toward -Z, the right side +X, bounding box centred on the origin; empty marker nodes Grip / Muzzle / Sight /
 // Eject / Hinge); part 'Barrels' = the whole top-break assembly (barrel, shroud, cylinder, top strap, latch and the window's front post),
-// pivot = its 'Hinge' marker (the model's hinge pin; a rotation.x < 0 drops the muzzle and lifts the cylinder's rear face).
+// pivot = its 'Hinge' marker (the model's hinge pin; a rotation.x < 0 drops the muzzle and lifts the cylinder's rear face); part
+// 'Cylinder' = the cylinder + its rear ratchet, a child node of 'Barrels' at a point on the cylinder's own axis (parallel to Z; a
+// rotation.z < 0 turns it clockwise seen from behind: weapons/gunParts.ts indexes it one chamber per shot).
 // The last entry of WEAPON_VARIETY_MODELS (assets/weaponVarietyModels.generated.ts).
 import type {WeaponVarietyModel} from './weaponVarietyModels.generated';
 
@@ -11,5 +13,5 @@ export const WEAPON_TURNSTILE_MODEL: WeaponVarietyModel = {
   id: 'G07', itemId: 'turnstile', kind: 'gun', url: 'assets/models/weapon-turnstile.glb', length: 0.8,
   bounds: {min: [-0.0398, -0.0861, -0.4], max: [0.0398, 0.0861, 0.4]}, tris: 30693,
   markers: {Grip: [0.00064, -0.057, 0.132], Muzzle: [0.00143, 0.03694, -0.4], Sight: [0.00031, 0.0833, 0.069], Eject: [0.00066, 0.0214, 0.0224], Hinge: [-0.00044, -0.01735, -0.0653]},
-  parts: ['Barrels'],
+  parts: ['Barrels', 'Cylinder'],
 };

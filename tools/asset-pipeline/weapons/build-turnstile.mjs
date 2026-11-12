@@ -20,12 +20,17 @@
 //   separate position-connected islands of the model, plus the frame's cylinder window AHEAD of the standing breech (front post + top
 //   bar), cut exactly from the frame by an axis-aligned box. It turns about the `Hinge` marker = the model's own hinge pin at the lower
 //   front of the window (the pin heads stay on the frame). A part node's translation is its pivot, its geometry relative to it.
+//   Task studio-turnstile-cylinder-rotation-20261112-034833-01 (the user: "I want it to rotate as you shoot!"): `Cylinder` = the cylinder
+//   island + its rear ratchet (whole islands of the Barrels part, reparented: no new geometry), a CHILD node of `Barrels` (so it breaks
+//   open with it) whose pivot lies on the cylinder's own axis — measured on the model: a least-squares circle fit of its outer surface,
+//   parallel to the bore (Z). weapons/gunParts.ts turns it about that axis one chamber per shot. The front axis pin stays on `Barrels`.
 // Geometry: an exact-attribute weld (lossless) only; NO simplification (30.4k triangles: a held-weapon first-person density, like the
 // ~20k weapon-variety guns). Maps: the model's 8192 px base colour and 4096 px metallic-roughness / normal JPEGs, downsized to the guns'
 // budget — base colour 2048, metallic-roughness / normal 1024 (sharp lanczos3, JPEG 4:4:4) — ~48.7 MB of maps -> ~2 MB.
 //
 // Writes deterministically:
-//   game/public/assets/models/weapon-turnstile.glb              one body mesh node + the Barrels part node + marker nodes, ONE material
+//   game/public/assets/models/weapon-turnstile.glb              one body mesh node + the Barrels part node (+ its Cylinder child) + marker
+//                                                               nodes, ONE material
 //   game/public/assets/derivatives/weapon-turnstile.json        safe public provenance (hashes / measurements; no paths, names or tokens)
 //   game/src/assets/weaponTurnstileModel.generated.ts           WEAPON_TURNSTILE_MODEL (an entry of WEAPON_VARIETY_MODELS)
 //   tools/release/public-inputs.json                            ONLY this script's two entries added / updated (others untouched)
@@ -61,7 +66,9 @@ const TASK = {
   master: {sha256: '492e620ab13990ba49052af702c37f041e2c33334ca7dc538cf9f1ef19637652', bytes: 50133992},
   /** The user-selected concept (shotgun concept options, option B): the design reference the user's model follows; not an input here. */
   concept: {id: 'B', name: 'Turnstile', tag: 'Keep moving', sha256: '52d41497202f7f45ed829cbfd43bfc600ca6ab204530e95783d6f5b3a84a6adc'},
-  route: "the user's own textured model (made by the user with Meshy, per its export) of the selected concept B, supplied by the user for implementation and texture compression; cooked as-is: rotation, uniform scale to the design length, a lossless weld, one recorded local part separation and the model's own maps downsized / re-encoded (no generation, re-texture, projection or replacement)",
+  route: "the user's own textured model (made by the user with Meshy, per its export) of the selected concept B, supplied by the user for implementation and texture compression; cooked as-is: rotation, uniform scale to the design length, a lossless weld, recorded local part separations (the break-open assembly; its cylinder reparented under it) and the model's own maps downsized / re-encoded (no generation, re-texture, projection or replacement)",
+  /** Later changes of this derivative (each re-cooks the same master with this script). */
+  revisions: [{task: 'studio-turnstile-cylinder-rotation-20261112-034833-01', change: 'the user asked for the cylinder to turn as the gun fires: the cylinder island + its rear ratchet separated from the Barrels part into a Cylinder child node pivoting on the cylinder\'s measured axis (whole existing islands reparented; the triangles, UVs and maps are unchanged)'}],
   licence: 'supplied by the user for this project (its upload file name mentions Meshy; the generator, account, settings and licence are not verified and the provider\'s terms may apply); unapproved prototype asset, no blanket licence or commercial clearance implied',
 };
 
@@ -90,8 +97,15 @@ const SPEC = {
     {op: 'assign', name: 'Barrels', clip: {box: {min: [-1, -0.0165, -1], max: [1, 1, 0.0228]},
       except: {box: {min: [-0.03, -0.024, -0.0715], max: [0.03, -0.011, -0.0595]}, expect: {islands: 2, tris: 324}}},
       why: 'the frame\'s cylinder window ahead of the standing breech (its front post and top bar) breaks with the barrel: the frame cut exactly at the breech face (z 0.0228, just ahead of its first vertex 0.0229 and behind the cylinder\'s rear face 0.0224) and just above the bottom strap (y -0.0165; the strap\'s top is -0.0167), which stays as the hinge carrier; the two hinge pin heads (their own islands) stay on the frame'},
+    {op: 'assign', name: 'Cylinder', from: 'Barrels', islands: {box: {min: [-0.041, -0.019, -0.0575], max: [0.041, 0.062, 0.027]}, expect: {islands: 2, tris: 3182}},
+      why: 'the revolving cylinder (task studio-turnstile-cylinder-rotation-20261112-034833-01): the cylinder island and its rear ratchet (the extractor star turns with it), whole islands taken from the Barrels part unchanged; the front axis pin (the arbor it turns on) stays on Barrels'},
   ],
-  parts: [{name: 'Barrels', pivot: 'hinge', why: 'the top-break reload: barrel + shroud + cylinder + top strap + latch + the window\'s front post / top bar turn about the Hinge (rotation.x < 0 drops the muzzle and lifts the cylinder\'s rear face toward the eye)'}],
+  parts: [
+    {name: 'Barrels', pivot: 'hinge', why: 'the top-break reload: barrel + shroud + top strap + latch + the window\'s front post / top bar, carrying the Cylinder, turn about the Hinge (rotation.x < 0 drops the muzzle and lifts the cylinder\'s rear face toward the eye)'},
+    {name: 'Cylinder', parent: 'Barrels', pivot: 'axis', why: 'the revolving cylinder: a child of Barrels (it breaks open with it) turned about its own axis, +Z through the node (weapons/gunParts.ts: one chamber per shot)'},
+  ],
+  /** The cylinder axis fit (on the Cylinder part's largest island = the cylinder): its outer surface between these fractions of its length. */
+  axisFit: {band: [0.15, 0.85], minRadialNormal: 0.9, minRadiusFraction: 0.9, iterations: 3, slices: 5},
   markers: {Grip: [{mid: [-0.057, 0.132]}, -0.057, 0.132], Muzzle: {front: {y: [0.02, 0.052]}}, Sight: [{mid: [0.072, 0.069]}, 0.0833, 0.069],
     Eject: ['mid', 0.0214, 0.0224], Hinge: ['mid', -0.01735, -0.0653]},
   markerNotes: 'Grip: the slanted rubber pistol grip at mid-hand height (its section at y -0.057 spans z 0.102 - 0.161); Muzzle: the barrel\'s front face (y 0.022 - 0.0518; the front sight starts 3 mm behind it); Sight: the eye line over the rear sight top (0.0833; the front post tip is 0.0784 and the top latch rises to 0.0861 between them, so ADS sets a sight lift); Eject: the cylinder\'s rear face on its axis (where the hulls leave when it is broken open; a revolver throws none per shot); Hinge: the centre of the model\'s own hinge pin at the lower front of the cylinder window (the pivot axis is parallel to X)',
@@ -162,15 +176,60 @@ for (const n of ['Grip', 'Muzzle', 'Sight', 'Eject', 'Hinge']) if (!markers[n]) 
 const byLabel = new Map();
 ops.label.forEach((l, t) => { if (!byLabel.has(l)) byLabel.set(l, []); byLabel.get(l).push(t); });
 if (byLabel.size !== 1 + SPEC.parts.length) fail(`labels ${[...byLabel.keys()]} != the body + the recorded parts`);
+
+/**
+ * The cylinder's own axis (parallel to Z, the bore): a least-squares (Kasa) circle fit in XY of the cylinder island's OUTER surface — its
+ * vertices in the middle of its length (away from the chamfered ends) whose normal points outward from the axis and that lie near the
+ * largest radius (the lands between the flutes) — refit from the new centre a few times, then checked per Z slice (the axis tilt).
+ */
+const cylAxis = (() => {
+  const F = SPEC.axisFit, cyl = islands({P: ops.mesh.P, I: triList(ops.mesh, byLabel.get('Cylinder'))})[0];
+  const verts = [...new Set(triList(ops.mesh, cyl.tris.map(t => byLabel.get('Cylinder')[t])))];
+  const P = ops.mesh.P, N = ops.mesh.N, z0 = cyl.min[2], len = cyl.max[2] - cyl.min[2];
+  const circle = pts => {
+    let sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0, sxq = 0, syq = 0, sq = 0;
+    for (const [x, y] of pts) { const q = x * x + y * y; sx += x; sy += y; sxx += x * x; syy += y * y; sxy += x * y; sxq += x * q; syq += y * q; sq += q; }
+    const A = [[sxx, sxy, sx], [sxy, syy, sy], [sx, sy, pts.length]], b = [-sxq, -syq, -sq];
+    const det = m => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    const d = det(A), [D, E, G] = [0, 1, 2].map(k => det(A.map((row, i) => row.map((v, j) => (j === k ? b[i] : v)))) / d);
+    const cx = -D / 2, cy = -E / 2, r = Math.sqrt(cx * cx + cy * cy - G);
+    return {c: [cx, cy], r, rms: Math.sqrt(pts.reduce((t, [x, y]) => t + (Math.hypot(x - cx, y - cy) - r) ** 2, 0) / pts.length)};
+  };
+  const outer = (c, lo, hi, minR) => verts.filter(v => {
+    const x = P[3 * v] - c[0], y = P[3 * v + 1] - c[1], r = Math.hypot(x, y), z = (P[3 * v + 2] - z0) / len;
+    return z >= lo && z <= hi && r >= minR && (N[3 * v] * x + N[3 * v + 1] * y) / (r || 1) >= F.minRadialNormal;
+  }).map(v => [P[3 * v], P[3 * v + 1]]);
+  let c = [(cyl.min[0] + cyl.max[0]) / 2, (cyl.min[1] + cyl.max[1]) / 2], fit = null, pts = null;
+  for (let i = 0; i < F.iterations; i++) {
+    const rMax = Math.max(...verts.map(v => Math.hypot(P[3 * v] - c[0], P[3 * v + 1] - c[1])));
+    pts = outer(c, F.band[0], F.band[1], F.minRadiusFraction * rMax);
+    fit = circle(pts);
+    c = fit.c;
+  }
+  const slices = Array.from({length: F.slices}, (_, s) => {
+    const lo = F.band[0] + (F.band[1] - F.band[0]) * s / F.slices, hi = F.band[0] + (F.band[1] - F.band[0]) * (s + 1) / F.slices, f = circle(outer(c, lo, hi, F.minRadiusFraction * fit.r));
+    return {z: [r4(z0 + lo * len), r4(z0 + hi * len)], centre: f.c.map(r5), offsetMm: +(Math.hypot(f.c[0] - c[0], f.c[1] - c[1]) * 1000).toFixed(2)};
+  });
+  const at = [r5(c[0]), r5(c[1]), r5(z0 + len / 2)];
+  if (Math.hypot(at[0] - cyl.min[0] - (cyl.max[0] - cyl.min[0]) / 2, at[1] - cyl.min[1] - (cyl.max[1] - cyl.min[1]) / 2) > 0.002) fail('the cylinder axis fit is > 2 mm from its bounds centre');
+  return {at, radius: r5(fit.r), rmsMm: +(fit.rms * 1000).toFixed(2), points: pts.length, slices, bounds: {min: cyl.min.map(r4), max: cyl.max.map(r4)}, triangles: cyl.tris.length,
+    rule: `a least-squares circle fit in XY of the cylinder island's outer surface (its middle ${F.band.map(f => f * 100).join(' - ')} % of length; vertices with a radial normal >= ${F.minRadialNormal} at >= ${F.minRadiusFraction} of the largest radius: the lands), ${F.iterations} passes from its bounds centre; the axis is parallel to Z (the bore) and the pivot at the middle of its length; per-slice refits give the tilt`};
+})();
+if (Math.max(...cylAxis.slices.map(s => s.offsetMm)) > 1) fail('the cylinder axis tilts more than 1 mm across its length');
+
+const pivots = {hinge: markers.Hinge, axis: cylAxis.at};
+const pivotOf = name => pivots[SPEC.parts.find(p => p.name === name).pivot];
 const nodes = [{name: W.itemId, mesh: compact(ops.mesh, triList(ops.mesh, byLabel.get(''))), translation: [0, 0, 0]}];
 const partRecs = [];
 for (const p of SPEC.parts) {
   const tris = byLabel.get(p.name);
   if (!tris?.length) fail(`part ${p.name} has no triangles`);
-  const I = triList(ops.mesh, tris), pb = boundsOf(ops.mesh.P, I), pivot = markers.Hinge;
-  nodes.push({name: p.name, mesh: compact(ops.mesh, I, pivot), translation: pivot}); // node translation + local geometry = the model frame
-  partRecs.push({name: p.name, why: p.why, pivot: {rule: 'the Hinge marker (the break-action axis, parallel to X)', at: pivot}, triangles: I.length / 3,
-    bounds: {min: pb.min.map(r4), max: pb.max.map(r4)}});
+  const I = triList(ops.mesh, tris), pb = boundsOf(ops.mesh.P, I), pivot = pivots[p.pivot], base = p.parent ? pivotOf(p.parent) : [0, 0, 0];
+  // node translation (relative to its parent's pivot) + local geometry = the model frame
+  nodes.push({name: p.name, parent: p.parent, mesh: compact(ops.mesh, I, pivot), translation: pivot.map((v, k) => r5(v - base[k]))});
+  partRecs.push({name: p.name, why: p.why, ...(p.parent ? {parent: p.parent} : {}),
+    pivot: p.pivot === 'hinge' ? {rule: 'the Hinge marker (the break-action axis, parallel to X)', at: pivot} : {rule: 'on the cylinder\'s own axis (parallel to Z) at the middle of its length: processing.cylinderAxis', at: pivot},
+    triangles: I.length / 3, bounds: {min: pb.min.map(r4), max: pb.max.map(r4)}});
 }
 
 // ---------- maps: the model's own, downsized / re-encoded ----------
@@ -198,13 +257,15 @@ for (const [slot, info] of [['baseColor', mat.getBaseColorTextureInfo()], ['meta
 const scene = doc.createScene(`weapon-${W.slug}`);
 doc.getRoot().setDefaultScene(scene);
 const acc = (type, a) => doc.createAccessor().setType(type).setArray(a).setBuffer(buf);
+const docNodes = new Map();
 for (const n of nodes) {
   const {P, N, UV, I} = n.mesh;
   const prim = doc.createPrimitive().setMaterial(mat).setAttribute('POSITION', acc('VEC3', P)).setAttribute('NORMAL', acc('VEC3', N)).setAttribute('TEXCOORD_0', acc('VEC2', UV))
     .setIndices(acc('SCALAR', P.length / 3 < 65536 ? Uint16Array.from(I) : Uint32Array.from(I)));
   const node = doc.createNode(n.name).setMesh(doc.createMesh(n.name).addPrimitive(prim));
   if (n.translation.some(v => v !== 0)) node.setTranslation(n.translation);
-  scene.addChild(node);
+  (n.parent ? docNodes.get(n.parent) : scene).addChild(node);
+  docNodes.set(n.name, node);
 }
 for (const [name, p] of Object.entries(markers)) scene.addChild(doc.createNode(name).setTranslation(p));
 doc.getRoot().getAsset().generator = `Terminal State ${SELF} (glTF-Transform)`;
@@ -231,10 +292,15 @@ const length = r4(all.max[2] - all.min[2]);
 if (Math.abs(length - W.length) > 2e-4) fail(`written length ${length} != ${W.length}`);
 if (tris < raw.tris) fail(`triangles ${tris} < the source's ${raw.tris} (nothing may be dropped)`);
 for (const name of Object.keys(markers)) if (!chk.listNodes().some(n => n.getName() === name && !n.getMesh())) fail(`marker node ${name} missing`);
+for (const p of SPEC.parts) {
+  const n = chk.listNodes().find(x => x.getName() === p.name), at = n?.getWorldTranslation() ?? [NaN, NaN, NaN];
+  if ((n?.getParentNode()?.getName() ?? null) !== (p.parent ?? null)) fail(`part ${p.name}: parent != ${p.parent ?? 'the scene'}`);
+  if (Math.hypot(...at.map((v, k) => v - pivots[p.pivot][k])) > 1e-6) fail(`part ${p.name}: its node is not at its pivot`);
+}
 const dims = [0, 1, 2].map(k => r4(all.max[k] - all.min[k]));
 const bounds = {min: all.min.map(r4), max: all.max.map(r4)};
 console.log(`${W.asset} ${W.itemId}: ${raw.tris} tris -> ${tris} (parts ${partNames.join(', ')}; weld ${welded.info.verticesBefore} -> ${welded.info.verticesAfter} verts), dims ${dims.join(' x ')} m, ` +
-  `scale ${r6(g.scale)}, barrel X/Y ${g.thickness.after.ratioXY}; ${glb.length} B; maps ${maps.recs.map(t => `${t.slot} ${t.source.size[0]} -> ${t.size[0]} ${t.bytes}`).join(', ')}; ` +
+  `scale ${r6(g.scale)}, barrel X/Y ${g.thickness.after.ratioXY}; cylinder axis ${cylAxis.at.join(',')} r ${cylAxis.radius} (rms ${cylAxis.rmsMm} mm, tilt <= ${Math.max(...cylAxis.slices.map(s => s.offsetMm))} mm); ${glb.length} B; maps ${maps.recs.map(t => `${t.slot} ${t.source.size[0]} -> ${t.size[0]} ${t.bytes}`).join(', ')}; ` +
   `markers ${Object.entries(markers).map(([k, v]) => `${k} ${v.join(',')}`).join(' | ')}`);
 
 // ---------- public provenance (safe: hashes and measurements only) ----------
@@ -242,7 +308,7 @@ const url = `assets/models/weapon-${W.slug}.glb`, provRel = `assets/derivatives/
 const prov = {
   schema: 'terminal-state-derivative-v1', id: `weapon-${W.slug}`, itemId: W.itemId, asset: W.asset, name: W.name, kind: W.kind, family: W.family,
   role: 'held / pickup model of the Turnstile (12-gauge six-shell top-break revolving-cylinder shotgun): a weapon-variety ADDITION (every other weapon model is unchanged)',
-  task: TASK.id, route: TASK.route,
+  task: TASK.id, revisions: TASK.revisions, route: TASK.route,
   concept: {...TASK.concept, note: 'the user-selected shotgun concept (outside Git): the design the user\'s model follows; a reference only, not an input of this cook'},
   source: {kind: 'user-supplied textured GLB: the private master stays outside Git, read-only and never shipped', sha256: TASK.master.sha256, bytes: TASK.master.bytes,
     triangles: raw.tris, vertices: raw.verts, extent: rawExtent, axes: 'muzzle at -X, +Y up, the weapon\'s right side (the concept\'s visible side) facing -Z',
@@ -253,16 +319,18 @@ const prov = {
     rotation: ROT_TEXT, lengthM: W.length, uniformScale: r6(g.scale),
     lengthRule: 'uniform scale so the overall Z extent (muzzle to butt pad) = the selected design\'s length (concept B: ~0.80 m, the shortest shotgun); the six-shot cylinder is then 78 mm across and the length of pull ~0.34 m',
     thickness: g.thickness, origin: 'the bounding box (all parts) centred on the origin',
-    ops: ops.recs, parts: partRecs, markers: markerRules, markerNotes: SPEC.markerNotes,
+    ops: ops.recs, parts: partRecs, cylinderAxis: cylAxis, markers: markerRules, markerNotes: SPEC.markerNotes,
   },
   output: {url, file: `game/public/${url}`, bytes: glb.length, sha256: sha(glb), triangles: tris, vertices: verts, dims, bounds,
     nodes: {body: W.itemId, parts: partNames, markers: Object.keys(markers)}, markers},
   textures: maps.recs,
   texturePolicy: 'the model\'s own PBR maps kept slot for slot (base colour / metallic-roughness / normal), only downsized + re-encoded to the held-gun budget: base colour 8192 -> 2048 px, metallic-roughness / normal 4096 -> 1024 px (no recolour, tint, re-texture, projection or new art)',
   limitations: [
-    'the model\'s cylinder faces carry no modelled chambers (front / rear faces are flat with an unresolved texture) and its section is not six-fold symmetric: the open action shows the rear face as modelled, and the cylinder does not index per shot (turning it would show surfaces the model never resolved); nothing is invented in their place',
+    'the model\'s cylinder faces carry no modelled chambers (front / rear faces are flat with an unresolved texture): the open action shows the rear face as modelled; nothing is invented in their place',
+    'the cylinder has eight flutes for six shells: it turns one chamber (60 deg) per shot about its measured axis, so between shots its flutes rest 0 / 15 / 30 deg off the modelled pose (a full turn every six shots); its rear ratchet (modelled ~2.4 mm off that axis) turns with it, inside the standing breech while closed',
+    'turned off the modelled pose, the cylinder\'s lands reach up to ~2.5 mm into the bottom strap\'s top face directly beneath it (1 mm as modelled), hidden under the cylinder in the held views; the front axis pin stays on the Barrels part, inside the cylinder\'s front face as modelled',
   ],
-  convention: 'metres at real size, +Y up, muzzle toward -Z, the right side +X; bounding box centred on the origin; empty marker nodes Grip / Muzzle / Sight / Eject / Hinge; the Barrels part node translated to its pivot (the Hinge)',
+  convention: 'metres at real size, +Y up, muzzle toward -Z, the right side +X; bounding box centred on the origin; empty marker nodes Grip / Muzzle / Sight / Eject / Hinge; the Barrels part node translated to its pivot (the Hinge); its Cylinder child node translated (relative to the Hinge) to a point on the cylinder\'s own axis, which is parallel to Z',
   licence: TASK.licence, rebuild: `node ${SELF} [--master <the private master glb>]`,
 };
 const provBytes = Buffer.from(JSON.stringify(prov, null, 1) + '\n');
@@ -277,7 +345,9 @@ const registry = `// GENERATED by ${SELF} (task ${TASK.id}) — do not edit.
 // metallic-roughness / normal 1024 px). Provenance in assets/derivatives/weapon-turnstile.json. The held-weapon convention of the weapon-variety
 // models (metres, +Y up, muzzle toward -Z, the right side +X, bounding box centred on the origin; empty marker nodes Grip / Muzzle / Sight /
 // Eject / Hinge); part 'Barrels' = the whole top-break assembly (barrel, shroud, cylinder, top strap, latch and the window's front post),
-// pivot = its 'Hinge' marker (the model's hinge pin; a rotation.x < 0 drops the muzzle and lifts the cylinder's rear face).
+// pivot = its 'Hinge' marker (the model's hinge pin; a rotation.x < 0 drops the muzzle and lifts the cylinder's rear face); part
+// 'Cylinder' = the cylinder + its rear ratchet, a child node of 'Barrels' at a point on the cylinder's own axis (parallel to Z; a
+// rotation.z < 0 turns it clockwise seen from behind: weapons/gunParts.ts indexes it one chamber per shot).
 // The last entry of WEAPON_VARIETY_MODELS (assets/weaponVarietyModels.generated.ts).
 import type {WeaponVarietyModel} from './weaponVarietyModels.generated';
 
