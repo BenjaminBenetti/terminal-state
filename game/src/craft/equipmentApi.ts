@@ -20,13 +20,19 @@ export interface EquipmentUnit {
   readonly mode: 'world' | 'cargo' | 'held';
   /** The train plug it is connected to right now (craft/trainFixtures.ts equipmentPlugs index), or null. */
   readonly plug: number | null;
-  /** Rounds in its hopper (kinds with def.ammoCap; else 0). Integers; changed only through setAmmo. */
+  /**
+   * The rounds it holds (kinds with def.slotItem: that item counted over its slots; else 0). They are ordinary stacks the player puts
+   * in and takes out through the store view; the only other way one leaves is takeAmmo.
+   */
   readonly ammo: number;
-  /** Set the hopper's rounds (clamped to 0..def.ammoCap, floored). Returns the value now held. */
-  setAmmo(n: number): number;
+  /**
+   * Its consumer takes up to `n` (default 1) rounds out of its slots — the sentry's turret, one per shot, BEFORE the shot. The last
+   * stack empties first; an emptied slot is free again. Returns how many rounds really left (0: none there). Never creates a round.
+   */
+  takeAmmo(n?: number): number;
   /** Its storage slots (kinds with def.slots; else null): the live array the store view and transfers use. */
   readonly slots: (ItemStack | null)[] | null;
-  /** Bumped whenever the slots changed outside the inventory's own transfers (a load, touchStore): an open view's redraw key. */
+  /** Bumped whenever the slots changed outside the inventory's own transfers (a load, takeAmmo, touchStore): an open view's redraw key. */
   readonly storeVersion: number;
   /** The slots changed (a debit by the bench): bump storeVersion. */
   touchStore(): void;
@@ -53,7 +59,7 @@ export interface EquipmentUse {
   hold?(u: EquipmentUnit): boolean;
 }
 
-/** A chest standing in the parked car, as a store of materials the bench may draw from. */
+/** A chest standing in the parked car, as a store of materials the bench may draw from (general storage only: never a feed's slots). */
 export interface EquipmentStore {
   readonly uid: string;
   readonly slots: (ItemStack | null)[];
@@ -73,6 +79,11 @@ export interface EquipmentSystemLike {
   /** Called when a unit connects to / leaves a plug (after the state changed). */
   readonly plugListeners: ((u: EquipmentUnit, plugged: boolean) => void)[];
   /**
+   * A kind's own system adds a short status to the look-at line of its units ('not plugged in', 'no headroom …'; null: nothing to
+   * say) — read by whoever writes that line (the store view's prompt for a unit with slots).
+   */
+  readonly promptNotes: ((u: EquipmentUnit) => string | null)[];
+  /**
    * Why a freshly crafted `kind` cannot be put on the car's floor now (the train moving / not built, no free spot, too many units
    * aboard): the refusal text; null: it can.
    */
@@ -82,6 +93,6 @@ export interface EquipmentSystemLike {
    * unit, or null exactly when craftBlock(kind) is not null (nothing changed).
    */
   craft(kind: EquipmentKind): EquipmentUnit | null;
-  /** The chests standing wholly inside the parked car (uid order): the bench counts and takes materials from them. */
+  /** The general-storage units (chests) standing wholly inside the parked car (uid order): the bench counts and takes materials from them. */
   storesAboard(): EquipmentStore[];
 }

@@ -641,8 +641,12 @@ they sit outside the two audits; their classification is recorded here.
     0.49 m, grounded on 4 skid contacts, lid top at 0.44 m (knee height: a box one person can carry).
 - **Devices: route radar, defense sentry, item scanner** (crafted at the bench; models `assets/models/train-{radar,sentry,scanner}.glb`
   standing on the fuel dolly's hand truck, `world/trainEquipmentModel.ts`):
-  - Not storage: sealed equipment cabinets. The sentry's hopper is a round counter worked from its console (tap [E] loads the 5.56
-    rounds carried, hold [E] takes them back); it is not a container and has no door.
+  - Not general storage: sealed equipment cabinets. The radar and the scanner hold nothing.
+  - The sentry's ammunition feed is a real four-slot inventory (`craft/equipment.ts` `slots` + `slotItem`): [E] opens the shared
+    store view over the unit's own slots (`world/equipmentChestStore.ts`), and it takes 5.56 rounds only. Contents are the player's
+    own rounds: crafted EMPTY, never seeded or refilled (no loot table), finite, persistent and saved with the unit. Explicit
+    exception to "physical doors": the module is a sealed model with no door or lid part to animate, and no new model work is
+    approved, so the feed opens as an inventory view without a moving part.
   - Physics: movable, exactly like the fuel dolly: grabbed and dragged by the frame, pushed by walking into it, up and down stairs,
     carried by lifts, stops bullets with a shove by its mass. Sleeping kinematic bodies on the same controller.
   - No baked clutter: dish, antenna, hood, handles and leads are permanent parts of each module.
@@ -658,8 +662,9 @@ they sit outside the two audits; their classification is recorded here.
   box, a round socket, an indicator lamp). Not storage, no body. A connected device's cable is the fuel hose's tube.
 - **Limits:** at most 24 crafted units in the car and 48 left in one station (`craft/equipment.ts EQUIPMENT_LIMITS`); a craft or a
   departure beyond them is refused. Enemies walk through units on the floor, as they do through fuel carts.
-- **Tests:** `tests/train-equipment-*.test.ts`, `tests/equipment-chest-store.test.ts`, `tests/craft-bench.test.ts`,
-  `tests/train-equipment-asset.test.ts`, `tests/sentry-turret-model.test.ts`, `tests/train-crafting-session.test.ts`.
+- **Tests:** `tests/train-equipment-*.test.ts`, `tests/equipment-chest-store.test.ts`, `tests/sentry-ammo.test.ts`,
+  `tests/craft-bench.test.ts`, `tests/train-equipment-asset.test.ts`, `tests/sentry-turret-model.test.ts`,
+  `tests/train-crafting-session.test.ts`.
 
 ## 7. Reactor mines set pieces (not layout prop kinds)
 Task reactor-expansion-20261101 (lane MINES). The old mine workings off tier 2 (`gen/reactor/complex/mines*.ts`) dress their drifts

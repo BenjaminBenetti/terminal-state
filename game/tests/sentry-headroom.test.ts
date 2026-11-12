@@ -136,7 +136,7 @@ describe('sentry: no headroom = stowed, silent, and the console says so', () => 
       s.eq.disconnect(s.unit);
       s.eq.connect(s.unit, 0);
       expect(s.toasts.slice(n).map(t => t.text)).toEqual([SENTRY_TEXT.plugNoHeadroom]);
-      expect(s.eq.uses.sentry!.prompt(s.unit)).toContain(SENTRY_TEXT.noHeadroom);
+      expect(s.eq.promptNotes.map(f => f(s.unit))).toEqual([SENTRY_TEXT.noHeadroom]);
       s.host.zombies.push(fakeEnemy(trainToWorld(s.p, m.x, SPEC.floorY, -7)));
       for (let i = 0; i < 3 / DT; i++) s.sys.update(DT);
       expect(s.sys.deploy).toBe(0);
@@ -149,7 +149,7 @@ describe('sentry: no headroom = stowed, silent, and the console says so', () => 
     for (const h of s.host.sectionHooks) h.teardown?.();
     for (const h of s.host.sectionHooks) h.build?.(s.lay);
     expect(s.sys.headroom().ok).toBe(true);
-    expect(s.eq.uses.sentry!.prompt(s.unit)).not.toContain(SENTRY_TEXT.noHeadroom);
+    expect(s.eq.promptNotes.map(f => f(s.unit))).toEqual([null]);
     for (let i = 0; i < 1 / DT; i++) s.sys.update(DT);
     expect(s.sys.deploy).toBe(1);
     expect(s.sys.view.root.visible).toBe(true);

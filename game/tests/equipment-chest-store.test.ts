@@ -6,7 +6,7 @@ import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 import {installCanvasShim} from './helpers/canvas2d';
 import {installFakeDom, type FakeDom} from './helpers/fakeDom';
 import {fakeEquipment, fakeUnit, type FakeUnit} from './helpers/craftBenchFakes';
-import {EQUIPMENT} from '../src/craft/equipment';
+import {EQUIPMENT, EQUIPMENT_KINDS} from '../src/craft/equipment';
 import {ELECTRICAL_PARTS, SCRAP_METAL} from '../src/items/craftMaterials';
 import {Inventory, type ItemStack, type SlotRef, type StoreRef} from '../src/items/inventory';
 import {LOCKBOX_GRID, LOCKBOX_SLOTS} from '../src/run/trainLockbox';
@@ -84,7 +84,8 @@ describe('chest store: the registered use and the view\'s look', () => {
     expect(typeof s.store.use.prompt).toBe('function');
     expect(typeof s.store.use.tap).toBe('function');
     expect(s.store.use.hold).toBeUndefined();
-    expect(Object.keys(s.eq.uses)).toEqual(['chest']); // the devices' uses are their own systems'
+    // (every kind with slots opens through this one controller — the sentry's feed too: tests/sentry-ammo.test.ts; the others' uses are their own systems')
+    expect(Object.keys(s.eq.uses).sort()).toEqual(EQUIPMENT_KINDS.filter(k => EQUIPMENT[k].slots > 0).sort());
     // a replaced / late equipment system gets it on the next frame
     const eq2 = fakeEquipment();
     s.host.trainEquipment = eq2;
@@ -105,13 +106,13 @@ describe('chest store: the registered use and the view\'s look', () => {
     expect(s.a.slots!.length).toBe(50);
   });
 
-  it('the prompt counts the used slots and names both actions; null hands it back to the equipment system', () => {
+  it('the prompt counts the used slots and names its action (the equipment system adds the hold); null hands it back to the system', () => {
     const s = setup(), inv = s.host.inv;
-    expect(s.store.use.prompt(s.a)).toBe('<b>[E]</b> Open the storage chest (0/50) · hold <b>[E]</b> to carry it');
+    expect(s.store.use.prompt(s.a)).toBe('<b>[E]</b> Open the storage chest (0/50)');
     s.a.slots![0] = inv.makeStack(SCRAP_METAL, 5);
     s.a.slots![7] = inv.makeStack('bandage', 1);
     s.a.slots![49] = inv.makeStack('pistol', 1);
-    expect(s.store.use.prompt(s.a)).toBe('<b>[E]</b> Open the storage chest (3/50) · hold <b>[E]</b> to carry it');
+    expect(s.store.use.prompt(s.a)).toBe('<b>[E]</b> Open the storage chest (3/50)');
     expect(CHEST_STORE_TEXT.prompt(3, 50)).toBe(s.store.use.prompt(s.a));
     // not storage / carried / riding as cargo / the train moving: the system's own prompt
     expect(s.store.use.prompt(s.radar)).toBeNull();
@@ -126,7 +127,7 @@ describe('chest store: the registered use and the view\'s look', () => {
     // while its view is open
     expect(s.store.use.tap(s.a)).toBe(true);
     expect(s.store.use.prompt(s.a)).toBe('<b>[E]</b> Close the storage chest');
-    expect(s.store.use.prompt(s.b)).toBe('<b>[E]</b> Open the storage chest (0/50) · hold <b>[E]</b> to carry it');
+    expect(s.store.use.prompt(s.b)).toBe('<b>[E]</b> Open the storage chest (0/50)');
   });
 });
 

@@ -3,8 +3,8 @@
 // route radar's reveal radius (campaign/discovery.ts) and the fuel dolly controller's per-body mass / radius (world/fuelCartPhysics.ts).
 import {describe, expect, it} from 'vitest';
 import {
-  EQUIPMENT, EQUIPMENT_KINDS, EQUIPMENT_LIMITS, STATION_EQUIPMENT_LANE, TrainEquipment, copyEquipment, equipmentProblem, equipmentSeqOf,
-  freshEquipment, stationEquipmentOf, stationEquipmentProblem, trainEquipmentProblem, type EquipmentJSON,
+  EQUIPMENT, EQUIPMENT_KINDS, EQUIPMENT_LIMITS, SENTRY_FEED_SLOTS, STATION_EQUIPMENT_LANE, TrainEquipment, copyEquipment, equipmentProblem, equipmentRounds,
+  equipmentSeqOf, freshEquipment, stationEquipmentOf, stationEquipmentProblem, trainEquipmentProblem, type EquipmentJSON,
 } from '../src/craft/equipment';
 import {RECIPES, RECIPE_MATERIALS, recipeFor} from '../src/craft/recipes';
 import {
@@ -42,25 +42,36 @@ describe('train crafting: recipes', () => {
 
 describe('train crafting: equipment kinds are traits, not lists', () => {
   it('the chest is the Lockbox store again and needs no plug; the three devices ride the fuel dolly and need a plug', () => {
-    expect(EQUIPMENT.chest).toMatchObject({move: 'carry', plug: false, slots: LOCKBOX_SLOTS, ammoCap: 0});
+    expect(EQUIPMENT.chest).toMatchObject({move: 'carry', plug: false, slots: LOCKBOX_SLOTS, slotItem: null, legacyAmmoCap: 0});
     expect(LOCKBOX_SLOTS).toBe(50);
     for (const k of ['radar', 'sentry', 'scanner'] as const) {
-      expect(EQUIPMENT[k]).toMatchObject({move: 'dolly', plug: true, slots: 0, radius: CART.radius, height: CART.height});
+      expect(EQUIPMENT[k]).toMatchObject({move: 'dolly', plug: true, radius: CART.radius, height: CART.height});
       expect(EQUIPMENT[k].kg).toBeGreaterThan(CART.emptyKg);
       expect(EQUIPMENT[k].kg).toBeLessThanOrEqual(cartMass(FUEL.cartUnits));
     }
-    expect(EQUIPMENT.sentry.ammoItem).toBe('ammo_556');
-    expect(ITEMS[EQUIPMENT.sentry.ammoItem!]?.kind).toBe('ammo');
-    expect(EQUIPMENT.sentry.ammoCap).toBeGreaterThan(0);
-    for (const k of EQUIPMENT_KINDS) expect(EQUIPMENT[k].kind).toBe(k);
+    // (task train-interaction-ux: the sentry's ammunition is a real FOUR-slot inventory that takes only 5.56 mm rounds)
+    expect(SENTRY_FEED_SLOTS).toBe(4);
+    expect(EQUIPMENT.sentry).toMatchObject({slots: 4, slotItem: 'ammo_556', legacyAmmoCap: 300});
+    expect(ITEMS[EQUIPMENT.sentry.slotItem!]?.kind).toBe('ammo');
+    for (const k of ['radar', 'scanner'] as const) expect(EQUIPMENT[k]).toMatchObject({slots: 0, slotItem: null, legacyAmmoCap: 0});
+    // a feed is storage with one item; only a kind that once had a round counter accepts a legacy one
+    for (const k of EQUIPMENT_KINDS) {
+      const d = EQUIPMENT[k];
+      expect(d.kind).toBe(k);
+      if (d.slotItem) expect(d.slots).toBeGreaterThan(0);
+      if (d.legacyAmmoCap) expect(d.slotItem).not.toBeNull();
+    }
   });
 
   it('a fresh unit is EMPTY: no stacks, no rounds, no plug', () => {
     const pose = {x: 1, y: 0.98, z: 0.5, yaw: 0};
     expect(freshEquipment('chest', 'eq-1', pose)).toEqual({uid: 'eq-1', kind: 'chest', ...pose, slots: new Array(50).fill(null)});
-    expect(freshEquipment('sentry', 'eq-2', pose)).toEqual({uid: 'eq-2', kind: 'sentry', ...pose, ammo: 0});
+    expect(freshEquipment('sentry', 'eq-2', pose)).toEqual({uid: 'eq-2', kind: 'sentry', ...pose, slots: [null, null, null, null]});
     expect(freshEquipment('radar', 'eq-3', pose)).toEqual({uid: 'eq-3', kind: 'radar', ...pose});
-    for (const k of EQUIPMENT_KINDS) expect(equipmentProblem(freshEquipment(k, 'eq-9', pose), false)).toBeNull();
+    for (const k of EQUIPMENT_KINDS) {
+      expect(equipmentProblem(freshEquipment(k, 'eq-9', pose), false)).toBeNull();
+      expect(equipmentRounds(freshEquipment(k, 'eq-9', pose))).toBe(0);
+    }
   });
 });
 
@@ -70,14 +81,31 @@ describe('train crafting: records', () => {
 
   it('accepts exact records and refuses malformed ones (never a free round, slot or plug)', () => {
     expect(equipmentProblem(chest(), false)).toBeNull();
-    expect(equipmentProblem({...freshEquipment('sentry', 'eq-2', pose), ammo: 120, plug: 1}, false)).toBeNull();
-    expect(equipmentProblem({...freshEquipment('sentry', 'eq-2', pose), level: 2}, true)).toBeNull();
+    const feed = (...counts: (number | null)[]) => counts.map((c, i) => (c === null ? null : {uid: 20 + i, itemId: 'ammo_556', count: c}));
+    const sentry = (extra: Record<string, unknown> = {}): EquipmentJSON => ({...freshEquipment('sentry', 'eq-2', pose), ...extra} as EquipmentJSON);
+    expect(equipmentProblem(sentry({slots: feed(120, null, 30, null), plug: 1}), false)).toBeNull();
+    expect(equipmentProblem(sentry({level: 2}), true)).toBeNull();
+    expect(equipmentRounds(sentry({slots: feed(120, null, 30, null)}))).toBe(150);
+    // LEGACY: a record from before the feed slots carries `ammo` (0..300), with no slots at all or beside (empty) slots — both stay valid
+    const legacy = {uid: 'eq-2', kind: 'sentry', ...pose, ammo: 300} as EquipmentJSON;
+    expect(equipmentProblem(legacy, false)).toBeNull();
+    expect(equipmentProblem({...legacy, ammo: 0, plug: 2}, false)).toBeNull();
+    expect(equipmentProblem(sentry({ammo: 120, plug: 1}), false)).toBeNull();
+    expect(equipmentRounds(legacy)).toBe(300);
+    expect(equipmentRounds(sentry({ammo: 77, slots: feed(null, 5, null, null)}))).toBe(82);
+    expect(equipmentRounds(chest())).toBe(0); // (a chest's 5.56 are stored items, not a feed's rounds)
     const bad: [unknown, boolean][] = [
       [null, false], [[], false], [{...chest(), kind: 'tank'}, false], [{...chest(), uid: 'x'}, false], [{...chest(), uid: 'eq-0'}, false],
       [{...chest(), slots: new Array(49).fill(null)}, false], [{...chest(), slots: undefined}, false], [{...chest(), ammo: 3}, false],
       [{...chest(), plug: 0}, false], [{...chest(), x: Infinity}, false], [{...chest(), x: 41}, false], [{...chest(), extra: 1}, false],
-      [{...freshEquipment('sentry', 'eq-2', pose), ammo: EQUIPMENT.sentry.ammoCap + 1}, false], [{...freshEquipment('sentry', 'eq-2', pose), ammo: 1.5}, false],
-      [{...freshEquipment('sentry', 'eq-2', pose), ammo: -1}, false], [{...freshEquipment('radar', 'eq-3', pose), plug: 3}, false],
+      [sentry({ammo: EQUIPMENT.sentry.legacyAmmoCap + 1}), false], [sentry({ammo: 1.5}), false], [sentry({ammo: -1}), false],
+      [{...legacy, ammo: 301}, false], [{...legacy, ammo: undefined}, false], // (neither slots nor a legacy count: not a sentry record)
+      [sentry({slots: feed(1, 2, 3)}), false], [sentry({slots: feed(1, 2, 3, 4, 5)}), false], [sentry({slots: 'none'}), false],
+      // a feed's slots take only its own rounds: no other caliber, no other item, nothing that is not a stack
+      [sentry({slots: [{uid: 20, itemId: 'ammo_9mm', count: 30}, null, null, null]}), false],
+      [sentry({slots: [null, {uid: 20, itemId: 'bandage', count: 1}, null, null]}), false], [sentry({slots: [7, null, null, null]}), false],
+      [{...freshEquipment('radar', 'eq-3', pose), ammo: 0}, false], [{...freshEquipment('radar', 'eq-3', pose), slots: []}, false],
+      [{...freshEquipment('radar', 'eq-3', pose), plug: 3}, false],
       [{...freshEquipment('radar', 'eq-3', pose), plug: 0, level: 0}, true], // a station unit is never plugged
       [freshEquipment('radar', 'eq-3', pose), true], // a station unit needs its storey
       [{...freshEquipment('radar', 'eq-3', pose), level: 0}, false], // a unit aboard has none
@@ -125,16 +153,21 @@ describe('train crafting: the run-side store', () => {
   it('hands out ids that are never reused, keeps the records exactly without a live system', () => {
     const e = new TrainEquipment();
     expect([e.nextUid(), e.nextUid()]).toEqual(['eq-1', 'eq-2']);
-    const recs = [{...freshEquipment('sentry', 'eq-1', pose), ammo: 40, plug: 2}, {...freshEquipment('chest', 'eq-2', pose), slots: [{uid: 31, itemId: 'ammo_556', count: 3, }, ...new Array(49).fill(null)]}];
+    const recs = [
+      {...freshEquipment('sentry', 'eq-1', pose), slots: [{uid: 44, itemId: 'ammo_556', count: 40}, null, null, null], plug: 2},
+      {...freshEquipment('chest', 'eq-2', pose), slots: [{uid: 31, itemId: 'ammo_556', count: 3, }, ...new Array(49).fill(null)]},
+      {uid: 'eq-3', kind: 'sentry' as const, ...pose, ammo: 40}, // (a legacy record is kept exactly as it is: nothing converts it here)
+    ];
+    e.nextUid();
     e.setAboard(recs);
     const j = JSON.parse(JSON.stringify(e.toJSON()));
-    expect(j).toEqual({v: 1, seq: 2, aboard: recs});
+    expect(j).toEqual({v: 1, seq: 3, aboard: recs});
     expect(trainEquipmentProblem(j)).toBeNull();
-    expect(e.maxUid()).toBe(31);
+    expect(e.maxUid()).toBe(44); // (the feed's stacks count for the inventory's uid counter too)
     const f = new TrainEquipment();
     f.load(j);
     expect(f.toJSON()).toEqual(j);
-    expect(f.nextUid()).toBe('eq-3');
+    expect(f.nextUid()).toBe('eq-4');
     f.reset();
     expect(f.toJSON()).toEqual({v: 1, seq: 0, aboard: []});
   });
@@ -151,7 +184,7 @@ describe('train crafting: the run-side store', () => {
 
   it('a live system is the truth while attached and is restored on load / reset', () => {
     const e = new TrainEquipment();
-    let live: EquipmentJSON[] = [{...freshEquipment('sentry', 'eq-1', pose), ammo: 12}];
+    let live: EquipmentJSON[] = [{...freshEquipment('sentry', 'eq-1', pose), slots: [null, {uid: 5, itemId: 'ammo_556', count: 12}, null, null]}];
     const restored: EquipmentJSON[][] = [];
     e.live = {aboard: () => live, restore: a => { restored.push(a); live = a; }};
     e.seq = 1;
@@ -165,9 +198,10 @@ describe('train crafting: the run-side store', () => {
 
   it("is saved with the 'player-train' participant; an old save without it loads none; NewGame clears it", () => {
     const t = new PlayerTrainRecord(), p = t.participant();
-    t.equipment.setAboard([{...freshEquipment('sentry', t.equipment.nextUid(), pose), ammo: 77, plug: 0}]);
+    const feed = [{uid: 9, itemId: 'ammo_556', count: 77}, null, null, null];
+    t.equipment.setAboard([{...freshEquipment('sentry', t.equipment.nextUid(), pose), slots: feed, plug: 0}]);
     const saved = JSON.parse(JSON.stringify(p.save())) as Record<string, unknown>;
-    expect(saved.equipment).toEqual({v: 1, seq: 1, aboard: [{uid: 'eq-1', kind: 'sentry', ...pose, ammo: 77, plug: 0}]});
+    expect(saved.equipment).toEqual({v: 1, seq: 1, aboard: [{uid: 'eq-1', kind: 'sentry', ...pose, slots: feed, plug: 0}]});
     const u = new PlayerTrainRecord();
     u.participant().load(saved);
     expect(u.equipment.toJSON()).toEqual(saved.equipment);

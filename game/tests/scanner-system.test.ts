@@ -33,7 +33,7 @@ class FakeUnit implements EquipmentUnit {
     this.def = EQUIPMENT[kind];
     this.pose = {x, y: 1.1, z, yaw: 0, level: 0};
   }
-  setAmmo(n: number): number { return (this.ammo = n); }
+  takeAmmo(): number { return 0; }
   touchStore(): void {}
   setOpen(): void {}
   worldPose() { this.poses++; return this.pose ? {...this.pose} : null; }
@@ -43,6 +43,7 @@ class FakeUnit implements EquipmentUnit {
 class FakeEquipment implements EquipmentSystemLike {
   readonly uses: Partial<Record<EquipmentKind, EquipmentUse>> = {};
   readonly plugListeners: ((u: EquipmentUnit, plugged: boolean) => void)[] = [];
+  readonly promptNotes: ((u: EquipmentUnit) => string | null)[] = [];
   readonly list: FakeUnit[] = [];
   parked = true;
   asked = 0;

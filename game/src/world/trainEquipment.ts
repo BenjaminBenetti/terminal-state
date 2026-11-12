@@ -5,12 +5,18 @@
 // interactHandlers, promptProviders, inputOwners, modifierSources, hitListeners, stateListeners, sectionHooks, sectionPreloads,
 // bulletHitHandlers, warmRegistry) and attaches the train record's live hook (craft/equipment.ts TrainEquipment.live).
 //
-// ONE MECHANISM FOR EVERY KIND: everything below reads a kind's TRAITS (EquipmentDef: move / plug / slots / ammoCap / kg / radius /
+// ONE MECHANISM FOR EVERY KIND: everything below reads a kind's TRAITS (EquipmentDef: move / plug / slots / slotItem / kg / radius /
 // height) — no list of kinds anywhere in this file.
 //
 // A UNIT: uid ('eq-<n>'), kind, a CartBody (its own kg / r / h; a 'carry' kind slides on its base: EQUIP.slideDecel), a mode
-// ('world' | 'cargo' | 'held'), its plug, its hopper rounds, its store (run/trainLockbox.ts TrainLockbox(def.slots): the live slots the
-// store view and the bench use) and its view (world/trainEquipmentModel.ts).
+// ('world' | 'cargo' | 'held'), its plug, its store (run/trainLockbox.ts TrainLockbox(def.slots): the live slots the store view and
+// the bench use) and its view (world/trainEquipmentModel.ts).
+//  - A kind with def.slotItem (the sentry) is a FEED: its slots take only that item (items/inventory.ts setStoreRule on the live
+//    list), unit.ammo counts it and unit.takeAmmo is how its consumer uses rounds up. The bench never draws from a feed.
+//  - LEGACY ROUNDS (task train-interaction-ux-20261112-063646): a record written while the sentry still had a round counter carries
+//    `ammo`. The live unit keeps that count aside (legacyAmmo) and adoptLegacyAmmo() turns it into real stacks in its slots on the
+//    first PLAYED frame (every restore step is over by then; uids from the live inventory) — all of it or, without an inventory to
+//    make stacks, none: stamp() writes whatever is still aside back as `ammo`. No round is lost, none counted twice.
 //  - 'dolly' kinds (the devices: a module on the fuel dolly's hand truck) MOVE AND STOP LIKE THE FUEL DOLLY — the same controller calls
 //    with the same constants (FUEL_CART / CART): E on the frame / handle grabs (the hand point, the slow walk, the input owner, the
 //    let-go reasons, the break distance), walking into one pushes it, it sleeps, goes up and down stairs, lies on the steps, rides lifts
@@ -80,14 +86,15 @@ import type {Levels} from '../gen/levels';
 import type {PropPlacement} from '../gen/props';
 import {moveCircle, type PropIndex} from '../core/physics';
 import {
-  EQUIPMENT, EQUIPMENT_KINDS, EQUIPMENT_LIMITS, STATION_EQUIPMENT_LANE, copyEquipment, equipmentProblem, equipmentSeqOf, isEquipmentKind, freshEquipment,
-  stationEquipmentOf, type EquipmentDef, type EquipmentJSON, type EquipmentKind, type StationEquipmentJSON, type TrainEquipment,
+  EQUIPMENT, EQUIPMENT_KINDS, EQUIPMENT_LIMITS, STATION_EQUIPMENT_LANE, copyEquipment, equipmentProblem, equipmentRounds, equipmentSeqOf, isEquipmentKind,
+  freshEquipment, stationEquipmentOf, type EquipmentDef, type EquipmentJSON, type EquipmentKind, type StationEquipmentJSON, type TrainEquipment,
 } from '../craft/equipment';
 import {EQUIP_HOLD_S, type EquipmentStore, type EquipmentSystemLike, type EquipmentUnit, type EquipmentUse} from '../craft/equipmentApi';
 import {PLUG, craftSpots, plugInReach} from '../craft/trainFixtures';
 import {cartAboard, cartStraddles} from '../fuel/trainPort';
 import {playerTrainPlacement, trainSpawnLocal, trainToWorld, type TrainPlacement} from '../gen/playerTrain';
-import type {ItemStack} from '../items/inventory';
+import {setStoreRule, type ItemStack, type StoreRule} from '../items/inventory';
+import {itemDef} from '../items/items';
 import {SPRINT_SPEED, WALK_SPEED} from '../player/player';
 import {TrainLockbox} from '../run/trainLockbox';
 import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from './playerTrainSpec';
@@ -198,8 +205,8 @@ export interface TrainEquipmentHost {
   playerTrain: {equipment: TrainEquipment};
   /** The station lane (run/runState.ts lane stores: STATION_EQUIPMENT_LANE of the current station). */
   run?: {current: SectionKeyLike; laneStore?(lane: string, key?: never): unknown; setLaneStore?(lane: string, data: unknown, key?: never): void} | null;
-  /** The inventory's uid counter stays above every chest's stacks. */
-  inv?: {reserveUids?(max: number): void} | null;
+  /** The inventory's uid counter stays above every unit's stacks; it makes the stacks of a legacy record's rounds (adoptLegacyAmmo). */
+  inv?: {reserveUids?(max: number): void; makeStack?(itemId: string, count: number): ItemStack} | null;
   /** E held / released (the tap / hold rule); `clears` changes when the input was cleared (a menu). */
   input?: {down(code: string): boolean; clears?: number} | null;
   hud: {toast(text: string, warn?: boolean): void; setHoldRing?(progress: number | null): void};
@@ -273,7 +280,8 @@ export class LiveUnit implements EquipmentUnit {
   readonly seq: number;
   mode: Mode = 'world';
   plug: number | null = null;
-  ammo = 0;
+  /** Rounds of a record written before the kind had slots, not yet turned into stacks (TrainEquipmentSystem.adoptLegacyAmmo). */
+  legacyAmmo = 0;
   /** The storage (kinds with def.slots): the live slots, exactly a Lockbox-like store. */
   readonly store: TrainLockbox | null;
   /** World pose / motion (mode 'world'). */
@@ -303,6 +311,8 @@ export class LiveUnit implements EquipmentUnit {
     this.kind = def.kind;
     this.seq = equipmentSeqOf(uid);
     this.store = def.slots > 0 ? new TrainLockbox(def.slots) : null;
+    // (a feed: its slots take only its own item, whatever moves the stacks)
+    if (this.store && def.slotItem) setStoreRule(this.store.slots, feedRule(def));
     this.body = {x: at.x, y: at.y, z: at.z, yaw: at.yaw, vx: 0, vz: 0, level: at.level, units: 0, kg: def.kg, r: def.radius, h: def.height};
     if (def.move === 'carry') this.body.decel = EQUIP.slideDecel;
   }
@@ -311,10 +321,39 @@ export class LiveUnit implements EquipmentUnit {
   get storeVersion(): number { return this.store?.version ?? 0; }
   touchStore(): void { if (this.store) this.store.version++; }
 
-  setAmmo(n: number): number {
-    const c = this.def.ammoCap;
-    this.ammo = c > 0 && Number.isFinite(n) ? Math.max(0, Math.min(c, Math.floor(n))) : 0;
-    return this.ammo;
+  /** EquipmentUnit.ammo: the rounds in its slots (+ a legacy record's rounds still aside). */
+  get ammo(): number {
+    const item = this.def.slotItem;
+    if (!item) return 0;
+    let n = this.legacyAmmo;
+    if (this.store) for (const st of this.store.slots) if (st && st.itemId === item) n += st.count;
+    return n;
+  }
+
+  /** EquipmentUnit.takeAmmo: rounds out (a legacy record's first, then the last stack backwards; an emptied slot is free again). */
+  takeAmmo(n = 1): number {
+    let want = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+    const item = this.def.slotItem;
+    if (!item || want <= 0) return 0;
+    let took = Math.min(want, this.legacyAmmo);
+    this.legacyAmmo -= took;
+    want -= took;
+    const slots = this.store?.slots;
+    if (slots && want > 0) {
+      let changed = false;
+      for (let i = slots.length - 1; i >= 0 && want > 0; i--) {
+        const st = slots[i];
+        if (!st || st.itemId !== item) continue;
+        const k = Math.min(want, st.count);
+        st.count -= k;
+        if (st.count <= 0) slots[i] = null;
+        took += k;
+        want -= k;
+        changed = changed || k > 0;
+      }
+      if (changed) this.touchStore();
+    }
+    return took;
   }
 
   setOpen(open: boolean): void { this.sys.setLid(this, open); }
@@ -330,6 +369,7 @@ export interface EquipmentReadout {
 export class TrainEquipmentSystem implements EquipmentSystemLike {
   readonly uses: Partial<Record<EquipmentKind, EquipmentUse>> = {};
   readonly plugListeners: ((u: EquipmentUnit, plugged: boolean) => void)[] = [];
+  readonly promptNotes: ((u: EquipmentUnit) => string | null)[] = [];
   /** World units live under this group (cargo under the car's view root, the carried chest under `hands`). */
   readonly group = new THREE.Group();
   /** The carry frame: a child of the camera (follows the eye through every frame, the transit gap included). */
@@ -364,7 +404,9 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   /** Lids in motion. */
   private readonly lids = new Set<LiveUnit>();
   /** QA / tests. */
-  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, pushes: 0, restores: 0, steps: 0, bullets: 0, carried: 0, seated: 0, poses: 0, plugged: 0, unplugged: 0, pickups: 0, putDowns: 0, refused: 0, crafted: 0, taps: 0, holds: 0, cables: 0};
+  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, pushes: 0, restores: 0, steps: 0, bullets: 0, carried: 0, seated: 0, poses: 0, plugged: 0, unplugged: 0, pickups: 0, putDowns: 0, refused: 0, crafted: 0, taps: 0, holds: 0, cables: 0, adopted: 0};
+  /** Live units still holding a legacy record's rounds aside (adoptLegacyAmmo runs while > 0). */
+  private legacyUnits = 0;
   private proto: THREE.Group | null = null;
   private protoGen = -1;
   private pollIn = 0;
@@ -514,7 +556,8 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     const p = this.parkedPlacement(), out: EquipmentStore[] = [];
     if (!this.worldLive || !p) return out;
     for (const u of this.units()) {
-      if (u.mode !== 'world' || !u.store || !this.insideCar(u, p)) continue;
+      // (general storage only: a feed's slots hold its rounds, never bench materials)
+      if (u.mode !== 'world' || !u.store || u.def.slotItem || !this.insideCar(u, p)) continue;
       out.push({uid: u.uid, slots: u.store.slots, touch: () => u.touchStore()});
     }
     return out;
@@ -550,7 +593,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     this.writeLane(this.stationRecords());
   }
 
-  /** Highest item uid in any chest (live in the world, in the hands, waiting as a record): the inventory's counter stays above it. */
+  /** Highest item uid in any unit's slots (live in the world, in the hands, waiting as a record): the inventory's counter stays above it. */
   maxUid(): number {
     let m = this.host.playerTrain.equipment.maxUid();
     for (const u of this.list) if (u.store) m = Math.max(m, u.store.maxUid());
@@ -642,7 +685,8 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
 
   private stamp(u: LiveUnit, r: EquipmentJSON): EquipmentJSON {
     if (u.store) r.slots = u.store.toJSON().slots;
-    if (u.def.ammoCap > 0) r.ammo = u.ammo;
+    // (a legacy record's rounds that are not stacks yet go back out exactly as they came: never lost, never also in the slots)
+    if (u.legacyAmmo > 0) r.ammo = u.legacyAmmo;
     return r;
   }
 
@@ -774,6 +818,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     this.attachFixtures();
     this.followRide(dt);
     if (this.pending.length) this.spawnPending();
+    if (this.legacyUnits > 0) this.adoptLegacyAmmo();
     const h = this.host, P = h.player, riding = this.riding;
     this.world.levels = h.levels!;
     this.world.props = h.propIndex;
@@ -1030,7 +1075,11 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     const u = new LiveUnit(this, rec.uid, def, view, {x: rec.x, y: f?.floor ?? rec.y, z: rec.z, yaw: rec.yaw, level: f?.level ?? level});
     // (nothing is invented: exactly the record's stacks / rounds; a malformed stack loads as an empty slot)
     if (u.store) u.store.load({v: 1, slots: rec.slots ?? []});
-    u.setAmmo(rec.ammo ?? 0);
+    if (def.slotItem && def.legacyAmmoCap > 0 && Number.isFinite(rec.ammo) && (rec.ammo as number) > 0) {
+      // a record from before the feed slots: its rounds wait aside until a played frame makes them stacks (adoptLegacyAmmo)
+      u.legacyAmmo = Math.min(def.legacyAmmoCap, Math.floor(rec.ammo as number));
+      this.legacyUnits++;
+    }
     // (nothing under it at its recorded height — a lift shaft whose car stands elsewhere: seated on the first frames)
     u.unseated = f || !L ? 0 : SEAT_FRAMES;
     view.group.name = `train-equipment:${rec.uid}`;
@@ -1047,6 +1096,45 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     if (u.seq > E.seq) E.seq = Math.min(EQUIPMENT_LIMITS.seq, u.seq);
     if (plug !== undefined && def.plug) this.restorePlug(u, plug);
     return u;
+  }
+
+  /**
+   * LEGACY ROUNDS -> STACKS (see the header): each unit's `legacyAmmo` goes into its slots as ordinary stacks of its def.slotItem —
+   * onto its own part stacks first, then into free slots, each new stack made by the live inventory (its uid counter is above every
+   * restored stack by the time a frame is played). What does not fit (a hand-made record) stays aside and is used up first. Runs only
+   * while some unit has such rounds.
+   */
+  private adoptLegacyAmmo(): void {
+    const inv = this.host.inv;
+    let waiting = 0;
+    for (const u of this.list) {
+      if (u.legacyAmmo <= 0) continue;
+      const item = u.def.slotItem, slots = u.store?.slots;
+      if (item && slots && inv?.makeStack) {
+        const max = itemDef(item).stackMax;
+        let n = u.legacyAmmo;
+        for (const st of slots) {
+          if (n <= 0) break;
+          if (!st || st.itemId !== item || st.count >= max) continue;
+          const k = Math.min(n, max - st.count);
+          st.count += k;
+          n -= k;
+        }
+        for (let i = 0; i < slots.length && n > 0; i++) {
+          if (slots[i]) continue;
+          const st = inv.makeStack(item, Math.min(n, max));
+          slots[i] = st;
+          n -= st.count;
+        }
+        if (n !== u.legacyAmmo) {
+          this.counts.adopted += u.legacyAmmo - n;
+          u.legacyAmmo = n;
+          u.touchStore();
+        }
+      }
+      if (u.legacyAmmo > 0) waiting++;
+    }
+    this.legacyUnits = waiting;
   }
 
   private removeAt(i: number): void {
@@ -1775,7 +1863,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
       out.push({uid: u.uid, kind: u.kind, mode: u.mode, owner: this.isTrainOwned(u) ? 'train' : 'station', plug: u.plug, ammo: u.ammo, stacks: u.store?.used ?? 0,
         x: r4(w.x), y: r4(w.y), z: r4(w.z), yaw: r4(w.yaw), level: w.level});
     }
-    for (const r of this.pending) out.push({uid: r.uid, kind: r.kind, mode: 'pending', owner: 'train', plug: r.plug ?? null, ammo: r.ammo ?? 0, stacks: (r.slots ?? []).filter(Boolean).length, x: r.x, y: r.y, z: r.z, yaw: r.yaw, level: -1});
+    for (const r of this.pending) out.push({uid: r.uid, kind: r.kind, mode: 'pending', owner: 'train', plug: r.plug ?? null, ammo: equipmentRounds(r), stacks: (r.slots ?? []).filter(Boolean).length, x: r.x, y: r.y, z: r.z, yaw: r.yaw, level: -1});
     return out;
   }
 
@@ -1804,6 +1892,12 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     this.draw(u, true);
     return true;
   }
+}
+
+/** A feed kind's store rule (items/inventory.ts StoreRule): only its own item — the refusal names the item and the unit. */
+export function feedRule(def: EquipmentDef): StoreRule {
+  const item = def.slotItem!, text = `Only ${itemDef(item).name} go in ${def.the}.`;
+  return {accepts: id => (id === item ? null : text)};
 }
 
 /** A lid's eased open fraction (smoothstep, like the Lockbox's). */

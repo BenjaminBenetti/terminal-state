@@ -1,5 +1,5 @@
 // Task studio-train-crafting-v1-20261111-225628-01 (lane SENTRY): the defense sentry's test fixture — a fake train equipment system
-// (craft/equipmentApi.ts: units with a real clamped hopper, plugs, the parked / riding switch) and a host of the game's REAL objects for
+// (craft/equipmentApi.ts: units with a round count the turret takes from, plugs, the parked / riding switch) and a host of the game's REAL objects for
 // world/sentryTurret.ts: a generated layout, its Levels, the REAL parked train runtime (world/playerTrain.ts: the car's volume and
 // collider boxes in layout.props / the prop index), the real Player and Inventory, real ZombieActors (stripped GLB: no texture decoding
 // in Node) — with recording effects / sound / damage-system / ragdoll stand-ins.
@@ -31,7 +31,10 @@ import {SentryTurretSystem, type SentryEnemy, type SentryHost, type SentryOption
 
 export const DT = 1 / 60;
 
-/** A live unit as the equipment system hands it out: the hopper clamps like the contract says (0..cap, whole rounds). */
+/**
+ * A live unit as the equipment system hands it out, for the TURRET's tests: `ammo` rounds (set by the test — what the unit's feed slots
+ * hold; the real slots are world/trainEquipment.ts LiveUnit's, tested with the real system) and takeAmmo as the contract says.
+ */
 export class FakeUnit implements EquipmentUnit {
   readonly def;
   mode: 'world' | 'cargo' | 'held' = 'world';
@@ -39,16 +42,17 @@ export class FakeUnit implements EquipmentUnit {
   ammo = 0;
   readonly slots = null;
   readonly storeVersion = 0;
-  /** Every value setAmmo was asked for (in order). */
+  /** Every count takeAmmo was asked for (in order). */
   readonly asked: number[] = [];
   constructor(readonly uid: string, readonly kind: EquipmentKind = 'sentry', ammo = 0) {
     this.def = EQUIPMENT[kind];
     this.ammo = ammo;
   }
-  setAmmo(n: number): number {
+  takeAmmo(n = 1): number {
     this.asked.push(n);
-    this.ammo = Math.max(0, Math.min(this.def.ammoCap, Math.floor(n)));
-    return this.ammo;
+    const k = Math.max(0, Math.min(this.ammo, Math.floor(n)));
+    this.ammo -= k;
+    return k;
   }
   touchStore(): void { /* no store */ }
   setOpen(): void { /* no lid */ }
@@ -62,6 +66,7 @@ export class FakeEquipment implements EquipmentSystemLike {
   parked = true;
   readonly uses: Partial<Record<EquipmentKind, EquipmentUse>> = {};
   readonly plugListeners: ((u: EquipmentUnit, plugged: boolean) => void)[] = [];
+  readonly promptNotes: ((u: EquipmentUnit) => string | null)[] = [];
   units(): readonly EquipmentUnit[] { return this.list; }
   plugged(kind: EquipmentKind): EquipmentUnit | null {
     let best: FakeUnit | null = null;
@@ -105,7 +110,7 @@ export function layoutOf(level: LevelId, seed: number): StationLayout {
 export interface SentryWorldOpts extends SentryOptions {
   level?: LevelId;
   seed?: number;
-  /** Rounds in the sentry's hopper, the plug it is on (null: not plugged in). */
+  /** Rounds in the sentry's feed slots, the plug it is on (null: not plugged in). */
   ammo?: number;
   plug?: number | null;
   /** No sentry unit at all. */

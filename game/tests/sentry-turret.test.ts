@@ -269,7 +269,7 @@ describe('sentry turret: firing', () => {
       expect(times[i] - times[i - 1]).toBeGreaterThanOrEqual(SENTRY.interval - 1e-9);
       expect(times[i] - times[i - 1]).toBeLessThanOrEqual(SENTRY.interval + 2 * DT);
     }
-    expect(s.unit.asked).toEqual([4, 3, 2, 1, 0]); // exactly one round per shot, never below 0
+    expect(s.unit.asked).toEqual([1, 1, 1, 1, 1]); // exactly one round per shot, asked of the unit's own slots — never more
     expect(s.unit.ammo).toBe(0);
     expect(s.sys.counts).toMatchObject({shots: 5, hits: 5, kills: 0, worldHits: 0, misses: 0, emptied: 1, noises: 5});
     expect(q.hits.length).toBe(5);
@@ -290,11 +290,15 @@ describe('sentry turret: firing', () => {
     expect([s.sys.deploy, s.sys.view.root.visible, s.sys.target]).toEqual([0, false, null]);
     s.run(3);
     expect([s.sys.counts.shots, s.unit.ammo, q.hits.length, s.toasts.length]).toEqual([5, 0, 5, 1]);
-    // reloaded at the console: it rises and fires again
-    s.host.inv.add(s.host.inv.makeStack('ammo_556', 3));
-    expect(s.eq.uses.sentry!.tap(s.unit)).toBe(true);
+    // rounds the player only CARRIES are never the turret's: it stays down
+    const carried = s.host.inv.makeStack('ammo_556', 3);
+    s.host.inv.add(carried);
+    s.run(2);
+    expect([s.sys.deploy, s.sys.counts.shots, s.host.inv.count('ammo_556'), s.unit.asked.length]).toEqual([0, 5, 3, 5]);
+    // put into its slots (the store view's move): it rises and fires again, those rounds and no more
+    s.unit.ammo += s.host.inv.take('ammo_556', 3);
     expect(s.shotTimes(4).length).toBe(3);
-    expect(s.unit.ammo).toBe(0);
+    expect([s.unit.ammo, s.host.inv.count('ammo_556')]).toEqual([0, 0]);
   });
 
   it('a crafted (empty) sentry never rises or fires, plugged in beside enemies', () => {
@@ -618,14 +622,15 @@ describe('sentry turret: lifecycle', () => {
     expect(s.sys.counts.shots).toBeGreaterThan(n);
   });
 
-  it('registers only through the registries: one frame hook, one section hook pair, the warm pool, the console use, the QA report', () => {
+  it('registers only through the registries: one frame hook, one section hook pair, the warm pool, the prompt note, the QA report', () => {
     const s = sentryWorld({ammo: 12, noUnit: false});
     expect(s.host.warmRegistry.names.pools).toContain('train-turret');
     expect(s.host.warmRegistry.poolRoots()).toContain(s.sys.view.root);
-    expect(Object.keys(s.eq.uses)).toEqual(['sentry']);
+    expect(Object.keys(s.eq.uses)).toEqual([]); // (its slots open through the equipment store's one controller: no use of its own)
+    expect(s.eq.promptNotes.length).toBe(1);
     expect(s.eq.plugListeners.length).toBe(1);
     const q = s.sys.qa();
-    expect(q).toMatchObject({unit: 'eq-1', plugged: true, ammo: 12, cap: 300, attached: true, model: false, deployed: false, shots: 0});
+    expect(q).toMatchObject({unit: 'eq-1', plugged: true, ammo: 12, attached: true, model: false, deployed: false, shots: 0});
     expect(q.headroom).toMatchObject({ok: true});
     // a host without the equipment system yet (or without a train here) is harmless
     const bare = {...s.host, trainEquipment: null, trainRuntime: undefined, frameHooks: [], sectionHooks: [], stateListeners: [], warmRegistry: new WarmupRegistry()};

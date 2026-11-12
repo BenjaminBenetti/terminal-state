@@ -1,27 +1,28 @@
 // Task studio-train-crafting-v1-20261111-225628-01 (lane SENTRY): a movable console that plugs into the train and is fed real 5.56 mm
 // rounds; a roof turret deploys and fires them at nearby enemies through the game's normal line-of-sight combat; crafted empty, no free
 // round — THE DEFENSE SENTRY'S RUNTIME (Game.sentryTurret). The rules and every number are
-// craft/sentry.ts (SENTRY); the look is world/sentryTurretView.ts; the unit itself (the console on its hand truck, the plug, its saved
-// `ammo`) is the equipment system's (world/trainEquipment.ts) — this module only knows craft/equipmentApi.ts.
+// craft/sentry.ts (SENTRY); the look is world/sentryTurretView.ts; the unit itself (the console on its hand truck, the plug, its four
+// saved feed slots) is the equipment system's (world/trainEquipment.ts) — this module only knows craft/equipmentApi.ts.
 //
 // installSentryTurret(game, {rand}) is called ONCE from the Game constructor (after the train equipment; `rand` = the game's level random
-// stream, handed in the way installBlightBurst gets it); it only REGISTERS: the console's use
-// (EquipmentSystemLike.uses.sentry) and a plug listener, a frame hook (only while playing), section hooks (build = attach the turret to
+// stream, handed in the way installBlightBurst gets it); it only REGISTERS: its status in the unit's look-at line
+// (EquipmentSystemLike.promptNotes) and a plug listener, a frame hook (only while playing), section hooks (build = attach the turret to
 // the car's view root, everything transient reset; teardown = stowed and hidden), a state listener (leaving 'playing' drops the target)
 // and the warm pool 'train-turret' (the turret's materials compile on the loading screen; its flash / tracer / impacts are the existing
 // 'effects' pool's). No new light, sound file or texture.
 //
-// THE CONSOLE ([E] on the sentry module's console face): TAP = every carried 5.56 mm round (pockets / quick slots) the hopper has room
-// for goes in (craft/sentry.ts loadHopper); HOLD = the loaded rounds come back as ordinary stacks, as many as fit (unloadHopper).
-// Plugged in or not; not while the train moves. The unit's `ammo` is the ONLY state (saved by the equipment system): the turret's pose,
-// target and cooldown are transient and reset on every build.
+// THE AMMUNITION (task train-interaction-ux-20261112-063646: no more "load everything carried"): the sentry is a unit with four slots
+// that take only 5.56 mm rounds. [E] on it opens the shared store view over those slots (world/equipmentChestStore.ts — the chest's
+// view and the Lockbox's transfers: drag / click real stacks in and out under the usual stack rules), plugged in or not, not while
+// the train moves. This module never moves a round except to FIRE one: unit.takeAmmo(1) per shot. The slots are the ONLY state (saved
+// by the equipment system): the turret's pose, target and cooldown are transient and reset on every build.
 // THE TURRET exists (is drawn) only while the sentry is ACTIVE (plugged into the PARKED train in a live world: EquipmentSystemLike.
 // active), LOADED and there is HEADROOM over the roof mount (headroom(): the bed's ceiling over the swept disc — Levels.ceilingOver —
 // and any prop box hanging there; the placement only guarantees gen/playerTrain.ts TRAIN_CLEAR.ceiling above the roof). It stands on the
 // car's middle roof hatch (craft/trainFixtures.ts turretMount), rises out of it in SENTRY.deployS, scans slowly, tracks its target and
 // sinks again when the sentry is unplugged / empty / the doors close for a departure; once the ride MOVES, at a teardown or without a
 // parked car it is hidden at once.
-// FIRE (single aimed shots, SENTRY.interval apart, one loaded round each — the round leaves the hopper BEFORE the shot):
+// FIRE (single aimed shots, SENTRY.interval apart, one loaded round each — the round leaves its slot BEFORE the shot):
 //  - targets: the living, standing, awake enemies (Game.zombies; never a ragdoll, a dormant / rising Siren, or anything that is not an
 //    enemy: market people are not in that list) within SENTRY.range of the turret's yaw axis on any storey; every SENTRY.repick s the
 //    NEAREST one with a clear shot (pickTarget: bounded — at most SENTRY.maxChecks enemies are refused by the world rays per pick; the
@@ -54,8 +55,8 @@ import {raycastWorld, type WorldHit} from '../combat/hitscan';
 import {moveCircle, type PropIndex} from '../core/physics';
 import type {EquipmentSystemLike, EquipmentUnit} from '../craft/equipmentApi';
 import {
-  SENTRY, aimAngles, aimPoint, barrelDir, clearOfBody, hullExit, loadHopper, ownHullClear, pickTarget, turnToward, turretMuzzle,
-  turretPivot, turretPivotToward, turretReach, turretSweep, unloadHopper, wrapAngle, type AmmoInventory, type V3,
+  SENTRY, aimAngles, aimPoint, barrelDir, clearOfBody, hullExit, ownHullClear, pickTarget, turnToward, turretMuzzle,
+  turretPivot, turretPivotToward, turretReach, turretSweep, wrapAngle, type V3,
 } from '../craft/sentry';
 import {turretMount} from '../craft/trainFixtures';
 import {DAMAGE_MATERIALS, propDamageSpec} from '../damage/materials';
@@ -72,23 +73,12 @@ import {WEAPONS, WeaponController, type WeaponDef} from '../weapons/weapons';
 import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from './playerTrainSpec';
 import {SentryTurretView} from './sentryTurretView';
 
-/** Prompt / toast texts. */
+/** Prompt-note / toast texts. */
 export const SENTRY_TEXT = {
-  moving: 'Not while the train is moving',
+  /** Status notes after the unit's look-at line (EquipmentSystemLike.promptNotes). */
   noHeadroom: 'no headroom for the roof turret at this platform',
   unplugged: 'not plugged in',
-  unloadHint: 'hold <b>[E]</b> to unload',
-  load: (short: string, carried: number, ammo: number, cap: number) => `<b>[E]</b> Load ${short} (${carried} carried) · sentry ${ammo}/${cap} rounds`,
-  noneCarried: (short: string, ammo: number, cap: number) => `Sentry ${ammo}/${cap} rounds — no ${short} carried`,
-  full: (ammo: number, cap: number) => `Sentry ${ammo}/${cap} rounds — full`,
-  ride: (ammo: number, cap: number) => `Sentry ${ammo}/${cap} rounds — not while the train is moving`,
-  loaded: (n: number, ammo: number, cap: number) => `Loaded ${n} round${n === 1 ? '' : 's'} — sentry ${ammo}/${cap}`,
-  nothingToLoad: (short: string) => `No ${short} rounds carried`,
-  hopperFull: (cap: number) => `The sentry is full — ${cap}/${cap} rounds`,
-  unloaded: (n: number, left: number) => left > 0 ? `Unloaded ${n} round${n === 1 ? '' : 's'} — no room for the other ${left}` : `Unloaded ${n} round${n === 1 ? '' : 's'} — the sentry is empty`,
-  nothingToUnload: 'The sentry is empty',
-  noRoom: (ammo: number, cap: number) => `No room to unload — sentry ${ammo}/${cap} rounds`,
-  empty: (short: string) => `Sentry out of ammunition — load ${short} at its console`,
+  empty: (short: string) => `Sentry out of ammunition — put ${short} rounds in its slots`,
   plugNoHeadroom: 'Sentry: no headroom for the roof turret at this platform',
 } as const;
 
@@ -109,8 +99,6 @@ export interface SentryEnemy {
 export interface SentryHost {
   state: string;
   player: {x: number; y: number; z: number; eye: number; alive: boolean};
-  /** The carried inventory (re-read on every use: a load / Retry replaces it). */
-  inv: AmmoInventory;
   hud: {toast(text: string, warn?: boolean): void};
   trainEquipment?: EquipmentSystemLike | null;
   zombies: readonly SentryEnemy[];
@@ -196,7 +184,7 @@ export class SentryTurretSystem {
   target: SentryEnemy | null = null;
   targetPart: 'torso' | 'head' = 'torso';
   /** Counters (QA / tests). */
-  readonly counts = {shots: 0, hits: 0, kills: 0, worldHits: 0, misses: 0, picks: 0, lineTests: 0, rayTests: 0, holds: 0, hullFallbacks: 0, noises: 0, loaded: 0, unloaded: 0, attached: 0, emptied: 0};
+  readonly counts = {shots: 0, hits: 0, kills: 0, worldHits: 0, misses: 0, picks: 0, lineTests: 0, rayTests: 0, holds: 0, hullFallbacks: 0, noises: 0, attached: 0, emptied: 0};
   /** The last shot (QA / tests; null: none since the last build). */
   lastShot: SentryShot | null = null;
   private readonly shot: SentryShot = {result: 'none', part: null, damage: 0, dist: 0, killed: false, end: v0(), origin: v0(), pivot: v0(), ammo: 0};
@@ -257,67 +245,22 @@ export class SentryTurretSystem {
   }
 
   private useOwner: EquipmentSystemLike | null = null;
-  /** The console's use + the plug listener, registered once the equipment system exists. */
+  /** The status note + the plug listener, registered once the equipment system exists. */
   private ensureUse(): void {
     const eq = this.host.trainEquipment ?? null;
     if (!eq || eq === this.useOwner) return;
-    eq.uses.sentry = {prompt: u => this.prompt(u), tap: u => this.tap(u), hold: u => this.hold(u)};
+    eq.promptNotes.push(u => this.note(u));
     eq.plugListeners.push((u, on) => this.onPlug(u, on));
     this.useOwner = eq;
   }
 
-  // --- the console: real rounds in, real rounds out ------------------------------------------------------------------
+  // --- the unit's look-at line ---------------------------------------------------------------------------------------
 
-  /** The unit can be loaded / unloaded now: standing in the world (not riding as cargo), the train not on a ride. */
-  private usable(u: EquipmentUnit): boolean {
-    return u.mode === 'world' && !this.host.trainRide?.riding;
-  }
-
-  /** The look-at line of the console face. */
-  prompt(u: EquipmentUnit): string | null {
-    const item = u.def.ammoItem, cap = u.def.ammoCap, a = u.ammo;
-    if (!item || !cap) return null;
-    if (!this.usable(u)) return SENTRY_TEXT.ride(a, cap);
-    const carried = this.host.inv.count(item);
-    let s = a >= cap ? SENTRY_TEXT.full(a, cap) : carried <= 0 ? SENTRY_TEXT.noneCarried(ammoShort(u), a, cap) : SENTRY_TEXT.load(ammoShort(u), carried, a, cap);
-    if (a > 0) s += ` · ${SENTRY_TEXT.unloadHint}`;
-    if (u.plug === null) s += ` · ${SENTRY_TEXT.unplugged}`;
-    else if (this.isActive(u) && !this.headroom().ok) s += ` · ${SENTRY_TEXT.noHeadroom}`;
-    return s;
-  }
-
-  /** [E] tapped on the console: load every carried round there is room for. Always handled (the console face never grabs the truck). */
-  tap(u: EquipmentUnit): boolean {
-    const h = this.host, cap = u.def.ammoCap;
-    if (!u.def.ammoItem || !cap) return false;
-    if (!this.usable(u)) { this.deny(SENTRY_TEXT.moving); return true; }
-    const n = loadHopper(h.inv, u);
-    if (n > 0) {
-      this.counts.loaded += n;
-      h.hud.toast(SENTRY_TEXT.loaded(n, u.ammo, cap));
-      (h.sfx as Partial<Sfx> | null | undefined)?.shellIn?.();
-    } else this.deny(u.ammo >= cap ? SENTRY_TEXT.hopperFull(cap) : SENTRY_TEXT.nothingToLoad(ammoShort(u)));
-    return true;
-  }
-
-  /** [E] held on the console: unload — the rounds back into the inventory, as many as fit. */
-  hold(u: EquipmentUnit): boolean {
-    const h = this.host, cap = u.def.ammoCap;
-    if (!u.def.ammoItem || !cap) return false;
-    if (!this.usable(u)) { this.deny(SENTRY_TEXT.moving); return true; }
-    if (u.ammo <= 0) { this.deny(SENTRY_TEXT.nothingToUnload); return true; }
-    const n = unloadHopper(h.inv, u, itemDef(u.def.ammoItem).stackMax);
-    if (n > 0) {
-      this.counts.unloaded += n;
-      h.hud.toast(SENTRY_TEXT.unloaded(n, u.ammo), u.ammo > 0);
-      (h.sfx as Partial<Sfx> | null | undefined)?.pickup?.();
-    } else this.deny(SENTRY_TEXT.noRoom(u.ammo, cap));
-    return true;
-  }
-
-  private deny(text: string): void {
-    this.host.hud.toast(text, true);
-    (this.host.sfx as Partial<Sfx> | null | undefined)?.denied?.();
+  /** What the sentry adds to its unit's look-at line: why the turret is not up (not plugged in / no headroom), else nothing. */
+  note(u: EquipmentUnit): string | null {
+    if (u.kind !== 'sentry') return null;
+    if (u.plug === null) return SENTRY_TEXT.unplugged;
+    return this.isActive(u) && !this.headroom().ok ? SENTRY_TEXT.noHeadroom : null;
   }
 
   /** A sentry was plugged in where the turret cannot stand: say so once (the benefit toast is the equipment system's). */
@@ -564,11 +507,9 @@ export class SentryTurretSystem {
     // stepped in
     if (!this.clearShot(t, this.yaw)) { this.dropTarget(); this.cooldown = SENTRY.repick; return; }
     if (this.clearPart !== this.targetPart) { this.targetPart = this.clearPart; return; } // (the other part now: swing onto it first)
-    // the round leaves the hopper FIRST: never a shot without one
-    const before = unit.ammo;
-    if (before <= 0) return;
-    const left = unit.setAmmo(before - 1);
-    if (!(left < before)) return;
+    // the round leaves its slot FIRST: never a shot without one
+    if (unit.takeAmmo(1) !== 1) return;
+    const left = unit.ammo;
     this.cooldown = SENTRY.interval;
     this.counts.shots++;
     this.shotSeq++;
@@ -670,14 +611,14 @@ export class SentryTurretSystem {
 
   /** QA / tests: a compact state report. */
   qa(): {
-    unit: string | null; plugged: boolean; ammo: number; cap: number; attached: boolean; model: boolean; deployed: boolean; deploy: number;
+    unit: string | null; plugged: boolean; ammo: number; slots: number; attached: boolean; model: boolean; deployed: boolean; deploy: number;
     visible: boolean; yaw: number; pitch: number; headroom: SentryHeadroom | null; target: {x: number; y: number; z: number; part: string} | null;
     cooldown: number; shots: number; counts: SentryTurretSystem['counts']; lastShot: SentryShot | null;
   } {
     const u = this.host.trainEquipment?.active('sentry') ?? null, t = this.target, r = this.host.trainRuntime?.train ? this.headroom() : null;
     const n = (v: number) => (Number.isFinite(v) ? +v.toFixed(3) : v);
     return {
-      unit: u?.uid ?? null, plugged: !!u, ammo: u?.ammo ?? 0, cap: u?.def.ammoCap ?? 0, attached: !!this.view.root.parent, model: !!this.view.model,
+      unit: u?.uid ?? null, plugged: !!u, ammo: u?.ammo ?? 0, slots: u?.slots?.length ?? 0, attached: !!this.view.root.parent, model: !!this.view.model,
       deployed: this.deploy >= 1, deploy: n(this.deploy), visible: this.view.root.visible, yaw: n(this.yaw), pitch: n(this.pitch),
       headroom: r ? {ok: r.ok, ceil: n(r.ceil), clearance: n(r.clearance)} : null,
       target: t ? {x: n(t.brain.x), y: n(t.brain.y), z: n(t.brain.z), part: this.targetPart} : null,
@@ -686,9 +627,9 @@ export class SentryTurretSystem {
   }
 }
 
-/** The short name of the rounds a unit takes (its def's ammo item: '5.56mm'). */
+/** The short name of the rounds a unit takes (its def's slot item: '5.56mm'). */
 function ammoShort(u: EquipmentUnit): string {
-  return u.def.ammoItem ? itemDef(u.def.ammoItem).short : 'ammunition';
+  return u.def.slotItem ? itemDef(u.def.slotItem).short : 'ammunition';
 }
 const NO_ROOM: SentryHeadroom = Object.freeze({ok: false, ceil: -Infinity, clearance: -Infinity});
 

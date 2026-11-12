@@ -63,8 +63,8 @@ Train crafting (task studio-train-crafting-v1-20261111-225628-01, `docs/train-cr
 compartment, opposite the Lockbox, turns **Scrap metal / Electrical parts** into four physical things. Aim + **E** opens the recipe
 list (costs, what you have, what is missing); materials come from your pockets, worn backpack, the Lockbox and crafted chests in the
 car. **Storage chest** (2 / 0): 50 more slots in a box you carry (tap **E** opens, hold **E** carries). **Route radar** (4 / 3): the
-travel map shows two stops out. **Defense sentry** (8 / 6): tap **E** on its console to load your 5.56 rounds, and a roof turret shoots
-nearby enemies with them. **Item scanner** (5 / 5): **E** on its console opens a 100 m radar scope that sweeps about every 30 s (red
+travel map shows two stops out. **Defense sentry** (8 / 6): **E** on it opens its four ammunition slots; put 5.56 rounds in (and take them back out) like in
+any store, and a roof turret shoots nearby enemies with the rounds in those slots. **Item scanner** (5 / 5): **E** on its console opens a 100 m radar scope that sweeps about every 30 s (red
 enemies, green items, gold weapons and gear). The three devices roll like the fuel dolly and work only while plugged into one of the
 train's three wall sockets, which happens by itself when one is parked beside a free socket. Everything travels with the train and is
 saved with its contents, rounds and socket.

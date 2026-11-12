@@ -55,8 +55,11 @@ chest and three devices that plug into the train. Material supply is unchanged; 
 
 ## Defense sentry
 
-- **Ammunition.** Aim at the console face. Tap **E** to load every 5.56 round you carry (up to 300 in the hopper). Hold **E** to take
-  the loaded rounds back. Rounds are only ever moved: none is created, and the count is saved with the unit.
+- **Ammunition.** The sentry has its own inventory of **four slots** that take 5.56 rounds only (up to 4 × 120). **E** on the sentry
+  opens it beside your quick slots and pockets, like a chest: click a stack to move it across, drag it onto a slot, Shift-drag to
+  split. Stacks merge and split by the usual inventory rules. Anything that is not 5.56 is refused and stays where it was.
+- The turret fires only the rounds in those slots, one per shot, last slot first. Rounds you carry are never used. Rounds are only
+  ever moved: none is created, and the stacks are saved with the unit.
 - **The turret** stands on the middle roof hatch. It rises when the sentry is plugged into the parked train, loaded, and there is
   headroom over the roof. It sinks when the sentry is unplugged or empty, or when the train leaves.
 - **Targets.** Living, awake enemies within 28 m, the nearest with a clear shot first. Market people are never targets.
@@ -96,7 +99,7 @@ belongs to the station it was left in. One mechanism covers every kind; the code
 |---|---|---|---|
 | Unit number, kind, position | train record (`equipment`) or the station's lane (`train-equipment.here`) | rides in the car to the next station | restored exactly |
 | Chest contents | with the unit (ordinary item stacks) | ride along | restored exactly, never refilled |
-| Sentry rounds | with the unit | ride along | restored exactly |
+| Sentry rounds | with the unit (ordinary 5.56 stacks in its four slots) | ride along | restored exactly |
 | Which socket a device is on | with the unit (train only) | kept; working again on arrival | restored when still in reach |
 | Scanner snapshot, turret pose | not saved | cleared at each station | cleared |
 
@@ -105,6 +108,10 @@ belongs to the station it was left in. One mechanism covers every kind; the code
   nothing is ever dropped from a save.
 - A chest in your hands when the train leaves or the game saves is recorded as the train's.
 - A damaged equipment record loads as no equipment. It never produces a free device, item or round.
+- **Saves from before the sentry had slots** recorded a round count (0–300) instead of stacks. Such a save stays valid. The first
+  time the unit stands in a played station its count becomes real 5.56 stacks in its slots: the same number of rounds, each stack
+  with a new item number. Until then the count is written back unchanged, so a unit left in a station you never revisit keeps its
+  rounds. Retry, Load and export–import of such a save give the same rounds again, never more.
 
 ## Assets
 
@@ -139,13 +146,14 @@ belongs to the station it was left in. One mechanism covers every kind; the code
 | Atomic craft | `craft/crafting.ts` |
 | Bench and recipe list | `world/craftBench.ts`, `ui/craftView.ts` |
 | Units, plugs, cargo, saves | `world/trainEquipment.ts`, `world/trainEquipmentModel.ts` |
-| Chest view | `world/equipmentChestStore.ts` |
+| Store view of a chest or a sentry | `world/equipmentChestStore.ts`, `ui/lockboxView.ts` |
 | Sentry | `craft/sentry.ts`, `world/sentryTurret.ts`, `world/sentryTurretView.ts` |
 | Scanner | `craft/scanner.ts`, `world/itemScanner.ts`, `ui/scannerView.ts` |
 | Save validation | `save/validate.ts` |
 
 QA hooks (`?qa=1`): `__LL.bench()`, `benchGo()`, `benchOpen()`, `benchCraft(kind)`, `equipment()`, `equipmentCraft(kind)`,
-`equipmentToPlug(uid, i)`, `sentry()`, `scanner()`, `scannerSweep()`.
+`equipmentToPlug(uid, i)`, `sentry()`, `scanner()`, `scannerSweep()`. The store view of any unit with slots (a chest or a sentry,
+by unit number): `chestStore()`, `chestTap(uid)`, `chestQuick(ref)`, `chestMove(from, to, count)`, `chestClose()`.
 
 Tests: `tests/train-crafting-session.test.ts` runs the whole chain with every system real. Each part has its own files:
 `craft-*`, `train-equipment-*`, `equipment-chest-store`, `sentry-*`, `scanner-*`, `route-radar`, `train-crafting-contract`,
