@@ -828,7 +828,7 @@
    "measured": {
     "size": {
      "l": 0.958,
-     "h": 0.52,
+     "h": 0.521,
      "w": 0.423
     },
     "pitch": true,
@@ -844,7 +844,14 @@
     },
     "pitchClear": {
      "down": 31,
-     "up": 0
+     "up": 0,
+     "overPlane": 29
+    },
+    "lowestAtDown": {
+     "20": 0.1,
+     "25": 0.05,
+     "29": 0.012,
+     "31": -0.007
     },
     "baseRadius": 0.215,
     "swingRadius": 0.651,
@@ -946,7 +953,7 @@
     "split": "connected shells (vertices welded by position); shells are seeded into base / yoke / head by where they are, the remaining small ones join the class of the nearest classified shell (nearest first); mirror twins must agree; the result must equal the reviewed shell / triangle counts",
     "caps": "each rear arm plate is an open shell whose boundary loop lies in its innermost plane: a triangle fan over that loop about its centre, wound to continue the shell's outside (facing the gun); each cap vertex takes the texture coordinate of the nearest vertex of the plate's own outer face (no new texture)",
     "pitchPivot": "chosen, not a modelled hinge: the lateral axis that lets the gun depress in front of the yoke (the modelled hub discs on the rear arms would only allow ~6 degrees before the nose meets the yoke floor)",
-    "pitchClear": "column test on a 2 mm plan grid: the tilted head's underside against the top of the yoke + base, columns overlapping at rest (the mounts) left out; the largest whole-degree angle each way with at most 0.5 cm2 deeper than 1 mm",
+    "pitchClear": "column test on a 2 mm plan grid: the tilted head's underside against the top of the yoke + base, columns overlapping at rest (the mounts) left out; the largest whole-degree angle each way with at most 0.5 cm2 deeper than 1 mm. overPlane = the largest depression (within down) at which the head's lowest point (the barrel's tip) stays 10 mm above the mounting plane y = 0 (lowestAtDown: that point's height per angle)",
     "muzzle": "the centre of the head's vertices within 4 mm of its front end (the barrel's tip), at rest",
     "yawAxis": "the centre of the base flange's bounds (the slew rings agree within 4 mm)"
    },

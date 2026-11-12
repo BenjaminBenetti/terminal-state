@@ -76,12 +76,15 @@ const MODULE_SCALE = {radar: 1.08, sentry: 0.98, scanner: 1.05};
 /** The dolly frame (world/fuelCartModel.ts CART_LOOK, fuel/trainPort.ts PORT.cartRadius; tests/train-equipment-asset.test.ts pins these
  *  against the sources): the hand truck's model origin z, its nose plate's top, the footprint circle about the dolly origin. */
 const DOLLY = {truckUrl: 'assets/models/p7-hand-truck-t25.glb', truckZ: -0.071268, plateTop: 0.073, radius: 0.36, plate: {x0: -0.174, x1: 0.173, z0: -0.066, z1: 0.232}};
-/** Module rules on the truck (m): clearance behind the module, the hard plan-radius cap (whip aerials included), top limits above the floor. */
-const MOUNT = {clear: 0.004, hardRadius: 0.40, bodyTopMax: 1.20, topMax: 1.30};
+/** Module rules on the truck (m): clearance behind the module, the hard plan-radius cap (whip aerials included), top limits above the floor
+ *  (the body under the truck's 1.20 m handle; everything inside the devices' 1.25 m clear height: craft/equipment.ts). */
+const MOUNT = {clear: 0.004, hardRadius: 0.40, bodyTopMax: 1.20, topMax: 1.25};
 /** The turret's tilt axis (cooked frame, m): the lateral axis through this point. Chosen by the clearance scan below (pitchClear): the
  *  gun's nose swings DOWN in front of the yoke's open front while its rear lifts, so the roof gun can depress onto targets below it. */
 const PITCH_PIVOT = {x: 0, y: 0.27, z: 0.052};
 const PITCH_NEED = {down: 30, up: 0};
+/** The head's lowest point must stay this far above the mounting plane (y = 0) at the recorded `overPlane` depression (m). */
+const PLANE_CLEAR = 0.01;
 
 const sha = b => crypto.createHash('sha256').update(b).digest('hex');
 const fail = m => { throw new Error(`build-train-equipment: ${m}`); };
@@ -372,7 +375,7 @@ async function cookBench(m) {
   return {...o, ...f, scale: s, orient: {...orient, result: 'Meshy native frame kept (no rotation): +Y up, the front (gauge dials, vise screw) = +Z, the low rail at the back (-Z) and the +X end'},
     transform: 'uniform scale to the runtime length, grounded (min y = 0), centred on x / z, baked into the vertices (identity node); no rotation, no geometry simplification',
     convention: 'metres at runtime size, +Y up, origin at the bottom centre of the footprint; +Z = the front (the side the player stands at), X along the wall it stands against (vise at -X, gauge box at +X)',
-    measured: {size: {l: r3(dims[0]), h: r3(dims[1]), d: r3(dims[2])}, ...M},
+    measured: {size: {l: r3(b.max[0] - b.min[0]), h: r3(b.max[1] - b.min[1]), d: r3(b.max[2] - b.min[2])}, ...M},
     method: {
       worktopY: 'top-down height map (5 mm): the most populated 1 cm band above 0.5 m, refined to the mean of the cells within 6 mm = the wooden top',
       worktop: 'the height-map columns / rows in which at least a quarter of the cells are within 8 mm of the worktop height (the top as far as it is seen from above, inside its rail); free = the largest rectangle made only of such cells (nothing stands in it)',
@@ -730,7 +733,7 @@ async function cookTurret(m) {
   node.yoke.addChild(node.head);
   mat.setName(m.id);
   const f = await finish(doc, m);
-  const {chk, b, dims} = f;
+  const {chk, b} = f;
   // structure: three named nodes, base + yoke at the origin under the scene, head under the yoke at the pivot, one shared material
   const cr = chk.getRoot(), names = cr.listNodes().map(n => n.getName()).sort().join();
   const nb = cr.listNodes().find(n => n.getName() === 'turret-base'), ny = cr.listNodes().find(n => n.getName() === 'turret-yoke'), nh = cr.listNodes().find(n => n.getName() === 'turret-head');
@@ -748,12 +751,18 @@ async function cookTurret(m) {
   if (!(Math.abs(muzzle.x) < 0.005 && muzzle.z > 0.6 && muzzle.y > PITCH_PIVOT.y)) fail(`turret: muzzle implausible ${JSON.stringify(muzzle)}`);
   const clear = pitchClearance(headT, [...yokeT, ...baseT], b);
   if (clear.down < PITCH_NEED.down || clear.up < PITCH_NEED.up) fail(`turret: the head does not clear the yoke over the needed tilt ${JSON.stringify(clear)}`);
+  // the mounting plane (y = 0: a flat roof under the base): how low the tilted head's lowest point (the barrel's tip) comes
+  const headPts = headT.flat();
+  const lowest = deg => { const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a); return lo(headPts, q => PITCH_PIVOT.y + (q[1] - PITCH_PIVOT.y) * c - (q[2] - PITCH_PIVOT.z) * s); };
+  let overPlane = 0;
+  while (overPlane < clear.down && lowest(overPlane + 1) >= PLANE_CLEAR) overPlane++;
   const planR = T => hi(T.flat(), q => Math.hypot(q[0], q[2]));
   const box = q => ({x0: r3(q.min[0]), x1: r3(q.max[0]), y0: r3(q.min[1]), y1: r3(q.max[1]), z0: r3(q.min[2]), z1: r3(q.max[2])});
   const measured = {
-    size: {l: r3(dims[2]), h: r3(dims[1]), w: r3(dims[0])},
+    size: {l: r3(b.max[2] - b.min[2]), h: r3(b.max[1] - b.min[1]), w: r3(b.max[0] - b.min[0])},
     pitch: true, pitchPivot: PITCH_PIVOT, muzzle,
-    pitchClear: {down: clear.down, up: clear.up},
+    pitchClear: {down: clear.down, up: clear.up, overPlane},
+    lowestAtDown: Object.fromEntries([20, 25, overPlane, clear.down].map(d => [d, r3(lowest(d))])),
     baseRadius: r3(planR(baseT)), swingRadius: r3(Math.max(planR(yokeT), planR(headT))),
     parts: {base: box(bb), yoke: box(by), head: box(bh)},
     split, pitchOverlap: clear.table,
@@ -767,7 +776,7 @@ async function cookTurret(m) {
       split: 'connected shells (vertices welded by position); shells are seeded into base / yoke / head by where they are, the remaining small ones join the class of the nearest classified shell (nearest first); mirror twins must agree; the result must equal the reviewed shell / triangle counts',
       caps: 'each rear arm plate is an open shell whose boundary loop lies in its innermost plane: a triangle fan over that loop about its centre, wound to continue the shell\'s outside (facing the gun); each cap vertex takes the texture coordinate of the nearest vertex of the plate\'s own outer face (no new texture)',
       pitchPivot: 'chosen, not a modelled hinge: the lateral axis that lets the gun depress in front of the yoke (the modelled hub discs on the rear arms would only allow ~6 degrees before the nose meets the yoke floor)',
-      pitchClear: 'column test on a 2 mm plan grid: the tilted head\'s underside against the top of the yoke + base, columns overlapping at rest (the mounts) left out; the largest whole-degree angle each way with at most 0.5 cm2 deeper than 1 mm',
+      pitchClear: `column test on a 2 mm plan grid: the tilted head's underside against the top of the yoke + base, columns overlapping at rest (the mounts) left out; the largest whole-degree angle each way with at most 0.5 cm2 deeper than 1 mm. overPlane = the largest depression (within down) at which the head's lowest point (the barrel's tip) stays ${PLANE_CLEAR * 1000} mm above the mounting plane y = 0 (lowestAtDown: that point's height per angle)`,
       muzzle: 'the centre of the head\'s vertices within 4 mm of its front end (the barrel\'s tip), at rest',
       yawAxis: 'the centre of the base flange\'s bounds (the slew rings agree within 4 mm)',
     }};
@@ -881,8 +890,11 @@ ${['radar', 'sentry', 'scanner'].map(moduleLine).join('\n')}
 /**
  * The roof turret: size at rest (l along Z, h, w along X), the tilt axis (the lateral axis through \`pitchPivot\`: a chosen axis that
  * lets the gun depress, not the modelled hub discs), the muzzle = the barrel tip's centre at rest (model frame). Added by the cook:
- * \`pitchClear\` = the largest tilt in whole degrees each way at which the head still clears the yoke (down = positive rotation.x),
- * \`baseRadius\` = the fixed base ring's plan radius, \`swingRadius\` = the largest plan distance of the turning parts from the yaw axis.
+ * \`pitchClear\` = the largest tilt in whole degrees each way at which the head still clears the yoke (down = positive rotation.x; up 0:
+ * raising the muzzle sinks the head's rear mounts into the yoke's arms — a few cm2 up to 10 degrees, the gun body from 12) and
+ * \`overPlane\` = the largest depression at which the barrel's tip stays ${PLANE_CLEAR * 1000} mm above the mounting plane y = 0 (a flat roof under the base;
+ * where the roof falls away the gun may go down to \`down\`), \`baseRadius\` = the fixed base ring's plan radius, \`swingRadius\` = the
+ * largest plan distance of the turning parts from the yaw axis.
  */
 export const TRAIN_TURRET_MEASURED = {
   size: ${lit(TU.size)},

@@ -50,15 +50,18 @@ export const TRAIN_MODULE_MEASURED = {
 /**
  * The roof turret: size at rest (l along Z, h, w along X), the tilt axis (the lateral axis through `pitchPivot`: a chosen axis that
  * lets the gun depress, not the modelled hub discs), the muzzle = the barrel tip's centre at rest (model frame). Added by the cook:
- * `pitchClear` = the largest tilt in whole degrees each way at which the head still clears the yoke (down = positive rotation.x),
- * `baseRadius` = the fixed base ring's plan radius, `swingRadius` = the largest plan distance of the turning parts from the yaw axis.
+ * `pitchClear` = the largest tilt in whole degrees each way at which the head still clears the yoke (down = positive rotation.x; up 0:
+ * raising the muzzle sinks the head's rear mounts into the yoke's arms — a few cm2 up to 10 degrees, the gun body from 12) and
+ * `overPlane` = the largest depression at which the barrel's tip stays 10 mm above the mounting plane y = 0 (a flat roof under the base;
+ * where the roof falls away the gun may go down to `down`), `baseRadius` = the fixed base ring's plan radius, `swingRadius` = the
+ * largest plan distance of the turning parts from the yaw axis.
  */
 export const TRAIN_TURRET_MEASURED = {
-  size: {l: 0.958, h: 0.52, w: 0.423},
+  size: {l: 0.958, h: 0.521, w: 0.423},
   pitch: true,
   pitchPivot: {x: 0, y: 0.27, z: 0.052},
   muzzle: {x: 0, y: 0.322, z: 0.651},
-  pitchClear: {down: 31, up: 0},
+  pitchClear: {down: 31, up: 0, overPlane: 29},
   baseRadius: 0.215,
   swingRadius: 0.651,
 } as const;

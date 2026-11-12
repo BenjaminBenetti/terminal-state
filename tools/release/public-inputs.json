@@ -2825,8 +2825,8 @@
     },
     {
       "path": "assets/derivatives/train-equipment.json",
-      "bytes": 30012,
-      "sha256": "169163cac415513a1a6100187ae6ffd5fd04f794ca5b116a2fc8d11bf4ef1836"
+      "bytes": 30324,
+      "sha256": "95d5c1e3dee3ad1ddb7a732974c8bd5c5443aa2276a805201bfe14e4e9a31b6d"
     },
     {
       "path": "assets/derivatives/train-fuel-can.json",
