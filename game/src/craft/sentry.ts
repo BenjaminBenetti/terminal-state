@@ -10,14 +10,20 @@
 // back into the inventory (unloadHopper: stack by stack, as many as fit — what does not fit stays loaded). Inventory + hopper is constant
 // through any sequence of loads / unloads; nothing here makes a round.
 //
+// THE TURRET stands on the car's middle roof hatch (craft/trainFixtures.ts turretMount: the yaw axis, the underside of the base ring).
+// Its tilt axis is NOT on the yaw axis: the cooked model's pitch pivot (assets/trainEquipment.generated.ts TRAIN_TURRET_MEASURED.
+// pitchPivot) sits a few centimetres ahead of it, so the PIVOT orbits the yaw axis as the gun turns (turretPivot(yaw)).
 // THE LINE OF FIRE (train-local frame of world/playerTrainSpec.ts: +X front, +Y up, origin at rail-top height on the centre line): from
-// the turret's PIVOT (the yaw axis at the tilt axis' height, above craft/trainFixtures.ts turretMount) to the aim point.
-//  1. OWN HULL (ownHullClear): while the line is above the car's plan outline (|x| <= length / 2, |z| <= width / 2) it stays at least
-//     SENTRY.hullMargin above the roof outline (trainFixtures.ts TRAIN_ROOF_PROFILE: the cooked shell's highest roof point at or beyond
-//     that |z|, vent boxes included; checked exactly against its steps). The turret never shoots through its own roof — which leaves a
-//     dead zone close beside the car (a target under the eaves), and fore / aft along the roof, and inside the car.
+// the PIVOT of the turret at the yaw it has — for a clear-shot test, at the yaw that points at that target (turretPivotToward) — to the
+// aim point.
+//  1. OWN HULL (ownHullClear): while the line is above the car's plan it stays at least SENTRY.hullMargin above the measured roof
+//     outline AT EACH STATION ALONG IT (trainFixtures.ts roofTopAtPoint: per 2 cm band of |z| the highest roof point at or beyond it, with
+//     its own outline over each of the three hatch boxes, the end caps and the body between them). The outline is constant inside each
+//     plan rectangle (band x stretch), so the test is exact: the line's height where it enters / leaves every rectangle it crosses. The
+//     turret never shoots through its own roof — which leaves a dead zone close beside the car (a target under the eaves; straight
+//     across the car the lower elevation stop binds before the roof does), fore / aft along the roof, and inside the car.
 //  2. THE VIRTUAL ORIGIN (hullExit): the parked car's colliders (world/playerTrain.ts trainColliders) include a ROOF BOX over the full
-//     outline up to the vents' top, coarser than the real roof — a ray cast from the pivot would stop in it. So the level's rays (sight,
+//     outline up to the hatches' top, coarser than the real roof — a ray cast from the pivot would stop in it. So the level's rays (sight,
 //     bullet) start where the line leaves the outline, SENTRY.hullPush outside it (every collider box of the car lies inside the outline).
 //     A convex outline is never re-entered: from there on the car cannot be hit.
 // Everything past the virtual origin is the game's normal combat (world/sentryTurret.ts): Levels.lineOfSight + the bullet's world ray, the
@@ -26,11 +32,11 @@
 import type {ItemStack} from '../items/inventory';
 import {TRAIN_TURRET_MEASURED} from '../assets/trainEquipment.generated';
 import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from '../world/playerTrainSpec';
-import {TRAIN_ROOF_PROFILE, roofTopAt, turretMount} from './trainFixtures';
+import {TRAIN_ROOF, roofTopAtPoint, turretMount} from './trainFixtures';
 
 const DEG = Math.PI / 180;
 
-/** Every tuning number of the sentry (one place; first-pass defaults of the lead's design). */
+/** Every tuning number of the sentry (one place). */
 export const SENTRY = {
   /** Targets: within this horizontal distance of the turret (m), on any storey. */
   range: 28,
@@ -55,23 +61,37 @@ export const SENTRY = {
   hullMargin: 0.03,
   /** THE VIRTUAL ORIGIN: this far outside the car's plan outline (m). */
   hullPush: 0.04,
-  /** The turret: yaw / pitch rates (rad/s), the elevation stops (rad), the idle scan (rad/s, its pitch). */
+  /** The turret: yaw / pitch rates (rad/s). */
   yawRate: 200 * DEG,
   pitchRate: 120 * DEG,
-  pitchMin: -35 * DEG,
-  pitchMax: 20 * DEG,
+  /**
+   * The elevation stops (rad, up positive) — the cooked turret's own.
+   * DOWN: TRAIN_TURRET_MEASURED.pitchClear.overPlane — the largest depression at which the barrel's tip stays 10 mm above the plane
+   * the base stands on (the hatch top under it).
+   * UP: 8 degrees. Raising the muzzle sinks the head's rear lugs into the yoke's rear arm housings — a nested-lug overlap, hidden from
+   * the platform: 1.6 cm2 at 2 degrees, 12.2 cm2 at 10 degrees where the gun's underside starts to touch the yoke's floor, 78.5 cm2 at
+   * 12 degrees (the gun body through the floor). 8 keeps a margin below the 10-degree contact; pitchClear.up (0) stays the strict
+   * no-overlap limit.
+   */
+  pitchMin: -TRAIN_TURRET_MEASURED.pitchClear.overPlane * DEG,
+  pitchMax: 8 * DEG,
+  /** The idle scan (rad/s) and its pitch: a small depression. */
   scanRate: 25 * DEG,
   scanPitch: -6 * DEG,
   /** Rising out of / sinking into the roof (s). */
   deployS: 0.8,
   /** Free height needed above the deployed turret's highest reach (m). */
   headroom: 0.05,
+  /**
+   * The cooked head's highest point above the base's underside at the LOWER stop (m): the sensor box at its rear rises as the muzzle
+   * goes down (TRAIN_TURRET_MEASURED.size.h at rest). Measured on the model's vertices; tests/sentry-turret-model.test.ts re-measures
+   * it on the GLB. TODO(lead): a number for the cook's TRAIN_TURRET_MEASURED (the highest point over the elevation range).
+   */
+  topDepressed: 0.568,
   /** The aim point on an enemy's torso volume: this fraction from its lower end to its upper end. */
   torsoUp: 0.7,
   /** The round it fires: weapons/weapons.ts WEAPONS[weapon] (damage, falloff, part multipliers, range, knockback, noise). */
   weapon: 'rifle',
-  /** The pivot clears the roof's crest by at least this (m): lower, and the dead zone beside the car swallows the platform (a cook check). */
-  pivotClearMin: 0.12,
 } as const;
 
 export interface V3 { x: number; y: number; z: number }
@@ -146,23 +166,40 @@ export function unloadHopper(inv: AmmoInventory, unit: AmmoHopper, stackMax: num
 // ---------------------------------------------------------------------------------------------------------------------------------
 // The turret on the roof (train-local)
 
-/** The turret's highest reach above its base (m): its own height, or the barrel's tip at full elevation. */
+/**
+ * The turret's highest reach above its base's underside (m) anywhere between the elevation stops: its height at rest, the head's rear
+ * at the lower stop (SENTRY.topDepressed), the barrel's tip at the upper stop.
+ */
 export function turretReach(): number {
   const M = TRAIN_TURRET_MEASURED, dy = M.muzzle.y - M.pitchPivot.y, dz = M.muzzle.z - M.pitchPivot.z;
-  const tip = M.pitchPivot.y + Math.hypot(dy, dz) * Math.sin(SENTRY.pitchMax + Math.atan2(dy, dz)) + 0.02;
-  return Math.max(M.size.h, tip);
+  const tip = M.pitchPivot.y + dy * Math.cos(SENTRY.pitchMax) + dz * Math.sin(SENTRY.pitchMax) + 0.02;
+  return Math.max(M.size.h, SENTRY.topDepressed, tip);
 }
 
-/** The radius the turning turret sweeps about its yaw axis (m). */
+/** The radius the turning turret sweeps about its yaw axis (m): the cook's measurement. */
 export function turretSweep(): number {
-  const M = TRAIN_TURRET_MEASURED;
-  return Math.hypot(Math.max(Math.abs(M.muzzle.z), M.size.l - Math.abs(M.muzzle.z)), M.size.w / 2);
+  return TRAIN_TURRET_MEASURED.swingRadius;
 }
 
-/** The PIVOT: the point of the yaw axis at the tilt axis' height — where the line of fire starts (train-local). */
-export function turretPivot(spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC, out: V3 = {x: 0, y: 0, z: 0}): V3 {
-  const m = turretMount(spec);
-  out.x = m.x; out.y = m.y + TRAIN_TURRET_MEASURED.pitchPivot.y; out.z = m.z;
+/**
+ * The PIVOT of a turret turned `yaw` (about +Y; 0 = the car's +Z): the middle of the tilt axis — where the line of fire starts
+ * (train-local). It is NOT on the yaw axis (TRAIN_TURRET_MEASURED.pitchPivot is ahead of it): it orbits the axis with the yaw.
+ */
+export function turretPivot(yaw: number, spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC, out: V3 = {x: 0, y: 0, z: 0}): V3 {
+  const P = TRAIN_TURRET_MEASURED.pitchPivot, m = turretMount(spec), c = Math.cos(yaw), s = Math.sin(yaw);
+  out.x = m.x + P.x * c + P.z * s; out.y = m.y + P.y; out.z = m.z - P.x * s + P.z * c;
+  return out;
+}
+
+/**
+ * The pivot of a turret turned to POINT AT the train-local plan point (x, z) — the line of fire to a target there starts here. The yaw
+ * is the bearing of the point from the yaw axis: the tilt axis' middle lies in the gun's own vertical plane (pitchPivot.x = 0; pinned
+ * by tests/sentry-hull), so the pivot is on that bearing and the line from it to the point has the same yaw. No trigonometry.
+ */
+export function turretPivotToward(x: number, z: number, spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC, out: V3 = {x: 0, y: 0, z: 0}): V3 {
+  const P = TRAIN_TURRET_MEASURED.pitchPivot, m = turretMount(spec), ax = x - m.x, az = z - m.z, h = Math.hypot(ax, az);
+  const s = h > 1e-9 ? ax / h : 0, c = h > 1e-9 ? az / h : 1;
+  out.x = m.x + P.x * c + P.z * s; out.y = m.y + P.y; out.z = m.z - P.x * s + P.z * c;
   return out;
 }
 
@@ -202,13 +239,23 @@ export function turnToward(cur: number, want: number, max: number): number {
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // The own-hull rule and the virtual origin (train-local)
-//
-// TODO(lead): TRAIN_ROOF_PROFILE is ONE outline for the whole car length, vent boxes included, so the crest (3.85 m) binds every line
-// although the turret stands between two vent boxes on a 3.70 m skin. Measured with the provisional turret constants (tests/sentry-hull):
-// a body on the platform can be shot in the chest from 3.25 m off the car's side, in the head from 2.33 m. An outline that knows where
-// along the car the vent boxes are, or a higher tilt axis, would narrow that strip; the rule below needs no change for either.
 
 const SPAN: [number, number] = [0, 0];
+/** At a crossing of a piece's edge the outline is read this far either side of it (m): the higher of the adjoining pieces counts. */
+const EDGE = 1e-6;
+/** roofTopAtPoint knows a roof up to this far beyond the car's half width (m). */
+const ROOF_SIDE = 0.02;
+/** The stations along the car where the outline changes: the end caps, each hatch box's two ends. */
+const ROOF_X_EDGES: readonly number[] = [-TRAIN_ROOF.endX, TRAIN_ROOF.endX, ...TRAIN_ROOF.hatches.flatMap(h => [h.x0, h.x1])];
+/** The highest outline anywhere on the car: a line that stays above it needs no walk. */
+const ROOF_MAX: number = Math.max(...TRAIN_ROOF.body, ...TRAIN_ROOF.ends, ...TRAIN_ROOF.hatches.flatMap(h => [...h.top]));
+
+/** The highest roof outline within EDGE of the plan point (x, z): at an edge both pieces, at a corner all four. */
+function topNear(x: number, z: number, spec: PlayerTrainSpec): number {
+  return Math.max(
+    roofTopAtPoint(x - EDGE, z - EDGE, spec), roofTopAtPoint(x - EDGE, z + EDGE, spec),
+    roofTopAtPoint(x + EDGE, z - EDGE, spec), roofTopAtPoint(x + EDGE, z + EDGE, spec));
+}
 
 /** The part [t0, t1] of the ray o + d t, 0 <= t <= maxT, above the plan rect |x| <= hx, |z| <= hz (into `out`); false: none. */
 export function planSpan(o: V3, d: V3, maxT: number, hx: number, hz: number, out: [number, number] = [0, 0]): boolean {
@@ -231,25 +278,35 @@ export function planSpan(o: V3, d: V3, maxT: number, hx: number, hz: number, out
 }
 
 /**
- * OWN HULL: the ray o + d t (unit d, 0 <= t <= maxT) never comes within `margin` of the car's roof outline while it is above the car's
- * plan outline. False: the shot would go through the car's own roof (or starts under it). EXACT against the stepped outline (no
- * sampling): the line is straight and the outline is constant between its steps, so the line is lowest against each step where it
- * enters / leaves it — the ends of its span over the car and every crossing of a step's |z| (on either side of the centre line),
- * where the higher (inner) step counts.
+ * OWN HULL: the ray o + d t (unit d, 0 <= t <= maxT) never comes within `margin` of the car's roof outline (trainFixtures.ts
+ * roofTopAtPoint at the station under it) while it is above the car's plan. False: the shot would go through the car's own roof (or
+ * starts under it). EXACT, no sampling: the outline is constant inside each rectangle of the plan — a 2 cm band of |z| x a stretch
+ * along the car (a hatch box, an end cap, the body between) — and the line is straight, so against each rectangle it is lowest where
+ * it enters or leaves it. Tested: the two ends of its span over the car, every crossing of a band's edge (|z| = j x step, the hatch
+ * boxes' sides among them) and of a stretch's edge (each hatch box's ends, the end caps), against the higher outline adjoining the
+ * crossing. No allocation; at most ~160 crossings (a line right across the car), none for a line that stays above the highest hatch.
  */
 export function ownHullClear(o: V3, d: V3, maxT: number, spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC, margin: number = SENTRY.hullMargin): boolean {
-  if (!planSpan(o, d, maxT, spec.length / 2, spec.width / 2, SPAN)) return true;
-  const t0 = SPAN[0], t1 = SPAN[1];
-  if (o.y + d.y * t0 < roofTopAt(o.z + d.z * t0, spec) + margin) return false;
-  if (o.y + d.y * t1 < roofTopAt(o.z + d.z * t1, spec) + margin) return false;
-  if (Math.abs(d.z) < 1e-12) return true; // along the car: the same step all the way
-  const P = TRAIN_ROOF_PROFILE;
-  for (let i = 1; i < P.length; i++) {
-    const z = P[i][0], inner = Math.max(P[i - 1][1], P[i][1]) + margin;
-    let t = (z - o.z) / d.z;
-    if (t > t0 && t < t1 && o.y + d.y * t < inner) return false;
-    t = (-z - o.z) / d.z;
-    if (t > t0 && t < t1 && o.y + d.y * t < inner) return false;
+  if (!planSpan(o, d, maxT, spec.length / 2, spec.width / 2 + ROOF_SIDE, SPAN)) return true;
+  const t0 = SPAN[0], t1 = SPAN[1], y0 = o.y + d.y * t0, y1 = o.y + d.y * t1;
+  if (Math.min(y0, y1) >= ROOF_MAX + margin) return true;
+  if (y0 < topNear(o.x + d.x * t0, o.z + d.z * t0, spec) + margin) return false;
+  if (y1 < topNear(o.x + d.x * t1, o.z + d.z * t1, spec) + margin) return false;
+  if (Math.abs(d.z) > 1e-12) {
+    // the bands' edges across the car (z = 0 is not one: the same band either side of the centre line)
+    const step = TRAIN_ROOF.step, za = o.z + d.z * t0, zb = o.z + d.z * t1, j1 = Math.floor(Math.max(za, zb) / step);
+    for (let j = Math.ceil(Math.min(za, zb) / step); j <= j1; j++) {
+      if (j === 0) continue;
+      const z = j * step, t = (z - o.z) / d.z;
+      if (o.y + d.y * t < topNear(o.x + d.x * t, z, spec) + margin) return false;
+    }
+  }
+  if (Math.abs(d.x) > 1e-12) {
+    // the stretches' edges along the car
+    for (let i = 0; i < ROOF_X_EDGES.length; i++) {
+      const x = ROOF_X_EDGES[i], t = (x - o.x) / d.x;
+      if (t > t0 && t < t1 && o.y + d.y * t < topNear(x, o.z + d.z * t, spec) + margin) return false;
+    }
   }
   return true;
 }
