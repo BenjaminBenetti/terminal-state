@@ -194,6 +194,8 @@ import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // 
 import {carriedModelKeys, installTrainPropCargo, type TrainPropCargo} from './world/trainPropCargo'; // task train-all-cargo: every movable prop aboard travels too
 import {installCorpses, type CorpseSystem} from './world/corpses'; // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): carried dead bodies
 import {installChipper, type ChipperSystem} from './world/chipper'; // task corpse-chipper (lane CHIPPER): the woodchipper fixed in the train
+import {installTrainOnboarding, type TrainOnboarding} from './world/trainOnboarding'; // task first-player-onboarding: the train's seven 3D guide markers
+import {OnboardingStore, browserOnboardingStorage} from './ui/onboardingStore'; // (the same task) the browser-global tutorial record
 import type {PropPlacement} from './gen/props';
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
@@ -433,6 +435,9 @@ export class Game {
   corpses!: CorpseSystem;
   /** Task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): the woodchipper fixed in the train (world/chipper.ts): feed dead bodies, fuel. */
   readonly chipper: ChipperSystem;
+  /** Task first-player-onboarding: the browser-global tutorial record (never in a save) and the train's first-player markers. */
+  readonly onboarding: OnboardingStore;
+  readonly trainOnboarding: TrainOnboarding;
   /** Task studio-survivor-market-20261108-005807-01 (lane TRADE): market trade (market/trade/tradeSystem.ts); since the rework Rail Ties are a physical item. */
   trade!: TradeSystem;
   /** Task studio-weapon-runtime-fix-20261110-022206-01: the delivery of the new weapons' lazily loaded models (world/weaponVarietyDelivery.ts). */
@@ -833,6 +838,12 @@ export class Game {
     // view; its teardown keeps a riding car's machine) — the corpse sink, the grind / transfer / blood / noise, the look-at line, warm pool 'train-chipper'
     this.chipper = installChipper(this);
     hookName('chipper');
+    // task studio-first-player-onboarding-20261111-234657-01: after the train / chipper (its section build reads the placed console desk) —
+    // seven world-space markers at the parked train until the player first walks 10 m from it (world/trainOnboarding.ts); warm pool
+    // 'train-onboarding'; nothing collides, casts or takes [E]
+    this.onboarding = new OnboardingStore(browserOnboardingStorage());
+    this.trainOnboarding = installTrainOnboarding(this, this.onboarding);
+    hookName('trainOnboarding');
     this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionModelKeys.push(skywaysKitchenModelKeysFor); // task studio-skyways-level-20261106-054448 (lane FOOD): the ramen restaurant's skyways-* models
     this.sectionModelKeys.push(skywaysAddonModelKeysFor); // task studio-skyways-level-20261106-054448 (lane ADDON): the add-on's skyways-* models

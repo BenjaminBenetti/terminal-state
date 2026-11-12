@@ -610,6 +610,11 @@ export class PlayerTrainRuntime {
     return true;
   }
 
+  /** Task first-player-onboarding: a layout.props box of this car that is see-through window glass (sight lines pass it). */
+  isGlass(box: PropPlacement | undefined): boolean {
+    return !!box && this.glassBoxes.has(box);
+  }
+
   /** Fetches the interior textures once (never rejects). */
   preloadTextures(): Promise<void> {
     if (!this.opts.textures) return Promise.resolve();
