@@ -153,7 +153,8 @@ describe('seeded roster: placement policies (synthetic levels: the pass itself, 
       const seed = s * 7919 >>> 0, a = synthetic(seed), b = synthetic(seed);
       for (const l of [a, b]) { l.zombies[3].horde = 0; l.zombies[3].archetype = 'zombie'; l.zombies[4].look = 'cosplay'; l.zombies[4].archetype = 'zombie'; l.zombies[5].horde = 0; l.zombies[5].archetype = 'ratdog'; }
       applyEnemyRoster(b, 'subway', seed);
-      for (const i of [3, 4, 5]) expect(b.zombies[i]).toEqual(a.zombies[i]);
+      // (roster version 2: an ordinary horde / outfit zombie may carry the sprinter tag — ai/sprinter.ts; its family, look and slot never move)
+      for (const i of [3, 4, 5]) expect({...b.zombies[i], sprinter: undefined}).toEqual(a.zombies[i]);
     }
   });
 
@@ -170,7 +171,8 @@ describe('seeded roster: placement policies (synthetic levels: the pass itself, 
 
 describe('seeded roster: real levels through the registry', () => {
   const SEEDS = [0, 1, 2, 3, 4, 5].map(k => (1201 + k * 7919) >>> 0);
-  const strip = (l: StationLayout): string => JSON.stringify(l.zombies.map(z => ({...z, archetype: undefined, variant: undefined})));
+  // (roster version 2, task studio-sprinter-zombies-20261112-033210-01: + the sprinter tag — ai/sprinter.ts, tests/sprinter-zombies.test.ts)
+  const strip = (l: StationLayout): string => JSON.stringify(l.zombies.map(z => ({...z, archetype: undefined, variant: undefined, sprinter: undefined})));
 
   it('rosterVersion absent or 0 = the plain generator output (no pass); the game\'s explicit version turns it on', () => {
     const plain = LEVELS.subway.generate('main', {levelSeed: 1201}), zero = LEVELS.subway.generate('main', {levelSeed: 1201, rosterVersion: 0});
@@ -276,16 +278,18 @@ describe('seeded roster: real levels through the registry', () => {
 
 describe('seeded roster: the version pin (saves)', () => {
   it('rosterVersionFor: a recorded version wins; visited without a record = 0 (before the roster); never entered = current', () => {
-    expect(ROSTER_VERSION).toBe(1);
-    expect(rosterVersionFor(undefined)).toBe(1);
-    expect(rosterVersionFor({visits: 0, lanes: {}})).toBe(1);
+    // (2 since task studio-sprinter-zombies-20261112-033210-01: version 1's families + the sprinters; a station recorded at 1 stays at 1)
+    expect(ROSTER_VERSION).toBe(2);
+    expect(rosterVersionFor(undefined)).toBe(2);
+    expect(rosterVersionFor({visits: 0, lanes: {}})).toBe(2);
     expect(rosterVersionFor({visits: 3, lanes: {}})).toBe(0);
     expect(rosterVersionFor({visits: 3, lanes: {[ROSTER_LANE]: {v: 1}}})).toBe(1);
+    expect(rosterVersionFor({visits: 3, lanes: {[ROSTER_LANE]: {v: 2}}})).toBe(2);
     expect(rosterVersionFor({visits: 0, lanes: {[ROSTER_LANE]: {v: 0}}})).toBe(0);
     // a damaged / future record falls back to the visits rule
     expect(rosterVersionFor({visits: 2, lanes: {[ROSTER_LANE]: {v: 99}}})).toBe(0);
-    expect(rosterVersionFor({visits: 0, lanes: {[ROSTER_LANE]: {v: -1}}})).toBe(1);
-    expect(rosterVersionFor({visits: 0, lanes: {[ROSTER_LANE]: 'x'}})).toBe(1);
+    expect(rosterVersionFor({visits: 0, lanes: {[ROSTER_LANE]: {v: -1}}})).toBe(2);
+    expect(rosterVersionFor({visits: 0, lanes: {[ROSTER_LANE]: 'x'}})).toBe(2);
   });
 
   it('a campaign: an old visited station keeps version 0 (its enemies exact), a new one records the current version on its first build', () => {
@@ -304,12 +308,12 @@ describe('seeded roster: the version pin (saves)', () => {
     const old1 = build(oldKey), new1 = build(newKey);
     expect(JSON.stringify(old1.zombies)).toBe(JSON.stringify(plain.zombies)); // the visited station: exactly the old enemies, so its kill indices mean the same
     expect(rosterOf(old1)).toBeUndefined();
-    expect(rosterOf(new1)).toMatchObject({version: 1});
+    expect(rosterOf(new1)).toMatchObject({version: ROSTER_VERSION});
     run.memory(newKey).visits++;
     const old2 = build(oldKey), new2 = build(newKey);
     expect(JSON.stringify(old2.zombies)).toBe(JSON.stringify(old1.zombies));
     expect(JSON.stringify(new2.zombies)).toBe(JSON.stringify(new1.zombies)); // a revisit: the same roster, never rerolled
-    expect([run.laneStore(ROSTER_LANE, oldKey), run.laneStore(ROSTER_LANE, newKey)]).toEqual([{v: 0}, {v: 1}]);
+    expect([run.laneStore(ROSTER_LANE, oldKey), run.laneStore(ROSTER_LANE, newKey)]).toEqual([{v: 0}, {v: ROSTER_VERSION}]);
     expect(run.memory(oldKey).killed).toEqual([0, 3, 7]);
     // the game applies exactly this rule (always an explicit version in the generator inputs, the lane recorded at the first build)
     const src = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/game.ts'), 'utf8');

@@ -23,11 +23,13 @@
 // it as before. Worlds without `lights` / `seePoint` (older tests) never investigate.
 
 import type {ZombieType} from '../gen/station';
+import type {ZombieSpawn} from '../gen/stationTypes';
 import type {Waypoint} from '../gen/grid';
 import {CLIMB, climbDuration, ladderClimbPath, sampleClimb, type ClimbPath, type Ladder, type Vec3} from '../gen/traversal';
 import type {LightSource, LightSourceKind} from '../world/lightSources';
 import {LURE, perceiveLight, type LurePart, type LureSighting, type SeePoint} from './lightLure';
 import {ATRIUM_CHASE} from './chaseShare'; // Task track3-eaton-centre-20261031 (lane HORDE, atrium AI)
+import {SPRINTER, isSprinter} from './sprinter'; // Task studio-sprinter-zombies-20261112-033210-01
 
 export interface ZombieStats {
   hp: number;
@@ -63,6 +65,21 @@ export const ZOMBIE_STATS: Record<ZombieType, ZombieStats> = {
   shambler: {hp: 100, wanderSpeed: 0.65, chaseSpeed: 2.55, attackRange: 1.35, attackDamage: 10, attackDuration: 1.1, attackImpact: 0.45, sightRange: 18, radius: 0.33, chaseAnim: 'Run'},
   coated: {hp: 165, wanderSpeed: 0.55, chaseSpeed: 1.75, attackRange: 1.4, attackDamage: 15, attackDuration: 1.1, attackImpact: 0.45, sightRange: 16, radius: 0.38, chaseAnim: 'Run'},
 };
+
+/**
+ * Task studio-sprinter-zombies-20261112-033210-01: a SPRINTER (ai/sprinter.ts) is an ordinary zombie of either type with only its pursuit
+ * pace raised — chaseSpeed (shambler 2.55, coated 1.75) -> SPRINTER.chaseSpeed (4.3 m/s) on the same Run clip (zombieActor.ts plays it
+ * faster to match). Every other number is its type's: wander pace, hp, reach, damage, swing timing, sight, radius and turn rate.
+ */
+export const SPRINTER_STATS: Record<ZombieType, ZombieStats> = {
+  shambler: {...ZOMBIE_STATS.shambler, chaseSpeed: SPRINTER.chaseSpeed},
+  coated: {...ZOMBIE_STATS.coated, chaseSpeed: SPRINTER.chaseSpeed},
+};
+
+/** The brain stats of an ordinary-zombie spawn: its type's sprinter stats when it is one (isSprinter), else its type's. */
+export function spawnStats(s: Pick<ZombieSpawn, 'archetype' | 'type' | 'sprinter'>): ZombieStats {
+  return (isSprinter(s) ? SPRINTER_STATS : ZOMBIE_STATS)[s.type];
+}
 
 // Task track3-eaton-centre-20261031 (lane HORDE): 'patrol' = a roaming-horde member walking in its group's formation (ai/horde.ts
 // steers it through `escort`). Only a brain with an escort ever enters it (no pre-mall enemy has one: their behaviour is unchanged).

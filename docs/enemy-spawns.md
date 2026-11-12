@@ -758,7 +758,8 @@ and the reference read it.
 
 ### Version and saves
 
-- `ROSTER_VERSION` is 1. Version 0 means "before the roster": no pass.
+- `ROSTER_VERSION` is 2. Version 0 means "before the roster": no pass. Version 1 is the seeded families. Version 2 is the same
+  families, placed identically, plus the sprinters (below).
 - A station records the version it was first built with in its section memory (lane `ROSTER_LANE` = `enemy.roster`, `{v}`).
   `rosterVersionFor(memory)`: the recorded version; else 0 for a station that has visits but no record (built before the roster
   existed); else the current version.
@@ -769,13 +770,35 @@ and the reference read it.
 - A later rule change bumps `ROSTER_VERSION` and gates the new rule on `since`, so a visited station keeps regenerating the
   roster it was built with.
 
+### Sprinters (roster version 2)
+
+`game/src/ai/sprinter.ts` (`SPRINTER`, `applySprinters`, `sprinterRoll`). About one ordinary zombie in ten RUNS at the player while it
+pursues, instead of the usual chase gait.
+
+- **Who.** Every spawn of the ordinary infected family (`archetype` absent or `zombie`) is eligible: either type (shambler or
+  coated), ambient, roaming-horde member or store / convention outfit zombie. No special family (Siren, Blightbelly, Strainer,
+  Screacher, rat/dog) and no special family's zombie stand-in ever sprints.
+- **The roll.** One independent hash roll per eligible spawn: `sprinterRoll(level seed, spawn index) < SPRINTER.chance` (0.1). No
+  RNG stream is consumed. The pass runs last in `applyEnemyRoster`, after the families have their slots, and writes only
+  `ZombieSpawn.sprinter = true`. No spawn is added, removed, moved, reordered or given another family, type or look. There is no
+  minimum: a level may hold none. `rosterOf(layout).sprinters` reports `eligible` and `sprinters`.
+- **What changes.** Only the pursuit pace: `SPRINTER_STATS` (`game/src/ai/brain.ts`) is each type's own stats with
+  `chaseSpeed` 4.3 m/s (shambler 2.55, coated 1.75). That is faster than a walking player (3.4) and slower than a sprinting one
+  (5.8). Idle, wander, search, light investigation and horde patrol keep the type's wander pace. HP, damage, reach, swing timing,
+  sight, hearing, turn rate, look, cues and loot are the type's own. `gaitTimeScale` (`game/src/ai/zombieActor.ts`) plays the same
+  Run clip up to about 1.97x so the stride matches 4.3 m/s on every body scale. Every other zombie's playback is unchanged.
+- **Saves.** A station recorded at version 1 (or visited before the roster) regenerates with no sprinters, exactly as before.
+  Only stations first built at version 2 have them, and the same seed gives the same sprinters on every revisit, Continue,
+  Retry and import.
+- **Tests.** `game/tests/sprinter-zombies.test.ts`.
+
 ### Census with the roster
 
 100 generated levels per level kind, level seeds `1201 + 7919 k`, k = 0..99, through the registered generators, then the pass at
 roster version 1 (re-measured after the at-least-one step and the `electrical-closet` exclusion were added). Checked on every
 level: only `archetype` / `variant` differ from the plain generator output, and on every tenth seed the registry path with
 `rosterVersion: 1` gives the identical level. The roll depends on the level seed and the family only, so these seeds roll the same
-families present on every level kind.
+families present on every level kind. Version 2 places exactly the same families; it only adds the sprinter tags.
 
 Mean per level, "per-spawn roll alone → with the roster", and the number of the 100 levels that hold at least one:
 
