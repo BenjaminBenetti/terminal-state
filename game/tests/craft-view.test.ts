@@ -183,7 +183,7 @@ describe('craft view: the markup', () => {
 
   it('no shortcut labels anywhere: no number keys, no "Craft (n)", no key hints for crafting', () => {
     const m = craftModel(sources(), k => (k === 'chest' ? 'No room on the car floor — move something first' : null));
-    const panel = craftViewHtml(m, 'Crafted: Route radar — roll it to a free plug', false);
+    const panel = craftViewHtml(m, 'Crafted: Route radar — hold E to drag it to a free plug', false);
     expect(panel).not.toContain('cv-key');
     expect(panel).not.toMatch(/Craft\s*\(/);
     expect([...panel.matchAll(/<button class="cv-craft[^>]*>([^<]*)<\/button>/g)].map(x => x[1])).toEqual(['Craft', 'Craft', 'Craft', 'Craft']);
@@ -195,10 +195,10 @@ describe('craft view: the markup', () => {
 
   it('the panel: the title, the not-paused line, the rows, the note beside Close — no help line, no totals', () => {
     const m = craftModel(sources(), free);
-    const html = craftViewHtml(m, 'Crafted: Route radar — roll it to a free plug', false);
+    const html = craftViewHtml(m, 'Crafted: Route radar — hold E to drag it to a free plug', false);
     expect(html).toContain('<b class="cv-title">Crafting bench</b><span class="cv-live">● Not paused — keep an eye out</span>');
     expect(html).toContain(`<div class="cv-list">${craftRowsHtml(m)}</div>`);
-    expect(html).toContain('<div class="cv-actions"><div class="cv-note" role="status">Crafted: Route radar — roll it to a free plug</div><button class="cv-close" type="button">Close (E)</button></div>');
+    expect(html).toContain('<div class="cv-actions"><div class="cv-note" role="status">Crafted: Route radar — hold E to drag it to a free plug</div><button class="cv-close" type="button">Close (E)</button></div>');
     expect(craftViewHtml(m, 'No', true)).toContain('<div class="cv-note refused" role="status">No</div>');
     expect(craftViewHtml(null)).toContain('<div class="cv-list"></div><div class="cv-actions">');
     for (const gone of ['cv-help', 'cv-foot', 'cv-total', 'cv-cost']) expect(html).not.toContain(gone);
@@ -287,7 +287,7 @@ describe('craft view: the DOM shell', () => {
     view.say('Need 2 more Electrical parts', true);
     expect(dom.el('.cv-note').textContent).toBe('Need 2 more Electrical parts');
     expect(dom.el('.cv-note').classList.contains('refused')).toBe(true);
-    view.say('Crafted: Route radar — roll it to a free plug', false);
+    view.say('Crafted: Route radar — hold E to drag it to a free plug', false);
     expect(dom.el('.cv-note').classList.contains('refused')).toBe(false);
     view.hide();
     expect(root.classList.contains('hidden')).toBe(true);

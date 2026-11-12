@@ -490,8 +490,8 @@ describe('crafting bench: the recipe list — keys, crafting, redraws', () => {
     expect(s.eq.calls.craft).toEqual(['radar']);
     expect(s.host.inv.count(SCRAP_METAL)).toBe(5);
     expect(s.host.inv.count(ELECTRICAL_PARTS)).toBe(1);
-    expect(s.toasts).toEqual(['Crafted: Route radar — roll it to a free plug']);
-    expect([s.bench.view.note, s.bench.view.noteBad]).toEqual(['Crafted: Route radar — roll it to a free plug', false]);
+    expect(s.toasts).toEqual(['Crafted: Route radar — hold E to drag it to a free plug']);
+    expect([s.bench.view.note, s.bench.view.noteBad]).toEqual(['Crafted: Route radar — hold E to drag it to a free plug', false]);
     expect(s.sfx.calls).toEqual(['pickup', 'cue:clank']); // existing cues only
     expect(s.bench.view.renders).toBeGreaterThan(renders);
     expect(chips(s, 'radar')).toEqual([[SCRAP_METAL, 5, 4, 'ok'], [ELECTRICAL_PARTS, 1, 3, 'short']]);
@@ -558,7 +558,7 @@ describe('crafting bench: the recipe list — keys, crafting, redraws', () => {
 
   it('the hints come from the unit\'s traits', () => {
     expect(craftedHint(EQUIPMENT.chest)).toBe('hold E to carry it');
-    for (const k of ['radar', 'sentry', 'scanner'] as const) expect(craftedHint(EQUIPMENT[k])).toBe('roll it to a free plug');
+    for (const k of ['radar', 'sentry', 'scanner'] as const) expect(craftedHint(EQUIPMENT[k])).toBe('hold E to drag it to a free plug');
     expect(craftedHint({move: 'dolly', plug: false})).toBe('');
     expect(BENCH_TEXT.crafted('Thing', '')).toBe('Crafted: Thing');
   });

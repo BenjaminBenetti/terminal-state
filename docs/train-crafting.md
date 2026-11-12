@@ -75,8 +75,8 @@ chest and three devices that plug into the train. Material supply is unchanged; 
 
 ## Defense sentry
 
-- **Ammunition.** The sentry has its own inventory of **four slots** that take 5.56 rounds only (up to 4 × 120). **E** on the sentry
-  opens it beside your quick slots and pockets, like a chest: click a stack to move it across, drag it onto a slot, Shift-drag to
+- **Ammunition.** The sentry has its own inventory of **four slots** that take 5.56 rounds only (up to 4 × 120). Tap **E** on the
+  sentry to open it beside your quick slots and pockets, like a chest: click a stack to move it across, drag it onto a slot, Shift-drag to
   split. Stacks merge and split by the usual inventory rules. Anything that is not 5.56 is refused and stays where it was.
 - The turret fires only the rounds in those slots, one per shot, last slot first. Rounds you carry are never used. Rounds are only
   ever moved: none is created, and the stacks are saved with the unit.
@@ -178,4 +178,4 @@ QA hooks (`?qa=1`): `__LL.bench()` (each row's material chips as `needs`, the 3D
 
 Tests: `tests/train-crafting-session.test.ts` runs the whole chain with every system real. Each part has its own files:
 `craft-*`, `train-equipment-*`, `equipment-chest-store`, `sentry-*`, `scanner-*`, `route-radar`, `train-crafting-contract`,
-`train-roof-profile`.
+`train-roof-profile`; the hold-to-drag rule and the turn: `hold-gesture`, `drag-hold-*`, `equipment-flip`.

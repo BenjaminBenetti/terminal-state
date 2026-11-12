@@ -30,7 +30,7 @@
 // craft/crafting.ts craft() over the four sources — the carried inventory, the worn backpack, the Lockbox, the chests standing in the
 // car — and the equipment system (task train-interaction-ux-20261112-063646: there is NO crafting shortcut; while the list is open
 // every digit key is swallowed and does nothing). A craft: the list is redrawn with the new counts, a toast + the view's note say
-// "Crafted: <Name> — <hint>" (the hint from the unit's traits: carried kinds "hold E to carry it", plug kinds "roll it to a free plug"),
+// "Crafted: <Name> — <hint>" (the hint from the unit's traits: carried kinds "hold E to carry it", plug kinds "hold E to drag it to a free plug"),
 // the cue is the existing pickup sound + the existing metal 'clank' at the bench. A refusal: the note in red + the denied sound,
 // nothing changed. It CLOSES on E / Esc / Tab / I / Close (user), a hit, walking away (BENCH_RT.closeRange from the bench's footprint),
 // any state but playing, death, the train starting to move, the bench gone, teardown. It redraws when the inventory or the Lockbox
@@ -84,7 +84,7 @@ export const BENCH_TEXT = {
   /** No equipment system / no train to put a unit into. */
   unavailable: 'The bench cannot build anything here',
   hintCarry: 'hold E to carry it',
-  hintPlug: 'roll it to a free plug',
+  hintPlug: 'hold E to drag it to a free plug',
   crafted: (name: string, hint: string) => `Crafted: ${name}${hint ? ` — ${hint}` : ''}`,
 } as const;
 
