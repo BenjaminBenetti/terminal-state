@@ -21,7 +21,9 @@
 //    (EQUIP.carry.speedMult, no sprint), never picked up or put down on a ladder; E puts it down on FREE FLOOR in front of the player
 //    (the controller's own tests: floor under the footprint, no wall / prop / unit / fuel cart / player overlap, a clear way to the spot)
 //    facing the player, else "No room to put it down here" and it stays in the hands. A hit does not drop it; death puts it down at the
-//    player's feet. On the floor it is pushed slowly (EQUIP.slideMax), stops at once and is never walked through.
+//    player's feet (on that frame's hook, or on the state change when the death was decided after it; never into a moving car — the
+//    ride is called off first — and between two worlds it stays in the hands, the train's record). On the floor it is pushed slowly
+//    (EQUIP.slideMax), stops at once and is never walked through.
 //  - Units and fuel carts keep apart (separateCarts); the player never stands inside one (separatePlayer). ONE thing is grabbed at a
 //    time across fuel carts + equipment (E while a unit is grabbed / carried is this system's first: interactHandlers.unshift).
 //
@@ -49,10 +51,13 @@
 //    'train-equipment'); once the ride stopped they are released at the NEW placement.
 //  - departBlock(): a unit straddling the car's outline, more than EQUIPMENT_LIMITS.aboard aboard (or more than .station left behind).
 //  - Teardown: train units -> pending records (TrainEquipment.setAboard), station units -> the lane (deleted when none). Build: the
-//    lane's units, then the pending train units inside the parked car (clamped into the interior, nudged apart when two overlap).
+//    lane's units, then the pending train units inside the parked car (clamped into the interior, nudged apart when two overlap). A
+//    lane that names a unit the train carries (or one the car now parks over) is written again at once: never one unit in two places.
+//    World units in the car beyond EQUIPMENT_LIMITS.aboard are recorded with the station (the save format's bound; overflow()).
 //  - restore(aboard) (TrainEquipment.load / reset: Load, Continue, Retry, New Game): idempotent, before or after a world: the old train
 //    units (the chest in the hands too) go, the records wait for a world; a uid clash is won by the train's record. After a restore /
-//    build the inventory's uid counter is reserved above every chest's stacks (host.inv.reserveUids).
+//    build the inventory's uid counter is reserved above every chest's stacks (host.inv.reserveUids). The run's unit counter is never
+//    left behind a living unit (a new unit never takes a living unit's id). A record loaded before install() is adopted at install.
 //
 // CRAFT (lane BENCH calls it): craftBlock(kind) / craft(kind) — the car parked in a live world, fewer than EQUIPMENT_LIMITS.aboard
 // aboard, the first PHYSICALLY FREE spot of craftSpots(def.radius): a new, empty, unplugged unit with the run's next uid, facing the
