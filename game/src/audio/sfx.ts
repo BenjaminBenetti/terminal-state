@@ -1961,6 +1961,13 @@ export class Sfx {
     if (d >= stride) { d -= stride; this.zombieStep(x, z, heavy, speed, y); }
     this.gait.set(id, d);
   }
+  /**
+   * Task studio-sprinter-gait-20261112-063646-01: one footfall struck by the animation itself (a sprinter's Sprint clip foot contact)
+   * instead of the stride accumulator above; the same positional step, and silent while it barely moves (blocked: treading in place).
+   */
+  zombieFootfall(x: number, z: number, heavy: boolean, speed: number, y = 0): void {
+    if (this.live && speed >= 0.15) this.zombieStep(x, z, heavy, speed, y);
+  }
   zombieStep(x: number, z: number, heavy: boolean, speed = 1, y = 0): void {
     const L = this.listener;
     if (Math.hypot(x - L.x, z - L.z) > 18) return;

@@ -189,14 +189,20 @@ export const VARIETY_GUN_DEFS: Readonly<Record<VarietyGunId, WeaponDef>> = {
   // fires while it is open; a trigger press closes it after the current shell; a weapon switch keeps every shell already loaded. The
   // whole top-break assembly (barrel, shroud, cylinder) turns about the model's own hinge pin (its `Barrels` part). Existing sounds only:
   // the shotgun set's shot (no pump rack) and shell insert, the Coach Gun's break open / close (audio/gunVoices.ts GUN_VOICE_SHARES).
+  // (task studio-turnstile-reload-visuals-20261112-063646-01, the user: "Turnstile should eject old shell casings on reload, and show new
+  // shells appearing in the cylinder") each fired hull stays in its chamber (ItemStack.spent) until the reload opens the gun: fully open,
+  // only the spent hulls are thrown out — live rounds stay in — and each new shell is seen going into its chamber (weapons/cylinderRounds.ts).
   turnstile: {
     ...base('turnstile'), magazine: 6, auto: false, interval: 0.55,
     damage: 14, pellets: 9, spreadHip: 0.08, spreadAim: 0.065, spreadMove: 0.012,
     range: 22, falloffStart: 5, falloffMin: 0.25, headMult: 1.8, limbMult: 0.75, knockback: 0.5,
-    reload: {kind: 'break', start: 0.6, eject: 0.4, each: 0.5, end: 0.3},
+    reload: {kind: 'break', start: 0.6, eject: 0.4, each: 0.5, end: 0.3, spentHulls: true},
     recoil: firingRecoil({pitch: 0.065, yaw: 0.018, kick: 0.09, recover: 8}),
     equipTime: 0.4, aimFov: 62, moveMult: 0.97, noise: 38, sound: 'shotgun', shotCycle: 'none',
     // sightLift: the eye line just over the top latch (it rises 2.8 mm above the rear sight, between the sights)
-    view: gunView('turnstile', 'long', [0.204, -0.245, -0.36], {sightRelief: 0.3, sightLift: 0.012, aim: [0, -0.152, -0.237]}),
+    // breakPresent (task turnstile-reload-visuals): open, the gun turns its cylinder's rear face to the eye. In the shared open-breech pose
+    // the frame hid the lower two chambers (0 % of a seated head in view); turned, every chamber shows (>= 85 % seated, >= 65 % at its
+    // insert start; measured in the held view at 16:9).
+    view: {...gunView('turnstile', 'long', [0.204, -0.245, -0.36], {sightRelief: 0.3, sightLift: 0.012, aim: [0, -0.152, -0.237]}), breakPresent: [0.5, 0.7, 0.3]},
   },
 };

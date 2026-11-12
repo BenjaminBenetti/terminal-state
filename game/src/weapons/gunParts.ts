@@ -8,7 +8,8 @@
 //    it closes; barrelsAngle(WeaponController.actionOpen);
 //  - (task studio-turnstile-cylinder-rotation-20261112-034833-01, the user: "I want it to rotate as you shoot!") a revolver's
 //    'Cylinder' (the Turnstile's: a child of its 'Barrels', so it breaks open with them) turns about its own axis one chamber per
-//    actual shot (Viewmodel.fire -> index(); cylinderTurn).
+//    actual shot (Viewmodel.fire -> index(); cylinderTurn). (task studio-turnstile-reload-visuals-20261112-063646-01: chamberIndex = the chamber
+//    under the barrel, where weapons/cylinderRounds.ts lays out the live rounds and fired hulls.)
 // A model without such nodes (the baseline pistol / rifle / shotgun / knife) gets no GunParts at all: nothing changes for it.
 // Pure pose functions + a tiny node binder; no allocation per frame.
 
@@ -73,7 +74,7 @@ interface PartBinding {
 
 /** The movable parts of one held model (viewmodel clone), bound once; `apply` poses them. */
 export class GunParts {
-  private constructor(readonly magazine: PartBinding | null, readonly barrels: PartBinding | null, readonly cylinder: PartBinding | null, chambers: number) {
+  private constructor(readonly magazine: PartBinding | null, readonly barrels: PartBinding | null, readonly cylinder: PartBinding | null, private readonly chambers: number) {
     this.step = 2 * Math.PI / chambers;
   }
   private readonly q = new THREE.Quaternion();
@@ -146,6 +147,15 @@ export class GunParts {
   /** The cylinder's current turn (rad, clockwise seen from behind; 0 without a cylinder). */
   get cylinderAngle(): number {
     return this.cylinder ? cylinderTurn(this.from, this.to, this.t) : 0;
+  }
+
+  /**
+   * (task studio-turnstile-reload-visuals-20261112-063646-01) The chamber under the barrel (0 .. chambers - 1; the cylinder's own chamber 0
+   * at rest): the one the last index turns to — at once on a shot, while the turn still runs. 0 without a cylinder.
+   */
+  get chamberIndex(): number {
+    const n = this.chambers;
+    return this.cylinder ? ((Math.round(this.to / this.step) % n) + n) % n : 0; // (a full turn wraps `to` to ~0, maybe -0: always 0 .. n - 1)
   }
 
   /**

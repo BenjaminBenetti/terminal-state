@@ -3165,6 +3165,7 @@ export class Game {
         else if (e.type === 'dry') { this.sfx.dry(e.def.sound); if (e.def.caliber && reserveFor(e.def, this.inv) === 0) this.hud.toast(`Out of ${caliberLabel(e.def)} ${CALIBERS[e.def.caliber].unit[1]}`, true); }
         else if (e.type === 'reloadStart') this.sfx.reloadStart(e.def.reloadCue ?? e.def.sound, e.empty, reloadCueTime(e.def, e.empty), e.def.id); // (lane GUNS: the gun's cue set + timing; + its own reload cues by id)
         else if (e.type === 'shellIn') { this.sfx.shellIn(); this.viewmodel.shellBump(); }
+        else if (e.type === 'eject') this.viewmodel.ejectHulls(e.def, e.hulls); // (task turnstile-reload-visuals) the fired hulls fly out of the open cylinder
         else if (e.type === 'reloadEnd') { if (e.def.reload.kind === 'break') this.sfx.breakClose(e.def.sound, e.def.id); else this.sfx.reloadEnd(e.def.reloadCue ?? e.def.sound); } // (lane GUNS: a break action closes — its own barrels-shut cue by id, else a click)
       }
     } else if (heldDef?.kind === 'consumable' && inp.mousePressed[0] && !this.use && !flareOwns) {
@@ -3264,7 +3265,13 @@ export class Game {
       throwReady: this.flareHold.ready01, // Iteration 15: grenade-style pull-back
       melee: this.weapon.meleePose, // lane KNIFE / FEEL: windup / ready / slash / recovery pose (weapons/meleeView.ts)
       actionOpen: this.weapon.actionOpen, // (weapon variety, lane GUNS) a break action's barrels open / closed
+      // (task studio-turnstile-reload-visuals-20261112-063646-01) a revolver's chambers show the held stack's own live rounds / fired hulls
+      live: wdef && !wdef.melee && this.weapon.stack ? this.weapon.stack.mag ?? 0 : undefined, spent: this.weapon.stack?.spent ?? 0,
+      shellDue: this.weapon.shellDue !== null && wdef && reserveFor(wdef, this.inv) > 0 ? this.weapon.shellDue : null, // + the shell going in (only with one in the reserve)
+      down: this.vmDown.set(0, -1, 0).applyQuaternion(this.camera.getWorldQuaternion(this.vmQuat).invert()),
     });
+    // (task turnstile-reload-visuals) thrown hulls that left the held view land in the world's bounded casing pool
+    this.viewmodel.flushHulls(this.camera, this.hullSink);
     prof.lap(SPAN.hud);
     this.hud.setStance(p.crouched, p.standBlocked);
     this.updateHud(wdef);
@@ -3295,6 +3302,11 @@ export class Game {
   private readonly frameEye = new THREE.Vector3();
   private readonly frameLook = new THREE.Vector3();
   private readonly farEye = new THREE.Vector3(0, 1e6, 0);
+  /** (task turnstile-reload-visuals) the world's down in camera space for the held view's thrown hulls. */
+  private readonly vmDown = new THREE.Vector3();
+  private readonly vmQuat = new THREE.Quaternion();
+  /** (task turnstile-reload-visuals) a thrown hull into the world's casing pool (one closure, not one per frame). */
+  private readonly hullSink = (pos: THREE.Vector3, dir: THREE.Vector3, speed: number): void => this.physics.ejectAt(pos, dir, 'shell', this.camera, this.player, speed);
 
   /** Lane PLAY: enemies still alive (update's clear rule and the HUD count; was a filtered array, twice a frame). */
   private aliveEnemies(): number {

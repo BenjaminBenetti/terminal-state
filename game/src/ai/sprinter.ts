@@ -19,11 +19,17 @@
 //  - the same seed + index gives the same sprinters on every regeneration (revisit, reload, Continue, Retry, import). A station first
 //    built before this rule keeps its recorded roster version (< since) and regenerates without sprinters (enemyRoster.ts VERSION PIN).
 //
-// THE BEHAVIOUR (brain.ts SPRINTER_STATS via spawnStats; zombieActor.ts plays the same Run clip faster): only the pursuit pace changes —
+// THE BEHAVIOUR (brain.ts SPRINTER_STATS via spawnStats): only the pursuit pace changes —
 // chaseSpeed SPRINTER.chaseSpeed m/s for both types (the ordinary shambler chases at 2.55, the coated at 1.75). Idle, wander, search,
 // light investigation and horde patrol keep the type's wander pace; hp, damage, reach, swing timing and cooldown, sight / hearing, turn
 // rate, body radius, look, cues and loot are the type's own (a coated sprinter keeps its 165 hp and heavier swipe). Faster than a walking player (player.ts WALK_SPEED 3.4: a sprinter closes ~0.9 m/s), slower than a sprinting
 // one (SPRINT_SPEED 5.8: the player can still break away while stamina lasts), between the ordinary zombie and the rat/dog (4.4).
+//
+// THE LOOK (task studio-sprinter-gait-20261112-063646-01; user: "the player should clearly see a sprinting gait/pose rather than a sped-up
+// shamble"): while it pursues, a sprinter plays its own Sprint clip (ai/sprintGait.ts, built on its body's rig; zombieActor.ts) instead
+// of the ordinary Run played faster, and its footsteps follow that clip's foot strikes. Presentation only: it comes from the spawn's tag
+// when the actor is built, so a saved sprinter shows it on Continue / Retry / import without any reroll; idle / roaming / attack clips
+// and every other zombie's animation are unchanged.
 
 import {hashString, mulberry32} from '../core/rng';
 import type {ZombieSpawn} from '../gen/stationTypes';

@@ -77,6 +77,12 @@ export interface ItemStack {
   count: number;
   /** Rounds currently loaded (weapons only). */
   mag?: number;
+  /**
+   * Task studio-turnstile-reload-visuals-20261112-063646-01: fired hulls still in a revolver's chambers (a BreakReload with spentHulls: the
+   * Turnstile), thrown out when its reload opens it; mag + spent <= magazine. Absent = none (every older save / found gun: empty chambers).
+   * Travels with the item like `mag` (drop / bag / Lockbox / saves).
+   */
+  spent?: number;
   /** Iteration 16 (GEAR): a backpack's own contents (backpack stacks only; never holds another backpack). */
   bag?: (ItemStack | null)[];
   /** Mask lane: a gas mask's fitted filter, seconds of on-face use left (gas masks only; undefined = no charge). */
@@ -137,7 +143,7 @@ export type RefusalCode = 'split' | 'wrong-slot' | 'not-gear' | 'pockets-occupie
 export interface Refusal { code: RefusalCode; text: string }
 
 /** Plain-data stack (snapshots). Mask lane: + `filter` (a gas mask's fitted-filter seconds). */
-export interface StackJSON { uid: number; itemId: string; count: number; mag?: number; bag?: (StackJSON | null)[]; filter?: number; air?: number; armor?: number }
+export interface StackJSON { uid: number; itemId: string; count: number; mag?: number; spent?: number; bag?: (StackJSON | null)[]; filter?: number; air?: number; armor?: number }
 export interface InventoryJSON {
   /** 1: iteration-16 snapshots (no grenade slot), 2: + grenade slot (no melee slot) — both still loaded; 3: current. */
   v: 1 | 2 | 3;
@@ -186,6 +192,7 @@ export function stackToJSON(s: ItemStack | null | undefined): StackJSON | null {
   if (!s) return null;
   const j: StackJSON = {uid: s.uid, itemId: s.itemId, count: s.count};
   if (s.mag !== undefined) j.mag = s.mag;
+  if (s.spent !== undefined) j.spent = s.spent; // task studio-turnstile-reload-visuals-20261112-063646-01: hulls still in the cylinder
   if (s.bag) j.bag = s.bag.map(stackToJSON);
   if (s.filter !== undefined) j.filter = s.filter; // mask lane
   if (s.air !== undefined) j.air = s.air; // task filter-tension-airtank
@@ -201,6 +208,7 @@ export function stackFromJSON(j: StackJSON | null | undefined): ItemStack | null
   if (!j) return null;
   const s: ItemStack = {uid: j.uid, itemId: canonicalItemId(j.itemId), count: j.count};
   if (j.mag !== undefined) s.mag = j.mag;
+  if (j.spent !== undefined) s.spent = j.spent; // task studio-turnstile-reload-visuals-20261112-063646-01
   if (j.bag) s.bag = fitBagContents(s.itemId, j.bag.map(stackFromJSON)); // (lane STORAGE: an older 12-slot bag gains its new empty slots)
   if (j.filter !== undefined) s.filter = j.filter; // mask lane
   if (j.air !== undefined) s.air = j.air; // task filter-tension-airtank
@@ -1074,6 +1082,12 @@ export class Inventory {
       if (def.kind === 'weapon') {
         const w = WEAPONS[def.weaponId!];
         if (s.mag === undefined || s.mag < 0 || s.mag > w.magazine) out.push(`bad mag ${s.itemId}:${s.mag}`);
+      }
+      // task studio-turnstile-reload-visuals-20261112-063646-01: spent hulls only in a hull-keeping gun, whole, never more than its free chambers
+      if (s.spent !== undefined) {
+        const w = def.kind === 'weapon' ? WEAPONS[def.weaponId!] : undefined;
+        if (!w || w.reload.kind !== 'break' || !w.reload.spentHulls) out.push(`${s.itemId} keeps no hulls`);
+        else if (!Number.isInteger(s.spent) || s.spent < 0 || s.spent + (s.mag ?? 0) > w.magazine) out.push(`bad spent ${s.itemId}:${s.spent}`);
       }
       const slots = def.gear?.bagSlots ?? 0;
       if (slots > 0) {

@@ -19,7 +19,15 @@ export interface ShellReload { kind: 'shell'; start: number; each: number; end: 
  * (with a shell loaded) stops the loading after the current shell and closes it; a weapon switch mid-reload keeps exactly
  * the shells already loaded (each was taken from the reserve as it went in). Same shape as ShellReload (start / each / end).
  */
-export interface BreakReload { kind: 'break'; start: number; eject: number; each: number; end: number }
+export interface BreakReload {
+  kind: 'break'; start: number; eject: number; each: number; end: number;
+  /**
+   * Task studio-turnstile-reload-visuals-20261112-063646-01: the gun keeps each fired hull in its chamber (ItemStack.spent) until a reload
+   * opens it: `eject` s in, the spent hulls (only those: live rounds stay in) are thrown out ('eject' event). Absent = no hulls are
+   * tracked (the Coach Gun, exactly as before).
+   */
+  spentHulls?: true;
+}
 
 /**
  * Lane GUNS: optional handling extensions (weapon variety). Absent on the baseline pistol / rifle / shotgun / knife, whose
@@ -102,7 +110,12 @@ export interface WeaponDef {
   view: {model: string; // the held model key: the baseline 'rifle' | 'shotgun' | 'pistol' | 'knife', or a weapon-variety id (weapons/varietyIds.ts)
     hip: [number, number, number]; aim: [number, number, number]; hipYaw: number; hipPitch: number; hipRoll: number; length: number; optic?: OpticSpec; sightRelief?: number; sightLift?: number;
     /** (weapon poses task) The visual kick's push toward the eye at HIP, x (default 1; ADS always 1): a gun held nearer than its kick was tuned at. */
-    kickTravel?: number};
+    kickTravel?: number;
+    /**
+     * (task studio-turnstile-reload-visuals-20261112-063646-01) A BREAK action's own extra presentation while open: [pitch, yaw, roll] rad
+     * added to the shared open-breech pose at full open (scaled with the opening like it), so every chamber of its rear face shows.
+     */
+    breakPresent?: [number, number, number]};
   /**
    * Lane KNIFE (knife-melee-20261030): a MELEE weapon. Its swing replaces the gun's fire / magazine / reload cycle in
    * WeaponController (no ammo is ever counted or taken, R does nothing, no ADS). The shared fields keep their meaning:
@@ -298,6 +311,8 @@ export type WeaponEvent =
   | {type: 'dry'; def: WeaponDef}
   | {type: 'reloadStart'; def: WeaponDef; empty: boolean}
   | {type: 'shellIn'; def: WeaponDef}
+  // (task studio-turnstile-reload-visuals-20261112-063646-01) a BreakReload with spentHulls, fully open: its `hulls` spent hulls leave the gun
+  | {type: 'eject'; def: WeaponDef; hulls: number}
   | {type: 'reloadEnd'; def: WeaponDef}
   | {type: 'equipped'; def: WeaponDef}
   // Lane FEEL (melee only): a press started the windup (the raise; silent, nothing can be hit yet)
@@ -340,6 +355,8 @@ export class WeaponController {
   /** Reload sub-state for shell-by-shell loading. */
   private shellStage: 'start' | 'load' | 'end' = 'start';
   private interruptReload = false;
+  /** (task turnstile-reload-visuals) this break reload has thrown out the spent hulls (at its `eject` time). */
+  private ejected = false;
   /** 0..1 progress for HUD/viewmodel. */
   progress = 0;
   /** Iteration 16 (lane GEAR): reload time multiplier — gloves x0.92, an arm injury slower (Game.mods.handlingMult, set every frame). */
@@ -401,6 +418,15 @@ export class WeaponController {
 
   get reloading(): boolean {
     return this.phase === 'reloading';
+  }
+
+  /**
+   * (task studio-turnstile-reload-visuals-20261112-063646-01) Seconds (real time) until the shell now going in is in ('shellIn': it is taken
+   * from the reserve then) while a shell / break reload loads one, else null. The held view slides it home over its last moments.
+   */
+  get shellDue(): number | null {
+    const k = this.def?.reload.kind;
+    return this.phase === 'reloading' && (k === 'shell' || k === 'break') && this.shellStage === 'load' ? Math.max(0, this.phaseT) * Math.max(0.25, this.handling) : null;
   }
 
   /** Lane KNIFE / FEEL: a melee cycle is under way (windup, ready hold, swing or recovery). */
@@ -540,6 +566,7 @@ export class WeaponController {
     if (wants && this.cooldown <= 0) {
       if ((s.mag ?? 0) > 0) {
         s.mag = (s.mag ?? 0) - 1;
+        if (d.reload.kind === 'break' && d.reload.spentHulls) s.spent = (s.spent ?? 0) + 1; // (task turnstile-reload-visuals) the hull stays in its chamber
         inv.version++;
         this.cooldown = d.interval;
         // lane GUNS: string count for RecoilClimb; a shot sets an AimSettle hold back (both unused by the baseline guns)
@@ -560,6 +587,7 @@ export class WeaponController {
     const d = this.def!, s = this.stack!;
     this.phase = 'reloading';
     this.interruptReload = false;
+    this.ejected = false;
     this.progress = 0;
     if (d.reload.kind === 'magazine') this.phaseT = (s.mag ?? 0) === 0 ? d.reload.emptyTime : d.reload.time;
     else { this.shellStage = 'start'; this.phaseT = d.reload.start; }
@@ -574,6 +602,17 @@ export class WeaponController {
    */
   private updateBreak(d: WeaponDef, r: BreakReload, s: ItemStack, inv: Inventory, ev: WeaponEvent[]): void {
     const full = () => (s.mag ?? 0) >= d.magazine || reserveFor(d, inv) === 0 || this.interruptReload;
+    // (task studio-turnstile-reload-visuals-20261112-063646-01) fully open (`eject` s in, before any shell of this frame): the spent hulls
+    // leave — exactly the stack's own count, once per reload; the live rounds stay. A switch before this moment keeps them in the gun.
+    if (this.shellStage === 'start' && !this.ejected && r.start - this.phaseT >= r.eject - 1e-9) {
+      this.ejected = true;
+      const hulls = r.spentHulls ? s.spent ?? 0 : 0;
+      if (hulls > 0) {
+        delete s.spent;
+        inv.version++;
+        ev.push({type: 'eject', def: d, hulls});
+      }
+    }
     while (this.phaseT <= 0 && this.phase === 'reloading') {
       if (this.shellStage === 'start') {
         if (full()) { this.shellStage = 'end'; this.phaseT += r.end; } else { this.shellStage = 'load'; this.phaseT += r.each; }
