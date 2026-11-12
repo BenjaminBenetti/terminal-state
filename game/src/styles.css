@@ -162,3 +162,9 @@ body #hotbar .slot.maskslot img.ico3d { width: 54px; height: 30px; }
 .dmg-arc { position: absolute; width: 180px; height: 180px; left: -90px; top: -90px; border-radius: 50%; border-top: 6px solid rgba(210, 50, 40, 0.85); animation: fade 0.9s forwards; }
 @keyframes fade { from { opacity: 1; } to { opacity: 0; } }
 #flashlight-tag { position: absolute; right: 26px; bottom: 108px; font-size: 11px; letter-spacing: 0.12em; color: var(--cream-dim); }
+/* ==== Task studio-train-crafting-v1-20261111-225628-01 (lane SCANNER): the item / enemy scanner's scope (ui/scannerView.ts) ====
+   One canvas centred over the game, above the HUD (10) and under the menus (20). pointer-events none: it never takes the mouse; the
+   game keeps running behind it. ui/scannerView.ts sets the canvas's size (px) and shows / hides the holder. */
+#scanner-scope { position: fixed; inset: 0; z-index: 15; display: none; align-items: center; justify-content: center; pointer-events: none; background: rgba(2, 6, 4, 0.5); }
+#scanner-scope canvas { display: block; max-width: 96vmin; max-height: 96vmin; border-radius: 14px; box-shadow: 0 0 0 6px #1c2420, 0 0 0 9px #0b0f0d, 0 14px 44px rgba(0, 0, 0, 0.65); }
+/* ==== end of lane SCANNER ==== */
