@@ -31,13 +31,13 @@
 //    (craft/sentry.ts) the game's normal pair — Levels.lineOfSight and the bullet's world ray reaching the point (Game.echoScan's test)
 //    — and the player's body not within SENTRY.safeRadius of the line (it holds fire rather than shoot past the player);
 //  - the shot: tested again from the pivot AT THE YAW THE GUN HAS, then that aim line + a small cone (the random source handed in at
-//    install; a draw that would clip the hull falls back to the aim line), then
-//    exactly the player's bullet (Game.fire): physics/merchOnHost.ts raycastShot, combat/enemyRay.ts nearestEnemyHit — so it can miss,
-//    hit a limb / the head / another enemy in front, a wall, a prop or glass (Game.bulletHitHandlers) —, the rifle's damage x falloff
-//    (from the pivot) x part multiplier through brain.damage FROM THE TRAIN (the enemies come for the train as they would for a
-//    gunman standing in it under the turret), the wound / blood through the damage system, knockback, the hurt cue; a kill = stats.kills, the death cue
-//    and a ragdoll with the rifle's impulse. A world hit is the survivors' impact (market/combat/marketCombat.ts: the material's
-//    chips / mark / sound; no lasting damage). The player's own shot statistics, hit marker and hit confirm are never touched.
+//    install; a draw that would clip the hull falls back to the aim line), then exactly the player's bullet (Game.fire): physics/
+//    merchOnHost.ts raycastShot, combat/enemyRay.ts nearestEnemyHit — so it can miss, hit a limb / the head / another enemy in front,
+//    a wall, a prop or glass (Game.bulletHitHandlers) —, the rifle's damage x falloff (from the pivot) x part multiplier through
+//    brain.damage FROM THE TRAIN (the enemies come for the train as they would for a gunman standing in it under the turret), the
+//    wound / blood through the damage system, knockback, the hurt cue; a kill = stats.kills, the death cue and a ragdoll with the
+//    rifle's impulse. A world hit is the survivors' impact (market/combat/marketCombat.ts: the material's chips / mark / sound; no
+//    lasting damage). The player's own shot statistics, hit marker and hit confirm are never touched.
 //    Each shot: the positional rifle cue (Sfx.npcShot), flash + tracer + the shared muzzle light, and gunfire noise at the train
 //    (ai/brain.ts alertListeners, the rifle's radius).
 // It does not fire while the game is not 'playing' (frame hooks do not run), while riding, or with the player dead. Enemies do not

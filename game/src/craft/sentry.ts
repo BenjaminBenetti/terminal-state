@@ -244,7 +244,7 @@ export function turnToward(cur: number, want: number, max: number): number {
 // boxes' sides |z| = hatchZ are band edges) x a stretch along the car between two of the stations where the outline changes (the end
 // caps' starts, each hatch box's two ends). The table below is READ FROM roofTopAtPoint once (at the middle of every rectangle), so
 // the values are the contract's own whatever it composes them from; tests/sentry-hull compares the rule against roofTopAtPoint itself
-// along thousands of lines.
+// along thousands of lines. (The outline is the one cooked shell's; a `spec` only bounds the plan the line is walked over.)
 
 const SPAN: [number, number] = [0, 0];
 /** A point this close to a rectangle's edge (m) counts as on it: the higher of the adjoining rectangles is taken. */
@@ -255,7 +255,7 @@ const ROOF_SIDE = 0.02;
 const ROOF_XS: readonly number[] = [-TRAIN_ROOF.endX, TRAIN_ROOF.endX, ...TRAIN_ROOF.hatches.flatMap(h => [h.x0, h.x1])].sort((a, b) => a - b);
 /** Bands per stretch (the last one: beyond the roof). */
 const ROOF_BANDS: number = TRAIN_ROOF.body.length;
-/** ROOF_TOP[s * ROOF_BANDS + k]: the outline of stretch s (ROOF_XS[s - 1] .. ROOF_XS[s]; the first / last run to the car's ends) in band k. */
+/** ROOF_TOP[s * ROOF_BANDS + k]: the outline in band k of stretch s (ROOF_XS[s - 1] .. ROOF_XS[s]; the first / last: to the car's ends). */
 const ROOF_TOP: Float64Array = (() => {
   const n = ROOF_XS.length, T = new Float64Array((n + 1) * ROOF_BANDS);
   for (let s = 0; s <= n; s++) {
