@@ -153,7 +153,8 @@ describe('seeded roster: placement policies (synthetic levels: the pass itself, 
       const seed = s * 7919 >>> 0, a = synthetic(seed), b = synthetic(seed);
       for (const l of [a, b]) { l.zombies[3].horde = 0; l.zombies[3].archetype = 'zombie'; l.zombies[4].look = 'cosplay'; l.zombies[4].archetype = 'zombie'; l.zombies[5].horde = 0; l.zombies[5].archetype = 'ratdog'; }
       applyEnemyRoster(b, 'subway', seed);
-      for (const i of [3, 4, 5]) expect(b.zombies[i]).toEqual(a.zombies[i]);
+      // (roster version 2: an ordinary horde / outfit zombie may carry the sprinter tag — ai/sprinter.ts; its family, look and slot never move)
+      for (const i of [3, 4, 5]) expect({...b.zombies[i], sprinter: undefined}).toEqual(a.zombies[i]);
     }
   });
 
