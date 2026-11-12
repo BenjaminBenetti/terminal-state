@@ -233,7 +233,7 @@ describe('train equipment: the wiring in the shared files (source)', () => {
     expect(game.match(/installTrainEquipment\(/g)).toHaveLength(1);
     // (the car and the ride exist before it; the fuel carts — same controller, kept apart — too; the consumers come after it)
     for (const before of [/this\.fuelCarts = installFuelCarts\(/, /this\.trainRuntime = installPlayerTrain\(/, /this\.trainRide = installTrainRide\(/]) expect(at(before), String(before)).toBeLessThan(install);
-    for (const after of [/installCraftBench\(this\)/, /installSentryTurret\(this\)/, /installItemScanner\(this\)/]) expect(at(after), String(after)).toBeGreaterThan(install);
+    for (const after of [/installCraftBench\(this, \{pickupTarget: /, /installSentryTurret\(this, \{rand: /, /installItemScanner\(this\)/]) expect(at(after), String(after)).toBeGreaterThan(install);
     // the carried chest: no item use, no reload, the held item lowered
     at(/if \(this\.trainEquipment\?\.refuseUse\(\)\) return;/);
     at(/reload: [^\n]*!this\.trainEquipment\?\.carrying/);

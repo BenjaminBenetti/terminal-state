@@ -84,8 +84,8 @@ export const SENTRY = {
   headroom: 0.05,
   /**
    * The cooked head's highest point above the base's underside at the LOWER stop (m): the sensor box at its rear rises as the muzzle
-   * goes down (TRAIN_TURRET_MEASURED.size.h at rest). Measured on the model's vertices; tests/sentry-turret-model.test.ts re-measures
-   * it on the GLB. TODO(lead): a number for the cook's TRAIN_TURRET_MEASURED (the highest point over the elevation range).
+   * goes down (TRAIN_TURRET_MEASURED.size.h at rest). Measured on the model's vertices; the cook's table has no such number, so it is
+   * kept here and tests/sentry-turret-model.test.ts re-measures it on the GLB (a re-cooked turret that moves it fails there).
    */
   topDepressed: 0.568,
   /** The aim point on an enemy's torso volume: this fraction from its lower end to its upper end. */
