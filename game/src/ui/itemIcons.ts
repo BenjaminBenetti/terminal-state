@@ -71,6 +71,47 @@ export function itemIconStats(): IconStats & {ids: string[]} {
   return {...stats, failed: [...stats.failed], ids: [...urls.keys()]};
 }
 
+/**
+ * Task train-interaction-ux-20261112-063646 (lane CRAFT-UI): EXTRA PREVIEW SOURCES — things that are not catalogue items but are shown
+ * with the same rendered 3D preview (the crafting bench's recipe rows: the unit a recipe makes). A source is registered under an id
+ * OUTSIDE the item catalogue (namespaced: 'equipment:<kind>'); from then on that id goes through the very same pass and cache as an
+ * item: refreshItemIcons(renderer, [id]) renders it, itemIconUrl(id) / itemIconHtml(id) read it, onItemIconsChanged reports it. Nothing
+ * of an item changes: a catalogue id can never be registered, the boot render's list stays the catalogue, and an unrendered extra id
+ * has NO fallback picture (itemIconHtml gives '' — its surface shows an empty frame, never a glyph or a proxy).
+ */
+export interface IconSource {
+  /**
+   * A FRESH object to render now (the pass owns it: it is rendered once and let go), or null while there is nothing real to show (the
+   * id is skipped; an earlier render of it stays cached). It may share geometry / materials with live templates — the pass never
+   * disposes those — but must not be an object that is in use anywhere.
+   */
+  build(): THREE.Object3D | null;
+  /** Camera direction in degrees: azimuth from +Z (the front) toward +X, elevation above the horizon (default: the items' 30 / 18). */
+  view?: {az: number; el: number};
+}
+
+const extraSources = new Map<string, IconSource>();
+
+/** Register (or replace) the preview source of a non-item id; returns the function that removes it (its cached render stays). */
+export function registerIconSource(id: string, source: IconSource): () => void {
+  if (!id || ITEMS[id]) throw new Error(`item icons: '${id}' is a catalogue item (or empty): an extra preview source needs its own id`);
+  extraSources.set(id, source);
+  return () => { if (extraSources.get(id) === source) extraSources.delete(id); };
+}
+
+/** The extra preview source of an id (never a catalogue item's). */
+function extraSource(id: string): IconSource | undefined {
+  return ITEMS[id] ? undefined : extraSources.get(id);
+}
+
+/**
+ * Let three's per-object render state of a transient preview object go (its render objects, their bindings and pipeline use): the
+ * object 'dispose' event, as InstancedMesh.dispose() sends it. The shared geometry / materials / textures are not touched.
+ */
+function releaseShotObject(root: THREE.Object3D): void {
+  root.traverse(o => { (o as unknown as THREE.EventDispatcher<{dispose: object}>).dispatchEvent({type: 'dispose'}); });
+}
+
 /** `<img>` of the rendered model, or the SVG fallback when no render exists. */
 export function itemIconHtml(itemId: string, cls = 'ico3d'): string {
   const u = urls.get(itemId);
@@ -151,6 +192,8 @@ const AMMO_ICON_VIEW: Record<string, {az: number; el: number}> = {ammo_9mm: {az:
 /** Camera direction for an item: azimuth from +Z (front) toward +X, elevation above the horizon. */
 function viewFor(itemId: string): {az: number; el: number} {
   const def = ITEMS[itemId];
+  const extra = extraSource(itemId)?.view; // (lane CRAFT-UI: a registered non-item preview brings its own angle)
+  if (extra) return {az: extra.az * DEG, el: extra.el * DEG};
   // Guns: camera on the detailed +X side (muzzle at -Z appears on the right), a touch from above/behind.
   if (def?.kind === 'weapon') return {az: 78 * DEG, el: 14 * DEG};
   // Flat goods (chocolate bar, ammo boxes, med kit, bandage) read better from higher up.
@@ -194,7 +237,7 @@ function fitProjection(cam: THREE.PerspectiveCamera, root: THREE.Object3D, fill 
 
 function modelFor(itemId: string, guns: Record<string, GLTF | undefined>): THREE.Object3D | null {
   const def = ITEMS[itemId];
-  if (!def) return null;
+  if (!def) return extraSource(itemId)?.build() ?? null; // (lane CRAFT-UI: a registered non-item preview; null = nothing real to show yet)
   // (lane LOOT-UI, weapon variety: + a new weapon's lazily loaded model — world/weaponVarietyModels.ts; absent -> its SVG glyph)
   if (def.kind === 'weapon') return (guns[itemId] ?? weaponVarietyGltf(itemId))?.scene.clone(true) ?? null;
   return makeSupplyMesh(itemId);
@@ -280,6 +323,9 @@ async function renderShots(renderer: WebGPURenderer, ids: string[], guns: Record
         console.warn(`item icon readback failed for ${id}:`, err);
       }
       scene.remove(wrap); // clones share geometry/materials with the live templates: nothing to dispose
+      // (lane CRAFT-UI) a registered preview is rendered again whenever its models change: its transient object's render state is let
+      // go here, so a re-render keeps nothing of the previous one (the shared geometry / materials stay with their owners)
+      if (extraSource(id)) releaseShotObject(obj);
       const stride = buf ? readbackStride(buf.length, ICON_W, ICON_H) : 0;
       let covered = 0;
       if (buf) for (let y = 0; y < ICON_H; y++) for (let x = 0; x < ICON_W; x++) if (buf[y * stride + x * 4 + 3]) covered++;
