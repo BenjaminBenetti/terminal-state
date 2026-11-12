@@ -687,15 +687,19 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     this.look.poll(EQUIPMENT);
     this.attachFixtures();
     // the units left lying in this station (a uid the train carries is the train's)
-    const mine = new Set<string>();
+    const mine = new Set<string>(), p = this.placement();
     for (const u of this.list) mine.add(u.uid);
     for (const r of this.pending) mine.add(r.uid);
+    let stale = false;
     for (const r of stationEquipmentOf(run?.laneStore?.(STATION_EQUIPMENT_LANE))) {
-      if (mine.has(r.uid)) continue;
+      if (mine.has(r.uid)) { stale = true; continue; }
       mine.add(r.uid);
-      this.spawnUnit(r, r.level ?? 0);
+      const u = this.spawnUnit(r, r.level ?? 0);
+      if (u && p && this.insideCar(u, p)) stale = true; // (the car parks over it: the train's from now on)
     }
     this.spawnPending();
+    // a lane that lists a unit the train owns is written again at once: a save taken in this world never has one unit in two places
+    if (stale) this.writeLane(this.stationRecords());
     this.reserveUids();
   }
 
