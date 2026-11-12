@@ -178,12 +178,12 @@ body #hotbar .slot.maskslot img.ico3d { width: 54px; height: 30px; }
 #craftview .cv-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
 #craftview .cv-head b { font-size: 16px; letter-spacing: 0.04em; }
 #craftview .cv-live { color: var(--red); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
-#craftview .cv-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) 280px 200px; gap: 14px; align-items: center; padding: 8px 0; border-top: 1px solid #2f3438; }
+#craftview .cv-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) 336px 200px; gap: 14px; align-items: center; padding: 8px 0; border-top: 1px solid #2f3438; }
 #craftview .cv-key { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--teal); color: var(--teal); font-size: 15px; font-weight: 700; }
 #craftview .cv-row.cv-cant .cv-key { border-color: #4a5157; color: #7d848a; }
 #craftview .cv-name { font-size: 16px; letter-spacing: 0.02em; }
 #craftview .cv-blurb { margin-top: 2px; color: var(--cream-dim); font-size: 14px; }
-#craftview .cv-cost { font-size: 14px; white-space: nowrap; }
+#craftview .cv-cost { font-size: 14px; overflow-wrap: anywhere; }
 #craftview .cv-cost.ok { color: #8cc97f; }
 #craftview .cv-cost.short { color: #e8776a; font-weight: 700; }
 #craftview .cv-cost.none { color: #7d848a; }
@@ -197,5 +197,5 @@ body #hotbar .slot.maskslot img.ico3d { width: 54px; height: 30px; }
 #craftview .cv-actions { display: flex; gap: 14px; justify-content: space-between; align-items: center; margin-top: 6px; }
 #craftview .cv-help { color: var(--cream-dim); font-size: 14px; }
 #craftview .cv-actions button { padding: 6px 12px; white-space: nowrap; }
-@media (max-width: 900px) { #craftview .cv-row { grid-template-columns: 28px minmax(0, 1fr) 200px; } #craftview .cv-costs { grid-column: 2; grid-row: 2; } #craftview .cv-do { grid-column: 3; grid-row: 1 / span 2; } #craftview .cv-cost { white-space: normal; } }
+@media (max-width: 900px) { #craftview .cv-row { grid-template-columns: 28px minmax(0, 1fr) 200px; } #craftview .cv-costs { grid-column: 2; grid-row: 2; } #craftview .cv-do { grid-column: 3; grid-row: 1 / span 2; } }
 /* ---------- crafting bench view: END ---------- */
