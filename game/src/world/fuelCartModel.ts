@@ -185,6 +185,24 @@ function modelBody(m: CartModels): THREE.Group {
   return g;
 }
 
+/**
+ * Task studio-train-crafting-v1-20261111-225628-01 (lane EQUIP): the HAND TRUCK alone, in the cart frame, exactly as a fuel cart draws
+ * it (the model at CART_LOOK.truckZ, else the stand-in's truck pieces) — the train equipment's devices stand on the same truck
+ * (world/trainEquipmentModel.ts). Shared geometry / materials; a truck built before the model arrived is rebuilt by its owner when
+ * cartModelsGen changes.
+ */
+export function buildTruckBody(): THREE.Group {
+  const m = cartModels(), g = new THREE.Group();
+  g.name = 'fuel-cart-truck-body';
+  if (m.truck) {
+    const t = m.truck.scene.clone(true);
+    t.name = 'fuel-cart-truck';
+    t.position.set(0, 0, CART_LOOK.truckZ);
+    g.add(t);
+  } else for (const c of [...standInBody().children].filter(c => (c as THREE.Mesh).geometry !== cartMaterials().drumGeo)) g.add(c);
+  return g;
+}
+
 /** A cart's view in the cart frame (the body from the models, else the stand-in; the gauge on the lid). */
 export function buildCartView(): CartView {
   const m = cartModels(), S = cartMaterials(), L = CART_LOOK;
