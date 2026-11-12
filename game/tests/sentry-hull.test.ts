@@ -250,11 +250,12 @@ describe('sentry virtual origin', () => {
 });
 
 describe('sentry target order (pure)', () => {
-  const at = (d: number, clear = true, ok = true) => ({d, clear, ok});
+  /** A candidate d m away; clear: true = a clear shot, false = refused by the world rays, null = refused for free (the own roof). */
+  const at = (d: number, clear: boolean | null = true, ok = true) => ({d, clear, ok});
   type C = ReturnType<typeof at>;
-  const pick = (cs: C[], range = SENTRY.range, max = SENTRY.maxChecks) => {
+  const pick = (cs: C[], range = SENTRY.range, max = SENTRY.maxChecks, cands = SENTRY.maxCandidates) => {
     const asked: C[] = [];
-    const got = pickTarget(cs, c => (c.ok ? c.d * c.d : Infinity), c => { asked.push(c); return c.clear; }, range, max);
+    const got = pickTarget(cs, c => (c.ok ? c.d * c.d : Infinity), c => { asked.push(c); return c.clear; }, range, max, cands);
     return {got, asked};
   };
 
@@ -285,6 +286,21 @@ describe('sentry target order (pure)', () => {
     expect(r.got).toBeNull();
     expect(r.asked.length).toBe(SENTRY.maxChecks);
     expect(r.asked).toEqual(many.slice(0, SENTRY.maxChecks));
+  });
+
+  it('a crowd pressed against the car (refused for free by the roof rule) never hides the clear target behind it', () => {
+    const crowd = Array.from({length: 30}, (_, i) => at(2 + i * 0.02, null)), walled = Array.from({length: 5}, (_, i) => at(4 + i, false));
+    const clear = at(12);
+    const r = pick([...crowd, ...walled, clear]);
+    expect(r.got).toBe(clear);
+    expect(r.asked.length).toBe(36);
+    // the free refusals do not use up the costly budget; the candidates looked at per pick are bounded all the same
+    expect(pick([...crowd, ...Array.from({length: SENTRY.maxChecks}, (_, i) => at(4 + i * 0.1, false)), at(20)]).got).toBeNull();
+    const huge = Array.from({length: 200}, (_, i) => at(1 + i * 0.1, null));
+    const h = pick([...huge, at(25)]);
+    expect(h.got).toBeNull();
+    expect(h.asked.length).toBe(SENTRY.maxCandidates);
+    expect([SENTRY.maxChecks, SENTRY.maxCandidates]).toEqual([12, 48]);
   });
 });
 

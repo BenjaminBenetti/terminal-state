@@ -224,12 +224,28 @@ describe('sentry turret: targeting', () => {
     const s = sentryWorld({ammo: 5, rand: STRAIGHT});
     for (let i = 0; i < 30; i++) zombieAt(s, -6 + (i % 10) * 0.6, -19 - Math.floor(i / 10) * 0.8); // 30 enemies behind the wall
     s.deploy();
-    const picks = s.sys.counts.picks, tests = s.sys.counts.lineTests;
+    const picks = s.sys.counts.picks, tests = s.sys.counts.rayTests;
     s.run(5);
     const dp = s.sys.counts.picks - picks;
     expect(dp).toBeGreaterThanOrEqual(5 / SENTRY.repick - 2); expect(dp).toBeLessThanOrEqual(5 / SENTRY.repick + 2);
-    expect(s.sys.counts.lineTests - tests).toBeLessThanOrEqual(dp * SENTRY.maxChecks * 2); // (torso, then head, per candidate)
+    expect(s.sys.counts.rayTests - tests).toBe(dp * SENTRY.maxChecks * 2); // 12 of the 30 per pick (torso, then head): never more
     expect(s.sys.counts.shots).toBe(0);
+  });
+
+  it('a crowd under the eaves (more bodies than the line-test budget) does not hide the clear enemy behind it', () => {
+    const s = sentryWorld({ammo: 20, rand: STRAIGHT});
+    const crowd: EnemyActor[] = [];
+    for (let i = 0; i < 16; i++) crowd.push(zombieAt(s, PIV.x - 6 + i * 0.8, -(HW + 0.7 + (i % 2) * 0.5)));
+    expect(crowd.length).toBeGreaterThan(SENTRY.maxChecks);
+    const out = zombieAt(s, PIV.x, -8);
+    s.deploy();
+    const rays = s.sys.counts.rayTests;
+    s.run(0.3);
+    expect(s.sys.target).toBe(out);
+    expect(s.sys.counts.rayTests - rays).toBeLessThanOrEqual(4); // the crowd cost no world ray at all
+    s.until(() => s.sys.counts.shots >= 2);
+    expect(out.brain.hp).toBe(1e6 - 2 * DEF.damage);
+    for (const z of crowd) expect(z.brain.hp).toBe(1e6);
   });
 });
 

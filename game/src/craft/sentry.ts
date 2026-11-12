@@ -33,9 +33,13 @@ const DEG = Math.PI / 180;
 export const SENTRY = {
   /** Targets: within this horizontal distance of the turret (m), on any storey. */
   range: 28,
-  /** A target is picked this often (s); at most `maxChecks` candidates are line-tested per pick, nearest first. */
+  /**
+   * A target is picked this often (s), nearest first: at most `maxChecks` candidates are refused by the costly world rays and at most
+   * `maxCandidates` are looked at per pick (the ones refused by the own-roof rule cost nothing and do not count).
+   */
   repick: 0.25,
   maxChecks: 12,
+  maxCandidates: 48,
   /** Single aimed shots: seconds between two; the cone's half angle (rad). */
   interval: 0.4,
   spread: 0.012,
@@ -263,13 +267,18 @@ export function hullExit(o: V3, d: V3, maxT: number, spec: PlayerTrainSpec = PLA
 
 /**
  * THE TARGET: the nearest candidate with a clear shot. `dist2(c)` = its squared horizontal distance from the turret (Infinity: not a
- * candidate — dead, ragdolled, dormant); candidates beyond `range` are never tested; `clear` (the costly line tests) is asked nearest
- * first, at most `maxChecks` times. Equal distances keep the list order. No allocation.
+ * candidate — dead, ragdolled, dormant); candidates beyond `range` are never asked. `clear` is asked nearest first and answers true
+ * (take it), false (refused after the costly world rays) or null (refused for free: the own roof / the elevation stops). At most
+ * `maxChecks` costly refusals and `maxCands` candidates per pick — so a crowd pressed against the car (all refused for free) never
+ * hides a clear target behind it. Equal distances keep the list order. No allocation.
  */
-export function pickTarget<T>(cands: readonly T[], dist2: (c: T) => number, clear: (c: T) => boolean, range: number = SENTRY.range, maxChecks: number = SENTRY.maxChecks): T | null {
+export function pickTarget<T>(
+  cands: readonly T[], dist2: (c: T) => number, clear: (c: T) => boolean | null,
+  range: number = SENTRY.range, maxChecks: number = SENTRY.maxChecks, maxCands: number = SENTRY.maxCandidates,
+): T | null {
   const r2 = range * range;
-  let lastD = -1, lastI = -1;
-  for (let k = 0; k < maxChecks; k++) {
+  let lastD = -1, lastI = -1, checks = 0;
+  for (let k = 0; k < maxCands && checks < maxChecks; k++) {
     let bi = -1, bd = Infinity;
     for (let i = 0; i < cands.length; i++) {
       const d = dist2(cands[i]);
@@ -278,7 +287,9 @@ export function pickTarget<T>(cands: readonly T[], dist2: (c: T) => number, clea
       if (d < bd) { bd = d; bi = i; }
     }
     if (bi < 0) return null;
-    if (clear(cands[bi])) return cands[bi];
+    const c = clear(cands[bi]);
+    if (c) return cands[bi];
+    if (c === false) checks++;
     lastD = bd; lastI = bi;
   }
   return null;

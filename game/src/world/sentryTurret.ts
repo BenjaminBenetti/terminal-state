@@ -22,7 +22,8 @@
 // FIRE (single aimed shots, SENTRY.interval apart, one loaded round each — the round leaves the hopper BEFORE the shot):
 //  - targets: the living, standing, awake enemies (Game.zombies; never a ragdoll, a dormant / rising Siren, or anything that is not an
 //    enemy: market people are not in that list) within SENTRY.range of the turret on any storey; every SENTRY.repick s the NEAREST one
-//    with a clear shot (pickTarget: at most SENTRY.maxChecks line tests per pick);
+//    with a clear shot (pickTarget: bounded — at most SENTRY.maxChecks enemies are refused by the world rays per pick; the ones under
+//    the eaves are refused by the roof rule for free and never hide a clear target behind them);
 //  - a clear shot from the pivot to the enemy's upper torso, else its head: the OWN-HULL rule, then from the VIRTUAL ORIGIN (craft/
 //    sentry.ts) the game's normal pair — Levels.lineOfSight and the bullet's world ray reaching the point (Game.echoScan's test) — and
 //    the player's body not within SENTRY.safeRadius of the line (it holds fire rather than shoot past the player);
@@ -191,7 +192,7 @@ export class SentryTurretSystem {
   target: SentryEnemy | null = null;
   targetPart: 'torso' | 'head' = 'torso';
   /** Counters (QA / tests). */
-  readonly counts = {shots: 0, hits: 0, kills: 0, worldHits: 0, misses: 0, picks: 0, lineTests: 0, holds: 0, hullFallbacks: 0, noises: 0, loaded: 0, unloaded: 0, attached: 0, emptied: 0};
+  readonly counts = {shots: 0, hits: 0, kills: 0, worldHits: 0, misses: 0, picks: 0, lineTests: 0, rayTests: 0, holds: 0, hullFallbacks: 0, noises: 0, loaded: 0, unloaded: 0, attached: 0, emptied: 0};
   /** The last shot (QA / tests; null: none since the last build). */
   lastShot: SentryShot | null = null;
   private readonly shot: SentryShot = {result: 'none', part: null, damage: 0, dist: 0, killed: false, end: v0(), origin: v0(), ammo: 0};
@@ -225,7 +226,12 @@ export class SentryTurretSystem {
     const dx = z.brain.x - this.mountWX, dz = z.brain.z - this.mountWZ;
     return dx * dx + dz * dz;
   };
-  private readonly clear = (z: SentryEnemy): boolean => this.clearShot(z);
+  /** pickTarget's question: true = a clear shot; false = refused by the world rays (costly); null = refused by the own roof / the stops (free). */
+  private readonly clear = (z: SentryEnemy): boolean | null => {
+    const n = this.counts.rayTests;
+    if (this.clearShot(z)) return true;
+    return this.counts.rayTests === n ? null : false;
+  };
 
   constructor(readonly host: SentryHost, readonly opts: SentryOptions = {}) {
     this.spec = host.trainRuntime?.spec ?? PLAYER_TRAIN_SPEC;
@@ -508,6 +514,7 @@ export class SentryTurretSystem {
     this.lineT = tx;
     const o = this.originW;
     o.x = this.pivotW.x + this.dirW.x * tx; o.y = this.pivotW.y + this.dirW.y * tx; o.z = this.pivotW.z + this.dirW.z * tx;
+    this.counts.rayTests++;
     if (!h.levels.lineOfSight(o, to)) return false;
     const rest = d - tx;
     const wh = raycastWorld(h.levels, h.layout.props, o, this.dirW, rest, h.layout.trench.floorY);
@@ -583,7 +590,7 @@ export class SentryTurretSystem {
       this.counts.hits++;
       S.result = 'enemy'; S.part = part; S.damage = amount; S.killed = killed;
       if (killed) this.kill(z, dir, end, part === 'head');
-      else enemyCues(z as unknown as EnemyActor).hurt(h.sfx as Sfx, z as unknown as EnemyActor);
+      else if (h.sfx) enemyCues(z as unknown as EnemyActor).hurt(h.sfx as Sfx, z as unknown as EnemyActor);
       if (killed && z === this.target) this.dropTarget();
     } else if (wh.kind !== 'none') {
       this.counts.worldHits++;
@@ -611,7 +618,7 @@ export class SentryTurretSystem {
     const h = this.host;
     this.counts.kills++;
     h.stats.kills++;
-    enemyCues(z as unknown as EnemyActor).death(h.sfx as Sfx, z as unknown as EnemyActor);
+    if (h.sfx) enemyCues(z as unknown as EnemyActor).death(h.sfx as Sfx, z as unknown as EnemyActor);
     h.physics?.ragdoll(z as never, {dir, point, strength: killImpulseStrength(this.def.id, 1, 1), bone: head ? 'head' : undefined});
   }
 
