@@ -70,7 +70,8 @@ export const EJECTION_PORTS: Record<string, {pos: THREE.Vector3; dir: THREE.Vect
   pistol: {pos: new THREE.Vector3(0.016, 0.058, -0.045), dir: new THREE.Vector3(1, 0.7, 0.15).normalize(), kind: 'rifle'},
   // Task studio-weapon-variety-production-20261109-224355-01 (lane GUNS): the weapon-variety guns. Their cooked models carry an `Eject`
   // marker (which wins); these grip-relative positions are only the fallback. Brass for the 9mm / 5.56 guns; the semi-auto box-magazine
-  // shotgun throws its hull at once (`delay` 0: no pump stroke). The coach gun has no entry: a break action keeps its hulls until opened.
+  // shotgun throws its hull at once (`delay` 0: no pump stroke). The coach gun has no entry: a break action keeps its hulls until opened
+  // (nor the Turnstile, task studio-turnstile-user-model-20261112-004550-01: a revolver keeps its hulls in the cylinder).
   hornet: {pos: new THREE.Vector3(0.02, 0.07, -0.06), dir: new THREE.Vector3(1, 0.6, 0.15).normalize(), kind: 'rifle'},
   longslide: {pos: new THREE.Vector3(0.016, 0.06, -0.06), dir: new THREE.Vector3(1, 0.7, 0.15).normalize(), kind: 'rifle'},
   stub: {pos: new THREE.Vector3(0.03, 0.09, 0.12), dir: new THREE.Vector3(1, 0.55, 0.22).normalize(), kind: 'rifle'},

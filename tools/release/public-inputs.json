@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 73966,
-      "sha256": "a32c48f97797dbe766d45367c117a0686f9e75b8a56fd4db0116135b722cc76b"
+      "bytes": 74774,
+      "sha256": "e53545a80448d25df709d3518eb27937ce0de24daf191dc7b2e02d0ea652cfb2"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -2839,6 +2839,11 @@
       "sha256": "b6703fcbaf5fce1ce404bdfa9ddf68f9f64937f7c0ce6d34e51b7ff76667d4db"
     },
     {
+      "path": "assets/derivatives/weapon-turnstile.json",
+      "bytes": 14083,
+      "sha256": "a39739cb3d7641dedc5691edaad0735a10369238c8e7111f34551197664a457a"
+    },
+    {
       "path": "assets/derivatives/weapon-variety-coach-gun.json",
       "bytes": 18201,
       "sha256": "ac190ff7f7b42293a30141ce65ee50ed9ee4c48dfe54743186cffd1ee30d090d"
@@ -5292,6 +5297,11 @@
       "path": "assets/models/weapon-track-shovel.glb",
       "bytes": 722520,
       "sha256": "341a1ab011ab1be83cc3f04638a9ce801357f7b076f0cd440d7b533f4acdc4d5"
+    },
+    {
+      "path": "assets/models/weapon-turnstile.glb",
+      "bytes": 3159520,
+      "sha256": "19b3d44895a255e28d80b46444d2f2facea03af6cc71a9a332f8df61353baa19"
     },
     {
       "path": "assets/models/zombie-body-agent-t25.glb",

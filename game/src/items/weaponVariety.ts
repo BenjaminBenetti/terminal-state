@@ -19,9 +19,12 @@
 // THE SLOT of an opportunity (slotKindOf): a find in a GUN STORE — an area whose purpose / type carries the `guns` tag (the Mall's
 // `mall-guns` shop programme on any level that builds it; the Skywalk's store pool has none) — is a GUN slot; every other ordinary find
 // is a WEAPON slot. The rows (slotRows):
-//   WEAPON  : 50 % gun (each of the 9 guns 1/18) + 50 % melee (each of the 7 melee weapons 1/14, the knife included)
-//   GUN     : each of the 9 guns 1/9            (pistol / Hornet / Longslide · rifle / Stub / Overwatch · shotgun / Coach Gun / Thresher)
-//   PISTOL / RIFLE / SHOTGUN : each of its 3 guns 1/3        MELEE : each of the 7 melee weapons 1/7
+//   WEAPON  : 50 % gun (each of the 10 guns 1/20) + 50 % melee (each of the 7 melee weapons 1/14, the knife included)
+//   GUN     : each of the 10 guns 1/10   (pistol / Hornet / Longslide · rifle / Stub / Overwatch · shotgun / Coach Gun / Thresher / Turnstile)
+//   PISTOL / RIFLE : each of its 3 guns 1/3   SHOTGUN : each of its 4 guns 1/4   MELEE : each of the 7 melee weapons 1/7
+// (Task studio-turnstile-user-model-20261112-004550-01: the Turnstile joined the gun group / the 12-gauge category under the SAME policy —
+// every gun type equally likely, the 50 / 50 Weapon split, one standard bundle per find — so the gun share and the ammo supply are
+// unchanged and each earlier gun's share went from 1/18 to 1/20 of a Weapon slot. Realized finds are remembered stacks and never change.)
 // (No generator lays an explicit category slot today; the kinds exist so one can be declared without a second rule.) The source family
 // no longer constrains the choice, and there is no context lean: an ordinary slot on any level can realize any of its leaves.
 //
@@ -64,11 +67,11 @@ export type BaselineGun = 'pistol' | 'rifle' | 'shotgun';
 export const BASELINE_GUNS: readonly BaselineGun[] = ['pistol', 'rifle', 'shotgun'];
 
 /**
- * Real overall lengths (m) of the twelve approved weapons (the cook lane's target lengths: lane plan "Real lengths"): the fit rule reads
+ * Real overall lengths (m) of the approved weapons (the cook lane's target lengths: lane plan "Real lengths"): the fit rule reads
  * these fixed numbers, never the cooked bounds, so a re-cook never moves an unrecorded pick.
  */
 export const VARIETY_LENGTH_M: Readonly<Record<VarietyWeaponId, number>> = {
-  hornet: 0.62, longslide: 0.27, stub: 0.70, overwatch: 1.05, coach_gun: 0.95, thresher: 1.00,
+  hornet: 0.62, longslide: 0.27, stub: 0.70, overwatch: 1.05, coach_gun: 0.95, thresher: 1.00, turnstile: 0.80,
   fire_axe: 0.90, machete: 0.62, sledgehammer: 0.92, crowbar: 0.76, slugger: 0.84, track_shovel: 1.25,
 };
 /** Half-size (m) of an ammo box on the floor: a weapon's half-length + this must stay short of its paired box. */
@@ -88,11 +91,11 @@ export function identityAvailable(id: string): boolean {
   return !isVarietyWeapon(id) || !!WEAPON_VARIETY_MODELS[id];
 }
 
-/** The nine guns by category (catalogue order) and the seven melee weapons (the starter knife + the six new ones). */
+/** The ten guns by category (catalogue order) and the seven melee weapons (the starter knife + the six new ones). */
 export const GUN_CATEGORIES = {
   pistol: ['pistol', 'hornet', 'longslide'],
   rifle: ['rifle', 'stub', 'overwatch'],
-  shotgun: ['shotgun', 'coach_gun', 'thresher'],
+  shotgun: ['shotgun', 'coach_gun', 'thresher', 'turnstile'],
 } as const satisfies Readonly<Record<BaselineGun, readonly string[]>>;
 export const GUN_LEAVES: readonly string[] = [...GUN_CATEGORIES.pistol, ...GUN_CATEGORIES.rifle, ...GUN_CATEGORIES.shotgun];
 export const MELEE_LEAVES: readonly string[] = ['knife', ...VARIETY_MELEE_IDS];
