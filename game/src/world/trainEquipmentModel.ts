@@ -44,10 +44,17 @@ export const PLUG_LOOK = {
   portY: 0.32, portOut: 0.2,
 } as const;
 
-/** A box in a unit's own frame: half width (x), base / top (y), centre z, half depth. */
-export interface UnitBox { hw: number; y0: number; y1: number; z: number; hd: number }
+/** A box in a unit's own frame: centre x, half width, base / top (y), centre z, half depth. */
+export interface UnitBox { x: number; hw: number; y0: number; y1: number; z: number; hd: number }
 
-interface ModuleMeasured { size: {w: number; h: number; d: number}; mountZ: number; face: {y0: number; y1: number} }
+/**
+ * What the cook measured of a module (assets/trainEquipment.generated.ts TRAIN_MODULE_MEASURED): `bounds` = the plan bounds of
+ * everything of it in its own frame (handles, leads, a hood reach past the cabinet; absent: the size centred on the origin).
+ */
+interface ModuleMeasured {
+  size: {w: number; h: number; d: number}; mountZ: number; face: {y0: number; y1: number};
+  bounds?: {x0: number; x1: number; z0: number; z1: number};
+}
 
 /** A dolly kind's module as measured (the cook's numbers; a kind without a cooked module yet: a plain box on the plate). */
 function moduleMeasured(kind: EquipmentKind): ModuleMeasured {
@@ -81,10 +88,15 @@ export function equipmentBox(def: EquipmentDef, spec: PlayerTrainSpec = PLAYER_T
   if (b) return b;
   if (def.move === 'carry') {
     const lb = chestSource(spec);
-    b = {body: {hw: (lb.length * CHEST_SCALE) / 2, y0: 0, y1: lb.height * CHEST_SCALE, z: 0, hd: (lb.depth * CHEST_SCALE) / 2}, face: null};
+    b = {body: {x: 0, hw: (lb.length * CHEST_SCALE) / 2, y0: 0, y1: lb.height * CHEST_SCALE, z: 0, hd: (lb.depth * CHEST_SCALE) / 2}, face: null};
   } else {
+    // the module's plan bounds as it stands on the nose plate (its origin at (0, plate top, mountZ) in the dolly frame)
     const m = moduleMeasured(def.kind), y0 = CART_LOOK.plateTop;
-    b = {body: {hw: m.size.w / 2, y0, y1: y0 + m.size.h, z: m.mountZ, hd: m.size.d / 2}, face: {y0: y0 + m.face.y0, y1: y0 + m.face.y1}};
+    const B = m.bounds ?? {x0: -m.size.w / 2, x1: m.size.w / 2, z0: -m.size.d / 2, z1: m.size.d / 2};
+    b = {
+      body: {x: (B.x0 + B.x1) / 2, hw: (B.x1 - B.x0) / 2, y0, y1: y0 + m.size.h, z: m.mountZ + (B.z0 + B.z1) / 2, hd: (B.z1 - B.z0) / 2},
+      face: {y0: y0 + m.face.y0, y1: y0 + m.face.y1},
+    };
   }
   if (spec === PLAYER_TRAIN_SPEC) boxCache.set(id, b);
   return b;
@@ -196,23 +208,23 @@ export class EquipmentLook {
     const body = new THREE.Group();
     body.name = 'train-equipment-device-body';
     body.add(buildTruckBody());
-    const src = this.scenes.get(equipmentModelKey(def) ?? '') ?? null, M = moduleMeasured(def.kind);
+    const src = this.scenes.get(equipmentModelKey(def) ?? '') ?? null;
     if (src) {
       const m = src.clone(true);
       m.name = `train-equipment-module:${def.kind}`;
-      m.position.set(0, CART_LOOK.plateTop, M.mountZ);
+      m.position.set(0, CART_LOOK.plateTop, moduleMeasured(def.kind).mountZ);
       body.add(m);
     } else {
-      // the stand-in: a plain box of the measured size, its console face marked on +Z
-      const S = equipmentMaterials(), G = cartMaterials().boxGeo;
+      // the stand-in: a plain box of the measured bounds (exactly the aim box), its console face marked on +Z
+      const S = equipmentMaterials(), G = cartMaterials().boxGeo, K = equipmentBox(def, this.spec), B = K.body, F = K.face ?? {y0: B.y0, y1: B.y1};
       const box = new THREE.Mesh(G, S.standIn);
       box.name = 'train-equipment-stand-in';
-      box.scale.set(M.size.w, M.size.h, M.size.d);
-      box.position.set(0, CART_LOOK.plateTop + M.size.h / 2, M.mountZ);
+      box.scale.set(B.hw * 2, B.y1 - B.y0, B.hd * 2);
+      box.position.set(B.x, (B.y0 + B.y1) / 2, B.z);
       const face = new THREE.Mesh(G, S.standInFace);
       face.name = 'train-equipment-stand-in-face';
-      face.scale.set(M.size.w * 0.8, Math.max(0.05, M.face.y1 - M.face.y0), 0.012);
-      face.position.set(0, CART_LOOK.plateTop + (M.face.y0 + M.face.y1) / 2, M.mountZ + M.size.d / 2 + 0.004);
+      face.scale.set(B.hw * 1.6, Math.max(0.05, F.y1 - F.y0), 0.012);
+      face.position.set(B.x, (F.y0 + F.y1) / 2, B.z + B.hd + 0.004);
       body.add(box, face);
     }
     return {body, standIn: !src, lid: null, lidRest: 0, lidOpen: 0};

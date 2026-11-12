@@ -377,6 +377,9 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   private readonly shot = new THREE.Vector3();
   private readonly q: P3 = {x: 0, y: 0, z: 0};
   private readonly axis = new THREE.Vector3(1, 0, 0);
+  /** craft/trainFixtures.ts craftSpots per footprint radius (of `spotsSpec`). */
+  private readonly spots = new Map<number, readonly {x: number; z: number}[]>();
+  private spotsSpec: PlayerTrainSpec | null = null;
 
   constructor(readonly host: TrainEquipmentHost, private readonly deps: TrainEquipmentDeps = {}) {
     this.group.name = 'train-equipment';
@@ -459,12 +462,13 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     return null;
   }
 
-  plugged(kind: EquipmentKind): LiveUnit | null {
+  /** (The return types are the contract's: a subclass / a fake may answer with any EquipmentUnit.) */
+  plugged(kind: EquipmentKind): EquipmentUnit | null {
     for (const u of this.owners) if (u && u.kind === kind) return u;
     return null;
   }
 
-  active(kind: EquipmentKind): LiveUnit | null {
+  active(kind: EquipmentKind): EquipmentUnit | null {
     if (!this.worldLive || !this.parkedPlacement()) return null;
     for (const u of this.owners) if (u && u.kind === kind && u.mode === 'world') return u;
     return null;
@@ -1103,12 +1107,18 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     return true;
   }
 
-  /** The first physically free craft spot for `def` in the parked car (train-local), or null. */
+  /**
+   * The first physically free craft spot for `def` in the parked car (train-local), or null. Reads only (craftBlock is asked per recipe
+   * while the bench's list is open): the spot list is kept per footprint radius, the first free spot is usually the first tested.
+   */
   private craftSpot(def: EquipmentDef, p: TrainPlacement): {x: number; z: number} | null {
     const spec = this.spec;
-    for (const s of craftSpots(def.radius, spec)) {
-      const w = trainToWorld(p, s.x, spec.floorY, s.z);
-      if (this.spotFree(w.x, p.floorY, w.z, def)) return s;
+    if (this.spotsSpec !== spec) { this.spots.clear(); this.spotsSpec = spec; }
+    let list = this.spots.get(def.radius);
+    if (!list) this.spots.set(def.radius, (list = craftSpots(def.radius, spec)));
+    for (const s of list) {
+      const wx = p.x + p.front * s.x, wz = p.z + p.front * s.z; // (trainToWorld without the object)
+      if (this.spotFree(wx, p.floorY, wz, def)) return s;
     }
     return null;
   }
@@ -1528,7 +1538,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
       lo.set(ox * c - oz * s, o.y - b.y, ox * s + oz * c);
       ld.set(d.x * c - d.z * s, d.y, d.x * s + d.z * c);
     }
-    B.min.x = -K.hw; B.max.x = K.hw; B.min.y = K.y0; B.max.y = K.y1; B.min.z = K.z - K.hd; B.max.z = K.z + K.hd;
+    B.min.x = K.x - K.hw; B.max.x = K.x + K.hw; B.min.y = K.y0; B.max.y = K.y1; B.min.z = K.z - K.hd; B.max.z = K.z + K.hd;
     const t = rayBox(lo, ld, B, maxT);
     if (t !== null && face) {
       const F = equipmentBox(u.def, this.spec).face, hy = lo.y + ld.y * t, hz = lo.z + ld.z * t;
