@@ -94,7 +94,7 @@ describe('train equipment: the QA hooks (window.__LL)', () => {
     run(h, 0.2);
     expect(box.plug).toBeNull();
     // a grabbed unit is let go first; a carried one is refused
-    eq.grab = {unit: dev[0], lag: 0};
+    eq.grab = {unit: dev[0], lag: 0, flip: false};
     expect(api.equipmentToPlug(dev[0].uid, 1)).toBe(true);
     expect(eq.grab).toBeNull();
     expect(eq.pickUp(box)).toBe(true);

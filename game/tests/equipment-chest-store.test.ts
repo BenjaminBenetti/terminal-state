@@ -83,7 +83,7 @@ describe('chest store: the registered use and the view\'s look', () => {
     expect(s.eq.uses.chest).toBe(s.store.use);
     expect(typeof s.store.use.prompt).toBe('function');
     expect(typeof s.store.use.tap).toBe('function');
-    expect(s.store.use.hold).toBeUndefined();
+    expect('hold' in s.store.use).toBe(false);
     expect(Object.keys(s.eq.uses)).toEqual(['chest']); // the devices' uses are their own systems'
     // a replaced / late equipment system gets it on the next frame
     const eq2 = fakeEquipment();
@@ -105,13 +105,13 @@ describe('chest store: the registered use and the view\'s look', () => {
     expect(s.a.slots!.length).toBe(50);
   });
 
-  it('the prompt counts the used slots and names both actions; null hands it back to the equipment system', () => {
+  it('the prompt counts the used slots (the tap\'s line: the equipment system adds "hold [E] to carry it"); null hands it back to the equipment system', () => {
     const s = setup(), inv = s.host.inv;
-    expect(s.store.use.prompt(s.a)).toBe('<b>[E]</b> Open the storage chest (0/50) · hold <b>[E]</b> to carry it');
+    expect(s.store.use.prompt(s.a)).toBe('<b>[E]</b> Open the storage chest (0/50)');
     s.a.slots![0] = inv.makeStack(SCRAP_METAL, 5);
     s.a.slots![7] = inv.makeStack('bandage', 1);
     s.a.slots![49] = inv.makeStack('pistol', 1);
-    expect(s.store.use.prompt(s.a)).toBe('<b>[E]</b> Open the storage chest (3/50) · hold <b>[E]</b> to carry it');
+    expect(s.store.use.prompt(s.a)).toBe('<b>[E]</b> Open the storage chest (3/50)');
     expect(CHEST_STORE_TEXT.prompt(3, 50)).toBe(s.store.use.prompt(s.a));
     // not storage / carried / riding as cargo / the train moving: the system's own prompt
     expect(s.store.use.prompt(s.radar)).toBeNull();
@@ -126,7 +126,7 @@ describe('chest store: the registered use and the view\'s look', () => {
     // while its view is open
     expect(s.store.use.tap(s.a)).toBe(true);
     expect(s.store.use.prompt(s.a)).toBe('<b>[E]</b> Close the storage chest');
-    expect(s.store.use.prompt(s.b)).toBe('<b>[E]</b> Open the storage chest (0/50) · hold <b>[E]</b> to carry it');
+    expect(s.store.use.prompt(s.b)).toBe('<b>[E]</b> Open the storage chest (0/50)');
   });
 });
 
