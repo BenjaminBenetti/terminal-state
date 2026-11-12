@@ -10,9 +10,10 @@
 //   plug 2: -Z wall, front saloon (opposite the woodchipper).
 // THE BENCH: cramped into the rear compartment on the side opposite the Lockbox (user: "a small, cramped-in crafting bench at the rear
 // opposite the train chest"), its back against the lining, its front toward the aisle between the two.
-// THE ROOF TURRET (the sentry's): on the roof's centre line between two vent boxes, over the rear saloon.
+// THE ROOF TURRET (the sentry's): on the roof's centre line, on the middle ventilation hatch (the roof's highest seat).
 
 import {TRAIN_BENCH_MEASURED} from '../assets/trainEquipment.generated';
+import {TRAIN_ROOF_MEASURED} from '../assets/trainRoof.generated';
 import {chipperFootprint, chipperPlacement} from '../world/chipperPlace';
 import {LOCKBOX_CLEAR, PARTITION_HALF, PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from '../world/playerTrainSpec';
 
@@ -177,35 +178,59 @@ export function craftSpots(radius: number, spec: PlayerTrainSpec = PLAYER_TRAIN_
 // The roof (the sentry's turret)
 
 /**
- * The car's roof outline across the car, measured on the cooked shell (assets/models/player-train-shell.glb; tests/train-roof-profile):
- * [|z| (m), the highest roof point at or beyond that |z| over the whole car length, the vent boxes included (train-local y, m)].
- * The turret's own-hull rule (craft/sentry.ts): a shot may only leave over this outline, never through the roof.
+ * The car's roof as measured on the cooked shell (assets/trainRoof.generated.ts, tools/asset-pipeline/train/measure-train-roof.mjs;
+ * tests/train-roof-profile.test.ts checks it against the shell's triangles): outlines across the car in bands of |z|, each the
+ * highest roof point at or beyond that |z| — for the body between the end caps, for the whole length, and for each of the three low
+ * ventilation hatches on the centre line inside its plan box. The turret's own-hull rule (craft/sentry.ts): a shot may only leave
+ * over this outline, never through the roof.
  */
-export const TRAIN_ROOF_PROFILE: readonly (readonly [number, number])[] = Object.freeze([
-  [0, 3.851], [0.2, 3.842], [0.3, 3.822], [0.4, 3.795], [0.5, 3.744], [0.6, 3.611], [0.7, 3.572], [0.8, 3.55], [0.9, 3.504],
-  [1.0, 3.443], [1.1, 3.405], [1.2, 3.351], [1.3, 3.313], [1.4, 3.233],
-] as const);
+export const TRAIN_ROOF = TRAIN_ROOF_MEASURED;
 
-/** The roof skin's height on the centre line between the vent boxes (train-local y, m; measured on the cooked shell). */
-export const TRAIN_ROOF_SKIN_Y = 3.695;
+/** The roof skin's height on the centre line between the hatches (train-local y, m; measured on the cooked shell). */
+export const TRAIN_ROOF_SKIN_Y: number = TRAIN_ROOF.skinY;
 
-/** The highest roof point at a distance |z| from the car's centre line (the outline above; beyond the body's half width: -Infinity). */
+/** The band of an |z| (clamped into the tables). */
+function roofBand(absZ: number): number {
+  const k = Math.floor(absZ / TRAIN_ROOF.step + 1e-9);
+  return k < 0 ? 0 : k >= TRAIN_ROOF.body.length ? TRAIN_ROOF.body.length - 1 : k;
+}
+
+/**
+ * The highest roof point at or beyond |z| at the station x along the car (train-local): the hatch's own outline inside a hatch's
+ * plan box, the end caps' beyond TRAIN_ROOF.endX, the body's elsewhere. Beyond the body's half width: -Infinity. Never below the
+ * real roof at (x, z) — and never below it at any point farther out across the car, so a line that clears this outline all the
+ * way to the car's side has cleared the roof.
+ */
+export function roofTopAtPoint(x: number, z: number, spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC): number {
+  const a = Math.abs(z);
+  if (a > spec.width / 2 + 0.02) return -Infinity;
+  const R = TRAIN_ROOF, k = roofBand(a);
+  if (a <= R.hatchZ) for (const h of R.hatches) if (x >= h.x0 && x <= h.x1) return h.top[k < h.top.length ? k : h.top.length - 1];
+  return Math.abs(x) > R.endX ? R.ends[k] : R.body[k];
+}
+
+/** The highest roof point at or beyond |z| over the WHOLE car length, hatches included (beyond the body's half width: -Infinity). */
 export function roofTopAt(absZ: number, spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC): number {
   const a = Math.abs(absZ);
   if (a > spec.width / 2 + 0.02) return -Infinity;
-  let y = TRAIN_ROOF_PROFILE[0][1];
-  for (const [z, h] of TRAIN_ROOF_PROFILE) { if (z <= a + 1e-9) y = h; else break; }
+  const R = TRAIN_ROOF, k = roofBand(a);
+  let y: number = R.ends[k];
+  if (a <= R.hatchZ) for (const h of R.hatches) y = Math.max(y, h.top[k < h.top.length ? k : h.top.length - 1]);
   return y;
 }
 
 export interface TurretMount {
-  /** The turret's base centre on the roof skin (train-local): the model's origin when deployed. */
+  /** The turret's base centre on the roof (train-local): the model's origin when deployed. */
   x: number; y: number; z: number;
 }
 
-/** The roof turret's mount: on the centre line, between the rear and the middle vent boxes (over the rear saloon). */
+/**
+ * The roof turret's mount: on the MIDDLE roof hatch, the highest seat the roof offers (the higher the gun, the closer to the car's
+ * side it can still shoot down over the roof's edge). y = the lowest roof point under its base ring, so the ring beds a few
+ * millimetres into the hatch's slightly crowned top instead of floating over it.
+ */
 export function turretMount(spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC): TurretMount {
   void spec;
   return TURRET_MOUNT;
 }
-const TURRET_MOUNT: TurretMount = Object.freeze({x: -3, y: TRAIN_ROOF_SKIN_Y, z: 0});
+const TURRET_MOUNT: TurretMount = Object.freeze({x: TRAIN_ROOF.seat.x, y: TRAIN_ROOF.seat.lo, z: 0});
