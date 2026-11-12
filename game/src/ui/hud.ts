@@ -672,6 +672,8 @@ export const CONTROLS: [string, string][] = [
   // flares) are all "Use held item" / "Throw equipped grenade". Bindings unchanged.
   ['Move', 'W A S D'], ['Look', 'Mouse'], ['Sprint', 'Shift'], ['Jump', 'Space'], ['Crouch (tap · hold)', 'C'],
   ['Use held item', 'Left click'], ['Aim down sights', 'Right click'], ['Reload', 'R'], ['Interact · take (hold to pick up)', 'E'],
+  // task train-interaction-ux-20261112-063646: every draggable starts on a HELD E (core/holdGesture.ts); R turns a dragged device round
+  ['Drag a cart or device (hold) · turn it round', 'E · R'],
   ['Quick slots', '1 – 5 · wheel'], ['Melee weapon', '~'], ['Throw equipped grenade', 'Hold G'],
   ['Gas mask on/off', 'Q'], ['Flashlight', 'F'], ['Quick heal', 'H'], ['Inventory', 'Tab or I'], ['Backpack slot', '6'],
   ['Climb ladder · let go', 'E · Space or S'], ['Mute', 'M'], ['Pause / release mouse', 'Esc'],
