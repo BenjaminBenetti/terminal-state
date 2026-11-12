@@ -1,0 +1,987 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "train-equipment",
+ "what": "the train crafting equipment: the crafting bench, the three device modules that stand on a hand truck (route radar, sentry control, item / enemy scanner) and the sentry's roof turret",
+ "task": "studio-train-crafting-v1-20261111-225628-01",
+ "approval": "task-specific user generation approval (sha256 f25194e0c4819825aa43bc513c0f16203807df2da10c8026ccc5d558f1194a2e): the bench, three modules and roof turret, up to 150 Meshy credits",
+ "accepted": true,
+ "route": "Codex native image_gen INITIAL design -> Meshy T2.5 image-to-3D, own PBR maps kept",
+ "budget": {
+  "generations": 5,
+  "paidRequests": 5,
+  "billedCredits": 75,
+  "creditsPerModel": 15,
+  "caps": {
+   "credits": 150,
+   "generations": 10,
+   "requests": 20
+  },
+  "note": "every model is the first Meshy attempt of its design image"
+ },
+ "meshyTool": "mcp__meshy__meshy_image_to_3d (the project's Meshy MCP entry)",
+ "evidence": "the exact create arguments, task ids, charges and raw hashes are in the job ledger and the production input manifest kept outside Git; this cook verifies every raw original and conditioning image against them before it writes",
+ "texturePolicy": "Meshy maps kept channel for channel (base colour, packed metallic-roughness, normal), Lanczos downsize + JPEG: base 1024 px q85, metallic-roughness 512 px q85, normal 1024 px q90; no reprojection / retexture / repaint",
+ "handTruck": {
+  "url": "assets/models/p7-hand-truck-t25.glb",
+  "sha256": "0af42f234fb10701aed95c0326453631f1ccfbc9e3b77ea9e02b8cd3022b7abd",
+  "bytes": 296240,
+  "dollyFrame": {
+   "truckZ": -0.071268,
+   "plateTop": 0.073,
+   "footprintRadius": 0.36
+  },
+  "note": "the existing hand truck model the modules stand on (not changed by this cook); it alone reaches the truckRadius recorded per module"
+ },
+ "licence": "generated for this project under the existing provider accounts; no blanket licence or commercial clearance implied (assets/CREDITS.md)",
+ "models": [
+  {
+   "id": "train-bench",
+   "what": "the train CRAFTING BENCH: a small welded steel workbench with a wooden top inside a low back / end rail, a bolted-down bench vise, bench grinder and gauge / test box with its cable, and a wire-mesh lower shelf",
+   "conditioningImage": {
+    "sha256": "42fe9454b4343f3ae9029cfda8e06c53d3a3cd54cf23eb042bacf281cc1e1384",
+    "bytes": 1949163,
+    "size": "1312x1199",
+    "generator": "codex-cli 0.163.0 built-in image_gen (model id not reported)",
+    "file": "reference/tasks/train-crafting-v1-20261111-225628/gen/out/BENCH-a2.png (raw original, outside Git)"
+   },
+   "meshy": {
+    "task": "01a1cce3-149a-7359-bf98-f89607d03730",
+    "request": {
+     "ai_model": "meshy-t2.5",
+     "enable_pbr": true,
+     "model_type": "smart-topology",
+     "should_texture": true,
+     "target_formats": [
+      "glb"
+     ],
+     "target_polycount": 20000,
+     "texture_resolution": "2k"
+    },
+    "status": "SUCCEEDED",
+    "billedCredits": 15,
+    "attempt": 1
+   },
+   "source": {
+    "file": "reference/tasks/train-crafting-v1-20261111-225628/gen/raw/BENCH-R004-01a1cce3-149a-7359-bf98-f89607d03730.glb (raw original, outside Git)",
+    "sha256": "f29d3cfe98490d904f66bde93c99787ac3899594d61edf90f11895f59a7fcdce",
+    "bytes": 9653388,
+    "triangles": 19017,
+    "extent": [
+     0.8667,
+     0.9521,
+     0.5786
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3496900
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2748935
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2443114
+     }
+    ]
+   },
+   "output": {
+    "file": "game/public/assets/models/train-bench.glb",
+    "url": "assets/models/train-bench.glb",
+    "sha256": "8220b094c9a79ba1dbb7f68244e944a5145e9a4d56dde637975eb85b3fdb3de6",
+    "bytes": 1395868,
+    "triangles": 19017,
+    "dims": [
+     1.02,
+     1.1206,
+     0.681
+    ]
+   },
+   "scale": 1.176879,
+   "orientation": {
+    "upAxis": "y",
+    "feetSpanX": 0.966,
+    "feetSpanZ": 0.888,
+    "result": "Meshy native frame kept (no rotation): +Y up, the front (gauge dials, vise screw) = +Z, the low rail at the back (-Z) and the +X end"
+   },
+   "transform": "uniform scale to the runtime length, grounded (min y = 0), centred on x / z, baked into the vertices (identity node); no rotation, no geometry simplification",
+   "convention": "metres at runtime size, +Y up, origin at the bottom centre of the footprint; +Z = the front (the side the player stands at), X along the wall it stands against (vise at -X, gauge box at +X)",
+   "measured": {
+    "size": {
+     "l": 1.02,
+     "h": 1.121,
+     "d": 0.681
+    },
+    "worktopY": 0.839,
+    "worktop": {
+     "x0": -0.485,
+     "x1": 0.45,
+     "z0": -0.305,
+     "z1": 0.285
+    },
+    "free": {
+     "x0": -0.26,
+     "x1": 0.44,
+     "z0": 0.05,
+     "z1": 0.285
+    },
+    "shelfY": 0.205,
+    "fixtures": [
+     {
+      "name": "rail",
+      "what": "the low rail along the back and the +X end of the top (part of the top)",
+      "x0": -0.48,
+      "x1": 0.455,
+      "z0": -0.33,
+      "z1": -0.11,
+      "top": 0.913,
+      "areaCm2": 271
+     },
+     {
+      "name": "vise",
+      "what": "the bench vise on its bolted base plate at the -X end (its screw handle reaches past the front edge)",
+      "x0": -0.51,
+      "x1": -0.26,
+      "z0": -0.275,
+      "z1": 0.34,
+      "top": 1.121,
+      "areaCm2": 1065
+     },
+     {
+      "name": "grinder",
+      "what": "the bench grinder on its bolted foot",
+      "x0": -0.025,
+      "x1": 0.185,
+      "z0": -0.155,
+      "z1": 0.03,
+      "top": 1.102,
+      "areaCm2": 348
+     },
+     {
+      "name": "gauge-box",
+      "what": "the gauge / test box at the +X end (two dials, toggle switches), with its cable",
+      "x0": 0.185,
+      "x1": 0.51,
+      "z0": -0.12,
+      "z1": 0.05,
+      "top": 1.085,
+      "areaCm2": 352
+     }
+    ],
+    "looseItems": {
+     "found": 0,
+     "strayRaisedCm2": 0,
+     "note": "nothing rises above the worktop outside the fixture zones; the dark marks on the top are painted stains (flat); the lower shelf is empty"
+    },
+    "plateau": {
+     "cells": 14568,
+     "shareOfTopView": 0.613
+    },
+    "shelfPlateau": {
+     "cells": 10570
+    }
+   },
+   "measureMethod": {
+    "worktopY": "top-down height map (5 mm): the most populated 1 cm band above 0.5 m, refined to the mean of the cells within 6 mm = the wooden top",
+    "worktop": "the height-map columns / rows in which at least a quarter of the cells are within 8 mm of the worktop height (the top as far as it is seen from above, inside its rail); free = the largest rectangle made only of such cells (nothing stands in it)",
+    "fixtures": "every height-map cell rising more than 12 mm over the worktop is assigned to a reviewed plan zone (rail / vise / grinder / gauge box); more than 2 cm2 of raised cells outside the zones stops the cook (prop rule 4: no loose item is baked into the bench)",
+    "shelfY": "the same plateau measure with everything from 15 cm under the worktop up ignored = the wire-mesh lower shelf"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 250028,
+     "sha256": "49583def67a312050c6c5e530ab95fc518d7c952e475467dc21dcf2a7b5d6c54"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 91198,
+     "sha256": "30267e39f348a8a0b3c759e8003736e146c8c50ab9f65684d09f22ad20e3f0ae"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 204810,
+     "sha256": "a3c2d334a4107d50018c4e840b32ecd48763df225d74cd8117b6a663409b16b5"
+    }
+   ]
+  },
+  {
+   "id": "train-radar",
+   "what": "the ROUTE RADAR device module: a field cabinet (round scope, lamps, vent, side handles, coiled power lead) carrying a mast-mounted antenna bar and a whip aerial; it stands on a hand truck's nose plate",
+   "conditioningImage": {
+    "sha256": "c6f66c0f3edb0a963a4e1726ebb38dc5587ebdeb958e7f70dee5f39321403654",
+    "bytes": 1843053,
+    "size": "1086x1448",
+    "generator": "codex-cli 0.163.0 built-in image_gen (model id not reported)",
+    "file": "reference/tasks/train-crafting-v1-20261111-225628/gen/out/RADAR-a1.png (raw original, outside Git)"
+   },
+   "meshy": {
+    "task": "01a1cce1-bfc8-7225-a764-fcd6efbafdae",
+    "request": {
+     "ai_model": "meshy-t2.5",
+     "enable_pbr": true,
+     "model_type": "smart-topology",
+     "should_texture": true,
+     "target_formats": [
+      "glb"
+     ],
+     "target_polycount": 20000,
+     "texture_resolution": "2k"
+    },
+    "status": "SUCCEEDED",
+    "billedCredits": 15,
+    "attempt": 1
+   },
+   "source": {
+    "file": "reference/tasks/train-crafting-v1-20261111-225628/gen/raw/RADAR-R001-01a1cce1-bfc8-7225-a764-fcd6efbafdae.glb (raw original, outside Git)",
+    "sha256": "dcbd8a6176acb4be0dd781f832b0080557fe3b4398048beef068827763edcf5c",
+    "bytes": 8801156,
+    "triangles": 18660,
+    "extent": [
+     0.5142,
+     0.9521,
+     0.354
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3262906
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2357291
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2470987
+     }
+    ]
+   },
+   "output": {
+    "file": "game/public/assets/models/train-radar.glb",
+    "url": "assets/models/train-radar.glb",
+    "sha256": "643251ff2b76dd8a13271346fac8bd0e836cd1ed1a3e7a688db0d6c3dcd69324",
+    "bytes": 1127612,
+    "triangles": 18660,
+    "dims": [
+     0.5553,
+     1.0283,
+     0.3823
+    ]
+   },
+   "scale": 1.08,
+   "orientation": {
+    "upAxis": "y",
+    "footprintShareX": 0.683,
+    "footprintShareZ": 0.793,
+    "behindBack": 0,
+    "proudOfFront": 0.073,
+    "result": "Meshy native frame kept (no rotation): +Y up, the console face = +Z"
+   },
+   "transform": "fixed uniform scale, grounded (min y = 0), the cabinet footprint (the lowest 5 % of the height) centred on x / z, baked into the vertices (identity node); no rotation, no geometry simplification",
+   "convention": "metres at runtime size, +Y up, origin at the bottom centre of the cabinet's footprint; +Z = the console face. On the hand truck the origin sits at (0, nose plate top, mountZ) in the dolly frame",
+   "measured": {
+    "size": {
+     "w": 0.555,
+     "h": 1.028,
+     "d": 0.382
+    },
+    "mountZ": 0.034,
+    "face": {
+     "y0": 0,
+     "y1": 0.57
+    },
+    "bodyTop": 0.87,
+    "footprint": {
+     "w": 0.379,
+     "d": 0.303
+    },
+    "bounds": {
+     "x0": -0.278,
+     "x1": 0.278,
+     "z0": -0.152,
+     "z1": 0.231
+    },
+    "radius": 0.335,
+    "onTruck": {
+     "clearance": 0.0043,
+     "tightestAt": {
+      "x": 0.184,
+      "y": 0.142,
+      "truckZ": -0.121
+     },
+     "radiusWithWhip": 0.335,
+     "truckRadius": 0.395,
+     "bodyTopAboveFloor": 0.943,
+     "topAboveFloor": 1.101,
+     "footprintFrontPastPlate": 0.025
+    }
+   },
+   "measureMethod": {
+    "mountZ": "the truck's cooked model (assets/models/p7-hand-truck-t25.glb, at z -0.071268 in the dolly frame) sampled every 2 mm above its nose plate (top 0.073 m): frontmost z per 4 mm (x, y) cell; the module's samples must stay 4 mm in front of it in their own and the neighbouring cells; rounded up to a millimetre",
+    "radius": "largest plan distance from the dolly origin of the mounted module's samples up to bodyTop (limit 0.36 m; a whip aerial may reach 0.4 m)",
+    "bodyTop": "the top of the model without a whip aerial: 5 mm slabs from the top down are skipped while thinner than 3 cm both ways",
+    "face": "from the base up, the run of 5 mm slabs in which the cabinet body (inside the footprint's width: no handles / leads) is at least 75 % as wide as the footprint = the cabinet / console front",
+    "footprint": "the plan bounds of the lowest 5 % of the height (the cabinet's base)"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 246104,
+     "sha256": "2858693e21f5bda1e6d0d9f4c23b1c00f35ce32647d2984e642305305ec18b10"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 81056,
+     "sha256": "ea043c650f5a7f69362ae5f7e66d31a8e7e5655c0f5ec1f05361c413fc4cae26"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 203010,
+     "sha256": "f6826dde84a002c1b2e500dc1d7511ccd051d462032fe00535dce27f8650c1c4"
+    }
+   ]
+  },
+  {
+   "id": "train-sentry",
+   "what": "the SENTRY CONTROL device module: a field console (monitor, switches, emergency stop, vent, side handles, coiled power lead) with an open ammunition hopper on top; it stands on a hand truck's nose plate",
+   "conditioningImage": {
+    "sha256": "f8de257f212c6f43a83ef8c75a85def228af07ef845e268240db2dbaf69242cd",
+    "bytes": 2060439,
+    "size": "1024x1536",
+    "generator": "codex-cli 0.163.0 built-in image_gen (model id not reported)",
+    "file": "reference/tasks/train-crafting-v1-20261111-225628/gen/out/SENTRY-a3.png (raw original, outside Git)"
+   },
+   "meshy": {
+    "task": "01a1cce3-ee24-739b-9925-b575f1ed6e7a",
+    "request": {
+     "ai_model": "meshy-t2.5",
+     "enable_pbr": true,
+     "model_type": "smart-topology",
+     "should_texture": true,
+     "target_formats": [
+      "glb"
+     ],
+     "target_polycount": 20000,
+     "texture_resolution": "2k"
+    },
+    "status": "SUCCEEDED",
+    "billedCredits": 15,
+    "attempt": 1
+   },
+   "source": {
+    "file": "reference/tasks/train-crafting-v1-20261111-225628/gen/raw/SENTRY-R005-01a1cce3-ee24-739b-9925-b575f1ed6e7a.glb (raw original, outside Git)",
+    "sha256": "b43cda1dd459362e31f2074b9b913ecd00c4d4c99abc7df4b1b103e8f79f5ae0",
+    "bytes": 6256532,
+    "triangles": 18582,
+    "extent": [
+     0.4194,
+     0.9497,
+     0.4521
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2119114
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1640117
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1575934
+     }
+    ]
+   },
+   "output": {
+    "file": "game/public/assets/models/train-sentry.glb",
+    "url": "assets/models/train-sentry.glb",
+    "sha256": "64694f5434cbd00256e15aa8aafcc26e321f4ece7ae4a510de6b41d777a92f5d",
+    "bytes": 1163292,
+    "triangles": 18582,
+    "dims": [
+     0.411,
+     0.9307,
+     0.4431
+    ]
+   },
+   "scale": 0.98,
+   "orientation": {
+    "upAxis": "y",
+    "footprintShareX": 0.8,
+    "footprintShareZ": 0.768,
+    "behindBack": 0.001,
+    "proudOfFront": 0.104,
+    "result": "Meshy native frame kept (no rotation): +Y up, the console face = +Z"
+   },
+   "transform": "fixed uniform scale, grounded (min y = 0), the cabinet footprint (the lowest 5 % of the height) centred on x / z, baked into the vertices (identity node); no rotation, no geometry simplification",
+   "convention": "metres at runtime size, +Y up, origin at the bottom centre of the cabinet's footprint; +Z = the console face. On the hand truck the origin sits at (0, nose plate top, mountZ) in the dolly frame",
+   "measured": {
+    "size": {
+     "w": 0.411,
+     "h": 0.931,
+     "d": 0.443
+    },
+    "mountZ": 0.043,
+    "face": {
+     "y0": 0,
+     "y1": 0.66
+    },
+    "bodyTop": 0.931,
+    "footprint": {
+     "w": 0.329,
+     "d": 0.34
+    },
+    "bounds": {
+     "x0": -0.206,
+     "x1": 0.206,
+     "z0": -0.172,
+     "z1": 0.272
+    },
+    "radius": 0.356,
+    "onTruck": {
+     "clearance": 0.0045,
+     "tightestAt": {
+      "x": -0.14,
+      "y": 0.087,
+      "truckZ": -0.131
+     },
+     "radiusWithWhip": 0.356,
+     "truckRadius": 0.395,
+     "bodyTopAboveFloor": 1.004,
+     "topAboveFloor": 1.004,
+     "footprintFrontPastPlate": 0.052
+    }
+   },
+   "measureMethod": {
+    "mountZ": "the truck's cooked model (assets/models/p7-hand-truck-t25.glb, at z -0.071268 in the dolly frame) sampled every 2 mm above its nose plate (top 0.073 m): frontmost z per 4 mm (x, y) cell; the module's samples must stay 4 mm in front of it in their own and the neighbouring cells; rounded up to a millimetre",
+    "radius": "largest plan distance from the dolly origin of the mounted module's samples up to bodyTop (limit 0.36 m; a whip aerial may reach 0.4 m)",
+    "bodyTop": "the top of the model without a whip aerial: 5 mm slabs from the top down are skipped while thinner than 3 cm both ways",
+    "face": "from the base up, the run of 5 mm slabs in which the cabinet body (inside the footprint's width: no handles / leads) is at least 75 % as wide as the footprint = the cabinet / console front",
+    "footprint": "the plan bounds of the lowest 5 % of the height (the cabinet's base)"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 159421,
+     "sha256": "6a84490bec89aac4ae308c0760d79b9c7fb4168c7561290cfd5228690dc0f603"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 55845,
+     "sha256": "734ff6b0413cc751fbf9dfdd616ed892980882fde2c9f1e45effc3365de130c0"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 138660,
+     "sha256": "1872507ca0ea8dd7d43a044441db8af670b46066aecf5043fdb8652d4fcff14f"
+    }
+   ]
+  },
+  {
+   "id": "train-scanner",
+   "what": "the ITEM / ENEMY SCANNER device module: a field console (hooded round scope, dials, lamps, vent, side handles, coiled power lead) with a beacon and a whip aerial; it stands on a hand truck's nose plate",
+   "conditioningImage": {
+    "sha256": "90ba4173c0b9f4ef24614302705c7991c91b8138985219fae2a5ca5910f12c9d",
+    "bytes": 1947500,
+    "size": "1024x1536",
+    "generator": "codex-cli 0.163.0 built-in image_gen (model id not reported)",
+    "file": "reference/tasks/train-crafting-v1-20261111-225628/gen/out/SCANNER-a1.png (raw original, outside Git)"
+   },
+   "meshy": {
+    "task": "01a1cce1-de50-72a5-a98f-47a1ec3b8878",
+    "request": {
+     "ai_model": "meshy-t2.5",
+     "enable_pbr": true,
+     "model_type": "smart-topology",
+     "should_texture": true,
+     "target_formats": [
+      "glb"
+     ],
+     "target_polycount": 20000,
+     "texture_resolution": "2k"
+    },
+    "status": "SUCCEEDED",
+    "billedCredits": 15,
+    "attempt": 1
+   },
+   "source": {
+    "file": "reference/tasks/train-crafting-v1-20261111-225628/gen/raw/SCANNER-R002-01a1cce1-de50-72a5-a98f-47a1ec3b8878.glb (raw original, outside Git)",
+    "sha256": "1cb62af770ac0b576f1fc09f4c673906f00ef7bda10ab97d59ae659b6c37f3d8",
+    "bytes": 8910264,
+    "triangles": 18691,
+    "extent": [
+     0.4517,
+     0.9517,
+     0.3657
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3315054
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2304586
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2365290
+     }
+    ]
+   },
+   "output": {
+    "file": "game/public/assets/models/train-scanner.glb",
+    "url": "assets/models/train-scanner.glb",
+    "sha256": "539c14f7af324d6eb29a85a4fad0410ae7d7d3b54b6a6a8a79ac9730a1efa74a",
+    "bytes": 1270816,
+    "triangles": 18691,
+    "dims": [
+     0.4742,
+     0.9992,
+     0.384
+    ]
+   },
+   "scale": 1.05,
+   "orientation": {
+    "upAxis": "y",
+    "footprintShareX": 0.776,
+    "footprintShareZ": 0.821,
+    "behindBack": 0,
+    "proudOfFront": 0.065,
+    "result": "Meshy native frame kept (no rotation): +Y up, the console face = +Z"
+   },
+   "transform": "fixed uniform scale, grounded (min y = 0), the cabinet footprint (the lowest 5 % of the height) centred on x / z, baked into the vertices (identity node); no rotation, no geometry simplification",
+   "convention": "metres at runtime size, +Y up, origin at the bottom centre of the cabinet's footprint; +Z = the console face. On the hand truck the origin sits at (0, nose plate top, mountZ) in the dolly frame",
+   "measured": {
+    "size": {
+     "w": 0.474,
+     "h": 0.999,
+     "d": 0.384
+    },
+    "mountZ": 0.031,
+    "face": {
+     "y0": 0,
+     "y1": 0.845
+    },
+    "bodyTop": 0.965,
+    "footprint": {
+     "w": 0.368,
+     "d": 0.315
+    },
+    "bounds": {
+     "x0": -0.214,
+     "x1": 0.26,
+     "z0": -0.158,
+     "z1": 0.226
+    },
+    "radius": 0.289,
+    "onTruck": {
+     "clearance": 0.0043,
+     "tightestAt": {
+      "x": 0.176,
+      "y": 0.149,
+      "truckZ": -0.125
+     },
+     "radiusWithWhip": 0.289,
+     "truckRadius": 0.395,
+     "bodyTopAboveFloor": 1.038,
+     "topAboveFloor": 1.072,
+     "footprintFrontPastPlate": 0.028
+    }
+   },
+   "measureMethod": {
+    "mountZ": "the truck's cooked model (assets/models/p7-hand-truck-t25.glb, at z -0.071268 in the dolly frame) sampled every 2 mm above its nose plate (top 0.073 m): frontmost z per 4 mm (x, y) cell; the module's samples must stay 4 mm in front of it in their own and the neighbouring cells; rounded up to a millimetre",
+    "radius": "largest plan distance from the dolly origin of the mounted module's samples up to bodyTop (limit 0.36 m; a whip aerial may reach 0.4 m)",
+    "bodyTop": "the top of the model without a whip aerial: 5 mm slabs from the top down are skipped while thinner than 3 cm both ways",
+    "face": "from the base up, the run of 5 mm slabs in which the cabinet body (inside the footprint's width: no handles / leads) is at least 75 % as wide as the footprint = the cabinet / console front",
+    "footprint": "the plan bounds of the lowest 5 % of the height (the cabinet's base)"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 213576,
+     "sha256": "1d0048a7ddb943bf5e18ae8417ee7854bac624bc6bd87fb6daaf2844ed761bd4"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 75129,
+     "sha256": "f369fb7f97e27abeae474bda0a424f036348c228756ae224bd059e1f693469ae"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 169428,
+     "sha256": "4dfc0114936da2ceedbb02b7a3736985cd626e0a6347bc8e30023a5fb253faba"
+    }
+   ]
+  },
+  {
+   "id": "train-turret",
+   "what": "the SENTRY ROOF TURRET: a belt-fed machine gun with a sensor pod and twin ammunition boxes in a U yoke on a bolted slew-ring base, with its power hose and junction box",
+   "conditioningImage": {
+    "sha256": "d17758ec0d30677a86fe7ee7cb1ac6c829a78dce7bb55ce690bb47fd0a3a5fe0",
+    "bytes": 1855564,
+    "size": "1672x941",
+    "generator": "codex-cli 0.163.0 built-in image_gen (model id not reported)",
+    "file": "reference/tasks/train-crafting-v1-20261111-225628/gen/out/TURRET-a2.png (raw original, outside Git)"
+   },
+   "meshy": {
+    "task": "01a1cce2-d935-73da-b810-259aa1557993",
+    "request": {
+     "ai_model": "meshy-t2.5",
+     "enable_pbr": true,
+     "model_type": "smart-topology",
+     "should_texture": true,
+     "target_formats": [
+      "glb"
+     ],
+     "target_polycount": 20000,
+     "texture_resolution": "2k"
+    },
+    "status": "SUCCEEDED",
+    "billedCredits": 15,
+    "attempt": 1
+   },
+   "source": {
+    "file": "reference/tasks/train-crafting-v1-20261111-225628/gen/raw/TURRET-R003-01a1cce2-d935-73da-b810-259aa1557993.glb (raw original, outside Git)",
+    "sha256": "64e61b603f301d96c2b3b334af7e757b2303c3853787997b1609debb0fc4ecf0",
+    "bytes": 8923092,
+    "triangles": 18216,
+    "extent": [
+     0.9575,
+     0.5205,
+     0.4233
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3116916
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2504865
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2284785
+     }
+    ]
+   },
+   "output": {
+    "file": "game/public/assets/models/train-turret.glb",
+    "url": "assets/models/train-turret.glb",
+    "sha256": "f6efdb830c91f1215fd23a5700994f073b47d80565d13e9c8582663e425624d5",
+    "bytes": 1383584,
+    "triangles": 18268,
+    "dims": [
+     0.4233,
+     0.5205,
+     0.9575
+    ]
+   },
+   "scale": 1,
+   "orientation": {
+    "upAxis": "y",
+    "flangeUnderside": 0,
+    "flangeDiameter": [
+     0.4233,
+     0.4233
+    ],
+    "barrel": {
+     "reachesMinX": 0,
+     "length": 0.3799,
+     "thickness": [
+      0.0488,
+      0.0488
+     ]
+    },
+    "yawAxisRaw": {
+     "x": 0.1719,
+     "z": 0
+    },
+    "result": "rotated a quarter turn about +Y (the raw barrel points -X): +Y up, +Z = the muzzle at rest"
+   },
+   "transform": "scale 1; a quarter turn about +Y, origin on the yaw axis (the base flange's centre) at the flange's underside (min y = 0), baked into the vertices; the mesh's 284 separate shells sorted (none cut) into three nodes sharing one material; two flat caps added (the rear arm plates' open inner sides, which the tilt uncovers); the head's vertices are relative to its node at the tilt axis; no geometry simplification",
+   "convention": "metres at runtime size, +Y up, origin on the yaw axis at the underside of the base ring; +Z = the muzzle at rest. Nodes: turret-base (fixed), turret-yoke (child of the scene root; yaw = rotation.y about its origin), turret-head (child of the yoke at pitchPivot; tilt = rotation.x about its origin, positive = muzzle down)",
+   "measured": {
+    "size": {
+     "l": 0.958,
+     "h": 0.52,
+     "w": 0.423
+    },
+    "pitch": true,
+    "pitchPivot": {
+     "x": 0,
+     "y": 0.27,
+     "z": 0.052
+    },
+    "muzzle": {
+     "x": 0,
+     "y": 0.322,
+     "z": 0.651
+    },
+    "pitchClear": {
+     "down": 31,
+     "up": 0
+    },
+    "baseRadius": 0.215,
+    "swingRadius": 0.651,
+    "parts": {
+     "base": {
+      "x0": -0.212,
+      "x1": 0.212,
+      "y0": 0,
+      "y1": 0.114,
+      "z0": -0.212,
+      "z1": 0.212
+     },
+     "yoke": {
+      "x0": -0.177,
+      "x1": 0.177,
+      "y0": 0.005,
+      "y1": 0.364,
+      "z0": -0.307,
+      "z1": 0.246
+     },
+     "head": {
+      "x0": -0.183,
+      "x1": 0.183,
+      "y0": 0.187,
+      "y1": 0.521,
+      "z0": -0.273,
+      "z1": 0.651
+     }
+    },
+    "split": {
+     "shells": 284,
+     "base": [
+      34,
+      2012
+     ],
+     "yoke": [
+      58,
+      4001
+     ],
+     "head": [
+      192,
+      12203
+     ],
+     "seeded": 126,
+     "grown": 158,
+     "farthestJoinMm": 2.785,
+     "mirrorMismatch": 0
+    },
+    "pitchOverlap": {
+     "downCm2": {
+      "5": 0,
+      "10": 0,
+      "15": 0,
+      "20": 0,
+      "25": 0,
+      "30": 0,
+      "35": 26.4,
+      "40": 56
+     },
+     "downDeepMm": {
+      "5": 0,
+      "10": 0,
+      "15": 0,
+      "20": 0,
+      "25": 0,
+      "30": 0,
+      "35": 8,
+      "40": 18
+     },
+     "upCm2": {
+      "2": 1.6,
+      "4": 3.5,
+      "6": 5.8,
+      "8": 6.9,
+      "10": 12.2,
+      "12": 78.5
+     },
+     "upDeepMm": {
+      "2": 49,
+      "4": 56,
+      "6": 61,
+      "8": 66,
+      "10": 70,
+      "12": 70
+     }
+    },
+    "caps": {
+     "count": 2,
+     "triangles": 52,
+     "rimLengths": [
+      0.358,
+      0.36
+     ],
+     "rimFlatnessMm": 3.906,
+     "what": "the two rear arm plates' open inner sides (uncovered when the head tilts) closed with flat fans; texture coordinates taken from each plate's own outer face"
+    }
+   },
+   "measureMethod": {
+    "split": "connected shells (vertices welded by position); shells are seeded into base / yoke / head by where they are, the remaining small ones join the class of the nearest classified shell (nearest first); mirror twins must agree; the result must equal the reviewed shell / triangle counts",
+    "caps": "each rear arm plate is an open shell whose boundary loop lies in its innermost plane: a triangle fan over that loop about its centre, wound to continue the shell's outside (facing the gun); each cap vertex takes the texture coordinate of the nearest vertex of the plate's own outer face (no new texture)",
+    "pitchPivot": "chosen, not a modelled hinge: the lateral axis that lets the gun depress in front of the yoke (the modelled hub discs on the rear arms would only allow ~6 degrees before the nose meets the yoke floor)",
+    "pitchClear": "column test on a 2 mm plan grid: the tilted head's underside against the top of the yoke + base, columns overlapping at rest (the mounts) left out; the largest whole-degree angle each way with at most 0.5 cm2 deeper than 1 mm",
+    "muzzle": "the centre of the head's vertices within 4 mm of its front end (the barrel's tip), at rest",
+    "yawAxis": "the centre of the base flange's bounds (the slew rings agree within 4 mm)"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 214021,
+     "sha256": "66eb42079942690487c5906e0a184b0d0b7654369a24e253921d9d1b9f2516b7"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 83545,
+     "sha256": "267c9b2a44597e7246e59d85b61b0bbfdf139fbf3c413ce823c1cb4ce5e49aa7"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 175783,
+     "sha256": "764036027600b2e12f3ce0f13567c799cd9d8d15102a13a8ec92aacfed8e911a"
+    }
+   ]
+  }
+ ]
+}

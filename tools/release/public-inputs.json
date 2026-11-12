@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 73966,
-      "sha256": "a32c48f97797dbe766d45367c117a0686f9e75b8a56fd4db0116135b722cc76b"
+      "bytes": 75946,
+      "sha256": "b280ff690dee9decb3b737e90ee66db223e07e98329550870be8dc3ca076318e"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -2824,6 +2824,11 @@
       "sha256": "b6377b944c7d93605d33a1e42911d3b0ee4b990f01b96de0d05fa7d76eeb74ab"
     },
     {
+      "path": "assets/derivatives/train-equipment.json",
+      "bytes": 30012,
+      "sha256": "169163cac415513a1a6100187ae6ffd5fd04f794ca5b116a2fc8d11bf4ef1836"
+    },
+    {
       "path": "assets/derivatives/train-fuel-can.json",
       "bytes": 5654,
       "sha256": "64c7f770c0e85edccfa2e3f6d0c5189b31e53cdb89c412237446bd61d6cd47ac"
@@ -5209,6 +5214,11 @@
       "sha256": "014bc3ef3c6cbc59661b6d51f85f556afd608e33678a058a01ce8261b8e3208e"
     },
     {
+      "path": "assets/models/train-bench.glb",
+      "bytes": 1395868,
+      "sha256": "8220b094c9a79ba1dbb7f68244e944a5145e9a4d56dde637975eb85b3fdb3de6"
+    },
+    {
       "path": "assets/models/train-chipper.glb",
       "bytes": 1316080,
       "sha256": "e607cb8f8c6bc36ab503560967a8e4efbda30c8b47d59a32182e3ebe952df5d2"
@@ -5217,6 +5227,26 @@
       "path": "assets/models/train-fuel-can.glb",
       "bytes": 779784,
       "sha256": "5d1fba9c8d2447293990b27be05d1a55846ccfdee5f22a87ae447e7e5f33f825"
+    },
+    {
+      "path": "assets/models/train-radar.glb",
+      "bytes": 1127612,
+      "sha256": "643251ff2b76dd8a13271346fac8bd0e836cd1ed1a3e7a688db0d6c3dcd69324"
+    },
+    {
+      "path": "assets/models/train-scanner.glb",
+      "bytes": 1270816,
+      "sha256": "539c14f7af324d6eb29a85a4fad0410ae7d7d3b54b6a6a8a79ac9730a1efa74a"
+    },
+    {
+      "path": "assets/models/train-sentry.glb",
+      "bytes": 1163292,
+      "sha256": "64694f5434cbd00256e15aa8aafcc26e321f4ece7ae4a510de6b41d777a92f5d"
+    },
+    {
+      "path": "assets/models/train-turret.glb",
+      "bytes": 1383584,
+      "sha256": "f6efdb830c91f1215fd23a5700994f073b47d80565d13e9c8582663e425624d5"
     },
     {
       "path": "assets/models/trash-can-t25.glb",
