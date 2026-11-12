@@ -240,21 +240,53 @@ export function turnToward(cur: number, want: number, max: number): number {
 // ---------------------------------------------------------------------------------------------------------------------------------
 // The own-hull rule and the virtual origin (train-local)
 
+// THE OUTLINE AS A TABLE. roofTopAtPoint is constant inside each rectangle of the plan: a band of |z| (TRAIN_ROOF.step wide; the hatch
+// boxes' sides |z| = hatchZ are band edges) x a stretch along the car between two of the stations where the outline changes (the end
+// caps' starts, each hatch box's two ends). The table below is READ FROM roofTopAtPoint once (at the middle of every rectangle), so
+// the values are the contract's own whatever it composes them from; tests/sentry-hull compares the rule against roofTopAtPoint itself
+// along thousands of lines.
+
 const SPAN: [number, number] = [0, 0];
-/** At a crossing of a piece's edge the outline is read this far either side of it (m): the higher of the adjoining pieces counts. */
+/** A point this close to a rectangle's edge (m) counts as on it: the higher of the adjoining rectangles is taken. */
 const EDGE = 1e-6;
 /** roofTopAtPoint knows a roof up to this far beyond the car's half width (m). */
 const ROOF_SIDE = 0.02;
-/** The stations along the car where the outline changes: the end caps, each hatch box's two ends. */
-const ROOF_X_EDGES: readonly number[] = [-TRAIN_ROOF.endX, TRAIN_ROOF.endX, ...TRAIN_ROOF.hatches.flatMap(h => [h.x0, h.x1])];
+/** The stations along the car where the outline changes, ascending. */
+const ROOF_XS: readonly number[] = [-TRAIN_ROOF.endX, TRAIN_ROOF.endX, ...TRAIN_ROOF.hatches.flatMap(h => [h.x0, h.x1])].sort((a, b) => a - b);
+/** Bands per stretch (the last one: beyond the roof). */
+const ROOF_BANDS: number = TRAIN_ROOF.body.length;
+/** ROOF_TOP[s * ROOF_BANDS + k]: the outline of stretch s (ROOF_XS[s - 1] .. ROOF_XS[s]; the first / last run to the car's ends) in band k. */
+const ROOF_TOP: Float64Array = (() => {
+  const n = ROOF_XS.length, T = new Float64Array((n + 1) * ROOF_BANDS);
+  for (let s = 0; s <= n; s++) {
+    const x = s === 0 ? ROOF_XS[0] - 0.5 : s === n ? ROOF_XS[n - 1] + 0.5 : (ROOF_XS[s - 1] + ROOF_XS[s]) / 2;
+    for (let k = 0; k < ROOF_BANDS; k++) T[s * ROOF_BANDS + k] = roofTopAtPoint(x, (k + 0.5) * TRAIN_ROOF.step);
+  }
+  return T;
+})();
 /** The highest outline anywhere on the car: a line that stays above it needs no walk. */
-const ROOF_MAX: number = Math.max(...TRAIN_ROOF.body, ...TRAIN_ROOF.ends, ...TRAIN_ROOF.hatches.flatMap(h => [...h.top]));
+const ROOF_MAX: number = ROOF_TOP.reduce((a, b) => Math.max(a, b), -Infinity);
 
-/** The highest roof outline within EDGE of the plan point (x, z): at an edge both pieces, at a corner all four. */
-function topNear(x: number, z: number, spec: PlayerTrainSpec): number {
-  return Math.max(
-    roofTopAtPoint(x - EDGE, z - EDGE, spec), roofTopAtPoint(x - EDGE, z + EDGE, spec),
-    roofTopAtPoint(x + EDGE, z - EDGE, spec), roofTopAtPoint(x + EDGE, z + EDGE, spec));
+/** The band of a distance from the centre line (the contract's own rounding: trainFixtures.ts roofBand). */
+function bandOf(absZ: number): number {
+  const k = Math.floor(absZ / TRAIN_ROOF.step + 1e-9);
+  return k < 0 ? 0 : k >= ROOF_BANDS ? ROOF_BANDS - 1 : k;
+}
+
+/** The higher outline of bands k0 / k1 at station x (of both stretches when x is on a stretch's edge). */
+function topAt(x: number, k0: number, k1: number): number {
+  const n = ROOF_XS.length;
+  let s = 0;
+  while (s < n && ROOF_XS[s] < x - EDGE) s++;
+  let top = Math.max(ROOF_TOP[s * ROOF_BANDS + k0], ROOF_TOP[s * ROOF_BANDS + k1]);
+  if (s < n && ROOF_XS[s] < x + EDGE) { s++; top = Math.max(top, ROOF_TOP[s * ROOF_BANDS + k0], ROOF_TOP[s * ROOF_BANDS + k1]); }
+  return top;
+}
+
+/** The highest outline at the plan point (x, z): on a rectangle's edge the higher side, on a corner the highest of the four. */
+function topNear(x: number, z: number): number {
+  const a = Math.abs(z);
+  return topAt(x, bandOf(a - EDGE), bandOf(a + EDGE));
 }
 
 /** The part [t0, t1] of the ray o + d t, 0 <= t <= maxT, above the plan rect |x| <= hx, |z| <= hz (into `out`); false: none. */
@@ -284,28 +316,29 @@ export function planSpan(o: V3, d: V3, maxT: number, hx: number, hz: number, out
  * along the car (a hatch box, an end cap, the body between) — and the line is straight, so against each rectangle it is lowest where
  * it enters or leaves it. Tested: the two ends of its span over the car, every crossing of a band's edge (|z| = j x step, the hatch
  * boxes' sides among them) and of a stretch's edge (each hatch box's ends, the end caps), against the higher outline adjoining the
- * crossing. No allocation; at most ~160 crossings (a line right across the car), none for a line that stays above the highest hatch.
+ * crossing. No allocation, a table read per crossing; at most ~160 crossings (a line right across the car), none for a line that
+ * stays above the highest hatch.
  */
 export function ownHullClear(o: V3, d: V3, maxT: number, spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC, margin: number = SENTRY.hullMargin): boolean {
   if (!planSpan(o, d, maxT, spec.length / 2, spec.width / 2 + ROOF_SIDE, SPAN)) return true;
   const t0 = SPAN[0], t1 = SPAN[1], y0 = o.y + d.y * t0, y1 = o.y + d.y * t1;
   if (Math.min(y0, y1) >= ROOF_MAX + margin) return true;
-  if (y0 < topNear(o.x + d.x * t0, o.z + d.z * t0, spec) + margin) return false;
-  if (y1 < topNear(o.x + d.x * t1, o.z + d.z * t1, spec) + margin) return false;
+  if (y0 < topNear(o.x + d.x * t0, o.z + d.z * t0) + margin) return false;
+  if (y1 < topNear(o.x + d.x * t1, o.z + d.z * t1) + margin) return false;
   if (Math.abs(d.z) > 1e-12) {
     // the bands' edges across the car (z = 0 is not one: the same band either side of the centre line)
     const step = TRAIN_ROOF.step, za = o.z + d.z * t0, zb = o.z + d.z * t1, j1 = Math.floor(Math.max(za, zb) / step);
     for (let j = Math.ceil(Math.min(za, zb) / step); j <= j1; j++) {
       if (j === 0) continue;
-      const z = j * step, t = (z - o.z) / d.z;
-      if (o.y + d.y * t < topNear(o.x + d.x * t, z, spec) + margin) return false;
+      const t = (j * step - o.z) / d.z, k = Math.min(j < 0 ? -j : j, ROOF_BANDS); // the edge between bands k - 1 and k
+      if (o.y + d.y * t < topAt(o.x + d.x * t, k - 1, k < ROOF_BANDS ? k : k - 1) + margin) return false;
     }
   }
   if (Math.abs(d.x) > 1e-12) {
     // the stretches' edges along the car
-    for (let i = 0; i < ROOF_X_EDGES.length; i++) {
-      const x = ROOF_X_EDGES[i], t = (x - o.x) / d.x;
-      if (t > t0 && t < t1 && o.y + d.y * t < topNear(x, o.z + d.z * t, spec) + margin) return false;
+    for (let i = 0; i < ROOF_XS.length; i++) {
+      const x = ROOF_XS[i], t = (x - o.x) / d.x;
+      if (t > t0 && t < t1 && o.y + d.y * t < topNear(x, o.z + d.z * t) + margin) return false;
     }
   }
   return true;

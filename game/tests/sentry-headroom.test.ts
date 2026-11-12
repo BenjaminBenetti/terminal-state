@@ -52,7 +52,7 @@ function census(level: LevelId, seed: number): Row {
   row.over = room.ceil - (s.p.railTopY + m.y);
   row.rayUp = Math.min(rayUp(s, m.x, m.z), rayUp(s, m.x + r, m.z), rayUp(s, m.x - r, m.z), rayUp(s, m.x, m.z + r * 0.98), rayUp(s, m.x, m.z - r * 0.98));
   // the field of fire: standing cells within range (every 3rd cell of every storey), a clear shot at chest height
-  const piv = s.pivot();
+  const piv = s.mount(); // (the range is measured from the yaw axis)
   for (const lv of s.levels.list) {
     const g = lv.grid;
     for (let cy = 1; cy < g.h; cy += 3) for (let cx = 1; cx < g.w; cx += 3) {

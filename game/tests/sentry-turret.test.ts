@@ -2,14 +2,15 @@
 // layout with the REAL parked train runtime (its car boxes in the bullet's world), the real Levels rays, the real Player body, real
 // ZombieActors (their own hit volumes and brains) and a fake train-equipment system (helpers/sentryFixture.ts):
 //  - targeting: the nearest enemy with a clear shot (one under the eaves is passed over), a wall between = no shot, the player's body
-//    in the line = it holds fire, dead / ragdolled / dormant / rising enemies are skipped, the range limit, the head when the chest is
-//    hidden by the roof;
+//    in the line = it holds fire, dead / ragdolled / dormant / rising enemies are skipped, the range limit (from the yaw axis), the
+//    head when the chest is below the lower elevation stop;
 //  - firing: one loaded round per shot (the round leaves first), the cadence, stops at 0 and stows; the rifle's damage numbers (part
-//    multipliers, falloff from the pivot), an enemy in front takes the hit, a miss marks the world (lane handlers first); a kill = the
-//    game's kill path once; the brain is hurt FROM THE TRAIN; gunfire noise at the train; the player's own shot statistics untouched;
+//    multipliers, falloff from the pivot — the tilt axis at the yaw the gun has), an enemy in front takes the hit, a miss marks the
+//    world (lane handlers first); a kill = the game's kill path once; the brain is hurt FROM THE TRAIN (under the yaw axis); gunfire
+//    noise at the train; the player's own shot statistics untouched; the spread drawn from the stream handed in at install;
 //  - lifecycle: stowed and silent when unplugged / riding / empty / the player dead / not playing; redeploys on arrival; hidden
-//    through a ride (it stays on the riding car); a rebuild keeps nothing stale; the warm pool; the view's pivots agree with the rules.
-import {readFileSync} from 'node:fs';
+//    through a ride (it stays on the riding car); a rebuild keeps nothing stale; the warm pool; the view's pivots agree with the rules
+//    (the REAL cooked model through the view: tests/sentry-turret-model.test.ts).
 import * as THREE from 'three';
 import {afterEach, beforeAll, describe, expect, it} from 'vitest';
 import {installCanvasShim} from './helpers/canvas2d';
@@ -17,7 +18,8 @@ import {DT, loadZombieModels, placeZombie, sentryWorld, syncBody, teardownSentry
 import type {EnemyActor} from '../src/ai/creatureArchetypes';
 import {HEARING} from '../src/ai/brain';
 import {TRAIN_TURRET_MEASURED as TM} from '../src/assets/trainEquipment.generated';
-import {SENTRY, aimPoint, hullExit, ownHullClear, turretMuzzle, turretPivot, type V3} from '../src/craft/sentry';
+import {mulberry32} from '../src/core/rng';
+import {SENTRY, aimPoint, hullExit, ownHullClear, turretMuzzle, turretReach, type V3} from '../src/craft/sentry';
 import {turretMount} from '../src/craft/trainFixtures';
 import {trainToWorld} from '../src/gen/playerTrain';
 import {killImpulseStrength} from '../src/physics/world';
@@ -31,7 +33,8 @@ installCanvasShim(false);
 afterEach(teardownSentryWorlds);
 beforeAll(loadZombieModels, 180000);
 
-const HW = SPEC.width / 2, PIV = turretPivot(SPEC), DEF = WEAPONS.rifle;
+/** The mount: the turret's yaw axis on the car's middle hatch (train-local). */
+const HW = SPEC.width / 2, MNT = turretMount(SPEC), DEF = WEAPONS.rifle;
 /** No spread: every round goes down the aim line. */
 const STRAIGHT = () => 0;
 
@@ -70,18 +73,22 @@ function aim(z: SentryEnemy, part: 'torso' | 'head'): V3 {
   return o;
 }
 
-/** The world line pivot -> `to` clears the car's own roof (the pure rule), and where it leaves the outline. */
+/**
+ * The line of fire to world point `to` — from the pivot of the turret turned to point at it — by the pure rules: `clear` = inside the
+ * elevation stops and over the car's own roof; `origin` = where it leaves the car's outline.
+ */
 function hullLine(s: SentryWorld, to: V3): {clear: boolean; origin: V3 | null} {
-  const piv = s.pivot(), d = Math.hypot(to.x - piv.x, to.y - piv.y, to.z - piv.z);
+  const piv = s.pivotToward(to), pivL = s.local(piv), d = Math.hypot(to.x - piv.x, to.y - piv.y, to.z - piv.z);
   const dw = {x: (to.x - piv.x) / d, y: (to.y - piv.y) / d, z: (to.z - piv.z) / d}, dl = {x: dw.x * s.p.front, y: dw.y, z: dw.z * s.p.front};
-  const clear = ownHullClear(PIV, dl, d, SPEC), tx = hullExit(PIV, dl, d, SPEC);
+  const pitch = Math.asin(dl.y), tx = hullExit(pivL, dl, d, SPEC);
+  const clear = pitch >= SENTRY.pitchMin && pitch <= SENTRY.pitchMax && ownHullClear(pivL, dl, d, SPEC);
   return {clear, origin: tx === null ? null : {x: piv.x + dw.x * tx, y: piv.y + dw.y * tx, z: piv.z + dw.z * tx}};
 }
 
 describe('sentry turret: targeting', () => {
   it('rises when plugged in and loaded, then fires at the NEAREST enemy with a clear shot — one under the eaves is passed over', () => {
     const s = sentryWorld({ammo: 60, rand: STRAIGHT});
-    const eaves = zombieAt(s, PIV.x, -(HW + 1.0)), near = zombieAt(s, PIV.x + 1, -6.5, 60), far = zombieAt(s, PIV.x - 2, -9.5);
+    const eaves = zombieAt(s, MNT.x, -(HW + 1.0)), near = zombieAt(s, MNT.x + 1, -6.5, 60), far = zombieAt(s, MNT.x - 5, -9.5);
     const hp = far.brain.hp, hpE = eaves.brain.hp;
     // hidden in the roof, then rising over SENTRY.deployS: nothing is fired before it is up
     expect([s.sys.deploy, s.sys.view.root.visible]).toEqual([0, false]);
@@ -135,9 +142,9 @@ describe('sentry turret: targeting', () => {
 
   it('holds fire while the player stands in or near the line; fires again once the player is clear; never with the player dead', () => {
     const s = sentryWorld({ammo: 30, rand: STRAIGHT});
-    const z = zombieAt(s, PIV.x, -9);
+    const z = zombieAt(s, MNT.x, -9);
     // the player on the platform between the car and the enemy: the line passes through the head
-    const mid = s.stand(PIV.x, -7.5)!;
+    const mid = s.stand(MNT.x, -7.5)!;
     s.player.spawn(mid.x, mid.z, 0, mid.y);
     s.run(3);
     expect(s.sys.deploy).toBe(1);
@@ -145,11 +152,11 @@ describe('sentry turret: targeting', () => {
     expect(s.sys.counts.holds).toBeGreaterThan(0);
     expect(s.sys.target).toBeNull();
     // a step short of the safe radius beside the line: still held; well beside it: fire
-    const beside = s.stand(PIV.x + SENTRY.safeRadius - 0.15, -7.5)!;
+    const beside = s.stand(MNT.x + SENTRY.safeRadius - 0.15, -7.5)!;
     s.player.spawn(beside.x, beside.z, 0, beside.y);
     s.run(1.5);
     expect(s.sys.counts.shots).toBe(0);
-    const clear = s.stand(PIV.x + 2.5, -7.5)!;
+    const clear = s.stand(MNT.x + 2.5, -7.5)!;
     s.player.spawn(clear.x, clear.z, 0, clear.y);
     s.run(1.5);
     expect(s.sys.target).toBe(z);
@@ -164,8 +171,8 @@ describe('sentry turret: targeting', () => {
 
   it('skips the dead, the ragdolled, the dormant and the rising; only a living, standing, awake enemy is shot', () => {
     const s = sentryWorld({ammo: 40, rand: STRAIGHT});
-    const dead = zombieAt(s, PIV.x - 1, -5.5), rag = zombieAt(s, PIV.x + 1, -5.5), dormant = zombieAt(s, PIV.x, -6), rising = zombieAt(s, PIV.x + 2, -6);
-    const live = zombieAt(s, PIV.x - 1, -9.5);
+    const dead = zombieAt(s, MNT.x - 1, -5.5), rag = zombieAt(s, MNT.x + 1, -5.5), dormant = zombieAt(s, MNT.x, -6), rising = zombieAt(s, MNT.x + 2, -6);
+    const live = zombieAt(s, MNT.x - 1, -9.5);
     dead.brain.damage(1e9, 0, 0);
     expect(dead.brain.alive).toBe(false);
     rag.ragdolled = true;
@@ -186,13 +193,13 @@ describe('sentry turret: targeting', () => {
 
   it('the range: an enemy with a clear line beyond SENTRY.range is left alone, inside it is shot; a chest hidden by the roof = the head', () => {
     const s = sentryWorld({ammo: 40, rand: STRAIGHT});
-    const z = zombieAt(s, PIV.x + SENTRY.range + 1, -5);
-    const piv = s.pivot();
+    const z = zombieAt(s, MNT.x - SENTRY.range - 1, -5);
+    const piv = s.mount(); // (the range is measured from the yaw axis)
     expect(Math.hypot(z.brain.x - piv.x, z.brain.z - piv.z)).toBeGreaterThan(SENTRY.range);
     expect(s.sys.clearTo(aim(z, 'torso'), s.p)).toBe(true); // (the line itself is clear: only the range excludes it)
     s.run(3);
     expect([s.sys.target, s.sys.counts.shots]).toEqual([null, 0]);
-    const f = s.stand(PIV.x + SENTRY.range - 1.5, -5)!;
+    const f = s.stand(MNT.x - SENTRY.range + 1.5, -5)!;
     z.brain.x = f.x; z.brain.z = f.z; z.brain.y = f.y;
     syncBody(z);
     expect(Math.hypot(z.brain.x - piv.x, z.brain.z - piv.z)).toBeLessThan(SENTRY.range);
@@ -202,8 +209,8 @@ describe('sentry turret: targeting', () => {
     expect(s.sys.targetPart).toBe('torso');
     expect(['torso', 'limb']).toContain(s.sys.lastShot!.part); // (seen from the side an arm can be in front of the chest: the nearest volume takes it)
     expect(s.sys.lastShot!.result).toBe('enemy');
-    // close beside the car: the chest is below the roof's edge, the head is not — it aims at the head
-    const g = s.stand(PIV.x, -(HW + 2.7))!;
+    // close beside the car: the chest is below the turret's lower stop, the head is not — it aims at the head
+    const g = s.stand(MNT.x, -(HW + 1.8))!;
     z.brain.x = g.x; z.brain.z = g.z; z.brain.y = g.y;
     syncBody(z);
     expect(hullLine(s, aim(z, 'torso')).clear).toBe(false);
@@ -215,7 +222,7 @@ describe('sentry turret: targeting', () => {
     expect(s.sys.targetPart).toBe('head');
     expect(s.sys.lastShot).toMatchObject({result: 'enemy', part: 'head', damage: DEF.damage * DEF.headMult});
     expect(hp - z.brain.hp).toBe(DEF.damage * DEF.headMult);
-    // (each hit knocks it back: a few rounds later its chest is clear of the roof's edge and the turret aims there again)
+    // (each hit knocks it back: a few rounds later its chest is inside the stop's reach and the turret aims there again)
     s.until(() => s.sys.targetPart === 'torso', 4);
     expect(s.sys.targetPart).toBe('torso');
     expect(hullLine(s, aim(z, 'torso')).clear).toBe(true);
@@ -236,9 +243,9 @@ describe('sentry turret: targeting', () => {
   it('a crowd under the eaves (more bodies than the line-test budget) does not hide the clear enemy behind it', () => {
     const s = sentryWorld({ammo: 20, rand: STRAIGHT});
     const crowd: EnemyActor[] = [];
-    for (let i = 0; i < 16; i++) crowd.push(zombieAt(s, PIV.x - 6 + i * 0.8, -(HW + 0.7 + (i % 2) * 0.5)));
+    for (let i = 0; i < 16; i++) crowd.push(zombieAt(s, MNT.x - 6 + i * 0.8, -(HW + 0.6 + (i % 2) * 0.4)));
     expect(crowd.length).toBeGreaterThan(SENTRY.maxChecks);
-    const out = zombieAt(s, PIV.x, -8);
+    const out = zombieAt(s, MNT.x, -8);
     s.deploy();
     const rays = s.sys.counts.rayTests;
     s.run(0.3);
@@ -253,7 +260,7 @@ describe('sentry turret: targeting', () => {
 describe('sentry turret: firing', () => {
   it('one loaded round per shot (the round leaves first), SENTRY.interval apart; at 0 it stops, says so and stows', () => {
     const s = sentryWorld({ammo: 5, rand: STRAIGHT});
-    const z = zombieAt(s, PIV.x, -7);
+    const z = zombieAt(s, MNT.x, -7);
     const q = spy(z);
     s.deploy();
     const times = s.shotTimes(4);
@@ -292,7 +299,7 @@ describe('sentry turret: firing', () => {
 
   it('a crafted (empty) sentry never rises or fires, plugged in beside enemies', () => {
     const s = sentryWorld({ammo: 0, rand: STRAIGHT});
-    const z = zombieAt(s, PIV.x, -7);
+    const z = zombieAt(s, MNT.x, -7);
     s.run(4);
     expect([s.sys.deploy, s.sys.view.root.visible, s.sys.counts.shots, s.unit.ammo, z.brain.hp]).toEqual([0, false, 0, 0, 1e6]);
     expect(s.unit.asked).toEqual([]);
@@ -301,28 +308,35 @@ describe('sentry turret: firing', () => {
 
   it("the rifle's damage: body x1, head x headMult, falloff by the distance from the pivot; the brain is hurt FROM THE TRAIN", () => {
     const s = sentryWorld({ammo: 40, rand: STRAIGHT});
-    const z = zombieAt(s, PIV.x, -8);
+    const z = zombieAt(s, MNT.x, -8);
     const q = spy(z);
     s.deploy();
     s.until(() => s.sys.counts.shots >= 2);
     const n = s.sys.counts.shots;
     expect(n).toBe(2);
-    // torso, within the falloff start: the rifle's damage exactly, from the mount's x / z at the car floor's height
-    const piv = s.pivot();
+    // torso, within the falloff start: the rifle's damage exactly, from under the turret's yaw axis at the car floor's height
+    const from = s.mount();
     expect(s.sys.lastShot).toMatchObject({result: 'enemy', part: 'torso', killed: false, damage: DEF.damage});
-    for (const h of q.hits) expect(h).toEqual({amount: DEF.damage, x: piv.x, z: piv.z, y: s.p.floorY});
+    for (const h of q.hits) expect(h).toEqual({amount: DEF.damage, x: from.x, z: from.z, y: s.p.floorY});
     expect(z.brain.hp).toBe(1e6 - n * DEF.damage);
-    expect((z.brain as unknown as {lastKnown: number[]}).lastKnown).toEqual([piv.x, piv.z, s.p.floorY]);
+    expect((z.brain as unknown as {lastKnown: number[]}).lastKnown).toEqual([from.x, from.z, s.p.floorY]);
     expect(z.brain.aware).toBe(true);
     expect(z.hitFlash).toBe(1);
     // the damage system got the same shot (wound / blood), the weapon named
     const hz = s.dmg.of('hitZombie')[0].args as [unknown, THREE.Vector3, THREE.Vector3, string, {damage: number; pellet: boolean; weapon: string}];
     expect(hz[0]).toBe(z); expect(hz[3]).toBe('torso'); expect(hz[4]).toEqual({damage: DEF.damage, pellet: false, weapon: 'rifle'});
+    // the line of fire started at the PIVOT AT THE YAW THE GUN HAD — the tilt axis' middle, ahead of the yaw axis toward the target
+    const shot = s.sys.lastShot!, piv = s.pivot(s.sys.yaw), pl = s.local(shot.pivot);
+    expect(Math.hypot(shot.pivot.x - piv.x, shot.pivot.y - piv.y, shot.pivot.z - piv.z)).toBeLessThan(1e-9);
+    expect(Math.hypot(pl.x - MNT.x, pl.z - MNT.z)).toBeCloseTo(TM.pitchPivot.z, 9);
+    expect(pl.z).toBeCloseTo(-TM.pitchPivot.z, 4); // (the target is straight across on the platform side: -Z)
+    expect(pl.y).toBeCloseTo(MNT.y + TM.pitchPivot.y, 9);
     // the distance is measured from the pivot (the virtual origin is on the line, not the start of the bullet's travel)
     // (the body has been knocked back by that round since: its chest is DEF.knockback farther now; the round met its surface)
     const chest = aim(z, 'torso'), d = Math.hypot(chest.x - piv.x, chest.y - piv.y, chest.z - piv.z) - DEF.knockback;
-    expect(s.sys.lastShot!.dist).toBeGreaterThan(d - 0.35); expect(s.sys.lastShot!.dist).toBeLessThan(d + 0.05);
-    expect(Math.hypot(s.sys.lastShot!.origin.x - piv.x, s.sys.lastShot!.origin.z - piv.z)).toBeCloseTo(HW + SENTRY.hullPush, 3);
+    expect(shot.dist).toBeGreaterThan(d - 0.35); expect(shot.dist).toBeLessThan(d + 0.05);
+    // and the bullet's world ray started a push outside the car's side
+    expect(Math.abs(s.local(shot.origin).z)).toBeCloseTo(HW + SENTRY.hullPush, 6);
     // a falloff that starts before the target (the same formula as the player's rifle: WeaponController.falloff)
     const short = {...DEF, falloffStart: 2, range: 20, falloffMin: 0.5};
     (s.sys as unknown as {def: typeof DEF}).def = short;
@@ -337,7 +351,7 @@ describe('sentry turret: firing', () => {
 
   it('head x2.5 on a head-only target; an enemy in front of the target takes the round on the part it hits (limb x0.7)', () => {
     const s = sentryWorld({ammo: 40, rand: STRAIGHT});
-    const body = zombieAt(s, PIV.x, -8);
+    const body = zombieAt(s, MNT.x, -8);
     s.host.zombies[0] = only(body, 'head');
     const q = spy(body);
     s.deploy();
@@ -349,9 +363,9 @@ describe('sentry turret: firing', () => {
     s.host.zombies[0] = body;
     s.until(() => s.sys.lastShot?.part === 'torso');
     expect(s.sys.lastShot).toMatchObject({result: 'enemy', part: 'torso', damage: DEF.damage});
-    const chest = aim(body, 'torso'), piv = s.pivot(), k = 0.7;
+    const chest = aim(body, 'torso'), piv = s.pivotToward(chest), k = 0.7;
     const c = {x: piv.x + (chest.x - piv.x) * k, y: piv.y + (chest.y - piv.y) * k, z: piv.z + (chest.z - piv.z) * k};
-    const other = zombieAt(s, PIV.x - 3, -9.5);
+    const other = zombieAt(s, MNT.x - 3, -9.5);
     const arm = Object.create(other, {hitVolumes: {get: () => [{part: 'limb' as const, a: {x: c.x - 0.2, y: c.y, z: c.z}, b: {x: c.x + 0.2, y: c.y, z: c.z}, r: 0.08}]}}) as EnemyActor;
     s.host.zombies[1] = arm;
     const qo = spy(other);
@@ -366,7 +380,7 @@ describe('sentry turret: firing', () => {
 
   it('a kill is the game kill path, once: the tally, the death cue, a ragdoll shoved by the rifle round; then the next target or none', () => {
     const s = sentryWorld({ammo: 40, rand: STRAIGHT});
-    const z = zombieAt(s, PIV.x, -7, 40); // two torso rounds
+    const z = zombieAt(s, MNT.x, -7, 40); // two torso rounds
     const q = spy(z);
     s.deploy();
     s.run(3);
@@ -387,7 +401,7 @@ describe('sentry turret: firing', () => {
     expect(s.sys.lastShot).toMatchObject({result: 'enemy', killed: true});
     expect(s.sys.target).toBeNull();
     // a head kill names the bone
-    const h = zombieAt(s, PIV.x - 1, -8, 30);
+    const h = zombieAt(s, MNT.x - 1, -8, 30);
     s.host.zombies[1] = only(h, 'head');
     s.run(2);
     expect(h.brain.alive).toBe(false);
@@ -399,15 +413,15 @@ describe('sentry turret: firing', () => {
 
   it('gunfire noise at the train: enemies in earshot hear every shot from the car (muffled behind a wall), none beyond the radius', () => {
     const s = sentryWorld({ammo: 3, rand: STRAIGHT});
-    const z = zombieAt(s, PIV.x, -7);
-    const open = zombieAt(s, PIV.x + 8, -6); // in the open, farther than the target: not shot, but it hears
+    const z = zombieAt(s, MNT.x, -7);
+    const open = zombieAt(s, MNT.x + 8, -6); // in the open, farther than the target: not shot, but it hears
     const walled = zombieAt(s, -4, -19); // behind the platform's back wall
-    const far = zombieAt(s, PIV.x + DEF.noise + 3, -5);
+    const far = zombieAt(s, MNT.x + DEF.noise + 3, -5);
     const qs = [z, open, walled, far].map(spy);
     s.deploy();
     s.shotTimes(2);
     expect(s.sys.counts.shots).toBe(3);
-    const piv = s.pivot();
+    const piv = s.mount(); // (heard from under the turret's yaw axis)
     for (const q of qs.slice(0, 3)) {
       expect(q.heard.length).toBe(3);
       for (const h of q.heard) expect([h.x, h.z, h.y]).toEqual([piv.x, piv.z, s.p.floorY]);
@@ -424,7 +438,7 @@ describe('sentry turret: firing', () => {
     // a small target at long range and the widest spread: the round goes past it
     const wide = (() => { let i = 0; return () => (i++ % 2 === 0 ? 0.25 : 0.999); })();
     const s = sentryWorld({ammo: 2, rand: wide});
-    const body = zombieAt(s, PIV.x + 24, -5.5);
+    const body = zombieAt(s, MNT.x + 24, -5.5);
     s.host.zombies[0] = only(body, 'head');
     const q = spy(body);
     const offered: {shot: number; damage: number; kind: string}[] = [];
@@ -455,12 +469,11 @@ describe('sentry turret: firing', () => {
 });
 
 describe('sentry turret: the spread', () => {
-  it("is drawn from the level's random stream (Game.rand, re-seeded per level: read at each shot), two draws per round, inside the cone", () => {
-    const s = sentryWorld({ammo: 12});
-    let draws = 0;
-    const R = s.host.rand;
-    s.host.rand = () => { draws++; return R(); };
-    const z = zombieAt(s, PIV.x, -9);
+  it('is drawn from the stream handed in at install (the game: its level stream through a closure, read at each shot), two draws per round, inside the cone', () => {
+    // installSentryTurret(game, {rand: () => game.rand()}): `stream` stands for the game's member, re-assigned at every level
+    let draws = 0, stream: () => number = mulberry32(0x5e7);
+    const s = sentryWorld({ammo: 12, rand: () => { draws++; return stream(); }});
+    const z = zombieAt(s, MNT.x, -9);
     s.deploy();
     expect(draws).toBe(0); // nothing is drawn while it only tracks
     const ends: V3[] = [];
@@ -469,28 +482,32 @@ describe('sentry turret: the spread', () => {
     expect(n).toBe(10);
     expect(draws).toBe(20);
     // every round left inside the cone round the aim line (the body moved a little between shots: a generous bound), and they differ
-    const piv = s.pivot(), chest = aim(z, 'torso');
+    const chest = aim(z, 'torso'), piv = s.pivotToward(chest);
     const dirs = ends.map(e => { const d = Math.hypot(e.x - piv.x, e.y - piv.y, e.z - piv.z); return {x: (e.x - piv.x) / d, y: (e.y - piv.y) / d, z: (e.z - piv.z) / d}; });
     const dc = Math.hypot(chest.x - piv.x, chest.y - piv.y, chest.z - piv.z), c = {x: (chest.x - piv.x) / dc, y: (chest.y - piv.y) / dc, z: (chest.z - piv.z) / dc};
     for (const d of dirs) expect(Math.acos(Math.min(1, d.x * c.x + d.y * c.y + d.z * c.z))).toBeLessThan(SENTRY.spread + 0.08);
     expect(new Set(ends.map(e => e.x.toFixed(4))).size).toBeGreaterThan(5);
-    // a swapped stream (the next level's) is the one used from then on
+    // the next level's stream: the one used from then on
     let other = 0;
-    s.host.rand = () => { other++; return 0.5; };
+    stream = () => { other++; return 0.5; };
     s.until(() => s.sys.counts.shots >= 11);
-    expect([draws, other]).toEqual([20, 2]);
-    // the game's member the system reads is private there: pinned by name (a rename must come here too)
-    const src = readFileSync(new URL('../src/game.ts', import.meta.url), 'utf8');
-    expect(src).toMatch(/\n {2}private rand: \(\) => number = Math\.random;/);
-    expect(src).toMatch(/this\.rand = mulberry32\(layout\.seed \^ /);
-    expect(src).toMatch(/this\.sentryTurret = installSentryTurret\(this\)/);
+    expect([draws, other]).toEqual([22, 2]);
+  });
+
+  it('with no stream handed in it is Math.random (Node tests): nothing of the host is read for one', () => {
+    const s = sentryWorld({ammo: 1});
+    const host = {...s.host, rand: () => { throw new Error('the host is not asked for a stream'); }, frameHooks: [], sectionHooks: [], stateListeners: [], warmRegistry: new WarmupRegistry()};
+    const sys = new SentryTurretSystem(host as unknown as SentryHost, {model: () => null});
+    expect((sys as unknown as {rand: () => number}).rand).toBe(Math.random);
+    const own = () => 0.25, given = new SentryTurretSystem(host as unknown as SentryHost, {model: () => null, rand: own});
+    expect((given as unknown as {rand: () => number}).rand).toBe(own);
   });
 });
 
 describe('sentry turret: lifecycle', () => {
   it('unplugged: it sinks back and is silent; plugged in again it rises and fires; a second sentry on a higher plug has no turret of its own', () => {
     const s = sentryWorld({ammo: 30, rand: STRAIGHT});
-    zombieAt(s, PIV.x, -7);
+    zombieAt(s, MNT.x, -7);
     s.deploy();
     s.run(1);
     const n = s.sys.counts.shots;
@@ -519,7 +536,7 @@ describe('sentry turret: lifecycle', () => {
 
   it('a ride: sinks while the doors close, hidden at once when the car moves, stays on the riding car through the teardown, redeploys on arrival', () => {
     const s = sentryWorld({ammo: 30, rand: STRAIGHT});
-    zombieAt(s, PIV.x, -7);
+    zombieAt(s, MNT.x, -7);
     s.deploy();
     s.run(1);
     const n = s.sys.counts.shots, viewRoot = s.rt.train!.view.root;
@@ -548,7 +565,7 @@ describe('sentry turret: lifecycle', () => {
     expect(s.sys.deploy).toBe(0); // still riding: stowed
     s.host.trainRide.riding = false; s.host.trainRide.moving = false;
     s.eq.parked = true;
-    zombieAt(s, PIV.x, -7);
+    zombieAt(s, MNT.x, -7);
     s.run(SENTRY.deployS + 2);
     expect([s.sys.deploy, s.sys.view.root.visible]).toEqual([1, true]);
     expect(s.sys.counts.shots).toBeGreaterThan(n);
@@ -557,7 +574,7 @@ describe('sentry turret: lifecycle', () => {
 
   it('a teardown / rebuild keeps nothing stale: target, pose, cooldown, last shot and the headroom answer start over; no duplicates', () => {
     const s = sentryWorld({ammo: 30, rand: STRAIGHT});
-    const z = zombieAt(s, PIV.x + 3, -7);
+    const z = zombieAt(s, MNT.x + 3, -7);
     s.deploy();
     s.run(1.2);
     expect(s.sys.target).toBe(z);
@@ -586,7 +603,7 @@ describe('sentry turret: lifecycle', () => {
 
   it('not playing: nothing moves or fires; leaving play drops the target', () => {
     const s = sentryWorld({ammo: 30, rand: STRAIGHT});
-    const z = zombieAt(s, PIV.x, -7);
+    const z = zombieAt(s, MNT.x, -7);
     s.deploy();
     s.run(1);
     expect(s.sys.target).toBe(z);
@@ -638,8 +655,11 @@ describe('sentry turret view', () => {
   it('the stand-in: hidden when stowed (sunk into the roof, never through the ceiling lining), its barrel tip is the rules muzzle', () => {
     const v = new SentryTurretView(SPEC), m = turretMount(SPEC);
     expect(v.root.visible).toBe(false);
-    expect(v.sink).toBeGreaterThan(0.3);
-    expect(m.y - v.sink).toBeGreaterThan(SPEC.ceilingY); // the stowed base stays above the saloon's ceiling
+    // stowed: sunk by more than its whole height at any pitch (so all of it is below its seat on the hatch), the base still above the
+    // saloon's ceiling lining
+    expect(v.sink).toBeGreaterThanOrEqual(turretReach());
+    expect(v.sink).toBeGreaterThanOrEqual(TM.size.h);
+    expect(m.y - v.sink).toBeGreaterThan(SPEC.ceilingY);
     expect(v.root.position.y).toBeCloseTo(m.y - v.sink, 9);
     v.pose(0.5, 0, 0);
     expect(v.root.visible).toBe(true);
@@ -681,7 +701,7 @@ describe('sentry turret view', () => {
       expect(worldOf(base).distanceTo(base0)).toBeLessThan(1e-9); // the base ring does not turn
     }
     // every part is skipped by the interaction raycasts
-    const rc = new THREE.Raycaster(new THREE.Vector3(PIV.x, 10, 0), new THREE.Vector3(0, -1, 0));
+    const rc = new THREE.Raycaster(new THREE.Vector3(MNT.x, 10, 0), new THREE.Vector3(0, -1, 0));
     expect(rc.intersectObject(v.root, true)).toEqual([]);
     v.dispose();
   });
