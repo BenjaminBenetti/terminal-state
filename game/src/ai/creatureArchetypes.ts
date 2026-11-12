@@ -54,6 +54,8 @@ export interface EnemyActor extends RagdollTarget, WoundableActor {
   corpseVolumes?(): HitVolume[];
   /** Task corpse-chipper (lane CORPSE): an authored clip by name (the humanoid actors; world/corpses.ts poses a body by its Death clip). */
   authoredClip?(name: string): THREE.AnimationClip | null;
+  /** Task studio-sprinter-gait-20261112-063646-01: the ordinary zombie's Sprint-clip foot strikes since the last call (null: not sprinting). */
+  sprintFootfalls?(): number | null;
 }
 
 export function archetypeOf(z: {archetype?: EnemyArchetypeId}): EnemyArchetypeId {
@@ -90,7 +92,12 @@ export const ZOMBIE_CUES: EnemyCues = {
     z.groanT -= dt;
     if (z.groanT <= 0) { z.groanT = (b.aware ? 2.5 : 6) + rand() * 6; if (dist < 22) sfx.groan(b.x, b.y + 1.6, b.z, coatedOf(z)); }
     if (b.climbing) sfx.zombieClimb(z, b.x, b.y, b.z, dt); // Lane S: rung clanks on a ladder
-    else sfx.zombieGait(z, b.x, b.z, moved, dt, coatedOf(z), b.y);
+    else {
+      // task studio-sprinter-gait-20261112-063646-01: a sprinting sprinter's steps are its Sprint clip's foot strikes (zombieActor.ts)
+      const strikes = z.sprintFootfalls?.() ?? null;
+      if (strikes === null) sfx.zombieGait(z, b.x, b.z, moved, dt, coatedOf(z), b.y);
+      else if (strikes > 0) sfx.zombieFootfall(b.x, b.z, coatedOf(z), moved, b.y);
+    }
   },
   hurt: () => {},
   death: (sfx, z) => sfx.zombieDeath(z.brain.x, z.brain.y + 1.4, z.brain.z),
