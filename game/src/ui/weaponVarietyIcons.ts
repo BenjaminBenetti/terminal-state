@@ -1,4 +1,5 @@
-// Task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): inline SVG HUD glyphs for the twelve new weapons
+// Task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): inline SVG HUD glyphs for the twelve new weapons (+ the Turnstile,
+// task studio-turnstile-user-model-20261112-004550-01)
 // (items/weaponVarietyItems.ts), the same 64x32 silhouette style as ui/icons.ts (guns side-on, stock / grip at the left, muzzle to the
 // right like the rifle / shotgun / pistol; melee weapons lying along X, grip at the left like the knife) — the HUD fallback while the
 // rendered 3D icon (ui/itemIcons.ts, from the delivered model) is unavailable. Silhouettes only: no label or surface art.
@@ -20,6 +21,9 @@ export const WEAPON_VARIETY_ICONS: Record<WeaponVarietyIconKey, string> = {
   coach_gun: S(`<path d="M2 16l14-4h8v6h-8l-12 6z"/><rect x="22" y="12" width="8" height="7" rx="1"/><rect x="22.5" y="9.5" width="2" height="2.5"/><rect x="26" y="9.5" width="2" height="2.5"/><rect x="30" y="11.5" width="30" height="2.5"/><rect x="30" y="14.5" width="30" height="2.5" opacity="0.8"/><rect x="32" y="17" width="10" height="2.5"/><rect x="24.5" y="19" width="1.5" height="3"/>`),
   // semi-auto box-magazine shotgun: a solid stock, a deep receiver, a thick barrel over the handguard, a wide box magazine
   thresher: S(`<path d="M2 14h12v6h-3L2 24z"/><rect x="14" y="11" width="24" height="8" rx="1"/><rect x="38" y="12" width="20" height="4"/><rect x="58" y="11.5" width="3" height="5"/><rect x="38" y="16" width="12" height="3"/><path d="M28 19h8l1 9h-8z"/><path d="M18 19h5l-2 7h-5z"/><rect x="24" y="8.5" width="6" height="2.5"/>`),
+  // top-break revolving shotgun (the Turnstile): a bent tube stock with its brace, a pistol grip, the squared frame round the fluted
+  // cylinder, the top latch, a slim barrel under a perforated top plate, front sight at the muzzle
+  turnstile: S(`<path d="M3 11h3v10H3z"/><path d="M5 12.5h14v2.5H8.5L5 18.5z"/><path d="M10 15l6 3.5-1.2 1L9 16z" opacity="0.8"/><path d="M18 11h11v9h-5l-2.5 9h-6l3-10H18z"/><rect x="28" y="9.5" width="12" height="11" rx="1"/><rect x="30" y="12" width="8" height="2" fill="${DARK}" opacity="0.45"/><rect x="30" y="16" width="8" height="2" fill="${DARK}" opacity="0.45"/><rect x="33" y="7.5" width="5" height="2"/><rect x="40" y="10.5" width="16" height="4" rx="0.6"/><rect x="40" y="14.5" width="21" height="2.5"/><rect x="59" y="8.5" width="1.6" height="2"/><circle cx="43" cy="12.5" r="0.7" fill="${DARK}" opacity="0.5"/><circle cx="46.5" cy="12.5" r="0.7" fill="${DARK}" opacity="0.5"/><circle cx="50" cy="12.5" r="0.7" fill="${DARK}" opacity="0.5"/><circle cx="53.5" cy="12.5" r="0.7" fill="${DARK}" opacity="0.5"/><path d="M21 20c0 3 2 4 4 4h3" fill="none" stroke="currentColor" stroke-width="1.2"/>`),
   // fire axe: a long haft with a wrapped grip; the head across its end — the flared, curved blade below, the pick above
   fire_axe: S(`<rect x="4" y="14.5" width="50" height="3.5" rx="1.5"/><rect x="4" y="14" width="10" height="4.5" rx="1.5" opacity="0.7"/><rect x="49" y="9" width="9" height="13" rx="1"/><path d="M49 21h9l4 7c-5 2-12 2-17 0z"/><path d="M50 9h7l-4-7z"/>`),
   // machete: a riveted grip, a short bolster, a long blade widening toward the tip

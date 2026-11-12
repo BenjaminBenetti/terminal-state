@@ -21,9 +21,27 @@ export function gunCueId(weaponId: string, part: GunVoicePart): string {
   return `gun${weaponId.split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join('')}${part}`;
 }
 
-/** The weapon's own cue for `part`, or null (no id, or no clips for it: the caller keeps the shared cue). */
-export function gunCue(weaponId: string | null | undefined, part: GunVoicePart): CueId | null {
-  if (!weaponId) return null;
+/**
+ * Task studio-turnstile-user-model-20261112-004550-01: parts a gun SHARES from another gun's existing voice (no new audio, no generation).
+ * The Turnstile's top break opens and snaps shut with the Coach Gun's break cues (the same break-action reload); its shot is the shotgun
+ * set's shared shot (no own Shot: shotCycle 'none', so no pump rack) and its shells the shared insert. A gun's OWN cue for a part wins.
+ */
+export const GUN_VOICE_SHARES: Readonly<Record<string, Partial<Record<GunVoicePart, string>>>> = {
+  turnstile: {BreakOpen: 'coach_gun', BreakClose: 'coach_gun'},
+};
+
+/** The cue of `weaponId`'s own clips for `part` (null: the bank has none). */
+function ownCue(weaponId: string, part: GunVoicePart): CueId | null {
   const id = gunCueId(weaponId, part);
   return KNOWN.has(id) && (CLIP_MANIFEST[id]?.length ?? 0) > 0 ? (id as CueId) : null;
+}
+
+/**
+ * The weapon's own cue for `part` — or the one it shares from another gun (GUN_VOICE_SHARES) — or null (no id, or neither has clips for
+ * it: the caller keeps the shared cue).
+ */
+export function gunCue(weaponId: string | null | undefined, part: GunVoicePart): CueId | null {
+  if (!weaponId) return null;
+  const from = GUN_VOICE_SHARES[weaponId]?.[part];
+  return ownCue(weaponId, part) ?? (from ? ownCue(from, part) : null);
 }
