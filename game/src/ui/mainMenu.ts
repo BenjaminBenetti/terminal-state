@@ -643,6 +643,8 @@ const CSS = `
 .settings select { max-width: 62%; }
 .settings output { min-width: 3.4em; font-variant-numeric: tabular-nums; }
 .settings .set-readout { grid-column: 1 / -1; font-size: 11.5px; color: var(--cream-dim); margin-top: -4px; text-align: right; }
+.settings .set-tutorials { grid-column: 1 / -1; display: flex; justify-content: flex-start; margin-top: 2px; }
+.settings .set-tutorials button { padding: 7px 14px; font-size: 13px; }
 @media (max-width: 760px) {
   .mm-side { width: 100%; background: rgba(10, 12, 11, 0.86); }
   .mm-overlay { padding: 10px; }
@@ -1081,4 +1083,37 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
   const onResize = () => { for (const f of sync) f(store.get()); };
   globalThis.addEventListener?.('resize', onResize);
   return bindForm(store, sync, () => { resApply?.cancel(); globalThis.removeEventListener?.('resize', onResize); });
+}
+
+/** What the tutorial reset needs (ui/onboardingStore.ts OnboardingStore). */
+export interface TutorialResetStore { reset(): void; readonly persistent: boolean }
+
+/**
+ * Task studio-first-player-onboarding-20261111-234657-01: the "Reset tutorials" button, appended to a settings box (the main menu's
+ * Settings view and the pause menu's Settings section; ids P + 'reset-tutorials' / 'tutorials-note'). It clears ONLY the browser-global
+ * tutorial / onboarding record — never a save slot, the settings or anything else — so the train's first-player markers show again at
+ * the current / next parked train without a new campaign. A short note confirms it. Returns a cleanup.
+ */
+export function mountTutorialReset(box: HTMLElement, store: TutorialResetStore, o: Pick<SettingsFormOptions, 'idPrefix'>): () => void {
+  const d = box.ownerDocument, P = o.idPrefix;
+  const row = d.createElement('div');
+  row.className = 'set-tutorials';
+  const b = d.createElement('button');
+  b.type = 'button';
+  b.id = P + 'reset-tutorials';
+  b.textContent = 'Reset tutorials';
+  const note = d.createElement('p');
+  note.className = 'set-note';
+  note.id = P + 'tutorials-note';
+  note.setAttribute('aria-live', 'polite');
+  b.setAttribute('aria-describedby', note.id);
+  const click = () => {
+    store.reset();
+    note.textContent = store.persistent ? 'Tutorials reset: the train guide shows again at your train.' : 'Tutorials reset for this session (this browser could not save it).';
+  };
+  b.addEventListener('click', click);
+  row.appendChild(b);
+  box.appendChild(row);
+  box.appendChild(note);
+  return () => { b.removeEventListener('click', click); row.remove(); note.remove(); };
 }
