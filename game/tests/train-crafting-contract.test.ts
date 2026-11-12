@@ -8,8 +8,8 @@ import {
 } from '../src/craft/equipment';
 import {RECIPES, RECIPE_MATERIALS, recipeFor} from '../src/craft/recipes';
 import {
-  BENCH_AISLE_MIN, PLUG, TRAIN_ROOF_PROFILE, TRAIN_ROOF_SKIN_Y, benchFootprint, benchPlacement, benchToLocal, craftSpots, equipmentPlugs,
-  plugInReach, roofTopAt, turretMount,
+  BENCH_AISLE_MIN, PLUG, TRAIN_ROOF, TRAIN_ROOF_SKIN_Y, benchFootprint, benchPlacement, benchToLocal, craftSpots, equipmentPlugs,
+  plugInReach, roofTopAt, roofTopAtPoint, turretMount,
 } from '../src/craft/trainFixtures';
 import {ELECTRICAL_PARTS, SCRAP_METAL} from '../src/items/craftMaterials';
 import {ITEMS} from '../src/items/items';
@@ -251,17 +251,41 @@ describe('train crafting: the fixtures in the car', () => {
     }
   });
 
-  it('the roof turret mounts on the roof skin between the vent boxes; the roof outline falls away to the eaves', () => {
-    const m = turretMount(S);
+  it('the roof turret mounts on the middle roof hatch; every roof outline falls away to the eaves', () => {
+    const m = turretMount(S), R = TRAIN_ROOF, mid = R.hatches[1];
     expect(m.z).toBe(0);
-    expect(m.y).toBe(TRAIN_ROOF_SKIN_Y);
+    expect(m.x).toBeGreaterThan(mid.x0 + 0.215);
+    expect(m.x).toBeLessThan(mid.x1 - 0.215);
+    // bedded on the hatch's top: at the lowest roof point under its base ring, within 2 cm of the highest
+    expect(m.y).toBe(R.seat.lo);
+    expect(R.seat.hi - m.y).toBeGreaterThanOrEqual(0);
+    expect(R.seat.hi - m.y).toBeLessThan(0.02);
+    expect(m.y).toBeGreaterThan(TRAIN_ROOF_SKIN_Y + 0.1);
     expect(m.y).toBeLessThanOrEqual(S.roofY);
     expect(m.y).toBeGreaterThan(S.ceilingY);
-    expect(Math.abs(m.x)).toBeLessThan(S.interior.x1);
-    expect(roofTopAt(0, S)).toBeCloseTo(S.roofY, 2);
-    let prev = Infinity;
-    for (const [z, y] of TRAIN_ROOF_PROFILE) { expect(y).toBeLessThanOrEqual(prev); prev = y; expect(roofTopAt(z, S)).toBe(y); expect(roofTopAt(-z - 0.01, S)).toBe(y); }
+    expect(roofTopAt(0, S)).toBeGreaterThanOrEqual(S.roofY);
+    expect(roofTopAt(0, S)).toBeLessThan(S.roofY + 0.005);
+    expect(R.hatches).toHaveLength(3);
+    for (const T of [R.body, R.ends, ...R.hatches.map(h => h.top)]) {
+      let prev = Infinity;
+      for (const y of T) { expect(y).toBeLessThanOrEqual(prev); prev = y; }
+    }
+    for (let k = 0; k < R.body.length; k++) {
+      const z = (k + 0.5) * R.step;
+      if (z > S.width / 2) break;
+      expect(R.ends[k]).toBeGreaterThanOrEqual(R.body[k]);
+      // the body between the hatches, the end caps, a hatch box, the whole-length outline; both sides alike
+      expect(roofTopAtPoint(-3, z, S)).toBe(R.body[k]);
+      expect(roofTopAtPoint(-3, -z, S)).toBe(R.body[k]);
+      expect(roofTopAtPoint(R.endX + 0.2, z, S)).toBe(R.ends[k]);
+      const inHatch = z <= R.hatchZ;
+      expect(roofTopAtPoint(m.x, z, S)).toBe(inHatch ? mid.top[k] : R.body[k]);
+      if (inHatch) expect(mid.top[k]).toBeGreaterThanOrEqual(R.body[k]);
+      expect(roofTopAt(z, S)).toBe(Math.max(R.ends[k], ...(inHatch ? R.hatches.map(h => h.top[k]) : [])));
+      expect(roofTopAt(z, S)).toBeGreaterThanOrEqual(roofTopAtPoint(m.x, z, S));
+    }
     expect(roofTopAt(S.width / 2 + 0.5, S)).toBe(-Infinity);
+    expect(roofTopAtPoint(0, S.width / 2 + 0.5, S)).toBe(-Infinity);
   });
 });
 
