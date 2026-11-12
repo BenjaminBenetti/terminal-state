@@ -462,9 +462,15 @@ describe('weapon variety: game.ts wiring (source order)', () => {
   const src = readFileSync(fileURLToPath(new URL('../src/game.ts', import.meta.url)), 'utf8');
   it('first spawns only: the plan is made from the pickup plan\'s layout list; the yaw and the food gate come first; same makeStack count', () => {
     const loopAt = src.indexOf('for (const i of plan.fromLayout) {');
-    const planAt = src.indexOf('const weaponFinds = plan.fromLayout.length ? weaponFindPlan(this.layout, key.level, mem.id).changes : null;');
+    const planAt = src.indexOf('const findPlan = plan.fromLayout.length ? weaponFindPlan(this.layout, key.level, mem.id, {pool}) : null;');
     expect(planAt).toBeGreaterThan(0);
     expect(planAt).toBeLessThan(loopAt);
+    // (task studio-turnstile-user-model-20261112-004550-01) the section's pool: after this entry is counted, recorded with the finds
+    const poolAt = src.indexOf('const pool = sectionWeaponPool(mem.lanes, mem.visits - 1);');
+    expect(poolAt).toBeGreaterThan(src.indexOf('mem.visits++;'));
+    expect(poolAt).toBeLessThan(planAt);
+    expect(src.indexOf('if (findPlan?.finds.length) mem.lanes[WEAPON_POOL_LANE] = pool;')).toBeGreaterThan(planAt);
+    expect(src).toContain('{pool: sectionWeaponPool(mem?.lanes, mem?.visits ?? 0)}'); // the preload: the same pool, before the entry
     const loop = src.slice(loopAt, src.indexOf('for (const rec of plan.restored) {'));
     const yaw = loop.indexOf('const yaw = this.rand() * Math.PI * 2;'), skip = loop.indexOf('if (!keepLayoutPickup(this.layout.seed, mem.id, i, p)) continue;');
     const make = loop.indexOf('const st = wf ? this.inv.makeStack(wf.itemId, wf.count, wf.mag) : this.inv.makeStack(pantryPickupItem(this.layout, i, key.level), p.count);');

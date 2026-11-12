@@ -296,6 +296,11 @@ its "same rounds per caliber" rule for every NEW roll.
   remembered pickup list, from any save, is restored exactly. Nothing is converted, rerolled or migrated; finds already realized under
   the old rule stay what they are. The new rule reaches every section whose pickups were never realized, including the unvisited
   areas of an old campaign.
+- **Pool versions.** A later pool only adds leaves: version 1 is the nine guns and seven melee weapons, and version 2 adds the
+  Turnstile. An autosave (arrival, new game) does not capture the loose items of the station it is made in. So a section's first spawn
+  records its pool version in the section memory (lane `weapon-pool`, `sectionWeaponPool`), and Continue or Retry at that station
+  realizes the same finds. A section an older build already spawned (entered before, nothing captured, no record) keeps version 1,
+  whose rows and picks are exactly the pre-Turnstile ones. A section entered for the first time uses the current pool.
 - **Measured** (`tests/weapon-variety-loot.test.ts`: 76 real layouts of every level, pistol start plus two rifle-start seeds each;
   `/tmp/weapon-variety-loot/census.json`; re-measured with the Turnstile in the pool). The weapon find count and every other pickup are
   identical, and every find carries exactly one standard bundle before and after (127.0 = 127.0). Raw rounds in the find bundles move

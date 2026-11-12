@@ -27,7 +27,18 @@ const {GunParts, BREAK_ANGLE} = await import('../src/weapons/gunParts');
 const {reloadCueTime} = await import('../src/weapons/gunHandling');
 const {Inventory} = await import('../src/items/inventory');
 const {ITEMS} = await import('../src/items/items');
-const {GUN_CATEGORIES, GUN_LEAVES, slotRows, gunAmmo, familyBundle, identityAvailable, weaponLength, HOST_MAX_M} = await import('../src/items/weaponVariety');
+const {GUN_CATEGORIES, GUN_LEAVES, MELEE_LEAVES, slotRows, gunAmmo, familyBundle, identityAvailable, weaponLength, HOST_MAX_M, weaponFindPlan, inWeaponPool,
+  sectionWeaponPool, WEAPON_POOL_VERSION, WEAPON_POOL_LANE} = await import('../src/items/weaponVariety');
+const {WEAPON_FIND_AMMO} = await import('../src/gen/weaponFinds');
+const {LEVELS} = await import('../src/levels/registry');
+const {sectionId} = await import('../src/levels/types');
+const {createMemory} = await import('../src/run/memory');
+const {Harness} = await import('./helpers/saveFixture');
+const {saveFileText, restoreRun} = await import('../src/save/serialize');
+const {parseSaveText} = await import('../src/save/validate');
+type StationLayout = import('../src/gen/stationTypes').StationLayout;
+type PickupPlacement = import('../src/gen/stationTypes').PickupPlacement;
+type SectionMemory = import('../src/run/memory').SectionMemory;
 const {WEAPON_VARIETY_ICONS} = await import('../src/ui/weaponVarietyIcons');
 const {EJECTION_PORTS} = await import('../src/physics/world');
 const {gunCue} = await import('../src/audio/gunVoices');
@@ -66,7 +77,7 @@ const count = (ev: Ev[], type: Ev['type']) => ev.filter(e => e.type === type).le
 // ------------------------------------------------------------------------------------------------------------------------------
 describe('the Turnstile: handling (selected B)', () => {
   it('a registered variety shotgun on 12-gauge only: the G07 asset, six shells, the shared 12-gauge reserve', () => {
-    expect(VARIETY_GUN_IDS.at(-1)).toBe('turnstile');
+    expect(VARIETY_GUN_IDS).toContain('turnstile');
     expect(VARIETY_WEAPONS.turnstile).toEqual({asset: 'G07', name: 'Turnstile', family: 'shotgun', caliber: '12ga'});
     expect([T.caliber, T.magazine, T.auto, T.sound, T.shotCycle, T.reload.kind]).toEqual(['12ga', 6, false, 'shotgun', 'none', 'break']);
     expect(weaponAmmoItem(T)).toBe('ammo_12ga');
@@ -275,6 +286,12 @@ describe('the Turnstile: the user\'s model, cooked', () => {
       .toEqual([[[2048, 2048], 'image/jpeg'], [[1024, 1024], 'image/jpeg'], [[1024, 1024], 'image/jpeg']]);
     expect(root.listNodes().map(n => n.getName()).sort()).toEqual(['Barrels', 'Eject', 'Grip', 'Hinge', 'Muzzle', 'Sight', 'turnstile']);
     expect(root.listMeshes().map(m => m.getName()).sort()).toEqual(['Barrels', 'turnstile']);
+    // every other name (scene, material, textures) is the cook's own; the generator string is the repo script
+    const names = [...root.listScenes(), ...root.listMaterials(), ...root.listTextures()].map(o => o.getName());
+    for (const n of names) expect(n).toMatch(/^weapon-turnstile(-[A-Za-z]+)?$/);
+    expect(names.length).toBe(5);
+    const glb = fs.readFileSync(file), json = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString()); // (the reader restamps it)
+    expect(json.asset.generator).toBe('Terminal State tools/asset-pipeline/weapons/build-turnstile.mjs (glTF-Transform)');
     const prov = fs.readFileSync(path.join(PUBLIC, 'assets/derivatives/weapon-turnstile.json'), 'utf8');
     expect(prov).not.toMatch(/https?:|reference\/|\/workspace|portal|token=/i);
     expect(JSON.parse(prov).textures.map((t: {slot: string; size: number[]}) => [t.slot, t.size[0]])).toEqual([['baseColor', 2048], ['metallicRoughness', 1024], ['normal', 1024]]);
@@ -319,13 +336,103 @@ describe('the Turnstile: item and pools (uniform, the ammo budget unchanged)', (
   it('a fourth shotgun-category leaf; the Gun and Weapon slots share uniformly; one find = one standard 12-gauge bundle (6 + 6)', () => {
     expect(GUN_CATEGORIES.shotgun).toEqual(['shotgun', 'coach_gun', 'thresher', 'turnstile']);
     expect(slotRows('shotgun').find(([id]) => id === 'turnstile')![1]).toBeCloseTo(1 / 4, 12);
-    expect(slotRows('gun').find(([id]) => id === 'turnstile')![1]).toBeCloseTo(1 / GUN_LEAVES.length, 12);
+    expect(slotRows('gun').find(([id]) => id === 'turnstile')![1]).toBeCloseTo(1 / 10, 12);
+    expect(slotRows('weapon').find(([id]) => id === 'turnstile')![1]).toBeCloseTo(1 / 20, 12);
     const weapon = slotRows('weapon');
     const guns = weapon.filter(([id]) => GUN_LEAVES.includes(id));
     expect(guns.reduce((t, [, w]) => t + w, 0)).toBeCloseTo(0.5, 12); // the total gun share is unchanged
     expect(new Set(guns.map(([, w]) => w.toFixed(12))).size).toBe(1);
     expect(gunAmmo('12ga', T.magazine, 1)).toEqual({loaded: 6, box: 6});
-    const std = familyBundle('shotgun');
-    expect(6 + 6).toBe(std.total);
+    expect(familyBundle('shotgun')).toEqual({caliber: '12ga', loaded: 6, box: 6, total: 12});
+  });
+});
+
+// ------------------------------------------------------------------------------------------------------------------------------
+describe('the Turnstile: pool versions (a station already seen keeps its finds)', () => {
+  /** A synthetic layout: `n` finds cycling pistol / rifle / shotgun, each with its paired box, in one area of `purpose`. */
+  function synth(n: number, purpose: string, seed = 2026): StationLayout {
+    const pickups: PickupPlacement[] = [];
+    for (let k = 0; k < n; k++) {
+      const family = (['pistol', 'rifle', 'shotgun'] as const)[k % 3], x = (k % 100) * 6, z = Math.floor(k / 100) * 6;
+      pickups.push({itemId: family, count: 1, x, y: 0, z, area: 0} as PickupPlacement);
+      const [ammo, cnt] = WEAPON_FIND_AMMO[family];
+      pickups.push({itemId: ammo, count: cnt, x: x + 1.5, y: 0, z, area: 0} as PickupPlacement);
+    }
+    return {seed, pickups, areas: [{id: 0, type: 'storage', purpose}]} as unknown as StationLayout;
+  }
+  /** game.ts buildSectionSteps' order: the entry is counted, the section's pool read, the plan made, the pool recorded with its finds. */
+  function spawn(layout: StationLayout, level: string, mem: SectionMemory) {
+    mem.visits++;
+    const pool = sectionWeaponPool(mem.lanes, mem.visits - 1);
+    const plan = weaponFindPlan(layout, level, mem.id, {pool});
+    if (plan.finds.length) mem.lanes[WEAPON_POOL_LANE] = pool;
+    return plan;
+  }
+  const ids = (p: ReturnType<typeof weaponFindPlan>) => p.finds.map(f => f.itemId);
+
+  it('version 1 is exactly the pre-Turnstile pool (rows, and main\'s own picks); version 2 only adds the Turnstile', () => {
+    expect(WEAPON_POOL_VERSION).toBe(2);
+    expect([inWeaponPool('turnstile', 1), inWeaponPool('turnstile', 2), GUN_LEAVES.filter(id => id !== 'turnstile').every(id => inWeaponPool(id, 1))]).toEqual([false, true, true]);
+    const nine = GUN_LEAVES.filter(id => id !== 'turnstile');
+    expect(slotRows('weapon', 1)).toEqual([...nine.map(id => [id, 0.5 / 9]), ...MELEE_LEAVES.map(id => [id, 0.5 / 7])]);
+    expect(slotRows('gun', 1)).toEqual(nine.map(id => [id, 1 / 9]));
+    expect(slotRows('shotgun', 1)).toEqual(['shotgun', 'coach_gun', 'thresher'].map(id => [id, 1 / 3]));
+    expect(slotRows('melee', 1)).toEqual(slotRows('melee'));
+    // the picks main (before the Turnstile) made for these finds (recorded from main's items/weaponVariety.ts), reproduced by version 1
+    const golden = {
+      storage: [
+        'thresher', 'longslide', 'machete', 'machete', 'knife', 'overwatch', 'machete', 'machete', 'crowbar', 'track_shovel', 'knife', 'slugger',
+        'overwatch', 'crowbar', 'crowbar', 'machete', 'longslide', 'sledgehammer', 'coach_gun', 'fire_axe', 'crowbar', 'track_shovel', 'shotgun',
+        'slugger'
+      ],
+      'mall-guns': [
+        'stub', 'hornet', 'shotgun', 'shotgun', 'stub', 'longslide', 'overwatch', 'shotgun', 'coach_gun', 'thresher', 'stub', 'coach_gun', 'longslide',
+        'coach_gun', 'coach_gun', 'shotgun', 'hornet', 'coach_gun', 'rifle', 'overwatch', 'coach_gun', 'thresher', 'rifle', 'thresher'
+      ],
+    };
+    for (const purpose of ['storage', 'mall-guns'] as const) expect(ids(weaponFindPlan(synth(24, purpose), 'bunker', 'bunker:main@st-7', {pool: 1})), purpose).toEqual(golden[purpose]);
+    // over many finds version 1 never realizes the Turnstile; the current pool does
+    for (const purpose of ['storage', 'mall-guns']) {
+      const old = weaponFindPlan(synth(3000, purpose), 'subway', 'subway:main', {pool: 1}), now = weaponFindPlan(synth(3000, purpose), 'subway', 'subway:main');
+      expect(ids(old)).not.toContain('turnstile');
+      expect(ids(now)).toContain('turnstile');
+    }
+  });
+
+  it('sectionWeaponPool: a recorded version wins (clamped); entered before without one = version 1; a first entry = the current pool', () => {
+    expect(sectionWeaponPool({[WEAPON_POOL_LANE]: 1}, 3)).toBe(1);
+    expect(sectionWeaponPool({[WEAPON_POOL_LANE]: 2}, 0)).toBe(2);
+    expect(sectionWeaponPool({[WEAPON_POOL_LANE]: 99}, 0)).toBe(WEAPON_POOL_VERSION);
+    expect(sectionWeaponPool({[WEAPON_POOL_LANE]: 'x'}, 1)).toBe(1);
+    expect(sectionWeaponPool({}, 1)).toBe(1);
+    expect(sectionWeaponPool({}, 0)).toBe(WEAPON_POOL_VERSION);
+    expect(sectionWeaponPool(undefined, 0)).toBe(WEAPON_POOL_VERSION);
+  });
+
+  it('Continue of an OLD save (its station entered, never captured, no record) re-spawns main\'s finds; a new first entry records its pool and keeps it through a save', () => {
+    const level = 'bunker' as const, layout = LEVELS[level].generate('main', {levelSeed: 3333, startWeapon: 'pistol'});
+    const key = {level, section: 'main'};
+    expect(weaponFindPlan(layout, level, sectionId(key)).finds.length).toBeGreaterThan(0);
+    // an old save's current station: visits 1, pickups null, no lane -> version 1 = exactly what the old build realized there
+    const old = {...createMemory(key), visits: 1};
+    expect(ids(spawn(layout, level, old))).toEqual(ids(weaponFindPlan(layout, level, old.id, {pool: 1})));
+    expect(old.lanes[WEAPON_POOL_LANE]).toBe(1);
+    // a first entry with this build: the current pool, recorded; the arrival save keeps it; Continue re-spawns the same finds
+    const h = new Harness(), mem = h.run.memory(h.run.current);
+    const first = ids(spawn(layout, level, mem));
+    expect([mem.visits, mem.lanes[WEAPON_POOL_LANE], mem.pickups]).toEqual([1, WEAPON_POOL_VERSION, null]);
+    const parsed = parseSaveText(saveFileText(h.file()));
+    expect(parsed.ok, parsed.ok ? '' : parsed.error).toBe(true);
+    if (!parsed.ok) return;
+    const back = new Harness();
+    expect(restoreRun(parsed.value.run, back.target()).failed).toEqual([]);
+    const again = back.run.memory(back.run.current);
+    expect(again.lanes[WEAPON_POOL_LANE]).toBe(WEAPON_POOL_VERSION);
+    expect(ids(spawn(layout, level, again))).toEqual(first);
+    // a section without weapon finds records nothing (its memory is unchanged)
+    const empty = {...layout, pickups: layout.pickups.filter(p => !['pistol', 'rifle', 'shotgun'].includes(p.itemId))};
+    const none = createMemory({level, section: 'main', station: 'st-99'});
+    expect(spawn(empty, level, none).finds).toEqual([]);
+    expect(none.lanes).toEqual({});
   });
 });
