@@ -40,7 +40,7 @@ import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearStatText, isAirtank, isBagItem, isFilte
 import {armorPool, pipsText} from '../player/armor'; // task studio-general-armor-20261107-231448-01
 import {WEAPONS, reserveFor, weaponsForCaliber} from '../weapons/weapons';
 import {CALIBERS, CALIBER_IDS, ammoItemFor} from '../items/calibers'; // lane AMMO
-import {MATERIAL_NOTE} from '../items/craftMaterials'; // lane RACK (office-props-physics-scale-20261030)
+import {materialNote} from '../items/craftMaterials'; // lane RACK (office-props-physics-scale-20261030); task train-crafting (lane BENCH): per material
 import {CURRENCY_NOTE} from '../items/railTies'; // task studio-market-rework-20261108-074144-01 (lane TRADE)
 import {CRITICAL, LOW} from '../player/survival';
 import {GEAR_ICONS} from './gearIcons';
@@ -555,7 +555,7 @@ export class InventoryUI {
         : def?.kind === 'gear' ? `${isFilterMask(def.id) ? `Filter ${filterPct(st!.filter)} % fitted · ${inv.count('gas_filter')} spare · ` : ''}${isAirtank(def.id) ? `${airText(st!.air)} · ` : ''}${gearStatText(def.gear!, st)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / Ctrl+click / right-click / Take off to remove') : `double-click / Ctrl+click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}`
         : def?.kind === 'throwable' ? (this.selected?.bar === 'throw' ? 'In the grenade slot: hold G to ready it, release to throw' : 'Right-click / double-click / Ctrl+click / Equip puts it in the grenade slot (G)') // INTERACT (#6)
         : def?.kind === 'supply' ? `A worn gas mask fits one by itself when its filter runs out · ${inv.count(def.id)} carried where the mask can reach them (not in a worn backpack)` // mask lane
-        : def?.kind === 'material' ? `${MATERIAL_NOTE} · ${inv.count(def.id)} in pockets / quick slots` // lane RACK (office-props-physics-scale-20261030)
+        : def?.kind === 'material' ? `${materialNote(def.id)} · ${inv.count(def.id)} in pockets / quick slots` // lane RACK (office-props-physics-scale-20261030)
         : def?.kind === 'part' ? `Reactor restart part — nothing to use by hand: take it to its control and press E there · ${inv.count(def.id)} in pockets / quick slots` // task reactor-build-20261101 (lane RESTART)
         : def?.kind === 'currency' ? `${CURRENCY_NOTE} · ${inv.count(def.id)} ready to spend` : ''); // task studio-market-rework-20261108-074144-01 (lane TRADE)
       fx.classList.toggle('refused', !!this.note && this.noteBad);
