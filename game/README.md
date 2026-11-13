@@ -86,6 +86,22 @@ settles physically, burns red with red smoke for 50 s (fading over the last 6 s)
 iteration 15; walls and other storeys stay dark) — and lures enemies that can see it (28 m). At most 3 burn at once (a 4th throw is refused, nothing used). The
 flashlight beam lures too (20 m around where it lands, scaled by its brightness).
 
+Zombie lure (scent; `ai/scentLure.ts`, the brain's `investigate` state): a landed lure canister gives off a scent for **20 s of
+play** (paused, menus and loading do not count). Enemies within **20 m** of it (straight 3D distance from their feet) smell it.
+No sight line is needed and they do not have to face it. Walls, doors and floors do not stop it, so enemies on the storey above
+or below are drawn too. Each one walks to the canister itself, never to the player, at its search pace. It uses the normal
+path search (stairs, drops, and ladders for families that climb) and normal collision, so it goes round walls, never through
+them. It stands around the canister while the scent lasts. When the scent ends it walks on to the canister if it is still on
+the way, lingers a few seconds, then goes back to what it was doing. If it can find no way there, it gives up on that canister.
+- Seeing the player always wins. An enemy that still sees you keeps chasing you.
+- A pursuer that has lost sight of you for 1.5 s is pulled to the canister. This is how you shake pursuers.
+- A gunshot heard or a hit taken in the last 5 s comes first: it hunts that, then the scent pulls it again.
+- An active scent beats a flare or the flashlight.
+- At most 3 scents at once. The scent makes no sound and no gas.
+- Families: ordinary and coated zombies, sprinters, the rat/dog, the Strainer, the Blightbelly, horde members and an awake
+  Siren are drawn. A dormant Siren is not: the scent never wakes her. The Screacher hunts only by sound, so it ignores the
+  scent.
+
 Crouch: **C** (iteration 05: back from Ctrl, which collided with the browser's Ctrl+W) — tap to
 toggle; hold longer than 0.3 s to crouch only while held. Crouched = half speed, ~30% less recoil and
 20% tighter spread; you cannot sprint or jump from a crouch — Space, or Shift while moving forward,
