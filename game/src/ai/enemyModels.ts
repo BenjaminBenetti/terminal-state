@@ -26,10 +26,10 @@ export const ENEMY_MODEL_FILES: Readonly<Record<string, {url: string; bytes: num
   // Task studio-bb-production-20261112-234540-01: BB's four approved looks (one enemy type; a layout loads exactly the looks its roster
   // placed: 1-3 of them, on the 40 % of combat levels that hold BBs at all). `bytes` = each GLB's size (tests/bb-contract.test.ts
   // checks it). A model that failed to load -> the counted zombie stand-in.
-  enemy_bb_lullaby: {url: 'assets/models/enemy-bb-lullaby.glb', bytes: 2_000_000},
-  enemy_bb_binky: {url: 'assets/models/enemy-bb-binky.glb', bytes: 2_000_000},
-  enemy_bb_teddy: {url: 'assets/models/enemy-bb-teddy.glb', bytes: 2_000_000},
-  enemy_bb_changeling: {url: 'assets/models/enemy-bb-changeling.glb', bytes: 2_000_000},
+  enemy_bb_lullaby: {url: 'assets/models/enemy-bb-lullaby.glb', bytes: 2146828},
+  enemy_bb_binky: {url: 'assets/models/enemy-bb-binky.glb', bytes: 2119528},
+  enemy_bb_teddy: {url: 'assets/models/enemy-bb-teddy.glb', bytes: 1927056},
+  enemy_bb_changeling: {url: 'assets/models/enemy-bb-changeling.glb', bytes: 1822620},
 };
 
 /** The lazy enemy model keys a layout's spawns use (sorted; families without a lazy model contribute none). */
