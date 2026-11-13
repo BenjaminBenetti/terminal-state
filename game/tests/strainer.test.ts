@@ -91,8 +91,9 @@ describe('Strainer: registry, weights and the context lock', () => {
     // task studio-screacher-production-20261110-221858-01: the roster-only Screacher was appended AFTER the Strainer (weight 0 in every
     // pool, so no roll band moved): the Strainer keeps index 4 and the list has six families (was: the Strainer last of five)
     expect(ENEMY_FAMILY_IDS[4]).toBe('strainer');
-    expect(ENEMY_FAMILY_IDS.slice(5)).toEqual(['screacher']);
-    expect(ENEMY_FAMILY_IDS).toHaveLength(6);
+    // task studio-bb-production-20261112-234540-01: and the roster-only BB after the Screacher (weight 0 in every pool too): seven families
+    expect(ENEMY_FAMILY_IDS.slice(5)).toEqual(['screacher', 'bb']);
+    expect(ENEMY_FAMILY_IDS).toHaveLength(7);
     expect(Object.keys(ENEMY_ARCHETYPES)).toEqual([...ENEMY_FAMILY_IDS]);
     const d = ENEMY_ARCHETYPES.strainer;
     expect(d).toMatchObject({id: 'strainer', label: 'Strainer', model: 'enemy_strainer', climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: 1.9});
