@@ -80,7 +80,7 @@ Everything else reaches it as a sound **event at the place the sound happened**.
 over somewhere else, sends it there.
 
 It has no sight cone, no eye ray and no light lure. Standing in front of it, shining the flashlight on it or throwing a flare does
-nothing by itself.
+nothing by itself. The lure grenade's scent makes no sound, so it never draws a Screacher either.
 
 | Sense | Value | Constant |
 |---|---|---|

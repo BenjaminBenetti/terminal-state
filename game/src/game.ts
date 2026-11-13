@@ -58,6 +58,7 @@ import {COSPLAY_MODEL_FILES, createCosplayLibrary} from './ai/cosplay'; // task 
 import type {WardrobeLibrary} from './ai/wardrobe';
 import {alertListeners, type BrainWorld} from './ai/brain';
 import {lureWorld} from './ai/lightLure'; // Iteration 12 (AI): light attracts enemies
+import {ScentLures} from './ai/scentLure'; // task studio-refinement-batch-20261113-035659-01 (lane LURE): the lure grenade's scent
 import {moveZombie, sameLevel, settleZombie} from './ai/motor';
 import {ladderTarget, type Ladder} from './gen/traversal';
 import {raycastWorld, type Vec3, type WorldHit} from './combat/hitscan';
@@ -81,6 +82,7 @@ import {LightSources} from './world/lightSources';
 import {PlayerLight, applyBatteryItem} from './player/flashlight'; // Iteration 12 (LIGHT): flashlight battery + body glow
 import {FlareSystem, throwOneFlare, type FlareSmokeHost} from './weapons/throwables'; // Iteration 12 (LIGHT): thrown road flares (grenade slot)
 import {FlareHold} from './weapons/flareHold'; // Iteration 15: hold to ready, release to throw
+import {GrenadeSystem, throwHoldTarget, throwOneGrenade} from './weapons/grenades'; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades
 import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifiers} from './player/modifiers'; // Iteration 16 (shared contract)
 import {incomingHit, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
 import {armorHit, armorPool} from './player/armor'; // task studio-general-armor-20261107-231448-01: the worn armour pool
@@ -92,6 +94,8 @@ import type {FuelCartsLike} from './fuel/trainPort'; // task train-fuel-system: 
 import {installGasMask, type GasMaskSystem} from './gear/gasMask'; // Task gasmask-breach-20261030 (mask lane): gas mask on / off (Q), filters (+ the first-person mask view, gear/maskView.ts)
 import {installFuelPort, type FuelPortSystem} from './world/fuelPort'; // task train-fuel-system (lane PORT): the train's fuel cap (pour a fuel can), HUD fuel readout
 import {preloadFuelCanModel} from './world/fuelCanModel'; // task train-fuel-system (lane PORT): the delivered fuel-can GLB
+import {preloadGrenadeModels} from './world/grenadeModels'; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades
+import {ACID_GRENADE, isGrenadeItem, type GrenadeId} from './items/grenades';
 import {installFuelCarts, type FuelCarts} from './world/fuelCarts'; // task train-fuel-system (lane CART): fuel carts — push / grab, hose to the fuel cap, station / train cargo ownership
 import {installSkywaysCar, type SkywaysCar} from './world/skywaysCar'; // task skyways-level-20261106 (lane CAR): the Skyways prize car (first-person drivable)
 import {MaskView} from './gear/maskView'; // Task gas-mask-roof-feedback-20261030 (item 4): first-person view through the real mask's visor
@@ -121,7 +125,7 @@ import {installReactorRestart, preloadReactorItemModels} from './world/reactor/r
 import {installReactorStartup} from './world/reactor/startup'; // task reactor-playtest-round2-20261102 (lane STARTUP): startup audio, orange beacons, the ONLINE sky
 import {installReactorEnding} from './world/reactor/ending'; // task studio-reactor-surface-ending-20261102 (lane ENDING): the exterior door -> surface
 import {installReactorSurface} from './world/reactor/surface'; // task studio-reactor-surface-ending-20261102 (lane SURFACE): the city / rain / clear air outside
-import {installReactorCredits} from './world/reactor/credits'; // task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane CREDITS): the end credits
+import {installReactorCredits, reactorCreditsOf} from './world/reactor/credits'; // task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane CREDITS): the end credits
 import {installReactorCpuCulling} from './world/reactor/cpuActorCulling'; // task studio-reactor-submit-roof-fog-20261102 (lane CPU)
 import {installBunkerObjective} from './world/bunker/objective'; // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE): the Bunker's optional generators + core intel
 import {installReactorMapBoards} from './world/reactor/mapBoard'; // task reactor-expansion-20261101 (lane CONTROLS) // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
@@ -195,12 +199,16 @@ import {installRidePortals, type RidePortalRuntime} from './world/ridePortalRunt
 import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // task train-loose-cargo: every loose item / bag aboard travels with the train
 import {carriedModelKeys, installTrainPropCargo, type TrainPropCargo} from './world/trainPropCargo'; // task train-all-cargo: every movable prop aboard travels too
 import {installCorpses, type CorpseSystem} from './world/corpses'; // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): carried dead bodies
+import {groundDropSpots} from './world/dropScatter'; // task studio-refinement-batch-20261113-035659-01 (lane DROPS): inventory drops scatter
 import {installChipper, type ChipperSystem} from './world/chipper'; // task corpse-chipper (lane CHIPPER): the woodchipper fixed in the train
 import {installTrainEquipment, type TrainEquipmentSystem} from './world/trainEquipment'; // task train-crafting (lane EQUIP): the crafted chests / devices as physical cargo, the three plugs
 import {installCraftBench, type CraftBenchSystem} from './world/craftBench'; // task train-crafting (lane BENCH): the crafting bench + its recipe list
+import {installSaveTerminal, type SaveNowResult, type SaveRefusal, type SaveTerminalSystem} from './world/trainSaveTerminal'; // task refinement-batch (lane SAVE): the manual Save terminal
 import {installSentryTurret, type SentryTurretSystem} from './world/sentryTurret'; // task train-crafting (lane SENTRY): the sentry's ammo + roof turret
 import {installItemScanner, type ItemScannerSystem} from './world/itemScanner'; // task train-crafting (lane SCANNER): the scanner's scope
+import {installTrainArmor, type TrainArmorSystem, type TrainUpgradesApi} from './world/trainArmor'; // task refinement-batch (lane ARMOR): the permanent train armour + the upgrades seam
 import {installTrainOnboarding, type TrainOnboarding} from './world/trainOnboarding'; // task first-player-onboarding: the train's seven 3D guide markers
+import {installAcidMelt, type AcidMelt} from './world/acidMelt'; // task studio-refinement-batch-20261113-035659-01 (lane MELT): acid melts world props
 import {OnboardingStore, browserOnboardingStorage} from './ui/onboardingStore'; // (the same task) the browser-global tutorial record
 import type {PropPlacement} from './gen/props';
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
@@ -381,6 +389,12 @@ export class Game {
   readonly torch: PlayerLight;
   /** Iteration 12 (LIGHT): thrown road flares (weapons/throwables.ts; a cannon BodySource of `physics`). */
   readonly flares = new FlareSystem(this.scene, this.physics, this.lightSources);
+  /** Task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades' canisters, acid pools and lures (weapons/grenades.ts). */
+  readonly grenades = new GrenadeSystem(this.scene, this.physics);
+  /** The throwable a grenade-style hold readies / throws (its item id: the flare or a crafted grenade; null when idle). */
+  private throwItem: string | null = null;
+  /** Task studio-refinement-batch-20261113-035659-01 (lane LURE): the lure grenade's scent emitters enemies walk to (ai/scentLure.ts; no sight needed). */
+  readonly scents = new ScentLures();
   /** Track 2 (VIS): the service annexes' steam vents (visual only; Effects' bounded steam ring). */
   private steamVents: SteamVents | null = null;
   /** Iteration 15: grenade-style flare input (T, or left click with a flare in hand): hold readies, release throws once. */
@@ -450,9 +464,17 @@ export class Game {
   readonly craftBench: CraftBenchSystem;
   readonly sentryTurret: SentryTurretSystem;
   readonly itemScanner: ItemScannerSystem;
+  /** Task studio-refinement-batch-20261113-035659-01 (lane SAVE): the train's Save terminal left of the desk (world/trainSaveTerminal.ts; [E] -> saveNow). */
+  readonly saveTerminal: SaveTerminalSystem;
+  /** Task studio-refinement-batch-20261113-035659-01 (lane ARMOR): the train armour (kit, colliders, zombies-only contact damage) and the
+   *  train upgrades seam the bench's recipe calls (installed / block / install: the craft debits first, a false install refunds). */
+  readonly trainArmor: TrainArmorSystem;
+  readonly trainUpgrades: TrainUpgradesApi;
   /** Task first-player-onboarding: the browser-global tutorial record (never in a save) and the train's first-player markers. */
   readonly onboarding: OnboardingStore;
   readonly trainOnboarding: TrainOnboarding;
+  /** Task studio-refinement-batch-20261113-035659-01 (lane MELT): acid melting world props (world/acidMelt.ts; the acid grenade's seam). */
+  acidMelt: AcidMelt | null = null;
   /** Task studio-survivor-market-20261108-005807-01 (lane TRADE): market trade (market/trade/tradeSystem.ts); since the rework Rail Ties are a physical item. */
   trade!: TradeSystem;
   /** Task studio-weapon-runtime-fix-20261110-022206-01: the delivery of the new weapons' lazily loaded models (world/weaponVarietyDelivery.ts). */
@@ -675,6 +697,20 @@ export class Game {
     // Iteration 14: effects hidden until the first shot / hit and the thrown-flare prototypes are warmed with the station
     this.warmRegistry.addPool('effects', () => [this.fx.group]);
     this.warmRegistry.addPool('flares', () => this.flares.warmPrototypes());
+    // task studio-refinement-batch-20261113-035659-01: the crafted grenades — the zombies they hurt / kill, the player a pool burns, the
+    // melt system (world/acidMelt.ts) and the scent emitters (ai/scentLure.ts); their canisters / pool film compile with the station
+    this.grenades.env = {
+      zombies: () => this.zombies, player: () => this.player, smoke: this.atmosphere satisfies FlareSmokeHost, audio: this.sfx,
+      kill: (z, dir, point, strength) => this.blastKill(z as unknown as BlightEnemy, dir, point, strength),
+      hurt: z => enemyCues(z as unknown as EnemyActor).hurt(this.sfx, z as unknown as EnemyActor),
+      playerBurn: () => this.hud.toast('Acid! Get out of the pool', true),
+      playerHurt: amount => { this.hud.pain(amount); this.sfx.hurt(); }, // (no direction arc, no camera punch: it burns, it does not hit)
+      melt: () => this.acidMelt, scents: () => this.scents, // (world/acidMelt.ts: what the acid may melt; ai/scentLure.ts: the lure's scent)
+      levelAt: (x, z, y) => this.levels ? this.levels.levelAt(x, z, y) : 0,
+      lineOfSight: (a, b) => !this.levels || this.levels.lineOfSight(a, b),
+      noise: (x, y, z) => this.worldNoise(x, y, z, 14, 'impact'),
+    };
+    this.warmRegistry.addPool('grenades', () => this.grenades.warmPrototypes());
     this.warmRegistry.addPool('shelf-junk-moving', () => this.stock.warmRoots()); // (task studio-food-shelf-production-20261109-002816-01) the moving shelf-junk instanced meshes compile behind the loading screen
     // Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): every moving set of the shelf filler — the authored filler's
     // too, made hidden before each warm-up by refreshRuntimeVariants (world/shelfStockWarm.ts), not on the first shot into a shelf
@@ -866,12 +902,27 @@ export class Game {
     hookName('sentryTurret');
     this.itemScanner = installItemScanner(this);
     hookName('itemScanner');
+    // task studio-refinement-batch-20261113-035659-01 (lane SAVE): after the train and the ride — the Save terminal left of the desk (its aim /
+    // glow / prompt / [E] through the train's own aim: PlayerTrainRuntime.saveTerminal; the screen's frame hook; the CRT model with the car)
+    this.saveTerminal = installSaveTerminal(this);
+    hookName('saveTerminal');
+    // task studio-refinement-batch-20261113-035659-01 (lane ARMOR): after the train and the ride (its section build reads the built car;
+    // the car's own build reads the fitted boxes) — the armour kit on the car's view, its parked / riding colliders, the zombies-only contact
+    // damage (a frame hook: after updateZombies), warm pool 'train-armor', the recipe row's preview 'upgrade:armor' through the icon pass
+    this.trainArmor = installTrainArmor(this, {refreshIcons: ids => refreshItemIcons(this.renderer, ids),
+      rendererReady: () => !!this.gpu && this.renderer.initialized === true, rendererFree: () => this.warmRun});
+    this.trainUpgrades = this.trainArmor;
+    hookName('trainArmor');
     // task studio-first-player-onboarding-20261111-234657-01: after the train / chipper (its section build reads the placed console desk) —
     // seven world-space markers at the parked train until the player first walks 10 m from it (world/trainOnboarding.ts); warm pool
     // 'train-onboarding'; nothing collides, casts or takes [E]
     this.onboarding = new OnboardingStore(browserOnboardingStorage());
     this.trainOnboarding = installTrainOnboarding(this, this.onboarding);
     hookName('trainOnboarding');
+    // (keep it the LAST install that unshifts a section hook: its teardown must run FIRST — a melt in progress completes, spilling into the
+    // pickups / cargo / bodies the later teardowns then record; world/acidMelt.ts install)
+    installAcidMelt(this); // task studio-refinement-batch-20261113-035659-01 (lane MELT): sets this.acidMelt; its own layout / section / frame hooks, warm pool 'acid-melt'
+    hookName('acidMelt');
     this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionModelKeys.push(skywaysKitchenModelKeysFor); // task studio-skyways-level-20261106-054448 (lane FOOD): the ramen restaurant's skyways-* models
     this.sectionModelKeys.push(skywaysAddonModelKeysFor); // task studio-skyways-level-20261106-054448 (lane ADDON): the add-on's skyways-* models
@@ -926,13 +977,15 @@ export class Game {
     await preloadMedicalModels(); // Iteration 16 (lane INJURY): Meshy splint / sling (null urls / failures -> authored models)
     await preloadReactorItemModels(); // task reactor-build-20261101 (lane RESTART): startup key / fuse cartridge kit GLBs (failures -> procedural stand-ins)
     await preloadFuelCanModel(); // task train-fuel-system (lane PORT): the fuel-can GLB before item templates / icons (a failure -> the fallback box)
+    await preloadGrenadeModels(); // task studio-refinement-batch-20261113-035659-01: the acid / lure grenade GLBs (a failure -> the fallback cylinder)
     await preloadBeerLabels(); // task studio-market-bar-20261108-225231-01 (lane BEER): the beer bottles' Codex label atlas (a failure -> plain paper labels)
     registerItemModels(m as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>);
     const consumables: Record<string, THREE.Object3D> = {};
     for (const id of Object.values(ITEMS).filter(d => d.kind === 'consumable' || d.kind === 'throwable').map(d => d.id)) {
       const o = makeSupplyMesh(id);
       // Iteration 12 (LIGHT): a held flare is gripped mid-tube, cap (head) pointing forward and a little up
-      if (itemDef(id).kind === 'throwable') o.rotation.set(0.35, Math.PI / 2 + 0.12, 0.1); else o.rotation.set(0.5, -0.4, 0.15);
+      // (task studio-refinement-batch-20261113-035659-01: the upright acid / lure canisters are held like a can, cap up)
+      if (itemDef(id).kind === 'throwable' && !isGrenadeItem(id)) o.rotation.set(0.35, Math.PI / 2 + 0.12, 0.1); else o.rotation.set(0.5, -0.4, 0.15);
       o.traverse(x => { const mm = x as THREE.Mesh; if (mm.isMesh) mm.frustumCulled = false; });
       consumables[id] = o;
     }
@@ -1182,7 +1235,10 @@ export class Game {
     this.consumeReturn = null; // (consumable return: a new station / Retry starts with nothing pending)
     this.consumeView?.reset();
     this.flares.clear(); // Iteration 12 (LIGHT): burning / thrown flares, their lights, smoke, loops and light sources
+    this.scents.clear(); // lane LURE: every lure scent ends with its station (travel / Retry / new game)
+    this.grenades.clear(); // task studio-refinement-batch-20261113-035659-01: canisters, acid pools, lures
     this.flareHold.cancel(); // Iteration 15: a readied flare is dropped (nothing spent)
+    this.throwItem = null;
     this.lmbLatch = false;
     this.laneOwnedLast = false;
     this.aiming = false;
@@ -1577,8 +1633,58 @@ export class Game {
    */
   commitEndingSave(): CommitResult | null {
     if (!this.run.campaign) return null;
+    this.acidMelt?.clear(); // (refinement batch: a melt in progress completes first — spill, salvage, its record — never saved half done)
     if (this.world) { this.saveSectionMemory(); this.gear.flush(); this.fuelStations?.flush(); this.trainPropCargo?.flush(); this.corpses?.flush(); this.trainEquipment?.flush(); } // (task fuel-feedback: the station's fuel record with its memory; task train-all-cargo: its carried / lost props; lane CORPSE: the bodies lying in the station; task train-crafting: the crafted equipment left in it)
     return this.commitSave('ending', {pose: {...trainSpawnLocal(), yaw: 0, pitch: 0, crouched: false}});
+  }
+
+  /**
+   * Task studio-refinement-batch-20261113-035659-01 (lane SAVE): why a MANUAL save (the train's Save terminal) cannot be made right now
+   * (null: it can). Flags only — nothing is captured, read from storage or written. The slot checks are commitSave's own (same words).
+   */
+  saveBlock(): SaveRefusal | null {
+    const no = (code: SaveRefusal['code'], error: string): SaveRefusal => ({ok: false, code, error});
+    const c = this.run.campaign;
+    if (!c) return no('no-campaign', 'Not saved: this run is not a campaign run, so it has no save.');
+    if (this.state !== 'playing') return no('not-playing', 'Not saved: saving works only during play.');
+    if (!this.player.alive) return no('dead', 'Not saved: you are dead.');
+    if (this.trainRide?.riding || c.transit || this.transitGap) return no('moving', 'Not saved: the train is moving — save while it stands at a station.');
+    if (this.lifecycle.busy) return no('busy', 'Not saved: busy — try again in a moment.');
+    if (!this.world || !this.trainPlacement || !this.trainRuntime?.train) return no('no-train', 'Not saved: the train is not parked here.');
+    if (!this.trainRuntime.playerInside()) return no('outside', 'Not saved: step inside the train to save.');
+    // (the Bunker's cargo lift records its stop for a save; a car still travelling would carry things mid-shaft)
+    if (this.tower?.office?.elevator?.logic.moving) return no('lift', 'Not saved: the lift is moving — save once it stops.');
+    // (world/acidMelt.ts: a prop still dissolving holds its contents until it completes, and what stood on it is still falling: a save
+    // now would catch it half done; it takes MELT.seconds)
+    if (this.acidMelt?.busy) return no('acid', 'Not saved: acid is still eating through something — save in a moment.');
+    if (this.currentSlot === null) return no('bad-slot', 'Not saved: choose a save slot for this run first.');
+    if (this.saveRunId !== this.run.id) return no('conflict', `Not saved: this run is not the one saved in slot ${this.currentSlot}.`);
+    return null;
+  }
+
+  /**
+   * (lane SAVE) THE MANUAL SAVE — [E] at the train's Save terminal (world/trainSaveTerminal.ts). Refused (nothing captured or written)
+   * whenever saveBlock says so. Otherwise the live station's deltas go into the run memory by the same NON-destructive captures the
+   * ending save makes (loose items / holders / kills, the grounded bags, the fuel record, carried / lost props, the station's bodies and
+   * crafted units) plus the other records a teardown writes (the office / Skyways panes, the Bunker lift's stop, the Skyways car, the
+   * market's hostility, the Reactor credits) — the world stays live and its real teardown captures again — and the run is committed to
+   * the ACTIVE slot (commitSave: this run's slot, expectRevision, validated, one write, read back) with the player's real train-local
+   * pose, so Continue / Load last save resume right here. Never throws; a failed write leaves the slot's previous save as it was.
+   * Autosaves, Continue and Retry are unchanged (run.entry, the level-entry snapshot, is saved exactly as it stands).
+   */
+  saveNow(): SaveNowResult {
+    const no = this.saveBlock();
+    if (no) return no;
+    const pose = this.trainLocalPose();
+    if (!pose) return {ok: false, code: 'no-train', error: 'Not saved: the train is not parked here.'};
+    try {
+      this.saveSectionMemory(); this.gear.flush(); this.fuelStations?.flush(); this.trainPropCargo?.flush(); this.corpses?.flush(); this.trainEquipment?.flush();
+      this.gas?.flush?.(); // the office / Skyways window panes (otherwise written at teardown)
+      const lift = this.tower?.office?.elevator?.logic;
+      if (lift && !lift.moving && lift.stop !== null) this.tower.parkCar(); // a car level at a stop: only its record (nothing moves)
+      this.skywaysCar?.store?.(); this.marketCombat?.persist?.(); reactorCreditsOf(this)?.store();
+    } catch (err) { return {ok: false, code: 'invalid', error: `Not saved: ${String((err as Error)?.message ?? err)}`}; } // (as commitSave's capture: nothing written)
+    return this.commitSave('manual', {pose});
   }
 
   /** The campaign's return to the main menu (main.ts pause / death "Main menu"; lane CREDITS' end card): the moving ride reset, the title. */
@@ -2736,14 +2842,52 @@ export class Game {
       this.viewmodel.setItem(def?.kind === 'consumable' || def?.kind === 'throwable' || (def?.kind === 'supply' && this.viewmodel.hasItem(st!.itemId)) ? st!.itemId : null);
     }
     // Iteration 15: while a flare is readied the hand shows it (whatever pickups / inventory changes happen meanwhile)
-    if (this.flareHold.active) { this.weapon.equip(null); this.viewmodel.setItem('flare'); }
+    if (this.flareHold.active) { this.weapon.equip(null); this.viewmodel.setItem(this.throwItem ?? 'flare'); } // (the readied throwable: a flare or a crafted grenade)
     // Task office-overhaul-20261030 (INTERACT, #1): the readied backpack (6) is what the hands hold (gear/system.ts)
     else if (this.gear?.readied) { this.weapon.equip(null); this.viewmodel.setItem('backpack'); }
   }
 
   /** Iteration 15: drop a readied flare without throwing (nothing spent); the held item comes back. */
   private cancelFlareHold(): void {
-    if (this.flareHold.cancel()) this.syncHeld();
+    if (this.flareHold.cancel()) { this.throwItem = null; this.syncHeld(); }
+  }
+
+  /** Task studio-refinement-batch-20261113-035659-01: the hold's release throws the readied throwable — a flare or a crafted grenade. */
+  private throwHeld(fromHeld: boolean): void {
+    const id = this.throwItem ?? 'flare';
+    this.throwItem = null;
+    if (isGrenadeItem(id)) this.throwGrenade(fromHeld, id);
+    else this.throwFlare(fromHeld);
+  }
+
+  /** A grenade-style press refused (nothing readied, nothing spent): one message per press. */
+  private throwRefused(reason: 'none' | 'cap', itemId: string | null): void {
+    const g = isGrenadeItem(itemId) ? itemDef(itemId) : null;
+    if (reason === 'none') this.hud.toast(!itemId ? 'Nothing in the grenade slot — find a flare or craft a grenade' : g ? `No ${g.name}s left` : 'No flares — find one first', true);
+    else this.hud.toast(itemId === ACID_GRENADE ? 'Three acid grenades already out — wait for a pool to dry up' : g ? 'Three lures already out — wait for one to run out' : 'Three flares already burning — wait for one to burn out', true);
+    this.sfx.denied();
+  }
+
+  /**
+   * Task studio-refinement-batch-20261113-035659-01: toss one crafted grenade (the grenade slot's, or the held one) — exactly one item is
+   * removed, and only once the throw happened (weapons/grenades.ts throwOneGrenade; the throwFlare rule).
+   */
+  private throwGrenade(fromHeld: boolean, id: GrenadeId): void {
+    const ref = fromHeld && this.inv.selectedStack()?.itemId === id ? this.inv.selectedRef()
+      : !fromHeld && this.inv.thrown?.itemId === id ? THROW_REF : null;
+    if (this.use || this.consumeView.busy || this.player.climbing) return;
+    const p = this.player, def = itemDef(id);
+    const r = throwOneGrenade(this.grenades, id, () => (ref ? this.inv.consumeAt(ref) : this.inv.take(id, 1) === 1), () => this.inv.count(id) > 0,
+      this.camera.getWorldPosition(new THREE.Vector3()), this.forward(), {x: p.vx, y: p.grounded ? 0 : p.vy * 0.5, z: p.vz});
+    if (!r.ok) {
+      if (r.reason === 'none' || r.reason === 'cap') this.throwRefused(r.reason, id);
+      return; // 'cooldown' (a double press) / 'unavailable': silent
+    }
+    this.stats.itemsUsed++;
+    const left = this.inv.count(id);
+    this.hud.toast(`${def.short} grenade thrown · ${left ? `${left} left` : 'last one'}`);
+    this.viewmodel.setItem(null);
+    this.syncHeld();
   }
 
   /**
@@ -2835,30 +2979,18 @@ export class Game {
     const st = this.inv.detach(ref, count);
     if (!st) return;
     if (this.use && !this.inv.find(this.use.uid)) this.cancelUse('dropped');
-    const g = this.layout.grid, L = this.levels, p = this.player;
-    const f = this.forward();
-    let x = p.x + f.x * 0.9, z = p.z + f.z * 0.9;
-    let y: number;
-    if (L.count > 1) {
-      // Lane B (iteration 08): on the player's own storey, in sight (not through a railing / slab), on its floor / tread.
-      const s = L.supportIn(x, z, p.y + 0.05);
-      const ok = !!s && L.grid(s.level).passable(...g.cellOf(x, z)) && Math.abs(s.floor - p.y) <= 0.45 && L.lineOfSight({x: p.x, y: p.y + 0.6, z: p.z}, {x, y: p.y + 0.6, z}) && !L.railCrosses(p.x, p.z, x, z, 0.05, p.y);
-      if (!ok) { x = p.x; z = p.z; }
-      y = L.stepAt(x, z, p.y + 0.05);
-      if (!Number.isFinite(y)) y = p.y;
-    } else {
-      // Lane T: same level only (not over the platform edge), resting on the local floor / stair tread.
-      if (!g.passable(...g.cellOf(x, z)) || Math.abs(g.floorAt(x, z) - p.y) > 0.45 || !g.lineOfSight(p.x, p.z, x, z)) { x = p.x; z = p.z; }
-      y = g.stepAt(x, z);
-    }
-    const n = st.count;
-    if (st.itemId === FUEL.canItem && n > 1) {
-      // task fuel-feedback: fuel cans lie as SINGLE cans (one visible can = one can; the quantity kept exactly), back towards the player
-      const fl = Math.hypot(f.x, f.z) || 1, bx = -f.x / fl * 0.26, bz = -f.z / fl * 0.26;
+    const p = this.player, n = st.count;
+    // Lane B (iteration 08) / Lane T: 0.9 m along the view on the player's own storey / floor, in sight (not through a railing / slab), on
+    // its floor / tread, else at the player's feet. Task studio-refinement-batch-20261113-035659-01 (lane DROPS): + no collider box crossed,
+    // and successive drops (the cans of a stack too) take a small bounded scatter round that point instead of one spot (world/dropScatter.ts)
+    // task fuel-feedback: fuel cans lie as SINGLE cans (one visible can = one can; the quantity kept exactly)
+    const cans = st.itemId === FUEL.canItem && n > 1;
+    const spots = groundDropSpots({levels: this.levels, grid: this.layout.grid, propIndex: this.propIndex}, p, this.forward(), cans ? n : 1, this.pickups.list.map(pk => pk.obj.position));
+    if (cans) {
       st.count = 1;
-      this.pickups.add(st, x, y, z, p.yaw);
-      for (let k = 1; k < n; k++) { const one = this.inv.makeStack(FUEL.canItem, 1); one.count = 1; this.pickups.add(one, x + bx * k, y, z + bz * k, p.yaw); }
-    } else this.pickups.add(st, x, y, z, p.yaw);
+      this.pickups.add(st, spots[0].x, spots[0].y, spots[0].z, p.yaw);
+      for (let k = 1; k < n; k++) { const one = this.inv.makeStack(FUEL.canItem, 1); one.count = 1; this.pickups.add(one, spots[k].x, spots[k].y, spots[k].z, p.yaw); }
+    } else this.pickups.add(st, spots[0].x, spots[0].y, spots[0].z, p.yaw);
     this.hud.toast(`Dropped ${n > 1 ? `${n} × ` : ''}${itemDef(st.itemId).short}`);
     this.syncHeld();
   }
@@ -3115,16 +3247,20 @@ export class Game {
     if (this.laneOwnedLast && !laneOwns && inp.mouse[0]) this.lmbLatch = true;
     this.laneOwnedLast = laneOwns;
     if (this.lmbLatch && !inp.mouse[0]) this.lmbLatch = false;
+    // (task studio-refinement-batch-20261113-035659-01) the SAME hold throws whichever throwable it readies: the grenade slot's (G) or the
+    // held one (click) — a road flare or a crafted acid / lure grenade (throwItem; Game.throwHeld dispatches by item id)
+    const keyThrow = inp.hit('KeyG') || inp.hit('KeyT');
+    const tItem = throwHoldTarget({active: this.flareHold.active, readied: this.throwItem, keyPressed: keyThrow, slot: this.inv.thrown?.itemId ?? null,
+      mousePressed: inp.mousePressed[0], held: held?.itemId ?? null, heldThrowable: heldDef?.kind === 'throwable'});
     for (const e of this.flareHold.update(dt, {
-      keyDown: inp.down('KeyG') || inp.down('KeyT'), keyPressed: inp.hit('KeyG') || inp.hit('KeyT'), mouseDown: inp.mouse[0], mousePressed: inp.mousePressed[0], // INTERACT (#6): G
-      heldIsFlare: heldDef?.kind === 'throwable' && held?.itemId === 'flare', busy: !!this.use || this.consumeView.busy || p.climbing || laneOwns || rideHolster,
-      flares: this.inv.count('flare'), refusal: this.flares.refusal(), clears: inp.clears,
+      keyDown: inp.down('KeyG') || inp.down('KeyT'), keyPressed: keyThrow, mouseDown: inp.mouse[0], mousePressed: inp.mousePressed[0], // INTERACT (#6): G
+      heldIsFlare: heldDef?.kind === 'throwable' && (this.flareHold.source !== 'mouse' || held?.itemId === this.throwItem), busy: !!this.use || this.consumeView.busy || p.climbing || laneOwns || rideHolster,
+      flares: tItem ? this.inv.count(tItem) : 0, refusal: tItem && isGrenadeItem(tItem) ? this.grenades.refusal(tItem) : this.flares.refusal(), clears: inp.clears,
     })) {
-      if (e.type === 'ready') { this.weapon.equip(null); this.viewmodel.setItem('flare'); }
-      else if (e.type === 'release') this.throwFlare(e.source === 'mouse');
-      else if (e.type === 'cancel') this.syncHeld();
-      else if (e.reason === 'none') { this.hud.toast('No flares — find one first', true); this.sfx.denied(); }
-      else { this.hud.toast('Three flares already burning — wait for one to burn out', true); this.sfx.denied(); }
+      if (e.type === 'ready') { this.throwItem = tItem; this.weapon.equip(null); this.viewmodel.setItem(tItem ?? 'flare'); }
+      else if (e.type === 'release') this.throwHeld(e.source === 'mouse');
+      else if (e.type === 'cancel') { this.throwItem = null; this.syncHeld(); }
+      else this.throwRefused(e.reason, tItem);
       if ((e.type === 'release' || e.type === 'cancel') && inp.mouse[0]) this.lmbLatch = true; // never bleeds into the gun
     }
     const flareOwns = this.flareHold.active || this.lmbLatch || laneOwns;
@@ -3200,6 +3336,8 @@ export class Game {
     this.physics.update(dt); // ragdolls (fixed 1/60 steps) + casings; update() only runs while playing
     prof.lap(SPAN.flares);
     this.flares.tick(dt); // Iteration 12 (LIGHT): flare bodies -> mesh / light / smoke / sound / light-source positions, burn-out
+    this.scents.tick(dt); // lane LURE: the lure scents' ACTIVE seconds (update() never runs paused / in menus / loading)
+    this.grenades.tick(dt); // task studio-refinement-batch-20261113-035659-01: canisters, bursts, acid pools (active seconds only), lures
 
     prof.lap(SPAN.camera);
     // recoil recovery and bloom decay
@@ -3782,6 +3920,8 @@ export class Game {
       rand: this.rand,
       // Iteration 12 (AI): light lure — this frame's attracting lights, 3D eye-to-point sight, standable goal near a lit spot (ai/lightLure.ts).
       ...lureWorld(L, this.lightSources),
+      // task studio-refinement-batch-20261113-035659-01 (lane LURE): the lure grenade's active scents (ai/scentLure.ts: 20 m in 3D, no sight)
+      scents: this.scents.list,
       // Task track3-eaton-centre-20261031 (lane HORDE, atrium AI): open-atrium chase rules (ai/brain.ts BrainWorld.atrium); absent elsewhere
       ...(this.layout.mall || this.layout.reactor ? {atrium: true} : {}), // (reactor-build, lane ARCH: + the open pit)
       // Task studio-beta-mall-round3-20261031-01 (lane ENEMY, R2): the open-atrium notice rule (ai/brain.ts ATRIUM_PERCEPTION); mall only
@@ -3947,13 +4087,17 @@ export class Game {
     this.muzzleT = 0.05;
   }
 
-  /** Task track1-siren-blightbelly-20261031 (lane BLIGHT): an enemy killed by a Blightbelly's blast — the normal kill bookkeeping (stats, death cue, ragdoll). */
-  blastKill(z: BlightEnemy, dir: THREE.Vector3, point: THREE.Vector3): void {
+  /**
+   * Task track1-siren-blightbelly-20261031 (lane BLIGHT): an enemy killed by a Blightbelly's blast — the normal kill bookkeeping (stats,
+   * death cue, ragdoll). Task studio-refinement-batch-20261113-035659-01: `strength` = the ragdoll impulse (default: the blast's; an
+   * acid kill passes its gentler ACID.killImpulse).
+   */
+  blastKill(z: BlightEnemy, dir: THREE.Vector3, point: THREE.Vector3, strength = killImpulseStrength('shotgun', 6, 9)): void {
     const e = z as EnemyActor;
     if (!this.zombies.includes(e)) return;
     this.stats.kills++;
     enemyCues(e).death(this.sfx, e);
-    this.physics.ragdoll(e, {dir, point, strength: killImpulseStrength('shotgun', 6, 9)});
+    this.physics.ragdoll(e, {dir, point, strength});
   }
 
   /**

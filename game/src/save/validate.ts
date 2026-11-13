@@ -33,10 +33,12 @@ import {CORPSE_CARRY_PARTICIPANT, STATION_BODIES_LANE, carryProblem, stationBodi
 import {STATION_PROPS_LANE, cargoProblem, stationPropsProblem, type CargoPropJSON} from '../run/trainCargo'; // task train-loose-cargo: the train's loose items (+ train-all-cargo: props)
 import {EQUIPMENT, STATION_EQUIPMENT_LANE, equipmentSeqOf, stationEquipmentProblem, trainEquipmentProblem, type EquipmentJSON} from '../craft/equipment'; // task train-crafting: the crafted chests / devices aboard and left in stations
 import {PROP_DEFS} from '../gen/props'; // task train-all-cargo: carried props are of real kinds
+import {trainUpgradesProblem} from '../run/trainUpgrades'; // task studio-refinement-batch-20261113-035659-01 (lane ARMOR): the train's fitted upgrades
 import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
 import {MARKET_STOCK_LANE, STOCK_MAX} from '../market/trade/stock';
 import {BUNKER_LANE, bunkerStateProblem} from '../world/bunker/objectiveState'; // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE)
 import {MARKET_HOSTILITY_LANE, marketHostilityProblem} from '../market/combat/record'; // task studio-market-rework-20261108-074144-01 (lane COMBAT): a market station's hostility
+import {ACID_MELT_LANE, ACID_MELT_LIMITS, acidMeltedProblem} from '../run/acidMeltRecord'; // task studio-refinement-batch-20261113-035659-01 (lane MELT): a station's acid-melted props
 import {WALLET_PARTICIPANT, walletProblem} from '../market/trade/wallet';
 import {BEER_PARTICIPANT, beerSaveProblem} from '../market/beer/beerSave'; // task studio-market-bar-20261108-225231-01 (lane BEER): the timed beer's record
 import {SURVIVAL_OVERFILL} from '../player/survival'; // (lane BEER) food / water may hold the Bock's overfill (0..200)
@@ -68,6 +70,8 @@ export const SAVE_LIMITS = {
   holderLots: 256,
   killed: 5_000,
   lanes: 32,
+  /** Task studio-refinement-batch-20261113-035659-01 (lane MELT): generated props one station's ACID_MELT_LANE lists as melted. */
+  meltedProps: ACID_MELT_LIMITS.gone,
   participants: 32,
   stats: 64,
   nameChars: 64,
@@ -559,6 +563,8 @@ function participants(v: unknown, path: string, seen: Set<number>): void {
       if (ep) bad(`${p}.equipment`, ep);
       equipmentUnits((r.equipment as {aboard: EquipmentJSON[]}).aboard, `${p}.equipment.aboard`, seen);
     }
+    // (lane ARMOR) the permanent one-time upgrades: optional (absent = none fitted), else exactly {v: 1, fitted: [unique known ids]}
+    if (r.upgrades !== undefined) { const up = trainUpgradesProblem(r.upgrades); if (up) bad(`${p}.upgrades`, up); }
   }
   const cc = o[CORPSE_CARRY_PARTICIPANT]; // (lane CORPSE) the body in the player's hands
   if (cc !== undefined) {
@@ -637,6 +643,11 @@ function lanes(v: unknown, path: string): void {
     const ep = stationEquipmentProblem(o[STATION_EQUIPMENT_LANE]);
     if (ep) bad(`${path}.${STATION_EQUIPMENT_LANE}`, ep);
     equipmentUnits((o[STATION_EQUIPMENT_LANE] as {here: EquipmentJSON[]}).here, `${path}.${STATION_EQUIPMENT_LANE}.here`, uidScope);
+  }
+  if (has(o, ACID_MELT_LANE)) { // task studio-refinement-batch-20261113-035659-01 (lane MELT): the generated props acid dissolved here
+    const mp = acidMeltedProblem(o[ACID_MELT_LANE]);
+    if (mp) bad(`${path}.${ACID_MELT_LANE}`, mp);
+    if ((o[ACID_MELT_LANE] as {gone: unknown[]}).gone.length > SAVE_LIMITS.meltedProps) bad(`${path}.${ACID_MELT_LANE}`, 'too many melted props');
   }
 }
 
@@ -754,7 +765,7 @@ export function validateRunData(v: unknown, o: ValidateOptions = {}, path = 'run
 function validateRunBody(r: Record<string, unknown>, o: ValidateOptions, path: string): SerializedRunV1 {
   const point = oneOf(r.point, `${path}.point`, SAVE_POINTS);
   const c = campaign(r.campaign, `${path}.campaign`, o.validateNetwork);
-  if ((point === 'departure') !== (c.transit !== null)) bad(`${path}.point`, point === 'departure' ? 'a departure save without a journey' : `${point === 'arrival' ? 'an arrival' : point === 'ending' ? 'an ending' : 'a new-game'} save during a journey`);
+  if ((point === 'departure') !== (c.transit !== null)) bad(`${path}.point`, point === 'departure' ? 'a departure save without a journey' : `${point === 'arrival' ? 'an arrival' : point === 'ending' ? 'an ending' : point === 'manual' ? 'a manual' : 'a new-game'} save during a journey`); // (lane SAVE, refinement batch: + 'manual', taken only while parked)
   const seeds = obj(r.seeds, `${path}.seeds`);
   // task studio-skyways-level-20261106-054448-01: a run saved before Skyways existed has no seeds.skyways (the legacy per-archetype seed;
   // campaign nodes carry their own levelSeed) — a deterministic default from its Subway seed (the checksum was verified on the stored run)

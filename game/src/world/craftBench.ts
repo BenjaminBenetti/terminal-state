@@ -41,14 +41,20 @@
 // with the inventory's icon pass (ui/itemIcons.ts) — the unit as the live equipment system's look builds it, real models only. The
 // bench only says WHEN: its update, while the car stands parked in a live world, costs one integer compare and asks for a render when
 // the look's models changed; an open asks again only for a preview still missing. The view redraws when the icon cache reports one.
+//
+// MADE RECIPES (task studio-refinement-batch-20261113-035659-01): the rows after the units make a batch of grenades (into your pockets,
+// the rest into the Lockbox) or fit the permanent train armor (host.trainUpgrades, world/trainArmor.ts) — craft/crafting.ts craftMade,
+// the same atomic debit / exact refund over the same four sources; refused (with its text) without room / when already fitted.
 
 import * as THREE from 'three';
 import type {Game} from '../game';
 import {TRAIN_EQUIPMENT_MODELS} from '../assets/trainEquipment.generated';
-import {countMaterials, craft, craftSources, type CraftResult, type MaterialSource} from '../craft/crafting';
-import {EQUIPMENT, type EquipmentDef, type EquipmentKind} from '../craft/equipment';
+import {countMaterials, craft, craftMade, craftSources, madeBlock, type CraftResult, type MadeResult, type MadeUpgradesTarget, type MaterialSource} from '../craft/crafting';
+import {EQUIPMENT, type EquipmentDef} from '../craft/equipment';
 import type {EquipmentSystemLike} from '../craft/equipmentApi';
-import {RECIPE_MATERIALS, recipeFor} from '../craft/recipes';
+import {BENCH_RECIPES, RECIPE_MATERIALS, benchRecipeFor, isMadeRecipe, type BenchKind, type MadeRecipe} from '../craft/recipes';
+import type {EquipmentKind} from '../craft/equipment';
+import {itemDef} from '../items/items';
 import {benchFootprint, benchPlacement, type BenchPlacement} from '../craft/trainFixtures';
 import type {Inventory, ItemStack} from '../items/inventory';
 import type {WarmupRegistry} from '../render/warmup';
@@ -86,11 +92,22 @@ export const BENCH_TEXT = {
   hintCarry: 'hold E to carry it',
   hintPlug: 'hold E to drag it to a free plug',
   crafted: (name: string, hint: string) => `Crafted: ${name}${hint ? ` — ${hint}` : ''}`,
+  /** A made item batch: where it went (task studio-refinement-batch-20261113-035659-01). */
+  madeItems: (n: number, name: string, carried: number, lockbox: number) =>
+    `Crafted: ${n} × ${name} — ${!lockbox ? 'on you' : !carried ? 'in the Lockbox' : `${carried} on you, ${lockbox} in the Lockbox`}`,
+  /** The train upgrade is fitted. */
+  fitted: (name: string) => `Fitted: ${name} — on the train for good`,
 } as const;
 
 /** What to do with a freshly crafted unit, from its traits (never a per-kind list). */
 export function craftedHint(def: Pick<EquipmentDef, 'move' | 'plug'>): string {
   return def.move === 'carry' ? BENCH_TEXT.hintCarry : def.plug ? BENCH_TEXT.hintPlug : '';
+}
+
+/** The toast / note of a made recipe that went through. */
+function madeText(r: MadeRecipe, res: Extract<MadeResult, {ok: true}>): string {
+  const m = res.made;
+  return m.type === 'item' ? BENCH_TEXT.madeItems(m.count, itemDef(m.itemId).name, res.carried, res.lockbox) : BENCH_TEXT.fitted(r.name);
 }
 
 export type BenchCloseReason = 'user' | 'hit' | 'distance' | 'state' | 'travel' | 'gone';
@@ -114,6 +131,8 @@ export interface CraftBenchHost {
   sfx: unknown;
   playerTrain: {lockbox: {slots: (ItemStack | null)[]; version: number}};
   trainEquipment?: EquipmentSystemLike | null;
+  /** The permanent train upgrades (world/trainArmor.ts; task studio-refinement-batch-20261113-035659-01). Absent: the armor row is refused. */
+  trainUpgrades?: MadeUpgradesTarget | null;
   trainRuntime?: {
     view: {root: THREE.Object3D} | null;
     train?: {placement: {level: number}} | null;
@@ -201,7 +220,7 @@ export class CraftBenchSystem {
   readonly counts = {attached: 0, opens: 0, closes: 0, refusedOpen: 0, crafted: 0, refused: 0, cues: 0};
   lastClose: BenchCloseReason | null = null;
   /** The last craft attempt (QA / tests). */
-  lastCraft: CraftResult | null = null;
+  lastCraft: CraftResult | MadeResult | null = null;
   private modelSrc: THREE.Object3D | null = null;
   private standInParts: {geos: THREE.BufferGeometry[]; mats: THREE.Material[]} | null = null;
   private openFlag = false;
@@ -453,16 +472,24 @@ export class CraftBenchSystem {
     return craftSources({inv: this.host.inv, lockbox: this.host.playerTrain.lockbox, stores: this.equipment()?.storesAboard() ?? []});
   }
 
-  /** Why the equipment system would not take a new unit of `kind` now (null: it would). */
-  block(kind: EquipmentKind): string | null {
+  /** Why the equipment system would not take a new unit of `kind` now — or a made recipe could not be delivered (null: it would). */
+  block(kind: BenchKind): string | null {
+    const r = benchRecipeFor(kind);
+    if (r && isMadeRecipe(r)) return this.parked() ? madeBlock(r, this.madeContext()) : BENCH_TEXT.unavailable;
     const eq = this.equipment();
-    if (!eq || !this.parked()) return BENCH_TEXT.unavailable;
-    return eq.craftBlock(kind);
+    if (!eq || !this.parked() || !r) return BENCH_TEXT.unavailable;
+    return eq.craftBlock(r.kind);
+  }
+
+  /** Where a made recipe's output goes: the carried inventory + the Lockbox; the train upgrade system. */
+  private madeContext() {
+    const h = this.host;
+    return {items: {inv: h.inv, lockbox: h.playerTrain.lockbox}, upgrades: h.trainUpgrades ?? null};
   }
 
   /** The recipe list as it stands (and what the redraw check last saw). */
   private listModel(): CraftViewModel {
-    const m = craftModel(this.sources(), kind => this.block(kind));
+    const m = craftModel(this.sources(), kind => this.block(kind), BENCH_RECIPES);
     this.seenInv = this.host.inv.version;
     this.seenBox = this.host.playerTrain.lockbox.version;
     this.seenSlow = this.slowKey(m);
@@ -515,18 +542,21 @@ export class CraftBenchSystem {
     void inp.lock().then(ok => { if (!ok && h.state === 'playing' && !inp.locked) h.gear?.showResume?.(); });
   }
 
-  /** Craft one unit of `kind` from the open list (the row's Craft button, QA). Null: the view is closed. */
-  craftKind(kind: EquipmentKind): CraftResult | null {
+  /** Craft one unit of `kind` (or a made recipe's output) from the open list (the row's Craft button, QA). Null: the view is closed. */
+  craftKind(kind: EquipmentKind): CraftResult | null;
+  craftKind(kind: BenchKind): CraftResult | MadeResult | null;
+  craftKind(kind: BenchKind): CraftResult | MadeResult | null {
     if (!this.openFlag) return null;
-    const h = this.host, recipe = recipeFor(kind), eq = this.equipment();
-    let res: CraftResult;
-    if (!recipe || !eq || !this.usable()) res = {ok: false, reason: 'blocked', text: BENCH_TEXT.unavailable};
+    const h = this.host, recipe = benchRecipeFor(kind), eq = this.equipment();
+    let res: CraftResult | MadeResult;
+    if (recipe && isMadeRecipe(recipe)) res = this.usable() ? craftMade(recipe, {sources: this.sources(), ...this.madeContext()}) : {ok: false, reason: 'blocked', text: BENCH_TEXT.unavailable};
+    else if (!recipe || !eq || !this.usable()) res = {ok: false, reason: 'blocked', text: BENCH_TEXT.unavailable};
     else res = craft(recipe, {sources: this.sources(), equipment: eq});
     this.lastCraft = res;
     const sfx = h.sfx as {pickup?(): void; denied?(): void} | null;
     if (res.ok) {
       this.counts.crafted++;
-      const def = res.unit.def ?? EQUIPMENT[kind], text = BENCH_TEXT.crafted(def.name, craftedHint(def));
+      const text = 'made' in res ? madeText(recipe as MadeRecipe, res) : BENCH_TEXT.crafted((res.unit.def ?? EQUIPMENT[res.unit.kind]).name, craftedHint(res.unit.def ?? EQUIPMENT[res.unit.kind]));
       this.view.say(text, false);
       h.hud.toast(text);
       sfx?.pickup?.();
@@ -536,7 +566,7 @@ export class CraftBenchSystem {
       h.syncHeld?.();
     } else {
       this.counts.refused++;
-      if (res.error !== undefined) console.warn('crafting bench: the equipment system failed to build a unit (materials refunded)', res.error);
+      if (res.error !== undefined) console.warn(`crafting bench: making ${kind} failed (${recipe && isMadeRecipe(recipe) ? 'the delivery / upgrade' : 'the equipment system'} threw; materials refunded)`, res.error);
       this.view.say(res.text, true);
       sfx?.denied?.();
     }
@@ -565,7 +595,7 @@ export class CraftBenchSystem {
       this.slowT += dt;
       if (!stale && this.slowT >= BENCH_RT.refreshS) {
         this.slowT = 0;
-        stale = this.slowKey(craftModel(this.sources(), kind => this.block(kind))) !== this.seenSlow;
+        stale = this.slowKey(craftModel(this.sources(), kind => this.block(kind), BENCH_RECIPES)) !== this.seenSlow;
       }
       if (stale) this.view.render();
       return;
@@ -600,7 +630,8 @@ export class CraftBenchSystem {
       materials: counts ? Object.fromEntries(RECIPE_MATERIALS.map(m => [m, {total: counts[m].total, carried: counts[m].carried, backpack: counts[m].backpack, lockbox: counts[m].lockbox, chests: counts[m].chests}])) : null,
       rows: this.view.last?.rows.map(r => ({kind: r.kind, can: r.can, reason: r.reason, needs: r.needs.map(n => ({material: n.material, have: n.have, need: n.need, state: n.state}))})) ?? null,
       previews: this.previews.qa(),
-      lastCraft: this.lastCraft ? (this.lastCraft.ok ? {ok: true, unit: this.lastCraft.unit.uid} : {ok: false, reason: this.lastCraft.reason, text: this.lastCraft.text}) : null,
+      lastCraft: this.lastCraft ? (this.lastCraft.ok ? ('made' in this.lastCraft ? {ok: true, made: this.lastCraft.made, carried: this.lastCraft.carried, lockbox: this.lastCraft.lockbox} : {ok: true, unit: this.lastCraft.unit.uid})
+        : {ok: false, reason: this.lastCraft.reason, text: this.lastCraft.text}) : null,
       counts: {...this.counts},
     };
   }
@@ -637,10 +668,10 @@ export function craftBenchQaApi(game: unknown): Record<string, (...a: any[]) => 
     /** Open the recipe list as [E] on the bench would (false: not usable now). */
     benchOpen: () => g.craftBench?.open() ?? false,
     benchClose: () => g.craftBench?.close('user'),
-    /** Craft a kind from the open list ('chest' | 'radar' | 'sentry' | 'scanner'): the result ({ok, …}). */
-    benchCraft: (kind: EquipmentKind) => {
+    /** Craft a kind from the open list ('chest' | 'radar' | 'sentry' | 'scanner' | 'acid_grenade' | 'lure_grenade' | 'armor'): the result ({ok, …}). */
+    benchCraft: (kind: BenchKind) => {
       const r = g.craftBench?.craftKind(kind) ?? null;
-      return r ? (r.ok ? {ok: true, unit: r.unit.uid, kind: r.unit.kind} : {ok: false, reason: r.reason, text: r.text}) : null;
+      return r ? (r.ok ? ('made' in r ? {ok: true, made: r.made, carried: r.carried, lockbox: r.lockbox} : {ok: true, unit: r.unit.uid, kind: r.unit.kind}) : {ok: false, reason: r.reason, text: r.text}) : null;
     },
     ...chestStoreQaApi(game),
   };

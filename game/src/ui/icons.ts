@@ -57,6 +57,10 @@ export const ICONS: Record<IconKey, string> = {
   // task studio-market-bar-20261108-225231-01 (lane BEER): a standing long-neck bottle (crown cap, neck, shoulder, the label band) — the HUD
   // glyph style; the 3D icon is the code-built bottle with its own Codex label (market/beer/beerModel.ts)
   beer: S(`<rect x="29.6" y="1" width="4.8" height="2.2" rx="0.6"/><path d="M30.2 3.2h3.6v6.3c0 1.7 4.6 3.4 4.6 6.6V29a2 2 0 0 1-2 2h-8.8a2 2 0 0 1-2-2V16.1c0-3.2 4.6-4.9 4.6-6.6z"/><rect x="25.6" y="18" width="12.8" height="8" fill="${DARK}" opacity="0.45"/>`),
+  // task studio-refinement-batch-20261113-035659-01: the crafted throwables as HUD glyphs (fallback for the 3D icon of the Meshy model) —
+  // an upright canister with a cap and lever: acid with a drip band, lure with scent vents
+  acidGrenade: S(`<rect x="24" y="8" width="16" height="22" rx="3"/><rect x="27" y="3" width="10" height="5" rx="1" opacity="0.8"/><path d="M37 5l6 2v6" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="24" y="14" width="16" height="6" fill="${DARK}" opacity="0.45"/><path d="M29 20v4M33 20v6M36 20v3" stroke="${DARK}" stroke-width="1.4" opacity="0.5"/>`),
+  lureGrenade: S(`<rect x="24" y="8" width="16" height="22" rx="3"/><rect x="27" y="3" width="10" height="5" rx="1" opacity="0.8"/><path d="M37 5l6 2v6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M27 13h10M27 17h10M27 21h10" stroke="${DARK}" stroke-width="1.6" opacity="0.5"/><circle cx="32" cy="26" r="1.6" fill="${DARK}" opacity="0.5"/>`),
 };
 
 /** Iteration 12 (LIGHT): small square HUD icons for the light panel (battery meter, flare count). */

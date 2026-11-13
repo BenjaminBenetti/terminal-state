@@ -135,7 +135,10 @@ describe('Screacher noise: the player\'s own sounds and gunfire (game wiring)', 
     expect(game).toMatch(/if \(step && p\.sprinting\) this\.worldNoise\(p\.x, p\.y, p\.z, SCREACHER_NOISE\.run \* k, 'run'\);/);
     expect(game).toMatch(/if \(p\.justLanded\) this\.worldNoise\(p\.x, p\.y, p\.z, landNoise\(p\.landSpeed\) \* k, 'land'\);/);
     // no other player-movement noise source exists
-    expect(game.match(/this\.worldNoise\(/g)!.length).toBe(3); // run, land, the physics adapter's raise
+    // run, land, the physics adapter's raise — and (re-pinned, refinement batch) the acid canister's burst: an impact where it shatters,
+    // not a sound of the player's movement
+    expect(game).toMatch(/noise: \(x, y, z\) => this\.worldNoise\(x, y, z, 14, 'impact'\),/);
+    expect(game.match(/this\.worldNoise\(/g)!.length).toBe(4);
     // the player's one detectability factor (Night Shift Porter) applies once, as to gunfire
     expect(game).toMatch(/const k = this\.beerEffects\?\.perceptionMult\(\) \?\? 1;\n\s+if \(step && p\.sprinting\)/);
   });

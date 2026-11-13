@@ -24,11 +24,11 @@
 // awaits: no frame, save or other system runs between the debit and the unit (or the refund). No loot table, RNG stream or supply
 // number is read or changed by any of this.
 
-import type {Inventory, ItemStack} from '../items/inventory';
+import {storeRefusal, type Inventory, type ItemStack} from '../items/inventory';
 import {itemDef} from '../items/items';
 import {equipmentSeqOf, type EquipmentKind} from './equipment';
 import type {EquipmentStore, EquipmentSystemLike, EquipmentUnit} from './equipmentApi';
-import {RECIPE_MATERIALS, type Recipe, type RecipeMaterial} from './recipes';
+import {RECIPE_MATERIALS, type MadeOutput, type MadeRecipe, type Recipe, type RecipeMaterial, type UpgradeId} from './recipes';
 
 export type MaterialSourceKind = 'carried' | 'backpack' | 'lockbox' | 'chest';
 
@@ -181,9 +181,9 @@ export interface CraftTake {
 export type MissingMaterials = Partial<Record<RecipeMaterial, number>>;
 
 /** The exact draw for one recipe, in source order per material. */
-export interface CraftPlan {
+export interface CraftPlan<K extends string = EquipmentKind> {
   ok: true;
-  kind: EquipmentKind;
+  kind: K;
   takes: CraftTake[];
 }
 
@@ -194,7 +194,7 @@ export interface CraftShort {
 }
 
 /** What one craft would draw from where (carried first, then the backpack, the Lockbox, the chests) — or what is missing. Changes nothing. */
-export function planCraft(recipe: Recipe, sources: readonly MaterialSource[]): CraftPlan | CraftShort {
+export function planCraft<K extends string = EquipmentKind>(recipe: {readonly kind: K; readonly cost: Recipe['cost']}, sources: readonly MaterialSource[]): CraftPlan<K> | CraftShort {
   const takes: CraftTake[] = [];
   const missing: MissingMaterials = {};
   let short = false;
@@ -234,7 +234,7 @@ export interface RecipeNeed {
  * the craft: every need is ok exactly when planCraft(recipe, sources) finds a plan, and `have` is countMaterials(sources)' total.
  * Changes nothing. `counts`: countMaterials(sources) when the caller has it already (several recipes over one source list).
  */
-export function recipeNeeds(recipe: Recipe, sources: readonly MaterialSource[], counts: MaterialCounts = countMaterials(sources)): RecipeNeed[] {
+export function recipeNeeds(recipe: Pick<Recipe, 'cost'>, sources: readonly MaterialSource[], counts: MaterialCounts = countMaterials(sources)): RecipeNeed[] {
   const out: RecipeNeed[] = [];
   for (const m of RECIPE_MATERIALS) {
     const need = recipe.cost[m];
@@ -246,8 +246,8 @@ export function recipeNeeds(recipe: Recipe, sources: readonly MaterialSource[], 
 }
 
 /** What applyCraft did: enough to put every unit back exactly. */
-export interface CraftReceipt {
-  plan: CraftPlan;
+export interface CraftReceipt<K extends string = EquipmentKind> {
+  plan: CraftPlan<K>;
   undo: StackUndo[];
   touched: MaterialSource[];
 }
@@ -265,7 +265,7 @@ function restore(undo: readonly StackUndo[], touched: readonly MaterialSource[])
  * Draw a plan from the sources, synchronously and exactly. Returns the receipt — or null when the plan no longer fits the sources (a
  * stale plan: everything already drawn is put back first, nothing changed).
  */
-export function applyCraft(plan: CraftPlan, sources: readonly MaterialSource[]): CraftReceipt | null {
+export function applyCraft<K extends string = EquipmentKind>(plan: CraftPlan<K>, sources: readonly MaterialSource[]): CraftReceipt<K> | null {
   const undo: StackUndo[] = [], touched: MaterialSource[] = [];
   for (const t of plan.takes) {
     const s = sources.find(x => x.id === t.source);
@@ -278,7 +278,7 @@ export function applyCraft(plan: CraftPlan, sources: readonly MaterialSource[]):
 }
 
 /** Put a debit back exactly: the same stack objects, at the same slots, with the same counts. */
-export function refundCraft(receipt: CraftReceipt): void {
+export function refundCraft(receipt: CraftReceipt<string>): void {
   restore(receipt.undo, receipt.touched);
 }
 
@@ -327,4 +327,148 @@ export function craft(recipe: Recipe, ctx: CraftContext): CraftResult {
     return error === undefined ? {ok: false, reason: 'failed', text: CRAFT_TEXT.failed} : {ok: false, reason: 'failed', text: CRAFT_TEXT.failed, error};
   }
   return {ok: true, unit, plan};
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Made recipes (task studio-refinement-batch-20261113-035659-01): a batch of an item, or a permanent train upgrade
+//
+// THE SAME TRANSACTION, another last step: 1. madeBlock — refused with its text, nothing changes (an item batch needs room for ALL of
+// it on you + in the Lockbox, counted before the debit — the debit can only free room; an upgrade asks its system); 2. planCraft;
+// 3. applyCraft; 4. deliver: the batch is added to the inventory (Inventory.add: the grenade slot first, then its usual order) up to
+// the room it has, the rest into the Lockbox (same item first, then empty slots); an upgrade is installed. If that last step cannot
+// complete (or throws), everything it changed is put back exactly and refundCraft returns the materials: no item is ever created
+// without its materials spent, nor materials spent without the whole output.
+
+/** Where a made item batch goes (the carried inventory, then the train Lockbox). */
+export interface MadeItemsTarget {
+  inv: Inventory;
+  lockbox?: {slots: (ItemStack | null)[]; version: number} | null;
+}
+
+/** The permanent train upgrades (world/trainArmor.ts TrainUpgradesApi). */
+export interface MadeUpgradesTarget {
+  /** Why it cannot be fitted now (null: it can). */
+  block(id: UpgradeId): string | null;
+  /** Fit it; false = it was not fitted. */
+  install(id: UpgradeId): boolean;
+}
+
+export interface MadeContext {
+  sources: readonly MaterialSource[];
+  items?: MadeItemsTarget | null;
+  upgrades?: MadeUpgradesTarget | null;
+}
+
+export type MadeResult =
+  | {ok: true; made: MadeOutput; plan: CraftPlan<MadeRecipe['kind']>; carried: number; lockbox: number}
+  | {ok: false; reason: 'blocked' | 'missing' | 'failed'; text: string; missing?: MissingMaterials; error?: unknown};
+
+export const MADE_TEXT = {
+  /** No destination for items / no upgrade system (outside a parked train). */
+  unavailable: 'The bench cannot make that here',
+  noRoom: (n: number, name: string) => `No room for ${n} × ${name} on you or in the Lockbox — free a slot first`,
+} as const;
+
+/** How many of `itemId` fit in a plain slot list: what is missing from its stacks + whole empty slots. */
+function listRoom(list: readonly (ItemStack | null)[], itemId: string, max: number): number {
+  let n = 0;
+  for (const s of list) n += !s ? max : s.itemId === itemId ? Math.max(0, max - s.count) : 0;
+  return n;
+}
+
+/** How many of `itemId` the inventory would take now — exactly Inventory.add's places: the grenade slot (a throwable), the quick slots + pockets. */
+export function carriedRoom(inv: Inventory, itemId: string): number {
+  const def = itemDef(itemId), max = def.stackMax;
+  let n = 0;
+  if (def.kind === 'throwable') {
+    const t = inv.throwSlot[0];
+    n += !t ? max : t.itemId === itemId ? Math.max(0, max - t.count) : 0;
+  }
+  return n + listRoom(inv.hotbar, itemId, max) + listRoom(inv.pack, itemId, max);
+}
+
+/** How many of `itemId` the Lockbox would take now (its store rule respected). */
+export function lockboxRoom(box: {slots: (ItemStack | null)[]} | null | undefined, itemId: string): number {
+  if (!box || storeRefusal(box.slots, itemId)) return 0;
+  return listRoom(box.slots, itemId, itemDef(itemId).stackMax);
+}
+
+/** Why a made recipe would be refused now (null: it would go through if the materials are there). Changes nothing. */
+export function madeBlock(recipe: MadeRecipe, ctx: Pick<MadeContext, 'items' | 'upgrades'>): string | null {
+  const m = recipe.make;
+  if (m.type === 'upgrade') return ctx.upgrades ? ctx.upgrades.block(m.id) : MADE_TEXT.unavailable;
+  const t = ctx.items;
+  if (!t) return MADE_TEXT.unavailable;
+  return carriedRoom(t.inv, m.itemId) + lockboxRoom(t.lockbox, m.itemId) >= m.count ? null : MADE_TEXT.noRoom(m.count, itemDef(m.itemId).name);
+}
+
+/** Slot lists as they are (every slot's stack object + count) and the exact way back. */
+function snapshotSlots(lists: (ItemStack | null)[][]): () => void {
+  const saved = lists.map(l => l.map(s => (s ? {s, n: s.count} : null)));
+  return () => {
+    lists.forEach((l, i) => saved[i].forEach((v, k) => { l[k] = v ? v.s : null; if (v) v.s.count = v.n; }));
+  };
+}
+
+/** Put a batch into the inventory (up to its room) and the Lockbox (the rest). Returns where it went, or null (everything put back). */
+function deliverItems(t: MadeItemsTarget, itemId: string, count: number): {carried: number; lockbox: number} | null {
+  const inv = t.inv, box = t.lockbox ?? null, max = itemDef(itemId).stackMax;
+  const undo = snapshotSlots([inv.throwSlot, inv.hotbar, inv.pack, ...(box ? [box.slots] : [])]);
+  const verInv = inv.version, verBox = box?.version ?? 0;
+  const back = () => {
+    undo();
+    inv.version = verInv + 1;
+    if (box) box.version = verBox + 1;
+  };
+  let carried = 0, rest = count;
+  try {
+    carried = Math.min(count, carriedRoom(inv, itemId));
+    if (carried > 0) carried -= inv.add(inv.makeStack(itemId, carried));
+    rest = count - carried;
+    if (rest > 0 && box) rest = fillLockbox(inv, box, itemId, rest, max);
+  } catch (err) { back(); throw err; }
+  if (rest > 0) { back(); return null; }
+  inv.version++;
+  if (box && count - carried > 0) box.version++;
+  return {carried, lockbox: count - carried};
+}
+
+/** Put `rest` of an item into the Lockbox: its same-item stacks first, then empty slots. Returns what did not fit. */
+function fillLockbox(inv: Inventory, box: {slots: (ItemStack | null)[]}, itemId: string, rest: number, max: number): number {
+  if (storeRefusal(box.slots, itemId)) return rest;
+  for (const s of box.slots) {
+    if (rest <= 0) break;
+    if (!s || s.itemId !== itemId || s.count >= max) continue;
+    const k = Math.min(rest, max - s.count);
+    s.count += k;
+    rest -= k;
+  }
+  for (let i = 0; i < box.slots.length && rest > 0; i++) {
+    if (box.slots[i]) continue;
+    const k = Math.min(rest, max);
+    box.slots[i] = inv.makeStack(itemId, k);
+    rest -= k;
+  }
+  return rest;
+}
+
+/** THE craft of a made recipe: block -> plan -> debit -> the batch / the upgrade; any refusal leaves everything exactly as it was. */
+export function craftMade(recipe: MadeRecipe, ctx: MadeContext): MadeResult {
+  const block = madeBlock(recipe, ctx);
+  if (block) return {ok: false, reason: 'blocked', text: block};
+  const plan = planCraft(recipe, ctx.sources);
+  if (!plan.ok) return {ok: false, reason: 'missing', text: missingText(plan.missing), missing: plan.missing};
+  const receipt = applyCraft(plan, ctx.sources);
+  if (!receipt) return {ok: false, reason: 'failed', text: CRAFT_TEXT.failed};
+  const m = recipe.make;
+  let where: {carried: number; lockbox: number} | null = null, error: unknown;
+  try {
+    if (m.type === 'item') where = deliverItems(ctx.items!, m.itemId, m.count);
+    else where = ctx.upgrades!.install(m.id) ? {carried: 0, lockbox: 0} : null;
+  } catch (err) { error = err; }
+  if (!where) {
+    refundCraft(receipt);
+    return error === undefined ? {ok: false, reason: 'failed', text: CRAFT_TEXT.failed} : {ok: false, reason: 'failed', text: CRAFT_TEXT.failed, error};
+  }
+  return {ok: true, made: m, plan, ...where};
 }

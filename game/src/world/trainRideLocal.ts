@@ -24,6 +24,7 @@ import {lockboxFootprint} from './trainLockbox';
 import {consoleLocalRect, type ConsoleRect} from './trainConsole';
 import {chipperFootprint, chipperPlacement} from './chipperPlace';
 import {benchFootprint, benchPlacement} from '../craft/trainFixtures';
+import {saveTerminalPlacement} from './trainSaveTerminalPlace';
 
 export interface P3 { x: number; y: number; z: number }
 
@@ -38,7 +39,7 @@ export interface RideLocalModel {
   /** The collision boxes (step frame; grounded below the floor, taller than the ceiling: solid columns). */
   props: PropIndex;
   boxes: PropPlacement[];
-  /** Named boxes (tests / QA): side walls, end walls, partitions, console, lockbox, chipper, bench. */
+  /** Named boxes (tests / QA): side walls, end walls, partitions, console, lockbox, chipper, bench, saveTerminal. */
   named: Record<string, PropPlacement>;
   /** The console box used (train-local). */
   console: ConsoleRect;
@@ -60,6 +61,16 @@ export function setRideCargoBoxes(model: RideLocalModel, owner: string, boxes: r
   if (boxes?.length) c.boxes.set(owner, [...boxes]); else c.boxes.delete(owner);
   if (!c.boxes.size) { model.props = c.base; model.cargo = undefined; return; }
   model.props = new PropIndex(model.levels, [...model.boxes, ...[...c.boxes.values()].flat()]);
+}
+
+/**
+ * Task studio-refinement-batch-20261113-035659-01 (lane ARMOR): the fitted train armour (world/trainArmorLayout.ts piece boxes, train-local)
+ * as riding collision, owner 'train-armor' of the riding cargo seam above (null / empty: none). The plates stand outside the side walls /
+ * ends, so a body inside the car never meets them; they are solid wherever the model reaches (the colliders match the parked car's).
+ */
+export function setRideArmorBoxes(model: RideLocalModel, boxes: readonly {x0: number; x1: number; z0: number; z1: number}[] | null): void {
+  const H = model.spec.ceilingY + 3;
+  setRideCargoBoxes(model, 'train-armor', boxes?.length ? boxes.map(b => box(b.x0, b.x1, b.z0, b.z1, H)) : null);
 }
 
 const box = (x0: number, x1: number, z0: number, z1: number, h: number): PropPlacement => ({
@@ -110,6 +121,8 @@ export function buildRideLocalModel(spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC, c
   if (ch) { const fp = chipperFootprint(ch); named.chipper = box(fp.x0, fp.x1, fp.z0, fp.z1, H); }
   const bn = benchPlacement(spec); // task train-crafting: the crafting bench (craft/trainFixtures.ts)
   if (bn) { const fp = benchFootprint(bn); named.bench = box(fp.x0, fp.x1, fp.z0, fp.z1, H); }
+  const sv = saveTerminalPlacement(spec); // task refinement-batch (lane SAVE): the save terminal's wall shelf left of the desk
+  if (sv) named.saveTerminal = box(sv.box.x0, sv.box.x1, sv.box.z0, sv.box.z1, H);
   const boxes = Object.values(named);
   const levels = new Levels([{id: 0, role: 'main', grid, baseY: 0}], [], []);
   return {spec, levels, grid, props: new PropIndex(levels, boxes), boxes, named, console: cr};

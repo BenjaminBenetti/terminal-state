@@ -10,7 +10,8 @@
 // never used, equipped, held as a weapon or thrown; it stacks in the pockets first (like ammo).
 // Task office-props-physics-scale-20261030 (lane RACK): 'material' = collectible crafting salvage (items/craftMaterials.ts): passive
 // like 'supply' (never used / equipped / thrown; pockets first). Since task studio-train-crafting-v1-20261111-225628-01 the train's
-// crafting bench consumes scrap metal and electrical parts (craft/recipes.ts); nothing consumes Bio mater yet.
+// crafting bench consumes scrap metal and electrical parts (craft/recipes.ts) — and, since task studio-refinement-batch-20261113-035659-01,
+// bio mater (the acid / lure grenades: items/grenades.ts).
 // Task reactor-build-20261101 (lane RESTART): 'part' = a finite restart part of THE REACTOR (startup key, fuse cartridge): passive
 // (never used / equipped / thrown; pockets first), placed once by the level generator, never in a loot table; a control consumes it.
 // Task studio-market-rework-20261108-074144-01 (lane TRADE): 'currency' = the survivor market's Rail Ties (items/railTies.ts): passive
@@ -33,7 +34,8 @@ export type IconKey =
   | 'reactorKey' | 'fuseCartridge' // task reactor-build-20261101 (lane RESTART): the reactor restart parts
   | 'railTies' // task studio-market-rework-20261108-074144-01 (lane TRADE): the market's Rail Ties (items/railTies.ts)
   | BeerIconKey // task studio-market-bar-20261108-225231-01 (lane BEER): the market bar's beers (items/beers.ts)
-  | WeaponVarietyIconKey; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve new weapons (ui/weaponVarietyIcons.ts)
+  | WeaponVarietyIconKey // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve new weapons (ui/weaponVarietyIcons.ts)
+  | GrenadeIconKey; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades (items/grenades.ts)
 
 /** How a consumable is used: wording, sound and the stat it mainly restores ('use': the flashlight battery). */
 export type ConsumeVerb = 'apply' | 'eat' | 'drink' | 'use';
@@ -73,6 +75,7 @@ import {RAIL_TIES_DIMS, RAIL_TIES_ITEMS} from './railTies'; // task studio-marke
 import {BEER_DIMS, BEER_ITEMS, beerEffectText, isBeer, type BeerIconKey} from './beers'; // task studio-market-bar-20261108-225231-01: the market bar's beers
 import {PANTRY_DIMS, PANTRY_DRINK_IDS, PANTRY_FOOD_IDS, PANTRY_ITEMS, type PantryIconKey} from './pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
 import {VARIETY_WEAPON_ITEMS, type WeaponVarietyIconKey} from './weaponVarietyItems'; // task studio-weapon-variety-production-20261109-224355-01: the twelve new weapons
+import {GRENADE_DIMS, GRENADE_ITEMS, isGrenadeItem, type GrenadeIconKey} from './grenades'; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades
 
 // + bread (task office-props-physics-scale-20261030, lane FURN): only bakery display cases hold it (items/lootTables.ts BAKERY_ROWS)
 // + the Skyways ramen restaurant's ramen bowls / bento and bubble tea (task studio-skyways-level-20261106-054448, lane FOOD: items/skywaysFood.ts)
@@ -155,6 +158,7 @@ export const ITEMS: Record<string, ItemDef> = {
   // every earlier entry keeps its catalogue order (icon builds, fixtures); they appear only by family substitution (items/pantryVariety.ts) ---
   ...PANTRY_ITEMS,
   ...VARIETY_WEAPON_ITEMS, // task studio-weapon-variety-production-20261109-224355-01 (items/weaponVarietyItems.ts)
+  ...GRENADE_ITEMS, // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades (items/grenades.ts; bench only, never loot) — appended last
 };
 
 export function itemDef(id: string): ItemDef {
@@ -183,7 +187,8 @@ export function effectText(def: ItemDef): string {
 
 /** Iteration 12 (LIGHT): weapon-panel hint while a throwable (flare) is held. */
 export function throwHint(def: ItemDef): string {
-  return `Hold click or G to ready ${def.short.toLowerCase()} · release to throw`; // Iteration 15: grenade-style; INTERACT (#6): G (was T)
+  const what = isGrenadeItem(def.id) ? `the ${def.short.toLowerCase()} grenade` : def.short.toLowerCase(); // (a crafted grenade: "ready the acid grenade")
+  return `Hold click or G to ready ${what} · release to throw`; // Iteration 15: grenade-style; INTERACT (#6): G (was T)
 }
 
 /** Weapon-panel hint while a consumable is held. */
@@ -254,6 +259,7 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   fuse_cartridge: {w: 0.3, d: 0.062, h: 0.0623, shape: 'flat'},
   ...RAIL_TIES_DIMS, // task studio-market-rework-20261108-074144-01 (lane TRADE): the code-built tie bundle (world/railTiesModel.ts)
   ...BEER_DIMS, // task studio-market-bar-20261108-225231-01: the beer bottles
+  ...GRENADE_DIMS, // task studio-refinement-batch-20261113-035659-01: the cooked acid / lure canisters' bounds (assets/grenades.generated.ts)
 };
 
 export function itemDims(id: string): ItemDims {

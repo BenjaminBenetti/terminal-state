@@ -111,6 +111,38 @@ export function poseCarry(actor: PosedActor): void {
 }
 
 /**
+ * Task studio-refinement-batch-20261113-035659-01 (lane DROPS): a 'fallen' pose (a dropped body's ragdoll at rest, its record's `bones` /
+ * `hips`) back on the bones — the bind pose first, then every recorded bone's local rotation by name and the pelvis' local position (a
+ * name the body does not have is skipped; a bone the record lacks keeps its bind rotation). Returns how many recorded bones were set.
+ */
+export function poseFallen(actor: PosedActor, bones: Readonly<Record<string, readonly number[]>>, hips: readonly number[] | undefined): number {
+  const binds = bindLocals(actor.root);
+  toBind(binds);
+  let n = 0;
+  for (const [b] of binds) {
+    const q = bones[b.name];
+    if (q) { b.quaternion.set(q[0], q[1], q[2], q[3]).normalize(); n++; }
+    if (b.name === 'Hips' && hips) b.position.set(hips[0], hips[1], hips[2]);
+  }
+  actor.root.updateMatrixWorld(true);
+  return n;
+}
+
+/** Lane DROPS: the current pose's bone locals as a 'fallen' record's `bones` (rounded unit quaternions, by name) + the pelvis' position. */
+export function readFallen(root: THREE.Object3D, round: (v: number) => number): {bones: Record<string, [number, number, number, number]>; hips: [number, number, number] | null} {
+  const bones: Record<string, [number, number, number, number]> = {};
+  let hips: [number, number, number] | null = null;
+  for (const [b] of bindLocals(root)) {
+    const q = b.quaternion.clone().normalize();
+    const v = [round(q.x), round(q.y), round(q.z), round(q.w)];
+    const len = Math.hypot(v[0], v[1], v[2], v[3]) || 1;
+    bones[b.name] = v.map(c => round(c / len)) as [number, number, number, number];
+    if (b.name === 'Hips') hips = [round(b.position.x), round(b.position.y), round(b.position.z)];
+  }
+  return {bones, hips};
+}
+
+/**
  * The lift (unscaled model metres; + up) that puts the CURRENT pose's lowest skinned vertex exactly on the root's floor: CPU skinning of
  * every `stride`-th bind-space vertex (three's SkinnedMesh.applyBoneTransform, the shader's maths) measured in the root's frame. The
  * authored deaths end within millimetres of the floor; a flowing garment (the Siren's dress) may sink a few centimetres — this keeps

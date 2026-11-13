@@ -21,6 +21,13 @@
 // last seen spot (unless stuck / unreachable), lingers there, then returns to wander; it re-acquires a
 // light that reappears. Seeing the player always wins (the normal chase / attack), and gunfire / damage alert
 // it as before. Worlds without `lights` / `seePoint` (older tests) never investigate.
+//
+// Task studio-refinement-batch-20261113-035659-01 (lane LURE): the lure grenade's SCENT (ai/scentLure.ts) drives the same
+// 'investigate' state (LureState.kind 'scent'): smelt within 20 m in 3D with no sight / view test (walls and slabs do not stop
+// it), checked on the light timer; it pulls LURABLE enemies and a chaser that lost sight of the player (no fresh gunshot / hit);
+// an active scent beats a light; the goal is the canister, never the player. Worlds without `scents` never smell anything.
+// Task studio-refinement-scope-finish-20261113-080904-01: the BB (ai/bb.ts) is drawn too — on the floor through this machine (its
+// own clock / sight feed scentable() through sinceAlert() / lostSight()), off the floor through scentDraw().
 
 import type {ZombieType} from '../gen/station';
 import type {ZombieSpawn} from '../gen/stationTypes';
@@ -28,6 +35,7 @@ import type {Waypoint} from '../gen/grid';
 import {CLIMB, climbDuration, ladderClimbPath, sampleClimb, type ClimbPath, type Ladder, type Vec3} from '../gen/traversal';
 import type {LightSource, LightSourceKind} from '../world/lightSources';
 import {LURE, perceiveLight, type LurePart, type LureSighting, type SeePoint} from './lightLure';
+import {SCENT, perceiveScent, type ScentEmitter, type ScentSighting} from './scentLure'; // lane LURE (refinement batch 2026-11-13)
 import type {CrawlWorld} from './bbSurface';
 import {ATRIUM_CHASE} from './chaseShare'; // Task track3-eaton-centre-20261031 (lane HORDE, atrium AI)
 import {SPRINTER, isSprinter} from './sprinter'; // Task studio-sprinter-zombies-20261112-033210-01
@@ -102,8 +110,9 @@ export interface PatrolLink {
 
 /** Iteration 12 (AI): an enemy's current light investigation (QA reads it through `brain.lure`). */
 export interface LureState {
+  /** The light's id — or, with kind 'scent' (lane LURE), the scent emitter's id (ai/scentLure.ts; its own id space). */
   lightId: number;
-  kind: LightSourceKind;
+  kind: LightSourceKind | 'scent';
   part: LurePart;
   /** Last seen light point (world, absolute y). */
   x: number; y: number; z: number;
@@ -122,6 +131,8 @@ export interface LureState {
   repathT: number;
   stuckT: number;
   stucks: number;
+  /** (lane LURE, scent only) the walk's path search is queued in the background (path service): ask again next frame. */
+  pending?: boolean;
 }
 /** Vertical reach of a swipe (m between feet heights). */
 export const ATTACK_REACH_Y = 0.9;
@@ -155,6 +166,11 @@ export interface BrainWorld {
   seePoint?: SeePoint;
   /** Iteration 12 (AI): standable [x, z, floor] near a lit point on the storey containing it (absent / null: the point on the enemy's storey). */
   lureGoal?(x: number, y: number, z: number): [number, number, number] | null;
+  /**
+   * Task studio-refinement-batch-20261113-035659-01 (lane LURE): the lure grenade's ACTIVE scent emitters this frame (Game.scents.list,
+   * ai/scentLure.ts): smelt within their radius in 3D, no sight needed. Absent / empty: no scent (the established behaviour).
+   */
+  scents?: readonly ScentEmitter[];
   /**
    * Task track3-eaton-centre-20261031 (lane HORDE, atrium AI): an OPEN-ATRIUM level (the mall: the game sets it only for a layout
    * with `mall`; ai/chaseShare.ts ATRIUM_CHASE). A chase re-plan toward a SEEN player on another storey is then offered to the
@@ -351,6 +367,13 @@ export class ZombieBrain {
   /** Iteration 12 (AI): countdown to the next light check, and a private jitter stream (never consumes world.rand). */
   private lureCheckT: number;
   private lureSeed: number;
+  /** Lane LURE (scent): scent checks run / scent investigations started (QA counters; light checks stay in lureChecks). */
+  scentChecks = 0;
+  scentStarts = 0;
+  /** Lane LURE: brain time of the last gunshot heard / hit taken (a fresh alert is hunted before any scent: SCENT.alertHoldS). */
+  private alertT = -Infinity;
+  /** Lane LURE: scent emitters this enemy gave up on (no route there; at most SCENT.max, newest last). */
+  private scentIgnore: number[] = [];
   /** Task track3-eaton-centre-20261031 (lane HORDE): the roaming-horde group steering this member's 'patrol' state; null = ordinary enemy. */
   escort: PatrolLink | null = null;
   /** Lane HORDE (atrium AI, w.atrium only): goal of the last planned chase route [x, z, y] and when; re-plans skipped by the throttle (QA). */
@@ -405,6 +428,7 @@ export class ZombieBrain {
     if (Math.hypot(x - this.x, z - this.z, y === undefined ? 0 : y - this.y) > radius) return;
     this.lastKnown = [x, z, y];
     this.aware = true;
+    this.alertT = this.t; // lane LURE: hunted before any scent for SCENT.alertHoldS
     if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate' || this.state === 'patrol') {
       this.setState('chase');
       this.repathT = 0;
@@ -425,6 +449,7 @@ export class ZombieBrain {
     this.hp -= amount;
     this.lastKnown = [fromX, fromZ, fromY];
     this.aware = true;
+    this.alertT = this.t; // lane LURE: as hear()
     if (this.hp <= 0) {
       this.hp = 0;
       this.setState('dead');
@@ -551,9 +576,13 @@ export class ZombieBrain {
     this.lureCheckT -= dt;
     if (this.lureCheckT <= 0) {
       this.lureCheckT = LURE.period * (0.8 + 0.4 * this.lureRnd());
-      if (!sees && w.lights?.length && w.seePoint && LURABLE.has(this.state)) {
+      // lane LURE: the lure grenade's scent first (no rays: 3D reach only); an active scent in reach beats any light
+      const c = !sees && w.scents?.length && this.scentable() ? this.smell(w.scents) : null;
+      if (c) this.noticeScent(w, c);
+      else if (!sees && w.lights?.length && w.seePoint && LURABLE.has(this.state)) {
         this.lureChecks++;
-        const s = perceiveLight(this, w.lights, w.seePoint, this.state === 'investigate' && this.lure ? this.lure.lightId : null);
+        const L = this.lure; // (lane LURE: a followed scent's id is no light id)
+        const s = perceiveLight(this, w.lights, w.seePoint, this.state === 'investigate' && L && L.kind !== 'scent' ? L.lightId : null);
         if (s) this.noticeLight(w, s);
       }
     }
@@ -750,6 +779,67 @@ export class ZombieBrain {
   }
 
   /**
+   * Lane LURE: can a scent draw this enemy now? The LURABLE states, and a chase that has not seen the player for SCENT.lostSightS
+   * (the lure shakes pursuers) — never within SCENT.alertHoldS of a gunshot heard / a hit taken (it hunts that first).
+   */
+  private scentable(): boolean {
+    if (this.sinceAlert() < SCENT.alertHoldS) return false;
+    return LURABLE.has(this.state) || (this.state === 'chase' && this.lostSight() >= SCENT.lostSightS);
+  }
+
+  /**
+   * Lane LURE: seconds since the last gunshot heard / hit taken, and seconds without sight of the player — what scentable() reads.
+   * (ai/bb.ts BbBrain: its own clock, noise / hit and 3D sight, which also run while it is off the floor; every other brain: these.)
+   */
+  protected sinceAlert(): number {
+    return this.t - this.alertT;
+  }
+  protected lostSight(): number {
+    return this.unseenT;
+  }
+
+  /**
+   * Lane LURE (ai/bb.ts BbBrain off the floor, where this machine's own update does not run): the scent that draws it now under the
+   * same rules and with the same bookkeeping as the check in update() — scentable(), smell() (sticky, given-up ones skipped, counted).
+   * The caller has already ruled out a player in sight.
+   */
+  protected scentDraw(w: BrainWorld): ScentSighting | null {
+    return w.scents?.length && this.scentable() ? this.smell(w.scents) : null;
+  }
+
+  /** Lane LURE: the strongest scent in reach (ai/scentLure.ts perceiveScent; the followed one is sticky, given-up ones skipped). */
+  private smell(scents: readonly ScentEmitter[]): ScentSighting | null {
+    this.scentChecks++;
+    const L = this.lure;
+    return perceiveScent(this, scents, this.state === 'investigate' && L && L.kind === 'scent' ? L.lightId : null, this.scentIgnore.length ? this.scentIgnore : null);
+  }
+
+  /**
+   * Lane LURE: a scent reached it — start investigating the CANISTER (a standable point beside it on its storey), or refresh /
+   * retarget the investigation (the canister moved, a stronger scent, a light investigation taken over). Only the lure state
+   * changes: the last known player position and awareness are untouched (the goal is the emitter, never the player).
+   */
+  private noticeScent(w: BrainWorld, c: ScentSighting): void {
+    const e = c.emitter;
+    const g = w.lureGoal?.(e.x, e.y + SCENT.goalLift, e.z) ?? [e.x, e.z, e.y];
+    const L = this.lure;
+    if (this.state !== 'investigate' || !L) {
+      this.lure = {lightId: e.id, kind: 'scent', part: 'emitter', x: e.x, y: e.y, z: e.z, gx: g[0], gz: g[1], gy: g[2],
+        seenT: this.t, startT: this.t, phase: 'approach', lingerT: 0, stop: LURE.arrive + this.lureRnd() * LURE.arriveJitter,
+        pathGoal: null, repathT: 0, stuckT: 0, stucks: 0};
+      this.path = [];
+      this.setState('investigate');
+      this.scentStarts++;
+      return;
+    }
+    if (L.kind !== 'scent' || L.lightId !== e.id) { L.stucks = 0; L.pending = false; } // another target: its own give-up count
+    L.lightId = e.id; L.kind = 'scent'; L.part = 'emitter';
+    L.x = e.x; L.y = e.y; L.z = e.z; L.gx = g[0]; L.gz = g[1]; L.gy = g[2];
+    L.seenT = this.t;
+    if (L.phase === 'linger') { L.phase = 'approach'; L.stucks = 0; }
+  }
+
+  /**
    * Iteration 12 (AI): the 'investigate' state body. approach: walk (wander speed x LURE.speedMult) to the goal near the
    * last seen light point; hold: stand facing a light that is still visible; linger: the light went out / was lost
    * (out of sight LURE.lostGrace s once at the spot or with no way there, or the LURE.pursueAfterLoss safety cap) —
@@ -760,10 +850,20 @@ export class ZombieBrain {
     if (!L) { this.setState('idle', 1); return; }
     const lost = this.t - L.seenT;
     const near = Math.hypot(L.x - this.x, L.z - this.z) <= L.stop && Math.abs(L.gy - this.y) < 1.2;
+    const scent = L.kind === 'scent'; // lane LURE
     if (L.phase !== 'linger') {
       // lost: at the spot, or no way there (stuck / no path, LURE.stuckGiveUp times), or the safety cap; a light still in view
       // that cannot be reached keeps it standing and staring
-      if (lost > LURE.pursueAfterLoss || (lost > LURE.lostGrace && (near || L.stucks >= LURE.stuckGiveUp))) {
+      if (scent) {
+        // lane LURE: a spent / out-of-reach scent like a lost light (walk on to the canister, linger there); no way there, even
+        // while it still smells it: give up and ignore that canister (it never stands smelling an unreachable one)
+        const noWay = L.stucks >= LURE.stuckGiveUp;
+        if (noWay || lost > LURE.pursueAfterLoss || (lost > SCENT.lostGrace && near)) {
+          if (noWay) { this.scentIgnore.push(L.lightId); if (this.scentIgnore.length > SCENT.max) this.scentIgnore.shift(); }
+          L.phase = 'linger';
+          L.lingerT = LURE.linger + this.lureRnd() * LURE.lingerJitter;
+        } else L.phase = near ? 'hold' : 'approach';
+      } else if (lost > LURE.pursueAfterLoss || (lost > LURE.lostGrace && (near || L.stucks >= LURE.stuckGiveUp))) {
         L.phase = 'linger';
         L.lingerT = LURE.linger + this.lureRnd() * LURE.lingerJitter;
       } else L.phase = near ? 'hold' : 'approach';
@@ -772,14 +872,25 @@ export class ZombieBrain {
     if (L.phase === 'approach') {
       L.repathT -= dt;
       const goalMoved = L.pathGoal ? Math.hypot(L.pathGoal[0] - L.gx, L.pathGoal[1] - L.gz) : Infinity;
-      if (L.repathT <= 0 && this.pathFailT <= 0 && (!this.path.length || goalMoved > LURE.repathMove)) {
+      if (scent && (L.pending || (L.repathT <= 0 && this.pathFailT <= 0 && (!this.path.length || goalMoved > LURE.repathMove)))) {
+        // lane LURE: the same level-aware search, offered to the path service's deferral (a scent draws many far enemies at once;
+        // undefined = queued: keep the current path / stand facing the canister, ask again next frame)
+        const path = w.findPath(this.x, this.z, L.gx, L.gz, {drops: true, ay: this.y, by: L.gy, defer: this});
+        L.pending = path === undefined;
+        if (path !== undefined) {
+          L.repathT = LURE.repathMin;
+          this.path = path ?? [];
+          L.pathGoal = [L.gx, L.gz];
+          if (!path) { this.pathFailT = 1.5 + this.lureRnd(); L.stucks++; }
+        }
+      } else if (!scent && L.repathT <= 0 && this.pathFailT <= 0 && (!this.path.length || goalMoved > LURE.repathMove)) {
         L.repathT = LURE.repathMin;
         const path = w.findPath(this.x, this.z, L.gx, L.gz, {drops: true, ay: this.y, by: L.gy});
         this.path = path ?? [];
         L.pathGoal = [L.gx, L.gz];
         if (!path) { this.pathFailT = 1.5 + this.lureRnd(); L.stucks++; }
       }
-      const done = this.followPath(w, out, this.stats.wanderSpeed * LURE.speedMult);
+      const done = this.followPath(w, out, this.stats.wanderSpeed * (scent ? SCENT.speedMult : LURE.speedMult));
       out.anim = 'Walk';
       if (out.speed > 0 && moved < 0.002) L.stuckT += dt; else L.stuckT = 0;
       if (L.stuckT > LURE.stuckTime) { L.stuckT = 0; L.stucks++; this.path = []; L.repathT = 0; }

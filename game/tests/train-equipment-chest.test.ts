@@ -425,6 +425,13 @@ describe('the carried chest: put down', () => {
     expect(uidOf(eq.held)).toBe('eq-1');
     rt.consoleAimed = false;
     expect(h.promptProviders[0]()).toBe(EQUIPMENT_TEXT.putDown(THE));
+    // (refinement batch) at the Save terminal likewise: its [E] saves with the chest in the hands (a held unit saves as the train's)
+    rt.saveAimed = true;
+    expect(h.interactHandlers[0]()).toBe(false);
+    expect(h.promptProviders[0]()).toBeNull();
+    expect(uidOf(eq.held)).toBe('eq-1');
+    rt.saveAimed = false;
+    expect(h.promptProviders[0]()).toBe(EQUIPMENT_TEXT.putDown(THE));
     // the train moves: refused with the reason; no put-down prompt
     void ride.depart();
     run(h, 0.3);

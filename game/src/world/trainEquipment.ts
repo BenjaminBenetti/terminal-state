@@ -197,6 +197,8 @@ interface TrainRuntimeLike {
   train: {placement: TrainPlacement; col?: {statics?: readonly PropPlacement[]; doors?: readonly {leaves: readonly PropPlacement[]}[]}} | null;
   readonly view: {root: THREE.Object3D} | null;
   consoleAimed?: boolean;
+  /** (refinement batch) the Save terminal is aimed: its [E] saves with the chest in the hands. */
+  saveAimed?: boolean;
   carPoint?(lx: number, ly: number, lz: number): P3 | null;
 }
 interface TrainRideLike {
@@ -1168,6 +1170,20 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     this.legacyUnits = waiting;
   }
 
+  /**
+   * Task studio-refinement-batch-20261113-035659-01 (lane MELT, world/acidMelt.ts): a unit STANDING IN THE WORLD destroyed (acid) — out of
+   * the list for good (removeAt: its grab / hold / aim / plug go, its view leaves its parent and is the caller's now), so its records (the
+   * station lane at teardown / flush, the train's aboard()) never name it again. The caller spills its slots (the same stacks). Null: no
+   * such unit in the world (in the hands, riding as cargo, unknown).
+   */
+  destroy(uid: string): LiveUnit | null {
+    const i = this.list.findIndex(u => u.uid === uid && u.mode === 'world');
+    if (i < 0) return null;
+    const u = this.list[i];
+    this.removeAt(i);
+    return u;
+  }
+
   private removeAt(i: number): void {
     if (i < 0) return;
     const u = this.list[i];
@@ -1581,8 +1597,9 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     if (this.grab) { this.letGo('user'); return true; }
     if (!this.held) return false;
     if (this.host.state !== 'playing') return true;
-    // the one other E use while carrying: the train's driving console (its map / a journey with the chest in the hands)
-    if (this.rt?.consoleAimed) return false;
+    // the other E uses while carrying: the train's driving console (its map / a journey) and its Save terminal (a manual save; a held unit
+    // saves as one of the train's: aboard()) — the chest stays in the hands
+    if (this.rt?.consoleAimed || this.rt?.saveAimed) return false;
     this.putDown();
     return true;
   }
@@ -1591,7 +1608,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     const h = this.host;
     if (h.state !== 'playing' || !h.player.alive) return null;
     if (this.grab) return EQUIPMENT_TEXT.letGo(this.grab.unit.def.the);
-    if (!this.held || this.riding || this.rt?.consoleAimed) return null;
+    if (!this.held || this.riding || this.rt?.consoleAimed || this.rt?.saveAimed) return null;
     return EQUIPMENT_TEXT.putDown(this.held.def.the);
   }
 

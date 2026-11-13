@@ -503,7 +503,7 @@ describe('battery / flare items and their authored models', () => {
     expect(useHint(b)).toMatch(/Click to use · flashlight battery 100 %/);
     expect(effectText(b)).toBe('flashlight battery 100 %');
     expect(throwHint(f)).toMatch(/Hold click or G to ready .* release to throw/); // iteration 15: hold to ready, release to throw; INTERACT #6: G (was T)
-    expect(Object.values(ITEMS).filter(d => d.kind === 'throwable').map(d => d.id)).toEqual(['flare']);
+    expect(Object.values(ITEMS).filter(d => d.kind === 'throwable').map(d => d.id)).toEqual(['flare', 'acid_grenade', 'lure_grenade']); // (re-pin, task studio-refinement-batch-20261113-035659-01: the user's crafted acid / lure grenades are throwables too)
     expect(CONTROLS.some(([a, k]) => a === 'Throw equipped grenade' && k.startsWith('Hold G'))).toBe(true); // INTERACT #6: G (was T); campaign-save-controls-fix: item-agnostic
     expect(CONTROLS.some(([a, k]) => a === 'Use held item' && k === 'Left click')).toBe(true); // a battery is used like any held item (campaign-save-controls-fix: no item-specific rows)
   });

@@ -17,6 +17,8 @@ import {BB_BODY, BB_POUNCE, BbBrain, bbShoveStep, type BbPhase, type BbSurface} 
 import {levelsCrawlWorld, type CrawlWorld} from '../../src/ai/bbSurface';
 import {moveZombie, sameLevel, settleZombie} from '../../src/ai/motor';
 import {searchExpand} from '../../src/ai/chaseShare';
+import {lureWorld} from '../../src/ai/lightLure';
+import type {ScentLures} from '../../src/ai/scentLure';
 import type {StationLayout} from '../../src/gen/stationTypes';
 
 export interface BbSimPlayer { x: number; y: number; z: number; eye: number; alive: boolean; radius: number }
@@ -74,6 +76,11 @@ export interface BbSimOpts {
   /** No CrawlWorld for the brain (the floor-only fallback). */
   noCrawl?: boolean;
   seed?: number;
+  /**
+   * Zombie Lure scents (ai/scentLure.ts): the world gets the game's lure fields (lureWorld: no lights) and `scents` = this registry's
+   * active list, and every step ends with its tick (Game.update's scents.tick). Absent: the world has no lure fields, as before.
+   */
+  scents?: ScentLures;
 }
 
 export function bbSim(layout: StationLayout, o: BbSimOpts) {
@@ -101,6 +108,7 @@ export function bbSim(layout: StationLayout, o: BbSimOpts) {
     },
     rand,
     ...(o.noCrawl ? {} : {crawl: cw}),
+    ...(o.scents ? {...lureWorld(L, {attracting: () => []}), scents: o.scents.list} : {}),
   });
 
   const solids = layout.props.filter(p => p.hx > 0 && p.hz > 0 && p.h > 0);
@@ -210,6 +218,7 @@ export function bbSim(layout: StationLayout, o: BbSimOpts) {
     if (P.surface !== surface) { ev(`${surface} -> ${P.surface}`); surface = P.surface; }
     seq = {cackle: P.cackleSeq, windup: P.windupSeq, pounce: P.pounceSeq, land: P.landSeq};
     last = out;
+    o.scents?.tick(dt); // (Game.update after the enemies: the lure's active seconds)
     return out;
   }
   /** Run `seconds` at `dt`; `each` may move the player / stop early (return false). */

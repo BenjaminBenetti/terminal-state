@@ -345,6 +345,8 @@ export class ScreacherBrain extends ZombieBrain {
       los: () => live,
       // no eyes: no light lure, no atrium sight rule, no detectability factor
       lights: undefined, seePoint: undefined, lureGoal: undefined, atriumNotice: false, detect: 1,
+      // (task studio-refinement-batch-20261113-035659-01, lane LURE) it reacts only to sound: the lure grenade's silent scent never draws it
+      scents: undefined,
       // no ladders (the Strainer's rule); track-bed drops stay allowed
       findPath: (ax, az, bx, bz, opts) => w.findPath(ax, az, bx, bz, {...opts, noLinks: true}),
     };

@@ -259,10 +259,18 @@ export class GasSystem {
   }
 
   teardown(): void {
-    if (this.windows) {
-      try { this.host.run.setLaneStore(this.lane, this.windows.save(this.host.clock)); } catch (err) { console.warn('gas: saving the window state failed', err); }
-    }
+    this.flush();
     this.clear();
+  }
+
+  /**
+   * The live world's pane damage / breach ages -> its RUN lane store (what a teardown writes), WITHOUT tearing anything down: task
+   * studio-refinement-batch-20261113-035659-01 (lane SAVE) — a manual save mid-station (Game.saveNow) captures the same record. A pure
+   * read of the panes (idempotent: a later teardown writes it again).
+   */
+  flush(): void {
+    if (!this.windows) return;
+    try { this.host.run.setLaneStore(this.lane, this.windows.save(this.host.clock)); } catch (err) { console.warn('gas: saving the window state failed', err); }
   }
 
   private clear(): void {

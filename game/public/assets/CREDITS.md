@@ -717,6 +717,17 @@ by ear on the build worker. Raw takes are kept outside Git.
 - `assets/audio/chipper-stop.mp3` — chipperStop (Sound Lab job 20261111T004025-1134923694)
 <!-- END train-chipper-audio-20261111 -->
 
+<!-- BEGIN refinement-batch-models-20261113 (build-refinement-batch.mjs) -->
+## Refinement batch: train armour and crafted throwables
+
+Generated for this project from one Codex INITIAL design image each (the owned Codex CLI's built-in image_gen tool) turned into models with Meshy T2.5 image-to-3D (smart topology, 2K PBR) through the Meshy MCP; every model keeps Meshy's own PBR maps (re-encoded only). Task studio-refinement-batch-20261113-035659-01 under the user's fresh 75-credit grant (60 credits billed, 4 generations, each a first attempt). AI-generated assets: unapproved prototypes, no licence or commercial clearance implied. The raw masters, conditioning images and job ledger are kept outside Git. Runtime derivatives by `tools/asset-pipeline/props/build-refinement-batch.mjs` (provenance: `assets/derivatives/refinement-batch-20261113.json`). The train's Save terminal reuses the existing `assets/models/p7-crt-terminal-t25.glb`.
+
+- `assets/models/train-armor-side.glb` — the train armour's side skirt segment (welded rusted plates, a row of blades and spikes, two saw discs; tiled along both sides) (Meshy task 01a1d329-053b-762d-8771-d28ea8556025).
+- `assets/models/train-armor-end.glb` — the train armour's end plough (welded pilot grille with long tapered fins and two saw discs; one at each end of the car) (Meshy task 01a1d32e-47f0-74a7-a4c3-ac4c63fbd0d1).
+- `assets/models/item-acid-grenade.glb` — the Acid Scrapper Grenade (caged glass jar of green acid, taped cap and pull ring) (Meshy task 01a1d328-eb53-76e4-a8aa-8ee1d0203353).
+- `assets/models/item-lure-grenade.glb` — the Zombie Lure (a cloth- and rope-wrapped tin with a perforated lid, wick and pull ring) (Meshy task 01a1d32d-c1a9-75a5-8ffe-678159e349e7).
+<!-- END refinement-batch-models-20261113 -->
+
 <!-- BEGIN enemy-bb-20261113 (build-bb.mjs) -->
 ## The BB (enemy, four bodies)
 

@@ -10,7 +10,7 @@ import {installCanvasShim, ShimContext} from './helpers/canvas2d';
 import {layoutHolders} from './helpers/lootEconomy';
 import {ITEMS, ITEM_DIMS, effectText, itemDef, isFoodOrDrink} from '../src/items/items';
 import {BIO_MATER, ELECTRICAL_PARTS, MATERIAL_IDS, MATERIAL_NOTE, MATERIAL_NOTE_NO_RECIPE, SCRAP_METAL, isMaterialItem, materialNote} from '../src/items/craftMaterials';
-import {RECIPES, RECIPE_MATERIALS} from '../src/craft/recipes';
+import {BENCH_RECIPES, RECIPE_MATERIALS} from '../src/craft/recipes';
 import {itemTipLines} from '../src/ui/itemTip';
 import {Inventory, stacksIn, type AnyRef, type SlotRef} from '../src/items/inventory';
 import {GEAR_SLOTS} from '../src/items/gear';
@@ -46,7 +46,7 @@ describe('the three materials: stable ids, labels, passive kind, honest descript
       for (const k of ['heal', 'hunger', 'thirst', 'verb', 'useTime', 'recharge', 'weaponId', 'gear', 'treats', 'caliber'] as const) expect(d[k], `${id}.${k}`).toBeUndefined();
       expect(effectText(d)).toBe('');
       expect(isFoodOrDrink(d)).toBe(false);
-      const used = RECIPES.some(r => (r.cost as Record<string, number>)[id] > 0);
+      const used = BENCH_RECIPES.some(r => (r.cost as Record<string, number>)[id] > 0); // (re-pin, task studio-refinement-batch-20261113-035659-01: the bench's whole list — bio mater makes the grenades)
       expect((RECIPE_MATERIALS as readonly string[]).includes(id), `${id}: a recipe material`).toBe(used);
       expect(d.description).toMatch(/Nothing to use by hand: a crafting material/);
       if (used) {
@@ -67,7 +67,7 @@ describe('the three materials: stable ids, labels, passive kind, honest descript
     }
     expect(MATERIAL_NOTE).toBe('Crafting material — nothing to use by hand: used at the train\'s crafting bench');
     expect(MATERIAL_NOTE_NO_RECIPE).toBe('Crafting material — nothing to use by hand, and no recipe uses it yet');
-    expect([ELECTRICAL_PARTS, SCRAP_METAL, BIO_MATER].map(materialNote)).toEqual([MATERIAL_NOTE, MATERIAL_NOTE, MATERIAL_NOTE_NO_RECIPE]);
+    expect([ELECTRICAL_PARTS, SCRAP_METAL, BIO_MATER].map(materialNote)).toEqual([MATERIAL_NOTE, MATERIAL_NOTE, MATERIAL_NOTE]); // (re-pin, task studio-refinement-batch-20261113-035659-01: bio mater has recipes now)
     // prompts / toasts name the count and nothing to use
     expect(lotPrompt({itemId: ELECTRICAL_PARTS, count: 2}, true).text).toBe('Take 2 × Electrical parts');
     expect(lotPrompt({itemId: BIO_MATER, count: 1}, false).text).toBe('Take Bio mater — no room');

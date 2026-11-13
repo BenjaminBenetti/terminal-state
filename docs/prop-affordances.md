@@ -661,11 +661,42 @@ they sit outside the two audits; their classification is recorded here.
   nodes of one model so it can turn and tilt.
 - **Plug sockets** (three; `craft/trainFixtures.ts equipmentPlugs`): anchored wall fixtures on the lining (a 16 × 20 cm steel back
   box, a round socket, an indicator lamp). Not storage, no body. A connected device's cable is the fuel hose's tube.
+- **Save terminal** (task studio-refinement-batch-20261113-035659-01, lane SAVE; the reused P7 CRT terminal
+  `assets/models/p7-crt-terminal-t25.glb` at 0.68 scale with its own Meshy maps, no new model or texture; placement
+  `world/trainSaveTerminalPlace.ts`, runtime `world/trainSaveTerminal.ts`):
+  - Not storage: a save console with nothing to open and no loot table. [E] saves the run to its active slot (`Game.saveNow`).
+  - Physics: static, `anchored`. It sits on a small steel wall shelf (plain geometry and material) in the strip between the
+    driving desk's left (-Z) end and the lining, screen to the operator. Shelf and terminal are one solid box for player, enemy and
+    hitscan, parked and riding (`trainColliders`, `buildRideLocalModel`). Shots and bumps don't move it. It is a fixed part of the
+    car, never a layout prop kind, cargo or equipment, so acid never melts it.
+  - No baked clutter: the keyboard is part of the terminal model. The screen is a dynamic canvas texture (the dynamic-text
+    exemption): the "SAVE" heading, the active slot, the slot's last save and the terminal's state. That heading is its label.
+  - Scale (rule 5): `scale-check.mjs --prop game/public/assets/models/p7-crt-terminal-t25.glb --scale 0.68`, viewed beside zombie
+    lastshift (1.78 m, runtime scale 1). 0.30 × 0.31 × 0.34 m, grounded (8 contact clusters, base y 0.0002 m), top 0.31 m: a small
+    terminal. The shelf top is 0.92 m over the car floor. The monitor stands in front of the solid pier between the two -Z cab
+    windows; the keyboard (top 0.957 m) and the shelf lip stay below the 0.98 m window sill.
+- **Train armour** (task studio-refinement-batch-20261113-035659, `docs/train-crafting.md` "Train armour"; models
+  `assets/models/train-armor-{side,end}.glb`, cooked by `tools/asset-pipeline/props/build-refinement-batch.mjs`; layout
+  `world/trainArmorLayout.ts`, runtime `world/trainArmor.ts`): a permanent one-time upgrade fixed to the car's outside.
+  - Not storage: welded plates, blades, saw discs and plough fins. Nothing to open, no loot table.
+  - Physics: static, `anchored`: part of the car body (bolted plating), never a loose prop, cargo or crafted equipment, so acid,
+    shots and bumps don't move or melt it. Solid boxes for player, enemy and hitscan while parked (`world/playerTrain.ts
+    armorColliders`) and in the riding model (`world/trainRideLocal.ts setRideArmorBoxes`). It never covers a door opening, a
+    leaf pocket, a window, a lamp or the boarding path over the door bridges.
+  - No baked clutter: every part is a permanent welded part of the plate.
+  - Scale (rule 5): `scale-check.mjs --prop .../train-armor-side.glb --scale 0.8375,0.8,0.8 --lift 1.395 --prop
+    .../train-armor-side.glb --scale 0.6575,0.8,0.8 --lift 0.11 --prop .../train-armor-end.glb --scale 1.1 --lift 0.515`, viewed
+    beside zombie lastshift (1.78 m, runtime scale 1), plus a CPU render of the whole kit on the cooked car shell. A side skirt
+    segment is 0.40 m tall and 0.22 m deep (1.58–2.01 m long: each free span is filled exactly, X scale 0.66–0.84 against Y / Z
+    0.8). A plough is 2.86 × 0.75 × 0.61 m (W × H × D, uniform 1.1). Mounted, not grounded: the skirts' back faces sit on the
+    side skin 1.10–1.50 m above the rail top (shin to knee of a zombie on the platform, chest to head of one in the track bed),
+    the ploughs' back plates 0.06 m ahead of the end faces, 0.22–0.97 m above the rail top (thigh to chest from the bed).
+  - Tests: `tests/train-armor.test.ts`, `tests/train-armor-save.test.ts`, `tests/train-armor-clearance.test.ts`.
 - **Limits:** at most 24 crafted units in the car and 48 left in one station (`craft/equipment.ts EQUIPMENT_LIMITS`); a craft or a
   departure beyond them is refused. Enemies walk through units on the floor, as they do through fuel carts.
 - **Tests:** `tests/train-equipment-*.test.ts`, `tests/equipment-chest-store.test.ts`, `tests/sentry-ammo.test.ts`,
   `tests/craft-bench.test.ts`, `tests/train-equipment-asset.test.ts`, `tests/sentry-turret-model.test.ts`,
-  `tests/train-crafting-session.test.ts`.
+  `tests/train-crafting-session.test.ts`; the save terminal: `tests/train-save-terminal.test.ts`, `tests/save-manual.test.ts`.
 
 ## 7. Reactor mines set pieces (not layout prop kinds)
 Task reactor-expansion-20261101 (lane MINES). The old mine workings off tier 2 (`gen/reactor/complex/mines*.ts`) dress their drifts

@@ -499,6 +499,13 @@ describe('corpses: the station, the train, the journey', () => {
     expect(h.interactHandlers[0]()).toBe(false); // (the carry handler goes first and lets the console's E through)
     (rt as unknown as {consoleAimed: boolean}).consoleAimed = false;
     expect(prompt(c)).toBe(CORPSE_TEXT.drop);
+    // (refinement batch) so does the Save terminal beside it: its [E] saves with the body held (the carry participant saves it held)
+    (rt as unknown as {saveAimed: boolean}).saveAimed = true;
+    expect(prompt(c)).not.toBe(CORPSE_TEXT.drop);
+    expect(h.interactHandlers[0]()).toBe(false);
+    expect(c.sys.held()?.record.id).toBe(heldId);
+    (rt as unknown as {saveAimed: boolean}).saveAimed = false;
+    expect(prompt(c)).toBe(CORPSE_TEXT.drop);
     void ride.depart();
     run(h, 80, () => ride.phase === 'transit');
     expect(ride.phase).toBe('transit');

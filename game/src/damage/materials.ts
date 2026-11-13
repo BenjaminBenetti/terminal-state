@@ -290,6 +290,7 @@ export const ITEM_CLASS: Record<string, DamageClass> = {
   // task studio-market-bar-20261108-225231-01: the bar's beers — brown glass long-necks
   beer_lager: 'glass', beer_pilsner: 'glass', beer_stout: 'glass', beer_porter: 'glass', beer_bock: 'glass',
   ...WEAPON_VARIETY_CLASS, // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve new weapons
+  acid_grenade: 'sheetMetal', lure_grenade: 'sheetMetal', // task studio-refinement-batch-20261113-035659-01: the crafted throwables' pressed-steel canisters
 };
 export function itemClass(itemId: string): DamageClass {
   return ITEM_CLASS[itemId] ?? 'plastic';
@@ -377,6 +378,8 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   beer_lager: {mass: 0.55, shape: 'cylinder', mat: 'glass'}, beer_pilsner: {mass: 0.55, shape: 'cylinder', mat: 'glass'},
   beer_stout: {mass: 0.55, shape: 'cylinder', mat: 'glass'}, beer_porter: {mass: 0.55, shape: 'cylinder', mat: 'glass'},
   beer_bock: {mass: 0.55, shape: 'cylinder', mat: 'glass'},
+  // task studio-refinement-batch-20261113-035659-01: a filled ~0.5 l steel canister ~0.32 kg (= weapons/grenades.ts GRENADE.mass), upright
+  acid_grenade: {mass: 0.32, shape: 'cylinder', mat: 'metal'}, lure_grenade: {mass: 0.32, shape: 'cylinder', mat: 'metal'},
 };
 export function itemPhysics(itemId: string): ItemPhysics {
   return ITEM_PHYSICS[itemId] ?? {mass: 0.3, shape: 'box', mat: 'plastic'};

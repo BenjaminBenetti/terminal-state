@@ -67,6 +67,25 @@ import {CONSOLE_PROMPT, consoleLocalRect, type ConsoleRect} from './trainConsole
 import {chipperFootprint, chipperPlacement} from './chipperPlace'; // task corpse-chipper: the train's woodchipper (a fixed component)
 import {benchFootprint, benchPlacement} from '../craft/trainFixtures'; // task train-crafting: the crafting bench (a fixed component)
 import {TRAIN_EQUIPMENT_MODELS} from '../assets/trainEquipment.generated'; // task train-crafting: the bench, device modules and roof turret join the car's model catalogue
+import {saveTerminalPlacement} from './trainSaveTerminalPlace'; // task refinement-batch (lane SAVE): the save terminal left of the desk (a fixed component)
+import {TRAIN_ARMOR_MODELS} from '../assets/trainArmor.generated'; // task refinement-batch (lane ARMOR): the armour kit joins the car's model catalogue
+import type {ArmorBox} from './trainArmorLayout';
+
+/**
+ * Task studio-refinement-batch-20261113-035659-01 (lane SAVE): a car fixture whose aim / prompt / glow / [E] go through THIS runtime's
+ * aim (nearest of the doors, the Lockbox, the console and it; the same reach, partitions and occlusion), so the driving desk beside it
+ * never takes its [E]. world/trainSaveTerminal.ts sets PlayerTrainRuntime.saveTerminal. All in the CAR frame (parked and riding).
+ */
+export interface TrainFixtureLink {
+  /** The aim box (train-local), null while the fixture is not on the car. */
+  aimBox(): {x0: number; x1: number; y0: number; y1: number; z0: number; z1: number} | null;
+  /** The meshes that glow while it is aimed (MeshStandardMaterial ones get the highlight clone; others are left as they are). */
+  meshes(): THREE.Mesh[];
+  /** The look-at prompt while aimed. */
+  prompt(): string | null;
+  /** [E] while aimed. */
+  interact(): void;
+}
 
 /**
  * Task studio-alpha-campaign-foundation-20261102-230708-01 (lane RIDE): the link a MOVING car (world/trainRide.ts) gives the runtime.
@@ -92,9 +111,11 @@ export interface TrainRideLink {
 /** The prop library file map of the train models (game.ts propModels catalogue). Task corpse-chipper (lane ASSET): + the chipper fixture
  *  (world/chipperSpec.ts CHIPPER_MODEL, its own cook: assets/trainChipper.generated.ts) — fetched with the car's other models.
  *  Task train-crafting: + the crafting bench, the three device modules and the sentry's roof turret (assets/trainEquipment.generated.ts):
- *  the bench is a fixture of every car and a device can be crafted at any stop, so they are fetched with the car too. */
+ *  the bench is a fixture of every car and a device can be crafted at any stop, so they are fetched with the car too.
+ *  Task studio-refinement-batch-20261113-035659-01 (lane ARMOR): + the armour kit (assets/trainArmor.generated.ts: side skirt, end plough):
+ *  the upgrade can be fitted at any stop and shows the moment it is, so it is fetched with the car too. */
 export const PLAYER_TRAIN_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> =
-  Object.fromEntries([...Object.values(PLAYER_TRAIN_MODELS), CHIPPER_MODEL, ...Object.values(TRAIN_EQUIPMENT_MODELS)].map(m => [m.key, {url: m.url, bytes: m.bytes}]));
+  Object.fromEntries([...Object.values(PLAYER_TRAIN_MODELS), CHIPPER_MODEL, ...Object.values(TRAIN_EQUIPMENT_MODELS), ...Object.values(TRAIN_ARMOR_MODELS)].map(m => [m.key, {url: m.url, bytes: m.bytes}]));
 
 /** Game.sectionModelKeys: the train models for a level that parks the car (playerTrainPlacement is pure and memoized per layout). */
 export function playerTrainModelKeys(layout: StationLayout): string[] {
@@ -209,6 +230,26 @@ export interface TrainColliders {
   topY: number;
   /** Curb height (bed floor -> car floor + curbAbove). */
   curbH: number;
+  /**
+   * Task studio-refinement-batch-20261113-035659-01 (lane ARMOR): the fitted armour (world/trainArmorLayout.ts; empty while not fitted) —
+   * `collide`: grounded columns (bed floor -> each piece's top) for game.propIndex (player / enemy collision: the plates / blades stand
+   * proud of the skin); `shoot`: the pieces' own boxes for layout.props (hitscan / the ragdoll and item statics: a shot stops on a plate,
+   * a body falls past under the belt). Part of the car: in its layoutBoxes, removed with it.
+   */
+  armor: {collide: PropPlacement[]; shoot: PropPlacement[]};
+}
+
+/**
+ * (lane ARMOR) The armour's colliders at `p` (see TrainColliders.armor): one grounded column and one exact box per train-local piece box.
+ * The car's anchored steel kind (BOX_KIND), like the walls.
+ */
+export function armorColliders(p: Pose, boxes: readonly ArmorBox[] | null | undefined, bedY: number, area: number): TrainColliders['armor'] {
+  const collide: PropPlacement[] = [], shoot: PropPlacement[] = [];
+  for (const b of boxes ?? []) {
+    collide.push(propBox(p, area, b.x0, b.x1, b.z0, b.z1, bedY, p.railTopY + b.y1 - bedY));
+    shoot.push(propBox(p, area, b.x0, b.x1, b.z0, b.z1, p.railTopY + b.y0, b.y1 - b.y0));
+  }
+  return {collide, shoot};
 }
 
 type Pose = Pick<TrainPlacement, 'x' | 'z' | 'railTopY' | 'front' | 'level'> & Partial<Pick<TrainPlacement, 'platformArea' | 'trenchIndex'>>;
@@ -259,7 +300,9 @@ function spans(lo: number, hi: number, cuts: [number, number][]): [number, numbe
  * The car's colliders at `p`. `levels` (without the car's volume) finds the platform gap beside each door; `consoleRect` = the
  * desk's local footprint + height when its model is placed. Pure: nothing is registered here.
  */
-export function trainColliders(spec: PlayerTrainSpec, p: Pose, levels: Levels | null, opt: {bedY?: number; area?: number; consoleRect?: {x0: number; x1: number; z0: number; z1: number; top: number} | null; glass?: TrainGlassData | null} = {}): TrainColliders {
+export function trainColliders(spec: PlayerTrainSpec, p: Pose, levels: Levels | null, opt: {bedY?: number; area?: number; consoleRect?: {x0: number; x1: number; z0: number; z1: number; top: number} | null; glass?: TrainGlassData | null;
+  /** (lane ARMOR) The fitted armour's train-local piece boxes (null / absent: not fitted). */
+  armor?: readonly ArmorBox[] | null} = {}): TrainColliders {
   const hw = spec.interior.halfWidth, out = outerHalf(spec), L2 = spec.length / 2;
   const floorY = p.railTopY + spec.floorY, ceilY = p.railTopY + spec.ceilingY, topY = p.railTopY + spec.roofY;
   const bedY = opt.bedY ?? p.railTopY - RAIL_TOP_ABOVE_BED;
@@ -342,6 +385,9 @@ export function trainColliders(spec: PlayerTrainSpec, p: Pose, levels: Levels | 
   // task train-crafting: the crafting bench in the rear compartment opposite the Lockbox (craft/trainFixtures.ts) — solid to its worktop
   const bn = benchPlacement(spec);
   if (bn) { const fp = benchFootprint(bn); statics.push(propBox(p, area, fp.x0, fp.x1, fp.z0, fp.z1, bedY, floorY + bn.worktopY - bedY)); }
+  // task refinement-batch (lane SAVE): the save terminal's wall shelf left of the desk (world/trainSaveTerminalPlace.ts) — solid to its top
+  const sv = saveTerminalPlacement(spec);
+  if (sv) statics.push(propBox(p, area, sv.box.x0, sv.box.x1, sv.box.z0, sv.box.z1, bedY, p.railTopY + sv.top - bedY));
   statics.push(propBox(p, area, -L2, L2, -out, out, bedY, floorY - bedY)); // underframe: the floor for bullets, the body for the bed
   shoot.push(...statics.slice(wallsAndEnds), ...glass); // partitions, desk, underframe as they are; the window glass
   // --- overhead (layout.props only) ---
@@ -408,7 +454,7 @@ export function trainColliders(spec: PlayerTrainSpec, p: Pose, levels: Levels | 
       curbs.push({kind: BOX_KIND, x: (a + b) / 2, z: (zA + zB) / 2, y: bedY, rot: 0, area, hx: (b - a) / 2, hz: Math.abs(zB - zA) / 2, h: curbH, blocksSight: false, variant: 0, level: p.level});
     }
   }
-  return {volume, statics, shoot, glass, overhead, curbs, doors, bedY, floorY, ceilY, topY, curbH};
+  return {volume, statics, shoot, glass, overhead, curbs, doors, bedY, floorY, ceilY, topY, curbH, armor: armorColliders(p, opt.armor, bedY, area)};
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -533,7 +579,7 @@ export class PlayerTrainRuntime {
   target: DoorRt | null = null;
   prompt: string | null = null;
   /** Counters (QA / tests). */
-  readonly counts = {builds: 0, teardowns: 0, toggles: 0, opened: 0, closed: 0, refused: 0, reopen: 0, pushOpen: 0, glassHits: 0, lockbox: 0, console: 0};
+  readonly counts = {builds: 0, teardowns: 0, toggles: 0, opened: 0, closed: 0, refused: 0, reopen: 0, pushOpen: 0, glassHits: 0, lockbox: 0, console: 0, save: 0};
   private readonly mats = new TrainMaterials();
   private textures: TrainTextures = {};
   private texturesLoading: Promise<void> | null = null;
@@ -550,8 +596,12 @@ export class PlayerTrainRuntime {
    * (world/highlight.ts: the containers' material swap + pulse). The door it is on, and the highlight clones per leaf base material.
    */
   highlighted: DoorRt | null = null;
-  /** What glows: a door pair, the Lockbox, (lane RIDE) the driving console, or nothing. */
-  private hiOwner: DoorRt | 'lockbox' | 'console' | null = null;
+  /** What glows: a door pair, the Lockbox, (lane RIDE) the driving console, (lane SAVE) the save terminal, or nothing. */
+  private hiOwner: DoorRt | 'lockbox' | 'console' | 'save' | null = null;
+  /** Task refinement-batch (lane SAVE): the save terminal (world/trainSaveTerminal.ts; null: none — no aim, no prompt). */
+  saveTerminal: TrainFixtureLink | null = null;
+  /** The save terminal is under the crosshair right now (within reach, unobstructed, nearer than the desk / doors / Lockbox). */
+  saveAimed = false;
   // ---- task studio-alpha-campaign-foundation-20261102-230708-01 (lane RIDE): the driving console + the moving car ----
   /** [E] on the aimed driving console (the primary opens the campaign map). Null: the console is not an interactable (no prompt). */
   onConsoleInteract: (() => void) | null = null;
@@ -577,6 +627,11 @@ export class PlayerTrainRuntime {
   private time = 0;
   /** Task train-shell-followup: the glass boxes of the built car (windows + leaf windows) — a bullet stopping on one is a glass hit. */
   private glassBoxes = new Set<PropPlacement>();
+  /**
+   * Task studio-refinement-batch-20261113-035659-01 (lane ARMOR): the fitted armour's train-local piece boxes (world/trainArmor.ts sets
+   * it; null / absent: not fitted). Read at every build; refitArmor() applies a change to the built car.
+   */
+  armorBoxes: (() => readonly ArmorBox[] | null) | null = null;
 
   constructor(readonly host: TrainHost, readonly opts: TrainOptions = {}) {
     this.spec = opts.spec ?? PLAYER_TRAIN_SPEC;
@@ -661,12 +716,13 @@ export class PlayerTrainRuntime {
     this.consoleRect = consoleRect; // (lane RIDE: the console's aim box and the ride's local collision use the same desk box)
     const bedY = h.layout.trenches?.[p.trenchIndex]?.floorY;
     // (the conformal glass's slabs are measured for the cooked car's own windows: a custom spec keeps the flat glass boxes)
-    const col = trainColliders(spec, p, h.levels, {bedY: Number.isFinite(bedY) ? bedY : undefined, consoleRect, glass: spec.windows === PLAYER_TRAIN_SPEC.windows ? TRAIN_GLASS : null});
+    // (lane ARMOR: + the fitted armour's pieces, read from the armour system at every build)
+    const col = trainColliders(spec, p, h.levels, {bedY: Number.isFinite(bedY) ? bedY : undefined, consoleRect, glass: spec.windows === PLAYER_TRAIN_SPEC.windows ? TRAIN_GLASS : null, armor: this.armorBoxes?.() ?? null});
     // 1. the walkable interior (support / headroom / rays inside), the platform bridges
     h.levels.addDynamicVolume(col.volume);
-    // 2. hitscan / physics statics: walls, floor, roof, partition, console, door leaves
+    // 2. hitscan / physics statics: walls, floor, roof, partition, console, door leaves (+ the armour's pieces)
     const leafBoxes = col.doors.flatMap(d => d.leaves);
-    const layoutBoxes = [...col.shoot, ...col.overhead, ...col.doors.flatMap(d => [...d.hitLeaves, ...(d.leafGlass ?? [])])];
+    const layoutBoxes = [...col.shoot, ...col.overhead, ...col.doors.flatMap(d => [...d.hitLeaves, ...(d.leafGlass ?? [])]), ...col.armor.shoot];
     this.glassBoxes = new Set([...col.glass, ...col.doors.flatMap(d => d.leafGlass ?? [])]);
     h.layout.props.push(...layoutBoxes);
     // 3. collision: everything already in the index (stalls etc.) + the car's grounded boxes. The leaves are bucketed over their
@@ -681,7 +737,7 @@ export class PlayerTrainRuntime {
       for (const b of d.col.leaves) refitBox(b, p, a0, b1, dd.side * hw, dd.side * out);
     }
     const curbs = [...col.curbs, ...col.doors.map(d => d.curb).filter((c): c is PropPlacement => !!c)];
-    h.propIndex = new PropIndex(h.levels, [...base, ...col.statics, ...leafBoxes, ...curbs]);
+    h.propIndex = new PropIndex(h.levels, [...base, ...col.statics, ...leafBoxes, ...curbs, ...col.armor.collide]);
     // 4. the view: in the scene, storey-culled (static parts; the leaves move), torch shadows
     view.root.traverse(x => { if ((x as THREE.Mesh).isMesh) x.userData.level = p.level; });
     h.scene.add(root);
@@ -716,6 +772,7 @@ export class PlayerTrainRuntime {
     if (!keep) this.lockboxView = null;
     this.lockboxAimed = false;
     this.consoleAimed = false;
+    this.saveAimed = false;
     this.target = null;
     this.prompt = null;
     if (!keep) this.lightsOff();
@@ -732,6 +789,32 @@ export class PlayerTrainRuntime {
       for (const g of t.view.geometries) g.dispose();
     }
     this.counts.teardowns++;
+  }
+
+  /** (lane ARMOR) The parked car carries the armour's colliders now. */
+  armorFitted(): boolean {
+    return !!this.train && this.train.col.armor.collide.length > 0;
+  }
+
+  /**
+   * (lane ARMOR) The armour was fitted (or, after a record load, taken off) while this car stands built: its colliders follow at once
+   * (game.propIndex rebuilt with / without the columns; the exact boxes added to layout.props and the car's own boxes). Boxes leaving
+   * mid-level stay in layout.props EMPTIED (zero size: nothing hits or collides with them; no later prop's index ever shifts) until the
+   * car's teardown removes them with its other boxes. No-op without a built car or when nothing changes.
+   */
+  refitArmor(): void {
+    const t = this.train, h = this.host;
+    if (!t || h.layout !== t.layout) return;
+    const old = t.col.armor, next = armorColliders(t.placement, this.armorBoxes?.() ?? null, t.col.bedY, t.col.volume.area ?? -1);
+    if (!old.collide.length && !next.collide.length) return;
+    for (const b of old.shoot) { b.hx = 0; b.hz = 0; b.h = 0; }
+    h.layout.props.push(...next.shoot);
+    t.layoutBoxes.push(...next.shoot);
+    const gone = new Set(old.collide);
+    h.propIndex = new PropIndex(h.levels, [...h.propIndex.props.filter(q => !gone.has(q)), ...next.collide]);
+    t.col.armor = next;
+    const v = t.col.volume;
+    for (let x = v.x0 - 2; x <= v.x1 + 2; x += 4) for (const z of [v.z0 - 1, (v.z0 + v.z1) / 2, v.z1 + 1]) h.physics?.propsChanged?.(x, z);
   }
 
   /** (lane RIDE) The car's view right now: the built train's, or the one held through a teardown while riding (null: none). */
@@ -950,8 +1033,8 @@ export class PlayerTrainRuntime {
    * What the crosshair is on: the nearest of every doorway's aim box and (task train-lockbox) the Lockbox's closed box, within reach,
    * with nothing structural in between. At most one of the two is set.
    */
-  pickAim(): {door: DoorRt | null; lockbox: boolean; console: boolean} {
-    const none = {door: null, lockbox: false, console: false};
+  pickAim(): {door: DoorRt | null; lockbox: boolean; console: boolean; save: boolean} {
+    const none = {door: null, lockbox: false, console: false, save: false};
     const t = this.train, h = this.host, ride = this.ride;
     if ((!t && !(ride && this.heldView)) || !h.player.alive) return none;
     // (lane RIDE) everything is tested in the CAR frame: the placement's (parked; exact for yaw 0 / PI) or the moving car's (riding)
@@ -990,15 +1073,23 @@ export class PlayerTrainRuntime {
       const hit = rayBox(eye, dir, b as never, bt);
       if (hit !== null && hit < bt) { bt = hit; best = null; lockbox = false; desk = true; }
     }
-    if (!best && !lockbox && !desk) return none;
-    // nothing structural in between: the partitions (their walls + doorway heads; the open doorway passes) for the Lockbox / console,
-    // and (parked) the station's levels as before
-    if ((lockbox || desk) && this.partitionBlocks(eye, dir, bt)) return none;
+    // (lane SAVE) the save terminal left of the desk: the nearer of it and the desk wins (one [E], one prompt, one glow)
+    let save = false;
+    const sb = this.saveTerminal?.aimBox() ?? null;
+    if (sb) {
+      setBox(sb.x0, sb.x1, sb.y0, sb.y1, sb.z0, sb.z1);
+      const hit = rayBox(eye, dir, b as never, bt);
+      if (hit !== null && hit < bt) { bt = hit; best = null; lockbox = false; desk = false; save = true; }
+    }
+    if (!best && !lockbox && !desk && !save) return none;
+    // nothing structural in between: the partitions (their walls + doorway heads; the open doorway passes) for the Lockbox / console /
+    // save terminal, and (parked) the station's levels as before
+    if ((lockbox || desk || save) && this.partitionBlocks(eye, dir, bt)) return none;
     if (!ride && t) {
       const blocked = h.levels.raycast(weye, wdir, bt + 0.02);
       if (blocked.kind !== 'none' && blocked.t < bt - 0.01) return none;
     }
-    return {door: best, lockbox, console: desk};
+    return {door: best, lockbox, console: desk, save};
   }
 
   /** (lane RIDE) A car-frame ray meets a partition wall / doorway head before `maxT`. */
@@ -1036,12 +1127,13 @@ export class PlayerTrainRuntime {
   }
 
   private updateTarget(): void {
-    const r = this.host.state === 'playing' ? this.pickAim() : {door: null, lockbox: false, console: false};
+    const r = this.host.state === 'playing' ? this.pickAim() : {door: null, lockbox: false, console: false, save: false};
     this.target = r.door;
     this.lockboxAimed = r.lockbox;
     this.consoleAimed = r.console;
-    this.prompt = r.door ? this.promptFor(r.door) : r.lockbox ? this.lockboxPrompt() : r.console ? CONSOLE_PROMPT : null;
-    this.setHighlightOwner(r.door ?? (r.lockbox ? 'lockbox' : r.console ? 'console' : null)); // the glow follows the prompt (same aim / reach / occlusion)
+    this.saveAimed = r.save;
+    this.prompt = r.door ? this.promptFor(r.door) : r.lockbox ? this.lockboxPrompt() : r.console ? CONSOLE_PROMPT : r.save ? this.saveTerminal?.prompt() ?? null : null;
+    this.setHighlightOwner(r.door ?? (r.lockbox ? 'lockbox' : r.console ? 'console' : r.save ? 'save' : null)); // the glow follows the prompt (same aim / reach / occlusion)
   }
 
   // -------------------------------------------------------------------------------------------
@@ -1063,8 +1155,8 @@ export class PlayerTrainRuntime {
   }
 
   /** The meshes that glow for a highlight owner. */
-  private ownerMeshes(o: DoorRt | 'lockbox' | 'console'): THREE.Mesh[] {
-    return o === 'lockbox' ? (this.lockboxView?.highlight ?? []) : o === 'console' ? this.consoleMeshes() : this.leafMeshes(o);
+  private ownerMeshes(o: DoorRt | 'lockbox' | 'console' | 'save'): THREE.Mesh[] {
+    return o === 'lockbox' ? (this.lockboxView?.highlight ?? []) : o === 'console' ? this.consoleMeshes() : o === 'save' ? (this.saveTerminal?.meshes() ?? []) : this.leafMeshes(o);
   }
 
   /** (lane RIDE) The driving desk's meshes (the cooked console model; none without it). */
@@ -1078,11 +1170,11 @@ export class PlayerTrainRuntime {
   }
 
   /** Swap the aimed thing's (a door pair's / the Lockbox's / the console's) materials for their highlight clones, restoring the previous one's own. */
-  private setHighlightOwner(o: DoorRt | 'lockbox' | 'console' | null): void {
+  private setHighlightOwner(o: DoorRt | 'lockbox' | 'console' | 'save' | null): void {
     if (o === this.hiOwner) return;
     if (this.hiOwner && (this.train || this.heldView)) for (const m of this.ownerMeshes(this.hiOwner)) m.material = (m.userData.baseMat as THREE.Material | undefined) ?? m.material;
     this.hiOwner = o;
-    this.highlighted = o && o !== 'lockbox' && o !== 'console' ? o : null;
+    this.highlighted = o && o !== 'lockbox' && o !== 'console' && o !== 'save' ? o : null;
     if (!o) return;
     for (const m of this.ownerMeshes(o)) {
       const base = (m.userData.baseMat as THREE.Material | undefined) ?? (m.material as THREE.Material);
@@ -1110,6 +1202,10 @@ export class PlayerTrainRuntime {
       const m = o as THREE.Mesh;
       if (m.isMesh && !Array.isArray(m.material) && !bases.has((m.userData.baseMat as THREE.Material | undefined) ?? m.material)) bases.set((m.userData.baseMat as THREE.Material | undefined) ?? m.material, m);
     });
+    for (const m of this.saveTerminal?.meshes() ?? []) { // (lane SAVE) the save terminal glows like the console
+      const base = (m.userData.baseMat as THREE.Material | undefined) ?? m.material;
+      if (!Array.isArray(base) && !bases.has(base as THREE.Material)) bases.set(base as THREE.Material, m);
+    }
     for (const [base, hi] of [...this.hiMats]) if (!bases.has(base)) { hi.dispose(); this.hiMats.delete(base); }
     for (const [base, mesh] of bases) {
       const hi = highlightMaterial(this.hiMats, base);
@@ -1138,6 +1234,7 @@ export class PlayerTrainRuntime {
     const r = this.pickAim();
     if (r.lockbox) { this.lockboxInteract(); return true; }
     if (r.console) { this.consoleInteract(); return true; } // (lane RIDE)
+    if (r.save && this.saveTerminal) { this.counts.save++; this.saveTerminal.interact(); return true; } // (lane SAVE)
     if (!r.door) return false;
     this.toggle(r.door);
     return true;
@@ -1253,6 +1350,7 @@ export class PlayerTrainRuntime {
       } : null,
       // (lane RIDE) the driving console (aim box in the car frame, wired = the primary's map) and the moving-car link
       console: {aimed: this.consoleAimed, wired: !!this.onConsoleInteract, measured: !!this.consoleRect, box: consoleLocalRect(this.spec, this.consoleRect)},
+      saveTerminal: {aimed: this.saveAimed, linked: !!this.saveTerminal, box: this.saveTerminal?.aimBox() ?? null}, // (lane SAVE)
       riding: !!this.ride, heldView: !!this.heldView,
       rear: this.spec.rear ?? null,
       windows: (() => { const w = windowsOf(this.spec); return {side: w.side.length, end: w.end.length, leaf: !!w.leaf, glassBoxes: this.glassBoxes.size}; })(),

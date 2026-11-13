@@ -42,7 +42,8 @@ aim · R reload · E pick up / open / take aimed item / take all / pry vending /
 not in a quick slot · 6 backpack (hold it in front, click sets it down; on a grounded bag tap E opens it, hold E 0.5 s wears it) · Q gas mask on / off · Tab or I inventory · H quick
 heal · F flashlight · hold G, release to throw the grenade-slot item (flares) · elevator: aim at a button and click or press E · M mute · Esc pause.
 Ctrl+Shift+P toggles the performance overlay (see below). Drop an item by dragging it out of the inventory panel (the old G = drop key is gone). Desktop keyboard + mouse only; touch
-is not supported.
+is not supported. Several drops in a row land a little apart, within 0.4 m of the drop point, never through a wall or the car's side;
+each stack keeps its count, rounds and uid (lane DROPS, `world/dropScatter.ts`).
 
 Train Lockbox (task train-lockbox-windows-20261101-232156): the big steel box in the player train's rear compartment is your own
 **50-slot storage (10 × 5) that travels with the train**. Aim + **E** opens it: your slots on the left, the box on the right; click moves an
@@ -53,7 +54,8 @@ type (13 slots). It adds all of it or nothing: if there isn't room, nothing chan
 
 Train corpse chipper (task studio-corpse-chipper-fuel-20261110-235304-01, `docs/corpse-chipper.md`): an emergency fuel source.
 Aim at the body of an undead enemy you killed and press **E** to pick it up (one at a time, over the shoulder: your hands are busy and
-you move slower). **E** puts it down again. In the parked train, aim at the woodchipper on the far side between the middle and front
+you move slower). **E** lets it go: it falls from your shoulder as a ragdoll onto whatever is there (crates and clutter too) and stays
+exactly as it lands, through saves and journeys. You can pick it up again later. In the parked train, aim at the woodchipper on the far side between the middle and front
 doors and press **E** to feed the body in. The body goes limp in the hopper and its arms and legs flop as the machine draws it in,
 head first. About 20 s later it is ground (with a lot of blood) into **0.1 of a standard tank**: 10
 bodies = one hop, 40 = a full empty train (the train's tank holds four standard tanks). The machine runs with an empty tank, is loud enough to draw the infected, and only grinds
@@ -70,6 +72,12 @@ train's three wall sockets, which happens by itself when one is parked beside a 
 cart, or to carry the chest (a tap never moves one); **R** turns a dragged device round to face you. Everything travels with the train
 and is saved with its contents, rounds and socket.
 
+Train armour (task studio-refinement-batch-20261113-035659-01, `docs/train-crafting.md` "Train armour"): a permanent one-time upgrade
+(10 scrap metal at the bench) that welds bladed plates and saw discs along both sides of the car and a bladed plough across each end.
+No durability; it stays for the run, is saved with the train and never covers a door, window or lamp. While the train is parked, a
+zombie pressed against the blades takes 20 damage a second (a regular zombie dies after 5 seconds); the player, market people and
+corpses are never hurt, and nothing is hurt while the train moves. The plates are solid to the player, enemies and bullets.
+
 Light survival (iteration 12, `player/flashlight.ts`, `weapons/throwables.ts`): the flashlight runs on a **battery**
 (HUD meter bottom right, above the weapon panel). It starts at 80 % and drains only while the light is on: a full battery
 gives 7 min of continuous light. Above 25 % the beam is steady; below 25 % it flickers — soft irregular dips whose share of
@@ -85,6 +93,35 @@ release, holding never throws twice, and switching item / pausing / opening the 
 settles physically, burns red with red smoke for 50 s (fading over the last 6 s) — a strong red light (42 cd, 11.5 m,
 iteration 15; walls and other storeys stay dark) — and lures enemies that can see it (28 m). At most 3 burn at once (a 4th throw is refused, nothing used). The
 flashlight beam lures too (20 m around where it lands, scaled by its brightness).
+
+Zombie lure (scent; `ai/scentLure.ts`, the brain's `investigate` state): a landed lure canister gives off a scent for **20 s of
+play** (paused, menus and loading do not count). Enemies within **20 m** of it (straight 3D distance from their feet) smell it.
+No sight line is needed and they do not have to face it. Walls, doors and floors do not stop it, so enemies on the storey above
+or below are drawn too. Each one walks to the canister itself, never to the player, at its search pace. It uses the normal
+path search (stairs, drops, and ladders for families that climb) and normal collision, so it goes round walls, never through
+them. It stands around the canister while the scent lasts. When the scent ends it walks on to the canister if it is still on
+the way, lingers a few seconds, then goes back to what it was doing. If it can find no way there, it gives up on that canister.
+- Seeing the player always wins. An enemy that still sees you keeps chasing you.
+- A pursuer that has lost sight of you for 1.5 s is pulled to the canister. This is how you shake pursuers.
+- A gunshot heard or a hit taken in the last 5 s comes first: it hunts that, then the scent pulls it again.
+- An active scent beats a flare or the flashlight.
+- At most 3 scents at once. The canister hisses once as it opens and shows a faint tan plume while it vents (harmless: not a gas
+  hazard, never green); the scent itself is silent.
+
+Crafted grenades (task studio-refinement-batch-20261113-035659-01; `weapons/grenades.ts`, `items/grenades.ts`): the train's
+crafting bench turns **3 bio mater** into **5 Acid Scrapper grenades** or **3 Zombie Lure grenades** (into your pockets, the
+grenade slot first; the rest into the Lockbox). Both are throwables: they go in the grenade slot and are thrown like a flare
+(hold G, or hold click with one in the hand; release to throw; one item per throw, only when it is thrown).
+- **Acid Scrapper grenade**: a zombie it hits takes 45 and it bursts there; on a prop the acid can melt it sticks, bursts 0.9 s
+  later and that prop starts melting; elsewhere a hard hit bursts it, at rest it bursts. The burst splashes 20 (zombies) / 8 (the
+  player) within 1.3 m and leaves a 1.5 m acid pool on the floor for **10 s of play**. Everyone in the pool burns: zombies 30 hp/s
+  (a regular zombie in ~3.3 s), the player 7 hp/s. Props it touches melt (`world/acidMelt.ts`): each gives exactly one Scrap metal
+  or Electrical parts once and spills its contents. The train and its fitted fixtures never melt. At most 3 pools at once.
+- **Zombie Lure grenade**: it lands, comes to rest and opens — the scent above, from the canister itself.
+- Families: ordinary and coated zombies, sprinters, the rat/dog, the Strainer, the Blightbelly, horde members and an awake
+  Siren are drawn, and so is the BB: off a wall or ceiling it comes down and walks the floor to the canister. A dormant Siren
+  is not: the scent never wakes her. The Screacher hunts only by sound, so it ignores the
+  scent.
 
 Crouch: **C** (iteration 05: back from Ctrl, which collided with the browser's Ctrl+W) — tap to
 toggle; hold longer than 0.3 s to crouch only while held. Crouched = half speed, ~30% less recoil and
@@ -217,7 +254,8 @@ done (or says it is partial / failed). `?warmup=off|view|full` overrides (softwa
 Goal (campaign): "Scavenge for resources. Return to the train when done." There is no kill goal; the Reactor's objective is
 to restart it. On death a campaign run offers "Load last save" (task campaign-polish-20261103: the active slot's latest valid save,
 loaded through the same path as the menu's Continue; nothing is saved or erased on death; without a valid save the button is disabled
-and says why) or "Main menu", which leaves after a confirmation naming the last autosave. Legacy dev runs keep "New station" (fresh
+and says why) or "Main menu", which leaves after a confirmation naming the last save (an autosave, or a manual save at the train's
+Save terminal). Legacy dev runs keep "New station" (fresh
 seed) as well.
 
 ## Campaign (task campaign-foundation-20261102)
@@ -265,6 +303,16 @@ seed) as well.
   an explicit confirm). Three heavily played slots measure about 42 % of a 5 MiB origin quota (`tests/save-budget.test.ts`
 keeps them under 70 %).
   A quota error is reported, never silently dropped.
+- **Manual save** (task refinement-batch-20261113, lane SAVE): a small green-screen CRT on a wall shelf left of the driving
+  console (`src/world/trainSaveTerminal.ts`). Its screen shows "SAVE", the active slot, that slot's last save and why the
+  terminal cannot save right now. [E] on it runs `Game.saveNow`. That captures the live station as a teardown would, without
+  tearing anything down, then writes the active slot through the same commit as the autosaves (reason `manual`, validated, one
+  write, read back), with your exact spot in the car. Continue and "Load last save" resume there. It saves only while the train
+  stands at a station with you inside it, during play, alive, and with a slot bound to the run. Otherwise the prompt says why.
+  Success shows "Game saved · slot N". A failure (a full storage, another tab's newer save) shows that error, and the slot keeps
+  its previous save. Autosaves, Continue and Retry (the level-entry snapshot) are unchanged. The terminal is a fixed part of the
+  car (a solid box parked and riding), not a prop, cargo or equipment. `tests/train-save-terminal.test.ts`,
+  `tests/save-manual.test.ts`.
 - **Win**: at the Reactor, restarting it opens the habitable-surface ending, and reaching the surface
   (`reactor.state.ending.surfaced`) completes the run once. Builds without the surface ending fall back to the restart itself.
 - **QA**: `node tools/qa/campaign-loop-check.mjs` is one serial spot check (menu, new game, slot, map, journey, Continue).
