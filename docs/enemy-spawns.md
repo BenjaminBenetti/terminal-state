@@ -847,7 +847,7 @@ pursues, instead of the usual chase gait.
 - **Sprinters.** The sprinter roll is per spawn index and runs after the families, as before. A BB slot that was a sprinter at
   version 2 is a BB, not a sprinter; no other tag changes.
 - **Saves.** A station recorded at version 2 or lower regenerates with that version: no BB, and its enemies, kills and indices
-  exact. Only stations first built at version 3 can hold BBs, and the same seed gives the same BBs, in the same slots and looks,
+  exact. Only stations first built at version 3 or later can hold BBs, and the same seed gives the same BBs, in the same slots and looks,
   on every revisit, Continue, Retry and import.
 - **Never the Survivor Market** (`ZOMBIE_FREE_LEVELS`), at any version.
 - **Tests.** `game/tests/bb-roster.test.ts`: the rate, the counts and looks, the slot rule, version 3 against version 2 on every
@@ -921,6 +921,13 @@ What the sample shows:
 - **The Screacher.** 41 of 100 levels: 22 with one, 11 with two, 8 with three (0.68 per level; 1.66 per level that holds any).
   Spacing never cut a count and no level needed a relaxed slot rule. The closest pair was 14.09 m apart. None stands in a room
   whose purpose is a closet. Bodies: `sc01` 20, `sc02` 19, `sc03` 16, `sc04` 13 of the 68.
+- **BB** (the same 100 seeds per level kind through the registry at roster version 3; not in the tables above). The roll includes
+  BB in 38 of the 100 seeds, and every such level holds exactly the number its count roll picked: 16 with one, 12 with two, 10
+  with three (0.70 per level; 1.84 per level that holds any). Spacing never cut a count, no level needed a relaxed slot rule and
+  none reported `noSlot`. The closest pair was 9.01 m apart, on a Mall (Subway 10.61 m, Reactor 10.44 m, Office 11.43 m, Bunker
+  12.02 m, Skyways 12.05 m). Looks: `lullaby` 19, `binky` 21, `teddy` 15, `changeling` 15 of the 70. Slots a level offered at the
+  strict rule, fewest to most: Mall 2 to 13 (median 9), Subway 9 to 26 (18), Skyways 11 to 26 (19), Office 14 to 32 (22), Bunker
+  15 to 31 (26), Reactor 22 to 38 (31). Of each level kind's 70 BB slots, 7 to 10 were sprinters at version 2.
 - **Counts.** The enemy count of every level is identical with and without the pass.
 
 ### In the reference and in tests

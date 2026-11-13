@@ -60,14 +60,13 @@ roster pass that places a BB gives its spawn a look (`ZombieSpawn.variant`), and
 
 ## Behaviour and timings
 
-> **Placeholder.** The lead of this task completes this section with the finished brain: the stop-start cadence (`BB_CADENCE`),
-> what it notices and how long it remembers (`BB_SENSE`), and the pounce — its tell, range, flight, the one hit, the recovery and
-> the cooldown (`BB_POUNCE`). Until then, read the constants and their comments in `game/src/ai/bb.ts`.
+> **Placeholder — the task lead completes this section.** The stop-start cadence (`BB_CADENCE`), what it notices (`BB_SENSE`)
+> and the pounce (`BB_POUNCE`). Until then, see the constants and their comments in `game/src/ai/bb.ts`.
 
 ## Locomotion
 
-> **Placeholder.** The lead of this task completes this section with the finished surface locomotion (`game/src/ai/bbSurface.ts`):
-> how it moves on floors, walls and ceilings, its climbing paces and limits (`BB_CLIMB`) and the body it moves with (`BB_BODY`).
+> **Placeholder — the task lead completes this section.** Movement on floors, walls and ceilings (`game/src/ai/bbSurface.ts`),
+> the climbing paces and limits (`BB_CLIMB`) and the body it moves with (`BB_BODY`).
 
 ## Where it appears: the seeded roster
 
