@@ -56,5 +56,10 @@ export function heldRecord(b: BodyRecordJSON): BodyRecordJSON {
   r.x = r.y = r.z = 0;
   r.q = [0, 0, 0, 1];
   delete r.level;
+  // (task studio-refinement-batch-20261113-035659-01, lane DROPS: a body picked up from where it fell has no resting pose in the hands)
+  r.pose = 'lying';
+  delete r.bones;
+  delete r.hips;
+  delete r.falling;
   return r;
 }

@@ -26,11 +26,25 @@ export const BODIES = {
   pos: 40, world: 1e5,
   /** Task corpse-chipper (lane CORPSE): the body's uniform size factor bounds (EnemyActor.scale; input safety). */
   scaleMin: 0.5, scaleMax: 2,
+  /**
+   * Task studio-refinement-batch-20261113-035659-01 (lane DROPS): a 'fallen' pose's bounds — at most this many bones (the shared rig has 17
+   * below its 'Root'), the pelvis' local offset within this of its parent bone (model metres), a falling body's velocity components
+   * within this (m/s; input safety).
+   */
+  bonesMax: 40, hipsLim: 4, fallV: 20,
 } as const;
 
-/** The resting poses a body record can name (the corpse system owns their shapes). */
-export const BODY_POSES = ['lying'] as const;
+/**
+ * The resting poses a body record can name (the corpse system owns their shapes). 'lying': the Death clip's end frame (a body laid down
+ * without physics). 'fallen' (task studio-refinement-batch-20261113-035659-01, lane DROPS; user: "carried bodies: set down / drop freely as
+ * physical ragdolls that fall naturally amid clutter"): the ACTUAL pose a dropped body's ragdoll came to rest in — its bones' local
+ * rotations by name (`bones`) and the pelvis' local offset (`hips`), so a reload / revisit / journey rebuilds it lying exactly as it fell.
+ */
+export const BODY_POSES = ['lying', 'fallen'] as const;
 export type BodyPose = typeof BODY_POSES[number];
+
+/** A bone name of a 'fallen' pose (the rig's own names: 'Hips', 'L_UpperArm' …). */
+export const BODY_BONE_RE = /^[A-Za-z0-9_]{1,32}$/;
 
 export const BODY_TYPES: readonly ZombieType[] = ['shambler', 'coated'];
 export const BODY_LOOKS: readonly SpawnLook[] = ['lingerie', 'cosplay'];
@@ -60,6 +74,20 @@ export interface BodyRecordJSON {
    * ENEMY_ARCHETYPES[arch].variantModels): a rebuilt body is the same body. Absent = the family's only / default body.
    */
   variant?: string;
+  /**
+   * Task studio-refinement-batch-20261113-035659-01 (lane DROPS): pose 'fallen' only (required there, absent otherwise) — every skeleton
+   * bone's local rotation below the rig's 'Root' (unit quaternion x, y, z, w by bone name) and the pelvis bone's local position (its parent
+   * bone's frame). The object pose (x, y, z, q) is then the root under the pelvis, turned about the vertical only.
+   */
+  bones?: Record<string, [number, number, number, number]>;
+  hips?: [number, number, number];
+  /**
+   * 'fallen' only: captured while the body was still falling (a save, a teardown or a departure in the second or two after a drop) — its
+   * pelvis' velocity then (m/s; the record's frame: world in a station, the car's aboard). A rebuilt body falls on from this pose at this
+   * velocity as a ragdoll (a body dropped straight down from the shoulder would balance folded) and is recorded again where it comes to
+   * rest. Absent = at rest.
+   */
+  falling?: [number, number, number];
 }
 
 /** A body variant id (the archetype's own table decides which exist: an unknown one rebuilds as its default body). */
@@ -70,7 +98,25 @@ export const BODY_ID_RE = /^[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{1,32}#\d{1,6}$/;
 export const bodyId = (section: string, index: number): string => `${section}#${index}`;
 
 const finite = (v: unknown, lim: number): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= lim;
-const BODY_KEYS = ['id', 'arch', 'seed', 'type', 'look', 'pose', 'x', 'y', 'z', 'q', 'level', 'scale', 'variant'];
+const BODY_KEYS = ['id', 'arch', 'seed', 'type', 'look', 'pose', 'x', 'y', 'z', 'q', 'level', 'scale', 'variant', 'bones', 'hips', 'falling'];
+const unitQuat = (q: unknown): boolean => Array.isArray(q) && q.length === 4 && q.every(x => finite(x, 1.0001)) && Math.abs(Math.hypot(q[0], q[1], q[2], q[3]) - 1) <= 1e-3;
+
+/** Lane DROPS: why a 'fallen' pose's bones / pelvis offset are malformed (null = fine). */
+function fallenProblem(b: Record<string, unknown>): string | null {
+  const bones = b.bones;
+  if (!bones || typeof bones !== 'object' || Array.isArray(bones)) return `body ${b.id} fallen needs its bones`;
+  const names = Object.keys(bones);
+  if (!names.length || names.length > BODIES.bonesMax) return `body ${b.id} has 1..${BODIES.bonesMax} bones`;
+  for (const n of names) {
+    if (!BODY_BONE_RE.test(n)) return `body ${b.id} has a malformed bone name`;
+    if (!unitQuat((bones as Record<string, unknown>)[n])) return `body ${b.id} bone ${n} must be a unit quaternion`;
+  }
+  const h = b.hips;
+  if (!Array.isArray(h) || h.length !== 3 || !h.every(x => finite(x, BODIES.hipsLim))) return `body ${b.id} fallen needs its pelvis offset`;
+  const f = b.falling;
+  if (f !== undefined && (!Array.isArray(f) || f.length !== 3 || !f.every(x => finite(x, BODIES.fallV)))) return `body ${b.id} falling must be its velocity`;
+  return null;
+}
 
 /**
  * Why one body record is malformed (null = fine). `world`: a station record (world pose + storey); else train-local (aboard / a job).
@@ -95,6 +141,9 @@ export function bodyProblem(v: unknown, o: {world: boolean; feedable: (arch: str
   else if (b.level !== undefined) return `body ${b.id} aboard has no storey`;
   if (b.variant !== undefined && (typeof b.variant !== 'string' || !BODY_VARIANT_RE.test(b.variant))) return `body ${b.id} has a malformed body variant`;
   if (b.scale !== undefined && (typeof b.scale !== 'number' || !Number.isFinite(b.scale) || b.scale < BODIES.scaleMin || b.scale > BODIES.scaleMax)) return `body ${b.id} size out of range`;
+  // lane DROPS: a 'fallen' pose carries its bones (and only it does: an old 'lying' record loads unchanged)
+  if (b.pose === 'fallen') return fallenProblem(b);
+  if (b.bones !== undefined || b.hips !== undefined || b.falling !== undefined) return `body ${b.id} lying has no bones`;
   return null;
 }
 
@@ -112,4 +161,11 @@ export function bodiesProblem(v: unknown, o: {world: boolean; max: number; feeda
   return null;
 }
 
-export const copyBody = (b: BodyRecordJSON): BodyRecordJSON => ({...b, q: [b.q[0], b.q[1], b.q[2], b.q[3]]});
+export function copyBody(b: BodyRecordJSON): BodyRecordJSON {
+  const r: BodyRecordJSON = {...b, q: [b.q[0], b.q[1], b.q[2], b.q[3]]};
+  // (lane DROPS: a fallen pose's bones are copied too — a record never shares arrays with another place)
+  if (b.bones) r.bones = Object.fromEntries(Object.entries(b.bones).map(([k, q]) => [k, [q[0], q[1], q[2], q[3]]])) as BodyRecordJSON['bones'];
+  if (b.hips) r.hips = [b.hips[0], b.hips[1], b.hips[2]];
+  if (b.falling) r.falling = [b.falling[0], b.falling[1], b.falling[2]];
+  return r;
+}
