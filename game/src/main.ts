@@ -360,12 +360,15 @@ async function boot(): Promise<void> {
     document.querySelector(`${parentSel} .actions`)?.appendChild(b);
     return b;
   };
+  // (task refinement-batch, lane SAVE: the slot's latest save may be the player's own — the train's Save terminal — so "Last save", with
+  // its real reason; the game autosaves at every departure / arrival and saves on demand at the Save terminal)
   const autosaveNote = (): string => {
     const slot = game.currentSlot;
     const v = slot ? game.saves.list().find(x => x.slot === slot) : undefined;
     if (!slot || !v?.meta) return 'This run has no save yet — leaving now loses it.';
     const at = new Date(v.meta.savedAt), when = isNaN(at.getTime()) ? v.meta.savedAt : at.toLocaleString();
-    return `Last autosave (slot ${slot}): ${when}, at ${v.meta.station} (${v.meta.reason}). Progress since then is NOT saved — the game saves at every train departure and arrival.`;
+    const why = v.meta.reason === 'manual' ? 'saved at the Save terminal' : v.meta.reason === 'new-game' ? 'new game' : v.meta.reason;
+    return `Last save (slot ${slot}): ${when}, at ${v.meta.station} (${why}). Progress since then is NOT saved — the game autosaves at every train departure and arrival, and the Save terminal left of the train's driving desk saves any time the train is stopped.`;
   };
   const toMenu = (b: HTMLButtonElement) => b.addEventListener('click', () => {
     if (!game.run.campaign) { game.setState('title'); return; }

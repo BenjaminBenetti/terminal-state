@@ -121,7 +121,7 @@ import {installReactorRestart, preloadReactorItemModels} from './world/reactor/r
 import {installReactorStartup} from './world/reactor/startup'; // task reactor-playtest-round2-20261102 (lane STARTUP): startup audio, orange beacons, the ONLINE sky
 import {installReactorEnding} from './world/reactor/ending'; // task studio-reactor-surface-ending-20261102 (lane ENDING): the exterior door -> surface
 import {installReactorSurface} from './world/reactor/surface'; // task studio-reactor-surface-ending-20261102 (lane SURFACE): the city / rain / clear air outside
-import {installReactorCredits} from './world/reactor/credits'; // task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane CREDITS): the end credits
+import {installReactorCredits, reactorCreditsOf} from './world/reactor/credits'; // task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane CREDITS): the end credits
 import {installReactorCpuCulling} from './world/reactor/cpuActorCulling'; // task studio-reactor-submit-roof-fog-20261102 (lane CPU)
 import {installBunkerObjective} from './world/bunker/objective'; // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE): the Bunker's optional generators + core intel
 import {installReactorMapBoards} from './world/reactor/mapBoard'; // task reactor-expansion-20261101 (lane CONTROLS) // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
@@ -196,6 +196,7 @@ import {installCorpses, type CorpseSystem} from './world/corpses'; // task studi
 import {installChipper, type ChipperSystem} from './world/chipper'; // task corpse-chipper (lane CHIPPER): the woodchipper fixed in the train
 import {installTrainEquipment, type TrainEquipmentSystem} from './world/trainEquipment'; // task train-crafting (lane EQUIP): the crafted chests / devices as physical cargo, the three plugs
 import {installCraftBench, type CraftBenchSystem} from './world/craftBench'; // task train-crafting (lane BENCH): the crafting bench + its recipe list
+import {installSaveTerminal, type SaveNowResult, type SaveRefusal, type SaveTerminalSystem} from './world/trainSaveTerminal'; // task refinement-batch (lane SAVE): the manual Save terminal
 import {installSentryTurret, type SentryTurretSystem} from './world/sentryTurret'; // task train-crafting (lane SENTRY): the sentry's ammo + roof turret
 import {installItemScanner, type ItemScannerSystem} from './world/itemScanner'; // task train-crafting (lane SCANNER): the scanner's scope
 import {installTrainOnboarding, type TrainOnboarding} from './world/trainOnboarding'; // task first-player-onboarding: the train's seven 3D guide markers
@@ -448,6 +449,8 @@ export class Game {
   readonly craftBench: CraftBenchSystem;
   readonly sentryTurret: SentryTurretSystem;
   readonly itemScanner: ItemScannerSystem;
+  /** Task studio-refinement-batch-20261113-035659-01 (lane SAVE): the train's Save terminal left of the desk (world/trainSaveTerminal.ts; [E] -> saveNow). */
+  readonly saveTerminal: SaveTerminalSystem;
   /** Task first-player-onboarding: the browser-global tutorial record (never in a save) and the train's first-player markers. */
   readonly onboarding: OnboardingStore;
   readonly trainOnboarding: TrainOnboarding;
@@ -864,6 +867,10 @@ export class Game {
     hookName('sentryTurret');
     this.itemScanner = installItemScanner(this);
     hookName('itemScanner');
+    // task studio-refinement-batch-20261113-035659-01 (lane SAVE): after the train and the ride — the Save terminal left of the desk (its aim /
+    // glow / prompt / [E] through the train's own aim: PlayerTrainRuntime.saveTerminal; the screen's frame hook; the CRT model with the car)
+    this.saveTerminal = installSaveTerminal(this);
+    hookName('saveTerminal');
     // task studio-first-player-onboarding-20261111-234657-01: after the train / chipper (its section build reads the placed console desk) —
     // seven world-space markers at the parked train until the player first walks 10 m from it (world/trainOnboarding.ts); warm pool
     // 'train-onboarding'; nothing collides, casts or takes [E]
@@ -1576,6 +1583,52 @@ export class Game {
     if (!this.run.campaign) return null;
     if (this.world) { this.saveSectionMemory(); this.gear.flush(); this.fuelStations?.flush(); this.trainPropCargo?.flush(); this.corpses?.flush(); this.trainEquipment?.flush(); } // (task fuel-feedback: the station's fuel record with its memory; task train-all-cargo: its carried / lost props; lane CORPSE: the bodies lying in the station; task train-crafting: the crafted equipment left in it)
     return this.commitSave('ending', {pose: {...trainSpawnLocal(), yaw: 0, pitch: 0, crouched: false}});
+  }
+
+  /**
+   * Task studio-refinement-batch-20261113-035659-01 (lane SAVE): why a MANUAL save (the train's Save terminal) cannot be made right now
+   * (null: it can). Flags only — nothing is captured, read from storage or written. The slot checks are commitSave's own (same words).
+   */
+  saveBlock(): SaveRefusal | null {
+    const no = (code: SaveRefusal['code'], error: string): SaveRefusal => ({ok: false, code, error});
+    const c = this.run.campaign;
+    if (!c) return no('no-campaign', 'Not saved: this run is not a campaign run, so it has no save.');
+    if (this.state !== 'playing') return no('not-playing', 'Not saved: saving works only during play.');
+    if (!this.player.alive) return no('dead', 'Not saved: you are dead.');
+    if (this.trainRide?.riding || c.transit || this.transitGap) return no('moving', 'Not saved: the train is moving — save while it stands at a station.');
+    if (this.lifecycle.busy) return no('busy', 'Not saved: busy — try again in a moment.');
+    if (!this.world || !this.trainPlacement || !this.trainRuntime?.train) return no('no-train', 'Not saved: the train is not parked here.');
+    if (!this.trainRuntime.playerInside()) return no('outside', 'Not saved: step inside the train to save.');
+    // (the Bunker's cargo lift records its stop for a save; a car still travelling would carry things mid-shaft)
+    if (this.tower?.office?.elevator?.logic.moving) return no('lift', 'Not saved: the lift is moving — save once it stops.');
+    if (this.currentSlot === null) return no('bad-slot', 'Not saved: choose a save slot for this run first.');
+    if (this.saveRunId !== this.run.id) return no('conflict', `Not saved: this run is not the one saved in slot ${this.currentSlot}.`);
+    return null;
+  }
+
+  /**
+   * (lane SAVE) THE MANUAL SAVE — [E] at the train's Save terminal (world/trainSaveTerminal.ts). Refused (nothing captured or written)
+   * whenever saveBlock says so. Otherwise the live station's deltas go into the run memory by the same NON-destructive captures the
+   * ending save makes (loose items / holders / kills, the grounded bags, the fuel record, carried / lost props, the station's bodies and
+   * crafted units) plus the other records a teardown writes (the office / Skyways panes, the Bunker lift's stop, the Skyways car, the
+   * market's hostility, the Reactor credits) — the world stays live and its real teardown captures again — and the run is committed to
+   * the ACTIVE slot (commitSave: this run's slot, expectRevision, validated, one write, read back) with the player's real train-local
+   * pose, so Continue / Load last save resume right here. Never throws; a failed write leaves the slot's previous save as it was.
+   * Autosaves, Continue and Retry are unchanged (run.entry, the level-entry snapshot, is saved exactly as it stands).
+   */
+  saveNow(): SaveNowResult {
+    const no = this.saveBlock();
+    if (no) return no;
+    const pose = this.trainLocalPose();
+    if (!pose) return {ok: false, code: 'no-train', error: 'Not saved: the train is not parked here.'};
+    try {
+      this.saveSectionMemory(); this.gear.flush(); this.fuelStations?.flush(); this.trainPropCargo?.flush(); this.corpses?.flush(); this.trainEquipment?.flush();
+      this.gas?.flush?.(); // the office / Skyways window panes (otherwise written at teardown)
+      const lift = this.tower?.office?.elevator?.logic;
+      if (lift && !lift.moving && lift.stop !== null) this.tower.parkCar(); // a car level at a stop: only its record (nothing moves)
+      this.skywaysCar?.store?.(); this.marketCombat?.persist?.(); reactorCreditsOf(this)?.store();
+    } catch (err) { return {ok: false, code: 'invalid', error: `Not saved: ${String((err as Error)?.message ?? err)}`}; } // (as commitSave's capture: nothing written)
+    return this.commitSave('manual', {pose});
   }
 
   /** The campaign's return to the main menu (main.ts pause / death "Main menu"; lane CREDITS' end card): the moving ride reset, the title. */
