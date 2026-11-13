@@ -2,7 +2,8 @@
 
 <!-- Task enemy-spawn-tables-20261030 (lane SPAWN); task track1-siren-blightbelly-20261031 (lane SPAWN): families Blightbelly and
 Siren, family eligibility, level tiers; task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): the Strainer (service
-annexes only); task studio-screacher-production-20261110-221858-01: the Screacher (roster-only) and the seeded per-level roster.
+annexes only); task studio-screacher-production-20261110-221858-01: the Screacher (roster-only) and the seeded per-level roster;
+task studio-bb-production-20261112-234540-01: BB (roster-only, roster version 3, placed last).
 Registering a NEW level or annex zone: docs/level-enemy-contract.md. -->
 
 Every logical level has one **enemy spawn profile**. The real level generators read it; nothing else holds spawn numbers. On top
@@ -23,11 +24,11 @@ are marked **pre-roster**; they still describe that roll, which still runs first
 | Export | What it is |
 |---|---|
 | `SPAWN_PROFILES` / `spawnProfile(level)` | One `SpawnProfile` per `LevelId` (`subway`, `office`, `mall`, `market`, `bunker`, `skyways`, `reactor`). `Record<LevelId, …>`: a new level does not typecheck until it has one. |
-| `ENEMY_FAMILY_IDS` | The six enemy families in registry and roll order: `zombie`, `blightbelly`, `siren`, `ratdog`, `strainer`, `screacher` (= the archetype registry `ENEMY_ARCHETYPES`, `game/src/ai/creatureArchetypes.ts`, same key order; the Strainer and then the Screacher were appended last). |
-| `familyPool(shares)`, `DEFAULT_FAMILY_SHARES`, `ENEMY_POOL` | A level's pool: blightbelly 0.05 (default ON), siren 0 (default OFF, `OPT_IN_FAMILIES`), ratdog 0.05, strainer 0 (context-locked, below), screacher 0 (roster-only, below), zombie the remainder. `ENEMY_POOL` = `familyPool()` = the Subway's. |
+| `ENEMY_FAMILY_IDS` | The seven enemy families in registry and roll order: `zombie`, `blightbelly`, `siren`, `ratdog`, `strainer`, `screacher`, `bb` (= the archetype registry `ENEMY_ARCHETYPES`, `game/src/ai/creatureArchetypes.ts`, same key order; the Strainer, then the Screacher and then BB were appended last). |
+| `familyPool(shares)`, `DEFAULT_FAMILY_SHARES`, `ENEMY_POOL` | A level's pool: blightbelly 0.05 (default ON), siren 0 (default OFF, `OPT_IN_FAMILIES`), ratdog 0.05, strainer 0 (context-locked, below), screacher 0 and bb 0 (roster-only, below), zombie the remainder. `ENEMY_POOL` = `familyPool()` = the Subway's. |
 | `STRAINER_CONTEXTS`, `CONTEXT_LOCKED_FAMILIES` | The contexts whose OWN pool may give the Strainer weight: `['service', 'damp']` (the service annexes, the Bunker's damp zone). `validateSpawnProfile` rejects a positive Strainer weight in a level pool, in any other context's pool or in a horde pool (`HORDE_FORBIDDEN_FAMILIES`). |
-| `ROSTER_ONLY_FAMILIES` | `['screacher']`: families placed only by the seeded roster. Their weight is 0 in EVERY level pool, context pool and horde pool (`validateSpawnProfile` rejects anything else), so no per-spawn roll ever draws one. |
-| `SERVICE_FAMILY_POOL` | The service annexes' own pool: zombie 0.67, blightbelly 0.05, siren 0, ratdog 0.20, strainer 0.08, screacher 0 (see "Service annexes"). |
+| `ROSTER_ONLY_FAMILIES` | `['screacher', 'bb']`: families placed only by the seeded roster. Their weight is 0 in EVERY level pool, context pool and horde pool (`validateSpawnProfile` rejects anything else), so no per-spawn roll ever draws one. |
+| `SERVICE_FAMILY_POOL` | The service annexes' own pool: zombie 0.67, blightbelly 0.05, siren 0, ratdog 0.20, strainer 0.08, screacher 0, bb 0 (see "Service annexes"). |
 | `OFFICE_ENEMY_POOL`, `OFFICE_SIREN_WEIGHT`, `OFFICE_SIREN_ELIGIBILITY` | The Office pool (siren draw weight 0.19) and where an Office Siren may lie dormant. |
 | `markSpawnContext`, `spawnContextOf`, `eligibilityFailure`, `eligibleFamily`, `sealsPassage` | Spawn context tags and the eligibility checks. |
 | `ENEMY_SPAWNS` (+ `ENEMY_SPAWNS_BASELINE`, `ENEMY_POPULATION_SCALE`) | The Subway station count range (the iteration-12 doubled population). |
@@ -473,6 +474,9 @@ the seeded roster now runs after it.
 - **Screacher: 0 in EVERY pool.** `screacher` is appended last and is roster-only (`ROSTER_ONLY_FAMILIES`): weight 0 in every level
   pool, every context's own pool and every horde pool. A weight-0 row has no band, so every pick of every pool is bit-identical
   to the picks before it existed. It is placed by the seeded roster alone (below; the enemy itself: `docs/screacher.md`).
+- **BB: 0 in EVERY pool.** `bb` is appended last, after the Screacher, and is roster-only too: weight 0 in every level pool,
+  every context's own pool and every horde pool, so again no pick of any pool moved. It is placed by the seeded roster alone, from
+  roster version 3 (below; the enemy itself: `docs/bb.md`).
 - **Siren draw weight vs placed share (pre-roster: the roll and her eligibility rule).** Only ~11.3 of the ~38.7 slots of an Office run pass `OFFICE_SIREN_ELIGIBILITY`; an
   ineligible draw becomes a zombie. 400-run census (seeds 700000 + 101 k): draw weight 0.12 → 1.28 / run, 0.16 → 1.67, 0.18 → 1.87,
   **0.19 → 1.97 (12.5 % of runs none, max 4 = the cap; histogram 0: 50, 1: 102, 2: 117, 3: 71, 4: 60)**, 0.20 → 2.09. Not a
@@ -636,15 +640,16 @@ with the option B top-up): "I like it, lets go!" -->
 The per-spawn roll decides what one placed spawn is. The **seeded roster** then decides which special families a generated level
 holds **at all**: a level has a family, or it has none of it. It was introduced with the Screacher, which is placed by the roster
 alone, and it applies to every special family. Code: `game/src/ai/enemyRoster.ts` (`FAMILY_ROSTER`, `applyEnemyRoster`,
-`rosterOf`). The enemy itself: `docs/screacher.md`.
+`rosterOf`). The enemy itself: `docs/screacher.md`. BB (`docs/bb.md`, `game/src/ai/bb.ts`) is the second family placed by the
+roster alone; it was added in roster version 3.
 
 ### What the pass may do
 
 - **When.** Once per generated level map, on the FINISHED layout. The level registry runs it (`game/src/levels/registry.ts`: one
   wrapper over every `LEVELS[id].generate`), so it comes after every generation context, the one family roll
   (`assignEnemyArchetypes`), the eligibility rules, cap and spacing (`applyFamilySpacing`) and the hordes.
-- **What changes.** Only the family of a spawn: `archetype`, and `variant` for a Screacher. A family only ever swaps with an
-  **ordinary ambient zombie** slot.
+- **What changes.** Only the family of a spawn: `archetype`, and `variant` for a Screacher or a BB. A family only ever swaps
+  with an **ordinary ambient zombie** slot.
 - **What never changes.** No spawn is added, removed, moved or reordered. The enemy count, every position, the spawn indices (the
   per-index kill memory), the context tags and the zombie types are the generator's.
 - **Never touched.** Roaming-horde members (`ZombieSpawn.horde`) and store / convention outfit zombies (`ZombieSpawn.look`).
@@ -672,6 +677,7 @@ The rolls of different families are independent.
 | `ratdog` | 60 % (Reactor 100 %) | every level whose pools give it weight | `share-topup` (option B, at least one) |
 | `strainer` | 35 % | only a level map that has an ambient spawn in `STRAINER_CONTEXTS` (a service annex, the Bunker's damp zone) | `context-one` |
 | `screacher` | 40 % | every level that has enemies | `count` |
+| `bb` | 40 % | every level that has enemies, from roster version 3 | `count`, placed last |
 
 The Survivor Market is in `ZOMBIE_FREE_LEVELS`: `rosterRate` is 0 there for every family and the pass changes nothing.
 
@@ -683,6 +689,10 @@ them.
 The pass first makes every roll and clears the absent families. Then it places the present ones, **the most constrained first**
 (`ROSTER_PLACE_PRIORITY`; ties in registry order): the Strainer (`context-one`), the Siren (`eligible-min-one`), the Screacher
 (`count`), then the share top-ups (Blightbelly, rat/dog). Each works on the ordinary zombie slots still left.
+
+A family added in a later roster version is **placed last**, whatever its policy: its rule carries `last`, and the pass ranks it
+after every placement policy (`ROSTER_PLACE_LAST`). BB is the one such family. It takes only ordinary zombie slots the earlier
+families left, so each of them stands exactly where the earlier version put it.
 
 **Blightbelly and rat/dog: `share-topup` (option B).** The per-spawn pool shares, the room modifiers and the context pools still
 decide where they can be. A present level keeps what the per-spawn roll placed and gets more on top:
@@ -740,26 +750,43 @@ Bunkers have one).
 - **Variants.** The first Screacher's body is picked by a hash roll and the next ones follow in turn (`sc01` … `sc04`), stored in
   `ZombieSpawn.variant`.
 
+**BB: `count`, placed last.** No pool gives it weight, so only the roster places it (`FAMILY_ROSTER.bb`, from roster version 3).
+Its roll is independent of the Screacher's: a level can hold either, both or neither.
+
+- **Count.** `counts: [[1, 0.35], [2, 0.4], [3, 0.25]]`: one roll per level map picks 1, 2 or 3 (expected 1.9).
+- **Slots.** Ordinary ambient zombie slots of the level's enclosed core contexts (`station`, `street`, `floor`, `pit`, `ring`), in
+  an area at least 5 cells (2.5 m) on its shorter side and 60 cells (15 m²) large. It needs walls and ceilings, so the open `roof`
+  is not in the list; neither are the service annexes or the damp zone. The excluded area kind and rooms are the Screacher's:
+  never `closet`, and never a room of type or purpose `exit-stair`, `washroom`, `office-stair`, `stair-core`, `office-elevator`,
+  `supply-closet`, `janitor-closet` or `electrical-closet`.
+- **Spacing.** Slots are taken in a seeded order, each at least 9 m (straight 3D line) from the ones already taken. Where the
+  level cannot space them out, it holds as many as fit — at least one.
+- **Relaxing.** The same two steps as the Screacher (`relaxed` 1 / 2 in the report).
+- **Looks.** The first BB's look is picked by a hash roll and the next ones follow in turn (`lullaby`, `binky`, `teddy`,
+  `changeling`), stored in `ZombieSpawn.variant`.
+- **After everyone else.** By the time BB is placed, the Strainer, the Siren, the Screacher and the share top-ups have their
+  slots. BB never takes one of theirs, a roaming-horde member or an outfit zombie.
+
 ### On top of the per-spawn pools
 
 The roster decides WHETHER a level has a family. Everything else on this page still decides WHERE and HOW MANY within a level
 that has it: the pool shares, the context pools, the eligibility rules, the caps, the spacing and the context locks.
 
-- The per-spawn tables and bands are unchanged. The Screacher's band is empty in every pool.
+- The per-spawn tables and bands are unchanged. The Screacher's and BB's bands are empty in every pool.
 - A direct generator call without a roster version runs no pass. That is how the tests behind the pre-roster censuses on this
   page, the layout fingerprints and the parity pins call it, so they are all unchanged.
 
 ### The report
 
 `rosterOf(layout)` returns what the pass did (`RosterReport`): per seeded family `eligible`, `present`, `before`, `after`,
-`removed`, `added`, `noSlot`, and for the Screacher `wanted` and `relaxed`. `noSlot` marks a present family the level has no
+`removed`, `added`, `noSlot`, and for the counted families (the Screacher, BB) `wanted` and `relaxed`. `noSlot` marks a present family the level has no
 place for: it is the only way a present family holds none. The report is `undefined` for a layout no pass ran on. The QA hooks
 and the reference read it.
 
 ### Version and saves
 
-- `ROSTER_VERSION` is 2. Version 0 means "before the roster": no pass. Version 1 is the seeded families. Version 2 is the same
-  families, placed identically, plus the sprinters (below).
+- `ROSTER_VERSION` is 3. Version 0 means "before the roster": no pass. Version 1 is the seeded families. Version 2 is the same
+  families, placed identically, plus the sprinters (below). Version 3 is version 2, placed identically, plus BB (below).
 - A station records the version it was first built with in its section memory (lane `ROSTER_LANE` = `enemy.roster`, `{v}`).
   `rosterVersionFor(memory)`: the recorded version; else 0 for a station that has visits but no record (built before the roster
   existed); else the current version.
@@ -768,7 +795,8 @@ and the reference read it.
 - `Game.sectionGenInputs` (`game/src/game.ts`) always passes `rosterVersion`. `SectionGenContext.rosterVersion` absent means 0
   (`game/src/levels/types.ts`).
 - A later rule change bumps `ROSTER_VERSION` and gates the new rule on `since`, so a visited station keeps regenerating the
-  roster it was built with.
+  roster it was built with. A family added that way is also placed last (above), so the stations built from then on differ from
+  the older version only in the slots the new family takes.
 
 ### Sprinters (roster version 2)
 
@@ -777,7 +805,7 @@ pursues, instead of the usual chase gait.
 
 - **Who.** Every spawn of the ordinary infected family (`archetype` absent or `zombie`) is eligible: either type (shambler or
   coated), ambient, roaming-horde member or store / convention outfit zombie. No special family (Siren, Blightbelly, Strainer,
-  Screacher, rat/dog) and no special family's zombie stand-in ever sprints.
+  Screacher, BB, rat/dog) and no special family's zombie stand-in ever sprints.
 - **The roll.** One independent hash roll per eligible spawn: `sprinterRoll(level seed, spawn index) < SPRINTER.chance` (0.1). No
   RNG stream is consumed. The pass runs last in `applyEnemyRoster`, after the families have their slots, and writes only
   `ZombieSpawn.sprinter = true`. No spawn is added, removed, moved, reordered or given another family, type or look. There is no
@@ -804,10 +832,26 @@ pursues, instead of the usual chase gait.
   The look comes from the spawn's tag when the actor is built, so a saved sprinter shows it on Continue, Retry and import, and no
   actor, station, kill or loot is rerolled.
 - **Saves.** A station recorded at version 1 (or visited before the roster) regenerates with no sprinters, exactly as before.
-  Only stations first built at version 2 have them, and the same seed gives the same sprinters on every revisit, Continue,
-  Retry and import.
+  Only stations first built at version 2 or later have them, and the same seed gives the same sprinters on every revisit,
+  Continue, Retry and import.
 - **Tests.** `game/tests/sprinter-zombies.test.ts`; the gait on every shipped body (floor contact, no foot slide, flight, the
   differences from the Run, the garment joint range, footsteps, the actor) in `game/tests/sprinter-gait.test.ts`.
+
+### BB (roster version 3)
+
+`game/src/ai/bb.ts`, `FAMILY_ROSTER.bb`. The enemy and its rule: `docs/bb.md`; how it is placed: "BB: `count`, placed last" above.
+
+- **What version 3 changes.** On a level seed whose roll has no BB (60 % of them), nothing: the enemies are the version-2
+  enemies, record for record. On a seed with BB, 1 to 3 ordinary ambient zombies are BBs instead (`archetype` and `variant` of
+  those spawns). Every other spawn — its family, position, index, type, look and horde — is the version-2 spawn.
+- **Sprinters.** The sprinter roll is per spawn index and runs after the families, as before. A BB slot that was a sprinter at
+  version 2 is a BB, not a sprinter; no other tag changes.
+- **Saves.** A station recorded at version 2 or lower regenerates with that version: no BB, and its enemies, kills and indices
+  exact. Only stations first built at version 3 can hold BBs, and the same seed gives the same BBs, in the same slots and looks,
+  on every revisit, Continue, Retry and import.
+- **Never the Survivor Market** (`ZOMBIE_FREE_LEVELS`), at any version.
+- **Tests.** `game/tests/bb-roster.test.ts`: the rate, the counts and looks, the slot rule, version 3 against version 2 on every
+  combat level, the version pin, the registry classification.
 
 ### Census with the roster
 
@@ -815,7 +859,9 @@ pursues, instead of the usual chase gait.
 roster version 1 (re-measured after the at-least-one step and the `electrical-closet` exclusion were added). Checked on every
 level: only `archetype` / `variant` differ from the plain generator output, and on every tenth seed the registry path with
 `rosterVersion: 1` gives the identical level. The roll depends on the level seed and the family only, so these seeds roll the same
-families present on every level kind. Version 2 places exactly the same families; it only adds the sprinter tags.
+families present on every level kind. Version 2 places exactly the same families; it only adds the sprinter tags. Version 3
+places them identically as well and adds BB, which is not in these tables: on the seeds whose roll includes BB, 1 to 3 of the
+ordinary zombies counted here are BBs.
 
 Mean per level, "per-spawn roll alone → with the roster", and the number of the 100 levels that hold at least one:
 
@@ -885,6 +931,7 @@ What the sample shows:
 - **Tests.** `game/tests/enemy-roster.test.ts` (the table, the rolls, every placement policy on synthetic and real levels, the
   version pin). `game/tests/enemy-spawn-reference.test.ts` and `game/tests/pages-output.test.ts` (the reference agrees with it).
   `game/tests/screacher.test.ts` (a Screacher regenerates at the same index in the same body; a killed one stays dead).
+  `game/tests/bb-roster.test.ts` (BB: its rule, version 3 against version 2, the version pin).
 
 ## Room modifiers
 
@@ -922,15 +969,17 @@ What the sample shows:
 - **Add a family**:
   - Add it to `EnemyFamilyId` / `ENEMY_FAMILY_IDS` and to `ENEMY_ARCHETYPES` in the same order. **Where in the order:** the order
     is every pool's roll order. A family that is 0 in every existing pool is simply **appended last**: a weight-0 row has no band,
-    so every older pick stays bit-identical. Both newest families were added that way (the context-locked Strainer, then the
-    roster-only Screacher). Only a family that takes a positive DEFAULT share in existing pools has to sit before the families
+    so every older pick stays bit-identical. The three newest families were added that way (the context-locked Strainer, then
+    the roster-only Screacher and BB). Only a family that takes a positive DEFAULT share in existing pools has to sit before the families
     whose draws must not move (Blightbelly and Siren were inserted before `ratdog`, which so kept the top band of the roll).
   - Give it a `DEFAULT_FAMILY_SHARES` entry (0 = off by default). Add it to `OPT_IN_FAMILIES` when a level must enable it
     deliberately, to `CONTEXT_LOCKED_FAMILIES` when only some contexts' own pools may give it weight, or to `ROSTER_ONLY_FAMILIES`
     when only the seeded roster places it. Add its 0 row to the pools written out literally (`MALL_HORDE.families`,
     `COSPLAY_FAMILY_POOL` in `game/src/ai/cosplayContext.ts`) and decide `HORDE_FORBIDDEN_FAMILIES` (`game/src/ai/hordeSpec.ts`).
   - Give it a `FAMILY_ROSTER` entry in `game/src/ai/enemyRoster.ts` (typecheck forces it): the baseline, or a rate and a placement
-    policy.
+    policy. A seeded family added after a release bumps `ROSTER_VERSION`, sets `since` to the new version and `last: true`, so
+    saved stations and the earlier families' placement do not move (BB is the example).
+  - Classify its dead body in `CORPSE_TRAITS` (`game/src/ai/corpseTrait.ts`; typecheck forces it).
   - Runtime: its actor in `createEnemyActor`, its cues, `MELEE_MASS` (`game/src/combat/meleeImpact.ts`), its lazy model(s) in
     `ENEMY_MODEL_FILES` (`game/src/ai/enemyModels.ts`).
   - Reference: an `ENEMY_FAMILY_ADAPTER` entry (its exported stats / rules, with labels) in `tools/pages/enemyReference.ts`.
@@ -952,7 +1001,7 @@ SPAWN_PROFILES (game/src/ai/spawnTables.ts) ──> buildEnemyReference() ──
 `buildEnemyReference` reads only the profile API, the archetype registry, the registered levels (with their tiers, checked by
 `validateLevelRegistry`), each family's exported stats / rules (`ENEMY_FAMILY_ADAPTER`: `ZOMBIE_STATS`, `BLIGHTBELLY_STATS` /
 `BLIGHTBELLY_BURST`, `SIREN_STATS` / `SIREN_WAKE` / `SIREN_CLAW`, `RATDOG_STATS` / `LUNGE`, `STRAINER_STATS` / `STRAINER_ASSET`,
-`SCREACHER_STATS` and the Screacher's behaviour constants) and the seeded roster (`FAMILY_ROSTER`, `rosterRate`, `familyInRoster`,
+`SCREACHER_STATS` and the Screacher's behaviour constants, `BB_STATS` and BB's behaviour constants) and the seeded roster (`FAMILY_ROSTER`, `rosterRate`, `familyInRoster`,
 `applyEnemyRoster`). Static prose explains the rules; every number comes from the source.
 
 Its sampled censuses run the registered generators:
@@ -970,7 +1019,8 @@ long-run rate, and the roll itself is counted over 10,000 level seeds without ge
 
 Pages: `enemies/index.html` (levels, tiers, the roster's rules and every family's chance per level: `#roster`),
 `enemies/<level>.html` (profile, eligibility, the level's roster section `#roster` with a row `#roster-<family>` per family),
-`enemies/families.html` (stats, wake rules, death burst, the Screacher's hearing and echo constants, every family's roster rule),
+`enemies/families.html` (stats, wake rules, death burst, the Screacher's hearing and echo constants, BB's cadence, climbing and
+pounce constants, every family's roster rule),
 `enemies/how-to-read.html`. `tools/pages/validate.ts` fails a build where a level, a family or a family's roster place has no
 rendered anchor; a roster-only family is not exempt (the roster section is where its rule is shown).
 
@@ -990,9 +1040,12 @@ rendered anchor; a roster-only family is not exempt (the roster section is where
   GLB against the asset contract (skipped until the file exists).
 - `game/tests/enemy-spawn-reference.test.ts` — the reference: coverage, runtime agreement, census, maths, this page's names; the
   roster shown === `FAMILY_ROSTER` / `rosterRate` / `familyInRoster`, the roster census === a fresh registry generation with the
-  roster version on, the Screacher at weight 0 in every pool, and this page's roster table stating every family's rate.
+  roster version on, the Screacher and BB at weight 0 in every pool, and this page's roster table stating every family's rate.
 - `game/tests/enemy-roster.test.ts` — the seeded roster itself (rates, absent = none, placement policies, the version pin, the
   Market). `game/tests/pages-output.test.ts` — the rendered roster sections and the validator's rejections.
+- `game/tests/bb-roster.test.ts` — BB in the roster: the 40 % roll (never the Market, independent of the Screacher's), 1-3 per
+  selected level, the looks, the slot rule, roster version 3 against version 2 on every combat level (only the BB slots differ),
+  the version pin, the registry classification, and the tables of `docs/bb.md`.
 - `game/tests/annex-content.test.ts` (Track 2) — the `service` zone: declared per annex-bearing level, appended after every core spawn
   and tagged, annex areas only, within the per-annex budget / keep-off / spacing, the core's spawns and families unchanged, no
   Siren in an annex, kills remembered. Stage 5 of the parity pins: the live layouts of annex seeds (core views unchanged).

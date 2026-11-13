@@ -481,6 +481,10 @@ enemy models it is not in the boot preload: its four bodies are `enemy_screacher
 carry (`ZombieSpawn.variant`). So only a level whose seeded roster placed Screachers loads any of them — one to three bodies — and
 a level without Screachers loads none. Their first-use render objects were not measured here.
 
+BB (task studio-bb-production-20261112-234540-01) follows the same rule. Its four looks are `enemy_bb_lullaby`, `enemy_bb_binky`,
+`enemy_bb_teddy` and `enemy_bb_changeling` in `ENEMY_MODEL_FILES`; only a level whose seeded roster placed BBs loads any of them —
+one to three looks — and a level without BBs loads none. Their first-use render objects were not measured here either.
+
 **The reverb kernels** (`audio/reverb.ts`, `audio/sfx.ts`). Each room kind's stereo impulse response was built in one go:
 - the current room at audio start;
 - three others in later timer tasks, one whole kernel each;

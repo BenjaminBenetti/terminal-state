@@ -107,7 +107,8 @@ describe('Strainer: registry, weights and the context lock', () => {
     expect(DEFAULT_FAMILY_SHARES.strainer).toBe(0);
     expect(SERVICE_FAMILY_SHARES).toEqual({ratdog: 0.2, blightbelly: 0.05, siren: 0, strainer: 0.08});
     // (task studio-screacher-production-20261110-221858-01: familyPool lists the roster-only Screacher last at 0 — no band of this pool moved)
-    expect(SERVICE_FAMILY_POOL).toEqual([['zombie', 0.67], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.2], ['strainer', 0.08], ['screacher', 0]]);
+    // (task studio-bb-production-20261112-234540-01: + the roster-only BB last at 0 — again no band of this pool moved)
+    expect(SERVICE_FAMILY_POOL).toEqual([['zombie', 0.67], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.2], ['strainer', 0.08], ['screacher', 0], ['bb', 0]]);
     expect(SERVICE_CONTEXT.families).toBe(SERVICE_FAMILY_POOL);
     for (const id of LEVEL_IDS) {
       const p = spawnProfile(id);
@@ -181,9 +182,10 @@ describe('Strainer: core / non-service picks bit-identical; service-annex simula
     // the pre-change pools, literally (task track1 / mall round 3 values)
     // (task studio-screacher-production-20261110-221858-01: every pool now also lists the roster-only Screacher last at weight 0; `before`
     // removes the Strainer row only, so the literal carries that 0 row — a weight-0 row has no band, the picks below are the pre-Strainer ones)
-    expect(before(spawnProfile('subway').families)).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.05], ['screacher', 0]]);
-    expect(before(spawnProfile('office').families)).toEqual([['zombie', 0.71], ['blightbelly', 0.05], ['siren', 0.19], ['ratdog', 0.05], ['screacher', 0]]);
-    expect(before(spawnProfile('mall').families)).toEqual([['zombie', 0.1], ['blightbelly', 0.05], ['siren', 0.8], ['ratdog', 0.05], ['screacher', 0]]);
+    // (task studio-bb-production-20261112-234540-01: … and the roster-only BB's 0 row after it, for the same reason)
+    expect(before(spawnProfile('subway').families)).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.05], ['screacher', 0], ['bb', 0]]);
+    expect(before(spawnProfile('office').families)).toEqual([['zombie', 0.71], ['blightbelly', 0.05], ['siren', 0.19], ['ratdog', 0.05], ['screacher', 0], ['bb', 0]]);
+    expect(before(spawnProfile('mall').families)).toEqual([['zombie', 0.1], ['blightbelly', 0.05], ['siren', 0.8], ['ratdog', 0.05], ['screacher', 0], ['bb', 0]]);
     let strainers = 0;
     for (let k = 0; k < 200000; k++) {
       const seed = (k * 2654435761 + 12345) >>> 0, i = k % 53;
