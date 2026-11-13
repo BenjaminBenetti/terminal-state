@@ -217,7 +217,8 @@ done (or says it is partial / failed). `?warmup=off|view|full` overrides (softwa
 Goal (campaign): "Scavenge for resources. Return to the train when done." There is no kill goal; the Reactor's objective is
 to restart it. On death a campaign run offers "Load last save" (task campaign-polish-20261103: the active slot's latest valid save,
 loaded through the same path as the menu's Continue; nothing is saved or erased on death; without a valid save the button is disabled
-and says why) or "Main menu", which leaves after a confirmation naming the last autosave. Legacy dev runs keep "New station" (fresh
+and says why) or "Main menu", which leaves after a confirmation naming the last save (an autosave, or a manual save at the train's
+Save terminal). Legacy dev runs keep "New station" (fresh
 seed) as well.
 
 ## Campaign (task campaign-foundation-20261102)
@@ -265,6 +266,16 @@ seed) as well.
   an explicit confirm). Three heavily played slots measure about 42 % of a 5 MiB origin quota (`tests/save-budget.test.ts`
 keeps them under 70 %).
   A quota error is reported, never silently dropped.
+- **Manual save** (task refinement-batch-20261113, lane SAVE): a small green-screen CRT on a wall shelf left of the driving
+  console (`src/world/trainSaveTerminal.ts`). Its screen shows "SAVE", the active slot, that slot's last save and why the
+  terminal cannot save right now. [E] on it runs `Game.saveNow`. That captures the live station as a teardown would, without
+  tearing anything down, then writes the active slot through the same commit as the autosaves (reason `manual`, validated, one
+  write, read back), with your exact spot in the car. Continue and "Load last save" resume there. It saves only while the train
+  stands at a station with you inside it, during play, alive, and with a slot bound to the run. Otherwise the prompt says why.
+  Success shows "Game saved · slot N". A failure (a full storage, another tab's newer save) shows that error, and the slot keeps
+  its previous save. Autosaves, Continue and Retry (the level-entry snapshot) are unchanged. The terminal is a fixed part of the
+  car (a solid box parked and riding), not a prop, cargo or equipment. `tests/train-save-terminal.test.ts`,
+  `tests/save-manual.test.ts`.
 - **Win**: at the Reactor, restarting it opens the habitable-surface ending, and reaching the surface
   (`reactor.state.ending.surfaced`) completes the run once. Builds without the surface ending fall back to the restart itself.
 - **QA**: `node tools/qa/campaign-loop-check.mjs` is one serial spot check (menu, new game, slot, map, journey, Continue).
