@@ -637,13 +637,17 @@ export class Hud {
   }
 
   damage(angle: number, amount: number): void {
-    const v = $('#vignette');
-    v.animate([{opacity: Math.min(0.9, 0.35 + amount / 30)}, {opacity: 0}], {duration: 600, easing: 'ease-out'});
+    this.pain(amount);
     const arc = document.createElement('div');
     arc.className = 'dmg-arc';
     arc.style.transform = `rotate(${angle}rad)`;
     $('#damage-dir').appendChild(arc);
     setTimeout(() => arc.remove(), 950);
+  }
+
+  /** The red vignette's pulse (damage() and a burn without a direction: the acid pool). */
+  pain(amount: number): void {
+    $('#vignette').animate([{opacity: Math.min(0.9, 0.35 + amount / 30)}, {opacity: 0}], {duration: 600, easing: 'ease-out'});
   }
 
   toast(text: string, warn = false): void {

@@ -65,14 +65,18 @@ Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
   **sticks**, bursts 0.9 s later and that prop starts to melt. On anything else a hard hit bursts it and a soft one bounces; at rest
   it bursts. The burst splashes 20 damage to zombies and 8 to the player within 1.3 m, and leaves an **acid pool** (1.5 m radius) on
   the floor below for **10 active seconds** (it does not age while paused or in menus). Everyone standing in the pool burns:
-  zombies 30 hp/s (a regular zombie dies in about 3.3 s), the player 7 hp/s (it is not an attack: no armour). Props the pool touches
+  zombies 30 hp/s (a regular zombie dies in about 3.3 s), the player 7 hp/s (it is not an attack: no armour; a red pulse and a
+  grunt about once a second). The time each one stands in it is counted every frame and applied four times a second, as strong as
+  the film is (it spreads in over 0.3 s and thins over its last 1.6 s); a burning zombie is alerted where it stands, never drawn to
+  the pool, and an acid kill crumples rather than flies. Props the pool touches
   melt after 0.8 s of contact (`world/acidMelt.ts`): each leaves exactly one salvage — **Electrical parts** from powered devices,
   **Scrap metal** from anything else — once, and spills what it held as real items. The train itself and everything fitted to it
   (the Lockbox, the bench, the chipper, the controls, the Save terminal, the armor) never melt; portable cargo and crafted equipment
   aboard do. The pool is a liquid film with bubbles, never a gas cloud. At most three acid pools / acid canisters at once.
 - **Zombie Lure grenade.** It lands and rolls; at rest it opens and for **20 active seconds** the infected within **20 m** smell it,
-  through walls and round corners, and go to the canister itself — never to you (`ai/scentLure.ts`). A faint tan plume shows it is
-  venting. Then it is empty and goes after a while. At most three at once.
+  through walls and round corners, and go to the canister itself — never to you (`ai/scentLure.ts`); one that sees you still
+  comes for you, and the blind Screacher and a dormant Siren ignore it. A faint tan plume shows it is venting. Then it is empty and
+  goes after a while. At most three at once.
 
 ## Moving equipment
 

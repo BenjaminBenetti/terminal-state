@@ -30,7 +30,7 @@ export const GRENADE_ITEMS: Record<string, ItemDef> = {
   [ACID_GRENADE]: {id: ACID_GRENADE, name: 'Acid Scrapper grenade', short: 'Acid', kind: 'throwable', stackMax: 5, icon: 'acidGrenade',
     description: 'A sealed canister of scrapper acid brewed from bio mater. Goes in the grenade slot: hold G to ready it, release to throw. It sticks to the prop it hits and bursts — on a zombie it bursts at once. The pool eats through props for 10 seconds, each leaving one piece of salvage and spilling what it held, and burns anyone standing in it, you too. It never touches the train itself or its fitted fixtures.'},
   [LURE_GRENADE]: {id: LURE_GRENADE, name: 'Zombie Lure grenade', short: 'Lure', kind: 'throwable', stackMax: 5, icon: 'lureGrenade',
-    description: 'A canister of rotten bio-mater scent. Goes in the grenade slot: hold G to ready it, release to throw. For 20 seconds the infected within 20 m smell it, even round corners, and go to the canister instead of you.'},
+    description: 'A canister of rotten bio-mater scent. Goes in the grenade slot: hold G to ready it, release to throw. For 20 seconds the infected within 20 m smell it, even round corners, and go to the canister instead of you — unless they can see you. The blind Screacher and a sleeping Siren ignore it.'},
 };
 
 const dimsOf = (k: keyof typeof GRENADE_MODELS): ItemDims => {

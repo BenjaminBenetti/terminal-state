@@ -687,9 +687,10 @@ export class Game {
     // melt system (world/acidMelt.ts) and the scent emitters (ai/scentLure.ts); their canisters / pool film compile with the station
     this.grenades.env = {
       zombies: () => this.zombies, player: () => this.player, smoke: this.atmosphere satisfies FlareSmokeHost, audio: this.sfx,
-      kill: (z, dir, point) => this.blastKill(z as unknown as BlightEnemy, dir, point),
+      kill: (z, dir, point, strength) => this.blastKill(z as unknown as BlightEnemy, dir, point, strength),
       hurt: z => enemyCues(z as unknown as EnemyActor).hurt(this.sfx, z as unknown as EnemyActor),
       playerBurn: () => this.hud.toast('Acid! Get out of the pool', true),
+      playerHurt: amount => { this.hud.pain(amount); this.sfx.hurt(); }, // (no direction arc, no camera punch: it burns, it does not hit)
       melt: () => (this as {acidMelt?: AcidMeltLike | null}).acidMelt ?? null, scents: () => this.scents, // (lane MELT: world/acidMelt.ts; lane LURE: ai/scentLure.ts)
       levelAt: (x, z, y) => this.levels ? this.levels.levelAt(x, z, y) : 0,
       lineOfSight: (a, b) => !this.levels || this.levels.lineOfSight(a, b),
@@ -2782,7 +2783,7 @@ export class Game {
   private throwRefused(reason: 'none' | 'cap', itemId: string | null): void {
     const g = isGrenadeItem(itemId) ? itemDef(itemId) : null;
     if (reason === 'none') this.hud.toast(!itemId ? 'Nothing in the grenade slot — find a flare or craft a grenade' : g ? `No ${g.name}s left` : 'No flares — find one first', true);
-    else this.hud.toast(itemId === ACID_GRENADE ? 'Three acid pools already — wait for one to dry up' : g ? 'Three lures already out — wait for one to run out' : 'Three flares already burning — wait for one to burn out', true);
+    else this.hud.toast(itemId === ACID_GRENADE ? 'Three acid grenades already out — wait for a pool to dry up' : g ? 'Three lures already out — wait for one to run out' : 'Three flares already burning — wait for one to burn out', true);
     this.sfx.denied();
   }
 
@@ -3997,13 +3998,17 @@ export class Game {
     this.muzzleT = 0.05;
   }
 
-  /** Task track1-siren-blightbelly-20261031 (lane BLIGHT): an enemy killed by a Blightbelly's blast — the normal kill bookkeeping (stats, death cue, ragdoll). */
-  blastKill(z: BlightEnemy, dir: THREE.Vector3, point: THREE.Vector3): void {
+  /**
+   * Task track1-siren-blightbelly-20261031 (lane BLIGHT): an enemy killed by a Blightbelly's blast — the normal kill bookkeeping (stats,
+   * death cue, ragdoll). Task studio-refinement-batch-20261113-035659-01: `strength` = the ragdoll impulse (default: the blast's; an
+   * acid kill passes its gentler ACID.killImpulse).
+   */
+  blastKill(z: BlightEnemy, dir: THREE.Vector3, point: THREE.Vector3, strength = killImpulseStrength('shotgun', 6, 9)): void {
     const e = z as EnemyActor;
     if (!this.zombies.includes(e)) return;
     this.stats.kills++;
     enemyCues(e).death(this.sfx, e);
-    this.physics.ragdoll(e, {dir, point, strength: killImpulseStrength('shotgun', 6, 9)});
+    this.physics.ragdoll(e, {dir, point, strength});
   }
 
   /**

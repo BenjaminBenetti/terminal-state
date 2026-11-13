@@ -849,7 +849,7 @@ export class Inventory {
     }
     const def = itemDef(itemId);
     // Task office-overhaul-20261030 (INTERACT): the grenade slot takes throwables only
-    if (e.kind === 'throw' && def.kind !== 'throwable') return {code: 'wrong-slot', text: `Only throwables (flares) go in the grenade slot (G) — not the ${def.short.toLowerCase()}.`};
+    if (e.kind === 'throw' && def.kind !== 'throwable') return {code: 'wrong-slot', text: `Only throwables (flares, crafted grenades) go in the grenade slot (G) — not the ${def.short.toLowerCase()}.`};
     // Task knife-windup-20261030 (SLOT): the melee slot takes melee weapons only
     if (e.kind === 'melee' && !isMeleeItem(itemId)) return {code: 'wrong-slot', text: `Only melee weapons go in the melee slot (~) — not the ${def.short.toLowerCase()}.`};
     if (e.kind === 'gear') {

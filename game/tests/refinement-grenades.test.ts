@@ -20,7 +20,7 @@ import {ITEMS, ITEM_DIMS, itemDef} from '../src/items/items';
 import {econCat} from '../src/items/lootTables';
 import {ICONS} from '../src/ui/icons';
 import {GRENADE_MODEL_URLS, grenadeModel, grenadeModelSource} from '../src/world/grenadeModels';
-import {ACID, GRENADE, GrenadeSystem, LURE, inPool, throwOneGrenade, type AcidMeltLike, type GrenadeEnemy, type MeltRefLike} from '../src/weapons/grenades';
+import {ACID, GRENADE, GrenadeSystem, LURE, inPool, poolReach, poolStrength, throwOneGrenade, type AcidMeltLike, type GrenadeEnemy, type MeltRefLike} from '../src/weapons/grenades';
 import {PhysicsSystem} from '../src/physics/world';
 import {levelsOf} from '../src/gen/levels';
 import {mulberry32} from '../src/core/rng';
@@ -157,10 +157,16 @@ describe('craftMade: the atomic transaction of a made recipe', () => {
 const fx = levelFixture();
 const L = levelsOf(fx);
 
-function fakeZombie(x: number, y: number, z: number, hp = 100): GrenadeEnemy & {brain: {hp: number}} {
+function fakeZombie(x: number, y: number, z: number, hp = 100): GrenadeEnemy & {brain: {hp: number; hits: {amount: number; from: [number, number, number?]}[]}} {
   const brain = {
-    alive: true, x, y, z, hp,
-    damage(amount: number) { if (!this.alive) return false; this.hp -= amount; if (this.hp <= 0) { this.alive = false; return true; } return false; },
+    alive: true, x, y, z, hp, hits: [] as {amount: number; from: [number, number, number?]}[],
+    damage(amount: number, fx: number, fz: number, fy?: number) {
+      if (!this.alive) return false;
+      this.hits.push({amount, from: [fx, fz, fy]});
+      this.hp -= amount;
+      if (this.hp <= 0) { this.alive = false; return true; }
+      return false;
+    },
   };
   return {
     brain, hitFlash: 0,
@@ -174,9 +180,10 @@ function world(o: {zombies?: GrenadeEnemy[]; melt?: AcidMeltLike | null} = {}) {
   const sys = new GrenadeSystem(new THREE.Group(), ph, mulberry32(11));
   const player = {x: 21, y: FIX.upperY, z: 4, alive: true, hp: 100, takeDamage(a: number) { this.hp -= a; if (this.hp <= 0) this.alive = false; }};
   const scents = {added: [] as {x: number; y: number; z: number; seconds?: number}[], removed: 0, add(p: {x: number; y: number; z: number}, opts?: {seconds?: number}) { this.added.push({...p, seconds: opts?.seconds}); return {id: this.added.length}; }, remove() { this.removed++; }};
-  const kills: GrenadeEnemy[] = [];
+  const kills: GrenadeEnemy[] = [], killStrength: number[] = [], pain: number[] = [];
   sys.env = {
-    zombies: () => o.zombies ?? [], player: () => player, kill: z => { kills.push(z); },
+    zombies: () => o.zombies ?? [], player: () => player, kill: (z, _d, _p, strength) => { kills.push(z); killStrength.push(strength); },
+    playerHurt: a => { pain.push(a); },
     melt: () => o.melt ?? null, scents: () => scents,
     levelAt: (x, z, y) => L.levelAt(x, z, y), lineOfSight: (a, b) => L.lineOfSight(a, b),
   };
@@ -188,7 +195,8 @@ function world(o: {zombies?: GrenadeEnemy[]; melt?: AcidMeltLike | null} = {}) {
   const step = (n = 1) => { for (let i = 0; i < n; i++) { ph.update(DT); sys.tick(DT); } };
   const toss = (id: typeof ACID_GRENADE | typeof LURE_GRENADE, dir = dirOf(0, -0.35, 1)) =>
     throwOneGrenade(sys, id, () => inv.take(id, 1) === 1, () => inv.count(id) > 0, eye, dir);
-  return {ph, sys, player, scents, kills, inv, step, toss, dirOf};
+  const poolNow = () => { let n = 0; while (!sys.pools.length && n++ < 600) step(); return sys.pools[0]; };
+  return {ph, sys, player, scents, kills, killStrength, pain, inv, step, toss, dirOf, poolNow};
 }
 
 describe('GrenadeSystem: acid', () => {
@@ -218,28 +226,60 @@ describe('GrenadeSystem: acid', () => {
   it('the pool burns the zombies AND the player standing in it (inPool: the drawn disc), and nobody outside it', () => {
     const w = world();
     w.toss(ACID_GRENADE);
-    let n = 0;
-    while (!w.sys.pools.length && n++ < 600) w.step();
-    const p = w.sys.pools[0];
+    const p = w.poolNow();
+    w.step(Math.round(ACID.fadeIn / DT) + 1); // (spread to its full disc)
+    expect(poolReach(p)).toBe(ACID.poolR);
     const inside = fakeZombie(p.x + 0.6, p.y, p.z), outside = fakeZombie(p.x + ACID.poolR + 0.6, p.y, p.z), above = fakeZombie(p.x, p.y + 3, p.z);
     const zs = [inside, outside, above];
     w.sys.env.zombies = () => zs;
     Object.assign(w.player, {x: p.x - 0.5, y: p.y, z: p.z});
     const hp0 = w.player.hp;
-    w.step(60); // 1 s
-    expect(100 - inside.brain.hp).toBeCloseTo(ACID.zombieDps * 1, 0);
+    w.step(60); // 1 s: applied in ACID.burnEvery batches, so up to one batch is still pending
+    expect(100 - inside.brain.hp).toBeGreaterThan(ACID.zombieDps * (1 - ACID.burnEvery) - 0.01);
+    expect(100 - inside.brain.hp).toBeLessThan(ACID.zombieDps * 1 + 0.01);
     expect([outside.brain.hp, above.brain.hp]).toEqual([100, 100]);
-    expect(hp0 - w.player.hp).toBeCloseTo(ACID.playerDps * 1, 1);
+    expect(hp0 - w.player.hp).toBeGreaterThan(ACID.playerDps * (1 - ACID.burnEvery) - 0.01);
+    expect(hp0 - w.player.hp).toBeLessThan(ACID.playerDps * 1 + 0.01);
     expect(inPool(p, w.player.x, w.player.y, w.player.z)).toBe(true);
-    // a regular zombie dies in it in ~100 / 30 s (the kill goes through the game's kill path)
+    // a regular zombie dies in it in ~100 / 30 s (the kill goes through the game's kill path, crumpling: ACID.killImpulse)
     w.step(Math.round(2.6 / DT));
     expect(inside.brain.alive).toBe(false);
     expect(w.kills).toEqual([inside]);
-    // stepping out stops the burn at once
+    expect(w.killStrength).toEqual([ACID.killImpulse]);
+    // the burn comes from the zombie's own feet (never "a noise at the pool's centre" that would draw it in), batched, never per frame
+    expect(inside.brain.hits.every(h => h.from[0] === inside.brain.x && h.from[1] === inside.brain.z)).toBe(true);
+    expect(inside.brain.hits.length).toBeLessThanOrEqual(Math.ceil(3.6 / ACID.burnEvery) + 1);
+    // stepping out stops the burn (what was counted before is applied at the next batch, then nothing)
     Object.assign(w.player, {x: p.x + ACID.poolR + 1});
+    w.step(Math.round(ACID.burnEvery / DT) + 1);
     const hp1 = w.player.hp;
     w.step(60);
     expect(w.player.hp).toBe(hp1);
+    // the pain cue (HUD pulse + grunt) at most every ACID.painEvery s while it burns
+    expect(w.pain.length).toBeGreaterThan(0);
+    expect(w.pain.length).toBeLessThanOrEqual(Math.ceil(3.6 / ACID.painEvery) + 1);
+  });
+
+  it('the burn thins with the film: a whole pool is worth about (10 - the fades / 2) s, and nothing burns past its 10 active seconds', () => {
+    const w = world();
+    w.toss(ACID_GRENADE);
+    const p = w.poolNow();
+    const z = fakeZombie(p.x, p.y, p.z, 1e6);
+    w.sys.env.zombies = () => [z];
+    Object.assign(w.player, {x: p.x + 9, z: p.z + 9});
+    const t0 = p.left;
+    // to the last frame, then one long (0.05 s) frame past its end
+    w.step(Math.floor((t0 - 0.03) / DT));
+    expect(w.sys.pools).toHaveLength(1);
+    w.ph.update(0.05); w.sys.tick(0.05);
+    expect(w.sys.pools).toHaveLength(0);
+    const took = 1e6 - z.brain.hp;
+    const full = ACID.zombieDps * (t0 - ACID.fadeIn / 2 - ACID.fadeOut / 2);
+    expect(took).toBeGreaterThan(full - 1);
+    expect(took).toBeLessThan(full + 1);
+    // the strength the burn uses IS the film's opacity (drawPool) — one source for what hurts and what shows
+    expect(poolStrength({age: ACID.fadeIn / 2, left: 5})).toBeCloseTo(0.5, 6);
+    expect(poolStrength({age: 5, left: ACID.fadeOut / 4})).toBeCloseTo(0.25, 6);
   });
 
   it('a zombie in its path stops it: direct damage + the burst there; the caps refuse with nothing consumed', () => {
@@ -295,6 +335,72 @@ describe('GrenadeSystem: acid', () => {
     n = 0;
     while (!w2.sys.pools.length && n++ < 600) w2.step();
     expect(w2.sys.pools).toHaveLength(1);
+  });
+});
+
+describe('GrenadeSystem: lifts, doors and clears', () => {
+  it('an elevator cab carries a venting lure (its emitter AND its plume follow) and a pool; a stuck canister rides its prop instead', () => {
+    const w = world();
+    const moved: {y: number}[] = [], plume: {up: {y: number}[]; stopped: number} = {up: [], stopped: 0};
+    const scents = {n: 0, add() { return {id: ++this.n}; }, remove() {}, move: (_e: unknown, p: {y: number}) => { moved.push(p); }};
+    w.sys.env.scents = () => scents;
+    w.sys.env.smoke = {addSmokeEmitter: () => ({update: (q: {y: number}) => { plume.up.push(q); }, stop: () => { plume.stopped++; }})};
+    w.toss(LURE_GRENADE);
+    let n = 0;
+    while (w.sys.canisters[0].state === 'flying' && n++ < 900) w.step();
+    const c = w.sys.canisters[0], y0 = w.sys.qa().canisters[0].y;
+    expect(c.state).toBe('venting');
+    w.sys.carry(() => true, 1.25);
+    expect(w.sys.qa().canisters[0].y).toBeCloseTo(y0 + 1.25, 2); // (qa() rounds to mm)
+    expect(moved.map(p => p.y)).toEqual([expect.closeTo(y0 + 1.25, 2)]);
+    expect(plume.up.map(p => p.y)).toEqual([expect.closeTo(y0 + 1.25 + 0.1, 2)]);
+    // outside the cab: nothing moves
+    w.sys.carry(() => false, 3);
+    expect(moved).toHaveLength(1);
+    // a landing door shuts on it: it goes to the side the door hands it, the scent with it
+    w.sys.relocate(() => [c.root.position.x + 0.6, c.root.position.z]);
+    expect(moved).toHaveLength(2);
+    expect(plume.up).toHaveLength(2);
+    // a pool rides the cab too (its film and its bubbles)
+    const w2 = world();
+    w2.toss(ACID_GRENADE);
+    const p = w2.poolNow(), py = p.y;
+    w2.sys.carry((_x, y) => Math.abs(y - py) < 0.5, 0.8);
+    expect([p.y, p.mesh.position.y - p.y, p.bubbles.position.y - p.y].map(v => +v.toFixed(4))).toEqual([+(py + 0.8).toFixed(4), 0.012, 0.012]);
+  });
+
+  it('clear(): canisters in every state and pools go silently — no burst, no melt start, no damage; a cleared world ticks to nothing', () => {
+    const ref: MeltRefLike = {key: 'prop:9', x: 21, y: FIX.upperY, z: 8, label: 'crate'};
+    const started: string[] = [];
+    const melt: AcidMeltLike = {
+      atPoint: (_x, _y, z) => (z > 5.5 ? ref : null), inDisc: () => [], expose: () => true,
+      start: r => { started.push(r.key); return true; }, alive: () => true,
+      where: (r, out) => { out.x = r.x; out.y = r.y; out.z = r.z; return true; },
+    };
+    const w = world({melt});
+    w.toss(ACID_GRENADE);
+    let n = 0;
+    while (w.sys.canisters[0]?.state !== 'stuck' && n++ < 600) w.step();
+    expect(w.sys.canisters[0].state).toBe('stuck');
+    w.step(Math.round(GRENADE.cooldown / DT) + 1);
+    w.toss(LURE_GRENADE); // (in flight)
+    const z = fakeZombie(21, FIX.upperY, 6);
+    w.sys.env.zombies = () => [z];
+    w.sys.clear();
+    expect([w.sys.canisters.length, w.sys.pools.length, w.sys.acidCount, w.sys.lureCount]).toEqual([0, 0, 0, 0]);
+    w.step(Math.round(3 / DT));
+    expect([started, z.brain.hits.length, w.sys.counts.bursts, w.sys.pools.length]).toEqual([[], 0, 0, 0]);
+    // and a pool mid-burn: its pending batch is dropped with it (nothing applied after clear)
+    const w2 = world();
+    w2.toss(ACID_GRENADE);
+    const p = w2.poolNow();
+    const z2 = fakeZombie(p.x, p.y, p.z);
+    w2.sys.env.zombies = () => [z2];
+    w2.step(Math.round(0.5 / DT) + 3);
+    const hp = z2.brain.hp;
+    w2.sys.clear();
+    w2.step(Math.round(1 / DT));
+    expect(z2.brain.hp).toBe(hp);
   });
 });
 

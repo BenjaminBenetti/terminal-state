@@ -76,7 +76,7 @@ export const MADE_RECIPES: readonly MadeRecipe[] = Object.freeze([
   Object.freeze({kind: ACID_GRENADE, make: Object.freeze({type: 'item', itemId: ACID_GRENADE, count: 5}), name: 'Acid Scrapper grenade ×5', cost: costOf(0, 0, 3),
     blurb: 'Five throwable canisters: the acid sticks, melts props down to salvage and burns whoever stands in it.'}),
   Object.freeze({kind: LURE_GRENADE, make: Object.freeze({type: 'item', itemId: LURE_GRENADE, count: 3}), name: 'Zombie Lure grenade ×3', cost: costOf(0, 0, 3),
-    blurb: 'Three scent canisters: for 20 s the infected within 20 m go to the canister, not to you.'}),
+    blurb: 'Three scent canisters: for 20 s the infected within 20 m go to the canister, not to you (one that sees you still comes).'}),
   Object.freeze({kind: 'armor', make: Object.freeze({type: 'upgrade', id: 'armor'}), name: 'Train armor', cost: costOf(10, 0, 0),
     blurb: 'Fits steel plating and blades all round the train for good: zombies pressed against it are cut down.'}),
 ] as MadeRecipe[]);

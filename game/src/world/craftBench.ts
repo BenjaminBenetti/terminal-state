@@ -566,7 +566,7 @@ export class CraftBenchSystem {
       h.syncHeld?.();
     } else {
       this.counts.refused++;
-      if (res.error !== undefined) console.warn('crafting bench: the equipment system failed to build a unit (materials refunded)', res.error);
+      if (res.error !== undefined) console.warn(`crafting bench: making ${kind} failed (${recipe && isMadeRecipe(recipe) ? 'the delivery / upgrade' : 'the equipment system'} threw; materials refunded)`, res.error);
       this.view.say(res.text, true);
       sfx?.denied?.();
     }

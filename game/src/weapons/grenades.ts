@@ -16,16 +16,18 @@
 //  - a ZOMBIE hit bursts it at once: ACID.direct damage to that zombie;
 //  - touching a PROP the acid can melt (world/acidMelt.ts atPoint: the melt system's own eligibility — never the train, its fitted
 //    fixtures or building structure) it STICKS there (no body; it follows the prop) and bursts ACID.stickFuse later, the prop starting
-//    to melt at once (AcidMelt.start);
+//    to melt at that burst (AcidMelt.start);
 //  - anything else (floor, wall, the train, a fixture): a hard hit (>= ACID.burstSpeed) bursts it, a soft one bounces; at rest it bursts.
 //  BURST: a splash (ACID.splash to the zombies, ACID.playerSplash to the player within ACID.splashR — the thrower too) and an ACID POOL on
 //  the floor under the burst: a disc of ACID.poolR for ACID.poolSeconds ACTIVE seconds (it only ages while the game updates: paused /
-//  menus / loading never spend it). Every frame everyone standing in it burns — zombies ACID.zombieDps (a shambler ~3.3 s), the player
-//  ACID.playerDps (no armour: it is not a hit) — and every ACID.propEvery s the melt system is told which eligible props it touches
-//  (AcidMelt.expose: after MELT.exposure s they melt; one salvage each, contents spilled — world/acidMelt.ts). One function decides
-//  "in the pool" for damage AND for what is drawn (inPool + the disc's own radius). The pool is a LIQUID: a glossy yellow-green film with
-//  a few bubbles, never a gas / fog volume (CLAUDE.md's green-fog rule is for toxic gas). At most ACID.maxPools pools + acid canisters at
-//  once (refused with a message, nothing consumed).
+//  menus / loading never spend it). Everyone standing in it burns — zombies ACID.zombieDps (a shambler ~3.3 s), the player ACID.playerDps
+//  (no armour: it is not a hit) — counted every frame, applied in ACID.burnEvery batches (a zombie's damage() re-plans it, so never per
+//  frame; the source is the zombie's own feet, so the burn never draws it into the pool), the strength thinning with the film as it dries.
+//  Every ACID.propEvery s the melt system is told which eligible props it touches (AcidMelt.expose: after MELT.exposure s they melt; one
+//  salvage each, contents spilled — world/acidMelt.ts). One function decides "in the pool" for damage AND for what is drawn (inPool over
+//  the film's drawn radius, poolReach). The pool is a LIQUID: a glossy yellow-green film with a few bubbles, never a gas / fog volume
+//  (CLAUDE.md's green-fog rule is for toxic gas). At most ACID.maxPools pools + acid canisters not yet burst at once (refused with a
+//  message, nothing consumed). An acid kill crumples (ACID.killImpulse), it is no blast.
 //
 // LURE (user: "Scent reaches 20 m without LOS for 20 active seconds. Zombies investigate the ACTUAL emitter, not the player"):
 //  - it lands, rolls and comes to rest (a zombie hit just stops it); at rest it OPENS: a scent emitter at the canister itself
@@ -80,8 +82,15 @@ export const ACID = {
   poolSeconds: 10,
   zombieDps: 30,
   playerDps: 7,
-  /** Feet this far (m) above / below the pool's film still stand in it. */
+  /** Feet this far (m) above / below the pool's film still stand in it; a body whose centre is within footR (m) of the film's edge has a foot in it. */
   poolRise: 0.45,
+  footR: 0.12,
+  /** Seconds between the pool's burn batches (the time each actor stood in it, applied at once). */
+  burnEvery: 0.25,
+  /** The ragdoll impulse of an acid kill (a pistol kill is 38, a shotgun blast up to ~107): it crumples. */
+  killImpulse: 12,
+  /** Seconds between the player's pain cues (HUD pulse + grunt) while the acid burns. */
+  painEvery: 0.9,
   /** Seconds between the pool's prop exposure passes (AcidMelt.inDisc / expose). */
   propEvery: 0.2,
   /** Pools + acid canisters in flight / stuck at once. */
@@ -143,12 +152,14 @@ export interface GrenadeEnv {
   zombies?(): readonly GrenadeEnemy[];
   /** The player (Game.player): splash / pool burns go straight to takeDamage (not an attack: no armour, no injury roll). */
   player?(): {x: number; y: number; z: number; alive: boolean; takeDamage(amount: number): void} | null;
-  /** A zombie the acid killed: the game's kill bookkeeping + ragdoll (Game.blastKill). */
-  kill?(z: GrenadeEnemy, dir: THREE.Vector3, point: THREE.Vector3): void;
+  /** A zombie the acid killed: the game's kill bookkeeping + ragdoll at `strength` (Game.blastKill). */
+  kill?(z: GrenadeEnemy, dir: THREE.Vector3, point: THREE.Vector3, strength: number): void;
   /** A zombie the acid hurt (its hurt cue). */
   hurt?(z: GrenadeEnemy): void;
   /** The player stepped into a pool (a HUD hint, once per pool). */
   playerBurn?(): void;
+  /** The acid hurt the player (the splash, or a burn — at most every ACID.painEvery s): the pain feedback (HUD pulse + grunt). */
+  playerHurt?(amount: number): void;
   melt?(): AcidMeltLike | null;
   scents?(): ScentHostLike | null;
   smoke?: FlareSmokeHost | null;
@@ -202,6 +213,10 @@ export interface AcidPool {
   /** Active seconds left / since it formed. */
   left: number;
   age: number;
+  /** Seconds into the current burn batch; each zombie's / the player's exposure in it (s x the film's strength). */
+  burnT: number;
+  readonly burning: Map<GrenadeEnemy, number>;
+  playerS: number;
   propT: number;
   fizzT: number;
   burned: boolean;
@@ -227,9 +242,17 @@ export function throwOneGrenade(sys: GrenadeSystem, itemId: GrenadeId, takeOne: 
   return sys.throw(itemId, eye, dir, inherit);
 }
 
-/** Is a point (feet) inside a pool: THE test for its damage and for what it melts (the disc drawn is the same radius). */
-export function inPool(p: Pick<AcidPool, 'x' | 'y' | 'z' | 'r'>, x: number, y: number, z: number, pad = 0): boolean {
-  const dx = x - p.x, dz = z - p.z, r = p.r + pad;
+/** The film's drawn radius now: it spreads from 40 % to the full ACID.poolR over ACID.fadeIn (drawPool scales the disc by exactly this). */
+export function poolReach(p: Pick<AcidPool, 'r' | 'age'>): number {
+  return p.r * (0.4 + 0.6 * Math.min(1, p.age / ACID.fadeIn));
+}
+/** The film's strength now (0..1): its opacity's fade in / out — the burn thins with it as the pool dries. */
+export function poolStrength(p: Pick<AcidPool, 'age' | 'left'>): number {
+  return Math.max(0, Math.min(1, p.age / ACID.fadeIn, p.left / ACID.fadeOut));
+}
+/** Is a point (feet) inside a pool: THE test for its damage and for what it melts — the drawn disc (+ `pad`: a body's foot reach). */
+export function inPool(p: Pick<AcidPool, 'x' | 'y' | 'z' | 'r' | 'age'>, x: number, y: number, z: number, pad = 0): boolean {
+  const dx = x - p.x, dz = z - p.z, r = poolReach(p) + pad;
   return dx * dx + dz * dz <= r * r && Math.abs(y - p.y) <= ACID.poolRise;
 }
 
@@ -298,10 +321,11 @@ export class GrenadeSystem implements BodySource {
     }
   }
 
-  /** A venting lure was moved (elevator): its emitter follows the canister. */
+  /** A venting lure was moved (elevator): its emitter and its plume follow the canister. */
   private moveScent(c: Canister): void {
     const p = this.centre(c, new THREE.Vector3());
     this.env.scents?.()?.move?.(c.emitter!, {x: p.x, y: p.y, z: p.z, level: this.levelOf(p.x, p.y, p.z)});
+    c.smoke?.update?.({x: p.x, y: p.y + 0.1, z: p.z});
   }
 
   /** Pools + acid canisters not yet burst (the acid cap counts these). */
@@ -416,6 +440,7 @@ export class GrenadeSystem implements BodySource {
   tick(dt: number): void {
     this.clock += dt;
     this.cooldown = Math.max(0, this.cooldown - dt);
+    if (!this.canisters.length && !this.pools.length) return;
     for (const c of [...this.canisters]) this.tickCanister(c, dt);
     for (const p of [...this.pools]) this.tickPool(p, dt);
   }
@@ -503,7 +528,7 @@ export class GrenadeSystem implements BodySource {
       b.previousPosition.copy(b.position); b.interpolatedPosition.copy(b.position); b.interpolatedQuaternion.copy(b.quaternion);
       b.aabbNeedsUpdate = true;
       c.prev.set(b.position.x, b.position.y, b.position.z);
-      if (c.rescues > 3) this.settle(c);
+      if (c.rescues > 3) { this.syncBody(c); this.settle(c); } // (the model lies at the restored pose, not at the bad one)
       return;
     }
     c.last.set(b.position.x, b.position.y, b.position.z);
@@ -555,7 +580,11 @@ export class GrenadeSystem implements BodySource {
     const pl = env.player?.();
     if (pl?.alive) {
       const dx = pl.x - at.x, dz = pl.z - at.z, dy = at.y - pl.y;
-      if (dx * dx + dz * dz <= S2 && dy > -0.6 && dy < 2.2) pl.takeDamage(ACID.playerSplash);
+      if (dx * dx + dz * dz <= S2 && dy > -0.6 && dy < 2.2) {
+        pl.takeDamage(ACID.playerSplash);
+        this.painAt = this.clock;
+        env.playerHurt?.(ACID.playerSplash);
+      }
     }
     // the pool: on the floor under the burst (none when there is no floor under it)
     const fy = this.host.statics?.cellGround(at.x, at.z, at.y + 0.05);
@@ -564,6 +593,7 @@ export class GrenadeSystem implements BodySource {
     this.addPool(at.x, y, at.z);
   }
 
+  /** Acid damage to a zombie from (fx, fy, fz) (its brain's `damage`: aware, its last-known spot there; no stagger); a kill crumples it. */
   private hurtZombie(z: GrenadeEnemy, amount: number, fx: number, fz: number, fy: number): void {
     const b = z.brain;
     const killed = b.damage(amount, fx, fz, fy, {stagger: false});
@@ -571,16 +601,17 @@ export class GrenadeSystem implements BodySource {
     if (killed) {
       this.counts.kills++;
       const dir = new THREE.Vector3(b.x - fx, 0.4, b.z - fz);
-      if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0);
-      this.env.kill?.(z, dir.normalize(), new THREE.Vector3(b.x, b.y + 0.9, b.z));
-    } else if (this.clock - (this.hurtAt.get(z) ?? -1e9) >= 1.1) { // (a pool burns every frame: its hurt cue at most about once a second)
+      if (dir.lengthSq() < 0.17) dir.set(0, 1, 0); // (a pool burn comes from its own feet: it just sinks)
+      this.env.kill?.(z, dir.normalize(), new THREE.Vector3(b.x, b.y + 0.9, b.z), ACID.killImpulse);
+    } else if (this.clock - (this.hurtAt.get(z) ?? -1e9) >= 1.1) { // (a pool burns in batches: its hurt cue at most about once a second)
       this.hurtAt.set(z, this.clock);
       this.env.hurt?.(z);
     }
   }
-  /** Active seconds ticked (the hurt-cue throttle) and when each zombie last cried out. */
+  /** Active seconds ticked (the cue throttles), when each zombie last cried out, when the player last had a pain cue. */
   private clock = 0;
   private readonly hurtAt = new WeakMap<object, number>();
+  private painAt = -1e9;
 
   private addPool(x: number, y: number, z: number): AcidPool {
     poolGeo ??= new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2);
@@ -607,7 +638,8 @@ export class GrenadeSystem implements BodySource {
       seeds.set([Math.cos(a) * d, Math.sin(a) * d, this.rng() * 1.7, 0.012 + this.rng() * 0.018], i * 4);
     }
     this.group.add(mesh, bubbles);
-    const p: AcidPool = {id: this.nextId++, x, y, z, level: this.levelOf(x, y, z), r, left: ACID.poolSeconds, age: 0, propT: 0, fizzT: ACID.fizzEvery, burned: false, mesh, bubbles, mat, seeds};
+    const p: AcidPool = {id: this.nextId++, x, y, z, level: this.levelOf(x, y, z), r, left: ACID.poolSeconds, age: 0, burnT: 0, burning: new Map(), playerS: 0,
+      propT: 0, fizzT: ACID.fizzEvery, burned: false, mesh, bubbles, mat, seeds};
     this.pools.push(p);
     this.counts.pools++;
     this.drawPool(p);
@@ -616,10 +648,10 @@ export class GrenadeSystem implements BodySource {
 
   /** The pool's look from its age / time left: film opacity + spread, the bubbles rising and popping. */
   private drawPool(p: AcidPool): void {
-    const fin = Math.min(1, p.age / ACID.fadeIn), fout = Math.min(1, p.left / ACID.fadeOut);
-    const k = Math.max(0, Math.min(fin, fout));
+    const fin = Math.min(1, p.age / ACID.fadeIn);
+    const k = poolStrength(p);
     p.mat.opacity = 0.82 * k;
-    p.mesh.scale.setScalar(p.r * (0.4 + 0.6 * fin));
+    p.mesh.scale.setScalar(poolReach(p));
     const m = this.tm, s = p.seeds;
     for (let i = 0; i < ACID.bubbles; i++) {
       const ph = (p.age * 0.9 + s[i * 4 + 2]) % 1.7, life = ph / 1.7; // each bubble swells for 1.7 s, then pops and starts again
@@ -631,32 +663,56 @@ export class GrenadeSystem implements BodySource {
   }
 
   private tickPool(p: AcidPool, dt: number): void {
+    // the active seconds of this frame the pool still had (a long frame never burns past its ACID.poolSeconds)
+    const live = Math.max(0, Math.min(dt, p.left));
+    // everyone standing in it burns as much as the film is there (its strength at the middle of this frame's live part)
+    const k = live * poolStrength({age: p.age + live / 2, left: p.left - live / 2});
     p.left -= dt;
     p.age += dt;
-    if (p.left <= 0) { this.dropPool(p); this.counts.poolsDried++; return; }
-    if (dt > 0) {
-      // everyone standing in it burns (inPool: the same disc as the film)
+    const dry = p.left <= 0;
+    if (live > 0) {
+      // (inPool: the drawn disc; counted every frame, applied per batch)
       for (const z of this.env.zombies?.() ?? []) {
         const b = z.brain;
-        if (b.alive && inPool(p, b.x, b.y, b.z, 0.15)) this.hurtZombie(z, ACID.zombieDps * dt, p.x, p.z, p.y);
+        if (b.alive && inPool(p, b.x, b.y, b.z, ACID.footR)) p.burning.set(z, (p.burning.get(z) ?? 0) + k);
       }
       const pl = this.env.player?.();
-      if (pl?.alive && inPool(p, pl.x, pl.y, pl.z, 0.1)) {
-        pl.takeDamage(ACID.playerDps * dt);
-        this.counts.playerBurnS += dt;
+      if (pl?.alive && inPool(p, pl.x, pl.y, pl.z, ACID.footR)) {
+        p.playerS += k;
+        this.counts.playerBurnS += live;
         if (!p.burned) { p.burned = true; this.env.playerBurn?.(); }
       }
+      p.burnT += live;
+      if (p.burnT >= ACID.burnEvery - 1e-9 || dry) this.burnBatch(p);
       // and the props it touches (the melt system decides what is eligible)
-      p.propT += dt;
-      if (p.propT >= ACID.propEvery) {
+      p.propT += live;
+      if (p.propT >= ACID.propEvery - 1e-9 || dry) {
         const melt = this.env.melt?.();
-        if (melt) for (const ref of melt.inDisc(p.x, p.y, p.z, p.r)) { melt.expose(ref, p.propT); this.counts.exposures++; }
+        if (melt) for (const ref of melt.inDisc(p.x, p.y, p.z, poolReach(p))) { melt.expose(ref, p.propT); this.counts.exposures++; }
         p.propT = 0;
       }
-      p.fizzT -= dt;
+      p.fizzT -= live;
       if (p.fizzT <= 0 && p.left > 2) { p.fizzT = ACID.fizzEvery; this.env.audio?.flareOut?.(p.x, p.y + 0.05, p.z); }
     }
+    if (dry) { this.dropPool(p); this.counts.poolsDried++; return; }
     this.drawPool(p);
+  }
+
+  /** One burn batch: each zombie / the player takes the acid for the time it stood in the pool since the last batch. */
+  private burnBatch(p: AcidPool): void {
+    p.burnT = 0;
+    for (const [z, s] of p.burning) {
+      const b = z.brain;
+      if (b.alive) this.hurtZombie(z, ACID.zombieDps * s, b.x, b.z, b.y); // (from its own feet: aware, but not drawn to the pool's centre)
+    }
+    p.burning.clear();
+    const pl = this.env.player?.();
+    if (p.playerS > 0 && pl?.alive) {
+      const amount = ACID.playerDps * p.playerS;
+      pl.takeDamage(amount);
+      if (this.clock - this.painAt >= ACID.painEvery - 1e-9) { this.painAt = this.clock; this.env.playerHurt?.(amount); }
+    }
+    p.playerS = 0;
   }
 
   private dropPool(p: AcidPool): void {
