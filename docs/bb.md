@@ -38,7 +38,8 @@ For comparison (`ZOMBIE_STATS.shambler`, `game/src/ai/brain.ts`): the ordinary z
   hit volumes (`BB_ASSET`) and size jitter (`BB_SCALE`). It fits under desks the adults cannot.
 - **Its paces are burst paces.** It moves in bursts with freezes between (`BB_CADENCE`), so its average pursuit pace is about
   3.3 m/s: just under the player's 3.4 m/s walk and well under the 5.8 m/s sprint.
-- **No ladders.** It climbs the walls themselves. It drops into a track bed like every enemy.
+- **No ladders.** It climbs the walls themselves (`ENEMY_ARCHETYPES.bb.climbsLadders` is false). It drops into a track bed like
+  every enemy (`dropsIntoTrackBed`).
 
 ## One enemy, four looks
 
@@ -159,10 +160,11 @@ A BB is saved exactly like every other enemy: only its **death** is remembered, 
   (`game/src/ai/bbClips.ts`). They are rigged and skinned locally by `tools/asset-pipeline/enemy/build-bb.mjs`, and
   `game/tests/bb-asset.test.ts` checks them against the asset contract. Provenance and credits: see
   `game/public/assets/CREDITS.md`, section "The BB (enemy, four bodies)".
-- **Audio.** One shared voice set for all four looks (`Sfx.bbVoice`, `game/src/audio/sfx.ts`): the cackle when it notices the
-  player, a quiet giggle now and then while one is near, a squeal at the pounce, a yelp when hurt and a short death cry. A missing
-  clip is silent, never a stand-in sound. The cues are audio only: nothing in them feeds the AI. Provenance, review status and
-  licensing caveats: see `game/public/assets/audio/NOTICE.md` and `game/public/assets/CREDITS.md`.
+- **Audio.** One shared voice set for all four looks (`Sfx.bbVoice`, `game/src/audio/sfx.ts`), five cues: the cackle when it
+  notices the player, a quiet giggle now and then while the player is near, a cue at the start of the pounce wind-up, a hurt
+  sound and a death sound. A missing clip is silent, never a stand-in sound. The cues are audio only: nothing in them feeds the
+  AI. Which cue plays when, levels, ranges and limits: `docs/bb-audio.md`. Provenance, review status and licensing caveats: see
+  that page, `game/public/assets/audio/NOTICE.md` and `game/public/assets/CREDITS.md`.
 
 ## Files and tests
 
@@ -176,6 +178,8 @@ A BB is saved exactly like every other enemy: only its **death** is remembered, 
 | `game/src/ai/enemyModels.ts` | The four lazy models |
 | `tools/asset-pipeline/enemy/build-bb.mjs` | Builds the four runtime bodies |
 | `game/tests/bb-asset.test.ts` | The GLBs against the asset contract |
+| `game/tests/bb-brain.test.ts`, `game/tests/bb-surface.test.ts` | The brain and the surface locomotion |
+| `game/tests/bb-audio.test.ts` | The voice set (`docs/bb-audio.md`) |
 | `game/tests/bb-roster.test.ts` | The roster rule: the rate, counts, looks, slots, the version pin; the registry classification; this page's tables |
 | `game/tests/enemy-roster.test.ts` | The roster of every family |
 | `game/tests/enemy-spawn-reference.test.ts` | The reference site shows BB's constants and roster rule |

@@ -293,11 +293,15 @@ export const ENEMY_FAMILY_ADAPTER: Readonly<Record<EnemyFamilyId, {
         knockOffDamage: ['a hit of at least this much damage knocks it off a wall or a ceiling (it falls and lies recovering)', 'hp'],
         floorS: ['unaware: it stays on the floor before it climbs for between', 's'],
         perchS: ['unaware: it stays on a perch for between', 's'],
+        perchUpM: ['a wall perch is this high above the floor: between', 'm'],
+        perchCeilingM: ['a ceiling perch is a crawl of this length out onto the ceiling: between', 'm'],
+        huntClimbM: ['it may take the wall-and-ceiling way to a player it has noticed from farther than', 'm'],
+        huntClimbChance: ['chance that it then takes the wall-and-ceiling way (otherwise it runs on the floor)', ''],
       }},
       {title: 'The pounce, its only attack (attack range 0 in the stats above: it never swings standing): a wind-up tell, one leap aimed once at the launch that can hurt at most once, then a recovery and a cooldown', value: BB_POUNCE, file: F.bb, symbol: 'BB_POUNCE', ownLabelsOnly: true, labels: {
         minM: ['nearer to the player than this it scuttles back once, then leaps anyway', 'm'],
         leapFromM: ['each attempt launches from its own distance: at least this far', 'm'],
-        maxM: ['farthest distance it launches a leap from (its body to the player\'s chest, 3D, with a clear straight line between)', 'm'],
+        maxM: ['farthest distance it launches a leap from (its body to the player\'s chest, 3D, with a clear arc between)', 'm'],
         dropMaxM: ['from a wall or ceiling perch it may also drop on a player this far away (3D)', 'm'],
         windupS: ['the tell before the leap: it stops, crouches and giggles for', 's'],
         speed: ['horizontal launch speed of the leap', 'm/s'],
@@ -313,9 +317,13 @@ export const ENEMY_FAMILY_ADAPTER: Readonly<Record<EnemyFamilyId, {
         fleeToM: ['while it cools down and runs away: it runs until it is this far from the player', 'm'],
         holdM: ['while it cools down: beyond the retreat distance and nearer than this it waits and watches', 'm'],
       }},
-      {title: 'What it notices and how long it remembers', value: BB_SENSE, file: F.bb, symbol: 'BB_SENSE', ownLabelsOnly: true, labels: {
+      {title: 'What it notices and how long it remembers (the notice distances of an unaware one scale with the player\'s detectability, as for every enemy)', value: BB_SENSE, file: F.bb, symbol: 'BB_SENSE', ownLabelsOnly: true, labels: {
         loseS: ['after losing sight of the player it keeps hunting the last place it saw them for', 's'],
         cackleGapS: ['the cackle (the tell that it has noticed the player) is not repeated within', 's'],
+        stareS: ['after noticing the player it stares for this long before it moves', 's'],
+        perchNoticeM: ['unaware, clinging to a wall or a ceiling: it notices the player all round, but only within', 'm'],
+        fovRad: ['unaware, on the floor: it notices the player within this angle to either side of its heading', 'rad'],
+        closeM: ['unaware, on the floor: nearer than this it notices the player all round', 'm'],
       }},
       {title: 'The crawling body the AI and its movement reason about (scale 1)', value: BB_BODY, file: F.bb, symbol: 'BB_BODY', ownLabelsOnly: true, labels: {
         radius: ['collider radius on the floor, and its body\'s reach on a surface', 'm'],
