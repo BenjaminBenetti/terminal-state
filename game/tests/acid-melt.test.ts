@@ -10,8 +10,9 @@
 //    prop) returned and melted;
 //  - exposure -> start -> completion exactly once; contents spill as real pickups on real floor (same items / counts, lot provenance);
 //    exactly one salvage by trait; the lane persisted; a rebuild from the JSON keeps it gone with no second spill / salvage;
-//  - clear() mid-melt (and beyond the visual cap) completes each once; pickups on a melted surface fall to the floor.
-// Equipment units and fuel carts: acid-melt-equipment.test.ts.
+//  - clear() mid-melt (and beyond the visual cap) completes each once; pickups on a melted surface fall to the floor (more than the item
+//    body pool holds: in turn, none left in the air).
+// Equipment units and fuel carts: acid-melt-equipment.test.ts; a stocked shelf's filler: acid-melt-stock.test.ts.
 import {afterEach, describe, expect, it} from 'vitest';
 import * as THREE from 'three';
 import {installCanvasShim, ShimContext} from './helpers/canvas2d';
@@ -24,7 +25,8 @@ import {BUNKER_OBJECTIVE_KINDS} from '../src/gen/bunker/bunkerKinds';
 import {vendorDisplayHosts} from '../src/market/wares/slots';
 import {playerTrainPlacement, trainToWorld} from '../src/gen/playerTrain';
 import {PLAYER_TRAIN_SPEC as SPEC} from '../src/world/playerTrainSpec';
-import {Inventory} from '../src/items/inventory';
+import {Inventory, type ItemStack} from '../src/items/inventory';
+import {MAX_DYNAMIC_ITEMS} from '../src/physics/dynamicItems';
 import {ELECTRICAL_PARTS, SCRAP_METAL} from '../src/items/craftMaterials';
 import {canonicalItemId} from '../src/items/calibers';
 import {STATION_PROPS_LANE, type CargoPropJSON, type StationPropsJSON} from '../src/run/trainCargo';
@@ -448,6 +450,34 @@ describe('acid melt: the real station and the parked train', () => {
     expect(pk.obj.position.y, `${T.kind}: top ${top} floor ${floor}`).toBeLessThan(floor + 0.2);
     expect(pk.obj.position.y).toBeGreaterThan(floor - 0.05);
     expect(c.pickups.list.filter(p => p.stack.uid === st.uid)).toHaveLength(1);
+  }, 60000);
+
+  it('more pickups on it than the item body pool holds: every one falls in turn (none left resting in the air), none lost or doubled', () => {
+    const {c, w} = station();
+    const T = w.L.props.find(p => c.melt.protection(p) === null && !w.ph.dynamicItems.isDynamicProp(p) && !w.cm.holderFor(p) && p.h > 0.4 && p.h < 1.1 && p.hx > 0.3 && p.hz > 0.25 && lone(w, p))!;
+    expect(T).toBeTruthy();
+    const top = T.y + T.h, floor = c.h.levels!.supportAt(T.x, T.z, T.y + 0.05, 0.35)!.floor;
+    const n = MAX_DYNAMIC_ITEMS + 4, stacks: ItemStack[] = [];
+    for (let i = 0; i < n; i++) {
+      const st = c.h.inv.makeStack(i % 2 ? 'cola' : 'beans', 1);
+      stacks.push(st);
+      c.pickups.add(st, T.x - 0.24 + (i % 5) * 0.12, top + 0.004, T.z - 0.165 + Math.floor(i / 5) * 0.11, i * 0.7);
+    }
+    step(c, 0.5);
+    const mine = () => c.pickups.list.filter(p => stacks.includes(p.stack as ItemStack));
+    for (const p of mine()) expect(p.obj.position.y).toBeCloseTo(top + 0.004, 2);
+    expect(c.melt.start(refOf(c, w, T))).toBe(true);
+    step(c, MELT.seconds + 0.1);
+    expect(T.h).toBe(0);
+    expect(w.ph.dynamicItems.stats().itemsAwake).toBeLessThanOrEqual(MAX_DYNAMIC_ITEMS);
+    step(c, 6);
+    expect(mine()).toHaveLength(n);
+    for (const st of stacks) expect(c.pickups.list.filter(p => p.stack === st)).toHaveLength(1);
+    const up = mine().filter(p => p.obj.position.y > floor + 0.2).map(p => +p.obj.position.y.toFixed(2));
+    expect(up, `${T.kind}: top ${top} floor ${floor}`).toEqual([]);
+    for (const p of mine()) expect(p.obj.position.y).toBeGreaterThan(floor - 0.05);
+    expect(c.melt.counts.stuck).toBe(0);
+    expect((c.melt.qa() as {falling: number}).falling).toBe(0);
   }, 60000);
 
   it('decor on a counter: alone it leaves its salvage ON the counter (never inside it); the counter melting takes its static decor with it', () => {

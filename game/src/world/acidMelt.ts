@@ -41,7 +41,8 @@
 // static prop's collider stays until it is gone. Everything resting on it or hosted by it that cannot stand on its own (static decor, a
 // static stack) joins the melt as members (each one its own salvage). After MELT.seconds it COMPLETES, exactly once:
 //  - colliders / sight gone (h 0, blocksSight false, cargoGone: never stocked / roped again; physics.propsChanged), loose decor on it
-//    woken first (it falls), then pickups / loose props / shelf filler resting on it woken (the stocked boards out of the filler's way);
+//    woken first (it falls), then pickups / loose props / shelf filler resting on it woken (the stocked boards out of the filler's way) —
+//    as the bounded body pools allow (MELT.drop*: a full shelf's stock falls in batches; one a pool put back to rest in the air wakes again);
 //  - contents spill as real pickups at valid floor spots inside its footprint (Levels.supportAt: never through a wall): holder lots incl.
 //    closed compartments (same item / count, lot id as provenance — the game's spill rule), a unit's slots (the SAME ItemStack objects:
 //    uid / mag / count / bag kept; legacy sentry rounds as fresh stacks), a fuel cart's units as fuel cans (FUEL.canUnits each, stacks of
@@ -78,6 +79,8 @@ import {itemDef} from '../items/items';
 import {ELECTRICAL_PARTS, SCRAP_METAL} from '../items/craftMaterials';
 import {FUEL} from '../fuel/fuel';
 import {dynamicKind} from '../physics/merchOnHost';
+import {MAX_DYNAMIC_ITEMS, MAX_DYNAMIC_PROPS} from '../physics/dynamicItems';
+import {FILLER_TUNING} from '../physics/fillerStock';
 import {ACID_MELT_LANE, acidMeltedOf, type AcidMeltedJSON} from '../run/acidMeltRecord';
 import {CART} from './fuelCartPhysics';
 
@@ -111,6 +114,17 @@ export const MELT = {
   stepMax: 0.35,
   /** The tiny shove that wakes loose decor / props resting on a melted support (N s: lets gravity act, no throw). */
   nudge: 0.02,
+  /**
+   * What rested on a melted support falls as the bounded body pools allow (FillerStock 64 / DynamicItems 16 items, 4 props): woken while a
+   * pool has a free slot (filler: `dropReserve` kept for gunplay), at most `dropPerTick` per frame; one still up (a pool retired it calm before
+   * it fell) is woken again after `dropRetry` s, at most `dropTries` times, for at most `dropSeconds`; it has fallen once `dropFell` m lower.
+   */
+  dropReserve: 8,
+  dropPerTick: 24,
+  dropRetry: 0.5,
+  dropTries: 6,
+  dropSeconds: 20,
+  dropFell: 0.02,
 } as const;
 
 export interface MeltRef { readonly key: string; readonly x: number; readonly y: number; readonly z: number; readonly label: string }
@@ -136,6 +150,8 @@ interface UnitLike {
 }
 interface CartLike { uid: string; mode: string; body: {x: number; y: number; z: number; r?: number; h?: number} }
 interface DestroyedCart { uid: string; units: number; x: number; y: number; z: number; yaw: number; level: number; view: {group: THREE.Object3D} }
+interface FillerPieceLike { readonly state: string; readonly p: THREE.Vector3; readonly box: THREE.Box3 }
+interface FillerLike { readonly awake: number; restingIn(box: THREE.Box3, out?: never[]): readonly FillerPieceLike[]; wake(p: never, why?: 'support'): unknown }
 interface PropDamageLike {
   index: {inst: Map<PropPlacement, {mesh: THREE.InstancedMesh; index: number}[]>; merged: readonly {box: THREE.Box3; blockersOnly: boolean}[]};
   retire(prop: PropPlacement, index?: number, copies?: boolean): {meshes: THREE.Mesh[]; geometries: THREE.BufferGeometry[]} | null;
@@ -163,11 +179,13 @@ export interface AcidMeltHost {
       shootProp(prop: PropPlacement, index: number, point: THREE.Vector3, dir: THREE.Vector3, impulse: number): boolean;
       wakePickup(p: PickupLike): boolean;
       restHeight(prop: PropPlacement): number;
+      /** Bodies simulating now (the bounded pools' use; absent: unbounded). */
+      stats?(): {itemsAwake: number; propsAwake: number};
     };
     propsChanged(x: number, z: number): void;
   };
   damage: {props: PropDamageLike};
-  stock?: {holders: readonly {prop: PropPlacement; colliders: THREE.Box3[]}[]; filler: {restingIn(box: THREE.Box3, out?: never[]): readonly unknown[]; wake(p: never, why?: 'support'): unknown}} | null;
+  stock?: {holders: readonly {prop: PropPlacement; colliders: THREE.Box3[]}[]; filler: FillerLike} | null;
   trainRuntime?: {train: {layoutBoxes: readonly PropPlacement[]} | null} | null;
   trainPropCargo?: {consume(prop: PropPlacement): boolean} | null;
   trainEquipment?: {units(): readonly UnitLike[]; destroy(uid: string): UnitLike | null} | null;
@@ -232,6 +250,14 @@ interface Melt {
   bub: Float32Array;
   done: boolean;
 }
+
+/**
+ * Something that rested on a melted support and must fall (MELT.drop*): a filler piece, a pickup or a loose / loose-able prop. `y`: its height
+ * when the support went (a prop's: its base, as DynamicItems.propMatrix places it); `at`: the drop clock it may be woken (again) at; `until`:
+ * when it is given up.
+ */
+type Drop = ({k: 'filler'; filler: FillerLike; p: FillerPieceLike} | {k: 'pickup'; p: PickupLike} | {k: 'prop'; prop: PropPlacement; index: number})
+  & {y: number; tries: number; at: number; until: number};
 
 const DOWN = new THREE.Vector3(0, -1, 0);
 const M = new THREE.Matrix4(), M2 = new THREE.Matrix4(), V = new THREE.Vector3(), V2 = new THREE.Vector3(), Q = new THREE.Quaternion(), S = new THREE.Vector3();
@@ -316,6 +342,10 @@ export class AcidMelt {
   private readonly keyOf = new WeakMap<StationLayout, SectionKey>();
   private readonly protections = new Map<PropPlacement, MeltProtection | null>();
   private readonly out: MeltRef[] = [];
+  /** What must fall off melted supports (woken as the body pools allow) and the set of things in it (no thing twice). */
+  private readonly drops: Drop[] = [];
+  private readonly dropping = new Set<object>();
+  private dropClock = 0;
   /** The fizz when a dissolve begins (default: the existing positional hiss, once per melt). Assignable (the lead's own cue). */
   fizz: ((x: number, y: number, z: number, id: object) => void) | null;
   /** The presentation (scene objects kept across worlds). */
@@ -325,7 +355,7 @@ export class AcidMelt {
   private readonly bubbles: THREE.InstancedMesh;
   private seed = 0x2545f491;
   /** QA / tests. */
-  readonly counts = {exposed: 0, started: 0, begun: 0, queued: 0, completed: 0, aborted: 0, salvage: 0, spilled: 0, woken: 0, members: 0, restored: 0, cleared: 0};
+  readonly counts = {exposed: 0, started: 0, begun: 0, queued: 0, completed: 0, aborted: 0, salvage: 0, spilled: 0, woken: 0, rewoken: 0, stuck: 0, members: 0, restored: 0, cleared: 0};
 
   constructor(readonly host: AcidMeltHost) {
     this.group.name = 'acid-melt';
@@ -1028,10 +1058,10 @@ export class AcidMelt {
         const onTop = Math.abs(q.y - top) < 0.08 && q.x > mem.box.min.x - MELT.restPad && q.x < mem.box.max.x + MELT.restPad && q.z > mem.box.min.z - MELT.restPad && q.z < mem.box.max.z + MELT.restPad;
         if (!hosted && !onTop) continue;
         if (!di.isDynamicProp(q)) continue;
-        V.set(q.x, q.y + q.h / 2, q.z);
-        if (di.shootProp(q, qi, V, DOWN, MELT.nudge)) this.counts.woken++;
+        this.dropAdd({k: 'prop', prop: q, index: qi, y: q.y, tries: 0, at: 0, until: 0}, q);
       }
     }
+    this.pumpDrops(0);
     // 2. colliders / sight gone
     for (const mem of m.members) {
       const p = mem.prop;
@@ -1048,11 +1078,16 @@ export class AcidMelt {
     const filler = h.stock?.filler;
     if (filler) {
       for (const mem of m.members) {
-        B.copy(mem.box).expandByScalar(MELT.restPad);
-        for (const piece of filler.restingIn(B)) { filler.wake(piece as never, 'support'); this.counts.woken++; }
+        const b = mem.box, pad = MELT.restPad / 2;
+        B.copy(b).expandByScalar(MELT.restPad);
+        // (its centre over the melted footprint, above its base: a neighbour's piece on its own board is not disturbed; the lowest first)
+        const pieces = filler.restingIn(B).filter(q => q.p.x > b.min.x - pad && q.p.x < b.max.x + pad && q.p.z > b.min.z - pad && q.p.z < b.max.z + pad && q.box.min.y > b.min.y + MELT.dropFell);
+        pieces.sort((u, v) => u.p.y - v.p.y);
+        for (const q of pieces) this.dropAdd({k: 'filler', filler, p: q, y: q.p.y, tries: 0, at: 0, until: 0}, q);
       }
     }
     this.wakeResting(m.box, m.box.min.y);
+    this.pumpDrops(0);
     // 4. contents spill + one salvage per member, at valid floor spots under each
     for (const mem of m.members) {
       const b = mem.box, cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2;
@@ -1076,15 +1111,15 @@ export class AcidMelt {
     }
   }
 
-  /** Pickups and loose props resting inside `box` (above its base `y0`, up to its top + MELT.restOver) are woken: they fall. */
+  /** Pickups and loose props resting inside `box` (above its base `y0`, up to its top + MELT.restOver) must fall (the drop queue). */
   private wakeResting(box: THREE.Box3, y0: number): void {
     const di = this.host.physics.dynamicItems;
     const x0 = box.min.x - MELT.restPad, x1 = box.max.x + MELT.restPad, z0 = box.min.z - MELT.restPad, z1 = box.max.z + MELT.restPad;
     const ylo = y0 + MELT.restLift, yhi = box.max.y + MELT.restOver;
-    for (const p of [...this.host.pickups.list]) {
+    for (const p of this.host.pickups.list) {
       const o = p.obj.position;
       if (o.x < x0 || o.x > x1 || o.z < z0 || o.z > z1 || o.y < ylo || o.y > yhi) continue;
-      if (di.wakePickup(p)) this.counts.woken++;
+      this.dropAdd({k: 'pickup', p, y: o.y, tries: 0, at: 0, until: 0}, p);
     }
     let any = false;
     for (const p of this.here?.movers ?? []) if (di.propMatrix(p, M)) { any = true; break; }
@@ -1092,8 +1127,69 @@ export class AcidMelt {
     for (const lp of di.loose()) {
       const e = lp.matrix.elements, x = e[12], y = e[13], z = e[14];
       if (x < x0 || x > x1 || z < z0 || z > z1 || y < ylo || y > yhi) continue;
-      V.set(x, y + lp.half.y, z);
-      if (di.shootProp(lp.prop, lp.index, V, DOWN, MELT.nudge)) this.counts.woken++;
+      this.dropAdd({k: 'prop', prop: lp.prop, index: lp.index, y, tries: 0, at: 0, until: 0}, lp.prop);
+    }
+  }
+
+  private dropAdd(d: Drop, thing: object): void {
+    if (this.dropping.has(thing)) return;
+    this.dropping.add(thing);
+    d.at = this.dropClock;
+    d.until = this.dropClock + MELT.dropSeconds;
+    this.drops.push(d);
+  }
+
+  private dropOf(i: number): void {
+    const d = this.drops[i];
+    this.dropping.delete(d.k === 'prop' ? d.prop : d.p);
+    this.drops.splice(i, 1);
+  }
+
+  /** Its height now (null: gone from the world — taken, withdrawn, melted). */
+  private dropY(d: Drop): number | null {
+    if (d.k === 'filler') return d.p.p.y;
+    if (d.k === 'pickup') return this.host.pickups.list.includes(d.p) ? d.p.obj.position.y : null;
+    return this.host.physics.dynamicItems.propMatrix(d.prop, M) ? M.elements[13] : null;
+  }
+
+  /**
+   * Wakes what must fall as the bounded body pools allow (MELT.drop*): a pool retires its oldest CALM body to make room, and a just-woken
+   * one is calm — waking a full shelf at once would leave the excess resting in the air. One still up later is woken again.
+   */
+  private pumpDrops(dt: number): void {
+    if (!this.drops.length) return;
+    this.dropClock += dt;
+    const di = this.host.physics.dynamicItems;
+    let items = -1, props = -1, budget = MELT.dropPerTick;
+    for (let i = 0; i < this.drops.length && budget > 0; i++) {
+      const d = this.drops[i];
+      if (d.k === 'filler' && d.p.state !== 'rest') continue; // simulating (or frozen mid-fall: the filler resumes it)
+      if (d.at > this.dropClock) continue;
+      const y = this.dropY(d);
+      if (y === null || y < d.y - MELT.dropFell || d.tries >= MELT.dropTries || this.dropClock > d.until) {
+        if (y !== null && y >= d.y - MELT.dropFell) this.counts.stuck++; // (given up while still up: QA)
+        this.dropOf(i--);
+        continue;
+      }
+      if (d.k === 'filler') {
+        if (d.filler.awake >= FILLER_TUNING.maxActive - MELT.dropReserve) continue;
+      } else {
+        if (items < 0) { const s = di.stats?.(); items = MAX_DYNAMIC_ITEMS - (s?.itemsAwake ?? 0); props = MAX_DYNAMIC_PROPS - (s?.propsAwake ?? 0); }
+        if ((d.k === 'pickup' ? items : props) <= 0) continue;
+      }
+      let ok: boolean;
+      if (d.k === 'filler') ok = !!d.filler.wake(d.p as never, 'support');
+      else if (d.k === 'pickup') { ok = di.wakePickup(d.p); if (ok) items--; }
+      else {
+        if (di.propMatrix(d.prop, M)) V.set(M.elements[12], M.elements[13] + 0.05, M.elements[14]);
+        else V.set(d.prop.x, d.prop.y + d.prop.h / 2, d.prop.z);
+        ok = di.shootProp(d.prop, d.index, V, DOWN, MELT.nudge);
+        if (ok) props--;
+      }
+      if (ok) { this.counts.woken++; if (d.tries > 0) this.counts.rewoken++; }
+      d.tries++;
+      d.at = this.dropClock + MELT.dropRetry;
+      budget--;
     }
   }
 
@@ -1193,8 +1289,9 @@ export class AcidMelt {
 
   /** Dissolve presentation + completion (a frame hook: installAcidMelt registers it). */
   tick(dt: number): void {
-    if (!this.melts.length) { if (this.bubbles.visible) this.bubbles.visible = false; return; }
     const step = Math.max(0, Math.min(0.25, Number.isFinite(dt) ? dt : 0));
+    if (this.drops.length) this.pumpDrops(step);
+    if (!this.melts.length) { if (this.bubbles.visible) this.bubbles.visible = false; return; }
     let shown = false;
     for (let k = this.melts.length - 1; k >= 0; k--) {
       const m = this.melts[k];
@@ -1246,6 +1343,9 @@ export class AcidMelt {
     for (const s of this.shells) s.opacity = 0;
     for (const t of this.targets.values()) t.exposure = 0;
     this.melts.length = 0;
+    // (what is still waiting to fall stays where it is: filler is re-dressed per visit; a pickup / loose prop keeps its pose, as when shot)
+    this.drops.length = 0;
+    this.dropping.clear();
     this.counts.cleared++;
   }
 
@@ -1255,6 +1355,7 @@ export class AcidMelt {
       melting: this.melts.map(m => ({key: m.t.ref.key, label: m.t.ref.label, age: Math.round(m.age * 100) / 100, slot: m.slot, members: m.members.map(x => x.prop.kind)})),
       gone: this.here?.rec.gone.length ?? 0,
       targets: this.targets.size,
+      falling: this.drops.length,
       counts: {...this.counts},
     };
   }
