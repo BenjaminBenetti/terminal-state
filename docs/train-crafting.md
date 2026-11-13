@@ -97,7 +97,7 @@ Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
   Save terminal waits while a melt is under way or debris is still falling ("acid is still at work").
 - **Zombie Lure grenade.** It lands and rolls; at rest it opens and for **20 active seconds** the infected within **20 m** smell it,
   through walls and round corners, and go to the canister itself — never to you (`ai/scentLure.ts`); one that sees you still
-  comes for you, and the blind Screacher and a dormant Siren ignore it. A faint tan plume shows it is venting. Then it is empty and
+  comes for you, and the blind Screacher, a dormant Siren and the BB (its own crawling brain) ignore it. A faint tan plume shows it is venting. Then it is empty and
   goes after a while. At most three at once.
 
 ## Moving equipment

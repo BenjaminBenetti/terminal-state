@@ -27,8 +27,8 @@
 //  * FAMILIES: ordinary zombies (sprinters included), the coated, the rat/dog, the Strainer, the Blightbelly, horde members and an
 //    AWAKE Siren are drawn (all run the base brain). A DORMANT / rising Siren never is (her dormant front end has no perception but
 //    proximity / flashlight / damage, and the scent is no LightSource: it can never light or wake her). The SCREACHER is never drawn:
-//    it reacts only to sound (user rule) and the scent is silent (ai/screacher.ts subWorld: scents undefined). Market people are not
-//    enemies.
+//    it reacts only to sound (user rule) and the scent is silent (ai/screacher.ts subWorld: scents undefined). The BB (ai/bb.ts BbBrain)
+//    runs its own update and never reads the scent. Market people are not enemies.
 
 /** Lure tuning (see the file comment). */
 export const SCENT = {
