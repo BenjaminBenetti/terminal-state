@@ -33,6 +33,7 @@ import {CORPSE_CARRY_PARTICIPANT, STATION_BODIES_LANE, carryProblem, stationBodi
 import {STATION_PROPS_LANE, cargoProblem, stationPropsProblem, type CargoPropJSON} from '../run/trainCargo'; // task train-loose-cargo: the train's loose items (+ train-all-cargo: props)
 import {EQUIPMENT, STATION_EQUIPMENT_LANE, equipmentSeqOf, stationEquipmentProblem, trainEquipmentProblem, type EquipmentJSON} from '../craft/equipment'; // task train-crafting: the crafted chests / devices aboard and left in stations
 import {PROP_DEFS} from '../gen/props'; // task train-all-cargo: carried props are of real kinds
+import {trainUpgradesProblem} from '../run/trainUpgrades'; // task studio-refinement-batch-20261113-035659-01 (lane ARMOR): the train's fitted upgrades
 import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
 import {MARKET_STOCK_LANE, STOCK_MAX} from '../market/trade/stock';
 import {BUNKER_LANE, bunkerStateProblem} from '../world/bunker/objectiveState'; // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE)
@@ -559,6 +560,8 @@ function participants(v: unknown, path: string, seen: Set<number>): void {
       if (ep) bad(`${p}.equipment`, ep);
       equipmentUnits((r.equipment as {aboard: EquipmentJSON[]}).aboard, `${p}.equipment.aboard`, seen);
     }
+    // (lane ARMOR) the permanent one-time upgrades: optional (absent = none fitted), else exactly {v: 1, fitted: [unique known ids]}
+    if (r.upgrades !== undefined) { const up = trainUpgradesProblem(r.upgrades); if (up) bad(`${p}.upgrades`, up); }
   }
   const cc = o[CORPSE_CARRY_PARTICIPANT]; // (lane CORPSE) the body in the player's hands
   if (cc !== undefined) {
