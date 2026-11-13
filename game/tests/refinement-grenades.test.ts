@@ -268,8 +268,8 @@ describe('GrenadeSystem: acid', () => {
     const ref: MeltRefLike = {key: 'prop:7', x: 21, y: FIX.upperY, z: 8, label: 'crate'};
     const calls = {start: [] as string[], expose: [] as [string, number][], atPoint: 0};
     const melt: AcidMeltLike = {
-      atPoint: (x, y, z) => { calls.atPoint++; return z > 5.5 ? ref : null; },
-      inDisc: (x, y, z, r) => (Math.hypot(x - ref.x, z - ref.z) <= r + 0.5 ? [ref] : []),
+      atPoint: (_x, _y, z) => { calls.atPoint++; return z > 5.5 ? ref : null; },
+      inDisc: (x, _y, z, r) => (Math.hypot(x - ref.x, z - ref.z) <= r + 0.5 ? [ref] : []),
       expose: (r, dt) => { calls.expose.push([r.key, dt]); return true; },
       start: r => { calls.start.push(r.key); return true; },
       alive: () => true,
