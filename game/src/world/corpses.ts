@@ -18,10 +18,26 @@
 // only the body's; slower by the body's mass (a ModifierSource; a sprint is a heavy jog). A still-held left button never fires after the
 // body leaves the hands (Game's laneOwnedLast latch).
 // E WHILE CARRYING: each registered sink (addSink, in order) is offered the body — an ok offer's E hands it over (take() true: the sink
-// owns record + object from that call on); a refusal is shown and keeps it. Otherwise E lays it down in the 'lying' pose (its Death clip's
-// end frame, its lowest vertex exactly on the floor) on a free, level floor spot in front of the player (refused while the train moves).
+// owns record + object from that call on); a refusal is shown and keeps it. Otherwise E lets it go (refused while the train moves).
 // A body lying there is a corpse for shots and swings (hitTargets: blood, and its wounds while it is still the actor that died here); never
 // a collider, like any corpse.
+// THE DROP (task studio-refinement-batch-20261113-035659-01, lane DROPS; user: "Carried bodies: set down/drop freely as physical ragdolls
+// that fall naturally amid clutter, rather than requiring a clear area"): with the game's physics world up (every built station), E lets
+// the body go as a RAGDOLL (physics/world.ts PhysicsSystem.ragdoll: the same parts / joints / limits as any corpse, colliding with the
+// floors, walls, stairs, props, loose props and the parked car's floor) from its carried pose, moved a little in front of the player —
+// pulled back toward the player while the way from the chest to any part of it is blocked (never inside or beyond a wall / prop / the car's
+// shell), with the player's own velocity, a small push and a roll off the shoulder (CORPSE.push / roll: dropped straight down it could
+// balance folded on head and feet). No clear-area refusal: it falls on whatever is there. The refusals left are about integrity: riding,
+// a lift cab (it moves), the count caps (train / station, decided at the release point) and — at the departure — a body across the
+// doorway or still falling. While it falls it is in `lying` (a target, aimed / picked up as any; its centre follows the pelvis); once
+// physics stops simulating it (calm, the 8 s cap; one stopped in mid-air by a newer ragdoll falls on at its velocity, CORPSE.restarts) it
+// leaves the physics, is lifted out of the floor by its deepest skinned point (CORPSE.lift: the ragdoll's spheres are slimmer than the
+// skin) and its ACTUAL pose is recorded ('fallen': the bones' local rotations + the pelvis, the root moved under the pelvis with the world
+// pose kept); ownership follows the settled pelvis by the rule below. A save / teardown / departure while it still falls records its pose
+// at that instant marked `falling` with its pelvis velocity (a teardown / departure stops its ragdoll there): rebuilt, it falls on from
+// that pose at that velocity. Without a physics world
+// (Node hosts without one, a rig the ragdoll refuses) the old posed drop remains: the 'lying' pose (its Death clip's end frame, its lowest
+// vertex exactly on the floor) on a free, level floor spot in front of the player.
 // The one other E use while carrying is the train's driving console (aimed: its map / a journey with the body in the hands).
 //
 // OWNERSHIP (one body, one place; every move is one synchronous call):
@@ -46,7 +62,7 @@ import {cosplayModelKeysFor, lingerieModelKeysFor} from '../ai/spawnLook';
 import {BODIES, bodyId, copyBody, type BodyRecordJSON} from '../corpse/bodyRecord';
 import {CORPSE_CARRY_PARTICIPANT, STATION_BODIES_LANE, carriedBodyOf, heldRecord, stationBodiesOf, type CorpseCarryJSON} from '../corpse/bodyLanes';
 import type {BodyOffer, BodySink, CorpseSystemApi, HeldBody} from '../corpse/api';
-import {boneInRoot, bodyPoints, poseCarry, poseLying, restingLift} from '../corpse/bodyPose';
+import {boneInRoot, bodyPoints, poseCarry, poseFallen, poseLying, readFallen, restingLift} from '../corpse/bodyPose';
 import {corpseVolumes, type DamageZombie} from '../damage/system';
 import type {RagdollTarget} from '../physics/ragdoll';
 import {raySphere, rayCapsule} from '../combat/hitscan';
@@ -83,6 +99,30 @@ export const CORPSE = {
   apart: 0.28,
   /** A lying body's point this far past the car's wall line counts as outside / inside (m; resting against a wall is not straddling). */
   wallTol: 0.06,
+  /**
+   * Lane DROPS (the ragdoll drop): the carried pose moves this far along the view's heading (m, tried in order, down to behind the
+   * shoulder: the pull-back) and across it (m, + right: the shoulder's pelvis comes in front of the player first); the first release whose
+   * every part is in free space in sight of the chest (`chestY` above the feet) with `partClear` m to spare wins.
+   */
+  release: [0.55, 0.4, 0.25, 0.1, 0, -0.15, -0.3], across: [-0.2, 0, -0.4], chestY: 1.2, partClear: 0.06,
+  /**
+   * The push the body leaves the shoulder with (m/s along the view's heading, on top of the player's own velocity) and the roll (rad/s)
+   * about its length (the carried root's Z, head to feet; the same frame when it falls on after a stop): dropped straight down from the
+   * carry pose a ragdoll lands on head and feet and can balance there folded, pelvis up; rolling, it lands on a side.
+   */
+  push: 0.7, roll: 3,
+  /**
+   * A ragdoll that stops while its pelvis still moved faster than `stillV` (m/s: retired in mid-air by a newer ragdoll, not at rest) falls
+   * on from there at the velocity it had, at most `restarts` times; then it stays as it is.
+   */
+  stillV: 0.35, restarts: 2,
+  /**
+   * At rest, the body is lifted by its deepest skinned point's sink into the floor under it (m, at most `lift`; every `liftStride`-th
+   * vertex): the ragdoll's spheres are slimmer than the skin (a Blightbelly's belly, a coat), which would sink into the floor. The lying
+   * pose's rule (corpse/bodyPose.ts restingLift): never sunk. Floors only, level `liftFlat` m round the point (a prop's top or side, a
+   * stair riser cannot be told apart from one point: skin against a crate or a wall may touch a few cm into it, as every ragdoll's does).
+   */
+  lift: 0.15, liftStride: 3, liftFlat: 0.06,
 } as const;
 
 export const CORPSE_TEXT = {
@@ -96,6 +136,8 @@ export const CORPSE_TEXT = {
   stationFull: `No more room for bodies here (at most ${BODIES.stationHere} in one station)`,
   trainFull: `The train holds at most ${BODIES.maxAboard} bodies — put this one down outside`,
   doorway: 'A body is lying in the train doorway — move it fully inside or out onto the platform',
+  noSpace: 'No space to let the body go here — step back from the wall', // (lane DROPS: even the pulled-back release would start in a wall)
+  settling: 'A body is still falling — wait a moment', // (lane DROPS: the departure waits for a body falling at the car)
   overloaded: (n: number) => `The train is overloaded — ${n} bodies lie in it, at most ${BODIES.maxAboard} can travel. Carry ${n - BODIES.maxAboard} out first`,
 } as const;
 
@@ -103,6 +145,7 @@ type Phase = 'prepare' | 'build';
 type V3 = {x: number; y: number; z: number};
 const UP = new THREE.Vector3(0, 1, 0);
 const V = new THREE.Vector3(), V2 = new THREE.Vector3(), Q = new THREE.Quaternion(), QY = new THREE.Quaternion(), S = new THREE.Vector3(), EYE = new THREE.Vector3(), DIR = new THREE.Vector3();
+const C = new THREE.Vector3(), M1 = new THREE.Matrix4(), M2 = new THREE.Matrix4(), E1 = new THREE.Euler(); // (lane DROPS)
 const r5 = (v: number) => (Math.round(v * 1e5) / 1e5) || 0;
 /** Layout key of the body model keys computed by the layout hook (a symbol: copied by `{...layout}` spreads, never serialized). */
 const KEYS = Symbol('corpse-model-keys');
@@ -116,6 +159,12 @@ function quat(q: THREE.Quaternion): [number, number, number, number] {
   return out.map(v => r5(v / len)) as [number, number, number, number];
 }
 
+/** Lane DROPS: a record's velocity turned about the vertical by `yaw` (the world <-> car frames; rounded like the record). */
+function turnV(v: readonly number[], yaw: number): [number, number, number] {
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  return [r5(c * v[0] + s * v[2]), r5(v[1]), r5(-s * v[0] + c * v[2])];
+}
+
 /** A handled body in the live world (or riding / in the hands). */
 interface Body {
   rec: BodyRecordJSON;
@@ -125,6 +174,16 @@ interface Body {
   centre: THREE.Vector3;
   /** Its meshes' frustumCulled / castShadow before the carry. */
   flags: {mesh: THREE.Mesh; culled: boolean; shadow: boolean}[] | null;
+  /**
+   * Lane DROPS: the ragdoll target this body was handed to the game's physics as (simulating while `falling`, then one of its frozen
+   * corpses), its pelvis velocity / speed (m/s) and last position while it falls, and how often it fell on after a mid-air stop.
+   */
+  rag?: RagdollTarget | null;
+  falling?: boolean;
+  vel?: THREE.Vector3;
+  v?: number;
+  last?: THREE.Vector3 | null;
+  restarts?: number;
 }
 
 type Aimed = {kind: 'actor'; z: EnemyActor; index: number; t: number} | {kind: 'body'; b: Body; list: Body[]; t: number};
@@ -141,7 +200,7 @@ interface LevelsLike {
 export interface CorpseHost {
   scene: THREE.Object3D;
   camera: THREE.Camera;
-  player: {x: number; y: number; z: number; yaw: number; pitch: number; alive: boolean; climbing: boolean; sprinting: boolean};
+  player: {x: number; y: number; z: number; yaw: number; pitch: number; alive: boolean; climbing: boolean; sprinting: boolean; vx?: number; vz?: number};
   levels: LevelsLike | null;
   propIndex?: {near(x0: number, z0: number, x1: number, z1: number, out: Set<number>): Set<number>; props: readonly PropPlacement[]} | null;
   layout: StationLayout | null;
@@ -155,7 +214,12 @@ export interface CorpseHost {
   zombies: EnemyActor[];
   readonly seed: number;
   state: string;
-  physics?: {forgetRagdoll?(target: object): boolean} | null;
+  /**
+   * Lane DROPS: + the ragdoll drop — PhysicsSystem.ragdoll (a body from its current pose), its world (built: a station's), and actorVelocity
+   * (true only while a target's ragdoll SIMULATES: false = frozen / retired / gone — how a drop sees its body come to rest).
+   */
+  physics?: {forgetRagdoll?(target: object): boolean; ragdoll?(target: RagdollTarget, impulse: null): boolean; world?: unknown;
+    actorVelocity?(target: object, point: THREE.Vector3, out: THREE.Vector3): boolean; statics?: {cellGround(x: number, z: number, y?: number): number} | null} | null;
   damage?: {releaseZombie?(z: object): boolean} | null;
   atmosphere?: {markShadows(root: THREE.Object3D, structure: boolean): void} | null;
   trainRuntime?: {spec: PlayerTrainSpec; view: {root: THREE.Object3D} | null; train: {placement: TrainPlacement} | null; consoleAimed?: boolean} | null;
@@ -216,7 +280,8 @@ export class CorpseSystem implements CorpseSystemApi {
   private readonly prepared = new WeakMap<object, BodyRecordJSON[]>();
   private readonly owner = () => !!(this.hand || this.handRec);
   /** QA / tests. */
-  readonly counts = {pickups: 0, drops: 0, sunk: 0, refused: 0, built: 0, failed: 0, captured: 0, released: 0, flushes: 0, blocked: 0};
+  readonly counts = {pickups: 0, drops: 0, sunk: 0, refused: 0, built: 0, failed: 0, captured: 0, released: 0, flushes: 0, blocked: 0,
+    ragdolls: 0, landed: 0, restarts: 0, stopped: 0, resumed: 0}; // (lane DROPS: ragdoll drops started, come to rest, fell on, stopped mid-fall, resumed)
 
   constructor(readonly host: CorpseHost, private readonly deps: CorpseDeps) {
     this.carry.name = 'corpse-carry';
@@ -315,7 +380,8 @@ export class CorpseSystem implements CorpseSystemApi {
     const s = rec.scale ?? a.scale;
     a.root.scale.setScalar(s);
     (a as unknown as {scale: number}).scale = s;
-    poseLying(a);
+    if (rec.pose === 'fallen' && rec.bones) poseFallen(a, rec.bones, rec.hips); // (lane DROPS: exactly as it fell)
+    else poseLying(a);
     a.root.position.set(rec.x, rec.y, rec.z);
     a.root.quaternion.set(rec.q[0], rec.q[1], rec.q[2], rec.q[3]).normalize();
     a.root.updateMatrixWorld(true);
@@ -325,8 +391,16 @@ export class CorpseSystem implements CorpseSystemApi {
   }
 
   private dispose(b: Body): void {
+    this.leavePhysics(b);
     this.restoreFlags(b);
     this.disposeBody(b.actor.root);
+  }
+
+  /** Lane DROPS: the body's ragdoll (simulating or one of the frozen corpses) leaves the game's physics; its bones keep the pose now. */
+  private leavePhysics(b: Body): void {
+    if (b.rag) this.host.physics?.forgetRagdoll?.(b.rag);
+    b.rag = null;
+    b.falling = false;
   }
 
   /** A lying body's points / centre / cull bounds / shadows after a (re)pose. */
@@ -467,6 +541,7 @@ export class CorpseSystem implements CorpseSystemApi {
   /** A body into the hands: the carry pose on the carry frame, item use cancelled. */
   private toHands(b: Body): void {
     const h = this.host;
+    this.leavePhysics(b); // (lane DROPS: a dropped body — falling or at rest — leaves its ragdoll behind)
     if (b.actor.root.parent !== this.carry) this.carry.add(b.actor.root);
     b.rec = heldRecord(b.rec);
     this.carryPose(b);
@@ -568,11 +643,297 @@ export class CorpseSystem implements CorpseSystemApi {
     this.counts.refused++;
   }
 
-  /** Lay the carried body down in front of the player (the 'lying' pose), or say why not; true = done. */
+  /**
+   * Let the carried body go in front of the player, or say why not; true = done. Lane DROPS: with the game's physics world up, as a ragdoll
+   * falling on whatever is there (dropRagdoll); without one, laid down in the 'lying' pose on a clear spot (layDown).
+   */
   putDown(): boolean {
     const h = this.host, b = this.hand;
     if (!b) return false;
     if (h.trainRide?.riding) { this.refuse(CORPSE_TEXT.riding); return false; }
+    return this.physicsReady() ? this.dropRagdoll(b) : this.layDown(b);
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------------
+  // Lane DROPS: the ragdoll drop (see the header)
+
+  /** The game's physics world is up (a built station): the ragdoll drop. */
+  private physicsReady(): boolean {
+    const h = this.host, ph = h.physics;
+    return !!(ph?.ragdoll && ph.world && h.levels && h.layout);
+  }
+
+  /** A point in a lift cab (a Levels dynamic volume other than the parked car's interior: it moves — no body is left in one). */
+  private inLift(x: number, y: number, z: number): boolean {
+    const s = this.host.levels?.supportIn(x, z, y + 0.05);
+    if (!s?.volume) return false;
+    const p = this.parked();
+    return !(p && this.insideCar(worldToTrain(p, x, s.floor + 0.05, z)));
+  }
+
+  /** Let the carried body go as a ragdoll from its carried pose (moved / pulled back by releaseOffset), or say why not. */
+  private dropRagdoll(b: Body): boolean {
+    const h = this.host, P = h.player, p = this.parked(), root = b.actor.root;
+    if (this.inLift(P.x, P.y, P.z)) { this.refuse(CORPSE_TEXT.elevator); return false; }
+    this.followView();
+    const off = this.releaseOffset(b);
+    if (!off) { this.refuse(CORPSE_TEXT.noSpace); return false; }
+    const hips = root.getObjectByName('Hips');
+    const c = (hips ? hips.getWorldPosition(C) : root.getWorldPosition(C)).add(off);
+    if (this.inLift(c.x, c.y, c.z)) { this.refuse(CORPSE_TEXT.elevator); return false; }
+    // the count caps at the release point (the car's or the station's; a body that then rolls across is counted where it lies)
+    const inCar = !!p && this.insideCar(worldToTrain(p, c.x, c.y, c.z));
+    if (inCar && this.trainCount() >= BODIES.maxAboard) { this.refuse(CORPSE_TEXT.trainFull); return false; }
+    if (!inCar && this.stationCount() >= BODIES.stationHere) { this.refuse(CORPSE_TEXT.stationFull); return false; }
+    this.restoreFlags(b);
+    h.scene.attach(root); // (its world transform kept: the carried pose where it hangs now)
+    root.position.add(off);
+    root.updateMatrixWorld(true);
+    const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
+    if (!this.startFall(b, V.set((P.vx ?? 0) + fx * CORPSE.push, 0, (P.vz ?? 0) + fz * CORPSE.push))) {
+      // (a rig the ragdoll refuses: back on the shoulder, then the posed drop)
+      this.carry.add(root);
+      this.carryPose(b);
+      this.keepFlags(b);
+      return this.layDown(b);
+    }
+    b.restarts = 0;
+    b.rec = this.fallenRecord(b); // (its pose at once: a save in the next frames already holds it, marked falling)
+    this.settle(b);
+    h.atmosphere?.markShadows(root, false); // (enemies block the flashlight beam: so does a body lying there)
+    this.lying.push(b);
+    this.hand = null;
+    this.counts.drops++;
+    this.flush();
+    return true;
+  }
+
+  /** The release offset (world m: the view's heading and across it) of the carried pose with every part free and in sight, else null. */
+  private releaseOffset(b: Body): THREE.Vector3 | null {
+    const P = this.host.player;
+    const pts = this.partPoints(b.actor.root);
+    const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = -fz, rz = fx; // (forward, right)
+    const chest = {x: P.x, y: P.y + CORPSE.chestY, z: P.z};
+    for (const d of CORPSE.release) {
+      for (const a of CORPSE.across) {
+        const ox = fx * d + rx * a, oz = fz * d + rz * a;
+        if (pts.every(q => this.freePoint(chest, q.x + ox, q.y, q.z + oz))) return new THREE.Vector3(ox, 0, oz);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * World points spanning a body's ragdoll parts now: every bone below the skeleton root, the midpoint of each bone to its parent bone, the
+   * crown and the toes (the parts' spheres sit on these segments).
+   */
+  private partPoints(root: THREE.Object3D): THREE.Vector3[] {
+    root.updateMatrixWorld(true);
+    const out: THREE.Vector3[] = [];
+    root.traverse(o => {
+      if (!(o as THREE.Bone).isBone || !(o.parent as THREE.Bone | null)?.isBone) return;
+      const w = o.getWorldPosition(new THREE.Vector3());
+      out.push(w);
+      if ((o.parent as THREE.Bone).parent && (o.parent!.parent as THREE.Bone).isBone) out.push(o.parent!.getWorldPosition(new THREE.Vector3()).lerp(w, 0.5));
+    });
+    const head = root.getObjectByName('Head');
+    if (head) out.push(head.localToWorld(new THREE.Vector3(0, 0.17, 0.02)));
+    for (const n of ['L_Foot', 'R_Foot']) { const f = root.getObjectByName(n); if (f) out.push(f.localToWorld(new THREE.Vector3(0, -0.06, 0.13))); }
+    return out;
+  }
+
+  /** A part point is in free space seen from the chest: nothing (walls, slabs, floors, props, the car's shell) on the way or `partClear` past it. */
+  private freePoint(chest: V3, x: number, y: number, z: number): boolean {
+    const L = this.host.levels!, dx = x - chest.x, dy = y - chest.y, dz = z - chest.z, dist = Math.hypot(dx, dy, dz);
+    if (dist < 1e-4) return true;
+    const want = dist + CORPSE.partClear;
+    // (a long max distance: Levels.raycast's cheap prop reject measures from the ray's reach, so a long wall box is never skipped)
+    const hit = L.raycast(chest, {x: dx / dist, y: dy / dist, z: dz / dist}, want + 3, {props: this.host.layout?.props ?? []});
+    return hit.kind === 'none' || hit.t >= want;
+  }
+
+  /**
+   * The body into the game's physics as a ragdoll from its current pose (the wrapper hands it `v` as its pelvis' start velocity, turning
+   * at CORPSE.roll about the root's yaw-only Z: the bones' start velocities are the pelvis' + the roll's).
+   */
+  private startFall(b: Body, v: THREE.Vector3): boolean {
+    const ph = this.host.physics;
+    if (!ph?.ragdoll) return false;
+    const root = b.actor.root, hips = root.getObjectByName('Hips');
+    root.updateMatrixWorld(true);
+    root.getWorldQuaternion(Q);
+    E1.setFromQuaternion(Q, 'YXZ');
+    const w = new THREE.Vector3(0, 0, CORPSE.roll).applyQuaternion(QY.setFromAxisAngle(UP, E1.y));
+    const at = hips ? hips.getWorldPosition(new THREE.Vector3()) : root.getWorldPosition(new THREE.Vector3());
+    const rag = this.ragTarget(b, v.clone(), w, at);
+    let ok = false;
+    try { ok = ph.ragdoll(rag, null); } catch (err) { console.warn('corpses: a ragdoll drop failed', err); }
+    if (!ok) return false;
+    b.rag = rag;
+    b.falling = true;
+    b.vel = (b.vel ?? new THREE.Vector3()).copy(v);
+    b.v = Infinity;
+    b.last = null;
+    this.counts.ragdolls++;
+    return true;
+  }
+
+  /**
+   * The ragdoll target of a body (its actor, but its start velocity is the drop's — the actor's own bone velocities are those of its last
+   * living frames: `v` at the pelvis `at` + `w` (rad/s) x the bone's offset from it). The physics finds it by this object (forgetRagdoll /
+   * actorVelocity), never by the actor.
+   */
+  private ragTarget(b: Body, v: THREE.Vector3, w: THREE.Vector3, at: THREE.Vector3): RagdollTarget {
+    const a = b.actor, br = a.brain as {x: number; z: number};
+    return {
+      root: a.root, scale: b.rec.scale ?? a.scale, coated: a.coated, girth: a.girth, ragdollRig: a.ragdollRig,
+      bone: n => a.bone(n),
+      boneVelocity: (n, out) => {
+        const bone = a.bone(n);
+        if (!bone) return out.copy(v);
+        return out.copy(bone.getWorldPosition(out).sub(at)).cross(w).negate().add(v); // (v + w x r = v - r x w)
+      },
+      beginRagdoll: () => a.beginRagdoll(),
+      setCullSphere: (c, r) => a.setCullSphere(c, r),
+      ragdollMoved: (x, z) => { br.x = x; br.z = z; },
+    };
+  }
+
+  /** The body's ragdoll simulates now (PhysicsSystem.actorVelocity answers for a simulating ragdoll only). */
+  private simulating(b: Body): boolean {
+    return !!b.rag && !!this.host.physics?.actorVelocity?.(b.rag, V2.copy(b.centre), S);
+  }
+
+  /** Per frame while a dropped body falls: its centre follows the pelvis; once physics stops simulating it, it rests (or falls on). */
+  private watchFall(b: Body, dt: number): void {
+    const root = b.actor.root, hips = root.getObjectByName('Hips');
+    if (hips) hips.getWorldPosition(C); else root.getWorldPosition(C);
+    if (b.last && dt > 0) { b.vel = (b.vel ?? new THREE.Vector3()).copy(C).sub(b.last).divideScalar(dt); b.v = b.vel.length(); }
+    b.last = (b.last ?? new THREE.Vector3()).copy(C);
+    b.centre.copy(C);
+    if (this.simulating(b)) return;
+    if ((b.v ?? 0) > CORPSE.stillV && (b.restarts ?? 0) < CORPSE.restarts && this.physicsReady()) {
+      // stopped in mid-fall (retired for a newer ragdoll): it falls on from where it is, as fast as it fell
+      const v = V.copy(b.vel ?? V.set(0, 0, 0));
+      this.leavePhysics(b);
+      b.restarts = (b.restarts ?? 0) + 1;
+      if (this.startFall(b, v)) { this.counts.restarts++; return; }
+    }
+    // at rest: out of the physics (the corpse system poses it from now on), re-rooted under the pelvis, lifted out of the floor
+    this.leavePhysics(b);
+    let rec = this.fallenRecord(b);
+    this.applyPose(b, rec);
+    const up = this.groundLift(b);
+    if (up > 1e-3) {
+      root.position.y += up;
+      root.updateMatrixWorld(true);
+      rec = this.fallenRecord(b);
+      this.applyPose(b, rec);
+    }
+    delete rec.falling;
+    b.rec = rec;
+    this.settle(b);
+    this.counts.landed++;
+    this.flush();
+  }
+
+  /**
+   * How far (world m, >= 0, at most CORPSE.lift) the body's deepest skinned point lies below the floor under it (the station's floors and
+   * stair treads, the car's floor volume; StaticQuery.cellGround of the band `lift` above it): the lift that puts it on the floor.
+   * A point counts only where that floor is level `liftFlat` m round it (one against a stair riser or a platform face is beside a floor,
+   * not in it) and sunk at most `lift` (deeper: not this floor's).
+   */
+  private groundLift(b: Body): number {
+    const q = this.host.physics?.statics;
+    if (!q) return 0;
+    const root = b.actor.root, top = CORPSE.lift, d = CORPSE.liftFlat;
+    root.updateMatrixWorld(true);
+    let sink = 0;
+    const level = (x: number, z: number, y: number, s: number) =>
+      Math.abs(q.cellGround(x + d, z, y) - s) < 0.01 && Math.abs(q.cellGround(x - d, z, y) - s) < 0.01 && Math.abs(q.cellGround(x, z + d, y) - s) < 0.01 && Math.abs(q.cellGround(x, z - d, y) - s) < 0.01;
+    // (the floor of the band `top` above the point: a point in a thin slab — the car's floor over the trench — reads the floor it sank in)
+    root.traverse(o => {
+      const m = o as THREE.SkinnedMesh;
+      if (!m.isSkinnedMesh || !m.visible) return;
+      const pos = m.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i += CORPSE.liftStride) {
+        C.fromBufferAttribute(pos, i);
+        m.applyBoneTransform(i, C);
+        C.applyMatrix4(m.matrixWorld);
+        const s = q.cellGround(C.x, C.z, C.y + top), k = s - C.y;
+        if (Number.isFinite(s) && k > sink && k <= top && level(C.x, C.z, C.y + top, s)) sink = k;
+      }
+    });
+    return sink;
+  }
+
+  /**
+   * A body's CURRENT pose as a 'fallen' world record (marked `falling` with its pelvis velocity; nothing is moved): its bones' local
+   * rotations, its root re-seated on the floor under the pelvis and turned about the vertical only (the pelvis' local transform recomputed
+   * so the world pose is the same), the pelvis' storey.
+   */
+  private fallenRecord(b: Body): BodyRecordJSON {
+    const root = b.actor.root, L = this.host.levels;
+    root.updateMatrixWorld(true);
+    const {bones} = readFallen(root, r5);
+    const fv = BODIES.fallV, cv = (v: number | undefined) => r5(Math.max(-fv, Math.min(fv, v ?? 0)));
+    const base: BodyRecordJSON = {...copyBody(b.rec), pose: 'fallen', bones, falling: [cv(b.vel?.x), cv(b.vel?.y), cv(b.vel?.z)]};
+    const hips = root.getObjectByName('Hips');
+    root.matrixWorld.decompose(V, Q, S);
+    if (!hips?.parent) return {...base, ...this.worldPose(b), hips: [0, 0, 0]}; // (no pelvis bone: the root as it is)
+    hips.getWorldPosition(C);
+    const sup = L?.supportIn(C.x, C.z, C.y + 0.05) ?? null;
+    E1.setFromQuaternion(Q, 'YXZ');
+    const q = quat(QY.setFromAxisAngle(UP, E1.y));
+    const x = r5(C.x), y = r5(sup ? sup.floor : C.y - 0.15), z = r5(C.z);
+    // the new root's world matrix x the model's fixed chain from the root to the pelvis' parent bone; the pelvis' local = its inverse x world
+    M1.compose(V2.set(x, y, z), QY.set(q[0], q[1], q[2], q[3]), S);
+    M2.copy(root.matrixWorld).invert().multiply(hips.parent.matrixWorld);
+    M1.multiply(M2).invert().multiply(hips.matrixWorld);
+    M1.decompose(V, Q, S);
+    Q.normalize();
+    const hq = [r5(Q.x), r5(Q.y), r5(Q.z), r5(Q.w)], hl = Math.hypot(hq[0], hq[1], hq[2], hq[3]) || 1;
+    bones.Hips = hq.map(v => r5(v / hl)) as [number, number, number, number];
+    const lim = BODIES.hipsLim - 1e-3, cl = (v: number) => r5(Math.max(-lim, Math.min(lim, v)));
+    return {...base, x, y, z, q, level: Math.max(0, sup?.level ?? b.rec.level ?? 0), hips: [cl(V.x), cl(V.y), cl(V.z)]};
+  }
+
+  /** A body posed exactly as a 'fallen' world record says (root + bones; its world pose as recorded). */
+  private applyPose(b: Body, rec: BodyRecordJSON): void {
+    const root = b.actor.root;
+    root.position.set(rec.x, rec.y, rec.z);
+    root.quaternion.set(rec.q[0], rec.q[1], rec.q[2], rec.q[3]).normalize();
+    root.scale.setScalar(rec.scale ?? b.actor.scale);
+    if (rec.bones) poseFallen(b.actor, rec.bones, rec.hips);
+    root.updateMatrixWorld(true);
+  }
+
+  /** A body still falling at a teardown / departure: its ragdoll stops where it is now, its record says so (rebuilt, it falls on). */
+  private stopFall(b: Body): void {
+    this.leavePhysics(b);
+    const rec = this.fallenRecord(b);
+    this.applyPose(b, rec);
+    b.rec = rec;
+    this.settle(b);
+    this.counts.stopped++;
+  }
+
+  /** A rebuilt body whose record was captured mid-fall falls on from that pose at its recorded velocity (a built station, a parked car). */
+  private resume(b: Body): void {
+    const f = b.rec.falling;
+    if (b.rec.pose !== 'fallen' || !f || b.falling || this.host.trainRide?.riding || !this.physicsReady()) return;
+    if (this.startFall(b, V.set(f[0], f[1], f[2]))) { b.restarts = 0; this.counts.resumed++; }
+  }
+
+  /** A lying body's world record now (a falling one: its pose this instant; a fallen one: its root where it is — a lift may carry it). */
+  private worldRecord(b: Body): BodyRecordJSON {
+    if (b.falling) return this.fallenRecord(b);
+    return b.rec.pose === 'fallen' ? {...copyBody(b.rec), ...this.worldPose(b)} : copyBody(b.rec);
+  }
+
+  /** The posed drop (no physics world): laid down in the 'lying' pose on a clear, level spot in front, or say why not. */
+  private layDown(b: Body): boolean {
+    const h = this.host;
     const spot = this.dropSpot(b);
     if (typeof spot === 'string') { this.refuse(spot); return false; }
     const p = this.parked();
@@ -732,15 +1093,23 @@ export class CorpseSystem implements CorpseSystemApi {
     return !!p && this.insideCar(worldToTrain(p, b.centre.x, b.centre.y, b.centre.z));
   }
 
-  /** A lying body's record in the train frame of `p`. */
+  /** A lying body's record in the train frame of `p` (lane DROPS: a falling one's pose this instant, marked falling). */
   private trainRecord(b: Body, p: TrainPlacement): BodyRecordJSON {
-    const root = b.actor.root;
-    root.updateMatrixWorld(true);
-    root.matrixWorld.decompose(V, Q, S);
+    let base = b.rec;
+    if (b.falling) {
+      base = this.fallenRecord(b);
+      V.set(base.x, base.y, base.z);
+      Q.set(base.q[0], base.q[1], base.q[2], base.q[3]);
+    } else {
+      const root = b.actor.root;
+      root.updateMatrixWorld(true);
+      root.matrixWorld.decompose(V, Q, S);
+    }
     const l = worldToTrain(p, V.x, V.y, V.z);
     Q.premultiply(QY.setFromAxisAngle(UP, -p.yaw));
-    const rec: BodyRecordJSON = {...copyBody(b.rec), x: r5(l.x), y: r5(l.y), z: r5(l.z), q: quat(Q)};
+    const rec: BodyRecordJSON = {...copyBody(base), x: r5(l.x), y: r5(l.y), z: r5(l.z), q: quat(Q)};
     delete rec.level;
+    if (rec.falling) rec.falling = turnV(rec.falling, -p.yaw); // (lane DROPS: its velocity in the car's frame too)
     return rec;
   }
 
@@ -777,6 +1146,7 @@ export class CorpseSystem implements CorpseSystemApi {
     for (const b of this.lying) {
       const c = worldToTrain(p, b.centre.x, b.centre.y, b.centre.z);
       if (c.x < Sp.interior.x0 - 3 || c.x > Sp.interior.x1 + 3 || Math.abs(c.z) > Sp.interior.halfWidth + 3) continue;
+      if (b.falling) { this.counts.blocked++; return CORPSE_TEXT.settling; } // (lane DROPS: one falling at the car — where it ends decides)
       const inside = this.insideCar(c);
       const pts = b.points.map(q => worldToTrain(p, q.x, q.y, q.z)).map(q => ({x: q.x, y: Math.max(q.y, Sp.floorY), z: q.z}));
       const straddles = inside ? pts.some(q => !this.insideCar(q, T)) : pts.some(q => this.insideCar(q, -T));
@@ -796,7 +1166,7 @@ export class CorpseSystem implements CorpseSystemApi {
     const w = this.here;
     if (!w) return;
     const p = this.parked();
-    const here = [...this.deferred.map(copyBody), ...this.lying.filter(b => !this.ownsBody(b, p)).map(b => copyBody(b.rec))];
+    const here = [...this.deferred.map(copyBody), ...this.lying.filter(b => !this.ownsBody(b, p)).map(b => this.worldRecord(b))]; // (lane DROPS: live poses)
     const seen = new Set<string>();
     const list = here.filter(r => !seen.has(r.id) && !!seen.add(r.id)).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     // (never cut: BODIES.stationHere is the format's input safety and a drop beyond it is refused)
@@ -905,6 +1275,7 @@ export class CorpseSystem implements CorpseSystemApi {
       this.settle(b);
       h.atmosphere?.markShadows(b.actor.root, false);
       this.lying.push(b);
+      this.resume(b); // (lane DROPS: one saved while it fell falls on)
     }
     // the train's pending bodies: in the parked car, or riding in on the car's view root (an arriving build)
     this.placePending();
@@ -929,6 +1300,7 @@ export class CorpseSystem implements CorpseSystemApi {
         this.placeInCar(b, p!);
         h.atmosphere?.markShadows(b.actor.root, false);
         this.lying.push(b);
+        this.resume(b); // (lane DROPS)
       }
     }
     this.pending = keep;
@@ -943,7 +1315,9 @@ export class CorpseSystem implements CorpseSystemApi {
     root.position.set(w.x, w.y, w.z);
     root.quaternion.set(rec.q[0], rec.q[1], rec.q[2], rec.q[3]).normalize().premultiply(QY.setFromAxisAngle(UP, p.yaw));
     this.settle(b);
+    const f = b.rec.falling;
     b.rec = {...copyBody(b.rec), ...this.worldPose(b)}; // (lying in the world: a world record; trainRecord() gives its car-local one)
+    if (f) b.rec.falling = turnV(f, p.yaw); // (lane DROPS: a falling one's velocity back in the world's frame)
   }
 
   /** A lying body's world pose fields (root position / orientation + storey). */
@@ -959,6 +1333,7 @@ export class CorpseSystem implements CorpseSystemApi {
   private onTeardown(): void {
     if (!this.here) return;
     const h = this.host;
+    for (const b of this.lying) if (b.falling) this.stopFall(b); // (lane DROPS: recorded as they are this instant, marked falling)
     if (h.trainRide?.riding && !this.captured) this.capture(); // (a teardown before the ride's first frame: the car's bodies ride along)
     const p = this.parked();
     if (p) for (const b of [...this.lying]) if (this.ownsBody(b, p)) { this.pending.push(this.trainRecord(b, p)); this.lying.splice(this.lying.indexOf(b), 1); this.dispose(b); }
@@ -978,6 +1353,8 @@ export class CorpseSystem implements CorpseSystemApi {
     let n = 0;
     for (const b of [...this.lying]) {
       if (!(this.here && this.insideCar(worldToTrain(p, b.centre.x, b.centre.y, b.centre.z)))) continue;
+      if (b.falling) this.stopFall(b); // (lane DROPS: departBlock waits for it; a ride started otherwise records it falling — it falls on at the stop)
+      this.leavePhysics(b); // (lane DROPS: a riding body is no corpse of the station's physics)
       b.rec = this.trainRecord(b, p);
       const o = b.actor.root;
       root.add(o);
@@ -1005,6 +1382,7 @@ export class CorpseSystem implements CorpseSystemApi {
       this.placeInCar(b, p);
       h.atmosphere?.markShadows(b.actor.root, false);
       this.lying.push(b);
+      this.resume(b); // (lane DROPS: one captured while it fell falls on in the parked car)
       n++;
     }
     this.counts.released += n;
@@ -1015,6 +1393,7 @@ export class CorpseSystem implements CorpseSystemApi {
     const ride = this.host.trainRide;
     if (ride?.riding) { if (!this.captured && (ride.phase === 'closing' || ride.phase === 'departing')) this.capture(); }
     else if (this.captured || this.riding.length) this.release();
+    for (const b of this.lying) if (b.falling) this.watchFall(b, dt); // (lane DROPS: the ragdoll drops in flight)
     if (!this.hand && this.handRec && this.here && (this.retryT -= dt) <= 0) { this.retryT = 1; this.buildHeld(); } // (a model that arrived late)
     if (this.hand) this.followView();
     const step = dt / CORPSE.holsterS;
@@ -1025,7 +1404,8 @@ export class CorpseSystem implements CorpseSystemApi {
   qa() {
     const p = this.parked();
     return {held: this.hand?.rec.id ?? this.handRec?.id ?? null, built: !!this.hand, holster: +this.holster.toFixed(2),
-      lying: this.lying.map(b => ({id: b.rec.id, arch: b.rec.arch, owner: this.ownsBody(b, p) ? 'train' : 'station', x: +b.centre.x.toFixed(2), y: +b.centre.y.toFixed(2), z: +b.centre.z.toFixed(2)})),
+      lying: this.lying.map(b => ({id: b.rec.id, arch: b.rec.arch, owner: this.ownsBody(b, p) ? 'train' : 'station', x: +b.centre.x.toFixed(2), y: +b.centre.y.toFixed(2), z: +b.centre.z.toFixed(2),
+        pose: b.rec.pose, falling: !!b.falling})),
       riding: this.riding.map(b => b.rec.id), pending: this.pending.map(r => r.id), deferred: this.deferred.map(r => r.id), sinks: this.sinks.length, captured: this.captured, counts: {...this.counts}};
   }
 }
