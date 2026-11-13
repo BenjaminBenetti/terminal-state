@@ -35,6 +35,12 @@ export interface RagdollTarget {
    * (HUMANOID_RIG). Sphere offsets are in each named bone's local frame (unscaled model metres).
    */
   readonly ragdollRig?: RagdollRig;
+  /**
+   * Task studio-bb-production-20261112-234540-01 (lane ACTOR): called once, first thing, before the bodies are built from the pose —
+   * the target may put its root where the ragdoll should start (BB: lifted just clear of the wall / ceiling / floor it clings to, so
+   * no sphere starts inside it). Omitted = nothing (every other enemy).
+   */
+  prepareRagdoll?(): void;
 }
 
 export interface KillImpulse {
@@ -297,6 +303,7 @@ export class Ragdoll {
 
   constructor(readonly target: RagdollTarget, impulse: KillImpulse | null, private readonly opts: RagdollOptions, now = 0) {
     this.startedAt = now;
+    target.prepareRagdoll?.(); // (BB: off the surface it clings to)
     const rig = (this.rig = target.ragdollRig ?? HUMANOID_RIG);
     const root = target.root;
     root.updateMatrixWorld(true);

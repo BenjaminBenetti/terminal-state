@@ -8,6 +8,7 @@
 //   Crawl    the slow gear: diagonal pairs (L hand + R knee, then R hand + L knee)               (loop, driven by phase)
 //   Scuttle  the fast gear: the same pairs, a longer hop between them                            (loop, driven by phase)
 //   Poise    stopped dead mid-stride: all four planted, staggered (the freeze between two bursts; mirrored for the other pair)
+//   Cackle   the "it has seen you" tell: it sits up on its haunches, hands off the surface, head thrown back, shaking with laughter
 //   Windup   the pounce tell: the chest dips and wiggles, then it sinks onto its haunches, hands off the floor, head up
 //   Pounce   airborne: arms thrown forward and apart, legs trailing                              (held while it flies)
 //   Fall     airborne without a leap: limbs splayed and flailing                                 (loop)
@@ -77,7 +78,7 @@ export interface BbExtras {
 }
 
 // ---------------------------------------------------------------- the clip set
-export const BB_CLIP_NAMES = ['Idle', 'Crawl', 'Scuttle', 'Poise', 'Windup', 'Pounce', 'Fall', 'Land', 'Hit', 'Death'] as const;
+export const BB_CLIP_NAMES = ['Idle', 'Crawl', 'Scuttle', 'Poise', 'Cackle', 'Windup', 'Pounce', 'Fall', 'Land', 'Hit', 'Death'] as const;
 export type BbClipName = (typeof BB_CLIP_NAMES)[number];
 
 /**
@@ -89,6 +90,7 @@ export const BB_CLIPS: Readonly<Record<BbClipName, {duration: number; loop: bool
   Crawl: {duration: 0.25, loop: true, frames: 40},
   Scuttle: {duration: 0.2, loop: true, frames: 40},
   Poise: {duration: 1.4, loop: true, frames: 14},
+  Cackle: {duration: 1.2, loop: false, frames: 72},
   Windup: {duration: BB_POUNCE.windupS, loop: false, frames: 26},
   Pounce: {duration: 1.1, loop: false, frames: 40},
   Fall: {duration: 0.56, loop: true, frames: 16},
@@ -140,6 +142,8 @@ export const BB_GAIT = {
   elbowOutDeg: 32,
   /** The wind-up sinks the hips this far behind the knees (thigh angle ahead of vertical, deg), as the hip allows. */
   haunchDeg: 42,
+  /** The cackle: how far it sits back, the pitch its trunk rears to (deg from upright) and the laugh's shakes per second. */
+  cackle: {haunchDeg: 34, pitchDeg: 44, hz: 6.5},
 } as const;
 
 // ---------------------------------------------------------------- pose maths (lib/pose.mjs, as ported by ai/sprintGait.ts)
@@ -819,6 +823,17 @@ function poiseFrame(rig: BbRig, t: number): BbFrame {
 }
 
 /**
+ * An all-fours pose with the hips sat back behind the knees by `want` degrees of thigh lean — or as far as the hip's flexion allows
+ * under the pelvis' pitch (which the sitting itself changes a little: a few rounds settle it).
+ */
+function sitBack(rig: BbRig, o: Fours, pitchOf: (o: Fours) => number, want: number): Fours {
+  const m = rig.m;
+  let a = want;
+  for (let i = 0; i < 3; i++) a = clamp(Math.min(want, BB_GAIT.maxHipFlexDeg - 4 - pitchOf({...o, hipsZ: m.hipsZ - m.thigh * Math.sin(a * D2R)})), 0, want);
+  return {...o, hipsZ: m.hipsZ - m.thigh * Math.sin(a * D2R)};
+}
+
+/**
  * The pounce tell, in two beats. First the chest dips between the elbows and the hindquarters wiggle (as far back as the hip lets the
  * knees fold under a low chest); then it sinks onto its haunches — hips flexed to their limit, knees folded under — as the trunk rears,
  * the hands come off the floor cocked by the chest and the head snaps up at its target.
@@ -832,20 +847,30 @@ function windupFrame(rig: BbRig, t: number): BbFrame {
     palm: {L: {x: m.palmX * 1.08, z: m.palmUnder + 0.3 * m.stroke * dip, lift: 0}, R: {x: -m.palmX * 1.08, z: m.palmUnder + 0.3 * m.stroke * dip, lift: 0}},
     elbowOut: lerp(BB_GAIT.elbowOutDeg, 55, dip), head: [lerp(m.headPitch, 34, ss(0.02, 0.3, u)), 0, 5 * wig],
   });
-  // how far the hips may sit back behind the knees: the hip's limit less the pelvis' pitch (which the sitting itself changes a little)
-  const sit = (o: Fours, pitchOf: (o: Fours) => number, want: number): Fours => {
-    let a = want, out = o;
-    for (let i = 0; i < 3; i++) {
-      out = {...o, hipsZ: m.hipsZ - m.thigh * Math.sin(a * D2R)};
-      a = clamp(Math.min(want, BB_GAIT.maxHipFlexDeg - 4 - pitchOf(out)), 0, want);
-    }
-    return {...o, hipsZ: m.hipsZ - m.thigh * Math.sin(a * D2R)};
-  };
-  const lowSat = sit(low, o => foursTrunk(rig, o).pitch, BB_GAIT.haunchDeg * dip);
+  const lowSat = sitBack(rig, low, o => foursTrunk(rig, o).pitch, BB_GAIT.haunchDeg * dip);
   if (rear <= 0) return solveFours(rig, lowSat);
   const T = foursTrunk(rig, lowSat), pitch = lerp(T.pitch, Math.min(T.pitch, 62), rear), k = ss(0, 0.4, rear);
   const cocked = {flex: 52, abd: 24, elbow: 96, k};
-  return solveFours(rig, sit({...low, pitch, bend: lerp(T.bend, -4, rear), free: {L: cocked, R: cocked}}, () => pitch, BB_GAIT.haunchDeg * Math.max(dip, rear)));
+  return solveFours(rig, sitBack(rig, {...low, pitch, bend: lerp(T.bend, -4, rear), free: {L: cocked, R: cocked}}, () => pitch, BB_GAIT.haunchDeg * Math.max(dip, rear)));
+}
+
+/**
+ * The cackle. It sits up on its haunches — the trunk reared, the hands off the surface and flapping at its sides, the head thrown
+ * back as far as the neck goes — and the whole upper body shakes with every "ha"; then it drops back onto its hands. Big enough to
+ * read from across a room; nothing like the wind-up's low coil.
+ */
+function cackleFrame(rig: BbRig, t: number): BbFrame {
+  const m = rig.m, C = BB_GAIT.cackle, D = BB_CLIPS.Cackle.duration;
+  const up = ss(0, 0.2, t) * (1 - ss(D - 0.3, D, t)), w = TAU * C.hz * t;
+  const shake = ss(0.1, 0.24, t) * (1 - ss(D - 0.36, D - 0.12, t)), ha = Math.sin(w) * shake, beat = (0.5 - 0.5 * Math.cos(w)) * shake;
+  const base = stance(rig), T = foursTrunk(rig, base);
+  const pitch = lerp(T.pitch, Math.min(T.pitch, C.pitchDeg), up) + 3 * ha;
+  const arm = (sg: number): ArmFk & {k: number} => ({flex: 30 + 12 * ha, abd: 40 + 9 * sg * Math.sin(w / 2) * shake + 6 * beat, elbow: 74 - 14 * ha, k: ss(0, 0.45, up)});
+  return solveFours(rig, sitBack(rig, {
+    ...base, hipsX: 0.06 * m.kneeX * Math.sin(w / 2) * shake, pitch, roll: 2.5 * Math.sin(w / 2) * shake, bend: lerp(T.bend, -6, up) + 4 * ha, chestRoll: -3 * Math.sin(w / 2) * shake,
+    free: {L: arm(1), R: arm(-1)},
+    head: [lerp(m.headPitch, 40, up) - 9 * beat, 0, 7 * Math.sin(w / 2) * shake],
+  }, () => pitch, C.haunchDeg * up));
 }
 
 /** The airborne trunk: its middle over the root at the brain's body-centre height. */
@@ -927,7 +952,7 @@ function hitFrame(rig: BbRig, t: number): BbFrame {
   }));
 }
 
-/** The fallback death (no ragdoll): it sags and rolls onto its left side, limbs curling in. */
+/** The fallback death (no ragdoll): it sags and rolls onto its right side, limbs curling in. */
 function deathFrame(rig: BbRig, t: number): BbFrame {
   const m = rig.m, u = clamp(t / BB_CLIPS.Death.duration, 0, 1), k = ss(0.05, 0.75, u);
   const from = solveFours(rig, stance(rig));
@@ -951,6 +976,7 @@ export function bbPoseAt(rig: BbRig, clip: BbClipName, t: number): BbFrame {
     case 'Crawl': return gaitFrame(rig, t / BB_CLIPS.Crawl.duration, false);
     case 'Scuttle': return gaitFrame(rig, t / BB_CLIPS.Scuttle.duration, true);
     case 'Poise': return poiseFrame(rig, t);
+    case 'Cackle': return cackleFrame(rig, t);
     case 'Windup': return windupFrame(rig, t);
     case 'Pounce': return pounceFrame(rig, t);
     case 'Fall': return fallFrame(rig, t);
