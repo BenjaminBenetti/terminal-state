@@ -29,7 +29,7 @@ import {Inventory} from '../src/items/inventory';
 import {ELECTRICAL_PARTS, SCRAP_METAL} from '../src/items/craftMaterials';
 import {TRAIN_BENCH_MEASURED} from '../src/assets/trainEquipment.generated';
 import {BENCH_AISLE_MIN, benchFootprint, benchPlacement, benchToLocal} from '../src/craft/trainFixtures';
-import {RECIPES} from '../src/craft/recipes';
+import {BENCH_RECIPES, RECIPES} from '../src/craft/recipes';
 import {CRAFT_TEXT} from '../src/craft/crafting';
 import {BENCH_RT, BENCH_TEXT, CraftBenchSystem, craftBenchQaApi, craftedHint, installCraftBench, type CraftBenchOptions} from '../src/world/craftBench';
 import {EquipmentChestStore} from '../src/world/equipmentChestStore';
@@ -362,7 +362,7 @@ describe('crafting bench: aim, prompt and [E]', () => {
     expect(s.input.calls.unlock).toBe(1); // the pointer is released for the list
     expect(s.host.inputOwners.some(f => f())).toBe(true); // ... and the mouse buttons are the view's
     expect(s.bench.view.visible).toBe(true);
-    expect(s.bench.view.last!.rows.map(r => r.kind)).toEqual(RECIPES.map(r => r.kind));
+    expect(s.bench.view.last!.rows.map(r => r.kind)).toEqual(BENCH_RECIPES.map(r => r.kind)); // (re-pin, task studio-refinement-batch-20261113-035659-01: the units, then the made recipes)
     expect(s.toasts).toEqual([]);
     expect(s.bench.prompt()).toBeNull(); // (the open list has its own Close)
   });
@@ -483,7 +483,7 @@ describe('crafting bench: the recipe list — keys, crafting, redraws', () => {
     give(s, 9, 4);
     openBench(s);
     const renders = s.bench.view.renders;
-    expect(s.bench.view.last!.rows.map(r => r.can)).toEqual([true, true, false, false]);
+    expect(s.bench.view.last!.rows.slice(0, 4).map(r => r.can)).toEqual([true, true, false, false]); // (re-pin, task studio-refinement-batch-20261113-035659-01: the bench lists the made recipes after the four units — these are the units' rows)
     // the route radar's button (4 scrap / 3 electrical)
     clickCraft(s, 'radar');
     expect(s.eq.made.map(u => u.kind)).toEqual(['radar']);
@@ -517,7 +517,7 @@ describe('crafting bench: the recipe list — keys, crafting, redraws', () => {
     const s = setup();
     give(s, 20, 20); // every recipe could be crafted
     openBench(s);
-    expect(s.bench.view.last!.rows.map(r => r.can)).toEqual([true, true, true, true]);
+    expect(s.bench.view.last!.rows.slice(0, 4).map(r => r.can)).toEqual([true, true, true, true]); // (re-pin, task studio-refinement-batch-20261113-035659-01: the bench lists the made recipes after the four units — these are the units' rows)
     const inv = s.host.inv, before = worldSnapshot(inv, [s.host.playerTrain.lockbox.slots]);
     const selected = JSON.stringify(inv.selectedRef()), version = inv.version, renders = s.bench.view.renders;
     for (const code of DIGITS) {
@@ -572,7 +572,7 @@ describe('crafting bench: the recipe list — keys, crafting, redraws', () => {
     const before = snap();
     // missing (the row's button is disabled and its ratios are red, without a sentence; asked anyway — the QA hook — the craft says it)
     expect(chips(s, 'radar')).toEqual([[SCRAP_METAL, 3, 4, 'short'], [ELECTRICAL_PARTS, 2, 3, 'short']]);
-    expect(s.bench.view.last!.rows.map(r => [r.kind, r.can, r.reason])).toEqual([['chest', true, ''], ['radar', false, ''], ['sentry', false, ''], ['scanner', false, '']]);
+    expect(s.bench.view.last!.rows.slice(0, 4).map(r => [r.kind, r.can, r.reason])).toEqual([['chest', true, ''], ['radar', false, ''], ['sentry', false, ''], ['scanner', false, '']]); // (re-pin, task studio-refinement-batch-20261113-035659-01: the bench lists the made recipes after the four units — these are the units' rows)
     const r1 = s.bench.craftKind('radar')!;
     expect(r1).toMatchObject({ok: false, reason: 'missing', text: 'Need 1 more Scrap metal and 1 more Electrical parts'});
     expect([s.bench.view.note, s.bench.view.noteBad]).toEqual(['Need 1 more Scrap metal and 1 more Electrical parts', true]);
@@ -581,7 +581,7 @@ describe('crafting bench: the recipe list — keys, crafting, redraws', () => {
     // the equipment system refuses (its text is shown on the row and in the note)
     s.eq.block = 'No room on the car floor — move something first';
     frames(s, BENCH_RT.refreshS + 0.05);
-    expect(s.bench.view.last!.rows.map(r => [r.can, r.reason])).toEqual(new Array(4).fill([false, 'No room on the car floor — move something first']));
+    expect(s.bench.view.last!.rows.slice(0, 4).map(r => [r.can, r.reason])).toEqual(new Array(4).fill([false, 'No room on the car floor — move something first'])); // (re-pin, task studio-refinement-batch-20261113-035659-01: the bench lists the made recipes after the four units — these are the units' rows)
     const r2 = s.bench.craftKind('chest')!;
     expect(r2).toEqual({ok: false, reason: 'blocked', text: 'No room on the car floor — move something first'});
     expect(s.bench.view.noteBad).toBe(true);
@@ -682,7 +682,7 @@ describe('crafting bench: the recipe list — keys, crafting, redraws', () => {
     const s = setup({equipment: false});
     give(s, 20, 20);
     openBench(s);
-    expect(s.bench.view.last!.rows.map(r => [r.can, r.reason])).toEqual(new Array(4).fill([false, BENCH_TEXT.unavailable]));
+    expect(s.bench.view.last!.rows.slice(0, 4).map(r => [r.can, r.reason])).toEqual(new Array(4).fill([false, BENCH_TEXT.unavailable])); // (re-pin, task studio-refinement-batch-20261113-035659-01: the bench lists the made recipes after the four units — these are the units' rows)
     expect(s.bench.craftKind('chest')).toEqual({ok: false, reason: 'blocked', text: BENCH_TEXT.unavailable});
     expect(s.host.inv.count(SCRAP_METAL)).toBe(20);
   });
@@ -826,7 +826,7 @@ describe('crafting bench: the recipe rows\' 3D previews (when they are asked for
     expect(Object.values(s.bench.qa().previews.shown)).toEqual(RECIPES.map(() => false));
     expect(s.bench.previews.ids).toEqual(RECIPES.map(r => craftPreviewId(r.kind)));
     const html = dom.el('.cv-list').innerHTML;
-    expect(html.match(/<div class="cv-preview cv-empty"><\/div>/g)).toHaveLength(RECIPES.length);
+    expect(html.match(/<div class="cv-preview cv-empty"><\/div>/g)).toHaveLength(BENCH_RECIPES.length); // (re-pin, task studio-refinement-batch-20261113-035659-01: + the made rows, whose item / upgrade previews are not rendered here either — empty, never a glyph)
     expect(html).not.toContain('<img class="cv-img"');
   });
 

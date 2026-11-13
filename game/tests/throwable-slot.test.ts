@@ -28,9 +28,9 @@ const flares = (inv: Inventory) => inv.count('flare');
 const total = (inv: Inventory) => inv.allStacks(true).reduce((n, s) => n + (s.itemId === 'flare' ? s.count : 0), 0);
 
 describe('flares stack to 10; the grenade slot fills first', () => {
-  it('flare stackMax is 10 (the only throwable); the hint and description say G', () => {
+  it('flare stackMax is 10 (with the crafted acid / lure grenades the throwables); the hint and description say G', () => {
     expect(itemDef('flare')).toMatchObject({kind: 'throwable', stackMax: 10});
-    expect(Object.values(ITEMS).filter(d => d.kind === 'throwable').map(d => d.id)).toEqual(['flare']);
+    expect(Object.values(ITEMS).filter(d => d.kind === 'throwable').map(d => d.id)).toEqual(['flare', 'acid_grenade', 'lure_grenade']); // (re-pin, task studio-refinement-batch-20261113-035659-01: the user's crafted acid / lure grenades are throwables too)
     expect(throwHint(itemDef('flare'))).toMatch(/G to ready/);
     expect(itemDef('flare').description).toMatch(/hold G/);
     expect(itemDef('flare').description).not.toMatch(/\bT\b/);

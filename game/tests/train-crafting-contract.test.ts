@@ -11,7 +11,7 @@ import {
   BENCH_AISLE_MIN, PLUG, TRAIN_ROOF, TRAIN_ROOF_SKIN_Y, benchFootprint, benchPlacement, benchToLocal, craftSpots, equipmentPlugs,
   plugInReach, roofTopAt, roofTopAtPoint, turretMount,
 } from '../src/craft/trainFixtures';
-import {ELECTRICAL_PARTS, SCRAP_METAL} from '../src/items/craftMaterials';
+import {BIO_MATER, ELECTRICAL_PARTS, SCRAP_METAL} from '../src/items/craftMaterials';
 import {ITEMS} from '../src/items/items';
 import {LOCKBOX_SLOTS} from '../src/run/trainLockbox';
 import {PlayerTrainRecord} from '../src/run/playerTrain';
@@ -28,7 +28,8 @@ const S = PLAYER_TRAIN_SPEC;
 describe('train crafting: recipes', () => {
   it('lists the four approved outputs at the approved costs (scrap metal / electrical parts), in order', () => {
     expect(RECIPES.map(r => [r.kind, r.cost[SCRAP_METAL], r.cost[ELECTRICAL_PARTS]])).toEqual([['chest', 2, 0], ['radar', 4, 3], ['sentry', 8, 6], ['scanner', 5, 5]]);
-    expect([...RECIPE_MATERIALS]).toEqual([SCRAP_METAL, ELECTRICAL_PARTS]);
+    expect([...RECIPE_MATERIALS]).toEqual([SCRAP_METAL, ELECTRICAL_PARTS, BIO_MATER]); // (re-pin, task studio-refinement-batch-20261113-035659-01: bio mater makes the crafted grenades; the four units cost none of it)
+    for (const r of RECIPES) expect(r.cost[BIO_MATER]).toBe(0);
     for (const r of RECIPES) {
       expect(Object.keys(r.cost).sort()).toEqual([...RECIPE_MATERIALS].sort());
       expect(r.blurb.length).toBeGreaterThan(40);

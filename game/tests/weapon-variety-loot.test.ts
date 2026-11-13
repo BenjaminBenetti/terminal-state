@@ -30,6 +30,7 @@ vi.mock('../src/weapons/varietyMelee', async importOriginal => {
 });
 
 import {ITEMS, itemDef} from '../src/items/items';
+import {GRENADE_IDS} from '../src/items/grenades';
 import {ICONS} from '../src/ui/icons';
 import {WEAPONS} from '../src/weapons/weapons';
 import {VARIETY_GUN_IDS, VARIETY_MELEE_IDS, VARIETY_WEAPONS, VARIETY_WEAPON_IDS, isVarietyWeapon} from '../src/weapons/varietyIds';
@@ -97,7 +98,11 @@ describe('weapon variety: the twelve ItemDefs', () => {
   });
   it('the old items keep their catalogue order (the twelve are appended last)', () => {
     const keys = Object.keys(ITEMS);
-    expect(keys.slice(-VARIETY_WEAPON_IDS.length)).toEqual([...VARIETY_WEAPON_IDS]);
+    // (re-pin, task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades are appended after the twelve — the
+    // twelve still follow every older item in order, and only the grenades come after them)
+    const at = keys.length - VARIETY_WEAPON_IDS.length - GRENADE_IDS.length;
+    expect(keys.slice(at, at + VARIETY_WEAPON_IDS.length)).toEqual([...VARIETY_WEAPON_IDS]);
+    expect(keys.slice(at + VARIETY_WEAPON_IDS.length)).toEqual([...GRENADE_IDS]);
   });
   it('guns name their caliber family; melee weapons say they need no ammo', () => {
     for (const id of VARIETY_GUN_IDS) expect(ITEMS[id].description, id).toMatch(/9mm|5\.56|12-gauge/);

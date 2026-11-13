@@ -172,7 +172,7 @@ describe('the bench and the equipment system: a craft is a real unit on the car 
     const counts = () => countMaterials(bench.sources());
     const where = (m: (typeof RECIPE_MATERIALS)[number]) => { const c = counts()[m]; return [c.carried, c.lockbox, c.chests]; };
     expect([where(SCRAP_METAL), where(ELECTRICAL_PARTS)]).toEqual([[5, 20, 0], [2, 20, 0]]);
-    expect(bench.qa().rows!.map(r => r.can)).toEqual(RECIPES.map(() => true));
+    expect(bench.qa().rows!.slice(0, RECIPES.length).map(r => r.can)).toEqual(RECIPES.map(() => true)); // (re-pin, task studio-refinement-batch-20261113-035659-01: the bench lists the made recipes after the four units — these are the units' rows)
 
     const made: LiveUnit[] = [];
     const craftRow = (kind: string) => {
@@ -293,12 +293,12 @@ describe('the bench and the equipment system: a craft is a real unit on the car 
     expect(ledger(h)).toBe(L1);
     expect(eq.units().map(u => u.uid)).toEqual(units1);
     expect(h.sfxCalls.filter(c => c === 'denied')).toHaveLength(RECIPES.length);
-    expect(bench.qa().rows!.map(r => [r.can, r.reason])).toEqual(RECIPES.map(() => [false, full]));
+    expect(bench.qa().rows!.slice(0, RECIPES.length).map(r => [r.can, r.reason])).toEqual(RECIPES.map(() => [false, full])); // (re-pin, task studio-refinement-batch-20261113-035659-01: the bench lists the made recipes after the four units — these are the units' rows)
     // one unit rolled out of the car: room again (the list notices by itself)
     const out = eq.units()[0], w = trainToWorld(h.trainPlacement!, 2, SPEC.floorY, -3);
     out.body.x = w.x; out.body.z = w.z; out.body.y = h.levels!.floorAt(w.x, w.z, h.trainPlacement!.floorY + 0.3); out.plugCheck = true;
     run(h, 0.4);
-    expect(bench.qa().rows!.map(r => r.can)).toEqual(RECIPES.map(() => true));
+    expect(bench.qa().rows!.slice(0, RECIPES.length).map(r => r.can)).toEqual(RECIPES.map(() => true)); // (re-pin, task studio-refinement-batch-20261113-035659-01: the bench lists the made recipes after the four units — these are the units' rows)
     // THE TRAIN RIDES: the bench closes; the atomic craft over the real system is refused before anything is drawn
     void ride.depart();
     run(h, 0.2);
