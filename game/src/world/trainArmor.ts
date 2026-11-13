@@ -1,4 +1,6 @@
 // Task studio-refinement-batch-20261113-035659-01 (lane ARMOR): THE TRAIN ARMOUR — a permanent one-time upgrade of the player's train.
+// Task studio-train-armor-makeover-20261113-183146-01: the kit's MAKEOVER (a heavy armoured car; world/trainArmorLayout.ts) — the same
+// record flag, seam, recipe and contact rule: an armoured save simply shows the new kit.
 // User: "Train plating/blades: permanent ONE-TIME 10-scrap_metal upgrade, no durability. Deliver striking all-around Mad Max: Fury
 // Road-inspired plating/blades. About 5 seconds of continuous contact kills a regular zombie; contact damage targets zombies ONLY.
 // Preserve doors, windows, controls, Save and travel." Answer (final): the permanent armour is a FIXED train fixture (acid-safe: part of
@@ -16,14 +18,17 @@
 //   block(id)       why it cannot be fitted now: already fitted / no parked car here / the train is moving / an unknown id — else null;
 //   install(id)     fits it now: the record, the kit shown, the parked colliders and the riding collision at once.
 //
-// THE KIT (world/trainArmorLayout.ts: where every piece sits and the contact rule; the lead's cooked Meshy models with their own PBR maps,
-// assets/trainArmor.generated.ts, loaded with the car's other models through the prop library): one InstancedMesh per model (8 side
-// skirt segments, 2 end ploughs: two draws) under one group parented to the car's view root, so it rides with the car and is adopted by
-// the next station's build like the bench / chipper. The meshes are HIDDEN while the armour is not fitted and shown the moment it is; the
-// group is a warm pool root, so the warm-up compiles them while hidden (the first frame with armour compiles nothing). No model yet (Node
-// tests, a failed fetch): nothing is drawn — never a stand-in — while the colliders / damage still follow the record. Not culler-registered
-// (it moves with a riding car; the bench and the chipper are not either); flashlight shadow casters like the bench (markShadows, not
-// structure: the library's materials are never changed). Geometry / materials are the library's (never disposed here).
+// THE KIT (world/trainArmorLayout.ts: where every piece sits and the contact rule; the cooked Meshy models with their own PBR maps,
+// ARMOR_MODELS, loaded with the car's other models through the prop library): one InstancedMesh per model — and one more for a model's
+// MIRRORED pieces (the same material over a mirrored copy of its geometry: an opposite-handed look, no negative scale) — under one group
+// parented to the car's view root, so it rides with the car and is adopted by the next station's build like the bench / chipper: nine
+// draws for the whole kit (skirt strips, bogie guards, plates / mirrored plates, posts, wings / mirrored wings, rails / mirrored rails).
+// The meshes are HIDDEN while the armour is not fitted and shown the moment it is; the group is a warm pool root, so the warm-up
+// compiles them while hidden (the first frame with armour compiles nothing). No model yet (Node tests, a failed fetch): that model's
+// pieces are not drawn — never a stand-in — while the colliders / damage still follow the record. Not culler-registered (it moves with a
+// riding car; the bench and the chipper are not either); flashlight shadow casters like the bench (markShadows, not structure: the
+// library's materials are never changed). Geometry / materials are the library's (never disposed here); the mirrored geometry copies are
+// this system's.
 //
 // COLLISION: world/playerTrain.ts armorColliders (the parked car: grounded columns in game.propIndex, exact boxes in layout.props — part of
 // the car's own boxes, removed with it) and world/trainRideLocal.ts setRideArmorBoxes (the riding car's local model).
@@ -40,9 +45,8 @@
 import * as THREE from 'three';
 import type {Game} from '../game';
 import {itemIconUrl, registerIconSource} from '../ui/itemIcons';
-import {TRAIN_ARMOR_MODELS} from '../assets/trainArmor.generated';
 import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from './playerTrainSpec';
-import {ARMOR_CONTACT, armorContact, armorLayout, type ArmorBox, type ArmorLayout, type ArmorPiece} from './trainArmorLayout';
+import {ARMOR_CONTACT, ARMOR_MODELS, ARMOR_MODEL_IDS, armorContact, armorLayout, type ArmorBox, type ArmorLayout, type ArmorModelId, type ArmorPiece} from './trainArmorLayout';
 import {setRideArmorBoxes, type RideLocalModel} from './trainRideLocal';
 import {TRAIN_UPGRADE_IDS, type TrainUpgradeId, type TrainUpgrades, type TrainUpgradesApi} from '../run/trainUpgrades';
 
@@ -50,7 +54,7 @@ export type {TrainUpgradeId, TrainUpgradesApi} from '../run/trainUpgrades';
 
 /** The recipe row's preview id (ui/itemIcons.ts extra source; the crafting list reads itemIconUrl of it). */
 export const ARMOR_PREVIEW_ID = 'upgrade:armor';
-/** The preview camera (degrees: azimuth from the kit's +Z front toward +X, elevation): the front plough and the platform-side skirt. */
+/** The preview camera (degrees: azimuth from the kit's +Z front toward +X, elevation): the front plough and the platform side's front. */
 export const ARMOR_PREVIEW_VIEW = {az: 38, el: 18} as const;
 
 /** block() reasons (plain, short, truthful). */
@@ -102,16 +106,17 @@ export interface TrainArmorHost {
 }
 
 export interface TrainArmorOptions {
-  /** The cooked models' scenes (default: the prop library's TRAIN_ARMOR_MODELS keys; null = not loaded). */
-  model?: (kind: 'side' | 'end') => THREE.Object3D | null;
+  /** The cooked models' scenes (default: the prop library's ARMOR_MODELS keys; null = not loaded). */
+  model?: (model: ArmorModelId) => THREE.Object3D | null;
   /** The recipe preview's render (Game: ui/itemIcons.ts refreshItemIcons with its renderer); absent (Node): never rendered. */
   refreshIcons?: (ids: readonly string[]) => Promise<void> | void;
   rendererReady?: () => boolean;
   rendererFree?: () => Promise<unknown> | null | undefined;
 }
 
-/** One cooked model's mesh: its geometry / material (the library's) and its transform inside the model's scene. */
-interface ModelPart { src: THREE.Object3D; geometry: THREE.BufferGeometry; material: THREE.Material | THREE.Material[]; rel: THREE.Matrix4 }
+/** One cooked model's mesh: its geometry / material (the library's) and its transform inside the model's scene; `mirror` = this
+ *  system's own mirrored copy of the geometry (made when a piece needs it). */
+interface ModelPart { src: THREE.Object3D; geometry: THREE.BufferGeometry; material: THREE.Material | THREE.Material[]; rel: THREE.Matrix4; mirror: THREE.BufferGeometry | null }
 
 /** The first mesh of a cooked model scene (one mesh, one material by the cook's rule), with its node transform in the scene's frame. */
 function partOf(scene: THREE.Object3D): ModelPart | null {
@@ -121,8 +126,30 @@ function partOf(scene: THREE.Object3D): ModelPart | null {
   if (!mesh) return null;
   const m = mesh as THREE.Mesh;
   const rel = new THREE.Matrix4().copy(scene.matrixWorld).invert().multiply(m.matrixWorld);
-  return {src: scene, geometry: m.geometry, material: m.material, rel};
+  return {src: scene, geometry: m.geometry, material: m.material, rel, mirror: null};
 }
+
+/**
+ * A copy of a model geometry MIRRORED in its own X: positions / normals reflected and every triangle's winding reversed, so its front
+ * faces stay front faces under an ordinary (positive) instance transform. The maps follow the surface (no tangents in the cooked models:
+ * the normal map's frame comes from the surface's own derivatives).
+ */
+export function mirroredGeometry(src: THREE.BufferGeometry): THREE.BufferGeometry {
+  const g = src.clone();
+  g.scale(-1, 1, 1);
+  if (!g.getIndex()) g.setIndex(Array.from({length: g.getAttribute('position').count}, (_, i) => i));
+  const idx = g.getIndex()!, a = idx.array as Uint16Array | Uint32Array;
+  for (let i = 0; i + 2 < a.length; i += 3) { const t = a[i + 1]; a[i + 1] = a[i + 2]; a[i + 2] = t; }
+  idx.needsUpdate = true;
+  const tan = g.getAttribute('tangent');
+  if (tan) { for (let i = 0; i < tan.count; i++) tan.setW(i, -tan.getW(i)); tan.needsUpdate = true; }
+  g.computeBoundingBox();
+  g.computeBoundingSphere();
+  return g;
+}
+
+/** The instanced mesh key of a model's plain / mirrored pieces. */
+export const armorMeshKey = (model: ArmorModelId, mirror: boolean): string => (mirror ? `${model}-mirror` : model);
 
 const vPos = new THREE.Vector3(), vScale = new THREE.Vector3(), qRot = new THREE.Quaternion(), yAxis = new THREE.Vector3(0, 1, 0);
 
@@ -138,14 +165,15 @@ export class TrainArmorSystem implements TrainUpgradesApi {
   readonly layout: ArmorLayout;
   /** The kit's root on the car's view root (car frame). */
   readonly group = new THREE.Group();
-  /** The side skirt segments / the end ploughs (null until their model is loaded). */
-  sideMesh: THREE.InstancedMesh | null = null;
-  endMesh: THREE.InstancedMesh | null = null;
+  /** The kit's instanced meshes by armorMeshKey (a model's plain / mirrored pieces; absent until its model is loaded). */
+  readonly meshes = new Map<string, THREE.InstancedMesh>();
   /** Counters (QA / tests). */
   readonly counts = {installs: 0, refused: 0, syncs: 0, refits: 0, contactFrames: 0, damage: 0, kills: 0, fx: 0, previews: 0};
   /** The last block() reason install() met (QA). */
   lastRefusal: string | null = null;
-  private parts: {side: ModelPart | null; end: ModelPart | null} = {side: null, end: null};
+  private readonly parts = new Map<ArmorModelId, ModelPart>();
+  /** Parts read for the preview before the kit's meshes exist (no car view yet); the meshes adopt them. */
+  private readonly loose = new Map<ArmorModelId, ModelPart>();
   /** Bumped when a model arrives / changes (the preview renders once per generation). */
   private modelGen = 0;
   private seenVersion = -1;
@@ -195,6 +223,7 @@ export class TrainArmorSystem implements TrainUpgradesApi {
   dispose(): void {
     this.unregister?.();
     this.unregister = null;
+    for (const part of [...this.parts.values(), ...this.loose.values()]) { part.mirror?.dispose(); part.mirror = null; }
   }
 
   // --- the seam (TrainUpgradesApi) ----------------------------------------------------------------------------------------
@@ -236,26 +265,47 @@ export class TrainArmorSystem implements TrainUpgradesApi {
     return true;
   }
 
-  private modelScene(kind: 'side' | 'end'): THREE.Object3D | null {
-    return this.opts.model ? this.opts.model(kind) : this.host.propModels?.get(TRAIN_ARMOR_MODELS[kind].key)?.scene ?? null;
+  private modelScene(model: ArmorModelId): THREE.Object3D | null {
+    return this.opts.model ? this.opts.model(model) : this.host.propModels?.get(ARMOR_MODELS[model].key)?.scene ?? null;
+  }
+
+  /** A model's part once its scene is loaded (the cached one, else read now; null: not loaded). */
+  private partFor(model: ArmorModelId): ModelPart | null {
+    const had = this.parts.get(model);
+    if (had) return had;
+    const src = this.modelScene(model);
+    let part = this.loose.get(model) ?? null;
+    if (part && part.src !== src) { part.mirror?.dispose(); this.loose.delete(model); part = null; }
+    if (!part && src && (part = partOf(src))) this.loose.set(model, part);
+    return part;
+  }
+
+  /** The geometry a piece is drawn with: the model's, or this system's mirrored copy of it (made once per loaded model). */
+  private geometryOf(part: ModelPart, mirror: boolean): THREE.BufferGeometry {
+    return mirror ? (part.mirror ??= mirroredGeometry(part.geometry)) : part.geometry;
   }
 
   /** The instanced meshes from the cooked models once the library has them (rebuilt only when a model object changes). */
   private ensureMeshes(): void {
-    for (const kind of ['side', 'end'] as const) {
-      const src = this.modelScene(kind), had = this.parts[kind];
+    let added = false;
+    for (const model of ARMOR_MODEL_IDS) {
+      const src = this.modelScene(model), had = this.parts.get(model);
       if (src === (had?.src ?? null)) continue;
-      const part = src ? partOf(src) : null;
-      this.parts[kind] = part;
+      const loose = this.loose.get(model) ?? null;
+      const part = src ? (loose?.src === src ? loose : partOf(src)) : null;
+      if (loose && loose !== part) loose.mirror?.dispose(); // (a stale preview part's own mirrored copy)
+      this.loose.delete(model);
+      had?.mirror?.dispose(); // (this system's own copy; the library's geometry / material are never disposed here)
+      if (part) this.parts.set(model, part); else this.parts.delete(model);
       this.modelGen++;
-      const old = kind === 'side' ? this.sideMesh : this.endMesh;
-      if (old) { this.group.remove(old); old.dispose(); } // (the InstancedMesh's own instance buffer only: geometry / material are the library's)
-      let im: THREE.InstancedMesh | null = null;
-      if (part) {
-        const pieces = this.layout.pieces.filter(p => p.kind === kind);
-        im = new THREE.InstancedMesh(part.geometry, part.material, pieces.length);
-        im.name = `train-armor-${kind}`;
-        pieces.forEach((p, i) => im!.setMatrixAt(i, pieceMatrix(p, part.rel, this.mtx)));
+      for (const mirror of [false, true]) {
+        const key = armorMeshKey(model, mirror), old = this.meshes.get(key);
+        if (old) { this.group.remove(old); old.dispose(); this.meshes.delete(key); } // (the InstancedMesh's own instance buffer only)
+        const pieces = this.layout.pieces.filter(p => p.model === model && p.mirror === mirror);
+        if (!part || !pieces.length) continue;
+        const im = new THREE.InstancedMesh(this.geometryOf(part, mirror), part.material, pieces.length);
+        im.name = `train-armor-${key}`;
+        pieces.forEach((p, i) => im.setMatrixAt(i, pieceMatrix(p, part.rel, this.mtx)));
         im.instanceMatrix.needsUpdate = true;
         im.computeBoundingBox();
         im.computeBoundingSphere();
@@ -263,10 +313,11 @@ export class TrainArmorSystem implements TrainUpgradesApi {
         im.visible = this.fitted;
         this.group.add(im);
         this.host.atmosphere?.markShadows(im, false);
+        this.meshes.set(key, im);
+        added = true;
       }
-      if (kind === 'side') this.sideMesh = im; else this.endMesh = im;
-      if (im) this.levelMeshes();
     }
+    if (added) this.levelMeshes();
   }
 
   /** Every mesh of the kit carries the car's level (the culler's tag). */
@@ -276,12 +327,12 @@ export class TrainArmorSystem implements TrainUpgradesApi {
   }
 
   private warmRoots(): THREE.Object3D[] {
-    return this.attach() && (this.sideMesh || this.endMesh) ? [this.group] : [];
+    return this.attach() && this.meshes.size ? [this.group] : [];
   }
 
   /** The kit is drawn now (fitted and at least one model loaded, on the car). */
   get shown(): boolean {
-    return !!this.group.parent && [this.sideMesh, this.endMesh].some(m => !!m && m.visible);
+    return !!this.group.parent && [...this.meshes.values()].some(m => m.visible);
   }
 
   /** Bring everything in line with the record: the meshes' visibility, the parked car's colliders, the riding car's collision. */
@@ -290,7 +341,7 @@ export class TrainArmorSystem implements TrainUpgradesApi {
     this.counts.syncs++;
     this.seenVersion = this.record.version;
     this.ensureMeshes();
-    for (const m of [this.sideMesh, this.endMesh]) if (m) m.visible = fitted;
+    for (const m of this.meshes.values()) m.visible = fitted;
     const rt = h.trainRuntime;
     if (rt?.train && rt.armorFitted() !== fitted) { rt.refitArmor(); this.counts.refits++; }
     const model = h.trainRide?.model;
@@ -366,22 +417,27 @@ export class TrainArmorSystem implements TrainUpgradesApi {
 
   // --- the recipe row's preview ('upgrade:armor') ------------------------------------------------------------------------------
 
+  /** The pieces the recipe row's preview shows: the front end's plough (towers, wings, prow) and the platform side's front (the
+   *  pieces centred ahead of the front door: its bogie guard, plates, pillar and rails). */
+  previewPieces(): ArmorPiece[] {
+    const front = Math.max(...this.spec.doors.map(d => d.x + d.width / 2));
+    return this.layout.pieces.filter(p => (p.kind === 'end' ? p.dir > 0 && p.part !== 'brow' : p.dir < 0 && p.box.x0 + p.box.x1 > 2 * front));
+  }
+
   /**
-   * A FRESH object of the fitted kit for the icon pass: the front plough and the platform-side cab skirt segment, posed as on the car and
-   * turned so the car's front faces +Z (the camera sees the plough's blades and the skirt down the side). Real models only: null while
-   * either is not loaded (the row keeps its empty frame — never a proxy).
+   * A FRESH object of the fitted kit for the icon pass: previewPieces() posed as on the car and turned so the car's front faces +Z (the
+   * camera sees the plough's fins and the plates down the platform side). Real models only: null while any of them is not loaded (the
+   * row keeps its empty frame — never a proxy).
    */
   previewObject(): THREE.Object3D | null {
-    const side = this.parts.side ?? (this.modelScene('side') ? partOf(this.modelScene('side')!) : null);
-    const end = this.parts.end ?? (this.modelScene('end') ? partOf(this.modelScene('end')!) : null);
-    if (!side || !end) return null;
-    const plough = this.layout.pieces.find(p => p.kind === 'end' && p.dir > 0);
-    const skirt = this.layout.pieces.filter(p => p.kind === 'side' && p.dir < 0).sort((a, b) => b.box.x1 - a.box.x1)[0];
-    if (!plough || !skirt) return null;
+    const pieces = this.previewPieces();
+    if (!pieces.length) return null;
     const g = new THREE.Group();
     g.name = 'train-armor-preview';
-    for (const [piece, part] of [[plough, end], [skirt, side]] as const) {
-      const m = new THREE.Mesh(part.geometry, part.material);
+    for (const piece of pieces) {
+      const part = this.partFor(piece.model);
+      if (!part) return null;
+      const m = new THREE.Mesh(this.geometryOf(part, piece.mirror), part.material);
       m.matrixAutoUpdate = false;
       pieceMatrix(piece, part.rel, m.matrix);
       g.add(m);
@@ -393,7 +449,7 @@ export class TrainArmorSystem implements TrainUpgradesApi {
   /** Render the preview once per model generation (and retry a missing one now and then); never without a renderer (Node). */
   private tickPreview(dt: number): void {
     const o = this.opts, refresh = o.refreshIcons;
-    if (!refresh || this.previewRun || !this.parts.side || !this.parts.end) return;
+    if (!refresh || this.previewRun || this.parts.size < ARMOR_MODEL_IDS.length) return;
     this.previewT += dt;
     const missing = !itemIconUrl(ARMOR_PREVIEW_ID);
     if (this.previewAsked === this.modelGen && !(missing && this.previewT >= PREVIEW_RETRY_S)) return;
@@ -419,7 +475,8 @@ export class TrainArmorSystem implements TrainUpgradesApi {
     const rt = this.host.trainRuntime;
     return {
       fitted: this.fitted, block: this.block('armor'), shown: this.shown, attached: !!this.group.parent,
-      models: {side: !!this.parts.side, end: !!this.parts.end}, pieces: {side: this.layout.pieces.filter(p => p.kind === 'side').length, end: this.layout.pieces.filter(p => p.kind === 'end').length},
+      models: Object.fromEntries(ARMOR_MODEL_IDS.map(id => [id, this.parts.has(id)])), pieces: {side: this.layout.pieces.filter(p => p.kind === 'side').length, end: this.layout.pieces.filter(p => p.kind === 'end').length},
+      draws: this.meshes.size,
       colliders: rt?.armorFitted() ?? false, ride: this.rideFitted, parked: this.parked(), preview: !!itemIconUrl(ARMOR_PREVIEW_ID),
       lastRefusal: this.lastRefusal, counts: {...this.counts, damage: Math.round(this.counts.damage)},
     };

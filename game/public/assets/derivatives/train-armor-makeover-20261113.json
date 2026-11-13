@@ -1,0 +1,519 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "train-armor-makeover-20261113",
+ "what": "the train armour makeover's new kit parts: the body plate, the buttress post, the plough wing and the roof-line rail (the skirt strip and the fin grille of refinement-batch-20261113 are reused)",
+ "task": "studio-train-armor-makeover-20261113-183146-01",
+ "approval": "task-specific user generation grant 383bee85-ee41-4ac9-b941-d1624ceba6c0: a fresh cap of 75 Meshy credits for the train armour makeover, reuse first",
+ "accepted": true,
+ "route": "Codex native image_gen INITIAL design -> Meshy T2.5 image-to-3D, own PBR maps kept",
+ "budget": {
+  "generations": 4,
+  "billedCredits": 60,
+  "capCredits": 75,
+  "creditsPerModel": 15,
+  "note": "every model is the first Meshy attempt of its first design image"
+ },
+ "meshyTool": "mcp__meshy__meshy_image_to_3d (the project's Meshy MCP entry)",
+ "evidence": "the exact create arguments, task ids, charges, price evidence and raw hashes are in the job ledger kept outside Git; this cook verifies every raw original and conditioning image against it before it writes",
+ "licence": "generated for this project under the existing provider accounts; no blanket licence or commercial clearance implied (assets/CREDITS.md)",
+ "models": [
+  {
+   "id": "train-armor-plate",
+   "what": "the train ARMOUR body plate: a layered rusted steel slab in a bolted angle-iron frame with a second welded slab, two riveted straps, a half-sunk circular saw disc, a row of five tapered fins on a bar and a hazard-striped corner",
+   "conditioningImage": {
+    "sha256": "05cb9cfda67b4918c27d5dbb888fbada6b0a2a211bb2351c20f8a3d11ceb1127",
+    "bytes": 2922338,
+    "size": "1407x1118",
+    "codexAttempt": 1,
+    "generator": "Codex CLI built-in image_gen (ChatGPT login); image model id not reported",
+    "file": "reference/tasks/train-armor-makeover-20261113-183146/gen/out/ARMOR_PLATE-a1.png (raw original, outside Git)"
+   },
+   "meshy": {
+    "task": "01a1d655-52bc-7151-b956-07f65aa3f646",
+    "request": {
+     "ai_model": "meshy-t2.5",
+     "enable_pbr": true,
+     "model_type": "smart-topology",
+     "should_texture": true,
+     "target_formats": [
+      "glb"
+     ],
+     "target_polycount": 6000,
+     "texture_resolution": "2k"
+    },
+    "status": "SUCCEEDED",
+    "billedCredits": 15,
+    "attempt": 1,
+    "priceEvidenceSha256": "8f905ca5da68b59fa9766de78c268494b382d14be95ccdd836675386f5f93db2"
+   },
+   "source": {
+    "file": "reference/tasks/train-armor-makeover-20261113-183146/gen/raw/ARMOR_PLATE-R001-01a1d655-52bc-7151-b956-07f65aa3f646.glb (raw original, outside Git)",
+    "sha256": "d37291ffc3463c9360d74b7de766b7ceb3ef96ab74f4c159d99a893f9c433763",
+    "bytes": 8414620,
+    "triangles": 5346,
+    "parts": 1,
+    "extent": [
+     0.9502,
+     0.7383,
+     0.0981
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3483995
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2218324
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2489664
+     }
+    ]
+   },
+   "output": {
+    "file": "game/public/assets/models/train-armor-plate.glb",
+    "url": "assets/models/train-armor-plate.glb",
+    "sha256": "1016f31d21f14b4a6b1111cd2afc137f1f96611799e47ab823798e2ee23fff7c",
+    "bytes": 749968,
+    "triangles": 5346,
+    "dims": [
+     1.2,
+     0.9324,
+     0.1239
+    ]
+   },
+   "scale": [
+    1.262897,
+    1.262897,
+    1.262897
+   ],
+   "convention": "width along X, up +Y, the fin side toward +Z; origin = bottom centre of the back (mounting) face (z = 0 at the back)",
+   "halfTurn": false,
+   "finSideProud": {
+    "front": 0.0618,
+    "back": 0.0005
+   },
+   "texturePolicy": "Meshy maps kept channel for channel, Lanczos downsize + JPEG: base 1024 px q85, metallic-roughness 512 px q85, normal 1024 px q90; no reprojection / retexture / repaint",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 263904,
+     "sha256": "6edd25ace3dbe5f8d0877d3a424d832b145acd75ec3b1b5f0286ec5ce9c27d6c"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 77304,
+     "sha256": "dd4a94cf2b4d7104c5f9ffb21376e5a0cd71bd406e80b0e3f3289bce953d1dc1"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 218759,
+     "sha256": "842568f08901e396baef09be9cc762ddfe15326d7a8e8f47083f3e529d7ce745"
+    }
+   ]
+  },
+  {
+   "id": "train-armor-post",
+   "what": "the train ARMOUR buttress post: an upright I-beam girder on a bolted back plate with gussets at the top and bottom, three hooked fins down the spine and a hazard-striped foot",
+   "conditioningImage": {
+    "sha256": "09743b480fac1ee5deb63f0edeeca9df57834a6eca8c1e6c28faccf0d660b0de",
+    "bytes": 2342223,
+    "size": "777x2024",
+    "codexAttempt": 1,
+    "generator": "Codex CLI built-in image_gen (ChatGPT login); image model id not reported",
+    "file": "reference/tasks/train-armor-makeover-20261113-183146/gen/out/ARMOR_POST-a1.png (raw original, outside Git)"
+   },
+   "meshy": {
+    "task": "01a1d655-6dec-744e-8be9-2517efb37ea3",
+    "request": {
+     "ai_model": "meshy-t2.5",
+     "enable_pbr": true,
+     "model_type": "smart-topology",
+     "should_texture": true,
+     "target_formats": [
+      "glb"
+     ],
+     "target_polycount": 4000,
+     "texture_resolution": "2k"
+    },
+    "status": "SUCCEEDED",
+    "billedCredits": 15,
+    "attempt": 1,
+    "priceEvidenceSha256": "8f905ca5da68b59fa9766de78c268494b382d14be95ccdd836675386f5f93db2"
+   },
+   "source": {
+    "file": "reference/tasks/train-armor-makeover-20261113-183146/gen/raw/ARMOR_POST-R002-01a1d655-6dec-744e-8be9-2517efb37ea3.glb (raw original, outside Git)",
+    "sha256": "e9d13e07294b444527ee1d4e03b8a984014e3c8b1a0ab5ccad142bd9a862718e",
+    "bytes": 7441948,
+    "triangles": 3850,
+    "parts": 1,
+    "extent": [
+     0.2817,
+     0.9517,
+     0.1421
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3217344
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1766045
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2290114
+     }
+    ]
+   },
+   "output": {
+    "file": "game/public/assets/models/train-armor-post.glb",
+    "url": "assets/models/train-armor-post.glb",
+    "sha256": "a8c7326b487a98d057362174b946b842e81e71e04a74034f8433c7e6c6852ea5",
+    "bytes": 606812,
+    "triangles": 3850,
+    "dims": [
+     0.45,
+     1.52,
+     0.2269
+    ]
+   },
+   "scale": [
+    1.597229,
+    1.597229,
+    1.597229
+   ],
+   "convention": "width along X, up +Y, the fin side toward +Z; origin = bottom centre of the back (mounting) face (z = 0 at the back)",
+   "halfTurn": false,
+   "finSideProud": {
+    "front": 0.0957,
+    "back": 0.0041
+   },
+   "texturePolicy": "Meshy maps kept channel for channel, Lanczos downsize + JPEG: base 1024 px q85, metallic-roughness 512 px q85, normal 1024 px q90; no reprojection / retexture / repaint",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 227663,
+     "sha256": "f113a2288b963346cdea6705918688a6ec5202b2d636cb2b9253221e5e77fd5d"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 59006,
+     "sha256": "465fc08e45782036692eb9f4d73e357b79044afbc02590c2da27657f99c696f6"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 175405,
+     "sha256": "40c7f5bfd723edb853c813f1ef5355ef22d87c29574e731874d09ee374a5092d"
+    }
+   ]
+  },
+  {
+   "id": "train-armor-wing",
+   "what": "the train ARMOUR plough wing: a riveted mouldboard panel with a hazard-striped box beam along the top, six long swept fins, gussets, a circular saw disc at one corner and a saw-toothed wear bar along the bottom",
+   "conditioningImage": {
+    "sha256": "8c66a5e181c2d8beadd6cfde45fee695861475e8e809128da86bdbacab61eebc",
+    "bytes": 2699114,
+    "size": "1430x1100",
+    "codexAttempt": 1,
+    "generator": "Codex CLI built-in image_gen (ChatGPT login); image model id not reported",
+    "file": "reference/tasks/train-armor-makeover-20261113-183146/gen/out/ARMOR_WING-a1.png (raw original, outside Git)"
+   },
+   "meshy": {
+    "task": "01a1d655-873d-70b0-b1af-e16e8a2c5802",
+    "request": {
+     "ai_model": "meshy-t2.5",
+     "enable_pbr": true,
+     "model_type": "smart-topology",
+     "should_texture": true,
+     "target_formats": [
+      "glb"
+     ],
+     "target_polycount": 8000,
+     "texture_resolution": "2k"
+    },
+    "status": "SUCCEEDED",
+    "billedCredits": 15,
+    "attempt": 1,
+    "priceEvidenceSha256": "8f905ca5da68b59fa9766de78c268494b382d14be95ccdd836675386f5f93db2"
+   },
+   "source": {
+    "file": "reference/tasks/train-armor-makeover-20261113-183146/gen/raw/ARMOR_WING-R003-01a1d655-873d-70b0-b1af-e16e8a2c5802.glb (raw original, outside Git)",
+    "sha256": "098324d7d8029396db59ace851045afaaa7df04b8c8c0190c02ed123e172d8dc",
+    "bytes": 8769028,
+    "triangles": 7696,
+    "parts": 1,
+    "extent": [
+     0.957,
+     0.6333,
+     0.1172
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3567252
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2331871
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2410790
+     }
+    ]
+   },
+   "output": {
+    "file": "game/public/assets/models/train-armor-wing.glb",
+    "url": "assets/models/train-armor-wing.glb",
+    "sha256": "6f336688a4269778d9f92b6fc5f6b258fa1eead7bc82e1d387a3480724c79bea",
+    "bytes": 864076,
+    "triangles": 7696,
+    "dims": [
+     1.5,
+     0.9926,
+     0.1837
+    ]
+   },
+   "scale": [
+    1.567347,
+    1.567347,
+    1.567347
+   ],
+   "convention": "width along X, up +Y, the fin side toward +Z; origin = bottom centre of the back (mounting) face (z = 0 at the back)",
+   "halfTurn": false,
+   "finSideProud": {
+    "front": 0.0605,
+    "back": 0.001
+   },
+   "texturePolicy": "Meshy maps kept channel for channel, Lanczos downsize + JPEG: base 1024 px q85, metallic-roughness 512 px q85, normal 1024 px q90; no reprojection / retexture / repaint",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 224459,
+     "sha256": "187e39cc8a3525ea9c2bfca2ae5ab49671cdb36b9b90f257d8480b6cbec4d879"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 59318,
+     "sha256": "9cc3fae7fe382af5bb67c82fb1826bc361c365c2c35d6f532f613eff9c157306"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 167900,
+     "sha256": "df42cd603549ca951ebd8e357e29188ef48a418e2dd9cd9bacc2bb51ca6787d9"
+    }
+   ]
+  },
+  {
+   "id": "train-armor-rail",
+   "what": "the train ARMOUR roof-line rail: a bolted box-section beam with strap plates at its ends, a row of six raked fins and a hazard-striped end",
+   "conditioningImage": {
+    "sha256": "a75a56ed5517b77c80215c11116cd7ece8af826652167d0b5738d87144b02c1d",
+    "bytes": 1842017,
+    "size": "2172x724",
+    "codexAttempt": 1,
+    "generator": "Codex CLI built-in image_gen (ChatGPT login); image model id not reported",
+    "file": "reference/tasks/train-armor-makeover-20261113-183146/gen/out/ARMOR_CREST-a1.png (raw original, outside Git)"
+   },
+   "meshy": {
+    "task": "01a1d666-3848-7624-92cd-106b831a4ffc",
+    "request": {
+     "ai_model": "meshy-t2.5",
+     "enable_pbr": true,
+     "model_type": "smart-topology",
+     "should_texture": true,
+     "target_formats": [
+      "glb"
+     ],
+     "target_polycount": 3000,
+     "texture_resolution": "2k"
+    },
+    "status": "SUCCEEDED",
+    "billedCredits": 15,
+    "attempt": 1,
+    "priceEvidenceSha256": "8f905ca5da68b59fa9766de78c268494b382d14be95ccdd836675386f5f93db2"
+   },
+   "source": {
+    "file": "reference/tasks/train-armor-makeover-20261113-183146/gen/raw/ARMOR_CREST-R004-01a1d666-3848-7624-92cd-106b831a4ffc.glb (raw original, outside Git)",
+    "sha256": "8ceff13de1ffc1671f9b726e7b20f069d06efb83f3d15d3ac9d63252a1d0ae41",
+    "bytes": 8358028,
+    "triangles": 2934,
+    "parts": 1,
+    "extent": [
+     0.9497,
+     0.1133,
+     0.2397
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3612392
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1931055
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2671851
+     }
+    ]
+   },
+   "output": {
+    "file": "game/public/assets/models/train-armor-rail.glb",
+    "url": "assets/models/train-armor-rail.glb",
+    "sha256": "5b82418b080dbf4e5070cb4db26bd5e0fc250b1fa560ebe0a30eb3c4376a3745",
+    "bytes": 702896,
+    "triangles": 2934,
+    "dims": [
+     1.6,
+     0.1908,
+     0.202
+    ]
+   },
+   "scale": [
+    1.684728,
+    1.684728,
+    1.684728
+   ],
+   "convention": "width along X, up +Y, the fin side toward +Z; origin = bottom centre of the back (mounting) face (z = 0 at the back); the raw's rear half folded flat onto the back",
+   "halfTurn": false,
+   "finSideProud": {
+    "front": 0.0798,
+    "back": 0
+   },
+   "foldedVertices": 1640,
+   "foldPlaneRawZ": 0,
+   "texturePolicy": "Meshy maps kept channel for channel, Lanczos downsize + JPEG: base 1024 px q85, metallic-roughness 512 px q85, normal 1024 px q90; no reprojection / retexture / repaint",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 278449,
+     "sha256": "a94785fa847b001802299b3b3cc901f67c691e67ddfd2c7979206a34caa4a933"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 66891,
+     "sha256": "05eb2ad8391e23bfa7b33eb3671f5cb03d763f5e9f48ab3f438a271fd135d4c3"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 233037,
+     "sha256": "bd4e7f873afea608c65da18e840989d6670bb1c39cac0af62385bbe50aa1ac90"
+    }
+   ]
+  }
+ ]
+}

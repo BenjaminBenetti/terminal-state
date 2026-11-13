@@ -30,7 +30,8 @@
 // Lights that CAST light: created ONCE at install (boot) and kept in the scene — one head SpotLight aimed down the track ahead, one
 // red tail SpotLight aimed back, interior PointLights — intensity 0 with no train, moved to the car's mounts per build, intensity
 // only otherwise (the light set never changes: docs/rendering-warmup.md). No shadow casters (the flashlight stays the only one),
-// bounded distance / decay, not lures (world/lightSources.ts is untouched).
+// bounded distance / decay, not lures (world/lightSources.ts is untouched). With the armour fitted the head / tail beams start just
+// clear of its ploughs (placeLightsBy: no shadow means a plough in a cone would only be lit point-blank from behind).
 // NOT done here (limits): enemies' path finding ignores volumes (they never path INTO the car; nothing makes it a safe zone).
 //
 // Task train-shell-followup-20261101-221246 (user playtest: "Interaction highlight is missing on train doors", "you should be able to see
@@ -68,8 +69,7 @@ import {chipperFootprint, chipperPlacement} from './chipperPlace'; // task corps
 import {benchFootprint, benchPlacement} from '../craft/trainFixtures'; // task train-crafting: the crafting bench (a fixed component)
 import {TRAIN_EQUIPMENT_MODELS} from '../assets/trainEquipment.generated'; // task train-crafting: the bench, device modules and roof turret join the car's model catalogue
 import {saveTerminalPlacement} from './trainSaveTerminalPlace'; // task refinement-batch (lane SAVE): the save terminal left of the desk (a fixed component)
-import {TRAIN_ARMOR_MODELS} from '../assets/trainArmor.generated'; // task refinement-batch (lane ARMOR): the armour kit joins the car's model catalogue
-import type {ArmorBox} from './trainArmorLayout';
+import {ARMOR_MODELS, type ArmorBox} from './trainArmorLayout'; // task refinement-batch (lane ARMOR) + task train-armor-makeover: the armour kit joins the car's model catalogue
 
 /**
  * Task studio-refinement-batch-20261113-035659-01 (lane SAVE): a car fixture whose aim / prompt / glow / [E] go through THIS runtime's
@@ -112,10 +112,11 @@ export interface TrainRideLink {
  *  (world/chipperSpec.ts CHIPPER_MODEL, its own cook: assets/trainChipper.generated.ts) — fetched with the car's other models.
  *  Task train-crafting: + the crafting bench, the three device modules and the sentry's roof turret (assets/trainEquipment.generated.ts):
  *  the bench is a fixture of every car and a device can be crafted at any stop, so they are fetched with the car too.
- *  Task studio-refinement-batch-20261113-035659-01 (lane ARMOR): + the armour kit (assets/trainArmor.generated.ts: side skirt, end plough):
- *  the upgrade can be fitted at any stop and shows the moment it is, so it is fetched with the car too. */
+ *  Task studio-refinement-batch-20261113-035659-01 (lane ARMOR): + the armour kit (world/trainArmorLayout.ts ARMOR_MODELS: the blade
+ *  strip and fin grille, and — task train-armor-makeover — the body plate, buttress post, plough wing and roof-line rail): the upgrade can be fitted
+ *  at any stop and shows the moment it is, so it is fetched with the car too. */
 export const PLAYER_TRAIN_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> =
-  Object.fromEntries([...Object.values(PLAYER_TRAIN_MODELS), CHIPPER_MODEL, ...Object.values(TRAIN_EQUIPMENT_MODELS), ...Object.values(TRAIN_ARMOR_MODELS)].map(m => [m.key, {url: m.url, bytes: m.bytes}]));
+  Object.fromEntries([...Object.values(PLAYER_TRAIN_MODELS), CHIPPER_MODEL, ...Object.values(TRAIN_EQUIPMENT_MODELS), ...Object.values(ARMOR_MODELS)].map(m => [m.key, {url: m.url, bytes: m.bytes}]));
 
 /** Game.sectionModelKeys: the train models for a level that parks the car (playerTrainPlacement is pure and memoized per layout). */
 export function playerTrainModelKeys(layout: StationLayout): string[] {
@@ -246,7 +247,9 @@ export interface TrainColliders {
 export function armorColliders(p: Pose, boxes: readonly ArmorBox[] | null | undefined, bedY: number, area: number): TrainColliders['armor'] {
   const collide: PropPlacement[] = [], shoot: PropPlacement[] = [];
   for (const b of boxes ?? []) {
-    collide.push(propBox(p, area, b.x0, b.x1, b.z0, b.z1, bedY, p.railTopY + b.y1 - bedY));
+    // (task train-armor-makeover) an `overhead` box — a window pillar over the plates, the roof-line rail — stops shots only: no column
+    // under it; a `colTop` box — the skirt under a door's sill — has a low column (a body in the bed; never one at platform height)
+    if (!b.overhead) collide.push(propBox(p, area, b.x0, b.x1, b.z0, b.z1, bedY, p.railTopY + (b.colTop ?? b.y1) - bedY));
     shoot.push(propBox(p, area, b.x0, b.x1, b.z0, b.z1, p.railTopY + b.y0, b.y1 - b.y0));
   }
   return {collide, shoot};
@@ -632,6 +635,8 @@ export class PlayerTrainRuntime {
    * it; null / absent: not fitted). Read at every build; refitArmor() applies a change to the built car.
    */
   armorBoxes: (() => readonly ArmorBox[] | null) | null = null;
+  /** (task train-armor-makeover) ploughReach()'s result for the boxes it was read from. */
+  private ploughEnds: {boxes: readonly ArmorBox[] | null; front: number; rear: number} = {boxes: null, front: 0, rear: 0};
 
   constructor(readonly host: TrainHost, readonly opts: TrainOptions = {}) {
     this.spec = opts.spec ?? PLAYER_TRAIN_SPEC;
@@ -813,6 +818,7 @@ export class PlayerTrainRuntime {
     const gone = new Set(old.collide);
     h.propIndex = new PropIndex(h.levels, [...h.propIndex.props.filter(q => !gone.has(q)), ...next.collide]);
     t.col.armor = next;
+    this.placeLights(t.placement); // (the head / tail beams start clear of the ploughs, or back at the lamps)
     const v = t.col.volume;
     for (let x = v.x0 - 2; x <= v.x1 + 2; x += 4) for (const z of [v.z0 - 1, (v.z0 + v.z1) / 2, v.z1 + 1]) h.physics?.propsChanged?.(x, z);
   }
@@ -866,9 +872,13 @@ export class PlayerTrainRuntime {
     const head = avg(s.lights.head, {x: s.length / 2, y: s.floorY + 0.6, z: 0});
     const tail = avg(s.lights.tail, {x: -s.length / 2, y: s.floorY + 0.6, z: 0});
     const at = (o: THREE.Object3D, q: {x: number; y: number; z: number}) => { const v = w(q); o.position.set(v.x, v.y, v.z); o.updateMatrixWorld(); };
-    at(L.head, {x: head.x + 0.05, y: head.y, z: head.z});
+    // (task train-armor-makeover) the fitted armour's ploughs stand ahead of the lamps, inside both beams, and these lights cast no
+    // shadow: a plough in a cone would only be lit point-blank from behind (white-hot fins, seen from the cab and the platform). With
+    // the armour on, each beam starts just clear of its plough, aimed at the same point; without it, at the lamps as before
+    const reach = this.ploughReach();
+    at(L.head, {x: Math.max(head.x, reach.front) + 0.05, y: head.y, z: head.z});
     at(L.head.target, {x: head.x + H.aim, y: head.y - H.drop, z: head.z});
-    at(L.tail, {x: tail.x - 0.05, y: tail.y, z: tail.z});
+    at(L.tail, {x: Math.min(tail.x, -reach.rear) - 0.05, y: tail.y, z: tail.z});
     at(L.tail.target, {x: tail.x - T.aim, y: tail.y - T.drop, z: tail.z});
     L.head.intensity = H.intensity;
     L.tail.intensity = T.intensity;
@@ -879,6 +889,16 @@ export class PlayerTrainRuntime {
       at(l, {x: m.x, y: m.y - 0.12, z: m.z});
       l.intensity = I.intensity;
     });
+  }
+
+  /** (task train-armor-makeover) How far the fitted armour reaches past the car's centre at the front / the rear (0: not fitted). */
+  private ploughReach(): {front: number; rear: number} {
+    const boxes = this.armorBoxes?.() ?? null, c = this.ploughEnds;
+    if (c.boxes !== boxes) {
+      c.boxes = boxes; c.front = 0; c.rear = 0;
+      for (const b of boxes ?? []) { c.front = Math.max(c.front, b.x1); c.rear = Math.max(c.rear, -b.x0); }
+    }
+    return c;
   }
 
   private lightsOff(): void {

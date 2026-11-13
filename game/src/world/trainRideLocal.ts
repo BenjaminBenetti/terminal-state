@@ -68,9 +68,11 @@ export function setRideCargoBoxes(model: RideLocalModel, owner: string, boxes: r
  * as riding collision, owner 'train-armor' of the riding cargo seam above (null / empty: none). The plates stand outside the side walls /
  * ends, so a body inside the car never meets them; they are solid wherever the model reaches (the colliders match the parked car's).
  */
-export function setRideArmorBoxes(model: RideLocalModel, boxes: readonly {x0: number; x1: number; z0: number; z1: number}[] | null): void {
-  const H = model.spec.ceilingY + 3;
-  setRideCargoBoxes(model, 'train-armor', boxes?.length ? boxes.map(b => box(b.x0, b.x1, b.z0, b.z1, H)) : null);
+export function setRideArmorBoxes(model: RideLocalModel, boxes: readonly {x0: number; x1: number; z0: number; z1: number; y1?: number; overhead?: boolean}[] | null): void {
+  // (task train-armor-makeover) what a body on the car's floor meets of the parked car's columns: not an `overhead` box (shots only),
+  // not the skirt (it ends under the floor line — also under the doors)
+  const H = model.spec.ceilingY + 3, cols = boxes?.filter(b => !b.overhead && !(b.y1 !== undefined && b.y1 <= model.spec.floorY + 0.02)) ?? [];
+  setRideCargoBoxes(model, 'train-armor', cols.length ? cols.map(b => box(b.x0, b.x1, b.z0, b.z1, H)) : null);
 }
 
 const box = (x0: number, x1: number, z0: number, z1: number, h: number): PropPlacement => ({
