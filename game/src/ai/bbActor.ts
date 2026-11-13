@@ -51,7 +51,9 @@ export const BB_ACTOR = {
    * The cackle on a body that is NOT still (the still one plays the Cackle clip): the chest bobs and the head nods with each "ha",
    * over whatever the gait is doing. `stillMps`: at or above this pace it counts as moving.
    */
-  cackle: {stillMps: 0.3, bobDeg: 5, nodDeg: 10, rollDeg: 7, attackS: 0.14, releaseS: 0.3, lookK: 0.35},
+  cackle: {stillMps: 0.3, bobDeg: 5, nodDeg: 10, rollDeg: 7, attackS: 0.14, releaseS: 0.3, lookK: 0.35,
+    /** On a WALL the still cackle is only this share of the Cackle clip (the rest: its settled stance): it pushes its chest off the wall and shakes, rather than standing out of it. */
+    wallK: 0.55},
   /** The freeze's head twitch: snapped to a yaw / roll, held, released; every `pawEvery`-th one lifts a hand as well. */
   twitch: {durationS: 0.34, snapS: 0.045, releaseS: 0.12, yawDeg: [26, 56], rollDeg: 20, pawEvery: 3, paw: {flex: 112, abd: 14, elbow: 62}},
   /**
@@ -59,7 +61,11 @@ export const BB_ACTOR = {
    * range (yaw +-70, extension -30 .. +75: BB-ASSET-CONTRACT poseEnvelope); the aim follows with time constant `followS`, and the
    * whole overlay eases in / out over `blendS`. The Neck takes `neckShare` of the turn.
    */
-  look: {yawDeg: 70, upDeg: 75, downDeg: 30, followS: 0.09, blendS: 0.16, neckShare: 0.42},
+  look: {yawDeg: 70, upDeg: 75, downDeg: 30, followS: 0.09, blendS: 0.16, neckShare: 0.42,
+    /** A target steeper than `steepDeg[0]` over / under the body turns the head less and less to the side, at `steepDeg[1]` not at all (its bearing means nothing there). */
+    steepDeg: [50, 80]},
+  /** The trunk capsule ends this share of its radius short of the Neck joint: its round end covers the shoulders, not the back of the skull. */
+  torsoPullK: 0.7,
   /** Overlays (cackle bob, twitch) fade out over this long when the body starts a wind-up / leap / landing / flinch. */
   calmS: 0.08,
   /** Hit flash: a neutral pale blink (emissive at full flash), not the red one of the bleeding enemies. */
@@ -189,6 +195,7 @@ export class BbActor {
   private readonly cur = new Float32Array(BB_FRAME_FLOATS);
   private readonly from = new Float32Array(BB_FRAME_FLOATS);
   private readonly tgt = new Float32Array(BB_FRAME_FLOATS);
+  private readonly aux = new Float32Array(BB_FRAME_FLOATS);
   private fadeT = 0;
   private fadeS = 0;
   // --- overlays
@@ -383,6 +390,11 @@ export class BbActor {
   private pose(set: BbClipSet, dt: number): void {
     const cur = this.cur, J = this.joints;
     sampleBbClip(set.tables[this.clipName!], this.u, this.tgt, this.mirror);
+    if (this.clipName === 'Cackle' && this.brain.pose.surface === 'wall') {
+      // (the clip begins in its settled stance: only part of the way up from it)
+      sampleBbClip(set.tables.Cackle, 0, this.aux);
+      mixRows(this.aux, this.tgt, BB_ACTOR.cackle.wallK, this.tgt);
+    }
     if (this.fadeT < this.fadeS) {
       this.fadeT += dt;
       mixRows(this.from, this.tgt, smooth(this.fadeT / this.fadeS), cur);
@@ -453,10 +465,10 @@ export class BbActor {
       const flat = Math.hypot(v.x, v.z);
       if (flat + Math.abs(v.y) > 1e-4) {
         let yaw = Math.atan2(v.x, v.z) / D2R;
-        const pitch = clamp(Math.atan2(v.y, flat) / D2R, -L.downDeg, L.upDeg);
+        const steep = Math.atan2(v.y, flat) / D2R, pitch = clamp(steep, -L.downDeg, L.upDeg);
         // (a target behind it: the head stays turned to the side it was on, never snapping across the back)
         if (Math.abs(yaw) > 140 && this.lookYaw !== 0) yaw = Math.sign(this.lookYaw) * L.yawDeg;
-        yaw = clamp(yaw, -L.yawDeg, L.yawDeg);
+        yaw = clamp(yaw, -L.yawDeg, L.yawDeg) * (1 - smooth((Math.abs(steep) - L.steepDeg[0]) / (L.steepDeg[1] - L.steepDeg[0])));
         const k = dt > 0 ? 1 - Math.exp(-dt / L.followS) : 1;
         this.lookYaw += (yaw - this.lookYaw) * k;
         this.lookPitch += (pitch - this.lookPitch) * k;
@@ -511,7 +523,13 @@ export class BbActor {
     const s = this.scale, rig = this.set?.rig;
     const v = (part: HitPart, a: Vec3, b: Vec3 | null, r: number): HitVolume => ({part, a, b, r: r * s});
     if (!rig) return [v('torso', this.at(''), null, BB_ASSET.hitRadii.torso * 1.6)];
-    const H = rig.hit, out: HitVolume[] = [v('head', this.at('Head', rig.head.centre), null, rig.head.radius), v('torso', this.at('Hips'), this.at('Neck'), H.torso)];
+    const H = rig.hit, hips = this.at('Hips'), top = this.at('Neck');
+    const dx = top.x - hips.x, dy = top.y - hips.y, dz = top.z - hips.z, len = Math.hypot(dx, dy, dz);
+    if (len > 1e-6) {
+      const k = Math.max(0.3, 1 - BB_ACTOR.torsoPullK * H.torso * s / len);
+      top.x = hips.x + dx * k; top.y = hips.y + dy * k; top.z = hips.z + dz * k;
+    }
+    const out: HitVolume[] = [v('head', this.at('Head', rig.head.centre), null, rig.head.radius), v('torso', hips, top, H.torso)];
     for (const side of SIDES) {
       out.push(v('limb', this.at(`${side}_UpperArm`), this.at(`${side}_Forearm`), H.arm), v('limb', this.at(`${side}_Forearm`), this.at(`${side}_Hand`, rig.palm[side]), H.arm));
       out.push(v('limb', this.at(`${side}_Thigh`), this.at(`${side}_Shin`), H.leg), v('limb', this.at(`${side}_Shin`), this.at(`${side}_Foot`), H.leg));
