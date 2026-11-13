@@ -18,6 +18,8 @@ import {gearItemModel, gearModelSource, registerGasMaskOutfit} from '../gear/mod
 import {isGearItem} from '../items/gear';
 import {isReactorItem, reactorItemModel, reactorItemSource} from './reactor/restartItems'; // task reactor-build-20261101 (lane RESTART)
 import {fuelCanModel, fuelCanModelSource} from './fuelCanModel'; // task train-fuel-system-20261106 (lane PORT): the delivered fuel-can GLB (fallback box if not loaded)
+import {grenadeModel, grenadeModelSource} from './grenadeModels'; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades
+import {isGrenadeItem} from '../items/grenades';
 import {RAIL_TIES_MODEL_SOURCE, railTiesModel} from './railTiesModel'; // task studio-market-rework-20261108-074144-01 (lane TRADE)
 import {RAIL_TIES_ID} from '../items/railTies';
 import {isBeer} from '../items/beers'; // task studio-market-bar-20261108-225231-01 (lane BEER)
@@ -292,6 +294,11 @@ export function itemTemplate(itemId: string): THREE.Object3D {
     // task train-fuel-system-20261106 (lane PORT): the delivered Meshy fuel-can GLB (preloaded; Meshy maps kept), else the labelled fallback box
     t = fuelCanModel();
     templateSource.set(itemId, fuelCanModelSource());
+  } else if (isGrenadeItem(itemId)) {
+    // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure canisters — the delivered Meshy GLBs (preloaded; Meshy maps
+    // kept), else the labelled fallback cylinder
+    t = grenadeModel(itemId);
+    templateSource.set(itemId, grenadeModelSource(itemId));
   } else if (isReactorItem(itemId)) {
     // task reactor-build-20261101 (lane RESTART): startup key / fuse cartridge — the Meshy kit GLBs (procedural stand-in if one failed to load)
     t = reactorItemModel(itemId);

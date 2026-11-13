@@ -18,6 +18,8 @@
 // line say "used at the train's crafting bench". Bio mater has NO recipe yet: its text says exactly that (materialNote). The items
 // themselves are unchanged (still passive stacks: never used by hand; no loot row, weight or roll moved). tests/craft-materials.test.ts
 // keeps the texts and the recipe list in step.
+// Task studio-refinement-batch-20261113-035659-01: Bio mater has recipes now (3 makes 5 Acid Scrapper grenades or 3 Zombie Lure grenades,
+// craft/recipes.ts MADE_RECIPES), so its text says "used at the train's crafting bench" like the other two (no supply change).
 import type {ItemDef, ItemDims} from './items';
 
 /** Icon keys of the materials (ui/materialIcons.ts). */
@@ -35,8 +37,9 @@ export const isMaterialItem = (id: string): id is MaterialId => (MATERIAL_IDS as
 export const MATERIAL_NOTE = 'Crafting material — nothing to use by hand: used at the train\'s crafting bench';
 /** ... and of a material no recipe uses yet. */
 export const MATERIAL_NOTE_NO_RECIPE = 'Crafting material — nothing to use by hand, and no recipe uses it yet';
-/** The materials without a recipe (the rest are spent at the train's crafting bench; tests check this against craft/recipes.ts). */
-const NO_RECIPE: readonly string[] = [BIO_MATER];
+/** The materials without a recipe (the rest are spent at the train's crafting bench; tests check this against craft/recipes.ts). None since
+ *  task studio-refinement-batch-20261113-035659-01 (bio mater makes the grenades). */
+const NO_RECIPE: readonly string[] = [];
 /** A material's detail line. */
 export const materialNote = (id: string): string => (NO_RECIPE.includes(id) ? MATERIAL_NOTE_NO_RECIPE : MATERIAL_NOTE);
 
@@ -46,7 +49,7 @@ export const MATERIAL_ITEMS: Record<string, ItemDef> = {
   [SCRAP_METAL]: {id: SCRAP_METAL, name: 'Scrap metal', short: 'Scrap', kind: 'material', stackMax: 20, icon: 'scrap',
     description: 'Bent steel brackets, a plate offcut and a length of rack rail. Heavy for its size. Nothing to use by hand: a crafting material, used at the train\'s crafting bench.'},
   [BIO_MATER]: {id: BIO_MATER, name: 'Bio mater', short: 'Bio mater', kind: 'material', stackMax: 10, icon: 'biomater',
-    description: 'A sealed lab specimen jar of organic culture. Not food and not medicine — keep it closed. Nothing to use by hand: a crafting material, but no recipe uses it yet.'},
+    description: 'A sealed lab specimen jar of organic culture. Not food and not medicine — keep it closed. Nothing to use by hand: a crafting material for acid and lure grenades, used at the train\'s crafting bench.'},
 };
 
 export const MATERIAL_DIMS: Record<string, ItemDims> = {

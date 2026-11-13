@@ -81,6 +81,7 @@ import {LightSources} from './world/lightSources';
 import {PlayerLight, applyBatteryItem} from './player/flashlight'; // Iteration 12 (LIGHT): flashlight battery + body glow
 import {FlareSystem, throwOneFlare, type FlareSmokeHost} from './weapons/throwables'; // Iteration 12 (LIGHT): thrown road flares (grenade slot)
 import {FlareHold} from './weapons/flareHold'; // Iteration 15: hold to ready, release to throw
+import {GrenadeSystem, throwOneGrenade, type AcidMeltLike, type ScentHostLike} from './weapons/grenades'; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades
 import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifiers} from './player/modifiers'; // Iteration 16 (shared contract)
 import {incomingHit, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
 import {armorHit, armorPool} from './player/armor'; // task studio-general-armor-20261107-231448-01: the worn armour pool
@@ -92,6 +93,8 @@ import type {FuelCartsLike} from './fuel/trainPort'; // task train-fuel-system: 
 import {installGasMask, type GasMaskSystem} from './gear/gasMask'; // Task gasmask-breach-20261030 (mask lane): gas mask on / off (Q), filters (+ the first-person mask view, gear/maskView.ts)
 import {installFuelPort, type FuelPortSystem} from './world/fuelPort'; // task train-fuel-system (lane PORT): the train's fuel cap (pour a fuel can), HUD fuel readout
 import {preloadFuelCanModel} from './world/fuelCanModel'; // task train-fuel-system (lane PORT): the delivered fuel-can GLB
+import {preloadGrenadeModels} from './world/grenadeModels'; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades
+import {ACID_GRENADE, isGrenadeItem, type GrenadeId} from './items/grenades';
 import {installFuelCarts, type FuelCarts} from './world/fuelCarts'; // task train-fuel-system (lane CART): fuel carts — push / grab, hose to the fuel cap, station / train cargo ownership
 import {installSkywaysCar, type SkywaysCar} from './world/skywaysCar'; // task skyways-level-20261106 (lane CAR): the Skyways prize car (first-person drivable)
 import {MaskView} from './gear/maskView'; // Task gas-mask-roof-feedback-20261030 (item 4): first-person view through the real mask's visor
@@ -379,6 +382,10 @@ export class Game {
   readonly torch: PlayerLight;
   /** Iteration 12 (LIGHT): thrown road flares (weapons/throwables.ts; a cannon BodySource of `physics`). */
   readonly flares = new FlareSystem(this.scene, this.physics, this.lightSources);
+  /** Task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades' canisters, acid pools and lures (weapons/grenades.ts). */
+  readonly grenades = new GrenadeSystem(this.scene, this.physics);
+  /** The throwable a grenade-style hold readies / throws (its item id: the flare or a crafted grenade; null when idle). */
+  private throwItem: string | null = null;
   /** Track 2 (VIS): the service annexes' steam vents (visual only; Effects' bounded steam ring). */
   private steamVents: SteamVents | null = null;
   /** Iteration 15: grenade-style flare input (T, or left click with a flare in hand): hold readies, release throws once. */
@@ -673,6 +680,19 @@ export class Game {
     // Iteration 14: effects hidden until the first shot / hit and the thrown-flare prototypes are warmed with the station
     this.warmRegistry.addPool('effects', () => [this.fx.group]);
     this.warmRegistry.addPool('flares', () => this.flares.warmPrototypes());
+    // task studio-refinement-batch-20261113-035659-01: the crafted grenades — the zombies they hurt / kill, the player a pool burns, the
+    // melt system (world/acidMelt.ts) and the scent emitters (ai/scentLure.ts); their canisters / pool film compile with the station
+    this.grenades.env = {
+      zombies: () => this.zombies, player: () => this.player, smoke: this.atmosphere satisfies FlareSmokeHost, audio: this.sfx,
+      kill: (z, dir, point) => this.blastKill(z as unknown as BlightEnemy, dir, point),
+      hurt: z => enemyCues(z as unknown as EnemyActor).hurt(this.sfx, z as unknown as EnemyActor),
+      playerBurn: () => this.hud.toast('Acid! Get out of the pool', true),
+      melt: () => (this as {acidMelt?: AcidMeltLike | null}).acidMelt ?? null, scents: () => (this as {scents?: ScentHostLike | null}).scents ?? null, // (lanes MELT / LURE)
+      levelAt: (x, z, y) => this.levels ? this.levels.levelAt(x, z, y) : 0,
+      lineOfSight: (a, b) => !this.levels || this.levels.lineOfSight(a, b),
+      noise: (x, y, z) => this.worldNoise(x, y, z, 14, 'impact'),
+    };
+    this.warmRegistry.addPool('grenades', () => this.grenades.warmPrototypes());
     this.warmRegistry.addPool('shelf-junk-moving', () => this.stock.warmRoots()); // (task studio-food-shelf-production-20261109-002816-01) the moving shelf-junk instanced meshes compile behind the loading screen
     // Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): every moving set of the shelf filler — the authored filler's
     // too, made hidden before each warm-up by refreshRuntimeVariants (world/shelfStockWarm.ts), not on the first shot into a shelf
@@ -924,13 +944,15 @@ export class Game {
     await preloadMedicalModels(); // Iteration 16 (lane INJURY): Meshy splint / sling (null urls / failures -> authored models)
     await preloadReactorItemModels(); // task reactor-build-20261101 (lane RESTART): startup key / fuse cartridge kit GLBs (failures -> procedural stand-ins)
     await preloadFuelCanModel(); // task train-fuel-system (lane PORT): the fuel-can GLB before item templates / icons (a failure -> the fallback box)
+    await preloadGrenadeModels(); // task studio-refinement-batch-20261113-035659-01: the acid / lure grenade GLBs (a failure -> the fallback cylinder)
     await preloadBeerLabels(); // task studio-market-bar-20261108-225231-01 (lane BEER): the beer bottles' Codex label atlas (a failure -> plain paper labels)
     registerItemModels(m as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>);
     const consumables: Record<string, THREE.Object3D> = {};
     for (const id of Object.values(ITEMS).filter(d => d.kind === 'consumable' || d.kind === 'throwable').map(d => d.id)) {
       const o = makeSupplyMesh(id);
       // Iteration 12 (LIGHT): a held flare is gripped mid-tube, cap (head) pointing forward and a little up
-      if (itemDef(id).kind === 'throwable') o.rotation.set(0.35, Math.PI / 2 + 0.12, 0.1); else o.rotation.set(0.5, -0.4, 0.15);
+      // (task studio-refinement-batch-20261113-035659-01: the upright acid / lure canisters are held like a can, cap up)
+      if (itemDef(id).kind === 'throwable' && !isGrenadeItem(id)) o.rotation.set(0.35, Math.PI / 2 + 0.12, 0.1); else o.rotation.set(0.5, -0.4, 0.15);
       o.traverse(x => { const mm = x as THREE.Mesh; if (mm.isMesh) mm.frustumCulled = false; });
       consumables[id] = o;
     }
@@ -1180,7 +1202,9 @@ export class Game {
     this.consumeReturn = null; // (consumable return: a new station / Retry starts with nothing pending)
     this.consumeView?.reset();
     this.flares.clear(); // Iteration 12 (LIGHT): burning / thrown flares, their lights, smoke, loops and light sources
+    this.grenades.clear(); // task studio-refinement-batch-20261113-035659-01: canisters, acid pools, lures
     this.flareHold.cancel(); // Iteration 15: a readied flare is dropped (nothing spent)
+    this.throwItem = null;
     this.lmbLatch = false;
     this.laneOwnedLast = false;
     this.aiming = false;
@@ -2732,14 +2756,52 @@ export class Game {
       this.viewmodel.setItem(def?.kind === 'consumable' || def?.kind === 'throwable' || (def?.kind === 'supply' && this.viewmodel.hasItem(st!.itemId)) ? st!.itemId : null);
     }
     // Iteration 15: while a flare is readied the hand shows it (whatever pickups / inventory changes happen meanwhile)
-    if (this.flareHold.active) { this.weapon.equip(null); this.viewmodel.setItem('flare'); }
+    if (this.flareHold.active) { this.weapon.equip(null); this.viewmodel.setItem(this.throwItem ?? 'flare'); } // (the readied throwable: a flare or a crafted grenade)
     // Task office-overhaul-20261030 (INTERACT, #1): the readied backpack (6) is what the hands hold (gear/system.ts)
     else if (this.gear?.readied) { this.weapon.equip(null); this.viewmodel.setItem('backpack'); }
   }
 
   /** Iteration 15: drop a readied flare without throwing (nothing spent); the held item comes back. */
   private cancelFlareHold(): void {
-    if (this.flareHold.cancel()) this.syncHeld();
+    if (this.flareHold.cancel()) { this.throwItem = null; this.syncHeld(); }
+  }
+
+  /** Task studio-refinement-batch-20261113-035659-01: the hold's release throws the readied throwable — a flare or a crafted grenade. */
+  private throwHeld(fromHeld: boolean): void {
+    const id = this.throwItem ?? 'flare';
+    this.throwItem = null;
+    if (isGrenadeItem(id)) this.throwGrenade(fromHeld, id);
+    else this.throwFlare(fromHeld);
+  }
+
+  /** A grenade-style press refused (nothing readied, nothing spent): one message per press. */
+  private throwRefused(reason: 'none' | 'cap', itemId: string | null): void {
+    const g = isGrenadeItem(itemId) ? itemDef(itemId) : null;
+    if (reason === 'none') this.hud.toast(!itemId ? 'Nothing in the grenade slot — find a flare or craft a grenade' : g ? `No ${g.name}s left` : 'No flares — find one first', true);
+    else this.hud.toast(itemId === ACID_GRENADE ? 'Three acid pools already — wait for one to dry up' : g ? 'Three lures already out — wait for one to run out' : 'Three flares already burning — wait for one to burn out', true);
+    this.sfx.denied();
+  }
+
+  /**
+   * Task studio-refinement-batch-20261113-035659-01: toss one crafted grenade (the grenade slot's, or the held one) — exactly one item is
+   * removed, and only once the throw happened (weapons/grenades.ts throwOneGrenade; the throwFlare rule).
+   */
+  private throwGrenade(fromHeld: boolean, id: GrenadeId): void {
+    const ref = fromHeld && this.inv.selectedStack()?.itemId === id ? this.inv.selectedRef()
+      : !fromHeld && this.inv.thrown?.itemId === id ? THROW_REF : null;
+    if (this.use || this.consumeView.busy || this.player.climbing) return;
+    const p = this.player, def = itemDef(id);
+    const r = throwOneGrenade(this.grenades, id, () => (ref ? this.inv.consumeAt(ref) : this.inv.take(id, 1) === 1), () => this.inv.count(id) > 0,
+      this.camera.getWorldPosition(new THREE.Vector3()), this.forward(), {x: p.vx, y: p.grounded ? 0 : p.vy * 0.5, z: p.vz});
+    if (!r.ok) {
+      if (r.reason === 'none' || r.reason === 'cap') this.throwRefused(r.reason, id);
+      return; // 'cooldown' (a double press) / 'unavailable': silent
+    }
+    this.stats.itemsUsed++;
+    const left = this.inv.count(id);
+    this.hud.toast(`${def.short} grenade thrown · ${left ? `${left} left` : 'last one'}`);
+    this.viewmodel.setItem(null);
+    this.syncHeld();
   }
 
   /**
@@ -3111,16 +3173,20 @@ export class Game {
     if (this.laneOwnedLast && !laneOwns && inp.mouse[0]) this.lmbLatch = true;
     this.laneOwnedLast = laneOwns;
     if (this.lmbLatch && !inp.mouse[0]) this.lmbLatch = false;
+    // (task studio-refinement-batch-20261113-035659-01) the SAME hold throws whichever throwable it readies: the grenade slot's (G) or the
+    // held one (click) — a road flare or a crafted acid / lure grenade (throwItem; Game.throwHeld dispatches by item id)
+    const keyThrow = inp.hit('KeyG') || inp.hit('KeyT');
+    const tItem = this.flareHold.active ? this.throwItem : keyThrow ? this.inv.thrown?.itemId ?? null
+      : inp.mousePressed[0] && heldDef?.kind === 'throwable' ? held!.itemId : null;
     for (const e of this.flareHold.update(dt, {
-      keyDown: inp.down('KeyG') || inp.down('KeyT'), keyPressed: inp.hit('KeyG') || inp.hit('KeyT'), mouseDown: inp.mouse[0], mousePressed: inp.mousePressed[0], // INTERACT (#6): G
-      heldIsFlare: heldDef?.kind === 'throwable' && held?.itemId === 'flare', busy: !!this.use || this.consumeView.busy || p.climbing || laneOwns || rideHolster,
-      flares: this.inv.count('flare'), refusal: this.flares.refusal(), clears: inp.clears,
+      keyDown: inp.down('KeyG') || inp.down('KeyT'), keyPressed: keyThrow, mouseDown: inp.mouse[0], mousePressed: inp.mousePressed[0], // INTERACT (#6): G
+      heldIsFlare: heldDef?.kind === 'throwable' && (this.flareHold.source !== 'mouse' || held?.itemId === this.throwItem), busy: !!this.use || this.consumeView.busy || p.climbing || laneOwns || rideHolster,
+      flares: tItem ? this.inv.count(tItem) : 0, refusal: tItem && isGrenadeItem(tItem) ? this.grenades.refusal(tItem) : this.flares.refusal(), clears: inp.clears,
     })) {
-      if (e.type === 'ready') { this.weapon.equip(null); this.viewmodel.setItem('flare'); }
-      else if (e.type === 'release') this.throwFlare(e.source === 'mouse');
-      else if (e.type === 'cancel') this.syncHeld();
-      else if (e.reason === 'none') { this.hud.toast('No flares — find one first', true); this.sfx.denied(); }
-      else { this.hud.toast('Three flares already burning — wait for one to burn out', true); this.sfx.denied(); }
+      if (e.type === 'ready') { this.throwItem = tItem; this.weapon.equip(null); this.viewmodel.setItem(tItem ?? 'flare'); }
+      else if (e.type === 'release') this.throwHeld(e.source === 'mouse');
+      else if (e.type === 'cancel') { this.throwItem = null; this.syncHeld(); }
+      else this.throwRefused(e.reason, tItem);
       if ((e.type === 'release' || e.type === 'cancel') && inp.mouse[0]) this.lmbLatch = true; // never bleeds into the gun
     }
     const flareOwns = this.flareHold.active || this.lmbLatch || laneOwns;
@@ -3196,6 +3262,7 @@ export class Game {
     this.physics.update(dt); // ragdolls (fixed 1/60 steps) + casings; update() only runs while playing
     prof.lap(SPAN.flares);
     this.flares.tick(dt); // Iteration 12 (LIGHT): flare bodies -> mesh / light / smoke / sound / light-source positions, burn-out
+    this.grenades.tick(dt); // task studio-refinement-batch-20261113-035659-01: canisters, bursts, acid pools (active seconds only), lures
 
     prof.lap(SPAN.camera);
     // recoil recovery and bloom decay

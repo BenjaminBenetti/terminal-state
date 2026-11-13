@@ -28,10 +28,15 @@
 //
 // The model (craftModel) and the markup (craftViewHtml) are pure: Node tests call them without a DOM; CraftView is the thin DOM shell
 // (mounted in #app like the Lockbox view; its CSS is the marked "crafting bench view" block of styles.css).
+//
+// Task studio-refinement-batch-20261113-035659-01: the list is craft/recipes.ts BENCH_RECIPES — the four units, then the MADE recipes (a
+// batch of acid / lure grenades, the train armor upgrade). A made row's name is the recipe's own; its preview is the item's own rendered
+// icon (an item batch) or the upgrade's registered preview ('upgrade:<id>', world/trainArmor.ts) — still never a glyph or a proxy; its
+// refusal ("no room on you or in the Lockbox", "already fitted") is the bench's madeBlock text.
 
-import {EQUIPMENT, isEquipmentKind, type EquipmentKind} from '../craft/equipment';
+import {EQUIPMENT, type EquipmentKind} from '../craft/equipment';
 import {countMaterials, planCraft, recipeNeeds, type MaterialCount, type MaterialSource} from '../craft/crafting';
-import {RECIPES, type Recipe, type RecipeMaterial} from '../craft/recipes';
+import {RECIPES, isBenchKind, isMadeRecipe, type BenchKind, type BenchRecipe, type Recipe, type RecipeMaterial} from '../craft/recipes';
 import {digitOfCode} from '../items/devGrant';
 import {itemDef} from '../items/items';
 import {isTypingTarget} from '../player/input';
@@ -51,6 +56,14 @@ export const CRAFT_VIEW_TEXT = {
 
 /** The item-icon cache id of a unit's 3D preview (ui/itemIcons.ts extra sources; world/craftPreview.ts registers one per recipe). */
 export const craftPreviewId = (kind: EquipmentKind): string => `equipment:${kind}`;
+/** The icon-cache id of a permanent train upgrade's preview (registered by its system, world/trainArmor.ts). */
+export const upgradePreviewId = (id: string): string => `upgrade:${id}`;
+
+/** A bench row's preview id: a unit's 3D preview, an item batch's own item icon, an upgrade's registered preview. */
+export function recipePreviewId(r: BenchRecipe): string {
+  if (!isMadeRecipe(r)) return craftPreviewId(r.kind);
+  return r.make.type === 'item' ? r.make.itemId : upgradePreviewId(r.make.id);
+}
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Texts (pure)
@@ -81,11 +94,11 @@ export interface CraftNeedChip {
   where: string;
 }
 
-export interface CraftRow {
-  kind: EquipmentKind;
+export interface CraftRow<K extends string = BenchKind> {
+  kind: K;
   name: string;
   blurb: string;
-  /** The icon-cache id of its 3D preview (craftPreviewId). */
+  /** The icon-cache id of its 3D preview (recipePreviewId). */
   preview: string;
   /** The materials it costs (a material it does not cost has no chip). */
   needs: CraftNeedChip[];
@@ -95,21 +108,22 @@ export interface CraftRow {
   reason: string;
 }
 
-export interface CraftViewModel {
-  rows: CraftRow[];
+export interface CraftViewModel<K extends string = BenchKind> {
+  rows: CraftRow<K>[];
 }
 
 /**
  * The list as it stands: every recipe against the SOURCES a craft would pay from (craft/crafting.ts craftSources — counted once) and
  * the equipment system's refusal (`block`, per kind).
  */
-export function craftModel(sources: readonly MaterialSource[], block: (kind: EquipmentKind) => string | null, recipes: readonly Recipe[] = RECIPES): CraftViewModel {
+export function craftModel<R extends BenchRecipe = Recipe>(sources: readonly MaterialSource[], block: (kind: R['kind']) => string | null, recipes: readonly R[] = RECIPES as unknown as readonly R[]): CraftViewModel<R['kind']> {
   const counts = countMaterials(sources);
-  return {rows: recipes.map((r): CraftRow => {
+  return {rows: recipes.map((r): CraftRow<R['kind']> => {
     const needs = recipeNeeds(r, sources, counts).map((n): CraftNeedChip => (
       {material: n.id, name: itemDef(n.id).name, need: n.need, have: n.have, state: n.ok ? 'ok' : 'short', where: whereFromText(n.where)}));
     const reason = block(r.kind) || '';
-    return {kind: r.kind, name: EQUIPMENT[r.kind].name, blurb: r.blurb, preview: craftPreviewId(r.kind), needs, can: planCraft(r, sources).ok && !reason, reason};
+    const name = isMadeRecipe(r) ? r.name : EQUIPMENT[r.kind].name;
+    return {kind: r.kind, name, blurb: r.blurb, preview: recipePreviewId(r), needs, can: planCraft<string>(r, sources).ok && !reason, reason};
   })};
 }
 
@@ -120,7 +134,9 @@ const esc = (t: string): string => t.replace(/&/g, '&amp;').replace(/</g, '&lt;'
 
 /** A row's preview frame: the cached render of the unit's real models, or the EMPTY frame while there is none (never a proxy). */
 export function craftPreviewHtml(id: string): string {
-  return `<div class="cv-preview${itemIconUrl(id) ? '' : ' cv-empty'}">${itemIconHtml(id, 'cv-img')}</div>`;
+  // (an item batch's id is an item: without its rendered icon the frame stays EMPTY — never the item's SVG glyph)
+  const url = itemIconUrl(id);
+  return `<div class="cv-preview${url ? '' : ' cv-empty'}">${url ? itemIconHtml(id, 'cv-img') : ''}</div>`;
 }
 
 /** A material chip: the material's inventory icon + "have / need", green or red; the name and where the count is in its tooltip. */
@@ -132,7 +148,7 @@ export function craftNeedHtml(n: CraftNeedChip): string {
 }
 
 /** The rows' markup (the list element's innerHTML). */
-export function craftRowsHtml(m: CraftViewModel): string {
+export function craftRowsHtml(m: CraftViewModel<string>): string {
   return m.rows.map(r => `<div class="cv-row ${r.can ? 'cv-can' : 'cv-cant'}" data-kind="${r.kind}">`
     + craftPreviewHtml(r.preview)
     + `<div class="cv-what"><b class="cv-name">${esc(r.name)}</b><div class="cv-blurb">${esc(r.blurb)}</div></div>`
@@ -143,7 +159,7 @@ export function craftRowsHtml(m: CraftViewModel): string {
 }
 
 /** The whole panel (the root element's innerHTML). */
-export function craftViewHtml(m: CraftViewModel | null, note = '', noteBad = false): string {
+export function craftViewHtml(m: CraftViewModel<string> | null, note = '', noteBad = false): string {
   const T = CRAFT_VIEW_TEXT;
   return `<div class="cv-panel">`
     + `<div class="cv-head"><b class="cv-title">${T.title}</b><span class="cv-live">${T.live}</span></div>`
@@ -179,7 +195,7 @@ export interface CraftViewHost {
   /** The list as it stands (null: closed — nothing to show). */
   model(): CraftViewModel | null;
   /** [Craft] clicked on a row. */
-  craft(kind: EquipmentKind): void;
+  craft(kind: BenchKind): void;
   close(): void;
 }
 
@@ -239,7 +255,7 @@ export class CraftView {
       if (t.closest('.cv-close')) { this.host.close(); return; }
       const b = t.closest('.cv-craft') as HTMLButtonElement | null;
       const kind = b && !b.disabled ? b.dataset.kind : undefined;
-      if (isEquipmentKind(kind)) this.host.craft(kind);
+      if (isBenchKind(kind)) this.host.craft(kind);
     });
     el.addEventListener('contextmenu', e => e.preventDefault());
   }
