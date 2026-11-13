@@ -198,6 +198,7 @@ import {installTrainEquipment, type TrainEquipmentSystem} from './world/trainEqu
 import {installCraftBench, type CraftBenchSystem} from './world/craftBench'; // task train-crafting (lane BENCH): the crafting bench + its recipe list
 import {installSentryTurret, type SentryTurretSystem} from './world/sentryTurret'; // task train-crafting (lane SENTRY): the sentry's ammo + roof turret
 import {installItemScanner, type ItemScannerSystem} from './world/itemScanner'; // task train-crafting (lane SCANNER): the scanner's scope
+import {installTrainArmor, type TrainArmorSystem, type TrainUpgradesApi} from './world/trainArmor'; // task refinement-batch (lane ARMOR): the permanent train armour + the upgrades seam
 import {installTrainOnboarding, type TrainOnboarding} from './world/trainOnboarding'; // task first-player-onboarding: the train's seven 3D guide markers
 import {OnboardingStore, browserOnboardingStorage} from './ui/onboardingStore'; // (the same task) the browser-global tutorial record
 import type {PropPlacement} from './gen/props';
@@ -448,6 +449,10 @@ export class Game {
   readonly craftBench: CraftBenchSystem;
   readonly sentryTurret: SentryTurretSystem;
   readonly itemScanner: ItemScannerSystem;
+  /** Task studio-refinement-batch-20261113-035659-01 (lane ARMOR): the train armour (kit, colliders, zombies-only contact damage) and the
+   *  train upgrades seam the bench's recipe calls (installed / block / install: the craft debits first, a false install refunds). */
+  readonly trainArmor: TrainArmorSystem;
+  readonly trainUpgrades: TrainUpgradesApi;
   /** Task first-player-onboarding: the browser-global tutorial record (never in a save) and the train's first-player markers. */
   readonly onboarding: OnboardingStore;
   readonly trainOnboarding: TrainOnboarding;
@@ -864,6 +869,13 @@ export class Game {
     hookName('sentryTurret');
     this.itemScanner = installItemScanner(this);
     hookName('itemScanner');
+    // task studio-refinement-batch-20261113-035659-01 (lane ARMOR): after the train and the ride (its section build reads the built car;
+    // the car's own build reads the fitted boxes) — the armour kit on the car's view, its parked / riding colliders, the zombies-only contact
+    // damage (a frame hook: after updateZombies), warm pool 'train-armor', the recipe row's preview 'upgrade:armor' through the icon pass
+    this.trainArmor = installTrainArmor(this, {refreshIcons: ids => refreshItemIcons(this.renderer, ids),
+      rendererReady: () => !!this.gpu && this.renderer.initialized === true, rendererFree: () => this.warmRun});
+    this.trainUpgrades = this.trainArmor;
+    hookName('trainArmor');
     // task studio-first-player-onboarding-20261111-234657-01: after the train / chipper (its section build reads the placed console desk) —
     // seven world-space markers at the parked train until the player first walks 10 m from it (world/trainOnboarding.ts); warm pool
     // 'train-onboarding'; nothing collides, casts or takes [E]

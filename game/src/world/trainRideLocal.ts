@@ -62,6 +62,16 @@ export function setRideCargoBoxes(model: RideLocalModel, owner: string, boxes: r
   model.props = new PropIndex(model.levels, [...model.boxes, ...[...c.boxes.values()].flat()]);
 }
 
+/**
+ * Task studio-refinement-batch-20261113-035659-01 (lane ARMOR): the fitted train armour (world/trainArmorLayout.ts piece boxes, train-local)
+ * as riding collision, owner 'train-armor' of the riding cargo seam above (null / empty: none). The plates stand outside the side walls /
+ * ends, so a body inside the car never meets them; they are solid wherever the model reaches (the colliders match the parked car's).
+ */
+export function setRideArmorBoxes(model: RideLocalModel, boxes: readonly {x0: number; x1: number; z0: number; z1: number}[] | null): void {
+  const H = model.spec.ceilingY + 3;
+  setRideCargoBoxes(model, 'train-armor', boxes?.length ? boxes.map(b => box(b.x0, b.x1, b.z0, b.z1, H)) : null);
+}
+
 const box = (x0: number, x1: number, z0: number, z1: number, h: number): PropPlacement => ({
   kind: 'column', x: (x0 + x1) / 2 + RIDE_FRAME.ox, z: (z0 + z1) / 2 + RIDE_FRAME.oz, y: -1, rot: 0, area: -1,
   hx: (x1 - x0) / 2, hz: (z1 - z0) / 2, h, blocksSight: false, variant: 0, level: 0,
