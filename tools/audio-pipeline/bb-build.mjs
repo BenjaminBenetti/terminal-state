@@ -76,19 +76,19 @@ const MIX = {
  * Per accepted take: its derivative window. The windows were placed on the takes' 5 ms envelopes (private QC):
  *  - cackle: takes 02 / 03 / 04 are ONE request with three seeds — one family: ten bursts in 1.8 s at about 5.6 per second that get
  *    quieter, pitched syllables at 520-780 Hz under bright breath noise; each window runs from the silence before the first burst to
- *    the silence after the tenth (a stray 40-70 ms blip 0.2 s later is left out). Take 05 is the other request: twelve bursts in 2 s
- *    whose pitch steps down (about 1.08 kHz -> 680 -> 430 Hz); it begins sounding at the take's first sample (a 20 ms fade-in) and ends
- *    in the silence before a separate steady sound.
- *  - giggle: four takes (two requests x two seeds), 4-6 voiced syllables each (f0 about 380-480 Hz) inside 0.7-1.0 s; take 03 keeps its
- *    two quieter trailing syllables, the others end in the silence after their main run.
+ *    the silence after the tenth (a stray 40-70 ms blip 0.2 s later is left out). Take 05 is the other request: about a dozen bursts
+ *    in 2 s whose pitch steps down (about 1.08 kHz -> 680 -> 430 Hz); it begins sounding at the take's first sample (a 20 ms fade-in)
+ *    and ends in the silence before a separate steady sound.
+ *  - giggle: four takes (two requests x two seeds), six bursts each (median f0 about 400-450 Hz) inside 0.9-1.0 s; take 03 keeps its
+ *    two quieter trailing ones (eight bursts, 1.25 s), the others end in the silence after their main run.
  *  - pounce: takes 03 / 07 / 08 are one request with three seeds — one continuous squeal (main partial 3.1-3.3 kHz) that holds a
  *    steady level, then steps up about 10 dB to its loudest part 0.7-0.9 s into the event while that partial drifts up 1.5-3
  *    semitones (to 3.6-3.7 kHz): the build is mostly one of level, the pitch rise is small. Each window starts INSIDE the squeal's
  *    steady early part (already sounding: audible from the first frame, a 12 ms fade-in) so that the loud part arrives about 0.5 s
  *    after the clip start — at the launch, 0.55 s after the wind-up tell begins. Takes 03 / 07 end with a second short squeal after
  *    a 0.1 s gap, take 08 holds its loud part for 0.5 s.
- *  - hurt: the first squawk of each take (0.2-0.24 s, a 15-25 ms attack, noisy with a partial near 1.15 kHz), cut from silence to
- *    silence; the takes' separate steady squeak 0.13-0.15 s later is left out.
+ *  - hurt: the first squawk of each take (0.22-0.26 s, within 6 dB of its loudest frame after 25-35 ms; a bright noisy burst with a
+ *    partial near 1.1-1.2 kHz), cut from silence to silence; the takes' separate steady squeak 0.13-0.15 s later is left out.
  *  - death: take 02 — five voiced laugh syllables whose pitch steps down by more than an octave (YIN readings from about 650-690 Hz
  *    to 155-200 Hz), ended with a 60 ms fade inside the last low syllable (a louder, higher blip follows it in the take and is left
  *    out). Take 03 — a pulse train at one pitch (600-670 Hz) whose bursts get about 10 dB quieter and lose their voicing over 1 s:
@@ -409,10 +409,10 @@ const provDoc = {schema: 'last-line-derivative/1', asset: 'audio-bb-20261113', t
     kitStatus: 'Conditional. Not commercially cleared by this kit.', review: 'NOT LISTENED TO on the worker (no audio output): structural analysis only (5 ms / 20 ms / 50 ms envelopes, laugh bursts — count, rate, dips —, time to the loud part, spectrogram images, spectral centroid / bands / flatness, strongest partial, YIN voicing and pitch, peak, DC, slice-edge levels, BS.1770 loudness). `metrics` / `gate` describe signal structure only, never how a clip sounds: whether a burst train reads as a laugh, and as an eerie one, needs an ear. The user taste-tests in game.',
     gameReady: false, approved: false, notice: 'game/public/assets/audio/NOTICE.md'},
   design: {
-    bbCackle: 'Four takes of two requests. Takes 01-03 are one request with three seeds — one family: ten bursts in 1.8 s at about 5.6 per second that get quieter, pitched syllables at 520-780 Hz under bright breath noise, almost the same rhythm in all three. Take 04 is the other request: twelve bursts in 2 s whose pitch steps down.',
-    bbGiggle: 'Four takes (two requests x two seeds): 4-6 voiced syllables each (median f0 about 380-480 Hz) inside 0.7-1.0 s; the third keeps two quieter trailing syllables.',
+    bbCackle: 'Four takes of two requests. Takes 01-03 are one request with three seeds — one family: ten bursts in 1.8 s at about 5.6 per second that get quieter, pitched syllables at 520-780 Hz under bright breath noise, almost the same rhythm in all three. Take 04 is the other request: about a dozen bursts in 2 s whose pitch steps down.',
+    bbGiggle: 'Four takes (two requests x two seeds): six bursts each (median f0 about 400-450 Hz) inside 0.9-1.0 s; the third keeps two quieter trailing ones (eight bursts, 1.25 s). Takes 01 / 03 are mostly voiced (two thirds of their frames), takes 02 / 04 breathier (one third).',
     bbPounce: `Three takes of one request: one continuous squeal (main partial 3.1-3.3 kHz). Each clip starts inside the squeal's steady early part (already sounding at the first frame) and steps up about 10 dB to its loudest part about 0.5 s later — the cue is started with the ${POUNCE_WINDUP_S} s wind-up tell, so the loud part meets the launch. The build is mostly one of level: the main partial drifts up only 1.5-3 semitones into the loud part (gate.riseSt). Two end with a second short squeal after a 0.1 s gap; the third holds its loud part.`,
-    bbHurt: 'Three takes of two requests: the first squawk of each take (0.2-0.26 s, a 15-25 ms attack, noisy with a partial near 1.15 kHz). They are shorter than the 0.3-0.6 s first asked for: the takes hold a second, separate steady squeak 0.13-0.15 s later, which is left out.',
+    bbHurt: 'Three takes of two requests: the first squawk of each take (0.22-0.26 s, within 6 dB of its loudest frame after 25-35 ms; a bright noisy burst, centroid about 4 kHz, with a partial near 1.1-1.2 kHz). They are shorter than the 0.3-0.6 s first asked for: the takes hold a second, separate steady squeak 0.13-0.15 s later, which is left out.',
     bbDeath: 'Two takes of two requests: voiced laugh syllables whose pitch steps down by more than an octave (ended by a fade inside the last low syllable), and a pulse train at one pitch whose bursts get about 10 dB quieter and lose their voicing (it winds down by level, not by pitch). A first wording returned only unvoiced ratchet clicks and was rejected.',
     tone: 'Asked for as a creepy doll / haunted-nursery laugh. Hurt and death were asked for, and structurally read, as toy- and creature-like sounds (a squawk, a laugh running down), not as a crying or suffering child.'},
   loudness: {method: 'ITU-R BS.1770-4 K-weighting, 400 ms blocks / 75 % overlap (one-shots zero-padded to one block), maximum momentary loudness, mono; sample peak (no true-peak oversampling)'},

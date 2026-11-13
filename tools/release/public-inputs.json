@@ -1955,8 +1955,8 @@
     },
     {
       "path": "assets/derivatives/audio-bb.json",
-      "bytes": 76599,
-      "sha256": "05c649a8b37ef5199358f315b52073cda988f42c63ffe137d66bef77e892df86"
+      "bytes": 76785,
+      "sha256": "1d8a635b719550fa9210b8bcb6cdc7ac763fcf56a35c35c21752c2f5e10b4c61"
     },
     {
       "path": "assets/derivatives/audio-chipper.json",
