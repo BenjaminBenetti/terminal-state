@@ -109,6 +109,30 @@ chest and three devices that plug into the train. Material supply is unchanged; 
 - Things in the parked car and a market stall's displayed wares are never shown.
 - No battery, fuel or other upkeep. A sweep makes no noise.
 
+## Train armour
+
+- A **permanent, one-time upgrade** of the car (its recipe is at the bench). Once fitted it stays for the rest of the run. It has
+  no durability, wear or upkeep, and it cannot be fitted twice.
+- **What it is.** Rusted welded plates with downward blades and saw discs along both sides of the lower body (8 skirt segments),
+  and a bladed plough across each end, below the head and tail lamps. The pieces are Meshy models (image-to-3D from Codex design
+  images) that keep their own texture maps (`train-armor-side.glb`, `train-armor-end.glb`), shown the moment the upgrade is fitted.
+- **What it keeps clear.** Every door opening and both leaves' full sliding travel into the wall pockets, every window, every lamp,
+  the platform-side boarding path over the door bridges and the couplers (inside the ploughs). Everything stays inside the 0.507 m
+  gap to the platform edge, inside the ride tunnel's box (clear of the open portal gate leaves), under the tunnel signals and above
+  the third rail. The kit is a fixed part of the car: acid never melts it.
+- **Solid.** The plates block the player, enemies and bullets while the car is parked (its own collision boxes, removed with the
+  car), and are part of the moving car's collision while riding.
+- **Contact damage, zombies only.** While the car stands parked, a living enemy pressed against the blades takes **20 damage per
+  second**: a regular zombie (100 health) dies after **5 seconds** of continuous contact, a coated one (165) after about 8 s, a
+  special by its own health. "Against the blades" means within 0.4 m of the outer face (a zombie at the platform edge beside the
+  plates is 0.34 m away), its body overlapping the plates' height, and never within 0.5 m of a door opening on that side, so a
+  zombie in an open doorway or on a door bridge is never cut. The hit makes the zombie aware, like any hit, and a kill counts as a
+  kill (ragdoll thrown off the blades). The player, market people, corpses, ragdolls and zombies on a ladder are never hurt, and
+  nothing is hurt while the train is moving. Feedback is the usual blood puff now and then; there is no new sound.
+- **The upgrades seam** (`Game.trainUpgrades`): `installed(id)`, `block(id)` (already fitted / no parked car here / the train is
+  moving) and `install(id)`. The craft takes the 10 scrap metal first and then calls `install`; if that returns false the craft
+  refunds the scrap.
+
 ## Travel and saves
 
 Equipment follows the game's common cargo rule: what stands wholly inside the parked car belongs to the train; everything else
@@ -128,6 +152,10 @@ belongs to the station it was left in. One mechanism covers every kind; the code
   nothing is ever dropped from a save.
 - A chest in your hands when the train leaves or the game saves is recorded as the train's.
 - A damaged equipment record loads as no equipment. It never produces a free device, item or round.
+- **Train armour** is part of the train record (`upgrades: {v: 1, fitted: ['armor']}`, written only while fitted). New game: none.
+  Travel keeps it. Retry, Load, Continue and export–import restore it with the rest of the train record: a Retry back to before the
+  craft takes it off again together with the refunded scrap, so it is never free and never lost. An old save has no key and loads
+  none; a damaged value is rejected by the save check and never fits the armour.
 - **Saves from before the sentry had slots** recorded a round count (0–300) instead of stacks. Such a save stays valid. The first
   time the unit stands in a played station its count becomes real 5.56 stacks in its slots: the same number of rounds, each stack
   with a new item number. Until then the count is written back unchanged, so a unit left in a station you never revisit keeps its
@@ -169,13 +197,16 @@ belongs to the station it was left in. One mechanism covers every kind; the code
 | Store view of a chest or a sentry | `world/equipmentChestStore.ts`, `ui/lockboxView.ts` |
 | Sentry | `craft/sentry.ts`, `world/sentryTurret.ts`, `world/sentryTurretView.ts` |
 | Scanner | `craft/scanner.ts`, `world/itemScanner.ts`, `ui/scannerView.ts` |
+| Train armour (record, kit, colliders, contact damage) | `run/trainUpgrades.ts`, `world/trainArmor.ts`, `world/trainArmorLayout.ts` |
 | Save validation | `save/validate.ts` |
 
 QA hooks (`?qa=1`): `__LL.bench()` (each row's material chips as `needs`, the 3D previews' state as `previews`), `benchGo()`,
 `benchOpen()`, `benchCraft(kind)`, `equipment()`, `equipmentCraft(kind)`, `equipmentToPlug(uid, i)`, `sentry()`, `scanner()`,
 `scannerSweep()`. The store view of any unit with slots (a chest or a sentry, by unit number): `chestStore()`, `chestTap(uid)`,
-`chestQuick(ref)`, `chestMove(from, to, count)`, `chestClose()`.
+`chestQuick(ref)`, `chestMove(from, to, count)`, `chestClose()`. The train armour: `trainArmor()`, and `trainArmorFit()` (fits it
+without a craft, QA only).
 
 Tests: `tests/train-crafting-session.test.ts` runs the whole chain with every system real. Each part has its own files:
 `craft-*`, `train-equipment-*`, `equipment-chest-store`, `sentry-*`, `scanner-*`, `route-radar`, `train-crafting-contract`,
-`train-roof-profile`; the hold-to-drag rule and the turn: `hold-gesture`, `drag-hold-*`, `equipment-flip`.
+`train-roof-profile`; the hold-to-drag rule and the turn: `hold-gesture`, `drag-hold-*`, `equipment-flip`; the train armour:
+`train-armor` (seam, contact damage, colliders, layout), `train-armor-save`, `train-armor-clearance` (every level's placement).

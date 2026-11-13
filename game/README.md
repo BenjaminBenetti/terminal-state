@@ -70,6 +70,12 @@ train's three wall sockets, which happens by itself when one is parked beside a 
 cart, or to carry the chest (a tap never moves one); **R** turns a dragged device round to face you. Everything travels with the train
 and is saved with its contents, rounds and socket.
 
+Train armour (task studio-refinement-batch-20261113-035659-01, `docs/train-crafting.md` "Train armour"): a permanent one-time upgrade
+(10 scrap metal at the bench) that welds bladed plates and saw discs along both sides of the car and a bladed plough across each end.
+No durability; it stays for the run, is saved with the train and never covers a door, window or lamp. While the train is parked, a
+zombie pressed against the blades takes 20 damage a second (a regular zombie dies after 5 seconds); the player, market people and
+corpses are never hurt, and nothing is hurt while the train moves. The plates are solid to the player, enemies and bullets.
+
 Light survival (iteration 12, `player/flashlight.ts`, `weapons/throwables.ts`): the flashlight runs on a **battery**
 (HUD meter bottom right, above the weapon panel). It starts at 80 % and drains only while the light is on: a full battery
 gives 7 min of continuous light. Above 25 % the beam is steady; below 25 % it flickers — soft irregular dips whose share of
