@@ -675,23 +675,41 @@ they sit outside the two audits; their classification is recorded here.
     lastshift (1.78 m, runtime scale 1). 0.30 × 0.31 × 0.34 m, grounded (8 contact clusters, base y 0.0002 m), top 0.31 m: a small
     terminal. The shelf top is 0.92 m over the car floor. The monitor stands in front of the solid pier between the two -Z cab
     windows; the keyboard (top 0.957 m) and the shelf lip stay below the 0.98 m window sill.
-- **Train armour** (task studio-refinement-batch-20261113-035659, `docs/train-crafting.md` "Train armour"; models
-  `assets/models/train-armor-{side,end}.glb`, cooked by `tools/asset-pipeline/props/build-refinement-batch.mjs`; layout
-  `world/trainArmorLayout.ts`, runtime `world/trainArmor.ts`): a permanent one-time upgrade fixed to the car's outside.
-  - Not storage: welded plates, blades, saw discs and plough fins. Nothing to open, no loot table.
+- **Train armour** (first kit: task studio-refinement-batch-20261113-035659; the makeover kit that replaced its look: task
+  studio-train-armor-makeover-20261113-183146-01; `docs/train-crafting.md` "Train armour"; models
+  `assets/models/train-armor-{side,end}.glb`, cooked by `tools/asset-pipeline/props/build-refinement-batch.mjs`, and
+  `assets/models/train-armor-{plate,post,wing,rail}.glb`, cooked by `tools/asset-pipeline/props/build-train-armor-makeover.mjs`;
+  layout `world/trainArmorLayout.ts`, runtime `world/trainArmor.ts`): a permanent one-time upgrade fixed to the car's outside.
+  - Not storage: welded plates, blades, saw discs, posts, rails and plough wings. Nothing to open, no loot table.
   - Physics: static, `anchored`: part of the car body (bolted plating), never a loose prop, cargo or crafted equipment, so acid,
     shots and bumps don't move or melt it. Solid boxes for player, enemy and hitscan while parked (`world/playerTrain.ts
-    armorColliders`) and in the riding model (`world/trainRideLocal.ts setRideArmorBoxes`). It never covers a door opening, a
-    leaf pocket, a window, a lamp or the boarding path over the door bridges.
-  - No baked clutter: every part is a permanent welded part of the plate.
-  - Scale (rule 5): `scale-check.mjs --prop .../train-armor-side.glb --scale 0.8375,0.8,0.8 --lift 1.395 --prop
-    .../train-armor-side.glb --scale 0.6575,0.8,0.8 --lift 0.11 --prop .../train-armor-end.glb --scale 1.1 --lift 0.515`, viewed
-    beside zombie lastshift (1.78 m, runtime scale 1), plus a CPU render of the whole kit on the cooked car shell. A side skirt
-    segment is 0.40 m tall and 0.22 m deep (1.58–2.01 m long: each free span is filled exactly, X scale 0.66–0.84 against Y / Z
-    0.8). A plough is 2.86 × 0.75 × 0.61 m (W × H × D, uniform 1.1). Mounted, not grounded: the skirts' back faces sit on the
-    side skin 1.10–1.50 m above the rail top (shin to knee of a zombie on the platform, chest to head of one in the track bed),
-    the ploughs' back plates 0.06 m ahead of the end faces, 0.22–0.97 m above the rail top (thigh to chest from the bed).
-  - Tests: `tests/train-armor.test.ts`, `tests/train-armor-save.test.ts`, `tests/train-armor-clearance.test.ts`.
+    armorColliders`) and in the riding model (`world/trainRideLocal.ts setRideArmorBoxes`). The boxes follow the assembled kit:
+    posts and rails (over head height and over the doors) stop shots only; the skirt under a door stops a body only up to 0.5 m
+    over the rails, under every platform a car can stand at, so boarding is unchanged; a slanted plough wing is a staircase of
+    boxes at most 7 cm proud. It never covers a door opening, a window, a lamp, the fuel cap or the roof turret's lines of fire.
+  - No baked clutter: every part is a permanent welded part of its plate.
+  - Scale (rule 5): `scale-check.mjs --prop <model> --scale sx,sy,sz --lift y` for every piece type at its runtime transform
+    (two sheets: skirt guard, skirt strip, belt plate, pillar; roof rail, corner tower, plough wing, prow), viewed beside zombie
+    lastshift (1.78 m, runtime scale 1), plus CPU renders of the whole kit on the cooked car shell with that zombie on the
+    platform and in the track bed. Mounted, not grounded (the lowest edge is 0.22 m over the rail top, 0.52 m over the bed).
+    W × H × D and height over the rail top:
+
+    | Piece (model) | W × H × D (m) | Over the rail top (m) | Beside the zombie |
+    |---|---|---|---|
+    | Skirt guard (`end`) | 3.35 × 0.68 × 0.25 | 0.24–0.92 | knee to chest from the bed; below the car floor from the platform |
+    | Skirt strip (`side`) | 2.71 × 0.68 × 0.225 | 0.24–0.92 | the same |
+    | Belt plate (`plate`) | 0.96–1.42 × 0.96 × 0.19–0.215 | 0.87–1.86 | ankle to hip from the platform, chest to over the head from the bed |
+    | Pillar (`post`) | 0.43–0.48 × 1.24 × 0.165 | 1.88–3.12 | from the window sill to the roof line, over head height |
+    | Roof rail (`rail`) | 1.59 × 0.16 × 0.13 | 2.99–3.15 | over the 2.0 m door heads |
+    | Corner tower (`post`) | 0.50 × 1.64 × 0.25 | 0.22–1.86 | a little over the zombie's own height from the bed |
+    | Plough wing (`wing`) | 1.29 × 1.00 × 0.25 | 0.22–1.22 | knee to shoulder from the bed |
+    | Prow (`post`) | 0.50 × 1.40 × 0.26 | 0.22–1.62 | head height from the bed |
+    | Brow (`rail`) | 1.40 × 0.21 × 0.20 | 3.12–3.33 | on the roof edge between the marker lamps |
+
+    Each piece is fitted to its span, so its scale is not uniform: every face ratio stays within 0.75–1.36 of the model's own
+    proportions (pinned by `tests/train-armor.test.ts`); depth is free (a plate's thickness).
+  - Tests: `tests/train-armor.test.ts`, `tests/train-armor-makeover.test.ts`, `tests/train-armor-save.test.ts`,
+    `tests/train-armor-clearance.test.ts`.
 - **Limits:** at most 24 crafted units in the car and 48 left in one station (`craft/equipment.ts EQUIPMENT_LIMITS`); a craft or a
   departure beyond them is refused. Enemies walk through units on the floor, as they do through fuel carts.
 - **Tests:** `tests/train-equipment-*.test.ts`, `tests/equipment-chest-store.test.ts`, `tests/sentry-ammo.test.ts`,

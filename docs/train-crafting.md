@@ -181,20 +181,49 @@ Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
 
 - A **permanent, one-time upgrade** of the car (its recipe is at the bench). Once fitted it stays for the rest of the run. It has
   no durability, wear or upkeep, and it cannot be fitted twice.
-- **What it is.** Rusted welded plates with downward blades and saw discs along both sides of the lower body (8 skirt segments),
-  and a bladed plough across each end, below the head and tail lamps. The pieces are Meshy models (image-to-3D from Codex design
-  images) that keep their own texture maps (`train-armor-side.glb`, `train-armor-end.glb`), shown the moment the upgrade is fitted.
-- **What it keeps clear.** Every door opening and both leaves' full sliding travel into the wall pockets, every window, every lamp,
-  the platform-side boarding path over the door bridges and the couplers (inside the ploughs). Everything stays inside the 0.507 m
-  gap to the platform edge, inside the ride tunnel's box (clear of the open portal gate leaves), under the tunnel signals and above
-  the third rail. The kit is a fixed part of the car: acid never melts it.
-- **Solid.** The plates block the player, enemies and bullets while the car is parked (its own collision boxes, removed with the
-  car), and are part of the moving car's collision while riding.
+- **What it is** (the makeover kit, task studio-train-armor-makeover-20261113-183146-01: the recipe, the record and the contact
+  rule are the first kit's; only the look and the boxes that follow it changed). 67 rusted, welded, bladed pieces in five layers
+  that cover the car from the rails to the roof line (`world/trainArmorLayout.ts`):
+  - **Skirt**: one unbroken bladed skirt along each side below the floor, from 0.24 m over the rails to 0.92 m. It runs under the
+    doors too (the floor is at 0.98 m). Over each bogie (the 3.35 m at either end) it is the heavy toothed guard.
+  - **Belt plates**: eight tall plates per side from the floor line to the window sills (0.87–1.86 m), in the free spans between
+    the doors. Neighbours lap 3 cm and stand alternately 19 and 21.5 cm proud, one 3 cm lower than the next, so the belt reads as
+    stacked plate, not one strip. The platform side leaves a 0.6 m bay open around the fuel cap.
+  - **Buttress posts**: a bladed post on every solid pier of the window band (six on the platform side, five on the far side),
+    1.88–3.12 m, never over glass.
+  - **Roof rail**: a spiked rail along the roof line of each side (2.99–3.15 m), over the door heads and windows.
+  - **Ends**: a V plough at each end, two wings (1.0 m tall) from 1.64 m corner towers to a 1.4 m prow that stands 0.45 m ahead of
+    the body, with the couplers inside it; and a brow rail on the roof edge between the two marker lamps.
+
+  The first kit's two models are reused (the side strip is the skirt, the end plough is the guard) with four more Meshy models
+  (image-to-3D from Codex design images, their own texture maps kept): `train-armor-{plate,post,wing,rail}.glb`, cooked by
+  `tools/asset-pipeline/props/build-train-armor-makeover.mjs`. Nine instanced draws; a mirrored piece uses a mirrored copy of
+  its geometry. The kit shows the moment the upgrade is fitted, and on every save that already has it: the save records only
+  that the armour is fitted, so nothing is crafted again and nothing else in the record changes.
+- **What it keeps clear.** Every door opening and both leaves' full sliding travel, every window, every lamp (head, tail and
+  marker), the fuel cap and its aim, the roof hatch turret's whole field of fire (the rail's top is under its lowest line), the
+  boarding path and the couplers. It stays as slim as the first kit along the body: the plates reach 1.69 m from the centre line
+  on the far side and 1.655 m on the platform side (first kit: 1.695 / 1.66), the four corner towers 1.683 m. That is inside the
+  0.5 m gap to the platform edge (2.0 m), inside the ride tunnel's box (clear of the open portal gate leaves), inboard of the
+  tunnel signals and cable tray, above the third rail. The kit is a fixed part of the car: acid never melts it.
+- **Head and tail beams.** The ploughs stand ahead of the lamps, the prow on the beams' own axis, and the car's cast lights throw
+  no shadow: left at the lamps they would light the ploughs point-blank from behind (white-hot fins seen from the cab and the
+  platform; found in the browser spot check). While the armour is fitted each beam therefore starts 5 cm clear of its plough,
+  aimed at the same point on the track with the same strength (`PlayerTrainRuntime.placeLightsBy`); the lamp lenses stay where
+  they are, and without the armour the beams start at the lamps as before.
+- **Solid.** The pieces block the player, enemies and bullets while the car is parked (its own collision boxes, removed with the
+  car), and are part of the moving car's collision while riding. Three details (`ArmorBox`):
+  - the posts and rails are above everyone's head and over the doors, so they stop **shots only**, never a body;
+  - the skirt **under a door** stops shots at its real height but a body only up to 0.5 m: station platforms lie 0.125 m under
+    the car floor (and may lie up to 0.45 m under it), so anything that boards from a platform passes over it exactly as before,
+    including a wide enemy or a cart whose side overhangs the bridge;
+  - the slanted plough wings are a staircase of boxes that stand at most 7 cm proud of the plate.
 - **Contact damage, zombies only.** While the car stands parked, a living enemy pressed against the blades takes **20 damage per
   second**: a regular zombie (100 health) dies after **5 seconds** of continuous contact, a coated one (165) after about 8 s, a
   special by its own health. "Against the blades" means within 0.4 m of the outer face (a zombie at the platform edge beside the
-  plates is 0.34 m away), its body overlapping the plates' height, and never within 0.5 m of a door opening on that side, so a
-  zombie in an open doorway or on a door bridge is never cut. The hit makes the zombie aware, like any hit, and a kill counts as a
+  skirt and plates is 0.35–0.38 m away), its body overlapping the piece's height, and never within 0.5 m of a door opening on
+  that side, so a zombie in an open doorway or on a door bridge is never cut. The blades are the skirt, the belt plates and the
+  ploughs; the posts and rails overhead cut nobody. The hit makes the zombie aware, like any hit, and a kill counts as a
   kill (ragdoll thrown off the blades). The player, market people, corpses, ragdolls and zombies on a ladder are never hurt, and
   nothing is hurt while the train is moving. Feedback is the usual blood puff now and then; there is no new sound.
 - **The upgrades seam** (`Game.trainUpgrades`): `installed(id)`, `block(id)` (already fitted / no parked car here / the train is
@@ -265,7 +294,7 @@ belongs to the station it was left in. One mechanism covers every kind; the code
 | Store view of a chest or a sentry | `world/equipmentChestStore.ts`, `ui/lockboxView.ts` |
 | Sentry | `craft/sentry.ts`, `world/sentryTurret.ts`, `world/sentryTurretView.ts` |
 | Scanner | `craft/scanner.ts`, `world/itemScanner.ts`, `ui/scannerView.ts` |
-| Train armour (record, kit, colliders, contact damage) | `run/trainUpgrades.ts`, `world/trainArmor.ts`, `world/trainArmorLayout.ts` |
+| Train armour (record, kit, colliders, contact damage) | `run/trainUpgrades.ts`, `world/trainArmor.ts`, `world/trainArmorLayout.ts`, `assets/trainArmor.generated.ts`, `assets/trainArmorKit.generated.ts` |
 | Save validation | `save/validate.ts` |
 | Made recipes: grenades, train armor | `craft/recipes.ts MADE_RECIPES`, `craft/crafting.ts craftMade`, `items/grenades.ts`, `weapons/grenades.ts`, `world/grenadeModels.ts`, `world/acidMelt.ts`, `ai/scentLure.ts`, `world/trainArmor.ts` |
 
@@ -278,5 +307,6 @@ without a craft, QA only).
 Tests: `tests/train-crafting-session.test.ts` runs the whole chain with every system real. Each part has its own files:
 `craft-*`, `train-equipment-*`, `equipment-chest-store`, `sentry-*`, `scanner-*`, `route-radar`, `train-crafting-contract`,
 `train-roof-profile`; the hold-to-drag rule and the turn: `hold-gesture`, `drag-hold-*`, `equipment-flip`; the made recipes and the
-grenades: `refinement-grenades`; the train armour: `train-armor` (seam, contact damage, colliders, layout), `train-armor-save`,
-`train-armor-clearance` (every level's placement).
+grenades: `refinement-grenades`; the train armour: `train-armor` (seam, contact damage, colliders, layout), `train-armor-makeover`
+(the kit's composition and cover, the cooked models, door walks and a cart through the doors, the fuel cap, the turret's field of
+fire, an existing armoured save), `train-armor-save`, `train-armor-clearance` (every level's placement).

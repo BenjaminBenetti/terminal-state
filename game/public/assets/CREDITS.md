@@ -764,3 +764,14 @@ reviewed by ear on the build worker. Raw takes are kept outside Git.
 - `assets/audio/bb-death-01.mp3` — bbDeath (Sound Lab job 20261113T002726-147471791)
 - `assets/audio/bb-death-02.mp3` — bbDeath (Sound Lab job 20261113T002731-1936675290)
 <!-- END bb-audio-20261113 -->
+
+<!-- BEGIN train-armor-makeover-20261113 (build-train-armor-makeover.mjs) -->
+## Train armour makeover: body plates, buttress posts, plough wings and roof-line rails
+
+Generated for this project from one Codex INITIAL design image each (the owned Codex CLI's built-in image_gen tool) turned into models with Meshy T2.5 image-to-3D (smart topology, 2K PBR) through the Meshy MCP; every model keeps Meshy's own PBR maps (re-encoded only). Task studio-train-armor-makeover-20261113-183146-01 under the user's fresh 75-credit grant (60 credits billed, 4 generations, each a first attempt). AI-generated assets: unapproved prototypes, no licence or commercial clearance implied. The raw masters, conditioning images and job ledger are kept outside Git. Runtime derivatives by `tools/asset-pipeline/props/build-train-armor-makeover.mjs` (provenance: `assets/derivatives/train-armor-makeover-20261113.json`). The kit's skirt strip and fin grille are the refinement batch's `assets/models/train-armor-side.glb` and `assets/models/train-armor-end.glb`, reused as they are.
+
+- `assets/models/train-armor-plate.glb` — the train armour's body plate (a layered, bolted steel slab with a saw disc and a row of fins; overlapping along both sides of the lower body) (Meshy task 01a1d655-52bc-7151-b956-07f65aa3f646).
+- `assets/models/train-armor-post.glb` — the train armour's buttress post (an I-beam girder on a bolted plate with three hooked fins; the window pillars, the plough's corner towers and its prow) (Meshy task 01a1d655-6dec-744e-8be9-2517efb37ea3).
+- `assets/models/train-armor-wing.glb` — the train armour's plough wing (a mouldboard panel with six swept fins, a saw disc and a toothed wear bar; two per end form the wedge plough) (Meshy task 01a1d655-873d-70b0-b1af-e16e8a2c5802).
+- `assets/models/train-armor-rail.glb` — the train armour's roof-line rail (a bolted box beam with a row of six raked fins; along both sides under the roof and across each end over the windscreen) (Meshy task 01a1d666-3848-7624-92cd-106b831a4ffc).
+<!-- END train-armor-makeover-20261113 -->

@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 82678,
-      "sha256": "f2edde039567ba0a0eab17d91d7ffe8d3fc58bf1ace1927e3a3f7e67c91370aa"
+      "bytes": 84758,
+      "sha256": "a81979e98016dc59666ed8c91e83a6933ac74dc743b1c05bdee2e158ad5acd38"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -2929,6 +2929,11 @@
       "sha256": "50abde035753fad48aab8779a12817435178c1a5d720eecf4105c22a4d3dbdf9"
     },
     {
+      "path": "assets/derivatives/train-armor-makeover-20261113.json",
+      "bytes": 14771,
+      "sha256": "46b06984c68fcf027464a369a9e4abdf9eb44ba80d2a5d139f1fa84243c3c7b5"
+    },
+    {
       "path": "assets/derivatives/train-chipper.json",
       "bytes": 6155,
       "sha256": "b6377b944c7d93605d33a1e42911d3b0ee4b990f01b96de0d05fa7d76eeb74ab"
@@ -5364,9 +5369,29 @@
       "sha256": "8e6c694a4d93247bc461ab29829248b4f1bb7133c48c0f460756054c7f7263cc"
     },
     {
+      "path": "assets/models/train-armor-plate.glb",
+      "bytes": 749968,
+      "sha256": "1016f31d21f14b4a6b1111cd2afc137f1f96611799e47ab823798e2ee23fff7c"
+    },
+    {
+      "path": "assets/models/train-armor-post.glb",
+      "bytes": 606812,
+      "sha256": "a8c7326b487a98d057362174b946b842e81e71e04a74034f8433c7e6c6852ea5"
+    },
+    {
+      "path": "assets/models/train-armor-rail.glb",
+      "bytes": 702896,
+      "sha256": "5b82418b080dbf4e5070cb4db26bd5e0fc250b1fa560ebe0a30eb3c4376a3745"
+    },
+    {
       "path": "assets/models/train-armor-side.glb",
       "bytes": 1206340,
       "sha256": "9ba9ca1981c6e64740c66c9254541522735dd15d5bf5185c2682318e578d4309"
+    },
+    {
+      "path": "assets/models/train-armor-wing.glb",
+      "bytes": 864076,
+      "sha256": "6f336688a4269778d9f92b6fc5f6b258fa1eead7bc82e1d387a3480724c79bea"
     },
     {
       "path": "assets/models/train-bench.glb",
