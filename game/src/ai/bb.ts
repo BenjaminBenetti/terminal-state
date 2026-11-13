@@ -35,7 +35,7 @@ export function bbVariantOf(spawn: {variant?: string}): BbVariantId {
 
 /**
  * The asset contract numbers the gameplay reads (model metres at scale 1) = the `enemyBb` extras every variant GLB carries
- * (tools/asset-pipeline/enemy/build-bb.mjs; tests/bb-contract.test.ts checks the agreement). The GLBs carry no clips: every pose is
+ * (tools/asset-pipeline/enemy/build-bb.mjs; tests/bb-asset.test.ts checks the files, tests/bb-contract.test.ts the agreement). The GLBs carry no clips: every pose is
  * a runtime clip on the shared 18-joint rig (ai/bbClips.ts).
  */
 export const BB_ASSET = {
@@ -544,7 +544,7 @@ export class BbBrain extends ZombieBrain {
             return this.still(out, face);
           }
           if (d3 <= this.leapAt && this.aimT <= 0) {
-            if (this.aim(w, cw, false)) {
+            if (this.aim(cw, false)) {
               this.beginWindup();
               return this.still(out, face);
             }
@@ -700,14 +700,14 @@ export class BbBrain extends ZombieBrain {
       this.cdT = Math.max(this.cdT, 1);
       return;
     }
-    if (a.t >= BB_POUNCE.windupS) this.launch(w, cw);
+    if (a.t >= BB_POUNCE.windupS) this.launch(cw);
   }
 
   /**
    * The launch velocity of a leap at the player's chest from where the body is, when its arc is clear of solid geometry (else null).
    * `lead`: aim ahead of a moving player. A player beyond its reach is leapt at as far as it can leap: it falls short.
    */
-  private aim(w: BrainWorld, cw: CrawlWorld, lead: boolean): {vx: number; vy: number; vz: number; T: number} | null {
+  private aim(cw: CrawlWorld, lead: boolean): {vx: number; vy: number; vz: number; T: number} | null {
     const P = BB_POUNCE, from = this.centre();
     // where it last SAW the player (the launch may come a moment after the last sighting: it never aims at a player it cannot see)
     let tx = this.known.x, tz = this.known.z;
@@ -746,8 +746,8 @@ export class BbBrain extends ZombieBrain {
     return false;
   }
 
-  private launch(w: BrainWorld, cw: CrawlWorld): void {
-    const v = this.aim(w, cw, true) ?? this.aim(w, cw, false);
+  private launch(cw: CrawlWorld): void {
+    const v = this.aim(cw, true) ?? this.aim(cw, false);
     this.act = NONE;
     if (!v) { this.cdT = Math.max(this.cdT, 1); return; }
     const f = this.flight;
@@ -1035,7 +1035,7 @@ export class BbBrain extends ZombieBrain {
     if (a.k !== 'none') this.act = NONE;
     // the leap from a perch
     if (kind !== 'floor' && this.seenNow && this.cdT <= 0 && this.aimT <= 0 && w.playerAlive && this.chestDist(w) <= BB_POUNCE.dropMaxM) {
-      if (this.aim(w, cw, false)) {
+      if (this.aim(cw, false)) {
         this.beginWindup();
         this.shadow(cw, cx, cy, cz);
         return out;
