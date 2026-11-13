@@ -394,7 +394,7 @@ export class Hud {
         bar.innerHTML = `<div class="slot maskslot" data-bar="gear" data-index="${MASK}" title="Q: put the gas mask on / take it off"></div>`
           + inv.hotbar.map((_, i) => `<div class="slot" data-bar="hotbar" data-index="${i}"></div>`).join('')
           + `<div class="slot bagslot" data-bar="gear" data-index="${BACK}" title="6: take your backpack off into your hands · click sets it down"></div>`
-          + `<div class="slot throwslot" data-bar="throw" data-index="0" title="G: hold to ready the grenade slot's throwable (flare), release to throw"></div>`
+          + `<div class="slot throwslot" data-bar="throw" data-index="0" title="G: hold to ready the grenade slot's throwable (a flare or a crafted grenade), release to throw"></div>`
           + `<div class="slot meleeslot" data-bar="melee" data-index="0" title="~: draw the melee slot's weapon · 1-5 / wheel go back to the quick slots"></div>`;
       }
       const meleeHeld = inv.meleeSelected && !this.bagSelected;

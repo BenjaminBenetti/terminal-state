@@ -1,7 +1,8 @@
 # Train crafting (first pass)
 
 The player's train carries a small crafting bench. It turns the two salvage materials into four physical things: an extra storage
-chest and three devices that plug into the train. Material supply is unchanged; nothing here adds loot.
+chest and three devices that plug into the train. Material supply is unchanged; nothing here adds loot. Since the refinement batch
+it also makes acid and lure grenades from bio mater and fits the permanent train armor (see "Made recipes" below).
 
 ## The bench and the recipes
 
@@ -32,6 +33,46 @@ chest and three devices that plug into the train. Material supply is unchanged; 
   short material is its red chip; when the car cannot take the unit, a red line under the row says why.
 - The new unit is a real object with its own number (`eq-1`, `eq-2`, …) that it keeps for good. It starts empty, unplugged and with
   no ammunition.
+
+### Made recipes: grenades and the train armor
+
+Since the refinement batch (task studio-refinement-batch-20261113-035659-01) the list goes on after the four units with three
+recipes whose output is not a unit (`craft/recipes.ts MADE_RECIPES`; `BENCH_RECIPES` is the whole list):
+
+| Recipe | Scrap metal | Electrical parts | Bio mater | What it makes |
+|---|---|---|---|---|
+| Acid Scrapper grenade ×5 | 0 | 0 | 3 | Five throwables for the grenade slot (below). |
+| Zombie Lure grenade ×3 | 0 | 0 | 3 | Three throwables for the grenade slot (below). |
+| Train armor | 10 | 0 | 0 | Plating and blades all round the train, fitted once and for good (no durability). |
+
+- Bio mater is a recipe material now; the four units cost none of it.
+- **Grenades go to you first**: the batch is added to your inventory (the grenade slot first, then the usual order) and what does not
+  fit goes into the Lockbox. The bench counts the room for the WHOLE batch before it takes anything; without it the row says "No
+  room for … on you or in the Lockbox".
+- **The armor** is installed by the train's upgrade system (`world/trainArmor.ts`); once fitted its row is refused with that
+  system's reason.
+- Same transaction as a unit: the debit and the output happen in one step; if the last step fails (or throws) everything it changed
+  is put back and the materials are refunded into the same stacks (`craft/crafting.ts craftMade`). A made row's picture is the
+  item's own rendered icon, or the upgrade's registered preview (`upgrade:<id>`) — empty until it is rendered, never a glyph.
+
+### The crafted grenades
+
+Both go in the grenade slot and are thrown like a road flare: **hold G** (or hold click with one in the hand) to ready, release to
+throw. One item is spent per throw, only when the throw happens (`weapons/grenades.ts`; the items: `items/grenades.ts`; models:
+Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
+
+- **Acid Scrapper grenade.** A zombie it hits takes 45 damage and the canister bursts there. On a prop the acid can melt it
+  **sticks**, bursts 0.9 s later and that prop starts to melt. On anything else a hard hit bursts it and a soft one bounces; at rest
+  it bursts. The burst splashes 20 damage to zombies and 8 to the player within 1.3 m, and leaves an **acid pool** (1.5 m radius) on
+  the floor below for **10 active seconds** (it does not age while paused or in menus). Everyone standing in the pool burns:
+  zombies 30 hp/s (a regular zombie dies in about 3.3 s), the player 7 hp/s (it is not an attack: no armour). Props the pool touches
+  melt after 0.8 s of contact (`world/acidMelt.ts`): each leaves exactly one salvage — **Electrical parts** from powered devices,
+  **Scrap metal** from anything else — once, and spills what it held as real items. The train itself and everything fitted to it
+  (the Lockbox, the bench, the chipper, the controls, the Save terminal, the armor) never melt; portable cargo and crafted equipment
+  aboard do. The pool is a liquid film with bubbles, never a gas cloud. At most three acid pools / acid canisters at once.
+- **Zombie Lure grenade.** It lands and rolls; at rest it opens and for **20 active seconds** the infected within **20 m** smell it,
+  through walls and round corners, and go to the canister itself — never to you (`ai/scentLure.ts`). A faint tan plume shows it is
+  venting. Then it is empty and goes after a while. At most three at once.
 
 ## Moving equipment
 
@@ -170,12 +211,14 @@ belongs to the station it was left in. One mechanism covers every kind; the code
 | Sentry | `craft/sentry.ts`, `world/sentryTurret.ts`, `world/sentryTurretView.ts` |
 | Scanner | `craft/scanner.ts`, `world/itemScanner.ts`, `ui/scannerView.ts` |
 | Save validation | `save/validate.ts` |
+| Made recipes: grenades, train armor | `craft/recipes.ts MADE_RECIPES`, `craft/crafting.ts craftMade`, `items/grenades.ts`, `weapons/grenades.ts`, `world/grenadeModels.ts`, `world/acidMelt.ts`, `ai/scentLure.ts`, `world/trainArmor.ts` |
 
 QA hooks (`?qa=1`): `__LL.bench()` (each row's material chips as `needs`, the 3D previews' state as `previews`), `benchGo()`,
 `benchOpen()`, `benchCraft(kind)`, `equipment()`, `equipmentCraft(kind)`, `equipmentToPlug(uid, i)`, `sentry()`, `scanner()`,
-`scannerSweep()`. The store view of any unit with slots (a chest or a sentry, by unit number): `chestStore()`, `chestTap(uid)`,
+`scannerSweep()`, `grenades()`, `grenadeGive(id, n)`, `grenadeThrow(id)`. The store view of any unit with slots (a chest or a sentry, by unit number): `chestStore()`, `chestTap(uid)`,
 `chestQuick(ref)`, `chestMove(from, to, count)`, `chestClose()`.
 
 Tests: `tests/train-crafting-session.test.ts` runs the whole chain with every system real. Each part has its own files:
 `craft-*`, `train-equipment-*`, `equipment-chest-store`, `sentry-*`, `scanner-*`, `route-radar`, `train-crafting-contract`,
-`train-roof-profile`; the hold-to-drag rule and the turn: `hold-gesture`, `drag-hold-*`, `equipment-flip`.
+`train-roof-profile`; the hold-to-drag rule and the turn: `hold-gesture`, `drag-hold-*`, `equipment-flip`; the made recipes and the
+grenades: `refinement-grenades`.

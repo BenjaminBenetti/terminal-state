@@ -513,7 +513,7 @@ export class InventoryUI {
       if (ref.bar === 'throw') {
         lead = `<span class="key">G</span>${def ? '' : `<span class="ghost">${ICONS.flare}</span>`}`;
         title = st ? tipAttrs(itemTip(st, 'Grenade slot: hold G to ready it, release to throw · drag to move · drag out of the panel to drop', {inv}))
-          : tipAttrs({head: 'Grenade slot (G)', hint: 'Drag a flare here (or right-click one) — hold G to ready it, release to throw'});
+          : tipAttrs({head: 'Grenade slot (G)', hint: 'Drag a flare or a crafted grenade here (or right-click one) — hold G to ready it, release to throw'});
       }
       // Task knife-windup-20261030 (SLOT): the melee slot
       if (ref.bar === 'melee') {

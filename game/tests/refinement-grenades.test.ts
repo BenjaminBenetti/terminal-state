@@ -6,6 +6,8 @@
 // (weapons/grenades.ts GrenadeSystem: one item per throw, the caps, acid: zombie hit / stick to a meltable prop / burst on landing ->
 // the pool on the floor that burns zombies AND the player for exactly 10 ACTIVE seconds and exposes the props it touches; lure: at rest
 // it opens ONE scent emitter at the canister for 20 active seconds, then it is spent and removed).
+import {readFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
 import * as THREE from 'three';
 import {describe, expect, it, vi} from 'vitest';
 import {GRENADE_MODELS} from '../src/assets/grenades.generated';
@@ -15,6 +17,7 @@ import {BIO_MATER, ELECTRICAL_PARTS, SCRAP_METAL} from '../src/items/craftMateri
 import {ACID_GRENADE, GRENADE_IDS, LURE_GRENADE, grenadeKind, isGrenadeItem} from '../src/items/grenades';
 import {Inventory, PACK_SIZE, THROW_REF} from '../src/items/inventory';
 import {ITEMS, ITEM_DIMS, itemDef} from '../src/items/items';
+import {econCat} from '../src/items/lootTables';
 import {ICONS} from '../src/ui/icons';
 import {GRENADE_MODEL_URLS, grenadeModel, grenadeModelSource} from '../src/world/grenadeModels';
 import {ACID, GRENADE, GrenadeSystem, LURE, inPool, throwOneGrenade, type AcidMeltLike, type GrenadeEnemy, type MeltRefLike} from '../src/weapons/grenades';
@@ -41,6 +44,9 @@ describe('the crafted throwables: items', () => {
       expect(d.description).toMatch(/hold G/);
     }
     expect(isGrenadeItem('flare')).toBe(false);
+    // never loot: no economy category, in no loot table / pool (they only come from the bench)
+    const tables = readFileSync(fileURLToPath(new URL('../src/items/lootTables.ts', import.meta.url)), 'utf8');
+    for (const id of GRENADE_IDS) { expect(econCat(id)).toBeNull(); expect(tables).not.toContain(id); }
     expect(itemDef(ACID_GRENADE).description).toMatch(/10 seconds/);
     expect(itemDef(ACID_GRENADE).description).toMatch(/you too/);
     expect(itemDef(LURE_GRENADE).description).toMatch(/20 seconds.*20 m/);

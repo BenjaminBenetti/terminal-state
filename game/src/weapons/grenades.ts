@@ -742,3 +742,22 @@ export class GrenadeSystem implements BodySource {
     };
   }
 }
+
+/** QA hooks (qa.ts): grenades() — canisters / pools / counters; grenadeGive(id, n) — into the inventory; grenadeThrow(id) — one throw along the view. */
+export function grenadeQaApi(game: unknown): Record<string, (...a: any[]) => unknown> {
+  type Inv = {makeStack(id: string, n: number): {count: number}; add(s: unknown): number; count(id: string): number; take(id: string, n: number): number};
+  const g = game as {grenades: GrenadeSystem; inv: Inv; syncHeld(): void; camera: THREE.Camera; player: {vx: number; vz: number}};
+  return {
+    grenades: () => g.grenades.qa(),
+    grenadeGive: (id: GrenadeId = 'acid_grenade', n = 5) => {
+      const left = g.inv.add(g.inv.makeStack(id, n));
+      g.syncHeld();
+      return {left, total: g.inv.count(id)};
+    },
+    grenadeThrow: (id: GrenadeId = 'acid_grenade') => {
+      const eye = g.camera.getWorldPosition(new THREE.Vector3()), dir = g.camera.getWorldDirection(new THREE.Vector3());
+      const r = throwOneGrenade(g.grenades, id, () => g.inv.take(id, 1) === 1, () => g.inv.count(id) > 0, eye, dir, {x: g.player.vx, z: g.player.vz});
+      return r.ok ? {ok: true, id: r.canister.id, left: g.inv.count(id)} : r;
+    },
+  };
+}

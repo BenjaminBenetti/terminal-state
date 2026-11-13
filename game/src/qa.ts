@@ -67,6 +67,7 @@ import {parseSectionId} from './run/bagStore'; // Iteration 16 (lane RUN)
 import type {Arrival, LevelId} from './levels/types'; // Iteration 16 (lane RUN)
 import {propPhysics} from './damage/materials'; // Task office-props-physics-scale-20261030 (lane PHYS): goWalkInto
 import type {PropPlacement} from './gen/props'; // lane PHYS
+import {grenadeQaApi} from './weapons/grenades'; // task studio-refinement-batch-20261113-035659-01
 import {SPAN_ABOUT, SPAN_COUNT} from './debug/updateProfile'; // Task frame-budget-deferral-20261030 (lane MEASURE)
 
 export function installQaHooks(game: Game): void {
@@ -409,6 +410,7 @@ export function installQaHooks(game: Game): void {
     ...trainQaApi(game), // Task player-train-shell-20261101-202805 (lane TRAIN): train(), trainDoor(i, open), trainFaceDoor(i?), trainLights(); train-shell-followup: trainGo('cab' | 'rear' | 'spawn'); train-lockbox: trainGo('lockbox')
     ...chipperQaApi(game), // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): chipper() — state / progress / credit / pools; chipperGo() — stand at the hopper
     ...trainEquipmentQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane EQUIP): equipment() — units / plugs / grab / carry / counters; equipmentCraft(kind) — a unit on the car floor; equipmentToPlug(uid, i) — stand it beside a plug
+    ...grenadeQaApi(game), // task studio-refinement-batch-20261113-035659-01: grenades() — canisters / acid pools / lures / counters; grenadeGive(id, n); grenadeThrow(id) — one throw along the view
     ...craftBenchQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane BENCH): bench() — placement / model / prompt / the open list's rows / material counts; benchGo() — stand at it; benchOpen() / benchClose(); benchCraft(kind) — craft from the open list
     ...sentryQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane SENTRY): sentry() — the active unit / rounds, turret (deployed, pose, headroom), target, shots
     ...rideQaApi(game), // task campaign-foundation-20261102 (lane RIDE): ride(), rideDepart(), rideArrive(), rideDemo(seconds?) (dev: depart + loop + re-arrive at the same station), rideReset()
