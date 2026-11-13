@@ -132,7 +132,8 @@ describe('Screacher: the family and its four variants (one enemy type)', () => {
   });
 
   it('the game treats its hit as a standing humanoid claw hit (attacker "screacher"), never a low creature bite', () => {
-    expect(src('game.ts')).toMatch(/const claw = archetypeOf\(z\) === 'siren' \|\| archetypeOf\(z\) === 'blightbelly' \|\| archetypeOf\(z\) === 'strainer' \|\| archetypeOf\(z\) === 'screacher';/);
+    // (task studio-bb-production-20261112-234540-01: BB's pounce joined the list after it, so the line no longer ends at the Screacher)
+    expect(src('game.ts')).toMatch(/const claw = archetypeOf\(z\) === 'siren' \|\| archetypeOf\(z\) === 'blightbelly' \|\| archetypeOf\(z\) === 'strainer' \|\| archetypeOf\(z\) === 'screacher'(?: \|\| archetypeOf\(z\) === '\w+')*;/);
   });
 });
 
