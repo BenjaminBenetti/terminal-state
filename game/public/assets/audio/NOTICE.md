@@ -20,7 +20,8 @@ market-chatter-loop.mp3 / market-bar-chatter-loop.mp3, panic screams market-scre
 retch market-retch-01.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-market-bar.json; the weapon-variety gun set (shots, magazine out / in and the coach gun's break open / close,
 gun-*.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-gun-variety.json; the Screacher voice set (echo scream, frenzy shriek, idle wheeze, death gurgle,
 screacher-*.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-screacher.json; the train chipper set (motor loop chipper-motor-loop.mp3, wet grind loop chipper-grind-loop.mp3, body feed
-chipper-feed.mp3, spin-up chipper-start.mp3, wind-down chipper-stop.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-chipper.json).
+chipper-feed.mp3, spin-up chipper-start.mp3, wind-down chipper-stop.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-chipper.json; the BB voice set (cackle, giggle, pounce squeal, hurt squawk, wind-down death,
+bb-*.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-bb.json).
 
 Powered by Stability AI.
 
