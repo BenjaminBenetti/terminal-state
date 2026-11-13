@@ -77,13 +77,14 @@ describe('family pools: defaults, opt-in, eligibility validation', () => {
     // task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): + the Strainer, listed explicitly at 0 (service annexes only)
     // task studio-screacher-production-20261110-221858-01: + the Screacher, listed explicitly at 0 in every pool (roster-only: placed by
     // ai/enemyRoster.ts, never by a per-spawn roll) — appended last, so the older bands are the same numbers
-    expect(DEFAULT_FAMILY_SHARES).toEqual({blightbelly: 0.05, siren: 0, ratdog: 0.05, strainer: 0, screacher: 0});
+    // task studio-bb-production-20261112-234540-01: + BB, the second roster-only family, listed at 0 and appended last (again the older bands are the same numbers)
+    expect(DEFAULT_FAMILY_SHARES).toEqual({blightbelly: 0.05, siren: 0, ratdog: 0.05, strainer: 0, screacher: 0, bb: 0});
     expect(familyPool().map(([f]) => f)).toEqual([...ENEMY_FAMILY_IDS]);
-    expect(familyPool()).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.05], ['strainer', 0], ['screacher', 0]]);
+    expect(familyPool()).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.05], ['strainer', 0], ['screacher', 0], ['bb', 0]]);
     expect(ENEMY_POOL).toEqual(familyPool());
     expect(SUBWAY.families).toBe(ENEMY_POOL);
     expect(OFFICE.families).toBe(OFFICE_ENEMY_POOL);
-    expect(OFFICE_ENEMY_POOL).toEqual([['zombie', 0.71], ['blightbelly', 0.05], ['siren', OFFICE_SIREN_WEIGHT], ['ratdog', 0.05], ['strainer', 0], ['screacher', 0]]); // (+ the roster-only Screacher at 0: task studio-screacher-production-20261110-221858-01)
+    expect(OFFICE_ENEMY_POOL).toEqual([['zombie', 0.71], ['blightbelly', 0.05], ['siren', OFFICE_SIREN_WEIGHT], ['ratdog', 0.05], ['strainer', 0], ['screacher', 0], ['bb', 0]]); // (+ the roster-only Screacher at 0: task studio-screacher-production-20261110-221858-01; + the roster-only BB at 0: task studio-bb-production-20261112-234540-01)
     for (const p of [SUBWAY, OFFICE]) expect(p.families.reduce((t, [, w]) => t + w, 0)).toBeCloseTo(1, 12);
     expect(() => familyPool({siren: 0.95})).toThrow(/exceed 1/);
     // the Subway never opts in; the Office does, with its eligibility rule

@@ -35,6 +35,14 @@ export interface RagdollTarget {
    * (HUMANOID_RIG). Sphere offsets are in each named bone's local frame (unscaled model metres).
    */
   readonly ragdollRig?: RagdollRig;
+  /**
+   * Task studio-bb-production-20261112-234540-01 (lane ACTOR): called once, first thing, before the bodies are built from the pose —
+   * the target may put its root where the ragdoll should start (BB: lifted just clear of the wall / ceiling / floor it clings to, so
+   * no sphere starts inside it), and is handed the killing shot: what it returns (unless undefined) is the impulse its body takes
+   * instead (BB: nothing of a shot fired INTO the surface it clings to, no launch through a ceiling, a 9 kg body's throw kept within
+   * what the solver resolves). It must not change the object it was given. Omitted = nothing (every other enemy).
+   */
+  prepareRagdoll?(impulse: KillImpulse | null): KillImpulse | null | void;
 }
 
 export interface KillImpulse {
@@ -297,6 +305,8 @@ export class Ragdoll {
 
   constructor(readonly target: RagdollTarget, impulse: KillImpulse | null, private readonly opts: RagdollOptions, now = 0) {
     this.startedAt = now;
+    const own = target.prepareRagdoll?.(impulse); // (BB: off the surface it clings to; its own share of the shot)
+    if (own !== undefined) impulse = own;
     const rig = (this.rig = target.ragdollRig ?? HUMANOID_RIG);
     const root = target.root;
     root.updateMatrixWorld(true);

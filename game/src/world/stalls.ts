@@ -67,7 +67,7 @@ type GameLike = {
   propIndex?: PropIndex;
   containers?: ContainerManager | null;
   player?: {x: number; y: number; z: number; eye?: number; yaw: number; pitch: number; radius?: number};
-  zombies?: {brain: {alive: boolean; x: number; y: number; z: number; stats: {radius: number}}}[];
+  zombies?: {brain: {alive: boolean; x: number; y: number; z: number; climbing?: boolean; stats: {radius: number}}; placesRoot?: boolean}[];
   physics?: {propsChanged?(x: number, z: number): void};
   hud?: {toast(t: string, warn?: boolean): void};
   sfx?: {denied?(): void};
@@ -255,7 +255,8 @@ export class StallSystem {
     const g = this.g, p = s.prop;
     const bodies: {x: number; y: number; z: number; r: number}[] = [];
     if (g.player) bodies.push({x: g.player.x, y: g.player.y, z: g.player.z, r: g.player.radius ?? 0.3});
-    for (const z of g.zombies ?? []) if (z.brain.alive) bodies.push({x: z.brain.x, y: z.brain.y, z: z.brain.z, r: z.brain.stats.radius});
+    // (a BB on a wall / ceiling / in the air is not in a door's sweep: its `y` is the floor below it)
+    for (const z of g.zombies ?? []) if (z.brain.alive && !(z.placesRoot && z.brain.climbing)) bodies.push({x: z.brain.x, y: z.brain.y, z: z.brain.z, r: z.brain.stats.radius});
     const {hingeX, hingeZ, length} = STALL_DOOR;
     for (const b of bodies) {
       if (Math.abs(b.y - p.y) > 1.5) continue;

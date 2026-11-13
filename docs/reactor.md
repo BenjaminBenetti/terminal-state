@@ -701,6 +701,8 @@ families that pit holds at all. Counts and positions are unchanged.
 - The Strainer: exactly one in 35 % of the pits whose map has an annex spawn; none in the others.
 - Screachers (`docs/screacher.md`): 1–3 in 40 % of pits, in place of ordinary zombies of the rim, the walkway tiers or the core
   floor. They are blind and hunt by sound, like on every level.
+- BBs (`docs/bb.md`; pits first built at roster version 3): 1–3 in 40 % of pits, an independent roll, in place of ordinary
+  zombies of the rim, the walkway tiers or the core floor. They are placed last, so the families above stand where they did before.
 
 ### Cross-storey hits (task reactor-playtest-round2-20261102, lane COMBAT; every level)
 User: enemies on another storey (down the stairs, across an atrium, in the pit) could not be damaged, on every level.
@@ -716,7 +718,7 @@ User: enemies on another storey (down the stairs, across an atrium, in the pit) 
   the limit: walls, slabs, closed lift doors and props still stop bullets. Melee, noise, gas, blasts and AI are unchanged.
 - **Tests:** `game/tests/combat-cross-storey.test.ts` uses real Subway / Office / Mall / Reactor layouts and the real enemy
   actors. It checks every stair link down and up, atrium and pit shots for five families (zombie, rat/dog, Blightbelly, Siren,
-  Strainer: the test's own list; the Screacher, registered later as the sixth family, is not in it), slab and closed-door blocks, the
+  Strainer: the test's own list; the Screacher and BB, registered later as the sixth and seventh families, are not in it), slab and closed-door blocks, the
   pistol / rifle / shotgun parts and pellets, a culled enemy still hit, brute-force parity and the wiring. On the same rays the
   pre-fix reject skipped 35 of 35 stair shots down, 33 of 35 up and 85 of 87 atrium / pit shots down.
 

@@ -25,6 +25,8 @@ import {SIREN_MODEL_KEY, SirenActor} from './sirenActor'; // Task track1-siren-b
 import {SIREN_CUES} from './sirenCues'; // Task track1-siren-blightbelly-20261031 (lane SIREN)
 import {SCREACHER_CUES, SCREACHER_STATS, SCREACHER_VARIANTS, SCREACHER_VOICE_Y, screacherVariantOf} from './screacher'; // task studio-screacher-production-20261110-221858-01
 import {ScreacherActor} from './screacherActor'; // task studio-screacher-production-20261110-221858-01
+import {BB_CUES, BB_STATS, BB_VARIANTS, BB_VOICE_Y, bbVariantOf} from './bb'; // task studio-bb-production-20261112-234540-01
+import {BbActor} from './bbActor'; // task studio-bb-production-20261112-234540-01
 import {ENEMY_POOL, type EnemyArchetypeId} from './creatureSpawn';
 import {CORPSE_TRAITS, type CorpseTrait} from './corpseTrait'; // task studio-corpse-chipper-fuel-20261110-235304-01: what each dead body is
 
@@ -56,6 +58,16 @@ export interface EnemyActor extends RagdollTarget, WoundableActor {
   authoredClip?(name: string): THREE.AnimationClip | null;
   /** Task studio-sprinter-gait-20261112-063646-01: the ordinary zombie's Sprint-clip foot strikes since the last call (null: not sprinting). */
   sprintFootfalls?(): number | null;
+  /**
+   * Task studio-bb-production-20261112-234540-01: the actor places its whole root itself in syncTransform (BB: on a wall or a ceiling the
+   * body is not at the brain's feet height `y`) — the game then leaves root.position.y alone. Absent: root y = brain.y, as always.
+   */
+  readonly placesRoot?: boolean;
+  /**
+   * Task studio-bb-production-20261112-234540-01: a NON-GRAPHIC body (BB): hits and kills show no wound decals, blood, flesh chunks or
+   * dismemberment, alive or dead (damage/system.ts), and no skull-crack confirm. Damage, hit parts and the ragdoll are unchanged.
+   */
+  readonly nonGraphic?: boolean;
 }
 
 export function archetypeOf(z: {archetype?: EnemyArchetypeId}): EnemyArchetypeId {
@@ -126,6 +138,7 @@ export function enemyCues(z: EnemyActor): EnemyCues {
   if (archetypeOf(z) === 'siren') return SIREN_CUES; // Task track1-siren-blightbelly-20261031 (lane SIREN): dormant hum, one wake scream, no groans
   if (archetypeOf(z) === 'strainer') return STRAINER_CUES; // lane FAMILY: the zombie voice calls (deep groan from its taller mouth) + its own wet squelch set
   if (archetypeOf(z) === 'screacher') return SCREACHER_CUES; // the headless one: its own stump voice (echo scream, shriek, wheeze), zombie footfalls
+  if (archetypeOf(z) === 'bb') return BB_CUES; // BB: the shared laugh set (cackle, giggle, pounce squeal)
   return archetypeOf(z) === 'ratdog' ? RATDOG_CUES : ZOMBIE_CUES;
 }
 
@@ -179,6 +192,14 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetypeDef> = {
   screacher: {id: 'screacher', corpse: CORPSE_TRAITS.screacher, label: 'Screacher', model: null, stats: SCREACHER_STATS, climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: SCREACHER_VOICE_Y,
     variantModels: Object.fromEntries(Object.entries(SCREACHER_VARIANTS).map(([id, v]) => [id, v.model])),
     source: 'four user-approved headless concepts (SC01-SC04) -> Meshy T2.5 image-to-3D -> derivatives enemy-screacher-sc01..sc04.glb (shared 18-joint rig, clips Idle / Walk / Run / Attack / Hit / Death / Scream, extras enemyScreacher)'},
+  // Task studio-bb-production-20261112-234540-01: BB, APPENDED LAST (= ENEMY_FAMILY_IDS; weight 0 in every pool: placed only by the
+  // per-level seeded roster, ai/enemyRoster.ts) — a small baby-like undead that crawls on floors, walls and ceilings in twitchy
+  // bursts, cackles when it notices the player and pounces (ai/bb.ts brain / stats, ai/bbSurface.ts locomotion, ai/bbActor.ts). ONE
+  // enemy type with four approved looks (variantModels: the spawn's `variant` picks the GLB; the AI and stats are the same). No ladder
+  // links (it climbs the walls themselves); models lazily loaded per layout.
+  bb: {id: 'bb', corpse: CORPSE_TRAITS.bb, label: 'BB', model: null, stats: BB_STATS, climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: BB_VOICE_Y,
+    variantModels: Object.fromEntries(Object.entries(BB_VARIANTS).map(([id, v]) => [id, v.model])),
+    source: 'four user-selected looks (A Lullaby, B Binky, C Teddy, D Changeling) -> Meshy T2.5 image-to-3D -> derivatives enemy-bb-lullaby / -binky / -teddy / -changeling.glb (shared 18-joint rig, no baked clips: runtime clips ai/bbClips.ts, extras enemyBb)'},
 };
 
 /**
@@ -216,6 +237,13 @@ export function createEnemyActor(spawn: ZombieSpawn, models: Record<string, GLTF
   if (spawn.archetype === 'screacher') {
     const g = models[SCREACHER_VARIANTS[screacherVariantOf(spawn)].model];
     if (g) return {actor: new ScreacherActor(g, spawn, rand), fallback: false};
+    return {actor: zombie(), fallback: true};
+  }
+  // Task studio-bb-production-20261112-234540-01: BB in its spawn's approved look when that (lazily loaded) variant model is there, else
+  // the Screacher's contract — a counted zombie stand-in (QA `fallback`; never a T-pose, a box or another look)
+  if (spawn.archetype === 'bb') {
+    const g = models[BB_VARIANTS[bbVariantOf(spawn)].model];
+    if (g) return {actor: new BbActor(g, spawn, rand), fallback: false};
     return {actor: zombie(), fallback: true};
   }
   return {actor: zombie(), fallback: false};

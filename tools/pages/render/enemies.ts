@@ -561,6 +561,8 @@ export function renderEnemyFamilies(es: EnemySite): string {
       if (rule.contexts) rosterFacts.push(`<dt>Its contexts</dt><dd>${rule.contexts.map(c => `<code>${esc(c)}</code>`).join(', ')}</dd>`);
       if (rule.variants?.length) rosterFacts.push(`<dt>Model variants dealt</dt><dd>${rule.variants.map(v => `<code>${esc(v)}</code>`).join(', ')}, in turn from a seeded start</dd>`);
       if (rule.since !== null) rosterFacts.push(`<dt>Applies from roster version</dt><dd>${num(rule.since)} (current: ${num(ref.roster.version)})</dd>`);
+      // task studio-bb-production-20261112-234540-01: a family added in a later roster version is placed after all the others
+      if (rule.last) rosterFacts.push('<dt>Placement order</dt><dd>last: after every family of an earlier roster version has its slots, whatever their policies</dd>');
     }
     // the roll depends on the level seed, the family and the rate only: levels with the same rate share one row
     const rollGroups = new Map<string, {rate: number; present: number; seeds: number; levels: string[]}>();
@@ -601,7 +603,9 @@ ${rollCheck}
         rowHeader: 0,
         rows: f.stats.map(v => [
           v.variant ? esc(v.variant) : esc(f.label), stat(v.hp, 'hp'), stat(v.wanderSpeed, 'm/s'), stat(v.chaseSpeed, 'm/s'), stat(v.attackRange, 'm'),
-          stat(v.attackDamage, 'hp'), `${num(v.attackDuration)} s / ${num(v.attackImpact)} s / ${stat(v.attackCooldown, 's')}`, stat(v.sightRange, 'm'), stat(v.radius, 'm'),
+          stat(v.attackDamage, 'hp'),
+          // attack range 0: the family never swings standing (BB: its one attack is the pounce, in its own rules below) — the base swing timings would mislead
+          v.attackRange === 0 ? '<span class="muted">no standing swing</span>' : `${num(v.attackDuration)} s / ${num(v.attackImpact)} s / ${stat(v.attackCooldown, 's')}`, stat(v.sightRange, 'm'), stat(v.radius, 'm'),
           enemySourceLoc(es, v.at),
         ]),
       })

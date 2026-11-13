@@ -5,13 +5,93 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 78585,
-      "sha256": "4d12dfe2a8b09a0de9aaf3f220d66fa46e6c4eadc08e266977c80db208561c8b"
+      "bytes": 82678,
+      "sha256": "f2edde039567ba0a0eab17d91d7ffe8d3fc58bf1ace1927e3a3f7e67c91370aa"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 3557,
-      "sha256": "d67e57f720903a5213de7d21ce7c3b8238801e4e473671b8ea3959329bbd3736"
+      "bytes": 3745,
+      "sha256": "0c0151323cf2e50134d308ddab459296b8a077465a80823839671b4f6e133372"
+    },
+    {
+      "path": "assets/audio/bb-cackle-01.mp3",
+      "bytes": 29675,
+      "sha256": "f6e34789398b24af9954428e7ab49183b57cd3b2e2353c97cd880c9bc1f960aa"
+    },
+    {
+      "path": "assets/audio/bb-cackle-02.mp3",
+      "bytes": 29675,
+      "sha256": "4b364df730a5b687bfc32b63d438f93cb204a7d8432f4bbd2c723af5bc78e683"
+    },
+    {
+      "path": "assets/audio/bb-cackle-03.mp3",
+      "bytes": 29675,
+      "sha256": "7595227777110f6ddc711252cda6f1c4dffe829d8189f613229f1a685507f0c1"
+    },
+    {
+      "path": "assets/audio/bb-cackle-04.mp3",
+      "bytes": 33018,
+      "sha256": "78f97e8d0ade21006b3fbc4298c0fd3179e067dd216dcfe6ff85d0efa0db11bc"
+    },
+    {
+      "path": "assets/audio/bb-death-01.mp3",
+      "bytes": 13793,
+      "sha256": "16c284fe293addf14675cc37136848d0612e7e0d3813e75f303d8c0905b3d47e"
+    },
+    {
+      "path": "assets/audio/bb-death-02.mp3",
+      "bytes": 12852,
+      "sha256": "d34ac57c41279d619674044a04185955d3d84e85489a8db22e3ed3793e246c04"
+    },
+    {
+      "path": "assets/audio/bb-giggle-01.mp3",
+      "bytes": 11912,
+      "sha256": "93d1bbdb0c53637ae02e7163e26172a76181610d376d8a77c0cf44a1895d7c97"
+    },
+    {
+      "path": "assets/audio/bb-giggle-02.mp3",
+      "bytes": 10971,
+      "sha256": "8cf8443102557797329256e809fc34ad13cd21e3bf8b04239794da1ac9c82d3f"
+    },
+    {
+      "path": "assets/audio/bb-giggle-03.mp3",
+      "bytes": 15360,
+      "sha256": "9f56503342afc252527fb75bbf50364e77633c543f33b99b816eb8c799cf303e"
+    },
+    {
+      "path": "assets/audio/bb-giggle-04.mp3",
+      "bytes": 11285,
+      "sha256": "b1d62300ff97218c0ae60d225b4b40474f2ab84352b70ad96ba858aac3e0cf8a"
+    },
+    {
+      "path": "assets/audio/bb-hurt-01.mp3",
+      "bytes": 3448,
+      "sha256": "0ece8289ffc5c121ed9a275a626b14479432d546c78dcd527d83d9579f666fac"
+    },
+    {
+      "path": "assets/audio/bb-hurt-02.mp3",
+      "bytes": 3448,
+      "sha256": "c32da0945ae5b82f51916516bd8451484ef46797ea0407bc7696727b03d7b560"
+    },
+    {
+      "path": "assets/audio/bb-hurt-03.mp3",
+      "bytes": 3135,
+      "sha256": "1d5a4edf327660a41b096aed8a697cf9c900bbb948a1148232ee2b98e1f83c32"
+    },
+    {
+      "path": "assets/audio/bb-pounce-01.mp3",
+      "bytes": 17554,
+      "sha256": "cbff8015c52be943571ce6f60e2be9098466f68111680ef7b7280f3728a0f76b"
+    },
+    {
+      "path": "assets/audio/bb-pounce-02.mp3",
+      "bytes": 17554,
+      "sha256": "c69bbc86ea7eb3d8967fd2cdfe0ff1ac3d9c5223dca7ae30d83bb21675e27f2a"
+    },
+    {
+      "path": "assets/audio/bb-pounce-03.mp3",
+      "bytes": 18390,
+      "sha256": "77be06aff3645aab1403e894ce015a1f17253887ca8fe0d455c00c243d4d5be5"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -1874,6 +1954,11 @@
       "sha256": "4a8f1dac0a1e97f52187b72124d3117386e4bae510cac2eb039e8ed9930928c8"
     },
     {
+      "path": "assets/derivatives/audio-bb.json",
+      "bytes": 76785,
+      "sha256": "1d8a635b719550fa9210b8bcb6cdc7ac763fcf56a35c35c21752c2f5e10b4c61"
+    },
+    {
       "path": "assets/derivatives/audio-chipper.json",
       "bytes": 8511,
       "sha256": "9582c4da9e942826bce57abc1f56482879ee69c82f4a558da429236b1bf38de1"
@@ -1987,6 +2072,26 @@
       "path": "assets/derivatives/creature-ratdog.json",
       "bytes": 23070,
       "sha256": "2534182960bf96f813b2d57d92d2b530250ddaeb5d9967a7aa15b2fb6ccd23f4"
+    },
+    {
+      "path": "assets/derivatives/enemy-bb-binky.json",
+      "bytes": 24347,
+      "sha256": "ed2da0b2d08ebfe8a3346d524ba8025a400b6d8de4979239c52b4be2f2cb5138"
+    },
+    {
+      "path": "assets/derivatives/enemy-bb-changeling.json",
+      "bytes": 24384,
+      "sha256": "b3aa64790ff2b9e430e5f12d2e6ecd15de60e132aba33b83ae835155a8596a9f"
+    },
+    {
+      "path": "assets/derivatives/enemy-bb-lullaby.json",
+      "bytes": 24365,
+      "sha256": "a5c885c0cedd2c50a5e28c53dd2fa993f1200f69ea898b086f060f24eea35691"
+    },
+    {
+      "path": "assets/derivatives/enemy-bb-teddy.json",
+      "bytes": 24321,
+      "sha256": "b00b182786d109194031213e0f7ecea18fce01642307220acd811157038d8668"
     },
     {
       "path": "assets/derivatives/enemy-blightbelly.json",
@@ -3032,6 +3137,26 @@
       "path": "assets/models/creature-ratdog-t25.glb",
       "bytes": 893544,
       "sha256": "58a5d210e02272a67ae4c7c9bd3f56279f35d6a34000237cb568b19dac57dfad"
+    },
+    {
+      "path": "assets/models/enemy-bb-binky.glb",
+      "bytes": 2119528,
+      "sha256": "5f654b4daf985e9ffaff5b005e0bfce47d07686b189298512da9d7a354e35b84"
+    },
+    {
+      "path": "assets/models/enemy-bb-changeling.glb",
+      "bytes": 1822620,
+      "sha256": "def676dde39a5cde8acfda5606c0eb699d83b181474229124e7236119d937b67"
+    },
+    {
+      "path": "assets/models/enemy-bb-lullaby.glb",
+      "bytes": 2146828,
+      "sha256": "b3dcf6425c608c1faa36b2e42a48c2c1791247ca22082345ebc80156fdc92d0e"
+    },
+    {
+      "path": "assets/models/enemy-bb-teddy.glb",
+      "bytes": 1927056,
+      "sha256": "94c7d89d42237b3f967b37d7ee897b793fa44780516a18c5abe7a016f7f5bee9"
     },
     {
       "path": "assets/models/enemy-blightbelly.glb",

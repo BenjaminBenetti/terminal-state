@@ -126,6 +126,13 @@ export const CUE_GAIN: Record<CueId, number> = {
   // yelp is the same takes x0.55), the wheeze -24.4 (soft: ~6 LU under a groan, about the Siren's hum), the death gurgle -19.5 (1 LU
   // under a groan). First estimates for the ear pass (not auditioned).
   screacherScream: 0.62, screacherShriek: 1, screacherWheeze: 0.44, screacherDeath: 0.83,
+  // Task studio-bb-production-20261112-234540-01 (lane AUDIO, tools/audio-pipeline/bb-build.mjs; BB_AUDIO): the bb-* clips are peak
+  // -1 dBFS with a cue's takes matched in loudness; these gains = derivatives/audio-bb.json mixCalibration (momentary max AT THE
+  // SOURCE): the cackle -16.5 LUFS (the "it has seen you" tell: 2 LU over a zombie groan, just under the Siren's wake scream; peak
+  // -2.8 dBFS), the giggle -24.9 (soft: ~6.5 LU under a groan, about the Siren's hum), the pounce squeal -16.5 at its loudest part
+  // (the launch; the clip starts about 10 dB lower), the hurt squawk -21.5 (~1 LU under a zombie attack), the wind-down death -19.5
+  // (1 LU under a groan). First estimates for the ear pass (not auditioned).
+  bbCackle: 0.81, bbGiggle: 0.41, bbPounce: 0.53, bbHurt: 0.45, bbDeath: 0.91,
   // Task reactor-build-20261101 (primary): the Reactor's machine set (tools/audio-pipeline/reactor-build.mjs). One-shots are peak
   // -1 dBFS, the loops RMS -20 dBFS (the bed / flare-loop convention). The generator start is deliberately LOUD (it is the noise that
   // pulls the dead onto the landing); the running loops sit under combat; the core startup swell is the win's sound.
@@ -557,6 +564,45 @@ export const SCREACHER_AUDIO = {
 } as const;
 type ScreacherVoiceKind = 'scream' | 'shriek' | 'hurt' | 'wheeze' | 'death';
 
+/**
+ * Task studio-bb-production-20261112-234540-01 (lane AUDIO): BB's VOICE — one laugh set shared by all four looks (Sound Lab clips
+ * bb-*.mp3, tools/audio-pipeline/bb-build.mjs; provenance derivatives/audio-bb.json, levels: its mixCalibration = CUE_GAIN). All
+ * world-placed ONE-SHOTS at the mouth (distance, air / occlusion low-pass, HRTF while free, reverb send); nothing loops. Playing them is
+ * audio only: the AI never listens to them (ai/bb.ts decides when a cue fires and calls Sfx.bbVoice).
+ * The mouth may hang under a ceiling or sit on a wall: the panner stays at the real mouth, while the navigable-route / storey gates
+ * are asked at `gateY + gateLiftM` — where a BB crawling on the floor below the body would be voicing — so one on a ceiling is heard
+ * like one on the floor under it (the route field looks for a floor at most VOCAL_REACH.down m under a voice; a perch can be higher).
+ *  - cackle: THE tell that it has noticed the player. Heard along the navigable route by the 'alert' law (silent on another storey
+ *    without a route in range, attenuated by a detour, heard by the straight line when in sight) but OUTSIDE the VOCAL_GATE.cap that
+ *    thins groans, and pri 2 (the shared voice cap never drops it, e.g. under gunfire); `occMax` caps the occlusion so a wall muffles
+ *    it but it stays present through a doorway / round a corner. At most `max` cackles sound at once: past that the NEAREST win (the
+ *    farthest sounding one gives way, a farther new one is dropped). Dropped while this BB's own pounce squeal still sounds.
+ *  - giggle: the quiet laugh of a calm one nearby: an 'idle' enemy VOCAL (vocal(): route gate, vocal cap, storey rules), audible to
+ *    about `maxDist` m. Dropped while this BB is still voicing anything (one throat: no giggle under its own cackle / squeal).
+ *  - pounce: the squeal of the pounce. The brain starts it WITH the wind-up tell (BB_POUNCE.windupS before the launch) and the clips
+ *    reach their loudest part about then (derivatives/audio-bb.json gate.loudAtS): the warning the player reacts to — pri 2, never
+ *    route-gated, and it takes the throat (this BB's sounding cackle / giggle fades under it over `throatFadeS`).
+ *  - hurt: the short toy-like squawk when it is shot but not killed (a combat cue, never gated).
+ *  - death: the laugh that winds down (never gated); it also fades everything this BB was still voicing (`deathCutS`).
+ * Bounded: per BB (`key`) and kind at most one cue per `minGapS`; at most `max` of a kind sounding at once.
+ * Levels: CUE_GAIN x `gain` (x the `gainJitter` dB spread) never exceeds the -1 dBFS ceiling of the clips. Dry level by the panner law,
+ * from the calibrated source levels: the cackle at 28 m about -37.1 LUFS (6 dB over a zombie groan at its 34 m limit), the giggle at
+ * 12 m about -45.6, the pounce squeal's loudest part at 3 m about -17.9.
+ */
+export const BB_AUDIO = {
+  cackle: {cue: 'bbCackle', ref: 2.6, rolloff: 1, maxDist: 36, send: 0.55, occMax: 0.8, pri: 2, max: 2, minGapS: 4, gain: 1, rate: 1, jitter: 0.04, gainJitter: 1},
+  giggle: {cue: 'bbGiggle', ref: 1.4, rolloff: 1.3, maxDist: 17, send: 0.3, occMax: 1, pri: 1, max: 2, minGapS: 2.5, gain: 1, rate: 1, jitter: 0.06, gainJitter: 1.5},
+  pounce: {cue: 'bbPounce', ref: 2.6, rolloff: 1.1, maxDist: 28, send: 0.4, occMax: 0.85, pri: 2, max: 3, minGapS: 1.5, gain: 1, rate: 1, jitter: 0.03, gainJitter: 1},
+  hurt: {cue: 'bbHurt', ref: 2, rolloff: 1.1, maxDist: 26, send: 0.35, occMax: 1, pri: 1, max: 2, minGapS: 0.4, gain: 1, rate: 1, jitter: 0.08, gainJitter: 1.5},
+  death: {cue: 'bbDeath', ref: 2.2, rolloff: 1.1, maxDist: 34, send: 0.5, occMax: 1, pri: 1, max: 2, minGapS: 5, gain: 1, rate: 1, jitter: 0.05, gainJitter: 0.5},
+  /** The route / storey gates are asked this far (m) above `gateY`: the mouth of a BB crawling on that floor. */
+  gateLiftM: 0.3,
+  /** Fades (s): a cackle that gives way to a nearer one; a BB's own cackle / giggle under its pounce squeal; a dying BB's sounding voices. */
+  stealFadeS: 0.08, throatFadeS: 0.1, deathCutS: 0.12,
+} as const;
+/** BB's vocal kinds (Sfx.bbVoice; task studio-bb-production-20261112-234540-01). */
+export type BbVoiceKind = 'cackle' | 'giggle' | 'pounce' | 'hurt' | 'death';
+
 /** Weapon sound kinds (WeaponDef.sound). */
 /**
  * Task studio-beta-train-fuel-system-20261106-024923-01 (lane PORT): the train FUEL cues. engineStall / fuelPour play one Sound Lab take
@@ -810,6 +856,9 @@ export class Sfx {
   // cue of each kind + the voices it is still sounding, and the sounding Screacher voices (kind, distance when started) for the per-kind caps.
   private scrKeys = new WeakMap<object, {last: Partial<Record<ScreacherVoiceKind, number>>; vs: Voice[]}>();
   private scrVoices: {v: Voice; kind: ScreacherVoiceKind; d: number}[] = [];
+  /** Task studio-bb-production-20261112-234540-01 (lane AUDIO): per BB (`key`) the last start per kind and what it is still voicing; every sounding BB voice (the per-kind caps). */
+  private bbKeys = new WeakMap<object, {last: Partial<Record<BbVoiceKind, number>>; vs: {v: Voice; kind: BbVoiceKind}[]}>();
+  private bbVoices: {v: Voice; kind: BbVoiceKind; d: number}[] = [];
   /** Iteration 08 (Lane B): `y` = the source height (3D occlusion through slabs on stacked levels). */
   private occlusion: ((x: number, z: number, y?: number) => number) | null = null;
   // Task office-overhaul-20261030 (lane AUDIO): enemy vocal gate (navigable route) + counters (debugState().vocal).
@@ -1861,20 +1910,24 @@ export class Sfx {
    * in clear 3D line of sight (the occlusion test: no wall / slab between) is heard by the straight line as before. At most
    * VOCAL_GATE.cap vocals sound at once: a nearer (alert-biased) one fades out the farthest playing one, else it is dropped.
    * Spatial panning, HRTF, occlusion filter and reverb send are unchanged (voice()). Returns the voice or null.
+   * Task studio-bb-production-20261112-234540-01 (lane AUDIO): `gateY` = the height the route is asked at when the mouth is not just
+   * above its own floor (a BB under a ceiling: the floor below it; the panner, the straight distance and the sight test stay at the
+   * mouth); `capped` false = route-gated only, outside the vocal cap (BB's cackle keeps its own: bbThroat).
    */
-  private vocal(kind: VocalKind, o: VoiceOpts & {at: Pos}): Voice | null {
+  private vocal(kind: VocalKind, o: VoiceOpts & {at: Pos}, gateY = o.at.y, capped = true): Voice | null {
     const ctx = this.live;
     if (!ctx) return null;
     const straight = this.dist(o.at);
     if (straight > (o.maxDist ?? 45)) { this.culled++; return null; }
     let gain = 1, rank = straight;
     if (this.reach) {
-      const spec = VOCAL_GATE[kind], path = this.reach.pathTo(o.at.x, o.at.y, o.at.z);
+      const spec = VOCAL_GATE[kind], path = this.reach.pathTo(o.at.x, gateY, o.at.z);
       gain = vocalGain(path, straight, spec.limit, spec.fade, o.ref ?? 1.6, o.rolloff ?? 1);
       if (gain >= VOCAL_GATE.minGain) rank = Math.max(straight, path);
       else if (this.occlusion && (straight <= 1.5 || this.occlusion(o.at.x, o.at.z, o.at.y) <= 0)) { gain = 1; this.vstats.sight++; } // in sight
       else { this.vstats.gated++; return null; }
     }
+    if (!capped) { const u = this.voice({...o, gain: (o.gain ?? 1) * gain}); if (u) this.vstats.played++; return u; }
     if (kind === 'alert') rank *= VOCAL_GATE.alertBias;
     // vocal voice cap: the nearest / most relevant win
     const now = ctx.currentTime;
@@ -2980,6 +3033,58 @@ export class Sfx {
     if (kind === 'death') for (const u of own) this.fadeVoice(u, SCREACHER_AUDIO.deathCutS);
     k.last[kind] = now;
     own.push(v);
+    live.push({v, kind, d});
+    return v;
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Task studio-bb-production-20261112-234540-01 (lane AUDIO): BB's voice — the laugh set shared by all four looks (silent no-ops when
+  // audio is paused / not started or a clip is missing — never a stand-in sound).
+
+  /**
+   * One BB vocal at its mouth (world position): 'cackle' (it noticed the player), 'giggle' (the quiet near tell), 'pounce' (the
+   * squeal that starts with the wind-up and is loudest at the launch), 'hurt', 'death'. `key` = the BB (its own rate limits and
+   * throat). `gateY` = the height of the floor below the body: the route / storey gates use it, so one clinging to a ceiling is
+   * heard like one on the floor under it; the sound itself comes from the mouth. See BB_AUDIO.
+   */
+  bbVoice(kind: BbVoiceKind, key: object, x: number, y: number, z: number, gateY?: number): void {
+    const S = BB_AUDIO[kind];
+    this.play(this.bbThroat(kind, key, x, y, z, gateY), S.cue, {gain: S.gain, rate: S.rate, jitter: S.jitter, gainJitter: S.gainJitter});
+  }
+
+  /**
+   * A BB cue's voice within its bounds (BB_AUDIO[kind]): the per-BB rate limit (`minGapS` per `key` and kind), the one-throat rules (no
+   * giggle under its own sounding voice, no cackle under its own pounce squeal), the range, the per-kind cap (`max` sounding; cackles:
+   * the nearest win), the route gates of the cackle / giggle at the floor below the body. Null = limited / capped / culled / gated /
+   * paused. Plays nothing itself.
+   */
+  private bbThroat(kind: BbVoiceKind, key: object, x: number, y: number, z: number, gateY?: number): Voice | null {
+    const ctx = this.live;
+    if (!ctx || ![x, y, z].every(Number.isFinite)) return null;
+    const S = BB_AUDIO[kind], now = ctx.currentTime, at = {x, y, z};
+    let k = this.bbKeys.get(key);
+    if (!k) this.bbKeys.set(key, (k = {last: {}, vs: []}));
+    const last = k.last[kind];
+    if (last !== undefined && now - last < S.minGapS) { this.dropped++; return null; }
+    const own = k.vs = k.vs.filter(e => e.v.end > now); // what this BB is still voicing
+    if (kind === 'giggle' ? own.length > 0 : kind === 'cackle' && own.some(e => e.kind === 'pounce')) return null; // one throat
+    const d = this.dist(at);
+    if (d > S.maxDist) { this.culled++; return null; }
+    const live = this.bbVoices = this.bbVoices.filter(e => e.v.end > now);
+    const same = live.filter(e => e.kind === kind);
+    let far: {v: Voice; kind: BbVoiceKind; d: number} | null = null;
+    if (same.length >= S.max) {
+      far = same.reduce((p, e) => (e.d > p.d ? e : p));
+      if (kind !== 'cackle' || d >= far.d) { this.dropped++; return null; }
+    }
+    const gy = gateY !== undefined && Number.isFinite(gateY) ? gateY + BB_AUDIO.gateLiftM : y; // the gates: a BB on the floor below the body
+    const o = {at, hrtf: true, ref: S.ref, rolloff: S.rolloff, send: S.send, pri: S.pri, maxDist: S.maxDist, occMax: S.occMax};
+    const v = kind === 'cackle' ? this.vocal('alert', o, gy, false) : kind === 'giggle' ? this.vocal('idle', o, gy) : this.voice(o);
+    if (!v) return null;
+    if (far) { this.fadeVoice(far.v, BB_AUDIO.stealFadeS); live.splice(live.indexOf(far), 1); } // a nearer cackle: the farthest gives way (fading: it no longer counts)
+    if (kind === 'pounce' || kind === 'death') for (const e of own) this.fadeVoice(e.v, kind === 'death' ? BB_AUDIO.deathCutS : BB_AUDIO.throatFadeS);
+    k.last[kind] = now;
+    own.push({v, kind});
     live.push({v, kind, d});
     return v;
   }

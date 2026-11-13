@@ -46,6 +46,12 @@ export interface DamageZombie extends WoundableActor {
   boneVelocity?(name: string, out: THREE.Vector3): THREE.Vector3;
   /** Iteration 07: non-humanoid actors may supply their own corpse hit volumes (else humanoid bones). */
   corpseVolumes?(): {part: 'head' | 'torso' | 'limb'; a: Vec3; b: Vec3 | null; r: number}[];
+  /**
+   * Task studio-bb-production-20261112-234540-01 (lane ACTOR): a NON-GRAPHIC body (BB; EnemyActor.nonGraphic). installZombie gives it
+   * no wound materials and hitZombie shows no wound, blood, flesh / cloth piece, tear cue or torn-off chunk on it — alive, on the
+   * killing hit, or as a corpse: a neutral dust puff marks the hit instead. Damage itself is not this module's business.
+   */
+  readonly nonGraphic?: boolean;
 }
 
 export interface DamagePickup { stack: {itemId: string; uid?: number; count?: number}; x: number; y: number; z: number; obj: THREE.Object3D }
@@ -167,8 +173,12 @@ export class DamageSystem {
     for (const k in this.counts) (this.counts as Record<string, number>)[k] = 0;
   }
 
-  /** Give a freshly built zombie its own wound-patched materials (lane contract). */
-  installZombie(z: WoundableActor): void {
+  /**
+   * Give a freshly built zombie its own wound-patched materials (lane contract). A non-graphic body (BB) gets none: it keeps its own
+   * materials and has no wound controller, so nothing can ever mark or tear it (task studio-bb-production-20261112-234540-01).
+   */
+  installZombie(z: WoundableActor & {readonly nonGraphic?: boolean}): void {
+    if (z.nonGraphic) return;
     this.actors.push(installWounds(z));
   }
 
@@ -411,6 +421,16 @@ export class DamageSystem {
   hitZombie(z: DamageZombie, point: THREE.Vector3, dir: THREE.Vector3, part: 'head' | 'torso' | 'limb', shot: ShotInput, corpse = false): HitInfo {
     this.prof?.begin(SPAN.hitZombie);
     if (corpse) this.counts.corpse++; else this.counts.zombie++;
+    if (z.nonGraphic) {
+      // Task studio-bb-production-20261112-234540-01 (lane ACTOR): a non-graphic body (BB) — no wound, no blood spray / floor splat, no
+      // flesh or cloth piece, no tear cue, no torn-off chunk; alive, on the killing hit and as a corpse alike. The hit is marked by the
+      // existing soft-goods dust puff (no decal, no chips). No RNG draw: the game's stream is the same as if the shot had missed.
+      const back = tv.copy(dir).negate();
+      this.fx?.impact(point, back, 'soft', {decal: false, chips: 0});
+      const hit: HitInfo = {point: v3(point), normal: v3(back), object: corpse ? 'corpse' : 'zombie', instanceId: null, material: 'cloth'};
+      this.prof?.end(SPAN.hitZombie);
+      return hit;
+    }
     const w = woundsOf(z);
     const r = w?.add({point, dir, part, damage: shot.damage, pellet: shot.pellet}) ?? null;
     const at = r?.entry ?? point;

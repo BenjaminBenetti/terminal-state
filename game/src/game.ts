@@ -131,6 +131,8 @@ import {installBunkerObjective} from './world/bunker/objective'; // task studio-
 import {installReactorMapBoards} from './world/reactor/mapBoard'; // task reactor-expansion-20261101 (lane CONTROLS) // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import {SCREACHER_NOISE, ScreacherBrain, deliverNoise, echoLocate, landNoise, type ScreacherNoiseKind} from './ai/screacher'; // task studio-screacher-production-20261110-221858-01: the blind, sound-hunting family
+import {BbBrain, bbShoveStep} from './ai/bb'; // task studio-bb-production-20261112-234540-01: BB, the small wall / ceiling crawler
+import {levelsCrawlWorld, type CrawlWorld} from './ai/bbSurface';
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 // Iteration 16 (lane RUN): logical levels / sections, travel, run carryover (levels/registry.ts, run/*)
 import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, levelDisplayName, sectionLabel, storeyLabel} from './levels/registry';
@@ -1349,7 +1351,8 @@ export class Game {
     this.physics.dynamicItems.holderLoose = p => { const carried = cm.goLoose(p); this.world.culler.release(carried); return carried; }; // Lane G: moving now
     // task office-interactions-layout-20261030 (lane PHYS): `wake` — in the office the player wakes light props by walking into them
     this.physics.dynamicItems.walkers = () => [{id: this.player, x: this.player.x, z: this.player.z, y: this.player.y, r: this.player.radius, wake: true},
-      ...this.zombies.filter(z => z.brain.alive && !z.ragdolled).map(z => ({id: z, x: z.brain.x, z: z.brain.z, y: z.brain.y, r: z.brain.stats.radius}))];
+      // (task studio-bb-production-20261112-234540-01: a BB on a wall / ceiling / in the air walks into nothing — its `y` is the floor below it)
+      ...this.zombies.filter(z => z.brain.alive && !z.ragdolled && !(z.placesRoot && z.brain.climbing)).map(z => ({id: z, x: z.brain.x, z: z.brain.z, y: z.brain.y, r: z.brain.stats.radius}))];
     this.damage.build(this.layout, this.mats, [this.world.group, cm.group], {
       ownMeshes: p => cm.ownMeshes(p),
       onBreak: e => { const h = cm.holderFor(e.prop); if (h) cm.breakHolder(h, e.kind); this.physics.propsChanged(e.prop.x, e.prop.z); },
@@ -2532,6 +2535,7 @@ export class Game {
     this.blight.adopt(z); // Task track1-siren-blightbelly-20261031 (lane BLIGHT): a Blightbelly reports its single death to the burst (others: no-op)
     // Lane T: spawn on the local floor height; Lane B (iteration 08): of the spawn's own level
     z.brain.y = z.root.position.y = s.y ?? this.levels.grid(s.level ?? 0).floorAt(s.x, s.z);
+    if (z.brain instanceof BbBrain) z.brain.pose.y = z.brain.y; // (BB: the pose its actor renders starts on that floor too)
     this.sirens.adopt(z, s, i); // Task track1-siren-blightbelly-20261031 (lane SIREN): dormant (+ vein patch) or remembered awake (others: no-op)
     if (z.brain instanceof ScreacherBrain) this.screacherBrains.push(z.brain); // (the listeners of worldNoise)
     this.zombies.push(z);
@@ -3637,7 +3641,7 @@ export class Game {
     for (const [z, e] of dmg) {
       const killed = z.brain.damage(e.total, this.player.x, this.player.z, this.player.y);
       z.hitFlash = 1;
-      this.sfx.hitConfirm(e.point.x, e.point.y, e.point.z, z, e.head); // Iteration 12 (AUDIO): foreground (non-spatial) flesh confirm, once per enemy per shot (pellets aggregated in dmg; `z` de-dups); + the skull crack when a pellet / bullet of this shot really hit its HEAD (task studio-general-armor-20261107-231448-01)
+      this.sfx.hitConfirm(e.point.x, e.point.y, e.point.z, z, e.head && !z.nonGraphic); // Iteration 12 (AUDIO): foreground (non-spatial) flesh confirm, once per enemy per shot (pellets aggregated in dmg; `z` de-dups); + the skull crack when a pellet / bullet of this shot really hit its HEAD (task studio-general-armor-20261107-231448-01) — never on a non-graphic body (BB: task studio-bb-production-20261112-234540-01; its head hit still counts below)
       if (e.head) this.stats.headshots++;
       // knockback along the shot direction (stays out of walls)
       const k = def.knockback * (e.pellets / def.pellets) * (killed ? 1.4 : 1);
@@ -3744,7 +3748,7 @@ export class Game {
       this.damage.hitZombie(z, point, dir, res.part, wound);
       const killed = z.brain.damage(amount, this.player.x, this.player.z, this.player.y, swing.stagger > 0 ? meleeStaggerOpts(swing.stagger, arch) : {stagger: false});
       z.hitFlash = 1;
-      this.sfx.hitConfirm(point.x, point.y, point.z, z, res.part === 'head'); // (+ the head crack on a confirmed head hit: task studio-general-armor-20261107-231448-01)
+      this.sfx.hitConfirm(point.x, point.y, point.z, z, res.part === 'head' && !z.nonGraphic); // (+ the head crack on a confirmed head hit: task studio-general-armor-20261107-231448-01; never on a non-graphic body — BB: task studio-bb-production-20261112-234540-01)
       if (killed) {
         anyKill = true;
         this.stats.kills++;
@@ -3876,6 +3880,8 @@ export class Game {
     const g = this.layout.grid, L = this.levels, multi = L.count > 1;
     return {
       echo: (x, y, z, range) => this.echoScan(x, y, z, range), // (the Screacher's scream; no other brain calls it)
+      // task studio-bb-production-20261112-234540-01: the level's solid geometry for BB's wall / ceiling crawl and leap, and the eye its sight and aim use
+      crawl: this.crawlWorld(), pEye: this.player.eye,
       px: this.player.x, pz: this.player.z, playerAlive: this.player.alive,
       // Lane B (iteration 08): stacked levels — 3D sight between eye lines (1.5 m over the feet), so a slab between storeys blocks it.
       los: (ax, az, bx, bz, ay, by) => multi && ay !== undefined && by !== undefined ? L.lineOfSight({x: ax, y: ay + 1.5, z: az}, {x: bx, y: by + 1.5, z: bz}) : g.lineOfSight(ax, az, bx, bz),
@@ -3922,6 +3928,19 @@ export class Game {
       detect: this.beerEffects?.perceptionMult() ?? 1,
     };
   }
+
+  /**
+   * Task studio-bb-production-20261112-234540-01: BB's CrawlWorld of the current section (ai/bbSurface.ts: the bullet line over the
+   * structure and the solid props, the free bands, the standable floors, the 3D sight line) — built once per section's levels / props.
+   */
+  private crawlWorld(): CrawlWorld {
+    const c = this.bbCrawl;
+    if (c && c.levels === this.levels && c.props === this.layout.props) return c.world;
+    const world = levelsCrawlWorld(this.levels, this.layout.props, this.layout.trench.floorY);
+    this.bbCrawl = {levels: this.levels, props: this.layout.props, world};
+    return world;
+  }
+  private bbCrawl: {levels: Levels; props: readonly PropPlacement[]; world: CrawlWorld} | null = null;
 
   /** Lane B (iteration 08): a sound at (x, y, z) is occluded from the player (3D on stacked levels; 2D walls otherwise). */
   private soundOccluded(x: number, z: number, y?: number): boolean {
@@ -3970,15 +3989,19 @@ export class Game {
       const moved = moveZombie(b, out, dt, this.levels, this.propIndex); // Lane B: stacked levels
       if (b.alive && !b.climbing) {
         // keep bodies apart: other zombies and the player (same level only: platform vs track bed do not shove)
+        // (BB comes to the floor wherever a leap or a climb ends, also right at somebody's feet: it is eased out at a bounded pace,
+        // so one frame's push can never carry its small body through the wall beside it)
+        const ease = b instanceof BbBrain ? bbShoveStep(dt) : Infinity;
         for (const o of this.zombies) {
-          if (o === z || !o.brain.alive || !sameLevel(b.y, o.brain.y)) continue;
+          if (o === z || !o.brain.alive || !sameLevel(b.y, o.brain.y) || (o.placesRoot && o.brain.climbing)) continue; // (a BB on a wall / ceiling / in the air shoves nobody)
           const dx = b.x - o.brain.x, dz = b.z - o.brain.z, d = Math.hypot(dx, dz), min = b.stats.radius + o.brain.stats.radius;
-          if (d > 1e-4 && d < min) { const push = (min - d) * 0.5; b.x += dx / d * push; b.z += dz / d * push; }
+          if (d > 1e-4 && d < min) { const push = Math.min((min - d) * 0.5, ease); b.x += dx / d * push; b.z += dz / d * push; }
         }
         const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz), min = b.stats.radius + p.radius + 0.22;
-        if (d > 1e-4 && d < min && sameLevel(b.y, p.y)) { b.x += dx / d * (min - d); b.z += dz / d * (min - d); }
+        if (d > 1e-4 && d < min && sameLevel(b.y, p.y)) { const push = Math.min(min - d, ease); b.x += dx / d * push; b.z += dz / d * push; }
         settleZombie(b, this.levels, this.propIndex);
       }
+      if (b instanceof BbBrain) b.syncFloor(); // (its pose is written inside update(), before the motor: the floor body is shown where the motor left it)
       // positional (panner) enemy audio: vocals, swings, footfalls — per archetype (Lane Q cue adapter;
       // the zombie adapter makes exactly the previous groan / swing / gait / ladder calls)
       prof.end(SPAN.motor);
@@ -3994,7 +4017,7 @@ export class Game {
       const adt = H ? H.animStep(b, dt, dist) : dt;
       if (adt > 0) z.animate(adt, out.anim, moved);
       z.syncTransform();
-      if (!z.ragdolled) z.root.position.y = b.y; // Lane T: feet on stairs / track bed / underpass / ladder
+      if (!z.ragdolled && !z.placesRoot) z.root.position.y = b.y; // Lane T: feet on stairs / track bed / underpass / ladder (BB places its own root: a wall / ceiling body is not at the feet height)
       // Task studio-alpha-strainer-lumbering-wetness-20261101-01: the Strainer's bounded wet-shine trail (ai/strainerTrail.ts, fx WET_TRAIL)
       if (archetypeOf(z) === 'strainer') this.strainerTrail.step(z, b, z.ragdolled, (x, y, wz, size) => this.fx.wet(x, y, wz, size), Math.random); // (visual only: never the game RNG)
       if (adt > 0) z.updateVolumes();
@@ -4010,7 +4033,8 @@ export class Game {
     // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly's fist slam too (an ordinary zombie hit: melee locations, 'zombie' source), attacker 'blightbelly'
     // Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): the Strainer's long claw swipe too (a standing humanoid melee hit), attacker 'strainer'
     // Task studio-screacher-production-20261110-221858-01: the Screacher's long-arm rake too (a standing humanoid melee hit), attacker 'screacher'
-    const claw = archetypeOf(z) === 'siren' || archetypeOf(z) === 'blightbelly' || archetypeOf(z) === 'strainer' || archetypeOf(z) === 'screacher';
+    // Task studio-bb-production-20261112-234540-01: BB's pounce too — it leaps at the chest, so the hit lands like a standing melee hit (not a low bite), attacker 'bb'
+    const claw = archetypeOf(z) === 'siren' || archetypeOf(z) === 'blightbelly' || archetypeOf(z) === 'strainer' || archetypeOf(z) === 'screacher' || archetypeOf(z) === 'bb';
     const creature = archetypeOf(z) !== 'zombie' && !claw;
     const hit: PlayerHit = {amount: z.brain.stats.attackDamage, source: creature ? 'creature' : 'zombie', enemy: true,
       location: creature ? biteHitLocation(this.rand(), p.crouched) : meleeHitLocation(this.rand(), p.crouched), attacker: creature || claw ? archetypeOf(z) : z.brain.type};

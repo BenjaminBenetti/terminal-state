@@ -38,10 +38,11 @@ import {BLIGHTBELLY_BURST, BLIGHTBELLY_STATS} from '../../game/src/ai/blightbell
 import {SIREN_CLAW, SIREN_STATS, SIREN_WAKE} from '../../game/src/ai/siren';
 import {LUNGE as RATDOG_LUNGE, RATDOG_STATS} from '../../game/src/ai/creatureActor';
 import {STRAINER_ASSET, STRAINER_MAX_TOP_M, STRAINER_SCALE, STRAINER_STATS} from '../../game/src/ai/strainer'; // task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY)
+import {BB_ASSET, BB_BODY, BB_CADENCE, BB_CLIMB, BB_POUNCE, BB_SCALE, BB_SENSE, BB_STATS, BB_VARIANTS} from '../../game/src/ai/bb'; // task studio-bb-production-20261112-234540-01
 import {IMPACT_FAMILY_LOUDNESS, SCREACHER_AGGRO, SCREACHER_ASSET, SCREACHER_ECHO, SCREACHER_MAX_TOP_M, SCREACHER_NOISE, SCREACHER_SCALE, SCREACHER_SENSE, SCREACHER_SPEED, SCREACHER_STATS, SCREACHER_VARIANTS} from '../../game/src/ai/screacher'; // task studio-screacher-production-20261110-221858-01
 // task studio-screacher-production-20261110-221858-01: the seeded roster (the rule table, the pass itself, the roll, the version pin)
 import {
-  FAMILY_ROSTER, ROSTER_LANE, ROSTER_PLACE_PRIORITY, ROSTER_VERSION, ZOMBIE_FREE_LEVELS, applyEnemyRoster, familyInRoster, rosterRate,
+  FAMILY_ROSTER, ROSTER_LANE, ROSTER_PLACE_LAST, ROSTER_PLACE_PRIORITY, ROSTER_VERSION, ZOMBIE_FREE_LEVELS, applyEnemyRoster, familyInRoster, rosterRate,
   type RosterReport, type RosterRule,
 } from '../../game/src/ai/enemyRoster';
 import {LEVELS, LEVEL_IDS} from '../../game/src/levels/registry';
@@ -128,12 +129,14 @@ const F = {
   cosplaySpawns: 'game/src/gen/skyways/cosplaySpawns.ts', cosplayContext: 'game/src/ai/cosplayContext.ts',
   // task studio-screacher-production-20261110-221858-01: the Screacher and the seeded family roster
   screacher: 'game/src/ai/screacher.ts', roster: 'game/src/ai/enemyRoster.ts',
+  // task studio-bb-production-20261112-234540-01: BB
+  bb: 'game/src/ai/bb.ts',
 } as const;
 
 /** The game modules whose exported values the reference reads (this file's imports). Other files appear only as source links. */
 export const ENEMY_GENERATED_FROM: readonly string[] = [
   F.tables, F.archetypes, F.registry, F.frame, F.grid, F.stationKit, F.purposes, F.pistol, F.spawn, F.brain, F.blightbelly, F.siren, F.creatureActor,
-  F.contract, F.mallTypes, F.trackExt, F.strainer, F.lingerieSpawns, F.cosplaySpawns, F.cosplayContext, F.screacher, F.roster,
+  F.contract, F.mallTypes, F.trackExt, F.strainer, F.lingerieSpawns, F.cosplaySpawns, F.cosplayContext, F.screacher, F.roster, F.bb,
 ].slice().sort();
 
 /**
@@ -143,8 +146,12 @@ export const ENEMY_GENERATED_FROM: readonly string[] = [
  */
 export const ENEMY_FAMILY_ADAPTER: Readonly<Record<EnemyFamilyId, {
   stats: readonly {variant: string | null; stats: ZombieStats; file: string; symbol: string}[];
-  /** `labels`: this constant's own leaf labels (key path -> [label, unit]), read before the shared RULE_LABEL (the same key can mean another thing in another constant). */
-  rules: readonly {title: string; value: object; file: string; symbol: string; labels?: Readonly<Record<string, readonly [string, string]>>}[];
+  /**
+   * `labels`: this constant's own leaf labels (key path -> [label, unit]), read before the shared RULE_LABEL (the same key can mean another thing in another constant).
+   * `ownLabelsOnly` (task studio-bb-production-20261112-234540-01): a leaf without an own label shows its key path — it never borrows the
+   * shared RULE_LABEL wording another family's constant gave the same key (a key added to the constant later stays honest).
+   */
+  rules: readonly {title: string; value: object; file: string; symbol: string; labels?: Readonly<Record<string, readonly [string, string]>>; ownLabelsOnly?: true}[];
   /** Names of the family's model variants (ENEMY_ARCHETYPES[id].variantModels keys), where it has several bodies. */
   variantNames?: Readonly<Record<string, string>>;
 }>> = {
@@ -261,6 +268,83 @@ export const ENEMY_FAMILY_ADAPTER: Readonly<Record<EnemyFamilyId, {
       }},
     ],
   },
+  // task studio-bb-production-20261112-234540-01: BB (a small crawling undead with four looks; placed only by the seeded roster: its
+  // roster rule FAMILY_ROSTER.bb is shown by the roster block every family has). Every exported behaviour constant of ai/bb.ts, each
+  // leaf with its OWN label (`ownLabelsOnly`: a key the constant gains later shows its key path until it is labelled here — it is
+  // never dropped and never borrows another family's wording). A label for a key the constant does not have is simply not shown.
+  bb: {
+    stats: [{variant: null, stats: BB_STATS, file: F.bb, symbol: 'BB_STATS'}],
+    variantNames: Object.fromEntries(Object.entries(BB_VARIANTS).map(([id, v]) => [id, v.name])),
+    rules: [
+      {title: 'Stop-start crawl: it moves in bursts with freezes between (each length is drawn uniformly from its range; the speeds in the stats above are its burst paces)', value: BB_CADENCE, file: F.bb, symbol: 'BB_CADENCE', ownLabelsOnly: true, labels: {
+        burstS: ['hunting (aware of the player): one burst of movement lasts between', 's'],
+        freezeS: ['hunting: the freeze between two bursts lasts between', 's'],
+        farM: ['it counts as far from its target beyond this distance', 'm'],
+        farBurstS: ['far from its target: a burst lasts between (it keeps moving longer, to close the distance)', 's'],
+        farFreezeS: ['far from its target: a freeze lasts between', 's'],
+        calmBurstS: ['unaware (roaming, or settling on a perch): a burst lasts between', 's'],
+        calmFreezeS: ['unaware: a freeze lasts between', 's'],
+      }},
+      {title: 'Climbing: its paces on a wall or a ceiling, and where it climbs', value: BB_CLIMB, file: F.bb, symbol: 'BB_CLIMB', ownLabelsOnly: true, labels: {
+        speed: ['burst pace on a wall or ceiling while hunting', 'm/s'],
+        calmSpeed: ['burst pace on a wall or ceiling while unaware', 'm/s'],
+        maxHeightM: ['it never clings higher than this above the floor below it (a tall hall\'s ceiling and an atrium void are out of reach)', 'm'],
+        mountReachM: ['a wall it mounts must be within this distance', 'm'],
+        knockOffDamage: ['a hit of at least this much damage knocks it off a wall or a ceiling (it falls and lies recovering)', 'hp'],
+        floorS: ['unaware: it stays on the floor before it climbs for between', 's'],
+        perchS: ['unaware: it stays on a perch for between', 's'],
+        perchUpM: ['a wall perch is this high above the floor: between', 'm'],
+        perchCeilingM: ['a ceiling perch is a crawl of this length out onto the ceiling: between', 'm'],
+        huntClimbM: ['it may take the wall-and-ceiling way to a player it has noticed from farther than', 'm'],
+        huntClimbChance: ['chance that it then takes the wall-and-ceiling way (otherwise it runs on the floor)', ''],
+      }},
+      {title: 'The pounce, its only attack (attack range 0 in the stats above: it never swings standing): a wind-up tell, one leap aimed once at the launch that can hurt at most once, then a recovery and a cooldown', value: BB_POUNCE, file: F.bb, symbol: 'BB_POUNCE', ownLabelsOnly: true, labels: {
+        minM: ['nearer to the player than this it scuttles back once, then leaps anyway', 'm'],
+        leapFromM: ['each attempt launches from its own distance: at least this far', 'm'],
+        maxM: ['farthest distance it launches a leap from (its body to the player\'s chest, 3D, with a clear arc between)', 'm'],
+        dropMaxM: ['from a wall or ceiling perch it may also drop on a player this far away (3D)', 'm'],
+        windupS: ['the tell before the leap: it stops, crouches and giggles for', 's'],
+        speed: ['horizontal launch speed of the leap', 'm/s'],
+        gravity: ['gravity the leap falls with', 'm/s²'],
+        lead: ['its aim leads a moving player by this share of the flight time', ''],
+        maxFlightS: ['a leap can hurt only during its first', 's'],
+        contactSlackM: ['the one hit lands within its body radius + the player\'s body radius + this slack', 'm'],
+        landS: ['it lies recovering after a leap for this long (it cannot attack, and a hit staggers it)', 's'],
+        dropLandS: ['recovery after it lets go of a perch without a leap', 's'],
+        cooldownS: ['no new wind-up for this long after a leap', 's'],
+        retreatM: ['while it cools down: nearer to the player than this it runs to a wall perch, or away', 'm'],
+        retreatPerchChance: ['while it cools down and is that near: chance that it runs to a wall perch rather than away', ''],
+        fleeToM: ['while it cools down and runs away: it runs until it is this far from the player', 'm'],
+        holdM: ['while it cools down: beyond the retreat distance and nearer than this it waits and watches', 'm'],
+      }},
+      {title: 'What it notices and how long it remembers (the notice distances of an unaware one scale with the player\'s detectability, as for every enemy)', value: BB_SENSE, file: F.bb, symbol: 'BB_SENSE', ownLabelsOnly: true, labels: {
+        loseS: ['after losing sight of the player it keeps hunting the last place it saw them for', 's'],
+        cackleGapS: ['the cackle (the tell that it has noticed the player) is not repeated within', 's'],
+        stareS: ['after noticing the player it stares for this long before it moves', 's'],
+        perchNoticeM: ['unaware, clinging to a wall or a ceiling: it notices the player all round, but only within', 'm'],
+        fovRad: ['unaware, on the floor: it notices the player within this angle to either side of its heading', 'rad'],
+        closeM: ['unaware, on the floor: nearer than this it notices the player all round', 'm'],
+      }},
+      {title: 'The crawling body the AI and its movement reason about (scale 1)', value: BB_BODY, file: F.bb, symbol: 'BB_BODY', ownLabelsOnly: true, labels: {
+        radius: ['collider radius on the floor, and its body\'s reach on a surface', 'm'],
+        clearM: ['clear height it needs under a soffit when crawling on the floor', 'm'],
+        centreUp: ['body centre above the surface it is on (along the surface normal)', 'm'],
+        eyeUp: ['eyes above the surface it is on (along the surface normal)', 'm'],
+        eyeFwd: ['eyes ahead of the body centre', 'm'],
+      }},
+      {title: 'Height and hit volumes (the asset contract numbers of the four enemy-bb-*.glb models that the gameplay reads)', value: BB_ASSET, file: F.bb, symbol: 'BB_ASSET', ownLabelsOnly: true, labels: {
+        heightM: ['standing bind height (floor to the top of the head, headwear included, scale 1)', 'm'],
+        'hitRadii.torso': ['torso hit-capsule radius', 'm'],
+        'hitRadii.arm': ['arm hit-capsule radius', 'm'],
+        'hitRadii.leg': ['leg hit-capsule radius', 'm'],
+        headRadius: ['head hit-sphere radius', 'm'],
+      }},
+      {title: 'Runtime root scale (its own narrow jitter)', value: BB_SCALE, file: F.bb, symbol: 'BB_SCALE', ownLabelsOnly: true, labels: {
+        min: ['runtime root scale at least', 'x'],
+        max: ['runtime root scale at most', 'x'],
+      }},
+    ],
+  },
 };
 
 /** Labels + units of known rule constant leaves (key path → [label, unit]). Unknown leaves show their key path. */
@@ -296,13 +380,14 @@ const RULE_LABEL: Readonly<Record<string, readonly [string, string]>> = {
 /**
  * Every leaf of a rules constant as a row (nested objects flattened by key path; arrays: numbers joined, else their length).
  * `labels` (task studio-screacher-production-20261110-221858-01): the constant's own labels, read before the shared RULE_LABEL.
+ * `ownLabelsOnly` (task studio-bb-production-20261112-234540-01): the shared RULE_LABEL is not read — an unlabelled leaf shows its key path.
  */
-export function ruleRows(value: object, prefix = '', labels: Readonly<Record<string, readonly [string, string]>> = {}): {what: string; value: number | string; unit: string}[] {
+export function ruleRows(value: object, prefix = '', labels: Readonly<Record<string, readonly [string, string]>> = {}, ownLabelsOnly = false): {what: string; value: number | string; unit: string}[] {
   const out: {what: string; value: number | string; unit: string}[] = [];
   for (const [k, v] of Object.entries(value)) {
     const key = prefix ? `${prefix}.${k}` : k;
-    const [label, unit] = labels[key] ?? RULE_LABEL[key] ?? [key, ''];
-    if (v && typeof v === 'object' && !Array.isArray(v)) { out.push(...ruleRows(v, key, labels)); continue; }
+    const [label, unit] = labels[key] ?? (ownLabelsOnly ? undefined : RULE_LABEL[key]) ?? [key, ''];
+    if (v && typeof v === 'object' && !Array.isArray(v)) { out.push(...ruleRows(v, key, labels, ownLabelsOnly)); continue; }
     let shown: number | string;
     if (Array.isArray(v)) shown = v.every(x => typeof x === 'number') ? v.join(', ') : v.every(x => typeof x === 'string') ? v.join(', ') : v.length;
     else if (typeof v === 'boolean') shown = v ? 'yes' : 'no';
@@ -314,13 +399,13 @@ export function ruleRows(value: object, prefix = '', labels: Readonly<Record<str
 }
 
 /** Track 2 (lane CONTENT): how the service-annex zone context relates to the level (shown with the context). */
-const SERVICE_ZONE_NOTE = 'A PER-ANNEX ZONE BUDGET: one run per seeded service annex (0 to TRACK_EXT.annex.max per level, a generation census quantity — see docs/enemy-spawns.md "Service annexes"), on the annex\'s own fork, appended after every core spawn and tagged \'service\'. It is additive to the core contexts and NOT in the whole-level total above; the level\'s zombie types apply; its spawns draw from the annexes\' OWN family pool (SERVICE_FAMILY_POOL: a configured 20 % rat/dog selection share, Blightbelly 5 %, Strainer 8 % (the only pool that enables it: STRAINER_CONTEXTS), no Siren — per-spawn probabilities, not quotas). The seeded roster pass then runs on the finished level (see the seeded roster): it fixes the level\'s Strainers at EXACTLY ONE on the maps whose seed rolled the Strainer present, and at none on the others, and it decides per level whether Blightbellies and rat/dogs are there at all (the Screacher\'s slot rule lists the core contexts, not the annex). The sampled census shows the outcome with the pass applied. Killed annex enemies stay dead for the run (per-index memory).';
+const SERVICE_ZONE_NOTE = 'A PER-ANNEX ZONE BUDGET: one run per seeded service annex (0 to TRACK_EXT.annex.max per level, a generation census quantity — see docs/enemy-spawns.md "Service annexes"), on the annex\'s own fork, appended after every core spawn and tagged \'service\'. It is additive to the core contexts and NOT in the whole-level total above; the level\'s zombie types apply; its spawns draw from the annexes\' OWN family pool (SERVICE_FAMILY_POOL: a configured 20 % rat/dog selection share, Blightbelly 5 %, Strainer 8 % (the only pool that enables it: STRAINER_CONTEXTS), no Siren — per-spawn probabilities, not quotas). The seeded roster pass then runs on the finished level (see the seeded roster): it fixes the level\'s Strainers at EXACTLY ONE on the maps whose seed rolled the Strainer present, and at none on the others, and it decides per level whether Blightbellies and rat/dogs are there at all (the slot rules of the roster-only Screacher and BB list the core contexts, not the annex). The sampled census shows the outcome with the pass applied. Killed annex enemies stay dead for the run (per-index memory).';
 
 /**
  * Task mall-lingerie-20261102-221554 (lane CONTEXT): how the lingerie store's zone context relates to the mall (shown with the context),
  * the store-local eligibility line and the placement steps of gen/mall/lingerieSpawns.ts placeLingerieSpawns (not the generic area order).
  */
-const LINGERIE_ZONE_NOTE = `A STORE-LOCAL ZONE BUDGET: one run per lingerie store — the store is a seeded shop program on a LARGE lot (0 to ${LINGERIE_STORES_MAX} per mall, never guaranteed) — on its own fork (mall-lingerie-spawns), appended after EVERY other spawn of the mall (ambient, hordes, annex 'service') and tagged 'lingerie' (spawn context and ZombieSpawn.look). It is additive to the core contexts and NOT in the whole-level total or the ambient budget; its spawns draw from the store's OWN family pool (LINGERIE_FAMILY_POOL: ordinary zombies only — no Blightbelly, Siren, rat/dog, Strainer or Screacher; the seeded roster never converts an outfit zombie), are shamblers, and wear a fitted lingerie set at spawn time (ai/lingerie.ts lingerieLook(level seed, spawn index)) — a wardrobe look of the zombie family, never a new family. Every other spawn of every level keeps the ordinary wardrobe pick. No leash: after aggro they may follow the player out of the store. Killed variants stay dead for the run (per-index memory); a mall without a lingerie store has none.`;
+const LINGERIE_ZONE_NOTE = `A STORE-LOCAL ZONE BUDGET: one run per lingerie store — the store is a seeded shop program on a LARGE lot (0 to ${LINGERIE_STORES_MAX} per mall, never guaranteed) — on its own fork (mall-lingerie-spawns), appended after EVERY other spawn of the mall (ambient, hordes, annex 'service') and tagged 'lingerie' (spawn context and ZombieSpawn.look). It is additive to the core contexts and NOT in the whole-level total or the ambient budget; its spawns draw from the store's OWN family pool (LINGERIE_FAMILY_POOL: ordinary zombies only — no Blightbelly, Siren, rat/dog, Strainer, Screacher or BB; the seeded roster never converts an outfit zombie), are shamblers, and wear a fitted lingerie set at spawn time (ai/lingerie.ts lingerieLook(level seed, spawn index)) — a wardrobe look of the zombie family, never a new family. Every other spawn of every level keeps the ordinary wardrobe pick. No leash: after aggro they may follow the player out of the store. Killed variants stay dead for the run (per-index memory); a mall without a lingerie store has none.`;
 const LINGERIE_ZONE_WHERE = `the lingerie store's own sales floor only (never its stock room, a gallery or another unit), ≥ ${LINGERIE_SPAWN_RULES.entryKeepM} m from its shopfront(s): in a BOOTH (a changing rect with 1-${LINGERIE_SPAWN_RULES.boothOpeningCells} opening cells — its curtain gap) the centre of a 2 × 2 patch of its walkable cells off the opening row (the booth's centre line); the aisle hosts nobody while the store has booths; on the sales floor a 3 × 3-clear cell > ${LINGERIE_SPAWN_RULES.changingMarginCells} cells off the changing area and ≥ ${LINGERIE_SPAWN_RULES.changingEntryKeepM} m from its mouth; everywhere a ${LINGERIE_SPAWN_RULES.passageRadiusM} m disc around the spawn never splits the storey (fair passage)`;
 const LINGERIE_ZONE_EXPLAIN: readonly string[] = [
   `Only when the mall has a lingerie store: draw count = U{${ST.LINGERIE_CONTEXT.count[0]}..${ST.LINGERIE_CONTEXT.count[1]}} (one draw per store, rng.int); every one a shambler (no coat roll: the look is a lingerie set).`,
@@ -341,7 +426,7 @@ const LINGERIE_ZONE_EXPLAIN: readonly string[] = [
  */
 export const BUNKER_DAMP_RUNS_MAX = 1;
 const BUNKER_DAMP_ZONE_NOTE = `A DAMP-SECTION ZONE BUDGET: one run per Bunker level (0 to ${BUNKER_DAMP_RUNS_MAX}: a level without a damp area has none) over the water-damaged areas only (layout.bunker.damp: the pump hall, the filtration plant, the flooded maintenance wing), on its own fork, appended after the storey runs and tagged 'damp'. It is additive to the core contexts and NOT in the whole-level total; its one spawn draws from the zone's OWN family pool (BUNKER_DAMP_SHARES: rat/dog 10 %, THE STRAINER 30 % — the only pool outside the service annexes that enables it: STRAINER_CONTEXTS — the zombie the remainder; no Siren, no Blightbelly) — a per-spawn probability. The seeded roster pass then decides (see the seeded roster): on the maps whose seed rolled the Strainer present the damp spawn IS the level\'s one Strainer (whatever the per-spawn roll drew there — a rat/dog drawn there is exchanged to an ordinary zombie slot elsewhere), on the others the level has none. Killed ones stay dead for the run (per-index memory).`;
-const COSPLAY_ZONE_NOTE = `A CONVENTION ZONE BUDGET (layout version 5+): one run when the level's one add-on is the anime convention (0 to ${COSPLAY_CONVENTIONS_MAX} per level, never guaranteed — the alternative add-on, the prize display, has none), on its own fork (skyways-cosplay-spawns), appended after EVERY other spawn of the level (ambient, hordes, annex 'service') and tagged 'cosplay' (spawn context and ZombieSpawn.look). It is additive to the core contexts and NOT in the whole-level total; its spawns draw from the convention's OWN family pool (COSPLAY_FAMILY_POOL: ordinary zombies only — no Blightbelly, Siren, rat/dog, Strainer or Screacher; the seeded roster never converts an outfit zombie), are shamblers, and wear a costume at spawn time (ai/cosplay.ts cosplayLook(level seed, spawn index): the mascot's bear-ear hat + wig, an oversized mascot head, a sushi hat, the alternate-palette wig with a uniform) — a wardrobe look of the zombie family, never a new family. Every other spawn keeps the ordinary wardrobe pick. No leash. Killed ones stay dead for the run (per-index memory). Layout versions 1-4 never run it.`;
+const COSPLAY_ZONE_NOTE = `A CONVENTION ZONE BUDGET (layout version 5+): one run when the level's one add-on is the anime convention (0 to ${COSPLAY_CONVENTIONS_MAX} per level, never guaranteed — the alternative add-on, the prize display, has none), on its own fork (skyways-cosplay-spawns), appended after EVERY other spawn of the level (ambient, hordes, annex 'service') and tagged 'cosplay' (spawn context and ZombieSpawn.look). It is additive to the core contexts and NOT in the whole-level total; its spawns draw from the convention's OWN family pool (COSPLAY_FAMILY_POOL: ordinary zombies only — no Blightbelly, Siren, rat/dog, Strainer, Screacher or BB; the seeded roster never converts an outfit zombie), are shamblers, and wear a costume at spawn time (ai/cosplay.ts cosplayLook(level seed, spawn index): the mascot's bear-ear hat + wig, an oversized mascot head, a sushi hat, the alternate-palette wig with a uniform) — a wardrobe look of the zombie family, never a new family. Every other spawn keeps the ordinary wardrobe pick. No leash. Killed ones stay dead for the run (per-index memory). Layout versions 1-4 never run it.`;
 const COSPLAY_ZONE_WHERE = `the convention venue's public event floor only (its main hall, exhibitors' floor, photo lounge and panel rooms — never registration, the back of house, storage or the washrooms): a 3 × 3-clear walkable floor cell, never a ramp, ≥ ${COSPLAY_SPAWN_RULES.doorKeepM} m from every door of those areas and from the add-on's entry, ≥ ${COSPLAY_SPAWN_RULES.statueKeepM} m from every mascot statue (the greeter included), off the stage + ${COSPLAY_SPAWN_RULES.stageMarginM} m, a ${COSPLAY_SPAWN_RULES.passageRadiusM} m disc around the spawn never splitting the storey (fair passage)`;
 const COSPLAY_ZONE_EXPLAIN: readonly string[] = [
   `Only with the convention add-on (layout version 5+): draw count = U{${COSPLAY_CONTEXT.count[0]}..${COSPLAY_CONTEXT.count[1]}} (one draw, rng.int); every one a shambler (no coat roll: the look is a costume).`,
@@ -466,6 +551,8 @@ const VARIANTS: Readonly<Partial<Record<EnemyFamilyId, string>>> = {
   zombie: 'Shambler / coated type (the profile\'s zombie type roll) and the wardrobe outfit chosen at spawn time from (level seed, spawn index, type) by ai/wardrobe.ts pickZombieLook — sub-distributions of the zombie family, not separate families.',
   // task studio-screacher-production-20261110-221858-01: the Screacher's four approved bodies — ONE enemy type
   screacher: `${Object.keys(SCREACHER_VARIANTS).length} approved bodies (${Object.entries(SCREACHER_VARIANTS).map(([id, v]) => `${id} "${v.name}"`).join(', ')}): model variants of ONE enemy type with the same AI, stats and sounds — not separate families. The roster pass that places a Screacher gives it its variant (ZombieSpawn.variant), dealt in turn from a seeded start, and a level loads only the bodies its Screachers use.`,
+  // task studio-bb-production-20261112-234540-01: BB's four approved looks — ONE enemy type
+  bb: `${Object.keys(BB_VARIANTS).length} approved looks (${Object.entries(BB_VARIANTS).map(([id, v]) => `${v.look}: ${id} "${v.name}"`).join(', ')}): model variants of ONE enemy type with the same AI, stats, timings and sounds — not separate families. The roster pass that places a BB gives it its look (ZombieSpawn.variant), dealt in turn from a seeded start, and a level loads only the looks its BBs use.`,
 };
 
 /**
@@ -857,10 +944,17 @@ function statsVariant(v: {variant: string | null; stats: ZombieStats}, at: Sourc
 
 type SeededRule = Extract<RosterRule, {mode: 'seeded'}>;
 /** Every field of a roster rule the reference carries: a field it does not know fails the build instead of being silently dropped. */
-const ROSTER_RULE_FIELDS: readonly string[] = ['mode', 'why', 'since', 'key', 'rate', 'levelRates', 'place', 'contexts', 'counts', 'slots', 'spacingM', 'variants'];
+const ROSTER_RULE_FIELDS: readonly string[] = ['mode', 'why', 'since', 'key', 'rate', 'levelRates', 'place', 'contexts', 'counts', 'slots', 'spacingM', 'variants', 'last'];
 const ROSTER_SLOT_FIELDS: readonly string[] = ['contexts', 'excludeKinds', 'excludeRooms', 'minSideCells', 'minAreaCells'];
 /** A share as a percentage ("40 %"). */
 const pc = (x: number): string => `${rd(x * 100)} %`;
+/**
+ * Task studio-bb-production-20261112-234540-01: the rank a present family is placed at — the source's own rule (ai/enemyRoster.ts
+ * applyEnemyRoster): a `last` family (one added in a later roster version) after every policy, else its policy's ROSTER_PLACE_PRIORITY.
+ */
+const rosterPlaceRank = (rule: SeededRule): number => (rule.last ? ROSTER_PLACE_LAST : ROSTER_PLACE_PRIORITY[rule.place]);
+/** What `last` means, appended to the policy text of such a family (its numbers read from the rule). */
+const rosterLastText = (rule: SeededRule): string => `PLACED LAST (its rule applies from roster version ${rule.since}): after every family of an earlier roster version has its slots, whatever their policies. It takes only ordinary ambient zombie slots those families left, so each of them stands exactly where the earlier version put it.`;
 
 /**
  * How a PRESENT family is placed, in plain language; every number is read from the rule. The switch is exhaustive over the source's
@@ -902,7 +996,7 @@ function rosterFamilyInfo(id: EnemyFamilyId, src: Sources): RosterFamilyInfo {
     if (rosterOnly) throw new Error(`family ${id}: roster-only (weight 0 in every pool) but its roster rule is the baseline — nothing could ever place it`);
     return {family: id, mode: 'baseline', since: null, key: null, rate: null, levelRates: [], place: null,
       placement: 'Baseline: always present and never rolled. Every other family only ever takes ordinary ambient zombie slots, so the ordinary zombie is whatever the others leave.',
-      contexts: null, counts: null, countMean: null, slots: null, spacingM: null, variants: null, rosterOnly, why: rule.why, at};
+      contexts: null, counts: null, countMean: null, slots: null, spacingM: null, variants: null, last: false, rosterOnly, why: rule.why, at};
   }
   if (rosterOnly && rule.place !== 'count') throw new Error(`family ${id}: roster-only (weight 0 in every pool) needs a 'count' roster rule — policy '${rule.place}' builds on a per-spawn roll that can never draw it`);
   let counts: RosterFamilyInfo['counts'] = null, countMean: number | null = null, slots: RosterFamilyInfo['slots'] = null;
@@ -921,11 +1015,12 @@ function rosterFamilyInfo(id: EnemyFamilyId, src: Sources): RosterFamilyInfo {
   return {
     family: id, mode: 'seeded', since: rule.since, key: rule.key, rate: rule.rate,
     levelRates: Object.entries(rule.levelRates ?? {}).map(([level, rate]) => ({level, rate: rate as number})),
-    place: rule.place, placement: rosterPlacementText(rule),
+    place: rule.place, placement: `${rosterPlacementText(rule)}${rule.last ? ` ${rosterLastText(rule)}` : ''}`,
     contexts: rule.place === 'context-one' ? [...rule.contexts] : null,
     counts, countMean, slots,
     spacingM: rule.place === 'count' ? rule.spacingM : null,
     variants: rule.place === 'count' ? [...rule.variants] : null,
+    last: rule.last === true,
     rosterOnly, why: rule.why, at,
   };
 }
@@ -1068,7 +1163,7 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
     // the registry's stats (when set) must be the very constant the adapter reads: the reference never shows other numbers
     if (d.stats && !ad.stats.some(v => v.stats === d.stats)) throw new Error(`family ${id}: ENEMY_ARCHETYPES.${id}.stats is not ${ad.stats.map(v => v.symbol).join(' / ')}`);
     const stats = ad.stats.map(v => statsVariant(v, src.at(v.file, v.symbol)));
-    const rules: FamilyRuleGroup[] = ad.rules.map(r => ({title: r.title, rows: ruleRows(r.value, '', r.labels), at: src.at(r.file, r.symbol)}));
+    const rules: FamilyRuleGroup[] = ad.rules.map(r => ({title: r.title, rows: ruleRows(r.value, '', r.labels, r.ownLabelsOnly), at: src.at(r.file, r.symbol)}));
     // task studio-screacher-production-20261110-221858-01: a roster-only family (weight 0 in every pool) appears where the roster places it
     const rosterOnly = ROSTER_ONLY_FAMILIES.includes(id);
     return {id, label: d.label, model: d.model,
@@ -1083,7 +1178,13 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
   const rosterFamilies = ENEMY_FAMILY_IDS.map(id => rosterFamilyInfo(id, src));
   const levelName = (l: LevelId) => LEVELS[l].name;
   const seededOrder = ENEMY_FAMILY_IDS.map((f, k) => [f, k] as const).filter(([f]) => FAMILY_ROSTER[f].mode === 'seeded')
-    .sort((a, b) => ROSTER_PLACE_PRIORITY[(FAMILY_ROSTER[a[0]] as SeededRule).place] - ROSTER_PLACE_PRIORITY[(FAMILY_ROSTER[b[0]] as SeededRule).place] || a[1] - b[1]).map(r => r[0]);
+    .sort((a, b) => rosterPlaceRank(FAMILY_ROSTER[a[0]] as SeededRule) - rosterPlaceRank(FAMILY_ROSTER[b[0]] as SeededRule) || a[1] - b[1]).map(r => r[0]);
+  // (task studio-bb-production-20261112-234540-01) the order in words: the policies' order, then the `last` families; and which rules
+  // apply only from a later roster version (a station recorded before it regenerates without them)
+  const seededRule = (f: EnemyFamilyId) => FAMILY_ROSTER[f] as SeededRule;
+  const placedText = (f: EnemyFamilyId) => `${ENEMY_ARCHETYPES[f].label} (${seededRule(f).place})`;
+  const lastOrder = seededOrder.filter(f => seededRule(f).last);
+  const laterRules = seededOrder.filter(f => seededRule(f).since > 1).map(f => `${ENEMY_ARCHETYPES[f].label} from version ${seededRule(f).since}`);
   const roster: RosterInfo = {
     version: ROSTER_VERSION, lane: ROSTER_LANE, zombieFreeLevels: [...ZOMBIE_FREE_LEVELS], rosterOnly: [...ROSTER_ONLY_FAMILIES], order: seededOrder,
     rules: [
@@ -1091,9 +1192,9 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
       'The pass runs once on the FINISHED layout — after every generation context, the one per-spawn family roll, the eligibility rules, cap and spacing, and the hordes — in the level registry, the same for every registered level.',
       'It only swaps a family with an ORDINARY AMBIENT ZOMBIE slot: a spawn\'s family (and, for a family with several bodies, its model variant) changes and nothing else. No spawn is added, removed, moved or reordered, so the enemy count, the positions and the per-index kill memory keep their meaning. Roaming-horde members and store / convention outfit zombies are never touched.',
       'A family rolled ABSENT has exactly none in that level: what its per-spawn roll placed becomes ordinary zombies. Nothing is renormalised and no other family\'s draw moves.',
-      `A family rolled PRESENT is placed by its policy, the most constrained first: ${seededOrder.map(f => `${ENEMY_ARCHETYPES[f].label} (${(FAMILY_ROSTER[f] as SeededRule).place})`).join(', ')} — each on the ordinary zombie slots still left. A constrained family whose only legal slot holds a member of a share-top-up family takes that slot, and the member is exchanged to an ordinary zombie slot elsewhere. PRESENT MEANS AT LEAST ONE for every policy: only a level with no slot at all where the family may stand holds none, and the pass reports that as "no slot".`,
+      `A family rolled PRESENT is placed by its policy, the most constrained first: ${seededOrder.filter(f => !seededRule(f).last).map(placedText).join(', ')} — each on the ordinary zombie slots still left.${lastOrder.length ? ` A family added in a later roster version is placed LAST, whatever its policy (${lastOrder.map(placedText).join(', ')}): it takes only slots the earlier families left, so their placement does not move.` : ''} A constrained family whose only legal slot holds a member of a share-top-up family takes that slot, and the member is exchanged to an ordinary zombie slot elsewhere. PRESENT MEANS AT LEAST ONE for every policy: only a level with no slot at all where the family may stand holds none, and the pass reports that as "no slot".`,
       `The ordinary zombie is the baseline: always present, never rolled.${ZOMBIE_FREE_LEVELS.length ? ` Zombie-free levels (${ZOMBIE_FREE_LEVELS.map(levelName).join(', ')}) never get any family.` : ''}`,
-      `Version pin (saves): a station records the roster version it was first built with (section-memory lane '${ROSTER_LANE}'). A station already visited before the roster existed regenerates with version 0 — no pass, so its enemies, kills and ids stay exact; a station never entered (a new campaign, or an unvisited node of an older one) is built with the current version ${ROSTER_VERSION}. A direct generator call without a roster version gets no pass.`,
+      `Version pin (saves): a station records the roster version it was first built with (section-memory lane '${ROSTER_LANE}'). A station already visited before the roster existed regenerates with version 0 — no pass, so its enemies, kills and ids stay exact; a station never entered (a new campaign, or an unvisited node of an older one) is built with the current version ${ROSTER_VERSION}. A station recorded at an older version regenerates with that version: a rule that applies only from a later one${laterRules.length ? ` (${laterRules.join(', ')})` : ''} does not run there, so a visited station's enemies are never rerolled. A direct generator call without a roster version gets no pass.`,
     ],
     families: rosterFamilies, rollCheckSeeds: ROSTER_ROLL_CHECK_SEEDS,
     at: src.at(F.roster, 'applyEnemyRoster'),

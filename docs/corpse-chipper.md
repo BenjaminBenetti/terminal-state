@@ -60,6 +60,8 @@ spray, and becomes a tenth of a standard fuel tank. Normal fuel loot, spawn weig
   `corpse` of every `ENEMY_ARCHETYPES` entry).
   - Today that is the zombie (every look), Blightbelly, Siren, Strainer and the Screacher (all four bodies).
   - The rat/dog scavenger is an animal and is not eligible.
+  - BB is undead but not a humanoid body: a knee-high crawler is not the adult body plan the carry and the feed are built for.
+    It is not eligible (`docs/bb.md`).
   - A new archetype must classify itself; a registry-driven test checks every entry.
 - **Never eligible:** living enemies, Market people, the player, decorative corpse props, ragdoll parts and severed limbs.
 - **Identity:** `'<station section>#<layout enemy index>'`, which is one death (killed enemies never respawn). Only layout spawns have
