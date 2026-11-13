@@ -58,6 +58,7 @@ import {COSPLAY_MODEL_FILES, createCosplayLibrary} from './ai/cosplay'; // task 
 import type {WardrobeLibrary} from './ai/wardrobe';
 import {alertListeners, type BrainWorld} from './ai/brain';
 import {lureWorld} from './ai/lightLure'; // Iteration 12 (AI): light attracts enemies
+import {ScentLures} from './ai/scentLure'; // task studio-refinement-batch-20261113-035659-01 (lane LURE): the lure grenade's scent
 import {moveZombie, sameLevel, settleZombie} from './ai/motor';
 import {ladderTarget, type Ladder} from './gen/traversal';
 import {raycastWorld, type Vec3, type WorldHit} from './combat/hitscan';
@@ -379,6 +380,8 @@ export class Game {
   readonly torch: PlayerLight;
   /** Iteration 12 (LIGHT): thrown road flares (weapons/throwables.ts; a cannon BodySource of `physics`). */
   readonly flares = new FlareSystem(this.scene, this.physics, this.lightSources);
+  /** Task studio-refinement-batch-20261113-035659-01 (lane LURE): the lure grenade's scent emitters enemies walk to (ai/scentLure.ts; no sight needed). */
+  readonly scents = new ScentLures();
   /** Track 2 (VIS): the service annexes' steam vents (visual only; Effects' bounded steam ring). */
   private steamVents: SteamVents | null = null;
   /** Iteration 15: grenade-style flare input (T, or left click with a flare in hand): hold readies, release throws once. */
@@ -1180,6 +1183,7 @@ export class Game {
     this.consumeReturn = null; // (consumable return: a new station / Retry starts with nothing pending)
     this.consumeView?.reset();
     this.flares.clear(); // Iteration 12 (LIGHT): burning / thrown flares, their lights, smoke, loops and light sources
+    this.scents.clear(); // lane LURE: every lure scent ends with its station (travel / Retry / new game)
     this.flareHold.cancel(); // Iteration 15: a readied flare is dropped (nothing spent)
     this.lmbLatch = false;
     this.laneOwnedLast = false;
@@ -3196,6 +3200,7 @@ export class Game {
     this.physics.update(dt); // ragdolls (fixed 1/60 steps) + casings; update() only runs while playing
     prof.lap(SPAN.flares);
     this.flares.tick(dt); // Iteration 12 (LIGHT): flare bodies -> mesh / light / smoke / sound / light-source positions, burn-out
+    this.scents.tick(dt); // lane LURE: the lure scents' ACTIVE seconds (update() never runs paused / in menus / loading)
 
     prof.lap(SPAN.camera);
     // recoil recovery and bloom decay
@@ -3776,6 +3781,8 @@ export class Game {
       rand: this.rand,
       // Iteration 12 (AI): light lure — this frame's attracting lights, 3D eye-to-point sight, standable goal near a lit spot (ai/lightLure.ts).
       ...lureWorld(L, this.lightSources),
+      // task studio-refinement-batch-20261113-035659-01 (lane LURE): the lure grenade's active scents (ai/scentLure.ts: 20 m in 3D, no sight)
+      scents: this.scents.list,
       // Task track3-eaton-centre-20261031 (lane HORDE, atrium AI): open-atrium chase rules (ai/brain.ts BrainWorld.atrium); absent elsewhere
       ...(this.layout.mall || this.layout.reactor ? {atrium: true} : {}), // (reactor-build, lane ARCH: + the open pit)
       // Task studio-beta-mall-round3-20261031-01 (lane ENEMY, R2): the open-atrium notice rule (ai/brain.ts ATRIUM_PERCEPTION); mall only
