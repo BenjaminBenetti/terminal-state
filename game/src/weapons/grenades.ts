@@ -241,6 +241,7 @@ export class GrenadeSystem implements BodySource {
   cooldown = 0;
   private nextId = 1;
   private readonly tv = new THREE.Vector3();
+  private readonly tseg = new THREE.Vector3();
   private readonly tq = new THREE.Quaternion();
   private readonly tm = new THREE.Matrix4();
   private readonly tw = {x: 0, y: 0, z: 0};
@@ -417,11 +418,10 @@ export class GrenadeSystem implements BodySource {
       if (!b) { this.land(c); return; }
       this.guard(c, dt);
       if (!c.body) { this.land(c); return; }
-      const now = this.tv.set(b.position.x, b.position.y, b.position.z);
       // the path since the last tick against the live enemies (the bullets' test)
       const zs = this.env.zombies?.();
       if (zs?.length) {
-        const seg = now.clone().sub(c.prev), len = seg.length();
+        const seg = this.tseg.set(b.position.x, b.position.y, b.position.z).sub(c.prev), len = seg.length();
         if (len > 1e-4) {
           const hit = nearestEnemyHit(c.prev, seg.divideScalar(len), len + GRENADE.radius, zs);
           if (hit) {
@@ -435,7 +435,7 @@ export class GrenadeSystem implements BodySource {
           }
         }
       }
-      c.prev.copy(now);
+      c.prev.set(b.position.x, b.position.y, b.position.z);
       this.syncBody(c);
       if (c.kind === 'acid') {
         const contact = c.hit;
