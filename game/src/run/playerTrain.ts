@@ -28,6 +28,11 @@
 // TrainEquipment: the additional chests with their contents and the devices — radar, sentry with its loaded rounds, scanner — aboard,
 // their train-local poses and plugs, and the run's unit counter). Saved with the record (`equipment`); NewGame: none; Travel keeps it;
 // Retry restores the entry state. An old save without `equipment` loads none.
+//
+// Task studio-refinement-batch-20261113-035659-01 (lane ARMOR): the record also holds the train's permanent one-time UPGRADES
+// (run/trainUpgrades.ts TrainUpgrades: the fitted ids — today the armour, world/trainArmor.ts). Saved with the record (`upgrades`, only
+// while something is fitted); NewGame: none; Travel keeps them; Retry restores the entry state (a craft undone by Retry un-fits with the
+// refunded scrap). An old save without `upgrades` (or a damaged value) loads none fitted.
 
 import type {RunParticipant} from './snapshot';
 import type {SectionKey} from '../levels/types';
@@ -37,6 +42,7 @@ import {TrainCargo} from './trainCargo';
 import {chipperProblem, copyChipper, freshChipper, type ChipperJSON} from '../fuel/chipperFuel';
 import {corpseFeedable} from '../ai/corpseTrait';
 import {TrainEquipment} from '../craft/equipment';
+import {TrainUpgrades} from './trainUpgrades';
 
 /**
  * The train's fuel: the tank (quarter units, 0..FUEL.trainTankUnits) and the carts aboard. With a live cart system attached (`live`, the
@@ -134,6 +140,8 @@ export class PlayerTrainRecord {
   readonly chipper = new TrainChipper();
   /** Task train-crafting: the crafted chests / devices aboard (the same object for the whole session). */
   readonly equipment = new TrainEquipment();
+  /** (lane ARMOR) The permanent one-time upgrades fitted to the car (the same object for the whole session). */
+  readonly upgrades = new TrainUpgrades();
 
   /** A copy of the current record. */
   get state(): PlayerTrainState {
@@ -156,7 +164,9 @@ export class PlayerTrainRecord {
   participant(): RunParticipant {
     return {
       id: PLAYER_TRAIN_PARTICIPANT,
-      save: () => ({...this.state, lockbox: this.lockbox.toJSON(), fuel: this.fuel.toJSON(), cargo: this.cargo.toJSON(), chipper: this.chipper.toJSON(), equipment: this.equipment.toJSON()}),
+      // (lane ARMOR: `upgrades` only while something is fitted — an unfitted train saves exactly as before)
+      save: () => ({...this.state, lockbox: this.lockbox.toJSON(), fuel: this.fuel.toJSON(), cargo: this.cargo.toJSON(), chipper: this.chipper.toJSON(), equipment: this.equipment.toJSON(),
+        ...(this.upgrades.any ? {upgrades: this.upgrades.toJSON()} : {})}),
       load: d => {
         this.s = valid(d) ? {id: d.id, tier: d.tier, at: d.at ? {level: d.at.level, section: d.at.section} : null} : fresh();
         this.lockbox.load(d && typeof d === 'object' ? (d as {lockbox?: unknown}).lockbox : undefined);
@@ -164,8 +174,9 @@ export class PlayerTrainRecord {
         this.cargo.load(d && typeof d === 'object' ? (d as {cargo?: unknown}).cargo : undefined);
         this.chipper.load(d && typeof d === 'object' ? (d as {chipper?: unknown}).chipper : undefined);
         this.equipment.load(d && typeof d === 'object' ? (d as {equipment?: unknown}).equipment : undefined);
+        this.upgrades.load(d && typeof d === 'object' ? (d as {upgrades?: unknown}).upgrades : undefined); // (lane ARMOR) absent / damaged: none fitted
       },
-      reset: () => { this.s = fresh(); this.lockbox.clear(); this.fuel.reset(); this.cargo.reset(); this.chipper.reset(); this.equipment.reset(); },
+      reset: () => { this.s = fresh(); this.lockbox.clear(); this.fuel.reset(); this.cargo.reset(); this.chipper.reset(); this.equipment.reset(); this.upgrades.reset(); },
     };
   }
 }

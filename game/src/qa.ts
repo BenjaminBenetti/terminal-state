@@ -48,6 +48,7 @@ import {trainEquipmentQaApi} from './world/trainEquipment'; // task train-crafti
 import {saveTerminalQaApi} from './world/trainSaveTerminal'; // task refinement-batch (lane SAVE): saveTerminal(), saveTerminalGo(), saveTerminalPress()
 import {craftBenchQaApi} from './world/craftBench'; // task train-crafting (lane BENCH): bench(), benchGo(), benchOpen(), benchClose(), benchCraft(kind)
 import {sentryQaApi} from './world/sentryTurret'; // task train-crafting-v1 (lane SENTRY): sentry()
+import {trainArmorQaApi} from './world/trainArmor'; // task refinement-batch (lane ARMOR): trainArmor(), trainArmorFit()
 import {rideQaApi} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): ride(), rideDepart(), rideArrive(), rideDemo(seconds?), rideReset()
 import {lockboxQaApi} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): lockbox(), lockboxOpen(), lockboxType('1337'), lockboxQuick / Move / Stow / Close
 import {trunkQaApi} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): trunk(), trunkOpen(), trunkClose(), trunkQuick / Move / Stow
@@ -415,6 +416,7 @@ export function installQaHooks(game: Game): void {
     ...craftBenchQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane BENCH): bench() — placement / model / prompt / the open list's rows / material counts; benchGo() — stand at it; benchOpen() / benchClose(); benchCraft(kind) — craft from the open list
     ...saveTerminalQaApi(game), // task studio-refinement-batch-20261113-035659-01 (lane SAVE): saveTerminal() — placement / screen lines / last result / block; saveTerminalGo() — stand and look at it; saveTerminalPress() — [E] on it
     ...sentryQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane SENTRY): sentry() — the active unit / rounds, turret (deployed, pose, headroom), target, shots
+    ...trainArmorQaApi(game), // task studio-refinement-batch-20261113-035659-01 (lane ARMOR): trainArmor() — fitted / shown / models / colliders / ride / preview / contact counters; trainArmorFit() — fit it through the seam without a craft (QA)
     ...rideQaApi(game), // task campaign-foundation-20261102 (lane RIDE): ride(), rideDepart(), rideArrive(), rideDemo(seconds?) (dev: depart + loop + re-arrive at the same station), rideReset()
     ...lockboxQaApi(game), // task train-lockbox-windows-20261101-232156 (lane BOX): lockbox(), lockboxOpen(), lockboxClose(), lockboxType(keys), lockboxQuick(spec), lockboxMove(from, to, n?), lockboxStow()
     ...trunkQaApi(game), // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): trunk(), trunkOpen(), trunkClose(), trunkQuick(spec), trunkMove(from, to, n?), trunkStow()
