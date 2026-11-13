@@ -762,7 +762,9 @@ function gaitFrame(rig: BbRig, phi: number, fast: boolean): BbFrame {
   const kR = gaitContact(ph, duty, m.kneeFront, S, kneeLift, -m.kneeX), kL = gaitContact(ph + 0.5, duty, m.kneeFront, S, kneeLift, m.kneeX);
   const pL = gaitContact(ph + lead, duty, m.palmFront, S, palmLift, m.palmX), pR = gaitContact(ph + lead + 0.5, duty, m.palmFront, S, palmLift, -m.palmX);
   // the right hip leads while the right knee is planted ahead (a yaw about the root's up: + turns the left side back)
-  const yaw = (fast ? 5 : 7) * Math.cos(w - 0.3), roll = -(fast ? 2.5 : 3.5) * s, hipsX = -0.1 * m.kneeX * s;
+  // (the pelvis tips up on the side of the swinging knee — a hip hike: + raises the left side — and shifts over the planted one)
+  const yaw = (fast ? 5 : 7) * Math.cos(w - 0.3), hipsX = -0.1 * m.kneeX * s;
+  let roll = (fast ? 3 : 4) * s;
   // the hips ride the planted knee; between two stances (a hop, or the hand-over of a hop-less crawl) they ease from where one knee
   // left them to where the next takes them, never lower than a knee still planted needs
   const o: Fours = {
@@ -777,7 +779,22 @@ function gaitFrame(rig: BbRig, phi: number, fast: boolean): BbFrame {
   const half = ph < 0.5, hp = half ? ph : ph - 0.5, cur: BbSide = half ? 'R' : 'L', next: BbSide = half ? 'L' : 'R';
   const curK = half ? kR : kL, sx = (side: BbSide): number => (side === 'L' ? m.kneeX : -m.kneeX);
   const blendW = Math.max(0.5 - duty, 0.1), u = (hp - (0.5 - blendW)) / blendW;
-  const held = need(cur, curK.down ? curK : {x: sx(cur), z: m.kneeFront - S, lift: 0});
+  const heldK: Contact = curK.down ? curK : {x: sx(cur), z: m.kneeFront - S, lift: 0};
+  // late in a stance the planted thigh lies far back (the hips want to be low) just as the other knee passes under its own hip joint
+  // (which wants them high): the hike grows by what it takes to keep the planted knee ON the surface, and eases off with the hop
+  const short = (r: number): number => {
+    const T = foursTrunk(rig, {...o, roll: r, hipsY: cur, knee: {...o.knee, [cur]: heldK}});
+    return T.hips[1] - hipsYFor(rig, tq(T.pitch, yaw, r), hipsX, m.hipsZ, cur, heldK);
+  };
+  if (short(roll) > 1e-5) {
+    const sg = cur === 'R' ? 1 : -1;
+    let lo = 0, hi = 12;
+    if (short(roll + sg * hi) > 1e-5) lo = hi;
+    else for (let i = 0; i < 14; i++) { const mid = (lo + hi) / 2; if (short(roll + sg * mid) > 1e-5) lo = mid; else hi = mid; }
+    roll += sg * hi * (u > 0 ? 1 - ss(0, 1, u) : 1);
+    o.roll = roll;
+  }
+  const held = need(cur, heldK);
   let hipsY = held;
   if (u > 0) {
     const hop = clamp((hp - duty) / Math.max(1e-6, 0.5 - duty), 0, 1);
