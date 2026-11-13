@@ -168,7 +168,8 @@ describe('Siren family: stats from source, registry entry', () => {
     expect(def.model).toBe(SIREN_MODEL_KEY);
     expect(def.climbsLadders).toBe(false);
     // round 4 (lane FAMILY): + the Strainer, appended last; task studio-screacher-production-20261110-221858-01: + the roster-only Screacher after it
-    expect(Object.keys(ENEMY_ARCHETYPES)).toEqual(['zombie', 'blightbelly', 'siren', 'ratdog', 'strainer', 'screacher']);
+    // task studio-bb-production-20261112-234540-01: + the roster-only BB, appended after the Screacher
+    expect(Object.keys(ENEMY_ARCHETYPES)).toEqual(['zombie', 'blightbelly', 'siren', 'ratdog', 'strainer', 'screacher', 'bb']);
     const z = {archetype: 'siren', brain: new SirenBrain(0, 0, 0)} as unknown as EnemyActor;
     expect(enemyCues(z)).toBe(SIREN_CUES);
   });

@@ -35,7 +35,7 @@ export function bbVariantOf(spawn: {variant?: string}): BbVariantId {
 
 /**
  * The asset contract numbers the gameplay reads (model metres at scale 1) = the `enemyBb` extras every variant GLB carries
- * (tools/asset-pipeline/enemy/build-bb.mjs; tests/bb-contract.test.ts checks the agreement). The GLBs carry no clips: every pose is
+ * (tools/asset-pipeline/enemy/build-bb.mjs; tests/bb-asset.test.ts checks the files, tests/bb-contract.test.ts the agreement). The GLBs carry no clips: every pose is
  * a runtime clip on the shared 18-joint rig (ai/bbClips.ts).
  */
 export const BB_ASSET = {
@@ -159,8 +159,8 @@ export const BB_SENSE = {
   stareS: 0.4,
   /** Clinging to a wall or ceiling it notices all round, but only this near (m); on the floor it has the usual forward field of view. */
   perchNoticeM: 10,
-  /** Field of view of an unaware one on the floor (rad each side) beyond closeM; nearer than nearM it notices all round. */
-  fovRad: 1.3, closeM: 5, nearM: 2.5,
+  /** Field of view of an unaware one on the floor (rad each side of its heading); nearer than closeM it notices all round. */
+  fovRad: 1.3, closeM: 5,
 } as const;
 
 /** Feet-to-mouth height of the crawling body (m): its positional voice on the floor (ENEMY_ARCHETYPES.bb.voiceHeight). */
@@ -232,6 +232,8 @@ type Act =
 const NONE: Act = {k: 'none'};
 /** In the air (m/s, m): the fastest fall, the push off the player after its hit, the hop off a thing it cannot stay on. */
 const AIR = {terminal: 18, reboundSpeed: 2.2, hopSpeed: 3, hopRings: [0.7, 1.1, 1.6]} as const;
+/** A leap is aimed at the first of these horizontal paces (m/s) whose arc is clear and comes down somewhere it can go on from. */
+const LEAP_PACES = [BB_POUNCE.speed, 5, 3.5] as const;
 
 const clamp1 = (v: number): number => Math.max(-1, Math.min(1, v));
 
@@ -255,7 +257,9 @@ export class BbBrain extends ZombieBrain {
   readonly archetype = 'bb' as const;
   readonly pose: BbPose;
   /** QA counters: walls mounted, corners turned, leaps, leaps that hit, falls (let go / knocked off / lost its hold), knock-offs, and two that must stay 0 (a forced return to the floor, a recovery from an invalid place). */
-  readonly tally = {mounts: 0, corners: 0, leaps: 0, hits: 0, falls: 0, knocks: 0, forced: 0, recoveries: 0};
+  readonly tally = {mounts: 0, corners: 0, leaps: 0, hits: 0, falls: 0, knocks: 0, hops: 0, forced: 0, recoveries: 0};
+  /** QA: why and where the last forced return to the floor happened. */
+  lastForced: string | null = null;
   private mode: Mode = 'ground';
   private act: Act = NONE;
   private readonly cling: Cling = {x: 0, y: 0, z: 0, nx: 0, ny: 1, nz: 0, hx: 0, hy: 0, hz: 1};
@@ -287,6 +291,10 @@ export class BbBrain extends ZombieBrain {
   private cdT = 0;
   private leapAt: number;
   private backed = false;
+  /** Seconds until it looks for a leap again after finding none (the aim costs rays). */
+  private aimT = 0;
+  /** The player's chest height when it last saw them (what a leap aims at). */
+  private seenChest = 0;
   private lastCackle = -Infinity;
   private alertFlag = false;
   private burstT = 0;
@@ -417,6 +425,7 @@ export class BbBrain extends ZombieBrain {
     this.clock += dt;
     const real = w.crawl !== undefined, cw = w.crawl ?? this.flatWorld();
     this.cdT = Math.max(0, this.cdT - dt);
+    this.aimT = Math.max(0, this.aimT - dt);
     this.noClimbT = Math.max(0, this.noClimbT - dt);
     this.alertFlag = false; this.moving = false; this.frozen = false; this.paceNow = 0;
     let out: BrainOutput;
@@ -449,6 +458,7 @@ export class BbBrain extends ZombieBrain {
     } else { this.pvx = 0; this.pvz = 0; }
     this.plx = w.px; this.plz = w.pz; this.plt = this.clock;
     this.know(w.px, py, w.pz);
+    this.seenChest = this.chestY(w);
     this.unseen = 0;
     if (!this.aware) { this.alertFlag = true; this.noticed(); }
   }
@@ -463,9 +473,9 @@ export class BbBrain extends ZombieBrain {
     if (d > this.stats.sightRange * k) return false;
     if (!this.aware) {
       if (this.mode === 'ground') {
-        if (d > S.nearM * k) {
+        if (d > S.closeM * k) {
           const ang = Math.atan2(dx, dz) - this.yaw;
-          if (Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang))) > S.fovRad && d > S.closeM * k) return false;
+          if (Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang))) > S.fovRad) return false;
         }
       } else if (d > S.perchNoticeM * k) return false;
     }
@@ -533,9 +543,12 @@ export class BbBrain extends ZombieBrain {
             this.act = {k: 'flee', t: 0, dur: 0.45, farM: P.minM + 0.7, back: true, dx: 0, dz: 0, pickT: -1};
             return this.still(out, face);
           }
-          if (d3 <= this.leapAt && this.aim(w, cw, false)) {
-            this.beginWindup();
-            return this.still(out, face);
+          if (d3 <= this.leapAt && this.aimT <= 0) {
+            if (this.aim(cw, false)) {
+              this.beginWindup();
+              return this.still(out, face);
+            }
+            this.aimT = 0.12;
           }
         } else if (d3 < P.retreatM) {
           // cooling down with the player near: up a wall when one is close, else away
@@ -600,7 +613,7 @@ export class BbBrain extends ZombieBrain {
         break;
       }
       case 'windup': {
-        out.face = Math.atan2(w.px - this.x, w.pz - this.z);
+        out.face = Math.atan2(this.known.x - this.x, this.known.z - this.z); // where it last saw the player (sight is required all through)
         this.windupTick(a, dt, w, cw);
         break;
       }
@@ -629,7 +642,8 @@ export class BbBrain extends ZombieBrain {
       }
       case 'flee': {
         a.t += dt;
-        const dx = this.x - w.px, dz = this.z - w.pz, d = Math.hypot(dx, dz) || 1;
+        // away from where it last saw the player (it does not follow a player it cannot see)
+        const dx = this.x - this.known.x, dz = this.z - this.known.z, d = Math.hypot(dx, dz) || 1;
         if (a.t >= a.dur || d >= a.farM || !w.playerAlive) { this.act = NONE; this.wake(); break; }
         if (a.pickT < 0 || a.t - a.pickT >= 0.3) {
           // away from the player; where that way is shut, the nearest open way round
@@ -686,16 +700,17 @@ export class BbBrain extends ZombieBrain {
       this.cdT = Math.max(this.cdT, 1);
       return;
     }
-    if (a.t >= BB_POUNCE.windupS) this.launch(w, cw);
+    if (a.t >= BB_POUNCE.windupS) this.launch(cw);
   }
 
   /**
    * The launch velocity of a leap at the player's chest from where the body is, when its arc is clear of solid geometry (else null).
    * `lead`: aim ahead of a moving player. A player beyond its reach is leapt at as far as it can leap: it falls short.
    */
-  private aim(w: BrainWorld, cw: CrawlWorld, lead: boolean): {vx: number; vy: number; vz: number; T: number} | null {
+  private aim(cw: CrawlWorld, lead: boolean): {vx: number; vy: number; vz: number; T: number} | null {
     const P = BB_POUNCE, from = this.centre();
-    let tx = w.px, tz = w.pz;
+    // where it last SAW the player (the launch may come a moment after the last sighting: it never aims at a player it cannot see)
+    let tx = this.known.x, tz = this.known.z;
     if (lead) {
       const T0 = Math.max(0.2, Math.min(0.65, Math.hypot(tx - from.x, tz - from.z) / P.speed));
       tx += this.pvx * P.lead * T0; tz += this.pvz * P.lead * T0;
@@ -703,12 +718,36 @@ export class BbBrain extends ZombieBrain {
     const dx = tx - from.x, dz = tz - from.z, dh = Math.hypot(dx, dz);
     const reach = (this.mode === 'ground' ? P.maxM : P.dropMaxM) * 1.15;
     if (dh > reach) { tx = from.x + dx * reach / dh; tz = from.z + dz * reach / dh; }
-    const v = launchVelocity(from, {x: tx, y: this.chestY(w), z: tz}, P.speed, P.gravity);
-    return arcClear(cw, from, v, P.gravity, v.T) ? v : null;
+    const to = {x: tx, y: this.seenChest, z: tz}, refY = Math.min(this.y, this.known.y);
+    for (const pace of LEAP_PACES) {
+      const v = launchVelocity(from, to, pace, P.gravity);
+      if (arcClear(cw, from, v, P.gravity, v.T) && this.comesDown(cw, from, v, refY)) return v;
+    }
+    return null;
   }
 
-  private launch(w: BrainWorld, cw: CrawlWorld): void {
-    const v = this.aim(w, cw, true) ?? this.aim(w, cw, false);
+  /**
+   * A dry run of a leap PAST its target (a miss): it must come down on a floor it can stand on, or on something at about floor
+   * level (a desk it hops off) — never in a pit, a shaft or a void it could not walk out of. Rays do not see railings, so without
+   * this a miss beside an open edge would carry it over.
+   */
+  private comesDown(cw: CrawlWorld, from: {x: number; y: number; z: number}, v: {vx: number; vy: number; vz: number}, refY: number): boolean {
+    const f: Flight = {x: from.x, y: from.y, z: from.z, vx: v.vx, vy: v.vy, vz: v.vz}, G = BB_POUNCE.gravity;
+    const ok = (x: number, y: number, z: number): boolean => y >= refY - 1.6 || cw.stand(x, y, z, 0.1) !== null;
+    for (let k = 0; k < 45; k++) {
+      const hit = flightStep(cw, f, 1 / 30, G);
+      if (!hit) continue;
+      if (hit.ny > 0.7) return ok(f.x, hit.y, f.z);
+      if (hit.ny < -0.7) { f.vy = Math.min(f.vy, -0.5); continue; }
+      // a wall: it slides down it — what lies at its foot
+      const d = cw.ray(f, {x: 0, y: -1, z: 0}, 12);
+      return d.kind !== 'none' && ok(f.x, f.y - d.t, f.z);
+    }
+    return false;
+  }
+
+  private launch(cw: CrawlWorld): void {
+    const v = this.aim(cw, true) ?? this.aim(cw, false);
     this.act = NONE;
     if (!v) { this.cdT = Math.max(this.cdT, 1); return; }
     const f = this.flight;
@@ -841,6 +880,7 @@ export class BbBrain extends ZombieBrain {
         const v = launchVelocity(f, {x: tx, y: fy + BB_BODY.centreUp, z: tz}, AIR.hopSpeed, G, 0.3, 0.6);
         if (!arcClear(cw, f, v, G, v.T)) continue;
         f.vx = v.vx; f.vy = v.vy; f.vz = v.vz;
+        this.tally.hops++;
         return true;
       }
     }
@@ -877,6 +917,7 @@ export class BbBrain extends ZombieBrain {
     const f = this.flight, b = cw.band(f.x, f.y, f.z);
     if (!b) { this.recover(); return; }
     this.tally.forced++;
+    this.lastForced = `air ${this.airT.toFixed(2)} s, ${this.bounces} hops, at ${f.x.toFixed(2)},${f.y.toFixed(2)},${f.z.toFixed(2)}`;
     if (this.alive) this.touchDown(f.x, b.floor, f.z); else this.rest(f.x, b.floor, f.z);
   }
 
@@ -979,7 +1020,7 @@ export class BbBrain extends ZombieBrain {
     const turn = (this.stats.turnRate ?? 4.5) * dt;
     const a = this.act;
     if (a.k === 'windup') {
-      steerCling(c, w.px - cx, this.chestY(w) - cy, w.pz - cz, turn);
+      steerCling(c, this.known.x - cx, this.seenChest - cy, this.known.z - cz, turn);
       this.windupTick(a, dt, w, cw);
       if (this.mode === 'surf') this.shadow(cw, cx, cy, cz);
       return out;
@@ -993,10 +1034,13 @@ export class BbBrain extends ZombieBrain {
     }
     if (a.k !== 'none') this.act = NONE;
     // the leap from a perch
-    if (kind !== 'floor' && this.seenNow && this.cdT <= 0 && w.playerAlive && this.chestDist(w) <= BB_POUNCE.dropMaxM && this.aim(w, cw, false)) {
-      this.beginWindup();
-      this.shadow(cw, cx, cy, cz);
-      return out;
+    if (kind !== 'floor' && this.seenNow && this.cdT <= 0 && this.aimT <= 0 && w.playerAlive && this.chestDist(w) <= BB_POUNCE.dropMaxM) {
+      if (this.aim(cw, false)) {
+        this.beginWindup();
+        this.shadow(cw, cx, cy, cz);
+        return out;
+      }
+      this.aimT = 0.12;
     }
     this.runPlan(this.plan ?? this.setPlan(this.aware ? 'hunt' : 'down'), dt, cw, turn);
     if (this.mode === 'surf' && !this.blend) this.shadow(cw, c.x + c.nx * L, c.y + c.ny * L, c.z + c.nz * L);
@@ -1066,7 +1110,7 @@ export class BbBrain extends ZombieBrain {
         const H = this.home;
         if (kind === 'floor') {
           // a floor top it cannot stand on: off it, toward where it last stood
-          if (P.t > 6 || P.blocks >= 4) { this.tally.forced++; this.toGround(c.x, c.y, c.z, Math.atan2(c.hx, c.hz)); this.wake(); return; }
+          if (P.t > 6 || P.blocks >= 4) { this.tally.forced++; this.lastForced = `floor top ${P.t.toFixed(1)} s, ${P.blocks} blocks, at ${c.x.toFixed(2)},${c.y.toFixed(2)},${c.z.toFixed(2)}`; this.toGround(c.x, c.y, c.z, Math.atan2(c.hx, c.hz)); this.wake(); return; }
           wx = H.x - c.x; wz = H.z - c.z; steer = Math.hypot(wx, wz) > 0.3;
         } else if (kind === 'ceiling' || P.t > 5 || P.blocks >= 3) {
           // let go where there is a floor to land on (in the end: anywhere — the fall finds the floor)
@@ -1163,7 +1207,8 @@ export class BbBrain extends ZombieBrain {
     if (this.mode === 'ground') {
       cx = this.x; cy = this.y + L; cz = this.z;
       const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
-      if (P.uy > 0.9995) { P.ux = 0; P.uy = 1; P.uz = 0; P.fx = fx; P.fy = 0; P.fz = fz; }
+      // upright and facing its yaw (the game turns the yaw slower than this): exactly the floor body; else it rights itself
+      if (P.uy > 0.9995 && P.fx * fx + P.fz * fz > Math.cos(14 * dt)) { P.ux = 0; P.uy = 1; P.uz = 0; P.fx = fx; P.fy = 0; P.fz = fz; }
       else this.turnPose(0, 1, 0, fx, 0, fz, 14 * dt);
       P.surface = 'floor';
     } else if (this.mode === 'surf') {

@@ -94,9 +94,11 @@ describe('sprinters: real levels through the registry (the roster pass at versio
   for (const level of COMBAT) {
     it(`${level}: version 2 = version 1 + the sprinter tags only (families, counts, positions, indices, looks, layout unchanged)`, () => {
       for (const seed of SEEDS) {
+        // (explicitly the sprinters' own version, not ROSTER_VERSION: version 3 adds BB — task studio-bb-production-20261112-234540-01 —
+        // which takes ordinary zombie slots on 40 % of seeds, two of these four; that step is tests/bb-roster.test.ts)
         const v1 = LEVELS[level].generate('main', {levelSeed: seed, rosterVersion: 1});
-        const v2 = LEVELS[level].generate('main', {levelSeed: seed, rosterVersion: ROSTER_VERSION});
-        const again = LEVELS[level].generate('main', {levelSeed: seed, rosterVersion: ROSTER_VERSION});
+        const v2 = LEVELS[level].generate('main', {levelSeed: seed, rosterVersion: SPRINTER.since});
+        const again = LEVELS[level].generate('main', {levelSeed: seed, rosterVersion: SPRINTER.since});
         expect(JSON.stringify(again.zombies), `${level} ${seed}: deterministic`).toBe(JSON.stringify(v2.zombies));
         expect(v1.zombies.some(z => z.sprinter !== undefined), `${level} ${seed}: a version-1 station has no sprinters`).toBe(false);
         expect(untagged(v2), `${level} ${seed}: special enemies and their spawn rules untouched`).toBe(JSON.stringify(v1.zombies));
@@ -131,7 +133,7 @@ describe('sprinters: saves (the roster version pin)', () => {
     const newKey = {level: 'subway' as const, section: 'main', station: 'st-new'};
     run.memory(v1Key).visits = 3; run.setLaneStore(ROSTER_LANE, {v: 1}, v1Key); run.memory(v1Key).killed = [1, 4];
     run.memory(v0Key).visits = 1;
-    const SEED = 2203;
+    const SEED = 2203; // (this seed rolls no BB, so a station built at the current roster version 3 is still version 1 + the sprinter tags)
     const build = (k: typeof v1Key): StationLayout => {
       // Game.generateSection's rule (sectionGenInputs + the lane stamp)
       const rosterVersion = rosterVersionFor(run.peekMemory(k));

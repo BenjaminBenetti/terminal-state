@@ -30,7 +30,7 @@
 //                    AT ALL: one independent hash roll per family per level map seed (game/src/ai/enemyRoster.ts FAMILY_ROSTER /
 //                    applyEnemyRoster), applied to the finished layout AFTER the per-spawn family roll. An absent family has exactly
 //                    none in that level; a present one is placed by its policy; only ordinary ambient zombie slots ever change
-//                    family. A ROSTER-ONLY family (the Screacher) has weight 0 in every pool and is placed by the roster alone.
+//                    family. A ROSTER-ONLY family (the Screacher, BB) has weight 0 in every pool and is placed by the roster alone.
 //                    Every sampled "what a level holds" figure is measured with the roster applied; a figure of the per-spawn roll
 //                    alone is labelled "before the roster pass".
 
@@ -134,7 +134,7 @@ export interface EnemyFamilyInfo {
   model: string | null;
   /**
    * Task studio-screacher-production-20261110-221858-01 (schema 3): the model variants of a family with several approved bodies (the
-   * Screacher: one enemy type, the same AI and stats), in registry order: the spawn's variant id, its lazy model key and its name.
+   * Screacher, BB: one enemy type, the same AI and stats), in registry order: the spawn's variant id, its lazy model key and its name.
    * null = the family has one body (or the zombie wardrobe).
    */
   variantModels: readonly {variant: string; model: string; name: string | null}[] | null;
@@ -200,7 +200,7 @@ export interface RosterInfo {
   zombieFreeLevels: readonly string[];
   /** Families placed ONLY by the roster (weight 0 in every pool). */
   rosterOnly: readonly string[];
-  /** The seeded families in the order the pass places the present ones (the most constrained first). */
+  /** The seeded families in the order the pass places the present ones (the most constrained first; then the `last` families). */
   order: readonly string[];
   /** Plain-language rules of the pass (what it may change, the roll, the order, the version pin); numbers read from the source. */
   rules: readonly string[];
@@ -240,6 +240,11 @@ export interface RosterFamilyInfo {
   spacingM: number | null;
   /** 'count': the model variants dealt in turn from a seeded start. */
   variants: readonly string[] | null;
+  /**
+   * Task studio-bb-production-20261112-234540-01: the family is placed LAST, after every family without this flag whatever its policy
+   * (RosterRule.last: a family added in a later roster version takes only the slots the earlier ones left). false = by its policy's order.
+   */
+  last: boolean;
   rosterOnly: boolean;
   why: string;
   at: SourceLoc;

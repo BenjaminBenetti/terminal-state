@@ -24,6 +24,12 @@ export interface BbAudit {
   steps: number; wall: number; ceiling: number; air: number;
   /** Body centre outside free space; a step off the floor that crossed something solid; a step longer than a body can move. */
   inSolid: number; crossed: number; jumps: number;
+  /** On the floor (the game's motor + body separation): a step of more than 0.5 m (a shove no walk explains). */
+  shoves: number;
+  /** The pose's basis not unit / not perpendicular; the largest turn of the basis in one step (rad). */
+  badBasis: number; maxTurn: number;
+  /** Steps on which it "saw" the player with no real sight line from its eye. */
+  blindSight: number;
   /** The longest single step of the body centre (m) and the fastest (m/s). */
   maxStep: number; maxSpeed: number;
   /** Wind-ups begun, leaps launched, hits on the player. */
@@ -85,11 +91,13 @@ export function bbSim(layout: StationLayout, o: BbSimOpts) {
     ...(o.noCrawl ? {} : {crawl: cw}),
   });
 
-  const A: BbAudit = {steps: 0, wall: 0, ceiling: 0, air: 0, inSolid: 0, crossed: 0, jumps: 0, maxStep: 0, maxSpeed: 0, windups: 0, leaps: 0, hits: 0,
+  const A: BbAudit = {steps: 0, wall: 0, ceiling: 0, air: 0, inSolid: 0, crossed: 0, jumps: 0, shoves: 0, badBasis: 0, maxTurn: 0, blindSight: 0, maxStep: 0, maxSpeed: 0, windups: 0, leaps: 0, hits: 0,
     freeHits: 0, doubleHits: 0, earlyLeaps: 0, earlyWindups: 0, minRestS: Infinity, phases: new Set(), surfaces: new Set(), events: []};
   let t = 0;
   const P = b.pose;
   const prev = b.centre();
+  const foot = {x: b.x, z: b.z};
+  const basis = {ux: P.ux, uy: P.uy, uz: P.uz, fx: P.fx, fy: P.fy, fz: P.fz};
   let seq = {cackle: P.cackleSeq, windup: P.windupSeq, pounce: P.pounceSeq, land: P.landSeq};
   let surface: BbSurface = P.surface;
   let windupAt = -Infinity, landAt = -Infinity, leapOpen = false, leapHits = 0, wasOff = false;
@@ -99,6 +107,8 @@ export function bbSim(layout: StationLayout, o: BbSimOpts) {
   /** One frame, as Game.updateZombies runs an enemy. */
   function step(dt: number): BrainOutput {
     t += dt;
+    // the eye its sight is cast from this step (the pose as it stands before the update)
+    const eye = {x: P.x + P.ux * BB_BODY.eyeUp + P.fx * BB_BODY.eyeFwd, y: P.y + P.uy * BB_BODY.eyeUp + P.fy * BB_BODY.eyeFwd, z: P.z + P.uz * BB_BODY.eyeUp + P.fz * BB_BODY.eyeFwd};
     const out = b.update(dt, world());
     if (out.face !== null) {
       let d = out.face - b.yaw;
@@ -121,7 +131,6 @@ export function bbSim(layout: StationLayout, o: BbSimOpts) {
     A.phases.add(P.phase); A.surfaces.add(P.surface);
     if (P.surface === 'wall') A.wall++; else if (P.surface === 'ceiling') A.ceiling++; else if (P.surface === 'air') A.air++;
     const d = Math.hypot(c.x - prev.x, c.y - prev.y, c.z - prev.z);
-    if (!cw.band(b.x, b.y + BB_BODY.centreUp, b.z)) { A.inSolid++; ev(`IN SOLID (floor body) at ${b.x.toFixed(2)},${b.y.toFixed(2)},${b.z.toFixed(2)} ${P.phase}`); }
     if (off || wasOff) {
       if (!cw.band(c.x, c.y, c.z)) { A.inSolid++; ev(`IN SOLID at ${c.x.toFixed(2)},${c.y.toFixed(2)},${c.z.toFixed(2)} ${P.surface}/${P.phase}`); }
       if (d > 1e-6) {
@@ -131,6 +140,19 @@ export function bbSim(layout: StationLayout, o: BbSimOpts) {
       // no step off the floor is longer than the fastest body motion (the fastest fall is 18 m/s) allows
       if (d > 19 * dt + 0.03) { A.jumps++; ev(`JUMP ${d.toFixed(3)} m in one step ${P.surface}/${P.phase}`); }
     }
+    if (!off && !wasOff && Math.hypot(b.x - foot.x, b.z - foot.z) > 0.5) { A.shoves++; ev(`SHOVE ${Math.hypot(b.x - foot.x, b.z - foot.z).toFixed(3)} m on the floor ${P.phase}`); }
+    foot.x = b.x; foot.z = b.z;
+    // the pose contract: a unit, perpendicular basis that turns continuously
+    if (Math.abs(Math.hypot(P.ux, P.uy, P.uz) - 1) > 1e-6 || Math.abs(Math.hypot(P.fx, P.fy, P.fz) - 1) > 1e-6 || Math.abs(P.ux * P.fx + P.uy * P.fy + P.uz * P.fz) > 1e-6) A.badBasis++;
+    const turn = Math.max(Math.acos(Math.max(-1, Math.min(1, P.ux * basis.ux + P.uy * basis.uy + P.uz * basis.uz))), Math.acos(Math.max(-1, Math.min(1, P.fx * basis.fx + P.fy * basis.fy + P.fz * basis.fz))));
+    if (turn > A.maxTurn && turn > 0.26) ev(`TURN ${turn.toFixed(3)} rad in one step ${P.surface}/${P.phase} was ${surface} doing ${JSON.stringify(b.doing)}`);
+    A.maxTurn = Math.max(A.maxTurn, turn);
+    // sight is honest: whenever it sees the player there is a real sight line from its eye to the player's head or chest
+    if (b.seeing && !o.noCrawl && !L.lineOfSight(eye, {x: player.x, y: player.eye - 0.1, z: player.z}) && !L.lineOfSight(eye, {x: player.x, y: Math.max(player.y + 0.35, player.eye - 0.55), z: player.z})) {
+      A.blindSight++;
+      ev('SEES THROUGH SOLID');
+    }
+    basis.ux = P.ux; basis.uy = P.uy; basis.uz = P.uz; basis.fx = P.fx; basis.fy = P.fy; basis.fz = P.fz;
     A.maxStep = Math.max(A.maxStep, d);
     A.maxSpeed = Math.max(A.maxSpeed, d / dt);
     prev.x = c.x; prev.y = c.y; prev.z = c.z;
