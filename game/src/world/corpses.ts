@@ -116,6 +116,8 @@ export const CORPSE = {
    * on from there at the velocity it had, at most `restarts` times; then it stays as it is.
    */
   stillV: 0.35, restarts: 2,
+  /** Let go this close to the parked car (m, its interior box padded: departBlock's box), a body may come to rest in it or out of it. */
+  nearCar: 3,
   /**
    * At rest, the body is lifted by its deepest skinned point's sink into the floor under it (m, at most `lift`; every `liftStride`-th
    * vertex): the ragdoll's spheres are slimmer than the skin (a Blightbelly's belly, a coat), which would sink into the floor. The lying
@@ -175,8 +177,8 @@ interface Body {
   /** Its meshes' frustumCulled / castShadow before the carry. */
   flags: {mesh: THREE.Mesh; culled: boolean; shadow: boolean}[] | null;
   /**
-   * Lane DROPS: the ragdoll target this body was handed to the game's physics as (simulating while `falling`, then one of its frozen
-   * corpses), its pelvis velocity / speed (m/s) and last position while it falls, and how often it fell on after a mid-air stop.
+   * Lane DROPS: the ragdoll target this body was handed to the game's physics as (simulating while `falling`; at rest it leaves the
+   * physics), its pelvis velocity / speed (m/s) and last position while it falls, and how often it fell on after a mid-air stop.
    */
   rag?: RagdollTarget | null;
   falling?: boolean;
@@ -398,6 +400,7 @@ export class CorpseSystem implements CorpseSystemApi {
 
   /** Lane DROPS: the body's ragdoll (simulating or one of the frozen corpses) leaves the game's physics; its bones keep the pose now. */
   private leavePhysics(b: Body): void {
+    // (forgetRagdoll freezes a simulating one first: its bones keep the physics' latest step)
     if (b.rag) this.host.physics?.forgetRagdoll?.(b.rag);
     b.rag = null;
     b.falling = false;
@@ -681,10 +684,13 @@ export class CorpseSystem implements CorpseSystemApi {
     const hips = root.getObjectByName('Hips');
     const c = (hips ? hips.getWorldPosition(C) : root.getWorldPosition(C)).add(off);
     if (this.inLift(c.x, c.y, c.z)) { this.refuse(CORPSE_TEXT.elevator); return false; }
-    // the count caps at the release point (the car's or the station's; a body that then rolls across is counted where it lies)
-    const inCar = !!p && this.insideCar(worldToTrain(p, c.x, c.y, c.z));
-    if (inCar && this.trainCount() >= BODIES.maxAboard) { this.refuse(CORPSE_TEXT.trainFull); return false; }
-    if (!inCar && this.stationCount() >= BODIES.stationHere) { this.refuse(CORPSE_TEXT.stationFull); return false; }
+    // the count caps at the release point (the car's or the station's); let go within CORPSE.nearCar of the car it may come to rest on
+    // either side of its wall: both caps then (a record never holds more bodies than its validator takes)
+    const l = p ? worldToTrain(p, c.x, c.y, c.z) : null, Sp = this.spec, N = CORPSE.nearCar;
+    const inCar = !!l && this.insideCar(l);
+    const near = !!l && !!Sp && l.x > Sp.interior.x0 - N && l.x < Sp.interior.x1 + N && Math.abs(l.z) < Sp.interior.halfWidth + N;
+    if ((inCar || near) && this.trainCount() >= BODIES.maxAboard) { this.refuse(CORPSE_TEXT.trainFull); return false; }
+    if ((!inCar || near) && this.stationCount() >= BODIES.stationHere) { this.refuse(CORPSE_TEXT.stationFull); return false; }
     this.restoreFlags(b);
     h.scene.attach(root); // (its world transform kept: the carried pose where it hangs now)
     root.position.add(off);

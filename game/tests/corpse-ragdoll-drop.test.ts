@@ -422,6 +422,33 @@ describe('corpse ragdoll drop: amid clutter, at walls, ownership', () => {
   }, 180000);
 });
 
+describe('corpse ragdoll drop: the count caps', () => {
+  it('decided at the release: in or near the car (it may come to rest on either side of its wall) both caps, far out only the station\'s', () => {
+    const L = SUB(), c = rig(L);
+    enter(c, L, KA);
+    const z = deadEnemy(c, 0, MID + 0.6, 0.2);
+    const id = pickUp(c, z);
+    // (the counts stubbed at their caps: filling 64 / 256 real bodies is not the point here)
+    const sys = c.sys as unknown as {trainCount(): number; stationCount(): number};
+    const full = (train: boolean, station: boolean) => { sys.trainCount = () => (train ? BODIES.maxAboard : 0); sys.stationCount = () => (station ? BODIES.stationHere : 0); };
+    const tryDrop = (want: string | null) => {
+      press(c.h, 'KeyE');
+      if (want) { expect(c.sys.held()?.record.id, want).toBe(id); expect(c.h.toasts.at(-1)).toBe(want); } else expect(c.sys.held()).toBeNull();
+    };
+    const pl = -(SPEC.width / 2 + 1.6);
+    standAt(c, MID - 1.0, 0.1, true, at(c, MID + 2, 0.1, 0.4)); // (in the car)
+    full(true, false); tryDrop(CORPSE_TEXT.trainFull);
+    full(false, true); tryDrop(CORPSE_TEXT.stationFull);
+    standAt(c, MID, pl, false, at(c, MID, pl * 2, 0.8, false)); // (on the platform beside the car)
+    full(true, false); tryDrop(CORPSE_TEXT.trainFull);
+    full(false, true); tryDrop(CORPSE_TEXT.stationFull);
+    standAt(c, I.x1 + 5, pl, false, at(c, I.x1 + 8, pl, 0.8, false)); // (far out along the platform, beyond the car's end)
+    full(false, true); tryDrop(CORPSE_TEXT.stationFull);
+    full(true, false); tryDrop(null); // (the train's cap is no concern there)
+    expect(c.sys.counts.ragdolls).toBe(1);
+  }, 180000);
+});
+
 describe('corpse ragdoll drop: saves, travel, mid-fall', () => {
   it('Continue: a fallen body aboard saves into cargo v3 and rebuilds in the next game\'s car exactly as it fell, once', () => {
     const L = SUB(), c = rig(L);
