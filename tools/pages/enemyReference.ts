@@ -38,6 +38,7 @@ import {BLIGHTBELLY_BURST, BLIGHTBELLY_STATS} from '../../game/src/ai/blightbell
 import {SIREN_CLAW, SIREN_STATS, SIREN_WAKE} from '../../game/src/ai/siren';
 import {LUNGE as RATDOG_LUNGE, RATDOG_STATS} from '../../game/src/ai/creatureActor';
 import {STRAINER_ASSET, STRAINER_MAX_TOP_M, STRAINER_SCALE, STRAINER_STATS} from '../../game/src/ai/strainer'; // task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY)
+import {BB_STATS, BB_VARIANTS} from '../../game/src/ai/bb'; // task studio-bb-production-20261112-234540-01
 import {IMPACT_FAMILY_LOUDNESS, SCREACHER_AGGRO, SCREACHER_ASSET, SCREACHER_ECHO, SCREACHER_MAX_TOP_M, SCREACHER_NOISE, SCREACHER_SCALE, SCREACHER_SENSE, SCREACHER_SPEED, SCREACHER_STATS, SCREACHER_VARIANTS} from '../../game/src/ai/screacher'; // task studio-screacher-production-20261110-221858-01
 // task studio-screacher-production-20261110-221858-01: the seeded roster (the rule table, the pass itself, the roll, the version pin)
 import {
@@ -128,12 +129,14 @@ const F = {
   cosplaySpawns: 'game/src/gen/skyways/cosplaySpawns.ts', cosplayContext: 'game/src/ai/cosplayContext.ts',
   // task studio-screacher-production-20261110-221858-01: the Screacher and the seeded family roster
   screacher: 'game/src/ai/screacher.ts', roster: 'game/src/ai/enemyRoster.ts',
+  // task studio-bb-production-20261112-234540-01: BB
+  bb: 'game/src/ai/bb.ts',
 } as const;
 
 /** The game modules whose exported values the reference reads (this file's imports). Other files appear only as source links. */
 export const ENEMY_GENERATED_FROM: readonly string[] = [
   F.tables, F.archetypes, F.registry, F.frame, F.grid, F.stationKit, F.purposes, F.pistol, F.spawn, F.brain, F.blightbelly, F.siren, F.creatureActor,
-  F.contract, F.mallTypes, F.trackExt, F.strainer, F.lingerieSpawns, F.cosplaySpawns, F.cosplayContext, F.screacher, F.roster,
+  F.contract, F.mallTypes, F.trackExt, F.strainer, F.lingerieSpawns, F.cosplaySpawns, F.cosplayContext, F.screacher, F.roster, F.bb,
 ].slice().sort();
 
 /**
@@ -260,6 +263,13 @@ export const ENEMY_FAMILY_ADAPTER: Readonly<Record<EnemyFamilyId, {
         maxTopM: ['neck-stump height cap', 'm'],
       }},
     ],
+  },
+  // task studio-bb-production-20261112-234540-01: BB (a small crawling undead with four looks; placed only by the seeded roster). STUB
+  // (lead contract commit): lane REGISTRY adds its rule constants (cadence, climb, pounce, senses, body) with labels.
+  bb: {
+    stats: [{variant: null, stats: BB_STATS, file: F.bb, symbol: 'BB_STATS'}],
+    variantNames: Object.fromEntries(Object.entries(BB_VARIANTS).map(([id, v]) => [id, v.name])),
+    rules: [],
   },
 };
 

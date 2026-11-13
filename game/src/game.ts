@@ -3856,7 +3856,7 @@ export class Game {
       const adt = H ? H.animStep(b, dt, dist) : dt;
       if (adt > 0) z.animate(adt, out.anim, moved);
       z.syncTransform();
-      if (!z.ragdolled) z.root.position.y = b.y; // Lane T: feet on stairs / track bed / underpass / ladder
+      if (!z.ragdolled && !z.placesRoot) z.root.position.y = b.y; // Lane T: feet on stairs / track bed / underpass / ladder (BB places its own root: a wall / ceiling body is not at the feet height)
       // Task studio-alpha-strainer-lumbering-wetness-20261101-01: the Strainer's bounded wet-shine trail (ai/strainerTrail.ts, fx WET_TRAIL)
       if (archetypeOf(z) === 'strainer') this.strainerTrail.step(z, b, z.ragdolled, (x, y, wz, size) => this.fx.wet(x, y, wz, size), Math.random); // (visual only: never the game RNG)
       if (adt > 0) z.updateVolumes();

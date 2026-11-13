@@ -556,6 +556,8 @@ export const SCREACHER_AUDIO = {
   stealFadeS: 0.08, deathCutS: 0.12,
 } as const;
 type ScreacherVoiceKind = 'scream' | 'shriek' | 'hurt' | 'wheeze' | 'death';
+/** BB's vocal kinds (Sfx.bbVoice; task studio-bb-production-20261112-234540-01). */
+export type BbVoiceKind = 'cackle' | 'giggle' | 'pounce' | 'hurt' | 'death';
 
 /** Weapon sound kinds (WeaponDef.sound). */
 /**
@@ -2982,6 +2984,20 @@ export class Sfx {
     own.push(v);
     live.push({v, kind, d});
     return v;
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Task studio-bb-production-20261112-234540-01 (lane AUDIO): BB's voice — the laugh set shared by all four looks (silent no-ops when
+  // audio is paused / not started or a clip is missing — never a stand-in sound).
+
+  /**
+   * One BB vocal at its mouth (world position): 'cackle' (it noticed the player), 'giggle' (the quiet near tell), 'pounce' (the
+   * rising squeal of the wind-up and leap), 'hurt', 'death'. `gateY` = the height of the floor below the body: the route / storey
+   * gates use it, so one clinging to a ceiling is heard like one on the floor under it. STUB (lead contract commit): lane AUDIO
+   * implements it.
+   */
+  bbVoice(kind: BbVoiceKind, key: object, x: number, y: number, z: number, gateY?: number): void {
+    void kind; void key; void x; void y; void z; void gateY;
   }
 
   // ---------------------------------------------------------------------------------------

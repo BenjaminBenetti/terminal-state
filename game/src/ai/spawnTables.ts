@@ -58,9 +58,11 @@ export type {HordeRules} from './hordeSpec';
  * Task studio-screacher-production-20261110-221858-01: 'screacher' (THE SCREACHER, ai/screacher.ts: a headless, blind, sound-hunting
  * infected) is APPENDED LAST and is ROSTER-ONLY (ROSTER_ONLY_FAMILIES below): weight 0 in EVERY pool — no per-spawn roll ever lands on
  * it, so every older pick stays bit-identical — and placed only by the per-level seeded roster pass (ai/enemyRoster.ts).
+ * Task studio-bb-production-20261112-234540-01: 'bb' (BB, ai/bb.ts: a small baby-like undead that crawls on floors, walls and
+ * ceilings and pounces) is APPENDED LAST and ROSTER-ONLY too: weight 0 in every pool, placed only by the seeded roster pass.
  */
-export type EnemyFamilyId = 'zombie' | 'blightbelly' | 'siren' | 'ratdog' | 'strainer' | 'screacher';
-export const ENEMY_FAMILY_IDS: readonly EnemyFamilyId[] = ['zombie', 'blightbelly', 'siren', 'ratdog', 'strainer', 'screacher'];
+export type EnemyFamilyId = 'zombie' | 'blightbelly' | 'siren' | 'ratdog' | 'strainer' | 'screacher' | 'bb';
+export const ENEMY_FAMILY_IDS: readonly EnemyFamilyId[] = ['zombie', 'blightbelly', 'siren', 'ratdog', 'strainer', 'screacher', 'bb'];
 /** Room-modifier family key that applies its density to every family of the room. */
 export const ALL_FAMILIES = 'all';
 
@@ -80,7 +82,7 @@ export type ShareFamilyId = Exclude<EnemyFamilyId, 'zombie'>;
  *    (CONTEXT_LOCKED_FAMILIES): a positive weight only in the pool of a context listed in STRAINER_CONTEXTS (the Beyond the Station
  *    service annexes: SERVICE_FAMILY_SHARES.strainer 0.08); every level pool, every other context and every horde pool says 0.
  */
-export const DEFAULT_FAMILY_SHARES: Readonly<Record<ShareFamilyId, number>> = {blightbelly: 0.05, siren: 0, ratdog: 0.05, strainer: 0, screacher: 0};
+export const DEFAULT_FAMILY_SHARES: Readonly<Record<ShareFamilyId, number>> = {blightbelly: 0.05, siren: 0, ratdog: 0.05, strainer: 0, screacher: 0, bb: 0};
 /** Families a level must enable deliberately: weight > 0 is only valid together with an explicit `eligibility` rule. */
 export const OPT_IN_FAMILIES: readonly EnemyFamilyId[] = ['siren'];
 /**
@@ -97,7 +99,7 @@ export const STRAINER_CONTEXTS: readonly SpawnContextId[] = ['service', 'damp'];
  * Their weight is 0 in every level, context and horde pool (validateSpawnProfile rejects anything else): a per-spawn roll never places
  * one, so a level whose roster excludes the family has exactly none.
  */
-export const ROSTER_ONLY_FAMILIES: readonly EnemyFamilyId[] = ['screacher'];
+export const ROSTER_ONLY_FAMILIES: readonly EnemyFamilyId[] = ['screacher', 'bb']; // (+ BB: task studio-bb-production-20261112-234540-01)
 /** Families locked to a list of contexts' own pools (validateSpawnProfile): family -> the contexts where its weight may be > 0. */
 export const CONTEXT_LOCKED_FAMILIES: Readonly<Partial<Record<EnemyFamilyId, readonly SpawnContextId[]>>> = {strainer: STRAINER_CONTEXTS};
 
@@ -565,7 +567,7 @@ export const MALL_HORDE: HordeRules = {
   label: 'Roaming hordes',
   groups: MALL_HORDE_RULES.groups,
   size: [5, 20],
-  families: [['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0], ['strainer', 0], ['screacher', 0]], // lane FAMILY: the Strainer never joins a horde (nor the roster-only Screacher)
+  families: [['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0], ['strainer', 0], ['screacher', 0], ['bb', 0]], // lane FAMILY: the Strainer never joins a horde (nor the roster-only Screacher)
   zombieTypes: {coatedChance: 0.4, atLeastOneEach: false},
   budget: MALL_HORDE_RULES.budget,
   placement: MALL_HORDE_RULES.placement,

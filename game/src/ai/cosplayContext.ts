@@ -29,7 +29,7 @@ export const COSPLAY_PLACEMENT: PlacementRules = {
  * wardrobe look of the zombie family, never another family). = familyPool({blightbelly: 0, siren: 0, ratdog: 0, strainer: 0}), written out
  * (this module must not import spawnTables' values: it is imported BY it).
  */
-export const COSPLAY_FAMILY_POOL: FamilyPool = [['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0], ['strainer', 0], ['screacher', 0]]; // (+ the roster-only Screacher at 0: task studio-screacher-production-20261110-221858-01)
+export const COSPLAY_FAMILY_POOL: FamilyPool = [['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0], ['strainer', 0], ['screacher', 0], ['bb', 0]]; // (+ the roster-only Screacher at 0: task studio-screacher-production-20261110-221858-01)
 /** The 'cosplay' zone context of Skyways (once per convention; never regenerates a level: no accepted minimum). */
 export const COSPLAY_CONTEXT: SpawnContextRule = {
   label: 'Anime convention (cosplay zombies on the venue event floor)', count: COSPLAY_ZONE_BUDGET, placement: COSPLAY_PLACEMENT,
