@@ -18,6 +18,8 @@ import {BB_VARIANT_IDS} from '../../src/ai/enemyRoster';
 import {ENEMY_MODEL_FILES} from '../../src/ai/enemyModels';
 import {BB_VARIANTS, type BbVariantId} from '../../src/ai/bb';
 import type {ZombieSpawn} from '../../src/gen/stationTypes';
+import {CELL, FLOOR, Grid, SOLID} from '../../src/gen/grid';
+import type {Level} from '../../src/gen/levels';
 
 const pub = (rel: string): string => fileURLToPath(new URL('../../public/' + rel, import.meta.url));
 
@@ -87,6 +89,27 @@ export function rigOfGltf(gltf: GLTF, extras?: BbExtras): BbRig | null {
 }
 /** The synthetic body's rig straight from its joint table. */
 export const syntheticRig = (): BbRig => bbRigFromBind({...SYNTHETIC_BIND} as Record<string, V3>, SYNTHETIC_EXTRAS)!;
+
+/**
+ * A 24 x 16 m room for the physics / damage systems: floor at 0, a solid border. `storeyM` adds a second storey over it — a real
+ * ceiling SLAB from `storeyM` up to the upper floor (a single-storey layout has no physics ceiling) — and `wallX` an interior wall
+ * across the room at that x (one cell thick, both storeys).
+ */
+export function bbRoom(o: {storeyM?: number; wallX?: number} = {}): {grid: Grid; props: never[]; trench: {floorY: number}; levels?: Level[]} {
+  const W = 48, H = 32, wallCx = o.wallX === undefined ? -1 : Math.floor(o.wallX / CELL);
+  const make = (floor: number, ceil: number): Grid => {
+    const g = new Grid(W, H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const open = x >= 2 && y >= 2 && x < W - 2 && y < H - 2 && x !== wallCx;
+      g.set(x, y, open ? FLOOR : SOLID);
+      if (open) { const i = g.idx(x, y); g.area[i] = 0; g.floor[i] = floor; g.ceil[i] = ceil; }
+    }
+    return g;
+  };
+  if (o.storeyM === undefined) return {grid: make(0, 0), props: [], trench: {floorY: -1.15}};
+  const up = o.storeyM + 0.4, g0 = make(0, o.storeyM), g1 = make(up, up + 3);
+  return {grid: g0, props: [], trench: {floorY: -1.15}, levels: [{id: 0, role: 'main', grid: g0, baseY: 0}, {id: 1, role: 'upper', grid: g1, baseY: up}]};
+}
 
 export const rng = (seed = 1): (() => number) => { let s = seed; return () => ((s = (s * 16807) % 2147483647) / 2147483647); };
 export const spawnBb = (x: number, z: number, variant: BbVariantId = 'lullaby', yaw = 0): ZombieSpawn => ({x, z, yaw, type: 'shambler', area: 0, archetype: 'bb', variant});

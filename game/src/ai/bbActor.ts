@@ -20,7 +20,8 @@
 //   * NON-GRAPHIC (`nonGraphic`): damage/system.ts shows no wound, blood, flesh piece or tear on it, alive or dead; the hit flash here
 //     is a neutral pale blink, not the red one;
 //   * RAGDOLL: its own small rig (bbRagdollRig: this body's radii, ~9 kg) and prepareRagdoll(), which lifts the body just clear of
-//     the surface it clings to before the bodies are built. It is not carriable (ai/corpseTrait.ts CORPSE_TRAITS.bb).
+//     the surface it clings to before the bodies are built and takes the killing shot as a light body on a surface can (nothing of
+//     it into that surface, no launch, a bounded throw). It is not carriable (ai/corpseTrait.ts CORPSE_TRAITS.bb).
 // The four looks are one enemy: the same class, stats and clips; only the GLB (and so the solved proportions) differs.
 // No model -> createEnemyActor's counted zombie stand-in. A GLB whose skeleton is not the shared rig shows its bind pose (hasRig false).
 
@@ -31,7 +32,7 @@ import type {AnimName} from './brain';
 import {BB_ASSET, BB_BODY, BB_SCALE, BbBrain, bbVariantOf, type BbPhase, type BbPose, type BbVariantId} from './bb';
 import {BB_ANIMATED, BB_CLIPS, BB_FRAME_FLOATS, BB_GAIT, BB_JOINT_INDEX, bbAnimationClip, bbArmLocal, bbClipSetFor, sampleBbClip,
   type BbClipName, type BbClipSet, type BbExtras, type BbRig, type BbSide, type Q} from './bbClips';
-import type {BallSpec, HingeSpec, RagdollPartSpec, RagdollRig} from '../physics/ragdoll';
+import type {BallSpec, HingeSpec, KillImpulse, RagdollPartSpec, RagdollRig} from '../physics/ragdoll';
 import type {ZombieSpawn} from '../gen/station';
 import type {Vec3} from '../combat/hitscan';
 import type {HitPart, HitVolume} from './zombieActor';
@@ -74,6 +75,16 @@ export const BB_ACTOR = {
   cull: {centre: [0, 0.3, 0], radius: 0.95},
   /** prepareRagdoll lifts the body at most this far (model metres x scale) off the surface it clings to. */
   ragdollLiftM: 0.09,
+  /**
+   * The killing shot throws the whole body at most this fast (m/s). The impulse every enemy gets (physics/world.ts killImpulseStrength:
+   * 38 N s a rifle round, up to 107 a full load of buckshot) is sized for an adult; on ~9 kg the buckshot would fire it off at 12 m/s
+   * and its trunk at 25 — 0.2 .. 0.4 m per physics step, further than a storey slab (0.3 m) or its own trunk is thick, and the solver
+   * has no continuous collision (measured: joints 24 cm into a 50 cm wall, 21 cm into a 40 cm slab). 6 m/s = 0.1 m per fixed step:
+   * a rifle round (~4.3 m/s on this body) is untouched, buckshot throws it about half as hard again.
+   */
+  ragdollMaxShoveMps: 6,
+  /** ... and its vertical share stays in physics/ragdoll.ts applyShot's own band, here measured against the horizontal part: [down, up]. */
+  ragdollShoveY: [-0.3, 0.15],
 } as const;
 
 /** The clip each phase shows (crawl: Crawl below the gear shift, Scuttle above it; idle / freeze: Cackle while a cackle runs). */
@@ -117,27 +128,32 @@ function pawsOf(set: BbClipSet): Record<BbSide, ArmPose> {
  * BB's ragdoll: the shared joint names, a small body's parts — sphere radii from this body's own measured hit radii and skull (the
  * extras; BB_ASSET without a rig), masses of a ~9 kg body (ai/corpseTrait.ts CORPSE_TRAITS.bb.massKg), a toddler's loose hips. The
  * root part is named 'pelvis' (physics/ragdoll.ts writes the root translation by that name). No girth / coat padding.
+ * The limbs carry a little more of the 9 kg than an infant's do (arms 0.7 kg each, legs 1.05): under a trunk landing from a ceiling
+ * the solver presses a lighter hand well into the floor for a moment (tests/bb-ragdoll.test.ts has the measured bounds). Their spin
+ * dies quickly (LIMB_DAMP): thumb-sized limbs do not whirl.
  */
 export function bbRagdollRig(rig: BbRig | null): RagdollRig {
   const D = BB_ASSET.hitRadii, k = rig?.sizeK ?? 1;
-  const T = rig?.hit.torso ?? D.torso, A = Math.max(0.02 * k, rig?.hit.arm ?? D.arm), L = Math.max(0.03 * k, rig?.hit.leg ?? D.leg);
+  // (no limb sphere under 3 cm, however thin the look's arms: a smaller one is driven into the floor under the landing trunk)
+  const T = rig?.hit.torso ?? D.torso, A = Math.max(0.03 * k, rig?.hit.arm ?? D.arm), L = Math.max(0.03 * k, rig?.hit.leg ?? D.leg);
   const HR = rig?.head.radius ?? BB_ASSET.headRadius, hc = rig?.head.centre ?? [0, 0.6 * BB_ASSET.headRadius, 0.02];
   const neck = rig?.local.Neck ?? [0, 0.08, 0];
   const part = (name: string, bone: string, child: string, parent: string | null, mass: number, spheres: RagdollPartSpec['spheres'], damp: [number, number] = [0.08, 0.5]): RagdollPartSpec =>
     ({name, bone, child, parent, mass, coat: 1, damp, girth: 'none', spheres});
+  const LIMB_DAMP: [number, number] = [0.08, 0.9];
   const parts: RagdollPartSpec[] = [
-    part('pelvis', 'Hips', 'Spine', null, 1.7, [{at: [0, 0, 0], r: 0.82 * T}, {seg: 'Spine', t: 0.8, r: 0.8 * T}], [0.06, 0.4]),
-    part('torso', 'Spine', 'Chest', 'pelvis', 2.5, [{at: [0, 0, 0], bone: 'Chest', r: 0.88 * T}, {at: [neck[0] * 0.6, neck[1] * 0.6, neck[2] * 0.6], bone: 'Chest', r: 0.8 * T}], [0.06, 0.4]),
-    part('head', 'Neck', 'Head', 'torso', 2.0, [{at: [hc[0], hc[1], hc[2]], bone: 'Head', r: HR}], [0.08, 0.6]),
+    part('pelvis', 'Hips', 'Spine', null, 1.5, [{at: [0, 0, 0], r: 0.82 * T}, {seg: 'Spine', t: 0.8, r: 0.8 * T}], [0.06, 0.4]),
+    part('torso', 'Spine', 'Chest', 'pelvis', 2.2, [{at: [0, 0, 0], bone: 'Chest', r: 0.88 * T}, {at: [neck[0] * 0.6, neck[1] * 0.6, neck[2] * 0.6], bone: 'Chest', r: 0.8 * T}], [0.06, 0.4]),
+    part('head', 'Neck', 'Head', 'torso', 1.8, [{at: [hc[0], hc[1], hc[2]], bone: 'Head', r: HR}], [0.08, 0.6]),
   ];
   for (const s of SIDES) {
     const f = rig?.fingers[s] ?? [0, -0.06, 0], toe = rig?.toe[s] ?? [0, -0.03, 0.09];
     parts.push(
-      part(`upperArm${s}`, `${s}_UpperArm`, `${s}_Forearm`, 'torso', 0.22, [{seg: `${s}_Forearm`, t: 0.3, r: A}, {seg: `${s}_Forearm`, t: 0.85, r: A}]),
-      part(`forearm${s}`, `${s}_Forearm`, `${s}_Hand`, `upperArm${s}`, 0.18, [{seg: `${s}_Hand`, t: 0.4, r: A}, {seg: `${s}_Hand`, t: 1, r: 0.95 * A}, {at: [f[0] * 0.55, f[1] * 0.55, f[2] * 0.55], bone: `${s}_Hand`, r: 0.9 * A}]),
-      part(`thigh${s}`, `${s}_Thigh`, `${s}_Shin`, 'pelvis', 0.55, [{seg: `${s}_Shin`, t: 0.2, r: L}, {seg: `${s}_Shin`, t: 0.8, r: 0.95 * L}]),
-      part(`shin${s}`, `${s}_Shin`, `${s}_Foot`, `thigh${s}`, 0.35, [{seg: `${s}_Foot`, t: 0.05, r: 0.9 * L}, {seg: `${s}_Foot`, t: 0.5, r: 0.9 * L}, {seg: `${s}_Foot`, t: 0.95, r: 0.85 * L},
-        {at: [toe[0] * 0.6, toe[1] * 0.6, toe[2] * 0.6], bone: `${s}_Foot`, r: 0.75 * L}]),
+      part(`upperArm${s}`, `${s}_UpperArm`, `${s}_Forearm`, 'torso', 0.35, [{seg: `${s}_Forearm`, t: 0.3, r: A}, {seg: `${s}_Forearm`, t: 0.85, r: A}], LIMB_DAMP),
+      part(`forearm${s}`, `${s}_Forearm`, `${s}_Hand`, `upperArm${s}`, 0.35, [{seg: `${s}_Hand`, t: 0.4, r: A}, {seg: `${s}_Hand`, t: 1, r: 0.95 * A}, {at: [f[0] * 0.55, f[1] * 0.55, f[2] * 0.55], bone: `${s}_Hand`, r: 0.9 * A}], LIMB_DAMP),
+      part(`thigh${s}`, `${s}_Thigh`, `${s}_Shin`, 'pelvis', 0.6, [{seg: `${s}_Shin`, t: 0.2, r: L}, {seg: `${s}_Shin`, t: 0.8, r: 0.95 * L}], LIMB_DAMP),
+      part(`shin${s}`, `${s}_Shin`, `${s}_Foot`, `thigh${s}`, 0.45, [{seg: `${s}_Foot`, t: 0.05, r: 0.9 * L}, {seg: `${s}_Foot`, t: 0.5, r: 0.9 * L}, {seg: `${s}_Foot`, t: 0.95, r: 0.85 * L},
+        {at: [toe[0] * 0.6, toe[1] * 0.6, toe[2] * 0.6], bone: `${s}_Foot`, r: 0.75 * L}], LIMB_DAMP),
     );
   }
   const ball = (cone: [number, number, number], coneAngle: number, twist: number): BallSpec => ({kind: 'ball', cone, coneAngle, twistRef: [1, 0, 0], twist});
@@ -151,7 +167,11 @@ export function bbRagdollRig(rig: BbRig | null): RagdollRig {
     joints[`thigh${s}`] = ball([0.2, -0.55, 0.8], 1.1, 0.8); // a crawler's hip: flexed past a right angle as easily as straight
     joints[`shin${s}`] = {kind: 'hinge', axis: 'x', min: 0, max: 2.3} satisfies HingeSpec;
   }
-  return {parts, joints, root: 'pelvis', core: [['torso', 0.6], ['pelvis', 0.4]], head: 'head', fall: ['pelvis', 'torso'], mirrorPrefix: 'R_', rootBone: 'Root'};
+  // the shot's shove is shared by EVERY part by its mass (the trunk first: the default hit part): the whole body leaves at one speed.
+  // On the trunk alone (the adult rig's 60 / 40) a 4 kg trunk would start at twice the body's speed and whip the limbs after it.
+  const total = parts.reduce((m, p) => m + p.mass, 0);
+  const core = ['torso', 'pelvis', ...parts.map(p => p.name).filter(n => n !== 'torso' && n !== 'pelvis')].map((n): [string, number] => [n, parts.find(p => p.name === n)!.mass / total]);
+  return {parts, joints, root: 'pelvis', core, head: 'head', fall: ['pelvis', 'torso'], mirrorPrefix: 'R_', rootBone: 'Root'};
 }
 
 export class BbActor {
@@ -583,26 +603,47 @@ export class BbActor {
   }
 
   /**
-   * Just before the ragdoll's bodies are built from this pose (physics/ragdoll.ts): on a surface, the body is lifted along the
-   * surface normal until none of the ragdoll's spheres starts inside it (palms, knees and toes are planted ON the surface, so the
-   * spheres about them would start a few centimetres in it and be thrown out) — by BB_ACTOR.ragdollLiftM at most. In the air: nothing.
+   * Just before the ragdoll's bodies are built from this pose (physics/ragdoll.ts), with the killing shot.
+   *  - On a surface, the body is lifted along the surface normal until none of the ragdoll's spheres starts inside it (palms, knees
+   *    and toes are planted ON the surface, so the spheres about them would start a few centimetres in it and be thrown out) — by
+   *    BB_ACTOR.ragdollLiftM at most. In the air: nothing.
+   *  - The shot's shove, as this body takes it (returned; the given object is not changed): a surface takes what is fired INTO it
+   *    (a BB shot off a ceiling from below drops, it is not driven up through the slab), the throw is never a launch
+   *    (ragdollShoveY: shot from straight below in mid-drop it falls at the shooter's feet, not through the ceiling), and the whole
+   *    body leaves at ragdollMaxShoveMps at most.
    */
-  prepareRagdoll(): void {
+  prepareRagdoll(impulse: KillImpulse | null = null): KillImpulse | null {
     const P = this.brain.pose;
-    if (this.ragdolled || !this.set || P.surface === 'air') return;
-    this.root.updateMatrixWorld(true);
-    const s = this.scale, up = this.vy.set(P.ux, P.uy, P.uz).normalize(), o = this.root.position;
-    let need = 0;
-    for (const part of this.ragdollRig.parts) {
-      const r = part.spheres.reduce((m, sp) => Math.max(m, sp.r), 0) * s;
-      for (const n of [part.bone, part.child]) {
-        const b = this.allBones.get(n);
-        if (!b) continue;
-        need = Math.max(need, r - this.tmp.setFromMatrixPosition(b.matrixWorld).sub(o).dot(up));
+    if (this.ragdolled) return impulse;
+    const s = this.scale, up = this.vy.set(P.ux, P.uy, P.uz), clings = P.surface !== 'air' && up.lengthSq() > 1e-8;
+    if (clings) up.normalize();
+    if (clings && this.set) {
+      this.root.updateMatrixWorld(true);
+      const o = this.root.position;
+      let need = 0;
+      for (const part of this.ragdollRig.parts) {
+        const r = part.spheres.reduce((m, sp) => Math.max(m, sp.r), 0) * s;
+        for (const n of [part.bone, part.child]) {
+          const b = this.allBones.get(n);
+          if (!b) continue;
+          need = Math.max(need, r - this.tmp.setFromMatrixPosition(b.matrixWorld).sub(o).dot(up));
+        }
       }
+      const lift = Math.min(need + 0.004, BB_ACTOR.ragdollLiftM * s);
+      if (lift > 0) { this.root.position.addScaledVector(up, lift); this.root.updateMatrixWorld(true); }
     }
-    const lift = Math.min(need + 0.004, BB_ACTOR.ragdollLiftM * s);
-    if (lift > 0) { this.root.position.addScaledVector(up, lift); this.root.updateMatrixWorld(true); }
+    if (!impulse || !(impulse.strength > 0)) return impulse;
+    const d = this.tmp.set(impulse.dir.x, impulse.dir.y, impulse.dir.z);
+    if (!(d.lengthSq() > 1e-12)) return impulse;
+    d.normalize();
+    if (clings) { const into = d.dot(up); if (into < 0) d.addScaledVector(up, -into); }
+    const flat = Math.hypot(d.x, d.z), Y = BB_ACTOR.ragdollShoveY;
+    d.y = clamp(d.y, Y[0] * flat, Y[1] * flat);
+    // (what is left of the unit shot: the share of its momentum that throws the body)
+    const share = d.length();
+    if (share < 1e-3) return null;
+    const mass = this.ragdollRig.parts.reduce((m, p) => m + p.mass, 0) * s ** 3;
+    return {...impulse, dir: {x: d.x, y: d.y, z: d.z}, strength: Math.min(impulse.strength * share, BB_ACTOR.ragdollMaxShoveMps * mass)};
   }
 
   beginRagdoll(): void {
