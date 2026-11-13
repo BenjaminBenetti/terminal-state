@@ -45,6 +45,7 @@ import {itemDims} from '../items/items';
 import {grenadeKind, type GrenadeId} from '../items/grenades';
 import {grenadeModel} from '../world/grenadeModels';
 import type {FlareSmokeHost, SmokeHandle} from './throwables';
+import {SCENT} from '../ai/scentLure';
 
 export const GRENADE = {
   /** Seconds between throws (any grenade). */
@@ -95,10 +96,10 @@ export const ACID = {
 } as const;
 
 export const LURE = {
-  /** Active seconds the scent works (= ai/scentLure.ts SCENT.seconds). */
-  seconds: 20,
-  /** Lures out at once. */
-  maxActive: 3,
+  /** Active seconds the scent works (ai/scentLure.ts SCENT.seconds: 20). */
+  seconds: SCENT.seconds,
+  /** Lures out at once (= the emitters' cap, SCENT.max). */
+  maxActive: SCENT.max,
   /** Seconds the spent canister lies there afterwards. */
   husk: 15,
   /** The vent plume (atmosphere smoke API): tan, faint, small — scent, not smoke and not a gas hazard. */
@@ -123,6 +124,8 @@ export interface ScentEmitterLike { readonly id: number }
 export interface ScentHostLike {
   add(p: {x: number; y: number; z: number; level?: number}, opts?: {seconds?: number}): ScentEmitterLike | null;
   remove(e: ScentEmitterLike): void;
+  /** The canister moved (an elevator cab carried it): the scent comes from where it is now. */
+  move?(e: ScentEmitterLike, p: {x: number; y: number; z: number; level?: number}): void;
 }
 /** What a canister / pool hurts (EnemyActor satisfies it). */
 export interface GrenadeEnemy extends RayEnemy {
@@ -273,6 +276,7 @@ export class GrenadeSystem implements BodySource {
       p.y += dy;
       c.root.updateMatrixWorld(true);
       c.last.y += dy;
+      if (c.emitter) this.moveScent(c);
     }
     for (const q of this.pools) {
       if (!inside(q.x, q.y, q.z)) continue;
@@ -290,7 +294,14 @@ export class GrenadeSystem implements BodySource {
       if (!to) continue;
       p.x = to[0]; p.z = to[1];
       c.root.updateMatrixWorld(true);
+      if (c.emitter) this.moveScent(c);
     }
+  }
+
+  /** A venting lure was moved (elevator): its emitter follows the canister. */
+  private moveScent(c: Canister): void {
+    const p = this.centre(c, new THREE.Vector3());
+    this.env.scents?.()?.move?.(c.emitter!, {x: p.x, y: p.y, z: p.z, level: this.levelOf(p.x, p.y, p.z)});
   }
 
   /** Pools + acid canisters not yet burst (the acid cap counts these). */
