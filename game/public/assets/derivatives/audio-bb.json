@@ -1,0 +1,3006 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "audio-bb-20261113",
+ "task": "studio-bb-production-20261112-234540-01",
+ "lane": "AUDIO",
+ "generatedBy": "the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (the task's audio authorization: the free local service inside the task, no fixed attempt cap, nothing paid or external; 23 jobs in bounded batches, each under its own durable POST cap — 16 takes shipped, 5 structurally rejected, 2 usable spares not shipped)",
+ "soundLab": {
+  "jobs": 23,
+  "accepted": 16,
+  "rejected": 5,
+  "spare": 2,
+  "numericCap": null,
+  "paidOrExternal": 0
+ },
+ "plannedBy": "tools/audio-pipeline/bb-plan.py (ids, cues, durations, seeds; the prompt text stays with the private raw archive)",
+ "rebuild": "SOUND_LAB_AUDIO_DIR=<raw dir> node tools/audio-pipeline/bb-build.mjs",
+ "reuse": "Checked first (audio/bank.ts): every enemy vocal in the bank is a groan, growl, snarl, hum, scream, shriek, wheeze or gurgle and the market voices are adult screams / grunts; nothing laughs. So the five cues were generated.",
+ "privacy": "This public record names each raw take by its Sound Lab job id, seed and SHA-256 (raw take, lab sidecar, prompt). The prompt text, the raw takes and their paths stay in the private raw archive (independent backup), not in Git.",
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (5 ms / 20 ms / 50 ms envelopes, laugh bursts — count, rate, dips —, time to the loud part, spectrogram images, spectral centroid / bands / flatness, strongest partial, YIN voicing and pitch, peak, DC, slice-edge levels, BS.1770 loudness). `metrics` / `gate` describe signal structure only, never how a clip sounds: whether a burst train reads as a laugh, and as an eerie one, needs an ear. The user taste-tests in game.",
+  "gameReady": false,
+  "approved": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "design": {
+  "bbCackle": "Four takes of two requests. Takes 01-03 are one request with three seeds — one family: ten bursts in 1.8 s at about 5.6 per second that get quieter, pitched syllables at 520-780 Hz under bright breath noise, almost the same rhythm in all three. Take 04 is the other request: twelve bursts in 2 s whose pitch steps down.",
+  "bbGiggle": "Four takes (two requests x two seeds): 4-6 voiced syllables each (median f0 about 380-480 Hz) inside 0.7-1.0 s; the third keeps two quieter trailing syllables.",
+  "bbPounce": "Three takes of one request: one continuous squeal (main partial 3.1-3.3 kHz). Each clip starts inside the squeal's steady early part (already sounding at the first frame) and steps up about 10 dB to its loudest part about 0.5 s later — the cue is started with the 0.55 s wind-up tell, so the loud part meets the launch. The build is mostly one of level: the main partial drifts up only 1.5-3 semitones into the loud part (gate.riseSt). Two end with a second short squeal after a 0.1 s gap; the third holds its loud part.",
+  "bbHurt": "Three takes of two requests: the first squawk of each take (0.2-0.26 s, a 15-25 ms attack, noisy with a partial near 1.15 kHz). They are shorter than the 0.3-0.6 s first asked for: the takes hold a second, separate steady squeak 0.13-0.15 s later, which is left out.",
+  "bbDeath": "Two takes of two requests: voiced laugh syllables whose pitch steps down by more than an octave (ended by a fade inside the last low syllable), and a pulse train at one pitch whose bursts get about 10 dB quieter and lose their voicing (it winds down by level, not by pitch). A first wording returned only unvoiced ratchet clicks and was rejected.",
+  "tone": "Asked for as a creepy doll / haunted-nursery laugh. Hurt and death were asked for, and structurally read, as toy- and creature-like sounds (a squawk, a laugh running down), not as a crying or suffering child."
+ },
+ "loudness": {
+  "method": "ITU-R BS.1770-4 K-weighting, 400 ms blocks / 75 % overlap (one-shots zero-padded to one block), maximum momentary loudness, mono; sample peak (no true-peak oversampling)"
+ },
+ "mixCalibration": {
+  "note": "CUE_GAIN (audio/sfx.ts; the same numbers as BB_CUE_GAIN in the generated manifest) per cue = 10^((target - measured) / 20), capped at 1 (no boost): the target is the cue's momentary-max loudness AT THE SOURCE (derivative x CUE_GAIN, before distance / occlusion / master), set against the existing cues' calibration (derivatives/audio-track1.json mixCalibration). Never above the -1 dBFS ceiling. First estimates for the ear pass (not auditioned).",
+  "references": {
+   "zombieGroan": -18.5,
+   "zombieDeath": -17.1,
+   "zombieAttack": -20.3,
+   "hurt": -24,
+   "sirenScream": -15.8,
+   "sirenHum": -24.3
+  },
+  "cues": {
+   "bbCackle": {
+    "basis": "zombieGroan",
+    "why": "2 LU over a zombie groan, 0.7 LU under the Siren's wake scream (the tell carries)",
+    "targetLufs": -16.5,
+    "measuredLufs": -14.7,
+    "cueGain": 0.81,
+    "atSourceLufs": -16.5,
+    "atSourcePeakDbfs": -2.8,
+    "vsReferenceLu": 2,
+    "variants": 4
+   },
+   "bbGiggle": {
+    "basis": "zombieGroan",
+    "why": "6.5 LU under a zombie groan (about the Siren's hum)",
+    "targetLufs": -25,
+    "measuredLufs": -17.2,
+    "cueGain": 0.41,
+    "atSourceLufs": -24.9,
+    "atSourcePeakDbfs": -8.7,
+    "vsReferenceLu": -6.4,
+    "variants": 4
+   },
+   "bbPounce": {
+    "basis": "zombieAttack",
+    "why": "its loudest moment (the launch) as loud as the cackle, 3.8 LU over a zombie attack; the clip starts about 10 dB lower",
+    "targetLufs": -16.5,
+    "measuredLufs": -11,
+    "cueGain": 0.53,
+    "atSourceLufs": -16.5,
+    "atSourcePeakDbfs": -6.5,
+    "vsReferenceLu": 3.8,
+    "variants": 3
+   },
+   "bbHurt": {
+    "basis": "zombieAttack",
+    "why": "1.2 LU under a zombie attack",
+    "targetLufs": -21.5,
+    "measuredLufs": -14.6,
+    "cueGain": 0.45,
+    "atSourceLufs": -21.5,
+    "atSourcePeakDbfs": -7.9,
+    "vsReferenceLu": -1.2,
+    "variants": 3
+   },
+   "bbDeath": {
+    "basis": "zombieGroan",
+    "why": "1 LU under a zombie groan, 2.4 LU under a zombie death",
+    "targetLufs": -19.5,
+    "measuredLufs": -18.7,
+    "cueGain": 0.91,
+    "atSourceLufs": -19.5,
+    "atSourcePeakDbfs": -1.8,
+    "vsReferenceLu": -1,
+    "variants": 2
+   }
+  },
+  "pounceWindupS": 0.55
+ },
+ "derivatives": [
+  {
+   "cue": "bbCackle",
+   "url": "assets/audio/bb-cackle-01.mp3",
+   "bytes": 29675,
+   "sha256": "f6e34789398b24af9954428e7ab49183b57cd3b2e2353c97cd880c9bc1f960aa",
+   "dur": 1.82,
+   "window": {
+    "startS": 0.115,
+    "endS": 1.935
+   },
+   "ops": [
+    "mono",
+    "remove DC (8.4e-4)",
+    "trim 0.115-1.935 s",
+    "cosine fades 0.005 / 0.03 s",
+    "peak -1 dBFS (4.2 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "kind": "cackle",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.035,
+    "bursts": 10,
+    "burstRatePerS": 5.61,
+    "burstDipDb": 26,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 8.77,
+       "flatness": 0.089,
+       "voicedFrac": 0.099
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 0.000011,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.98,
+       "flatness": 0.089
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "a long laugh (1.5-2.5 s)",
+      "ok": true,
+      "value": 1.82,
+      "need": "1.5-2.5 s"
+     },
+     {
+      "name": "a train of discrete bursts at a laugh rate",
+      "ok": true,
+      "value": {
+       "bursts": 10,
+       "ratePerS": 5.61,
+       "medianDipDb": 26
+      },
+      "need": ">= 6 bursts at 3-9 per second, median dip between neighbours >= 10 dB"
+     },
+     {
+      "name": "loud quickly (the tell)",
+      "ok": true,
+      "value": 0.035,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.2 s after the clip start"
+     },
+     {
+      "name": "trails off",
+      "ok": true,
+      "value": -5.8,
+      "need": "last quarter >= 3 dB under the first quarter"
+     },
+     {
+      "name": "ends in silence",
+      "ok": true,
+      "value": -46.7,
+      "need": "the cut end >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.82,
+    "peakDbfs": -1,
+    "rmsDbfs": -20.1,
+    "crestDb": 19.1,
+    "clippedFrac": 0,
+    "quietFrac": 0.198,
+    "activeFrac": 1,
+    "levelSpreadDb": 8.77,
+    "attack": {
+     "onsetS": 0.01,
+     "peakS": 0.89,
+     "riseMs": 65
+    },
+    "decay": {
+     "firstQuarterDb": -18.6,
+     "lastQuarterDb": -24.5,
+     "lastMinusFirstDb": -5.8,
+     "slopeDbPerS": -13.7,
+     "activeEndS": 1.8
+    },
+    "spectral": {
+     "centroidHz": 3159,
+     "flatness": 0.089,
+     "rolloff85Hz": 4232,
+     "bands": {
+      "0-300Hz": 0.004,
+      "300-1000Hz": 0.107,
+      "1000-3000Hz": 0.264,
+      "3000-8000Hz": 0.612,
+      "8000-22050Hz": 0.013
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.099,
+     "f0MedianHz": 525,
+     "f0P5Hz": 88,
+     "f0P95Hz": 764,
+     "rangeSt": 37.38,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -17.3,
+     "momentaryMaxLufs": -14.7
+    },
+    "edgesDb": {
+     "startDb": -48,
+     "endDb": -46.7
+    }
+   },
+   "source": {
+    "clip": "bb-cackle-02",
+    "jobId": "20261113T002431-822573182",
+    "seed": 822573182,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "ce0989b4f1ad8c55f445eb1646be31d8b61222fd003559af95d06f4b9e13dfac",
+    "rawBytes": 529244,
+    "labSidecarSha256": "ab322073f7a3f79aad1cad3c2633a8b702b4119ede7f713f67402565b8c98b4c",
+    "promptSha256": "9e83e400d5c8df514960e621918fb00f5484b36bcbb1b739a6b85d8e46b65148"
+   }
+  },
+  {
+   "cue": "bbCackle",
+   "url": "assets/audio/bb-cackle-02.mp3",
+   "bytes": 29675,
+   "sha256": "4b364df730a5b687bfc32b63d438f93cb204a7d8432f4bbd2c723af5bc78e683",
+   "dur": 1.815,
+   "window": {
+    "startS": 0.12,
+    "endS": 1.935
+   },
+   "ops": [
+    "mono",
+    "remove DC (4.5e-4)",
+    "trim 0.12-1.935 s",
+    "cosine fades 0.005 / 0.03 s",
+    "peak -1 dBFS (5.7 dB)",
+    "matched to the cue's quietest take (-1.4 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "kind": "cackle",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.09,
+    "bursts": 10,
+    "burstRatePerS": 5.88,
+    "burstDipDb": 28,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 9.33,
+       "flatness": 0.089,
+       "voicedFrac": 0.092
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -2.4
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 0.000001,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.98,
+       "flatness": 0.089
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "a long laugh (1.5-2.5 s)",
+      "ok": true,
+      "value": 1.815,
+      "need": "1.5-2.5 s"
+     },
+     {
+      "name": "a train of discrete bursts at a laugh rate",
+      "ok": true,
+      "value": {
+       "bursts": 10,
+       "ratePerS": 5.88,
+       "medianDipDb": 28
+      },
+      "need": ">= 6 bursts at 3-9 per second, median dip between neighbours >= 10 dB"
+     },
+     {
+      "name": "loud quickly (the tell)",
+      "ok": true,
+      "value": 0.09,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.2 s after the clip start"
+     },
+     {
+      "name": "trails off",
+      "ok": true,
+      "value": -5.3,
+      "need": "last quarter >= 3 dB under the first quarter"
+     },
+     {
+      "name": "ends in silence",
+      "ok": true,
+      "value": -48.2,
+      "need": "the cut end >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.815,
+    "peakDbfs": -2.4,
+    "rmsDbfs": -19.2,
+    "crestDb": 16.8,
+    "clippedFrac": 0,
+    "quietFrac": 0.188,
+    "activeFrac": 1,
+    "levelSpreadDb": 9.33,
+    "attack": {
+     "onsetS": 0.01,
+     "peakS": 0.88,
+     "riseMs": 90
+    },
+    "decay": {
+     "firstQuarterDb": -17.5,
+     "lastQuarterDb": -22.8,
+     "lastMinusFirstDb": -5.3,
+     "slopeDbPerS": -8,
+     "activeEndS": 1.8
+    },
+    "spectral": {
+     "centroidHz": 2796,
+     "flatness": 0.089,
+     "rolloff85Hz": 4044,
+     "bands": {
+      "0-300Hz": 0.003,
+      "300-1000Hz": 0.129,
+      "1000-3000Hz": 0.409,
+      "3000-8000Hz": 0.445,
+      "8000-22050Hz": 0.014
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.092,
+     "f0MedianHz": 537,
+     "f0P5Hz": 388,
+     "f0P95Hz": 759,
+     "rangeSt": 11.61,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -16.5,
+     "momentaryMaxLufs": -14.7
+    },
+    "edgesDb": {
+     "startDb": -46.7,
+     "endDb": -48.2
+    }
+   },
+   "source": {
+    "clip": "bb-cackle-03",
+    "jobId": "20261113T002640-2049682736",
+    "seed": 2049682736,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "cd34dc2b8a88bbcd4afff46fbabb46272e8c5ad88d2556f6dced2feab280767a",
+    "rawBytes": 529244,
+    "labSidecarSha256": "eea35231ffba5f718dacbd294da1558503defe266f9caec7d853d38636c431d6",
+    "promptSha256": "9e83e400d5c8df514960e621918fb00f5484b36bcbb1b739a6b85d8e46b65148"
+   }
+  },
+  {
+   "cue": "bbCackle",
+   "url": "assets/audio/bb-cackle-03.mp3",
+   "bytes": 29675,
+   "sha256": "7595227777110f6ddc711252cda6f1c4dffe829d8189f613229f1a685507f0c1",
+   "dur": 1.82,
+   "window": {
+    "startS": 0.11,
+    "endS": 1.93
+   },
+   "ops": [
+    "mono",
+    "remove DC (1.2e-3)",
+    "trim 0.11-1.93 s",
+    "cosine fades 0.005 / 0.03 s",
+    "peak -1 dBFS (3.9 dB)",
+    "matched to the cue's quietest take (-1.4 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "kind": "cackle",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.045,
+    "bursts": 10,
+    "burstRatePerS": 5.63,
+    "burstDipDb": 28.6,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 8.84,
+       "flatness": 0.086,
+       "voicedFrac": 0.093
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -2.4
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 0.000013,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.99,
+       "flatness": 0.086
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "a long laugh (1.5-2.5 s)",
+      "ok": true,
+      "value": 1.82,
+      "need": "1.5-2.5 s"
+     },
+     {
+      "name": "a train of discrete bursts at a laugh rate",
+      "ok": true,
+      "value": {
+       "bursts": 10,
+       "ratePerS": 5.63,
+       "medianDipDb": 28.6
+      },
+      "need": ">= 6 bursts at 3-9 per second, median dip between neighbours >= 10 dB"
+     },
+     {
+      "name": "loud quickly (the tell)",
+      "ok": true,
+      "value": 0.045,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.2 s after the clip start"
+     },
+     {
+      "name": "trails off",
+      "ok": true,
+      "value": -7.4,
+      "need": "last quarter >= 3 dB under the first quarter"
+     },
+     {
+      "name": "ends in silence",
+      "ok": true,
+      "value": -44.2,
+      "need": "the cut end >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.82,
+    "peakDbfs": -2.4,
+    "rmsDbfs": -20.9,
+    "crestDb": 18.5,
+    "clippedFrac": 0,
+    "quietFrac": 0.204,
+    "activeFrac": 1,
+    "levelSpreadDb": 8.84,
+    "attack": {
+     "onsetS": 0.01,
+     "peakS": 1.21,
+     "riseMs": 55
+    },
+    "decay": {
+     "firstQuarterDb": -17.8,
+     "lastQuarterDb": -25.2,
+     "lastMinusFirstDb": -7.4,
+     "slopeDbPerS": -7.3,
+     "activeEndS": 1.8
+    },
+    "spectral": {
+     "centroidHz": 2943,
+     "flatness": 0.086,
+     "rolloff85Hz": 4058,
+     "bands": {
+      "0-300Hz": 0.006,
+      "300-1000Hz": 0.126,
+      "1000-3000Hz": 0.293,
+      "3000-8000Hz": 0.567,
+      "8000-22050Hz": 0.007
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.093,
+     "f0MedianHz": 650,
+     "f0P5Hz": 354,
+     "f0P95Hz": 742,
+     "rangeSt": 12.79,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -18.7,
+     "momentaryMaxLufs": -14.7
+    },
+    "edgesDb": {
+     "startDb": -48.5,
+     "endDb": -44.2
+    }
+   },
+   "source": {
+    "clip": "bb-cackle-04",
+    "jobId": "20261113T002645-1200815533",
+    "seed": 1200815533,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "569bc781226e5c69d19f1b695885879426376cdb9a7502514d4867a72fd06ac4",
+    "rawBytes": 529244,
+    "labSidecarSha256": "f652b8400abc381d23f7f451c67f78e7d73dc7d6e482d00ee99b3113ffe1147b",
+    "promptSha256": "9e83e400d5c8df514960e621918fb00f5484b36bcbb1b739a6b85d8e46b65148"
+   }
+  },
+  {
+   "cue": "bbCackle",
+   "url": "assets/audio/bb-cackle-04.mp3",
+   "bytes": 33018,
+   "sha256": "78f97e8d0ade21006b3fbc4298c0fd3179e067dd216dcfe6ff85d0efa0db11bc",
+   "dur": 2.02,
+   "window": {
+    "startS": 0,
+    "endS": 2.02
+   },
+   "ops": [
+    "mono",
+    "remove DC (-5.5e-5)",
+    "trim 0-2.02 s",
+    "cosine fades 0.02 / 0.02 s",
+    "peak -1 dBFS (4.7 dB)",
+    "matched to the cue's quietest take (-0.4 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "kind": "cackle",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.175,
+    "bursts": 11,
+    "burstRatePerS": 5.67,
+    "burstDipDb": 34.4,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 11.16,
+       "flatness": 0.105,
+       "voicedFrac": 0.123
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1.4
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.0000072,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.98,
+       "flatness": 0.105
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "a long laugh (1.5-2.5 s)",
+      "ok": true,
+      "value": 2.02,
+      "need": "1.5-2.5 s"
+     },
+     {
+      "name": "a train of discrete bursts at a laugh rate",
+      "ok": true,
+      "value": {
+       "bursts": 11,
+       "ratePerS": 5.67,
+       "medianDipDb": 34.4
+      },
+      "need": ">= 6 bursts at 3-9 per second, median dip between neighbours >= 10 dB"
+     },
+     {
+      "name": "loud quickly (the tell)",
+      "ok": true,
+      "value": 0.175,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.2 s after the clip start"
+     },
+     {
+      "name": "trails off",
+      "ok": true,
+      "value": -8.9,
+      "need": "last quarter >= 3 dB under the first quarter"
+     },
+     {
+      "name": "ends in silence",
+      "ok": true,
+      "value": -43.9,
+      "need": "the cut end >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 2.02,
+    "peakDbfs": -1.4,
+    "rmsDbfs": -20.2,
+    "crestDb": 18.8,
+    "clippedFrac": 0,
+    "quietFrac": 0.439,
+    "activeFrac": 0.925,
+    "levelSpreadDb": 11.16,
+    "attack": {
+     "onsetS": 0.01,
+     "peakS": 0.45,
+     "riseMs": 175
+    },
+    "decay": {
+     "firstQuarterDb": -18.8,
+     "lastQuarterDb": -27.7,
+     "lastMinusFirstDb": -8.9,
+     "slopeDbPerS": -6.1,
+     "activeEndS": 2
+    },
+    "spectral": {
+     "centroidHz": 2327,
+     "flatness": 0.105,
+     "rolloff85Hz": 3748,
+     "bands": {
+      "0-300Hz": 0.004,
+      "300-1000Hz": 0.032,
+      "1000-3000Hz": 0.78,
+      "3000-8000Hz": 0.164,
+      "8000-22050Hz": 0.02
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.123,
+     "f0MedianHz": 677,
+     "f0P5Hz": 172,
+     "f0P95Hz": 1097,
+     "rangeSt": 32.05,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -17.5,
+     "momentaryMaxLufs": -14.7
+    },
+    "edgesDb": {
+     "startDb": -40.2,
+     "endDb": -43.9
+    }
+   },
+   "source": {
+    "clip": "bb-cackle-05",
+    "jobId": "20261113T002650-749044461",
+    "seed": 749044461,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "7303f810440200c2b0764cf32655b2698a29036583b045a7226dcae6f8d59dde",
+    "rawBytes": 529244,
+    "labSidecarSha256": "579350f2768abe6d5a171a52b130472489ee03fc7b017cd899760ba0ed2c464c",
+    "promptSha256": "81b7d18195a219d0788b832aedc09f507fe575ed90ae40db8f3046332ecdaf2b"
+   }
+  },
+  {
+   "cue": "bbGiggle",
+   "url": "assets/audio/bb-giggle-01.mp3",
+   "bytes": 11912,
+   "sha256": "93d1bbdb0c53637ae02e7163e26172a76181610d376d8a77c0cf44a1895d7c97",
+   "dur": 0.955,
+   "window": {
+    "startS": 0.13,
+    "endS": 1.085
+   },
+   "ops": [
+    "mono",
+    "remove DC (-2.0e-4)",
+    "trim 0.13-1.085 s",
+    "cosine fades 0.01 / 0.02 s",
+    "peak -1 dBFS (6.2 dB)",
+    "matched to the cue's quietest take (-2.9 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "giggle",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.025,
+    "bursts": 6,
+    "burstRatePerS": 6.25,
+    "burstDipDb": 33.5,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 9.93,
+       "flatness": 0.074,
+       "voicedFrac": 0.658
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -3.9
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.0000034,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.99,
+       "flatness": 0.074
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "short (0.7-1.5 s)",
+      "ok": true,
+      "value": 0.955,
+      "need": "0.7-1.5 s"
+     },
+     {
+      "name": "a few discrete bursts at a laugh rate",
+      "ok": true,
+      "value": {
+       "bursts": 6,
+       "ratePerS": 6.25,
+       "medianDipDb": 33.5
+      },
+      "need": ">= 3 bursts at 3-9 per second, median dip >= 10 dB"
+     },
+     {
+      "name": "pitched syllables in a small high voice",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.658,
+       "f0MedianHz": 418
+      },
+      "need": "voiced >= 0.2, median f0 250-800 Hz"
+     },
+     {
+      "name": "soft, not shrill",
+      "ok": true,
+      "value": 527,
+      "need": "centroid <= 1.5 kHz"
+     },
+     {
+      "name": "starts and ends in silence",
+      "ok": true,
+      "value": {
+       "startDb": -34.2,
+       "endDb": -47.6
+      },
+      "need": "both cuts >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.955,
+    "peakDbfs": -3.9,
+    "rmsDbfs": -19.3,
+    "crestDb": 15.4,
+    "clippedFrac": 0,
+    "quietFrac": 0.421,
+    "activeFrac": 1,
+    "levelSpreadDb": 9.93,
+    "attack": {
+     "onsetS": 0.005,
+     "peakS": 0.035,
+     "riseMs": 25
+    },
+    "decay": {
+     "firstQuarterDb": -15.7,
+     "lastQuarterDb": -25.5,
+     "lastMinusFirstDb": -9.8,
+     "slopeDbPerS": -4.1,
+     "activeEndS": 0.95
+    },
+    "spectral": {
+     "centroidHz": 527,
+     "flatness": 0.074,
+     "rolloff85Hz": 2407,
+     "bands": {
+      "0-300Hz": 0.002,
+      "300-1000Hz": 0.986,
+      "1000-3000Hz": 0.004,
+      "3000-8000Hz": 0.005,
+      "8000-22050Hz": 0.003
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.658,
+     "f0MedianHz": 418,
+     "f0P5Hz": 156,
+     "f0P95Hz": 620,
+     "rangeSt": 23.85,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -20.5,
+     "momentaryMaxLufs": -17.2
+    },
+    "edgesDb": {
+     "startDb": -34.2,
+     "endDb": -47.6
+    }
+   },
+   "source": {
+    "clip": "bb-giggle-01",
+    "jobId": "20261113T002436-561658655",
+    "seed": 561658655,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "412035244363311fb940958e3156422e4b9f5c5be239b5b05058786074173dd3",
+    "rawBytes": 352844,
+    "labSidecarSha256": "5e34a8fe45e6e8d642d5b562a6d02ace786fbae56b9f70095beae19a357dd74b",
+    "promptSha256": "f6af471847e7f9ecda97cb7144312208a341f4c29db6ecc31e421fdf03634df0"
+   }
+  },
+  {
+   "cue": "bbGiggle",
+   "url": "assets/audio/bb-giggle-02.mp3",
+   "bytes": 10971,
+   "sha256": "8cf8443102557797329256e809fc34ad13cd21e3bf8b04239794da1ac9c82d3f",
+   "dur": 0.875,
+   "window": {
+    "startS": 0.115,
+    "endS": 0.99
+   },
+   "ops": [
+    "mono",
+    "remove DC (-5.7e-4)",
+    "trim 0.115-0.99 s",
+    "cosine fades 0.01 / 0.015 s",
+    "peak -1 dBFS (3.2 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "giggle",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.185,
+    "bursts": 6,
+    "burstRatePerS": 6.45,
+    "burstDipDb": 15.6,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 8.13,
+       "flatness": 0.121,
+       "voicedFrac": 0.313
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.000013,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.98,
+       "flatness": 0.121
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "short (0.7-1.5 s)",
+      "ok": true,
+      "value": 0.875,
+      "need": "0.7-1.5 s"
+     },
+     {
+      "name": "a few discrete bursts at a laugh rate",
+      "ok": true,
+      "value": {
+       "bursts": 6,
+       "ratePerS": 6.45,
+       "medianDipDb": 15.6
+      },
+      "need": ">= 3 bursts at 3-9 per second, median dip >= 10 dB"
+     },
+     {
+      "name": "pitched syllables in a small high voice",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.313,
+       "f0MedianHz": 420
+      },
+      "need": "voiced >= 0.2, median f0 250-800 Hz"
+     },
+     {
+      "name": "soft, not shrill",
+      "ok": true,
+      "value": 1100,
+      "need": "centroid <= 1.5 kHz"
+     },
+     {
+      "name": "starts and ends in silence",
+      "ok": true,
+      "value": {
+       "startDb": -48,
+       "endDb": -46.2
+      },
+      "need": "both cuts >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.875,
+    "peakDbfs": -1,
+    "rmsDbfs": -19.8,
+    "crestDb": 18.8,
+    "clippedFrac": 0,
+    "quietFrac": 0.345,
+    "activeFrac": 0.941,
+    "levelSpreadDb": 8.13,
+    "attack": {
+     "onsetS": 0.015,
+     "peakS": 0.19,
+     "riseMs": 170
+    },
+    "decay": {
+     "firstQuarterDb": -17.7,
+     "lastQuarterDb": -22,
+     "lastMinusFirstDb": -4.3,
+     "slopeDbPerS": -20.5,
+     "activeEndS": 0.85
+    },
+    "spectral": {
+     "centroidHz": 1100,
+     "flatness": 0.121,
+     "rolloff85Hz": 4116,
+     "bands": {
+      "0-300Hz": 0.007,
+      "300-1000Hz": 0.826,
+      "1000-3000Hz": 0.039,
+      "3000-8000Hz": 0.119,
+      "8000-22050Hz": 0.009
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.313,
+     "f0MedianHz": 420,
+     "f0P5Hz": 344,
+     "f0P95Hz": 467,
+     "rangeSt": 5.29,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -19.1,
+     "momentaryMaxLufs": -17.2
+    },
+    "edgesDb": {
+     "startDb": -48,
+     "endDb": -46.2
+    }
+   },
+   "source": {
+    "clip": "bb-giggle-02",
+    "jobId": "20261113T002440-1543757455",
+    "seed": 1543757455,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "171e53c43fa6e05400583e40fbff10ceeac93b6916135250e73714b27808ce79",
+    "rawBytes": 352844,
+    "labSidecarSha256": "a743414ebad8545ee9f388857f72a9000e048c7b3281827688ffdaef92787534",
+    "promptSha256": "bdf5a9e820afdf9f472ea9fbbe496e9e7441210387acf9bd15de70638d243bd8"
+   }
+  },
+  {
+   "cue": "bbGiggle",
+   "url": "assets/audio/bb-giggle-03.mp3",
+   "bytes": 15360,
+   "sha256": "9f56503342afc252527fb75bbf50364e77633c543f33b99b816eb8c799cf303e",
+   "dur": 1.245,
+   "window": {
+    "startS": 0.135,
+    "endS": 1.38
+   },
+   "ops": [
+    "mono",
+    "remove DC (-5.6e-5)",
+    "trim 0.135-1.38 s",
+    "cosine fades 0.01 / 0.015 s",
+    "peak -1 dBFS (5.9 dB)",
+    "matched to the cue's quietest take (-1.3 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "giggle",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.025,
+    "bursts": 8,
+    "burstRatePerS": 6.01,
+    "burstDipDb": 31.6,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 9.28,
+       "flatness": 0.063,
+       "voicedFrac": 0.698
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -2.3
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 0.0000074,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.99,
+       "flatness": 0.063
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "short (0.7-1.5 s)",
+      "ok": true,
+      "value": 1.245,
+      "need": "0.7-1.5 s"
+     },
+     {
+      "name": "a few discrete bursts at a laugh rate",
+      "ok": true,
+      "value": {
+       "bursts": 8,
+       "ratePerS": 6.01,
+       "medianDipDb": 31.6
+      },
+      "need": ">= 3 bursts at 3-9 per second, median dip >= 10 dB"
+     },
+     {
+      "name": "pitched syllables in a small high voice",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.698,
+       "f0MedianHz": 445
+      },
+      "need": "voiced >= 0.2, median f0 250-800 Hz"
+     },
+     {
+      "name": "soft, not shrill",
+      "ok": true,
+      "value": 580,
+      "need": "centroid <= 1.5 kHz"
+     },
+     {
+      "name": "starts and ends in silence",
+      "ok": true,
+      "value": {
+       "startDb": -30.9,
+       "endDb": -42.2
+      },
+      "need": "both cuts >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.245,
+    "peakDbfs": -2.3,
+    "rmsDbfs": -19.7,
+    "crestDb": 17.4,
+    "clippedFrac": 0,
+    "quietFrac": 0.444,
+    "activeFrac": 0.958,
+    "levelSpreadDb": 9.28,
+    "attack": {
+     "onsetS": 0.005,
+     "peakS": 0.265,
+     "riseMs": 20
+    },
+    "decay": {
+     "firstQuarterDb": -16.7,
+     "lastQuarterDb": -29.9,
+     "lastMinusFirstDb": -13.2,
+     "slopeDbPerS": -16.9,
+     "activeEndS": 1.2
+    },
+    "spectral": {
+     "centroidHz": 580,
+     "flatness": 0.063,
+     "rolloff85Hz": 2206,
+     "bands": {
+      "0-300Hz": 0.002,
+      "300-1000Hz": 0.982,
+      "1000-3000Hz": 0.005,
+      "3000-8000Hz": 0.008,
+      "8000-22050Hz": 0.003
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.698,
+     "f0MedianHz": 445,
+     "f0P5Hz": 153,
+     "f0P95Hz": 619,
+     "rangeSt": 24.2,
+     "notes": 1,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -20.2,
+     "momentaryMaxLufs": -17.2
+    },
+    "edgesDb": {
+     "startDb": -30.9,
+     "endDb": -42.2
+    }
+   },
+   "source": {
+    "clip": "bb-giggle-03",
+    "jobId": "20261113T002654-283085158",
+    "seed": 283085158,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "af2d96c884f454f1b14d4c1ee596bd22be4f728622f3e0a8c3e458211794fef0",
+    "rawBytes": 352844,
+    "labSidecarSha256": "36ebd77ccf4ae3013a40fa90b4a3517ebef9e9c20a41c8bfa524df18ef410066",
+    "promptSha256": "f6af471847e7f9ecda97cb7144312208a341f4c29db6ecc31e421fdf03634df0"
+   }
+  },
+  {
+   "cue": "bbGiggle",
+   "url": "assets/audio/bb-giggle-04.mp3",
+   "bytes": 11285,
+   "sha256": "b1d62300ff97218c0ae60d225b4b40474f2ab84352b70ad96ba858aac3e0cf8a",
+   "dur": 0.9,
+   "window": {
+    "startS": 0.085,
+    "endS": 0.985
+   },
+   "ops": [
+    "mono",
+    "remove DC (-5.8e-4)",
+    "trim 0.085-0.985 s",
+    "cosine fades 0.01 / 0.015 s",
+    "peak -1 dBFS (4.8 dB)",
+    "matched to the cue's quietest take (-2.6 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "giggle",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.215,
+    "bursts": 6,
+    "burstRatePerS": 6.49,
+    "burstDipDb": 31.4,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 9.54,
+       "flatness": 0.128,
+       "voicedFrac": 0.309
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -3.6
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.0000063,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.98,
+       "flatness": 0.128
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "short (0.7-1.5 s)",
+      "ok": true,
+      "value": 0.9,
+      "need": "0.7-1.5 s"
+     },
+     {
+      "name": "a few discrete bursts at a laugh rate",
+      "ok": true,
+      "value": {
+       "bursts": 6,
+       "ratePerS": 6.49,
+       "medianDipDb": 31.4
+      },
+      "need": ">= 3 bursts at 3-9 per second, median dip >= 10 dB"
+     },
+     {
+      "name": "pitched syllables in a small high voice",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.309,
+       "f0MedianHz": 404
+      },
+      "need": "voiced >= 0.2, median f0 250-800 Hz"
+     },
+     {
+      "name": "soft, not shrill",
+      "ok": true,
+      "value": 1159,
+      "need": "centroid <= 1.5 kHz"
+     },
+     {
+      "name": "starts and ends in silence",
+      "ok": true,
+      "value": {
+       "startDb": -41.7,
+       "endDb": -41.3
+      },
+      "need": "both cuts >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.9,
+    "peakDbfs": -3.6,
+    "rmsDbfs": -20.5,
+    "crestDb": 16.9,
+    "clippedFrac": 0,
+    "quietFrac": 0.302,
+    "activeFrac": 0.944,
+    "levelSpreadDb": 9.54,
+    "attack": {
+     "onsetS": 0.015,
+     "peakS": 0.22,
+     "riseMs": 205
+    },
+    "decay": {
+     "firstQuarterDb": -31.1,
+     "lastQuarterDb": -30.8,
+     "lastMinusFirstDb": 0.3,
+     "slopeDbPerS": -31.8,
+     "activeEndS": 0.9
+    },
+    "spectral": {
+     "centroidHz": 1159,
+     "flatness": 0.128,
+     "rolloff85Hz": 4493,
+     "bands": {
+      "0-300Hz": 0.006,
+      "300-1000Hz": 0.815,
+      "1000-3000Hz": 0.033,
+      "3000-8000Hz": 0.136,
+      "8000-22050Hz": 0.011
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.309,
+     "f0MedianHz": 404,
+     "f0P5Hz": 345,
+     "f0P95Hz": 460,
+     "rangeSt": 4.97,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -19.5,
+     "momentaryMaxLufs": -17.2
+    },
+    "edgesDb": {
+     "startDb": -41.7,
+     "endDb": -41.3
+    }
+   },
+   "source": {
+    "clip": "bb-giggle-04",
+    "jobId": "20261113T002659-800409814",
+    "seed": 800409814,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "d92525c1d950b80bf2882c2315b334a122f4ed0030d1c40244c7e29513d3fcd7",
+    "rawBytes": 352844,
+    "labSidecarSha256": "474c608bf255cee51b918559cd140aaba7565fff11d076ab703fdaee3342858f",
+    "promptSha256": "bdf5a9e820afdf9f472ea9fbbe496e9e7441210387acf9bd15de70638d243bd8"
+   }
+  },
+  {
+   "cue": "bbPounce",
+   "url": "assets/audio/bb-pounce-01.mp3",
+   "bytes": 17554,
+   "sha256": "cbff8015c52be943571ce6f60e2be9098466f68111680ef7b7280f3728a0f76b",
+   "dur": 1.07,
+   "window": {
+    "startS": 0.44,
+    "endS": 1.51
+   },
+   "ops": [
+    "mono",
+    "remove DC (1.5e-4)",
+    "trim 0.44-1.51 s",
+    "cosine fades 0.012 / 0.03 s",
+    "peak -1 dBFS (15.0 dB)",
+    "matched to the cue's quietest take (-0.4 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "kind": "pounce",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.47,
+    "bursts": 2,
+    "burstRatePerS": 3.03,
+    "burstDipDb": 39.7,
+    "audibleWithinS": 0.01,
+    "loudAtS": 0.5,
+    "buildDb": 9.5,
+    "partialStartHz": 3230,
+    "partialLoudHz": 3747,
+    "riseSt": 2.6,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 4.85,
+       "flatness": 0.066,
+       "voicedFrac": 0.735
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1.4
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 0.000044,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.99,
+       "flatness": 0.066
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "the wind-up and the leap (0.9-1.3 s)",
+      "ok": true,
+      "value": 1.07,
+      "need": "0.9-1.3 s"
+     },
+     {
+      "name": "audible at once (the warning)",
+      "ok": true,
+      "value": 0.01,
+      "need": "within 16 dB of its loudest 5 ms frame <= 0.05 s after the clip start"
+     },
+     {
+      "name": "loudest at the launch",
+      "ok": true,
+      "value": 0.5,
+      "need": "first within 3 dB of its loudest 20 ms frame 0.4-0.7 s after the clip start (the leap launches at 0.55 s)"
+     },
+     {
+      "name": "builds",
+      "ok": true,
+      "value": 9.5,
+      "need": "its loudest 0.1 s >= 6 dB over its first 0.3 s"
+     },
+     {
+      "name": "a pitched, bright squeal that does not sink",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.735,
+       "riseSt": 2.6,
+       "centroidHz": 3912
+      },
+      "need": "voiced >= 0.4, centroid >= 2 kHz, its main partial (2-4.5 kHz) at the loud part not lower than at the clip start (>= -0.5 semitones; the measured rise is recorded as riseSt)"
+     },
+     {
+      "name": "ends in silence",
+      "ok": true,
+      "value": -25.7,
+      "need": "the cut end >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.07,
+    "peakDbfs": -1.4,
+    "rmsDbfs": -16.1,
+    "crestDb": 14.7,
+    "clippedFrac": 0,
+    "quietFrac": 0.113,
+    "activeFrac": 0.952,
+    "levelSpreadDb": 4.85,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.93,
+     "riseMs": 470
+    },
+    "decay": {
+     "firstQuarterDb": -20.3,
+     "lastQuarterDb": -14.8,
+     "lastMinusFirstDb": 5.5,
+     "slopeDbPerS": 26.9,
+     "activeEndS": 1.05
+    },
+    "spectral": {
+     "centroidHz": 3912,
+     "flatness": 0.066,
+     "rolloff85Hz": 4706,
+     "bands": {
+      "0-300Hz": 0.002,
+      "300-1000Hz": 0.007,
+      "1000-3000Hz": 0.065,
+      "3000-8000Hz": 0.915,
+      "8000-22050Hz": 0.011
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.735,
+     "f0MedianHz": 1568,
+     "f0P5Hz": 963,
+     "f0P95Hz": 1666,
+     "rangeSt": 9.48,
+     "notes": 1,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -12.4,
+     "momentaryMaxLufs": -11
+    },
+    "edgesDb": {
+     "startDb": -10.6,
+     "endDb": -25.7
+    }
+   },
+   "source": {
+    "clip": "bb-pounce-03",
+    "jobId": "20261113T002703-1712363872",
+    "seed": 1712363872,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "d8523fb257675877d8e8109168685da3664bbdf813e12516db403ed50c1c3a81",
+    "rawBytes": 352844,
+    "labSidecarSha256": "504fc312132ee6334a1a9b4f1e22ac3670d19e3d33cae81e354d431a7f453b0c",
+    "promptSha256": "1f0cd05b1607aa05a44a4be4186e2560a3e86a152f89c2d304eea0749be295c3"
+   }
+  },
+  {
+   "cue": "bbPounce",
+   "url": "assets/audio/bb-pounce-02.mp3",
+   "bytes": 17554,
+   "sha256": "c69bbc86ea7eb3d8967fd2cdfe0ff1ac3d9c5223dca7ae30d83bb21675e27f2a",
+   "dur": 1.06,
+   "window": {
+    "startS": 0.44,
+    "endS": 1.5
+   },
+   "ops": [
+    "mono",
+    "remove DC (-3.0e-5)",
+    "trim 0.44-1.5 s",
+    "cosine fades 0.012 / 0.03 s",
+    "peak -1 dBFS (11.4 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "kind": "pounce",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.48,
+    "bursts": 2,
+    "burstRatePerS": 2.78,
+    "burstDipDb": 31.9,
+    "audibleWithinS": 0.01,
+    "loudAtS": 0.54,
+    "buildDb": 11.5,
+    "partialStartHz": 3058,
+    "partialLoudHz": 3618,
+    "riseSt": 2.9,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 6.94,
+       "flatness": 0.089,
+       "voicedFrac": 0.718
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 0.000019,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.98,
+       "flatness": 0.089
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "the wind-up and the leap (0.9-1.3 s)",
+      "ok": true,
+      "value": 1.06,
+      "need": "0.9-1.3 s"
+     },
+     {
+      "name": "audible at once (the warning)",
+      "ok": true,
+      "value": 0.01,
+      "need": "within 16 dB of its loudest 5 ms frame <= 0.05 s after the clip start"
+     },
+     {
+      "name": "loudest at the launch",
+      "ok": true,
+      "value": 0.54,
+      "need": "first within 3 dB of its loudest 20 ms frame 0.4-0.7 s after the clip start (the leap launches at 0.55 s)"
+     },
+     {
+      "name": "builds",
+      "ok": true,
+      "value": 11.5,
+      "need": "its loudest 0.1 s >= 6 dB over its first 0.3 s"
+     },
+     {
+      "name": "a pitched, bright squeal that does not sink",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.718,
+       "riseSt": 2.9,
+       "centroidHz": 3687
+      },
+      "need": "voiced >= 0.4, centroid >= 2 kHz, its main partial (2-4.5 kHz) at the loud part not lower than at the clip start (>= -0.5 semitones; the measured rise is recorded as riseSt)"
+     },
+     {
+      "name": "ends in silence",
+      "ok": true,
+      "value": -31.9,
+      "need": "the cut end >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.06,
+    "peakDbfs": -1,
+    "rmsDbfs": -17.3,
+    "crestDb": 16.3,
+    "clippedFrac": 0,
+    "quietFrac": 0.104,
+    "activeFrac": 1,
+    "levelSpreadDb": 6.94,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.575,
+     "riseMs": 540
+    },
+    "decay": {
+     "firstQuarterDb": -21.6,
+     "lastQuarterDb": -20.1,
+     "lastMinusFirstDb": 1.5,
+     "slopeDbPerS": -6.8,
+     "activeEndS": 1.05
+    },
+    "spectral": {
+     "centroidHz": 3687,
+     "flatness": 0.089,
+     "rolloff85Hz": 5116,
+     "bands": {
+      "0-300Hz": 0.002,
+      "300-1000Hz": 0.009,
+      "1000-3000Hz": 0.101,
+      "3000-8000Hz": 0.875,
+      "8000-22050Hz": 0.013
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.718,
+     "f0MedianHz": 1595,
+     "f0P5Hz": 936,
+     "f0P95Hz": 1664,
+     "rangeSt": 9.95,
+     "notes": 2,
+     "noteSteps": 0,
+     "movementSt": 0.39
+    },
+    "loudness": {
+     "integratedLufs": -12.9,
+     "momentaryMaxLufs": -11
+    },
+    "edgesDb": {
+     "startDb": -14.8,
+     "endDb": -31.9
+    }
+   },
+   "source": {
+    "clip": "bb-pounce-07",
+    "jobId": "20261113T002956-16607901",
+    "seed": 16607901,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "82f432e06d432de788bb3f323b79a170783a01ea16d9726d1adfa106e51a6ab8",
+    "rawBytes": 352844,
+    "labSidecarSha256": "e8b0c192ff7cf995750f3f77e637fe3983099697525ce908b131006a40abd519",
+    "promptSha256": "1f0cd05b1607aa05a44a4be4186e2560a3e86a152f89c2d304eea0749be295c3"
+   }
+  },
+  {
+   "cue": "bbPounce",
+   "url": "assets/audio/bb-pounce-03.mp3",
+   "bytes": 18390,
+   "sha256": "77be06aff3645aab1403e894ce015a1f17253887ca8fe0d455c00c243d4d5be5",
+   "dur": 1.11,
+   "window": {
+    "startS": 0.42,
+    "endS": 1.53
+   },
+   "ops": [
+    "mono",
+    "remove DC (-1.1e-4)",
+    "trim 0.42-1.53 s",
+    "cosine fades 0.012 / 0.03 s",
+    "peak -1 dBFS (13.2 dB)",
+    "matched to the cue's quietest take (-3.0 dB)",
+    "mp3 mono 128 kbps"
+   ],
+   "gate": {
+    "kind": "pounce",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.5,
+    "bursts": 2,
+    "burstRatePerS": 7.14,
+    "burstDipDb": 6,
+    "audibleWithinS": 0.01,
+    "loudAtS": 0.56,
+    "buildDb": 10.8,
+    "partialStartHz": 3316,
+    "partialLoudHz": 3618,
+    "riseSt": 1.5,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 4.77,
+       "flatness": 0.069,
+       "voicedFrac": 0.543
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -4
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.000012,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.99,
+       "flatness": 0.069
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "the wind-up and the leap (0.9-1.3 s)",
+      "ok": true,
+      "value": 1.11,
+      "need": "0.9-1.3 s"
+     },
+     {
+      "name": "audible at once (the warning)",
+      "ok": true,
+      "value": 0.01,
+      "need": "within 16 dB of its loudest 5 ms frame <= 0.05 s after the clip start"
+     },
+     {
+      "name": "loudest at the launch",
+      "ok": true,
+      "value": 0.56,
+      "need": "first within 3 dB of its loudest 20 ms frame 0.4-0.7 s after the clip start (the leap launches at 0.55 s)"
+     },
+     {
+      "name": "builds",
+      "ok": true,
+      "value": 10.8,
+      "need": "its loudest 0.1 s >= 6 dB over its first 0.3 s"
+     },
+     {
+      "name": "a pitched, bright squeal that does not sink",
+      "ok": true,
+      "value": {
+       "voicedFrac": 0.543,
+       "riseSt": 1.5,
+       "centroidHz": 3555
+      },
+      "need": "voiced >= 0.4, centroid >= 2 kHz, its main partial (2-4.5 kHz) at the loud part not lower than at the clip start (>= -0.5 semitones; the measured rise is recorded as riseSt)"
+     },
+     {
+      "name": "ends in silence",
+      "ok": true,
+      "value": -32.6,
+      "need": "the cut end >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.11,
+    "peakDbfs": -4,
+    "rmsDbfs": -16.9,
+    "crestDb": 12.9,
+    "clippedFrac": 0,
+    "quietFrac": 0.018,
+    "activeFrac": 1,
+    "levelSpreadDb": 4.77,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.57,
+     "riseMs": 555
+    },
+    "decay": {
+     "firstQuarterDb": -23.8,
+     "lastQuarterDb": -15.9,
+     "lastMinusFirstDb": 7.9,
+     "slopeDbPerS": -32.8,
+     "activeEndS": 1.1
+    },
+    "spectral": {
+     "centroidHz": 3555,
+     "flatness": 0.069,
+     "rolloff85Hz": 4860,
+     "bands": {
+      "0-300Hz": 0.002,
+      "300-1000Hz": 0.002,
+      "1000-3000Hz": 0.032,
+      "3000-8000Hz": 0.957,
+      "8000-22050Hz": 0.006
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.543,
+     "f0MedianHz": 1644,
+     "f0P5Hz": 1125,
+     "f0P95Hz": 1676,
+     "rangeSt": 6.91,
+     "notes": 1,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -13.2,
+     "momentaryMaxLufs": -11
+    },
+    "edgesDb": {
+     "startDb": -12.7,
+     "endDb": -32.6
+    }
+   },
+   "source": {
+    "clip": "bb-pounce-08",
+    "jobId": "20261113T003000-1698090508",
+    "seed": 1698090508,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "943c62a0dc4c14624afd59a153622be49b4ee0fb5bbdd24903de7b85160b81d5",
+    "rawBytes": 352844,
+    "labSidecarSha256": "3d86b5d09bccb587de0508b0ed7c0dacfeea490efa335464509977e1f1e9045c",
+    "promptSha256": "1f0cd05b1607aa05a44a4be4186e2560a3e86a152f89c2d304eea0749be295c3"
+   }
+  },
+  {
+   "cue": "bbHurt",
+   "url": "assets/audio/bb-hurt-01.mp3",
+   "bytes": 3448,
+   "sha256": "0ece8289ffc5c121ed9a275a626b14479432d546c78dcd527d83d9579f666fac",
+   "dur": 0.255,
+   "window": {
+    "startS": 0.185,
+    "endS": 0.44
+   },
+   "ops": [
+    "mono",
+    "remove DC (2.1e-4)",
+    "trim 0.185-0.44 s",
+    "cosine fades 0.004 / 0.02 s",
+    "peak -1 dBFS (3.7 dB)",
+    "matched to the cue's quietest take (-1.2 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "hurt",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.025,
+    "bursts": 1,
+    "burstRatePerS": null,
+    "burstDipDb": null,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 3.28,
+       "flatness": 0.179,
+       "voicedFrac": 0.111
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -2.2
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 0.0000053,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.95,
+       "flatness": 0.179
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "short (0.2-0.6 s)",
+      "ok": true,
+      "value": 0.255,
+      "need": "0.2-0.6 s"
+     },
+     {
+      "name": "fast attack",
+      "ok": true,
+      "value": 0.025,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.04 s after the clip start"
+     },
+     {
+      "name": "one event",
+      "ok": true,
+      "value": 1,
+      "need": "<= 2 bursts"
+     },
+     {
+      "name": "a bright squawk",
+      "ok": true,
+      "value": 4487,
+      "need": "centroid >= 2 kHz"
+     },
+     {
+      "name": "starts and ends in silence",
+      "ok": true,
+      "value": {
+       "startDb": -43.1,
+       "endDb": -44
+      },
+      "need": "both cuts >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.255,
+    "peakDbfs": -2.2,
+    "rmsDbfs": -15.7,
+    "crestDb": 13.5,
+    "clippedFrac": 0,
+    "quietFrac": 0.16,
+    "activeFrac": 1,
+    "levelSpreadDb": 3.28,
+    "attack": {
+     "onsetS": 0.005,
+     "peakS": 0.12,
+     "riseMs": 50
+    },
+    "decay": {
+     "firstQuarterDb": -18.9,
+     "lastQuarterDb": -22,
+     "lastMinusFirstDb": -3.1,
+     "slopeDbPerS": -84.5,
+     "activeEndS": 0.25
+    },
+    "spectral": {
+     "centroidHz": 4487,
+     "flatness": 0.179,
+     "rolloff85Hz": 6277,
+     "bands": {
+      "0-300Hz": 0.002,
+      "300-1000Hz": 0.012,
+      "1000-3000Hz": 0.207,
+      "3000-8000Hz": 0.734,
+      "8000-22050Hz": 0.046
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.111,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -12.7,
+     "momentaryMaxLufs": -14.6
+    },
+    "edgesDb": {
+     "startDb": -43.1,
+     "endDb": -44
+    }
+   },
+   "source": {
+    "clip": "bb-hurt-01",
+    "jobId": "20261113T002454-240541345",
+    "seed": 240541345,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "e90e7a3789f1414c758b01b0cfc6d9337edfe06074e024de83ba04e9242d48db",
+    "rawBytes": 352844,
+    "labSidecarSha256": "44b39d35776e20855026682d4a72293e1cae2ed58f7a96fdb3c1608d66c2ce6b",
+    "promptSha256": "a5bcff5d225229ee7c3a969c24c3832c2694c26fd3df6b5c644f4984722503b5"
+   }
+  },
+  {
+   "cue": "bbHurt",
+   "url": "assets/audio/bb-hurt-02.mp3",
+   "bytes": 3448,
+   "sha256": "c32da0945ae5b82f51916516bd8451484ef46797ea0407bc7696727b03d7b560",
+   "dur": 0.255,
+   "window": {
+    "startS": 0.15,
+    "endS": 0.405
+   },
+   "ops": [
+    "mono",
+    "remove DC (4.4e-4)",
+    "trim 0.15-0.405 s",
+    "cosine fades 0.004 / 0.015 s",
+    "peak -1 dBFS (2.7 dB)",
+    "matched to the cue's quietest take (-1.1 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "hurt",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.03,
+    "bursts": 2,
+    "burstRatePerS": 8,
+    "burstDipDb": 14.9,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 4.88,
+       "flatness": 0.183,
+       "voicedFrac": 0
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -2.1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 0.000021,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.97,
+       "flatness": 0.183
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "short (0.2-0.6 s)",
+      "ok": true,
+      "value": 0.255,
+      "need": "0.2-0.6 s"
+     },
+     {
+      "name": "fast attack",
+      "ok": true,
+      "value": 0.03,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.04 s after the clip start"
+     },
+     {
+      "name": "one event",
+      "ok": true,
+      "value": 2,
+      "need": "<= 2 bursts"
+     },
+     {
+      "name": "a bright squawk",
+      "ok": true,
+      "value": 4329,
+      "need": "centroid >= 2 kHz"
+     },
+     {
+      "name": "starts and ends in silence",
+      "ok": true,
+      "value": {
+       "startDb": -49.3,
+       "endDb": -44.4
+      },
+      "need": "both cuts >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.255,
+    "peakDbfs": -2.1,
+    "rmsDbfs": -15.7,
+    "crestDb": 13.6,
+    "clippedFrac": 0,
+    "quietFrac": 0.12,
+    "activeFrac": 1,
+    "levelSpreadDb": 4.88,
+    "attack": {
+     "onsetS": 0.01,
+     "peakS": 0.105,
+     "riseMs": 25
+    },
+    "decay": {
+     "firstQuarterDb": -17.4,
+     "lastQuarterDb": -26.3,
+     "lastMinusFirstDb": -8.9,
+     "slopeDbPerS": -139.6,
+     "activeEndS": 0.25
+    },
+    "spectral": {
+     "centroidHz": 4329,
+     "flatness": 0.183,
+     "rolloff85Hz": 6251,
+     "bands": {
+      "0-300Hz": 0.002,
+      "300-1000Hz": 0.005,
+      "1000-3000Hz": 0.257,
+      "3000-8000Hz": 0.707,
+      "8000-22050Hz": 0.029
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -12.6,
+     "momentaryMaxLufs": -14.6
+    },
+    "edgesDb": {
+     "startDb": -49.3,
+     "endDb": -44.4
+    }
+   },
+   "source": {
+    "clip": "bb-hurt-02",
+    "jobId": "20261113T002717-1834050305",
+    "seed": 1834050305,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "681de4bdf336e675f33c7e8ffb6e44f43afaae6d059727803ee0aa3d2f2a25a4",
+    "rawBytes": 352844,
+    "labSidecarSha256": "a3dc37f3bd32da48b519a7536b21c95cd448816bf89a074ffca863e5b5b696f8",
+    "promptSha256": "a5bcff5d225229ee7c3a969c24c3832c2694c26fd3df6b5c644f4984722503b5"
+   }
+  },
+  {
+   "cue": "bbHurt",
+   "url": "assets/audio/bb-hurt-03.mp3",
+   "bytes": 3135,
+   "sha256": "1d5a4edf327660a41b096aed8a697cf9c900bbb948a1148232ee2b98e1f83c32",
+   "dur": 0.22,
+   "window": {
+    "startS": 0.33,
+    "endS": 0.55
+   },
+   "ops": [
+    "mono",
+    "remove DC (1.8e-3)",
+    "trim 0.33-0.55 s",
+    "cosine fades 0.004 / 0.015 s",
+    "peak -1 dBFS (4.9 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "hurt",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.035,
+    "bursts": 1,
+    "burstRatePerS": null,
+    "burstDipDb": null,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 2.13,
+       "flatness": 0.177,
+       "voicedFrac": 0.133
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 0.00014,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.96,
+       "flatness": 0.177
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "short (0.2-0.6 s)",
+      "ok": true,
+      "value": 0.22,
+      "need": "0.2-0.6 s"
+     },
+     {
+      "name": "fast attack",
+      "ok": true,
+      "value": 0.035,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.04 s after the clip start"
+     },
+     {
+      "name": "one event",
+      "ok": true,
+      "value": 1,
+      "need": "<= 2 bursts"
+     },
+     {
+      "name": "a bright squawk",
+      "ok": true,
+      "value": 3835,
+      "need": "centroid >= 2 kHz"
+     },
+     {
+      "name": "starts and ends in silence",
+      "ok": true,
+      "value": {
+       "startDb": -46.4,
+       "endDb": -44
+      },
+      "need": "both cuts >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.22,
+    "peakDbfs": -1,
+    "rmsDbfs": -14.7,
+    "crestDb": 13.7,
+    "clippedFrac": 0,
+    "quietFrac": 0.14,
+    "activeFrac": 1,
+    "levelSpreadDb": 2.13,
+    "attack": {
+     "onsetS": 0.01,
+     "peakS": 0.06,
+     "riseMs": 50
+    },
+    "decay": {
+     "firstQuarterDb": -17.2,
+     "lastQuarterDb": -16.3,
+     "lastMinusFirstDb": 0.9,
+     "slopeDbPerS": -44.8,
+     "activeEndS": 0.2
+    },
+    "spectral": {
+     "centroidHz": 3835,
+     "flatness": 0.177,
+     "rolloff85Hz": 5528,
+     "bands": {
+      "0-300Hz": 0.003,
+      "300-1000Hz": 0.01,
+      "1000-3000Hz": 0.353,
+      "3000-8000Hz": 0.595,
+      "8000-22050Hz": 0.04
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.133,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -12,
+     "momentaryMaxLufs": -14.6
+    },
+    "edgesDb": {
+     "startDb": -46.4,
+     "endDb": -44
+    }
+   },
+   "source": {
+    "clip": "bb-hurt-03",
+    "jobId": "20261113T002722-151840185",
+    "seed": 151840185,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "965d616dcd28ca969fd6d4006e8ebcd5ea169a932aca68649026eb19ac2bbab9",
+    "rawBytes": 352844,
+    "labSidecarSha256": "928f2fc1605047aae323d02da2bf91c1fc3c8ee9fbc5719583329aeb53a3e86a",
+    "promptSha256": "61fe02f2ddd5fdbeb4cb0b70f7a9712344ca3be0a36e07fde5ab3b8368f61d08"
+   }
+  },
+  {
+   "cue": "bbDeath",
+   "url": "assets/audio/bb-death-01.mp3",
+   "bytes": 13793,
+   "sha256": "16c284fe293addf14675cc37136848d0612e7e0d3813e75f303d8c0905b3d47e",
+   "dur": 1.105,
+   "window": {
+    "startS": 1.185,
+    "endS": 2.29
+   },
+   "ops": [
+    "mono",
+    "remove DC (-1.4e-4)",
+    "trim 1.185-2.29 s",
+    "cosine fades 0.01 / 0.06 s",
+    "peak -1 dBFS (11.9 dB)",
+    "matched to the cue's quietest take (-5.4 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "death",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.105,
+    "bursts": 5,
+    "burstRatePerS": 4.28,
+    "burstDipDb": 32.5,
+    "f0FirstThirdHz": 366,
+    "f0LastThirdHz": 187,
+    "pitchDropSt": -11.6,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 10.5,
+       "flatness": 0.047,
+       "voicedFrac": 0.725
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -6.4
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.000048,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.97,
+       "flatness": 0.047
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "short (0.7-1.3 s)",
+      "ok": true,
+      "value": 1.105,
+      "need": "0.7-1.3 s"
+     },
+     {
+      "name": "a train of bursts",
+      "ok": true,
+      "value": 5,
+      "need": ">= 4 bursts"
+     },
+     {
+      "name": "winds down",
+      "ok": true,
+      "value": {
+       "pitchDropSt": -11.6,
+       "lastMinusFirstDb": -10.5
+      },
+      "need": "the pitch of its last third >= 7 semitones under its first third, OR its last quarter >= 4 dB under its first quarter"
+     },
+     {
+      "name": "starts in silence",
+      "ok": true,
+      "value": -32.2,
+      "need": "the cut start >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.105,
+    "peakDbfs": -6.4,
+    "rmsDbfs": -20.1,
+    "crestDb": 13.7,
+    "clippedFrac": 0,
+    "quietFrac": 0.309,
+    "activeFrac": 1,
+    "levelSpreadDb": 10.5,
+    "attack": {
+     "onsetS": 0.005,
+     "peakS": 0.61,
+     "riseMs": 110
+    },
+    "decay": {
+     "firstQuarterDb": -17.4,
+     "lastQuarterDb": -28,
+     "lastMinusFirstDb": -10.5,
+     "slopeDbPerS": -10,
+     "activeEndS": 1.1
+    },
+    "spectral": {
+     "centroidHz": 598,
+     "flatness": 0.047,
+     "rolloff85Hz": 1447,
+     "bands": {
+      "0-300Hz": 0.033,
+      "300-1000Hz": 0.943,
+      "1000-3000Hz": 0.01,
+      "3000-8000Hz": 0.014,
+      "8000-22050Hz": 0
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.725,
+     "f0MedianHz": 424,
+     "f0P5Hz": 159,
+     "f0P95Hz": 667,
+     "rangeSt": 24.87,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -20.4,
+     "momentaryMaxLufs": -18.7
+    },
+    "edgesDb": {
+     "startDb": -32.2,
+     "endDb": -18.6
+    }
+   },
+   "source": {
+    "clip": "bb-death-02",
+    "jobId": "20261113T002726-147471791",
+    "seed": 147471791,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "778394682599d09b4bc240be93643f61ec483786c10c5a5d2ad1e093b6708b76",
+    "rawBytes": 529244,
+    "labSidecarSha256": "7f75fde3a6261a7b12c6695b2a9a4ed361a9678221c75cce80f89f6089f4360e",
+    "promptSha256": "44abd3c27391cf6cde0cb862070d64c64c1a66a56a0ccebfc89d1009440eee52"
+   }
+  },
+  {
+   "cue": "bbDeath",
+   "url": "assets/audio/bb-death-02.mp3",
+   "bytes": 12852,
+   "sha256": "d34ac57c41279d619674044a04185955d3d84e85489a8db22e3ed3793e246c04",
+   "dur": 1.025,
+   "window": {
+    "startS": 0.215,
+    "endS": 1.24
+   },
+   "ops": [
+    "mono",
+    "remove DC (1.0e-4)",
+    "trim 0.215-1.24 s",
+    "cosine fades 0.008 / 0.02 s",
+    "peak -1 dBFS (9.8 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "death",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.025,
+    "bursts": 7,
+    "burstRatePerS": 6.9,
+    "burstDipDb": 36.4,
+    "f0FirstThirdHz": 655,
+    "f0LastThirdHz": null,
+    "pitchDropSt": null,
+    "criteria": [
+     {
+      "name": "not a broadband noise wall",
+      "ok": true,
+      "value": {
+       "levelSpreadDb": 9.24,
+       "flatness": 0.03,
+       "voicedFrac": 0.274
+      },
+      "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)"
+     },
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 2.3e-7,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "voice band, not a hiss or a rumble",
+      "ok": true,
+      "value": {
+       "share300to8000Hz": 0.99,
+       "flatness": 0.03
+      },
+      "need": ">= 80 % of the energy in 300-8000 Hz, flatness <= 0.3"
+     },
+     {
+      "name": "short (0.7-1.3 s)",
+      "ok": true,
+      "value": 1.025,
+      "need": "0.7-1.3 s"
+     },
+     {
+      "name": "a train of bursts",
+      "ok": true,
+      "value": 7,
+      "need": ">= 4 bursts"
+     },
+     {
+      "name": "winds down",
+      "ok": true,
+      "value": {
+       "pitchDropSt": null,
+       "lastMinusFirstDb": -5.7
+      },
+      "need": "the pitch of its last third >= 7 semitones under its first third, OR its last quarter >= 4 dB under its first quarter"
+     },
+     {
+      "name": "starts in silence",
+      "ok": true,
+      "value": -32.8,
+      "need": "the cut start >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.025,
+    "peakDbfs": -1,
+    "rmsDbfs": -20.9,
+    "crestDb": 19.9,
+    "clippedFrac": 0,
+    "quietFrac": 0.441,
+    "activeFrac": 0.9,
+    "levelSpreadDb": 9.24,
+    "attack": {
+     "onsetS": 0.005,
+     "peakS": 0.03,
+     "riseMs": 25
+    },
+    "decay": {
+     "firstQuarterDb": -17.2,
+     "lastQuarterDb": -22.9,
+     "lastMinusFirstDb": -5.7,
+     "slopeDbPerS": -6.6,
+     "activeEndS": 1
+    },
+    "spectral": {
+     "centroidHz": 896,
+     "flatness": 0.03,
+     "rolloff85Hz": 1231,
+     "bands": {
+      "0-300Hz": 0.007,
+      "300-1000Hz": 0.782,
+      "1000-3000Hz": 0.192,
+      "3000-8000Hz": 0.018,
+      "8000-22050Hz": 0.001
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.274,
+     "f0MedianHz": 650,
+     "f0P5Hz": 226,
+     "f0P95Hz": 690,
+     "rangeSt": 19.34,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -21.8,
+     "momentaryMaxLufs": -18.7
+    },
+    "edgesDb": {
+     "startDb": -32.8,
+     "endDb": -44.9
+    }
+   },
+   "source": {
+    "clip": "bb-death-03",
+    "jobId": "20261113T002731-1936675290",
+    "seed": 1936675290,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "7b96a9be1726bef2ae0167dd85e7e8b3058bfbc2c7d66d8173b822b07917cc16",
+    "rawBytes": 529244,
+    "labSidecarSha256": "3b2695f2fd08fd6ea55613c97d9d16f38152ace10b9c049e1e3c02a767026e16",
+    "promptSha256": "7b0c8e929d38cbf662d6ee04ccc7cb3807f6e5fa1386d48879345e7d37f84b79"
+   }
+  }
+ ],
+ "notUsedRaws": [
+  {
+   "cue": "bbCackle",
+   "clip": "bb-cackle-01",
+   "jobId": "20261113T002426-1526037905",
+   "seed": 1526037905,
+   "seconds": 3,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "5e6dcd759e7da0dc94786fd5d22c2cc915062a03f097a28205f4c9094d9ffeef",
+   "rawBytes": 529244,
+   "labSidecarSha256": "095466d98caf4fc3487655d65a3b45e4481cb3abf4599b925cf58eceac6dd763",
+   "promptSha256": "81b7d18195a219d0788b832aedc09f507fe575ed90ae40db8f3046332ecdaf2b",
+   "kind": "spare",
+   "reason": "a second take of the request behind cackle take 05 (the same family: 15 bursts in 2 s that thin out, a partial near 1 kHz); the cue ships four takes — three of the other request and one of this one"
+  },
+  {
+   "cue": "bbPounce",
+   "clip": "bb-pounce-01",
+   "jobId": "20261113T002445-622676659",
+   "seed": 622676659,
+   "seconds": 2,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "9d01911dd4ea9736c9b0dd68d43ef72ccdb98597f2e20eb6fc80fd7668ecafac",
+   "rawBytes": 352844,
+   "labSidecarSha256": "cf52c3523979c421d1db27e54919da7c30fb7d0d6ba2de98abb4715f3cb4d793",
+   "promptSha256": "1f0cd05b1607aa05a44a4be4186e2560a3e86a152f89c2d304eea0749be295c3",
+   "kind": "spare",
+   "reason": "the same rising squeal as the shipped three, but the take stops 0.2 s after its loud part begins: cut to put that part at the launch it is 0.78 s long, under the 0.9-1.3 s cue"
+  },
+  {
+   "cue": "bbPounce",
+   "clip": "bb-pounce-02",
+   "jobId": "20261113T002449-422195149",
+   "seed": 422195149,
+   "seconds": 2,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "4c2cc1cf4cc749d3f8f6fc8ceea7a4fa55b0fb042a9692efab06d1dcb8dce41f",
+   "rawBytes": 352844,
+   "labSidecarSha256": "8e335461404ce03ea57780002f0c6dc9f8e651fca78aa41c8a024ae3f46d2957",
+   "promptSha256": "6a58f7e3054b7a43f99b00b22fb228840b1b84105e0d7e46100c2ce41fd31697",
+   "kind": "rejected",
+   "reason": "six separate voiced syllables (f0 about 450-600 Hz) that get louder, the loud ones 1.2-1.75 s into the take: a laugh-like staccato, not the one continuous rising squeal of the accepted request"
+  },
+  {
+   "cue": "bbDeath",
+   "clip": "bb-death-01",
+   "jobId": "20261113T002458-2082025192",
+   "seed": 2082025192,
+   "seconds": 3,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "2b92dd6d67eb82e6d7e412e403f3561c773d5688d5864eb194e327806d9e06a7",
+   "rawBytes": 529244,
+   "labSidecarSha256": "dd0f02ea0f237ef5badffab6953f0e17dba33e7e8947fa25eecd4d5b990ac217",
+   "promptSha256": "5c309d257770c8faa0593f353f3b50b305a1feb6a5da8cb0a44666432455b38d",
+   "kind": "rejected",
+   "reason": "ten unvoiced clicks (60-95 ms each, centroid about 5 kHz, voiced 5 %) that slow down and decay: a ratchet running out with no laugh or voice in it; replaced by takes 02 / 03 of two new wordings"
+  },
+  {
+   "cue": "bbPounce",
+   "clip": "bb-pounce-04",
+   "jobId": "20261113T002708-832952025",
+   "seed": 832952025,
+   "seconds": 2,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "bbd7e2531d2c144d5ac7221fb57fdae0722f747beae3d9ed45ec4b2e2ad57b59",
+   "rawBytes": 352844,
+   "labSidecarSha256": "0e2c579b4d4fca9c8891dbcc958eef396bb9935f8df7493f7ace3a31bfe33b16",
+   "promptSha256": "1f0cd05b1607aa05a44a4be4186e2560a3e86a152f89c2d304eea0749be295c3",
+   "kind": "rejected",
+   "reason": "the rising glide is there, but the take is loudest 0.27 s after its start and then declines by about 10 dB: it does not build to a loud part at the launch"
+  },
+  {
+   "cue": "bbPounce",
+   "clip": "bb-pounce-05",
+   "jobId": "20261113T002712-2029571792",
+   "seed": 2029571792,
+   "seconds": 2,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "e780b0187116b8ab6ac4b5a45f43322d875d0844c768684ec107ffc272dc7d39",
+   "rawBytes": 352844,
+   "labSidecarSha256": "8441881e0761721cf533f24cf19f2667f153703372f6edb69388984b83c55374",
+   "promptSha256": "6a58f7e3054b7a43f99b00b22fb228840b1b84105e0d7e46100c2ce41fd31697",
+   "kind": "rejected",
+   "reason": "quiet separate syllables (24-30 dB under the peak), then one loud 0.25 s shriek 1.35 s into the take: nothing audible at once before the loud part"
+  },
+  {
+   "cue": "bbPounce",
+   "clip": "bb-pounce-06",
+   "jobId": "20261113T002951-316091854",
+   "seed": 316091854,
+   "seconds": 2,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "c7720cdec26bcd5210b12ddc5b1c78b9d7787e21e67c2465de857594b9b0b3c4",
+   "rawBytes": 352844,
+   "labSidecarSha256": "2079d8cc8a12148be110f56198f649f5dfd0fa8b4fa73d83020cc19b1dc5d17e",
+   "promptSha256": "1f0cd05b1607aa05a44a4be4186e2560a3e86a152f89c2d304eea0749be295c3",
+   "kind": "rejected",
+   "reason": "the rising glide is there, but the take is loudest 0.23 s after its start and only returns to within 3 dB of that near its end: it does not build to a loud part at the launch"
+  }
+ ]
+}
