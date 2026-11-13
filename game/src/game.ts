@@ -199,6 +199,7 @@ import {installCraftBench, type CraftBenchSystem} from './world/craftBench'; // 
 import {installSentryTurret, type SentryTurretSystem} from './world/sentryTurret'; // task train-crafting (lane SENTRY): the sentry's ammo + roof turret
 import {installItemScanner, type ItemScannerSystem} from './world/itemScanner'; // task train-crafting (lane SCANNER): the scanner's scope
 import {installTrainOnboarding, type TrainOnboarding} from './world/trainOnboarding'; // task first-player-onboarding: the train's seven 3D guide markers
+import {installAcidMelt, type AcidMelt} from './world/acidMelt'; // task studio-refinement-batch-20261113-035659-01 (lane MELT): acid melts world props
 import {OnboardingStore, browserOnboardingStorage} from './ui/onboardingStore'; // (the same task) the browser-global tutorial record
 import type {PropPlacement} from './gen/props';
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
@@ -451,6 +452,8 @@ export class Game {
   /** Task first-player-onboarding: the browser-global tutorial record (never in a save) and the train's first-player markers. */
   readonly onboarding: OnboardingStore;
   readonly trainOnboarding: TrainOnboarding;
+  /** Task studio-refinement-batch-20261113-035659-01 (lane MELT): acid melting world props (world/acidMelt.ts; the acid grenade's seam). */
+  acidMelt: AcidMelt | null = null;
   /** Task studio-survivor-market-20261108-005807-01 (lane TRADE): market trade (market/trade/tradeSystem.ts); since the rework Rail Ties are a physical item. */
   trade!: TradeSystem;
   /** Task studio-weapon-runtime-fix-20261110-022206-01: the delivery of the new weapons' lazily loaded models (world/weaponVarietyDelivery.ts). */
@@ -870,6 +873,8 @@ export class Game {
     this.onboarding = new OnboardingStore(browserOnboardingStorage());
     this.trainOnboarding = installTrainOnboarding(this, this.onboarding);
     hookName('trainOnboarding');
+    installAcidMelt(this); // task studio-refinement-batch-20261113-035659-01 (lane MELT): sets this.acidMelt; its own layout / section / frame hooks, warm pool 'acid-melt'
+    hookName('acidMelt');
     this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionModelKeys.push(skywaysKitchenModelKeysFor); // task studio-skyways-level-20261106-054448 (lane FOOD): the ramen restaurant's skyways-* models
     this.sectionModelKeys.push(skywaysAddonModelKeysFor); // task studio-skyways-level-20261106-054448 (lane ADDON): the add-on's skyways-* models

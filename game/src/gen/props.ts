@@ -376,7 +376,11 @@ export interface PropPlacement {
    * generated). Absent on every generated placement.
    */
   cargo?: string;
-  /** Task train-all-cargo: a generated placement this station lost to the train (hidden at build; never respawned, roped or stocked). */
+  /**
+   * Task train-all-cargo: a generated placement this station lost to the train (hidden at build; never respawned, roped or stocked). Task
+   * studio-refinement-batch-20261113-035659-01 (lane MELT, world/acidMelt.ts): also one acid dissolved (ACID_MELT_LANE), or any prop while
+   * / after it dissolves — the same "not part of this station any more" for every reader.
+   */
   cargoGone?: boolean;
 }
 

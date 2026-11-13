@@ -635,11 +635,16 @@ export class PropDamage {
   }
   private readonly damageMats = new Map<THREE.Material, Map<string, THREE.Material>>();
 
-  /** Detach the prop into its own meshes + material clones (idempotent). False when capped / nothing found. */
-  detach(s: PropState, force = false): boolean {
+  /**
+   * Detach the prop into its own meshes + material clones (idempotent). False when capped / nothing found. Task
+   * studio-refinement-batch-20261113-035659-01 (lane MELT): `uncapped` — retire() only, which gives the slot back at once; a retired prop
+   * never detaches again.
+   */
+  detach(s: PropState, force = false, uncapped = false): boolean {
+    if (this.retired.has(s.prop)) return false;
     if (s.parts) return true;
     const n = this.detachedCount;
-    if (n >= (force ? MAX_DETACHED_HARD : MAX_DETACHED)) return false;
+    if (!uncapped && n >= (force ? MAX_DETACHED_HARD : MAX_DETACHED)) return false;
     const p = s.prop;
     const parts: Part[] = [];
     const add = (mesh: THREE.Mesh, key: string, created: boolean, ownGeometry: boolean, moving: boolean, tint: THREE.Color | null) => {
@@ -806,6 +811,64 @@ export class PropDamage {
     return freed;
   }
 
+  /**
+   * Task studio-refinement-batch-20261113-035659-01 (lane MELT, world/acidMelt.ts): props acid dissolves — out of this system for good from
+   * the start of their dissolve: never detached again, re-attached, reclaimed or marked (a hit answers as rubble). Their shared instances
+   * stay hidden and their merged-chunk triangles cut for the rest of this world (clear() restores the shared draws, as for every state).
+   */
+  private readonly retired = new Set<PropPlacement>();
+
+  /** Lane MELT: the prop was retired (dissolving / dissolved). */
+  isRetired(prop: PropPlacement): boolean {
+    return this.retired.has(prop);
+  }
+
+  /**
+   * Lane MELT: retire a prop (see `retired`) and hand over what drew it: `meshes` — stand-alone copies of its SHOWN parts at their world
+   * matrices, sharing the parts' geometry and damage materials (warmed variants: no new pipeline), carrying their per-object damage data
+   * (bullet marks as drawn) — and `geometries`, the merged-chunk extracts among them, now the caller's to dispose. Its own parts leave the
+   * scene and its detach slot is freed at once (the detach here ignores the caps for that reason); a holder's own meshes get their base
+   * material back and are hidden. `copies` false (a rebuild hiding a prop melted earlier): nothing is handed over. Null: already retired.
+   */
+  retire(prop: PropPlacement, index?: number, copies = true): {meshes: THREE.Mesh[]; geometries: THREE.BufferGeometry[]} | null {
+    if (this.retired.has(prop)) return null;
+    const s = this.state(prop, index);
+    this.detach(s, true, true);
+    this.retired.add(prop);
+    const meshes: THREE.Mesh[] = [], geometries: THREE.BufferGeometry[] = [];
+    for (const q of s.parts ?? []) {
+      const keep = copies && q.mesh.visible;
+      if (keep) {
+        q.mesh.updateWorldMatrix(true, false);
+        const m = new THREE.Mesh(q.mesh.geometry, q.mat);
+        m.name = `retired-${prop.kind}-${s.index}`;
+        m.matrixAutoUpdate = false;
+        m.matrix.copy(q.mesh.matrixWorld);
+        m.renderOrder = q.mesh.renderOrder;
+        m.castShadow = q.mesh.castShadow;
+        m.receiveShadow = q.mesh.receiveShadow;
+        m.userData[PROP_DATA_KEY] = q.u.data.slice();
+        if (q.mesh.userData.level !== undefined) m.userData.level = q.mesh.userData.level;
+        meshes.push(m);
+        if (q.ownGeometry) geometries.push(q.mesh.geometry);
+      } else if (q.ownGeometry) q.mesh.geometry.dispose();
+      if (q.created) this.group.remove(q.mesh);
+      else {
+        if (q.prevMat) { q.mesh.material = q.prevMat; if (q.mesh.userData.baseMat === q.mat) q.mesh.userData.baseMat = q.prevMat; }
+        delete q.mesh.userData[PROP_DATA_KEY];
+        q.mesh.visible = false;
+      }
+    }
+    if (s.parts) {
+      this.clones -= s.parts.length;
+      s.parts = null;
+      this.detached--;
+    }
+    // (nothing detached — nothing drawn by the render index: s.hidden / s.cuts are empty, nothing to hide)
+    this.order.delete(s);
+    return {meshes, geometries};
+  }
+
   /** Whether another prop rests on top of this one (it then never fully breaks: no floating stacks). */
   private supports(p: PropPlacement): boolean {
     const top = p.y + p.h;
@@ -814,8 +877,8 @@ export class PropDamage {
 
   hit(h: PropHit): PropHitResult {
     const s = this.state(h.prop, h.index);
-    const res: PropHitResult = {cls: s.spec.cls, glass: false, point: h.point.clone(), normal: h.normal.clone(), color: new THREE.Color(DAMAGE_MATERIALS[s.spec.cls].palette[0]), stage: s.stage, broke: null, boxes: [], marked: false, rubble: s.broken};
-    if (s.broken) return res;
+    const res: PropHitResult = {cls: s.spec.cls, glass: false, point: h.point.clone(), normal: h.normal.clone(), color: new THREE.Color(DAMAGE_MATERIALS[s.spec.cls].palette[0]), stage: s.stage, broke: null, boxes: [], marked: false, rubble: s.broken || this.retired.has(h.prop)};
+    if (s.broken || res.rubble) return res; // (lane MELT: a retired prop is dissolving / gone: no mark, no break)
     // glass / breakable props may exceed the soft detach cap (their break needs their own meshes)
     this.detach(s, !!s.spec.glass || s.spec.breaks !== 'never');
     // refine onto the real surface: first detached part along the shot (inside the prop box)
@@ -978,6 +1041,7 @@ export class PropDamage {
     this.clones = 0;
     this.detached = 0; // lane PHYS
     this.order.clear();
+    this.retired.clear(); // lane MELT
   }
 
   stats(): {damaged: number; detached: number; broken: number; glassBroken: number; lines: number; clones: number} {
