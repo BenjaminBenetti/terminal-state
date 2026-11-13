@@ -97,7 +97,19 @@ the way, lingers a few seconds, then goes back to what it was doing. If it can f
 - A pursuer that has lost sight of you for 1.5 s is pulled to the canister. This is how you shake pursuers.
 - A gunshot heard or a hit taken in the last 5 s comes first: it hunts that, then the scent pulls it again.
 - An active scent beats a flare or the flashlight.
-- At most 3 scents at once. The scent makes no sound and no gas.
+- At most 3 scents at once. The canister hisses once as it opens and shows a faint tan plume while it vents (harmless: not a gas
+  hazard, never green); the scent itself is silent.
+
+Crafted grenades (task studio-refinement-batch-20261113-035659-01; `weapons/grenades.ts`, `items/grenades.ts`): the train's
+crafting bench turns **3 bio mater** into **5 Acid Scrapper grenades** or **3 Zombie Lure grenades** (into your pockets, the
+grenade slot first; the rest into the Lockbox). Both are throwables: they go in the grenade slot and are thrown like a flare
+(hold G, or hold click with one in the hand; release to throw; one item per throw, only when it is thrown).
+- **Acid Scrapper grenade**: a zombie it hits takes 45 and it bursts there; on a prop the acid can melt it sticks, bursts 0.9 s
+  later and that prop starts melting; elsewhere a hard hit bursts it, at rest it bursts. The burst splashes 20 (zombies) / 8 (the
+  player) within 1.3 m and leaves a 1.5 m acid pool on the floor for **10 s of play**. Everyone in the pool burns: zombies 30 hp/s
+  (a regular zombie in ~3.3 s), the player 7 hp/s. Props it touches melt (`world/acidMelt.ts`): each gives exactly one Scrap metal
+  or Electrical parts once and spills its contents. The train and its fitted fixtures never melt. At most 3 pools at once.
+- **Zombie Lure grenade**: it lands, comes to rest and opens — the scent above, from the canister itself.
 - Families: ordinary and coated zombies, sprinters, the rat/dog, the Strainer, the Blightbelly, horde members and an awake
   Siren are drawn. A dormant Siren is not: the scent never wakes her. The Screacher hunts only by sound, so it ignores the
   scent.
