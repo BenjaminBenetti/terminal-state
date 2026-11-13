@@ -26,8 +26,8 @@ BB).
 | Collider radius on the floor | 0.22 m | `BB_STATS.radius`, `BB_BODY.radius` |
 | Clear height it needs under a soffit | 0.6 m | `BB_STATS.height`, `BB_BODY.clearM` |
 | Standing height, floor to the top of the head | 0.85 m | `BB_ASSET.heightM` |
-| Head hit radius | 0.12 m | `BB_ASSET.headRadius` |
-| Hit radii: torso / arm / leg | 0.11 m / 0.035 m / 0.045 m | `BB_ASSET.hitRadii.torso`, `BB_ASSET.hitRadii.arm`, `BB_ASSET.hitRadii.leg` |
+| Head hit radius of a body that carries no measured one | 0.12 m | `BB_ASSET.headRadius` |
+| Hit radii of such a body: torso / arm / leg | 0.11 m / 0.035 m / 0.045 m | `BB_ASSET.hitRadii.torso`, `BB_ASSET.hitRadii.arm`, `BB_ASSET.hitRadii.leg` |
 | Runtime size jitter | 0.94 to 1.06 | `BB_SCALE.min`, `BB_SCALE.max` |
 | Voice height above its support surface | 0.32 m | `BB_VOICE_Y` |
 
@@ -35,7 +35,11 @@ For comparison (`ZOMBIE_STATS.shambler`, `game/src/ai/brain.ts`): the ordinary z
 2.55 m/s. BB is small and quick, so it dies fast once it is hit. A head hit counts as on any enemy.
 
 - **Not a scaled adult.** It is about 0.85 m tall standing and about 0.45 m on all fours, with its own body numbers (`BB_BODY`),
-  hit volumes (`BB_ASSET`) and size jitter (`BB_SCALE`). It fits under desks the adults cannot.
+  hit volumes and size jitter (`BB_SCALE`). It fits under desks the adults cannot.
+- **What is seen is what is hit.** Each look's hit volumes are measured on its own body and stored in its model file: a skull
+  sphere, a trunk capsule and two capsules per limb, on the bones. The four shipped bodies measure 0.083 to 0.098 m (head),
+  0.088 to 0.135 m (torso), 0.018 to 0.045 m (arm) and 0.041 to 0.062 m (leg). The `BB_ASSET` values above are only the fallback
+  for a body without measured ones. This is the one thing that differs between the looks besides the model.
 - **Its paces are burst paces.** It moves in bursts with freezes between (`BB_CADENCE`), so its average pursuit pace is about
   3.3 m/s: just under the player's 3.4 m/s walk and well under the 5.8 m/s sprint.
 - **No ladders.** It climbs the walls themselves (`ENEMY_ARCHETYPES.bb.climbsLadders` is false). It drops into a track bed like
@@ -142,7 +146,11 @@ With the hunting cadence its average pursuit pace on the floor is about 3.3 m/s 
 - **One hit at most.** The hit lands only if its body touches the player's during the leap, with nothing solid between them. It
   then bounces off, away from the player. A leap that misses does no damage.
 - **It always comes down on floor.** Before it winds up it checks where a missed leap would land. It does not leap where a miss
-  would carry it into a pit, a shaft or over an open edge; it tries a slower, shorter leap or holds off.
+  would carry it into a pit, a shaft or over an open edge. It tries slower, higher leaps (down to 1.3 m/s along the ground)
+  before it gives that line up.
+- **With no safe leap from where it is, it looks for another line.** After a few failed aims it goes round the player at leap
+  distance and tries from there. A BB whose approach has stalled leaps from a little further than usual (up to 3.9 m), or takes
+  the wall. It does not stand beside the player doing nothing.
 - **A hit during the wind-up** flinches it like any enemy and cancels the leap. A hit of 20 damage or more in the air takes most
   of its speed away, so it falls short.
 - **No second chance from touch.** Between leaps it cannot hurt the player at all: not by standing against them, and not when
@@ -154,9 +162,9 @@ Measured in the test simulation, on the six combat levels, 60 s each (`game/test
 |---|---|
 | Stands still | about 99 % |
 | Walks backwards, or circles it at a walk | about 99 % |
-| Strafes at a walk | about 80 to 85 % |
-| Strafes at a sprint | about 50 % |
-| Sidesteps at a sprint as it launches | about 13 % |
+| Strafes at a walk | about 85 % |
+| Strafes at a sprint | about 45 % |
+| Sidesteps at a sprint as it launches | about 14 % |
 
 One attack cycle (wind-up, leap, recovery, cooldown, coming back) takes about 4.3 to 5.2 s. So one BB that hits every time does
 about 18 hp per 5 s before armour, and a player who sidesteps each launch takes almost none.
@@ -181,18 +189,24 @@ BB moves on the real collision geometry of the level: the same structure and pro
 | … and does so this often | 0.6 | `BB_CLIMB.huntClimbChance` |
 | Body centre above the surface it is on | 0.2 m | `BB_BODY.centreUp` |
 | Eyes above the surface, and ahead of the centre | 0.3 m, 0.1 m | `BB_BODY.eyeUp`, `BB_BODY.eyeFwd` |
+| On the floor, the fastest another body pushes it out of itself | 6 m/s | `BB_BODY.shoveMps` |
 
 - **Floors.** On the floor it is an ordinary enemy body: the shared path finder, the shared motor and collider, body separation,
   doors, stairs and ramps. It does not use ladders.
+- **Eased out of other bodies.** It can come down right at the player's feet. The body separation every enemy shares then moves
+  it out of the player at 6 m/s at most, and never more than half its radius in one frame, so it is never pushed through the
+  wall beside them.
 - **Walls and ceilings.** It walks to the foot of a wall, climbs it, and goes round the corner onto the ceiling or onto the next
   wall. It crosses inside corners and outside corners (a beam, a door lintel, the edge of a ledge). Its body stays on the surface
   and turns with it.
 - **Where it cannot go.** It stops at an obstacle on the surface, at an edge with nothing to hold beyond it, and at 4.6 m above
   the floor. So a tall hall's ceiling and an atrium void are out of its reach: there it uses the walls up to that height.
 - **No passing through anything.** Every step is checked against the geometry. It cannot cross a wall or a floor slab, on a
-  surface or in the air, and it never teleports. Props are obstacles to it, not surfaces: it crawls round them, and when a leap
-  ends on top of one (a desk, a crate) it hops off to the nearest floor. If the surface it holds is no longer there, it lets go
-  and falls.
+  surface or in the air, and it never teleports. In the air its body is kept its own radius off the walls it passes. If the
+  surface it holds is no longer there, it lets go and falls.
+- **Props are obstacles, not surfaces.** It crawls round them. When a leap or a fall ends on top of one (a desk, a crate, a
+  counter) it rests there for a moment. From there it leaps at a player it sees, or hops off to the nearest floor it can stand
+  on. It never drops through the thing.
 - **Unaware, it perches.** It roams the floor for a while, climbs to a perch on a wall or ceiling, sits there, and comes down
   again. A player may first meet it overhead.
 - **Hunting, it uses both ways.** It runs on the floor or takes the wall-and-ceiling way. It climbs toward a player it cannot
@@ -207,9 +221,13 @@ Limits of the first version:
 
 - Railings, wire fences and other see-through barriers are not surfaces for it. It does not climb them, and its leap checks do
   not see them. That is why a leap is tested for where a miss would land.
-- It reads the level's static geometry and its props. It does not ride moving things (elevator cars, train cars in motion).
+- It reads the level's static geometry and its props. It does not ride moving things (elevator cars, train cars in motion), and
+  moving door leaves, shutters and props that physics has knocked loose have not been tested as surfaces or obstacles for it.
 - Levels with very tall rooms (the Mall's concourses, the Reactor's halls) have no ceiling within its reach. There it perches on
   walls only.
+- Its neck has a limited range: on the floor it cannot raise its face to a standing player's, and under a ceiling it cannot
+  look straight down.
+- At an inside corner its skull can dip a few centimetres into the wall or slab for a few frames.
 
 ## Where it appears: the seeded roster
 
@@ -284,7 +302,15 @@ BB's presentation is non-graphic, alive and dead. This is a rule of the family, 
 
 - Hits and kills on a BB show no wound decals, no blood, no flesh chunks and no dismemberment, and there is no skull-crack
   confirm (`EnemyActor.nonGraphic`, set by `game/src/ai/bbActor.ts`).
-- Damage, hit parts and the ragdoll work as on every enemy. Only what is shown differs.
+- Damage and hit parts work as on every enemy. Only what is shown differs: a hit shows a small dust puff.
+- The dead body is a ragdoll like every enemy's, built for its own small body (`CORPSE_TRAITS.bb.massKg`). The killing shot
+  throws it more gently than an adult: the whole body leaves at 6 m/s at most, never into the surface it was holding and never
+  upward as a launch. A BB shot off a ceiling drops. Without this a shotgun put the light body's joints into walls and slabs.
+
+| What | Value | Constant |
+|---|---|---|
+| Fastest the killing shot throws the body | 6 m/s | `BB_ACTOR.ragdollMaxShoveMps` |
+| Furthest the body is lifted off its surface when the ragdoll starts | 0.09 m | `BB_ACTOR.ragdollLiftM` |
 
 ## Saves and rebuilds
 
@@ -314,13 +340,17 @@ A BB is saved exactly like every other enemy: only its **death** is remembered, 
 |---|---|
 | `game/src/ai/bb.ts` | Stats, constants, the four looks, the pose contract, `BbBrain`, cues |
 | `game/src/ai/bbSurface.ts` | The surface locomotion (floors, walls, ceilings) |
-| `game/src/ai/bbActor.ts` | The rendered body: hit volumes, the non-graphic presentation |
+| `game/src/ai/bbActor.ts` | The rendered body: placed by the brain's pose, hit volumes, the ragdoll hand-over, the non-graphic presentation |
 | `game/src/ai/bbClips.ts` | The runtime clips on the shared rig |
 | `game/src/ai/enemyRoster.ts` | The seeded roster that places it (`FAMILY_ROSTER.bb`) |
 | `game/src/ai/enemyModels.ts` | The four lazy models |
 | `tools/asset-pipeline/enemy/build-bb.mjs` | Builds the four runtime bodies |
 | `game/tests/bb-asset.test.ts` | The GLBs against the asset contract |
+| `game/tests/bb-contract.test.ts` | The four bodies against the game's tables: sizes, looks, the AI's body, shots at and over it |
 | `game/tests/bb-brain.test.ts`, `game/tests/bb-surface.test.ts` | The brain and the surface locomotion |
+| `game/tests/bb-places.test.ts` | Places it must never end up in and stand-offs it must not fall into: the review's cases, and a sweep over seeds, player movement and frame times |
+| `game/tests/bb-actor.test.ts`, `game/tests/bb-clips.test.ts` | The rendered body and its runtime clips, on the four real bodies |
+| `game/tests/bb-ragdoll.test.ts`, `game/tests/bb-nongraphic.test.ts` | The ragdoll in the real physics world; no wounds, blood or pieces |
 | `game/tests/bb-audio.test.ts` | The voice set (`docs/bb-audio.md`) |
 | `game/tests/bb-roster.test.ts` | The roster rule: the rate, counts, looks, slots, the version pin; the registry classification; this page's tables |
 | `game/tests/enemy-roster.test.ts` | The roster of every family |

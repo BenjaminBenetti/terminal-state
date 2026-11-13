@@ -26,6 +26,7 @@ import {COSPLAY_FAMILY_POOL} from '../src/ai/cosplayContext';
 import {MELEE_MASS, meleeMassOf} from '../src/combat/meleeImpact';
 import {sprinterEligible, sprinterRoll, SPRINTER} from '../src/ai/sprinter';
 import {BB_ASSET, BB_BODY, BB_CADENCE, BB_CLIMB, BB_POUNCE, BB_SCALE, BB_SENSE, BB_STATS, BB_VARIANTS, BB_VOICE_Y, bbVariantOf} from '../src/ai/bb';
+import {BB_ACTOR} from '../src/ai/bbActor';
 import {createRun} from '../src/run/runState';
 import type {StationLayout, ZombieSpawn} from '../src/gen/stationTypes';
 
@@ -493,7 +494,7 @@ describe('BB: docs/bb.md states the source\'s numbers', () => {
   it('every constant table row === the exported constant; the roster statements, the four looks and the file names hold', () => {
     const doc = read('docs/bb.md');
     expect(doc, 'docs/bb.md exists').not.toBeNull();
-    const ROOTS: Record<string, unknown> = {BB_STATS, BB_ASSET, BB_BODY, BB_SCALE, BB_CADENCE, BB_CLIMB, BB_POUNCE, BB_SENSE, BB_VOICE_Y, FAMILY_ROSTER, MELEE_MASS, CORPSE_TRAITS, ROSTER_VERSION};
+    const ROOTS: Record<string, unknown> = {BB_STATS, BB_ASSET, BB_BODY, BB_SCALE, BB_CADENCE, BB_CLIMB, BB_POUNCE, BB_SENSE, BB_VOICE_Y, BB_ACTOR, FAMILY_ROSTER, MELEE_MASS, CORPSE_TRAITS, ROSTER_VERSION};
     const resolve = (path: string): unknown => path.split('.').reduce<unknown>((o, k, i) => (i === 0 ? ROOTS[k] : (o as Record<string, unknown> | undefined)?.[k]), undefined);
     const shown = (v: number): string => String(Math.round(v * 1e6) / 1e6);
     const hasNumber = (cell: string, v: number): boolean => new RegExp(`(?<![\\d.])${shown(v).replace('.', '\\.')}(?![\\d]|\\.\\d)`).test(cell);

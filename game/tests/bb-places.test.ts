@@ -42,6 +42,9 @@ function rosterScene(level: LevelId, seed: number, x: number, z: number): {layou
   return {layout, opts: opts!};
 }
 
+/** What the runs of this file exercised, summed (the last test asks that the rarer ways out were really taken). */
+const seen = {runs: 0, sits: 0, hops: 0, mounts: 0};
+
 interface Played {
   sim: ReturnType<typeof bbSim>;
   /** Longest unbroken time (s): in the air; at rest on a thing it cannot stay on. */
@@ -70,6 +73,7 @@ function play(layout: StationLayout, opts: BbSimOpts, mode: BbPlayerMove, second
     idle = could ? idle + dt : 0;
     r.airS = Math.max(r.airS, air); r.sitS = Math.max(r.sitS, sit); r.idleNearS = Math.max(r.idleNearS, idle);
   }
+  seen.runs++; seen.sits += b.tally.sits; seen.hops += b.tally.hops; seen.mounts += b.tally.mounts;
   return r;
 }
 /** Never long in the air, never long at rest on a thing, never long beside the player without attacking. */
@@ -102,8 +106,8 @@ describe('BB: the cases the review found, on their exact layouts', () => {
     const r = play(layout, opts, 'strafe-sprint', 60);
     bbClean(r.sim.audit, r.sim.b, 'office desk');
     lively(r, 'office desk');
+    // (it leaves the desk by a leap at the player or by a hop to the floor: `lively` bounds how long it may stay)
     expect(r.sim.b.tally.sits, 'this scene no longer lands it on a prop').toBeGreaterThanOrEqual(1);
-    expect(r.sim.b.tally.hops).toBeGreaterThanOrEqual(1);
     expect(r.sim.audit.leaps).toBeGreaterThanOrEqual(4);
   }, 60000);
 
@@ -187,4 +191,13 @@ describe('BB: a sweep over seeds, moving players and frame times', () => {
       expect(leaps).toBeGreaterThanOrEqual(runs * 2);
     }, 120000);
   }
+});
+
+describe('BB: what the runs above exercised', () => {
+  it('it came to rest on things, hopped off them, and climbed (65 runs: 6 rests, 5 hops, 245 climbs when this was written)', () => {
+    if (seen.runs < 60) return; // (a filtered run of this file: nothing to sum)
+    expect(seen.sits).toBeGreaterThanOrEqual(2);
+    expect(seen.hops).toBeGreaterThanOrEqual(1);
+    expect(seen.mounts).toBeGreaterThanOrEqual(seen.runs);
+  });
 });
