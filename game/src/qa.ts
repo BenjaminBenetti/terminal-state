@@ -45,6 +45,7 @@ import {reactorRestartQaApi} from './world/reactor/restartQa'; // task reactor-b
 import {trainQaApi} from './world/playerTrain'; // Task player-train-shell-20261101-202805 (lane TRAIN): train(), trainDoor(i, open), trainFaceDoor(i?), trainLights()
 import {chipperQaApi} from './world/chipper'; // task corpse-chipper (lane CHIPPER): chipper(), chipperGo()
 import {trainEquipmentQaApi} from './world/trainEquipment'; // task train-crafting (lane EQUIP): equipment(), equipmentCraft(), equipmentToPlug()
+import {saveTerminalQaApi} from './world/trainSaveTerminal'; // task refinement-batch (lane SAVE): saveTerminal(), saveTerminalGo(), saveTerminalPress()
 import {craftBenchQaApi} from './world/craftBench'; // task train-crafting (lane BENCH): bench(), benchGo(), benchOpen(), benchClose(), benchCraft(kind)
 import {sentryQaApi} from './world/sentryTurret'; // task train-crafting-v1 (lane SENTRY): sentry()
 import {rideQaApi} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): ride(), rideDepart(), rideArrive(), rideDemo(seconds?), rideReset()
@@ -412,6 +413,7 @@ export function installQaHooks(game: Game): void {
     ...trainEquipmentQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane EQUIP): equipment() — units / plugs / grab / carry / counters; equipmentCraft(kind) — a unit on the car floor; equipmentToPlug(uid, i) — stand it beside a plug
     ...grenadeQaApi(game), // task studio-refinement-batch-20261113-035659-01: grenades() — canisters / acid pools / lures / counters; grenadeGive(id, n); grenadeThrow(id) — one throw along the view
     ...craftBenchQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane BENCH): bench() — placement / model / prompt / the open list's rows / material counts; benchGo() — stand at it; benchOpen() / benchClose(); benchCraft(kind) — craft from the open list
+    ...saveTerminalQaApi(game), // task studio-refinement-batch-20261113-035659-01 (lane SAVE): saveTerminal() — placement / screen lines / last result / block; saveTerminalGo() — stand and look at it; saveTerminalPress() — [E] on it
     ...sentryQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane SENTRY): sentry() — the active unit / rounds, turret (deployed, pose, headroom), target, shots
     ...rideQaApi(game), // task campaign-foundation-20261102 (lane RIDE): ride(), rideDepart(), rideArrive(), rideDemo(seconds?) (dev: depart + loop + re-arrive at the same station), rideReset()
     ...lockboxQaApi(game), // task train-lockbox-windows-20261101-232156 (lane BOX): lockbox(), lockboxOpen(), lockboxClose(), lockboxType(keys), lockboxQuick(spec), lockboxMove(from, to, n?), lockboxStow()

@@ -1,14 +1,16 @@
 // Task studio-alpha-campaign-foundation-20261102-230708-01 (lane SAVE): the SERIALIZED RUN — the exact shape of SaveFileV1.run
 // (campaign/types.ts), and capture / restore between it and the live run (run/runState.ts, run/snapshot.ts carry, participants).
 //
-// Saves are written ONLY at train transitions (the primary's orchestrator calls Game.captureSave): DEPARTURE (the departing
+// Autosaves are written at train transitions (the primary's orchestrator calls Game.captureSave): DEPARTURE (the departing
 // station's world already torn down, so every station delta is flushed into run memory; campaign.transit set), ARRIVAL (the train
-// stopped at the new station; transit null) and NEW GAME (the start station). The player is always inside the player train, so the
-// pose is TRAIN-LOCAL.
+// stopped at the new station; transit null) and NEW GAME (the start station). (lane SAVE, refinement batch) A MANUAL save is the
+// player's own, at the parked train's Save terminal (Game.saveNow: the live station's deltas flushed into run memory WITHOUT a
+// teardown; transit null). The player is always inside the player train, so the pose is TRAIN-LOCAL.
 //
 // SerializedRunV1 (plain JSON data; never three.js objects / closures / DOM / audio):
 //   v: 1
-//   point: 'departure' | 'arrival' | 'new-game' | 'ending'   the transition this save was taken at ('ending': lane CREDITS' Main Menu)
+//   point: 'departure' | 'arrival' | 'new-game' | 'ending' | 'manual'   the transition this save was taken at ('ending': lane
+//                                                       CREDITS' Main Menu; 'manual': the train's Save terminal)
 //   campaign: CampaignState                             deep copy (network, current, known, visited, cheat, won, transit)
 //   seeds: Record<LevelId, number>                      the run's archetype seeds (RunState.seeds; the legacy fallback)
 //   section: string                                     run.current.section ('main'; the station is campaign.current)
@@ -74,10 +76,13 @@ export const seenWordCount = (len: number): number => Math.max(1, Math.ceil(len 
  * The transition a save was taken at (SaveMeta.reason adds 'import'). Task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01
  * (lane CREDITS): + 'ending' — the Reactor credits' "Main Menu" saves the run before it returns to the menu (Game.commitEndingSave; no
  * journey: transit null; the pose is the parked train's spawn point). Older saves (the first three points) load unchanged.
+ * Task studio-refinement-batch-20261113-035659-01 (lane SAVE): + 'manual' — the player's own save at the train's Save terminal
+ * (Game.saveNow: the live station flushed into the run without a teardown, the ACTIVE slot, the player's real train-local pose; only
+ * while the train stands parked: transit null). Every older save (the four points above) loads unchanged.
  */
-export type SavePoint = 'departure' | 'arrival' | 'new-game' | 'ending';
+export type SavePoint = 'departure' | 'arrival' | 'new-game' | 'ending' | 'manual';
 export type SaveReason = SavePoint | 'import';
-export const SAVE_POINTS: readonly SavePoint[] = ['departure', 'arrival', 'new-game', 'ending'];
+export const SAVE_POINTS: readonly SavePoint[] = ['departure', 'arrival', 'new-game', 'ending', 'manual'];
 export const SAVE_REASONS: readonly SaveReason[] = [...SAVE_POINTS, 'import'];
 
 /** The player's pose in the player train's local frame (gen/playerTrain.ts worldToTrain; yaw relative to the car's yaw). */

@@ -639,8 +639,10 @@ describe("the Main Menu save path (the REAL game.ts methods on a minimal shell):
   }
 
   it("SAVE_POINTS / SAVE_REASONS gain 'ending' (the older points unchanged, in order)", () => {
-    expect(SAVE_POINTS).toEqual(['departure', 'arrival', 'new-game', 'ending']);
-    expect(SAVE_REASONS).toEqual(['departure', 'arrival', 'new-game', 'ending', 'import']);
+    // re-pin (task studio-refinement-batch-20261113-035659-01, lane SAVE): 'manual' (the train's Save terminal, Game.saveNow) is
+    // appended AFTER 'ending' — the older points, 'ending' included, keep their order; 'import' stays last
+    expect(SAVE_POINTS).toEqual(['departure', 'arrival', 'new-game', 'ending', 'manual']);
+    expect(SAVE_REASONS).toEqual(['departure', 'arrival', 'new-game', 'ending', 'manual', 'import']);
   });
 
   it("commits the bound slot with reason 'ending' (valid, loads back with the credits record); the other slots untouched", () => {
