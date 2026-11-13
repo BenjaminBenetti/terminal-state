@@ -91,8 +91,9 @@ describe('Strainer: registry, weights and the context lock', () => {
     // task studio-screacher-production-20261110-221858-01: the roster-only Screacher was appended AFTER the Strainer (weight 0 in every
     // pool, so no roll band moved): the Strainer keeps index 4 and the list has six families (was: the Strainer last of five)
     expect(ENEMY_FAMILY_IDS[4]).toBe('strainer');
-    expect(ENEMY_FAMILY_IDS.slice(5)).toEqual(['screacher']);
-    expect(ENEMY_FAMILY_IDS).toHaveLength(6);
+    // task studio-bb-production-20261112-234540-01: and the roster-only BB after the Screacher (weight 0 in every pool too): seven families
+    expect(ENEMY_FAMILY_IDS.slice(5)).toEqual(['screacher', 'bb']);
+    expect(ENEMY_FAMILY_IDS).toHaveLength(7);
     expect(Object.keys(ENEMY_ARCHETYPES)).toEqual([...ENEMY_FAMILY_IDS]);
     const d = ENEMY_ARCHETYPES.strainer;
     expect(d).toMatchObject({id: 'strainer', label: 'Strainer', model: 'enemy_strainer', climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: 1.9});
@@ -107,7 +108,8 @@ describe('Strainer: registry, weights and the context lock', () => {
     expect(DEFAULT_FAMILY_SHARES.strainer).toBe(0);
     expect(SERVICE_FAMILY_SHARES).toEqual({ratdog: 0.2, blightbelly: 0.05, siren: 0, strainer: 0.08});
     // (task studio-screacher-production-20261110-221858-01: familyPool lists the roster-only Screacher last at 0 — no band of this pool moved)
-    expect(SERVICE_FAMILY_POOL).toEqual([['zombie', 0.67], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.2], ['strainer', 0.08], ['screacher', 0]]);
+    // (task studio-bb-production-20261112-234540-01: + the roster-only BB last at 0 — again no band of this pool moved)
+    expect(SERVICE_FAMILY_POOL).toEqual([['zombie', 0.67], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.2], ['strainer', 0.08], ['screacher', 0], ['bb', 0]]);
     expect(SERVICE_CONTEXT.families).toBe(SERVICE_FAMILY_POOL);
     for (const id of LEVEL_IDS) {
       const p = spawnProfile(id);
@@ -181,9 +183,10 @@ describe('Strainer: core / non-service picks bit-identical; service-annex simula
     // the pre-change pools, literally (task track1 / mall round 3 values)
     // (task studio-screacher-production-20261110-221858-01: every pool now also lists the roster-only Screacher last at weight 0; `before`
     // removes the Strainer row only, so the literal carries that 0 row — a weight-0 row has no band, the picks below are the pre-Strainer ones)
-    expect(before(spawnProfile('subway').families)).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.05], ['screacher', 0]]);
-    expect(before(spawnProfile('office').families)).toEqual([['zombie', 0.71], ['blightbelly', 0.05], ['siren', 0.19], ['ratdog', 0.05], ['screacher', 0]]);
-    expect(before(spawnProfile('mall').families)).toEqual([['zombie', 0.1], ['blightbelly', 0.05], ['siren', 0.8], ['ratdog', 0.05], ['screacher', 0]]);
+    // (task studio-bb-production-20261112-234540-01: … and the roster-only BB's 0 row after it, for the same reason)
+    expect(before(spawnProfile('subway').families)).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.05], ['screacher', 0], ['bb', 0]]);
+    expect(before(spawnProfile('office').families)).toEqual([['zombie', 0.71], ['blightbelly', 0.05], ['siren', 0.19], ['ratdog', 0.05], ['screacher', 0], ['bb', 0]]);
+    expect(before(spawnProfile('mall').families)).toEqual([['zombie', 0.1], ['blightbelly', 0.05], ['siren', 0.8], ['ratdog', 0.05], ['screacher', 0], ['bb', 0]]);
     let strainers = 0;
     for (let k = 0; k < 200000; k++) {
       const seed = (k * 2654435761 + 12345) >>> 0, i = k % 53;
