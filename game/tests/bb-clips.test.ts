@@ -13,8 +13,8 @@
 import {beforeAll, describe, expect, it} from 'vitest';
 import * as THREE from 'three';
 import {
-  BB_ANIMATED, BB_CLIP_NAMES, BB_CLIPS, BB_FRAME_FLOATS, BB_GAIT, BB_JOINTS, bbAngles, bbAnimationClip, bbArmLocal, bbClipSetFor, bbContacts, bbGaitAt, bbGaitDown,
-  bbPoseAt, bbRigFromBind, bbRigOf, bbWorld, buildBbClipSet, frameOfSample, mirrorFrame, sampleBbClip,
+  BB_ANIMATED, BB_CLIP_NAMES, BB_CLIPS, BB_FRAME_FLOATS, BB_GAIT, BB_JOINTS, BB_MIRRORED_CLIPS, bbAngles, bbAnimationClip, bbArmLocal, bbClipSetFor, bbContacts, bbGaitAt,
+  bbGaitDown, bbMirrorPoseAt, bbPoseAt, bbRigFromBind, bbRigOf, bbWorld, buildBbClipSet, frameOfSample, mirrorFrame, sampleBbClip,
   type BbClipName, type BbClipSet, type BbFrame, type BbRig, type BbSide, type V3,
 } from '../src/ai/bbClips';
 import {BB_ASSET, BB_BODY, BB_POUNCE, BB_STATS, BB_CLIMB} from '../src/ai/bb';
@@ -255,6 +255,38 @@ describe.each(BODIES)('BB runtime clips on %s', (_label, isBb, symmetric, load) 
       for (let j = 0; j < BB_ANIMATED.length; j++) expect(Math.hypot(a[j * 4], a[j * 4 + 1], a[j * 4 + 2], a[j * 4 + 3]), name).toBeCloseTo(1, 6);
       sampleBbClip(t, 0.4, a); sampleBbClip(t, 0.4, b, true);
       expect(jointDist(rig, mirrorFrame(frameOfSample(a)), frameOfSample(b)), name).toBeLessThan(1e-6 * Math.max(1, k));
+    }
+  });
+
+  it('the clips shown either way round are SOLVED in the mirror: their own tables, limbs on the surface, the plain pose\'s mirror image', () => {
+    const row = new Float32Array(BB_FRAME_FLOATS);
+    expect(Object.keys(set.mirrored).sort()).toEqual([...BB_MIRRORED_CLIPS].sort());
+    for (const name of BB_MIRRORED_CLIPS) {
+      const C = BB_CLIPS[name], table = set.mirrored[name]!;
+      expect([table.frames, table.duration, table.loop]).toEqual([C.frames, C.duration, C.loop]);
+      for (let i = 0; i <= C.frames; i++) {
+        const t = C.duration * i / C.frames, plain = bbPoseAt(rig, name, t), f = bbMirrorPoseAt(rig, name, t), what = `${name} in the mirror @${t.toFixed(3)}`;
+        expect(allFinite(f), what).toBe(true);
+        expectInEnvelope(rig, f, what);
+        const L = lows(rig, f), a = bbContacts(rig, plain), b = bbContacts(rig, f);
+        expect(L.limb, `${what} lowest palm / knee / toe`).toBeGreaterThan(-0.005 * k);
+        expect(L.skull, `${what} skull`).toBeGreaterThan(-0.002 * k);
+        // each limb where the plain pose has the other side's: a palm planted there is planted here, on its mirrored mark
+        // (the plain pose with its joint angles swapped — mirrorFrame alone — leaves a real body's limb up to 11 mm under the surface)
+        for (const s of SIDES) {
+          const o = s === 'L' ? 'R' : 'L';
+          if (a.palm[o][1] < 0.004 * k) {
+            expect(b.palm[s][1], `${what} palm ${s}`).toBeLessThan(0.004 * k);
+            expect(Math.hypot(b.palm[s][0] + a.palm[o][0], b.palm[s][2] - a.palm[o][2]), `${what} palm ${s} on its mark`).toBeLessThan(0.012 * k);
+          }
+          expect(b.knee[s][1], `${what} knee ${s}`).toBeLessThan(0.02 * k); // (as the plain pose's: one may ride a few millimetres high)
+        }
+        // the table is that pose (frame i; loops close on frame 0)
+        sampleBbClip(table, i / C.frames, row);
+        if (!(C.loop && i === C.frames)) expect(jointDist(rig, frameOfSample(row), f), what).toBeLessThan(1e-5 * Math.max(1, k));
+        // on an exactly symmetric skeleton it IS the plain pose with left and right swapped
+        if (symmetric) expect(jointDist(rig, f, mirrorFrame(plain)), what).toBeLessThan(1e-6 * Math.max(1, k));
+      }
     }
   });
 

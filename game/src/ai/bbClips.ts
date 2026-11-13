@@ -1003,6 +1003,33 @@ export function bbPoseAt(rig: BbRig, clip: BbClipName, t: number): BbFrame {
   }
 }
 
+/** The mirror image of a body (left <-> right), with the same all-fours geometry. */
+const MIRRORED = new WeakMap<BbRig, BbRig>();
+function mirrorRig(rig: BbRig): BbRig {
+  let out = MIRRORED.get(rig);
+  if (!out) {
+    const other = (n: string): string => (n.startsWith('L_') ? `R_${n.slice(2)}` : n.startsWith('R_') ? `L_${n.slice(2)}` : n);
+    const mx = (v: V3): V3 => [-v[0], v[1], v[2]];
+    const bind: Record<string, V3> = {}, local: Record<string, V3> = {};
+    for (const [n] of BB_JOINTS) { bind[n] = mx(rig.bind[other(n)]); local[n] = mx(rig.local[other(n)]); }
+    const sw = <T>(r: Record<BbSide, T>, f: (v: T) => T = v => v): Record<BbSide, T> => ({L: f(r.R), R: f(r.L)});
+    out = {...rig, bind, local, thigh: sw(rig.thigh), shin: sw(rig.shin), upper: sw(rig.upper), fore: sw(rig.fore), elbow0: sw(rig.elbow0), knee0: sw(rig.knee0), kneeR: sw(rig.kneeR),
+      palm: sw(rig.palm, mx), fingers: sw(rig.fingers, mx), palmN: sw(rig.palmN, mx), toe: sw(rig.toe, mx),
+      head: {centre: mx(rig.head.centre), radius: rig.head.radius, crown: mx(rig.head.crown)}};
+    MIRRORED.set(rig, out);
+  }
+  return out;
+}
+
+/**
+ * `clip` at `t` seen in a mirror (left <-> right) and SOLVED for this body: the clip posed on the body's mirror image, mirrored back.
+ * No real body is quite symmetric — the plain pose's joint angles swapped left for right (mirrorFrame alone) leave its planted palms
+ * and knees up to a centimetre under or over the surface.
+ */
+export function bbMirrorPoseAt(rig: BbRig, clip: BbClipName, t: number): BbFrame {
+  return mirrorFrame(bbPoseAt(mirrorRig(rig), clip, t));
+}
+
 /** The gait pose at cycle phase `phi` (0..1): pair A (left hand + right knee) lands at 0, pair B at 0.5. */
 export function bbGaitAt(rig: BbRig, phi: number, fast: boolean): BbFrame {
   return gaitFrame(rig, phi, fast);
@@ -1022,20 +1049,25 @@ export const BB_FRAME_FLOATS = NJ * 4 + 3;
 /** One clip sampled evenly: `frames` + 1 rows (the last = the clip's end; a loop's last row equals its first). */
 export interface BbClipTable { name: BbClipName; duration: number; loop: boolean; frames: number; data: Float32Array }
 
+/** The clips the actor shows either way round (the freeze of the pair that led, a flinch to either side). */
+export const BB_MIRRORED_CLIPS = ['Poise', 'Hit'] as const;
+
 /** Every clip of one body model, and the numbers the actor plays them by. */
 export interface BbClipSet {
   rig: BbRig;
   tables: Record<BbClipName, BbClipTable>;
+  /** BB_MIRRORED_CLIPS seen in a mirror, solved for this body (bbMirrorPoseAt). */
+  mirrored: Partial<Record<BbClipName, BbClipTable>>;
   /** Metres per cycle (scale 1) and the stance share of each gear. */
   crawlM: number; scuttleM: number;
   crawlDuty: number; scuttleDuty: number;
 }
 
-function tableOf(rig: BbRig, name: BbClipName): BbClipTable {
+function tableOf(rig: BbRig, name: BbClipName, mirrored = false): BbClipTable {
   const C = BB_CLIPS[name], n = C.frames, data = new Float32Array((n + 1) * BB_FRAME_FLOATS);
   const prev: Q[] = [];
   for (let f = 0; f <= n; f++) {
-    const p = bbPoseAt(rig, name, C.loop && f === n ? 0 : C.duration * f / n), at = f * BB_FRAME_FLOATS;
+    const p = (mirrored ? bbMirrorPoseAt : bbPoseAt)(rig, name, C.loop && f === n ? 0 : C.duration * f / n), at = f * BB_FRAME_FLOATS;
     for (let j = 0; j < NJ; j++) {
       let q = p.rot[BB_ANIMATED[j]] ?? qId();
       const pq = prev[j];
@@ -1052,7 +1084,9 @@ function tableOf(rig: BbRig, name: BbClipName): BbClipTable {
 export function buildBbClipSet(rig: BbRig): BbClipSet {
   const tables = {} as Record<BbClipName, BbClipTable>;
   for (const n of BB_CLIP_NAMES) tables[n] = tableOf(rig, n);
-  return {rig, tables, crawlM: rig.m.crawlM, scuttleM: rig.m.scuttleM, crawlDuty: rig.m.crawlDuty, scuttleDuty: rig.m.scuttleDuty};
+  const mirrored: BbClipSet['mirrored'] = {};
+  for (const n of BB_MIRRORED_CLIPS) mirrored[n] = tableOf(rig, n, true);
+  return {rig, tables, mirrored, crawlM: rig.m.crawlM, scuttleM: rig.m.scuttleM, crawlDuty: rig.m.crawlDuty, scuttleDuty: rig.m.scuttleDuty};
 }
 
 /**

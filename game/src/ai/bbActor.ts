@@ -300,7 +300,7 @@ export class BbActor {
 
   /** The runtime clip `name` as a THREE.AnimationClip (QA / the corpse poser's Death look-up); null for a name it has none of. */
   authoredClip(name: string): THREE.AnimationClip | null {
-    if (!this.set || !(name in this.set.tables)) return null;
+    if (!this.set || !Object.hasOwn(this.set.tables, name)) return null;
     let c = this.clips.get(name);
     if (!c) this.clips.set(name, (c = bbAnimationClip(this.set, name as BbClipName)));
     return c;
@@ -409,7 +409,9 @@ export class BbActor {
   /** Sample the clip (through the cross-fade) and write the bones. */
   private pose(set: BbClipSet, dt: number): void {
     const cur = this.cur, J = this.joints;
-    sampleBbClip(set.tables[this.clipName!], this.u, this.tgt, this.mirror);
+    // (the mirrored freeze / flinch: its own table, solved for this body — a real body is not symmetric enough to swap the angles)
+    const flipped = this.mirror ? set.mirrored[this.clipName!] : undefined;
+    sampleBbClip(flipped ?? set.tables[this.clipName!], this.u, this.tgt, this.mirror && !flipped);
     if (this.clipName === 'Cackle' && this.brain.pose.surface === 'wall') {
       // (the clip begins in its settled stance: only part of the way up from it)
       sampleBbClip(set.tables.Cackle, 0, this.aux);
@@ -499,23 +501,33 @@ export class BbActor {
     const neck = J[I.Neck], head = J[I.Head], rel = this.q3.copy(neck.quaternion).multiply(head.quaternion);
     if (this.lookW >= 1e-3) {
       q.setFromAxisAngle(AY, this.lookYaw * D2R).multiply(this.tmpQ.setFromAxisAngle(AX, -this.lookPitch * D2R)).premultiply(this.tmpQ.copy(qChest).invert());
+      // (limited BEFORE the blend: the head goes the short way to a place it can reach, never round through its own chest)
+      this.limitHead(q);
       rel.slerp(q, Math.min(1, this.lookW));
     }
     if (headYaw !== 0) rel.multiply(q.setFromAxisAngle(AY, headYaw * D2R));
     if (headRoll !== 0) rel.multiply(q.setFromAxisAngle(AZ, headRoll * D2R));
     if (headNod !== 0) rel.multiply(q.setFromAxisAngle(AX, headNod * D2R));
-    const face = this.tmp.copy(AZ).applyQuaternion(rel), maxTurn = Math.sin(L.yawDeg * D2R);
+    this.limitHead(rel);
+    neck.quaternion.identity().slerp(rel, L.neckShare);
+    head.quaternion.copy(neck.quaternion).invert().multiply(rel);
+  }
+
+  /** Bring a head-against-chest rotation inside the neck's range: the face's turn off the chest's mid-plane, then its extension. */
+  private limitHead(rel: THREE.Quaternion): void {
+    const L = BB_ACTOR.look, q = this.tmpQ, face = this.tmp.copy(AZ).applyQuaternion(rel), maxTurn = Math.sin(L.yawDeg * D2R);
     if (Math.abs(face.x) > maxTurn) {
       // turned past the neck's range off the chest's mid-plane: swing the face back toward it
       const sx = Math.sign(face.x), axis = this.tmp2.set(sx, 0, 0).cross(face);
       if (axis.lengthSq() > 1e-10) { rel.premultiply(q.setFromAxisAngle(axis.normalize(), Math.asin(Math.min(1, Math.abs(face.x))) - L.yawDeg * D2R)); face.copy(AZ).applyQuaternion(rel); }
     }
-    const ext = Math.atan2(face.y, face.z) / D2R;
+    let ext = Math.atan2(face.y, face.z) / D2R;
+    // (a face turned right over toward its own back reads as nearly -180: that is past the EXTENSION limit — the long way round from
+    // the flexion one, which would tuck the chin and drive the skull into the surface)
+    if (ext < (L.upDeg - L.downDeg) / 2 - 180) ext += 360;
     // (a turn about the chest's +X by +a tips the face forward: back inside the extension range)
     if (ext > L.upDeg) rel.premultiply(q.setFromAxisAngle(AX, (ext - L.upDeg) * D2R));
     else if (ext < -L.downDeg) rel.premultiply(q.setFromAxisAngle(AX, (ext + L.downDeg) * D2R));
-    neck.quaternion.identity().slerp(rel, L.neckShare);
-    head.quaternion.copy(neck.quaternion).invert().multiply(rel);
   }
 
   private fadeFlash(dt: number): void {
