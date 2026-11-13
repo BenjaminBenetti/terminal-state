@@ -1,0 +1,500 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "refinement-batch-20261113",
+ "what": "the refinement batch's new models: the train armour kit (side skirt segment, end plough) and the two crafted throwables (Acid Scrapper Grenade, Zombie Lure)",
+ "task": "studio-refinement-batch-20261113-035659-01",
+ "approval": "task-specific user generation grant 39e43eef-e262-431f-af78-c1fbef081438: a fresh cap of 75 Meshy credits for the batch's asset targets, reuse first",
+ "accepted": true,
+ "route": "Codex native image_gen INITIAL design -> Meshy T2.5 image-to-3D, own PBR maps kept",
+ "budget": {
+  "generations": 4,
+  "billedCredits": 60,
+  "capCredits": 75,
+  "creditsPerModel": 15,
+  "note": "every model is the first Meshy attempt of its design image; the Save terminal reuses assets/models/p7-crt-terminal-t25.glb"
+ },
+ "meshyTool": "mcp__meshy__meshy_image_to_3d (the project's Meshy MCP entry)",
+ "evidence": "the exact create arguments, task ids, charges, price evidence and raw hashes are in the job ledger kept outside Git; this cook verifies every raw original and conditioning image against it before it writes",
+ "licence": "generated for this project under the existing provider accounts; no blanket licence or commercial clearance implied (assets/CREDITS.md)",
+ "models": [
+  {
+   "id": "train-armor-side",
+   "what": "the train ARMOUR side skirt segment: overlapping welded rusted steel plates with a row of blades and spikes, two half-sunk circular saw discs, hazard stripes and a top rail",
+   "conditioningImage": {
+    "sha256": "239d44cd7c78db2dbcf41d4d848f79d35027d596019a006478e091af876fc91c",
+    "bytes": 2509952,
+    "size": "2172x724",
+    "codexAttempt": 1,
+    "generator": "Codex CLI built-in image_gen (ChatGPT login); image model id not reported",
+    "file": "reference/tasks/refinement-batch-20261113-035659/gen/out/ARMOR_SIDE-a1.png (raw original, outside Git)"
+   },
+   "meshy": {
+    "task": "01a1d329-053b-762d-8771-d28ea8556025",
+    "request": {
+     "ai_model": "meshy-t2.5",
+     "enable_pbr": true,
+     "model_type": "smart-topology",
+     "should_texture": true,
+     "target_formats": [
+      "glb"
+     ],
+     "target_polycount": 16000,
+     "texture_resolution": "2k"
+    },
+    "status": "SUCCEEDED",
+    "billedCredits": 15,
+    "attempt": 1,
+    "priceEvidenceSha256": "155330ee8189c13cba054c7d7dd38bb70a0f8f625a9a3eccabc33420233a8876"
+   },
+   "source": {
+    "file": "reference/tasks/refinement-batch-20261113-035659/gen/raw/ARMOR_SIDE-R002-01a1d329-053b-762d-8771-d28ea8556025.glb (raw original, outside Git)",
+    "sha256": "5769b6710cb8d06830f14cafbc83215ffdb61809c267157c7d38ff23c600e188",
+    "bytes": 7744644,
+    "triangles": 14971,
+    "extent": [
+     0.9575,
+     0.1997,
+     0.1089
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2752162
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2142778
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2031303
+     }
+    ]
+   },
+   "output": {
+    "file": "game/public/assets/models/train-armor-side.glb",
+    "url": "assets/models/train-armor-side.glb",
+    "sha256": "9ba9ca1981c6e64740c66c9254541522735dd15d5bf5185c2682318e578d4309",
+    "bytes": 1206340,
+    "triangles": 14971,
+    "dims": [
+     2.4,
+     0.5006,
+     0.2729
+    ]
+   },
+   "scale": [
+    2.506475,
+    2.506475,
+    2.506475
+   ],
+   "convention": "length along X, up +Y, the blade side toward +Z; origin = bottom centre of the back (mounting) face (z = 0 at the back)",
+   "halfTurn": false,
+   "sideRoughness": {
+    "front": 0.073,
+    "back": 0.0187
+   },
+   "texturePolicy": "Meshy maps kept channel for channel, Lanczos downsize + JPEG: base 1024 px q85, metallic-roughness 512 px q85, normal 1024 px q90; no reprojection / retexture / repaint",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 215553,
+     "sha256": "e501329d2e460db15b16be6bb12ea8ece6622da9e924781ad5cb94b4aae32b96"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 77228,
+     "sha256": "660049433c86849faebd4e3343e41f83815564a6653b38cb8dbb901226f92d35"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 185520,
+     "sha256": "cb4d9ac5d2893f0e9e4ce289e1936f6e39e3969e7c1121b8428999b328b193b2"
+    }
+   ]
+  },
+  {
+   "id": "train-armor-end",
+   "what": "the train ARMOUR end plough: a welded steel pilot grille with a row of long tapered fins, two circular saw discs at the corners and a hazard-striped top beam",
+   "conditioningImage": {
+    "sha256": "0fadd2d929b0c663fca8da4d9105dba25f5c439b1c0168fee551db9b99f42c7c",
+    "bytes": 2756325,
+    "size": "2172x724",
+    "codexAttempt": 3,
+    "generator": "Codex CLI built-in image_gen (ChatGPT login); image model id not reported",
+    "file": "reference/tasks/refinement-batch-20261113-035659/gen/out/ARMOR_END-a3.png (raw original, outside Git)"
+   },
+   "meshy": {
+    "task": "01a1d32e-47f0-74a7-a4c3-ac4c63fbd0d1",
+    "request": {
+     "ai_model": "meshy-t2.5",
+     "enable_pbr": true,
+     "model_type": "smart-topology",
+     "should_texture": true,
+     "target_formats": [
+      "glb"
+     ],
+     "target_polycount": 16000,
+     "texture_resolution": "2k"
+    },
+    "status": "SUCCEEDED",
+    "billedCredits": 15,
+    "attempt": 1,
+    "priceEvidenceSha256": "155330ee8189c13cba054c7d7dd38bb70a0f8f625a9a3eccabc33420233a8876"
+   },
+   "source": {
+    "file": "reference/tasks/refinement-batch-20261113-035659/gen/raw/ARMOR_END-R004-01a1d32e-47f0-74a7-a4c3-ac4c63fbd0d1.glb (raw original, outside Git)",
+    "sha256": "3d6a8ffbeaebbfe81831ca594cb9310acb5ec2981696fe248089ea6b9a403b89",
+    "bytes": 7724400,
+    "triangles": 14338,
+    "extent": [
+     0.9482,
+     0.25,
+     0.8813
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2802727
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2084848
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2014102
+     }
+    ]
+   },
+   "output": {
+    "file": "game/public/assets/models/train-armor-end.glb",
+    "url": "assets/models/train-armor-end.glb",
+    "sha256": "8e6c694a4d93247bc461ab29829248b4f1bb7133c48c0f460756054c7f7263cc",
+    "bytes": 1145184,
+    "triangles": 14338,
+    "dims": [
+     2.6,
+     0.6855,
+     0.55
+    ]
+   },
+   "scale": [
+    2.741916,
+    2.741916,
+    1.24809
+   ],
+   "convention": "width along X, up +Y, the fins toward +Z; origin = bottom centre of the back plate (z = 0 at the back); the raw's rear half folded flat onto the back plate, depth scaled",
+   "foldedVertices": 10244,
+   "foldPlaneRawZ": -0.001,
+   "texturePolicy": "Meshy maps kept channel for channel, Lanczos downsize + JPEG: base 1024 px q85, metallic-roughness 512 px q85, normal 1024 px q90; no reprojection / retexture / repaint",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 191304,
+     "sha256": "71a6d514fc04d5d4477a67bd460222bfc334ab0208cecbbb9259a8dcdfdcd067"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 57835,
+     "sha256": "acbd856c258f0504e69de26cbf5f90dbae953eb925beb777006a6de5a18d99b2"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 159872,
+     "sha256": "823255f77edbe8bc8fe939a16e1861678a90a25ad6cc30097b77b02a5728c4b7"
+    }
+   ]
+  },
+  {
+   "id": "item-acid-grenade",
+   "what": "the ACID SCRAPPER GRENADE: a thick glass jar of glowing green liquid in a welded wire cage, a taped screw cap with a twisted pull ring and a biohazard-yellow band",
+   "conditioningImage": {
+    "sha256": "77a0f502bf5b7ec8faf271044ecd03bba8a2dd680955891b957f855d4ebe1835",
+    "bytes": 2255496,
+    "size": "1024x1536",
+    "codexAttempt": 1,
+    "generator": "Codex CLI built-in image_gen (ChatGPT login); image model id not reported",
+    "file": "reference/tasks/refinement-batch-20261113-035659/gen/out/ACID-a1.png (raw original, outside Git)"
+   },
+   "meshy": {
+    "task": "01a1d328-eb53-76e4-a8aa-8ee1d0203353",
+    "request": {
+     "ai_model": "meshy-t2.5",
+     "enable_pbr": true,
+     "model_type": "smart-topology",
+     "should_texture": true,
+     "target_formats": [
+      "glb"
+     ],
+     "target_polycount": 8000,
+     "texture_resolution": "2k"
+    },
+    "status": "SUCCEEDED",
+    "billedCredits": 15,
+    "attempt": 1,
+    "priceEvidenceSha256": "155330ee8189c13cba054c7d7dd38bb70a0f8f625a9a3eccabc33420233a8876"
+   },
+   "source": {
+    "file": "reference/tasks/refinement-batch-20261113-035659/gen/raw/ACID-R001-01a1d328-eb53-76e4-a8aa-8ee1d0203353.glb (raw original, outside Git)",
+    "sha256": "033808a1061641f25b841c48c0426c63876be65453cc3c13c4ee7989594540a1",
+    "bytes": 9073152,
+    "triangles": 8370,
+    "extent": [
+     0.46,
+     0.9512,
+     0.4556
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3667369
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2541743
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2524314
+     }
+    ]
+   },
+   "output": {
+    "file": "game/public/assets/models/item-acid-grenade.glb",
+    "url": "assets/models/item-acid-grenade.glb",
+    "sha256": "4a8dd2990a36587498df1d48fb044edb8815fff5063d813190f6d1bdd71e8868",
+    "bytes": 630124,
+    "triangles": 8370,
+    "dims": [
+     0.0725,
+     0.15,
+     0.0718
+    ]
+   },
+   "scale": [
+    0.1577,
+    0.1577,
+    0.1577
+   ],
+   "convention": "upright, origin at the bottom centre, front +Z as generated",
+   "texturePolicy": "Meshy maps kept channel for channel, Lanczos downsize + JPEG: base 1024 px q85, metallic-roughness 256 px q85, normal 512 px q90; no reprojection / retexture / repaint",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 268694,
+     "sha256": "c5ca633b8377554a0251db129ea0a7b195c6be3c35b4ee6673f745a01cc1d1bf"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 31058,
+     "sha256": "a192f298fe5355b1f10792d88d77547c69bce8132e6750532df7b573fc10e448"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 41498,
+     "sha256": "e997ea3e8e94bb219724ebbd56bea353c7c35f82eec5f89d2922fb2b7d4a408a"
+    }
+   ]
+  },
+  {
+   "id": "item-lure-grenade",
+   "what": "the ZOMBIE LURE: a dented tin wrapped in stained cloth and rope with a red tape band, a perforated lid, a short wick and a pull ring",
+   "conditioningImage": {
+    "sha256": "bf33912a91fb88a5af34488ebec0ed23082655b6c57003dd7ca5857b2ad9e577",
+    "bytes": 2237761,
+    "size": "1024x1536",
+    "codexAttempt": 2,
+    "generator": "Codex CLI built-in image_gen (ChatGPT login); image model id not reported",
+    "file": "reference/tasks/refinement-batch-20261113-035659/gen/out/LURE-a2.png (raw original, outside Git)"
+   },
+   "meshy": {
+    "task": "01a1d32d-c1a9-75a5-8ffe-678159e349e7",
+    "request": {
+     "ai_model": "meshy-t2.5",
+     "enable_pbr": true,
+     "model_type": "smart-topology",
+     "should_texture": true,
+     "target_formats": [
+      "glb"
+     ],
+     "target_polycount": 8000,
+     "texture_resolution": "2k"
+    },
+    "status": "SUCCEEDED",
+    "billedCredits": 15,
+    "attempt": 1,
+    "priceEvidenceSha256": "155330ee8189c13cba054c7d7dd38bb70a0f8f625a9a3eccabc33420233a8876"
+   },
+   "source": {
+    "file": "reference/tasks/refinement-batch-20261113-035659/gen/raw/LURE-R003-01a1d32d-c1a9-75a5-8ffe-678159e349e7.glb (raw original, outside Git)",
+    "sha256": "a5ebb41625dbf59e5f682606fa6f408c01dcb94306b2d70fa433c015c3ccd01f",
+    "bytes": 7962812,
+    "triangles": 8482,
+    "extent": [
+     0.5029,
+     0.9507,
+     0.5308
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3351365
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1838046
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2369261
+     }
+    ]
+   },
+   "output": {
+    "file": "game/public/assets/models/item-lure-grenade.glb",
+    "url": "assets/models/item-lure-grenade.glb",
+    "sha256": "b8d078baded6b68b2e6092047aa3ee2baa96ea3193fddbf24e33badcf6d1f01e",
+    "bytes": 635816,
+    "triangles": 8482,
+    "dims": [
+     0.0741,
+     0.14,
+     0.0782
+    ]
+   },
+   "scale": [
+    0.147262,
+    0.147262,
+    0.147262
+   ],
+   "convention": "upright, origin at the bottom centre, front +Z as generated",
+   "texturePolicy": "Meshy maps kept channel for channel, Lanczos downsize + JPEG: base 1024 px q85, metallic-roughness 256 px q85, normal 512 px q90; no reprojection / retexture / repaint",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 229767,
+     "sha256": "7c481e71450e0ec4ec80d8af7a2a39646fa1f37a1bdb32e0910ff9cd4813a0f1"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 19176,
+     "sha256": "0bdbe27b9c7b6acc4c5618d3431a88384a2b56044f6a6935f9c7ae4b60715a0c"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 34195,
+     "sha256": "e0fcc140ff86883ac42e0fd9be385d7ab7b60b30a4367bad2e91f0d62cdf6145"
+    }
+   ]
+  }
+ ]
+}

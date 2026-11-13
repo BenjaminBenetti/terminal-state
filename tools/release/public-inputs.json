@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 76794,
-      "sha256": "a3f1169c2343d46b43ad1cd9f7a523d4a7b521f24709b5e45fcbed8a139f02d7"
+      "bytes": 78585,
+      "sha256": "4d12dfe2a8b09a0de9aaf3f220d66fa46e6c4eadc08e266977c80db208561c8b"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -2424,6 +2424,11 @@
       "sha256": "439c137c2a9ecc534ab2e120bba57e9aa510f4c0ac473e13de1e35d91e5318c3"
     },
     {
+      "path": "assets/derivatives/refinement-batch-20261113.json",
+      "bytes": 14164,
+      "sha256": "58c8af4106a673502a2dec6d56f92ab62a69c70a76dd09e61a547744f98eb5fe"
+    },
+    {
       "path": "assets/derivatives/rifle-optic-iteration04.json",
       "bytes": 10032,
       "sha256": "e0061f969f5ddcce652f6cfd022ba31106adbdd83b738aea71ae31669cee83d2"
@@ -3199,6 +3204,11 @@
       "sha256": "e50ba14b293e4f6b64399d807276422e4c19f72b0112e903ecd7d0a652d9e8b9"
     },
     {
+      "path": "assets/models/item-acid-grenade.glb",
+      "bytes": 630124,
+      "sha256": "4a8dd2990a36587498df1d48fb044edb8815fff5063d813190f6d1bdd71e8868"
+    },
+    {
       "path": "assets/models/item-beans-t25.glb",
       "bytes": 185200,
       "sha256": "b2f381479c81bdbf73b21a33757fbbd7284b36707a456da9f5a7c5f4f7ff6bf8"
@@ -3232,6 +3242,11 @@
       "path": "assets/models/item-juice-t25.glb",
       "bytes": 172544,
       "sha256": "27d6929170334aa3a1f2c79212d544fc3aa13febd15a482e35e014bff77a7d2b"
+    },
+    {
+      "path": "assets/models/item-lure-grenade.glb",
+      "bytes": 635816,
+      "sha256": "b8d078baded6b68b2e6092047aa3ee2baa96ea3193fddbf24e33badcf6d1f01e"
     },
     {
       "path": "assets/models/item-noodles-t25.glb",
@@ -5217,6 +5232,16 @@
       "path": "assets/models/tech-display-t25.glb",
       "bytes": 500576,
       "sha256": "014bc3ef3c6cbc59661b6d51f85f556afd608e33678a058a01ce8261b8e3208e"
+    },
+    {
+      "path": "assets/models/train-armor-end.glb",
+      "bytes": 1145184,
+      "sha256": "8e6c694a4d93247bc461ab29829248b4f1bb7133c48c0f460756054c7f7263cc"
+    },
+    {
+      "path": "assets/models/train-armor-side.glb",
+      "bytes": 1206340,
+      "sha256": "9ba9ca1981c6e64740c66c9254541522735dd15d5bf5185c2682318e578d4309"
     },
     {
       "path": "assets/models/train-bench.glb",
