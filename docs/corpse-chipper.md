@@ -30,7 +30,17 @@ spray, and becomes a tenth of a standard fuel tank. Normal fuel loot, spawn weig
    - Hands are busy: no firing, aiming, flares, item use, reloading or fuel pouring. The held item is lowered.
    - Movement slows by the body's mass, and a sprint becomes a heavy jog.
    - The train's driving console stays usable, so a body can be carried through a journey.
-3. **E** puts the body down on open, level floor in front. It can be picked up again later.
+3. **E** lets the body go (task studio-refinement-batch-20261113-035659-01, lane DROPS: "drop freely as physical ragdolls that fall
+   naturally amid clutter").
+   - It falls as a ragdoll from the shoulder, a little in front of you, rolling off as it goes. It falls on whatever is there:
+     crates, furniture, stairs, the car's floor. No clear area is needed.
+   - Facing a wall, it is let go nearer to you, never inside or beyond the wall, a prop or the car's shell. Even right against a wall:
+     *No space to let the body go here — step back from the wall*.
+   - These refusals still apply: riding, a lift cab, the count caps (decided where it is let go), and at the departure a body across the
+     doorway or still falling (*A body is still falling — wait a moment*).
+   - Where it comes to rest, its actual pose is kept (`pose: 'fallen'`). Who owns it follows the settled pelvis.
+   - It can be picked up again later.
+   - Without a physics world, the old posed drop remains: the Death-clip pose on open, level floor in front.
 4. In the parked train, stand within 1.4 m of the chipper's hopper (the far side of the car, between the middle and front door pairs).
    Look at it and press **E** (*Feed the body into the chipper*).
    - It refuses while the train moves, while it is still grinding, or when its credit is full.
@@ -73,6 +83,14 @@ spray, and becomes a tenth of a standard fuel tank. Normal fuel loot, spawn weig
 - **Retry** restores the level-entry state of everything together: the station memory (the enemy alive again), the hands, the train's
   cargo and the machine. Credit and the body are never both kept.
 - **Old saves** load with no bodies and an idle, empty chipper. Older cargo records (v1/v2) still load.
+- **Fallen pose** (lane DROPS): a record with `pose: 'fallen'` holds a few extra fields, checked strictly and bounded. Old `'lying'`
+  records load unchanged.
+  - `bones`: each bone's local rotation, by name.
+  - `hips`: the pelvis offset.
+  - `falling`: the pelvis velocity, only while it was still falling.
+
+  A save, a teardown or a departure in the second or so before it lands records the pose at that instant, with `falling` set. Rebuilt,
+  it falls on from there. The departure waits for it.
 
 ## World noise
 
@@ -106,6 +124,13 @@ Blind Screachers hear it through the same path. Their belief is the machine's po
 - Old saves: a loose item, prop or fuel cart that was saved where the machine now stands is restored where it was. Nothing is moved
   or teleported, but such an object sits inside the machine's box.
 - The machine's sounds were checked structurally only (duration, level, loop seams), not by ear.
+- **The ragdoll drop** (lane DROPS) uses the game's own corpse ragdoll. That brings its limits:
+  - The parts are spheres a little slimmer than the skin. At rest the whole body is lifted out of the floor by its deepest skinned
+    point (at most 0.15 m; floors and stair treads only). Skin against a crate, a wall or the car's lining may still touch a few
+    centimetres into it, like every corpse.
+  - It falls for at most 8 s.
+  - At most four ragdolls simulate at once. One stopped in mid-air by a newer death falls on at its velocity, at most twice.
+  - It is checked in Node physics tests only, with no browser or visual check (`game/tests/corpse-ragdoll-drop.test.ts`).
 - **The feed physics** (`world/chipperRagdoll.ts ChipperFeed`) is deliberately controlled:
   - It runs in a small private physics world in the car's frame: a few boxes of the machine around the hopper's open mouth, and the
     car floor. It never touches the game's physics, the player, the machine's collider or another body. It steps only while the

@@ -197,6 +197,7 @@ import {installRidePortals, type RidePortalRuntime} from './world/ridePortalRunt
 import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // task train-loose-cargo: every loose item / bag aboard travels with the train
 import {carriedModelKeys, installTrainPropCargo, type TrainPropCargo} from './world/trainPropCargo'; // task train-all-cargo: every movable prop aboard travels too
 import {installCorpses, type CorpseSystem} from './world/corpses'; // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): carried dead bodies
+import {groundDropSpots} from './world/dropScatter'; // task studio-refinement-batch-20261113-035659-01 (lane DROPS): inventory drops scatter
 import {installChipper, type ChipperSystem} from './world/chipper'; // task corpse-chipper (lane CHIPPER): the woodchipper fixed in the train
 import {installTrainEquipment, type TrainEquipmentSystem} from './world/trainEquipment'; // task train-crafting (lane EQUIP): the crafted chests / devices as physical cargo, the three plugs
 import {installCraftBench, type CraftBenchSystem} from './world/craftBench'; // task train-crafting (lane BENCH): the crafting bench + its recipe list
@@ -2963,30 +2964,18 @@ export class Game {
     const st = this.inv.detach(ref, count);
     if (!st) return;
     if (this.use && !this.inv.find(this.use.uid)) this.cancelUse('dropped');
-    const g = this.layout.grid, L = this.levels, p = this.player;
-    const f = this.forward();
-    let x = p.x + f.x * 0.9, z = p.z + f.z * 0.9;
-    let y: number;
-    if (L.count > 1) {
-      // Lane B (iteration 08): on the player's own storey, in sight (not through a railing / slab), on its floor / tread.
-      const s = L.supportIn(x, z, p.y + 0.05);
-      const ok = !!s && L.grid(s.level).passable(...g.cellOf(x, z)) && Math.abs(s.floor - p.y) <= 0.45 && L.lineOfSight({x: p.x, y: p.y + 0.6, z: p.z}, {x, y: p.y + 0.6, z}) && !L.railCrosses(p.x, p.z, x, z, 0.05, p.y);
-      if (!ok) { x = p.x; z = p.z; }
-      y = L.stepAt(x, z, p.y + 0.05);
-      if (!Number.isFinite(y)) y = p.y;
-    } else {
-      // Lane T: same level only (not over the platform edge), resting on the local floor / stair tread.
-      if (!g.passable(...g.cellOf(x, z)) || Math.abs(g.floorAt(x, z) - p.y) > 0.45 || !g.lineOfSight(p.x, p.z, x, z)) { x = p.x; z = p.z; }
-      y = g.stepAt(x, z);
-    }
-    const n = st.count;
-    if (st.itemId === FUEL.canItem && n > 1) {
-      // task fuel-feedback: fuel cans lie as SINGLE cans (one visible can = one can; the quantity kept exactly), back towards the player
-      const fl = Math.hypot(f.x, f.z) || 1, bx = -f.x / fl * 0.26, bz = -f.z / fl * 0.26;
+    const p = this.player, n = st.count;
+    // Lane B (iteration 08) / Lane T: 0.9 m along the view on the player's own storey / floor, in sight (not through a railing / slab), on
+    // its floor / tread, else at the player's feet. Task studio-refinement-batch-20261113-035659-01 (lane DROPS): + no collider box crossed,
+    // and successive drops (the cans of a stack too) take a small bounded scatter round that point instead of one spot (world/dropScatter.ts)
+    // task fuel-feedback: fuel cans lie as SINGLE cans (one visible can = one can; the quantity kept exactly)
+    const cans = st.itemId === FUEL.canItem && n > 1;
+    const spots = groundDropSpots({levels: this.levels, grid: this.layout.grid, propIndex: this.propIndex}, p, this.forward(), cans ? n : 1, this.pickups.list.map(pk => pk.obj.position));
+    if (cans) {
       st.count = 1;
-      this.pickups.add(st, x, y, z, p.yaw);
-      for (let k = 1; k < n; k++) { const one = this.inv.makeStack(FUEL.canItem, 1); one.count = 1; this.pickups.add(one, x + bx * k, y, z + bz * k, p.yaw); }
-    } else this.pickups.add(st, x, y, z, p.yaw);
+      this.pickups.add(st, spots[0].x, spots[0].y, spots[0].z, p.yaw);
+      for (let k = 1; k < n; k++) { const one = this.inv.makeStack(FUEL.canItem, 1); one.count = 1; this.pickups.add(one, spots[k].x, spots[k].y, spots[k].z, p.yaw); }
+    } else this.pickups.add(st, spots[0].x, spots[0].y, spots[0].z, p.yaw);
     this.hud.toast(`Dropped ${n > 1 ? `${n} × ` : ''}${itemDef(st.itemId).short}`);
     this.syncHeld();
   }

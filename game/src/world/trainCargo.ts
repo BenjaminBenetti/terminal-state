@@ -33,6 +33,7 @@ import {isBagItem} from '../items/gear';
 import {trainToWorld, worldToTrain, type TrainPlacement} from '../gen/playerTrain';
 import {CARGO, type CargoItemJSON} from '../run/trainCargo';
 import {makeBagObject, type GroundBag} from './groundBag';
+import {pickScatter} from './dropScatter'; // task studio-refinement-batch-20261113-035659-01 (lane DROPS): riding drops scatter too
 import type {Pickup} from './pickups';
 import type {PlayerTrainSpec} from './playerTrainSpec';
 
@@ -42,8 +43,7 @@ export const TRAIN_CARGO = {
   reach: 2.6, cone: 0.32, near: 1.0, nearCone: 1.0,
   /** A riding drop lands this far in front of the player (m), at least `margin` inside the interior walls. */
   dropAhead: 0.8, margin: 0.25,
-  /** Riding fuel cans dropped as a stack lie side by side this far apart (m). */
-  canStep: 0.26,
+  // (lane DROPS: the cans of a riding drop no longer lie in a 0.26 m row — they take the drop scatter's spots, world/dropScatter.ts)
 } as const;
 
 export const CARGO_TEXT = {
@@ -490,7 +490,8 @@ export class TrainCargoSystem {
 
   /**
    * An inventory drop while riding (Game.dropRef): the stack lies on the car floor in front of the player (inside the car) as riding cargo
-   * — it arrives with the train. A fuel-can stack lies as single cans side by side (one visible can = one can). False = no car to drop in.
+   * — it arrives with the train. A fuel-can stack lies as single cans (one visible can = one can), each on its own spot of the drop scatter
+   * (lane DROPS). False = no car to drop in.
    */
   dropRiding(stack: ItemStack): boolean {
     const h = this.host, S = this.spec, L = h.trainRide?.local;
@@ -502,18 +503,37 @@ export class TrainCargoSystem {
     const T = TRAIN_CARGO, fx = -Math.sin(L.yaw), fz = -Math.cos(L.yaw);
     const clampX = (v: number) => Math.max(S.interior.x0 + T.margin, Math.min(S.interior.x1 - T.margin, v));
     const clampZ = (v: number) => Math.max(-S.interior.halfWidth + T.margin, Math.min(S.interior.halfWidth - T.margin, v));
-    const x = clampX(L.x + fx * T.dropAhead), z = clampZ(L.z + fz * T.dropAhead), q = new THREE.Quaternion().setFromAxisAngle(UP, L.yaw);
+    let x = clampX(L.x + fx * T.dropAhead);
+    const z = clampZ(L.z + fz * T.dropAhead), q = new THREE.Quaternion().setFromAxisAngle(UP, L.yaw);
+    // (task studio-refinement-batch-20261113-035659-01, lane DROPS: "without passing through walls" — a point across the cab's / the rear
+    // compartment's partition from the player, not through its doorway, comes back to the player's side of it, `margin` clear)
+    const walls = [{px: S.cab.x0, d: S.cab.doorway}, ...(S.rear ? [{px: S.rear.x1, d: S.rear.doorway}] : [])];
+    for (const {px, d} of walls) {
+      if ((L.x - px) * (x - px) >= 0) continue;
+      const cz = L.z + (z - L.z) * (px - L.x) / (x - L.x);
+      if (cz > d.z0 + 0.05 && cz < d.z1 - 0.05) continue; // (through the doorway)
+      x = px + Math.sign(L.x - px) * T.margin;
+    }
     const stacks: ItemStack[] = [stack];
     if (stack.itemId === 'fuel_can' && stack.count > 1) { // (fuel/fuel.ts FUEL.canItem: single cans, the total exact)
       const n = stack.count;
       stack.count = 1;
       for (let k = 1; k < n; k++) { const one = h.inv.makeStack('fuel_can', 1); one.count = 1; stacks.push(one); }
     }
-    stacks.forEach((st, k) => {
-      const off = k * T.canStep;
+    // task studio-refinement-batch-20261113-035659-01 (lane DROPS): successive riding drops (and the cans of one stack) take the bounded
+    // scatter round that point (world/dropScatter.ts) — a spot only inside the clamped interior and on the point's side of the cab's / rear
+    // compartment's partition (never through a wall), never on another riding item; all taken / none inside: the point itself (the old
+    // single spot)
+    const I = S.interior;
+    const inside = (sx: number, sz: number) => sx >= I.x0 + T.margin - 1e-9 && sx <= I.x1 - T.margin + 1e-9 && Math.abs(sz) <= I.halfWidth - T.margin + 1e-9
+      && walls.every(({px}) => (sx - px) * (x - px) > 0 || Math.abs(x - px) < 1e-9);
+    const taken = this.riding.map(r => ({x: r.x, y: r.y, z: r.z}));
+    for (const st of stacks) {
+      const s = pickScatter(x, z, L.yaw, (sx, sz) => (inside(sx, sz) ? {x: sx, y: S.floorY, z: sz} : null), taken) ?? {x, y: S.floorY, z};
+      taken.push(s);
       // (an item, as a drop in the parked car makes a pickup — a backpack too: worn again by E, or lying as a pickup after the stop)
-      this.ride({kind: 'item', stack: st, x: clampX(x - fx * off), y: S.floorY, z: clampZ(z - fz * off), q});
-    });
+      this.ride({kind: 'item', stack: st, x: s.x, y: S.floorY, z: s.z, q});
+    }
     this.captured = true;
     this.counts.dropped += stacks.length;
     return true;
