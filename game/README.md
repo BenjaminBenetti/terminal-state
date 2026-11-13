@@ -42,7 +42,8 @@ aim · R reload · E pick up / open / take aimed item / take all / pry vending /
 not in a quick slot · 6 backpack (hold it in front, click sets it down; on a grounded bag tap E opens it, hold E 0.5 s wears it) · Q gas mask on / off · Tab or I inventory · H quick
 heal · F flashlight · hold G, release to throw the grenade-slot item (flares) · elevator: aim at a button and click or press E · M mute · Esc pause.
 Ctrl+Shift+P toggles the performance overlay (see below). Drop an item by dragging it out of the inventory panel (the old G = drop key is gone). Desktop keyboard + mouse only; touch
-is not supported.
+is not supported. Several drops in a row land a little apart, within 0.4 m of the drop point, never through a wall or the car's side;
+each stack keeps its count, rounds and uid (lane DROPS, `world/dropScatter.ts`).
 
 Train Lockbox (task train-lockbox-windows-20261101-232156): the big steel box in the player train's rear compartment is your own
 **50-slot storage (10 × 5) that travels with the train**. Aim + **E** opens it: your slots on the left, the box on the right; click moves an
@@ -53,7 +54,8 @@ type (13 slots). It adds all of it or nothing: if there isn't room, nothing chan
 
 Train corpse chipper (task studio-corpse-chipper-fuel-20261110-235304-01, `docs/corpse-chipper.md`): an emergency fuel source.
 Aim at the body of an undead enemy you killed and press **E** to pick it up (one at a time, over the shoulder: your hands are busy and
-you move slower). **E** puts it down again. In the parked train, aim at the woodchipper on the far side between the middle and front
+you move slower). **E** lets it go: it falls from your shoulder as a ragdoll onto whatever is there (crates and clutter too) and stays
+exactly as it lands, through saves and journeys. You can pick it up again later. In the parked train, aim at the woodchipper on the far side between the middle and front
 doors and press **E** to feed the body in. The body goes limp in the hopper and its arms and legs flop as the machine draws it in,
 head first. About 20 s later it is ground (with a lot of blood) into **0.1 of a standard tank**: 10
 bodies = one hop, 40 = a full empty train (the train's tank holds four standard tanks). The machine runs with an empty tank, is loud enough to draw the infected, and only grinds
