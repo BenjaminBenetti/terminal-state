@@ -182,8 +182,8 @@ Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
 - A **permanent, one-time upgrade** of the car (its recipe is at the bench). Once fitted it stays for the rest of the run. It has
   no durability, wear or upkeep, and it cannot be fitted twice.
 - **What it is** (the makeover kit, task studio-train-armor-makeover-20261113-183146-01: the recipe, the record and the contact
-  rule are the first kit's; only the look and the boxes that follow it changed). 67 rusted, welded, bladed pieces in five layers
-  that cover the car from the rails to the roof line (`world/trainArmorLayout.ts`):
+  rule are the first kit's; only the look and the boxes that follow it changed). 67 weathered steel, welded, bladed pieces
+  in five layers that cover the car from the rails to the roof line (`world/trainArmorLayout.ts`):
   - **Skirt**: one unbroken bladed skirt along each side below the floor, from 0.24 m over the rails to 0.92 m. It runs under the
     doors too (the floor is at 0.98 m). Over each bogie (the 3.35 m at either end) it is the heavy toothed guard.
   - **Belt plates**: eight tall plates per side from the floor line to the window sills (0.87–1.86 m), in the free spans between
@@ -200,6 +200,17 @@ Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
   `tools/asset-pipeline/props/build-train-armor-makeover.mjs`. Nine instanced draws; a mirrored piece uses a mirrored copy of
   its geometry. The kit shows the moment the upgrade is fitted, and on every save that already has it: the save records only
   that the armour is fitted, so nothing is crafted again and nothing else in the record changes.
+- **Palette** (task studio-train-armor-palette-20261113-213306-01; user: the rusty metal should blend with the cleaner
+  train, "mostly a color issue"). The six models' base colour maps carry one deterministic grade
+  (`tools/asset-pipeline/props/lib/armor-palette.mjs`, run by both cooks on the raw map before its downsize): the
+  uniform orange-brown becomes weathered steel centred on the car body's own light steel (the mean of the shell map's
+  grey and off-white texels, sRGB about 157, 159, 155), the most saturated patches of each map stay rust (accents in
+  patches, streaks and seams), the hazard stripes stay as generated, and dark seams stay dark. The kit's steel is partly
+  metallic in its own metallic-roughness map, so it draws darker than that albedo: in the game's renderer it sits at the
+  car's grey waist band, under the off-white panels. It is material only: the meshes, the UVs, the metallic-roughness
+  and normal maps are byte for byte as they were before the grade (`tests/train-armor-palette.test.ts`), nothing was
+  generated, and the raw masters are untouched. The files keep their names, so an armoured save shows the new palette as
+  it loads. Nothing at run time tints the kit: no light, exposure or shader changed.
 - **What it keeps clear.** Every door opening and both leaves' full sliding travel, every window, every lamp (head, tail and
   marker), the fuel cap and its aim, the roof hatch turret's whole field of fire (the rail's top is under its lowest line), the
   boarding path and the couplers. It stays as slim as the first kit along the body: the plates reach 1.69 m from the centre line

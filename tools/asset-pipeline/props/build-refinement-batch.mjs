@@ -15,7 +15,10 @@
 //
 // Derivatives (every frame is measured on the mesh, never assumed): metres, +Y up, grounded (min y = 0), transforms baked into the
 // vertices, one material each with Meshy's base colour / packed metallic-roughness / normal maps (Lanczos downsize, JPEG): no
-// reprojection / retexture / repaint. No geometry simplification (Smart Topology made the requested triangle targets).
+// reprojection / retexture / repaint. Task studio-train-armor-palette-20261113-213306-01: the two ARMOUR models' base colour maps carry
+// THE ARMOUR'S PALETTE GRADE (lib/armor-palette.mjs: a deterministic per-texel grade of Meshy's own map toward the car body's own light
+// steel, rust kept as accents; applied to the raw map before its downsize; their other two maps and the throwables' maps as before).
+// No geometry simplification (Smart Topology made the requested triangle targets).
 //  - ARMOUR SIDE: native frame kept (length along X, blades toward +Z — checked: the blade side is the deeper, rougher side), uniform
 //    scale to the reference length SIDE_L, origin at the bottom centre of the BACK (mounting) face: z = 0 at the back.
 //  - ARMOUR END: Meshy reconstructed the straight-on plough design as a symmetric deep sled (a plough on +Z and another on -Z). Kept:
@@ -33,6 +36,8 @@ import {createRequire} from 'node:module';
 import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {flatten, clearNodeTransform, transformMesh, getBounds, textureCompress, prune, dedup} from '@gltf-transform/functions';
+
+import {ARMOR_PALETTE, applyArmorPalette, armorPaletteNote, armorPaletteRecord} from './lib/armor-palette.mjs';
 
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
@@ -184,6 +189,9 @@ function bake(o, m, s, origin, halfTurn = false) {
 async function finish(doc, m) {
   const r = doc.getRoot(), tx = TEX[m.tex];
   compactIndices(doc);
+  // task train-armor-palette: the armour's palette grade of the raw base colour map, before its downsize (lib/armor-palette.mjs);
+  // the throwables keep their maps as they are
+  const palette = m.tex === 'armor' ? await applyArmorPalette(doc, sharp, sha) : null;
   await doc.transform(dedup(), prune(),
     textureCompress({encoder: sharp, targetFormat: 'jpeg', resize: [tx.base, tx.base], quality: tx.quality, slots: /^baseColor/}),
     textureCompress({encoder: sharp, targetFormat: 'jpeg', resize: [tx.mr, tx.mr], quality: tx.quality, slots: /^metallicRoughness/}),
@@ -203,7 +211,7 @@ async function finish(doc, m) {
   if (textures.length !== 3 || textures.some(t => t.slot === 'unused' || t.mime !== 'image/jpeg')) fail(`${m.id}: expected exactly the three JPEG maps, got ${JSON.stringify(textures.map(t => [t.slot, t.mime]))}`);
   const T = triangleList(chk), b = boundsOf(T);
   if (Math.abs(b.min[1]) > 1e-4) fail(`${m.id}: not grounded (min y ${b.min[1]})`);
-  return {glb, textures, T, b, dims: [0, 1, 2].map(k => r4(b.max[k] - b.min[k])), outTris: tris(chk)};
+  return {glb, textures, palette, T, b, dims: [0, 1, 2].map(k => r4(b.max[k] - b.min[k])), outTris: tris(chk)};
 }
 
 /** Mean |depth - plane| of the outermost surface seen from each Z side: the flat mounting back is the SMOOTHER side. */
@@ -286,6 +294,7 @@ const prov = {
   meshyTool: `${MODELS[0].tool} (the project's Meshy MCP entry)`,
   evidence: 'the exact create arguments, task ids, charges, price evidence and raw hashes are in the job ledger kept outside Git; this cook verifies every raw original and conditioning image against it before it writes',
   licence: 'generated for this project under the existing provider accounts; no blanket licence or commercial clearance implied (assets/CREDITS.md)',
+  palette: {...armorPaletteRecord(), models: MODELS.filter(m => m.out.palette).map(m => m.id)},
   models: MODELS.map(m => {
     const o = m.out, a = m.rec, tx = TEX[m.tex];
     return {
@@ -297,7 +306,10 @@ const prov = {
       scale: o.scale.map(v => +v.toFixed(6)), convention: o.convention,
       ...(o.halfTurn !== undefined ? {halfTurn: o.halfTurn, sideRoughness: o.roughness} : {}),
       ...(o.foldedVertices !== undefined ? {foldedVertices: o.foldedVertices, foldPlaneRawZ: o.foldPlaneRawZ} : {}),
-      texturePolicy: `Meshy maps kept channel for channel, Lanczos downsize + JPEG: base ${tx.base} px q${tx.quality}, metallic-roughness ${tx.mr} px q${tx.quality}, normal ${tx.normal} px q${tx.normalQuality}; no reprojection / retexture / repaint`,
+      texturePolicy: o.palette
+        ? `Meshy maps kept, Lanczos downsize + JPEG: base ${tx.base} px q${tx.quality}, metallic-roughness ${tx.mr} px q${tx.quality}, normal ${tx.normal} px q${tx.normalQuality}; metallic-roughness and normal channel for channel; ${armorPaletteNote()}`
+        : `Meshy maps kept channel for channel, Lanczos downsize + JPEG: base ${tx.base} px q${tx.quality}, metallic-roughness ${tx.mr} px q${tx.quality}, normal ${tx.normal} px q${tx.normalQuality}; no reprojection / retexture / repaint`,
+      ...(o.palette ? {palette: o.palette} : {}),
       textures: o.textures,
     };
   }),
@@ -312,9 +324,10 @@ const modelLine = m => {
   return `  ${m.key}: {key: '${m.id}', url: '${rel(m)}', bytes: ${o.glb.length}, tris: ${o.outTris}, dims: [${o.dims.join(', ')}] as const, textures: {baseColor: [${tex.baseColor.join(', ')}] as const, metallicRoughness: [${tex.metallicRoughness.join(', ')}] as const, normal: [${tex.normal.join(', ')}] as const}},`;
 };
 fs.writeFileSync(REG_ARMOR, `// GENERATED by ${SCRIPT} — do not edit (task ${TASK}).
-// The train armour kit: Meshy T2.5 image-to-3D derivatives of one Codex design image each, their own PBR maps kept (provenance
-// ${PROV_REL}). world/trainArmor.ts reads this. Frames (metres at the reference size, +Y up, grounded: min y = 0; one mesh, one
-// material, identity node):
+// The train armour kit: Meshy T2.5 image-to-3D derivatives of one Codex design image each, their own PBR maps kept (the base colour
+// graded: ${ARMOR_PALETTE.id}, lib/armor-palette.mjs; provenance ${PROV_REL}).
+// world/trainArmor.ts reads this. Frames (metres at the reference size, +Y up, grounded: min y = 0; one mesh, one material, identity
+// node):
 //  - side: one skirt segment, length along X, the blade side toward +Z; origin = bottom centre of the BACK (mounting) face (z = 0).
 //  - end: one end plough, width along X, the fins toward +Z; origin = bottom centre of the back plate (z = 0).
 // dims = [along X, height, depth along Z].
@@ -331,7 +344,7 @@ ${[by.acid, by.lure].map(modelLine).join('\n')}
 `);
 
 const credSection = [CREDITS_BEGIN, '## Refinement batch: train armour and crafted throwables', '',
-  `Generated for this project from one Codex INITIAL design image each (the owned Codex CLI's built-in image_gen tool) turned into models with Meshy T2.5 image-to-3D (smart topology, 2K PBR) through the Meshy MCP; every model keeps Meshy's own PBR maps (re-encoded only). Task ${TASK} under the user's fresh 75-credit grant (${billedTotal} credits billed, ${generations} generations, each a first attempt). AI-generated assets: unapproved prototypes, no licence or commercial clearance implied. The raw masters, conditioning images and job ledger are kept outside Git. Runtime derivatives by \`${SCRIPT}\` (provenance: \`${PROV_REL}\`). The train's Save terminal reuses the existing \`assets/models/p7-crt-terminal-t25.glb\`.`, '',
+  `Generated for this project from one Codex INITIAL design image each (the owned Codex CLI's built-in image_gen tool) turned into models with Meshy T2.5 image-to-3D (smart topology, 2K PBR) through the Meshy MCP; every model keeps Meshy's own PBR maps (re-encoded; the two train armour models' base colour maps carry the armour's deterministic palette grade \`${ARMOR_PALETTE.id}\` of task ${ARMOR_PALETTE.task} — \`tools/asset-pipeline/props/lib/armor-palette.mjs\`: toward the car body's own weathered steel, rust kept as accents, nothing generated). Task ${TASK} under the user's fresh 75-credit grant (${billedTotal} credits billed, ${generations} generations, each a first attempt). AI-generated assets: unapproved prototypes, no licence or commercial clearance implied. The raw masters, conditioning images and job ledger are kept outside Git. Runtime derivatives by \`${SCRIPT}\` (provenance: \`${PROV_REL}\`). The train's Save terminal reuses the existing \`assets/models/p7-crt-terminal-t25.glb\`.`, '',
   ...MODELS.map(m => `- \`${rel(m)}\` — ${m.credit} (Meshy task ${m.rec.meshyTask}).`),
   CREDITS_END].join('\n');
 const credSrc = fs.readFileSync(CREDITS, 'utf8');

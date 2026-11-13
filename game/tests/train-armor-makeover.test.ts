@@ -285,7 +285,9 @@ describe('train armour makeover: the cooked models', () => {
       const doc = await new NodeIO().registerExtensions(ALL_EXTENSIONS).readBinary(new Uint8Array(bytes));
       const root = doc.getRoot(), b = getBounds(root.getDefaultScene() ?? root.listScenes()[0]);
       expect(bytes.length, id).toBe(M.bytes);
-      expect(bytes.length, id).toBeLessThan(900_000);
+      // (task train-armor-palette: the graded base colour's steel / rust contrast costs its JPEG 3-9 % of a file — the wing 864 -> 920 kB;
+      // the mesh and the other two maps are byte for byte the same: tests/train-armor-palette.test.ts)
+      expect(bytes.length, id).toBeLessThan(950_000);
       const prims = root.listMeshes().flatMap(m => m.listPrimitives());
       expect([root.listMeshes().length, prims.length], id).toEqual([1, 1]);
       expect(prims[0].getIndices()!.getCount() / 3, id).toBe(M.tris);

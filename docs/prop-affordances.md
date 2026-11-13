@@ -680,6 +680,10 @@ they sit outside the two audits; their classification is recorded here.
   `assets/models/train-armor-{side,end}.glb`, cooked by `tools/asset-pipeline/props/build-refinement-batch.mjs`, and
   `assets/models/train-armor-{plate,post,wing,rail}.glb`, cooked by `tools/asset-pipeline/props/build-train-armor-makeover.mjs`;
   layout `world/trainArmorLayout.ts`, runtime `world/trainArmor.ts`): a permanent one-time upgrade fixed to the car's outside.
+  - Palette (task studio-train-armor-palette-20261113-213306-01): both cooks grade the base colour map toward the car
+    body's own light steel (`tools/asset-pipeline/props/lib/armor-palette.mjs`; rust kept as accents). Material only:
+    every mesh is byte for byte as it was before the grade (`tests/train-armor-palette.test.ts`), so the scale record
+    below and the boxes stand as they are.
   - Not storage: welded plates, blades, saw discs, posts, rails and plough wings. Nothing to open, no loot table.
   - Physics: static, `anchored`: part of the car body (bolted plating), never a loose prop, cargo or crafted equipment, so acid,
     shots and bumps don't move or melt it. Solid boxes for player, enemy and hitscan while parked (`world/playerTrain.ts
@@ -709,7 +713,7 @@ they sit outside the two audits; their classification is recorded here.
     Each piece is fitted to its span, so its scale is not uniform: every face ratio stays within 0.75–1.36 of the model's own
     proportions (pinned by `tests/train-armor.test.ts`); depth is free (a plate's thickness).
   - Tests: `tests/train-armor.test.ts`, `tests/train-armor-makeover.test.ts`, `tests/train-armor-save.test.ts`,
-    `tests/train-armor-clearance.test.ts`.
+    `tests/train-armor-clearance.test.ts`, `tests/train-armor-palette.test.ts`.
 - **Limits:** at most 24 crafted units in the car and 48 left in one station (`craft/equipment.ts EQUIPMENT_LIMITS`); a craft or a
   departure beyond them is refused. Enemies walk through units on the floor, as they do through fuel carts.
 - **Tests:** `tests/train-equipment-*.test.ts`, `tests/equipment-chest-store.test.ts`, `tests/sentry-ammo.test.ts`,
