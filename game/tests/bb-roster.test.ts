@@ -487,8 +487,8 @@ describe('BB: registry coherence (one family, four looks, roster-only)', () => {
 // row is checked against the live constant, so a retune that does not reach the page fails here with the row and the value to write.
 describe('BB: docs/bb.md states the source\'s numbers', () => {
   const read = (f: string): string | null => { try { return readFileSync(new URL(`../../${f}`, import.meta.url), 'utf8'); } catch { return null; } };
-  /** Files the page names that other lanes of this task deliver (the locomotion, the runtime clips): skipped only while they do not exist yet. */
-  const LANDING: readonly string[] = ['game/src/ai/bbSurface.ts', 'game/src/ai/bbClips.ts'];
+  /** A file the page names that another lane of this task delivers (the runtime clips): skipped only while it does not exist yet. */
+  const LANDING: readonly string[] = ['game/src/ai/bbClips.ts'];
 
   it('every constant table row === the exported constant; the roster statements, the four looks and the file names hold', () => {
     const doc = read('docs/bb.md');

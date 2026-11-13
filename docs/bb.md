@@ -157,7 +157,9 @@ A BB is saved exactly like every other enemy: only its **death** is remembered, 
 ## Models and audio
 
 - **Models.** Four GLBs, one per look, on the shared 18-joint rig, with no baked clips: its poses are runtime clips
-  (`game/src/ai/bbClips.ts`). Provenance and credits: see `game/public/assets/CREDITS.md`.
+  (`game/src/ai/bbClips.ts`). They are rigged and skinned locally by `tools/asset-pipeline/enemy/build-bb.mjs`, and
+  `game/tests/bb-asset.test.ts` checks them against the asset contract. Provenance and credits: see
+  `game/public/assets/CREDITS.md`, section "The BB (enemy, four bodies)".
 - **Audio.** One shared voice set for all four looks (`Sfx.bbVoice`, `game/src/audio/sfx.ts`): the cackle when it notices the
   player, a quiet giggle now and then while one is near, a squeal at the pounce, a yelp when hurt and a short death cry. A missing
   clip is silent, never a stand-in sound. The cues are audio only: nothing in them feeds the AI. Provenance, review status and
@@ -173,6 +175,8 @@ A BB is saved exactly like every other enemy: only its **death** is remembered, 
 | `game/src/ai/bbClips.ts` | The runtime clips on the shared rig |
 | `game/src/ai/enemyRoster.ts` | The seeded roster that places it (`FAMILY_ROSTER.bb`) |
 | `game/src/ai/enemyModels.ts` | The four lazy models |
+| `tools/asset-pipeline/enemy/build-bb.mjs` | Builds the four runtime bodies |
+| `game/tests/bb-asset.test.ts` | The GLBs against the asset contract |
 | `game/tests/bb-roster.test.ts` | The roster rule: the rate, counts, looks, slots, the version pin; the registry classification; this page's tables |
 | `game/tests/enemy-roster.test.ts` | The roster of every family |
 | `game/tests/enemy-spawn-reference.test.ts` | The reference site shows BB's constants and roster rule |

@@ -484,6 +484,33 @@ describe('enemy spawns section', () => {
     expect(howTo).toContain('id="term-seeded-roster"');
     expect(howTo).toContain('id="term-roster-only-family"');
   });
+
+  // Task studio-bb-production-20261112-234540-01 (lane REGISTRY-DOCS): BB — the second roster-only family, added in roster version 3
+  // and placed last. Nothing here names a constant's key: every rule group and row the reference holds must be on the page.
+  it('shows BB: its section with every behaviour constant and its four looks, roster-only, and "placed last" wherever the order is stated', () => {
+    const R = enemyRef.roster, families = site.get('enemies/families.html')!;
+    const bb = enemyRef.families.find(f => f.id === 'bb')!, rule = R.families.find(f => f.family === 'bb')!;
+    expect([bb.rosterOnly, rule.last, R.rosterOnly.includes('bb'), R.order[R.order.length - 1]]).toEqual([true, true, true, 'bb']);
+    const section = /<section id="family-bb">[\s\S]*?<section id="roster-bb">[\s\S]*?<\/section>/.exec(families)![0];
+    expect(section).toContain('<span class="badge badge-special">roster-only</span> <strong>Weight 0 in every level, context and horde pool.</strong>');
+    expect(section).not.toContain('no registered level spawns it');
+    expect(bb.variantModels).toHaveLength(4);
+    for (const v of bb.variantModels!) expect(section, v.variant).toContain(`<code>${v.model}</code>`);
+    expect(bb.rules.length).toBeGreaterThanOrEqual(5);
+    for (const g of bb.rules) for (const row of g.rows) expect(section, `${g.at.symbol}: ${row.what}`).toContain(prose(row.what));
+    // its roster rule: the version it applies from and that it is placed last — and no other family's rule says "last"
+    expect(section).toContain(`<dt>Applies from roster version</dt><dd>${num(rule.since!)} (current: ${num(R.version)})</dd>`);
+    expect(section).toContain('<dt>Placement order</dt><dd>last: after every family of an earlier roster version has its slots, whatever their policies</dd>');
+    expect(families.split('<dt>Placement order</dt>').length - 1).toBe(R.families.filter(f => f.last).length);
+    expect(rule.placement).toMatch(/PLACED LAST/);
+    // every level page that rolls it says so where it states the order; a zombie-free level states no order at all
+    for (const level of enemyRef.levels) {
+      const html = site.get(levelPage(level.id))!;
+      expect(html.includes('BB last: added in a later roster version, it takes only slots the others left'), level.id).toBe(!level.roster.zombieFree);
+      const row = level.pool.rows.find(r => r.family === 'bb')!;
+      expect([row.weight, row.share], level.id).toEqual([0, 0]);
+    }
+  });
 });
 
 describe('reference site validator rejects unsafe or broken output', () => {

@@ -271,7 +271,7 @@ export const ENEMY_FAMILY_ADAPTER: Readonly<Record<EnemyFamilyId, {
   // task studio-bb-production-20261112-234540-01: BB (a small crawling undead with four looks; placed only by the seeded roster: its
   // roster rule FAMILY_ROSTER.bb is shown by the roster block every family has). Every exported behaviour constant of ai/bb.ts, each
   // leaf with its OWN label (`ownLabelsOnly`: a key the constant gains later shows its key path until it is labelled here — it is
-  // never dropped and never borrows another family's wording).
+  // never dropped and never borrows another family's wording). A label for a key the constant does not have is simply not shown.
   bb: {
     stats: [{variant: null, stats: BB_STATS, file: F.bb, symbol: 'BB_STATS'}],
     variantNames: Object.fromEntries(Object.entries(BB_VARIANTS).map(([id, v]) => [id, v.name])),
@@ -290,18 +290,28 @@ export const ENEMY_FAMILY_ADAPTER: Readonly<Record<EnemyFamilyId, {
         calmSpeed: ['burst pace on a wall or ceiling while unaware', 'm/s'],
         maxHeightM: ['it never clings higher than this above the floor below it (a tall hall\'s ceiling and an atrium void are out of reach)', 'm'],
         mountReachM: ['a wall it mounts must be within this distance', 'm'],
+        knockOffDamage: ['a hit of at least this much damage knocks it off a wall or a ceiling (it falls and lies recovering)', 'hp'],
+        floorS: ['unaware: it stays on the floor before it climbs for between', 's'],
+        perchS: ['unaware: it stays on a perch for between', 's'],
       }},
       {title: 'The pounce, its only attack (attack range 0 in the stats above: it never swings standing): a wind-up tell, one leap aimed once at the launch that can hurt at most once, then a recovery and a cooldown', value: BB_POUNCE, file: F.bb, symbol: 'BB_POUNCE', ownLabelsOnly: true, labels: {
-        minM: ['it launches from at least this far (its body to the player\'s chest, 3D, with a clear straight line between)', 'm'],
-        maxM: ['it launches from at most this far', 'm'],
+        minM: ['nearer to the player than this it scuttles back once, then leaps anyway', 'm'],
+        leapFromM: ['each attempt launches from its own distance: at least this far', 'm'],
+        maxM: ['farthest distance it launches a leap from (its body to the player\'s chest, 3D, with a clear straight line between)', 'm'],
         dropMaxM: ['from a wall or ceiling perch it may also drop on a player this far away (3D)', 'm'],
         windupS: ['the tell before the leap: it stops, crouches and giggles for', 's'],
         speed: ['horizontal launch speed of the leap', 'm/s'],
         gravity: ['gravity the leap falls with', 'm/s²'],
-        maxFlightS: ['a leap ends after this long, whatever happens', 's'],
+        lead: ['its aim leads a moving player by this share of the flight time', ''],
+        maxFlightS: ['a leap can hurt only during its first', 's'],
         contactSlackM: ['the one hit lands within its body radius + the player\'s body radius + this slack', 'm'],
         landS: ['it lies recovering after a leap for this long (it cannot attack, and a hit staggers it)', 's'],
+        dropLandS: ['recovery after it lets go of a perch without a leap', 's'],
         cooldownS: ['no new wind-up for this long after a leap', 's'],
+        retreatM: ['while it cools down: nearer to the player than this it runs to a wall perch, or away', 'm'],
+        retreatPerchChance: ['while it cools down and is that near: chance that it runs to a wall perch rather than away', ''],
+        fleeToM: ['while it cools down and runs away: it runs until it is this far from the player', 'm'],
+        holdM: ['while it cools down: beyond the retreat distance and nearer than this it waits and watches', 'm'],
       }},
       {title: 'What it notices and how long it remembers', value: BB_SENSE, file: F.bb, symbol: 'BB_SENSE', ownLabelsOnly: true, labels: {
         loseS: ['after losing sight of the player it keeps hunting the last place it saw them for', 's'],
