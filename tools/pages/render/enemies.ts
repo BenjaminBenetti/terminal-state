@@ -603,7 +603,9 @@ ${rollCheck}
         rowHeader: 0,
         rows: f.stats.map(v => [
           v.variant ? esc(v.variant) : esc(f.label), stat(v.hp, 'hp'), stat(v.wanderSpeed, 'm/s'), stat(v.chaseSpeed, 'm/s'), stat(v.attackRange, 'm'),
-          stat(v.attackDamage, 'hp'), `${num(v.attackDuration)} s / ${num(v.attackImpact)} s / ${stat(v.attackCooldown, 's')}`, stat(v.sightRange, 'm'), stat(v.radius, 'm'),
+          stat(v.attackDamage, 'hp'),
+          // attack range 0: the family never swings standing (BB: its one attack is the pounce, in its own rules below) — the base swing timings would mislead
+          v.attackRange === 0 ? '<span class="muted">no standing swing</span>' : `${num(v.attackDuration)} s / ${num(v.attackImpact)} s / ${stat(v.attackCooldown, 's')}`, stat(v.sightRange, 'm'), stat(v.radius, 'm'),
           enemySourceLoc(es, v.at),
         ]),
       })
