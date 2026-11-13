@@ -12,7 +12,7 @@
 //     (stopped mid-stride, mirrored for the pair that led), windup / pounce / land / stagger -> Windup / Pounce / Land / Hit driven by
 //     `pose.phaseT`, fall -> Fall, dead -> Death (only shown when the ragdoll is unavailable);
 //   * OVERLAYS, all in the root's frame: the CACKLE (pose.cackleSeq: on a still body the Cackle clip — up on its haunches, hands off
-//     the surface, head thrown back, shaking; on a moving one a head / chest bob over the gait), the head TWITCH of a freeze
+//     the surface, head thrown back, shaking, held back on a wall / ceiling; on a moving one a head / chest bob over the gait), the head TWITCH of a freeze
 //     (pose.twitchSeq: a snap of the head, now and then a lifted paw) and the head LOOK-AT (Neck + Head toward pose.look, inside the
 //     neck's audited range, smoothed; relaxed when there is nothing to look at);
 //   * HIT VOLUMES from the animated bones: ONE 'head' sphere (the extras' skull, riding the Head joint — the big head is a fair
@@ -53,7 +53,10 @@ export const BB_ACTOR = {
    * over whatever the gait is doing. `stillMps`: at or above this pace it counts as moving.
    */
   cackle: {stillMps: 0.3, bobDeg: 5, nodDeg: 10, rollDeg: 7, attackS: 0.14, releaseS: 0.3, lookK: 0.35,
-    /** On a WALL the still cackle is only this share of the Cackle clip (the rest: its settled stance): it pushes its chest off the wall and shakes, rather than standing out of it. */
+    /**
+     * On a WALL or under a CEILING the still cackle is only this share of the Cackle clip (the rest: its settled stance): it pushes
+     * its chest off the surface and shakes, rather than standing out of the wall / hanging straight down by its shins.
+     */
     wallK: 0.55},
   /** The freeze's head twitch: snapped to a yaw / roll, held, released; every `pawEvery`-th one lifts a hand as well. */
   twitch: {durationS: 0.34, snapS: 0.045, releaseS: 0.12, yawDeg: [26, 56], rollDeg: 20, pawEvery: 3, paw: {flex: 112, abd: 14, elbow: 62}},
@@ -412,7 +415,7 @@ export class BbActor {
     // (the mirrored freeze / flinch: its own table, solved for this body — a real body is not symmetric enough to swap the angles)
     const flipped = this.mirror ? set.mirrored[this.clipName!] : undefined;
     sampleBbClip(flipped ?? set.tables[this.clipName!], this.u, this.tgt, this.mirror && !flipped);
-    if (this.clipName === 'Cackle' && this.brain.pose.surface === 'wall') {
+    if (this.clipName === 'Cackle' && (this.brain.pose.surface === 'wall' || this.brain.pose.surface === 'ceiling')) {
       // (the clip begins in its settled stance: only part of the way up from it)
       sampleBbClip(set.tables.Cackle, 0, this.aux);
       mixRows(this.aux, this.tgt, BB_ACTOR.cackle.wallK, this.tgt);

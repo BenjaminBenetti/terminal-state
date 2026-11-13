@@ -380,7 +380,7 @@ describe.each(BB_IDS)('BB actor, look %s (the real body)', v => {
     bb.dispose();
   });
 
-  it('the cackle: once per count; the Cackle clip on a still body, a bob over the gait on a moving one; a wind-up ends it; held back on a wall', () => {
+  it('the cackle: once per count; the Cackle clip on a still body, a bob over the gait on a moving one; a wind-up ends it; held back on a wall and under a ceiling', () => {
     const frames = Math.round(BB_CLIPS.Cackle.duration / DT);
     for (const still of ['idle', 'freeze'] as const) {
       const bb = make(MID, FLOOR, {phase: still}), P = bb.brain.pose, rest = BB_PHASE_CLIP[still];
@@ -441,23 +441,26 @@ describe.each(BB_IDS)('BB actor, look %s (the real body)', v => {
     expect(sunk, 'the bobbing chest presses a palm no more than a few millimetres into the surface').toBeGreaterThan(-0.008);
     for (const n of BB_ANIMATED) expect(rotAngle(q(a, n), q(b, n)), `${n} after`).toBeLessThan(SAME);
     a.dispose(); b.dispose();
-    // on a wall the still cackle is only part of the way up: chest off the wall, never standing out of it
-    const fl = make(MID, FLOOR), wl = make(MID, WALL);
-    show(fl, 40); show(wl, 40);
-    const settled = heightOf(wl.brain.pose, contactsOf(wl).head.c);
-    fl.brain.pose.cackleSeq++; wl.brain.pose.cackleSeq++;
-    let out = 0, outFloor = 0;
-    for (let i = 0; i < frames - 2; i++) {
-      show(fl); show(wl);
-      expect(wl.clip).toBe('Cackle');
-      const hw = heightOf(wl.brain.pose, contactsOf(wl).head.c), hf = heightOf(fl.brain.pose, contactsOf(fl).head.c);
-      expect(hw).toBeLessThanOrEqual(hf + 1e-6);
-      out = Math.max(out, hw - settled); outFloor = Math.max(outFloor, hf - settled);
+    // on a wall and under a ceiling the still cackle is only part of the way up: chest off the surface, never standing out of the
+    // wall / hanging straight down by its shins
+    for (const [surface, name] of [[WALL, 'a wall'], [CEILING, 'a ceiling']] as const) {
+      const fl = make(MID, FLOOR), wl = make(MID, surface);
+      show(fl, 40); show(wl, 40);
+      const settled = heightOf(wl.brain.pose, contactsOf(wl).head.c);
+      fl.brain.pose.cackleSeq++; wl.brain.pose.cackleSeq++;
+      let out = 0, outFloor = 0;
+      for (let i = 0; i < frames - 2; i++) {
+        show(fl); show(wl);
+        expect(wl.clip).toBe('Cackle');
+        const hw = heightOf(wl.brain.pose, contactsOf(wl).head.c), hf = heightOf(fl.brain.pose, contactsOf(fl).head.c);
+        expect(hw, name).toBeLessThanOrEqual(hf + 1e-6);
+        out = Math.max(out, hw - settled); outFloor = Math.max(outFloor, hf - settled);
+      }
+      log(`${v}: cackle, the head comes ${(outFloor * 100).toFixed(1)} cm up on a floor, ${(out * 100).toFixed(1)} cm off ${name}`);
+      expect(out, name).toBeGreaterThan(0.02);
+      expect(out, name).toBeLessThan(0.75 * outFloor);
+      fl.dispose(); wl.dispose();
     }
-    log(`${v}: cackle, the head comes ${(outFloor * 100).toFixed(1)} cm up on a floor, ${(out * 100).toFixed(1)} cm off a wall`);
-    expect(out).toBeGreaterThan(0.02);
-    expect(out).toBeLessThan(0.75 * outFloor);
-    fl.dispose(); wl.dispose();
   });
 
   it('the freeze\'s head twitch: once per count, a hash of the actor and the count, back to the stance; a paw comes up on every third', () => {
