@@ -73,8 +73,11 @@ describe('head-hit feedback: a distinct skull crack on a confirmed head hit', ()
   it('the game passes the CONFIRMED hit part: guns (any pellet of the shot that hit this enemy\'s head volume) and the knife', () => {
     const game = src('game.ts');
     expect(game).toMatch(/e\.head \|\|= bestPart === 'head';/); // set only from the hit volume the ray hit
-    expect(game).toMatch(/this\.sfx\.hitConfirm\(e\.point\.x, e\.point\.y, e\.point\.z, z, e\.head\);/);
-    expect(game).toMatch(/this\.sfx\.hitConfirm\(point\.x, point\.y, point\.z, z, res\.part === 'head'\);/);
+    // (task studio-bb-production-20261112-234540-01, re-pin: the same confirmed part, minus the crack on a NON-GRAPHIC body — BB; the
+    // confirm itself, the head damage and the headshot count are unchanged: tests/bb-nongraphic.test.ts)
+    expect(game).toMatch(/this\.sfx\.hitConfirm\(e\.point\.x, e\.point\.y, e\.point\.z, z, e\.head && !z\.nonGraphic\);/);
+    expect(game).toMatch(/this\.sfx\.hitConfirm\(point\.x, point\.y, point\.z, z, res\.part === 'head' && !z\.nonGraphic\);/);
+    expect(game).toMatch(/if \(e\.head\) this\.stats\.headshots\+\+;/);
     // corpses / world / misses never call hitConfirm with a head flag (corpse hits keep impact())
     expect(game.match(/hitConfirm\(/g)?.length).toBe(2);
   });

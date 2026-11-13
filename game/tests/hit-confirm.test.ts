@@ -216,7 +216,8 @@ describe('foreground player hit confirm: aggregation and bounds', () => {
     expect(all.length).toBe(2);
     const melee = all.filter(c => src.lastIndexOf('private meleeContact(', c.index) > src.lastIndexOf('private fire(', c.index));
     expect(melee.length).toBe(1);
-    expect(melee[0][1].split(',').map(s => s.trim())).toEqual(['point.x', 'point.y', 'point.z', 'z', "res.part === 'head'"]); // (+ the confirmed head part: task studio-general-armor-20261107-231448-01)
+    // (+ the confirmed head part: task studio-general-armor-20261107-231448-01; re-pin, task studio-bb-production-20261112-234540-01: no crack on a non-graphic body — BB)
+    expect(melee[0][1].split(',').map(s => s.trim())).toEqual(['point.x', 'point.y', 'point.z', 'z', "res.part === 'head' && !z.nonGraphic"]);
     const inMelee = src.slice(src.lastIndexOf('private meleeContact(', melee[0].index), melee[0].index);
     // task studio-weapon-variety-production-20261109-224355-01 (lane MELEE, re-pin): the wide sweeps (machete / track shovel) strike up
     // to MeleeSpec.maxTargets DISTINCT targets — still one confirm per damaged enemy per swing: the ONLY enclosing loop is the per-swing
@@ -226,7 +227,7 @@ describe('foreground player hit confirm: aggregation and bounds', () => {
     expect(inMelee.lastIndexOf('for (')).toBe(inMelee.lastIndexOf('for (const [i, res] of sweep.hits.entries())'));
     const calls = all.filter(c => !melee.includes(c));
     expect(calls.length).toBe(1);
-    expect(calls[0][1].split(',').map(s => s.trim())).toEqual(['e.point.x', 'e.point.y', 'e.point.z', 'z', 'e.head']);
+    expect(calls[0][1].split(',').map(s => s.trim())).toEqual(['e.point.x', 'e.point.y', 'e.point.z', 'z', 'e.head && !z.nonGraphic']); // (re-pin as above: BB)
     const before = src.slice(0, calls[0].index);
     // the nearest enclosing loop is the per-enemy damage map (never the per-pellet loop)
     expect(before.lastIndexOf('for (')).toBe(before.lastIndexOf('for (const [z, e] of dmg)'));
