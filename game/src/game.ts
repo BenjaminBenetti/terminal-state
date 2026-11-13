@@ -3863,6 +3863,7 @@ export class Game {
         if (d > 1e-4 && d < min && sameLevel(b.y, p.y)) { const push = Math.min(min - d, ease); b.x += dx / d * push; b.z += dz / d * push; }
         settleZombie(b, this.levels, this.propIndex);
       }
+      if (b instanceof BbBrain) b.syncFloor(); // (its pose is written inside update(), before the motor: the floor body is shown where the motor left it)
       // positional (panner) enemy audio: vocals, swings, footfalls — per archetype (Lane Q cue adapter;
       // the zombie adapter makes exactly the previous groan / swing / gait / ladder calls)
       prof.end(SPAN.motor);

@@ -1367,6 +1367,18 @@ export class BbBrain extends ZombieBrain {
     P.fx = gx / gl; P.fy = gy / gl; P.fz = gz / gl;
   }
 
+  /**
+   * The pose follows the floor body to where the game's motor and body separation have just put it. The pose is written inside
+   * update(), before the motor runs: without this the floor body is shown one frame behind, and for that frame where the motor has
+   * not yet resolved it against a wall. The game calls it after the motor, before the actor places the root; off the floor the pose
+   * is the brain's own.
+   */
+  syncFloor(): void {
+    if (this.mode !== 'ground') return;
+    const P = this.pose, L = BB_BODY.centreUp;
+    P.x = this.x - P.ux * L; P.y = this.y + L - P.uy * L; P.z = this.z - P.uz * L;
+  }
+
   private writePose(dt: number, w: BrainWorld): void {
     const P = this.pose, L = BB_BODY.centreUp;
     let cx: number, cy: number, cz: number;

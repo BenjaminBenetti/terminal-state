@@ -41,6 +41,7 @@ import {blightbellyQaApi} from './ai/blightbellyQa'; // Task track1-siren-blight
 import {sirenQaApi} from './ai/sirenQa'; // Task track1-siren-blightbelly-20261031 (lane SIREN): Siren state / wake / veins spot-check hooks
 import {strainerQaApi} from './ai/strainerQa'; // Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): Strainer spot-check hooks
 import {screacherQaApi} from './ai/screacherQa'; // task studio-screacher-production-20261110-221858-01: Screacher spot-check hooks
+import {bbQaApi} from './ai/bbQa'; // task studio-bb-production-20261112-234540-01: BB spot-check hooks
 import {reactorRestartQaApi} from './world/reactor/restartQa'; // task reactor-build-20261101 (lane RESTART): restart state / controls / win spot-check hooks
 import {trainQaApi} from './world/playerTrain'; // Task player-train-shell-20261101-202805 (lane TRAIN): train(), trainDoor(i, open), trainFaceDoor(i?), trainLights()
 import {chipperQaApi} from './world/chipper'; // task corpse-chipper (lane CHIPPER): chipper(), chipperGo()
@@ -403,6 +404,8 @@ export function installQaHooks(game: Game): void {
     ...strainerQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     // task studio-screacher-production-20261110-221858-01: screachers(), screacherGo(i?, dist), DEBUG screacherSpawnNear(dist, variant) / screacherEcho(i?, inS) / screacherNoise(dist, radius)
     ...screacherQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
+    // task studio-bb-production-20261112-234540-01: bbs(), bbGo(i?, dist), DEBUG bbSpawnNear(dist, variant)
+    ...bbQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     // task reactor-build-20261101 (lane RESTART): reactorRestart(), reactorGoControl(id), reactorControl(id, {give}), reactorWinFinish()
     ...reactorRestartQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     ...fuelQaApi(game), // task train-fuel-system: fuel(), fuelSetTank(units)

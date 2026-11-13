@@ -135,6 +135,7 @@ export function bbSim(layout: StationLayout, o: BbSimOpts) {
       if (d > 1e-4 && d < min && sameLevel(b.y, player.y)) { const push = Math.min(min - d, bbShoveStep(dt)); b.x += dx / d * push; b.z += dz / d * push; }
       settleZombie(b, L, idx);
     }
+    b.syncFloor(); // (as the game does after the motor: the rendered floor body is where the motor left it)
     // ---- audit
     A.steps++;
     const off = b.offFloor;
