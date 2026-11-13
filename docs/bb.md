@@ -61,13 +61,155 @@ roster pass that places a BB gives its spawn a look (`ZombieSpawn.variant`), and
 
 ## Behaviour and timings
 
-> **Placeholder — the task lead completes this section.** The stop-start cadence (`BB_CADENCE`), what it notices (`BB_SENSE`)
-> and the pounce (`BB_POUNCE`). Until then, see the constants and their comments in `game/src/ai/bb.ts`.
+All four looks run one machine (`BbBrain`, `game/src/ai/bb.ts`). In order, the player meets this:
+
+1. **It notices the player and cackles.** The cackle is the "it has seen you" tell.
+2. **It stares** for a moment, then closes in.
+3. **It closes in bursts**, with freezes between: on the floor, or up a wall and along the ceiling.
+4. **Close enough, it stops and winds up**: it crouches and squeals. This is the tell of the pounce.
+5. **It leaps.** The leap is aimed once, at the launch. It hurts only by touching the player, and at most once.
+6. **It lies recovering** where it lands. It cannot attack, and a hit flinches it.
+7. **It cools down.** Until the cooldown is over it keeps its distance or climbs out of reach, then it comes again.
+
+It has no other attack. Standing next to the player it does nothing: touching a BB on the floor never hurts.
+
+### What it notices
+
+| What | Value | Constant |
+|---|---|---|
+| Sight range, from its eyes to the player's head or chest | 16 m | `BB_STATS.sightRange` |
+| Unaware on the floor: field of view each side of its heading | 1.3 rad | `BB_SENSE.fovRad` |
+| Unaware on the floor: nearer than this it notices all round | 5 m | `BB_SENSE.closeM` |
+| Unaware on a wall or ceiling: it notices all round, but only this near | 10 m | `BB_SENSE.perchNoticeM` |
+| Stare after noticing, before it moves | 0.4 s | `BB_SENSE.stareS` |
+| Shortest time between two cackles of one BB | 7 s | `BB_SENSE.cackleGapS` |
+| Time it keeps hunting the last place it saw or heard the player | 9 s | `BB_SENSE.loseS` |
+
+- **Sight is three-dimensional.** The line runs from where its eyes really are (on a floor, a wall or a ceiling) to the player's
+  head, or to the chest when the head is hidden. The same geometry that stops bullets stops its sight.
+- **It knows only what it saw or heard.** It goes to the last place it saw the player, or where a noise or a hit came from. It
+  does not track a player it cannot see: its wind-up, its aim and its retreat all use the last place it saw them. After 9 s
+  without a new sighting it gives up and roams again.
+- **Sneaking works on it** as on every enemy: the distances at which an unaware BB notices are scaled by the player's
+  detectability (`detectFactor`, `game/src/ai/brain.ts`). An aware one keeps its full sight range.
+- **Noise wakes it** like any enemy: a shot, an impact or another noise within the noise's radius.
+
+### Stop-start movement
+
+Its paces are burst paces. Each burst and each freeze is drawn from a range, on the BB's own random stream.
+
+| What | Value | Constant |
+|---|---|---|
+| Hunting: a burst lasts | 0.35 to 0.75 s | `BB_CADENCE.burstS` |
+| Hunting: a freeze lasts | 0.14 to 0.36 s | `BB_CADENCE.freezeS` |
+| Further than this from its target it uses the long bursts | 9 m | `BB_CADENCE.farM` |
+| Far: a burst lasts | 0.8 to 1.3 s | `BB_CADENCE.farBurstS` |
+| Far: a freeze lasts | 0.1 to 0.22 s | `BB_CADENCE.farFreezeS` |
+| Unaware: a burst lasts | 0.5 to 1.1 s | `BB_CADENCE.calmBurstS` |
+| Unaware: a freeze lasts | 0.7 to 2.2 s | `BB_CADENCE.calmFreezeS` |
+| How fast it turns | 11 rad/s | `BB_STATS.turnRate` |
+
+With the hunting cadence its average pursuit pace on the floor is about 3.3 m/s (4.8 m/s for about two thirds of the time). Beyond
+9 m it averages about 4.2 m/s, so it catches up with a walking player and loses a sprinting one.
+
+### The pounce
+
+| What | Value | Constant |
+|---|---|---|
+| Launch distance, body to the player's chest: each attempt picks one from | 2 m | `BB_POUNCE.leapFromM` |
+| … to | 3.4 m | `BB_POUNCE.maxM` |
+| Nearer than this it first scuttles back once | 0.9 m | `BB_POUNCE.minM` |
+| From a wall or ceiling it also drops on a player this far away | 4.4 m | `BB_POUNCE.dropMaxM` |
+| Wind-up (the tell) before the leap | 0.55 s | `BB_POUNCE.windupS` |
+| Launch speed along the ground | 7.5 m/s | `BB_POUNCE.speed` |
+| Gravity of the leap | 16 m/s² | `BB_POUNCE.gravity` |
+| A leap can hurt only this long after the launch | 1.1 s | `BB_POUNCE.maxFlightS` |
+| Share of the player's movement the aim leads by | 0.6 | `BB_POUNCE.lead` |
+| Slack added to the body-to-body contact distance | 0.12 m | `BB_POUNCE.contactSlackM` |
+| Damage of the one hit | 9 hp raw | `BB_STATS.attackDamage` |
+| Recovery after landing from a leap or a knock-off | 0.75 s | `BB_POUNCE.landS` |
+| Recovery after letting go of a perch on its own | 0.3 s | `BB_POUNCE.dropLandS` |
+| Cooldown from the landing to the next wind-up | 3 s | `BB_POUNCE.cooldownS` |
+| Cooling down, a player nearer than this makes it run | 3.2 m | `BB_POUNCE.retreatM` |
+| Cooling down, between that and this it waits and watches | 5.5 m | `BB_POUNCE.holdM` |
+| Running away on the floor, it stops this far from the player | 4.8 m | `BB_POUNCE.fleeToM` |
+| Chance that it retreats up a nearby wall instead | 0.65 | `BB_POUNCE.retreatPerchChance` |
+
+- **The tell comes first, every time.** It winds up only with the player in sight and a clear arc to them. If it loses sight of
+  the player for more than a quarter of a second during the wind-up, it calls the leap off and waits at least 1 s.
+- **The leap is a real arc**, aimed once at the launch at the player's chest. It does not steer in the air. A player who moves
+  out of the way after the launch is missed.
+- **One hit at most.** The hit lands only if its body touches the player's during the leap, with nothing solid between them. It
+  then bounces off, away from the player. A leap that misses does no damage.
+- **It always comes down on floor.** Before it winds up it checks where a missed leap would land. It does not leap where a miss
+  would carry it into a pit, a shaft or over an open edge; it tries a slower, shorter leap or holds off.
+- **A hit during the wind-up** flinches it like any enemy and cancels the leap. A hit of 20 damage or more in the air takes most
+  of its speed away, so it falls short.
+- **No second chance from touch.** Between leaps it cannot hurt the player at all: not by standing against them, and not when
+  the player walks into it.
+
+Measured in the test simulation, on the six combat levels, 60 s each (`game/tests/bb-brain.test.ts` keeps the two ends):
+
+| What the player does | Leaps that hit |
+|---|---|
+| Stands still | about 99 % |
+| Walks backwards, or circles it at a walk | about 99 % |
+| Strafes at a walk | about 80 to 85 % |
+| Strafes at a sprint | about 50 % |
+| Sidesteps at a sprint as it launches | about 13 % |
+
+One attack cycle (wind-up, leap, recovery, cooldown, coming back) takes about 4.3 to 5.2 s. So one BB that hits every time does
+about 18 hp per 5 s before armour, and a player who sidesteps each launch takes almost none.
 
 ## Locomotion
 
-> **Placeholder — the task lead completes this section.** Movement on floors, walls and ceilings (`game/src/ai/bbSurface.ts`),
-> the climbing paces and limits (`BB_CLIMB`) and the body it moves with (`BB_BODY`).
+BB moves on the real collision geometry of the level: the same structure and prop shapes that stop the player and bullets
+(`game/src/ai/bbSurface.ts`). Nothing is placed by hand: no climb markers, no per-level paths.
+
+| What | Value | Constant |
+|---|---|---|
+| Burst pace on a wall or ceiling, hunting | 3.4 m/s | `BB_CLIMB.speed` |
+| Burst pace on a wall or ceiling, unaware | 1.3 m/s | `BB_CLIMB.calmSpeed` |
+| Highest it clings above the floor below it | 4.6 m | `BB_CLIMB.maxHeightM` |
+| A wall it climbs must be within | 6 m | `BB_CLIMB.mountReachM` |
+| A hit of at least this much damage knocks it off a wall or ceiling | 10 hp | `BB_CLIMB.knockOffDamage` |
+| Unaware: time on the floor before it climbs to a perch | 8 to 20 s | `BB_CLIMB.floorS` |
+| Unaware: time it stays on a perch | 20 to 45 s | `BB_CLIMB.perchS` |
+| A wall perch is this high above the floor | 1.9 to 2.8 m | `BB_CLIMB.perchUpM` |
+| A ceiling perch is this far out from the wall | 1 to 3.5 m | `BB_CLIMB.perchCeilingM` |
+| Noticing the player from further than this, it may take the walls | 4.5 m | `BB_CLIMB.huntClimbM` |
+| … and does so this often | 0.6 | `BB_CLIMB.huntClimbChance` |
+| Body centre above the surface it is on | 0.2 m | `BB_BODY.centreUp` |
+| Eyes above the surface, and ahead of the centre | 0.3 m, 0.1 m | `BB_BODY.eyeUp`, `BB_BODY.eyeFwd` |
+
+- **Floors.** On the floor it is an ordinary enemy body: the shared path finder, the shared motor and collider, body separation,
+  doors, stairs and ramps. It does not use ladders.
+- **Walls and ceilings.** It walks to the foot of a wall, climbs it, and goes round the corner onto the ceiling or onto the next
+  wall. It crosses inside corners and outside corners (a beam, a door lintel, the edge of a ledge). Its body stays on the surface
+  and turns with it.
+- **Where it cannot go.** It stops at an obstacle on the surface, at an edge with nothing to hold beyond it, and at 4.6 m above
+  the floor. So a tall hall's ceiling and an atrium void are out of its reach: there it uses the walls up to that height.
+- **No passing through anything.** Every step is checked against the geometry. It cannot cross a wall or a floor slab, on a
+  surface or in the air, and it never teleports. Props are obstacles to it, not surfaces: it crawls round them, and when a leap
+  ends on top of one (a desk, a crate) it hops off to the nearest floor. If the surface it holds is no longer there, it lets go
+  and falls.
+- **Unaware, it perches.** It roams the floor for a while, climbs to a perch on a wall or ceiling, sits there, and comes down
+  again. A player may first meet it overhead.
+- **Hunting, it uses both ways.** It runs on the floor or takes the wall-and-ceiling way. It climbs toward a player it cannot
+  walk to, and when the floor route is not getting it there.
+- **From a perch it drops on the player**: the same wind-up tell and the same one-hit leap, from above.
+- **Getting it down.** A hit of 10 damage or more knocks it off a wall or ceiling. It falls, and lies recovering like after a
+  leap. A weaker hit hurts it but leaves it up there. A BB killed on a wall or ceiling falls to the floor.
+- **While it is off the floor** it blocks nobody and nobody pushes it: it is not in the way of the player, other enemies, doors
+  or the train's doors.
+
+Limits of the first version:
+
+- Railings, wire fences and other see-through barriers are not surfaces for it. It does not climb them, and its leap checks do
+  not see them. That is why a leap is tested for where a miss would land.
+- It reads the level's static geometry and its props. It does not ride moving things (elevator cars, train cars in motion).
+- Levels with very tall rooms (the Mall's concourses, the Reactor's halls) have no ceiling within its reach. There it perches on
+  walls only.
 
 ## Where it appears: the seeded roster
 
