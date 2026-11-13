@@ -24,6 +24,7 @@ import {lockboxFootprint} from './trainLockbox';
 import {consoleLocalRect, type ConsoleRect} from './trainConsole';
 import {chipperFootprint, chipperPlacement} from './chipperPlace';
 import {benchFootprint, benchPlacement} from '../craft/trainFixtures';
+import {saveTerminalPlacement} from './trainSaveTerminalPlace';
 
 export interface P3 { x: number; y: number; z: number }
 
@@ -38,7 +39,7 @@ export interface RideLocalModel {
   /** The collision boxes (step frame; grounded below the floor, taller than the ceiling: solid columns). */
   props: PropIndex;
   boxes: PropPlacement[];
-  /** Named boxes (tests / QA): side walls, end walls, partitions, console, lockbox, chipper, bench. */
+  /** Named boxes (tests / QA): side walls, end walls, partitions, console, lockbox, chipper, bench, saveTerminal. */
   named: Record<string, PropPlacement>;
   /** The console box used (train-local). */
   console: ConsoleRect;
@@ -110,6 +111,8 @@ export function buildRideLocalModel(spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC, c
   if (ch) { const fp = chipperFootprint(ch); named.chipper = box(fp.x0, fp.x1, fp.z0, fp.z1, H); }
   const bn = benchPlacement(spec); // task train-crafting: the crafting bench (craft/trainFixtures.ts)
   if (bn) { const fp = benchFootprint(bn); named.bench = box(fp.x0, fp.x1, fp.z0, fp.z1, H); }
+  const sv = saveTerminalPlacement(spec); // task refinement-batch (lane SAVE): the save terminal's wall shelf left of the desk
+  if (sv) named.saveTerminal = box(sv.box.x0, sv.box.x1, sv.box.z0, sv.box.z1, H);
   const boxes = Object.values(named);
   const levels = new Levels([{id: 0, role: 'main', grid, baseY: 0}], [], []);
   return {spec, levels, grid, props: new PropIndex(levels, boxes), boxes, named, console: cr};
