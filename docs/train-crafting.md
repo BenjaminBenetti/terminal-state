@@ -73,6 +73,28 @@ Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
   **Scrap metal** from anything else — once, and spills what it held as real items. The train itself and everything fitted to it
   (the Lockbox, the bench, the chipper, the controls, the Save terminal, the armor) never melt; portable cargo and crafted equipment
   aboard do. The pool is a liquid film with bubbles, never a gas cloud. At most three acid pools / acid canisters at once.
+- **Acid melt** (`world/acidMelt.ts`; the grenade only asks it what its pool and its stuck canister touch). What melts is decided by
+  physical traits and ownership, never by a list of kinds. Station furniture, containers, machines, shelves, crates, lockers, desks and
+  counters melt. So do loose props where they lie, carried props, crafted equipment and fuel carts standing in the world, **aboard the
+  train too**: portable things are not protected by being in the car. Never melted:
+  - the train's own boxes and its fixed fixtures (drawn on the car, never layout placements);
+  - building structure and partitions;
+  - the Bunker's objectives and anything another system draws;
+  - the market stalls' ware displays;
+  - a prop holding up one that may not melt (nothing is left floating).
+
+  A melt takes **2.4 s**. The thing leaves every system at once; at most six dissolve on screen and the rest wait their turn intact.
+  Its contents then spill as real pickups on valid floor inside its footprint, never through a wall. A holder's lots keep their item
+  and count. A unit's slots are the same item stacks, so UIDs, magazines and counts are kept. A fuel cart's units become fuel cans;
+  under one can's worth is lost. Pickups and loose things resting on it fall, within the bounded body pools. It leaves **exactly one**
+  salvage at its base: **Electrical parts** for anything with a screen, machinery, a hum or a plug, **Scrap metal** otherwise.
+  A melted generated prop is recorded in the station's `acid.melted` lane, saved and validated. It stays gone on every rebuild and
+  never spills or salvages twice. Carried props, units and carts leave their own records.
+
+  Presentation is non-graphic and not a gas: the prop is covered by a rising acid-tinted shell that sags and shrinks into the floor and
+  fades, with a few bubbles and a soft hiss. The navigation grid is unchanged: a melted prop's cells stay blocked for enemies, which is
+  conservative and can never trap anyone. Leaving the station completes a melt in progress, and so does the ending save. The train's
+  Save terminal waits while a melt is under way or debris is still falling ("acid is still at work").
 - **Zombie Lure grenade.** It lands and rolls; at rest it opens and for **20 active seconds** the infected within **20 m** smell it,
   through walls and round corners, and go to the canister itself — never to you (`ai/scentLure.ts`); one that sees you still
   comes for you, and the blind Screacher and a dormant Siren ignore it. A faint tan plume shows it is venting. Then it is empty and
