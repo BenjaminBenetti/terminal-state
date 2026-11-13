@@ -190,6 +190,8 @@ export interface AcidMeltHost {
   trainPropCargo?: {consume(prop: PropPlacement): boolean} | null;
   trainEquipment?: {units(): readonly UnitLike[]; destroy(uid: string): UnitLike | null} | null;
   fuelCarts?: {bodies(): readonly CartLike[]; destroy(uid: string): DestroyedCart | null} | null;
+  /** (refinement batch) the carried-body system: a body lying at rest on a melted support falls again (world/corpses.ts supportGone). */
+  corpses?: {supportGone?(box: THREE.Box3, y0: number): number} | null;
   sfx?: unknown;
   sectionLayoutHooks: ((layout: StationLayout, key: SectionKey, run: never, phase: 'prepare' | 'build') => void)[];
   sectionHooks: {holders?(layout: StationLayout, key: SectionKey): void; build?(layout: StationLayout): void; teardown?(): void}[];
@@ -355,7 +357,7 @@ export class AcidMelt {
   private readonly bubbles: THREE.InstancedMesh;
   private seed = 0x2545f491;
   /** QA / tests. */
-  readonly counts = {exposed: 0, started: 0, begun: 0, queued: 0, completed: 0, aborted: 0, salvage: 0, spilled: 0, woken: 0, rewoken: 0, stuck: 0, members: 0, restored: 0, cleared: 0};
+  readonly counts = {exposed: 0, started: 0, begun: 0, queued: 0, completed: 0, aborted: 0, salvage: 0, spilled: 0, woken: 0, rewoken: 0, stuck: 0, members: 0, restored: 0, cleared: 0, setDown: 0};
 
   constructor(readonly host: AcidMeltHost) {
     this.group.name = 'acid-melt';
@@ -1121,6 +1123,8 @@ export class AcidMelt {
       if (o.x < x0 || o.x > x1 || o.z < z0 || o.z > z1 || o.y < ylo || o.y > yhi) continue;
       this.dropAdd({k: 'pickup', p, y: o.y, tries: 0, at: 0, until: 0}, p);
     }
+    // (refinement batch) a dropped body lying on it falls again as a ragdoll from its pose (the corpse system's own drop physics)
+    this.host.corpses?.supportGone?.(box, y0);
     let any = false;
     for (const p of this.here?.movers ?? []) if (di.propMatrix(p, M)) { any = true; break; }
     if (!any) return;
@@ -1351,7 +1355,13 @@ export class AcidMelt {
     for (const s of this.shells) s.opacity = 0;
     for (const t of this.targets.values()) t.exposure = 0;
     this.melts.length = 0;
-    // (what is still waiting to fall stays where it is: filler is re-dressed per visit; a pickup / loose prop keeps its pose, as when shot)
+    // what is still waiting to fall: a PICKUP is set down on the floor under it now (the teardown / ending save capture it there — never
+    // saved in the air); shelf filler is re-dressed per visit; a loose prop keeps its pose, as when shot
+    for (const d of this.drops) {
+      if (d.k !== 'pickup' || !this.host.pickups.list.includes(d.p)) continue;
+      const o = d.p.obj.position, f = this.floorAt(o.x, o.z, o.y);
+      if (f !== null && f < o.y - 0.01) { o.y = f + 0.004; d.p.obj.updateMatrixWorld(true); this.counts.setDown++; }
+    }
     this.drops.length = 0;
     this.dropping.clear();
     this.counts.cleared++;

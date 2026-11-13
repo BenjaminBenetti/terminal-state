@@ -480,6 +480,39 @@ describe('acid melt: the real station and the parked train', () => {
     expect((c.melt.qa() as {falling: number}).falling).toBe(0);
   }, 60000);
 
+  it('refinement batch: a body lying on it is handed to the corpse system (supportGone: the footprint, its base); clear() mid-fall sets pickups DOWN on the floor (never saved in the air)', () => {
+    const {c, w} = station();
+    const T = w.L.props.find(p => c.melt.protection(p) === null && !w.ph.dynamicItems.isDynamicProp(p) && !w.cm.holderFor(p) && p.h > 0.4 && p.h < 1.1 && p.hx > 0.3 && p.hz > 0.25 && lone(w, p))!;
+    expect(T).toBeTruthy();
+    const calls: {min: THREE.Vector3; max: THREE.Vector3; y0: number}[] = [];
+    (c.h as unknown as {corpses: unknown}).corpses = {supportGone: (b: THREE.Box3, y0: number) => { calls.push({min: b.min.clone(), max: b.max.clone(), y0}); return 0; }};
+    const top = T.y + T.h, floor = c.h.levels!.supportAt(T.x, T.z, T.y + 0.05, 0.35)!.floor;
+    const n = MAX_DYNAMIC_ITEMS + 6, stacks: ItemStack[] = [];
+    for (let i = 0; i < n; i++) {
+      const st = c.h.inv.makeStack(i % 2 ? 'cola' : 'beans', 1);
+      stacks.push(st);
+      c.pickups.add(st, T.x - 0.24 + (i % 5) * 0.12, top + 0.004, T.z - 0.165 + Math.floor(i / 5) * 0.11, i * 0.7);
+    }
+    step(c, 0.5);
+    expect(c.melt.start(refOf(c, w, T))).toBe(true);
+    step(c, MELT.seconds + 0.05);
+    expect(T.h).toBe(0);
+    // the corpse system was told: T's footprint (it contains T's centre) from T's base
+    expect(calls.length).toBeGreaterThanOrEqual(1);
+    const k = calls[0];
+    expect(k.min.x <= T.x && T.x <= k.max.x && k.min.z <= T.z && T.z <= k.max.z).toBe(true);
+    expect(k.y0).toBeCloseTo(T.y, 2);
+    // more than the item pool can wake at once: some still wait to fall — a teardown / the ending save now (clear) sets them down
+    expect(c.melt.busy).toBe(true);
+    c.melt.clear();
+    expect(c.melt.busy).toBe(false);
+    const mine = c.pickups.list.filter(p => stacks.includes(p.stack as ItemStack));
+    expect(mine).toHaveLength(n);
+    const up = mine.filter(p => p.obj.position.y > floor + 0.2).map(p => +p.obj.position.y.toFixed(2));
+    expect(up, `${T.kind}: top ${top} floor ${floor}`).toEqual([]);
+    expect(c.melt.counts.setDown).toBeGreaterThan(0);
+  }, 60000);
+
   it('decor on a counter: alone it leaves its salvage ON the counter (never inside it); the counter melting takes its static decor with it', () => {
     const {c, w} = station();
     const di = w.ph.dynamicItems;

@@ -224,7 +224,7 @@ export interface CorpseHost {
     actorVelocity?(target: object, point: THREE.Vector3, out: THREE.Vector3): boolean; statics?: {cellGround(x: number, z: number, y?: number): number} | null} | null;
   damage?: {releaseZombie?(z: object): boolean} | null;
   atmosphere?: {markShadows(root: THREE.Object3D, structure: boolean): void} | null;
-  trainRuntime?: {spec: PlayerTrainSpec; view: {root: THREE.Object3D} | null; train: {placement: TrainPlacement} | null; consoleAimed?: boolean} | null;
+  trainRuntime?: {spec: PlayerTrainSpec; view: {root: THREE.Object3D} | null; train: {placement: TrainPlacement} | null; consoleAimed?: boolean; saveAimed?: boolean} | null;
   trainRide?: {riding: boolean; phase: string} | null;
   playerTrain: {cargo: {liveBodies: {bodies(): BodyRecordJSON[]; restoreBodies(b: BodyRecordJSON[]): void} | null}; chipper?: {state: {job: {body: BodyRecordJSON} | null}}};
   hud: {toast(text: string, warn?: boolean): void};
@@ -283,7 +283,7 @@ export class CorpseSystem implements CorpseSystemApi {
   private readonly owner = () => !!(this.hand || this.handRec);
   /** QA / tests. */
   readonly counts = {pickups: 0, drops: 0, sunk: 0, refused: 0, built: 0, failed: 0, captured: 0, released: 0, flushes: 0, blocked: 0,
-    ragdolls: 0, landed: 0, restarts: 0, stopped: 0, resumed: 0}; // (lane DROPS: ragdoll drops started, come to rest, fell on, stopped mid-fall, resumed)
+    ragdolls: 0, landed: 0, restarts: 0, stopped: 0, resumed: 0, unsupported: 0}; // (lane DROPS: ragdoll drops started, come to rest, fell on, stopped mid-fall, resumed; refinement batch: fell again when the support under them melted)
 
   constructor(readonly host: CorpseHost, private readonly deps: CorpseDeps) {
     this.carry.name = 'corpse-carry';
@@ -589,7 +589,7 @@ export class CorpseSystem implements CorpseSystemApi {
     if (!this.hand) return CORPSE_TEXT.notReady;
     const o = this.offers();
     if (o) return o.offer.text;
-    if (this.host.trainRuntime?.consoleAimed) return null; // (the driving console's own prompt: a journey with a body in the hands)
+    if (this.host.trainRuntime?.consoleAimed || this.host.trainRuntime?.saveAimed) return null; // (the driving console's / the Save terminal's own prompt: a journey or a save with a body in the hands)
     return this.host.trainRide?.riding ? CORPSE_TEXT.riding : CORPSE_TEXT.drop;
   }
 
@@ -606,8 +606,9 @@ export class CorpseSystem implements CorpseSystemApi {
       this.toSink(o.sink);
       return true;
     }
-    // the one other E use while carrying: the train's driving console (its map / the journey — the body stays in the hands)
-    if (h.trainRuntime?.consoleAimed) return false;
+    // the other E uses while carrying: the train's driving console (its map / the journey) and its Save terminal (a manual save) — the body
+    // stays in the hands (the carry participant saves it held)
+    if (h.trainRuntime?.consoleAimed || h.trainRuntime?.saveAimed) return false;
     this.putDown();
     return true;
   }
@@ -922,6 +923,26 @@ export class CorpseSystem implements CorpseSystemApi {
     b.rec = rec;
     this.settle(b);
     this.counts.stopped++;
+  }
+
+  /**
+   * Task studio-refinement-batch-20261113-035659-01: the support under `box` is gone (world/acidMelt.ts completed a melt there): every body
+   * lying AT REST on it — its pelvis or a bone point inside the footprint (+ 5 cm), above the support's base `y0`, at most 0.6 m over its
+   * top — falls again as a ragdoll from its pose (no push), so none hangs in the air; it comes to rest on what is below as any drop does
+   * (watchFall: the 'fallen' record, ownership by where the pelvis ends up). Nothing while the train rides / without the physics world.
+   * Returns how many fell.
+   */
+  supportGone(box: {min: V3; max: V3}, y0: number): number {
+    if (this.host.trainRide?.riding || !this.physicsReady()) return 0;
+    const pad = 0.05, ylo = y0 + 0.04, yhi = box.max.y + 0.6;
+    const on = (v: V3) => v.x >= box.min.x - pad && v.x <= box.max.x + pad && v.z >= box.min.z - pad && v.z <= box.max.z + pad && v.y >= ylo && v.y <= yhi;
+    let n = 0;
+    for (const b of this.lying) {
+      if (b.falling || !(on(b.centre) || b.points.some(on))) continue;
+      b.restarts = 0;
+      if (this.startFall(b, V.set(0, 0, 0))) { n++; this.counts.unsupported++; }
+    }
+    return n;
   }
 
   /** A rebuilt body whose record was captured mid-fall falls on from that pose at its recorded velocity (a built station, a parked car). */

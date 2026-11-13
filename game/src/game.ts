@@ -919,6 +919,8 @@ export class Game {
     this.onboarding = new OnboardingStore(browserOnboardingStorage());
     this.trainOnboarding = installTrainOnboarding(this, this.onboarding);
     hookName('trainOnboarding');
+    // (keep it the LAST install that unshifts a section hook: its teardown must run FIRST — a melt in progress completes, spilling into the
+    // pickups / cargo / bodies the later teardowns then record; world/acidMelt.ts install)
     installAcidMelt(this); // task studio-refinement-batch-20261113-035659-01 (lane MELT): sets this.acidMelt; its own layout / section / frame hooks, warm pool 'acid-melt'
     hookName('acidMelt');
     this.sectionModelKeys.push(playerTrainModelKeys);

@@ -585,4 +585,37 @@ describe('corpse ragdoll drop: saves, travel, mid-fall', () => {
     expect((c.sys.participant().save() as {held: unknown}).held).toBeNull();
     expect((c.h.runParticipants as {id: string}[]).some(q => q.id === CORPSE_CARRY_PARTICIPANT)).toBe(true);
   }, 180000);
+
+  it('its support melts away (refinement batch: world/acidMelt.ts -> supportGone): a body at rest on a table falls again and rests on the floor', () => {
+    const L = SUB(), c = rig(L);
+    const p0 = playerTrainPlacement(L)!;
+    const pl = -(SPEC.width / 2 + 1.6), dir = Math.sign(pl), w = trainToWorld(p0, MID, 0, pl + dir * 1.05);
+    const table = {...crate(w.x, w.z, 0, 0.45), hx: 0.8, hz: 0.8} as PropPlacement; // (a low, wide crate the body lands on)
+    enter(c, L, KA, [table]);
+    const z = deadEnemy(c, 2, MID + 0.6, 0.2);
+    const id = pickUp(c, z);
+    standAt(c, MID, pl, false, at(c, MID, pl + dir * 3, 1.0, false));
+    c.h.player.pitch = 0;
+    syncCamera(c.h);
+    const b = dropAndSettle(c, id);
+    const top = table.y! + table.h;
+    expect(hipsOf(z.root).y, 'it came to rest on the table').toBeGreaterThan(top - 0.05);
+    // a support elsewhere going: nothing
+    const far = new THREE.Box3(new THREE.Vector3(table.x + 5, 0, table.z + 5), new THREE.Vector3(table.x + 6, top, table.z + 6));
+    expect(c.sys.supportGone(far, 0)).toBe(0);
+    // the table melts (as AcidMelt.complete leaves it: no height, no collider — the static chunks rebuilt), then the melt's call
+    table.h = 0;
+    table.blocksSight = false;
+    for (const [dx, dz] of [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]]) c.ph.propsChanged(table.x + dx * table.hx, table.z + dz * table.hz);
+    const box = new THREE.Box3(new THREE.Vector3(table.x - table.hx, 0, table.z - table.hz), new THREE.Vector3(table.x + table.hx, top, table.z + table.hz));
+    expect(c.sys.supportGone(box, 0)).toBe(1);
+    expect(b.falling).toBe(true);
+    run(c.h, 12, () => !b.falling);
+    expect(b.falling, 'came to rest again').toBe(false);
+    expect(b.rec.pose).toBe('fallen');
+    expectResting(c, z.root, 'on the floor after the melt');
+    expect(hipsOf(z.root).y, 'down on the floor').toBeLessThan(top - 0.12);
+    expect(c.sys.counts.unsupported).toBe(1);
+    expect(census(c)).toEqual([id]); // (one body, never doubled)
+  }, 120000);
 });
