@@ -82,7 +82,7 @@ import {LightSources} from './world/lightSources';
 import {PlayerLight, applyBatteryItem} from './player/flashlight'; // Iteration 12 (LIGHT): flashlight battery + body glow
 import {FlareSystem, throwOneFlare, type FlareSmokeHost} from './weapons/throwables'; // Iteration 12 (LIGHT): thrown road flares (grenade slot)
 import {FlareHold} from './weapons/flareHold'; // Iteration 15: hold to ready, release to throw
-import {GrenadeSystem, throwOneGrenade, type AcidMeltLike} from './weapons/grenades'; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades
+import {GrenadeSystem, throwHoldTarget, throwOneGrenade, type AcidMeltLike} from './weapons/grenades'; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades
 import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifiers} from './player/modifiers'; // Iteration 16 (shared contract)
 import {incomingHit, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
 import {armorHit, armorPool} from './player/armor'; // task studio-general-armor-20261107-231448-01: the worn armour pool
@@ -3181,8 +3181,8 @@ export class Game {
     // (task studio-refinement-batch-20261113-035659-01) the SAME hold throws whichever throwable it readies: the grenade slot's (G) or the
     // held one (click) — a road flare or a crafted acid / lure grenade (throwItem; Game.throwHeld dispatches by item id)
     const keyThrow = inp.hit('KeyG') || inp.hit('KeyT');
-    const tItem = this.flareHold.active ? this.throwItem : keyThrow ? this.inv.thrown?.itemId ?? null
-      : inp.mousePressed[0] && heldDef?.kind === 'throwable' ? held!.itemId : null;
+    const tItem = throwHoldTarget({active: this.flareHold.active, readied: this.throwItem, keyPressed: keyThrow, slot: this.inv.thrown?.itemId ?? null,
+      mousePressed: inp.mousePressed[0], held: held?.itemId ?? null, heldThrowable: heldDef?.kind === 'throwable'});
     for (const e of this.flareHold.update(dt, {
       keyDown: inp.down('KeyG') || inp.down('KeyT'), keyPressed: keyThrow, mouseDown: inp.mouse[0], mousePressed: inp.mousePressed[0], // INTERACT (#6): G
       heldIsFlare: heldDef?.kind === 'throwable' && (this.flareHold.source !== 'mouse' || held?.itemId === this.throwItem), busy: !!this.use || this.consumeView.busy || p.climbing || laneOwns || rideHolster,

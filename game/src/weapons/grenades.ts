@@ -242,6 +242,15 @@ export function throwOneGrenade(sys: GrenadeSystem, itemId: GrenadeId, takeOne: 
   return sys.throw(itemId, eye, dir, inherit);
 }
 
+/**
+ * Game's throw dispatch (ONE hold for every throwable, weapons/flareHold.ts): the item a grenade-style hold is about — the readied one
+ * while a hold is active, else the grenade slot's on a G press, else the held throwable on a click. Its count and its own system's
+ * refusal (a grenade's GrenadeSystem, a flare's FlareSystem) are the hold's `flares` / `refusal` inputs; the release throws it.
+ */
+export function throwHoldTarget(o: {active: boolean; readied: string | null; keyPressed: boolean; slot: string | null; mousePressed: boolean; held: string | null; heldThrowable: boolean}): string | null {
+  return o.active ? o.readied : o.keyPressed ? o.slot : o.mousePressed && o.heldThrowable ? o.held : null;
+}
+
 /** The film's drawn radius now: it spreads from 40 % to the full ACID.poolR over ACID.fadeIn (drawPool scales the disc by exactly this). */
 export function poolReach(p: Pick<AcidPool, 'r' | 'age'>): number {
   return p.r * (0.4 + 0.6 * Math.min(1, p.age / ACID.fadeIn));

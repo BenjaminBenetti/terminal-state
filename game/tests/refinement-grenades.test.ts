@@ -20,12 +20,15 @@ import {ITEMS, ITEM_DIMS, itemDef} from '../src/items/items';
 import {econCat} from '../src/items/lootTables';
 import {ICONS} from '../src/ui/icons';
 import {GRENADE_MODEL_URLS, grenadeModel, grenadeModelSource} from '../src/world/grenadeModels';
-import {ACID, GRENADE, GrenadeSystem, LURE, inPool, poolReach, poolStrength, throwOneGrenade, type AcidMeltLike, type GrenadeEnemy, type MeltRefLike} from '../src/weapons/grenades';
+import {ACID, GRENADE, GrenadeSystem, LURE, inPool, poolReach, poolStrength, throwHoldTarget, throwOneGrenade, type AcidMeltLike, type GrenadeEnemy, type MeltRefLike} from '../src/weapons/grenades';
 import {PhysicsSystem} from '../src/physics/world';
 import {levelsOf} from '../src/gen/levels';
 import {mulberry32} from '../src/core/rng';
 import {TrainLockbox} from '../src/run/trainLockbox';
 import {SCENT, ScentLures} from '../src/ai/scentLure';
+import {FlareHold, type FlareHoldInput} from '../src/weapons/flareHold';
+import {FlareSystem, throwOneFlare} from '../src/weapons/throwables';
+import {LightSources} from '../src/world/lightSources';
 import {FIX, levelFixture} from './helpers/levelFixture';
 
 const DT = 1 / 60;
@@ -335,6 +338,91 @@ describe('GrenadeSystem: acid', () => {
     n = 0;
     while (!w2.sys.pools.length && n++ < 600) w2.step();
     expect(w2.sys.pools).toHaveLength(1);
+  });
+});
+
+describe("Game's throw dispatch: one hold for every throwable (throwHoldTarget + FlareHold, as Game.update drives them)", () => {
+  /** One frame of Game.update's throw part: the target item, the hold, the release thrown by item id (Game.throwHeld / throwGrenade). */
+  function rig() {
+    const w = world();
+    const fl = new FlareSystem(new THREE.Group(), w.ph, new LightSources(), mulberry32(7));
+    const inv = w.inv, hold = new FlareHold(), eye = {x: 21, y: FIX.upperY + 1.62, z: 4}, dir = w.dirOf(0, -0.35, 1);
+    let readied: string | null = null;
+    const events: string[] = [];
+    const frame = (o: {press?: boolean; down?: boolean; click?: boolean; mouse?: boolean} = {}) => {
+      const held = inv.selectedStack(), heldThrowable = !!held && itemDef(held.itemId).kind === 'throwable';
+      const t = throwHoldTarget({active: hold.active, readied, keyPressed: !!o.press, slot: inv.thrown?.itemId ?? null, mousePressed: !!o.click, held: held?.itemId ?? null, heldThrowable});
+      const input: FlareHoldInput = {keyDown: !!o.down, keyPressed: !!o.press, mouseDown: !!o.mouse, mousePressed: !!o.click,
+        heldIsFlare: heldThrowable && (hold.source !== 'mouse' || held?.itemId === readied), busy: false, flares: t ? inv.count(t) : 0,
+        refusal: t && isGrenadeItem(t) ? w.sys.refusal(t) : fl.refusal(), clears: 0};
+      for (const e of hold.update(DT, input)) {
+        events.push(e.type === 'refuse' ? `refuse:${e.reason}` : e.type);
+        if (e.type === 'ready') readied = t;
+        else if (e.type === 'release') {
+          const id = readied ?? 'flare', fromHeld = e.source === 'mouse';
+          readied = null;
+          const ref = fromHeld && inv.selectedStack()?.itemId === id ? inv.selectedRef() : !fromHeld && inv.thrown?.itemId === id ? THROW_REF : null;
+          const take = () => (ref ? inv.consumeAt(ref) : inv.take(id, 1) === 1), has = () => inv.count(id) > 0;
+          if (isGrenadeItem(id)) throwOneGrenade(w.sys, id, take, has, eye, dir);
+          else throwOneFlare(fl, take, has, eye, dir);
+        } else if (e.type === 'cancel') readied = null;
+      }
+      w.ph.update(DT); w.sys.tick(DT); fl.tick(DT);
+    };
+    return {...w, fl, hold, frame, events, readied: () => readied};
+  }
+
+  it('G throws the grenade slot\'s item (an acid grenade), exactly one, from that slot; a flare in the pack is untouched', () => {
+    const r = rig();
+    r.inv.add(r.inv.makeStack('flare', 4));
+    if (!r.inv.thrown) r.inv.refillThrowSlot();
+    const slot = r.inv.thrown!;
+    expect(slot.itemId).toBe(ACID_GRENADE);
+    r.frame({press: true, down: true});
+    expect(r.readied()).toBe(ACID_GRENADE);
+    for (let i = 0; i < 20; i++) r.frame({down: true});
+    expect([slot.count, r.sys.canisters.length]).toEqual([5, 0]); // nothing spent while readied
+    r.frame();
+    expect([slot.count, r.sys.canisters.length, r.sys.canisters[0]?.itemId, r.fl.flares.length, r.inv.count('flare')]).toEqual([4, 1, ACID_GRENADE, 0, 4]);
+    expect(r.inv.invariants()).toEqual([]);
+  });
+
+  it('a click with a lure grenade in the hand throws THAT lure (the held stack), and the hold keeps its item if the slot changes', () => {
+    const r = rig();
+    expect(r.inv.take(LURE_GRENADE, 3)).toBe(3);
+    r.inv.set({bar: 'hotbar', index: 2}, r.inv.makeStack(LURE_GRENADE, 3));
+    r.inv.select(2);
+    expect(r.inv.selectedStack()!.itemId).toBe(LURE_GRENADE);
+    r.frame({click: true, mouse: true});
+    expect([r.hold.source, r.readied()]).toEqual(['mouse', LURE_GRENADE]);
+    r.frame({mouse: true});
+    r.frame({press: true, mouse: true}); // (a G press mid-hold never re-targets: the readied lure stays the throw)
+    expect(r.readied()).toBe(LURE_GRENADE);
+    r.frame();
+    expect([r.sys.canisters.length, r.sys.canisters[0]?.itemId, r.inv.count(LURE_GRENADE), r.inv.count(ACID_GRENADE)]).toEqual([1, LURE_GRENADE, 2, 5]);
+  });
+
+  it('the refusal is the item\'s own system\'s: three acid pools refuse acid (nothing spent), never a lure or a flare', () => {
+    const r = rig();
+    if (!r.inv.thrown) r.inv.refillThrowSlot();
+    for (let i = 0; i < ACID.maxPools; i++) {
+      expect(r.toss(ACID_GRENADE).ok).toBe(true);
+      for (let k = 0; k < Math.round(GRENADE.cooldown / DT) + 1; k++) r.frame();
+    }
+    const n = r.inv.count(ACID_GRENADE);
+    r.frame({press: true, down: true});
+    r.frame();
+    expect(r.events).toContain('refuse:cap');
+    expect(r.inv.count(ACID_GRENADE)).toBe(n);
+    // the grenades gone, flares in the slot: the acid cap does not apply to them
+    r.inv.take(ACID_GRENADE, n);
+    r.inv.take(LURE_GRENADE, 3);
+    r.inv.add(r.inv.makeStack('flare', 2));
+    expect(r.inv.refillThrowSlot()).toBe(true);
+    expect(r.inv.thrown?.itemId).toBe('flare');
+    r.events.length = 0;
+    r.frame({press: true, down: true});
+    expect([r.events, r.readied()]).toEqual([['ready'], 'flare']); // (readied, not refused: its release is the flare's own throw)
   });
 });
 
