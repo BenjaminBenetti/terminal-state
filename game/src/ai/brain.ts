@@ -28,6 +28,7 @@ import type {Waypoint} from '../gen/grid';
 import {CLIMB, climbDuration, ladderClimbPath, sampleClimb, type ClimbPath, type Ladder, type Vec3} from '../gen/traversal';
 import type {LightSource, LightSourceKind} from '../world/lightSources';
 import {LURE, perceiveLight, type LurePart, type LureSighting, type SeePoint} from './lightLure';
+import type {CrawlWorld} from './bbSurface';
 import {ATRIUM_CHASE} from './chaseShare'; // Task track3-eaton-centre-20261031 (lane HORDE, atrium AI)
 import {SPRINTER, isSprinter} from './sprinter'; // Task studio-sprinter-zombies-20261112-033210-01
 
@@ -181,6 +182,14 @@ export interface BrainWorld {
    * other brain calls it; it is not sight (nothing reads it between screams).
    */
   echo?(x: number, y: number, z: number, range: number): {x: number; z: number; y: number} | null;
+  /**
+   * Task studio-bb-production-20261112-234540-01: the level's solid geometry for BB's surface locomotion and leap (ai/bbSurface.ts
+   * CrawlWorld: rays against walls / floors / ceilings / solid props, free bands, standable floors, 3D sight). Absent: BB stays on
+   * the floor (nothing to climb). No other brain reads it.
+   */
+  crawl?: CrawlWorld;
+  /** (BB) The player's eye height (world y): what a 3D sight line and a leap aim at. Absent: `py` + 1.62 (standing). */
+  pEye?: number;
 }
 
 /** (lane BEER) The detection factor in use: a finite positive BrainWorld.detect, else 1. */

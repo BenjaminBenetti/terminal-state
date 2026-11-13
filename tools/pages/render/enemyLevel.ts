@@ -249,10 +249,12 @@ function rosterSection(es: EnemySite, level: EnemyLevelInfo, p: string): string 
     className: 'rows',
   });
   const rolled = fams.filter(f => rosterRow(level, f.id).rolled);
+  // task studio-bb-production-20261112-234540-01: the rolled families the pass places last (RosterFamilyInfo.last)
+  const placedLast = rolled.filter(f => rule(f.id).last);
   const policies = rolled.length
     ? `<h3>How a family this level holds is placed</h3>
 <ul>${rolled.map(f => `<li><strong>${esc(f.label)}</strong> (${esc(rosterPlaceLabel(rule(f.id).place ?? ''))}). ${prose(rule(f.id).placement)} <a href="${esc(href(p, `${ENEMIES_FAMILIES}#${rosterAnchor(f.id)}`))}">Its rule</a>.</li>`).join('\n')}</ul>
-<p>Order: ${R.order.filter(id => rolled.some(f => f.id === id)).map(id => esc(familyLabel(es, id))).join(', then ')} — the most constrained first, each on the ordinary zombie slots still left.</p>`
+<p>Order: ${R.order.filter(id => rolled.some(f => f.id === id)).map(id => esc(familyLabel(es, id))).join(', then ')} — the most constrained first${placedLast.length ? ` (${placedLast.map(f => esc(f.label)).join(', ')} last: added in a later roster version, it takes only slots the others left)` : ''}, each on the ordinary zombie slots still left.</p>`
     : '';
   const c = lr.census;
   let census: string;

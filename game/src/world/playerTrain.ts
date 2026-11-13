@@ -464,7 +464,7 @@ export interface TrainHost {
   /** Task train-shell-followup: bullet hits offered before the damage system (Game.bulletHitHandlers) + the impact effects. */
   bulletHitHandlers?: ((wh: never, point: THREE.Vector3, dir: THREE.Vector3, shot: number, damage: number) => boolean)[];
   fx?: {impact(pos: THREE.Vector3, normal: THREE.Vector3, surface: 'glass', opts?: {decal?: boolean; chips?: number}): void};
-  zombies: readonly {brain: {x: number; z: number; y: number; alive: boolean; stats: {radius: number}}; ragdolled?: boolean}[];
+  zombies: readonly {brain: {x: number; z: number; y: number; alive: boolean; climbing?: boolean; stats: {radius: number}}; ragdolled?: boolean; placesRoot?: boolean}[];
   levels: Levels;
   layout: StationLayout;
   propIndex: PropIndex;
@@ -828,7 +828,8 @@ export class PlayerTrainRuntime {
     const playerNear = P.alive && near(P.x, P.z);
     const bodies = this.nearBodies;
     bodies.length = 0;
-    for (const z of h.zombies) { const b = z.brain; if (b.alive && !z.ragdolled && near(b.x, b.z)) bodies.push(b); }
+    // (task studio-bb-production-20261112-234540-01: a BB on a wall / ceiling / in the air is not a body in a doorway — its `y` is the floor below it)
+    for (const z of h.zombies) { const b = z.brain; if (b.alive && !z.ragdolled && !(z.placesRoot && b.climbing) && near(b.x, b.z)) bodies.push(b); }
     let moved = false;
     for (const d of t.doors) {
       const dd = d.col.door;

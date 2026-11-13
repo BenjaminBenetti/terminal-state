@@ -308,7 +308,8 @@ describe('mall spawn profile', () => {
     expect(H.placement).toBe(MALL_HORDE_RULES.placement);
     expect(H.placement).toMatchObject({startM: 45, routeMPerMember: 18, startClearM: 28});
     // round 4 (lane FAMILY): + strainer 0; task studio-screacher-production-20261110-221858-01: + screacher 0 (roster-only: never a horde member)
-    expect(Object.fromEntries(H.families)).toEqual({zombie: 1, blightbelly: 0, siren: 0, ratdog: 0, strainer: 0, screacher: 0});
+    // task studio-bb-production-20261112-234540-01: + bb 0 (roster-only, and a forbidden horde family: never a horde member)
+    expect(Object.fromEntries(H.families)).toEqual({zombie: 1, blightbelly: 0, siren: 0, ratdog: 0, strainer: 0, screacher: 0, bb: 0});
   });
 
   it('validation enforces the Siren / spacing / horde / budget semantics', () => {
@@ -516,7 +517,8 @@ describe('reference coverage (the generated pages document the mall automaticall
     expect(m.pool.eligibility[0].criteria.join(' ')).toMatch(new RegExp(`${MALL_SIREN_SPACING.spacingM} m`));
     expect(m.knobs.find(k => k.what === 'spacing (siren, m)')!.value).toBe(MALL_SIREN_SPACING.spacingM);
     // (round 4, lane FAMILY: + strainer 0; task studio-screacher-production-20261110-221858-01: + the roster-only screacher 0)
-    expect(m.horde!.pool.rows.map(x => [x.family, x.weight])).toEqual([['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0], ['strainer', 0], ['screacher', 0]]);
+    // (task studio-bb-production-20261112-234540-01: + the roster-only bb 0)
+    expect(m.horde!.pool.rows.map(x => [x.family, x.weight])).toEqual([['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0], ['strainer', 0], ['screacher', 0], ['bb', 0]]);
     expect(m.horde!.semantics.join(' ')).toMatch(new RegExp(`'${HORDE_CONTEXT}'`));
     expect(m.horde!.size).toMatchObject({lo: 5, hi: 20});
     expect(m.budgets!.ambient.total).toBe(S.budgets!.ambient.total);

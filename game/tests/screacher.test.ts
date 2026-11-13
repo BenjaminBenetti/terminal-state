@@ -71,8 +71,9 @@ function syntheticScreacher(variant = 'sc01', extras: Record<string, unknown> = 
 const zombieStandIn = (): EnemyActor => ({brain: new ZombieBrain('shambler', 0, 0, 0), stand: 'zombie'}) as unknown as EnemyActor;
 
 describe('Screacher: the family and its four variants (one enemy type)', () => {
-  it('registered last; one archetype (the user\'s name, spelled "Screacher"); four approved bodies, the same stats', () => {
-    expect(ENEMY_FAMILY_IDS[ENEMY_FAMILY_IDS.length - 1]).toBe('screacher');
+  it('registered after the five older families; one archetype (the user\'s name, spelled "Screacher"); four approved bodies, the same stats', () => {
+    // (it was appended last; task studio-bb-production-20261112-234540-01 appended BB after it — the Screacher is still the sixth family, after the same five)
+    expect(ENEMY_FAMILY_IDS.slice(5)).toEqual(['screacher', 'bb']);
     expect(Object.keys(ENEMY_ARCHETYPES)).toEqual([...ENEMY_FAMILY_IDS]);
     const def = ENEMY_ARCHETYPES.screacher;
     expect(def).toMatchObject({id: 'screacher', label: 'Screacher', model: null, climbsLadders: false, voiceHeight: SCREACHER_VOICE_Y});
@@ -131,7 +132,8 @@ describe('Screacher: the family and its four variants (one enemy type)', () => {
   });
 
   it('the game treats its hit as a standing humanoid claw hit (attacker "screacher"), never a low creature bite', () => {
-    expect(src('game.ts')).toMatch(/const claw = archetypeOf\(z\) === 'siren' \|\| archetypeOf\(z\) === 'blightbelly' \|\| archetypeOf\(z\) === 'strainer' \|\| archetypeOf\(z\) === 'screacher';/);
+    // (task studio-bb-production-20261112-234540-01: BB's pounce joined the list after it, so the line no longer ends at the Screacher)
+    expect(src('game.ts')).toMatch(/const claw = archetypeOf\(z\) === 'siren' \|\| archetypeOf\(z\) === 'blightbelly' \|\| archetypeOf\(z\) === 'strainer' \|\| archetypeOf\(z\) === 'screacher'(?: \|\| archetypeOf\(z\) === '\w+')*;/);
   });
 });
 

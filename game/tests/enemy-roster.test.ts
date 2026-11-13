@@ -26,7 +26,7 @@ const arch = (z: ZombieSpawn): EnemyFamilyId => z.archetype ?? 'zombie';
 const countOf = (l: {zombies: ZombieSpawn[]}, f: EnemyFamilyId): number => l.zombies.filter(z => arch(z) === f).length;
 
 describe('seeded roster: the table and the rolls (pure)', () => {
-  it('every registered family decides: zombie = baseline; the user\'s rates for the rest; the Screacher is roster-only (weight 0 in every pool)', () => {
+  it('every registered family decides: zombie = baseline; the user\'s rates for the rest; the Screacher and BB are roster-only (weight 0 in every pool)', () => {
     expect(Object.keys(FAMILY_ROSTER)).toEqual([...ENEMY_FAMILY_IDS]);
     expect(FAMILY_ROSTER.zombie.mode).toBe('baseline');
     const R = (f: EnemyFamilyId, l: LevelId) => rosterRate(f, l);
@@ -36,10 +36,11 @@ describe('seeded roster: the table and the rolls (pure)', () => {
     }
     for (const f of ENEMY_FAMILY_IDS) expect(rosterRate(f, 'market')).toBe(0);
     expect(ZOMBIE_FREE_LEVELS).toEqual(['market']);
-    expect(ROSTER_ONLY_FAMILIES).toEqual(['screacher']);
+    // (+ 'bb', task studio-bb-production-20261112-234540-01: the second roster-only family — its own rule and rate in tests/bb-roster.test.ts)
+    expect(ROSTER_ONLY_FAMILIES).toEqual(['screacher', 'bb']);
     for (const p of Object.values(SPAWN_PROFILES)) {
       const pools = [p.families, ...Object.values(p.contexts).map(c => c?.families).filter(Boolean), ...(p.horde ? [p.horde.families] : [])];
-      for (const pool of pools) expect(pool!.find(r => r[0] === 'screacher')?.[1], `${p.id}: screacher weight`).toBe(0);
+      for (const pool of pools) for (const f of ROSTER_ONLY_FAMILIES) expect(pool!.find(r => r[0] === f)?.[1], `${p.id}: ${f} weight`).toBe(0);
       expect(validateSpawnProfile(p)).toEqual([]);
     }
     // a profile that gives the roster-only family weight is rejected
@@ -73,7 +74,7 @@ describe('seeded roster: the table and the rolls (pure)', () => {
   });
 
   it('the family rolls are independent of one another (joint frequencies = products, 20,000 seeds)', () => {
-    const N = 20000, fams: EnemyFamilyId[] = ['screacher', 'blightbelly', 'ratdog', 'siren', 'strainer'];
+    const N = 20000, fams: EnemyFamilyId[] = ['screacher', 'blightbelly', 'ratdog', 'siren', 'strainer', 'bb'];
     for (let a = 0; a < fams.length; a++) for (let b = a + 1; b < fams.length; b++) {
       let both = 0;
       for (let s = 1; s <= N; s++) { const seed = s * 2246822519 >>> 0; if (familyInRoster(fams[a], 'office', seed) && familyInRoster(fams[b], 'office', seed)) both++; }
@@ -115,6 +116,7 @@ describe('seeded roster: placement policies (synthetic levels: the pass itself, 
       for (const p of mine) for (const q of mine) if (p !== q) expect(Math.hypot(p.x - q.x, p.z - q.z)).toBeGreaterThanOrEqual(14);
       // a converted slot was an ordinary zombie — as rolled, or a family this level's roster excludes (cleared to a zombie first)
       b.zombies.forEach((z, i) => {
+        if (arch(z) === 'bb') return; // (roster version 3: a BB carries its own look, placed after the Screacher — tests/bb-roster.test.ts)
         if (arch(z) !== 'screacher') { expect(z.variant).toBeUndefined(); return; }
         const was = arch(a.zombies[i]);
         expect(was === 'zombie' || rep.families[was]?.present === false, `slot ${i} was ${was}`).toBe(true);
@@ -279,17 +281,20 @@ describe('seeded roster: real levels through the registry', () => {
 describe('seeded roster: the version pin (saves)', () => {
   it('rosterVersionFor: a recorded version wins; visited without a record = 0 (before the roster); never entered = current', () => {
     // (2 since task studio-sprinter-zombies-20261112-033210-01: version 1's families + the sprinters; a station recorded at 1 stays at 1)
-    expect(ROSTER_VERSION).toBe(2);
-    expect(rosterVersionFor(undefined)).toBe(2);
-    expect(rosterVersionFor({visits: 0, lanes: {}})).toBe(2);
+    // (3 since task studio-bb-production-20261112-234540-01: version 2 + BB, placed last; a station recorded at 2 or 1 stays there —
+    // tests/bb-roster.test.ts)
+    expect(ROSTER_VERSION).toBe(3);
+    expect(rosterVersionFor(undefined)).toBe(3);
+    expect(rosterVersionFor({visits: 0, lanes: {}})).toBe(3);
     expect(rosterVersionFor({visits: 3, lanes: {}})).toBe(0);
     expect(rosterVersionFor({visits: 3, lanes: {[ROSTER_LANE]: {v: 1}}})).toBe(1);
     expect(rosterVersionFor({visits: 3, lanes: {[ROSTER_LANE]: {v: 2}}})).toBe(2);
+    expect(rosterVersionFor({visits: 3, lanes: {[ROSTER_LANE]: {v: 3}}})).toBe(3);
     expect(rosterVersionFor({visits: 0, lanes: {[ROSTER_LANE]: {v: 0}}})).toBe(0);
     // a damaged / future record falls back to the visits rule
     expect(rosterVersionFor({visits: 2, lanes: {[ROSTER_LANE]: {v: 99}}})).toBe(0);
-    expect(rosterVersionFor({visits: 0, lanes: {[ROSTER_LANE]: {v: -1}}})).toBe(2);
-    expect(rosterVersionFor({visits: 0, lanes: {[ROSTER_LANE]: 'x'}})).toBe(2);
+    expect(rosterVersionFor({visits: 0, lanes: {[ROSTER_LANE]: {v: -1}}})).toBe(3);
+    expect(rosterVersionFor({visits: 0, lanes: {[ROSTER_LANE]: 'x'}})).toBe(3);
   });
 
   it('a campaign: an old visited station keeps version 0 (its enemies exact), a new one records the current version on its first build', () => {

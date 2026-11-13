@@ -24,6 +24,9 @@ export const CORPSE_TRAITS: Record<EnemyArchetypeId, CorpseTrait> = {
   ratdog: {undead: false, humanoid: false, massKg: 25, note: 'tunnel scavenger animal: not undead, not a humanoid body'},
   strainer: {undead: true, humanoid: true, massKg: 90, note: 'tall clawed infected on a humanoid body plan'},
   screacher: {undead: true, humanoid: true, massKg: 75, note: 'headless blind infected (four bodies, one type) on the humanoid rig'},
+  // task studio-bb-production-20261112-234540-01: BB is undead, but its body is a knee-high crawler that moves on all fours — not the adult
+  // body plan the over-the-shoulder carry and the chipper feed are built for. Recorded as not carriable; its presentation stays non-graphic.
+  bb: {undead: true, humanoid: false, massKg: 9, note: 'BB: small baby-like undead crawler (four looks, one type); not an adult humanoid body: never carried or fed to the chipper'},
 };
 
 /** A dead body of this archetype can be carried and fed to the train's chipper (undead + humanoid). Unknown ids: no. */

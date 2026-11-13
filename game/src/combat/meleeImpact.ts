@@ -21,6 +21,7 @@ export const MELEE_MASS: Readonly<Record<string, number>> = {
   siren: 1.1,
   strainer: 2.6, // tall, heavy body
   screacher: 0.9, // tall but gaunt: a lanky headless body is a little easier to shove than a zombie (task studio-screacher-production-20261110-221858-01)
+  bb: 0.4, // BB: a knee-high crawler, the lightest body — a heavy swing bats it away (capped at MELEE_KNOCK.maxM; task studio-bb-production-20261112-234540-01)
 };
 /** Protected bosses (their HP / rig / AI / sounds unchanged): they RESIST KNOCKDOWN — a token push, never a longer stagger. */
 export const MELEE_PROTECTED: ReadonlySet<string> = new Set(['strainer', 'siren']);

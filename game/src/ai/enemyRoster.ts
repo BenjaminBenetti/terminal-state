@@ -31,6 +31,11 @@
 // Task studio-sprinter-zombies-20261112-033210-01: version 2 = version 1's families, unchanged, + the SPRINTERS (ai/sprinter.ts): after the
 // families are placed, a seeded 10 % of the eligible ordinary zombies are tagged to run while they pursue. A station recorded at 1 (or 0)
 // regenerates exactly as before — no sprinters; only a station first built at 2 has them.
+//
+// Task studio-bb-production-20261112-234540-01: version 3 = version 2, unchanged, + BB (ai/bb.ts): 40 % of combat level maps hold 1-3 BBs
+// in place of ordinary ambient zombies. BB is placed LAST (RosterRule.last), after every earlier family has taken its slots, so each
+// earlier family stands exactly where version 2 put it; then the sprinters, as before, among the ordinary zombies that are left. A
+// station recorded at 2 or lower regenerates without BB: no visited station's enemies are rerolled.
 
 import {hashString, mulberry32} from '../core/rng';
 import type {Area, AreaKind, ZombieSpawn} from '../gen/stationTypes';
@@ -45,9 +50,10 @@ import {SPRINTER, applySprinters, type SprinterReport} from './sprinter';
 export const ROSTER_LANE = 'enemy.roster';
 /**
  * 0 = before the roster (no pass); 1 = the seeded roster: the Screacher's 40 % and the user-approved rates of the existing families
- * (one version: it was finalised before its first release); 2 = the same families + the sprinters (ai/sprinter.ts SPRINTER.since).
+ * (one version: it was finalised before its first release); 2 = the same families + the sprinters (ai/sprinter.ts SPRINTER.since);
+ * 3 = the same + BB (FAMILY_ROSTER.bb.since).
  */
-export const ROSTER_VERSION = 2;
+export const ROSTER_VERSION = 3;
 
 /** The roster version a station regenerates with, from its section memory (undefined = never touched). */
 export function rosterVersionFor(mem: {visits: number; lanes: Record<string, unknown>} | undefined): number {
@@ -108,11 +114,18 @@ export type RosterRule =
     /** Chance a generated level map contains the family at all; `levelRates` overrides it per level. */
     readonly rate: number;
     readonly levelRates?: Readonly<Partial<Record<LevelId, number>>>;
+    /**
+     * Placed AFTER every family without this flag, whatever its placement policy (ties in ENEMY_FAMILY_IDS order): a family added in a
+     * later roster version takes only the ordinary zombie slots the earlier families left, so their placement does not move.
+     */
+    readonly last?: true;
     readonly why: string;
   } & RosterPlacement);
 
 /** The Screacher's model variants: one enemy type, four approved looks (ai/screacher.ts SCREACHER_VARIANTS names them). */
 export const SCREACHER_VARIANT_IDS = ['sc01', 'sc02', 'sc03', 'sc04'] as const;
+/** BB's model variants: one enemy type, four approved looks — A Lullaby, B Binky, C Teddy, D Changeling (ai/bb.ts BB_VARIANTS). */
+export const BB_VARIANT_IDS = ['lullaby', 'binky', 'teddy', 'changeling'] as const;
 
 /**
  * THE ROSTER TABLE: one entry per registered family (Record<EnemyFamilyId, …> makes a new family decide). The rates are the user's:
@@ -125,6 +138,10 @@ export const SCREACHER_VARIANT_IDS = ['sc01', 'sc02', 'sc03', 'sc04'] as const;
  *    place of ambient zombies of the level's core contexts in a room-sized or larger area (never a closet, stair core, elevator or
  *    washroom; never a service annex — the Strainer's cramped ground —, the Bunker's damp zone, a horde member or an outfit zombie),
  *    14 m apart when the level allows it. The spawn's own placement already kept it off the arrival and off landings.
+ *  - BB 0.4 (roster version 3): 1-3 per selected level (1 in 35 %, 2 in 40 %, 3 in 25 % of the selected levels), its four looks dealt in
+ *    turn from a seeded start, in place of ordinary ambient zombies of the level's enclosed core contexts (it needs walls and ceilings:
+ *    never the open roof, a service annex, the damp zone, a closet, a stair core, an elevator or a washroom; never a horde member or
+ *    an outfit zombie), 9 m apart when the level allows it. Its roll is independent of the Screacher's. Placed last (`last`).
  */
 export const FAMILY_ROSTER: Readonly<Record<EnemyFamilyId, RosterRule>> = {
   zombie: {mode: 'baseline', why: 'the ordinary infected: always present, never rolled; every other family replaces ordinary zombie slots'},
@@ -148,6 +165,19 @@ export const FAMILY_ROSTER: Readonly<Record<EnemyFamilyId, RosterRule>> = {
     spacingM: 14,
     variants: SCREACHER_VARIANT_IDS,
     why: 'user: 40 % of generated levels contain Screachers at all (per level seed, deterministic); the others have none',
+  },
+  bb: {
+    mode: 'seeded', since: 3, key: 'bb', rate: 0.4, place: 'count', last: true,
+    counts: [[1, 0.35], [2, 0.4], [3, 0.25]],
+    slots: {
+      contexts: ['station', 'street', 'floor', 'pit', 'ring'],
+      excludeKinds: ['closet'],
+      excludeRooms: ['exit-stair', 'washroom', 'office-stair', 'stair-core', 'office-elevator', 'supply-closet', 'janitor-closet', 'electrical-closet'],
+      minSideCells: 5, minAreaCells: 60,
+    },
+    spacingM: 9,
+    variants: BB_VARIANT_IDS,
+    why: 'user: a deterministic 40 % of combat level maps hold BBs at all (never the Market), 1-3 of them from a shared pool of four looks',
   },
 };
 
@@ -224,6 +254,8 @@ function pickCount(rows: readonly (readonly [number, number])[], roll: number): 
  * context-locked one, the room-eligible one, the counted one, then the share top-ups (which may stand anywhere their pools allow).
  */
 export const ROSTER_PLACE_PRIORITY: Readonly<Record<RosterPlacement['place'], number>> = {'context-one': 0, 'eligible-min-one': 1, count: 2, 'share-topup': 3};
+/** The placement rank of a `last` family (RosterRule.last): after every policy above. */
+export const ROSTER_PLACE_LAST = 9;
 
 /** A family's share of a pool (0 for an empty pool). */
 function shareOf(pool: FamilyPool, family: EnemyFamilyId): number {
@@ -291,10 +323,9 @@ export function applyEnemyRoster(layout: RosterLayout, level: LevelId, levelSeed
   // PHASE 2 — the present families, the MOST CONSTRAINED FIRST (a family that may only stand in a few places claims its place before
   // the families that may stand anywhere): the context-locked one, the room-eligible one, the counted one, then the share top-ups.
   const PRIORITY = ROSTER_PLACE_PRIORITY;
-  const ordered = seededFamilies.map((f, k) => [f, k] as const).sort((a, b) => {
-    const pa = PRIORITY[(FAMILY_ROSTER[a[0]] as Extract<RosterRule, {mode: 'seeded'}>).place], pb = PRIORITY[(FAMILY_ROSTER[b[0]] as Extract<RosterRule, {mode: 'seeded'}>).place];
-    return pa - pb || a[1] - b[1];
-  }).map(r => r[0]);
+  // (a `last` family — one added in a later version — goes after all of them: the earlier families' placement does not move)
+  const prio = (f: EnemyFamilyId): number => { const r = FAMILY_ROSTER[f] as Extract<RosterRule, {mode: 'seeded'}>; return r.last ? ROSTER_PLACE_LAST : PRIORITY[r.place]; };
+  const ordered = seededFamilies.map((f, k) => [f, k] as const).sort((a, b) => prio(a[0]) - prio(b[0]) || a[1] - b[1]).map(r => r[0]);
   for (const family of ordered) {
     const rule = FAMILY_ROSTER[family] as Extract<RosterRule, {mode: 'seeded'}>;
     const rep = report.families[family]!;

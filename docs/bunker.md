@@ -133,6 +133,8 @@ The enemy count and every position are unchanged; only families change.
   have none.
 - **Blightbelly, rat/dog:** each in 60 % of level seeds, at least one there, topped up from the pool shares. **Screachers**
   (docs/screacher.md): 1–3 in 40 % of level seeds, in place of ordinary zombies of the storey runs.
+- **BBs** (docs/bb.md; Bunkers first built at roster version 3): 1–3 in 40 % of level seeds, an independent roll, likewise in
+  place of ordinary zombies of the storey runs. They are placed last, so the families above stand where they did before.
 
 **Census of the per-spawn roll, before the roster pass** (32 levels, seeds 4401 + k × 7919, `tests/bunker-spawns.test.ts`: a
 direct generator call, so no roster pass runs):

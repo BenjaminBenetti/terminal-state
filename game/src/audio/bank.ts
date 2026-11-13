@@ -25,6 +25,7 @@ import {CLIP_MANIFEST_GUN_VARIETY, GUN_VARIETY_CUES} from './manifest.gunVariety
 import {CLIP_MANIFEST_HEAD_HIT} from './manifest.headHit.generated'; // task studio-general-armor-20261107-231448-01: the head-hit skull crack // task skyways-destinations-20261106 (lane AUDIO): clock tick / chime, arcade, projector
 import {CLIP_MANIFEST_SCREACHER, SCREACHER_CUES} from './manifest.screacher.generated'; // task studio-screacher-production-20261110-221858-01 (lane AUDIO): the Screacher's voice (echo scream, shriek, wheeze, death)
 import {CLIP_MANIFEST_CHIPPER} from './manifest.chipper.generated'; // task studio-corpse-chipper-fuel-20261110-235304-01 (lane AUDIO): the train chipper set
+import {BB_VOICE_CUES, CLIP_MANIFEST_BB} from './manifest.bb.generated'; // task studio-bb-production-20261112-234540-01 (lane AUDIO): BB's voice (cackle, giggle, pounce squeal, hurt, death)
 
 /**
  * Runtime manifest: the iteration-05 bank plus the iteration-06 material-breaking cues
@@ -35,7 +36,7 @@ import {CLIP_MANIFEST_CHIPPER} from './manifest.chipper.generated'; // task stud
  * 20261101-201110-01 (lane AUDIO): + the Strainer's wet footfalls / arm swing / claw contact / hit squish (tools/audio-pipeline/
  * strainer-build.mjs; provenance derivatives/audio-strainer.json).
  */
-export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT, ...CLIP_MANIFEST_MARKET_BAR, ...CLIP_MANIFEST_GUN_VARIETY, ...CLIP_MANIFEST_SCREACHER, ...CLIP_MANIFEST_CHIPPER};
+export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT, ...CLIP_MANIFEST_MARKET_BAR, ...CLIP_MANIFEST_GUN_VARIETY, ...CLIP_MANIFEST_SCREACHER, ...CLIP_MANIFEST_CHIPPER, ...CLIP_MANIFEST_BB};
 
 /** Every cue the game can play, in decode-priority order (most frequent / important first). */
 export const CUES = [
@@ -61,6 +62,9 @@ export const CUES = [
   // voice out of its open throat — the echolocation scream (the tell of each echo pulse), the frenzy shriek (also its hurt, quieter),
   // the idle wheeze, the death gurgle.
   ...SCREACHER_CUES,
+  // Task studio-bb-production-20261112-234540-01 (lane AUDIO, tools/audio-pipeline/bb-build.mjs): BB's voice, one laugh set for all four
+  // looks — the cackle when it notices the player (the tell), the quiet giggle, the pounce squeal, the hurt squawk, the wind-down death.
+  ...BB_VOICE_CUES,
   // Task reactor-build-20261101 (primary, tools/audio-pipeline/reactor-build.mjs): the Reactor's machines — auxiliary generator start +
   // running loop, extraction-fan loop, switchgear breaker / fuse, coolant valve / pump, the core's startup swell + running hum loop.
   'reactorGeneratorStart', 'reactorGeneratorLoop', 'reactorFanLoop', 'reactorBreaker', 'reactorFuse', 'reactorValve', 'reactorPump', 'reactorStartup', 'reactorHum',
