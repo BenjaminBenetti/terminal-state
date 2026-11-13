@@ -440,6 +440,41 @@ describe('acid melt: the real station and the parked train', () => {
     expect(c.pickups.list.filter(p => p.stack.uid === st.uid)).toHaveLength(1);
   }, 60000);
 
+  it('decor on a counter: alone it leaves its salvage ON the counter (never inside it); the counter melting takes its static decor with it', () => {
+    const {c, w} = station();
+    const di = w.ph.dynamicItems;
+    const pairs: {base: PropPlacement; top: PropPlacement}[] = [];
+    for (const top of w.L.props) {
+      if (top.h <= 0.02 || di.isDynamicProp(top) || c.melt.protection(top) !== null) continue;
+      const base = w.L.props.find(b => b !== top && b.h > 0.3 && Math.abs(top.y - (b.y + b.h)) < 0.05 && Math.abs(top.x - b.x) < b.hx && Math.abs(top.z - b.z) < b.hz && c.melt.protection(b) === null && !di.isDynamicProp(b));
+      if (base && !pairs.some(q => q.base === base)) pairs.push({base, top});
+    }
+    expect(pairs.length).toBeGreaterThanOrEqual(2);
+    const [a, b] = pairs;
+    // alone: the decor goes, the counter stays; the salvage lies on the counter's top inside the decor's footprint
+    const ra = c.melt.atPoint(a.top.x, a.top.y + a.top.h, a.top.z, 0.05)!;
+    expect(propOf(w, ra)).toBe(a.top);
+    expect(c.melt.start(ra)).toBe(true);
+    step(c, MELT.seconds + 0.1);
+    const s1 = salvageOf(c);
+    expect(s1).toHaveLength(1);
+    expect(s1[0].y).toBeCloseTo(a.base.y + a.base.h + 0.004, 3);
+    expect(Math.abs(s1[0].x - a.top.x) <= a.top.hx + 0.01 && Math.abs(s1[0].z - a.top.z) <= a.top.hz + 0.01).toBe(true);
+    expect(a.base.h).toBeGreaterThan(0.3);
+    expect(c.melt.protection(a.base)).toBeNull();
+    // the counter: its static decor dissolves with it (each its own salvage), both persisted
+    const rb = refOf(c, w, b.base);
+    expect(c.melt.start(rb)).toBe(true);
+    expect((c.melt.qa() as {melting: {members: string[]}[]}).melting[0].members).toEqual(expect.arrayContaining([b.base.kind, b.top.kind]));
+    step(c, MELT.seconds + 0.1);
+    expect(b.base.h).toBe(0);
+    expect(b.top.h).toBe(0);
+    expect(salvageOf(c)).toHaveLength(3);
+    const gone = acidMeltedOf(c.h.run.laneStore(ACID_MELT_LANE, w.key)).gone.map(g => g.i);
+    for (const p of [a.top, b.base, b.top]) expect(gone).toContain(w.L.props.indexOf(p));
+    expect(gone).not.toContain(w.L.props.indexOf(a.base));
+  }, 60000);
+
   it('a loose prop melts where it lies (its body withdrawn), salvage at its new place', () => {
     const {c, w} = station();
     const B = w.L.props.find(p => c.melt.protection(p) === null && w.ph.dynamicItems.isDynamicProp(p) && p.h > 0.3 && instDrawn(w, p) && lone(w, p))!;

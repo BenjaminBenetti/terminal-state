@@ -182,8 +182,8 @@ export interface AcidMeltHost {
 // ---------------------------------------------------------------------------------------------------------------------
 
 type Kind = 'prop' | 'unit' | 'cart';
-/** idle (meltable, untouched) / melting (started: queued or dissolving) / done (gone for good) / protected (never). */
-type State = 'idle' | 'melting' | 'done' | 'protected';
+/** idle (untouched: whether it may melt is protection(), checked live) / melting (started: queued or dissolving) / done (gone for good). */
+type State = 'idle' | 'melting' | 'done';
 
 class Ref implements MeltRef {
   x = 0; y = 0; z = 0;
@@ -292,7 +292,9 @@ interface Here {
   buckets: Map<number, PropPlacement[]> | null;
   movers: PropPlacement[];
   maxHalf: number;
-  /** The prop index the candidates were collected against (a stall / train rebuild of it re-collects). */
+  /** layout.props.length when the candidates were collected (placements appended later: collected again). */
+  collected: number;
+  /** The live walk index's props and their set (inWalkIndex; a stall / train rebuild of the index is a new array: a new set). */
   indexed: readonly PropPlacement[] | null;
   indexSet: Set<PropPlacement> | null;
 }
@@ -409,7 +411,7 @@ export class AcidMelt {
       this.vendorOf.set(L, new Set());
     }
     const key = this.keyOf.get(L) ?? {...h.run.current};
-    this.here = {key, layout: L, gen, rec: acidMeltedOf(h.run.laneStore(ACID_MELT_LANE, key)), buckets: null, movers: [], maxHalf: 0, indexed: null, indexSet: null};
+    this.here = {key, layout: L, gen, rec: acidMeltedOf(h.run.laneStore(ACID_MELT_LANE, key)), buckets: null, movers: [], maxHalf: 0, collected: -1, indexed: null, indexSet: null};
     // props melted earlier: gone for good (render retired — instances hidden, merged triangles cut —, no holder, no collider, no sight)
     for (const q of this.meltedOf.get(L) ?? []) {
       h.damage.props.retire(q, L.props.indexOf(q), false);
@@ -438,16 +440,22 @@ export class AcidMelt {
     const w = this.here;
     if (!w) return 'not a placement';
     if (prop.cargoGone) return 'gone';
-    const boxes = this.host.trainRuntime?.train?.layoutBoxes;
-    if (boxes && boxes.includes(prop)) return 'train structure';
-    let p = this.protections.get(prop);
-    if (p === undefined) { p = this.staticProtection(prop, w); this.protections.set(prop, p); }
+    const p = this.staticOf(prop, w);
     if (p !== null) return p;
     if (!this.inWalkIndex(prop, w)) return 'collision owned elsewhere';
     return null;
   }
 
+  /** The permanent part of protection() (traits / ownership that cannot change within one world), cached per world. */
+  private staticOf(prop: PropPlacement, w: Here): MeltProtection | null {
+    let p = this.protections.get(prop);
+    if (p === undefined) { p = this.staticProtection(prop, w); this.protections.set(prop, p); }
+    return p;
+  }
+
   private staticProtection(prop: PropPlacement, w: Here): MeltProtection | null {
+    // (the train's own boxes are never generated placements either: named for what they are; the cache lasts one world, as they do)
+    if (this.host.trainRuntime?.train?.layoutBoxes.includes(prop)) return 'train structure';
     if (!(w.gen.has(prop) || (!!prop.cargo && !prop.cargo.includes('/')))) return 'not a placement';
     const row = PROP_PHYSICS_AUDIT[prop.kind];
     if (!row) return 'unclassified';
@@ -499,7 +507,7 @@ export class AcidMelt {
     if (t) return t;
     const id = this.propId(prop);
     if (!id) return null;
-    t = {ref: new Ref(id, meltLabel(prop.kind)), kind: 'prop', prop, uid: null, exposure: 0, state: this.protection(prop) ? 'protected' : 'idle', melt: null};
+    t = {ref: new Ref(id, meltLabel(prop.kind)), kind: 'prop', prop, uid: null, exposure: 0, state: 'idle', melt: null}; // (protection is checked live: inDisc / atPoint / standing)
     this.targets.set(id, t);
     this.byProp.set(prop, t);
     return t;
@@ -554,16 +562,19 @@ export class AcidMelt {
     return t.ref;
   }
 
-  /** The static-position candidate buckets + the movers (collected once per world, again after a walk-index rebuild). */
+  /**
+   * The static-position candidate buckets + the movers: every placement whose permanent traits allow a melt (live states — gone, the
+   * walk index — are checked per query: a prop the train withdrew on a departure that was then refused is a candidate again). Collected
+   * once per world, again when placements were appended (the layout only grows after its build).
+   */
   private collect(w: Here): void {
-    const props = this.host.propIndex?.props ?? null;
-    if (w.buckets && w.indexed === (props === w.layout.props ? null : props)) return;
+    if (w.buckets && w.collected === w.layout.props.length) return;
     w.buckets = new Map();
     w.movers = [];
     w.maxHalf = 0;
-    if (props && props !== w.layout.props) { w.indexed = props; w.indexSet = new Set(props); } else { w.indexed = null; w.indexSet = null; }
+    w.collected = w.layout.props.length;
     for (const p of w.layout.props) {
-      if (this.protection(p) !== null) continue;
+      if (this.staticOf(p, w) !== null) continue;
       if (p.cargo || dynamicKind(p.kind)) { w.movers.push(p); continue; }
       const k = (Math.floor(p.z / BUCKET) + 4096) * 8192 + (Math.floor(p.x / BUCKET) + 4096);
       let l = w.buckets.get(k);
@@ -630,36 +641,50 @@ export class AcidMelt {
   /** The eligible meltable (idle or already melting) whose surface is at / within `r` of a world point — the canister sticks to it. */
   atPoint(x: number, y: number, z: number, r: number = MELT.reach): MeltRef | null {
     if (!this.here) return null;
+    const dm = this.host.physics.dynamicItems;
     let best: Target | null = null, bd = r;
-    const consider = (t: Target, d: number) => { if (d <= bd) { bd = d; best = t; } };
     for (const p of this.near(x, z, r, this.nearList)) {
       const t = this.byProp.get(p) ?? this.propTarget(p);
-      if (!t || (t.state !== 'idle' && t.state !== 'melting')) continue;
-      if (t.state === 'melting') { if (t.melt?.box) consider(t, boxDist(t.melt.box, x, y, z)); continue; }
-      if (this.protection(p) !== null) continue;
-      const dm = this.host.physics.dynamicItems;
-      if (dm.propMatrix(p, M)) { // a loose prop: the point in its object frame vs its (oriented) box
+      if (!t || t.state === 'done') continue;
+      let d: number;
+      if (t.melt && t.melt.age >= 0) d = boxDist(t.melt.box, x, y, z); // (dissolving: its copy's box)
+      else if (this.protection(p) !== null) continue;
+      else if (dm.propMatrix(p, M)) { // a loose prop: the point in its object frame vs its (oriented) box
         const rh = dm.restHeight(p), q = Math.round(p.rot / (Math.PI / 2)) & 1, hx = q ? p.hz : p.hx, hz = q ? p.hx : p.hz;
         V.set(x, y, z).applyMatrix4(M2.copy(M).invert());
-        consider(t, Math.hypot(Math.max(Math.abs(V.x) - hx, 0), Math.max(-V.y, 0, V.y - rh), Math.max(Math.abs(V.z) - hz, 0)));
-      } else if (p.h > 0.02 && this.boxOf(t, B)) consider(t, boxDist(B, x, y, z));
+        d = Math.hypot(Math.max(Math.abs(V.x) - hx, 0), Math.max(-V.y, 0, V.y - rh), Math.max(Math.abs(V.z) - hz, 0));
+      } else if (this.boxOf(t, B)) d = boxDist(B, x, y, z);
+      else continue;
+      if (d <= bd) { bd = d; best = t; }
     }
+    // units / carts standing (idle or queued): their cylinders; dissolving ones (out of their systems): their copies' boxes
     for (const u of this.host.trainEquipment?.units() ?? []) {
       if (u.mode !== 'world') continue;
       const t = this.thingTarget('unit', u.uid, u.def.name);
-      if (t.state === 'idle' && this.boxOf(t, B)) consider(t, this.cylDist(u.body.x, u.body.z, B, x, y, z));
-      else if (t.state === 'melting' && t.melt) consider(t, boxDist(t.melt.box, x, y, z));
+      if (t.state === 'done' || !this.boxOf(t, B)) continue;
+      const d = this.cylDist(u.body.x, u.body.z, B, x, y, z);
+      if (d <= bd) { bd = d; best = t; }
     }
     for (const c of this.host.fuelCarts?.bodies() ?? []) {
       if (c.mode !== 'world') continue;
       const t = this.thingTarget('cart', c.uid, 'fuel cart');
-      if (t.state === 'idle' && this.boxOf(t, B)) consider(t, this.cylDist(c.body.x, c.body.z, B, x, y, z));
+      if (t.state === 'done' || !this.boxOf(t, B)) continue;
+      const d = this.cylDist(c.body.x, c.body.z, B, x, y, z);
+      if (d <= bd) { bd = d; best = t; }
     }
-    for (const m of this.melts) if (m.t.kind !== 'prop' && !m.done) consider(m.t, boxDist(m.box, x, y, z)); // (a unit / cart dissolving)
+    for (const m of this.melts) {
+      if (m.t.kind === 'prop' || m.done || m.age < 0) continue;
+      const d = boxDist(m.box, x, y, z);
+      if (d <= bd) { bd = d; best = m.t; }
+    }
     const t = best as Target | null;
-    if (!t) return null;
-    if (t.state === 'melting' && t.melt) return this.place(t, t.melt.box);
-    return this.boxOf(t, B) ? this.place(t, B) : null;
+    return t && this.boxNow(t, B) ? this.place(t, B) : null;
+  }
+
+  /** The thing's box now: a dissolving one's copy, else as it stands (boxOf). */
+  private boxNow(t: Target, out: THREE.Box3): boolean {
+    if (t.melt && t.melt.age >= 0) { out.copy(t.melt.box); return true; }
+    return this.boxOf(t, out);
   }
 
   private cylDist(cx: number, cz: number, b: THREE.Box3, x: number, y: number, z: number): number {
@@ -667,15 +692,16 @@ export class AcidMelt {
     return Math.hypot(Math.max(Math.hypot(x - cx, z - cz) - r, 0), Math.max(b.min.y - y, 0, y - b.max.y));
   }
 
+  /** The target of a ref this world handed out (by identity: a ref kept from another world names nothing here, whatever its key). */
   private targetOf(ref: MeltRef): Target | null {
     const t = this.targets.get(ref.key);
-    return t && t.ref === ref ? t : t ?? null;
+    return t && t.ref === ref ? t : null;
   }
 
   /** Pool contact for dt seconds; MELT.exposure of it starts the melt. Idempotent once melting; false = protected / gone. */
   expose(ref: MeltRef, dt: number): boolean {
     const t = this.targetOf(ref);
-    if (!t || t.state === 'done' || t.state === 'protected') return false;
+    if (!t || t.state === 'done') return false;
     if (t.state === 'melting') return true;
     if (!this.standing(t)) return false;
     t.exposure += Math.max(0, Number.isFinite(dt) ? dt : 0);
@@ -687,7 +713,7 @@ export class AcidMelt {
   /** Start melting now (the canister was stuck to it when it burst). True: melting (now or already); false: protected / gone. */
   start(ref: MeltRef): boolean {
     const t = this.targetOf(ref);
-    if (!t || t.state === 'done' || t.state === 'protected') return false;
+    if (!t || t.state === 'done') return false;
     if (t.state === 'melting') return true;
     if (!this.standing(t)) return false;
     this.queue(t);
@@ -696,23 +722,18 @@ export class AcidMelt {
     return true;
   }
 
-  /** True while that thing still exists in the world (idle and standing, or dissolving). */
+  /** True while that thing still exists in the world (standing — idle or waiting its turn — or dissolving). */
   alive(ref: MeltRef): boolean {
     const t = this.targetOf(ref);
-    if (!t || t.state === 'done' || t.state === 'protected') return false;
-    return t.state === 'melting' || this.standing(t);
+    if (!t || t.state === 'done') return false;
+    return (!!t.melt && t.melt.age >= 0) || this.standing(t);
   }
 
   /** Current world position of a ref (its base centre; loose props / units / carts move). False: gone. */
   where(ref: MeltRef, out: {x: number; y: number; z: number}): boolean {
-    const t = this.targetOf(ref);
-    if (!t || t.state === 'done' || t.state === 'protected') return false;
-    if (t.state === 'melting' && t.melt) {
-      const b = t.melt.box;
-      out.x = (b.min.x + b.max.x) / 2; out.y = b.min.y; out.z = (b.min.z + b.max.z) / 2;
-      return true;
-    }
-    if (!this.standing(t) || !this.boxOf(t, B)) return false;
+    if (!this.alive(ref)) return false;
+    const t = this.targetOf(ref)!;
+    if (!this.boxNow(t, B)) return false;
     out.x = (B.min.x + B.max.x) / 2; out.y = B.min.y; out.z = (B.min.z + B.max.z) / 2;
     return true;
   }
@@ -835,15 +856,19 @@ export class AcidMelt {
     const loose = new Map<PropPlacement, LooseLike>();
     if (list.some(p => di.propMatrix(p, M))) for (const lp of di.loose()) loose.set(lp.prop, lp);
     m.box.makeEmpty();
+    const looseMem = new Map<PropPlacement, Member>();
     for (const p of list) {
       const t = this.byProp.get(p) ?? this.propTarget(p)!;
       if (t !== m.t) { t.state = 'melting'; t.melt = m; this.counts.members++; }
       const idx = L.props.indexOf(p);
       const mem: Member = {t, prop: p, index: idx, gen: p.cargo ? undefined : this.here!.gen.get(p), box: new THREE.Box3(), lots: [], serial: -1};
-      const lp = loose.get(p);
+      const lp = loose.get(p), host = p.host !== undefined && ridesHost(p.kind) ? looseMem.get(L.props[p.host]) : undefined;
       if (lp) {
         obbBox(lp.matrix, lp.center, lp.half, mem.box);
         di.withdraw(p); // (its body out of the simulation: nothing pushes, captures or reclaims it while it dissolves)
+        looseMem.set(p, mem);
+      } else if (host) {
+        mem.box.copy(host.box); // (decor riding a loose host lies where the host lies: its placement is stale)
       } else {
         mem.box.min.set(p.x - p.hx, p.y, p.z - p.hz);
         mem.box.max.set(p.x + p.hx, p.y + Math.max(0.02, p.h), p.z + p.hz);
@@ -1072,13 +1097,24 @@ export class AcidMelt {
   }
   private readonly spot = {x: 0, y: 0, z: 0};
 
-  /** The floor under (x, z) for a thing whose base is at y0 (null: a wall / nothing within MELT.dropMax below). */
+  /**
+   * The surface under (x, z) for a thing whose base is at y0: the level's floor (null: a wall / nothing within MELT.dropMax below) or, when
+   * higher, the top of a standing prop the thing rested on (decor melted on a counter spills / salvages ON the counter — never into the
+   * counter's collider on the floor below it). A scan of the placements: a handful of spots per completed melt.
+   */
   private floorAt(x: number, z: number, y0: number): number | null {
     const L = this.host.levels;
     if (!L) return null;
     const s = L.supportAt(x, z, y0 + 0.05, MELT.stepMax);
     if (!s || !Number.isFinite(s.floor) || s.floor < y0 - MELT.dropMax || s.floor > y0 + MELT.stepMax) return null;
-    return s.floor;
+    let f = s.floor;
+    for (const q of this.here?.layout.props ?? []) {
+      if (q.h <= 0.02 || q.cargoGone || q.mounted) continue;
+      const top = q.y + q.h;
+      if (top <= f || top > y0 + 0.06 || Math.abs(x - q.x) > q.hx || Math.abs(z - q.z) > q.hz) continue;
+      f = top;
+    }
+    return f;
   }
 
   /** physics.propsChanged over a footprint (each static chunk it touches). */
