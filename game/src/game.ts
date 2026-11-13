@@ -82,7 +82,7 @@ import {LightSources} from './world/lightSources';
 import {PlayerLight, applyBatteryItem} from './player/flashlight'; // Iteration 12 (LIGHT): flashlight battery + body glow
 import {FlareSystem, throwOneFlare, type FlareSmokeHost} from './weapons/throwables'; // Iteration 12 (LIGHT): thrown road flares (grenade slot)
 import {FlareHold} from './weapons/flareHold'; // Iteration 15: hold to ready, release to throw
-import {GrenadeSystem, throwHoldTarget, throwOneGrenade, type AcidMeltLike} from './weapons/grenades'; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades
+import {GrenadeSystem, throwHoldTarget, throwOneGrenade} from './weapons/grenades'; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades
 import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifiers} from './player/modifiers'; // Iteration 16 (shared contract)
 import {incomingHit, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
 import {armorHit, armorPool} from './player/armor'; // task studio-general-armor-20261107-231448-01: the worn armour pool
@@ -206,6 +206,7 @@ import {installSentryTurret, type SentryTurretSystem} from './world/sentryTurret
 import {installItemScanner, type ItemScannerSystem} from './world/itemScanner'; // task train-crafting (lane SCANNER): the scanner's scope
 import {installTrainArmor, type TrainArmorSystem, type TrainUpgradesApi} from './world/trainArmor'; // task refinement-batch (lane ARMOR): the permanent train armour + the upgrades seam
 import {installTrainOnboarding, type TrainOnboarding} from './world/trainOnboarding'; // task first-player-onboarding: the train's seven 3D guide markers
+import {installAcidMelt, type AcidMelt} from './world/acidMelt'; // task studio-refinement-batch-20261113-035659-01 (lane MELT): acid melts world props
 import {OnboardingStore, browserOnboardingStorage} from './ui/onboardingStore'; // (the same task) the browser-global tutorial record
 import type {PropPlacement} from './gen/props';
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
@@ -470,6 +471,8 @@ export class Game {
   /** Task first-player-onboarding: the browser-global tutorial record (never in a save) and the train's first-player markers. */
   readonly onboarding: OnboardingStore;
   readonly trainOnboarding: TrainOnboarding;
+  /** Task studio-refinement-batch-20261113-035659-01 (lane MELT): acid melting world props (world/acidMelt.ts; the acid grenade's seam). */
+  acidMelt: AcidMelt | null = null;
   /** Task studio-survivor-market-20261108-005807-01 (lane TRADE): market trade (market/trade/tradeSystem.ts); since the rework Rail Ties are a physical item. */
   trade!: TradeSystem;
   /** Task studio-weapon-runtime-fix-20261110-022206-01: the delivery of the new weapons' lazily loaded models (world/weaponVarietyDelivery.ts). */
@@ -700,7 +703,7 @@ export class Game {
       hurt: z => enemyCues(z as unknown as EnemyActor).hurt(this.sfx, z as unknown as EnemyActor),
       playerBurn: () => this.hud.toast('Acid! Get out of the pool', true),
       playerHurt: amount => { this.hud.pain(amount); this.sfx.hurt(); }, // (no direction arc, no camera punch: it burns, it does not hit)
-      melt: () => (this as {acidMelt?: AcidMeltLike | null}).acidMelt ?? null, scents: () => this.scents, // (lane MELT: world/acidMelt.ts; lane LURE: ai/scentLure.ts)
+      melt: () => this.acidMelt, scents: () => this.scents, // (world/acidMelt.ts: what the acid may melt; ai/scentLure.ts: the lure's scent)
       levelAt: (x, z, y) => this.levels ? this.levels.levelAt(x, z, y) : 0,
       lineOfSight: (a, b) => !this.levels || this.levels.lineOfSight(a, b),
       noise: (x, y, z) => this.worldNoise(x, y, z, 14, 'impact'),
@@ -914,6 +917,8 @@ export class Game {
     this.onboarding = new OnboardingStore(browserOnboardingStorage());
     this.trainOnboarding = installTrainOnboarding(this, this.onboarding);
     hookName('trainOnboarding');
+    installAcidMelt(this); // task studio-refinement-batch-20261113-035659-01 (lane MELT): sets this.acidMelt; its own layout / section / frame hooks, warm pool 'acid-melt'
+    hookName('acidMelt');
     this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionModelKeys.push(skywaysKitchenModelKeysFor); // task studio-skyways-level-20261106-054448 (lane FOOD): the ramen restaurant's skyways-* models
     this.sectionModelKeys.push(skywaysAddonModelKeysFor); // task studio-skyways-level-20261106-054448 (lane ADDON): the add-on's skyways-* models
@@ -1623,6 +1628,7 @@ export class Game {
    */
   commitEndingSave(): CommitResult | null {
     if (!this.run.campaign) return null;
+    this.acidMelt?.clear(); // (refinement batch: a melt in progress completes first — spill, salvage, its record — never saved half done)
     if (this.world) { this.saveSectionMemory(); this.gear.flush(); this.fuelStations?.flush(); this.trainPropCargo?.flush(); this.corpses?.flush(); this.trainEquipment?.flush(); } // (task fuel-feedback: the station's fuel record with its memory; task train-all-cargo: its carried / lost props; lane CORPSE: the bodies lying in the station; task train-crafting: the crafted equipment left in it)
     return this.commitSave('ending', {pose: {...trainSpawnLocal(), yaw: 0, pitch: 0, crouched: false}});
   }
@@ -1643,6 +1649,9 @@ export class Game {
     if (!this.trainRuntime.playerInside()) return no('outside', 'Not saved: step inside the train to save.');
     // (the Bunker's cargo lift records its stop for a save; a car still travelling would carry things mid-shaft)
     if (this.tower?.office?.elevator?.logic.moving) return no('lift', 'Not saved: the lift is moving — save once it stops.');
+    // (world/acidMelt.ts: a prop still dissolving holds its contents until it completes, and what stood on it is still falling: a save
+    // now would catch it half done; it takes MELT.seconds)
+    if (this.acidMelt?.busy) return no('acid', 'Not saved: acid is still eating through something — save in a moment.');
     if (this.currentSlot === null) return no('bad-slot', 'Not saved: choose a save slot for this run first.');
     if (this.saveRunId !== this.run.id) return no('conflict', `Not saved: this run is not the one saved in slot ${this.currentSlot}.`);
     return null;

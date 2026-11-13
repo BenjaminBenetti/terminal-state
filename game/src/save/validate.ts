@@ -38,6 +38,7 @@ import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL} from '../gen/market/marketT
 import {MARKET_STOCK_LANE, STOCK_MAX} from '../market/trade/stock';
 import {BUNKER_LANE, bunkerStateProblem} from '../world/bunker/objectiveState'; // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE)
 import {MARKET_HOSTILITY_LANE, marketHostilityProblem} from '../market/combat/record'; // task studio-market-rework-20261108-074144-01 (lane COMBAT): a market station's hostility
+import {ACID_MELT_LANE, ACID_MELT_LIMITS, acidMeltedProblem} from '../run/acidMeltRecord'; // task studio-refinement-batch-20261113-035659-01 (lane MELT): a station's acid-melted props
 import {WALLET_PARTICIPANT, walletProblem} from '../market/trade/wallet';
 import {BEER_PARTICIPANT, beerSaveProblem} from '../market/beer/beerSave'; // task studio-market-bar-20261108-225231-01 (lane BEER): the timed beer's record
 import {SURVIVAL_OVERFILL} from '../player/survival'; // (lane BEER) food / water may hold the Bock's overfill (0..200)
@@ -69,6 +70,8 @@ export const SAVE_LIMITS = {
   holderLots: 256,
   killed: 5_000,
   lanes: 32,
+  /** Task studio-refinement-batch-20261113-035659-01 (lane MELT): generated props one station's ACID_MELT_LANE lists as melted. */
+  meltedProps: ACID_MELT_LIMITS.gone,
   participants: 32,
   stats: 64,
   nameChars: 64,
@@ -640,6 +643,11 @@ function lanes(v: unknown, path: string): void {
     const ep = stationEquipmentProblem(o[STATION_EQUIPMENT_LANE]);
     if (ep) bad(`${path}.${STATION_EQUIPMENT_LANE}`, ep);
     equipmentUnits((o[STATION_EQUIPMENT_LANE] as {here: EquipmentJSON[]}).here, `${path}.${STATION_EQUIPMENT_LANE}.here`, uidScope);
+  }
+  if (has(o, ACID_MELT_LANE)) { // task studio-refinement-batch-20261113-035659-01 (lane MELT): the generated props acid dissolved here
+    const mp = acidMeltedProblem(o[ACID_MELT_LANE]);
+    if (mp) bad(`${path}.${ACID_MELT_LANE}`, mp);
+    if ((o[ACID_MELT_LANE] as {gone: unknown[]}).gone.length > SAVE_LIMITS.meltedProps) bad(`${path}.${ACID_MELT_LANE}`, 'too many melted props');
   }
 }
 

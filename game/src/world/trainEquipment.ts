@@ -1168,6 +1168,20 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     this.legacyUnits = waiting;
   }
 
+  /**
+   * Task studio-refinement-batch-20261113-035659-01 (lane MELT, world/acidMelt.ts): a unit STANDING IN THE WORLD destroyed (acid) — out of
+   * the list for good (removeAt: its grab / hold / aim / plug go, its view leaves its parent and is the caller's now), so its records (the
+   * station lane at teardown / flush, the train's aboard()) never name it again. The caller spills its slots (the same stacks). Null: no
+   * such unit in the world (in the hands, riding as cargo, unknown).
+   */
+  destroy(uid: string): LiveUnit | null {
+    const i = this.list.findIndex(u => u.uid === uid && u.mode === 'world');
+    if (i < 0) return null;
+    const u = this.list[i];
+    this.removeAt(i);
+    return u;
+  }
+
   private removeAt(i: number): void {
     if (i < 0) return;
     const u = this.list[i];

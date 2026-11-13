@@ -195,6 +195,8 @@ describe('the manual save (Game.saveNow: the real game.ts methods on a minimal s
       ['no world', s => { s.world = null; }, 'no-train', /not parked here/],
       ['outside the car', s => { s.trainRuntime = {train: {}, playerInside: () => false}; }, 'outside', /step inside the train/],
       ['the Bunker lift moving', s => { s.tower = {office: {elevator: {logic: {moving: true, stop: null}}}, parkCar: () => { throw new Error('never'); }}; }, 'lift', /lift is moving/],
+      // (refinement batch: a prop still dissolving in acid holds its contents until it completes — world/acidMelt.ts AcidMelt.busy)
+      ['acid still at work', s => { s.acidMelt = {busy: true, clear: () => { throw new Error('never'); }}; }, 'acid', /acid is still eating through something/],
       ['another run in this session', (_s, g) => { g.run = createRun({seeds: SEEDS, start: key(0), levels: LEVELS, campaign: fixtureCampaign()}); }, 'conflict', /not the one saved in slot 2/],
     ];
     for (const [name, set, code, msg] of cases) {
@@ -310,7 +312,8 @@ describe('the manual save (Game.saveNow: the real game.ts methods on a minimal s
     expect(reasons.filter(r => r === 'manual').length).toBe(1);
     const saveNow = src.slice(src.indexOf('  saveNow(): SaveNowResult {'), src.indexOf('  returnToMenu(): void {'));
     expect(saveNow).toMatch(/this\.commitSave\('manual', \{pose\}\)/);
-    // the ending save's own capture order is untouched by this lane (reactor-credits.test.ts pins it)
-    expect(src).toMatch(/commitEndingSave\(\): CommitResult \| null \{\n {4}if \(!this\.run\.campaign\) return null;\n {4}if \(this\.world\) \{ this\.saveSectionMemory\(\); this\.gear\.flush\(\);/);
+    // the ending save's own capture order is untouched by this lane (reactor-credits.test.ts pins it). Re-pinned (refinement batch,
+    // lane MELT integration): an acid melt in progress completes first (AcidMelt.clear: spill, salvage, its record), then the same captures
+    expect(src).toMatch(/commitEndingSave\(\): CommitResult \| null \{\n {4}if \(!this\.run\.campaign\) return null;\n {4}this\.acidMelt\?\.clear\(\);[^\n]*\n {4}if \(this\.world\) \{ this\.saveSectionMemory\(\); this\.gear\.flush\(\);/);
   });
 });

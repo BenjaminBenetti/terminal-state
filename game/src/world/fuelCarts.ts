@@ -1159,6 +1159,21 @@ export class FuelCarts implements FuelCartsLike {
     return c ? {...c.pose} : null;
   }
 
+  /**
+   * Task studio-refinement-batch-20261113-035659-01 (lane MELT, world/acidMelt.ts): a cart STANDING IN THE WORLD destroyed (acid) — out of
+   * the list for good (removeAt: the grab / the hold / the hose go, its view leaves its parent and is the caller's now), so the station
+   * snapshot / the train's cargo() never name it again. Returns its uid, fuel units, pose and view (the caller spills the units as fuel
+   * cans). Null: no such cart in the world (riding as cargo, unknown).
+   */
+  destroy(uid: string): {uid: string; units: number; x: number; y: number; z: number; yaw: number; level: number; view: CartView} | null {
+    const i = this.carts.findIndex(c => c.uid === uid && c.mode === 'world');
+    if (i < 0) return null;
+    const c = this.carts[i], b = c.body;
+    const out = {uid: c.uid, units: c.fuel.units, x: b.x, y: b.y, z: b.z, yaw: b.yaw, level: b.level, view: c.view};
+    this.removeAt(i);
+    return out;
+  }
+
   private removeAt(i: number): void {
     if (i < 0) return;
     const c = this.carts[i];
@@ -1236,7 +1251,7 @@ export class FuelCarts implements FuelCartsLike {
 }
 
 /** A live cart as another system on the same controller sees it (FuelCarts.bodies). */
-export interface CartBodyRef { readonly body: CartBody; readonly mode: 'world' | 'cargo'; awake: boolean }
+export interface CartBodyRef { readonly uid: string; readonly body: CartBody; readonly mode: 'world' | 'cargo'; awake: boolean } // (uid: lane MELT — world/acidMelt.ts names a cart by it)
 
 /**
  * A riding cargo's footprint in the riding car's own collision model (world/trainRideLocal.ts: the step frame): a solid round column

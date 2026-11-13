@@ -557,6 +557,23 @@ export class TrainPropCargo {
     return i === undefined ? null : {i, kind: prop.kind};
   }
 
+  /**
+   * Task studio-refinement-batch-20261113-035659-01 (lane MELT, world/acidMelt.ts): a CARRIED prop destroyed in the live world (acid)
+   * leaves this system's records for good, whoever owned it — never re-added by a flush as a station prop that "never went loose"
+   * (`here`), never a train record (pending). The caller took its body out of the world first (DynamicItems.withdraw); the decor riding it
+   * is part of its record and goes with it. False: not a carried prop of this world.
+   */
+  consume(prop: PropPlacement): boolean {
+    const w = this.here, id = prop.cargo;
+    if (!w || !id || id.includes('/')) return false;
+    const n = w.appended.length + w.deferred.length + this.pending.length;
+    w.appended = w.appended.filter(a => a.prop !== prop && a.rec.id !== id);
+    w.deferred = w.deferred.filter(r => r.id !== id);
+    this.pending = this.pending.filter(r => r.id !== id);
+    prop.cargoGone = true;
+    return w.appended.length + w.deferred.length + this.pending.length < n;
+  }
+
   /** A generated loose prop (and the generated decor riding it) lost to the train. */
   private markGone(lp: {prop: PropPlacement; riders: readonly {prop: PropPlacement}[]}): void {
     for (const q of [lp.prop, ...lp.riders.map(r => r.prop)]) {
