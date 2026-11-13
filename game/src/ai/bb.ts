@@ -293,6 +293,8 @@ export class BbBrain extends ZombieBrain {
   private backed = false;
   /** Seconds until it looks for a leap again after finding none (the aim costs rays). */
   private aimT = 0;
+  /** The player's chest height when it last saw them (what a leap aims at). */
+  private seenChest = 0;
   private lastCackle = -Infinity;
   private alertFlag = false;
   private burstT = 0;
@@ -456,6 +458,7 @@ export class BbBrain extends ZombieBrain {
     } else { this.pvx = 0; this.pvz = 0; }
     this.plx = w.px; this.plz = w.pz; this.plt = this.clock;
     this.know(w.px, py, w.pz);
+    this.seenChest = this.chestY(w);
     this.unseen = 0;
     if (!this.aware) { this.alertFlag = true; this.noticed(); }
   }
@@ -610,7 +613,7 @@ export class BbBrain extends ZombieBrain {
         break;
       }
       case 'windup': {
-        out.face = Math.atan2(w.px - this.x, w.pz - this.z);
+        out.face = Math.atan2(this.known.x - this.x, this.known.z - this.z); // where it last saw the player (sight is required all through)
         this.windupTick(a, dt, w, cw);
         break;
       }
@@ -639,7 +642,8 @@ export class BbBrain extends ZombieBrain {
       }
       case 'flee': {
         a.t += dt;
-        const dx = this.x - w.px, dz = this.z - w.pz, d = Math.hypot(dx, dz) || 1;
+        // away from where it last saw the player (it does not follow a player it cannot see)
+        const dx = this.x - this.known.x, dz = this.z - this.known.z, d = Math.hypot(dx, dz) || 1;
         if (a.t >= a.dur || d >= a.farM || !w.playerAlive) { this.act = NONE; this.wake(); break; }
         if (a.pickT < 0 || a.t - a.pickT >= 0.3) {
           // away from the player; where that way is shut, the nearest open way round
@@ -705,7 +709,8 @@ export class BbBrain extends ZombieBrain {
    */
   private aim(w: BrainWorld, cw: CrawlWorld, lead: boolean): {vx: number; vy: number; vz: number; T: number} | null {
     const P = BB_POUNCE, from = this.centre();
-    let tx = w.px, tz = w.pz;
+    // where it last SAW the player (the launch may come a moment after the last sighting: it never aims at a player it cannot see)
+    let tx = this.known.x, tz = this.known.z;
     if (lead) {
       const T0 = Math.max(0.2, Math.min(0.65, Math.hypot(tx - from.x, tz - from.z) / P.speed));
       tx += this.pvx * P.lead * T0; tz += this.pvz * P.lead * T0;
@@ -713,7 +718,7 @@ export class BbBrain extends ZombieBrain {
     const dx = tx - from.x, dz = tz - from.z, dh = Math.hypot(dx, dz);
     const reach = (this.mode === 'ground' ? P.maxM : P.dropMaxM) * 1.15;
     if (dh > reach) { tx = from.x + dx * reach / dh; tz = from.z + dz * reach / dh; }
-    const to = {x: tx, y: this.chestY(w), z: tz}, refY = Math.min(this.y, w.py ?? this.y);
+    const to = {x: tx, y: this.seenChest, z: tz}, refY = Math.min(this.y, this.known.y);
     for (const pace of LEAP_PACES) {
       const v = launchVelocity(from, to, pace, P.gravity);
       if (arcClear(cw, from, v, P.gravity, v.T) && this.comesDown(cw, from, v, refY)) return v;
@@ -1015,7 +1020,7 @@ export class BbBrain extends ZombieBrain {
     const turn = (this.stats.turnRate ?? 4.5) * dt;
     const a = this.act;
     if (a.k === 'windup') {
-      steerCling(c, w.px - cx, this.chestY(w) - cy, w.pz - cz, turn);
+      steerCling(c, this.known.x - cx, this.seenChest - cy, this.known.z - cz, turn);
       this.windupTick(a, dt, w, cw);
       if (this.mode === 'surf') this.shadow(cw, cx, cy, cz);
       return out;
