@@ -716,3 +716,14 @@ by ear on the build worker. Raw takes are kept outside Git.
 - `assets/audio/chipper-start.mp3` — chipperStart (Sound Lab job 20261111T004021-456234135)
 - `assets/audio/chipper-stop.mp3` — chipperStop (Sound Lab job 20261111T004025-1134923694)
 <!-- END train-chipper-audio-20261111 -->
+
+<!-- BEGIN enemy-bb-20261113 (build-bb.mjs) -->
+## The BB (enemy, four bodies)
+
+One enemy family with four bodies. Each was generated for this project with Meshy T2.5 image-to-3D (smart topology, 2K PBR; 1 attempt and 15 credits each) through the Meshy MCP under the user's task authorization, conditioned on a standing reference image of the user-selected concept look (a Codex native image generation). Rigged and skinned locally on CPU by `tools/asset-pipeline/enemy/build-bb.mjs`: the shared 18-joint skeleton (joints measured on each body) and automatic skin weights; no animation clips are baked (the game poses the body at runtime); the provider's texture maps are resized / re-encoded only (hash-only provenance: `assets/derivatives/enemy-bb-<variant>.json`). AI-generated assets: provider terms apply; unapproved prototype, no licence or commercial clearance implied. Raw masters, provider maps and the input images are kept outside Git.
+
+- `assets/models/enemy-bb-lullaby.glb` — BB "Lullaby": a porcelain-doll-like toddler in a yellowed lace christening smock, puffed sleeves, ribboned bloomers, a frilled lace bonnet and grey knitted stockings (Meshy task 01a1d238-d41c-7639-a90a-89eee05f533c)
+- `assets/models/enemy-bb-binky.glb` — BB "Binky": a skinny big-headed toddler in a torn oversized orange hi-vis vest worn as a smock, striped leggings and a pacifier on a cord (Meshy task 01a1d238-dbe9-75fb-80a8-31186ca71e65)
+- `assets/models/enemy-bb-teddy.glb` — BB "Teddy": a top-heavy toddler in a fuzzy hand-knitted brown bear-suit romper with a deep eared hood and mismatched buttons (Meshy task 01a1d238-e41c-7526-8481-9f7377b26d46)
+- `assets/models/enemy-bb-changeling.glb` — BB "Changeling": a stocky wrinkled old-faced toddler in a quilted navy hooded snowsuit with patched knees, a striped undershirt, fingerless mittens and knitted booties (Meshy task 01a1d238-ec04-76ee-a49d-62e84a27a0e0)
+<!-- END enemy-bb-20261113 -->
