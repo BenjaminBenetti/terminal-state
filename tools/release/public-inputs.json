@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 76794,
-      "sha256": "a3f1169c2343d46b43ad1cd9f7a523d4a7b521f24709b5e45fcbed8a139f02d7"
+      "bytes": 78742,
+      "sha256": "1361bf2d3a763b27eae8bf23034655497a8ebf98b4b7341239223acaca6536f9"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1989,6 +1989,26 @@
       "sha256": "2534182960bf96f813b2d57d92d2b530250ddaeb5d9967a7aa15b2fb6ccd23f4"
     },
     {
+      "path": "assets/derivatives/enemy-bb-binky.json",
+      "bytes": 24347,
+      "sha256": "ed2da0b2d08ebfe8a3346d524ba8025a400b6d8de4979239c52b4be2f2cb5138"
+    },
+    {
+      "path": "assets/derivatives/enemy-bb-changeling.json",
+      "bytes": 24384,
+      "sha256": "b3aa64790ff2b9e430e5f12d2e6ecd15de60e132aba33b83ae835155a8596a9f"
+    },
+    {
+      "path": "assets/derivatives/enemy-bb-lullaby.json",
+      "bytes": 24365,
+      "sha256": "a5c885c0cedd2c50a5e28c53dd2fa993f1200f69ea898b086f060f24eea35691"
+    },
+    {
+      "path": "assets/derivatives/enemy-bb-teddy.json",
+      "bytes": 24321,
+      "sha256": "b00b182786d109194031213e0f7ecea18fce01642307220acd811157038d8668"
+    },
+    {
       "path": "assets/derivatives/enemy-blightbelly.json",
       "bytes": 37031,
       "sha256": "134a1b58ae19723855cab13eb6c9a96f6325dccf964cea9e66fcdf4aec6f7ff1"
@@ -3027,6 +3047,26 @@
       "path": "assets/models/creature-ratdog-t25.glb",
       "bytes": 893544,
       "sha256": "58a5d210e02272a67ae4c7c9bd3f56279f35d6a34000237cb568b19dac57dfad"
+    },
+    {
+      "path": "assets/models/enemy-bb-binky.glb",
+      "bytes": 2119528,
+      "sha256": "5f654b4daf985e9ffaff5b005e0bfce47d07686b189298512da9d7a354e35b84"
+    },
+    {
+      "path": "assets/models/enemy-bb-changeling.glb",
+      "bytes": 1822620,
+      "sha256": "def676dde39a5cde8acfda5606c0eb699d83b181474229124e7236119d937b67"
+    },
+    {
+      "path": "assets/models/enemy-bb-lullaby.glb",
+      "bytes": 2146828,
+      "sha256": "b3dcf6425c608c1faa36b2e42a48c2c1791247ca22082345ebc80156fdc92d0e"
+    },
+    {
+      "path": "assets/models/enemy-bb-teddy.glb",
+      "bytes": 1927056,
+      "sha256": "94c7d89d42237b3f967b37d7ee897b793fa44780516a18c5abe7a016f7f5bee9"
     },
     {
       "path": "assets/models/enemy-blightbelly.glb",
