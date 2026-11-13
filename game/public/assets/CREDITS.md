@@ -727,3 +727,29 @@ One enemy family with four bodies. Each was generated for this project with Mesh
 - `assets/models/enemy-bb-teddy.glb` — BB "Teddy": a top-heavy toddler in a fuzzy hand-knitted brown bear-suit romper with a deep eared hood and mismatched buttons (Meshy task 01a1d238-e41c-7526-8481-9f7377b26d46)
 - `assets/models/enemy-bb-changeling.glb` — BB "Changeling": a stocky wrinkled old-faced toddler in a quilted navy hooded snowsuit with patched knees, a striped undershirt, fingerless mittens and knitted booties (Meshy task 01a1d238-ec04-76ee-a49d-62e84a27a0e0)
 <!-- END enemy-bb-20261113 -->
+
+<!-- BEGIN bb-audio-20261113 (bb-build.mjs) -->
+## BB audio (cackle, giggle, pounce squeal, hurt squawk, wind-down death)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the BB task's
+audio authorization (the free local service only; 23 jobs, 16 takes shipped). Powered by Stability AI. Stability AI Community License +
+Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades,
+levelling, MP3) built by `tools/audio-pipeline/bb-build.mjs` (provenance: `assets/derivatives/audio-bb.json`). Not
+reviewed by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/bb-cackle-01.mp3` — bbCackle (Sound Lab job 20261113T002431-822573182)
+- `assets/audio/bb-cackle-02.mp3` — bbCackle (Sound Lab job 20261113T002640-2049682736)
+- `assets/audio/bb-cackle-03.mp3` — bbCackle (Sound Lab job 20261113T002645-1200815533)
+- `assets/audio/bb-cackle-04.mp3` — bbCackle (Sound Lab job 20261113T002650-749044461)
+- `assets/audio/bb-giggle-01.mp3` — bbGiggle (Sound Lab job 20261113T002436-561658655)
+- `assets/audio/bb-giggle-02.mp3` — bbGiggle (Sound Lab job 20261113T002440-1543757455)
+- `assets/audio/bb-giggle-03.mp3` — bbGiggle (Sound Lab job 20261113T002654-283085158)
+- `assets/audio/bb-giggle-04.mp3` — bbGiggle (Sound Lab job 20261113T002659-800409814)
+- `assets/audio/bb-pounce-01.mp3` — bbPounce (Sound Lab job 20261113T002703-1712363872)
+- `assets/audio/bb-pounce-02.mp3` — bbPounce (Sound Lab job 20261113T002956-16607901)
+- `assets/audio/bb-pounce-03.mp3` — bbPounce (Sound Lab job 20261113T003000-1698090508)
+- `assets/audio/bb-hurt-01.mp3` — bbHurt (Sound Lab job 20261113T002454-240541345)
+- `assets/audio/bb-hurt-02.mp3` — bbHurt (Sound Lab job 20261113T002717-1834050305)
+- `assets/audio/bb-hurt-03.mp3` — bbHurt (Sound Lab job 20261113T002722-151840185)
+- `assets/audio/bb-death-01.mp3` — bbDeath (Sound Lab job 20261113T002726-147471791)
+- `assets/audio/bb-death-02.mp3` — bbDeath (Sound Lab job 20261113T002731-1936675290)
+<!-- END bb-audio-20261113 -->
