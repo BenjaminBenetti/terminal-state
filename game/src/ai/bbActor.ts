@@ -72,8 +72,11 @@ export const BB_ACTOR = {
   torsoPullK: 0.7,
   /** Overlays (cackle bob, twitch) fade out over this long when the body starts a wind-up / leap / landing / flinch. */
   calmS: 0.08,
-  /** Hit flash: a neutral pale blink (emissive at full flash), not the red one of the bleeding enemies. */
-  flash: [0.34, 0.34, 0.31],
+  /**
+   * Hit flash: a neutral pale blink (emissive at full flash), not the red one of the bleeding enemies. (0.34 turned the whole body
+   * into a flat pale silhouette on the first frame in the browser spot check; at this level its look stays readable under the blink.)
+   */
+  flash: [0.2, 0.2, 0.18],
   /** Culling sphere (root space, model metres): covers the standing bind, the stretched leap and every all-fours pose, in any orientation. */
   cull: {centre: [0, 0.3, 0], radius: 0.95},
   /** prepareRagdoll lifts the body at most this far (model metres x scale) off the surface it clings to. */

@@ -207,7 +207,8 @@ describe('BB is non-graphic in the damage system (real bodies, real effects, rea
     a.animate(1 / 600, 'Idle', 0);
     b.animate(1 / 600, 'Idle', 0);
     for (const m of materialsOf(a) as THREE.MeshStandardMaterial[]) {
-      expect(m.emissive.g).toBeGreaterThan(0.2);
+      expect(m.emissive.g).toBeGreaterThan(0.15); // a visible blink (kept under the level that flattens the body to a silhouette)
+      expect(m.emissive.g).toBeLessThan(0.26);
       expect(Math.abs(m.emissive.r - m.emissive.g)).toBeLessThan(0.02); // grey, not red
       expect(m.emissive.b).toBeLessThanOrEqual(m.emissive.g);
     }
