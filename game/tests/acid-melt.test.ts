@@ -194,7 +194,11 @@ describe('acid melt: eligibility by trait and ownership (every registered prop k
     const riders = kinds.filter(k => ridesHost(k)).map((k, i) => place(k, kinds.length + 2 + i, {host: props.length}));
     const undrawn = place('cabinetTall', kinds.length + 40), walled = place('cabinetTall', kinds.length + 41), gone = place('cabinetTall', kinds.length + 42, {cargoGone: true});
     const carried = place('foldingChair', kinds.length + 43, {cargo: 'st-09:main#7'}), wrongCargo = place('foldingChair', kinds.length + 44, {cargo: 'st-09:main#7/rider'});
-    const L = {props: [...props, host0, ...riders, undrawn, walled, gone, carried, wrongCargo]} as unknown as StationLayout;
+    // stacks: a structure piece on a counter holds the counter (never left floating); a meltable box on another keeps both meltable
+    const structKind = kinds.find(k => PROP_PHYSICS_AUDIT[k].why === 'structure')!, plainKind = 'cabinetLow';
+    const under = place(plainKind, kinds.length + 45), onIt = {...place(structKind, kinds.length + 45), y: under.h, hx: 0.2, hz: 0.2};
+    const under2 = place(plainKind, kinds.length + 46), onIt2 = {...place(plainKind, kinds.length + 46), y: under2.h, hx: 0.2, hz: 0.2};
+    const L = {props: [...props, host0, ...riders, undrawn, walled, gone, carried, wrongCargo, under, onIt, under2, onIt2]} as unknown as StationLayout;
     const appended = [place('column', kinds.length + 50), place(kinds[0], kinds.length + 51)];
     const {melt} = traitWorld(L, {undrawn: new Set([undrawn]), walk: L.props.filter(p => p !== walled), append: appended});
     const fails: string[] = [];
@@ -211,10 +215,16 @@ describe('acid melt: eligibility by trait and ownership (every registered prop k
     expect(melt.protection(gone)).toBe('gone');
     expect(melt.protection(carried)).toBeNull();
     expect(melt.protection(wrongCargo)).toBe('not a placement');
+    expect(melt.protection(onIt)).toBe('building structure');
+    expect(melt.protection(under)).toBe('holds up a protected prop');
+    expect(melt.protection(under2)).toBeNull();
+    expect(melt.protection(onIt2)).toBeNull();
     for (const p of appended) expect(melt.protection(p)).toBe('not a placement');
     // the queries never return a protected one (a disc over the whole synthetic yard)
     const refs = melt.inDisc(60, 0, 20, 200).map(r => r.key).sort();
-    const want = L.props.filter(p => melt.protection(p) === null).map(p => (p.cargo ? `c:${p.cargo}` : `p:${L.props.indexOf(p)}`)).sort();
+    // (a floor pool at y 0: every eligible prop whose base lies within MELT.band of it — not the box stacked on a cabinet)
+    const want = L.props.filter(p => melt.protection(p) === null && Math.abs(p.y) <= MELT.band).map(p => (p.cargo ? `c:${p.cargo}` : `p:${L.props.indexOf(p)}`)).sort();
+    expect(want).not.toContain(`p:${L.props.indexOf(onIt2)}`);
     expect(refs).toEqual(want);
     expect(refs).toContain('c:st-09:main#7');
     expect(refs.length).toBeGreaterThan(250);
