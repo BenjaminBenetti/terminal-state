@@ -45,8 +45,9 @@
 //    as the bounded body pools allow (MELT.drop*: a full shelf's stock falls in batches; one a pool put back to rest in the air wakes again);
 //  - contents spill as real pickups at valid floor spots inside its footprint (Levels.supportAt: never through a wall): holder lots incl.
 //    closed compartments (same item / count, lot id as provenance — the game's spill rule), a unit's slots (the SAME ItemStack objects:
-//    uid / mag / count / bag kept; legacy sentry rounds as fresh stacks), a fuel cart's units as fuel cans (FUEL.canUnits each, stacks of
-//    FUEL.canStackMax; a remainder below one can — none while canUnits is 1 — is never invented);
+//    uid / mag / count / bag kept; legacy sentry rounds as fresh stacks), ALL of a fuel cart's units as SINGLE fuel cans across its
+//    footprint (fuel/fuel.ts cansForUnits: a can is one unit, so every amount — its odd last unit too — is exact; one visible can = one
+//    can, as every can lying in the world);
 //  - salvage: EXACTLY one pickup per destroyed thing at its base — `electrical_parts` for powered / electronic things (a screen, the
 //    audit's machinery, a humming appliance: audio/sfx.ts humEmitters, a plug-in device), `scrap_metal` for everything else;
 //  - persisted: a generated prop in ACID_MELT_LANE (run/acidMeltRecord.ts; re-applied on every build: hidden, no collider / holder /
@@ -77,7 +78,7 @@ import {vendorDisplayHosts} from '../market/wares/slots';
 import {HOLDER_LABEL} from '../items/loot';
 import {itemDef} from '../items/items';
 import {ELECTRICAL_PARTS, SCRAP_METAL} from '../items/craftMaterials';
-import {FUEL} from '../fuel/fuel';
+import {FUEL, cansForUnits} from '../fuel/fuel';
 import {dynamicKind} from '../physics/merchOnHost';
 import {MAX_DYNAMIC_ITEMS, MAX_DYNAMIC_PROPS} from '../physics/dynamicItems';
 import {FILLER_TUNING} from '../physics/fillerStock';
@@ -1029,10 +1030,12 @@ export class AcidMelt {
       this.salvage(u.def.plug ? ELECTRICAL_PARTS : SCRAP_METAL, m.base.x, m.base.z, m.base.y);
       this.wakeResting(m.box, m.base.y);
     } else if (m.cart) {
-      const c = m.cart, r = (m.box.max.x - m.box.min.x) / 2;
-      const cans = Math.floor(c.units / FUEL.canUnits), stacks: ItemStack[] = [];
-      for (let n = cans; n > 0;) { const st = h.inv.makeStack(FUEL.canItem, Math.min(n, FUEL.canStackMax)); stacks.push(st); n -= st.count; }
-      this.spillStacks(stacks, m.base.x, m.base.z, r * 0.75, r * 0.75, m.base.y);
+      // ALL its fuel (fuel/fuel.ts cansForUnits: a can is one unit — its last odd unit too, nothing rounded either way) as SINGLE cans
+      // across its footprint (the world's fuel convention: one visible can = one can). The whole radius, not 0.75 of it: up to 8 cans
+      // then lie about a can's width apart, still inside the footprint the cart's own body kept clear of walls
+      const c = m.cart, r = (m.box.max.x - m.box.min.x) / 2, stacks: ItemStack[] = [];
+      for (let n = cansForUnits(c.units); n > 0; n--) stacks.push(h.inv.makeStack(FUEL.canItem, 1));
+      this.spillStacks(stacks, m.base.x, m.base.z, r, r, m.base.y);
       this.salvage(SCRAP_METAL, m.base.x, m.base.z, m.base.y);
       this.wakeResting(m.box, m.base.y);
     } else if (m.members.length) {

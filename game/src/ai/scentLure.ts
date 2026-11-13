@@ -28,7 +28,8 @@
 //    AWAKE Siren are drawn (all run the base brain). A DORMANT / rising Siren never is (her dormant front end has no perception but
 //    proximity / flashlight / damage, and the scent is no LightSource: it can never light or wake her). The SCREACHER is never drawn:
 //    it reacts only to sound (user rule) and the scent is silent (ai/screacher.ts subWorld: scents undefined). The BB (ai/bb.ts BbBrain)
-//    runs its own update and never reads the scent. Market people are not enemies.
+//    is drawn too, by the same rules on its own clock and sight: off its wall / ceiling it drops down, then walks the floor through
+//    the base machine. Market people are not enemies.
 
 /** Lure tuning (see the file comment). */
 export const SCENT = {

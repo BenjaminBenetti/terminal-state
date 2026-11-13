@@ -26,6 +26,8 @@
 // 'investigate' state (LureState.kind 'scent'): smelt within 20 m in 3D with no sight / view test (walls and slabs do not stop
 // it), checked on the light timer; it pulls LURABLE enemies and a chaser that lost sight of the player (no fresh gunshot / hit);
 // an active scent beats a light; the goal is the canister, never the player. Worlds without `scents` never smell anything.
+// Task studio-refinement-scope-finish-20261113-080904-01: the BB (ai/bb.ts) is drawn too — on the floor through this machine (its
+// own clock / sight feed scentable() through sinceAlert() / lostSight()), off the floor through scentDraw().
 
 import type {ZombieType} from '../gen/station';
 import type {ZombieSpawn} from '../gen/stationTypes';
@@ -781,8 +783,28 @@ export class ZombieBrain {
    * (the lure shakes pursuers) — never within SCENT.alertHoldS of a gunshot heard / a hit taken (it hunts that first).
    */
   private scentable(): boolean {
-    if (this.t - this.alertT < SCENT.alertHoldS) return false;
-    return LURABLE.has(this.state) || (this.state === 'chase' && this.unseenT >= SCENT.lostSightS);
+    if (this.sinceAlert() < SCENT.alertHoldS) return false;
+    return LURABLE.has(this.state) || (this.state === 'chase' && this.lostSight() >= SCENT.lostSightS);
+  }
+
+  /**
+   * Lane LURE: seconds since the last gunshot heard / hit taken, and seconds without sight of the player — what scentable() reads.
+   * (ai/bb.ts BbBrain: its own clock, noise / hit and 3D sight, which also run while it is off the floor; every other brain: these.)
+   */
+  protected sinceAlert(): number {
+    return this.t - this.alertT;
+  }
+  protected lostSight(): number {
+    return this.unseenT;
+  }
+
+  /**
+   * Lane LURE (ai/bb.ts BbBrain off the floor, where this machine's own update does not run): the scent that draws it now under the
+   * same rules and with the same bookkeeping as the check in update() — scentable(), smell() (sticky, given-up ones skipped, counted).
+   * The caller has already ruled out a player in sight.
+   */
+  protected scentDraw(w: BrainWorld): ScentSighting | null {
+    return w.scents?.length && this.scentable() ? this.smell(w.scents) : null;
   }
 
   /** Lane LURE: the strongest scent in reach (ai/scentLure.ts perceiveScent; the followed one is sticky, given-up ones skipped). */

@@ -10,7 +10,7 @@
 //  - seeing the player always wins; a pursuer that lost sight of the player is pulled (a fresh gunshot / hit is hunted first);
 //  - the goal is the canister (the player stands elsewhere; the last known player position / awareness never move toward the
 //    player); move() retargets, remove() / clear() end it; the cap; bounded staggered checks; the path service's deferral;
-//  - families: rat/dog (no ladder links), awake Siren, Strainer drawn; a dormant Siren never woken / drawn; the Screacher never.
+//  - families: rat/dog (no ladder links), awake Siren, Strainer, the BB drawn; a dormant Siren never woken / drawn; the Screacher never.
 
 import {describe, expect, it} from 'vitest';
 import {readFileSync} from 'node:fs';
@@ -24,6 +24,7 @@ import {SIREN_STATS, SirenBrain} from '../src/ai/siren';
 import {StrainerBrain} from '../src/ai/strainer';
 import {BlightbellyBrain} from '../src/ai/blightbelly';
 import {ScreacherBrain} from '../src/ai/screacher';
+import {BbBrain} from '../src/ai/bb';
 import {moveZombie, settleZombie} from '../src/ai/motor';
 import {LURE, lureWorld} from '../src/ai/lightLure';
 import {SCENT, SCENT_MAX, ScentLures, perceiveScent, type ScentEmitter} from '../src/ai/scentLure';
@@ -511,6 +512,22 @@ describe('scent lure: families', () => {
       expect(b.state).toBe('investigate');
       expect(b.lure?.lightId).toBe(e.id);
     }
+  });
+
+  it('the BB (its own crawling brain) is drawn too and walks round the wall to the canister (on real levels, off its walls and ceilings: bb-lure.test.ts)', () => {
+    const s = sim(HL, HPF);
+    s.wander = false;
+    const b = new BbBrain(22.5, 5, -Math.PI / 2); // behind the wall, facing away (no CrawlWorld here: it stays on the floor)
+    const e = canister(s, 37.5, 0.05, 5, {seconds: 60});
+    run(s, b, 0.6);
+    expect(b.state).toBe('investigate');
+    expect(b.lure).toMatchObject({kind: 'scent', lightId: e.id});
+    const tr = run(s, b, 40, holding(e));
+    expect(tr.bad).toEqual([]);
+    expect(holding(e)(b)).toBe(true);
+    expect(b.x).toBeGreaterThan(WALL.x1);
+    expect(b.aware).toBe(false);
+    expect(s.paths.every(p => p.noLinks === true && p.defer)).toBe(true); // (no ladders: it climbs walls)
   });
 
   it('a DORMANT Siren is never drawn or woken by a scent (it is no light); the Screacher (sound only) never smells it', () => {

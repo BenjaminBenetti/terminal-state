@@ -8,10 +8,19 @@
 // the next one. It is knee-high (0.85 m standing, ~0.45 m on all fours), not a scaled adult zombie, and its presentation is
 // non-graphic (no wounds, gore or dismemberment: ai/bbActor.ts).
 //
+// THE ZOMBIE LURE (task studio-refinement-scope-finish-20261113-080904-01): the lure grenade's scent (ai/scentLure.ts: 20 m in 3D from
+// the floor below it, no sight needed, 20 active seconds) draws it under the lure's own rules — the player in sight wins, a fresh noise
+// / hit is hunted first, a hunt that lost sight of the player for SCENT.lostSightS is pulled — read on its own clock and 3D sight
+// (sinceAlert / lostSight). Off the floor it comes down the way it always does (the 'down' plan; a hop off a thing it sits on, toward
+// the canister); on the floor the base machine's 'investigate' walks it to a standable point beside the canister by the path finder and
+// the motor, with its purposeful stop-start cadence, and it stays there while the scent lasts, then roams and perches again.
+//
 // This module is pure (no three.js): the numbers, the pose the actor renders (BbPose) and the brain (BbBrain). The surface
 // locomotion itself is ai/bbSurface.ts.
 
 import {detectFactor, ZOMBIE_STATS, ZombieBrain, type BrainOutput, type BrainWorld, type ZombieStats} from './brain';
+import {LURE} from './lightLure';
+import type {ScentSighting} from './scentLure';
 import {
   anchorValid, arcClear, centreValid, clingKind, CRAWL, crawlStep, findMounts, flatCrawlWorld, flightClear, flightStep, floorBelow, launchVelocity, mountWall, steerCling,
   type Cling, type CrawlWorld, type Flight, type FlightHit, type MountSpot,
@@ -268,6 +277,7 @@ const clamp1 = (v: number): number => Math.max(-1, Math.min(1, v));
  *    walls it meets on the way are crossed by their own surfaces (a door lintel: down its face, under it, up again).
  *  - THE POUNCE: wind-up (the tell) -> a ballistic leap aimed once -> at most one hit, by touching the player -> a recovery on
  *    the floor -> a cooldown during which it keeps its distance (a wall perch when one is near).
+ *  - THE ZOMBIE LURE's scent draws it like every lurable enemy (the file comment): down off its surface, then the floor walk.
  *
  * While the body is off the floor, `x` / `z` are its plan position and `y` is the FLOOR BELOW it (so every "same storey" / sight /
  * sound rule of the game keeps working); where the body really is, is `pose`.
@@ -338,6 +348,13 @@ export class BbBrain extends ZombieBrain {
   private frozen = false;
   private paceNow = 0;
   private readonly lookAt = {x: 0, y: 0, z: 0};
+  /** (lure) Its clock at the last noise it heard / hit it took (a fresh one is hunted before any scent). */
+  private alarmAt = -Infinity;
+  /** (lure) Off the floor / before a climb: seconds to its next scent check, and the scent that drew it at the last one. */
+  private scentT = 0;
+  private drawn: ScentSighting | null = null;
+  /** QA: times a scent brought it down off a wall or ceiling. */
+  lureDowns = 0;
 
   constructor(x: number, z: number, yaw: number, stats: ZombieStats = BB_STATS) {
     super('shambler', x, z, yaw, stats);
@@ -397,6 +414,7 @@ export class BbBrain extends ZombieBrain {
     if (!this.alive) return;
     if (Math.hypot(x - this.x, z - this.z, y === undefined ? 0 : y - this.y) > radius) return;
     const was = this.aware;
+    this.alarmAt = this.clock;
     super.hear(x, z, radius, y);
     this.know(x, y ?? this.y, z);
     if (!was) this.noticed();
@@ -405,6 +423,7 @@ export class BbBrain extends ZombieBrain {
   override damage(amount: number, fromX: number, fromZ: number, fromY?: number, o: {stagger?: boolean; staggerS?: number} = {}): boolean {
     if (!this.alive) return false;
     const was = this.aware;
+    this.alarmAt = this.clock;
     // off the floor the base stagger (a floor flinch) does not apply: a hard enough hit knocks it off instead
     const dead = super.damage(amount, fromX, fromZ, fromY, this.mode === 'ground' ? o : {...o, stagger: false});
     this.know(fromX, fromY ?? this.y, fromZ);
@@ -432,6 +451,34 @@ export class BbBrain extends ZombieBrain {
   private know(x: number, y: number, z: number): void {
     const K = this.known;
     K.x = x; K.y = y; K.z = z; K.t = this.clock;
+  }
+
+  /**
+   * (lure) The lure's rules read on this brain's own clock and sight: they run on every surface, while the base machine's clock and
+   * sight count only on the floor, and the base machine's `hear()` it calls itself to go after what it knows (wake) is no noise.
+   */
+  protected override sinceAlert(): number {
+    return this.clock - this.alarmAt;
+  }
+  protected override lostSight(): number {
+    return this.unseen;
+  }
+
+  /**
+   * (lure) Off the floor, or before it climbs: the scent that draws it now (ai/brain.ts scentDraw: the lure's reach and rules; the
+   * player in sight wins), checked every LURE.period like the floor's check. No active scent: nothing at all — no check, no draw from
+   * its stream. The kept answer never outlives sight of the player or its canister going quiet.
+   */
+  private scentPull(dt: number, w: BrainWorld): ScentSighting | null {
+    if (!w.scents?.length) { this.drawn = null; return null; }
+    if (this.seenNow) { this.drawn = null; return null; } // sight wins at once (it hunts)
+    this.scentT -= dt;
+    if (this.scentT <= 0) {
+      this.scentT = LURE.period;
+      this.drawn = this.scentDraw(w);
+    }
+    if (this.drawn && !this.drawn.emitter.active) this.drawn = null;
+    return this.drawn;
   }
   private get knows(): boolean {
     return this.clock - this.known.t <= BB_SENSE.loseS;
@@ -630,12 +677,16 @@ export class BbBrain extends ZombieBrain {
       this.perchT -= dt;
       if (this.perchT <= 0) {
         this.perchT = 4 + this.rnd() * 4;
-        if (this.tryMount('perch', w, cw, 1.4, BB_CLIMB.mountReachM)) return this.still(out, null);
+        // (lure) a scent drawing it: no climb now (the floor's check sends it to the canister)
+        if (!(w.scents?.length && this.scentDraw(w)) && this.tryMount('perch', w, cw, 1.4, BB_CLIMB.mountReachM)) return this.still(out, null);
       }
     }
     if (out.speed > 0) {
-      const far = hunting && Math.hypot(this.known.x - this.x, this.known.z - this.z) > BB_CADENCE.farM;
-      if (this.cadence(dt, !hunting, far)) { this.moving = true; this.paceNow = out.speed; }
+      // (lure) on its way to a scent it moves with its purposeful cadence (its unaware one's long freezes would read as stuck)
+      const L = this.lure, lured = this.state === 'investigate' && L?.kind === 'scent';
+      const far = hunting ? Math.hypot(this.known.x - this.x, this.known.z - this.z) > BB_CADENCE.farM
+        : lured ? Math.hypot(L.x - this.x, L.z - this.z) > BB_CADENCE.farM : false;
+      if (this.cadence(dt, !hunting && !lured, far)) { this.moving = true; this.paceNow = out.speed; }
       else { out.speed = 0; this.frozen = true; }
     }
     return out;
@@ -674,6 +725,13 @@ export class BbBrain extends ZombieBrain {
       }
       case 'mount': {
         a.t += dt;
+        // (lure) on its way to a wall, a scent draws it (the lure's rules: a hunt only once it lost sight of the player): it stays on the
+        // floor (the floor's check sends it to the canister)
+        if (this.scentPull(dt, w)) {
+          this.act = NONE; this.noClimbT = Math.max(this.noClimbT, 1.5);
+          this.drawn = null; this.scentT = 0; // spent: the next climb asks afresh
+          break;
+        }
         const dx = a.spot.x - this.x, dz = a.spot.z - this.z, d = Math.hypot(dx, dz);
         if (d < 0.16 || (d < 0.45 && a.t > 1.2)) {
           const c = mountWall(cw, this.x, this.y, this.z, -a.spot.nx, -a.spot.nz, 0.9);
@@ -1009,6 +1067,7 @@ export class BbBrain extends ZombieBrain {
     this.shadow(cw, f.x, f.y, f.z);
     this.frozen = true;
     if (this.knows) out.face = Math.atan2(this.known.x - f.x, this.known.z - f.z);
+    const scent = this.scentPull(dt, w); // (lure) it hops off toward a canister that draws it
     const a = this.act;
     if (a.k === 'windup') {
       this.windupTick(a, dt, w, cw);
@@ -1032,7 +1091,8 @@ export class BbBrain extends ZombieBrain {
     this.sitT -= dt;
     if (this.sitT <= 0) {
       this.sitT = 0.6 + this.rnd() * 0.6;
-      const ang = this.aware && this.knows ? Math.atan2(this.known.x - f.x, this.known.z - f.z) : this.yaw;
+      const ang = scent ? Math.atan2(scent.emitter.x - f.x, scent.emitter.z - f.z)
+        : this.aware && this.knows ? Math.atan2(this.known.x - f.x, this.known.z - f.z) : this.yaw;
       if (this.hopOff(cw, ang) || this.hopHome(cw)) {
         this.mode = 'air';
         this.leap = false; this.leapHit = true; this.coolOnLand = false;
@@ -1061,6 +1121,7 @@ export class BbBrain extends ZombieBrain {
     this.blend = null; this.plan = null;
     this.x = x; this.y = y; this.z = z; this.vy = 0;
     this.yaw = yaw;
+    this.drawn = null; this.scentT = 0; // (lure) on the floor the base machine's check runs; the next one off it starts afresh
   }
 
   /** A dead body at rest. */
@@ -1179,6 +1240,8 @@ export class BbBrain extends ZombieBrain {
     }
     const cx = c.x + c.nx * L, cy = c.y + c.ny * L, cz = c.z + c.nz * L;
     const turn = (this.stats.turnRate ?? 4.5) * dt;
+    // (lure) a scent draws it: down off the wall / ceiling the way it always comes down, then to the canister on the floor
+    if (this.scentPull(dt, w) && this.plan?.k !== 'down') { this.setPlan('down'); this.lureDowns++; }
     const a = this.act;
     if (a.k === 'windup') {
       steerCling(c, this.known.x - cx, this.seenChest - cy, this.known.z - cz, turn);

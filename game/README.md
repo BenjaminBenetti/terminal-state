@@ -119,7 +119,8 @@ grenade slot first; the rest into the Lockbox). Both are throwables: they go in 
   or Electrical parts once and spills its contents. The train and its fitted fixtures never melt. At most 3 pools at once.
 - **Zombie Lure grenade**: it lands, comes to rest and opens — the scent above, from the canister itself.
 - Families: ordinary and coated zombies, sprinters, the rat/dog, the Strainer, the Blightbelly, horde members and an awake
-  Siren are drawn. A dormant Siren is not: the scent never wakes her. The Screacher hunts only by sound, so it ignores the
+  Siren are drawn, and so is the BB: off a wall or ceiling it comes down and walks the floor to the canister. A dormant Siren
+  is not: the scent never wakes her. The Screacher hunts only by sound, so it ignores the
   scent.
 
 Crouch: **C** (iteration 05: back from Ctrl, which collided with the browser's Ctrl+W) — tap to

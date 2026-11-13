@@ -85,8 +85,8 @@ Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
 
   A melt takes **2.4 s**. The thing leaves every system at once; at most six dissolve on screen and the rest wait their turn intact.
   Its contents then spill as real pickups on valid floor inside its footprint, never through a wall. A holder's lots keep their item
-  and count. A unit's slots are the same item stacks, so UIDs, magazines and counts are kept. A fuel cart's units become fuel cans;
-  under one can's worth is lost. Pickups and loose things resting on it fall, within the bounded body pools. It leaves **exactly one**
+  and count. A unit's slots are the same item stacks, so UIDs, magazines and counts are kept. A fuel cart's units become single fuel cans,
+  one per unit (a can holds exactly one unit), so all of its fuel is kept. Pickups and loose things resting on it fall, within the bounded body pools. It leaves **exactly one**
   salvage at its base: **Electrical parts** for anything with a screen, machinery, a hum or a plug, **Scrap metal** otherwise.
   A melted generated prop is recorded in the station's `acid.melted` lane, saved and validated. It stays gone on every rebuild and
   never spills or salvages twice. Carried props, units and carts leave their own records.
@@ -97,7 +97,8 @@ Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
   Save terminal waits while a melt is under way or debris is still falling ("acid is still at work").
 - **Zombie Lure grenade.** It lands and rolls; at rest it opens and for **20 active seconds** the infected within **20 m** smell it,
   through walls and round corners, and go to the canister itself — never to you (`ai/scentLure.ts`); one that sees you still
-  comes for you, and the blind Screacher, a dormant Siren and the BB (its own crawling brain) ignore it. A faint tan plume shows it is venting. Then it is empty and
+  comes for you, and the blind Screacher and a dormant Siren ignore it. The BB is drawn too: off its wall or ceiling it drops down
+  and walks the floor to the canister (`ai/bb.ts`). A faint tan plume shows it is venting. Then it is empty and
   goes after a while. At most three at once.
 
 ## Moving equipment

@@ -93,6 +93,19 @@ export function routeCost(hops: number, cheat = false): number {
   return cheat ? 0 : Math.max(0, Math.floor(hops)) * FUEL.hopUnits;
 }
 
+/**
+ * Task studio-refinement-scope-finish-20261113-080904-01: fuel units as fuel CANS, exactly. A can holds one unit (FUEL.canUnits: "the
+ * unit IS a can"), and every fuel amount the game keeps is whole units (a cart's 0..FUEL.cartUnits: cartProblem refuses anything else
+ * on load, fuelCarts.spawnWorld floors and clamps, the hose drains a unit at a time), so any amount is that many cans: nothing rounded
+ * away, nothing rounded up, never a part can left over. The world lays
+ * them as SINGLE cans (one visible can = one can: Game.dropRef, the riding drop, the station's loot cans, a melted cart).
+ */
+export function cansForUnits(units: number): number {
+  // a can is exactly one unit: this line stops type-checking if a can is ever made bigger (a part-can remainder would need an item first)
+  const perCan: 1 = FUEL.canUnits;
+  return Math.max(0, units) / perCan;
+}
+
 /** Fuel units in fuel-can stacks of a slot list (the train chest / a bag / an inventory list). */
 export function canUnitsIn(slots: readonly (ItemStack | null | undefined)[]): number {
   let n = 0;

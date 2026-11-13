@@ -6,8 +6,8 @@
 //  - a chest's stacks spill as the SAME objects (uid / mag / count), a sentry's feed stacks too and its legacy rounds as real stacks of
 //    its feed item (every round conserved); salvage by trait (a plug-in device: electrical parts; the chest: scrap metal);
 //  - the unit leaves its system at once (never grabbed / plugged / recorded again): the station lane and the train's record drop it;
-//  - a fuel cart's units become fuel cans (FUEL.canUnits each, stacks of FUEL.canStackMax: every unit conserved), scrap salvage, the
-//    cart out of the carts and their records.
+//  - a fuel cart's units become SINGLE fuel cans (FUEL.canUnits each: every unit conserved, one visible can = one can), scrap salvage,
+//    the cart out of the carts and their records (the whole chain through saves / pickup / use: acid-melt-cart-fuel.test.ts).
 import {afterEach, describe, expect, it} from 'vitest';
 import {installCanvasShim, ShimContext} from './helpers/canvas2d';
 import {LEVELS} from '../src/levels/registry';
@@ -135,7 +135,7 @@ describe('acid melt: crafted equipment and fuel carts', () => {
     expect(c.h.playerTrain.equipment.records()).toEqual([]);
   }, 60000);
 
-  it('a fuel cart: its units become fuel cans (every unit conserved, stacks of at most FUEL.canStackMax); scrap salvage; out of the carts and their records', () => {
+  it('a fuel cart: its units become single fuel cans (every unit conserved, one visible can = one can); scrap salvage; out of the carts and their records', () => {
     const {c} = world();
     const cart = c.carts.bodies().find(x => x.uid === 'cart:A')!;
     const r = c.melt.inDisc(cart.body.x, cart.body.y, cart.body.z, 0.2).find(x => x.key === 'cart:cart:A')!;
@@ -144,7 +144,7 @@ describe('acid melt: crafted equipment and fuel carts', () => {
     step(c, MELT.seconds + 0.1);
     const cans = pickupsOf(c).filter(p => p.itemId === FUEL.canItem);
     expect(cans.reduce((n, p) => n + p.count * FUEL.canUnits, 0)).toBe(5);
-    for (const p of cans) expect(p.count).toBeLessThanOrEqual(FUEL.canStackMax);
+    expect(cans.map(p => p.count)).toEqual([1, 1, 1, 1, 1]);
     expect(salvageOf(c).map(s => s.itemId)).toEqual([SCRAP_METAL]);
     expect(c.carts.stationRecords().some(x => x.uid === 'cart:A')).toBe(false);
     expect(c.carts.all().some(x => x.uid === 'cart:A')).toBe(false);
