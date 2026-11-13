@@ -754,7 +754,7 @@ export function validateRunData(v: unknown, o: ValidateOptions = {}, path = 'run
 function validateRunBody(r: Record<string, unknown>, o: ValidateOptions, path: string): SerializedRunV1 {
   const point = oneOf(r.point, `${path}.point`, SAVE_POINTS);
   const c = campaign(r.campaign, `${path}.campaign`, o.validateNetwork);
-  if ((point === 'departure') !== (c.transit !== null)) bad(`${path}.point`, point === 'departure' ? 'a departure save without a journey' : `${point === 'arrival' ? 'an arrival' : point === 'ending' ? 'an ending' : 'a new-game'} save during a journey`);
+  if ((point === 'departure') !== (c.transit !== null)) bad(`${path}.point`, point === 'departure' ? 'a departure save without a journey' : `${point === 'arrival' ? 'an arrival' : point === 'ending' ? 'an ending' : point === 'manual' ? 'a manual' : 'a new-game'} save during a journey`); // (lane SAVE, refinement batch: + 'manual', taken only while parked)
   const seeds = obj(r.seeds, `${path}.seeds`);
   // task studio-skyways-level-20261106-054448-01: a run saved before Skyways existed has no seeds.skyways (the legacy per-archetype seed;
   // campaign nodes carry their own levelSeed) — a deterministic default from its Subway seed (the checksum was verified on the stored run)
