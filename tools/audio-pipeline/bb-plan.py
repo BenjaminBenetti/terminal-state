@@ -3,9 +3,9 @@
 
 BB: a small crawling undead with four looks that share ONE voice set (game/src/ai/bb.ts, audio/sfx.ts bbVoice / BB_AUDIO). Cues
 (runtime ids): bbCackle (the loud eerie cackle when it notices the player: the gameplay tell), bbGiggle (a quiet short giggle now
-and then while one is near), bbPounce (the gleeful squeal of its leap), bbHurt (a short warped toy-like squeak when it is shot),
-bbDeath (a laugh that winds down like a broken wind-up toy). The tone is a creepy doll / haunted-nursery laugh: non-graphic, and
-hurt / death are creature- and toy-like, never a suffering child.
+and then while one is near), bbPounce (the gleeful squeal of its pounce: the cue starts with the wind-up tell and is loudest at the
+launch), bbHurt (a short warped toy-like squeak when it is shot), bbDeath (a laugh that winds down like a broken wind-up toy). The
+tone is a creepy doll / haunted-nursery laugh: non-graphic, and hurt / death are creature- and toy-like, never a suffering child.
 
 Reuse first (game/src/audio/bank.ts): every enemy vocal in the bank is a groan, growl, snarl, hum, scream, shriek, wheeze or gurgle;
 the market set's voices are adult screams and grunts. Nothing in it laughs, so the five cues are generated.
@@ -102,6 +102,12 @@ BATCHES: dict[str, list[tuple[str, str, float]]] = {
         ("bb-pounce-07", "bbPounce", 2.0),
         ("bb-pounce-08", "bbPounce", 2.0),
     ],
+    # Structural QC of batch C (NOT listened to):
+    #  - pounce-06: the glide again, but loudest 0.23 s after its start (no build). pounce-07 / 08: the family of pounce-03 — a steady
+    #    squeal (main partial 3.1-3.3 kHz) that steps up about 10 dB to its loudest part 0.7-0.9 s into the event.
+    # Outcome (tools/audio-pipeline/bb-build.mjs; 23 jobs): 16 takes shipped (cackle 02-05, giggle 01-04, pounce 03 / 07 / 08,
+    # hurt 01-03, death 02 / 03), 5 structurally rejected (pounce 02 / 04 / 05 / 06, death 01), 2 usable spares not shipped
+    # (cackle 01, pounce 01). No further batch was planned.
 }
 
 
