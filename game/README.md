@@ -75,7 +75,9 @@ and is saved with its contents, rounds and socket.
 Train armour (task studio-refinement-batch-20261113-035659-01, `docs/train-crafting.md` "Train armour"): a permanent one-time upgrade
 (10 scrap metal at the bench) that armours the car from the rails to the roof line: a bladed skirt, lapped belt plates, buttress
 posts between the windows and a spiked roof rail along both sides, and a V plough with corner towers and a prow at each end (the
-makeover kit, task studio-train-armor-makeover-20261113-183146-01; existing armoured saves show it without crafting again).
+makeover kit, task studio-train-armor-makeover-20261113-183146-01; existing armoured saves show it without crafting again). Its
+palette is weathered steel close to the car body's own with rust as accents (task studio-train-armor-palette-20261113-213306-01: a
+deterministic grade of the models' own base colour maps, nothing else changed).
 No durability; it stays for the run, is saved with the train and never covers a door, window or lamp. While the train is parked, a
 zombie pressed against the blades takes 20 damage a second (a regular zombie dies after 5 seconds); the player, market people and
 corpses are never hurt, and nothing is hurt while the train moves. The plates are solid to the player, enemies and bullets.

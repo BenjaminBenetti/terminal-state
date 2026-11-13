@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 84758,
-      "sha256": "a81979e98016dc59666ed8c91e83a6933ac74dc743b1c05bdee2e158ad5acd38"
+      "bytes": 85359,
+      "sha256": "231107b0d5c004d29c785e884b37c3bf5520f0226928d4cc35ce4f34b6fa8f74"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -2530,8 +2530,8 @@
     },
     {
       "path": "assets/derivatives/refinement-batch-20261113.json",
-      "bytes": 14164,
-      "sha256": "58c8af4106a673502a2dec6d56f92ab62a69c70a76dd09e61a547744f98eb5fe"
+      "bytes": 17627,
+      "sha256": "dac786e57b82098bf9590800cfa590c9d8e2edc5ec00ce6db55678af152029bb"
     },
     {
       "path": "assets/derivatives/rifle-optic-iteration04.json",
@@ -2930,8 +2930,8 @@
     },
     {
       "path": "assets/derivatives/train-armor-makeover-20261113.json",
-      "bytes": 14771,
-      "sha256": "46b06984c68fcf027464a369a9e4abdf9eb44ba80d2a5d139f1fa84243c3c7b5"
+      "bytes": 20568,
+      "sha256": "74d5f8084f2f8361ff04275ec2d7241d0dceab5f6710070beca431ae141261d2"
     },
     {
       "path": "assets/derivatives/train-chipper.json",
@@ -5365,33 +5365,33 @@
     },
     {
       "path": "assets/models/train-armor-end.glb",
-      "bytes": 1145184,
-      "sha256": "8e6c694a4d93247bc461ab29829248b4f1bb7133c48c0f460756054c7f7263cc"
+      "bytes": 1202688,
+      "sha256": "62eb58770b3ab59de86f044a0c685c6cec04a206c887acf2bbe3f657410a7cbb"
     },
     {
       "path": "assets/models/train-armor-plate.glb",
-      "bytes": 749968,
-      "sha256": "1016f31d21f14b4a6b1111cd2afc137f1f96611799e47ab823798e2ee23fff7c"
+      "bytes": 776152,
+      "sha256": "401aaf0679e9bf7236e26eea2106cb4847d9389f21736070831f8634601d4d6d"
     },
     {
       "path": "assets/models/train-armor-post.glb",
-      "bytes": 606812,
-      "sha256": "a8c7326b487a98d057362174b946b842e81e71e04a74034f8433c7e6c6852ea5"
+      "bytes": 658748,
+      "sha256": "5ba06fd5e8ca5cac2e1b5fe01e6cb852652b6b01bc6b3fea53220612b968b74b"
     },
     {
       "path": "assets/models/train-armor-rail.glb",
-      "bytes": 702896,
-      "sha256": "5b82418b080dbf4e5070cb4db26bd5e0fc250b1fa560ebe0a30eb3c4376a3745"
+      "bytes": 729824,
+      "sha256": "6cb553bbf2f6b1b4063ccac5360d7a5ebff430a903fd3d678a33cee66d021634"
     },
     {
       "path": "assets/models/train-armor-side.glb",
-      "bytes": 1206340,
-      "sha256": "9ba9ca1981c6e64740c66c9254541522735dd15d5bf5185c2682318e578d4309"
+      "bytes": 1244956,
+      "sha256": "d53de40ee0f046ab0010a2a651e9ed8fd2af0190826a4adfcec4fcc78ff17658"
     },
     {
       "path": "assets/models/train-armor-wing.glb",
-      "bytes": 864076,
-      "sha256": "6f336688a4269778d9f92b6fc5f6b258fa1eead7bc82e1d387a3480724c79bea"
+      "bytes": 920236,
+      "sha256": "e52ccd3410be895b2c631cfa9696bd864ae102116903a8b42f2cc1055ce43900"
     },
     {
       "path": "assets/models/train-bench.glb",

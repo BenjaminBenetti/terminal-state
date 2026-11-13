@@ -16,6 +16,48 @@
  "meshyTool": "mcp__meshy__meshy_image_to_3d (the project's Meshy MCP entry)",
  "evidence": "the exact create arguments, task ids, charges, price evidence and raw hashes are in the job ledger kept outside Git; this cook verifies every raw original and conditioning image against it before it writes",
  "licence": "generated for this project under the existing provider accounts; no blanket licence or commercial clearance implied (assets/CREDITS.md)",
+ "palette": {
+  "id": "train-armor-palette-20261113",
+  "version": 1,
+  "task": "studio-train-armor-palette-20261113-213306-01",
+  "by": "tools/asset-pipeline/props/lib/armor-palette.mjs",
+  "what": "a deterministic colour grade of the train armour models' own Meshy base colour maps toward the car body's own light steel (rust kept as accents, hazard paint kept); material only: geometry, UVs, metallic-roughness and normal maps unchanged; no generation",
+  "approval": "user direction for task studio-train-armor-palette-20261113-213306-01: a colour / material pass with existing models and maps, non-generative, no paid calls",
+  "space": "OKLab",
+  "target": {
+   "L": 0.7,
+   "a": -0.0047,
+   "b": 0.0047
+  },
+  "rust": {
+   "lo": 0.62,
+   "hi": 0.94,
+   "blur": 4,
+   "at": 2048,
+   "keep": 0.9,
+   "lift": 0.35
+  },
+  "steel": {
+   "variation": 0.35,
+   "contrast": 1,
+   "shoulder": [
+    0.8,
+    0.93
+   ],
+   "shadow": [
+    0.1,
+    0.45
+   ]
+  },
+  "hazard": [
+   0.085,
+   0.11
+  ],
+  "models": [
+   "train-armor-side",
+   "train-armor-end"
+  ]
+ },
  "models": [
   {
    "id": "train-armor-side",
@@ -86,8 +128,8 @@
    "output": {
     "file": "game/public/assets/models/train-armor-side.glb",
     "url": "assets/models/train-armor-side.glb",
-    "sha256": "9ba9ca1981c6e64740c66c9254541522735dd15d5bf5185c2682318e578d4309",
-    "bytes": 1206340,
+    "sha256": "d53de40ee0f046ab0010a2a651e9ed8fd2af0190826a4adfcec4fcc78ff17658",
+    "bytes": 1244956,
     "triangles": 14971,
     "dims": [
      2.4,
@@ -106,7 +148,38 @@
     "front": 0.073,
     "back": 0.0187
    },
-   "texturePolicy": "Meshy maps kept channel for channel, Lanczos downsize + JPEG: base 1024 px q85, metallic-roughness 512 px q85, normal 1024 px q90; no reprojection / retexture / repaint",
+   "texturePolicy": "Meshy maps kept, Lanczos downsize + JPEG: base 1024 px q85, metallic-roughness 512 px q85, normal 1024 px q90; metallic-roughness and normal channel for channel; base colour graded by tools/asset-pipeline/props/lib/armor-palette.mjs (train-armor-palette-20261113 v1, task studio-train-armor-palette-20261113-213306-01): a deterministic per-texel OKLab grade of Meshy's own map — texels whose chroma (its 9x9 box mean at 2048 px) is below the map's own 0.62 chroma quantile become weathered steel (the map's median lightness and mean hue moved onto the car body's own light steel, 0.35 of the texel's own colour variation kept), those above its 0.94 quantile stay rust (chroma x0.9, 0.35 of the steel's lightness lift), a smooth blend between; hazard paint (chroma over 0.11) kept as generated; no generation, repaint or reprojection",
+   "palette": {
+    "id": "train-armor-palette-20261113",
+    "version": 1,
+    "source": {
+     "slot": "baseColor",
+     "sha256": "0c6fc8c3398d064cae2cb02d482e67ba5e2ed5ee035ab61b6925162f9c5fb1aa",
+     "bytes": 2752162,
+     "size": [
+      2048,
+      2048
+     ]
+    },
+    "chromaLo": 0.0376,
+    "chromaHi": 0.0579,
+    "medianL": 0.4332,
+    "meanAB": [
+     0.0223,
+     0.0271
+    ],
+    "rustShare": 0.1207,
+    "meanBefore": [
+     103,
+     82,
+     70
+    ],
+    "meanAfter": [
+     153,
+     153,
+     148
+    ]
+   },
    "textures": [
     {
      "slot": "baseColor",
@@ -115,8 +188,8 @@
       1024
      ],
      "mime": "image/jpeg",
-     "bytes": 215553,
-     "sha256": "e501329d2e460db15b16be6bb12ea8ece6622da9e924781ad5cb94b4aae32b96"
+     "bytes": 254170,
+     "sha256": "72f63cf663ae24a97b7b707943b9d35d1fe6fe3d3d4b0ab175544636c1982e76"
     },
     {
      "slot": "metallicRoughness",
@@ -209,8 +282,8 @@
    "output": {
     "file": "game/public/assets/models/train-armor-end.glb",
     "url": "assets/models/train-armor-end.glb",
-    "sha256": "8e6c694a4d93247bc461ab29829248b4f1bb7133c48c0f460756054c7f7263cc",
-    "bytes": 1145184,
+    "sha256": "62eb58770b3ab59de86f044a0c685c6cec04a206c887acf2bbe3f657410a7cbb",
+    "bytes": 1202688,
     "triangles": 14338,
     "dims": [
      2.6,
@@ -226,7 +299,38 @@
    "convention": "width along X, up +Y, the fins toward +Z; origin = bottom centre of the back plate (z = 0 at the back); the raw's rear half folded flat onto the back plate, depth scaled",
    "foldedVertices": 10244,
    "foldPlaneRawZ": -0.001,
-   "texturePolicy": "Meshy maps kept channel for channel, Lanczos downsize + JPEG: base 1024 px q85, metallic-roughness 512 px q85, normal 1024 px q90; no reprojection / retexture / repaint",
+   "texturePolicy": "Meshy maps kept, Lanczos downsize + JPEG: base 1024 px q85, metallic-roughness 512 px q85, normal 1024 px q90; metallic-roughness and normal channel for channel; base colour graded by tools/asset-pipeline/props/lib/armor-palette.mjs (train-armor-palette-20261113 v1, task studio-train-armor-palette-20261113-213306-01): a deterministic per-texel OKLab grade of Meshy's own map — texels whose chroma (its 9x9 box mean at 2048 px) is below the map's own 0.62 chroma quantile become weathered steel (the map's median lightness and mean hue moved onto the car body's own light steel, 0.35 of the texel's own colour variation kept), those above its 0.94 quantile stay rust (chroma x0.9, 0.35 of the steel's lightness lift), a smooth blend between; hazard paint (chroma over 0.11) kept as generated; no generation, repaint or reprojection",
+   "palette": {
+    "id": "train-armor-palette-20261113",
+    "version": 1,
+    "source": {
+     "slot": "baseColor",
+     "sha256": "86ee011bea4d3a4e93ce70341d915f0f35c686d0b82833e82b63c5c09c119e11",
+     "bytes": 2802727,
+     "size": [
+      2048,
+      2048
+     ]
+    },
+    "chromaLo": 0.0541,
+    "chromaHi": 0.0633,
+    "medianL": 0.4176,
+    "meanAB": [
+     0.0305,
+     0.0415
+    ],
+    "rustShare": 0.1601,
+    "meanBefore": [
+     105,
+     76,
+     57
+    ],
+    "meanAfter": [
+     152,
+     150,
+     145
+    ]
+   },
    "textures": [
     {
      "slot": "baseColor",
@@ -235,8 +339,8 @@
       1024
      ],
      "mime": "image/jpeg",
-     "bytes": 191304,
-     "sha256": "71a6d514fc04d5d4477a67bd460222bfc334ab0208cecbbb9259a8dcdfdcd067"
+     "bytes": 248807,
+     "sha256": "8692d5bf39ada7b8636a6a6bba7eaa0ca46b0b704f7ece3ba7620d76e838e716"
     },
     {
      "slot": "metallicRoughness",
