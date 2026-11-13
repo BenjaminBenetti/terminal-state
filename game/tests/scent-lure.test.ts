@@ -22,6 +22,7 @@ import {ZombieBrain, type BrainOutput, type BrainWorld} from '../src/ai/brain';
 import {CreatureBrain} from '../src/ai/creatureActor';
 import {SIREN_STATS, SirenBrain} from '../src/ai/siren';
 import {StrainerBrain} from '../src/ai/strainer';
+import {BlightbellyBrain} from '../src/ai/blightbelly';
 import {ScreacherBrain} from '../src/ai/screacher';
 import {moveZombie, settleZombie} from '../src/ai/motor';
 import {LURE, lureWorld} from '../src/ai/lightLure';
@@ -494,7 +495,7 @@ describe('scent lure: retarget, teardown, cost, deferral', () => {
 });
 
 describe('scent lure: families', () => {
-  it('the rat/dog is drawn (no ladder links); the Strainer and an AWAKE Siren are drawn', () => {
+  it('the rat/dog is drawn (no ladder links); the Strainer, the Blightbelly and an AWAKE Siren are drawn', () => {
     const s = sim(HL, HPF);
     s.wander = false;
     const r = new CreatureBrain(30, 17, 0);
@@ -505,7 +506,7 @@ describe('scent lure: families', () => {
     expect(holding(e)(r)).toBe(true);
     expect(s.paths.length).toBeGreaterThan(0);
     expect(s.paths.every(p => p.noLinks === true && p.defer)).toBe(true);
-    for (const b of [new StrainerBrain(34, 9, 0), new SirenBrain(34, 9, 0, SIREN_STATS, false)]) {
+    for (const b of [new StrainerBrain(34, 9, 0), new BlightbellyBrain(34, 9, 0), new SirenBrain(34, 9, 0, SIREN_STATS, false)]) {
       run(s, b, 0.6);
       expect(b.state).toBe('investigate');
       expect(b.lure?.lightId).toBe(e.id);

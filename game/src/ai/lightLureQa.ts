@@ -53,8 +53,11 @@ export function lightLureQaApi(game: Game, lookAt: (x: number, y: number, z: num
       const z = game.zombies[k];
       if (!z) return null;
       const b = z.brain;
+      // (lane LURE, refinement batch 2026-11-13: a followed lure SCENT's id is an emitter id, not a light id — game.scents.qa())
+      const light = b.lure && b.lure.kind !== 'scent' ? b.lure.lightId : null;
       return {index: k, archetype: archetypeOf(z), state: b.state, aware: b.aware, yaw: r2(b.yaw), eye: {x: r2(b.x), y: r2(b.y + LURE_EYE), z: r2(b.z)},
-        tracking: b.lure?.lightId ?? null, lights: probeLights(b, game.lightSources.list, see(), b.state === 'investigate' ? b.lure?.lightId ?? null : null)};
+        tracking: light, scent: b.lure?.kind === 'scent' ? b.lure.lightId : null,
+        lights: probeLights(b, game.lightSources.list, see(), b.state === 'investigate' ? light : null)};
     },
     /**
      * QA-only setup (not behaviour proof): stand `dist` m (default: the enemy's sight range + 4) from a living idle / wandering enemy
