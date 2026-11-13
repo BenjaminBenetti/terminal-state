@@ -475,6 +475,57 @@ describe('acid melt: the real station and the parked train', () => {
     expect(gone).not.toContain(w.L.props.indexOf(a.base));
   }, 60000);
 
+  it('presentation: the copy tints acid yellow-green, sags into the floor about its base, bubbles rise; no fog / gas; warm pool in the scene', () => {
+    const {c, w} = station();
+    // the warm-up pool: hidden prototype meshes (never invisible groups) under a group that is in the scene
+    const pool = (c.h.pools['acid-melt'] ?? (() => []))();
+    expect(pool).toHaveLength(MELT.maxActive + 1);
+    for (const o of pool) {
+      expect((o as THREE.Mesh).isMesh, o.name).toBe(true);
+      let a: THREE.Object3D | null = o;
+      while (a && a !== c.h.scene) a = a.parent;
+      expect(a, o.name).toBe(c.h.scene);
+    }
+    const H = w.L.props.find(p => c.melt.protection(p) === null && !w.ph.dynamicItems.isDynamicProp(p) && p.h > 0.8 && instDrawn(w, p) && lone(w, p))!;
+    const ref = refOf(c, w, H);
+    const fizz: number[][] = [];
+    c.melt.fizz = (x, y, z) => { fizz.push([x, y, z]); };
+    expect(c.melt.start(ref)).toBe(true);
+    expect(fizz).toHaveLength(1);
+    step(c, MELT.seconds * 0.55);
+    const root = c.h.scene.getObjectByName(`acid-melt:${ref.key}`)!;
+    expect(root).toBeTruthy();
+    const shells: THREE.Mesh[] = [], copies: THREE.Mesh[] = [];
+    root.traverse(o => { if ((o as THREE.Mesh).isMesh) (o.name === 'acid-melt-shell' ? shells : copies).push(o as THREE.Mesh); });
+    expect(copies.length).toBeGreaterThan(0);
+    expect(shells).toHaveLength(copies.length);
+    const shell = shells[0].material as THREE.MeshStandardMaterial;
+    expect(shell.opacity).toBeGreaterThan(0.3);
+    expect(shell.opacity).toBeLessThanOrEqual(MELT.tint);
+    expect(shell.depthWrite).toBe(false);
+    expect(shell.color.g).toBeGreaterThan(shell.color.r); // (yellow-green: green over red over blue)
+    expect(shell.color.r).toBeGreaterThan(shell.color.b);
+    const s = new THREE.Vector3(), p = new THREE.Vector3();
+    root.matrix.decompose(p, new THREE.Quaternion(), s);
+    expect(s.y).toBeLessThan(0.8);
+    expect(s.y).toBeGreaterThan(MELT.sag);
+    expect(s.x).toBeLessThan(1);
+    // about its base: the base point stays put (within the small sink)
+    const base = new THREE.Vector3(H.x, H.y, H.z).applyMatrix4(root.matrix);
+    expect(base.distanceTo(new THREE.Vector3(H.x, H.y, H.z))).toBeLessThan(0.02);
+    const bubbles = c.melt.group.getObjectByName('acid-melt-bubbles') as THREE.InstancedMesh;
+    expect(bubbles.visible).toBe(true);
+    // nothing fog / gas / smoke: no scene fog, no fog-named object anywhere
+    expect(c.h.scene.fog).toBeFalsy();
+    let foggy = 0;
+    c.h.scene.traverse(o => { if (/fog|gas|smoke/i.test(o.name) && /acid/i.test(o.name)) foggy++; });
+    expect(foggy).toBe(0);
+    step(c, MELT.seconds * 0.5);
+    expect(c.h.scene.getObjectByName(`acid-melt:${ref.key}`)).toBeUndefined();
+    expect(bubbles.visible).toBe(false);
+    expect(shell.opacity).toBe(0);
+  }, 60000);
+
   it('a loose prop melts where it lies (its body withdrawn), salvage at its new place', () => {
     const {c, w} = station();
     const B = w.L.props.find(p => c.melt.protection(p) === null && w.ph.dynamicItems.isDynamicProp(p) && p.h > 0.3 && instDrawn(w, p) && lone(w, p))!;
