@@ -159,8 +159,8 @@ export const BB_SENSE = {
   stareS: 0.4,
   /** Clinging to a wall or ceiling it notices all round, but only this near (m); on the floor it has the usual forward field of view. */
   perchNoticeM: 10,
-  /** Field of view of an unaware one on the floor (rad each side) beyond closeM; nearer than nearM it notices all round. */
-  fovRad: 1.3, closeM: 5, nearM: 2.5,
+  /** Field of view of an unaware one on the floor (rad each side of its heading); nearer than closeM it notices all round. */
+  fovRad: 1.3, closeM: 5,
 } as const;
 
 /** Feet-to-mouth height of the crawling body (m): its positional voice on the floor (ENEMY_ARCHETYPES.bb.voiceHeight). */
@@ -470,9 +470,9 @@ export class BbBrain extends ZombieBrain {
     if (d > this.stats.sightRange * k) return false;
     if (!this.aware) {
       if (this.mode === 'ground') {
-        if (d > S.nearM * k) {
+        if (d > S.closeM * k) {
           const ang = Math.atan2(dx, dz) - this.yaw;
-          if (Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang))) > S.fovRad && d > S.closeM * k) return false;
+          if (Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang))) > S.fovRad) return false;
         }
       } else if (d > S.perchNoticeM * k) return false;
     }
