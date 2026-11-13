@@ -187,6 +187,23 @@ describe('Levels.raycast / lineOfSight', () => {
     expect(q.kind === 'prop' ? fx.props[q.prop!].kind : q.kind).not.toBe('bench');
   });
 
+  it('a long prop is solid at its ends too: a short ray beside its far end hits it (the cheap reject reaches as far as the prop does)', () => {
+    // a 5.6 m machine along z, in the open air over the track bed; a 0.5 m ray into its side 2.5 m from its middle. Rejecting by
+    // "centre further than the ray's reach + 2 m" skipped it there: bullets and bodies passed through the ends of long props.
+    const machine = {...fx.props[0], x: 24.3, z: 12, y: 1.2, hx: 0.4, hz: 2.8, h: 0.8, round: undefined};
+    const o = {x: 25, y: 1.6, z: 14.5}, d = {x: -1, y: 0, z: 0};
+    expect(L.raycast(o, d, 0.5).kind).toBe('none'); // (nothing else is there)
+    for (const z of [9.5, 12, 14.5]) {
+      const h = L.raycast({...o, z}, d, 0.5, {props: [machine], trenchY: FIX.bedY});
+      expect(h.kind, `at z ${z}`).toBe('prop');
+      expect(h.t).toBeCloseTo(0.3, 6);
+      expect(h.nx).toBe(1);
+      expect(raycastWorld(L, [machine], {...o, z}, d, 0.5, FIX.bedY).kind).toBe('prop');
+    }
+    // beyond its end it is not there
+    expect(L.raycast({...o, z: 15}, d, 0.5, {props: [machine], trenchY: FIX.bedY}).kind).toBe('none');
+  });
+
   it('raycastWorld routes through Levels (level + cell on the hit)', () => {
     const h = raycastWorld(L, fx.props, {x: 22.6, y: 1.62, z: 7}, {x: 0, y: 1, z: 0}, 30, FIX.bedY);
     expect(h.kind).toBe('ceiling');

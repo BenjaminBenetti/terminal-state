@@ -127,7 +127,7 @@ import {installBunkerObjective} from './world/bunker/objective'; // task studio-
 import {installReactorMapBoards} from './world/reactor/mapBoard'; // task reactor-expansion-20261101 (lane CONTROLS) // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import {SCREACHER_NOISE, ScreacherBrain, deliverNoise, echoLocate, landNoise, type ScreacherNoiseKind} from './ai/screacher'; // task studio-screacher-production-20261110-221858-01: the blind, sound-hunting family
-import {BbBrain} from './ai/bb'; // task studio-bb-production-20261112-234540-01: BB, the small wall / ceiling crawler
+import {BbBrain, bbShoveStep} from './ai/bb'; // task studio-bb-production-20261112-234540-01: BB, the small wall / ceiling crawler
 import {levelsCrawlWorld, type CrawlWorld} from './ai/bbSurface';
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 // Iteration 16 (lane RUN): logical levels / sections, travel, run carryover (levels/registry.ts, run/*)
@@ -3851,13 +3851,16 @@ export class Game {
       const moved = moveZombie(b, out, dt, this.levels, this.propIndex); // Lane B: stacked levels
       if (b.alive && !b.climbing) {
         // keep bodies apart: other zombies and the player (same level only: platform vs track bed do not shove)
+        // (BB comes to the floor wherever a leap or a climb ends, also right at somebody's feet: it is eased out at a bounded pace,
+        // so one frame's push can never carry its small body through the wall beside it)
+        const ease = b instanceof BbBrain ? bbShoveStep(dt) : Infinity;
         for (const o of this.zombies) {
           if (o === z || !o.brain.alive || !sameLevel(b.y, o.brain.y) || (o.placesRoot && o.brain.climbing)) continue; // (a BB on a wall / ceiling / in the air shoves nobody)
           const dx = b.x - o.brain.x, dz = b.z - o.brain.z, d = Math.hypot(dx, dz), min = b.stats.radius + o.brain.stats.radius;
-          if (d > 1e-4 && d < min) { const push = (min - d) * 0.5; b.x += dx / d * push; b.z += dz / d * push; }
+          if (d > 1e-4 && d < min) { const push = Math.min((min - d) * 0.5, ease); b.x += dx / d * push; b.z += dz / d * push; }
         }
         const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz), min = b.stats.radius + p.radius + 0.22;
-        if (d > 1e-4 && d < min && sameLevel(b.y, p.y)) { b.x += dx / d * (min - d); b.z += dz / d * (min - d); }
+        if (d > 1e-4 && d < min && sameLevel(b.y, p.y)) { const push = Math.min(min - d, ease); b.x += dx / d * push; b.z += dz / d * push; }
         settleZombie(b, this.levels, this.propIndex);
       }
       // positional (panner) enemy audio: vocals, swings, footfalls — per archetype (Lane Q cue adapter;

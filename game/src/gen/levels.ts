@@ -948,9 +948,10 @@ export class Levels implements NavLevels {
     if (props) {
       for (let i = 0; i < props.length; i++) {
         const p = props[i];
-        // cheap reject: distance from ray origin
-        const dx = p.x - o.x, dz = p.z - o.z;
-        if (dx * dx + dz * dz > (best.t + 2) * (best.t + 2)) continue;
+        // cheap reject: distance from ray origin to the prop's centre, less the prop's own reach (a long machine, a partition run or a
+        // glazing line reaches further than 2 m from its centre: a short ray at its far end must still be tested against it)
+        const dx = p.x - o.x, dz = p.z - o.z, reach = best.t + Math.max(2, p.hx + p.hz);
+        if (dx * dx + dz * dz > reach * reach) continue;
         // lane FIX (U04): round props (mall atrium columns) are hit as their upright cylinder, not the square box
         const h = p.round ? rayCylinder(o, d, p.x, p.z, p.hx, p.y, p.y + p.h) : rayBox(o, d, p.x - p.hx, p.y, p.z - p.hz, p.x + p.hx, p.y + p.h, p.z + p.hz);
         if (h && h.t < best.t) {

@@ -4,7 +4,7 @@
 
 import {describe, expect, it} from 'vitest';
 import {
-  CRAWL, anchorValid, arcClear, centreValid, clingCentre, clingKind, crawlStep, findMounts, flatCrawlWorld, flightStep, floorBelow, launchVelocity, layoutCrawlWorld, mountWall,
+  CRAWL, anchorValid, arcClear, centreValid, clingCentre, clingKind, crawlStep, findMounts, flatCrawlWorld, flightClear, flightStep, floorBelow, launchVelocity, layoutCrawlWorld, mountWall,
   steerCling, type Cling, type CrawlHit, type CrawlWorld, type Vec3,
 } from '../src/ai/bbSurface';
 import {LEVELS} from '../src/levels/registry';
@@ -243,6 +243,41 @@ describe('BB leap: a swept ballistic body', () => {
     expect(floorBelow(w, 2, 2.5, 4, 5)).toBeCloseTo(0, 6);
     const withProp = boxWorld(ROOM, [{min: {x: 1, y: 0, z: 3}, max: {x: 3, y: 1, z: 5}, prop: true}]);
     expect(floorBelow(withProp, 2, 2.5, 4, 5)).toBeNull();
+  });
+
+  it('flightClear holds the body\'s centre off the walls it passes, keeps its velocity, and never pushes it into anything', () => {
+    const R = CRAWL.radius;
+    // along the wall's face (x = 4), 0.1 m from it: pushed out to the clearance, its speed untouched
+    const along = {x: 3.9, y: 1.5, z: 1, vx: 0, vy: -1, vz: 3};
+    expect(flightClear(w, along, R)).toBe(true);
+    expect(along.x).toBeCloseTo(4 - R, 6);
+    expect([along.z, along.vx, along.vy, along.vz]).toEqual([1, 0, -1, 3]);
+    // in the open: nothing near, nothing changes
+    const open = {x: 2, y: 1.5, z: 4, vx: 3, vy: 0, vz: 0};
+    expect(flightClear(w, open, R)).toBe(false);
+    expect(open).toEqual({x: 2, y: 1.5, z: 4, vx: 3, vy: 0, vz: 0});
+    // drifting INTO the face at a shallow angle it is held at the clearance and slides along it, its velocity as it was
+    // (a head-on flight meets the wall in flightStep: the test above)
+    const into = {x: 3.6, y: 2.5, z: 0.4, vx: 0.5, vy: 0, vz: 3};
+    let nearest = Infinity;
+    for (let k = 0; k < 30; k++) {
+      expect(flightStep(w, into, 1 / 60, 0)).toBeNull();
+      flightClear(w, into, R);
+      nearest = Math.min(nearest, 4 - into.x);
+    }
+    expect(nearest).toBeCloseTo(R, 6);
+    expect(4 - into.x).toBeCloseTo(R, 6);
+    expect(into.z).toBeCloseTo(0.4 + 3 * 30 / 60, 6);
+    expect([into.vx, into.vz]).toEqual([0.5, 3]);
+    // grazing the wall's END (its face z = 2.4) it is held off while beside it and goes on once past: it still arrives
+    const graze = {x: 3.5, y: 1.5, z: 2.5, vx: 6, vy: 2, vz: 0};
+    for (let k = 0; k < 20; k++) { expect(flightStep(w, graze, 1 / 60, 16)).toBeNull(); flightClear(w, graze, R); }
+    expect(graze.x).toBeCloseTo(3.5 + 6 * 20 / 60, 6);
+    expect(graze.z).toBeCloseTo(2.4 + R, 6);
+    // in a slot narrower than its body it goes to the middle and stays there (no hopping from side to side)
+    const slot = boxWorld(ROOM, [{min: {x: 4, y: 0, z: 0}, max: {x: 4.5, y: 3, z: 6}}, {min: {x: 3.2, y: 0, z: 0}, max: {x: 3.7, y: 3, z: 6}}]);
+    const s = {x: 3.78, y: 1.5, z: 3, vx: 0, vy: 0, vz: 2};
+    for (let k = 0; k < 4; k++) { flightClear(slot, s, R); expect(s.x).toBeCloseTo(3.85, 6); }
   });
 
   it('the flat stand-in world: one endless floor, nothing to climb', () => {

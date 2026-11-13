@@ -10,9 +10,9 @@ import {LEVELS} from '../src/levels/registry';
 import type {LevelId} from '../src/levels/types';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {ZOMBIE_STATS} from '../src/ai/brain';
-import {BB_ASSET, BB_BODY, BB_CADENCE, BB_CLIMB, BB_POUNCE, BB_SENSE, BB_STATS, BbBrain, bbRestPose} from '../src/ai/bb';
+import {BB_ASSET, BB_BODY, BB_CADENCE, BB_CLIMB, BB_POUNCE, BB_SENSE, BB_STATS, bbRestPose} from '../src/ai/bb';
 import {CRAWL, findMounts} from '../src/ai/bbSurface';
-import {bbSim, bbStatic, standNear, type BbAudit} from './helpers/bbSim';
+import {bbClean, bbSim, bbStatic, standNear} from './helpers/bbSim';
 
 const SEED = 1201;
 const LEVEL_IDS: LevelId[] = ['subway', 'office', 'mall', 'bunker', 'skyways', 'reactor'];
@@ -62,25 +62,7 @@ function hiddenNear(layout: StationLayout, x: number, z: number, y: number): {x:
   return null;
 }
 
-/**
- * The invariants every run must keep. `pushed`: the player kept walking into it — the game's body separation and wall resolve
- * (the floor motor every enemy shares) may then shove it; that is not its own motion.
- */
-function clean(A: BbAudit, b: BbBrain, where: string, pushed = false): void {
-  const bad = A.events.filter(e => /[A-Z]{4}/.test(e)).slice(0, 3).join(' | ');
-  expect(A.inSolid, `${where}: body inside solid geometry: ${bad}`).toBe(0);
-  expect(A.crossed, `${where}: moved through solid geometry: ${bad}`).toBe(0);
-  expect(A.jumps, `${where}: a step no body could make: ${bad}`).toBe(0);
-  if (!pushed) expect(A.shoves, `${where}: shoved across the floor: ${bad}`).toBe(0);
-  expect(A.badBasis, `${where}: pose basis not orthonormal`).toBe(0);
-  expect(A.maxTurn, `${where}: the pose turned too far in one step: ${A.events.filter(e => / TURN /.test(e)).slice(-2).join(' | ')}`).toBeLessThanOrEqual(14 / 60 + 0.02);
-  expect(A.blindSight, `${where}: saw the player through solid geometry`).toBe(0);
-  expect(A.freeHits, `${where}: a hit outside a leap`).toBe(0);
-  expect(A.doubleHits, `${where}: two hits in one leap`).toBe(0);
-  expect(A.earlyLeaps, `${where}: a leap before its wind-up ran its time`).toBe(0);
-  expect(A.earlyWindups, `${where}: a wind-up during the cooldown`).toBe(0);
-  expect(b.tally.recoveries, `${where}: recovered from an invalid place`).toBe(0);
-}
+const clean = bbClean;
 
 describe('BB: numbers', () => {
   it('is a small, quick, fragile body with one attack — not a scaled zombie', () => {

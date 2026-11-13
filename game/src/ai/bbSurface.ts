@@ -35,7 +35,11 @@ export interface CrawlWorld {
   ray(o: Vec3, d: Vec3, max: number): CrawlHit;
   /** The free vertical band holding a point (its floor / ceiling heights), or null inside solid or outside the map. */
   band(x: number, y: number, z: number): {floor: number; ceil: number} | null;
-  /** The height of a walkable floor a body of radius r can stand on at (x, z) with its feet within 0.4 m of y, clear of walls and props; else null. */
+  /**
+   * The height of a walkable floor a body of radius r can stand on at (x, z) with its feet within 0.4 m of y, clear of the level's
+   * walls and edges; else null. Props are NOT part of this test (they are solid to `ray`): a caller that must not end inside one
+   * checks its way there with rays.
+   */
   stand(x: number, y: number, z: number, r: number): number | null;
   /** Sight between two points: the level's 3D line of sight (walls, slabs, shutters and sight-blocking props). Absent: a clear `ray`. */
   sight?(a: Vec3, b: Vec3): boolean;
@@ -404,6 +408,42 @@ export function flightStep(w: CrawlWorld, f: Flight, dt: number, gravity: number
   const go = Math.max(0, h.t - r);
   f.x += ux * go; f.y += uy * go; f.z += uz * go;
   return {kind: h.kind, nx: h.nx, ny: h.ny, nz: h.nz, x: f.x + ux * (h.t - go), y: f.y + uy * (h.t - go), z: f.z + uz * (h.t - go)};
+}
+
+const DIAG = Math.SQRT1_2;
+const SIDES: readonly (readonly [number, number])[] = [[1, 0], [-1, 0], [0, 1], [0, -1], [DIAG, DIAG], [DIAG, -DIAG], [-DIAG, DIAG], [-DIAG, -DIAG]];
+
+/**
+ * Keep a flying body's CENTRE `clear` m from the walls and prop sides beside it (`flightStep` sweeps the centre along its motion
+ * only, so an arc can pass a wall as near as you like, and then come down where the body does not fit). Eight level probes: the
+ * centre is pushed off what they meet (never into anything else). It keeps its velocity: held off a face it slides along it, and
+ * goes on once it is past the face's end (a corner it grazes, a beam it passes under). True when something was near.
+ */
+export function flightClear(w: CrawlWorld, f: Flight, clear: number): boolean {
+  let xp = 0, xn = 0, zp = 0, zn = 0, any = false;
+  for (const [ux, uz] of SIDES) {
+    const h = w.ray({x: f.x, y: f.y, z: f.z}, {x: ux, y: 0, z: uz}, clear);
+    if (h.kind === 'none' || Math.abs(h.ny) > 0.7) continue;
+    // how far the centre is inside the clearance of that face, along the face's own (level) normal
+    const nl = Math.hypot(h.nx, h.nz);
+    if (nl < 1e-6) continue;
+    const nx = h.nx / nl, nz = h.nz / nl, push = clear - h.t * Math.abs(ux * nx + uz * nz);
+    if (push <= 0) continue;
+    any = true;
+    if (nx > 0.5) xp = Math.max(xp, push * nx); else if (nx < -0.5) xn = Math.max(xn, -push * nx);
+    if (nz > 0.5) zp = Math.max(zp, push * nz); else if (nz < -0.5) zn = Math.max(zn, -push * nz);
+  }
+  if (!any) return false;
+  // each axis on its own: off the nearer face by what is missing — and where another face stands opposite it nearer than that
+  // leaves room for (a slot narrower than the body), to the middle between the two and no further
+  const ease = (push: number, near: number, ux: number, uz: number): number => {
+    if (push <= 1e-6) return 0;
+    const h = w.ray({x: f.x, y: f.y, z: f.z}, {x: ux, y: 0, z: uz}, push + clear);
+    return h.kind === 'none' ? push : Math.max(0, Math.min(push, (h.t - near) / 2));
+  };
+  f.x += xp >= xn ? ease(xp - xn, clear - xp, 1, 0) : -ease(xn - xp, clear - xn, -1, 0);
+  f.z += zp >= zn ? ease(zp - zn, clear - zp, 0, 1) : -ease(zn - zp, clear - zn, 0, -1);
+  return true;
 }
 
 /** The floor straight below a point within `max` m: its height when the ray meets a level floor (not a prop top), else null. */
