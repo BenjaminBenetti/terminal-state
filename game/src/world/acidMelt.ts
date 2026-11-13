@@ -133,7 +133,7 @@ interface UnitLike {
   touchStore?(): void;
   view: {group: THREE.Object3D};
 }
-interface CartLike { uid?: string; mode: string; body: {x: number; y: number; z: number; r?: number; h?: number} }
+interface CartLike { uid: string; mode: string; body: {x: number; y: number; z: number; r?: number; h?: number} }
 interface DestroyedCart { uid: string; units: number; x: number; y: number; z: number; yaw: number; level: number; view: {group: THREE.Object3D} }
 interface PropDamageLike {
   index: {inst: Map<PropPlacement, {mesh: THREE.InstancedMesh; index: number}[]>; merged: readonly {box: THREE.Box3; blockersOnly: boolean}[]};
@@ -617,7 +617,7 @@ export class AcidMelt {
       out.push(this.place(t, B));
     }
     for (const c of this.host.fuelCarts?.bodies() ?? []) {
-      if (c.mode !== 'world' || !c.uid) continue;
+      if (c.mode !== 'world') continue;
       const t = this.thingTarget('cart', c.uid, 'fuel cart');
       if (t.state !== 'idle' || !this.boxOf(t, B)) continue;
       const rr = (B.max.x - B.min.x) / 2;
@@ -651,7 +651,7 @@ export class AcidMelt {
       else if (t.state === 'melting' && t.melt) consider(t, boxDist(t.melt.box, x, y, z));
     }
     for (const c of this.host.fuelCarts?.bodies() ?? []) {
-      if (c.mode !== 'world' || !c.uid) continue;
+      if (c.mode !== 'world') continue;
       const t = this.thingTarget('cart', c.uid, 'fuel cart');
       if (t.state === 'idle' && this.boxOf(t, B)) consider(t, this.cylDist(c.body.x, c.body.z, B, x, y, z));
     }

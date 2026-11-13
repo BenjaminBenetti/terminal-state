@@ -1251,7 +1251,7 @@ export class FuelCarts implements FuelCartsLike {
 }
 
 /** A live cart as another system on the same controller sees it (FuelCarts.bodies). */
-export interface CartBodyRef { readonly body: CartBody; readonly mode: 'world' | 'cargo'; awake: boolean }
+export interface CartBodyRef { readonly uid: string; readonly body: CartBody; readonly mode: 'world' | 'cargo'; awake: boolean } // (uid: lane MELT — world/acidMelt.ts names a cart by it)
 
 /**
  * A riding cargo's footprint in the riding car's own collision model (world/trainRideLocal.ts: the step frame): a solid round column
