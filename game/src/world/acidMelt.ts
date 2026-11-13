@@ -18,10 +18,12 @@
 //    any box another system pushes at run time — only GENERATED placements (identity captured before anything is appended) and carried
 //    props are candidates. The fixed train fixtures (original Lockbox, bench, chipper, plugs, drive console, Save CRT, armour kit) are
 //    drawn on the car's view root and are never placements: no query can reach them;
-//  - building structure: the physics audit's 'structure' / 'partition' classes (columns, stairs, glazing, shutters, partitions, stages ...);
-//  - mounted on the building (`mounted` / the audit's 'mounted'): wall / ceiling fixtures with no floor footprint of their own;
+//  - building structure: the physics audit's 'structure' / 'partition' classes (columns, stairs, glazing, shutters, partitions, stages ...).
+//    Wall / ceiling MOUNTED props (cabinets, kits, phones, boards) are objects, not structure: they melt (a floor pool rarely reaches
+//    them — their base is above its band —, a canister stuck to one does);
 //  - an objective: the Bunker's generator slots and core cluster (gen/bunker/bunkerKinds.ts isBunkerObjectiveKind: world/bunker owns
-//    them) — and anything drawn by another system (not in the shared prop render index: the Reactor's hero models) is never hidden here;
+//    them) — and anything drawn by another system (not in the shared prop render index: the Reactor's gensets — collision-only
+//    'annexMachine' boxes under world/reactor's models —, its hero models) is never hidden here ('not drawn');
 //  - trader stock: the market stalls' ware displays (market/wares/slots.ts vendorDisplayHosts: the stall's finite stock, never loot);
 //  - collision owned elsewhere: a placement the live walk index does not hold (world/stalls.ts rebuilds it with its own partition /
 //    door boxes per toilet stall: dissolving the placement would leave them standing);
@@ -113,7 +115,7 @@ export const MELT = {
 export interface MeltRef { readonly key: string; readonly x: number; readonly y: number; readonly z: number; readonly label: string }
 
 /** Why a prop never melts (null: it can). */
-export type MeltProtection = 'not a placement' | 'train structure' | 'gone' | 'unclassified' | 'building structure' | 'mounted' | 'objective'
+export type MeltProtection = 'not a placement' | 'train structure' | 'gone' | 'unclassified' | 'building structure' | 'objective'
   | 'trader stock' | 'collision owned elsewhere' | 'rides its host' | 'not drawn';
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -134,7 +136,7 @@ interface UnitLike {
 interface CartLike { uid?: string; mode: string; body: {x: number; y: number; z: number; r?: number; h?: number} }
 interface DestroyedCart { uid: string; units: number; x: number; y: number; z: number; yaw: number; level: number; view: {group: THREE.Object3D} }
 interface PropDamageLike {
-  index: {inst: Map<PropPlacement, {mesh: THREE.InstancedMesh; index: number}[]>; merged: readonly {box: THREE.Box3}[]};
+  index: {inst: Map<PropPlacement, {mesh: THREE.InstancedMesh; index: number}[]>; merged: readonly {box: THREE.Box3; blockersOnly: boolean}[]};
   retire(prop: PropPlacement, index?: number, copies?: boolean): {meshes: THREE.Mesh[]; geometries: THREE.BufferGeometry[]} | null;
   isRetired(prop: PropPlacement): boolean;
 }
@@ -143,7 +145,10 @@ export interface AcidMeltHost {
   scene: THREE.Object3D;
   run: {current: SectionKey; laneStore<T = unknown>(lane: string, key?: SectionKey): T | undefined; setLaneStore(lane: string, data: unknown, key?: SectionKey): void};
   layout: StationLayout | null;
-  levels: {supportAt(x: number, z: number, y: number, tol?: number): {floor: number} | null} | null;
+  levels: {
+    supportAt(x: number, z: number, y: number, tol?: number): {floor: number} | null;
+    lineOfSight?(a: {x: number; y: number; z: number}, b: {x: number; y: number; z: number}, o?: {sightProps?: boolean}): boolean;
+  } | null;
   propIndex: {props: readonly PropPlacement[]} | null;
   inv: {makeStack(itemId: string, count: number, mag?: number): ItemStack};
   pickups: {readonly list: readonly PickupLike[]; add(stack: ItemStack, x: number, y: number, z: number, yaw?: number): unknown; addAt?(stack: ItemStack, m: THREE.Matrix4, fromLot?: {holder: number; lot: number}): unknown};
@@ -167,8 +172,8 @@ export interface AcidMeltHost {
   trainEquipment?: {units(): readonly UnitLike[]; destroy(uid: string): UnitLike | null} | null;
   fuelCarts?: {bodies(): readonly CartLike[]; destroy(uid: string): DestroyedCart | null} | null;
   sfx?: unknown;
-  sectionLayoutHooks: ((layout: StationLayout, key: SectionKey, run: unknown, phase: 'prepare' | 'build') => void)[];
-  sectionHooks: {holders?(layout: never): void; build?(layout: never): void; teardown?(): void}[];
+  sectionLayoutHooks: ((layout: StationLayout, key: SectionKey, run: never, phase: 'prepare' | 'build') => void)[];
+  sectionHooks: {holders?(layout: StationLayout, key: SectionKey): void; build?(layout: StationLayout): void; teardown?(): void}[];
   frameHooks: ((dt: number) => void)[];
   warmRegistry?: {addPool(name: string, f: () => readonly THREE.Object3D[]): void} | null;
   acidMelt?: AcidMelt | null;
@@ -227,7 +232,7 @@ interface Melt {
   done: boolean;
 }
 
-const UP = new THREE.Vector3(0, 1, 0), DOWN = new THREE.Vector3(0, -1, 0);
+const DOWN = new THREE.Vector3(0, -1, 0);
 const M = new THREE.Matrix4(), M2 = new THREE.Matrix4(), V = new THREE.Vector3(), V2 = new THREE.Vector3(), Q = new THREE.Quaternion(), S = new THREE.Vector3();
 const B = new THREE.Box3();
 const BUCKET = 4;
@@ -447,7 +452,6 @@ export class AcidMelt {
     const row = PROP_PHYSICS_AUDIT[prop.kind];
     if (!row) return 'unclassified';
     if (row.why === 'structure' || row.why === 'partition') return 'building structure';
-    if (prop.mounted || row.why === 'mounted') return 'mounted';
     if (isBunkerObjectiveKind(prop.kind)) return 'objective';
     if (this.vendorOf.get(w.layout)?.has(prop)) return 'trader stock';
     if (prop.host !== undefined && ridesHost(prop.kind)) return 'rides its host';
@@ -462,7 +466,7 @@ export class AcidMelt {
     if (this.host.containers?.ownRoot?.(prop)) return true;
     B.min.set(prop.x - prop.hx, prop.y, prop.z - prop.hz);
     B.max.set(prop.x + prop.hx, prop.y + Math.max(0.02, prop.h), prop.z + prop.hz);
-    for (const m of pd.index.merged) if (m.box.intersectsBox(B)) return true;
+    for (const m of pd.index.merged) if (!m.blockersOnly && m.box.intersectsBox(B)) return true; // (blocker chunks: glazing / shutters only — structure)
     return false;
   }
 
@@ -1024,12 +1028,13 @@ export class AcidMelt {
    */
   private spillStacks(stacks: readonly ItemStack[], cx: number, cz: number, hx: number, hz: number, y0: number, lots?: readonly LotLike[], serial = -1): void {
     const h = this.host, n = stacks.length;
-    const cy = this.floorAt(cx, cz, y0) ?? y0;
+    if (!n) return;
+    const c = this.anchor(cx, cz, y0);
     stacks.forEach((st, k) => {
       const a = k * 2.39996 + 0.7, f = n > 1 ? Math.sqrt((k + 0.5) / n) : 0;
       let x = cx + Math.cos(a) * f * hx, z = cz + Math.sin(a) * f * hz;
       let y = this.floorAt(x, z, y0);
-      if (y === null) { x = cx; z = cz; y = cy; }
+      if (y === null) { x = c.x; z = c.z; y = c.y; }
       const lot = lots?.[k];
       if (lot && h.pickups.addAt) h.pickups.addAt(st, M.makeRotationY(a * 1.7).setPosition(x, y + 0.004, z), {holder: serial, lot: lot.id});
       else h.pickups.add(st, x, y + 0.004, z, a * 1.7);
@@ -1039,10 +1044,33 @@ export class AcidMelt {
 
   /** EXACTLY one salvage pickup at a thing's base. */
   private salvage(itemId: string, x: number, z: number, y0: number): void {
-    const y = this.floorAt(x, z, y0) ?? y0;
-    this.host.pickups.add(this.host.inv.makeStack(itemId, 1), x, y + 0.004, z, this.rand() * Math.PI * 2);
+    const c = this.anchor(x, z, y0);
+    this.host.pickups.add(this.host.inv.makeStack(itemId, 1), c.x, c.y + 0.004, c.z, this.rand() * Math.PI * 2);
     this.counts.salvage++;
   }
+
+  /**
+   * A floor spot for a thing's centre: its own floor; failing that (a wall-hung prop whose centre cell is the wall's) the nearest floor
+   * around it that the centre can SEE (Levels.lineOfSight: never through a wall into the next room); failing that the base itself.
+   */
+  private anchor(cx: number, cz: number, y0: number): {x: number; y: number; z: number} {
+    const o = this.spot;
+    const f = this.floorAt(cx, cz, y0);
+    o.x = cx; o.z = cz; o.y = f ?? y0;
+    if (f !== null) return o;
+    const L = this.host.levels;
+    for (const r of [0.3, 0.6, 0.9, 1.3]) {
+      for (let k = 0; k < 8; k++) {
+        const a = (k * Math.PI) / 4, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r, y = this.floorAt(x, z, y0);
+        if (y === null) continue;
+        if (L?.lineOfSight && !L.lineOfSight({x: cx, y: y0 + 0.4, z: cz}, {x, y: y + 0.3, z})) continue;
+        o.x = x; o.z = z; o.y = y;
+        return o;
+      }
+    }
+    return o;
+  }
+  private readonly spot = {x: 0, y: 0, z: 0};
 
   /** The floor under (x, z) for a thing whose base is at y0 (null: a wall / nothing within MELT.dropMax below). */
   private floorAt(x: number, z: number, y0: number): number | null {
@@ -1147,5 +1175,6 @@ export class AcidMelt {
 
 /** Create the acid melt and register it into the Game (sets game.acidMelt; installed beside the other lane installs). */
 export function installAcidMelt(game: Game): AcidMelt {
-  return new AcidMelt(game as unknown as AcidMeltHost).install();
+  const host: AcidMeltHost = game;
+  return new AcidMelt(host).install();
 }
