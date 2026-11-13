@@ -25,6 +25,7 @@ import {PhysicsSystem} from '../src/physics/world';
 import {levelsOf} from '../src/gen/levels';
 import {mulberry32} from '../src/core/rng';
 import {TrainLockbox} from '../src/run/trainLockbox';
+import {SCENT, ScentLures} from '../src/ai/scentLure';
 import {FIX, levelFixture} from './helpers/levelFixture';
 
 const DT = 1 / 60;
@@ -326,6 +327,21 @@ describe('GrenadeSystem: lure', () => {
     while (w2.sys.canisters[0].state === 'flying' && n++ < 900) w2.step();
     w2.sys.clear();
     expect([w2.scents.removed, w2.sys.canisters.length]).toEqual([1, 0]);
+  });
+
+  it('with the real scent registry (ai/scentLure.ts): the canister IS the emitter, active for SCENT.seconds, gone after', () => {
+    const w = world(), real = new ScentLures();
+    w.sys.env.scents = () => real;
+    w.toss(LURE_GRENADE);
+    let n = 0;
+    while (w.sys.canisters[0].state === 'flying' && n++ < 900) { w.step(); real.tick(DT); }
+    expect(real.list).toHaveLength(1);
+    const e = real.list[0], c = w.sys.qa().canisters[0];
+    expect([e.active, e.seconds, e.radius]).toEqual([true, SCENT.seconds, SCENT.radius]);
+    expect(Math.hypot(e.x - c.x, e.z - c.z)).toBeLessThan(0.05);
+    for (let i = 0; i < Math.round((SCENT.seconds + 0.2) / DT); i++) { w.step(); real.tick(DT); }
+    expect(real.list).toHaveLength(0);
+    expect(w.sys.canisters[0].state).toBe('spent');
   });
 
   it('never refused by an acid pool: the caps are per kind', () => {
