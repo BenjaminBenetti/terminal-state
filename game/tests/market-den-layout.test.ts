@@ -267,6 +267,9 @@ describe('the Survivor Market, layout version 4 (version 3 plus the corpse buyer
       expect(behind, at).toBeGreaterThanOrEqual(0.4);
       expect(behind, at).toBeLessThanOrEqual(0.8);
       expect(-Math.sin(bu.yaw) * fx - Math.cos(bu.yaw) * fz, at).toBeGreaterThan(0.99);
+      // off the booth's centre line toward the way in (his face between the middle bar and the next, not behind the middle one)
+      expect(Math.abs((bu.x - booth.x) * fz - (bu.z - booth.z) * fx), at).toBeCloseTo(DEN.buyerSide, 3);
+      expect(bu.z, at).toBeLessThan(booth.z);
     }
   });
 

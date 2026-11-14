@@ -47,6 +47,9 @@ export const DEN = {
   /** The clear band (m) between the room's north wall and the chute (the way in from the passage); the buyer's post behind the booth. */
   band: 1.5,
   buyerBack: 0.6,
+  /** The buyer's post off the booth's centre line, toward the way in (m): the cooked booth's bars stand at 0 and +-0.47 m, so his face shows in
+   *  the gap beside the middle bar (from the customer's spot on the centre line too), not behind it. */
+  buyerSide: 0.28,
   /** The fewest rows the customer room needs (3 m). */
   minRows: 6,
 } as const;
@@ -189,8 +192,8 @@ export function carveDen(layout: StationLayout, sc: SettleCarve): DenCarve | nul
     chute: {x: wx(cx), z: r3(cz), rot: crot},
     tray: {x: wx(Math.min(xf - DEN.trayOut, DEN.divider * CELL - DEN.trayDisc)), z: r3(zb)},
     front: {x: wx(xf - DEN.frontOut), z: r3(zb)},
-    // the buyer faces the customer: forward (-sin yaw, -cos yaw) = canonical -x
-    buyer: {x: wx(xb + B.d / 2 + DEN.buyerBack), z: r3(zb), yaw: wr(Math.PI / 2)},
+    // the buyer faces the customer: forward (-sin yaw, -cos yaw) = canonical -x; his face in a gap between the bars (DEN.buyerSide)
+    buyer: {x: wx(xb + B.d / 2 + DEN.buyerBack), z: r3(zb - DEN.buyerSide), yaw: wr(Math.PI / 2)},
     plan: {xb, xf, zb, doorZ: (dy0 + DEN.doorW / 2) * CELL, cx, cz, z0: r0 * CELL, z1: r1 * CELL, backX1: (DEN.divider + 1 + DEN.backW) * CELL, laneX: SETTLE.x0 * CELL},
     wx, wr, rect,
   };
