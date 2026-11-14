@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 85359,
-      "sha256": "231107b0d5c004d29c785e884b37c3bf5520f0226928d4cc35ce4f34b6fa8f74"
+      "bytes": 87143,
+      "sha256": "94724a587afc24db0382f709e432951e3602585e1adea078fae5d7411e047e11"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 3745,
-      "sha256": "0c0151323cf2e50134d308ddab459296b8a077465a80823839671b4f6e133372"
+      "bytes": 3978,
+      "sha256": "4baa57b9f98ac652b92577406cba6324b26fcdf6d27e8a14ca0d6a956edb2ba7"
     },
     {
       "path": "assets/audio/bb-cackle-01.mp3",
@@ -477,6 +477,56 @@
       "path": "assets/audio/eat-noodles-01.mp3",
       "bytes": 36049,
       "sha256": "57ee1a3e5f17c558dae4aee20d44dabfd84b43709da68af602bd7c13e577c9fa"
+    },
+    {
+      "path": "assets/audio/fire-burn-loop.mp3",
+      "bytes": 72359,
+      "sha256": "c394910102e70b611ec21e8d3dd4358aa8f6ef8132709bb651c6af6fd649db85"
+    },
+    {
+      "path": "assets/audio/fire-catch-01.mp3",
+      "bytes": 8777,
+      "sha256": "888a8ee074e4a72d30ba3c104ea0faaa9e7187112cbcbafbad0cd1d7e9872d83"
+    },
+    {
+      "path": "assets/audio/fire-catch-02.mp3",
+      "bytes": 10971,
+      "sha256": "3b2f46ca0de041eae98e000ad1a23d3ddff22ffddf13aa8956c15bbf67fcbda4"
+    },
+    {
+      "path": "assets/audio/fire-collapse-01.mp3",
+      "bytes": 7837,
+      "sha256": "b6c774e43325fc6d6fefb531aa3709fcf4cb371c7c12823cae1014171de745bd"
+    },
+    {
+      "path": "assets/audio/fire-embers-01.mp3",
+      "bytes": 17554,
+      "sha256": "45d741edd186712d0a9ebae096104aef9af18795c61d32f9809fe0a1a5ae3f42"
+    },
+    {
+      "path": "assets/audio/fire-flame-ignite-01.mp3",
+      "bytes": 10971,
+      "sha256": "1cc4dd1221cd40f002d4fa16a90dd4af3815f7b030fb8263cbd8aba3e9155c4e"
+    },
+    {
+      "path": "assets/audio/fire-flame-ignite-02.mp3",
+      "bytes": 10971,
+      "sha256": "f2992ab60cfbf21b783a13d7dd1c61c66d3c9bd3a6fcd8792abcc49aaf6af066"
+    },
+    {
+      "path": "assets/audio/fire-flame-out-01.mp3",
+      "bytes": 12225,
+      "sha256": "f8b4b2a47bdbb1db5c1c1b4191b77fbd4fb0ef18796ee47f7e1d82e458fad9c6"
+    },
+    {
+      "path": "assets/audio/fire-flame-out-02.mp3",
+      "bytes": 5956,
+      "sha256": "f16c6bdaed198ed701b5237fc7d4dbda138b792ae0fe10e9a2e1430e8be83e48"
+    },
+    {
+      "path": "assets/audio/fire-flame-roar-loop.mp3",
+      "bytes": 57887,
+      "sha256": "872a5f5514b829e18cf11632c44c30181362a53af659692ddd11c79fa4df0df2"
     },
     {
       "path": "assets/audio/flashlight-click-01.mp3",
@@ -1967,6 +2017,11 @@
       "path": "assets/derivatives/audio-cough.json",
       "bytes": 24088,
       "sha256": "60204bf7da17a1eee224268875d11ac91d329933e88cedc3eb4c4058ee3b2212"
+    },
+    {
+      "path": "assets/derivatives/audio-fire.json",
+      "bytes": 46753,
+      "sha256": "45a01ff4da78b682084cefa7d28267032bc3dc120fae9fb900e6011fe84fb04f"
     },
     {
       "path": "assets/derivatives/audio-fuel.json",
