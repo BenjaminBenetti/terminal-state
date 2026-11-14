@@ -1391,7 +1391,7 @@ export class AcidMelt {
       // it chars as it burns (the shell darkens it, embers pulsing), stands while it does, then collapses into a low heap
       const shell = this.shells[m.slot];
       shell.opacity = BURN.tint * smooth(0, 0.55, t) * (1 - smooth(0.93, 1, t));
-      shell.emissiveIntensity = (0.35 + 0.9 * smooth(0.1, 0.6, t)) * (0.78 + 0.22 * Math.sin(m.age * 11 + m.slot * 2.1));
+      shell.emissiveIntensity = (0.05 + 0.2 * smooth(0.1, 0.6, t)) * (0.75 + 0.25 * Math.sin(m.age * 11 + m.slot * 2.1)); // (black char, a dull ember glow: the flames are fire/fireFx.ts)
       sy = 1 - (1 - BURN.sag) * smooth(0.62, 1, t);
       sxz = 1 - (1 - BURN.shrink) * smooth(0.7, 1, t);
     } else {

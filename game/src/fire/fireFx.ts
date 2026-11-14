@@ -97,10 +97,17 @@ export function fireNoiseTexture(n = 128): THREE.DataTexture {
 
 interface FogUniforms { mode: TNode; density: TNode; near: TNode; far: TNode; color: TNode }
 
+/** Flame sprite shapes (aB.z). */
+const TONGUE = 0, BALL = 1, SPARK = 2;
+
 /**
  * One ring of instanced sprites (world/fx.ts Particles' draw: a THREE.Sprite with `count = cap` + PointsNodeMaterial, per-instance
- * dynamic attributes), with what fire needs on top: age (erosion, the heat ramp), rotation, a noise seed.
- *   aA = (size m, age 0..1, rotation rad, seed)      aB = flames: (heat, erode 0..1, -, alpha); smoke: (r, g, b, alpha)
+ * dynamic attributes), with what fire needs on top: age (erosion, the heat ramp), rotation, a noise seed, a shape.
+ *   aA = (size m, age 0..1, rotation rad, seed)      aB = flames: (heat, erode 0..1, shape, alpha); smoke: (r, g, b, alpha)
+ * FLAMES are drawn IN the sprite, not by it: a TONGUE is a whole standing flame (its foot at the sprite's lower edge, tapering to a
+ * swaying tip, torn into licks by noise that streams up through it with the clock — it flickers while it stands), a BALL is a rolling
+ * gout of fire (the stream, splashes, bursts), a SPARK a hot dot. Colour follows the flame's own density: white-yellow in the thick
+ * foot, orange, deep red at the thinning tips; as a sprite ages its threshold climbs and it tears apart.
  */
 class FireSprites {
   readonly points: THREE.Sprite;
@@ -113,7 +120,7 @@ class FireSprites {
   private next = 0;
   live = 0;
 
-  constructor(readonly cap: number, readonly kind: 'flame' | 'smoke', noise: THREE.Texture) {
+  constructor(readonly cap: number, readonly kind: 'flame' | 'smoke', noise: THREE.Texture, time: TNode) {
     this.pos = new Float32Array(cap * 3); this.vel = new Float32Array(cap * 3);
     this.a = new Float32Array(cap * 4); this.b = new Float32Array(cap * 4);
     this.life = new Float32Array(cap); this.max = new Float32Array(cap); this.par = new Float32Array(cap * 6);
@@ -138,31 +145,51 @@ class FireSprites {
       const seed = vec2(aA.w, aA.w.mul(1.618)) as TNode;
       const d = (positionView as TNode).z.negate();
       const ff = select(fogU.mode.greaterThan(1.5), smoothstep(fogU.near, fogU.far, d), select(fogU.mode.greaterThan(0.5), exp(fogU.density.mul(fogU.density).mul(d).mul(d).negate()).oneMinus(), float(0)));
+      const r = length(p).mul(2);
       if (flame) {
-        // a lick: wide at the foot, drawn to a point at the top (the sprite's +y), broken up by noise that scrolls up through it
-        const px = p.x.div(float(1).sub(p.y.add(0.5).mul(0.55)).max(0.2));
-        const mask = float(1).sub(length(vec2(px, p.y.mul(0.94))).mul(2)).clamp(0, 1);
-        const n1 = (texture(noise, p.mul(0.5).add(seed).add(vec2(0, age.mul(-0.5)))) as TNode).r;
-        const n2 = (texture(noise, p.mul(1.25).add(seed.mul(2.3)).add(vec2(0, age.mul(-1.1)))) as TNode).g;
-        const v = mask.mul(n1.mul(0.7).add(n2.mul(0.45)).add(0.42));
-        // erosion: the threshold climbs with age (sparks: erode 0 — a plain hot dot)
-        const thr = age.mul(0.66).mul(aB.y);
-        const al = smoothstep(thr, thr.add(0.2), v).mul(aB.w);
-        Discard(al.lessThan(0.004));
-        const heat = v.sub(thr).mul(1.7).add(float(1).sub(age).mul(0.22)).mul(aB.x);
-        const red = vec3(0.6, 0.07, 0.012), orange = vec3(1.0, 0.36, 0.05), yellow = vec3(1.0, 0.7, 0.2), white = vec3(1.0, 0.92, 0.7);
-        const col = mix(mix(mix(red, orange, smoothstep(0.05, 0.42, heat)), yellow, smoothstep(0.4, 0.8, heat)), white, smoothstep(0.8, 1.25, heat)) as TNode;
-        return vec4(col.mul(1.15).mul(ff.oneMinus()), al);
+        const shape = aB.z;
+        const ball = smoothstep(0.5, 0.6, shape) as TNode, spark = smoothstep(1.5, 1.6, shape) as TNode;
+        // TONGUE: y 0 at the foot .. 1 at the tip; the tip sways (a slow noise, stronger with height), the body narrows upward
+        const y = p.y.add(0.5).clamp(0, 1);
+        const sway = (texture(noise, vec2(p.x.mul(0.6).add(seed.x), y.mul(0.5).sub(time.mul(0.85)).add(seed.y))) as TNode).b.sub(0.5);
+        const xw = p.x.add(sway.mul(0.42).mul(y));
+        // (widest a little above the foot, drawn in to the tip: a flame's belly, not a cone)
+        const w = float(1).sub(y).pow(0.75).mul(smoothstep(-0.12, 0.26, y).mul(0.5).add(0.5)).mul(0.44).add(0.015);
+        const body = float(1).sub(xw.abs().div(w)).clamp(0, 1).pow(0.8);
+        // the licks: two octaves streaming up through the flame (a tongue) / rolling in place (a ball)
+        const q = mix(vec2(xw, y), p, ball) as TNode;
+        const up1 = mix(time.mul(1.45), age.mul(0.9), ball), up2 = mix(time.mul(2.5), age.mul(1.6), ball);
+        const n1 = (texture(noise, vec2(q.x.mul(1.15).add(seed.x), q.y.mul(0.8).sub(up1).add(seed.y))) as TNode).r;
+        const n2 = (texture(noise, vec2(q.x.mul(2.7).add(seed.y.mul(2.3)), q.y.mul(1.9).sub(up2).add(seed.x))) as TNode).g;
+        const lick = n1.mul(0.95).add(0.3).mul(n2.mul(0.7).add(0.62));
+        // (a tongue thins toward its tip — more where the noise is thin —, and is soft at its very foot: it sits in the glow)
+        const tongue = body.mul(lick).sub(y.mul(float(0.62).sub(n1.mul(0.42)))).sub(float(1).sub(body).mul(n2).mul(0.16)).mul(smoothstep(0.0, 0.15, y)).mul(1.25);
+        const gout = float(1).sub(r).clamp(0, 1).pow(0.8).mul(lick).mul(1.15);
+        const dot = float(1).sub(r).clamp(0, 1).pow(2).mul(2.2);
+        const f = mix(mix(tongue, gout, ball), dot, spark) as TNode;
+        // erosion: the threshold climbs with age (it tears into wisps and goes out)
+        const thr = age.pow(1.6).mul(0.6).mul(aB.y);
+        const v = f.sub(thr);
+        const al = smoothstep(0.0, 0.2, v).mul(aB.w);
+        Discard(al.lessThan(0.003));
+        const heat = v.mul(aB.x);
+        const red = vec3(0.5, 0.04, 0.0), orange = vec3(1.0, 0.31, 0.03), yellow = vec3(1.0, 0.66, 0.17), white = vec3(1.0, 0.9, 0.62);
+        const col = mix(mix(mix(red, orange, smoothstep(0.0, 0.3, heat)), yellow, smoothstep(0.28, 0.66, heat)), white, smoothstep(0.7, 1.15, heat)) as TNode;
+        return vec4(col.mul(ff.oneMinus()), al);
       }
-      // smoke: a soft billow with darker folds, thinning from the rim inward as it ages
-      const mask = float(1).sub(length(p).mul(2)).clamp(0, 1);
-      const n1 = (texture(noise, p.mul(0.6).add(seed).add(vec2(0, age.mul(-0.18)))) as TNode).r;
-      const n2 = (texture(noise, p.mul(1.5).add(seed.mul(1.9))) as TNode).b;
-      const v = mask.mul(n1.mul(0.9).add(n2.mul(0.35)).add(0.35));
-      const thr = age.mul(0.42);
-      const al = smoothstep(thr, thr.add(0.34), v).mul(aB.w);
-      Discard(al.lessThan(0.004));
-      const col = (aB.rgb as TNode).mul(n2.mul(0.55).add(0.6));
+      // smoke: a soft rolling billow — big folds (slow), finer detail, thinning from the rim inward as it ages. Lit by the fire it
+      // leaves (its birth colour, aB.rgb) and going dark as it climbs away from it: smoke in a dark station is a dark veil, not a glow.
+      const m0 = float(1).sub(r).clamp(0, 1);
+      const soft = m0.mul(m0).mul(float(3).sub(m0.mul(2)));
+      const n1 = (texture(noise, p.mul(0.3).add(seed).add(vec2(0, age.mul(-0.1)))) as TNode).r;
+      const n2 = (texture(noise, p.mul(0.72).add(seed.mul(1.9)).add(vec2(time.mul(0.013), time.mul(-0.03)))) as TNode).g;
+      const dens = soft.mul(n1.mul(1.0).add(0.22)).mul(n2.mul(0.55).add(0.7));
+      const thr = age.mul(0.3);
+      const al = smoothstep(thr, thr.add(0.42), dens).mul(aB.w);
+      Discard(al.lessThan(0.003));
+      const lit = float(1).sub(age).pow(1.7).mul(soft.mul(0.5).add(0.5));
+      const cold = (vec3(0.05, 0.047, 0.045) as TNode).mul(n2.mul(0.8).add(0.55));
+      const col = mix(cold as TNode, aB.rgb as TNode, lit as TNode) as TNode;
       return vec4(mix(col, fogU.color, ff), al);
     })();
     this.points = new THREE.Sprite(mat as unknown as THREE.SpriteMaterial);
@@ -182,16 +209,19 @@ class FireSprites {
     };
   }
 
-  /** `b0..b2`: flames (heat, erode, 0); smoke (r, g, b). `grow` m/s, `lift` m/s2 upward, `drag` 1/s, `fadeIn` share of its life. */
-  spawn(x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, life: number, b0: number, b1: number, b2: number, alpha: number, grow: number, lift: number, drag: number, spin: number, fadeIn = 0.12): void {
+  /**
+   * `b0..b2`: flames (heat, erode, shape); smoke (r, g, b). `grow` m/s, `lift` m/s2 upward, `drag` 1/s, `fadeIn` share of its life,
+   * `rot` the sprite's turn (rad; null: any).
+   */
+  spawn(x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, life: number, b0: number, b1: number, b2: number, alpha: number, grow: number, lift: number, drag: number, spin: number, fadeIn = 0.12, rot: number | null = null): void {
     const i = this.next;
     this.next = (this.next + 1) % this.cap;
     if (this.life[i] <= 0) this.live++;
     const j = i * 3, k = i * 4, q = i * 6;
     this.pos[j] = x; this.pos[j + 1] = y; this.pos[j + 2] = z;
     this.vel[j] = vx; this.vel[j + 1] = vy; this.vel[j + 2] = vz;
-    this.a[k] = size; this.a[k + 1] = 0; this.a[k + 2] = this.kind === 'flame' ? rnd(-0.5, 0.5) : rnd(0, Math.PI * 2); this.a[k + 3] = Math.random() * 7;
-    this.b[k] = b0; this.b[k + 1] = b1; this.b[k + 2] = b2; this.b[k + 3] = 0.0001;
+    this.a[k] = size; this.a[k + 1] = 0; this.a[k + 2] = rot ?? rnd(0, Math.PI * 2); this.a[k + 3] = Math.random() * 7;
+    this.b[k] = b0; this.b[k + 1] = b1; this.b[k + 2] = b2; this.b[k + 3] = fadeIn > 0 ? 0.0001 : alpha;
     this.life[i] = this.max[i] = life;
     this.par[q] = grow; this.par[q + 1] = lift; this.par[q + 2] = drag; this.par[q + 3] = spin; this.par[q + 4] = alpha; this.par[q + 5] = fadeIn;
     this.points.visible = true;
@@ -214,7 +244,7 @@ class FireSprites {
       this.a[k] = Math.max(0.01, this.a[k] + this.par[q] * dt);
       this.a[k + 1] = age;
       this.a[k + 2] += this.par[q + 3] * dt;
-      this.b[k + 3] = this.par[q + 4] * Math.min(1, age / this.par[q + 5]) * Math.min(1, (1 - age) * 4);
+      this.b[k + 3] = this.par[q + 4] * (this.par[q + 5] > 0 ? Math.min(1, age / this.par[q + 5]) : 1) * Math.min(1, (1 - age) * 3.2);
     }
     this.live = live;
     this.attrs.pos.needsUpdate = this.attrs.a.needsUpdate = this.attrs.b.needsUpdate = true;
@@ -298,6 +328,8 @@ class SurfaceMarks {
 }
 
 interface Plume { h: FirePlume; x: number; y: number; z: number; idle: number }
+/** Fractional particles owed by one source: flames, smoke, sparks, wisps. */
+interface Owed { f: number; s: number; e: number; w: number }
 
 /** What the frame needs from the Game besides the fire state. */
 export interface FireFrame {
@@ -325,7 +357,7 @@ export class FireFx implements FireView {
   private sootT = 0;
   private clock = 0;
   /** Fractional particles owed per source since the last frame (one accumulator per kind: a source's share is its rate x dt). */
-  private readonly owed = new Map<object, {f: number; s: number; e: number}>();
+  private readonly owed = new Map<object, Owed>();
   private streamOwed = 0; private splashOwed = 0; private pilotOwed = 0;
   private readonly plumes: Plume[] = [];
   private lit = false;
@@ -337,8 +369,8 @@ export class FireFx implements FireView {
 
   constructor(parent: THREE.Object3D) {
     this.group.name = 'fire-fx';
-    this.flames = new FireSprites(FIRE_FX.flames, 'flame', this.noise);
-    this.puffs = new FireSprites(FIRE_FX.smoke, 'smoke', this.noise);
+    this.flames = new FireSprites(FIRE_FX.flames, 'flame', this.noise, this.time);
+    this.puffs = new FireSprites(FIRE_FX.smoke, 'smoke', this.noise, this.time);
     this.glows = new SurfaceMarks(FIRE_FX.glows, true, this.noise, this.time);
     this.soot = new SurfaceMarks(FIRE_FX.soot, false, this.noise, this.time);
     this.group.add(this.soot.mesh, this.glows.mesh, this.puffs.points, this.flames.points);
@@ -373,9 +405,9 @@ export class FireFx implements FireView {
 
   burst(x: number, y: number, z: number, size: number): void {
     this.counts.bursts++;
-    for (let i = 0; i < 16; i++) {
-      const a = Math.random() * Math.PI * 2, sp = rnd(0.6, 2.2) * size;
-      this.flame(x + Math.cos(a) * size * 0.3, y + rnd(-0.1, 0.25), z + Math.sin(a) * size * 0.3, Math.cos(a) * sp, rnd(1.2, 2.8), Math.sin(a) * sp, rnd(0.4, 0.75) * size, rnd(0.35, 0.65), 1, 1, 0.8, -0.2, 1.5, 2.5);
+    for (let i = 0; i < 12; i++) {
+      const a = Math.random() * Math.PI * 2, sp = rnd(0.5, 1.9) * size;
+      this.ball(x + Math.cos(a) * size * 0.3, y + rnd(-0.05, 0.3), z + Math.sin(a) * size * 0.3, Math.cos(a) * sp, rnd(0.9, 2.4), Math.sin(a) * sp, rnd(0.45, 0.8) * size, rnd(0.4, 0.7), rnd(0.9, 1.1), 1, 0.7, 0.5, 1.2, 2.2);
     }
     for (let i = 0; i < 12; i++) this.spark(x + rnd(-0.3, 0.3) * size, y + rnd(0, 0.3), z + rnd(-0.3, 0.3) * size, 2.2);
     for (let i = 0; i < 3; i++) this.puff(x + rnd(-0.2, 0.2), y + rnd(0.3, 0.6), z + rnd(-0.2, 0.2), 1, 1);
@@ -384,28 +416,38 @@ export class FireFx implements FireView {
   // ---------------------------------------------------------------------------------------------------------------------
   // Spawners
 
-  private flame(x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, life: number, heat: number, erode: number, alpha: number, grow: number, lift: number, drag: number): void {
-    this.flames.spawn(x, y, z, vx, vy, vz, size, life, heat, erode, 0, alpha, grow, lift, drag, rnd(-1.2, 1.2), 0.1);
+  /** A standing flame with its foot at (x, y, z), `size` m tall (the shader draws the tongue inside the sprite; it leans a little). */
+  private tongue(x: number, y: number, z: number, size: number, life: number, heat: number, alpha: number, rise = 0.16, vx = 0, vz = 0): void {
+    this.flames.spawn(x, y + size * 0.45, z, vx, rise, vz, size, life, heat, 1, TONGUE, alpha, size * 0.1, 0, 0, 0, 0.18, rnd(-0.2, 0.2));
+    this.counts.flames++;
+  }
+
+  /** A rolling gout of fire (the stream, a splash, a wisp breaking off a flame). */
+  private ball(x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, life: number, heat: number, erode: number, alpha: number, grow: number, lift: number, drag: number, fadeIn = 0.1): void {
+    this.flames.spawn(x, y, z, vx, vy, vz, size, life, heat, erode, BALL, alpha, grow, lift, drag, rnd(-1.4, 1.4), fadeIn);
     this.counts.flames++;
   }
 
   private spark(x: number, y: number, z: number, speed: number): void {
     const a = Math.random() * Math.PI * 2, h = rnd(0.15, 0.7) * speed;
-    this.flames.spawn(x, y, z, Math.cos(a) * h, rnd(0.8, 1.6) * speed, Math.sin(a) * h, rnd(0.03, 0.055), rnd(0.7, 1.5), 1.5, 0, 0, 1, -0.012, -1.6, 0.9, 0, 0.02);
+    this.flames.spawn(x, y, z, Math.cos(a) * h, rnd(0.8, 1.6) * speed, Math.sin(a) * h, rnd(0.03, 0.055), rnd(0.7, 1.5), 1.4, 0, SPARK, 1, -0.012, -1.6, 0.9, 0, 0.02);
     this.counts.sparks++;
   }
 
-  /** A smoke billow leaving a fire of strength k: warm-lit where `glow` is high (just over the flames), grey-brown otherwise. */
+  /**
+   * A smoke billow leaving a fire of strength k: dull orange-brown where `glow` is high (lit by the flames it leaves), going dark as it
+   * climbs (the shader: its birth colour fades to soot with age).
+   */
   private puff(x: number, y: number, z: number, k: number, glow: number): void {
-    const g = 0.5 * glow, d = rnd(0.085, 0.13);
-    this.puffs.spawn(x, y, z, rnd(-0.18, 0.18), rnd(0.75, 1.25), rnd(-0.18, 0.18), rnd(0.5, 0.8), rnd(2.6, 4.2),
-      d + 0.34 * g, d * 0.95 + 0.13 * g, d * 0.9 + 0.03 * g, rnd(0.34, 0.5) * (0.5 + 0.5 * k), rnd(0.35, 0.6), 0.12, 0.5, rnd(-0.5, 0.5), 0.18);
+    const g = Math.max(0, Math.min(1, glow)), w = rnd(0.8, 1.15);
+    this.puffs.spawn(x, y, z, rnd(-0.16, 0.16), rnd(0.7, 1.15), rnd(-0.16, 0.16), rnd(0.55, 0.85), rnd(3.0, 4.6),
+      (0.05 + 0.3 * g) * w, (0.046 + 0.135 * g) * w, (0.042 + 0.045 * g) * w, rnd(0.36, 0.5) * (0.55 + 0.45 * k), rnd(0.32, 0.52), 0.1, 0.45, rnd(-0.35, 0.35), 0.2);
     this.counts.smoke++;
   }
 
-  private share(key: object): {f: number; s: number; e: number} {
+  private share(key: object): Owed {
     let o = this.owed.get(key);
-    if (!o) this.owed.set(key, (o = {f: Math.random(), s: Math.random(), e: Math.random()}));
+    if (!o) this.owed.set(key, (o = {f: Math.random(), s: Math.random(), e: Math.random(), w: Math.random()}));
     return o;
   }
 
@@ -418,9 +460,9 @@ export class FireFx implements FireView {
     (this.time as unknown as {value: number}).value = this.clock;
     const busy = sys.active || !!view.muzzle;
     if (busy && step > 0) {
-      if (view.muzzle && sys.stream.on) this.jet(step, sys, view.muzzle);
+      if (view.muzzle && sys.stream.on) this.jet(step, sys, view.muzzle, view.eye);
       else { this.streamOwed = 0; this.splashOwed = 0; }
-      if (view.muzzle && view.pilot && !sys.stream.on) this.pilot(step, sys, view.muzzle);
+      if (view.muzzle && view.pilot && !sys.stream.on) this.pilot(step, view.muzzle);
       for (const p of sys.patches) this.patch(step, p);
       for (const b of sys.burns) this.prop(step, b);
       let n = 0;
@@ -436,7 +478,7 @@ export class FireFx implements FireView {
   }
 
   /** The stream: a jet of flame from the lance to where it stops, widening to the cone; it splashes along a surface it hits. */
-  private jet(dt: number, sys: FireSystem, m: {x: number; y: number; z: number}): void {
+  private jet(dt: number, sys: FireSystem, m: {x: number; y: number; z: number}, eye: {x: number; y: number; z: number}): void {
     const s = sys.stream;
     // from the muzzle toward the point the aim ray reaches
     const tx = s.ox + s.dx * s.reach, ty = s.oy + s.dy * s.reach, tz = s.oz + s.dz * s.reach;
@@ -448,16 +490,21 @@ export class FireFx implements FireView {
     if (u.lengthSq() < 1e-4) u.set(1, 0, 0);
     u.normalize();
     const w = this.tw.crossVectors(d, u);
-    const endSize = Math.max(0.5, (FLAME.radius0 + (FLAME.radius1 - FLAME.radius0) * (s.reach / FLAME.range)) * 2.3);
-    this.streamOwed += dt * 150;
+    const endSize = Math.max(0.45, (FLAME.radius0 + (FLAME.radius1 - FLAME.radius0) * (s.reach / FLAME.range)) * 2.3);
+    // seen END-ON (the player's own stream: the eye looks along it) every gout stacks on the next — thinner and cooler per sprite
+    // there, so the fireball keeps its folds instead of burning out to white; from the side the jet keeps its full body
+    const el = Math.hypot(tx - eye.x, ty - eye.y, tz - eye.z) || 1;
+    const endOn = Math.abs(((tx - eye.x) * d.x + (ty - eye.y) * d.y + (tz - eye.z) * d.z) / el) ** 4;
+    const jetAlpha = 0.34 * (1 - 0.5 * endOn), jetHeat = 1 - 0.36 * endOn;
+    this.streamOwed += dt * 220;
     while (this.streamOwed >= 1) {
       this.streamOwed -= 1;
-      const sp = FLAME.speed * rnd(0.82, 1.08), life = Math.max(0.06, dist / sp);
-      const ja = Math.random() * Math.PI * 2, jr = Math.sqrt(Math.random()) * 0.055;
+      const sp = FLAME.speed * rnd(0.85, 1.08), life = Math.max(0.06, dist / sp);
+      const ja = Math.random() * Math.PI * 2, jr = Math.sqrt(Math.random()) * 0.05;
       const vx = (d.x + (u.x * Math.cos(ja) + w.x * Math.sin(ja)) * jr) * sp, vy = (d.y + (u.y * Math.cos(ja) + w.y * Math.sin(ja)) * jr) * sp, vz = (d.z + (u.z * Math.cos(ja) + w.z * Math.sin(ja)) * jr) * sp;
       const lead = Math.random() * dt * sp; // (spread along this frame's travel: no beads at low frame rates)
-      const size0 = rnd(0.1, 0.16);
-      this.flame(m.x + d.x * lead, m.y + d.y * lead, m.z + d.z * lead, vx, vy, vz, size0, life, rnd(0.95, 1.2), 0.85, 0.62, (endSize * rnd(0.8, 1.15) - size0) / life, 0.9, 0);
+      const size0 = rnd(0.09, 0.15);
+      this.ball(m.x + d.x * lead, m.y + d.y * lead, m.z + d.z * lead, vx, vy, vz, size0, life, rnd(0.74, 0.96) * jetHeat, 0.9, jetAlpha, (endSize * rnd(0.8, 1.15) - size0) / life, 0.9, 0, 0);
     }
     if (s.kind !== 'none') {
       // the splash: flame running out along the surface from where the jet lands, and curling off it
@@ -466,91 +513,95 @@ export class FireFx implements FireView {
       if (t1.lengthSq() < 1e-4) t1.set(0, n.z, -n.y);
       t1.normalize();
       const t2 = this.tw.crossVectors(n, t1);
-      this.splashOwed += dt * 55;
+      this.splashOwed += dt * 45;
       while (this.splashOwed >= 1) {
         this.splashOwed -= 1;
-        const a = Math.random() * Math.PI * 2, sp = rnd(1.6, 4.2), off = rnd(0.25, 1.1);
+        const a = Math.random() * Math.PI * 2, sp = rnd(1.4, 3.8), off = rnd(0.2, 0.9);
         const cx = Math.cos(a), cz = Math.sin(a);
-        this.flame(tx + n.x * 0.08, ty + n.y * 0.08, tz + n.z * 0.08, (t1.x * cx + t2.x * cz) * sp + n.x * off, (t1.y * cx + t2.y * cz) * sp + n.y * off + 0.9, (t1.z * cx + t2.z * cz) * sp + n.z * off,
-          rnd(0.32, 0.6), rnd(0.28, 0.5), rnd(0.9, 1.1), 1, 0.7, 0.5, 2.2, 3.2);
+        this.ball(tx + n.x * 0.1, ty + n.y * 0.1, tz + n.z * 0.1, (t1.x * cx + t2.x * cz) * sp + n.x * off, (t1.y * cx + t2.y * cz) * sp + n.y * off + 0.8, (t1.z * cx + t2.z * cz) * sp + n.z * off,
+          rnd(0.35, 0.65), rnd(0.3, 0.5), rnd(0.9, 1.1) * jetHeat, 1, 0.6 * (1 - 0.4 * endOn), 0.6, 2.0, 3.0);
       }
       if (Math.random() < dt * 9) this.spark(tx + n.x * 0.1, ty + n.y * 0.1, tz + n.z * 0.1, 1.6);
-      if (Math.random() < dt * 5) this.puff(tx + n.x * 0.3 + rnd(-0.2, 0.2), ty + 0.5, tz + n.z * 0.3 + rnd(-0.2, 0.2), 0.8, 1);
-    }
+      if (Math.random() < dt * 4) this.puff(tx + n.x * 0.3 + rnd(-0.2, 0.2), ty + 0.5, tz + n.z * 0.3 + rnd(-0.2, 0.2), 0.8, 1);
+    } else if (Math.random() < dt * 5) this.puff(tx + rnd(-0.3, 0.3), ty + rnd(0, 0.4), tz + rnd(-0.3, 0.3), 0.7, 0.8); // (open air: the flame's end rolls into smoke)
   }
 
   /** The pilot flame at the burner while the lance is held and fuelled. */
-  private pilot(dt: number, sys: FireSystem, m: {x: number; y: number; z: number}): void {
-    this.pilotOwed += dt * 26;
-    const s = sys.stream;
+  private pilot(dt: number, m: {x: number; y: number; z: number}): void {
+    this.pilotOwed += dt * 22;
     while (this.pilotOwed >= 1) {
       this.pilotOwed -= 1;
-      this.flame(m.x + rnd(-0.004, 0.004), m.y + rnd(-0.004, 0.004), m.z + rnd(-0.004, 0.004), s.dx * 0.25 + rnd(-0.03, 0.03), 0.3, s.dz * 0.25 + rnd(-0.03, 0.03), rnd(0.035, 0.05), rnd(0.1, 0.16), 0.75, 0.9, 0.7, -0.08, 0.4, 0);
+      this.tongue(m.x + rnd(-0.003, 0.003), m.y - 0.012, m.z + rnd(-0.003, 0.003), rnd(0.05, 0.07), rnd(0.12, 0.18), 0.9, 0.8, 0.04);
     }
   }
 
-  /** A clinging patch: licks rising off its surface (tapering as they climb), sparks, smoke from its top. */
+  /** A clinging patch: flames standing on its surface (taller in its middle, climbing a wall, rolling under a ceiling), sparks, smoke. */
   private patch(dt: number, p: FirePatch): void {
     const k = patchStrength(p);
     if (k <= 0.02) return;
     const o = this.share(p), r = patchRadius(p);
-    const floor = p.face === 'floor', ceil = p.face === 'ceiling';
+    const ceil = p.face === 'ceiling', wall = p.face === 'wall';
     // a basis in the surface
     const t1 = this.tu.set(p.ny, -p.nx, 0);
     if (t1.lengthSq() < 1e-4) t1.set(1, 0, 0);
     t1.normalize();
     const t2 = this.tw.set(p.ny * t1.z - p.nz * t1.y, p.nz * t1.x - p.nx * t1.z, p.nx * t1.y - p.ny * t1.x);
-    o.f += dt * (6 + 15 * k);
+    o.f += dt * (3.5 + 6.5 * k);
     while (o.f >= 1) {
       o.f -= 1;
-      const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * r * 0.85, ca = Math.cos(a) * d, sa = Math.sin(a) * d;
-      const x = p.x + t1.x * ca + t2.x * sa + p.nx * 0.06, y = p.y + t1.y * ca + t2.y * sa + p.ny * 0.06, z = p.z + t1.z * ca + t2.z * sa + p.nz * 0.06;
-      const edge = 1 - 0.45 * (d / Math.max(0.01, r)); // (taller in the middle)
-      if (ceil) this.flame(x, y - 0.05, z, Math.cos(a) * rnd(0.5, 1.1), -0.05, Math.sin(a) * rnd(0.5, 1.1), rnd(0.3, 0.5) * (0.6 + 0.4 * k), rnd(0.4, 0.7), rnd(0.75, 1), 1, 0.75, 0.2, 0.3, 1.2);
-      else this.flame(x, y + (floor ? 0.05 : 0), z, p.nx * 0.3 + rnd(-0.12, 0.12), rnd(0.9, 1.7) * (0.55 + 0.45 * k) * edge, p.nz * 0.3 + rnd(-0.12, 0.12),
-        rnd(0.3, 0.52) * (0.6 + 0.4 * k), rnd(0.45, 0.85), rnd(0.8, 1.1), 1, 0.8, -0.22, 1.3, 0.6);
+      const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * r * 0.8, ca = Math.cos(a) * d, sa = Math.sin(a) * d;
+      const x = p.x + t1.x * ca + t2.x * sa + p.nx * 0.08, y = p.y + t1.y * ca + t2.y * sa + p.ny * 0.08, z = p.z + t1.z * ca + t2.z * sa + p.nz * 0.08;
+      const edge = 1 - 0.5 * (d / Math.max(0.01, r)); // (taller in the middle)
+      if (ceil) {
+        for (let i = 0; i < 2; i++) { const b = a + i * 2.4 + rnd(-0.5, 0.5), bd = Math.sqrt(Math.random()) * r * 0.85; this.ball(p.x + Math.cos(b) * bd, p.y - rnd(0.07, 0.13), p.z + Math.sin(b) * bd, Math.cos(b) * rnd(0.3, 0.9), 0.05, Math.sin(b) * rnd(0.3, 0.9), rnd(0.28, 0.46) * (0.6 + 0.4 * k), rnd(0.45, 0.8), rnd(0.75, 0.95), 1, 0.62, 0.2, 0.3, 1.2); }
+      }
+      else this.tongue(x, y - (wall ? r * 0.25 : 0), z, (0.5 + 0.8 * k) * edge * rnd(0.8, 1.2) * (wall ? 0.85 : 1), rnd(0.6, 1.05), rnd(0.85, 1.1), 0.85, rnd(0.1, 0.3), p.nx * 0.12, p.nz * 0.12);
     }
+    // wisps breaking off the flames' tips
+    o.w += dt * 2.2 * k;
+    while (o.w >= 1 && !ceil) { o.w -= 1; this.ball(p.x + p.nx * 0.12 + rnd(-r, r) * 0.5, p.y + (0.35 + 0.5 * k) * rnd(0.6, 1), p.z + p.nz * 0.12 + rnd(-r, r) * 0.5, rnd(-0.2, 0.2), rnd(1.3, 2.1), rnd(-0.2, 0.2), rnd(0.16, 0.28), rnd(0.3, 0.5), rnd(0.8, 1), 1, 0.6, 0.1, 0.6, 0.5); }
+    if (ceil) o.w = 0;
     o.e += dt * 1.3 * k;
     while (o.e >= 1) { o.e -= 1; this.spark(p.x + rnd(-r, r) * 0.6, p.y + 0.15, p.z + rnd(-r, r) * 0.6, 1.3); }
-    o.s += dt * (0.5 + 1.5 * k);
+    o.s += dt * (0.9 + 2 * k);
     while (o.s >= 1) { o.s -= 1; this.puff(p.x + p.nx * 0.2 + rnd(-r, r) * 0.45, p.y + (ceil ? -0.15 : rnd(0.55, 0.95) * (0.5 + 0.5 * k)), p.z + p.nz * 0.2 + rnd(-r, r) * 0.45, k, 1); }
   }
 
-  /** A burning prop: flames off its top and up its sides, sparks, heavy smoke; dying down as it collapses. */
+  /** A burning prop: flames standing on its top and up its sides, wisps, sparks, heavy smoke; dying down as it collapses. */
   private prop(dt: number, b: {id: object; box: {min: {x: number; y: number; z: number}; max: {x: number; y: number; z: number}}; age: number; seconds: number}): void {
     const o = this.share(b.id), t = b.age / b.seconds;
     const up = Math.min(1, t * 5), down = 1 - Math.max(0, (t - 0.68) / 0.32) * 0.75; // (catches fast; sinks with the collapse)
     const w = b.box.max.x - b.box.min.x, dp = b.box.max.z - b.box.min.z, h = (b.box.max.y - b.box.min.y) * (t > 0.62 ? 1 - 0.9 * Math.min(1, (t - 0.62) / 0.38) : 1);
-    const area = Math.max(0.1, w * dp);
-    o.f += dt * Math.max(14, Math.min(48, 12 + 26 * area + 8 * h)) * up * down;
+    const area = Math.max(0.1, w * dp), big = 0.75 + 0.25 * Math.min(1, area), sc = up * (0.6 + 0.4 * down);
+    o.f += dt * Math.max(7, Math.min(20, 5 + 9 * area + 2.5 * h)) * up * down;
     while (o.f >= 1) {
       o.f -= 1;
-      let x: number, y: number, z: number;
-      if (Math.random() < 0.55) { x = rnd(b.box.min.x, b.box.max.x); z = rnd(b.box.min.z, b.box.max.z); y = b.box.min.y + h; }
+      if (Math.random() < 0.5) this.tongue(rnd(b.box.min.x + w * 0.1, b.box.max.x - w * 0.1), b.box.min.y + h - 0.04, rnd(b.box.min.z + dp * 0.1, b.box.max.z - dp * 0.1), rnd(0.7, 1.25) * big * sc, rnd(0.6, 1.05), rnd(0.9, 1.15), 0.85, rnd(0.12, 0.3));
       else {
         const side = Math.floor(Math.random() * 4);
-        x = side === 0 ? b.box.min.x - 0.04 : side === 1 ? b.box.max.x + 0.04 : rnd(b.box.min.x, b.box.max.x);
-        z = side === 2 ? b.box.min.z - 0.04 : side === 3 ? b.box.max.z + 0.04 : rnd(b.box.min.z, b.box.max.z);
-        y = b.box.min.y + h * rnd(0.1, 0.95);
+        const x = side === 0 ? b.box.min.x - 0.06 : side === 1 ? b.box.max.x + 0.06 : rnd(b.box.min.x, b.box.max.x);
+        const z = side === 2 ? b.box.min.z - 0.06 : side === 3 ? b.box.max.z + 0.06 : rnd(b.box.min.z, b.box.max.z);
+        this.tongue(x, b.box.min.y + h * rnd(0.05, 0.6), z, rnd(0.55, 1.0) * big * sc, rnd(0.55, 0.95), rnd(0.85, 1.1), 0.82, rnd(0.12, 0.3));
       }
-      this.flame(x, y, z, rnd(-0.15, 0.15), rnd(1.1, 2.1), rnd(-0.15, 0.15), rnd(0.36, 0.7), rnd(0.5, 0.95), rnd(0.85, 1.15), 1, 0.82, -0.22, 1.5, 0.6);
     }
+    o.w += dt * 3 * up * down;
+    while (o.w >= 1) { o.w -= 1; this.ball(rnd(b.box.min.x, b.box.max.x), b.box.min.y + h + rnd(0.3, 0.8), rnd(b.box.min.z, b.box.max.z), rnd(-0.25, 0.25), rnd(1.4, 2.3), rnd(-0.25, 0.25), rnd(0.18, 0.32), rnd(0.3, 0.55), rnd(0.8, 1), 1, 0.6, 0.1, 0.6, 0.5); }
     o.e += dt * 3.5 * up * down;
     while (o.e >= 1) { o.e -= 1; this.spark(rnd(b.box.min.x, b.box.max.x), b.box.min.y + h, rnd(b.box.min.z, b.box.max.z), 1.7); }
-    o.s += dt * 3.2 * up;
+    o.s += dt * 4 * up;
     while (o.s >= 1) { o.s -= 1; this.puff(rnd(b.box.min.x, b.box.max.x), b.box.min.y + h + rnd(0.5, 0.9), rnd(b.box.min.z, b.box.max.z), 1, 1); }
   }
 
   /** A burning body: flames about its trunk (never on a non-graphic body: the caller filters). */
   private body(dt: number, z: FireEnemy): void {
     const o = this.share(z), b = z.brain, r = b.stats.radius, h = b.stats.height ?? 1.7;
-    o.f += dt * 11;
+    o.f += dt * 9;
     while (o.f >= 1) {
       o.f -= 1;
-      const a = Math.random() * Math.PI * 2, d = r * rnd(0.3, 0.9);
-      this.flame(b.x + Math.cos(a) * d, b.y + h * rnd(0.3, 0.85), b.z + Math.sin(a) * d, rnd(-0.1, 0.1), rnd(0.9, 1.6), rnd(-0.1, 0.1), rnd(0.24, 0.42), rnd(0.32, 0.58), rnd(0.8, 1.05), 1, 0.78, -0.2, 1.2, 0.8);
+      const a = Math.random() * Math.PI * 2, d = r * rnd(0.8, 1.2); // (about it, not inside it: its own surface would hide them)
+      this.tongue(b.x + Math.cos(a) * d, b.y + h * rnd(0.12, 0.72), b.z + Math.sin(a) * d, rnd(0.45, 0.8), rnd(0.45, 0.75), rnd(0.85, 1.05), 0.8, rnd(0.15, 0.35));
     }
-    o.s += dt * 0.9;
+    o.s += dt * 0.8;
     while (o.s >= 1) { o.s -= 1; this.puff(b.x, b.y + h + 0.2, b.z, 0.6, 0.8); }
   }
 
@@ -608,7 +659,7 @@ export class FireFx implements FireView {
       const sc = level / (1 + 0.03 * ((x - eye.x) ** 2 + (y - eye.y) ** 2 + (z - eye.z) ** 2));
       if (sc > best) { best = sc; bx = x; by = y; bz = z; }
     };
-    for (const p of sys.patches) { const k = patchStrength(p); if (k > 0.05) consider(p.x + p.nx * 0.4, p.y + p.ny * 0.4 + (p.face === 'ceiling' ? -0.2 : 0.35), p.z + p.nz * 0.4, k); }
+    for (const p of sys.patches) { const k = patchStrength(p); if (k > 0.05) consider(p.x + p.nx * 0.4, p.y + p.ny * 0.4 + (p.face === 'ceiling' ? -0.45 : 0.35), p.z + p.nz * 0.4, p.face === 'ceiling' ? k * 0.55 : k); }
     for (const b of sys.burns) consider(b.base.x, b.box.max.y + 0.3, b.base.z, 1.2);
     if (best > 0) {
       // (everything burning within 3.5 m of it adds to it, up to a ceiling)
