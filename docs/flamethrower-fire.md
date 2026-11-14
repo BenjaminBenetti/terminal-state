@@ -114,6 +114,28 @@ green fog is reserved for toxic gas.
 - A burning prop is overlaid by a charring shell that glows faintly and collapses at the end.
 - A body that is never shown hurt (the BB) takes fire damage, and no flames are drawn on it.
 - The noise texture is runtime data, not authored art.
+- The stream and the pilot flame leave the burner bell where the held view draws it (`Viewmodel.muzzleDrawnWorld`: the held view has
+  its own narrower camera, so the plain muzzle point would sit nearer the screen centre than the bell). The pilot flame's foot is in the
+  bell's mouth and licks up over its rim.
+
+## Models
+
+Both are Meshy image-to-3D models of one Codex design image each, with Meshy's own PBR maps kept (credits and provenance:
+`game/public/assets/CREDITS.md`, `assets/derivatives/weapon-flamethrower.json`, `assets/derivatives/gear-fuel-tank.json`).
+
+| Model | File | Size (W×H×D) | Triangles | Maps |
+|---|---|---|---|---|
+| Flamethrower | `assets/models/weapon-flamethrower.glb` | 0.13 × 0.22 × 0.95 m | 20 170 | base colour 2048, metal-rough / normal 1024 |
+| Fuel Tank | `assets/models/gear-fuel-tank.glb` | 0.59 × 0.62 × 0.40 m | 14 454 | base colour / normal 1024, metal-rough 512 |
+
+- The flamethrower's model is delivered lazily like the weapon-variety guns (`weapons/lazyWeaponModels.ts`): fetched for a section that
+  can show it (carried, stored, remembered) or the moment a surface shows it, never in the boot preload. It is not a weapon-variety
+  identity and joins no find pool.
+- Held: low at the right hip, the lance running forward toward the crosshair, pivoting at the model's `Grip` marker. No aimed pose.
+- The tank is a gear model (`gear/models.ts`): it stands upright as a pickup and has a rendered item icon. A worn tank is not drawn
+  (the game is first person).
+- Cook scripts: `tools/asset-pipeline/weapons/build-flamethrower.mjs`, `tools/asset-pipeline/props/build-fuel-tank.mjs` (they read the
+  private raw masters; a checkout without them cannot re-cook, and never needs to).
 
 ## Files
 
@@ -126,6 +148,7 @@ green fog is reserved for toxic gas.
 | Fire rendering | `fire/fireFx.ts` |
 | Burning props | `world/acidMelt.ts` |
 | Sound | `fire/sound.ts`, `audio/flameAudio.ts` |
+| Models | `assets/flamethrowerModels.generated.ts`, `weapons/lazyWeaponModels.ts`, `gear/models.ts` |
 | Wiring | `game.ts` (`flameTick`, `stopFlame`, `flameHint`, the `fireSys.env` block) |
 
 ## Tests
@@ -138,6 +161,8 @@ green fog is reserved for toxic gas.
 - `fuel-tank-state`, `flamethrower-economy`, `flamethrower-market`: the tank's fuel through every store and save, the recipes, the
   stall stock and prices.
 - `fire-audio`: the sound set.
+- `flamethrower-model`, `fuel-tank-model`: the cooked models, their markers and bounds, the lazy delivery, the held pose and muzzle.
+- `acid-pool-visual`: the Acid Scrapper pool's new look (and that its rules did not move).
 
 ## Limits
 

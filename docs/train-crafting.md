@@ -105,6 +105,11 @@ Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
   **Scrap metal** from anything else — once, and spills what it held as real items. The train itself and everything fitted to it
   (the Lockbox, the bench, the chipper, the controls, the Save terminal, the armor) never melt; portable cargo and crafted equipment
   aboard do. The pool is a liquid film with bubbles, never a gas cloud. At most three acid pools / acid canisters at once.
+  **How the pool looks** (`weapons/acidPoolShape.ts`, `acidPoolLook.ts`, `acidPoolVisual.ts`; a look only, no rule reads it): an
+  irregular seeded outline that stays inside the circle that hurts; a wet yellow-green film with depth and a slow swirl; pale foam
+  along the edge; bubbles that swell and pop, froth beads and small spits; foam and bubbling gather where the acid is working (someone
+  standing in it, a prop it is eating, the burst); over its last seconds the film dries from the rim inward and leaves an etched
+  mark. Lit by the torch and the station lamps, with a modest glow of its own so it reads in the dark.
 - **Acid melt** (`world/acidMelt.ts`; the grenade only asks it what its pool and its stuck canister touch). What melts is decided by
   physical traits and ownership, never by a list of kinds. Station furniture, containers, machines, shelves, crates, lockers, desks and
   counters melt. So do loose props where they lie, carried props, crafted equipment and fuel carts standing in the world, **aboard the
