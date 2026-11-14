@@ -34,8 +34,10 @@ export function barFloorArea(layout: StationLayout, area: number): number {
   return n * CELL * CELL;
 }
 
-export function barSettleIssues(layout: StationLayout): string[] {
-  const issues = settleIssues(layout, {v: 3, stalls: MARKET_STALLS_ALL, behindCounter: [BAR_STALL]});
+/** (task studio-corpse-market-shop-20261114-031614-01: `expect` — layout version 4 checks its version-3 part with its own record version
+ *  and its sealed den back room, gen/market/v4/denValidate.ts; version 3's by default) */
+export function barSettleIssues(layout: StationLayout, expect: {v?: number; sealed?: readonly number[]} = {}): string[] {
+  const issues = settleIssues(layout, {v: expect.v ?? 3, stalls: MARKET_STALLS_ALL, behindCounter: [BAR_STALL], ...(expect.sealed ? {sealed: expect.sealed} : {})});
   const m = layout.market;
   const bar = m?.stalls.find(s => s.id === BAR_STALL);
   if (!m || !bar) return [...issues, 'no bar'];

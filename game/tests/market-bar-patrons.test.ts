@@ -44,10 +44,11 @@ beforeAll(async () => {
   can = new THREE.Group(); can.add(m);
 });
 
-/** The market as built now (layout v3: the settlement + the bar deck, its 'drink' posts naming their seats, the 'bar' stall). */
+/** The market as built now (layout v3: the settlement + the bar deck, its 'drink' posts naming their seats, the 'bar' stall; re-pinned by
+ *  task studio-corpse-market-shop-20261114-031614-01: now layout v4 = that same v3 plus the corpse buyer's den, appended after it). */
 function barMarket(seed = 808) {
   const w = combatWorld(A, seed);
-  expect(w.layout.market!.v).toBe(3);
+  expect(w.layout.market!.v).toBe(4);
   w.people.bottleSource = () => ({obj: can, item: 'cola', source: 'models.item_cola (test)'});
   return {w};
 }

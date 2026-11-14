@@ -70,6 +70,7 @@ export interface MarketLayout {
    * 1: the first market (one salvaged shed, stall row); 2 (task studio-market-rework-20261108-074144-01): the dense container settlement.
    * A station keeps the version it was first built with (its geometry, ids and stock never reroll); unvisited markets build the newest.
    * 3 (task studio-market-bar-20261108-225231-01): version 2's settlement plus a substantial upper-level bar (its bartender a stall).
+   * 4 (task studio-corpse-market-shop-20261114-031614-01): version 3 plus the corpse buyer's den (`den`; the same stalls / spots).
    */
   v: 1 | 2 | 3 | 4;
   /** Exactly one stall per MARKET_STALLS id (version 3: + the bar, BAR_STALL, last). */
@@ -95,8 +96,8 @@ export interface MarketDen {
   door: {x0: number; z0: number; x1: number; z1: number} & MarketPoint;
   /** The floor chute (layout.props index; centre, yaw; rimY = absolute height of the hopper's rim, the mouth a body goes in at). */
   chute: MarketPoint & {prop: number; yaw: number; rimY: number};
-  /** The buyer's booth (layout.props index; centre, yaw = the side facing the customer). tray: the counter top's payout spot in front of
-   *  the bars (y = the counter top), where the buyer drops the Rail Ties. */
+  /** The buyer's booth (layout.props index; centre, yaw = the side facing the customer). tray: the payout spot ON THE FLOOR (y = the floor)
+   *  ~0.35-0.5 m in front of the booth's front face on its centre line, a clear ~0.7 m disc: the Rail Ties pushed through the slot drop there. */
   booth: MarketPoint & {prop: number; yaw: number; tray: MarketPoint};
   /** Where the buyer stands behind the booth, facing the customer (three.js rotation.y; forward = (-sin yaw, -cos yaw)). */
   buyer: MarketPoint & {yaw: number};

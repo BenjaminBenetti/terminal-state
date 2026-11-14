@@ -5,6 +5,8 @@
 //  - version 2 = the dense container settlement (gen/market/v2/: alleys, stacked container housing, catwalks, rooftops, real shops);
 //  - version 3 (task studio-market-bar-20261108-225231-01, lane BAR) = version 2's settlement plus the upper-level bar over the yard
 //    (gen/market/v3/; its bartender a seventh stall) — a recorded version 2 stays version 2 (no bar), byte for byte;
+//  - version 4 (task studio-corpse-market-shop-20261114-031614-01) = version 3 plus the corpse buyer's den off the Back Lane
+//    (gen/market/v4/: appended to version 3's output, which it leaves exactly as it was) — a recorded version 3 stays version 3 (no den);
 //  - a station's section memory records the version it was first built with (lane `market.layout` = {v}); a memory with visits but no
 //    record was entered under the first market's build -> version 1, forever (its geometry, area ids, stalls and stock never reroll);
 //  - a station never entered (or a new campaign) -> the current version, recorded when it is first built.
@@ -12,8 +14,9 @@
 
 export const MARKET_LAYOUT_LANE = 'market.layout';
 /** 1 = the first market (one salvaged shed); 2 = the dense container settlement (task studio-market-rework-20261108-074144-01); 3 = the
- *  settlement with the upper-level bar (task studio-market-bar-20261108-225231-01). */
-export const MARKET_LAYOUT_VERSION = 3;
+ *  settlement with the upper-level bar (task studio-market-bar-20261108-225231-01); 4 = + the corpse buyer's den (task
+ *  studio-corpse-market-shop-20261114-031614-01). */
+export const MARKET_LAYOUT_VERSION = 4;
 
 /** The layout version a market station regenerates with, from its section memory (undefined = never touched). */
 export function marketLayoutVersionFor(mem: {visits: number; lanes: Record<string, unknown>} | undefined): number {
