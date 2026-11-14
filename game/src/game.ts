@@ -201,6 +201,7 @@ import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // 
 import {carriedModelKeys, installTrainPropCargo, type TrainPropCargo} from './world/trainPropCargo'; // task train-all-cargo: every movable prop aboard travels too
 import {installCorpses, type CorpseSystem} from './world/corpses'; // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): carried dead bodies
 import {groundDropSpots} from './world/dropScatter'; // task studio-refinement-batch-20261113-035659-01 (lane DROPS): inventory drops scatter
+import {CORPSE_BUYER_MODEL_FILES, installCorpseShop, type CorpseShop} from './market/corpseShop/corpseShop'; // task studio-corpse-market-shop-20261114-031614-01: the Market den's corpse buyer
 import {installChipper, type ChipperSystem} from './world/chipper'; // task corpse-chipper (lane CHIPPER): the woodchipper fixed in the train
 import {installTrainEquipment, type TrainEquipmentSystem} from './world/trainEquipment'; // task train-crafting (lane EQUIP): the crafted chests / devices as physical cargo, the three plugs
 import {installCraftBench, type CraftBenchSystem} from './world/craftBench'; // task train-crafting (lane BENCH): the crafting bench + its recipe list
@@ -323,7 +324,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...COSPLAY_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES, ...MARKET_HUMAN_MODEL_FILES, ...SHELF_JUNK_MODEL_FILES, ...BUNKER_KIT_MODEL_FILES, ...CORPSE_DEN_MODEL_FILES}); // (task studio-food-shelf-production-20261109-002816-01: + the shelf-junk atlas, lazy) // (survivor market, lane HUMANS: + the friendly cast, level-only market-*) (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...COSPLAY_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES, ...MARKET_HUMAN_MODEL_FILES, ...SHELF_JUNK_MODEL_FILES, ...BUNKER_KIT_MODEL_FILES, ...CORPSE_DEN_MODEL_FILES, ...CORPSE_BUYER_MODEL_FILES}); // (task studio-food-shelf-production-20261109-002816-01: + the shelf-junk atlas, lazy) // (survivor market, lane HUMANS: + the friendly cast, level-only market-*) (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
   /** Task track3-eaton-centre-20261031 (lane PACKAGE): textures / GPU resources owned by ONE level, released when the level changes (assets/levelResources.ts). */
   readonly levelResources = new LevelResources();
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
@@ -456,6 +457,8 @@ export class Game {
   corpses!: CorpseSystem;
   /** Task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): the woodchipper fixed in the train (world/chipper.ts): feed dead bodies, fuel. */
   readonly chipper: ChipperSystem;
+  /** task studio-corpse-market-shop-20261114-031614-01: the Market den's corpse buyer (market/corpseShop/corpseShop.ts; inert without layout.market.den). */
+  corpseShop!: CorpseShop;
   /**
    * Task studio-train-crafting-v1-20261111-225628-01: the crafted train equipment (world/trainEquipment.ts: chests / devices as physical
    * cargo, the three generic plugs), the crafting bench (world/craftBench.ts), the sentry's roof turret (world/sentryTurret.ts) and the
@@ -889,6 +892,10 @@ export class Game {
     // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): after the train, ride and cargo (its section build attaches to the car's
     // view; its teardown keeps a riding car's machine) — the corpse sink, the grind / transfer / blood / noise, the look-at line, warm pool 'train-chipper'
     this.chipper = installChipper(this);
+    // task studio-corpse-market-shop-20261114-031614-01: after the corpses (its sink) and the market's people / combat (it reads the hostility) — the Market den's
+    // corpse buyer: the chute sink, the sale clock on the station lane 'market.corpseShop', the physical Rail Ties drop; inert without a den
+    this.corpseShop = installCorpseShop(this);
+    hookName('corpseShop');
     hookName('chipper');
     // task studio-train-crafting-v1-20261111-225628-01: after the train, the ride, the fuel carts and the cargo systems — the crafted
     // equipment (lane EQUIP: kinematic units on the fuel dolly's controller, the plugs, its own cargo capture / station lane; the train

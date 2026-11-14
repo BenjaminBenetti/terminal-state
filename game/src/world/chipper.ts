@@ -44,7 +44,7 @@ import {CHIPPER, chipperRefusal, creditTankText, GrindClock, grind, jobProgress,
 import {tanksText} from '../fuel/fuel';
 import {bodyProblem, copyBody, type BodyRecordJSON} from '../corpse/bodyRecord';
 import type {BodyOffer, BodySink, CorpseSystemApi, HeldBody} from '../corpse/api';
-import {corpseFeedable} from '../ai/corpseTrait';
+import {corpseCarriable, corpseFeedable} from '../ai/corpseTrait';
 import {emitWorldNoise, type WorldNoise, type WorldNoiseHost, type WorldNoiseKind} from '../ai/worldNoise';
 import {ChipperAudio} from '../audio/chipperAudio';
 import type {Sfx} from '../audio/sfx';
@@ -79,6 +79,8 @@ export const CHIPPER_TEXT = {
   feed: '<b>[E]</b> Feed the body into the chipper',
   riding: 'Not while the train is moving',
   notUndead: 'The chipper only takes dead undead bodies',
+  /** (task studio-corpse-market-shop-20261114-031614-01) a carriable undead body that is not an adult humanoid one (BB). */
+  notAdult: 'Too small a body for the chipper — the Market\'s corpse buyer takes it whole',
   ground: (credit: string) => `Body ground — +0.1 tank of fuel${credit !== '0.0' ? ` · ${credit} tank waiting` : ''}`,
   transfer: (tank: string) => `Chipper fuel into the tank — ${tank}`,
 } as const;
@@ -394,6 +396,8 @@ export class ChipperSystem {
     if (this.host.trainRide?.riding || !this.host.trainRuntime?.train) return {ok: false, text: CHIPPER_TEXT.riding};
     const r = chipperRefusal(this.state);
     if (r) return {ok: false, text: r};
+    const arch = held.record.arch;
+    if (corpseCarriable(arch) && !corpseFeedable(arch)) return {ok: false, text: CHIPPER_TEXT.notAdult}; // (BB: carried and sold, never chipped)
     if (bodyProblem(this.jobRecord(held.record), {world: false, feedable: corpseFeedable})) return {ok: false, text: CHIPPER_TEXT.notUndead};
     return {ok: true, text: CHIPPER_TEXT.feed};
   }
