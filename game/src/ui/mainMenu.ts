@@ -1171,7 +1171,7 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
   const mounted = () => alive && cacheLine.parentElement === box;
   const showCache = (text: string | null) => {
     const button = !!text && !!o.clearLightingCache;
-    cacheLine.textContent = text ?? '';
+    if (cacheLine.textContent !== (text ?? '')) cacheLine.textContent = text ?? ''; // (a polite live region: unchanged numbers are not announced again)
     cacheLine.classList.toggle('hidden', !text);
     cacheRow.classList.toggle('hidden', !button);
     clear.hidden = !button;
