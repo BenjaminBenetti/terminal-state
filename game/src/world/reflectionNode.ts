@@ -16,16 +16,20 @@
 //    unfiltered fetch of their ids, then per probe that really weighs in (one in a block's core, two along an edge, four at a corner):
 //    its position / box (three texel loads), a box-projected lookup direction and two atlas samples (the two roughness levels).
 //    A probe's light is scaled by the field's light at the surface (flicker, the ride mask, a dark side room).
+//  - A 'window' pane (render/reflectTag.ts) sits inside its wall's own cell, where the field is the wall's: dark, and in a column
+//    that may only be open on another storey. Its reflection reads the field and the probe grid one cell out along its normal
+//    instead (WINDOW_REACH): the room it is seen from. One more field sample on those panes only.
 //  - No uniform buffer is added in any stage (plain render-group uniforms: the group LF already binds); three sampled textures more
 //    on a reflective material (atlas, meta, grid), none on any other.
 
 import * as THREE from 'three';
 import {PhysicalLightingModel, type Node, type NodeBuilder} from 'three/webgpu';
 import {
-  If, abs, cameraWorldMatrix, clamp, float, floor, int, ivec2, ivec3, materialOpacity, max, metalness, min, mix, mod, normalView, positionWorld, pow4,
+  If, abs, cameraWorldMatrix, clamp, float, floor, int, ivec2, ivec3, materialOpacity, max, metalness, min, mix, mod, normalView, normalWorld, positionWorld, pow4,
   reflectView, renderGroup, roughness, select, step, texture, texture3D, uniform, vec2, vec3,
 } from 'three/tsl';
-import {LightFieldLight, LightFieldNode, type LightFieldSampleNodes, type NodeLibraryLike} from './lightFieldNode';
+import {LightFieldLight, LightFieldNode, lightFieldCell, lightFieldSample, type LightFieldSampleNodes, type NodeLibraryLike} from './lightFieldNode';
+import {fieldSlot, sampleField, type BakedField} from './lightField';
 import {PROBE_COLS, PROBE_GUTTER, PROBE_LEVELS, PROBE_LEVEL_PER_ROUGHNESS, PROBE_RATIO_MAX, octEncode, probeAtlasLayout, probeBytes, probeTileOrigin, type BakedProbes} from './reflectionProbes';
 import {CELL} from '../gen/grid';
 import {refreshTextureBindings} from '../render/bindingRefresh';
@@ -154,7 +158,8 @@ export type {ReflectClass} from '../render/reflectTag';
 /**
  * Whether a material shows the probes, and how. Decided while its program is built, so from nothing but what three's program cache
  * key holds (render/reflectTag.ts explains): two materials that share a program always get the same answer.
- *  - a TAG (tagReflect) wins: 'glass', 'metal' or 'none' — the station's glazing is tagged glass, its wall / floor / ceiling sets none;
+ *  - a TAG (tagReflect) wins: 'glass', 'window', 'metal' or 'none' — the station's glazing is tagged glass, the tower's wall-set
+ *    panes window, its wall / floor / ceiling sets none;
  *  - never a skinned mesh (characters), never a non-standard material;
  *  - an untagged see-through material: 'none' (decals, particles, liquids: only tagged panes are glass);
  *  - 'metal': a metalness map (model materials) or a metalness that is not zero. This is a CANDIDATE: the shader then decides per
@@ -191,12 +196,14 @@ const lumOf = (c: N): N => n(c).dot(vec3(0.2126, 0.7152, 0.0722));
 
 /**
  * The probes' radiance at the shaded point along world direction `dir` for a surface of roughness `rough` (declares vars and
- * branches: call inside a material / lighting stack). `s` is the field sample of the same point (its slot and its light).
+ * branches: call inside a material / lighting stack). `s` is the field sample of the same point (its slot and its light). `at`:
+ * the world point whose cell names the probes (the shaded point unless given: a window pane names them a cell out, with the field
+ * sample of that place); the parallax box is always entered from the shaded point itself.
  */
-export function probeRadiance(s: LightFieldSampleNodes, dir: Node, rough: Node): Node {
+export function probeRadiance(s: LightFieldSampleNodes, dir: Node, rough: Node, at?: Node): Node {
   const P = n(positionWorld), R = n(n(dir)).toVar();
   const gi = n(REFL.gridInfo), ai = n(REFL.atlasInfo), LY = n(REFL.levelY);
-  const cxy = n(n(P.xz).div(gi.w)).toVar();
+  const cxy = n(n(n(at ?? positionWorld).xz).div(gi.w)).toVar();
   const slot = n(s.slot);
   const W4 = n(n(REFL.grid).sample(vec3(n(cxy).div(gi.xy), n(slot).mul(2).add(0.5).div(gi.z))).level(0)).toVar();
   const ci = n(clamp(floor(cxy), vec2(0, 0), n(gi.xy).sub(1))).toVar();
@@ -243,6 +250,9 @@ export function probeRadiance(s: LightFieldSampleNodes, dir: Node, rough: Node):
   return n(acc).div(max(wsum, 0.05)).mul(n(REFL.params).x);
 }
 
+/** How many cells out along its normal a 'window' pane reads the field and the probe grid (the field's usual offset is 0.5). */
+export const WINDOW_REACH = 1;
+
 // ---------------------------------------------------------------------------------------------
 // Scene light + lighting node
 
@@ -284,6 +294,12 @@ export class LightFieldReflectNode extends LightFieldNode {
     if (cls === 'glass') {
       // a see-through pane: its reflection is not dimmed by how much it lets through (the blend multiplies by the opacity)
       rad.assign(n(probeRadiance(s, dir, rough)).div(clamp(materialOpacity, 0.25, 1)));
+    } else if (cls === 'window') {
+      // a pane inside its wall's own cell: the field and the probes of the room it is seen from, a cell out along the normal
+      const cell = n(lightFieldCell());
+      const at = n(n(positionWorld).add(n(normalWorld).mul(vec3(n(cell.x).mul(WINDOW_REACH), 0, n(cell.y).mul(WINDOW_REACH))))).toVar();
+      const sw = lightFieldSample(positionWorld, {normal: normalWorld, reach: WINDOW_REACH});
+      rad.assign(n(probeRadiance(sw, dir, rough, at)).div(clamp(materialOpacity, 0.25, 1)));
     } else {
       // a rough non-metal texel reflects next to nothing: no lookup there (the real, per-fragment metalness and roughness decide)
       If(n(metalness).greaterThan(REFLECT_METALNESS_MIN).or(n(rough).lessThan(REFLECT_ROUGHNESS_MAX)), () => { rad.assign(probeRadiance(s, dir, rough)); });
@@ -323,11 +339,12 @@ export function sampleProbeLevel(B: BakedProbes, p: number, l: number, d: readon
 
 /**
  * The probes' radiance at world point (x, y, z) of level slot `slot` along unit direction `dir` at roughness `rough`, for a local
- * field luminance `local` — the shader's maths on the CPU (bilinear weights, unfiltered ids, box projection, two levels).
+ * field luminance `local` — the shader's maths on the CPU (bilinear weights, unfiltered ids, box projection, two levels). `at`:
+ * the (x, z) whose cell names the probes, when it is not the point itself (probeRadiance's `at`).
  */
-export function sampleProbes(B: BakedProbes, x: number, y: number, z: number, slot: number, dir: readonly [number, number, number], rough: number, local: number, strength = 1): [number, number, number] {
+export function sampleProbes(B: BakedProbes, x: number, y: number, z: number, slot: number, dir: readonly [number, number, number], rough: number, local: number, strength = 1, at?: readonly [number, number]): [number, number, number] {
   const W = B.gridW, H = B.gridH, g = B.grid;
-  const cx = x / CELL, cz = z / CELL;
+  const cx = (at ? at[0] : x) / CELL, cz = (at ? at[1] : z) / CELL;
   const u = cx - 0.5, v = cz - 0.5, iu = Math.floor(u), iv = Math.floor(v), fu = u - iu, fv = v - iv;
   const w4 = [0, 0, 0, 0];
   for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++) {
@@ -364,4 +381,21 @@ export function sampleProbes(B: BakedProbes, x: number, y: number, z: number, sl
   }
   const ws = Math.max(w4[0] + w4[1] + w4[2] + w4[3], 0.05);
   return [acc[0] / ws * strength, acc[1] / ws * strength, acc[2] / ws * strength];
+}
+
+/**
+ * What a reflective surface of class `cls` at world point (x, y, z) with unit normal `normal` reads before it looks the probes up
+ * — LightFieldReflectNode's choice on the CPU: the level slot and the field's luminance (`local`) of the field sample it uses, and
+ * the (x, z) whose cell names the probes. Glass and metal read at the surface (the field's own half-cell offset along the normal);
+ * a 'window' pane reads WINDOW_REACH cells out along its normal.
+ */
+export function reflectLookup(cls: ReflectClass, F: BakedField, x: number, y: number, z: number, normal: readonly [number, number, number], levels: readonly number[] = [1, 1, 1]): {slot: number; local: number; at: [number, number]} {
+  const C = CELL * (F.cellScale ?? 1), reach = cls === 'window' ? WINDOW_REACH : 0.5;
+  // the field sample: its point is (reach cells, 0.2 m, reach cells) along the normal; sampleField adds half a cell of that itself
+  const px = x + normal[0] * C * (reach - 0.5), pz = z + normal[2] * C * (reach - 0.5);
+  const f = sampleField(F, px, y, pz, levels, normal);
+  const ox = x + normal[0] * C * reach, oy = y + normal[1] * 0.2, oz = z + normal[2] * C * reach;
+  const ci = Math.min(F.w - 1, Math.max(0, Math.floor(ox / C))), cj = Math.min(F.h - 1, Math.max(0, Math.floor(oz / C)));
+  const lum = (c: readonly number[]): number => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  return {slot: fieldSlot(F, ci, cj, oy).slot, local: lum(f.amb) + lum(f.dirColor), at: cls === 'window' ? [ox, oz] : [x, z]};
 }

@@ -1,11 +1,12 @@
 // Task studio-baked-lighting-reflections-20261114-050258-01: the reflection probes' lighting node (world/reflectionNode.ts).
-// - which materials reflect (metal / glass) and which never do (walls, floors, characters, unlit materials);
+// - which materials reflect (metal / glass / a wall-set window pane) and which never do (walls, floors, characters, unlit materials);
 // - with the PLAIN field light every material compiles to the program it always had: no probe texture, no extra code — the
 //   reflecting light is a second session-wide light a station only uses when it was built with probes;
 // - a reflective material builds on BOTH backends (WGSL = WebGPU, GLSL = WebGL2 fallback) within WebGPU's per-stage limits, with
 //   three more sampled textures and no uniform buffer more; a non-reflective one under the reflecting light adds none;
 // - binding / unbinding swaps values only and asks every render object to re-read its texture bindings;
-// - the CPU mirror of the shader's lookup (sampleProbes) on a hand-made probe set.
+// - the CPU mirror of the shader's lookup (sampleProbes) on a hand-made probe set, and where each class reads (reflectLookup).
+//   (The tower's real window panes: reflection-window.test.ts.)
 // Shader code is generated in Node by three's own GLSLNodeBuilder / WGSLNodeBuilder on an uninitialised renderer (no GPU).
 import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
@@ -13,7 +14,7 @@ import {GLSLNodeBuilder, MeshBasicNodeMaterial, MeshLambertNodeMaterial, MeshSta
 import {LightFieldLight, LightFieldNode, installLightFieldNode, stationFieldLight} from '../src/world/lightFieldNode';
 import {
   LightFieldReflectLight, LightFieldReflectNode, REFL, REFLECTION_TUNING, ReflectionProbeVolume, activeReflectionProbes, bindReflectionProbes, installReflectNode,
-  REFLECT_METALNESS_MIN, REFLECT_ROUGHNESS_MAX, reflectClass, sampleProbeLevel, sampleProbes, stationReflectLight, syncReflectionTuning,
+  REFLECT_METALNESS_MIN, REFLECT_ROUGHNESS_MAX, WINDOW_REACH, reflectClass, sampleProbeLevel, sampleProbes, stationReflectLight, syncReflectionTuning,
 } from '../src/world/reflectionNode';
 import {reflectTagOf, tagReflect} from '../src/render/reflectTag';
 import {materialKey} from '../src/render/runtimeVariants';
@@ -124,6 +125,11 @@ describe('which materials reflect', () => {
     expect(reflectClass(pane)).toBe('glass');
     expect(reflectTagOf(pane)).toBe('glass');
     expect(reflectTagOf(std({}))).toBeUndefined();
+    // a pane set inside its wall's own cell: its own class (it reads the room a cell out), and so its own program
+    const set = tagReflect(std({metalness: 0.1, transparent: true, opacity: 0.42}), 'window');
+    expect([reflectClass(set), reflectTagOf(set)]).toEqual(['window', 'window']);
+    expect(materialKey(set)).not.toBe(materialKey(pane));
+    expect(reflectTagOf(tagReflect(std({}), 'mirror' as never))).toBeUndefined(); // an unknown tag is no tag
     const steel = std({metalness: 0.5});
     expect(reflectClass(steel, new THREE.SkinnedMesh())).toBe('none');
     expect(reflectClass(steel, new THREE.Mesh())).toBe('metal');
@@ -151,7 +157,7 @@ describe('which materials reflect', () => {
     expect(key(tagReflect(std({transparent: true, opacity: 0.4}), 'glass'))).not.toBe(key(std({transparent: true, opacity: 0.4})));
     expect(key(tagReflect(std({metalness: 1}), 'none'))).not.toBe(key(std({metalness: 1})));
   });
-  it('the station kit: glazing is glass (clones too), tile / slab / ceiling sets never reflect, painted and brushed steel are metal candidates', () => {
+  it('the station kit: glazing is glass (clones too), the tower\'s wall-set panes are windows, tile / slab / ceiling sets never reflect, painted and brushed steel are metal candidates', () => {
     installCanvasShim(false);
     const mats = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
     for (const k of ['tileLower', 'tileUpper', 'platformSlab', 'ceiling', 'tunnel', 'platformFace', 'safetyEdge'] as const) expect(reflectClass(mats.get(k)), k).toBe('none');
@@ -161,8 +167,10 @@ describe('which materials reflect', () => {
     expect(reflectClass(glass)).toBe('glass');
     expect(reflectClass(front)).toBe('glass');
     expect(reflectClass(cloneSurfaceMaterial(front))).toBe('glass');
-    expect(reflectClass(officeGlassMaterial(mats))).toBe('glass');
-    expect(reflectClass(crackedGlassMaterial(null))).toBe('glass');
+    // the tower's panes (intact and cracked) sit inside the wall's own cell: windows; the shop glazing they were copied from stays glass
+    expect(reflectClass(officeGlassMaterial(mats))).toBe('window');
+    expect(reflectClass(crackedGlassMaterial(null))).toBe('window');
+    expect(reflectClass(front)).toBe('glass');
     expect(reflectClass(shapeMaterial(mats, 'steelBright'))).toBe('metal');
     expect(reflectClass(shapeMaterial(mats, 'counter'))).toBe('none');
   });
@@ -192,6 +200,7 @@ describe('the reflecting field light', () => {
       wall: () => new MeshStandardNodeMaterial({metalness: 0, roughness: 0.8}),
       steel: () => new MeshStandardNodeMaterial({metalness: 0.45, roughness: 0.4}),
       glass: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'glass'),
+      window: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'window'),
     };
     for (const backend of ['wgsl', 'glsl'] as const) {
       const plain = Object.fromEntries(Object.entries(mats).map(([k, f]) => [k, compile(backend, box(f()), [stationFieldLight(), new THREE.HemisphereLight()])]));
@@ -218,6 +227,11 @@ describe('the reflecting field light', () => {
       }
       // the plain programs never mention a probe texture
       for (const k of Object.keys(mats)) expect(bindings(backend, plain[k]).textures, `${backend} ${k} plain`).toBeLessThanOrEqual(bindings(backend, refl[k]).textures);
+      // a window pane is the glass program under the plain light (the tag only matters to the reflecting one); under the
+      // reflecting light it samples the field a second time, a cell out: more code, the same bindings
+      expect(plain.window).toBe(plain.glass);
+      expect(refl.window.length).toBeGreaterThan(refl.glass.length);
+      expect(bindings(backend, refl.window)).toEqual(bindings(backend, refl.glass));
       // unlit / non-physical materials: nothing under the reflecting light either
       const basic = compile(backend, box(new MeshBasicNodeMaterial()), [stationReflectLight()]);
       expect(bindings(backend, basic).textures).toBe(0);
@@ -299,6 +313,20 @@ describe('the lookup (CPU mirror of the shader)', () => {
     const none = {...B, grid: new Uint8Array(B.grid.length)};
     expect(sampleProbes(none, 2, 1.2, 2, 0, [0, 1, 0], 0.3, 2)).toEqual([0, 0, 0]);
     expect(PROBE_NORM_MIN).toBeGreaterThan(0);
+  });
+  it('the probes can be named from another cell than the shaded point\'s (a window pane names them a cell out); the parallax stays the point\'s', () => {
+    // an 8 x 8 grid: probe 1 (red) weighs on the cells x >= 1, none on the wall column x = 0
+    const B = fakeProbes({colors: [[1, 0, 0]]});
+    const n = B.gridW * B.gridH;
+    for (let i = 0; i < n; i++) if (i % B.gridW === 0) B.grid[i * 4] = 0;
+    const dir: [number, number, number] = [0.8, 0.6, 0];
+    // deep in the wall column (its texel centre): nothing; named from the room cell beside it: the room's probe
+    expect(sampleProbes(B, 0.25, 1.2, 2.25, 0, dir, 0.2, 1)).toEqual([0, 0, 0]);
+    const out = sampleProbes(B, 0.25, 1.2, 2.25, 0, dir, 0.2, 1, 1, [0.75, 2.25]);
+    expect(out.map(v => +v.toFixed(3))).toEqual([1, 0, 0]);
+    // ... which is what a point standing in that room cell gets
+    expect(out).toEqual(sampleProbes(B, 0.75, 1.2, 2.25, 0, dir, 0.2, 1));
+    expect(WINDOW_REACH).toBe(1); // a window reads one whole cell out (the field's usual offset along a normal is half a cell)
   });
   it('two probes blend by their weights; a faint total weight fades the reflection out instead of normalising it up', () => {
     const B = fakeProbes({colors: [[1, 0, 0], [0, 0, 1]]});

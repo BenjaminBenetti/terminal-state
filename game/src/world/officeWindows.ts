@@ -155,7 +155,7 @@ export function crackedGlassMaterial(tex: THREE.Texture | null): SurfaceNodeMate
     // Task office-overhaul-20261030 (lane ARCH): a faint green-grey cast (the murk outside), was 0xdfe6e4
     m = worldMapped(new SurfaceNodeMaterial({map: t, color: 0xd3ddcf, transparent: true, opacity: 0.85, depthWrite: false, roughness: 0.3, metalness: 0.1, side: THREE.DoubleSide}), {span: [1.6, 1.6], macro: 0.08});
     m.name = 'tower-glass-cracked';
-    tagReflect(m, 'glass'); // task studio-baked-lighting-reflections-20261114-050258-01: a pane shows the cached reflection probes
+    tagReflect(m, 'window'); // task studio-baked-lighting-reflections-20261114-050258-01: a pane shows the cached reflection probes (set inside its wall: read a cell out)
     glassMats.set(t, m);
   }
   return m;
@@ -163,8 +163,9 @@ export function crackedGlassMaterial(tex: THREE.Texture | null): SurfaceNodeMate
 
 const officeGlass = new WeakMap<WorldMaterials, THREE.Material>();
 /**
- * Task office-overhaul-20261030 (lane ARCH): the tower's intact panes — the shop glazing (same program, values only) with a
- * faint green-grey cast from the infected murk outside. Its own copy: the station's shop glass is untouched.
+ * Task office-overhaul-20261030 (lane ARCH): the tower's intact panes — the shop glazing (its maps and values) with a
+ * faint green-grey cast from the infected murk outside. Its own copy: the station's shop glass is untouched. (Its reflect tag is
+ * 'window', not the shop glazing's 'glass': a tag is part of three's program key, so the two no longer share one program.)
  */
 export function officeGlassMaterial(mats: WorldMaterials): THREE.Material {
   let m = officeGlass.get(mats);
@@ -172,6 +173,7 @@ export function officeGlassMaterial(mats: WorldMaterials): THREE.Material {
     const c = cloneSurfaceMaterial(shapeMaterial(mats, 'glassShopfront') as SurfaceNodeMaterial);
     c.color.setHex(0xcbd9c4);
     c.name = 'tower-window-glass-office';
+    tagReflect(c, 'window'); // the pane sits inside its wall's own cell: its reflection reads the room a cell out (world/reflectionNode.ts)
     officeGlass.set(mats, (m = c));
   }
   return m;
