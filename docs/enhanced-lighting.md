@@ -139,7 +139,8 @@ URL overrides for one session: `?lighting=off|auto|on`, `?reflections=off|standa
 Baked results are stored outside the save, in IndexedDB (`core/derivedCache.ts`, database
 `terminal-state.derived.v1`): at most 48 entries or 96 MiB, least recently used evicted first, compressed where the
 browser has `CompressionStream`. One entry per station and settings combination holds the gathered light and, when
-probes were baked, the probe atlas, grid and metadata.
+probes were baked, the probe atlas, grid and metadata. Stored sizes measured in Firefox (seed 93, compressed):
+Subway 5.2 MB without reflections, 6.4 MB with Standard, 9.1 MB with High; Office 4.3 / 5.2 MB; Mall 3.9 / 4.9 MB.
 
 **Keys.** An entry is found by an **address**: a content hash (`core/contentHash.ts`) of the realized layout (every
 level's cells, floor and ceiling heights, sight blockers, ramps), the fixtures, the bake parameters, the tier names
@@ -190,7 +191,7 @@ so the software renderer of that pod does not change it:
 
 | Station (seed 93) | Auto (Standard bake, no reflections) | On + Standard reflections | On + High reflections | cache hit |
 |---|---|---|---|---|
-| Subway | 1.0 s (gather 0.5 s) | 2.9 s (gather 2.2 s, probes 0.2 s) | 3.5 s (probes 0.6 s) | 0.5 s |
+| Subway | 1.0 s (gather 0.5 s) | 2.9 s (gather 2.2 s, probes 0.2 s) | 3.6 s (probes 0.7 s) | 0.5 s |
 | Office | not measured | 2.8 s (gather 1.8 s, probes 0.2 s) | not measured | 0.8 s |
 | Mall | not measured | 2.3 s (gather 1.5 s, probes 0.2 s) | not measured | 0.7 s |
 
@@ -212,15 +213,20 @@ buffers (the fog march, unchanged), 10 sampled textures and 9 samplers; WebGPU's
 
 ## Known limits
 
-- Glass inside a prop's model (a display cabinet's own panes) is not tagged: it reflects only if its material is a
-  metal candidate.
+- Glass inside a prop's model is not tagged: a see-through pane there does not reflect (a part with metalness
+  does, as metal).
 - A `virtual` light source (one with no tube) is not drawn into a probe; its light on the surfaces is.
 - Metal set inside a wall's own cell (window frames and mullions, a shutter) reads the field of that cell like any
   surface there: its reflection is dimmer than the room's, and under an upper storey's outer wall it can be the
   storey below's. Only the panes read a cell out.
 - Open cells walled off from every probe in reach get no reflection (the counts above).
+- A cell that takes a probe across a floor step is scaled by its own light against the probe's place, like every
+  reflection. A dark track bed under a platform probe therefore reflects little: in Subway seed 93 the rails in
+  view gain less at High (their probes stand on the platform) than at Standard (their probes stand in the bed),
+  and next to nothing at either. More probes at High do not make every surface reflect more.
 - Travelling between a station with probes and one without (the Reactor, or reflections unavailable) recompiles
-  the reflective materials once: they are built against the other field light.
+  once the materials of what outlives a station (the held weapon, the parked car): the scene's field light is
+  the other one.
 - Frame cost on a real GPU is not measured (see Costs). Every picture and timing of this feature so far comes from
   software rasterizers.
 
