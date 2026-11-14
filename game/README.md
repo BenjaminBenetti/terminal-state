@@ -14,7 +14,8 @@ the middle), washrooms, sealed street-exit stairs and back-of-house (stock rooms
 storage, crew/utility rooms, closets) — 22–32 rigged zombies (iteration 12: doubled) that fall as
 physics ragdolls, physical casings, both existing guns, a five-slot hotbar + backpack, visible
 searchable loot, food/drink with hunger/thirst (both start at 80%; full to empty in about 23 / 16 active minutes; at 0, 5 % of max health per active minute), death and restart. Campaign runs autosave
-into three local save slots and settings persist (both `localStorage`, see Campaign below); no IndexedDB, cloud or server.
+into three local save slots and settings persist (both `localStorage`, see Campaign below); no cloud or server. (Enhanced lighting
+keeps a derived cache of baked station lighting in IndexedDB: rebuilt when missing, never part of a save; `docs/enhanced-lighting.md`.)
 
 ## Commands (from the repo root)
 | Command | What |

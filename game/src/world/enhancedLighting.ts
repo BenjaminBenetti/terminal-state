@@ -12,7 +12,8 @@
 // This module is a LEAF (no three, no DOM): the settings store, the menu, the game and the tests share it.
 //  - Off  = today's baseline: the unchanged bake, the unchanged light node, no cache access, no extra texture or shader.
 //  - Auto = enhanced where it is supported and cheap: the bounded 'standard' bake everywhere it applies (it has no frame cost), and
-//           reflections only on a hardware renderer whose real limits fit the probe textures.
+//           reflections only on the hardware WebGPU backend when its real limits fit the probe textures (the WebGL 2 fallback and
+//           software renderers get the bake alone: their frame budget is the unknown one).
 //  - On   = the manual opt-in: the 'high' bake, and reflections on any renderer that can run them (also a software one).
 // What a browser does NOT tell us is never guessed: total / free VRAM is not exposed, and navigator.deviceMemory or an adapter limit
 // proves nothing about it — so nothing here reads them. The feature's own GPU memory is small and bounded instead (see
@@ -94,6 +95,7 @@ export interface EnhancedLightingPlan {
 
 export const REACTOR_REASON = 'not used in the Reactor (its lighting is unchanged)';
 export const SOFTWARE_REASON = 'Auto skips reflections on a software renderer (On forces them)';
+export const FALLBACK_REASON = 'Auto skips reflections on the WebGL 2 fallback renderer (On forces them)';
 
 /** Smallest 2D texture edge the probe atlas of `t` needs (world/reflectionProbes.ts atlasLayout: 16 tiles a row, four levels). */
 export function reflectionAtlasEdge(t: ReflectionTier): number {
@@ -116,6 +118,7 @@ export function planEnhancedLighting(req: EnhancedLightingRequest, caps: Lightin
   if (!caps.backend) return no('the renderer is not ready');
   if (!caps.halfFloatLinear) return no('this renderer cannot filter half-float textures');
   if (req.lighting === 'auto' && caps.software) return no(SOFTWARE_REASON);
+  if (req.lighting === 'auto' && caps.backend !== 'webgpu') return no(FALLBACK_REASON);
   let tier = REFLECTION_TIERS[req.reflections];
   if (reflectionAtlasEdge(tier) > caps.maxTextureSize) {
     tier = REFLECTION_TIERS.standard;
@@ -168,7 +171,7 @@ export const REFLECTION_OPTIONS: readonly {value: ReflectionQuality; label: stri
 export function enhancedLightingSummary(mode: EnhancedLightingMode): string {
   return mode === 'off' ? 'Off: the baseline station lighting'
     : mode === 'on' ? 'On: bounced, material-coloured light baked per station at full quality (a longer first load), and reflections on any renderer'
-      : 'Auto: bounced, material-coloured light baked per station; reflections where the renderer supports them';
+      : 'Auto: bounced, material-coloured light baked per station; reflections on a hardware WebGPU renderer';
 }
 
 export function reflectionsSummary(q: ReflectionQuality): string {
