@@ -299,8 +299,8 @@ describe('probe atlas layout and the octahedral map', () => {
     expect(probeHalf(NaN)).toBe(0);
     expect(DataUtils.fromHalfFloat(probeHalf(1e9))).toBe(PROBE_RADIANCE_MAX);
     expect(DataUtils.fromHalfFloat(probeHalf(Infinity))).toBe(PROBE_RADIANCE_MAX);
-    let v = 1.7e-7;
-    for (let q = 0; q < 400; q++, v *= 1.071) {
+    let v = 1.1e-8; // (from under half the smallest half float: 0, up past the clamp)
+    for (let q = 0; q < 440; q++, v *= 1.071) {
       const x = Math.min(v, PROBE_RADIANCE_MAX), h = probeHalf(x), back = DataUtils.fromHalfFloat(h);
       expect(Number.isFinite(back)).toBe(true);
       // nearest: never further than half a step of the half-float grid (2^-11 relative; 2^-25 in the subnormals)
@@ -443,10 +443,16 @@ describe('what a probe shows', () => {
     return {glow, kinds, cells, shownLum, ups, downs};
   }
   const tubeDir = (l: LightPlacement, pos: V3 = POS): V3 => [l.x - pos[0], l.y - 0.08 - pos[1], l.z - pos[2]];
-  /** Solid angle of a tube from the probe, in level-0 texels. */
-  const tubeTexels = (l: LightPlacement, pos: V3 = POS): number => {
+  /** Solid angle (sr) of a tube from the probe: 1 m long, 0.12 m wide seen from below, 0.07 m from the side. */
+  const tubeSr = (l: LightPlacement, pos: V3 = POS): number => {
     const d = tubeDir(l, pos), dist = Math.hypot(d[0], d[1], d[2]), ay = Math.abs(d[1]) / dist;
-    return (0.12 * ay + 0.07 * (1 - ay)) / (dist * dist) / (4 * Math.PI / (T * T));
+    return (0.12 * ay + 0.07 * (1 - ay)) / (dist * dist);
+  };
+  /** The tube's light in a comparison's leftovers: radiance x solid angle, summed over the texels (their real sizes), per channel. */
+  const glowEnergy = (glow: V3[]): V3 => {
+    const om = texelSolidAngles(T), e: V3 = [0, 0, 0];
+    glow.forEach((g, q) => { e[0] += g[0] * om[q]; e[1] += g[1] * om[q]; e[2] += g[2] * om[q]; });
+    return e;
   };
 
   it('one probe in the middle of the room, with NORM from its own voxel and the room as its parallax box', () => {
@@ -496,19 +502,19 @@ describe('what a probe shows', () => {
     }
     expect(lum(glow[at])).toBeGreaterThan(10 * shownLum[at]); // far brighter than the ceiling it hangs from
     expect(lum(rgbAt(base, 0, 0, at % T, Math.floor(at / T)))).toBeGreaterThan(5 * Math.max(...floorLum));
-    // its energy: radiance x solid angle, whatever the texels it is spread over
-    const want = tubeTexels(LAMP);
-    expect(want).toBeGreaterThan(0.3);
-    expect(want).toBeLessThan(1);
-    for (let c = 0; c < 3; c++) expect(lit0.reduce((a, q) => a + glow[q][c], 0) / (L[c] * want)).toBeCloseTo(1, 2);
+    // its energy: radiance x solid angle, wherever on the map (big texels or small) it falls
+    const sr = tubeSr(LAMP), energy = glowEnergy(glow);
+    expect(sr / texelSolidAngles(T)[at]).toBeGreaterThan(0.2); // (a good part of a texel, but no texel is full: nothing is clamped)
+    expect(sr / texelSolidAngles(T)[at]).toBeLessThan(1);
+    for (let c = 0; c < 3; c++) expect(energy[c] / (L[c] * sr)).toBeCloseTo(1, 2);
     expect(base.stats.fixtures).toBe(1);
     expect(base.stats.rays).toBe(T * T + 1 + 6); // the capture, one visibility ray, the six box rays
   });
 
   it('fixtures: only working tubes in sight are drawn, in the colour and at the level the station draws them', () => {
     const sum = (r: Rig, l: LightPlacement[]): {b: BakedProbes; total: V3} => {
-      const b = bake(r, TIER, {lights: l}), {glow} = compare(r, b);
-      return {b, total: glow.reduce((a, g) => [a[0] + g[0], a[1] + g[1], a[2] + g[2]] as V3, [0, 0, 0] as V3)};
+      const b = bake(r, TIER, {lights: l});
+      return {b, total: glowEnergy(compare(r, b).glow)};
     };
     const steady = sum(lit, [LAMP]);
     for (const off of [{broken: true}, {virtual: true}, {power: 0.005}] as Partial<LightPlacement>[]) {
@@ -531,22 +537,22 @@ describe('what a probe shows', () => {
     ratio(sum(lit, [aged]), aged, 1);
     ratio(sum(lit, [tinted]), tinted, 1);
     expect(tubeRadiance(tinted, 1)[1] / tubeRadiance(tinted, 1)[0]).toBeCloseTo(0.35 + 0.65 / 3, 9);
-    // two tubes add up; the same list in another order is the same picture here (they do not overlap)
-    const second = light(2.25, 6.25);
+    // two tubes add up, each with its own solid angle; in the other order they are the same picture (they do not overlap)
+    const second = light(2.25, 6.25, 4.35, {rot: 0.7});
     const both = sum(lit, [LAMP, second]);
     expect(both.b.stats.fixtures).toBe(2);
-    expect(both.total[1]).toBeGreaterThan(steady.total[1] * 1.5);
+    expect(both.total[1] / steady.total[1]).toBeCloseTo(1 + tubeSr(second) / tubeSr(LAMP), 2);
+    expect(bytes(bake(lit, TIER, {lights: [second, LAMP]}).atlas).equals(bytes(both.b.atlas))).toBe(true);
     // a tube right over the probe covers whole texels: they show its radiance, never more
     const low = room([light(4.85, 4.85, 1.55)], 1.6), bl = bake(low, TIER), pos = metaAt(bl, 0, 0).slice(0, 3) as V3;
     expect(pos.map(v => +v.toFixed(5))).toEqual([4.75, 0.8, 4.75]);
-    expect(tubeTexels(low.lights[0], pos)).toBeGreaterThan(20); // more than four texels a point: each point fills its nearest texel
-    const {glow} = compare(low, bl, pos), L = tubeRadiance(low.lights[0], 1);
-    for (let c = 0; c < 3; c++) {
-      const top = Math.max(...glow.map(g => g[c]));
-      expect(top).toBeLessThanOrEqual(L[c] * 1.001);
-      expect(top).toBeGreaterThan(L[c] * 0.98);
-    }
-    expect(glow.filter(g => g[1] > L[1] * 0.98).length).toBeGreaterThanOrEqual(3);
+    const {glow} = compare(low, bl, pos), L = tubeRadiance(low.lights[0], 1), full = glow.filter(g => g[1] > L[1] * 0.999).length;
+    for (let c = 0; c < 3; c++) expect(Math.max(...glow.map(g => g[c]))).toBeLessThanOrEqual(L[c] * 1.0006);
+    // 0.7 m away the tube is 10 degrees wide and 70 long: a solid line of full texels, not five dots — and less light than its
+    // solid angle x radiance, the rest being what the clamp cut
+    expect(full).toBeGreaterThanOrEqual(12);
+    expect(glowEnergy(glow)[1]).toBeLessThan(0.9 * L[1] * tubeSr(low.lights[0], pos));
+    expect(glowEnergy(glow)[1]).toBeGreaterThan(0.2 * L[1] * tubeSr(low.lights[0], pos));
     // behind a wall: the probe of the other room does not see it
     const g2 = box(34, 18);
     for (let z = 0; z < 18; z++) { g2.set(16, z, SOLID); for (let x = 17; x < 33; x++) if (g2.get(x, z) === FLOOR) g2.area[z * 34 + x] = 1; }

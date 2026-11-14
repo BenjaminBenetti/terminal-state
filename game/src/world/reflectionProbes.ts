@@ -172,6 +172,7 @@ const OMEGAS = new Map<number, Float64Array>();
 /**
  * Solid angle (sr) of every texel of a t-px tile (texel j * t + i; they sum to 4 pi). The map is a unit octahedron pushed onto the
  * sphere: a patch dp of the (2u - 1, 2v - 1) square subtends dp / r^3, r = the length of its octahedron point (4 x 4 samples a texel).
+ * A tile under 64 px is summed from the tile twice its size: a texel is exactly its four halves down the levels of a probe.
  * Cached and shared: read only.
  */
 export function octTexelSolidAngles(t: number): Float64Array {
@@ -179,7 +180,7 @@ export function octTexelSolidAngles(t: number): Float64Array {
   if (w) return w;
   w = new Float64Array(t * t);
   if (t < 64 && Number.isInteger(t) && t > 0) {
-    // a small tile: the sums of the texels of the tile twice its size (a texel is exactly its four halves: halving conserves energy)
+    // (halving a level over these weights keeps its energy exactly)
     const f = octTexelSolidAngles(2 * t), ft = 2 * t;
     for (let j = 0; j < t; j++) for (let i = 0; i < t; i++) { const a = 2 * j * ft + 2 * i; w[j * t + i] = f[a] + f[a + 1] + f[a + ft] + f[a + ft + 1]; }
     OMEGAS.set(t, w);
@@ -212,9 +213,9 @@ export function probeHalf(v: number): number {
   if (!(v > 0)) return 0;
   F32[0] = v > PROBE_RADIANCE_MAX ? PROBE_RADIANCE_MAX : v;
   const x = U32[0], e = (x >>> 23) & 0xff, m = x & 0x7fffff;
-  if (e < 103) return 0; // below half the smallest half float
+  if (e < 102) return 0; // under half the smallest half float
   if (e < 113) {
-    // a subnormal half: the float's 24-bit mantissa shifted down, round to nearest even
+    // a subnormal half (or just under the smallest one): the float's 24-bit mantissa shifted down, round to nearest even
     const mant = m | 0x800000, shift = 126 - e, half = 1 << (shift - 1), rem = mant & ((1 << shift) - 1);
     let h = mant >> shift;
     if (rem > half || (rem === half && (h & 1))) h++;
@@ -378,7 +379,9 @@ const STEP_MAX = 0.6;
 /** Linear irradiance of a field byte. */
 const DEC: Float64Array = (() => { const t = new Float64Array(256); for (let i = 0; i < 256; i++) t[i] = (i / 255) ** 2 * FIELD_EMAX; return t; })();
 /** The tube of a fixture as a probe sees it: 1 m long, 0.12 m wide from below and 0.07 m from the side, 0.08 m under the mount. */
-const TUBE_LENGTH = 1, TUBE_FACE = 0.12, TUBE_SIDE = 0.07, TUBE_DROP = 0.08, TUBE_POINTS = 5;
+const TUBE_LENGTH = 1, TUBE_FACE = 0.12, TUBE_SIDE = 0.07, TUBE_DROP = 0.08;
+/** Points a tube is splatted as: at least / at most. */
+const TUBE_POINTS = 5, TUBE_POINTS_MAX = 256;
 /** A fixture counts as seen when the ray toward it ends this close to it (m): it hangs at the ceiling it is mounted on. */
 const TUBE_SLACK = 0.4;
 /** Parallax box half-extents (m): at least / at most (also the extent along a ray that hit nothing). */
@@ -389,12 +392,22 @@ const BOX_MIN = 0.5, BOX_MAX = 30;
  * (no random numbers, no clock but the statistics). A station with no open cell returns count 0 (a 1-probe-sized zero atlas).
  *
  * What the contract leaves to the bake:
- *  - a probe sits at its cell's centre, min(1.5 m, half the room height) above the floor; its weights reach the cells it can walk to
- *    inside its block grown by ramp + 1 cells (4-neighbour steps over open cells of its slot, floors less than 0.6 m apart);
- *  - a fixture is drawn when it works (not broken, power above 0.01, not a `virtual` daylight source: that one has no tube), is within
+ *  - the block is the even number of cells nearest the tier's spacing (at least 8), grown by 2 until the station holds no more probes
+ *    than the tier allows; a block holds a probe when it has 4 or more open cells of the slot; probes are numbered by slot, then
+ *    block row, then block column. A probe sits at its cell's centre, min(1.5 m, half the room height) above the floor; its weights
+ *    reach the cells it can walk to inside its block grown by ramp + 1 cells (4-neighbour steps over open cells of its slot, floors
+ *    less than 0.6 m apart);
+ *  - level 0 texel (i, j) looks along octDecode((i + 0.5) / tile, (j + 0.5) / tile), at most PROBE_REACH far (nothing there: black);
+ *  - a fixture is drawn when it works (not broken, power above 0.01, not a `virtual` light source: that one has no tube), is within
  *    PROBE_REACH and the ray to its tube's centre is not stopped more than 0.4 m short of it; its radiance is added on top of the
- *    surface behind it, splatted bilinearly as five points along the tube, and a texel's added fixture radiance is never raised above
- *    the radiance of the fixture being added (one running total per texel over all the fixtures of a probe);
+ *    surface behind it: the tube's solid angle (from its centre), split evenly over points along it (five, more for a tube close
+ *    enough to span more texels) and splatted bilinearly — a texel gains the tube's radiance x the share of the texel's own solid
+ *    angle the tube covers (the map's texels differ fivefold in size), and its added fixture radiance is never raised above the
+ *    radiance of the fixture being added (one running total per texel over all the fixtures of a probe, in the lights' order);
+ *  - level l is level l - 1 halved (each texel the mean of its four over their solid angle) and blurred by a Gaussian on the sphere
+ *    (levelKernelsSteps): a level's solid-angle-weighted mean radiance is level 0's;
+ *  - the parallax box reaches 0.5 .. 30 m from the probe along each axis (the first surface a ray along it meets; the level rays
+ *    are turned 0.001 off their axis);
  *  - every tile (all four levels) is written with its gutter and alpha 1; the tiles of unused atlas slots stay 0.
  */
 export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: ReflectionTier): BuildSteps<BakedProbes> {
@@ -509,20 +522,18 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
   const FX = 8, fx: number[] = [];
   lights.forEach((l, li) => {
     if (l.broken || !(l.power > 0.01) || l.virtual) return;
+    // its circuit as a probe keeps it: a steady tube full on, a flickering one at its usual level, a dying one at a tenth
     const g = fixtureGroup(l, li), out = l.power * (g < 0 ? 1 : g === 2 ? 0.1 : 0.92);
-    let r = 0.035, gg = 0.038, b = 0.04; // (a tube this dim is drawn as dead glass)
-    if (out > 0.02) {
-      const [tr, tg, tb] = fixtureTint(l), mx = Math.max(tr, tg, tb), s = l.tint ? 0.65 : 0.35, k = 0.12 + 0.88 * out;
-      r = k * (1 - s + s * tr / mx); gg = k * (1 - s + s * tg / mx); b = k * (1 - s + s * tb / mx);
-    }
-    fx.push(l.x, l.y - TUBE_DROP, l.z, Math.cos(l.rot), -Math.sin(l.rot), r * PROBE_FIXTURE_RADIANCE, gg * PROBE_FIXTURE_RADIANCE, b * PROBE_FIXTURE_RADIANCE);
+    const [tr, tg, tb] = fixtureTint(l), mx = Math.max(tr, tg, tb), s = l.tint ? 0.65 : 0.35, k = PROBE_FIXTURE_RADIANCE * (0.12 + 0.88 * out);
+    fx.push(l.x, l.y - TUBE_DROP, l.z, Math.cos(l.rot), -Math.sin(l.rot), k * (1 - s + s * tr / mx), k * (1 - s + s * tg / mx), k * (1 - s + s * tb / mx));
   });
   const fxs = Float64Array.from(fx), fxCount = fxs.length / FX;
   /** Fixture radiance added per level-0 texel of the probe in work. */
-  const glow = new Float32Array(T2 * 3), uv: [number, number] = [0, 0], texelPerSr = T2 / (4 * Math.PI);
-  const put = (i: number, j: number, cover: number, lr: number, lg: number, lb: number): void => {
-    if (!(cover > 0)) return;
-    const o = wrapIndex(i, j, tile) * 3;
+  const glow = new Float32Array(T2 * 3), uv: [number, number] = [0, 0], texelSr = octTexelSolidAngles(tile);
+  /** Adds a fixture's radiance to a texel for the solid angle `sr` of the tube that falls on it: the part of the texel it covers. */
+  const put = (i: number, j: number, sr: number, lr: number, lg: number, lb: number): void => {
+    if (!(sr > 0)) return;
+    const q = wrapIndex(i, j, tile), cover = sr / texelSr[q], o = q * 3;
     let v = glow[o];
     if (v < lr) { v += lr * cover; glow[o] = v > lr ? lr : v; }
     v = glow[o + 1];
@@ -540,16 +551,22 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
       if (scene.trace(px, py, pz, dx / dist, dy / dist, dz / dist, dist) && scene.hitT < dist - TUBE_SLACK) continue;
       if (!any) { glow.fill(0); any = true; }
       fixtures++;
-      const ay = Math.abs(dy) / dist;
-      // texels the tube covers, a fifth per point along it
-      const cover = TUBE_LENGTH * (TUBE_FACE * ay + TUBE_SIDE * (1 - ay)) / (dist * dist) / TUBE_POINTS * texelPerSr;
+      const ax = fxs[o + 3], az = fxs[o + 4], ay = Math.abs(dy) / dist;
+      // points along the tube: TUBE_POINTS, or as many as keep them within a texel of each other where the tube is nearest (a tube
+      // close by spans many texels: five points would be five dots), each with an equal share of the tube's solid angle
+      let s = -(dx * ax + dz * az);
+      s = s < -TUBE_LENGTH / 2 ? -TUBE_LENGTH / 2 : s > TUBE_LENGTH / 2 ? TUBE_LENGTH / 2 : s;
+      const nx = dx + ax * s, nz = dz + az * s, nearest = Math.sqrt(nx * nx + dy * dy + nz * nz);
+      let points = Math.ceil(TUBE_LENGTH * tile / (2 * (nearest > 0.05 ? nearest : 0.05))); // (the map's smallest texels are 2 / tile rad wide)
+      points = points < TUBE_POINTS ? TUBE_POINTS : points > TUBE_POINTS_MAX ? TUBE_POINTS_MAX : points;
+      const sr = TUBE_LENGTH * (TUBE_FACE * ay + TUBE_SIDE * (1 - ay)) / (dist * dist) / points;
       const lr = fxs[o + 5], lg = fxs[o + 6], lb = fxs[o + 7];
-      for (let m = 0; m < TUBE_POINTS; m++) {
-        const along = ((m + 0.5) / TUBE_POINTS - 0.5) * TUBE_LENGTH;
-        octEncode(dx + fxs[o + 3] * along, dy, dz + fxs[o + 4] * along, uv);
+      for (let m = 0; m < points; m++) {
+        const along = ((m + 0.5) / points - 0.5) * TUBE_LENGTH;
+        octEncode(dx + ax * along, dy, dz + az * along, uv);
         const x = uv[0] * tile - 0.5, y = uv[1] * tile - 0.5, i0 = Math.floor(x), j0 = Math.floor(y), tx = x - i0, ty = y - j0;
-        put(i0, j0, cover * (1 - tx) * (1 - ty), lr, lg, lb); put(i0 + 1, j0, cover * tx * (1 - ty), lr, lg, lb);
-        put(i0, j0 + 1, cover * (1 - tx) * ty, lr, lg, lb); put(i0 + 1, j0 + 1, cover * tx * ty, lr, lg, lb);
+        put(i0, j0, sr * (1 - tx) * (1 - ty), lr, lg, lb); put(i0 + 1, j0, sr * tx * (1 - ty), lr, lg, lb);
+        put(i0, j0 + 1, sr * (1 - tx) * ty, lr, lg, lb); put(i0 + 1, j0 + 1, sr * tx * ty, lr, lg, lb);
       }
     }
     if (any) for (let q = 0, o = p * T2 * 3, e = T2 * 3; q < e; q++) cap[o + q] += glow[q];
@@ -594,7 +611,7 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
   const halved = kernels.map(K => new Float32Array(K.t * K.t * 3)), blurred = kernels.map(K => new Float32Array(K.t * K.t * 3));
   const writeTile = (p: number, l: number, src: Float32Array, so: number, t: number): void => {
     const [ox, oy] = probeTileOrigin(layout, p, l);
-    for (let j = -1; j <= t; j++) for (let i = -1; i <= t; i++) {
+    for (let j = -PROBE_GUTTER; j < t + PROBE_GUTTER; j++) for (let i = -PROBE_GUTTER; i < t + PROBE_GUTTER; i++) {
       const s = so + wrapIndex(i, j, t) * 3, o = ((oy + j) * AW + ox + i) * 4;
       atlas[o] = probeHalf(src[s]); atlas[o + 1] = probeHalf(src[s + 1]); atlas[o + 2] = probeHalf(src[s + 2]); atlas[o + 3] = HALF_ONE;
     }
