@@ -153,6 +153,7 @@ export class CorpseShop {
     h.frameHooks.push(dt => this.frame(dt));
     h.promptProviders?.push(() => this.prompt());
     h.warmRegistry?.addPool('market-corpse-buyer', () => this.warmRoots());
+    this.ensureSink(); // (the corpse system installed first: the sink from the start; else on the first frame)
     return this;
   }
 
