@@ -108,8 +108,8 @@ Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
   **How the pool looks** (`weapons/acidPoolShape.ts`, `acidPoolLook.ts`, `acidPoolVisual.ts`; a look only, no rule reads it): an
   irregular seeded outline that stays inside the circle that hurts; a wet yellow-green film with depth and a slow swirl; pale foam
   along the edge; bubbles that swell and pop, froth beads and small spits; foam and bubbling gather where the acid is working (someone
-  standing in it, a prop it is eating, the burst); over its last seconds the film dries from the rim inward and leaves an etched
-  mark. Lit by the torch and the station lamps, with a modest glow of its own so it reads in the dark.
+  standing in it, a prop it is eating, the burst); over its last seconds the film dries from the rim inward, showing the etched
+  floor under it, and is gone when the pool ends. Lit by the torch and the station lamps, with a modest glow of its own so it reads in the dark.
 - **Acid melt** (`world/acidMelt.ts`; the grenade only asks it what its pool and its stuck canister touch). What melts is decided by
   physical traits and ownership, never by a list of kinds. Station furniture, containers, machines, shelves, crates, lockers, desks and
   counters melt. So do loose props where they lie, carried props, crafted equipment and fuel carts standing in the world, **aboard the
