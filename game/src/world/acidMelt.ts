@@ -63,6 +63,15 @@
 // (`fizz`: the existing positional hiss by default, Sfx.blightHiss — assignable). Bounded: MELT.maxActive dissolves, one shell material
 // per slot, one bubble mesh, no allocation per frame (the copy is built once when a melt begins); the shell / bubble prototypes are
 // warmed with the station (pool 'acid-melt').
+//
+// FIRE (task studio-flamethrower-fire-20261114-031614-01; user: "Damage player, zombies and exposed world props (not only movable/cargo
+// props); protect train structure and ALL fixed fixtures. Preserve contents/UIDs when props burn out. No unrequested acid-salvage
+// windfalls"): a prop the flamethrower's fire set alight (fire/fireSystem.ts) BURNS OUT through this same engine — start(ref, 'fire').
+// One eligibility rule (protection(): what acid may not melt, fire may not burn), one begin (the thing leaves every system), one
+// completion (colliders gone, what rested on it falls, contents spilled — the same ItemStack objects / lot ids —, the same record lane:
+// gone is gone, whatever destroyed it), the same slots / queue / `busy` / clear(). What differs for a fire melt: it takes
+// PROP_FIRE.burnSeconds, it gives NO salvage (nothing is won by burning things down), and its look is a charring, ember-lit shell that
+// collapses at the end, no acid tint or bubbles (the flames and smoke are fire/fireFx.ts, fed by burning()).
 
 import * as THREE from 'three';
 import type {Game} from '../game';
@@ -84,6 +93,7 @@ import {MAX_DYNAMIC_ITEMS, MAX_DYNAMIC_PROPS} from '../physics/dynamicItems';
 import {FILLER_TUNING} from '../physics/fillerStock';
 import {ACID_MELT_LANE, acidMeltedOf, type AcidMeltedJSON} from '../run/acidMeltRecord';
 import {CART} from './fuelCartPhysics';
+import {PROP_FIRE} from '../fire/flamethrowerSpec';
 
 export const MELT = {
   /** Seconds of pool contact before a thing starts to melt. */
@@ -128,7 +138,32 @@ export const MELT = {
   dropFell: 0.02,
 } as const;
 
+/** A fire melt's look: the shell chars (dark, a dim ember glow that pulses) over the first half, the copy collapses at the end. */
+export const BURN = {
+  color: 0x0d0a08,
+  glow: 0xa83206,
+  tint: 0.9,
+  /** The copy's final height / footprint scale about its base (a low heap of char). */
+  sag: 0.06,
+  shrink: 0.88,
+} as const;
+
 export interface MeltRef { readonly key: string; readonly x: number; readonly y: number; readonly z: number; readonly label: string }
+
+/** What is destroying a thing: the acid (dissolve, one salvage each) or fire (burn-out, no salvage). */
+export type MeltCause = 'acid' | 'fire';
+
+/** A thing burning out now (fire/fireSystem.ts: its flames, smoke, the bodies it burns). `box` / `base` are live objects: read, never kept. */
+export interface BurnInfo {
+  readonly ref: MeltRef;
+  /** Stable identity of this burn (sound voices, per-burn state). */
+  readonly id: object;
+  readonly box: THREE.Box3;
+  readonly base: THREE.Vector3;
+  /** Seconds it has burned / burns in all. */
+  readonly age: number;
+  readonly seconds: number;
+}
 
 /** Why a prop never melts (null: it can). */
 export type MeltProtection = 'not a placement' | 'train structure' | 'gone' | 'unclassified' | 'building structure' | 'objective'
@@ -237,6 +272,9 @@ interface Member {
 
 interface Melt {
   t: Target;
+  cause: MeltCause;
+  /** Begin -> gone (MELT.seconds; a fire melt: PROP_FIRE.burnSeconds). */
+  seconds: number;
   members: Member[];
   unit: UnitLike | null;
   cart: DestroyedCart | null;
@@ -351,6 +389,8 @@ export class AcidMelt {
   private dropClock = 0;
   /** The fizz when a dissolve begins (default: the existing positional hiss, once per melt). Assignable (the lead's own cue). */
   fizz: ((x: number, y: number, z: number, id: object) => void) | null;
+  /** A fire melt began to burn (drawn) / burned out in play (never from clear()): the fire system's cues, scorch and embers. */
+  fire: {ignite?(b: BurnInfo): void; out?(b: BurnInfo): void} | null = null;
   /** The presentation (scene objects kept across worlds). */
   readonly group = new THREE.Group();
   private readonly shells: THREE.MeshStandardMaterial[] = [];
@@ -358,7 +398,7 @@ export class AcidMelt {
   private readonly bubbles: THREE.InstancedMesh;
   private seed = 0x2545f491;
   /** QA / tests. */
-  readonly counts = {exposed: 0, started: 0, begun: 0, queued: 0, completed: 0, aborted: 0, salvage: 0, spilled: 0, woken: 0, rewoken: 0, stuck: 0, members: 0, restored: 0, cleared: 0, setDown: 0};
+  readonly counts = {exposed: 0, started: 0, begun: 0, queued: 0, completed: 0, aborted: 0, salvage: 0, spilled: 0, woken: 0, rewoken: 0, stuck: 0, members: 0, restored: 0, cleared: 0, setDown: 0, burned: 0};
 
   constructor(readonly host: AcidMeltHost) {
     this.group.name = 'acid-melt';
@@ -794,13 +834,16 @@ export class AcidMelt {
     return true;
   }
 
-  /** Start melting now (the canister was stuck to it when it burst). True: melting (now or already); false: protected / gone. */
-  start(ref: MeltRef): boolean {
+  /**
+   * Start melting now (the canister was stuck to it when it burst; `cause` 'fire': it caught fire and burns out). True: melting / burning
+   * (now or already, whichever began first); false: protected / gone.
+   */
+  start(ref: MeltRef, cause: MeltCause = 'acid'): boolean {
     const t = this.targetOf(ref);
     if (!t || t.state === 'done') return false;
     if (t.state === 'melting') return true;
     if (!this.standing(t)) return false;
-    this.queue(t);
+    this.queue(t, cause);
     this.counts.started++;
     this.pump();
     return true;
@@ -836,9 +879,9 @@ export class AcidMelt {
   // ---------------------------------------------------------------------------------------------------------------------
   // Melts
 
-  private queue(t: Target): Melt {
-    const m: Melt = {t, members: [], unit: null, cart: null, box: new THREE.Box3(), base: new THREE.Vector3(), age: -1, slot: -1, root: null, geometries: [],
-      bub: new Float32Array(MELT.bubbles * 5), done: false};
+  private queue(t: Target, cause: MeltCause = 'acid'): Melt {
+    const m: Melt = {t, cause, seconds: cause === 'fire' ? PROP_FIRE.burnSeconds : MELT.seconds, members: [], unit: null, cart: null, box: new THREE.Box3(), base: new THREE.Vector3(),
+      age: -1, slot: -1, root: null, geometries: [], bub: new Float32Array(MELT.bubbles * 5), done: false};
     t.state = 'melting';
     t.melt = m;
     this.melts.push(m);
@@ -897,7 +940,13 @@ export class AcidMelt {
     if (!visuals) return;
     m.slot = slot;
     this.slots[slot] = m;
-    this.shells[slot].opacity = 0;
+    const shell = this.shells[slot], fire = m.cause === 'fire';
+    shell.opacity = 0;
+    // (the slot's look for this melt: colour / glow are uniforms — no new program for a burn)
+    shell.color.setHex(fire ? BURN.color : MELT.color);
+    shell.emissive.setHex(fire ? BURN.glow : MELT.glow);
+    shell.emissiveIntensity = 0.8;
+    shell.roughness = fire ? 0.9 : 0.32;
     // shells: every shown mesh of the copy again with the slot's acid material (the copy root is at identity now: world matrices)
     const meshes: THREE.Mesh[] = [];
     m.root!.updateMatrixWorld(true);
@@ -921,7 +970,24 @@ export class AcidMelt {
       const o = i * 5;
       m.bub[o] = this.rand(); m.bub[o + 1] = 0.7 + this.rand() * 0.8; m.bub[o + 2] = this.rand() * 2 - 1; m.bub[o + 3] = this.rand() * 2 - 1; m.bub[o + 4] = 0.018 + this.rand() * 0.03;
     }
-    this.fizz?.(m.base.x, m.base.y + 0.2, m.base.z, m);
+    if (fire) { this.counts.burned++; this.fire?.ignite?.(this.burnInfo(m)); }
+    else this.fizz?.(m.base.x, m.base.y + 0.2, m.base.z, m);
+  }
+
+  private burnInfo(m: Melt): BurnInfo {
+    return {ref: m.t.ref, id: m, box: m.box, base: m.base, age: Math.max(0, m.age), seconds: m.seconds};
+  }
+
+  /** The fire melts burning now (drawn: begun, not yet out), into `out` (emptied first). */
+  burning(out: BurnInfo[] = []): BurnInfo[] {
+    out.length = 0;
+    for (const m of this.melts) if (m.cause === 'fire' && m.age >= 0 && !m.done && m.slot >= 0) out.push(this.burnInfo(m));
+    return out;
+  }
+
+  /** What is destroying the thing now (null: nothing has started on it / it is gone). */
+  causeOf(ref: MeltRef): MeltCause | null {
+    return this.targetOf(ref)?.melt?.cause ?? null;
   }
 
   /** A unit's / cart's own view becomes the dissolving copy (its world matrix kept; its meshes, materials and look as drawn). */
@@ -1027,7 +1093,7 @@ export class AcidMelt {
       }
       u.touchStore?.();
       this.spillStacks(stacks, m.base.x, m.base.z, r * 0.75, r * 0.75, m.base.y);
-      this.salvage(u.def.plug ? ELECTRICAL_PARTS : SCRAP_METAL, m.base.x, m.base.z, m.base.y);
+      if (m.cause === 'acid') this.salvage(u.def.plug ? ELECTRICAL_PARTS : SCRAP_METAL, m.base.x, m.base.z, m.base.y);
       this.wakeResting(m.box, m.base.y);
     } else if (m.cart) {
       // ALL its fuel (fuel/fuel.ts cansForUnits: a can is one unit — its last odd unit too, nothing rounded either way) as SINGLE cans
@@ -1036,7 +1102,7 @@ export class AcidMelt {
       const c = m.cart, r = (m.box.max.x - m.box.min.x) / 2, stacks: ItemStack[] = [];
       for (let n = cansForUnits(c.units); n > 0; n--) stacks.push(h.inv.makeStack(FUEL.canItem, 1));
       this.spillStacks(stacks, m.base.x, m.base.z, r, r, m.base.y);
-      this.salvage(SCRAP_METAL, m.base.x, m.base.z, m.base.y);
+      if (m.cause === 'acid') this.salvage(SCRAP_METAL, m.base.x, m.base.z, m.base.y);
       this.wakeResting(m.box, m.base.y);
     } else if (m.members.length) {
       this.completeProps(m);
@@ -1093,14 +1159,14 @@ export class AcidMelt {
     }
     this.wakeResting(m.box, m.box.min.y);
     this.pumpDrops(0);
-    // 4. contents spill + one salvage per member, at valid floor spots under each
+    // 4. contents spill + (acid) one salvage per member, at valid floor spots under each
     for (const mem of m.members) {
       const b = mem.box, cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2;
       if (mem.lots.length) {
         const stacks = mem.lots.map(l => { const st = h.inv.makeStack(l.itemId, l.count); st.count = l.count; return st; }); // (the game's spill rule: same item / count)
         this.spillStacks(stacks, cx, cz, Math.max(0.05, (b.max.x - b.min.x) / 2 - 0.06), Math.max(0.05, (b.max.z - b.min.z) / 2 - 0.06), b.min.y, mem.lots, mem.serial);
       }
-      this.salvage(propSalvage(mem.prop.kind), cx, cz, b.min.y);
+      if (m.cause === 'acid') this.salvage(propSalvage(mem.prop.kind), cx, cz, b.min.y); // (a burn-out gives nothing: salvage is the acid's)
     }
     // 5. persisted: the generated members gone for good (carried ones were consumed from the prop cargo when they began)
     const w = this.here!;
@@ -1304,7 +1370,12 @@ export class AcidMelt {
       const m = this.melts[k];
       if (m.age < 0 || m.done) continue;
       m.age += step;
-      if (m.age >= MELT.seconds) { this.complete(m); continue; }
+      if (m.age >= m.seconds) {
+        const out = m.cause === 'fire' && m.slot >= 0 ? this.burnInfo(m) : null;
+        this.complete(m);
+        if (out) this.fire?.out?.(out);
+        continue;
+      }
       if (m.slot >= 0) { this.draw(m); shown = true; }
     }
     this.pump();
@@ -1314,10 +1385,21 @@ export class AcidMelt {
 
   /** One dissolve's look at its age: the acid shell rises, the copy sags / shrinks about its base and fades; bubbles rise off it. */
   private draw(m: Melt): void {
-    const t = m.age / MELT.seconds, b = m.base;
-    const tint = smooth(0, 0.45, t) * (1 - smooth(0.82, 1, t));
-    this.shells[m.slot].opacity = MELT.tint * tint;
-    const sy = 1 - (1 - MELT.sag) * smooth(0.22, 1, t), sxz = 1 - (1 - MELT.shrink) * smooth(0.3, 1, t);
+    const t = m.age / m.seconds, b = m.base, fire = m.cause === 'fire';
+    let sy: number, sxz: number;
+    if (fire) {
+      // it chars as it burns (the shell darkens it, embers pulsing), stands while it does, then collapses into a low heap
+      const shell = this.shells[m.slot];
+      shell.opacity = BURN.tint * smooth(0, 0.55, t) * (1 - smooth(0.93, 1, t));
+      shell.emissiveIntensity = (0.35 + 0.9 * smooth(0.1, 0.6, t)) * (0.78 + 0.22 * Math.sin(m.age * 11 + m.slot * 2.1));
+      sy = 1 - (1 - BURN.sag) * smooth(0.62, 1, t);
+      sxz = 1 - (1 - BURN.shrink) * smooth(0.7, 1, t);
+    } else {
+      const tint = smooth(0, 0.45, t) * (1 - smooth(0.82, 1, t));
+      this.shells[m.slot].opacity = MELT.tint * tint;
+      sy = 1 - (1 - MELT.sag) * smooth(0.22, 1, t);
+      sxz = 1 - (1 - MELT.shrink) * smooth(0.3, 1, t);
+    }
     const root = m.root!;
     // about the base: T(b) S T(-b)
     root.matrix.makeScale(sxz, sy, sxz);
@@ -1325,6 +1407,7 @@ export class AcidMelt {
     e[12] = b.x - sxz * b.x; e[13] = b.y - sy * b.y - 0.01 * smooth(0.6, 1, t); e[14] = b.z - sxz * b.z;
     root.matrixWorldNeedsUpdate = true;
     // bubbles over the footprint, rising from the sagging top's lower half and popping
+    if (fire) return; // (no bubbles on a burn: its slot's stay zero-scaled)
     const hx = (m.box.max.x - m.box.min.x) / 2, hz = (m.box.max.z - m.box.min.z) / 2, top = (m.box.max.y - b.y) * sy;
     for (let i = 0; i < MELT.bubbles; i++) {
       const o = i * 5, life = (m.age * m.bub[o + 1] + m.bub[o]) % 1;
@@ -1341,6 +1424,11 @@ export class AcidMelt {
    */
   get busy(): boolean {
     return this.drops.length > 0 || this.melts.some(m => !m.done);
+  }
+
+  /** `busy` because something is burning out (a fire melt under way): the Save terminal's wording. */
+  get burningOut(): boolean {
+    return this.melts.some(m => !m.done && m.cause === 'fire');
   }
 
   /** Every started melt completes now (spill, salvage, persistence), the visuals dropped; exposures reset (section teardown; mid-world safe). */
@@ -1373,7 +1461,7 @@ export class AcidMelt {
   /** QA: a compact state report. */
   qa(): unknown {
     return {
-      melting: this.melts.map(m => ({key: m.t.ref.key, label: m.t.ref.label, age: Math.round(m.age * 100) / 100, slot: m.slot, members: m.members.map(x => x.prop.kind)})),
+      melting: this.melts.map(m => ({key: m.t.ref.key, label: m.t.ref.label, cause: m.cause, age: Math.round(m.age * 100) / 100, slot: m.slot, members: m.members.map(x => x.prop.kind)})),
       gone: this.here?.rec.gone.length ?? 0,
       targets: this.targets.size,
       falling: this.drops.length,

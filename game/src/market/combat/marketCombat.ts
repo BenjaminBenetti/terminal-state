@@ -489,6 +489,14 @@ export class MarketCombat implements MarketHostilityApi {
     return this.damage(p, amount, part === 'head', point, dir, weapon, 1, 1);
   }
 
+  /**
+   * Fire on a person (task studio-flamethrower-fire-20261114-031614-01: the flamethrower's stream, Game.flushFlamePeople — batched): the
+   * damage once, as any attack of the player's (the settlement turns hostile); no blood. Returns killed.
+   */
+  burnHit(p: MarketCombatant, amount: number, point: THREE.Vector3, dir: THREE.Vector3, weapon: string): boolean {
+    return this.damage(p, amount, false, point, dir, weapon, 1, 1);
+  }
+
   /** Damage a person (the player's attack): the hit confirm, a flinch, the settlement turns hostile; a kill -> ragdoll / Death. */
   private damage(p: MarketCombatant, amount: number, head: boolean, point: THREE.Vector3, dir: THREE.Vector3, weapon: string, pelletsHit: number, pellets: number): boolean {
     if (p.state !== 'alive' || !(amount > 0)) return false;

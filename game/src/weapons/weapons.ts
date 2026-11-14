@@ -305,6 +305,12 @@ export function meleeDefOf(itemId: string | null | undefined, defs: Record<strin
   return d?.melee ? d : null;
 }
 
+/** The weapon def of an item id when it is a STREAM weapon (the flamethrower: no magazine — its fuel is the worn tank's), else null. */
+export function streamDefOf(itemId: string | null | undefined, defs: Record<string, WeaponDef> = WEAPONS): WeaponDef | null {
+  const d = itemId ? Object.values(defs).find(w => w.itemId === itemId) : undefined;
+  return d?.stream ? d : null;
+}
+
 // ---- Lane AMMO (knife-melee-20261030): caliber-based ammo -----------------------------------------------------------------
 
 /** The ammo item a weapon loads from (resolved through its caliber), or null for a weapon that uses no ammo (melee). */

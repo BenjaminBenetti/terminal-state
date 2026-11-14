@@ -46,7 +46,7 @@ import {SAVE_TERMINAL, SAVE_TERMINAL_MODEL, SAVE_TERMINAL_MODEL_KEY, saveTermina
 // The save API's result types (Game.saveBlock / Game.saveNow)
 
 /** Why a manual save is refused before anything is captured or written. */
-export type SaveRefusalCode = 'no-campaign' | 'not-playing' | 'dead' | 'moving' | 'busy' | 'no-train' | 'outside' | 'lift' | 'acid' | 'bad-slot' | 'conflict';
+export type SaveRefusalCode = 'no-campaign' | 'not-playing' | 'dead' | 'moving' | 'busy' | 'no-train' | 'outside' | 'lift' | 'acid' | 'fire' | 'bad-slot' | 'conflict';
 export interface SaveRefusal { ok: false; code: SaveRefusalCode; error: string }
 /** Game.saveNow: a refusal, or the active slot's CommitResult (ok: written and read back; otherwise its own player-readable error). */
 export type SaveNowResult = CommitResult | SaveRefusal;
@@ -77,6 +77,7 @@ const SHORT_REASON: Partial<Record<SaveRefusalCode, string>> = {
   'no-campaign': 'this run is not saved',
   'lift': 'wait for the lift to stop',
   'acid': 'acid is still at work — a moment',
+  'fire': 'something is still burning — a moment',
   'outside': 'step inside the train',
 };
 

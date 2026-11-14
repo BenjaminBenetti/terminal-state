@@ -83,6 +83,12 @@ import {PlayerLight, applyBatteryItem} from './player/flashlight'; // Iteration 
 import {FlareSystem, throwOneFlare, type FlareSmokeHost} from './weapons/throwables'; // Iteration 12 (LIGHT): thrown road flares (grenade slot)
 import {FlareHold} from './weapons/flareHold'; // Iteration 15: hold to ready, release to throw
 import {GrenadeSystem, throwHoldTarget, throwOneGrenade} from './weapons/grenades'; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades
+// task studio-flamethrower-fire-20261114-031614-01: the flamethrower's fire — what burns (fire/fireSystem.ts), how it looks (fire/fireFx.ts), its fuel (fire/fuelTank.ts)
+import {FireSystem, streamFalloff, type FireEnemy} from './fire/fireSystem';
+import {FireFx} from './fire/fireFx';
+import {FLAME_FUEL_CAN} from './fire/flamethrowerSpec';
+import {canPourCan, tankFuel, wornFuelTank} from './fire/fuelTank';
+import {NO_FLAME_SOUND, type FlameSound} from './fire/sound';
 import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifiers} from './player/modifiers'; // Iteration 16 (shared contract)
 import {incomingHit, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
 import {armorHit, armorPool} from './player/armor'; // task studio-general-armor-20261107-231448-01: the worn armour pool
@@ -391,6 +397,23 @@ export class Game {
   readonly flares = new FlareSystem(this.scene, this.physics, this.lightSources);
   /** Task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades' canisters, acid pools and lures (weapons/grenades.ts). */
   readonly grenades = new GrenadeSystem(this.scene, this.physics);
+  /**
+   * Task studio-flamethrower-fire-20261114-031614-01: the flamethrower's fire. `fireSys` holds what burns (the stream's cone, the fire
+   * clinging to surfaces, burning props through the melt engine, burning bodies); `fireFx` draws it (flames, smoke, glow, soot, the pooled
+   * fire light); `flameSound` is its audio (fire/sound.ts).
+   */
+  readonly fireSys = new FireSystem();
+  readonly fireFx = new FireFx(this.scene);
+  private flameSound: FlameSound = NO_FLAME_SOUND;
+  private readonly flameEye = new THREE.Vector3();
+  private readonly flameDir = new THREE.Vector3();
+  private readonly flameMuzzle = new THREE.Vector3();
+  /** Seconds until the running stream is heard again (Game.alertZombies) / marks a hit again, a cancelled pour's sound stop, fire owed to market people. */
+  private flameNoiseT = 0;
+  private flameMarkT = 0;
+  private refillStop: (() => void) | null = null;
+  private readonly flamePeople = new Map<MarketCombatant, {amount: number; point: THREE.Vector3; dir: THREE.Vector3}>();
+  private flamePeopleT = 0;
   /** The throwable a grenade-style hold readies / throws (its item id: the flare or a crafted grenade; null when idle). */
   private throwItem: string | null = null;
   /** Task studio-refinement-batch-20261113-035659-01 (lane LURE): the lure grenade's scent emitters enemies walk to (ai/scentLure.ts; no sight needed). */
@@ -711,6 +734,22 @@ export class Game {
       noise: (x, y, z) => this.worldNoise(x, y, z, 14, 'impact'),
     };
     this.warmRegistry.addPool('grenades', () => this.grenades.warmPrototypes());
+    // task studio-flamethrower-fire-20261114-031614-01: the fire's world — the bodies it burns, the bullet ray it stops at, the floor its
+    // flame falls to, the melt engine that burns props out (world/acidMelt.ts: what acid may not melt, fire may not burn), its look and
+    // sound; the flame / smoke / glow / soot rings compile with the station
+    this.fireSys.env = {
+      enemies: () => this.zombies as unknown as readonly FireEnemy[], player: () => this.player,
+      kill: (z, dir, point, strength) => this.blastKill(z as unknown as BlightEnemy, new THREE.Vector3(dir.x, dir.y, dir.z), new THREE.Vector3(point.x, point.y, point.z), strength),
+      hurt: z => enemyCues(z as unknown as EnemyActor).hurt(this.sfx, z as unknown as EnemyActor),
+      playerBurn: () => this.hud.toast('Fire! Get out of the flames', true),
+      playerHurt: amount => { this.hud.pain(amount); this.sfx.hurt(); }, // (no direction arc, no camera punch: it burns, it does not hit)
+      ray: (o, d, max) => raycastShot(this.levels, this.layout.props, o, d, max, this.layout.trench.floorY),
+      los: (a, b) => !this.levels || this.levels.lineOfSight(a, b),
+      floorAt: (x, z, y) => { const sup = this.levels?.supportAt(x, z, y + 0.05, 0.35); return sup && Number.isFinite(sup.floor) ? sup.floor : null; },
+      melt: () => this.acidMelt, sound: this.flameSound, view: this.fireFx,
+    };
+    this.fireFx.smoke = this.atmosphere;
+    this.warmRegistry.addPool('fire', () => this.fireFx.warmRoots());
     this.warmRegistry.addPool('shelf-junk-moving', () => this.stock.warmRoots()); // (task studio-food-shelf-production-20261109-002816-01) the moving shelf-junk instanced meshes compile behind the loading screen
     // Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): every moving set of the shelf filler — the authored filler's
     // too, made hidden before each warm-up by refreshRuntimeVariants (world/shelfStockWarm.ts), not on the first shot into a shelf
@@ -1237,6 +1276,9 @@ export class Game {
     this.flares.clear(); // Iteration 12 (LIGHT): burning / thrown flares, their lights, smoke, loops and light sources
     this.scents.clear(); // lane LURE: every lure scent ends with its station (travel / Retry / new game)
     this.grenades.clear(); // task studio-refinement-batch-20261113-035659-01: canisters, acid pools, lures
+    this.stopFlame(true); // task studio-flamethrower-fire-20261114-031614-01: nothing of a fire outlives its world (a burning prop already
+    this.fireSys.clear(); // completed through the melt engine's own teardown, first)
+    this.fireFx.clear();
     this.flareHold.cancel(); // Iteration 15: a readied flare is dropped (nothing spent)
     this.throwItem = null;
     this.lmbLatch = false;
@@ -1656,6 +1698,7 @@ export class Game {
     if (this.tower?.office?.elevator?.logic.moving) return no('lift', 'Not saved: the lift is moving — save once it stops.');
     // (world/acidMelt.ts: a prop still dissolving holds its contents until it completes, and what stood on it is still falling: a save
     // now would catch it half done; it takes MELT.seconds)
+    if (this.acidMelt?.busy && this.acidMelt.burningOut) return no('fire', 'Not saved: something is still burning out — save in a moment.'); // (a fire melt: PROP_FIRE.burnSeconds)
     if (this.acidMelt?.busy) return no('acid', 'Not saved: acid is still eating through something — save in a moment.');
     if (this.currentSlot === null) return no('bad-slot', 'Not saved: choose a save slot for this run first.');
     if (this.saveRunId !== this.run.id) return no('conflict', `Not saved: this run is not the one saved in slot ${this.currentSlot}.`);
@@ -2577,6 +2620,7 @@ export class Game {
     if (s === 'title' || s === 'dead' || s === 'loading' || s === 'error') this.journeyCompile?.cancel();
     this.input.active = s === 'playing';
     if (s !== 'playing') { this.input.clear(); this.cancelUse(s); this.cancelFlareHold(); this.weapon.cancelSwing(); this.meleeShoves.clear(); } // lane KNIFE / FEEL: no stale windup / contact after a menu / death / loading (lane MELEE: nor a push)
+    if (s !== 'playing') this.stopFlame(s !== 'paused' && s !== 'inventory'); // (the flame goes out with the trigger; a frozen menu suspends the audio, any other screen silences the fire)
     this.invUI.cancelDrag();
     hideTooltip(); // (task studio-ui-subway-maps-20261108-074144-01) every screen change takes the game tooltip with it
     for (const id of ['title', 'pause', 'inventory', 'death', 'win', 'error']) $('#' + id).classList.add('hidden');
@@ -3269,7 +3313,7 @@ export class Game {
     // brought the gun back up it stays lowered: no aiming, firing or reloading.
     if (this.use && (inp.hit('ShiftLeft') || inp.hit('ShiftRight')) && (inp.down('KeyW') || inp.down('ArrowUp'))) this.cancelUse('sprint');
     const vmBusy = !!this.use || this.consumeView.busy || !!this.vomit?.active; // (lane SHELVES: throwing up — no aim / reload, the gun lowered)
-    this.aiming = !!wdef && !wdef.melee && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active && !laneOwns;
+    this.aiming = !!wdef && !wdef.melee && !wdef.stream && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active && !laneOwns;
     const moveOpts = {aiming: this.aiming, speedMult: (this.use ? 0.6 : wdef?.moveMult ?? 1) * this.mods.speedMult, canSprint: !this.use && !inp.mouse[0]};
     // (lane RIDE) riding: car pose -> the player's car-local step -> the world pose (TrainRide.stepPlayer); else the world body as ever
     // (lane CAR) driving the Skyways prize car: the car's step puts the player in the driver seat (world/skywaysCar.ts stepPlayer)
@@ -3299,6 +3343,13 @@ export class Game {
       for (const e of ev) {
         // (task hitch-attribution-recorder-20261105: weapon.fire / weapon.melee spans — timing only, a no-op unless profiling)
         if (e.type === 'fire') { prof.begin(SPAN.fire); this.fire(e.def); prof.end(SPAN.fire); }
+        // task studio-flamethrower-fire-20261114-031614-01: the stream weapon's cycle (weapons/weapons.ts updateStream: every 'flame' tick is PAID fuel)
+        else if (e.type === 'streamStart') this.fireSys.streamStart(this.viewmodel.muzzleWorld(this.camera, this.flameMuzzle));
+        else if (e.type === 'flame') this.flameTick(e.def, e.ticks);
+        else if (e.type === 'streamEnd') { this.fireSys.streamEnd(e.dry); if (e.dry) this.hud.toast('Fuel tank empty', true); }
+        else if (e.type === 'refuelStart') { this.refillStop?.(); this.refillStop = this.flameSound.refill(e.def.stream!.refillTime * Math.max(0.25, this.weapon.handling)); }
+        else if (e.type === 'refuelEnd') { if (!e.poured) this.refillStop?.(); this.refillStop = null; }
+        else if (e.type === 'dry' && e.def.stream) { this.flameSound.dry(); this.hud.toast(wornFuelTank(this.inv) ? 'Fuel tank empty' : 'No fuel tank on your back', true); }
         else if (e.type === 'windup') { /* lane FEEL: the raise is silent (no whoosh while held); the viewmodel shows it */ }
         else if (e.type === 'swing') this.sfx.meleeSwing(); // lane KNIFE / FEEL: the whoosh at the RELEASE (no gunfire, bullets, flash or recoil)
         else if (e.type === 'contact') { prof.begin(SPAN.melee); this.meleeContact(e.def); prof.end(SPAN.melee); }
@@ -3311,6 +3362,8 @@ export class Game {
     } else if (heldDef?.kind === 'consumable' && inp.mousePressed[0] && !this.use && !flareOwns) {
       this.startUse(this.inv.selectedRef());
     }
+    // (the flame follows the controller: holstering, a swap or a readied flare end the stream without an event)
+    if (this.fireSys.stream.on && !(wdef?.stream && !this.flareHold.active && this.weapon.streaming)) this.stopFlame();
     this.stepMeleeShoves(dt); // lane MELEE (weapon variety): heavy melee pushes, bounded, never through walls / off the floor
 
     if (this.use) {
@@ -3338,6 +3391,8 @@ export class Game {
     this.flares.tick(dt); // Iteration 12 (LIGHT): flare bodies -> mesh / light / smoke / sound / light-source positions, burn-out
     this.scents.tick(dt); // lane LURE: the lure scents' ACTIVE seconds (update() never runs paused / in menus / loading)
     this.grenades.tick(dt); // task studio-refinement-batch-20261113-035659-01: canisters, bursts, acid pools (active seconds only), lures
+    this.fireSys.tick(dt); // task studio-flamethrower-fire-20261114-031614-01: flames land, fires burn down, bodies / props burn (active seconds only)
+    if (this.flamePeople.size && (this.flamePeopleT -= dt) <= 0) this.flushFlamePeople();
 
     prof.lap(SPAN.camera);
     // recoil recovery and bloom decay
@@ -3371,12 +3426,17 @@ export class Game {
     this.containers?.update(dt, this.time);
 
     prof.lap(SPAN.lights);
+    // (task studio-flamethrower-fire-20261114-031614-01) the running stream lights what it sprays: the pooled muzzle light, ahead of the lance
+    if (this.fireSys.stream.on) { this.muzzleT = Math.max(this.muzzleT, 0.07); this.muzzleLight.position.copy(eye).addScaledVector(look, Math.min(2.4, Math.max(0.8, this.fireSys.stream.reach * 0.5))); }
     this.muzzleT -= dt;
     this.muzzleLight.intensity = this.muzzleT > 0 ? 18 * (0.65 + Math.random() * 0.7) : 0; // flicker
     this.updatePlayerLight(dt, eye); // Iteration 12 (LIGHT): battery drain / flicker -> SpotLight, body glow, light sources
     this.lightPool.update(dt, eye);
     prof.lap(SPAN.fx);
     this.fx.update(dt);
+    // (task studio-flamethrower-fire-20261114-031614-01) the fire's look from the fire's state; the lance's muzzle while it is in the hands
+    const lance = !!wdef?.stream && !this.flareHold.active && !this.gear?.readied;
+    this.fireFx.frame(dt, this.fireSys, {muzzle: lance ? this.viewmodel.muzzleWorld(this.camera, this.flameMuzzle) : null, pilot: lance && tankFuel(wornFuelTank(this.inv)) > 0 && !this.weapon.reloading, eye});
     // Track 2 (VIS): annex steam near the player (visual only), lit by the light field + the torch.
     if (this.steamVents?.count) this.steamVents.update(dt, eye, steamLight((x, y, z) => this.lightPool.sample(x, y, z), {eye, dir: look, on: this.torch.battery.emitting}));
     this.world.trackExt?.machines.update(this.time); // Track 2 round 2 (lane MOTION): annex water flow + wall-fan rotors, game clock
@@ -3497,6 +3557,7 @@ export class Game {
     let hint = '';
     if (wdef && st) {
       if (wdef.melee) hint = meleeHint(wdef, this.weapon.winding, this.weapon.chargeLevel) ?? (this.weapon.winding ? 'Release to slash' : 'Hold · release to slash'); // lane KNIFE / FEEL (short: a long hint overlapped the hotbar at 960 px); lane MELEE: a weapon-variety line / the slugger's charge cue
+      else if (wdef.stream) hint = this.flameHint();
       else if (this.weapon.reloading) hint = 'Reloading…';
       else if ((st.mag ?? 0) === 0) hint = reserveFor(wdef, this.inv) ? 'Empty — press R' : `No ${caliberLabel(wdef)} ammo`;
       else if ((st.mag ?? 0) <= wdef.magazine * 0.25 && reserveFor(wdef, this.inv)) hint = 'Low — R to reload';
@@ -3527,8 +3588,9 @@ export class Game {
       hp: p.hp, maxHp: p.maxHp, stamina: p.stamina,
       // lane AMMO: a gun shows the caliber it loads ("Pistol · 9mm"); the reserve counts that caliber's pool.
       // INTERACT (#1): slot 6 (the readied backpack) in the hands overrides the weapon panel.
-      weaponName: this.gear?.readied ? 'Backpack · click sets it down' : def ? (wdef?.caliber ? `${def.short} · ${caliberLabel(wdef)}` : def.short) : 'Empty hands',
-      mag: wdef && st && !wdef.melee && !this.gear?.readied ? st.mag ?? 0 : null, reserve: wdef ? reserveFor(wdef, this.inv) : 0,
+      weaponName: this.gear?.readied ? 'Backpack · click sets it down' : def ? (wdef?.caliber ? `${def.short} · ${caliberLabel(wdef)}` : wdef?.stream ? `${def.short} · fuel` : def.short) : 'Empty hands',
+      // (task studio-flamethrower-fire-20261114-031614-01) a stream weapon: the worn tank's fuel units / the fuel cans carried
+      mag: wdef && st && !wdef.melee && !this.gear?.readied ? (wdef.stream ? tankFuel(wornFuelTank(this.inv)) : st.mag ?? 0) : null, reserve: wdef?.stream ? this.inv.count(FLAME_FUEL_CAN) : wdef ? reserveFor(wdef, this.inv) : 0,
       melee: !!wdef?.melee && !this.gear?.readied, // lane KNIFE: MELEE tag, no rounds
       hint, prompt, promptItem: lanePrompt ? undefined : this.currentTarget?.stack.itemId,
       remaining: this.aliveEnemies(), total: this.layout.zombies.length, // Iteration 16: kills earlier in the run stay dead (not spawned)
@@ -3682,6 +3744,60 @@ export class Game {
   }
 
   /** A noise of loudness radius `radius` (m) at the player: zombies in earshot hear it (walls / slabs muffle; see fire()). */
+  // ---------------------------------------------------------------------------------------
+  // Task studio-flamethrower-fire-20261114-031614-01: the flamethrower in the hands (fuel: weapons/weapons.ts; the fire: fire/fireSystem.ts)
+
+  /**
+   * `ticks` fuel units were just burned (the controller's 'flame' event): that much flame goes down the aim ray now. The roar is heard
+   * (the weapon's noise, at most every 0.3 s of stream); people of a settlement in the stream burn too (market COMBAT rules, no blood).
+   */
+  private flameTick(def: WeaponDef, ticks: number): void {
+    const seconds = ticks * def.stream!.unitSeconds;
+    this.camera.updateMatrixWorld(true);
+    const o = this.camera.getWorldPosition(this.flameEye), d = this.forward(this.flameDir);
+    const c = this.fireSys.counts, hits = c.streamHits, kills = c.kills;
+    this.fireSys.flame(o, d, seconds);
+    this.shake = Math.max(this.shake, 0.05);
+    this.flameMarkT -= seconds;
+    if (c.kills > kills || (c.streamHits > hits && this.flameMarkT <= 0)) { this.flameMarkT = 0.25; this.hud.hitmarker(c.kills > kills); }
+    const mh = this.marketCombat.rayHit(o, d, this.fireSys.stream.reach);
+    if (mh) {
+      const owed = this.flamePeople.get(mh.person) ?? {amount: 0, point: new THREE.Vector3(), dir: new THREE.Vector3()};
+      owed.amount += def.damage * ticks * streamFalloff(mh.t);
+      owed.point.copy(o).addScaledVector(d, mh.t);
+      owed.dir.copy(d);
+      if (!this.flamePeople.size) this.flamePeopleT = 0.3;
+      this.flamePeople.set(mh.person, owed);
+    }
+    this.flameNoiseT -= seconds;
+    if (this.flameNoiseT <= 0) { this.flameNoiseT = 0.3; this.alertZombies(Number(def.noise)); }
+  }
+
+  /** Fire owed to market people lands in batches (one hit confirm / flinch per batch, not per fuel unit). */
+  private flushFlamePeople(): void {
+    for (const [p, owed] of this.flamePeople) this.marketCombat.burnHit(p, owed.amount, owed.point, owed.dir, 'flamethrower');
+    this.flamePeople.clear();
+  }
+
+  /** The flame goes out now (a holster, a swap, a menu, death): the controller sends no event for these. `silence`: every fire sound too. */
+  private stopFlame(silence = false): void {
+    this.weapon.streaming = false;
+    this.fireSys.streamEnd(false);
+    if (this.flamePeople.size) this.flushFlamePeople();
+    if (silence) { this.refillStop?.(); this.refillStop = null; this.flameSound.silence(); }
+  }
+
+  /** The hotbar hint with the flamethrower in the hands. */
+  private flameHint(): string {
+    const tank = wornFuelTank(this.inv), cans = this.inv.count(FLAME_FUEL_CAN);
+    if (!tank) return 'No fuel tank on your back';
+    if (this.weapon.reloading) return 'Pouring a fuel can…';
+    const fuel = tankFuel(tank);
+    if (fuel === 0) return cans ? 'Tank empty — R pours a fuel can' : 'Tank empty — no fuel cans';
+    if (cans && canPourCan(tank) && fuel <= 60) return 'Low — R pours a fuel can';
+    return '';
+  }
+
   private alertZombies(radius: number): void {
     this.prof.begin(SPAN.alert); // (task hitch-attribution-recorder-20261105: hit.alert span, timing only)
     const multi = this.levels.count > 1, P = this.player, bases = multi ? this.levels.list.map(l => l.baseY) : null;

@@ -57,6 +57,12 @@ export const FLAME = Object.freeze({
   /** Movement while it is in the hands (a heavy two-handed lance). */
   moveMult: 0.88,
   equipTime: 0.7,
+  /** Fire damage lands in batches this often (s): burning bodies, bodies standing in fire, the player. */
+  burnEvery: 0.25,
+  /** The player's pain cue at most this often (s) while burning. */
+  painEvery: 0.9,
+  /** The shove (N s) that crumples a body the fire killed (a rifle kill: ~9; the acid: 12). */
+  killImpulse: 5,
 });
 
 /** Fire clinging to a surface (floor, wall, a prop's face) where the stream lands. */
@@ -73,6 +79,14 @@ export const FIRE_PATCH = Object.freeze({
   enemyDps: 20, playerDps: 10,
   /** How far above a floor patch (m) the flames still burn a body. */
   height: 1.3,
+  /** A patch dies down over its last `fade` active seconds (strength and size follow). */
+  fade: 2,
+  /** Seconds the stream's flame takes to drop onto the floor where it ends in open air, and the share of its flame that lands there. */
+  fall: 0.25, airFeed: 0.5,
+  /** While the stream runs, a burning drip falls under it every `dripEvery` s (a small fire worth `dripFeed` s of stream). */
+  dripEvery: 0.45, dripFeed: 0.1,
+  /** What a burnt-out prop leaves: a low fire for `emberSeconds` (it sets nothing else alight). */
+  emberSeconds: 2.5,
 });
 
 /** A PROP on fire (world/acidMelt.ts runs the burn-out as a `fire` melt: no salvage, contents spilled, the same protection rules). */
@@ -83,6 +97,4 @@ export const PROP_FIRE = Object.freeze({
   burnSeconds: 4.5,
   /** Damage a second to an enemy / the player touching a burning prop, and the reach (m) beyond its footprint. */
   enemyDps: 20, playerDps: 10, reach: 0.35,
-  /** Props burning at once (further ones wait their turn, still heated). */
-  maxActive: 4,
 });
