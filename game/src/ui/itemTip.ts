@@ -10,7 +10,7 @@ import {effectText, itemDef} from '../items/items';
 import type {Inventory, ItemStack} from '../items/inventory';
 import {AIRTANK_AIR_S, FILTER_LIFE_S, fuelCansText, gearStatText, isAirtank, isFilterMask} from '../items/gear';
 import {WEAPONS, caliberLabel, reserveFor, weaponsForCaliber, type WeaponDef} from '../weapons/weapons';
-import {FLAME_FUEL, FUEL_TANK_ID} from '../fire/flamethrowerSpec';
+import {FLAME_FUEL, FLAME_FUEL_CAN, FUEL_TANK_ID} from '../fire/flamethrowerSpec';
 import {tankFuel, wornFuelTank} from '../fire/fuelTank';
 import {CALIBERS} from '../items/calibers';
 import {materialNote} from '../items/craftMaterials';
@@ -46,6 +46,16 @@ export function streamText(inv?: Pick<Inventory, 'gearSlots'>): string {
   return tank ? `${base} · tank worn: ${fuelCansText(tankFuel(tank))} of ${FLAME_FUEL.capacityCans} cans` : `${base} · no fuel tank worn: it will not fire`;
 }
 
+/**
+ * A supply item's line: the spare gas filter's (mask lane), or — task studio-flamethrower-fire-20261114-031614-01 — the ordinary fuel
+ * can's: what it is for (it is no filter).
+ */
+export function supplyText(itemId: string): string {
+  return itemId === FLAME_FUEL_CAN
+    ? `Train fuel: pour it in at the fuel cap · refills a worn ${itemDef(FUEL_TANK_ID).name} (R with the flamethrower in your hands) · a bench ingredient`
+    : 'A worn gas mask fits one by itself when its filter runs out';
+}
+
 /** What this stack is, line by line (no hint). `inv` adds carried counts (ammo in reserve). */
 export function itemTipLines(st: ItemStack, o: {inv?: Inventory} = {}): string[] {
   const def = itemDef(st.itemId);
@@ -67,7 +77,7 @@ export function itemTipLines(st: ItemStack, o: {inv?: Inventory} = {}): string[]
     if (stats) out.push(stats);
     if (st.bag) out.push(`${st.bag.filter(Boolean).length} of ${st.bag.length} slots used inside`);
   }
-  if (def.kind === 'supply') out.push('A worn gas mask fits one by itself when its filter runs out');
+  if (def.kind === 'supply') out.push(supplyText(def.id));
   if (def.kind === 'material') out.push(materialNote(def.id)); // (task train-crafting, lane BENCH: per material — the bench's two, or no recipe yet)
   if (def.kind === 'part') out.push('Reactor restart part — take it to its control and press E there');
   if (def.kind === 'currency') out.push(CURRENCY_NOTE);

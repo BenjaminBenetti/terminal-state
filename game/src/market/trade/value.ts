@@ -167,7 +167,8 @@ export function armorState(stack: Pick<ItemStack, 'itemId' | 'armor'>): {left: n
 
 /** Task studio-flamethrower-fire-20261114-031614-01: `units` of fuel in a tank, in cents — their exact share of the ordinary fuel can's value (whole cents, rounded down). */
 export function tankFuelCents(units: number): number {
-  return Math.floor((Math.max(0, Math.floor(units)) * baseCents(FLAME_FUEL_CAN)) / FLAME_FUEL.unitsPerCan);
+  const whole = Number.isFinite(units) ? Math.max(0, Math.floor(units)) : 0;
+  return Math.floor((whole * baseCents(FLAME_FUEL_CAN)) / FLAME_FUEL.unitsPerCan);
 }
 
 /**

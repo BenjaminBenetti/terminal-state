@@ -46,7 +46,7 @@ import {CRITICAL, LOW} from '../player/survival';
 import {GEAR_ICONS} from './gearIcons';
 import {ICONS} from './icons';
 import {ensureGearStyles} from './gearStyles';
-import {airText, filterPct, fuelText, itemTip, noMagazine, streamText} from './itemTip'; // (task studio-ui-subway-maps-20261108-074144-01: the slot tooltips; filterPct / airText moved there, shared)
+import {airText, filterPct, fuelText, itemTip, noMagazine, streamText, supplyText} from './itemTip'; // (task studio-ui-subway-maps-20261108-074144-01: the slot tooltips; filterPct / airText moved there, shared)
 import {refreshTooltip, tipAttrs} from './tooltip';
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
@@ -555,6 +555,7 @@ export class InventoryUI {
         : def?.kind === 'consumable' ? `${effectText(def)} · ${def.useTime ?? 1} s to ${useButtonLabel(def).toLowerCase()} · double-click / Ctrl+click or right-click to ${useButtonLabel(def).toLowerCase()}`
         : def?.kind === 'gear' ? `${isFilterMask(def.id) ? `Filter ${filterPct(st!.filter)} % fitted · ${inv.count('gas_filter')} spare · ` : ''}${isAirtank(def.id) ? `${airText(st!.air)} · ` : ''}${gearStatText(def.gear!, st)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / Ctrl+click / right-click / Take off to remove') : `double-click / Ctrl+click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}`
         : def?.kind === 'throwable' ? (this.selected?.bar === 'throw' ? 'In the grenade slot: hold G to ready it, release to throw' : 'Right-click / double-click / Ctrl+click / Equip puts it in the grenade slot (G)') // INTERACT (#6)
+        : def?.kind === 'supply' && def.id !== 'gas_filter' ? `${supplyText(def.id)} · ${inv.count(def.id)} in pockets / quick slots` // task studio-flamethrower-fire-20261114-031614-01: the fuel can is no filter
         : def?.kind === 'supply' ? `A worn gas mask fits one by itself when its filter runs out · ${inv.count(def.id)} carried where the mask can reach them (not in a worn backpack)` // mask lane
         : def?.kind === 'material' ? `${materialNote(def.id)} · ${inv.count(def.id)} in pockets / quick slots` // lane RACK (office-props-physics-scale-20261030)
         : def?.kind === 'part' ? `Reactor restart part — nothing to use by hand: take it to its control and press E there · ${inv.count(def.id)} in pockets / quick slots` // task reactor-build-20261101 (lane RESTART)
