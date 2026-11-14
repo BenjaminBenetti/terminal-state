@@ -65,8 +65,8 @@ export interface ReflectionTier {
 }
 
 export const REFLECTION_TIERS: Readonly<Record<ReflectionTier['id'], ReflectionTier>> = {
-  standard: {id: 'standard', tile: 32, maxProbes: 160, spacing: 9},
-  high: {id: 'high', tile: 64, maxProbes: 224, spacing: 7},
+  standard: {id: 'standard', tile: 32, maxProbes: 192, spacing: 9},
+  high: {id: 'high', tile: 64, maxProbes: 240, spacing: 7},
 };
 
 // ---------------------------------------------------------------------------------------------
