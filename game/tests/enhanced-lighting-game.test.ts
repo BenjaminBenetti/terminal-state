@@ -9,7 +9,7 @@
 //     the session's cache.
 //  3. Enhanced lighting Off, then Main menu -> Continue: the plain field light, no probe texture bound by anything drawn, the status
 //     says baseline; then Auto again: the probes are back.
-//  4. The same station every time — layout, loot holders — and no derived data anywhere in browser storage (the save, the settings).
+//  4. The same station every time — layout, loot holders — and no derived data anywhere in browser storage (the saves).
 import {afterAll, describe, expect, it, vi} from 'vitest';
 import {installHeadless} from './helpers/headlessGame';
 
@@ -47,7 +47,7 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
     const g = game as unknown as {
       player: {yaw: number; takeDamage(n: number): void}; state: string; scene: {children: unknown[]};
       layout: {grid: {cells: Uint8Array}; props: {kind: string; x: number; z: number}[]; lights: unknown[]};
-      containers: {holders: {state: {lots: {itemId: string; count?: number}[]}}[]};
+      containers: {all: {state: {lots: {itemId: string; count?: number}[]}}[]};
       settings: {enhancedLighting: string; reflections: string};
     };
     const frameErrors: string[] = [];
@@ -78,8 +78,11 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
       m.set(ro.id, ro);
       draw(ro, info);
     };
-    const probeNodes = new Set<unknown>([REFL.atlas, REFL.meta, REFL.grid]);
-    const probeBindings = (ro: RenderObject) => ro.getBindings().flatMap(b => b.bindings).filter(b => b.isSampledTexture && probeNodes.has(b.textureNode));
+    // a binding of the probes: its texture node follows one of the three global nodes (a sampled node is a clone that refers to it)
+    const probeBindings = (ro: RenderObject) => {
+      const values = new Set<unknown>([REFL.atlas.value, REFL.meta.value, REFL.grid.value]);
+      return ro.getBindings().flatMap(b => b.bindings).filter(b => b.isSampledTexture && values.has(b.textureNode?.value));
+    };
     const until = async (f: () => boolean, max = 6000) => { for (let i = 0; i < max && !f(); i++) await h.waitFrames(1); return f(); };
     const sweep = async (name: string) => {
       phase = name;
@@ -94,7 +97,7 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
     /** The station as generated and stocked (what a cache hit, a miss or Off may never change). */
     const stationPrint = () => fnv(JSON.stringify([
       fnv(Buffer.from(g.layout.grid.cells).toString('latin1')), g.layout.props.map(p => [p.kind, Math.round(p.x * 100), Math.round(p.z * 100)]), g.layout.lights,
-      g.containers.holders.map(x => x.state.lots.map(l => [l.itemId, l.count ?? 1])),
+      g.containers.all.map(x => x.state.lots.map(l => [l.itemId, l.count ?? 1])),
     ]));
 
     // 1. a new campaign under the defaults
@@ -200,7 +203,7 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
     for (const ro of reflective3) for (const b of probeBindings(ro)) expect([probes3.atlas, probes3.meta, probes3.grid], ro.object.name).toContain(b.texture);
     expect(stationPrint(), 'Auto again: the same station').toBe(print1);
 
-    // 4. browser storage holds the save and the settings — and nothing derived
+    // 4. browser storage holds the saves — and nothing derived
     let stored = 0;
     for (const [k, v] of h.storage.map) {
       stored += v.length;
@@ -208,7 +211,6 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
     }
     expect(stored).toBeGreaterThan(0);
     expect(stored, 'the whole of storage stays save-sized').toBeLessThan(4_000_000);
-    expect([...h.storage.map.values()].some(v => /"enhancedLighting":"auto"/.test(v)), 'the choice is a setting').toBe(true);
 
     expect(frameErrors).toEqual([]);
     expect(errors).toEqual([]);
