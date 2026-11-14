@@ -260,7 +260,10 @@ describe('market stalls: who buys what', () => {
       }
       const ammo = s.stalls.gun.filter(x => ITEMS[x.itemId].kind === 'ammo').reduce((n, x) => n + x.count, 0);
       expect(ammo).toBeLessThanOrEqual(6 * 12); // at most six big boxes: no free global ammo
-      expect(s.stalls.gun.filter(x => ITEMS[x.itemId].kind === 'weapon').length).toBeLessThanOrEqual(2);
+      // (re-pin, task studio-flamethrower-fire-20261114-031614-01: at most two DRAWN guns as before, plus the one flamethrower every gun stall stocks as an
+      // additive lot — never a draw; tests/flamethrower-market.test.ts proves the draws are what they were)
+      expect(s.stalls.gun.filter(x => ITEMS[x.itemId].kind === 'weapon' && x.itemId !== 'flamethrower').length).toBeLessThanOrEqual(2);
+      expect(s.stalls.gun.filter(x => x.itemId === 'flamethrower').length).toBe(1);
     }
   });
 });

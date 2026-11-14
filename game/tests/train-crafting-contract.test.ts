@@ -28,8 +28,10 @@ const S = PLAYER_TRAIN_SPEC;
 describe('train crafting: recipes', () => {
   it('lists the four approved outputs at the approved costs (scrap metal / electrical parts), in order', () => {
     expect(RECIPES.map(r => [r.kind, r.cost[SCRAP_METAL], r.cost[ELECTRICAL_PARTS]])).toEqual([['chest', 2, 0], ['radar', 4, 3], ['sentry', 8, 6], ['scanner', 5, 5]]);
-    expect([...RECIPE_MATERIALS]).toEqual([SCRAP_METAL, ELECTRICAL_PARTS, BIO_MATER]); // (re-pin, task studio-refinement-batch-20261113-035659-01: bio mater makes the crafted grenades; the four units cost none of it)
-    for (const r of RECIPES) expect(r.cost[BIO_MATER]).toBe(0);
+    // (re-pin, task studio-refinement-batch-20261113-035659-01: bio mater makes the crafted grenades; the four units cost none of it)
+    // (re-pin, task studio-flamethrower-fire-20261114-031614-01: + the ordinary fuel can, the flamethrower fuel tank's first fuel; the four units cost none of it)
+    expect([...RECIPE_MATERIALS]).toEqual([SCRAP_METAL, ELECTRICAL_PARTS, BIO_MATER, 'fuel_can']);
+    for (const r of RECIPES) expect([r.cost[BIO_MATER], r.cost.fuel_can]).toEqual([0, 0]);
     for (const r of RECIPES) {
       expect(Object.keys(r.cost).sort()).toEqual([...RECIPE_MATERIALS].sort());
       expect(r.blurb.length).toBeGreaterThan(40);
@@ -37,7 +39,7 @@ describe('train crafting: recipes', () => {
     }
     // every equipment kind has exactly one recipe; the materials are real items
     expect(RECIPES.map(r => r.kind).sort()).toEqual([...EQUIPMENT_KINDS].sort());
-    for (const m of RECIPE_MATERIALS) expect(ITEMS[m]?.kind).toBe('material');
+    for (const m of RECIPE_MATERIALS) expect(ITEMS[m]?.kind).toBe(m === 'fuel_can' ? 'supply' : 'material'); // (re-pin, flamethrower-fire: the fuel can is an ordinary supply item, not a salvage material)
   });
 });
 

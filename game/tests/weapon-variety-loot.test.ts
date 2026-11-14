@@ -100,9 +100,12 @@ describe('weapon variety: the twelve ItemDefs', () => {
     const keys = Object.keys(ITEMS);
     // (re-pin, task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades are appended after the twelve — the
     // twelve still follow every older item in order, and only the grenades come after them)
-    const at = keys.length - VARIETY_WEAPON_IDS.length - GRENADE_IDS.length;
+    // (re-pin, task studio-flamethrower-fire-20261114-031614-01: the flamethrower is appended after the grenades — the twelve and the grenades keep their
+    // places behind every older item, and only it comes after them)
+    const tail = [...GRENADE_IDS, 'flamethrower'];
+    const at = keys.length - VARIETY_WEAPON_IDS.length - tail.length;
     expect(keys.slice(at, at + VARIETY_WEAPON_IDS.length)).toEqual([...VARIETY_WEAPON_IDS]);
-    expect(keys.slice(at + VARIETY_WEAPON_IDS.length)).toEqual([...GRENADE_IDS]);
+    expect(keys.slice(at + VARIETY_WEAPON_IDS.length)).toEqual(tail);
   });
   it('guns name their caliber family; melee weapons say they need no ammo', () => {
     for (const id of VARIETY_GUN_IDS) expect(ITEMS[id].description, id).toMatch(/9mm|5\.56|12-gauge/);

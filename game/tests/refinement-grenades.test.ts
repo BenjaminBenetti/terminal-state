@@ -62,13 +62,15 @@ describe('the crafted throwables: items', () => {
 
 describe('the bench recipes: the made outputs', () => {
   it('3 bio mater -> 5 acid / 3 lure grenades, 10 scrap -> the train armor; listed after the four units', () => {
-    expect([...RECIPE_MATERIALS]).toEqual([SCRAP_METAL, ELECTRICAL_PARTS, BIO_MATER]);
-    expect(MADE_RECIPES.map(r => [r.kind, r.make, r.cost[SCRAP_METAL], r.cost[ELECTRICAL_PARTS], r.cost[BIO_MATER]])).toEqual([
+    // (re-pin, task studio-flamethrower-fire-20261114-031614-01: the ordinary fuel can is the fourth recipe input — the fuel tank's first fuel — and the
+    // flamethrower and its tank are listed after the armor; the three rows of this batch, their costs and their places are unchanged)
+    expect([...RECIPE_MATERIALS]).toEqual([SCRAP_METAL, ELECTRICAL_PARTS, BIO_MATER, 'fuel_can']);
+    expect(MADE_RECIPES.slice(0, 3).map(r => [r.kind, r.make, r.cost[SCRAP_METAL], r.cost[ELECTRICAL_PARTS], r.cost[BIO_MATER]])).toEqual([
       [ACID_GRENADE, {type: 'item', itemId: ACID_GRENADE, count: 5}, 0, 0, 3],
       [LURE_GRENADE, {type: 'item', itemId: LURE_GRENADE, count: 3}, 0, 0, 3],
       ['armor', {type: 'upgrade', id: 'armor'}, 10, 0, 0],
     ]);
-    expect(BENCH_RECIPES.map(r => r.kind)).toEqual(['chest', 'radar', 'sentry', 'scanner', ACID_GRENADE, LURE_GRENADE, 'armor']);
+    expect(BENCH_RECIPES.map(r => r.kind)).toEqual(['chest', 'radar', 'sentry', 'scanner', ACID_GRENADE, LURE_GRENADE, 'armor', 'flamethrower', 'fuel_tank']);
     expect(BENCH_RECIPES.slice(0, 4)).toEqual([...RECIPES]); // the units: unchanged, first
     for (const r of RECIPES) expect(r.cost[BIO_MATER]).toBe(0);
     for (const r of BENCH_RECIPES) { expect(benchRecipeFor(r.kind)).toBe(r); expect(r.blurb.length).toBeGreaterThan(40); }
