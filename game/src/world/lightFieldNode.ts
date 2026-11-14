@@ -345,6 +345,15 @@ export class LightFieldNode extends LightingNode {
     super();
   }
   setup(builder: NodeBuilder): null {
+    this.shade(builder);
+    return null;
+  }
+  /**
+   * The field's light for the builder's material: its sample (null: not a surface lighting model, nothing was added). Task
+   * studio-baked-lighting-reflections-20261114-050258-01: split from setup() so world/reflectionNode.ts LightFieldReflectNode adds
+   * the reflection probes to the same sample; the nodes built here are the ones setup() always built.
+   */
+  protected shade(builder: NodeBuilder): LightFieldSampleNodes | null {
     const b = builder as LightingBuilder;
     // Surface lighting models only (Standard / Physical, Lambert / Phong, Toon), as the WebGL probe-grid path: three also
     // builds every light into MeshBasicNodeMaterial (BasicLightingModel ignores direct light and irradiance), shadow
@@ -354,7 +363,7 @@ export class LightFieldNode extends LightingNode {
     b.context.irradiance.addAssign(s.amb);
     const dirView = n(n(cameraViewMatrix).mul(vec4(n(s.dir), 0)).xyz).normalize();
     b.lightsNode.setupDirectLight(b, this, {lightDirection: dirView, lightColor: s.dirColor});
-    return null;
+    return s;
   }
   /** Whether the builder's lighting model is a surface model that uses direct light + indirect irradiance. */
   static surfaceModel(b: NodeBuilder): boolean {
