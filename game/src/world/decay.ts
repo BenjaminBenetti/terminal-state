@@ -46,6 +46,7 @@ import {
 import {addNodeHook} from '../render/nodeHooks';
 import {requestSurfaceAnisotropy} from '../render/anisotropy'; // lane FIX (U08)
 import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
+import {refreshTextureBindings} from '../render/bindingRefresh'; // task studio-death-retry-render-fix-20261114-044607-01
 import {SurfaceNodeMaterial, cloneSurfaceMaterial, worldMapped, type MatKey, type WorldMapping, type WorldMaterials} from './materials';
 import {shapeMaterial} from './shapeMaterials';
 import {asColor, isNodeMaterial, lfBandNode, matRef, pick, sharedStage, skipInShadowPass} from './surfaceNodes';
@@ -824,6 +825,7 @@ export function setDecayField(field: DecayField): THREE.DataTexture {
   if (fieldTex) fieldTex.dispose();
   fieldTex = t;
   DECAY_UNIFORMS.uDecayMap.value = t;
+  refreshTextureBindings(); // (task studio-death-retry-render-fix-20261114-044607-01: an unchanged object drawn on would keep the disposed one; render/bindingRefresh.ts)
   DECAY_UNIFORMS.uDecayGrid.value.set(f.w, f.h, f.levels, f.cell ?? CELL);
   if (DECAY_UNIFORMS.uDecayTex.value !== detailTex || !detailTex) DECAY_UNIFORMS.uDecayTex.value = decayDetailTexture();
   return t;
