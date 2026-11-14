@@ -69,18 +69,32 @@ The enhanced bake costs **load time only**. It adds no frame time and no GPU mem
 - A per-cell grid holds up to four probe weights and ids. Weights ramp across block borders (a continuous blend, no
   popping) and are zero where a probe cannot reach by walking inside its block: no reflection of the room behind a
   wall.
+- A cell no probe can walk to takes the probes that reach it across a floor step instead (a track bed below the
+  platform its blocks' probes stand on: the same air). Without this the bed and its rails went without a probe
+  wherever the block lattice happened to fall that way: 4,953 open cells of Subway seed 93 at High, 16 at Standard;
+  now 32 and 0. What is left is walled off from every probe in reach (Mall seed 93: 124 cells at Standard, Office:
+  9; at High 0 and 110).
+- A probe's weights also go one cell into the solid cells beside its cells, so a fitting set into the wall's own
+  cell still reflects the room it faces.
 - Each probe has a parallax box, so reflections line up with nearby walls instead of sliding with the camera.
 
 `world/reflectionNode.ts` shows them:
 
 - Only **metal and glass** sample the probes. A material is chosen while its program is built: tagged glazing
-  (`render/reflectTag.ts` `tagReflect(material, 'glass')`), and metal candidates (a metalness map or a non-zero
-  metalness). A metal candidate's fragment looks a probe up only when its real metalness is above 0.2 or its
+  (`render/reflectTag.ts` `tagReflect(material, 'glass')`, or `'window'` for a pane set inside its wall, below), and
+  metal candidates (a metalness map or a non-zero metalness). A metal candidate's fragment looks a probe up only when its real metalness is above 0.2 or its
   roughness below 0.45. The station's tile, slab and ceiling sets are tagged `none`. Floors, walls, wood, cloth and
   characters (skinned meshes) never reflect.
 - three's physical lighting model does the rest: Fresnel, the roughness and metalness response, a metal's base colour.
 - A probe's light is scaled by the baked field's light at the surface (capped). Reflections dim with a flicker
   circuit, in a passing train's shadow and in a dark side room.
+- A tower window's glass sits 0.28 m **inside** its wall's own cell. The field there is the wall's: no light in its
+  texel, and a column that belongs to whichever storey is open at that cell (the lobby level, under an upper
+  storey's outer wall). Read at its own place, a pane got a fifth of the room's light (median 0.20x over the 252
+  window spans of Office seed 93), and at 40 of 756 sampled points another storey's probes. So those panes carry
+  their own tag, `window`: the reflection reads the field and names the probes **one cell out along the normal**,
+  in the room the pane is seen from (0.90x the room's light, the right storey at every point). It costs one more
+  field sample on those panes only; the pane's own diffuse shading is untouched.
 - A station with probes uses a second, session-wide field light (`LightFieldReflectLight`). A station without
   probes keeps the plain one, so with reflections off every material compiles to exactly the program it always had.
 
@@ -139,7 +153,9 @@ and the data versions. It is never the seed alone.
 
 So the cache cannot serve stale lighting after a generator, material, fixture or parameter change: the address finds
 an entry, the digest decides. A mismatch is reported as "baked again" and the entry is replaced. Changing the gather
-or probe code itself needs a version bump (`DERIVED_LIGHTING_VERSIONS` in `world/enhancedLightingRuntime.ts`).
+or probe code itself needs a version bump (`DERIVED_LIGHTING_VERSIONS` in `world/enhancedLightingRuntime.ts`). The
+versions are part of the address, so a bump is a full miss for every station: both parts are baked again, and the
+old entries are never read again and leave by eviction.
 
 **What it can never do.** The cache holds derived data only. Nothing in it is read by the generator, the save or the
 campaign. A hit, a miss, a cleared cache, a full disk or a browser without IndexedDB (the cache then lives in memory
@@ -185,8 +201,8 @@ work is cut into paced build steps of a few milliseconds (the longest enhanced s
 
 Frame cost: the enhanced field has none (same texture, same shader). A reflective fragment adds one filtered and
 one unfiltered grid fetch, and per probe that weighs in (one in a block's core, up to four at a corner) three
-texel loads and two atlas samples. Its frame-time cost on a real GPU has **not** been measured: the studio pod only
-has software rasterizers. `docs/performance-recorder.md` explains how to record it on a real machine; the recorder's
+texel loads and two atlas samples; a tower window pane also samples the field a second time. Its frame-time cost
+on a real GPU has **not** been measured: the studio pod only has software rasterizers. `docs/performance-recorder.md` explains how to record it on a real machine; the recorder's
 environment block includes the lighting status.
 
 Shader bindings: a reflective material binds three more sampled textures and no uniform buffer more. In the real
@@ -194,11 +210,28 @@ game on the validating WebGPU device, the worst shader stage of a Market station
 buffers (the fog march, unchanged), 10 sampled textures and 9 samplers; WebGPU's default limits are 12 / 16 / 16
 (`game/tests/enhanced-lighting-game.test.ts` asserts this for every compiled module).
 
+## Known limits
+
+- Glass inside a prop's model (a display cabinet's own panes) is not tagged: it reflects only if its material is a
+  metal candidate.
+- A `virtual` light source (one with no tube) is not drawn into a probe; its light on the surfaces is.
+- Metal set inside a wall's own cell (window frames and mullions, a shutter) reads the field of that cell like any
+  surface there: its reflection is dimmer than the room's, and under an upper storey's outer wall it can be the
+  storey below's. Only the panes read a cell out.
+- Open cells walled off from every probe in reach get no reflection (the counts above).
+- Travelling between a station with probes and one without (the Reactor, or reflections unavailable) recompiles
+  the reflective materials once: they are built against the other field light.
+- Frame cost on a real GPU is not measured (see Costs). Every picture and timing of this feature so far comes from
+  software rasterizers.
+
 ## Tests
 
 - `game/tests/light-gather.test.ts`: occlusion, colour, energy, flicker shares, determinism, no movable props.
-- `game/tests/reflection-probes.test.ts`: placement, weights, capture, fixtures, levels, the atlas.
+- `game/tests/reflection-probes.test.ts`: placement, weights (walked, across a floor step, into the wall's cell),
+  capture, fixtures, levels, the atlas.
 - `game/tests/reflection-node.test.ts`: which materials reflect, both shader backends, binding counts, the lookup.
+- `game/tests/reflection-window.test.ts`: every window span of a generated Office: the slot, light and probes a
+  pane reads, against the plain glass rule.
 - `game/tests/enhanced-lighting-policy.test.ts`: what Off / Auto / On plan for each kind of renderer, the reasons,
   the texture-size fallbacks, the bounded tiers.
 - `game/tests/enhanced-lighting-runtime.test.ts`: Off / Reactor, miss / hit / stale / cleared / unavailable, what
