@@ -118,6 +118,16 @@ describe('corpse shop kit: the chute and the booth', () => {
     for (let i = 0; i < T.length; i += 3) { if (T[i + 2] > 0) front = Math.max(front, T[i + 1]); else back = Math.max(back, T[i + 1]); }
     expect(front).toBeCloseTo(c.rimY, 3);
     expect(back).toBeCloseTo(c.dims[1], 3);
+    // the open throat (the runtime's dark shaft mouth): the provenance's measure, inside the hopper, wide enough for a shoulder
+    const meas = JSON.parse(fs.readFileSync(path.join(PUB, KIT_PROV), 'utf8')).models.find((m: {key: string}) => m.key === c.key).measured;
+    const [x0, x1, z0, z1] = c.throat;
+    expect([x0, x1, z0, z1]).toEqual([...meas.throatX, ...meas.throatZ]);
+    expect(x0).toBeGreaterThan(-c.dims[0] / 2); expect(x1).toBeLessThan(c.dims[0] / 2);
+    expect(z0).toBeGreaterThan(-c.dims[2] / 2); expect(z1).toBeLessThan(c.dims[2] / 2);
+    expect(x1 - x0).toBeGreaterThan(0.3); expect(z1 - z0).toBeGreaterThan(0.4);
+    // no floor or ledge across its middle (seen straight down through the hopper: open)
+    const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+    expect(upArea(T, (x, _y, z) => Math.abs(x - mx) < 0.1 && Math.abs(z - mz) < 0.1)).toBe(0);
   });
 
   it('the booth: a counter top at counter height in front of the bars, within the den\'s 2.3 x 0.5 m slot', async () => {

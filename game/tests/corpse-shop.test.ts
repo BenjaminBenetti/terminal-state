@@ -11,6 +11,7 @@ import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {CORPSE_BUYER_MODEL} from '../src/assets/corpseBuyer.generated';
+import {CORPSE_SHOP_KIT} from '../src/assets/corpseShopKit.generated';
 import type {HumanActor} from '../src/market/humanActor';
 import {corpseCarriable} from '../src/ai/corpseTrait';
 import type {BodyRecordJSON} from '../src/corpse/bodyRecord';
@@ -194,6 +195,37 @@ describe('corpse buyer: the den runtime (fake host)', () => {
     expect(s.shop.den).toBeNull();
     s.look(3, 0.5, 5);
     expect(s.shop.offer(s.hold(held('st-01:main#4')))).toBeNull();
+  });
+
+  it('the chute\'s open throat gets a dark shaft mouth (placed like the model: turned with the prop); the body goes down through it', () => {
+    const L = LAYOUT();
+    L.props[0].rot = Math.PI / 2; // (the chute turned a quarter: its throat's +z offset now points +x)
+    const s = shopHost();
+    s.h.layout = L;
+    for (const b of s.h.sectionHooks as {build(l: unknown): void}[]) b.build(L);
+    const [x0, x1, z0, z1] = CORPSE_SHOP_KIT.chute.throat;
+    const t = s.shop.throat()!;
+    expect(t.x).toBeCloseTo(3 + (z0 + z1) / 2, 6);
+    expect(t.z).toBeCloseTo(5 - (x0 + x1) / 2, 6);
+    const mouth = s.h.scene.getObjectByName('corpse-chute-mouth') as THREE.Mesh;
+    expect(mouth).toBeTruthy();
+    const box = new THREE.Box3().setFromObject(mouth);
+    expect(box.max.y - box.min.y).toBeLessThan(1e-6);
+    expect(box.min.y).toBeGreaterThan(0); expect(box.min.y).toBeLessThan(0.01); // (just over the floor)
+    // its long side (the throat's z) along world x after the quarter turn, grown over the throat on every side
+    expect(box.max.x - box.min.x).toBeCloseTo(z1 - z0 + 2 * CORPSE_SHOP_RT.mouthGrow, 4);
+    expect(box.max.z - box.min.z).toBeCloseTo(x1 - x0 + 2 * CORPSE_SHOP_RT.mouthGrow, 4);
+    expect((mouth.material as THREE.MeshBasicMaterial).color.getHex()).toBeLessThan(0x101010);
+    // the swallowed body ends over the throat's middle
+    s.look(3, 0.5, 5);
+    const body = s.hold(held('st-01:main#4'));
+    expect(sell(s, body)).toBe(true);
+    s.frames(CORPSE_SHOP.swallowMs * CORPSE_SHOP_RT.lift / 1000 + 0.05);
+    const hips = body.object.getObjectByName('Hips')!.getWorldPosition(new THREE.Vector3());
+    expect(Math.hypot(hips.x - t.x, hips.z - t.z)).toBeLessThan(0.35);
+    // leaving the station: gone with the rest of the den's visuals
+    s.shop.teardown();
+    expect(s.h.scene.getObjectByName('corpse-chute-mouth')).toBeUndefined();
   });
 
   it('sold at the chute: the hands empty in the same call, the body down the shaft, ten Rail Ties land as ONE world pickup, once', () => {

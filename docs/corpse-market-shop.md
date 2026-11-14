@@ -18,7 +18,7 @@ stock, and nobody can buy a corpse anywhere.
 1. Carry a dead body to the den (`docs/corpse-chipper.md`: aim at it, **E**; one at a time, slower).
 2. Walk up to the chute and aim at it. The prompt reads **[E] Drop the body down the chute · 10 Rail Ties**.
 3. **E**: the body leaves your hands in the same instant. It is lifted head-down over the hopper and slides down the shaft out of sight
-   (about 1.6 s). The buyer greets you, then counts (his work loop, about 1.4 s).
+   (about 1.6 s): into the black mouth at the bottom of the hopper. The buyer greets you, then counts (his work loop, about 1.4 s).
 4. He pushes a bundle of 10 Rail Ties through the booth's slot. It slides off the counter's edge and lands on the floor in front of the
    booth (about 0.6 s). It is now an ordinary `rail_ties` pickup: aim + **E** takes it. Unclaimed bundles from several sales lie side by
    side.
@@ -81,7 +81,9 @@ Genuine owned Codex initial conditioning images, then Meshy T2.5 image-to-3D (Sm
 maps, re-encoded by the normal cook; there is no retexture or reprojection. Private masters, prompts and the finance ledger stay outside
 Git with an independent backup. Only cooked outputs and hash provenance ship.
 
-- `market-corpse-chute.glb`: the floor chute, a square riveted steel hopper with its lid welded upright. A static, anchored prop.
+- `market-corpse-chute.glb`: the floor chute, a square riveted steel hopper with its lid welded upright. A static, anchored prop. Its
+  throat is open geometry (no shaft is modelled), so the runtime lays one unlit near-black quad over the floor in the measured throat
+  (`CORPSE_SHOP_KIT.chute.throat`, turned with the prop): seen down the hopper it reads as a shaft. It is a flat colour, not a texture.
 - `market-corpse-booth.glb`: the barred steel booth with its counter and caged red lamp. A static, built-in prop that closes the
   opening to the buyer's back room.
 - `market-corpse-buyer.glb`: the buyer, a gaunt, fully clothed man of about 55 (roll-neck, leather waistcoat, long rubber gloves, rubber
@@ -92,8 +94,9 @@ Scale checks beside a runtime zombie, dimensions and contacts: `docs/prop-afford
 
 ## Tests
 
-- `game/tests/corpse-shop.test.ts`: the sale record, the runtime on a fake host (sink, swallow, one pickup per sale, resume mid-sale,
-  hostile booth, the spill seam, the look-at line), and save validation.
+- `game/tests/corpse-shop.test.ts`: the sale record, the runtime on a fake host (sink, the shaft mouth, swallow, one pickup per sale,
+  resume mid-sale, hostile booth, the spill seam, the look-at line), the buyer actor with the real cooked model (his post and facing,
+  Idle / Greet / Work, dark while hostile, the bounded stare), and save validation.
 - `game/tests/corpse-bb-carry.test.ts`: BB's body with the real model, corpse system and chipper (pickup, shoulder anchor, chipper
   refusal, cargo, platform drop, grounded rebuild).
 - `game/tests/market-den-layout.test.ts`: the version 4 den (layout lane).

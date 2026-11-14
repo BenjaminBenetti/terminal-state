@@ -62,7 +62,12 @@ export const CORPSE_SHOP_RT = {
   stare: 1.0, stareRate: 3, stareRange: 7,
   /** A missing body visual (its model not loaded yet) is retried this often (s). */
   rebuildS: 1,
+  /** The shaft's dark mouth: the throat grown by this on every side (m; under the hopper walls' bottom edge), this far over the floor. */
+  mouthGrow: 0.03, mouthY: 0.004,
 } as const;
+
+/** The chute's open throat (no shaft floor is modelled: the floor under it would show): one unlit near-black quad, shared. */
+let mouthMat: THREE.MeshBasicMaterial | null = null;
 
 /** The lazy prop-library file of the buyer (game.ts propModels). */
 export const CORPSE_BUYER_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = {[CORPSE_BUYER_MODEL.key]: {url: CORPSE_BUYER_MODEL.url, bytes: CORPSE_BUYER_MODEL.bytes}};
@@ -126,6 +131,7 @@ export class CorpseShop {
   private ties: THREE.Object3D | null = null;
   private tiesUid = 0;
   private warmTies: THREE.Object3D | null = null;
+  private mouth: THREE.Mesh | null = null;
   private stareYaw = 0;
   private stareApplied = 0;
   private stareQ: THREE.Quaternion | null = null;
@@ -180,11 +186,15 @@ export class CorpseShop {
     this.rebuildAt = 0;
     this.ensureBuyer();
     this.ensureWarmTies();
+    this.ensureMouth();
   }
 
   teardown(): void {
     this.dropBody();
     this.dropTies();
+    this.mouth?.removeFromParent();
+    this.mouth?.geometry.dispose();
+    this.mouth = null;
     this.buyer?.dispose();
     this.buyer = null;
     this.warmTies?.removeFromParent();
@@ -224,14 +234,41 @@ export class CorpseShop {
     this.warmTies = o;
   }
 
+  /** The shaft's dark mouth in the chute's throat: down through the hopper it reads as a hole, and the swallowed body goes into it. */
+  private ensureMouth(): void {
+    const m = this.den ? this.throat() : null;
+    if (!m || this.mouth) return;
+    const g = CORPSE_SHOP_RT.mouthGrow;
+    const geo = new THREE.PlaneGeometry(m.w + 2 * g, m.d + 2 * g).rotateX(-Math.PI / 2);
+    const o = new THREE.Mesh(geo, (mouthMat ??= new THREE.MeshBasicMaterial({color: 0x050403})));
+    o.name = 'corpse-chute-mouth';
+    o.position.set(m.x, m.y + CORPSE_SHOP_RT.mouthY, m.z);
+    o.rotation.y = m.rot;
+    o.userData.level = this.den!.chute.level;
+    o.updateMatrixWorld(true);
+    this.host.scene.add(o);
+    this.mouth = o;
+  }
+
   private warmRoots(): THREE.Object3D[] {
-    return [this.buyer?.root, this.warmTies].filter((o): o is THREE.Object3D => !!o);
+    return [this.buyer?.root, this.warmTies, this.mouth].filter((o): o is THREE.Object3D => !!o);
   }
 
   // --- geometry ------------------------------------------------------------------------------------------------------
 
   private propOf(i: number): PropPlacement | null {
     return this.props[i] ?? null;
+  }
+
+  /**
+   * The chute's open throat in the world (its cooked model's measured mouth, CORPSE_SHOP_KIT.chute.throat, placed like the builder's
+   * model: the prop's position, turned by its rot): its middle, size (model frame) and yaw. Null without the chute prop.
+   */
+  throat(): {x: number; y: number; z: number; w: number; d: number; rot: number} | null {
+    const den = this.den, p = den ? this.propOf(den.chute.prop) : null;
+    if (!den || !p) return null;
+    const [x0, x1, z0, z1] = CORPSE_SHOP_KIT.chute.throat, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, c = Math.cos(p.rot), s = Math.sin(p.rot);
+    return {x: p.x + cx * c + cz * s, y: p.y, z: p.z - cx * s + cz * c, w: x1 - x0, d: z1 - z0, rot: p.rot};
   }
 
   /** The booth's front direction (its prop's +Z: rot is a quarter turn). */
@@ -372,8 +409,8 @@ export class CorpseShop {
     const b = this.body, den = this.den;
     if (!b || !den) return;
     const t = clamp01(ms / CORPSE_SHOP.swallowMs), L = CORPSE_SHOP_RT.lift;
-    // over the mouth: the lowest point just above the rim; at the end: the highest point below the floor
-    const x1 = den.chute.x - b.dx, z1 = den.chute.z - b.dz;
+    // over the mouth (the throat's middle): the lowest point just above the rim; at the end: the highest point below the floor
+    const m = this.throat() ?? den.chute, x1 = m.x - b.dx, z1 = m.z - b.dz;
     const yTop = den.chute.rimY + CORPSE_SHOP_RT.above - b.low, yEnd = den.chute.y - CORPSE_SHOP_RT.below - b.high;
     if (t < L) {
       const k = ease(t / L);
