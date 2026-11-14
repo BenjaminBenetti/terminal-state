@@ -41,7 +41,7 @@ export interface EnhancedLightingSettings { enhancedLighting?: EnhancedLightingR
  * different result for the same inputs, PROBES likewise for world/reflectionProbes.ts, ENTRY when the stored layout changes.
  * (Everything upstream — generation, fixtures, the direct bake, the finishes — is covered by content: see inputs digests.)
  */
-export const DERIVED_LIGHTING_VERSIONS = {entry: 1, gather: 1, probes: 2} as const;
+export const DERIVED_LIGHTING_VERSIONS = {entry: 1, gather: 1, probes: 3} as const;
 
 /** What a station's enhanced bake reads (world/lights.ts stationBakeInput). */
 export interface StationBakeInput {

@@ -396,8 +396,9 @@ const BOX_MIN = 0.5, BOX_MAX = 30;
  *    than the tier allows; a block holds a probe when it has 4 or more open cells of the slot; probes are numbered by slot, then
  *    block row, then block column. A probe sits at its cell's centre, min(1.5 m, half the room height) above the floor; its weights
  *    reach the cells it can walk to inside its block grown by ramp + 1 cells (4-neighbour steps over open cells of its slot, floors
- *    less than 0.6 m apart), and one cell further into the solid cells beside those (the largest weight of the reached cells next
- *    to it: what is set into a wall's own cell still reflects the room it faces);
+ *    less than 0.6 m apart); a cell NO probe can walk to takes the probes that reach it the same way across floor steps of any
+ *    height (a track bed below a platform edge: the same air); and a probe's weights go one cell further into the solid cells
+ *    beside its cells (the largest weight of those next to it: what is set into a wall's own cell still reflects the room it faces);
  *  - level 0 texel (i, j) looks along octDecode((i + 0.5) / tile, (j + 0.5) / tile), at most PROBE_REACH far (nothing there: black);
  *  - a fixture is drawn when it works (not broken, power above 0.01, not a `virtual` light source: that one has no tube), is within
  *    PROBE_REACH and the ray to its tube's centre is not stopped more than 0.4 m short of it; its radiance is added on top of the
@@ -444,34 +445,61 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
   const gridDepth = 2 * Math.max(1, S), grid = new Uint8Array(n * gridDepth * 4);
   const stamp = new Int32Array(n), queue = new Int32Array(n);
   const w1 = (a: number, b: number): number => { const v = 0.5 + 0.5 * (a < b ? a : b) / ramp; return v < 0 ? 0 : v > 1 ? 1 : v; };
-  const gridOf = (p: number): void => {
-    const s = pl.slot[p], bx = pl.bx[p], bz = pl.bz[p], id = p + 1, c = (bx & 1) + 2 * (bz & 1);
+  /** The cells probe `p` reaches inside its expanded block (into `queue`; returns how many): by walking, or `across` floor steps too. */
+  const reach = (p: number, across: boolean): number => {
+    const s = pl.slot[p], bx = pl.bx[p], bz = pl.bz[p], mark = across ? -(p + 1) : p + 1;
     const {open, floorH} = geos[s];
-    const X0 = bx * block, X1 = X0 + block, Z0 = bz * block, Z1 = Z0 + block;
-    const x0 = Math.max(0, X0 - ramp - 1), x1 = Math.min(W, X1 + ramp + 1), z0 = Math.max(0, Z0 - ramp - 1), z1 = Math.min(H, Z1 + ramp + 1);
-    const wo = 2 * s * n * 4 + c, io = (2 * s + 1) * n * 4 + c;
-    for (let cz = z0; cz < z1; cz++) for (let i = cz * W + x0, e = cz * W + x1; i < e; i++) grid[io + i * 4] = id;
+    const x0 = Math.max(0, bx * block - ramp - 1), x1 = Math.min(W, (bx + 1) * block + ramp + 1), z0 = Math.max(0, bz * block - ramp - 1), z1 = Math.min(H, (bz + 1) * block + ramp + 1);
     let head = 0, tail = 0;
-    stamp[pl.cell[p]] = id; queue[tail++] = pl.cell[p];
+    stamp[pl.cell[p]] = mark; queue[tail++] = pl.cell[p];
     while (head < tail) {
       const i = queue[head++], cx = i % W, cz = (i - cx) / W, f = floorH[i];
-      grid[wo + i * 4] = Math.round(w1(cx + 0.5 - X0, X1 - cx - 0.5) * w1(cz + 0.5 - Z0, Z1 - cz - 0.5) * 255);
-      if (cx > x0) { const j = i - 1; if (stamp[j] !== id && open[j] && Math.abs(floorH[j] - f) < STEP_MAX) { stamp[j] = id; queue[tail++] = j; } }
-      if (cx + 1 < x1) { const j = i + 1; if (stamp[j] !== id && open[j] && Math.abs(floorH[j] - f) < STEP_MAX) { stamp[j] = id; queue[tail++] = j; } }
-      if (cz > z0) { const j = i - W; if (stamp[j] !== id && open[j] && Math.abs(floorH[j] - f) < STEP_MAX) { stamp[j] = id; queue[tail++] = j; } }
-      if (cz + 1 < z1) { const j = i + W; if (stamp[j] !== id && open[j] && Math.abs(floorH[j] - f) < STEP_MAX) { stamp[j] = id; queue[tail++] = j; } }
+      if (cx > x0) { const j = i - 1; if (stamp[j] !== mark && open[j] && (across || Math.abs(floorH[j] - f) < STEP_MAX)) { stamp[j] = mark; queue[tail++] = j; } }
+      if (cx + 1 < x1) { const j = i + 1; if (stamp[j] !== mark && open[j] && (across || Math.abs(floorH[j] - f) < STEP_MAX)) { stamp[j] = mark; queue[tail++] = j; } }
+      if (cz > z0) { const j = i - W; if (stamp[j] !== mark && open[j] && (across || Math.abs(floorH[j] - f) < STEP_MAX)) { stamp[j] = mark; queue[tail++] = j; } }
+      if (cz + 1 < z1) { const j = i + W; if (stamp[j] !== mark && open[j] && (across || Math.abs(floorH[j] - f) < STEP_MAX)) { stamp[j] = mark; queue[tail++] = j; } }
     }
-    // one cell into the SOLID cells beside what it reached: a pane or a fitting set into the wall's own cell (a tower window sits
-    // 0.28 m inside it) is shaded there, and with no weight it would reflect nothing. Never into an open cell it could not walk to.
-    for (let q = 0; q < tail; q++) {
+    return tail;
+  };
+  const weightOf = (p: number, i: number): number => {
+    const X0 = pl.bx[p] * block, Z0 = pl.bz[p] * block, cx = i % W, cz = (i - cx) / W;
+    return Math.round(w1(cx + 0.5 - X0, X0 + block - cx - 0.5) * w1(cz + 0.5 - Z0, Z0 + block - cz - 0.5) * 255);
+  };
+  // 1. ids over the expanded block; weights on the cells the probe can walk to
+  for (let p = 0; p < count; p++) {
+    const s = pl.slot[p], bx = pl.bx[p], bz = pl.bz[p], id = p + 1, c = (bx & 1) + 2 * (bz & 1);
+    const x0 = Math.max(0, bx * block - ramp - 1), x1 = Math.min(W, (bx + 1) * block + ramp + 1), z0 = Math.max(0, bz * block - ramp - 1), z1 = Math.min(H, (bz + 1) * block + ramp + 1);
+    const wo = 2 * s * n * 4 + c, io = (2 * s + 1) * n * 4 + c;
+    for (let cz = z0; cz < z1; cz++) for (let i = cz * W + x0, e = cz * W + x1; i < e; i++) grid[io + i * 4] = id;
+    for (let q = 0, e = reach(p, false); q < e; q++) grid[wo + queue[q] * 4] = weightOf(p, queue[q]);
+    if (p % 16 === 15) yield;
+  }
+  // 2. a cell NO probe can walk to (a track bed whose blocks all put their probe on the platform beside it) takes the probes
+  //    that reach it across floor steps: the same air, seen from the other side of an edge. Never through a wall, and never
+  //    changing a cell some probe walks to. Decided from the state after step 1, so the probes' order does not matter.
+  const walked = new Uint8Array(n * Math.max(1, S));
+  for (let s = 0; s < S; s++) {
+    const wo = 2 * s * n * 4, so = s * n;
+    for (let i = 0; i < n; i++) if (grid[wo + i * 4] | grid[wo + i * 4 + 1] | grid[wo + i * 4 + 2] | grid[wo + i * 4 + 3]) walked[so + i] = 1;
+    yield;
+  }
+  // 3. ... and one cell into the SOLID cells beside what it weighs on: a fitting set into the wall's own cell is shaded there, and
+  //    with no weight it would reflect nothing. Never into an open cell.
+  for (let p = 0; p < count; p++) {
+    const s = pl.slot[p], bx = pl.bx[p], bz = pl.bz[p], c = (bx & 1) + 2 * (bz & 1), open = geos[s].open, so = s * n;
+    const x0 = Math.max(0, bx * block - ramp - 1), x1 = Math.min(W, (bx + 1) * block + ramp + 1), z0 = Math.max(0, bz * block - ramp - 1), z1 = Math.min(H, (bz + 1) * block + ramp + 1);
+    const wo = 2 * s * n * 4 + c, e = reach(p, true);
+    for (let q = 0; q < e; q++) { const i = queue[q]; if (!walked[so + i]) grid[wo + i * 4] = weightOf(p, i); }
+    for (let q = 0; q < e; q++) {
       const i = queue[q], cx = i % W, cz = (i - cx) / W, w = grid[wo + i * 4];
+      if (!w) continue;
       if (cx > x0 && !open[i - 1] && grid[wo + (i - 1) * 4] < w) grid[wo + (i - 1) * 4] = w;
       if (cx + 1 < x1 && !open[i + 1] && grid[wo + (i + 1) * 4] < w) grid[wo + (i + 1) * 4] = w;
       if (cz > z0 && !open[i - W] && grid[wo + (i - W) * 4] < w) grid[wo + (i - W) * 4] = w;
       if (cz + 1 < z1 && !open[i + W] && grid[wo + (i + W) * 4] < w) grid[wo + (i + W) * 4] = w;
     }
-  };
-  for (let p = 0; p < count; p++) { gridOf(p); if (p % 16 === 15) yield; }
+    if (p % 16 === 15) yield;
+  }
   const orphansOf = (s: number): number => {
     const open = geos[s].open, wo = 2 * s * n * 4;
     let c = 0;

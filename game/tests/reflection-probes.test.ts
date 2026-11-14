@@ -383,7 +383,7 @@ describe('probe placement and the weight / id grid', () => {
     expect([10, 11, 12, 13, 26, 27, 28, 29].map(cx => gridAt(b, 1, cx, 19, 0))).toEqual([p - 1, 0, 0, p + 1, p + 1, 0, 0, p + 3]);
   });
 
-  it('a probe weighs only on cells it can walk to inside its expanded block: not behind a wall, not down a platform edge', () => {
+  it('a probe weighs on the cells it can walk to inside its expanded block: not behind a wall, not down a platform edge another probe stands below', () => {
     // two rooms split by a wall at x = 12; the only door at z = 20
     const g = box(34, 26);
     for (let z = 0; z < 26; z++) { g.set(12, z, SOLID); for (let x = 13; x < 33; x++) if (g.get(x, z) === FLOOR) g.area[z * 34 + x] = 1; }
@@ -413,8 +413,43 @@ describe('probe placement and the weight / id grid', () => {
     const plat = pe.findIndex(q => q.bx === 1 && q.bz === 0), bed = pe.findIndex(q => q.bx === 2 && q.bz === 0);
     expect([pe[plat].cx, pe[plat].cz, pe[bed].cx, pe[bed].cz]).toEqual([10, 4, 16, 4]);
     expect(metaAt(be, bed, 0)[1]).toBeCloseTo(-1.15 + 1.5, 5);
-    expect([12, 13, 14, 15].map(x => gridAt(be, 0, x, 4, 1))).toEqual([255, 0, 0, 0]); // the platform probe stops at the edge
+    // the platform probe stops where the bed probe's cells begin (x = 14); the one bed cell NO probe can walk to (x = 13, short of
+    // the bed probe's ramp) takes the platform probe across the edge instead of going without
+    expect([12, 13, 14, 15].map(x => gridAt(be, 0, x, 4, 1))).toEqual([255, 255, 0, 0]);
     expect([12, 13, 14, 15].map(x => gridAt(be, 0, x, 4, 0))).toEqual([0, 0, 32, 96]); // the bed probe: its ramp, bed cells only
+    expect(be.stats.orphanCells).toBe(0);
+  });
+
+  it('a space no probe stands in or walks to takes the probes that reach it across a floor step: a track bed beside the platforms', () => {
+    // a platform (z 1..12) with a narrower bed beside it (z 13..15, 1.15 m down): every block of the bed's row (z 8..15) puts its
+    // probe on the platform (40 cells against 24), no block beyond holds one, so nothing walks into the bed
+    const W = 34, H = 17, g = box(W, H);
+    for (let z = 13; z <= 15; z++) for (let x = 1; x <= W - 2; x++) { g.set(x, z, VOID); g.area[z * W + x] = -1; }
+    // ... and a closet in the bed, walled off from everything (x 20..22, z 14..15 inside walls)
+    for (let z = 13; z <= 15; z++) for (const x of [19, 23]) g.set(x, z, SOLID);
+    for (let x = 19; x <= 23; x++) g.set(x, 13, SOLID);
+    const r = rig(g), b = bake(r, tierOf(4)), probes = checkGrid(b, r.geos);
+    const {open, floorH} = r.geos[0];
+    for (const q of probes) expect(floorH[q.cz * W + q.cx], 'every probe stands on the platform').toBe(0);
+    const trapezoid = (q: {bx: number; bz: number}, cx: number, cz: number): number => {
+      const w1 = (a: number, c: number): number => Math.min(1, Math.max(0, 0.5 + 0.5 * Math.min(a, c) / b.ramp));
+      return Math.round(w1(cx + 0.5 - q.bx * b.block, (q.bx + 1) * b.block - cx - 0.5) * w1(cz + 0.5 - q.bz * b.block, (q.bz + 1) * b.block - cz - 0.5) * 255);
+    };
+    let bed = 0, closet = 0;
+    for (let z = 13; z <= 15; z++) for (let x = 1; x <= W - 2; x++) {
+      if (!open[z * W + x]) continue;
+      const w = weightsAt(b, 0, x, z), ids = idsAt(b, 0, x, z);
+      if (x >= 20 && x <= 22 && z >= 14) { closet++; expect(w, `closet ${x},${z}: behind walls, no probe`).toEqual([0, 0, 0, 0]); continue; }
+      bed++;
+      // exactly the weights a platform cell there would have: every probe whose expanded block holds the cell, by its trapezoid
+      expect(w, `bed ${x},${z}`).toEqual(ids.map(id => (id ? trapezoid(probes[id - 1], x, z) : 0)));
+      expect(w.reduce((a, v) => a + v, 0), `bed ${x},${z}: under a probe`).toBeGreaterThan(0);
+    }
+    expect([bed, closet]).toEqual([3 * 32 - 9 - 6, 6]); // 9 wall cells, 6 closet cells
+    expect(b.stats.orphanCells).toBe(6);
+    // the platform is what it is without the bed's rescue: a cell a probe walks to is never changed by one that only sees it
+    const flat = rig(box(W, H)), bf = bake(flat, tierOf(4));
+    for (let z = 1; z <= 11; z++) for (let x = 1; x <= W - 2; x++) expect(weightsAt(b, 0, x, z), `platform ${x},${z}`).toEqual(weightsAt(bf, 0, x, z));
   });
 });
 
