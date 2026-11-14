@@ -16,6 +16,7 @@ import type {Level} from '../gen/levels';
 import {textureMean} from '../damage/sample';
 import {mallTableData} from './mallSurfaces';
 import type {ColumnGeometry} from './lightField';
+import {drainSync, type BuildSteps} from '../core/pacedBuild';
 
 /** What the architecture pass drew (world/builder.ts BuiltWorld.drawn). */
 export interface DrawnSurfaces {
@@ -92,6 +93,11 @@ export function finishAlbedo(key: string, mat: THREE.Material | undefined): [num
  * Cheap (a pass over the drawn rects and faces): it runs on every load, and its bytes are part of the derived cache's key.
  */
 export function surfaceAlbedo(W: number, H: number, levels: readonly Level[], geos: readonly ColumnGeometry[], drawn: DrawnSurfaces | null | undefined): SurfaceAlbedo {
+  return drainSync(surfaceAlbedoSteps(W, H, levels, geos, drawn));
+}
+
+/** surfaceAlbedo as build steps (core/pacedBuild.ts: the journey's paced build draws frames between them). The same bytes. */
+export function* surfaceAlbedoSteps(W: number, H: number, levels: readonly Level[], geos: readonly ColumnGeometry[], drawn: DrawnSurfaces | null | undefined): BuildSteps<SurfaceAlbedo> {
   const n = W * H, S = geos.length;
   const slots = geos.map(() => new Uint8Array(n * ALBEDO_STRIDE));
   const set = geos.map(() => new Uint8Array(n)); // bit 0 floor, bit 1 ceiling
@@ -123,9 +129,14 @@ export function surfaceAlbedo(W: number, H: number, levels: readonly Level[], ge
         }
       }
     };
+    yield;
     rects(drawn.floors, ALB_FLOOR, 1);
+    yield;
     rects(drawn.ceils, ALB_CEIL, 2);
+    yield;
+    let done = 0;
     for (const f of drawn.faces) {
+      if (++done % 1500 === 0) yield;
       const s = f.level;
       if (!(s >= 0 && s < S)) continue;
       const ki = byKey.get(f.finish);
@@ -161,6 +172,7 @@ export function surfaceAlbedo(W: number, H: number, levels: readonly Level[], ge
     }
   }
   for (let s = 0; s < S; s++) {
+    yield;
     const A = slots[s], st = set[s], acc = wallAcc[s], open = geos[s].open, cells = levels[s]?.grid.cells;
     for (let i = 0; i < n; i++) {
       if (!open[i]) continue;

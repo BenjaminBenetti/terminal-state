@@ -31,7 +31,7 @@ import {BandScene} from './lightScene';
 import {
   PROBE_FIXTURE_RADIANCE, PROBE_LEVEL_SIGMA, PROBE_NORM_MIN, PROBE_REACH, bakeReflectionProbesSteps, probeBytes, type BakedProbes, type ProbeAtlasLayout,
 } from './reflectionProbes';
-import {surfaceAlbedo, type DrawnSurfaces, type SurfaceAlbedo} from './surfaceAlbedo';
+import {surfaceAlbedoSteps, type DrawnSurfaces, type SurfaceAlbedo} from './surfaceAlbedo';
 
 /** The two settings as the game holds them (game.ts Settings; optional: hosts / tests from before them read the defaults). */
 export interface EnhancedLightingSettings { enhancedLighting?: EnhancedLightingRequest['lighting']; reflections?: EnhancedLightingRequest['reflections'] }
@@ -243,7 +243,7 @@ export class EnhancedLightingRuntime {
     const indirect = function* (ctx: IndirectContext): BuildSteps<IndirectLight> {
       yield 'gather.surfaces';
       let t = now();
-      const albedo = surfaceAlbedo(ctx.W, ctx.H, levels, ctx.geos, drawn ?? null);
+      const albedo = yield* surfaceAlbedoSteps(ctx.W, ctx.H, levels, ctx.geos, drawn ?? null);
       timings.albedoMs = now() - t;
       yield 'gather.digest';
       t = now();

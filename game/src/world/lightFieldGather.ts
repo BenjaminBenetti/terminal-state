@@ -132,6 +132,7 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
   const fillFrom = geos.map(() => (stride === 2 ? new Int32Array(n * 4).fill(-1) : null));
   let probes = 0;
   for (let s = 0; s < S; s++) {
+    yield;
     const {open, floorH} = geos[s], gt = gathers[s], ff = fillFrom[s], L = LS[s];
     for (let i = 0; i < n; i++) {
       if (!open[i]) continue;
@@ -161,11 +162,15 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
   /** The gathering voxels (rows of `data`), in slot / cell / layer order. */
   const P = new Int32Array(probes);
   for (let s = 0, q = 0; s < S; s++) { const gt = gathers[s], L = LS[s], ix = index[s]; for (let i = 0; i < n; i++) if (gt[i]) for (let k = 0; k < L; k++) P[q++] = ix[i * L + k]; }
+  yield;
   const sets = raySets(N), setShift = stride === 2 ? 1 : 0;
+  yield;
   const hitV = new Int32Array(probes * N).fill(-1);
   /** Per ray: the surface code (0 floor, 1 ceiling, 2 / 3 wall facing +x / -x, 4 / 5 wall facing +z / -z) and its weight (0..255). */
   const hitC = new Uint8Array(probes * N), hitW = new Uint8Array(probes * N);
+  yield;
   let cur = new Float32Array(count * IND_STRIDE), prev = new Float32Array(count * IND_STRIDE);
+  yield;
   const tot = new Float32Array(count * IND_STRIDE);
   const R = opt.reach, fade0 = R * 0.6, invFade = 1 / (R - fade0), invN = 1 / N;
   let hits = 0;
@@ -174,7 +179,9 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
   // colours (floor, ceiling, wall: linear rgb), and what each of the six surface orientations there sends back of the DIRECT light
   // (its colour x the direct light on it from its own side), plus the flicker circuits' shares of that light ------------------------
   const va = new Float32Array(count * 9);
+  yield;
   const RAD = 21, rad = new Float32Array(count * RAD);
+  yield;
   const radRange = (c0: number, c1: number): void => {
     for (let c = c0; c < c1; c++) {
       const s = vs[c], i = vi[c], L = LS[s], hv = i * L + vk[c], A = opt.albedo.slots[s], a0 = i * ALBEDO_STRIDE, v0 = c * 9;

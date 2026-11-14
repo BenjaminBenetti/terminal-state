@@ -152,7 +152,7 @@ describe('which materials reflect', () => {
     expect(key(tagReflect(std({metalness: 1}), 'none'))).not.toBe(key(std({metalness: 1})));
   });
   it('the station kit: glazing is glass (clones too), tile / slab / ceiling sets never reflect, painted and brushed steel are metal candidates', () => {
-    installCanvasShim();
+    installCanvasShim(false);
     const mats = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
     for (const k of ['tileLower', 'tileUpper', 'platformSlab', 'ceiling', 'tunnel', 'platformFace', 'safetyEdge'] as const) expect(reflectClass(mats.get(k)), k).toBe('none');
     for (const k of ['terrazzo', 'concrete', 'paint', 'ballast'] as const) expect(reflectClass(mats.get(k)), k).toBe('none');
