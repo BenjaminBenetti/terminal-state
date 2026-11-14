@@ -573,15 +573,15 @@ export class FireFx implements FireView {
     const up = Math.min(1, t * 5), down = 1 - Math.max(0, (t - 0.68) / 0.32) * 0.75; // (catches fast; sinks with the collapse)
     const w = b.box.max.x - b.box.min.x, dp = b.box.max.z - b.box.min.z, h = (b.box.max.y - b.box.min.y) * (t > 0.62 ? 1 - 0.9 * Math.min(1, (t - 0.62) / 0.38) : 1);
     const area = Math.max(0.1, w * dp), big = 0.75 + 0.25 * Math.min(1, area), sc = up * (0.6 + 0.4 * down);
-    o.f += dt * Math.max(7, Math.min(20, 5 + 9 * area + 2.5 * h)) * up * down;
+    o.f += dt * Math.max(7, Math.min(30, 5 + 9 * area + 6 * h)) * up * down;
     while (o.f >= 1) {
       o.f -= 1;
-      if (Math.random() < 0.5) this.tongue(rnd(b.box.min.x + w * 0.1, b.box.max.x - w * 0.1), b.box.min.y + h - 0.04, rnd(b.box.min.z + dp * 0.1, b.box.max.z - dp * 0.1), rnd(0.7, 1.25) * big * sc, rnd(0.6, 1.05), rnd(0.9, 1.15), 0.85, rnd(0.12, 0.3));
+      if (Math.random() < (h > 1.2 ? 0.3 : 0.5)) this.tongue(rnd(b.box.min.x + w * 0.1, b.box.max.x - w * 0.1), b.box.min.y + h - 0.04, rnd(b.box.min.z + dp * 0.1, b.box.max.z - dp * 0.1), rnd(0.7, 1.25) * big * sc, rnd(0.6, 1.05), rnd(0.9, 1.15), 0.85, rnd(0.12, 0.3));
       else {
         const side = Math.floor(Math.random() * 4);
         const x = side === 0 ? b.box.min.x - 0.06 : side === 1 ? b.box.max.x + 0.06 : rnd(b.box.min.x, b.box.max.x);
         const z = side === 2 ? b.box.min.z - 0.06 : side === 3 ? b.box.max.z + 0.06 : rnd(b.box.min.z, b.box.max.z);
-        this.tongue(x, b.box.min.y + h * rnd(0.05, 0.6), z, rnd(0.55, 1.0) * big * sc, rnd(0.55, 0.95), rnd(0.85, 1.1), 0.82, rnd(0.12, 0.3));
+        this.tongue(x, b.box.min.y + h * rnd(0, 0.7), z, rnd(0.55, 1.0) * big * sc, rnd(0.55, 0.95), rnd(0.85, 1.1), 0.82, rnd(0.12, 0.3));
       }
     }
     o.w += dt * 3 * up * down;
