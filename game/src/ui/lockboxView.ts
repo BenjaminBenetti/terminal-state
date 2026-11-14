@@ -22,7 +22,7 @@
 import type {Game} from '../game';
 import {itemIconHtml, onItemIconsChanged} from './itemIcons';
 import {itemDef} from '../items/items';
-import {itemTip} from './itemTip'; // (task studio-ui-subway-maps-20261108-074144-01)
+import {itemTip, noMagazine} from './itemTip'; // (task studio-ui-subway-maps-20261108-074144-01)
 import {hideTooltip, refreshTooltip, setTip, tipAttrs} from './tooltip';
 import {isBagItem} from '../items/gear';
 import {PACK_SIZE, POCKET_GRID, type Inventory, type ItemStack, type StoreSideRef} from '../items/inventory';
@@ -348,7 +348,7 @@ export class LockboxView {
     const cell = (ref: StoreSideRef, st: ItemStack | null) => {
       const def = st ? itemDef(st.itemId) : null;
       const w = def?.kind === 'weapon' ? WEAPONS[def.weaponId!] : null;
-      const count = def ? (w ? (w.melee ? '' : `<span class="count">${st!.mag}/${w.magazine}</span>`) : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
+      const count = def ? (w ? (noMagazine(w) ? '' : `<span class="count">${st!.mag}/${w.magazine}</span>`) : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
       const verb = ref.bar === 'store' ? (st && isBagItem(st.itemId) ? 'to wear it' : 'to take it') : `into ${this.opts.the}`;
       // (task studio-ui-subway-maps-20261108-074144-01) the game's own tooltip (a bag's contents count is in its lines; escaped names)
       const title = st ? tipAttrs(itemTip(st, `Click to move it ${verb} · drag to a slot`, {inv})) : '';

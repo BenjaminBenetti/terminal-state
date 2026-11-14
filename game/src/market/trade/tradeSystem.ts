@@ -5,7 +5,8 @@
 //    it as real ties at the next section build / frame (carried, then the train's Lockbox, then the parked car's floor) with a toast;
 //  - sectionHooks.build: this station's stalls (layout.market, gen/market/marketTypes.ts) and stock — the remembered record from the
 //    station's lane memory, else the stock seeded ONCE right now and written there (market/trade/stock.ts); the inventory's uid counter
-//    is reserved above every stock uid. teardown closes the view and forgets the live stock (the memory already has it);
+//    is reserved above every stock uid. teardown closes the view and forgets the live stock (the memory already has it). (Task
+//    studio-flamethrower-fire-20261114-031614-01: a record remembered from before the stock's additive lots gets them once, then.);
 //  - frameHooks + promptProviders: standing at a stall's customer spot (`front`: within TRADE_RT.reach, its storey, facing the counter)
 //    shows "[E] Trade — <stall sign> · N ties" (N = the ties you carry; nothing on the HUD);
 //  - HOSTILITY (task studio-market-rework-20261108-074144-01; market/hostility.ts, Game.marketHostility — the combat lane's): a stall
@@ -171,16 +172,20 @@ export class TradeSystem {
     const run = this.host.run, key: SectionKey = {...run.current};
     this.key = key;
     const rec = run.laneStore<unknown>(MARKET_STOCK_LANE, key);
+    const inv = this.host.inv, ids = this.stalls.map(s => s.id); // (the stalls this layout places)
     if (rec !== undefined) {
       this.stock = MarketStock.fromJSON(rec);
       this.counts.loaded++;
+      // task studio-flamethrower-fire-20261114-031614-01: a record remembered from before the additive lots (stock.ts STOCK_EXTRAS: the
+      // flamethrower, its fuel tank) gets them ONCE — fresh uids above every stock uid, and the record with its marker written at once
+      inv.reserveUids(this.stock.maxUid());
+      if (this.stock.addExtras((id, n) => inv.makeStack(id, n), ids)) this.write();
     } else {
-      const inv = this.host.inv;
-      this.stock = MarketStock.seed(run.scopeOf(key), run.seedFor(key), (id, n) => inv.makeStack(id, n), this.stalls.map(s => s.id)); // (the stalls this layout places)
+      this.stock = MarketStock.seed(run.scopeOf(key), run.seedFor(key), (id, n) => inv.makeStack(id, n), ids);
       this.counts.seeded++;
       this.write();
     }
-    this.host.inv.reserveUids(this.stock.maxUid());
+    inv.reserveUids(this.stock.maxUid());
   }
 
   /** Leaving the station: close; forget the live stock (its memory holds every change already). */

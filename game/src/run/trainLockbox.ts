@@ -4,7 +4,8 @@
 // - LOCKBOX_SLOTS (LOCKBOX_GRID 10 × 5 = 50; 40 = 10 × 4 before task gameplay-feedback-20261111, lane STORAGE: one more row, the same
 //   columns) ordinary inventory slots (ItemStack, the item's own stackMax), not volume. An older 40-slot save loads into the first 40
 //   slots exactly as saved (load reads by index; the new row starts empty). Every item kind fits, a backpack whole with its
-//   contents (`bag`); stacks keep their uid, count, gun magazine `mag`, gas-mask `filter` charge and an airtank's `air`.
+//   contents (`bag`); stacks keep their uid, count, gun magazine `mag`, gas-mask `filter` charge, an airtank's `air` and a fuel
+//   tank's `fuel`.
 // - It lives in the player-train RunParticipant: Travel keeps it (nothing touches the record), Retry restores it with the player's
 //   inventory from the level-entry snapshot, NewGame empties it. There is no on-disk run save (a page reload starts a new run).
 // - Transfers go only through Inventory.storeMove / storeQuick / storeWornBag (the open Lockbox view); the 1337 gear drop through
@@ -16,7 +17,7 @@
 
 import {ITEMS} from '../items/items';
 import {canonicalItemId} from '../items/calibers';
-import {gearSpec, isAirtank, isFilterMask} from '../items/gear';
+import {gearSpec, isAirtank, isFilterMask, isFuelTank} from '../items/gear';
 import {stackToJSON, stacksIn, type ItemStack, type StackJSON} from '../items/inventory';
 import {WEAPONS} from '../weapons/weapons';
 
@@ -53,6 +54,8 @@ function stackFrom(j: unknown, inBag: boolean, seen: Set<number>): ItemStack | n
   }
   if (isFilterMask(itemId) && Number.isFinite(o.filter)) s.filter = Math.max(0, Math.min(gearSpec(itemId)!.filterLife!, o.filter as number));
   if (isAirtank(itemId) && Number.isFinite(o.air)) s.air = Math.max(0, Math.min(gearSpec(itemId)!.airLife!, o.air as number)); // task filter-tension-airtank
+  // task studio-flamethrower-fire-20261114-031614-01: a fuel tank's fuel stays with it (whole units, never above a full tank; absent = empty)
+  if (isFuelTank(itemId) && Number.isFinite(o.fuel)) s.fuel = Math.max(0, Math.min(gearSpec(itemId)!.fuelCap!, Math.floor(o.fuel as number)));
   const fullArmor = gearSpec(itemId)?.armor ?? 0; // task studio-general-armor-20261107-231448-01: worn armour stays worn in the Lockbox
   if (fullArmor > 0 && Number.isFinite(o.armor)) s.armor = Math.max(0, Math.min(fullArmor, o.armor as number));
   if (slots > 0) {

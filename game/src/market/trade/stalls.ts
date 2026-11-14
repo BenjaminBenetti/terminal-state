@@ -76,7 +76,7 @@ const refuse = (code: TradeRefusalCode, text: string): TradeRefusal => ({ok: fal
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
 /** The ties a stall charges for `count` of this stack (its condition included): the value, rounded UP. */
-export function buyPrice(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air' | 'armor'>, count: number): number {
+export function buyPrice(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air' | 'armor' | 'fuel'>, count: number): number {
   const n = Math.max(0, Math.floor(count));
   return Math.ceil((n * stackUnitCents(stack) * TRADE_RATES.buyPct) / (CENTS * 100));
 }
@@ -92,7 +92,7 @@ export function buyBackPct(stall: MarketStallId, itemId: string): number | null 
 const signOf = (s: MarketStallId, names?: Partial<Record<MarketStallId, string>>) => names?.[s] ?? `the ${lower(STALL_TRADE[s].label)}`;
 
 /** What a stall pays for `count` of this stack (ties, rounded DOWN), or why it will not buy it. */
-export function sellQuote(stall: MarketStallId, stack: Pick<ItemStack, 'itemId' | 'count' | 'mag' | 'filter' | 'air' | 'armor' | 'bag'>, count: number): SellQuote | TradeRefusal {
+export function sellQuote(stall: MarketStallId, stack: Pick<ItemStack, 'itemId' | 'count' | 'mag' | 'filter' | 'air' | 'armor' | 'bag' | 'fuel'>, count: number): SellQuote | TradeRefusal {
   const d = ITEMS[stack.itemId];
   if (!d || !STALL_TRADE[stall]) return refuse('unknown', 'Nobody here knows what that is.');
   if (d.kind === 'part') return refuse('part', `Nobody here will take the ${lower(d.name)}: it is a reactor restart part, and the reactor needs it.`);
@@ -114,7 +114,7 @@ export function sellQuote(stall: MarketStallId, stack: Pick<ItemStack, 'itemId' 
  * names it ("PANTRY pays 4"), so using the right stall is worth it and easy to see. (Task studio-market-bar-20261108-225231-01: the six,
  * plus the bar where the station has one — its sign among `names`, the station's stalls; a market without a bar never names it.)
  */
-export function betterStall(stall: MarketStallId, stack: Pick<ItemStack, 'itemId' | 'count' | 'mag' | 'filter' | 'air' | 'armor' | 'bag'>, count: number,
+export function betterStall(stall: MarketStallId, stack: Pick<ItemStack, 'itemId' | 'count' | 'mag' | 'filter' | 'air' | 'armor' | 'bag' | 'fuel'>, count: number,
   names?: Partial<Record<MarketStallId, string>>): {stall: MarketStallId; name: string; price: number} | null {
   const here = sellQuote(stall, stack, count);
   let best: {stall: MarketStallId; name: string; price: number} | null = null;

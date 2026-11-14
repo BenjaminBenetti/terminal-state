@@ -34,7 +34,9 @@
 
 import * as THREE from 'three';
 import type {Game} from '../game';
-import {FILTER_LIFE_S, gearModifiersFor, GEAR_IDS, isAirtank, isBagItem, isFilterMask} from '../items/gear';
+import {FILTER_LIFE_S, fuelCansText, gearModifiersFor, GEAR_IDS, isAirtank, isBagItem, isFilterMask, isFuelTank} from '../items/gear';
+import {FLAME_FUEL} from '../fire/flamethrowerSpec'; // task studio-flamethrower-fire-20261114-031614-01
+import {tankFuel} from '../fire/fuelTank';
 import {itemDef} from '../items/items';
 import {stackFromJSON, stackToJSON, stacksIn, type ItemStack} from '../items/inventory';
 import {makeSupplyMesh} from '../world/pickups';
@@ -317,6 +319,7 @@ export class GearSystem {
       this.game.hud.toast(isBagItem(st.itemId) ? `Wearing the ${def.short.toLowerCase()} — 6 takes it off, click sets it down, tap E opens it`
         : isFilterMask(st.itemId) ? `${def.short} equipped (face slot) — Q puts it on · filter ${Math.ceil(Math.max(0, Math.min(1, (st.filter ?? 0) / FILTER_LIFE_S)) * 100 - 1e-9)} %` // mask lane
         : isAirtank(st.itemId) ? `Wearing the ${def.name} — ${Math.ceil(st.air ?? 0)} s of air for the gas mask (used before its filter; it cannot be refilled)` // task filter-tension-airtank
+        : isFuelTank(st.itemId) ? `Wearing the ${def.name} — ${fuelCansText(tankFuel(st))} of ${FLAME_FUEL.capacityCans} cans of fuel for the flamethrower (R with it in your hands pours a fuel can in)` // task studio-flamethrower-fire-20261114-031614-01
         : `Wearing the ${def.short.toLowerCase()} (Tab: gear)`);
     }
   }

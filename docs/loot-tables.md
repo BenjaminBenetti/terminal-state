@@ -815,6 +815,11 @@ and crates (`gen/market/dress.ts`). It carries `MARKET_WORKSHOP_KEY` (`'market-w
   seeps into the kitchen or the bunks.
 - **Unchanged.** Trader stock, the wallet, prices and ownership. Workbenches stay scenery: no crafting and no conversion.
 
+**Not loot: the flamethrower and its fuel tank** (task studio-flamethrower-fire-20261114-031614-01). They are in no table, pool,
+weight map, weapon-find leaf or starter kit on any level; they come from the train's bench (`docs/train-crafting.md`) or a market
+stall. Each market's gun stall stocks one flamethrower and its outfitter one new fuel tank as extra lots on top of the seeded stock
+(`market/trade/stock.ts` `STOCK_EXTRAS`): no stall's draws, counts or seeds changed (`tests/flamethrower-market.test.ts` pins them).
+
 ## The Bunker (`bunker`)
 
 <!-- Task studio-bunker-level-20261109-072224-01 (lane LEVEL). -->

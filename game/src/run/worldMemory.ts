@@ -23,6 +23,9 @@ export function stackRecord(st: ItemStack): StackRecord {
 /** A live stack from a record, with a fresh uid of `inv` (count / mag / lane fields exactly as recorded). */
 export function stackFromRecord(inv: Inventory, rec: StackRecord): ItemStack {
   const st = inv.makeStack(rec.itemId, 1, rec.mag);
+  // task studio-flamethrower-fire-20261114-031614-01: makeStack's tank is a NEW one (its recipe's fuel) — a remembered tank holds what its
+  // record says (0 stays 0), and a record without `fuel` is an EMPTY tank: coming back from memory never adds fuel
+  delete st.fuel;
   Object.assign(st, structuredClone(rec)); // the record has no uid: the fresh one stays
   st.itemId = canonicalItemId(st.itemId); // lane AMMO: a remembered legacy ammo id comes back as its caliber item (same count)
   if (st.bag) st.bag = fitBagContents(st.itemId, st.bag.map(c => (c ? {...c, itemId: canonicalItemId(c.itemId)} : null))); // (lane STORAGE: an older 12-slot bag gains its new empty slots)
