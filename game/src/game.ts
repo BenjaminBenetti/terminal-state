@@ -15,7 +15,9 @@ import {P7_FILES, dropUnloadedP7, p7ModelKeysFor} from './gen/props07';
 import {buildWorldSteps, type BuiltWorld} from './world/builder';
 import {fogCullDistance} from './world/levelCulling';
 import {WorldMaterials} from './world/materials';
-import {MOOD, StationLighting} from './world/lights';
+import {MOOD, StationLighting, stationBakeInput} from './world/lights';
+import {ENHANCED_LIGHTING_DEFAULT, REFLECTIONS_DEFAULT, type EnhancedLightingMode, type ReflectionQuality} from './world/enhancedLighting'; // task studio-baked-lighting-reflections-20261114-050258-01
+import {EnhancedLightingRuntime, lightingCapabilities} from './world/enhancedLightingRuntime';
 import {VolumetricAtmosphere} from './render/volumetric';
 import {PickupManager, makeSupplyMesh, refreshItemTemplates, registerItemModels, type Pickup} from './world/pickups';
 import {levelPreloadPantryIds, pantryHolderRealizer, pantryIdsIn, pantryPickupItem} from './items/pantryVariety'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): food variety
@@ -264,7 +266,8 @@ export const BUNKER_OBJECTIVE = 'Scavenge the shelter · optional: restart three
 // (task campaign-foundation-20261102, lane MENU: + renderScale — a linear render-resolution scale over the DPR-capped native buffer;
 // the persisted values live in ui/settingsStore.ts, main.ts copies them in; task studio-perf-ao-train-continuity-20261110-022206-01, lane AO:
 // + ambientOcclusion, the atmosphere pass's screen-space AO on / off)
-export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertX: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: RenderScale; trainSway: number; ambientOcclusion: boolean }
+// (task studio-baked-lighting-reflections-20261114-050258-01: + enhancedLighting / reflections — world/enhancedLighting.ts; read when a station is built)
+export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertX: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: RenderScale; trainSway: number; enhancedLighting: EnhancedLightingMode; reflections: ReflectionQuality; ambientOcclusion: boolean }
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 
@@ -321,7 +324,9 @@ export class Game {
   readonly input: Input;
   readonly hud = new Hud();
   readonly sfx = new Sfx();
-  readonly settings: Settings = {sens: 1, fov: 75, volume: 0.7, muted: false, invertX: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1, ambientOcclusion: true};
+  readonly settings: Settings = {sens: 1, fov: 75, volume: 0.7, muted: false, invertX: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1, enhancedLighting: ENHANCED_LIGHTING_DEFAULT, reflections: REFLECTIONS_DEFAULT, ambientOcclusion: true};
+  /** Task studio-baked-lighting-reflections-20261114-050258-01: enhanced lighting's runtime (what the live station was built with, the derived cache, the status the settings form shows). */
+  readonly enhancedLighting = new EnhancedLightingRuntime(this.settings);
   // ==== task campaign-foundation-20261102 (lane MENU): main-menu hooks (main.ts / world/menuScene.ts) ====
   /** The main menu's diorama render (world/menuScene.ts), drawn by frame() in 'title' / 'loading' while no world is built; true when it drew. */
   menuRender: ((time: number) => boolean) | null = null;
@@ -979,6 +984,9 @@ export class Game {
     this.sectionModelKeys.push(skywaysDestModelKeysFor); // task studio-skyways-destinations-20261106-170011-01 (lane LANDMARKS): the destinations' skyways-d-* models
     this.sectionModelKeys.push(skywaysGardenModelKeysFor); // (task studio-skyways-rework-20261107-054512-01, lane ARCH) the planters' foliage (the office potted plant)
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
+    // Task studio-baked-lighting-reflections-20261114-050258-01: the station's cached enhanced bake, read before the build (nothing when
+    // Enhanced lighting is off or the station is the Reactor: the cache is not even opened)
+    this.sectionPreloads.push(layout => this.enhancedLighting.prefetch(stationBakeInput(layout)));
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('blur', () => { if (this.state === 'playing' && !this.qa) this.setState('paused'); });
@@ -1001,6 +1009,9 @@ export class Game {
       watchDevice(this.renderer, gpu, {onLost: text => { this.lastError = text; this.journeyCompile?.cancel(); this.onDeviceLost?.(text); }});
       this.softwareGl = adaptToSoftwareGl(this.renderer); // iteration 08: no anisotropic filtering on software rasterizers / adapters
       observeBackendAnisotropy(this.renderer.backend); // lane FIX (U08): count the anisotropy values the backend hands the API (__LL.anisotropy())
+      // Task studio-baked-lighting-reflections-20261114-050258-01: what this renderer really offers (backend limits, software or not) decides
+      // what Enhanced lighting Auto uses — never a guess about memory
+      this.enhancedLighting.setCapabilities(lightingCapabilities(this.renderer.backend, gpu.backend === 'webgpu' ? 'webgpu' : 'webgl2', this.softwareGl.software, maxTexture3DSize(this.renderer.backend as never)));
       installFlareLightNode(this.renderer); // Iteration 15: flare lights occluded by their window (before the first compile)
       installUploadDedupe(this.renderer); // task mall-horde-performance-20261105: no identical / split per-frame uniform uploads (WebGPU only)
       installBindingRefresh(this.renderer); // task studio-death-retry-render-fix-20261114-044607-01: a swapped shared texture (the station light field) reaches unchanged objects too
@@ -1436,7 +1447,12 @@ export class Game {
     // Iteration 05: every fixture baked into a persistent light field (camera-independent; no pooled lights).
     const max3D = maxTexture3DSize(this.renderer.backend as never); // Iteration 13 (CORE): WebGPU device limit / WebGL 2 MAX_3D_TEXTURE_SIZE
     // Iteration 13 (LIGHTING): `renderer` registers the TSL light-field node (world/lightFieldNode.ts) in its node library.
-    this.lightPool = yield* StationLighting.steps(this.scene, this.layout, this.world.fixtures, this.world.tubes, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer});
+    // Task studio-baked-lighting-reflections-20261114-050258-01: Enhanced lighting (world/enhancedLightingRuntime.ts) — the same field
+    // baked with a ray-gathered, finish-coloured indirect term, and cached reflection probes for metal and glass; each from the derived
+    // cache when its inputs still match, else made here in the same paced steps. Off / the Reactor: nothing (the baseline bake below).
+    const enhanced = yield* this.enhancedLighting.bakeSteps(stationBakeInput(this.layout), this.world.drawn, {max3DTextureSize: max3D});
+    this.lightPool = yield* StationLighting.steps(this.scene, this.layout, this.world.fixtures, this.world.tubes, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes});
+    this.enhancedLighting.applied(this.lightPool.reflectionsSkipped);
     // Iteration 06 (Lane F): haze density map + light-field rebind; station structure/containers cast the flashlight shadow.
     yield* this.atmosphere.setStationSteps(this.layout, this.lightPool.volume);
     this.atmosphere.markShadows(this.world.group, true);

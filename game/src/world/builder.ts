@@ -73,6 +73,7 @@ import {TRACK_SLEEPER} from './railTiesModel'; // task studio-market-rework-2026
 import {platformLipBoxes, platformLipGeometry} from './platformEdgeLip'; // task studio-cosplay-general-20261108-225231-01 (lane GENERAL): the edge lip, proud of the floor / face
 import {buildRideGates, staticGateEnds, type RideGatesBuilt} from './ridePortalView'; // task studio-perf-ao-train-continuity-20261110-022206-01: the ride gates of the parked car's closed bed ends
 import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): the stepped build
+import type {DrawnSurfaces} from './surfaceAlbedo'; // task studio-baked-lighting-reflections-20261114-050258-01: what the architecture pass drew (the enhanced bake's surface colours)
 
 class Accum {
   pos: number[] = [];
@@ -189,6 +190,8 @@ export interface BuiltWorld {
   finishAt?: FinishAt | null;
   /** Task studio-perf-ao-train-continuity-20261110-022206-01: the static ride gates (world/ridePortalView.ts); null / absent: none. */
   rideGates?: RideGatesBuilt | null;
+  /** Task studio-baked-lighting-reflections-20261114-050258-01: the floors, ceilings and wall faces the architecture pass drew, with their finish keys (world/surfaceAlbedo.ts). */
+  drawn?: DrawnSurfaces;
 }
 
 /** Instanced model chunk size (m): bigger chunks = fewer draw calls, coarser frustum culling. */
@@ -397,8 +400,13 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     a.quad([[x0, y, z0], [x0, y, z1], [x1, y, z1], [x1, y, z0]], [0, 1, 0], [[x0 / m.u, vz(z0)], [x0 / m.u, vz(z1)], [x1 / m.u, vz(z1)], [x1 / m.u, vz(z0)]]);
   };
   /** Floor rect split on the chunk grid (world-mapped UVs stay continuous). */
+  // Task studio-baked-lighting-reflections-20261114-050258-01: every drawn floor / ceiling rect with its finish key ([level, x0, z0, x1, z1,
+  // y, key] each; a ceiling key of -1 = no ceiling there: open sky, a glass roof) — the enhanced light bake's surface colours
+  const drawnKeys: string[] = [], drawnIdx = new Map<string, number>(), drawnFloors: number[] = [], drawnCeils: number[] = [];
+  const drawnKey = (k: string): number => { let i = drawnIdx.get(k); if (i === undefined) { drawnIdx.set(k, (i = drawnKeys.length)); drawnKeys.push(k); } return i; };
   const floorRect = (mat: MatKey | string | {shop: string}, level: number, x0: number, z0: number, x1: number, z1: number, y = 0, vFrom?: number, flip = false) => {
     const m = typeof mat === 'string' ? scaleOf(mat) : SHOP_SCALE;
+    drawnFloors.push(level, x0, z0, x1, z1, y, drawnKey(typeof mat === 'string' ? mat : `shop:${mat.shop}`));
     for (const [xa, xb] of chunkSpans(x0, x1)) for (const [za, zb] of chunkSpans(z0, z1)) {
       const ck = chunkKey(level, (xa + xb) / 2, (za + zb) / 2);
       floorQuadTo(typeof mat === 'string' ? A(mat, ck) : S(mat.shop, ck), m, xa, za, xb, zb, y, vFrom, flip);
@@ -406,6 +414,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   };
   const ceilRect = (mat: MatKey | string, level: number, x0: number, z0: number, x1: number, z1: number, y: number) => {
     const m = scaleOf(mat);
+    drawnCeils.push(level, x0, z0, x1, z1, y, drawnKey(mat));
     for (const [xa, xb] of chunkSpans(x0, x1)) for (const [za, zb] of chunkSpans(z0, z1)) {
       A(mat, chunkKey(level, (xa + xb) / 2, (za + zb) / 2)).quad([[xa, y, za], [xb, y, za], [xb, y, zb], [xa, y, zb]], [0, -1, 0],
         [[xa / m.u, za / m.v], [xb / m.u, za / m.v], [xb / m.u, zb / m.v], [xa / m.u, zb / m.v]]);
@@ -506,7 +515,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     // Task office-overhaul-20261030 (lane ARCH): office ceilings (T-bar grid, plaster, exposed slab, core); none on the open roof.
     // Task track3-eaton-centre-20261031 (lane ARCH): the mall's ceilings; none over the void (the glass vault), track bed included.
     const oc = r.voidCell ? (mall?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? null) : office?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? mall?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? sky?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? mkt?.ceilKey(r.level, r.area) ?? bunk?.ceilKey(r.level, r.area) ?? null; // (+ reactor: lane ARCH; + sky: lane VIEW, none inside an atrium opening)
-    if (oc === false) continue;
+    if (oc === false) { drawnCeils.push(levels[r.level].id, r.x0 * CELL, r.row * CELL, r.x1 * CELL, (r.row + 1) * CELL, r.y, -1); continue; }
     ceilRect(oc ?? (r.voidCell || !a || a.publicSpace ? 'ceiling' : 'ceilingService'), levels[r.level].id, r.x0 * CELL, r.row * CELL, r.x1 * CELL, (r.row + 1) * CELL, r.y);
     if (++step % 128 === 0) yield;
   }
@@ -881,6 +890,8 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler,
     ...(office ? {officeArch: office} : {}), ...(mall ? {mallArch: mall} : {}), ...(trackExt ? {trackExt} : {}), ...(reactor ? {reactorArch: reactor} : {}), ...(sky ? {skywaysArch: sky} : {}), ...(mkt ? {marketArch: mkt} : {}), ...(bunk ? {bunkerArch: bunk} : {}),
     ...(rideGates ? {rideGates} : {}),
+    drawn: {keys: drawnKeys, floors: drawnFloors, ceils: drawnCeils, faces, // task studio-baked-lighting-reflections-20261114-050258-01
+      material: k => (k.startsWith('shop:') ? shapeMaterial(mats, k.slice(5)) : matOf(k.includes('|') ? splitFinishKey(k).base : k))},
     finishAt: finishResolver(levels, faces, office ?? mall ?? reactor ?? sky ?? mkt ?? bunk ?? null)}; // task reactor-expansion-20261101 (lane CONTROLS): bullet impacts take the drawn finish (+ sky: lane VIEW)
 }
 

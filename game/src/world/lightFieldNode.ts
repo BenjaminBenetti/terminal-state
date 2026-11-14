@@ -161,6 +161,8 @@ const n = (x: unknown): N => x;
 
 /** World XZ size of one field texel. */
 const texelSize = () => n(n(LF.max).xz).sub(n(LF.min).xz).div(n(LF.dims).xy);
+/** The bound field's cell size in metres (x, z) as a node. */
+export const lightFieldCell = (): Node => texelSize();
 
 /** Texel column (float x, z, clamped) holding world XZ `pxz` for texel size `cell`. */
 const columnOf = (pxz: N, cell: N) => clamp(floor(n(pxz).sub(n(LF.min).xz).div(cell)), vec2(0, 0), n(n(LF.dims).xy).sub(1));
@@ -270,12 +272,15 @@ export interface LightFieldSampleNodes {
  * The field at world point `p` as TSL nodes (declares vars: call inside an Fn / material stack). `normal`: offset the
  * lookup along the surface normal like the shader always did (wall faces read the cell in front of them, never the rock
  * behind). `slot`: reuse an already picked level slot (the volumetric march picks one per step for density and field).
+ * `reach`: how many cells the normal offset spans sideways (half a cell unless given; world/reflectionNode.ts reads a pane set
+ * inside its wall a whole cell out).
  * Mirrors sampleField(): slot by height, bilinear in XZ (texel centres = cell centres), linear between height layers, the
  * flicker circuits' shares scaled by LF.levels. Zero when no field is bound.
  */
-export function lightFieldSample(p: Node, o: {normal?: Node; slot?: Node} = {}): LightFieldSampleNodes {
+export function lightFieldSample(p: Node, o: {normal?: Node; slot?: Node; reach?: number} = {}): LightFieldSampleNodes {
   const cell = n(texelSize()).toVar();
-  const P = n(o.normal ? n(p).add(n(o.normal).mul(vec3(n(cell.x).mul(0.5), 0.2, n(cell.y).mul(0.5)))) : vec3(n(p))).toVar();
+  const reach = o.reach ?? 0.5;
+  const P = n(o.normal ? n(p).add(n(o.normal).mul(vec3(n(cell.x).mul(reach), 0.2, n(cell.y).mul(reach)))) : vec3(n(p))).toVar();
   const cxy = n(n(P.xz).sub(n(LF.min).xz).div(cell)).toVar();
   const ci = n(clamp(floor(cxy), vec2(0, 0), n(n(LF.dims).xy).sub(1))).toVar();
   const slot = n(o.slot ?? pickSlot(ci, P.y)).toVar();
@@ -345,6 +350,15 @@ export class LightFieldNode extends LightingNode {
     super();
   }
   setup(builder: NodeBuilder): null {
+    this.shade(builder);
+    return null;
+  }
+  /**
+   * The field's light for the builder's material: its sample (null: not a surface lighting model, nothing was added). Task
+   * studio-baked-lighting-reflections-20261114-050258-01: split from setup() so world/reflectionNode.ts LightFieldReflectNode adds
+   * the reflection probes to the same sample; the nodes built here are the ones setup() always built.
+   */
+  protected shade(builder: NodeBuilder): LightFieldSampleNodes | null {
     const b = builder as LightingBuilder;
     // Surface lighting models only (Standard / Physical, Lambert / Phong, Toon), as the WebGL probe-grid path: three also
     // builds every light into MeshBasicNodeMaterial (BasicLightingModel ignores direct light and irradiance), shadow
@@ -354,7 +368,7 @@ export class LightFieldNode extends LightingNode {
     b.context.irradiance.addAssign(s.amb);
     const dirView = n(n(cameraViewMatrix).mul(vec4(n(s.dir), 0)).xyz).normalize();
     b.lightsNode.setupDirectLight(b, this, {lightDirection: dirView, lightColor: s.dirColor});
-    return null;
+    return s;
   }
   /** Whether the builder's lighting model is a surface model that uses direct light + indirect irradiance. */
   static surfaceModel(b: NodeBuilder): boolean {

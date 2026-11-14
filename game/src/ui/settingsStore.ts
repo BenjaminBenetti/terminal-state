@@ -25,8 +25,17 @@
 //    occlusion of the atmosphere pass (render/ambientOcclusion.ts). A record from before it existed reads it as on (missing = just
 //    defaulted, not "fixed"); a non-boolean falls back to on. Same record, same SETTINGS_VERSION. It is not a quality preset: it never
 //    changes the fog, shadows, MSAA or resolution, and AO needs the volumetric pass (no AO where the station is drawn directly).
+//  - Task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): enhancedLighting ('off' | 'auto' | 'on', default Auto) and
+//    reflections ('off' | 'standard' | 'high', default Standard) — what the player asks of ENHANCED LIGHTING (world/enhancedLighting.ts
+//    is the contract: its types, defaults and validators are used here, never restated). A record from before they existed reads the
+//    defaults (missing = just defaulted, not "fixed"); any other value falls back to the default (fixed, like quality). Same record,
+//    same SETTINGS_VERSION (records are read field by field). The game reads them when a station is BUILT: a change never rebuilds the
+//    live station and re-applies nothing. Never part of a save slot; the baked data itself lives in the derived cache
+//    (core/derivedCache.ts), outside this record and outside every save.
 
 import {STORAGE_KEYS} from '../campaign/types';
+import {ENHANCED_LIGHTING_DEFAULT, REFLECTIONS_DEFAULT, isEnhancedLightingMode, isReflectionQuality, type EnhancedLightingMode, type ReflectionQuality} from '../world/enhancedLighting';
+import type {DerivedCacheStats} from '../core/derivedCache';
 
 export type Quality = 'low' | 'high';
 /** Linear render-resolution scale of width and height: 0.25..1 in whole-percent steps (1 = native). */
@@ -54,10 +63,15 @@ export interface GameSettings {
   trainSway: number;
   /** Lane AO: screen-space ambient occlusion on / off (the atmosphere pass; default on). */
   ambientOcclusion: boolean;
+  /** Lane SETTINGS (enhanced lighting): Off / Auto / On — the better baked light field (+ reflections where allowed); read when a station is built. */
+  enhancedLighting: EnhancedLightingMode;
+  /** Cached reflection probes for metal and glass: Off / Standard / High (used only while enhancedLighting is not 'off'; kept either way). */
+  reflections: ReflectionQuality;
 }
 
 /** The game's historical defaults (game.ts Settings) + native resolution. */
-export const SETTINGS_DEFAULTS: Readonly<GameSettings> = Object.freeze({sens: 1, fov: 75, volume: 0.7, muted: false, invertX: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1, ambientOcclusion: true});
+export const SETTINGS_DEFAULTS: Readonly<GameSettings> = Object.freeze({sens: 1, fov: 75, volume: 0.7, muted: false, invertX: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1, ambientOcclusion: true,
+  enhancedLighting: ENHANCED_LIGHTING_DEFAULT, reflections: REFLECTIONS_DEFAULT}); // (lane SETTINGS: the contract's defaults, Auto / Standard)
 
 /** The existing UI bounds (index.html ranges): sensitivity 0.2-3, FOV 60-100 degrees, volume 0-100 %, train sway 0-100 %. */
 export const SETTINGS_BOUNDS = {
@@ -71,7 +85,7 @@ export const SETTINGS_BOUNDS = {
 export const SETTINGS_VERSION = 1;
 
 export type SettingsKey = keyof GameSettings;
-export const SETTINGS_KEYS: readonly SettingsKey[] = ['sens', 'fov', 'volume', 'muted', 'invertX', 'invertY', 'quality', 'renderScale', 'trainSway', 'ambientOcclusion'];
+export const SETTINGS_KEYS: readonly SettingsKey[] = ['sens', 'fov', 'volume', 'muted', 'invertX', 'invertY', 'quality', 'renderScale', 'trainSway', 'ambientOcclusion', 'enhancedLighting', 'reflections'];
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -104,6 +118,10 @@ function field<K extends SettingsKey>(k: K, raw: unknown): {value: GameSettings[
       return typeof raw === 'boolean' ? {value: raw as GameSettings[K], fixed: false} : {value: d, fixed: true};
     case 'quality':
       return raw === 'low' || raw === 'high' ? {value: raw as GameSettings[K], fixed: false} : {value: d, fixed: true};
+    case 'enhancedLighting': // (lane SETTINGS: the contract's validators; an unknown value falls back to the default, like quality)
+      return isEnhancedLightingMode(raw) ? {value: raw as GameSettings[K], fixed: false} : {value: d, fixed: true};
+    case 'reflections':
+      return isReflectionQuality(raw) ? {value: raw as GameSettings[K], fixed: false} : {value: d, fixed: true};
     case 'renderScale': {
       // lane MENU (item 8): any finite fraction -> its whole percent (clamped 25..100 %); 1 / 0.5 / 0.25 stay exactly themselves
       const n = num(raw);
@@ -222,6 +240,34 @@ export const AO_OPTIONS: readonly {value: 'on' | 'off'; label: string}[] = [{val
 export function aoDescription(on: boolean, unavailable: string | null): string {
   if (unavailable) return `Unavailable here: ${unavailable}`;
   return on ? 'Soft contact shadows in corners, under furniture and around props' : 'Off: no contact shadows';
+}
+
+// ---------------------------------------------------------------------------------------------
+// Enhanced lighting (task studio-baked-lighting-reflections-20261114-050258-01, lane SETTINGS)
+// The two choices' names, options and help lines are the contract's (world/enhancedLighting.ts ENHANCED_LIGHTING_LABEL / _OPTIONS,
+// REFLECTIONS_LABEL / REFLECTION_OPTIONS, describeEnhancedLighting / describeReflections); only the cache line is worded here.
+
+/** Stored bytes as the cache line shows them: binary megabytes, one decimal at most ("12.4 MB", "96 MB", "0 MB", "<0.1 MB"). */
+export function megabytes(bytes: number): string {
+  const b = Number.isFinite(bytes) && bytes > 0 ? bytes : 0, m = b / 1048576;
+  if (b > 0 && m < 0.05) return '<0.1 MB';
+  const t = m.toFixed(1);
+  return `${t.endsWith('.0') ? t.slice(0, -2) : t} MB`;
+}
+
+/**
+ * The settings form's cache line, from the derived cache's own numbers (core/derivedCache.ts DerivedCacheStats; an entry = one
+ * station's baked lighting): what is stored and where — or, where browser storage cannot be used, that it lasts this session only
+ * (with the cache's reason). null = no line (the cache was never opened: enhanced lighting off all session). It is derived data:
+ * rebuilt when missing, never part of a save.
+ */
+export function lightingCacheLine(stats: DerivedCacheStats | null | undefined): string | null {
+  if (!stats) return null;
+  const why = stats.reason ? ` — ${stats.reason}` : '';
+  if (stats.backend === 'memory') return `Lighting cache: this session only${why}`;
+  if (stats.backend !== 'indexeddb') return `Lighting cache: not available${why}`;
+  const n = Number.isFinite(stats.entries) && stats.entries > 0 ? Math.floor(stats.entries) : 0;
+  return `Lighting cache: ${n} station${n === 1 ? '' : 's'} · ${megabytes(stats.bytes)} of ${megabytes(stats.maxBytes)} in this browser (rebuilt when missing; never part of a save)`;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -388,10 +434,11 @@ export function browserSettingsStorage(): SettingsStorage | null {
 }
 
 /** Copy the effective settings into the game's Settings object (game.ts reads `game.settings.*`); true when render-affecting quality changed. */
-export function copySettingsInto(target: {sens: number; fov: number; volume: number; muted: boolean; invertX: boolean; invertY: boolean; quality: Quality; renderScale: RenderScale; trainSway: number; ambientOcclusion?: boolean}, s: Readonly<GameSettings>): {qualityChanged: boolean} {
+export function copySettingsInto(target: {sens: number; fov: number; volume: number; muted: boolean; invertX: boolean; invertY: boolean; quality: Quality; renderScale: RenderScale; trainSway: number; ambientOcclusion?: boolean; enhancedLighting?: EnhancedLightingMode; reflections?: ReflectionQuality}, s: Readonly<GameSettings>): {qualityChanged: boolean} {
   const qualityChanged = target.quality !== s.quality;
   target.sens = s.sens; target.fov = s.fov; target.volume = s.volume; target.muted = s.muted;
   target.invertX = s.invertX; target.invertY = s.invertY; target.quality = s.quality; target.renderScale = s.renderScale; target.trainSway = s.trainSway;
   target.ambientOcclusion = s.ambientOcclusion; // (lane AO)
+  target.enhancedLighting = s.enhancedLighting; target.reflections = s.reflections; // (lane SETTINGS: read when a station is built, nothing to re-apply)
   return {qualityChanged};
 }

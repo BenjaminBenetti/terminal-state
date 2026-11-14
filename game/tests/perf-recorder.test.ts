@@ -12,8 +12,9 @@ import {PerfRecorderController, sanitizeInvoker, type RecorderGame} from '../src
 import {PerfRecorderUi, RECORDER_KEYS, RECORDER_PRIVACY_LINE, clockText, recorderKeyAction} from '../src/debug/perfRecorderUi';
 import {S, SPAN_COUNT, UpdateProfiler} from '../src/debug/updateProfile';
 import {GAME_KEYS} from '../src/player/input';
+import {enhancedLightingLine, type EnhancedLightingStatus} from '../src/world/enhancedLighting'; // task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS)
 
-const LOG = '/tmp/recorder-perf-recorder-test.txt';
+const LOG ='/tmp/recorder-perf-recorder-test.txt';
 const log = (line: string) => { try { writeFileSync(LOG, line + '\n', {flag: 'a'}); } catch { /* best effort */ } };
 
 const NAMES = (() => { const p = new UpdateProfiler(2); return Array.from({length: SPAN_COUNT}, (_, j) => p.name(j)); })();
@@ -573,6 +574,35 @@ describe('perf recorder: the recent warm-up result (schemaMinor 5, task static-b
     expect(r2.world.segments[0].lastWarmup.reason).toBe('withheld (not a plain reason)');
     expect(JSON.stringify(r2)).not.toContain('x.example');
     vi.restoreAllMocks();
+  });
+});
+
+// Task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS)
+describe('perf recorder: enhanced lighting in the environment block (an additive key: schemaMinor unchanged)', () => {
+  it('a report carries the runtime\'s status at report time — what the live station was built with; null for a game without the runtime', async () => {
+    const clock = {t: 1000};
+    vi.spyOn(performance, 'now').mockImplementation(() => clock.t);
+    const g = new FakeGame() as FakeGame & {enhancedLighting?: {status(): EnhancedLightingStatus}};
+    const bare = new PerfRecorderController(asGame(g), quick);
+    bare.start('qa');
+    for (let k = 0; k < 3; k++) playFrame(g, bare, clock);
+    await bare.stop('manual', 'qa');
+    const r0 = bare.reportObject() as any;
+    expect(Object.prototype.hasOwnProperty.call(r0.environment, 'enhancedLighting')).toBe(true);
+    expect(r0.environment.enhancedLighting).toBe(null);
+    const status: EnhancedLightingStatus = {requested: {lighting: 'on', reflections: 'high'}, pending: true, cacheBackend: 'indexeddb',
+      active: {gi: 'standard', giReason: null, reflections: 'off', reflectionsReason: 'Auto skips reflections on a software renderer (On forces them)', cache: 'miss', giMs: 840.5, probeMs: 0, probes: 0, probeBytes: 0}};
+    g.enhancedLighting = {status: () => status};
+    const ctl = new PerfRecorderController(asGame(g), quick);
+    ctl.start('qa');
+    for (let k = 0; k < 3; k++) playFrame(g, ctl, clock);
+    await ctl.stop('manual', 'qa');
+    const r = ctl.reportObject() as any;
+    expect(r.schemaMinor).toBe(5);
+    expect(r.environment.enhancedLighting).toEqual({line: enhancedLightingLine(status), requested: status.requested, active: status.active, pending: true, cacheBackend: 'indexeddb'});
+    expect(r.environment.enhancedLighting.line).toBe('on: bake standard · refl off (Auto skips reflections on a software renderer (On forces them)) · cache miss · change pending');
+    expect(r.environment.warmup).toBe(null); // the other environment keys are as before
+    expect(r.environment.display).toMatchObject({quality: g.settings.quality});
   });
 });
 
