@@ -1,0 +1,600 @@
+{
+  "schema": "the-last-line/derivative-manifest@1",
+  "asset": "market-corpse-buyer",
+  "task": "studio-corpse-market-shop-20261114-031614-01",
+  "title": "The Survivor Market's corpse buyer: one clothed Meshy T2.5 body, local rig, the market humans' healthy clips (prototype)",
+  "what": "the corpse buyer: a very tall, gaunt man of about 55 (balding, round dark-tinted spectacles, a thin closed-mouth smile) in a charcoal roll-neck, an oxblood leather waistcoat, elbow-length black rubber gloves, dark work trousers and tall rubber boots; rigged / animated locally with the market humans' healthy clips",
+  "status": {
+    "approved": false,
+    "gameReady": false,
+    "stage": "unapproved prototype derivative (the corpse buyer); art / anatomy / deformation not certified",
+    "licenseClearance": "none - evaluation quality does not grant commercial rights; the body is an AI reconstruction (Meshy T2.5) of an AI-generated (Codex) concept image"
+  },
+  "honesty": {
+    "sourceHadSkeleton": false,
+    "rig": "NEW derivative skeleton (the shared 18-joint naming / hierarchy, measured on this body) and automatic skin weights created by the market humans' CPU pipeline (zombie autorig libraries); no provider rig",
+    "animation": "the market humans' hand-authored procedural HEALTHY clips (tools/asset-pipeline/humans/lib/clips.mjs, sampled with this body's own joints; walk stride / sit fitted to it) - NOT motion capture, NOT provider animation, NOT the zombie clips",
+    "maps": "the Meshy base colour, metallic-roughness and normal maps are KEPT on the Meshy mesh / UVs (re-encoded JPEG, resized only)",
+    "generation": "no generation, inference, model download or network service was used by this builder"
+  },
+  "generation": {
+    "asset": "CORPSE_BUYER",
+    "reservation": "R001",
+    "meshyTask": "01a1d825-e930-767a-ad6b-11cc65a6f728",
+    "tool": "mcp__meshy__meshy_image_to_3d",
+    "request": {
+      "ai_model": "meshy-t2.5",
+      "enable_pbr": true,
+      "model_type": "smart-topology",
+      "should_texture": true,
+      "target_formats": [
+        "glb"
+      ],
+      "target_polycount": 20000,
+      "texture_resolution": "2k"
+    },
+    "creditsBilled": 15,
+    "accepted": "gaunt fully clothed adult buyer (roll-neck, leather waistcoat, elbow gloves, rubber boots), A-pose arms clear of the torso, one body; rig/clips LOCAL (humans pipeline)",
+    "codexInput": {
+      "file": "reference/tasks/corpse-market-shop-20261114-031614/gen/out/CORPSE_BUYER-a1.png",
+      "sha256": "6d29b27723041f7e4533983c7ae604c113263113221f048fe3da86cac9234637",
+      "bytes": 1507195,
+      "size": "1024x1536",
+      "attempt": 1
+    },
+    "master": {
+      "file": "reference/tasks/corpse-market-shop-20261114-031614/gen/raw/CORPSE_BUYER-R001-01a1d825-e930-767a-ad6b-11cc65a6f728.glb",
+      "sha256": "854760a34e678aa2da5425351e777ee284f8e53bf8afd2ad322b9f94617db60e",
+      "bytes": 7990256
+    },
+    "providerMaps": {
+      "dir": "reference/tasks/corpse-market-shop-20261114-031614/gen/raw/CORPSE_BUYER-R001-01a1d825-e930-767a-ad6b-11cc65a6f728_textures",
+      "files": {
+        "base_color.png": {
+          "bytes": 5164993,
+          "sha256": "82958897e6bac070e5975110d81880296787428a23f0ae658c54716d4633e0a2"
+        },
+        "metallic.png": {
+          "bytes": 24492,
+          "sha256": "7493505dbda71f576c5bf4de7a335f70821c6d5e99d5ed8f5eaff7f2602742f4"
+        },
+        "normal.png": {
+          "bytes": 4894373,
+          "sha256": "91e6a98c8c07762270236082023a1ad5f97e917b823fd03d41753719f602b27c"
+        },
+        "roughness.png": {
+          "bytes": 1064290,
+          "sha256": "a3885d2098452a671bb988a839ca49ccc2c35ee4039582e7787c470721dfe18e"
+        }
+      }
+    }
+  },
+  "outputs": {
+    "glb": {
+      "path": "assets/models/market-corpse-buyer.glb",
+      "bytes": 1826364,
+      "sha256": "993d02bae0c0a7f9c7e3d3054fad63c1b263328efe4b628cd6c4fe53844a7c78",
+      "format": "glTF 2.0 binary (KHR_mesh_quantization int8 normals); JPEG textures; the market-human-cast.glb layout with ONE body 'cb' and no wearables: 18 prefixed joints, the skinned body, its clips \"cb:<Clip>\""
+    }
+  },
+  "levelOnly": "market (game/src/assets/levelAssets.ts LEVEL_ONLY_RULES market-*)",
+  "runtime": "market/humanWardrobe.ts HumanWardrobe loads the file unchanged: build({body: 'cb', wear: {}, scale: 1})",
+  "clips": {
+    "Idle": {
+      "loop": true,
+      "durationS": 4
+    },
+    "Walk": {
+      "loop": true,
+      "durationS": 1
+    },
+    "Talk": {
+      "loop": true,
+      "durationS": 5
+    },
+    "Greet": {
+      "loop": false,
+      "durationS": 1.6
+    },
+    "Work": {
+      "loop": true,
+      "durationS": 3.2
+    },
+    "Sit": {
+      "loop": true,
+      "durationS": 4
+    }
+  },
+  "body": {
+    "id": "cb",
+    "label": "Corpse buyer, about 55, very tall and gaunt",
+    "heightM": 1.85,
+    "placement": {
+      "scale": 1.945967302098687,
+      "pivot": [
+        -0.00012199953198432922,
+        -0.4753420054912567,
+        0.002075251191854477
+      ],
+      "flipFacing": false,
+      "offset": [
+        0,
+        0,
+        0
+      ],
+      "note": "scaled to 1.85 m; source faced +Z: no rotation; feet midpoint (bbox centres of soles below 4 cm) moved to origin"
+    },
+    "facing": {
+      "facing": 1,
+      "margin": 0.0434,
+      "method": "sole bbox z-centre (lowest 3% of height) vs shin centroid (8-12%): toes extend toward the front",
+      "used": 1,
+      "forced": false
+    },
+    "mesh": {
+      "method": "Meshy source mesh kept as the runtime mesh (no simplify / unwrap / bake); skeleton detected on a densified copy",
+      "densify": {
+        "method": "per-edge midpoint split (consistent across shared edges, linear position/UV/normal) until every edge <= maxEdge; surface and texture mapping unchanged",
+        "maxEdge": 0.0042781,
+        "passes": 5,
+        "sourceTriangles": 20117,
+        "sourceVertices": 21719,
+        "triangles": 186137,
+        "vertices": 114264,
+        "longestEdge": 0.004278,
+        "maxEdgeFractionOfHeight": 0.0045
+      },
+      "sourceTriangles": 20117,
+      "sourceVertices": 21719,
+      "runtimeTriangles": 20117,
+      "droppedDegenerateTriangles": 0,
+      "droppedSliverTriangles": {
+        "count": 0,
+        "maxEdgeM": 0.2
+      },
+      "weldedVertices": 10145,
+      "textures": {
+        "baseColor": [
+          2048,
+          630599
+        ],
+        "normal": [
+          1024,
+          144311
+        ],
+        "metallicRoughness": [
+          512,
+          44687
+        ],
+        "source": {
+          "baseColor": [
+            2048,
+            2048
+          ],
+          "normal": [
+            2048,
+            2048
+          ],
+          "metallicRoughness": [
+            2048,
+            2048
+          ],
+          "normalScale": 1
+        }
+      },
+      "legBridgeTrim": {
+        "removed": 0,
+        "method": "triangles joining the left and right leg regions lower than 0.05 m under the crotch removed"
+      },
+      "shippedTriangles": 20117
+    },
+    "skeleton": {
+      "jointCount": 18,
+      "joints": [
+        {
+          "name": "Root",
+          "parent": null,
+          "bindWorldPosition": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "Hips",
+          "parent": "Root",
+          "bindWorldPosition": [
+            0,
+            0.92,
+            -0.0289
+          ]
+        },
+        {
+          "name": "Spine",
+          "parent": "Hips",
+          "bindWorldPosition": [
+            0,
+            1.1105,
+            -0.0302
+          ]
+        },
+        {
+          "name": "Chest",
+          "parent": "Spine",
+          "bindWorldPosition": [
+            0,
+            1.3391,
+            -0.0387
+          ]
+        },
+        {
+          "name": "Neck",
+          "parent": "Chest",
+          "bindWorldPosition": [
+            0,
+            1.555,
+            -0.0373
+          ]
+        },
+        {
+          "name": "Head",
+          "parent": "Neck",
+          "bindWorldPosition": [
+            0,
+            1.673,
+            -0.0273
+          ]
+        },
+        {
+          "name": "L_UpperArm",
+          "parent": "Chest",
+          "bindWorldPosition": [
+            0.138,
+            1.4685,
+            -0.0615
+          ]
+        },
+        {
+          "name": "L_Forearm",
+          "parent": "L_UpperArm",
+          "bindWorldPosition": [
+            0.2883,
+            1.262,
+            -0.0643
+          ]
+        },
+        {
+          "name": "L_Hand",
+          "parent": "L_Forearm",
+          "bindWorldPosition": [
+            0.4129,
+            1.104,
+            0.0019
+          ]
+        },
+        {
+          "name": "R_UpperArm",
+          "parent": "Chest",
+          "bindWorldPosition": [
+            -0.138,
+            1.4685,
+            -0.0615
+          ]
+        },
+        {
+          "name": "R_Forearm",
+          "parent": "R_UpperArm",
+          "bindWorldPosition": [
+            -0.2883,
+            1.262,
+            -0.0643
+          ]
+        },
+        {
+          "name": "R_Hand",
+          "parent": "R_Forearm",
+          "bindWorldPosition": [
+            -0.4129,
+            1.104,
+            0.0019
+          ]
+        },
+        {
+          "name": "L_Thigh",
+          "parent": "Hips",
+          "bindWorldPosition": [
+            0.0769,
+            0.92,
+            -0.0289
+          ]
+        },
+        {
+          "name": "L_Shin",
+          "parent": "L_Thigh",
+          "bindWorldPosition": [
+            0.1304,
+            0.5175,
+            -0.0609
+          ]
+        },
+        {
+          "name": "L_Foot",
+          "parent": "L_Shin",
+          "bindWorldPosition": [
+            0.1462,
+            0.115,
+            -0.0756
+          ]
+        },
+        {
+          "name": "R_Thigh",
+          "parent": "Hips",
+          "bindWorldPosition": [
+            -0.0769,
+            0.92,
+            -0.0289
+          ]
+        },
+        {
+          "name": "R_Shin",
+          "parent": "R_Thigh",
+          "bindWorldPosition": [
+            -0.1304,
+            0.5175,
+            -0.0609
+          ]
+        },
+        {
+          "name": "R_Foot",
+          "parent": "R_Shin",
+          "bindWorldPosition": [
+            -0.1462,
+            0.115,
+            -0.0756
+          ]
+        }
+      ],
+      "notes": [],
+      "fixes": [],
+      "options": null
+    },
+    "skinning": {
+      "method": "zombie/lib/autorig.mjs bodySkin (skin.mjs region classification + chain weights + masked Laplacian smoothing), the market humans' HUMAN_SKIN options",
+      "regionVertexCounts": {
+        "torso": 5738,
+        "armL": 1459,
+        "legL": 747,
+        "armR": 1434,
+        "legR": 767
+      },
+      "armVerticesAdoptedOutsideFlood": {
+        "L": 8,
+        "R": 9
+      },
+      "verticesWithMoreThan4Truncated": 0,
+      "smoothIters": 4,
+      "smoothLambda": 0.5,
+      "armRule": "wall"
+    },
+    "profile": {
+      "heightM": 1.85,
+      "landmarks": {
+        "ankle": 0.115,
+        "knee": 0.5175,
+        "crotch": 0.86,
+        "hip": 0.92,
+        "spine": 1.1105,
+        "chest": 1.3391,
+        "armpit": 1.355,
+        "neck": 1.555,
+        "head": 1.673,
+        "top": 1.85
+      },
+      "limb": {
+        "L_UpperArm": {
+          "length": 0.2554,
+          "radius": 0.0364,
+          "samples": 87
+        },
+        "L_Forearm": {
+          "length": 0.2118,
+          "radius": 0.0357,
+          "samples": 145
+        },
+        "R_UpperArm": {
+          "length": 0.2554,
+          "radius": 0.0364,
+          "samples": 89
+        },
+        "R_Forearm": {
+          "length": 0.2118,
+          "radius": 0.0357,
+          "samples": 146
+        },
+        "L_Thigh": {
+          "length": 0.4073,
+          "radius": 0.055,
+          "samples": 119
+        },
+        "L_Shin": {
+          "length": 0.4031,
+          "radius": 0.052,
+          "samples": 153
+        },
+        "R_Thigh": {
+          "length": 0.4073,
+          "radius": 0.055,
+          "samples": 122
+        },
+        "R_Shin": {
+          "length": 0.4031,
+          "radius": 0.052,
+          "samples": 164
+        }
+      },
+      "head": {
+        "halfWidth": 0.101,
+        "depth": 0.2214
+      },
+      "torso": {
+        "chest": {
+          "w": 0.1672,
+          "d": 0.1881
+        },
+        "waist": {
+          "w": 0.2699,
+          "d": 0.1881
+        },
+        "hips": {
+          "w": 0.305,
+          "d": 0.1454
+        }
+      },
+      "hit": {
+        "head": 0.1058,
+        "torso": 0.1036,
+        "arm": 0.05,
+        "leg": 0.0749,
+        "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+      }
+    },
+    "gait": {
+      "T": 1,
+      "beta": 0.62,
+      "center": -0.02,
+      "lift": 0.085,
+      "drop": 0.055,
+      "swing": 17,
+      "stride": 0.835,
+      "maxReach": 0.989,
+      "groundSpeed": 1.3468
+    },
+    "sit": {
+      "thigh": -102,
+      "knee": 35.622,
+      "hipsY": -0.8589,
+      "hipsZ": -0.04,
+      "lowestSeatM": 0.012,
+      "lowestFootM": 0.002,
+      "method": "thighs -102 deg (from -102, raised while the feet could not reach the floor); pelvis height: lowest Hips / Thigh vertex 0.012 m above the floor; knee flexion: lowest Shin / Foot vertex on the floor (bisection, body mesh skinned)"
+    },
+    "clips": [
+      {
+        "name": "Idle",
+        "durationS": 4,
+        "loop": true,
+        "keyframes": 121,
+        "maxLegReach": 0.9875
+      },
+      {
+        "name": "Walk",
+        "durationS": 1,
+        "loop": true,
+        "keyframes": 31,
+        "maxLegReach": 0.989
+      },
+      {
+        "name": "Talk",
+        "durationS": 5,
+        "loop": true,
+        "keyframes": 151,
+        "maxLegReach": 0.9943
+      },
+      {
+        "name": "Greet",
+        "durationS": 1.6,
+        "loop": false,
+        "keyframes": 49,
+        "maxLegReach": 0.9873
+      },
+      {
+        "name": "Work",
+        "durationS": 3.2,
+        "loop": true,
+        "keyframes": 97,
+        "maxLegReach": 0.9789
+      },
+      {
+        "name": "Sit",
+        "durationS": 4,
+        "loop": true,
+        "keyframes": 121,
+        "maxLegReach": 0
+      }
+    ]
+  },
+  "verification": {
+    "floorLowestSkinnedVertexM": {
+      "Idle": 0,
+      "Walk": 0,
+      "Talk": 0,
+      "Greet": 0,
+      "Work": 0,
+      "Sit": -0.0046
+    },
+    "motionStretch": {
+      "triangles": 20117,
+      "p50": 1,
+      "p99": 1.571,
+      "max": 3.81,
+      "over2x": 40,
+      "over3x": 4,
+      "fractionOver": 0.0002,
+      "worstClips": {
+        "Greet": 99,
+        "Walk": 12,
+        "Sit": 26,
+        "Work": 46,
+        "Talk": 19,
+        "Idle": 2
+      },
+      "poses": 194
+    },
+    "motionStretchPerClip": {
+      "Idle": {
+        "over2x": 2,
+        "over3x": 0,
+        "p99": 1.216,
+        "max": 2.04
+      },
+      "Walk": {
+        "over2x": 4,
+        "over3x": 0,
+        "p99": 1.301,
+        "max": 2.11
+      },
+      "Talk": {
+        "over2x": 12,
+        "over3x": 0,
+        "p99": 1.377,
+        "max": 2.44
+      },
+      "Greet": {
+        "over2x": 34,
+        "over3x": 4,
+        "p99": 1.403,
+        "max": 3.81
+      },
+      "Work": {
+        "over2x": 8,
+        "over3x": 0,
+        "p99": 1.39,
+        "max": 2.57
+      },
+      "Sit": {
+        "over2x": 0,
+        "over3x": 0,
+        "p99": 1.356,
+        "max": 1.98
+      }
+    },
+    "qa": "CPU renders (tools/asset-pipeline/humans/qa/sheets.mjs --cast <this file>: bind + every clip front / side, the face, the scale line beside a runtime zombie) viewed; renders kept in the task's private QA folder"
+  },
+  "limitations": [
+    "Automatic approximate skin weights; LBS volume loss at shoulders / elbows / hips in the deeper poses (Sit, Greet).",
+    "Procedural (not mocap) clips; no facial rig, no finger or twist bones (the gloved hands keep their A-pose shape).",
+    "Hidden-side geometry of the Meshy base is AI-hallucinated; the maps are the Meshy model's own (normal map kept, sampled without tangents).",
+    "Unapproved prototype: appearance, anatomy, deformation, performance and licensing not certified."
+  ],
+  "rebuild": "LL_THREADS=1 node --max-old-space-size=6000 tools/asset-pipeline/humans/build-corpse-buyer.mjs"
+}

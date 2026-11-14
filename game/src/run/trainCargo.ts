@@ -21,7 +21,7 @@
 
 import type {StackJSON} from '../items/inventory';
 import {BODIES, bodiesProblem, copyBody, type BodyRecordJSON} from '../corpse/bodyRecord';
-import {corpseFeedable} from '../ai/corpseTrait';
+import {corpseCarriable} from '../ai/corpseTrait';
 
 /**
  * Limits (items / props; train-local metres; a station's lists) — input-safety bounds of the save format, never truncation points.
@@ -201,7 +201,7 @@ export function cargoProblem(v: unknown): string | null {
     if (Math.abs(n - 1) > 1e-3) return 'a train cargo orientation must be a unit quaternion';
   }
   if (o.v >= 2) { const pp = propsProblem(o.props, {world: false, max: CARGO.maxProps}); if (pp) return pp; } // task train-all-cargo
-  if (o.v === 3) return bodiesProblem(o.bodies, {world: false, max: BODIES.maxAboard, feedable: corpseFeedable}); // task corpse-chipper
+  if (o.v === 3) return bodiesProblem(o.bodies, {world: false, max: BODIES.maxAboard, feedable: corpseCarriable}); // task corpse-chipper (task corpse-market-shop: every carriable undead body, BB's too)
   return null;
 }
 

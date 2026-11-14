@@ -41,8 +41,10 @@ import {MARKET_WORKSHOP_KEY} from '../src/items/lootTables';
 import type {StationLayout} from '../src/gen/stationTypes';
 
 const SEEDS = [1, 2, 3, 42, 777, 4242, 9001, 123456, 0xdeadbeef, 20261108];
+// (re-pinned by task studio-corpse-market-shop-20261114-031614-01: the default is now version 4 = this version 3 plus the corpse buyer's
+// den, appended without moving anything — market-den-layout.test.ts proves the parity — so the bar's checks run on version 3 explicitly)
 const layouts = SEEDS.map(s => {
-  const L = generateMarketLevel({levelSeed: s});
+  const L = generateMarketLevel({levelSeed: s, layoutVersion: 3});
   return {seed: s, L, attempts: SETTLE_GEN_STATS.attempts, ms: SETTLE_GEN_STATS.ms};
 });
 const barOf = (L: StationLayout) => L.market!.stalls.find(s => s.id === BAR_STALL)!;
@@ -57,7 +59,7 @@ function fromTrainDoor(L: StationLayout, ladders = true): Int32Array[] {
 }
 
 describe('the Survivor Market, layout version 3 (the settlement with the upper-level bar)', () => {
-  it('is the default: valid for every seed on its first attempts, deterministic, quick, both mirror states; version 2 around it', () => {
+  it('valid for every seed on its first attempts, deterministic, quick, both mirror states; version 2 around it', () => {
     for (const {seed, L, attempts, ms} of layouts) {
       expect(L.market!.v, `seed ${seed}`).toBe(3);
       expect([seed, marketLayoutIssues(L)]).toEqual([seed, []]);
@@ -72,9 +74,10 @@ describe('the Survivor Market, layout version 3 (the settlement with the upper-l
       expect(L.market!.residents).toBe(v2.market!.residents);
     }
     const sig = (L: StationLayout) => JSON.stringify({areas: L.areas, doors: L.doors, props: L.props, lights: L.lights, signs: L.signs, market: L.market, rails: L.rails, links: L.levelLinks});
-    expect(sig(generateMarketLevel({levelSeed: SEEDS[0]}))).toBe(sig(layouts[0].L));
     expect(sig(generateMarketLevel({levelSeed: SEEDS[0], layoutVersion: 3}))).toBe(sig(layouts[0].L));
-    expect(sig(LEVELS.market.generate('main', {levelSeed: SEEDS[0]}))).toBe(sig(layouts[0].L));
+    expect(sig(LEVELS.market.generate('main', {levelSeed: SEEDS[0], layoutVersion: 3}))).toBe(sig(layouts[0].L));
+    // (the default, version 4, carries this same bar: the den is appended after it — market-den-layout.test.ts)
+    expect(generateMarketLevel({levelSeed: SEEDS[0]}).market!.stalls).toEqual(layouts[0].L.market!.stalls);
     expect(new Set(layouts.map(({L}) => L.levelLinks[0].bottom.x > L.grid.w * CELL / 2)).size).toBe(2); // both mirror states
     expect(new Set(layouts.map(({L}) => barOf(L).name)).size).toBeGreaterThan(1); // the bar's painted name is seeded
   });

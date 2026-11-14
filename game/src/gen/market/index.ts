@@ -33,12 +33,15 @@ import {MARKET_LAYOUT_VERSION} from './layoutVersion';
 import {generateSettlement, settleStoreyLabel} from './v2/index';
 import {settleIssues} from './v2/validate';
 import {barSettleIssues} from './v3/barValidate'; // task studio-market-bar-20261108-225231-01 (lane BAR): layout version 3
+import {denSettleIssues} from './v4/denValidate'; // task studio-corpse-market-shop-20261114-031614-01 (lane LAYOUT): layout version 4
 
 export {MARKET, MARKET_GENERIC_NAME, marketFrame, marketNameOf, marketSeed} from './frame';
 export {MARKET_LAYOUT_LANE, MARKET_LAYOUT_VERSION, marketLayoutVersionFor} from './layoutVersion';
 export {SETTLE_GEN_STATS, generateSettlement} from './v2/index';
 export {BAR_DECK, barDeckArea} from './v3/barCarve';
 export {BAR_RULES, barFloorArea, barSettleIssues} from './v3/barValidate';
+export {DEN} from './v4/denCarve'; // (task studio-corpse-market-shop-20261114-031614-01: the corpse buyer's den)
+export {DEN_RULES, denIssues, denSettleIssues} from './v4/denValidate';
 export {marketIssues} from './validate';
 export {MARKET_EMPTY_KEY} from './dress';
 export {MARKET_POPULATION, marketStandOk} from './spots';
@@ -56,21 +59,22 @@ export function marketStoreyLabel(level: number, version = 1): string {
   return level === 1 ? 'Housing deck' : 'Market floor';
 }
 
-/** Any market layout's validation issues (version 1, 2 or 3). */
+/** Any market layout's validation issues (version 1, 2, 3 or 4). */
 export function marketLayoutIssues(layout: StationLayout): string[] {
   const v = layout.market?.v;
-  return v === 3 ? barSettleIssues(layout) : v === 2 ? settleIssues(layout) : marketIssues(layout);
+  return v === 4 ? denSettleIssues(layout) : v === 3 ? barSettleIssues(layout) : v === 2 ? settleIssues(layout) : marketIssues(layout);
 }
 
 /**
  * The ONE continuous market layout. Task studio-market-rework-20261108-074144-01 (lane LAYOUT): `ctx.layoutVersion` picks the generator
  * (gen/market/layoutVersion.ts: a station keeps the version it was first built with) — 1 = the first market (below, unchanged), 2 = the
- * dense container settlement (gen/market/v2/), absent / 3 (task studio-market-bar-20261108-225231-01, lane BAR) = that settlement plus
- * the upper-level bar (gen/market/v3/).
+ * dense container settlement (gen/market/v2/), 3 (task studio-market-bar-20261108-225231-01, lane BAR) = that settlement plus
+ * the upper-level bar (gen/market/v3/), absent / 4 (task studio-corpse-market-shop-20261114-031614-01) = version 3 plus the corpse
+ * buyer's den (gen/market/v4/).
  */
 export function generateMarketLevel(ctx: SectionGenContext): StationLayout {
   const version = ctx.layoutVersion ?? MARKET_LAYOUT_VERSION;
-  if (version >= 2) return generateSettlement(ctx, {bar: version >= 3});
+  if (version >= 2) return generateSettlement(ctx, {bar: version >= 3, den: version >= 4});
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const seed = marketSeed(ctx.levelSeed);
   let f = marketFrame(ctx.levelSeed);

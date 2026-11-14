@@ -6,7 +6,8 @@
 // IDENTITY: '<section id>#<layout enemy index>' of the enemy it was (levels/types.ts sectionId + Game.enemyIndex; the same shape as a
 // carried prop's id, run/trainCargo.ts PROP_ID_RE). An index dies at most once per timeline (killed enemies never respawn; Retry rolls the
 // death back with everything else), so the id names one death. A body lives in exactly ONE place: the player's hands, a station's lane,
-// the train's cargo or the chipper's job; a body the chipper finished exists nowhere.
+// the train's cargo, the chipper's job or (task studio-corpse-market-shop-20261114-031614-01) the Market corpse buyer's sale; a body the
+// chipper finished or the buyer bought exists nowhere.
 //
 // LOOK: the inputs the enemy's model was built from (its archetype, the source layout's seed and the spawn's type / look), so the same
 // body is rebuilt at any station. POSE: a known resting pose (`pose`) at an object-frame position + orientation: world + storey in a
@@ -52,7 +53,7 @@ export const BODY_LOOKS: readonly SpawnLook[] = ['lingerie', 'cosplay'];
 export interface BodyRecordJSON {
   /** '<section id>#<layout enemy index>'. Never changes. */
   id: string;
-  /** The enemy archetype it was (an ENEMY_ARCHETYPES key whose corpse trait is feedable). */
+  /** The enemy archetype it was (an ENEMY_ARCHETYPES key whose corpse trait is carriable: undead; the chipper's job: feedable). */
   arch: EnemyArchetypeId;
   /** Look inputs: the source layout's seed, the spawn's type and store-local look (absent = the ordinary pool). */
   seed: number;
@@ -120,7 +121,8 @@ function fallenProblem(b: Record<string, unknown>): string | null {
 
 /**
  * Why one body record is malformed (null = fine). `world`: a station record (world pose + storey); else train-local (aboard / a job).
- * `feedable`: the archetype check (ai/creatureArchetypes.ts corpseFeedable), injected so this module stays registry-free.
+ * `feedable`: the archetype check (ai/corpseTrait.ts: corpseCarriable for every place a body can be, corpseFeedable for the chipper's
+ * job; task studio-corpse-market-shop-20261114-031614-01), injected so this module stays registry-free.
  */
 export function bodyProblem(v: unknown, o: {world: boolean; feedable: (arch: string) => boolean}): string | null {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return 'a body must be an object';

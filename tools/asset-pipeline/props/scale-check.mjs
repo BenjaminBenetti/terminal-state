@@ -98,6 +98,9 @@ export async function loadRuntime() {
     `export {propShape, ACCENT_COLORS} from '${G}/gen/propShapes';`,
     // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-HOCKEY): code-drawn Skyways store kinds (DestKindSpec.parts)
     `export {SKYWAYS_DEST_SPECS} from '${G}/gen/skyways/destinations/registry';`,
+    // task studio-corpse-market-shop-20261114-031614-01 (lane ASSET): the Market den's model-backed kinds are spread into builder.ts
+    // MODEL_FOR (`...CORPSE_DEN_MODEL_FOR`, which the literal scan below cannot read) and load from their own lazy file map
+    `export {CORPSE_DEN_MODEL_FOR, CORPSE_DEN_MODEL_FILES} from '${G}/gen/market/v4/denKinds';`,
   ].join('\n');
   const bundle = await rolldown({
     input: 'scale-check-entry', platform: 'node', logLevel: 'silent',
@@ -114,6 +117,7 @@ export async function loadRuntime() {
   const builder = fs.readFileSync(path.join(GAME, 'src/world/builder.ts'), 'utf8');
   const lit = /const MODEL_FOR[^=]*=\s*\{([^}]*)\}/.exec(builder)?.[1] ?? '';
   const MODEL_FOR = Object.fromEntries([...lit.matchAll(/(\w+):\s*'(\w+)'/g)].map(x => [x[1], x[2]]));
+  if (/\.\.\.CORPSE_DEN_MODEL_FOR\b/.test(lit)) Object.assign(MODEL_FOR, m.CORPSE_DEN_MODEL_FOR); // (the den's spread keys)
   runtimeData = {...m, MODEL_FOR};
   return runtimeData;
 }
@@ -121,7 +125,7 @@ export async function loadRuntime() {
 /** Runtime model file of a library key (manifest / office-<asset> / p7_<kind>), or null. */
 function modelFileOf(rt, key) {
   if (!key) return null;
-  let url = rt.MODEL_FILES[key]?.url ?? rt.P7_FILES[key]?.url ?? rt.MALL_MODEL_FILES?.[key]?.url ?? null;
+  let url = rt.MODEL_FILES[key]?.url ?? rt.P7_FILES[key]?.url ?? rt.MALL_MODEL_FILES?.[key]?.url ?? rt.CORPSE_DEN_MODEL_FILES?.[key]?.url ?? null;
   if (!url && key.startsWith('office-')) url = `assets/models/${key}.glb`; // OFFICE_MODEL_FILES / COMPANY_MODEL_FILES naming
   if (!url) return null;
   const f = path.join(PUBLIC, url);
