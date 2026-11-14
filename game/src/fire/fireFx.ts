@@ -531,7 +531,8 @@ export class FireFx implements FireView {
     this.pilotOwed += dt * 22;
     while (this.pilotOwed >= 1) {
       this.pilotOwed -= 1;
-      this.tongue(m.x + rnd(-0.003, 0.003), m.y - 0.012, m.z + rnd(-0.003, 0.003), rnd(0.05, 0.07), rnd(0.12, 0.18), 0.9, 0.8, 0.04);
+      // (its foot sits in the burner bell's mouth; seen from behind the lance it licks up over the bell's rim)
+      this.tongue(m.x + rnd(-0.004, 0.004), m.y + 0.015, m.z + rnd(-0.004, 0.004), rnd(0.1, 0.135), rnd(0.12, 0.18), 0.9, 0.8, 0.04);
     }
   }
 

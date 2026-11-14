@@ -3346,7 +3346,7 @@ export class Game {
         // (task hitch-attribution-recorder-20261105: weapon.fire / weapon.melee spans — timing only, a no-op unless profiling)
         if (e.type === 'fire') { prof.begin(SPAN.fire); this.fire(e.def); prof.end(SPAN.fire); }
         // task studio-flamethrower-fire-20261114-031614-01: the stream weapon's cycle (weapons/weapons.ts updateStream: every 'flame' tick is PAID fuel)
-        else if (e.type === 'streamStart') this.fireSys.streamStart(this.viewmodel.muzzleWorld(this.camera, this.flameMuzzle));
+        else if (e.type === 'streamStart') this.fireSys.streamStart(this.viewmodel.muzzleDrawnWorld(this.camera, this.flameMuzzle)); // (the bell's mouth where the held view draws it)
         else if (e.type === 'flame') this.flameTick(e.def, e.ticks);
         else if (e.type === 'streamEnd') { this.fireSys.streamEnd(e.dry); if (e.dry) this.hud.toast('Fuel tank empty', true); }
         else if (e.type === 'refuelStart') { this.refillStop?.(); this.refillStop = this.flameSound.refill(e.def.stream!.refillTime * Math.max(0.25, this.weapon.handling)); }
@@ -3438,7 +3438,7 @@ export class Game {
     this.fx.update(dt);
     // (task studio-flamethrower-fire-20261114-031614-01) the fire's look from the fire's state; the lance's muzzle while it is in the hands
     const lance = !!wdef?.stream && !this.flareHold.active && !this.gear?.readied;
-    this.fireFx.frame(dt, this.fireSys, {muzzle: lance ? this.viewmodel.muzzleWorld(this.camera, this.flameMuzzle) : null, pilot: lance && tankFuel(wornFuelTank(this.inv)) > 0 && !this.weapon.reloading, eye});
+    this.fireFx.frame(dt, this.fireSys, {muzzle: lance ? this.viewmodel.muzzleDrawnWorld(this.camera, this.flameMuzzle) : null, pilot: lance && tankFuel(wornFuelTank(this.inv)) > 0 && !this.weapon.reloading, eye});
     // Track 2 (VIS): annex steam near the player (visual only), lit by the light field + the torch.
     if (this.steamVents?.count) this.steamVents.update(dt, eye, steamLight((x, y, z) => this.lightPool.sample(x, y, z), {eye, dir: look, on: this.torch.battery.emitting}));
     this.world.trackExt?.machines.update(this.time); // Track 2 round 2 (lane MOTION): annex water flow + wall-fan rotors, game clock
