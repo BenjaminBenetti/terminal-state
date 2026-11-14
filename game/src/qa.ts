@@ -72,6 +72,7 @@ import {propPhysics} from './damage/materials'; // Task office-props-physics-sca
 import type {PropPlacement} from './gen/props'; // lane PHYS
 import {grenadeQaApi} from './weapons/grenades'; // task studio-refinement-batch-20261113-035659-01
 import {SPAN_ABOUT, SPAN_COUNT} from './debug/updateProfile'; // Task frame-budget-deferral-20261030 (lane MEASURE)
+import {enhancedLightingLine} from './world/enhancedLighting'; // task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): lighting()
 
 export function installQaHooks(game: Game): void {
   // task office-props-physics-scale-20261030 (lane PHYS): the goWalkInto target (walkIntoCheck)
@@ -124,6 +125,9 @@ export function installQaHooks(game: Game): void {
         lighting: game.lightPool ? {...game.lightPool.debug(), flashlightOn: game.flashlightOn, areaProfiles: game.layout.areas.map(a => a.lighting)} : null,
         // Iteration 06 (Lane F): volumetric atmosphere (quality, active, march resolution/steps, shadow map, ms).
         atmosphere: game.atmosphere.debug(),
+        // Task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): enhanced lighting's status — what was asked, what the
+        // live station was really built with (bake tier, reflections, reasons, cache use), a pending change, the cache backend.
+        enhancedLighting: game.enhancedLighting.status(),
         layout: game.layout && {areas: game.layout.areas.map(a => ({kind: a.kind, type: a.type, x: a.x, y: a.y, w: a.w, h: a.h})), doors: game.layout.doors.length, props: game.layout.props.length, lights: game.layout.lights.length,
           // Iteration 04 (Lane B): macro archetype + storefront bays (name, use, hall wall, shutter, unit area) for the layout-variety check.
           archetype: game.layout.archetype, tracks: game.layout.trenches.reduce((n, t) => n + t.tracks.length, 0),
@@ -476,6 +480,15 @@ export function installQaHooks(game: Game): void {
      * + backend the fog pass runs on, fog clock {fog, game, epoch}, motion (m/s), density stats, pass counters.
      */
     atmosphere: () => game.atmosphere.debug(),
+    /**
+     * Task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): enhanced lighting — {status, line, cache}: the runtime's
+     * status (snapshot().enhancedLighting), its one-line summary (the perf overlay's Lighting row) and the derived cache's numbers
+     * (backend, reason, entries, bytes, limits, this session's counters; null while the cache was never opened). Read-only.
+     */
+    lighting: async () => {
+      const status = game.enhancedLighting.status();
+      return {status, line: enhancedLightingLine(status), cache: await game.enhancedLighting.cacheStats()};
+    },
     /**
      * Iteration 13 (FOG): the world haze at (x, y, z) — sigma (1/m), patch / wisp values, area multiplier, level slot — at the
      * current fog time, or at fog time `t` (s). The CPU mirror of what the march integrates there; independent of the camera,

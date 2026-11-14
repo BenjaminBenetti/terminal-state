@@ -20,16 +20,28 @@
 // stacked deliberately on a narrow screen. Explanatory copy was cut to short labels, status lines and honest confirmations. The
 // settings form names Quality by what it really changes (settingsStore.ts QUALITY_LABEL / qualityDescription) and render resolution
 // is a 25-100 % slider (1 % steps) applied coalesced.
+//
+// Task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): the settings form's "Enhanced lighting" (Auto / On / Off)
+// and "Reflections" (Standard / High / Off) choices after Ambient occlusion — names, options and help lines from the contract
+// (world/enhancedLighting.ts); the help lines say what the LIVE station really uses and why (the game's runtime status, handed in by
+// main.ts), and that a change applies when a station next loads. Under the form's note: the lighting cache line (the derived cache's
+// own numbers) and "Clear lighting cache". Nothing here bakes, renders or touches a save.
 
 import {SAVE_SLOTS, type SaveMeta} from '../campaign/types';
 import type {LevelId} from '../levels/types';
 import {seedToCode} from '../core/rng';
 import {setTip} from './tooltip'; // task studio-ui-subway-maps-20261108-074144-01 (the game tooltip)
 import {
-  AO_LABEL, AO_OPTIONS, CoalescedApply, QUALITY_LABEL, QUALITY_OPTIONS, RENDER_PERCENT, SETTINGS_BOUNDS, aoDescription, nativeRatioLabel, qualityDescription,
+  AO_LABEL, AO_OPTIONS, CoalescedApply, QUALITY_LABEL, QUALITY_OPTIONS, RENDER_PERCENT, SETTINGS_BOUNDS, aoDescription, lightingCacheLine, nativeRatioLabel, qualityDescription,
   renderPercent, renderScaleFromPercent, renderScaleReadout, volumeFromPercent, volumePercent,
   type CoalesceTimers, type GameSettings, type Quality, type QualityPresetLike, type SettingsStore,
 } from './settingsStore';
+// task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): the enhanced-lighting contract (a leaf: no three, no DOM)
+import {
+  ENHANCED_LIGHTING_LABEL, ENHANCED_LIGHTING_OPTIONS, REFLECTIONS_LABEL, REFLECTION_OPTIONS, describeEnhancedLighting, describeReflections,
+  isEnhancedLightingMode, isReflectionQuality, type EnhancedLightingStatus,
+} from '../world/enhancedLighting';
+import type {DerivedCacheStats} from '../core/derivedCache';
 
 // ---------------------------------------------------------------------------------------------
 // The host contract (primary + lane SAVE implement it; tests use a fake)
@@ -643,8 +655,8 @@ const CSS = `
 .settings select { max-width: 62%; }
 .settings output { min-width: 3.4em; font-variant-numeric: tabular-nums; }
 .settings .set-readout { grid-column: 1 / -1; font-size: 11.5px; color: var(--cream-dim); margin-top: -4px; text-align: right; }
-.settings .set-tutorials { grid-column: 1 / -1; display: flex; justify-content: flex-start; margin-top: 2px; }
-.settings .set-tutorials button { padding: 7px 14px; font-size: 13px; }
+.settings .set-tutorials, .settings .set-actions { grid-column: 1 / -1; display: flex; justify-content: flex-start; margin-top: 2px; }
+.settings .set-tutorials button, .settings .set-actions button { padding: 7px 14px; font-size: 13px; }
 @media (max-width: 760px) {
   .mm-side { width: 100%; background: rgba(10, 12, 11, 0.86); }
   .mm-overlay { padding: 10px; }
@@ -930,6 +942,22 @@ export interface SettingsFormOptions {
    * render/volumetric.ts aoUnavailable) — the AO help line says so instead of pretending.
    */
   aoUnavailable?: () => string | null;
+  /**
+   * Task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): enhanced lighting's truthful status
+   * (world/enhancedLightingRuntime.ts status(): what the LIVE station was built with and why, whether a change waits for the next
+   * station load) — the Enhanced lighting / Reflections help lines describe it. Absent or null: the lines say what the stored choices mean.
+   */
+  lightingStatus?: () => EnhancedLightingStatus | null;
+  /** The derived cache's numbers for the cache line (EnhancedLightingRuntime.cacheStats; null = never opened: no line, no button). */
+  lightingCache?: () => Promise<DerivedCacheStats | null>;
+  /** Deletes every cached bake (EnhancedLightingRuntime.clearCache): the "Clear lighting cache" button. Absent: no button. */
+  clearLightingCache?: () => Promise<void>;
+  /**
+   * Called ONCE at mount with the form's lighting refresh (the two help lines + the cache line): the host runs that whenever the status
+   * may have changed (EnhancedLightingRuntime.subscribe: a station was built, the cache was cleared). A returned function is the
+   * unsubscribe, called when the form unmounts. The refresh is a no-op once the form was unmounted or replaced.
+   */
+  lightingChanged?: (refresh: () => void) => (() => void) | void;
 }
 
 /** The form's field builders (one store; ids P + id): shared by the Settings and the Controls forms. */
@@ -1001,6 +1029,8 @@ export function mountControlsForm(box: HTMLElement, store: SettingsStore, o: Pic
 /**
  * Builds the settings controls (view, audio, graphics: everything but the input preferences, which are the Controls form's) into `box`
  * (replacing its children), bound both ways to `store`. Returns an unsubscribe.
+ * Ids (P = o.idPrefix): fov, vol, mute, sway, quality (+ -help), res (+ -readout), ao (+ -help), lighting (+ -help), reflections
+ * (+ -help), then the store note, lighting-cache and lighting-cache-clear.
  */
 export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: SettingsFormOptions): () => void {
   const P = o.idPrefix;
@@ -1078,11 +1108,105 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
     box.append(l, help);
     sync.push(s => { const v = s.ambientOcclusion ? 'on' : 'off'; if (sel.value !== v) sel.value = v; help.textContent = aoDescription(s.ambientOcclusion, o.aoUnavailable?.() ?? null); });
   }
+  // task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): Enhanced lighting (Auto / On / Off) and Reflections
+  // (Standard / High / Off) — labels, choices and help lines are the contract's (world/enhancedLighting.ts). The help lines describe the
+  // game's status (o.lightingStatus: what the LIVE station really uses, why not what was asked, "Applies when a station next loads."
+  // for a pending change); without one, what the stored choices mean. A change is only stored: the game reads it when a station is
+  // built. Reflections needs Enhanced lighting: its choice is disabled while that is Off (the stored value is kept).
+  let syncLighting: (s: Readonly<GameSettings>) => void = () => {};
+  {
+    const choice = <V extends string>(id: string, text: string, options: readonly {value: V; label: string}[], valid: (v: unknown) => v is V, patch: (v: V) => Partial<GameSettings>) => {
+      const l = label(text);
+      const sel = d.createElement('select');
+      sel.id = P + id;
+      for (const q of options) { const op = d.createElement('option'); op.value = q.value; op.textContent = q.label; sel.append(op); }
+      const help = d.createElement('div');
+      help.className = 'set-readout set-help';
+      help.id = `${P}${id}-help`;
+      sel.setAttribute('aria-describedby', help.id);
+      sel.addEventListener('change', () => { const v: unknown = sel.value; if (valid(v)) store.set(patch(v)); });
+      l.append(sel);
+      box.append(l, help);
+      return {sel, help};
+    };
+    const light = choice('lighting', ENHANCED_LIGHTING_LABEL, ENHANCED_LIGHTING_OPTIONS, isEnhancedLightingMode, v => ({enhancedLighting: v}));
+    const refl = choice('reflections', REFLECTIONS_LABEL, REFLECTION_OPTIONS, isReflectionQuality, v => ({reflections: v}));
+    const statusOf = (s: Readonly<GameSettings>): EnhancedLightingStatus => {
+      let st: EnhancedLightingStatus | null = null;
+      try { st = o.lightingStatus?.() ?? null; } catch (err) { console.warn('settings: the lighting status could not be read', err); }
+      return st ?? {requested: {lighting: s.enhancedLighting, reflections: s.reflections}, active: null, pending: false, cacheBackend: 'none'};
+    };
+    syncLighting = s => {
+      if (light.sel.value !== s.enhancedLighting) light.sel.value = s.enhancedLighting;
+      if (refl.sel.value !== s.reflections) refl.sel.value = s.reflections;
+      refl.sel.disabled = s.enhancedLighting === 'off';
+      const st = statusOf(s);
+      light.help.textContent = describeEnhancedLighting(st);
+      refl.help.textContent = describeReflections(st);
+    };
+    sync.push(s => syncLighting(s));
+  }
   // only a short note when something is wrong (lane MENU, campaign polish item 2: no explanatory copy otherwise)
   sync.push(storeNote(box, store));
+  // (lane SETTINGS) the lighting cache, under that note (which stays the form's first note): what the derived cache holds
+  // (core/derivedCache.ts — rebuildable data, never part of a save; settingsStore.ts lightingCacheLine words it) and the button that
+  // deletes it. Both are hidden without numbers (no cache option, or the cache was never opened). The numbers are read asynchronously:
+  // at mount, when either lighting choice changes, on the host's lightingChanged signal and after a clear; only the newest answer is
+  // shown, an answer for an unmounted / replaced form is dropped, and a failed read or clear never reaches the UI as an error.
+  let alive = true, cacheSeq = 0, cacheKey = '', clearing = false;
+  const cacheLine = d.createElement('p');
+  cacheLine.className = 'set-note hidden';
+  cacheLine.id = P + 'lighting-cache';
+  cacheLine.setAttribute('aria-live', 'polite');
+  const cacheRow = d.createElement('div');
+  cacheRow.className = 'set-actions hidden';
+  const clear = d.createElement('button');
+  clear.type = 'button';
+  clear.id = P + 'lighting-cache-clear';
+  clear.textContent = 'Clear lighting cache';
+  clear.hidden = true;
+  clear.setAttribute('aria-describedby', cacheLine.id);
+  cacheRow.append(clear);
+  box.append(cacheLine, cacheRow);
+  const mounted = () => alive && cacheLine.parentElement === box;
+  const showCache = (text: string | null) => {
+    const button = !!text && !!o.clearLightingCache;
+    cacheLine.textContent = text ?? '';
+    cacheLine.classList.toggle('hidden', !text);
+    cacheRow.classList.toggle('hidden', !button);
+    clear.hidden = !button;
+  };
+  const refreshCache = async (): Promise<void> => {
+    const seq = ++cacheSeq;
+    let stats: DerivedCacheStats | null = null;
+    try { stats = (await o.lightingCache?.()) ?? null; } catch (err) { console.warn('settings: the lighting cache could not be read', err); }
+    if (mounted() && seq === cacheSeq) showCache(lightingCacheLine(stats));
+  };
+  const onClear = () => {
+    if (clearing || !o.clearLightingCache || !mounted()) return;
+    clearing = true;
+    clear.disabled = true;
+    void (async () => {
+      try { await o.clearLightingCache?.(); } catch (err) { console.warn('settings: the lighting cache could not be cleared', err); }
+      clearing = false;
+      clear.disabled = false;
+      await refreshCache();
+    })();
+  };
+  clear.addEventListener('click', onClear);
+  sync.push(s => { const k = `${s.enhancedLighting}|${s.reflections}`; if (k !== cacheKey) { cacheKey = k; void refreshCache(); } });
+  const refreshLighting = () => { if (!mounted()) return; syncLighting(store.get()); void refreshCache(); };
+  let offLighting: (() => void) | void;
+  try { offLighting = o.lightingChanged?.(refreshLighting); } catch (err) { console.warn('settings: no lighting status updates', err); }
   const onResize = () => { for (const f of sync) f(store.get()); };
   globalThis.addEventListener?.('resize', onResize);
-  return bindForm(store, sync, () => { resApply?.cancel(); globalThis.removeEventListener?.('resize', onResize); });
+  return bindForm(store, sync, () => {
+    resApply?.cancel();
+    globalThis.removeEventListener?.('resize', onResize);
+    alive = false; // (lane SETTINGS: late cache answers and status signals are dropped)
+    clear.removeEventListener('click', onClear);
+    try { if (typeof offLighting === 'function') offLighting(); } catch (err) { console.warn('settings: the lighting status unsubscribe failed', err); }
+  });
 }
 
 /** What the tutorial reset needs (ui/onboardingStore.ts OnboardingStore). */
