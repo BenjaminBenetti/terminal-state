@@ -46,6 +46,7 @@ import {CELL, SOLID, VOID, type Grid} from '../gen/grid';
 import type {Level} from '../gen/levels';
 import type {LightPlacement} from '../gen/station';
 import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
+import type {IndirectContext, IndirectLight} from './lightFieldGather'; // task studio-baked-lighting-reflections-20261114-050258-01 (types only)
 
 // ---------------------------------------------------------------------------------------------
 // Tunables
@@ -173,6 +174,13 @@ export interface FieldSource {
    * Receives the per-slot direct-light arrays (tinted fluence E, direction D, luminance EL) and the slots' column geometry.
    */
   extraDirect?: (ctx: ExtraDirectContext) => Record<string, number> | void;
+  /**
+   * Task studio-baked-lighting-reflections-20261114-050258-01: the ENHANCED indirect light (world/lightFieldGather.ts: a ray gather over
+   * the fixed architecture, coloured by its finishes) in place of the bounce fill below. Absent (Enhanced lighting off, the Reactor,
+   * every caller that does not ask for it): the bake is unchanged, byte for byte. Same format either way: the shader, the fog and the
+   * CPU sampler read an enhanced field exactly as they read a baseline one.
+   */
+  indirect?: (ctx: IndirectContext) => BuildSteps<IndirectLight>;
 }
 
 /** Task track3 (lane ARCH): what FieldSource.extraDirect may add into (the bake's own arrays, slot-major as the fixtures write). */
@@ -211,7 +219,9 @@ export interface BakedField {
     /** Most bands in one column, extended columns, columns with bands past MAX_BANDS (dropped), cross rays skipped by the flood. */
     bands?: number; extCols?: number; cut?: number; crossCulled?: number;
     /** Task track3 (lane ARCH): FieldSource.extraDirect's stats (the mall skylight), when present. */
-    extra?: Record<string, number>};
+    extra?: Record<string, number>;
+    /** Task studio-baked-lighting-reflections-20261114-050258-01: FieldSource.indirect's stats (the enhanced gather), when present. */
+    indirect?: IndirectLight['stats']};
 }
 
 /** [lo, hi] of slot s's header heights (floor = lo + byte / 255 * (hi - lo)). */
@@ -616,8 +626,10 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
     }
     return B;
   };
+  // Task studio-baked-lighting-reflections-20261114-050258-01: the enhanced gather replaces the fill (encoded below from `ind`)
+  const ind = src.indirect ? yield* src.indirect({W, H, geos, layers: LS, E, D, EL, GL, G2L, scatter: p.scatter}) : null;
   const bounce: Float32Array[] = [];
-  for (let s = 0; s < geos.length; s++) { bounce.push(bounceOf(geos[s], s)); yield; } // (lane BUILD: one slot per step)
+  if (!ind) for (let s = 0; s < geos.length; s++) { bounce.push(bounceOf(geos[s], s)); yield; } // (lane BUILD: one slot per step)
 
   yield 'field.headers';
   // --- Column headers: which slots are really present per column (a flight carved into two level grids is one band: it
@@ -717,7 +729,62 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
     const Es = E[s], Ds = D[s], ELs = EL[s], GLs = GL[s], G2Ls = G2L[s], B = bounce[s];
     const base = slotBase(s), L = LS[s];
     const ylo = slotY[2 * s], yr = slotY[2 * s + 1] - ylo;
-    const encodeRow = (cy: number): void => { for (let cx = 0; cx < W; cx++) { // (lane BUILD: a row per call, a step per 16 rows; the loop out of the generator body)
+    // Task studio-baked-lighting-reflections-20261114-050258-01: a row of an ENHANCED field. The direct light is the baseline's; the
+    // gathered indirect light adds its mean and, along its own first moment, a directional part (a surface facing where the bounce
+    // comes from gets more of it): one direction per voxel still, the luminance-weighted sum of the two. The flicker shares count the
+    // indirect light's own circuits.
+    const ix = ind ? ind.index[s] : null, id = ind ? ind.data : null, cohK = new Float32Array(LAYERS);
+    const encodeRowEnhanced = (cy: number): void => { for (let cx = 0; cx < W; cx++) {
+      const i = cy * W + cx;
+      let hi = i;
+      if (!open[i]) {
+        hi = -1;
+        for (const j of [i - 1, i + 1, i - W, i + W]) if (j >= 0 && j < n && open[j] && Math.abs((j % W) - cx) <= 1) { hi = j; break; }
+      }
+      const o0 = ((base * H + cy) * W + cx) * 4;
+      const dfl = levels[s].baseY;
+      data[o0] = hi >= 0 ? u8((floorH[hi] - ylo) / yr) : u8((dfl - ylo) / yr);
+      data[o0 + 1] = hi >= 0 ? u8((ceilH[hi] - ylo) / yr) : u8((dfl + 3 - ylo) / yr);
+      if (!open[i]) continue;
+      let tot = 0, totD = 0, totI = 0, c0 = 0, c1 = 0;
+      for (let k = 0; k < L; k++) {
+        const vi = (i * L + k) * 3, el = ELs[i * L + k];
+        const dmag = Math.sqrt(Ds[vi] * Ds[vi] + Ds[vi + 1] * Ds[vi + 1] + Ds[vi + 2] * Ds[vi + 2]);
+        const dl = Math.min(el, dmag), coh = el > 0 ? (dl + (el - dl) * p.scatter) / el : 0;
+        cohK[k] = coh; tot += el; totD += el * coh;
+        const q = ix![i * L + k] * 9, ml = lum(id![q], id![q + 1], id![q + 2]);
+        if (ml <= 0) continue;
+        const il = ml + 2 * Math.min(ml, Math.sqrt(id![q + 3] * id![q + 3] + id![q + 4] * id![q + 4] + id![q + 5] * id![q + 5]));
+        totI += il; c0 += id![q + 6] / ml * il; c1 += id![q + 7] / ml * il;
+      }
+      const cohAvg = tot > 0 ? totD / tot : 0, den = totD + totI;
+      data[o0 + 2] = den > 0 ? u8((GLs[i * FLICKER_GROUPS] * cohAvg + c0) / den) : 0;
+      data[o0 + 3] = den > 0 ? u8((GLs[i * FLICKER_GROUPS + 1] * cohAvg + c1) / den) : 0;
+      for (let k = 0; k < L; k++) {
+        const vi = (i * L + k) * 3, el = ELs[i * L + k], coh = cohK[k];
+        const dxv = Ds[vi], dyv = Ds[vi + 1], dzv = Ds[vi + 2];
+        const dmag = Math.sqrt(dxv * dxv + dyv * dyv + dzv * dzv);
+        const dl = Math.min(el, dmag);
+        const q = ix![i * L + k] * 9, mr = id![q], mg = id![q + 1], mb = id![q + 2], ml = lum(mr, mg, mb);
+        const vx = id![q + 3], vy = id![q + 4], vz = id![q + 5], vm = Math.min(ml, Math.sqrt(vx * vx + vy * vy + vz * vz));
+        const il = ml + 2 * vm, ik = ml > 0 ? il / ml : 0;
+        const r = Es[vi] * coh + mr * ik, gg = Es[vi + 1] * coh + mg * ik, b = Es[vi + 2] * coh + mb * ik;
+        const tl = el * coh + il;
+        // one direction: the direct light's (its coherent luminance) plus three times the indirect first moment
+        const ds = dmag > 1e-9 ? dl / dmag : 0;
+        const xx = dxv * ds + 3 * vx, xy = dyv * ds + 3 * vy, xz = dzv * ds + 3 * vz;
+        const xm = Math.sqrt(xx * xx + xy * xy + xz * xz), xl = Math.min(xm, tl);
+        const rho = tl > 0 ? xl / tl : 0;
+        const oa = (((base + 1 + 2 * k) * H + cy) * W + cx) * 4, ob = (((base + 2 + 2 * k) * H + cy) * W + cx) * 4;
+        data[oa] = enc(r); data[oa + 1] = enc(gg); data[oa + 2] = enc(b); data[oa + 3] = u8(rho);
+        const inv = xl > 1e-6 ? 1 / xm : 0;
+        data[ob] = u8(xl > 1e-6 ? xx * inv * 0.5 + 0.5 : 0.5);
+        data[ob + 1] = u8(xl > 1e-6 ? xy * inv * 0.5 + 0.5 : 1);
+        data[ob + 2] = u8(xl > 1e-6 ? xz * inv * 0.5 + 0.5 : 0.5);
+        data[ob + 3] = tl > 0 ? u8((G2Ls[i * L + k] * coh + (ml > 0 ? id![q + 8] / ml * il : 0)) / tl) : 0;
+      }
+    } };
+    const encodeRow = ind ? encodeRowEnhanced : (cy: number): void => { for (let cx = 0; cx < W; cx++) { // (lane BUILD: a row per call, a step per 16 rows; the loop out of the generator body)
       const i = cy * W + cx;
       // Closed cells: zero light; heights borrowed from an open neighbour so filtering near walls stays sane.
       let hi = i;
@@ -759,7 +826,7 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
   return {
     w: W, h: H, layers: LAYERS, depth, slots: S, data, yMin, yMax, groups, hdr, slotY, masks,
     stats: {ms: performance.now() - t0, bytes: data.byteLength, fixtures: src.lights.length, working, steady, circuits, rays, crossRays, slots: S,
-      bands: maxBands, extCols, cut, crossCulled, ...(extra ? {extra} : {})},
+      bands: maxBands, extCols, cut, crossCulled, ...(extra ? {extra} : {}), ...(ind ? {indirect: ind.stats} : {})},
   };
 }
 

@@ -40,15 +40,17 @@ export interface EnhancedLightingRequest { lighting: EnhancedLightingMode; refle
 /** The indirect-light gather of the enhanced bake (world/lightFieldGather.ts). */
 export interface GiTier {
   id: 'standard' | 'high';
-  /** Rays per field voxel of the first bounce. */
+  /** Rays per gathering voxel. */
   rays: number;
-  /** Rays per voxel of the second bounce (0 = the second bounce is estimated from the first, no rays). */
-  secondRays: number;
+  /** 2 = every other cell in x and z gathers (a 1 m lattice) and the cells between are filled from it; 1 = every cell gathers. */
+  stride: 1 | 2;
+  /** Light bounces followed. */
+  bounces: number;
 }
 
 export const GI_TIERS: Readonly<Record<GiTier['id'], GiTier>> = {
-  standard: {id: 'standard', rays: 16, secondRays: 0},
-  high: {id: 'high', rays: 32, secondRays: 12},
+  standard: {id: 'standard', rays: 16, stride: 2, bounces: 3},
+  high: {id: 'high', rays: 32, stride: 1, bounces: 3},
 };
 
 /** The reflection probes (world/reflectionProbes.ts). */
