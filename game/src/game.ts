@@ -2426,6 +2426,12 @@ export class Game {
    */
   relightAfterSettings(): Promise<void> {
     if (this.relightRun) return this.relightRun; // (a choice changed again meanwhile is picked up by the running one's loops)
+    if (this.lifecycle.busy) {
+      // a journey, a travel or a Retry owns the station (between two stations there is none: the one left is torn down, the next one's
+      // load applies the choice). A pause that outlives it — the arrival — is looked at again when it has ended.
+      this.relightWait ??= this.lifecycle.settled().then(() => { this.relightWait = null; return this.relightAfterSettings(); });
+      return this.relightWait;
+    }
     if (!this.relightDue()) return Promise.resolve();
     const run = (async () => {
       // (bounded: a choice that changed again while one rebuild's warm-up ran — the form holds it, another tab does not — gets its own)
@@ -2442,12 +2448,14 @@ export class Game {
     return run;
   }
   private relightRun: Promise<void> | null = null;
+  private relightWait: Promise<void> | null = null;
   /** Live rebuilds of the station lighting this session (QA / tests). */
   readonly relightCounts = {runs: 0, swaps: 0, failed: 0};
 
   /** A live station in the pause menu whose lighting the settings now plan differently (and that plan did not already fail). */
   private relightDue(): boolean {
     if (!this.world || !this.lightPool || this.state !== 'paused' || !this.gpu || this.gpu.deviceLost || !this.renderer.initialized) return false;
+    if (this.transitGap || this.lifecycle.busy) return false; // (no live station / a transition owns it: `world` and `lightPool` may be the station just left)
     const el = this.enhancedLighting;
     return el.status().pending && !el.failedFor(el.pendingSignature());
   }

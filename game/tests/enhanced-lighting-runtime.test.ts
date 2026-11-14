@@ -20,7 +20,7 @@ import {FLOOR, Grid, SOLID} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {dropUnloadedP7, p7ModelKeysFor} from '../src/gen/props07';
 import {buildWorldSteps, type BuiltWorld} from '../src/world/builder';
-import {REACTOR_REASON, SOFTWARE_REASON, enhancedLightingLine, type LightingCapabilities} from '../src/world/enhancedLighting';
+import {APPLYING_NOTE, REACTOR_REASON, SOFTWARE_REASON, describeEnhancedLighting, enhancedLightingLine, type LightingCapabilities} from '../src/world/enhancedLighting';
 import {
   DERIVED_LIGHTING_VERSIONS, EnhancedLightingRuntime, layoutAddress, lightingCapabilities, type EnhancedBake, type EnhancedLightingSettings, type StationBakeInput,
 } from '../src/world/enhancedLightingRuntime';
@@ -423,6 +423,61 @@ describe('capabilities, reasons and pending changes', () => {
     settings.enhancedLighting = 'off';
     expect(r.rt.status()).toMatchObject({pending: false, error: null});
   });
+
+  it('while a rebuild in place runs, the status says what the station is still lit by — and the new lighting from the swap on', async () => {
+    const settings: EnhancedLightingSettings = {enhancedLighting: 'auto', reflections: 'standard'};
+    const r = runtime(settings);
+    await load(r, rooms());
+    const before = r.rt.status().active!;
+    expect(before).toMatchObject({gi: 'standard', reflections: 'standard'});
+    let heard = 0;
+    r.rt.subscribe(() => { heard++; });
+
+    // Off: bakeSteps writes the baseline record at its first step, before the station lighting is swapped (the baseline bake runs
+    // in between). Until the swap the station still has the enhanced lighting, and the status says so
+    settings.enhancedLighting = 'off';
+    r.rt.setApplying(true);
+    r.rt.checkpoint();
+    expect(drainSync(r.rt.bakeSteps(rooms(), null, {max3DTextureSize: 2048})).baked).toBeUndefined();
+    expect(r.rt.status()).toMatchObject({applying: true, pending: false, active: before});
+    expect(describeEnhancedLighting(r.rt.status())).toMatch(/^This station: enhanced bake \(standard\), .*\. Rebuilding this station's lighting…$/);
+    expect(describeEnhancedLighting(r.rt.status()).endsWith(APPLYING_NOTE)).toBe(true);
+    let n = heard;
+    r.rt.applied(null); // (the swap: world/lights.ts replaceSteps returned)
+    expect(heard, 'the forms hear the swap').toBe(n + 1);
+    expect(r.rt.status()).toMatchObject({applying: true, pending: false, active: {gi: 'baseline', reflections: 'off'}});
+    expect(describeEnhancedLighting(r.rt.status())).toBe(`This station: baseline lighting. ${APPLYING_NOTE}`); // (the warm-up still runs)
+    r.rt.setApplying(false);
+    expect(r.rt.status()).toMatchObject({applying: false, pending: false, active: {gi: 'baseline', reflections: 'off'}});
+
+    // On again, with the probes: the record is written at the END of the bake — still before the swap
+    settings.enhancedLighting = 'auto';
+    r.rt.setApplying(true);
+    r.rt.checkpoint();
+    expect((await load(r, rooms())).baked).toBeDefined();
+    expect(r.rt.status()).toMatchObject({applying: true, active: {gi: 'baseline', reflections: 'off'}});
+    r.rt.applied(null);
+    expect(r.rt.status()).toMatchObject({applying: true, active: {gi: 'standard', reflections: 'standard'}});
+    r.rt.setApplying(false);
+
+    // a rebuild that ends without a swap (the station was replaced, a lost device): nothing of the checkpoint outlives it
+    settings.enhancedLighting = 'off';
+    r.rt.setApplying(true);
+    const undo = r.rt.checkpoint();
+    drainSync(r.rt.bakeSteps(rooms(), null, {max3DTextureSize: 2048}));
+    undo();
+    r.rt.setApplying(false);
+    expect(r.rt.status()).toMatchObject({applying: false, pending: true, active: {gi: 'standard', reflections: 'standard'}});
+    r.rt.setApplying(true);
+    r.rt.checkpoint();
+    r.rt.setApplying(false); // (ended before any bake step)
+    drainSync(r.rt.bakeSteps(rooms(), null, {max3DTextureSize: 2048})); // a station LOAD: its record is the status at once
+    expect(r.rt.status()).toMatchObject({applying: false, pending: false, active: {gi: 'baseline'}});
+    // …and applied() with nothing to report stays silent there, as before
+    n = heard;
+    r.rt.applied(null);
+    expect(heard).toBe(n);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -585,6 +640,16 @@ describe('a real station: what the builder drew, and the station lighting', () =
     expect(glows()).toEqual([r2.lighting.glow]);
     for (const f of retired.splice(0)) f();
 
+    // (the same double failure as 5 below, over a lighting WITH probes: it stands as it stood, its probes bound)
+    const hemiDead = new THREE.HemisphereLight();
+    Object.defineProperty(hemiDead, 'intensity', {get: () => 1, set: () => { throw new Error('simulated: nothing installs'); }});
+    expect(() => drainSync(StationLighting.replaceSteps(r2.lighting, {...opts, hemi: hemiDead, baked: enhanced.baked}, f => retired.push(f)))).toThrow('simulated: nothing installs');
+    expect(fieldLights()).toEqual([stationReflectLight()]);
+    expect([activeLightField(), activeReflectionProbes()]).toEqual([r2.lighting.volume, r2.lighting.reflections]);
+    expect(REFL.atlas.value).toBe(r2.lighting.reflections!.atlas);
+    expect(glows()).toEqual([r2.lighting.glow]);
+    expect(retired).toHaveLength(0);
+
     // 3. the planned lighting cannot be installed (it throws after its light is in the scene and its textures are bound): the station
     //    gets the BASELINE lighting, the error is reported, and nothing of the failed one is left behind
     let throwsLeft = 1;
@@ -605,20 +670,41 @@ describe('a real station: what the builder drew, and the station lighting', () =
     expect(retired, 'the replaced lighting is released once').toHaveLength(1);
     for (const f of retired.splice(0)) f();
 
-    // 4. neither the planned lighting nor the baseline can be installed: the step throws the FIRST error and the old lighting stands
-    //    exactly as it stood — in the scene, bound, not released
-    const hemiNever = new THREE.HemisphereLight();
-    Object.defineProperty(hemiNever, 'intensity', {get: () => 1, set: () => { throw new Error('simulated: nothing installs'); }});
-    const releasedBase = vi.spyOn(base.volume, 'dispose');
-    expect(() => drainSync(StationLighting.replaceSteps(base, {...opts, hemi: hemiNever, baked: enhanced.baked, probes: enhanced.probes}, f => retired.push(f)))).toThrow('simulated: nothing installs');
+    // 4. …and when it fails at its very end, its glow cards already in the scene: they go too (one set of cards, the baseline's)
+    const tubes = world.tubes!;
+    expect(base.glow).not.toBeNull();
+    let tubeThrows = 1, cardSets = 0;
+    const setColorAt = tubes.setColorAt;
+    tubes.setColorAt = function (this: THREE.InstancedMesh, i: number, c: THREE.Color) { if (tubeThrows-- > 0) throw new Error('simulated late install failure'); return setColorAt.call(this, i, c); } as typeof tubes.setColorAt;
+    const add = scene.add;
+    scene.add = function (this: THREE.Scene, ...o: THREE.Object3D[]) { for (const x of o) if (x.name === 'light-glow') cardSets++; return add.apply(this, o); } as typeof scene.add;
+    const r4 = drainSync(StationLighting.replaceSteps(base, {...opts, baked: enhanced.baked, probes: enhanced.probes}, f => retired.push(f)));
+    tubes.setColorAt = setColorAt;
+    scene.add = add;
+    const late = r4.lighting;
+    expect(String((r4.error as Error).message)).toBe('simulated late install failure');
+    expect(cardSets, 'the failed lighting had put its cards in, then the baseline put its own').toBe(2);
+    expect(glows()).toEqual([late.glow]);
+    expect(late.glow).not.toBe(base.glow);
     expect(fieldLights()).toEqual([stationFieldLight()]);
-    expect(activeLightField()).toBe(base.volume);
+    expect([activeLightField(), activeReflectionProbes(), late.reflections]).toEqual([late.volume, null, null]);
+    expect([clock(late), [...late.levels]]).toEqual([t0, levels0]);
+    expect(world.fixtures.map(f => f.level), 'the fixtures carry the levels').toEqual(world.fixtures.map((_, i) => late.fixtureLevel(i)));
+    expect(retired).toHaveLength(1);
+    for (const f of retired.splice(0)) f();
+
+    // 5. neither the planned lighting nor the baseline can be installed: the step throws the FIRST error and the old lighting stands
+    //    exactly as it stood — in the scene, bound, not released
+    const releasedLate = vi.spyOn(late.volume, 'dispose');
+    expect(() => drainSync(StationLighting.replaceSteps(late, {...opts, hemi: hemiDead, baked: enhanced.baked, probes: enhanced.probes}, f => retired.push(f)))).toThrow('simulated: nothing installs');
+    expect(fieldLights()).toEqual([stationFieldLight()]);
+    expect(activeLightField()).toBe(late.volume);
     expect(activeReflectionProbes()).toBeNull();
-    expect(glows()).toEqual([base.glow]);
+    expect(glows()).toEqual([late.glow]);
     expect(retired).toHaveLength(0);
-    expect(releasedBase).not.toHaveBeenCalled();
-    expect([clock(base), [...base.levels]]).toEqual([t0, levels0]);
-    base.update(1 / 60); // (still a working lighting)
-    base.dispose(scene);
+    expect(releasedLate).not.toHaveBeenCalled();
+    expect([clock(late), [...late.levels]]).toEqual([t0, levels0]);
+    late.update(1 / 60); // (still a working lighting)
+    late.dispose(scene);
   }, 240000);
 });

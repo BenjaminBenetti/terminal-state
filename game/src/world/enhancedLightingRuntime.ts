@@ -152,7 +152,8 @@ export class EnhancedLightingRuntime {
     const want = this.live ? planSignature(this.plan(this.live.reactor)) : null;
     const pending = !!this.live && want !== this.live.signature;
     return {
-      requested: this.request(), active: this.active, pending, cacheBackend: this.cache ? this.cache.backend : 'none',
+      // (during a rebuild in place the station is lit by what it had until the new lighting is installed: bakeSteps writes its record earlier)
+      requested: this.request(), active: this.applying && this.litBy ? this.litBy.active : this.active, pending, cacheBackend: this.cache ? this.cache.backend : 'none',
       applying: this.applying, error: pending && this.failure?.signature === want ? this.failure.reason : null,
     };
   }
@@ -161,9 +162,12 @@ export class EnhancedLightingRuntime {
   private applying = false;
   /** The plan that could not be applied to the live station, and why (reported while that plan is still the pending one). */
   private failure: {signature: string; reason: string} | null = null;
+  /** What the station was lit by when a rebuild in place began (checkpoint): the status's `active` until the new lighting is installed. */
+  private litBy: {active: EnhancedLightingActive | null} | null = null;
 
   /** The live station's lighting is being rebuilt (true) / the rebuild ended (false): the forms say so and hold their choices. */
   setApplying(on: boolean): void {
+    if (!on) this.litBy = null;
     if (this.applying === on) return;
     this.applying = on;
     this.changed();
@@ -185,12 +189,14 @@ export class EnhancedLightingRuntime {
    */
   checkpoint(): () => void {
     const active = this.active, live = this.live, timings = this.timings;
-    return () => { this.active = active; this.live = live; this.timings = timings; };
+    this.litBy = {active};
+    return () => { this.active = active; this.live = live; this.timings = timings; this.litBy = null; };
   }
   /** A rebuild in place ended with the BASELINE lighting installed instead of what was planned (world/lights.ts replaceSteps). */
   installedBaseline(reason: string): void {
     if (this.live) this.live = {...this.live, signature: planSignature({gi: null, reflections: null, giReason: null, reflectionsReason: null})};
     this.timings = null;
+    this.litBy = null;
     this.active = {gi: 'baseline', giReason: reason, reflections: 'off', reflectionsReason: null, cache: 'none', giMs: 0, probeMs: 0, probes: 0, probeBytes: 0};
     this.changed();
   }
@@ -370,9 +376,11 @@ export class EnhancedLightingRuntime {
    * usable after all (no node library, a grid past the 3D texture limit) — the status says so.
    */
   applied(skipped: string | null): void {
+    const inPlace = this.litBy !== null; // (a rebuild in place: from here the status describes the new lighting)
+    this.litBy = null;
     const a = this.active;
-    if (!a || !skipped || a.reflections === 'off') return;
-    this.active = {...a, reflections: 'off', reflectionsReason: skipped, probes: 0, probeBytes: 0};
+    if (a && skipped && a.reflections !== 'off') this.active = {...a, reflections: 'off', reflectionsReason: skipped, probes: 0, probeBytes: 0};
+    else if (!inPlace) return;
     this.changed();
   }
 

@@ -171,6 +171,10 @@ menu, Continue, station load or reroll is involved.
   "The change could not be applied (reason): the station keeps this lighting." A failure after the swap leaves the
   baseline lighting, and the status says baseline. A failed plan is not retried until the choice changes again.
 - A lost device or a station replaced meanwhile ends the rebuild without touching the new station.
+- Between two stations (the train is in the tunnel: the station left is gone, the next one is not built) and inside
+  a transition nothing is rebuilt: the next station's load applies the choice, and a pause that outlives the
+  transition applies it then. The status says "Not applied yet" meanwhile.
+- While it runs the status keeps saying what the station is still lit by, and the new lighting from the swap on.
 - Switching Reflections between Standard and High with a cached bake is the cheapest change (the probes only); Off
   to On is the most expensive (the high bake, the probes and every lit program).
 

@@ -11,6 +11,7 @@
 //     every station's memory), the enemies and the flicker circuits are the same before and after every rebuild.
 //  4. A bake that fails leaves the lighting the station had, says so, and is not retried by itself; a later change works.
 //  5. A change made while the game is not paused waits (pending) and is applied at the next pause.
+//  6. Nothing is rebuilt in the gap between two stations or inside a transition; a pause that outlives the transition applies it.
 import {afterAll, describe, expect, it, vi} from 'vitest';
 import {installHeadless} from './helpers/headlessGame';
 
@@ -39,6 +40,7 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     const game = new Game(h.canvas, false);
     const g = game as unknown as {
       player: {x: number; y: number; z: number; yaw: number; pitch: number}; state: string; scene: {children: unknown[]}; stationGen: number; warming: boolean; warmup: unknown;
+      transitGap: boolean; lifecycle: {busy: boolean; run<T>(fn: () => Promise<T>): Promise<T> | null};
       layout: {grid: {cells: Uint8Array}; props: {kind: string; x: number; z: number}[]; lights: unknown[]};
       containers: {all: {state: {lots: {itemId: string; count?: number}[]}}[]};
       zombies: {brain: {x: number; y: number; z: number; hp: number; alive: boolean}}[];
@@ -96,22 +98,29 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     /** One change in the pause menu, as main.ts makes it; records what the forms would show while it runs. */
     const apply = async (patch: Partial<{enhancedLighting: string; reflections: string}>) => {
       Object.assign(g.settings, patch);
-      const seen = {applying: false, held: false, noFrames: true, line: '', help: '', releasedAfterWarmup: null as boolean | null};
-      const warmupBefore = g.warmup, swapsBefore = game.relightCounts.swaps;
+      const seen = {applying: false, held: false, noFrames: true, framesWatched: 0, early: false, line: '', help: '', releasedAfterWarmup: null as boolean | null};
+      const warmupBefore = g.warmup, swapsBefore = game.relightCounts.swaps, poolBefore = game.lightPool;
+      const helpBefore = describeEnhancedLighting({...game.enhancedLighting.status(), applying: true});
       const off = game.enhancedLighting.subscribe(() => {
         const st = game.enhancedLighting.status();
-        if (st.applying) { seen.applying = true; seen.held = resume.disabled; seen.line = enhancedLightingLine(st); seen.help = describeEnhancedLighting(st); }
+        if (st.applying) {
+          seen.applying = true; seen.held = resume.disabled; seen.line = enhancedLightingLine(st); seen.help = describeEnhancedLighting(st);
+          // until the lighting is swapped the forms keep saying what the station is still lit by
+          if (game.lightPool === poolBefore && seen.help !== helpBefore) seen.early = true;
+        }
         // the forms get their choices back (applying ends) only once the warm-up of a swapped lighting has finished
         else if (seen.applying && seen.releasedAfterWarmup === null && game.relightCounts.swaps > swapsBefore) seen.releasedAfterWarmup = g.warmup !== warmupBefore;
       });
-      const submits0 = h.log.submits;
-      const p = game.relightAfterSettings();
-      // while the rebuild runs the frame loop draws nothing: watch a few frames go by
-      await h.waitFrames(3);
-      if (game.enhancedLighting.status().applying && !g.warming) seen.noFrames = false;
+      let done = false;
+      const p = game.relightAfterSettings().then(() => { done = true; });
+      // while the rebuild runs the frame loop draws nothing: every frame that goes by meanwhile is held back by `warming`
+      while (!done) {
+        await h.waitFrames(1);
+        if (!done && game.enhancedLighting.status().applying) { seen.framesWatched++; if (!g.warming) seen.noFrames = false; }
+      }
       await p;
       off();
-      return {seen, submitsDuring: h.log.submits - submits0};
+      return {seen};
     };
 
     // --- a new campaign under the defaults (Auto, Standard reflections) ---
@@ -129,7 +138,8 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     const releaseField1 = vi.spyOn(field1, 'dispose'), releaseProbes1 = vi.spyOn(probes1, 'dispose');
     const lineBefore = pauseLine.textContent;
     const a1 = await apply({reflections: 'high'});
-    expect(a1.seen, 'the status said "applying" and Resume was held while the lighting was rebuilt, the warm-up included').toMatchObject({applying: true, held: true, noFrames: true, releasedAfterWarmup: true});
+    expect(a1.seen, 'the status said "applying" and Resume was held while the lighting was rebuilt, the warm-up included').toMatchObject({applying: true, held: true, noFrames: true, early: false, releasedAfterWarmup: true});
+    expect(a1.seen.framesWatched, 'frames went by while it was rebuilt').toBeGreaterThan(0);
     expect(a1.seen.line).toContain('applying a change');
     expect(a1.seen.help).toContain(APPLYING_NOTE);
     expect(resume.disabled, 'Resume is free again').toBe(false);
@@ -164,7 +174,9 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     await pause();
     const before2 = {save: savePrint(), enemies: enemiesPrint(), light: lightPrint(), counts: counts()};
     const releaseProbes2 = vi.spyOn(probes2, 'dispose');
-    await apply({enhancedLighting: 'off'});
+    const a2 = await apply({enhancedLighting: 'off'});
+    expect(a2.seen, 'until the swap the status said the enhanced lighting the station still had').toMatchObject({applying: true, held: true, noFrames: true, early: false});
+    expect(a2.seen.help).toBe(`This station: baseline lighting. ${APPLYING_NOTE}`); // (from the swap on, while the warm-up ran)
     expect(game.enhancedLighting.status()).toMatchObject({pending: false, applying: false, error: null, active: {gi: 'baseline', giReason: null, reflections: 'off', cache: 'none', probes: 0, probeBytes: 0}});
     expect(g.scene.children).toContain(stationFieldLight());
     expect(g.scene.children).not.toContain(stationReflectLight());
@@ -221,6 +233,29 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     game.setState('paused');
     expect(await until(() => game.relightCounts.swaps === swaps5 + 1 && !game.enhancedLighting.status().applying && !resume.disabled, 3000)).toBe(true);
     expect(game.enhancedLighting.status()).toMatchObject({pending: false, error: null, active: {gi: 'standard', reflections: 'standard', cache: 'hit'}});
+
+    // --- 6. between two stations (the train journey's gap) and inside a transition nothing is rebuilt: the station that was left is
+    //        torn down by then, and the next one's load applies the choice. A pause that outlives the transition is looked at again ---
+    const runs6 = game.relightCounts.runs, pool6 = game.lightPool;
+    g.transitGap = true;
+    await apply({reflections: 'high'});
+    expect(game.relightCounts.runs, 'nothing is rebuilt in the gap between two stations').toBe(runs6);
+    expect(game.lightPool).toBe(pool6);
+    expect(game.enhancedLighting.status()).toMatchObject({pending: true, applying: false, error: null, active: {reflections: 'standard'}});
+    expect(describeEnhancedLighting(game.enhancedLighting.status())).toMatch(/Not applied yet/);
+    g.transitGap = false;
+    let endFlight!: () => void;
+    const flight = g.lifecycle.run(() => new Promise<void>(r => { endFlight = r; }))!;
+    const waiting = game.relightAfterSettings();
+    await h.waitFrames(8);
+    expect(game.relightCounts.runs, 'nothing is rebuilt inside a transition').toBe(runs6);
+    expect([game.lightPool === pool6, resume.disabled, game.enhancedLighting.status().applying]).toEqual([true, false, false]);
+    endFlight();
+    await flight;
+    await waiting; // the pause outlived the transition: the change is applied now
+    expect(game.relightCounts.runs).toBe(runs6 + 1);
+    expect(game.enhancedLighting.status()).toMatchObject({pending: false, applying: false, error: null, active: {gi: 'standard', reflections: 'high'}});
+    expect(resume.disabled).toBe(false);
     await play();
     expect(await sweep('end'), 'at the end: nothing dropped').toMatchObject({dropped: 0, issues: []});
     expect(stationPrint(), 'the same station at the end').toBe(print0);
