@@ -62,10 +62,11 @@ bodies = one hop, 40 = a full empty train (the train's tank holds four standard 
 while the train is parked.
 
 Market corpse buyer (task studio-corpse-market-shop-20261114-031614-01, `docs/corpse-market-shop.md`): newly built Survivor Markets
-(layout version 4) have a tucked-away den off the Back Lane, marked by a sign and a red lamp. A creepy buyer behind a barred booth buys
-whole dead undead bodies (BB's small one too, which can now be carried) for a flat **10 Rail Ties** each. Carry one in, aim at his
-floor chute and press **E**: the body goes down the shaft, he counts, then pushes a bundle of ties through his slot onto the floor for
-you to pick up. He sells nothing and is closed while the Market is hostile. Visited Markets keep their old layout.
+(layout version 4) have a tucked-away den off the Back Lane, marked by painted boards over its door (red lamps inside). A creepy buyer
+behind a barred booth buys whole dead undead bodies (BB's small one too, which can now be carried) for a flat **10 Rail Ties** each.
+Carry one in, aim at his floor chute and press **E**: the body goes down the shaft, he counts, then pushes a bundle of ties through his
+slot onto the floor for you to pick up. He sells nothing and is closed while the Market is hostile. Visited Markets keep their old
+layout.
 
 Train crafting (task studio-train-crafting-v1-20261111-225628-01, `docs/train-crafting.md`): the bench in the train's rear
 compartment, opposite the Lockbox, turns **Scrap metal / Electrical parts** into four physical things. Aim + **E** opens the recipe
