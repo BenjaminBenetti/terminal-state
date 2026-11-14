@@ -40,7 +40,7 @@ export const POOL_LIFT = 0.012;
 export const ACID_FX = {
   /** Instances per pool: bubbles, froth beads, spits. */
   count: {bubbles: 26, froth: 40, spits: 18},
-  bubble: {size: [0.012, 0.042] as const, life: [0.55, 2.1] as const, rate: 8, reactRate: 11, edge: 0.55, squash: 0.72, wobble: 0.08, wobbleHz: [5, 9] as const, pop: 0.07},
+  bubble: {size: [0.014, 0.055] as const, life: [0.55, 2.1] as const, rate: 8, reactRate: 11, edge: 0.55, squash: 0.72, wobble: 0.08, wobbleHz: [5, 9] as const, pop: 0.07},
   froth: {size: [0.005, 0.012] as const, life: [0.45, 1.3] as const, rate: 13, reactRate: 20, edge: 0.8},
   /** A popping bubble of at least minBubble throws perPop spits: up / sideways speed (m/s). */
   spit: {size: [0.004, 0.008] as const, up: [0.5, 1.1] as const, out: 0.28, perPop: [1, 3] as const, minBubble: 0.02},
@@ -48,6 +48,13 @@ export const ACID_FX = {
   splash: {spits: 12, up: [0.9, 1.7] as const, out: [0.5, 1.5] as const, react: 1.4},
   /** Reaction points: merged within `merge` m, amount x e^(-decay t), dropped under `floor`; kept `inset` x the edge inside the film. */
   react: {merge: 0.28, decay: 2.2, floor: 0.02, inset: 0.93, spread: 0.13},
+  /**
+   * Drying (0..1): no new bead from `stop` on, the live ones age `hurry` x faster per unit of drying and fade out between
+   * `fade[0]` and `fade[1]` — the bubbling dies down before the thin film goes (acidPoolLook.ts), so no bead sits on a dry stain.
+   */
+  dry: {stop: 0.3, hurry: 5, fade: [0.2, 0.5] as const},
+  /** A bead keeps this x its radius clear of the film's edge (a bubble swells a little as it pops). */
+  clear: 1.5,
   gravity: 9.8,
   /** Spawns per kind per frame at most (a long frame never dumps a burst). */
   maxPerFrame: 4,
@@ -105,7 +112,7 @@ function beadMaterial(body: number): MeshStandardNodeMaterial {
   mat.colorNode = mix(mix(P(body), P(ACID_LOOK.bright), 0.5), P(ACID_LOOK.foam), a.y);
   mat.opacityNode = a.x.mul(mix(mix(0.3, 0.95, rimLit), 0.92, a.y));
   mat.roughnessNode = mix(0.06, 0.6, a.y);
-  mat.emissiveNode = P(body).mul(a.z.mul(0.35).add(0.04)).mul(a.x);
+  mat.emissiveNode = P(body).mul(a.z.mul(0.35).add(ACID_LOOK.foamGlow)).mul(a.x);
   return mat;
 }
 
@@ -156,7 +163,8 @@ export class AcidPoolVisual {
   private readonly bead: THREE.InstancedBufferAttribute;
   private rand: () => number = mulberry32(1);
   private reach = 0;
-  // beads: unit position (x the reach) for bubbles / froth, metres for spits; velocity (spits); size, age, life, wobble phase / rate
+  // beads: unit position (x the reach) for bubbles / froth, metres for spits; velocity (spits; vx of a froth bead: its glow); size,
+  // age, life, wobble phase / rate
   private readonly bx = new Float32Array(BEADS);
   private readonly by = new Float32Array(BEADS);
   private readonly bz = new Float32Array(BEADS);
@@ -285,12 +293,15 @@ export class AcidPoolVisual {
     R[weakest * 3] = mx; R[weakest * 3 + 1] = mz; R[weakest * 3 + 2] = amount;
   }
 
-  /** A spot for a new bubble / froth bead (unit frame): at a reaction point, in the edge band, or anywhere in the film. */
-  private spot(edge: number, shrink: number, out: {x: number; z: number}): void {
+  /**
+   * A spot for a new bubble / froth bead of radius `size` m (unit frame): at a reaction point (`hot`: its amount), in the edge band,
+   * or anywhere in the film — the whole bead inside the film's outline.
+   */
+  private spot(edge: number, shrink: number, size: number, out: {x: number; z: number; hot: number}): void {
     const R = this.look.react, n = ACID_LOOK.reactions, full = this.look.r;
     let w = 0;
     for (let i = 0; i < n; i++) w += R[i * 3 + 2];
-    let x: number, z: number;
+    let x: number, z: number, hot = 0;
     if (this.rand() < w / (w + 1.2)) {
       // one of the reaction points, by its amount; scattered around it
       let pick = this.rand() * w, i = 0;
@@ -298,25 +309,36 @@ export class AcidPoolVisual {
       const s = ACID_FX.react.spread * (0.6 + 0.8 * R[i * 3 + 2]);
       x = (R[i * 3] + (this.rand() + this.rand() + this.rand() - 1.5) * s * 1.6) / full;
       z = (R[i * 3 + 1] + (this.rand() + this.rand() + this.rand() - 1.5) * s * 1.6) / full;
+      hot = Math.min(1, R[i * 3 + 2]);
     } else {
       const a = this.rand() * TAU, e = ringRadius(this.look.ring, a);
       const f = this.rand() < edge ? 0.78 + 0.19 * this.rand() : Math.sqrt(this.rand()) * 0.9;
       x = Math.cos(a) * e * f; z = Math.sin(a) * e * f;
     }
-    // never outside the film (nor, while it dries, outside what is left of the liquid)
-    const rho = Math.hypot(x, z), lim = ringRadius(this.look.ring, Math.atan2(z, x)) * 0.97 * shrink;
-    if (rho > lim) { x *= lim / rho; z *= lim / rho; }
-    out.x = x; out.z = z;
+    // never outside the film (the reach only grows after the burst: what fits now fits later)
+    const rho = Math.hypot(x, z);
+    const lim = Math.max(0, ringRadius(this.look.ring, Math.atan2(z, x)) * 0.97 * shrink - ACID_FX.clear * size / Math.max(1e-3, this.reach));
+    if (rho > lim) { const f = rho > 0 ? lim / rho : 0; x *= f; z *= f; }
+    out.x = x; out.z = z; out.hot = hot;
   }
-  private readonly at = {x: 0, z: 0};
+  private readonly at = {x: 0, z: 0, hot: 0};
+
+  /** A free bead of kind `k` (0 bubbles / 1 froth / 2 spits: `n` of them from `first`), or -1: a live bead is never cut short. */
+  private free(k: number, first: number, n: number): number {
+    for (let j = 0; j < n; j++) {
+      const o = (this.next[k] + j) % n;
+      if (this.life[first + o] <= 0) { this.next[k] = (o + 1) % n; return first + o; }
+    }
+    return -1;
+  }
 
   private bubble(shrink: number, scale: number): void {
-    const B = ACID_FX.bubble, i = this.next[0];
-    this.next[0] = (i + 1) % ACID_FX.count.bubbles;
-    this.spot(B.edge, shrink, this.at);
-    this.bx[i] = this.at.x; this.bz[i] = this.at.z; this.by[i] = 0;
+    const B = ACID_FX.bubble, i = this.free(0, 0, ACID_FX.count.bubbles);
+    if (i < 0) return;
     // (mostly small ones, now and then a big blister)
-    this.size[i] = (B.size[0] + (B.size[1] - B.size[0]) * this.rand() ** 1.8) * scale;
+    this.size[i] = (B.size[0] + (B.size[1] - B.size[0]) * this.rand() ** 1.7) * scale;
+    this.spot(B.edge, shrink, this.size[i], this.at);
+    this.bx[i] = this.at.x; this.bz[i] = this.at.z; this.by[i] = 0;
     this.life[i] = this.range(B.life);
     this.age[i] = 0;
     this.wob[i * 2] = this.rand() * TAU; this.wob[i * 2 + 1] = this.range(B.wobbleHz) * TAU;
@@ -324,11 +346,12 @@ export class AcidPoolVisual {
   }
 
   private frothBead(shrink: number, scale: number): void {
-    const F = ACID_FX.froth, i = FROTH0 + this.next[1];
-    this.next[1] = (this.next[1] + 1) % ACID_FX.count.froth;
-    this.spot(F.edge, shrink, this.at);
-    this.bx[i] = this.at.x; this.bz[i] = this.at.z; this.by[i] = 0;
+    const F = ACID_FX.froth, i = this.free(1, FROTH0, ACID_FX.count.froth);
+    if (i < 0) return;
     this.size[i] = this.range(F.size) * scale;
+    this.spot(F.edge, shrink, this.size[i], this.at);
+    this.bx[i] = this.at.x; this.bz[i] = this.at.z; this.by[i] = 0;
+    this.vx[i] = this.at.hot; // (a froth bead's glow: it shares its reaction's, and fades with it)
     this.life[i] = this.range(F.life);
     this.age[i] = 0;
     this.counts.froth++;
@@ -336,8 +359,8 @@ export class AcidPoolVisual {
 
   /** A spit from (mx, mz) metres from the centre, thrown at (vx, vy, vz). */
   private spit(mx: number, mz: number, vx: number, vy: number, vz: number): void {
-    const i = SPIT0 + this.next[2];
-    this.next[2] = (this.next[2] + 1) % ACID_FX.count.spits;
+    const i = this.free(2, SPIT0, ACID_FX.count.spits);
+    if (i < 0) return;
     this.bx[i] = mx; this.by[i] = 0.004; this.bz[i] = mz;
     this.vx[i] = vx; this.vy[i] = vy; this.vz[i] = vz;
     this.size[i] = this.range(ACID_FX.spit.size);
@@ -381,8 +404,8 @@ export class AcidPoolVisual {
       work += a;
       (this.u.react[i].value as THREE.Vector3).set(R[i * 3], R[i * 3 + 1], a);
     }
-    // new beads: fewer as the film thins, none on what has dried
-    const live = k * (1 - dry) * (1 - dry), shrink = 1 - 0.6 * dry, scale = 0.45 + 0.55 * k;
+    // new beads: fewer as the film thins, none once it dries in earnest
+    const D = F.dry, live = k * Math.max(0, 1 - dry / D.stop), shrink = 1 - 0.6 * dry, scale = 0.45 + 0.55 * k;
     if (dt > 0 && live > 0) {
       const w = Math.min(work, 2.5);
       this.acc[0] += (F.bubble.rate + F.bubble.reactRate * w) * live * dt;
@@ -392,18 +415,19 @@ export class AcidPoolVisual {
       if (this.acc[0] > F.maxPerFrame) this.acc[0] = 0;
       if (this.acc[1] > F.maxPerFrame) this.acc[1] = 0;
     }
-    const fade = Math.min(1, k * 1.5);
+    const fade = Math.min(1, k * 1.5) * Math.max(0, Math.min(1, (D.fade[1] - dry) / (D.fade[1] - D.fade[0])));
+    const aged = dt * (1 + D.hurry * dry);
     // bubbles: swell, wobble, pop (and spit)
     const B = F.bubble, S = F.spit;
     for (let i = 0; i < FROTH0; i++) {
       if (this.life[i] <= 0) continue;
-      this.age[i] += dt;
+      this.age[i] += aged;
       const t = this.age[i], left = this.life[i] - t;
       if (left <= 0) {
         const x = this.bx[i] * reach, z = this.bz[i] * reach, s = this.size[i];
         this.hide(i);
         this.counts.pops++;
-        if (s >= S.minBubble) for (let n = Math.round(this.range(S.perPop)); n > 0; n--) {
+        if (s >= S.minBubble && fade > 0) for (let n = Math.round(this.range(S.perPop)); n > 0; n--) {
           const a = this.rand() * TAU, out = this.rand() * S.out;
           this.spit(x, z, Math.cos(a) * out, this.range(S.up), Math.sin(a) * out);
         }
@@ -419,11 +443,12 @@ export class AcidPoolVisual {
     // froth: small pale beads on the foam
     for (let i = FROTH0; i < SPIT0; i++) {
       if (this.life[i] <= 0) continue;
-      this.age[i] += dt;
+      this.age[i] += aged;
       const u = this.age[i] / this.life[i];
       if (u >= 1) { this.hide(i); continue; }
       const rad = this.size[i] * Math.min(1, u / 0.2);
-      this.put(i, this.bx[i] * reach, rad * 0.35, this.bz[i] * reach, rad, rad * 0.8, rad, fade * Math.min(1, (1 - u) / 0.3), 1, 0);
+      this.vx[i] *= decay;
+      this.put(i, this.bx[i] * reach, rad * 0.35, this.bz[i] * reach, rad, rad * 0.8, rad, fade * Math.min(1, (1 - u) / 0.3), 1, 0.5 * this.vx[i]);
     }
     // spits: up a few centimetres and back into the film
     for (let i = SPIT0; i < BEADS; i++) {
@@ -431,8 +456,9 @@ export class AcidPoolVisual {
       this.age[i] += dt;
       this.vy[i] -= F.gravity * dt;
       this.bx[i] += this.vx[i] * dt; this.by[i] += this.vy[i] * dt; this.bz[i] += this.vz[i] * dt;
-      if (this.by[i] <= 0 && this.vy[i] < 0) { this.hide(i); continue; }
-      const s = this.size[i];
+      const s = this.size[i], far = reach - 2 * s;
+      // (back in the film, or about to leave the circle that hurts: nothing of the pool is ever drawn outside it)
+      if ((this.by[i] <= 0 && this.vy[i] < 0) || this.bx[i] * this.bx[i] + this.bz[i] * this.bz[i] > far * far) { this.hide(i); continue; }
       this.put(i, this.bx[i], this.by[i], this.bz[i], s, s * (1 + Math.min(0.8, Math.abs(this.vy[i]) * 0.5)), s, fade, 0, 0.3);
     }
     this.bubbles.instanceMatrix.needsUpdate = true;

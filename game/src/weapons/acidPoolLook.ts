@@ -43,6 +43,8 @@ export const ACID_LOOK = {
   alphaEtch: 0.5,
   /** Glow (x the body colour): base, in the streaks, at a reaction; and the hot yellow at a reaction. */
   glow: [0.1, 0.1, 0.26, 0.14] as const,
+  /** The foam's own glow (x the body colour): the edge band is where the hazard ends, so it must read in the dark too. */
+  foamGlow: 0.08,
   /** Colours (sRGB): deep / body (= ACID.color, passed in) / bright streak / foam / dried crust / etched floor. */
   deep: 0x3a7009,
   bright: 0xe2f25a,
@@ -136,11 +138,12 @@ export function poolLook<T>(M: LookMath<T>, i: LookIn<T>): LookOut<T> {
   }
   const react = re === null ? M.mul(depth, 0) : M.min(re, 1.5);
   // THICKNESS: lobes of pooled liquid inside a thin runny film — the thick body's own edge wanders (it rides the swirl) between about
-  // half way out and the rim, so the heavy part of the spill is far from round
+  // half way out and the rim, so the heavy part of the spill is far from round; the film itself thins toward the rim, unevenly
   const lobes = M.add(0.8, M.mul(M.sub(M.add(M.mul(A.r, 0.6), M.mul(B.g, 0.4)), 0.5), 0.9));
   const pooled = M.sub(1, M.smoothstep(M.sub(lobes, 0.3), M.add(lobes, 0.05), rc));
-  const thick = M.clamp(M.add(M.sub(0.2, M.mul(rc, 0.07)), M.mul(pooled, M.add(0.3, M.mul(flow, 0.6)))), 0, 1);
-  // DRYING: the thin film goes first, the pooled lobes shrink last
+  const film = M.add(M.sub(0.22, M.mul(rc, 0.12)), M.mul(M.sub(flow, 0.5), 0.16));
+  const thick = M.clamp(M.add(film, M.mul(pooled, M.add(0.3, M.mul(flow, 0.6)))), 0, 1);
+  // DRYING: the thin film goes first — from the rim inward, in patches — the pooled lobes shrink last
   const d = M.mul(M.pow(i.dry, 1.6), 1.25);
   const wet = M.smoothstep(M.sub(d, 0.22), M.sub(d, 0.02), thick);
   // the liquid's own edge: frayed and soft, always inside the mesh's rim
@@ -177,7 +180,7 @@ export function poolLook<T>(M: LookMath<T>, i: LookIn<T>): LookOut<T> {
     etch: M.mul(dryW, M.sub(1, crustA)),
     alpha: M.mul(M.mix(dryA, liquidA, liquid), fade),
     rough: M.mix(M.mix(0.5, 0.9, crustA), M.mix(0.07, 0.75, foam), liquid),
-    glow: M.mul(M.mul(lf, fade), M.add(M.add(K.glow[0], M.mul(streak, 2 * K.glow[1])), M.mul(react, K.glow[2]))),
+    glow: M.mul(fade, M.add(M.mul(lf, M.add(M.add(K.glow[0], M.mul(streak, 2 * K.glow[1])), M.mul(react, K.glow[2]))), M.mul(M.mul(liquid, foam), K.foamGlow))),
     hot: M.mul(M.mul(M.mul(liquid, fade), react), K.glow[3]),
     sx: M.add(M.mul(churn, M.add(M.mul(M.sub(A.g, 0.5), 0.5), M.mul(M.sub(B.g, 0.5), 0.4))), M.mul(froth, M.sub(C.b, 0.5))),
     sz: M.add(M.mul(churn, M.add(M.mul(M.sub(B.r, 0.5), 0.5), M.mul(M.sub(A.r, 0.5), 0.4))), M.mul(froth, M.sub(D.b, 0.5))),

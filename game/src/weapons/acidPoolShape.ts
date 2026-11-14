@@ -25,12 +25,12 @@ export const POOL_EDGE = {
   /** Spokes of the film's mesh (the outline is sampled at these angles; a chord sags by 1 - cos(pi / segments) = 0.03 %). */
   segments: 128,
   /** Harmonics of the lobes (per turn), their falloff (amplitude ~ 1 / k^falloff). */
-  harmonics: [2, 9] as const,
-  falloff: 0.75,
+  harmonics: [3, 13] as const,
+  falloff: 0.4,
   /** Bays / tongues: narrow features on top of the lobes — their count, half-width range (rad) and depth range (x the lobes' scale). */
-  notches: 3,
-  notchWidth: [0.14, 0.3] as const,
-  notchDepth: [0.55, 1.15] as const,
+  notches: 5,
+  notchWidth: [0.1, 0.22] as const,
+  notchDepth: [0.6, 1.2] as const,
   /** Lobes are broad, bays narrow: the normalised profile s -> 1 - (1 - s)^round. */
   round: 1.5,
 } as const;
