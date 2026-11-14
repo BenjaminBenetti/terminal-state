@@ -35,7 +35,8 @@ export type IconKey =
   | 'railTies' // task studio-market-rework-20261108-074144-01 (lane TRADE): the market's Rail Ties (items/railTies.ts)
   | BeerIconKey // task studio-market-bar-20261108-225231-01 (lane BEER): the market bar's beers (items/beers.ts)
   | WeaponVarietyIconKey // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve new weapons (ui/weaponVarietyIcons.ts)
-  | GrenadeIconKey; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades (items/grenades.ts)
+  | GrenadeIconKey // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades (items/grenades.ts)
+  | FlamethrowerIconKey; // task studio-flamethrower-fire-20261114-031614-01: the flamethrower (items/flamethrowerItems.ts)
 
 /** How a consumable is used: wording, sound and the stat it mainly restores ('use': the flashlight battery). */
 export type ConsumeVerb = 'apply' | 'eat' | 'drink' | 'use';
@@ -76,6 +77,7 @@ import {BEER_DIMS, BEER_ITEMS, beerEffectText, isBeer, type BeerIconKey} from '.
 import {PANTRY_DIMS, PANTRY_DRINK_IDS, PANTRY_FOOD_IDS, PANTRY_ITEMS, type PantryIconKey} from './pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
 import {VARIETY_WEAPON_ITEMS, type WeaponVarietyIconKey} from './weaponVarietyItems'; // task studio-weapon-variety-production-20261109-224355-01: the twelve new weapons
 import {GRENADE_DIMS, GRENADE_ITEMS, isGrenadeItem, type GrenadeIconKey} from './grenades'; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades
+import {FLAMETHROWER_DIMS, FLAMETHROWER_ITEMS, type FlamethrowerIconKey} from './flamethrowerItems'; // task studio-flamethrower-fire-20261114-031614-01: the flamethrower
 
 // + bread (task office-props-physics-scale-20261030, lane FURN): only bakery display cases hold it (items/lootTables.ts BAKERY_ROWS)
 // + the Skyways ramen restaurant's ramen bowls / bento and bubble tea (task studio-skyways-level-20261106-054448, lane FOOD: items/skywaysFood.ts)
@@ -159,6 +161,7 @@ export const ITEMS: Record<string, ItemDef> = {
   ...PANTRY_ITEMS,
   ...VARIETY_WEAPON_ITEMS, // task studio-weapon-variety-production-20261109-224355-01 (items/weaponVarietyItems.ts)
   ...GRENADE_ITEMS, // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades (items/grenades.ts; bench only, never loot) — appended last
+  ...FLAMETHROWER_ITEMS, // task studio-flamethrower-fire-20261114-031614-01: the flamethrower (items/flamethrowerItems.ts; bench / Market only, never loot) — appended after them
 };
 
 export function itemDef(id: string): ItemDef {
@@ -260,6 +263,7 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   ...RAIL_TIES_DIMS, // task studio-market-rework-20261108-074144-01 (lane TRADE): the code-built tie bundle (world/railTiesModel.ts)
   ...BEER_DIMS, // task studio-market-bar-20261108-225231-01: the beer bottles
   ...GRENADE_DIMS, // task studio-refinement-batch-20261113-035659-01: the cooked acid / lure canisters' bounds (assets/grenades.generated.ts)
+  ...FLAMETHROWER_DIMS, // task studio-flamethrower-fire-20261114-031614-01
 };
 
 export function itemDims(id: string): ItemDims {

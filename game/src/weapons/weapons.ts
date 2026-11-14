@@ -9,6 +9,9 @@ import {carryView, KNIFE_POSES} from './meleeView'; // lane FEEL: the knife's up
 import {RECOIL_SCALE, firingRecoil} from './recoil';
 import {VARIETY_GUN_DEFS} from './varietyGuns'; // task studio-weapon-variety-production-20261109-224355-01: the six new guns
 import {VARIETY_MELEE_DEFS} from './varietyMelee'; // task studio-weapon-variety-production-20261109-224355-01: the six new melee weapons
+import {FLAMETHROWER_DEF} from './flamethrower'; // task studio-flamethrower-fire-20261114-031614-01: the flamethrower (a STREAM weapon)
+import {FLAME_FUEL_CAN} from '../fire/flamethrowerSpec';
+import {burnUnit, canPourCan, pourCan, tankFuel, wornFuelTank} from '../fire/fuelTank';
 
 export interface MagazineReload { kind: 'magazine'; time: number; emptyTime: number }
 export interface ShellReload { kind: 'shell'; start: number; each: number; end: number }
@@ -124,6 +127,27 @@ export interface WeaponDef {
    * which the melee phases enforce (= melee.windup + melee.sweep + melee.recovery); `auto` false (holding never repeats).
    */
   melee?: MeleeSpec;
+  /**
+   * Task studio-flamethrower-fire-20261114-031614-01: a STREAM weapon (the flamethrower). Its stream replaces the gun's fire / magazine /
+   * reload cycle in WeaponController (updateStream): no caliber, no magazine, no bullets — the fuel is the WORN Fuel Tank's (fire/fuelTank.ts).
+   */
+  stream?: StreamSpec;
+}
+
+/**
+ * Task studio-flamethrower-fire-20261114-031614-01: a stream weapon's cycle. While the trigger is held (and a Fuel Tank with fuel is worn)
+ * the controller TICKS every `unitSeconds`: each tick first takes ONE whole fuel unit from the worn tank and then gives one 'flame' tick
+ * (the game applies exactly `unitSeconds` of flame for it), so fuel and flame can never drift: no tick without its unit, no unit without
+ * its tick. The press pays its first tick at once; a release lets the paid tick run out (the stream ends <= unitSeconds later); ticks never
+ * come faster than one per `unitSeconds`, however the trigger is tapped. R pours ONE ordinary fuel can into the worn tank over
+ * `refillTime` s (only when the whole can fits): the can is taken and its units arrive in the same step at the end — a switch, sprint or
+ * the tank coming off before that pours nothing and takes nothing.
+ */
+export interface StreamSpec {
+  /** Seconds of flame one fuel unit pays for = the tick length. */
+  unitSeconds: number;
+  /** Seconds one fuel can takes to pour into the worn tank. */
+  refillTime: number;
 }
 
 /**
@@ -272,6 +296,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   // task studio-weapon-variety-production-20261109-224355-01: the twelve user-approved additions (the baseline four above are unchanged)
   ...VARIETY_GUN_DEFS,
   ...VARIETY_MELEE_DEFS,
+  [FLAMETHROWER_DEF.id]: FLAMETHROWER_DEF, // task studio-flamethrower-fire-20261114-031614-01 (bench / Market only: never a find)
 };
 
 /** Lane KNIFE: the weapon def of an item id when it is a melee weapon (knife), else null. */
@@ -322,7 +347,15 @@ export type WeaponEvent =
   // (game.ts meleeContact). `swing` numbers them.
   // (lane MELEE, weapon variety: a CHARGE weapon's swing / contact also carry the release's `charge` 0..1; absent for the others)
   | {type: 'swing'; def: WeaponDef; swing: number; charge?: number}
-  | {type: 'contact'; def: WeaponDef; swing: number; charge?: number};
+  | {type: 'contact'; def: WeaponDef; swing: number; charge?: number}
+  // Task studio-flamethrower-fire-20261114-031614-01 (stream weapons only; StreamSpec): the stream lit / `ticks` PAID ticks of flame are due
+  // now (each took one fuel unit) / the stream went out (`dry`: the tank ran empty under the trigger) / a fuel can started pouring into the
+  // worn tank / the pour ended (`poured`: the can went in; false = cancelled, nothing taken).
+  | {type: 'streamStart'; def: WeaponDef}
+  | {type: 'flame'; def: WeaponDef; ticks: number}
+  | {type: 'streamEnd'; def: WeaponDef; dry: boolean}
+  | {type: 'refuelStart'; def: WeaponDef}
+  | {type: 'refuelEnd'; def: WeaponDef; poured: boolean};
 
 export interface TriggerInput {
   /** Trigger currently held. */
@@ -345,6 +378,8 @@ export interface TriggerInput {
 const MELEE_EPS = 1e-6;
 /** Lane GUNS: a shot within the def's interval + this gap (s) of the previous one continues a string (RecoilClimb). */
 export const STREAK_GAP = 0.1;
+/** Task flamethrower-fire: stream ticks one frame may catch up (a 0.3 s hitch burns 3 units of flame, not a burst of 30). */
+export const STREAM_CATCHUP = 3;
 
 export class WeaponController {
   def: WeaponDef | null = null;
@@ -379,6 +414,10 @@ export class WeaponController {
   private sinceShot = Infinity;
   /** Lane GUNS: seconds of steady aiming counted toward the def's AimSettle (0 when not aiming; shots set it back). */
   aimT = 0;
+  /** Task flamethrower-fire: a stream weapon's flame is on (from its first paid tick until the last paid tick has run out). */
+  streaming = false;
+  /** Task flamethrower-fire: seconds left of the tick already paid for (the next tick is due at 0). */
+  private tickT = 0;
 
   equip(stack: ItemStack | null, defs = WEAPONS): void {
     if (stack === this.stack && stack) return;
@@ -390,6 +429,7 @@ export class WeaponController {
     this.progress = 0;
     this.streak = 0; this.sinceShot = Infinity; this.aimT = 0; // lane GUNS: a new weapon starts a fresh string, unsettled
     this.resetMelee(); // lane KNIFE / FEEL: a windup, ready hold or swing never survives a weapon change (no stale contact)
+    this.streaming = false; this.tickT = 0; // task flamethrower-fire: the flame goes out with the weapon (its paid ticks were already given)
   }
 
   /**
@@ -495,6 +535,7 @@ export class WeaponController {
   canReload(inv: Inventory): boolean {
     const d = this.def, s = this.stack;
     if (d?.melee) return false; // lane KNIFE: nothing to reload
+    if (d?.stream) return canPourCan(wornFuelTank(inv)) && inv.count(FLAME_FUEL_CAN) > 0; // task flamethrower-fire: a whole can fits the worn tank
     return !!d && !!s && (s.mag ?? 0) < d.magazine && reserveFor(d, inv) > 0;
   }
 
@@ -515,6 +556,7 @@ export class WeaponController {
       return ev;
     }
     if (d.melee) return this.updateMelee(dt, input, ev); // lane KNIFE: swing cycle instead of fire / magazine / reload
+    if (d.stream) return this.updateStream(dt, input, inv, ev); // task flamethrower-fire: fuel ticks instead of fire / magazine / reload
     if (this.phase === 'reloading') {
       if (input.pressed && (d.reload.kind === 'shell' || d.reload.kind === 'break') && (s.mag ?? 0) > 0) this.interruptReload = true; // (lane GUNS: + break)
       this.phaseT -= dt / Math.max(0.25, this.handling); // Iteration 16: handling scales the whole reload (magazine and shell by shell)
@@ -728,6 +770,65 @@ export class WeaponController {
     const queued = this.pressQueued;
     this.resetMelee();
     this.pressQueued = queued;
+  }
+
+  /**
+   * Task studio-flamethrower-fire-20261114-031614-01: the STREAM cycle (StreamSpec). One whole fuel unit of the WORN tank per tick, taken
+   * in the same step its 'flame' tick is emitted; at most one tick per `unitSeconds` (a frame longer than that catches up, bounded). The
+   * magazine / reserve / caliber code is never reached: `mag` stays 0 and no ammo item is ever counted or taken.
+   */
+  private updateStream(dt: number, input: TriggerInput, inv: Inventory, ev: WeaponEvent[]): WeaponEvent[] {
+    const d = this.def!, sp = d.stream!;
+    const tank = wornFuelTank(inv);
+    const out = (dry: boolean) => { if (this.streaming) { this.streaming = false; ev.push({type: 'streamEnd', def: d, dry}); } };
+    if (this.phase === 'reloading') { // a can is being poured into the worn tank
+      // the tank came off, the can left the pockets or the gun was lowered (sprint / item use / climbing): nothing poured, nothing taken
+      if (!this.canReload(inv) || input.lowered) {
+        this.phase = 'idle'; this.progress = 0;
+        ev.push({type: 'refuelEnd', def: d, poured: false});
+        return ev;
+      }
+      this.phaseT -= dt / Math.max(0.25, this.handling);
+      this.progress = 1 - Math.max(0, this.phaseT) / sp.refillTime;
+      if (this.phaseT <= 0) {
+        const poured = pourCan(tank!, inv); // the can leaves the pockets and its units arrive together
+        this.phase = 'idle'; this.progress = 0;
+        ev.push({type: 'refuelEnd', def: d, poured});
+      }
+      return ev;
+    }
+    const fresh = this.tickT <= 0 && !this.streaming; // no paid tick is running: a press now starts a full tick
+    this.tickT -= dt; // the paid tick runs out in real time, held or not
+    if (input.reload && !input.lowered && this.canReload(inv)) {
+      out(false);
+      this.tickT = 0;
+      this.phase = 'reloading'; this.phaseT = sp.refillTime; this.progress = 0;
+      ev.push({type: 'refuelStart', def: d});
+      return ev;
+    }
+    const wants = input.held && !input.lowered;
+    if (wants && tank && tankFuel(tank) > 0) {
+      // every tick due this frame: take ONE unit, then give its tick. A held stream keeps the frame's overshoot (an exact tick rate);
+      // a long frame catches up at most STREAM_CATCHUP ticks and drops the rest of the backlog — time lost, never fuel.
+      let ticks = 0;
+      while (this.tickT <= 0 && ticks < STREAM_CATCHUP && burnUnit(tank)) {
+        ticks++;
+        this.tickT = fresh && ticks === 1 ? sp.unitSeconds : this.tickT + sp.unitSeconds;
+      }
+      if (ticks >= STREAM_CATCHUP && this.tickT <= 0) this.tickT = sp.unitSeconds;
+      if (ticks > 0) {
+        inv.version++;
+        if (!this.streaming) { this.streaming = true; ev.push({type: 'streamStart', def: d}); }
+        ev.push({type: 'flame', def: d, ticks});
+      }
+    } else if (input.pressed && !input.lowered && this.cooldown <= 0 && !this.streaming) {
+      this.cooldown = 0.25; // no tank on the back / an empty tank: a dry click (the game says which)
+      ev.push({type: 'dry', def: d});
+    }
+    // the flame goes out once the last paid tick has run out and no new one was paid (released, lowered, the tank empty or taken off)
+    if (this.streaming && this.tickT <= 0) out(wants && tankFuel(tank) === 0);
+    if (!this.streaming) this.tickT = Math.max(0, this.tickT);
+    return ev;
   }
 
   /** Damage multiplier by distance. */

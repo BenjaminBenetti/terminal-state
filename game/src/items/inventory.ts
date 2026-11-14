@@ -70,6 +70,7 @@ import {itemDef} from './items';
 import {canonicalItemId} from './calibers';
 import {WEAPONS, meleeDefOf} from '../weapons/weapons';
 import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearSpec, isAirtank, isBagItem, isFilterMask, type GearSlot} from './gear';
+import {FLAME_FUEL} from '../fire/flamethrowerSpec';
 
 export interface ItemStack {
   uid: number;
@@ -94,6 +95,11 @@ export interface ItemStack {
    * undamaged (every older save / new item); travels with the item (drop / bag / Lockbox / cargo / saves): never reset by equipping.
    */
   armor?: number;
+  /**
+   * Task studio-flamethrower-fire-20261114-031614-01: a Fuel Tank's flamethrower fuel, WHOLE units left (fuel tanks only: 0..its GearSpec.fuelCap;
+   * fire/flamethrowerSpec.ts). Absent = empty (like `air`): no copy path can refill a tank. A new tank holds FLAME_FUEL.newUnits.
+   */
+  fuel?: number;
 }
 
 export type Bar = 'hotbar' | 'pack' | 'gear' | 'throw' | 'melee';
@@ -143,7 +149,7 @@ export type RefusalCode = 'split' | 'wrong-slot' | 'not-gear' | 'pockets-occupie
 export interface Refusal { code: RefusalCode; text: string }
 
 /** Plain-data stack (snapshots). Mask lane: + `filter` (a gas mask's fitted-filter seconds). */
-export interface StackJSON { uid: number; itemId: string; count: number; mag?: number; spent?: number; bag?: (StackJSON | null)[]; filter?: number; air?: number; armor?: number }
+export interface StackJSON { uid: number; itemId: string; count: number; mag?: number; spent?: number; bag?: (StackJSON | null)[]; filter?: number; air?: number; armor?: number; fuel?: number }
 export interface InventoryJSON {
   /** 1: iteration-16 snapshots (no grenade slot), 2: + grenade slot (no melee slot) — both still loaded; 3: current. */
   v: 1 | 2 | 3;
@@ -197,6 +203,7 @@ export function stackToJSON(s: ItemStack | null | undefined): StackJSON | null {
   if (s.filter !== undefined) j.filter = s.filter; // mask lane
   if (s.air !== undefined) j.air = s.air; // task filter-tension-airtank
   if (s.armor !== undefined) j.armor = s.armor; // task studio-general-armor-20261107-231448-01: armour left after wear
+  if (s.fuel !== undefined) j.fuel = s.fuel; // task studio-flamethrower-fire-20261114-031614-01: a fuel tank's units
   return j;
 }
 
@@ -213,6 +220,7 @@ export function stackFromJSON(j: StackJSON | null | undefined): ItemStack | null
   if (j.filter !== undefined) s.filter = j.filter; // mask lane
   if (j.air !== undefined) s.air = j.air; // task filter-tension-airtank
   if (j.armor !== undefined) s.armor = j.armor; // task studio-general-armor-20261107-231448-01
+  if (j.fuel !== undefined) s.fuel = j.fuel; // task studio-flamethrower-fire-20261114-031614-01
   return s;
 }
 
@@ -296,6 +304,7 @@ export class Inventory {
     const bagSlots = def.gear?.bagSlots ?? 0;
     if (bagSlots > 0) s.bag = new Array(bagSlots).fill(null);
     if (def.gear?.airLife) s.air = def.gear.airLife; // task filter-tension-airtank: a NEW tank is full (copies keep their own `air`)
+    if (def.gear?.fuelCap) s.fuel = Math.min(def.gear.fuelCap, FLAME_FUEL.newUnits); // task flamethrower-fire: a NEW tank holds exactly its recipe's one can
     return s;
   }
 
