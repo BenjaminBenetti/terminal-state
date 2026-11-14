@@ -28,7 +28,8 @@ import {BAG_LANE} from '../run/bagStore';
 import {FUEL, FUEL_LANE, debitProblem, debitUnits, stationFuelProblem, trainFuelProblem, type FuelDebit} from '../fuel/fuel';
 import {SKYWAYS_CAR_LANE, TRUNK_SLOTS, skywaysCarProblem} from '../world/skywaysCarStore'; // task skyways-level-20261106 (lane CAR): the prize car's pose
 import {chipperProblem} from '../fuel/chipperFuel'; // task studio-corpse-chipper-fuel-20261110-235304-01: the train chipper's record
-import {corpseFeedable} from '../ai/corpseTrait';
+import {corpseCarriable, corpseFeedable} from '../ai/corpseTrait';
+import {CORPSE_SHOP_LANE, corpseShopProblem, type CorpseShopJSON} from '../market/corpseShop/shopState'; // task studio-corpse-market-shop-20261114-031614-01
 import {CORPSE_CARRY_PARTICIPANT, STATION_BODIES_LANE, carryProblem, stationBodiesProblem} from '../corpse/bodyLanes'; // (lane CORPSE) the carried body, a station's bodies
 import {STATION_PROPS_LANE, cargoProblem, stationPropsProblem, type CargoPropJSON} from '../run/trainCargo'; // task train-loose-cargo: the train's loose items (+ train-all-cargo: props)
 import {EQUIPMENT, STATION_EQUIPMENT_LANE, equipmentSeqOf, stationEquipmentProblem, trainEquipmentProblem, type EquipmentJSON} from '../craft/equipment'; // task train-crafting: the crafted chests / devices aboard and left in stations
@@ -572,7 +573,7 @@ function participants(v: unknown, path: string, seen: Set<number>): void {
   }
   const cc = o[CORPSE_CARRY_PARTICIPANT]; // (lane CORPSE) the body in the player's hands
   if (cc !== undefined) {
-    const cp = carryProblem(cc, corpseFeedable);
+    const cp = carryProblem(cc, corpseCarriable); // (task corpse-market-shop: every undead body is carriable — BB's too)
     if (cp) bad(`${path}.${CORPSE_CARRY_PARTICIPANT}`, cp);
     const held = (cc as {held: unknown}).held;
     if (held) bodiesIn([held], `${path}.${CORPSE_CARRY_PARTICIPANT}.held`);
@@ -641,9 +642,16 @@ function lanes(v: unknown, path: string): void {
     carriedProps((o[STATION_PROPS_LANE] as {here: CargoPropJSON[]}).here, `${path}.${STATION_PROPS_LANE}.here`);
   }
   if (has(o, STATION_BODIES_LANE)) { // task corpse-chipper (lane CORPSE): the handled bodies lying in the station
-    const bp = stationBodiesProblem(o[STATION_BODIES_LANE], corpseFeedable);
+    const bp = stationBodiesProblem(o[STATION_BODIES_LANE], corpseCarriable);
     if (bp) bad(`${path}.${STATION_BODIES_LANE}`, bp);
     bodiesIn((o[STATION_BODIES_LANE] as {here: unknown[]}).here, `${path}.${STATION_BODIES_LANE}.here`);
+  }
+  if (has(o, CORPSE_SHOP_LANE)) { // task studio-corpse-market-shop-20261114-031614-01: the Market corpse buyer's sale (its body) + the bodies he bought
+    const sp = corpseShopProblem(o[CORPSE_SHOP_LANE], corpseCarriable);
+    if (sp) bad(`${path}.${CORPSE_SHOP_LANE}`, sp);
+    const r = o[CORPSE_SHOP_LANE] as CorpseShopJSON;
+    if (r.job) bodiesIn([r.job.body], `${path}.${CORPSE_SHOP_LANE}.job.body`); // (the body being bought is in no other place)
+    bodiesIn(r.sold.map(id => ({id})), `${path}.${CORPSE_SHOP_LANE}.sold`); // (a bought body exists nowhere: never also in the hands / a lane / the train)
   }
   if (has(o, STATION_EQUIPMENT_LANE)) { // task train-crafting: the crafted chests / devices left lying in the station
     const ep = stationEquipmentProblem(o[STATION_EQUIPMENT_LANE]);

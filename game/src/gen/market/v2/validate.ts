@@ -36,9 +36,10 @@ export const SETTLE_DISPLAY = {min: 4, reach: 1.3, customerReach: 2.6, nearWidth
  * Task studio-market-bar-20261108-225231-01 (lane BAR): `expect` — the record version and the stall ids in order (layout version 3:
  * 3 and the six + the bar, gen/market/v3/barValidate.ts) and the stalls whose stock is NOT shown within the customer's reach from across
  * the counter (the bar: its bottles stand on the backbar behind the bartender — reached by walking behind the counter); version 2's by
- * default.
+ * default. (Task studio-corpse-market-shop-20261114-031614-01: `sealed` — areas the player never enters by design, left out of the
+ * reachability count: layout version 4's den back room behind the booth, gen/market/v4/denValidate.ts proves it sealed.)
  */
-export function settleIssues(layout: StationLayout, expect: {v: number; stalls: readonly string[]; behindCounter?: readonly string[]} = {v: 2, stalls: MARKET_STALLS}): string[] {
+export function settleIssues(layout: StationLayout, expect: {v: number; stalls: readonly string[]; behindCounter?: readonly string[]; sealed?: readonly number[]} = {v: 2, stalls: MARKET_STALLS}): string[] {
   const issues: string[] = [];
   const m = layout.market;
   if (!m) return ['no market record'];
@@ -65,11 +66,12 @@ export function settleIssues(layout: StationLayout, expect: {v: number; stalls: 
   // --- Reachability: the player (stairs + rooftop ladders), the residents (stairs only) --------------------------------------
   const dist = levelDistance(levels, sx, sy, 0, layout.levelLinks);
   const walk = levelDistance(levels, sx, sy, 0, []);
+  const sealed = new Set(expect.sealed ?? []);
   for (const L of levels) {
     const g = L.grid;
     let bad = 0, any = false;
     for (let i = 0; i < g.cells.length; i++) {
-      if (g.cells[i] !== FLOOR || g.blocked[i]) continue;
+      if (g.cells[i] !== FLOOR || g.blocked[i] || sealed.has(g.area[i])) continue;
       if (dist[L.id][i] >= 0) { any = true; continue; }
       if (g.rampIdx[i] >= 0 && levels.some(M => M.id !== L.id && dist[M.id][i] >= 0)) continue;
       bad++;

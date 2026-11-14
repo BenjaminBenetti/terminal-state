@@ -158,6 +158,10 @@ describe('train crafting: records', () => {
       expect(copyEquipment(scanner({display: m})).display).toBe(m);
     }
     expect(trainEquipmentProblem({v: 1, seq: 4, aboard: [scanner({display: 'fuel'})]})).toBeNull();
+    // task studio-scanner-medical-20261114-054010-01: Medical was APPENDED — the field is the mode's name, so a record saved before it
+    // ('material', the old last mode) still loads as that, and a Medical scanner saves and loads as 'medical'
+    expect(trainEquipmentProblem({v: 1, seq: 5, aboard: [scanner({display: 'material'}), scanner({uid: 'eq-5', plug: 2, display: 'medical'})]})).toBeNull();
+    expect([equipmentDisplay(EQUIPMENT.scanner, 'material'), equipmentDisplay(EQUIPMENT.scanner, 'medical')]).toEqual(['material', 'medical']);
     // a mode the kind does not have, a kind without modes, a non-string: malformed (the save is refused like any bad field)
     for (const bad of [scanner({display: 'enemy'}), scanner({display: 'ALL'}), scanner({display: ''}), scanner({display: 3}), scanner({display: null}),
       {...freshEquipment('radar', 'eq-3', pose), display: 'all'}, {...freshEquipment('sentry', 'eq-2', pose), display: 'ammo'}, {...chest(), display: 'all'}]) {

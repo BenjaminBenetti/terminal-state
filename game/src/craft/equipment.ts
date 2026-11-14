@@ -30,7 +30,8 @@
 // SCAN_MODES; every other kind none). The unit's selected one is its record's `display`, written ONLY when it is not the kind's first
 // (default) mode: a record without it — every record written before the modes, and every unit still on its default — loads with the
 // default (ALL), and those records stay byte-for-byte what they were. A `display` the kind does not have is malformed, like any other
-// bad field.
+// bad field. The field is the mode's NAME, never an index: task studio-scanner-medical-20261114-054010-01 appended 'medical' and every
+// older record's mode still means what it did.
 
 import type {StackJSON} from '../items/inventory';
 import {LOCKBOX_SLOTS} from '../run/trainLockbox';

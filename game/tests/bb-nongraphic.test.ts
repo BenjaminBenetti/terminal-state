@@ -66,7 +66,7 @@ describe('BB is non-graphic in the damage system (real bodies, real effects, rea
     zombie = await zombieGltf();
   }, 120_000);
 
-  it('the actor says so; an ordinary zombie does not; a BB corpse is never carried or fed to anything', () => {
+  it('the actor says so; an ordinary zombie does not; a BB corpse is never fed to the chipper (carried and sold whole instead)', () => {
     for (const v of BB_IDS) {
       const bb: EnemyActor = makeBb(bodies.get(v)!, v, 6, 6, 3);
       expect(bb.nonGraphic).toBe(true);
@@ -75,7 +75,7 @@ describe('BB is non-graphic in the damage system (real bodies, real effects, rea
     }
     const z: EnemyActor = new ZombieActor(zombie, {x: 8, z: 6, yaw: 0, type: 'shambler', area: 0}, rng(5));
     expect(z.nonGraphic).toBeUndefined();
-    expect(corpseFeedable('bb')).toBe(false); // (not a humanoid corpse: no carry, no chipper)
+    expect(corpseFeedable('bb')).toBe(false); // (not a humanoid corpse: no chipper; task corpse-market-shop: carried and sold whole, its body as clean as ever)
     expect(corpseFeedable('zombie')).toBe(true);
     z.dispose();
   });

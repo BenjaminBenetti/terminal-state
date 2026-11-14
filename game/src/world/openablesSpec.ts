@@ -30,6 +30,7 @@ import {SKYWAYS_DEST_OPEN_AUDIT} from '../gen/skyways/destinations/registry'; //
 import {SKYWAYS_MAPBOARD_OPEN_AUDIT} from '../gen/skyways/mapBoardKind'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS)
 import {SUBWAY_MAP_KIOSK_OPEN_AUDIT} from '../gen/subwayMapKioskKind'; // task studio-ui-subway-maps-20261108-074144-01
 import {BUNKER_MODEL_OPEN_AUDIT, BUNKER_OBJECTIVE_OPEN_AUDIT} from '../gen/bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01
+import {CORPSE_DEN_OPEN_AUDIT} from '../gen/market/v4/denKinds'; // task studio-corpse-market-shop-20261114-031614-01
 import {MALL_OPEN_AUDIT} from '../gen/mall/kinds'; // Task track3-eaton-centre-20261031 (lane SHOPS): the mall shop-fixture kinds' rows
 import {OPENABLE_TABLES, type ItemRows, type OwnTable} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import {COMPANY_DIMS} from '../assets/companyDims.generated'; // Task office-props-physics-scale-20261030 (lane FURN): furniture-only rescales
@@ -1401,6 +1402,7 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
   ...SUBWAY_MAP_KIOSK_OPEN_AUDIT, // task studio-ui-subway-maps-20261108-074144-01: the sealed station map kiosk
   ...BUNKER_OBJECTIVE_OPEN_AUDIT, // task studio-bunker-level-20261109-072224-01: the Bunker's generator slots + core cluster (equipment)
   ...BUNKER_MODEL_OPEN_AUDIT, // (follow-up) the Bunker's model-backed flavour kinds (sealed equipment / fixtures)
+  ...CORPSE_DEN_OPEN_AUDIT, // task studio-corpse-market-shop-20261114-031614-01: the Market den's chute / booth (equipment)
 ];
 
 function describe(k: OpenableKind): string {

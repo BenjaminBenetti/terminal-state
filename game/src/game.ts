@@ -123,6 +123,7 @@ import {collectTextures, modelTextures, releaseModelTexturesAfterUpload, stageUp
 import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
 import {bunkerGasSource} from './world/gas/zones'; // task studio-bunker-level-20261109-072224-01: the Bunker's local gas leaks (a gas zone world)
 import {BUNKER_KIT_MODEL_FILES, bunkerModelKindKeysFor} from './gen/bunker/bunkerKinds'; // (follow-up) the Bunker's model-backed flavour kinds (lazy)
+import {CORPSE_DEN_MODEL_FILES, corpseDenModelKeysFor} from './gen/market/v4/denKinds'; // task studio-corpse-market-shop-20261114-031614-01: the Market den's chute / booth (lazy, level-only market-*)
 import {installCough, type CoughFeedback} from './audio/cough'; // Task gas-mask-roof-feedback-20261030: the player coughs while gas hurts them
 import {installReactorAir} from './world/reactor/generators'; // task reactor-build-20261101 (lane AIR): Reactor depth gas + auxiliary generators
 import {installBlightBurst, type BlightBurstSystem, type BlightEnemy} from './ai/blightBurst'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly's once-only death burst
@@ -208,6 +209,7 @@ import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // 
 import {carriedModelKeys, installTrainPropCargo, type TrainPropCargo} from './world/trainPropCargo'; // task train-all-cargo: every movable prop aboard travels too
 import {installCorpses, type CorpseSystem} from './world/corpses'; // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): carried dead bodies
 import {groundDropSpots} from './world/dropScatter'; // task studio-refinement-batch-20261113-035659-01 (lane DROPS): inventory drops scatter
+import {CORPSE_BUYER_MODEL_FILES, installCorpseShop, type CorpseShop} from './market/corpseShop/corpseShop'; // task studio-corpse-market-shop-20261114-031614-01: the Market den's corpse buyer
 import {installChipper, type ChipperSystem} from './world/chipper'; // task corpse-chipper (lane CHIPPER): the woodchipper fixed in the train
 import {installTrainEquipment, type TrainEquipmentSystem} from './world/trainEquipment'; // task train-crafting (lane EQUIP): the crafted chests / devices as physical cargo, the three plugs
 import {installCraftBench, type CraftBenchSystem} from './world/craftBench'; // task train-crafting (lane BENCH): the crafting bench + its recipe list
@@ -243,6 +245,7 @@ import {woundsOf} from './damage/wounds'; // (the enemies' wound layers: their f
 import {renderContextDepth} from './render/renderContextDepth'; // task studio-performance-recorder-20261103 (lane RENDER-CPU)
 import {installShadowAlphaTwin} from './render/shadowOverride'; // (lane RENDER-CPU)
 import {installUploadDedupe} from './render/uploadDedupe'; // task mall-horde-performance-20261105
+import {installBindingRefresh} from './render/bindingRefresh'; // task studio-death-retry-render-fix-20261114-044607-01
 import {JourneyCompile, type JourneyCompileOptions} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
 import {loadingPlaceName, type LastSaveStatus} from './ui/loadingScreen'; // task studio-beta-campaign-polish-20261103-063841-01 (lane MENU): loading name only; Load last save
@@ -330,7 +333,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...COSPLAY_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES, ...MARKET_HUMAN_MODEL_FILES, ...SHELF_JUNK_MODEL_FILES, ...BUNKER_KIT_MODEL_FILES}); // (task studio-food-shelf-production-20261109-002816-01: + the shelf-junk atlas, lazy) // (survivor market, lane HUMANS: + the friendly cast, level-only market-*) (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...COSPLAY_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES, ...SKYWAYS_DEST_MODEL_FILES, ...MARKET_HUMAN_MODEL_FILES, ...SHELF_JUNK_MODEL_FILES, ...BUNKER_KIT_MODEL_FILES, ...CORPSE_DEN_MODEL_FILES, ...CORPSE_BUYER_MODEL_FILES}); // (task studio-food-shelf-production-20261109-002816-01: + the shelf-junk atlas, lazy) // (survivor market, lane HUMANS: + the friendly cast, level-only market-*) (skyways destinations, lane LANDMARKS: + the destination kit's built models, level-only skyways-d-*) (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
   /** Task track3-eaton-centre-20261031 (lane PACKAGE): textures / GPU resources owned by ONE level, released when the level changes (assets/levelResources.ts). */
   readonly levelResources = new LevelResources();
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
@@ -480,6 +483,8 @@ export class Game {
   corpses!: CorpseSystem;
   /** Task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): the woodchipper fixed in the train (world/chipper.ts): feed dead bodies, fuel. */
   readonly chipper: ChipperSystem;
+  /** task studio-corpse-market-shop-20261114-031614-01: the Market den's corpse buyer (market/corpseShop/corpseShop.ts; inert without layout.market.den). */
+  corpseShop!: CorpseShop;
   /**
    * Task studio-train-crafting-v1-20261111-225628-01: the crafted train equipment (world/trainEquipment.ts: chests / devices as physical
    * cargo, the three generic plugs), the crafting bench (world/craftBench.ts), the sentry's roof turret (world/sentryTurret.ts) and the
@@ -586,7 +591,7 @@ export class Game {
   // (round 2, R3) + the generated annex genset model on a layout with a genset record (a shared file: every annex-bearing level)
   // (task mall-lingerie-20261102, lane STORE) + the lingerie store's display sets: lane FIT's outfit files they are cut from (lazy, same keys)
   // (task mall-lingerie-20261102-221554, lane CONTEXT) + the lingerie garments on a layout with lingerie-tagged spawns (the mall's lingerie store only)
-  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys, lingerieModelKeysFor, cosplayModelKeysFor, shelfJunkModelKeysFor, bunkerModelKindKeysFor]; // (+ task studio-food-shelf-production-20261109-002816-01: the shelf-junk atlas only on layouts with stockable holders)
+  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys, lingerieModelKeysFor, cosplayModelKeysFor, shelfJunkModelKeysFor, bunkerModelKindKeysFor, corpseDenModelKeysFor]; // (+ task studio-food-shelf-production-20261109-002816-01: the shelf-junk atlas only on layouts with stockable holders)
   /** One lifecycle operation at a time: travel, new game, retry level. */
   private readonly lifecycle = new SingleFlight();
   /** Live pickups that are (what is left of) a generated layout pickup -> its layout.pickups index. */
@@ -929,6 +934,10 @@ export class Game {
     // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): after the train, ride and cargo (its section build attaches to the car's
     // view; its teardown keeps a riding car's machine) — the corpse sink, the grind / transfer / blood / noise, the look-at line, warm pool 'train-chipper'
     this.chipper = installChipper(this);
+    // task studio-corpse-market-shop-20261114-031614-01: after the corpses (its sink) and the market's people / combat (it reads the hostility) — the Market den's
+    // corpse buyer: the chute sink, the sale clock on the station lane 'market.corpse-shop', the physical Rail Ties drop; inert without a den
+    this.corpseShop = installCorpseShop(this);
+    hookName('corpseShop');
     hookName('chipper');
     // task studio-train-crafting-v1-20261111-225628-01: after the train, the ride, the fuel carts and the cargo systems — the crafted
     // equipment (lane EQUIP: kinematic units on the fuel dolly's controller, the plugs, its own cargo capture / station lane; the train
@@ -994,6 +1003,7 @@ export class Game {
       observeBackendAnisotropy(this.renderer.backend); // lane FIX (U08): count the anisotropy values the backend hands the API (__LL.anisotropy())
       installFlareLightNode(this.renderer); // Iteration 15: flare lights occluded by their window (before the first compile)
       installUploadDedupe(this.renderer); // task mall-horde-performance-20261105: no identical / split per-frame uniform uploads (WebGPU only)
+      installBindingRefresh(this.renderer); // task studio-death-retry-render-fix-20261114-044607-01: a swapped shared texture (the station light field) reaches unchanged objects too
       this.overlay.target.samples = this.renderer.samples; // 0 in WebGPU compatibility mode
       console.info(`Terminal State: ${gpu.label}${gpu.adapter ? ` · ${[gpu.adapter.vendor, gpu.adapter.architecture, gpu.adapter.description].filter(Boolean).join(' ')}` : gpu.glRenderer ? ` · ${gpu.glRenderer}` : ''}`);
       return gpu;

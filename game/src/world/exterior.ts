@@ -39,6 +39,7 @@ import {wmHash, wmNoise} from './surfaceNodes';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import type {Rect2} from './towerShared';
 import {OFFICE_ASSETS} from '../assets/officeAssets';
+import {refreshTextureBindings} from '../render/bindingRefresh'; // task studio-death-retry-render-fix-20261114-044607-01
 
 type N = Node<'float'> & Node;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -599,7 +600,8 @@ export function skylineFallbackTexture(): THREE.Texture {
 /** Use ASSETS' T5 panorama (also when it arrives late): a texture node value change, no rebuild. */
 export function setSkylineTexture(t: THREE.Texture | null): void {
   skylineWanted = t;
-  if (skylineNode) skylineNode.value = t ?? skylineFallbackTexture();
+  const next = skylineNode ? t ?? skylineFallbackTexture() : null;
+  if (skylineNode && skylineNode.value !== next) { skylineNode.value = next; refreshTextureBindings(); } // (render/bindingRefresh.ts: unchanged objects re-read it too)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -729,7 +731,7 @@ export function buildExterior(plan: ExteriorPlan, models: ExteriorModels = {}): 
   geometries.push(ground);
   const gtex = groundTexture(plan);
   const gmat = groundMaterial(gtex);
-  groundMapNode.value = gtex;
+  if (groundMapNode.value !== gtex) { groundMapNode.value = gtex; refreshTextureBindings(); } // (render/bindingRefresh.ts)
   groundXform.value.set(c.x - H, c.z - H, 1 / (2 * H), 1 / (2 * H));
   const gm = new THREE.Mesh(ground, gmat); gm.name = 'tower-ext-ground'; root.add(gm);
   tris += triCount(ground);

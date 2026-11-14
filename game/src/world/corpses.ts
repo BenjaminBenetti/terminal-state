@@ -56,7 +56,7 @@
 
 import * as THREE from 'three';
 import {archetypeOf, type EnemyActor} from '../ai/creatureArchetypes';
-import {CORPSE_TRAITS, corpseFeedable} from '../ai/corpseTrait';
+import {CORPSE_TRAITS, corpseCarriable} from '../ai/corpseTrait'; // (task studio-corpse-market-shop-20261114-031614-01: every undead body is carriable — BB's too; the chipper keeps its own feedable check)
 import {enemyModelKeysFor} from '../ai/enemyModels';
 import {cosplayModelKeysFor, lingerieModelKeysFor} from '../ai/spawnLook';
 import {BODIES, bodyId, copyBody, type BodyRecordJSON} from '../corpse/bodyRecord';
@@ -370,7 +370,7 @@ export class CorpseSystem implements CorpseSystemApi {
   /** The real model of a record (Game.buildEnemyActor with its own stream; null: its archetype's model is not loaded). Lying, at rest. */
   private makeBody(rec: BodyRecordJSON): Body | null {
     const h = this.host;
-    if (!h.buildEnemyActor || !corpseFeedable(rec.arch)) return null;
+    if (!h.buildEnemyActor || !corpseCarriable(rec.arch)) return null;
     const index = Number(rec.id.slice(rec.id.lastIndexOf('#') + 1));
     const spawn: ZombieSpawn = {x: 0, z: 0, yaw: 0, type: rec.type, area: 0, ...(rec.arch !== 'zombie' ? {archetype: rec.arch} : {}), ...(rec.look ? {look: rec.look} : {}), ...(rec.variant !== undefined ? {variant: rec.variant} : {})};
     let built: {actor: EnemyActor; fallback: boolean};
@@ -439,9 +439,9 @@ export class CorpseSystem implements CorpseSystemApi {
   // ---------------------------------------------------------------------------------------------------------------------
   // Eligibility + aim
 
-  /** A live actor's body can be carried: dead, a layout spawn (identity), a feedable archetype. */
+  /** A live actor's body can be carried: dead, a layout spawn (identity), a carriable (undead) archetype. */
   eligible(z: EnemyActor): boolean {
-    return !z.brain.alive && this.deps.enemyIndex(z) !== undefined && corpseFeedable(archetypeOf(z));
+    return !z.brain.alive && this.deps.enemyIndex(z) !== undefined && corpseCarriable(archetypeOf(z));
   }
 
   /** The nearest bone-volume hit of the camera ray on a body (Infinity: none). */
@@ -465,7 +465,7 @@ export class CorpseSystem implements CorpseSystemApi {
       for (const z of h.zombies) {
         if (z.brain.alive || (z.brain.x - o.x) ** 2 + (z.brain.z - o.z) ** 2 > near) continue;
         const index = this.deps.enemyIndex(z);
-        if (index === undefined || !corpseFeedable(archetypeOf(z))) continue;
+        if (index === undefined || !corpseCarriable(archetypeOf(z))) continue;
         const t = this.rayBody(z, o, d);
         if (t < (best?.t ?? R)) best = {kind: 'actor', z, index, t};
       }
@@ -1217,7 +1217,7 @@ export class CorpseSystem implements CorpseSystemApi {
         const r = this.hand?.rec ?? this.handRec;
         return {v: 1, held: r ? heldRecord(r) : null};
       },
-      load: d => this.setHeld(carriedBodyOf(d, corpseFeedable)),
+      load: d => this.setHeld(carriedBodyOf(d, corpseCarriable)),
       reset: () => this.setHeld(null),
     };
   }
@@ -1245,7 +1245,7 @@ export class CorpseSystem implements CorpseSystemApi {
   notePrepared(run: object, participants: Record<string, unknown> | undefined): void {
     const t = participants?.['player-train'] as {cargo?: unknown; chipper?: {job?: {body?: unknown} | null}} | undefined;
     const out = cargoBodiesOf(t?.cargo);
-    const held = carriedBodyOf(participants?.[CORPSE_CARRY_PARTICIPANT], corpseFeedable);
+    const held = carriedBodyOf(participants?.[CORPSE_CARRY_PARTICIPANT], corpseCarriable);
     if (held) out.push(held);
     const job = t?.chipper?.job?.body as BodyRecordJSON | undefined;
     if (job && typeof job === 'object' && typeof job.arch === 'string') out.push(job);
@@ -1270,12 +1270,12 @@ export class CorpseSystem implements CorpseSystemApi {
     recs.push(...this.riding.map(b => b.rec), ...this.lying.map(b => b.rec), ...this.pending);
     const job = h.playerTrain.chipper?.state.job?.body;
     if (job) recs.push(job);
-    recs.push(...stationBodiesOf(run.laneStore(STATION_BODIES_LANE, key), corpseFeedable));
+    recs.push(...stationBodiesOf(run.laneStore(STATION_BODIES_LANE, key), corpseCarriable));
     if (phase === 'prepare') {
       const snap = run.entry;
       if (snap) {
-        recs.push(...stationBodiesOf(snap.memories?.[sectionId(key)]?.lanes?.[STATION_BODIES_LANE], corpseFeedable));
-        const held = carriedBodyOf(snap.lanes?.[CORPSE_CARRY_PARTICIPANT], corpseFeedable);
+        recs.push(...stationBodiesOf(snap.memories?.[sectionId(key)]?.lanes?.[STATION_BODIES_LANE], corpseCarriable));
+        const held = carriedBodyOf(snap.lanes?.[CORPSE_CARRY_PARTICIPANT], corpseCarriable);
         if (held) recs.push(held);
         const t = snap.lanes?.['player-train'] as {cargo?: unknown; chipper?: {job?: {body?: BodyRecordJSON} | null}} | undefined;
         recs.push(...cargoBodiesOf(t?.cargo));
@@ -1294,7 +1294,7 @@ export class CorpseSystem implements CorpseSystemApi {
     this.prepared.delete(h.run);
     this.deferred = [];
     // the station's handled bodies, at their world poses (their source enemies, if from here, are in the killed list: never doubled)
-    for (const rec of stationBodiesOf(h.run.laneStore(STATION_BODIES_LANE, key), corpseFeedable)) {
+    for (const rec of stationBodiesOf(h.run.laneStore(STATION_BODIES_LANE, key), corpseCarriable)) {
       if (this.lying.some(b => b.rec.id === rec.id) || this.riding.some(b => b.rec.id === rec.id)) continue;
       const b = this.makeBody(rec);
       if (!b) { this.deferred.push(rec); continue; }
