@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 85359,
-      "sha256": "231107b0d5c004d29c785e884b37c3bf5520f0226928d4cc35ce4f34b6fa8f74"
+      "bytes": 87330,
+      "sha256": "a57763617bdacabc57efccf29ea2727a98bcbe897fa079c52a8f5aa80a7e1427"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -2069,6 +2069,11 @@
       "sha256": "6da43a14cb795a81a382318d7eb2cf2ef47f05cf99750176b1ac682367076754"
     },
     {
+      "path": "assets/derivatives/corpse-shop-kit-20261114.json",
+      "bytes": 9652,
+      "sha256": "5b7cddbd0dc41435c0dc250ef19c0d9439a75f4ab84f560ca764b3bc25663577"
+    },
+    {
       "path": "assets/derivatives/creature-ratdog.json",
       "bytes": 23070,
       "sha256": "2534182960bf96f813b2d57d92d2b530250ddaeb5d9967a7aa15b2fb6ccd23f4"
@@ -3627,6 +3632,16 @@
       "path": "assets/models/mall-womens-skirts-group.glb",
       "bytes": 210276,
       "sha256": "6a49b6574a22eef83a7d80e56a701d9b5a8f705217e5d6aedb6fec696b769a7c"
+    },
+    {
+      "path": "assets/models/market-corpse-booth.glb",
+      "bytes": 1190820,
+      "sha256": "0ac8a72a60f46d3403e6374d8c2b63c0d0fa6273aa5a8fa0d14ff2d67bf6e946"
+    },
+    {
+      "path": "assets/models/market-corpse-chute.glb",
+      "bytes": 567784,
+      "sha256": "19dfe78d80334400c032df6fdbabb3efda8a5b4bb7900d1a25b849d8327a9b74"
     },
     {
       "path": "assets/models/market-human-cast.glb",
