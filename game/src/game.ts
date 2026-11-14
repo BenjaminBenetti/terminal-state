@@ -893,7 +893,7 @@ export class Game {
     // view; its teardown keeps a riding car's machine) — the corpse sink, the grind / transfer / blood / noise, the look-at line, warm pool 'train-chipper'
     this.chipper = installChipper(this);
     // task studio-corpse-market-shop-20261114-031614-01: after the corpses (its sink) and the market's people / combat (it reads the hostility) — the Market den's
-    // corpse buyer: the chute sink, the sale clock on the station lane 'market.corpseShop', the physical Rail Ties drop; inert without a den
+    // corpse buyer: the chute sink, the sale clock on the station lane 'market.corpse-shop', the physical Rail Ties drop; inert without a den
     this.corpseShop = installCorpseShop(this);
     hookName('corpseShop');
     hookName('chipper');

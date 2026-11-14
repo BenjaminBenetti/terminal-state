@@ -38,7 +38,7 @@ export const CORPSE_SHOP = {
 } as const;
 
 /** The Market station lane holding the buyer's record (save/validate.ts lanes()). */
-export const CORPSE_SHOP_LANE = 'market.corpseShop';
+export const CORPSE_SHOP_LANE = 'market.corpse-shop';
 
 export interface CorpseSaleJSON {
   /** Stable sale uid (seq - 1 when issued). */
