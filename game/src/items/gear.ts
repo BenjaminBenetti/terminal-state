@@ -133,7 +133,7 @@ export const GEAR_DIMS: Record<string, ItemDims> = {
   // the delivered derivative's bounds (assets/models/gear-airtank-backpack.glb: tank + frame upright, straps / belt splayed)
   airtank_backpack: {w: 0.58, d: 0.48, h: 0.72, shape: 'box'},
   // task flamethrower-fire: the cooked derivative's bounds (assets/models/gear-fuel-tank.glb: jerrycan + frame upright, straps splayed)
-  [FUEL_TANK_ID]: {w: 0.5, d: 0.34, h: 0.62, shape: 'box'},
+  [FUEL_TANK_ID]: {w: 0.59, d: 0.4, h: 0.62, shape: 'box'},
 };
 
 export const GEAR_IDS = Object.keys(GEAR_ITEMS);

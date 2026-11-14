@@ -20,7 +20,8 @@ import {VolumetricAtmosphere} from './render/volumetric';
 import {PickupManager, makeSupplyMesh, refreshItemTemplates, registerItemModels, type Pickup} from './world/pickups';
 import {levelPreloadPantryIds, pantryHolderRealizer, pantryIdsIn, pantryPickupItem} from './items/pantryVariety'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): food variety
 import {ensurePantryModels} from './world/pantryModels'; // (lane ITEMS) the pantry items' lazy models
-import {WEAPON_POOL_LANE, plannedVarietyIds, sectionWeaponPool, varietyIdsIn, weaponFindPlan} from './items/weaponVariety'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): weapon find identities
+import {WEAPON_POOL_LANE, plannedVarietyIds, sectionWeaponPool, weaponFindPlan} from './items/weaponVariety'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): weapon find identities
+import {lazyWeaponIdsIn} from './weapons/lazyWeaponModels'; // task studio-flamethrower-fire-20261114-031614-01 (lane ASSET): the carried / stored weapons whose model loads lazily (variety + the Flamethrower)
 import {WEAPON_VARIETY_WARM_GROUP, ensureWeaponVarietyModels, weaponVarietyWarmRoots} from './world/weaponVarietyModels'; // (lane LOOT-UI) the new weapons' lazy models
 import {installWeaponVarietyDelivery, type WeaponVarietyDelivery} from './world/weaponVarietyDelivery'; // task studio-weapon-runtime-fix-20261110-022206-01: one delivery of a lazily loaded weapon model to the held view / pickups / icons
 import {Survival, survivalTicks} from './player/survival';
@@ -1152,7 +1153,7 @@ export class Game {
   private async prepareWeaponVariety(layout: StationLayout | null, key: SectionKey | null, run: RunState = this.run, late = false): Promise<void> {
     try {
       const mem = key ? run.peekMemory(key) ?? null : null;
-      const ids = varietyIdsIn([this.inv.toJSON(), this.playerTrain.lockbox.toJSON(), this.playerTrain.cargo.toJSON(), mem]);
+      const ids = lazyWeaponIdsIn([this.inv.toJSON(), this.playerTrain.lockbox.toJSON(), this.playerTrain.cargo.toJSON(), mem]);
       if (layout && key && !late && !mem?.pickups) for (const id of plannedVarietyIds(layout, key.level, mem?.id ?? sectionId(key), {pool: sectionWeaponPool(mem?.lanes, mem?.visits ?? 0)})) ids.add(id); // (before the entry: visits = earlier entries)
       await ensureWeaponVarietyModels(ids, {late});
       if (!late) await this.weaponVariety.settled();

@@ -27,7 +27,7 @@ import {ICONS} from './icons';
 import {gearIconView, preloadGearModels} from '../gear/models'; // Iteration 16 (lane GEAR)
 import {PANTRY_DIMS, isPantryItem} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
 import {pantryGltf} from '../world/pantryModels';
-import {isVarietyWeapon} from '../weapons/varietyIds'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve new weapons
+import {isLazyModelWeapon} from '../weapons/lazyWeaponModels'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve new weapons (+ task studio-flamethrower-fire-20261114-031614-01: the Flamethrower takes the same lazy route)
 import {requestWeaponVarietyModel, weaponVarietyGltf} from '../world/weaponVarietyModels';
 
 /** Icon bitmap size (CSS shows them at roughly half size, so they stay sharp at DPR 1.5–2). */
@@ -118,7 +118,7 @@ export function itemIconHtml(itemId: string, cls = 'ico3d'): string {
   if (u) return `<img class="${cls}" src="${u}" alt="" draggable="false">`;
   // (task studio-weapon-runtime-fix-20261110-022206-01) a new weapon shown before its lazily loaded model is resident — the Lockbox gear
   // drop, a trade, a restored save: this surface asks for the model (idempotent); its rendered icon replaces the glyph when it arrives
-  if (isVarietyWeapon(itemId) && !weaponVarietyGltf(itemId)) requestWeaponVarietyModel(itemId);
+  if (isLazyModelWeapon(itemId) && !weaponVarietyGltf(itemId)) requestWeaponVarietyModel(itemId);
   const def = ITEMS[itemId];
   return def ? ICONS[def.icon] : '';
 }
@@ -345,7 +345,7 @@ async function renderShots(renderer: WebGPURenderer, ids: string[], guns: Record
  * SVG glyph — never an icon of its fallback primitive; refreshItemIcons renders it once world/pantryModels.ts delivered the model.)
  * (Task studio-weapon-variety-production-20261109-224355-01, lane LOOT-UI: likewise a new weapon until world/weaponVarietyModels.ts loaded it.)
  */
-export async function buildItemIcons(renderer: WebGPURenderer, guns: Record<string, GLTF | undefined>, ids: string[] = Object.keys(ITEMS).filter(id => (!isPantryItem(id) || !!pantryGltf(id)) && (!isVarietyWeapon(id) || !!weaponVarietyGltf(id)))): Promise<IconStats> {
+export async function buildItemIcons(renderer: WebGPURenderer, guns: Record<string, GLTF | undefined>, ids: string[] = Object.keys(ITEMS).filter(id => (!isPantryItem(id) || !!pantryGltf(id)) && (!isLazyModelWeapon(id) || !!weaponVarietyGltf(id)))): Promise<IconStats> {
   const t0 = performance.now();
   await preloadGearModels(); // Iteration 16 (lane GEAR): the delivered Meshy gear models before their first template (icons, pickups, bags)
   let failed: string[] = [];

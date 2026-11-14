@@ -20,6 +20,7 @@ import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {ITEMS, itemDef} from '../src/items/items';
 import {WEAPONS} from '../src/weapons/weapons';
 import {VARIETY_GUN_IDS, VARIETY_WEAPON_IDS} from '../src/weapons/varietyIds';
+import {isLazyModelWeapon} from '../src/weapons/lazyWeaponModels';
 import {WEAPON_VARIETY_MODELS} from '../src/assets/weaponVarietyModels.generated';
 import {identityAvailable, weaponFindPlan} from '../src/items/weaponVariety';
 import {
@@ -273,13 +274,16 @@ describe('the Lockbox 1337 gear drop through its real key path', () => {
     expect(sys.lastGrant?.ok).toBe(true);
     const got = box.slots.filter(Boolean).map(s => s!.itemId);
     for (const id of VARIETY_GUN_IDS) expect(got, id).toContain(id);
-    // the view rendered the new stacks: each cell's preview asked for its model (ui/itemIcons.ts itemIconHtml) — the six guns, nothing else
-    expect([...L.calls].sort()).toEqual([...VARIETY_GUN_IDS].sort());
+    // the view rendered the new stacks: each cell's preview asked for its model (ui/itemIcons.ts itemIconHtml) — the new guns, nothing else
+    // (task studio-flamethrower-fire-20261114-031614-01: the grant is every gun item — whichever of them has a lazily delivered model,
+    // the variety guns and the Flamethrower when it is granted: weapons/lazyWeaponModels.ts)
+    const lazyGuns = [...new Set(got.filter(isLazyModelWeapon))].sort();
+    expect([...L.calls].sort()).toEqual(lazyGuns);
     expect(VARIETY_GUN_IDS.map(id => w.viewmodel.hasItem(id))).toEqual(VARIETY_GUN_IDS.map(() => false)); // (still on their way)
     await sleep(60);
     await w.delivery.settled();
     for (const id of VARIETY_GUN_IDS) expect([id, weaponVarietyModelState(id), w.viewmodel.hasItem(id)]).toEqual([id, 'resident', true]);
-    expect(w.log.icons.flat().sort()).toEqual([...VARIETY_GUN_IDS].sort()); // every preview rendered (each id once)
+    expect(w.log.icons.flat().sort()).toEqual(lazyGuns); // every preview rendered (each id once)
     expect(new Set(w.log.icons.flat()).size).toBe(w.log.icons.flat().length);
     expect(w.log.said).toEqual([]);
     // take the Hornet out with the view's own quick move, close, select it: it is IN HAND
@@ -505,7 +509,7 @@ describe('the game is wired to the one delivery', () => {
     for (const f of ['ui/lockboxView.ts', 'ui/bagView.ts', 'market/trade/tradeView.ts']) expect(src(f), f).toMatch(/onItemIconsChanged\(\(\) => \{ if \(this\.visible/);
     expect(game).toMatch(/onItemIconsChanged\(\(\) => \{ if \(this\.state === 'inventory' && !this\.invUI\.dragging\) this\.invUI\.render\(\); \}\);/);
     expect(src('ui/hud.ts')).toContain('itemIconsVersion()');
-    expect(src('ui/itemIcons.ts')).toContain('if (isVarietyWeapon(itemId) && !weaponVarietyGltf(itemId)) requestWeaponVarietyModel(itemId);');
+    expect(src('ui/itemIcons.ts')).toContain('if (isLazyModelWeapon(itemId) && !weaponVarietyGltf(itemId)) requestWeaponVarietyModel(itemId);');
   });
 
   it('an icon render hands the renderer back before it awaits its readback (frames are drawn between two icons)', () => {

@@ -18,5 +18,6 @@ export const FLAMETHROWER_DEF: WeaponDef = {
   sound: 'rifle', // placeholder for the gun-only cue type: a stream never calls shot / reload cues (audio/flameAudio.ts)
   stream: {unitSeconds: FLAME_FUEL.unitSeconds, refillTime: FLAME_FUEL.refillSeconds},
   // carried low at the right hip, the lance running forward to the crosshair (pivot: the model's Grip marker); no ADS (Game.aiming)
-  view: {model: FLAMETHROWER_ID, hip: [0.2, -0.3, -0.36], aim: [0.2, -0.3, -0.36], hipYaw: 0.1, hipPitch: 0.02, hipRoll: -0.04, length: FLAMETHROWER_MODEL.length},
+  view: {model: FLAMETHROWER_ID, hip: [0.26, -0.24, -0.44], aim: [0.26, -0.24, -0.44], hipYaw: 0.125, hipPitch: 0.116, hipRoll: -0.1, length: FLAMETHROWER_MODEL.length, // (lane ASSET) yaw / pitch: the lance points from the Grip at the view axis 2.5 m ahead, so the bell sits under the crosshair (tests/flamethrower-model.test.ts)
+  },
 };

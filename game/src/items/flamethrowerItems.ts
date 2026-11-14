@@ -21,5 +21,5 @@ export const FLAMETHROWER_PHYSICS: ItemPhysics = {mass: 5.5, shape: 'box', mat: 
 
 /** Resting size (m) lying on its side = the cooked model's bounds (assets/flamethrowerModels.generated.ts; world/pickups.ts lays weapons down). */
 export const FLAMETHROWER_DIMS: Record<string, ItemDims> = {
-  [FLAMETHROWER_ID]: {w: 0.95, d: 0.3, h: 0.1, shape: 'flat'},
+  [FLAMETHROWER_ID]: {w: 0.95, d: 0.2229, h: 0.1251, shape: 'flat'},
 };

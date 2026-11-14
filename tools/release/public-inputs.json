@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 87143,
-      "sha256": "94724a587afc24db0382f709e432951e3602585e1adea078fae5d7411e047e11"
+      "bytes": 89268,
+      "sha256": "6a40c335998d5dcb8adbc2e81a1518038dfb7a3614e66b4c17d8fdaa2bf74ad9"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -2314,6 +2314,11 @@
       "sha256": "bd17235b10a7d47d574950d56c67764c467b23bab147248194d4dba5e76101f3"
     },
     {
+      "path": "assets/derivatives/gear-fuel-tank.json",
+      "bytes": 7748,
+      "sha256": "9bf215c2065286d5b88480a93dbe6dbd4de02aa307df9bf0fd3b1c596245c00f"
+    },
+    {
       "path": "assets/derivatives/item-bubble-tea.json",
       "bytes": 4332,
       "sha256": "5cc4079d8fce014a070d4fdf44e85b52b60090f8e168fed075bb6445a1cec583"
@@ -3014,6 +3019,11 @@
       "sha256": "b6703fcbaf5fce1ce404bdfa9ddf68f9f64937f7c0ce6d34e51b7ff76667d4db"
     },
     {
+      "path": "assets/derivatives/weapon-flamethrower.json",
+      "bytes": 10404,
+      "sha256": "02a93765405f85972c30ffccae89c79416cbb8c40b4cd7099934e537b218905d"
+    },
+    {
       "path": "assets/derivatives/weapon-turnstile.json",
       "bytes": 18079,
       "sha256": "da6c54b06c70b3f09c3ea1cba28d19da5e0538cf041e4d2f228d7c7d0e9f1318"
@@ -3377,6 +3387,11 @@
       "path": "assets/models/gear-airtank-backpack.glb",
       "bytes": 832924,
       "sha256": "f8eb54ab6c92cf10e796b6ca32c1e926ce938fc0fad75ffd61d96c4221873981"
+    },
+    {
+      "path": "assets/models/gear-fuel-tank.glb",
+      "bytes": 1117328,
+      "sha256": "5aabf303a01226bb36cbeb3c4631da48c838ec0e5d1ecba3cc3aa3c4032f85c2"
     },
     {
       "path": "assets/models/gun-locker.glb",
@@ -5512,6 +5527,11 @@
       "path": "assets/models/weapon-fire-axe.glb",
       "bytes": 980448,
       "sha256": "2514a89c7bd05deafc404530d863a3856351913be9a2c2b65fa74a9ba146c2ff"
+    },
+    {
+      "path": "assets/models/weapon-flamethrower.glb",
+      "bytes": 4784340,
+      "sha256": "9ef7a520c30e0907539fd235af3a92096c972ecfb1befef6d43c4a66d0e70d89"
     },
     {
       "path": "assets/models/weapon-hornet.glb",
