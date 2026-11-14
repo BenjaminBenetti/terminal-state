@@ -3,6 +3,7 @@
 // persisted, the render-resolution composition with the existing DPR cap / Quality (never a quality preset), volume mapping.
 import {describe, expect, it} from 'vitest';
 import {STORAGE_KEYS} from '../src/campaign/types';
+import {ENHANCED_LIGHTING_MODES, REFLECTION_QUALITIES} from '../src/world/enhancedLighting';
 import {
   RENDER_SCALES, SETTINGS_DEFAULTS, SettingsStore, copySettingsInto, drawingBufferSize, masterGain, nativePixelRatio, nativeRatioLabel, parseStoredSettings,
   renderPixelRatio, renderScaleReadout, sanitizeSettings, serializeSettings, volumeFromPercent, volumePercent,
@@ -41,7 +42,7 @@ describe('settings store: persistence', () => {
     const a = new SettingsStore(mem);
     a.set({sens: 1.85, fov: 92, volume: 0.35, muted: true, invertY: true, quality: 'low', renderScale: 0.25});
     const b = new SettingsStore(mem);
-    expect(b.get()).toEqual({sens: 1.85, fov: 92, volume: 0.35, muted: true, invertX: false, invertY: true, quality: 'low', renderScale: 0.25, trainSway: 1, ambientOcclusion: true});
+    expect(b.get()).toEqual({sens: 1.85, fov: 92, volume: 0.35, muted: true, invertX: false, invertY: true, quality: 'low', renderScale: 0.25, trainSway: 1, ambientOcclusion: true, enhancedLighting: 'auto', reflections: 'standard'}); // (task studio-baked-lighting-reflections-20261114-050258-01, lane SETTINGS: + the two enhanced-lighting choices at their defaults)
     expect(b.loadReport.source).toBe('stored');
     expect(JSON.parse(mem.map.get(STORAGE_KEYS.settings)!).v).toBe(1);
   });
@@ -100,7 +101,7 @@ describe('settings store: invalid storage falls back sanely', () => {
     // (task studio-beta-campaign-polish-20261103-063841-01, lane MENU: render scale is a 25-100 % slider now — 0.333 rounds to 33 %)
     mem.setItem(STORAGE_KEYS.settings, JSON.stringify({v: 1, sens: 'fast', fov: 500, volume: -3, muted: 'yes', invertY: true, quality: 'ultra', renderScale: 0.333}));
     const s = new SettingsStore(mem);
-    expect(s.get()).toEqual({sens: SETTINGS_DEFAULTS.sens, fov: 100, volume: 0, muted: false, invertX: false, invertY: true, quality: 'high', renderScale: 0.33, trainSway: 1, ambientOcclusion: true});
+    expect(s.get()).toEqual({sens: SETTINGS_DEFAULTS.sens, fov: 100, volume: 0, muted: false, invertX: false, invertY: true, quality: 'high', renderScale: 0.33, trainSway: 1, ambientOcclusion: true, enhancedLighting: 'auto', reflections: 'standard'});
     expect(s.loadReport.source).toBe('invalid');
     expect([...s.loadReport.fixed].sort()).toEqual(['fov', 'muted', 'quality', 'renderScale', 'sens', 'volume']);
     // NaN / Infinity never survive (JSON has none, but a patch could carry them)
@@ -109,7 +110,8 @@ describe('settings store: invalid storage falls back sanely', () => {
 
   it('an older / partial record keeps what it has and defaults the rest (missing = not "fixed")', () => {
     const r = parseStoredSettings(JSON.stringify({sens: 2, fov: 66, volume: 0.5, muted: true, invertY: false, quality: 'low'}));
-    expect(r.settings).toEqual({sens: 2, fov: 66, volume: 0.5, muted: true, invertX: false, invertY: false, quality: 'low', renderScale: 1, trainSway: 1, ambientOcclusion: true}); // (task mouse-axis-invert: a record without invertX reads it as false; lane AO: without ambientOcclusion, on)
+    expect(r.settings).toEqual({sens: 2, fov: 66, volume: 0.5, muted: true, invertX: false, invertY: false, quality: 'low', renderScale: 1, trainSway: 1, ambientOcclusion: true, enhancedLighting: 'auto', reflections: 'standard'}); // (task mouse-axis-invert: a record without invertX reads it as false; lane AO: without ambientOcclusion, on; lane SETTINGS: without the enhanced-lighting choices, Auto / Standard)
+    expect(r.fixed).toEqual([]);
     expect(r.source).toBe('stored');
   });
 
@@ -151,6 +153,13 @@ describe('settings store: invalid storage falls back sanely', () => {
     for (const q of ['low', 'high'] as const) for (const r of RENDER_SCALES) {
       const v = {...SETTINGS_DEFAULTS, quality: q, renderScale: r, sens: 0.45, fov: 99, volume: 0.07};
       expect(parseStoredSettings(serializeSettings(v)).settings).toEqual(v);
+    }
+    // (lane SETTINGS: the enhanced-lighting enums, every pair)
+    for (const enhancedLighting of ENHANCED_LIGHTING_MODES) for (const reflections of REFLECTION_QUALITIES) {
+      const v = {...SETTINGS_DEFAULTS, enhancedLighting, reflections};
+      const r = parseStoredSettings(serializeSettings(v));
+      expect(r.settings).toEqual(v);
+      expect([r.source, r.fixed]).toEqual(['stored', []]);
     }
   });
 });

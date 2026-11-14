@@ -27,6 +27,7 @@ import type {GpuTimingSupport} from './gpuTimer';
 import {seedToCode} from '../core/rng';
 import {SAVE_BUILD} from '../save/serialize';
 import {uploadStats, uploadsIssued} from '../render/uploadDedupe'; // task mall-horde-performance-20261105 (schemaMinor 4)
+import {enhancedLightingLine, type EnhancedLightingStatus} from '../world/enhancedLighting'; // task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS)
 
 /** The page was hidden this long (ms): the capture stops when it comes back (termination 'hidden'). */
 export const HIDDEN_STOP_MS = 30000;
@@ -193,6 +194,27 @@ interface GameExtras {
   journeyCompileStats?: JourneyStats | null;
   /** (Revision 2) the player's flashlight SpotLight (Game.flashlight): lit / shadow-map state flags. */
   flashlight?: {visible?: boolean; intensity?: number; castShadow?: boolean; shadow?: {autoUpdate?: boolean}} | null;
+  /**
+   * Task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): enhanced lighting's runtime (Game.enhancedLighting) — its
+   * status goes into the report's environment block (an additive key: no schemaMinor change).
+   */
+  enhancedLighting?: {status(): EnhancedLightingStatus} | null;
+}
+
+/**
+ * (Lane SETTINGS) The report's `environment.enhancedLighting`: what was asked, what the live station was really built with at the
+ * time of the report (bake tier, reflections, their reasons, cache use, the enhanced work's load-time ms, probe count / bytes), whether
+ * a change is pending, the cache backend and the one-line summary the overlay shows. Plain values only; null when the game has no
+ * runtime or its status cannot be read.
+ */
+export function lightingEnvironment(rt: {status(): EnhancedLightingStatus} | null | undefined): Record<string, unknown> | null {
+  if (!rt) return null;
+  try {
+    const s = rt.status(), a = s.active;
+    return {line: enhancedLightingLine(s), requested: {...s.requested}, active: a ? {...a} : null, pending: s.pending === true, cacheBackend: s.cacheBackend};
+  } catch {
+    return null;
+  }
 }
 
 /** A WebGPU queue as the completion probe uses it (three r186 WebGPUBackend.device.queue). */
@@ -684,6 +706,7 @@ export class PerfRecorderController {
       softwareRasterizer: x.softwareGl ? x.softwareGl.software === true : null,
       warmup: x.warmup ? warmupSummary(x.warmup) : null, // (schemaMinor 5: the full recent result, not only mode / status)
       atmosphereBypass: typeof x.atmosphereBypass === 'string' ? true : x.atmosphereBypass === null ? false : null,
+      enhancedLighting: lightingEnvironment(x.enhancedLighting), // (lane SETTINGS: additive; null without the runtime)
     };
   }
 

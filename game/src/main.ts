@@ -13,6 +13,7 @@ import {milestoneBadge, readMilestones} from './run/milestones'; // task reactor
 // task campaign-foundation-20261102 (lane MENU): the main menu, its diorama and the persisted settings
 import {MainMenuController, MainMenuView, bootLine, mountControlsForm, mountSettingsForm, mountTutorialReset, type DevStart, type MenuHost, type SlotView} from './ui/mainMenu';
 import {SettingsStore, browserSettingsStorage, copySettingsInto} from './ui/settingsStore';
+import {isEnhancedLightingMode, isReflectionQuality} from './world/enhancedLighting'; // task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): ?lighting= / ?reflections=
 import {MENU_TRAIN_KEYS, MenuScene, type MenuRenderer, type MenuSceneAssets} from './world/menuScene';
 import {OFFICE_ASSETS, loadOfficeAsset, loadOfficeTexture, type OfficeAssetId} from './assets/officeAssets';
 import {setSkylineTexture} from './world/exterior';
@@ -165,6 +166,11 @@ async function boot(): Promise<void> {
   const settings = new SettingsStore(browserSettingsStorage());
   // Session-only quality override (?quality=low), e.g. for slow software renderers: applied, never persisted.
   if (params.get('quality') === 'low') settings.sessionOverride({quality: 'low'});
+  // (task studio-baked-lighting-reflections-20261114-050258-01, lane SETTINGS) session-only ?lighting=off|auto|on and
+  // ?reflections=off|standard|high (QA / comparisons): applied on top of the stored choices, never persisted; any other value is ignored
+  const urlLighting = params.get('lighting'), urlReflections = params.get('reflections');
+  if (isEnhancedLightingMode(urlLighting)) settings.sessionOverride({enhancedLighting: urlLighting});
+  if (isReflectionQuality(urlReflections)) settings.sessionOverride({reflections: urlReflections});
   copySettingsInto(game.settings, settings.get());
   game.applySettings();
   settings.subscribe((s, changed) => {
@@ -179,7 +185,15 @@ async function boot(): Promise<void> {
   window.addEventListener('storage', e => { if (e.key === settings.key) settings.reload(); }); // another tab changed them
   // (task studio-perf-ao-train-continuity-20261110-022206-01, lane AO: the AO line says when the atmosphere pass cannot run it)
   const aoUnavailable = () => game.atmosphere.aoUnavailable();
-  mountSettingsForm($('#pause-settings'), settings, {idPrefix: 'set-', qualityPresets: ATMOSPHERE_QUALITY, aoUnavailable});
+  // (task studio-baked-lighting-reflections-20261114-050258-01, lane SETTINGS: both forms show enhanced lighting's truthful status — what
+  // the live station was built with, a pending change — and the derived cache's numbers, and re-read them when the runtime says they
+  // changed. The two settings are only copied into game.settings (the subscription above, which runs before the forms' own): the game
+  // reads them when a station is built, so there is nothing to apply and no re-warm.)
+  const lightingStatus = () => game.enhancedLighting.status();
+  const lightingCache = () => game.enhancedLighting.cacheStats();
+  const clearLightingCache = () => game.enhancedLighting.clearCache();
+  const lightingChanged = (refresh: () => void) => game.enhancedLighting.subscribe(refresh);
+  mountSettingsForm($('#pause-settings'), settings, {idPrefix: 'set-', lightingStatus, lightingCache, clearLightingCache, lightingChanged, qualityPresets: ATMOSPHERE_QUALITY, aoUnavailable});
   // task studio-first-player-onboarding-20261111-234657-01: "Reset tutorials" under the pause menu's Settings (and the main menu's, below):
   // clears only the browser-global tutorial record; the current / next parked train shows its guide markers again
   mountTutorialReset($('#pause-settings'), game.onboarding, {idPrefix: 'set-'});
@@ -305,7 +319,7 @@ async function boot(): Promise<void> {
     qa: qa ? {label: qaPrebuild ? `QA quick start · ${LEVELS[dev?.level ?? 'subway'].name} (scratch, not saved)` : 'QA quick start (scratch build, not saved)', start: () => qaButton.click(), ready: () => qaReady || !qaPrebuild} : null,
   });
   const menuView = new MainMenuView($('#mm-view'), menu, {
-    settings: box => { mountSettingsForm(box, settings, {idPrefix: 'mm-set-', qualityPresets: ATMOSPHERE_QUALITY, aoUnavailable}); mountTutorialReset(box, game.onboarding, {idPrefix: 'mm-set-'}); recorder.mountPanel(box, {idPrefix: 'mm-'}); }, // (+ the tutorial reset; lane RECORDER's Performance section; lane MENU: the quality help line)
+    settings: box => { mountSettingsForm(box, settings, {idPrefix: 'mm-set-', lightingStatus, lightingCache, clearLightingCache, lightingChanged, qualityPresets: ATMOSPHERE_QUALITY, aoUnavailable}); mountTutorialReset(box, game.onboarding, {idPrefix: 'mm-set-'}); recorder.mountPanel(box, {idPrefix: 'mm-'}); }, // (+ the tutorial reset; lane RECORDER's Performance section; lane MENU: the quality help line; lane SETTINGS: the lighting status / cache)
     controlsForm: box => { mountControlsForm(box, settings, {idPrefix: 'mm-set-'}); }, // (task studio-alpha-survival-controls-20261107-060450-01: input preferences under Controls)
     qaButton: qa ? qaButton : null,
     overlayHost: titleEl, // (lane MENU, campaign polish item 4: submenus open front and centre over the diorama)

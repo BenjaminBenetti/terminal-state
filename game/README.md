@@ -358,7 +358,14 @@ play frame is drawn.
   runs) and the native pixel-ratio cap (min(DPR, 1.5) / min(DPR, 0.85)). Nothing else (no light, geometry or art change).
 - **Render resolution**: a 25-100 % slider (1 % steps) = a linear width-and-height scale of the canvas over that DPR-capped
   native buffer; not a quality preset. Stored as the fraction, so the former Native / Half / Quarter (1 / 0.5 / 0.25) read as
-  exactly 100 / 50 / 25 %; other values round to a whole percent and clamp. A drag applies once it settles or on release. Dev deep links (`?level=`, `?seed=` …) never start a game: they pre-fill the menu's **Dev start** picker,
+  exactly 100 / 50 / 25 %; other values round to a whole percent and clamp. A drag applies once it settles or on release.
+- **Enhanced lighting** (the stored `enhancedLighting`, Auto / On / Off, default Auto) and **Reflections** (`reflections`, Standard /
+  High / Off, default Standard; needs Enhanced lighting): a better baked station light field and cached reflections on metal and
+  glass, described in `docs/enhanced-lighting.md`. A change applies when a station next loads; each help line says what the live
+  station really uses and why. The baked data is a derived cache in this browser (the form shows its size and a **Clear lighting
+  cache** button): it is rebuilt when missing and is never part of a save or of the settings record.
+
+Dev deep links (`?level=`, `?seed=` …) never start a game: they pre-fill the menu's **Dev start** picker,
 which starts a normal new game at that level.
 
 QA automation: `?qa=1` keeps the old automation contract — the menu waits behind the loading card while a **scratch run**
@@ -371,6 +378,8 @@ settings, slots) with the QA hooks (`window.__menu`); there `#btn-start` builds 
   Reloading without it always makes a new station. (`?officeSeed=` / `?mallSeed=` / `?reactorSeed=`, `?level=` likewise.)
 - `?quality=low` — the Low "Fog, shadows & anti-aliasing" setting (the 0.85 pixel-ratio cap, the low volumetric-haze preset, the
   512 px flashlight shadow, no MSAA; no light is removed). Session-only: it overrides the stored setting without changing it.
+- `?lighting=off|auto|on` — the Enhanced lighting setting for this session (`docs/enhanced-lighting.md`); never persisted.
+- `?reflections=off|standard|high` — the Reflections setting for this session; never persisted. Other values of either are ignored.
 - `?warmup=off|view|full` — loading-screen graphics warm-up scope (iteration 14; default `full`, `view` on software GL).
 - `?renderer=webgl2` — force WebGPURenderer's WebGL 2 fallback backend (iteration 13; default: WebGPU when available).
 - `?fog=off|low|high` — override the volumetric haze (iteration 06, `src/render/volumetric.ts`):
@@ -607,6 +616,9 @@ the page — use `?perf=1` there. `src/debug/` (`overlay.ts`, `frameHistory.ts`,
   estimate of the resources it tracks. **Long frames** (Long Animation Frames API) and **JS heap** where the browser has them.
 - **Backend**: what actually initialized (same source as the title badge). With `?qa=1`, `window.__perf.snapshot()`
   returns the numbers and row texts.
+- **Lighting**: what the live station was built with (enhanced-lighting bake tier, reflection probes, cache use, a pending
+  change; `docs/enhanced-lighting.md`). The same status is in the performance recorder's `environment.enhancedLighting`,
+  in `__LL.snapshot().enhancedLighting` and, with the cache's numbers, in `await __LL.lighting()`.
 
 ## Layout
 `src/gen` deterministic generator + grid/A*/LOS (pure, unit-tested) · `src/world` mesh building,

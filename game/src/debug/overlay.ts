@@ -21,6 +21,7 @@ import {FrameHistory, HISTORY_FRAMES, TARGET_LINES_MS, graphScaleMs, type FrameS
 import {GpuTimer, type TimingRendererLike} from './gpuTimer';
 import {CpuPressureWatch, LongFrameWatch, summarizeLongFrames} from './browserSignals';
 import type {FrameBudgetDiagnostics} from '../core/frameBudget'; // task frame-budget-deferral-20261030 (lane SCHED)
+import {enhancedLightingLine, type EnhancedLightingStatus} from '../world/enhancedLighting'; // task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): the Lighting row
 
 /** Task frame-budget-deferral-20261030 (lane SCHED): the scheduler numbers the overlay reads (core/frameBudget.ts FrameBudget). */
 export interface DeferralView {
@@ -35,6 +36,12 @@ export interface PerfHost {
   readonly frameCpu: {readonly updateMs: number; readonly renderMs: number; readonly rendered: boolean; readonly deferredMs?: number};
   /** Lane SCHED: the frame-budget scheduler (read only by the 4 Hz text rows while shown). */
   readonly frameBudget?: DeferralView | null;
+  /**
+   * Task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): enhanced lighting's runtime (Game.enhancedLighting) — the
+   * Lighting row shows its status line (what the live station was built with; read only by the 4 Hz text rows while shown). Optional:
+   * a host without it gets no Lighting row.
+   */
+  readonly enhancedLighting?: {status(): EnhancedLightingStatus} | null;
   readonly gpu: GpuInfo | null;
   readonly settings: {readonly quality: string};
   readonly canvas: {readonly width: number; readonly height: number};
@@ -75,6 +82,7 @@ const ROWS = [
   ['heap', 'JS heap'],
   ['backend', 'Backend'],
   ['output', 'Output'],
+  ['light', 'Lighting'], // lane SETTINGS (enhanced lighting): world/enhancedLighting.ts enhancedLightingLine; only with a host that has the runtime
   ['state', 'State'],
 ] as const;
 type RowKey = (typeof ROWS)[number][0];
@@ -273,6 +281,7 @@ export class PerfOverlay {
     chip(COLORS.gap, 'gap');
     const dl = doc.createElement('dl');
     for (const [key, label] of ROWS) {
+      if (key === 'light' && !this.host.enhancedLighting) continue; // (lane SETTINGS: nothing shown without the runtime)
       const dt = doc.createElement('dt');
       dt.textContent = label;
       const dd = doc.createElement('dd');
@@ -327,6 +336,9 @@ export class PerfOverlay {
       ? `${mb(pm.usedJSHeapSize)} / ${mb(pm.jsHeapSizeLimit ?? 0)} limit (coarse)` : 'n/a — Chromium-only API');
     this.set('backend', this.backendText());
     this.set('output', ready ? `${h.canvas.width}×${h.canvas.height} · DPR ${fmt(r.getPixelRatio(), 2)} · quality ${h.settings.quality}` : '—');
+    // lane SETTINGS (enhanced lighting): what the live station was really built with — the bake tier, the reflection probes, how the
+    // cache was used, a pending change (the contract's own line; a status read that fails says so instead of stopping the overlay)
+    if (h.enhancedLighting) { let line: string; try { line = enhancedLightingLine(h.enhancedLighting.status()); } catch { line = 'n/a — status unavailable'; } this.set('light', line); }
     this.set('state', h.warming ? 'warm-up running (loop idle, no GPU timing)'
       : h.state === 'playing' ? 'playing'
         : h.state === 'paused' || h.state === 'inventory' || h.state === 'dead' || h.state === 'won' ? `${h.state} (menu: frame redrawn 4/s)` : h.state);
