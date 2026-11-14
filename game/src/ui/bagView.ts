@@ -15,7 +15,7 @@
 
 import {itemIconHtml, onItemIconsChanged} from './itemIcons';
 import {itemDef} from '../items/items';
-import {itemTip} from './itemTip'; // (task studio-ui-subway-maps-20261108-074144-01)
+import {itemTip, noMagazine} from './itemTip'; // (task studio-ui-subway-maps-20261108-074144-01)
 import {hideTooltip, refreshTooltip, setTip, tipAttrs} from './tooltip';
 import {PACK_SIZE, POCKET_GRID, type AnyRef, type Inventory, type ItemStack} from '../items/inventory';
 import {ICONS} from './icons';
@@ -204,7 +204,7 @@ export class BagView {
     const inv = this.host.inv();
     const cell = (ref: AnyRef, st: ItemStack | null) => {
       const def = st ? itemDef(st.itemId) : null;
-      const count = def ? (def.kind === 'weapon' ? (WEAPONS[def.weaponId!].melee ? '' : `<span class="count">${st!.mag}/${WEAPONS[def.weaponId!].magazine}</span>`) : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
+      const count = def ? (def.kind === 'weapon' ? (noMagazine(WEAPONS[def.weaponId!]) ? '' : `<span class="count">${st!.mag}/${WEAPONS[def.weaponId!].magazine}</span>`) : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
       // (task studio-ui-subway-maps-20261108-074144-01) the game's own tooltip (escaped: weapon names quote their nickname)
       const title = st ? tipAttrs(itemTip(st, `Click to move it ${ref.bar === 'bag' ? 'to you' : 'into the backpack'} · drag to a slot`, {inv})) : '';
       const extra = ref.bar === 'pack' && ref.index >= PACK_SIZE ? ' gear-extra' : '';

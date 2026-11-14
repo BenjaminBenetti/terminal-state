@@ -17,6 +17,8 @@ import {MALL_RIDER_KINDS} from '../gen/mall/kinds'; // Task mall-playtest-revisi
 import {SKYWAYS_FOOD_CLASS, SKYWAYS_FOOD_MODEL_CLASS, SKYWAYS_FOOD_PHYSICS} from '../items/skywaysFood'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {PANTRY_CLASS, PANTRY_MODEL_CLASS, PANTRY_PHYSICS} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
 import {WEAPON_VARIETY_CLASS, WEAPON_VARIETY_PHYSICS} from '../items/weaponVarietyItems'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI)
+import {FLAMETHROWER_CLASS, FLAMETHROWER_PHYSICS} from '../items/flamethrowerItems'; // task studio-flamethrower-fire-20261114-031614-01
+import {FLAMETHROWER_ID, FUEL_TANK_ID} from '../fire/flamethrowerSpec';
 import {SKYWAYS_KITCHEN_DAMAGE_CLASS} from '../gen/skyways/kitchenKinds'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {SKYWAYS_ADDON_DAMAGE_CLASS} from '../gen/skyways/addonKinds'; // task studio-skyways-level-20261106-054448 (lane ADDON)
 import {SKYWAYS_DEST_DAMAGE_CLASS} from '../gen/skyways/destinations/registry'; // task studio-skyways-destinations-20261106-170011-01
@@ -291,6 +293,8 @@ export const ITEM_CLASS: Record<string, DamageClass> = {
   beer_lager: 'glass', beer_pilsner: 'glass', beer_stout: 'glass', beer_porter: 'glass', beer_bock: 'glass',
   ...WEAPON_VARIETY_CLASS, // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the twelve new weapons
   acid_grenade: 'sheetMetal', lure_grenade: 'sheetMetal', // task studio-refinement-batch-20261113-035659-01: the crafted throwables' pressed-steel canisters
+  // task studio-flamethrower-fire-20261114-031614-01: the steel burner lance; a steel jerrycan clamped to a welded pack frame
+  [FLAMETHROWER_ID]: FLAMETHROWER_CLASS, [FUEL_TANK_ID]: 'steel',
 };
 export function itemClass(itemId: string): DamageClass {
   return ITEM_CLASS[itemId] ?? 'plastic';
@@ -380,6 +384,9 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   beer_bock: {mass: 0.55, shape: 'cylinder', mat: 'glass'},
   // task studio-refinement-batch-20261113-035659-01: a filled ~0.5 l steel canister ~0.32 kg (= weapons/grenades.ts GRENADE.mass), upright
   acid_grenade: {mass: 0.32, shape: 'cylinder', mat: 'metal'}, lure_grenade: {mass: 0.32, shape: 'cylinder', mat: 'metal'},
+  // task studio-flamethrower-fire-20261114-031614-01: the lance (items/flamethrowerItems.ts); a steel jerrycan with fuel in it on a
+  // welded frame with its pump and hose ~9 kg
+  [FLAMETHROWER_ID]: FLAMETHROWER_PHYSICS, [FUEL_TANK_ID]: {mass: 9, shape: 'box', mat: 'heavy'},
 };
 export function itemPhysics(itemId: string): ItemPhysics {
   return ITEM_PHYSICS[itemId] ?? {mass: 0.3, shape: 'box', mat: 'plastic'};

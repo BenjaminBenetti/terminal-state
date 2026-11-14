@@ -12,7 +12,8 @@
 // full stack of their kind, so a rarer / bulkier unit (it stacks less) is worth more each.
 //
 // CONDITION travels with the stack and is priced, never repaired: a gun's loaded rounds (`mag`, each at the loose round's value), a gas
-// mask's fitted filter charge (`filter`, its share of a spare filter), an airtank's air (`air`, per second), and armor wear (`armor`, the
+// mask's fitted filter charge (`filter`, its share of a spare filter), an airtank's air (`air`, per second), a fuel tank's fuel (`fuel`,
+// each unit its share of a fuel can: below), and armor wear (`armor`, the
 // fraction LEFT in absolute GearSpec.armor units, read through the common player/armor.ts itemArmor: absent = undamaged, 0 = depleted;
 // the worn share of the armor's value comes off). Nothing here — or in any trade — writes, resets or repairs any of these fields.
 // A backpack is valued EMPTY (the trade rules refuse a bag with contents: market/trade/stalls.ts).
@@ -26,10 +27,19 @@
 // every other piece rises by its own stats into the guns' range (knife 42 .. rifle 113): hard hat 37, work boots 55, work gloves 57, chest
 // rig 61, gas mask 70 (+ its fitted filter), armor vest 72, backpack 78, airtank 28 empty .. 100 full (its air still priced per second).
 // Guns, food, medicine, ammo and supplies are unchanged; condition (wear / filter / air / rounds) still prices in through this one path.
+//
+// Task studio-flamethrower-fire-20261114-031614-01: the FLAMETHROWER and its FUEL TANK (bench / Market-only; in no loot pool, so no
+// rarity) have explicit values — VALUE.fixed — because the stat rules do not fit them: a stream weapon has no damage-per-shot cycle
+// and the tank no gear stat. Flamethrower 140 ties; the tank 60 ties EMPTY. The tank's fuel is condition like a gun's loaded rounds:
+// every unit it holds (`fuel`) is worth exactly its share of the ordinary fuel can it was poured from (one can = FLAME_FUEL.unitsPerCan
+// units = 10 ties, so 5 cents a unit): a new tank (one can) 70 ties, a full one 90. Pouring a can into a tank therefore moves value,
+// never makes it; nothing here writes `fuel`.
 import {ITEMS, type ItemDef} from '../../items/items';
 import {WEAPONS, type WeaponDef} from '../../weapons/weapons';
 import {CALIBERS, type Caliber} from '../../items/calibers';
-import {FILTER_LIFE_S, LEGACY_BACKPACK_SLOTS, gearSpec, isAirtank, isFilterMask, type GearSpec} from '../../items/gear';
+import {FILTER_LIFE_S, LEGACY_BACKPACK_SLOTS, fuelCansText, gearSpec, isAirtank, isFilterMask, isFuelTank, type GearSpec} from '../../items/gear';
+import {FLAMETHROWER_ID, FLAME_FUEL, FLAME_FUEL_CAN, FUEL_TANK_ID} from '../../fire/flamethrowerSpec';
+import {tankFuel} from '../../fire/fuelTank';
 import {GEAR_WEIGHTS, GLOBAL_POOL, LIMB_ECONOMY, econCat, type ItemRows} from '../../items/lootTables';
 import {FUEL} from '../../fuel/fuel';
 import type {ItemKind} from '../../items/items';
@@ -67,6 +77,11 @@ export const VALUE = {
   rarity: {min: 0.8, max: 1.6},
   /** No single unit of an item valued by its stats is worth less than this (ties): its sale is always worth at least a tie somewhere. */
   minUnit: 3,
+  /**
+   * Task studio-flamethrower-fire-20261114-031614-01: explicit values (ties) of the items the stat rules do not fit — the flamethrower (a
+   * stream weapon) and its fuel tank EMPTY (the fuel in it is priced on top, per unit: stackUnitCents).
+   */
+  fixed: {[FLAMETHROWER_ID]: 140, [FUEL_TANK_ID]: 60} as Readonly<Record<string, number>>,
 } as const;
 
 const pos = (v: number | undefined) => Math.max(0, v ?? 0);
@@ -120,12 +135,13 @@ const stackRule = (d: ItemDef) => VALUE.stackTies[d.kind as Exclude<ItemKind, 'p
 
 /**
  * The intrinsic value of ONE unit, in cents: a weapon with an EMPTY magazine, a gas mask with NO filter charge, an EMPTY airtank, armor
- * undamaged, a backpack empty. 0 for anything that cannot be traded (unknown items, the reactor restart parts, Rail Ties).
+ * undamaged, a backpack empty, a fuel tank EMPTY. 0 for anything that cannot be traded (unknown items, the reactor restart parts, Rail Ties).
  */
 export function baseCents(itemId: string): number {
   const d = ITEMS[itemId];
   if (!d || !isTradeable(itemId)) return 0;
   let ties: number;
+  if (Object.prototype.hasOwnProperty.call(VALUE.fixed, d.id)) return toCents(VALUE.fixed[d.id]); // (task flamethrower-fire) the flamethrower, its tank empty
   if (d.kind === 'weapon' && d.weaponId && WEAPONS[d.weaponId]) ties = VALUE.weapon.base + dps(WEAPONS[d.weaponId]) * VALUE.weapon.perDps;
   else if (d.kind === 'gear' && d.gear) ties = gearTies(d.gear);
   else if (d.id === GAS_FILTER_ID) ties = FILTER_LIFE_S * VALUE.filterPerSecond;
@@ -149,11 +165,17 @@ export function armorState(stack: Pick<ItemStack, 'itemId' | 'armor'>): {left: n
   return {left: Number.isFinite(left) ? left : full, full};
 }
 
+/** Task studio-flamethrower-fire-20261114-031614-01: `units` of fuel in a tank, in cents — their exact share of the ordinary fuel can's value (whole cents, rounded down). */
+export function tankFuelCents(units: number): number {
+  return Math.floor((Math.max(0, Math.floor(units)) * baseCents(FLAME_FUEL_CAN)) / FLAME_FUEL.unitsPerCan);
+}
+
 /**
  * The value of ONE unit of this very stack, in cents, with its condition: + the loaded rounds (each at the loose round's value), + the
- * fitted filter charge (its share of a spare filter), + the air left; armor wear takes its share of the armor value off. 0 = untradeable.
+ * fitted filter charge (its share of a spare filter), + the air left, + a fuel tank's fuel (each unit its share of a fuel can); armor
+ * wear takes its share of the armor value off. 0 = untradeable.
  */
-export function stackUnitCents(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air' | 'armor'>): number {
+export function stackUnitCents(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air' | 'armor' | 'fuel'>): number {
   const d = ITEMS[stack.itemId];
   const base = baseCents(stack.itemId);
   if (!d || !base) return 0;
@@ -170,6 +192,7 @@ export function stackUnitCents(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter
     const life = gearSpec(stack.itemId)!.airLife!;
     cents += Math.floor(Math.max(0, Math.min(life, stack.air ?? 0)) * VALUE.gear.airPerSecond * CENTS);
   }
+  if (isFuelTank(stack.itemId)) cents += tankFuelCents(tankFuel(stack)); // task flamethrower-fire (absent `fuel` = empty; never above a full tank)
   const arm = armorState(stack);
   if (arm && arm.left < arm.full) {
     const share = arm.full * VALUE.gear.armor * rarityFactor(stack.itemId) * CENTS; // the armor's part of the base value
@@ -179,14 +202,17 @@ export function stackUnitCents(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter
 }
 
 /** The value of `count` units of the stack (default: all of it), in cents. */
-export function stackCents(stack: Pick<ItemStack, 'itemId' | 'count' | 'mag' | 'filter' | 'air' | 'armor'>, count = stack.count): number {
+export function stackCents(stack: Pick<ItemStack, 'itemId' | 'count' | 'mag' | 'filter' | 'air' | 'armor' | 'fuel'>, count = stack.count): number {
   return Math.max(0, Math.floor(count)) * stackUnitCents(stack);
 }
 
 const pct = (x: number) => Math.ceil(Math.max(0, Math.min(1, x)) * 100 - 1e-9);
 
-/** The condition a trade row names: "7 of 15 rounds loaded", "filter 54 % fitted", "air 52 % · 312 s", "armor 3 of 4 left"; '' = none. */
-export function conditionText(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air' | 'armor' | 'bag'>): string {
+/**
+ * The condition a trade row names: "7 of 15 rounds loaded", "filter 54 % fitted", "air 52 % · 312 s", "armor 3 of 4 left", "fuel 1 of 3
+ * cans"; '' = none.
+ */
+export function conditionText(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter' | 'air' | 'armor' | 'bag' | 'fuel'>): string {
   const d = ITEMS[stack.itemId];
   if (!d) return '';
   const out: string[] = [];
@@ -194,6 +220,7 @@ export function conditionText(stack: Pick<ItemStack, 'itemId' | 'mag' | 'filter'
   if (w && w.caliber) out.push(`${stack.mag ?? 0} of ${w.magazine} ${CALIBERS[w.caliber].unit[1]} loaded`);
   if (isFilterMask(d.id)) out.push((stack.filter ?? 0) > 0 ? `filter ${pct((stack.filter ?? 0) / gearSpec(d.id)!.filterLife!)} % fitted` : 'no filter charge');
   if (isAirtank(d.id)) out.push((stack.air ?? 0) > 0 ? `air ${pct((stack.air ?? 0) / gearSpec(d.id)!.airLife!)} % · ${Math.ceil(stack.air ?? 0)} s left` : 'air empty');
+  if (isFuelTank(d.id)) out.push(tankFuel(stack) > 0 ? `fuel ${fuelCansText(tankFuel(stack))} of ${FLAME_FUEL.capacityCans} cans` : 'fuel empty'); // task flamethrower-fire
   const arm = armorState(stack);
   if (arm && arm.left < arm.full) out.push(`armor worn: ${pct(arm.left / arm.full)} % left`);
   if (stack.bag) { const n = stack.bag.filter(Boolean).length; out.push(n ? `${n} item${n === 1 ? '' : 's'} inside` : 'empty'); }

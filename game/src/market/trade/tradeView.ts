@@ -19,7 +19,7 @@
 //    ordinary pick -> quantity -> Confirm flow is unchanged.
 import {itemIconHtml, onItemIconsChanged} from '../../ui/itemIcons';
 import {hideTooltip, refreshTooltip, tipAttrs} from '../../ui/tooltip'; // task studio-market-rework-20261108-074144-01: the game's own tooltip (Alpha's ui/tooltip.ts)
-import {itemTip} from '../../ui/itemTip';
+import {itemTip, noMagazine} from '../../ui/itemTip';
 import {ICONS} from '../../ui/icons';
 import {ITEMS} from '../../items/items';
 import {GEAR_SLOTS, GEAR_SLOT_NAMES} from '../../items/gear';
@@ -352,7 +352,7 @@ export class TradeView {
     const cell = (side: 'sell' | 'stock', bar: string, i: number, st: ItemStack | null, key: string) => {
       const def = st ? ITEMS[st.itemId] : null;
       const w = def?.kind === 'weapon' ? WEAPONS[def.weaponId!] : null;
-      const count = def ? (w ? (w.melee ? '' : `<span class="count">${st!.mag ?? 0} of ${w.magazine}</span>`) : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
+      const count = def ? (w ? (noMagazine(w) ? '' : `<span class="count">${st!.mag ?? 0} of ${w.magazine}</span>`) : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
       let price = '', no = false, why = '', quick = '', worth = '';
       const ref: SlotRef = {bar: bar as SlotRef['bar'], index: i};
       if (st && side === 'sell') {

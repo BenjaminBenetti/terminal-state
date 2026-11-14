@@ -69,7 +69,7 @@
 import {itemDef} from './items';
 import {canonicalItemId} from './calibers';
 import {WEAPONS, meleeDefOf} from '../weapons/weapons';
-import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearSpec, isAirtank, isBagItem, isFilterMask, type GearSlot} from './gear';
+import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearSpec, isAirtank, isBagItem, isFilterMask, isFuelTank, type GearSlot} from './gear';
 import {FLAME_FUEL} from '../fire/flamethrowerSpec';
 
 export interface ItemStack {
@@ -1120,6 +1120,12 @@ export class Inventory {
         const life = gearSpec(s.itemId)?.airLife ?? 0;
         if (!isAirtank(s.itemId)) out.push(`non-airtank ${s.itemId} carries air`);
         else if (!Number.isFinite(s.air) || s.air < 0 || s.air > life + 1e-6) out.push(`bad air ${s.itemId}:${s.air}`);
+      }
+      // task studio-flamethrower-fire-20261114-031614-01: fuel only on fuel tanks, WHOLE units, 0..a full tank
+      if (s.fuel !== undefined) {
+        const cap = gearSpec(s.itemId)?.fuelCap ?? 0;
+        if (!isFuelTank(s.itemId)) out.push(`non-tank ${s.itemId} carries fuel`);
+        else if (!Number.isInteger(s.fuel) || s.fuel < 0 || s.fuel > cap) out.push(`bad fuel ${s.itemId}:${s.fuel}`);
       }
       // task studio-general-armor-20261107-231448-01: armour left only on armour-bearing gear, finite, 0..its full armour
       if (s.armor !== undefined) {

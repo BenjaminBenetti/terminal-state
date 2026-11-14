@@ -36,7 +36,7 @@
 import {itemIconHtml} from './itemIcons';
 import {effectText, itemDef, useButtonLabel} from '../items/items';
 import {MELEE_REF, PACK_SIZE, THROW_REF, isMeleeItem, type Bar, type Inventory, type SlotRef} from '../items/inventory';
-import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearStatText, isAirtank, isBagItem, isFilterMask} from '../items/gear';
+import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearStatText, isAirtank, isBagItem, isFilterMask, isFuelTank} from '../items/gear';
 import {armorPool, pipsText} from '../player/armor'; // task studio-general-armor-20261107-231448-01
 import {WEAPONS, reserveFor, weaponsForCaliber} from '../weapons/weapons';
 import {CALIBERS, CALIBER_IDS, ammoItemFor} from '../items/calibers'; // lane AMMO
@@ -46,7 +46,7 @@ import {CRITICAL, LOW} from '../player/survival';
 import {GEAR_ICONS} from './gearIcons';
 import {ICONS} from './icons';
 import {ensureGearStyles} from './gearStyles';
-import {airText, filterPct, itemTip} from './itemTip'; // (task studio-ui-subway-maps-20261108-074144-01: the slot tooltips; filterPct / airText moved there, shared)
+import {airText, filterPct, fuelText, itemTip, noMagazine, streamText} from './itemTip'; // (task studio-ui-subway-maps-20261108-074144-01: the slot tooltips; filterPct / airText moved there, shared)
 import {refreshTooltip, tipAttrs} from './tooltip';
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
@@ -453,7 +453,7 @@ export class InventoryUI {
     const def = itemDef(st.itemId);
     const g = document.createElement('div');
     g.id = 'drag-ghost';
-    const n = def.kind === 'weapon' ? (WEAPONS[def.weaponId!].melee ? '' : `${st.mag}/${WEAPONS[def.weaponId!].magazine}`) : d.count > 1 || d.count < st.count ? `×${d.count}` : '';
+    const n = def.kind === 'weapon' ? (noMagazine(WEAPONS[def.weaponId!]) ? '' : `${st.mag}/${WEAPONS[def.weaponId!].magazine}`) : d.count > 1 || d.count < st.count ? `×${d.count}` : '';
     g.innerHTML = `${itemIconHtml(st.itemId)}${n ? `<span class="count">${n}</span>` : ''}<span class="hint"></span>`;
     ($('#app') ?? document.body).appendChild(g);
     d.ghost = g;
@@ -500,7 +500,7 @@ export class InventoryUI {
       const sel = same(this.selected, ref);
       const held = same(ref, inv.selectedRef()); // SLOT: the melee slot while its weapon is drawn
       const usable = def?.kind === 'consumable';
-      const count = def ? (def.kind === 'weapon' ? (WEAPONS[def.weaponId!].melee ? '' : `<span class="count">${st!.mag}/${WEAPONS[def.weaponId!].magazine}</span>`)
+      const count = def ? (def.kind === 'weapon' ? (noMagazine(WEAPONS[def.weaponId!]) ? '' : `<span class="count">${st!.mag}/${WEAPONS[def.weaponId!].magazine}</span>`)
         : isFilterMask(def.id) ? `<span class="count">${filterPct(st!.filter)}%</span>` // mask lane: the fitted filter
         : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
       // (task studio-ui-subway-maps-20261108-074144-01) the game's own tooltip (ui/tooltip.ts): no native title, which outlived the closed panel under a still cursor
@@ -542,7 +542,7 @@ export class InventoryUI {
     const st = this.selected ? inv.get(this.selected) : null;
     const def = st ? itemDef(st.itemId) : null;
     const worn = this.selected?.bar === 'gear';
-    $('#inv-detail .name').textContent = def ? `${def.name}${def.kind === 'weapon' ? (WEAPONS[def.weaponId!].melee ? ' — melee, no ammo' : ` — ${st!.mag} loaded`) : def.kind === 'gear' ? (worn ? ' — worn' : '') : ` ×${st!.count}`}` : 'Nothing selected';
+    $('#inv-detail .name').textContent = def ? `${def.name}${def.kind === 'weapon' ? (WEAPONS[def.weaponId!].melee ? ' — melee, no ammo' : WEAPONS[def.weaponId!].stream ? ' — burns tank fuel' : ` — ${st!.mag} loaded`) : def.kind === 'gear' ? (worn ? ' — worn' : '') : ` ×${st!.count}`}` : 'Nothing selected';
     // lane AMMO (knife-melee-20261030): ammo by caliber; an ammo item names the weapons it loads, a gun the caliber it takes
     $('#inv-detail .desc').textContent = def ? def.description : `Ammo — ${CALIBER_IDS.map(c => `${CALIBERS[c].label}: ${inv.count(ammoItemFor(c))}`).join(' · ')}`;
     const fx = document.querySelector('#inv-detail .fx');
@@ -550,6 +550,7 @@ export class InventoryUI {
     if (fx) {
       fx.textContent = this.note || (def?.kind === 'ammo' && def.caliber ? `${CALIBERS[def.caliber].designation} · loads: ${weaponsForCaliber(def.caliber).map(w => itemDef(w.itemId).short).join(', ') || 'no weapon yet'}`
         : wdef?.caliber ? `Takes ${CALIBERS[wdef.caliber].label} (${CALIBERS[wdef.caliber].designation}) · ${reserveFor(wdef, inv)} in reserve`
+        : wdef?.stream ? `${streamText(inv)} · hold the trigger for a stream of fire · R pours one fuel can into the worn tank` // task studio-flamethrower-fire-20261114-031614-01
         : wdef?.melee ? `Melee · hold click to wind up, release to slash · reach ${wdef.range} m · never needs ammo · ${this.selected?.bar === 'melee' ? 'in the melee slot: ~ draws it' : 'right-click / double-click / Ctrl+click / Equip puts it in the melee slot (~)'}` // lane KNIFE / SLOT
         : def?.kind === 'consumable' ? `${effectText(def)} · ${def.useTime ?? 1} s to ${useButtonLabel(def).toLowerCase()} · double-click / Ctrl+click or right-click to ${useButtonLabel(def).toLowerCase()}`
         : def?.kind === 'gear' ? `${isFilterMask(def.id) ? `Filter ${filterPct(st!.filter)} % fitted · ${inv.count('gas_filter')} spare · ` : ''}${isAirtank(def.id) ? `${airText(st!.air)} · ` : ''}${gearStatText(def.gear!, st)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / Ctrl+click / right-click / Take off to remove') : `double-click / Ctrl+click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}`
@@ -586,14 +587,16 @@ export class InventoryUI {
     // (task studio-general-armor-20261107-231448-01) the worn armour as ONE pool first ("armor 5 pips (12.5 %)"), then each item's other stats
     const pool = armorPool(inv.gear);
     if (pool > 0) mods.push(`armor ${pipsText(pool)} pips (${+(pool * 100).toFixed(2)} %) — cuts every enemy hit; same chance to shrug off its injury`);
-    for (const st of inv.gearSlots) if (st) { const t = gearStatText({...itemDef(st.itemId).gear!, armor: undefined}); if (t) mods.push(t); }
+    // (task studio-flamethrower-fire-20261114-031614-01: with the worn stack — a fuel tank's line is what THAT tank holds now, not a new one's)
+    for (const st of inv.gearSlots) if (st) { const t = gearStatText({...itemDef(st.itemId).gear!, armor: undefined}, st); if (t) mods.push(t); }
     const sum = document.querySelector('#inv-gear-wrap .gear-sum');
     if (sum) sum.textContent = mods.length ? mods.join(' · ') : 'nothing worn — gear is rare: armor vest, chest rig, backpack, hard hat, boots, gloves, gas mask';
     const note = document.querySelector('#inv-gear-note');
     if (note) {
       const bag = inv.wornBag(), back = inv.worn('backpack');
       note.innerHTML = bag ? `<b>${itemDef(bag.itemId).short}</b> — put it down (<b>6</b>, then click) and tap <b>E</b> to open it; hold <b>E</b> picks it back up. Its contents are not reachable while you wear it.`
-        : back && isAirtank(back.itemId) ? `<b>${itemDef(back.itemId).name}</b> — ${airText(back.air)}. With the gas mask on (<b>Q</b>) it is breathed before the mask's filter. No storage; it cannot be refilled.` : ''; // task filter-tension-airtank
+        : back && isAirtank(back.itemId) ? `<b>${itemDef(back.itemId).name}</b> — ${airText(back.air)}. With the gas mask on (<b>Q</b>) it is breathed before the mask's filter. No storage; it cannot be refilled.` // task filter-tension-airtank
+        : back && isFuelTank(back.itemId) ? `<b>${itemDef(back.itemId).name}</b> — ${fuelText(back)}. It feeds the flamethrower, which will not fire without it. With the flamethrower in your hands <b>R</b> pours one fuel can in. No storage.` : ''; // task studio-flamethrower-fire-20261114-031614-01
     }
   }
 }
