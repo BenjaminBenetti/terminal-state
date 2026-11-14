@@ -7,6 +7,8 @@
 // the finish the builder drew there) times the light that falls on it from its side (the direct light of the bake, by the surface's
 // normal). What comes back is kept as a mean (the indirect irradiance), its first moment (where it comes from: a doorway, a lit floor)
 // and its share of each flicker circuit (so a room lit by a stuttering tube stutters with it). Further bounces reuse the same hits.
+// The first moment lights the next bounce by each surface's own normal, and decides what the field's bottom and top layers store
+// (what a floor and a ceiling get: world/lightField.ts encodeRowEnhanced); it never steers the field's one direction.
 //  - A room lit only through its door is lit from the door; an alcove off a bright hall is darker than the hall; under a platform edge,
 //    behind a pier or up a stairwell the light falls off the way the space does.
 //  - Red quarry tile throws warm light, a green wall a green cast, dark ballast almost nothing: no extra flat ambient anywhere.

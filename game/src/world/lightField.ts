@@ -729,11 +729,22 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
     const Es = E[s], Ds = D[s], ELs = EL[s], GLs = GL[s], G2Ls = G2L[s], B = bounce[s];
     const base = slotBase(s), L = LS[s];
     const ylo = slotY[2 * s], yr = slotY[2 * s + 1] - ylo;
-    // Task studio-baked-lighting-reflections-20261114-050258-01: a row of an ENHANCED field. The direct light is the baseline's; the
-    // gathered indirect light adds its mean and, along its own first moment, a directional part (a surface facing where the bounce
-    // comes from gets more of it): one direction per voxel still, the luminance-weighted sum of the two. The flicker shares count the
-    // indirect light's own circuits.
+    // Task studio-baked-lighting-reflections-20261114-050258-01: a row of an ENHANCED field. The direct light is the baseline's:
+    // its colour, its direction and its directional share of the direct light, texel for texel. The gathered indirect light joins
+    // it without a direction of its own (a voxel has ONE direction, and it is the direct light's business: an earlier version mixed
+    // the bounce's first moment into it, and wherever the fixtures' own directions cancel — the lines between two rows of tubes —
+    // the direction flipped to "from the floor" and drew bright veins on the ceiling). What the first moment does decide is how
+    // much each LAYER stores: the bottom layer is what floors read and the top layer what ceilings read, so each holds what that
+    // surface gets — the mean plus (minus) twice the first moment's height part, never below nothing or above three times the
+    // mean. A floor is not lit by its own bounce; a ceiling gets the floor's in full. The layers between hold the mean.
+    // The flicker shares count the indirect light's own circuits.
     const ix = ind ? ind.index[s] : null, id = ind ? ind.data : null, cohK = new Float32Array(LAYERS);
+    /** What voxel k (row q, mean luminance ml > 0) stores of the gathered light, as a factor of its mean. */
+    const indK = (k: number, q: number, ml: number): number => {
+      if (L < 2 || (k > 0 && k < L - 1)) return 1;
+      const fy = 1 + (k === 0 ? 2 : -2) * id![q + 4] / ml;
+      return fy < 0 ? 0 : fy > 3 ? 3 : fy;
+    };
     const encodeRowEnhanced = (cy: number): void => { for (let cx = 0; cx < W; cx++) {
       const i = cy * W + cx;
       let hi = i;
@@ -754,8 +765,8 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
         cohK[k] = coh; tot += el; totD += el * coh;
         const q = ix![i * L + k] * 9, ml = lum(id![q], id![q + 1], id![q + 2]);
         if (ml <= 0) continue;
-        const il = ml + 2 * Math.min(ml, Math.sqrt(id![q + 3] * id![q + 3] + id![q + 4] * id![q + 4] + id![q + 5] * id![q + 5]));
-        totI += il; c0 += id![q + 6] / ml * il; c1 += id![q + 7] / ml * il;
+        const ik = indK(k, q, ml);
+        totI += ml * ik; c0 += id![q + 6] * ik; c1 += id![q + 7] * ik;
       }
       const cohAvg = tot > 0 ? totD / tot : 0, den = totD + totI;
       data[o0 + 2] = den > 0 ? u8((GLs[i * FLICKER_GROUPS] * cohAvg + c0) / den) : 0;
@@ -766,22 +777,17 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
         const dmag = Math.sqrt(dxv * dxv + dyv * dyv + dzv * dzv);
         const dl = Math.min(el, dmag);
         const q = ix![i * L + k] * 9, mr = id![q], mg = id![q + 1], mb = id![q + 2], ml = lum(mr, mg, mb);
-        const vx = id![q + 3], vy = id![q + 4], vz = id![q + 5], vm = Math.min(ml, Math.sqrt(vx * vx + vy * vy + vz * vz));
-        const il = ml + 2 * vm, ik = ml > 0 ? il / ml : 0;
+        const ik = ml > 0 ? indK(k, q, ml) : 0;
         const r = Es[vi] * coh + mr * ik, gg = Es[vi + 1] * coh + mg * ik, b = Es[vi + 2] * coh + mb * ik;
-        const tl = el * coh + il;
-        // one direction: the direct light's (its coherent luminance) plus three times the indirect first moment
-        const ds = dmag > 1e-9 ? dl / dmag : 0;
-        const xx = dxv * ds + 3 * vx, xy = dyv * ds + 3 * vy, xz = dzv * ds + 3 * vz;
-        const xm = Math.sqrt(xx * xx + xy * xy + xz * xz), xl = Math.min(xm, tl);
-        const rho = tl > 0 ? xl / tl : 0;
+        const tl = el * coh + ml * ik;
+        const rho = tl > 0 ? dl / tl : 0;
         const oa = (((base + 1 + 2 * k) * H + cy) * W + cx) * 4, ob = (((base + 2 + 2 * k) * H + cy) * W + cx) * 4;
         data[oa] = enc(r); data[oa + 1] = enc(gg); data[oa + 2] = enc(b); data[oa + 3] = u8(rho);
-        const inv = xl > 1e-6 ? 1 / xm : 0;
-        data[ob] = u8(xl > 1e-6 ? xx * inv * 0.5 + 0.5 : 0.5);
-        data[ob + 1] = u8(xl > 1e-6 ? xy * inv * 0.5 + 0.5 : 1);
-        data[ob + 2] = u8(xl > 1e-6 ? xz * inv * 0.5 + 0.5 : 0.5);
-        data[ob + 3] = tl > 0 ? u8((G2Ls[i * L + k] * coh + (ml > 0 ? id![q + 8] / ml * il : 0)) / tl) : 0;
+        const inv = dl > 1e-6 ? 1 / dmag : 0;
+        data[ob] = u8(dl > 1e-6 ? dxv * inv * 0.5 + 0.5 : 0.5);
+        data[ob + 1] = u8(dl > 1e-6 ? dyv * inv * 0.5 + 0.5 : 1);
+        data[ob + 2] = u8(dl > 1e-6 ? dzv * inv * 0.5 + 0.5 : 0.5);
+        data[ob + 3] = tl > 0 ? u8((G2Ls[i * L + k] * coh + id![q + 8] * ik) / tl) : 0;
       }
     } };
     const encodeRow = ind ? encodeRowEnhanced : (cy: number): void => { for (let cx = 0; cx < W; cx++) { // (lane BUILD: a row per call, a step per 16 rows; the loop out of the generator body)

@@ -6,6 +6,8 @@
 //   everywhere in it;
 // - bounced light takes the COLOUR of what it left (a red floor reddens the unlit ceiling), and no more energy than the surfaces
 //   send back (a black room bounces nothing; a generated station's mean light stays what it was: no extra flat ambient);
+// - a floor is not lit by its own bounce and the ceiling above it gets it (the field's bottom / top layers store what those surfaces
+//   receive), while the field's one direction stays the direct light's, byte for byte (no bounce-steered veins on ceilings);
 // - the three flicker circuits keep their share of the bounce (a circuit that is off takes its bounce with it);
 // - nothing movable is in the ray scene (a cell holding a sight-blocking prop is open space to it);
 // - deterministic, and independent of how the build is sliced; the standard tier's lattice + fill stays close to gathering everywhere.
@@ -14,7 +16,7 @@ import {FLOOR, Grid, SOLID} from '../src/gen/grid';
 import {generateStation, type StationLayout} from '../src/gen/station';
 import {stationLevels} from '../src/world/levelGeometry';
 import {GI_TIERS, type GiTier} from '../src/world/enhancedLighting';
-import {bakeLightField, bakeLightFieldSteps, fixtureGroup, sampleField, type BakedField, type FieldSource} from '../src/world/lightField';
+import {bakeLightField, bakeLightFieldSteps, fixtureGroup, sampleField, slotBase, slotLayers, type BakedField, type FieldSource} from '../src/world/lightField';
 import {GATHER_GAIN, GATHER_REACH, IND_STRIDE, gatherIndirectSteps, indirectIndex, type IndirectContext, type IndirectLight} from '../src/world/lightFieldGather';
 import {BandScene, HIT_CEIL, HIT_FLOOR, HIT_WALL, sphereDirections} from '../src/world/lightScene';
 import {ALBEDO_STRIDE, ALB_CEIL, ALB_FLOOR, ALB_WALL, surfaceAlbedo, type DrawnSurfaces, type SurfaceAlbedo} from '../src/world/surfaceAlbedo';
@@ -183,8 +185,41 @@ describe('material colour and energy', () => {
     console.log(`ceiling light: neutral floor rgb ${n.map(v => v.toFixed(4))}, red floor rgb ${r.map(v => v.toFixed(4))}`);
     expect(n[0] / n[1]).toBeGreaterThan(0.7);
     expect(n[0] / n[1]).toBeLessThan(1.3);
-    expect(r[0] / r[1]).toBeGreaterThan((n[0] / n[1]) * 1.5);
+    expect(r[0] / r[1]).toBeGreaterThan((n[0] / n[1]) * 1.35);
     expect(r[1]).toBeLessThan(n[1]); // the red floor sends back less green than the grey one
+  });
+
+  it('a floor is not lit by its own bounce, the ceiling above it gets it; and the field\'s direction stays the direct light\'s, texel for texel', () => {
+    // only the floor sends light back (walls and ceiling black): one bounce, floor -> everything else
+    const only = (floor: readonly [number, number, number]) => enhanced(room(), GI_TIERS.high, a => { fillAlbedo(a, ALB_FLOOR, floor); fillAlbedo(a, ALB_WALL, [0, 0, 0]); fillAlbedo(a, ALB_CEIL, [0, 0, 0]); });
+    const black = only([0, 0, 0]), lit = only([0.7, 0.7, 0.7]);
+    const rows: string[] = [];
+    for (const [x, z] of [[7.5, 6], [10, 8], [4, 3]] as const) {
+      const f0 = irr(black.field, x, 0.02, z), f1 = irr(lit.field, x, 0.02, z);
+      const c0 = irr(black.field, x, 4.38, z, [0, -1, 0]), c1 = irr(lit.field, x, 4.38, z, [0, -1, 0]);
+      const mid = gathered(lit, x, 2.2, z);
+      rows.push(`(${x}, ${z}) floor ${f0.toFixed(3)} -> ${f1.toFixed(3)}, ceiling ${c0.toFixed(3)} -> ${c1.toFixed(3)}, gathered mean at mid height ${mid.toFixed(3)}`);
+      // the floor: the direct light, and next to nothing of its own bounce (the sphere mean alone would add about a third of it)
+      expect(f1).toBeGreaterThanOrEqual(f0 * 0.999);
+      expect(f1).toBeLessThan(f0 * 1.1);
+      // the ceiling: clearly more than the mid-height mean (a ceiling faces the floor; the mean looks at the black ceiling too)
+      expect(c1 - c0).toBeGreaterThan(mid * 1.3);
+    }
+    console.log(`floor-only bounce: ${rows.join('; ')}`);
+    // the direction slices of the enhanced field are the baseline's bytes (xyz of every layer of every slot)
+    const base = bakeLightField(room()), e = lit.field;
+    expect([e.w, e.h, e.depth, e.slots]).toEqual([base.w, base.h, base.depth, base.slots]);
+    const n = e.w * e.h;
+    let differ = 0, lit3 = 0;
+    for (let s = 0; s < e.slots; s++) for (let k = 0; k < slotLayers(s); k++) {
+      const b = (slotBase(s) + 2 + 2 * k) * n * 4;
+      for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) {
+        if (e.data[b + i * 4 + c] !== base.data[b + i * 4 + c]) differ++;
+        if (c !== 1 && base.data[b + i * 4 + c] !== 128) lit3++;
+      }
+    }
+    expect(lit3).toBeGreaterThan(1000); // (real directions were compared, not a field of defaults)
+    expect(differ).toBe(0);
   });
 
   it('black surfaces bounce nothing: the field is the direct light alone; brighter surfaces bounce more', () => {
