@@ -248,6 +248,14 @@ describe('the Survivor Market, layout version 4 (version 3 plus the corpse buyer
       expect([at, marketStandOk(g, den.front.x, den.front.z), out(den.front.x, den.front.z) > 0.6, Math.hypot(den.front.x - chute.x, den.front.z - chute.z) <= 2]).toEqual([at, true, true, true]);
       const [cx0, cy0] = g.cellOf(chute.x - chute.hx + 0.04, chute.z - chute.hz + 0.04), [cx1, cy1] = g.cellOf(chute.x + chute.hx - 0.04, chute.z + chute.hz - 0.04);
       for (let y = cy0 - 1; y <= cy1 + 1; y++) for (let x = cx0 - 1; x <= cx1 + 1; x++) if (x < cx0 || x > cx1 || y < cy0 || y > cy1) expect([at, x, y, g.walkable(x, y)]).toEqual([at, x, y, true]);
+      // the floor in front of the chute's open side (+Z), 1 m deep across its width: clear (a body is tipped in from there)
+      {
+        const kx = Math.sin(chute.rot), kz = Math.cos(chute.rot), along = Math.abs(kx) * chute.hx + Math.abs(kz) * chute.hz, across = Math.abs(kz) * chute.hx + Math.abs(kx) * chute.hz;
+        for (const a of [0.25, 0.75]) for (const s of [-(across - 0.25), 0, across - 0.25]) {
+          const px = chute.x + kx * (along + a) + kz * s, pz = chute.z + kz * (along + a) - kx * s;
+          expect([at, a, s, g.walkable(...g.cellOf(px, pz))]).toEqual([at, a, s, true]);
+        }
+      }
       // the chute's near edge 0.5-2.6 m in front of the booth; its rim at the floor + the kit's rim height
       const ce = out(chute.x, chute.z) - (Math.abs(fx) * chute.hx + Math.abs(fz) * chute.hz);
       expect(ce, at).toBeGreaterThanOrEqual(0.5);

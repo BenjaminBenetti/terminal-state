@@ -5,7 +5,7 @@
 //    toward the way in, DEN.chuteGap in front of the booth, clear floor all round;
 //  - light, grim dressing from kinds the market already loads (no new kind): trash bags, a hand truck and a mop bucket along the customer
 //    room's far wall, empty steel shelving and bags in the back room — every one through the shared placement kit (blocked
-//    cells, connectivity), kept off the way in, the chute's ring, the dealing floor in front of the booth and the buyer's post; every loot
+//    cells, connectivity), kept off the way in, the chute's ring and mouth, the dealing floor in front of the booth and the buyer's post; every loot
 //    holder carries the market's exact empty key (the market rule), movables keep their ordinary physics;
 //  - low, moody light: a dim RED lamp in front of the booth, a faint red one over the buyer, one dim ordinary lamp in the passage;
 //  - discoverable: painted boards over the door on the Back Lane ("BODIES BOUGHT", the price), a hanging board in front of the booth.
@@ -58,6 +58,12 @@ export function dressDen(layout: StationLayout, dc: DenCarve, rng: Rng): DenDres
   const cp = layout.props[chute], [kx0, ky0, kx1, ky1] = cellsOfBox(cp.x, cp.z, cp.hx, cp.hz);
   const chuteC0 = Math.min(canonX(kx0), canonX(kx1));
   const bandRows = Math.ceil(DEN.band / CELL - 1e-6);
+  // the floor in front of the chute's open side (1 m deep, its width): where a body is tipped in
+  const fx = Math.sin(cp.rot), fz = Math.cos(cp.rot), halfAlong = Math.abs(fx) * cp.hx + Math.abs(fz) * cp.hz, halfAcross = Math.abs(fz) * cp.hx + Math.abs(fx) * cp.hz;
+  const mouth = (wx: number, wz: number) => {
+    const along = (wx - cp.x) * fx + (wz - cp.z) * fz, across = Math.abs((wx - cp.x) * fz - (wz - cp.z) * fx);
+    return along > 0 && along < halfAlong + 1.25 && across < halfAcross + 0.25;
+  };
   for (const a of [dc.passage, dc.room, dc.back]) for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) {
     const i = g.idx(x, y);
     if (g.area[i] !== a.id) continue;
@@ -65,6 +71,7 @@ export function dressDen(layout: StationLayout, dc: DenCarve, rng: Rng): DenDres
     const keep = a === dc.passage // the passage: the way in
       || (a === dc.room && (y < dc.rows.r0 + bandRows // the way in north of the chute
         || (x >= kx0 - 1 && x <= kx1 + 1 && y >= ky0 - 1 && y <= ky1 + 1) // the chute's ring
+        || mouth(wx, wz) // the floor in front of its open side
         || c >= chuteC0 - 1)) // the dealing floor between the chute and the booth (the tray, the customer's spot)
       || (a === dc.back && Math.hypot(wx - dc.buyer.x, wz - dc.buyer.z) < 0.85); // the buyer's post
     if (keep) markCell(ctx, ctx.keep, i);
