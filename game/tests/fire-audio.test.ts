@@ -323,7 +323,7 @@ describe('FlameAudio: the jet (fake machine Sfx)', () => {
 
 describe('FlameAudio: the fire beds (fake machine Sfx)', () => {
   it('each burning place gets ONE positional bed loop at its level; at most FIRE_VOICES; the same places keep their loops', () => {
-    const {sfx, sound, run, audio} = rig();
+    const {sfx, run, audio} = rig();
     run(1 / 60, [fire(5, 5, 1)]);
     expect(sfx.loops).toHaveLength(1);
     const a = sfx.loops[0];
