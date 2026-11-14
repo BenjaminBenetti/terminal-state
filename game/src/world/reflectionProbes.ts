@@ -396,7 +396,8 @@ const BOX_MIN = 0.5, BOX_MAX = 30;
  *    than the tier allows; a block holds a probe when it has 4 or more open cells of the slot; probes are numbered by slot, then
  *    block row, then block column. A probe sits at its cell's centre, min(1.5 m, half the room height) above the floor; its weights
  *    reach the cells it can walk to inside its block grown by ramp + 1 cells (4-neighbour steps over open cells of its slot, floors
- *    less than 0.6 m apart);
+ *    less than 0.6 m apart), and one cell further into the solid cells beside those (the largest weight of the reached cells next
+ *    to it: what is set into a wall's own cell still reflects the room it faces);
  *  - level 0 texel (i, j) looks along octDecode((i + 0.5) / tile, (j + 0.5) / tile), at most PROBE_REACH far (nothing there: black);
  *  - a fixture is drawn when it works (not broken, power above 0.01, not a `virtual` light source: that one has no tube), is within
  *    PROBE_REACH and the ray to its tube's centre is not stopped more than 0.4 m short of it; its radiance is added on top of the
@@ -459,6 +460,15 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
       if (cx + 1 < x1) { const j = i + 1; if (stamp[j] !== id && open[j] && Math.abs(floorH[j] - f) < STEP_MAX) { stamp[j] = id; queue[tail++] = j; } }
       if (cz > z0) { const j = i - W; if (stamp[j] !== id && open[j] && Math.abs(floorH[j] - f) < STEP_MAX) { stamp[j] = id; queue[tail++] = j; } }
       if (cz + 1 < z1) { const j = i + W; if (stamp[j] !== id && open[j] && Math.abs(floorH[j] - f) < STEP_MAX) { stamp[j] = id; queue[tail++] = j; } }
+    }
+    // one cell into the SOLID cells beside what it reached: a pane or a fitting set into the wall's own cell (a tower window sits
+    // 0.28 m inside it) is shaded there, and with no weight it would reflect nothing. Never into an open cell it could not walk to.
+    for (let q = 0; q < tail; q++) {
+      const i = queue[q], cx = i % W, cz = (i - cx) / W, w = grid[wo + i * 4];
+      if (cx > x0 && !open[i - 1] && grid[wo + (i - 1) * 4] < w) grid[wo + (i - 1) * 4] = w;
+      if (cx + 1 < x1 && !open[i + 1] && grid[wo + (i + 1) * 4] < w) grid[wo + (i + 1) * 4] = w;
+      if (cz > z0 && !open[i - W] && grid[wo + (i - W) * 4] < w) grid[wo + (i - W) * 4] = w;
+      if (cz + 1 < z1 && !open[i + W] && grid[wo + (i + W) * 4] < w) grid[wo + (i + W) * 4] = w;
     }
   };
   for (let p = 0; p < count; p++) { gridOf(p); if (p % 16 === 15) yield; }

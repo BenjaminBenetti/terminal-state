@@ -248,7 +248,7 @@ describe('miss, hit, stale: the derived cache', () => {
     const extra = {...rooms(), extra: 'roof'};
     const all = [a, ...(await Promise.all([moved, raised, broken, params, extra].map(i => layoutAddress(i))))];
     expect(new Set(all).size).toBe(all.length);
-    expect(DERIVED_LIGHTING_VERSIONS).toEqual({entry: 1, gather: 1, probes: 1});
+    expect(DERIVED_LIGHTING_VERSIONS).toEqual({entry: 1, gather: 1, probes: 2});
   });
 });
 

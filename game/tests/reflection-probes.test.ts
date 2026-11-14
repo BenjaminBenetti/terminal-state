@@ -24,6 +24,7 @@ import {
   probeBlockCells, probeBytes, probeHalf, probeTileOrigin,
   type BakedProbes, type ProbeBakeInput,
 } from '../src/world/reflectionProbes';
+import {sampleProbes} from '../src/world/reflectionNode';
 
 type V3 = [number, number, number];
 const lum = (v: readonly number[]): number => 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
@@ -176,7 +177,9 @@ function checkGrid(b: BakedProbes, geos: readonly ColumnGeometry[]): {slot: numb
     const a = probes[p - 1], q = probes[p];
     expect(a.slot < q.slot || (a.slot === q.slot && (a.bz < q.bz || (a.bz === q.bz && a.bx < q.bx))), `probe ${p} follows probe ${p - 1}`).toBe(true);
   }
-  // weights: only in open cells, only under an id; two probes of one colour never weigh on adjacent cells
+  // weights: only under an id; in an open cell, or in a solid cell beside one — there exactly the largest weight of its probe's
+  // open cells next to it (what is set into a wall's own cell reflects the room it faces), so never across a second solid cell;
+  // two probes of one colour never weigh on adjacent cells
   let orphans = 0, clash = 0, stray = 0;
   for (let s = 0; s < b.slots; s++) {
     const wo = 2 * s * n * 4, io = (2 * s + 1) * n * 4, open = geos[s].open;
@@ -184,11 +187,16 @@ function checkGrid(b: BakedProbes, geos: readonly ColumnGeometry[]): {slot: numb
       const cx = i % W;
       let any = 0;
       for (let c = 0; c < 4; c++) {
-        const w = b.grid[wo + i * 4 + c];
+        const w = b.grid[wo + i * 4 + c], id = b.grid[io + i * 4 + c];
+        if (!open[i]) {
+          let m = 0;
+          if (id) for (const j of [i - 1, i + 1, i - W, i + W]) if (j >= 0 && j < n && Math.abs((j % W) - cx) <= 1 && open[j] && b.grid[io + j * 4 + c] === id) m = Math.max(m, b.grid[wo + j * 4 + c]);
+          if (w !== m) stray++;
+          continue;
+        }
         if (!w) continue;
         any = 1;
-        const id = b.grid[io + i * 4 + c];
-        if (!open[i] || !id) stray++;
+        if (!id) stray++;
         for (const j of [i + 1, i + W - 1, i + W, i + W + 1]) {
           if (j >= n || Math.abs((j % W) - cx) > 1) continue;
           if (b.grid[wo + j * 4 + c] && b.grid[io + j * 4 + c] !== id) clash++;
@@ -475,6 +483,22 @@ describe('what a probe shows', () => {
     expect(metaAt(dark, 0, 0)[3]).toBe(Math.fround(PROBE_NORM_MIN));
     expect(dark.atlas.some((v, q) => q % 4 !== 3 && v !== 0)).toBe(false); // no light anywhere: every texel black
     expect(dark.stats.fixtures).toBe(0);
+  });
+
+  it('what is set into the wall\'s own cell still reflects the room it faces (a tower window sits 0.28 m inside its wall)', () => {
+    // the west wall is cell 0 (x 0 .. 0.5 m): a pane at x = 0.22 m, head height, looking back into the room
+    const colour = 0, dir: V3 = [0.8, 0.1, 0.59];
+    for (const cz of [3, 9, 15]) {
+      expect(gridAt(base, 0, 1, cz, colour)).toBeGreaterThan(0);
+      expect(gridAt(base, 0, 0, cz, colour)).toBe(gridAt(base, 0, 1, cz, colour)); // the solid cell carries its open neighbour's weight
+      const z = (cz + 0.5) * CELL;
+      const inRoom = lum(sampleProbes(base, 0.75, 1.5, z, 0, dir, 0.3, 1)), inWall = lum(sampleProbes(base, 0.22, 1.5, z, 0, dir, 0.3, 1));
+      expect(inRoom).toBeGreaterThan(0);
+      expect(inWall).toBeGreaterThan(inRoom * 0.6);
+      expect(inWall).toBeLessThan(inRoom * 1.6);
+    }
+    // the corner cell touches no open cell: nothing there
+    expect(gridAt(base, 0, 0, 0, colour)).toBe(0);
   });
 
   it('level 0: every texel is the hit surface\'s finish colour under the field\'s light there, plus the tube', () => {
