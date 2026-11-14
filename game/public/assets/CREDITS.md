@@ -416,6 +416,22 @@ Generated for this project from a Codex INITIAL concept image (the owned Codex C
 - The train's fuel cart is a composition of two existing models (`assets/models/p7-hand-truck-t25.glb` and `assets/models/reactor-waste-drum.glb`); nothing new was generated for it.
 <!-- END train-fuel-and-airtank-models -->
 
+<!-- BEGIN flamethrower-model-20261114 (build-flamethrower.mjs) -->
+## The Flamethrower
+
+Generated for this project from one Codex INITIAL design image (the owned Codex CLI's built-in image_gen tool) turned into a model with Meshy T2.5 image-to-3D (smart topology, 2K PBR) through the Meshy MCP; the model keeps Meshy's own PBR maps (the base colour as generated, the other two re-encoded). Task studio-flamethrower-fire-20261114-031614-01 under the user's scoped 75-credit grant (15 credits, a first attempt). AI-generated asset: an unapproved prototype, no licence or commercial clearance implied. The raw master, the design image and the job ledger are kept outside Git.
+
+- `assets/models/weapon-flamethrower.glb` — the Flamethrower (a scrap-built burner lance: shoulder rest, squeeze-lever grip, valve body with a gauge, perforated heat shield, burner bell); runtime derivative by `tools/asset-pipeline/weapons/build-flamethrower.mjs` (provenance: `assets/derivatives/weapon-flamethrower.json`; Meshy task 01a1d827-b0b0-769e-b5f4-748d2528597c).
+<!-- END flamethrower-model-20261114 -->
+
+<!-- BEGIN flamethrower-fuel-tank-model-20261114 (build-fuel-tank.mjs) -->
+## The Fuel Tank
+
+Generated for this project from one Codex INITIAL design image (the owned Codex CLI's built-in image_gen tool) turned into a model with Meshy T2.5 image-to-3D (smart topology, 2K PBR) through the Meshy MCP; the model keeps Meshy's own PBR maps (re-encoded only). Task studio-flamethrower-fire-20261114-031614-01 under the user's scoped 75-credit grant (15 credits, a first attempt). AI-generated asset: an unapproved prototype, no licence or commercial clearance implied. The raw master, the design image and the job ledger are kept outside Git.
+
+- `assets/models/gear-fuel-tank.glb` — the Fuel Tank gear item (a red jerrycan on a tubular pack frame with a hand pump, hose, shoulder straps and a waist belt); runtime derivative by `tools/asset-pipeline/props/build-fuel-tank.mjs` (provenance: `assets/derivatives/gear-fuel-tank.json`; Meshy task 01a1d827-dec4-76e0-973b-b51cc616368d).
+<!-- END flamethrower-fuel-tank-model-20261114 -->
+
 <!-- BEGIN train-chipper-model (build-train-chipper.mjs) -->
 ## Train chipper
 

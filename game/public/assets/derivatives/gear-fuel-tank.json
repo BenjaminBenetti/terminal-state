@@ -1,0 +1,266 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "gear-fuel-tank",
+ "item": "fuel_tank (items/gear.ts)",
+ "role": "ground / stall / icon model of the Fuel Tank gear item (the worn tank the Flamethrower burns from)",
+ "task": "studio-flamethrower-fire-20261114-031614-01",
+ "approval": "task-specific user generation grant 63caa2a0-d8b5-44c0-9b69-fa4eb22585e2 (a scoped cap of 75 Meshy credits); this model: 15 credits, the first attempt of its design image",
+ "route": "Codex native image_gen INITIAL design image (a front elevation of the outward side: the jerrycan on its frame) -> Meshy T2.5 image-to-3D (smart topology, 2K PBR); the Meshy model keeps its own PBR maps (re-encoded only)",
+ "conditioningImage": {
+  "sha256": "f572c6aceaac80e48a9ea7c93604132d4a38abbd1188ae875391668333e71698",
+  "bytes": 2364311,
+  "size": "1254x1254",
+  "generator": "Codex CLI built-in image_gen (ChatGPT login); image model id not reported",
+  "note": "the INITIAL design image (kept outside Git): a reference only, not an input of this cook"
+ },
+ "meshy": {
+  "tool": "mcp__meshy__meshy_image_to_3d (the project's Meshy MCP entry)",
+  "task": "01a1d827-dec4-76e0-973b-b51cc616368d",
+  "request": {
+   "ai_model": "meshy-t2.5",
+   "model_type": "smart-topology",
+   "should_texture": true,
+   "texture_resolution": "2k",
+   "enable_pbr": true,
+   "target_polycount": 14000,
+   "target_formats": [
+    "glb"
+   ]
+  },
+  "status": "SUCCEEDED",
+  "billedCredits": 15,
+  "attempt": 1,
+  "ledgerRow": "R002",
+  "evidence": "the exact create arguments, the charge, the price evidence and the raw hash are in the job ledger kept outside Git"
+ },
+ "source": {
+  "kind": "the Meshy raw original: kept outside Git, read-only and never shipped",
+  "sha256": "da329600fce670269e37c58d2b4310c08c66cfe8cb79bf8963a6d3bcdc09ca6c",
+  "bytes": 9089008,
+  "triangles": 14454,
+  "vertices": 13053,
+  "extent": [
+   0.9058,
+   0.9526,
+   0.6187
+  ],
+  "axes": "the jerrycan (the outward side) facing +Z, +Y up, the shoulder straps looping out toward -Z",
+  "material": {
+   "baseColorFactor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "metallicFactor": 1,
+   "roughnessFactor": 1,
+   "emissiveFactor": [
+    0,
+    0,
+    0
+   ],
+   "normalScale": 1,
+   "doubleSided": true,
+   "alphaMode": "OPAQUE"
+  },
+  "maps": [
+   {
+    "slot": "baseColor",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 3574694,
+    "sha256": "3b617ae5048b7cbdc30613f858cf922bfcd6d0ff3203919b58cf9a54f76beadb"
+   },
+   {
+    "slot": "metallicRoughness",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2348279,
+    "sha256": "5ec3e1e6784bdacc221711f03081bae33af7a23b09dc07712d773f8903d4dd4b"
+   },
+   {
+    "slot": "normal",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2572648,
+    "sha256": "19370c6fcda9081a23f1b0905a0669ee04a9f393099dd5a6f2ce558a19cdb79d"
+   }
+  ],
+  "droppedAttributes": []
+ },
+ "processing": {
+  "weld": {
+   "verticesBefore": 13053,
+   "verticesAfter": 13053,
+   "unreferencedVerticesDropped": 0,
+   "degenerateTrianglesDropped": 0,
+   "rule": "exact-attribute weld (bitwise-equal position / normal / uv), degenerate triangles and unreferenced vertices dropped: lossless"
+  },
+  "simplify": "none: the model's triangle count is kept",
+  "ops": [],
+  "rotation": "rotateY(180deg): (x, y, z) -> (-x, y, -z); raw +Z (the jerrycan, the outward side) -> -Z, the gear derivatives' front",
+  "orientationCheck": {
+   "bandY": [
+    0.3,
+    0.62
+   ],
+   "backZ": 0.166,
+   "frontZ": -0.1177,
+   "rule": "above the waist belt (y 0.3 .. 0.62 m) the shoulder straps reach z >= 0.15 m behind the frame (the wearer's side) and the jerrycan stands out no farther than z = -0.14 m in front"
+  },
+  "heightM": 0.62,
+  "uniformScale": 0.650825,
+  "heightRule": "uniform scale so the overall Y extent (the hanging waist belt's buckle to the top of the frame) = 0.62 m: a pack frame the height of a torso, carrying a slim jerrycan",
+  "origin": "grounded (min y = 0) and centred on x / z; baked into the vertices"
+ },
+ "output": {
+  "url": "assets/models/gear-fuel-tank.glb",
+  "file": "game/public/assets/models/gear-fuel-tank.glb",
+  "bytes": 1117328,
+  "sha256": "5aabf303a01226bb36cbeb3c4631da48c838ec0e5d1ecba3cc3aa3c4032f85c2",
+  "triangles": 14454,
+  "vertices": 13053,
+  "dims": [
+   0.5895,
+   0.62,
+   0.4026
+  ],
+  "bounds": {
+   "min": [
+    -0.2947,
+    0,
+    -0.2013
+   ],
+   "max": [
+    0.2947,
+    0.62,
+    0.2013
+   ]
+  }
+ },
+ "measured": {
+  "frame": {
+   "triangles": 564,
+   "bounds": {
+    "min": [
+     -0.1448,
+     0.0505,
+     -0.0453
+    ],
+    "max": [
+     0.1451,
+     0.62,
+     -0.0211
+    ]
+   },
+   "size": [
+    0.2898,
+    0.5695,
+    0.0242
+   ],
+   "rule": "the largest island lying inside the box min [-0.15,0.04,-0.05] max [0.15,0.6201,-0.015] (m)"
+  },
+  "jerrycan": {
+   "triangles": 1360,
+   "bounds": {
+    "min": [
+     -0.1216,
+     0.1303,
+     -0.0996
+    ],
+    "max": [
+     0.1206,
+     0.5456,
+     -0.0249
+    ]
+   },
+   "size": [
+    0.2422,
+    0.4153,
+    0.0747
+   ],
+   "rule": "the largest island lying inside the box min [-0.125,0.125,-0.105] max [0.125,0.55,-0.02] (m)"
+  },
+  "frameFeetAboveFloorM": 0.0505
+ },
+ "textures": [
+  {
+   "slot": "baseColor",
+   "source": {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 3574694,
+    "sha256": "3b617ae5048b7cbdc30613f858cf922bfcd6d0ff3203919b58cf9a54f76beadb"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 283410,
+   "sha256": "4893483552ecdcbc7438880d30a952d229785296c0e89027279a19bc3aa3a39f",
+   "note": "Meshy's 2048 px map downsized to 1024 (sharp lanczos3, JPEG q86 4:2:0)"
+  },
+  {
+   "slot": "metallicRoughness",
+   "source": {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2348279,
+    "sha256": "5ec3e1e6784bdacc221711f03081bae33af7a23b09dc07712d773f8903d4dd4b"
+   },
+   "size": [
+    512,
+    512
+   ],
+   "mime": "image/jpeg",
+   "bytes": 108287,
+   "sha256": "2c3858425bc6cdd4626b6cd4e614583f5a9b5a28598fea8e063a707fa79894ee",
+   "note": "Meshy's 2048 px map downsized to 512 (sharp lanczos3, JPEG q88 4:4:4)"
+  },
+  {
+   "slot": "normal",
+   "source": {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2572648,
+    "sha256": "19370c6fcda9081a23f1b0905a0669ee04a9f393099dd5a6f2ce558a19cdb79d"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 219407,
+   "sha256": "0fa4e30a858e8fc8b21ab88427ede4e05c0ccd87524467d05b55f61e57b1bf98",
+   "note": "Meshy's 2048 px map downsized to 1024 (sharp lanczos3, JPEG q90 4:4:4)"
+  }
+ ],
+ "texturePolicy": "the model's own PBR maps kept slot for slot (base colour / metallic-roughness / normal), downsized 2048 -> 1024 / 512 / 1024 px and re-encoded (no recolour, tint, re-texture, projection or new art)",
+ "limitations": [
+  "one rigid mesh: the straps, the waist belt, the pump lever and the hose are modelled in place and do not move",
+  "the waist belt is modelled as a closed loop hanging around the foot of the frame: its buckle is the model's lowest part, so the standing pack rests on the belt and the frame's feet stay 51 mm above the floor",
+  "the jerrycan is modelled slim (a shallow can against the frame's back plate)"
+ ],
+ "convention": "metres at real size, +Y up, front -Z (the jerrycan side; gear/models.ts turns gear derivatives to +Z), grounded, centred on x / z",
+ "licence": "generated for this project under the existing provider accounts; unapproved prototype asset, no blanket licence or commercial clearance implied (assets/CREDITS.md)",
+ "rebuild": "node tools/asset-pipeline/props/build-fuel-tank.mjs [--master <the private raw original>]"
+}
