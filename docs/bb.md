@@ -355,7 +355,7 @@ A BB is saved exactly like every other enemy: only its **death** is remembered, 
 | `game/tests/bb-asset.test.ts` | The GLBs against the asset contract |
 | `game/tests/bb-contract.test.ts` | The four bodies against the game's tables: sizes, looks, the AI's body, shots at and over it |
 | `game/tests/bb-brain.test.ts`, `game/tests/bb-surface.test.ts` | The brain and the surface locomotion |
-| `game/tests/bb-lure.test.ts` | The Zombie Lure on real levels: from the floor and from a perch, the 20 m reach, sight and alarm rules, the scent running out |
+| `game/tests/bb-lure.test.ts` | The Zombie Lure on real levels: from the floor and from a perch, the common reach (`SCENT.radius`, 30 m), sight and alarm rules, the scent running out |
 | `game/tests/bb-places.test.ts` | Places it must never end up in and stand-offs it must not fall into: the review's cases, and a sweep over seeds, player movement and frame times |
 | `game/tests/bb-actor.test.ts`, `game/tests/bb-clips.test.ts` | The rendered body and its runtime clips, on the four real bodies |
 | `game/tests/bb-ragdoll.test.ts`, `game/tests/bb-nongraphic.test.ts` | The ragdoll in the real physics world; no wounds, blood or pieces |

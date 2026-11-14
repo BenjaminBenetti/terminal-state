@@ -53,7 +53,7 @@ describe('the crafted throwables: items', () => {
     for (const id of GRENADE_IDS) { expect(econCat(id)).toBeNull(); expect(tables).not.toContain(id); }
     expect(itemDef(ACID_GRENADE).description).toMatch(/10 seconds/);
     expect(itemDef(ACID_GRENADE).description).toMatch(/you too/);
-    expect(itemDef(LURE_GRENADE).description).toMatch(/20 seconds.*20 m/);
+    expect(itemDef(LURE_GRENADE).description).toMatch(/20 seconds.*30 m/); // (the reach: SCENT.radius, 30 m since the console refinements)
     // Node: the labelled fallback (no browser fetch), never claimed as the Meshy model
     expect(grenadeModelSource(ACID_GRENADE)).toMatch(/^FALLBACK/);
     expect(grenadeModel(ACID_GRENADE).userData.fallback).toBe(true);

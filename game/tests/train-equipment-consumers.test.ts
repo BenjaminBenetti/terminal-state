@@ -21,7 +21,8 @@ import {installFakeDom} from './helpers/fakeDom';
 import {LEVELS} from '../src/levels/registry';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {trainToWorld, worldToTrain} from '../src/gen/playerTrain';
-import {EQUIPMENT, EQUIPMENT_LIMITS, SENTRY_FEED_SLOTS, equipmentRounds, type EquipmentJSON} from '../src/craft/equipment';
+import {EQUIPMENT, EQUIPMENT_LIMITS, SENTRY_FEED_SLOTS, equipmentRounds, trainEquipmentProblem, type EquipmentJSON} from '../src/craft/equipment';
+import {SCANNER} from '../src/craft/scanner';
 import {EQUIP_HOLD_S} from '../src/craft/equipmentApi';
 import {countMaterials, craft} from '../src/craft/crafting';
 import {RECIPES, RECIPE_MATERIALS} from '../src/craft/recipes';
@@ -654,6 +655,61 @@ describe('the scanner\'s console, the radar and the equipment system', () => {
     expect(Math.hypot(q.x - e1.x, q.z - e1.z)).toBeGreaterThan(PLUG.reach);
     expect([uidOf(scanner.openUnit), scanner.lastClose]).toEqual([null, 'inactive']);
     expect(h.toasts).toContain(EQUIPMENT_TEXT.pulled(u.def.name));
+  });
+
+  // Task studio-scanner-console-refinements-20261114-031614-01: the scanner's MODE through the game's real keyboard seam (Game.input) and
+  // the real equipment system — X cycles the open scope's unit; the unit keeps it; its record holds it only when it is not ALL
+  it('X on the open scope cycles that scanner\'s mode; the unit keeps it through a save and a load; tap / hold E and R are untouched', () => {
+    const {h, eq, scanner, scope} = world();
+    const s1 = plugSpot(1);
+    loadAboard(h, [aboardRec('scanner', 1, -3.9, 0.3, -Math.PI / 2)]);
+    run(h, 0.3);
+    const u = eq.unit('eq-1')!;
+    putLocal(h, u, s1.x, s1.z, -Math.PI / 2);
+    run(h, SCANNER.warmup + 0.5); // plugged in, swept once
+    expect([u.plug, u.display, scanner.counts.sweeps]).toEqual([1, 'all', 1]);
+    // the default mode is not written: the record is what it was before the modes
+    const rec0 = eq.aboard().find(r => r.uid === u.uid)!;
+    expect('display' in rec0).toBe(false);
+    // X with the scope closed is nothing
+    faceOf(h, u);
+    press(h, 'KeyX');
+    expect([u.display, scanner.counts.modes]).toEqual(['all', 0]);
+    // tap E opens; X steps the mode, re-filters the captured snapshot, never sweeps; E stays the scope's (and a tap never grabs)
+    press(h, 'KeyE');
+    expect(scanner.openUnit === u).toBe(true);
+    const snap = scanner.snap, sweeps = scanner.counts.sweeps, draws = scope.draws;
+    press(h, 'KeyX');
+    expect([u.display, scanner.qa().mode, uidOf(eq.grab?.unit)]).toEqual(['food', 'food', null]);
+    expect(scope.draws).toBeGreaterThan(draws);
+    press(h, 'KeyX'); press(h, 'KeyX');
+    expect(u.display).toBe('fuel');
+    expect([scanner.snap === snap, scanner.counts.sweeps]).toEqual([true, sweeps]);
+    expect(h.inputOwners.some(f => f())).toBe(false); // the open scope owns no input: the mouse and the keys stay the player's
+    press(h, 'KeyE');
+    expect(uidOf(scanner.openUnit)).toBeNull();
+    // the record a save takes holds it, validated
+    const rec = eq.aboard().find(r => r.uid === u.uid)!;
+    expect(rec.display).toBe('fuel');
+    expect(trainEquipmentProblem({v: 1, seq: 1, aboard: [rec]})).toBeNull();
+    // hold E still drags it and R still turns it round while dragged; the mode rides along
+    handleOf(h, u);
+    holdE(h);
+    expect(uidOf(eq.grab?.unit)).toBe(u.uid);
+    const flips = eq.counts.flips;
+    press(h, 'KeyR');
+    expect(eq.counts.flips).toBe(flips + 1);
+    press(h, 'KeyE');
+    expect([uidOf(eq.grab?.unit), u.display]).toEqual([null, 'fuel']);
+    // a load of that record: the same mode; a record from before the modes (no field): ALL
+    loadAboard(h, [rec]);
+    run(h, 0.3);
+    expect(eq.unit('eq-1')!.display).toBe('fuel');
+    const {display: _gone, ...old} = rec;
+    loadAboard(h, [old as EquipmentJSON]);
+    run(h, 0.3);
+    expect(eq.unit('eq-1')!.display).toBe('all');
+    expect('display' in eq.aboard().find(r => r.uid === 'eq-1')!).toBe(false);
   });
 
   it('the route radar: the map reveals two stops out exactly while a radar is plugged in (parked or riding)', async () => {

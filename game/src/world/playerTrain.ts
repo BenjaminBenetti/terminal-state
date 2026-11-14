@@ -73,8 +73,8 @@ import {ARMOR_MODELS, type ArmorBox} from './trainArmorLayout'; // task refineme
 
 /**
  * Task studio-refinement-batch-20261113-035659-01 (lane SAVE): a car fixture whose aim / prompt / glow / [E] go through THIS runtime's
- * aim (nearest of the doors, the Lockbox, the console and it; the same reach, partitions and occlusion), so the driving desk beside it
- * never takes its [E]. world/trainSaveTerminal.ts sets PlayerTrainRuntime.saveTerminal. All in the CAR frame (parked and riding).
+ * aim (nearest of the doors, the Lockbox, the console and it — a ray on its box beats the desk's coarse box, which it overlaps; the same
+ * reach, partitions and occlusion), so the driving desk beside it never takes its [E]. world/trainSaveTerminal.ts sets PlayerTrainRuntime.saveTerminal. All in the CAR frame (parked and riding).
  */
 export interface TrainFixtureLink {
   /** The aim box (train-local), null while the fixture is not on the car. */
@@ -1086,20 +1086,22 @@ export class PlayerTrainRuntime {
       const hit = rayBox(eye, dir, b as never, bt);
       if (hit !== null && hit < bt) { bt = hit; best = null; lockbox = true; }
     }
-    // (lane RIDE) the driving console in the front cab (only while the primary's map is wired)
-    if (this.onConsoleInteract) {
-      const cr = consoleLocalRect(this.spec, this.consoleRect);
-      setBox(cr.x0, cr.x1, fy, cr.top, cr.z0, cr.z1);
-      const hit = rayBox(eye, dir, b as never, bt);
-      if (hit !== null && hit < bt) { bt = hit; best = null; lockbox = false; desk = true; }
-    }
-    // (lane SAVE) the save terminal left of the desk: the nearer of it and the desk wins (one [E], one prompt, one glow)
+    // (lane SAVE) the save terminal left of the desk (one [E], one prompt, one glow). Tested BEFORE the desk: since it faces inward
+    // (task studio-scanner-console-refinements-20261114-031614-01) its keyboard reaches over the desk's low -Z end, inside the desk's
+    // coarse box, and from the drive controls the ray to its screen grazes that box's corner — a ray on the terminal's own box takes it
     let save = false;
     const sb = this.saveTerminal?.aimBox() ?? null;
     if (sb) {
       setBox(sb.x0, sb.x1, sb.y0, sb.y1, sb.z0, sb.z1);
       const hit = rayBox(eye, dir, b as never, bt);
-      if (hit !== null && hit < bt) { bt = hit; best = null; lockbox = false; desk = false; save = true; }
+      if (hit !== null && hit < bt) { bt = hit; best = null; lockbox = false; save = true; }
+    }
+    // (lane RIDE) the driving console in the front cab (only while the primary's map is wired)
+    if (this.onConsoleInteract && !save) {
+      const cr = consoleLocalRect(this.spec, this.consoleRect);
+      setBox(cr.x0, cr.x1, fy, cr.top, cr.z0, cr.z1);
+      const hit = rayBox(eye, dir, b as never, bt);
+      if (hit !== null && hit < bt) { bt = hit; best = null; lockbox = false; desk = true; }
     }
     if (!best && !lockbox && !desk && !save) return none;
     // nothing structural in between: the partitions (their walls + doorway heads; the open doorway passes) for the Lockbox / console /

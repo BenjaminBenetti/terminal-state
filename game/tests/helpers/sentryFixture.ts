@@ -57,6 +57,8 @@ export class FakeUnit implements EquipmentUnit {
   touchStore(): void { /* no store */ }
   setOpen(): void { /* no lid */ }
   worldPose(): null { return null; }
+  get display(): string { return this.def.displayModes[0] ?? ''; }
+  setDisplay(): boolean { return false; }
 }
 
 /** The equipment system as the sentry sees it (craft/equipmentApi.ts EquipmentSystemLike). */

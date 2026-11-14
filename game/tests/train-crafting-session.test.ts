@@ -4,7 +4,8 @@
 // the platform, the scanner (world/itemScanner.ts):
 //   materials in the pockets and the Lockbox -> the four recipes at the bench (exact costs, nothing left, a fifth craft refused) ->
 //   the three devices on the three plugs (the route radar's two stops, the sentry and the scanner active) -> real 5.56 rounds into the
-//   sentry, its roof turret shoots the zombie (one round per shot, none made) -> the scanner's sweep (red enemy, green item, gold
+//   sentry, its roof turret shoots the zombie (one round per shot, none made) -> the scanner's sweep (resources only since task
+//   studio-scanner-console-refinements-20261114-031614-01: was red enemy, green item, gold
 //   weapon) -> the record a save takes -> a journey to ANOTHER station with everything aboard -> the same units, plugs, rounds and
 //   chest contents there, the turret up and shooting again, the scanner sweeping the new station -> a load of the earlier record puts
 //   every unit, round and stack back.
@@ -19,7 +20,7 @@ import type {StationLayout} from '../src/gen/stationTypes';
 import {EQUIPMENT, equipmentRounds, trainEquipmentProblem, type EquipmentJSON, type TrainEquipmentJSON} from '../src/craft/equipment';
 import {countMaterials} from '../src/craft/crafting';
 import {RECIPES, RECIPE_MATERIALS} from '../src/craft/recipes';
-import {SCANNER} from '../src/craft/scanner';
+import {SCANNER, SCAN_MODES, scanBlips} from '../src/craft/scanner';
 import {SENTRY} from '../src/craft/sentry';
 import {turretMount} from '../src/craft/trainFixtures';
 import {ELECTRICAL_PARTS, SCRAP_METAL} from '../src/items/craftMaterials';
@@ -178,7 +179,7 @@ describe('train crafting: one session, every system real', () => {
     expect([made.sentry.ammo, sentry.counts.shots]).toEqual([kept, shotsA]);
 
     // --- the scanner: it swept once after its warm-up; what appears afterwards is on the scope only after the NEXT sweep (a
-    // snapshot every SCANNER.period active seconds, nothing live) — an enemy, an ordinary item, a weapon
+    // snapshot every SCANNER.period active seconds, nothing live) — a dressing (ALL only), a weapon; the enemy is not a resource
     const sweep1 = scanner.snap;
     expect(sweep1).not.toBeNull();
     const far = platformWorld(h, m.x + 9, -(SPEC.width / 2 + 4)), far2 = platformWorld(h, m.x - 7, -(SPEC.width / 2 + 5));
@@ -188,8 +189,8 @@ describe('train crafting: one session, every system real', () => {
     expect(scanner.snap).toBe(sweep1); // (no live tracking between sweeps)
     run(h, SCANNER.period + 1, () => scanner.snap !== sweep1);
     expect(scanner.snap).not.toBe(sweep1);
-    expect(scanner.snap!.seen).toEqual({enemy: 1, item: 1, gear: 1});
-    expect([scanner.snap!.enemy.length, scanner.snap!.item.length, scanner.snap!.gear.length]).toEqual([1, 1, 1]);
+    expect(scanner.snap!.seen).toEqual({all: 2, food: 0, ammo: 0, fuel: 0, weapon: 1, equipment: 0, material: 0});
+    expect(SCAN_MODES.map(k => scanBlips(scanner.snap!, k).blips.length)).toEqual([2, 0, 0, 0, 1, 0, 0]);
     expect([made.sentry.ammo, z2.brain.alive]).toEqual([kept, true]); // (the far zombie is the scanner's business only)
     h.zombies.length = 0;
     h.pickups.list.length = 0;
@@ -249,7 +250,7 @@ describe('train crafting: one session, every system real', () => {
     const sweepB = scanner.snap;
     run(h, SCANNER.period + SCANNER.warmup + 1, () => scanner.snap !== sweepB);
     expect(scanner.snap).not.toBe(sweepB);
-    expect(scanner.snap!.seen.enemy).toBe(1);
+    expect(Object.keys(scanner.snap!.seen)).toEqual([...SCAN_MODES]); // (resources only: the live far zombie is no dot)
     expect(z4.brain.alive).toBe(true);
 
     // --- a load of the record taken before the journey: every unit, round and stack as recorded (the rounds shot since are back —
