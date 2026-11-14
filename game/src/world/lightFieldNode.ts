@@ -11,7 +11,8 @@
 //    part -> lightsNode.setupDirectLight (N.L diffuse + GGX specular), exactly as the WebGL patch fed RE_Direct.
 //  - LF: GLOBAL texture / uniform nodes bound to the active station (bindLightField). Materials built before a station
 //    exists compile against a zero placeholder (same format / filtering) and pick the real texture up when it is bound
-//    (the sampled-texture binding follows the node's value; no rebuild).
+//    (the sampled-texture binding follows the node's value; no rebuild — every render object re-reads it once after a swap,
+//    render/bindingRefresh.ts).
 //  - Shared TSL for other lanes: lfSlotAt / lfBandAt / lfFloorAt (decay floor grime, world-mapped grime, fog density
 //    layer) and lightFieldSample (surfaces and the volumetric in-scattering). The CPU mirror is sampleField().
 //  - Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PORTAL): lightFieldSample is scaled by the RIDE MASK (RM below,
@@ -31,6 +32,7 @@ import {
 } from 'three/tsl';
 import {AUX_LAYERS, AUX_SLOT_DEPTH, FIELD_EMAX, GROUP_BANDS, LAYERS, MAX_SLOTS, SLOT_DEPTH, configureFieldTexture, fieldDepth, slotRange, type LightFieldVolume} from './lightField';
 import {RIDE_MASK, RIDE_MASK_SKIN} from './rideMask';
+import {refreshTextureBindings} from '../render/bindingRefresh';
 
 /** Zero field (1 x 1 column, one slot): what materials compile and sample against before a station is bound. */
 const PLACEHOLDER = configureFieldTexture(new THREE.Data3DTexture(new Uint8Array(fieldDepth(1) * 4), 1, 1, fieldDepth(1)));
@@ -62,10 +64,16 @@ export const LF = {
 
 let active: LightFieldVolume | null = null;
 
-/** Bind a station's field to the global nodes (null: unbind -> placeholder, no field light, band fallback). */
+/**
+ * Bind a station's field to the global nodes (null: unbind -> placeholder, no field light, band fallback). Task
+ * studio-death-retry-render-fix-20261114-044607-01: a changed texture also makes every render object re-read it at its next draw
+ * (render/bindingRefresh.ts): three alone kept an unchanged object (the parked car's fuel cap / plugs on a same-station reload) on the
+ * previous station's field, destroyed after the warm-up, and WebGPU then dropped the station's whole scene pass.
+ */
 export function bindLightField(v: LightFieldVolume | null): void {
   active = v;
   syncRideMask();
+  if (LF.tex.value !== (v ? v.texture : PLACEHOLDER)) refreshTextureBindings();
   if (!v) {
     LF.tex.value = PLACEHOLDER;
     LF.min.value.set(0, 0, 0);
