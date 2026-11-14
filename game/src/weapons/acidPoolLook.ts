@@ -20,7 +20,8 @@
 //    (weapons/grenades.ts poolStrength, through the material's opacity) — nothing vanishes at once, and the outline stays marked
 //    until the end;
 //  - wetness: a low roughness on the liquid (the torch and the lamps glint on it), matte foam, and slopes for the normal that drift
-//    with the flow and get choppier where it reacts; a modest green glow (stronger at the reactions) keeps it readable in the dark.
+//    with the flow and get choppier where it reacts; a modest green glow (stronger at the reactions, a little on the foam too: the
+//    edge band is where the hazard ends) keeps it readable in the dark.
 // It is a LIQUID on the floor: no vapour, no haze, no volume (CLAUDE.md's green-fog rule is for inhaled gas).
 
 import {POOL_EDGE, poolEdgeRing, ringRadius, type PoolShape} from './acidPoolShape';

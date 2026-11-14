@@ -13,7 +13,8 @@
 //  - the BEADS: one InstancedMesh of small spheres — BUBBLES that swell, wobble and pop (varied size and life, more of them near the
 //    edge and at the reaction points), pale FROTH beads clustering on the edge foam and the blooms, and tiny SPITS thrown up a few
 //    centimetres by a popping bubble (and a short crown of them at the burst), falling back at once. Glossy and translucent (a rim-lit
-//    dome), per-instance fade / paleness / glow in one instanced attribute.
+//    dome), per-instance fade / paleness / glow in one instanced attribute. Every bead stays inside the film (a spit inside the circle
+//    that hurts), a live one is never cut short for a new one, and the bubbling dies down as the pool starts to dry (ACID_FX.dry).
 // REACTIONS: react(x, z, amount) marks where the acid is working — an actor standing in it, a prop it is eating, the burst —
 // and the foam, the churn and the bubbling gather there, fading in about a second. It is a look only: grenades.ts calls it from
 // its burn code and nothing reads it back.
@@ -40,12 +41,12 @@ export const POOL_LIFT = 0.012;
 export const ACID_FX = {
   /** Instances per pool: bubbles, froth beads, spits. */
   count: {bubbles: 26, froth: 40, spits: 18},
-  bubble: {size: [0.014, 0.055] as const, life: [0.55, 2.1] as const, rate: 8, reactRate: 11, edge: 0.55, squash: 0.72, wobble: 0.08, wobbleHz: [5, 9] as const, pop: 0.07},
-  froth: {size: [0.005, 0.012] as const, life: [0.45, 1.3] as const, rate: 13, reactRate: 20, edge: 0.8},
+  bubble: {size: [0.018, 0.065] as const, life: [0.55, 2.1] as const, rate: 8, reactRate: 11, edge: 0.55, squash: 0.72, wobble: 0.08, wobbleHz: [5, 9] as const, pop: 0.07},
+  froth: {size: [0.006, 0.016] as const, life: [0.45, 1.3] as const, rate: 13, reactRate: 20, edge: 0.8},
   /** A popping bubble of at least minBubble throws perPop spits: up / sideways speed (m/s). */
-  spit: {size: [0.004, 0.008] as const, up: [0.5, 1.1] as const, out: 0.28, perPop: [1, 3] as const, minBubble: 0.02},
+  spit: {size: [0.005, 0.011] as const, up: [0.8, 1.6] as const, out: 0.28, perPop: [1, 3] as const, minBubble: 0.03},
   /** The burst: a crown of spits from the middle and a reaction there. */
-  splash: {spits: 12, up: [0.9, 1.7] as const, out: [0.5, 1.5] as const, react: 1.4},
+  splash: {spits: 12, up: [1.2, 2.2] as const, out: [0.5, 1.5] as const, react: 1.4},
   /** Reaction points: merged within `merge` m, amount x e^(-decay t), dropped under `floor`; kept `inset` x the edge inside the film. */
   react: {merge: 0.28, decay: 2.2, floor: 0.02, inset: 0.93, spread: 0.13},
   /**
@@ -229,6 +230,7 @@ export class AcidPoolVisual {
     const shape = poolShape(seed);
     this.look = lookState(shape, r);
     this.rand = mulberry32((seed ^ 0x51f15e) >>> 0);
+    this.reach = 0;
     this.wipe();
     const ring = this.look.ring, pos = this.mesh.geometry.getAttribute('position') as THREE.BufferAttribute, n = ring.length;
     for (let i = 0; i < n; i++) { const a = i / n * TAU; pos.setXYZ(1 + i, Math.cos(a) * ring[i], 0, Math.sin(a) * ring[i]); }
@@ -264,33 +266,43 @@ export class AcidPoolVisual {
     if (!this.inUse || !(amount > 0)) return;
     const reach = Math.max(1e-3, this.reach || this.look.r), full = this.look.r;
     // into the film's own frame at full radius (the film spreads as a whole: a point keeps its place in it)
-    let qx = (x - this.mesh.position.x) / reach, qz = (z - this.mesh.position.z) / reach;
-    const rho = Math.hypot(qx, qz), lim = ringRadius(this.look.ring, Math.atan2(qz, qx)) * ACID_FX.react.inset;
-    if (rho > lim) { qx *= lim / rho; qz *= lim / rho; }
-    this.mark(qx * full, qz * full, amount);
+    this.mark((x - this.mesh.position.x) / reach * full, (z - this.mesh.position.z) / reach * full, amount);
   }
 
-  /** A reaction point at (mx, mz) metres from the centre (full-radius frame): refresh the one within reach, else take the weakest slot. */
+  /** Reaction point `i` pulled back inside the film (`inset` x its edge in that direction). */
+  private keepIn(i: number): void {
+    const R = this.look.react, full = this.look.r, rho = Math.hypot(R[i * 3], R[i * 3 + 1]);
+    const lim = ringRadius(this.look.ring, Math.atan2(R[i * 3 + 1], R[i * 3])) * ACID_FX.react.inset * full;
+    if (rho > lim) { R[i * 3] *= lim / rho; R[i * 3 + 1] *= lim / rho; }
+  }
+
+  /**
+   * A reaction point at (mx, mz) metres from the centre (full-radius frame), kept inside the film: refresh the one within reach, else
+   * take the weakest slot.
+   */
   private mark(mx: number, mz: number, amount: number): void {
     const R = this.look.react, n = ACID_LOOK.reactions, merge2 = ACID_FX.react.merge * ACID_FX.react.merge;
+    const rho = Math.hypot(mx, mz), lim = ringRadius(this.look.ring, Math.atan2(mz, mx)) * ACID_FX.react.inset * this.look.r;
+    const x = rho > lim ? mx * lim / rho : mx, z = rho > lim ? mz * lim / rho : mz;
     let weakest = 0, near = -1, nd = merge2;
     for (let i = 0; i < n; i++) {
       const a = R[i * 3 + 2];
       if (a < R[weakest * 3 + 2]) weakest = i;
       if (a <= 0) continue;
-      const d = (R[i * 3] - mx) ** 2 + (R[i * 3 + 1] - mz) ** 2;
+      const d = (R[i * 3] - x) ** 2 + (R[i * 3 + 1] - z) ** 2;
       if (d <= nd) { nd = d; near = i; }
     }
     this.counts.reacts++;
     if (near >= 0) {
       // (it follows whoever stands there: half way each call, the amount never below the call's)
-      R[near * 3] += (mx - R[near * 3]) * 0.5;
-      R[near * 3 + 1] += (mz - R[near * 3 + 1]) * 0.5;
+      R[near * 3] += (x - R[near * 3]) * 0.5;
+      R[near * 3 + 1] += (z - R[near * 3 + 1]) * 0.5;
       R[near * 3 + 2] = Math.max(R[near * 3 + 2], amount);
+      this.keepIn(near); // (half way between two points of a lobed outline can lie in a bay)
       return;
     }
     if (R[weakest * 3 + 2] >= amount) return;
-    R[weakest * 3] = mx; R[weakest * 3 + 1] = mz; R[weakest * 3 + 2] = amount;
+    R[weakest * 3] = x; R[weakest * 3 + 1] = z; R[weakest * 3 + 2] = amount;
   }
 
   /**
@@ -473,11 +485,11 @@ export class AcidPoolVisual {
     return {bubbles: b, froth: f, spits: s, reactions: r};
   }
 
-  /** Every live bead: metres from the pool's centre (x, y above the film, z), radius, kind (QA / tests / CPU previews). */
+  /** Every live bead that shows: metres from the pool's centre (x, y above the film, z), radius, kind (QA / tests / CPU previews). */
   beads(): {kind: 'bubble' | 'froth' | 'spit'; x: number; y: number; z: number; r: number; fade: number}[] {
     const a = this.bubbles.instanceMatrix.array as Float32Array, b = this.bead.array as Float32Array, out = [];
     for (let i = 0; i < BEADS; i++) {
-      if (this.life[i] <= 0 || a[i * 16] <= 0) continue;
+      if (this.life[i] <= 0 || a[i * 16] <= 0 || b[i * 4] <= 0) continue;
       out.push({kind: i < FROTH0 ? 'bubble' as const : i < SPIT0 ? 'froth' as const : 'spit' as const, x: a[i * 16 + 12], y: a[i * 16 + 13], z: a[i * 16 + 14], r: a[i * 16], fade: b[i * 4]});
     }
     return out;

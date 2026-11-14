@@ -22,8 +22,8 @@ export const POOL_EDGE = {
   hi: 0.995,
   /** The shader's frayed, soft rim reaches at most this far (x the edge) inside poolEdge. */
   fringe: 0.025,
-  /** Spokes of the film's mesh (the outline is sampled at these angles; a chord sags by 1 - cos(pi / segments) = 0.03 %). */
-  segments: 128,
+  /** Spokes of the film's mesh (the outline is sampled at these angles: several per bay; a chord sags by 1 - cos(pi / segments) = 0.01 %). */
+  segments: 192,
   /** Harmonics of the lobes (per turn), their falloff (amplitude ~ 1 / k^falloff). */
   harmonics: [3, 13] as const,
   falloff: 0.4,
