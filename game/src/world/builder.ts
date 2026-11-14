@@ -774,7 +774,10 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
       // Unit-height box scaled per instance (platform/concourse columns differ in height).
       const geo = new THREE.BoxGeometry(def.w, 1, def.d);
       geo.translate(0, 0.5, 0);
-      const im = new THREE.InstancedMesh(geo, mats.get('steel'), list.length);
+      // (task studio-graphics-gpu-materials-toggle-20261114-212239-01: brushed-steel cladding — 'pillar' — instead of the charcoal trim
+      // paint. Every 'column' is a station column: gen/stationDress.ts places them on the platforms and concourses of each level's
+      // station storey)
+      const im = new THREE.InstancedMesh(geo, mats.get('pillar'), list.length);
       const m4 = new THREE.Matrix4();
       list.forEach((p, i) => im.setMatrixAt(i, m4.makeScale(1, p.h, 1).setPosition(p.x, p.y, p.z)));
       im.name = 'prop-column';

@@ -47,6 +47,7 @@ import {addNodeHook} from '../render/nodeHooks';
 import {requestSurfaceAnisotropy} from '../render/anisotropy'; // lane FIX (U08)
 import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {refreshTextureBindings} from '../render/bindingRefresh'; // task studio-death-retry-render-fix-20261114-044607-01
+import {plainTexture, sampleAt} from '../render/textureFetch';
 import {SurfaceNodeMaterial, cloneSurfaceMaterial, worldMapped, type MatKey, type WorldMapping, type WorldMaterials} from './materials';
 import {shapeMaterial} from './shapeMaterials';
 import {asColor, isNodeMaterial, lfBandNode, matRef, pick, sharedStage, skipInShadowPass} from './surfaceNodes';
@@ -562,14 +563,15 @@ function neutral(): THREE.DataTexture {
  * (`.value` is the bound texture / vector, as the GLSL uniforms were).
  */
 export const DECAY_UNIFORMS = {
-  uDecayMap: texture(neutral()),
+  // (render/textureFetch.ts: both textures are sampled at computed world coordinates — no uv-transform uniform)
+  uDecayMap: plainTexture(texture(neutral())),
   /** (cells x, cells z per level, levels, cell size m). */
   uDecayGrid: uniform(new THREE.Vector4(1, 1, 1, CELL)),
   /**
    * The generated detail texture (bound on first applyDecay). Its own placeholder: three shares one sampler uniform between
    * texture nodes whose textures have the same uuid at build time, so the two inputs must never start on one texture.
    */
-  uDecayTex: texture(Object.assign(new THREE.DataTexture(new Uint8Array([128, 0, 128, 0]), 1, 1), {needsUpdate: true, name: 'decay-detail-placeholder'})),
+  uDecayTex: plainTexture(texture(Object.assign(new THREE.DataTexture(new Uint8Array([128, 0, 128, 0]), 1, 1), {needsUpdate: true, name: 'decay-detail-placeholder'}))),
   uDecayAge: uniform(DECAY_AGE),
 };
 
@@ -615,16 +617,16 @@ const DC = (() => {
   // The open cell in front of the surface: its level slot, floor and ceiling (station light field, when installed).
   const dp = pos.add(dn.mul(0.2)).toVar('dcP');
   const {band, uv: fieldUv} = decayFieldAt(dp);
-  const D = (DECAY_UNIFORMS.uDecayMap.sample(fieldUv) as unknown as Node<'vec4'>).toVar('dcD');
+  const D = (sampleAt(DECAY_UNIFORMS.uDecayMap, fieldUv) as unknown as Node<'vec4'>).toVar('dcD');
   const traffic = D.x, open = D.y, wet = D.z;
   const k = (DECAY_UNIFORMS.uDecayAge as unknown as Node<'float'>).mul(mix(0.55, 1.35, D.w)).toVar('dcK');
   const h = max(0.0, pos.y.sub(band.y)).toVar('dcH');
   const hTop = max(0.0, band.z.sub(pos.y)).toVar('dcHTop');
   const wuv = pick(wallK.greaterThan(0.5), vec2(pick(dn.x.abs().greaterThan(dn.z.abs()), pos.z, pos.x), pos.y), pos.xz);
   const tex = DECAY_UNIFORMS.uDecayTex;
-  const TA = (tex.sample(wuv.mul(1 / DETAIL_SPANS[0])) as unknown as Node<'vec4'>).toVar('dcTA');
-  const TB = (tex.sample(wuv.mul(1 / DETAIL_SPANS[1]).add(vec2(0.43, 0.17))) as unknown as Node<'vec4'>).toVar('dcTB');
-  const edgeN = (tex.sample(vec2(wuv.x.mul(1 / EDGE_SPAN), 0.31)) as unknown as Node<'vec4'>).x.toVar('dcEdge');
+  const TA = (sampleAt(tex, wuv.mul(1 / DETAIL_SPANS[0])) as unknown as Node<'vec4'>).toVar('dcTA');
+  const TB = (sampleAt(tex, wuv.mul(1 / DETAIL_SPANS[1]).add(vec2(0.43, 0.17))) as unknown as Node<'vec4'>).toVar('dcTB');
+  const edgeN = (sampleAt(tex, vec2(wuv.x.mul(1 / EDGE_SPAN), 0.31)) as unknown as Node<'vec4'>).x.toVar('dcEdge');
   // Irregular stain field (smooth warped fBm at two incommensurate scales: no stamps, no visible repeat).
   const S = TA.x.mul(0.65).add(TB.x.mul(0.35)).toVar('dcS');
   const grain = TB.z, run = max(TA.w, TB.w.mul(0.6));
@@ -884,7 +886,7 @@ export async function probeDecayGPU(renderer: ProbeRenderer, pts: readonly Decay
     const i = int(floor((screenCoordinate as unknown as Node<'vec2'>).x));
     const dp = (textureLoad(posT, ivec2(i, 0)) as unknown as Node<'vec4'>).xyz;
     const {band, uv} = decayFieldAt(dp);
-    const D = DECAY_UNIFORMS.uDecayMap.sample(uv) as unknown as Node<'vec4'>;
+    const D = sampleAt(DECAY_UNIFORMS.uDecayMap, uv) as unknown as Node<'vec4'>;
     return mix(D, vec4(band, 1), (row as unknown as Node<'float'>));
   })();
   const quad = new QuadMesh(mat);

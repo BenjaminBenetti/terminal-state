@@ -26,13 +26,14 @@ import * as THREE from 'three';
 import {PhysicalLightingModel, type Node, type NodeBuilder} from 'three/webgpu';
 import {
   If, abs, cameraWorldMatrix, clamp, float, floor, int, ivec2, ivec3, materialOpacity, max, metalness, min, mix, mod, normalView, normalWorld, positionWorld, pow4,
-  reflectView, renderGroup, roughness, select, step, texture, texture3D, uniform, vec2, vec3,
+  reflectView, renderGroup, roughness, select, smoothstep, step, texture, texture3D, uniform, vec2, vec3,
 } from 'three/tsl';
 import {LightFieldLight, LightFieldNode, lightFieldCell, lightFieldSample, type LightFieldSampleNodes, type NodeLibraryLike} from './lightFieldNode';
 import {fieldSlot, sampleField, type BakedField} from './lightField';
 import {PROBE_COLS, PROBE_GUTTER, PROBE_LEVELS, PROBE_LEVEL_PER_ROUGHNESS, PROBE_RATIO_MAX, octEncode, probeAtlasLayout, probeBytes, probeTileOrigin, type BakedProbes} from './reflectionProbes';
 import {CELL} from '../gen/grid';
 import {refreshTextureBindings} from '../render/bindingRefresh';
+import {fetchTexel, plainTexture} from '../render/textureFetch';
 import {reflectTagOf, type ReflectClass} from '../render/reflectTag';
 
 // TSL nodes are chained untyped here (three's TSL typings reject most mixed-type chains).
@@ -80,6 +81,19 @@ GRID_PH.name = 'reflection-grid-placeholder';
 /** A 'metal' candidate's fragment looks the probes up when its metalness is above this, or its roughness below REFLECT_ROUGHNESS_MAX. */
 export const REFLECT_METALNESS_MIN = 0.2;
 export const REFLECT_ROUGHNESS_MAX = 0.45;
+/**
+ * Task studio-graphics-gpu-materials-toggle-20261114-212239-01: a 'gloss' candidate (a glossy non-metal: the glazed wall tile) shows
+ * the probes in full up to GLOSS_ROUGHNESS_FULL and not at all from GLOSS_ROUGHNESS_NONE on (grout, grime, dust): a fade, so a tile
+ * face around the limit does not flip between the two. Only with the High probes (REFL.params.y).
+ */
+export const GLOSS_ROUGHNESS_FULL = 0.45;
+export const GLOSS_ROUGHNESS_NONE = 0.6;
+/** How much of the probes a 'gloss' fragment of roughness `rough` shows (the shader's weight; `high`: the bound probes are the High tier). */
+export function glossWeight(rough: number, high: boolean): number {
+  if (!high) return 0;
+  const t = Math.min(1, Math.max(0, (rough - GLOSS_ROUGHNESS_FULL) / (GLOSS_ROUGHNESS_NONE - GLOSS_ROUGHNESS_FULL)));
+  return 1 - t * t * (3 - 2 * t);
+}
 
 /** One station's probes on the GPU. */
 export class ReflectionProbeVolume {
@@ -105,11 +119,13 @@ export class ReflectionProbeVolume {
 /**
  * The global reflection nodes. atlasInfo = atlas width, height (px), the sharpest tile's edge (px), probe tiles per row;
  * levelY = first texel row of each roughness level's band; gridInfo = grid width, height (cells), slices, metres per cell;
- * params.x = strength (0 while nothing is bound: the probes add nothing).
+ * params.x = strength (0 while nothing is bound: the probes add nothing), params.y = 1 while the bound probes are the High tier
+ * (glossy non-metals — 'gloss' — show them too), else 0.
  */
 export const REFL = {
-  atlas: texture(ATLAS_PH),
-  meta: texture(META_PH),
+  // (render/textureFetch.ts: data textures — no uv-transform uniform, and none of its per-object updates)
+  atlas: plainTexture(texture(ATLAS_PH)),
+  meta: plainTexture(texture(META_PH)),
   grid: texture3D(GRID_PH),
   atlasInfo: uniform(new THREE.Vector4(PH_LAYOUT.width, PH_LAYOUT.height, PH_LAYOUT.tile, PROBE_COLS)).setGroup(renderGroup),
   levelY: uniform(new THREE.Vector4(...PH_LAYOUT.levelY)).setGroup(renderGroup),
@@ -142,7 +158,7 @@ export function bindReflectionProbes(v: ReflectionProbeVolume | null): void {
   REFL.levelY.value.set(L.levelY[0], L.levelY[1], L.levelY[2], L.levelY[3]);
   if (v) REFL.gridInfo.value.set(v.probes.gridW, v.probes.gridH, v.probes.gridDepth, CELL);
   else REFL.gridInfo.value.set(1, 1, 2, CELL);
-  REFL.params.value.set(v && v.probes.count > 0 ? REFLECTION_TUNING.strength : 0, 0, 0, 0);
+  REFL.params.value.set(v && v.probes.count > 0 ? REFLECTION_TUNING.strength : 0, v && v.probes.count > 0 && v.probes.tier === 'high' ? 1 : 0, 0, 0);
 }
 
 /** Re-apply REFLECTION_TUNING to the bound probes (QA / tuning). */
@@ -158,8 +174,8 @@ export type {ReflectClass} from '../render/reflectTag';
 /**
  * Whether a material shows the probes, and how. Decided while its program is built, so from nothing but what three's program cache
  * key holds (render/reflectTag.ts explains): two materials that share a program always get the same answer.
- *  - a TAG (tagReflect) wins: 'glass', 'window', 'metal' or 'none' — the station's glazing is tagged glass, the tower's wall-set
- *    panes window, its wall / floor / ceiling sets none;
+ *  - a TAG (tagReflect) wins: 'glass', 'window', 'metal', 'gloss' or 'none' — the station's glazing is tagged glass, the tower's
+ *    wall-set panes window, the glazed wall tile gloss, the floor / ceiling / slab sets none;
  *  - never a skinned mesh (characters), never a non-standard material;
  *  - an untagged see-through material: 'none' (decals, particles, liquids: only tagged panes are glass);
  *  - 'metal': a metalness map (model materials) or a metalness that is not zero. This is a CANDIDATE: the shader then decides per
@@ -225,8 +241,8 @@ export function probeRadiance(s: LightFieldSampleNodes, dir: Node, rough: Node, 
     const w = n(W4[ch[c]]), idf = n(floor(n(ID[ch[c]]).mul(255).add(0.5))).toVar();
     If(n(w).greaterThan(0.004).and(n(idf).greaterThan(0.5)), () => {
       const p = n(idf).sub(1).toVar(), pi = int(p);
-      const M0 = n(n(REFL.meta).load(ivec2(pi, int(0)))).toVar();
-      const B0 = n(n(REFL.meta).load(ivec2(pi, int(1))).xyz).toVar(), B1 = n(n(REFL.meta).load(ivec2(pi, int(2))).xyz).toVar();
+      const M0 = n(fetchTexel(REFL.meta, ivec2(pi, int(0)))).toVar();
+      const B0 = n(n(fetchTexel(REFL.meta, ivec2(pi, int(1)))).xyz).toVar(), B1 = n(n(fetchTexel(REFL.meta, ivec2(pi, int(2)))).xyz).toVar();
       // box projection: where the reflected ray leaves the probe's box, seen from the probe
       const tm = n(max(n(B1).sub(P).mul(rInv), n(B0).sub(P).mul(rInv))).toVar();
       const t = max(min(tm.x, min(tm.y, tm.z)), 0);
@@ -300,6 +316,11 @@ export class LightFieldReflectNode extends LightFieldNode {
       const at = n(n(positionWorld).add(n(normalWorld).mul(vec3(n(cell.x).mul(WINDOW_REACH), 0, n(cell.y).mul(WINDOW_REACH))))).toVar();
       const sw = lightFieldSample(positionWorld, {normal: normalWorld, reach: WINDOW_REACH});
       rad.assign(n(probeRadiance(sw, dir, rough, at)).div(clamp(materialOpacity, 0.25, 1)));
+    } else if (cls === 'gloss') {
+      // a glossy non-metal (glazed tile): three's Fresnel keeps it faint face-on and strong at a grazing angle. With the High probes
+      // only (REFL.params.y), and fading out toward rough texels (see GLOSS_ROUGHNESS_FULL); no lookup where the weight is nothing
+      const w = n(n(REFL.params).y.mul(float(1).sub(smoothstep(GLOSS_ROUGHNESS_FULL, GLOSS_ROUGHNESS_NONE, rough)))).toVar();
+      If(n(w).greaterThan(0.004), () => { rad.assign(n(probeRadiance(s, dir, rough)).mul(w)); });
     } else {
       // a rough non-metal texel reflects next to nothing: no lookup there (the real, per-fragment metalness and roughness decide)
       If(n(metalness).greaterThan(REFLECT_METALNESS_MIN).or(n(rough).lessThan(REFLECT_ROUGHNESS_MAX)), () => { rad.assign(probeRadiance(s, dir, rough)); });

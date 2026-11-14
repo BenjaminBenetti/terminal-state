@@ -248,6 +248,7 @@ import {renderContextDepth} from './render/renderContextDepth'; // task studio-p
 import {installShadowAlphaTwin} from './render/shadowOverride'; // (lane RENDER-CPU)
 import {installUploadDedupe} from './render/uploadDedupe'; // task mall-horde-performance-20261105
 import {installBindingRefresh} from './render/bindingRefresh'; // task studio-death-retry-render-fix-20261114-044607-01
+import {shareShaderText} from './render/shaderTextShare'; // task studio-graphics-gpu-materials-toggle-20261114-212239-01
 import {JourneyCompile, type JourneyCompileOptions} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
 import {loadingPlaceName, type LastSaveStatus} from './ui/loadingScreen'; // task studio-beta-campaign-polish-20261103-063841-01 (lane MENU): loading name only; Load last save
@@ -283,6 +284,25 @@ const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 export interface WarmupUi { meter: LoadMeter | null; label: HTMLElement; button: HTMLButtonElement | null }
 /** Iteration 16: let the browser paint a loading screen / overlay before a long synchronous generation. */
 const nextPaint = () => new Promise<void>(r => setTimeout(r, 30));
+
+/** The pause line while the live station's lighting is rebuilt (Game.relightAfterSettings), by the build stage that is running. */
+export const RELIGHT_LABEL = {start: 'Rebuilding this station\'s lighting…', bounce: 'Rebuilding this station\'s lighting: bounced light…', probes: 'Rebuilding this station\'s lighting: reflections…'} as const;
+export const relightLabel = (stage: string): string => stage.startsWith('gather') ? RELIGHT_LABEL.bounce : stage.startsWith('probes') ? RELIGHT_LABEL.probes : RELIGHT_LABEL.start;
+
+/** `steps` unchanged, with every labelled stage (core/pacedBuild.ts: a string yield) reported to `on` as it starts. */
+function* stageLabels<T>(steps: BuildSteps<T>, on: (stage: string) => void): BuildSteps<T> {
+  let done = false;
+  try {
+    for (;;) {
+      const r = steps.next();
+      if (r.done) { done = true; return r.value; }
+      if (typeof r.value === 'string') on(r.value);
+      yield r.value;
+    }
+  } finally {
+    if (!done) steps.return(undefined as never); // (an abandoned paced build closes the inner build too)
+  }
+}
 
 export function warmupMode(search: string, software: boolean): WarmupMode {
   const v = new URLSearchParams(search).get('warmup');
@@ -2390,6 +2410,114 @@ export class Game {
     line.textContent = w.status === 'complete' || !note ? was : `${was} (${note})`;
   }
 
+  /**
+   * Task studio-graphics-gpu-materials-toggle-20261114-212239-01 (the user: "Apply Enhanced Lighting and Reflection settings within the
+   * current session/station"): a changed Enhanced lighting / Reflections choice is applied to the LIVE station from the pause menu — at
+   * once when it is made there, else the next time the game is paused (another tab changed the stored choice while this one played).
+   * No main menu, Continue, station load or reroll: only the station's LIGHTING is rebuilt — the field bake of the new choice (from the
+   * derived cache when this layout's entry matches, else baked now in paced steps under the pause menu), then one step that swaps the
+   * station lighting (world/lights.ts replaceSteps: flicker clock, circuit levels and fixtures carried over) — followed by the same
+   * blocking warm-up a quality change runs, because a changed light set compiles every lit material again. The frame loop draws
+   * nothing meanwhile (`warming`), Resume and the choices are held, the pause line says what is being done, and every transition waits
+   * for it (it is the renderer-owning `warmRun`). The world, its seed and random stream, enemies, loot, the player, the inventory and
+   * the save are not touched; the replaced field / probe textures are released after the warm-up, and render objects that outlive the
+   * swap re-read their bindings (render/bindingRefresh.ts). A failure leaves the lighting the station had (or, past the swap, the
+   * baseline lighting) and is reported in the status; that plan is not retried until the choice changes.
+   */
+  relightAfterSettings(): Promise<void> {
+    if (this.relightRun) return this.relightRun; // (a choice changed again meanwhile is picked up by the running one's loops)
+    if (!this.relightDue()) return Promise.resolve();
+    const run = (async () => {
+      // (bounded: a choice that changed again while one rebuild's warm-up ran — the form holds it, another tab does not — gets its own)
+      for (let round = 0; round < 3; round++) {
+        if (this.warmRun) await this.warmRun; // a running warm-up owns the renderer: after it
+        if (!this.relightDue()) return;
+        const whole = this.runRelight({meter: null, label: $('#pause .fine'), button: $('#btn-resume') as HTMLButtonElement})
+          .finally(() => { this.warming = false; this.warmRun = null; this.flushRetired(); });
+        this.warmRun = whole;
+        await whole;
+      }
+    })().catch(err => { console.warn('enhanced lighting: applying the changed choice failed', err); }).finally(() => { this.relightRun = null; });
+    this.relightRun = run;
+    return run;
+  }
+  private relightRun: Promise<void> | null = null;
+  /** Live rebuilds of the station lighting this session (QA / tests). */
+  readonly relightCounts = {runs: 0, swaps: 0, failed: 0};
+
+  /** A live station in the pause menu whose lighting the settings now plan differently (and that plan did not already fail). */
+  private relightDue(): boolean {
+    if (!this.world || !this.lightPool || this.state !== 'paused' || !this.gpu || this.gpu.deviceLost || !this.renderer.initialized) return false;
+    const el = this.enhancedLighting;
+    return el.status().pending && !el.failedFor(el.pendingSignature());
+  }
+
+  private async runRelight(ui: WarmupUi): Promise<WarmupResult> {
+    const el = this.enhancedLighting, {label, button} = ui;
+    const was = label.textContent;
+    const quality = document.querySelector<HTMLSelectElement>('#set-quality');
+    const qualityWas = quality?.disabled ?? false;
+    this.relightCounts.runs++;
+    this.warming = true; // from here no frame is drawn until the warm-up below has finished
+    if (button) button.disabled = true;
+    if (quality) quality.disabled = true; // (a quality change would rebuild the targets this run compiles into)
+    el.setApplying(true); // (until the warm-up is done: the forms hold the two choices for the whole rebuild)
+    const gen = this.stationGen;
+    const alive = () => gen === this.stationGen && !this.gpu?.deviceLost && !!this.world;
+    let swapped = false;
+    let w: WarmupResult = skippedWarmup('the lighting was not changed');
+    try {
+      // (bounded: the choice may change again while a bake runs — the form holds it, another tab does not)
+      for (let pass = 0; pass < 3 && alive() && el.status().pending && !el.failedFor(el.pendingSignature()); pass++) {
+        const signature = el.pendingSignature();
+        const restore = el.checkpoint();
+        let installed = false;
+        try {
+          label.textContent = RELIGHT_LABEL.start;
+          await nextPaint();
+          const input = stationBakeInput(this.layout);
+          await el.prefetch(input); // this layout's cached bake under the new choice, if there is one
+          if (!alive()) break;
+          const r = await runPaced(stageLabels(this.relightSteps(input), stage => { label.textContent = relightLabel(stage); }), {...this.buildPacing, alive});
+          installed = swapped = true;
+          this.relightCounts.swaps++;
+          if (r.error) throw r.error; // (the station is lit by the baseline now: relightSteps recorded it)
+        } catch (err) {
+          if (err instanceof PacedBuildCancelled) {
+            // a replaced station's own build owns the record by now; this station (a lost device) keeps the lighting and the record it had
+            if (!installed && gen === this.stationGen && this.world) restore();
+            break;
+          }
+          this.relightCounts.failed++;
+          console.warn('enhanced lighting: the changed choice could not be applied to this station', err);
+          // before the swap the station keeps the lighting (and the record) it had; past it, it has the baseline the swap fell back to
+          el.failed(signature, String((err as Error)?.message ?? err), installed ? undefined : restore);
+        }
+      }
+      // every lit material's program follows the light set, and the new field / probe textures are bound: prepare them before Resume
+      if (swapped) w = alive() ? await this.runWarmup(ui) : skippedWarmup('the station was replaced');
+    } finally {
+      el.setApplying(false);
+      if (quality) quality.disabled = qualityWas;
+      if (button) button.disabled = false;
+      const note = warmupNote(w);
+      label.textContent = w.status === 'complete' || w.status === 'skipped' || !note ? was : `${was} (${note})`;
+    }
+    return w;
+  }
+
+  /** The live station's lighting for the current choice, as steps (runRelight): the bake, then the swap in ONE step. */
+  private *relightSteps(input: ReturnType<typeof stationBakeInput>): BuildSteps<{error: unknown}> {
+    const max3D = maxTexture3DSize(this.renderer.backend as never);
+    const enhanced = yield* this.enhancedLighting.bakeSteps(input, this.world.drawn, {max3DTextureSize: max3D});
+    const r = yield* StationLighting.replaceSteps(this.lightPool, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes}, fn => this.retire(fn));
+    this.lightPool = r.lighting;
+    if (r.error) this.enhancedLighting.installedBaseline('the enhanced lighting could not be installed');
+    else this.enhancedLighting.applied(r.lighting.reflectionsSkipped);
+    this.atmosphere.setLightField(r.lighting.volume); // (the station's fog maps, gas, smoke and fog clock stay)
+    return {error: r.error};
+  }
+
   /** Iteration 14: queue a GPU-side release of the previous station (run after the next warm-up). */
   private retire(fn: () => void): void {
     this.retired.push(fn);
@@ -2559,6 +2687,7 @@ export class Game {
       onProgress: (p: WarmupProgress) => { meter?.stage('graphics', p.done / Math.max(1, p.total)); label.textContent = warmupLabel(p); },
     });
     this.warmup = res;
+    shareShaderText(this.renderer); // (one copy of each shader text among the states the warm-up built: render/shaderTextShare.ts)
     const st = res.stages;
     if (button) button.disabled = false;
     if (quality) quality.disabled = qualityWas;
@@ -2661,6 +2790,9 @@ export class Game {
     if (s !== 'playing' && prev === 'playing') this.input.unlock();
     this.lastFrame = performance.now();
     for (const fn of this.stateListeners) { try { fn(s, prev); } catch (err) { console.warn('Iteration 16: a state listener failed', err); } }
+    // task studio-graphics-gpu-materials-toggle-20261114-212239-01: a lighting choice changed while the game was not paused (another tab)
+    // is applied to the live station now that it is
+    if (s === 'paused' && prev !== 'paused') void this.relightAfterSettings();
   }
 
   /** Called from a click (user gesture): audio + pointer lock, then play. */
@@ -2768,6 +2900,7 @@ export class Game {
       // already spent is measured, not predicted; still inside this callback, so the overlay's game CPU includes them
       // (deferredMs = their share). Nothing frame-critical is ever queued (see core/frameBudget.ts).
       this.prof.lap(SPAN.deferred); // lane MEASURE
+      shareShaderText(this.renderer); // (three size reads unless something was built since: render/shaderTextShare.ts)
       if (this.state === 'playing') cpu.deferredMs = fb.run();
       this.prof.lap(SPAN.other); // lane MEASURE
       this.frames++;
