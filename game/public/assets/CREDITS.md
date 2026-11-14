@@ -775,3 +775,23 @@ Generated for this project from one Codex INITIAL design image each (the owned C
 - `assets/models/train-armor-wing.glb` — the train armour's plough wing (a mouldboard panel with six swept fins, a saw disc and a toothed wear bar; two per end form the wedge plough) (Meshy task 01a1d655-873d-70b0-b1af-e16e8a2c5802).
 - `assets/models/train-armor-rail.glb` — the train armour's roof-line rail (a bolted box beam with a row of six raked fins; along both sides under the roof and across each end over the windscreen) (Meshy task 01a1d666-3848-7624-92cd-106b831a4ffc).
 <!-- END train-armor-makeover-20261113 -->
+
+<!-- BEGIN flamethrower-fire-audio-20261114 (fire-build.mjs) -->
+## Flamethrower and fire audio (jet ignition, roar loop, cut-off, fire bed loop, catching fire, collapse, ember crackle)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the flamethrower
+task's audio authorization (the free local service only; 14 jobs, 10 takes shipped). Powered by Stability AI. Stability AI Community License +
+Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades, loop,
+levelling, MP3) built by `tools/audio-pipeline/fire-build.mjs` (provenance: `assets/derivatives/audio-fire.json`). Not
+reviewed by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/fire-flame-ignite-01.mp3` — flameIgnite (Sound Lab job 20261114T035149-397170823)
+- `assets/audio/fire-flame-ignite-02.mp3` — flameIgnite (Sound Lab job 20261114T035605-142011743)
+- `assets/audio/fire-flame-roar-loop.mp3` — flameRoar (Sound Lab job 20261114T035551-315438461)
+- `assets/audio/fire-flame-out-01.mp3` — flameOut (Sound Lab job 20261114T035153-149688133)
+- `assets/audio/fire-flame-out-02.mp3` — flameOut (Sound Lab job 20261114T035556-1986922178)
+- `assets/audio/fire-burn-loop.mp3` — fireBurn (Sound Lab job 20261114T035143-808848918)
+- `assets/audio/fire-catch-01.mp3` — fireCatch (Sound Lab job 20261114T035158-1166221398)
+- `assets/audio/fire-catch-02.mp3` — fireCatch (Sound Lab job 20261114T035610-2070104277)
+- `assets/audio/fire-collapse-01.mp3` — fireCollapse (Sound Lab job 20261114T035601-1267916011)
+- `assets/audio/fire-embers-01.mp3` — fireEmbers (Sound Lab job 20261114T035203-1819897513)
+<!-- END flamethrower-fire-audio-20261114 -->

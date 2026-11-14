@@ -1,0 +1,1733 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "audio-fire-20261114",
+ "task": "studio-flamethrower-fire-20261114-031614-01",
+ "lane": "AUDIO",
+ "generatedBy": "the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (the task's audio authorization: the free local service inside the task as useful, without numerical permission caps, nothing paid or external; 14 jobs in bounded batches, each under its own durable POST cap — 10 takes shipped, 4 structurally rejected, 0 spares)",
+ "soundLab": {
+  "jobs": 14,
+  "accepted": 10,
+  "rejected": 4,
+  "spare": 0,
+  "numericCap": null,
+  "paidOrExternal": 0
+ },
+ "plannedBy": "tools/audio-pipeline/fire-plan.py (ids, cues, durations, seeds; the prompt text stays with the private raw archive)",
+ "rebuild": "SOUND_LAB_AUDIO_DIR=<raw dir> node tools/audio-pipeline/fire-build.mjs",
+ "reuse": "Checked first (audio/bank.ts): the tank refill plays the existing jerrycan pour (fuelPour) and the dry trigger the existing dry click (dryFire), no new clip. The only fire in the bank is the road flare (a striker scrape, a sputtering chemical hiss loop, a dying fizz): no pressurised fuel jet, no open wood fire, nothing that whoomps alight or caves in. So these seven cues were generated; no flare clip stands in for any of them.",
+ "privacy": "This public record names each raw take by its Sound Lab job id, seed and SHA-256 (raw take, lab sidecar, prompt). The prompt text, the raw takes and their paths stay in the private raw archive (independent backup), not in Git.",
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (5 ms / 50 ms envelopes, 0.5 s block levels, 50 ms level spread, crackle transients, time to the loud part, spectrogram images (viewed), spectral centroid / bands / flatness, peak, DC, slice-edge levels, loop-seam step / level jump, BS.1770 loudness). `metrics` / `gate` describe signal structure only, never how a clip sounds: whether the roar reads as a flamethrower, the bed as a fire and the mix sits right in play needs an ear. The roar / burn loops are steady broadband noise by nature and are not gated by the generic noise-wall rule (each loop records the values that rule reads). The user taste-tests in game.",
+  "gameReady": false,
+  "approved": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "design": {
+  "flameIgnite": "Two takes of one request (two seeds, one family): silent before a rise to the loudest 50 ms about 0.12 s after the clip start (almost all of it under 300 Hz: the whoomp), then a roaring part 5-10 dB lower that a 0.3 s fade hands over to the roar loop. No distinct valve hiss leads it.",
+  "flameRoar": "One 7 s loop of the fourth wording: a continuous broadband roar, about 80 % of its energy under 300 Hz with a bright layer over it; its 0.5 s blocks stay within about 1 dB and the 50 ms level wanders a little over 1 dB (turbulence). Three earlier takes were rejected: two were a dark rumble with almost nothing above 1 kHz, one a thin hiss with no body.",
+  "flameOut": "Two takes of two wordings: one opens at roar level and falls over 0.8 s with small bumps, the other holds 0.2 s and drops 30 dB in 0.2 s. Neither has the hot-metal ticks that were asked for after the fall. The audio layer plays the same takes lower and slower for a tank that ran dry.",
+  "fireBurn": "One 7 s loop of the second wording: a steady low flutter under a dozen broadband crackle transients a second. The first wording returned separate surges with silence between them and was rejected.",
+  "fireCatch": "Two takes of one request (two seeds, one family): one low swell from silence, loudest about 0.3 s in, a short flutter, silence.",
+  "fireCollapse": "One take: its single heavy hit (a 15 ms attack, most of the energy under 300 Hz) with a 0.45 s low decay; two earlier, smaller knocks of the take are left out so that the hit leads the clip.",
+  "fireEmbers": "The other take of the collapse request, shipped as a layer: from its loudest mid crunch through the sharp bright snaps that follow over 1.4 s. It has almost no low end, so the audio layer plays it WITH the collapse hit (the weight) — no single take had both with the hit first."
+ },
+ "loudness": {
+  "method": "ITU-R BS.1770-4 K-weighting, 400 ms blocks / 75 % overlap, mono; one-shots: maximum momentary loudness (zero-padded to one block); loops: integrated loudness of the loop played twice; sample peak (no true-peak oversampling)"
+ },
+ "mixCalibration": {
+  "note": "CUE_GAIN (audio/sfx.ts spreads FIRE_CUE_GAIN of the generated manifest: the same numbers) per cue = 10^((target - measured) / 20), capped at 1 (no boost): the target is the cue's loudness AT THE SOURCE (derivative x CUE_GAIN, before distance / occlusion / master), set against the existing cues' calibration (derivatives/audio-track1.json, derivatives/audio-chipper.json). Never above the -1 dBFS ceiling. `handover` = plain RMS at the source (dBFS) of the roar loop, of each ignition take's roaring part (0.4-0.7 s in) and of each cut-off take's first 0.12 s. First estimates for the ear pass (not auditioned).",
+  "references": {
+   "zombieGroan": -18.5,
+   "zombieAttack": -20.3,
+   "shotgunShot": -17.6,
+   "chipperGrind": -25.1,
+   "chipperMotor": -27.9
+  },
+  "cues": {
+   "flameIgnite": {
+    "measure": "max momentary",
+    "basis": "zombieAttack",
+    "why": "the whoomp of the jet lighting: 4 LU over the roar it hands over to, about a zombie attack (-20.3), 2.4 LU under a shotgun shot",
+    "targetLufs": -20,
+    "measuredLufs": -15.5,
+    "cueGain": 0.6,
+    "atSourceLufs": -19.9,
+    "atSourcePeakDbfs": -5.4,
+    "vsReferenceLu": 0.4,
+    "variants": 2
+   },
+   "flameRoar": {
+    "measure": "integrated (loop x2)",
+    "basis": "chipperGrind",
+    "why": "the player's own weapon, close and continuous: 1 LU over the chipper's wet grind, 5.5 LU under a zombie groan's loudest 400 ms (-18.5) and 3.7 under an attack snarl, so enemy vocals are not masked",
+    "targetLufs": -24,
+    "measuredLufs": -21.6,
+    "cueGain": 0.76,
+    "atSourceLufs": -24,
+    "atSourcePeakDbfs": -9,
+    "vsReferenceLu": 1.1,
+    "variants": 1
+   },
+   "flameOut": {
+    "measure": "max momentary",
+    "basis": "chipperGrind",
+    "why": "the jet cutting off: its first 0.12 s sit 1-2 dB over the fading roar (a last puff, see handover), then it falls away",
+    "targetLufs": -26,
+    "measuredLufs": -17.8,
+    "cueGain": 0.39,
+    "atSourceLufs": -26,
+    "atSourcePeakDbfs": -9.2,
+    "vsReferenceLu": -0.9,
+    "variants": 2
+   },
+   "fireBurn": {
+    "measure": "integrated (loop x2)",
+    "basis": "chipperMotor",
+    "why": "one fire's bed at its reference distance: the chipper motor's bed level; three beds near the listener sum to about the roar",
+    "targetLufs": -28,
+    "measuredLufs": -22.7,
+    "cueGain": 0.54,
+    "atSourceLufs": -28.1,
+    "atSourcePeakDbfs": -6.4,
+    "vsReferenceLu": -0.2,
+    "variants": 1
+   },
+   "fireCatch": {
+    "measure": "max momentary",
+    "basis": "zombieAttack",
+    "why": "something catching fire: a soft whoomp at the prop, 1.7 LU under a zombie attack",
+    "targetLufs": -22,
+    "measuredLufs": -16.6,
+    "cueGain": 0.54,
+    "atSourceLufs": -22,
+    "atSourcePeakDbfs": -6.4,
+    "vsReferenceLu": -1.7,
+    "variants": 2
+   },
+   "fireCollapse": {
+    "measure": "max momentary",
+    "basis": "zombieAttack",
+    "why": "a burnt prop caving in: about a zombie attack (-20.3) / the chipper's body feed (-20.9)",
+    "targetLufs": -20,
+    "measuredLufs": -19.3,
+    "cueGain": 0.92,
+    "atSourceLufs": -20,
+    "atSourcePeakDbfs": -1.7,
+    "vsReferenceLu": 0.3,
+    "variants": 1
+   },
+   "fireEmbers": {
+    "measure": "max momentary",
+    "basis": "zombieAttack",
+    "why": "the crunch + ember crackle that settles after the collapse hit: a layer 5 LU under it",
+    "targetLufs": -25,
+    "measuredLufs": -24.3,
+    "cueGain": 0.92,
+    "atSourceLufs": -25,
+    "atSourcePeakDbfs": -1.7,
+    "vsReferenceLu": -4.7,
+    "variants": 1
+   }
+  },
+  "handover": {
+   "roarRmsDbfs": -22.4,
+   "igniteHoldRmsDbfs": [
+    -20.7,
+    -21.1
+   ],
+   "outStartRmsDbfs": [
+    -20.7,
+    -21.8
+   ]
+  }
+ },
+ "derivatives": [
+  {
+   "cue": "flameIgnite",
+   "url": "assets/audio/fire-flame-ignite-01.mp3",
+   "bytes": 10971,
+   "sha256": "1cc4dd1221cd40f002d4fa16a90dd4af3815f7b030fb8263cbd8aba3e9155c4e",
+   "dur": 0.87,
+   "window": {
+    "startS": 0.08,
+    "endS": 0.95
+   },
+   "ops": [
+    "mono",
+    "remove DC (-1.3e-3)",
+    "trim 0.08-0.95 s",
+    "cosine fades 0.005 / 0.3 s",
+    "peak -1 dBFS (5.6 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "ignite",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.115,
+    "lowShare": 0.94,
+    "above1kShare": 0.013,
+    "crackles": 7,
+    "cracklesPerS": 8.05,
+    "holdDb": -7.1,
+    "criteria": [
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.00034,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "short (0.6-1.0 s)",
+      "ok": true,
+      "value": 0.87,
+      "need": "0.6-1.0 s"
+     },
+     {
+      "name": "the whoomp arrives quickly",
+      "ok": true,
+      "value": 0.115,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.2 s after the clip start"
+     },
+     {
+      "name": "a low whoomp",
+      "ok": true,
+      "value": 0.94,
+      "need": ">= 70 % of the energy under 300 Hz"
+     },
+     {
+      "name": "the roar holds after it (hands over to the loop)",
+      "ok": true,
+      "value": -7.1,
+      "need": "the level 0.3-0.6 s in within 15 dB of the loudest 50 ms frame"
+     },
+     {
+      "name": "starts in silence",
+      "ok": true,
+      "value": -45,
+      "need": "the cut start >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.87,
+    "peakDbfs": -1,
+    "rmsDbfs": -15.4,
+    "crestDb": 14.4,
+    "clippedFrac": 0,
+    "quietFrac": 0.116,
+    "activeFrac": 1,
+    "levelSpreadDb": 7.23,
+    "attack": {
+     "onsetS": 0.025,
+     "peakS": 0.13,
+     "riseMs": 105
+    },
+    "decay": {
+     "firstQuarterDb": -13.2,
+     "lastQuarterDb": -19.3,
+     "lastMinusFirstDb": -6.1,
+     "slopeDbPerS": -20.6,
+     "activeEndS": 0.85
+    },
+    "spectral": {
+     "centroidHz": 167,
+     "flatness": 0.018,
+     "rolloff85Hz": 214,
+     "bands": {
+      "0-300Hz": 0.94,
+      "300-1000Hz": 0.047,
+      "1000-3000Hz": 0.007,
+      "3000-8000Hz": 0.005,
+      "8000-22050Hz": 0.001
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -16.7,
+     "momentaryMaxLufs": -15.5
+    },
+    "edgesDb": {
+     "startDb": -45,
+     "endDb": -13.3
+    }
+   },
+   "source": {
+    "clip": "fire-flame-ignite-01",
+    "jobId": "20261114T035149-397170823",
+    "seed": 397170823,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "af54d2ebb9877599d2d1b7ebe58d6c441157840a18b0fffefc091dd035b8c1bd",
+    "rawBytes": 352844,
+    "labSidecarSha256": "73d261104d9647898bb20d27cede0e5be1099cbf047e5818c650dd9154741a17",
+    "promptSha256": "2cfe57b0def41533f38de94c1bd17b9e19c50434477fcb37bedecfdc860a388f"
+   }
+  },
+  {
+   "cue": "flameIgnite",
+   "url": "assets/audio/fire-flame-ignite-02.mp3",
+   "bytes": 10971,
+   "sha256": "f2992ab60cfbf21b783a13d7dd1c61c66d3c9bd3a6fcd8792abcc49aaf6af066",
+   "dur": 0.875,
+   "window": {
+    "startS": 0.075,
+    "endS": 0.95
+   },
+   "ops": [
+    "mono",
+    "remove DC (-8.9e-4)",
+    "trim 0.075-0.95 s",
+    "cosine fades 0.005 / 0.3 s",
+    "peak -1 dBFS (4.1 dB)",
+    "matched to the cue's quietest take (-1.0 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "ignite",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.11,
+    "lowShare": 0.93,
+    "above1kShare": 0.015,
+    "crackles": 4,
+    "cracklesPerS": 4.57,
+    "holdDb": -5.3,
+    "criteria": [
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -2
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.00076,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "short (0.6-1.0 s)",
+      "ok": true,
+      "value": 0.875,
+      "need": "0.6-1.0 s"
+     },
+     {
+      "name": "the whoomp arrives quickly",
+      "ok": true,
+      "value": 0.11,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.2 s after the clip start"
+     },
+     {
+      "name": "a low whoomp",
+      "ok": true,
+      "value": 0.93,
+      "need": ">= 70 % of the energy under 300 Hz"
+     },
+     {
+      "name": "the roar holds after it (hands over to the loop)",
+      "ok": true,
+      "value": -5.3,
+      "need": "the level 0.3-0.6 s in within 15 dB of the loudest 50 ms frame"
+     },
+     {
+      "name": "starts in silence",
+      "ok": true,
+      "value": -48.2,
+      "need": "the cut start >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.875,
+    "peakDbfs": -2,
+    "rmsDbfs": -15.7,
+    "crestDb": 13.7,
+    "clippedFrac": 0,
+    "quietFrac": 0.109,
+    "activeFrac": 1,
+    "levelSpreadDb": 6.35,
+    "attack": {
+     "onsetS": 0.015,
+     "peakS": 0.135,
+     "riseMs": 110
+    },
+    "decay": {
+     "firstQuarterDb": -13.9,
+     "lastQuarterDb": -20.9,
+     "lastMinusFirstDb": -7,
+     "slopeDbPerS": -21.6,
+     "activeEndS": 0.85
+    },
+    "spectral": {
+     "centroidHz": 190,
+     "flatness": 0.022,
+     "rolloff85Hz": 223,
+     "bands": {
+      "0-300Hz": 0.93,
+      "300-1000Hz": 0.055,
+      "1000-3000Hz": 0.006,
+      "3000-8000Hz": 0.007,
+      "8000-22050Hz": 0.002
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.028,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -16.7,
+     "momentaryMaxLufs": -15.5
+    },
+    "edgesDb": {
+     "startDb": -48.2,
+     "endDb": -11.8
+    }
+   },
+   "source": {
+    "clip": "fire-flame-ignite-02",
+    "jobId": "20261114T035605-142011743",
+    "seed": 142011743,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "8c66cb4d84a88d0f92cd0c5ea5b3aaa57ff784801403b5298bddea1466beaab6",
+    "rawBytes": 352844,
+    "labSidecarSha256": "ac635ec82dc3210cc0065bba6702a3328c714ac189ca2b9a768d08a04ae91d1b",
+    "promptSha256": "2cfe57b0def41533f38de94c1bd17b9e19c50434477fcb37bedecfdc860a388f"
+   }
+  },
+  {
+   "cue": "flameRoar",
+   "url": "assets/audio/fire-flame-roar-loop.mp3",
+   "bytes": 57887,
+   "sha256": "872a5f5514b829e18cf11632c44c30181362a53af659692ddd11c79fa4df0df2",
+   "dur": 7.2,
+   "loop": {
+    "start": 0.1,
+    "length": 7
+   },
+   "seam": {
+    "wrapStep": 0.01406,
+    "medianStep": 0.02051,
+    "wrapOverMedian": 0.69,
+    "wrapOverP99": 0.17,
+    "levelJumpDb": 1.12,
+    "adjacentJumpP95Db": 3.54
+   },
+   "window": {
+    "startS": 1,
+    "endS": 8.5
+   },
+   "ops": [
+    "mono",
+    "stationary window from 1 s (std 0.74 dB over 0.5 s blocks, searched from 1 s, end guard 2.5 s)",
+    "remove DC (-5.8e-4)",
+    "loop 7 s, equal-power crossfade 0.5 s",
+    "margins 0.1 s",
+    "rms -20 dBFS under a -1 dBFS peak ceiling (-2.2 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "gate": {
+    "kind": "roar",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.005,
+    "lowShare": 0.788,
+    "above1kShare": 0.073,
+    "crackles": 11,
+    "cracklesPerS": 1.57,
+    "blockStdDb": 0.73,
+    "levelSpread50msDb": 1.4,
+    "crestDb": 13.4,
+    "noiseWallRule": {
+     "applied": false,
+     "wouldFire": false,
+     "levelSpreadDb": 1.4,
+     "flatness": 0.096,
+     "voicedFrac": 0.002,
+     "why": "a flame is legitimately steady broadband noise: judged by block steadiness, turbulence, crackle transients and band shares instead"
+    },
+    "criteria": [
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -6.6
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 0.00012,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "a bed-length loop",
+      "ok": true,
+      "value": 7,
+      "need": ">= 5 s"
+     },
+     {
+      "name": "no click at the wrap",
+      "ok": true,
+      "value": 0.17,
+      "need": "the sample step across the wrap <= the loop's own 99th-percentile step"
+     },
+     {
+      "name": "no level step at the wrap",
+      "ok": true,
+      "value": 1.12,
+      "need": "the 50 ms level across the wrap within 3.54 dB (3 dB, or the texture's own 95th-percentile 50 ms change, never over 6 dB)"
+     },
+     {
+      "name": "steady (no surges, no fade)",
+      "ok": true,
+      "value": 0.73,
+      "need": "0.5 s block levels within 1.5 dB (standard deviation)"
+     },
+     {
+      "name": "unpitched",
+      "ok": true,
+      "value": 0.002,
+      "need": "voiced <= 0.1"
+     },
+     {
+      "name": "turbulent, neither a flat wall nor a pulse",
+      "ok": true,
+      "value": 1.4,
+      "need": "50 ms level spread 0.5-3 dB"
+     },
+     {
+      "name": "a roar body",
+      "ok": true,
+      "value": 0.788,
+      "need": ">= 50 % of the energy under 300 Hz"
+     },
+     {
+      "name": "a bright layer over it (not a rumble alone)",
+      "ok": true,
+      "value": 0.073,
+      "need": ">= 3 % of the energy above 1 kHz"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 7,
+    "peakDbfs": -6.6,
+    "rmsDbfs": -20,
+    "crestDb": 13.4,
+    "clippedFrac": 0,
+    "quietFrac": 0,
+    "activeFrac": 1,
+    "levelSpreadDb": 1.4,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 6.685,
+     "riseMs": 60
+    },
+    "decay": {
+     "firstQuarterDb": -19.8,
+     "lastQuarterDb": -19.3,
+     "lastMinusFirstDb": 0.4,
+     "slopeDbPerS": -2.5,
+     "activeEndS": 7
+    },
+    "spectral": {
+     "centroidHz": 562,
+     "flatness": 0.096,
+     "rolloff85Hz": 537,
+     "bands": {
+      "0-300Hz": 0.788,
+      "300-1000Hz": 0.139,
+      "1000-3000Hz": 0.028,
+      "3000-8000Hz": 0.025,
+      "8000-22050Hz": 0.02
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.002,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -21.6,
+     "loopIntegratedLufs": -21.6
+    }
+   },
+   "source": {
+    "clip": "fire-flame-roar-04",
+    "jobId": "20261114T035551-315438461",
+    "seed": 315438461,
+    "seconds": 12,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "293e5e7bfabf466ce4883fc66c76c42a8078658de307ea39d780abb104f3e281",
+    "rawBytes": 2116844,
+    "labSidecarSha256": "efabc116bcd79e2077b9f0c63139574925b5077b0a67e149cfff1fd7d93923d2",
+    "promptSha256": "928daa5592f037b9cc9c34573fb35effdf827a8d66291df5d7181cc70fee052d"
+   }
+  },
+  {
+   "cue": "flameOut",
+   "url": "assets/audio/fire-flame-out-01.mp3",
+   "bytes": 12225,
+   "sha256": "f8b4b2a47bdbb1db5c1c1b4191b77fbd4fb0ef18796ee47f7e1d82e458fad9c6",
+   "dur": 0.98,
+   "window": {
+    "startS": 1.86,
+    "endS": 2.84
+   },
+   "ops": [
+    "mono",
+    "remove DC (5.6e-4)",
+    "trim 1.86-2.84 s",
+    "cosine fades 0.02 / 0.1 s",
+    "peak -1 dBFS (2.6 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "out",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.01,
+    "lowShare": 0.95,
+    "above1kShare": 0.01,
+    "crackles": 3,
+    "cracklesPerS": 3.06,
+    "criteria": [
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.00045,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "short (0.4-1.2 s)",
+      "ok": true,
+      "value": 0.98,
+      "need": "0.4-1.2 s"
+     },
+     {
+      "name": "starts at the roar (takes over from the fading loop)",
+      "ok": true,
+      "value": 0.01,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.1 s after the clip start"
+     },
+     {
+      "name": "falls away",
+      "ok": true,
+      "value": -28.7,
+      "need": "last quarter >= 12 dB under the first quarter"
+     },
+     {
+      "name": "ends in silence",
+      "ok": true,
+      "value": -53.6,
+      "need": "the cut end >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.98,
+    "peakDbfs": -1,
+    "rmsDbfs": -20.1,
+    "crestDb": 19.1,
+    "clippedFrac": 0,
+    "quietFrac": 0.441,
+    "activeFrac": 0.895,
+    "levelSpreadDb": 10.48,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.055,
+     "riseMs": 15
+    },
+    "decay": {
+     "firstQuarterDb": -13.5,
+     "lastQuarterDb": -42.2,
+     "lastMinusFirstDb": -28.7,
+     "slopeDbPerS": -41.8,
+     "activeEndS": 0.85
+    },
+    "spectral": {
+     "centroidHz": 169,
+     "flatness": 0.01,
+     "rolloff85Hz": 147,
+     "bands": {
+      "0-300Hz": 0.95,
+      "300-1000Hz": 0.04,
+      "1000-3000Hz": 0.008,
+      "3000-8000Hz": 0.002,
+      "8000-22050Hz": 0
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.143,
+     "f0MedianHz": 86,
+     "f0P5Hz": 70,
+     "f0P95Hz": 101,
+     "rangeSt": 6.31,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -21.3,
+     "momentaryMaxLufs": -17.8
+    },
+    "edgesDb": {
+     "startDb": -3.2,
+     "endDb": -53.6
+    }
+   },
+   "source": {
+    "clip": "fire-flame-out-01",
+    "jobId": "20261114T035153-149688133",
+    "seed": 149688133,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "84d6451bf344dc7ec3d5c5f181a2faf754abc34468d4631fc5638577c884cdcb",
+    "rawBytes": 529244,
+    "labSidecarSha256": "bfe31124a999e96871eb6c3901a347b46be5796903cdf3de6c75b281e23afb44",
+    "promptSha256": "aa7ea816af8418cfa2445072dc4da23dead724a1d81e88289630776aee1837e9"
+   }
+  },
+  {
+   "cue": "flameOut",
+   "url": "assets/audio/fire-flame-out-02.mp3",
+   "bytes": 5956,
+   "sha256": "f16c6bdaed198ed701b5237fc7d4dbda138b792ae0fe10e9a2e1430e8be83e48",
+   "dur": 0.45,
+   "window": {
+    "startS": 1.5,
+    "endS": 1.95
+   },
+   "ops": [
+    "mono",
+    "remove DC (2.8e-3)",
+    "trim 1.5-1.95 s",
+    "cosine fades 0.02 / 0.05 s",
+    "peak -1 dBFS (-0.8 dB)",
+    "matched to the cue's quietest take (-1.9 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "out",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.015,
+    "lowShare": 0.84,
+    "above1kShare": 0.055,
+    "crackles": 1,
+    "cracklesPerS": 2.22,
+    "criteria": [
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -2.9
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 0.00044,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "short (0.4-1.2 s)",
+      "ok": true,
+      "value": 0.45,
+      "need": "0.4-1.2 s"
+     },
+     {
+      "name": "starts at the roar (takes over from the fading loop)",
+      "ok": true,
+      "value": 0.015,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.1 s after the clip start"
+     },
+     {
+      "name": "falls away",
+      "ok": true,
+      "value": -29.5,
+      "need": "last quarter >= 12 dB under the first quarter"
+     },
+     {
+      "name": "ends in silence",
+      "ok": true,
+      "value": -48.5,
+      "need": "the cut end >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.45,
+    "peakDbfs": -2.9,
+    "rmsDbfs": -17.1,
+    "crestDb": 14.2,
+    "clippedFrac": 0,
+    "quietFrac": 0.326,
+    "activeFrac": 0.889,
+    "levelSpreadDb": 12.7,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.08,
+     "riseMs": 65
+    },
+    "decay": {
+     "firstQuarterDb": -13.9,
+     "lastQuarterDb": -43.4,
+     "lastMinusFirstDb": -29.5,
+     "slopeDbPerS": -126,
+     "activeEndS": 0.4
+    },
+    "spectral": {
+     "centroidHz": 348,
+     "flatness": 0.04,
+     "rolloff85Hz": 279,
+     "bands": {
+      "0-300Hz": 0.84,
+      "300-1000Hz": 0.105,
+      "1000-3000Hz": 0.039,
+      "3000-8000Hz": 0.012,
+      "8000-22050Hz": 0.004
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -17.8,
+     "momentaryMaxLufs": -17.8
+    },
+    "edgesDb": {
+     "startDb": -8.2,
+     "endDb": -48.5
+    }
+   },
+   "source": {
+    "clip": "fire-flame-out-02",
+    "jobId": "20261114T035556-1986922178",
+    "seed": 1986922178,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "ed5a2d55adf5f542fa575288996163d7c0d35523decc4fc390d0fe4da116d18c",
+    "rawBytes": 529244,
+    "labSidecarSha256": "88f541ff41f08fd9a598a649789d3fb9f170a4c901fdd7e24344c9a34e6692b0",
+    "promptSha256": "1bf6c9400ce79523abe585e1c51fd52ac593910301a4a32ed38d429845277ffa"
+   }
+  },
+  {
+   "cue": "fireBurn",
+   "url": "assets/audio/fire-burn-loop.mp3",
+   "bytes": 72359,
+   "sha256": "c394910102e70b611ec21e8d3dd4358aa8f6ef8132709bb651c6af6fd649db85",
+   "dur": 7.2,
+   "loop": {
+    "start": 0.1,
+    "length": 7
+   },
+   "seam": {
+    "wrapStep": 0.0001675,
+    "medianStep": 0.0006866,
+    "wrapOverMedian": 0.24,
+    "wrapOverP99": 0.01,
+    "levelJumpDb": -1.25,
+    "adjacentJumpP95Db": 7.21
+   },
+   "window": {
+    "startS": 3.5,
+    "endS": 11
+   },
+   "ops": [
+    "mono",
+    "stationary window from 3.5 s (std 0.89 dB over 0.5 s blocks, searched from 1 s, end guard 1.5 s)",
+    "remove DC (4.4e-5)",
+    "loop 7 s, equal-power crossfade 0.5 s",
+    "margins 0.1 s",
+    "rms -20 dBFS under a -1 dBFS peak ceiling (14.1 dB)",
+    "mp3 mono 80 kbps"
+   ],
+   "gate": {
+    "kind": "burn",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.075,
+    "lowShare": 0.796,
+    "above1kShare": 0.107,
+    "crackles": 92,
+    "cracklesPerS": 13.14,
+    "blockStdDb": 0.9,
+    "levelSpread50msDb": 2.58,
+    "crestDb": 20.9,
+    "noiseWallRule": {
+     "applied": false,
+     "wouldFire": false,
+     "levelSpreadDb": 2.58,
+     "flatness": 0.041,
+     "voicedFrac": 0.012,
+     "why": "a flame is legitimately steady broadband noise: judged by block steadiness, turbulence, crackle transients and band shares instead"
+    },
+    "criteria": [
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": 0.000015,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "a bed-length loop",
+      "ok": true,
+      "value": 7,
+      "need": ">= 5 s"
+     },
+     {
+      "name": "no click at the wrap",
+      "ok": true,
+      "value": 0.01,
+      "need": "the sample step across the wrap <= the loop's own 99th-percentile step"
+     },
+     {
+      "name": "no level step at the wrap",
+      "ok": true,
+      "value": -1.25,
+      "need": "the 50 ms level across the wrap within 6 dB (3 dB, or the texture's own 95th-percentile 50 ms change, never over 6 dB)"
+     },
+     {
+      "name": "steady (no surges, no fade)",
+      "ok": true,
+      "value": 0.9,
+      "need": "0.5 s block levels within 1.5 dB (standard deviation)"
+     },
+     {
+      "name": "unpitched",
+      "ok": true,
+      "value": 0.012,
+      "need": "voiced <= 0.1"
+     },
+     {
+      "name": "crackles and pops",
+      "ok": true,
+      "value": {
+       "cracklesPerS": 13.14,
+       "crestDb": 20.9
+      },
+      "need": ">= 5 crackle transients a second, crest >= 15 dB"
+     },
+     {
+      "name": "a flame bed under them",
+      "ok": true,
+      "value": 0.796,
+      "need": ">= 40 % of the energy under 300 Hz"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 7,
+    "peakDbfs": -1,
+    "rmsDbfs": -21.9,
+    "crestDb": 20.9,
+    "clippedFrac": 0,
+    "quietFrac": 0.003,
+    "activeFrac": 1,
+    "levelSpreadDb": 2.58,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 3.145,
+     "riseMs": 3145
+    },
+    "decay": {
+     "firstQuarterDb": -22.9,
+     "lastQuarterDb": -21.2,
+     "lastMinusFirstDb": 1.7,
+     "slopeDbPerS": -1.8,
+     "activeEndS": 7
+    },
+    "spectral": {
+     "centroidHz": 519,
+     "flatness": 0.041,
+     "rolloff85Hz": 672,
+     "bands": {
+      "0-300Hz": 0.796,
+      "300-1000Hz": 0.097,
+      "1000-3000Hz": 0.059,
+      "3000-8000Hz": 0.042,
+      "8000-22050Hz": 0.006
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.012,
+     "f0MedianHz": 101,
+     "f0P5Hz": 71,
+     "f0P95Hz": 140,
+     "rangeSt": 11.8,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -22.7,
+     "loopIntegratedLufs": -22.7
+    }
+   },
+   "source": {
+    "clip": "fire-burn-02",
+    "jobId": "20261114T035143-808848918",
+    "seed": 808848918,
+    "seconds": 12,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "7abf9331407a4d9f5c1319d01c93d74d4607092322ccd90ba669559d37c7336a",
+    "rawBytes": 2116844,
+    "labSidecarSha256": "c94ae8b8d35b199561524222861f83c1fd98ec90d9ebeeab8aa14d3bae850c81",
+    "promptSha256": "02db44b2e7850b4f37bdaf500c54d23fbcf4f7e55a00b688e551fa1f0adf15aa"
+   }
+  },
+  {
+   "cue": "fireCatch",
+   "url": "assets/audio/fire-catch-01.mp3",
+   "bytes": 8777,
+   "sha256": "888a8ee074e4a72d30ba3c104ea0faaa9e7187112cbcbafbad0cd1d7e9872d83",
+   "dur": 0.7,
+   "window": {
+    "startS": 0.14,
+    "endS": 0.84
+   },
+   "ops": [
+    "mono",
+    "remove DC (-4.5e-4)",
+    "trim 0.14-0.84 s",
+    "cosine fades 0.01 / 0.04 s",
+    "peak -1 dBFS (0.3 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "catch",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.195,
+    "lowShare": 0.862,
+    "above1kShare": 0.02,
+    "crackles": 7,
+    "cracklesPerS": 10,
+    "criteria": [
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.000014,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "short (0.5-1.0 s)",
+      "ok": true,
+      "value": 0.7,
+      "need": "0.5-1.0 s"
+     },
+     {
+      "name": "a swell, not a click",
+      "ok": true,
+      "value": 0.195,
+      "need": "within 6 dB of its loudest 5 ms frame 0.05-0.4 s after the clip start"
+     },
+     {
+      "name": "a low whoomp",
+      "ok": true,
+      "value": 0.862,
+      "need": ">= 70 % of the energy under 300 Hz"
+     },
+     {
+      "name": "starts and ends in silence",
+      "ok": true,
+      "value": {
+       "startDb": -51.9,
+       "endDb": -51.9
+      },
+      "need": "both cuts >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.7,
+    "peakDbfs": -1,
+    "rmsDbfs": -17.5,
+    "crestDb": 16.5,
+    "clippedFrac": 0,
+    "quietFrac": 0.252,
+    "activeFrac": 0.857,
+    "levelSpreadDb": 9.37,
+    "attack": {
+     "onsetS": 0.03,
+     "peakS": 0.27,
+     "riseMs": 190
+    },
+    "decay": {
+     "firstQuarterDb": -23.5,
+     "lastQuarterDb": -28.9,
+     "lastMinusFirstDb": -5.4,
+     "slopeDbPerS": -88,
+     "activeEndS": 0.65
+    },
+    "spectral": {
+     "centroidHz": 223,
+     "flatness": 0.024,
+     "rolloff85Hz": 319,
+     "bands": {
+      "0-300Hz": 0.862,
+      "300-1000Hz": 0.119,
+      "1000-3000Hz": 0.013,
+      "3000-8000Hz": 0.006,
+      "8000-22050Hz": 0.001
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.096,
+     "f0MedianHz": 78,
+     "f0P5Hz": 73,
+     "f0P95Hz": 110,
+     "rangeSt": 7.06,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -17.3,
+     "momentaryMaxLufs": -16.6
+    },
+    "edgesDb": {
+     "startDb": -51.9,
+     "endDb": -51.9
+    }
+   },
+   "source": {
+    "clip": "fire-catch-01",
+    "jobId": "20261114T035158-1166221398",
+    "seed": 1166221398,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "b1eed6c6aa0dae831e1b79b9192a9194d5b66289537af7554826c74a08125170",
+    "rawBytes": 352844,
+    "labSidecarSha256": "c7a03a2b87572763a10f83e97d03a007223cafcaefb977d3ba94e9688be962a2",
+    "promptSha256": "84d27a175be94a2cc016c6cbb593495c439e9e84c0e2940752be8bb4bfd61c26"
+   }
+  },
+  {
+   "cue": "fireCatch",
+   "url": "assets/audio/fire-catch-02.mp3",
+   "bytes": 10971,
+   "sha256": "3b2f46ca0de041eae98e000ad1a23d3ddff22ffddf13aa8956c15bbf67fcbda4",
+   "dur": 0.87,
+   "window": {
+    "startS": 0.11,
+    "endS": 0.98
+   },
+   "ops": [
+    "mono",
+    "remove DC (-1.4e-3)",
+    "trim 0.11-0.98 s",
+    "cosine fades 0.01 / 0.05 s",
+    "peak -1 dBFS (0.0 dB)",
+    "matched to the cue's quietest take (-1.1 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "catch",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.2,
+    "lowShare": 0.902,
+    "above1kShare": 0.016,
+    "crackles": 7,
+    "cracklesPerS": 8.05,
+    "criteria": [
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -2.1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.000051,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "short (0.5-1.0 s)",
+      "ok": true,
+      "value": 0.87,
+      "need": "0.5-1.0 s"
+     },
+     {
+      "name": "a swell, not a click",
+      "ok": true,
+      "value": 0.2,
+      "need": "within 6 dB of its loudest 5 ms frame 0.05-0.4 s after the clip start"
+     },
+     {
+      "name": "a low whoomp",
+      "ok": true,
+      "value": 0.902,
+      "need": ">= 70 % of the energy under 300 Hz"
+     },
+     {
+      "name": "starts and ends in silence",
+      "ok": true,
+      "value": {
+       "startDb": -53.4,
+       "endDb": -48.3
+      },
+      "need": "both cuts >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.87,
+    "peakDbfs": -2.1,
+    "rmsDbfs": -17.9,
+    "crestDb": 15.8,
+    "clippedFrac": 0,
+    "quietFrac": 0.301,
+    "activeFrac": 0.882,
+    "levelSpreadDb": 9.62,
+    "attack": {
+     "onsetS": 0.045,
+     "peakS": 0.3,
+     "riseMs": 155
+    },
+    "decay": {
+     "firstQuarterDb": -25.2,
+     "lastQuarterDb": -36.8,
+     "lastMinusFirstDb": -11.7,
+     "slopeDbPerS": -63.3,
+     "activeEndS": 0.8
+    },
+    "spectral": {
+     "centroidHz": 187,
+     "flatness": 0.021,
+     "rolloff85Hz": 197,
+     "bands": {
+      "0-300Hz": 0.902,
+      "300-1000Hz": 0.082,
+      "1000-3000Hz": 0.01,
+      "3000-8000Hz": 0.005,
+      "8000-22050Hz": 0.001
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.06,
+     "f0MedianHz": 84,
+     "f0P5Hz": 71,
+     "f0P95Hz": 138,
+     "rangeSt": 11.53,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -18.1,
+     "momentaryMaxLufs": -16.6
+    },
+    "edgesDb": {
+     "startDb": -53.4,
+     "endDb": -48.3
+    }
+   },
+   "source": {
+    "clip": "fire-catch-02",
+    "jobId": "20261114T035610-2070104277",
+    "seed": 2070104277,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "7dbc4ef212cd5f8d23d0792089cd571d2390597b798d8bccb5f89ebe5c6e279e",
+    "rawBytes": 352844,
+    "labSidecarSha256": "596a1582710fc854fe2dd2f6a04237b7a6a2cfea3c8e66401e91c0718575266d",
+    "promptSha256": "84d27a175be94a2cc016c6cbb593495c439e9e84c0e2940752be8bb4bfd61c26"
+   }
+  },
+  {
+   "cue": "fireCollapse",
+   "url": "assets/audio/fire-collapse-01.mp3",
+   "bytes": 7837,
+   "sha256": "b6c774e43325fc6d6fefb531aa3709fcf4cb371c7c12823cae1014171de745bd",
+   "dur": 0.61,
+   "window": {
+    "startS": 2.05,
+    "endS": 2.66
+   },
+   "ops": [
+    "mono",
+    "remove DC (9.5e-6)",
+    "trim 2.05-2.66 s",
+    "cosine fades 0.003 / 0.08 s",
+    "peak -1 dBFS (0.4 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "collapse",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.025,
+    "lowShare": 0.787,
+    "above1kShare": 0.031,
+    "crackles": 3,
+    "cracklesPerS": 4.92,
+    "criteria": [
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.0000018,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "short (0.4-1.0 s)",
+      "ok": true,
+      "value": 0.61,
+      "need": "0.4-1.0 s"
+     },
+     {
+      "name": "the hit leads",
+      "ok": true,
+      "value": 0.025,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.05 s after the clip start"
+     },
+     {
+      "name": "weight",
+      "ok": true,
+      "value": 0.787,
+      "need": ">= 60 % of the energy under 300 Hz"
+     },
+     {
+      "name": "decays",
+      "ok": true,
+      "value": -27.4,
+      "need": "last quarter >= 10 dB under the first quarter"
+     },
+     {
+      "name": "ends in silence",
+      "ok": true,
+      "value": -51.3,
+      "need": "the cut end >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 0.61,
+    "peakDbfs": -1,
+    "rmsDbfs": -19.8,
+    "crestDb": 18.8,
+    "clippedFrac": 0,
+    "quietFrac": 0.397,
+    "activeFrac": 0.833,
+    "levelSpreadDb": 10.47,
+    "attack": {
+     "onsetS": 0.005,
+     "peakS": 0.03,
+     "riseMs": 20
+    },
+    "decay": {
+     "firstQuarterDb": -13.5,
+     "lastQuarterDb": -40.9,
+     "lastMinusFirstDb": -27.4,
+     "slopeDbPerS": -79.3,
+     "activeEndS": 0.5
+    },
+    "spectral": {
+     "centroidHz": 272,
+     "flatness": 0.015,
+     "rolloff85Hz": 156,
+     "bands": {
+      "0-300Hz": 0.787,
+      "300-1000Hz": 0.181,
+      "1000-3000Hz": 0.025,
+      "3000-8000Hz": 0.005,
+      "8000-22050Hz": 0.001
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.341,
+     "f0MedianHz": 78,
+     "f0P5Hz": 73,
+     "f0P95Hz": 81,
+     "rangeSt": 1.88,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -21.2,
+     "momentaryMaxLufs": -19.3
+    },
+    "edgesDb": {
+     "startDb": -40.6,
+     "endDb": -51.3
+    }
+   },
+   "source": {
+    "clip": "fire-collapse-02",
+    "jobId": "20261114T035601-1267916011",
+    "seed": 1267916011,
+    "seconds": 4,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "df3b9d5a6b213b86f4275b93a8f3d43735279c6a4377510beefeb7ff404fb64b",
+    "rawBytes": 705644,
+    "labSidecarSha256": "3c8f4f45ca3208e15362174606bc3993eee055fb7ba5be95f39bde30f9b7ff3f",
+    "promptSha256": "36eac64d21b1f2103e4afe4417996a8219f3ef6153826d6c06a423407742a456"
+   }
+  },
+  {
+   "cue": "fireEmbers",
+   "askedAs": "fireCollapse",
+   "url": "assets/audio/fire-embers-01.mp3",
+   "bytes": 17554,
+   "sha256": "45d741edd186712d0a9ebae096104aef9af18795c61d32f9809fe0a1a5ae3f42",
+   "dur": 1.43,
+   "window": {
+    "startS": 1.43,
+    "endS": 2.86
+   },
+   "ops": [
+    "mono",
+    "remove DC (1.3e-4)",
+    "trim 1.43-2.86 s",
+    "cosine fades 0.005 / 0.05 s",
+    "peak -1 dBFS (13.5 dB)",
+    "mp3 mono 96 kbps"
+   ],
+   "gate": {
+    "kind": "embers",
+    "pass": true,
+    "failed": [],
+    "timeToWithin6DbS": 0.045,
+    "lowShare": 0.092,
+    "above1kShare": 0.512,
+    "crackles": 16,
+    "cracklesPerS": 11.19,
+    "criteria": [
+     {
+      "name": "no clipping, under the ceiling",
+      "ok": true,
+      "value": {
+       "clippedFrac": 0,
+       "peakDbfs": -1
+      },
+      "need": "no clipped samples, peak <= -1 dBFS"
+     },
+     {
+      "name": "no DC",
+      "ok": true,
+      "value": -0.0000036,
+      "need": "|mean| <= 0.003"
+     },
+     {
+      "name": "no click at the edges (faded to zero)",
+      "ok": true,
+      "value": {
+       "first": 0,
+       "last": 0
+      },
+      "need": "first / last sample ~ 0"
+     },
+     {
+      "name": "the settle (1.0-2.0 s)",
+      "ok": true,
+      "value": 1.43,
+      "need": "1.0-2.0 s"
+     },
+     {
+      "name": "the crunch comes with the hit",
+      "ok": true,
+      "value": 0.045,
+      "need": "within 6 dB of its loudest 5 ms frame <= 0.1 s after the clip start"
+     },
+     {
+      "name": "a crackle shower",
+      "ok": true,
+      "value": 16,
+      "need": ">= 6 crackle transients"
+     },
+     {
+      "name": "bright snaps",
+      "ok": true,
+      "value": 2415,
+      "need": "centroid >= 1.5 kHz"
+     },
+     {
+      "name": "ends in silence",
+      "ok": true,
+      "value": -36.3,
+      "need": "the cut end >= 24 dB under the take peak"
+     }
+    ]
+   },
+   "metrics": {
+    "durationS": 1.43,
+    "peakDbfs": -1,
+    "rmsDbfs": -27.7,
+    "crestDb": 26.7,
+    "clippedFrac": 0,
+    "quietFrac": 0.572,
+    "activeFrac": 1,
+    "levelSpreadDb": 8.31,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.05,
+     "riseMs": 50
+    },
+    "decay": {
+     "firstQuarterDb": -24.3,
+     "lastQuarterDb": -30.3,
+     "lastMinusFirstDb": -6,
+     "slopeDbPerS": -2.1,
+     "activeEndS": 1.4
+    },
+    "spectral": {
+     "centroidHz": 2415,
+     "flatness": 0.311,
+     "rolloff85Hz": 5650,
+     "bands": {
+      "0-300Hz": 0.092,
+      "300-1000Hz": 0.396,
+      "1000-3000Hz": 0.246,
+      "3000-8000Hz": 0.197,
+      "8000-22050Hz": 0.069
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0
+    },
+    "loudness": {
+     "integratedLufs": -27.1,
+     "momentaryMaxLufs": -24.3
+    },
+    "edgesDb": {
+     "startDb": -23.3,
+     "endDb": -36.3
+    }
+   },
+   "source": {
+    "clip": "fire-collapse-01",
+    "jobId": "20261114T035203-1819897513",
+    "seed": 1819897513,
+    "seconds": 4,
+    "steps": 8,
+    "cfg": 1,
+    "rawSha256": "41aa94ce6f6e6f8c74ec5ad9715c93820681022323883813c70b8921901e48a0",
+    "rawBytes": 705644,
+    "labSidecarSha256": "54689e290b092116b1e6baeea67e09a85ec6ef40611e736f907805c4d6fb2c97",
+    "promptSha256": "988177c67ccc09d053581c19da142f94806b5cfbb673b5d50fbfc5c05eee972e"
+   }
+  }
+ ],
+ "notUsedRaws": [
+  {
+   "cue": "flameRoar",
+   "clip": "fire-flame-roar-01",
+   "jobId": "20261114T035128-1883732438",
+   "seed": 1883732438,
+   "seconds": 12,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "246e74c93a5b630c64b02f3d1e744f4a8d4042dfa5bbfddb98a868102e31d0b5",
+   "rawBytes": 2116844,
+   "labSidecarSha256": "774e83a47428f0f05cfaa3348a8b2bcbcfc243cb6e5da077cb559f8e06747727",
+   "promptSha256": "eea16fd52168e6d0a26d4928cc7d3e93183e85542c562ebb6cb1de6b57b66dee",
+   "kind": "rejected",
+   "reason": "a steady continuous roar (0.5 s blocks within 0.4 dB), but dark: 90 % of its energy under 300 Hz, the octaves fall about 8 dB each above 250 Hz and the band above 1 kHz is 21.9 dB under the whole — a deep rumble with almost no rushing hiss; replaced by the fourth wording"
+  },
+  {
+   "cue": "flameRoar",
+   "clip": "fire-flame-roar-02",
+   "jobId": "20261114T035133-1241316237",
+   "seed": 1241316237,
+   "seconds": 12,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "22b86df1ecb1faff4df63df3d0b608c5ff67c185c9ccdbfe189f210bce1165a7",
+   "rawBytes": 2116844,
+   "labSidecarSha256": "0b5e71dbed3295fe3b0a7ff5a7a40b4d7423a7f0dd05e2a4f41fd5bb8ee0eb6a",
+   "promptSha256": "58601da24cd53198f11ec321082aafeba740ddd2e01775a1ee87ba272c92adc8",
+   "kind": "rejected",
+   "reason": "the second wording returned the same dark family: 88 % under 300 Hz, the band above 1 kHz 20.3 dB under the whole; replaced by the fourth wording"
+  },
+  {
+   "cue": "fireBurn",
+   "clip": "fire-burn-01",
+   "jobId": "20261114T035138-409182469",
+   "seed": 409182469,
+   "seconds": 12,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "186a5e62697ae735a72342505af9799f0bb589e061e4bd9b6d2bb5af8b11220f",
+   "rawBytes": 2116844,
+   "labSidecarSha256": "286864d6099bcb38be275071584e4375f10fd88a630ca6522c4e14f7544804b4",
+   "promptSha256": "f04aa269df714d5cd537c7bd3fbb26572a9b1d957e78ac4d38fc4e038601e0f4",
+   "kind": "rejected",
+   "reason": "six separate 1.0-2.6 s surges that fall to silence between them (0.5 s block levels from -25 to -51 dBFS): no steady bed to loop; the second wording gave the steady fire"
+  },
+  {
+   "cue": "flameRoar",
+   "clip": "fire-flame-roar-03",
+   "jobId": "20261114T035546-924678517",
+   "seed": 924678517,
+   "seconds": 12,
+   "steps": 8,
+   "cfg": 1,
+   "rawSha256": "00cd3c0b7dcf1eedb41d210adff4dbedda791c6e282582ecdac03cb2f9f22c9f",
+   "rawBytes": 2116844,
+   "labSidecarSha256": "6b6480b3f30b50ea0353088affe4d0c1029004341c4ec9625220a9dfa6bbe852",
+   "promptSha256": "70649e2621ea04344e7f37ba65b8852b2cb50323f20724cafb3fe1329ea8176c",
+   "kind": "rejected",
+   "reason": "a band-limited hiss (centroid 3.9 kHz, 0.3 % of the energy under 300 Hz) at an almost constant level (50 ms spread 0.35 dB) that slowly sinks 3 dB: a gas hiss with no roar body and no turbulence"
+  }
+ ]
+}

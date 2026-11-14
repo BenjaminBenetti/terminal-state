@@ -21,7 +21,8 @@ retch market-retch-01.mp3; seeds and hashes only, the prompts stay with the priv
 gun-*.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-gun-variety.json; the Screacher voice set (echo scream, frenzy shriek, idle wheeze, death gurgle,
 screacher-*.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-screacher.json; the train chipper set (motor loop chipper-motor-loop.mp3, wet grind loop chipper-grind-loop.mp3, body feed
 chipper-feed.mp3, spin-up chipper-start.mp3, wind-down chipper-stop.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-chipper.json; the BB voice set (cackle, giggle, pounce squeal, hurt squawk, wind-down death,
-bb-*.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-bb.json).
+bb-*.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-bb.json; the flamethrower and fire set (jet ignition, roar loop, cut-off, fire bed loop, catching fire, collapse, ember crackle,
+fire-*.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-fire.json).
 
 Powered by Stability AI.
 
