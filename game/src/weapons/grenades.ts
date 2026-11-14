@@ -29,7 +29,8 @@
 //  (CLAUDE.md's green-fog rule is for toxic gas). At most ACID.maxPools pools + acid canisters not yet burst at once (refused with a
 //  message, nothing consumed). An acid kill crumples (ACID.killImpulse), it is no blast.
 //
-// LURE (user: "Scent reaches 20 m without LOS for 20 active seconds. Zombies investigate the ACTUAL emitter, not the player"):
+// LURE (user: "Scent reaches 20 m without LOS for 20 active seconds. Zombies investigate the ACTUAL emitter, not the player"; the reach
+// is ai/scentLure.ts SCENT.radius — 30 m since task studio-scanner-console-refinements-20261114-031614-01):
 //  - it lands, rolls and comes to rest (a zombie hit just stops it); at rest it OPENS: a scent emitter at the canister itself
 //    (env.scents: ai/scentLure.ts ScentLures — the AI side: reach, no line of sight, path-finding to the emitter) for LURE.seconds active
 //    seconds, with a faint tan vent plume (the atmosphere smoke API; not green, not a hazard) and a hiss; then it is spent, the empty

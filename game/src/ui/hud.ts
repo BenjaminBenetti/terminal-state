@@ -678,6 +678,8 @@ export const CONTROLS: [string, string][] = [
   ['Use held item', 'Left click'], ['Aim down sights', 'Right click'], ['Reload', 'R'], ['Interact · take (hold to pick up)', 'E'],
   // task train-interaction-ux-20261112-063646: every draggable starts on a HELD E (core/holdGesture.ts); R turns a dragged device round
   ['Drag a cart or device (hold) · turn it round', 'E · R'],
+  // task studio-scanner-console-refinements-20261114-031614-01: the open scanner scope's mode key (craft/scanner.ts SCANNER.modeKey)
+  ['Item scanner scope: next mode', 'X'],
   ['Quick slots', '1 – 5 · wheel'], ['Melee weapon', '~'], ['Throw equipped grenade', 'Hold G'],
   ['Gas mask on/off', 'Q'], ['Flashlight', 'F'], ['Quick heal', 'H'], ['Inventory', 'Tab or I'], ['Backpack slot', '6'],
   ['Climb ladder · let go', 'E · Space or S'], ['Mute', 'M'], ['Pause / release mouse', 'Esc'],

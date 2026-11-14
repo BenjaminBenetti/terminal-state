@@ -23,7 +23,7 @@
 // it as before. Worlds without `lights` / `seePoint` (older tests) never investigate.
 //
 // Task studio-refinement-batch-20261113-035659-01 (lane LURE): the lure grenade's SCENT (ai/scentLure.ts) drives the same
-// 'investigate' state (LureState.kind 'scent'): smelt within 20 m in 3D with no sight / view test (walls and slabs do not stop
+// 'investigate' state (LureState.kind 'scent'): smelt within SCENT.radius (30 m) in 3D with no sight / view test (walls and slabs do not stop
 // it), checked on the light timer; it pulls LURABLE enemies and a chaser that lost sight of the player (no fresh gunshot / hit);
 // an active scent beats a light; the goal is the canister, never the player. Worlds without `scents` never smell anything.
 // Task studio-refinement-scope-finish-20261113-080904-01: the BB (ai/bb.ts) is drawn too — on the floor through this machine (its
