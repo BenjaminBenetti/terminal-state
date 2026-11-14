@@ -3366,6 +3366,7 @@ export class Game {
     }
     // (the flame follows the controller: holstering, a swap or a readied flare end the stream without an event)
     if (this.fireSys.stream.on && !(wdef?.stream && !this.flareHold.active && this.weapon.streaming)) this.stopFlame();
+    if (this.refillStop && !(wdef?.stream && this.weapon.reloading)) { this.refillStop(); this.refillStop = null; } // (likewise a pour: a swap or a holster ends it without a 'refuelEnd', so its sound stops here)
     this.stepMeleeShoves(dt); // lane MELEE (weapon variety): heavy melee pushes, bounded, never through walls / off the floor
 
     if (this.use) {

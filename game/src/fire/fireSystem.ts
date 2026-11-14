@@ -165,6 +165,7 @@ export interface StreamState {
 const MAX_DEPOSITS = 24;
 const PROP_PASS = 0.2;
 const TMP: V3 = {x: 0, y: 0, z: 0};
+const LOS_A: V3 = {x: 0, y: 0, z: 0}, LOS_B: V3 = {x: 0, y: 0, z: 0};
 
 export class FireSystem {
   env: FireEnv = {};
@@ -399,6 +400,14 @@ export class FireSystem {
       const lo = p.face === 'floor' ? p.y - 0.25 : p.face === 'wall' ? p.y - patchRadius(p) : p.y - 0.5;
       const hi = p.face === 'floor' ? p.y + FIRE_PATCH.height : p.face === 'wall' ? p.y + patchRadius(p) + 0.5 : p.y + 0.1;
       if (y + h < lo || y > hi) continue;
+      // never through what it clings to or stands beside: fire on a wall or a prop's face burns on its open side only, and every patch
+      // needs a clear line from just off its surface to the body (a floor fire at the foot of a partition leaves the next room alone)
+      if (p.face === 'wall' && (x - p.x) * p.nx + (z - p.z) * p.nz < -FIRE_PATCH.behind) continue;
+      if (this.env.los) {
+        LOS_A.x = p.x + p.nx * FIRE_PATCH.sightLift; LOS_A.y = p.y + p.ny * FIRE_PATCH.sightLift; LOS_A.z = p.z + p.nz * FIRE_PATCH.sightLift;
+        LOS_B.x = x; LOS_B.y = y + h * 0.5; LOS_B.z = z;
+        if (!this.env.los(LOS_A, LOS_B)) continue;
+      }
       dps = Math.max(dps, patchDps * k);
     }
     for (const b of this.burns) {
@@ -454,7 +463,7 @@ export class FireSystem {
         this.playerOut = 0;
       } else this.playerOut += step;
     } else this.playerOut += step;
-    for (const a of this.alight.values()) { const live = Math.min(step, a.left); a.acc += FLAME.burnDps * live; a.left -= step; }
+    for (const a of this.alight.values()) { const live = Math.max(0, Math.min(step, a.left)); a.acc += FLAME.burnDps * live; a.left -= step; } // (never a negative last step: the afterburn pays its whole FLAME.burnSeconds)
     this.batchT += step;
     if (this.batchT >= FLAME.burnEvery - 1e-9) this.batch();
     // props: stream-fed patches heat what they touch; heat fades where nothing feeds it

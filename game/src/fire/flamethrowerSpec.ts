@@ -79,6 +79,11 @@ export const FIRE_PATCH = Object.freeze({
   enemyDps: 20, playerDps: 10,
   /** How far above a floor patch (m) the flames still burn a body. */
   height: 1.3,
+  /**
+   * Fire never burns through what it clings to. On a wall or a prop's face it burns bodies on its open side only (a body's centre at
+   * most `behind` m behind that surface), and any patch needs a clear line to the body from `sightLift` m off its surface.
+   */
+  behind: 0.1, sightLift: 0.25,
   /** A patch dies down over its last `fade` active seconds (strength and size follow). */
   fade: 2,
   /** Seconds the stream's flame takes to drop onto the floor where it ends in open air, and the share of its flame that lands there. */

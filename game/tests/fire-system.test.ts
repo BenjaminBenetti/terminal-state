@@ -163,6 +163,18 @@ describe('fire: the stream', () => {
     expect(w2.hurts.length).toBeLessThanOrEqual(8);
   });
 
+  it('the afterburn pays its whole burnSeconds at any frame length (the last, partial step never takes damage back)', () => {
+    for (const dt of [1 / 60, 1 / 30, 1 / 144, 0.013, 0.07, 0.11, 0.25]) {
+      const z = body(0, 2, 1e6);
+      const w = world({enemies: [z], floor: false});
+      w.sys.flame(EYE, FWD, TICK);
+      const direct = taken(z);
+      w.run(FLAME.burnSeconds + 1.5, dt);
+      expect(taken(z) - direct, `dt ${dt}`).toBeCloseTo(FLAME.burnDps * FLAME.burnSeconds, 6);
+      expect(w.sys.alight.size, `dt ${dt}`).toBe(0);
+    }
+  });
+
   it('a kill is handed to the game exactly once (a small shove), the body stops burning; BB burns as any body (damage only)', () => {
     const z = body(0, 2, 30), bb = body(0.3, 3, 55, {nonGraphic: true});
     const w = world({enemies: [z, bb], floor: false});
@@ -329,6 +341,47 @@ describe('fire: what it burns', () => {
     (w2.env as {enemies: () => Body[]}).enemies = () => [y];
     w2.run(1);
     expect(taken(y)).toBeLessThan(FIRE_PATCH.enemyDps * 1.05 + FLAME.burnDps * 1.05);
+  });
+
+  it('fire never burns through what it clings to: a wall fire on its open side only; a floor fire at a partition leaves the next room alone', () => {
+    // 1. fire on a wall (normal -z): a body in front of it burns, a body just behind the wall does not
+    const w = world({wallZ: 5});
+    w.spray(FIRE_PATCH.feed + 0.2);
+    w.run(0.4);
+    const wall = landed(w.sys, 'wall')[0];
+    expect(wall).toBeDefined();
+    expect(patchStrength(wall)).toBe(1);
+    expect(wall.nz).toBeLessThan(-0.9);
+    const open = body(0, 5 - 0.45, 1e6), behindIt = body(0, 5 + 0.45, 1e6);
+    (w.env as {enemies: () => Body[]}).enemies = () => [open, behindIt];
+    w.run(1);
+    expect(taken(open)).toBeGreaterThan(FIRE_PATCH.enemyDps * 0.8);
+    expect(taken(behindIt)).toBe(0);
+    expect(w.sys.alight.has(behindIt)).toBe(false);
+    // 2. a floor fire at the foot of a partition (sight blocked across z = 5): bodies and the player in the next room are untouched
+    const crosses = (a: V3, b: V3) => (a.z - 5) * (b.z - 5) < 0;
+    const w2 = world({wallZ: 5, los: (a, b) => !crosses(a, b), player: {x: 0.3, y: 0, z: 5.5, alive: true, hp: 100}});
+    w2.spray(FIRE_PATCH.feed + 0.2, EYE, norm({x: 0, y: -1.6, z: 4.8}));
+    w2.run(0.4);
+    const floor = landed(w2.sys, 'floor', {x: 0, z: 4.8})[0];
+    expect(floor).toBeDefined();
+    expect(patchRadius(floor)).toBeGreaterThan(0.6);
+    const same = body(0, 4.3, 1e6), next = body(0, 5.5, 1e6);
+    (w2.env as {enemies: () => Body[]}).enemies = () => [same, next];
+    w2.run(1);
+    expect(taken(same)).toBeGreaterThan(FIRE_PATCH.enemyDps * 0.8);
+    expect(taken(next)).toBe(0);
+    expect(w2.pl!.hp).toBe(100);
+    expect(w2.sys.counts.playerS).toBe(0);
+    // (the same fire with nothing in the way reaches both: the rule is the line, not the distance)
+    const w3 = world({});
+    w3.spray(FIRE_PATCH.feed + 0.2, EYE, norm({x: 0, y: -1.6, z: 4.8}));
+    w3.run(0.4);
+    const near = body(0, 4.3, 1e6), far = body(0, 5.5, 1e6);
+    (w3.env as {enemies: () => Body[]}).enemies = () => [near, far];
+    w3.run(1);
+    expect(taken(near)).toBeGreaterThan(0);
+    expect(taken(far)).toBeGreaterThan(0);
   });
 
   it('the player burns only while in the fire (takeDamage direct, pain throttled, one hint per stay) — and not from the stream itself', () => {

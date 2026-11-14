@@ -811,7 +811,7 @@ export class Sfx {
   private stallVoice: Voice | null = null;
   private pourVoice: Voice | null = null;
   private igniteVoice: Voice | null = null; // task studio-flamethrower-fire-20261114-031614-01 (lane AUDIO): the one jet ignition that may be sounding
-  private cart:{src: AudioBufferSourceNode; fade: GainNode; lp: BiquadFilterNode; pan: PannerNode; k: number; idle: ReturnType<typeof setTimeout> | null} | null = null;
+  private cart: {src: AudioBufferSourceNode; fade: GainNode; lp: BiquadFilterNode; pan: PannerNode; k: number; idle: ReturnType<typeof setTimeout> | null} | null = null;
   private cartStats = {starts: 0, stops: 0};
   // Task skyways-level-20261106 (lane CAR2): the prize car's engine channel (both loops; null while nobody drives) + counters
   // (round 2, lane AUDIO: + the reverse whine loop, per-loop rates, the start one-shot's voice and the startup hold)

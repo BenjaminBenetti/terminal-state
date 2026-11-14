@@ -34,7 +34,8 @@ All numbers are in `game/src/fire/flamethrowerSpec.ts` (`FLAME_FUEL`). Fuel is c
   at any frame rate. A long frame burns at most three units and leaves no backlog.
 - **Refill**: with the flamethrower in the hands, **R** pours one whole fuel can from the inventory into the worn tank. The can is
   consumed and the 200 units added in one step when the pour ends. The pour is refused while the tank has less than 200 units of
-  room. Switching weapons or firing cancels a pour and keeps the can.
+  room. Switching weapons, holstering or taking the tank off cancels a pour and keeps the can. The trigger does nothing during a
+  pour.
 - The HUD shows the tank's units where a gun shows its magazine and the fuel cans carried where a gun shows its reserve.
 
 ## The stream
@@ -53,6 +54,7 @@ All numbers are in `game/src/fire/flamethrowerSpec.ts` (`FLAME_FUEL`). Fuel is c
 
 - The cone stops at the first wall, floor, ceiling or prop on the aim line. Enemies behind that are not burned, and an enemy needs a
   clear line from the eye.
+- Fire clinging to a wall, or to the face of a prop, burns on its open side only. It never reaches a body on the far side.
 - Fire does not stagger. A burning enemy keeps coming.
 - A kill is handed to the game's normal kill bookkeeping once, with a small shove.
 - Market people in the aim line are hurt by the stream itself (no blood effect). Lingering fire does not hurt them.
