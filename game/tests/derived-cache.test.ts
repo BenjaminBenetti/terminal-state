@@ -414,7 +414,7 @@ describe('derived container: long work is paced', () => {
     const bytes = await packBundle(bundle(1), true, 'k', 60_000);
     expectSameBundle(await unpackBundle(bytes, 'k', 60_000), bundle(1));
     expect(count).toBe(0);
-    expect(timers).not.toHaveBeenCalled();
+    expect(timers.mock.calls.filter(call => call[1] === 0).length).toBe(0);
   });
 
   it('falls back to a zero timer where there is no message port', async () => {

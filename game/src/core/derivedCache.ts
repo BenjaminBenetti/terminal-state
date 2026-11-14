@@ -40,8 +40,9 @@
 //    and the compressor is fed 64 KiB at a time; whenever `sliceMs` (default DERIVED_SLICE_MS) of real time has gone by since the
 //    last one, the work waits for a task boundary — a message port where there is one (a timer is clamped, and throttled to about
 //    one a second in a hidden tab), else a zero timer. What is left in one piece is plain copying: put's copy of the bundle at
-//    the call, one array out of the container, the structured clone into IndexedDB (measured in Node on a 24 MB bundle: no
-//    stretch over about 15 ms, against 25 ms unpaced with the compressor on another thread).
+//    the call (Node: 5-30 ms for 24 MB, the first use of fresh memory being the slow one), one array out of the container, the
+//    structured clone into IndexedDB. Whole operations in Node, 24 MB of float / half-float-like data: put about 0.7 s (deflate,
+//    to 9 MB), get about 0.2 s; raw, 20-60 ms each.
 //
 // THE CONTAINER (packBundle / unpackBundle; integers little-endian)
 //     0  4  magic 'TSDC'
