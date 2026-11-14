@@ -88,7 +88,8 @@ import {FireSystem, streamFalloff, type FireEnemy} from './fire/fireSystem';
 import {FireFx} from './fire/fireFx';
 import {FLAME_FUEL_CAN} from './fire/flamethrowerSpec';
 import {canPourCan, tankFuel, wornFuelTank} from './fire/fuelTank';
-import {NO_FLAME_SOUND, type FlameSound} from './fire/sound';
+import type {FlameSound} from './fire/sound';
+import {FlameAudio} from './audio/flameAudio';
 import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifiers} from './player/modifiers'; // Iteration 16 (shared contract)
 import {incomingHit, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
 import {armorHit, armorPool} from './player/armor'; // task studio-general-armor-20261107-231448-01: the worn armour pool
@@ -404,7 +405,7 @@ export class Game {
    */
   readonly fireSys = new FireSystem();
   readonly fireFx = new FireFx(this.scene);
-  private flameSound: FlameSound = NO_FLAME_SOUND;
+  private readonly flameSound: FlameSound = new FlameAudio(this.sfx); // (audio/flameAudio.ts: the Sound Lab fire set over Sfx)
   private readonly flameEye = new THREE.Vector3();
   private readonly flameDir = new THREE.Vector3();
   private readonly flameMuzzle = new THREE.Vector3();

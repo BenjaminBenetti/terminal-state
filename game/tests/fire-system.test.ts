@@ -487,6 +487,21 @@ describe('fire: what it burns', () => {
     expect(w.sys.counts.fell).toBe(1);
   });
 
+  it('the audio gets one last EMPTY frame when the last burn ends without embers (a burn completed by clear(): its bed fades)', () => {
+    const m = meltStub();
+    const w = world({melt: m.melt});
+    m.st.burning = true; // (a prop burning, nothing else: no patch, no stream)
+    w.run(0.5);
+    expect(w.sys.burns).toHaveLength(1);
+    expect(w.snd.frames[w.snd.frames.length - 1].fires).toHaveLength(1);
+    m.st.gone = true; // (the engine finished it without its `out` hook: no embers are left)
+    const n = w.snd.frames.length;
+    w.run(0.5);
+    expect(w.sys.active).toBe(false);
+    expect(w.snd.frames.length).toBe(n + 1);
+    expect(w.snd.frames[n]).toEqual({muzzle: null, fires: []});
+  });
+
   it('clear() leaves nothing burning, owed or in flight, and silences the fire', () => {
     const z = body(0, 2, 1e6);
     const w = world({wallZ: 5, enemies: [z], player: {x: 0, y: 0, z: 4.6, alive: true, hp: 100}});

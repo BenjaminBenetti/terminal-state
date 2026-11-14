@@ -189,6 +189,8 @@ export class FireSystem {
   private nextId = 1;
   private hooked: FireMelt | null = null;
   private readonly voices: FireVoice[] = [];
+  /** The audio was last given a stream / fires (it gets one more, empty, frame when everything is out). */
+  private voiced = false;
   /** The loudest burning places as of the last tick (fires within 3 m are one; at most FIRE_VOICES): the audio's beds, the smoke plumes. */
   get spots(): readonly FireVoice[] { return this.voices; }
   /** QA / tests. */
@@ -416,7 +418,7 @@ export class FireSystem {
     const melt = this.env.melt?.() ?? null;
     this.hook(melt);
     if (melt) melt.burning(this.burns); else this.burns.length = 0;
-    if (!this.active) return;
+    if (!this.active) { if (this.voiced) this.voice(step); return; } // (one last frame for the audio: an empty list fades its fire beds)
     this.clock += step;
     // flames in flight land
     while (this.deposits.length && this.deposits[0].at <= this.clock) this.land(this.deposits.shift()!);
@@ -545,6 +547,7 @@ export class FireSystem {
     }
     if (out.length > FIRE_VOICES) out.length = FIRE_VOICES;
     const s = this.stream;
+    this.voiced = s.on || out.length > 0;
     this.sound.frame(dt, s.on ? {x: s.ox + s.dx * 0.6, y: s.oy + s.dy * 0.6 - 0.2, z: s.oz + s.dz * 0.6} : null, out);
   }
 
@@ -562,6 +565,7 @@ export class FireSystem {
     this.playerOut = 1e9;
     this.batchT = 0;
     this.propT = 0;
+    this.voiced = false;
     this.sound.silence();
     if (was) this.counts.cleared++;
   }
