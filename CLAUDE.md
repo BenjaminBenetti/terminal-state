@@ -154,6 +154,13 @@ takes precedence over older browser-testing recipes.
 - Close the browser, its pages, and its owned child processes/resources before
   the next check starts. Use cleanup/finally and timeout handling, including on
   failure. Do not start another browser to investigate a still-running one.
+- For future browser-QA guards on the 12 GiB studios (Original, Alpha, Beta
+  and Gamma), use a **10 GiB (10,737,418,240 bytes)** default limit on cgroup
+  `anon + shmem`, leaving 2 GiB headroom. Preserve the existing guard failure
+  and owned-browser cleanup semantics. Completed task-local 6 GiB harnesses,
+  scripts and reports are historical evidence, not templates for future checks.
+  This is a future-harness default instruction, not a runtime memory guard
+  supplied by `tools/qa/browser-env.mjs`.
 - Bound runtime and memory use. One multiprocess browser can itself exhaust a
   worker, so serialization alone is not sufficient. If a check stalls or causes
   memory pressure, stop that owned check gracefully, preserve its evidence, and
