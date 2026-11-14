@@ -89,6 +89,20 @@ BATCHES: dict[str, list[tuple[str, str, float]]] = {
         ("fire-flame-ignite-02", "flameIgnite", 2.0),
         ("fire-catch-02", "fireCatch", 2.0),
     ],
+    # Structural QC of batch B (the same private records; NOT listened to):
+    #  - flame-roar-03: a band-limited hiss (centroid 3.9 kHz, 0.3 % of the energy under 300 Hz) at an almost constant level (50 ms
+    #    spread 0.35 dB) that sinks 3 dB over the take: a gas hiss with no roar body. Rejected.
+    #  - flame-roar-04: a deep roar WITH a bright layer (80 % under 300 Hz, the band above 1 kHz 11.8 dB under the whole, the 8 kHz
+    #    octave -17 dB), continuous 0.09-10.1 s, 0.5 s blocks within about 1 dB, 50 ms spread 1.2-1.5 dB (turbulence): the roar loop.
+    #  - flame-out-02: 0.22 s loud, then an abrupt 0.2 s / 30 dB fall; no tick transients either (two wordings, no ticks: a limit
+    #    recorded for the ear pass, not asked for a third time).
+    #  - collapse-02: one heavy hit (a 15 ms attack, 81 % under 300 Hz) with a 0.45 s low decay after two smaller knocks: the weight.
+    #  - flame-ignite-02 / catch-02: the same families as their first takes (variants).
+    # OUTCOME (14 jobs, none failed or lost; tools/audio-pipeline/fire-build.mjs PLAN / NOT_USED, derivatives/audio-fire.json):
+    # 10 takes ship, 4 were rejected for structure (flame-roar-01 / 02 / 03, burn-01), no spares. Seven runtime cues from the six
+    # requested: collapse-02's hit is fireCollapse and collapse-01 — the crunch and ember crackle with almost no low end — ships under
+    # its own cue, fireEmbers, a layer the audio plays over the hit (no single take had both, with the hit first). The queue keeps
+    # collapse-01's requested cue label (append-only); the builder records the change (`askedAs`). No flare clip stands in anywhere.
 }
 
 
