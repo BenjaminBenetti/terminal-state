@@ -71,11 +71,35 @@ export interface MarketLayout {
    * A station keeps the version it was first built with (its geometry, ids and stock never reroll); unvisited markets build the newest.
    * 3 (task studio-market-bar-20261108-225231-01): version 2's settlement plus a substantial upper-level bar (its bartender a stall).
    */
-  v: 1 | 2 | 3;
+  v: 1 | 2 | 3 | 4;
   /** Exactly one stall per MARKET_STALLS id (version 3: + the bar, BAR_STALL, last). */
   stalls: MarketStall[];
   /** Resident spots (wander targets / idle posts), at least a dozen, spread over the market's storeys. */
   spots: MarketSpot[];
   /** How many wandering / idling residents live here (traders are extra, one per stall). */
   residents: number;
+  /** (version 4, task studio-corpse-market-shop-20261114-031614-01) The corpse buyer's den. Absent on versions 1-3. */
+  den?: MarketDen;
+}
+
+/**
+ * Task studio-corpse-market-shop-20261114-031614-01: THE CORPSE BUYER'S DEN (layout version 4: version 3 plus the den) — a tucked-away
+ * back room off the Back Lane where a creepy buyer takes whole dead zombies down a floor chute and pays a flat price in physical Rail
+ * Ties (world/corpseShop). Not a stall (no stock, no trade view): it only BUYS bodies. Ground storey (level 0).
+ */
+export interface MarketDen {
+  /** The customer room (area index) and the buyer's sealed back room behind the booth (area index; the player never enters it). */
+  area: number;
+  back: number;
+  /** The den's way in off the Back Lane (its door cells' world box; y = floor): the painted sign / lamp mark it from the lane. */
+  door: {x0: number; z0: number; x1: number; z1: number} & MarketPoint;
+  /** The floor chute (layout.props index; centre, yaw; rimY = absolute height of the hopper's rim, the mouth a body goes in at). */
+  chute: MarketPoint & {prop: number; yaw: number; rimY: number};
+  /** The buyer's booth (layout.props index; centre, yaw = the side facing the customer). tray: the counter top's payout spot in front of
+   *  the bars (y = the counter top), where the buyer drops the Rail Ties. */
+  booth: MarketPoint & {prop: number; yaw: number; tray: MarketPoint};
+  /** Where the buyer stands behind the booth, facing the customer (three.js rotation.y; forward = (-sin yaw, -cos yaw)). */
+  buyer: MarketPoint & {yaw: number};
+  /** Where a customer stands to deal (clear floor in front of the booth, within reach of the chute). */
+  front: MarketPoint;
 }
