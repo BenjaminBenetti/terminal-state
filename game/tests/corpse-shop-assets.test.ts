@@ -128,7 +128,7 @@ describe('corpse shop kit: the chute and the booth', () => {
     expect(b.counterZ).toBeGreaterThan(0.05); expect(b.counterZ).toBeLessThanOrEqual(b.dims[2] / 2 + 1e-3);
     const {T} = await trianglesOf(b.url);
     // a broad up-facing surface on the customer side (z > 0) within a few cm of counterY, the full width of the counter
-    expect(upArea(T, (x, y, z) => z > 0 && Math.abs(y - b.counterY) < 0.03)).toBeGreaterThan(0.2);
+    expect(upArea(T, (_x, y, z) => z > 0 && Math.abs(y - b.counterY) < 0.03)).toBeGreaterThan(0.2);
     // the barred screen: no broad horizontal surface between the counter and the header (the bars leave open gaps)
     expect(upArea(T, (x, y) => y > b.counterY + 0.3 && y < 1.8 && Math.abs(x) < 0.9)).toBeLessThan(0.1);
   });

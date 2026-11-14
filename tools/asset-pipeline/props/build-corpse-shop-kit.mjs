@@ -16,8 +16,9 @@
 // Measured surfaces (from the cooked geometry, recorded in the registry for the den's runtime and PropDefs):
 //   chute rimY     = the hopper rim's top (the highest point of the FRONT half: the lid stands along the back edge) — what a body is
 //                    lifted over;
-//   booth counterY = the counter top (the broadest horizontal up-facing surface between 0.25 and 0.6 of the height), counterZ = how far
-//                    the counter's front edge reaches toward +Z from the model centre.
+//   booth counterY = the customer side's counter top (median height of the visible up-facing top in front of the bar line, between
+//                    0.25 and 0.6 of the height), counterZ = how far the counter's front edge reaches toward +Z from the model centre;
+//   (provenance only) the chute's hopper footprint / centre and its open throat, the booth counter's front-edge / bar-line heights.
 //
 //   node tools/asset-pipeline/props/build-corpse-shop-kit.mjs [--dry-run]
 import fs from 'node:fs';
@@ -37,8 +38,9 @@ const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
  * tools/asset-pipeline/props/scale-check.mjs --kind corpseChute / corpseBooth):
  *  - chute: the hopper ~1.0 m across (x) -> its rim lands knee high (~0.57 m);
  *  - booth: the counter top at a real counter height (nominal 0.90 m: typical counters 0.9-1.0 m) inside the den's slot of <= 2.3 m
- *    wide / <= 0.5 m deep. At exactly 0.90 m the screen would be 2.308 m wide (its side posts' foot plates), so the 2.3 m width
- *    binds and the counter lands at ~0.897 m (the cook asserts >= 0.89 m).
+ *    wide / <= 0.5 m deep. At exactly 0.90 m the screen would be 2.31 m wide (its side posts' foot plates), so the 2.3 m width
+ *    binds and the counter lands at ~0.896 m (the cook asserts >= 0.89 m). The reconstructed slab slopes a little toward the
+ *    customer (~0.91 m at the bar line, ~0.88 m at its front edge: recorded in the provenance).
  * tex: [base colour, metallicRoughness, normal] px. The booth is the den's interaction surface (the player stands at its counter, the
  * buyer behind its bars) across 2.3 m, so its base colour keeps Meshy's full 2048 and its normal 1024; the ~1 m chute 1024 / 512 / 512.
  */
