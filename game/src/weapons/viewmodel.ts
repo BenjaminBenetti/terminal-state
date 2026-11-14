@@ -164,7 +164,8 @@ export class Viewmodel {
     const mp = muzzleObj ? muzzleObj.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(0, 0, -def.view.length / 2);
     // see-through optic (model space, before the Grip shift); without one a `Sight` marker drives ADS, else the legacy view.aim
     const optic = def.view.optic ? RifleOptic.attach(root, def.view.optic) : null;
-    const sightObj = optic ? undefined : root.getObjectByName('Sight');
+    // (task studio-flamethrower-fire-20261114-031614-01) a STREAM weapon has no aimed pose: its `Sight` marker never drives one (view.aim stands)
+    const sightObj = optic || def.stream ? undefined : root.getObjectByName('Sight');
     const sightPoint = sightObj ? sightObj.getWorldPosition(new THREE.Vector3()).sub(gp) : undefined;
     const ejectObj = root.getObjectByName('Eject');
     const eject = ejectObj ? ejectObj.getWorldPosition(new THREE.Vector3()).sub(gp) : undefined;
@@ -386,6 +387,24 @@ export class Viewmodel {
     it.root.updateWorldMatrix(true, false);
     out.copy(it.muzzle).applyMatrix4(it.root.matrixWorld); // in viewmodel camera space (camera at origin)
     out.applyMatrix4(this.camera.matrixWorldInverse);
+    return main.localToWorld(out);
+  }
+
+  /**
+   * Task studio-flamethrower-fire-20261114-031614-01 (lane ASSET): the muzzle as a world point ON THE SCREEN SPOT where this overlay draws
+   * it (its view depth kept, re-projected through the screen like ejectionPort: the viewmodel camera is narrower than the main one, so
+   * muzzleWorld's point is drawn nearer the screen centre than the muzzle is). For a world-space effect that must visibly leave the
+   * muzzle — the Flamethrower's stream out of its burner bell. Empty hands: the camera position, as muzzleWorld.
+   */
+  muzzleDrawnWorld(main: THREE.PerspectiveCamera, out = new THREE.Vector3()): THREE.Vector3 {
+    if (!this.current) return main.getWorldPosition(out);
+    const it = this.items.get(this.current)!;
+    this.camera.updateMatrixWorld();
+    it.root.updateWorldMatrix(true, false);
+    out.copy(it.muzzle).applyMatrix4(it.root.matrixWorld).applyMatrix4(this.camera.matrixWorldInverse);
+    const k = Math.tan(THREE.MathUtils.degToRad(main.fov) / 2) / Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2);
+    out.x *= k;
+    out.y *= k;
     return main.localToWorld(out);
   }
 

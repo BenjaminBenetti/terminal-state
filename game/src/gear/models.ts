@@ -45,8 +45,14 @@ export const GEAR_ASSET: Readonly<Record<string, OfficeAssetId>> = {
   helmet: 'gear-helmet', boots: 'gear-boots', gloves: 'gear-gloves',
 };
 
-/** Task filter-tension-airtank-20261104-072836: gear derivatives outside the office asset registry (item id -> model url). */
-export const GEAR_MODEL_URL: Readonly<Record<string, string>> = {airtank_backpack: 'assets/models/gear-airtank-backpack.glb'};
+/**
+ * Task filter-tension-airtank-20261104-072836: gear derivatives outside the office asset registry (item id -> model url).
+ * + task studio-flamethrower-fire-20261114-031614-01: the Fuel Tank (tools/asset-pipeline/props/build-fuel-tank.mjs).
+ */
+export const GEAR_MODEL_URL: Readonly<Record<string, string>> = {
+  airtank_backpack: 'assets/models/gear-airtank-backpack.glb',
+  fuel_tank: 'assets/models/gear-fuel-tank.glb',
+};
 
 const loaded = new Map<string, GLTF>();
 let preload: Promise<void> | null = null;
@@ -284,6 +290,17 @@ function proceduralGear(itemId: string): THREE.Object3D {
       P.push(box(0.172, 0.04, 0.172, 0, 0.5, 0.04, band)); // hazard band
       P.push(box(0.05, 0.05, 0.05, 0, 0.63, 0.04, brass)); // valve (the stand-in stays under 0.7 m like every gear stand-in)
       P.push(box(0.24, 0.05, 0.05, 0, 0.12, -0.02, frame)); // waist belt stub
+      break;
+    }
+    case 'fuel_tank': { // task flamethrower-fire stand-in: a red jerrycan (+Z face) strapped to a pack frame, a hand pump at its side
+      const red = 0x8e2a22, steel = 0x8a8d8c, frame = 0x6f7374, strap = 0x5a3b24, black = 0x1c1c1c;
+      P.push(box(0.29, 0.57, 0.024, 0, 0.05, -0.03, steel)); // back plate
+      P.push(box(0.025, 0.57, 0.03, -0.135, 0.05, -0.03, frame), box(0.025, 0.57, 0.03, 0.135, 0.05, -0.03, frame)); // frame rails
+      P.push(box(0.24, 0.38, 0.075, 0, 0.13, 0.02, red)); // the can
+      P.push(box(0.06, 0.035, 0.05, 0.07, 0.51, 0.02, red), box(0.1, 0.03, 0.03, -0.04, 0.51, 0.02, red)); // cap + carry handle
+      P.push(box(0.29, 0.03, 0.085, 0, 0.21, 0.02, steel), box(0.29, 0.03, 0.085, 0, 0.38, 0.02, steel)); // clamp bands
+      P.push(box(0.025, 0.3, 0.025, 0.165, 0.2, 0, steel), box(0.03, 0.1, 0.03, 0.195, 0.22, 0.01, black)); // pump + its handle
+      P.push(box(0.46, 0.065, 0.03, 0, 0.01, 0.06, strap)); // waist belt
       break;
     }
     default:

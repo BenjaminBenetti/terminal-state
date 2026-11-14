@@ -20,7 +20,7 @@ import {
   WEAPON_VARIETY_MODEL_STATS, onWeaponVarietyFailed, onWeaponVarietyReady, requestWeaponVarietyModel, residentWeaponVarietyIds,
   weaponVarietyFailures, weaponVarietyGltf, weaponVarietyModelState, type WeaponVarietyFailure,
 } from './weaponVarietyModels';
-import {VARIETY_WEAPON_IDS} from '../weapons/varietyIds';
+import {LAZY_MODEL_WEAPON_IDS} from '../weapons/lazyWeaponModels'; // task studio-flamethrower-fire-20261114-031614-01: the variety weapons + the Flamethrower
 
 type Model = Pick<GLTF, 'scene'>;
 
@@ -152,7 +152,7 @@ export function weaponVarietyQaApi(game: () => {weaponVariety?: WeaponVarietyDel
     weaponVariety: () => {
       const g = game();
       return {
-        weapons: Object.fromEntries(VARIETY_WEAPON_IDS.map(id => [id, {model: weaponVarietyModelState(id), held: !!g.viewmodel?.hasItem(id), icon: !!iconUrl(id)}])),
+        weapons: Object.fromEntries(LAZY_MODEL_WEAPON_IDS.map(id => [id, {model: weaponVarietyModelState(id), held: !!g.viewmodel?.hasItem(id), icon: !!iconUrl(id)}])),
         stats: {...WEAPON_VARIETY_MODEL_STATS}, failures: weaponVarietyFailures(), delivery: g.weaponVariety?.qa() ?? null,
         heldItem: g.viewmodel?.heldItem ?? null, wantedItem: g.viewmodel?.wantedItem ?? null,
         awaiting: g.pickups?.awaitingModels?.() ?? {}, reskin: g.pickups?.reskinCounts ?? null,
