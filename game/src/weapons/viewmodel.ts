@@ -436,7 +436,8 @@ export class Viewmodel {
   update(dt: number, s: ViewState): void {
     const it = this.current ? this.items.get(this.current)! : null;
     this.equipT = Math.min(1, this.equipT + dt / 0.45);
-    this.aimBlend += ((s.aiming && !s.reloading && !s.sprint ? 1 : 0) - this.aimBlend) * Math.min(1, dt * 14);
+    // (task studio-flamethrower-fire-20261114-031614-01) a STREAM weapon is never aimed: it keeps its hip pose and angles whatever is asked
+    this.aimBlend += ((s.aiming && !s.reloading && !s.sprint && !it?.def?.stream ? 1 : 0) - this.aimBlend) * Math.min(1, dt * 14);
     this.lower += (((s.sprint ? 1 : 0)) - this.lower) * Math.min(1, dt * 8);
     // recoil spring
     this.kickV += (-this.kick * 220 - this.kickV * 22) * dt;
