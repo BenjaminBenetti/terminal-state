@@ -362,8 +362,10 @@ play frame is drawn.
   exactly 100 / 50 / 25 %; other values round to a whole percent and clamp. A drag applies once it settles or on release.
 - **Enhanced lighting** (the stored `enhancedLighting`, Auto / On / Off, default Auto) and **Reflections** (`reflections`, Standard /
   High / Off, default Standard; needs Enhanced lighting): a better baked station light field and cached reflections on metal and
-  glass, described in `docs/enhanced-lighting.md`. A change applies when a station next loads; each help line says what the live
-  station really uses and why. The baked data is a derived cache in this browser (the form shows its size and a **Clear lighting
+  glass (at High also a sheen on glazed wall tile), described in `docs/enhanced-lighting.md`. A change is applied to the live
+  station from the pause menu: its lighting is rebuilt and its materials are prepared again before Resume is released (no
+  station load, nothing of the run changes); each help line says what the live station really uses, a rebuild in progress or
+  why a change failed. The baked data is a derived cache in this browser (the form shows its size and a **Clear lighting
   cache** button): it is rebuilt when missing and is never part of a save or of the settings record.
 
 Dev deep links (`?level=`, `?seed=` …) never start a game: they pre-fill the menu's **Dev start** picker,
