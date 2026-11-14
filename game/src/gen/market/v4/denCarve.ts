@@ -38,8 +38,10 @@ export const DEN = {
   border: 1,
   /** Ceiling above the floor (m): a container's. */
   ceil: SETTLE.cont,
-  /** In front of the booth's front face (m): the payout spot on the floor, the customer's spot; the chute's near face. */
-  trayOut: 0.45,
+  /** In front of the booth's front face (m): the payout spot on the floor (at least, and its clear disc's radius off the booth's
+   *  blocked cell), the customer's spot; the chute's near face. */
+  trayOut: 0.4,
+  trayDisc: 0.36,
   frontOut: 1.1,
   chuteGap: 1.55,
   /** The clear band (m) between the room's north wall and the chute (the way in from the passage); the buyer's post behind the booth. */
@@ -139,6 +141,20 @@ export function carveDen(layout: StationLayout, sc: SettleCarve): DenCarve | nul
     }
   }
 
+  // --- the plan (canonical metres; the customer west of the booth, the buyer east of it) -------------------------------------------
+  const xb = (DEN.divider + 0.5) * CELL, zb = (o0 + n / 2) * CELL;
+  const xf = xb - B.d / 2; // the booth's front face (the customer side)
+  // the chute: its near face DEN.chuteGap in front of the booth face, the DEN.band way in north of it (centred in a deeper room), a clear
+  // row south of it; its open side north (toward the way in) — turned a quarter (open side west, toward the passage: its shorter side
+  // along z) when the room is too shallow for that
+  const place = (hx: number, hz: number) => {
+    const z = snap(Math.max(r0 * CELL + DEN.band + hz, (r0 + r1) / 2 * CELL), hz, 1);
+    return {x: snap(xf - DEN.chuteGap - hx, hx, -1), z, fits: Math.floor((z + hz - 0.04) / CELL) <= r1 - 2};
+  };
+  const north = place(C.w / 2, C.d / 2), turned = north.fits ? null : place(C.d / 2, C.w / 2);
+  if (turned && !turned.fits) return fail('chute');
+  const {x: cx, z: cz} = turned ?? north, crot = turned ? wr(-Math.PI / 2) : Math.PI;
+
   // --- the areas (appended: every version-3 area id stays) and their cells --------------------------------------------------------
   const stamp = (r: Rect, area: number, ceil: number) => {
     for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
@@ -166,19 +182,12 @@ export function carveDen(layout: StationLayout, sc: SettleCarve): DenCarve | nul
   stamp(ow, room.id, lintel);
   // (the storeys' cached derived arrays are keyed by the levels array: a fresh array, so every later query sees the den)
   layout.levels = layout.levels.slice();
-
-  // --- the plan (canonical metres; the customer west of the booth, the buyer east of it) -------------------------------------------
-  const xb = (DEN.divider + 0.5) * CELL, zb = (o0 + n / 2) * CELL;
-  const xf = xb - B.d / 2; // the booth's front face (the customer side)
-  // the chute: its near face DEN.chuteGap in front of the booth face, the DEN.band way in north of it (centred in a deeper room)
-  const cx = snap(xf - DEN.chuteGap - C.w / 2, C.w / 2, -1);
-  const cz = snap(Math.max(r0 * CELL + DEN.band + C.d / 2, (r0 + r1) / 2 * CELL), C.d / 2, 1);
   return {
     mirror, lane: lane.id, passage, room, back, door, opening: ow, lintel, rows: {r0, r1, door: dy0},
-    // booth: front (+Z) toward the customer (canonical -x); chute: its open side (+Z) toward the way in (north, -z)
+    // booth: front (+Z) toward the customer (canonical -x); chute: its open side (+Z) toward the way in (north, -z; turned: canonical -x)
     booth: {x: wx(xb), z: r3(zb), rot: wr(-Math.PI / 2)},
-    chute: {x: wx(cx), z: r3(cz), rot: Math.PI},
-    tray: {x: wx(xf - DEN.trayOut), z: r3(zb)},
+    chute: {x: wx(cx), z: r3(cz), rot: crot},
+    tray: {x: wx(Math.min(xf - DEN.trayOut, DEN.divider * CELL - DEN.trayDisc)), z: r3(zb)},
     front: {x: wx(xf - DEN.frontOut), z: r3(zb)},
     // the buyer faces the customer: forward (-sin yaw, -cos yaw) = canonical -x
     buyer: {x: wx(xb + B.d / 2 + DEN.buyerBack), z: r3(zb), yaw: wr(Math.PI / 2)},

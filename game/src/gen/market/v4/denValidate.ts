@@ -7,7 +7,8 @@
 //    the whole opening between solid jambs, its front toward the customer room; no cell of the back room is reachable on foot (the
 //    walking flood with prop footprints as blockers, stairs and ladders included);
 //  - REACHABLE: the door, the customer's spot and the chute on foot from the start; and carrying a body (DEN_RULES.carry: a 1 m clear disc,
-//    i.e. >= 1.5 m wide ways) to within DEN_RULES.reach of the door, the chute and the customer's spot;
+//    i.e. >= 1.5 m wide ways) from the door's approach on the Back Lane to within DEN_RULES.reach of the door, the chute and the
+//    customer's spot (the den's own ways; the market's alleys on the way there are version 3's, unchanged);
 //  - the dealing: the payout spot (tray) clear floor DEN_RULES.tray in front of the booth's face on its centre line, a DEN_RULES.trayClear
 //    disc free of every prop / the chute / a doorway; the customer's spot clear floor in front of the booth within DEN_RULES.frontChute
 //    of the chute; the buyer's post clear floor in the back room right behind the booth, facing the customer; clear floor all round the
@@ -144,12 +145,12 @@ export function denIssues(layout: StationLayout): string[] {
   const onFoot = (x: number, z: number) => { const [cx, cy] = g.cellOf(x, z); return g.inBounds(cx, cy) && walk[g.idx(cx, cy)] >= 0; };
   if (![...Array(door.h * door.w).keys()].every(k => walk[g.idx(door.x + (k % door.w), door.y + Math.floor(k / door.w))] >= 0)) issues.push('den door unreachable on foot');
   if (!onFoot(den.front.x, den.front.z)) issues.push('den front unreachable on foot');
-  const carry = carryField(layout, sx, sy);
+  const carry = carryField(layout, door);
   const carryNear = (d: (x: number, z: number) => number) => {
     for (let i = 0; i < carry.length; i++) if (carry[i]) { const [x, z] = g.center(i % W, (i / W) | 0); if (d(x, z) <= DEN_RULES.reach) return true; }
     return false;
   };
-  if (!carryNear((x, z) => Math.hypot(x - den.door.x, z - den.door.z))) issues.push('den door out of reach carrying a body');
+  if (!carryNear((x, z) => Math.hypot(x - den.door.x, z - den.door.z))) issues.push('den door\'s Back Lane approach too narrow to carry a body');
   if (!carryNear((x, z) => boxDist(chute, x, z))) issues.push('den chute out of reach carrying a body');
   if (!carryNear((x, z) => Math.hypot(x - den.front.x, z - den.front.z))) issues.push('den front out of reach carrying a body');
   {
@@ -219,22 +220,21 @@ export function denIssues(layout: StationLayout): string[] {
   return issues;
 }
 
-/** Cells (level 0) a body carrier reaches from the start: walkable with a DEN_RULES.carry clear disc round the cell's centre. */
-function carryField(layout: StationLayout, sx: number, sy: number): Uint8Array {
+/** Cells (level 0) a body carrier reaches from the den door's approach on the Back Lane (the lane's cells within 2 of the door: the den
+ *  is the carve's to keep wide; the market's own alleys are version 3's): walkable with a DEN_RULES.carry clear disc round the cell's
+ *  centre. Empty when no approach cell is that clear. */
+function carryField(layout: StationLayout, door: {x: number; y: number; w: number; h: number; a: number}): Uint8Array {
   const g = layout.grid, W = g.w, n = g.cells.length, seen = new Uint8Array(n), ok = new Int8Array(n).fill(-1);
   const pass = (i: number) => {
     if (ok[i] < 0) { const x = i % W, y = (i / W) | 0, [cx, cz] = g.center(x, y); ok[i] = g.walkable(x, y) && g.rampIdx[i] < 0 && g.circleClear(cx, cz, DEN_RULES.carry) ? 1 : 0; }
     return ok[i] === 1;
   };
-  // (the start itself: the nearest carry-clear cell to it)
-  let s = -1;
-  for (let r = 0; r <= 3 && s < 0; r++) for (let dy = -r; dy <= r && s < 0; dy++) for (let dx = -r; dx <= r; dx++) {
-    const x = sx + dx, y = sy + dy;
-    if (g.inBounds(x, y) && pass(g.idx(x, y))) { s = g.idx(x, y); break; }
+  const q: number[] = [];
+  for (let y = door.y - 2; y < door.y + door.h + 2; y++) for (let x = door.x - 2; x < door.x + door.w + 2; x++) {
+    if (!g.inBounds(x, y)) continue;
+    const i = g.idx(x, y);
+    if (g.area[i] === door.a && pass(i) && !seen[i]) { seen[i] = 1; q.push(i); }
   }
-  if (s < 0) return seen;
-  const q = [s];
-  seen[s] = 1;
   while (q.length) {
     const c = q.pop()!, x = c % W;
     for (const j of [x > 0 ? c - 1 : -1, x < W - 1 ? c + 1 : -1, c - W, c + W]) {
