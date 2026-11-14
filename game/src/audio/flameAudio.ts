@@ -44,8 +44,9 @@ export const FLAME_AUDIO = {
     roarOutS: 0.12,
     /** A new roar loop at most once per roarGapS (s); while the trigger is held, a lost one is re-requested at most once per retryS. */
     roarGapS: 0.2, retryS: 1,
-    /** The ignition whoomp / the cut-off at most once per this (s); a release inside the ignition take fades it over igniteCutS. */
-    igniteGapS: 0.35, outGapS: 0.25, igniteCutS: 0.1,
+    /** The ignition whoomp / the cut-off at most once per this (s: every press of a tap up to 5 a second gets both, like its roar); a
+     *  release inside the ignition take fades it over igniteCutS. */
+    igniteGapS: 0.2, outGapS: 0.2, igniteCutS: 0.1,
     /** The tank ran dry under the trigger: the cut-off takes lower and slower (processing). */
     dry: {gain: 0.7, rate: 0.82},
     /** The dry click at most once per this (s). */
@@ -259,7 +260,7 @@ export class FlameAudio implements FlameSound {
   /** Start delay (s) of a staggered one-shot whose queue is free from `next`; -1 = too many waiting (dropped, counted). */
   private stagger(now: number, next: number): number {
     const F = FLAME_AUDIO.fire, delay = Math.max(0, next - now);
-    if (delay > F.staggerS * F.staggerMax) { this.counts.dropped++; return -1; }
+    if (delay > F.staggerS * F.staggerMax + 1e-6) { this.counts.dropped++; return -1; }
     return delay;
   }
 
