@@ -4,6 +4,8 @@
 // Task studio-scanner-console-refinements-20261114-031614-01 (user: "Every mode shows ONLY GREEN dots, including weapons/equipment; no
 // red/gold categories. Provide a clear mode label and straightforward cycling control in the existing scanner UI"): one kind of mark — a
 // green dot — for every mode; the mode's name in the header, the cycling key beside it, every mode in a strip under the scope.
+// Task studio-scanner-medical-20261114-054010-01: an eighth mode, MEDICAL, at the strip's end (the strip still fits one row: it measures
+// its labels and shrinks only if it must); its empty state reads "NO MEDICAL SUPPLIES IN RANGE".
 //
 //  - drawScanner(ctx, model, w, h): PURE drawing of one model on a 2D context (tests record the calls / rasterise it). Black glass, green
 //    phosphor: the four range rings (SCANNER.rings, labelled in metres), a faint reticle and bearing ticks, the FRONT tick at the top (up
@@ -38,6 +40,9 @@ export interface ScannerModel {
 /** The key that cycles the mode, as printed ('KeyX' -> 'X'). */
 export const MODE_KEY_LABEL = SCANNER.modeKey.replace(/^Key/, '');
 
+/** What an empty snapshot says it found none of, where the mode's own name does not read as a noun. */
+const NONE_OF: Partial<Record<ScanMode, string>> = {all: 'RESOURCES', medical: 'MEDICAL SUPPLIES'};
+
 /** The on-screen copy (one place). */
 export const SCOPE_TEXT = {
   title: 'ITEM SCANNER',
@@ -49,7 +54,7 @@ export const SCOPE_TEXT = {
   mode: (m: ScanMode) => `MODE: ${SCAN_MODE_LABEL[m].toUpperCase()}`,
   cycle: `[${MODE_KEY_LABEL}] NEXT MODE`,
   /** A snapshot with nothing of the mode. */
-  none: (m: ScanMode) => (m === 'all' ? 'NO RESOURCES IN RANGE' : `NO ${SCAN_MODE_LABEL[m].toUpperCase()} IN RANGE`),
+  none: (m: ScanMode) => `NO ${NONE_OF[m] ?? SCAN_MODE_LABEL[m].toUpperCase()} IN RANGE`,
   next: (seconds: number) => `NEXT SWEEP IN ${seconds} s`,
   first: 'FIRST SWEEP PENDING',
   noSignal: 'NO SIGNAL — PLUG IN',

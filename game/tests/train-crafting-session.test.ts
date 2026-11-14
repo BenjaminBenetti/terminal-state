@@ -179,7 +179,8 @@ describe('train crafting: one session, every system real', () => {
     expect([made.sentry.ammo, sentry.counts.shots]).toEqual([kept, shotsA]);
 
     // --- the scanner: it swept once after its warm-up; what appears afterwards is on the scope only after the NEXT sweep (a
-    // snapshot every SCANNER.period active seconds, nothing live) — a dressing (ALL only), a weapon; the enemy is not a resource
+    // snapshot every SCANNER.period active seconds, nothing live) — a dressing (Medical since task studio-scanner-medical-20261114-054010-01;
+    // ALL only before), a weapon; the enemy is not a resource
     const sweep1 = scanner.snap;
     expect(sweep1).not.toBeNull();
     const far = platformWorld(h, m.x + 9, -(SPEC.width / 2 + 4)), far2 = platformWorld(h, m.x - 7, -(SPEC.width / 2 + 5));
@@ -189,8 +190,8 @@ describe('train crafting: one session, every system real', () => {
     expect(scanner.snap).toBe(sweep1); // (no live tracking between sweeps)
     run(h, SCANNER.period + 1, () => scanner.snap !== sweep1);
     expect(scanner.snap).not.toBe(sweep1);
-    expect(scanner.snap!.seen).toEqual({all: 2, food: 0, ammo: 0, fuel: 0, weapon: 1, equipment: 0, material: 0});
-    expect(SCAN_MODES.map(k => scanBlips(scanner.snap!, k).blips.length)).toEqual([2, 0, 0, 0, 1, 0, 0]);
+    expect(scanner.snap!.seen).toEqual({all: 2, food: 0, ammo: 0, fuel: 0, weapon: 1, equipment: 0, material: 0, medical: 1});
+    expect(SCAN_MODES.map(k => scanBlips(scanner.snap!, k).blips.length)).toEqual([2, 0, 0, 0, 1, 0, 0, 1]);
     expect([made.sentry.ammo, z2.brain.alive]).toEqual([kept, true]); // (the far zombie is the scanner's business only)
     h.zombies.length = 0;
     h.pickups.list.length = 0;

@@ -101,7 +101,7 @@ function page() {
 const CAR = {x: 100, z: 50, front: 1 as const, railTopY: 0.3};
 const enemy = (x: number, z: number): {brain: {alive: boolean; x: number; z: number}; ragdolled: boolean} => ({brain: {alive: true, x, z}, ragdolled: false});
 const cart = (x: number, z: number, units: number, owner = 'station'): ScanCart => ({x, z, units, owner});
-/** Counts per mode, all seven (zeros included). */
+/** Counts per mode, every mode (zeros included). */
 const counts = (o: Partial<Record<ScanMode, number>>) => Object.fromEntries(SCAN_MODES.map(m => [m, o[m] ?? 0]));
 /** What the default world holds in range: beans + a holder of water / 9 mm + a rifle + a station's fuel cart. */
 const SEEN = counts({all: 4, food: 2, ammo: 1, fuel: 1, weapon: 1});
@@ -186,6 +186,8 @@ describe('the console: the scanner\'s use on the equipment system', () => {
     expect(w.use().prompt(w.unit)).toBe('<b>[E]</b> Scanner scope · All · next sweep in 18 s');
     w.unit.display = 'fuel'; // (the unit's own mode: its record's)
     expect(w.use().prompt(w.unit)).toBe('<b>[E]</b> Scanner scope · Fuel · next sweep in 18 s');
+    w.unit.display = 'medical';
+    expect(w.use().prompt(w.unit)).toBe('<b>[E]</b> Scanner scope · Medical · next sweep in 18 s');
     w.unit.display = 'all';
     w.eq.unplug(w.unit);
     expect(w.use().prompt(w.unit)).toBe('Item scanner — plug it into a train socket');
@@ -272,6 +274,7 @@ describe('sweeps: one snapshot every 30 ACTIVE seconds', () => {
     expect(at('weapon')).toEqual([[cell(0), cell(40)]]);
     expect(at('equipment')).toEqual([[cell(0), cell(10)]]);
     expect(at('material')).toEqual([]);
+    expect(at('medical')).toEqual([]);
     expect(at('all')).toHaveLength(5);
     expect(enemyReads).toBe(0); // the enemies are never read: no dot is an enemy
     // the same world from a car that stands the other way round: everything is a half turn
@@ -369,7 +372,7 @@ describe('sweeps: one snapshot every 30 ACTIVE seconds', () => {
   it('the train\'s own cargo and a stall\'s wares are never blips', () => {
     const w = world();
     const inCar = pickup('shotgun', 101, 50), ware = pickup('medkit', 120, 60, 'stall-2');
-    const bagInCar: ScanBag = {pose: {x: 99, z: 50}, grounded: true}, crate = holder(102, 50.5, ['pistol'], 1.15);
+    const bagInCar: ScanBag = {pose: {x: 99, z: 50}, grounded: true}, crate = holder(102, 50.5, ['pistol', 'bandage'], 1.15);
     w.host.pickups.list.push(inCar, ware);
     w.host.gear.bags.push(bagInCar, {pose: {x: 90, z: 20}, grounded: true});
     w.host.containers!.all.push(crate);
@@ -379,7 +382,7 @@ describe('sweeps: one snapshot every 30 ACTIVE seconds', () => {
     // (the car's interior in its own frame: the holder at world (102, 50.5, 1.15) is local (2, 0.5, 0.85))
     w.host.trainCargo.insideCar = (lx, ly, lz) => { asked.push([lx, +ly.toFixed(2), lz]); return Math.abs(lx) < 9 && Math.abs(lz) < 1.3 && ly > 0.5 && ly < 3; };
     w.run(4);
-    expect(w.sys.snap!.seen).toEqual(counts({...SEEN, all: SEEN.all + 1, equipment: 1})); // + the far bag only
+    expect(w.sys.snap!.seen).toEqual(counts({...SEEN, all: SEEN.all + 1, equipment: 1})); // + the far bag only (no Medical: the ware, the car's bandage)
     expect(asked).toContainEqual([2, 0.85, 0.5]);
     expect(asked).not.toContain(ware); // an owned ware is out before anyone is asked
     // without a cargo system everything loose counts
@@ -585,13 +588,13 @@ describe('the modes: X on the open scope cycles the unit\'s filter of the ONE ca
     const w = world();
     w.host.player.x = w.unit.pose!.x; w.host.player.z = w.unit.pose!.z + 1;
     w.host.gear.bags.push({pose: {x: 100, z: 60}, grounded: true});
-    w.host.pickups.list.push(pickup('scrap_metal', 70, 70));
+    w.host.pickups.list.push(pickup('scrap_metal', 70, 70), pickup('medkit', 80, 30));
     w.run(5);
     expect(w.use().tap(w.unit)).toBe(true);
     return w;
   }
 
-  it('All → Food/Water → Ammo → Fuel → Weapon → Equipment → Material → All: the label, the prompt and the dots follow; nothing is swept or read', () => {
+  it('All → Food/Water → Ammo → Fuel → Weapon → Equipment → Material → Medical → All: the label, the prompt and the dots follow; nothing is swept or read', () => {
     const w = open();
     const snap = w.sys.snap!, sweeps = w.sys.counts.sweeps, left = w.sys.clock.left;
     const reads = {pickups: 0, holders: 0, carts: 0};
@@ -610,13 +613,13 @@ describe('the modes: X on the open scope cycles the unit\'s filter of the ONE ca
       expect(model.blips).toEqual(scanBlips(snap, m).blips);
       dots.push(model.blips!.length);
       // the scope was redrawn with the new mode's label at once (this frame's draw)
-      if (i > 0) expect(w.pg.ctx.texts).toContain(`MODE: ${['ALL', 'FOOD/WATER', 'AMMO', 'FUEL', 'WEAPON', 'EQUIPMENT', 'MATERIAL'][SCAN_MODES.indexOf(m)]}`);
+      if (i > 0) expect(w.pg.ctx.texts).toContain(`MODE: ${['ALL', 'FOOD/WATER', 'AMMO', 'FUEL', 'WEAPON', 'EQUIPMENT', 'MATERIAL', 'MEDICAL'][SCAN_MODES.indexOf(m)]}`);
       w.pg.ctx.texts.length = 0;
       if (i < SCAN_MODES.length) w.pressX();
     }
     expect(order).toEqual([...SCAN_MODES, 'all']);
-    expect(labels).toEqual(['All', 'Food/Water', 'Ammo', 'Fuel', 'Weapon', 'Equipment', 'Material', 'All'].map(l => `<b>[E]</b> Close the scanner scope · <b>[X]</b> Mode: ${l}`));
-    expect(dots).toEqual([6, 2, 1, 1, 1, 1, 1, 6]); // all / food / ammo / fuel / weapon / equipment / material / all again
+    expect(labels).toEqual(['All', 'Food/Water', 'Ammo', 'Fuel', 'Weapon', 'Equipment', 'Material', 'Medical', 'All'].map(l => `<b>[E]</b> Close the scanner scope · <b>[X]</b> Mode: ${l}`));
+    expect(dots).toEqual([7, 2, 1, 1, 1, 1, 1, 1, 7]); // all / food / ammo / fuel / weapon / equipment / material / medical / all again
     // no sweep, no world read, the very same snapshot; the clock went on only by the frames' time
     expect([w.sys.counts.sweeps, w.sys.snap, reads]).toEqual([sweeps, snap, {pickups: 0, holders: 0, carts: 0}]);
     expect(w.sys.clock.left).toBeCloseTo(left - SCAN_MODES.length / 60, 6);
