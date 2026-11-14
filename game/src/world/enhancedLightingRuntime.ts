@@ -22,9 +22,19 @@ export class EnhancedLightingRuntime {
     return {requested: this.request(), active: this.active, pending: false, cacheBackend: 'none'};
   }
 
+  private readonly listeners = new Set<() => void>();
+  /** Told whenever status() may have changed (a station was built, the cache was cleared). Returns the unsubscribe. */
+  subscribe(fn: () => void): () => void {
+    this.listeners.add(fn);
+    return () => { this.listeners.delete(fn); };
+  }
+  protected changed(): void {
+    for (const fn of [...this.listeners]) { try { fn(); } catch (err) { console.warn('enhanced lighting: a status listener failed', err); } }
+  }
+
   /** The derived cache's numbers (null while it was never opened: enhanced lighting off all session). Never rejects. */
   async cacheStats(): Promise<DerivedCacheStats | null> { return null; }
 
   /** Delete every cached bake of this browser (they are rebuilt when next needed). Never rejects. */
-  async clearCache(): Promise<void> { /* stub */ }
+  async clearCache(): Promise<void> { this.changed(); }
 }
