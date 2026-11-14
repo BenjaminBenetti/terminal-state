@@ -53,6 +53,11 @@ import type {IndirectContext, IndirectLight} from './lightFieldGather'; // task 
 
 /** Height layers per column and level slot (relative floor..ceiling). */
 export const LAYERS = 4;
+/**
+ * Task studio-baked-lighting-reflections-20261114-050258-01: the limits of the factor an ENHANCED bake scales a level's gathered
+ * light by (bakeLightFieldSteps: a level's bounced light totals FieldParams.bounce x its direct light, as the baseline's fill does).
+ */
+export const INDIRECT_SCALE_RANGE: readonly [number, number] = [0.1, 4];
 /** Slices of the main level's slot: header (floor, ceil, circuit shares) + 2 per layer. */
 export const SLOT_DEPTH = 1 + 2 * LAYERS;
 /**
@@ -221,7 +226,9 @@ export interface BakedField {
     /** Task track3 (lane ARCH): FieldSource.extraDirect's stats (the mall skylight), when present. */
     extra?: Record<string, number>;
     /** Task studio-baked-lighting-reflections-20261114-050258-01: FieldSource.indirect's stats (the enhanced gather), when present. */
-    indirect?: IndirectLight['stats']};
+    indirect?: IndirectLight['stats'];
+    /** (same task) Per slot, what its gathered light was scaled by to total that level's bounce budget (INDIRECT_SCALE_RANGE). */
+    indirectScale?: number[]};
 }
 
 /** [lo, hi] of slot s's header heights (floor = lo + byte / 255 * (hi - lo)). */
@@ -720,6 +727,33 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
     slotY[2 * s] = lo - 0.25; slotY[2 * s + 1] = hi + 0.25;
   }
 
+  // Task studio-baked-lighting-reflections-20261114-050258-01: the ENHANCED bake's budget. The gather is physical: a white office
+  // floor sends back several times what a dark tunnel does, and stored as it is it would simply brighten every pale level (measured:
+  // + 49 % on an Office floor's ceilings). The game's light levels are the baseline's, where the bounced light of a level totals
+  // FieldParams.bounce x its direct light — so each level's (slot's) gathered light is scaled by ONE factor to total the same. What
+  // the gather decides is where that light goes and what colour it is, never how much there is.
+  /** What voxel k of a column with L layers stores of its gathered light (first-moment height vy, mean luminance ml > 0), as a factor of the mean. */
+  const layerShare = (L: number, k: number, vy: number, ml: number): number => {
+    if (L < 2 || (k > 0 && k < L - 1)) return 1;
+    const fy = 1 + (k === 0 ? 2 : -2) * vy / ml;
+    return fy < 0 ? 0 : fy > 3 ? 3 : fy;
+  };
+  const indScale: number[] = [];
+  if (ind) for (let s = 0; s < S; s++) {
+    const open = geos[s].open, L = LS[s], ELs = EL[s], ix = ind.index[s], id = ind.data;
+    let direct = 0, gathered = 0;
+    for (let i = 0; i < n; i++) {
+      if (!open[i]) continue;
+      for (let k = 0; k < L; k++) {
+        direct += ELs[i * L + k];
+        const q = ix[i * L + k] * 9, ml = lum(id[q], id[q + 1], id[q + 2]);
+        if (ml > 0) gathered += ml * layerShare(L, k, id[q + 4], ml);
+      }
+    }
+    indScale.push(gathered > 0 && direct > 0 ? Math.min(INDIRECT_SCALE_RANGE[1], Math.max(INDIRECT_SCALE_RANGE[0], p.bounce * direct / gathered)) : 1);
+    yield;
+  }
+
   yield 'field.encode';
   // --- Encode --------------------------------------------------------------------------------
   const enc = (v: number) => Math.round(Math.sqrt(Math.min(1, Math.max(0, v / FIELD_EMAX))) * 255);
@@ -737,14 +771,11 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
     // much each LAYER stores: the bottom layer is what floors read and the top layer what ceilings read, so each holds what that
     // surface gets — the mean plus (minus) twice the first moment's height part, never below nothing or above three times the
     // mean. A floor is not lit by its own bounce; a ceiling gets the floor's in full. The layers between hold the mean.
-    // The flicker shares count the indirect light's own circuits.
+    // All of it times the level's one scale (indScale above). The flicker shares count the indirect light's own circuits.
     const ix = ind ? ind.index[s] : null, id = ind ? ind.data : null, cohK = new Float32Array(LAYERS);
-    /** What voxel k (row q, mean luminance ml > 0) stores of the gathered light, as a factor of its mean. */
-    const indK = (k: number, q: number, ml: number): number => {
-      if (L < 2 || (k > 0 && k < L - 1)) return 1;
-      const fy = 1 + (k === 0 ? 2 : -2) * id![q + 4] / ml;
-      return fy < 0 ? 0 : fy > 3 ? 3 : fy;
-    };
+    /** What voxel k (row q, mean luminance ml > 0) stores of the gathered light, as a factor of its mean (the level's scale in). */
+    const scale = ind ? indScale[s] : 1;
+    const indK = (k: number, q: number, ml: number): number => layerShare(L, k, id![q + 4], ml) * scale;
     const encodeRowEnhanced = (cy: number): void => { for (let cx = 0; cx < W; cx++) {
       const i = cy * W + cx;
       let hi = i;
@@ -832,7 +863,7 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
   return {
     w: W, h: H, layers: LAYERS, depth, slots: S, data, yMin, yMax, groups, hdr, slotY, masks,
     stats: {ms: performance.now() - t0, bytes: data.byteLength, fixtures: src.lights.length, working, steady, circuits, rays, crossRays, slots: S,
-      bands: maxBands, extCols, cut, crossCulled, ...(extra ? {extra} : {}), ...(ind ? {indirect: ind.stats} : {})},
+      bands: maxBands, extCols, cut, crossCulled, ...(extra ? {extra} : {}), ...(ind ? {indirect: ind.stats, indirectScale: indScale} : {})},
   };
 }
 

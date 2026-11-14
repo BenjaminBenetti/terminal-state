@@ -31,9 +31,14 @@ What that changes in the picture:
 - **Material colour.** A surface sends back its own colour: `world/surfaceAlbedo.ts` reads what the builder really
   drew (`BuiltWorld.drawn`: every floor / ceiling rect and wall face with its finish), so a red quarry-tile floor
   warms the wall above it and a dark tunnel returns little.
-- **No extra flat ambient.** The gather returns only what the surfaces send back (gain 1). Measured on a generated
-  Subway station (seed 93, the finishes the builder drew): directly lit floors get 0.99x the baseline's light,
-  ceilings 1.09x, walls 0.98x to 1.05x. The light is redistributed, not added.
+- **No extra flat ambient: the amount of bounced light is the baseline's.** The gather itself is physical, and a pale
+  Office floor sends back several times what a dark tunnel does; stored as it is, it simply brightened every pale
+  level (measured: +49 % on an Office floor's ceilings). So each level's gathered light is scaled by one factor to
+  total what the baseline's fill totals there: `FieldParams.bounce` x the level's direct light. The gather decides
+  where that light goes and what colour it is, never how much there is. Measured with the finishes the builder drew
+  (seed 93, directly lit surfaces of the main level, against the baseline): Subway floors 0.97x, ceilings 1.04x,
+  walls 0.93x to 1.01x; Office floors 0.97x, ceilings 1.06x, walls 1.03x to 1.09x; Mall floors 0.97x, ceilings
+  1.10x, walls 1.10x, and its dim areas 0.65x to 0.93x.
 - **Flicker circuits.** Each of the three circuits keeps its share of the bounce: when a circuit is off, its
   bounced light is off with it.
 
@@ -46,6 +51,7 @@ How the field stores it (`lightField.ts` `encodeRowEnhanced`):
   layer what ceilings read, so each stores what that surface receives: the mean plus (minus) twice the moment's
   height part. A floor is not lit by its own bounce; the ceiling above a lit floor gets that floor's bounce and its
   colour. The layers between store the mean.
+- The level's scale (above) multiplies all of it; `BakedField.stats.indirectScale` reports it per level.
 
 Nothing movable is in the ray scene: no prop, door leaf, character or train. A cell that holds a sight-blocking prop
 is open space to the gather. So nothing that can move, break or leave is frozen into the bounced light.

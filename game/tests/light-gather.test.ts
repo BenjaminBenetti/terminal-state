@@ -4,8 +4,9 @@
 // - bounced light is OCCLUDED by the architecture: nothing behind a sealed wall, less the further round a corner, and an alcove
 //   that hides from every lit surface is darker than the open floor next to it — where the baseline's fill spreads one area's mean
 //   everywhere in it;
-// - bounced light takes the COLOUR of what it left (a red floor reddens the unlit ceiling), and no more energy than the surfaces
-//   send back (a black room bounces nothing; a generated station's mean light stays what it was: no extra flat ambient);
+// - bounced light takes the COLOUR of what it left (a red floor reddens the unlit ceiling); a black room bounces nothing;
+// - the AMOUNT is the baseline's: each level's bounced light totals FieldParams.bounce x its direct light whatever its finishes
+//   (a pale room is not simply brighter; a generated station's mean light stays what it was: no extra flat ambient);
 // - a floor is not lit by its own bounce and the ceiling above it gets it (the field's bottom / top layers store what those surfaces
 //   receive), while the field's one direction stays the direct light's, byte for byte (no bounce-steered veins on ceilings);
 // - the three flicker circuits keep their share of the bounce (a circuit that is off takes its bounce with it);
@@ -16,7 +17,7 @@ import {FLOOR, Grid, SOLID} from '../src/gen/grid';
 import {generateStation, type StationLayout} from '../src/gen/station';
 import {stationLevels} from '../src/world/levelGeometry';
 import {GI_TIERS, type GiTier} from '../src/world/enhancedLighting';
-import {bakeLightField, bakeLightFieldSteps, fixtureGroup, sampleField, slotBase, slotLayers, type BakedField, type FieldSource} from '../src/world/lightField';
+import {DEFAULT_FIELD, INDIRECT_SCALE_RANGE, bakeLightField, bakeLightFieldSteps, fixtureGroup, sampleField, slotBase, slotLayers, type BakedField, type FieldSource} from '../src/world/lightField';
 import {GATHER_GAIN, GATHER_REACH, IND_STRIDE, gatherIndirectSteps, indirectIndex, type IndirectContext, type IndirectLight} from '../src/world/lightFieldGather';
 import {BandScene, HIT_CEIL, HIT_FLOOR, HIT_WALL, sphereDirections} from '../src/world/lightScene';
 import {ALBEDO_STRIDE, ALB_CEIL, ALB_FLOOR, ALB_WALL, surfaceAlbedo, type DrawnSurfaces, type SurfaceAlbedo} from '../src/world/surfaceAlbedo';
@@ -197,8 +198,8 @@ describe('material colour and energy', () => {
     for (const [x, z] of [[7.5, 6], [10, 8], [4, 3]] as const) {
       const f0 = irr(black.field, x, 0.02, z), f1 = irr(lit.field, x, 0.02, z);
       const c0 = irr(black.field, x, 4.38, z, [0, -1, 0]), c1 = irr(lit.field, x, 4.38, z, [0, -1, 0]);
-      const mid = gathered(lit, x, 2.2, z);
-      rows.push(`(${x}, ${z}) floor ${f0.toFixed(3)} -> ${f1.toFixed(3)}, ceiling ${c0.toFixed(3)} -> ${c1.toFixed(3)}, gathered mean at mid height ${mid.toFixed(3)}`);
+      const mid = gathered(lit, x, 2.2, z) * lit.field.stats.indirectScale![0];
+      rows.push(`(${x}, ${z}) floor ${f0.toFixed(3)} -> ${f1.toFixed(3)}, ceiling ${c0.toFixed(3)} -> ${c1.toFixed(3)}, stored mean at mid height ${mid.toFixed(3)}`);
       // the floor: the direct light, and next to nothing of its own bounce (the sphere mean alone would add about a third of it)
       expect(f1).toBeGreaterThanOrEqual(f0 * 0.999);
       expect(f1).toBeLessThan(f0 * 1.1);
@@ -237,6 +238,41 @@ describe('material colour and energy', () => {
     expect(corner(dim.field)).toBeLessThan(corner(bright.field));
   });
 
+  it('a level\'s bounced light totals `bounce` x its direct light whatever its finishes: a pale room is not simply brighter than a dark one', () => {
+    const all = (v: number) => (a: SurfaceAlbedo) => { for (const o of [ALB_FLOOR, ALB_WALL, ALB_CEIL]) fillAlbedo(a, o, [v, v, v]); };
+    const dim = enhanced(room(), GI_TIERS.standard, all(0.2)), bright = enhanced(room(), GI_TIERS.standard, all(0.7));
+    // the gather itself is physical: the pale room sends back several times as much
+    expect(bright.ind.stats.mean).toBeGreaterThan(dim.ind.stats.mean * 3.5);
+    // what the field stores of it (the layer shares x the level's scale), summed over the level's voxels, against the budget
+    const stored = (e: Enhanced) => {
+      const L = e.ctx.layers[0], ix = e.ind.index[0], d = e.ind.data, EL = e.ctx.EL[0], k = e.field.stats.indirectScale![0];
+      let direct = 0, got = 0;
+      for (let v = 0; v < ix.length; v++) {
+        if (ix[v] < 0) continue;
+        direct += EL[v];
+        const q = ix[v] * IND_STRIDE, ml = lum([d[q], d[q + 1], d[q + 2]]), layer = v % L;
+        if (ml > 0) got += ml * (layer === 0 ? Math.min(3, Math.max(0, 1 + 2 * d[q + 4] / ml)) : layer === L - 1 ? Math.min(3, Math.max(0, 1 - 2 * d[q + 4] / ml)) : 1) * k;
+      }
+      return {direct, got, k};
+    };
+    const sd = stored(dim), sb = stored(bright);
+    console.log(`bounce budget: dim room scale ${sd.k.toFixed(3)}, pale room scale ${sb.k.toFixed(3)}; stored / (bounce x direct) = ${(sd.got / (DEFAULT_FIELD.bounce * sd.direct)).toFixed(4)}, ${(sb.got / (DEFAULT_FIELD.bounce * sb.direct)).toFixed(4)}`);
+    for (const x of [sd, sb]) {
+      expect(x.k).toBeGreaterThan(INDIRECT_SCALE_RANGE[0]);
+      expect(x.k).toBeLessThan(INDIRECT_SCALE_RANGE[1]);
+      expect(x.got / (DEFAULT_FIELD.bounce * x.direct)).toBeCloseTo(1, 5);
+    }
+    expect(sb.k).toBeLessThan(sd.k / 3.5);
+    // so the two fields hold the same amount of light at mid height, within a few percent (where it lands differs)
+    const mean = (f: BakedField) => { let t = 0, c = 0; for (let z = 1; z < 11; z += 0.5) for (let x = 1; x < 14; x += 0.5) { const sm = sampleField(f, x, 2.2, z); t += lum(sm.amb) + lum(sm.dirColor); c++; } return t / c; };
+    expect(mean(bright.field) / mean(dim.field)).toBeGreaterThan(0.93);
+    expect(mean(bright.field) / mean(dim.field)).toBeLessThan(1.07);
+    // a black world has nothing to scale; the baseline has no scale at all
+    const black = enhanced(room(), GI_TIERS.standard, all(0));
+    expect(black.field.stats.indirectScale).toEqual([1]);
+    expect(bakeLightField(room()).stats.indirectScale).toBeUndefined();
+  });
+
   it('a generated station keeps its overall light: the bounce is redistributed by the architecture, not added as flat ambient', () => {
     const l = generateStation(11), s = src(l);
     const base = bakeLightField(s), e = enhanced(s);
@@ -253,8 +289,9 @@ describe('material colour and energy', () => {
     };
     const mb = mean(base), me = mean(e.field);
     console.log(`station 11 mean light at 1.2 m: baseline ${mb.toFixed(4)}, enhanced ${me.toFixed(4)} (${(me / mb).toFixed(3)}x); gather ${JSON.stringify(e.ind.stats)}`);
-    expect(me / mb).toBeGreaterThan(0.8);
-    expect(me / mb).toBeLessThan(1.15);
+    expect(me / mb).toBeGreaterThan(0.9);
+    expect(me / mb).toBeLessThan(1.1);
+    expect(e.field.stats.indirectScale).toHaveLength(e.field.slots);
     expect(same(e.field.data, base.data)).toBe(false);
     // same format: dimensions, slots, header layout
     expect([e.field.w, e.field.h, e.field.depth, e.field.slots, e.field.layers]).toEqual([base.w, base.h, base.depth, base.slots, base.layers]);
