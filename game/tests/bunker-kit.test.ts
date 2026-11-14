@@ -71,7 +71,7 @@ describe('bunker kit: the model-backed flavour kinds', () => {
     // the reused Reactor models load on the Bunker too (the reactor-* rule's also: ['bunker'])
     for (const k of BUNKER_MODEL_KINDS) expect(assetAllowedIn('bunker', BUNKER_MODEL_OF[k].url), k).toBe(true);
     const game = fs.readFileSync(path.join(GAME, 'src/game.ts'), 'utf8');
-    expect(game).toMatch(/\.\.\.BUNKER_KIT_MODEL_FILES\}/);
+    expect(game).toMatch(/\.\.\.BUNKER_KIT_MODEL_FILES[,}]/); // (corpse market shop: later kits may follow it in the same spread list)
     expect(game).toMatch(/sectionModelKeys[^\n]*bunkerModelKindKeysFor/);
   });
 

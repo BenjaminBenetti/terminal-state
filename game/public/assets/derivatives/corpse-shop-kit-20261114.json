@@ -1,0 +1,301 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "corpse-shop-kit-20261114",
+ "task": "studio-corpse-market-shop-20261114-031614-01",
+ "lane": "ASSET (cook); the task generated the models under its scoped credit grant",
+ "status": "runtime derivatives of NEW Survivor Market corpse-den models generated for this project with Meshy T2.5 (smart topology, image-to-3D) through the Meshy MCP from Codex initial reference images; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "rebuild": "node tools/asset-pipeline/props/build-corpse-shop-kit.mjs",
+ "rawStorage": "the task folder outside Git: gen/raw/<ID>-<reservation>-<Meshy task>.glb (+ _textures/), gen/out/<ID>-a1.png (Codex), finance/ledger.jsonl, gen/codex/codex.jsonl",
+ "texturePolicy": "Meshy maps kept channel for channel (the master's own base colour / packed metallic-roughness / normal; resized / re-encoded JPEG only); no reprojection / retexture / repaint",
+ "levelOnly": "market (game/src/assets/levelAssets.ts LEVEL_ONLY_RULES market-*)",
+ "models": [
+  {
+   "key": "market-corpse-chute",
+   "url": "assets/models/market-corpse-chute.glb",
+   "bytes": 567784,
+   "sha256": "19dfe78d80334400c032df6fdbabb3efda8a5b4bb7900d1a25b849d8327a9b74",
+   "tris": 7863,
+   "dims": [
+    1,
+    1.2114,
+    1.1723
+   ],
+   "rimY": 0.5697,
+   "what": "the corpse buyer's floor body chute: a square welded steel hopper (riveted sloping walls, a rolled rim lip with a hazard band, a dark shaft below the throat), its strap-hinged lid standing open along the back edge; bolted down at the four corners",
+   "measured": {
+    "rimTopPlateauY": 0.5661,
+    "rimTopPlateauAreaM2": 0.2649,
+    "rimSpanXZ": [
+     0.9293,
+     0.9783
+    ],
+    "hopperX": [
+     -0.474,
+     0.4709
+    ],
+    "hopperZ": [
+     -0.3921,
+     0.5608
+    ],
+    "hopperCentreXZ": [
+     -0.0015,
+     0.0843
+    ],
+    "throatX": [
+     -0.1815,
+     0.1885
+    ],
+    "throatZ": [
+     -0.1857,
+     0.3743
+    ],
+    "throatY": 0,
+    "throatNote": "the throat is OPEN geometry (no shaft floor is modelled): straight down through it the floor under the chute shows",
+    "method": "rimY = highest vertex of the front half (z > 0); rimTopPlateauY = broadest up-facing horizontal plateau (normal y > 0.9) between 0.3 and 0.75 of the height (cross-check); rimSpanXZ = geometry extent in the 4 cm band under the rim top; hopper = geometry extent between 5 cm and 5 cm under the rim; throat = the open rectangle of a 1 cm top-down coverage map grown from the hopper centre, throatY = the lowest geometry within 3 cm outside it"
+   },
+   "transform": {
+    "frame": "Meshy native (front +Z), +Y up",
+    "uniformScale": 1.269683,
+    "sizing": {
+     "by": "width",
+     "m": 1
+    },
+    "rawExtent": [
+     0.7876,
+     0.9541,
+     0.9233
+    ],
+    "grounded": "min y = 0",
+    "centred": "x / z bounding-box centre at 0",
+    "simplification": "none"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 204737
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 62691
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 22844
+    }
+   ],
+   "texturePolicy": {
+    "baseColor": 1024,
+    "metallicRoughness": 512,
+    "normal": 512,
+    "encoding": "JPEG (base / metallicRoughness q86, normal q90)"
+   },
+   "generation": {
+    "asset": "CORPSE_CHUTE",
+    "reservation": "R002",
+    "meshyTask": "01a1d826-0dcd-7428-8cc9-24b345c650fd",
+    "tool": "mcp__meshy__meshy_image_to_3d",
+    "request": {
+     "ai_model": "meshy-t2.5",
+     "enable_pbr": true,
+     "model_type": "smart-topology",
+     "should_texture": true,
+     "target_formats": [
+      "glb"
+     ],
+     "target_polycount": 8000,
+     "texture_resolution": "2k"
+    },
+    "creditsBilled": 15,
+    "accepted": "square riveted steel floor hopper with open upright lid, hollow sloped interior, hazard band rim; rim ~0.54 m at 1.15 m overall fit",
+    "codexInput": {
+     "file": "reference/tasks/corpse-market-shop-20261114-031614/gen/out/CORPSE_CHUTE-a1.png",
+     "sha256": "dca8d344bda9b666c6a8cf810aaaff6b5194f4d22ce693345811862fea0f8bcb",
+     "bytes": 2077491,
+     "size": "1217x1292",
+     "attempt": 1
+    },
+    "master": {
+     "file": "reference/tasks/corpse-market-shop-20261114-031614/gen/raw/CORPSE_CHUTE-R002-01a1d826-0dcd-7428-8cc9-24b345c650fd.glb",
+     "sha256": "0b0458c3241547fe380adba0cc38fc213c297b9b14c814096b9cd5636552b3f8",
+     "bytes": 7502480
+    },
+    "providerMaps": {
+     "dir": "reference/tasks/corpse-market-shop-20261114-031614/gen/raw/CORPSE_CHUTE-R002-01a1d826-0dcd-7428-8cc9-24b345c650fd_textures",
+     "files": {
+      "base_color.png": {
+       "bytes": 5038398,
+       "sha256": "6238324fe66f4543795e65c0a093ad5c746f4d71ad60fe945ff42ad43c020821"
+      },
+      "metallic.png": {
+       "bytes": 918592,
+       "sha256": "521ce2fe82451b1dc9a5bee428161a3085a4ff95a9efd8b4fdebf8256cb1bfd6"
+      },
+      "normal.png": {
+       "bytes": 4461690,
+       "sha256": "c7aef099c2d48c4d1532c99b0ea05dcf72f8cead2bb547f7d18c1f7b7a6bb76d"
+      },
+      "roughness.png": {
+       "bytes": 1469306,
+       "sha256": "5c5aa6860674cb0b9697e84e941133068081b75fca569f6d3dc78477ab2fecfa"
+      }
+     }
+    }
+   }
+  },
+  {
+   "key": "market-corpse-booth",
+   "url": "assets/models/market-corpse-booth.glb",
+   "bytes": 1190820,
+   "sha256": "0ac8a72a60f46d3403e6374d8c2b63c0d0fa6273aa5a8fa0d14ff2d67bf6e946",
+   "tris": 7529,
+   "dims": [
+    2.3,
+    2.3347,
+    0.2832
+   ],
+   "counterY": 0.8962,
+   "counterZ": 0.1416,
+   "what": "the corpse buyer's barred booth front: a welded steel screen of thick square bars with open gaps over a steel counter on a riveted plate, side posts, a header beam with a caged red work lamp",
+   "measured": {
+    "counterTopAreaM2": 0.2941,
+    "counterTopX": [
+     -1.0601,
+     1.0543
+    ],
+    "counterTopZ": [
+     0.0001,
+     0.1319
+    ],
+    "counterBandX": [
+     -1.0604,
+     1.0604
+    ],
+    "counterFrontEdgeY": 0.8825,
+    "counterBarLineY": 0.9096,
+    "counterSlopeDeg": 13.6,
+    "method": "counterY = the customer side's counter top: median height of a 1 cm top-down height map of the up-facing horizontal faces (normal y > 0.9; the highest face per cell) between 0.25 and 0.6 of the height, in front of the model centre (z > 0), cells within 4 cm of the 1 cm peak bin; counterFrontEdgeY / counterBarLineY = the same at its frontmost / rearmost 2 cm (the reconstructed slab slopes down toward the customer); counterZ = farthest +z of the geometry from 8 cm under to 1 cm over the top (the slab's front edge)"
+   },
+   "transform": {
+    "frame": "Meshy native (front +Z), +Y up",
+    "uniformScale": 2.446962,
+    "sizing": {
+     "by": "counter",
+     "m": 0.9,
+     "maxW": 2.3,
+     "maxD": 0.5,
+     "minCounter": 0.89
+    },
+    "rawExtent": [
+     0.9399,
+     0.9541,
+     0.1157
+    ],
+    "grounded": "min y = 0",
+    "centred": "x / z bounding-box centre at 0",
+    "simplification": "none"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      2048,
+      2048
+     ],
+     "mime": "image/jpeg",
+     "bytes": 721170
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 70022
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 146552
+    }
+   ],
+   "texturePolicy": {
+    "baseColor": 2048,
+    "metallicRoughness": 512,
+    "normal": 1024,
+    "encoding": "JPEG (base / metallicRoughness q86, normal q90)"
+   },
+   "generation": {
+    "asset": "CORPSE_BOOTH",
+    "reservation": "R003",
+    "meshyTask": "01a1d826-3014-7351-9515-7449b2050d0e",
+    "tool": "mcp__meshy__meshy_image_to_3d",
+    "request": {
+     "ai_model": "meshy-t2.5",
+     "enable_pbr": true,
+     "model_type": "smart-topology",
+     "should_texture": true,
+     "target_formats": [
+      "glb"
+     ],
+     "target_polycount": 8000,
+     "texture_resolution": "2k"
+    },
+    "creditsBilled": 15,
+    "accepted": "barred booth front: counter top ~0.85 m, four thick bars with OPEN gaps, header with caged red lamp; thin panel depth",
+    "codexInput": {
+     "file": "reference/tasks/corpse-market-shop-20261114-031614/gen/out/CORPSE_BOOTH-a1.png",
+     "sha256": "b0fd0291fe7b656295bd1ab9befe64aef971a3ec85bd4caf0a6f1862f7e33186",
+     "bytes": 2321576,
+     "size": "1312x1199",
+     "attempt": 1
+    },
+    "master": {
+     "file": "reference/tasks/corpse-market-shop-20261114-031614/gen/raw/CORPSE_BOOTH-R003-01a1d826-3014-7351-9515-7449b2050d0e.glb",
+     "sha256": "cff87e745d5461a5d62297b20b95f1b5c2462e93faef46737ab3b7cda4a712e0",
+     "bytes": 7062952
+    },
+    "providerMaps": {
+     "dir": "reference/tasks/corpse-market-shop-20261114-031614/gen/raw/CORPSE_BOOTH-R003-01a1d826-3014-7351-9515-7449b2050d0e_textures",
+     "files": {
+      "base_color.png": {
+       "bytes": 4806739,
+       "sha256": "2c5a1c9fedb0c62eb4e14cf58d60d009400a76068c0447be21247b8336915ead"
+      },
+      "metallic.png": {
+       "bytes": 1171337,
+       "sha256": "eda89e301571dbb315d1f597653fb5626265479c36a9f53011755a264d4f42d7"
+      },
+      "normal.png": {
+       "bytes": 4193829,
+       "sha256": "3aa037cf28bb5d3426545ac38b9602204a06ced3a6ae61b24000698127ca00c3"
+      },
+      "roughness.png": {
+       "bytes": 1347239,
+       "sha256": "da0f3c4b1bbbc50af49d8026416c07f3291e8d2a02a99f61ab63c3225ea81318"
+      }
+     }
+    }
+   }
+  }
+ ]
+}

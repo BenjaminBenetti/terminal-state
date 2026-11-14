@@ -160,6 +160,23 @@ placement goes through the shared primitive (door clear volumes, access / swing 
   (bench top 0.90 m), gun rack 2.00 × 1.48 × 0.31 m — all grounded.
 - The ceiling fans and stall awnings are not props: visual-only dressing above every head (`gen/market/art.ts`, `world/marketVisuals.ts`).
 
+#### The corpse buyer's den (task studio-corpse-market-shop-20261114-031614-01)
+`gen/market/v4/denKinds.ts`. Two NEW model-backed kinds drawn through the builder's generic instanced model path (`world/builder.ts`
+`MODEL_FOR` → the lazy library key; a non-uniform fit to the PropDef box, which is each model's own real size, so the scale is 1). Models
+(`assets/corpseShopKit.generated.ts`, `tools/asset-pipeline/props/build-corpse-shop-kit.mjs`): Meshy T2.5 from Codex initial references,
+Meshy maps kept, one uniform scale, level-only `market-*`. Nothing loose is part of either; neither is storage.
+
+| Kind | Model | Openables audit | Physics audit | Scale check (`--kind` beside `lastshift`) |
+|---|---|---|---|---|
+| `corpseChute` | `CORPSE_SHOP_KIT.chute`: a square welded steel floor hopper, its strap-hinged lid standing open along the back edge | `none` (`equipment`: a disposal chute over a shaft, nothing stored) | static `anchored` (bolted down at its four corners) | 1.00 × 1.21 × 1.17 m (the depth includes the open lid's lean); grounded on its four corner foot plates (contact span 1.0 × 1.0 m); hopper rim 0.57 m (above the knee), the hopper sits 8 cm forward of the box centre; its throat (about 0.37 × 0.56 m) is open at floor level: no shaft floor is modelled |
+| `corpseBooth` | `CORPSE_SHOP_KIT.booth`: a barred steel screen (open gaps) over a counter on a riveted plate, side posts, a header with a caged red lamp | `none` (`equipment`: no door, lid or drawer) | static `built-in` (welded into the den's wall opening) | 2.30 × 2.33 × 0.28 m; grounded on its two side posts' foot plates (contact span 2.29 × 0.15 m), the plate's bottom rail along the floor; counter top 0.90 m (its customer side slopes from 0.91 m at the bar line to 0.88 m at the front edge, 0.14 m in front of the centre); header 2.30 m. The 2.3 m width caps the scale (at exactly 0.90 m the screen would be 2.31 m wide) |
+
+- The corpse buyer himself is an actor, not a prop: one clothed Meshy T2.5 body rigged locally in the market humans' cast layout
+  (`assets/models/market-corpse-buyer.glb`, `assets/corpseBuyer.generated.ts`; `tools/asset-pipeline/humans/build-corpse-buyer.mjs`),
+  1.85 m tall, grounded in every clip; viewed beside the runtime zombie (`scale-check.mjs --prop`) and on the humans QA sheets.
+- Scale-check renders (2026-11-14) are in the task's private QA folder (`qa/scale/corpse-chute.png`, `corpse-booth.png`,
+  `corpse-buyer.png`, `corpse-den-all.png`).
+
 ## 3. Movable things move
 Standing user rule (2026-10-30): **every physics object reacts to the player walking into it — no shot needed first** (task
 office-props-physics-scale-20261030, lane PHYS; `tests/contact-physics.test.ts`).
