@@ -24,9 +24,17 @@
 // ordinary slots. A record written before that still carries `ammo` (and no `slots`): it stays VALID for good, and its rounds become
 // real stacks in the live unit's slots, uids from the live inventory, the first time the unit stands in a played world (world/
 // trainEquipment.ts adoptLegacyAmmo) — every round, none twice. Until then a save writes the count back as it was.
+//
+// Task studio-scanner-console-refinements-20261114-031614-01 (user: "Handle old scanner records safely with an All default; persist the
+// selected mode appropriately"): a kind may have DISPLAY MODES (EquipmentDef.displayModes — the item scanner's: craft/scanner.ts
+// SCAN_MODES; every other kind none). The unit's selected one is its record's `display`, written ONLY when it is not the kind's first
+// (default) mode: a record without it — every record written before the modes, and every unit still on its default — loads with the
+// default (ALL), and those records stay byte-for-byte what they were. A `display` the kind does not have is malformed, like any other
+// bad field.
 
 import type {StackJSON} from '../items/inventory';
 import {LOCKBOX_SLOTS} from '../run/trainLockbox';
+import {SCAN_MODES} from './scanner';
 
 export const EQUIPMENT_KINDS = ['chest', 'radar', 'sentry', 'scanner'] as const;
 export type EquipmentKind = (typeof EQUIPMENT_KINDS)[number];
@@ -56,6 +64,11 @@ export interface EquipmentDef {
    * Only the validators and the one-time adoption of those rounds read it.
    */
   readonly legacyAmmoCap: number;
+  /**
+   * The modes its display can be switched between, the first the default (empty: none) — the scanner's resource filters. A record holds
+   * the selected one as `display` only when it is not the first.
+   */
+  readonly displayModes: readonly string[];
   /** Mass (kg, empty), footprint radius (m) and clear height (m) of its kinematic body. */
   readonly kg: number;
   readonly radius: number;
@@ -69,10 +82,10 @@ export const SENTRY_FEED_SLOTS = 4;
 const DOLLY_RADIUS = 0.36, DOLLY_HEIGHT = 1.25;
 
 export const EQUIPMENT: Readonly<Record<EquipmentKind, EquipmentDef>> = Object.freeze({
-  chest: Object.freeze({kind: 'chest', name: 'Storage chest', the: 'the storage chest', move: 'carry', plug: false, slots: LOCKBOX_SLOTS, slotItem: null, legacyAmmoCap: 0, kg: 45, radius: 0.4, height: 0.5}),
-  radar: Object.freeze({kind: 'radar', name: 'Route radar', the: 'the route radar', move: 'dolly', plug: true, slots: 0, slotItem: null, legacyAmmoCap: 0, kg: 58, radius: DOLLY_RADIUS, height: DOLLY_HEIGHT}),
-  sentry: Object.freeze({kind: 'sentry', name: 'Defense sentry', the: 'the defense sentry', move: 'dolly', plug: true, slots: SENTRY_FEED_SLOTS, slotItem: 'ammo_556', legacyAmmoCap: 300, kg: 92, radius: DOLLY_RADIUS, height: DOLLY_HEIGHT}),
-  scanner: Object.freeze({kind: 'scanner', name: 'Item scanner', the: 'the item scanner', move: 'dolly', plug: true, slots: 0, slotItem: null, legacyAmmoCap: 0, kg: 74, radius: DOLLY_RADIUS, height: DOLLY_HEIGHT}),
+  chest: Object.freeze({kind: 'chest', name: 'Storage chest', the: 'the storage chest', move: 'carry', plug: false, slots: LOCKBOX_SLOTS, slotItem: null, legacyAmmoCap: 0, displayModes: [], kg: 45, radius: 0.4, height: 0.5}),
+  radar: Object.freeze({kind: 'radar', name: 'Route radar', the: 'the route radar', move: 'dolly', plug: true, slots: 0, slotItem: null, legacyAmmoCap: 0, displayModes: [], kg: 58, radius: DOLLY_RADIUS, height: DOLLY_HEIGHT}),
+  sentry: Object.freeze({kind: 'sentry', name: 'Defense sentry', the: 'the defense sentry', move: 'dolly', plug: true, slots: SENTRY_FEED_SLOTS, slotItem: 'ammo_556', legacyAmmoCap: 300, displayModes: [], kg: 92, radius: DOLLY_RADIUS, height: DOLLY_HEIGHT}),
+  scanner: Object.freeze({kind: 'scanner', name: 'Item scanner', the: 'the item scanner', move: 'dolly', plug: true, slots: 0, slotItem: null, legacyAmmoCap: 0, displayModes: SCAN_MODES, kg: 74, radius: DOLLY_RADIUS, height: DOLLY_HEIGHT}),
 } as const);
 
 export const isEquipmentKind = (k: unknown): k is EquipmentKind => typeof k === 'string' && (EQUIPMENT_KINDS as readonly string[]).includes(k);
@@ -104,6 +117,8 @@ export interface EquipmentJSON {
    * Such a record may have no `slots`. Never written for a unit whose rounds are all in its slots.
    */
   ammo?: number;
+  /** Kinds with def.displayModes: the selected mode when it is not the first (absent: the first — ALL for the scanner). */
+  display?: string;
 }
 
 export interface TrainEquipmentJSON { v: 1; seq: number; aboard: EquipmentJSON[] }
@@ -124,7 +139,8 @@ export function equipmentProblem(r: unknown, station: boolean): string | null {
   const o = r as Record<string, unknown>;
   if (!isEquipmentKind(o.kind)) return `unknown equipment kind '${String(o.kind).slice(0, 24)}'`;
   const def = EQUIPMENT[o.kind];
-  const keys = ['uid', 'kind', 'x', 'y', 'z', 'yaw', ...(station ? ['level'] : def.plug ? ['plug'] : []), ...(def.slots ? ['slots'] : []), ...(def.legacyAmmoCap ? ['ammo'] : [])];
+  const keys = ['uid', 'kind', 'x', 'y', 'z', 'yaw', ...(station ? ['level'] : def.plug ? ['plug'] : []), ...(def.slots ? ['slots'] : []), ...(def.legacyAmmoCap ? ['ammo'] : []),
+    ...(def.displayModes.length ? ['display'] : [])];
   for (const k of Object.keys(o)) if (!keys.includes(k)) return `unexpected ${def.name.toLowerCase()} field '${k.slice(0, 24)}'`;
   if (typeof o.uid !== 'string' || !UID.test(o.uid)) return 'an equipment unit needs an id';
   const pos = station ? EQUIPMENT_LIMITS.world : EQUIPMENT_LIMITS.pos;
@@ -132,6 +148,7 @@ export function equipmentProblem(r: unknown, station: boolean): string | null {
   if (!finite(o.yaw, -1e6, 1e6)) return `${def.name.toLowerCase()} yaw out of range`;
   if (station && !(Number.isInteger(o.level) && (o.level as number) >= 0 && (o.level as number) < 64)) return `${def.name.toLowerCase()} level out of range`;
   if (o.plug !== undefined && !(Number.isInteger(o.plug) && (o.plug as number) >= 0 && (o.plug as number) < EQUIPMENT_LIMITS.plugs)) return `${def.name.toLowerCase()} plug out of range`;
+  if (o.display !== undefined && !(typeof o.display === 'string' && def.displayModes.includes(o.display))) return `${def.name.toLowerCase()} has no display mode '${String(o.display).slice(0, 24)}'`;
   if (o.ammo !== undefined) {
     if (!(Number.isInteger(o.ammo) && (o.ammo as number) >= 0 && (o.ammo as number) <= def.legacyAmmoCap)) return `${def.name.toLowerCase()} ammo ${String(o.ammo).slice(0, 16)} out of range (0 to ${def.legacyAmmoCap})`;
   }
@@ -194,7 +211,13 @@ export function copyEquipment(r: EquipmentJSON): EquipmentJSON {
   if (r.plug !== undefined) c.plug = r.plug;
   if (r.slots) c.slots = r.slots.map(s => (s ? JSON.parse(JSON.stringify(s)) as StackJSON : null));
   if (r.ammo !== undefined) c.ammo = r.ammo;
+  if (r.display !== undefined) c.display = r.display;
   return c;
+}
+
+/** A unit's display mode from its record's `display` (absent / not one of the kind's: the kind's first; '' for a kind without modes). */
+export function equipmentDisplay(def: EquipmentDef, v: unknown): string {
+  return typeof v === 'string' && def.displayModes.includes(v) ? v : def.displayModes[0] ?? '';
 }
 
 /** A fresh unit record of `kind` (crafted EMPTY: no stacks, no rounds, unplugged) at a pose. */

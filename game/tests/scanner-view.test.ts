@@ -1,20 +1,24 @@
 // Task studio-train-crafting-v1-20261111-225628-01 (lane SCANNER; user: "opens a black/green 360-degree radar around the train,
-// approximately 100m range … red enemies, green ordinary items, gold weapons/gear. No floorplan/map or continuous live tracking"): the
-// scanner's SCOPE (ui/scannerView.ts) —
+// approximately 100m range … No floorplan/map or continuous live tracking") and task studio-scanner-console-refinements-20261114-031614-01
+// (user: "Every mode shows ONLY GREEN dots, including weapons/equipment; no red/gold categories. Provide a clear mode label and
+// straightforward cycling control in the existing scanner UI"): the scanner's SCOPE (ui/scannerView.ts) —
 //  - drawScanner on a RECORDING context: black glass, the four range rings, the FRONT tick, the train's glyph, the sweep hand (one turn a
-//    period, up at the sweep) with its trail, the legend / range / countdown copy, one mark per blip in its class's colour and shape at
-//    the right place (ahead of the car = up), dimming to 40 %; nothing else — no polyline, no outline, no text per blip: no map;
-//  - the same drawing RASTERISED (the canvas shim): the pixels at the blips are red / green / gold, the scope is black and green;
-//  - the DOM holder: one bounded canvas, redrawn only when what it shows changed; the stylesheet block (pointer-events none).
+//    period, up at the sweep) with its trail, the header (title, range, "MODE: …", "[X] NEXT MODE"), the mode strip (the cycle's order,
+//    the selected one lit and underlined), the countdown, one GREEN DOT per blip of the selected mode at the right place (ahead of the car
+//    = up), dimming to 40 %; nothing else — no polyline, no outline, no text per dot: no map;
+//  - the same drawing RASTERISED (the canvas shim): the dots are green, the whole canvas is black and green — no red, no gold anywhere;
+//  - the DOM holder: one bounded canvas, redrawn only when what it shows changed (a mode change too); the stylesheet block.
 // Node only.
 
 import {describe, expect, it} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
-import {SCANNER, blipBrightness, sweepAngle, type ScanBlip, type ScanClass, type ScanSnapshot} from '../src/craft/scanner';
+import {SCANNER, SCAN_MODES, blipBrightness, sweepAngle, type ScanBlip, type ScanMode} from '../src/craft/scanner';
 import {
-  SCAN_COLORS, SCOPE_COLORS, SCOPE_TEXT, ScannerScope, blipPoint, drawScanner, markSize, redrawStep, scopeGeometry, scopeSize, type ScannerModel, type ScopeEnv,
+  MODE_KEY_LABEL, SCAN_DOT, SCOPE_COLORS, SCOPE_TEXT, ScannerScope, blipPoint, drawScanner, markSize, redrawStep, scopeGeometry, scopeSize, type ScannerModel, type ScopeEnv,
 } from '../src/ui/scannerView';
+import * as viewModule from '../src/ui/scannerView';
+import {CONTROLS} from '../src/ui/hud';
 import {ShimCanvas} from './helpers/canvas2d';
 
 const TAU = Math.PI * 2;
@@ -58,24 +62,19 @@ class Rec {
 }
 
 const W = 720, H = 720, G = scopeGeometry(W, H);
-const snapOf = (o: Partial<Record<ScanClass, ScanBlip[]>>): ScanSnapshot => {
-  const enemy = o.enemy ?? [], item = o.item ?? [], gear = o.gear ?? [];
-  return {enemy, item, gear, seen: {enemy: enemy.length, item: item.length, gear: gear.length}, dropped: {enemy: 0, item: 0, gear: 0}};
-};
-const model = (o: Partial<ScannerModel> = {}): ScannerModel => ({active: true, snap: null, serial: 1, left: 20, ...o});
+const model = (o: Partial<ScannerModel> = {}): ScannerModel => ({active: true, mode: 'all', blips: null, serial: 1, left: 20, ...o});
 function draw(m: ScannerModel, w = W, h = H): Rec {
   const r = new Rec();
   drawScanner(r as unknown as CanvasRenderingContext2D, m, w, h);
   return r;
 }
 const rgb = (hex: string): [number, number, number] => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
-const isRed = (c: string) => { const [r, g, b] = rgb(c); return r > 200 && g < 130 && b < 130; };
 const isGreen = (c: string) => { const [r, g, b] = rgb(c); return g > 150 && r < g * 0.75 && b < g * 0.75; };
-const isGold = (c: string) => { const [r, g, b] = rgb(c); return r > 200 && g > 150 && g < r && b < 130; };
 /** Green-dominant at any brightness (the scope's dim furniture). */
 const greenish = (c: string) => { const [r, g, b] = rgb(c); return g > r * 1.3 && g > b * 1.3; };
+const MODE_NAMES = ['ALL', 'FOOD/WATER', 'AMMO', 'FUEL', 'WEAPON', 'EQUIPMENT', 'MATERIAL'];
 
-/** The marks in a recording: discs (one full arc filled), squares (fillRect, small), diamonds (4-point closed path filled). */
+/** The marks in a recording: discs (one full arc filled, small), squares (fillRect, small, square), diamonds (4-point closed path filled). */
 function marks(r: Rec): {shape: 'disc' | 'square' | 'diamond'; x: number; y: number; half: number; color: string; alpha: number}[] {
   const out: ReturnType<typeof marks> = [];
   for (const o of r.ops) {
@@ -89,12 +88,12 @@ function marks(r: Rec): {shape: 'disc' | 'square' | 'diamond'; x: number; y: num
   }
   return out;
 }
-/** Marks on the scope itself (the legend's samples sit below it). */
+/** Marks on the scope itself. */
 const blipsIn = (r: Rec) => marks(r).filter(m => Math.hypot(m.x - G.cx, m.y - G.cy) <= G.r * 1.01 && SCOPE_COLORS.train !== m.color);
 const texts = (r: Rec) => r.ops.filter((o): o is Extract<Op, {op: 'text'}> => o.op === 'text');
 const strokes = (r: Rec) => r.ops.filter((o): o is Extract<Op, {op: 'stroke'}> => o.op === 'stroke');
 
-describe('the scope: black glass, green rings, the legend and the copy', () => {
+describe('the scope: black glass, green rings, the mode label and strip, the copy', () => {
   const r = draw(model({left: 11.2}));
 
   it('starts by blacking out the whole canvas and leaves the context as it found it', () => {
@@ -123,33 +122,53 @@ describe('the scope: black glass, green rings, the legend and the copy', () => {
     expect(G.cx + G.r * 1.08).toBeLessThan(W);
   });
 
-  it('the copy: the title, the range, the ring distances, FRONT at the top, the legend in the class colours, the countdown', () => {
+  it('the copy: the title, the range, MODE: ALL and [X] NEXT MODE, the ring distances, FRONT at the top, the mode strip, the countdown — all green, no legend of classes', () => {
     const t = texts(r), by = new Map(t.map(o => [o.text, o]));
-    expect(t.map(o => o.text).sort()).toEqual(['100', '25', '50', '75', 'ENEMY', 'FIRST SWEEP PENDING', 'FRONT', 'ITEM', 'ITEM SCANNER', 'NEXT SWEEP IN 12 s', 'RANGE 100 m', 'WEAPON / GEAR']);
+    expect(t.map(o => o.text).sort()).toEqual(['100', '25', '50', '75', '[X] NEXT MODE', ...MODE_NAMES, 'FIRST SWEEP PENDING', 'FRONT', 'ITEM SCANNER', 'MODE: ALL', 'NEXT SWEEP IN 12 s', 'RANGE 100 m'].sort());
     expect(SCOPE_TEXT.range).toBe(`RANGE ${SCANNER.range} m`);
-    expect(isRed(by.get('ENEMY')!.color)).toBe(true);
-    expect(isGreen(by.get('ITEM')!.color)).toBe(true);
-    expect(isGold(by.get('WEAPON / GEAR')!.color)).toBe(true);
-    expect([by.get('ENEMY')!.color, by.get('ITEM')!.color, by.get('WEAPON / GEAR')!.color]).toEqual([SCAN_COLORS.enemy, SCAN_COLORS.item, SCAN_COLORS.gear]);
-    // the legend is one row under the scope, left to right, inside the canvas; each entry has its class's mark in front of it
-    const row = ['ENEMY', 'ITEM', 'WEAPON / GEAR'].map(k => by.get(k)!);
-    expect(new Set(row.map(o => o.y)).size).toBe(1);
-    expect(row[0].y).toBeGreaterThan(G.cy + G.r * 1.08);
-    expect(row.map(o => o.x)).toEqual([...row.map(o => o.x)].sort((a, b) => a - b));
-    const px = parseFloat(/(\d+)px/.exec(row[2].font)![1]);
-    expect(row[0].x).toBeGreaterThan(20);
-    expect(row[2].x + 'WEAPON / GEAR'.length * px * 0.6).toBeLessThan(W - 20);
-    const samples = marks(r).filter(m => Math.abs(m.y - row[0].y) < 1e-6);
-    expect(samples.map(m => [m.shape, m.color])).toEqual([['disc', SCAN_COLORS.enemy], ['square', SCAN_COLORS.item], ['diamond', SCAN_COLORS.gear]]);
-    samples.forEach((m, i) => { expect(m.x).toBeLessThan(row[i].x); expect(m.x).toBeGreaterThan(i ? row[i - 1].x : 0); });
-    // every other word is phosphor green; the fonts are monospace and readable
+    expect(MODE_KEY_LABEL).toBe('X');
+    expect(SCOPE_TEXT.cycle).toBe('[X] NEXT MODE');
+    // the game's Controls list (pause menu + the main menu's Controls view) names the same key
+    expect(CONTROLS.filter(([a, k]) => /scanner/i.test(a) && /mode/i.test(a) && k === MODE_KEY_LABEL)).toHaveLength(1);
+    for (const gone of ['ENEMY', 'ITEM', 'WEAPON / GEAR']) expect(by.has(gone)).toBe(false);
+    // every word is phosphor green; the fonts are monospace and readable
     for (const o of t) {
-      if (!['ENEMY', 'WEAPON / GEAR'].includes(o.text)) expect([o.text, isGreen(o.color)]).toEqual([o.text, true]);
+      expect([o.text, isGreen(o.color)]).toEqual([o.text, true]);
       expect(o.font).toMatch(/monospace/);
       expect(parseFloat(/(\d+)px/.exec(o.font)![1])).toBeGreaterThanOrEqual(12);
     }
     // FRONT sits above the outer ring: up on the scope is the car's front
     expect(by.get('FRONT')!.y).toBeLessThan(G.cy - G.r);
+    // the header: the mode label under the title (left), the key's hint under the range (right), both above the scope, inside the canvas
+    const title = by.get('ITEM SCANNER')!, label = by.get('MODE: ALL')!, hint = by.get('[X] NEXT MODE')!, range = by.get('RANGE 100 m')!;
+    expect(label.x).toBe(title.x);
+    expect(label.y).toBeGreaterThan(title.y);
+    expect([hint.x, hint.align, hint.y]).toEqual([range.x, 'right', label.y]);
+    expect(label.y).toBeLessThan(G.cy - G.r);
+    const lpx = parseFloat(/(\d+)px/.exec(label.font)![1]);
+    expect(label.x + 'MODE: EQUIPMENT'.length * lpx * 0.6).toBeLessThan(G.cx - Math.sqrt((G.r * 1.06) ** 2 - (G.cy - label.y) ** 2)); // clear of the glass
+    expect(label.color).toBe(SCOPE_COLORS.text); // the bright green
+  });
+
+  it('the mode strip: every mode in the cycle\'s order on one row under the scope, the selected one lit and underlined', () => {
+    for (const mode of SCAN_MODES) {
+      const d = draw(model({mode})), t = texts(d), name = MODE_NAMES[SCAN_MODES.indexOf(mode)];
+      const row = MODE_NAMES.map(k => t.find(o => o.text === k)!);
+      expect(new Set(row.map(o => o.y)).size).toBe(1);
+      expect(row[0].y).toBeGreaterThan(G.cy + G.r * 1.08);
+      expect(row.map(o => o.x)).toEqual([...row.map(o => o.x)].sort((a, b) => a - b)); // left to right in the cycle's order
+      expect(row[0].x).toBeGreaterThan(10);
+      const px = parseFloat(/(\d+)px/.exec(row[6].font)![1]);
+      expect(row[6].x + 'MATERIAL'.length * px * 0.6).toBeLessThan(W - 10);
+      for (const o of row) expect([o.text, o.color]).toEqual([o.text, o.text === name ? SCOPE_COLORS.text : SCOPE_COLORS.label]);
+      // one underline, under the selected name
+      const under = d.ops.filter((o): o is Extract<Op, {op: 'fillRect'}> => o.op === 'fillRect' && o.y > row[0].y && o.y < row[0].y + px && o.w > o.h * 3);
+      expect(under).toHaveLength(1);
+      const sel = row.find(o => o.text === name)!;
+      expect(under[0].x).toBeCloseTo(sel.x);
+      expect(under[0].w).toBeCloseTo(name.length * px * 0.6, 1);
+      expect(t.find(o => o.text.startsWith('MODE: '))!.text).toBe(`MODE: ${name}`);
+    }
   });
 
   it('the train is a small bar in the centre with its nose up; the FRONT tick is a small triangle on top of the outer ring', () => {
@@ -202,61 +221,49 @@ describe('the scope: black glass, green rings, the legend and the copy', () => {
   });
 });
 
-describe('the blips: one mark per blip, in its class\'s colour and shape, where the thing was', () => {
-  const snap = snapOf({enemy: [{x: 50, z: 0, n: 1}], item: [{x: 0, z: -40, n: 1}], gear: [{x: -30, z: 30, n: 1}]});
-  const r = draw(model({snap, left: SCANNER.period}));
+describe('the dots: one GREEN dot per blip of the selected mode, where the things were', () => {
+  const blips: ScanBlip[] = [{x: 50, z: 0, n: 1}, {x: 0, z: -40, n: 1}, {x: -30, z: 30, n: 1}];
+  const r = draw(model({blips, left: SCANNER.period}));
   const cell = SCANNER.cell * G.r / SCANNER.range;
 
-  it('red enemies (a disc), green items (a square), gold weapons / gear (a diamond)', () => {
-    const b = blipsIn(r);
-    expect(b.map(m => m.shape).sort()).toEqual(['diamond', 'disc', 'square']);
-    const by = new Map(b.map(m => [m.shape, m]));
-    expect(isRed(by.get('disc')!.color)).toBe(true);
-    expect(isGreen(by.get('square')!.color)).toBe(true);
-    expect(isGold(by.get('diamond')!.color)).toBe(true);
-    expect([by.get('disc')!.color, by.get('square')!.color, by.get('diamond')!.color]).toEqual([SCAN_COLORS.enemy, SCAN_COLORS.item, SCAN_COLORS.gear]);
-    // three different colours and three different shapes
-    expect(new Set(Object.values(SCAN_COLORS)).size).toBe(3);
+  it('every mode draws the same mark: a green disc, one colour — no red, no gold, no other shape', () => {
+    expect(isGreen(SCAN_DOT)).toBe(true);
+    const exported = Object.keys(viewModule);
+    expect(exported).not.toContain('SCAN_COLORS');
+    for (const mode of SCAN_MODES) {
+      const b = blipsIn(draw(model({mode, blips, left: SCANNER.period})));
+      expect(b.map(m => [m.shape, m.color])).toEqual(blips.map(() => ['disc', SCAN_DOT]));
+    }
   });
 
   it('ahead of the car is UP, its right is RIGHT, to scale with the rings (within the cell)', () => {
-    const by = new Map(blipsIn(r).map(m => [m.shape, m]));
+    const b = blipsIn(r);
     const near = (m: {x: number; y: number}, x: number, y: number) => { expect(Math.abs(m.x - x)).toBeLessThanOrEqual(cell * 0.25); expect(Math.abs(m.y - y)).toBeLessThanOrEqual(cell * 0.25); };
-    near(by.get('disc')!, G.cx, G.cy - G.r * 0.5); // 50 m ahead: straight up, on the 50 m ring
-    near(by.get('square')!, G.cx - G.r * 0.4, G.cy); // 40 m to the car's left
-    near(by.get('diamond')!, G.cx + G.r * 0.3, G.cy + G.r * 0.3); // behind and to the right
-    // the helper the draw uses says the same
-    for (const [cls, shape] of [['enemy', 'disc'], ['item', 'square'], ['gear', 'diamond']] as const) {
-      const p = blipPoint(G, snap[cls][0], cls), m = by.get(shape)!;
-      expect([m.x, m.y]).toEqual([p.x, p.y]);
-    }
+    near(b[0], G.cx, G.cy - G.r * 0.5); // 50 m ahead: straight up, on the 50 m ring
+    near(b[1], G.cx - G.r * 0.4, G.cy); // 40 m to the car's left
+    near(b[2], G.cx + G.r * 0.3, G.cy + G.r * 0.3); // behind and to the right
+    // the helper the draw uses says the same: exactly the cell centre's point
+    blips.forEach((q, i) => { const p = blipPoint(G, q); expect([b[i].x, b[i].y]).toEqual([p.x, p.y]); });
     const p0 = blipPoint(G, {x: 100, z: 0});
     expect([p0.x, p0.y]).toEqual([G.cx, G.cy - G.r]);
-    // a cell centre just past the range is drawn ON the outer ring; no mark's centre is ever outside it (nudged or not)
+    // a cell centre just past the range is drawn ON the outer ring; no dot's centre is ever outside it
     const edge = blipPoint(G, {x: 102, z: 102});
     expect(Math.hypot(edge.x - G.cx, edge.y - G.cy)).toBeCloseTo(G.r);
-    for (const cls of ['enemy', 'item', 'gear'] as const) for (let a = 0; a < TAU; a += 0.05) {
-      const q = blipPoint(G, {x: Math.cos(a) * 101.5, z: Math.sin(a) * 101.5}, cls);
+    for (let a = 0; a < TAU; a += 0.05) {
+      const q = blipPoint(G, {x: Math.cos(a) * 101.5, z: Math.sin(a) * 101.5});
       expect(Math.hypot(q.x - G.cx, q.y - G.cy)).toBeLessThanOrEqual(G.r + 1e-9);
     }
   });
 
-  it('marks of different classes in ONE cell stay apart; a count makes a mark only a little larger', () => {
-    const same = draw(model({snap: snapOf({enemy: [{x: 22, z: 10, n: 1}], item: [{x: 22, z: 10, n: 1}], gear: [{x: 22, z: 10, n: 1}]}), left: 30}));
-    const b = blipsIn(same);
-    expect(b).toHaveLength(3);
-    for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) expect(Math.hypot(b[i].x - b[j].x, b[i].y - b[j].y)).toBeGreaterThan(cell * 0.3);
-    const home = blipPoint(G, {x: 22, z: 10});
-    for (const m of b) expect(Math.hypot(m.x - home.x, m.y - home.y)).toBeLessThan(cell * 0.5); // still inside the cell
-    expect(b[b.length - 1].shape).toBe('disc'); // enemies are drawn last: on top
-    const sized = blipsIn(draw(model({snap: snapOf({enemy: [{x: 20, z: 0, n: 1}, {x: 40, z: 0, n: 3}, {x: 60, z: 0, n: 200}]}), left: 30})));
+  it('a count makes a dot only a little larger', () => {
+    const sized = blipsIn(draw(model({blips: [{x: 20, z: 0, n: 1}, {x: 40, z: 0, n: 3}, {x: 60, z: 0, n: 200}], left: 30})));
     expect(sized.map(m => +(m.half / markSize(G.s, 1)).toFixed(3))).toEqual([1, 1.2, 1.5]);
-    expect(sized[2].half * 2).toBeLessThan(cell); // the largest mark is still smaller than a cell
+    expect(sized[2].half * 2).toBeLessThan(cell); // the largest dot is still smaller than a cell
     expect(markSize(G.s, 1)).toBeGreaterThanOrEqual(3); // and the smallest is visible
   });
 
   it('brightest right after a sweep, dimming slowly to 40 % — never gone before the next sweep; the rest of the scope does not dim', () => {
-    const alphaAt = (left: number) => { const d = draw(model({snap, left})); const a = new Set(blipsIn(d).map(m => m.alpha)); expect(a.size).toBe(1); return {a: [...a][0], d}; };
+    const alphaAt = (left: number) => { const d = draw(model({blips, left})); const a = new Set(blipsIn(d).map(m => m.alpha)); expect(a.size).toBe(1); return {a: [...a][0], d}; };
     expect(alphaAt(SCANNER.period).a).toBe(1);
     expect(alphaAt(SCANNER.period / 2).a).toBeCloseTo(0.7);
     expect(alphaAt(0.05).a).toBeCloseTo(SCANNER.dim, 2);
@@ -271,37 +278,44 @@ describe('the blips: one mark per blip, in its class\'s colour and shape, where 
       prev = a;
     }
   });
+
+  it('a mode with nothing in the snapshot says so; before the first sweep it says that instead', () => {
+    for (const mode of SCAN_MODES) {
+      const t = texts(draw(model({mode, blips: []}))).map(o => o.text);
+      expect(t).toContain(mode === 'all' ? 'NO RESOURCES IN RANGE' : `NO ${MODE_NAMES[SCAN_MODES.indexOf(mode)]} IN RANGE`);
+      expect(t).not.toContain('FIRST SWEEP PENDING');
+    }
+    expect(texts(draw(model({mode: 'fuel', blips: null}))).map(o => o.text)).toContain('FIRST SWEEP PENDING');
+    expect(texts(draw(model({mode: 'fuel', blips: [{x: 1, z: 1, n: 1}]}))).map(o => o.text).some(t => /IN RANGE$/.test(t))).toBe(false);
+  });
 });
 
-describe('no floor plan, no map, nothing per blip but its mark', () => {
+describe('no floor plan, no map, nothing per dot but its mark', () => {
   const count = (r: Rec) => { const c: Record<string, number> = {}; for (const o of r.ops) c[o.op] = (c[o.op] ?? 0) + 1; return c; };
-  /** A full scope: every class at the cap. */
-  function crowded(): ScanSnapshot {
+  /** A full scope: a mode at the cap. */
+  function crowded(): ScanBlip[] {
     const cells: ScanBlip[] = [];
     for (let x = -98; x < 100 && cells.length < SCANNER.maxBlips; x += 4) for (let z = -98; z < 100 && cells.length < SCANNER.maxBlips; z += 4) if (Math.hypot(x, z) <= 100) cells.push({x, z, n: 1 + (cells.length % 7)});
-    return snapOf({enemy: cells, item: cells.map(b => ({...b})), gear: cells.map(b => ({...b}))});
+    return cells;
   }
 
-  it('a snapshot adds exactly one mark per blip and NOTHING else: no line, no outline, no text', () => {
-    const empty = draw(model({snap: snapOf({}), left: 17})), full = draw(model({snap: crowded(), left: 17}));
+  it('the dots add exactly one mark per blip and NOTHING else: no line, no outline, no text', () => {
+    const mode: ScanMode = 'weapon';
+    const one = draw(model({mode, blips: [{x: 4, z: 4, n: 1}], left: 17})), full = draw(model({mode, blips: crowded(), left: 17}));
     const n = SCANNER.maxBlips;
-    expect(blipsIn(full).length).toBe(3 * n);
-    const a = count(empty), b = count(full);
+    expect(blipsIn(full).length).toBe(n);
+    const a = count(one), b = count(full);
     expect(b.stroke).toBe(a.stroke); // not one more line
     expect(b.text).toBe(a.text); // not one more word
-    expect(b.fillRect - a.fillRect).toBe(n); // the item squares
-    expect(b.fill - a.fill).toBe(2 * n); // the enemy discs and the gear diamonds
-    expect(strokes(full)).toEqual(strokes(empty));
-    expect(texts(full)).toEqual(texts(empty));
-    // and every added fill IS a mark of one of the three colours
-    const fills = (r: Rec) => r.ops.filter(o => o.op === 'fill' || o.op === 'fillRect');
-    const extra = fills(full).length - fills(empty).length;
-    expect(extra).toBe(3 * n);
-    expect(new Set(blipsIn(full).map(m => m.color))).toEqual(new Set(Object.values(SCAN_COLORS)));
+    expect(b.fillRect).toBe(a.fillRect);
+    expect(b.fill - a.fill).toBe(n - 1); // the dots
+    expect(strokes(full)).toEqual(strokes(one));
+    expect(texts(full)).toEqual(texts(one));
+    expect(new Set(blipsIn(full).map(m => m.color))).toEqual(new Set([SCAN_DOT]));
   });
 
   it('the furniture is a fixed handful of strokes: rings, a reticle, bearing ticks and the hand — it does not grow with the world', () => {
-    const r = draw(model({snap: crowded()}));
+    const r = draw(model({blips: crowded()}));
     const s = strokes(r);
     expect(s).toHaveLength(SCANNER.rings.length + 3); // + the reticle, the ticks, the hand
     // every straight segment is a spoke through / on the centre or a short tick at the rim: nothing that could be a wall or a route
@@ -315,34 +329,33 @@ describe('no floor plan, no map, nothing per blip but its mark', () => {
       expect(pts.length % 2).toBe(0);
     }
     const lines = r.ops.reduce((k, o) => k + ((o.op === 'fill' || o.op === 'stroke') ? o.path.filter(p => p.k === 'L').length : 0), 0);
-    expect(lines).toBeLessThan(60 + 3 * SCANNER.maxBlips); // the diamonds' three edges each + the furniture
+    expect(lines).toBeLessThan(60);
   });
 
   it('the model holds no geometry to draw: extra data on it changes nothing', () => {
-    const snap = snapOf({enemy: [{x: 10, z: 10, n: 2}]});
-    const plain = draw(model({snap}));
-    const loaded = draw({...model({snap}), walls: [[0, 0, 50, 50]], rooms: ['Concourse'], route: [[0, 0], [10, 10]], names: ['zombie-1']} as unknown as ScannerModel);
+    const blips = [{x: 10, z: 10, n: 2}];
+    const plain = draw(model({blips}));
+    const loaded = draw({...model({blips}), walls: [[0, 0, 50, 50]], rooms: ['Concourse'], route: [[0, 0], [10, 10]], names: ['zombie-1'], enemies: [{x: 20, z: 20, n: 1}]} as unknown as ScannerModel);
     expect(loaded.ops).toEqual(plain.ops);
-    // a blip carries a cell centre and a count only
-    expect(Object.keys(snap.enemy[0]).sort()).toEqual(['n', 'x', 'z']);
-    expect(texts(plain).some(t => /\d+\s*m\b/.test(t.text) && t.text !== SCOPE_TEXT.range)).toBe(false); // no distance read-out per blip
+    expect(texts(plain).some(t => /\d+\s*m\b/.test(t.text) && t.text !== SCOPE_TEXT.range)).toBe(false); // no distance read-out per dot
   });
 
-  it('no signal: an unplugged scanner shows no blips, no hand and no countdown — only the furniture and NO SIGNAL — PLUG IN', () => {
-    const r = draw(model({active: false, snap: crowded(), left: 9}));
+  it('no signal: an unplugged scanner shows no dots, no hand and no countdown — only the furniture, the mode and NO SIGNAL — PLUG IN', () => {
+    const r = draw(model({active: false, mode: 'ammo', blips: crowded(), left: 9}));
     expect(blipsIn(r)).toHaveLength(0);
     expect(strokes(r).some(s => s.color === SCOPE_COLORS.hand)).toBe(false);
     expect(r.ops.some(o => o.op === 'fill' && o.path.length === 3 && o.path[1].k === 'A')).toBe(false); // no trail
     const t = texts(r).map(o => o.text);
     expect(t).toContain('NO SIGNAL — PLUG IN');
     expect(t).toContain('SWEEP PAUSED');
+    expect(t).toContain('MODE: AMMO');
     expect(t.some(x => x.startsWith('NEXT SWEEP'))).toBe(false);
     expect(strokes(r).filter(s => s.path.length === 1 && s.path[0].k === 'A')).toHaveLength(4); // the rings stay
     // before a world's first sweep an ACTIVE scope says so instead of showing an old picture
-    const first = texts(draw(model({snap: null, left: 3.2}))).map(o => o.text);
+    const first = texts(draw(model({blips: null, left: 3.2}))).map(o => o.text);
     expect(first).toContain('FIRST SWEEP PENDING');
     expect(first).toContain('NEXT SWEEP IN 4 s');
-    expect(texts(draw(model({snap: snapOf({}), left: 3.2}))).map(o => o.text)).not.toContain('FIRST SWEEP PENDING');
+    expect(texts(draw(model({blips: [], left: 3.2}))).map(o => o.text)).not.toContain('FIRST SWEEP PENDING');
   });
 });
 
@@ -354,44 +367,41 @@ describe('the same drawing as pixels (the canvas shim)', () => {
     drawScanner(c.getContext() as unknown as CanvasRenderingContext2D, m, size, size);
     return (x, y) => { const i = (Math.round(y) * size + Math.round(x)) * 4; return [c.data[i], c.data[i + 1], c.data[i + 2]]; };
   }
-  const snap = snapOf({enemy: [{x: 62, z: 22, n: 6}], item: [{x: -46, z: 30, n: 6}], gear: [{x: 10, z: -70, n: 6}]});
+  const blips: ScanBlip[] = [{x: 62, z: 22, n: 6}, {x: -46, z: 30, n: 6}, {x: 10, z: -70, n: 6}];
 
-  it('the blips are red, green and gold on black / dark green glass', () => {
-    const px = pixels(model({snap, left: SCANNER.period}));
-    const at = (cls: ScanClass) => { const p = blipPoint(g, snap[cls][0], cls); return px(p.x, p.y); };
-    const [er, eg, eb] = at('enemy'), [ir, ig, ib] = at('item'), [gr, gg, gb] = at('gear');
-    expect(er).toBeGreaterThan(180); expect(eg).toBeLessThan(er * 0.5); expect(eb).toBeLessThan(er * 0.5);
-    expect(ig).toBeGreaterThan(160); expect(ir).toBeLessThan(ig * 0.6); expect(ib).toBeLessThan(ig * 0.7);
-    expect(gr).toBeGreaterThan(180); expect(gg).toBeGreaterThan(130); expect(gb).toBeLessThan(gr * 0.5);
-    // the corners are black; the glass between the rings is nearly black with a green cast
-    expect(px(2, 2)).toEqual([0, 0, 0]);
-    expect(px(size - 3, 3)).toEqual([0, 0, 0]);
-    const glass = px(g.cx + g.r * 0.62 * Math.SQRT1_2, g.cy + g.r * 0.62 * Math.SQRT1_2);
-    expect(Math.max(...glass)).toBeLessThan(40);
-    expect(glass[1]).toBeGreaterThanOrEqual(glass[0]);
-    // a point ON the outer ring is green
-    const ring = px(g.cx + g.r * Math.cos(2.4), g.cy + g.r * Math.sin(2.4));
-    expect(ring[1]).toBeGreaterThan(ring[0] * 1.5);
-    expect(ring[1]).toBeGreaterThan(60);
+  it('the dots are green on black / dark green glass, in every mode', () => {
+    for (const mode of ['all', 'weapon', 'equipment'] as const) {
+      const px = pixels(model({mode, blips, left: SCANNER.period}));
+      for (const b of blips) {
+        const p = blipPoint(g, b), [r0, g0, b0] = px(p.x, p.y);
+        expect(g0).toBeGreaterThan(160); expect(r0).toBeLessThan(g0 * 0.6); expect(b0).toBeLessThan(g0 * 0.7);
+      }
+      // the corners are black; the glass between the rings is nearly black with a green cast
+      expect(px(2, 2)).toEqual([0, 0, 0]);
+      expect(px(size - 3, 3)).toEqual([0, 0, 0]);
+      const glass = px(g.cx + g.r * 0.62 * Math.SQRT1_2, g.cy + g.r * 0.62 * Math.SQRT1_2);
+      expect(Math.max(...glass)).toBeLessThan(40);
+      expect(glass[1]).toBeGreaterThanOrEqual(glass[0]);
+      // a point ON the outer ring is green
+      const ring = px(g.cx + g.r * Math.cos(2.4), g.cy + g.r * Math.sin(2.4));
+      expect(ring[1]).toBeGreaterThan(ring[0] * 1.5);
+      expect(ring[1]).toBeGreaterThan(60);
+    }
   });
 
-  it('black and green: without blips nothing on the scope is red or gold', () => {
-    const px = pixels(model({snap: snapOf({}), left: 21}));
-    const legendTop = texts(draw(model({snap: snapOf({}), left: 21}), size, size)).find(t => t.text === 'ENEMY')!.y - size * 0.03;
-    expect(legendTop).toBeGreaterThan(g.cy + g.r * 1.06);
+  it('black and green: with a full picture nothing on the whole canvas is red or gold', () => {
+    const px = pixels(model({mode: 'weapon', blips, left: 21}));
     let lit = 0, green = 0, dark = 0, all = 0;
     for (let y = 0; y < size; y += 2) for (let x = 0; x < size; x += 2) {
       const [r0, g0, b0] = px(x, y);
       all++;
       if (Math.max(r0, g0, b0) < 48) { dark++; continue; }
-      // (the legend's ENEMY / WEAPON-GEAR samples and words are the only red / gold: they sit under the scope)
-      if (y > legendTop) continue;
       lit++;
       if (g0 >= r0 && g0 >= b0) green++;
     }
     expect(dark / all).toBeGreaterThan(0.8); // a black screen
     expect(lit).toBeGreaterThan(100);
-    expect(green).toBe(lit); // everything lit above the legend is green-dominant
+    expect(green).toBe(lit); // everything lit is green-dominant: the header, the strip, the dots
   });
 });
 
@@ -455,7 +465,7 @@ describe('the DOM holder: one canvas, redrawn only when what it shows changed', 
 
   it('draws at the backing scale; the same picture is not drawn twice; the hand redraws at 10 Hz, not every frame', () => {
     const p = page(1280, 720, 2), s = new ScannerScope(p.env);
-    const m = model({snap: snapOf({enemy: [{x: 10, z: 10, n: 1}]}), left: 20, serial: 3});
+    const m = model({blips: [{x: 10, z: 10, n: 1}], left: 20, serial: 3});
     expect(s.draw(m)).toBe(false); // closed: nothing
     s.open();
     const canvas = p.body.children[0].children[0];
@@ -472,15 +482,20 @@ describe('the DOM holder: one canvas, redrawn only when what it shows changed', 
     expect(redrawStep(19.99)).toBe(redrawStep(19.91));
     expect(redrawStep(19.89)).not.toBe(redrawStep(19.91));
     expect(SCANNER.redrawHz).toBe(10);
-    // a new snapshot / a state change redraws at once
+    // a new snapshot / a mode change / a state change redraws at once
     const before = s.draws;
     m.serial++;
     expect(s.draw(m)).toBe(true);
+    m.mode = 'ammo';
+    expect(s.draw(m)).toBe(true);
+    expect(s.draw(m)).toBe(false);
     m.active = false;
     expect(s.draw(m)).toBe(true);
     m.left -= 5; m.serial += 4; // nothing an inactive scope shows depends on the clock or the snapshot
     expect(s.draw(m)).toBe(false);
-    expect(s.draws).toBe(before + 2);
+    m.mode = 'fuel'; // (its mode label does)
+    expect(s.draw(m)).toBe(true);
+    expect(s.draws).toBe(before + 4);
     // reopening always paints
     s.close(); s.open();
     expect(s.draw(m)).toBe(true);

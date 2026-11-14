@@ -4038,7 +4038,7 @@ export class Game {
       rand: this.rand,
       // Iteration 12 (AI): light lure — this frame's attracting lights, 3D eye-to-point sight, standable goal near a lit spot (ai/lightLure.ts).
       ...lureWorld(L, this.lightSources),
-      // task studio-refinement-batch-20261113-035659-01 (lane LURE): the lure grenade's active scents (ai/scentLure.ts: 20 m in 3D, no sight)
+      // task studio-refinement-batch-20261113-035659-01 (lane LURE): the lure grenade's active scents (ai/scentLure.ts: SCENT.radius 30 m in 3D, no sight)
       scents: this.scents.list,
       // Task track3-eaton-centre-20261031 (lane HORDE, atrium AI): open-atrium chase rules (ai/brain.ts BrainWorld.atrium); absent elsewhere
       ...(this.layout.mall || this.layout.reactor ? {atrium: true} : {}), // (reactor-build, lane ARCH: + the open pit)

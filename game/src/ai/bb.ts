@@ -8,7 +8,7 @@
 // the next one. It is knee-high (0.85 m standing, ~0.45 m on all fours), not a scaled adult zombie, and its presentation is
 // non-graphic (no wounds, gore or dismemberment: ai/bbActor.ts).
 //
-// THE ZOMBIE LURE (task studio-refinement-scope-finish-20261113-080904-01): the lure grenade's scent (ai/scentLure.ts: 20 m in 3D from
+// THE ZOMBIE LURE (task studio-refinement-scope-finish-20261113-080904-01): the lure grenade's scent (ai/scentLure.ts: SCENT.radius, 30 m, in 3D from
 // the floor below it, no sight needed, 20 active seconds) draws it under the lure's own rules — the player in sight wins, a fresh noise
 // / hit is hunted first, a hunt that lost sight of the player for SCENT.lostSightS is pulled — read on its own clock and 3D sight
 // (sinceAlert / lostSight). Off the floor it comes down the way it always does (the 'down' plan; a hop off a thing it sits on, toward

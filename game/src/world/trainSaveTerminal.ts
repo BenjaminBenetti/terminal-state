@@ -13,8 +13,10 @@
 // acid / melt rules never reach it; NOT storage, nothing to open; no baked clutter: the keyboard is part of the terminal): the reused
 // Meshy CRT terminal (P7 'crtTerminal', game/public/assets/models/p7-crt-terminal-t25.glb, its own maps kept) at 0.68 scale on a
 // small steel wall shelf (plain geometry, plain material, like the plug sockets) in the strip between the desk's -Z end and the -Z
-// lining: world/trainSaveTerminalPlace.ts. While the library has no model (Node tests, a failed fetch) a plain stand-in of the
-// measured size stands there instead. Its solid box (shelf + terminal) is the train's (trainColliders / buildRideLocalModel).
+// lining: world/trainSaveTerminalPlace.ts. Task studio-scanner-console-refinements-20261114-031614-01 turned it to face INWARD (+Z,
+// across the cab, toward the operator at the drive controls) — the model, its screen patch, the shelf, the aim box and the QA stand
+// spot all follow the one placement. While the library has no model (Node tests, a failed fetch) a plain stand-in of the measured
+// size stands there instead. Its solid box (shelf + terminal) is the train's (trainColliders / buildRideLocalModel).
 //
 // THE SCREEN is a DYNAMIC canvas texture drawn here (the texture rule's dynamic-text exemption: runtime status text over the generated
 // model): a green phosphor "SAVE" heading, the ACTIVE slot, the slot's real last save (time + why, read from the slot through
@@ -218,7 +220,7 @@ export function buildShelfGeometry(p: SaveTerminalPlacement): THREE.BufferGeomet
   };
   const lx = S.x1 - S.x0, lz = S.z1 - S.z0;
   box(lx, S.y1 - S.y0, lz, (S.x0 + S.x1) / 2, (S.y0 + S.y1) / 2, (S.z0 + S.z1) / 2); // the slab
-  box(lx, 0.025, 0.008, (S.x0 + S.x1) / 2, S.y1 + 0.0125, S.z1 - 0.004); // a low lip on the desk side (the terminal never slides off)
+  box(lx, 0.025, 0.008, (S.x0 + S.x1) / 2, S.y1 + 0.0125, S.z1 - 0.004); // a low lip along the front edge (the terminal never slides off)
   // two brackets: a plate on the lining + a strut from its foot to the slab's underside near the outer edge
   const wall = S.z0, drop = 0.2, plateT = 0.008, strutW = 0.022, reach = lz * 0.85;
   for (const x of [S.x0 + 0.035, S.x1 - 0.035]) {
@@ -504,7 +506,7 @@ export class SaveTerminalSystem implements TrainFixtureLink {
   terminalWorld(): V3 | null {
     const p = this.place;
     if (!p) return null;
-    return this.host.trainRuntime?.carPoint(p.screenX, p.shelfY + 0.24 * p.scale, p.z) ?? null;
+    return this.host.trainRuntime?.carPoint(p.screen.x, p.screen.y, p.screen.z) ?? null;
   }
 
   // --- per frame: the screen -------------------------------------------------------------------------------------------
@@ -547,7 +549,7 @@ export class SaveTerminalSystem implements TrainFixtureLink {
     const p = this.place;
     return {
       placed: !!p, attached: !!this.group.parent, model: !!this.model, standIn: !!this.standIn, shelf: !!this.shelf,
-      at: p ? {x: p.x, z: p.z, shelfY: p.shelfY, yaw: p.yaw, scale: p.scale, screenX: p.screenX} : null,
+      at: p ? {x: p.x, z: p.z, shelfY: p.shelfY, yaw: p.yaw, scale: p.scale, screen: p.screen, facing: p.facing} : null,
       size: p ? {w: p.width, h: p.height, d: p.depth} : null, box: p?.box ?? null, top: p?.top ?? null,
       screen: this.shown, result: this.result, block: this.host.saveBlock(), counts: {...this.counts},
     };
@@ -566,11 +568,11 @@ export function saveTerminalQaApi(game: unknown): Record<string, (...a: any[]) =
   return {
     /** The save terminal: placement, model / stand-in, the screen's lines, the last result, why it cannot save now. */
     saveTerminal: () => g.saveTerminal?.qa() ?? null,
-    /** Stand in the cab beside the desk's left end, looking at the terminal's screen (the prompt shows on the next frame). */
+    /** Stand at the drive controls (behind the desk's middle), looking at the terminal's screen (the prompt shows on the next frame). */
     saveTerminalGo: () => {
       const s = g.saveTerminal, p = s?.place, tr = s?.host.trainRuntime;
       if (!s || !p || !tr) return false;
-      const at = tr.carPoint(p.screenX - 0.85, p.floorY, p.z + 0.25), aim = tr.carPoint(p.screenX, p.shelfY + 0.24 * p.scale, p.z);
+      const at = tr.carPoint(p.driver.x, p.floorY, p.driver.z), aim = tr.carPoint(p.screen.x, p.screen.y, p.screen.z);
       if (!at || !aim) return false;
       const P = g.player;
       P.x = at.x; P.z = at.z; P.y = at.y; P.vy = 0; P.grounded = true;

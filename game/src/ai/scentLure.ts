@@ -2,6 +2,9 @@
 //
 //   User: "Zombie Lure Grenade: 3 bio_mater crafts 3. Scent reaches 20 metres without line-of-sight requirements for 20 active
 //    seconds. Zombies investigate the ACTUAL emitter, not the player. Retain valid navigation/collision: no wall-phasing."
+//   Task studio-scanner-console-refinements-20261114-031614-01 (user: "Increase the Zombie Lure radius from 20 m to 30 m. Keep 20
+//    active seconds, no-line-of-sight scent, priorities, valid navigation and current family behaviour."): SCENT.radius is 30 m — the
+//    one radius every emitter starts with, read by the base brain and the BB alike; nothing else changed.
 //
 // The lead's item / throw / landed canister (weapons/throwables.ts) owns the canister's body and its own small effect; it calls this
 // registry (Game.scents): add() when the canister lands, move() when it rolls / rides a lift cab, remove() when it goes. Nothing here
@@ -11,7 +14,7 @@
 //    (the throw refuses a 4th: `full`; add() past the cap retires the one with the least time left, a safety net for the bound).
 //  * PERCEPTION (perceiveScent; ai/brain.ts calls it on the light-lure check timer, ~every 0.4 s per enemy, staggered): an enemy
 //    smells an emitter when the straight 3D distance from its feet to the canister is within the emitter's radius (SCENT.radius
-//    20 m). NO line of sight and NO field of view: walls, closed doors, floors and slabs do not stop it, so an enemy on another
+//    30 m). NO line of sight and NO field of view: walls, closed doors, floors and slabs do not stop it, so an enemy on another
 //    storey inside that sphere is drawn too. Cost: O(emitters) per check, no rays, no scans.
 //  * BEHAVIOUR (ai/brain.ts 'investigate' with LureState.kind 'scent'): the enemy walks to a standable point beside the canister
 //    (lightLure.ts lureGoal on the canister's storey) with the normal level-aware path search (the path service may run a far one
@@ -33,8 +36,8 @@
 
 /** Lure tuning (see the file comment). */
 export const SCENT = {
-  /** Reach (m): straight 3D distance from an enemy's feet to the canister; nothing blocks it. */
-  radius: 20,
+  /** Reach (m): straight 3D distance from an enemy's feet to the canister; nothing blocks it (30 m since the console refinements; was 20). */
+  radius: 30,
   /** Active seconds of scent (play time only). */
   seconds: 20,
   /** At most this many emitters at once (the throw refuses beyond it). */

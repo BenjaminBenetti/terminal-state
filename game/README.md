@@ -66,8 +66,9 @@ compartment, opposite the Lockbox, turns **Scrap metal / Electrical parts** into
 list (a 3D picture of each thing, and each material's icon with have / need: green when enough, red when short; no key shortcuts); materials come from your pockets, worn backpack, the Lockbox and crafted chests in the
 car. **Storage chest** (2 / 0): 50 more slots in a box you carry (tap **E** opens, hold **E** carries). **Route radar** (4 / 3): the
 travel map shows two stops out. **Defense sentry** (8 / 6): **E** on it opens its four ammunition slots; put 5.56 rounds in (and take them back out) like in
-any store, and a roof turret shoots nearby enemies with the rounds in those slots. **Item scanner** (5 / 5): **E** on its console opens a 100 m radar scope that sweeps about every 30 s (red
-enemies, green items, gold weapons and gear). The three devices roll like the fuel dolly and work only while plugged into one of the
+any store, and a roof turret shoots nearby enemies with the rounds in those slots. **Item scanner** (5 / 5): **E** on its console opens a 100 m radar scope that sweeps about every 30 s and shows
+resources only, as green dots; with the scope open **X** steps its mode All → Food/Water → Ammo → Fuel → Weapon → Equipment → Material
+(kept on the scanner, saved with it; older saves open on All). The three devices roll like the fuel dolly and work only while plugged into one of the
 train's three wall sockets, which happens by itself when one is parked beside a free socket. Hold **E** to drag a device or a fuel
 cart, or to carry the chest (a tap never moves one); **R** turns a dragged device round to face you. Everything travels with the train
 and is saved with its contents, rounds and socket.
@@ -99,7 +100,8 @@ iteration 15; walls and other storeys stay dark) — and lures enemies that can 
 flashlight beam lures too (20 m around where it lands, scaled by its brightness).
 
 Zombie lure (scent; `ai/scentLure.ts`, the brain's `investigate` state): a landed lure canister gives off a scent for **20 s of
-play** (paused, menus and loading do not count). Enemies within **20 m** of it (straight 3D distance from their feet) smell it.
+play** (paused, menus and loading do not count). Enemies within **30 m** of it (straight 3D distance from their feet; 20 m before
+task studio-scanner-console-refinements-20261114-031614-01) smell it.
 No sight line is needed and they do not have to face it. Walls, doors and floors do not stop it, so enemies on the storey above
 or below are drawn too. Each one walks to the canister itself, never to the player, at its search pace. It uses the normal
 path search (stairs, drops, and ladders for families that climb) and normal collision, so it goes round walls, never through
@@ -308,7 +310,8 @@ seed) as well.
 keeps them under 70 %).
   A quota error is reported, never silently dropped.
 - **Manual save** (task refinement-batch-20261113, lane SAVE): a small green-screen CRT on a wall shelf left of the driving
-  console (`src/world/trainSaveTerminal.ts`). Its screen shows "SAVE", the active slot, that slot's last save and why the
+  console (`src/world/trainSaveTerminal.ts`), its screen turned inward across the cab toward the drive controls (task
+  studio-scanner-console-refinements-20261114-031614-01). Its screen shows "SAVE", the active slot, that slot's last save and why the
   terminal cannot save right now. [E] on it runs `Game.saveNow`. That captures the live station as a teardown would, without
   tearing anything down, then writes the active slot through the same commit as the autosaves (reason `manual`, validated, one
   write, read back), with your exact spot in the car. Continue and "Load last save" resume there. It saves only while the train

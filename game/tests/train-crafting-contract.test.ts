@@ -3,9 +3,10 @@
 // route radar's reveal radius (campaign/discovery.ts) and the fuel dolly controller's per-body mass / radius (world/fuelCartPhysics.ts).
 import {describe, expect, it} from 'vitest';
 import {
-  EQUIPMENT, EQUIPMENT_KINDS, EQUIPMENT_LIMITS, SENTRY_FEED_SLOTS, STATION_EQUIPMENT_LANE, TrainEquipment, copyEquipment, equipmentProblem, equipmentRounds,
-  equipmentSeqOf, freshEquipment, stationEquipmentOf, stationEquipmentProblem, trainEquipmentProblem, type EquipmentJSON,
+  EQUIPMENT, EQUIPMENT_KINDS, EQUIPMENT_LIMITS, SENTRY_FEED_SLOTS, STATION_EQUIPMENT_LANE, TrainEquipment, copyEquipment, equipmentDisplay, equipmentProblem,
+  equipmentRounds, equipmentSeqOf, freshEquipment, stationEquipmentOf, stationEquipmentProblem, trainEquipmentProblem, type EquipmentJSON,
 } from '../src/craft/equipment';
+import {SCAN_DEFAULT_MODE, SCAN_MODES} from '../src/craft/scanner';
 import {RECIPES, RECIPE_MATERIALS, recipeFor} from '../src/craft/recipes';
 import {
   BENCH_AISLE_MIN, PLUG, TRAIN_ROOF, TRAIN_ROOF_SKIN_Y, benchFootprint, benchPlacement, benchToLocal, craftSpots, equipmentPlugs,
@@ -136,6 +137,35 @@ describe('train crafting: records', () => {
     expect(STATION_EQUIPMENT_LANE).toMatch(/^[a-z][a-z0-9._-]{0,47}$/);
     expect(equipmentSeqOf('eq-12')).toBe(12);
     expect(equipmentSeqOf('cart-1')).toBe(0);
+  });
+
+  // Task studio-scanner-console-refinements-20261114-031614-01 (user: "Handle old scanner records safely with an All default; persist the
+  // selected mode appropriately"): a kind's DISPLAY MODES are a trait (the scanner's: SCAN_MODES, ALL first); the record holds the mode as
+  // `display` only when it is not the first
+  it('display modes: a trait of the kind; a record keeps a mode only when it is not the default; old records load on ALL; a bad one is refused', () => {
+    expect(EQUIPMENT.scanner.displayModes).toEqual([...SCAN_MODES]);
+    expect(EQUIPMENT.scanner.displayModes[0]).toBe(SCAN_DEFAULT_MODE);
+    for (const k of EQUIPMENT_KINDS) if (k !== 'scanner') expect([k, EQUIPMENT[k].displayModes]).toEqual([k, []]);
+    const scanner = (extra: Record<string, unknown> = {}): EquipmentJSON => ({...freshEquipment('scanner', 'eq-4', pose), plug: 1, ...extra} as EquipmentJSON);
+    // a fresh / old scanner record has no display field at all — and that is ALL
+    expect(freshEquipment('scanner', 'eq-4', pose)).toEqual({uid: 'eq-4', kind: 'scanner', ...pose});
+    expect(equipmentDisplay(EQUIPMENT.scanner, scanner().display)).toBe('all');
+    // every mode but the default is a valid field, aboard and in a station, and reads back as itself; copies keep it
+    for (const m of SCAN_MODES) {
+      expect(equipmentProblem(scanner({display: m}), false)).toBeNull();
+      expect(equipmentProblem({...freshEquipment('scanner', 'eq-4', pose), level: 0, display: m}, true)).toBeNull();
+      expect(equipmentDisplay(EQUIPMENT.scanner, m)).toBe(m);
+      expect(copyEquipment(scanner({display: m})).display).toBe(m);
+    }
+    expect(trainEquipmentProblem({v: 1, seq: 4, aboard: [scanner({display: 'fuel'})]})).toBeNull();
+    // a mode the kind does not have, a kind without modes, a non-string: malformed (the save is refused like any bad field)
+    for (const bad of [scanner({display: 'enemy'}), scanner({display: 'ALL'}), scanner({display: ''}), scanner({display: 3}), scanner({display: null}),
+      {...freshEquipment('radar', 'eq-3', pose), display: 'all'}, {...freshEquipment('sentry', 'eq-2', pose), display: 'ammo'}, {...chest(), display: 'all'}]) {
+      expect(equipmentProblem(bad, false), JSON.stringify(bad).slice(0, 80)).not.toBeNull();
+    }
+    expect(equipmentProblem(scanner({display: 'enemy'}), false)).toMatch(/display mode/);
+    // the live default for anything unknown is the kind's first (none for a kind without modes)
+    expect([equipmentDisplay(EQUIPMENT.scanner, 'enemy'), equipmentDisplay(EQUIPMENT.scanner, undefined), equipmentDisplay(EQUIPMENT.radar, 'all')]).toEqual(['all', 'all', '']);
   });
 
   it('copies deeply (a chest keeps its stacks: uid, count, bag contents)', () => {

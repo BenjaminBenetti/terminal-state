@@ -1,39 +1,51 @@
-// Task studio-train-crafting-v1-20261111-225628-01 (lane SCANNER; user: "About every 30 active seconds a sweep refreshes snapshot blips:
-// red enemies, green ordinary items, gold weapons/gear. No floorplan/map or continuous live tracking; it should give broad awareness
-// rather than precise navigation."): the scanner's PURE rules (craft/scanner.ts) —
-//  - what counts as what: weapons (guns AND melee) and gear are gold, everything else in the catalogue green, an unknown id nothing;
-//  - a snapshot: living non-ragdolled enemies; loose pickups (never a stall's ware, never the train's cargo); holders that still hold
-//    lots (gold if any lot is gold); grounded bags; cut at 100 m from the car's centre; every storey flattened;
-//  - coarse: 4 m cells in the TRAIN's frame (the car's front is +x for both ways the car can stand), one blip per class and cell, a
-//    bounded count per class (the nearest first); the same things give the same blips whatever order they come in;
+// Task studio-train-crafting-v1-20261111-225628-01 (lane SCANNER; user: "About every 30 active seconds a sweep refreshes snapshot blips
+// … No floorplan/map or continuous live tracking; it should give broad awareness rather than precise navigation.") and task
+// studio-scanner-console-refinements-20261114-031614-01 (user: "cycle through exactly this order: All → Food/Water → Ammo → Fuel → Weapon
+// → Equipment → Material → All. ALL means all RESOURCES ONLY: remove enemies from this display … Use common item/resource traits so new
+// weapons and gear integrate naturally, not another brittle per-kind whitelist … Filter the captured resource snapshot when changing
+// mode rather than inventing live tracking or an extra scan."): the scanner's PURE rules (craft/scanner.ts) —
+//  - the modes, in the user's order, and what an item is: its catalogue TRAITS (checked over the WHOLE catalogue at run time, so a new
+//    item joins by its traits), medical / batteries / flares / grenades / parts in ALL only, an unknown id nothing;
+//  - a snapshot of RESOURCES only (no enemy is read): loose pickups (never a stall's ware, never the train's cargo), holders that still
+//    hold lots, grounded bags and what is in them, a station's fuel cart with fuel; cut at 100 m from the car's centre; storeys flattened;
+//  - a mode is a FILTER of that one snapshot (scanBlips): nothing read, nothing swept; per-mode counts, a bounded count per mode;
+//  - coarse: 4 m cells in the TRAIN's frame (the car's front is +x for both ways the car can stand); deterministic in any order;
 //  - the sweep clock: 4 active seconds to a world's first sweep, then 30; a long frame queues none.
 // Node only: plain objects, and one real generated station with its real train placement.
 
 import {describe, expect, it} from 'vitest';
 import {
-  SCANNER, SCAN_CLASSES, SweepClock, blipBrightness, blipScale, classifyItem, classifyItems, secondsLeft, sweepAngle, takeSnapshot, toScanFrame,
-  type ScanBag, type ScanEnemy, type ScanFrame, type ScanHolder, type ScanPickup, type ScanSources,
+  SCANNER, SCAN_CATEGORIES, SCAN_DEFAULT_MODE, SCAN_MODES, SCAN_MODE_LABEL, SweepClock, blipBrightness, blipScale, hasMode, isScanMode, itemModes,
+  nextScanMode, scanBlips, scanCategory, secondsLeft, stackModes, sweepAngle, takeSnapshot, toScanFrame,
+  type ScanBag, type ScanCart, type ScanFrame, type ScanHolder, type ScanMode, type ScanPickup, type ScanSnapshot, type ScanSources,
 } from '../src/craft/scanner';
-import {ITEMS} from '../src/items/items';
+import * as scannerModule from '../src/craft/scanner';
+import {ITEMS, isFoodOrDrink, type ItemDef} from '../src/items/items';
 import {GEAR_IDS} from '../src/items/gear';
 import {MATERIAL_IDS} from '../src/items/craftMaterials';
 import {WEAPONS} from '../src/weapons/weapons';
+import {FUEL} from '../src/fuel/fuel';
 import {playerTrainPlacement, worldToTrain} from '../src/gen/playerTrain';
 import {isLootHolderKind} from '../src/items/loot';
 import {LEVELS} from '../src/levels/registry';
 import type {StationLayout} from '../src/gen/stationTypes';
+import {readFileSync} from 'node:fs';
 
 const HERE: ScanFrame = {x: 0, z: 0, front: 1};
-const enemy = (x: number, z: number, o: {alive?: boolean; ragdolled?: boolean; y?: number} = {}): ScanEnemy & {brain: {y: number}} =>
-  ({brain: {alive: o.alive ?? true, x, z, y: o.y ?? 0}, ragdolled: o.ragdolled ?? false});
 const pickup = (itemId: string, x: number, z: number, owner?: string): ScanPickup & {y: number} => ({stack: {itemId}, x, y: 0, z, ...(owner ? {owner} : {})});
 const holder = (x: number, z: number, lots: string[], y = 0): ScanHolder => ({prop: {x, y, z}, state: {lots: lots.map(itemId => ({itemId}))}});
-const bag = (x: number, z: number, grounded = true): ScanBag => ({pose: {x, z}, grounded});
+const bag = (x: number, z: number, grounded = true, contents?: string[]): ScanBag =>
+  ({pose: {x, z}, grounded, ...(contents ? {stack: {itemId: 'backpack', bag: contents.map(itemId => ({itemId}))}} : {})});
+const cart = (x: number, z: number, units: number, owner = 'station'): ScanCart => ({x, z, units, owner});
 /** The cell centre a position is quantised to. */
 const cellOf = (v: number) => (Math.floor(v / SCANNER.cell) + 0.5) * SCANNER.cell;
+/** A mode's dots of a snapshot. */
+const dots = (s: ScanSnapshot, m: ScanMode) => scanBlips(s, m).blips;
+/** Counts per mode, all seven (zeros included). */
+const counts = (o: Partial<Record<ScanMode, number>>) => Object.fromEntries(SCAN_MODES.map(m => [m, o[m] ?? 0]));
 
 describe('the scanner numbers (one place)', () => {
-  it('about 100 m, a sweep every 30 active seconds, coarse 4 m cells, a bounded draw', () => {
+  it('about 100 m, a sweep every 30 active seconds, coarse 4 m cells, a bounded draw; X cycles the mode', () => {
     expect([SCANNER.range, SCANNER.period, SCANNER.warmup, SCANNER.cell]).toEqual([100, 30, 4, 4]);
     expect(SCANNER.rings).toEqual([25, 50, 75, 100]);
     expect(SCANNER.rings[SCANNER.rings.length - 1]).toBe(SCANNER.range);
@@ -42,134 +54,245 @@ describe('the scanner numbers (one place)', () => {
     expect(SCANNER.dim).toBeCloseTo(0.4);
     expect(SCANNER.closeDist).toBeCloseTo(2.6);
     expect(SCANNER.canvas).toEqual({frac: 0.8, max: 720, min: 240, dpr: 2});
+    expect(SCANNER.modeKey).toBe('KeyX');
   });
 });
 
-describe('what an item is to the scanner', () => {
-  it('every weapon (guns and melee) and every piece of gear is gold; everything else in the catalogue is green', () => {
-    const kinds = new Map<string, Set<string>>();
+describe('the modes: exactly the user\'s cycle', () => {
+  it('All → Food/Water → Ammo → Fuel → Weapon → Equipment → Material → All; ALL is the default', () => {
+    expect(SCAN_MODES.map(m => SCAN_MODE_LABEL[m])).toEqual(['All', 'Food/Water', 'Ammo', 'Fuel', 'Weapon', 'Equipment', 'Material']);
+    expect(SCAN_DEFAULT_MODE).toBe('all');
+    const seen: ScanMode[] = [];
+    let m: ScanMode = 'all';
+    for (let i = 0; i < SCAN_MODES.length; i++) { seen.push(m); m = nextScanMode(m); }
+    expect(seen).toEqual([...SCAN_MODES]);
+    expect(m).toBe('all'); // round to ALL again
+    expect(SCAN_CATEGORIES).toEqual(SCAN_MODES.slice(1));
+    // an unknown mode starts the cycle over
+    expect(nextScanMode('enemy' as ScanMode)).toBe('all');
+    for (const v of [...SCAN_MODES]) expect(isScanMode(v)).toBe(true);
+    for (const v of ['', 'enemy', 'gear', 'item', 'ALL', 'toString', null, 3]) expect(isScanMode(v)).toBe(false);
+  });
+
+  it('no enemy and no red / gold class is left in the scanner\'s rules', () => {
+    const exported = Object.keys(scannerModule);
+    for (const gone of ['SCAN_CLASSES', 'classifyItem', 'classifyItems']) expect(exported).not.toContain(gone);
+    const src = readFileSync(new URL('../src/craft/scanner.ts', import.meta.url), 'utf8').split('\n').filter(l => !l.trimStart().startsWith('//')).join('\n');
+    expect(src).not.toMatch(/enem|zombie|brain/i);
+  });
+});
+
+describe('what an item is to the scanner: its traits', () => {
+  /** The rule restated from the item's traits (the catalogue's own fields, never ids). */
+  const byTraits = (d: ItemDef): string =>
+    d.kind === 'weapon' || d.weaponId ? 'weapon' : d.kind === 'ammo' || d.caliber ? 'ammo' : d.id === FUEL.canItem ? 'fuel'
+      : d.kind === 'gear' || d.gear ? 'equipment' : d.kind === 'material' ? 'material' : isFoodOrDrink(d) ? 'food' : '-';
+
+  it('EVERY catalogue item (whatever is in it at run time) is in ALL and in the mode its traits say, and in no other', () => {
+    const per = new Map<string, string[]>();
     for (const def of Object.values(ITEMS)) {
-      const c = classifyItem(def.id);
-      expect([def.id, c]).toEqual([def.id, def.kind === 'weapon' || def.kind === 'gear' ? 'gear' : 'item']);
-      (kinds.get(c!) ?? kinds.set(c!, new Set()).get(c!)!).add(def.kind);
+      const c = scanCategory(def) ?? '-';
+      expect([def.id, c]).toEqual([def.id, byTraits(def)]);
+      const m = itemModes(def.id);
+      expect([def.id, hasMode(m, 'all')]).toEqual([def.id, true]);
+      for (const k of SCAN_CATEGORIES) expect([def.id, k, hasMode(m, k)]).toEqual([def.id, k, k === c]);
+      (per.get(c) ?? per.set(c, []).get(c)!).push(def.id);
     }
-    expect([...kinds.get('gear')!].sort()).toEqual(['gear', 'weapon']);
-    // every other kind the catalogue has is an ordinary item
-    expect([...kinds.get('item')!].sort()).toEqual(['ammo', 'consumable', 'currency', 'material', 'part', 'supply', 'throwable']);
-    // melee weapons are weapons too
+    // every mode has something in today's catalogue
+    for (const k of SCAN_CATEGORIES) expect(per.get(k)?.length ?? 0, k).toBeGreaterThan(0);
+    // every weapon (guns AND melee) is a Weapon; every gear piece Equipment; every material Material; every food / drink Food/Water
     const melee = Object.values(ITEMS).filter(d => d.kind === 'weapon' && WEAPONS[d.weaponId!]?.melee).map(d => d.id);
-    expect(melee).toContain('knife');
     expect(melee.length).toBeGreaterThan(1);
-    for (const id of melee) expect(classifyItem(id)).toBe('gear');
-    for (const id of ['rifle', 'shotgun', 'pistol']) expect(classifyItem(id)).toBe('gear');
+    for (const d of Object.values(ITEMS).filter(q => q.kind === 'weapon')) expect([d.id, scanCategory(d)]).toEqual([d.id, 'weapon']);
+    for (const id of melee) expect(scanCategory(ITEMS[id])).toBe('weapon');
     expect(GEAR_IDS.length).toBeGreaterThan(3);
-    for (const id of GEAR_IDS) expect(classifyItem(id)).toBe('gear');
+    for (const id of GEAR_IDS) expect([id, scanCategory(ITEMS[id])]).toEqual([id, 'equipment']);
+    for (const id of MATERIAL_IDS) expect([id, scanCategory(ITEMS[id])]).toEqual([id, 'material']);
+    for (const d of Object.values(ITEMS).filter(isFoodOrDrink)) expect([d.id, scanCategory(d)]).toEqual([d.id, 'food']);
+    for (const d of Object.values(ITEMS).filter(q => q.kind === 'ammo')) expect([d.id, scanCategory(d)]).toEqual([d.id, 'ammo']);
+    expect(per.get('fuel')).toEqual([FUEL.canItem]);
   });
 
-  it('ammo, food, drink, medical supplies, materials and parts are ordinary (green)', () => {
-    for (const id of ['ammo_9mm', 'ammo_556', 'ammo_12ga', 'beans', 'chips', 'bread', 'water', 'cola', 'medkit', 'bandage', 'leg_splint', 'arm_sling',
-      'battery', 'flare', 'gas_filter', 'fuel_can', ...MATERIAL_IDS, 'reactor_key', 'fuse_cartridge', 'rail_ties']) {
-      expect([id, classifyItem(id)]).toEqual([id, 'item']);
+  it('a NEW item joins by its traits, with no list to update: a new gun, round, armour piece, salvage, ration', () => {
+    const def = (o: Partial<ItemDef>) => ({id: 'brand_new', name: 'New', kind: 'consumable', ...o}) as ItemDef;
+    expect(scanCategory(def({kind: 'weapon', weaponId: 'brand_new'}))).toBe('weapon');
+    expect(scanCategory(def({kind: 'ammo', caliber: '7.62x39mm' as ItemDef['caliber']}))).toBe('ammo'); // (a caliber the catalogue does not have yet)
+    expect(scanCategory(def({kind: 'gear', gear: ITEMS.helmet.gear}))).toBe('equipment');
+    expect(scanCategory(def({kind: 'material'}))).toBe('material');
+    expect(scanCategory(def({verb: 'eat'}))).toBe('food');
+    expect(scanCategory(def({verb: 'drink'}))).toBe('food');
+    expect(scanCategory(def({verb: 'apply'}))).toBeNull(); // a new dressing: ALL only
+    expect(scanCategory(def({kind: 'throwable'}))).toBeNull();
+  });
+
+  it('medical supplies, batteries, flares, grenades, filters, parts and currency are resources in ALL only', () => {
+    for (const id of ['medkit', 'bandage', 'leg_splint', 'arm_sling', 'trauma_kit', 'battery', 'flare', 'acid_grenade', 'lure_grenade', 'gas_filter',
+      'reactor_key', 'fuse_cartridge', 'rail_ties']) {
+      if (!ITEMS[id]) continue; // (a catalogue without it: nothing to check)
+      expect([id, scanCategory(ITEMS[id]), itemModes(id)]).toEqual([id, null, 1]);
     }
   });
 
-  it('an id the catalogue does not know is nothing (never a blip): not even an Object.prototype name', () => {
-    for (const id of ['', 'nope', 'RIFLE', 'toString', 'constructor', '__proto__', 'hasOwnProperty']) expect([id, classifyItem(id)]).toEqual([id, null]);
-    expect(classifyItem(undefined as unknown as string)).toBeNull();
+  it('an id the catalogue does not know is nothing (never a dot): not even an Object.prototype name', () => {
+    for (const id of ['', 'nope', 'RIFLE', 'toString', 'constructor', '__proto__', 'hasOwnProperty']) expect([id, itemModes(id)]).toEqual([id, 0]);
+    expect(itemModes(undefined as unknown as string)).toBe(0);
+    expect(stackModes(null)).toBe(0);
   });
 
-  it('things lying together: gold when any is gold, green when any is known, nothing otherwise', () => {
-    const lots = (...ids: string[]) => ids.map(itemId => ({itemId}));
-    expect(classifyItems(lots())).toBeNull();
-    expect(classifyItems(lots('beans', 'ammo_9mm'))).toBe('item');
-    expect(classifyItems(lots('beans', 'knife', 'water'))).toBe('gear');
-    expect(classifyItems(lots('nope', 'water'))).toBe('item');
-    expect(classifyItems(lots('nope', 'whatever'))).toBeNull();
+  it('a backpack is Equipment and also whatever is in it', () => {
+    const m = stackModes({itemId: 'backpack', bag: [{itemId: 'beans'}, null, {itemId: 'ammo_9mm'}, {itemId: 'nope'}]});
+    expect(SCAN_MODES.filter(k => hasMode(m, k))).toEqual(['all', 'food', 'ammo', 'equipment']);
   });
 });
 
-describe('a snapshot: what is in it', () => {
-  it('enemies: the living, non-ragdolled ones only', () => {
-    const s = takeSnapshot({enemies: [enemy(10, 2), enemy(30, 2, {alive: false}), enemy(50, 2, {ragdolled: true}), enemy(70, 2, {alive: false, ragdolled: true})]}, HERE);
-    expect(s.enemy).toEqual([{x: cellOf(10), z: cellOf(2), n: 1}]);
-    expect(s.seen).toEqual({enemy: 1, item: 0, gear: 0});
-    expect([s.item, s.gear]).toEqual([[], []]);
-  });
-
-  it('loose pickups by class; a market stall\'s ware and the train\'s own cargo are never blips; an unknown id is ignored', () => {
+describe('a snapshot: resources only', () => {
+  it('loose pickups by mode; a market stall\'s ware and the train\'s own cargo are never dots; an unknown id is ignored', () => {
     const cargo = pickup('rifle', 1, 1), ware = pickup('medkit', 30, 30, 'stall-3');
     const src: ScanSources = {
-      pickups: [pickup('beans', 20, 0), pickup('ammo_9mm', -20, 0), pickup('knife', 0, 40), pickup('gas_mask', 0, -40), pickup('mystery_item', 8, 8), ware, cargo],
+      pickups: [pickup('beans', 20, 0), pickup('ammo_9mm', -20, 0), pickup('knife', 0, 40), pickup('gas_mask', 0, -40), pickup('mystery_item', 8, 8),
+        pickup('scrap_metal', 60, 0), pickup('fuel_can', -60, 0), pickup('medkit', 0, 60), ware, cargo],
       cargoPickup: p => p === cargo,
     };
     const s = takeSnapshot(src, HERE);
-    expect(s.item).toEqual([{x: cellOf(20), z: cellOf(0), n: 1}, {x: cellOf(-20), z: cellOf(0), n: 1}].sort((a, b) => a.x * a.x + a.z * a.z - (b.x * b.x + b.z * b.z) || a.x - b.x));
-    expect(s.gear.map(b => [b.x, b.z])).toEqual([[cellOf(0), cellOf(-40)], [cellOf(0), cellOf(40)]]);
-    expect(s.seen).toEqual({enemy: 0, item: 2, gear: 2});
-    // without the cargo rule the rifle in the car WOULD be a blip (the exclusion is the rule, not a missing source)
-    expect(takeSnapshot({...src, cargoPickup: undefined}, HERE).seen.gear).toBe(3);
+    expect(s.seen).toEqual(counts({all: 7, food: 1, ammo: 1, fuel: 1, weapon: 1, equipment: 1, material: 1}));
+    expect(dots(s, 'food')).toEqual([{x: cellOf(20), z: cellOf(0), n: 1}]);
+    expect(dots(s, 'ammo')).toEqual([{x: cellOf(-20), z: cellOf(0), n: 1}]);
+    expect(dots(s, 'weapon')).toEqual([{x: cellOf(0), z: cellOf(40), n: 1}]);
+    expect(dots(s, 'equipment')).toEqual([{x: cellOf(0), z: cellOf(-40), n: 1}]);
+    expect(dots(s, 'material')).toEqual([{x: cellOf(60), z: cellOf(0), n: 1}]);
+    expect(dots(s, 'fuel')).toEqual([{x: cellOf(-60), z: cellOf(0), n: 1}]);
+    expect(dots(s, 'all')).toHaveLength(7); // the medkit is in ALL only
+    // without the cargo rule the rifle in the car WOULD be a dot (the exclusion is the rule, not a missing source)
+    expect(takeSnapshot({...src, cargoPickup: undefined}, HERE).seen.weapon).toBe(2);
     // a ware stays excluded whoever asks
-    expect(takeSnapshot({pickups: [ware]}, HERE).seen).toEqual({enemy: 0, item: 0, gear: 0});
+    expect(takeSnapshot({pickups: [ware]}, HERE).seen).toEqual(counts({}));
   });
 
-  it('holders: one blip per holder that still holds lots — empty none, ordinary lots green, any weapon / gear among them gold', () => {
+  it('no enemy is ever read: a source list of enemies is ignored, the result has no enemy part', () => {
+    const living = [{brain: {alive: true, x: 10, z: 2}, ragdolled: false}];
+    const s = takeSnapshot({enemies: living, zombies: living, pickups: [pickup('beans', 10, 2)]} as unknown as ScanSources, HERE);
+    expect(Object.keys(s).sort()).toEqual(['cells', 'seen']);
+    expect(Object.keys(s.seen)).toEqual([...SCAN_MODES]);
+    expect(s.seen.all).toBe(1);
+    expect(takeSnapshot({enemies: living} as unknown as ScanSources, HERE)).toEqual({cells: [], seen: counts({})});
+  });
+
+  it('holders: one thing per holder that still holds lots — counted once in ALL and once in each mode among its lots', () => {
     const s = takeSnapshot({holders: [holder(12, 0, []), holder(24, 0, ['beans', 'water', 'ammo_556']), holder(48, 0, ['beans', 'pistol']), holder(60, 0, ['backpack']), holder(72, 0, ['not_an_item'])]}, HERE);
-    expect(s.item).toEqual([{x: cellOf(24), z: cellOf(0), n: 1}]);
-    expect(s.gear).toEqual([{x: cellOf(48), z: cellOf(0), n: 1}, {x: cellOf(60), z: cellOf(0), n: 1}]);
-    expect(s.seen).toEqual({enemy: 0, item: 1, gear: 2}); // three lots in one holder are ONE thing; the emptied holder is none
+    expect(s.seen).toEqual(counts({all: 3, food: 2, ammo: 1, weapon: 1, equipment: 1}));
+    expect(dots(s, 'food')).toEqual([{x: cellOf(24), z: cellOf(0), n: 1}, {x: cellOf(48), z: cellOf(0), n: 1}]);
+    expect(dots(s, 'ammo')).toEqual([{x: cellOf(24), z: cellOf(0), n: 1}]);
+    expect(dots(s, 'weapon')).toEqual([{x: cellOf(48), z: cellOf(0), n: 1}]);
+    expect(dots(s, 'equipment')).toEqual([{x: cellOf(60), z: cellOf(0), n: 1}]);
+    expect(dots(s, 'material')).toEqual([]);
     // emptied before the sweep -> gone from the next snapshot
     const h = holder(24, 0, ['beans']);
-    expect(takeSnapshot({holders: [h]}, HERE).item).toHaveLength(1);
+    expect(dots(takeSnapshot({holders: [h]}, HERE), 'all')).toHaveLength(1);
     (h.state.lots as {itemId: string}[]).length = 0;
-    expect(takeSnapshot({holders: [h]}, HERE).item).toHaveLength(0);
+    expect(dots(takeSnapshot({holders: [h]}, HERE), 'all')).toHaveLength(0);
     // a holder standing in the parked car is the train's cargo
-    expect(takeSnapshot({holders: [h, holder(2, 0, ['beans'])], cargoHolder: c => c.prop.x === 2}, HERE).seen.item).toBe(0);
+    expect(takeSnapshot({holders: [h, holder(2, 0, ['beans'])], cargoHolder: c => c.prop.x === 2}, HERE).seen.all).toBe(0);
   });
 
-  it('grounded backpacks are gold; one being worn / carried away is not there; one in the car is cargo', () => {
+  it('grounded backpacks are Equipment and what is in them; one worn / carried away is not there; one in the car is cargo', () => {
     const inCar = bag(1, 0);
-    const s = takeSnapshot({bags: [bag(16, 16), bag(40, 0, false), inCar], cargoBag: b => b === inCar}, HERE);
-    expect(s.gear).toEqual([{x: cellOf(16), z: cellOf(16), n: 1}]);
-    expect(s.item).toEqual([]);
+    const s = takeSnapshot({bags: [bag(16, 16), bag(40, 0, false), inCar, bag(-16, 16, true, ['water', 'ammo_12ga'])], cargoBag: b => b === inCar}, HERE);
+    expect(dots(s, 'equipment')).toEqual([{x: cellOf(-16), z: cellOf(16), n: 1}, {x: cellOf(16), z: cellOf(16), n: 1}]); // (the nearer cell first)
+    expect(dots(s, 'food')).toEqual([{x: cellOf(-16), z: cellOf(16), n: 1}]);
+    expect(dots(s, 'ammo')).toEqual([{x: cellOf(-16), z: cellOf(16), n: 1}]);
+    expect(s.seen).toEqual(counts({all: 2, equipment: 2, food: 1, ammo: 1}));
+  });
+
+  it('fuel carts: a station\'s cart with fuel in it is Fuel; an empty one and the train\'s own never are', () => {
+    const s = takeSnapshot({carts: [cart(30, 0, 4), cart(-30, 0, 0), cart(0, 2, 8, 'train'), cart(0, 30, 0.5)]}, HERE);
+    expect(dots(s, 'fuel')).toEqual([{x: cellOf(0), z: cellOf(30), n: 1}, {x: cellOf(30), z: cellOf(0), n: 1}]); // (equally near: the cell index)
+    expect(s.seen).toEqual(counts({all: 2, fuel: 2}));
   });
 
   it('the range is 100 m, horizontal, from the car\'s centre', () => {
-    const at = (d: number, a: number) => enemy(Math.cos(a) * d, Math.sin(a) * d);
+    const at = (d: number, a: number) => pickup('beans', Math.cos(a) * d, Math.sin(a) * d);
     for (const a of [0, 1, 2.5, 4, 5.5]) {
-      expect(takeSnapshot({enemies: [at(99.9, a)]}, HERE).enemy).toHaveLength(1);
-      expect(takeSnapshot({enemies: [at(100.1, a)]}, HERE).enemy).toHaveLength(0);
+      expect(takeSnapshot({pickups: [at(99.9, a)]}, HERE).seen.all).toBe(1);
+      expect(takeSnapshot({pickups: [at(100.1, a)]}, HERE).seen.all).toBe(0);
     }
-    expect(takeSnapshot({enemies: [enemy(100, 0)], pickups: [pickup('beans', 0, -100)], holders: [holder(-100, 0, ['knife'])], bags: [bag(0, 100)]}, HERE).seen).toEqual({enemy: 1, item: 1, gear: 2});
-    expect(takeSnapshot({enemies: [enemy(100.01, 0)], pickups: [pickup('beans', 0, -100.01)], holders: [holder(-100.01, 0, ['knife'])], bags: [bag(71, 71)]}, HERE).seen).toEqual({enemy: 0, item: 0, gear: 0});
+    expect(takeSnapshot({pickups: [pickup('beans', 0, -100)], holders: [holder(-100, 0, ['knife'])], bags: [bag(0, 100)], carts: [cart(100, 0, 1)]}, HERE).seen)
+      .toEqual(counts({all: 4, food: 1, weapon: 1, equipment: 1, fuel: 1}));
+    expect(takeSnapshot({pickups: [pickup('beans', 0, -100.01)], holders: [holder(-100.01, 0, ['knife'])], bags: [bag(71, 71)], carts: [cart(100.01, 0, 1)]}, HERE).seen).toEqual(counts({}));
     // measured from the CAR, wherever it stands
     const f: ScanFrame = {x: 500, z: -300, front: -1};
-    expect(takeSnapshot({enemies: [enemy(500 - 99, -300), enemy(500 - 101, -300), enemy(0, 0)]}, f).enemy).toHaveLength(1);
-    // a broken position is no blip
-    expect(takeSnapshot({enemies: [enemy(NaN, 0), enemy(0, Infinity)]}, HERE).seen.enemy).toBe(0);
+    expect(takeSnapshot({pickups: [pickup('beans', 500 - 99, -300), pickup('beans', 500 - 101, -300), pickup('beans', 0, 0)]}, f).seen.all).toBe(1);
+    // a broken position is no dot
+    expect(takeSnapshot({pickups: [pickup('beans', NaN, 0), pickup('beans', 0, Infinity)]}, HERE).seen.all).toBe(0);
   });
 
   it('every storey is flattened onto one plane: height is not read, a thing ten floors up is one more thing in its cell', () => {
-    const low = enemy(21, 9, {y: 0}), high = enemy(22, 10, {y: 36});
     const sunk = {...pickup('beans', 41.5, 42), y: -8};
-    const s = takeSnapshot({enemies: [low, high], holders: [holder(40, 40, ['beans'], 0), holder(41, 41, ['water'], 24)], pickups: [sunk]}, HERE);
-    expect(s.enemy).toEqual([{x: cellOf(21), z: cellOf(9), n: 2}]);
-    expect(s.item).toEqual([{x: cellOf(40), z: cellOf(40), n: 3}]);
+    const s = takeSnapshot({holders: [holder(40, 40, ['beans'], 0), holder(41, 41, ['water'], 24)], pickups: [sunk]}, HERE);
+    expect(dots(s, 'all')).toEqual([{x: cellOf(40), z: cellOf(40), n: 3}]);
     // a snapshot holds positions on the plane and counts only: no height, no storey, no id, no name
-    for (const cls of SCAN_CLASSES) for (const b of s[cls]) expect(Object.keys(b).sort()).toEqual(['n', 'x', 'z']);
-    expect(Object.keys(s).sort()).toEqual(['dropped', 'enemy', 'gear', 'item', 'seen']);
+    for (const c of s.cells) {
+      expect(Object.keys(c).sort()).toEqual(['n', 'x', 'z']);
+      expect(Object.keys(c.n)).toEqual([...SCAN_MODES]);
+    }
+    for (const m of SCAN_MODES) for (const b of dots(s, m)) expect(Object.keys(b).sort()).toEqual(['n', 'x', 'z']);
   });
 });
 
+describe('a mode is a filter of the ONE snapshot', () => {
+  it('each mode shows exactly the cells with things of it, with their counts; ALL is every resource cell; nothing is read again', () => {
+    const src: ScanSources = {pickups: [pickup('beans', 9, 5), pickup('knife', 10, 6), pickup('ammo_9mm', 30, 30)], holders: [holder(9, 6, ['water', 'pistol'])]};
+    const s = takeSnapshot(src, HERE);
+    expect(dots(s, 'all')).toEqual([{x: 10, z: 6, n: 3}, {x: 30, z: 30, n: 1}]);
+    expect(dots(s, 'food')).toEqual([{x: 10, z: 6, n: 2}]);
+    expect(dots(s, 'weapon')).toEqual([{x: 10, z: 6, n: 2}]);
+    expect(dots(s, 'ammo')).toEqual([{x: 30, z: 30, n: 1}]);
+    for (const m of ['fuel', 'equipment', 'material'] as const) expect(scanBlips(s, m)).toEqual({blips: [], dropped: 0});
+    // filtering reads only the snapshot: the sources can be gone and the snapshot is unchanged
+    const frozen = JSON.stringify(s);
+    (src.pickups as ScanPickup[]).length = 0;
+    for (const m of SCAN_MODES) scanBlips(s, m);
+    expect(JSON.stringify(s)).toBe(frozen);
+    expect(dots(s, 'food')).toEqual([{x: 10, z: 6, n: 2}]);
+  });
+
+  it('every mode\'s dots are cells of the snapshot, never more things than ALL counts there', () => {
+    const src = scatter(300);
+    const s = takeSnapshot(src, HERE), all = new Map(s.cells.map(c => [`${c.x},${c.z}`, c.n.all]));
+    let n = 0;
+    for (const m of SCAN_CATEGORIES) for (const b of dots(s, m)) {
+      expect(all.has(`${b.x},${b.z}`)).toBe(true);
+      expect(b.n).toBeLessThanOrEqual(all.get(`${b.x},${b.z}`)!);
+      n++;
+    }
+    expect(n).toBeGreaterThan(300);
+    // ALL's own dots are the nearest cells (its cap is ALL's alone: a mode's far dots are not cut by it)
+    expect(dots(s, 'all')).toEqual(s.cells.slice(0, SCANNER.maxBlips).map(c => ({x: c.x, z: c.z, n: c.n.all})));
+  });
+});
+
+/** A deterministic scatter of resources in a ~160 m square. */
+function scatter(n: number): {pickups: ScanPickup[]; holders: ScanHolder[]; bags: ScanBag[]; carts: ScanCart[]} {
+  let a = 12345;
+  const r = () => ((a = (Math.imul(a, 1103515245) + 12345) >>> 0) / 4294967296 - 0.5) * 160;
+  const ids = ['beans', 'ammo_9mm', 'knife', 'water', 'backpack', 'scrap_metal', 'fuel_can', 'medkit'];
+  return {
+    pickups: Array.from({length: n}, (_, i) => pickup(ids[i % ids.length], r(), r())),
+    holders: Array.from({length: n}, (_, i) => holder(r(), r(), i % 5 === 0 ? [] : [ids[i % ids.length], ids[(i * 3) % ids.length]])),
+    bags: Array.from({length: Math.ceil(n / 20)}, () => bag(r(), r())),
+    carts: Array.from({length: 6}, (_, i) => cart(r(), r(), i % 3)),
+  };
+}
+
 describe('a snapshot is coarse and deterministic', () => {
-  it('positions are quantised to 4 m cells; the things of one class in one cell are ONE blip', () => {
-    const s = takeSnapshot({enemies: [enemy(8.1, 4.1), enemy(11.9, 7.9), enemy(9, 5), enemy(12.1, 4.1)], pickups: [pickup('beans', 9, 5), pickup('knife', 10, 6)]}, HERE);
-    expect(s.enemy).toEqual([{x: 10, z: 6, n: 3}, {x: 14, z: 6, n: 1}]);
-    // another class in the same cell is its own blip
-    expect(s.item).toEqual([{x: 10, z: 6, n: 1}]);
-    expect(s.gear).toEqual([{x: 10, z: 6, n: 1}]);
-    // a blip is never nearer the truth than its cell: the centre, up to half a cell diagonal off
+  it('positions are quantised to 4 m cells; the things of one mode in one cell are ONE dot', () => {
+    const s = takeSnapshot({pickups: [pickup('beans', 8.1, 4.1), pickup('water', 11.9, 7.9), pickup('cola', 9, 5), pickup('beans', 12.1, 4.1), pickup('knife', 10, 6)]}, HERE);
+    expect(dots(s, 'food')).toEqual([{x: 10, z: 6, n: 3}, {x: 14, z: 6, n: 1}]);
+    // another mode in the same cell is its own dot (on its own mode's picture)
+    expect(dots(s, 'weapon')).toEqual([{x: 10, z: 6, n: 1}]);
+    expect(dots(s, 'all')).toEqual([{x: 10, z: 6, n: 4}, {x: 14, z: 6, n: 1}]);
+    // a dot is never nearer the truth than its cell: the centre, up to half a cell diagonal off
     for (const [x, z] of [[8.1, 4.1], [11.9, 7.9], [-0.1, -0.1], [-3.9, 3.9], [57.3, -41.2]]) {
-      const [b] = takeSnapshot({enemies: [enemy(x, z)]}, HERE).enemy;
+      const [b] = dots(takeSnapshot({pickups: [pickup('beans', x, z)]}, HERE), 'all');
       expect([b.x, b.z]).toEqual([cellOf(x), cellOf(z)]);
       expect(Math.hypot(b.x - x, b.z - z)).toBeLessThanOrEqual(SCANNER.cell * Math.SQRT1_2 + 1e-9);
       expect((b.x / (SCANNER.cell / 2)) % 2).not.toBe(0); // a cell CENTRE, never a grid line
@@ -184,61 +307,50 @@ describe('a snapshot is coarse and deterministic', () => {
     for (let n = 1; n < 12; n++) expect(blipScale(n + 1)).toBeGreaterThanOrEqual(blipScale(n));
   });
 
-  /** A deterministic scatter of things in a ~160 m square. */
-  function scatter(n: number): {enemies: ScanEnemy[]; pickups: ScanPickup[]; holders: ScanHolder[]; bags: ScanBag[]} {
-    let a = 12345;
-    const r = () => ((a = (Math.imul(a, 1103515245) + 12345) >>> 0) / 4294967296 - 0.5) * 160;
-    const ids = ['beans', 'ammo_9mm', 'knife', 'water', 'backpack', 'scrap_metal'];
-    return {
-      enemies: Array.from({length: n}, () => enemy(r(), r())),
-      pickups: Array.from({length: n}, (_, i) => pickup(ids[i % ids.length], r(), r())),
-      holders: Array.from({length: n}, (_, i) => holder(r(), r(), i % 5 === 0 ? [] : [ids[i % ids.length], ids[(i * 3) % ids.length]])),
-      bags: Array.from({length: Math.ceil(n / 20)}, () => bag(r(), r())),
-    };
-  }
-
-  it('the same things give the same blips, in the same order, whatever order the lists come in', () => {
+  it('the same things give the same dots, in the same order, whatever order the lists come in', () => {
     const src = scatter(300);
     const a = takeSnapshot(src, HERE), again = takeSnapshot(src, HERE);
     expect(again).toEqual(a);
-    const rev = takeSnapshot({enemies: [...src.enemies].reverse(), pickups: [...src.pickups].reverse(), holders: [...src.holders].reverse(), bags: [...src.bags].reverse()}, HERE);
+    const rev = takeSnapshot({pickups: [...src.pickups].reverse(), holders: [...src.holders].reverse(), bags: [...src.bags].reverse(), carts: [...src.carts].reverse()}, HERE);
     expect(rev).toEqual(a);
     const rot = <T>(l: T[], k: number) => [...l.slice(k), ...l.slice(0, k)];
-    expect(takeSnapshot({enemies: rot(src.enemies, 97), pickups: rot(src.pickups, 31), holders: rot(src.holders, 211), bags: rot(src.bags, 3)}, HERE)).toEqual(a);
+    expect(takeSnapshot({pickups: rot(src.pickups, 31), holders: rot(src.holders, 211), bags: rot(src.bags, 3), carts: rot(src.carts, 2)}, HERE)).toEqual(a);
     // sorted: the nearest first, no cell twice, every count accounted for
-    for (const cls of SCAN_CLASSES) {
-      const d = a[cls].map(b => b.x * b.x + b.z * b.z);
-      expect(d).toEqual([...d].sort((u, v) => u - v));
-      expect(new Set(a[cls].map(b => `${b.x},${b.z}`)).size).toBe(a[cls].length);
-      if (!a.dropped[cls]) expect(a[cls].reduce((n, b) => n + b.n, 0)).toBe(a.seen[cls]);
+    const d = a.cells.map(b => b.x * b.x + b.z * b.z);
+    expect(d).toEqual([...d].sort((u, v) => u - v));
+    expect(new Set(a.cells.map(b => `${b.x},${b.z}`)).size).toBe(a.cells.length);
+    for (const m of SCAN_MODES) {
+      const r = scanBlips(a, m);
+      if (!r.dropped) expect(r.blips.reduce((n, b) => n + b.n, 0)).toBe(a.seen[m]);
+      expect(a.seen[m], m).toBeGreaterThan(0);
     }
-    expect(a.seen.enemy).toBeGreaterThan(100);
+    expect(a.seen.all).toBeGreaterThan(300);
     // taking a snapshot changes nothing it reads
     const before = JSON.stringify(src);
     takeSnapshot(src, HERE);
     expect(JSON.stringify(src)).toBe(before);
   });
 
-  it('at most maxBlips per class: the nearest cells are kept, the cut is counted', () => {
-    // one enemy in every cell of a 100 m square: far more cells than the cap
-    const enemies: ScanEnemy[] = [];
-    for (let x = -98; x < 100; x += 4) for (let z = -98; z < 100; z += 4) enemies.push(enemy(x, z));
-    const s = takeSnapshot({enemies, pickups: [pickup('beans', 3, 3)]}, HERE);
-    expect(s.enemy).toHaveLength(SCANNER.maxBlips);
-    expect(s.dropped.enemy).toBe(s.seen.enemy - SCANNER.maxBlips);
-    expect(s.dropped.enemy).toBeGreaterThan(1000);
-    const kept = new Set(s.enemy.map(b => `${b.x},${b.z}`));
-    const far = Math.max(...s.enemy.map(b => Math.hypot(b.x, b.z)));
+  it('at most maxBlips dots per mode: the nearest cells are kept, the cut is counted', () => {
+    // one tin of beans in every cell of a 100 m square: far more cells than the cap
+    const pickups: ScanPickup[] = [];
+    for (let x = -98; x < 100; x += 4) for (let z = -98; z < 100; z += 4) pickups.push(pickup('beans', x, z));
+    pickups.push(pickup('ammo_9mm', 3, 3));
+    const s = takeSnapshot({pickups}, HERE);
+    const food = scanBlips(s, 'food'), all = scanBlips(s, 'all');
+    expect(food.blips).toHaveLength(SCANNER.maxBlips);
+    expect(all.blips).toHaveLength(SCANNER.maxBlips);
+    expect(food.dropped).toBe(s.cells.length - SCANNER.maxBlips);
+    expect(food.dropped).toBeGreaterThan(1000);
+    const kept = new Set(food.blips.map(b => `${b.x},${b.z}`));
+    const far = Math.max(...food.blips.map(b => Math.hypot(b.x, b.z)));
     let nearestCut = Infinity;
-    for (const e of enemies) {
-      const x = cellOf(e.brain.x), z = cellOf(e.brain.z), d = Math.hypot(x, z);
-      if (d <= SCANNER.range + 3 && !kept.has(`${x},${z}`) && Math.hypot(e.brain.x, e.brain.z) <= SCANNER.range) nearestCut = Math.min(nearestCut, d);
-    }
+    for (const c of s.cells) if (!kept.has(`${c.x},${c.z}`)) nearestCut = Math.min(nearestCut, Math.hypot(c.x, c.z));
     expect(far).toBeLessThanOrEqual(nearestCut);
-    // the cap is per class: the one item is untouched
-    expect([s.item.length, s.dropped.item, s.dropped.gear]).toEqual([1, 0, 0]);
+    // the cap is per mode: the one cell of ammo is untouched
+    expect(scanBlips(s, 'ammo')).toEqual({blips: [{x: 2, z: 2, n: 1}], dropped: 0});
     // and it is the same cut in any order
-    expect(takeSnapshot({enemies: [...enemies].reverse(), pickups: [pickup('beans', 3, 3)]}, HERE)).toEqual(s);
+    expect(takeSnapshot({pickups: [...pickups].reverse()}, HERE)).toEqual(s);
   });
 });
 
@@ -256,11 +368,11 @@ describe('the scope is the TRAIN\'s frame: the car\'s front is +x whichever way 
   it('a thing ahead of the car\'s front is ahead (+x) on the scope for a car facing +X and for one facing -X; its right stays its right', () => {
     const east: ScanFrame = {x: 200, z: 50, front: 1}, west: ScanFrame = {x: 200, z: 50, front: -1};
     // 40 m ahead of each car's own front
-    const a = takeSnapshot({enemies: [enemy(240, 50.5)]}, east).enemy[0], b = takeSnapshot({enemies: [enemy(160, 49.5)]}, west).enemy[0];
+    const a = dots(takeSnapshot({pickups: [pickup('beans', 240, 50.5)]}, east), 'all')[0], b = dots(takeSnapshot({pickups: [pickup('beans', 160, 49.5)]}, west), 'all')[0];
     expect([a.x, a.z]).toEqual([42, 2]);
     expect([b.x, b.z]).toEqual([42, 2]);
     // the same world thing is ahead of one car and behind the other
-    const c = takeSnapshot({enemies: [enemy(241, 50.5)]}, west).enemy[0];
+    const c = dots(takeSnapshot({pickups: [pickup('beans', 241, 50.5)]}, west), 'all')[0];
     expect([c.x, c.z]).toEqual([cellOf(-41), cellOf(-0.5)]);
     expect(c.x).toBeLessThan(0);
     // a turned car is a half turn of the picture, never a mirror image: one metre ahead / one metre to the right are (1, 0) / (0, 1) in both
@@ -275,23 +387,23 @@ describe('the scope is the TRAIN\'s frame: the car\'s front is +x whichever way 
     const p = playerTrainPlacement(layout)!;
     expect(p).toBeTruthy();
     const src: ScanSources = {
-      enemies: layout.zombies.map(z => ({brain: {alive: true, x: z.x, z: z.z}})),
       pickups: layout.pickups.map(q => ({stack: {itemId: q.itemId}, x: q.x, z: q.z})),
       holders: layout.props.filter(q => isLootHolderKind(q.kind)).map(q => ({prop: q, state: {lots: [{itemId: 'water'}]}})),
     };
     const s = takeSnapshot(src, p);
     expect(takeSnapshot(src, p)).toEqual(s);
-    expect(s.seen.enemy).toBeGreaterThan(0);
-    expect(s.seen.item).toBeGreaterThan(20);
-    for (const cls of SCAN_CLASSES) {
-      expect(s[cls].length).toBeLessThanOrEqual(SCANNER.maxBlips);
-      for (const b of s[cls]) expect(Math.hypot(b.x, b.z)).toBeLessThanOrEqual(SCANNER.range + SCANNER.cell * Math.SQRT1_2);
+    expect(s.seen.all).toBeGreaterThan(20);
+    for (const m of SCAN_MODES) {
+      const r = scanBlips(s, m);
+      expect(r.blips.length).toBeLessThanOrEqual(SCANNER.maxBlips);
+      for (const b of r.blips) expect(Math.hypot(b.x, b.z)).toBeLessThanOrEqual(SCANNER.range + SCANNER.cell * Math.SQRT1_2);
+      // with EVERY loot holder counted as holding something the cap still cuts nothing here (SCANNER.maxBlips: measured, not guessed)
+      expect([m, r.dropped]).toEqual([m, 0]);
     }
-    // every enemy blip is the cell of a real spawn in the placement's own frame
-    const cells = new Set(layout.zombies.map(z => worldToTrain(p, z.x, 0, z.z)).filter(q => Math.hypot(q.x, q.z) <= SCANNER.range).map(q => `${cellOf(q.x)},${cellOf(q.z)}`));
-    expect(new Set(s.enemy.map(b => `${b.x},${b.z}`))).toEqual(cells);
-    // with EVERY loot holder counted as holding something the cap still cuts nothing here (SCANNER.maxBlips: measured, not guessed)
-    expect(s.dropped).toEqual({enemy: 0, item: 0, gear: 0});
+    // every pickup dot is the cell of a real pickup in the placement's own frame
+    const cells = new Set(layout.pickups.filter(q => itemModes(q.itemId)).map(q => worldToTrain(p, q.x, 0, q.z)).filter(q => Math.hypot(q.x, q.z) <= SCANNER.range).map(q => `${cellOf(q.x)},${cellOf(q.z)}`));
+    const pickupOnly = takeSnapshot({pickups: src.pickups}, p);
+    expect(new Set(dots(pickupOnly, 'all').map(b => `${b.x},${b.z}`))).toEqual(cells);
   });
 });
 

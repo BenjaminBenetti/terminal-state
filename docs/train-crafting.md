@@ -25,7 +25,7 @@ flamethrower task the flamethrower and its wearable fuel tank (see "The flamethr
 | Storage chest | 2 | 0 | The Lockbox's 50 slots in a smaller box you can carry. Needs no plug. |
 | Route radar | 4 | 3 | While plugged in, the travel map shows stations two stops away instead of one. |
 | Defense sentry | 8 | 6 | While plugged in and loaded, a roof turret shoots nearby enemies. Crafted empty. |
-| Item scanner | 5 | 5 | While plugged in, a radar scope shows enemies and items around the train. |
+| Item scanner | 5 | 5 | While plugged in, a radar scope shows the resources around the train, all or one kind at a time. |
 
 - **Where materials are taken from**, in this order: what you carry, the backpack you wear, the Lockbox, then crafted chests
   standing in the car. Nothing else counts (not the floor, not a backpack stored inside a box).
@@ -127,7 +127,8 @@ Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
   fades, with a few bubbles and a soft hiss. The navigation grid is unchanged: a melted prop's cells stay blocked for enemies, which is
   conservative and can never trap anyone. Leaving the station completes a melt in progress, and so does the ending save. The train's
   Save terminal waits while a melt is under way or debris is still falling ("acid is still at work").
-- **Zombie Lure grenade.** It lands and rolls; at rest it opens and for **20 active seconds** the infected within **20 m** smell it,
+- **Zombie Lure grenade.** It lands and rolls; at rest it opens and for **20 active seconds** the infected within **30 m** smell it
+  (20 m until task studio-scanner-console-refinements-20261114-031614-01; `SCENT.radius`, the one reach the base AI and the BB share),
   through walls and round corners, and go to the canister itself — never to you (`ai/scentLure.ts`); one that sees you still
   comes for you, and the blind Screacher and a dormant Siren ignore it. The BB is drawn too: off its wall or ceiling it drops down
   and walks the floor to the canister (`ai/bb.ts`). A faint tan plume shows it is venting. Then it is empty and
@@ -198,13 +199,36 @@ Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
 
 - Aim at the console face of a plugged-in scanner and tap **E**. A round black-and-green scope opens over the view. The game is
   not paused and you keep full control. **E**, a menu, a hit, or walking 2.6 m away closes it.
+- **Modes** (task studio-scanner-console-refinements-20261114-031614-01). With the scope open, **X** steps the mode:
+  **All → Food/Water → Ammo → Fuel → Weapon → Equipment → Material → All**. The header shows `MODE: …` with an `[X] NEXT MODE` hint, a
+  strip under the scope lists every mode in that order with the current one lit and underlined, and the prompt line says
+  `[X] Mode: …`; the Controls list names the key too. X does nothing while the scope is closed. A tap of **E** still opens and closes the scope, a held **E** still drags
+  the hand truck and **R** still turns a dragged one. The scope registers no input owner, so mouse and movement stay yours.
+  A mode change re-filters the snapshot already taken. It never takes an extra sweep and never tracks anything live.
+- **What counts as what** (`craft/scanner.ts scanCategory`, read from each item's catalogue traits, so new items join by what they
+  are):
+  - Weapon: kind `weapon` or a `weaponId`. Guns and melee.
+  - Ammo: kind `ammo` or a `caliber`.
+  - Fuel: the fuel can (`FUEL.canItem`) and a station's fuel cart that still holds fuel. The train's own carts are cargo, never shown.
+  - Equipment: kind `gear` or a gear spec (armour, rigs, helmets, masks, backpacks), and a backpack lying on the ground.
+  - Material: kind `material` (the bench's salvage).
+  - Food/Water: anything eaten or drunk (`isFoodOrDrink`), beers included.
+  - Medical supplies, batteries, flares, crafted grenades, gas filters, reactor parts and rail ties are resources of no listed kind:
+    they show in **All** only. An id the catalogue does not know is never a dot.
+  - A container counts once in All and once in each mode among its contents. A grounded backpack counts as Equipment and as whatever
+    is inside it.
+- **The mode belongs to the scanner.** Each scanner unit keeps its own mode, saved with it in the equipment record as `display`. The
+  field is written only when the mode is not All, so a scanner on All saves exactly as before. A record without the field (every
+  save from before the modes) loads on **All**. A `display` value the scanner does not have is a malformed record, like any other bad
+  field. It survives save, Continue, Retry, export–import and the journey with its unit. A second scanner has its own mode.
 - The scope covers a full circle of about 100 m around the train, with range rings every 25 m. Train front is up.
 - **Sweeps, not tracking.** About every 30 seconds of active play the scanner takes one snapshot. Blips do not move between sweeps:
   a blip is where something was at the last sweep. The first sweep at a station comes 4 seconds after the scanner is active there.
   Time spent unplugged does not count.
-- **Blips.** Red disc: a living enemy. Green square: ordinary items (ammunition, food, medical supplies, materials and so on),
-  loose or in a container. Gold diamond: a weapon, gear, or a backpack on the ground.
-- **Coarse on purpose.** Positions snap to a 4 m grid and things in one cell merge into one blip. All storeys are flattened onto
+- **Dots.** Resources only: a loose item, a container that still holds something, a backpack on the ground, a station's fuel cart
+  with fuel. Enemies are not shown (the scanner never reads them). Every mode draws the same mark, a **green dot**. There are no red
+  or gold classes. A mode with nothing in the snapshot says `NO … IN RANGE`.
+- **Coarse on purpose.** Positions snap to a 4 m grid and the things of one mode in one cell merge into one dot. All storeys are flattened onto
   one plane. There are no walls, rooms, labels or distances.
 - Things in the parked car and a market stall's displayed wares are never shown.
 - No battery, fuel or other upkeep. A sweep makes no noise.
@@ -286,6 +310,7 @@ belongs to the station it was left in. One mechanism covers every kind; the code
 | Sentry rounds | with the unit (ordinary 5.56 stacks in its four slots) | ride along | restored exactly |
 | Which socket a device is on | with the unit (train only) | kept; working again on arrival | restored when still in reach |
 | Scanner snapshot, turret pose | not saved | cleared at each station | cleared |
+| Scanner mode | with the unit (`display`, only when not All) | rides along | restored exactly; an older record loads on All |
 
 - A unit standing in a doorway refuses the departure ("push it all the way in or out"), like a fuel cart.
 - The limits are 24 units in the car and 48 left in one station. Beyond them a craft or a departure is refused with the numbers;
@@ -344,7 +369,7 @@ belongs to the station it was left in. One mechanism covers every kind; the code
 
 QA hooks (`?qa=1`): `__LL.bench()` (each row's material chips as `needs`, the 3D previews' state as `previews`), `benchGo()`,
 `benchOpen()`, `benchCraft(kind)`, `equipment()`, `equipmentCraft(kind)`, `equipmentToPlug(uid, i)`, `sentry()`, `scanner()`,
-`scannerSweep()`, `grenades()`, `grenadeGive(id, n)`, `grenadeThrow(id)`. The store view of any unit with slots (a chest or a sentry, by unit number): `chestStore()`, `chestTap(uid)`,
+`scannerSweep()`, `scannerMode()` (the open scope's next mode, as X does), `grenades()`, `grenadeGive(id, n)`, `grenadeThrow(id)`. The store view of any unit with slots (a chest or a sentry, by unit number): `chestStore()`, `chestTap(uid)`,
 `chestQuick(ref)`, `chestMove(from, to, count)`, `chestClose()`. The train armour: `trainArmor()`, and `trainArmorFit()` (fits it
 without a craft, QA only).
 

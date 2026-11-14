@@ -7,7 +7,7 @@
 //   Storage chest      2 / 0     the Lockbox's 50 slots again; carried, put down and picked up freely; needs no plug
 //   Route radar        4 / 3     plugged in: the network map shows two stops out instead of one
 //   Defense sentry     8 / 6     plugged in + loaded with real 5.56 mm rounds: the roof turret shoots zombies it can see; crafted EMPTY
-//   Item scanner       5 / 5     plugged in: a 360° scope, ~100 m, a sweep about every 30 active seconds
+//   Item scanner       5 / 5     plugged in: a 360° resource scope, ~100 m, a sweep about every 30 active seconds, modes (X)
 //
 // Task studio-refinement-batch-20261113-035659-01 (user: "Acid Scrapper Grenade: 3 bio_mater crafts 5 ... Zombie Lure Grenade:
 // 3 bio_mater crafts 3 ... Train plating/blades: permanent ONE-TIME 10-scrap_metal upgrade"): the bench also MAKES things that are not
@@ -67,7 +67,7 @@ export const RECIPES: readonly Recipe[] = Object.freeze([
   recipe('chest', 2, 0, 'A 50-slot chest you can carry and put down anywhere.'),
   recipe('radar', 4, 3, 'Plugged in, the network map shows stations two stops away.'),
   recipe('sentry', 8, 6, 'Plugged in and loaded with 5.56mm rounds, its roof turret shoots enemies near the train.'),
-  recipe('scanner', 5, 5, 'Plugged in, its scope shows enemies and items around the train.'),
+  recipe('scanner', 5, 5, 'Plugged in, its scope shows the resources around the train, all or one kind at a time.'),
 ]);
 
 export const recipeFor = (kind: EquipmentKind): Recipe | null => RECIPES.find(r => r.kind === kind) ?? null;
@@ -95,7 +95,7 @@ export const MADE_RECIPES: readonly MadeRecipe[] = Object.freeze([
   Object.freeze({kind: ACID_GRENADE, make: Object.freeze({type: 'item', itemId: ACID_GRENADE, count: 5}), name: 'Acid Scrapper grenade ×5', cost: costOf(0, 0, 3),
     blurb: 'Five throwable canisters: the acid sticks, melts props down to salvage and burns whoever stands in it.'}),
   Object.freeze({kind: LURE_GRENADE, make: Object.freeze({type: 'item', itemId: LURE_GRENADE, count: 3}), name: 'Zombie Lure grenade ×3', cost: costOf(0, 0, 3),
-    blurb: 'Three scent canisters: for 20 s the infected within 20 m go to the canister, not to you (one that sees you still comes).'}),
+    blurb: 'Three scent canisters: for 20 s the infected within 30 m go to the canister, not to you (one that sees you still comes).'}),
   Object.freeze({kind: 'armor', make: Object.freeze({type: 'upgrade', id: 'armor'}), name: 'Train armor', cost: costOf(10, 0, 0),
     blurb: 'Fits steel plating and blades all round the train for good: zombies pressed against it are cut down.'}),
   // task studio-flamethrower-fire-20261114-031614-01 (after every older row: the list's order is unchanged)

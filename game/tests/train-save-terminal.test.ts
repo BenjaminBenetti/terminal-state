@@ -3,12 +3,17 @@
 // retro Fallout-esque CRT LEFT of the main drive terminal, labeled 'Save'. Interaction invokes the existing actual active-slot save
 // path, truthfully reporting success/failure." On a generated Subway layout with the REAL parked train runtime, the real Player and
 // (moving car) the real TrainRide; the save API is a recorded fake here (tests/save-manual.test.ts runs the real Game.saveNow):
-//  - placement: left (-Z) of the driving desk as the operator faces the windshield (+X), in the dead strip beside the desk's -Z end,
-//    glass flush with the desk's operator edge, never in front of a cab window above its sill (the cooked CRT measured), one solid box
-//    in the parked colliders AND the ride's car-local model — a fixed part of the car (the train's own box kind, never a prop kind);
+//  - placement: left (-Z) of the driving desk as the operator faces the windshield (+X), in the dead strip beside the desk's -Z end;
+//    task studio-scanner-console-refinements-20261114-031614-01 ("Turn the train's existing Save terminal so the screen faces INWARD
+//    toward the cab/player at the drive controls. Keep its position/height"): its screen faces +Z, across the cab to the drive
+//    controls (within 30 deg; it was 66 deg off), on the same wall, shelf height and pier; the monitor on the solid pier between two cab
+//    windows (only its rounded sides reach ~2 cm past the pier's edges), the low parts under the sills; the keyboard's edge over the
+//    desk's LOW -Z end (the desk model measured under it); one solid box in the parked colliders AND the ride's car-local model — a
+//    fixed part of the car (the train's own box kind, never a prop kind);
 //  - the view: on the car's view root (stand-in without the model; the reused P7 CRT when the library has it), a dynamic canvas
 //    screen ("SAVE", the active slot, the slot's last save, the terminal's state), warm-up pool, model key, nothing pickable;
-//  - aim + glow + prompt + [E]: the nearest of the terminal and the desk; [E] calls saveNow once (cooldown), success / failure
+//  - aim + glow + prompt + [E]: the terminal (before the desk's coarse box, which covers its front corner) or the desk; aimed from the
+//    drive controls it is the terminal's; [E] calls saveNow once (cooldown), success / failure
 //    reported truthfully (toast + cue / warn toast + denied + the screen); blocked -> the prompt says why;
 //  - riding: the terminal rides on the held view and is aimed in the moving car's frame; the prompt says it saves only when stopped.
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
@@ -25,7 +30,7 @@ import type {StationLayout} from '../src/gen/stationTypes';
 import {playerTrainPlacement, trainSpawnPose, trainToWorld, worldToTrain, type TrainPlacement} from '../src/gen/playerTrain';
 import {P7_FILES} from '../src/gen/props07';
 import {PLAYER_TRAIN_SPEC as SPEC} from '../src/world/playerTrainSpec';
-import {PlayerTrainRuntime, installPlayerTrain, trainColliders} from '../src/world/playerTrain';
+import {PlayerTrainRuntime, TRAIN_DOOR, installPlayerTrain, trainColliders} from '../src/world/playerTrain';
 import {CONSOLE_PROMPT, consoleLocalRect, inCab} from '../src/world/trainConsole';
 import {RIDE_FRAME, buildRideLocalModel, carToWorld} from '../src/world/trainRideLocal';
 import {installTrainRide, type TrainRide} from '../src/world/trainRide';
@@ -139,10 +144,15 @@ const frames = (s: S, n = 1) => {
 };
 const prompt = (s: S) => s.h.promptProviders.map(f => f()).find(Boolean) ?? null;
 /** The screen's centre (train-local). */
-const SCREEN = {x: P.screenX, y: P.shelfY + SAVE_TERMINAL.screen.yc * P.scale, z: P.z};
-/** Where the operator stands to use it: in the cab, behind the desk's left end. */
-const OPERATOR = {x: CR.x0 - 0.75, z: -0.6};
+const SCREEN = P.screen;
+/** Where the operator stands at the drive controls: behind the desk's middle (the spot the screen is turned to). */
+const OPERATOR = P.driver;
 const lookAtScreen = (s: S) => standLook(s, OPERATOR.x, OPERATOR.z, SCREEN.x, SCREEN.y, SCREEN.z);
+/** The two -Z cab windows' pier (the solid lining between them). */
+const PIER = (() => { const w = cabWindows(SPEC).sort((a, b) => a.x0 - b.x0); return {x0: w[0].x1, x1: w[1].x0}; })();
+function cabWindows(spec: typeof SPEC) { return spec.windows.side.filter(w => w.side === -1 && w.zone === 'cab'); }
+/** How much of [a0, a1] lies inside [b0, b1]. */
+const overlap = (a0: number, a1: number, b0: number, b1: number) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
 
 /** Every vertex of a subtree in the train frame (the car's view root at the parked placement). */
 function localVerts(s: S, root: THREE.Object3D): THREE.Vector3[] {
@@ -160,41 +170,88 @@ function localVerts(s: S, root: THREE.Object3D): THREE.Vector3[] {
   });
   return out;
 }
-const CAB_WINDOWS = SPEC.windows.side.filter(w => w.side === -1 && w.zone === 'cab');
+const CAB_WINDOWS = cabWindows(SPEC);
 
 describe('save terminal: where it stands', () => {
-  it('LEFT of the driving desk (the operator faces +X: left = -Z), in the dead strip beside its -Z end, screen to the operator', () => {
+  it('LEFT of the driving desk (the operator faces +X: left = -Z), in the dead strip beside its -Z end, its screen turned INWARD to the drive controls', () => {
     expect(Math.abs(SPEC.console.yaw)).toBeLessThan(1e-6); // (the desk faces the windshield)
     expect(P).not.toBeNull();
     expect(P.side).toBe(-1);
     expect(P.z).toBeLessThan(CR.z0); // left of the desk
-    expect(P.box.z1).toBeLessThanOrEqual(CR.z0); // never inside it
+    expect(P.monitor.z1).toBeLessThan(CR.z0 - SAVE_TERMINAL.deskGap + 1e-9); // the monitor stands in the strip, never over the desk
     expect(P.box.z0).toBeGreaterThanOrEqual(-SPEC.interior.halfWidth - 1e-9); // against the -Z lining
-    expect(P.aim.z0).toBeGreaterThanOrEqual(P.box.z0);
-    expect(P.aim.z1).toBeLessThanOrEqual(P.box.z1);
-    expect(P.aim.z1 - P.aim.z0).toBeCloseTo(SAVE_TERMINAL_MODEL.w * SAVE_TERMINAL.scale, 3);
+    expect(P.aim.z0 - P.box.z0).toBeCloseTo(SAVE_TERMINAL.wallGap, 4); // its back at the lining
+    for (const k of ['x0', 'z0'] as const) expect(P.aim[k]).toBeGreaterThanOrEqual(P.box[k]);
+    for (const k of ['x1', 'z1'] as const) expect(P.aim[k]).toBeLessThanOrEqual(P.box[k]);
+    // turned: the model's width runs along the car, its depth across it
+    expect(P.aim.x1 - P.aim.x0).toBeCloseTo(SAVE_TERMINAL_MODEL.w * SAVE_TERMINAL.scale, 3);
+    expect(P.aim.z1 - P.aim.z0).toBeCloseTo(SAVE_TERMINAL_MODEL.d * SAVE_TERMINAL.scale, 3);
+    // only the keyboard's front edge reaches over the desk's -Z side, a few cm (the desk is low there: measured below)
+    expect(P.overDesk).toBeCloseTo(P.aim.z1 - CR.z0, 3);
+    expect(P.overDesk).toBeGreaterThan(0);
+    expect(P.overDesk).toBeLessThanOrEqual(SAVE_TERMINAL.maxOverDesk);
     expect(inCab(SPEC, P.x, P.z)).toBe(true);
     expect(P.x).toBeGreaterThan(SPEC.cab.x0 + 0.3);
-    // the glass is flush with the desk's operator edge (one more instrument beside it); the screen faces -X (the operator)
-    expect(P.screenX).toBeCloseTo(CR.x0, 4);
-    expect(P.monitor.x0).toBeCloseTo(CR.x0, 4);
-    expect(P.yaw).toBeCloseTo(-Math.PI / 2, 12);
+    // the screen faces +Z (yaw 0: model +Z, its front, is train +Z) — inward, across the cab
+    expect(P.yaw).toBe(0);
+    expect(P.facing).toEqual({x: 0, z: 1});
     const f = saveTerminalToLocal(P, 0, 0, 1), o = saveTerminalToLocal(P, 0, 0, 0);
-    expect([f.x - o.x, f.z - o.z].map(v => +v.toFixed(9) + 0)).toEqual([-P.scale, 0]); // model +Z (its front) -> train -X
-    // small: 0.30 x 0.31 x 0.34 m (the scale-check render's numbers at the runtime scale)
+    expect([f.x - o.x, f.z - o.z].map(v => +v.toFixed(9) + 0)).toEqual([0, P.scale]);
+    const c = saveTerminalToLocal(P, 0, SAVE_TERMINAL.screen.yc, screenGlassZ(0, SAVE_TERMINAL.screen.yc) + SAVE_TERMINAL.screen.lift);
+    expect([P.screen.x, P.screen.y, P.screen.z]).toEqual([c.x, c.y, c.z].map(v => Math.round(v * 1e4) / 1e4));
+    // toward the operator at the drive controls (behind the desk's middle): within 30 deg of its axis — the old -X screen was 66 deg off
+    expect(P.driver).toEqual({x: +(CR.x0 - SAVE_TERMINAL.driverBack).toFixed(4), z: (CR.z0 + CR.z1) / 2});
+    const to = {x: P.driver.x - P.screen.x, z: P.driver.z - P.screen.z}, len = Math.hypot(to.x, to.z);
+    const off = (fx: number, fz: number) => Math.acos((fx * to.x + fz * to.z) / len) * 180 / Math.PI;
+    expect(off(P.facing.x, P.facing.z)).toBeLessThan(30);
+    expect(off(-1, 0)).toBeGreaterThan(60); // (the old facing, for the record)
+    expect(inCab(SPEC, P.driver.x, P.driver.z)).toBe(true);
+    // small: 0.30 x 0.31 x 0.34 m (the scale-check render's numbers at the runtime scale); the same shelf height as before
     expect([P.width, P.height, P.depth]).toEqual([0.2985, 0.306, 0.34]);
     expect(P.shelfY - SPEC.floorY).toBeCloseTo(SAVE_TERMINAL.shelfY, 9);
+    expect(SAVE_TERMINAL.shelfY).toBe(0.92);
     expect(P.top).toBeCloseTo(P.shelfY + P.height, 4);
   });
 
-  it('never stands in front of a cab window above its sill: the monitor in front of the solid pier, the low parts under the sill', () => {
+  it('the monitor is centred on the solid pier between the two -Z cab windows (its rounded sides ~2 cm past the pier); the low parts under the sill', () => {
     expect(CAB_WINDOWS.length).toBeGreaterThanOrEqual(2);
-    // the monitor body (everything above the keyboard) lies between two windows
-    for (const w of CAB_WINDOWS) expect(P.monitor.x1 <= w.x0 || P.monitor.x0 >= w.x1, `monitor vs window ${w.x0}..${w.x1}`).toBe(true);
+    expect((P.monitor.x0 + P.monitor.x1) / 2).toBeCloseTo((PIER.x0 + PIER.x1) / 2, 4);
+    // the monitor (everything above the keyboard) is 0.30 m wide, the pier 0.26 m: at most 2.5 cm of it in front of either window's edge
+    expect(PIER.x1 - PIER.x0).toBeCloseTo(0.26, 2);
+    for (const w of CAB_WINDOWS) expect(overlap(P.monitor.x0, P.monitor.x1, w.x0, w.x1), `monitor vs window ${w.x0}..${w.x1}`).toBeLessThanOrEqual(0.025);
+    // it stands where it stood (the same wall, shelf and pier): the old placement's monitor was in front of this pier too
+    expect(overlap(P.aim.x0, P.aim.x1, 6.2131, 6.5531)).toBeGreaterThan(0.2); // (the old aim box's x span, task refinement-batch)
     // whatever lies in front of a window (the shelf + its lip, the keyboard) stays below that window's sill
     const lowTop = Math.max(P.shelfY + 0.025, P.shelfY + KEYBOARD_TOP * P.scale);
     for (const w of CAB_WINDOWS) if (w.x1 > P.box.x0 && w.x0 < P.box.x1) expect(lowTop, `under the sill of ${w.x0}..${w.x1}`).toBeLessThan(w.y0);
   });
+
+  it('what reaches over the desk\'s -Z end clears the desk model there: the cooked desk is low under the shelf (measured, not its box)', async () => {
+    const gl: GLTF = await loadStripped(SPEC.models.console.url);
+    const root = gl.scene;
+    root.updateMatrixWorld(true);
+    // placed as world/playerTrainView.ts places it: centred on spec.console, standing on the floor (yaw 0, scale 1 here)
+    expect([SPEC.console.yaw, SPEC.console.scale]).toEqual([0, 1]);
+    const bb = new THREE.Box3().setFromObject(root), v = new THREE.Vector3();
+    let under = 0, top = -Infinity, all = 0;
+    root.traverse(o => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const pos = m.geometry.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+        const x = SPEC.console.x + v.x - (bb.min.x + bb.max.x) / 2, y = SPEC.floorY + v.y - bb.min.y, z = SPEC.console.z + v.z - (bb.min.z + bb.max.z) / 2;
+        all++;
+        if (x >= P.shelf.x0 - 0.02 && x <= P.shelf.x1 + 0.02 && z <= P.shelf.z1 + 0.02) { under++; top = Math.max(top, y); }
+      }
+    });
+    expect(all).toBeGreaterThan(1000);
+    expect(under).toBeGreaterThan(0); // (the desk's low left end IS there)
+    // its highest point under the shelf (2 cm round) is far below the shelf's underside: the desk's coarse box (top 1.16 m) is not the desk
+    expect(top - SPEC.floorY).toBeLessThan(0.75);
+    expect(P.shelf.y0 - top).toBeGreaterThan(0.15);
+    expect(CR.top - SPEC.floorY).toBeGreaterThan(1.1);
+  }, 120000);
 
   it('one solid box (shelf + terminal, lining to the desk side, to its top) parked AND in the ride model — the train\'s own box kind', () => {
     const p = playerTrainPlacement(layout())!;
@@ -219,8 +276,9 @@ describe('save terminal: where it stands', () => {
     expect(sv).toBeDefined();
     const {ox, oz} = RIDE_FRAME; // (the ride's step frame: train-local + (ox, oz))
     expect([sv.x - sv.hx - ox, sv.x + sv.hx - ox, sv.z - sv.hz - oz, sv.z + sv.hz - oz].map(v => +v.toFixed(6))).toEqual([P.box.x0, P.box.x1, P.box.z0, P.box.z1].map(v => +v.toFixed(6)));
-    // it does not overlap the desk's box
-    expect(sv.z + sv.hz).toBeLessThanOrEqual(m.named.console.z - m.named.console.hz + 1e-9);
+    // it reaches into the desk's box by the keyboard's overhang + the shelf's lip only (two solids, no gap between them)
+    expect(sv.z + sv.hz - (m.named.console.z - m.named.console.hz)).toBeLessThanOrEqual(SAVE_TERMINAL.maxOverDesk + SAVE_TERMINAL.lip + 1e-9);
+    expect(P.box.z1 - CR.z0).toBeCloseTo(P.overDesk + SAVE_TERMINAL.lip, 3);
   });
 
   it('no placement for a car whose desk is turned or whose strip beside it is too narrow (nothing built, nothing throws)', () => {
@@ -326,16 +384,17 @@ describe('save terminal: the fixture in the car', () => {
     expect(box.min.x).toBeGreaterThanOrEqual(P.aim.x0 - e); expect(box.max.x).toBeLessThanOrEqual(P.aim.x1 + e);
     expect(box.min.z).toBeGreaterThanOrEqual(P.aim.z0 - e); expect(box.max.z).toBeLessThanOrEqual(P.aim.z1 + e);
     expect(box.min.z).toBeGreaterThan(-SPEC.interior.halfWidth); // never through the lining
-    expect(box.max.z).toBeLessThan(CR.z0); // never into the desk
-    // the monitor (above the keyboard) ends at the desk's operator edge: its glass front is flush with it
+    expect(box.max.z - CR.z0).toBeLessThanOrEqual(SAVE_TERMINAL.maxOverDesk); // only a few cm over the desk's side
+    // the monitor (above the keyboard) stands in the strip: its glass front faces +Z, short of the desk's side; only the keyboard reaches over
     const kbTop = P.shelfY + KEYBOARD_TOP * P.scale + 1e-4;
     const mon = verts.filter(v => v.y > kbTop);
-    const monMinX = Math.min(...mon.map(v => v.x));
-    expect(monMinX).toBeCloseTo(CR.x0, 2);
-    // nothing of it in front of a cab window above that window's sill
+    expect(Math.max(...mon.map(v => v.z))).toBeCloseTo(P.monitor.z1, 2);
+    expect(Math.max(...mon.map(v => v.z))).toBeLessThan(CR.z0);
+    for (const v of verts) if (v.z > CR.z0) expect(v.y).toBeLessThanOrEqual(kbTop);
+    // above a cab window's sill only the monitor's rounded sides, within 2.5 cm of that window's edge
     for (const w of CAB_WINDOWS) {
-      const bad = verts.filter(v => v.x > w.x0 && v.x < w.x1 && v.y >= w.y0);
-      expect(bad.length, `vertices in front of window ${w.x0}..${w.x1} above its sill`).toBe(0);
+      const bad = verts.filter(v => v.x > w.x0 && v.x < w.x1 && v.y >= w.y0 && Math.min(v.x - w.x0, w.x1 - v.x) > 0.025);
+      expect(bad.length, `vertices in front of window ${w.x0}..${w.x1} above its sill, past its edge`).toBe(0);
     }
     // the screen patch lies in front of the glass (model frame): no model vertex inside the patch rect stands in front of it
     const S = SAVE_TERMINAL.screen, inv = new THREE.Matrix4();
@@ -362,12 +421,25 @@ describe('save terminal: the fixture in the car', () => {
 });
 
 describe('save terminal: aim, prompt, [E]', () => {
-  it('the nearest of the terminal and the desk wins: aimed -> its glow + "[E] Save game · slot N"; the desk beside it keeps its own', async () => {
+  it('aimed from the drive controls -> its glow + "[E] Save game · slot N" (before the desk\'s coarse box); the desk beside it keeps its own', async () => {
     const gl: GLTF = await loadStripped(SAVE_TERMINAL_MODEL.url);
     const s = setup({term: {model: () => gl.scene}});
     const meshes = s.term.meshes();
     expect(meshes.length).toBeGreaterThan(0);
     const bases = new Map(meshes.map(m => [m, m.material as THREE.Material]));
+    // the premise: from the drive controls a ray to the screen's lower right (and to the keyboard) crosses the desk's coarse box FIRST
+    // (it covers the terminal's front corner) — so the terminal is tested before the desk, else the desk would take its [E] there
+    const S = SAVE_TERMINAL.screen, lowRight = saveTerminalToLocal(P, 0.1, 0.14, screenGlassZ(0.1, 0.14) + S.lift);
+    const eye = new THREE.Vector3(OPERATOR.x, SPEC.floorY + STAND_EYE, OPERATOR.z), dir = new THREE.Vector3(lowRight.x, lowRight.y, lowRight.z).sub(eye).normalize();
+    const ray = new THREE.Ray(eye, dir), hitAt = (b: THREE.Box3) => ray.intersectBox(b, new THREE.Vector3())?.distanceTo(eye) ?? Infinity;
+    const deskBox = new THREE.Box3(new THREE.Vector3(CR.x0, SPEC.floorY, CR.z0), new THREE.Vector3(CR.x1, CR.top, CR.z1));
+    const termBox = new THREE.Box3(new THREE.Vector3(P.aim.x0, P.aim.y0, P.aim.z0), new THREE.Vector3(P.aim.x1, P.aim.y1, P.aim.z1));
+    expect(hitAt(deskBox)).toBeLessThan(hitAt(termBox));
+    expect(hitAt(termBox)).toBeLessThan(TRAIN_DOOR.reach);
+    standLook(s, OPERATOR.x, OPERATOR.z, lowRight.x, lowRight.y, lowRight.z);
+    frames(s);
+    expect([s.rt.saveAimed, s.rt.consoleAimed]).toEqual([true, false]);
+    // aimed at the screen's centre from the drive controls: the terminal's
     lookAtScreen(s);
     frames(s);
     expect(s.rt.saveAimed).toBe(true);
@@ -386,6 +458,14 @@ describe('save terminal: aim, prompt, [E]', () => {
     expect(s.rt.saveAimed).toBe(false);
     expect(prompt(s)).toBe(CONSOLE_PROMPT);
     for (const m of meshes) expect(m.material).toBe(bases.get(m));
+    // the desk's controls left of its middle, past the terminal: still the desk's
+    standLook(s, OPERATOR.x, OPERATOR.z, CR.x0 + 0.5, SPEC.floorY + 1.05, CR.z0 + 0.3);
+    frames(s);
+    expect([s.rt.consoleAimed, s.rt.saveAimed]).toEqual([true, false]);
+    // from beside the desk's left end (the old operator spot) the screen is the terminal's too
+    standLook(s, CR.x0 - 0.75, -0.6, SCREEN.x, SCREEN.y, SCREEN.z);
+    frames(s);
+    expect(s.rt.saveAimed).toBe(true);
     // from the saloon, through the partition wall: nothing
     standLook(s, SPEC.cab.x0 - 0.45, -0.95, SCREEN.x, SCREEN.y, SCREEN.z);
     frames(s);

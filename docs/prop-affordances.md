@@ -666,15 +666,21 @@ they sit outside the two audits; their classification is recorded here.
   `world/trainSaveTerminalPlace.ts`, runtime `world/trainSaveTerminal.ts`):
   - Not storage: a save console with nothing to open and no loot table. [E] saves the run to its active slot (`Game.saveNow`).
   - Physics: static, `anchored`. It sits on a small steel wall shelf (plain geometry and material) in the strip between the
-    driving desk's left (-Z) end and the lining, screen to the operator. Shelf and terminal are one solid box for player, enemy and
-    hitscan, parked and riding (`trainColliders`, `buildRideLocalModel`). Shots and bumps don't move it. It is a fixed part of the
+    driving desk's left (-Z) end and the lining. Since task studio-scanner-console-refinements-20261114-031614-01 its screen faces
+    inward (+Z, across the cab): from the drive controls behind the desk's middle the screen is about 27° off its axis. Before,
+    it faced -X along the car, about 66° off. Same wall, shelf height, scale and model; its back is against the lining. Shelf
+    and terminal are one solid box for player, enemy and hitscan, parked and riding (`trainColliders`, `buildRideLocalModel`). The
+    box reaches about 3.5 cm into the desk's own box (two solids, no gap). Shots and bumps don't move it. It is a fixed part of the
     car, never a layout prop kind, cargo or equipment, so acid never melts it.
   - No baked clutter: the keyboard is part of the terminal model. The screen is a dynamic canvas texture (the dynamic-text
     exemption): the "SAVE" heading, the active slot, the slot's last save and the terminal's state. That heading is its label.
   - Scale (rule 5): `scale-check.mjs --prop game/public/assets/models/p7-crt-terminal-t25.glb --scale 0.68`, viewed beside zombie
     lastshift (1.78 m, runtime scale 1). 0.30 × 0.31 × 0.34 m, grounded (8 contact clusters, base y 0.0002 m), top 0.31 m: a small
-    terminal. The shelf top is 0.92 m over the car floor. The monitor stands in front of the solid pier between the two -Z cab
-    windows; the keyboard (top 0.957 m) and the shelf lip stay below the 0.98 m window sill.
+    terminal. The shelf top is 0.92 m over the car floor. Turned inward, the 0.30 m monitor is centred on the 0.26 m solid pier between
+    the two -Z cab windows. Only its rounded sides reach about 2 cm past the pier's edges. The keyboard (top 0.957 m) and the shelf lip
+    stay below the 0.98 m window sill. The 0.34 m depth is more than the 0.32 m strip, so the keyboard's front edge (2.3 cm) and the
+    shelf lip (3.5 cm) reach over the desk's left end. The cooked desk is at most 0.71 m high under them, against the shelf's 0.89 m
+    underside (`tests/train-save-terminal.test.ts` measures the desk model). Size, scale and contact are unchanged by the turn.
 - **Train armour** (first kit: task studio-refinement-batch-20261113-035659; the makeover kit that replaced its look: task
   studio-train-armor-makeover-20261113-183146-01; `docs/train-crafting.md` "Train armour"; models
   `assets/models/train-armor-{side,end}.glb`, cooked by `tools/asset-pipeline/props/build-refinement-batch.mjs`, and

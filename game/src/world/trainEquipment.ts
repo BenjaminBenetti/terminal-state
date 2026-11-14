@@ -97,8 +97,8 @@ import type {PropPlacement} from '../gen/props';
 import {HoldGesture, foreignOwners} from '../core/holdGesture';
 import {moveCircle, type PropIndex} from '../core/physics';
 import {
-  EQUIPMENT, EQUIPMENT_KINDS, EQUIPMENT_LIMITS, STATION_EQUIPMENT_LANE, copyEquipment, equipmentProblem, equipmentRounds, equipmentSeqOf, isEquipmentKind,
-  freshEquipment, stationEquipmentOf, type EquipmentDef, type EquipmentJSON, type EquipmentKind, type StationEquipmentJSON, type TrainEquipment,
+  EQUIPMENT, EQUIPMENT_KINDS, EQUIPMENT_LIMITS, STATION_EQUIPMENT_LANE, copyEquipment, equipmentDisplay, equipmentProblem, equipmentRounds, equipmentSeqOf,
+  isEquipmentKind, freshEquipment, stationEquipmentOf, type EquipmentDef, type EquipmentJSON, type EquipmentKind, type StationEquipmentJSON, type TrainEquipment,
 } from '../craft/equipment';
 import type {EquipmentStore, EquipmentSystemLike, EquipmentUnit, EquipmentUse} from '../craft/equipmentApi';
 import {PLUG, craftSpots, plugInReach} from '../craft/trainFixtures';
@@ -302,6 +302,8 @@ export class LiveUnit implements EquipmentUnit {
   plug: number | null = null;
   /** Rounds of a record written before the kind had slots, not yet turned into stacks (TrainEquipmentSystem.adoptLegacyAmmo). */
   legacyAmmo = 0;
+  /** EquipmentUnit.display: the selected display mode (kinds with def.displayModes; the record's, else the first). */
+  display: string;
   /** The storage (kinds with def.slots): the live slots, exactly a Lockbox-like store. */
   readonly store: TrainLockbox | null;
   /** World pose / motion (mode 'world'). */
@@ -331,6 +333,7 @@ export class LiveUnit implements EquipmentUnit {
   constructor(private readonly sys: TrainEquipmentSystem, readonly uid: string, readonly def: EquipmentDef, readonly view: EquipmentView, at: {x: number; y: number; z: number; yaw: number; level: number}) {
     this.kind = def.kind;
     this.seq = equipmentSeqOf(uid);
+    this.display = equipmentDisplay(def, undefined);
     this.store = def.slots > 0 ? new TrainLockbox(def.slots) : null;
     // (a feed: its slots take only its own item, whatever moves the stacks)
     if (this.store && def.slotItem) setStoreRule(this.store.slots, feedRule(def));
@@ -378,6 +381,11 @@ export class LiveUnit implements EquipmentUnit {
   }
 
   setOpen(open: boolean): void { this.sys.setLid(this, open); }
+  setDisplay(mode: string): boolean {
+    if (mode === this.display || !this.def.displayModes.includes(mode)) return false;
+    this.display = mode;
+    return true;
+  }
   worldPose(): {x: number; y: number; z: number; yaw: number; level: number} | null { return this.sys.poseOf(this); }
 }
 
@@ -385,6 +393,8 @@ export class LiveUnit implements EquipmentUnit {
 export interface EquipmentReadout {
   uid: string; kind: EquipmentKind; mode: Mode | 'pending'; owner: 'train' | 'station'; plug: number | null; ammo: number; stacks: number;
   x: number; y: number; z: number; yaw: number; level: number;
+  /** Its display mode ('' for a kind without modes). */
+  display: string;
 }
 
 export class TrainEquipmentSystem implements EquipmentSystemLike {
@@ -717,6 +727,8 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     if (u.store) r.slots = u.store.toJSON().slots;
     // (a legacy record's rounds that are not stacks yet go back out exactly as they came: never lost, never also in the slots)
     if (u.legacyAmmo > 0) r.ammo = u.legacyAmmo;
+    // (the display mode only when it is not the kind's default: a unit on its default records exactly what it did before the modes)
+    if (u.def.displayModes.length && u.display !== u.def.displayModes[0]) r.display = u.display;
     return r;
   }
 
@@ -1108,6 +1120,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     const u = new LiveUnit(this, rec.uid, def, view, {x: rec.x, y: f?.floor ?? rec.y, z: rec.z, yaw: rec.yaw, level: f?.level ?? level});
     // (nothing is invented: exactly the record's stacks / rounds; a malformed stack loads as an empty slot)
     if (u.store) u.store.load({v: 1, slots: rec.slots ?? []});
+    u.display = equipmentDisplay(def, rec.display); // (no / an unknown mode: the kind's default — ALL for the scanner)
     if (def.slotItem && def.legacyAmmoCap > 0 && Number.isFinite(rec.ammo) && (rec.ammo as number) > 0) {
       // a record from before the feed slots: its rounds wait aside until a played frame makes them stacks (adoptLegacyAmmo)
       u.legacyAmmo = Math.min(def.legacyAmmoCap, Math.floor(rec.ammo as number));
@@ -1917,9 +1930,10 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
     for (const u of this.units()) {
       const w = this.poseOf(u) ?? {x: u.body.x, y: u.body.y, z: u.body.z, yaw: u.body.yaw, level: u.body.level};
       out.push({uid: u.uid, kind: u.kind, mode: u.mode, owner: this.isTrainOwned(u) ? 'train' : 'station', plug: u.plug, ammo: u.ammo, stacks: u.store?.used ?? 0,
-        x: r4(w.x), y: r4(w.y), z: r4(w.z), yaw: r4(w.yaw), level: w.level});
+        x: r4(w.x), y: r4(w.y), z: r4(w.z), yaw: r4(w.yaw), level: w.level, display: u.display});
     }
-    for (const r of this.pending) out.push({uid: r.uid, kind: r.kind, mode: 'pending', owner: 'train', plug: r.plug ?? null, ammo: equipmentRounds(r), stacks: (r.slots ?? []).filter(Boolean).length, x: r.x, y: r.y, z: r.z, yaw: r.yaw, level: -1});
+    for (const r of this.pending) out.push({uid: r.uid, kind: r.kind, mode: 'pending', owner: 'train', plug: r.plug ?? null, ammo: equipmentRounds(r), stacks: (r.slots ?? []).filter(Boolean).length, x: r.x, y: r.y, z: r.z, yaw: r.yaw, level: -1,
+      display: equipmentDisplay(EQUIPMENT[r.kind], r.display)});
     return out;
   }
 
