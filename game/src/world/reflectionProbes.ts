@@ -24,13 +24,14 @@
 //    PROBE_NORM_MIN — the shader scales a probe by min(local field luminance / NORM, PROBE_RATIO_MAX), so reflections dim with the
 //    light around the surface: flicker, a passing train's shadow, a dark side room); row 1 / 2 = the probe's parallax box min / max.
 
+import {CELL} from '../gen/grid';
 import type {BuildSteps} from '../core/pacedBuild';
 import type {Level} from '../gen/levels';
 import type {LightPlacement} from '../gen/station';
 import type {ReflectionTier} from './enhancedLighting';
-import type {BakedField, ColumnGeometry} from './lightField';
-import type {BandScene} from './lightScene';
-import type {SurfaceAlbedo} from './surfaceAlbedo';
+import {FIELD_EMAX, fixtureGroup, fixtureTint, slotBase, slotLayers, type BakedField, type ColumnGeometry} from './lightField';
+import {BandScene, HIT_CEIL, HIT_FLOOR} from './lightScene';
+import {ALBEDO_LUT, ALBEDO_STRIDE, ALB_CEIL, ALB_FLOOR, ALB_WALL, type SurfaceAlbedo} from './surfaceAlbedo';
 
 /** Probe tiles per atlas row, roughness levels per probe, gutter texels around every tile. */
 export const PROBE_COLS = 16;
@@ -128,11 +129,458 @@ export function probeBytes(p: Pick<BakedProbes, 'atlas' | 'meta' | 'grid'>): num
   return p.atlas.byteLength + p.meta.byteLength + p.grid.byteLength;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Octahedral tiles: the gutter wrap, texel directions and solid angles, half floats
+
+/** Interior texel (j * t + i) that texel (i, j) of a t-px tile stands for, i and j in [-1, t] (octWrapTexel without the tuple). */
+function wrapIndex(i: number, j: number, t: number): number {
+  if (i < 0) { i = -1 - i; j = t - 1 - j; } else if (i >= t) { i = 2 * t - 1 - i; j = t - 1 - j; }
+  if (j < 0) { j = -1 - j; i = t - 1 - i; } else if (j >= t) { j = 2 * t - 1 - j; i = t - 1 - i; }
+  return j * t + i;
+}
+
+/**
+ * The octahedral WRAP of a t-px tile: the interior texel a texel one step outside the tile (i or j = -1 or t: the gutter) continues
+ * the map with. Across an edge the map folds back on itself (the two halves of an edge are the same directions): the overshooting
+ * coordinate is reflected and the other one mirrored — (-1, j) = (0, t-1-j), (t, j) = (t-1, t-1-j), (i, -1) = (t-1-i, 0),
+ * (i, t) = (t-1-i, t-1); a corner is the diagonally opposite interior corner (all four corners are the -y pole). An interior texel
+ * is itself. The bake fills the gutters and splats across the edges with it.
+ */
+export function octWrapTexel(i: number, j: number, t: number, out: [number, number] = [0, 0]): [number, number] {
+  const q = wrapIndex(i, j, t);
+  out[0] = q % t; out[1] = (q - out[0]) / t;
+  return out;
+}
+
+const DIRS = new Map<number, Float64Array>();
+/** Unit directions of the texel centres of a t-px tile ([x, y, z] per texel, texel j * t + i). Cached and shared: read only. */
+export function octTexelDirections(t: number): Float64Array {
+  let d = DIRS.get(t);
+  if (d) return d;
+  d = new Float64Array(t * t * 3);
+  const v: [number, number, number] = [0, 0, 0];
+  for (let j = 0; j < t; j++) for (let i = 0; i < t; i++) {
+    octDecode((i + 0.5) / t, (j + 0.5) / t, v);
+    const o = (j * t + i) * 3;
+    d[o] = v[0]; d[o + 1] = v[1]; d[o + 2] = v[2];
+  }
+  DIRS.set(t, d);
+  return d;
+}
+
+const OMEGAS = new Map<number, Float64Array>();
+/**
+ * Solid angle (sr) of every texel of a t-px tile (texel j * t + i; they sum to 4 pi). The map is a unit octahedron pushed onto the
+ * sphere: a patch dp of the (2u - 1, 2v - 1) square subtends dp / r^3, r = the length of its octahedron point (4 x 4 samples a texel).
+ * Cached and shared: read only.
+ */
+export function octTexelSolidAngles(t: number): Float64Array {
+  let w = OMEGAS.get(t);
+  if (w) return w;
+  w = new Float64Array(t * t);
+  const SS = 4, dp = 4 / (t * t * SS * SS);
+  let sum = 0;
+  for (let j = 0; j < t; j++) for (let i = 0; i < t; i++) {
+    let a = 0;
+    for (let b = 0; b < SS; b++) for (let c = 0; c < SS; c++) {
+      const px = (i + (c + 0.5) / SS) / t * 2 - 1, pz = (j + (b + 0.5) / SS) / t * 2 - 1;
+      const y = 1 - Math.abs(px) - Math.abs(pz), k = Math.max(-y, 0);
+      const x = px + (px >= 0 ? -k : k), z = pz + (pz >= 0 ? -k : k);
+      const r2 = x * x + y * y + z * z;
+      a += dp / (r2 * Math.sqrt(r2));
+    }
+    w[j * t + i] = a; sum += a;
+  }
+  const fix = 4 * Math.PI / sum;
+  for (let q = 0; q < w.length; q++) w[q] *= fix;
+  OMEGAS.set(t, w);
+  return w;
+}
+
+const F32 = new Float32Array(1), U32 = new Uint32Array(F32.buffer);
+/** Largest radiance an atlas texel stores. */
+export const PROBE_RADIANCE_MAX = 60000;
+/** A radiance as the atlas stores it: clamped to [0, PROBE_RADIANCE_MAX] (a NaN is 0), rounded to the nearest half float. */
+export function probeHalf(v: number): number {
+  if (!(v > 0)) return 0;
+  F32[0] = v > PROBE_RADIANCE_MAX ? PROBE_RADIANCE_MAX : v;
+  const x = U32[0], e = (x >>> 23) & 0xff, m = x & 0x7fffff;
+  if (e < 103) return 0; // below half the smallest half float
+  if (e < 113) {
+    // a subnormal half: the float's 24-bit mantissa shifted down, round to nearest even
+    const mant = m | 0x800000, shift = 126 - e, half = 1 << (shift - 1), rem = mant & ((1 << shift) - 1);
+    let h = mant >> shift;
+    if (rem > half || (rem === half && (h & 1))) h++;
+    return h;
+  }
+  let h = ((e - 112) << 10) | (m >> 13);
+  const rem = m & 0x1fff;
+  if (rem > 0x1000 || (rem === 0x1000 && (h & 1))) h++; // (a carry into the exponent is the next power of two: correct)
+  return h;
+}
+const HALF_ONE = 0x3c00;
+
+// ---------------------------------------------------------------------------------------------
+// The roughness levels: a Gaussian on the sphere per level, as a sparse matrix per tile size (built once, reused for every probe)
+
+interface LevelKernel {
+  /** Tile edge of the level. */
+  t: number;
+  /** Destination texel d: entries start[d] .. start[d + 1] - 1 of `src` (source texel) / `w` (weights; they sum to 1 per destination). */
+  start: Int32Array; src: Uint16Array; w: Float32Array;
+}
+const KERNELS = new Map<number, LevelKernel[]>();
+
+/** Gaussian sigma (radians) that takes level l - 1's blur to level l's. */
+const levelSigma = (l: number): number => Math.sqrt(PROBE_LEVEL_SIGMA[l] ** 2 - PROBE_LEVEL_SIGMA[l - 1] ** 2) * Math.PI / 180;
+
+/** The blur matrices of levels 1 .. PROBE_LEVELS - 1 of a `tile`-px probe (cached per tile size; built in steps the first time). */
+function* levelKernelsSteps(tile: number): BuildSteps<LevelKernel[]> {
+  const hit = KERNELS.get(tile);
+  if (hit) return hit;
+  const out: LevelKernel[] = [];
+  for (let l = 1; l < PROBE_LEVELS; l++) {
+    const t = Math.max(1, tile >> l), n = t * t, inv = 1 / (2 * levelSigma(l) ** 2);
+    const dirs = octTexelDirections(t), om = octTexelSolidAngles(t);
+    const start = new Int32Array(n + 1), src: number[] = [], w: number[] = [], row = new Float64Array(n);
+    const rows = (a: number, b: number): void => {
+      for (let d = a; d < b; d++) {
+        const x = dirs[d * 3], y = dirs[d * 3 + 1], z = dirs[d * 3 + 2];
+        let top = 0;
+        for (let q = 0; q < n; q++) {
+          const c = x * dirs[q * 3] + y * dirs[q * 3 + 1] + z * dirs[q * 3 + 2], th = Math.acos(c > 1 ? 1 : c < -1 ? -1 : c);
+          const v = Math.exp(-th * th * inv) * om[q];
+          row[q] = v;
+          if (v > top) top = v;
+        }
+        const cut = top * 1e-4;
+        let sum = 0;
+        for (let q = 0; q < n; q++) if (row[q] > cut) sum += row[q];
+        for (let q = 0; q < n; q++) if (row[q] > cut) { src.push(q); w.push(row[q] / sum); }
+        start[d + 1] = src.length;
+      }
+    };
+    const CHUNK = Math.max(1, Math.floor(50000 / n));
+    for (let a = 0; a < n; a += CHUNK) { rows(a, Math.min(n, a + CHUNK)); yield; }
+    out.push({t, start, src: Uint16Array.from(src), w: Float32Array.from(w)});
+  }
+  KERNELS.set(tile, out);
+  return out;
+}
+
+/** `src` (a 2t-px tile at offset `so`, rgb per texel) box-downsampled 2 x 2 into `dst` (t px). */
+function boxDown(src: Float32Array, so: number, t: number, dst: Float32Array): void {
+  const st = 2 * t;
+  for (let j = 0; j < t; j++) for (let i = 0; i < t; i++) {
+    const a = so + (2 * j * st + 2 * i) * 3, b = a + st * 3, o = (j * t + i) * 3;
+    dst[o] = (src[a] + src[a + 3] + src[b] + src[b + 3]) * 0.25;
+    dst[o + 1] = (src[a + 1] + src[a + 4] + src[b + 1] + src[b + 4]) * 0.25;
+    dst[o + 2] = (src[a + 2] + src[a + 5] + src[b + 2] + src[b + 5]) * 0.25;
+  }
+}
+
+function applyKernel(K: LevelKernel, src: Float32Array, dst: Float32Array): void {
+  const {start, src: ix, w} = K;
+  for (let d = 0, n = K.t * K.t; d < n; d++) {
+    let r = 0, g = 0, b = 0;
+    for (let q = start[d], e = start[d + 1]; q < e; q++) {
+      const o = ix[q] * 3, k = w[q];
+      r += src[o] * k; g += src[o + 1] * k; b += src[o + 2] * k;
+    }
+    dst[d * 3] = r; dst[d * 3 + 1] = g; dst[d * 3 + 2] = b;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Placement
+
+/** Where the probes of a station sit (probe p: its level slot, its block, its cell). */
+interface ProbePlacement { block: number; ramp: number; slot: number[]; bx: number[]; bz: number[]; cell: number[] }
+
+/** The block edge (cells) a tier starts from: the even number of cells nearest its spacing, at least 8. */
+export function probeBlockCells(spacing: number): number {
+  const b = 2 * Math.round(spacing / CELL / 2);
+  return b >= 8 ? b : 8;
+}
+
+/** One placement pass at a block size; null as soon as it would hold more than `limit` probes. */
+function placeAt(W: number, H: number, geos: readonly ColumnGeometry[], levels: readonly Level[], block: number, limit: number): ProbePlacement | null {
+  const out: ProbePlacement = {block, ramp: block / 2 - 2, slot: [], bx: [], bz: [], cell: []};
+  const nbx = Math.ceil(W / block), nbz = Math.ceil(H / block);
+  const groups = new Map<number, number>();
+  for (let s = 0; s < geos.length; s++) {
+    const open = geos[s].open, ar = levels[s]?.grid.area, area = ar && ar.length === W * H ? ar : null;
+    for (let bz = 0; bz < nbz; bz++) for (let bx = 0; bx < nbx; bx++) {
+      const x0 = bx * block, x1 = Math.min(W, x0 + block), z0 = bz * block, z1 = Math.min(H, z0 + block);
+      groups.clear();
+      let total = 0;
+      for (let cz = z0; cz < z1; cz++) for (let i = cz * W + x0, e = cz * W + x1; i < e; i++) {
+        if (!open[i]) continue;
+        total++;
+        const a = area ? area[i] : -1;
+        groups.set(a, (groups.get(a) ?? 0) + 1);
+      }
+      if (total < 4) continue;
+      // the block's largest space (most cells of one area; a tie: the lower id), and of it the cell nearest its centroid
+      let best = 0, most = 0;
+      for (const [a, c] of groups) if (c > most || (c === most && a < best)) { best = a; most = c; }
+      let sx = 0, sz = 0;
+      for (let cz = z0; cz < z1; cz++) for (let cx = x0; cx < x1; cx++) {
+        const i = cz * W + cx;
+        if (open[i] && (area ? area[i] : -1) === best) { sx += cx; sz += cz; }
+      }
+      const mx = sx / most, mz = sz / most;
+      let pick = -1, near = Infinity;
+      for (let cz = z0; cz < z1; cz++) for (let cx = x0; cx < x1; cx++) {
+        const i = cz * W + cx;
+        if (!open[i] || (area ? area[i] : -1) !== best) continue;
+        const d = (cx - mx) * (cx - mx) + (cz - mz) * (cz - mz);
+        if (d < near) { near = d; pick = i; }
+      }
+      if (out.cell.length >= limit) return null;
+      out.slot.push(s); out.bx.push(bx); out.bz.push(bz); out.cell.push(pick);
+    }
+  }
+  return out;
+}
+
+const lum = (r: number, g: number, b: number): number => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+/** Neighbouring cells whose floors differ by this much or more are not one space for a probe's weights (the bake's own rule). */
+const STEP_MAX = 0.6;
+/** Linear irradiance of a field byte. */
+const DEC: Float64Array = (() => { const t = new Float64Array(256); for (let i = 0; i < 256; i++) t[i] = (i / 255) ** 2 * FIELD_EMAX; return t; })();
+/** The tube of a fixture as a probe sees it: 1 m long, 0.12 m wide from below and 0.07 m from the side, 0.08 m under the mount. */
+const TUBE_LENGTH = 1, TUBE_FACE = 0.12, TUBE_SIDE = 0.07, TUBE_DROP = 0.08, TUBE_POINTS = 5;
+/** A fixture counts as seen when the ray toward it ends this close to it (m): it hangs at the ceiling it is mounted on. */
+const TUBE_SLACK = 0.4;
+/** Parallax box half-extents (m): at least / at most (also the extent along a ray that hit nothing). */
+const BOX_MIN = 0.5, BOX_MAX = 30;
+
 /**
  * Bake a station's probes, as build steps (core/pacedBuild.ts: a yield at least every couple of milliseconds of work). Deterministic
  * (no random numbers, no clock but the statistics). A station with no open cell returns count 0 (a 1-probe-sized zero atlas).
+ *
+ * What the contract leaves to the bake:
+ *  - a probe sits at its cell's centre, min(1.5 m, half the room height) above the floor; its weights reach the cells it can walk to
+ *    inside its block grown by ramp + 1 cells (4-neighbour steps over open cells of its slot, floors less than 0.6 m apart);
+ *  - a fixture is drawn when it works (not broken, power above 0.01, not a `virtual` daylight source: that one has no tube), is within
+ *    PROBE_REACH and the ray to its tube's centre is not stopped more than 0.4 m short of it; its radiance is added on top of the
+ *    surface behind it, splatted bilinearly as five points along the tube, and a texel's added fixture radiance is never raised above
+ *    the radiance of the fixture being added (one running total per texel over all the fixtures of a probe);
+ *  - every tile (all four levels) is written with its gutter and alpha 1; the tiles of unused atlas slots stay 0.
  */
-// eslint-disable-next-line require-yield
-export function* bakeReflectionProbesSteps(_input: ProbeBakeInput, _tier: ReflectionTier): BuildSteps<BakedProbes> {
-  throw new Error('bakeReflectionProbesSteps: not implemented');
+export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: ReflectionTier): BuildSteps<BakedProbes> {
+  const t0 = performance.now();
+  const {field, geos, levels, albedo, lights} = input;
+  const W = field.w, H = field.h, n = W * H, S = geos.length, tile = tier.tile;
+  if (!(tile >= 8 && tile <= 256 && (tile & (tile - 1)) === 0)) throw new Error(`bakeReflectionProbesSteps: tile ${tile} is not a power of two in 8..256`);
+  if ((field.cellScale ?? 1) !== 1) throw new Error('bakeReflectionProbesSteps: the field must be the full-resolution one');
+  const scene = input.scene ?? new BandScene(W, H, geos);
+
+  yield 'probes.place';
+  // --- placement: the tier's block, grown until the station fits the tier's probe count ----------------------------------------
+  const limit = Math.max(1, Math.min(255, Math.floor(tier.maxProbes)));
+  let block = probeBlockCells(tier.spacing);
+  let placed = placeAt(W, H, geos, levels, block, limit);
+  while (!placed && block < Math.max(W, H)) { yield; block += 2; placed = placeAt(W, H, geos, levels, block, limit); }
+  // (more level slots than the tier has probes: one block a slot is as coarse as it gets — the first `limit` are kept)
+  const pl = placed ?? placeAt(W, H, geos, levels, block, Infinity)!;
+  const count = Math.min(limit, pl.cell.length), ramp = pl.ramp;
+  const pos = new Float64Array(count * 3);
+  for (let p = 0; p < count; p++) {
+    const g = geos[pl.slot[p]], i = pl.cell[p], cx = i % W, cz = (i - cx) / W, f = g.floorH[i];
+    pos[p * 3] = (cx + 0.5) * CELL; pos[p * 3 + 1] = Math.fround(f + Math.min(1.5, 0.5 * (g.ceilH[i] - f))); pos[p * 3 + 2] = (cz + 0.5) * CELL;
+  }
+
+  yield 'probes.grid';
+  // --- the grid: ids over each probe's expanded block, weights where its probe can walk to ---------------------------------------
+  const gridDepth = 2 * Math.max(1, S), grid = new Uint8Array(n * gridDepth * 4);
+  const stamp = new Int32Array(n), queue = new Int32Array(n);
+  const w1 = (a: number, b: number): number => { const v = 0.5 + 0.5 * (a < b ? a : b) / ramp; return v < 0 ? 0 : v > 1 ? 1 : v; };
+  const gridOf = (p: number): void => {
+    const s = pl.slot[p], bx = pl.bx[p], bz = pl.bz[p], id = p + 1, c = (bx & 1) + 2 * (bz & 1);
+    const {open, floorH} = geos[s];
+    const X0 = bx * block, X1 = X0 + block, Z0 = bz * block, Z1 = Z0 + block;
+    const x0 = Math.max(0, X0 - ramp - 1), x1 = Math.min(W, X1 + ramp + 1), z0 = Math.max(0, Z0 - ramp - 1), z1 = Math.min(H, Z1 + ramp + 1);
+    const wo = 2 * s * n * 4 + c, io = (2 * s + 1) * n * 4 + c;
+    for (let cz = z0; cz < z1; cz++) for (let i = cz * W + x0, e = cz * W + x1; i < e; i++) grid[io + i * 4] = id;
+    let head = 0, tail = 0;
+    stamp[pl.cell[p]] = id; queue[tail++] = pl.cell[p];
+    while (head < tail) {
+      const i = queue[head++], cx = i % W, cz = (i - cx) / W, f = floorH[i];
+      grid[wo + i * 4] = Math.round(w1(cx + 0.5 - X0, X1 - cx - 0.5) * w1(cz + 0.5 - Z0, Z1 - cz - 0.5) * 255);
+      if (cx > x0) { const j = i - 1; if (stamp[j] !== id && open[j] && Math.abs(floorH[j] - f) < STEP_MAX) { stamp[j] = id; queue[tail++] = j; } }
+      if (cx + 1 < x1) { const j = i + 1; if (stamp[j] !== id && open[j] && Math.abs(floorH[j] - f) < STEP_MAX) { stamp[j] = id; queue[tail++] = j; } }
+      if (cz > z0) { const j = i - W; if (stamp[j] !== id && open[j] && Math.abs(floorH[j] - f) < STEP_MAX) { stamp[j] = id; queue[tail++] = j; } }
+      if (cz + 1 < z1) { const j = i + W; if (stamp[j] !== id && open[j] && Math.abs(floorH[j] - f) < STEP_MAX) { stamp[j] = id; queue[tail++] = j; } }
+    }
+  };
+  for (let p = 0; p < count; p++) { gridOf(p); if (p % 16 === 15) yield; }
+  const orphansOf = (s: number): number => {
+    const open = geos[s].open, wo = 2 * s * n * 4;
+    let c = 0;
+    for (let i = 0; i < n; i++) if (open[i] && !(grid[wo + i * 4] | grid[wo + i * 4 + 1] | grid[wo + i * 4 + 2] | grid[wo + i * 4 + 3])) c++;
+    return c;
+  };
+  let orphanCells = 0;
+  for (let s = 0; s < S; s++) { orphanCells += orphansOf(s); yield; }
+
+  if (!count) {
+    const layout = probeAtlasLayout(tile, 1);
+    const empty = {atlas: new Uint16Array(layout.width * layout.height * 4), meta: new Float32Array(12), grid};
+    return {tier: tier.id, count: 0, block, ramp, layout, ...empty, gridW: W, gridH: H, gridDepth, slots: S,
+      stats: {ms: performance.now() - t0, rays: 0, fixtures: 0, orphanCells, bytes: probeBytes(empty)}};
+  }
+
+  yield 'probes.capture';
+  // --- capture: level 0 of every probe (what each direction sees, lit by the field), its fixtures, its NORM and parallax box ------
+  const T2 = tile * tile, data = field.data, n4 = n * 4, INV_PI = 1 / Math.PI;
+  const bases = Int32Array.from(geos, (_, s) => slotBase(s)), layersOf = Int32Array.from(geos, (_, s) => slotLayers(s));
+  const dirs = octTexelDirections(tile), sf = scene.f, sc = scene.c, sslot = scene.slot, alb = albedo.slots;
+  const cap = new Float32Array(count * T2 * 3);
+  let rays = 0, fixtures = 0;
+  const captureTexels = (p: number, a: number, b: number): void => {
+    const px = pos[p * 3], py = pos[p * 3 + 1], pz = pos[p * 3 + 2];
+    for (let q = a, o = (p * T2 + a) * 3; q < b; q++, o += 3) {
+      if (!scene.trace(px, py, pz, dirs[q * 3], dirs[q * 3 + 1], dirs[q * 3 + 2], PROBE_REACH)) continue; // (nothing there: black)
+      const band = scene.hitBand, hs = sslot[band], hi = scene.hitCol, kind = scene.hitKind, Lh = layersOf[hs], A = alb[hs];
+      // the field voxel of the hit (world/lightFieldGather.ts: the same mapping), the surface's normal and its colour
+      let k = 0, nx = 0, ny = 0, nz = 0, ao = hi * ALBEDO_STRIDE, sky = false;
+      if (kind === HIT_FLOOR) { ny = 1; ao += ALB_FLOOR; }
+      else if (kind === HIT_CEIL) {
+        k = Lh - 1; ao += ALB_CEIL;
+        // no ceiling there (open sky, a glass roof): the light arriving from above shows, not a surface
+        if (A[ao] === 0 && A[ao + 1] === 0 && A[ao + 2] === 0) { sky = true; ny = 1; } else ny = -1;
+      } else {
+        const f = sf[band], span = sc[band] - 0.13 - f;
+        k = span > 1e-3 ? Math.round((scene.hitY - f - 0.05) / span * (Lh - 1)) : 0;
+        k = k < 0 ? 0 : k > Lh - 1 ? Lh - 1 : k;
+        nx = scene.hitNx; nz = scene.hitNz; ao += ALB_WALL;
+      }
+      const oa = (bases[hs] + 1 + 2 * k) * n4 + hi * 4, ob = oa + n4;
+      const rho = data[oa + 3] / 255;
+      let e = 1 - rho;
+      if (rho > 0) {
+        const vx = data[ob] / 255 * 2 - 1, vy = data[ob + 1] / 255 * 2 - 1, vz = data[ob + 2] / 255 * 2 - 1;
+        const vl = Math.sqrt(vx * vx + vy * vy + vz * vz), ndl = vl < 1e-4 ? ny : (nx * vx + ny * vy + nz * vz) / vl;
+        if (ndl > 0) e += rho * ndl;
+      }
+      e *= INV_PI;
+      if (sky) { cap[o] = DEC[data[oa]] * e; cap[o + 1] = DEC[data[oa + 1]] * e; cap[o + 2] = DEC[data[oa + 2]] * e; }
+      else { cap[o] = DEC[data[oa]] * e * ALBEDO_LUT[A[ao]]; cap[o + 1] = DEC[data[oa + 1]] * e * ALBEDO_LUT[A[ao + 1]]; cap[o + 2] = DEC[data[oa + 2]] * e * ALBEDO_LUT[A[ao + 2]]; }
+    }
+    rays += b - a;
+  };
+
+  // the working fixtures: tube centre, tube axis, radiance (the tube colour world/lights.ts applyLevels draws, x PROBE_FIXTURE_RADIANCE)
+  const FX = 8, fx: number[] = [];
+  lights.forEach((l, li) => {
+    if (l.broken || !(l.power > 0.01) || l.virtual) return;
+    const g = fixtureGroup(l, li), out = l.power * (g < 0 ? 1 : g === 2 ? 0.1 : 0.92);
+    let r = 0.035, gg = 0.038, b = 0.04; // (a tube this dim is drawn as dead glass)
+    if (out > 0.02) {
+      const [tr, tg, tb] = fixtureTint(l), mx = Math.max(tr, tg, tb), s = l.tint ? 0.65 : 0.35, k = 0.12 + 0.88 * out;
+      r = k * (1 - s + s * tr / mx); gg = k * (1 - s + s * tg / mx); b = k * (1 - s + s * tb / mx);
+    }
+    fx.push(l.x, l.y - TUBE_DROP, l.z, Math.cos(l.rot), -Math.sin(l.rot), r * PROBE_FIXTURE_RADIANCE, gg * PROBE_FIXTURE_RADIANCE, b * PROBE_FIXTURE_RADIANCE);
+  });
+  const fxs = Float64Array.from(fx), fxCount = fxs.length / FX;
+  /** Fixture radiance added per level-0 texel of the probe in work. */
+  const glow = new Float32Array(T2 * 3), uv: [number, number] = [0, 0], texelPerSr = T2 / (4 * Math.PI);
+  const put = (i: number, j: number, cover: number, lr: number, lg: number, lb: number): void => {
+    if (!(cover > 0)) return;
+    const o = wrapIndex(i, j, tile) * 3;
+    let v = glow[o];
+    if (v < lr) { v += lr * cover; glow[o] = v > lr ? lr : v; }
+    v = glow[o + 1];
+    if (v < lg) { v += lg * cover; glow[o + 1] = v > lg ? lg : v; }
+    v = glow[o + 2];
+    if (v < lb) { v += lb * cover; glow[o + 2] = v > lb ? lb : v; }
+  };
+  const fixturesOf = (p: number): void => {
+    const px = pos[p * 3], py = pos[p * 3 + 1], pz = pos[p * 3 + 2];
+    let any = false;
+    for (let q = 0; q < fxCount; q++) {
+      const o = q * FX, dx = fxs[o] - px, dy = fxs[o + 1] - py, dz = fxs[o + 2] - pz, dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (dist > PROBE_REACH || dist < 1e-3) continue;
+      rays++;
+      if (scene.trace(px, py, pz, dx / dist, dy / dist, dz / dist, dist) && scene.hitT < dist - TUBE_SLACK) continue;
+      if (!any) { glow.fill(0); any = true; }
+      fixtures++;
+      const ay = Math.abs(dy) / dist;
+      // texels the tube covers, a fifth per point along it
+      const cover = TUBE_LENGTH * (TUBE_FACE * ay + TUBE_SIDE * (1 - ay)) / (dist * dist) / TUBE_POINTS * texelPerSr;
+      const lr = fxs[o + 5], lg = fxs[o + 6], lb = fxs[o + 7];
+      for (let m = 0; m < TUBE_POINTS; m++) {
+        const along = ((m + 0.5) / TUBE_POINTS - 0.5) * TUBE_LENGTH;
+        octEncode(dx + fxs[o + 3] * along, dy, dz + fxs[o + 4] * along, uv);
+        const x = uv[0] * tile - 0.5, y = uv[1] * tile - 0.5, i0 = Math.floor(x), j0 = Math.floor(y), tx = x - i0, ty = y - j0;
+        put(i0, j0, cover * (1 - tx) * (1 - ty), lr, lg, lb); put(i0 + 1, j0, cover * tx * (1 - ty), lr, lg, lb);
+        put(i0, j0 + 1, cover * (1 - tx) * ty, lr, lg, lb); put(i0 + 1, j0 + 1, cover * tx * ty, lr, lg, lb);
+      }
+    }
+    if (any) for (let q = 0, o = p * T2 * 3, e = T2 * 3; q < e; q++) cap[o + q] += glow[q];
+  };
+
+  const meta = new Float32Array(count * 3 * 4);
+  const reachOf = (px: number, py: number, pz: number, dx: number, dy: number, dz: number): number => {
+    rays++;
+    const l = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (!scene.trace(px, py, pz, dx / l, dy / l, dz / l, BOX_MAX)) return BOX_MAX;
+    return scene.hitT < BOX_MIN ? BOX_MIN : scene.hitT > BOX_MAX ? BOX_MAX : scene.hitT;
+  };
+  const metaOf = (p: number): void => {
+    const s = pl.slot[p], i = pl.cell[p], px = pos[p * 3], py = pos[p * 3 + 1], pz = pos[p * 3 + 2];
+    // NORM: the field's luminance at the probe (its own voxel: the layer nearest its height)
+    const L = layersOf[s], ly = geos[s].layerY;
+    let k = 0;
+    for (let q = 1; q < L; q++) if (Math.abs(ly[i * L + q] - py) < Math.abs(ly[i * L + k] - py)) k = q;
+    const oa = (bases[s] + 1 + 2 * k) * n4 + i * 4;
+    const norm = lum(DEC[data[oa]], DEC[data[oa + 1]], DEC[data[oa + 2]]);
+    const m0 = p * 4, m1 = (count + p) * 4, m2 = (2 * count + p) * 4;
+    meta[m0] = px; meta[m0 + 1] = py; meta[m0 + 2] = pz; meta[m0 + 3] = norm > PROBE_NORM_MIN ? norm : PROBE_NORM_MIN;
+    // the parallax box: how far the room reaches along each axis (the level rays a hair off their axis)
+    meta[m1] = px - reachOf(px, py, pz, -1, 0, 1e-3); meta[m2] = px + reachOf(px, py, pz, 1, 0, 1e-3);
+    meta[m1 + 1] = py - reachOf(px, py, pz, 0, -1, 0); meta[m2 + 1] = py + reachOf(px, py, pz, 0, 1, 0);
+    meta[m1 + 2] = pz - reachOf(px, py, pz, 1e-3, 0, -1); meta[m2 + 2] = pz + reachOf(px, py, pz, 1e-3, 0, 1);
+    meta[m1 + 3] = 0; meta[m2 + 3] = 0;
+  };
+  // a step every ~1500 rays (a millisecond or two)
+  const CHUNK = 1536;
+  for (let p = 0; p < count; p++) {
+    for (let a = 0; a < T2; a += CHUNK) { captureTexels(p, a, Math.min(T2, a + CHUNK)); if (a + CHUNK < T2) yield; }
+    fixturesOf(p);
+    metaOf(p);
+    yield;
+  }
+
+  yield 'probes.filter';
+  // --- levels 1..3 (each the level before, halved and blurred on the sphere), and everything into the atlas with its gutters --------
+  const kernels = yield* levelKernelsSteps(tile);
+  const layout = probeAtlasLayout(tile, count), AW = layout.width, atlas = new Uint16Array(AW * layout.height * 4);
+  const halved = kernels.map(K => new Float32Array(K.t * K.t * 3)), blurred = kernels.map(K => new Float32Array(K.t * K.t * 3));
+  const writeTile = (p: number, l: number, src: Float32Array, so: number, t: number): void => {
+    const [ox, oy] = probeTileOrigin(layout, p, l);
+    for (let j = -1; j <= t; j++) for (let i = -1; i <= t; i++) {
+      const s = so + wrapIndex(i, j, t) * 3, o = ((oy + j) * AW + ox + i) * 4;
+      atlas[o] = probeHalf(src[s]); atlas[o + 1] = probeHalf(src[s + 1]); atlas[o + 2] = probeHalf(src[s + 2]); atlas[o + 3] = HALF_ONE;
+    }
+  };
+  const filterOf = (p: number): void => {
+    writeTile(p, 0, cap, p * T2 * 3, tile);
+    let src = cap, so = p * T2 * 3;
+    for (let l = 1; l < PROBE_LEVELS; l++) {
+      const K = kernels[l - 1];
+      boxDown(src, so, K.t, halved[l - 1]);
+      applyKernel(K, halved[l - 1], blurred[l - 1]);
+      writeTile(p, l, blurred[l - 1], 0, K.t);
+      src = blurred[l - 1]; so = 0;
+    }
+  };
+  for (let p = 0; p < count; p++) { filterOf(p); yield; }
+
+  const baked = {atlas, meta, grid};
+  return {tier: tier.id, count, block, ramp, layout, ...baked, gridW: W, gridH: H, gridDepth, slots: S,
+    stats: {ms: performance.now() - t0, rays, fixtures, orphanCells, bytes: probeBytes(baked)}};
 }
+
