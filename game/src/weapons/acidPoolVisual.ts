@@ -57,14 +57,17 @@ const BEADS = ACID_FX.count.bubbles + ACID_FX.count.froth + ACID_FX.count.spits;
 const FROTH0 = ACID_FX.count.bubbles, SPIT0 = ACID_FX.count.bubbles + ACID_FX.count.froth;
 const TAU = Math.PI * 2;
 
-/** poolLook's arithmetic over TSL nodes; `tile` samples the shared noise tile (one texture binding for all four samples). */
-function nodeMath(tile: TNode): LookMath<TNode> {
+/**
+ * poolLook's arithmetic over TSL nodes; `tile` samples the shared noise tile at explicit coordinates (three binds a texture once per
+ * material however many nodes sample it, and applies no texture matrix to explicit coordinates).
+ */
+function nodeMath(tile: THREE.Texture): LookMath<TNode> {
   return {
     add: (a, b) => add(a, b), sub: (a, b) => sub(a, b), mul: (a, b) => mul(a, b), div: (a, b) => div(a, b),
     min: (a, b) => min(a, b), max: (a, b) => max(a, b),
     clamp: (x, lo, hi) => clamp(x, lo, hi), mix: (a, b, t) => mix(a, b, t), smoothstep: (lo, hi, x) => smoothstep(lo, hi, x),
     sin: x => sin(x), cos: x => cos(x), exp: x => exp(x), pow: (x, y) => pow(x, y),
-    tile: (u, v) => { const s = tile.sample(vec2(u, v)); return {r: s.r, g: s.g, b: s.b, a: s.a}; },
+    tile: (u, v) => { const s = texture(tile, vec2(u, v)) as TNode; return {r: s.r, g: s.g, b: s.b, a: s.a}; },
   };
 }
 
@@ -75,7 +78,7 @@ function filmMaterial(tile: THREE.Texture, body: number, u: FilmUniforms): MeshS
   const mat = new MeshStandardNodeMaterial({transparent: true, opacity: 0, depthWrite: false, side: THREE.FrontSide, metalness: 0,
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2});
   mat.name = 'acid-pool';
-  const o = poolLook(nodeMath(texture(tile)), {
+  const o = poolLook(nodeMath(tile), {
     qx: (positionLocal as TNode).x, qz: (positionLocal as TNode).z, rim: attribute('aRim', 'float'),
     t: u.state.x, dry: u.state.y, k: (materialOpacity as TNode).div(ACID_LOOK.opacity), r: u.state.z, ox: u.flow.x, oz: u.flow.y, swirl: u.state.w,
     react: u.react.map(p => ({x: p.x, z: p.y, a: p.z})),
