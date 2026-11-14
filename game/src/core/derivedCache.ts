@@ -28,11 +28,20 @@
 //    blocked), when a transaction cannot be started (the connection closed: InvalidStateError) or does not finish in `txTimeoutMs`,
 //    or when IDB_FAILURE_LIMIT operations in a row failed for another reason than quota. A put refused for quota is only a failed
 //    put. The operation that found the database dead (also one whose transaction was aborted by the connection closing under
-//    it) is repeated on the in-memory backend. A missing factory is reported in `reason` without a console warning (Node, tests); every real failure is
-//    warned about once per kind per cache.
+//    it) is repeated on the in-memory backend. A missing factory is reported in `reason` without a console warning (Node,
+//    tests); every real failure is warned about once per kind per cache.
+//  - put lays the bundle out (copies its arrays into the container) before it returns: the caller may reuse or change them at
+//    once. Everything after that — checksum, compression, the write — happens when the put's turn comes.
 //  - `corrupt` counts records that were found but could not be used (damaged, truncated, another format version, another key, a
 //    `data` record without its `meta` row or the reverse); each is deleted and is also a miss. `failedPuts` counts every put that
 //    resolved false (quota, an aborted write, a bundle that cannot be packed, an entry over the byte budget, no backend).
+//  - No long block on the calling thread: a put or a get of tens of MB may run while frames are drawn (a station prepared during
+//    the ride), and a host is free to run its (de)compressor on the thread that feeds it. The checksum is taken in 1 MiB blocks
+//    and the compressor is fed 64 KiB at a time; whenever `sliceMs` (default DERIVED_SLICE_MS) of real time has gone by since the
+//    last one, the work waits for a task boundary — a message port where there is one (a timer is clamped, and throttled to about
+//    one a second in a hidden tab), else a zero timer. What is left in one piece is plain copying: put's copy of the bundle at
+//    the call, one array out of the container, the structured clone into IndexedDB (measured in Node on a 24 MB bundle: no
+//    stretch over about 15 ms, against 25 ms unpaced with the compressor on another thread).
 //
 // THE CONTAINER (packBundle / unpackBundle; integers little-endian)
 //     0  4  magic 'TSDC'
@@ -41,7 +50,8 @@
 //     7  1  0
 //     8  4  H: bytes of the header (UTF-8 JSON)
 //    12  4  B: bytes of the body before compression
-//    16  8  checksum: the 16 hex digits of new ContentHasher().num(version, H, B).view(body).digest() as 8 bytes
+//    16  8  checksum: the 16 hex digits of a ContentHasher fed num(version, H, B) and then the body as Uint8Array views of
+//           1 MiB each (the last one shorter), as 8 bytes
 //    24  …  the body: the header {key, meta, arrays: [{name, type, length, offset}]}, zero padding to a multiple of 8, then the
 //           payload; `offset` counts from the payload's start and is a multiple of 8, `type` is u8 i8 u16 i16 u32 i32 f32 f64,
 //           `length` is in elements.
@@ -104,6 +114,9 @@ export const DERIVED_MEMORY_MAX_BYTES = 48 * 1024 * 1024;
 /** The container format (a record of another version is a miss). */
 export const DERIVED_CONTAINER_VERSION = 1;
 
+/** Long work waits for a task boundary after about this much real time (ms), so a frame can be drawn in between. */
+export const DERIVED_SLICE_MS = 6;
+
 export interface DerivedCacheOptions {
   name?: string;
   maxEntries?: number;
@@ -120,6 +133,8 @@ export interface DerivedCacheOptions {
   txTimeoutMs?: number;
   /** false = no in-memory backend: without a working IndexedDB the cache stores nothing (backend 'none'). Default true. */
   memoryFallback?: boolean;
+  /** Real time a put / get may work before it waits for a task boundary (ms; default DERIVED_SLICE_MS; Infinity = never waits). */
+  sliceMs?: number;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -170,12 +185,58 @@ function assertJsonSafe(v: unknown, path: string, depth: number): void {
   for (const k of Object.keys(v)) assertJsonSafe(v[k], `${path}.${k}`, depth + 1);
 }
 
-function checksum(headerLength: number, body: Uint8Array): string {
-  return new ContentHasher().num(DERIVED_CONTAINER_VERSION, headerLength, body.byteLength).view(body).digest();
+/** The checksum is taken in blocks of this many bytes; the (de)compressor is fed this many at a time. */
+const HASH_BLOCK = 1 << 20, FEED_BLOCK = 1 << 16;
+
+/** The event loop runs (a frame, input, other tasks) before the caller continues. */
+function taskBoundary(): Promise<void> {
+  return new Promise<void>(resolve => {
+    try {
+      const Channel = (globalThis as {MessageChannel?: typeof MessageChannel}).MessageChannel;
+      if (typeof Channel === 'function') {
+        const channel = new Channel();
+        // Closed after its one message: an open port would keep a Node process alive.
+        channel.port1.onmessage = () => { channel.port1.close(); resolve(); };
+        channel.port2.postMessage(0);
+        return;
+      }
+    } catch { /* the timer below */ }
+    setTimeout(resolve, 0);
+  });
 }
 
-/** The uncompressed container of a bundle. Throws a plain Error for a bundle that cannot be stored. */
-function encode(b: DerivedBundle, key: string | null): Uint8Array<ArrayBuffer> {
+/** Paces one long operation: `due()` between its steps, `rest()` when it is. */
+class Pacer {
+  private since = Pacer.clock();
+  constructor(private readonly sliceMs: number) {}
+  private static clock(): number {
+    const p = (globalThis as {performance?: {now?: () => number}}).performance;
+    return p && typeof p.now === 'function' ? p.now() : Date.now();
+  }
+  due(): boolean { return Pacer.clock() - this.since >= this.sliceMs; }
+  async rest(): Promise<void> {
+    await taskBoundary();
+    this.since = Pacer.clock();
+  }
+}
+
+async function checksum(headerLength: number, body: Uint8Array, pacer: Pacer): Promise<string> {
+  const hasher = new ContentHasher().num(DERIVED_CONTAINER_VERSION, headerLength, body.byteLength);
+  for (let at = 0; at < body.byteLength; at += HASH_BLOCK) {
+    hasher.view(body.subarray(at, at + HASH_BLOCK));
+    if (pacer.due()) await pacer.rest();
+  }
+  return hasher.digest();
+}
+
+/** A bundle laid out as its uncompressed container, the checksum still to come. */
+interface Laid { out: Uint8Array<ArrayBuffer>; headerLength: number }
+
+/**
+ * The uncompressed container of a bundle, in one go: the arrays are COPIED here, so what is stored is the bundle as it was at this
+ * call whatever the caller does with its arrays afterwards. Throws a plain Error for a bundle that cannot be stored.
+ */
+function layout(b: DerivedBundle, key: string | null): Laid {
   if (!isPlain(b) || !isPlain(b.meta)) throw new Error('derived bundle: meta must be a plain object');
   assertJsonSafe(b.meta, 'meta', 0);
   if (!isPlain(b.arrays)) throw new Error('derived bundle: arrays must be a plain object of typed arrays');
@@ -203,9 +264,7 @@ function encode(b: DerivedBundle, key: string | null): Uint8Array<ArrayBuffer> {
   out[6] = HOST_BIG_ENDIAN ? FLAG_BIG_ENDIAN : 0;
   dv.setUint32(8, json.byteLength, true);
   dv.setUint32(12, total, true);
-  const sum = checksum(json.byteLength, out.subarray(FIXED));
-  for (let i = 0; i < 8; i++) out[16 + i] = parseInt(sum.slice(2 * i, 2 * i + 2), 16);
-  return out;
+  return {out, headerLength: json.byteLength};
 }
 
 interface ByteStreams { readonly readable: ReadableStream<Uint8Array>; readonly writable: WritableStream<Uint8Array> }
@@ -213,12 +272,19 @@ type StreamCtor = new (format: string) => ByteStreams;
 interface StreamGlobals { CompressionStream?: StreamCtor; DecompressionStream?: StreamCtor }
 
 /** `input` through a (de)compression stream. Null when the stream fails or gives more than `limit` bytes. Never rejects. */
-async function pipeBytes(make: () => ByteStreams, input: Uint8Array, limit: number): Promise<Uint8Array<ArrayBuffer> | null> {
+async function pipeBytes(make: () => ByteStreams, input: Uint8Array, limit: number, pacer: Pacer): Promise<Uint8Array<ArrayBuffer> | null> {
   try {
     const streams = make(), writer = streams.writable.getWriter(), reader = streams.readable.getReader();
-    // Written without waiting (the stream applies backpressure until it is read). A bad stream fails the read below as well: the
-    // write side's own rejection is swallowed here so it is never an unhandled one.
-    const fed = writer.write(input).then(() => writer.close()).then(() => true, () => false);
+    // Fed in pieces while the loop below reads (the stream holds a write back until its output is taken). A bad stream fails the
+    // read as well: the write side's own rejection ends here, so it is never an unhandled one.
+    const feed = async (): Promise<void> => {
+      for (let at = 0; at < input.byteLength; at += FEED_BLOCK) {
+        await writer.write(input.subarray(at, at + FEED_BLOCK));
+        if (pacer.due()) await pacer.rest();
+      }
+      await writer.close();
+    };
+    const fed = feed().then(() => true, () => false);
     const chunks: Uint8Array[] = [];
     let total = 0;
     for (;;) {
@@ -235,20 +301,25 @@ async function pipeBytes(make: () => ByteStreams, input: Uint8Array, limit: numb
     if (!(await fed)) return null;
     const out = new Uint8Array(total);
     let at = 0;
-    for (const c of chunks) { out.set(c, at); at += c.byteLength; }
+    for (const c of chunks) {
+      out.set(c, at); at += c.byteLength;
+      if (pacer.due()) await pacer.rest();
+    }
     return out;
   } catch {
     return null;
   }
 }
 
-/** A bundle as one byte container (magic, format version, checksum; deflated when possible). `key` binds it to a cache key. */
-export async function packBundle(b: DerivedBundle, compress = true, key: string | null = null): Promise<Uint8Array> {
-  const raw = encode(b, key);
+/** The finished container of a laid-out bundle: its checksum, and its body deflated when the host can and that is smaller. */
+async function seal(laid: Laid, compress: boolean, sliceMs: number): Promise<Uint8Array<ArrayBuffer>> {
+  const pacer = new Pacer(sliceMs), raw = laid.out;
+  const sum = await checksum(laid.headerLength, raw.subarray(FIXED), pacer);
+  for (let i = 0; i < 8; i++) raw[16 + i] = parseInt(sum.slice(2 * i, 2 * i + 2), 16);
   const g = globalThis as StreamGlobals, C = g.CompressionStream;
   if (!compress || typeof C !== 'function' || typeof g.DecompressionStream !== 'function') return raw;
   const body = raw.subarray(FIXED);
-  const packed = await pipeBytes(() => new C(DEFLATE), body, body.byteLength - 1);
+  const packed = await pipeBytes(() => new C(DEFLATE), body, body.byteLength - 1, pacer);
   if (!packed) return raw;
   const out = new Uint8Array(FIXED + packed.byteLength);
   out.set(raw.subarray(0, FIXED), 0);
@@ -258,18 +329,26 @@ export async function packBundle(b: DerivedBundle, compress = true, key: string 
 }
 
 /**
+ * A bundle as one byte container (magic, format version, checksum; deflated when possible). `key` binds it to a cache key. The
+ * bundle is read before this returns its promise (a bundle that cannot be stored rejects it); the rest is paced by `sliceMs`.
+ */
+export async function packBundle(b: DerivedBundle, compress = true, key: string | null = null, sliceMs: number = DERIVED_SLICE_MS): Promise<Uint8Array> {
+  return seal(layout(b, key), compress, sliceMs);
+}
+
+/**
  * The bundle of a container, or null when it is not one / is damaged / is of another format version. With `key` given (a string,
  * or null for "packed without one") the container must also have been packed with exactly that key.
  */
-export async function unpackBundle(bytes: Uint8Array, key?: string | null): Promise<DerivedBundle | null> {
+export async function unpackBundle(bytes: Uint8Array, key?: string | null, sliceMs: number = DERIVED_SLICE_MS): Promise<DerivedBundle | null> {
   try {
-    return await decode(bytes, key);
+    return await decode(bytes, key, new Pacer(sliceMs));
   } catch {
     return null;
   }
 }
 
-async function decode(bytes: Uint8Array, key: string | null | undefined): Promise<DerivedBundle | null> {
+async function decode(bytes: Uint8Array, key: string | null | undefined, pacer: Pacer): Promise<DerivedBundle | null> {
   if (!(bytes instanceof Uint8Array) || bytes.byteLength < FIXED) return null;
   for (let i = 0; i < 4; i++) if (bytes[i] !== MAGIC[i]) return null;
   const dv = new DataView(bytes.buffer, bytes.byteOffset, FIXED), flags = bytes[6];
@@ -280,10 +359,10 @@ async function decode(bytes: Uint8Array, key: string | null | undefined): Promis
   let body: Uint8Array | null = bytes.subarray(FIXED);
   if (flags & FLAG_DEFLATED) {
     const D = (globalThis as StreamGlobals).DecompressionStream, deflated = body;
-    body = typeof D === 'function' ? await pipeBytes(() => new D(DEFLATE), deflated, total) : null;
+    body = typeof D === 'function' ? await pipeBytes(() => new D(DEFLATE), deflated, total, pacer) : null;
   }
   if (!body || body.byteLength !== total) return null;
-  const sum = checksum(headerLength, body);
+  const sum = await checksum(headerLength, body, pacer);
   for (let i = 0; i < 8; i++) if (bytes[16 + i] !== parseInt(sum.slice(2 * i, 2 * i + 2), 16)) return null;
   const header: unknown = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(body.subarray(0, headerLength)));
   if (!isPlain(header) || !isPlain(header.meta) || !Array.isArray(header.arrays)) return null;
@@ -299,6 +378,7 @@ async function decode(bytes: Uint8Array, key: string | null | undefined): Promis
     if (to > total) return null;
     // defineProperty: a name like '__proto__' is an ordinary entry, as it was in the bundle that was packed.
     Object.defineProperty(arrays, name, {value: new ctor(body.slice(from, to).buffer, 0, length), enumerable: true, writable: true, configurable: true});
+    if (pacer.due()) await pacer.rest();
   }
   return {meta: header.meta, arrays};
 }
@@ -529,6 +609,7 @@ class Cache implements DerivedCache {
   private readonly compress: boolean;
   private readonly memoryFallback: boolean;
   private readonly txTimeoutMs: number;
+  private readonly sliceMs: number;
 
   constructor(opts: DerivedCacheOptions) {
     const limit = (v: unknown, d: number): number => (typeof v === 'number' && !Number.isNaN(v) ? Math.floor(v) : d);
@@ -538,6 +619,7 @@ class Cache implements DerivedCache {
     this.compress = opts.compress !== false;
     this.memoryFallback = opts.memoryFallback !== false;
     this.txTimeoutMs = opts.txTimeoutMs ?? TX_TIMEOUT_MS;
+    this.sliceMs = typeof opts.sliceMs === 'number' ? opts.sliceMs : DERIVED_SLICE_MS;
     if (!(this.maxEntries >= 1) || !(this.maxBytes >= 1)) {
       this.reason = 'the cache budget is zero';
       this.settled = Promise.resolve();
@@ -672,7 +754,7 @@ class Cache implements DerivedCache {
         this.warn('read', 'an entry could not be read', err);
       }
       if (!found.row && found.data === undefined) { this.counts.misses++; return null; }
-      const bundle = found.row && found.data instanceof Uint8Array ? await unpackBundle(found.data, key) : null;
+      const bundle = found.row && found.data instanceof Uint8Array ? await unpackBundle(found.data, key, this.sliceMs) : null;
       if (!bundle) {
         this.counts.corrupt++; this.counts.misses++;
         this.warn('corrupt', `an unreadable entry was dropped (${found.row?.tag || key})`);
@@ -688,15 +770,16 @@ class Cache implements DerivedCache {
   }
 
   put(key: string, bundle: DerivedBundle, tag = ''): Promise<boolean> {
+    // The bundle is laid out (its arrays copied) NOW, not when its turn comes: the caller may change or reuse them once put returned.
+    let laid: Laid | null = null, unfit: {err: unknown} | null = null;
+    if (this.backend !== 'none' && typeof key === 'string') {
+      try { laid = layout(bundle, key); } catch (err) { unfit = {err}; }
+    }
     return this.run<boolean>(async () => {
       const refuse = (kind: string, text: string, err?: unknown): boolean => { this.counts.failedPuts++; this.warn(kind, text, err); return false; };
-      if (!this.store || typeof key !== 'string') { this.counts.failedPuts++; return false; }
-      let data: Uint8Array;
-      try {
-        data = await packBundle(bundle, this.compress, key);
-      } catch (err) {
-        return refuse('bundle', 'a bundle could not be packed', err);
-      }
+      if (unfit) return refuse('bundle', 'a bundle could not be packed', unfit.err);
+      if (!this.store || !laid) { this.counts.failedPuts++; return false; }
+      const data = await seal(laid, this.compress, this.sliceMs);
       const size = data.byteLength, label = typeof tag === 'string' ? tag.slice(0, 120) : '', t = this.now();
       try {
         const evicted = await this.io(-1, s => {

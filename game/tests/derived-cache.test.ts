@@ -14,7 +14,7 @@ import {fileURLToPath} from 'node:url';
 import {afterEach, beforeEach, describe, expect, it, vi, type MockInstance} from 'vitest';
 import {ContentHasher} from '../src/core/contentHash';
 import {
-  DERIVED_CACHE_LIMITS, DERIVED_CONTAINER_VERSION, DERIVED_DB_NAME, DERIVED_MEMORY_MAX_BYTES, openDerivedCache, packBundle, unpackBundle,
+  DERIVED_CACHE_LIMITS, DERIVED_CONTAINER_VERSION, DERIVED_DB_NAME, DERIVED_MEMORY_MAX_BYTES, DERIVED_SLICE_MS, openDerivedCache, packBundle, unpackBundle,
   type DerivedArray, type DerivedBundle, type DerivedCache, type DerivedCacheOptions,
 } from '../src/core/derivedCache';
 import {FakeIndexedDb, type FakeDatabase, type FakeOpenRequest} from './helpers/fakeIndexedDb';
@@ -55,7 +55,8 @@ function expectSameBundle(got: DerivedBundle | null, want: DerivedBundle): void 
     const g = got.arrays[name], w = want.arrays[name];
     expect(g.constructor, name).toBe(w.constructor);
     expect(g.length, name).toBe(w.length);
-    expect(bytesOf(g), name).toEqual(bytesOf(w));
+    if (g.byteLength <= 4096) expect(bytesOf(g), name).toEqual(bytesOf(w)); // (a readable diff for small arrays)
+    else expect(Buffer.from(g.buffer, g.byteOffset, g.byteLength).equals(Buffer.from(w.buffer, w.byteOffset, w.byteLength)), name).toBe(true);
     expect(g.byteOffset, name).toBe(0);
     expect(g.buffer.byteLength, name).toBe(g.byteLength);
     expect(g.buffer, name).not.toBe(w.buffer);
@@ -101,7 +102,9 @@ function craft(header: unknown, payload: Uint8Array, o: CraftOptions = {}): Uint
   dv.setUint32(12, total, true);
   out.set(json, 24);
   out.set(payload, 24 + start);
-  const sum = new ContentHasher().num(version, json.length, total).view(out.subarray(24)).digest();
+  const hasher = new ContentHasher().num(version, json.length, total);
+  for (let at = 0; at < total; at += 1 << 20) hasher.view(out.subarray(24 + at, 24 + Math.min(total, at + (1 << 20))));
+  const sum = hasher.digest();
   for (let i = 0; i < 8; i++) out[16 + i] = parseInt(sum.slice(2 * i, 2 * i + 2), 16);
   return out;
 }
@@ -255,6 +258,20 @@ describe('derived container: the format', () => {
     expectSameBundle(await unpackBundle(crafted), source);
   });
 
+  it('takes the checksum in 1 MiB blocks (a body of several blocks from the second writer is the same bytes)', async () => {
+    const big = new Uint8Array(2_500_000), next = lcg(11);
+    for (let i = 0; i < big.length; i++) big[i] = next() >>> 24;
+    const small = new Float64Array([1, 2, 3]);
+    const crafted = craft({key: null, meta: {}, arrays: [{name: 'big', type: 'u8', length: big.length, offset: 0}, {name: 'small', type: 'f64', length: 3, offset: 2_500_000}]}, payloadOf(big, small));
+    expect(crafted.length).toBeGreaterThan(2 * (1 << 20) + 24);
+    const packed = await packBundle({meta: {}, arrays: {big, small}}, false);
+    expect(packed.length).toBe(crafted.length);
+    expect(Buffer.from(packed).equals(Buffer.from(crafted))).toBe(true);
+    expectSameBundle(await unpackBundle(crafted), {meta: {}, arrays: {big, small}});
+    await expect(unpackBundle(flipped(crafted, 24 + (1 << 20) + 5)), 'damage in the second block').resolves.toBeNull();
+    await expect(unpackBundle(flipped(crafted, crafted.length - 1)), 'damage in the last block').resolves.toBeNull();
+  });
+
   it('binds a container to the key it was packed with', async () => {
     const keyed = await packBundle(source, false, 'k'), bare = await packBundle(source, false);
     expectSameBundle(await unpackBundle(keyed), source);
@@ -350,6 +367,78 @@ describe('derived container: the format', () => {
   });
 });
 
+describe('derived container: long work is paced', () => {
+  /** Counts task boundaries (the message ports made for them) while `run` runs, on a clock that says every step took 10 ms. */
+  async function boundaries<T>(run: () => Promise<T>): Promise<{value: T; count: number}> {
+    let count = 0, t = 0;
+    const Real = MessageChannel;
+    vi.stubGlobal('MessageChannel', class extends Real { constructor() { super(); count++; } });
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => (t += 10));
+    try {
+      return {value: await run(), count};
+    } finally {
+      clock.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  }
+  const large = (): DerivedBundle => {
+    const grid = new Uint16Array(1_600_000);
+    for (let i = 0; i < grid.length; i++) grid[i] = (i % 251) * 7;
+    return {meta: {kind: 'large'}, arrays: {grid}};
+  };
+
+  it('waits for a task boundary whenever a slice is over, and never with sliceMs Infinity; the bytes are the same', async () => {
+    expect(DERIVED_SLICE_MS).toBe(6);
+    const b = large(); // a body of 3.2 MB: four checksum blocks, 49 pieces fed to the compressor
+    const paced = await boundaries(() => packBundle(b, true, 'k'));
+    expect(paced.count, 'at least one per checksum block and per piece fed').toBeGreaterThanOrEqual(4 + 49);
+    const unpaced = await boundaries(() => packBundle(b, true, 'k', Infinity));
+    expect(unpaced.count).toBe(0);
+    expect(Buffer.from(paced.value).equals(Buffer.from(unpaced.value))).toBe(true);
+    expect(paced.value[6]).toBe(1);
+    const read = await boundaries(() => unpackBundle(paced.value, 'k'));
+    expect(read.count).toBeGreaterThanOrEqual(4);
+    expectSameBundle(read.value, b);
+    const readUnpaced = await boundaries(() => unpackBundle(paced.value, 'k', Infinity));
+    expect(readUnpaced.count).toBe(0);
+    expectSameBundle(readUnpaced.value, b);
+    // Raw: only the checksum blocks.
+    expect((await boundaries(() => packBundle(b, false))).count).toBe(4);
+  });
+
+  it('does not wait at all for work that fits one slice', async () => {
+    let count = 0;
+    const Real = MessageChannel;
+    vi.stubGlobal('MessageChannel', class extends Real { constructor() { super(); count++; } });
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    const bytes = await packBundle(bundle(1), true, 'k', 60_000);
+    expectSameBundle(await unpackBundle(bytes, 'k', 60_000), bundle(1));
+    expect(count).toBe(0);
+    expect(timers).not.toHaveBeenCalled();
+  });
+
+  it('falls back to a zero timer where there is no message port', async () => {
+    let t = 0;
+    vi.stubGlobal('MessageChannel', undefined);
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => (t += 10));
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    const b = large(), bytes = await packBundle(b, true, 'k');
+    expect(timers.mock.calls.filter(call => call[1] === 0).length).toBeGreaterThanOrEqual(4 + 49);
+    expectSameBundle(await unpackBundle(bytes, 'k'), b);
+    clock.mockRestore();
+  });
+
+  it('the cache passes its sliceMs on', async () => {
+    const b = large();
+    const never = openDerivedCache({indexedDB: null, sliceMs: Infinity});
+    expect((await boundaries(async () => { await never.put('k', b); return never.get('k'); })).count).toBe(0);
+    const paced = openDerivedCache({indexedDB: null});
+    const run = await boundaries(async () => { await paced.put('k', b); return paced.get('k'); });
+    expect(run.count).toBeGreaterThanOrEqual(4 + 49 + 4);
+    expectSameBundle(run.value, b);
+  });
+});
+
 describe('derived container: what cannot be stored', () => {
   it('refuses meta that would not come back from JSON as it went in, naming the place', async () => {
     const cyclic: Record<string, unknown> = {};
@@ -435,6 +524,21 @@ describe('derived cache: the in-memory backend', () => {
     await expect(cache.clear()).resolves.toBeUndefined();
     await expect(cache.get('b')).resolves.toBeNull();
     expect(await cache.stats()).toMatchObject({entries: 0, bytes: 0, hits: 3, misses: 3, puts: 2, failedPuts: 0, evictions: 0, corrupt: 0});
+  });
+
+  it('stores the bundle as it was when put was called, whatever happens to its arrays before the put\'s turn', async () => {
+    const cache = open(), first = bundle(1), second = bundle(2);
+    const puts = [cache.put('a', first), cache.put('b', second)]; // not awaited
+    (first.arrays.field as Float32Array).fill(123);
+    (second.arrays.probes as Uint8Array).fill(9);
+    (first.meta as {id: number}).id = 77;
+    await expect(Promise.all(puts)).resolves.toEqual([true, true]);
+    expectSameBundle(await cache.get('a'), bundle(1));
+    expectSameBundle(await cache.get('b'), bundle(2));
+    // The same through packBundle.
+    const third = bundle(3), packing = packBundle(third);
+    (third.arrays.field as Float32Array).fill(-5);
+    expectSameBundle(await unpackBundle(await packing), bundle(3));
   });
 
   it('evicts the least recently USED entry when the entry limit is reached (a hit refreshes, a miss does not)', async () => {
@@ -582,12 +686,14 @@ describe('derived cache: IndexedDB', () => {
     expect(keysOf(fake, 'meta')).toEqual(['a']);
   });
 
-  it('keeps operations queued behind a slow open, in order', async () => {
+  it('keeps operations queued behind a slow open, in order (the bundle is the one given at the call)', async () => {
     const fake = newFake();
     fake.openMode = 'hang';
     const cache = open(fake, {openTimeoutMs: 60_000});
     let settled = 0;
-    const first = cache.put('a', bundle(1)), second = cache.get('a'), third = cache.stats();
+    const source = bundle(1);
+    const first = cache.put('a', source), second = cache.get('a'), third = cache.stats();
+    (source.arrays.field as Float32Array).fill(42);
     for (const p of [first, second, third]) void p.then(() => { settled++; });
     await fake.tick();
     expect(settled).toBe(0);
