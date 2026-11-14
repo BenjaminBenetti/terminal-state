@@ -157,7 +157,7 @@ describe('never loot: bench or Market only', () => {
 });
 
 describe('the bench recipes', () => {
-  const flame = benchRecipeFor(FLAMETHROWER_ID)!, tankR = benchRecipeFor(FUEL_TANK_ID)!;
+  const flame = benchRecipeFor(FLAMETHROWER_ID) as MadeRecipe, tankR = benchRecipeFor(FUEL_TANK_ID) as MadeRecipe;
 
   it('exactly the user\'s costs; listed after every older row, whose costs and order are unchanged', () => {
     expect(flame).toMatchObject({kind: FLAMETHROWER_ID, make: {type: 'item', itemId: FLAMETHROWER_ID, count: 1},

@@ -701,7 +701,7 @@ function scenario() {
   const perPool = draws - d0 - perThrow;
   const p = sys.pools[0];
   log.push(['pool1', p.x, p.y, p.z, p.left, p.age, p.r, Array.from(p.seeds)]);
-  ref.x = p.x + 1.2; ref.y = p.y; ref.z = p.z;
+  Object.assign(ref, {x: p.x + 1.2, y: p.y, z: p.z});
   zs = [fakeZombie(p.x + 0.6, p.y, p.z), fakeZombie(p.x - 0.4, p.y, p.z + 0.5, 60), fakeZombie(p.x + ACID.poolR + 0.6, p.y, p.z), fakeZombie(p.x + ACID.poolR + 0.05, p.y, p.z, 500)];
   Object.assign(player, {x: p.x - 0.5, y: p.y, z: p.z});
   const t0 = draws;
