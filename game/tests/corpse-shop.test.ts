@@ -1,10 +1,17 @@
 // Task studio-corpse-market-shop-20261114-031614-01: THE MARKET CORPSE BUYER — the pure sale record (market/corpseShop/shopState.ts), the
 // runtime on a fake host with a hand-made den (market/corpseShop/corpseShop.ts: the chute sink, the swallow, the physical Rail Ties drop that
-// becomes ONE world pickup, a load mid-sale, the hostile booth, the loot-spill seam, the look-at line) and the save validation's
-// one-body-one-place checks over the sale and the bought ids.
+// becomes ONE world pickup, a load mid-sale, the hostile booth, the loot-spill seam, the look-at line), the buyer actor (the real cooked
+// GLB: his post and facing, Idle / Greet / Work, dark while hostile, the bounded stare) and the save validation's one-body-one-place
+// checks over the sale and the bought ids.
 
-import {describe, expect, it} from 'vitest';
+import {beforeAll, describe, expect, it} from 'vitest';
 import * as THREE from 'three';
+import {fileURLToPath} from 'node:url';
+import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
+import {NodeIO} from '@gltf-transform/core';
+import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
+import {CORPSE_BUYER_MODEL} from '../src/assets/corpseBuyer.generated';
+import type {HumanActor} from '../src/market/humanActor';
 import {corpseCarriable} from '../src/ai/corpseTrait';
 import type {BodyRecordJSON} from '../src/corpse/bodyRecord';
 import type {BodySink, HeldBody} from '../src/corpse/api';
@@ -137,7 +144,7 @@ function fakeBody(): THREE.Object3D {
   return root;
 }
 
-function shopHost(o: {run?: FakeRun; loot?: (b: BodyRecordJSON) => ItemStack[]} = {}) {
+function shopHost(o: {run?: FakeRun; loot?: (b: BodyRecordJSON) => ItemStack[]; models?: Record<string, GLTF>} = {}) {
   const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.05, 100);
   scene.add(camera);
   const adds: {stack: ItemStack; x: number; y: number; z: number; jobAtAdd: boolean}[] = [], toasts: string[] = [], disposed: THREE.Object3D[] = [], sinks: BodySink[] = [];
@@ -154,7 +161,7 @@ function shopHost(o: {run?: FakeRun; loot?: (b: BodyRecordJSON) => ItemStack[]} 
       meshFor: () => new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.12, 1), new THREE.MeshBasicMaterial()),
     },
     inv: {makeStack: (itemId: string, count: number): ItemStack => ({uid: uid++, itemId, count})},
-    propModels: {get: () => undefined},
+    propModels: {get: (k: string) => o.models?.[k]},
     corpses: {held: () => holding, addSink: (s: BodySink) => { sinks.push(s); }, buildBody: () => fakeBody(), disposeBody: (obj: THREE.Object3D) => { disposed.push(obj); obj.removeFromParent(); }},
     marketHostility: {hostile: false},
     currentTarget: null as unknown,
@@ -324,6 +331,90 @@ describe('corpse buyer: the den runtime (fake host)', () => {
     expect(line()).toBe(CORPSE_SHOP_TEXT.closed);
     s.look(9, 0.5, -5);
     expect(line()).toBeNull();
+  });
+});
+
+describe('corpse buyer: the actor (the real cooked buyer through the unchanged HumanWardrobe)', () => {
+  let gltf: GLTF;
+  beforeAll(async () => {
+    const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
+    const doc = await io.read(fileURLToPath(new URL('../public/' + CORPSE_BUYER_MODEL.url, import.meta.url)));
+    for (const t of doc.getRoot().listTextures()) t.dispose(); // (node has no image decoder)
+    const bin = await io.writeBinary(doc);
+    gltf = await new Promise<GLTF>((res, rej) => new GLTFLoader().parse(bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength) as ArrayBuffer, '', res, rej));
+  }, 120_000);
+
+  /** World yaw (atan2(x, z) of +Z) of a bone or the root: the model faces +Z. */
+  const facing = (o: THREE.Object3D) => { o.updateWorldMatrix(true, false); const f = new THREE.Vector3(0, 0, 1).transformDirection(o.matrixWorld); return Math.atan2(f.x, f.z); };
+  const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
+  it('stands behind the booth facing the customer, idles, greets a sale, works the count, goes dark while hostile', () => {
+    const s = shopHost({models: {[CORPSE_BUYER_MODEL.key]: gltf}});
+    for (const b of s.h.sectionHooks as {build(l: unknown): void}[]) b.build(s.h.layout);
+    s.frames(0.1);
+    const a = (s.shop as unknown as {buyer: HumanActor}).buyer;
+    expect(s.shop.qa()).toMatchObject({buyer: true, buyerVisible: true, buyerClip: 'Idle'});
+    expect(a.root.parent).toBe(s.h.scene);
+    expect([a.root.position.x, a.root.position.y, a.root.position.z]).toEqual([DEN.buyer.x, DEN.buyer.y, DEN.buyer.z]);
+    // the contract's yaw 0 faces -Z: across the booth (z 7) toward the chute (z 5)
+    expect(Math.abs(wrap(facing(a.root) - Math.PI))).toBeLessThan(1e-6);
+    // a sale: the greeting, then the count's Work loop once the body is down
+    s.look(3, 0.5, 5);
+    expect(sell(s, s.hold(held('st-01:main#4')))).toBe(true);
+    expect(a.current).toBe('Greet');
+    s.frames(CORPSE_SHOP.swallowMs / 1000 + 0.1);
+    expect(a.loop).toBe('Work');
+    s.frames((CORPSE_SHOP.saleMs - CORPSE_SHOP.swallowMs) / 1000 + 2);
+    expect(s.shop.qa()).toMatchObject({buyerClip: 'Idle', record: {done: 1, job: null}});
+    // the settlement turns hostile: the booth goes dark (he is never a fighter), back at his post after
+    s.h.marketHostility.hostile = true;
+    s.frames(0.1);
+    expect(s.shop.qa().buyerVisible).toBe(false);
+    s.h.marketHostility.hostile = false;
+    s.frames(0.1);
+    expect(s.shop.qa().buyerVisible).toBe(true);
+    // teardown (leaving the station) removes him from the scene
+    s.shop.teardown();
+    expect(a.root.parent).toBeNull();
+    expect(s.shop.qa().buyer).toBe(false);
+  });
+
+  it('the stare: his head turns toward the player, bounded, and never accumulates over a long wait', () => {
+    const s = shopHost({models: {[CORPSE_BUYER_MODEL.key]: gltf}});
+    for (const b of s.h.sectionHooks as {build(l: unknown): void}[]) b.build(s.h.layout);
+    s.frames(0.1);
+    const a = (s.shop as unknown as {buyer: HumanActor}).buyer, head = a.bone('Head')!;
+    const turn = () => wrap(facing(head) - facing(a.root));
+    /**
+     * The head's turn with the player standing at (x, z): min / max / mean over the last whole Idle cycle (the clip sways the head
+     * itself; a whole cycle's mean is phase-free), after the smoothing has settled.
+     */
+    const cycle = Math.round(a.duration('Idle') * 60);
+    expect(cycle).toBeGreaterThan(30);
+    const sample = (x: number, z: number, secs: number) => {
+      s.h.player.x = x; s.h.player.z = z;
+      const v: number[] = [];
+      for (let t = 0; t < secs; t += 1 / 60) { for (const f of s.h.frameHooks as ((dt: number) => void)[]) f(1 / 60); v.push(turn()); }
+      const tail = v.slice(-cycle);
+      return {min: Math.min(...tail), max: Math.max(...tail), mean: tail.reduce((p, q) => p + q, 0) / tail.length};
+    };
+    const S = 3 + 2 * cycle / 60;
+    const ahead = sample(3, 5, S);
+    // the player off to his side (+X, about 60 degrees off his facing): the head follows, by a bounded turn
+    const side = sample(3 + 2.4, 7.6 - 1.4, S);
+    const want = Math.sign(wrap(Math.atan2(2.4, -1.4) - facing(a.root)));
+    expect((side.mean - ahead.mean) * want).toBeGreaterThan(0.5);
+    expect(Math.abs(side.mean - ahead.mean)).toBeLessThanOrEqual(CORPSE_SHOP_RT.stare + 0.05);
+    // directly behind him (out of a neck's reach): still capped
+    const behind = sample(3, 7.6 + 2, S);
+    expect(Math.abs(behind.mean - ahead.mean)).toBeLessThanOrEqual(CORPSE_SHOP_RT.stare + 0.05);
+    // a long wait at the side: the same band, never a growing spin
+    const later = sample(3 + 2.4, 7.6 - 1.4, 4 * S);
+    expect(Math.abs(later.mean - side.mean)).toBeLessThan(0.1);
+    expect(later.max - later.min).toBeLessThan(side.max - side.min + 0.1);
+    // out of range: he settles back to the clip's own head
+    const away = sample(3, 7.6 - 20, S);
+    expect(Math.abs(away.mean - ahead.mean)).toBeLessThan(0.1);
   });
 });
 
