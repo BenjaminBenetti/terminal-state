@@ -23,11 +23,12 @@
 //    Uint8Array). A hit rewrites its `meta` row only. The in-memory backend keeps the same two things in a Map.
 //  - IndexedDB is given up for this session (the in-memory backend takes over, capped at DERIVED_MEMORY_MAX_BYTES so a session
 //    without storage cannot grow without bound; `reason` says why) when: there is no factory or reading it throws; open() throws,
-//    errors, is blocked, finds another schema under the name or does not settle in `openTimeoutMs`; later, when a transaction cannot
-//    be started (the connection closed: InvalidStateError), the browser closed the connection, another tab asked for a version
-//    change, a transaction does not finish in `txTimeoutMs`, or IDB_FAILURE_LIMIT operations in a row failed for another reason
-//    than quota. A put refused for quota is only a failed put. The operation that found the database dead is repeated on the
-//    in-memory backend. A missing factory is reported in `reason` without a console warning (Node, tests); every real failure is
+//    errors, is blocked, finds another schema under the name or does not settle in `openTimeoutMs`; later, when the browser closes
+//    the connection or another tab asks for a version change (reported at that moment; our connection is closed so that tab is not
+//    blocked), when a transaction cannot be started (the connection closed: InvalidStateError) or does not finish in `txTimeoutMs`,
+//    or when IDB_FAILURE_LIMIT operations in a row failed for another reason than quota. A put refused for quota is only a failed
+//    put. The operation that found the database dead (also one whose transaction was aborted by the connection closing under
+//    it) is repeated on the in-memory backend. A missing factory is reported in `reason` without a console warning (Node, tests); every real failure is
 //    warned about once per kind per cache.
 //  - `corrupt` counts records that were found but could not be used (damaged, truncated, another format version, another key, a
 //    `data` record without its `meta` row or the reverse); each is deleted and is also a miss. `failedPuts` counts every put that
@@ -393,9 +394,12 @@ class IdbStore implements Store {
   /** Set when the connection was closed under us. */
   private dead: string | null = null;
 
-  constructor(private readonly db: IDBDatabase, private readonly txTimeoutMs: number) {
-    db.onversionchange = () => { this.dead = 'another tab is replacing the database'; this.dispose(); };
-    db.onclose = () => { this.dead = 'the browser closed the database'; };
+  /** `onDead` is told at once when the connection is lost (the cache reports the downgrade then, not at its next operation). */
+  constructor(private readonly db: IDBDatabase, private readonly txTimeoutMs: number, onDead: (why: string) => void) {
+    const lost = (why: string): void => { this.dead = why; onDead(why); };
+    // Another tab wants a newer version or to delete the database: holding the connection would block it.
+    db.onversionchange = () => { this.dispose(); lost('another tab is replacing the database'); };
+    db.onclose = () => lost('the browser closed the database');
   }
 
   /**
@@ -428,7 +432,20 @@ class IdbStore implements Store {
         timer = setTimeout(() => fail(new DatabaseUnusable(`a transaction did not finish in ${this.txTimeoutMs} ms`)), this.txTimeoutMs);
       }
       t.oncomplete = () => settle(() => resolve(out));
-      t.onabort = () => settle(() => reject(t.error ?? new Error('the transaction was aborted')));
+      // An abort that is not the browser refusing space may be the connection going away (its `close` event comes after the
+      // aborts, if at all): starting a transaction tells — it throws on a closed connection, and is an empty one otherwise.
+      t.onabort = () => settle(() => {
+        const cause: unknown = t.error ?? new Error('the transaction was aborted');
+        if (errorName(cause) !== 'QuotaExceededError') {
+          try {
+            this.db.transaction([META], 'readonly');
+          } catch (err) {
+            reject(new DatabaseUnusable(`the connection was lost (${errorText(err)})`));
+            return;
+          }
+        }
+        reject(cause);
+      });
       const step = (fn: () => void) => (): void => { try { fn(); } catch (err) { fail(err); } };
       step(() => body(t, v => { out = v; }, step))();
     });
@@ -556,40 +573,42 @@ class Cache implements DerivedCache {
         }
         done = true;
         if (timer !== null) clearTimeout(timer);
-        if (db) this.store = new IdbStore(db, this.txTimeoutMs); else this.downgrade(why, true);
+        if (db) {
+          const store: Store = new IdbStore(db, this.txTimeoutMs, lost => { if (this.store === store) this.downgrade(`IndexedDB stopped working (${lost})`, true); });
+          this.store = store;
+        } else this.downgrade(why, true);
         resolve();
       };
       if (Number.isFinite(timeoutMs) && timeoutMs > 0) timer = setTimeout(() => settle(null, `IndexedDB did not open within ${timeoutMs} ms`), timeoutMs);
-      let req: IDBOpenDBRequest;
       try {
-        req = factory.open(name, DB_VERSION);
-      } catch (err) {
-        settle(null, `IndexedDB could not be opened (${errorText(err)})`);
-        return;
-      }
-      req.onupgradeneeded = () => {
-        try {
+        const req = factory.open(name, DB_VERSION);
+        req.onupgradeneeded = () => {
+          try {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, {keyPath: 'key'});
+            if (!db.objectStoreNames.contains(DATA)) db.createObjectStore(DATA);
+          } catch (err) {
+            try { req.transaction?.abort(); } catch { /* the open fails by itself */ }
+            settle(null, `IndexedDB could not be set up (${errorText(err)})`);
+          }
+        };
+        req.onsuccess = () => {
           const db = req.result;
-          if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, {keyPath: 'key'});
-          if (!db.objectStoreNames.contains(DATA)) db.createObjectStore(DATA);
-        } catch (err) {
-          try { req.transaction?.abort(); } catch { /* the open fails by itself */ }
-          settle(null, `IndexedDB could not be set up (${errorText(err)})`);
-        }
-      };
-      req.onsuccess = () => {
-        const db = req.result;
-        let whole = false;
-        try { whole = db.objectStoreNames.contains(META) && db.objectStoreNames.contains(DATA); } catch { /* not ours */ }
-        if (whole) { settle(db, ''); return; }
-        try { db.close(); } catch { /* nothing to close */ }
-        settle(null, 'the IndexedDB database under this name is not the derived cache');
-      };
-      req.onerror = ev => {
-        try { ev.preventDefault(); } catch { /* not a real event */ }
-        settle(null, `IndexedDB could not be opened (${errorText(req.error)})`);
-      };
-      req.onblocked = () => settle(null, 'IndexedDB is blocked by another tab');
+          let whole = false;
+          try { whole = db.objectStoreNames.contains(META) && db.objectStoreNames.contains(DATA); } catch { /* not ours */ }
+          if (whole) { settle(db, ''); return; }
+          try { db.close(); } catch { /* nothing to close */ }
+          settle(null, 'the IndexedDB database under this name is not the derived cache');
+        };
+        req.onerror = ev => {
+          try { ev.preventDefault(); } catch { /* not a real event */ }
+          settle(null, `IndexedDB could not be opened (${errorText(req.error)})`);
+        };
+        req.onblocked = () => settle(null, 'IndexedDB is blocked by another tab');
+      } catch (err) {
+        // open() threw (some private modes do), or what it returned is not a request.
+        settle(null, `IndexedDB could not be opened (${errorText(err)})`);
+      }
     });
   }
 
@@ -633,9 +652,11 @@ class Cache implements DerivedCache {
       return r;
     } catch (err) {
       if (s.kind !== 'indexeddb') throw err;
+      // The connection was lost while this ran (the cache has already moved on): once more, on the backend in use now.
+      if (this.store !== s) return this.store ? op(this.store) : none;
       if (errorName(err) !== 'QuotaExceededError') this.failures++;
       if (!(err instanceof DatabaseUnusable) && this.failures < IDB_FAILURE_LIMIT) throw err;
-      this.downgrade(`IndexedDB stopped working (${errorText(err)})`, true);
+      this.downgrade(`IndexedDB stopped working (${err instanceof DatabaseUnusable ? err.message : errorText(err)})`, true);
       return this.store ? op(this.store) : none;
     }
   }

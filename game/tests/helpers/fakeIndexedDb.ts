@@ -21,8 +21,8 @@
 //
 // Switches for the tests: `openMode` (open() throws, errors, reports blocked, or never settles; release() lets held opens finish),
 // failNextPuts / failNextCommits (a QuotaExceededError-like failure that aborts the transaction), `hangTransactions` (nothing is
-// delivered: a stuck transaction), closeConnections() (the browser drops them: `close` fires), versionChange() (another tab wants
-// the database: `versionchange` fires), records() / corrupt() (the raw stored values), `log` (every request placed), and
+// delivered: a stuck transaction), closeConnections() (the browser drops them, with or without the `close` event), versionChange()
+// (another tab wants the database: `versionchange` fires), records() / corrupt() (the raw stored values), `log` (every request placed), and
 // `handlerErrors` (anything a handler of the code under test threw: it should stay empty).
 
 type Key = string | number;
@@ -128,6 +128,8 @@ export class FakeTransaction {
   /** The task that created it is over (requests may be delivered once it is first in line). */
   private created = false;
   private pending: {req: FakeRequest; run: () => unknown}[] = [];
+  /** Requests placed so far. */
+  private placed = 0;
   /** This transaction's private copies of the stores it wrote to. */
   private readonly work = new Map<string, Map<Key, unknown>>();
 
@@ -176,6 +178,7 @@ export class FakeTransaction {
     const req = new FakeRequest();
     req.transaction = this;
     this.db.factory.log.push(entry);
+    this.placed++;
     this.pending.push({req, run});
     return req;
   }
@@ -219,7 +222,8 @@ export class FakeTransaction {
   }
 
   private commit(): void {
-    const failure = this.db.factory.takeCommitFailure();
+    // A transaction that placed no request has nothing to commit and cannot fail at it.
+    const failure = this.placed > 0 ? this.db.factory.takeCommitFailure() : null;
     if (failure) { this.finishAbort(failure); return; }
     for (const [name, map] of this.work) this.def(name).records = map;
     this.state = 'finished';
@@ -386,7 +390,7 @@ export class FakeIndexedDb {
 
   /** The next `n` put requests fail (the transaction aborts with that error unless the request's error is preventDefault()ed). */
   failNextPuts(n: number, name = 'QuotaExceededError'): void { this.putFailures = n; this.putFailureName = name; }
-  /** The next `n` transactions that reach their commit abort with that error instead (how a browser usually reports quota). */
+  /** The next `n` transactions that did something and reach their commit abort with that error instead (how a browser usually reports quota). */
   failNextCommits(n: number, name = 'QuotaExceededError'): void { this.commitFailures = n; this.commitFailureName = name; }
   /** Opens held by 'blocked' / 'hang' finish now (as successes, whatever `openMode` is by then). */
   release(): void {
@@ -394,13 +398,16 @@ export class FakeIndexedDb {
     this.held = [];
     for (const finish of held) defer(finish);
   }
-  /** The browser drops every connection (site data cleared, storage pressure): running transactions abort, `close` fires. */
-  closeConnections(): void {
+  /**
+   * The browser drops every connection (site data cleared, storage pressure): running transactions abort and `close` fires.
+   * `fireClose` false = the event never comes: the page learns of it when its next transaction() throws InvalidStateError.
+   */
+  closeConnections(fireClose = true): void {
     for (const db of [...this.connections]) {
       db.closed = true;
       this.connections.delete(db);
       for (const tx of [...db.data.queue]) if (tx.db === db) tx.finishAbort(domError('AbortError', 'The connection was closed.'));
-      defer(() => { if (db.onclose) db.onclose(event('close', db)); });
+      if (fireClose) defer(() => { if (db.onclose) db.onclose(event('close', db)); });
     }
   }
   /** Another tab wants a newer version / to delete the database: every connection is told (`versionchange`). */
