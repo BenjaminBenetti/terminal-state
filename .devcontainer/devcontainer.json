@@ -1,6 +1,7 @@
 {
   "name": "Terminal State — Node 22",
   "build": {"dockerfile": "Dockerfile"},
+  "hostRequirements": {"memory": "12gb"},
   "remoteUser": "node",
   "forwardPorts": [5173, 4180],
   "portsAttributes": {
