@@ -1,10 +1,13 @@
 // Task studio-refinement-batch-20261113-035659-01 (lane LURE): the ZOMBIE LURE GRENADE's scent (ai/scentLure.ts + the brain's
 // 'investigate' state with LureState.kind 'scent'). User: "Scent reaches 20 metres without line-of-sight requirements for 20 active
-// seconds. Zombies investigate the ACTUAL emitter, not the player. Retain valid navigation/collision: no wall-phasing."
+// seconds. Zombies investigate the ACTUAL emitter, not the player. Retain valid navigation/collision: no wall-phasing." Task
+// studio-scanner-console-refinements-20261114-031614-01: "Increase the Zombie Lure radius from 20 m to 30 m. Keep 20 active seconds,
+// no-line-of-sight scent, priorities, valid navigation and current family behaviour" — the reach below is 30 m (SCENT.radius).
 // Hand-made fixtures driven exactly like game.ts updateZombies (brain -> body turn -> height-aware motor) with the game's BrainWorld
 // (3D sight on Levels, the level-aware PathFinder, lightLure.ts lureWorld) + `scents` = a ScentLures registry's active list:
 //  - an enemy 15 m away behind a wall (no sight line) walks round the wall to the canister; every frame's step is a valid walk
-//    (height-aware, body circle clear, never across the wall); 25 m away it ignores it; it reaches across storeys (3D distance);
+//    (height-aware, body circle clear, never across the wall); 31 / 35 m away it ignores it, 29 m away it is drawn; it reaches
+//    across storeys (3D distance);
 //  - active seconds count only while ticked (a paused game never ticks), the scent ends after 20 ticked s, enemies then linger
 //    and return to their ordinary behaviour;
 //  - seeing the player always wins; a pursuer that lost sight of the player is pulled (a fresh gunshot / hit is hunted first);
@@ -153,11 +156,11 @@ const holding = (e: ScentEmitter) => (q: ZombieBrain) => q.lure?.kind === 'scent
 describe('scent lure: the emitter registry', () => {
   it('add / move / remove / tick / clear; ACTIVE seconds only; the cap of 3 (a 4th retires the one with the least time left)', () => {
     const S = new ScentLures();
-    expect(SCENT.radius).toBe(20);
+    expect(SCENT.radius).toBe(30); // (was 20 m before the console refinements)
     expect(SCENT.seconds).toBe(20);
     expect(SCENT_MAX).toBe(3);
     const a = S.add({x: 1, y: 0.05, z: 2, level: 0});
-    expect(a).toMatchObject({x: 1, y: 0.05, z: 2, level: 0, left: 20, active: true, radius: 20, seconds: 20});
+    expect(a).toMatchObject({x: 1, y: 0.05, z: 2, level: 0, left: 20, active: true, radius: 30, seconds: 20});
     expect(S.list).toEqual([a]);
     S.tick(5);
     expect(a.left).toBe(15);
@@ -190,17 +193,21 @@ describe('scent lure: the emitter registry', () => {
 
   it('perception: 3D feet-to-canister distance within the radius, nothing else (no sight, no view); sticky; given-up ones skipped', () => {
     const S = new ScentLures();
-    const near = S.add({x: 10, y: 0, z: 0}), far = S.add({x: 0, y: 0, z: 21});
+    const near = S.add({x: 10, y: 0, z: 0}), far = S.add({x: 0, y: 0, z: 31});
     const o = {x: 0, y: 0, z: 0};
     expect(perceiveScent(o, S.list)?.emitter).toBe(near);
-    expect(perceiveScent(o, S.list, null, [near.id])).toBeNull(); // far is 21 m away
-    expect(perceiveScent({x: 0, y: 0, z: 2}, S.list, far.id)?.emitter).toBe(near); // 10.2 vs 19 x 0.8: still the nearer
-    expect(perceiveScent({x: 0, y: 0, z: 9}, S.list, far.id)?.emitter).toBe(far); // 13.5 vs 12 x 0.8 = 9.6: the followed one
-    // 3D: a storey above, 16 m along and 12 m up = 20 m (in reach); 13 m up = 20.6 m (out)
-    const up = new ScentLures(); up.add({x: 16, y: 12, z: 0});
-    expect(perceiveScent(o, up.list)?.dist).toBeCloseTo(20, 6);
-    up.move(up.list[0], {x: 16, y: 13, z: 0});
+    expect(perceiveScent(o, S.list, null, [near.id])).toBeNull(); // far is 31 m away
+    expect(perceiveScent({x: 0, y: 0, z: 1}, S.list, null, [near.id])?.emitter).toBe(far); // 30 m: just in reach
+    expect(perceiveScent({x: 0, y: 0, z: 2}, S.list, far.id)?.emitter).toBe(near); // 10.2 vs 29 x 0.8: still the nearer
+    expect(perceiveScent({x: 0, y: 0, z: 16}, S.list, far.id)?.emitter).toBe(far); // 18.9 vs 15 x 0.8 = 12: the followed one
+    // 3D: a storey above, 24 m along and 18 m up = 30 m (in reach); 19 m up = 30.6 m (out)
+    const up = new ScentLures(); up.add({x: 24, y: 18, z: 0});
+    expect(perceiveScent(o, up.list)?.dist).toBeCloseTo(30, 6);
+    up.move(up.list[0], {x: 24, y: 19, z: 0});
     expect(perceiveScent(o, up.list)).toBeNull();
+    // the reach is the radius the emitter was given (SCENT.radius by default): the 20 m of before is well inside it
+    const old = new ScentLures(); old.add({x: 25, y: 0, z: 0});
+    expect(perceiveScent(o, old.list)?.dist).toBeCloseTo(25, 6);
   });
 });
 
@@ -234,18 +241,20 @@ describe('scent lure: the walk to the canister', () => {
     expect(b.lure?.phase).toBe('hold');
   });
 
-  it('25 m (or 21 m) away it ignores the canister; 19 m away it is drawn', () => {
+  it('35 m (or 31 m) away it ignores the canister; 29 m (and 25 m — beyond the old 20 m) away it is drawn', () => {
     const s = sim(HL, HPF, {x: 58, z: 18});
     s.wander = false;
     const e = canister(s, 37.5, 0, 5, {seconds: 60});
-    const far = new ZombieBrain('shambler', 12.5, 5, Math.PI / 2), edge = new ZombieBrain('shambler', 16.5, 5, Math.PI / 2);
-    const inside = new ZombieBrain('shambler', 18.5, 5, Math.PI / 2);
-    run(s, [far, edge, inside], 3);
+    const far = new ZombieBrain('shambler', 2.5, 5, Math.PI / 2), edge = new ZombieBrain('shambler', 6.5, 5, Math.PI / 2);
+    const inside = new ZombieBrain('shambler', 8.5, 5, Math.PI / 2), was = new ZombieBrain('shambler', 12.5, 5, Math.PI / 2);
+    run(s, [far, edge, inside, was], 3);
     expect(far.state).not.toBe('investigate');
     expect(edge.state).not.toBe('investigate');
     expect(far.scentChecks).toBeGreaterThan(4); // it did check
     expect(inside.state).toBe('investigate');
     expect(inside.lure?.lightId).toBe(e.id);
+    expect(was.state).toBe('investigate'); // (25 m: out of the old 20 m reach, in the new 30 m one)
+    expect(was.lure?.lightId).toBe(e.id);
   });
 
   it('reaches across storeys (3D): an enemy on the deck above smells a canister on the platform UNDER the deck slab and takes the stairs down to it', () => {
@@ -266,12 +275,13 @@ describe('scent lure: the walk to the canister', () => {
     expect(holding(e)(b)).toBe(true);
     expect(b.y).toBeCloseTo(0, 1); // down on the canister's storey
     expect(tr.states.has('chase')).toBe(false);
-    // a deck enemy whose 3D distance exceeds the radius is not drawn
+    // a deck enemy whose 3D distance exceeds the radius is not drawn (30.5 m: the fixture's farthest deck / platform A corners)
     const s2 = sim(FL, FPF, hidden);
     s2.wander = false;
-    const c = new ZombieBrain('shambler', 24, 21.5, Math.PI); c.y = FIX.upperY;
-    canister(s2, 4, 0.05, 3, {seconds: 60});
-    expect(Math.hypot(4 - c.x, 0.05 - c.y, 3 - c.z)).toBeGreaterThan(SCENT.radius);
+    const c = new ZombieBrain('shambler', 25.4, 21.4, Math.PI); c.y = FIX.upperY;
+    canister(s2, 2.2, 0.05, 2.2, {seconds: 60});
+    expect(FL.levelAt(2.2, 2.2, 0.1)).toBe(0); // (on platform A)
+    expect(Math.hypot(2.2 - c.x, 0.05 - c.y, 2.2 - c.z)).toBeGreaterThan(SCENT.radius);
     expect(run(s2, c, 3).states.has('investigate')).toBe(false);
   });
 });

@@ -1,50 +1,63 @@
 // Task studio-train-crafting-v1-20261111-225628-01 (lane SCANNER; user: "opens a black/green 360-degree radar around the train,
-// approximately 100m range … snapshot blips: red enemies, green ordinary items, gold weapons/gear. No floorplan/map or continuous live
-// tracking"): THE SCANNER'S SCOPE — DYNAMIC content (the standing art rule's exemption: state-driven runtime data drawn in code, like
-// world/bunker/coreScreen.ts; never authored artwork).
+// approximately 100m range … No floorplan/map or continuous live tracking"): THE SCANNER'S SCOPE — DYNAMIC content (the standing art
+// rule's exemption: state-driven runtime data drawn in code, like world/bunker/coreScreen.ts; never authored artwork).
+// Task studio-scanner-console-refinements-20261114-031614-01 (user: "Every mode shows ONLY GREEN dots, including weapons/equipment; no
+// red/gold categories. Provide a clear mode label and straightforward cycling control in the existing scanner UI"): one kind of mark — a
+// green dot — for every mode; the mode's name in the header, the cycling key beside it, every mode in a strip under the scope.
 //
 //  - drawScanner(ctx, model, w, h): PURE drawing of one model on a 2D context (tests record the calls / rasterise it). Black glass, green
 //    phosphor: the four range rings (SCANNER.rings, labelled in metres), a faint reticle and bearing ticks, the FRONT tick at the top (up
 //    on the scope = the car's front), the train's glyph in the centre (a small bar, its nose up), the sweep hand with its fading trail
-//    (one turn per period; it crosses "up" at the sweep instant), the blips of the LAST SNAPSHOT (craft/scanner.ts: brightest right after a
-//    sweep, dimming to SCANNER.dim — never gone before the next one), the legend, the range and "NEXT SWEEP IN N s".
-//    A class has its colour AND its own mark (enemy: a red disc; item: a green square; weapon / gear: a gold diamond), so the three stay
-//    apart without colour vision; marks of different classes in one cell are nudged apart inside the cell so none hides another.
-//    NEVER drawn: walls, rooms, routes, a label or a distance per blip, anything of the level's plan — the model holds none of it.
-//    Not active (unplugged / the train not parked): the snapshot is blanked — "NO SIGNAL — PLUG IN".
+//    (one turn per period; it crosses "up" at the sweep instant), the selected MODE's dots of the LAST SNAPSHOT (craft/scanner.ts
+//    scanBlips: brightest right after a sweep, dimming to SCANNER.dim — never gone before the next one), the header (title, range, "MODE:
+//    …", "[X] NEXT MODE"), the mode strip (the cycle's order, the selected one lit and underlined) and "NEXT SWEEP IN N s".
+//    A snapshot with nothing of the mode says so ("NO … IN RANGE"). NEVER drawn: walls, rooms, routes, a label or a distance per dot,
+//    anything of the level's plan — the model holds none of it. Not active (unplugged / the train not parked): the dots are blanked —
+//    "NO SIGNAL — PLUG IN".
 //  - ScannerScope: the DOM holder — one <canvas> in #scanner-scope over the game (styles.css; pointer-events none: it never takes the
 //    mouse or pauses anything), sized scopeSize() (a fraction of the smaller viewport side, capped; devicePixelRatio capped), redrawn only
-//    when what it shows changed (the snapshot, the state, the hand's step at SCANNER.redrawHz, the viewport). No DOM (Node): it only
-//    tracks open / closed.
+//    when what it shows changed (the snapshot, the mode, the state, the hand's step at SCANNER.redrawHz, the viewport). No DOM (Node): it
+//    only tracks open / closed.
 
-import {SCANNER, SCAN_CLASSES, blipBrightness, blipScale, secondsLeft, sweepAngle, type ScanBlip, type ScanClass, type ScanSnapshot} from '../craft/scanner';
+import {SCANNER, SCAN_MODES, SCAN_MODE_LABEL, blipBrightness, blipScale, secondsLeft, sweepAngle, type ScanBlip, type ScanMode} from '../craft/scanner';
 
 /** What the scope shows (filled by world/itemScanner.ts; plain data). */
 export interface ScannerModel {
-  /** The scanner works: plugged into the parked train in a live world. False: no signal, the snapshot is not shown. */
+  /** The scanner works: plugged into the parked train in a live world. False: no signal, no dots. */
   active: boolean;
-  /** The last snapshot of this world (null: none yet). */
-  snap: ScanSnapshot | null;
+  /** The selected mode (the open scanner unit's own). */
+  mode: ScanMode;
+  /** The mode's dots of the last snapshot of this world (craft/scanner.ts scanBlips); null: no snapshot yet. */
+  blips: readonly ScanBlip[] | null;
   /** Counts the snapshots (a redraw key). */
   serial: number;
   /** Active seconds to the next sweep. */
   left: number;
 }
 
+/** The key that cycles the mode, as printed ('KeyX' -> 'X'). */
+export const MODE_KEY_LABEL = SCANNER.modeKey.replace(/^Key/, '');
+
 /** The on-screen copy (one place). */
 export const SCOPE_TEXT = {
   title: 'ITEM SCANNER',
   range: `RANGE ${SCANNER.range} m`,
   front: 'FRONT',
-  legend: {enemy: 'ENEMY', item: 'ITEM', gear: 'WEAPON / GEAR'} as Readonly<Record<ScanClass, string>>,
+  /** A mode's name on the scope. */
+  modeName: (m: ScanMode) => SCAN_MODE_LABEL[m].toUpperCase(),
+  /** The header's mode label. */
+  mode: (m: ScanMode) => `MODE: ${SCAN_MODE_LABEL[m].toUpperCase()}`,
+  cycle: `[${MODE_KEY_LABEL}] NEXT MODE`,
+  /** A snapshot with nothing of the mode. */
+  none: (m: ScanMode) => (m === 'all' ? 'NO RESOURCES IN RANGE' : `NO ${SCAN_MODE_LABEL[m].toUpperCase()} IN RANGE`),
   next: (seconds: number) => `NEXT SWEEP IN ${seconds} s`,
   first: 'FIRST SWEEP PENDING',
   noSignal: 'NO SIGNAL — PLUG IN',
   paused: 'SWEEP PAUSED',
 } as const;
 
-/** The three blip colours (user: red enemies, green ordinary items, gold weapons / gear). */
-export const SCAN_COLORS: Readonly<Record<ScanClass, string>> = {enemy: '#ff4b3e', item: '#4be06a', gear: '#ffc83d'};
+/** The dots' one colour (user: every mode shows only green dots). */
+export const SCAN_DOT = '#4be06a';
 
 /** The scope's own greens / glass. */
 export const SCOPE_COLORS = {
@@ -66,17 +79,14 @@ export function scopeGeometry(w: number, h: number): ScopeGeometry {
   return {cx: w / 2, cy: h * 0.47, r: s * 0.375, s};
 }
 
-/** How far marks of a class are moved inside their cell (fractions of a cell: right, down) so classes sharing a cell stay visible. */
-const NUDGE: Readonly<Record<ScanClass, readonly [number, number]>> = {enemy: [0, -0.2], item: [-0.22, 0.2], gear: [0.22, 0.2]};
-
 /**
- * A blip's point on the canvas: the train's frame seen from above with the car's FRONT UP — local +x (ahead) is up, local +z (the car's
- * right) is right; with a class, nudged inside its cell. Never past the outer ring (a cell centre at the edge of the range is drawn
- * on it). `out` is filled and returned (the draw passes one scratch point).
+ * A dot's point on the canvas: the train's frame seen from above with the car's FRONT UP — local +x (ahead) is up, local +z (the car's
+ * right) is right. Never past the outer ring (a cell centre at the edge of the range is drawn on it). `out` is filled and returned (the
+ * draw passes one scratch point).
  */
-export function blipPoint(g: ScopeGeometry, b: {x: number; z: number}, cls?: ScanClass, out: {x: number; y: number} = {x: 0, y: 0}): {x: number; y: number} {
-  const k = g.r / SCANNER.range, n = cls ? NUDGE[cls] : null, cell = SCANNER.cell * k;
-  let dx = b.z * k + (n ? n[0] * cell : 0), dy = -b.x * k + (n ? n[1] * cell : 0);
+export function blipPoint(g: ScopeGeometry, b: {x: number; z: number}, out: {x: number; y: number} = {x: 0, y: 0}): {x: number; y: number} {
+  const k = g.r / SCANNER.range;
+  let dx = b.z * k, dy = -b.x * k;
   const d = Math.hypot(dx, dy);
   if (d > g.r) { dx *= g.r / d; dy *= g.r / d; }
   out.x = g.cx + dx;
@@ -85,14 +95,13 @@ export function blipPoint(g: ScopeGeometry, b: {x: number; z: number}, cls?: Sca
 }
 const POINT = {x: 0, y: 0};
 
-/** A blip mark's half size (px) on a scope of unit `s` for `n` merged things. */
+/** A dot's radius (px) on a scope of unit `s` for `n` merged things. */
 export function markSize(s: number, n: number): number {
   return Math.max(1.5, s * 0.0046) * blipScale(n);
 }
 
-/** The legend's order (left to right) and its entries' measured widths (scratch). */
-const LEGEND: readonly ScanClass[] = ['enemy', 'item', 'gear'];
-const LEGEND_W = [0, 0, 0];
+/** The mode strip's measured label widths (scratch). */
+const STRIP_W = SCAN_MODES.map(() => 0);
 
 function text(ctx: Ctx, str: string, x: number, y: number, px: number, color: string, align: CanvasTextAlign = 'left', weight = 'bold'): void {
   ctx.fillStyle = color;
@@ -102,18 +111,30 @@ function text(ctx: Ctx, str: string, x: number, y: number, px: number, color: st
   ctx.fillText(str, x, y);
 }
 
-/** One mark of `cls` centred on (x, y), half size m, in the current fill style. */
-function mark(ctx: Ctx, cls: ScanClass, x: number, y: number, m: number): void {
-  if (cls === 'item') { ctx.fillRect(x - m * 0.9, y - m * 0.9, m * 1.8, m * 1.8); return; }
-  ctx.beginPath();
-  if (cls === 'enemy') ctx.arc(x, y, m, 0, TAU);
-  else { const d = m * 1.3; ctx.moveTo(x, y - d); ctx.lineTo(x + d, y); ctx.lineTo(x, y + d); ctx.lineTo(x - d, y); ctx.closePath(); }
-  ctx.fill();
-}
-
-function blips(ctx: Ctx, g: ScopeGeometry, cls: ScanClass, list: readonly ScanBlip[]): void {
-  ctx.fillStyle = SCAN_COLORS[cls];
-  for (const b of list) { const p = blipPoint(g, b, cls, POINT); mark(ctx, cls, p.x, p.y, markSize(g.s, b.n)); }
+/** The mode strip under the scope: every mode in the cycle's order, the selected one lit and underlined (fits the width: shrinks if it must). */
+function modeStrip(ctx: Ctx, mode: ScanMode, w: number, y: number, s: number): void {
+  const C = SCOPE_COLORS, avail = w - s * 0.06;
+  let px = Math.max(8, Math.round(s * 0.021)), gap = s * 0.026, total = 0;
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.font = `bold ${px}px ${FONT}`;
+    total = gap * (SCAN_MODES.length - 1);
+    for (let i = 0; i < SCAN_MODES.length; i++) total += (STRIP_W[i] = ctx.measureText(SCOPE_TEXT.modeName(SCAN_MODES[i])).width);
+    if (total <= avail || pass) break;
+    const k = avail / total;
+    px = Math.max(6, Math.floor(px * k));
+    gap *= k;
+  }
+  let x = (w - total) / 2;
+  for (let i = 0; i < SCAN_MODES.length; i++) {
+    const m = SCAN_MODES[i], on = m === mode;
+    ctx.fillStyle = on ? C.text : C.label;
+    ctx.font = `bold ${px}px ${FONT}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(SCOPE_TEXT.modeName(m), x, y);
+    if (on) ctx.fillRect(x, y + px * 0.72, STRIP_W[i], Math.max(1.5, s * 0.003));
+    x += STRIP_W[i] + gap;
+  }
 }
 
 /** Draws the scope for `m` onto a w x h px context (pure: the model in, canvas calls out). */
@@ -156,10 +177,11 @@ export function drawScanner(ctx: Ctx, m: ScannerModel, w: number, h: number): vo
     }
     ctx.strokeStyle = C.hand; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.sin(a) * r, cy - Math.cos(a) * r); ctx.stroke();
-    // the last snapshot: brightest right after its sweep, dimming until the next (enemies on top)
-    if (m.snap) {
+    // the mode's dots of the last snapshot: brightest right after its sweep, dimming until the next — all green
+    if (m.blips) {
       ctx.globalAlpha = blipBrightness(m.left);
-      for (const cls of SCAN_CLASSES) blips(ctx, g, cls, m.snap[cls]);
+      ctx.fillStyle = SCAN_DOT;
+      for (const b of m.blips) { const p = blipPoint(g, b, POINT); ctx.beginPath(); ctx.arc(p.x, p.y, markSize(s, b.n), 0, TAU); ctx.fill(); }
       ctx.globalAlpha = 1;
     }
   }
@@ -168,24 +190,17 @@ export function drawScanner(ctx: Ctx, m: ScannerModel, w: number, h: number): vo
   ctx.fillStyle = C.train;
   ctx.fillRect(cx - bw / 2, cy - bl / 2, bw, bl);
   ctx.beginPath(); ctx.moveTo(cx, cy - bl / 2 - bw); ctx.lineTo(cx + bw / 2, cy - bl / 2); ctx.lineTo(cx - bw / 2, cy - bl / 2); ctx.closePath(); ctx.fill();
-  // the header, the legend, the countdown
+  // the header: the title and the range; the MODE and its key
   text(ctx, SCOPE_TEXT.title, s * 0.045, s * 0.05, s * 0.026, C.text);
   text(ctx, SCOPE_TEXT.range, w - s * 0.045, s * 0.05, s * 0.026, C.text, 'right');
-  const ly = h - s * 0.088, lpx = s * 0.024, lm = s * 0.0085, gap = s * 0.016, between = s * 0.05;
-  ctx.font = `bold ${Math.max(8, Math.round(lpx))}px ${FONT}`;
-  let total = between * (LEGEND.length - 1);
-  for (let i = 0; i < LEGEND.length; i++) total += (LEGEND_W[i] = lm * 2 + gap + ctx.measureText(SCOPE_TEXT.legend[LEGEND[i]]).width);
-  let x = (w - total) / 2;
-  for (let i = 0; i < LEGEND.length; i++) {
-    const c = LEGEND[i];
-    ctx.fillStyle = SCAN_COLORS[c];
-    mark(ctx, c, x + lm, ly, lm);
-    text(ctx, SCOPE_TEXT.legend[c], x + lm * 2 + gap, ly, lpx, SCAN_COLORS[c]);
-    x += LEGEND_W[i] + between;
-  }
+  text(ctx, SCOPE_TEXT.mode(m.mode), s * 0.045, s * 0.092, s * 0.026, C.text);
+  text(ctx, SCOPE_TEXT.cycle, w - s * 0.045, s * 0.092, s * 0.021, C.dimText, 'right');
+  // the mode strip, the countdown
+  modeStrip(ctx, m.mode, w, h - s * 0.088, s);
   if (m.active) {
     text(ctx, SCOPE_TEXT.next(secondsLeft(m.left)), w / 2, h - s * 0.038, s * 0.026, C.text, 'center');
-    if (!m.snap) text(ctx, SCOPE_TEXT.first, cx, cy + r * 0.4, s * 0.024, C.dimText, 'center');
+    if (!m.blips) text(ctx, SCOPE_TEXT.first, cx, cy + r * 0.4, s * 0.024, C.dimText, 'center');
+    else if (!m.blips.length) text(ctx, SCOPE_TEXT.none(m.mode), cx, cy + r * 0.4, s * 0.024, C.dimText, 'center');
   } else {
     text(ctx, SCOPE_TEXT.noSignal, cx, cy - r * 0.32, s * 0.044, C.text, 'center');
     text(ctx, SCOPE_TEXT.paused, w / 2, h - s * 0.038, s * 0.026, C.dimText, 'center');
@@ -235,7 +250,7 @@ export class ScannerScope {
   private css = 0;
   private px = 0;
   // what the canvas shows now (a redraw only when one of them changed)
-  private shown = {valid: false, active: false, serial: -1, step: -1};
+  private shown = {valid: false, active: false, serial: -1, step: -1, mode: ''};
 
   constructor(readonly env: ScopeEnv = browserEnv) {}
 
@@ -278,19 +293,19 @@ export class ScannerScope {
     this.shown.valid = false;
   }
 
-  /** Redraw when what the scope shows changed (the snapshot, the state, the hand's step, the size). True: it drew. */
+  /** Redraw when what the scope shows changed (the snapshot, the mode, the state, the hand's step, the size). True: it drew. */
   draw(m: ScannerModel): boolean {
     if (!this.isOpen || !this.canvas) return false;
     this.fit();
     const sh = this.shown, step = m.active ? redrawStep(m.left) : 0, serial = m.active ? m.serial : 0;
-    if (sh.valid && sh.active === m.active && sh.serial === serial && sh.step === step) return false;
+    if (sh.valid && sh.active === m.active && sh.serial === serial && sh.step === step && sh.mode === m.mode) return false;
     const ctx = this.canvas.getContext('2d') as Ctx | null;
     if (!ctx) return false;
     const k = this.px / this.css;
     ctx.setTransform?.(k, 0, 0, k, 0, 0);
     drawScanner(ctx, m, this.css, this.css);
     ctx.setTransform?.(1, 0, 0, 1, 0, 0);
-    sh.valid = true; sh.active = m.active; sh.serial = serial; sh.step = step;
+    sh.valid = true; sh.active = m.active; sh.serial = serial; sh.step = step; sh.mode = m.mode;
     this.draws++;
     return true;
   }

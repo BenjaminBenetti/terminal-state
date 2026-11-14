@@ -1,6 +1,8 @@
 // Task studio-refinement-scope-finish-20261113-080904-01: the ZOMBIE LURE draws the BB (ai/bb.ts BbBrain) — "BB must respond to the
 // Zombie Lure's real scent emitter within 20 m, without a line-of-sight requirement, for its 20-active-second duration, using valid
-// surface/navigation behaviour", under the lure's normal priority rules, with its non-lure AI unchanged.
+// surface/navigation behaviour", under the lure's normal priority rules, with its non-lure AI unchanged. Task
+// studio-scanner-console-refinements-20261114-031614-01 raised the lure's reach to 30 m ("Existing BB floor/perch scent support must
+// continue using the common radius"): the reach below is the common SCENT.radius, whatever it is.
 //
 // Real generated levels, driven as the game drives an enemy (tests/helpers/bbSim.ts with `scents`: the game's lure world fields, the
 // registry's active list, its tick after every step) and audited every step (bbClean: never inside or through anything solid, no jump,
@@ -10,7 +12,7 @@
 //  - when the scent runs out it lingers, then roams and perches again;
 //  - priorities: a BB that sees the player keeps hunting it; one that lost sight of the player is pulled after SCENT.lostSightS; a
 //    fresh noise is hunted first for SCENT.alertHoldS;
-//  - out of reach (> 20 m in 3D) nothing happens, and a scent out of reach changes nothing at all: the same run step for step as
+//  - out of reach (> SCENT.radius in 3D) nothing happens, and a scent out of reach changes nothing at all: the same run step for step as
 //    with no scent (its non-lure behaviour is untouched).
 
 import {describe, expect, it} from 'vitest';
@@ -257,25 +259,35 @@ describe('BB and the Zombie Lure: priorities and reach', () => {
     bbClean(sim.audit, b, `${level} noise first`);
   }, 120000);
 
-  it('reach: 18 m away (3D, through walls) it is drawn, 22 m away it is not', () => {
+  it('reach: the common radius (30 m) — 2 m inside it (3D, through walls, beyond the old 20 m) it is drawn, 2 m beyond it it is not', () => {
+    expect(SCENT.radius).toBe(30);
     for (const level of LEVEL_IDS) {
-      const layout = layoutOf(level), {L} = bbStatic(layout), s = starts(level, 1)[0];
-      /** A floor spot `d` m from the start (straight 3D), or null. */
-      const at = (d: number): {x: number; y: number; z: number} | null => {
+      const layout = layoutOf(level), {L} = bbStatic(layout);
+      /** A floor spot on the same storey `d` m from `s` (straight 3D), or null. */
+      const at = (s: {x: number; y: number; z: number}, d: number): {x: number; y: number; z: number} | null => {
         for (let k = 0; k < 48; k++) {
           const a = k / 48 * Math.PI * 2, px = s.x + Math.sin(a) * d, pz = s.z + Math.cos(a) * d, q = L.supportIn(px, pz, s.y + 0.05, 0.3);
           if (q && Math.abs(q.floor - s.y) <= 0.2) return {x: px, y: q.floor, z: pz};
         }
         return null;
       };
-      for (const [d, drawn] of [[18, true], [22, false]] as const) {
-        const p = at(d);
-        expect(p, `${level}: no floor ${d} m away`).not.toBeNull();
+      // a spawn point with floor on its own storey both 28 m and 32 m away (30 m is more than half of a smaller level: the first
+      // spawn may stand mid-building)
+      let s: {x: number; y: number; z: number; level?: number} | null = null, spots: {x: number; y: number; z: number}[] = [];
+      for (const q of layout.zombies) {
+        const y = q.y ?? L.grid(q.level ?? 0).floorAt(q.x, q.z), c = {x: q.x, y, z: q.z, level: q.level};
+        const inside = at(c, SCENT.radius - 2), beyond = at(c, SCENT.radius + 2);
+        if (inside && beyond) { s = c; spots = [inside, beyond]; break; }
+      }
+      expect(s, `${level}: no spawn with floor ${SCENT.radius - 2} / ${SCENT.radius + 2} m away`).not.toBeNull();
+      for (const [i, drawn] of [[0, true], [1, false]] as const) {
+        const p = spots[i], d = Math.hypot(p.x - s!.x, p.y - s!.y, p.z - s!.z);
+        expect(d > SCENT.radius, `${level}: ${d.toFixed(1)} m`).toBe(!drawn);
         const scents = new ScentLures();
-        scents.add({x: p!.x, y: p!.y + 0.05, z: p!.z}, {seconds: 60});
-        const sim = bbSim(layout, {at: {x: s.x, z: s.z, y: s.y, yaw: 0, level: s.level}, player: away(s.x, s.z, s.y), scents});
+        scents.add({x: p.x, y: p.y + 0.05, z: p.z}, {seconds: 60});
+        const sim = bbSim(layout, {at: {x: s!.x, z: s!.z, y: s!.y, yaw: 0, level: s!.level}, player: away(s!.x, s!.z, s!.y), scents});
         sim.run(1.2); // (an unaware one idles a moment before it roams: it is still where it started)
-        expect(sim.b.state === 'investigate', `${level}: ${d} m`).toBe(drawn);
+        expect(sim.b.state === 'investigate', `${level}: ${d.toFixed(1)} m`).toBe(drawn);
         expect(sim.b.scentChecks).toBeGreaterThanOrEqual(2);
       }
     }

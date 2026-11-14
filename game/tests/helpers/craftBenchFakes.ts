@@ -15,6 +15,8 @@ export interface FakeUnit extends EquipmentUnit {
   /** The lid's state and every setOpen call (tests). */
   open: boolean;
   lidCalls: boolean[];
+  /** EquipmentUnit.display (the kind's first mode; setDisplay changes it to another of def.displayModes). */
+  display: string;
 }
 
 /**
@@ -52,6 +54,12 @@ export function fakeUnit(kind: EquipmentKind, uid: string, pose: FakeUnit['pose'
     setOpen(open: boolean) { u.open = open; u.lidCalls.push(open); },
     pose,
     worldPose() { return u.mode === 'held' ? null : u.pose; },
+    display: def.displayModes[0] ?? '',
+    setDisplay(mode: string) {
+      if (mode === u.display || !def.displayModes.includes(mode)) return false;
+      u.display = mode;
+      return true;
+    },
   };
   if (u.slots && def.slotItem) setStoreRule(u.slots, feedRule(def));
   return u;

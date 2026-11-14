@@ -43,6 +43,14 @@ export interface EquipmentUnit {
   /** Show its lid open / closed (kinds with a lid: the chest; else a no-op). Visual only. */
   setOpen(open: boolean): void;
   /**
+   * Task studio-scanner-console-refinements-20261114-031614-01: its DISPLAY MODE — one of def.displayModes (the item scanner's resource
+   * filter; the first by default and for every record written without one), '' for a kind without modes. Saved with the unit
+   * (craft/equipment.ts EquipmentJSON.display); its kind's own system reads and sets it.
+   */
+  readonly display: string;
+  /** Select one of def.displayModes (false: not one of them, or already selected — nothing changed). */
+  setDisplay(mode: string): boolean;
+  /**
    * Its footprint centre on the floor and yaw in the WORLD now (a parked / riding car's unit through the car's pose); null while there
    * is no world to stand in (between two stations) or it is carried.
    */
