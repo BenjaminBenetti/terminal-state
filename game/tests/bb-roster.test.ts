@@ -20,7 +20,7 @@ import {
 import {pickEnemyArchetype} from '../src/ai/creatureSpawn';
 import {ENEMY_ARCHETYPES} from '../src/ai/creatureArchetypes';
 import {ENEMY_MODEL_FILES, enemyModelKeysFor} from '../src/ai/enemyModels';
-import {CORPSE_TRAITS, corpseFeedable} from '../src/ai/corpseTrait';
+import {CORPSE_TRAITS, corpseCarriable, corpseFeedable} from '../src/ai/corpseTrait';
 import {HORDE_FORBIDDEN_FAMILIES} from '../src/ai/hordeSpec';
 import {COSPLAY_FAMILY_POOL} from '../src/ai/cosplayContext';
 import {MELEE_MASS, meleeMassOf} from '../src/combat/meleeImpact';
@@ -459,12 +459,14 @@ describe('BB: registry coherence (one family, four looks, roster-only)', () => {
     for (const p of Object.values(SPAWN_PROFILES)) for (let i = 0; i < 20000; i++) if (pickEnemyArchetype(1234567 + i, i, p.families) === 'bb') throw new Error(`${p.id}: the per-spawn roll drew a BB`);
   });
 
-  it('hordes, the corpse trait and the melee mass: never in a horde; undead but not a carried body; the lightest body', () => {
+  it('hordes, the corpse trait and the melee mass: never in a horde; undead, carried and sold but never chipped; the lightest body', () => {
     expect(HORDE_FORBIDDEN_FAMILIES).toContain('bb');
-    // undead, but not the adult body plan the carry and the chipper feed are built for: recorded with its reason, never fuel
+    // undead, but not the adult body plan the chipper feed is built for: recorded with its reason, never fuel
     expect(CORPSE_TRAITS.bb).toMatchObject({undead: true, humanoid: false});
     expect(CORPSE_TRAITS.bb.massKg).toBeGreaterThan(0);
-    expect(CORPSE_TRAITS.bb.note).toMatch(/never carried/);
+    // (task studio-corpse-market-shop-20261114-031614-01: its small body is carried and sold whole to the Market's corpse buyer; never chipped)
+    expect(CORPSE_TRAITS.bb.note).toMatch(/never fed to the chipper/);
+    expect(corpseCarriable('bb')).toBe(true);
     expect(corpseFeedable('bb')).toBe(false);
     expect(MELEE_MASS.bb).toBeGreaterThan(0);
     expect(meleeMassOf('bb')).toBe(MELEE_MASS.bb);
