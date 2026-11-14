@@ -82,10 +82,10 @@ starter kit, and the dev grant never hands them out.
 - The tank's fuel is state of that tank (`ItemStack.fuel`, whole units): it stays with it in a pocket, the Lockbox, a chest, the
   car trunk, train cargo, on a station floor, in a market stall's stock and in saves. Refill it from ordinary fuel cans (**R** with
   the flamethrower in your hands; one whole can at a time, up to 3 cans).
-- **At the Market** every gun stall stocks one flamethrower (140 ties) and every outfitter one new tank (70 ties: 60 for the tank
-  empty + 10 for its can of fuel; 5 cents a unit, 90 full). They are extra lots on top of the stalls' seeded stock, which is
-  unchanged, and they are finite like all stock. A market remembered from before them gets them once (`market/trade/stock.ts`
-  `STOCK_EXTRAS`).
+- **At the Market** every Gunsmith stocks one flamethrower (140 ties) and every Outfitter one new tank (70 ties: 60 for the tank
+  empty + 10 for its can of fuel, the price of a fuel can; 90 full). They are extra lots on top of the stalls' seeded stock, which
+  is unchanged, and they are finite like all stock: bought once, gone. A market remembered from before them gets them once
+  (`market/trade/stock.ts` `STOCK_EXTRAS`). Those stalls buy them back at their usual 55 % (a flamethrower 77, a new tank 38).
 
 ### The crafted grenades
 

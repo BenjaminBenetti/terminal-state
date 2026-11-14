@@ -10,6 +10,7 @@
 //    an item that is not a tank) wherever the stack lies;
 //  - a save holding tanks everywhere a stack can be (worn, pocketed, Lockbox, crafted chest, train cargo, a remembered pickup, the car
 //    trunk, market stock) validates and restores every one exactly; an older record without the field loads as an EMPTY tank;
+//  - a tank riding INSIDE a backpack (the worn one, one in the Lockbox, one lying on a station floor, one aboard the train) likewise;
 //  - Retry: the level-entry snapshot gives each tank back as it was (fuel burnt or poured since is undone with everything else).
 import {describe, expect, it} from 'vitest';
 import {FLAME_FUEL, FUEL_TANK_ID} from '../src/fire/flamethrowerSpec';
@@ -19,6 +20,7 @@ import {GEAR_SLOTS, gearSpec, isBagItem, isFuelTank} from '../src/items/gear';
 import {Inventory, stackFromJSON, stackToJSON, type ItemStack, type SlotRef, type StackJSON} from '../src/items/inventory';
 import {itemDef} from '../src/items/items';
 import {MARKET_STOCK_LANE, MarketStock, type MarketStockJSON} from '../src/market/trade/stock';
+import {BAG_LANE} from '../src/run/bagStore';
 import {restoreCarry, restoreParticipants} from '../src/run/snapshot';
 import {LOCKBOX_SLOTS, TrainLockbox} from '../src/run/trainLockbox';
 import {stackFromRecord, stackRecord} from '../src/run/worldMemory';
@@ -321,6 +323,70 @@ describe('saves: a tank keeps its fuel and uid wherever it lies', () => {
       expect(tankFuel(s)).toBe(0);
     }
     expect(back.inv.invariants()).toEqual([]);
+  });
+
+  it('inside a backpack too: the worn one, one in the Lockbox, one lying on the floor and one aboard keep their tank\'s fuel', () => {
+    const h = new Harness(fixtureCampaign({current: sid(1), known: [sid(0), sid(1)], visited: [sid(0), sid(1)]}));
+    const inv = h.inv;
+    const pack = (fuel: number, slot: number) => {
+      const b = inv.makeStack('backpack', 1), t = tank(inv, fuel);
+      b.bag![slot] = t;
+      return {b, t};
+    };
+    const worn = pack(137, 0), stowed = pack(0, 3), floor = pack(CAP, 5), aboard = pack(401, 7);
+    inv.gearSlots[BACK] = worn.b;
+    h.train.lockbox.slots[2] = stowed.b;
+    h.run.memory(KEY).visits = 1;
+    h.run.setLaneStore(BAG_LANE, {v: 1, seed: 1234, init: true, bags: [{id: `bag:${floor.b.uid}`, stack: stackToJSON(floor.b), x: 1, y: 0, z: 2, yaw: 0, level: 0}]}, KEY);
+    h.train.cargo.setRecords([{kind: 'bag', id: `bag:${aboard.b.uid}`, stack: json(stackToJSON(aboard.b)!), x: 0.5, y: 0.4, z: 0.2, q: [0, 0, 0, 1]}]);
+    expect(inv.invariants()).toEqual([]);
+    expect(h.train.lockbox.invariants()).toEqual([]);
+    // copies of the backpack copy its contents: the tank inside keeps its uid and its fuel, as its own object
+    const c = inv.clone().gearSlots[BACK]!;
+    expect(c.bag![0]).toEqual(asTank(worn.t.uid, 137));
+    expect(c.bag![0]).not.toBe(worn.t);
+    expect(stackFromJSON(json(stackToJSON(stowed.b))!)!.bag![3]).toEqual(asTank(stowed.t.uid, 0));
+    expect(stackFromRecord(inv, json(stackRecord(floor.b))).bag![5]).toEqual(asTank(floor.t.uid, CAP));
+    const inBags = (run: Any) => ({
+      worn: run.carry.inventory.gear.backpack.bag[0], stowed: run.participants['player-train'].lockbox.slots[2].bag[3],
+      floor: run.memories[memId].lanes[BAG_LANE].bags[0].stack.bag[5], aboard: run.participants['player-train'].cargo.items[0].stack.bag[7],
+    });
+    const file = h.file('arrival', 1);
+    const parsed = parseSaveText(saveFileText(file));
+    expect(parsed.ok, parsed.ok ? '' : parsed.error).toBe(true);
+    if (!parsed.ok) return;
+    expect(inBags(parsed.value.run)).toEqual({
+      worn: asTank(worn.t.uid, 137), stowed: asTank(stowed.t.uid, 0), floor: asTank(floor.t.uid, CAP), aboard: asTank(aboard.t.uid, 401),
+    });
+    const back = new Harness();
+    expect(restoreRun(parsed.value.run, back.target()).failed).toEqual([]);
+    expect(back.inv.gearSlots[BACK]!.bag![0]).toEqual(asTank(worn.t.uid, 137));
+    expect(back.train.lockbox.slots[2]!.bag![3]).toEqual(asTank(stowed.t.uid, 0));
+    expect((back.run.laneStore(BAG_LANE, KEY) as Any).bags[0].stack.bag[5]).toEqual(asTank(floor.t.uid, CAP));
+    expect(back.train.cargo.records()[0].stack.bag![7]).toEqual(asTank(aboard.t.uid, 401));
+    expect(saveFileText(back.file('arrival', 1)) === saveFileText(file)).toBe(true);
+    expect(back.inv.invariants()).toEqual([]);
+    // a value that cannot be is refused inside a backpack as anywhere else; a record without the field is an empty tank
+    for (const where of Object.keys(inBags(file.run)) as (keyof ReturnType<typeof inBags>)[]) {
+      for (const [fuel, re] of [[CAP + 1, /fuel: 601 is out of range/], [-1, /fuel: -1 is out of range/], [0.5, /fuel: 0\.5 is not a whole number/]] as const) {
+        const f = structuredClone(file) as Any;
+        inBags(f.run)[where].fuel = fuel;
+        f.checksum = checksumOf(f.run);
+        const r = validateSaveFile(f);
+        expect(r.ok, `${where} ${fuel}`).toBe(false);
+        expect((r as {error: string}).error, where).toMatch(re);
+      }
+    }
+    const old = structuredClone(file) as Any;
+    for (const s of Object.values(inBags(old.run)) as Any[]) delete s.fuel;
+    old.checksum = checksumOf(old.run);
+    expect(validateSaveFile(old).ok).toBe(true);
+    const older = new Harness();
+    expect(restoreRun(old.run, older.target()).failed).toEqual([]);
+    for (const s of [older.inv.gearSlots[BACK]!.bag![0], older.train.lockbox.slots[2]!.bag![3], older.train.cargo.records()[0].stack.bag![7]]) {
+      expect(s).toEqual(asTank(s!.uid));
+      expect(tankFuel(s)).toBe(0);
+    }
   });
 
   it('Retry: the level-entry snapshot gives each tank back as it was; a bad value inside the snapshot is refused too', () => {
