@@ -28,7 +28,8 @@ import {gearAreaWeight} from '../src/gen/gearLoot';
 import {refugeKindOf} from '../src/market/people/refuges';
 import {marketAwnings, marketFans} from '../src/gen/market/art';
 import {isLootHolderKind} from '../src/items/loot';
-import type {Door, PropPlacement, StationLayout} from '../src/gen/stationTypes';
+import type {Door, StationLayout} from '../src/gen/stationTypes';
+import type {PropPlacement} from '../src/gen/props';
 
 // seeds 1-48 (every frame depth, both mirror states, the three seeds whose version 3 never validates) + the bar test's sample
 const SEEDS = [...Array.from({length: 48}, (_, k) => k + 1), 42, 777, 4242, 9001, 123456, 0xdeadbeef, 20261108];
@@ -301,6 +302,14 @@ describe('the Survivor Market, layout version 4 (version 3 plus the corpse buyer
       expect(decor.length, at).toBeGreaterThanOrEqual(3);
       for (const p of own) {
         expect([at, p.kind, !!PROP_PHYSICS_AUDIT[p.kind], p.y, p.level ?? 0]).toEqual([at, p.kind, true, 0, 0]); // classified, on the floor
+        // overlapping no other prop (boxes), standing on the den's own floor cells
+        for (const q of L.props) {
+          if (q === p || (q.level ?? 0) !== 0) continue;
+          const ox = Math.min(p.x + p.hx, q.x + q.hx) - Math.max(p.x - p.hx, q.x - q.hx), oz = Math.min(p.z + p.hz, q.z + q.hz) - Math.max(p.z - p.hz, q.z - q.hz);
+          const oy = Math.min(p.y + p.h, q.y + q.h) - Math.max(p.y, q.y);
+          expect([at, p.kind, q.kind, ox > 0.005 && oz > 0.005 && oy > 0.005]).toEqual([at, p.kind, q.kind, false]);
+        }
+        expect([at, p.kind, ids.has(L.grid.area[L.grid.idx(...L.grid.cellOf(p.x, p.z))]), L.grid.cells[L.grid.idx(...L.grid.cellOf(p.x, p.z))]]).toEqual([at, p.kind, true, FLOOR]);
         if (isLootHolderKind(p.kind)) expect([at, p.kind, p.purpose]).toEqual([at, p.kind, MARKET_EMPTY_KEY]);
       }
       const stallAreas = new Set(L.market!.stalls.map(s => s.area));

@@ -191,7 +191,7 @@ export function denIssues(layout: StationLayout): string[] {
     if (p.host !== undefined) continue;
     const [cx, cy] = g.cellOf(p.x, p.z);
     if (!mine.has(g.area[g.idx(cx, cy)])) issues.push(`den prop ${p.kind}#${k} not on the den's floor`);
-    for (const [q, j] of layout.props.entries()) {
+    for (const [j, q] of layout.props.entries()) {
       if (j === k || q.host === k || p.host === j || (q.level ?? 0) !== (p.level ?? 0)) continue;
       const ox = Math.min(p.x + p.hx, q.x + q.hx) - Math.max(p.x - p.hx, q.x - q.hx), oz = Math.min(p.z + p.hz, q.z + q.hz) - Math.max(p.z - p.hz, q.z - q.hz);
       const oy = Math.min(p.y + p.h, q.y + q.h) - Math.max(p.y, q.y);
