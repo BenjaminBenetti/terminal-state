@@ -81,8 +81,9 @@ pump shotgun's 165. The flamethrower is weaker per target and strong against gro
 
 `PROP_FIRE`; the burn-out runs through the acid melt engine (`game/src/world/acidMelt.ts`, cause `fire`).
 
-- A prop **catches** after 1.4 s of flame: the stream on it, or a stream-fed patch touching it. Heat fades at 0.5 a second without
-  flame.
+- A prop **catches** after 1.4 s of flame: the stream on it, or a stream-fed patch touching it. Its heat is its time in flame:
+  several flames on it at once do not add up. Heat fades at 0.5 a second without flame. A short burst can still light a prop a
+  moment later, through the fire it leaves clinging to it.
 - A burning prop burns for **4.5 s**, then collapses and is gone for good. Touching it costs an enemy 20 a second, the player 10.
 - **Its contents are kept.** A holder's lots, a chest's stacks (the same stack objects, with their ids, rounds and fuel) and a fuel
   cart's fuel (as single cans) spill onto the floor when it collapses.

@@ -177,6 +177,8 @@ export class FireSystem {
   readonly stream: StreamState = {on: false, ox: 0, oy: 0, oz: 0, dx: 0, dy: 0, dz: 1, reach: 0, kind: 'none', nx: 0, ny: 1, nz: 0};
   private readonly deposits: Deposit[] = [];
   private readonly heat = new Map<string, Heat>();
+  /** The props flame reached since the last prop pass (key -> ref): each heats once in that pass. */
+  private readonly touched = new Map<string, FireRef>();
   /** Fire damage owed to a body since the last batch (the strongest fire touching it, over the frames). */
   private readonly touch = new Map<FireEnemy, number>();
   private readonly hurtAt = new WeakMap<object, number>();
@@ -309,7 +311,7 @@ export class FireSystem {
     const melt = this.env.melt?.() ?? null;
     // the prop under the flame heats (the engine decides what may burn: null for structure, the train, fixtures, objectives, stock)
     const ref = dep.prop && melt ? melt.atPoint(dep.x, dep.y, dep.z, 0.12) : null;
-    if (ref && dep.heats) this.heatUp(ref, dep.seconds, melt!);
+    if (ref && dep.heats) this.touched.set(ref.key, ref); // (it heats in the next prop pass: once, however many flames reach it)
     this.feed(dep.x, dep.y, dep.z, dep.nx, dep.ny, dep.nz, dep.seconds, dep.heats, ref, melt);
   }
 
@@ -470,14 +472,19 @@ export class FireSystem {
     this.propT += step;
     if (this.propT >= PROP_PASS - 1e-9) {
       if (melt) {
+        // every prop in flame since the last pass — under the stream, or touched by a stream-fed patch — gains the pass's seconds ONCE:
+        // a prop's heat is its time in flame, never a sum over the flames on it
+        const hot = this.touched;
         for (const p of this.patches) {
           if (!p.heats || patchStrength(p) < 0.25) continue;
           // (the prop it clings to; what stands in a floor fire; else what a wall / ceiling fire's point touches)
-          if (p.ref) this.heatUp(p.ref, this.propT, melt);
-          if (p.face === 'floor') { for (const ref of [...melt.inDisc(p.x, p.y, p.z, patchRadius(p))]) if (ref !== p.ref) this.heatUp(ref, this.propT, melt); }
-          else if (!p.ref) { const ref = melt.atPoint(p.x, p.y, p.z, 0.2); if (ref) this.heatUp(ref, this.propT, melt); }
+          if (p.ref) hot.set(p.ref.key, p.ref);
+          if (p.face === 'floor') { for (const ref of melt.inDisc(p.x, p.y, p.z, patchRadius(p))) hot.set(ref.key, ref); }
+          else if (!p.ref) { const ref = melt.atPoint(p.x, p.y, p.z, 0.2); if (ref) hot.set(ref.key, ref); }
         }
+        for (const ref of hot.values()) this.heatUp(ref, this.propT, melt);
       }
+      this.touched.clear();
       for (const [k, h] of this.heat) {
         if (this.clock - h.at <= PROP_PASS + 0.1) continue;
         h.s -= PROP_FIRE.cool * this.propT;
@@ -569,6 +576,7 @@ export class FireSystem {
     this.touch.clear();
     this.deposits.length = 0;
     this.heat.clear();
+    this.touched.clear();
     this.burns.length = 0;
     this.playerOwed = 0;
     this.playerOut = 1e9;

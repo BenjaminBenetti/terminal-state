@@ -458,11 +458,13 @@ describe('fire: what it burns', () => {
       expect(m.st.started).toEqual([]);
       expect(w.sys.patches).toHaveLength(0);
     }
-    // the stream held on it: not yet at half the catch time ...
-    w.spray(PROP_FIRE.catchSeconds * 0.5, EYE, at);
-    expect(m.st.started).toEqual([]);
-    // ... caught once the heat is there (the stream + the fire now clinging to its face), exactly once however long it goes on
-    w.spray(PROP_FIRE.catchSeconds, EYE, at);
+    // the stream held on it: its heat is its TIME in flame — the stream and the fire now clinging to its face are one flame, never a
+    // sum — so it catches after catchSeconds of it (+ the flame's flight and one prop pass), not sooner
+    let caughtAt = -1;
+    for (let t = 0; t < 4 && caughtAt < 0; t += TICK) { w.sys.flame(EYE, at, TICK); w.run(TICK); if (m.st.started.length) caughtAt = t + TICK; }
+    expect(caughtAt).toBeGreaterThanOrEqual(PROP_FIRE.catchSeconds);
+    expect(caughtAt).toBeLessThanOrEqual(PROP_FIRE.catchSeconds + 0.6);
+    // ... exactly once however long it goes on
     w.run(0.4);
     expect(m.st.started).toEqual(['p:1:fire']);
     w.spray(2, EYE, at);
