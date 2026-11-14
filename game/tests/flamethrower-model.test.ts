@@ -35,7 +35,7 @@ import {itemIconHtml} from '../src/ui/itemIcons';
 import {PickupManager} from '../src/world/pickups';
 import {WeaponVarietyDelivery, installWeaponVarietyDelivery} from '../src/world/weaponVarietyDelivery';
 import {
-  WEAPON_VARIETY_MODEL_STATS, ensureWeaponVarietyModels, requestWeaponVarietyModel, resetWeaponVarietyModels, residentWeaponVarietyIds,
+  WEAPON_VARIETY_MODEL_STATS, ensureWeaponVarietyModels, resetWeaponVarietyModels, residentWeaponVarietyIds,
   setWeaponVarietyLoader, weaponVarietyGltf, weaponVarietyModelState, weaponVarietyModelUrl, weaponVarietyWarmRoots,
 } from '../src/world/weaponVarietyModels';
 import {installCanvasShim, ShimContext} from './helpers/canvas2d';
