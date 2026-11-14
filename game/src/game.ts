@@ -16,6 +16,8 @@ import {buildWorldSteps, type BuiltWorld} from './world/builder';
 import {fogCullDistance} from './world/levelCulling';
 import {WorldMaterials} from './world/materials';
 import {MOOD, StationLighting} from './world/lights';
+import {ENHANCED_LIGHTING_DEFAULT, REFLECTIONS_DEFAULT, type EnhancedLightingMode, type ReflectionQuality} from './world/enhancedLighting'; // task studio-baked-lighting-reflections-20261114-050258-01
+import {EnhancedLightingRuntime} from './world/enhancedLightingRuntime';
 import {VolumetricAtmosphere} from './render/volumetric';
 import {PickupManager, makeSupplyMesh, refreshItemTemplates, registerItemModels, type Pickup} from './world/pickups';
 import {levelPreloadPantryIds, pantryHolderRealizer, pantryIdsIn, pantryPickupItem} from './items/pantryVariety'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): food variety
@@ -264,7 +266,8 @@ export const BUNKER_OBJECTIVE = 'Scavenge the shelter · optional: restart three
 // (task campaign-foundation-20261102, lane MENU: + renderScale — a linear render-resolution scale over the DPR-capped native buffer;
 // the persisted values live in ui/settingsStore.ts, main.ts copies them in; task studio-perf-ao-train-continuity-20261110-022206-01, lane AO:
 // + ambientOcclusion, the atmosphere pass's screen-space AO on / off)
-export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertX: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: RenderScale; trainSway: number; ambientOcclusion: boolean }
+// (task studio-baked-lighting-reflections-20261114-050258-01: + enhancedLighting / reflections — world/enhancedLighting.ts; read when a station is built)
+export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertX: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: RenderScale; trainSway: number; enhancedLighting: EnhancedLightingMode; reflections: ReflectionQuality; ambientOcclusion: boolean }
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 
@@ -321,7 +324,9 @@ export class Game {
   readonly input: Input;
   readonly hud = new Hud();
   readonly sfx = new Sfx();
-  readonly settings: Settings = {sens: 1, fov: 75, volume: 0.7, muted: false, invertX: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1, ambientOcclusion: true};
+  readonly settings: Settings = {sens: 1, fov: 75, volume: 0.7, muted: false, invertX: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1, enhancedLighting: ENHANCED_LIGHTING_DEFAULT, reflections: REFLECTIONS_DEFAULT, ambientOcclusion: true};
+  /** Task studio-baked-lighting-reflections-20261114-050258-01: enhanced lighting's runtime (what the live station was built with, the derived cache, the status the settings form shows). */
+  readonly enhancedLighting = new EnhancedLightingRuntime(this.settings);
   // ==== task campaign-foundation-20261102 (lane MENU): main-menu hooks (main.ts / world/menuScene.ts) ====
   /** The main menu's diorama render (world/menuScene.ts), drawn by frame() in 'title' / 'loading' while no world is built; true when it drew. */
   menuRender: ((time: number) => boolean) | null = null;
