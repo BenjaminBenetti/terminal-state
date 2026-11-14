@@ -31,6 +31,9 @@ import {carveBar, type BarCarve} from '../v3/barCarve';
 import {dressBar} from '../v3/barDress';
 import {barRecord} from '../v3/barRecord';
 import {barSettleIssues} from '../v3/barValidate';
+// task studio-corpse-market-shop-20261114-031614-01 (lane LAYOUT): layout version 4 = version 3 + the corpse buyer's den (gen/market/v4/)
+import {addDen} from '../v4/den';
+import {denSettleIssues} from '../v4/denValidate';
 
 /** Generation attempts before the last generated layout is returned with its issues. */
 const ATTEMPTS = 8;
@@ -52,19 +55,19 @@ export function settleStoreyLabel(level: number): string {
  * same settlement plus the upper-level bar (gen/market/v3/: its carve before the crop, its furnishing after version 2's, its record and
  * checks after version 2's; every draw of its own from forks, so version 2's stream is untouched). Version 2 is `bar` false (the default).
  */
-export function generateSettlement(ctx: SectionGenContext, opts: {bar?: boolean} = {}): StationLayout {
+export function generateSettlement(ctx: SectionGenContext, opts: {bar?: boolean; den?: boolean} = {}): StationLayout {
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const seed = marketSeed(ctx.levelSeed);
-  const bar = opts.bar === true;
+  const bar = opts.bar === true, den = bar && opts.den === true; // (version 4: the den on version 3's settlement)
   let f = settleFrame(ctx.levelSeed);
   let fallback: StationLayout | null = null;
   SETTLE_GEN_STATS.carveFails = 0;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const s = attempt === 0 ? seed : hashString('retry' + attempt, seed);
-    const layout = trySettlement(f, s, seed, attempt, ctx, undefined, bar);
+    const layout = trySettlement(f, s, seed, attempt, ctx, undefined, bar, den);
     SETTLE_GEN_STATS.attempts = attempt + 1;
     if (!layout) { SETTLE_GEN_STATS.carveFails++; f = settleFrame(ctx.levelSeed, SETTLE_GEN_STATS.carveFails); continue; }
-    const issues = bar ? barSettleIssues(layout) : settleIssues(layout);
+    const issues = den ? denSettleIssues(layout) : bar ? barSettleIssues(layout) : settleIssues(layout);
     SETTLE_GEN_STATS.issues = issues;
     if (!issues.length) { fallback = layout; break; }
     for (const i of new Set(issues.map(q => q.replace(/-?[\d.]+/g, '#')))) SETTLE_REJECTS.set(i, (SETTLE_REJECTS.get(i) ?? 0) + 1);
@@ -75,15 +78,15 @@ export function generateSettlement(ctx: SectionGenContext, opts: {bar?: boolean}
   throw new Error('market (version 2) generation failed');
 }
 
-/** QA / tests: one attempt (null when the program does not fit); `bar`: version 3's. */
-export function settlementAttempt(ctx: SectionGenContext, attempt: number, salt = 0, bar = false): {layout: StationLayout | null; carve: SettleCarve | null; bar: BarCarve | null} {
+/** QA / tests: one attempt (null when the program does not fit); `bar`: version 3's; `den`: version 4's. */
+export function settlementAttempt(ctx: SectionGenContext, attempt: number, salt = 0, bar = false, den = false): {layout: StationLayout | null; carve: SettleCarve | null; bar: BarCarve | null} {
   const seed = marketSeed(ctx.levelSeed);
   const out = {carve: null as SettleCarve | null, bar: null as BarCarve | null};
-  const layout = trySettlement(settleFrame(ctx.levelSeed, salt), attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, out, bar);
+  const layout = trySettlement(settleFrame(ctx.levelSeed, salt), attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, out, bar, bar && den);
   return {layout, carve: out.carve, bar: out.bar};
 }
 
-function trySettlement(f: SettleFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, out?: {carve: SettleCarve | null; bar?: BarCarve | null}, bar = false): StationLayout | null {
+function trySettlement(f: SettleFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, out?: {carve: SettleCarve | null; bar?: BarCarve | null}, bar = false, den = false): StationLayout | null {
   const rng = new Rng(genSeed);
   const k = new Kit(rng, {levels: SETTLE.canvas.levels, w: SETTLE.canvas.w, h: SETTLE.canvas.h});
   const sc = carveSettlement(k, f, rng.fork('carve'));
@@ -141,6 +144,9 @@ function trySettlement(f: SettleFrame, genSeed: number, seed: number, attempt: n
   layout.signs = layout.signs.filter(s => !roofLadders.some(q => Math.abs(q.x + 0.95 - s.x) < 1e-6 && Math.abs(q.bottomY + 0.72 - s.y) < 1e-6));
   layout.market = settleRecord(layout, sc, anchors, names, rng.fork('market-spots'));
   if (bc && barDressed) layout.market = barRecord(layout, sc, bc, barDressed, barName, rng.fork('market-bar-spots'), layout.market);
+  // (version 4, task studio-corpse-market-shop-20261114-031614-01) the corpse buyer's den, LAST: carved without a draw, furnished on its
+  // own fork, everything appended — version 3's output above is untouched (a den that does not fit leaves a version-3 record: rejected)
+  if (den) addDen(layout, sc, rng.fork('market-den'));
   return layout;
 }
 
