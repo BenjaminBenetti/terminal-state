@@ -31,10 +31,21 @@ What that changes in the picture:
 - **Material colour.** A surface sends back its own colour: `world/surfaceAlbedo.ts` reads what the builder really
   drew (`BuiltWorld.drawn`: every floor / ceiling rect and wall face with its finish), so a red quarry-tile floor
   warms the wall above it and a dark tunnel returns little.
-- **No extra flat ambient.** The gather returns only what the surfaces send back (gain 1). A generated Subway
-  station's mean light stays within a few percent of the baseline; the light is redistributed, not added.
+- **No extra flat ambient.** The gather returns only what the surfaces send back (gain 1). Measured on a generated
+  Subway station (seed 93, the finishes the builder drew): directly lit floors get 0.99x the baseline's light,
+  ceilings 1.09x, walls 0.98x to 1.05x. The light is redistributed, not added.
 - **Flicker circuits.** Each of the three circuits keeps its share of the bounce: when a circuit is off, its
   bounced light is off with it.
+
+How the field stores it (`lightField.ts` `encodeRowEnhanced`):
+
+- The direct light is the baseline's, byte for byte in the direction slices: the gathered light never steers the
+  field's one direction. (A first version did, and drew thin bright lines on ceilings wherever the fixtures' own
+  directions cancel.)
+- The gather keeps a mean and a first moment per voxel. The field's bottom layer is what floors read and its top
+  layer what ceilings read, so each stores what that surface receives: the mean plus (minus) twice the moment's
+  height part. A floor is not lit by its own bounce; the ceiling above a lit floor gets that floor's bounce and its
+  colour. The layers between store the mean.
 
 Nothing movable is in the ray scene: no prop, door leaf, character or train. A cell that holds a sight-blocking prop
 is open space to the gather. So nothing that can move, break or leave is frozen into the bounced light.
