@@ -84,7 +84,9 @@ describe('Turnstile reload visuals: hulls and rounds (WeaponController)', () => 
       const o = rig(w.magazine, 0, w.id), ammo = weaponAmmoItem(w);
       if (ammo) o.inv.add(o.inv.makeStack(ammo, 100));
       const ev = [...run(o, 0.2, i => ({pressed: i === 0, held: i === 0})), ...(o.wc.update(DT, {...idle, reload: true}, o.inv)), ...run(o, 8)];
-      expect(of(ev, 'fire').length, w.id).toBe(1);
+      // (task studio-flamethrower-fire-20261114-031614-01: a STREAM weapon — the flamethrower — fires no rounds, so it gives no 'fire' at
+      // all; like every other gun here it keeps no hull and throws nothing. Every gun that fires rounds is checked as before.)
+      expect(of(ev, 'fire').length, w.id).toBe(w.stream ? 0 : 1);
       expect([o.stack.spent, of(ev, 'eject').length, o.stack.mag], w.id).toEqual([undefined, 0, w.magazine]);
     }
   });

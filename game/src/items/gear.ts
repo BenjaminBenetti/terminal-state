@@ -25,8 +25,14 @@
 // air on its OWN stack (`air`, like a mask's `filter`) and NO storage (no bagSlots: it is not a bag). It is consumable and can NOT be
 // refilled: a new tank is made full (Inventory.makeStack); nothing ever adds air. Worn with the gas mask on the face it supplies the
 // air FIRST (gear/gasMask.ts), the fitted filter only once the tank is empty.
+//
+// Task studio-flamethrower-fire-20261114-031614-01: the FUEL TANK (`fuel_tank`, slot 'backpack': instead of a backpack / an Airtank
+// Backpack; no storage). It holds the flamethrower's fuel on its OWN stack (`fuel`, whole units: fire/flamethrowerSpec.ts) — the
+// flamethrower only fires while one is worn. Unlike the airtank it CAN be refilled: one ordinary fuel can at a time (R with the
+// flamethrower in the hands), only when the whole can fits. A new tank holds exactly the one can its recipe consumed.
 import type {ItemDef, ItemDims} from './items';
 import type {PlayerModifiers} from '../player/modifiers';
+import {FLAME_FUEL, FUEL_TANK_ID} from '../fire/flamethrowerSpec';
 
 export type GearSlot = 'chest' | 'backpack' | 'boots' | 'gloves' | 'helmet' | 'mask';
 export const GEAR_SLOTS: readonly GearSlot[] = ['helmet', 'chest', 'gloves', 'boots', 'backpack', 'mask'];
@@ -64,6 +70,8 @@ export interface GearSpec {
   filterLife?: number;
   /** Airtank Backpack: seconds of air in a full tank (AIRTANK_AIR_S); its stack's `air` = seconds left (never refilled). */
   airLife?: number;
+  /** Fuel Tank (task flamethrower-fire): fuel units a full tank holds (FLAME_FUEL.capacity); its stack's `fuel` = whole units left. */
+  fuelCap?: number;
 }
 
 /** Icon keys the gear lane adds (ui/gearIcons.ts). Mask lane: + 'gasmask'. */
@@ -107,6 +115,9 @@ export const GEAR_ITEMS: Record<string, ItemDef> = {
   // Task filter-tension-airtank-20261104-072836 (icon key: the backpack glyph — no new hand-drawn icon; the item icon is its model)
   airtank_backpack: gear('airtank_backpack', 'Airtank Backpack', 'Airtank', 'backpack', {slot: 'backpack', tier: 1, airLife: AIRTANK_AIR_S},
     `A dented steel air cylinder strapped to a tubular frame and harness. Worn on your back (instead of a backpack: it has no storage) with the gas mask on your face, it feeds the mask clean air for ${AIRTANK_AIR_S / 60} minutes before the fitted filter is used. It cannot be refilled.`),
+  // Task studio-flamethrower-fire-20261114-031614-01 (icon key: the backpack glyph, like the airtank — the item icon is its model)
+  [FUEL_TANK_ID]: gear(FUEL_TANK_ID, 'Flamethrower fuel tank', 'Fuel tank', 'backpack', {slot: 'backpack', tier: 1, fuelCap: FLAME_FUEL.capacity},
+    `A red jerrycan clamped to a welded pack frame, with a pump lever and a hose. Worn on your back (instead of a backpack: it has no storage) it feeds the flamethrower — which will not fire without one. It holds ${FLAME_FUEL.capacityCans} fuel cans' worth (${FLAME_FUEL.capacity * FLAME_FUEL.unitSeconds} s of flame) and a new one comes with ${FLAME_FUEL.newCans === 1 ? 'one can' : `${FLAME_FUEL.newCans} cans`} in it. Refill it from an ordinary fuel can: press R with the flamethrower in your hands.`),
 };
 
 /** Resting sizes (m) as a pickup / ground model = the delivered Meshy derivatives' bounds (vest, rig, backpack, hat and boots stand; gloves lie flat). */
@@ -121,6 +132,8 @@ export const GEAR_DIMS: Record<string, ItemDims> = {
   gas_mask: {w: 0.18, d: 0.13, h: 0.18, shape: 'box'},
   // the delivered derivative's bounds (assets/models/gear-airtank-backpack.glb: tank + frame upright, straps / belt splayed)
   airtank_backpack: {w: 0.58, d: 0.48, h: 0.72, shape: 'box'},
+  // task flamethrower-fire: the cooked derivative's bounds (assets/models/gear-fuel-tank.glb: jerrycan + frame upright, straps splayed)
+  [FUEL_TANK_ID]: {w: 0.59, d: 0.4, h: 0.62, shape: 'box'},
 };
 
 export const GEAR_IDS = Object.keys(GEAR_ITEMS);
@@ -143,6 +156,11 @@ export function isAirtank(itemId: string | null | undefined): boolean {
   return (gearSpec(itemId)?.airLife ?? 0) > 0;
 }
 
+/** Task studio-flamethrower-fire-20261114-031614-01: gear that holds flamethrower fuel (`fuel` on its stack): the Fuel Tank. */
+export function isFuelTank(itemId: string | null | undefined): boolean {
+  return (gearSpec(itemId)?.fuelCap ?? 0) > 0;
+}
+
 /** Backpack-type gear (has its own container). */
 export function isBagItem(itemId: string | null | undefined): boolean {
   return (gearSpec(itemId)?.bagSlots ?? 0) > 0;
@@ -150,8 +168,13 @@ export function isBagItem(itemId: string | null | undefined): boolean {
 
 const pct = (x: number) => `${Math.round(Math.abs(x) * 100)} %`;
 
+/** Task flamethrower-fire: fuel units as cans, to a tenth of a can and never rounded UP to a can that is not there ("1", "0.4", "2.9"). */
+export function fuelCansText(units: number): string {
+  return `${Math.floor(Math.max(0, units) / FLAME_FUEL.unitsPerCan * 10 + 1e-9) / 10}`;
+}
+
 /** One-line stat text: "armor 4 pips (10 %)", "+4 pockets", "speed +5 %", "spread −8 % · handling +8 %". */
-export function gearStatText(spec: GearSpec, stack?: {armor?: number} | null): string {
+export function gearStatText(spec: GearSpec, stack?: {armor?: number; fuel?: number} | null): string {
   const out: string[] = [];
   // (task studio-general-armor-20261107-231448-01) pooled armour: pips (half-pip steps, rounded down) of what this item has left / when new
   if (spec.armor) {
@@ -167,6 +190,10 @@ export function gearStatText(spec: GearSpec, stack?: {armor?: number} | null): s
   if (spec.handlingMult && spec.handlingMult !== 1) out.push(`reload / use time ${spec.handlingMult < 1 ? '−' : '+'}${pct(spec.handlingMult - 1)}`);
   if (spec.filterLife) out.push(`blocks infectious gas while on (Q) with a working filter · one filter lasts ${spec.filterLife} s on the face`); // mask lane
   if (spec.airLife) out.push(`${spec.airLife / 60} min of air for the gas mask (used before its filter) · no storage · cannot be refilled`);
+  if (spec.fuelCap) { // task flamethrower-fire: what THIS tank holds now (a stack) or what a new one comes with
+    const left = stack ? Math.max(0, Math.min(spec.fuelCap, stack.fuel ?? 0)) : FLAME_FUEL.newUnits;
+    out.push(`flamethrower fuel ${fuelCansText(left)} of ${FLAME_FUEL.capacityCans} cans (${Math.round(left * FLAME_FUEL.unitSeconds)} s of flame) · no storage · refill from fuel cans (R)`);
+  }
   return out.join(' · ');
 }
 

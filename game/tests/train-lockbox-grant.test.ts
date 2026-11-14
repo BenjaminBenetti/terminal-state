@@ -41,7 +41,9 @@ describe('the gear drop bundle (registry-derived)', () => {
     // derived, not listed: every weapon item that is not melee, every gear item, every caliber ammo item — nothing else
     for (const d of Object.values(ITEMS)) {
       // (task filter-tension-airtank-20261104-072836: the bundle stays exactly as it was — the new Airtank Backpack is not in it)
-      const want = (d.kind === 'weapon' && !!WEAPONS[d.weaponId!] && !WEAPONS[d.weaponId!].melee) || (d.kind === 'gear' && !!d.gear && d.id !== 'airtank_backpack') || d.kind === 'ammo';
+      // (re-pin, task studio-flamethrower-fire-20261114-031614-01: nor the flamethrower — a stream weapon — or its fuel tank: bench / Market only. The pinned
+      // bundle above is exactly what it was)
+      const want = (d.kind === 'weapon' && !!WEAPONS[d.weaponId!] && !WEAPONS[d.weaponId!].melee && !WEAPONS[d.weaponId!].stream) || (d.kind === 'gear' && !!d.gear && d.id !== 'airtank_backpack' && d.id !== 'fuel_tank') || d.kind === 'ammo';
       expect([d.id, devGrantBundle().some(l => l.itemId === d.id)]).toEqual([d.id, want]);
     }
     expect(devGrantBundle().some(l => l.itemId === 'knife')).toBe(false); // melee: not a gun, not gear

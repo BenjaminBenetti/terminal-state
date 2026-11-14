@@ -19,7 +19,7 @@ import {SAVE_SLOTS} from '../campaign/types';
 import type {LevelId} from '../levels/types';
 import {ITEMS, type ItemDef} from '../items/items';
 import {LEGACY_AMMO_IDS} from '../items/calibers';
-import {FILTER_LIFE_S, GEAR_SLOTS, LEGACY_BACKPACK_SLOTS, LEGACY_FILTER_LIFE_S, gearSpec, isAirtank, isFilterMask} from '../items/gear';
+import {FILTER_LIFE_S, GEAR_SLOTS, LEGACY_BACKPACK_SLOTS, LEGACY_FILTER_LIFE_S, gearSpec, isAirtank, isFilterMask, isFuelTank} from '../items/gear';
 import {HOTBAR_SIZE, MELEE_SLOTS, THROW_SLOTS} from '../items/inventory';
 import {WEAPONS} from '../weapons/weapons';
 import {LOCKBOX_SLOTS} from '../run/trainLockbox';
@@ -36,7 +36,7 @@ import {EQUIPMENT, STATION_EQUIPMENT_LANE, equipmentSeqOf, stationEquipmentProbl
 import {PROP_DEFS} from '../gen/props'; // task train-all-cargo: carried props are of real kinds
 import {trainUpgradesProblem} from '../run/trainUpgrades'; // task studio-refinement-batch-20261113-035659-01 (lane ARMOR): the train's fitted upgrades
 import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
-import {MARKET_STOCK_LANE, STOCK_MAX} from '../market/trade/stock';
+import {MARKET_STOCK_LANE, STOCK_EXTRAS_VERSION, STOCK_MAX} from '../market/trade/stock';
 import {BUNKER_LANE, bunkerStateProblem} from '../world/bunker/objectiveState'; // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE)
 import {MARKET_HOSTILITY_LANE, marketHostilityProblem} from '../market/combat/record'; // task studio-market-rework-20261108-074144-01 (lane COMBAT): a market station's hostility
 import {ACID_MELT_LANE, ACID_MELT_LIMITS, acidMeltedProblem} from '../run/acidMeltRecord'; // task studio-refinement-batch-20261113-035659-01 (lane MELT): a station's acid-melted props
@@ -207,7 +207,7 @@ function itemOf(v: unknown, path: string): ItemDef {
   return ITEMS[canon];
 }
 
-const STACK_KEYS = ['uid', 'itemId', 'count', 'mag', 'spent', 'bag', 'filter', 'air', 'armor'] as const; // (+ armor: task studio-general-armor-20261107-231448-01; + spent: task studio-turnstile-reload-visuals-20261112-063646-01)
+const STACK_KEYS = ['uid', 'itemId', 'count', 'mag', 'spent', 'bag', 'filter', 'air', 'armor', 'fuel'] as const; // (+ armor: task studio-general-armor-20261107-231448-01; + spent: task studio-turnstile-reload-visuals-20261112-063646-01; + fuel: task studio-flamethrower-fire-20261114-031614-01)
 /**
  * Task filter-tension-airtank-20261104-072836: the largest fitted-filter charge a stack of the run being validated may hold = the
  * filter life that run was written with (run.filterLifeS; absent = LEGACY_FILTER_LIFE_S, a save from before 37.5 s filters).
@@ -313,6 +313,10 @@ function stack(v: unknown, path: string, o: {uid: boolean; inBag: boolean; seen?
   if (has(s, 'air')) { // task filter-tension-airtank: an Airtank Backpack's air (s)
     if (!isAirtank(def.id)) bad(`${path}.air`, `${def.id} holds no air`);
     num(s.air, `${path}.air`, 0, (gearSpec(def.id)?.airLife ?? 0) + 1e-6);
+  }
+  if (has(s, 'fuel')) { // task studio-flamethrower-fire-20261114-031614-01: a Fuel Tank's flamethrower fuel (whole units; absent = empty)
+    if (!isFuelTank(def.id)) bad(`${path}.fuel`, `${def.id} holds no fuel`);
+    int(s.fuel, `${path}.fuel`, 0, gearSpec(def.id)?.fuelCap ?? 0);
   }
   if (has(s, 'armor')) { // task studio-general-armor-20261107-231448-01: an armour-bearing gear item's armour left after wear
     const full = gearSpec(def.id)?.armor ?? 0;
@@ -591,15 +595,17 @@ function sectionBags(v: unknown, path: string): void {
 
 /**
  * Task studio-survivor-market-20261108-005807-01 (lane TRADE): a market station's stall stock (market/trade/stock.ts MarketStockJSON) —
- * every stall listed, at most STOCK_MAX stacks each, every stack as strictly as the Lockbox's (item, count, mag, filter, air, bag) with
+ * every stall listed, at most STOCK_MAX stacks each, every stack as strictly as the Lockbox's (item, count, mag, filter, air, fuel, bag) with
  * its uid in the scope's set (uidScope); no reactor restart part, no Rail Ties (task studio-market-rework-20261108-074144-01: the money is
  * never stock), no backpack holding items. Task studio-market-bar-20261108-225231-01 (lane BAR): + the bar's list where the station has a
  * bar holding something (layout version 3; optional — an old record or a market without a bar has the six only).
  */
 function marketStock(v: unknown, path: string): void {
   const o = obj(v, path);
-  only(o, path, ['v', 'stalls']);
+  only(o, path, ['v', 'stalls', 'extras'], ['v', 'stalls']);
   if (o.v !== 1) bad(`${path}.v`, 'unsupported market stock version');
+  // task studio-flamethrower-fire-20261114-031614-01: the additive lots' marker (absent: a record from before them — it gets them once)
+  if (has(o, 'extras')) int(o.extras, `${path}.extras`, 1, STOCK_EXTRAS_VERSION);
   const st = obj(o.stalls, `${path}.stalls`);
   only(st, `${path}.stalls`, MARKET_STALLS_ALL, MARKET_STALLS);
   for (const id of [...MARKET_STALLS, ...(has(st, BAR_STALL) ? [BAR_STALL] : [])]) {

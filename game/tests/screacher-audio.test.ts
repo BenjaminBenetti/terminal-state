@@ -225,8 +225,12 @@ describe('Screacher cues: registration + shipped Sound Lab derivatives', () => {
     // tests/bb-audio.test.ts / audio-bank.test.ts; excluded the same way)
     const BB = ['bbCackle', 'bbGiggle', 'bbPounce', 'bbHurt', 'bbDeath'];
     expect(BB.map(c => [CUES.includes(c as never), CUE_GAIN[c as keyof typeof CUE_GAIN]])).toEqual([[true, 0.81], [true, 0.41], [true, 0.53], [true, 0.45], [true, 0.91]]);
-    const others = CUES.filter(c => !(SCR as readonly string[]).includes(c) && !CHIP.includes(c) && !BB.includes(c));
-    expect(CUES.length).toBe(others.length + 4 + CHIP.length + BB.length);
+    // (task studio-flamethrower-fire-20261114-031614-01, lane AUDIO: the flamethrower / fire set's seven cues are a fourth, separately
+    // pinned addition — tests/fire-audio.test.ts / audio-bank.test.ts; excluded the same way)
+    const FIRE = ['flameIgnite', 'flameRoar', 'flameOut', 'fireBurn', 'fireCatch', 'fireCollapse', 'fireEmbers'];
+    expect(FIRE.map(c => [CUES.includes(c as never), CUE_GAIN[c as keyof typeof CUE_GAIN]])).toEqual([[true, 0.6], [true, 0.76], [true, 0.39], [true, 0.54], [true, 0.54], [true, 0.92], [true, 0.92]]);
+    const others = CUES.filter(c => !(SCR as readonly string[]).includes(c) && !CHIP.includes(c) && !BB.includes(c) && !FIRE.includes(c));
+    expect(CUES.length).toBe(others.length + 4 + CHIP.length + BB.length + FIRE.length);
     expect(Object.keys(CUE_GAIN).sort()).toEqual([...CUES].sort());
     expect(others.length).toBe(161);
     expect(sha(JSON.stringify(others))).toBe('3d4982c30a801d4287f78f2f519ffe942425d7ae775e9f90e1702dfcfa6bd521');

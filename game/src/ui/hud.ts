@@ -3,7 +3,8 @@
 import {ICONS, LIGHT_ICONS, STAT_ICONS} from './icons';
 import {itemIconHtml, itemIconsVersion} from './itemIcons';
 import {itemDef} from '../items/items';
-import {meleeDefOf} from '../weapons/weapons'; // lane KNIFE
+import {meleeDefOf, streamDefOf} from '../weapons/weapons'; // lane KNIFE
+import {tankFuel, wornFuelTank} from '../fire/fuelTank'; // task studio-flamethrower-fire-20261114-031614-01 (a stream weapon's slot shows the worn tank's fuel)
 import type {Inventory} from '../items/inventory';
 import {AIRTANK_AIR_S, FILTER_LIFE_S, GEAR_SLOTS, isAirtank} from '../items/gear';
 import {GEAR_ICONS} from './gearIcons';
@@ -401,11 +402,13 @@ export class Hud {
       inv.hotbar.forEach((st, i) => {
         const el = bar.children[i + 1] as HTMLElement;
         const def = st ? itemDef(st.itemId) : null;
-        const key = `${st?.uid ?? 0}|${st?.itemId ?? ''}|${st?.count ?? 0}|${st?.mag ?? ''}|${itemIconsVersion()}`;
+        // (a stream weapon has no magazine: its slot shows the fuel units in the worn tank — none worn: 0)
+        const fuel = def?.kind === 'weapon' && streamDefOf(def.id) ? tankFuel(wornFuelTank(inv)) : null;
+        const key = `${st?.uid ?? 0}|${st?.itemId ?? ''}|${st?.count ?? 0}|${fuel ?? st?.mag ?? ''}|${itemIconsVersion()}`;
         el.classList.toggle('selected', i === inv.selected && !inv.meleeSelected && !this.bagSelected);
         if (el.dataset.k === key) return;
         el.dataset.k = key;
-        const count = def && def.kind !== 'weapon' && st!.count > 1 ? `<span class="count">${st!.count}</span>` : def?.kind === 'weapon' && !meleeDefOf(def.id) ? `<span class="count">${st!.mag}</span>` : ''; // lane KNIFE: no rounds on a melee slot
+        const count = def && def.kind !== 'weapon' && st!.count > 1 ? `<span class="count">${st!.count}</span>` : def?.kind === 'weapon' && !meleeDefOf(def.id) ? `<span class="count">${fuel ?? st!.mag}</span>` : ''; // lane KNIFE: no rounds on a melee slot
         el.innerHTML = `<span class="key">${i + 1}</span>${def ? itemIconHtml(def.id) : ''}<span class="nm">${def ? def.short : ''}</span>${count}`;
       });
       this.extraSlots(inv, bar.children[n + 1] as HTMLElement, bar.children[n + 2] as HTMLElement);

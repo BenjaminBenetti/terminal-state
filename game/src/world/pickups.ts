@@ -27,7 +27,7 @@ import {beerModel, beerModelSource} from '../market/beer/beerModel';
 import {isPantryItem} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS)
 import {pantryFallbackModel, pantryGltf, pantryModelSource} from './pantryModels';
 import {requestWeaponVarietyModel, weaponVarietyGltf, weaponVarietyModelUrl} from './weaponVarietyModels'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the lazily loaded new weapons (+ task studio-weapon-runtime-fix-20261110-022206-01: asked for on demand)
-import {isVarietyWeapon} from '../weapons/varietyIds';
+import {isLazyModelWeapon} from '../weapons/lazyWeaponModels'; // task studio-flamethrower-fire-20261114-031614-01: + the Flamethrower's lazily delivered model
 import {Grid} from '../gen/grid';
 import type {Levels} from '../gen/levels';
 import type {MarketStallId} from '../gen/market/marketTypes';
@@ -554,12 +554,13 @@ export class PickupManager {
    * when it was warmed up, its first frame built a node variant and asked for a pipeline (first-use census over the item registry, in
    * Node: 6 to 45 builds per level kind). Each mesh carries its world matrix inside the pickup (a mirrored model part keeps its
    * winding in the pipeline key) and never answers a ray. Pure: nothing joins `list` or the group. `materials` are the copies made
-   * here (the pool releases them with the world). The twelve variety weapons are left to their own pool (world/weaponVarietyModels.ts).
+   * here (the pool releases them with the world). The lazily delivered weapons (the variety weapons, the Flamethrower) are left to their
+   * own pool (world/weaponVarietyModels.ts).
    */
   pickupPrototypes(ids: Iterable<string>): {meshes: THREE.Mesh[]; materials: THREE.Material[]} {
     const meshes: THREE.Mesh[] = [], materials: THREE.Material[] = [];
     for (const id of new Set(ids)) {
-      if (isVarietyWeapon(id)) continue;
+      if (isLazyModelWeapon(id)) continue;
       const {obj, mats} = this.build(id);
       materials.push(...mats);
       obj.updateMatrixWorld(true);

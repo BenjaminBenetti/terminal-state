@@ -28,6 +28,12 @@
 //  the film's drawn radius, poolReach). The pool is a LIQUID: a glossy yellow-green film with a few bubbles, never a gas / fog volume
 //  (CLAUDE.md's green-fog rule is for toxic gas). At most ACID.maxPools pools + acid canisters not yet burst at once (refused with a
 //  message, nothing consumed). An acid kill crumples (ACID.killImpulse), it is no blast.
+//  THE POOL'S LOOK (task studio-flamethrower-fire-20261114-031614-01, lane ACID-VFX; user: "an organic convincing corrosive pool:
+//  reactive foam, bubbles, layered detail, irregular edges, NOT a generic disk. VISUAL ONLY"): weapons/acidPoolVisual.ts draws it — an
+//  irregular spill that hugs the circle above (weapons/acidPoolShape.ts: its edge stays within POOL_EDGE of poolReach, so inPool is
+//  still what hurts AND what shows), a layered film (weapons/acidPoolLook.ts), bubbles, froth and spits. This file only tells it
+//  where the pool is, how old / strong it is (drawPool) and where the acid is working (AcidPoolVisual.react, from the burn code below:
+//  nothing reads it back, and the system's random stream is drawn exactly as before).
 //
 // LURE (user: "Scent reaches 20 m without LOS for 20 active seconds. Zombies investigate the ACTUAL emitter, not the player"; the reach
 // is ai/scentLure.ts SCENT.radius — 30 m since task studio-scanner-console-refinements-20261114-031614-01):
@@ -49,6 +55,7 @@ import {grenadeKind, type GrenadeId} from '../items/grenades';
 import {grenadeModel} from '../world/grenadeModels';
 import type {FlareSmokeHost, SmokeHandle} from './throwables';
 import {SCENT} from '../ai/scentLure';
+import {AcidPoolVisuals, type AcidPoolVisual} from './acidPoolVisual';
 
 export const GRENADE = {
   /** Seconds between throws (any grenade). */
@@ -221,10 +228,15 @@ export interface AcidPool {
   propT: number;
   fizzT: number;
   burned: boolean;
+  /** Its look (weapons/acidPoolVisual.ts: a slot of the system's AcidPoolVisuals); `mesh` / `bubbles` / `mat` are that slot's film, beads and film material. */
+  readonly look: AcidPoolVisual;
   readonly mesh: THREE.Mesh;
   readonly bubbles: THREE.InstancedMesh;
-  readonly mat: THREE.MeshStandardMaterial;
+  readonly mat: THREE.Material;
+  /** The pool's own random numbers (drawn from the system's stream exactly as before): its look is seeded from them. */
   readonly seeds: Float32Array;
+  /** Look only: the props this pool is eating (touched by it, or the one its canister was stuck to) — foam gathers at them. */
+  readonly eating: MeltRefLike[];
 }
 
 /** A canister model + its centre offset (the model's origin is its bottom centre). */
@@ -266,8 +278,8 @@ export function inPool(p: Pick<AcidPool, 'x' | 'y' | 'z' | 'r' | 'age'>, x: numb
   return dx * dx + dz * dz <= r * r && Math.abs(y - p.y) <= ACID.poolRise;
 }
 
-let poolGeo: THREE.CircleGeometry | null = null;
-let bubbleGeo: THREE.SphereGeometry | null = null;
+/** Look only: props a pool keeps foaming at, and how far past its film (m) one may stand and still count. */
+const EATING = {max: 8, margin: 0.6} as const;
 
 export class GrenadeSystem implements BodySource {
   readonly group = new THREE.Group();
@@ -279,7 +291,6 @@ export class GrenadeSystem implements BodySource {
   private readonly tv = new THREE.Vector3();
   private readonly tseg = new THREE.Vector3();
   private readonly tq = new THREE.Quaternion();
-  private readonly tm = new THREE.Matrix4();
   private readonly tw = {x: 0, y: 0, z: 0};
   /** Counters (QA / tests). */
   readonly counts = {thrown: 0, refused: 0, stuck: 0, bursts: 0, pools: 0, poolsDried: 0, zombieHits: 0, kills: 0, playerBurnS: 0, exposures: 0,
@@ -600,7 +611,8 @@ export class GrenadeSystem implements BodySource {
     const fy = this.host.statics?.cellGround(at.x, at.z, at.y + 0.05);
     const y = fy === undefined ? at.y - 0.05 : fy;
     if (!Number.isFinite(y) || at.y - y > 3.5) return;
-    this.addPool(at.x, y, at.z);
+    const p = this.addPool(at.x, y, at.z);
+    if (stuckTo) p.eating.push(stuckTo); // (look only: the prop it was stuck to dissolves in this pool's foam)
   }
 
   /** Acid damage to a zombie from (fx, fy, fz) (its brain's `damage`: aware, its last-known spot there; no stagger); a kill crumples it. */
@@ -623,53 +635,39 @@ export class GrenadeSystem implements BodySource {
   private readonly hurtAt = new WeakMap<object, number>();
   private painAt = -1e9;
 
-  private addPool(x: number, y: number, z: number): AcidPool {
-    poolGeo ??= new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2);
-    bubbleGeo ??= new THREE.SphereGeometry(1, 8, 6);
-    const mat = new THREE.MeshStandardMaterial({
-      name: 'acid-pool', color: ACID.color, emissive: 0x253d00, roughness: 0.12, metalness: 0, transparent: true, opacity: 0,
-      depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
-    });
+  /** The pools' looks: one slot per pool the acid cap allows, made once and reused (weapons/acidPoolVisual.ts). */
+  private looks: AcidPoolVisuals | null = null;
+  private visuals(): AcidPoolVisuals {
+    return (this.looks ??= new AcidPoolVisuals(this.group, ACID.maxPools, ACID.color));
+  }
+
+  /** A pool on the floor at (x, y, z) (burst() makes them; public for QA / render harnesses: see acidPoolRig). */
+  addPool(x: number, y: number, z: number): AcidPool {
     const r = ACID.poolR;
-    const mesh = new THREE.Mesh(poolGeo, mat);
-    mesh.name = 'acid-pool';
-    mesh.position.set(x, y + 0.012, z);
-    mesh.scale.setScalar(r * 0.4);
-    mesh.raycast = () => {};
-    mesh.renderOrder = 2;
-    const bubbles = new THREE.InstancedMesh(bubbleGeo, mat, ACID.bubbles);
-    bubbles.name = 'acid-pool-bubbles';
-    bubbles.position.set(x, y + 0.012, z);
-    bubbles.raycast = () => {};
-    bubbles.frustumCulled = false;
+    // (the same draws from the system's stream as ever — four per ACID.bubbles — now the seed of the pool's look)
     const seeds = new Float32Array(ACID.bubbles * 4);
     for (let i = 0; i < ACID.bubbles; i++) {
       const a = this.rng() * Math.PI * 2, d = Math.sqrt(this.rng()) * r * 0.85;
       seeds.set([Math.cos(a) * d, Math.sin(a) * d, this.rng() * 1.7, 0.012 + this.rng() * 0.018], i * 4);
     }
-    this.group.add(mesh, bubbles);
+    let seed = 2166136261;
+    for (const w of new Uint32Array(seeds.buffer)) seed = Math.imul(seed ^ w, 16777619);
+    const look = this.visuals().take();
+    look.place(x, y, z, r, seed >>> 0);
     const p: AcidPool = {id: this.nextId++, x, y, z, level: this.levelOf(x, y, z), r, left: ACID.poolSeconds, age: 0, burnT: 0, burning: new Map(), playerS: 0,
-      propT: 0, fizzT: ACID.fizzEvery, burned: false, mesh, bubbles, mat, seeds};
+      propT: 0, fizzT: ACID.fizzEvery, burned: false, look, mesh: look.mesh, bubbles: look.bubbles, mat: look.mat, seeds, eating: []};
     this.pools.push(p);
     this.counts.pools++;
     this.drawPool(p);
     return p;
   }
 
-  /** The pool's look from its age / time left: film opacity + spread, the bubbles rising and popping. */
-  private drawPool(p: AcidPool): void {
-    const fin = Math.min(1, p.age / ACID.fadeIn);
-    const k = poolStrength(p);
-    p.mat.opacity = 0.82 * k;
-    p.mesh.scale.setScalar(poolReach(p));
-    const m = this.tm, s = p.seeds;
-    for (let i = 0; i < ACID.bubbles; i++) {
-      const ph = (p.age * 0.9 + s[i * 4 + 2]) % 1.7, life = ph / 1.7; // each bubble swells for 1.7 s, then pops and starts again
-      const rad = s[i * 4 + 3] * Math.sin(Math.PI * life) * k;
-      m.makeScale(rad, rad * 0.7, rad).setPosition(s[i * 4] * (0.4 + 0.6 * fin), rad * 0.35, s[i * 4 + 1] * (0.4 + 0.6 * fin));
-      p.bubbles.setMatrixAt(i, m);
-    }
-    p.bubbles.instanceMatrix.needsUpdate = true;
+  /**
+   * The pool's look from its age / time left: the film spread to poolReach, its opacity = ACID_LOOK.opacity x poolStrength, drying over
+   * its last ACID.fadeOut seconds; `dt` advances its bubbles and reaction foam.
+   */
+  private drawPool(p: AcidPool, dt = 0): void {
+    p.look.update(dt, p.age, poolReach(p), poolStrength(p), Math.max(0, Math.min(1, 1 - p.left / ACID.fadeOut)));
   }
 
   private tickPool(p: AcidPool, dt: number): void {
@@ -684,13 +682,16 @@ export class GrenadeSystem implements BodySource {
       // (inPool: the drawn disc; counted every frame, applied per batch)
       for (const z of this.env.zombies?.() ?? []) {
         const b = z.brain;
-        if (b.alive && inPool(p, b.x, b.y, b.z, ACID.footR)) p.burning.set(z, (p.burning.get(z) ?? 0) + k);
+        if (!b.alive || !inPool(p, b.x, b.y, b.z, ACID.footR)) continue;
+        p.burning.set(z, (p.burning.get(z) ?? 0) + k);
+        p.look.react(b.x, b.z, 1); // (look only: it foams around whoever stands in it)
       }
       const pl = this.env.player?.();
       if (pl?.alive && inPool(p, pl.x, pl.y, pl.z, ACID.footR)) {
         p.playerS += k;
         this.counts.playerBurnS += live;
         if (!p.burned) { p.burned = true; this.env.playerBurn?.(); }
+        p.look.react(pl.x, pl.z, 0.8);
       }
       p.burnT += live;
       if (p.burnT >= ACID.burnEvery - 1e-9 || dry) this.burnBatch(p);
@@ -698,14 +699,30 @@ export class GrenadeSystem implements BodySource {
       p.propT += live;
       if (p.propT >= ACID.propEvery - 1e-9 || dry) {
         const melt = this.env.melt?.();
-        if (melt) for (const ref of melt.inDisc(p.x, p.y, p.z, poolReach(p))) { melt.expose(ref, p.propT); this.counts.exposures++; }
+        if (melt) {
+          for (const ref of melt.inDisc(p.x, p.y, p.z, poolReach(p))) {
+            if (melt.expose(ref, p.propT) && p.eating.length < EATING.max && !p.eating.includes(ref)) p.eating.push(ref);
+            this.counts.exposures++;
+          }
+          this.foamProps(p, melt);
+        }
         p.propT = 0;
       }
       p.fizzT -= live;
       if (p.fizzT <= 0 && p.left > 2) { p.fizzT = ACID.fizzEvery; this.env.audio?.flareOut?.(p.x, p.y + 0.05, p.z); }
     }
     if (dry) { this.dropPool(p); this.counts.poolsDried++; return; }
-    this.drawPool(p);
+    this.drawPool(p, dt);
+  }
+
+  /** Look only: foam at every prop this pool is eating, for as long as it stands or dissolves in reach (read-only melt queries). */
+  private foamProps(p: AcidPool, melt: AcidMeltLike): void {
+    const far = poolReach(p) + EATING.margin;
+    for (let i = p.eating.length - 1; i >= 0; i--) {
+      const ref = p.eating[i], at = this.tw;
+      if (melt.alive(ref) && melt.where(ref, at) && (at.x - p.x) ** 2 + (at.z - p.z) ** 2 <= far * far) p.look.react(at.x, at.z, 0.9);
+      else p.eating.splice(i, 1);
+    }
   }
 
   /** One burn batch: each zombie / the player takes the acid for the time it stood in the pool since the last batch. */
@@ -713,7 +730,9 @@ export class GrenadeSystem implements BodySource {
     p.burnT = 0;
     for (const [z, s] of p.burning) {
       const b = z.brain;
-      if (b.alive) this.hurtZombie(z, ACID.zombieDps * s, b.x, b.z, b.y); // (from its own feet: aware, but not drawn to the pool's centre)
+      if (!b.alive) continue;
+      this.hurtZombie(z, ACID.zombieDps * s, b.x, b.z, b.y); // (from its own feet: aware, but not drawn to the pool's centre)
+      if (!b.alive) p.look.react(b.x, b.z, 1.6); // (look only: a last bloom where it went down)
     }
     p.burning.clear();
     const pl = this.env.player?.();
@@ -728,9 +747,7 @@ export class GrenadeSystem implements BodySource {
   private dropPool(p: AcidPool): void {
     const i = this.pools.indexOf(p);
     if (i >= 0) this.pools.splice(i, 1);
-    this.group.remove(p.mesh, p.bubbles);
-    p.mat.dispose();
-    p.bubbles.dispose();
+    p.look.release(); // (its slot is hidden and free again: nothing is disposed, the next pool reuses it)
   }
 
   /** A lure at rest opens: the scent emitter at the canister + its plume and hiss. */
@@ -775,26 +792,18 @@ export class GrenadeSystem implements BodySource {
   }
 
   /**
-   * render/warmup.ts pool 'grenades': hidden prototypes of both thrown canisters and of a pool's film + bubbles, built by the same
-   * factories as a throw / a burst, so the loading-screen warm-up compiles them. Never shown, never simulated, never a raycast hit.
+   * render/warmup.ts pool 'grenades': hidden prototypes of both thrown canisters, built by the same factory as a throw, and every
+   * acid pool slot's film + beads — the very meshes a pool shows (hidden while free), so the loading-screen warm-up compiles what
+   * play draws and a burst builds nothing. Never simulated, never a raycast hit.
    */
   warmPrototypes(): THREE.Object3D[] {
     if (!this.protos) {
-      poolGeo ??= new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2);
-      bubbleGeo ??= new THREE.SphereGeometry(1, 8, 6);
       const out: THREE.Object3D[] = [];
       for (const id of ['acid_grenade', 'lure_grenade'] as const) {
         const m = grenadeModel(id);
         m.name = `${id}-warm-prototype`;
         out.push(m);
       }
-      const mat = new THREE.MeshStandardMaterial({name: 'acid-pool', color: ACID.color, emissive: 0x253d00, roughness: 0.12, metalness: 0, transparent: true, opacity: 0.8,
-        depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2});
-      const film = new THREE.Mesh(poolGeo, mat);
-      film.name = 'acid-pool-warm-prototype';
-      const bub = new THREE.InstancedMesh(bubbleGeo, mat, 1);
-      bub.name = 'acid-pool-bubbles-warm-prototype';
-      out.push(film, bub);
       // (only the MESHES are hidden: the warm-up un-hides warm roots + meshes, an invisible group in between would block the compile)
       for (const o of out) {
         o.position.set(0, -1000, 0);
@@ -803,7 +812,7 @@ export class GrenadeSystem implements BodySource {
       }
       this.protos = out;
     }
-    return this.protos;
+    return [...this.protos, ...this.visuals().meshes];
   }
   private protos: THREE.Object3D[] | null = null;
 
@@ -815,9 +824,21 @@ export class GrenadeSystem implements BodySource {
         return {id: c.id, kind: c.kind, state: c.state, age: +c.age.toFixed(2), moving: !!c.body, stuck: c.stuck?.ref.key ?? null, emitter: c.emitter?.id ?? null,
           x: +p.x.toFixed(3), y: +p.y.toFixed(3), z: +p.z.toFixed(3)};
       }),
-      pools: this.pools.map(p => ({id: p.id, x: +p.x.toFixed(3), y: +p.y.toFixed(3), z: +p.z.toFixed(3), r: p.r, left: +p.left.toFixed(2), opacity: +p.mat.opacity.toFixed(2)})),
+      pools: this.pools.map(p => ({id: p.id, x: +p.x.toFixed(3), y: +p.y.toFixed(3), z: +p.z.toFixed(3), r: p.r, left: +p.left.toFixed(2), opacity: +p.mat.opacity.toFixed(2), look: p.look.stats()})),
     };
   }
+}
+
+/**
+ * QA / render harness (task studio-flamethrower-fire-20261114-031614-01, lane ACID-VFX): acid pools on their own, without the game — a
+ * GrenadeSystem under `parent` with no physics world (nothing can be thrown) whose pools are made with `addPool(x, floorY, z)` and aged
+ * with `tick(dt)` exactly as in play: they spread, bubble, dry over their last ACID.fadeOut seconds and are gone after ACID.poolSeconds.
+ * `warmPrototypes()` are the meshes to compile first; `pool.look.react(x, z, amount)` foams at a world point; `env` takes zombies / a
+ * player for it to burn.
+ */
+export function acidPoolRig(parent: THREE.Object3D, rng: () => number = Math.random): GrenadeSystem {
+  const host: GrenadeHost = {world: null, statics: null, audio: null, material: () => new CANNON.Material('none'), bodiesChanged() {}, addSource() {}};
+  return new GrenadeSystem(parent, host, rng);
 }
 
 /** QA hooks (qa.ts): grenades() — canisters / pools / counters; grenadeGive(id, n) — into the inventory; grenadeThrow(id) — one throw along the view. */

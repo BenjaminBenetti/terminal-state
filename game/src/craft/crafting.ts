@@ -26,6 +26,7 @@
 
 import {storeRefusal, type Inventory, type ItemStack} from '../items/inventory';
 import {itemDef} from '../items/items';
+import {GEAR_SLOTS, isBagItem} from '../items/gear';
 import {equipmentSeqOf, type EquipmentKind} from './equipment';
 import type {EquipmentStore, EquipmentSystemLike, EquipmentUnit} from './equipmentApi';
 import {RECIPE_MATERIALS, type MadeOutput, type MadeRecipe, type Recipe, type RecipeMaterial, type UpgradeId} from './recipes';
@@ -338,6 +339,11 @@ export function craft(recipe: Recipe, ctx: CraftContext): CraftResult {
 // the room it has, the rest into the Lockbox (same item first, then empty slots); an upgrade is installed. If that last step cannot
 // complete (or throws), everything it changed is put back exactly and refundCraft returns the materials: no item is ever created
 // without its materials spent, nor materials spent without the whole output.
+//
+// Task studio-flamethrower-fire-20261114-031614-01: a made item may be a weapon or a piece of gear (the flamethrower, its fuel tank).
+// Inventory.add WEARS gear straight into its free gear slot, so that slot counts as carried room and is part of what a failed
+// delivery puts back. A made stack is a NEW item from Inventory.makeStack (a fuel tank: exactly FLAME_FUEL.newUnits — the fuel can its
+// recipe took), on you or in the Lockbox alike.
 
 /** Where a made item batch goes (the carried inventory, then the train Lockbox). */
 export interface MadeItemsTarget {
@@ -376,13 +382,20 @@ function listRoom(list: readonly (ItemStack | null)[], itemId: string, max: numb
   return n;
 }
 
-/** How many of `itemId` the inventory would take now — exactly Inventory.add's places: the grenade slot (a throwable), the quick slots + pockets. */
+/**
+ * How many of `itemId` the inventory would take now — exactly Inventory.add's places: the grenade slot (a throwable), its free gear
+ * slot (gear is worn straight away; a backpack goes nowhere else), the quick slots + pockets.
+ */
 export function carriedRoom(inv: Inventory, itemId: string): number {
   const def = itemDef(itemId), max = def.stackMax;
   let n = 0;
   if (def.kind === 'throwable') {
     const t = inv.throwSlot[0];
     n += !t ? max : t.itemId === itemId ? Math.max(0, max - t.count) : 0;
+  }
+  if (def.kind === 'gear' && def.gear) { // (task flamethrower-fire: the fuel tank)
+    if (!inv.gearSlots[GEAR_SLOTS.indexOf(def.gear.slot)]) n += max;
+    if (isBagItem(itemId)) return n;
   }
   return n + listRoom(inv.hotbar, itemId, max) + listRoom(inv.pack, itemId, max);
 }
@@ -413,7 +426,7 @@ function snapshotSlots(lists: (ItemStack | null)[][]): () => void {
 /** Put a batch into the inventory (up to its room) and the Lockbox (the rest). Returns where it went, or null (everything put back). */
 function deliverItems(t: MadeItemsTarget, itemId: string, count: number): {carried: number; lockbox: number} | null {
   const inv = t.inv, box = t.lockbox ?? null, max = itemDef(itemId).stackMax;
-  const undo = snapshotSlots([inv.throwSlot, inv.hotbar, inv.pack, ...(box ? [box.slots] : [])]);
+  const undo = snapshotSlots([inv.throwSlot, inv.gearSlots, inv.hotbar, inv.pack, ...(box ? [box.slots] : [])]); // (+ the gear slots: a made piece of gear is worn)
   const verInv = inv.version, verBox = box?.version ?? 0;
   const back = () => {
     undo();
@@ -423,7 +436,14 @@ function deliverItems(t: MadeItemsTarget, itemId: string, count: number): {carri
   let carried = 0, rest = count;
   try {
     carried = Math.min(count, carriedRoom(inv, itemId));
-    if (carried > 0) carried -= inv.add(inv.makeStack(itemId, carried));
+    // (stack by stack: an item that does not stack — a weapon, a piece of gear — is one stack each, never a batch clamped to one)
+    let left = carried;
+    while (left > 0) {
+      const st = inv.makeStack(itemId, left), n = st.count, notFit = inv.add(st);
+      left -= n - notFit;
+      if (notFit > 0) break;
+    }
+    carried -= left;
     rest = count - carried;
     if (rest > 0 && box) rest = fillLockbox(inv, box, itemId, rest, max);
   } catch (err) { back(); throw err; }

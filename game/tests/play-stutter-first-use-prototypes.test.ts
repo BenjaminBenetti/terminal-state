@@ -28,7 +28,7 @@ import {markShadows} from '../src/render/volumetric';
 import {MODEL_FILES} from '../src/assets/manifest';
 import {ITEMS} from '../src/items/items';
 import {Inventory} from '../src/items/inventory';
-import {isVarietyWeapon} from '../src/weapons/varietyIds';
+import {isLazyModelWeapon} from '../src/weapons/lazyWeaponModels';
 import {PickupManager, registerItemModels} from '../src/world/pickups';
 import {prepareStockMovingSets, stockMovingSets} from '../src/world/shelfStockWarm';
 import {FILLER_TUNING} from '../src/physics/fillerStock';
@@ -87,8 +87,11 @@ async function rig(scene: THREE.Scene) {
 }
 
 const GUNS = (): Record<string, GLTF> => ({rifle: boot.rifle, shotgun: boot.shotgun, pistol: boot.pistol, ...(boot.knife ? {knife: boot.knife} : {})});
-/** Every item a plain pickup can show (the twelve variety weapons are their own pool's: world/weaponVarietyModels.ts). */
-const PICKUP_IDS = Object.keys(ITEMS).filter(id => !isVarietyWeapon(id));
+/**
+ * Every item a plain pickup can show (the lazily delivered weapon models — the variety weapons and, task
+ * studio-flamethrower-fire-20261114-031614-01, the Flamethrower — are their own pool's: world/weaponVarietyModels.ts).
+ */
+const PICKUP_IDS = Object.keys(ITEMS).filter(id => !isLazyModelWeapon(id));
 
 describe('pickups: PickupManager.pickupPrototypes', () => {
   it('are add()\'s meshes, variant for variant, for every item; pure (no pickup, no group child, no id used)', () => {

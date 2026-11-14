@@ -212,7 +212,9 @@ describe('the six guns: distinct handling vs their family baseline (the table), 
     expect(W.overwatch.magazine).toBeGreaterThanOrEqual(10);
     expect(W.overwatch.magazine).toBeLessThanOrEqual(15);
     expect(W.overwatch.spreadHip).toBeGreaterThan(W.rifle.spreadHip);
-    for (const id of Object.keys(W)) if (id !== 'overwatch' && !W[id].melee) expect(W.overwatch.spreadAim, id).toBeLessThan(W[id].spreadAim);
+    // (task studio-flamethrower-fire-20261114-031614-01: among the weapons that fire BULLETS — a stream weapon, the flamethrower, fires
+    // none: its spread fields are unused zeros, not an aimed shot tighter than the Overwatch's. Every gun is compared as before.)
+    for (const id of Object.keys(W)) if (id !== 'overwatch' && !W[id].melee && !W[id].stream) expect(W.overwatch.spreadAim, id).toBeLessThan(W[id].spreadAim);
     expect(W.overwatch.aimSettle!.time).toBeGreaterThan(W.longslide.aimSettle!.time);
     expect(W.overwatch.aimFov).toBeGreaterThanOrEqual(28);
     expect(W.overwatch.aimFov).toBeLessThanOrEqual(32);
@@ -234,7 +236,9 @@ describe('the six guns: distinct handling vs their family baseline (the table), 
     expect(W.thresher.pellets).toBeLessThan(W.shotgun.pellets);
     expect(W.thresher.damage).toBeLessThan(W.shotgun.damage);
     expect(W.thresher.recoil.pitch).toBeGreaterThan(W.shotgun.recoil.pitch);
-    for (const id of Object.keys(W)) if (id !== 'thresher' && !W[id].melee) {
+    // (task studio-flamethrower-fire-20261114-031614-01: the heaviest of the guns that fire ROUNDS — the flamethrower, a stream weapon
+    // carried with its tank, is as slow to walk with (moveMult 0.88 = the Thresher's): not one of this table's guns. Every gun as before.)
+    for (const id of Object.keys(W)) if (id !== 'thresher' && !W[id].melee && !W[id].stream) {
       expect(W.thresher.equipTime, id).toBeGreaterThan(W[id].equipTime);
       expect(W.thresher.moveMult, id).toBeLessThan(W[id].moveMult);
     }

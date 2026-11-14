@@ -416,6 +416,22 @@ Generated for this project from a Codex INITIAL concept image (the owned Codex C
 - The train's fuel cart is a composition of two existing models (`assets/models/p7-hand-truck-t25.glb` and `assets/models/reactor-waste-drum.glb`); nothing new was generated for it.
 <!-- END train-fuel-and-airtank-models -->
 
+<!-- BEGIN flamethrower-model-20261114 (build-flamethrower.mjs) -->
+## The Flamethrower
+
+Generated for this project from one Codex INITIAL design image (the owned Codex CLI's built-in image_gen tool) turned into a model with Meshy T2.5 image-to-3D (smart topology, 2K PBR) through the Meshy MCP; the model keeps Meshy's own PBR maps (the base colour as generated, the other two re-encoded). Task studio-flamethrower-fire-20261114-031614-01 under the user's scoped 75-credit grant (15 credits, a first attempt). AI-generated asset: an unapproved prototype, no licence or commercial clearance implied. The raw master, the design image and the job ledger are kept outside Git.
+
+- `assets/models/weapon-flamethrower.glb` — the Flamethrower (a scrap-built burner lance: shoulder rest, squeeze-lever grip, valve body with a gauge, perforated heat shield, burner bell); runtime derivative by `tools/asset-pipeline/weapons/build-flamethrower.mjs` (provenance: `assets/derivatives/weapon-flamethrower.json`; Meshy task 01a1d827-b0b0-769e-b5f4-748d2528597c).
+<!-- END flamethrower-model-20261114 -->
+
+<!-- BEGIN flamethrower-fuel-tank-model-20261114 (build-fuel-tank.mjs) -->
+## The Fuel Tank
+
+Generated for this project from one Codex INITIAL design image (the owned Codex CLI's built-in image_gen tool) turned into a model with Meshy T2.5 image-to-3D (smart topology, 2K PBR) through the Meshy MCP; the model keeps Meshy's own PBR maps (re-encoded only). Task studio-flamethrower-fire-20261114-031614-01 under the user's scoped 75-credit grant (15 credits, a first attempt). AI-generated asset: an unapproved prototype, no licence or commercial clearance implied. The raw master, the design image and the job ledger are kept outside Git.
+
+- `assets/models/gear-fuel-tank.glb` — the Fuel Tank gear item (a red jerrycan on a tubular pack frame with a hand pump, hose, shoulder straps and a waist belt); runtime derivative by `tools/asset-pipeline/props/build-fuel-tank.mjs` (provenance: `assets/derivatives/gear-fuel-tank.json`; Meshy task 01a1d827-dec4-76e0-973b-b51cc616368d).
+<!-- END flamethrower-fuel-tank-model-20261114 -->
+
 <!-- BEGIN train-chipper-model (build-train-chipper.mjs) -->
 ## Train chipper
 
@@ -785,3 +801,23 @@ Generated for this project from one Codex INITIAL design image each (the owned C
 - `assets/models/market-corpse-buyer.glb` — the corpse buyer: a very tall, gaunt man of about 55 (balding, round dark-tinted spectacles, a thin closed-mouth smile) in a charcoal roll-neck, an oxblood leather waistcoat, elbow-length black rubber gloves, dark work trousers and tall rubber boots; rigged / animated locally with the market humans' healthy clips (Meshy task 01a1d825-e930-767a-ad6b-11cc65a6f728).
 - `assets/models/market-corpse-chute.glb` — the corpse buyer's floor body chute: a square welded steel hopper (riveted sloping walls, a rolled rim lip with a hazard band, a dark shaft below the throat), its strap-hinged lid standing open along the back edge; bolted down at the four corners (Meshy task 01a1d826-0dcd-7428-8cc9-24b345c650fd).
 <!-- END corpse-shop-20261114 -->
+
+<!-- BEGIN flamethrower-fire-audio-20261114 (fire-build.mjs) -->
+## Flamethrower and fire audio (jet ignition, roar loop, cut-off, fire bed loop, catching fire, collapse, ember crackle)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the flamethrower
+task's audio authorization (the free local service only; 14 jobs, 10 takes shipped). Powered by Stability AI. Stability AI Community License +
+Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades, loop,
+levelling, MP3) built by `tools/audio-pipeline/fire-build.mjs` (provenance: `assets/derivatives/audio-fire.json`). Not
+reviewed by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/fire-flame-ignite-01.mp3` — flameIgnite (Sound Lab job 20261114T035149-397170823)
+- `assets/audio/fire-flame-ignite-02.mp3` — flameIgnite (Sound Lab job 20261114T035605-142011743)
+- `assets/audio/fire-flame-roar-loop.mp3` — flameRoar (Sound Lab job 20261114T035551-315438461)
+- `assets/audio/fire-flame-out-01.mp3` — flameOut (Sound Lab job 20261114T035153-149688133)
+- `assets/audio/fire-flame-out-02.mp3` — flameOut (Sound Lab job 20261114T035556-1986922178)
+- `assets/audio/fire-burn-loop.mp3` — fireBurn (Sound Lab job 20261114T035143-808848918)
+- `assets/audio/fire-catch-01.mp3` — fireCatch (Sound Lab job 20261114T035158-1166221398)
+- `assets/audio/fire-catch-02.mp3` — fireCatch (Sound Lab job 20261114T035610-2070104277)
+- `assets/audio/fire-collapse-01.mp3` — fireCollapse (Sound Lab job 20261114T035601-1267916011)
+- `assets/audio/fire-embers-01.mp3` — fireEmbers (Sound Lab job 20261114T035203-1819897513)
+<!-- END flamethrower-fire-audio-20261114 -->

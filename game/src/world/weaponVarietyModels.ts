@@ -22,11 +22,14 @@
 // a world pickup's mesh, an item icon) and ONE delivery (world/weaponVarietyDelivery.ts, subscribed with onWeaponVarietyReady) hands a
 // model that arrived — by any path — to the held view, the pickups showing a stand-in and the icons. A failed fetch is reported
 // (onWeaponVarietyFailed: the game says so) and retried with a backoff while the weapon is still wanted: never silently absent for good.
+//
+// Task studio-flamethrower-fire-20261114-031614-01 (lane ASSET): the same loader serves every LAZILY DELIVERED weapon model
+// (weapons/lazyWeaponModels.ts: the variety identities + the Flamethrower, which is crafted / bought and never a find). Nothing else
+// changed: the names here keep "weapon variety", the set of ids they answer for is lazyWeaponModelUrl's.
 import * as THREE from 'three';
 import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {assetUrl} from '../assets/loader';
-import {WEAPON_VARIETY_MODELS} from '../assets/weaponVarietyModels.generated';
-import {isVarietyWeapon} from '../weapons/varietyIds';
+import {isLazyModelWeapon, lazyWeaponModelUrl} from '../weapons/lazyWeaponModels';
 
 type Model = Pick<GLTF, 'scene'>;
 const loaded = new Map<string, Model>();
@@ -78,10 +81,9 @@ export function onWeaponVarietyFailed(fn: (f: WeaponVarietyFailure) => void): ()
   return () => { failedListeners.delete(fn); };
 }
 
-/** The delivered model file of a variety weapon (null: not delivered / not a variety weapon). */
+/** The delivered model file of a lazily delivered weapon (null: not delivered / not one of them: weapons/lazyWeaponModels.ts). */
 export function weaponVarietyModelUrl(id: string): string | null {
-  const m = isVarietyWeapon(id) ? WEAPON_VARIETY_MODELS[id] : undefined;
-  return m && typeof m.url === 'string' && m.url.length ? m.url : null;
+  return lazyWeaponModelUrl(id);
 }
 
 /** The loaded model of a variety weapon (undefined: not delivered / not fetched yet / failed). */
@@ -203,7 +205,7 @@ export function requestWeaponVarietyModel(id: string): WeaponVarietyModelState {
  */
 export async function ensureWeaponVarietyModels(ids: Iterable<string>, o: {late?: boolean} = {}): Promise<string[]> {
   if (!activeLoader()) return [];
-  const want = [...new Set(ids)].filter(id => isVarietyWeapon(id) && !loaded.has(id) && weaponVarietyModelUrl(id));
+  const want = [...new Set(ids)].filter(id => isLazyModelWeapon(id) && !loaded.has(id) && weaponVarietyModelUrl(id));
   if (!want.length) return [];
   const fresh: string[] = [];
   await Promise.all(want.map(async id => {

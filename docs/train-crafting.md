@@ -2,7 +2,8 @@
 
 The player's train carries a small crafting bench. It turns the two salvage materials into four physical things: an extra storage
 chest and three devices that plug into the train. Material supply is unchanged; nothing here adds loot. Since the refinement batch
-it also makes acid and lure grenades from bio mater and fits the permanent train armor (see "Made recipes" below).
+it also makes acid and lure grenades from bio mater and fits the permanent train armor (see "Made recipes" below), and since the
+flamethrower task the flamethrower and its wearable fuel tank (see "The flamethrower and its fuel tank" below).
 
 ## The bench and the recipes
 
@@ -55,6 +56,37 @@ recipes whose output is not a unit (`craft/recipes.ts MADE_RECIPES`; `BENCH_RECI
   is put back and the materials are refunded into the same stacks (`craft/crafting.ts craftMade`). A made row's picture is the
   item's own rendered icon, or the upgrade's registered preview (`upgrade:<id>`) — empty until it is rendered, never a glyph.
 
+### Made recipes: the flamethrower and its fuel tank
+
+Task studio-flamethrower-fire-20261114-031614-01 adds two more made recipes after the armor (the older rows keep their costs and
+their order). Both items come **only** from the bench or a Market stall: they are in no loot table, weapon-find pool, gear roll or
+starter kit, and the dev grant never hands them out.
+
+| Recipe | Scrap metal | Electrical parts | Bio mater | Fuel can | What it makes |
+|---|---|---|---|---|---|
+| Flamethrower | 5 | 3 | 0 | 0 | One flamethrower. It fires only while a Flamethrower fuel tank is worn. |
+| Flamethrower fuel tank | 2 | 0 | 1 | 1 | One tank for the back slot, holding the fuel of the can it was built from. |
+
+- **The ordinary fuel can is a recipe input** (`RECIPE_MATERIALS`: scrap metal, electrical parts, bio mater, `fuel_can`). It is
+  counted and taken from the same four places as the salvage materials, carried cans first. Every other recipe costs none.
+- **The can is the tank's first fuel.** The recipe costs `FLAME_FUEL.newCans` cans (1) and the tank it makes holds
+  `FLAME_FUEL.newUnits` units (200: one can, 20 s of flame) — the numbers are one constant set (`fire/flamethrowerSpec.ts`), so the
+  fuel a recipe pays and the fuel a new tank holds cannot drift apart. No fuel is made or lost by crafting.
+- **Where the item goes.** The flamethrower: a free quick slot, else a pocket, else the Lockbox. The tank: **worn** at once when
+  your back is free; when you already wear a backpack, an airtank or another tank it goes to a pocket (nothing is swapped off);
+  with nothing free on you it goes into the Lockbox. It holds the same fuel wherever it lands.
+- **No room, no craft.** With no room on you or in the Lockbox the row is refused before anything is taken. Without a fuel can the
+  tank's row is refused like any short material: no empty tank is made instead.
+- **All or nothing**, like every craft: if the delivery fails the can and the materials are back in the very stacks they came from
+  and no item exists.
+- The tank's fuel is state of that tank (`ItemStack.fuel`, whole units): it stays with it in a pocket, the Lockbox, a chest, the
+  car trunk, train cargo, on a station floor, in a market stall's stock and in saves. Refill it from ordinary fuel cans (**R** with
+  the flamethrower in your hands; one whole can at a time, up to 3 cans).
+- **At the Market** every Gunsmith stocks one flamethrower (140 ties) and every Outfitter one new tank (70 ties: 60 for the tank
+  empty + 10 for its can of fuel, the price of a fuel can; 90 full). They are extra lots on top of the stalls' seeded stock, which
+  is unchanged, and they are finite like all stock: bought once, gone. A market remembered from before them gets them once
+  (`market/trade/stock.ts` `STOCK_EXTRAS`). Those stalls buy them back at their usual 55 % (a flamethrower 77, a new tank 38).
+
 ### The crafted grenades
 
 Both go in the grenade slot and are thrown like a road flare: **hold G** (or hold click with one in the hand) to ready, release to
@@ -73,6 +105,11 @@ Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
   **Scrap metal** from anything else — once, and spills what it held as real items. The train itself and everything fitted to it
   (the Lockbox, the bench, the chipper, the controls, the Save terminal, the armor) never melt; portable cargo and crafted equipment
   aboard do. The pool is a liquid film with bubbles, never a gas cloud. At most three acid pools / acid canisters at once.
+  **How the pool looks** (`weapons/acidPoolShape.ts`, `acidPoolLook.ts`, `acidPoolVisual.ts`; a look only, no rule reads it): an
+  irregular seeded outline that stays inside the circle that hurts; a wet yellow-green film with depth and a slow swirl; pale foam
+  along the edge; bubbles that swell and pop, froth beads and small spits; foam and bubbling gather where the acid is working (someone
+  standing in it, a prop it is eating, the burst); over its last seconds the film dries from the rim inward, showing the etched
+  floor under it, and is gone when the pool ends. Lit by the torch and the station lamps, with a modest glow of its own so it reads in the dark.
 - **Acid melt** (`world/acidMelt.ts`; the grenade only asks it what its pool and its stuck canister touch). What melts is decided by
   physical traits and ownership, never by a list of kinds. Station furniture, containers, machines, shelves, crates, lockers, desks and
   counters melt. So do loose props where they lie, carried props, crafted equipment and fuel carts standing in the world, **aboard the
@@ -341,6 +378,7 @@ belongs to the station it was left in. One mechanism covers every kind; the code
 | Train armour (record, kit, colliders, contact damage) | `run/trainUpgrades.ts`, `world/trainArmor.ts`, `world/trainArmorLayout.ts`, `assets/trainArmor.generated.ts`, `assets/trainArmorKit.generated.ts` |
 | Save validation | `save/validate.ts` |
 | Made recipes: grenades, train armor | `craft/recipes.ts MADE_RECIPES`, `craft/crafting.ts craftMade`, `items/grenades.ts`, `weapons/grenades.ts`, `world/grenadeModels.ts`, `world/acidMelt.ts`, `ai/scentLure.ts`, `world/trainArmor.ts` |
+| Made recipes: flamethrower, fuel tank | `craft/recipes.ts MADE_RECIPES`, `craft/crafting.ts craftMade` / `carriedRoom`, `fire/flamethrowerSpec.ts`, `fire/fuelTank.ts`, `items/gear.ts`, `market/trade/stock.ts`, `market/trade/value.ts` |
 
 QA hooks (`?qa=1`): `__LL.bench()` (each row's material chips as `needs`, the 3D previews' state as `previews`), `benchGo()`,
 `benchOpen()`, `benchCraft(kind)`, `equipment()`, `equipmentCraft(kind)`, `equipmentToPlug(uid, i)`, `sentry()`, `scanner()`,
@@ -351,6 +389,7 @@ without a craft, QA only).
 Tests: `tests/train-crafting-session.test.ts` runs the whole chain with every system real. Each part has its own files:
 `craft-*`, `train-equipment-*`, `equipment-chest-store`, `sentry-*`, `scanner-*`, `route-radar`, `train-crafting-contract`,
 `train-roof-profile`; the hold-to-drag rule and the turn: `hold-gesture`, `drag-hold-*`, `equipment-flip`; the made recipes and the
-grenades: `refinement-grenades`; the train armour: `train-armor` (seam, contact damage, colliders, layout), `train-armor-makeover`
+grenades: `refinement-grenades`; the flamethrower and its fuel tank as items: `flamethrower-economy` (never loot, the recipes, the
+craft), `flamethrower-market` (stall stock and prices), `fuel-tank-state` (the fuel through every copy, store and save); the train armour: `train-armor` (seam, contact damage, colliders, layout), `train-armor-makeover`
 (the kit's composition and cover, the cooked models, door walks and a cart through the doors, the fuel cap, the turret's field of
 fire, an existing armoured save), `train-armor-save`, `train-armor-clearance` (every level's placement).

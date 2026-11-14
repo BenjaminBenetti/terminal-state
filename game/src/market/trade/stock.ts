@@ -9,22 +9,30 @@
 // stack of the same item, else as the same stack: uid and condition kept); bought items LEAVE it.
 //
 // WHAT each stall stocks (bounded quantities, drawn from the loot-table foundation's pools — items/lootTables.ts — not a new item list):
-//  - gun: 1-2 guns (the weapons the item registry has) + 4-6 boxes of generic ammo (GLOBAL_POOL.ammo, BOX_COUNT big boxes);
+//  - gun: 1-2 guns (the weapons the item registry has) + 4-6 boxes of generic ammo (GLOBAL_POOL.ammo, BOX_COUNT big boxes) — and, not a
+//    draw, the one flamethrower (the additive lots below);
 //  - medical: 4-6 lots of HP medicine (GLOBAL_POOL.med) and limb treatments (LIMB_ECONOMY.pool);
 //  - fuel: fuel cans for one hop up to two tanks (FUEL_STALL_UNITS: FUEL.hopUnits .. 2 x FUEL.tankUnits, in FUEL.canUnits per can; never a
 //    hard-coded tank — the two-tank train's capacity when the stall was made; task gameplay-feedback-20261111 lane TRAVEL, user: "Do not
 //    couple the capacity increase to a general fuel-loot increase": the four-tank train did not grow the stall) + 1-2 lots of rail
 //    supplies (flares, cells). Ordinary cans: it is not a refuelling service;
 //  - general: 7-10 lots of food, drink, cells, flares (GLOBAL_POOL) and spare gas filters;
-//  - gear: 3-4 distinct pieces (GEAR_WEIGHTS + the gas mask), some part-used (a mask's fitted filter, an airtank's air);
+//  - gear: 3-4 distinct pieces (GEAR_WEIGHTS + the gas mask), some part-used (a mask's fitted filter, an airtank's air) — and, not a
+//    draw, the one flamethrower fuel tank (the additive lots below);
 //  - scrap: 3-5 lots of crafting materials (GLOBAL_POOL.material);
 //  - bar (task studio-market-bar-20261108-225231-01, layout version 3's bartender only): every one of the five beers (items/beers.ts BEER_IDS:
 //    BAR_BEER_COUNTS bottles each — the four timed beers 3-6, the Bock 2-4) + 1-2 small lots of ordinary drinks (GLOBAL_POOL.drink).
 // Task studio-market-bar-20261108-225231-01: a station seeds the stalls ITS layout places (versions 1 / 2: the six, in the same order and
 // with the same uids as before; version 3: + the bar, last), and its record lists the bar only when the bar holds something (a market
 // without a bar writes exactly the six as before; an old record without `bar` loads with an empty bar).
+// Task studio-flamethrower-fire-20261114-031614-01: THE ADDITIVE LOTS (STOCK_EXTRAS) — the two bench / Market-only items every market
+// stocks besides its draws: ONE flamethrower at the gun stall and ONE flamethrower fuel tank at the gear stall (a new tank: exactly its
+// recipe's fuel). They are not draws: no RNG stream is read for them (the flamethrower is not in the gun stall's weapon rows either), and
+// they are made AFTER every seeded stack, so each seed's draws, stacks and uids are what they were. Finite like all stock: bought once,
+// gone for good. A stock record remembered from before them gets them exactly ONCE (addExtras; the record's `extras` marker is written
+// in the same step as the lots, so a reload or a revisit after buying them never brings them back).
 // LOADING never throws: each stall's list goes through the Lockbox's sanitising stack loader (run/trainLockbox.ts — the same serializer
-// every store uses: mag / filter / air / armor wear are kept exactly, clamped like the Lockbox's); a uid already seen in another stall is dropped (and, task
+// every store uses: mag / filter / air / armor wear / a tank's fuel are kept exactly, clamped like the Lockbox's); a uid already seen in another stall is dropped (and, task
 // studio-market-rework-20261108-074144-01, a restart part or Rail Ties: never stock). A strict check of the saved record is save/validate.ts
 // (marketStock).
 import {Rng, hashString} from '../../core/rng';
@@ -32,11 +40,12 @@ import {ITEMS, type ItemDef} from '../../items/items';
 import {WEAPONS} from '../../weapons/weapons';
 import {isVarietyWeapon} from '../../weapons/varietyIds'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI)
 import {gearSpec, isAirtank, isFilterMask} from '../../items/gear';
+import {FLAMETHROWER_ID, FUEL_TANK_ID} from '../../fire/flamethrowerSpec';
 import {BOX_COUNT, GEAR_WEIGHTS, GLOBAL_POOL, LIMB_ECONOMY, type ItemRows, type LotRange} from '../../items/lootTables';
 import {FUEL} from '../../fuel/fuel';
 import {stackToJSON, stacksIn, type ItemStack, type StackJSON} from '../../items/inventory';
 import {TrainLockbox} from '../../run/trainLockbox';
-import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL, type MarketStallId} from '../../gen/market/marketTypes';
+import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL, type MarketShopId, type MarketStallId} from '../../gen/market/marketTypes';
 import {BEER_IDS, type BeerId} from '../../items/beers';
 import {GAS_FILTER_ID} from './value';
 
@@ -45,7 +54,22 @@ export const MARKET_STOCK_LANE = 'market.stock';
 /** Most stacks one stall's stock may hold (sold items merge first; a sale that would pass it is refused, nothing changes). */
 export const STOCK_MAX = 96;
 
-export interface MarketStockJSON { v: 1; stalls: Record<typeof MARKET_STALLS[number], StackJSON[]> & {bar?: StackJSON[]} }
+/**
+ * `extras` (task studio-flamethrower-fire-20261114-031614-01): the additive lots the stock has received (STOCK_EXTRAS_VERSION); absent = a
+ * record from before them.
+ */
+export interface MarketStockJSON { v: 1; stalls: Record<typeof MARKET_STALLS[number], StackJSON[]> & {bar?: StackJSON[]}; extras?: number }
+
+/**
+ * Task studio-flamethrower-fire-20261114-031614-01: the additive lots (see the header) — which stall stocks which bench / Market-only
+ * item. A stack of each comes from the run's stack factory as NEW (a fuel tank: FLAME_FUEL.newUnits of fuel).
+ */
+export const STOCK_EXTRAS: readonly Readonly<{stall: MarketShopId; itemId: string; count: number}>[] = Object.freeze([
+  Object.freeze({stall: 'gun', itemId: FLAMETHROWER_ID, count: 1}),
+  Object.freeze({stall: 'gear', itemId: FUEL_TANK_ID, count: 1}),
+]);
+/** The version of STOCK_EXTRAS a stock record is marked with once it has received them. */
+export const STOCK_EXTRAS_VERSION = 1;
 
 /** Task studio-market-bar-20261108-225231-01 (lane BAR): bottles of each beer the bartender starts with (inclusive ranges; finite, never refilled). */
 export const BAR_BEER_COUNTS: Readonly<Record<BeerId, LotRange>> = {
@@ -89,8 +113,10 @@ const box = (rng: Rng) => (d: ItemDef) => { const b = BOX_COUNT[d.id]; return b 
  * The weapons the item registry holds (guns first; melee half as often). Task studio-weapon-variety-production-20261109-224355-01 (lane
  * LOOT-UI, the lead's loot decision: vendor / market stock UNCHANGED): the twelve variety weapons (weapons/varietyIds.ts) are never seeded
  * here — the gunsmith keeps exactly its baseline rows and draws (they arrive only as diversified weapon finds; a player may still sell one).
+ * Task studio-flamethrower-fire-20261114-031614-01: nor a STREAM weapon (the flamethrower) — it is never a draw (the rows, and so every
+ * seed's picks, are what they were): each gun stall stocks exactly one as an additive lot (STOCK_EXTRAS).
  */
-const weaponRows = (): ItemRows => Object.values(ITEMS).filter(d => d.kind === 'weapon' && d.weaponId && WEAPONS[d.weaponId] && !isVarietyWeapon(d.id))
+const weaponRows = (): ItemRows => Object.values(ITEMS).filter(d => d.kind === 'weapon' && d.weaponId && WEAPONS[d.weaponId] && !isVarietyWeapon(d.id) && !WEAPONS[d.weaponId].stream)
   .map(d => [d.id, WEAPONS[d.weaponId!].melee ? 0.5 : 1] as const);
 
 /** What one stall stocks (the draws of its own stream; counts before merging). */
@@ -111,8 +137,8 @@ export function stallDraws(stall: MarketStallId, rng: Rng): Draw[] {
   }
 }
 
-/** A stack carries condition of its own (mag / filter / air / bag / wear): it is never merged with another. */
-const plain = (s: ItemStack) => s.mag === undefined && s.filter === undefined && s.air === undefined && !s.bag && s.armor === undefined;
+/** A stack carries condition of its own (mag / filter / air / bag / wear / a tank's fuel): it is never merged with another. */
+const plain = (s: ItemStack) => s.mag === undefined && s.filter === undefined && s.air === undefined && !s.bag && s.armor === undefined && s.fuel === undefined;
 
 /**
  * Put `piece` into a stock list: merged onto plain stacks of the same item up to stackMax, the rest as the SAME stack (uid kept). Returns
@@ -155,6 +181,8 @@ export class MarketStock {
   readonly stalls: Record<MarketStallId, ItemStack[]> = emptyStalls();
   /** Bumped by every change (the open view redraws). */
   version = 0;
+  /** The additive lots this stock has received (STOCK_EXTRAS_VERSION; 0: a record remembered from before them — addExtras gives them once). */
+  extras = 0;
 
   /**
    * The station's first stock (deterministic contents per scope + seed; uids from `make`) for the stalls its layout places (`stalls`,
@@ -176,7 +204,25 @@ export class MarketStock {
         }
       }
     }
+    st.addExtras(make, stalls); // (after every seeded stack: the draws above and their uids are untouched)
     return st;
+  }
+
+  /**
+   * Task studio-flamethrower-fire-20261114-031614-01: give this stock its additive lots (STOCK_EXTRAS) unless it already had them — the
+   * seed's last step, and the ONE top-up of a record remembered from before them (the trade controller calls it once the record is
+   * loaded and writes the record at once). `stalls`: the stalls this station has (a lot whose stall it has not is skipped). All or
+   * nothing: if a stall cannot take its lot (STOCK_MAX) nothing is added and the marker stays unset, so a later build tries again —
+   * never a part of them twice. Returns whether the stock changed.
+   */
+  addExtras(make: MakeStack, stalls: readonly MarketStallId[] = MARKET_STALLS): boolean {
+    if (this.extras >= STOCK_EXTRAS_VERSION) return false;
+    const lots = STOCK_EXTRAS.filter(x => stalls.includes(x.stall) && ITEMS[x.itemId]);
+    if (lots.some(x => this.stalls[x.stall].length + lots.filter(y => y.stall === x.stall).length > STOCK_MAX)) return false;
+    for (const x of lots) this.stalls[x.stall].push(make(x.itemId, x.count));
+    this.extras = STOCK_EXTRAS_VERSION;
+    this.version++;
+    return true;
   }
 
   /** A saved record back as live stacks (sanitised; never throws; a stall missing from it is empty). */
@@ -196,6 +242,8 @@ export class MarketStock {
         st.stalls[stall].push(s);
       }
     }
+    const extras = j && typeof j === 'object' ? (j as {extras?: unknown}).extras : undefined;
+    if (typeof extras === 'number' && Number.isInteger(extras) && extras > 0) st.extras = Math.min(extras, STOCK_EXTRAS_VERSION); // (absent / malformed: a record from before the additive lots)
     return st;
   }
 
@@ -204,7 +252,8 @@ export class MarketStock {
     for (const s of MARKET_STALLS) stalls[s] = this.stalls[s].map(x => stackToJSON(x)!);
     // (the bar only when it holds something: lossless — an absent bar loads empty — and a market without a bar writes the six as before)
     if (this.stalls[BAR_STALL].length) stalls[BAR_STALL] = this.stalls[BAR_STALL].map(x => stackToJSON(x)!);
-    return {v: 1, stalls};
+    // (the additive lots' marker only once they were given: a record from before them is written back exactly as it was)
+    return this.extras > 0 ? {v: 1, stalls, extras: this.extras} : {v: 1, stalls};
   }
 
   /** Every stock stack (all stalls). */

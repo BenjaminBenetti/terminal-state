@@ -29,6 +29,7 @@ import {startIR, type IrJob} from './reverb';
 import type {ImpactFamily} from '../physics/chunks';
 import {VOCAL_GATE, vocalGain} from '../ai/vocalReach'; // Task office-overhaul-20261030 (lane AUDIO): enemy vocals by navigable route
 import {STRAINER_SWING_PEAK_S} from './manifest.strainer.generated'; // lane AUDIO (strainer squish set): each swing clip's peak time
+import {FIRE_CUE_GAIN} from './manifest.fire.generated'; // task studio-flamethrower-fire-20261114-031614-01 (lane AUDIO): the flame / fire set's mix gains
 import {PANTRY_SOUND} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the pantry items' existing takes
 
 /**
@@ -167,6 +168,13 @@ export const CUE_GAIN: Record<CueId, number> = {
   // -21 (about an enemy attack), the spin-up / wind-down -26 (their running parts meet the motor loop without a step). First estimates for
   // the ear pass (not auditioned).
   chipperMotor: 0.42, chipperGrind: 0.52, chipperFeed: 0.6, chipperStart: 0.27, chipperStop: 0.32,
+  // Task studio-flamethrower-fire-20261114-031614-01 (lane AUDIO, tools/audio-pipeline/fire-build.mjs; audio/flameAudio.ts): the
+  // flamethrower + fire set. One-shots peak -1 dBFS (a cue's takes matched in loudness), loops RMS -20 dBFS. These gains ARE the
+  // build's numbers (derivatives/audio-fire.json mixCalibration, loudness AT THE SOURCE): the roar loop -24 LUFS integrated (the
+  // player's own weapon: 1 LU over the chipper's wet grind, 5.5 under a zombie groan's loudest 400 ms), the ignition whoomp -20 (about
+  // a zombie attack), the cut-off -26, one fire's bed loop -28 (the chipper motor's bed level), catching fire -22, the collapse hit
+  // -20 with the ember crackle layer at -25. First estimates for the ear pass (not auditioned).
+  ...FIRE_CUE_GAIN,
   // (task studio-skyways-level-20261106-054448-01: the prize car; round 2, task skyways-vehicle-20261107 lane AUDIO — see CAR_AUDIO: the
   // engine loops are RMS -20 dBFS mid-range layers now (idle 0.42 -> 0.55, drive 0.5 -> 0.6); start / brake peak -1 dBFS, the reverse whine
   // loop RMS -20 dBFS (a layer over the engine))
@@ -431,6 +439,8 @@ interface FlareLoop {
   pos: Pos; next: number; stopped: boolean;
   /** Task reactor-build-20261101: audible range of this loop (default FLARE_LOOP.far; a machine loop: MACHINE_LOOP.far). */
   far?: number;
+  /** Task studio-flamethrower-fire-20261114-031614-01 (lane AUDIO): a machine loop the full pool passes over when it makes room. */
+  keep?: boolean;
 }
 /**
  * Task reactor-build-20261101 (primary): the Reactor's MACHINE loops (auxiliary generator running, a zone's extraction fans, the
@@ -438,17 +448,22 @@ interface FlareLoop {
  * (fade -> level -> air / occlusion lowpass -> panner -> master + reverb send) with a bigger reference distance: machines are loud.
  * Bounded: at most MACHINE_LOOP.max loops (the oldest fades to make room); every loop stops on a new world (setWorld).
  */
-export const MACHINE_LOOP = {max: 12, ref: 4, rolloff: 1, fadeIn: 1.2, fadeOut: 1.5, send: 0.3, far: 70, maxDist: 80} as const;
+export const MACHINE_LOOP = {max: 16, ref: 4, rolloff: 1, fadeIn: 1.2, fadeOut: 1.5, send: 0.3, far: 70, maxDist: 80} as const;
 // (task reactor-playtest-round2-20261102, lane STARTUP: max 6 -> 10 — three running generators + three fan zones already filled 6, so the
 // restarted core's hum evicted a generator loop that re-requested itself and evicted the next; the startup director adds at most three
 // bounded loops: the machine bed, the rod drive while the rods move, one beacon motor.)
 // (task studio-corpse-chipper-fuel-20261110-235304-01, lane AUDIO: max 10 -> 12 — the train chipper adds at most two bounded loops, its
 // motor and its wet grind, and re-requests a stopped one like the generators do: at 10 a full Reactor would evict back and forth.)
+// (task studio-flamethrower-fire-20261114-031614-01, lane AUDIO: max 12 -> 16 — the flamethrower adds at most four bounded loops, its
+// roar and three fire beds (fire/sound.ts FIRE_VOICES; audio/flameAudio.ts), which re-request a stopped one too: at 12 a full Reactor
+// with the chipper running would evict back and forth. The roar is requested with `keep`: the pool makes room with another loop first.)
 export type MachineLoopCue = 'reactorGeneratorLoop' | 'reactorFanLoop' | 'reactorHum' | 'reactorBed' | 'reactorRodLoop' | 'reactorBeacon'
-  | 'chipperMotor' | 'chipperGrind';
+  | 'chipperMotor' | 'chipperGrind'
+  | 'flameRoar' | 'fireBurn';
 export type MachineCue = 'reactorGeneratorStart' | 'reactorBreaker' | 'reactorFuse' | 'reactorValve' | 'reactorPump' | 'reactorStartup'
   | 'reactorSurge' | 'reactorOnline' | 'reactorRodStop' | 'reactorStage' | 'reactorBeam'
-  | 'chipperFeed' | 'chipperStart' | 'chipperStop';
+  | 'chipperFeed' | 'chipperStart' | 'chipperStop'
+  | 'flameOut' | 'fireCatch' | 'fireCollapse' | 'fireEmbers';
 /** Task reactor-playtest-round2-20261102 (lane STARTUP): a machine one-shot's mix (gain x CUE_GAIN, playback rate, start delay s, panner
  *  reference distance / audible range m, priority: 2 = never dropped by the voice cap — the win's surge / ONLINE impact).
  *  Task reactor-surface-ending-20261102 (lane AUDIO): + an optional filter on the clip (the beam ignition is high-passed: processing). */
@@ -795,6 +810,7 @@ export class Sfx {
   // Task studio-beta-train-fuel-system-20261106-024923-01 (lane PORT): the sounding stall / pour (one each) and the cart rolling channel
   private stallVoice: Voice | null = null;
   private pourVoice: Voice | null = null;
+  private igniteVoice: Voice | null = null; // task studio-flamethrower-fire-20261114-031614-01 (lane AUDIO): the one jet ignition that may be sounding
   private cart: {src: AudioBufferSourceNode; fade: GainNode; lp: BiquadFilterNode; pan: PannerNode; k: number; idle: ReturnType<typeof setTimeout> | null} | null = null;
   private cartStats = {starts: 0, stops: 0};
   // Task skyways-level-20261106 (lane CAR2): the prize car's engine channel (both loops; null while nobody drives) + counters
@@ -2129,14 +2145,16 @@ export class Sfx {
    * Task reactor-build-20261101 (primary): a Reactor machine's spatial running loop at a world point (a running generator, a zone's
    * extraction fans, the restarted core's hum). Returns a handle like flareBurnStart (no-op when audio is not running or the clip is
    * missing). At most MACHINE_LOOP.max (the oldest fades to make room); all stop on a new world.
+   * (Task studio-flamethrower-fire-20261114-031614-01, lane AUDIO: `keep` — the held flamethrower's roar — is passed over when the
+   * full pool makes room, as long as any other loop can go.)
    */
-  reactorLoop(cue: MachineLoopCue, x: number, y: number, z: number, o: {ref?: number; far?: number; level?: number; rate?: number} = {}): MachineLoopHandle | null {
+  reactorLoop(cue: MachineLoopCue, x: number, y: number, z: number, o: {ref?: number; far?: number; level?: number; rate?: number; keep?: boolean} = {}): MachineLoopHandle | null {
     const ctx = this.live;
     if (!ctx) return null;
     const clip = this.bank.pick(cue);
     if (!clip) return null;
     this.machineLoops = this.machineLoops.filter(l => !l.stopped);
-    while (this.machineLoops.length >= MACHINE_LOOP.max) this.endLoop(this.machineLoops[0], 0.4);
+    while (this.machineLoops.length >= MACHINE_LOOP.max) this.endLoop(this.machineLoops.find(l => !l.keep) ?? this.machineLoops[0], 0.4);
     const now = ctx.currentTime;
     const src = ctx.createBufferSource();
     src.buffer = clip.buffer;
@@ -2162,7 +2180,7 @@ export class Sfx {
       filter.connect(sn).connect(this.reverbIn);
       nodes.push(sn);
     }
-    const loop: FlareLoop = {src, fade, level, filter, panner, nodes, pos: {x, y, z}, next: 0, stopped: false, far: o.far ?? MACHINE_LOOP.far};
+    const loop: FlareLoop = {src, fade, level, filter, panner, nodes, pos: {x, y, z}, next: 0, stopped: false, far: o.far ?? MACHINE_LOOP.far, keep: !!o.keep};
     this.setPannerPos(panner, x, y, z);
     this.loopFilter(loop, true);
     src.onended = () => { for (const n of loop.nodes) { try { n.disconnect(); } catch { /* already gone */ } } loop.nodes.length = 0; };
@@ -2192,6 +2210,27 @@ export class Sfx {
         loop.src.playbackRate.setTargetAtTime(jit * Math.max(0.25, Math.min(4, r)), c.currentTime, Math.max(0.01, tauS));
       },
     };
+  }
+
+  /**
+   * Task studio-flamethrower-fire-20261114-031614-01 (lane AUDIO): the flamethrower's jet lighting, at the muzzle — the one machine
+   * one-shot that can be CUT (its take roars on for ~0.7 s after the whoomp and hands over to the roar loop; a trigger released inside
+   * it must not leave that roar sounding). An ignition still sounding is cut first (never two). Returns the clip's length (s; 0 =
+   * nothing played: paused / not started / culled / clip missing). stopFlameIgnite() fades it out. The rest of the set plays through
+   * reactorCue / reactorLoop (audio/flameAudio.ts).
+   */
+  flameIgnite(x: number, y: number, z: number, o: MachineCueOpts = {}): number {
+    this.cutVoice(this.igniteVoice, 0.04);
+    const v = this.voice({at: {x, y, z}, ref: o.ref ?? MACHINE_LOOP.ref, rolloff: MACHINE_LOOP.rolloff, send: MACHINE_LOOP.send, pri: o.pri ?? 1, maxDist: o.maxDist ?? MACHINE_LOOP.maxDist});
+    const clip = this.play(v, 'flameIgnite', {jitter: 0.02, gainJitter: 0.5, gain: o.gain, rate: o.rate});
+    this.igniteVoice = clip ? v : null;
+    return clip ? clip.dur : 0;
+  }
+
+  /** A sounding jet ignition fades out over `fadeS` (the trigger was released inside it). Plays nothing. */
+  stopFlameIgnite(fadeS = 0.1): void {
+    this.cutVoice(this.igniteVoice, fadeS);
+    this.igniteVoice = null;
   }
 
   /**
@@ -2243,13 +2282,16 @@ export class Sfx {
   /**
    * One fuel can poured into the train's filler neck (at the hands). A pour still sounding is cut first. Returns the clip's length (s;
    * 0 = nothing played). stopFuelPour() cuts it (a cancelled pour).
+   * (Task studio-flamethrower-fire-20261114-031614-01, lane AUDIO: `maxS` — a pour shorter than the take, the worn flamethrower tank's
+   * refill, fades out there; absent = the whole take, as before.)
    */
-  fuelPour(): number {
+  fuelPour(maxS?: number): number {
     this.cutVoice(this.pourVoice, 0.05);
     const v = this.voice({send: FUEL_AUDIO.pour.send, pri: 1});
-    const clip = this.play(v, 'fuelPour', {jitter: 0.03, gainJitter: 0.8});
+    const cut = maxS !== undefined && Number.isFinite(maxS) && maxS > 0;
+    const clip = this.play(v, 'fuelPour', cut ? {jitter: 0.03, gainJitter: 0.8, maxDur: maxS, fadeOut: 0.15} : {jitter: 0.03, gainJitter: 0.8});
     this.pourVoice = clip ? v : null;
-    return clip ? clip.dur : 0;
+    return clip ? (cut ? Math.min(clip.dur, maxS) : clip.dur) : 0;
   }
 
   /** A sounding pour fades out (the pour was cancelled: nothing poured). Plays nothing. */

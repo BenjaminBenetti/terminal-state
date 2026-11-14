@@ -88,9 +88,16 @@ describe('the bar\'s stock: seeded once per station, remembered, never refilled'
     expect(Object.keys(rec.stalls)).toEqual([...MARKET_STALLS]);
     const make = () => { const inv = new Inventory(); return (id: string, n: number) => inv.makeStack(id, n); };
     const six = MarketStock.seed('st-a', 99, make()), seven = MarketStock.seed('st-a', 99, make(), [...MARKET_STALLS_ALL]);
-    for (const s of MARKET_STALLS) expect(JSON.stringify(seven.stalls[s]), s).toBe(JSON.stringify(six.stalls[s]));
+    // (re-pin, task studio-flamethrower-fire-20261114-031614-01: every SEEDED stack of the six is the same with or without the bar — same order, same
+    // uids. The two additive lots (the flamethrower, its fuel tank) are made after every seeded stack, the bar's included, so they are
+    // the same items at the end of the same lists with the uids that follow; the record carries their marker `extras`)
+    const extra = (x: {itemId: string}) => x.itemId === 'flamethrower' || x.itemId === 'fuel_tank';
+    for (const s of MARKET_STALLS) {
+      expect(JSON.stringify(seven.stalls[s].filter(x => !extra(x))), s).toBe(JSON.stringify(six.stalls[s].filter(x => !extra(x))));
+      expect(seven.stalls[s].filter(extra).map(x => [x.itemId, x.count, x.mag, x.fuel]), s).toEqual(six.stalls[s].filter(extra).map(x => [x.itemId, x.count, x.mag, x.fuel]));
+    }
     expect(six.stalls.bar).toEqual([]);
-    expect(JSON.stringify(six.toJSON())).toBe(JSON.stringify({v: 1, stalls: Object.fromEntries(MARKET_STALLS.map(s => [s, six.toJSON().stalls[s]]))}));
+    expect(JSON.stringify(six.toJSON())).toBe(JSON.stringify({v: 1, stalls: Object.fromEntries(MARKET_STALLS.map(s => [s, six.toJSON().stalls[s]])), extras: 1}));
     expect(Object.keys(seven.toJSON().stalls)).toEqual([...MARKET_STALLS_ALL]);
     // the given order never matters (the fixed order: the bar last)
     expect(JSON.stringify(MarketStock.seed('st-a', 99, make(), [BAR_STALL, ...MARKET_STALLS]).toJSON())).toBe(JSON.stringify(seven.toJSON()));

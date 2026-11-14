@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 87742,
-      "sha256": "9445a0420a99d3027914e55f98e3945d5b509074241b67db25ec2b2694e21f5b"
+      "bytes": 91651,
+      "sha256": "41860c479257e9186e0a5368b9f2c0f36896a3e6b9eb4e9d3dcf5703480f2bc3"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 3745,
-      "sha256": "0c0151323cf2e50134d308ddab459296b8a077465a80823839671b4f6e133372"
+      "bytes": 3978,
+      "sha256": "4baa57b9f98ac652b92577406cba6324b26fcdf6d27e8a14ca0d6a956edb2ba7"
     },
     {
       "path": "assets/audio/bb-cackle-01.mp3",
@@ -477,6 +477,56 @@
       "path": "assets/audio/eat-noodles-01.mp3",
       "bytes": 36049,
       "sha256": "57ee1a3e5f17c558dae4aee20d44dabfd84b43709da68af602bd7c13e577c9fa"
+    },
+    {
+      "path": "assets/audio/fire-burn-loop.mp3",
+      "bytes": 72359,
+      "sha256": "c394910102e70b611ec21e8d3dd4358aa8f6ef8132709bb651c6af6fd649db85"
+    },
+    {
+      "path": "assets/audio/fire-catch-01.mp3",
+      "bytes": 8777,
+      "sha256": "888a8ee074e4a72d30ba3c104ea0faaa9e7187112cbcbafbad0cd1d7e9872d83"
+    },
+    {
+      "path": "assets/audio/fire-catch-02.mp3",
+      "bytes": 10971,
+      "sha256": "3b2f46ca0de041eae98e000ad1a23d3ddff22ffddf13aa8956c15bbf67fcbda4"
+    },
+    {
+      "path": "assets/audio/fire-collapse-01.mp3",
+      "bytes": 7837,
+      "sha256": "b6c774e43325fc6d6fefb531aa3709fcf4cb371c7c12823cae1014171de745bd"
+    },
+    {
+      "path": "assets/audio/fire-embers-01.mp3",
+      "bytes": 17554,
+      "sha256": "45d741edd186712d0a9ebae096104aef9af18795c61d32f9809fe0a1a5ae3f42"
+    },
+    {
+      "path": "assets/audio/fire-flame-ignite-01.mp3",
+      "bytes": 10971,
+      "sha256": "1cc4dd1221cd40f002d4fa16a90dd4af3815f7b030fb8263cbd8aba3e9155c4e"
+    },
+    {
+      "path": "assets/audio/fire-flame-ignite-02.mp3",
+      "bytes": 10971,
+      "sha256": "f2992ab60cfbf21b783a13d7dd1c61c66d3c9bd3a6fcd8792abcc49aaf6af066"
+    },
+    {
+      "path": "assets/audio/fire-flame-out-01.mp3",
+      "bytes": 12225,
+      "sha256": "f8b4b2a47bdbb1db5c1c1b4191b77fbd4fb0ef18796ee47f7e1d82e458fad9c6"
+    },
+    {
+      "path": "assets/audio/fire-flame-out-02.mp3",
+      "bytes": 5956,
+      "sha256": "f16c6bdaed198ed701b5237fc7d4dbda138b792ae0fe10e9a2e1430e8be83e48"
+    },
+    {
+      "path": "assets/audio/fire-flame-roar-loop.mp3",
+      "bytes": 57887,
+      "sha256": "872a5f5514b829e18cf11632c44c30181362a53af659692ddd11c79fa4df0df2"
     },
     {
       "path": "assets/audio/flashlight-click-01.mp3",
@@ -1969,6 +2019,11 @@
       "sha256": "60204bf7da17a1eee224268875d11ac91d329933e88cedc3eb4c4058ee3b2212"
     },
     {
+      "path": "assets/derivatives/audio-fire.json",
+      "bytes": 46753,
+      "sha256": "45a01ff4da78b682084cefa7d28267032bc3dc120fae9fb900e6011fe84fb04f"
+    },
+    {
       "path": "assets/derivatives/audio-fuel.json",
       "bytes": 5049,
       "sha256": "fb5f0ddc3985bfc038af63e781ce88e7a5b3a9cb8e9f9931a3d786981193cf0b"
@@ -2262,6 +2317,11 @@
       "path": "assets/derivatives/gear-airtank-backpack.json",
       "bytes": 3636,
       "sha256": "bd17235b10a7d47d574950d56c67764c467b23bab147248194d4dba5e76101f3"
+    },
+    {
+      "path": "assets/derivatives/gear-fuel-tank.json",
+      "bytes": 7748,
+      "sha256": "9bf215c2065286d5b88480a93dbe6dbd4de02aa307df9bf0fd3b1c596245c00f"
     },
     {
       "path": "assets/derivatives/item-bubble-tea.json",
@@ -2969,6 +3029,11 @@
       "sha256": "b6703fcbaf5fce1ce404bdfa9ddf68f9f64937f7c0ce6d34e51b7ff76667d4db"
     },
     {
+      "path": "assets/derivatives/weapon-flamethrower.json",
+      "bytes": 10404,
+      "sha256": "02a93765405f85972c30ffccae89c79416cbb8c40b4cd7099934e537b218905d"
+    },
+    {
       "path": "assets/derivatives/weapon-turnstile.json",
       "bytes": 18079,
       "sha256": "da6c54b06c70b3f09c3ea1cba28d19da5e0538cf041e4d2f228d7c7d0e9f1318"
@@ -3332,6 +3397,11 @@
       "path": "assets/models/gear-airtank-backpack.glb",
       "bytes": 832924,
       "sha256": "f8eb54ab6c92cf10e796b6ca32c1e926ce938fc0fad75ffd61d96c4221873981"
+    },
+    {
+      "path": "assets/models/gear-fuel-tank.glb",
+      "bytes": 1117328,
+      "sha256": "5aabf303a01226bb36cbeb3c4631da48c838ec0e5d1ecba3cc3aa3c4032f85c2"
     },
     {
       "path": "assets/models/gun-locker.glb",
@@ -5482,6 +5552,11 @@
       "path": "assets/models/weapon-fire-axe.glb",
       "bytes": 980448,
       "sha256": "2514a89c7bd05deafc404530d863a3856351913be9a2c2b65fa74a9ba146c2ff"
+    },
+    {
+      "path": "assets/models/weapon-flamethrower.glb",
+      "bytes": 4784340,
+      "sha256": "9ef7a520c30e0907539fd235af3a92096c972ecfb1befef6d43c4a66d0e70d89"
     },
     {
       "path": "assets/models/weapon-hornet.glb",
