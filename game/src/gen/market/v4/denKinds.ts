@@ -66,6 +66,9 @@ export const CORPSE_DEN_OPEN_AUDIT: readonly {kind: CorpseDenKind; cls: 'none'; 
   {kind: CORPSE_BOOTH_KIND, cls: 'none', role: 'equipment', how: 'barred trading screen over a counter on a solid riveted plate (no door, lid or drawer; nothing is stored in it)'},
 ];
 
-/** Rule 5 record: real size (W x H x D) and contact (the cook's scale check rewrites the numbers with the cooked models'). */
-export const CORPSE_DEN_SCALE = `chute ${CORPSE_SHOP_KIT.chute.dims.join(' x ')} m (rim ${CORPSE_SHOP_KIT.chute.rimY} m; grounded on its four corner feet); ` +
-  `booth ${CORPSE_SHOP_KIT.booth.dims.join(' x ')} m (counter top ${CORPSE_SHOP_KIT.booth.counterY} m; grounded on its posts and plate)`;
+/**
+ * Rule 5 record: real size (W x H x D), the measured surfaces and contact of the cooked models (tools/asset-pipeline/props/
+ * scale-check.mjs --kind corpseChute / corpseBooth beside the runtime 'lastshift' zombie, 1.78 m at scale 1; viewed 2026-11-14).
+ */
+export const CORPSE_DEN_SCALE = `chute ${CORPSE_SHOP_KIT.chute.dims.join(' x ')} m (hopper rim ${CORPSE_SHOP_KIT.chute.rimY} m, above the knee; its open lid stands along the back edge to the full height; grounded on its four corner foot plates); ` +
+  `booth ${CORPSE_SHOP_KIT.booth.dims.join(' x ')} m (counter top ${CORPSE_SHOP_KIT.booth.counterY} m, sloping a few cm down toward the customer; grounded on its two side posts' foot plates, the plate's bottom rail along the floor)`;
