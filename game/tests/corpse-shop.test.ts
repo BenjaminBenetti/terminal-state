@@ -1,7 +1,7 @@
 // Task studio-corpse-market-shop-20261114-031614-01: THE MARKET CORPSE BUYER — the pure sale record (market/corpseShop/shopState.ts), the
 // runtime on a fake host with a hand-made den (market/corpseShop/corpseShop.ts: the chute sink, the swallow, the physical Rail Ties drop that
 // becomes ONE world pickup, a load mid-sale, the hostile booth, the loot-spill seam, the look-at line), the buyer actor (the real cooked
-// GLB: his post and facing, Idle / Greet / Work, dark while hostile, the bounded stare) and the save validation's one-body-one-place
+// GLB: his post and facing, Idle / Greet / Work, out of sight while hostile, the bounded stare) and the save validation's one-body-one-place
 // checks over the sale and the bought ids.
 
 import {beforeAll, describe, expect, it} from 'vitest';
@@ -380,7 +380,7 @@ describe('corpse buyer: the actor (the real cooked buyer through the unchanged H
   const facing = (o: THREE.Object3D) => { o.updateWorldMatrix(true, false); const f = new THREE.Vector3(0, 0, 1).transformDirection(o.matrixWorld); return Math.atan2(f.x, f.z); };
   const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
-  it('stands behind the booth facing the customer, idles, greets a sale, works the count, goes dark while hostile', () => {
+  it('stands behind the booth facing the customer, idles, greets a sale, works the count, steps out of sight while hostile', () => {
     const s = shopHost({models: {[CORPSE_BUYER_MODEL.key]: gltf}});
     for (const b of s.h.sectionHooks as {build(l: unknown): void}[]) b.build(s.h.layout);
     s.frames(0.1);
@@ -398,7 +398,7 @@ describe('corpse buyer: the actor (the real cooked buyer through the unchanged H
     expect(a.loop).toBe('Work');
     s.frames((CORPSE_SHOP.saleMs - CORPSE_SHOP.swallowMs) / 1000 + 2);
     expect(s.shop.qa()).toMatchObject({buyerClip: 'Idle', record: {done: 1, job: null}});
-    // the settlement turns hostile: the booth goes dark (he is never a fighter), back at his post after
+    // the settlement turns hostile: he steps out of sight (he is never a fighter), back at his post after
     s.h.marketHostility.hostile = true;
     s.frames(0.1);
     expect(s.shop.qa().buyerVisible).toBe(false);

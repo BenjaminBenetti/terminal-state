@@ -22,7 +22,7 @@
 // completes the sale and, in the SAME synchronous step, the bundle becomes a real world pickup of CORPSE_SHOP.price `rail_ties` at that
 // spot (PickupManager.add: saved with the station's loose items like any dropped item) — never a wallet, never a teleport into the
 // inventory. Several unclaimed bundles lie side by side (a few seeded spots round den.booth.tray).
-// The settlement turned hostile (market/hostility.ts): the booth goes dark (the buyer steps out of sight) and offers are refused; a sale
+// The settlement turned hostile (market/hostility.ts): the buyer steps out of sight (the booth is left empty) and offers are refused; a sale
 // already running still completes. The buyer is NOT one of the market's people (never a combat target, never in their roster): he stays
 // behind his welded booth, which takes the bullets (a solid prop box).
 
@@ -535,7 +535,7 @@ export class CorpseShop {
     if (phase === 'drop') this.poseTies(uid, ms);
   }
 
-  /** The buyer: dark (out of sight) while the settlement is hostile; counting during a sale; always watching the player. */
+  /** The buyer: out of sight while the settlement is hostile; counting during a sale; always watching the player. */
   private animateBuyer(dt: number, phase: 'swallow' | 'count' | 'drop' | null): void {
     const a = this.buyer;
     if (!a) return;

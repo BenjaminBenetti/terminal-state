@@ -105,7 +105,7 @@ export const copyCorpseShop = (c: CorpseShopJSON): CorpseShopJSON =>
 export const CORPSE_SHOP_TEXT = {
   sell: `<b>[E]</b> Drop the body down the chute · ${CORPSE_SHOP.price} Rail Ties`,
   busy: 'He is still dealing with the last one — wait',
-  closed: 'The booth is dark — nobody is buying now',
+  closed: 'The booth is empty — nobody is buying now',
   notUndead: 'He only buys whole dead undead bodies',
   already: 'He already bought that one',
   sold: `Body sold — ${CORPSE_SHOP.price} Rail Ties dropped at the booth`,

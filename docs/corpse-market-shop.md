@@ -41,8 +41,8 @@ one — wait"); the player keeps the refused body.
 - **Never accepted:** living enemies (only dead bodies can be carried), Market people and other non-undead humans, animals (the rat/dog
   is not undead), the player, and loose parts (flesh chunks, severed limbs, ragdoll pieces are not bodies; nothing but a whole body
   record in the hands is ever offered). A defensive check refuses any non-undead record with "He only buys whole dead undead bodies".
-- **Hostile settlement:** if the Market has turned on the player (`market/hostility.ts`), the booth goes dark (the buyer steps out of
-  sight) and offers are refused ("The booth is dark — nobody is buying now"). A sale already running still pays. The buyer is not one
+- **Hostile settlement:** if the Market has turned on the player (`market/hostility.ts`), the buyer steps out of sight (the booth is
+  left empty) and offers are refused ("The booth is empty — nobody is buying now"). A sale already running still pays. The buyer is not one
   of the Market's people: he is never a combat target, never in their roster, and his welded booth takes any bullets.
 
 ## Records, saves and compatibility
@@ -101,7 +101,7 @@ Scale checks beside a runtime zombie, dimensions and contacts: `docs/prop-afford
 
 - `game/tests/corpse-shop.test.ts`: the sale record, the runtime on a fake host (sink, the shaft mouth, swallow, one pickup per sale,
   resume mid-sale, hostile booth, the spill seam, the look-at line), the buyer actor with the real cooked model (his post and facing,
-  Idle / Greet / Work, dark while hostile, the bounded stare), and save validation.
+  Idle / Greet / Work, out of sight while hostile, the bounded stare), and save validation.
 - `game/tests/corpse-bb-carry.test.ts`: BB's body with the real model, corpse system and chipper (pickup, shoulder anchor, chipper
   refusal, cargo, platform drop, grounded rebuild).
 - `game/tests/market-den-layout.test.ts`: the version 4 den (layout lane): parity with version 3, the sealed back room, reachability
