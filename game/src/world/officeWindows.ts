@@ -20,6 +20,7 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {mulberry32} from '../core/rng';
 import {canvasTexture} from './canvasTextures';
 import {SurfaceNodeMaterial, cloneSurfaceMaterial, worldMapped, type WorldMaterials} from './materials';
+import {tagReflect} from '../render/reflectTag';
 import {shapeMaterial} from './shapeMaterials';
 import {hash01, sideNormal, windowYs, type Rect2, type TowerInfo, type WindowSpan} from './towerShared';
 
@@ -154,6 +155,7 @@ export function crackedGlassMaterial(tex: THREE.Texture | null): SurfaceNodeMate
     // Task office-overhaul-20261030 (lane ARCH): a faint green-grey cast (the murk outside), was 0xdfe6e4
     m = worldMapped(new SurfaceNodeMaterial({map: t, color: 0xd3ddcf, transparent: true, opacity: 0.85, depthWrite: false, roughness: 0.3, metalness: 0.1, side: THREE.DoubleSide}), {span: [1.6, 1.6], macro: 0.08});
     m.name = 'tower-glass-cracked';
+    tagReflect(m, 'glass'); // task studio-baked-lighting-reflections-20261114-050258-01: a pane shows the cached reflection probes
     glassMats.set(t, m);
   }
   return m;

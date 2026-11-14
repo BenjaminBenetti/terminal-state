@@ -36,6 +36,10 @@ import {LF, activeLightField, bindLightField, installLightFieldNode, setLightFie
 import {addNodeHook} from '../render/nodeHooks';
 import {stationLevels} from './levelGeometry';
 import {mallSkyField} from './mallSkylight'; // Task track3-eaton-centre-20261031 (lane ARCH): daylight through the mall's glass roof
+// Task studio-baked-lighting-reflections-20261114-050258-01: cached reflection probes on metal and glass (a station built with them)
+import {ReflectionProbeVolume, activeReflectionProbes, bindReflectionProbes, installReflectNode, stationReflectLight} from './reflectionNode';
+import type {BakedProbes} from './reflectionProbes';
+import type {StationBakeInput} from './enhancedLightingRuntime';
 import {CELL} from '../gen/grid';
 
 /**
@@ -112,13 +116,30 @@ export interface StationLightingOptions {
    * (the identical bake of the same source and parameters, run in paced steps); absent = baked here.
    */
   baked?: BakedField;
+  /**
+   * Task studio-baked-lighting-reflections-20261114-050258-01: this station's baked reflection probes (world/reflectionProbes.ts; the
+   * game's enhanced lighting makes or reads them: world/enhancedLightingRuntime.ts). Absent / null / none in it: no reflections.
+   */
+  probes?: BakedProbes | null;
 }
 
 /** The light field source of a station (StationLighting's bake input). */
-function stationFieldSource(layout: StationLayout): FieldSource {
+export function stationFieldSource(layout: StationLayout): FieldSource {
   // Iteration 08: one level slot per station level (upper deck / main / lower crossing).
   // Task track3-eaton-centre-20261031 (lane ARCH): + the mall's daylight through the glass roof ({} for every other level).
   return {grid: layout.grid, lights: layout.lights, trenchFloorY: layout.trench.floorY, levels: stationLevels(layout), ...mallSkyField(layout, CELL)};
+}
+
+/**
+ * Task studio-baked-lighting-reflections-20261114-050258-01: what a station's ENHANCED bake reads (world/enhancedLightingRuntime.ts) —
+ * the very source and parameters StationLighting bakes with.
+ */
+export function stationBakeInput(layout: StationLayout, opts: StationLightingOptions = {}): StationBakeInput {
+  const roof = layout.mall?.roof;
+  return {
+    source: stationFieldSource(layout), params: StationLighting.fieldParams(opts), reactor: !!layout.reactor,
+    extra: roof ? JSON.stringify([roof.springY, roof.outline, roof.polygon ?? null]) : '',
+  };
 }
 
 /**
@@ -271,8 +292,12 @@ const tmpColor = new THREE.Color();
 export class StationLighting {
   readonly field: BakedField;
   readonly volume: LightFieldVolume;
-  /** Iteration 13: the session's single light-field scene light (world/lightFieldNode.ts). */
+  /** Iteration 13: the session's single light-field scene light (world/lightFieldNode.ts; the reflecting one with probes). */
   readonly fieldLight: LightFieldLight;
+  /** The station's reflection probes on the GPU (null: none — the plain field light). */
+  readonly reflections: ReflectionProbeVolume | null;
+  /** Why probes that were handed in are not used (null: they are, or none were given). */
+  readonly reflectionsSkipped: string | null;
   /** Soft glow cards, one per working fixture (camera-facing, additive). */
   readonly glow: THREE.InstancedMesh | null;
   /** Kept for API compatibility: no pooled lights exist any more. */
@@ -304,9 +329,17 @@ export class StationLighting {
     this.volume = new LightFieldVolume(this.field);
     // Iteration 13: TSL lighting node on the persistent field light; this station's texture on the global nodes.
     this.registered = installLightFieldNode(opts.renderer);
-    this.fieldLight = stationFieldLight();
+    // Task studio-baked-lighting-reflections-20261114-050258-01: a station given usable probes puts the REFLECTING field light in the
+    // scene (world/reflectionNode.ts); every other station keeps the plain one, and with it exactly the programs it always had.
+    const p = opts.probes;
+    this.reflectionsSkipped = !p || p.count < 1 ? null
+      : Math.max(p.gridW, p.gridH, p.gridDepth) > max ? `the probe grid (${p.gridW} x ${p.gridH}) is larger than this renderer's 3D textures (${max})`
+        : !installReflectNode(opts.renderer) ? 'the renderer has no node library' : null;
+    this.reflections = p && p.count > 0 && !this.reflectionsSkipped ? new ReflectionProbeVolume(p) : null;
+    this.fieldLight = this.reflections ? stationReflectLight() : stationFieldLight();
     scene.add(this.fieldLight);
     bindLightField(this.volume);
+    bindReflectionProbes(this.reflections);
     if (opts.hemi) {
       opts.hemi.intensity = MOOD.ambient;
       opts.hemi.color.setHex(MOOD.hemiSky);
@@ -371,10 +404,12 @@ export class StationLighting {
   dispose(scene: THREE.Scene = this.scene, retire?: (release: () => void) => void): void {
     if (this.fieldLight.parent === scene) scene.remove(this.fieldLight);
     if (activeLightField() === this.volume) bindLightField(null);
-    const volume = this.volume, glow = this.glow;
+    if (this.reflections && activeReflectionProbes() === this.reflections) bindReflectionProbes(null);
+    const volume = this.volume, glow = this.glow, reflections = this.reflections;
     if (glow) scene.remove(glow);
     const release = () => {
       volume.dispose();
+      reflections?.dispose();
       if (glow) { glow.geometry.dispose(); (glow.material as THREE.Material).dispose(); glow.dispose(); }
     };
     if (retire) retire(release); else release();

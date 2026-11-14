@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import {SHAPE_MAT_KEYS, type ShapeMat} from '../gen/propShapes';
 import {fareScreenTexture, lanternGlowTexture, menuBoardTexture, vendFrontTexture} from './canvasTextures';
 import {SurfaceNodeMaterial, surfaceMaterial, worldMapped, type WorldMaterials} from './materials';
+import {tagReflect} from '../render/reflectTag'; // task studio-baked-lighting-reflections-20261114-050258-01: glazing shows the cached reflection probes
 
 export type ShapeUv = 'world' | 'face';
 
@@ -33,7 +34,7 @@ const SPECS: Record<ShapeMat, Spec> = {
   accent: {uv: 'world', make: () => surfaceMaterial('paintedPanel', {metalness: 0.1}, WORN)},
   counter: {uv: 'world', make: () => surfaceMaterial('laminate', {color: 0xe2ddd3}, {grime: [0.2, 0.35], macro: 0.12})},
   panel: {uv: 'world', make: () => surfaceMaterial('paintedPanel', {color: 0x7d786e, metalness: 0.1}, WORN)},
-  glass: {uv: 'world', make: () => surfaceMaterial('glass', {transparent: true, opacity: 0.55, depthWrite: false, metalness: 0.1}, {macro: 0.1})},
+  glass: {uv: 'world', make: () => tagReflect(surfaceMaterial('glass', {transparent: true, opacity: 0.55, depthWrite: false, metalness: 0.1}, {macro: 0.1}), 'glass')},
   screen: {uv: 'face', make: () => glow(fareScreenTexture(), 0.6, 0.25)},
   vendFront: {uv: 'face', make: () => glow(vendFrontTexture(), 0.45, 0.2)},
   porcelain: {uv: 'world', make: () => surfaceMaterial('porcelain', {}, {grime: [0.25, 0.3], macro: 0.08})},
@@ -59,7 +60,7 @@ const SPECS: Record<ShapeMat, Spec> = {
   quarryTile: {uv: 'world', make: () => surfaceMaterial('quarryTile', {}, {macro: 0.2})},
   woodVeneer: {alias: 'wood'},
   plasticSeat: {uv: 'world', make: () => surfaceMaterial('plastic', {color: 0xc98a2a}, {grime: [0.15, 0.3], macro: 0.1})},
-  glassShopfront: {uv: 'world', make: () => surfaceMaterial('glass', {color: 0xdde6e8, transparent: true, opacity: 0.42, depthWrite: false, metalness: 0.1}, {macro: 0.1})},
+  glassShopfront: {uv: 'world', make: () => tagReflect(surfaceMaterial('glass', {color: 0xdde6e8, transparent: true, opacity: 0.42, depthWrite: false, metalness: 0.1}, {macro: 0.1}), 'glass')},
   // Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): the camping lantern's mantle — a warm self-lit glow (one graphic per face;
   // the light it casts is a light-field source, gen/annexCache.ts)
   lanternGlow: {uv: 'face', make: () => glow(lanternGlowTexture(), 1.6, 0.5)},

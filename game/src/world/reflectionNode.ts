@@ -29,6 +29,7 @@ import {LightFieldLight, LightFieldNode, type LightFieldSampleNodes, type NodeLi
 import {PROBE_COLS, PROBE_GUTTER, PROBE_LEVELS, PROBE_LEVEL_PER_ROUGHNESS, PROBE_RATIO_MAX, octEncode, probeAtlasLayout, probeBytes, probeTileOrigin, type BakedProbes} from './reflectionProbes';
 import {CELL} from '../gen/grid';
 import {refreshTextureBindings} from '../render/bindingRefresh';
+import {reflectTagOf, type ReflectClass} from '../render/reflectTag';
 
 // TSL nodes are chained untyped here (three's TSL typings reject most mixed-type chains).
 type N = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -71,6 +72,10 @@ const META_PH = configureMeta(new THREE.DataTexture(new Float32Array(12), 1, 3))
 META_PH.name = 'reflection-meta-placeholder';
 const GRID_PH = configureGrid(new THREE.Data3DTexture(new Uint8Array(8), 1, 1, 2));
 GRID_PH.name = 'reflection-grid-placeholder';
+
+/** A 'metal' candidate's fragment looks the probes up when its metalness is above this, or its roughness below REFLECT_ROUGHNESS_MAX. */
+export const REFLECT_METALNESS_MIN = 0.2;
+export const REFLECT_ROUGHNESS_MAX = 0.45;
 
 /** One station's probes on the GPU. */
 export class ReflectionProbeVolume {
@@ -144,32 +149,28 @@ export function syncReflectionTuning(): void {
 // ---------------------------------------------------------------------------------------------
 // Which materials reflect
 
-export type ReflectClass = 'none' | 'metal' | 'glass';
-
-/** A constant metalness at or above this makes a material metal for the probes (painted / brushed steel, rails, shutters). */
-export const REFLECT_METALNESS_MIN = 0.25;
+export type {ReflectClass} from '../render/reflectTag';
 
 /**
- * Whether a material shows the probes, and how:
- *  - `material.userData.reflect`: 'metal' | 'glass' | false — the material's own answer wins (the station's wall / floor / ceiling
- *    sets carry `false`: packed maps, but not metal);
+ * Whether a material shows the probes, and how. Decided while its program is built, so from nothing but what three's program cache
+ * key holds (render/reflectTag.ts explains): two materials that share a program always get the same answer.
+ *  - a TAG (tagReflect) wins: 'glass', 'metal' or 'none' — the station's glazing is tagged glass, its wall / floor / ceiling sets none;
  *  - never a skinned mesh (characters), never a non-standard material;
- *  - 'glass': a see-through standard material that is smooth by a constant roughness, or named glass;
- *  - 'metal': a metalness map (model materials: weighted per texel by the lighting model itself), or a constant metalness of at
- *    least REFLECT_METALNESS_MIN.
- * Everything else — walls, floors, ceilings, wood, cloth, plastic — is 'none' and compiles exactly as without reflections.
+ *  - an untagged see-through material: 'none' (decals, particles, liquids: only tagged panes are glass);
+ *  - 'metal': a metalness map (model materials) or a metalness that is not zero. This is a CANDIDATE: the shader then decides per
+ *    fragment from the real metalness and roughness (LightFieldReflectNode), so a rough non-metal texel never pays for a lookup.
+ * Everything else — walls, floors, ceilings, wood, cloth, plastic with no metalness — is 'none' and compiles exactly as without
+ * reflections.
  */
 export function reflectClass(material: THREE.Material | null | undefined, object?: THREE.Object3D | null): ReflectClass {
   if (!material) return 'none';
-  const tag = material.userData?.reflect as unknown;
-  if (tag === false || tag === 'none') return 'none';
-  if (tag === 'metal' || tag === 'glass') return tag;
+  const tag = reflectTagOf(material);
+  if (tag) return tag;
   if ((object as {isSkinnedMesh?: boolean} | null | undefined)?.isSkinnedMesh) return 'none';
   const m = material as THREE.MeshStandardMaterial & {isMeshStandardNodeMaterial?: boolean};
   if (!m.isMeshStandardMaterial && !m.isMeshStandardNodeMaterial) return 'none';
-  if (m.transparent && m.opacity < 0.9) return (!m.roughnessMap && m.roughness <= 0.2) || /glass/i.test(m.name) ? 'glass' : 'none';
-  if (m.metalnessMap) return m.metalness > 0 ? 'metal' : 'none';
-  return m.metalness >= REFLECT_METALNESS_MIN ? 'metal' : 'none';
+  if (m.transparent) return 'none';
+  return m.metalnessMap || m.metalness !== 0 ? 'metal' : 'none';
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -284,8 +285,8 @@ export class LightFieldReflectNode extends LightFieldNode {
       // a see-through pane: its reflection is not dimmed by how much it lets through (the blend multiplies by the opacity)
       rad.assign(n(probeRadiance(s, dir, rough)).div(clamp(materialOpacity, 0.25, 1)));
     } else {
-      // a rough non-metal texel of a model reflects next to nothing: skip the lookups there
-      If(n(metalness).greaterThan(0.2).or(n(rough).lessThan(0.45)), () => { rad.assign(probeRadiance(s, dir, rough)); });
+      // a rough non-metal texel reflects next to nothing: no lookup there (the real, per-fragment metalness and roughness decide)
+      If(n(metalness).greaterThan(REFLECT_METALNESS_MIN).or(n(rough).lessThan(REFLECT_ROUGHNESS_MAX)), () => { rad.assign(probeRadiance(s, dir, rough)); });
     }
     b.context.radiance.addAssign(rad);
     return null;

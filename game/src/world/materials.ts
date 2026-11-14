@@ -9,6 +9,7 @@ import type {TextureKey} from '../assets/manifest';
 import {ENV_TEXTURE_LAYOUT} from '../assets/manifest';
 import {addNodeHook, copyNodeHooks, hasNodeHook} from '../render/nodeHooks';
 import {ANISO_ROLE, requestSurfaceAnisotropy} from '../render/anisotropy'; // lane FIX (U08)
+import {reflectTagOf, tagReflect} from '../render/reflectTag'; // task studio-baked-lighting-reflections-20261114-050258-01
 import {ballast, concreteFloor, crateWood, paintedBlock, signPlate, terrazzo, canvasTexture, surface, type SurfaceName} from './canvasTextures';
 import {WM_CONTEXT, WM_NORMAL, asColor, isNodeMaterial, lfFloorAtNode, matRef, sharedStage, skipInShadowPass, wmNoise, wmUp} from './surfaceNodes';
 
@@ -63,6 +64,9 @@ export class SurfaceNodeMaterial extends MeshStandardNodeMaterial {
   copy(source: this): this {
     super.copy(source);
     this.alphaTest = source.alphaTest;
+    // task studio-baked-lighting-reflections-20261114-050258-01: a clone keeps its source's reflection tag (render/reflectTag.ts)
+    const tag = reflectTagOf(source);
+    if (tag) tagReflect(this, tag);
     return this;
   }
 }
@@ -204,8 +208,10 @@ export class WorldMaterials {
     };
     // Iteration 13 (MAT-A): node materials (decay and other lanes' hooks layer onto them).
     const std = (o: MeshStandardNodeMaterialParameters) => new SurfaceNodeMaterial({roughness: 0.85, metalness: 0, ...o});
+    // (task studio-baked-lighting-reflections-20261114-050258-01: tagged 'none' — tile, slab and ceiling sets carry a packed metalness
+    // map but are not metal: they never show the reflection probes, and compile as they always did)
     const pbr = (color: THREE.Texture, orm: THREE.Texture, normal: THREE.Texture, extra: MeshStandardNodeMaterialParameters = {}) =>
-      std({map: color, roughnessMap: orm, metalnessMap: orm, normalMap: normal, normalScale: new THREE.Vector2(L.normalScale, L.normalScale), roughness: 1, metalness: 1, ...extra});
+      tagReflect(std({map: color, roughnessMap: orm, metalnessMap: orm, normalMap: normal, normalScale: new THREE.Vector2(L.normalScale, L.normalScale), roughness: 1, metalness: 1, ...extra}), 'none');
 
     this.mats.set('tileLower', pbr(tex.wallColor, tex.wallOrm, tex.wallNormal));
     this.mats.set('tileUpper', pbr(

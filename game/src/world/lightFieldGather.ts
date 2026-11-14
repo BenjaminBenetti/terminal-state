@@ -101,6 +101,17 @@ function raySets(N: number): Float32Array {
 }
 
 /**
+ * IndirectLight.index of a station (a pure enumeration of its open voxels, slot by slot, cell by cell, layer by layer) and the
+ * number of rows: a cached gather stores only its rows (world/enhancedLightingRuntime.ts).
+ */
+export function indirectIndex(geos: readonly ColumnGeometry[], layers: readonly number[], n: number): {index: Int32Array[]; count: number} {
+  const index = layers.map(L => new Int32Array(n * L).fill(-1));
+  let count = 0;
+  for (let s = 0; s < geos.length; s++) { const open = geos[s].open, L = layers[s], ix = index[s]; for (let i = 0; i < n; i++) if (open[i]) for (let k = 0; k < L; k++) ix[i * L + k] = count++; }
+  return {index, count};
+}
+
+/**
  * The gather as build steps (core/pacedBuild.ts): the journey's paced build draws frames between them. The result is the same
  * whatever the slicing (nothing reads a clock but the statistics).
  */
@@ -111,9 +122,7 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
   const scene = opt.scene ?? new BandScene(W, H, geos);
   yield 'gather.index';
   // --- open voxels ---------------------------------------------------------------------------
-  const index = LS.map(L => new Int32Array(n * L).fill(-1));
-  let count = 0;
-  for (let s = 0; s < S; s++) { const open = geos[s].open, L = LS[s], ix = index[s]; for (let i = 0; i < n; i++) if (open[i]) for (let k = 0; k < L; k++) ix[i * L + k] = count++; }
+  const {index, count} = indirectIndex(geos, LS, n);
   const vs = new Uint8Array(count), vi = new Int32Array(count), vk = new Uint8Array(count);
   for (let s = 0, c = 0; s < S; s++) { const open = geos[s].open, L = LS[s]; for (let i = 0; i < n; i++) if (open[i]) for (let k = 0; k < L; k++) { vs[c] = s; vi[c] = i; vk[c] = k; c++; } }
   yield;

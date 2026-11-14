@@ -13,8 +13,15 @@ import {GLSLNodeBuilder, MeshBasicNodeMaterial, MeshLambertNodeMaterial, MeshSta
 import {LightFieldLight, LightFieldNode, installLightFieldNode, stationFieldLight} from '../src/world/lightFieldNode';
 import {
   LightFieldReflectLight, LightFieldReflectNode, REFL, REFLECTION_TUNING, ReflectionProbeVolume, activeReflectionProbes, bindReflectionProbes, installReflectNode,
-  reflectClass, sampleProbeLevel, sampleProbes, stationReflectLight, syncReflectionTuning,
+  REFLECT_METALNESS_MIN, REFLECT_ROUGHNESS_MAX, reflectClass, sampleProbeLevel, sampleProbes, stationReflectLight, syncReflectionTuning,
 } from '../src/world/reflectionNode';
+import {reflectTagOf, tagReflect} from '../src/render/reflectTag';
+import {materialKey} from '../src/render/runtimeVariants';
+import {WorldMaterials, cloneSurfaceMaterial} from '../src/world/materials';
+import {shapeMaterial} from '../src/world/shapeMaterials';
+import {crackedGlassMaterial, officeGlassMaterial} from '../src/world/officeWindows';
+import {fakeEnvTextures} from './helpers/openablesFixture';
+import {installCanvasShim} from './helpers/canvas2d';
 import {PROBE_NORM_MIN, PROBE_RATIO_MAX, octDecode, octEncode, probeAtlasLayout, probeTileOrigin, type BakedProbes} from '../src/world/reflectionProbes';
 import {bindingRefreshStats} from '../src/render/bindingRefresh';
 const bindingEpoch = (): number => bindingRefreshStats.bumps;
@@ -94,37 +101,70 @@ function fakeProbes(o: {w?: number; h?: number; colors: [number, number, number]
 
 describe('which materials reflect', () => {
   const std = (o: THREE.MeshStandardMaterialParameters) => new MeshStandardNodeMaterial(o as never);
-  it('metal by a constant metalness or a metalness map; glass when see-through and smooth; nothing else', () => {
+  it('untagged: a metal candidate by a metalness map or a metalness that is not zero; never a see-through, unlit or zero-metalness material', () => {
     expect(reflectClass(std({metalness: 0.3, roughness: 0.5}))).toBe('metal');
-    expect(reflectClass(std({metalness: 0.45}))).toBe('metal');
-    expect(reflectClass(std({metalness: 0.1}))).toBe('none');
+    expect(reflectClass(std({metalness: 0.1}))).toBe('metal'); // a candidate: the shader's own metalness / roughness test decides per fragment
     expect(reflectClass(std({metalness: 0}))).toBe('none');
     const map = new THREE.Texture();
     expect(reflectClass(std({metalness: 1, metalnessMap: map}))).toBe('metal');
-    expect(reflectClass(std({metalness: 0, metalnessMap: map}))).toBe('none');
-    expect(reflectClass(std({transparent: true, opacity: 0.4, roughness: 0.06}))).toBe('glass');
-    const named = std({transparent: true, opacity: 0.4, roughness: 0.6});
-    expect(reflectClass(named)).toBe('none');
-    named.name = 'shop-Glass';
-    expect(reflectClass(named)).toBe('glass');
-    // a see-through rough thing (a decal, a curtain) is not glass, even when metallic
+    expect(reflectClass(std({metalness: 0, metalnessMap: map}))).toBe('metal');
+    // see-through things (decals, particles, liquids) are never glass on their own: only a tagged pane is
+    expect(reflectClass(std({transparent: true, opacity: 0.4, roughness: 0.06}))).toBe('none');
     expect(reflectClass(std({transparent: true, opacity: 0.5, roughness: 0.9, metalness: 1}))).toBe('none');
     expect(reflectClass(null)).toBe('none');
     expect(reflectClass(new MeshBasicNodeMaterial())).toBe('none');
     expect(reflectClass(new MeshLambertNodeMaterial())).toBe('none');
+    expect(REFLECT_METALNESS_MIN).toBeGreaterThan(0.1);
+    expect(REFLECT_ROUGHNESS_MAX).toBeLessThan(0.6);
   });
-  it('a material answers for itself (userData.reflect), and a skinned mesh never reflects', () => {
-    const wall = std({metalness: 1, metalnessMap: new THREE.Texture()});
-    wall.userData.reflect = false;
+  it('a tag wins (glass panes, the wall / floor sets that are not metal), and a skinned mesh never reflects', () => {
+    const wall = tagReflect(std({metalness: 1, metalnessMap: new THREE.Texture()}), 'none');
     expect(reflectClass(wall)).toBe('none');
-    const pane = std({metalness: 0});
-    pane.userData.reflect = 'glass';
+    const pane = tagReflect(std({metalness: 0.1, transparent: true, opacity: 0.42}), 'glass');
     expect(reflectClass(pane)).toBe('glass');
+    expect(reflectTagOf(pane)).toBe('glass');
+    expect(reflectTagOf(std({}))).toBeUndefined();
     const steel = std({metalness: 0.5});
     expect(reflectClass(steel, new THREE.SkinnedMesh())).toBe('none');
     expect(reflectClass(steel, new THREE.Mesh())).toBe('metal');
-    steel.userData.reflect = 'metal';
-    expect(reflectClass(steel, new THREE.SkinnedMesh())).toBe('metal'); // an explicit tag wins
+    expect(reflectClass(tagReflect(steel, 'metal'), new THREE.SkinnedMesh())).toBe('metal'); // an explicit tag wins
+  });
+  it('the choice only reads what three\'s program cache key holds: two materials that share a key always get the same class', () => {
+    // three r186 RenderObject.getMaterialCacheKey: numbers on / off, no userData / name / opacity; a string property as its text
+    const key = (m: THREE.Material): string => materialKey(m);
+    const cases: THREE.Material[] = [
+      std({metalness: 0}), std({metalness: 0.05}), std({metalness: 0.9}), std({metalness: 0.3, roughness: 0.2}), std({metalness: 0, roughness: 0.1}),
+      std({transparent: true, opacity: 0.3}), std({transparent: true, opacity: 0.95, metalness: 0.4}),
+      tagReflect(std({transparent: true, opacity: 0.4, metalness: 0.1}), 'glass'), tagReflect(std({metalness: 1}), 'none'), tagReflect(std({metalness: 0}), 'metal'),
+      std({metalness: 1, metalnessMap: new THREE.Texture()}), tagReflect(std({metalness: 1, metalnessMap: new THREE.Texture()}), 'none'),
+    ];
+    const named = std({transparent: true, opacity: 0.4}); named.name = 'shop-glass'; named.userData.reflect = 'glass';
+    cases.push(named); // neither a name nor userData is in the key: neither may decide
+    const byKey = new Map<string, string>();
+    for (const m of cases) {
+      const k = key(m), c = reflectClass(m);
+      if (byKey.has(k)) expect(c, `two materials with one key (${m.name || m.type})`).toBe(byKey.get(k));
+      byKey.set(k, c);
+    }
+    expect(reflectClass(named)).toBe('none');
+    // a tag is part of the key: a tagged pane never shares a program with an untagged see-through material
+    expect(key(tagReflect(std({transparent: true, opacity: 0.4}), 'glass'))).not.toBe(key(std({transparent: true, opacity: 0.4})));
+    expect(key(tagReflect(std({metalness: 1}), 'none'))).not.toBe(key(std({metalness: 1})));
+  });
+  it('the station kit: glazing is glass (clones too), tile / slab / ceiling sets never reflect, painted and brushed steel are metal candidates', () => {
+    installCanvasShim();
+    const mats = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
+    for (const k of ['tileLower', 'tileUpper', 'platformSlab', 'ceiling', 'tunnel', 'platformFace', 'safetyEdge'] as const) expect(reflectClass(mats.get(k)), k).toBe('none');
+    for (const k of ['terrazzo', 'concrete', 'paint', 'ballast'] as const) expect(reflectClass(mats.get(k)), k).toBe('none');
+    for (const k of ['steel', 'rail', 'gate'] as const) expect(reflectClass(mats.get(k)), k).toBe('metal');
+    const glass = shapeMaterial(mats, 'glass'), front = shapeMaterial(mats, 'glassShopfront');
+    expect(reflectClass(glass)).toBe('glass');
+    expect(reflectClass(front)).toBe('glass');
+    expect(reflectClass(cloneSurfaceMaterial(front))).toBe('glass');
+    expect(reflectClass(officeGlassMaterial(mats))).toBe('glass');
+    expect(reflectClass(crackedGlassMaterial(null))).toBe('glass');
+    expect(reflectClass(shapeMaterial(mats, 'steelBright'))).toBe('metal');
+    expect(reflectClass(shapeMaterial(mats, 'counter'))).toBe('none');
   });
 });
 
@@ -151,7 +191,7 @@ describe('the reflecting field light', () => {
     const mats = {
       wall: () => new MeshStandardNodeMaterial({metalness: 0, roughness: 0.8}),
       steel: () => new MeshStandardNodeMaterial({metalness: 0.45, roughness: 0.4}),
-      glass: () => new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}),
+      glass: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'glass'),
     };
     for (const backend of ['wgsl', 'glsl'] as const) {
       const plain = Object.fromEntries(Object.entries(mats).map(([k, f]) => [k, compile(backend, box(f()), [stationFieldLight(), new THREE.HemisphereLight()])]));
