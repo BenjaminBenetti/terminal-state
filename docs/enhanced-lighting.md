@@ -162,20 +162,26 @@ time differs. The settings form shows the cache's size and has a **Clear lightin
 GPU memory of the reflections for one station (atlas RGBA16F + grid RGBA8 + a small float metadata texture); the
 enhanced field itself adds none:
 
-| Station (seed 4242, Node bake) | Standard | High |
+| Station (seed 93) | Standard | High |
 |---|---|---|
-| Subway | 168 probes, 5.1 MiB | 228 probes, 17.4 MiB |
-| Office | 155 probes, 6.7 MiB | — |
-| Mall | 184 probes, 4.7 MiB | — |
+| Subway | 187 probes, 5.7 MiB | 210 probes, 16.7 MiB |
+| Office | 155 probes, 6.1 MiB | not measured |
+| Mall | 178 probes, 4.7 MiB | not measured |
 
-Main-thread bake time measured in **Node on the studio pod** (one core, not a browser, not a player's machine;
-the whole lighting step including the unchanged direct bake):
+Main-thread bake time of the lighting step, measured in **Firefox 158 on the studio pod** (one run each, in a
+private harness page of the game's own modules; a shared server CPU, not a player's machine). The bake is CPU work,
+so the software renderer of that pod does not change it:
 
-| Station | Off (baseline) | Auto / Standard, first load | On + High reflections, first load | cache hit |
+| Station (seed 93) | Auto (Standard bake, no reflections) | On + Standard reflections | On + High reflections | cache hit |
 |---|---|---|---|---|
-| Subway 4242 | about 0.6 s | about 1.4-1.7 s (gather 0.65 s, probes 0.2-0.3 s) | about 4.7 s (gather 3.2 s, probes 1.0 s) | baseline + about 0.1 s of hashing |
-| Office 4242 | about 0.7 s | about 1.8 s | — | — |
-| Mall 4242 | about 0.7 s | about 1.5 s | — | — |
+| Subway | 1.0 s (gather 0.5 s) | 2.9 s (gather 2.2 s, probes 0.2 s) | 3.5 s (probes 0.6 s) | 0.5 s |
+| Office | not measured | 2.8 s (gather 1.8 s, probes 0.2 s) | not measured | 0.8 s |
+| Mall | not measured | 2.3 s (gather 1.5 s, probes 0.2 s) | not measured | 0.7 s |
+
+A cache hit is the unchanged direct bake plus about 0.1 s of hashing: what Off costs, nearly. In Node on the same pod
+the same bakes took: Subway seed 4242 Off about 0.6 s, Auto 1.4 to 1.7 s, On + High reflections about 4.7 s. The
+work is cut into paced build steps of a few milliseconds (the longest enhanced step measured in Node was about
+35 ms; the unchanged direct bake has steps of 35 to 60 ms).
 
 Frame cost: the enhanced field has none (same texture, same shader). A reflective fragment adds one filtered and
 one unfiltered grid fetch, and per probe that weighs in (one in a block's core, up to four at a corner) three
