@@ -56,12 +56,15 @@ spray, and becomes a tenth of a standard fuel tank. Normal fuel loot, spawn weig
 
 ## Which bodies
 
-- **Eligible:** any dead enemy whose archetype's corpse trait is undead and humanoid (`ai/corpseTrait.ts CORPSE_TRAITS`, the field
-  `corpse` of every `ENEMY_ARCHETYPES` entry).
+- **Carriable:** any dead enemy whose archetype's corpse trait is undead (`corpseCarriable`, `ai/corpseTrait.ts CORPSE_TRAITS`, the
+  field `corpse` of every `ENEMY_ARCHETYPES` entry). Since the Market corpse buyer (`docs/corpse-market-shop.md`) that includes BB's
+  small body: it is carried, kept and sold like the others.
+- **Fed to the chipper:** a carriable body that is also humanoid (`corpseFeedable`).
   - Today that is the zombie (every look), Blightbelly, Siren, Strainer and the Screacher (all four bodies).
-  - The rat/dog scavenger is an animal and is not eligible.
-  - BB is undead but not a humanoid body: a knee-high crawler is not the adult body plan the carry and the feed are built for.
-    It is not eligible (`docs/bb.md`).
+  - The rat/dog scavenger is an animal: neither carriable nor fed.
+  - BB is undead but not a humanoid body: a knee-high crawler is not the adult body plan the feed is built for. The chipper refuses
+    it with its own line ("Too small a body for the chipper — the Market's corpse buyer takes it whole"); the body stays in the hands
+    (`docs/bb.md`).
   - A new archetype must classify itself; a registry-driven test checks every entry.
 - **Never eligible:** living enemies, Market people, the player, decorative corpse props, ragdoll parts and severed limbs.
 - **Identity:** `'<station section>#<layout enemy index>'`, which is one death (killed enemies never respawn). Only layout spawns have
@@ -78,6 +81,7 @@ spray, and becomes a tenth of a standard fuel tank. Normal fuel loot, spawn weig
 | A station's floor | section lane `corpses.here` (world pose + storey) | rebuilt on reload / revisit |
 | The parked or riding train | train cargo v3 `bodies` (train-local pose) | captured at the ride start with the props; at most 64 aboard (more refuses the departure; a body across the doorway refuses it too) |
 | The chipper's hopper | the player-train record's `chipper.job` | with a processing uid and integer-ms progress |
+| The Market corpse buyer's chute | section lane `market.corpse-shop` `job` (a station record at the chute) | with a sale uid and integer-ms progress; a bought body's id stays in `sold` (bounded) and exists nowhere else (`docs/corpse-market-shop.md`) |
 
 - Moves between places happen in one synchronous call.
 - Save validation refuses a save that lists one body twice anywhere.

@@ -297,9 +297,11 @@ The whole roster — every family's rate, the placement rules, the census and th
   no per-spawn roll ever draws one.
 - **Never in a horde.** `HORDE_FORBIDDEN_FAMILIES` (`game/src/ai/hordeSpec.ts`) lists it, and the roster never converts a horde
   member.
-- **Not a carried body, not chipper fuel.** `CORPSE_TRAITS.bb` (`game/src/ai/corpseTrait.ts`) records it as undead but not
-  humanoid: a knee-high crawler is not the adult body plan the over-the-shoulder carry and the train's chipper feed are built
-  for. So `corpseFeedable('bb')` is false: a dead BB cannot be picked up or fed to the chipper.
+- **Carried and sold, never chipper fuel.** `CORPSE_TRAITS.bb` (`game/src/ai/corpseTrait.ts`) records it as undead but not
+  humanoid. Since the Market corpse buyer (`docs/corpse-market-shop.md`), `corpseCarriable('bb')` is true: a dead BB is picked up
+  with the same over-the-shoulder carry on the shared rig (its own look kept), kept in a station or the train, and sold whole
+  for the flat price. `corpseFeedable('bb')` stays false: the train's chipper refuses it with its own line. Nothing about its
+  non-graphic presentation changes (no gore, no new wounds; the sale's swallow is the whole clothed body going down the chute).
 - **The lightest body in melee.** `MELEE_MASS.bb` (`game/src/combat/meleeImpact.ts`) is the smallest mass of any family, so a
   heavy swing pushes it furthest (up to the shared knockback cap).
 
