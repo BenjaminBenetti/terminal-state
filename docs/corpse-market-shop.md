@@ -7,8 +7,13 @@ stock, and nobody can buy a corpse anywhere.
 
 ## Finding it
 
-- The den is off the **Back Lane**: a doorway in the market shed's wall, with a painted sign ("BODIES BOUGHT", the price) and a dim red
-  lamp. A short passage leads to the customer room; the buyer stands behind a barred steel booth with a caged red lamp.
+- The den is off the **Back Lane**: a doorway through the market shed's wall beside the lane, with painted boards over it
+  ("BODIES BOUGHT", "10 TIES"). A 2 m back passage under a plain lamp leads to the low customer room (3 to 5 m deep, a 2.6 m ceiling, a
+  dim red lamp). The floor chute stands in the room's middle, open side toward the customer. A board hangs in front of the booth ("DEAD
+  ONES ONLY · 10 TIES"), and the buyer stands behind the barred steel booth that closes his sealed back room.
+- The den is on whichever side the Market's mirror puts the Back Lane. In the shallowest rooms the chute is turned a quarter to keep its
+  front clear. Version 4 is version 3 plus the den, with every other cell, prop, light, sign, stall and spot unchanged
+  (`game/tests/market-den-layout.test.ts`).
 - Looking at the chute or the booth (not carrying anything) shows the look-at line: *"Corpse buyer — whole dead undead bodies, 10 Rail
   Ties each, down the chute. He sells nothing."*
 - The train's chipper points BB carriers to him ("Too small a body for the chipper — the Market's corpse buyer takes it whole").
@@ -99,5 +104,8 @@ Scale checks beside a runtime zombie, dimensions and contacts: `docs/prop-afford
   Idle / Greet / Work, dark while hostile, the bounded stare), and save validation.
 - `game/tests/corpse-bb-carry.test.ts`: BB's body with the real model, corpse system and chipper (pickup, shoulder anchor, chipper
   refusal, cargo, platform drop, grounded rebuild).
-- `game/tests/market-den-layout.test.ts`: the version 4 den (layout lane).
+- `game/tests/market-den-layout.test.ts`: the version 4 den (layout lane): parity with version 3, the sealed back room, reachability
+  on foot and carrying a body, the clear tray and chute front, signs, lamps and the audits.
+- `game/tests/corpse-shop-market.test.ts`: the sale end to end in a real version 4 Market (the generated den, real level geometry,
+  corpse system and PickupManager), and a seed sweep over both mirror states and the quarter-turned chute.
 - `game/tests/corpse-shop-assets.test.ts`: the cooked models and provenance (asset lane).
