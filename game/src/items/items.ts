@@ -171,6 +171,16 @@ export function isFoodOrDrink(def: ItemDef): boolean {
   return def.verb === 'eat' || def.verb === 'drink';
 }
 
+/**
+ * Task studio-scanner-medical-20261114-054010-01: a MEDICAL item, by its own traits — it restores health (`heal`) or treats a limb
+ * injury (`treats`): the bandage, the med kit, the leg splint, the arm sling, the trauma kit, and any new dressing that has either field.
+ * Food and drink stay food even should one ever restore a little health; worn gear protects but heals / treats nothing.
+ */
+export function isMedical(def: ItemDef): boolean {
+  if (isFoodOrDrink(def) || def.kind === 'gear' || def.gear) return false;
+  return (def.heal ?? 0) > 0 || (def.treats?.length ?? 0) > 0;
+}
+
 const signed = (n: number) => (n > 0 ? `+${n}` : `−${-n}`);
 
 /** "+35 water", "+14 food · −4 water", "+20 health". */

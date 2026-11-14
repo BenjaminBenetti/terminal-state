@@ -11,16 +11,23 @@
 // captured resource snapshot when changing mode rather than inventing live tracking or an extra scan."): the scanner is a RESOURCE
 // scanner now — no enemies, no red / gold classes — and its MODES (SCAN_MODES, in that order) filter one captured snapshot.
 //
-// WHAT AN ITEM IS (scanCategory: its catalogue TRAITS, never a list of ids — a new weapon / ammo / gear / material / food joins its mode
-// by being what it is):
+// Task studio-scanner-medical-20261114-054010-01 (user: "Add Medical as an eighth resource-scanner mode. Keep the existing seven-mode
+// order and append Medical before the cycle wraps back to All … Use or extend common catalogue/item traits so future medical items
+// classify naturally … Existing saved mode values must not shift"): MEDICAL is appended last (a unit's saved mode is its NAME, so every
+// older value means what it did), classified by the catalogue's own isMedical trait.
+//
+// WHAT AN ITEM IS (scanCategory: its catalogue TRAITS, never a list of ids — a new weapon / ammo / gear / material / food / dressing
+// joins its mode by being what it is):
 //   weapon     kind 'weapon' or a weaponId (guns and melee);
 //   ammo       kind 'ammo' or a caliber;
 //   fuel       the train fuel system's own item (fuel/fuel.ts FUEL.canItem);
 //   equipment  kind 'gear' or a gear spec (worn gear: backpacks, armour, masks, helmets …);
 //   material   kind 'material' (the bench's crafting salvage);
 //   food       eaten or drunk (items/items.ts isFoodOrDrink: food, drinks, beers);
-//   none of these (medical supplies, batteries, flares and crafted grenades, gas filters, reactor parts, currency): a resource that
-//   shows in ALL only. An id the catalogue does not know is no resource at all (never a dot).
+//   medical    heals or treats an injury (items/items.ts isMedical: bandages, med kits, splints, slings, trauma kits) — never food or
+//              gear (they are checked first);
+//   none of these (batteries, flares and crafted grenades, gas filters, reactor parts, currency): a resource that shows in ALL only.
+//   An id the catalogue does not know is no resource at all (never a dot).
 //
 // A SNAPSHOT is taken at ONE instant and never updated: a dot is where a resource WAS at the last sweep (a taken item stays shown until
 // the next one). It holds, within SCANNER.range (horizontal, from the car's centre), EVERY STOREY FLATTENED onto one plane (no height, no
@@ -44,7 +51,7 @@
 // count and replugging neither resets nor advances it (no free sweep). The snapshot is never saved: a new world starts empty. (The
 // selected MODE is the scanner unit's own setting: saved with its equipment record — craft/equipment.ts EquipmentDef.displayModes.)
 
-import {ITEMS, isFoodOrDrink, type ItemDef} from '../items/items';
+import {ITEMS, isFoodOrDrink, isMedical, type ItemDef} from '../items/items';
 import {FUEL} from '../fuel/fuel';
 
 /** Every number of the scanner (one place). */
@@ -87,8 +94,11 @@ export const SCANNER = {
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Modes and what an item is
 
-/** The modes in their cycling order (the user's: All → Food/Water → Ammo → Fuel → Weapon → Equipment → Material → All). */
-export const SCAN_MODES = ['all', 'food', 'ammo', 'fuel', 'weapon', 'equipment', 'material'] as const;
+/**
+ * The modes in their cycling order (the user's: All → Food/Water → Ammo → Fuel → Weapon → Equipment → Material → Medical → All). A unit
+ * saves its mode by NAME (craft/equipment.ts `display`): a new mode is APPENDED and no mode is ever renamed, so old saves keep theirs.
+ */
+export const SCAN_MODES = ['all', 'food', 'ammo', 'fuel', 'weapon', 'equipment', 'material', 'medical'] as const;
 export type ScanMode = (typeof SCAN_MODES)[number];
 /** A mode that is one kind of resource (every mode but 'all'). */
 export type ScanCategory = Exclude<ScanMode, 'all'>;
@@ -98,7 +108,7 @@ export const SCAN_DEFAULT_MODE: ScanMode = SCAN_MODES[0];
 
 /** The modes' names (the scope upper-cases them). */
 export const SCAN_MODE_LABEL: Readonly<Record<ScanMode, string>> = {
-  all: 'All', food: 'Food/Water', ammo: 'Ammo', fuel: 'Fuel', weapon: 'Weapon', equipment: 'Equipment', material: 'Material',
+  all: 'All', food: 'Food/Water', ammo: 'Ammo', fuel: 'Fuel', weapon: 'Weapon', equipment: 'Equipment', material: 'Material', medical: 'Medical',
 };
 
 export const isScanMode = (v: unknown): v is ScanMode => typeof v === 'string' && (SCAN_MODES as readonly string[]).includes(v);
@@ -117,6 +127,7 @@ export function scanCategory(def: ItemDef): ScanCategory | null {
   if (def.kind === 'gear' || def.gear) return 'equipment';
   if (def.kind === 'material') return 'material';
   if (isFoodOrDrink(def)) return 'food';
+  if (isMedical(def)) return 'medical';
   return null;
 }
 
@@ -187,7 +198,7 @@ export function toScanFrame(f: ScanFrame, wx: number, wz: number): {x: number; z
 }
 
 const CELLS = Math.ceil(SCANNER.range / SCANNER.cell) + 1, SPAN = 2 * CELLS + 1, R2 = SCANNER.range * SCANNER.range;
-const zeroCounts = (): Record<ScanMode, number> => ({all: 0, food: 0, ammo: 0, fuel: 0, weapon: 0, equipment: 0, material: 0});
+const zeroCounts = (): Record<ScanMode, number> => ({all: 0, food: 0, ammo: 0, fuel: 0, weapon: 0, equipment: 0, material: 0, medical: 0});
 
 /** ONE snapshot of `src`'s resources around the train (the rules above). Reads only; allocates only its own result. */
 export function takeSnapshot(src: ScanSources, frame: ScanFrame): ScanSnapshot {

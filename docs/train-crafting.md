@@ -167,8 +167,9 @@ Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
 
 - Aim at the console face of a plugged-in scanner and tap **E**. A round black-and-green scope opens over the view. The game is
   not paused and you keep full control. **E**, a menu, a hit, or walking 2.6 m away closes it.
-- **Modes** (task studio-scanner-console-refinements-20261114-031614-01). With the scope open, **X** steps the mode:
-  **All → Food/Water → Ammo → Fuel → Weapon → Equipment → Material → All**. The header shows `MODE: …` with an `[X] NEXT MODE` hint, a
+- **Modes** (task studio-scanner-console-refinements-20261114-031614-01; Medical appended by task
+  studio-scanner-medical-20261114-054010-01). With the scope open, **X** steps the mode:
+  **All → Food/Water → Ammo → Fuel → Weapon → Equipment → Material → Medical → All**. The header shows `MODE: …` with an `[X] NEXT MODE` hint, a
   strip under the scope lists every mode in that order with the current one lit and underlined, and the prompt line says
   `[X] Mode: …`; the Controls list names the key too. X does nothing while the scope is closed. A tap of **E** still opens and closes the scope, a held **E** still drags
   the hand truck and **R** still turns a dragged one. The scope registers no input owner, so mouse and movement stay yours.
@@ -181,21 +182,28 @@ Meshy T2.5 derivatives of Codex design images, `world/grenadeModels.ts`).
   - Equipment: kind `gear` or a gear spec (armour, rigs, helmets, masks, backpacks), and a backpack lying on the ground.
   - Material: kind `material` (the bench's salvage).
   - Food/Water: anything eaten or drunk (`isFoodOrDrink`), beers included.
-  - Medical supplies, batteries, flares, crafted grenades, gas filters, reactor parts and rail ties are resources of no listed kind:
-    they show in **All** only. An id the catalogue does not know is never a dot.
+  - Medical: anything that restores health or treats a limb injury (`items/items.ts isMedical`: a `heal` or a `treats` field). Today
+    that is the bandage, med kit, leg splint, arm sling and trauma kit. Food and drink stay Food/Water and worn gear stays Equipment even
+    though they help you survive. This matches the loot tables' `med` category, and a test checks the two agree.
+  - Batteries, flares, crafted grenades, gas filters, reactor parts and rail ties are resources of no listed kind: they show in
+    **All** only. An id the catalogue does not know is never a dot.
   - A container counts once in All and once in each mode among its contents. A grounded backpack counts as Equipment and as whatever
     is inside it.
 - **The mode belongs to the scanner.** Each scanner unit keeps its own mode, saved with it in the equipment record as `display`. The
   field is written only when the mode is not All, so a scanner on All saves exactly as before. A record without the field (every
   save from before the modes) loads on **All**. A `display` value the scanner does not have is a malformed record, like any other bad
-  field. It survives save, Continue, Retry, export–import and the journey with its unit. A second scanner has its own mode.
+  field. The field holds the mode's name, not its position, so adding Medical at the end changed no older save's mode. (A save with a
+  scanner on Medical is refused by builds from before Medical, like any field they do not know.) It survives save, Continue, Retry,
+  export–import and the journey with its unit. A second scanner has its own mode.
 - The scope covers a full circle of about 100 m around the train, with range rings every 25 m. Train front is up.
 - **Sweeps, not tracking.** About every 30 seconds of active play the scanner takes one snapshot. Blips do not move between sweeps:
   a blip is where something was at the last sweep. The first sweep at a station comes 4 seconds after the scanner is active there.
   Time spent unplugged does not count.
 - **Dots.** Resources only: a loose item, a container that still holds something, a backpack on the ground, a station's fuel cart
   with fuel. Enemies are not shown (the scanner never reads them). Every mode draws the same mark, a **green dot**. There are no red
-  or gold classes. A mode with nothing in the snapshot says `NO … IN RANGE`.
+  or gold classes. A mode with nothing in the snapshot says `NO … IN RANGE` (`NO RESOURCES IN RANGE` for All,
+  `NO MEDICAL SUPPLIES IN RANGE` for Medical). The mode strip keeps all eight names on one row; it shrinks its text only on the
+  smallest scopes.
 - **Coarse on purpose.** Positions snap to a 4 m grid and the things of one mode in one cell merge into one dot. All storeys are flattened onto
   one plane. There are no walls, rooms, labels or distances.
 - Things in the parked car and a market stall's displayed wares are never shown.

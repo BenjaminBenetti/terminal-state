@@ -8,6 +8,8 @@
 //    = up), dimming to 40 %; nothing else — no polyline, no outline, no text per dot: no map;
 //  - the same drawing RASTERISED (the canvas shim): the dots are green, the whole canvas is black and green — no red, no gold anywhere;
 //  - the DOM holder: one bounded canvas, redrawn only when what it shows changed (a mode change too); the stylesheet block.
+// Task studio-scanner-medical-20261114-054010-01 (user: "Make the eight-mode label/strip/prompt and empty-state text clear without
+// clipping"): the eight names on one row at every scope size, none clipped or overlapping; "NO MEDICAL SUPPLIES IN RANGE".
 // Node only.
 
 import {describe, expect, it} from 'vitest';
@@ -72,7 +74,12 @@ const rgb = (hex: string): [number, number, number] => { const n = parseInt(hex.
 const isGreen = (c: string) => { const [r, g, b] = rgb(c); return g > 150 && r < g * 0.75 && b < g * 0.75; };
 /** Green-dominant at any brightness (the scope's dim furniture). */
 const greenish = (c: string) => { const [r, g, b] = rgb(c); return g > r * 1.3 && g > b * 1.3; };
-const MODE_NAMES = ['ALL', 'FOOD/WATER', 'AMMO', 'FUEL', 'WEAPON', 'EQUIPMENT', 'MATERIAL'];
+const MODE_NAMES = ['ALL', 'FOOD/WATER', 'AMMO', 'FUEL', 'WEAPON', 'EQUIPMENT', 'MATERIAL', 'MEDICAL'];
+/** A mode's empty-snapshot line. */
+const NONE_TEXT: Record<ScanMode, string> = {
+  all: 'NO RESOURCES IN RANGE', food: 'NO FOOD/WATER IN RANGE', ammo: 'NO AMMO IN RANGE', fuel: 'NO FUEL IN RANGE', weapon: 'NO WEAPON IN RANGE',
+  equipment: 'NO EQUIPMENT IN RANGE', material: 'NO MATERIAL IN RANGE', medical: 'NO MEDICAL SUPPLIES IN RANGE',
+};
 
 /** The marks in a recording: discs (one full arc filled, small), squares (fillRect, small, square), diamonds (4-point closed path filled). */
 function marks(r: Rec): {shape: 'disc' | 'square' | 'diamond'; x: number; y: number; half: number; color: string; alpha: number}[] {
@@ -158,8 +165,9 @@ describe('the scope: black glass, green rings, the mode label and strip, the cop
       expect(row[0].y).toBeGreaterThan(G.cy + G.r * 1.08);
       expect(row.map(o => o.x)).toEqual([...row.map(o => o.x)].sort((a, b) => a - b)); // left to right in the cycle's order
       expect(row[0].x).toBeGreaterThan(10);
-      const px = parseFloat(/(\d+)px/.exec(row[6].font)![1]);
-      expect(row[6].x + 'MATERIAL'.length * px * 0.6).toBeLessThan(W - 10);
+      const last = row[row.length - 1], px = parseFloat(/(\d+)px/.exec(last.font)![1]);
+      expect(last.text).toBe('MEDICAL');
+      expect(last.x + last.text.length * px * 0.6).toBeLessThan(W - 10);
       for (const o of row) expect([o.text, o.color]).toEqual([o.text, o.text === name ? SCOPE_COLORS.text : SCOPE_COLORS.label]);
       // one underline, under the selected name
       const under = d.ops.filter((o): o is Extract<Op, {op: 'fillRect'}> => o.op === 'fillRect' && o.y > row[0].y && o.y < row[0].y + px && o.w > o.h * 3);
@@ -168,6 +176,36 @@ describe('the scope: black glass, green rings, the mode label and strip, the cop
       expect(under[0].x).toBeCloseTo(sel.x);
       expect(under[0].w).toBeCloseTo(name.length * px * 0.6, 1);
       expect(t.find(o => o.text.startsWith('MODE: '))!.text).toBe(`MODE: ${name}`);
+    }
+  });
+
+  it('all eight modes fit at every scope size (240 - 720 px): one row inside the canvas, no name over the next; the header and the empty line clear of the glass', () => {
+    const fontPx = (o: {font: string}) => parseFloat(/(\d+)px/.exec(o.font)![1]);
+    for (const size of [SCANNER.canvas.min, 288, 360, 480, 576, SCANNER.canvas.max]) {
+      const g = scopeGeometry(size, size);
+      for (const mode of SCAN_MODES) {
+        const t = texts(draw(model({mode, blips: []}), size, size));
+        const row = MODE_NAMES.map(k => t.find(o => o.text === k)!);
+        expect(row.every(Boolean)).toBe(true);
+        const px = fontPx(row[0]);
+        expect(new Set(row.map(o => o.font)).size).toBe(1);
+        expect(new Set(row.map(o => o.y)).size).toBe(1);
+        expect(row[0].x).toBeGreaterThan(0);
+        for (let i = 0; i < row.length; i++) {
+          const right = row[i].x + row[i].text.length * px * 0.6;
+          expect([size, row[i].text, right < (i + 1 < row.length ? row[i + 1].x : size)]).toEqual([size, row[i].text, true]);
+        }
+        // from a 480 px scope up the eighth name costs nothing: the strip keeps its full size (it shrinks only on the smallest scopes)
+        if (size >= 480) expect([size, px]).toEqual([size, Math.max(8, Math.round(size * 0.021))]);
+        expect(px).toBeGreaterThanOrEqual(6);
+        // the header's MODE: … ends clear of the glass
+        const label = t.find(o => o.text.startsWith('MODE: '))!;
+        expect(label.x + label.text.length * fontPx(label) * 0.6).toBeLessThan(g.cx - Math.sqrt((g.r * 1.06) ** 2 - (g.cy - label.y) ** 2));
+        // the empty line sits inside the scope's circle, centred
+        const none = t.find(o => o.text === NONE_TEXT[mode])!;
+        expect(none.align).toBe('center');
+        expect(none.text.length * fontPx(none) * 0.6 / 2).toBeLessThan(Math.sqrt(g.r ** 2 - (none.y - g.cy) ** 2));
+      }
     }
   });
 
@@ -282,7 +320,8 @@ describe('the dots: one GREEN dot per blip of the selected mode, where the thing
   it('a mode with nothing in the snapshot says so; before the first sweep it says that instead', () => {
     for (const mode of SCAN_MODES) {
       const t = texts(draw(model({mode, blips: []}))).map(o => o.text);
-      expect(t).toContain(mode === 'all' ? 'NO RESOURCES IN RANGE' : `NO ${MODE_NAMES[SCAN_MODES.indexOf(mode)]} IN RANGE`);
+      expect(t).toContain(NONE_TEXT[mode]);
+      expect(SCOPE_TEXT.none(mode)).toBe(NONE_TEXT[mode]);
       expect(t).not.toContain('FIRST SWEEP PENDING');
     }
     expect(texts(draw(model({mode: 'fuel', blips: null}))).map(o => o.text)).toContain('FIRST SWEEP PENDING');

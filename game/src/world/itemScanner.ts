@@ -19,6 +19,8 @@
 //    then: E keeps its own rules (a tap opens / closes the scope, a hold drags the hand truck, R turns a grabbed one — the equipment
 //    system's), the mouse, movement and every other key stay the player's, nothing is paused, no input owner is registered;
 //  - a mode change re-filters the snapshot already captured (scanBlips) and redraws: no sweep, no read of the world, no live tracking.
+// Task studio-scanner-medical-20261114-054010-01: the cycle ends … → Material → Medical → All (craft/scanner.ts SCAN_MODES); nothing
+// here changed — the new mode is one more filter of the same snapshot.
 //
 // installItemScanner(game) is called ONCE from the Game constructor (after the train equipment); it only REGISTERS:
 //  - trainEquipment.uses.scanner: a TAP of E anywhere on the unit — the prompt line and the tap that opens / closes the scope
@@ -241,8 +243,8 @@ export class ItemScannerSystem {
   }
 
   /**
-   * The mode key on the open scope: that unit's mode one step on (All → Food/Water → … → Material → All), kept on the unit (its record);
-   * the captured snapshot is re-filtered and redrawn at once. Null: no scope open (nothing changed).
+   * The mode key on the open scope: that unit's mode one step on (All → Food/Water → … → Material → Medical → All), kept on the unit
+   * (its record); the captured snapshot is re-filtered and redrawn at once. Null: no scope open (nothing changed).
    */
   cycleMode(): ScanMode | null {
     const u = this.openUnit;

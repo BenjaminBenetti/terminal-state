@@ -3,9 +3,12 @@
 // studio-scanner-console-refinements-20261114-031614-01 (user: "cycle through exactly this order: All → Food/Water → Ammo → Fuel → Weapon
 // → Equipment → Material → All. ALL means all RESOURCES ONLY: remove enemies from this display … Use common item/resource traits so new
 // weapons and gear integrate naturally, not another brittle per-kind whitelist … Filter the captured resource snapshot when changing
-// mode rather than inventing live tracking or an extra scan."): the scanner's PURE rules (craft/scanner.ts) —
-//  - the modes, in the user's order, and what an item is: its catalogue TRAITS (checked over the WHOLE catalogue at run time, so a new
-//    item joins by its traits), medical / batteries / flares / grenades / parts in ALL only, an unknown id nothing;
+// mode rather than inventing live tracking or an extra scan.") and task studio-scanner-medical-20261114-054010-01 (user: "Add Medical as
+// an eighth resource-scanner mode … append Medical before the cycle wraps back to All … Use or extend common catalogue/item traits so
+// future medical items classify naturally … Existing saved mode values must not shift"): the scanner's PURE rules (craft/scanner.ts) —
+//  - the modes, in the user's order (Medical appended, the older seven unchanged), and what an item is: its catalogue TRAITS (checked
+//    over the WHOLE catalogue at run time, so a new item joins by its traits), medical by items/items.ts isMedical (and in step with the
+//    loot economy's 'med'), batteries / flares / grenades / parts in ALL only, an unknown id nothing;
 //  - a snapshot of RESOURCES only (no enemy is read): loose pickups (never a stall's ware, never the train's cargo), holders that still
 //    hold lots, grounded bags and what is in them, a station's fuel cart with fuel; cut at 100 m from the car's centre; storeys flattened;
 //  - a mode is a FILTER of that one snapshot (scanBlips): nothing read, nothing swept; per-mode counts, a bounded count per mode;
@@ -20,7 +23,8 @@ import {
   type ScanBag, type ScanCart, type ScanFrame, type ScanHolder, type ScanMode, type ScanPickup, type ScanSnapshot, type ScanSources,
 } from '../src/craft/scanner';
 import * as scannerModule from '../src/craft/scanner';
-import {ITEMS, isFoodOrDrink, type ItemDef} from '../src/items/items';
+import {ITEMS, isFoodOrDrink, isMedical, type ItemDef} from '../src/items/items';
+import {econCat} from '../src/items/lootTables';
 import {GEAR_IDS} from '../src/items/gear';
 import {MATERIAL_IDS} from '../src/items/craftMaterials';
 import {WEAPONS} from '../src/weapons/weapons';
@@ -41,7 +45,7 @@ const cart = (x: number, z: number, units: number, owner = 'station'): ScanCart 
 const cellOf = (v: number) => (Math.floor(v / SCANNER.cell) + 0.5) * SCANNER.cell;
 /** A mode's dots of a snapshot. */
 const dots = (s: ScanSnapshot, m: ScanMode) => scanBlips(s, m).blips;
-/** Counts per mode, all seven (zeros included). */
+/** Counts per mode, every mode (zeros included). */
 const counts = (o: Partial<Record<ScanMode, number>>) => Object.fromEntries(SCAN_MODES.map(m => [m, o[m] ?? 0]));
 
 describe('the scanner numbers (one place)', () => {
@@ -59,8 +63,8 @@ describe('the scanner numbers (one place)', () => {
 });
 
 describe('the modes: exactly the user\'s cycle', () => {
-  it('All → Food/Water → Ammo → Fuel → Weapon → Equipment → Material → All; ALL is the default', () => {
-    expect(SCAN_MODES.map(m => SCAN_MODE_LABEL[m])).toEqual(['All', 'Food/Water', 'Ammo', 'Fuel', 'Weapon', 'Equipment', 'Material']);
+  it('All → Food/Water → Ammo → Fuel → Weapon → Equipment → Material → Medical → All; ALL is the default', () => {
+    expect(SCAN_MODES.map(m => SCAN_MODE_LABEL[m])).toEqual(['All', 'Food/Water', 'Ammo', 'Fuel', 'Weapon', 'Equipment', 'Material', 'Medical']);
     expect(SCAN_DEFAULT_MODE).toBe('all');
     const seen: ScanMode[] = [];
     let m: ScanMode = 'all';
@@ -71,7 +75,15 @@ describe('the modes: exactly the user\'s cycle', () => {
     // an unknown mode starts the cycle over
     expect(nextScanMode('enemy' as ScanMode)).toBe('all');
     for (const v of [...SCAN_MODES]) expect(isScanMode(v)).toBe(true);
-    for (const v of ['', 'enemy', 'gear', 'item', 'ALL', 'toString', null, 3]) expect(isScanMode(v)).toBe(false);
+    for (const v of ['', 'enemy', 'gear', 'item', 'ALL', 'MEDICAL', 'med', 'toString', null, 3]) expect(isScanMode(v)).toBe(false);
+  });
+
+  it('Medical is APPENDED: the seven older modes keep their names and places, so a saved mode never changes meaning', () => {
+    // (a unit saves its mode by name — craft/equipment.ts `display` — and these are the names every save before Medical can hold)
+    expect(SCAN_MODES.slice(0, 7)).toEqual(['all', 'food', 'ammo', 'fuel', 'weapon', 'equipment', 'material']);
+    expect(SCAN_MODES[SCAN_MODES.length - 1]).toBe('medical');
+    expect(nextScanMode('material')).toBe('medical');
+    expect(nextScanMode('medical')).toBe('all');
   });
 
   it('no enemy and no red / gold class is left in the scanner\'s rules', () => {
@@ -86,7 +98,8 @@ describe('what an item is to the scanner: its traits', () => {
   /** The rule restated from the item's traits (the catalogue's own fields, never ids). */
   const byTraits = (d: ItemDef): string =>
     d.kind === 'weapon' || d.weaponId ? 'weapon' : d.kind === 'ammo' || d.caliber ? 'ammo' : d.id === FUEL.canItem ? 'fuel'
-      : d.kind === 'gear' || d.gear ? 'equipment' : d.kind === 'material' ? 'material' : isFoodOrDrink(d) ? 'food' : '-';
+      : d.kind === 'gear' || d.gear ? 'equipment' : d.kind === 'material' ? 'material' : isFoodOrDrink(d) ? 'food'
+        : (d.heal ?? 0) > 0 || (d.treats?.length ?? 0) > 0 ? 'medical' : '-';
 
   it('EVERY catalogue item (whatever is in it at run time) is in ALL and in the mode its traits say, and in no other', () => {
     const per = new Map<string, string[]>();
@@ -100,7 +113,8 @@ describe('what an item is to the scanner: its traits', () => {
     }
     // every mode has something in today's catalogue
     for (const k of SCAN_CATEGORIES) expect(per.get(k)?.length ?? 0, k).toBeGreaterThan(0);
-    // every weapon (guns AND melee) is a Weapon; every gear piece Equipment; every material Material; every food / drink Food/Water
+    // every weapon (guns AND melee) is a Weapon; every gear piece Equipment; every material Material; every food / drink Food/Water;
+    // every healing / injury-treatment item Medical
     const melee = Object.values(ITEMS).filter(d => d.kind === 'weapon' && WEAPONS[d.weaponId!]?.melee).map(d => d.id);
     expect(melee.length).toBeGreaterThan(1);
     for (const d of Object.values(ITEMS).filter(q => q.kind === 'weapon')) expect([d.id, scanCategory(d)]).toEqual([d.id, 'weapon']);
@@ -111,6 +125,18 @@ describe('what an item is to the scanner: its traits', () => {
     for (const d of Object.values(ITEMS).filter(isFoodOrDrink)) expect([d.id, scanCategory(d)]).toEqual([d.id, 'food']);
     for (const d of Object.values(ITEMS).filter(q => q.kind === 'ammo')) expect([d.id, scanCategory(d)]).toEqual([d.id, 'ammo']);
     expect(per.get('fuel')).toEqual([FUEL.canItem]);
+    for (const d of Object.values(ITEMS).filter(isMedical)) expect([d.id, scanCategory(d)]).toEqual([d.id, 'medical']);
+    expect([...per.get('medical')!].sort()).toEqual(['arm_sling', 'bandage', 'leg_splint', 'medkit', 'trauma_kit']);
+  });
+
+  it('Medical is the catalogue\'s own trait (isMedical), in step with the loot economy\'s med category — never food, drink or gear', () => {
+    for (const def of Object.values(ITEMS)) {
+      // the scanner and the loot tables agree on what is medical (a new med item in the loot's list needs a healing / treating trait)
+      expect([def.id, isMedical(def)]).toEqual([def.id, econCat(def.id) === 'med']);
+      if (isFoodOrDrink(def) || def.kind === 'gear' || def.gear) expect([def.id, isMedical(def), scanCategory(def) === 'medical']).toEqual([def.id, false, false]);
+    }
+    // protective gear (masks, armour, helmets) and its filters affect survival but are not medical
+    for (const id of ['gas_mask', 'helmet', 'gas_filter', 'battery']) if (ITEMS[id]) expect([id, isMedical(ITEMS[id]), scanCategory(ITEMS[id]) === 'medical']).toEqual([id, false, false]);
   });
 
   it('a NEW item joins by its traits, with no list to update: a new gun, round, armour piece, salvage, ration', () => {
@@ -121,12 +147,27 @@ describe('what an item is to the scanner: its traits', () => {
     expect(scanCategory(def({kind: 'material'}))).toBe('material');
     expect(scanCategory(def({verb: 'eat'}))).toBe('food');
     expect(scanCategory(def({verb: 'drink'}))).toBe('food');
-    expect(scanCategory(def({verb: 'apply'}))).toBeNull(); // a new dressing: ALL only
+    expect(scanCategory(def({verb: 'apply', heal: 15}))).toBe('medical'); // a new dressing / medicine
+    expect(scanCategory(def({verb: 'apply', treats: ['arm']}))).toBe('medical'); // a new limb treatment
+    expect(scanCategory(def({kind: 'supply', heal: 5}))).toBe('medical'); // whatever its kind
+    expect(scanCategory(def({verb: 'eat', heal: 5}))).toBe('food'); // a ration that also heals a little stays food
+    expect(scanCategory(def({verb: 'drink', treats: ['leg']}))).toBe('food');
+    expect(scanCategory(def({kind: 'gear', gear: ITEMS.helmet.gear, heal: 5}))).toBe('equipment'); // worn gear stays equipment
+    for (const o of [{verb: 'eat' as const, heal: 5}, {kind: 'gear' as const, heal: 5}, {gear: ITEMS.helmet.gear, treats: ['leg' as const]}]) expect(isMedical(def(o))).toBe(false);
+    expect(scanCategory(def({verb: 'apply'}))).toBeNull(); // nothing healed, nothing treated: ALL only
+    expect(scanCategory(def({verb: 'apply', heal: 0, treats: []}))).toBeNull();
     expect(scanCategory(def({kind: 'throwable'}))).toBeNull();
   });
 
-  it('medical supplies, batteries, flares, grenades, filters, parts and currency are resources in ALL only', () => {
-    for (const id of ['medkit', 'bandage', 'leg_splint', 'arm_sling', 'trauma_kit', 'battery', 'flare', 'acid_grenade', 'lure_grenade', 'gas_filter',
+  it('medical supplies are Medical (and in ALL)', () => {
+    for (const id of ['medkit', 'bandage', 'leg_splint', 'arm_sling', 'trauma_kit']) {
+      expect([id, scanCategory(ITEMS[id])]).toEqual([id, 'medical']);
+      expect([id, SCAN_MODES.filter(k => hasMode(itemModes(id), k))]).toEqual([id, ['all', 'medical']]);
+    }
+  });
+
+  it('batteries, flares, grenades, filters, parts and currency are resources in ALL only', () => {
+    for (const id of ['battery', 'flare', 'acid_grenade', 'lure_grenade', 'gas_filter',
       'reactor_key', 'fuse_cartridge', 'rail_ties']) {
       if (!ITEMS[id]) continue; // (a catalogue without it: nothing to check)
       expect([id, scanCategory(ITEMS[id]), itemModes(id)]).toEqual([id, null, 1]);
@@ -142,6 +183,8 @@ describe('what an item is to the scanner: its traits', () => {
   it('a backpack is Equipment and also whatever is in it', () => {
     const m = stackModes({itemId: 'backpack', bag: [{itemId: 'beans'}, null, {itemId: 'ammo_9mm'}, {itemId: 'nope'}]});
     expect(SCAN_MODES.filter(k => hasMode(m, k))).toEqual(['all', 'food', 'ammo', 'equipment']);
+    const med = stackModes({itemId: 'backpack', bag: [{itemId: 'bandage'}, {itemId: 'leg_splint'}]});
+    expect(SCAN_MODES.filter(k => hasMode(med, k))).toEqual(['all', 'equipment', 'medical']);
   });
 });
 
@@ -154,14 +197,15 @@ describe('a snapshot: resources only', () => {
       cargoPickup: p => p === cargo,
     };
     const s = takeSnapshot(src, HERE);
-    expect(s.seen).toEqual(counts({all: 7, food: 1, ammo: 1, fuel: 1, weapon: 1, equipment: 1, material: 1}));
+    expect(s.seen).toEqual(counts({all: 7, food: 1, ammo: 1, fuel: 1, weapon: 1, equipment: 1, material: 1, medical: 1}));
     expect(dots(s, 'food')).toEqual([{x: cellOf(20), z: cellOf(0), n: 1}]);
     expect(dots(s, 'ammo')).toEqual([{x: cellOf(-20), z: cellOf(0), n: 1}]);
     expect(dots(s, 'weapon')).toEqual([{x: cellOf(0), z: cellOf(40), n: 1}]);
     expect(dots(s, 'equipment')).toEqual([{x: cellOf(0), z: cellOf(-40), n: 1}]);
     expect(dots(s, 'material')).toEqual([{x: cellOf(60), z: cellOf(0), n: 1}]);
     expect(dots(s, 'fuel')).toEqual([{x: cellOf(-60), z: cellOf(0), n: 1}]);
-    expect(dots(s, 'all')).toHaveLength(7); // the medkit is in ALL only
+    expect(dots(s, 'medical')).toEqual([{x: cellOf(0), z: cellOf(60), n: 1}]); // the loose medkit; never the stall's (a ware)
+    expect(dots(s, 'all')).toHaveLength(7);
     // without the cargo rule the rifle in the car WOULD be a dot (the exclusion is the rule, not a missing source)
     expect(takeSnapshot({...src, cargoPickup: undefined}, HERE).seen.weapon).toBe(2);
     // a ware stays excluded whoever asks
@@ -178,8 +222,10 @@ describe('a snapshot: resources only', () => {
   });
 
   it('holders: one thing per holder that still holds lots — counted once in ALL and once in each mode among its lots', () => {
-    const s = takeSnapshot({holders: [holder(12, 0, []), holder(24, 0, ['beans', 'water', 'ammo_556']), holder(48, 0, ['beans', 'pistol']), holder(60, 0, ['backpack']), holder(72, 0, ['not_an_item'])]}, HERE);
-    expect(s.seen).toEqual(counts({all: 3, food: 2, ammo: 1, weapon: 1, equipment: 1}));
+    const s = takeSnapshot({holders: [holder(12, 0, []), holder(24, 0, ['beans', 'water', 'ammo_556']), holder(48, 0, ['beans', 'pistol']), holder(60, 0, ['backpack']), holder(72, 0, ['not_an_item']),
+      holder(84, 0, ['medkit', 'bandage', 'trauma_kit'])]}, HERE);
+    expect(s.seen).toEqual(counts({all: 4, food: 2, ammo: 1, weapon: 1, equipment: 1, medical: 1}));
+    expect(dots(s, 'medical')).toEqual([{x: cellOf(84), z: cellOf(0), n: 1}]); // a first-aid cabinet of three supplies: ONE thing
     expect(dots(s, 'food')).toEqual([{x: cellOf(24), z: cellOf(0), n: 1}, {x: cellOf(48), z: cellOf(0), n: 1}]);
     expect(dots(s, 'ammo')).toEqual([{x: cellOf(24), z: cellOf(0), n: 1}]);
     expect(dots(s, 'weapon')).toEqual([{x: cellOf(48), z: cellOf(0), n: 1}]);
@@ -196,7 +242,7 @@ describe('a snapshot: resources only', () => {
 
   it('grounded backpacks are Equipment and what is in them; one worn / carried away is not there; one in the car is cargo', () => {
     const inCar = bag(1, 0);
-    const s = takeSnapshot({bags: [bag(16, 16), bag(40, 0, false), inCar, bag(-16, 16, true, ['water', 'ammo_12ga'])], cargoBag: b => b === inCar}, HERE);
+    const s = takeSnapshot({bags: [bag(16, 16), bag(40, 0, false), inCar, bag(-16, 16, true, ['water', 'ammo_12ga']), bag(0, -30, false, ['medkit'])], cargoBag: b => b === inCar}, HERE);
     expect(dots(s, 'equipment')).toEqual([{x: cellOf(-16), z: cellOf(16), n: 1}, {x: cellOf(16), z: cellOf(16), n: 1}]); // (the nearer cell first)
     expect(dots(s, 'food')).toEqual([{x: cellOf(-16), z: cellOf(16), n: 1}]);
     expect(dots(s, 'ammo')).toEqual([{x: cellOf(-16), z: cellOf(16), n: 1}]);
@@ -240,12 +286,13 @@ describe('a snapshot: resources only', () => {
 
 describe('a mode is a filter of the ONE snapshot', () => {
   it('each mode shows exactly the cells with things of it, with their counts; ALL is every resource cell; nothing is read again', () => {
-    const src: ScanSources = {pickups: [pickup('beans', 9, 5), pickup('knife', 10, 6), pickup('ammo_9mm', 30, 30)], holders: [holder(9, 6, ['water', 'pistol'])]};
+    const src: ScanSources = {pickups: [pickup('beans', 9, 5), pickup('knife', 10, 6), pickup('ammo_9mm', 30, 30), pickup('bandage', 31, 31)], holders: [holder(9, 6, ['water', 'pistol', 'arm_sling'])]};
     const s = takeSnapshot(src, HERE);
-    expect(dots(s, 'all')).toEqual([{x: 10, z: 6, n: 3}, {x: 30, z: 30, n: 1}]);
+    expect(dots(s, 'all')).toEqual([{x: 10, z: 6, n: 3}, {x: 30, z: 30, n: 2}]);
     expect(dots(s, 'food')).toEqual([{x: 10, z: 6, n: 2}]);
     expect(dots(s, 'weapon')).toEqual([{x: 10, z: 6, n: 2}]);
     expect(dots(s, 'ammo')).toEqual([{x: 30, z: 30, n: 1}]);
+    expect(dots(s, 'medical')).toEqual([{x: 10, z: 6, n: 1}, {x: 30, z: 30, n: 1}]); // the sling in the holder, the loose bandage
     for (const m of ['fuel', 'equipment', 'material'] as const) expect(scanBlips(s, m)).toEqual({blips: [], dropped: 0});
     // filtering reads only the snapshot: the sources can be gone and the snapshot is unchanged
     const frozen = JSON.stringify(s);
