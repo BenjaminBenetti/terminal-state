@@ -33,7 +33,7 @@ export const IRRADIATED_SKIN = {
   prop: 'irradiatedSkin',
   tag: 'v1',
   /** Green of the skin's own luminance: rgb = clamp(lum x gain + lift); mixed in by mask x tint. */
-  gain: [0.5, 1.55, 0.38] as const,
+  gain: [0.36, 1.45, 0.24] as const,
   lift: [0.012, 0.05, 0.01] as const,
   tint: 0.9,
   /** Emission (linear rgb x strength) at full glow; x (lightFloor + lum x lightGain) of the atlas texel. Saturated: a brighter or

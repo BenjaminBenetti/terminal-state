@@ -737,7 +737,10 @@ radiation damage and Geiger-counter clicks.
   cutoff, decay 2, at chest height). The pool follows the irradiated zombies nearest the eye within 32 m, with 2 m hysteresis and a
   0.35 s fade.
   - Surfaces: the light is occluded by the same per-light line-of-sight window as a flare's (`flareVisibility`), so it never shines
-    through a wall or a slab.
+    through a wall or a slab. Its falloff never uses a distance under 0.6 m (it sits inside the chest: the zombie's own arms and
+    clothes would burn white), and the march's in-scattering of a glow slot none under 0.9 m (no hot ball around the body).
+  - Priority: the nearest within 32 m, the player's own floor first (a zombie more than 3 m above or below the eye ranks 12 m
+    farther; the open pit's other tiers still get a light when the player's floor has none to light).
   - Fog: each lit light is a scatter light in the march's own reserved glow slots (`SMOKE_LIMITS.glowLights` = 4, beside the 4
     ordinary slots used by flares, fire, the core lights and the beam). So it can never take a flare's slot, or be refused because
     the core took them. Its in-scattering is 1.6x its intensity (`userData.vfScatterGain`), so the haze around a zombie glows

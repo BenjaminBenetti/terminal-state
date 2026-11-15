@@ -34,6 +34,11 @@ export const SMOKE_LIMITS = {
 } as const;
 /** Every scatter-light slot of the march: the ordinary ones first, then the reserved glow ones. */
 export const SCATTER_SLOTS = SMOKE_LIMITS.scatterLights + SMOKE_LIMITS.glowLights;
+/**
+ * The march's nearest in-scattering distance (m) for a glow slot: a glow light sits inside its zombie's chest, so the 0.3 m of the
+ * ordinary slots would draw a hot ball around the body; this keeps it a soft halo.
+ */
+export const GLOW_SCATTER_NEAR_M = 0.9;
 /** Occlusion windows: ordinary scatter lights use layers 0..3, glow lights 4..7, smoke emitters 8..11. */
 export const VIS_WINDOWS = SCATTER_SLOTS + SMOKE_LIMITS.emitters;
 /** A scatter light that uses the reserved glow slots (world/glowLights.ts marks its lights). */

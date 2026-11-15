@@ -272,6 +272,18 @@ describe('glow light pool: real, occluded, fog-scattering point lights within a 
     expect(parent.children.length).toBe(GLOW_LIGHT.count);
   });
 
+  it('the player\'s own floor first: a zombie on another storey ranks otherStoreyPenaltyM farther (still lit when the floor has none)', () => {
+    const pool = new GlowLightPool(new THREE.Object3D(), 1);
+    const eye = {x: 0, y: 1.6, z: 0};
+    const above = {key: {}, x: 4, y: 1.2 + 6, z: 0, strength: 1}, here = {key: {}, x: 14, y: 1.2, z: 0, strength: 1};
+    for (let k = 0; k < 30; k++) pool.frame(1 / 60, [above, here], eye);
+    expect(pool.ownerOf(0)).toBe(here.key);
+    const alone = new GlowLightPool(new THREE.Object3D(), 1);
+    for (let k = 0; k < 30; k++) alone.frame(1 / 60, [above], eye);
+    expect(alone.ownerOf(0)).toBe(above.key);
+    expect(GLOW_LIGHT.nearM).toBeGreaterThan(0.3);
+  });
+
   it('GlowLightNode builds into lit node materials on both backends (registered for GlowLight; gated, window lookup in the shader)', () => {
     for (const backend of ['glsl', 'wgsl'] as const) {
       const canvas = {getContext: () => null, style: {}, addEventListener() {}, removeEventListener() {}, width: 1, height: 1};

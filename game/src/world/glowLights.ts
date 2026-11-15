@@ -2,8 +2,9 @@
 //
 // User: "They must emit real local green light that contributes to the game's actual fog scattering." A small BOOT-TIME POOL of
 // unshadowed point lights (GLOW_LIGHT.count = 4): each frame the pool follows the irradiated zombies nearest the eye (within
-// GLOW_LIGHT.range, with hysteresis so two equally near zombies do not trade a light every frame), fading a light in over
-// GLOW_LIGHT.fadeS when it takes a zombie and out when it lets one go (or the zombie dies: its glow strength falls to 0). A lit glow light
+// GLOW_LIGHT.range, the player's own floor first, with hysteresis so two equally near zombies do not trade a light every frame),
+// fading a light in over GLOW_LIGHT.fadeS when it takes a zombie and out when it lets one go (or the zombie dies: its glow strength
+// falls to 0). A lit glow light
 //  - lights the surfaces around the zombie (walls, floor, the zombie itself) through GlowLightNode, OCCLUDED like a flare's light: the
 //    same per-light line-of-sight window the fog march uses (world/flareLight.ts flareVisibility), so it never shines through a wall or a
 //    slab onto the next room / storey;
@@ -17,7 +18,7 @@
 
 import * as THREE from 'three';
 import type {NodeBuilder} from 'three/webgpu';
-import {If, directPointLight, positionWorld, vec3} from 'three/tsl';
+import {If, getDistanceAttenuation, max, positionWorld, vec3} from 'three/tsl';
 import {FlareLight, FlareLightNode, flareVisibility} from './flareLight';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -36,6 +37,9 @@ export const GLOW_LIGHT = {
   /** The fog march's in-scattering of a glow light, relative to its intensity (render/volumetric.ts userData.vfScatterGain): the haze
    *  around a zombie glows clearly while the surface light stays soft enough not to paint its neighbours' clothes green. */
   scatterGain: 1.6,
+  /** The surface falloff never uses a distance below this (m): the light sits inside the chest, and its own arms / clothing within
+   *  a few cm would otherwise burn white (decay 2 is singular at 0). */
+  nearM: 0.6,
   /** Height of the light above the zombie's feet, x its body scale (about the chest). */
   lift: 1.15,
   /** Only zombies within this range (m) of the eye get a light. */
@@ -44,6 +48,10 @@ export const GLOW_LIGHT = {
   hysteresisM: 2,
   /** Fade in / out (s). */
   fadeS: 0.35,
+  /** A zombie more than storeyM (m) above / below the eye ranks as this much farther: the player's own floor first (the pit is open,
+   *  so the tiers above / below still get a light when no zombie of the player's floor needs it). */
+  storeyM: 3,
+  otherStoreyPenaltyM: 12,
 } as const;
 
 /** A glow light: a FlareLight (occlusion window) the atmosphere puts in its glow slots (userData.vfGlow). */
@@ -79,9 +87,10 @@ export class GlowLightNode extends FlareLightNode {
     const c = self.colorNode;
     const diffuse = n(vec3(0)).toVar(), specular = n(vec3(0)).toVar();
     If(n(c).r.add(n(c).g).add(n(c).b).greaterThan(0).and(lightVector.length().lessThan(self.cutoffDistanceNode)), () => {
-      const d = directPointLight({color: c, lightVector, cutoffDistance: self.cutoffDistanceNode, decayExponent: self.decayExponentNode} as never) as unknown as {lightDirection: N; lightColor: N};
-      const lightColor = n(d.lightColor).mul(flareVisibility(positionWorld, this.winNode as never, this.bandNode as never));
-      lightingModel.direct({lightDirection: d.lightDirection, lightColor, lightNode: this, reflectedLight: {directDiffuse: diffuse, directSpecular: specular}}, builder);
+      // (three's directPointLight with the distance floored at GLOW_LIGHT.nearM)
+      const attenuation = getDistanceAttenuation({lightDistance: max(lightVector.length(), GLOW_LIGHT.nearM), cutoffDistance: self.cutoffDistanceNode, decayExponent: self.decayExponentNode} as never);
+      const lightColor = n(c).mul(attenuation).mul(flareVisibility(positionWorld, this.winNode as never, this.bandNode as never));
+      lightingModel.direct({lightDirection: lightVector.normalize(), lightColor, lightNode: this, reflectedLight: {directDiffuse: diffuse, directSpecular: specular}}, builder);
     });
     reflectedLight.directDiffuse.addAssign(diffuse);
     reflectedLight.directSpecular.addAssign(specular);
@@ -161,7 +170,8 @@ export class GlowLightPool {
       if (!(s.strength > 0)) continue;
       const d = Math.hypot(s.x - eye.x, s.y - eye.y, s.z - eye.z);
       if (d > GLOW_LIGHT.range) continue;
-      order.push({s, d: d - (owned.has(s.key) ? GLOW_LIGHT.hysteresisM : 0)});
+      const storey = Math.abs(s.y - eye.y) > GLOW_LIGHT.storeyM ? GLOW_LIGHT.otherStoreyPenaltyM : 0;
+      order.push({s, d: d + storey - (owned.has(s.key) ? GLOW_LIGHT.hysteresisM : 0)});
     }
     order.sort((a, b) => a.d - b.d);
     const want = this.want;
