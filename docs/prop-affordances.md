@@ -608,6 +608,57 @@ foliage sunk into the soil bed). No new model or texture.
 - Tests: `tests/skyways-arch-rework.test.ts` (both audits, troughs at the rails / on the floor / clear of stairs, doors and run mouths,
   the walkway behind them, bench-planters on the floor, the foliage model requested only where a planter stands).
 
+### Skyways major events: tech expo, mini-golf, evacuation centre (task studio-skywalk-events-20261115-193624-01, layout version 7)
+The three new event dressers (`gen/skyways/events/`, see `docs/skyways.md` "The major events") reuse EXISTING kinds first. Those
+keep their own classification:
+- the expo: the convention stage, office monitors and keyboards, demo phones / tablets, CRT terminals, console stations, server racks,
+  glass counters and cabinets, info kiosks, folding chairs, lounge seating, footlockers and plants;
+- the mini-golf: shop counters (the front desk), a snack rack and cooler, café tables and chairs, stacking and folding chairs, plants;
+- the shelter: merch tables, desks, notice boards, crowd barriers, folding barricades, wheeled stretchers, a crash cart, IV poles,
+  vitals monitors, wheelchairs, med cabinets, crates, carton stacks, storage totes, water coolers, chairs, luggage, strollers, plush
+  toys and trash bags.
+
+Storage among them opens with its purpose's loot (expo `mall-electronics` / `mall-electronics-back`, shelter `stock-room` /
+`first-aid-room`). Loose devices, rations and papers are separate props or pickups on their host's real top.
+
+The NEW kinds are code-built from the existing shape materials and locally drawn canvas faces (no model, texture or generated art).
+Their classification lives in `events/expoKinds.ts`, `golfKinds.ts` and `evacKinds.ts` (`*_SPECS`, spread into both audits through the
+destination registry). Their scale-check records (`*_SCALE`, renders beside `lastshift` in the task's QA folder) are summarized below.
+
+| Kind | Openables audit | Physics audit | Scale check W×H×D (contact; surfaces) |
+|---|---|---|---|
+| `skyExpoLedWall` | `none` (equipment) | static `mounted`: rigged in the stage truss (~300 kg) | 6.20 × 3.30 × 0.11 m, base 0.06 m over the 1.09 m deck; 4 contacts on the deck |
+| `skyExpoLectern` | `none` (equipment; solid front) | **dynamic** 30 kg box, `wood`, `onHost` (the stage deck) | 0.62 × 1.39 × 0.52 m, sloped top 1.12 m; 4 contacts |
+| `skyExpoBoothWall` | `none` (decor) | static `partition`: shell-scheme wall braced against the hall wall | 3.00 × 2.50 × 0.06 m (0.12 m collider), header 2.05–2.45 m; 2 contact runs |
+| `skyExpoDemoCounter` | `none` (surface; no doors or drawers) | static `fixture`: the host of the loose devices on it | 1.60 × 1.00 × 0.60 m, top 1.00 m; 4 contacts |
+| `skyExpoDemoTable` | `none` (surface; no drawers) | static `fixture`: the host of monitors / keyboards on it | 1.60 × 0.75 × 0.80 m, top 0.75 m; 4 legs |
+| `skyExpoPlinth` | `none` (surface) | static `fixture`: the host of its device | 0.52 × 1.00 × 0.52 m, top 1.00 m; 4 contacts |
+| `skyExpoScreenStand` | `none` (equipment) | **dynamic** 45 kg box, `pad` (felt-padded base plate) | 1.55 × 1.99 × 0.65 m, panel centre 1.54 m; 4 contacts |
+| `skyExpoTowerPc` | `none` (equipment; closed case) | **dynamic** 9 kg box, `metal`, `onHost` (a demo table) | 0.20 × 0.44 × 0.45 m; 4 contacts |
+| `skyExpoHangSign` | `none` (decor) | static `mounted`: hung on two cables | 2.45 × 1.10 × 0.04 m; ≥ 2.5 m clear under the board |
+| `skyExpoSignStand` | `none` (decor) | **dynamic** 14 kg box, `pad` | 0.90 × 1.98 × 0.45 m; 4 contacts |
+| `golfGreen` | `none` (surface) | static `built-in`: turf deck; `walkOver` (walkers cross it) | unit 1.00 × 0.06 × 1.00 m, per placement ≤ 2.8 m; 4 corners |
+| `golfCup` | `none` (surface; a ball drops into its cup) | static `built-in`: deck square with the 108 mm cup gap | 0.50 × 0.06 × 0.50 m; full base |
+| `golfTier` | `none` (surface) | static `built-in`: a deck tier 5 cm over its green | unit 1.00 × 0.11 × 1.00 m; 4 corners |
+| `golfRail` | `none` (decor) | static `built-in`: bumper rail; balls rebound, walkers step over | unit 1.00 × 0.11 × 0.086 m on the deck (0.17 m over the floor); 2 ends |
+| `golfBlock` | `none` (decor) | static `built-in`: bolted obstacle | 0.36 × 0.12 × 0.36 m per placement; full base on the deck |
+| `golfArch` | `none` (decor) | static `built-in`: tunnel gate (0.34 × 0.20 m opening) | 1.00 × 0.30 × 0.16 m; 2 posts on the deck |
+| `golfTeeMat` | `none` (surface) | static `flat`: 4 mm rubber mat | 0.50 × 0.004 × 0.36 m; full base |
+| `golfTeeSign` | `none` (decor) | **dynamic** 3.5 kg box, `pad` (weighted base) | 0.34 × 0.92 × 0.22 m, plate at 0.79 m; 4 corners |
+| `golfFlag` | `none` (decor) | static `mounted`: clamped beside the cup, outside the rail | 0.25 × 0.62 × 0.05 m; 1 clamp foot |
+| `golfScorecardStand` | `none` (decor) | **dynamic** 0.35 kg box, `plastic`, `onHost` (the front desk) | 0.16 × 0.18 × 0.09 m on the 1.05 m desk; 2 contacts |
+| `golfPutterRack` | `none` (decor; empty hooks, the one putter is at the desk) | static `mounted` | 0.90 × 0.50 × 0.09 m at 0.95–1.45 m; wall-mounted |
+| `golfPartyBanner` | `none` (decor) | static `mounted` | 1.80 × 0.45 × 0.01 m at 1.55–2.00 m; wall-mounted |
+| `evacCot` | `none` (decor; canvas bed) | **dynamic** 8 kg box, `pad`; its pillow and blanket are part of the body | 0.70 × 0.40 × 1.90 m (0.47–0.48 with bedding); 6 contacts |
+| `evacScreen` | `none` (decor) | **dynamic** 6 kg box, `castor` | 1.60 × 1.75 × 0.45 m; 8 feet / castors |
+| `evacNote` | `none` (decor; read with E, never taken) | static `flat`: one sheet of paper | 0.216 × 0.002 × 0.279 m flat on its support, or pinned on a board |
+| `evacWarnBoard` | `none` (decor) | static `mounted`: plywood screwed to the wall | 1.20 × 0.80 × 0.024 m at 1.15–1.95 m; wall-mounted |
+
+- The putter and the golf balls are ITEMS (layout pickups), not prop kinds: the putter is a melee weapon, and each ball is one pickup and
+  one rolling physics body (`items/golfItems.ts`, `physics/golfBall.ts`).
+- Tests: `tests/skyways-event-expo.test.ts`, `skyways-event-golf-course.test.ts`, `skyways-event-evac.test.ts` (both audits, support,
+  fit, loot themes), `skyways-event-golf-play-*.test.ts` and `skyways-event-golf-real.test.ts` (putting, cups, persistence).
+
 ## 6. Player-train fixtures (not layout prop kinds)
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
 they sit outside the two audits; their classification is recorded here.

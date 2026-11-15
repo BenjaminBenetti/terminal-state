@@ -252,6 +252,37 @@ per map, the rest of the map stays ordinary.
   circulation kit (`venueDress.ts eventVenueContext`, `group`, `markRoutes`). Its prop kinds live in `events/*Kinds.ts`, spread into the
   destination registry (both audits), and are drawn by `world/skywaysEventDraw.ts`.
 - Saves: a station entered at versions 1–6 keeps its version and its old event; only stations not yet entered can get a new event.
+- Each new event also puts a small infected crowd on its floor (`events/eventCrowd.ts`, its own fork, appended after every other spawn
+  pass, tagged 'floor'): 3–5 at the expo, 2–4 at the mini-golf, 4–6 at the shelter, kept clear of the doors and passages.
+- **`tech-expo`: a technology expo** (`expoDress.ts`, `expoKinds.ts`, `world/skywaysExpoDraw.ts`):
+  - a KEYNOTE in the main hall: the stage with an LED wall, a lectern, screens and up to 126 audience chairs;
+  - up to 12 exhibitor BOOTHS on the exhibitors' floor (booth walls with the exhibitor's fascia, demo counters and tables, plinths and
+    screen stands with the existing electronics as loose props on top) and demo theatres in the panel rooms; the washrooms, backstage
+    and storage keep the ordinary dressing;
+  - the expo and exhibitor names are fictional (`expoTypes.ts`); the screen and sign faces are drawn locally (`skywaysEventDraw.ts
+    eventFaceMaterial`);
+  - the booth holders roll `mall-electronics`, the back-of-house flight cases `mall-electronics-back`.
+- **`mini-golf`: an indoor mini-golf course** (`golfCourse.ts`, `golfDress.ts`, `golfKinds.ts`, `world/skywaysGolfDraw.ts`):
+  - 6–9 holes in bays across the main hall (nine designs: straight, dogleg, zigzag, gate, obstacle, island, tier, hairpin, plateau),
+    each with procedural turf, rails, a tee mat with its hole sign, a flag and a REAL cup: a gap in the green's collider
+    (`golfContract.ts golfColliderBoxes`) with a drawn liner;
+  - one ball on each tee and the course's ONE putter plus three spare balls on the FRONT DESK, all ordinary layout pickups;
+  - the putter (`weapons/putter.ts`, `items/golfItems.ts`) is a light melee weapon (equips, swings, hits enemies). Hold to charge and
+    release to putt a ball in front of you (`combat/putterStrike.ts`); the ball (`physics/golfBall.ts`) rolls with rolling resistance,
+    rebounds off the rails and drops through the cup's gap. There is no scoring UI. Neither item is ever loot, market stock or a weapon
+    find (`GOLF_EVENT_ONLY`);
+  - a ball keeps its pickup id, position and holed state through saves, unloading and cargo like any other loose pickup; taking it out of
+    a cup moves that same pickup;
+  - golf pieces are `walkOver`: walkers stand on the floor 6 cm below the turf and step over the rails.
+- **`evac-centre`: an emergency shelter** (`evacDress.ts`, `evacKinds.ts`, `world/skywaysEvacDraw.ts`):
+  - the whole venue floor: registration desks, a DORMITORY of cot rows along an aisle (at most 72 cots), a ration line, a medical bay
+    and a barricaded quarantine (a barrier line with one squeeze gap, abandoned cots and stretchers behind it);
+  - ration crates roll the stock room's rows and medical holders the first-aid room's rows; 2–4 ration pickups on the ration line; no
+    jackpot;
+  - 6–10 short notes from an authored pool (`evacNotes.ts`). Read them with the interact key (`world/skywaysNotes.ts`). They tell of the
+    ventilation failing, people turning, and the main reactor overrun. No quest or intel unlock.
+- Tests: `tests/skyways-event-pool.test.ts`, `skyways-event-expo.test.ts`, `skyways-event-golf-course.test.ts`,
+  `skyways-event-golf-play-*.test.ts`, `skyways-event-golf-real.test.ts` (a putt on a generated course), `skyways-event-evac*.test.ts`.
 
 ## Gas
 
