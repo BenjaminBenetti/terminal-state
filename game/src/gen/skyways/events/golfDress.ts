@@ -13,7 +13,7 @@
 //    (their spans cut from the counter's loot surface), the FRONT DESK plate hung over it;
 //  - the CLUBHOUSE (the exhibitors' court pieces): benches, the wall putter rack (empty: the one putter is at the desk), waiting chairs;
 //  - PARTY ROOMS (the panel rooms): party tables with chairs round them, a birthday banner on the wall; the SNACK BAR (photo lounge): a
-//    counter, a vending machine, a café table with chairs;
+//    counter, a drinks cooler, a snack rack, a café table with chairs;
 //  - wayfinding: the course's welcome plate at each bridge mouth (its arrow toward the course), plates over the course / room doors and
 //    the WASHROOMS / STAFF ONLY doors off the hall. The staff room, storage and washrooms keep their ordinary dressing.
 // Circulation: the venue kit's door strips, reach keys and whole-walk check (gen/skyways/venueDress.ts eventVenueContext / group): every
@@ -171,8 +171,6 @@ function placeCourse(vc: VenueCtx, hall: Area, name: number, info: GolfDressInfo
   const bays = bayOrder(hp, hub ? {x: hub.x, z: hub.z} : {x: (rect.x0 + rect.x1) / 2, z: rect.z0});
   const used = new Map<GolfDesign, number>();
   const tint0 = rng.int(0, GOLF_TINTS.length - 1), railOrder = rng.shuffle(GOLF_RAIL_MATS.map((_, i) => i)), block0 = rng.int(0, GOLF_BLOCK_MATS.length - 1);
-  // the aisles stay clear of everything placed after the course (the bays are clear of them by construction)
-  for (const a of hp.aisles) for (const [cx, cy] of cellsOf(a)) v.keepCell(cx, cy);
   let n = 0;
   for (const bay of bays) {
     if (n >= 9) break;
@@ -220,6 +218,8 @@ function placeCourse(vc: VenueCtx, hall: Area, name: number, info: GolfDressInfo
     if (!flag) v.skipped.push(`golf: hole ${k + 1} flag`);
     info.holes.push({n: k + 1, bay, frame: fr, built, tint, deck, cup, rails, blocks, arches, mat, sign, flag, tee, cupAt: fr.toWorld(plan.cup), path: plan.path.map(fr.toWorld)});
   }
+  // the aisles stay clear of everything placed after the course (after it: an aisle's edge cell may be shared with a bay's)
+  for (const a of hp.aisles) for (const [cx, cy] of cellsOf(a)) v.keepCell(cx, cy);
   if (n < 6) v.skipped.push(`golf: only ${n} holes`);
 }
 
@@ -384,7 +384,7 @@ function partyRoom(vc: VenueCtx, a: Area, k: number): PropPlacement[] {
   return v.layout.props.slice(n0);
 }
 
-/** The snack bar: a counter against the back wall, a vending machine, a café table with two chairs. */
+/** The snack bar: a counter against the back wall, a drinks cooler and a snack rack, a café table with two chairs. */
 function snackBar(vc: VenueCtx, a: Area): PropPlacement[] {
   const v = vc.v, n0 = v.layout.props.length, ps = vc.portals.get(a.id) ?? [];
   const door = ps.find(p => p.door) ?? ps[0] ?? null, fr = frameOf(a, door);
@@ -396,16 +396,19 @@ function snackBar(vc: VenueCtx, a: Area): PropPlacement[] {
     if (counter) break;
   }
   if (!counter) v.skipped.push(`golf: snack bar ${a.id} counter`);
-  if (!wallRow(vc, a, 'vending', {max: 1, front: 0.9}, 1)) v.skipped.push(`golf: snack bar ${a.id} vending`);
+  // (a vending machine would count against the storey's strict-wall vending cap: the drinks cooler and a snack rack instead)
+  if (!wallRow(vc, a, 'shopCooler', {max: 1, front: 0.9}, 1)) v.skipped.push(`golf: snack bar ${a.id} cooler`);
+  if (!wallRow(vc, a, 'snackRack', {max: 1, front: 0.8}, 1)) v.skipped.push(`golf: snack bar ${a.id} snack rack`);
   let set = false;
   for (let t = 0; t < 24 && !set; t++) {
-    const [x, z] = uvXZ(fr, v.rng.range(1.0, Math.max(1.05, fr.W - 1.0)), v.rng.range(1.6, Math.max(1.65, fr.D - 1.6)));
+    const [x, z] = uvXZ(fr, v.rng.range(0.8, Math.max(0.85, fr.W - 0.8)), v.rng.range(1.0, Math.max(1.05, fr.D - 0.9)));
     set = !!group(vc, [a], () => {
-      const tb = v.putRound('cafeBistroTable', snapC(x), snapC(z), 0, {area: a});
+      // (the table centred on a cell corner covers 2 x 2 cells: its chairs stand in the next cells, just clear of its top)
+      const tb = v.putRound('cafeBistroTable', Math.round(x * 2) / 2, Math.round(z * 2) / 2, 0, {area: a});
       if (!tb) return null;
-      const across = fr.front === 'N' || fr.front === 'S';
+      const across = fr.front === 'N' || fr.front === 'S', off = CELL + PROP_DEFS.cafeChair.d / 2 + 0.02;
       for (const s of [1, -1]) {
-        const cx = tb.x + (across ? s * 0.62 : 0), cz = tb.z + (across ? 0 : s * 0.62);
+        const cx = tb.x + (across ? s * off : 0), cz = tb.z + (across ? 0 : s * off);
         if (!v.put('cafeChair', cx, cz, quarter(yawToward(tb.x - cx, tb.z - cz)), {area: a})) return null;
       }
       return tb;
