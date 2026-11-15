@@ -646,7 +646,7 @@ destination registry). Their scale-check records (`*_SCALE`, renders beside `las
 | `golfTeeMat` | `none` (surface) | static `flat`: 4 mm rubber mat | 0.50 × 0.004 × 0.36 m; full base |
 | `golfTeeSign` | `none` (decor) | **dynamic** 3.5 kg box, `pad` (weighted base) | 0.34 × 0.92 × 0.22 m, plate at 0.79 m; 4 corners |
 | `golfFlag` | `none` (decor) | static `mounted`: clamped beside the cup, outside the rail | 0.25 × 0.62 × 0.05 m; 1 clamp foot |
-| `golfScorecardStand` | `none` (decor) | **dynamic** 0.35 kg box, `plastic`, `onHost` (the front desk) | 0.16 × 0.18 × 0.09 m on the 1.05 m desk; 2 contacts |
+| `golfScorecardStand` | `none` (decor) | **dynamic** 0.6 kg box, `plastic`, `onHost` (the front desk; a solid acrylic block) | 0.16 × 0.18 × 0.09 m on the 1.05 m desk; 2 contacts |
 | `golfPutterRack` | `none` (decor; empty hooks, the one putter is at the desk) | static `mounted` | 0.90 × 0.50 × 0.09 m at 0.95–1.45 m; wall-mounted |
 | `golfPartyBanner` | `none` (decor) | static `mounted` | 1.80 × 0.45 × 0.01 m at 1.55–2.00 m; wall-mounted |
 | `evacCot` | `none` (decor; canvas bed) | **dynamic** 8 kg box, `pad`; its pillow and blanket are part of the body | 0.70 × 0.40 × 1.90 m (0.47–0.48 with bedding); 6 contacts |

@@ -188,8 +188,8 @@ export const GOLF_SPECS: Readonly<Record<GolfKind, EventKindSpec>> = {
     faces: flagFaces,
   },
   golfScorecardStand: {
-    def: {w: GOLF_CARD.w, d: GOLF_CARD.d, h: GOLF_CARD.h, blocksSight: false, physics: {mass: 0.35, dynamic: true, shape: 'box', mat: 'plastic', contact: true, onHost: true}},
-    phys: {dynamic: true, mass: 0.35, mat: 'plastic', shape: 'box', onHost: true, how: 'a scorecard in an acrylic stand with a pencil cup (~0.35 kg) on the front desk: a shot knocks it over or off the desk (on-host decor)'},
+    def: {w: GOLF_CARD.w, d: GOLF_CARD.d, h: GOLF_CARD.h, blocksSight: false, physics: {mass: 0.6, dynamic: true, shape: 'box', mat: 'plastic', contact: true, onHost: true}},
+    phys: {dynamic: true, mass: 0.6, mat: 'plastic', shape: 'box', onHost: true, how: 'a scorecard in a solid acrylic block stand with a pencil cup (~0.6 kg of acrylic, like the convention\'s print easel) on the front desk: a shot knocks it over or off the desk (on-host decor)'},
     damage: 'plastic',
     open: {cls: 'none', role: 'decor', how: 'card stand and pencil cup: nothing to open'},
     parts: cardParts,
