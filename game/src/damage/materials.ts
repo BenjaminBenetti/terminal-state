@@ -332,7 +332,10 @@ export const PHYS_MATS: Readonly<Record<PhysMat, {friction: number; restitution:
   heavy: {friction: 0.55, restitution: 0.1}, stone: {friction: 0.7, restitution: 0.2}, wood: {friction: 0.6, restitution: 0.24},
   glass: {friction: 0.45, restitution: 0.14}, flesh: {friction: 0.95, restitution: 0.02}, cloth: {friction: 0.98, restitution: 0},
   castor: {friction: 0.0005, restitution: 0.1}, pad: {friction: 0.0012, restitution: 0.1}, // lane PHYS (calibrated, see above)
-  ball: {friction: 0.5, restitution: 0.55}, // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): the golf ball — grips the turf to roll, rebounds ~0.55 off a rail
+  // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): the golf ball — rebounds 0.65 off a rail; NO contact friction: cannon-es
+  // caps a friction equation's IMPULSE by mu m g (not mu m g dt), so any mu locks a sphere touching a rail and the turf at once (it stopped
+  // dead at the rail); its rolling is kept by physics/golfBall.ts instead (the spin follows the ground velocity, the turf drag GOLF_ROLL.decel)
+  ball: {friction: 0, restitution: 0.65},
 };
 /**
  * Task office-interactions-layout-20261030 (lane PHYS): why a prop kind stays static (damage/physicsAudit.ts PROP_PHYSICS_AUDIT;

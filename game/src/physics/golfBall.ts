@@ -2,8 +2,9 @@
 // (physics/dynamicItems.ts: one golf_ball pickup = one bounded, lazily created, sleeping cannon SPHERE) with three additions stepped in
 // the world's preStep (after the solver, before the integration: physics/world.ts build):
 //  - ROLLING RESISTANCE: while the ball touches a floor-like surface (a contact normal mostly up) its ground speed drops by a constant
-//    GOLF_ROLL.decel (the turf's drag; cannon's friction alone keeps a rolling sphere going for ever). Its spin is scaled with the ground
-//    velocity, so it keeps rolling without slipping; under stopSpeed it stops dead and the body sleeps / retires like any loose item.
+//    GOLF_ROLL.decel (the turf's drag; cannon's friction alone keeps a rolling sphere going for ever). Its spin always follows the ground
+//    velocity (arcade: it rolls without slipping, so a rail rebound keeps the solver's restitution instead of skidding to a crawl); under
+//    stopSpeed it stops dead and the body sleeps / retires like any loose item.
 //    A constant drag makes the roll distance v^2 / (2 decel): a 2.5 m/s putt rolls ~5 m.
 //  - CCD: at putt speeds a 42.7 mm ball moves up to ~8 cm per 1/60 s step — the depth of a course rail — so its centre could end past
 //    a rail's middle and be pushed out on the far side. Before each step a moving ball casts its centre line (cannon raycast vs the
@@ -38,8 +39,10 @@ export const GOLF_ROLL = {
   /** Cannon sleep (a stopped ball sleeps at once; the loose-item retirement then hands it back to its pickup). */
   sleepSpeedLimit: 0.03,
   sleepTimeLimit: 0.3,
-  /** Ball vs ball (two balls on the course): a hard, slippery click. Ball vs the course: physics/materials PHYS_MATS.ball. */
-  ballFriction: 0.08,
+  /** The player walking into a ball nudges it ahead at ~their speed, at most this (m/s: it rolls ~2 m). */
+  nudgeMax: 1.6,
+  /** Ball vs ball (two balls on the course): a hard click, no friction (as vs the course: damage/materials.ts PHYS_MATS.ball). */
+  ballFriction: 0,
   ballRestitution: 0.8,
 } as const;
 
@@ -52,15 +55,15 @@ export function golfBallCentre(obj: THREE.Object3D, out = new THREE.Vector3()): 
 
 /**
  * The height a golf ball put down at (x, z) near height y (a drop on the player's floor) rests at: the top of a mini-golf turf box under it
- * (golfColliderBoxes: never inside the 6 cm deck — over a cup's gap that is the floor, i.e. in the cup), else y. One pass over `props`
- * (a drop is a one-off event).
+ * (golfColliderBoxes: never inside the 6 cm deck / 11 cm tier — over a cup's gap that is the floor, i.e. in the cup; never on a taller
+ * obstacle's top), else y. One pass over `props` (a drop is a one-off event).
  */
 export function golfRestY(props: readonly PropPlacement[], x: number, z: number, y: number): number {
   let best = y;
   for (const p of props) {
     if (Math.abs(x - p.x) > p.hx || Math.abs(z - p.z) > p.hz) continue;
     const boxes = golfColliderBoxes(p);
-    if (boxes) for (const b of boxes) if (x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1 && b.y1 > best && b.y0 < y + 0.05 && b.y1 <= y + 0.3) best = b.y1;
+    if (boxes) for (const b of boxes) if (x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1 && b.y1 > best && b.y0 < y + 0.05 && b.y1 <= y + 0.15) best = b.y1;
   }
   return best;
 }
@@ -75,8 +78,8 @@ const ray = new CANNON.RaycastResult(), from = new CANNON.Vec3(), to = new CANNO
 
 /**
  * One world step's ball pass (call from the world's preStep: velocities are the solver's, the integration is next). `balls` = the
- * simulating ball bodies; `grounded` = those touching a floor-like surface this step (groundedBalls). Returns the bodies whose
- * velocity was clamped for this integration (with the velocity to restore after it: restoreClamped).
+ * simulating ball bodies; `grounded` = those touching a floor-like surface this step (groundedBalls). `clamped` receives the bodies whose
+ * velocity was clamped for this integration, with the velocity to restore after it (restoreClamped).
  */
 export function stepGolfBalls(world: CANNON.World, balls: readonly CANNON.Body[], grounded: ReadonlySet<CANNON.Body>, dt: number, clamped: Map<CANNON.Body, CANNON.Vec3>, counts?: {ballCcd: number; ballStops: number}): void {
   const G = GOLF_ROLL;
@@ -84,35 +87,43 @@ export function stepGolfBalls(world: CANNON.World, balls: readonly CANNON.Body[]
     if (b.type !== CANNON.Body.DYNAMIC || b.sleepState === CANNON.Body.SLEEPING) continue;
     const r = radiusOf(b);
     const v = b.velocity, w = b.angularVelocity;
+    // the integration adds force / mass * dt (gravity) to this velocity before moving the body: the solver's velocity of a ball resting
+    // on the turf points UP by g dt (it cancels that), so the motion this step is v + a dt
+    const ax = b.force.x * b.invMass * dt, ay = b.force.y * b.invMass * dt, az = b.force.z * b.invMass * dt;
     if (grounded.has(b)) {
-      const h = Math.hypot(v.x, v.z);
-      if (h < G.stopSpeed && Math.abs(v.y) < 0.05) {
+      const h = Math.hypot(v.x + ax, v.z + az);
+      if (h < G.stopSpeed && Math.abs(v.y + ay) < 0.05) {
         if (counts && (h > 0 || w.lengthSquared() > 0)) counts.ballStops++;
-        v.x = 0; v.z = 0; w.setZero();
+        v.x = -ax; v.z = -az; w.setZero();
       } else {
-        const k = Math.max(0, h - G.decel * dt) / h;
-        v.x *= k; v.z *= k; w.x *= k; w.z *= k;
-        w.y *= Math.max(0, 1 - G.ySpinDamp * dt);
+        const k = Math.max(0, h - G.decel * dt) / h, wy = w.y * Math.max(0, 1 - G.ySpinDamp * dt);
+        v.x = (v.x + ax) * k - ax; v.z = (v.z + az) * k - az;
+        // arcade: on the turf it always ROLLS (no skid): the spin follows the ground velocity — so a rail rebound leaves at once at the
+        // solver's restitution (a skidding sphere's forward spin would brake it to a crawl: v' = (2 - 5e) / 7 v)
+        rollingSpin(v.x + ax, v.z + az, r, w);
+        w.y = wy;
       }
     }
-    // CCD along the centre line
-    const sp = v.length(), travel = sp * dt;
+    // CCD along the centre line of this step's motion
+    const ex = v.x + ax, ey = v.y + ay, ez = v.z + az, sp = Math.hypot(ex, ey, ez), travel = sp * dt;
     if (travel <= r * G.ccdKeep) continue;
     const p = b.position;
     from.set(p.x, p.y, p.z);
     const reach = (travel + r) / sp;
-    to.set(p.x + v.x * reach, p.y + v.y * reach, p.z + v.z * reach);
+    to.set(p.x + ex * reach, p.y + ey * reach, p.z + ez * reach);
     ray.reset();
     if (!world.raycastClosest(from, to, RAY_OPTS, ray) || !ray.hasHit) continue;
     const allowed = Math.max(0, ray.distance - r * G.ccdKeep);
     if (allowed >= travel) continue;
-    clamped.set(b, v.clone());
-    v.scale(allowed / travel, v);
+    // this integration moves it only `allowed` along the same line; afterwards it has its full motion back (restoreClamped)
+    clamped.set(b, new CANNON.Vec3(ex, ey, ez));
+    const s = allowed / travel;
+    v.set(ex * s - ax, ey * s - ay, ez * s - az);
     if (counts) counts.ballCcd++;
   }
 }
 
-/** After the integration: the clamped balls get their real velocity back (the next step's contact rebounds them). */
+/** After the integration (postStep): the clamped balls get their real (post-integration) velocity back (the next step's contact rebounds them). */
 export function restoreClamped(clamped: Map<CANNON.Body, CANNON.Vec3>): void {
   for (const [b, v] of clamped) b.velocity.copy(v);
   clamped.clear();
