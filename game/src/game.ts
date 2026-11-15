@@ -15,7 +15,7 @@ import {P7_FILES, dropUnloadedP7, p7ModelKeysFor} from './gen/props07';
 import {buildWorldSteps, type BuiltWorld} from './world/builder';
 import {fogCullDistance} from './world/levelCulling';
 import {WorldMaterials} from './world/materials';
-import {MOOD, StationLighting, stationBakeInput} from './world/lights';
+import {FLASH_BOUNCE, MOOD, StationLighting, stationBakeInput} from './world/lights';
 import {ENHANCED_LIGHTING_DEFAULT, REFLECTIONS_DEFAULT, type EnhancedLightingMode, type ReflectionQuality} from './world/enhancedLighting'; // task studio-baked-lighting-reflections-20261114-050258-01
 import {EnhancedLightingRuntime, lightingCapabilities} from './world/enhancedLightingRuntime';
 import {VolumetricAtmosphere} from './render/volumetric';
@@ -3601,6 +3601,7 @@ export class Game {
     this.muzzleT -= dt;
     this.muzzleLight.intensity = this.muzzleT > 0 ? 18 * (0.65 + Math.random() * 0.7) : 0; // flicker
     this.updatePlayerLight(dt, eye); // Iteration 12 (LIGHT): battery drain / flicker -> SpotLight, body glow, light sources
+    FLASH_BOUNCE.update(dt, this.flashlight); // the beam's bounce off the architecture it lands on (zero unless the station is shaded in full)
     this.lightPool.update(dt, eye);
     prof.lap(SPAN.fx);
     this.fx.update(dt);

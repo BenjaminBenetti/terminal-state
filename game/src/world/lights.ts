@@ -22,8 +22,8 @@
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial, type Node, type NodeBuilder, type NodeMaterial} from 'three/webgpu';
 import {
-  Fn, cameraProjectionMatrix, clamp, dot, exp, float, length, mat3, max, min, mix, modelViewMatrix, normalize, output, positionGeometry,
-  positionLocal, positionView, renderGroup, smoothstep, sqrt, toneMappingExposure, uniform, uv, varying, vec2, vec3, vec4,
+  Fn, cameraProjectionMatrix, clamp, dot, exp, float, length, mat3, max, min, mix, modelViewMatrix, normalWorld, normalize, output, positionGeometry,
+  positionLocal, positionView, positionWorld, renderGroup, smoothstep, sqrt, toneMappingExposure, uniform, uv, varying, vec2, vec3, vec4,
 } from 'three/tsl';
 import type {Area, LightProfile, StationLayout} from '../gen/station';
 import type {Fixture} from './builder';
@@ -32,7 +32,8 @@ import {
   type BakedField, type FieldParams, type FieldSample, type FieldSource,
 } from './lightField';
 import type {BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
-import {LF, activeLightField, bindLightField, installLightFieldNode, setLightFieldLevels, stationFieldLight, stationLights, type LightFieldLight} from './lightFieldNode';
+import {FULL_IRRADIANCE, LF, activeLightField, bindLightField, installLightFieldNode, setLightFieldLevels, stationFieldLight, stationLights, type LightFieldLight} from './lightFieldNode';
+import {FlashBounce, flashBounceIrradiance} from './flashBounce';
 import {addNodeHook} from '../render/nodeHooks';
 import {stationLevels} from './levelGeometry';
 import {mallSkyField} from './mallSkylight'; // Task track3-eaton-centre-20261031 (lane ARCH): daylight through the mall's glass roof
@@ -299,6 +300,20 @@ function asNodeMaterial(m: THREE.Material): NodeMaterial {
 
 const tmpColor = new THREE.Color();
 
+/**
+ * Task studio-baked-gi-visual-uplift-20261115-004324-01: the session's live flashlight bounce (world/flashBounce.ts) — the light the
+ * beam sends back off the wall, floor or ceiling it lands on. Its sum is a term of the FULL field light's irradiance (plain render-group
+ * uniforms: no texture, no buffer of its own); it traces the station whose lighting is shaded in full and is zero everywhere else
+ * (Enhanced lighting Off, plain shading, the Reactor, the transit gap). The game calls FLASH_BOUNCE.update every frame.
+ */
+export const FLASH_BOUNCE = new FlashBounce();
+FULL_IRRADIANCE.push(() => flashBounceIrradiance(positionWorld, normalWorld));
+let bounceOwner: StationLighting | null = null;
+function bindBounce(owner: StationLighting | null): void {
+  bounceOwner = owner;
+  FLASH_BOUNCE.bind(owner?.bounce ?? null);
+}
+
 export class StationLighting {
   readonly field: BakedField;
   readonly volume: LightFieldVolume;
@@ -368,6 +383,7 @@ export class StationLighting {
     scene.add(this.fieldLight);
     bindLightField(this.volume);
     bindReflectionProbes(this.reflections);
+    bindBounce(this.bounce ? this : null);
     if (opts.hemi) {
       opts.hemi.intensity = MOOD.ambient;
       opts.hemi.color.setHex(MOOD.hemiSky);
@@ -478,6 +494,7 @@ export class StationLighting {
     }
     bindLightField(this.volume);
     bindReflectionProbes(this.reflections);
+    bindBounce(this.bounce ? this : null);
     this.setFieldLevels();
     this.applyLevels(true);
   }
@@ -501,6 +518,7 @@ export class StationLighting {
     if (this.fieldLight.parent === scene) scene.remove(this.fieldLight);
     if (activeLightField() === this.volume) bindLightField(null);
     if (this.reflections && activeReflectionProbes() === this.reflections) bindReflectionProbes(null);
+    if (bounceOwner === this) bindBounce(null);
     const volume = this.volume, glow = this.glow, reflections = this.reflections;
     if (glow) scene.remove(glow);
     const release = () => {

@@ -685,7 +685,7 @@ describe('the sum: CPU mirror and shader', () => {
     // the default parameters are FB.params' (the lead tunes there); it writes into what it is given
     const out = new Float32Array(3);
     expect(sampleFlashBounce(fb.vpls, [3, 0, 3], [0, 1, 0], out)).toBe(out);
-    expect(out[0]).toBeCloseTo(documented(fb.vpls, [3, 0, 3], [0, 1, 0], 1, 0.5, 11)[0], 5);
+    expect(out[0]).toBeCloseTo(documented(fb.vpls, [3, 0, 3], [0, 1, 0], FLASH_BOUNCE_DEFAULTS.gain, FLASH_BOUNCE_DEFAULTS.r0, FLASH_BOUNCE_DEFAULTS.range)[0], 5);
     // at a light's own place (r = 0) and with r0 = 0 nothing blows up
     for (const v of fb.vpls) for (const r0 of [0.5, 0]) {
       const e = sampleFlashBounce(fb.vpls, posOf(v), [0, 1, 0], [0, 0, 0], {x: 1, y: r0, z: 11});

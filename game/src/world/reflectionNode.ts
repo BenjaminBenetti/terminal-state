@@ -84,13 +84,14 @@ export const REFLECT_ROUGHNESS_MAX = 0.45;
 /**
  * Task studio-graphics-gpu-materials-toggle-20261114-212239-01: a 'gloss' candidate (a glossy non-metal: the glazed wall tile) shows
  * the probes in full up to GLOSS_ROUGHNESS_FULL and not at all from GLOSS_ROUGHNESS_NONE on (grout, grime, dust): a fade, so a tile
- * face around the limit does not flip between the two. Only with the High probes (REFL.params.y).
+ * face around the limit does not flip between the two. With either probe tier (task studio-baked-gi-visual-uplift-20261115-004324-01:
+ * it was High only); REFL.params.y gates it at run time and is 0 while no probes are bound.
  */
 export const GLOSS_ROUGHNESS_FULL = 0.45;
 export const GLOSS_ROUGHNESS_NONE = 0.6;
-/** How much of the probes a 'gloss' fragment of roughness `rough` shows (the shader's weight; `high`: the bound probes are the High tier). */
-export function glossWeight(rough: number, high: boolean): number {
-  if (!high) return 0;
+/** How much of the probes a 'gloss' fragment of roughness `rough` shows (the shader's weight; `bound`: probes are bound). */
+export function glossWeight(rough: number, bound: boolean): number {
+  if (!bound) return 0;
   const t = Math.min(1, Math.max(0, (rough - GLOSS_ROUGHNESS_FULL) / (GLOSS_ROUGHNESS_NONE - GLOSS_ROUGHNESS_FULL)));
   return 1 - t * t * (3 - 2 * t);
 }
@@ -119,8 +120,8 @@ export class ReflectionProbeVolume {
 /**
  * The global reflection nodes. atlasInfo = atlas width, height (px), the sharpest tile's edge (px), probe tiles per row;
  * levelY = first texel row of each roughness level's band; gridInfo = grid width, height (cells), slices, metres per cell;
- * params.x = strength (0 while nothing is bound: the probes add nothing), params.y = 1 while the bound probes are the High tier
- * (glossy non-metals — 'gloss' — show them too), else 0.
+ * params.x = strength (0 while nothing is bound: the probes add nothing), params.y = 1 while probes are bound (glossy non-metals —
+ * 'gloss' — show them too), else 0.
  */
 export const REFL = {
   // (render/textureFetch.ts: data textures — no uv-transform uniform, and none of its per-object updates)
@@ -158,7 +159,7 @@ export function bindReflectionProbes(v: ReflectionProbeVolume | null): void {
   REFL.levelY.value.set(L.levelY[0], L.levelY[1], L.levelY[2], L.levelY[3]);
   if (v) REFL.gridInfo.value.set(v.probes.gridW, v.probes.gridH, v.probes.gridDepth, CELL);
   else REFL.gridInfo.value.set(1, 1, 2, CELL);
-  REFL.params.value.set(v && v.probes.count > 0 ? REFLECTION_TUNING.strength : 0, v && v.probes.count > 0 && v.probes.tier === 'high' ? 1 : 0, 0, 0);
+  REFL.params.value.set(v && v.probes.count > 0 ? REFLECTION_TUNING.strength : 0, v && v.probes.count > 0 ? 1 : 0, 0, 0);
 }
 
 /** Re-apply REFLECTION_TUNING to the bound probes (QA / tuning). */
@@ -320,8 +321,8 @@ export class LightFieldReflectNode extends LightFieldNode {
       const sw = lightFieldSample(positionWorld, {normal: normalWorld, reach: WINDOW_REACH});
       rad.assign(n(probeRadiance(sw, dir, rough, at)).div(clamp(materialOpacity, 0.25, 1)));
     } else if (cls === 'gloss') {
-      // a glossy non-metal (glazed tile): three's Fresnel keeps it faint face-on and strong at a grazing angle. With the High probes
-      // only (REFL.params.y), and fading out toward rough texels (see GLOSS_ROUGHNESS_FULL); no lookup where the weight is nothing
+      // a glossy non-metal (glazed tile): three's Fresnel keeps it faint face-on and strong at a grazing angle. Fading out toward
+      // rough texels (see GLOSS_ROUGHNESS_FULL); no lookup where the weight is nothing (REFL.params.y: 0 while nothing is bound)
       const w = n(n(REFL.params).y.mul(float(1).sub(smoothstep(GLOSS_ROUGHNESS_FULL, GLOSS_ROUGHNESS_NONE, rough)))).toVar();
       If(n(w).greaterThan(0.004), () => { rad.assign(n(probeRadiance(s, dir, rough)).mul(w)); });
     } else {

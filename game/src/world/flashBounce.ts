@@ -52,8 +52,12 @@ export const FLASH_BOUNCE_LIFT = 0.05;
 export const FLASH_BOUNCE_REVIVE = 0.1;
 /** Ray length (m) for a spot light without a cutoff distance. */
 export const FLASH_BOUNCE_REACH = 60;
-/** FB.params at start: gain (1 = one physical bounce), r0 (m: the size of a patch), range (m: where a light's reach ends). */
-export const FLASH_BOUNCE_DEFAULTS = {gain: 1, r0: 0.5, range: 11} as const;
+/**
+ * FB.params at start: gain, r0 (m: the size of a patch), range (m: where a light's reach ends). A gain of 1 is one physical bounce;
+ * the game draws it stronger, like the baked bounce (world/lightFieldGather.ts GATHER_GAIN): a stylised choice, on real finishes
+ * (concrete ~0.15, floors ~0.26) one physical bounce of a hand lamp is hardly seen.
+ */
+export const FLASH_BOUNCE_DEFAULTS = {gain: 2.5, r0: 0.5, range: 11} as const;
 
 /** What the bounce is cast over: a station's ray scene and its surface colours (world/enhancedLightingRuntime.ts builds both). */
 export interface FlashBounceSource { scene: BandScene; albedo: SurfaceAlbedo }
