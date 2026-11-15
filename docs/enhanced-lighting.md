@@ -41,15 +41,31 @@ the light those surfaces send back, over three bounces.
 **The bounce is drawn stronger than the finishes strictly give, and that is a stated choice.** Measured on the base
 Subway (seed 93), the station's dark, grimy finishes (floors 0.21 to 0.26, concrete walls about 0.15) send back
 about a seventh of the light that falls on them: 0.11 to 0.16 against about 0.96 of direct light on a floor. That is
-the size of the baseline's fill, so a physically exact bounce reads like Off, which is what the player reported. The
-gather is therefore multiplied by `GATHER_GAIN` = 2.5 and the surface colours it sees get a little more chroma
-(`GATHER_SATURATION` = 1.25). This scales **the bounce alone**, with all of its occlusion, direction and colour: the
-direct light, the hemisphere light and every place without a lit surface nearby are untouched. It is not a flat
-brightness boost and adds no light of its own.
+the size of the baseline's fill, so a physically exact bounce reads like Off, which is what the player reported.
 
-Measured on Subway seed 93 (mean irradiance on the main level, baseline to enhanced): floors 0.96 to 1.15, ceilings
-0.43 to 0.75, walls 0.31 to 0.56. On the other levels (seed 93, same gain): ceilings 1.5x to 3.3x, walls 1.4x to
-2.5x, floors 1.1x to 1.35x; no value above the field's range anywhere (`BakedField.stats.cubeClipped` = 0).
+The first version multiplied the whole gather by 2.5, whatever the finish. A white-tiled room then sent back more
+light than fell on it and every ceiling over a lit floor was lifted to a flat mid grey: the player found parts of
+the world "too bright and less moody". The strength is now a **response of the finish** (`bounceReflectance`,
+`GATHER_RESPONSE`: lift 2.2, ceiling 0.7 in `world/lightFieldGather.ts`): the bounce takes a finish of reflectance
+`rho` to reflect `ceiling x (1 - exp(-lift x rho / ceiling))`.
+
+| finish as drawn | 0.05 | 0.15 (concrete) | 0.26 (floor) | 0.40 | 0.60 (white tile) | 0.80 |
+| --- | --- | --- | --- | --- | --- | --- |
+| what the bounce takes it for | 0.10 | 0.26 | 0.39 | 0.50 | 0.59 | 0.64 |
+
+A dark finish bounces up to 2.2 times what it strictly would, a pale one levels off, and none reaches 0.7: no room
+returns more light than it receives, however many bounces are followed. `GATHER_GAIN`, the scale of the whole
+gather, is 1, and the surface colours still get a little more chroma (`GATHER_SATURATION` = 1.25). The hue of a
+finish is kept. This changes **the bounce alone**, with all of its occlusion, direction and colour: the direct
+light, the hemisphere light and every place without a lit surface nearby are untouched. It is not a flat brightness
+change and adds no light of its own. Enhanced lighting Off is not touched by it at all.
+
+Measured on Subway seed 93 (mean irradiance on the main level, baseline to enhanced): floors 0.96 to 1.02, ceilings
+0.43 to 0.56, walls 0.32 to 0.40 (the first version: 1.14, 0.74, 0.55). On the other levels (seed 93): ceilings 1.2x
+to 1.8x, walls 1.1x to 1.4x, floors 1.0x to 1.07x of the baseline (the first version: ceilings 1.5x to 3.3x, walls
+1.3x to 2.4x, floors 1.07x to 1.33x); no value above the field's range anywhere (`BakedField.stats.cubeClipped` =
+0). The numbers are part of the derived cache's gather digest, so a station baked with the first version is baked
+again once.
 
 How the field stores it (`lightField.ts` `encodeRowEnhanced`, `world/lightFieldNode.ts`):
 

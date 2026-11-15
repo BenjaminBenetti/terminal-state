@@ -86,6 +86,8 @@ export interface GatherOptions {
   gain: number;
   /** Chroma of the surface colours the light bounces off (1 = as drawn; default 1): see GATHER_SATURATION. */
   saturation?: number;
+  /** How reflective the bounce takes a finish to be (default: as drawn): see GATHER_RESPONSE / bounceReflectance. */
+  response?: {lift: number; ceiling: number};
   albedo: SurfaceAlbedo;
   /** The ray scene (default: built from the context's geometry). */
   scene?: BandScene;
@@ -94,17 +96,32 @@ export interface GatherOptions {
 /** Defaults of the gather that are not a quality tier (world/enhancedLighting.ts GI_TIERS holds rays / stride / bounces). */
 export const GATHER_REACH = 14;
 /**
- * Task studio-baked-gi-visual-uplift-20261115-004324-01: how much of the gathered light the field keeps. Measured on the base Subway
- * (seed 93), the station's dark, grimy finishes send back about a seventh of the light that falls on them: kept at that (1), the
- * bounce is as faint as the baseline's fill and Enhanced lighting reads like Off. The game shows the bounce stronger than its
- * finishes strictly give — a stylisation of the bounce alone (direct light, the hemisphere and every light level without a lit
- * surface nearby are untouched), with all of its occlusion, direction and colour.
+ * Task studio-baked-gi-visual-uplift-20261115-004324-01: the game shows the bounce stronger than its finishes strictly give. Measured
+ * on the base Subway (seed 93), the station's dark, grimy finishes send back about a seventh of the light that falls on them: kept at
+ * that, the bounce is as faint as the baseline's fill and Enhanced lighting reads like Off. It is a stylisation of the bounce alone
+ * (direct light, the hemisphere and every light level without a lit surface nearby are untouched), with all of its occlusion,
+ * direction and colour.
+ * Task studio-gi-mood-bounce-loading-20261115-081523-01 (the user: "parts of the world are now too bright and less moody ... a bit
+ * darker, not a rollback"): that stylisation was one factor of 2.5 on the whole gather, whatever the finish — a white-tiled room then
+ * sent back more light than fell on it, and every ceiling over a lit floor was lifted to a flat mid grey. It is now a RESPONSE of the
+ * finish (bounceReflectance): a dark finish bounces GATHER_RESPONSE.lift times what it strictly would, a pale one levels off below
+ * GATHER_RESPONSE.ceiling (no finish returns more light than it receives), and GATHER_GAIN — the scale of the whole gather — is 1.
  */
-export const GATHER_GAIN = 2.5;
-/** (same task) Chroma of the surface colours as the bounce sees them (1 = as drawn): a little more, so a coloured finish reads in its bounce. */
+export const GATHER_GAIN = 1;
+export const GATHER_RESPONSE = {lift: 2.2, ceiling: 0.7} as const;
+/** (task studio-baked-gi-visual-uplift-20261115-004324-01) Chroma of the surface colours as the bounce sees them (1 = as drawn): a little more, so a coloured finish reads in its bounce. */
 export const GATHER_SATURATION = 1.25;
+/** What the game's bake gathers with (QA / tuning may change it before a bake: the cache digest covers every number; lift 0 = the finishes as drawn). */
+export const GATHER_TUNING: {gain: number; saturation: number; lift: number; ceiling: number} = {gain: GATHER_GAIN, saturation: GATHER_SATURATION, lift: GATHER_RESPONSE.lift, ceiling: GATHER_RESPONSE.ceiling};
 
 const lum = (r: number, g: number, b: number): number => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+/**
+ * The reflectance the bounce takes a finish of reflectance `rho` to have: `ceiling x (1 - exp(-lift x rho / ceiling))` — `lift` times
+ * rho for a dark finish, levelling off below `ceiling` for a pale one (monotonic; a black finish stays black).
+ */
+export function bounceReflectance(rho: number, lift: number, ceiling: number): number {
+  return rho > 0 ? ceiling * (1 - Math.exp(-lift * rho / ceiling)) : 0;
+}
 /** Cells whose floors differ by more than this are not one space for smoothing / filling (the bake's own bounce rule). */
 const STEP_MAX = 0.6;
 
@@ -153,7 +170,7 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
   const t0 = performance.now();
   const {W, H, geos, layers: LS, E, D, EL, GL, G2L, scatter} = ctx;
   const n = W * H, S = geos.length, N = Math.max(4, Math.round(opt.rays)), stride = opt.stride === 2 ? 2 : 1;
-  const scene = opt.scene ?? new BandScene(W, H, geos), sat = opt.saturation ?? 1;
+  const scene = opt.scene ?? new BandScene(W, H, geos), sat = opt.saturation ?? 1, resp = opt.response ?? null;
   yield 'gather.index';
   // --- open voxels ---------------------------------------------------------------------------
   const {index, count} = indirectIndex(geos, LS, n);
@@ -229,6 +246,15 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
           const l = lum(r, g, b);
           r = l + (r - l) * sat; g = l + (g - l) * sat; b = l + (b - l) * sat;
           r = r < 0 ? 0 : r > 1 ? 1 : r; g = g < 0 ? 0 : g > 1 ? 1 : g; b = b < 0 ? 0 : b > 1 ? 1 : b;
+        }
+        if (resp) {
+          // the finish's colour at the reflectance the bounce takes it to have (its hue kept; never brighter than white)
+          const l = lum(r, g, b);
+          if (l > 1e-6) {
+            const k = bounceReflectance(l, resp.lift, resp.ceiling) / l;
+            r *= k; g *= k; b *= k;
+            r = r > 1 ? 1 : r; g = g > 1 ? 1 : g; b = b > 1 ? 1 : b;
+          }
         }
         va[v0 + q] = r; va[v0 + q + 1] = g; va[v0 + q + 2] = b;
       }
