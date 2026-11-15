@@ -86,6 +86,11 @@ export const GLASS_MIRROR = {
   fade: 0.18,
   /** The eye is never treated as closer to the glass than this (m): the mirror camera's near distance. */
   minDistance: 0.05,
+  /**
+   * The sight probes stand this far in front of the glass (m) — and, when none of them is seen from there, `standoff`: just past
+   * one grid cell, for glass that lies inside its own prop's sight-blocking footprint (the ticket booth).
+   */
+  probe: 0.06, standoff: 0.6,
   /** The eye must be within this below / above a plane's panes (m): other storeys' glass is not a candidate. */
   below: 2, above: 2.5,
 } as const;
@@ -490,11 +495,17 @@ export class GlassMirror {
     const sight = this.sight;
     if (!sight || !c.plane) return true;
     const plane = c.plane, f = mirrorFace(plane, _eye.x, _eye.z, _face);
-    const at = plane.coord + f.side * (plane.half + 0.06), y = Math.min(c.y1, Math.max(c.y0, _eye.y));
-    for (let k = 0; k < 3; k++) {
-      const u = c.u0 + (c.u1 - c.u0) * (k === 0 ? 0.5 : k === 1 ? 0.15 : 0.85);
-      const x = plane.axis === 'x' ? at : u, z = plane.axis === 'x' ? u : at;
-      if (sight(_eye.x, _eye.y, _eye.z, x, y, z)) return true;
+    const y = Math.min(c.y1, Math.max(c.y0, _eye.y));
+    // (second ring: glass inside a sight-blocking prop's own footprint cells — the ticket booth's panes — is probed a cell out)
+    for (let ring = 0; ring < 2; ring++) {
+      const off = ring === 0 ? GLASS_MIRROR.probe : Math.min(GLASS_MIRROR.standoff, f.dist * 0.9);
+      if (ring === 1 && off <= GLASS_MIRROR.probe) break;
+      const at = plane.coord + f.side * (plane.half + off);
+      for (let k = 0; k < 3; k++) {
+        const u = c.u0 + (c.u1 - c.u0) * (k === 0 ? 0.5 : k === 1 ? 0.15 : 0.85);
+        const x = plane.axis === 'x' ? at : u, z = plane.axis === 'x' ? u : at;
+        if (sight(_eye.x, _eye.y, _eye.z, x, y, z)) return true;
+      }
     }
     return false;
   }
