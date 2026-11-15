@@ -7,11 +7,15 @@
 //  - voxelTerms: the test's own statement of what the encoder stores for one voxel, from the bake's direct-light arrays and the rows.
 import {FLOOR, Grid, SOLID} from '../../src/gen/grid';
 import {
-  FIELD_DMAX, GI_FACES, IND_CIRCUITS, IND_STRIDE, bakeLightField,
+  FIELD_EMAX, GI_FACES, IND_CIRCUITS, IND_STRIDE, bakeLightField,
   type BakedField, type FieldParams, type FieldSource,
 } from '../../src/world/lightField';
-import {cubeMean, indirectIndex, rowBits, rowValue, type IndirectContext, type IndirectLight} from '../../src/world/lightFieldGather';
-import type {BuildSteps} from '../../src/core/pacedBuild';
+import {
+  GATHER_GAIN, GATHER_REACH, GATHER_SATURATION, cubeMean, gatherIndirectSteps, indirectIndex, rowBits, rowValue, type IndirectContext, type IndirectLight,
+} from '../../src/world/lightFieldGather';
+import type {GiTier} from '../../src/world/enhancedLighting';
+import {surfaceAlbedo} from '../../src/world/surfaceAlbedo';
+import {drainSync, type BuildSteps} from '../../src/core/pacedBuild';
 
 export type V3 = [number, number, number];
 export const lum3 = (v: readonly number[]): number => 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
@@ -90,6 +94,16 @@ export function patternRows(top = 1.5, seed = 7): RowMaker {
   };
 }
 
+/**
+ * The REAL gather as rows (world/lightFieldGather.ts, as the game runs it: `tier`, the game's own gain and saturation by name, the
+ * neutral finish colours): for tests that need a real station's light AND the exact values the encoder was given.
+ */
+export const gatheredRows = (src: FieldSource, tier: GiTier): RowMaker => (_count, ctx) => {
+  const levels = src.levels ?? [{id: 0, role: 'main' as const, grid: src.grid, baseY: 0}];
+  const albedo = surfaceAlbedo(ctx.W, ctx.H, levels, ctx.geos, null);
+  return drainSync(gatherIndirectSteps(ctx, {rays: tier.rays, bounces: tier.bounces, stride: tier.stride, reach: GATHER_REACH, gain: GATHER_GAIN, saturation: GATHER_SATURATION, albedo})).data;
+};
+
 /** The same row in every voxel. */
 export const uniformRows = (row: readonly number[]): RowMaker => count => {
   const d = new Float32Array(count * IND_STRIDE);
@@ -106,9 +120,10 @@ export interface VoxelTerms {
   base: V3; T: V3; rho: number;
   /** The row's six faces. */
   face: V3[];
-  /** Per face: the signed difference the cube stores (before its clamp and its 8-bit steps). */
-  stored: V3[];
-  /** Per face: what a surface of that orientation receives apart from the direct light's directional part: its scatter + the face. */
+  /**
+   * Per face: the complete ambient of a surface of that orientation — what the direct light scatters (the share of it that has no
+   * direction) + the gathered face. What the cube stores (before its ceiling and its 8-bit steps) and what full shading shows.
+   */
   ambient: V3[];
 }
 
@@ -116,8 +131,8 @@ export interface VoxelTerms {
  * What the enhanced encoder is given, and stores, for the voxel (slot, cell i, layer k) — the documented rule, written out a second
  * time (world/lightField.ts encodeRowEnhanced): the main texel holds the direct light + the gathered light's share for the layer
  * (bottom: the up-facing face, top: the down-facing face, between: the mean of the four wall faces; one layer: the mean of the six)
- * with ONE directional share; each cube face stores the face minus that share plus, per channel, what the one-share split moved out
- * of the ambient part (T x rho - E x dl / el). null in a closed cell.
+ * with ONE directional share; each cube face stores the complete ambient of its orientation, per channel:
+ * E x (coh - dl / el) + the face. null in a closed cell.
  */
 export function voxelTerms(b: RowBake, slot: number, i: number, k: number): VoxelTerms | null {
   const L = b.ctx.layers[slot], row = b.index[slot][i * L + k];
@@ -136,18 +151,16 @@ export function voxelTerms(b: RowBake, slot: number, i: number, k: number): Voxe
   }
   const bl = Math.fround(lum3(base));
   const T: V3 = [E[0] * coh + base[0], E[1] * coh + base[1], E[2] * coh + base[2]], tl = el * coh + bl, rho = tl > 0 ? dl / tl : 0;
-  const stored = face.map((fc): V3 => [fc[0] + (T[0] * rho - E[0] * sh - base[0]), fc[1] + (T[1] * rho - E[1] * sh - base[1]), fc[2] + (T[2] * rho - E[2] * sh - base[2])]);
-  const ambient = face.map((fc): V3 => [E[0] * (coh - sh) + fc[0], E[1] * (coh - sh) + fc[1], E[2] * (coh - sh) + fc[2]]);
-  return {E, el, dl, coh, sh, base, T, rho, face, stored, ambient};
+  const sc = el > 0 ? coh - sh : 0;
+  const ambient = face.map((fc): V3 => [fc[0] + E[0] * sc, fc[1] + E[1] * sc, fc[2] + E[2] * sc]);
+  return {E, el, dl, coh, sh, base, T, rho, face, ambient};
 }
 
-/** The cube's byte for a signed difference (the encoding's rule, written out: square-root spaced either way up to FIELD_DMAX, 128 = none). */
+/** The cube's byte for an ambient value (the encoding's rule, written out: the main texels' own — square-root spaced from 0 = none up to FIELD_EMAX). */
 export function cubeByte(v: number): number {
-  const a = Math.abs(v), e = Math.round(Math.sqrt(a >= FIELD_DMAX ? 1 : a / FIELD_DMAX) * 127);
-  return v < 0 ? 128 - e : 128 + e;
+  return Math.round(Math.sqrt(Math.min(1, Math.max(0, v / FIELD_EMAX))) * 255);
 }
-/** The largest rounding error of a difference stored as cubeByte(v): half the distance to the neighbouring byte's value. */
+/** The largest rounding error of a value stored as cubeByte(v) (below the ceiling): half the distance to the neighbouring byte's value. */
 export function cubeHalfStep(v: number): number {
-  const e = Math.round(Math.sqrt(Math.min(1, Math.abs(v) / FIELD_DMAX)) * 127);
-  return (e + 0.5) / (127 * 127) * FIELD_DMAX + 1e-9;
+  return (Math.sqrt(FIELD_EMAX * Math.max(0, v)) + FIELD_EMAX * 0.25 / 255) / 255 + 1e-9;
 }

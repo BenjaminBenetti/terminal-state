@@ -5,24 +5,32 @@
 //    per height layer, giDepth(slots) slices in all — one slot, three levels (4 + 3 + 3 layers) and a nine-storey tower;
 //  - WITHOUT IT: a bake without `indirect` has no cube whatever `cube` says; an enhanced bake with `cube: false` is the cube bake's
 //    slots, byte for byte; withoutCube is a view of the same bytes, not a copy;
-//  - ENCODING: a texel is a signed difference, 128 = none, square-root spaced to +-FIELD_DMAX, clamped there and counted
-//    (stats.cubeClipped); cubeDifference undoes it within half a step;
-//  - THE POINT OF IT: sampled with a normal at a voxel's centre, the ambient light is the direct light's scatter + the gathered face
-//    of that orientation, channel by channel (within the 8-bit steps) — also on a surface turned away from a strong direct light,
-//    where the main texel's ONE directional share would otherwise take the gathered light's colour with it; what is left of that
-//    split sits in the directional part (its luminance is the direct light's, its colour the main texel's);
-//  - never negative; without a normal, or without a cube, the sample is the plain one;
+//  - ENCODING: a texel is the COMPLETE AMBIENT of a surface facing that way — what the direct light scatters + the gathered face —
+//    encoded as the main texels are (unsigned, square-root spaced up to FIELD_EMAX, 0 = none and all a closed cell holds); values
+//    past the range are stored at it and counted (stats.cubeClipped); cubeAmbient undoes it within half a step;
+//  - THE POINT OF IT: sampled with a normal at a voxel's centre, the ambient light is exactly that value, channel by channel (within
+//    the cube's own 8-bit step) — also on a surface turned away from a strong direct light, where the main texel's ONE directional
+//    share takes the gathered light's colour with it; the directional part stays the main texel's (T x rho);
+//  - with a normal the cube REPLACES the main texel's ambient part: the faces the normal points at, weighted by its squares; never
+//    negative; without a normal, or without a cube, the sample is the plain one;
+//  - BETWEEN TWO LAYERS a face is one filtered value, decoded after the blend: never above the blend of the two layers' values, and
+//    close to it on a real station (Subway 93 as the game bakes it: the bound that guards the encoding);
 //  - downsampleField keeps the cube (averaged like the slots; the header slices before it are not touched by it).
 import {describe, expect, it} from 'vitest';
 import {CELL} from '../src/gen/grid';
+import {generateStation} from '../src/gen/station';
+import {GI_TIERS} from '../src/world/enhancedLighting';
 import {
-  AUX_LAYERS, CUBE_FACES, FIELD_DMAX, FIELD_EMAX, GI_FACES, LAYERS, bakeLightField, cubeDifference, downsampleField, fieldDepth, fieldSlot, giDepth, giSlotBase,
-  sampleField, slotBase, slotLayers, withoutCube, type BakedField, type FieldSource,
+  AUX_LAYERS, CUBE_FACES, FIELD_EMAX, GI_FACES, LAYERS, bakeLightField, cubeAmbient, downsampleField, fieldDepth, fieldSlot, giDepth, giSlotBase,
+  sampleField, slotLayers, withoutCube, type BakedField, type FieldSource,
 } from '../src/world/lightField';
 import {IND_STRIDE} from '../src/world/lightFieldGather';
+import {stationBakeInput} from '../src/world/lights';
 import {FIX, levelFixture} from './helpers/levelRenderFixture';
 import {towerFixture} from './helpers/towerFixture';
-import {bakeRows, cubeByte, cubeHalfStep, cubeRoom, lum3, patternRows, sequence, uniformRows, voxelTerms, type RowBake, type V3} from './helpers/lightCubeFixture';
+import {
+  bakeRows, cubeByte, cubeHalfStep, cubeRoom, gatheredRows, lum3, patternRows, sequence, uniformRows, voxelTerms, type RowBake, type V3,
+} from './helpers/lightCubeFixture';
 
 const same = (a: Uint8Array, b: Uint8Array) => Buffer.from(a.buffer, a.byteOffset, a.byteLength).equals(Buffer.from(b.buffer, b.byteOffset, b.byteLength));
 const threeLevels = (lights = true): FieldSource => { const {layout, levels} = levelFixture({lights}); return {grid: layout.grid, lights: layout.lights, trenchFloorY: FIX.bedY, levels}; };
@@ -32,7 +40,7 @@ const cubeAt = (f: BakedField, slot: number, face: number, k: number, i: number)
 
 /**
  * Every cube texel of a bake against the test's own statement of the encoder (voxelTerms + cubeByte): how many open-voxel channels
- * were compared, how many differ, how many are past the clamp; closed cells must hold 128 in all four channels, open ones alpha 255.
+ * were compared, how many differ, how many are past the range; closed cells must hold 0 in all four channels, open ones alpha 255.
  */
 function checkCube(b: RowBake): {compared: number; wrong: number; clipped: number; closedWrong: number; alphaWrong: number; slices: number} {
   const f = b.field, n = f.w * f.h, seen = new Set<number>();
@@ -44,18 +52,28 @@ function checkCube(b: RowBake): {compared: number; wrong: number; clipped: numbe
       for (let face = 0; face < GI_FACES; face++) {
         const o = cubeAt(f, s, face, k, i);
         seen.add((o / 4 - i) / n);
-        if (!t) { if (f.data[o] !== 128 || f.data[o + 1] !== 128 || f.data[o + 2] !== 128 || f.data[o + 3] !== 128) closedWrong++; continue; }
+        if (!t) { if (f.data[o] !== 0 || f.data[o + 1] !== 0 || f.data[o + 2] !== 0 || f.data[o + 3] !== 0) closedWrong++; continue; }
         if (f.data[o + 3] !== 255) alphaWrong++;
         for (let c = 0; c < 3; c++) {
           compared++;
-          if (f.data[o + c] !== cubeByte(t.stored[face][c])) wrong++;
-          if (Math.abs(t.stored[face][c]) > FIELD_DMAX) clipped++;
+          if (f.data[o + c] !== cubeByte(t.ambient[face][c])) wrong++;
+          if (t.ambient[face][c] > FIELD_EMAX) clipped++;
         }
       }
     }
   }
   return {compared, wrong, clipped, closedWrong, alphaWrong, slices: seen.size};
 }
+
+/** World position of the centre of voxel (slot, cell i, layer k) as the SAMPLER sees it (its 8-bit floor / ceiling), or null when that height picks another slot. */
+function voxelCentre(f: BakedField, b: RowBake, slot: number, i: number, k: number): V3 | null {
+  const cx = i % f.w, cz = (i - cx) / f.w, L = slotLayers(slot);
+  const hs = fieldSlot(f, cx, cz, b.ctx.geos[slot].layerY[i * L + k]);
+  if (hs.slot !== slot || hs.ceil - hs.floor < 0.3) return null;
+  return [(cx + 0.5) * CELL, hs.floor + (hs.ceil - hs.floor) * k / (L - 1), (cz + 0.5) * CELL];
+}
+/** A sample whose lookup lands exactly on point p for normal n (the sampler offsets the lookup along the normal). */
+const atPoint = (f: BakedField, p: readonly number[], n: readonly [number, number, number]) => sampleField(f, p[0] - n[0] * CELL * 0.5, p[1] - n[1] * 0.2, p[2] - n[2] * CELL * 0.5, [1, 1, 1], n);
 
 // ---------------------------------------------------------------------------------------------
 describe('layout: the cube\'s slices follow the slots', () => {
@@ -70,7 +88,7 @@ describe('layout: the cube\'s slices follow the slots', () => {
     }
   });
 
-  it('one slot: gi = fieldDepth(1), 24 slices; every texel is the stored difference of its own voxel, face and layer; closed cells say "none"', () => {
+  it('one slot: gi = fieldDepth(1), 24 slices; every texel is the ambient of its own voxel, face and layer; closed cells hold nothing', () => {
     const b = bakeRows(cubeRoom(false), patternRows()), f = b.field;
     expect([f.slots, f.hdr, f.gi, f.depth]).toEqual([1, 0, fieldDepth(1), fieldDepth(1) + giDepth(1)]);
     expect(f.data.length).toBe(f.w * f.h * f.depth * 4);
@@ -80,20 +98,21 @@ describe('layout: the cube\'s slices follow the slots', () => {
     expect(c.compared).toBeGreaterThan(20000);
     expect([c.wrong, c.closedWrong, c.alphaWrong]).toEqual([0, 0, 0]);
     expect(c.slices).toBe(giDepth(1)); // every cube slice was reached, none twice over (the count above is per slice)
-    // without direct light the stored difference is the face minus the layer's own share: the bottom layer's up-facing texels and
-    // the top layer's down-facing texels are "none" (those faces ARE the main texel), and other faces are not
+    // without direct light a texel is the gathered face itself — straight from the rows, whatever the layer (the main texel
+    // holds one face, or a mean of four, per layer: the cube holds all six on every layer)
     const n = f.w * f.h, L = LAYERS;
-    let none = 0, some = 0;
-    for (let i = 0; i < n; i++) {
-      if (b.index[0][i * L] < 0) continue;
-      for (const [face, k] of [[0, 0], [1, L - 1]]) { const o = cubeAt(f, 0, face, k, i); if (f.data[o] !== 128 || f.data[o + 1] !== 128 || f.data[o + 2] !== 128) none++; }
-      for (const [face, k] of [[1, 0], [0, L - 1], [2, 1], [5, 2]]) { const o = cubeAt(f, 0, face, k, i); if (f.data[o] !== 128 || f.data[o + 1] !== 128 || f.data[o + 2] !== 128) some++; }
+    let off = 0, distinct = 0;
+    for (let i = 0; i < n; i++) for (let k = 0; k < L; k++) {
+      const row = b.index[0][i * L + k];
+      if (row < 0) continue;
+      for (let face = 0; face < GI_FACES; face++) for (let ch = 0; ch < 3; ch++) if (f.data[cubeAt(f, 0, face, k, i) + ch] !== cubeByte(b.rows[row * IND_STRIDE + face * 3 + ch])) off++;
+      if (f.data[cubeAt(f, 0, 0, k, i)] !== f.data[cubeAt(f, 0, 1, k, i)]) distinct++;
     }
-    expect(none).toBe(0);
-    expect(some).toBeGreaterThan(1000);
+    expect(off).toBe(0);
+    expect(distinct).toBeGreaterThan(1000); // (the faces of a voxel really differ in these rows)
   });
 
-  it('three levels (4 + 3 + 3 layers): each slot\'s faces at gi + giSlotBase(slot), with the direct light\'s correction in every texel', () => {
+  it('three levels (4 + 3 + 3 layers): each slot\'s faces at gi + giSlotBase(slot), with the direct light\'s scatter in every lit texel', () => {
     const b = bakeRows(threeLevels(), patternRows()), f = b.field;
     expect([f.slots, f.hdr]).toEqual([3, 0]);
     expect(f.gi).toBe(fieldDepth(3));
@@ -103,10 +122,13 @@ describe('layout: the cube\'s slices follow the slots', () => {
     expect(c.compared).toBe(b.count * GI_FACES * 3);
     expect([c.wrong, c.closedWrong, c.alphaWrong]).toEqual([0, 0, 0]);
     expect(c.slices).toBe(giDepth(3));
-    // (the fixture is lit: the correction term was really part of what was compared)
-    let lit = 0;
-    for (let s = 0; s < 3; s++) for (let v = 0; v < b.ctx.EL[s].length; v++) if (b.ctx.EL[s][v] > 0.05) lit++;
-    expect(lit).toBeGreaterThan(5000);
+    // (the fixture is lit: the direct light's scatter was really part of what was compared — in voxels of every slot)
+    const scattered = [0, 0, 0];
+    for (let s = 0; s < 3; s++) for (let i = 0; i < f.w * f.h; i++) for (let k = 0; k < slotLayers(s); k++) {
+      const t = voxelTerms(b, s, i, k);
+      if (t && lum3(t.E) * (t.coh - t.sh) > cubeHalfStep(0.05) * 4) scattered[s]++;
+    }
+    for (const q of scattered) expect(q).toBeGreaterThan(300);
   });
 
   it('a nine-storey tower (extended column headers): the cube starts after the header\'s group slices', () => {
@@ -179,69 +201,75 @@ describe('without the cube', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-describe('encoding: a signed difference in one byte', () => {
-  it('cubeDifference: 128 is nothing, 255 / 1 are +-FIELD_DMAX, ordered, the same either side of 128', () => {
-    expect(cubeDifference(128)).toBe(0);
-    expect(cubeDifference(255)).toBe(FIELD_DMAX);
-    expect(cubeDifference(1)).toBe(-FIELD_DMAX);
-    for (let b = 1; b < 256; b++) expect(cubeDifference(b)).toBeGreaterThan(cubeDifference(b - 1));
-    for (let e = 1; e <= 127; e++) expect(cubeDifference(128 - e)).toBe(-cubeDifference(128 + e));
-    // a filtered texel is any value between two bytes: still ordered, still 0 at 128
-    expect(cubeDifference(128.5)).toBeGreaterThan(0);
-    expect(cubeDifference(127.5)).toBeLessThan(0);
-    expect(cubeDifference(140.25)).toBeGreaterThan(cubeDifference(140));
-    // finest near nothing (where the eye sees a step), coarsest at the limit
-    expect(cubeDifference(129)).toBeLessThan(FIELD_DMAX / 10000);
-    expect(cubeDifference(255) - cubeDifference(254)).toBeLessThan(FIELD_DMAX / 60);
+describe('encoding: the complete ambient of a face in one byte a channel', () => {
+  it('cubeAmbient: 0 is nothing, 255 is FIELD_EMAX, ordered, square-root spaced — the main texels\' own decoding', () => {
+    expect(cubeAmbient(0)).toBe(0);
+    expect(cubeAmbient(255)).toBe(FIELD_EMAX);
+    for (let b = 1; b < 256; b++) {
+      expect(cubeAmbient(b)).toBeGreaterThan(cubeAmbient(b - 1));
+      const v = b / 255;
+      expect(cubeAmbient(b)).toBe(v * v * FIELD_EMAX);
+    }
+    // a filtered texel is any value between two bytes: still ordered
+    expect(cubeAmbient(0.5)).toBeGreaterThan(0);
+    expect(cubeAmbient(140.25)).toBeGreaterThan(cubeAmbient(140));
+    expect(cubeAmbient(140.25)).toBeLessThan(cubeAmbient(141));
+    // finest near nothing (where the eye sees a step), coarsest at the top
+    expect(cubeAmbient(1)).toBeLessThan(FIELD_EMAX / 10000);
+    expect(cubeAmbient(255) - cubeAmbient(254)).toBeLessThan(FIELD_EMAX / 60);
+    // and it IS how a main texel's colour reads: a cube texel and a main texel holding the same byte hold the same light
+    const b = bakeRows(cubeRoom(false), uniformRows(Array.from({length: IND_STRIDE}, (_, q) => (q < 18 ? 0.37 : 0)))), f = b.field;
+    const sm = sampleField(f, 3.25, 1.2, 3.25), smN = sampleField(f, 3.25, 1.2, 3.25 - CELL * 0.5, [1, 1, 1], [0, 0, 1]);
+    expect(sm.amb[0]).toBeGreaterThan(0.3);
+    for (let c = 0; c < 3; c++) expect(smN.amb[c]).toBeCloseTo(sm.amb[c], 12); // (every face = every layer's share = 0.37: the same byte both ways)
   });
 
-  it('the encoder and cubeDifference are each other\'s inverse within half a step; byte 0 is never written', () => {
-    // the test's own encoder against cubeDifference, over the whole range
+  it('the encoder and cubeAmbient are each other\'s inverse within half a step; a negative value is nothing', () => {
+    // the test's own encoder against cubeAmbient, over the whole range
     let worst = 0;
-    for (let q = -4000; q <= 4000; q++) {
-      const v = Math.sign(q) * (q / 4000) ** 2 * FIELD_DMAX, back = cubeDifference(cubeByte(v));
+    for (let q = 0; q <= 4000; q++) {
+      const v = (q / 4000) ** 2 * FIELD_EMAX, back = cubeAmbient(cubeByte(v));
       worst = Math.max(worst, Math.abs(back - v) / cubeHalfStep(v));
       expect(cubeByte(back)).toBe(cubeByte(v));
     }
     expect(worst).toBeLessThanOrEqual(1);
-    expect([cubeByte(0), cubeByte(FIELD_DMAX), cubeByte(-FIELD_DMAX), cubeByte(FIELD_DMAX * 3), cubeByte(-FIELD_DMAX * 3)]).toEqual([128, 255, 1, 255, 1]);
-    // the bake's bytes decode to what was stored, within half a step, wherever the clamp did not bind
+    expect(worst).toBeGreaterThan(0.5); // (the bound is the encoding's real half step, not a loose one)
+    expect([cubeByte(0), cubeByte(-1), cubeByte(FIELD_EMAX), cubeByte(FIELD_EMAX * 3)]).toEqual([0, 0, 255, 255]);
+    // the bake's bytes decode to what was stored, within half a step, wherever the ceiling did not bind
     const b = bakeRows(cubeRoom(), patternRows()), f = b.field, n = f.w * f.h;
-    let off = 0, zero = 0, checked = 0;
+    let off = 0, checked = 0;
     for (let i = 0; i < n; i++) for (let k = 0; k < LAYERS; k++) {
       const t = voxelTerms(b, 0, i, k);
       if (!t) continue;
       for (let face = 0; face < GI_FACES; face++) for (let c = 0; c < 3; c++) {
-        const byte = f.data[cubeAt(f, 0, face, k, i) + c], v = t.stored[face][c];
-        if (byte === 0) zero++;
-        if (Math.abs(v) > FIELD_DMAX) continue;
+        const byte = f.data[cubeAt(f, 0, face, k, i) + c], v = t.ambient[face][c];
+        if (v > FIELD_EMAX) continue;
         checked++;
-        if (Math.abs(cubeDifference(byte) - v) > cubeHalfStep(v)) off++;
+        if (Math.abs(cubeAmbient(byte) - v) > cubeHalfStep(v)) off++;
       }
     }
     expect(checked).toBeGreaterThan(20000);
-    expect([off, zero]).toEqual([0, 0]);
-    for (let o = f.gi! * n * 4; o < f.data.length; o++) if (f.data[o] === 0) zero++;
-    expect(zero).toBe(0);
+    expect(off).toBe(0);
   });
 
-  it('a difference past +-FIELD_DMAX is stored at the limit and counted (stats.cubeClipped); a bake within it counts none', () => {
-    // rows with faces far apart: some voxels' up-facing face is 3 x the limit, their other faces nothing
-    const big = FIELD_DMAX * 3;
+  it('a value past FIELD_EMAX is stored at the ceiling and counted (stats.cubeClipped); a bake within it counts none', () => {
+    // rows with one very bright face: every third voxel's up-facing face is 3 x the range in red and green, half of it in blue
+    const big = FIELD_EMAX * 3;
     const b = bakeRows(cubeRoom(false), count => {
       const d = new Float32Array(count * IND_STRIDE);
-      for (let v = 0; v < count; v += 3) { d[v * IND_STRIDE] = big; d[v * IND_STRIDE + 1] = big; d[v * IND_STRIDE + 2] = FIELD_DMAX * 0.5; }
+      for (let v = 0; v < count; v += 3) { d[v * IND_STRIDE] = big; d[v * IND_STRIDE + 1] = big; d[v * IND_STRIDE + 2] = FIELD_EMAX * 0.5; }
       return d;
     });
     const c = checkCube(b), f = b.field;
     expect(c.wrong).toBe(0);
-    expect(c.clipped).toBeGreaterThan(1000);
+    expect(c.clipped).toBe(Math.ceil(b.count / 3) * 2); // (two channels of one face of every third voxel)
+    expect(c.clipped).toBeGreaterThan(500);
     expect(f.stats.cubeClipped).toBe(c.clipped);
-    // at the limit either way: +limit where the face is far above its layer's share, -limit where the share is far above the face
-    let top = 0, bottom = 0;
-    for (let o = f.gi! * f.w * f.h * 4; o < f.data.length; o += 4) { if (f.data[o] === 255) top++; if (f.data[o] === 1) bottom++; }
-    expect(top).toBeGreaterThan(100);
-    expect(bottom).toBeGreaterThan(100);
+    // at the ceiling: 255, and only in the red and green of those texels
+    let top = 0, topBlue = 0;
+    for (let o = f.gi! * f.w * f.h * 4; o < f.data.length; o += 4) { if (f.data[o] === 255 && f.data[o + 1] === 255) top++; if (f.data[o + 2] === 255) topBlue++; }
+    expect(top).toBe(c.clipped / 2);
+    expect(topBlue).toBe(0);
     // the pattern rows stay inside
     const ok = bakeRows(cubeRoom(), patternRows());
     expect(checkCube(ok).clipped).toBe(0);
@@ -251,19 +279,8 @@ describe('encoding: a signed difference in one byte', () => {
 
 // ---------------------------------------------------------------------------------------------
 describe('sampling with a normal', () => {
-  /** World position of the centre of voxel (slot, cell i, layer k) as the SAMPLER sees it (its 8-bit floor / ceiling), or null when that height picks another slot. */
-  function voxelCentre(f: BakedField, b: RowBake, slot: number, i: number, k: number): V3 | null {
-    const cx = i % f.w, cz = (i - cx) / f.w, L = slotLayers(slot);
-    const hs = fieldSlot(f, cx, cz, b.ctx.geos[slot].layerY[i * L + k]);
-    if (hs.slot !== slot || hs.ceil - hs.floor < 0.3) return null;
-    return [(cx + 0.5) * CELL, hs.floor + (hs.ceil - hs.floor) * k / (L - 1), (cz + 0.5) * CELL];
-  }
-  /** A sample whose lookup lands exactly on a voxel's centre for normal n (the sampler offsets the lookup along the normal). */
-  const atCentre = (f: BakedField, p: V3, n: readonly [number, number, number]) => sampleField(f, p[0] - n[0] * CELL * 0.5, p[1] - n[1] * 0.2, p[2] - n[2] * CELL * 0.5, [1, 1, 1], n);
   /** Half a step of the main texel's colour byte at T (square-root spaced to FIELD_EMAX). */
   const colourStep = (T: number): number => (Math.sqrt(FIELD_EMAX * Math.max(T, 0)) + 0.04) / 255;
-  /** The 8-bit steps a sample of one voxel carries: the main texel's colour, its share (half a byte), the cube's byte. */
-  const stepsOf = (T: number, rho: number, stored: number): number => (colourStep(T) * (1 - rho + 0.5 / 255) + Math.max(T, 0) * 0.5 / 255 + cubeHalfStep(stored)) * 1.02 + 1e-6;
 
   for (const [name, src] of [['one room', cubeRoom], ['three levels', threeLevels]] as const) {
     it(`${name}: at a voxel's centre the ambient light is the direct light's scatter + the gathered face of that orientation, channel by channel`, () => {
@@ -275,20 +292,21 @@ describe('sampling with a normal', () => {
         const p = voxelCentre(f, b, s, i, k);
         if (!p) continue;
         for (let face = 0; face < GI_FACES; face++) {
-          if (t.stored[face].some(v => Math.abs(v) > FIELD_DMAX) || t.T.some(v => v > FIELD_EMAX)) continue;
-          const sm = atCentre(f, p, CUBE_FACES[face]);
+          if (t.ambient[face].some(v => v > FIELD_EMAX)) continue;
+          const sm = atPoint(f, p, CUBE_FACES[face]);
           for (let c = 0; c < 3; c++) {
             checked++;
             if (sm.amb[c] < 0) negative++;
-            const err = Math.abs(sm.amb[c] - t.ambient[face][c]), tol = stepsOf(t.T[c], t.rho, t.stored[face][c]);
+            // (the cube's own 8-bit step and nothing else: the main texel's colour and share are not part of it)
+            const err = Math.abs(sm.amb[c] - t.ambient[face][c]), tol = cubeHalfStep(t.ambient[face][c]) + 1e-9;
             worst = Math.max(worst, err / tol);
             if (err > tol) off++;
           }
-          // a strong, directional direct light and a coloured face: where one share for three channels used to cost the colour
+          // a strong, directional direct light and a coloured face: where one share for three channels would cost the colour
           if (t.rho > 0.7 && t.el > 0.3) strong++;
-          // what is left of the one-share split sits in the directional part: it has the luminance of the direct light's
-          // directional part and the colour of the main texel (T x rho, not E x dl / el)
-          if (face === 0 && t.el > 0.05) {
+          // the directional part is the main texel's, as without the cube: it has the luminance of the direct light's directional
+          // part and the colour of the main texel (T x rho, not E x dl / el — what is left of the one-share split sits here)
+          if (face === 0 && t.el > 0.05 && !t.T.some(v => v > FIELD_EMAX)) {
             dirChecked++;
             const want = t.T.map(v => v * t.rho), tolD = (c: number) => (colourStep(t.T[c]) + t.T[c] * 0.5 / 255) * 1.02 + 1e-6;
             if ([0, 1, 2].some(c => Math.abs(sm.dirColor[c] - want[c]) > tolD(c))) dirOff++;
@@ -296,7 +314,7 @@ describe('sampling with a normal', () => {
           }
         }
       }
-      console.log(`${name}: ${checked} channels at voxel centres, worst error ${(worst * 100).toFixed(0)} % of the 8-bit steps; ${strong} face samples under a strong directional light`);
+      console.log(`${name}: ${checked} channels at voxel centres, worst error ${(worst * 100).toFixed(0)} % of the cube's half step; ${strong} face samples under a strong directional light`);
       expect(checked).toBeGreaterThan(20000);
       expect(strong).toBeGreaterThan(1000);
       expect([off, negative]).toEqual([0, 0]);
@@ -319,11 +337,11 @@ describe('sampling with a normal', () => {
       if (!p) continue;
       // the face that looks away from the light: its normal against the direct light's direction
       const d = sampleField(f, p[0], p[1], p[2]).dir, away = CUBE_FACES.map((nf, face) => [nf[0] * d[0] + nf[1] * d[1] + nf[2] * d[2], face]).sort((x, y) => x[0] - y[0])[0][1];
-      const sm = atCentre(f, p, CUBE_FACES[away]);
+      const sm = atPoint(f, p, CUBE_FACES[away]);
       checked++;
       // the white light's scatter adds the same to every channel: the gathered light's red excess (r - g) arrives whole
       if (!(sm.amb[0] - sm.amb[1] > (red[0] - red[1]) * 0.8)) cast++;
-      // the plain sample (no normal: the main texel alone) has lost most of it to the directional part — why the cube corrects it
+      // the plain sample (no normal: the main texel alone) has lost most of it to the directional part — what the cube is for
       const plain = sampleField(f, p[0], p[1], p[2]).amb;
       if (plain[0] - plain[1] < (red[0] - red[1]) * 0.3) plainCast++;
     }
@@ -332,10 +350,10 @@ describe('sampling with a normal', () => {
     expect(plainCast).toBe(checked);
   });
 
-  it('never negative, whatever the normal and wherever the sample; the weights are the squares of the normal\'s components', () => {
+  it('never negative, whatever the normal and wherever the sample; the cube stands in for the main texel\'s ambient part, weighted by the squares of the normal\'s components', () => {
     const b = bakeRows(threeLevels(), patternRows(2.5, 3)), f = b.field, rnd = sequence(99);
     const W = f.w * CELL, D = f.h * CELL;
-    let negative = 0, combined = 0, off = 0;
+    let negative = 0, combined = 0, off = 0, notPlain = 0;
     for (let q = 0; q < 6000; q++) {
       const p: V3 = [rnd() * W, FIX.lowerY - 0.5 + rnd() * (FIX.upperCeil - FIX.lowerY + 1), rnd() * D];
       const v: V3 = [rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1], l = Math.hypot(v[0], v[1], v[2]) || 1;
@@ -343,24 +361,25 @@ describe('sampling with a normal', () => {
       const nrm: V3 = q % 7 === 0 ? [0, v[1] < 0 ? -1 : 1, 0] : q % 5 === 0 ? [v[0] / Math.hypot(v[0], v[2]), 0, v[2] / Math.hypot(v[0], v[2])] : [v[0] / l, v[1] / l, v[2] / l];
       const sm = sampleField(f, p[0], p[1], p[2], [1, 1, 1], nrm);
       if (sm.amb.some(c => !(c >= 0)) || sm.dirColor.some(c => !(c >= 0))) negative++;
-      // the same lookup position read with each axis normal: amb(n) = plain + sum over the axes of n_a^2 x (amb(axis) - plain)
+      // the same lookup position read with each axis normal: amb(n) = sum over the axes of n_a^2 x amb(the axis face n points at)
       const P: V3 = [p[0] + nrm[0] * CELL * 0.5, p[1] + nrm[1] * 0.2, p[2] + nrm[2] * CELL * 0.5];
-      const plain = sampleField(f, P[0], P[1], P[2]).amb, want: V3 = [plain[0], plain[1], plain[2]];
-      let clamped = false;
+      const want: V3 = [0, 0, 0];
       for (let a = 0; a < 3; a++) {
         if (nrm[a] === 0) continue;
         const ax: V3 = [0, 0, 0]; ax[a] = nrm[a] > 0 ? 1 : -1;
-        const one = sampleField(f, P[0] - ax[0] * CELL * 0.5, P[1] - ax[1] * 0.2, P[2] - ax[2] * CELL * 0.5, [1, 1, 1], ax).amb;
-        if (one.some(c => c === 0)) clamped = true;
-        for (let c = 0; c < 3; c++) want[c] += nrm[a] * nrm[a] * (one[c] - plain[c]);
+        const one = atPoint(f, P, ax).amb;
+        for (let c = 0; c < 3; c++) want[c] += nrm[a] * nrm[a] * one[c];
       }
-      if (clamped || want.some(c => c <= 0)) continue;
       combined++;
       if ([0, 1, 2].some(c => Math.abs(sm.amb[c] - want[c]) > 1e-9 + want[c] * 1e-9)) off++;
+      // …and nothing of the main texel's ambient part is left in it (the plain sample of the same place)
+      const plain = sampleField(f, P[0], P[1], P[2]).amb;
+      if ([0, 1, 2].some(c => Math.abs(sm.amb[c] - plain[c]) > 1e-6)) notPlain++;
     }
     expect(negative).toBe(0);
-    expect(combined).toBeGreaterThan(2000);
+    expect(combined).toBe(6000);
     expect(off).toBe(0);
+    expect(notPlain).toBeGreaterThan(2000);
   });
 
   it('without a normal, or without a cube, the sample is the plain one', () => {
@@ -391,13 +410,120 @@ describe('sampling with a normal', () => {
     const on = sampleField(f, p[0], p[1], p[2], [1, 1, 1], nrm), off = sampleField(f, p[0], p[1], p[2], [0, 0, 0], nrm), plain = sampleField(f, p[0], p[1] + 0, p[2] + CELL * 0.5, [0, 0, 0]);
     expect(lum3(on.amb)).toBeGreaterThan(0);
     expect(lum3(off.amb)).toBeLessThan(lum3(on.amb));
-    // one multiplier for the whole voxel: ambient (cube included) and directional parts keep their proportion
+    // one multiplier for the whole voxel: ambient (the cube's) and directional parts keep their proportion
     const m = lum3(off.dirColor) / lum3(on.dirColor);
     expect(m).toBeGreaterThan(0);
     expect(m).toBeLessThan(1);
     for (let c = 0; c < 3; c++) expect(off.amb[c]).toBeCloseTo(on.amb[c] * m, 9);
     expect(lum3(plain.dirColor)).toBeCloseTo(lum3(off.dirColor), 9);
   });
+});
+
+// ---------------------------------------------------------------------------------------------
+describe('between two layers', () => {
+  /** Cells whose own column and eight neighbours are open on every layer of the slot (no closed cell in any filtered fetch there). */
+  function interior(b: RowBake, slot: number): number[] {
+    const W = b.ctx.W, H = b.ctx.H, L = b.ctx.layers[slot], ix = b.index[slot], out: number[] = [];
+    for (let cz = 1; cz < H - 1; cz++) for (let cx = 1; cx < W - 1; cx++) {
+      let ok = true;
+      for (let dz = -1; dz <= 1 && ok; dz++) for (let dx = -1; dx <= 1 && ok; dx++) for (let k = 0; k < L; k++) if (ix[((cz + dz) * W + cx + dx) * L + k] < 0) { ok = false; break; }
+      if (ok) out.push(cz * W + cx);
+    }
+    return out;
+  }
+  /** The point `w` of the way from layer k to layer k + 1 over the centre of cell i (null: one of the two heights picks another slot). */
+  function between(f: BakedField, b: RowBake, slot: number, i: number, k: number, w: number): V3 | null {
+    const p0 = voxelCentre(f, b, slot, i, k), p1 = voxelCentre(f, b, slot, i, k + 1);
+    if (!p0 || !p1) return null;
+    const y = p0[1] + (p1[1] - p0[1]) * w, cx = i % f.w, cz = (i - cx) / f.w;
+    return fieldSlot(f, cx, cz, y).slot === slot ? [p0[0], y, p0[2]] : null;
+  }
+
+  it('a face is ONE filtered value, decoded after the blend: dec(mix(byte below, byte above)) — never above the blend of the two layers, never below the darker one', () => {
+    const b = bakeRows(threeLevels(), patternRows(1.2, 11)), f = b.field;
+    let checked = 0, off = 0, above = 0, below = 0, gap = 0;
+    for (let s = 0; s < f.slots; s++) {
+      const L = slotLayers(s);
+      for (const i of interior(b, s)) for (let k = 0; k < L - 1; k++) for (const w of [0.25, 0.5, 0.8]) {
+        const p = between(f, b, s, i, k, w);
+        if (!p) continue;
+        // (the sampler's own position between the layers: its 8-bit floor and ceiling are not exactly the voxels')
+        const hs = fieldSlot(f, i % f.w, Math.floor(i / f.w), p[1]), wk = (p[1] - hs.floor) / Math.max(hs.ceil - hs.floor, 0.3) * (L - 1) - k;
+        for (let face = 0; face < GI_FACES; face++) {
+          const sm = atPoint(f, p, CUBE_FACES[face]), o0 = cubeAt(f, s, face, k, i), o1 = cubeAt(f, s, face, k + 1, i);
+          for (let c = 0; c < 3; c++) {
+            const b0 = f.data[o0 + c], b1 = f.data[o1 + c], v0 = cubeAmbient(b0), v1 = cubeAmbient(b1);
+            checked++;
+            if (Math.abs(sm.amb[c] - cubeAmbient(b0 + (b1 - b0) * wk)) > 1e-9) off++;
+            if (sm.amb[c] > v0 + (v1 - v0) * wk + 1e-9) above++;
+            if (sm.amb[c] < Math.min(v0, v1) - 1e-9) below++;
+            if (v0 + (v1 - v0) * wk - sm.amb[c] > 1e-3) gap++;
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(50000);
+    expect([off, above, below]).toEqual([0, 0, 0]);
+    expect(gap).toBeGreaterThan(1000); // (these rows differ a lot from layer to layer: the blend of the bytes is really below the blend of the values)
+  });
+
+  // The guard of the encoding. A cube texel holds a face's COMPLETE ambient, so the two layers of a face hold nearly the same value in
+  // a real station and decoding after the blend costs next to nothing. (An earlier encoding stored each face as a signed difference
+  // to the main texel's share, which changes from layer to layer: halfway between two layers a wall's ambient was 10 to 16 % off on
+  // average, and more than 20 % off on a fifth of the walls.)
+  it('Subway 93 as the game bakes it: halfway between two layers the shaded ambient is the blend of the two layers\' exact values, within a few per cent', () => {
+    const input = stationBakeInput(generateStation(93));
+    const b = bakeRows(input.source, gatheredRows(input.source, GI_TIERS.standard), {params: input.params}), f = b.field;
+    expect(f.gi).toBeDefined();
+    interface Acc { n: number; abs: number; signed: number; over10: number; over20: number; worst: number }
+    const groups = new Map<string, Acc>();
+    const add = (key: string, e: number) => {
+      let a = groups.get(key);
+      if (!a) groups.set(key, (a = {n: 0, abs: 0, signed: 0, over10: 0, over20: 0, worst: 0}));
+      a.n++; a.abs += Math.abs(e); a.signed += e;
+      if (Math.abs(e) > 0.1) a.over10++;
+      if (Math.abs(e) > 0.2) a.over20++;
+      if (Math.abs(e) > Math.abs(a.worst)) a.worst = e;
+    };
+    let above = 0;
+    for (let s = 0; s < f.slots; s++) {
+      const L = slotLayers(s);
+      for (const i of interior(b, s)) for (let k = 0; k < L - 1; k++) {
+        const t0 = voxelTerms(b, s, i, k)!, t1 = voxelTerms(b, s, i, k + 1)!;
+        const p = between(f, b, s, i, k, 0.5);
+        if (!p) continue;
+        const gapName = k === 0 ? 'bottom gap' : k === L - 2 ? 'top gap' : 'middle gap';
+        for (let face = 0; face < GI_FACES; face++) {
+          // the linear blend of the two layers' exact values (before any byte), and what full shading shows there
+          const want = 0.5 * (lum3(t0.ambient[face]) + lum3(t1.ambient[face]));
+          if (want < 0.01) continue; // (too dark for a share of it to mean anything: under a hundredth of a lit floor)
+          const got = lum3(atPoint(f, p, CUBE_FACES[face]).amb), e = (got - want) / want;
+          add('all', e);
+          add(`${gapName}, ${face === 0 ? 'up-facing' : face === 1 ? 'down-facing' : 'walls'}`, e);
+          // decoding after the blend can only lose light (the encoding is concave) — beyond the bytes' own rounding
+          if (got > want + cubeHalfStep(lum3(t0.ambient[face])) + cubeHalfStep(lum3(t1.ambient[face]))) above++;
+        }
+      }
+    }
+    const pc = (v: number) => `${(v * 100).toFixed(2)} %`;
+    const line = (k: string, a: Acc) => `${k}: ${a.n} samples, mean |error| ${pc(a.abs / a.n)}, signed ${pc(a.signed / a.n)}, over 10 % off ${pc(a.over10 / a.n)}, over 20 % off ${pc(a.over20 / a.n)}, worst ${pc(a.worst)}`;
+    console.log(`Subway 93 (standard bake, ${f.w} x ${f.h}, ${f.slots} slots, ${f.stats.cubeClipped} cube channels clipped), halfway between two layers:\n  ${[...groups].sort((x, y) => x[0].localeCompare(y[0])).map(([k, a]) => line(k, a)).join('\n  ')}`);
+    // Measured 2026-11-15 (the absolute cube): all 1.95 % mean |error|, signed -1.41 %, 0.48 % of the samples over 20 % off; the worst
+    // group (up-facing surfaces in the top gap: the top of something just under a ceiling) 3.79 % and 2.83 %. The bounds leave room
+    // for a retuned gather, not for an encoding whose layers disagree.
+    const all = groups.get('all')!;
+    expect(all.n).toBeGreaterThan(50000);
+    expect(above).toBe(0);
+    expect(all.signed / all.n).toBeLessThanOrEqual(0);
+    expect(all.abs / all.n).toBeLessThan(0.03);
+    expect(all.over20 / all.n).toBeLessThan(0.01);
+    for (const [k, a] of groups) {
+      expect(a.n, k).toBeGreaterThan(1000);
+      expect(a.signed / a.n, k).toBeLessThanOrEqual(0);
+      expect(a.abs / a.n, k).toBeLessThan(0.06);
+      expect(a.over20 / a.n, k).toBeLessThan(0.05);
+    }
+  }, 120000);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -426,12 +552,12 @@ describe('downsampleField keeps the cube', () => {
     }
   });
 
-  it('a uniform cube stays uniform: "no difference" stays 128, and a field of one gathered light reads the same at half resolution', () => {
-    // no gathered light at all: every cube byte of the open cells' rgb is 128 before and after
-    const dark = bakeRows(cubeRoom(), uniformRows([])).field, dd = downsampleField(dark, 2);
+  it('a uniform cube stays uniform: nothing stays nothing, and a field of one gathered light reads the same at half resolution', () => {
+    // no light at all (no fixture, nothing gathered): every cube byte's rgb is 0 before and after
+    const dark = bakeRows(cubeRoom(false), uniformRows([])).field, dd = downsampleField(dark, 2);
     for (const f of [dark, dd]) {
       let set = 0;
-      for (let o = f.gi! * f.w * f.h * 4; o < f.data.length; o += 4) if (f.data[o] !== 128 || f.data[o + 1] !== 128 || f.data[o + 2] !== 128) set++;
+      for (let o = f.gi! * f.w * f.h * 4; o < f.data.length; o += 4) if (f.data[o] !== 0 || f.data[o + 1] !== 0 || f.data[o + 2] !== 0) set++;
       expect(set).toBe(0);
     }
     // one gathered light everywhere, a different value per face, no direct light: a surface at a layer's height, away from the
@@ -443,8 +569,8 @@ describe('downsampleField keeps the cube', () => {
       for (let face = 0; face < GI_FACES; face++) for (const [x, z] of [[2.2, 6.1], [3, 6.5], [2.6, 5.8]] as const) for (let k = 0; k < LAYERS; k++) {
         const nrm = CUBE_FACES[face], hs = fieldSlot(f, Math.floor(x / C), Math.floor(z / C), 1), y = hs.floor + (hs.ceil - hs.floor) * k / (LAYERS - 1);
         const sm = sampleField(f, x, y - nrm[1] * 0.2, z, [1, 1, 1], nrm);
-        // (within the two bytes' steps: the main texel's colour and the cube's difference)
-        for (let c = 0; c < 3; c++) expect(Math.abs(sm.amb[c] - faces[face] * (1 + 0.1 * c))).toBeLessThan(0.04);
+        // (within the cube byte's own step)
+        for (let c = 0; c < 3; c++) { const want = faces[face] * (1 + 0.1 * c); expect(Math.abs(sm.amb[c] - want)).toBeLessThan(cubeHalfStep(want) * 1.01); }
         expect(sm.dirColor).toEqual([0, 0, 0]);
       }
     }

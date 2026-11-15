@@ -9,7 +9,7 @@
 // - bounced light has a DIRECTION: a ceiling gets the lit floor's bounce on the face that looks down at it and nothing on the face
 //   that looks away, a floor is not lit by itself, and the face turned to a lit red wall is redder than the face turned away;
 // - bounced light takes the COLOUR of what it left; a black room bounces nothing (the field is then the direct light alone and
-//   every cube texel says "no difference");
+//   its cube holds what that light scatters, the same on all six faces; nothing at all in a room no light reaches);
 // - ENERGY: every further bounce adds light and adds less than the one before (surfaces send back less than they get: a closed
 //   pale room converges); `gain` scales the stored light linearly, `saturation` moves the chroma of the surface colours and never
 //   the amount; neither is pinned here by value (GATHER_GAIN / GATHER_SATURATION are tuned by the lighting's look);
@@ -108,11 +108,19 @@ const same = (a: Uint8Array | Float32Array, b: Uint8Array | Float32Array) => Buf
 const rowHalfStep = (v: number): number => (Math.sqrt(Math.max(0, v) / ROW_MAX) * 65535 + 1) / 65535 ** 2 * ROW_MAX + Math.abs(v) * 1e-6;
 /** The slices before a field's ambient cube (all of a field without one). */
 const slotBytes = (f: BakedField): Uint8Array => f.data.subarray(0, (f.gi ?? f.depth) * f.w * f.h * 4);
-/** The ambient cube's bytes (rgb only: alpha marks the open cells) that say anything but "no difference". */
-function cubeTexelsSet(f: BakedField): number {
-  let set = 0;
-  for (let o = f.gi! * f.w * f.h * 4; o < f.data.length; o += 4) if (f.data[o] !== 128 || f.data[o + 1] !== 128 || f.data[o + 2] !== 128) set++;
-  return set;
+/**
+ * The ambient cube of a one-slot field, face against face: texels (rgb) of faces 1..5 that differ from face 0's texel of the same
+ * voxel, and face-0 texels that hold any light.
+ */
+function cubeFaces(f: BakedField): {differ: number; lit: number} {
+  const n4 = f.w * f.h * 4, L = slotLayers(0), g = f.gi! * n4;
+  let differ = 0, lit = 0;
+  for (let k = 0; k < L; k++) for (let o = 0; o < n4; o += 4) {
+    const a = g + k * n4 + o;
+    if (f.data[a] !== 0 || f.data[a + 1] !== 0 || f.data[a + 2] !== 0) lit++;
+    for (let face = 1; face < GI_FACES; face++) { const b = g + (face * L + k) * n4 + o; if (f.data[b] !== f.data[a] || f.data[b + 1] !== f.data[a + 1] || f.data[b + 2] !== f.data[a + 2]) differ++; }
+  }
+  return {differ, lit};
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -197,7 +205,7 @@ describe('occlusion (synthetic rooms)', () => {
     expect(gathered(open, 8, 1, 9)).toBeGreaterThan(near * 5); // the lit room itself
   });
 
-  it('a sealed room stays black: every face of every voxel in it is zero, its cube says "no difference", no surface there is lit', () => {
+  it('a sealed room stays black: every face of every voxel in it is zero, its cube holds nothing, no surface there is lit', () => {
     const e = enhanced(rooms(false), GI_TIERS.high), {W, H} = e.ctx, L = e.ctx.layers[0], f = e.field, n = W * H;
     let rows = 0, lit = 0, roomA = 0, cube = 0;
     for (let cz = 0; cz < H; cz++) for (let cx = 0; cx < W; cx++) for (let k = 0; k < L; k++) {
@@ -208,8 +216,8 @@ describe('occlusion (synthetic rooms)', () => {
       if (cx < 30) { if (any) roomA++; continue; }
       rows++;
       if (any) lit++;
-      // its texel of each face's slice of this layer: no difference from a main texel that holds nothing
-      for (let face = 0; face < GI_FACES; face++) { const o = ((f.gi! + face * L + k) * n + cz * W + cx) * 4; if (f.data[o] !== 128 || f.data[o + 1] !== 128 || f.data[o + 2] !== 128) cube++; }
+      // its texel of each face's slice of this layer: no light (neither a fixture's scatter nor anything gathered)
+      for (let face = 0; face < GI_FACES; face++) { const o = ((f.gi! + face * L + k) * n + cz * W + cx) * 4; if (f.data[o] !== 0 || f.data[o + 1] !== 0 || f.data[o + 2] !== 0) cube++; }
     }
     expect(rows).toBeGreaterThan(1000);
     expect(roomA).toBeGreaterThan(1000); // (the lit room next door did gather)
@@ -352,7 +360,7 @@ describe('direction and colour (the ambient cube)', () => {
 describe('energy', () => {
   const room = (o: Partial<FieldSource['lights'][number]> = {}): FieldSource => ({grid: box(30, 24), lights: [light(7.5, 6, o)], trenchFloorY: -1.15});
 
-  it('black surfaces bounce nothing: the field is the direct light alone and its cube says "no difference" everywhere', () => {
+  it('black surfaces bounce nothing: the field is the direct light alone and its cube holds that light\'s scatter, the same on all six faces', () => {
     const black = enhanced(room(), GI_TIERS.standard, allAlbedo(0));
     expect(black.ind.stats.mean).toBe(0);
     expect(black.ind.data.every(v => v === 0)).toBe(true);
@@ -361,14 +369,23 @@ describe('energy', () => {
     expect(direct.gi).toBeUndefined();
     expect(black.field.gi).toBe(direct.depth);
     expect(same(slotBytes(black.field), direct.data)).toBe(true);
-    // the cube: 128 in every channel of every texel (alpha marks the open cells), nothing clipped
-    expect(cubeTexelsSet(black.field)).toBe(0);
+    // the cube: what the direct light scatters and nothing else — no face of a voxel differs from another, nothing clipped
+    const faces = cubeFaces(black.field);
+    expect(faces.differ).toBe(0);
+    expect(faces.lit).toBeGreaterThan(100); // (one fixture: its light has a direction nearly everywhere, little of it is scattered)
     expect(black.field.stats.cubeClipped).toBe(0);
-    // so a surface is lit the same whichever way the node reads it
-    for (const nrm of CUBE_FACES) {
-      const a = sampleField(black.field, 9, 2, 7, [1, 1, 1], nrm), b = sampleField(direct, 9, 2, 7, [1, 1, 1], nrm);
-      expect([a.amb, a.dirColor, a.dir]).toEqual([b.amb, b.dirColor, b.dir]);
+    // so a surface is lit the same whichever way the node reads it: the cube's ambient is the main texel's own ambient part
+    // (two encodings of one value: within their 8-bit steps), the directional part is the very same texel
+    let worst = 0;
+    for (const nrm of CUBE_FACES) for (const [x, y, z] of [[9, 2, 7], [7.5, 0.3, 6], [3, 4, 10], [12, 1, 3]] as const) {
+      const a = sampleField(black.field, x, y, z, [1, 1, 1], nrm), b = sampleField(direct, x, y, z, [1, 1, 1], nrm);
+      expect([a.dirColor, a.dir]).toEqual([b.dirColor, b.dir]);
+      const total = lum(b.amb) + lum(b.dirColor);
+      expect(total).toBeGreaterThan(0);
+      for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs(a.amb[c] - b.amb[c]) / total);
     }
+    console.log(`black room: the cube's ambient against the main texel's ambient part, worst difference ${(worst * 100).toFixed(2)} % of the light there`);
+    expect(worst).toBeLessThan(0.02);
   });
 
   it('brighter surfaces bounce more, and more than in proportion (the later bounces compound)', () => {
