@@ -120,8 +120,8 @@ const str = (v: unknown, max = 48): string | null => (typeof v === 'string' ? v.
  * Task studio-perf-ao-train-continuity-20261110-022206-01: the journey's paced build (Game.journeyBuildStats, core/pacedBuild.ts):
  * main-thread work, slices / steps, the longest slice and step, frame waits and fallbacks (no per-slice list: the event stays small).
  */
-const pacedSummary = (g: RecorderGame): Record<string, unknown> | null => {
-  const st = (g as {journeyBuildStats?: {slices: number; steps: number; workMs: number; maxSliceMs: number; maxStepMs: number; waits: number; fallbacks: number; hiddenSteps: number} | null}).journeyBuildStats;
+const pacedSummary = (g: RecorderGame, from: 'journeyBuildStats' | 'loadBuildStats' = 'journeyBuildStats'): Record<string, unknown> | null => {
+  const st = (g as Partial<Record<typeof from, {slices: number; steps: number; workMs: number; maxSliceMs: number; maxStepMs: number; waits: number; fallbacks: number; hiddenSteps: number} | null>>)[from];
   if (!st) return null;
   const r1 = (v: number) => Math.round(v * 10) / 10;
   return {slices: st.slices, steps: st.steps, workMs: r1(st.workMs), maxSliceMs: r1(st.maxSliceMs), maxStepMs: r1(st.maxStepMs), waits: st.waits, fallbacks: st.fallbacks, hiddenSteps: st.hiddenSteps};
@@ -149,6 +149,9 @@ function warmupSummary(r: unknown): Record<string, unknown> | null {
     budgetMs: typeof w.budgetMs === 'number' ? w.budgetMs : null, cutStage: str(w.cutStage), stages, plan: w.plan ? plan : null};
 }
 
+/** The three ways a station is built: at once (tests, tools), paced between the journey's frames, in time slices behind the loading screen. */
+const isBuild = (name: string): boolean => name === 'buildSection' || name === 'buildSectionPaced' || name === 'buildSectionSliced';
+
 /** Game methods timed while recording (instance wrappers; removed at stop). */
 const GAME_WRAPS: WrapSpec[] = [
   {name: 'generateSection', kind: 'level.generate', detail: sectionDetail},
@@ -157,6 +160,9 @@ const GAME_WRAPS: WrapSpec[] = [
   // task studio-perf-ao-train-continuity-20261110-022206-01: a train journey builds the next station in paced slices (core/pacedBuild.ts,
   // Game.buildSectionPaced: frames are drawn between them) and generates its layout at the destination's confirmation
   {name: 'buildSectionPaced', kind: 'level.build', async: true, detail: a => ({...sectionDetail(a), paced: true}), result: (_r, g) => pacedSummary(g)},
+  // the loading screen's build (Continue, New game, Retry, menu travel): the same steps in time slices with no frame drawn between
+  // them (core/pacedBuild.ts runSliced, Game.buildSectionSliced); `dur` is its wall time, workMs its main-thread time
+  {name: 'buildSectionSliced', kind: 'level.build', async: true, detail: a => ({...sectionDetail(a), sliced: true}), result: (_r, g) => pacedSummary(g, 'loadBuildStats')},
   {name: 'pregenerateSection', kind: 'level.generate', detail: a => ({...sectionDetail(a), pregenerated: true})},
   {name: 'leaveSection', kind: 'level.leave'},
   {name: 'prepareGraphics', kind: 'warmup', async: true, result: r => warmupSummary(r)},
@@ -841,7 +847,7 @@ export class PerfRecorderController {
     const wrapper = function (this: unknown, ...args: unknown[]): unknown {
       if (!self.recording) return fn.apply(this, args);
       const t0 = self.now();
-      const building = spec.name === 'buildSection' || spec.name === 'buildSectionPaced'; // (the journey's paced build: async)
+      const building = isBuild(spec.name); // (the journey's paced build and the loading screen's sliced one: async)
       if (building) { self.buildDepth++; self.spawnAgg = {count: 0, ms: 0, maxMs: 0}; }
       const route = spec.route;
       if (route) self.routes.push(route);
@@ -971,7 +977,7 @@ export class PerfRecorderController {
       }
       const route = this.route();
       const data: Record<string, unknown> = {...(spec.detail?.(args, this.g) ?? {}), ...(err ? {failed: true} : spec.result?.(result, this.g) ?? {}), route};
-      const building = spec.name === 'buildSection' || spec.name === 'buildSectionPaced';
+      const building = isBuild(spec.name);
       if (building) {
         const a = this.spawnAgg;
         data.enemySpawns = a.count; data.enemySpawnMs = r2(a.ms); data.enemySpawnMaxMs = r2(a.maxMs);

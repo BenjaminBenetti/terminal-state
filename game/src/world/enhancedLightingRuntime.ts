@@ -16,20 +16,29 @@
 // Nothing here reads or writes the campaign save, draws a random number or changes a layout: a cache hit, a miss, a cleared or
 // unavailable cache give the same station, the same loot and the same light — only the load time differs.
 // Enhanced lighting Off and the Reactor never open the cache and return nothing: the caller bakes the baseline as before.
+//
+// Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane WORKERS): the two long parts of step 2 — the gather and the probes —
+// run on the bake's WORKERS when the caller can wait for them (bakeSteps `offThread`: Game's paced and sliced builds; a synchronous
+// build never) and workers were handed in (setBakeWorkers: main.ts). world/lightBakePool.ts has the contract: the same bytes as on
+// this thread for any number of workers, so nothing below — the digests, the cache keys, what is stored, what the station looks
+// like — knows or cares where they were made. Everything else of step 2 stays on this thread (the direct light, the surface
+// colours, the digests, the field's encoding). When the workers cannot be used or give up, that part is baked here as before and
+// the reason is reported (timings.bake, status().bake, a console warning): never silently, never a different station.
 
 import {ContentHasher} from '../core/contentHash';
 import {openDerivedCache, type DerivedBundle, type DerivedCache, type DerivedCacheStats} from '../core/derivedCache';
 import type {BuildSteps} from '../core/pacedBuild';
+import {BakeWorkersFailed, LightBakeSession, type LightBakeReport, type LightBakeWorkers} from './lightBakePool';
 import {
   ENHANCED_LIGHTING_DEFAULT, FIELD_CUBE_BYTES, REFLECTIONS_DEFAULT, baselinePlan, planEnhancedLighting, planSignature,
   type EnhancedLightingActive, type EnhancedLightingPlan, type EnhancedLightingRequest, type EnhancedLightingStatus, type FieldShading, type GiTier, type LightingCacheUse,
   type LightingCapabilities, type ReflectionTier,
 } from './enhancedLighting';
 import {MAX_GROUPS, MAX_SLOTS, bakeLightFieldSteps, fieldDepth, giDepth, type BakedField, type ColumnGeometry, type FieldParams, type FieldSource} from './lightField';
-import {GATHER_REACH, GATHER_TUNING, IND_STRIDE, gatherIndirectSteps, indirectIndex, rowBits, rowValue, type IndirectContext, type IndirectLight} from './lightFieldGather';
+import {GATHER_REACH, GATHER_TUNING, IND_STRIDE, gatherIndirectSteps, indirectIndex, rowBits, rowValue, type GatherOptions, type IndirectContext, type IndirectLight} from './lightFieldGather';
 import {BandScene} from './lightScene';
 import {
-  PROBE_FIXTURE_RADIANCE, PROBE_LEVEL_SIGMA, PROBE_NORM_MIN, PROBE_REACH, bakeReflectionProbesSteps, probeBytes, type BakedProbes, type ProbeAtlasLayout,
+  PROBE_FIXTURE_RADIANCE, PROBE_LEVEL_SIGMA, PROBE_NORM_MIN, PROBE_REACH, bakeReflectionProbesSteps, probeBytes, type BakedProbes, type ProbeAtlasLayout, type ProbeBakeInput,
 } from './reflectionProbes';
 import {surfaceAlbedoSteps, type DrawnSurfaces, type SurfaceAlbedo} from './surfaceAlbedo';
 
@@ -69,7 +78,11 @@ export interface EnhancedBake {
   bounce: {scene: BandScene; albedo: SurfaceAlbedo} | null;
 }
 
-/** Main-thread times of the last enhanced load (ms; diagnostics / the cost report). */
+/**
+ * Times of the last enhanced load (ms; diagnostics / the cost report). They are this thread's own time where the work ran on this
+ * thread; a part the bake's workers made (`bake.workers` > 0) counts the time it took from asking to having it — this thread was
+ * free meanwhile (its own share of a build is in the build's statistics: core/pacedBuild.ts PacedBuildStats.stages / .parked).
+ */
 export interface EnhancedLightingTimings {
   /** Hashing the address (prefetch) and reading + unpacking the entry. */
   addressMs: number; fetchMs: number;
@@ -77,6 +90,11 @@ export interface EnhancedLightingTimings {
   albedoMs: number; digestMs: number; giMs: number; probeMs: number;
   /** The whole lighting bake of the load (direct light and encoding included). */
   totalMs: number;
+  /**
+   * How the gather and the probes were made, when either was (null: both came from the cache): on how many workers, what handing
+   * them the station cost this thread, what they held — and, when they were to be used and were not (for all of it), why.
+   */
+  bake: LightBakeReport | null;
 }
 
 export interface EnhancedLightingRuntimeOptions {
@@ -84,6 +102,8 @@ export interface EnhancedLightingRuntimeOptions {
   openCache?: () => DerivedCache;
   /** Clock (ms). */
   now?: () => number;
+  /** The workers a bake may use (world/lightBakePool.ts; setBakeWorkers replaces them). Absent: every bake runs on the calling thread. */
+  bakeWorkers?: LightBakeWorkers | null;
 }
 
 interface Captured { geos: readonly ColumnGeometry[]; albedo: SurfaceAlbedo; scene: BandScene | null; digest: string; rows: Float32Array; stats: IndirectLight['stats'] }
@@ -132,11 +152,24 @@ export class EnhancedLightingRuntime {
   private cache: DerivedCache | null = null;
   private fetched: Fetched | null = null;
   private readonly now: () => number;
-  /** The last enhanced load's main-thread times (null: none yet). */
+  private bakeWorkers: LightBakeWorkers | null;
+  /** Why no worker is started any more (they failed in a way the next bake would meet again: BakeWorkersFailed.lasting). */
+  private bakeWorkersOff: string | null = null;
+  /** The last enhanced load's times (null: none yet). */
   timings: EnhancedLightingTimings | null = null;
 
   constructor(private readonly settings: EnhancedLightingSettings, private readonly opts: EnhancedLightingRuntimeOptions = {}) {
     this.now = opts.now ?? (() => performance.now());
+    this.bakeWorkers = opts.bakeWorkers ?? null;
+  }
+
+  /**
+   * The workers the next bakes may use (world/lightBakePool.ts LightBakeWorkers; null: none — every bake on the calling thread).
+   * How many is the host's business (main.ts asks the browser): it changes how long a bake takes, never what it makes.
+   */
+  setBakeWorkers(workers: LightBakeWorkers | null): void {
+    this.bakeWorkers = workers;
+    this.bakeWorkersOff = null;
   }
 
   /** What the initialised renderer really offers (Game.initRenderer; before it: nothing — no reflections are planned). */
@@ -164,6 +197,7 @@ export class EnhancedLightingRuntime {
       // (during a rebuild in place the station is lit by what it had until the new lighting is installed: bakeSteps writes its record earlier)
       requested: this.request(), active: this.applying && this.litBy ? this.litBy.active : this.active, pending, cacheBackend: this.cache ? this.cache.backend : 'none',
       applying: this.applying, error: pending && this.failure?.signature === want ? this.failure.reason : null,
+      bake: this.timings?.bake ? {workers: this.timings.bake.workers, fallback: this.timings.bake.fallback} : null,
     };
   }
 
@@ -292,8 +326,25 @@ export class EnhancedLightingRuntime {
    * The enhanced part of a station's lighting bake, as build steps (core/pacedBuild.ts): {baked: undefined} when the station is not
    * enhanced (the caller bakes the baseline: nothing was touched), else the enhanced field and — when planned — its probes.
    * `drawn` is what the builder really drew (BuiltWorld.drawn; null: the neutral finish colours).
+   * `offThread`: the caller drains these steps with a driver that can wait (core/pacedBuild.ts runPaced / runSliced), so the gather
+   * and the probes may run on the bake's workers — the steps then PARK (yield a BuildWait) while the workers work. Without it every
+   * step runs on the calling thread (drainSync and every other synchronous caller).
    */
-  *bakeSteps(input: StationBakeInput, drawn: DrawnSurfaces | null | undefined, o: {max3DTextureSize?: number} = {}): BuildSteps<EnhancedBake> {
+  *bakeSteps(input: StationBakeInput, drawn: DrawnSurfaces | null | undefined, o: {max3DTextureSize?: number; offThread?: boolean} = {}): BuildSteps<EnhancedBake> {
+    // the bake's workers, for this station's bake alone (started by the first part that is not in the cache; closed here whatever
+    // happens: a bake that is abandoned half-way takes its workers with it)
+    const pool = o.offThread ? this.bakeWorkers : null, off = this.bakeWorkersOff;
+    const session = pool && pool.count > 0 && !off ? new LightBakeSession(pool, this.now) : null;
+    const unavailable = !pool || session ? null : pool.count > 0 && off ? `the bake workers failed earlier on this page (${off})` : pool.unavailable ?? 'no bake worker is available';
+    try {
+      return yield* this.bakeWith(session, unavailable, input, drawn, o);
+    } finally {
+      session?.close();
+    }
+  }
+
+  /** bakeSteps with its workers (`session`; null: none — `unavailable` says why when there were to be some). */
+  private *bakeWith(session: LightBakeSession | null, unavailable: string | null, input: StationBakeInput, drawn: DrawnSurfaces | null | undefined, o: {max3DTextureSize?: number}): BuildSteps<EnhancedBake> {
     const plan = this.plan(input.reactor);
     this.live = {signature: planSignature(plan), reactor: input.reactor};
     this.failure = null; // (a station is being lit for the current choice: an earlier failed change is history)
@@ -314,8 +365,25 @@ export class EnhancedLightingRuntime {
     if (fetched && fetched.grid !== src.grid) fetched = null;
     if (fetched && fetched.key !== this.entryKey(fetched.layoutKey, plan, shading)) fetched = {...fetched, key: this.entryKey(fetched.layoutKey, plan, shading), bundle: null};
     const entry = fetched?.bundle && isObject(fetched.bundle.meta) && fetched.bundle.meta.v === DERIVED_LIGHTING_VERSIONS.entry ? fetched.bundle : null;
-    const timings: EnhancedLightingTimings = {addressMs: fetched?.addressMs ?? 0, fetchMs: fetched?.fetchMs ?? 0, albedoMs: 0, digestMs: 0, giMs: 0, probeMs: 0, totalMs: 0};
+    const timings: EnhancedLightingTimings = {addressMs: fetched?.addressMs ?? 0, fetchMs: fetched?.fetchMs ?? 0, albedoMs: 0, digestMs: 0, giMs: 0, probeMs: 0, totalMs: 0, bake: null};
     const levels = (src.levels ?? [{id: 0, role: 'main', grid: src.grid, baseY: 0}]).slice(0, MAX_SLOTS) as NonNullable<FieldSource['levels']>;
+
+    /** Why a part meant for the workers is made on this thread instead (the first reason; null: none was). */
+    let fallback = unavailable;
+    /** The gather or the probes were made in this load (not taken from the cache). */
+    let made = false;
+    const workersOff = (why: string): void => { this.bakeWorkersOff ??= why; };
+    /** `steps` on the workers; null when they cannot do it (the reason is kept and said once): the caller makes it here. */
+    const onWorkers = function* <T>(what: string, steps: (s: LightBakeSession) => BuildSteps<T>): BuildSteps<T | null> {
+      if (!session || session.failure) return null;
+      try { return yield* steps(session); } catch (err) {
+        if (!(err instanceof BakeWorkersFailed)) throw err;
+        fallback ??= err.message;
+        if (err.lasting) workersOff(err.message); // (the next station's bake would meet it again: no worker is started for it)
+        console.warn(`enhanced lighting: the ${what} is baked on the main thread (${err.message})`);
+        return null;
+      }
+    };
 
     // what the bake's indirect hook saw and made (the probes read the same columns and colours)
     const hook: {got: Captured | null; use: 'hit' | 'miss' | 'stale'} = {got: null, use: 'miss'};
@@ -344,9 +412,15 @@ export class EnhancedLightingRuntime {
         }
       }
       hook.use = g ? 'stale' : 'miss';
-      const scene = new BandScene(ctx.W, ctx.H, ctx.geos);
-      const ind = yield* gatherIndirectSteps(ctx, {rays: gi.rays, bounces: gi.bounces, stride: gi.stride, reach: GATHER_REACH, gain: GATHER_TUNING.gain, saturation: GATHER_TUNING.saturation, ...(GATHER_TUNING.lift > 0 ? {response: {lift: GATHER_TUNING.lift, ceiling: GATHER_TUNING.ceiling}} : {}), albedo, scene});
+      const opt: GatherOptions = {rays: gi.rays, bounces: gi.bounces, stride: gi.stride, reach: GATHER_REACH, gain: GATHER_TUNING.gain, saturation: GATHER_TUNING.saturation, ...(GATHER_TUNING.lift > 0 ? {response: {lift: GATHER_TUNING.lift, ceiling: GATHER_TUNING.ceiling}} : {}), albedo};
+      let scene: BandScene | null = null;
+      let ind = yield* onWorkers('gather', s => s.gatherSteps(ctx, opt));
+      if (!ind) {
+        scene = new BandScene(ctx.W, ctx.H, ctx.geos);
+        ind = yield* gatherIndirectSteps(ctx, {...opt, scene});
+      }
       timings.giMs = ind.stats.ms;
+      made = true;
       hook.got = {geos: ctx.geos, albedo, scene, digest, rows: ind.data, stats: ind.stats};
       return ind;
     };
@@ -372,10 +446,13 @@ export class EnhancedLightingRuntime {
         rpUse = r ? 'stale' : 'miss';
         yield 'probes.bake';
         t = now();
-        probes = yield* bakeReflectionProbesSteps({field: baked, geos: got.geos, levels, albedo: got.albedo, lights: src.lights, scene: got.scene ?? undefined}, tier);
+        const from: ProbeBakeInput = {field: baked, geos: got.geos, levels, albedo: got.albedo, lights: src.lights, scene: got.scene ?? undefined};
+        probes = (yield* onWorkers('reflection probes', s => s.probesSteps(from, tier))) ?? (yield* bakeReflectionProbesSteps(from, tier));
         timings.probeMs = now() - t;
+        made = true;
       }
     }
+    if (made) timings.bake = {...(session ? session.report : {workers: 0, startMs: 0, copyMs: 0, copyBytes: 0, memory: {lead: 0, part: 0}}), fallback};
 
     // --- 3. store what was made --------------------------------------------------------------
     const baked1 = giUse !== 'hit' || (rpUse !== 'hit' && rpUse !== 'none');

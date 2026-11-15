@@ -24,8 +24,9 @@ const complete = (p: number) => { const f = loadingMapFrame(p); return f.lines.e
 
 describe('the load\'s progress (LoadProgress): truthful, monotonic, finished only when the game says so', () => {
   it('each stage has its own share of the scale, in the order the load runs them, and none of them reaches the end', () => {
-    const order: LoadStage[] = ['props', 'textures', 'graphics'];
+    const order: LoadStage[] = ['props', 'build', 'textures', 'graphics'];
     expect(Object.keys(LOAD_STAGES)).toEqual(order);
+    expect(LOAD_STAGES.build).toEqual([LOAD_STAGES.props[1], LOAD_STAGES.textures[0]]); // the station build: the stretch between the models and the uploads
     let prev = 0;
     for (const s of order) {
       const [a, b] = LOAD_STAGES[s];
@@ -47,6 +48,9 @@ describe('the load\'s progress (LoadProgress): truthful, monotonic, finished onl
     expect(new LoadProgress().stage('graphics', -3)).toBeCloseTo(0.52, 12);
     expect(new LoadProgress().stage('graphics', Number.NaN)).toBeCloseTo(0.52, 12);
     expect(new LoadProgress().stage('textures', 0.5)).toBeCloseTo(0.49, 12);
+    expect(new LoadProgress().stage('build', 0)).toBeCloseTo(0.42, 12);
+    expect(new LoadProgress().stage('build', 0.5)).toBeCloseTo(0.44, 12);
+    expect(new LoadProgress().stage('build', 1)).toBeCloseTo(0.46, 12);
   });
 
   it('never runs backwards within a load: a stage that restarts, or an earlier stage reported late, changes nothing', () => {
@@ -279,7 +283,7 @@ describe('the DOM view (LoadingMapView)', () => {
     const m = mount();
     try {
       const meter: LoadMeter = m.view;
-      const reports: [LoadStage, number][] = [['props', 0.1], ['props', 0.55], ['props', 1], ['textures', 0.5], ['graphics', 0], ['graphics', 0.31], ['graphics', 0.3], ['graphics', 0.77], ['graphics', 1]];
+      const reports: [LoadStage, number][] = [['props', 0.1], ['props', 0.55], ['props', 1], ['build', 0], ['build', 6 / 11], ['build', 1], ['textures', 0.5], ['graphics', 0], ['graphics', 0.31], ['graphics', 0.3], ['graphics', 0.77], ['graphics', 1]];
       let last = 0;
       for (const [s, f] of reports) {
         meter.stage(s, f);
@@ -383,7 +387,11 @@ describe('game.ts: the map is told the truth, and only the loading screen change
     const warm = body('  private async runWarmup(', '\n  }');
     expect(warm).toContain("meter?.stage('graphics', 0);");
     expect(warm).toContain("onProgress: (p: WarmupProgress) => { meter?.stage('graphics', p.done / Math.max(1, p.total)); label.textContent = warmupLabel(p); },");
-    expect(game.match(/meter\?\.stage\(/g)).toHaveLength(4);
+    // the station build between them: a stage that STARTS reports the ones before it as done; the whole share only after the last step
+    const build = body('  private async buildSectionSliced(', '\n  }\n');
+    expect(build).toContain("if (i >= 0) ui.meter?.stage('build', i / BUILD_STAGES.length);");
+    expect(build).toMatch(/\} finally \{\s*this\.buildHold = false;\s*\}\s*ui\.meter\?\.stage\('build', 1\);/);
+    expect(game.match(/meter\?\.stage\(/g)).toHaveLength(6);
     expect(body('  private showLoading(', '\n  }')).toContain('ui.meter?.reset();');
   });
 

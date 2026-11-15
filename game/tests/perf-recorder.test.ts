@@ -735,7 +735,7 @@ describe('perf recorder: keys, file name, build identity, game seams', () => {
 
   it('the game methods / fields the hooks read still exist (a rename shows up here, not as silently missing events)', () => {
     const src = readFileSync(new URL('../src/game.ts', import.meta.url), 'utf8');
-    for (const m of ['generateSection(', 'async prepareSection(', 'private buildSection(', 'private leaveSection(', 'prepareGraphics(', 'private async stageLevelTextures(',
+    for (const m of ['generateSection(', 'async prepareSection(', '\n  buildSection(key', 'private async buildSectionPaced(', 'private async buildSectionSliced(', 'get loadBuildStats(', 'private leaveSection(', 'prepareGraphics(', 'private async stageLevelTextures(',
       'private async backgroundCompile(', '  travel(req', 'async travelToStation(', '  newGame(level', 'async newCampaign(', 'async continueCampaign(', '  retryLevel(',
       'commitSave(reason', 'spawnEnemy(s', 'private readonly lifecycle = new SingleFlight()', 'private transitGap = false', 'readonly frameCpu = {', 'readonly prof = new UpdateProfiler()',
       'get journeyCompileStats(']) {

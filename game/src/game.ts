@@ -46,7 +46,7 @@ import {StrainerWetTrail} from './ai/strainerTrail';
 import {createEnemyActor, enemyCues, type EnemyActor} from './ai/creatureArchetypes'; // iteration 07 (Lane Q): generic enemy archetypes (rat/dog)
 import {VocalReach} from './ai/vocalReach'; // Task office-overhaul-20261030 (lane AUDIO): enemy vocals by navigable route
 import {FrameBudget} from './core/frameBudget'; // Task frame-budget-deferral-20261030 (lane SCHED): deferred background work
-import {PacedBuildCancelled, drainSync, newPacedStats, runPaced, type BuildSteps, type PacedBuildOptions, type PacedBuildStats} from './core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): the journey's paced station build
+import {PacedBuildCancelled, drainSync, newPacedStats, runPaced, runSliced, type BuildSteps, type PacedBuildOptions, type PacedBuildStats, type SlicedBuildOptions} from './core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): the journey's paced station build
 import {PathService, nearPlayerRule, PATH_DEFER} from './ai/pathService'; // lane SCHED: far, not-in-sight chase re-plans through the frame budget
 import {HordeDirector} from './ai/horde'; // Task track3-eaton-centre-20261031 (lane HORDE): roaming hordes (layout.hordes)
 import {ChaseShare, atriumNearRule, atriumPathOptions, searchExpand} from './ai/chaseShare'; // lane HORDE (atrium AI): open-atrium chase relief (layout.mall only)
@@ -300,6 +300,12 @@ const nextPaint = () => new Promise<void>(r => setTimeout(r, 30));
 /** The pause line while the live station's lighting is rebuilt (Game.relightAfterSettings), by the build stage that is running. */
 export const RELIGHT_LABEL = {start: 'Rebuilding this station\'s lighting…', bounce: 'Rebuilding this station\'s lighting: bounced light…', probes: 'Rebuilding this station\'s lighting: reflections…'} as const;
 export const relightLabel = (stage: string): string => stage.startsWith('gather') ? RELIGHT_LABEL.bounce : stage.startsWith('probes') ? RELIGHT_LABEL.probes : RELIGHT_LABEL.start;
+
+/**
+ * Game.buildSectionSteps' own stages, in order (its labelled yields; a builder's sub-stages are not listed). The loading screen's
+ * map advances by the ones that are DONE: a stage that starts proves every one before it finished.
+ */
+export const BUILD_STAGES = ['world', 'holders', 'navigation', 'physics', 'stock', 'damage', 'lighting', 'arrival', 'enemies', 'pickups', 'hooks'] as const;
 
 /** `steps` unchanged, with every labelled stage (core/pacedBuild.ts: a string yield) reported to `on` as it starts. */
 function* stageLabels<T>(steps: BuildSteps<T>, on: (stage: string) => void): BuildSteps<T> {
@@ -1379,15 +1385,20 @@ export class Game {
    * (Player.spawn: full health); otherwise Player.place keeps hp / stamina. The inventory, survival, battery and lane
    * state are NOT touched here (callers: newGame resets them before, retryLevel restores them before, travel keeps them).
    * The section's memory is applied: killed enemies stay dead, taken loot stays taken, dropped items come back once.
+   * This is the whole build at once: the game's own routes drain the same steps in slices (buildSectionSliced behind the loading
+   * screen, buildSectionPaced on the journey), so its callers are tests and tools — not private, or nothing in this file would use it.
    */
-  private buildSection(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean): void { drainSync(this.buildSectionSteps(key, layout, arrival, fresh)); }
+  buildSection(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean): void { drainSync(this.buildSectionSteps(key, layout, arrival, fresh)); }
   /**
    * Task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD): buildSection as steps (core/pacedBuild.ts) — the same lines in the
    * same order; each `yield` is a point where the journey's paced build (buildSectionPaced) lets the riding car's frame be drawn. Those
    * frames run only the transit gap (updateTransitGap; render() skips the level culler while transitGap) and draw the scene, where the
-   * station's parts stand far outside the riding camera's view; every other route drains it at once (buildSection).
+   * station's parts stand far outside the riding camera's view. The loading screen's routes (Continue, New game, Retry, menu travel)
+   * drain it in time slices with no frame drawn between them (buildSectionSliced); buildSection drains it at once (tests, tools).
+   * `offThread` (the paced and the sliced drain: they can wait): the lighting bake may run on its workers, and these steps then
+   * PARK while the workers work (core/pacedBuild.ts BuildWait). The synchronous drain never asks for it: the whole build on this thread.
    */
-  private *buildSectionSteps(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean): BuildSteps<void> {
+  private *buildSectionSteps(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean, offThread = false): BuildSteps<void> {
     this.lifecycleCounts.build++;
     const t0 = performance.now();
     this.layout = layout;
@@ -1505,7 +1516,10 @@ export class Game {
     // Task studio-baked-lighting-reflections-20261114-050258-01: Enhanced lighting (world/enhancedLightingRuntime.ts) — the same field
     // baked with a ray-gathered, finish-coloured indirect term, and cached reflection probes for metal and glass; each from the derived
     // cache when its inputs still match, else made here in the same paced steps. Off / the Reactor: nothing (the baseline bake below).
-    const enhanced = yield* this.enhancedLighting.bakeSteps(stationBakeInput(this.layout), this.world.drawn, {max3DTextureSize: max3D});
+    // Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane WORKERS): with `offThread` the gather and the probes are made by
+    // the bake's workers (world/lightBakePool.ts) while this build is parked — the same bytes, and the build goes on only with the
+    // complete result (nothing below starts early); without workers, or when they give up, they are made here as before.
+    const enhanced = yield* this.enhancedLighting.bakeSteps(stationBakeInput(this.layout), this.world.drawn, {max3DTextureSize: max3D, offThread});
     this.lightPool = yield* StationLighting.steps(this.scene, this.layout, this.world.fixtures, this.world.tubes, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes, shading: enhanced.shading, mirror: enhanced.mirror, bounce: enhanced.bounce});
     this.syncGlassMirror();
     this.enhancedLighting.applied(this.lightPool.reflectionsSkipped, this.lightPool.shadingSkipped);
@@ -1939,7 +1953,7 @@ export class Game {
         // the journey resumes once: the run arrives at the destination (the departure station was already left and saved)
         this.run.campaign = {...arriveCampaign(this.run.campaign!, h.transit.to), transit: null};
       }
-      this.buildSection(key, layout, {kind: 'start'}, false);
+      try { await this.buildSectionSliced(key, layout, {kind: 'start'}, false, ui); } catch (err) { if (!(err instanceof PacedBuildCancelled)) throw err; return {ok: false, error: 'The load was interrupted.'}; }
       const wp = this.trainLocalToWorld(h.pose);
       if (wp) { this.player.place(wp.x, wp.z, wp.yaw, wp.y); this.player.pitch = wp.pitch; }
       if (h.transit) this.run.entry = this.levelEntrySnapshot();
@@ -2060,9 +2074,40 @@ export class Game {
    */
   private async buildSectionPaced(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean): Promise<void> {
     const gen = this.stationGen, stats = (this.journeyBuild = newPacedStats());
-    await runPaced(this.buildSectionSteps(key, layout, arrival, fresh), {...this.buildPacing, stats, alive: () => gen === this.stationGen});
+    await runPaced(this.buildSectionSteps(key, layout, arrival, fresh, true), {...this.buildPacing, stats, alive: () => gen === this.stationGen});
     this.genMs = stats.workMs;
   }
+  /**
+   * The LOADING SCREEN's station build (Continue, New game, Retry, menu travel): buildSectionSteps drained in time slices with one
+   * turn of the event loop between two of them (core/pacedBuild.ts runSliced) instead of one synchronous block of seconds — the page
+   * stays responsive (the map and the progress line paint, input is delivered, a hidden tab does not stall it) and nothing else
+   * changes: the same steps in the same order, and every caller goes on to the warm-up only after the last step, exactly as after
+   * the synchronous build. No frame is drawn meanwhile (`buildHold`: the loading screen covers the canvas, and a half-built station
+   * is not a scene to draw). The progress is the build's own: the map's `build` share advances by the stages that are DONE. A
+   * teardown meanwhile (stationGen moved: the single flight never lets one start) abandons it exactly as the journey's paced build
+   * is abandoned — the generator is closed, PacedBuildCancelled. `genMs` = its main-thread work.
+   */
+  private async buildSectionSliced(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean, ui: WarmupUi): Promise<void> {
+    const gen = this.stationGen, stats = (this.loadBuild = newPacedStats());
+    // (the progress line — read by hooks and screen readers, not shown — keeps what its route wrote: Retry's and menu travel's say what they carry over)
+    const started = (stage: string): void => {
+      const i = (BUILD_STAGES as readonly string[]).indexOf(stage);
+      if (i >= 0) ui.meter?.stage('build', i / BUILD_STAGES.length); // (else a builder's own sub-stage)
+    };
+    this.buildHold = true;
+    try {
+      await runSliced(stageLabels(this.buildSectionSteps(key, layout, arrival, fresh, true), started), {...this.slicePacing, stats, alive: () => gen === this.stationGen});
+    } finally {
+      this.buildHold = false;
+    }
+    ui.meter?.stage('build', 1);
+    this.genMs = stats.workMs;
+  }
+  /** True while the loading screen's station build runs between its slices: the frame loop draws nothing (Game.frame). */
+  private buildHold = false;
+  private loadBuild: PacedBuildStats | null = null;
+  /** The last loading-screen build's slices / steps / main-thread ms / turns of the event loop (QA, the perf recorder). */
+  get loadBuildStats(): PacedBuildStats | null { return this.loadBuild; }
   /** Lane BUILD: the paced build's options (core/pacedBuild.ts PACED_BUILD defaults; tests / QA may override). */
   buildPacing: PacedBuildOptions = {};
   private journeyBuild: PacedBuildStats | null = null;
@@ -2312,7 +2357,7 @@ export class Game {
       this.leaveSection(false); // the old run is discarded (lane teardown still runs against it)
       this.run = run;
       this.resetCarry();
-      this.buildSection(key, layout, {kind: 'start'}, true);
+      try { await this.buildSectionSliced(key, layout, {kind: 'start'}, true, ui); } catch (err) { if (!(err instanceof PacedBuildCancelled)) throw err; return null; }
       this.run.entered.push(level);
       this.run.entry = this.levelEntrySnapshot();
       this.updateStationIntro();
@@ -2349,7 +2394,8 @@ export class Game {
       this.leaveSection(false); // this level's memories are replaced by the snapshot's
       this.run.restoreScopeMemories(key, snap.memories); // (campaign: this station's memories only)
       this.restoreCarryFrom(snap);
-      this.buildSection(key, layout, snap.arrival, false); // (the loading screen keeps saying what Retry restores)
+      // (the loading screen keeps saying what Retry restores)
+      try { await this.buildSectionSliced(key, layout, snap.arrival, false, ui); } catch (err) { if (!(err instanceof PacedBuildCancelled)) throw err; return null; }
       const w = await this.prepareGraphics(ui);
       if (w.status === 'cancelled') return w;
       this.readyLine(ui, w);
@@ -2409,7 +2455,7 @@ export class Game {
         await this.warmRun;
         this.leaveSection(true);
         built = true;
-        this.buildSection(req.to, layout, req.arrival, false);
+        await this.buildSectionSliced(req.to, layout, req.arrival, false, ui);
         if (levelChange) { this.run.entered.push(req.to.level); this.run.entry = this.levelEntrySnapshot(); }
         const w = await this.prepareGraphics(ui); // (a menu travel's loading screen keeps its carry-over line)
         if (w.status === 'cancelled') return {ok: false, reason: 'cancelled'};
@@ -2421,6 +2467,7 @@ export class Game {
         this.hud.toast(levelChange ? `${shown} · ${sectionLabel(req.to)} — your kit and condition came with you` : req.label);
         return {ok: true};
       } catch (err) {
+        if (err instanceof PacedBuildCancelled) return {ok: false, reason: 'cancelled'}; // (the station was replaced under the build: its replacement owns the screen)
         console.error('Iteration 16: travel failed', err);
         this.lastError = String((err as Error)?.stack ?? err);
         if (!built) { this.setState('paused'); $('#pause .fine').textContent = `Travel failed (${String((err as Error)?.message ?? err).slice(0, 120)}) — you are still here.`; }
@@ -2452,7 +2499,7 @@ export class Game {
    * current session/station"): a changed Enhanced lighting / Reflections choice is applied to the LIVE station from the pause menu — at
    * once when it is made there, else the next time the game is paused (another tab changed the stored choice while this one played).
    * No main menu, Continue, station load or reroll: only the station's LIGHTING is rebuilt — the field bake of the new choice (from the
-   * derived cache when this layout's entry matches, else baked now in paced steps under the pause menu), then one step that swaps the
+   * derived cache when this layout's entry matches, else baked now in time slices under the pause menu), then one step that swaps the
    * station lighting (world/lights.ts replaceSteps: flicker clock, circuit levels and fixtures carried over) — followed by the same
    * blocking warm-up a quality change runs, because a changed light set compiles every lit material again. The frame loop draws
    * nothing meanwhile (`warming`), Resume and the choices are held, the pause line says what is being done, and every transition waits
@@ -2488,6 +2535,11 @@ export class Game {
   private relightWait: Promise<void> | null = null;
   /** Live rebuilds of the station lighting this session (QA / tests). */
   readonly relightCounts = {runs: 0, swaps: 0, failed: 0};
+  /** The time-sliced drain's options where no frame is drawn (core/pacedBuild.ts SLICED_BUILD defaults; tests / QA may override). */
+  slicePacing: SlicedBuildOptions = {};
+  private relightBuild: PacedBuildStats | null = null;
+  /** The last live lighting rebuild's slices / steps / main-thread ms / turns of the event loop (QA). */
+  get relightBuildStats(): PacedBuildStats | null { return this.relightBuild; }
 
   /** A live station in the pause menu whose lighting the settings now plan differently (and that plan did not already fail). */
   private relightDue(): boolean {
@@ -2523,7 +2575,15 @@ export class Game {
           const input = stationBakeInput(this.layout);
           await el.prefetch(input); // this layout's cached bake under the new choice, if there is one
           if (!alive()) break;
-          const r = await runPaced(stageLabels(this.relightSteps(input), stage => { label.textContent = relightLabel(stage); }), {...this.buildPacing, alive});
+          // No frame is drawn meanwhile (`warming`), so there is no frame to wait for between two slices: the bake runs in long
+          // slices with one turn of the event loop between them (core/pacedBuild.ts runSliced — the line above paints, input is
+          // delivered, a hidden tab does not stall it). The same steps and the same `alive` check as the frame-paced drain it replaces.
+          const stats = (this.relightBuild = newPacedStats());
+          // (lane WORKERS) ... and a bake whose choice is no longer the one asked for (it changed under the bake: another tab) is
+          // abandoned like one whose station was replaced: its workers are stopped, nothing of it is installed, and the next pass
+          // bakes what is asked for now.
+          const wanted = () => alive() && el.pendingSignature() === signature;
+          const r = await runSliced(stageLabels(this.relightSteps(input), stage => { label.textContent = relightLabel(stage); }), {...this.slicePacing, stats, alive: wanted});
           installed = swapped = true;
           this.relightCounts.swaps++;
           if (r.error) throw r.error; // (the station is lit by the baseline now: relightSteps recorded it)
@@ -2531,6 +2591,7 @@ export class Game {
           if (err instanceof PacedBuildCancelled) {
             // a replaced station's own build owns the record by now; this station (a lost device) keeps the lighting and the record it had
             if (!installed && gen === this.stationGen && this.world) restore();
+            if (alive()) continue; // (only the choice changed: this station is still here to be lit by the new one)
             break;
           }
           this.relightCounts.failed++;
@@ -2554,7 +2615,8 @@ export class Game {
   /** The live station's lighting for the current choice, as steps (runRelight): the bake, then the swap in ONE step. */
   private *relightSteps(input: ReturnType<typeof stationBakeInput>): BuildSteps<{error: unknown}> {
     const max3D = maxTexture3DSize(this.renderer.backend as never);
-    const enhanced = yield* this.enhancedLighting.bakeSteps(input, this.world.drawn, {max3DTextureSize: max3D});
+    // (its one caller drains these steps in time slices and can wait: the bake may run on its workers — lane WORKERS, see buildSectionSteps)
+    const enhanced = yield* this.enhancedLighting.bakeSteps(input, this.world.drawn, {max3DTextureSize: max3D, offThread: true});
     const r = yield* StationLighting.replaceSteps(this.lightPool, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes, shading: enhanced.shading, mirror: enhanced.mirror, bounce: enhanced.bounce}, fn => this.retire(fn));
     this.lightPool = r.lighting;
     this.syncGlassMirror(); // made / released with the lighting; the warm-up that follows draws it once
@@ -2980,7 +3042,8 @@ export class Game {
     fb.hold(this.warming ? 'warmup' : this.state === 'loading' ? 'loading' : this.state === 'playing' ? null : 'paused');
     fb.beginFrame(time ?? now, now);
     // Iteration 14: the warm-up owns the renderer (render target / layers / hidden frames) until it resolves
-    if (this.warming) { this.input.endFrame(); return; }
+    // (and between the slices of the loading screen's station build there is no whole station to draw: buildSectionSliced)
+    if (this.warming || this.buildHold) { this.input.endFrame(); return; }
     if (this.state === 'playing' || (this.state === 'won' && this.wonAt >= 0)) {
       const playing = this.state === 'playing';
       if (playing) this.update(dt);

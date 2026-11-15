@@ -30,6 +30,13 @@
 //    put. The operation that found the database dead (also one whose transaction was aborted by the connection closing under
 //    it) is repeated on the in-memory backend. A missing factory is reported in `reason` without a console warning (Node,
 //    tests); every real failure is warned about once per kind per cache.
+//  - The two time limits count time in which the EVENT LOOP RAN, not wall time (`watchdog` below). IndexedDB answers through
+//    events, and an event needs the loop: while this thread is busy in one piece (a station built in one block, a warm-up frame of
+//    seconds, a long program build) a healthy database cannot answer, and a plain timer of the limit's length would be overdue the
+//    moment the thread comes back — possibly ahead of the answer that has been waiting in the queue. So a limit is cut into
+//    WATCH_TICKS timer ticks; a tick that fires late (the thread was not running for more than WATCH_SLACK_MS of it) counts
+//    nothing, and the limit has passed after WATCH_TICKS ticks that came on time. A database that really does not answer
+//    while the loop keeps turning is given up after the limit as before; one whose thread was blocked gets its turns first.
 //  - put lays the bundle out (copies its arrays into the container) before it returns: the caller may reuse or change them at
 //    once. Everything after that — checksum, compression, the write — happens when the put's turn comes.
 //  - `corrupt` counts records that were found but could not be used (damaged, truncated, another format version, another key, a
@@ -128,9 +135,9 @@ export interface DerivedCacheOptions {
   indexedDB?: unknown;
   /** false = never compress (default: deflate through CompressionStream when the host has it). */
   compress?: boolean;
-  /** How long open() may take before the in-memory backend takes over (ms; default 3000). */
+  /** How long open() may take before the in-memory backend takes over (ms of a running event loop; default 3000). */
   openTimeoutMs?: number;
-  /** How long one transaction may take before the database counts as unusable (ms; default 10000). */
+  /** How long one transaction may take before the database counts as unusable (ms of a running event loop; default 10000). */
   txTimeoutMs?: number;
   /** false = no in-memory backend: without a working IndexedDB the cache stores nothing (backend 'none'). Default true. */
   memoryFallback?: boolean;
@@ -206,19 +213,56 @@ function taskBoundary(): Promise<void> {
   });
 }
 
+/** Real time (ms) for pacing and the watchdog: monotonic where the host has it. */
+function clock(): number {
+  const p = (globalThis as {performance?: {now?: () => number}}).performance;
+  return p && typeof p.now === 'function' ? p.now() : Date.now();
+}
+
 /** Paces one long operation: `due()` between its steps, `rest()` when it is. */
 class Pacer {
-  private since = Pacer.clock();
+  private since = clock();
   constructor(private readonly sliceMs: number) {}
-  private static clock(): number {
-    const p = (globalThis as {performance?: {now?: () => number}}).performance;
-    return p && typeof p.now === 'function' ? p.now() : Date.now();
-  }
-  due(): boolean { return Pacer.clock() - this.since >= this.sliceMs; }
+  due(): boolean { return clock() - this.since >= this.sliceMs; }
   async rest(): Promise<void> {
     await taskBoundary();
-    this.since = Pacer.clock();
+    this.since = clock();
   }
+}
+
+/** A time limit is counted in this many timer ticks (each a turn of the event loop of its own). */
+export const WATCH_TICKS = 10;
+/**
+ * A tick counts when it fired within this many ms of its time (or within one more tick length, where that is longer). Wide enough
+ * for a hidden tab, whose timers fire about once a second; far below the blocks the limits must not mistake for a dead database.
+ */
+export const WATCH_SLACK_MS = 1250;
+
+/**
+ * A limit on WAITING FOR THE BROWSER, counted in time the event loop ran: `expire` is called once `limitMs` has passed in
+ * WATCH_TICKS timer ticks that fired on time. A tick that fires late counts nothing: the thread was busy in one piece meanwhile, so
+ * what is waited for (an IndexedDB event) could not be delivered either, and it may sit in the queue behind this very timer.
+ * So one block of any length never uses up more than one tick of the limit, a long one none, and after it the answer has the
+ * turns that are left to arrive. A hidden tab's timers (about one a second) still count; a tab throttled harder than that
+ * counts again once it is back. Returns the cancel. A limit that is not a positive finite number never expires.
+ * (Exported: the lighting bake's workers are waited for the same way — world/lightBakePool.ts.)
+ */
+export function watchdog(limitMs: number, expire: () => void): () => void {
+  if (!(Number.isFinite(limitMs) && limitMs > 0)) return () => {};
+  const step = limitMs / WATCH_TICKS, late = step + Math.max(step, WATCH_SLACK_MS);
+  let ran = 0, last = clock(), timer: ReturnType<typeof setTimeout> | null = null;
+  const tick = (): void => {
+    const t = clock(), waited = t - last;
+    last = t;
+    if (waited <= late) ran++;
+    if (ran >= WATCH_TICKS) { timer = null; expire(); return; }
+    timer = setTimeout(tick, step);
+  };
+  timer = setTimeout(tick, step);
+  return () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = null;
+  };
 }
 
 async function checksum(headerLength: number, body: Uint8Array, pacer: Pacer): Promise<string> {
@@ -498,20 +542,19 @@ class IdbStore implements Store {
         reject(new DatabaseUnusable(`a transaction could not start (${errorText(err)})`));
         return;
       }
-      let out = initial, settled = false, timer: ReturnType<typeof setTimeout> | null = null;
+      let out = initial, settled = false, unwatch: () => void = () => {};
       const settle = (fn: () => void): void => {
         if (settled) return;
         settled = true;
-        if (timer !== null) clearTimeout(timer);
+        unwatch();
         fn();
       };
       const fail = (err: unknown): void => {
         try { t.abort(); } catch { /* already finished */ }
         settle(() => reject(err));
       };
-      if (Number.isFinite(this.txTimeoutMs) && this.txTimeoutMs > 0) {
-        timer = setTimeout(() => fail(new DatabaseUnusable(`a transaction did not finish in ${this.txTimeoutMs} ms`)), this.txTimeoutMs);
-      }
+      // Counted in time the event loop ran (see `watchdog`): a thread that was blocked is not a database that hangs.
+      unwatch = watchdog(this.txTimeoutMs, () => fail(new DatabaseUnusable(`a transaction did not finish in ${this.txTimeoutMs} ms`)));
       t.oncomplete = () => settle(() => resolve(out));
       // An abort that is not the browser refusing space may be the connection going away (its `close` event comes after the
       // aborts, if at all): starting a transaction tells — it throws on a closed connection, and is an empty one otherwise.
@@ -647,7 +690,7 @@ class Cache implements DerivedCache {
   /** Opens the database; resolves (never rejects) with `store` set, or downgraded. */
   private open(factory: IDBFactory, name: string, timeoutMs: number): Promise<void> {
     return new Promise<void>(resolve => {
-      let done = false, timer: ReturnType<typeof setTimeout> | null = null;
+      let done = false, unwatch: () => void = () => {};
       const settle = (db: IDBDatabase | null, why: string): void => {
         if (done) {
           // A success that arrives after the cache gave up (blocked, timed out): the connection is not kept.
@@ -655,14 +698,15 @@ class Cache implements DerivedCache {
           return;
         }
         done = true;
-        if (timer !== null) clearTimeout(timer);
+        unwatch();
         if (db) {
           const store: Store = new IdbStore(db, this.txTimeoutMs, lost => { if (this.store === store) this.downgrade(`IndexedDB stopped working (${lost})`, true); });
           this.store = store;
         } else this.downgrade(why, true);
         resolve();
       };
-      if (Number.isFinite(timeoutMs) && timeoutMs > 0) timer = setTimeout(() => settle(null, `IndexedDB did not open within ${timeoutMs} ms`), timeoutMs);
+      // Counted in time the event loop ran (see `watchdog`): the open's events cannot arrive while the thread is busy.
+      unwatch = watchdog(timeoutMs, () => settle(null, `IndexedDB did not open within ${timeoutMs} ms`));
       try {
         const req = factory.open(name, DB_VERSION);
         req.onupgradeneeded = () => {
