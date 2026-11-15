@@ -48,8 +48,11 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     const {Game} = await import('../src/game');
     const {GM, isGlassMirrorPlaceholder} = await import('../src/render/glassMirror');
     const {stationReflectLight} = await import('../src/world/reflectionNode');
-    const {stationFieldLight} = await import('../src/world/lightFieldNode');
+    const {LF, stationFieldLight, stationLights} = await import('../src/world/lightFieldNode');
+    const {FLASH_BOUNCE} = await import('../src/world/lights');
     const game = new Game(h.canvas, false);
+    /** The station field lights in the scene, by name (exactly one while a station stands). */
+    const fieldLights = (): string[] => (g.scene.children.filter(c => (stationLights() as unknown[]).includes(c)) as {name: string}[]).map(l => l.name);
     const g = game as unknown as {
       player: {x: number; y: number; z: number; vx: number; vz: number; yaw: number; pitch: number; takeDamage(n: number): void}; state: string;
       scene: {children: unknown[]}; camera: object;
@@ -183,9 +186,11 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     game.flashlightOn = true;
     const gm = game.glassMirror!;
     expect(gm, 'the station is lit with the mirror').toBeTruthy();
-    expect(g.scene.children).toContain(stationReflectLight(true));
-    expect(g.scene.children).not.toContain(stationReflectLight());
-    expect(g.scene.children).not.toContain(stationFieldLight());
+    // (stationReflectLight(full, mirror): the Subway is shaded in full under the defaults — the full reflecting light with the
+    // mirror, alone in the scene; with it the field's cube and the flashlight's bounce)
+    expect(game.enhancedLighting.status().active).toMatchObject({shading: 'full', mirror: true, reflections: 'standard'});
+    expect(fieldLights()).toEqual([stationReflectLight(true, true).name]);
+    expect([LF.cube.value.y, FLASH_BOUNCE.debug().bound]).toEqual([1, true]);
     const planes = (gm as unknown as {planes: GlassPlane[]}).planes;
     expect(planes.length, 'the station has glass planes').toBeGreaterThan(0);
     const warm = gm.debug() as {renders: number; targets: number; target: {size: number[]; samples: number; matched: boolean} | null; failed: string | null};
@@ -254,6 +259,9 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     const on = report('mirror (cap-sized target: the default)');
     say({...on, pose: {plane: at.plane.id, source: at.source, panes: at.plane.panes.length}, mirror: gm.debug()});
     expect(on.frames).toBeGreaterThanOrEqual(55);
+    // (the flashlight is on in a station shaded in full: its bounce is live through the whole walk — what follows holds with it)
+    expect(FLASH_BOUNCE.debug()).toMatchObject({bound: true, lit: true});
+    expect(FLASH_BOUNCE.debug().hits, 'the beam lands on the architecture').toBeGreaterThan(0);
     expect(on.renders.mirror, 'the mirror is drawn every frame of the walk').toBe(on.frames);
     expect({mirror: on.made.mirror, scenePass: on.made.main, contexts: on.contexts}, `nothing is built by the mirror's draws or the scene pass's (${on.built.join('; ')})`).toEqual({mirror: NOTHING, scenePass: NOTHING, contexts: 0});
     expect(on.renders.shadow, 'still ONE shadow draw per frame').toBe(on.frames);
@@ -311,9 +319,8 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     expect((gm.debug() as {disposed: boolean}).disposed).toBe(true);
     expect(isGlassMirrorPlaceholder(GM.tex.value), 'Off: the target is released, the node holds its 1 x 1 placeholder').toBe(true);
     expect(GM.plane.value.w).toBe(0);
-    expect(g.scene.children).toContain(stationFieldLight());
-    expect(g.scene.children).not.toContain(stationReflectLight(true));
-    expect(g.scene.children).not.toContain(stationReflectLight());
+    expect(fieldLights(), 'Off: the plain field light alone').toEqual([stationFieldLight().name]);
+    expect([LF.cube.value.toArray(), FLASH_BOUNCE.debug().bound], 'Off: no cube, no bounce').toEqual([[0, 0], false]);
     game.flashlightOn = true;
     stand();
     await h.waitFrames(10);
@@ -334,7 +341,8 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     const gm2 = game.glassMirror!;
     expect(gm2, 'Auto again: the mirror is back').toBeTruthy();
     expect(gm2).not.toBe(gm);
-    expect(g.scene.children).toContain(stationReflectLight(true));
+    expect(fieldLights()).toEqual([stationReflectLight(true, true).name]);
+    expect([LF.cube.value.y, FLASH_BOUNCE.debug().bound]).toEqual([1, true]);
     expect((gm2.debug() as {renders: number}).renders, 'the apply\'s warm-up drew it').toBeGreaterThanOrEqual(1);
     game.flashlightOn = true;
     stand();

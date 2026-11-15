@@ -12,6 +12,10 @@
 //  4. A bake that fails leaves the lighting the station had, says so, and is not retried by itself; a later change works.
 //  5. A change made while the game is not paused waits (pending) and is applied at the next pause.
 //  6. Nothing is rebuilt in the gap between two stations or inside a transition; a pause that outlives the transition applies it.
+// Task studio-baked-gi-visual-uplift-20261115-004324-01: what lights the station after every change — the one field light of its
+// shading (full with the mirror while there are probes, the full plain-field light with reflections off, the plain one under Off),
+// the cube's place in the bound field, the flashlight bounce bound to the NEW lighting, and the glass mirror made, kept (its cap
+// following the Reflections tier) or released with it.
 import {afterAll, describe, expect, it, vi} from 'vitest';
 import {installHeadless} from './helpers/headlessGame';
 
@@ -35,9 +39,25 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     const h = installHeadless();
     const {Game} = await import('../src/game');
     const {REFL, activeReflectionProbes, stationReflectLight} = await import('../src/world/reflectionNode');
-    const {stationFieldLight, activeLightField} = await import('../src/world/lightFieldNode');
-    const {APPLYING_NOTE, describeEnhancedLighting, enhancedLightingLine} = await import('../src/world/enhancedLighting');
+    const {LF, stationFieldLight, stationLights, activeLightField} = await import('../src/world/lightFieldNode');
+    const {APPLYING_NOTE, MIRROR_TEXELS, describeEnhancedLighting, enhancedLightingLine} = await import('../src/world/enhancedLighting');
+    const {FLASH_BOUNCE} = await import('../src/world/lights');
     const game = new Game(h.canvas, false);
+    /**
+     * What lights the station: the field lights in the scene by name (one, always), the cube's place in the bound field, the
+     * flashlight bounce (bound, and to the live lighting's own source), the glass mirror's cap (null: no mirror).
+     */
+    const lighting = () => {
+      const pool = game.lightPool as unknown as {bounce: unknown};
+      return {
+        lights: (g.scene.children.filter(c => (stationLights() as unknown[]).includes(c)) as {name: string}[]).map(l => l.name),
+        cube: LF.cube.value.toArray(),
+        bounce: [FLASH_BOUNCE.debug().bound, (FLASH_BOUNCE as unknown as {src: unknown}).src === pool.bounce],
+        mirror: game.glassMirror ? [...game.glassMirror.cap] : null,
+      };
+    };
+    /** Full shading with probes and the mirror, the field's cube after `gi` slices. */
+    const full = (gi: number, tier: 'standard' | 'high' = 'standard') => ({lights: [stationReflectLight(true, true).name], cube: [gi, 1], bounce: [true, true], mirror: [...MIRROR_TEXELS[tier]]});
     const g = game as unknown as {
       player: {x: number; y: number; z: number; yaw: number; pitch: number}; state: string; scene: {children: unknown[]}; stationGen: number; warming: boolean; warmup: unknown;
       transitGap: boolean; lifecycle: {busy: boolean; run<T>(fn: () => Promise<T>): Promise<T> | null};
@@ -128,13 +148,16 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     expect(await until(() => g.state === 'playing')).toBe(true);
     expect(await sweep('play')).toMatchObject({dropped: 0, issues: []});
     const st0 = game.enhancedLighting.status();
-    expect(st0).toMatchObject({pending: false, applying: false, error: null, active: {gi: 'standard', reflections: 'standard'}});
+    expect(st0).toMatchObject({pending: false, applying: false, error: null, active: {gi: 'standard', shading: 'full', shadingReason: null, mirror: true, reflections: 'standard'}});
+    const gi = (game.lightPool as unknown as {field: {gi?: number}}).field.gi!;
+    expect(gi).toBeGreaterThan(0);
+    expect(lighting()).toEqual(full(gi));
     const print0 = stationPrint(), gen0 = g.stationGen;
 
     // --- 1. pause -> Reflections High ---
     await pause();
     const before1 = {save: savePrint(), enemies: enemiesPrint(), pose: posePrint(), light: lightPrint(), counts: counts(), pool: game.lightPool};
-    const field1 = activeLightField()!, probes1 = activeReflectionProbes()!;
+    const field1 = activeLightField()!, probes1 = activeReflectionProbes()!, mirror1 = game.glassMirror;
     const releaseField1 = vi.spyOn(field1, 'dispose'), releaseProbes1 = vi.spyOn(probes1, 'dispose');
     const lineBefore = pauseLine.textContent;
     const a1 = await apply({reflections: 'high'});
@@ -145,8 +168,11 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     expect(resume.disabled, 'Resume is free again').toBe(false);
     expect(pauseLine.textContent, 'the pause line is back').toBe(lineBefore);
     const st1 = game.enhancedLighting.status();
-    expect(st1).toMatchObject({pending: false, applying: false, error: null, active: {gi: 'standard', reflections: 'high', reflectionsReason: null}});
+    expect(st1).toMatchObject({pending: false, applying: false, error: null, active: {gi: 'standard', shading: 'full', mirror: true, reflections: 'high', reflectionsReason: null}});
     expect(st1.active!.probes).toBeGreaterThan(0);
+    // the same light of the same shading, once; the bounce bound to the NEW lighting; the SAME mirror, its cap the High tier's
+    expect(lighting()).toEqual(full(gi, 'high'));
+    expect(game.glassMirror === mirror1, 'the mirror is kept across a change that keeps it').toBe(true);
     expect(game.relightCounts).toEqual({runs: 1, swaps: 1, failed: 0});
     expect(counts(), 'no station was generated, prepared, built or left').toBe(before1.counts);
     expect(g.stationGen, 'the same world generation').toBe(gen0);
@@ -156,7 +182,6 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     const probes2 = activeReflectionProbes()!;
     expect(probes2).not.toBe(probes1);
     expect(REFL.atlas.value).toBe(probes2.atlas);
-    expect(g.scene.children.filter(c => c === stationReflectLight(true)).length, 'the reflecting field light, once').toBe(1); // (lane MIRROR, task baked-gi-visual-uplift-20261115-004324: with probes the Game lights the station with the reflecting light's MIRROR variant)
     expect({save: savePrint(), enemies: enemiesPrint(), pose: posePrint(), light: lightPrint()}, 'the run, the enemies, the pose and the flicker circuits are untouched')
       .toEqual({save: before1.save, enemies: before1.enemies, pose: before1.pose, light: before1.light});
     expect(stationPrint(), 'the same station').toBe(print0);
@@ -177,10 +202,10 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     const a2 = await apply({enhancedLighting: 'off'});
     expect(a2.seen, 'until the swap the status said the enhanced lighting the station still had').toMatchObject({applying: true, held: true, noFrames: true, early: false});
     expect(a2.seen.help).toBe(`This station: baseline lighting. ${APPLYING_NOTE}`); // (from the swap on, while the warm-up ran)
-    expect(game.enhancedLighting.status()).toMatchObject({pending: false, applying: false, error: null, active: {gi: 'baseline', giReason: null, reflections: 'off', cache: 'none', probes: 0, probeBytes: 0}});
-    expect(g.scene.children).toContain(stationFieldLight());
-    expect(g.scene.children).not.toContain(stationReflectLight());
-    expect(g.scene.children).not.toContain(stationReflectLight(true));
+    expect(game.enhancedLighting.status()).toMatchObject({pending: false, applying: false, error: null, active: {gi: 'baseline', giReason: null, shading: 'plain', shadingReason: null, mirror: false, reflections: 'off', cache: 'none', probes: 0, probeBytes: 0}});
+    // the plain light alone: no cube in the bound field, no bounce, the mirror released
+    expect(lighting()).toEqual({lights: [stationFieldLight().name], cube: [0, 0], bounce: [false, true], mirror: null});
+    expect((mirror1!.debug() as {disposed: boolean}).disposed, 'the mirror was released with the lighting that had it').toBe(true);
     expect(activeReflectionProbes()).toBeNull();
     expect(releaseProbes2).toHaveBeenCalled();
     expect({save: savePrint(), enemies: enemiesPrint(), light: lightPrint(), counts: counts()}).toEqual(before2);
@@ -191,10 +216,12 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     // --- ... On (the high bake), then Auto + Standard again: the first bake from the session's cache ---
     await pause();
     await apply({enhancedLighting: 'on'});
-    expect(game.enhancedLighting.status()).toMatchObject({pending: false, error: null, active: {gi: 'high', reflections: 'high'}});
+    expect(game.enhancedLighting.status()).toMatchObject({pending: false, error: null, active: {gi: 'high', shading: 'full', mirror: true, reflections: 'high'}});
+    expect(lighting(), 'On: full shading again, a new mirror').toEqual(full(gi, 'high'));
+    expect(game.glassMirror !== mirror1).toBe(true);
     await apply({enhancedLighting: 'auto', reflections: 'standard'});
-    expect(game.enhancedLighting.status()).toMatchObject({pending: false, error: null, active: {gi: 'standard', reflections: 'standard', cache: 'hit', giMs: 0, probeMs: 0, probes: st0.active!.probes}});
-    expect(g.scene.children).toContain(stationReflectLight(true));
+    expect(game.enhancedLighting.status()).toMatchObject({pending: false, error: null, active: {gi: 'standard', shading: 'full', mirror: true, reflections: 'standard', cache: 'hit', giMs: 0, probeMs: 0, probes: st0.active!.probes}});
+    expect(lighting()).toEqual(full(gi));
     await play();
     expect(await sweep('auto-again'), 'Auto again: nothing dropped at any angle').toMatchObject({dropped: 0, issues: []});
     expect(stationPrint(), 'still the same station').toBe(print0);
@@ -211,6 +238,7 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     expect(describeEnhancedLighting(st4)).toMatch(/could not be applied \(simulated bake failure\)/);
     expect(enhancedLightingLine(st4)).toContain('change failed');
     expect(game.lightPool, 'the lighting it had').toBe(pool4);
+    expect(lighting(), 'and everything that lighting had bound: its light, its cube, its bounce, the mirror').toEqual(full(gi));
     expect(resume.disabled).toBe(false);
     expect(game.relightCounts.failed).toBe(1);
     await play();
@@ -221,8 +249,9 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     expect(game.lightPool).toBe(pool4);
     // a different choice works again, and the failure is history
     await apply({reflections: 'off'});
-    expect(game.enhancedLighting.status()).toMatchObject({pending: false, error: null, active: {gi: 'standard', reflections: 'off'}});
-    expect(g.scene.children).toContain(stationFieldLight());
+    expect(game.enhancedLighting.status()).toMatchObject({pending: false, error: null, active: {gi: 'standard', shading: 'full', mirror: false, reflections: 'off'}});
+    // no probes: the FULL plain-field light (the cube and the bounce stay), and no mirror without probes
+    expect(lighting()).toEqual({lights: [stationFieldLight(true).name], cube: [gi, 1], bounce: [true, true], mirror: null});
     await play();
     expect(await sweep('no-reflections'), 'no reflections: nothing dropped').toMatchObject({dropped: 0, issues: []});
 
@@ -233,7 +262,8 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     const swaps5 = game.relightCounts.swaps;
     game.setState('paused');
     expect(await until(() => game.relightCounts.swaps === swaps5 + 1 && !game.enhancedLighting.status().applying && !resume.disabled, 3000)).toBe(true);
-    expect(game.enhancedLighting.status()).toMatchObject({pending: false, error: null, active: {gi: 'standard', reflections: 'standard', cache: 'hit'}});
+    expect(game.enhancedLighting.status()).toMatchObject({pending: false, error: null, active: {gi: 'standard', shading: 'full', mirror: true, reflections: 'standard', cache: 'hit'}});
+    expect(lighting()).toEqual(full(gi));
 
     // --- 6. between two stations (the train journey's gap) and inside a transition nothing is rebuilt: the station that was left is
     //        torn down by then, and the next one's load applies the choice. A pause that outlives the transition is looked at again ---
@@ -255,7 +285,8 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     await flight;
     await waiting; // the pause outlived the transition: the change is applied now
     expect(game.relightCounts.runs).toBe(runs6 + 1);
-    expect(game.enhancedLighting.status()).toMatchObject({pending: false, applying: false, error: null, active: {gi: 'standard', reflections: 'high'}});
+    expect(game.enhancedLighting.status()).toMatchObject({pending: false, applying: false, error: null, active: {gi: 'standard', shading: 'full', mirror: true, reflections: 'high'}});
+    expect(lighting()).toEqual(full(gi, 'high'));
     expect(resume.disabled).toBe(false);
     await play();
     expect(await sweep('end'), 'at the end: nothing dropped').toMatchObject({dropped: 0, issues: []});

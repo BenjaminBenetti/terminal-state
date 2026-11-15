@@ -10,6 +10,10 @@
 //  3. Enhanced lighting Off, then Main menu -> Continue: the plain field light, no probe texture bound by anything drawn, the status
 //     says baseline; then Auto again: the probes are back.
 //  4. The same station every time — layout, loot holders — and no derived data anywhere in browser storage (the saves).
+// Task studio-baked-gi-visual-uplift-20261115-004324-01: under the defaults the station is shaded in FULL (the field with its ambient
+// cube, the flashlight bounce bound) by the reflecting light's full + mirror variant, alone in the scene, and the live glass mirror
+// exists; every program built with all of it stays inside the per-stage limits; the yaw sweeps after a station's warm-up build no
+// shader module; Off: the plain light alone, no cube, no bounce, no mirror, and no program that is drawn knows the bounce.
 import {afterAll, describe, expect, it, vi} from 'vitest';
 import {installHeadless} from './helpers/headlessGame';
 
@@ -17,6 +21,7 @@ afterAll(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 interface Binding { isSampledTexture?: boolean; texture?: unknown; textureNode?: {value?: unknown} }
 interface RenderObject { id: number; object: {name: string; parent: unknown}; material?: {name?: string; type?: string}; getBindings(): {bindings: Binding[]}[] }
+interface Lit { full: boolean; mirror: boolean; reflections: unknown; bounce: unknown; shadingSkipped: string | null; reflectionsSkipped: string | null; field: {gi?: number; depth: number} }
 
 /** WebGPU's DEFAULT per-stage limits (three requests nothing higher). */
 const LIMITS = {uniformBuffers: 12, sampledTextures: 16, samplers: 16} as const;
@@ -42,14 +47,19 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
     const h = installHeadless();
     const {Game} = await import('../src/game');
     const {REFL, activeReflectionProbes, stationReflectLight} = await import('../src/world/reflectionNode');
-    const {stationFieldLight, activeLightField} = await import('../src/world/lightFieldNode');
+    const {LF, stationFieldLight, stationLights, activeLightField} = await import('../src/world/lightFieldNode');
+    const {FLASH_BOUNCE} = await import('../src/world/lights');
+    const {GM} = await import('../src/render/glassMirror');
     const game = new Game(h.canvas, false);
     const g = game as unknown as {
       player: {yaw: number; takeDamage(n: number): void}; state: string; scene: {children: unknown[]};
       layout: {grid: {cells: Uint8Array}; props: {kind: string; x: number; z: number}[]; lights: unknown[]};
       containers: {all: {state: {lots: {itemId: string; count?: number}[]}}[]};
       settings: {enhancedLighting: string; reflections: string};
+      lightPool: Lit;
     };
+    /** The station field lights in the scene, by name (exactly one while a station stands). */
+    const fieldLights = (): string[] => g.scene.children.filter(c => (stationLights() as unknown[]).includes(c)).map(l => (l as {name: string}).name);
     const frameErrors: string[] = [];
     const loop = (t: number) => { try { game.frame(t); } catch (err) { frameErrors.push(String((err as Error)?.stack ?? err).slice(0, 400)); } requestAnimationFrame(loop); };
     game.applySettings();
@@ -87,13 +97,23 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
     const sweep = async (name: string) => {
       phase = name;
       h.log.reset();
+      const m0 = modules.length;
       await h.waitFrames(20);
       const y0 = g.player.yaw;
       for (let i = 0; i < 24; i++) { g.player.yaw = y0 + (i / 24) * Math.PI * 2; await h.waitFrames(2); }
       g.player.yaw = y0;
       await h.waitFrames(4);
-      return {submits: h.log.submits, dropped: h.log.dropped, issues: h.log.issues.slice(0, 5).map(i => i.detail)};
+      // (`built`: shader modules compiled while playing, after the station's warm-up)
+      return {submits: h.log.submits, dropped: h.log.dropped, issues: h.log.issues.slice(0, 5).map(i => i.detail), built: modules.slice(m0).map(m => m.label)};
     };
+    /** The fragment program text of a drawn render object (three's cached builder state: nothing is built by asking). */
+    const nodes = (game.renderer as unknown as {_nodes: {get(ro: RenderObject): {nodeBuilderState?: {fragmentShader?: string}}}})._nodes;
+    const fragmentOf = (ro: RenderObject): string => nodes.get(ro).nodeBuilderState?.fragmentShader ?? '';
+    /** Drawn render objects whose program holds the flashlight bounce (its uniforms are named: world/flashBounce.ts FB). */
+    const withBounce = (name: string): RenderObject[] => [...drawn.get(name)!.values()].filter(ro => /\bfbParams\b/.test(fragmentOf(ro)));
+    const mirrorBound = (name: string): RenderObject[] => [...drawn.get(name)!.values()].filter(ro => ro.getBindings().flatMap(b => b.bindings).some(b => b.isSampledTexture && b.textureNode?.value === GM.tex.value));
+    /** What lights the station: the light in the scene, the cube's place in the field, the bounce, the mirror. */
+    const lighting = () => ({lights: fieldLights(), cube: LF.cube.value.toArray(), bounce: FLASH_BOUNCE.debug().bound, mirror: game.glassMirror !== null});
     /** The station as generated and stocked (what a cache hit, a miss or Off may never change). */
     const stationPrint = () => fnv(JSON.stringify([
       fnv(Buffer.from(g.layout.grid.cells).toString('latin1')), g.layout.props.map(p => [p.kind, Math.round(p.x * 100), Math.round(p.z * 100)]), g.layout.lights,
@@ -113,8 +133,17 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
     expect(st1.active!.probes).toBeGreaterThan(0);
     expect(st1.active!.probeBytes).toBeGreaterThan(0);
     expect(['miss', 'unavailable']).toContain(st1.active!.cache); // (Node has no IndexedDB: this session's memory only)
-    expect(g.scene.children).toContain(stationReflectLight(true)); // (lane MIRROR, task baked-gi-visual-uplift-20261115-004324: with probes the Game lights the station with the reflecting light's MIRROR variant)
-    expect(g.scene.children).not.toContain(stationFieldLight());
+    // task studio-baked-gi-visual-uplift-20261115-004324-01: shaded in full, with probes and the glass mirror — that light, alone;
+    // the field holds its cube, the flashlight bounce is bound, the mirror exists
+    expect(st1.active).toMatchObject({shading: 'full', shadingReason: null, mirror: true});
+    const lit1 = g.lightPool;
+    expect([lit1.full, lit1.mirror, lit1.reflections !== null, lit1.bounce !== null, lit1.shadingSkipped, lit1.reflectionsSkipped]).toEqual([true, true, true, true, null, null]);
+    expect(lit1.field.gi).toBeGreaterThan(0);
+    const FULL = {lights: [stationReflectLight(true, true).name], cube: [lit1.field.gi, 1], bounce: true, mirror: true};
+    expect(lighting()).toEqual(FULL);
+    expect(play.built, 'no shader module is compiled while playing (the warm-up built them all, the cube, the bounce and the mirror included)').toEqual([]);
+    expect(withBounce('play').length, 'drawn programs hold the flashlight bounce').toBeGreaterThan(0);
+    expect(mirrorBound('play').length, 'drawn glass holds the mirror picture').toBeGreaterThan(0);
     const probes1 = activeReflectionProbes()!;
     expect(probes1).toBeTruthy();
     expect(REFL.atlas.value).toBe(probes1.atlas);
@@ -125,7 +154,9 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
 
     // every module compiled so far (the warm-up and the sweep: every material of the station, the car, the held weapon, the fog)
     expect(modules.length).toBeGreaterThan(20);
-    let worst = {uniformBuffers: 0, textures: 0, samplers: 0}, withProbes = 0;
+    let worst = {uniformBuffers: 0, textures: 0, samplers: 0}, withProbes = 0, withBounceModules = 0;
+    // (the same maxima over the modules that hold the flashlight bounce: the full light's lit programs, where this task's additions are)
+    let worstLit = {uniformBuffers: 0, textures: 0, samplers: 0};
     for (const m of modules) {
       const b = wgslBindings(m.code);
       expect(b.uniformBuffers, `${m.label}: uniform buffers`).toBeLessThanOrEqual(LIMITS.uniformBuffers);
@@ -133,9 +164,15 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
       expect(b.samplers, `${m.label}: samplers`).toBeLessThanOrEqual(LIMITS.samplers);
       worst = {uniformBuffers: Math.max(worst.uniformBuffers, b.uniformBuffers), textures: Math.max(worst.textures, b.textures), samplers: Math.max(worst.samplers, b.samplers)};
       if (/textureSampleLevel\(\s*\w*[Aa]tlas|reflection/.test(m.code) || (m.code.match(/texture_3d/g) ?? []).length >= 2) withProbes++;
+      if (/\bfbParams\b/.test(m.code)) {
+        withBounceModules++;
+        worstLit = {uniformBuffers: Math.max(worstLit.uniformBuffers, b.uniformBuffers), textures: Math.max(worstLit.textures, b.textures), samplers: Math.max(worstLit.samplers, b.samplers)};
+      }
     }
-    process.stdout.write(`enhanced-lighting-game: ${modules.length} shader modules, worst per stage ${JSON.stringify(worst)}, ${reflective1.length} reflective render objects, ${st1.active!.probes} probes\n`);
+    process.stdout.write(`enhanced-lighting-game: ${modules.length} shader modules, worst per stage ${JSON.stringify(worst)}; ${withBounceModules} hold the flashlight bounce, worst of those ${JSON.stringify(worstLit)}; ` +
+      `${reflective1.length} reflective render objects, ${st1.active!.probes} probes\n`);
     expect(withProbes, 'fragment programs that hold the probe grid').toBeGreaterThan(0);
+    expect(withBounceModules, 'fragment programs that hold the flashlight bounce').toBeGreaterThan(0);
 
     // 2. death -> Load last save, enhanced lighting still on
     const field1 = activeLightField()!;
@@ -154,7 +191,10 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
     expect(probes2).toBeTruthy();
     expect(probes2).not.toBe(probes1);
     const st2 = game.enhancedLighting.status();
-    expect(st2.active).toMatchObject({gi: 'standard', reflections: 'standard', cache: 'hit', giMs: 0, probeMs: 0, probes: st1.active!.probes});
+    expect(st2.active).toMatchObject({gi: 'standard', shading: 'full', mirror: true, reflections: 'standard', cache: 'hit', giMs: 0, probeMs: 0, probes: st1.active!.probes});
+    expect(lighting(), 'the reloaded station is lit as the first was').toEqual(FULL);
+    expect(g.lightPool).not.toBe(lit1);
+    expect(afterDeath.built, 'after the reload\'s warm-up nothing is compiled either').toEqual([]);
     // render objects built under station 1 that sample the probes and are still drawn: bound to the NEW textures
     const before = drawn.get('play')!;
     const reflective2 = [...drawn.get('after-death')!.values()].filter(ro => probeBindings(ro).length > 0);
@@ -175,13 +215,16 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
     expect(await until(() => g.state === 'playing')).toBe(true);
     const off = await sweep('off');
     expect(off, 'Off: nothing dropped at any angle').toMatchObject({dropped: 0, issues: []});
-    expect(game.enhancedLighting.status()).toMatchObject({pending: false, active: {gi: 'baseline', giReason: null, reflections: 'off', cache: 'none', probes: 0, probeBytes: 0}});
-    expect(g.scene.children).toContain(stationFieldLight());
-    expect(g.scene.children).not.toContain(stationReflectLight());
-    expect(g.scene.children).not.toContain(stationReflectLight(true));
+    expect(game.enhancedLighting.status()).toMatchObject({pending: false, active: {gi: 'baseline', giReason: null, shading: 'plain', shadingReason: null, mirror: false, reflections: 'off', cache: 'none', probes: 0, probeBytes: 0}});
+    // the plain light alone; no cube in the field, no bounce bound, no mirror
+    expect(lighting()).toEqual({lights: [stationFieldLight().name], cube: [0, 0], bounce: false, mirror: false});
+    expect([g.lightPool.full, g.lightPool.mirror, g.lightPool.bounce, g.lightPool.field.gi]).toEqual([false, false, null, undefined]);
     expect(activeReflectionProbes()).toBeNull();
     expect(releaseProbes2).toHaveBeenCalled();
     expect([...drawn.get('off')!.values()].filter(ro => probeBindings(ro).length > 0).map(ro => ro.object.name), 'nothing drawn samples a probe texture under Off').toEqual([]);
+    expect(mirrorBound('off').map(ro => ro.object.name), 'nothing drawn holds the mirror picture under Off').toEqual([]);
+    expect(withBounce('off').map(ro => ro.object.name), 'no program drawn under Off knows the flashlight bounce').toEqual([]);
+    expect(off.built, 'Off: nothing compiled while playing').toEqual([]);
     expect(stationPrint(), 'Off: the same station').toBe(print1);
 
     // ... and Auto again: the probes are back (from the session's cache), still nothing dropped
@@ -196,8 +239,10 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
     expect(await until(() => g.state === 'playing')).toBe(true);
     const again = await sweep('auto-again');
     expect(again, 'Auto again: nothing dropped at any angle').toMatchObject({dropped: 0, issues: []});
-    expect(game.enhancedLighting.status()).toMatchObject({pending: false, active: {gi: 'standard', reflections: 'standard', cache: 'hit'}});
-    expect(g.scene.children).toContain(stationReflectLight(true)); // (lane MIRROR, task baked-gi-visual-uplift-20261115-004324: with probes the Game lights the station with the reflecting light's MIRROR variant)
+    expect(game.enhancedLighting.status()).toMatchObject({pending: false, active: {gi: 'standard', shading: 'full', mirror: true, reflections: 'standard', cache: 'hit'}});
+    expect(lighting(), 'Auto again: full shading, the bounce and the mirror are back').toEqual(FULL);
+    expect(again.built, 'Auto again: nothing compiled while playing').toEqual([]);
+    expect(withBounce('auto-again').length).toBeGreaterThan(0);
     const probes3 = activeReflectionProbes()!;
     const reflective3 = [...drawn.get('auto-again')!.values()].filter(ro => probeBindings(ro).length > 0);
     expect(reflective3.length).toBeGreaterThan(0);
