@@ -4,6 +4,9 @@
 // WebAudio (bank.ts; provenance in public/assets/derivatives/audio-iteration05.json). There are no
 // oscillators, no noise buffers and no synthesised fallback: a cue whose clip is missing or not yet
 // decoded is SILENT and counted (debugState().bank.silentPlays / silentCues).
+// (Task studio-reactor-glowing-zombies-20261115-013245-01, lane AUDIO: the Geiger-counter ticks geiger-*.mp3 are the one clip set that
+// is not a Sound Lab derivative — rendered OFFLINE by the repository's own procedural script, tools/audio-pipeline/geiger-render.mjs,
+// under the user's authorization for the Geiger clicks. At runtime they are ordinary bundled clips; nothing here synthesises them.)
 //
 // Lifecycle: exactly ONE AudioContext for the page lifetime (never closed or recreated), one ambient
 // system, and a single "desired" run state. Menus mute the master gain; the context is never
@@ -15,6 +18,7 @@
 //   clip sources -> voice in -> [air/occlusion lowpass] -> panner -> master -> compressor -> out
 //                            \-> send -> reverbIn -> preDelay -> convolver A|B -> wet A|B -> revOut -> master
 //   player hit confirm (iteration 12): clip -> voice in -> StereoPanner (±0.3) -> master   (no PannerNode / lowpass)
+//   player Geiger ticks (geigerClick): clip -> voice in -> master (centred) + a tiny room send
 //   flare burn loops (iteration 12): loop source -> fade -> level -> lowpass -> panner -> master (+ send)
 //   ambient: looping bed clips (wind, rumble, HVAC, fridge, buzz) -> bed gains -> ambBus -> master
 //            + a positional fridge-hum emitter (same clip) at the nearest vending machine / cooler.
@@ -30,6 +34,7 @@ import type {ImpactFamily} from '../physics/chunks';
 import {VOCAL_GATE, vocalGain} from '../ai/vocalReach'; // Task office-overhaul-20261030 (lane AUDIO): enemy vocals by navigable route
 import {STRAINER_SWING_PEAK_S} from './manifest.strainer.generated'; // lane AUDIO (strainer squish set): each swing clip's peak time
 import {FIRE_CUE_GAIN} from './manifest.fire.generated'; // task studio-flamethrower-fire-20261114-031614-01 (lane AUDIO): the flame / fire set's mix gains
+import {GEIGER_CUE_GAIN} from './manifest.geiger.generated'; // task studio-reactor-glowing-zombies-20261115-013245-01 (lane AUDIO): the Geiger ticks' mix gains
 import {PANTRY_SOUND} from '../items/pantryFood'; // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the pantry items' existing takes
 
 /**
@@ -148,6 +153,11 @@ export const CUE_GAIN: Record<CueId, number> = {
   // derivatives/audio-reactor-ending.json mixCalibration) and the surface rain bed (RMS -20 dBFS; its level: RAIN_BED).
   reactorBeam: 1, bedRain: 1,
   hurt: 0.45, death: 0.55, heartbeat: 0.4, breath: 0.12, cough: 0.38, // cough: restrained player vocal (gas feedback), below hurt
+  // Task studio-reactor-glowing-zombies-20261115-013245-01 (lane AUDIO, tools/audio-pipeline/geiger-build.mjs; GEIGER_AUDIO): the player's
+  // Geiger counter. The ticks are peak -1 dBFS; these gains ARE the build's numbers (derivatives/audio-geiger.json mixCalibration,
+  // loudest 400 ms K-weighted window AT THE SOURCE): a single tick at full exposure (k = 1) = the flashlight click (-35.8 LUFS), under the
+  // heartbeat (-32..-26); k = 0 is 5.2 dB softer. The cluster takes keep the per-tick gain. First estimates for the ear pass (not auditioned).
+  ...GEIGER_CUE_GAIN,
   bedWind: 1, bedRumble: 1, bedHvac: 1, bedFridge: 1, bedBuzz: 1,
   drip: 0.2, creak: 0.26, clank: 0.2, trainDistant: 0.55, flicker: 0.1,
   cabinetOpen: 0.4, cabinetClose: 0.42, crateOpen: 0.4, crateClose: 0.42, vendingPry: 0.42, vendingClose: 0.4,
@@ -351,8 +361,24 @@ const MAX_VOICES = 44;
 const MAX_HRTF = 6;
 /** Token buckets: [refill per second, burst]. */
 const BUCKETS = {casing: [22, 6], impact: [26, 6], step: [10, 4], fall: [9, 3], drip: [3, 2], confirm: [14, 4], flicker: [3, 2],
-  drag: [10, 3]} as const; // task mall-round2-20261031 (lane AUDIO, M01): cardboard drag ticks, all props together
+  drag: [10, 3], // task mall-round2-20261031 (lane AUDIO, M01): cardboard drag ticks, all props together
+  geiger: [30, 6]} as const; // task studio-reactor-glowing-zombies-20261115-013245-01 (lane AUDIO): Geiger ticks (GEIGER_AUDIO)
 type BucketName = keyof typeof BUCKETS;
+
+/**
+ * Task studio-reactor-glowing-zombies-20261115-013245-01 (lane AUDIO): the player's Geiger counter near the irradiated zombies
+ * (Sfx.geigerClick). The caller owns the count rate (a random, distance-ramped rate; cluster takes for high rates); this bounds the sound.
+ */
+export const GEIGER_AUDIO = {
+  /** Voice gain = floor + (1 - floor) x k for exposure k 0..1, times CUE_GAIN (the build's calibration). */
+  floor: 0.55,
+  /** Per tick: +- playback-rate fraction, +- dB. */
+  jitter: 0.04, gainJitter: 0.6,
+  /** A hint of the room: the detector is on the player (non-positional, centred). */
+  send: 0.04,
+  /** Ticks sounding at once (a single take ~20 ms, a cluster <= ~80 ms), on top of the 'geiger' token bucket (30 / s, burst 6). */
+  maxVoices: 4,
+} as const;
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -836,7 +862,7 @@ export class Sfx {
   private dropped = 0;
   private culled = 0;
   private tokens: Record<BucketName, {n: number; t: number}> = {casing: {n: 6, t: 0}, impact: {n: 6, t: 0}, step: {n: 4, t: 0}, fall: {n: 3, t: 0}, drip: {n: 2, t: 0}, confirm: {n: 4, t: 0}, flicker: {n: 2, t: 0},
-    drag: {n: 3, t: 0}};
+    drag: {n: 3, t: 0}, geiger: {n: 6, t: 0}};
   // Task mall-round2-20261031 (lane AUDIO, M01): the sounding drag voice per sliding cardboard prop + counters (debugState().drag).
   private drags = new Map<object, Voice>();
   private dragStats = {ticks: 0, stops: 0, capped: 0, handoffs: 0};
@@ -849,6 +875,9 @@ export class Sfx {
   private confirms = 0;
   /** Head-hit skull cracks played (task studio-general-armor-20261107-231448-01; QA / tests). */
   headConfirms = 0;
+  /** Task studio-reactor-glowing-zombies-20261115-013245-01 (lane AUDIO): Geiger ticks played / refused by the voice cap / by the bucket (QA / tests). */
+  readonly geigerStats = {played: 0, capped: 0, limited: 0};
+  private geigerVoices: Voice[] = [];
   // Iteration 12 (AUDIO): burning flare loops (bounded, FLARE_LOOP.max).
   private flareLoops: FlareLoop[] = [];
   /** Task reactor-build-20261101: the Reactor's machine loops (bounded: MACHINE_LOOP.max). */
@@ -1690,6 +1719,26 @@ export class Sfx {
     const clip = this.play(v, 'cough', {jitter: 0.03, gainJitter: 1.5});
     this.coughVoice = clip ? v : null;
     return clip ? clip.dur : 0;
+  }
+  /**
+   * Task studio-reactor-glowing-zombies-20261115-013245-01 (lane AUDIO): one Geiger-counter tick — `cluster`: a 2-4 tick burst take for
+   * high count rates. `k` 0..1 = exposure intensity (the caller draws the random count rate). Non-positional and centred (the detector is
+   * on the player, like the heartbeat) with a tiny room send, through the master, so the volume / mute settings apply. Dropped while
+   * audio is paused / not live; expendable priority (it never displaces another voice); bounded by its own token bucket and
+   * GEIGER_AUDIO.maxVoices.
+   */
+  geigerClick(k: number, cluster = false): void {
+    const ctx = this.live, G = GEIGER_AUDIO;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    this.geigerVoices = this.geigerVoices.filter(v => v.end > now);
+    if (this.geigerVoices.length >= G.maxVoices) { this.geigerStats.capped++; return; }
+    if (!this.take('geiger')) { this.geigerStats.limited++; return; }
+    const v = this.voice({pri: 0, gain: G.floor + (1 - G.floor) * clamp01(Number.isFinite(k) ? k : 0), send: G.send});
+    if (v && this.play(v, cluster ? 'geigerCluster' : 'geigerClick', {jitter: G.jitter, gainJitter: G.gainJitter})) {
+      this.geigerVoices.push(v);
+      this.geigerStats.played++;
+    }
   }
   /** Silence a cough that is still sounding (lifecycle: death, menus, a new section). */
   stopCough(): void {

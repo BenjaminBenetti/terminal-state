@@ -45,13 +45,17 @@ export const SPRINTER = {
   key: 'sprinter',
 } as const;
 
-/** A spawn that may be a sprinter: any spawn of the ordinary infected family, either type (see THE RULE). */
-export function sprinterEligible(s: Pick<ZombieSpawn, 'archetype'>): boolean {
-  return (s.archetype ?? 'zombie') === 'zombie';
+/**
+ * A spawn that may be a sprinter: any spawn of the ordinary infected family, either type (see THE RULE). (Task
+ * studio-reactor-glowing-zombies-20261115-013245-01: never an irradiated addition — its only change is its hp, ai/irradiated.ts; the
+ * additions are appended after this pass anyway, so no existing tag moves.)
+ */
+export function sprinterEligible(s: Pick<ZombieSpawn, 'archetype' | 'irradiated'>): boolean {
+  return (s.archetype ?? 'zombie') === 'zombie' && s.irradiated !== true;
 }
 
 /** A spawn that IS a sprinter: tagged by the roster pass and still eligible (a special family's spawn never is, whatever its tag). */
-export function isSprinter(s: Pick<ZombieSpawn, 'archetype' | 'sprinter'>): boolean {
+export function isSprinter(s: Pick<ZombieSpawn, 'archetype' | 'sprinter' | 'irradiated'>): boolean {
   return s.sprinter === true && sprinterEligible(s);
 }
 

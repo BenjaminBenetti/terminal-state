@@ -24,6 +24,7 @@ import {skywalkText} from '../gen/skyways/skywalkText'; // task studio-skywalk-v
 import {placeSubwayMapKiosks} from '../gen/subwayMapKiosks'; // task studio-ui-subway-maps-20261108-074144-01
 import {trainSpawnPose, type TrainPlacement} from '../gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE): start arrivals inside the train
 import {applyEnemyRoster} from '../ai/enemyRoster'; // task studio-screacher-production-20261110-221858-01: the per-level seeded family roster
+import {applyIrradiatedAdditions} from '../gen/reactor/irradiated'; // task studio-reactor-glowing-zombies-20261115-013245-01: + the Reactor's lower-storey irradiated zombies (roster v4)
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
 /** Logical levels in tier order (subway 0, office 1, mall 2 — task track3-eaton-centre-20261031, lane GEN). */
@@ -176,6 +177,7 @@ for (const id of LEVEL_IDS) {
   LEVELS[id].generate = (section, ctx) => {
     const layout = generate(section, ctx);
     applyEnemyRoster(layout, id, ctx.levelSeed, ctx.rosterVersion ?? 0);
+    applyIrradiatedAdditions(layout, id, ctx.levelSeed, ctx.rosterVersion ?? 0); // (roster v4) the Reactor's irradiated zombies, APPENDED after it
     return layout;
   };
 }

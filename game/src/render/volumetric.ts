@@ -55,7 +55,7 @@ import {
 } from './atmosphere';
 import type {BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {
-  SMOKE_LIMITS, ScatterLights, SmokeField, VIS_EMITTER_SPAN, VIS_RES, VIS_TEXEL, VIS_WINDOWS, computeVisWindow, computeVisWindowFan, windowStale,
+  SCATTER_SLOTS, SMOKE_LIMITS, ScatterLights, SmokeField, VIS_EMITTER_SPAN, VIS_RES, VIS_TEXEL, VIS_WINDOWS, computeVisWindow, computeVisWindowFan, isGlowScatter, windowStale,
   type SmokeEmitterOptions, type SmokeHandle, type VisLookup,
 } from './smoke';
 import {bindFlareVisibility, isFlareLight} from '../world/flareLight'; // Iteration 15
@@ -620,8 +620,10 @@ export class VolumetricAtmosphere {
   addScatterLight(light: THREE.PointLight): boolean {
     if (!this.scatter.add(light)) return false;
     if (!this.lightLayer.has(light)) {
-      const used = new Set(this.lightLayer.values());
-      for (let l = 0; l < SMOKE_LIMITS.scatterLights; l++) if (!used.has(l)) { this.lightLayer.set(light, l); break; }
+      // (task studio-reactor-glowing-zombies-20261115-013245-01: a glow light's window layer is one of its reserved slots' layers)
+      const used = new Set(this.lightLayer.values()), glow = isGlowScatter(light);
+      const [l0, l1] = glow ? [SMOKE_LIMITS.scatterLights, SCATTER_SLOTS] : [0, SMOKE_LIMITS.scatterLights];
+      for (let l = l0; l < l1; l++) if (!used.has(l)) { this.lightLayer.set(light, l); break; }
     }
     return true;
   }
@@ -817,11 +819,15 @@ export class VolumetricAtmosphere {
     st.winX = x; st.winY = y; st.winZ = z; st.winT = now;
     const n = VIS_RES * VIS_RES;
     // (task studio-general-armor-20261107-231448-01) scatter-light (flare) layers: 1 m texels (+-48 m); smoke emitter layers: 0.5 m, their central 24 m (as before)
+    // (task studio-reactor-glowing-zombies-20261115-013245-01) the reserved glow-light layers: the compact 0.5 m kind too (a glow reaches < 10 m)
     const scatterLayer = layer < SMOKE_LIMITS.scatterLights;
     const o = scatterLayer ? {texel: VIS_TEXEL.scatter} : {texel: VIS_TEXEL.emitter, span: VIS_EMITTER_SPAN};
     const dst = this.visData.subarray(layer * n, (layer + 1) * n), at = {x, y: y + 0.25, z};
     const w = scatterLayer ? computeVisWindowFan(at, this.visLookup, dst, o.texel) : computeVisWindow(at, this.visLookup, dst, o);
     this.winState[layer] = w ? {...w, ok: true} : {x0: 0, z0: 0, texel: o.texel, floor: -1e3, ceil: 1e3, ok: false};
+    // (task studio-reactor-glowing-zombies-20261115-013245-01: just this layer — both backends copy only the listed layers, as the gas
+    // layers do; with walking glow lights a window moves several times a second, and the 12-layer texture is 432 KiB)
+    this.visTex.addLayerUpdate(layer);
     this.visTex.needsUpdate = true;
   }
 
@@ -847,7 +853,9 @@ export class VolumetricAtmosphere {
       l.getWorldPosition(this.tmp);
       const layer = this.lightLayer.get(l) ?? n;
       if (this.densityMap) this.refreshWindow(layer, s, this.tmp.x, this.tmp.y, this.tmp.z, time);
-      const k = l.intensity * p.scatterLightScatter;
+      // (task studio-reactor-glowing-zombies-20261115-013245-01: `userData.vfScatterGain` = a light that scatters more in the haze than
+      // its intensity lights surfaces — the irradiated zombies' glow: a soft surface light, a clearly lit haze around it)
+      const k = l.intensity * p.scatterLightScatter * (l.userData?.vfScatterGain ?? 1);
       pos[n].set(this.tmp.x, this.tmp.y, this.tmp.z, l.distance);
       col[n].set(l.color.r * k, l.color.g * k, l.color.b * k, l.decay);
       // task reactor-expansion-20261101 (lane GASLIGHT): `userData.vfOpen` = a light in a big open volume (the Reactor core / coolant glow
@@ -872,8 +880,8 @@ export class VolumetricAtmosphere {
       let layer = this.smokeLayer.get(e.id);
       if (layer === undefined) {
         const used = new Set(this.smokeLayer.values());
-        for (let l = SMOKE_LIMITS.scatterLights; l < VIS_WINDOWS; l++) if (!used.has(l)) { layer = l; break; }
-        layer ??= SMOKE_LIMITS.scatterLights + m;
+        for (let l = SCATTER_SLOTS; l < VIS_WINDOWS; l++) if (!used.has(l)) { layer = l; break; }
+        layer ??= SCATTER_SLOTS + m;
         this.smokeLayer.set(e.id, layer);
       }
       if (this.densityMap) this.refreshWindow(layer, e, e.x, e.y, e.z, time);

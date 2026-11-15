@@ -17,6 +17,7 @@
 
 import {Rng, hashString} from '../../core/rng';
 import {STAIR, stairRunCells} from '../traversal';
+import type {SpawnContextId} from '../../ai/spawnTables';
 
 /** Walkway tiers below the rim (the core floor follows them). */
 export const TIERS = 4;
@@ -24,6 +25,11 @@ export const TIERS = 4;
 export const REACTOR_LEVELS = TIERS + 2;
 /** layout.levels index of the core floor. */
 export const CORE_LEVEL = TIERS + 1;
+
+/** Spawn context of a storey (the primary's SPAWN_PROFILES.reactor): rim 'station', tiers 1-2 'floor', tiers 3-4 'ring', core 'pit'. */
+export function reactorSpawnContext(lv: number): SpawnContextId {
+  return lv === 0 ? 'station' : lv === CORE_LEVEL ? 'pit' : lv <= 2 ? 'floor' : 'ring';
+}
 /** Canvas margin (cells) kept as rock around everything carved (>= 2 for Track2). */
 export const ORG = 3;
 /** Rock margin (cells) beside the pit for the rooms cut into the walls (room depth <= 24 + the wall). */
