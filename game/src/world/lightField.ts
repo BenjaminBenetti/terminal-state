@@ -53,11 +53,6 @@ import type {IndirectContext, IndirectLight} from './lightFieldGather'; // task 
 
 /** Height layers per column and level slot (relative floor..ceiling). */
 export const LAYERS = 4;
-/**
- * Task studio-baked-lighting-reflections-20261114-050258-01: the limits of the factor an ENHANCED bake scales a level's gathered
- * light by (bakeLightFieldSteps: a level's bounced light totals FieldParams.bounce x its direct light, as the baseline's fill does).
- */
-export const INDIRECT_SCALE_RANGE: readonly [number, number] = [0.1, 4];
 /** Slices of the main level's slot: header (floor, ceil, circuit shares) + 2 per layer. */
 export const SLOT_DEPTH = 1 + 2 * LAYERS;
 /**
@@ -83,6 +78,30 @@ export const fieldDepth = (slots: number) => 1 + SLOT_DEPTH + (slots - 1) * AUX_
 const layerT = (k: number, L: number) => (L > 1 ? k / (L - 1) : 0);
 /** Encoded irradiance range (sqrt-encoded in 8 bits: fine steps in the dark, headroom in pools). */
 export const FIELD_EMAX = 12;
+/**
+ * Task studio-baked-gi-visual-uplift-20261115-004324-01: the gathered light's row format (world/lightFieldGather.ts makes the rows; they
+ * are declared here so this module needs nothing of the gather at run time). The ambient cube's faces, in the order of the gather's surface codes: face f is the irradiance of a surface whose normal is
+ * CUBE_FACES[f] — 0 a floor (+y), 1 a ceiling (-y), 2 / 3 a wall facing +x / -x, 4 / 5 a wall facing +z / -z.
+ */
+export const CUBE_FACES: readonly (readonly [number, number, number])[] = [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
+/** Channels per voxel of IndirectLight.data: six faces x rgb, then the three flicker circuits. */
+export const IND_STRIDE = 21;
+/** First circuit channel of a row. */
+export const IND_CIRCUITS = 18;
+
+/**
+ * Task studio-baked-gi-visual-uplift-20261115-004324-01: the AMBIENT CUBE slices of an enhanced field (BakedField.gi: its first one).
+ * After the last slot (and the extended headers' group slices), per slot, per face of the gather's cube (lightFieldGather.ts
+ * CUBE_FACES: +y, -y, +x, -x, +z, -z), one slice per height layer — a face's layers are consecutive slices, so ONE filtered fetch
+ * between two of them is the face at any height. A texel is what that face receives MORE (or less) than the voxel's main texel
+ * already holds (rgb, signed: byte 128 = nothing, sqrt-encoded either way up to FIELD_DMAX), so a reader that knows nothing of
+ * these slices (the fog, a renderer that keeps the plain light node) still reads a complete field.
+ */
+export const GI_FACES = 6;
+export const FIELD_DMAX = 8;
+/** First cube slice of slot s relative to BakedField.gi; cube slices for S slots. */
+export const giSlotBase = (s: number) => (s === 0 ? 0 : GI_FACES * (LAYERS + (s - 1) * AUX_LAYERS));
+export const giDepth = (slots: number) => GI_FACES * (LAYERS + (slots - 1) * AUX_LAYERS);
 /** Soft transmittance through cells holding sight-blocking props (columns, tall cabinets). */
 const PROP_TRANSMITTANCE = 0.55;
 /** Height tolerance when a ray grazes a floor/ceiling/lintel (m). */
@@ -182,10 +201,15 @@ export interface FieldSource {
   /**
    * Task studio-baked-lighting-reflections-20261114-050258-01: the ENHANCED indirect light (world/lightFieldGather.ts: a ray gather over
    * the fixed architecture, coloured by its finishes) in place of the bounce fill below. Absent (Enhanced lighting off, the Reactor,
-   * every caller that does not ask for it): the bake is unchanged, byte for byte. Same format either way: the shader, the fog and the
-   * CPU sampler read an enhanced field exactly as they read a baseline one.
+   * every caller that does not ask for it): the bake is unchanged, byte for byte. The slots keep their format either way: the fog and
+   * a plain light node read an enhanced field exactly as they read a baseline one.
    */
   indirect?: (ctx: IndirectContext) => BuildSteps<IndirectLight>;
+  /**
+   * Task studio-baked-gi-visual-uplift-20261115-004324-01: with `indirect`, also store the gathered light's ambient cube (the slices
+   * after the slots: BakedField.gi) for the light node that shades by the surface normal. Default true; false = the slots alone.
+   */
+  cube?: boolean;
 }
 
 /** Task track3 (lane ARCH): what FieldSource.extraDirect may add into (the bake's own arrays, slot-major as the fixtures write). */
@@ -198,14 +222,14 @@ export interface ExtraDirectContext {
 
 export interface BakedField {
   w: number; h: number; layers: number; depth: number;
-  /** Level slots (one per station level); depth = fieldDepth(slots) + hdr. */
+  /** Level slots (one per station level); depth = fieldDepth(slots) + hdr (+ giDepth(slots) with an ambient cube). */
   slots: number;
   /**
    * RGBA8 voxels, slice-major: ((slice * h + y) * w + x) * 4. Slice 0 = the column header: legacy columns R = bitmask of
    * the slots present, G / B = split heights, A = band count << 6 | 2-bit slot ids; extended columns (A in 1..63) R / G / B =
    * coarse split heights, A = band count. Slot s starts at slice slotBase(s): its header (floor, ceil, circuit 0/1 shares),
    * then per layer k < slotLayers(s): (irradiance rgb + directional share) and (direction, dying share). Extended columns'
-   * group texels follow the last slot (slices fieldDepth(slots) .. depth - 1).
+   * group texels follow the last slot (`hdr` slices from fieldDepth(slots)); an enhanced field's ambient cube follows those (`gi`).
    */
   data: Uint8Array;
   /** Height encoding range of the column header split heights (and of every slot header in a legacy field). */
@@ -214,6 +238,11 @@ export interface BakedField {
   hdr?: number;
   /** Per slot [lo, hi]: the slot header's 8-bit floor / ceiling range (absent = [yMin, yMax] for every slot). */
   slotY?: Float64Array;
+  /**
+   * Task studio-baked-gi-visual-uplift-20261115-004324-01: the first ambient-cube slice (see GI_FACES; giDepth(slots) slices from
+   * here to the texture's end). Absent: the field has none (a baseline bake, or an enhanced one made without).
+   */
+  gi?: number;
   /** Per column: bitmask of the slots present (slice 0 R holds the same in legacy columns). */
   masks?: Uint16Array;
   /** Grid cells per texel in X/Z (1 = full resolution; see downsampleField). */
@@ -227,8 +256,8 @@ export interface BakedField {
     extra?: Record<string, number>;
     /** Task studio-baked-lighting-reflections-20261114-050258-01: FieldSource.indirect's stats (the enhanced gather), when present. */
     indirect?: IndirectLight['stats'];
-    /** (same task) Per slot, what its gathered light was scaled by to total that level's bounce budget (INDIRECT_SCALE_RANGE). */
-    indirectScale?: number[]};
+    /** Task studio-baked-gi-visual-uplift-20261115-004324-01: cube texels whose difference was past FIELD_DMAX (stored at the limit). */
+    cubeClipped?: number};
 }
 
 /** [lo, hi] of slot s's header heights (floor = lo + byte / 255 * (hi - lo)). */
@@ -668,8 +697,9 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
       else { extCols++; hdr = Math.max(hdr, Math.ceil(order.length / GROUP_BANDS)); }
     }
   }
-  const depth = fieldDepth(S) + hdr, gs0 = fieldDepth(S);
+  const gs0 = fieldDepth(S), cube = !!ind && src.cube !== false, gi0 = gs0 + hdr, depth = gi0 + (cube ? giDepth(S) : 0);
   const data = new Uint8Array(W * H * depth * 4);
+  if (cube) data.fill(128, gi0 * n * 4); // (the cube's texels are signed: 128 = no difference, also in closed cells)
   yield;
   // Packed slot choice (no per-slot loop in the shader). Legacy columns (the iteration-08 texel, byte for byte): R = slot
   // mask, G / B = heights between consecutive bands (mid-slab), A = band count << 6 | slot of band k in bits 2k. Extended
@@ -727,35 +757,9 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
     slotY[2 * s] = lo - 0.25; slotY[2 * s + 1] = hi + 0.25;
   }
 
-  // Task studio-baked-lighting-reflections-20261114-050258-01: the ENHANCED bake's budget. The gather is physical: a white office
-  // floor sends back several times what a dark tunnel does, and stored as it is it would simply brighten every pale level (measured:
-  // + 49 % on an Office floor's ceilings). The game's light levels are the baseline's, where the bounced light of a level totals
-  // FieldParams.bounce x its direct light — so each level's (slot's) gathered light is scaled by ONE factor to total the same. What
-  // the gather decides is where that light goes and what colour it is, never how much there is.
-  /** What voxel k of a column with L layers stores of its gathered light (first-moment height vy, mean luminance ml > 0), as a factor of the mean. */
-  const layerShare = (L: number, k: number, vy: number, ml: number): number => {
-    if (L < 2 || (k > 0 && k < L - 1)) return 1;
-    const fy = 1 + (k === 0 ? 2 : -2) * vy / ml;
-    return fy < 0 ? 0 : fy > 3 ? 3 : fy;
-  };
-  const indScale: number[] = [];
-  if (ind) for (let s = 0; s < S; s++) {
-    const open = geos[s].open, L = LS[s], ELs = EL[s], ix = ind.index[s], id = ind.data;
-    let direct = 0, gathered = 0;
-    for (let i = 0; i < n; i++) {
-      if (!open[i]) continue;
-      for (let k = 0; k < L; k++) {
-        direct += ELs[i * L + k];
-        const q = ix[i * L + k] * 9, ml = lum(id[q], id[q + 1], id[q + 2]);
-        if (ml > 0) gathered += ml * layerShare(L, k, id[q + 4], ml);
-      }
-    }
-    indScale.push(gathered > 0 && direct > 0 ? Math.min(INDIRECT_SCALE_RANGE[1], Math.max(INDIRECT_SCALE_RANGE[0], p.bounce * direct / gathered)) : 1);
-    yield;
-  }
-
   yield 'field.encode';
   // --- Encode --------------------------------------------------------------------------------
+  let cubeClipped = 0;
   const enc = (v: number) => Math.round(Math.sqrt(Math.min(1, Math.max(0, v / FIELD_EMAX))) * 255);
   const u8 = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255);
   for (let s = 0; s < S; s++) {
@@ -763,19 +767,41 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
     const Es = E[s], Ds = D[s], ELs = EL[s], GLs = GL[s], G2Ls = G2L[s], B = bounce[s];
     const base = slotBase(s), L = LS[s];
     const ylo = slotY[2 * s], yr = slotY[2 * s + 1] - ylo;
-    // Task studio-baked-lighting-reflections-20261114-050258-01: a row of an ENHANCED field. The direct light is the baseline's:
-    // its colour, its direction and its directional share of the direct light, texel for texel. The gathered indirect light joins
-    // it without a direction of its own (a voxel has ONE direction, and it is the direct light's business: an earlier version mixed
-    // the bounce's first moment into it, and wherever the fixtures' own directions cancel — the lines between two rows of tubes —
-    // the direction flipped to "from the floor" and drew bright veins on the ceiling). What the first moment does decide is how
-    // much each LAYER stores: the bottom layer is what floors read and the top layer what ceilings read, so each holds what that
-    // surface gets — the mean plus (minus) twice the first moment's height part, never below nothing or above three times the
-    // mean. A floor is not lit by its own bounce; a ceiling gets the floor's in full. The layers between hold the mean.
-    // All of it times the level's one scale (indScale above). The flicker shares count the indirect light's own circuits.
-    const ix = ind ? ind.index[s] : null, id = ind ? ind.data : null, cohK = new Float32Array(LAYERS);
-    /** What voxel k (row q, mean luminance ml > 0) stores of the gathered light, as a factor of its mean (the level's scale in). */
-    const scale = ind ? indScale[s] : 1;
-    const indK = (k: number, q: number, ml: number): number => layerShare(L, k, id![q + 4], ml) * scale;
+    // Task studio-baked-lighting-reflections-20261114-050258-01 / studio-baked-gi-visual-uplift-20261115-004324-01: a row of an
+    // ENHANCED field. The direct light is the baseline's: its colour, its direction and its directional share of the direct light,
+    // texel for texel (a voxel has ONE direction, and it is the direct light's business: an earlier version mixed the bounce's
+    // direction into it, and wherever the fixtures' own directions cancel the direction flipped to "from the floor" and drew
+    // bright veins on the ceiling). The gathered light (lightFieldGather.ts: an ambient cube per voxel, as gathered — no budget, no
+    // scale) joins it twice:
+    //  - in the voxel's main texel, without a direction, as what the surface that reads that LAYER mostly is receives: the bottom
+    //    layer is what floors read (the cube's up-facing face), the top layer what ceilings read (its down-facing face), the layers
+    //    between hold the mean of the four wall faces. A floor is not lit by its own bounce; a ceiling gets the floor's in full.
+    //    This is all a plain light node, the fog and the CPU sampler without a normal know of it;
+    //  - in the cube slices, per face, as the DIFFERENCE between that face and the main texel's share: the enhanced light node adds
+    //    the faces its normal points at, so every surface gets what its own orientation receives (main texel + difference = the face).
+    // The flicker shares count the gathered light's own circuits.
+    const ix = ind ? ind.index[s] : null, id = ind ? ind.data : null, cohK = new Float32Array(LAYERS), baseK = new Float32Array(LAYERS * 4);
+    const gb = gi0 + giSlotBase(s);
+    /** The main texel's share of row q's cube for layer k of L (rgb into baseK[k * 4 ..], its luminance behind them). */
+    const cubeBase = (q: number, k: number): void => {
+      const d = id!, o = k * 4;
+      if (L < 2) for (let c = 0; c < 3; c++) baseK[o + c] = (d[q + c] + d[q + 3 + c] + d[q + 6 + c] + d[q + 9 + c] + d[q + 12 + c] + d[q + 15 + c]) / 6;
+      else if (k === 0) for (let c = 0; c < 3; c++) baseK[o + c] = d[q + c];
+      else if (k === L - 1) for (let c = 0; c < 3; c++) baseK[o + c] = d[q + 3 + c];
+      else for (let c = 0; c < 3; c++) baseK[o + c] = (d[q + 6 + c] + d[q + 9 + c] + d[q + 12 + c] + d[q + 15 + c]) / 4;
+      baseK[o + 3] = lum(baseK[o], baseK[o + 1], baseK[o + 2]);
+    };
+    /** Luminance of the mean of row q's six faces (what its circuit values are shares of). */
+    const cubeLum = (q: number): number => {
+      const d = id!;
+      return lum(d[q] + d[q + 3] + d[q + 6] + d[q + 9] + d[q + 12] + d[q + 15], d[q + 1] + d[q + 4] + d[q + 7] + d[q + 10] + d[q + 13] + d[q + 16], d[q + 2] + d[q + 5] + d[q + 8] + d[q + 11] + d[q + 14] + d[q + 17]) / 6;
+    };
+    const encD = (v: number): number => {
+      const a = v < 0 ? -v : v;
+      if (a > FIELD_DMAX) cubeClipped++;
+      const e = Math.round(Math.sqrt(a >= FIELD_DMAX ? 1 : a / FIELD_DMAX) * 127);
+      return v < 0 ? 128 - e : 128 + e;
+    };
     const encodeRowEnhanced = (cy: number): void => { for (let cx = 0; cx < W; cx++) {
       const i = cy * W + cx;
       let hi = i;
@@ -794,10 +820,11 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
         const dmag = Math.sqrt(Ds[vi] * Ds[vi] + Ds[vi + 1] * Ds[vi + 1] + Ds[vi + 2] * Ds[vi + 2]);
         const dl = Math.min(el, dmag), coh = el > 0 ? (dl + (el - dl) * p.scatter) / el : 0;
         cohK[k] = coh; tot += el; totD += el * coh;
-        const q = ix![i * L + k] * 9, ml = lum(id![q], id![q + 1], id![q + 2]);
-        if (ml <= 0) continue;
-        const ik = indK(k, q, ml);
-        totI += ml * ik; c0 += id![q + 6] * ik; c1 += id![q + 7] * ik;
+        const q = ix![i * L + k] * IND_STRIDE;
+        cubeBase(q, k);
+        const bl = baseK[k * 4 + 3], ml = cubeLum(q);
+        if (bl <= 0 || ml <= 0) continue;
+        totI += bl; c0 += id![q + 18] / ml * bl; c1 += id![q + 19] / ml * bl;
       }
       const cohAvg = tot > 0 ? totD / tot : 0, den = totD + totI;
       data[o0 + 2] = den > 0 ? u8((GLs[i * FLICKER_GROUPS] * cohAvg + c0) / den) : 0;
@@ -807,10 +834,9 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
         const dxv = Ds[vi], dyv = Ds[vi + 1], dzv = Ds[vi + 2];
         const dmag = Math.sqrt(dxv * dxv + dyv * dyv + dzv * dzv);
         const dl = Math.min(el, dmag);
-        const q = ix![i * L + k] * 9, mr = id![q], mg = id![q + 1], mb = id![q + 2], ml = lum(mr, mg, mb);
-        const ik = ml > 0 ? indK(k, q, ml) : 0;
-        const r = Es[vi] * coh + mr * ik, gg = Es[vi + 1] * coh + mg * ik, b = Es[vi + 2] * coh + mb * ik;
-        const tl = el * coh + ml * ik;
+        const q = ix![i * L + k] * IND_STRIDE, br = baseK[k * 4], bg = baseK[k * 4 + 1], bb = baseK[k * 4 + 2], bl = baseK[k * 4 + 3], ml = bl > 0 ? cubeLum(q) : 0;
+        const r = Es[vi] * coh + br, gg = Es[vi + 1] * coh + bg, b = Es[vi + 2] * coh + bb;
+        const tl = el * coh + bl;
         const rho = tl > 0 ? dl / tl : 0;
         const oa = (((base + 1 + 2 * k) * H + cy) * W + cx) * 4, ob = (((base + 2 + 2 * k) * H + cy) * W + cx) * 4;
         data[oa] = enc(r); data[oa + 1] = enc(gg); data[oa + 2] = enc(b); data[oa + 3] = u8(rho);
@@ -818,7 +844,12 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
         data[ob] = u8(dl > 1e-6 ? dxv * inv * 0.5 + 0.5 : 0.5);
         data[ob + 1] = u8(dl > 1e-6 ? dyv * inv * 0.5 + 0.5 : 1);
         data[ob + 2] = u8(dl > 1e-6 ? dzv * inv * 0.5 + 0.5 : 0.5);
-        data[ob + 3] = tl > 0 ? u8((G2Ls[i * L + k] * coh + id![q + 8] * ik) / tl) : 0;
+        data[ob + 3] = tl > 0 ? u8((G2Ls[i * L + k] * coh + (ml > 0 ? id![q + 20] / ml * bl : 0)) / tl) : 0;
+        if (!cube) continue;
+        for (let f = 0; f < GI_FACES; f++) {
+          const og = (((gb + f * L + k) * H + cy) * W + cx) * 4, qf = q + f * 3;
+          data[og] = encD(id![qf] - br); data[og + 1] = encD(id![qf + 1] - bg); data[og + 2] = encD(id![qf + 2] - bb); data[og + 3] = 255;
+        }
       }
     } };
     const encodeRow = ind ? encodeRowEnhanced : (cy: number): void => { for (let cx = 0; cx < W; cx++) { // (lane BUILD: a row per call, a step per 16 rows; the loop out of the generator body)
@@ -861,9 +892,9 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
     for (let cy = 0; cy < H; cy++) { encodeRow(cy); if (cy % 16 === 15) yield; }
   }
   return {
-    w: W, h: H, layers: LAYERS, depth, slots: S, data, yMin, yMax, groups, hdr, slotY, masks,
+    w: W, h: H, layers: LAYERS, depth, slots: S, data, yMin, yMax, groups, hdr, slotY, masks, ...(cube ? {gi: gi0} : {}),
     stats: {ms: performance.now() - t0, bytes: data.byteLength, fixtures: src.lights.length, working, steady, circuits, rays, crossRays, slots: S,
-      bands: maxBands, extCols, cut, crossCulled, ...(extra ? {extra} : {}), ...(ind ? {indirect: ind.stats, indirectScale: indScale} : {})},
+      bands: maxBands, extCols, cut, crossCulled, ...(extra ? {extra} : {}), ...(ind ? {indirect: ind.stats} : {}), ...(cube ? {cubeClipped} : {})},
   };
 }
 
@@ -1031,6 +1062,9 @@ export interface FieldSample {
 }
 
 const dec = (b: number) => { const v = b / 255; return v * v * FIELD_EMAX; };
+/** A cube texel's byte (filtered: any value 0..255) as the signed difference it stores. */
+export const cubeDifference = (b: number): number => { const v = (b - 128) / 127; return v * (v < 0 ? -v : v) * FIELD_DMAX; };
+const decD = cubeDifference;
 
 /**
  * Level slot whose band at texel column (ci, cj) contains height y (else the nearest band); only slots
@@ -1068,7 +1102,11 @@ export function columnMask(f: BakedField, i: number): number {
   return f.masks ? f.masks[i] : f.data[i * 4];
 }
 
-/** Sample like the shader: slot by height, bilinear in XZ (texel centres = cell centres), linear between layers. */
+/**
+ * Sample like the shader: slot by height, bilinear in XZ (texel centres = cell centres), linear between layers. With a `normal` the
+ * lookup is offset along it as the surface shader's is, and a field with an ambient cube (BakedField.gi) adds what a surface of
+ * that orientation receives of the gathered light (into `amb`): what the enhanced light node shades. Without one: the main texels alone.
+ */
 export function sampleField(f: BakedField, x: number, y: number, z: number, levels: readonly number[] = [1, 1, 1], normal?: readonly [number, number, number]): FieldSample {
   const W = f.w, H = f.h, d = f.data, C = CELL * (f.cellScale ?? 1);
   if (normal) { x += normal[0] * C * 0.5; y += normal[1] * 0.2; z += normal[2] * C * 0.5; }
@@ -1098,8 +1136,20 @@ export function sampleField(f: BakedField, x: number, y: number, z: number, leve
   const dl = Math.hypot(dirRaw[0], dirRaw[1], dirRaw[2]) || 1;
   const f0 = tex(base, 2) / 255, f1 = tex(base, 3) / 255, f2 = mix(tex(sb0, 3), tex(sb1, 3)) / 255;
   const m = Math.max(0, 1 - f0 * (1 - levels[0]) - f1 * (1 - levels[1]) - f2 * (1 - levels[2]));
+  const amb: [number, number, number] = [T[0] * (1 - rho), T[1] * (1 - rho), T[2] * (1 - rho)];
+  if (normal && f.gi !== undefined) {
+    // the ambient cube (world/lightFieldNode.ts lightFieldCube): per axis the face the normal points at, weighted by its square
+    const gb = f.gi + giSlotBase(slot);
+    for (let a = 0; a < 3; a++) {
+      const na = normal[a], w = na * na;
+      if (w <= 0) continue;
+      const face = a === 1 ? (na > 0 ? 0 : 1) : a === 0 ? (na > 0 ? 2 : 3) : (na > 0 ? 4 : 5), s0 = gb + face * L;
+      for (let c = 0; c < 3; c++) amb[c] += w * decD(mix(tex(s0 + k0, c), tex(s0 + k1, c)));
+    }
+    for (let c = 0; c < 3; c++) if (amb[c] < 0) amb[c] = 0;
+  }
   return {
-    amb: [T[0] * (1 - rho) * m, T[1] * (1 - rho) * m, T[2] * (1 - rho) * m],
+    amb: [amb[0] * m, amb[1] * m, amb[2] * m],
     dirColor: [T[0] * rho * m, T[1] * rho * m, T[2] * rho * m],
     dir: [dirRaw[0] / dl, dirRaw[1] / dl, dirRaw[2] / dl],
   };
@@ -1110,17 +1160,17 @@ export function sampleField(f: BakedField, x: number, y: number, z: number, leve
  * station grid: WebGL2 only guarantees 256). The shader derives the texel size from the texture size,
  * so a coarser volume needs no shader change; light bleeds up to k/2 cells further near walls. The slot
  * masks are OR-ed; the column header (slice 0 G / B / A, and R + the group slices of an extended column) is taken from the
- * texel with the most bands; every slot slice is averaged.
+ * texel with the most bands; every slot slice (and every ambient-cube slice) is averaged.
  */
 export function downsampleField(f: BakedField, k: number): BakedField {
   if (k <= 1) return f;
-  const W = Math.ceil(f.w / k), H = Math.ceil(f.h / k), D = f.depth, gs0 = fieldDepth(f.slots);
+  const W = Math.ceil(f.w / k), H = Math.ceil(f.h / k), D = f.depth, gs0 = fieldDepth(f.slots), gi0 = f.gi ?? D;
   const data = new Uint8Array(W * H * D * 4);
   const masks = new Uint16Array(W * H);
   const pickOf = new Int32Array(W * H).fill(-1);
   for (let s = 0; s < D; s++) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const o = ((s * H + y) * W + x) * 4;
-    if (s >= gs0) { // extended-header group slices: the picked column's
+    if (s >= gs0 && s < gi0) { // extended-header group slices: the picked column's
       const p = pickOf[y * W + x];
       if (p >= 0 && isExtendedHeader(f.data[p * 4 + 3])) for (let c = 0; c < 4; c++) data[o + c] = f.data[((s * f.h) * f.w + p) * 4 + c];
       continue;
@@ -1145,6 +1195,17 @@ export function downsampleField(f: BakedField, k: number): BakedField {
     for (let c = 0; c < 4; c++) data[o + c] = Math.round(acc[c] / n);
   }
   return {...f, w: W, h: H, data, masks, stats: {...f.stats, bytes: data.byteLength}, cellScale: k};
+}
+
+/**
+ * Task studio-baked-gi-visual-uplift-20261115-004324-01: an enhanced field without its ambient cube (the same slots: what a plain light
+ * node, the fog and the CPU sampler without a normal read is unchanged). A view of the same bytes, nothing is copied.
+ */
+export function withoutCube(f: BakedField): BakedField {
+  if (f.gi === undefined) return f;
+  const data = f.data.subarray(0, f.gi * f.w * f.h * 4);
+  const {gi: _gi, ...rest} = f;
+  return {...rest, data, depth: f.gi, stats: {...f.stats, bytes: data.byteLength}};
 }
 
 // ---------------------------------------------------------------------------------------------

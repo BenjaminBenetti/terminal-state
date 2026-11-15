@@ -1,28 +1,34 @@
 // Task studio-baked-lighting-reflections-20261114-050258-01: the ENHANCED INDIRECT LIGHT of the station light field — a ray gather
 // that replaces the baseline bounce fill (world/lightField.ts: a tenth of the area's mean light, blurred) when Enhanced lighting is on.
+// Task studio-baked-gi-visual-uplift-20261115-004324-01: the gather is now kept as it is — PHYSICAL, with its own directions.
 //
 // The baseline fill knows nothing of the room: it is as bright behind a wall as in front of it, has no colour of its own and no
 // direction. Here every field voxel looks around instead: a fixed set of rays over the sphere (world/lightScene.ts: the station's fixed
 // architecture, exact) and, at whatever each ray hits, the light that surface really sends back — its own colour (world/surfaceAlbedo.ts:
 // the finish the builder drew there) times the light that falls on it from its side (the direct light of the bake, by the surface's
-// normal). What comes back is kept as a mean (the indirect irradiance), its first moment (where it comes from: a doorway, a lit floor)
-// and its share of each flicker circuit (so a room lit by a stuttering tube stutters with it). Further bounces reuse the same hits.
-// The first moment lights the next bounce by each surface's own normal, and decides what the field's bottom and top layers store
-// (what a floor and a ceiling get: world/lightField.ts encodeRowEnhanced); it never steers the field's one direction.
+// normal). What comes back is kept per voxel as an AMBIENT CUBE: the irradiance of a surface facing each of the six axis directions
+// (CUBE_FACES: what a floor, a ceiling and the four wall orientations there receive), plus the light's share of each flicker circuit
+// (so a room lit by a stuttering tube stutters with it). Further bounces reuse the same hits: the surface a ray hit is lit by the
+// bounce before through the cube face of its own normal (a radiosity iteration), so the light a white wall throws on the floor goes
+// on to the ceiling.
 //  - A room lit only through its door is lit from the door; an alcove off a bright hall is darker than the hall; under a platform edge,
 //    behind a pier or up a stairwell the light falls off the way the space does.
 //  - Red quarry tile throws warm light, a green wall a green cast, dark ballast almost nothing: no extra flat ambient anywhere.
+//  - A ceiling over a lit floor is lit by that floor and a floor is not lit by itself; the side of a pier that faces a bright wall is
+//    brighter than the side that faces a dark tunnel (the cube's six faces; the first version of this bake kept one mean and scaled
+//    it to the baseline's amount, which is why it looked like the baseline).
 //  - Nothing movable is in the scene (no prop, door, character or train), so nothing that can move is frozen into it.
-// Cost: load time only (it is baked into the SAME field texture: no shader, texture or frame cost). Deterministic: no random numbers,
-// the ray sets are fixed rotations of one lattice, interleaved over the cells and smoothed (an interleaved-sampling gather).
-// `stride` 2 gathers on every other cell in x and z (a 1 m lattice: indirect light is smooth) and fills the cells between from their
-// lattice neighbours in the same space, never across a wall or a drop: a quarter of the rays for nearly the same picture.
+// Cost: load time only. Deterministic: no random numbers, the ray sets are fixed rotations of one lattice, interleaved over the
+// cells and smoothed (an interleaved-sampling gather). `stride` 2 gathers on every other cell in x and z (a 1 m lattice: indirect
+// light is smooth) and fills the cells between from their lattice neighbours in the same space, never across a wall or a drop: a
+// quarter of the rays for nearly the same picture. The rows are rounded to the 16 bits the derived cache stores (rowBits): a row read
+// back from the cache is exactly the row a fresh gather returns.
 
 import {CELL} from '../gen/grid';
 import type {BuildSteps} from '../core/pacedBuild';
 import {BandScene, HIT_CEIL, HIT_FLOOR, sphereDirections} from './lightScene';
 import {ALBEDO_LUT, ALBEDO_STRIDE, ALB_CEIL, ALB_FLOOR, ALB_WALL, type SurfaceAlbedo} from './surfaceAlbedo';
-import type {ColumnGeometry} from './lightField';
+import {CUBE_FACES, IND_CIRCUITS, IND_STRIDE, type ColumnGeometry} from './lightField';
 
 /** What the bake hands the gather (its own arrays, slot-major as the fixtures wrote them). */
 export interface IndirectContext {
@@ -38,18 +44,33 @@ export interface IndirectContext {
   scatter: number;
 }
 
-/** Channels per voxel of IndirectLight.data. */
-export const IND_STRIDE = 9;
+export {CUBE_FACES, IND_CIRCUITS, IND_STRIDE};
 
 export interface IndirectLight {
   /** Per slot, per voxel (i * layers + k): its row in `data` (-1: a closed cell). */
   index: Int32Array[];
   /**
-   * Per open voxel, IND_STRIDE floats: the indirect light as a sphere mean (rgb: the irradiance of a surface that sees it evenly),
-   * its luminance-weighted mean direction (x, y, z: |it| <= the mean's luminance) and its luminance from flicker circuits 0 / 1 / 2.
+   * Per open voxel, IND_STRIDE floats (each a rowValue): the gathered light as an ambient cube — per face of CUBE_FACES the
+   * irradiance (rgb) of a surface with that normal — and the luminance flicker circuits 0 / 1 / 2 give to the cube's mean (the mean
+   * of its six faces).
    */
   data: Float32Array;
   stats: {voxels: number; probes: number; rays: number; hits: number; bounces: number; ms: number; traceMs: number; mean: number};
+}
+
+/** Largest value a row holds. */
+export const ROW_MAX = 64;
+/** A row value as the derived cache stores it: 16 bits, square-root spaced over 0 .. ROW_MAX (finer than a half float in the dark). */
+export const rowBits = (v: number): number => (v > 0 ? (v >= ROW_MAX ? 65535 : Math.round(Math.sqrt(v / ROW_MAX) * 65535)) : 0);
+/** The value of rowBits' 16 bits (as a 32-bit float: what a row holds). */
+export const rowValue = (b: number): number => { const t = b / 65535; return Math.fround(t * t * ROW_MAX); };
+
+/** The mean of a row's six faces (rgb into `out`): the light a small sphere there receives, as an irradiance. */
+export function cubeMean(data: ArrayLike<number>, o: number, out: [number, number, number]): [number, number, number] {
+  out[0] = (data[o] + data[o + 3] + data[o + 6] + data[o + 9] + data[o + 12] + data[o + 15]) / 6;
+  out[1] = (data[o + 1] + data[o + 4] + data[o + 7] + data[o + 10] + data[o + 13] + data[o + 16]) / 6;
+  out[2] = (data[o + 2] + data[o + 5] + data[o + 8] + data[o + 11] + data[o + 14] + data[o + 17]) / 6;
+  return out;
 }
 
 export interface GatherOptions {
@@ -63,6 +84,8 @@ export interface GatherOptions {
   reach: number;
   /** Scale of the result (1 = what the surfaces send back). */
   gain: number;
+  /** Chroma of the surface colours the light bounces off (1 = as drawn; default 1): see GATHER_SATURATION. */
+  saturation?: number;
   albedo: SurfaceAlbedo;
   /** The ray scene (default: built from the context's geometry). */
   scene?: BandScene;
@@ -70,7 +93,16 @@ export interface GatherOptions {
 
 /** Defaults of the gather that are not a quality tier (world/enhancedLighting.ts GI_TIERS holds rays / stride / bounces). */
 export const GATHER_REACH = 14;
-export const GATHER_GAIN = 1;
+/**
+ * Task studio-baked-gi-visual-uplift-20261115-004324-01: how much of the gathered light the field keeps. Measured on the base Subway
+ * (seed 93), the station's dark, grimy finishes send back about a seventh of the light that falls on them: kept at that (1), the
+ * bounce is as faint as the baseline's fill and Enhanced lighting reads like Off. The game shows the bounce stronger than its
+ * finishes strictly give — a stylisation of the bounce alone (direct light, the hemisphere and every light level without a lit
+ * surface nearby are untouched), with all of its occlusion, direction and colour.
+ */
+export const GATHER_GAIN = 2.5;
+/** (same task) Chroma of the surface colours as the bounce sees them (1 = as drawn): a little more, so a coloured finish reads in its bounce. */
+export const GATHER_SATURATION = 1.25;
 
 const lum = (r: number, g: number, b: number): number => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 /** Cells whose floors differ by more than this are not one space for smoothing / filling (the bake's own bounce rule). */
@@ -121,7 +153,7 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
   const t0 = performance.now();
   const {W, H, geos, layers: LS, E, D, EL, GL, G2L, scatter} = ctx;
   const n = W * H, S = geos.length, N = Math.max(4, Math.round(opt.rays)), stride = opt.stride === 2 ? 2 : 1;
-  const scene = opt.scene ?? new BandScene(W, H, geos);
+  const scene = opt.scene ?? new BandScene(W, H, geos), sat = opt.saturation ?? 1;
   yield 'gather.index';
   // --- open voxels ---------------------------------------------------------------------------
   const {index, count} = indirectIndex(geos, LS, n);
@@ -174,7 +206,10 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
   let cur = new Float32Array(count * IND_STRIDE), prev = new Float32Array(count * IND_STRIDE);
   yield;
   const tot = new Float32Array(count * IND_STRIDE);
-  const R = opt.reach, fade0 = R * 0.6, invFade = 1 / (R - fade0), invN = 1 / N;
+  const R = opt.reach, fade0 = R * 0.6, invFade = 1 / (R - fade0);
+  // a face's irradiance from N rays over the sphere: (4 pi / N) x sum of radiance x cosine, radiance = radiosity / pi; the cube's
+  // mean weighs a ray by the mean of its three cosines (x 4 / 6)
+  const faceN = 4 / N, meanN = 4 / (6 * N), acc = new Float64Array(IND_STRIDE);
   let hits = 0;
   yield;
   // --- per voxel, in one row each (a ray's hit then costs one or two cache lines, not a dozen scattered reads): its cell's surface
@@ -187,7 +222,16 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
   const radRange = (c0: number, c1: number): void => {
     for (let c = c0; c < c1; c++) {
       const s = vs[c], i = vi[c], L = LS[s], hv = i * L + vk[c], A = opt.albedo.slots[s], a0 = i * ALBEDO_STRIDE, v0 = c * 9;
-      for (let q = 0; q < 9; q++) va[v0 + q] = ALBEDO_LUT[A[a0 + q]];
+      for (let q = 0; q < 9; q += 3) {
+        let r = ALBEDO_LUT[A[a0 + q]], g = ALBEDO_LUT[A[a0 + q + 1]], b = ALBEDO_LUT[A[a0 + q + 2]];
+        if (sat !== 1) {
+          // more chroma at the same luminance (never below nothing, never brighter than white)
+          const l = lum(r, g, b);
+          r = l + (r - l) * sat; g = l + (g - l) * sat; b = l + (b - l) * sat;
+          r = r < 0 ? 0 : r > 1 ? 1 : r; g = g < 0 ? 0 : g > 1 ? 1 : g; b = b < 0 ? 0 : b > 1 ? 1 : b;
+        }
+        va[v0 + q] = r; va[v0 + q + 1] = g; va[v0 + q + 2] = b;
+      }
       const el = EL[s][hv];
       if (el <= 0) continue;
       const Ds = D[s], Es = E[s], h3 = hv * 3, ddx = Ds[h3], ddy = Ds[h3 + 1], ddz = Ds[h3 + 2];
@@ -217,7 +261,7 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
       const c = P[p], s = vs[c], i = vi[c], k = vk[c], cx = i % W, cz = (i - cx) / W;
       const ox = (cx + 0.5) * CELL, oz = (cz + 0.5) * CELL, oy = geos[s].layerY[i * LS[s] + k];
       const so = ((((cx >> setShift) & 1) | (((cz >> setShift) & 1) << 1) | ((k & 3) << 2)) % SETS) * N * 3;
-      let mr = 0, mg = 0, mb = 0, vx = 0, vy = 0, vz = 0, c0l = 0, c1l = 0, c2l = 0;
+      acc.fill(0);
       for (let j = 0; j < N; j++) {
         const dx = sets[so + j * 3], dy = sets[so + j * 3 + 1], dz = sets[so + j * 3 + 2];
         if (!scene.trace(ox, oy, oz, dx, dy, dz, R)) continue;
@@ -243,14 +287,18 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
         const r = rad[rc] * w, g = rad[rc + 1] * w, b = rad[rc + 2] * w;
         const l = lum(r, g, b);
         if (l <= 0) continue;
-        mr += r; mg += g; mb += b;
-        vx += l * dx; vy += l * dy; vz += l * dz;
-        c0l += l * rad[ro + 18]; c1l += l * rad[ro + 19]; c2l += l * rad[ro + 20];
+        // into the three faces the ray arrives on (a face sees the ray by the cosine to its normal)
+        const ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy, az = dz < 0 ? -dz : dz;
+        const fy = dy > 0 ? 0 : 3, fx = dx > 0 ? 6 : 9, fz = dz > 0 ? 12 : 15;
+        acc[fy] += r * ay; acc[fy + 1] += g * ay; acc[fy + 2] += b * ay;
+        acc[fx] += r * ax; acc[fx + 1] += g * ax; acc[fx + 2] += b * ax;
+        acc[fz] += r * az; acc[fz + 1] += g * az; acc[fz + 2] += b * az;
+        const lm = l * (ax + ay + az);
+        acc[18] += lm * rad[ro + 18]; acc[19] += lm * rad[ro + 19]; acc[20] += lm * rad[ro + 20];
       }
       const o = c * IND_STRIDE;
-      cur[o] = mr * invN; cur[o + 1] = mg * invN; cur[o + 2] = mb * invN;
-      cur[o + 3] = vx * invN; cur[o + 4] = vy * invN; cur[o + 5] = vz * invN;
-      cur[o + 6] = c0l * invN; cur[o + 7] = c1l * invN; cur[o + 8] = c2l * invN;
+      for (let q = 0; q < IND_CIRCUITS; q++) cur[o + q] = acc[q] * faceN;
+      cur[o + 18] = acc[18] * meanN; cur[o + 19] = acc[19] * meanN; cur[o + 20] = acc[20] * meanN;
     }
   };
   // a step every few thousand rays (a couple of milliseconds)
@@ -260,45 +308,77 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
 
   // --- further bounces: the same hits, lit by the bounce before ----------------------------------------
   const bounces = Math.max(1, Math.round(opt.bounces));
+  /** Luminance of the mean of the bounce before, per voxel. */
+  const meanL = new Float32Array(count), m3: [number, number, number] = [0, 0, 0];
+  // A bounce is gathered at the lattice's voxels only (stride 2): a surface in a cell between them is lit by the bounce before as
+  // its lattice neighbour in the same space is (`rep`: a voxel's own row when it gathers, else the row of its first lattice source).
+  const rep = new Int32Array(count);
+  for (let s = 0; s < S; s++) {
+    const gt = gathers[s], ff = fillFrom[s], L = LS[s], ix = index[s], open = geos[s].open;
+    for (let i = 0; i < n; i++) if (open[i]) for (let k = 0; k < L; k++) rep[ix[i * L + k]] = gt[i] || !ff ? ix[i * L + k] : ix[ff[i * 4] * L + k];
+  }
+  yield;
   const bounceRange = (p0: number, p1: number): void => {
     for (let p = p0; p < p1; p++) {
       const c = P[p], i = vi[c], k = vk[c], cx = i % W, cz = (i - cx) / W;
       const so = ((((cx >> setShift) & 1) | (((cz >> setShift) & 1) << 1) | ((k & 3) << 2)) % SETS) * N * 3;
-      let mr = 0, mg = 0, mb = 0, vx = 0, vy = 0, vz = 0, c0l = 0, c1l = 0, c2l = 0;
+      acc.fill(0);
       for (let j = 0, q = p * N; j < N; j++, q++) {
-        const h = hitV[q];
-        if (h < 0) continue;
-        const ph = h * IND_STRIDE, pr = prev[ph], pg = prev[ph + 1], pb = prev[ph + 2], pl = lum(pr, pg, pb);
-        if (pl <= 1e-7) continue;
-        const code = hitC[q];
-        // irradiance of the hit surface from the bounce before: the mean plus its first moment along the surface normal
-        const nv = code === 0 ? prev[ph + 4] : code === 1 ? -prev[ph + 4] : code === 2 ? prev[ph + 3] : code === 3 ? -prev[ph + 3] : code === 4 ? prev[ph + 5] : -prev[ph + 5];
-        let f = 1 + 2 * nv / pl;
-        if (f <= 0) continue;
-        if (f > 3) f = 3;
-        f *= hitW[q] / 255;
-        const a0 = h * 9 + (code === 0 ? ALB_FLOOR : code === 1 ? ALB_CEIL : ALB_WALL);
-        const r = pr * f * va[a0], g = pg * f * va[a0 + 1], b = pb * f * va[a0 + 2];
-        const l = lum(r, g, b), sh = l / pl;
-        mr += r; mg += g; mb += b;
-        vx += l * sets[so + j * 3]; vy += l * sets[so + j * 3 + 1]; vz += l * sets[so + j * 3 + 2];
-        c0l += prev[ph + 6] * sh; c1l += prev[ph + 7] * sh; c2l += prev[ph + 8] * sh;
+        const hx = hitV[q];
+        if (hx < 0) continue;
+        // irradiance of the hit surface from the bounce before: the cube face of its own normal
+        const h = rep[hx], code = hitC[q], hr = h * IND_STRIDE, ph = hr + code * 3, er = prev[ph], eg = prev[ph + 1], eb = prev[ph + 2];
+        if (er + eg + eb <= 1e-7) continue;
+        const w = hitW[q] / 255, a0 = hx * 9 + (code === 0 ? ALB_FLOOR : code === 1 ? ALB_CEIL : ALB_WALL);
+        const r = er * va[a0] * w, g = eg * va[a0 + 1] * w, b = eb * va[a0 + 2] * w;
+        const dx = sets[so + j * 3], dy = sets[so + j * 3 + 1], dz = sets[so + j * 3 + 2];
+        const ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy, az = dz < 0 ? -dz : dz;
+        const fy = dy > 0 ? 0 : 3, fx = dx > 0 ? 6 : 9, fz = dz > 0 ? 12 : 15;
+        acc[fy] += r * ay; acc[fy + 1] += g * ay; acc[fy + 2] += b * ay;
+        acc[fx] += r * ax; acc[fx + 1] += g * ax; acc[fx + 2] += b * ax;
+        acc[fz] += r * az; acc[fz + 1] += g * az; acc[fz + 2] += b * az;
+        // the circuits' shares of the surface's light: those of the hit voxel's mean
+        const pm = meanL[h];
+        if (pm <= 1e-9) continue;
+        const lm = lum(r, g, b) * (ax + ay + az) / pm;
+        acc[18] += lm * prev[hr + 18]; acc[19] += lm * prev[hr + 19]; acc[20] += lm * prev[hr + 20];
       }
       const o = c * IND_STRIDE;
-      cur[o] = mr * invN; cur[o + 1] = mg * invN; cur[o + 2] = mb * invN;
-      cur[o + 3] = vx * invN; cur[o + 4] = vy * invN; cur[o + 5] = vz * invN;
-      cur[o + 6] = c0l * invN; cur[o + 7] = c1l * invN; cur[o + 8] = c2l * invN;
+      for (let q = 0; q < IND_CIRCUITS; q++) cur[o + q] = acc[q] * faceN;
+      cur[o + 18] = acc[18] * meanN; cur[o + 19] = acc[19] * meanN; cur[o + 20] = acc[20] * meanN;
     }
   };
+  // (plain functions: a generator body runs a hot loop several times slower before the JIT warms up)
+  /** The bounce in `cur` into the total, and its mean's luminance (rows of gathering voxels; the others are zero until the fill). */
+  const addRange = (p0: number, p1: number): void => {
+    for (let p = p0; p < p1; p++) {
+      const c = P[p], o = c * IND_STRIDE;
+      for (let q = 0; q < IND_STRIDE; q++) tot[o + q] += cur[o + q];
+      cubeMean(cur, o, m3);
+      meanL[c] = lum(m3[0], m3[1], m3[2]);
+    }
+  };
+  for (let p = 0; p < probes; p += 8192) { addRange(p, Math.min(probes, p + 8192)); yield; }
+  for (let b = 1; b < bounces; b++) {
+    yield 'gather.bounce';
+    [cur, prev] = [prev, cur]; // (meanL is the swapped-in bounce's)
+    for (let p = 0; p < probes; p += CHUNK * 8) { bounceRange(p, Math.min(probes, p + CHUNK * 8)); yield; }
+    for (let p = 0; p < probes; p += 8192) { addRange(p, Math.min(probes, p + 8192)); yield; }
+  }
 
   // --- smoothing: a wall-respecting [1 2 1] along x then z, per slot and layer. On the lattice (stride 2) it runs over the gathering
   // cells two apart (which also merges the interleaved ray sets), and the cells between are then filled from them. -------------------
-  const tmp = new Float32Array(count * IND_STRIDE);
+  yield 'gather.smooth';
+  const tmp = prev; // (free now)
   const smoothAxis = (src: Float32Array, dst: Float32Array, s: number, d: number, lattice: boolean, i0: number, i1: number): void => {
     const {open, floorH} = geos[s], L = LS[s], ix = index[s], gt = gathers[s];
     const alongX = d < W, h = d >> 1;
     for (let i = i0; i < i1; i++) {
-      if (!open[i] || (lattice && gt[i] !== 1)) continue;
+      if (!open[i] || (lattice && gt[i] !== 1)) {
+        // (a cell that gathers on its own keeps what it gathered)
+        if (lattice && open[i] && gt[i] === 2) for (let k = 0; k < L; k++) { const o = ix[i * L + k] * IND_STRIDE; for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = src[o + q]; }
+        continue;
+      }
       const cx = i % W, f = floorH[i];
       const a = i - d, b = i + d;
       let okA = a >= 0 && (!alongX || cx - d >= 0) && open[a] > 0 && Math.abs(floorH[a] - f) < STEP_MAX;
@@ -307,10 +387,11 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
         okA = okA && gt[a] === 1 && open[i - h] > 0 && Math.abs(floorH[i - h] - f) < STEP_MAX;
         okB = okB && gt[b] === 1 && open[i + h] > 0 && Math.abs(floorH[i + h] - f) < STEP_MAX;
       }
-      const wt = 1 / (2 + (okA ? 1 : 0) + (okB ? 1 : 0));
       for (let k = 0; k < L; k++) {
-        const o = ix[i * L + k] * IND_STRIDE, oa = okA ? ix[a * L + k] * IND_STRIDE : -1, ob = okB ? ix[b * L + k] * IND_STRIDE : -1;
-        for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = (2 * src[o + q] + (oa >= 0 ? src[oa + q] : 0) + (ob >= 0 ? src[ob + q] : 0)) * wt;
+        const o = ix[i * L + k] * IND_STRIDE;
+        if (okA && okB) { const oa = ix[a * L + k] * IND_STRIDE, ob = ix[b * L + k] * IND_STRIDE; for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = (2 * src[o + q] + src[oa + q] + src[ob + q]) * 0.25; }
+        else if (okA || okB) { const oa = ix[(okA ? a : b) * L + k] * IND_STRIDE; for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = (2 * src[o + q] + src[oa + q]) * (1 / 3); }
+        else for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = src[o + q];
       }
     }
   };
@@ -320,42 +401,30 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
     const {open} = geos[s], L = LS[s], ix = index[s], gt = gathers[s];
     for (let i = i0; i < i1; i++) {
       if (!open[i] || gt[i]) continue;
-      let m = 0;
-      while (m < 4 && ff[i * 4 + m] >= 0) m++;
-      const wt = 1 / m;
+      const f0 = ff[i * 4], f1 = ff[i * 4 + 1], f2 = ff[i * 4 + 2], f3 = ff[i * 4 + 3];
       for (let k = 0; k < L; k++) {
-        const o = ix[i * L + k] * IND_STRIDE;
-        for (let q = 0; q < IND_STRIDE; q++) {
-          let v = 0;
-          for (let e = 0; e < m; e++) v += buf[ix[ff[i * 4 + e] * L + k] * IND_STRIDE + q];
-          buf[o + q] = v * wt;
-        }
+        const o = ix[i * L + k] * IND_STRIDE, o0 = ix[f0 * L + k] * IND_STRIDE;
+        if (f1 < 0) { for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = buf[o0 + q]; continue; }
+        const o1 = ix[f1 * L + k] * IND_STRIDE;
+        if (f2 < 0) { for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = (buf[o0 + q] + buf[o1 + q]) * 0.5; continue; }
+        const o2 = ix[f2 * L + k] * IND_STRIDE;
+        if (f3 < 0) { for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = (buf[o0 + q] + buf[o1 + q] + buf[o2 + q]) * (1 / 3); continue; }
+        const o3 = ix[f3 * L + k] * IND_STRIDE;
+        for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = (buf[o0 + q] + buf[o1 + q] + buf[o2 + q] + buf[o3 + q]) * 0.25;
       }
     }
   };
   const ROWS = 32 * W;
-  /** One bounce's result, complete at every voxel: lattice smoothing and the fill (stride 2), then into the total. */
-  const finish = function* (): BuildSteps<void> {
-    if (stride === 2) {
-      for (let s = 0; s < S; s++) {
-        for (let i = 0; i < n; i += ROWS) smoothAxis(cur, tmp, s, 2, true, i, Math.min(n, i + ROWS));
-        for (let i = 0; i < n; i += ROWS) smoothAxis(tmp, cur, s, 2 * W, true, i, Math.min(n, i + ROWS));
-        yield;
-        for (let i = 0; i < n; i += ROWS) fill(cur, s, i, Math.min(n, i + ROWS));
-        yield;
-      }
+  if (stride === 2) {
+    for (let s = 0; s < S; s++) {
+      for (let i = 0; i < n; i += ROWS) smoothAxis(tot, tmp, s, 2, true, i, Math.min(n, i + ROWS));
+      yield;
+      for (let i = 0; i < n; i += ROWS) smoothAxis(tmp, tot, s, 2 * W, true, i, Math.min(n, i + ROWS));
+      yield;
+      for (let i = 0; i < n; i += ROWS) fill(tot, s, i, Math.min(n, i + ROWS));
+      yield;
     }
-    for (let q = 0; q < tot.length; q++) tot[q] += cur[q];
-  };
-  yield* finish();
-  for (let b = 1; b < bounces; b++) {
-    yield 'gather.bounce';
-    [cur, prev] = [prev, cur];
-    for (let p = 0; p < probes; p += CHUNK * 8) { bounceRange(p, Math.min(probes, p + CHUNK * 8)); yield; }
-    yield* finish();
   }
-
-  yield 'gather.smooth';
   for (let pass = stride === 2 ? 1 : 0; pass < 2; pass++) {
     for (let s = 0; s < S; s++) {
       for (let i = 0; i < n; i += ROWS) smoothAxis(tot, tmp, s, 1, false, i, Math.min(n, i + ROWS));
@@ -364,12 +433,18 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
       yield;
     }
   }
+  // --- the rows as the cache holds them: 16-bit, square-root spaced up to ROW_MAX (rowBits / rowValue), so the row read back from
+  // the cache is the row returned here, bit for bit ---------------------------------------------------------------------------------
   let mean = 0;
   const gain = opt.gain;
-  for (let c = 0; c < count; c++) {
-    const o = c * IND_STRIDE;
-    if (gain !== 1) for (let q = 0; q < IND_STRIDE; q++) tot[o + q] *= gain;
-    mean += lum(tot[o], tot[o + 1], tot[o + 2]);
-  }
+  const roundRange = (c0: number, c1: number): void => {
+    for (let v = c0; v < c1; v++) {
+      const o = v * IND_STRIDE;
+      for (let q = 0; q < IND_STRIDE; q++) tot[o + q] = rowValue(rowBits(tot[o + q] * gain));
+      cubeMean(tot, o, m3);
+      mean += lum(m3[0], m3[1], m3[2]);
+    }
+  };
+  for (let c = 0; c < count; c += 8192) { roundRange(c, Math.min(count, c + 8192)); yield; }
   return {index, data: tot, stats: {voxels: count, probes, rays: probes * N, hits, bounces, ms: performance.now() - t0, traceMs, mean: count ? mean / count : 0}};
 }

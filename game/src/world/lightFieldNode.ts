@@ -28,9 +28,9 @@ import * as THREE from 'three';
 import {LightingNode, MeshBasicNodeMaterial, NodeMaterial, PhongLightingModel, PhysicalLightingModel, QuadMesh, RenderTarget, type Node, type NodeBuilder} from 'three/webgpu';
 import {
   Fn, If, abs, cameraViewMatrix, clamp, float, floor, int, ivec2, ivec3, length, max, min, mix, mod, normalWorld, positionWorld, renderGroup,
-  screenCoordinate, select, texture3D, textureLoad, uniform, uniformArray, vec2, vec3, vec4,
+  screenCoordinate, select, step, texture3D, textureLoad, uniform, uniformArray, vec2, vec3, vec4,
 } from 'three/tsl';
-import {AUX_LAYERS, AUX_SLOT_DEPTH, FIELD_EMAX, GROUP_BANDS, LAYERS, MAX_SLOTS, SLOT_DEPTH, configureFieldTexture, fieldDepth, slotRange, type LightFieldVolume} from './lightField';
+import {AUX_LAYERS, AUX_SLOT_DEPTH, FIELD_DMAX, FIELD_EMAX, GI_FACES, GROUP_BANDS, LAYERS, MAX_SLOTS, SLOT_DEPTH, configureFieldTexture, fieldDepth, slotRange, type LightFieldVolume} from './lightField';
 import {RIDE_MASK, RIDE_MASK_SKIN} from './rideMask';
 import {refreshTextureBindings} from '../render/bindingRefresh';
 
@@ -48,7 +48,9 @@ const SLOT_Y = Array.from({length: MAX_SLOTS}, () => new THREE.Vector4(0, 1, 0, 
  * The global light-field nodes. `tex` is the BASE texture node (its .value is swapped per station; every .load / .sample
  * clone references it). min/max = world bounds (x, y, z), dims = texture size (w, h, depth), levels = flicker-circuit
  * levels 0..2, slots = level slots in the texture, gain = output scale (LightFieldLight.intensity), bound = 0 / 1,
- * slotY = per-slot header height range (x = lo, y = hi; the bounds' y range in a legacy field).
+ * slotY = per-slot header height range (x = lo, y = hi; the bounds' y range in a legacy field), cube = the bound field's ambient
+ * cube (x = its first slice, y = 1 when the field has one, else 0: task studio-baked-gi-visual-uplift-20261115-004324-01; a plain
+ * render-group uniform — no new uniform buffer; only programs built with the cube read it).
  */
 export const LF = {
   tex: texture3D(PLACEHOLDER),
@@ -60,6 +62,7 @@ export const LF = {
   gain: uniform(1).setGroup(renderGroup),
   bound: uniform(0).setGroup(renderGroup),
   slotY: uniformArray(SLOT_Y, 'vec4').setGroup(renderGroup),
+  cube: uniform(new THREE.Vector2(0, 0)).setGroup(renderGroup),
 };
 
 let active: LightFieldVolume | null = null;
@@ -82,6 +85,7 @@ export function bindLightField(v: LightFieldVolume | null): void {
     LF.levels.value.set(1, 1, 1);
     LF.slots.value = 1;
     LF.bound.value = 0;
+    LF.cube.value.set(0, 0);
     for (const q of SLOT_Y) q.set(0, 1, 0, 0);
     return;
   }
@@ -92,6 +96,7 @@ export function bindLightField(v: LightFieldVolume | null): void {
   LF.levels.value.copy(v.resolution);
   LF.slots.value = v.field.slots;
   LF.bound.value = 1;
+  LF.cube.value.set(v.field.gi ?? 0, v.field.gi !== undefined ? 1 : 0);
   SLOT_Y.forEach((q, s) => { const [lo, hi] = slotRange(v.field, Math.min(s, v.field.slots - 1)); q.set(lo, hi, 0, 0); });
 }
 
@@ -274,10 +279,13 @@ export interface LightFieldSampleNodes {
  * behind). `slot`: reuse an already picked level slot (the volumetric march picks one per step for density and field).
  * `reach`: how many cells the normal offset spans sideways (half a cell unless given; world/reflectionNode.ts reads a pane set
  * inside its wall a whole cell out).
+ * `cube` (task studio-baked-gi-visual-uplift-20261115-004324-01): a unit WORLD normal — `amb` then also holds what a surface of that
+ * orientation receives of the gathered light (the field's ambient cube: three more filtered fetches, one per axis for the face the
+ * normal points at, weighted by the normal's squares); a field without a cube adds nothing. Without it: the nodes this always built.
  * Mirrors sampleField(): slot by height, bilinear in XZ (texel centres = cell centres), linear between height layers, the
  * flicker circuits' shares scaled by LF.levels. Zero when no field is bound.
  */
-export function lightFieldSample(p: Node, o: {normal?: Node; slot?: Node; reach?: number} = {}): LightFieldSampleNodes {
+export function lightFieldSample(p: Node, o: {normal?: Node; slot?: Node; reach?: number; cube?: Node} = {}): LightFieldSampleNodes {
   const cell = n(texelSize()).toVar();
   const reach = o.reach ?? 0.5;
   const P = n(o.normal ? n(p).add(n(o.normal).mul(vec3(n(cell.x).mul(reach), 0.2, n(cell.y).mul(reach)))) : vec3(n(p))).toVar();
@@ -310,8 +318,21 @@ export function lightFieldSample(p: Node, o: {normal?: Node; slot?: Node; reach?
   const d = n(n(b.rgb).mul(2).sub(1)).toVar();
   const dl = length(d);
   const dir = n(select(n(dl).greaterThan(1e-4), n(d).div(dl), vec3(0, 1, 0))).toVar();
+  let amb = n(T).mul(n(rho).oneMinus());
+  if (o.cube) {
+    // the cube's slices of this slot: per face its layers are consecutive, so one fetch between two of them is the face at this height
+    const N = n(o.cube), aux = min(slot, 1);
+    const gb = n(n(LF.cube).x).add(n(mix(float(0), float(GI_FACES * (LAYERS - AUX_LAYERS)).add(n(slot).mul(GI_FACES * AUX_LAYERS)), aux))).add(0.5).add(rel).toVar();
+    const layers = n(h.top).add(1).toVar();
+    // face of an axis: the positive one (0 / 2 / 4) or, for a component <= 0, the negative one (step, not select: no ternary to print)
+    const face = (first: number, c: N) => at(n(gb).add(n(float(first).add(step(c, 0))).mul(layers)));
+    const decD = (v: N) => { const d = n(n(v).mul(255).sub(128).div(127)).toVar(); return n(d).mul(abs(d)).mul(FIELD_DMAX); };
+    const n2 = n(N).mul(N);
+    const more = n(decD(face(0, N.y).rgb)).mul(n2.y).add(n(decD(face(2, N.x).rgb)).mul(n2.x)).add(n(decD(face(4, N.z).rgb)).mul(n2.z));
+    amb = max(n(amb).add(n(more).mul(n(LF.cube).y)), 0);
+  }
   return {
-    amb: n(T).mul(n(rho).oneMinus()).mul(g),
+    amb: n(amb).mul(g),
     dirColor: n(T).mul(rho).mul(g),
     dir, slot, floor: fl, ceil: ce,
   };
@@ -320,27 +341,47 @@ export function lightFieldSample(p: Node, o: {normal?: Node; slot?: Node; reach?
 // ---------------------------------------------------------------------------------------------
 // Scene light + lighting node
 
-/** The station light field as a scene light (see module doc). `intensity` scales the whole field (QA / debug). */
+/**
+ * The station light field as a scene light (see module doc). `intensity` scales the whole field (QA / debug).
+ * Task studio-baked-gi-visual-uplift-20261115-004324-01: `full` — its node also shades by the surface normal from the field's ambient
+ * cube and adds the flashlight's bounce (world/flashBounce.ts). Fixed when the light is made: a station lit the other way puts the
+ * OTHER session-wide instance in the scene (another light id: every lit program is then built for it, behind the game's warm-up),
+ * so the plain light's programs are exactly the ones they always were.
+ */
 export class LightFieldLight extends THREE.Light {
   readonly isLightFieldLight = true;
-  constructor() {
+  constructor(readonly full = false) {
     super(0xffffff, 1);
     (this as {type: string}).type = 'LightFieldLight';
-    this.name = 'light-field';
+    this.name = full ? 'light-field-full' : 'light-field';
     this.castShadow = false;
   }
 }
 
-let shared: LightFieldLight | null = null;
-/** The single session-wide field light (stable id => stable light set). */
-export function stationFieldLight(): LightFieldLight {
-  return (shared ??= new LightFieldLight());
+const sharedLights = new Map<string, LightFieldLight>();
+/** Every session-wide field light made so far (world/lights.ts takes the ones a station does not use out of its scene). */
+export const stationLights = (): LightFieldLight[] => [...sharedLights.values()];
+/** A session-wide field light by key, made on first use (world/reflectionNode.ts shares the registry). */
+export function sharedFieldLight<T extends LightFieldLight>(key: string, make: () => T): T {
+  let l = sharedLights.get(key) as T | undefined;
+  if (!l) sharedLights.set(key, (l = make()));
+  return l;
+}
+/** The single session-wide field light of its kind (stable id => stable light set). */
+export function stationFieldLight(full = false): LightFieldLight {
+  return sharedFieldLight(full ? 'field-full' : 'field', () => new LightFieldLight(full));
 }
 
 interface LightingBuilder extends NodeBuilder {
   context: NodeBuilder['context'] & {irradiance: Node & {addAssign(x: Node): Node}; lightingModel?: unknown};
   lightsNode: {setupDirectLight(builder: NodeBuilder, lightNode: Node, data: {lightDirection: Node; lightColor: Node}): void};
 }
+
+/**
+ * What a FULL field light adds to the indirect irradiance besides the field (the flashlight's bounce registers here: it lives in
+ * its own module and this one stays free of it). Read when a program is built.
+ */
+export const FULL_IRRADIANCE: (() => Node)[] = [];
 
 /** Per-fragment field lighting for every lit node material in a scene holding the LightFieldLight. */
 export class LightFieldNode extends LightingNode {
@@ -364,8 +405,11 @@ export class LightFieldNode extends LightingNode {
     // builds every light into MeshBasicNodeMaterial (BasicLightingModel ignores direct light and irradiance), shadow
     // catchers and volume materials, where the field would only cost a texture binding or sample the wrong point.
     if (!LightFieldNode.surfaceModel(b)) return null;
-    const s = lightFieldSample(positionWorld, {normal: normalWorld});
+    // (the plain light: the very nodes this always built)
+    const full = !!this.light?.full;
+    const s = lightFieldSample(positionWorld, full ? {normal: normalWorld, cube: normalWorld} : {normal: normalWorld});
     b.context.irradiance.addAssign(s.amb);
+    if (full) for (const extra of FULL_IRRADIANCE) b.context.irradiance.addAssign(extra());
     const dirView = n(n(cameraViewMatrix).mul(vec4(n(s.dir), 0)).xyz).normalize();
     b.lightsNode.setupDirectLight(b, this, {lightDirection: dirView, lightColor: s.dirColor});
     return s;

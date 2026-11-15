@@ -29,7 +29,7 @@ import type {BuildSteps} from '../core/pacedBuild';
 import type {Level} from '../gen/levels';
 import type {LightPlacement} from '../gen/station';
 import type {ReflectionTier} from './enhancedLighting';
-import {FIELD_EMAX, fixtureGroup, fixtureTint, slotBase, slotLayers, type BakedField, type ColumnGeometry} from './lightField';
+import {FIELD_EMAX, cubeDifference, fixtureGroup, fixtureTint, giSlotBase, slotBase, slotLayers, type BakedField, type ColumnGeometry} from './lightField';
 import {BandScene, HIT_CEIL, HIT_FLOOR} from './lightScene';
 import {ALBEDO_LUT, ALBEDO_STRIDE, ALB_CEIL, ALB_FLOOR, ALB_WALL, type SurfaceAlbedo} from './surfaceAlbedo';
 
@@ -518,7 +518,7 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
 
   yield 'probes.capture';
   // --- capture: level 0 of every probe (what each direction sees, lit by the field), its fixtures, its NORM and parallax box ------
-  const T2 = tile * tile, data = field.data, n4 = n * 4, INV_PI = 1 / Math.PI;
+  const T2 = tile * tile, data = field.data, n4 = n * 4, INV_PI = 1 / Math.PI, gi0 = field.gi ?? -1;
   const bases = Int32Array.from(geos, (_, s) => slotBase(s)), layersOf = Int32Array.from(geos, (_, s) => slotLayers(s));
   const dirs = octTexelDirections(tile), sf = scene.f, sc = scene.c, sslot = scene.slot, alb = albedo.slots;
   const cap = new Float32Array(count * T2 * 3);
@@ -529,10 +529,10 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
       if (!scene.trace(px, py, pz, dirs[q * 3], dirs[q * 3 + 1], dirs[q * 3 + 2], PROBE_REACH)) continue; // (nothing there: black)
       const band = scene.hitBand, hs = sslot[band], hi = scene.hitCol, kind = scene.hitKind, Lh = layersOf[hs], A = alb[hs];
       // the field voxel of the hit (world/lightFieldGather.ts: the same mapping), the surface's normal and its colour
-      let k = 0, nx = 0, ny = 0, nz = 0, ao = hi * ALBEDO_STRIDE, sky = false;
+      let k = 0, nx = 0, ny = 0, nz = 0, ao = hi * ALBEDO_STRIDE, sky = false, face = 0;
       if (kind === HIT_FLOOR) { ny = 1; ao += ALB_FLOOR; }
       else if (kind === HIT_CEIL) {
-        k = Lh - 1; ao += ALB_CEIL;
+        k = Lh - 1; ao += ALB_CEIL; face = 1;
         // no ceiling there (open sky, a glass roof): the light arriving from above shows, not a surface
         if (A[ao] === 0 && A[ao + 1] === 0 && A[ao + 2] === 0) { sky = true; ny = 1; } else ny = -1;
       } else {
@@ -540,6 +540,7 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
         k = span > 1e-3 ? Math.round((scene.hitY - f - 0.05) / span * (Lh - 1)) : 0;
         k = k < 0 ? 0 : k > Lh - 1 ? Lh - 1 : k;
         nx = scene.hitNx; nz = scene.hitNz; ao += ALB_WALL;
+        face = nx > 0 ? 2 : nx < 0 ? 3 : nz > 0 ? 4 : 5;
       }
       const oa = (bases[hs] + 1 + 2 * k) * n4 + hi * 4, ob = oa + n4;
       const rho = data[oa + 3] / 255;
@@ -551,7 +552,12 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
       }
       e *= INV_PI;
       if (sky) { cap[o] = DEC[data[oa]] * e; cap[o + 1] = DEC[data[oa + 1]] * e; cap[o + 2] = DEC[data[oa + 2]] * e; }
-      else { cap[o] = DEC[data[oa]] * e * ALBEDO_LUT[A[ao]]; cap[o + 1] = DEC[data[oa + 1]] * e * ALBEDO_LUT[A[ao + 1]]; cap[o + 2] = DEC[data[oa + 2]] * e * ALBEDO_LUT[A[ao + 2]]; }
+      else if (gi0 >= 0) {
+        // a field with its ambient cube (task studio-baked-gi-visual-uplift-20261115-004324-01): the surface also gets what its own
+        // orientation receives of the gathered light — as the full light node shades it
+        const og = (gi0 + giSlotBase(hs) + face * Lh + k) * n4 + hi * 4;
+        for (let c = 0; c < 3; c++) { const v = DEC[data[oa + c]] * e + cubeDifference(data[og + c]) * INV_PI; cap[o + c] = v > 0 ? v * ALBEDO_LUT[A[ao + c]] : 0; }
+      } else { cap[o] = DEC[data[oa]] * e * ALBEDO_LUT[A[ao]]; cap[o + 1] = DEC[data[oa + 1]] * e * ALBEDO_LUT[A[ao + 1]]; cap[o + 2] = DEC[data[oa + 2]] * e * ALBEDO_LUT[A[ao + 2]]; }
     }
     rays += b - a;
   };

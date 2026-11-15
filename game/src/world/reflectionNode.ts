@@ -28,7 +28,7 @@ import {
   If, abs, cameraWorldMatrix, clamp, float, floor, int, ivec2, ivec3, materialOpacity, max, metalness, min, mix, mod, normalView, normalWorld, positionWorld, pow4,
   reflectView, renderGroup, roughness, select, smoothstep, step, texture, texture3D, uniform, vec2, vec3,
 } from 'three/tsl';
-import {LightFieldLight, LightFieldNode, lightFieldCell, lightFieldSample, type LightFieldSampleNodes, type NodeLibraryLike} from './lightFieldNode';
+import {LightFieldLight, LightFieldNode, lightFieldCell, lightFieldSample, sharedFieldLight, type LightFieldSampleNodes, type NodeLibraryLike} from './lightFieldNode';
 import {fieldSlot, sampleField, type BakedField} from './lightField';
 import {PROBE_COLS, PROBE_GUTTER, PROBE_LEVELS, PROBE_LEVEL_PER_ROUGHNESS, PROBE_RATIO_MAX, octEncode, probeAtlasLayout, probeBytes, probeTileOrigin, type BakedProbes} from './reflectionProbes';
 import {CELL} from '../gen/grid';
@@ -272,20 +272,23 @@ export const WINDOW_REACH = 1;
 // ---------------------------------------------------------------------------------------------
 // Scene light + lighting node
 
-/** The station light field WITH reflection probes as a scene light (see module doc). */
+/**
+ * The station light field WITH reflection probes as a scene light (see module doc). `full` as LightFieldLight's; `mirror`
+ * (task studio-baked-gi-visual-uplift-20261115-004324-01): its glass also samples the live glass mirror (render/glassMirror.ts).
+ * Both are fixed per instance: one session-wide light per combination that was ever used.
+ */
 export class LightFieldReflectLight extends LightFieldLight {
   readonly isLightFieldReflectLight = true;
-  constructor() {
-    super();
+  constructor(full = false, readonly mirror = false) {
+    super(full);
     (this as {type: string}).type = 'LightFieldReflectLight';
-    this.name = 'light-field-reflect';
+    this.name = `light-field-reflect${full ? '-full' : ''}${mirror ? '-mirror' : ''}`;
   }
 }
 
-let shared: LightFieldReflectLight | null = null;
-/** The single session-wide reflecting field light (stable id => stable light set across stations that use it). */
-export function stationReflectLight(): LightFieldReflectLight {
-  return (shared ??= new LightFieldReflectLight());
+/** The single session-wide reflecting field light of its kind (stable id => stable light set across stations that use it). */
+export function stationReflectLight(full = false, mirror = false): LightFieldReflectLight {
+  return sharedFieldLight(`reflect${full ? '-full' : ''}${mirror ? '-mirror' : ''}`, () => new LightFieldReflectLight(full, mirror));
 }
 
 interface ReflectBuilder extends NodeBuilder {

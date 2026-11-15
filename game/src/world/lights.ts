@@ -28,18 +28,19 @@ import {
 import type {Area, LightProfile, StationLayout} from '../gen/station';
 import type {Fixture} from './builder';
 import {
-  DEFAULT_FIELD, LightFieldVolume, bakeLightField, bakeLightFieldSteps, downsampleField, fixtureTint, groupLevel, sampleField,
+  DEFAULT_FIELD, LightFieldVolume, bakeLightField, bakeLightFieldSteps, downsampleField, fixtureTint, groupLevel, sampleField, withoutCube,
   type BakedField, type FieldParams, type FieldSample, type FieldSource,
 } from './lightField';
 import type {BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
-import {LF, activeLightField, bindLightField, installLightFieldNode, setLightFieldLevels, stationFieldLight, type LightFieldLight} from './lightFieldNode';
+import {LF, activeLightField, bindLightField, installLightFieldNode, setLightFieldLevels, stationFieldLight, stationLights, type LightFieldLight} from './lightFieldNode';
 import {addNodeHook} from '../render/nodeHooks';
 import {stationLevels} from './levelGeometry';
 import {mallSkyField} from './mallSkylight'; // Task track3-eaton-centre-20261031 (lane ARCH): daylight through the mall's glass roof
 // Task studio-baked-lighting-reflections-20261114-050258-01: cached reflection probes on metal and glass (a station built with them)
 import {ReflectionProbeVolume, activeReflectionProbes, bindReflectionProbes, installReflectNode, stationReflectLight} from './reflectionNode';
 import type {BakedProbes} from './reflectionProbes';
-import type {StationBakeInput} from './enhancedLightingRuntime';
+import type {EnhancedBake, StationBakeInput} from './enhancedLightingRuntime';
+import type {FieldShading} from './enhancedLighting';
 import {CELL} from '../gen/grid';
 
 /**
@@ -121,6 +122,15 @@ export interface StationLightingOptions {
    * game's enhanced lighting makes or reads them: world/enhancedLightingRuntime.ts). Absent / null / none in it: no reflections.
    */
   probes?: BakedProbes | null;
+  /**
+   * Task studio-baked-gi-visual-uplift-20261115-004324-01 (all three from the enhanced runtime's bake: EnhancedBake). `shading`
+   * 'full': the field's ambient cube is kept on the GPU and the FULL field light shades by the surface normal (absent / 'plain': the
+   * cube, if the bake has one, is left out and the plain light is used). `mirror`: glass also samples the live glass mirror (with
+   * probes only). `bounce`: what the flashlight's bounce traces (full shading only).
+   */
+  shading?: FieldShading;
+  mirror?: boolean;
+  bounce?: EnhancedBake['bounce'];
 }
 
 /** The light field source of a station (StationLighting's bake input). */
@@ -298,6 +308,14 @@ export class StationLighting {
   readonly reflections: ReflectionProbeVolume | null;
   /** Why probes that were handed in are not used (null: they are, or none were given). */
   readonly reflectionsSkipped: string | null;
+  /** The field is shaded by the surface normal from its ambient cube (the FULL field light is in the scene). */
+  readonly full: boolean;
+  /** Why a field that was to be shaded in full is not (null: it is, or it was not asked for). */
+  readonly shadingSkipped: string | null;
+  /** Glass samples the live glass mirror (the reflecting light was made with it). */
+  readonly mirror: boolean;
+  /** What the flashlight's bounce traces in this station (null: no bounce here). */
+  readonly bounce: NonNullable<EnhancedBake['bounce']> | null;
   /** Soft glow cards, one per working fixture (camera-facing, additive). */
   readonly glow: THREE.InstancedMesh | null;
   /** Kept for API compatibility: no pooled lights exist any more. */
@@ -320,10 +338,18 @@ export class StationLighting {
 
   constructor(private readonly scene: THREE.Scene, private readonly layout: StationLayout, private readonly fixtures: Fixture[],
     private readonly tubes: THREE.InstancedMesh | null, private readonly opts: StationLightingOptions = {}) {
-    const full = opts.baked ?? bakeLightField(stationFieldSource(layout), StationLighting.fieldParams(opts));
+    let full = opts.baked ?? bakeLightField(stationFieldSource(layout), StationLighting.fieldParams(opts));
     const max = this.max3D = opts.max3DTextureSize ?? max3DTextureSize(opts.renderer);
+    // Task studio-baked-gi-visual-uplift-20261115-004324-01: the ambient cube stays on the GPU only for full shading, and only when
+    // the 3D texture takes its slices (else the same field without it, shaded plain)
+    const wantFull = opts.shading === 'full' && full.gi !== undefined;
+    this.shadingSkipped = wantFull && full.depth > max ? `the field with its cube (${full.depth} slices) is deeper than this renderer's 3D textures (${max})` : null;
+    if (full.gi !== undefined && (!wantFull || this.shadingSkipped)) full = withoutCube(full);
+    this.full = full.gi !== undefined;
     const budget = opts.maxFieldBytes ?? 32e6;
-    const k = Math.max(1, Math.ceil(Math.max(full.w, full.h) / max), Math.ceil(Math.sqrt(full.stats.bytes / budget)));
+    // (the byte cap is the slots': the cube has its own bound, world/enhancedLighting.ts FIELD_CUBE_BYTES)
+    const slotBytes = (full.gi ?? full.depth) * full.w * full.h * 4;
+    const k = Math.max(1, Math.ceil(Math.max(full.w, full.h) / max), Math.ceil(Math.sqrt(slotBytes / budget)));
     this.field = k > 1 ? downsampleField(full, k) : full;
     this.groups = this.field.groups;
     this.volume = new LightFieldVolume(this.field);
@@ -336,7 +362,9 @@ export class StationLighting {
       : Math.max(p.gridW, p.gridH, p.gridDepth) > max ? `the probe grid (${p.gridW} x ${p.gridH}) is larger than this renderer's 3D textures (${max})`
         : !installReflectNode(opts.renderer) ? 'the renderer has no node library' : null;
     this.reflections = p && p.count > 0 && !this.reflectionsSkipped ? new ReflectionProbeVolume(p) : null;
-    this.fieldLight = this.reflections ? stationReflectLight() : stationFieldLight();
+    this.mirror = !!this.reflections && !!opts.mirror;
+    this.fieldLight = this.reflections ? stationReflectLight(this.full, this.mirror) : stationFieldLight(this.full);
+    this.bounce = this.full ? opts.bounce ?? null : null;
     scene.add(this.fieldLight);
     bindLightField(this.volume);
     bindReflectionProbes(this.reflections);
@@ -419,7 +447,7 @@ export class StationLighting {
       error = err ?? new Error('the lighting could not be installed');
       prev.reinstate(); // (whatever the failed constructor had already put in the scene or bound)
       const base: StationLightingOptions = {...opts};
-      delete base.baked; delete base.probes;
+      delete base.baked; delete base.probes; delete base.shading; delete base.mirror; delete base.bounce;
       try {
         lighting = new StationLighting(scene, layout, fixtures, tubes, base);
       } catch {
@@ -440,7 +468,7 @@ export class StationLighting {
    */
   private reinstate(): void {
     const scene = this.scene;
-    for (const l of [stationFieldLight(), stationReflectLight()]) if (l !== this.fieldLight && l.parent === scene) scene.remove(l);
+    for (const l of stationLights()) if (l !== this.fieldLight && l.parent === scene) scene.remove(l);
     if (this.fieldLight.parent !== scene) scene.add(this.fieldLight);
     for (const c of [...scene.children]) {
       if (c.name !== 'light-glow' || c === this.glow) continue;

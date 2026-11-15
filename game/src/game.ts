@@ -1471,8 +1471,8 @@ export class Game {
     // baked with a ray-gathered, finish-coloured indirect term, and cached reflection probes for metal and glass; each from the derived
     // cache when its inputs still match, else made here in the same paced steps. Off / the Reactor: nothing (the baseline bake below).
     const enhanced = yield* this.enhancedLighting.bakeSteps(stationBakeInput(this.layout), this.world.drawn, {max3DTextureSize: max3D});
-    this.lightPool = yield* StationLighting.steps(this.scene, this.layout, this.world.fixtures, this.world.tubes, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes});
-    this.enhancedLighting.applied(this.lightPool.reflectionsSkipped);
+    this.lightPool = yield* StationLighting.steps(this.scene, this.layout, this.world.fixtures, this.world.tubes, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes, shading: enhanced.shading, mirror: enhanced.mirror, bounce: enhanced.bounce});
+    this.enhancedLighting.applied(this.lightPool.reflectionsSkipped, this.lightPool.shadingSkipped);
     // Iteration 06 (Lane F): haze density map + light-field rebind; station structure/containers cast the flashlight shadow.
     yield* this.atmosphere.setStationSteps(this.layout, this.lightPool.volume);
     this.atmosphere.markShadows(this.world.group, true);
@@ -2518,10 +2518,10 @@ export class Game {
   private *relightSteps(input: ReturnType<typeof stationBakeInput>): BuildSteps<{error: unknown}> {
     const max3D = maxTexture3DSize(this.renderer.backend as never);
     const enhanced = yield* this.enhancedLighting.bakeSteps(input, this.world.drawn, {max3DTextureSize: max3D});
-    const r = yield* StationLighting.replaceSteps(this.lightPool, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes}, fn => this.retire(fn));
+    const r = yield* StationLighting.replaceSteps(this.lightPool, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes, shading: enhanced.shading, mirror: enhanced.mirror, bounce: enhanced.bounce}, fn => this.retire(fn));
     this.lightPool = r.lighting;
     if (r.error) this.enhancedLighting.installedBaseline('the enhanced lighting could not be installed');
-    else this.enhancedLighting.applied(r.lighting.reflectionsSkipped);
+    else this.enhancedLighting.applied(r.lighting.reflectionsSkipped, r.lighting.shadingSkipped);
     this.atmosphere.setLightField(r.lighting.volume); // (the station's fog maps, gas, smoke and fog clock stay)
     return {error: r.error};
   }
