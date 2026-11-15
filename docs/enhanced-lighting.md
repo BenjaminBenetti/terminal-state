@@ -143,6 +143,10 @@ flashlight's light and bounce on them, as they are this frame.
   warm-up it builds nothing (`game/tests/glass-mirror-game.test.ts`: the real Game, zero node builds, pipelines
   and render objects while the mirror draws). Glass itself is skipped in the mirror draw, so the target is never
   sampled while it is drawn into. The flashlight's shadow map is not drawn a second time.
+- **Instanced pools.** three culls an instanced mesh by one sphere round all its instances, which for a
+  station-wide pool (the columns, the sleepers, every table) is the whole station. The mirror draws such a pool only
+  when one of its instances is inside the mirror's own frustum (the glass to the reach); the warm-up's draw leaves
+  nothing out.
 - **How much a pane reflects.** The station's glass material alone reflects about a tenth face-on, which a lit shop
   behind the pane washes out. Under the mirror light a pane reflects **0.3 face-on** (`GLASS_PANE_F0`), by the ratio
   of two Fresnel curves: nothing is added at a grazing angle, where glass mirrors anyway. That is about three times

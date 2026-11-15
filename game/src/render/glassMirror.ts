@@ -386,6 +386,7 @@ interface Candidate { plane: GlassPlane | null; score: number; coverage: number;
 const emptyCandidate = (): Candidate => ({plane: null, score: 0, coverage: 0, u0: 0, u1: 0, y0: 0, y1: 0, near: 0});
 
 const _vp = new THREE.Matrix4(), _eye = new THREE.Vector3(), _size = new THREE.Vector2();
+const _pv = new THREE.Matrix4(), _sphere = new THREE.Sphere();
 const _view: PaneView = {area: 0, u0: 0, u1: 0, y0: 0, y1: 0};
 const _face: MirrorFace = {side: 1, nx: 1, nz: 0, d: 0, dist: 0, sigma: 1};
 
@@ -414,11 +415,28 @@ export class GlassMirror {
   private disposed = false;
   private primed = false;
   private failed: string | null = null;
-  /** Counters (QA / tests): mirror draws, frames without one, objects drawn / glass objects left out in the last draw. */
-  readonly stats = {renders: 0, idle: 0, drawn: 0, skipped: 0, targets: 0};
+  /**
+   * Counters (QA / tests): mirror draws, frames without one, objects drawn / glass objects left out in the last draw, instanced
+   * pools left out of it (no instance inside the mirror's frustum).
+   */
+  readonly stats = {renders: 0, idle: 0, drawn: 0, skipped: 0, pools: 0, targets: 0};
   private drawing = false;
   private readonly filter: (...a: unknown[]) => void;
   private filterRenderer: MirrorRenderer | null = null;
+  /**
+   * Instanced pools in the mirror draw. three culls an InstancedMesh by the one sphere round ALL its instances — for a station-wide
+   * pool (the columns, the sleepers, every table) that is the station, so it is always drawn. Here a pool is drawn only when one
+   * of its instances' own spheres meets the mirror's frustum (near = the glass, far = the reach). Per draw: the frustum once
+   * (`frustumSerial`), a pool's answer once however many material groups it has (`poolSeen`: serial x 2 + in view), and the
+   * instance that was in view last time first (`poolHit`). Never for the warm-up's draw (everything is drawn), a pool that asks
+   * not to be culled (`frustumCulled` false) or a material that moves its vertices in the shader.
+   */
+  private readonly frustum = new THREE.Frustum();
+  private frustumSerial = -1;
+  private drawSerial = 0;
+  private cullPools = false;
+  private readonly poolSeen = new WeakMap<object, number>();
+  private readonly poolHit = new WeakMap<object, number>();
 
   constructor(opts: GlassMirrorOptions) {
     this.cap = opts.cap ?? GLASS_MIRROR_CAPS.standard;
@@ -430,10 +448,52 @@ export class GlassMirror {
       if (reflectTagOf(a[4] as THREE.Material) === 'glass') { this.stats.skipped++; return; }
       // (an instanced pool with nothing in it draws nothing — three still walks it through the whole per-object path)
       const o = a[0] as {isInstancedMesh?: boolean; count?: number};
-      if (o.isInstancedMesh === true && !((o.count as number) > 0)) return;
+      if (o.isInstancedMesh === true) {
+        if (!((o.count as number) > 0)) return;
+        if (this.cullPools && !this.poolInView(a[0] as THREE.InstancedMesh, a[4] as THREE.Material)) return;
+      }
       this.stats.drawn++;
       this.filterRenderer!.renderObject(...a);
     };
+  }
+
+  /**
+   * Whether an instanced pool has an instance inside the mirror's frustum (see `frustum` above). An instance scaled to nothing is
+   * not there. Conservative: spheres, six planes, no occlusion.
+   */
+  private poolInView(o: THREE.InstancedMesh, material: THREE.Material): boolean {
+    const mat = material as THREE.Material & {positionNode?: unknown; vertexNode?: unknown};
+    if (mat.positionNode != null || mat.vertexNode != null) return true; // (per material group: never part of the pool's answer)
+    const serial = this.drawSerial, seen = this.poolSeen.get(o);
+    if (seen !== undefined && seen >> 1 === serial) return (seen & 1) === 1;
+    let inView = o.frustumCulled === false || !o.instanceMatrix;
+    if (!inView) {
+      if (this.frustumSerial !== serial) {
+        const cam = this.camera;
+        this.frustum.setFromProjectionMatrix(_pv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse), cam.coordinateSystem, cam.reversedDepth);
+        this.frustumSerial = serial;
+      }
+      const g = o.geometry;
+      if (g.boundingSphere === null) g.computeBoundingSphere();
+      const bs = g.boundingSphere!, a = o.instanceMatrix.array, count = Math.min(o.count, Math.floor(a.length / 16)), w = o.matrixWorld.elements;
+      const cx = bs.center.x, cy = bs.center.y, cz = bs.center.z;
+      const r = bs.radius * Math.sqrt(Math.max(w[0] * w[0] + w[1] * w[1] + w[2] * w[2], w[4] * w[4] + w[5] * w[5] + w[6] * w[6], w[8] * w[8] + w[9] * w[9] + w[10] * w[10]));
+      const first = this.poolHit.get(o) ?? 0;
+      for (let k = -1; k < count && !inView; k++) {
+        const i = k < 0 ? first : k;
+        if (i >= count || (k >= 0 && i === first)) continue;
+        const p = i * 16;
+        const s2 = Math.max(a[p] * a[p] + a[p + 1] * a[p + 1] + a[p + 2] * a[p + 2], a[p + 4] * a[p + 4] + a[p + 5] * a[p + 5] + a[p + 6] * a[p + 6], a[p + 8] * a[p + 8] + a[p + 9] * a[p + 9] + a[p + 10] * a[p + 10]);
+        if (!(s2 > 1e-12)) continue;
+        const lx = a[p] * cx + a[p + 4] * cy + a[p + 8] * cz + a[p + 12], ly = a[p + 1] * cx + a[p + 5] * cy + a[p + 9] * cz + a[p + 13], lz = a[p + 2] * cx + a[p + 6] * cy + a[p + 10] * cz + a[p + 14];
+        _sphere.center.set(w[0] * lx + w[4] * ly + w[8] * lz + w[12], w[1] * lx + w[5] * ly + w[9] * lz + w[13], w[2] * lx + w[6] * ly + w[10] * lz + w[14]);
+        _sphere.radius = r * Math.sqrt(s2);
+        if (this.frustum.intersectsSphere(_sphere)) { inView = true; this.poolHit.set(o, i); }
+      }
+      if (!inView) this.stats.pools++;
+    }
+    this.poolSeen.set(o, serial * 2 + (inView ? 1 : 0));
+    return inView;
   }
 
   /** The station's glass planes (world/glassPanes.ts collectGlassPlanes), or null: no mirror (transit gap, teardown). */
@@ -626,6 +686,8 @@ export class GlassMirror {
     }
     const plane = c.plane;
     if (!plane || !(c.coverage > 0)) { this.deactivate(); this.stats.idle++; return false; }
+    // (a draw the warm-up asked for leaves no pool out: it is there to have everything of the mirror view drawn once)
+    this.cullPools = !this.primed;
     this.primed = false;
 
     // --- window, camera, uniforms ---
@@ -660,7 +722,8 @@ export class GlassMirror {
     const tm = renderer.toneMapping, cs = renderer.outputColorSpace, tr = renderer.transparent, op = renderer.opaque;
     flags.length = 0;
     for (let i = 0; i < lights.length; i++) { const s = lights[i].shadow; flags.push(s.autoUpdate, s.needsUpdate); s.autoUpdate = false; s.needsUpdate = false; }
-    this.stats.drawn = 0; this.stats.skipped = 0;
+    this.stats.drawn = 0; this.stats.skipped = 0; this.stats.pools = 0;
+    this.drawSerial = (this.drawSerial + 1) % 0x3fffffff;
     this.drawing = true;
     this.filterRenderer = renderer;
     let ok = false;
@@ -724,7 +787,7 @@ export class GlassMirror {
       window: active ? {a: [+w.a0.toFixed(3), +w.a1.toFixed(3)], y: [+w.y0.toFixed(3), +w.y1.toFixed(3)], texel: +w.texel.toFixed(4), size: [w.w, w.h]} : null,
       eyeDistance: active ? +this.face.dist.toFixed(3) : null,
       target: t ? {size: [t.width, t.height], samples: t.samples, matched: this.match} : null, cap: [this.cap[0], this.cap[1]],
-      renders: this.stats.renders, idle: this.stats.idle, drawn: this.stats.drawn, skipped: this.stats.skipped, targets: this.stats.targets,
+      renders: this.stats.renders, idle: this.stats.idle, drawn: this.stats.drawn, skipped: this.stats.skipped, pools: this.stats.pools, targets: this.stats.targets,
       failed: this.failed, disposed: this.disposed,
     };
   }
