@@ -23,19 +23,37 @@
 // light is smooth) and fills the cells between from their lattice neighbours in the same space, never across a wall or a drop: a
 // quarter of the rays for nearly the same picture. The rows are rounded to the 16 bits the derived cache stores (rowBits): a row read
 // back from the cache is exactly the row a fresh gather returns.
+//
+// Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane WORKERS): the gather is built from PARTS that a worker can run a share
+// of (world/lightBakeTasks.ts), and gatherIndirectSteps below — the gather on one thread, the reference — is those same parts in the
+// same order:
+//  - gatherPlanSteps: what follows from the geometry and the tier alone (the open voxels, which of them gather, the ray sets);
+//  - gatherSurfaces: per voxel, what its six surface orientations send back of the direct light;
+//  - gatherKernel: the rays of a RANGE of gathering voxels and their bounces. A gathering voxel's rays read the scene, the ray sets
+//    and the surfaces' light — all fixed before the first ray — and write that voxel's own hits and its own row; a bounce reads the
+//    bounce before (complete before it starts) and the voxel's own hits, and writes its own row. So any split of the gathering
+//    voxels into ranges, traced in any order or at the same time, gives the rows of one pass over all of them, bit for bit;
+//  - GatherRows: the sums over the bounces; smoothSteps and roundRows: the smoothing and the rounding, which read their neighbours'
+//    rows of the pass before (and add up one mean in voxel order) — ONE thread runs those, in order.
+// This module imports no renderer code (constants: world/lightFieldLayout.ts): a worker's script holds it without three.
 
 import {CELL} from '../gen/grid';
 import type {BuildSteps} from '../core/pacedBuild';
 import {BandScene, HIT_CEIL, HIT_FLOOR, sphereDirections} from './lightScene';
-import {ALBEDO_LUT, ALBEDO_STRIDE, ALB_CEIL, ALB_FLOOR, ALB_WALL, type SurfaceAlbedo} from './surfaceAlbedo';
-import {CUBE_FACES, IND_CIRCUITS, IND_STRIDE, type ColumnGeometry} from './lightField';
+import {ALBEDO_LUT, ALBEDO_STRIDE, ALB_CEIL, ALB_FLOOR, ALB_WALL, CUBE_FACES, IND_CIRCUITS, IND_STRIDE} from './lightFieldLayout';
+import type {ColumnGeometry} from './lightField';
+import type {SurfaceAlbedo} from './surfaceAlbedo';
 
-/** What the bake hands the gather (its own arrays, slot-major as the fixtures wrote them). */
-export interface IndirectContext {
+/** The columns a gather runs over (slot-major). */
+export interface GatherGeometry {
   W: number; H: number;
   geos: readonly ColumnGeometry[];
   /** Height layers per slot. */
   layers: readonly number[];
+}
+
+/** What the bake hands the gather (its own arrays, slot-major as the fixtures wrote them). */
+export interface IndirectContext extends GatherGeometry {
   /** Direct light per slot: tinted fluence (rgb per voxel), its luminance-weighted direction, its luminance. */
   E: readonly Float32Array[]; D: readonly Float32Array[]; EL: readonly Float32Array[];
   /** Per slot: per column the luminance from each flicker circuit (x 3), per voxel the dying circuit's. */
@@ -86,6 +104,8 @@ export interface GatherOptions {
   gain: number;
   /** Chroma of the surface colours the light bounces off (1 = as drawn; default 1): see GATHER_SATURATION. */
   saturation?: number;
+  /** How reflective the bounce takes a finish to be (default: as drawn): see GATHER_RESPONSE / bounceReflectance. */
+  response?: {lift: number; ceiling: number};
   albedo: SurfaceAlbedo;
   /** The ray scene (default: built from the context's geometry). */
   scene?: BandScene;
@@ -94,17 +114,32 @@ export interface GatherOptions {
 /** Defaults of the gather that are not a quality tier (world/enhancedLighting.ts GI_TIERS holds rays / stride / bounces). */
 export const GATHER_REACH = 14;
 /**
- * Task studio-baked-gi-visual-uplift-20261115-004324-01: how much of the gathered light the field keeps. Measured on the base Subway
- * (seed 93), the station's dark, grimy finishes send back about a seventh of the light that falls on them: kept at that (1), the
- * bounce is as faint as the baseline's fill and Enhanced lighting reads like Off. The game shows the bounce stronger than its
- * finishes strictly give — a stylisation of the bounce alone (direct light, the hemisphere and every light level without a lit
- * surface nearby are untouched), with all of its occlusion, direction and colour.
+ * Task studio-baked-gi-visual-uplift-20261115-004324-01: the game shows the bounce stronger than its finishes strictly give. Measured
+ * on the base Subway (seed 93), the station's dark, grimy finishes send back about a seventh of the light that falls on them: kept at
+ * that, the bounce is as faint as the baseline's fill and Enhanced lighting reads like Off. It is a stylisation of the bounce alone
+ * (direct light, the hemisphere and every light level without a lit surface nearby are untouched), with all of its occlusion,
+ * direction and colour.
+ * Task studio-gi-mood-bounce-loading-20261115-081523-01 (the user: "parts of the world are now too bright and less moody ... a bit
+ * darker, not a rollback"): that stylisation was one factor of 2.5 on the whole gather, whatever the finish — a white-tiled room then
+ * sent back more light than fell on it, and every ceiling over a lit floor was lifted to a flat mid grey. It is now a RESPONSE of the
+ * finish (bounceReflectance): a dark finish bounces GATHER_RESPONSE.lift times what it strictly would, a pale one levels off below
+ * GATHER_RESPONSE.ceiling (no finish returns more light than it receives), and GATHER_GAIN — the scale of the whole gather — is 1.
  */
-export const GATHER_GAIN = 2.5;
-/** (same task) Chroma of the surface colours as the bounce sees them (1 = as drawn): a little more, so a coloured finish reads in its bounce. */
+export const GATHER_GAIN = 1;
+export const GATHER_RESPONSE = {lift: 2.2, ceiling: 0.7} as const;
+/** (task studio-baked-gi-visual-uplift-20261115-004324-01) Chroma of the surface colours as the bounce sees them (1 = as drawn): a little more, so a coloured finish reads in its bounce. */
 export const GATHER_SATURATION = 1.25;
+/** What the game's bake gathers with (QA / tuning may change it before a bake: the cache digest covers every number; lift 0 = the finishes as drawn). */
+export const GATHER_TUNING: {gain: number; saturation: number; lift: number; ceiling: number} = {gain: GATHER_GAIN, saturation: GATHER_SATURATION, lift: GATHER_RESPONSE.lift, ceiling: GATHER_RESPONSE.ceiling};
 
 const lum = (r: number, g: number, b: number): number => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+/**
+ * The reflectance the bounce takes a finish of reflectance `rho` to have: `ceiling x (1 - exp(-lift x rho / ceiling))` — `lift` times
+ * rho for a dark finish, levelling off below `ceiling` for a pale one (monotonic; a black finish stays black).
+ */
+export function bounceReflectance(rho: number, lift: number, ceiling: number): number {
+  return rho > 0 ? ceiling * (1 - Math.exp(-lift * rho / ceiling)) : 0;
+}
 /** Cells whose floors differ by more than this are not one space for smoothing / filling (the bake's own bounce rule). */
 const STEP_MAX = 0.6;
 
@@ -145,16 +180,35 @@ export function indirectIndex(geos: readonly ColumnGeometry[], layers: readonly 
   return {index, count};
 }
 
-/**
- * The gather as build steps (core/pacedBuild.ts): the journey's paced build draws frames between them. The result is the same
- * whatever the slicing (nothing reads a clock but the statistics).
- */
-export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): BuildSteps<IndirectLight> {
-  const t0 = performance.now();
-  const {W, H, geos, layers: LS, E, D, EL, GL, G2L, scatter} = ctx;
-  const n = W * H, S = geos.length, N = Math.max(4, Math.round(opt.rays)), stride = opt.stride === 2 ? 2 : 1;
-  const scene = opt.scene ?? new BandScene(W, H, geos), sat = opt.saturation ?? 1;
-  yield 'gather.index';
+// ---------------------------------------------------------------------------------------------
+// The plan: what follows from the geometry and the tier alone
+
+/** A gather's fixed frame: the same for every thread that works on it (made from the geometry, the rays and the stride alone). */
+export interface GatherPlan extends GatherGeometry {
+  /** Cells, level slots, rays per gathering voxel, the lattice stride. */
+  n: number; S: number; N: number; stride: 1 | 2;
+  /** Open voxels (rows of the result) and the gathering voxels among them. */
+  count: number; probes: number;
+  /** IndirectLight.index. */
+  index: Int32Array[];
+  /** Per row: its slot, cell and layer. */
+  vs: Uint8Array; vi: Int32Array; vk: Uint8Array;
+  /** Per slot, per cell: 1 = gathers on the lattice, 2 = gathers on its own (no lattice neighbour in its space), 0 = filled. */
+  gathers: Uint8Array[];
+  /** Per slot (stride 2), per filled cell: up to four lattice cells it is filled from (-1 = none). */
+  fillFrom: (Int32Array | null)[];
+  /** The gathering voxels (rows of the result), in slot / cell / layer order. */
+  P: Int32Array;
+  /** The ray sets (SETS x N directions) and the shift that picks a voxel's set from its cell. */
+  sets: Float32Array; setShift: number;
+  /** Per row: the row a bounce reads for it — its own when it gathers, else that of its first lattice source. */
+  rep: Int32Array;
+}
+
+/** The plan of a gather, as build steps. */
+export function* gatherPlanSteps(geo: GatherGeometry, rays: number, strideOf: number): BuildSteps<GatherPlan> {
+  const {W, H, geos, layers: LS} = geo;
+  const n = W * H, S = geos.length, N = Math.max(4, Math.round(rays)), stride = strideOf === 2 ? 2 : 1;
   // --- open voxels ---------------------------------------------------------------------------
   const {index, count} = indirectIndex(geos, LS, n);
   const vs = new Uint8Array(count), vi = new Int32Array(count), vk = new Uint8Array(count);
@@ -199,29 +253,54 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
   yield;
   const sets = raySets(N), setShift = stride === 2 ? 1 : 0;
   yield;
-  const hitV = new Int32Array(probes * N).fill(-1);
-  /** Per ray: the surface code (0 floor, 1 ceiling, 2 / 3 wall facing +x / -x, 4 / 5 wall facing +z / -z) and its weight (0..255). */
-  const hitC = new Uint8Array(probes * N), hitW = new Uint8Array(probes * N);
+  // A bounce is gathered at the lattice's voxels only (stride 2): a surface in a cell between them is lit by the bounce before as
+  // its lattice neighbour in the same space is (`rep`: a voxel's own row when it gathers, else the row of its first lattice source).
+  const rep = new Int32Array(count);
+  for (let s = 0; s < S; s++) {
+    const gt = gathers[s], ff = fillFrom[s], L = LS[s], ix = index[s], open = geos[s].open;
+    for (let i = 0; i < n; i++) if (open[i]) for (let k = 0; k < L; k++) rep[ix[i * L + k]] = gt[i] || !ff ? ix[i * L + k] : ix[ff[i * 4] * L + k];
+  }
   yield;
-  let cur = new Float32Array(count * IND_STRIDE), prev = new Float32Array(count * IND_STRIDE);
-  yield;
-  const tot = new Float32Array(count * IND_STRIDE);
-  const R = opt.reach, fade0 = R * 0.6, invFade = 1 / (R - fade0);
-  // a face's irradiance from N rays over the sphere: (4 pi / N) x sum of radiance x cosine, radiance = radiosity / pi; the cube's
-  // mean weighs a ray by the mean of its three cosines (x 4 / 6)
-  const faceN = 4 / N, meanN = 4 / (6 * N), acc = new Float64Array(IND_STRIDE);
-  let hits = 0;
-  yield;
-  // --- per voxel, in one row each (a ray's hit then costs one or two cache lines, not a dozen scattered reads): its cell's surface
-  // colours (floor, ceiling, wall: linear rgb), and what each of the six surface orientations there sends back of the DIRECT light
-  // (its colour x the direct light on it from its own side), plus the flicker circuits' shares of that light ------------------------
-  const va = new Float32Array(count * 9);
-  yield;
-  const RAD = 21, rad = new Float32Array(count * RAD);
-  yield;
-  const radRange = (c0: number, c1: number): void => {
+  return {W, H, geos, layers: LS, n, S, N, stride, count, probes, index, vs, vi, vk, gathers, fillFrom, P, sets, setShift, rep};
+}
+
+/** Typed-array bytes of a plan (the workers' memory report). */
+export function gatherPlanBytes(p: GatherPlan): number {
+  let b = p.vs.byteLength + p.vi.byteLength + p.vk.byteLength + p.P.byteLength + p.sets.byteLength + p.rep.byteLength;
+  for (const a of p.index) b += a.byteLength;
+  for (const a of p.gathers) b += a.byteLength;
+  for (const a of p.fillFrom) b += a?.byteLength ?? 0;
+  return b;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The surfaces: what each voxel's six surface orientations send back of the direct light
+
+/** Floats per voxel of a gather's `rad` rows: six surface orientations x rgb, then the three circuits' shares. */
+export const GATHER_RAD = 21;
+/** Floats per voxel of a gather's `va` rows: the cell's floor, ceiling and wall colours (linear rgb) as the bounce sees them. */
+export const GATHER_VA = 9;
+
+export interface GatherSurfaces {
+  /** Per voxel, in one row each (a ray's hit then costs one or two cache lines, not a dozen scattered reads): GATHER_VA / GATHER_RAD floats. */
+  va: Float32Array; rad: Float32Array;
+  /** Fills the rows of voxels [c0, c1). */
+  range(c0: number, c1: number): void;
+}
+
+/**
+ * Per voxel: its cell's surface colours (floor, ceiling, wall: linear rgb), and what each of the six surface orientations there
+ * sends back of the DIRECT light (its colour x the direct light on it from its own side), plus the flicker circuits' shares of that
+ * light. The rows are zero until range() has filled them.
+ */
+export function gatherSurfaces(plan: GatherPlan, ctx: IndirectContext, opt: Pick<GatherOptions, 'albedo' | 'saturation' | 'response'>): GatherSurfaces {
+  const {layers: LS, vs, vi, vk, count} = plan, {E, D, EL, GL, G2L, scatter} = ctx;
+  const sat = opt.saturation ?? 1, resp = opt.response ?? null, slots = opt.albedo.slots;
+  const va = new Float32Array(count * GATHER_VA);
+  const RAD = GATHER_RAD, rad = new Float32Array(count * RAD);
+  const range = (c0: number, c1: number): void => {
     for (let c = c0; c < c1; c++) {
-      const s = vs[c], i = vi[c], L = LS[s], hv = i * L + vk[c], A = opt.albedo.slots[s], a0 = i * ALBEDO_STRIDE, v0 = c * 9;
+      const s = vs[c], i = vi[c], L = LS[s], hv = i * L + vk[c], A = slots[s], a0 = i * ALBEDO_STRIDE, v0 = c * 9;
       for (let q = 0; q < 9; q += 3) {
         let r = ALBEDO_LUT[A[a0 + q]], g = ALBEDO_LUT[A[a0 + q + 1]], b = ALBEDO_LUT[A[a0 + q + 2]];
         if (sat !== 1) {
@@ -229,6 +308,15 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
           const l = lum(r, g, b);
           r = l + (r - l) * sat; g = l + (g - l) * sat; b = l + (b - l) * sat;
           r = r < 0 ? 0 : r > 1 ? 1 : r; g = g < 0 ? 0 : g > 1 ? 1 : g; b = b < 0 ? 0 : b > 1 ? 1 : b;
+        }
+        if (resp) {
+          // the finish's colour at the reflectance the bounce takes it to have (its hue kept; never brighter than white)
+          const l = lum(r, g, b);
+          if (l > 1e-6) {
+            const k = bounceReflectance(l, resp.lift, resp.ceiling) / l;
+            r *= k; g *= k; b *= k;
+            r = r > 1 ? 1 : r; g = g > 1 ? 1 : g; b = b > 1 ? 1 : b;
+          }
         }
         va[v0 + q] = r; va[v0 + q + 1] = g; va[v0 + q + 2] = b;
       }
@@ -252,12 +340,48 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
       rad[o + 20] = G2L[s][hv] / el;
     }
   };
-  for (let c = 0; c < count; c += 16384) { radRange(c, Math.min(count, c + 16384)); yield; }
+  return {va, rad, range};
+}
 
-  yield 'gather.trace';
+// ---------------------------------------------------------------------------------------------
+// The kernel: the rays of a range of gathering voxels, and their bounces
+
+/** Gathering voxels traced per build step: a step every few thousand rays (a couple of milliseconds). */
+export const gatherChunk = (N: number): number => Math.max(32, Math.round(4000 / N));
+
+/**
+ * The rays and bounces of the gathering voxels [p0, p1) of a plan (plan.P). It keeps their hits; a voxel's row is written into `out`
+ * at the voxel's own place (`base` < 0: `out` holds every row) or packed from `base` (row p - base: a share's rows alone).
+ */
+export interface GatherKernel {
+  /** Trace voxels [from, to) (inside the kernel's range): their hits are kept, their first-bounce rows written. */
+  trace(from: number, to: number, out: Float32Array, base: number): void;
+  /** A further bounce of voxels [from, to): `prev` / `meanL` are the whole bounce before (every row; its means' luminance per row). */
+  bounce(from: number, to: number, prev: Float32Array, meanL: Float32Array, out: Float32Array, base: number): void;
+  /** Rays of the range that hit a lit-able surface so far. */
+  hits(): number;
+  /** Typed-array bytes the kernel holds (its hits). */
+  bytes: number;
+}
+
+/**
+ * The kernel of the gathering voxels [p0, p1). `rad` / `va` are gatherSurfaces' rows, complete (every voxel) before the first ray.
+ * (Plain closures: a generator body runs a hot loop several times slower before the JIT warms up.)
+ */
+export function gatherKernel(plan: GatherPlan, scene: BandScene, reach: number, rad: Float32Array, va: Float32Array, p0: number, p1: number): GatherKernel {
+  const {W, geos, layers: LS, N, index, vs, vi, vk, P, sets, setShift, rep} = plan;
+  const RAD = GATHER_RAD, own = Math.max(0, p1 - p0);
+  const hitV = new Int32Array(own * N).fill(-1);
+  /** Per ray: the surface code (0 floor, 1 ceiling, 2 / 3 wall facing +x / -x, 4 / 5 wall facing +z / -z) and its weight (0..255). */
+  const hitC = new Uint8Array(own * N), hitW = new Uint8Array(own * N);
+  const R = reach, fade0 = R * 0.6, invFade = 1 / (R - fade0);
+  // a face's irradiance from N rays over the sphere: (4 pi / N) x sum of radiance x cosine, radiance = radiosity / pi; the cube's
+  // mean weighs a ray by the mean of its three cosines (x 4 / 6)
+  const faceN = 4 / N, meanN = 4 / (6 * N), acc = new Float64Array(IND_STRIDE);
+  let hits = 0;
   // --- first bounce: trace, and gather what the directly lit surfaces send back ---------------------
-  const traceRange = (p0: number, p1: number): void => {
-    for (let p = p0; p < p1; p++) {
+  const trace = (from: number, to: number, out: Float32Array, base: number): void => {
+    for (let p = from; p < to; p++) {
       const c = P[p], s = vs[c], i = vi[c], k = vk[c], cx = i % W, cz = (i - cx) / W;
       const ox = (cx + 0.5) * CELL, oz = (cz + 0.5) * CELL, oy = geos[s].layerY[i * LS[s] + k];
       const so = ((((cx >> setShift) & 1) | (((cz >> setShift) & 1) << 1) | ((k & 3) << 2)) % SETS) * N * 3;
@@ -280,7 +404,7 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
         if (hc < 0) continue;
         const w8 = t <= fade0 ? 255 : Math.round((1 - (t - fade0) * invFade) * 255);
         if (w8 <= 0) continue;
-        const q = p * N + j;
+        const q = (p - p0) * N + j;
         hitV[q] = hc; hitC[q] = code; hitW[q] = w8;
         hits++;
         const ro = hc * RAD, rc = ro + code * 3, w = w8 / 255;
@@ -296,34 +420,18 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
         const lm = l * (ax + ay + az);
         acc[18] += lm * rad[ro + 18]; acc[19] += lm * rad[ro + 19]; acc[20] += lm * rad[ro + 20];
       }
-      const o = c * IND_STRIDE;
-      for (let q = 0; q < IND_CIRCUITS; q++) cur[o + q] = acc[q] * faceN;
-      cur[o + 18] = acc[18] * meanN; cur[o + 19] = acc[19] * meanN; cur[o + 20] = acc[20] * meanN;
+      const o = (base < 0 ? c : p - base) * IND_STRIDE;
+      for (let q = 0; q < IND_CIRCUITS; q++) out[o + q] = acc[q] * faceN;
+      out[o + 18] = acc[18] * meanN; out[o + 19] = acc[19] * meanN; out[o + 20] = acc[20] * meanN;
     }
   };
-  // a step every few thousand rays (a couple of milliseconds)
-  const CHUNK = Math.max(32, Math.round(4000 / N));
-  for (let p = 0; p < probes; p += CHUNK) { traceRange(p, Math.min(probes, p + CHUNK)); yield; }
-  const traceMs = performance.now() - t0;
-
   // --- further bounces: the same hits, lit by the bounce before ----------------------------------------
-  const bounces = Math.max(1, Math.round(opt.bounces));
-  /** Luminance of the mean of the bounce before, per voxel. */
-  const meanL = new Float32Array(count), m3: [number, number, number] = [0, 0, 0];
-  // A bounce is gathered at the lattice's voxels only (stride 2): a surface in a cell between them is lit by the bounce before as
-  // its lattice neighbour in the same space is (`rep`: a voxel's own row when it gathers, else the row of its first lattice source).
-  const rep = new Int32Array(count);
-  for (let s = 0; s < S; s++) {
-    const gt = gathers[s], ff = fillFrom[s], L = LS[s], ix = index[s], open = geos[s].open;
-    for (let i = 0; i < n; i++) if (open[i]) for (let k = 0; k < L; k++) rep[ix[i * L + k]] = gt[i] || !ff ? ix[i * L + k] : ix[ff[i * 4] * L + k];
-  }
-  yield;
-  const bounceRange = (p0: number, p1: number): void => {
-    for (let p = p0; p < p1; p++) {
+  const bounce = (from: number, to: number, prev: Float32Array, meanL: Float32Array, out: Float32Array, base: number): void => {
+    for (let p = from; p < to; p++) {
       const c = P[p], i = vi[c], k = vk[c], cx = i % W, cz = (i - cx) / W;
       const so = ((((cx >> setShift) & 1) | (((cz >> setShift) & 1) << 1) | ((k & 3) << 2)) % SETS) * N * 3;
       acc.fill(0);
-      for (let j = 0, q = p * N; j < N; j++, q++) {
+      for (let j = 0, q = (p - p0) * N; j < N; j++, q++) {
         const hx = hitV[q];
         if (hx < 0) continue;
         // irradiance of the hit surface from the bounce before: the cube face of its own normal
@@ -343,108 +451,178 @@ export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): 
         const lm = lum(r, g, b) * (ax + ay + az) / pm;
         acc[18] += lm * prev[hr + 18]; acc[19] += lm * prev[hr + 19]; acc[20] += lm * prev[hr + 20];
       }
-      const o = c * IND_STRIDE;
-      for (let q = 0; q < IND_CIRCUITS; q++) cur[o + q] = acc[q] * faceN;
-      cur[o + 18] = acc[18] * meanN; cur[o + 19] = acc[19] * meanN; cur[o + 20] = acc[20] * meanN;
+      const o = (base < 0 ? c : p - base) * IND_STRIDE;
+      for (let q = 0; q < IND_CIRCUITS; q++) out[o + q] = acc[q] * faceN;
+      out[o + 18] = acc[18] * meanN; out[o + 19] = acc[19] * meanN; out[o + 20] = acc[20] * meanN;
     }
   };
-  // (plain functions: a generator body runs a hot loop several times slower before the JIT warms up)
-  /** The bounce in `cur` into the total, and its mean's luminance (rows of gathering voxels; the others are zero until the fill). */
-  const addRange = (p0: number, p1: number): void => {
+  return {trace, bounce, hits: () => hits, bytes: hitV.byteLength + hitC.byteLength + hitW.byteLength};
+}
+
+// ---------------------------------------------------------------------------------------------
+// The rows: the bounces' sum, the smoothing, the rounding (one thread, in order)
+
+/** The rows of a gather over its bounces: the bounce being made, the one before, their sum. */
+export class GatherRows {
+  /** The bounce being gathered / the bounce before (every row; swap() between two bounces). */
+  cur: Float32Array; prev: Float32Array;
+  /** The sum of the bounces so far. */
+  readonly tot: Float32Array;
+  /** Luminance of the mean of the last added bounce, per row. */
+  readonly meanL: Float32Array;
+  private readonly m3: [number, number, number] = [0, 0, 0];
+  constructor(private readonly plan: GatherPlan) {
+    const n = plan.count * IND_STRIDE;
+    this.cur = new Float32Array(n); this.prev = new Float32Array(n); this.tot = new Float32Array(n);
+    this.meanL = new Float32Array(plan.count);
+  }
+  /** Typed-array bytes held. */
+  get bytes(): number { return this.cur.byteLength + this.prev.byteLength + this.tot.byteLength + this.meanL.byteLength; }
+  /** The bounce in `cur` into the total, and its mean's luminance (rows of gathering voxels [p0, p1); the others are zero until the fill). */
+  add(p0: number, p1: number): void {
+    const P = this.plan.P, tot = this.tot, cur = this.cur, meanL = this.meanL, m3 = this.m3;
     for (let p = p0; p < p1; p++) {
       const c = P[p], o = c * IND_STRIDE;
       for (let q = 0; q < IND_STRIDE; q++) tot[o + q] += cur[o + q];
       cubeMean(cur, o, m3);
       meanL[c] = lum(m3[0], m3[1], m3[2]);
     }
-  };
-  for (let p = 0; p < probes; p += 8192) { addRange(p, Math.min(probes, p + 8192)); yield; }
-  for (let b = 1; b < bounces; b++) {
-    yield 'gather.bounce';
-    [cur, prev] = [prev, cur]; // (meanL is the swapped-in bounce's)
-    for (let p = 0; p < probes; p += CHUNK * 8) { bounceRange(p, Math.min(probes, p + CHUNK * 8)); yield; }
-    for (let p = 0; p < probes; p += 8192) { addRange(p, Math.min(probes, p + 8192)); yield; }
   }
+  /** The bounce just added becomes the bounce before (meanL is then that bounce's). */
+  swap(): void { const c = this.cur; this.cur = this.prev; this.prev = c; }
+  /** The packed rows of gathering voxels [p0, p1) (a share's result: GatherKernel with `base` = p0) into `cur`, each at its voxel. */
+  place(rows: Float32Array, p0: number, p1: number): void {
+    const P = this.plan.P, cur = this.cur;
+    for (let p = p0, s = 0; p < p1; p++, s += IND_STRIDE) { const o = P[p] * IND_STRIDE; for (let q = 0; q < IND_STRIDE; q++) cur[o + q] = rows[s + q]; }
+  }
+}
 
-  // --- smoothing: a wall-respecting [1 2 1] along x then z, per slot and layer. On the lattice (stride 2) it runs over the gathering
-  // cells two apart (which also merges the interleaved ray sets), and the cells between are then filled from them. -------------------
-  yield 'gather.smooth';
-  const tmp = prev; // (free now)
-  const smoothAxis = (src: Float32Array, dst: Float32Array, s: number, d: number, lattice: boolean, i0: number, i1: number): void => {
-    const {open, floorH} = geos[s], L = LS[s], ix = index[s], gt = gathers[s];
-    const alongX = d < W, h = d >> 1;
-    for (let i = i0; i < i1; i++) {
-      if (!open[i] || (lattice && gt[i] !== 1)) {
-        // (a cell that gathers on its own keeps what it gathered)
-        if (lattice && open[i] && gt[i] === 2) for (let k = 0; k < L; k++) { const o = ix[i * L + k] * IND_STRIDE; for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = src[o + q]; }
-        continue;
-      }
-      const cx = i % W, f = floorH[i];
-      const a = i - d, b = i + d;
-      let okA = a >= 0 && (!alongX || cx - d >= 0) && open[a] > 0 && Math.abs(floorH[a] - f) < STEP_MAX;
-      let okB = b < n && (!alongX || cx + d < W) && open[b] > 0 && Math.abs(floorH[b] - f) < STEP_MAX;
-      if (lattice) {
-        okA = okA && gt[a] === 1 && open[i - h] > 0 && Math.abs(floorH[i - h] - f) < STEP_MAX;
-        okB = okB && gt[b] === 1 && open[i + h] > 0 && Math.abs(floorH[i + h] - f) < STEP_MAX;
-      }
-      for (let k = 0; k < L; k++) {
-        const o = ix[i * L + k] * IND_STRIDE;
-        if (okA && okB) { const oa = ix[a * L + k] * IND_STRIDE, ob = ix[b * L + k] * IND_STRIDE; for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = (2 * src[o + q] + src[oa + q] + src[ob + q]) * 0.25; }
-        else if (okA || okB) { const oa = ix[(okA ? a : b) * L + k] * IND_STRIDE; for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = (2 * src[o + q] + src[oa + q]) * (1 / 3); }
-        else for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = src[o + q];
-      }
+function smoothAxis(plan: GatherPlan, src: Float32Array, dst: Float32Array, s: number, d: number, lattice: boolean, i0: number, i1: number): void {
+  const {W, n} = plan, {open, floorH} = plan.geos[s], L = plan.layers[s], ix = plan.index[s], gt = plan.gathers[s];
+  const alongX = d < W, h = d >> 1;
+  for (let i = i0; i < i1; i++) {
+    if (!open[i] || (lattice && gt[i] !== 1)) {
+      // (a cell that gathers on its own keeps what it gathered)
+      if (lattice && open[i] && gt[i] === 2) for (let k = 0; k < L; k++) { const o = ix[i * L + k] * IND_STRIDE; for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = src[o + q]; }
+      continue;
     }
-  };
-  const fill = (buf: Float32Array, s: number, i0: number, i1: number): void => {
-    const ff = fillFrom[s];
-    if (!ff) return;
-    const {open} = geos[s], L = LS[s], ix = index[s], gt = gathers[s];
-    for (let i = i0; i < i1; i++) {
-      if (!open[i] || gt[i]) continue;
-      const f0 = ff[i * 4], f1 = ff[i * 4 + 1], f2 = ff[i * 4 + 2], f3 = ff[i * 4 + 3];
-      for (let k = 0; k < L; k++) {
-        const o = ix[i * L + k] * IND_STRIDE, o0 = ix[f0 * L + k] * IND_STRIDE;
-        if (f1 < 0) { for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = buf[o0 + q]; continue; }
-        const o1 = ix[f1 * L + k] * IND_STRIDE;
-        if (f2 < 0) { for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = (buf[o0 + q] + buf[o1 + q]) * 0.5; continue; }
-        const o2 = ix[f2 * L + k] * IND_STRIDE;
-        if (f3 < 0) { for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = (buf[o0 + q] + buf[o1 + q] + buf[o2 + q]) * (1 / 3); continue; }
-        const o3 = ix[f3 * L + k] * IND_STRIDE;
-        for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = (buf[o0 + q] + buf[o1 + q] + buf[o2 + q] + buf[o3 + q]) * 0.25;
-      }
+    const cx = i % W, f = floorH[i];
+    const a = i - d, b = i + d;
+    let okA = a >= 0 && (!alongX || cx - d >= 0) && open[a] > 0 && Math.abs(floorH[a] - f) < STEP_MAX;
+    let okB = b < n && (!alongX || cx + d < W) && open[b] > 0 && Math.abs(floorH[b] - f) < STEP_MAX;
+    if (lattice) {
+      okA = okA && gt[a] === 1 && open[i - h] > 0 && Math.abs(floorH[i - h] - f) < STEP_MAX;
+      okB = okB && gt[b] === 1 && open[i + h] > 0 && Math.abs(floorH[i + h] - f) < STEP_MAX;
     }
-  };
+    for (let k = 0; k < L; k++) {
+      const o = ix[i * L + k] * IND_STRIDE;
+      if (okA && okB) { const oa = ix[a * L + k] * IND_STRIDE, ob = ix[b * L + k] * IND_STRIDE; for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = (2 * src[o + q] + src[oa + q] + src[ob + q]) * 0.25; }
+      else if (okA || okB) { const oa = ix[(okA ? a : b) * L + k] * IND_STRIDE; for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = (2 * src[o + q] + src[oa + q]) * (1 / 3); }
+      else for (let q = 0; q < IND_STRIDE; q++) dst[o + q] = src[o + q];
+    }
+  }
+}
+
+function fillLattice(plan: GatherPlan, buf: Float32Array, s: number, i0: number, i1: number): void {
+  const ff = plan.fillFrom[s];
+  if (!ff) return;
+  const {open} = plan.geos[s], L = plan.layers[s], ix = plan.index[s], gt = plan.gathers[s];
+  for (let i = i0; i < i1; i++) {
+    if (!open[i] || gt[i]) continue;
+    const f0 = ff[i * 4], f1 = ff[i * 4 + 1], f2 = ff[i * 4 + 2], f3 = ff[i * 4 + 3];
+    for (let k = 0; k < L; k++) {
+      const o = ix[i * L + k] * IND_STRIDE, o0 = ix[f0 * L + k] * IND_STRIDE;
+      if (f1 < 0) { for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = buf[o0 + q]; continue; }
+      const o1 = ix[f1 * L + k] * IND_STRIDE;
+      if (f2 < 0) { for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = (buf[o0 + q] + buf[o1 + q]) * 0.5; continue; }
+      const o2 = ix[f2 * L + k] * IND_STRIDE;
+      if (f3 < 0) { for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = (buf[o0 + q] + buf[o1 + q] + buf[o2 + q]) * (1 / 3); continue; }
+      const o3 = ix[f3 * L + k] * IND_STRIDE;
+      for (let q = 0; q < IND_STRIDE; q++) buf[o + q] = (buf[o0 + q] + buf[o1 + q] + buf[o2 + q] + buf[o3 + q]) * 0.25;
+    }
+  }
+}
+
+/**
+ * The smoothing of the summed rows `tot` (`tmp`: scratch of the same size), as build steps: a wall-respecting [1 2 1] along x then
+ * z, per slot and layer. On the lattice (stride 2) it runs over the gathering cells two apart (which also merges the interleaved
+ * ray sets), and the cells between are then filled from them.
+ */
+export function* smoothSteps(plan: GatherPlan, tot: Float32Array, tmp: Float32Array): BuildSteps<void> {
+  const {W, n, S, stride} = plan;
   const ROWS = 32 * W;
   if (stride === 2) {
     for (let s = 0; s < S; s++) {
-      for (let i = 0; i < n; i += ROWS) smoothAxis(tot, tmp, s, 2, true, i, Math.min(n, i + ROWS));
+      for (let i = 0; i < n; i += ROWS) smoothAxis(plan, tot, tmp, s, 2, true, i, Math.min(n, i + ROWS));
       yield;
-      for (let i = 0; i < n; i += ROWS) smoothAxis(tmp, tot, s, 2 * W, true, i, Math.min(n, i + ROWS));
+      for (let i = 0; i < n; i += ROWS) smoothAxis(plan, tmp, tot, s, 2 * W, true, i, Math.min(n, i + ROWS));
       yield;
-      for (let i = 0; i < n; i += ROWS) fill(tot, s, i, Math.min(n, i + ROWS));
+      for (let i = 0; i < n; i += ROWS) fillLattice(plan, tot, s, i, Math.min(n, i + ROWS));
       yield;
     }
   }
   for (let pass = stride === 2 ? 1 : 0; pass < 2; pass++) {
     for (let s = 0; s < S; s++) {
-      for (let i = 0; i < n; i += ROWS) smoothAxis(tot, tmp, s, 1, false, i, Math.min(n, i + ROWS));
+      for (let i = 0; i < n; i += ROWS) smoothAxis(plan, tot, tmp, s, 1, false, i, Math.min(n, i + ROWS));
       yield;
-      for (let i = 0; i < n; i += ROWS) smoothAxis(tmp, tot, s, W, false, i, Math.min(n, i + ROWS));
+      for (let i = 0; i < n; i += ROWS) smoothAxis(plan, tmp, tot, s, W, false, i, Math.min(n, i + ROWS));
       yield;
     }
   }
-  // --- the rows as the cache holds them: 16-bit, square-root spaced up to ROW_MAX (rowBits / rowValue), so the row read back from
-  // the cache is the row returned here, bit for bit ---------------------------------------------------------------------------------
+}
+
+const M3: [number, number, number] = [0, 0, 0];
+/**
+ * The rows [c0, c1) of `tot` as the cache holds them: 16-bit, square-root spaced up to ROW_MAX (rowBits / rowValue), so the row read
+ * back from the cache is the row returned here, bit for bit. Returns `mean` plus the luminance of each row's mean, added in row order
+ * (the running sum of the gather's statistics: one thread adds it up, in order).
+ */
+export function roundRows(tot: Float32Array, c0: number, c1: number, gain: number, mean: number): number {
+  for (let v = c0; v < c1; v++) {
+    const o = v * IND_STRIDE;
+    for (let q = 0; q < IND_STRIDE; q++) tot[o + q] = rowValue(rowBits(tot[o + q] * gain));
+    cubeMean(tot, o, M3);
+    mean += lum(M3[0], M3[1], M3[2]);
+  }
+  return mean;
+}
+
+/**
+ * The gather as build steps (core/pacedBuild.ts): the journey's paced build draws frames between them. The result is the same
+ * whatever the slicing (nothing reads a clock but the statistics) — and the same as the bake's workers give
+ * (world/lightBakeTasks.ts runs these parts over shares of the gathering voxels).
+ */
+export function* gatherIndirectSteps(ctx: IndirectContext, opt: GatherOptions): BuildSteps<IndirectLight> {
+  const t0 = performance.now();
+  const scene = opt.scene ?? new BandScene(ctx.W, ctx.H, ctx.geos);
+  yield 'gather.index';
+  const plan = yield* gatherPlanSteps(ctx, opt.rays, opt.stride);
+  const {count, probes, N} = plan;
+  const rows = new GatherRows(plan);
+  yield;
+  const surf = gatherSurfaces(plan, ctx, opt);
+  yield;
+  for (let c = 0; c < count; c += 16384) { surf.range(c, Math.min(count, c + 16384)); yield; }
+  const kernel = gatherKernel(plan, scene, opt.reach, surf.rad, surf.va, 0, probes);
+  yield;
+
+  yield 'gather.trace';
+  const CHUNK = gatherChunk(N);
+  for (let p = 0; p < probes; p += CHUNK) { kernel.trace(p, Math.min(probes, p + CHUNK), rows.cur, -1); yield; }
+  const traceMs = performance.now() - t0;
+
+  const bounces = Math.max(1, Math.round(opt.bounces));
+  for (let p = 0; p < probes; p += 8192) { rows.add(p, Math.min(probes, p + 8192)); yield; }
+  for (let b = 1; b < bounces; b++) {
+    yield 'gather.bounce';
+    rows.swap(); // (meanL is the swapped-in bounce's)
+    for (let p = 0; p < probes; p += CHUNK * 8) { kernel.bounce(p, Math.min(probes, p + CHUNK * 8), rows.prev, rows.meanL, rows.cur, -1); yield; }
+    for (let p = 0; p < probes; p += 8192) { rows.add(p, Math.min(probes, p + 8192)); yield; }
+  }
+
+  yield 'gather.smooth';
+  yield* smoothSteps(plan, rows.tot, rows.prev); // (`prev` is free now: the scratch)
   let mean = 0;
-  const gain = opt.gain;
-  const roundRange = (c0: number, c1: number): void => {
-    for (let v = c0; v < c1; v++) {
-      const o = v * IND_STRIDE;
-      for (let q = 0; q < IND_STRIDE; q++) tot[o + q] = rowValue(rowBits(tot[o + q] * gain));
-      cubeMean(tot, o, m3);
-      mean += lum(m3[0], m3[1], m3[2]);
-    }
-  };
-  for (let c = 0; c < count; c += 8192) { roundRange(c, Math.min(count, c + 8192)); yield; }
-  return {index, data: tot, stats: {voxels: count, probes, rays: probes * N, hits, bounces, ms: performance.now() - t0, traceMs, mean: count ? mean / count : 0}};
+  for (let c = 0; c < count; c += 8192) { mean = roundRows(rows.tot, c, Math.min(count, c + 8192), opt.gain, mean); yield; }
+  return {index: plan.index, data: rows.tot, stats: {voxels: count, probes, rays: probes * N, hits: kernel.hits(), bounces, ms: performance.now() - t0, traceMs, mean: count ? mean / count : 0}};
 }

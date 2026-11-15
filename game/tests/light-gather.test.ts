@@ -12,7 +12,9 @@
 //   its cube holds what that light scatters, the same on all six faces; nothing at all in a room no light reaches);
 // - ENERGY: every further bounce adds light and adds less than the one before (surfaces send back less than they get: a closed
 //   pale room converges); `gain` scales the stored light linearly, `saturation` moves the chroma of the surface colours and never
-//   the amount; neither is pinned here by value (GATHER_GAIN / GATHER_SATURATION are tuned by the lighting's look);
+//   the amount, `response` (task studio-gi-mood-bounce-loading-20261115-081523-01) is how reflective the bounce takes a finish to be:
+//   dark finishes lifted, pale ones levelling off under a ceiling below 1; none is pinned here by value (GATHER_GAIN /
+//   GATHER_SATURATION / GATHER_RESPONSE are tuned by the lighting's look);
 // - the rows are 16-bit fixed points (rowBits / rowValue): what a fresh gather returns is exactly what the derived cache gives back;
 // - the field's one direction stays the direct light's, byte for byte (no bounce-steered veins on ceilings);
 // - the three flicker circuits keep their share of the bounce (a circuit that is off takes its bounce with it);
@@ -28,7 +30,7 @@ import {
   type BakedField, type FieldSource,
 } from '../src/world/lightField';
 import {
-  GATHER_GAIN, GATHER_REACH, GATHER_SATURATION, IND_CIRCUITS, IND_STRIDE, ROW_MAX, cubeMean, gatherIndirectSteps, indirectIndex, rowBits, rowValue,
+  GATHER_GAIN, GATHER_REACH, GATHER_RESPONSE, GATHER_SATURATION, GATHER_TUNING, IND_CIRCUITS, IND_STRIDE, ROW_MAX, bounceReflectance, cubeMean, gatherIndirectSteps, indirectIndex, rowBits, rowValue,
   type GatherOptions, type IndirectContext, type IndirectLight,
 } from '../src/world/lightFieldGather';
 import {BandScene, HIT_CEIL, HIT_FLOOR, HIT_WALL, sphereDirections} from '../src/world/lightScene';
@@ -55,14 +57,17 @@ function box(w: number, h: number, ceil = 4.4): Grid {
 const light = (x: number, z: number, o: Partial<FieldSource['lights'][number]> = {}) => ({x, y: 4.35, z, rot: 0, area: 0, broken: false, flicker: false, warm: false, power: 1, dying: false, ...o});
 const wall = (g: Grid, x: number, y0 = 0, y1 = g.h) => { for (let y = y0; y < y1; y++) g.set(x, y, SOLID); };
 
-/** The gather's options that are not a tier's. Default: the game's, by name (both are tuned by the lighting's look). */
-interface Look { gain?: number; saturation?: number; bounces?: number }
+/** The gather's options that are not a tier's. Default: the game's, by name (all are tuned by the lighting's look). `response` null: the finishes as drawn. */
+interface Look { gain?: number; saturation?: number; bounces?: number; response?: {lift: number; ceiling: number} | null }
 /** The bounce as the surfaces give it: nothing stylised. */
-const PHYSICAL: Look = {gain: 1, saturation: 1};
-const gatherOptions = (tier: GiTier, albedo: SurfaceAlbedo, look: Look = {}): GatherOptions => ({
-  rays: tier.rays, bounces: look.bounces ?? tier.bounces, stride: tier.stride, reach: GATHER_REACH,
-  gain: look.gain ?? GATHER_GAIN, saturation: look.saturation ?? GATHER_SATURATION, albedo,
-});
+const PHYSICAL: Look = {gain: 1, saturation: 1, response: null};
+const gatherOptions = (tier: GiTier, albedo: SurfaceAlbedo, look: Look = {}): GatherOptions => {
+  const response = look.response === undefined ? GATHER_RESPONSE : look.response;
+  return {
+    rays: tier.rays, bounces: look.bounces ?? tier.bounces, stride: tier.stride, reach: GATHER_REACH,
+    gain: look.gain ?? GATHER_GAIN, saturation: look.saturation ?? GATHER_SATURATION, ...(response ? {response} : {}), albedo,
+  };
+};
 interface Enhanced { field: BakedField; ind: IndirectLight; ctx: IndirectContext; albedo: SurfaceAlbedo }
 /** The enhanced bake of a source: the gather of `tier` over neutral (or painted) surface colours. */
 function enhanced(src: FieldSource, tier: GiTier = GI_TIERS.standard, paint?: (a: SurfaceAlbedo, ctx: IndirectContext) => void, drawn: DrawnSurfaces | null = null, look: Look = {}): Enhanced {
@@ -428,7 +433,7 @@ describe('energy', () => {
   });
 
   it('`gain` scales the stored light linearly; the game\'s own gain is one such scale of the physical gather', () => {
-    const at = (gain: number) => enhanced(room(), GI_TIERS.standard, allAlbedo(0.5), null, {gain, saturation: 1});
+    const at = (gain: number) => enhanced(room(), GI_TIERS.standard, allAlbedo(0.5), null, {gain, saturation: 1, response: null});
     const one = at(1);
     for (const g of [2, 0.5, GATHER_GAIN]) {
       const e = at(g), a = one.ind.data, b = e.ind.data;
@@ -453,13 +458,13 @@ describe('energy', () => {
   it('`saturation` 1 leaves a neutral room neutral; more of it deepens a coloured bounce without changing how much light it is', () => {
     const white = {tint: [1, 1, 1] as [number, number, number]};
     // a grey room under a white light: every face of every voxel is grey, at any saturation, and the rows do not depend on it
-    const grey = (saturation: number | undefined) => enhanced(room(white), GI_TIERS.standard, allAlbedo(0.5), null, {gain: 1, saturation});
+    const grey = (saturation: number | undefined) => enhanced(room(white), GI_TIERS.standard, allAlbedo(0.5), null, {gain: 1, saturation, response: null});
     const g1 = grey(1), d = g1.ind.data;
     let tinted = 0;
     for (let o = 0; o < d.length; o += IND_STRIDE) for (let f = 0; f < GI_FACES; f++) { const r = d[o + f * 3], g = d[o + f * 3 + 1], b = d[o + f * 3 + 2]; if (Math.abs(r - g) > rowHalfStep(g) * 2 || Math.abs(b - g) > rowHalfStep(g) * 2) tinted++; }
     expect(tinted).toBe(0);
     expect(g1.ind.stats.mean).toBeGreaterThan(0);
-    const dflt = enhanced(room(white), GI_TIERS.standard, allAlbedo(0.5), null, {gain: 1, saturation: undefined});
+    const dflt = enhanced(room(white), GI_TIERS.standard, allAlbedo(0.5), null, {gain: 1, saturation: undefined, response: null});
     expect(same(dflt.ind.data, d)).toBe(true); // (the option's default is 1)
     for (const s of [GATHER_SATURATION, 2]) {
       const gs = grey(s).ind.data;
@@ -468,7 +473,7 @@ describe('energy', () => {
       expect(off).toBe(0);
     }
     // a red floor, one bounce: more saturation = a redder bounce of (nearly) the same luminance
-    const redFloor = (saturation: number) => enhanced(room(white), GI_TIERS.high, a => { allAlbedo(0)(a); fillAlbedo(a, ALB_FLOOR, [0.5, 0.2, 0.2]); }, null, {gain: 1, saturation});
+    const redFloor = (saturation: number) => enhanced(room(white), GI_TIERS.high, a => { allAlbedo(0)(a); fillAlbedo(a, ALB_FLOOR, [0.5, 0.2, 0.2]); }, null, {gain: 1, saturation, response: null});
     const r1 = redFloor(1), r2 = redFloor(1.5);
     const f1 = faceAt(r1, 1, 7.5, 4.3, 6), f2 = faceAt(r2, 1, 7.5, 4.3, 6);
     console.log(`red floor's bounce on the ceiling: saturation 1 rgb ${f1.map(v => v.toFixed(4))}, 1.5 rgb ${f2.map(v => v.toFixed(4))}`);
@@ -477,6 +482,68 @@ describe('energy', () => {
     expect(lum(f2) / lum(f1)).toBeLessThan(1.03);
     expect(r2.ind.stats.mean / r1.ind.stats.mean).toBeGreaterThan(0.97);
     expect(r2.ind.stats.mean / r1.ind.stats.mean).toBeLessThan(1.03);
+  });
+
+  // Task studio-gi-mood-bounce-loading-20261115-081523-01: the bounce's strength is a RESPONSE of the finish, not one factor on the
+  // whole gather (which let a white-tiled room send back more light than fell on it and lifted every ceiling over a lit floor).
+  it('the finish response: a dark finish bounces up to `lift` times what it strictly would, a pale one levels off under `ceiling` — no finish returns more light than it gets', () => {
+    const {lift, ceiling} = GATHER_RESPONSE;
+    // the curve: black stays black, a paler finish never bounces less, nothing reaches the ceiling, nothing is lifted by more than the lift
+    expect(bounceReflectance(0, lift, ceiling)).toBe(0);
+    let prev = 0;
+    for (let k = 1; k <= 100; k++) {
+      const rho = k / 100, v = bounceReflectance(rho, lift, ceiling);
+      expect(v).toBeGreaterThan(prev);
+      expect(v).toBeLessThan(ceiling);
+      expect(v).toBeLessThanOrEqual(lift * rho);
+      prev = v;
+    }
+    expect(bounceReflectance(0.02, lift, ceiling) / 0.02).toBeGreaterThan(lift * 0.95); // (a dark finish: nearly the whole lift)
+    // the game's numbers, by what the look needs of them (not by value): the bounce is shown stronger than the finishes strictly give
+    // (the visible bounce is kept), no finish returns more than it receives, and nothing scales the whole gather past that
+    expect(lift).toBeGreaterThan(1);
+    expect(ceiling).toBeLessThan(1);
+    expect(GATHER_GAIN * ceiling).toBeLessThan(1);
+    expect(GATHER_TUNING).toEqual({gain: GATHER_GAIN, saturation: GATHER_SATURATION, lift, ceiling});
+    console.log(`finish response (lift ${lift}, ceiling ${ceiling}): ${[0.05, 0.15, 0.26, 0.4, 0.6, 0.8].map(r => `${r} -> ${bounceReflectance(r, lift, ceiling).toFixed(3)}`).join(', ')}`);
+
+    // in a gather: a grey room with a response is the room of the response's reflectance gathered as drawn (the 8-bit albedo's steps apart)
+    const R = {lift: 2, ceiling: 0.7};
+    const stored = (rho: number) => (Math.round(Math.sqrt(rho) * 255) / 255) ** 2;
+    const ratios: string[] = [];
+    for (const rho of [0.15, 0.6]) {
+      const withR = enhanced(room(), GI_TIERS.standard, allAlbedo(rho), null, {gain: 1, saturation: 1, response: R});
+      const mapped = enhanced(room(), GI_TIERS.standard, allAlbedo(bounceReflectance(stored(rho), R.lift, R.ceiling)), null, PHYSICAL);
+      const asDrawn = enhanced(room(), GI_TIERS.standard, allAlbedo(rho), null, PHYSICAL);
+      expect(withR.ind.stats.mean / mapped.ind.stats.mean).toBeGreaterThan(0.94);
+      expect(withR.ind.stats.mean / mapped.ind.stats.mean).toBeLessThan(1.06);
+      ratios.push(`${rho}: x${(withR.ind.stats.mean / asDrawn.ind.stats.mean).toFixed(2)} of the gather as drawn`);
+      const one = bounceReflectance(stored(rho), R.lift, R.ceiling) / stored(rho);
+      // the dark room gains at least its finish's own lift (its later bounces compound it); the pale room gains nothing
+      if (one > 1) expect(withR.ind.stats.mean / asDrawn.ind.stats.mean).toBeGreaterThan(one * 0.97);
+      else expect(withR.ind.stats.mean / asDrawn.ind.stats.mean).toBeLessThan(1.0001);
+    }
+    console.log(`response ${JSON.stringify(R)} in a grey room — ${ratios.join('; ')}`);
+
+    // the hue of a finish is kept: a red floor's bounce is as red with the response as without (only its amount changes)
+    const white = {tint: [1, 1, 1] as [number, number, number]};
+    const redFloor = (response: Look['response']) => enhanced(room(white), GI_TIERS.high, a => { allAlbedo(0)(a); fillAlbedo(a, ALB_FLOOR, [0.5, 0.2, 0.2]); }, null, {gain: 1, saturation: 1, response});
+    const f0 = faceAt(redFloor(null), 1, 7.5, 4.3, 6), f1 = faceAt(redFloor(R), 1, 7.5, 4.3, 6);
+    expect(f1[0] / f1[1] / (f0[0] / f0[1])).toBeGreaterThan(0.98);
+    expect(f1[0] / f1[1] / (f0[0] / f0[1])).toBeLessThan(1.02);
+    const l = lum([stored(0.5), stored(0.2), stored(0.2)]);
+    expect(lum(f1) / lum(f0)).toBeGreaterThan(bounceReflectance(l, R.lift, R.ceiling) / l * 0.97);
+    expect(lum(f1) / lum(f0)).toBeLessThan(bounceReflectance(l, R.lift, R.ceiling) / l * 1.03);
+
+    // the game's own look in a closed WHITE room: every further bounce adds less than `ceiling` x the one before (it converges —
+    // under one factor of 2.5 on everything, a room of finishes paler than 0.4 was shown returning more than it received)
+    const N = 5, means: number[] = [];
+    for (let b = 1; b <= N; b++) means.push(enhanced(room(), GI_TIERS.standard, allAlbedo(0.9), null, {bounces: b}).ind.stats.mean);
+    const adds = means.slice(1).map((m, i) => m - means[i]);
+    console.log(`white room, the game's look, bounces 1..${N}: mean ${means.map(m => m.toFixed(4)).join(', ')} (each adds x${adds.slice(1).map((a, i) => (a / adds[i]).toFixed(3)).join(', x')} of the one before)`);
+    expect(adds[0]).toBeLessThan(means[0] * ceiling * 1.05);
+    for (let i = 1; i < adds.length; i++) { expect(adds[i]).toBeGreaterThan(0); expect(adds[i]).toBeLessThan(adds[i - 1] * ceiling * 1.05); }
+    expect(means[N - 1]).toBeLessThan(means[0] / (1 - ceiling));
   });
 
   it('a generated station: the same slots with the cube after them, and the gathered light on top of the direct light — nowhere a loss', () => {

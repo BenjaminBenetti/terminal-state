@@ -5,7 +5,8 @@
 //
 // What is cold without it (three r186 WebGPURenderer):
 //  - every new material / geometry-layout combination builds its TSL node graph in JS on first draw, and every
-//    InstancedMesh (and instanced Sprite) gets its OWN node build (the object uuid is part of three's cache key);
+//    InstancedMesh (and instanced Sprite) gets its OWN node build (the object uuid is part of three's cache key) — unless the
+//    pools of a material share theirs (render/sharedInstancing.ts: then one build per material variant, like plain meshes);
 //  - the backend then creates the GPU pipeline synchronously (WebGPU createRenderPipeline / a WebGL2 program link);
 //  - the flashlight shadow pass compiles a shadow variant per caster the first time the lit torch sees it;
 //  - textures upload (and mip) on first use; the fog march / temporal / composite, the output transform and the
@@ -40,6 +41,12 @@
 // reported as such, never as ready. Nothing here touches gameplay: no update tick, no AI / physics / loot / battery /
 // flare timers, no sounds; the game loop does not render while it runs (Game.warming).
 //
+// Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane LOAD): three yields between a compile's build stages and objects with
+// scheduler.yield() where the browser has it, and with ONE animation frame per yield elsewhere (~11 000 per station). Stages 1 and 2
+// hold the game's frames anyway, so where scheduler.yield is missing each compileAsync call here runs with a task-boundary yield
+// installed (render/compileYield.ts; restored in a finally — never in play or on the journey). The result's `compile` says where
+// stage 1's time went: node builds, waits for asynchronously created pipelines, yields.
+//
 // On a software rasterizer (llvmpipe & co. JIT every program into system RAM: the iteration-13 QA saw Firefox pass
 // 6 GiB walking into new views) only the camera's neighbourhood is warmed ('view'); hardware GPUs get everything
 // ('full'). `?warmup=off|view|full` overrides.
@@ -47,6 +54,8 @@
 import * as THREE from 'three';
 import {CULL_LAYER} from '../world/levelCulling';
 import {compileAtDepth} from './renderContextDepth';
+import {emptyCompileSplit, hasSchedulerYield, installTaskYield, observeCompile, type CompileSplit} from './compileYield';
+import {instancingSignature, sharedInstancing} from './sharedInstancing';
 
 export type WarmupMode = 'full' | 'view' | 'off';
 export type WarmupStatus = 'complete' | 'partial' | 'cancelled' | 'failed' | 'skipped';
@@ -157,16 +166,20 @@ export function geometryKey(g: THREE.BufferGeometry | undefined): string {
 
 /**
  * Cache-key groups an object's draws fall into: a SUPERSET of three's key (material identity instead of its property
- * hash, so two equal materials are two groups — the second compiles as a cache hit).
+ * hash, so two equal materials are two groups — the second compiles as a cache hit). `shareInstanced`: group the pools of an
+ * instanced material as three now builds them (render/sharedInstancing.ts) instead of one group per InstancedMesh; default: off.
  */
-export function warmKeys(o: Renderable): string[] {
+export function warmKeys(o: Renderable, shareInstanced = false): string[] {
   const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[];
   const mats = (Array.isArray(m) ? m : [m]).filter(x => x && x.visible !== false);
   const kind = (o as THREE.SkinnedMesh).isSkinnedMesh ? 'skin' : (o as THREE.InstancedMesh).isInstancedMesh ? 'inst'
     : (o as THREE.Sprite).isSprite ? 'sprite' : (o as THREE.Points).isPoints ? 'points' : (o as THREE.LineSegments).isLineSegments ? 'segs'
       : (o as THREE.Line).isLine ? 'line' : 'mesh';
-  // three keys every InstancedMesh (and anything drawn with count > 1) by its own uuid
-  const own = (o as THREE.InstancedMesh).isInstancedMesh || ((o as {count?: number}).count ?? 1) > 1 ? o.uuid : '';
+  // three keys every InstancedMesh (and anything drawn with count > 1) by its own uuid — unless the pools of a material share their
+  // builds (render/sharedInstancing.ts; task studio-gi-mood-bounce-loading-20261115-081523-01, lane LOAD): then by what that shared key
+  // holds in the uuid's place, so ONE pool represents a material's pools and the others are drawn once like every covered renderable
+  const shared = shareInstanced ? instancingSignature(o) : null;
+  const own = shared ?? ((o as THREE.InstancedMesh).isInstancedMesh || ((o as {count?: number}).count ?? 1) > 1 ? o.uuid : '');
   const bones = (o as THREE.SkinnedMesh).skeleton?.bones.length ?? 0;
   const g = geometryKey(o.geometry as THREE.BufferGeometry);
   return mats.map(x => `${kind}|${x.uuid}|${g}|${own}|${bones}|${o.receiveShadow ? 1 : 0}|${o.castShadow ? 1 : 0}`);
@@ -199,6 +212,13 @@ export interface PlanOptions {
   near?: {center: THREE.Vector3; radius: number};
   /** Off-layer objects hidden by the level / fog culler count as candidates (default: 'full' mode only). */
   includeCulled?: boolean;
+  /**
+   * (lane LOAD) One representative for the pools of an instanced material whose builds are shared (render/sharedInstancing.ts); the
+   * other pools become `others`. Default: 'full' mode while shared builds are on — there every `other` is drawn once before the
+   * warm-up ends (its own render objects, pipeline and instance buffers). 'view' keeps one item per pool: nothing draws its `others`,
+   * and a pool's first sight would create its render object in play.
+   */
+  shareInstanced?: boolean;
 }
 
 const CULLED_MASK = new THREE.Layers();
@@ -228,6 +248,7 @@ function itemDistance(o: Renderable, eye: THREE.Vector3): number {
 export function planWarmup(root: THREE.Object3D, opts: PlanOptions): WarmupPlan {
   const pools = new Set(opts.pools ?? []);
   const includeCulled = opts.includeCulled ?? opts.mode === 'full';
+  const shareInstanced = opts.shareInstanced ?? (opts.mode === 'full' && sharedInstancing());
   const seen = new Set<string>();
   const items: WarmItem[] = [], renderables: Renderable[] = [], others: WarmItem[] = [];
   let skipped = 0;
@@ -248,7 +269,7 @@ export function planWarmup(root: THREE.Object3D, opts: PlanOptions): WarmupPlan 
         const s = worldSphere(o);
         ok = !!s && s.center.distanceTo(opts.near.center) - s.radius <= opts.near.radius;
       }
-      const fresh = ok ? warmKeys(o).filter(k => !seen.has(k)) : [];
+      const fresh = ok ? warmKeys(o, shareInstanced).filter(k => !seen.has(k)) : [];
       if (fresh.length) {
         for (const k of fresh) seen.add(k);
         items.push({object: o, flips: here ?? [], caster: o.castShadow});
@@ -334,6 +355,12 @@ export interface WarmupResult {
   budgetMs: number;
   cutStage: WarmupStage | null;
   stages: Record<WarmupStage, WarmupStageReport>;
+  /**
+   * Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane LOAD): where the MATERIALS stage's time went (render/compileYield.ts
+   * CompileSplit) — node builds and their wall time, asynchronous pipeline requests and the time waited for them, how three yielded
+   * and (with the warm-up's own task yield) how many yields and how long they waited. Wall times of this page, not of the GPU.
+   */
+  compile: CompileSplit;
   passes: string[];
   pools: string[];
 }
@@ -349,6 +376,11 @@ export interface WarmupOptions {
   now?: () => number;
   /** Lets the page paint between hidden frames (rAF, or a short timeout in a background tab). */
   yieldFrame?: () => Promise<void>;
+  /**
+   * (lane LOAD) Where the browser has no scheduler.yield, run the compile calls with a task-boundary yield instead of three's
+   * one-animation-frame-per-yield fallback (render/compileYield.ts). Default true; false = three's own fallback (tests).
+   */
+  taskYield?: boolean;
 }
 
 // Task static-batching-warmup-20261105 (user: "You mentiona a 60 limit. Lets double that to 120s"): the MAXIMUM work budget — the warm-up
@@ -407,7 +439,7 @@ const emptyStages = (): Record<WarmupStage, WarmupStageReport> => ({
 
 export const skippedWarmup = (reason: string): WarmupResult => ({
   status: 'skipped', reason, mode: 'off', ms: 0, plan: {items: 0, groups: 0, renderables: 0, skipped: 0, flipped: 0, casters: 0, others: 0}, sceneDepth: 0,
-  budgetMs: 0, cutStage: null, stages: emptyStages(), passes: [], pools: [],
+  budgetMs: 0, cutStage: null, stages: emptyStages(), compile: emptyCompileSplit(), passes: [], pools: [],
 });
 
 const message = (e: unknown): string => String((e as Error)?.message ?? e).slice(0, 300);
@@ -439,7 +471,9 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
   const casterTier = (i: WarmItem) => (!i.flips.length && dist(i) <= TORCH_REACH ? 0 : i.flips.length ? 1 : 2);
   const casters = torch?.castShadow ? items.filter(i => i.caster).sort((a, b) => casterTier(a) - casterTier(b) || dist(a) - dist(b)) : [];
   // (lane RENDER-CPU) 'full': every other eligible renderable is drawn once in the hidden frames as well (its own render objects in the
-  // real scene / shadow pass contexts; node builds are cache hits by then) — a first view in play then creates nothing
+  // real scene / shadow pass contexts; node builds are cache hits by then) — a first view in play then creates nothing. One exception
+  // to "cache hits" (lane LOAD, measured): a pool of a two-pass material (drawsDoublePass) that shares its build with a representative
+  // is first met by a real draw here, which asks for the BackSide and the FrontSide key — two builds per such material, in these frames
   const rest = plan.mode === 'full' ? [...plan.others].sort((a, b) => dist(a) - dist(b)) : [];
   const compileChunks = chunks(items, opts.compileChunk ?? WARMUP_DEFAULTS.compileChunk);
   // Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): the representatives drawn in TWO passes (drawsDoublePass:
@@ -480,12 +514,24 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
     if (now() - t0 > budget) { status = 'partial'; cutStage = stageNow; reason = `time budget (${Math.round(budget / 1000)} s) reached in ${stageNow}`; return true; }
     return false;
   };
-  const compileIn = async (target: unknown, scene: THREE.Object3D, camera: THREE.Camera, onP: ((e: {loaded: number; total: number}) => void) | null, depth = 0) => {
+  // (lane LOAD) the materials stage's split; `split` is null for the passes stage (its handful of builds are not the station's)
+  const compile = emptyCompileSplit(hasSchedulerYield() ? 'scheduler' : 'frame');
+  const compileIn = async (target: unknown, scene: THREE.Object3D, camera: THREE.Camera, onP: ((e: {loaded: number; total: number}) => void) | null, depth = 0, split: CompileSplit | null = null) => {
     r.setRenderTarget(target);
     r.setMRT(null);
+    // frames are held for the whole warm-up: where the browser has no scheduler.yield, three's yields end at the next task for this
+    // call instead of the next animation frame (restored below, whatever happens)
+    const ty = opts.taskYield === false ? null : installTaskYield(now);
+    const stopObserving = split ? observeCompile(r, split, now) : null;
     try {
       await compileAtDepth(r, depth, () => r.compileAsync(scene, camera, null, onP));
     } finally {
+      stopObserving?.();
+      ty?.restore();
+      if (split && ty) {
+        split.yield = ty.mode;
+        if (ty.mode === 'task') { split.yields = (split.yields ?? 0) + ty.yields; split.yieldWaitMs = (split.yieldWaitMs ?? 0) + ty.waitMs; }
+      }
       r.setRenderTarget(prevTarget);
       r.setMRT(prevMRT);
     }
@@ -501,7 +547,7 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
         const k = e.total > 0 ? Math.floor(n * Math.min(1, e.loaded / e.total)) : 0;
         done = base + k;
         report('materials', base + k);
-      }, sceneDepth);
+      }, sceneDepth, compile);
       stages.materials.done = base + n;
       done = stages.materials.done;
       report('materials', stages.materials.done);
@@ -584,7 +630,7 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
     status, reason, mode: plan.mode, ms: now() - t0,
     plan: {items: plan.items.length, groups: plan.groups, renderables: plan.renderables.length, skipped: plan.skipped,
       flipped: plan.items.filter(i => i.flips.length).length, casters: casters.length, others: rest.length},
-    sceneDepth, budgetMs: budget, cutStage, stages, passes: names.passes, pools: names.pools,
+    sceneDepth, budgetMs: budget, cutStage, stages, compile, passes: names.passes, pools: names.pools,
   };
 }
 

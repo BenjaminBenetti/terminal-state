@@ -11,7 +11,7 @@ import {
   type BakedField, type FieldParams, type FieldSource,
 } from '../../src/world/lightField';
 import {
-  GATHER_GAIN, GATHER_REACH, GATHER_SATURATION, cubeMean, gatherIndirectSteps, indirectIndex, rowBits, rowValue, type IndirectContext, type IndirectLight,
+  GATHER_GAIN, GATHER_REACH, GATHER_RESPONSE, GATHER_SATURATION, cubeMean, gatherIndirectSteps, indirectIndex, rowBits, rowValue, type IndirectContext, type IndirectLight,
 } from '../../src/world/lightFieldGather';
 import type {GiTier} from '../../src/world/enhancedLighting';
 import {surfaceAlbedo} from '../../src/world/surfaceAlbedo';
@@ -95,13 +95,13 @@ export function patternRows(top = 1.5, seed = 7): RowMaker {
 }
 
 /**
- * The REAL gather as rows (world/lightFieldGather.ts, as the game runs it: `tier`, the game's own gain and saturation by name, the
+ * The REAL gather as rows (world/lightFieldGather.ts, as the game runs it: `tier`, the game's own gain, saturation and finish response by name, the
  * neutral finish colours): for tests that need a real station's light AND the exact values the encoder was given.
  */
 export const gatheredRows = (src: FieldSource, tier: GiTier): RowMaker => (_count, ctx) => {
   const levels = src.levels ?? [{id: 0, role: 'main' as const, grid: src.grid, baseY: 0}];
   const albedo = surfaceAlbedo(ctx.W, ctx.H, levels, ctx.geos, null);
-  return drainSync(gatherIndirectSteps(ctx, {rays: tier.rays, bounces: tier.bounces, stride: tier.stride, reach: GATHER_REACH, gain: GATHER_GAIN, saturation: GATHER_SATURATION, albedo})).data;
+  return drainSync(gatherIndirectSteps(ctx, {rays: tier.rays, bounces: tier.bounces, stride: tier.stride, reach: GATHER_REACH, gain: GATHER_GAIN, saturation: GATHER_SATURATION, response: GATHER_RESPONSE, albedo})).data;
 };
 
 /** The same row in every voxel. */

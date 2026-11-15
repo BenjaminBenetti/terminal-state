@@ -41,15 +41,31 @@ the light those surfaces send back, over three bounces.
 **The bounce is drawn stronger than the finishes strictly give, and that is a stated choice.** Measured on the base
 Subway (seed 93), the station's dark, grimy finishes (floors 0.21 to 0.26, concrete walls about 0.15) send back
 about a seventh of the light that falls on them: 0.11 to 0.16 against about 0.96 of direct light on a floor. That is
-the size of the baseline's fill, so a physically exact bounce reads like Off, which is what the player reported. The
-gather is therefore multiplied by `GATHER_GAIN` = 2.5 and the surface colours it sees get a little more chroma
-(`GATHER_SATURATION` = 1.25). This scales **the bounce alone**, with all of its occlusion, direction and colour: the
-direct light, the hemisphere light and every place without a lit surface nearby are untouched. It is not a flat
-brightness boost and adds no light of its own.
+the size of the baseline's fill, so a physically exact bounce reads like Off, which is what the player reported.
 
-Measured on Subway seed 93 (mean irradiance on the main level, baseline to enhanced): floors 0.96 to 1.15, ceilings
-0.43 to 0.75, walls 0.31 to 0.56. On the other levels (seed 93, same gain): ceilings 1.5x to 3.3x, walls 1.4x to
-2.5x, floors 1.1x to 1.35x; no value above the field's range anywhere (`BakedField.stats.cubeClipped` = 0).
+The first version multiplied the whole gather by 2.5, whatever the finish. A white-tiled room then sent back more
+light than fell on it and every ceiling over a lit floor was lifted to a flat mid grey: the player found parts of
+the world "too bright and less moody". The strength is now a **response of the finish** (`bounceReflectance`,
+`GATHER_RESPONSE`: lift 2.2, ceiling 0.7 in `world/lightFieldGather.ts`): the bounce takes a finish of reflectance
+`rho` to reflect `ceiling x (1 - exp(-lift x rho / ceiling))`.
+
+| finish as drawn | 0.05 | 0.15 (concrete) | 0.26 (floor) | 0.40 | 0.60 (white tile) | 0.80 |
+| --- | --- | --- | --- | --- | --- | --- |
+| what the bounce takes it for | 0.10 | 0.26 | 0.39 | 0.50 | 0.59 | 0.64 |
+
+A dark finish bounces up to 2.2 times what it strictly would, a pale one levels off, and none reaches 0.7: no room
+returns more light than it receives, however many bounces are followed. `GATHER_GAIN`, the scale of the whole
+gather, is 1, and the surface colours still get a little more chroma (`GATHER_SATURATION` = 1.25). The hue of a
+finish is kept. This changes **the bounce alone**, with all of its occlusion, direction and colour: the direct
+light, the hemisphere light and every place without a lit surface nearby are untouched. It is not a flat brightness
+change and adds no light of its own. Enhanced lighting Off is not touched by it at all.
+
+Measured on Subway seed 93 (mean irradiance on the main level, baseline to enhanced): floors 0.96 to 1.02, ceilings
+0.43 to 0.56, walls 0.32 to 0.40 (the first version: 1.14, 0.74, 0.55). On the other levels (seed 93): ceilings 1.2x
+to 1.8x, walls 1.1x to 1.4x, floors 1.0x to 1.07x of the baseline (the first version: ceilings 1.5x to 3.3x, walls
+1.3x to 2.4x, floors 1.07x to 1.33x); no value above the field's range anywhere (`BakedField.stats.cubeClipped` =
+0). The numbers are part of the derived cache's gather digest, so a station baked with the first version is baked
+again once.
 
 How the field stores it (`lightField.ts` `encodeRowEnhanced`, `world/lightFieldNode.ts`):
 
@@ -73,20 +89,52 @@ is open space to the gather. So nothing that can move, break or leave is frozen 
 Most of a base Subway station is dark and lit by the flashlight alone, so baked light changes nothing there. With
 full shading the beam also lights its surroundings (`world/flashBounce.ts`):
 
-- Each frame the beam's axis and a ring of five rays inside its cone are cast over the station's fixed architecture
-  on the CPU (about 8 microseconds). Where a ray lands stands a **virtual light**: a small emitter on the surface
-  with the surface's colour and the flux the game's own spot light puts there. The six lights carry equal shares of
-  the beam; their positions and colours are smoothed over about 70 ms.
-- The GPU adds their sum to the full field light's irradiance: arithmetic on 19 plain uniforms, no texture and no
-  uniform buffer of its own. A dark room is softly lit outside the beam; a red tile wall throws warm light on the
-  floor beside it.
+- **Thirty rays of equal flux.** Each frame the beam is cast on the CPU as 30 rays, each standing for a thirtieth of
+  the cone's flux, in six sectors of five (a cap round the axis and five wedges). The rays are spread so that
+  every strip across the beam holds its share of them: a pole or a wall's edge crossing the beam takes the rays one
+  at a time and never more than its share.
+- **What stops a ray** is the nearest of the station's fixed architecture, a **prop's box** (the boxes bullets
+  hit, read live each frame: a prop that is carried off, broken or melted stops nothing any more) and a living,
+  standing **character** (an upright cylinder; the nearest 32 within the light's 30 m). **Glass passes**: shopfront
+  glazing, the hockey store's boards above 1.1 m, the player train's windows (and the whole car while it moves) and
+  the Bunker ward's glazed cubicles (`world/flashOccluders.ts`). So a locker, a column or an enemy close up takes
+  the bounce itself; none of it lands on the wall behind.
+- **A light stands on a plane.** Inside a sector the hits are grouped by plane. The sector's **virtual light**
+  stands on the plane most of them hit, at their centre, with that surface's colour and the flux the game's own
+  spot light puts on them. It is **as large as its rays' footprints** (`FLASH_BOUNCE_TUNING.soft` = 1), so a wall
+  lit from 8 m is a patch about 1.5 m across, not a point: right in front of it the bounce is a little under the
+  wall's own brightness times the gain, at any distance. A ray on another plane gives its flux to a neighbouring
+  sector's light on that plane, or to one of **eight extra lights** that stand on the planes no sector's light
+  stands on (a prop in a corner of the beam, the strip of ceiling at its edge). Flux never moves to a plane it
+  did not land on.
+- **In time** a light glides only along its own plane, and its flux follows over about 70 ms. When a sector's rays
+  move to another plane its light stays on the old plane and fades there, and the light on the new plane rises
+  from nothing (or changes places with that plane's extra light). Nothing travels through the air between two
+  surfaces, and a frame changes the total by its share of the way to the new place and no more.
+- The GPU adds the fourteen lights' sum to the full field light's irradiance: arithmetic on 43 plain uniforms, no
+  texture, no array and no uniform buffer of its own. A dark room is softly lit outside the beam; a red tile wall
+  throws warm light on the floor beside it.
 - On metal, glass and glazed tile the lit patches also show as a soft sheen round the mirror direction
   (`FLASH_BOUNCE_SHEEN`), weighed by three's own Fresnel and roughness response like the probes.
 - The gain is 2 (`FLASH_BOUNCE_DEFAULTS.gain`): stylised like the baked bounce, and for the same reason.
 
-Limits, by design: the beam passes through everything that is not fixed architecture (glass, props, door leaves,
-characters, the train), so its virtual lights stand on the wall behind such a thing; and virtual lights cast no
-shadows (only the emitter's own normal cuts: nothing reaches the back of the lit surface).
+Limits, by design:
+
+1. Virtual lights cast **no shadows**. Their light is not stopped by a wall, a slab or a prop between them and a
+   surface. Only the emitter's own normal cuts: nothing reaches the back of the lit surface or its own plane.
+2. A ray stops on fixed architecture, a prop's **box** and a character's **cylinder**, and on nothing finer. A
+   chair is its box, the gap between a table's legs does not exist, and glass inside a model (a ticket booth, a
+   display case, a cooler) is part of its box. Loose physics bodies, pickups and a prop gone loose stop nothing.
+   Tower and bridge windows are wall to the rays, as they are to the bake.
+3. **Fourteen lights stand for the whole lit patch.** Next to a large lit surface the bounce is patchier and
+   dimmer than that surface's true glow (the foot of a lit wall gets less than it should). When the beam lands on
+   more planes than there are lights, the planes with the least flux have none: dimmer, never misplaced (0.001 %
+   of the reflected flux over a Subway station's standing places; 0.3 % on a brisk walk through its clutter with
+   the head turning). A fading light is cut short when a new plane needs its place: on that walk at most 3.8 %
+   of the bounce in one frame at 60 Hz (2.8 % at 30 Hz), and no more than 2 % in 99 frames of 100. There are eight
+   extra lights for this: with four it was 8.9 % and 4.3 %.
+4. A light stands at the centre of its hits on their plane. With hits either side of a doorway or a pier that
+   point can lie over the opening or under the pier; it lights what is in front of the plane all the same.
 
 ### 3. Reflection probes for metal, glazed tile and glass
 
@@ -185,7 +233,9 @@ Bounded resources, and what happens when one does not fit:
   enhanced bake and is shaded plain; the status says why.
 - The mirror's target is a fixed size per tier, whatever the display's resolution.
 - A browser does **not** expose total or free video memory. `navigator.deviceMemory` and adapter limits prove
-  nothing about it, so nothing here reads them, and no minimum amount of video memory is claimed.
+  nothing about it, so nothing that decides how a station is lit reads them, and no minimum amount of video memory
+  is claimed. (The one thing that reads `navigator.deviceMemory` and `navigator.hardwareConcurrency` is the number
+  of bake workers: load time only, never the light. See *Loading: the bake's workers*.)
 
 What Auto reads: the backend that actually started (WebGPU or the WebGL 2 fallback), whether it is a software
 rasterizer (`render/softwareGl.ts`), and the backend's own largest 2D / 3D texture sizes. Auto leaves reflections off
@@ -208,10 +258,11 @@ choice that changes while playing, for example from another tab, waits; the stat
 menu, Continue, station load or reroll is involved.
 
 - Only the station's **lighting** is rebuilt: the field bake of the new choice (from the derived cache when this
-  layout's entry matches, else baked now in the same paced steps, under the pause menu), then one step that swaps
-  the station lighting (`StationLighting.replaceSteps`: the flicker clock, the circuit levels and the fixtures
-  carry over; the fog keeps its maps, gas, smoke and clock and only gets the new field). The glass mirror is made
-  or released with it, and the flashlight's bounce is bound to the new lighting.
+  layout's entry matches, else baked now under the pause menu: the same build steps, run in time slices of about
+  40 ms with a turn of the event loop between them, the gather and the probes on the bake's workers), then one
+  step that swaps the station lighting (`StationLighting.replaceSteps`: the flicker clock, the circuit levels and
+  the fixtures carry over; the fog keeps its maps, gas, smoke and clock and only gets the new field). The glass
+  mirror is made or released with it, and the flashlight's bounce is bound to the new lighting.
 - A changed light set compiles every lit material again, so the same **blocking warm-up** as a quality change
   follows; its hidden frames also draw the mirror once. No frame is drawn meanwhile. **Resume**, the two choices and
   the quality choice are held, and the pause line says what is being done. A new game, Continue, Retry and travel
@@ -222,7 +273,9 @@ menu, Continue, station load or reroll is involved.
 - The status says `applying` while it runs and the new live state afterwards. If the bake or the install fails:
   "The change could not be applied (reason): the station keeps this lighting." A failure after the swap leaves the
   baseline lighting, and the status says baseline. A failed plan is not retried until the choice changes again.
-- A lost device or a station replaced meanwhile ends the rebuild without touching the new station.
+- A lost device or a station replaced meanwhile ends the rebuild without touching the new station. A choice that
+  changes again while its bake runs (another tab) drops that bake the same way: its workers are stopped, nothing
+  of it is installed or cached, and the same rebuild goes on to bake what is asked for now.
 - Between two stations and inside a transition nothing is rebuilt: the next station's load applies the choice, and a
   pause that outlives the transition applies it then.
 - There is one session-wide field light per combination that was ever used (plain or full, with probes or without,
@@ -252,6 +305,14 @@ an entry, the digest decides. A mismatch is reported as "baked again" and the en
 or probe code itself needs a version bump (`DERIVED_LIGHTING_VERSIONS` in `world/enhancedLightingRuntime.ts`; this
 rebuild bumped all three, so every entry of the earlier version is a miss and leaves by eviction).
 
+**When IndexedDB is given up.** A browser that does not answer (an open that does not settle in 3 s, a transaction
+that does not finish in 10 s) moves the cache to memory for the session. Both limits count time in which the page's
+**event loop ran**, not wall time: IndexedDB answers through events, and while the main thread is busy in one piece
+(a station build, a warm-up frame of seconds) a healthy database cannot answer either. A limit is cut into ten timer
+ticks; a tick that fires late counts nothing, so one block of any length never uses a limit up. Before, a main
+thread that was busy for 10 s after a write began switched a working cache off for the session, and the next page
+load baked again.
+
 **What it can never do.** The cache holds derived data only. Nothing in it is read by the generator, the save or the
 campaign. A hit, a miss, a cleared cache, a full disk or a browser without IndexedDB (the cache then lives in memory
 for the session, and the status says so) give the same station, loot, identities, cargo and travel: only the load
@@ -262,9 +323,11 @@ flashlight's bounce are live and cache nothing.
 
 - `Game.prepareSection` (behind the loading screen, or during the ride): `EnhancedLightingRuntime.prefetch` hashes
   the address in pieces and reads the entry.
-- `Game.buildSectionSteps`, step `lighting`: `EnhancedLightingRuntime.bakeSteps` runs in the same paced build steps
-  as the baseline bake (`core/pacedBuild.ts`); `StationLighting.steps` gets the field, the probes, the shading, the
-  mirror choice and what the flashlight's bounce traces; `Game.syncGlassMirror` makes or releases the mirror.
+- `Game.buildSectionSteps`, step `lighting`: `EnhancedLightingRuntime.bakeSteps` runs in the same build steps as
+  the baseline bake (`core/pacedBuild.ts`: frame-paced during a train journey, in time slices behind the loading
+  screen); its two long parts, the gather and the probes, run on the bake's workers while the build waits (below).
+  `StationLighting.steps` gets the field, the probes, the shading, the mirror choice and what the flashlight's
+  bounce traces; `Game.syncGlassMirror` makes or releases the mirror.
 - Each frame: `FLASH_BOUNCE.update` after the player light moved; `GlassMirror.select` picks the plane; the mirror
   is drawn right before the scene pass, inside the frame's one scene-matrix update.
 - A station swap (travel, Retry, Load last save, Continue) binds the new station's textures first and retires the
@@ -273,6 +336,41 @@ flashlight's bounce are live and cache nothing.
   bounce is unbound and no mirror exists.
 - A changed choice in the pause menu rebuilds the live station's lighting in place (*Changing the settings during
   play*).
+
+## Loading: the bake's workers
+
+The two long parts of a station's lighting bake, the **gather** and the **reflection probes**, run on Web Workers
+(`world/lightBakePool.ts`, `world/lightBakeTasks.ts`, `world/lightBakeWorker.ts`) wherever the build can wait for
+them: behind the loading screen, during a train journey and under the pause menu. The build parks while they work
+(`core/pacedBuild.ts`: a yielded wait), so the page keeps drawing the ride or painting the progress line. The
+stage labels shown are the workers' own: a label appears when the stage before it is finished.
+
+- **The same light.** The workers run the bake's own code over shares that split it exactly. A gathering voxel's
+  rays and bounces, and a probe's capture and filter, read only inputs that are complete before the first ray. The
+  sums over the bounces, the smoothing, the rounding and the probes' placement and grid stay one pass on one
+  worker. The result is the bake on one thread, bit for bit, for one, two or three workers
+  (`game/tests/light-bake-workers.test.ts`: a generated Subway station at Standard and at High). The cache address
+  and the digests are made on the main thread before a worker starts, so the number of workers never changes what
+  is read from or written to the derived cache.
+- **Bounds.** `min(hardwareConcurrency - 1, 3)` workers and at least one; one where the browser reports 4 GB of
+  memory or less (`navigator.deviceMemory`); none without `Worker`. One worker leads and hands shares to the
+  others over direct ports. Before a job starts, the typed arrays its workers will hold are estimated: over 512 MB
+  the job uses fewer workers, then none. The workers live for one bake and are terminated when it ends, so nothing
+  idles between two stations.
+- **Fallback, never silent.** No `Worker`, a worker that cannot start, throws, answers something else or sends
+  nothing for 20 s (counted in time the event loop ran), or a station past the memory bound: that part is baked on
+  the main thread by the same code, and the status says so (`... · baked on the main thread (reason)` in the
+  Lighting row and `__LL.lighting()`, the bake's timings, a console warning). After a failure that is about the
+  workers themselves, no worker is started again until the page is reloaded.
+- **Cancellation.** A station replaced mid-bake, a lost device, back to the menu, or a choice changed again during
+  an apply closes the build where it waits: the workers are terminated and nothing of that bake is installed or
+  cached.
+- **What stays on the main thread:** the direct light, the surface colours, the digests and the cache, the field's
+  encoding, the textures and the install, and one copy of each job's inputs into the lead worker's message (no
+  `SharedArrayBuffer` is used; results come back by transfer).
+- The worker is one inline script inside the bundle, started from a Blob (the deploy's content security policy
+  allows `worker-src 'self' blob:`). `?bakeworkers=0..3` sets the count for one session (0: everything on the main
+  thread).
 
 ## Costs
 
@@ -291,18 +389,42 @@ The mirror's target (colour and depth, 4x MSAA): about 29 MB at Standard and 66 
 resolution. On the largest station measured (the Office) the feature's own video memory is about 70 MB at Standard
 (32 MB of cube, the mirror, the probes) and about 115 MB at High.
 
-Bake time of the lighting step on the main thread, cut into paced build steps of a few milliseconds. In Node on the
-studio pod, the Standard gather (Auto): Subway 1.4 s, Office 1.3 s, Mall 0.9 s, Skyways 1.3 s, Bunker 1.1 s, Market
-0.3 s. In Firefox 158 on the same pod (a shared server CPU, other work running), On with Standard reflections on
-Subway seed 93: 4.2 s in all (gather 3.2 s, probes 0.2 s); on seed 19: 2.9 s (gather 2.1 s). A cache hit skips the
-gather and the probe capture.
+Bake time on one thread (no workers: the fallback, and every synchronous build), cut into build steps of a few
+milliseconds. In Node on the studio pod, the Standard gather (Auto): Subway 1.4 s, Office 1.3 s, Mall 0.9 s,
+Skyways 1.3 s, Bunker 1.1 s, Market 0.3 s. In Firefox 158 on the same pod (a shared server CPU, other work
+running), On with Standard reflections on Subway seed 93: 4.2 s in all (gather 3.2 s, probes 0.2 s); on seed 19:
+2.9 s (gather 2.1 s). A cache hit skips the gather and the probe capture.
+
+Bake time with the workers, in the real game in Node on the studio pod (the first Subway station of a new campaign;
+Node worker threads stand in for Web Workers, so a browser's worker start-up, Blob and structured-clone costs are
+not in these numbers; no browser was measured):
+
+| Uncached lighting step | Main thread, no workers | Main thread, with workers | Waiting for 1 worker | Waiting for 3 workers |
+|---|---|---|---|---|
+| Auto, Standard reflections (166 probes) | 3.0 s | 1.4 s | 1.1 s | 1.0 s |
+| On, High reflections (239 probes) | 7.5 s | 1.3 to 1.5 s | 3.2 s | 1.9 s |
+
+The 1.4 s left on the main thread: the direct light about 0.4 s, the surface colours and digests 0.15 s, the
+field's encoding 0.35 s, packing the cache entry 0.15 to 0.2 s, the install and the fog's maps 0.25 s, and the two
+copies to the lead worker under 0.1 s (115 MB). A cache hit runs the same parts but the packing and the copies:
+about 1 s. On this station the lead worker held 141 to 165 MB of typed arrays at its fullest and each other worker
+61 to 78 MB, for the length of the bake; nothing is held afterwards. At Standard the workers' own time is mostly
+their one-pass stages (the gather's index, bounce sums and smoothing; the probes' placement and grid), so a second
+and third worker add little there; at High the rays dominate and they do.
+
+Changing Auto to On with High reflections from the pause menu, same station: 21.4 s before (the bake waited for a
+display frame after every 6 ms of work while no frame was drawn); 8.9 to 9.5 s in time slices without workers;
+5.5 s with one worker; 4.3 s with three (1.2 s of it main-thread work, 1.0 s the warm-up).
 
 Frame cost:
 
 - **Full shading**: three more filtered fetches of the field texture per lit pixel. No new texture, sampler or
   uniform buffer.
-- **The flashlight's bounce**: six small light sums per lit pixel on plain uniforms; about 8 microseconds of CPU a
-  frame for the trace.
+- **The flashlight's bounce**: fourteen small light terms per lit pixel on plain uniforms (three dot products and
+  one division each; fourteen more on a reflective surface for the sheen). It was six. On the CPU 30 rays over the
+  architecture and one pass over the station's prop boxes a frame: in Node on a base Subway station with its 635
+  boxes a median of about 75 microseconds, 85 to 90 with 32 characters in reach (it was about 18 with six rays and
+  no boxes). The update keeps nothing on the heap.
 - **A reflective fragment**: one filtered and one unfiltered grid fetch, and per probe that weighs in (one in a
   block's core, up to four at a corner) three texel loads and two atlas samples. Glazed tile now pays that at
   Standard too, where its weight is not zero.
@@ -339,7 +461,8 @@ compiled module).
   Subway: their ceilings and walls gain the most.
 - Auto on a software renderer or the WebGL 2 fallback looks closer to Off than to On: plain shading or no
   reflections (the status says which and why).
-- The flashlight's bounce passes through glass and movable things and casts no shadows.
+- The flashlight's bounce casts no shadows, treats a prop as its box and a character as a cylinder, and stands
+  for the whole lit patch with fourteen lights (its four limits above).
 - The mirror: one plane at a time; no player body or weapon; no volumetric fog in the reflection; a brightly lit
   interior behind a pane leaves only the hall's lights and signs visible in it face-on.
 - Glass inside a model, curved glass and tower windows reflect the probes, not a live image.
@@ -362,8 +485,12 @@ compiled module).
   the normal, the between-layers bound on Subway seed 93, downsampling, `withoutCube`.
 - `game/tests/lighting-node.test.ts`: the plain and full field lights' programs on both shader backends (three more
   field samples, no texture or buffer more), parity with the CPU sampler.
-- `game/tests/flash-bounce.test.ts`: the virtual lights' flux, colours, smoothing, the shader's sum against the CPU
-  mirror, no allocation.
+- `game/tests/flash-bounce.test.ts`: the rays' equal flux, what stops the beam (a prop box, a round prop, a
+  character, a thin pole; glass passes), every light on the plane of its rays through aim sweeps at 30, 60 and
+  144 Hz, the extra lights, near and far field against the six point lights it replaces, off = exactly zero, the
+  shader's sum against the CPU mirror, no uniform buffer, no allocation, a frame's cost on a real station.
+- `game/tests/flash-occluders.test.ts`: which boxes pass the beam (by kind, by the train's word, the Bunker's
+  panes; a census of real levels), a colour for every prop kind, which characters count, the game's wiring.
 - `game/tests/reflection-probes.test.ts`: placement, weights, capture with and without the cube, fixtures, levels,
   the atlas.
 - `game/tests/reflection-node.test.ts`: which materials reflect (metal, glass, window, gloss), glazed tile at either
@@ -381,7 +508,14 @@ compiled module).
 - `game/tests/enhanced-lighting-game.test.ts`: the real Game on a validating WebGPU device: binding limits, death
   and reload, Off and back.
 - `game/tests/lighting-live-apply.test.ts`: a change applied from the pause menu (only the lighting rebuilt, the
-  station and the save conserved, the status, a failed bake).
+  station and the save conserved, the status, a failed bake, an abandoned bake, the bake on worker threads and a
+  choice changed while it waits for them).
+- `game/tests/light-bake-workers.test.ts`: the bake's workers: how many, the same bytes as the bake on one thread
+  for 1, 2 and 3 real worker threads (a generated Subway station, Standard and High), every fallback with its
+  reason, the memory bound, cancellation while the build waits, the worker script's contents.
+- `game/tests/paced-build-sliced.test.ts`, `game/tests/loading-build-sliced.test.ts`: the time-sliced drain and a
+  build that waits for work off the thread (parking, cancellation while parked); the loading screen's station
+  build (readiness order, held frames, truthful progress, an abandoned build).
 - `game/tests/enhanced-lighting-settings.test.ts`: the settings, their form rows, the cache line and diagnostics.
 - `game/tests/reflection-window.test.ts`, `game/tests/station-pillar-material.test.ts`,
   `game/tests/texture-fetch.test.ts`, `game/tests/shader-text-share.test.ts`, `game/tests/content-hash.test.ts`,
