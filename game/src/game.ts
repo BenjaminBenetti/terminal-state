@@ -2,7 +2,7 @@
 // combat resolution, zombie updates, pickups and the station lifecycle (new seed per run).
 
 import * as THREE from 'three';
-import {freshSeed, mulberry32, seedToCode} from './core/rng';
+import {freshSeed, hashString, mulberry32, seedToCode} from './core/rng';
 import {PropIndex, moveCircle} from './core/physics';
 import {CELL, PathFinder, nearestWalkable} from './gen/grid';
 import {BODY_CLEAR, levelsOf, type Levels} from './gen/levels';
@@ -127,6 +127,11 @@ import {bunkerGasSource} from './world/gas/zones'; // task studio-bunker-level-2
 import {BUNKER_KIT_MODEL_FILES, bunkerModelKindKeysFor} from './gen/bunker/bunkerKinds'; // (follow-up) the Bunker's model-backed flavour kinds (lazy)
 import {CORPSE_DEN_MODEL_FILES, corpseDenModelKeysFor} from './gen/market/v4/denKinds'; // task studio-corpse-market-shop-20261114-031614-01: the Market den's chute / booth (lazy, level-only market-*)
 import {installCough, type CoughFeedback} from './audio/cough'; // Task gas-mask-roof-feedback-20261030: the player coughs while gas hurts them
+// task studio-reactor-glowing-zombies-20261115-013245-01: the Reactor's irradiated zombies — green glowing skin, their green light, dose + Geiger
+import {installIrradiation, type Irradiation} from './world/irradiation';
+import {installGlowLightNode} from './world/glowLights';
+import {installIrradiatedSkin, preloadSkinMask, setSkinGlow} from './ai/irradiatedSkin';
+import {isIrradiated} from './ai/irradiated';
 import {installReactorAir} from './world/reactor/generators'; // task reactor-build-20261101 (lane AIR): Reactor depth gas + auxiliary generators
 import {installBlightBurst, type BlightBurstSystem, type BlightEnemy} from './ai/blightBurst'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly's once-only death burst
 import {ENEMY_MODEL_FILES, enemyModelKeysFor, withEnemyModels} from './ai/enemyModels'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): level-specific (lazy) enemy models
@@ -588,6 +593,8 @@ export class Game {
   readonly gas: GasSystem;
   /** Task gas-mask-roof-feedback-20261030 (item 1): coughing while toxic gas hurts the unprotected player (audio/cough.ts). */
   readonly cough: CoughFeedback;
+  /** Task studio-reactor-glowing-zombies-20261115-013245-01: the irradiated zombies' dose, Geiger ticks, glow lights (world/irradiation.ts). */
+  readonly irradiation: Irradiation;
   /** Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly death burst — blast, pustule VFX, burst / hiss, gas puff (ai/blightBurst.ts). */
   readonly blight: BlightBurstSystem;
   /** Task track1-siren-blightbelly-20261031 (lane SIREN): Siren lifecycle — dormant vein patches, wake persistence, model-missing skip (ai/sirenSystem.ts). */
@@ -892,6 +899,12 @@ export class Game {
     };
     this.cough = installCough(this); // after GAS: its frame hook reads this frame's exposure
     hookName('cough');
+    // task studio-reactor-glowing-zombies-20261115-013245-01: the glow-light pool joins the scene now (intensity 0: the light set never
+    // changes); the skin mask loads behind the loading screen of a section that has irradiated zombies
+    this.irradiation = installIrradiation(this, (z, g) => setSkinGlow(z, g));
+    this.irradiation.smoke = this.atmosphere;
+    hookName('irradiation');
+    this.sectionPreloads.push(async layout => { if (layout.zombies.some(isIrradiated)) await preloadSkinMask(); });
     installReactorAir(this); hookName('reactorAir'); // task reactor-build-20261101 (lane AIR): after GAS (sets gas.depth on its build) — Reactor depth gas, generators (hold E), fans, HUD air line; inert elsewhere
     // Task track1-siren-blightbelly-20261031 (lane BLIGHT): after GAS (bursts add gas puffs); frame hook + section hooks. The lazy
     // enemy models (ai/enemyModels.ts) are fetched per layout through propModels like the office models.
@@ -969,7 +982,7 @@ export class Game {
     hookName('trainPropCargo');
     // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CORPSE): after the cargo systems (teardown first — unshifted —, build last); its
     // E / prompt while carrying go first (unshift), the pickup's after every lane's; the train chipper registers its sink (addSink)
-    this.corpses = installCorpses(this, {enemyIndex: z => this.enemyIndex.get(z), forgetEnemy: z => { this.enemyIndex.delete(z); }, cancelUse: r => this.cancelUse(r), targets: () => ({pickup: this.currentTarget, container: this.containerTarget})});
+    this.corpses = installCorpses(this, {enemyIndex: z => this.enemyIndex.get(z), forgetEnemy: z => { this.enemyIndex.delete(z); this.irradiation.forget(z as unknown as ZombieActor); }, cancelUse: r => this.cancelUse(r), targets: () => ({pickup: this.currentTarget, container: this.containerTarget})});
     hookName('corpses');
     // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): after the train, ride and cargo (its section build attaches to the car's
     // view; its teardown keeps a riding car's machine) — the corpse sink, the grind / transfer / blood / noise, the look-at line, warm pool 'train-chipper'
@@ -1048,6 +1061,7 @@ export class Game {
       // what Enhanced lighting Auto uses — never a guess about memory
       this.enhancedLighting.setCapabilities(lightingCapabilities(this.renderer.backend, gpu.backend === 'webgpu' ? 'webgpu' : 'webgl2', this.softwareGl.software, maxTexture3DSize(this.renderer.backend as never)));
       installFlareLightNode(this.renderer); // Iteration 15: flare lights occluded by their window (before the first compile)
+      installGlowLightNode(this.renderer); // task studio-reactor-glowing-zombies-20261115-013245-01: the irradiated zombies' gated, occluded glow lights
       installUploadDedupe(this.renderer); // task mall-horde-performance-20261105: no identical / split per-frame uniform uploads (WebGPU only)
       installBindingRefresh(this.renderer); // task studio-death-retry-render-fix-20261114-044607-01: a swapped shared texture (the station light field) reaches unchanged objects too
       this.overlay.target.samples = this.renderer.samples; // 0 in WebGPU compatibility mode
@@ -2795,9 +2809,13 @@ export class Game {
   }
 
   spawnEnemy(s: ZombieSpawn, i: number): EnemyActor {
-    const {actor: z, fallback} = this.buildEnemyActor(s, i, this.currentSeed, this.rand);
+    // (task studio-reactor-glowing-zombies-20261115-013245-01: an irradiated addition draws its scale / idle phase from its OWN stream, so
+    // this.rand — the stream every later spawn and pickup of the section draws from — is exactly what it was without the additions)
+    const irr = isIrradiated(s), rand = irr ? mulberry32(hashString(`irradiated-actor:${i}`, this.currentSeed >>> 0)) : this.rand;
+    const {actor: z, fallback} = this.buildEnemyActor(s, i, this.currentSeed, rand);
     if (fallback) this.enemyFallbacks++;
     this.damage.installZombie(z); // Lane D: own wound-patched material clones (body + every wearable)
+    if (irr) { installIrradiatedSkin(z as unknown as ZombieActor, rand() * Math.PI * 2); this.irradiation.adopt(z as unknown as ZombieActor); }
     this.blight.adopt(z); // Task track1-siren-blightbelly-20261031 (lane BLIGHT): a Blightbelly reports its single death to the burst (others: no-op)
     // Lane T: spawn on the local floor height; Lane B (iteration 08): of the spawn's own level
     z.brain.y = z.root.position.y = s.y ?? this.levels.grid(s.level ?? 0).floorAt(s.x, s.z);

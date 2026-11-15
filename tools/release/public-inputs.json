@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 91651,
-      "sha256": "41860c479257e9186e0a5368b9f2c0f36896a3e6b9eb4e9d3dcf5703480f2bc3"
+      "bytes": 93741,
+      "sha256": "20add183164ffae3e177de572c601affbeabfbcec3101a19fd188493d471b84c"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 3978,
-      "sha256": "4baa57b9f98ac652b92577406cba6324b26fcdf6d27e8a14ca0d6a956edb2ba7"
+      "bytes": 4985,
+      "sha256": "c03aaad64a75d33de819051ed4d85203f3f76d3c477e76652bc09d4b48f02bd1"
     },
     {
       "path": "assets/audio/bb-cackle-01.mp3",
@@ -562,6 +562,51 @@
       "path": "assets/audio/fuel-pour.mp3",
       "bytes": 20897,
       "sha256": "59afe9ae2c224e50cf2027092167b797a43353dc8bc43ae87f991e85209d1f4f"
+    },
+    {
+      "path": "assets/audio/geiger-click-01.mp3",
+      "bytes": 835,
+      "sha256": "ba4d0c9053e18fac84c418a1f3d52ba95b5f5d682b748c7295c8fb2e4ef5771e"
+    },
+    {
+      "path": "assets/audio/geiger-click-02.mp3",
+      "bytes": 835,
+      "sha256": "57ee6941d4cb095735391f8ab6faa2a7df163308724c92646c7519a5876a464f"
+    },
+    {
+      "path": "assets/audio/geiger-click-03.mp3",
+      "bytes": 835,
+      "sha256": "84964c80daefddeb68735b1acaa024879f057f808ee7cdee396e65945a15a2ec"
+    },
+    {
+      "path": "assets/audio/geiger-click-04.mp3",
+      "bytes": 835,
+      "sha256": "83ba985c746f8a0e071a20a8e5473ee501fdca01e5cf4424bb3e71436b3bdf93"
+    },
+    {
+      "path": "assets/audio/geiger-click-05.mp3",
+      "bytes": 835,
+      "sha256": "9780f1e0b61d190bef5ad00e210f0c76719f638bae78287eb9d7c995d70cf103"
+    },
+    {
+      "path": "assets/audio/geiger-click-06.mp3",
+      "bytes": 835,
+      "sha256": "1d637a888dc999861d7086876df3b0c4b9367a86f9ab49bb51fa87ef8ec3c8f1"
+    },
+    {
+      "path": "assets/audio/geiger-cluster-01.mp3",
+      "bytes": 1253,
+      "sha256": "5b9b1b22fd56ad98f2e6b75bc579f46cdfb11e0d974b9298bb927e5e36b979ed"
+    },
+    {
+      "path": "assets/audio/geiger-cluster-02.mp3",
+      "bytes": 2089,
+      "sha256": "424137e9e316741761e00608d56a3d85cb9e863e84e84226677fd2ee71baf1e0"
+    },
+    {
+      "path": "assets/audio/geiger-cluster-03.mp3",
+      "bytes": 1671,
+      "sha256": "0c5b6938e1127926756864ce4bc6c2a1166cdd94a5c860377f65cdb95af8f003"
     },
     {
       "path": "assets/audio/gun-coach-gun-break-close-01.mp3",
@@ -2029,6 +2074,11 @@
       "sha256": "fb5f0ddc3985bfc038af63e781ce88e7a5b3a9cb8e9f9931a3d786981193cf0b"
     },
     {
+      "path": "assets/derivatives/audio-geiger.json",
+      "bytes": 37896,
+      "sha256": "539b47841e4499750b654c072bb91ff9b7b7ec32d98b1eff7d458757cc576d1f"
+    },
+    {
       "path": "assets/derivatives/audio-gun-variety.json",
       "bytes": 32950,
       "sha256": "403fb3a894b31ccd25ff542346cce12ab3889943af84addf5e068600f40889bb"
@@ -3152,6 +3202,11 @@
       "path": "assets/derivatives/zombie-rigged.json",
       "bytes": 43884,
       "sha256": "409ff30a8073fbc0e563d5668ae2422b468084af3e011fc7e2d9cb9f6baf076d"
+    },
+    {
+      "path": "assets/derivatives/zombie-skin-mask.json",
+      "bytes": 16173,
+      "sha256": "b6c18b9ec125e05120d49367d8fe3d17ac1658426183dd3f622c703f21a60220"
     },
     {
       "path": "assets/derivatives/zombie-variants.json",
@@ -6092,6 +6147,11 @@
       "path": "assets/textures/wall-working-face-orm.jpg",
       "bytes": 268609,
       "sha256": "b095e0274a6088031c090dd3171a0dcd9e6935fb30470284e87b6f9cf2b6af29"
+    },
+    {
+      "path": "assets/textures/zombie-skin-mask.png",
+      "bytes": 153849,
+      "sha256": "3d6729d800160f3da3ec12cf99c1d887eda5e46117617706698b3a2df5722597"
     }
   ]
 }

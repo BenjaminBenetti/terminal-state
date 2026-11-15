@@ -1,0 +1,1576 @@
+{
+ "asset": "audio-geiger-20261115",
+ "task": "studio-reactor-glowing-zombies-20261115-013245-01 (lane AUDIO)",
+ "generatedBy": "tools/audio-pipeline/geiger-build.mjs",
+ "procedural": true,
+ "generator": {
+  "script": "tools/audio-pipeline/geiger-render.mjs",
+  "version": 1,
+  "sampleRate": 48000,
+  "model": {
+   "modes": [
+    {
+     "name": "piezo",
+     "f": 3200,
+     "var": 0.08,
+     "q": [
+      7,
+      9.5
+     ],
+     "levelDb": [
+      0,
+      0
+     ]
+    },
+    {
+     "name": "piezoUpper",
+     "f": 6600,
+     "var": 0.08,
+     "q": [
+      10,
+      13
+     ],
+     "levelDb": [
+      -16,
+      -12
+     ]
+    },
+    {
+     "name": "housing",
+     "f": 1150,
+     "var": 0.08,
+     "q": [
+      2.5,
+      3.5
+     ],
+     "levelDb": [
+      -8,
+      -5
+     ]
+    },
+    {
+     "name": "body",
+     "f": 200,
+     "var": 0.08,
+     "q": [
+      0.6,
+      0.8
+     ],
+     "levelDb": [
+      -14,
+      -10
+     ]
+    }
+   ],
+   "directLevelDb": [
+    -13,
+    -10
+   ],
+   "speakerLowpassHz": [
+    8500,
+    10500
+   ],
+   "excitation": {
+    "widthMs": [
+     0.15,
+     0.22
+    ],
+    "edgeMs": [
+     0.035,
+     0.055
+    ],
+    "fallRel": [
+     0.7,
+     0.85
+    ],
+    "recoveryMs": [
+     0.35,
+     0.6
+    ],
+    "noiseMix": [
+     0.08,
+     0.22
+    ]
+   },
+   "nominalExcitation": {
+    "widthMs": 0.18,
+    "edgeMs": 0.045,
+    "fallRel": 0.78,
+    "recoveryMs": 0.45,
+    "noiseMix": 0
+   },
+   "cluster": {
+    "gapMs": [
+     6,
+     35
+    ],
+    "amp": [
+     0.75,
+     1
+    ]
+   }
+  },
+  "window": {
+   "fromMs": 11,
+   "toMs": 17
+  },
+  "note": "Deterministic, seeded offline synthesis (one GM discharge = a short AC-coupled pulse into a band-pass resonator bank: piezo / upper piezo mode / housing / body, plus a little of the edge, through a small-speaker low-pass). Every master re-renders byte-identically from its seed; the build checks that."
+ },
+ "policy": "Procedural Geiger-counter ticks, user-authorized for this task (\"free local Sound Lab or procedural audio ... for Geiger clicks\"; no paid generation). Rendered OFFLINE by the repository's own script; the runtime plays them as ordinary bundled clips (no oscillator, noise buffer or synthesis at runtime). Private 48 kHz masters + sidecars stay in the external raw-asset mount, outside Git.",
+ "license": {
+  "status": "Conditional prototype (the repository's prototype status, unchanged): procedural clips rendered by the repository's own script from fixed seeds. No Sound Lab, no generative model, no third-party, stock, sampled or downloaded audio. Not production / commercial clearance.",
+  "gameReady": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "review": "NOT LISTENED TO on the worker: structural analysis only (peak, decay, spectral centroid / peak, band shares, discharges found, momentary loudness). The MP3s were frame-walked, not decoded. Gains are first estimates for an ear pass.",
+ "auditioned": false,
+ "rawArchive": "reference/tasks/reactor-glowing-zombies-20261115-013245/audio/raw/ (48 kHz 16-bit masters, per-take sidecars, index.json)",
+ "recipe": {
+  "onsetDb": -50,
+  "leadMs": 0.25,
+  "endDb": -80,
+  "holdMs": 2,
+  "tailMs": 3,
+  "peakDbfs": -1,
+  "kbps": 128,
+  "resample": {
+   "halfTaps": 32,
+   "kaiserBeta": 8.6,
+   "cutoffReNyquist": 0.9
+  }
+ },
+ "mixCalibration": {
+  "method": "loudest 400 ms K-weighted window (BS.1770 momentary; short clips zero-padded to 400 ms) at the game gain; references rebuilt from their raws with their recorded ops",
+  "targetReClickLu": 0,
+  "gainLaw": "voice gain = 0.55 + 0.45 k (k = exposure 0..1) x CUE_GAIN",
+  "references": {
+   "click": {
+    "cue": "click",
+    "gameGain": 0.3,
+    "lowpassHz": null,
+    "clips": 2,
+    "momentaryLufs": -35.8,
+    "perClip": [
+     -34.5,
+     -37.1
+    ],
+    "note": "Sfx.click(): the flashlight switch click, CUE_GAIN.click 0.3"
+   },
+   "heartbeatMax": {
+    "cue": "heartbeat",
+    "gameGain": 0.4,
+    "lowpassHz": 900,
+    "clips": 4,
+    "momentaryLufs": -25.98,
+    "perClip": [
+     -26,
+     -26.9,
+     -24.6,
+     -26.4
+    ],
+    "note": "Sfx.vitals() heartbeat at its strongest (CUE_GAIN 0.4 x voice gain 1, 900 Hz low-pass)"
+   },
+   "heartbeatMin": {
+    "cue": "heartbeat",
+    "gameGain": 0.2,
+    "lowpassHz": 900,
+    "clips": 4,
+    "momentaryLufs": -31.98,
+    "perClip": [
+     -32,
+     -32.9,
+     -30.6,
+     -32.4
+    ],
+    "note": "the heartbeat at its softest (voice gain 0.5)"
+   },
+   "hitTick": {
+    "cue": "hitTick",
+    "gameGain": 0.22,
+    "lowpassHz": null,
+    "clips": 2,
+    "momentaryLufs": -39.7,
+    "perClip": [
+     -38.9,
+     -40.5
+    ],
+    "note": "Sfx.hitTick(false), CUE_GAIN.hitTick 0.22"
+   }
+  },
+  "cues": {
+   "geigerClick": {
+    "cueGain": 0.57,
+    "variants": 6,
+    "momentaryLufsAtUnity": -30.95,
+    "atK1Lufs": -35.83,
+    "atK0Lufs": -41.03,
+    "atK1PeakDbfs": -5.88
+   },
+   "geigerCluster": {
+    "cueGain": 0.57,
+    "variants": 3,
+    "momentaryLufsAtUnity": -27.03,
+    "atK1Lufs": -31.92,
+    "atK0Lufs": -37.11,
+    "atK1PeakDbfs": -5.88
+   }
+  }
+ },
+ "gaps": [],
+ "totalBytes": 10023,
+ "derivatives": [
+  {
+   "file": "game/public/assets/audio/geiger-click-01.mp3",
+   "url": "assets/audio/geiger-click-01.mp3",
+   "bytes": 835,
+   "sha256": "ba4d0c9053e18fac84c418a1f3d52ba95b5f5d682b748c7295c8fb2e4ef5771e",
+   "cue": "geigerClick",
+   "durationS": 0.0202,
+   "mp3": {
+    "frames": 2,
+    "sampleRate": 44100,
+    "kbps": 128,
+    "decodeCheck": "MPEG-1 Layer III frame chain OK (not decoded on the worker)"
+   },
+   "source": {
+    "clip": "geiger-click-01",
+    "procedural": true,
+    "generator": "tools/audio-pipeline/geiger-render.mjs",
+    "generatorVersion": 1,
+    "seed": 15110101,
+    "discharges": 1,
+    "params": {
+     "modes": [
+      {
+       "name": "piezo",
+       "f": 3118.7685,
+       "q": 7.224,
+       "levelDb": 0
+      },
+      {
+       "name": "piezoUpper",
+       "f": 6746.5208,
+       "q": 10.7191,
+       "levelDb": -13.3814
+      },
+      {
+       "name": "housing",
+       "f": 1116.1073,
+       "q": 2.6508,
+       "levelDb": -7.598
+      },
+      {
+       "name": "body",
+       "f": 199.9349,
+       "q": 0.6278,
+       "levelDb": -10.1473
+      }
+     ],
+     "directLevelDb": -12.1439,
+     "speakerLowpassHz": 9195.583,
+     "discharges": [
+      {
+       "atMs": 0,
+       "amp": 1,
+       "widthMs": 0.1722,
+       "edgeMs": 0.0504,
+       "fallRel": 0.751,
+       "recoveryMs": 0.594,
+       "noiseMix": 0.1952,
+       "noiseSeed": 2586368635
+      }
+     ]
+    },
+    "rawFile": "reference/tasks/reactor-glowing-zombies-20261115-013245/audio/raw/geiger-click-01.wav",
+    "rawSha256": "2167e2b29dac2d5231c62671f7c61da5bbf6816b2692f4e2165f12edd2bc1d09",
+    "rawSampleRate": 48000,
+    "rawBits": 16,
+    "rawSamples": 2400,
+    "rawAnalysis": {
+     "peakDbfs": -3,
+     "dcMean": -5.09e-8,
+     "decayTo40DbMs": 3.4,
+     "decayTo60DbMs": 5.31,
+     "decayTo60DbReTakePeakMs": 5.31,
+     "centroidHz": 3281,
+     "spectralPeakHz": 3141,
+     "bandShares": {
+      "below400": 0.005,
+      "from400to2k": 0.123,
+      "from2kto5k": 0.811,
+      "above5k": 0.061
+     }
+    },
+    "reRendered": "byte-identical",
+    "jobId": null
+   },
+   "structural": {
+    "peakDbfs": -1,
+    "dcMean": -1.1e-7,
+    "decayTo40DbMs": 3.4,
+    "decayTo60DbMs": 5.33,
+    "decayTo60DbReTakePeakMs": 5.33,
+    "centroidHz": 3281,
+    "spectralPeakHz": 3144,
+    "bandShares": {
+     "below400": 0.005,
+     "from400to2k": 0.123,
+     "from2kto5k": 0.811,
+     "above5k": 0.061
+    },
+    "dischargesFound": 1,
+    "dischargeOffsetsMs": [
+     0.25
+    ],
+    "momentaryLufsAtUnity": -30.8
+   },
+   "ops": [
+    {
+     "op": "resample",
+     "fromHz": 48000,
+     "toHz": 44100,
+     "filter": "Kaiser-windowed sinc, 64 taps, beta 8.6, cutoff 0.9 x 22.05 kHz"
+    },
+    {
+     "op": "trim",
+     "startS": 0.00274,
+     "endS": 0.02,
+     "note": "0.25 ms before the first sample over -50 dB re peak, to the later of the last discharge window (17 ms) and the -80 dB point + 2 ms"
+    },
+    {
+     "op": "fade",
+     "inS": 0.00025,
+     "outS": 0,
+     "curve": "cosine",
+     "note": "fade-in over the near-silent lead only; the decay is the discharge window of the master"
+    },
+    {
+     "op": "pad",
+     "tailS": 0.003
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 2.09
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128,
+     "note": "constant encoder priming delay, skipped by the bank (leadOffset)"
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/geiger-click-02.mp3",
+   "url": "assets/audio/geiger-click-02.mp3",
+   "bytes": 835,
+   "sha256": "57ee6941d4cb095735391f8ab6faa2a7df163308724c92646c7519a5876a464f",
+   "cue": "geigerClick",
+   "durationS": 0.0202,
+   "mp3": {
+    "frames": 2,
+    "sampleRate": 44100,
+    "kbps": 128,
+    "decodeCheck": "MPEG-1 Layer III frame chain OK (not decoded on the worker)"
+   },
+   "source": {
+    "clip": "geiger-click-02",
+    "procedural": true,
+    "generator": "tools/audio-pipeline/geiger-render.mjs",
+    "generatorVersion": 1,
+    "seed": 15110102,
+    "discharges": 1,
+    "params": {
+     "modes": [
+      {
+       "name": "piezo",
+       "f": 3107.5478,
+       "q": 8.8644,
+       "levelDb": 0
+      },
+      {
+       "name": "piezoUpper",
+       "f": 6456.4122,
+       "q": 10.1378,
+       "levelDb": -12.8916
+      },
+      {
+       "name": "housing",
+       "f": 1147.4161,
+       "q": 3.4204,
+       "levelDb": -6.3145
+      },
+      {
+       "name": "body",
+       "f": 189.6702,
+       "q": 0.6534,
+       "levelDb": -11.4334
+      }
+     ],
+     "directLevelDb": -11.4085,
+     "speakerLowpassHz": 8686.8177,
+     "discharges": [
+      {
+       "atMs": 0,
+       "amp": 1,
+       "widthMs": 0.1536,
+       "edgeMs": 0.0479,
+       "fallRel": 0.7657,
+       "recoveryMs": 0.4288,
+       "noiseMix": 0.1189,
+       "noiseSeed": 3237837883
+      }
+     ]
+    },
+    "rawFile": "reference/tasks/reactor-glowing-zombies-20261115-013245/audio/raw/geiger-click-02.wav",
+    "rawSha256": "0e4ceb5c4cb92452e9764415f3e39a95c5fa3a4b9d44a0edf2accced6e568d2e",
+    "rawSampleRate": 48000,
+    "rawBits": 16,
+    "rawSamples": 2400,
+    "rawAnalysis": {
+     "peakDbfs": -3,
+     "dcMean": -3.05e-7,
+     "decayTo40DbMs": 4.21,
+     "decayTo60DbMs": 6.58,
+     "decayTo60DbReTakePeakMs": 6.58,
+     "centroidHz": 3093,
+     "spectralPeakHz": 3129,
+     "bandShares": {
+      "below400": 0.003,
+      "from400to2k": 0.126,
+      "from2kto5k": 0.852,
+      "above5k": 0.019
+     }
+    },
+    "reRendered": "byte-identical",
+    "jobId": null
+   },
+   "structural": {
+    "peakDbfs": -1,
+    "dcMean": -8.98e-7,
+    "decayTo40DbMs": 4.22,
+    "decayTo60DbMs": 6.58,
+    "decayTo60DbReTakePeakMs": 6.58,
+    "centroidHz": 3093,
+    "spectralPeakHz": 3144,
+    "bandShares": {
+     "below400": 0.003,
+     "from400to2k": 0.126,
+     "from2kto5k": 0.852,
+     "above5k": 0.019
+    },
+    "dischargesFound": 1,
+    "dischargeOffsetsMs": [
+     0.25
+    ],
+    "momentaryLufsAtUnity": -29.8
+   },
+   "ops": [
+    {
+     "op": "resample",
+     "fromHz": 48000,
+     "toHz": 44100,
+     "filter": "Kaiser-windowed sinc, 64 taps, beta 8.6, cutoff 0.9 x 22.05 kHz"
+    },
+    {
+     "op": "trim",
+     "startS": 0.00274,
+     "endS": 0.02,
+     "note": "0.25 ms before the first sample over -50 dB re peak, to the later of the last discharge window (17 ms) and the -80 dB point + 2 ms"
+    },
+    {
+     "op": "fade",
+     "inS": 0.00025,
+     "outS": 0,
+     "curve": "cosine",
+     "note": "fade-in over the near-silent lead only; the decay is the discharge window of the master"
+    },
+    {
+     "op": "pad",
+     "tailS": 0.003
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 2
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128,
+     "note": "constant encoder priming delay, skipped by the bank (leadOffset)"
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/geiger-click-03.mp3",
+   "url": "assets/audio/geiger-click-03.mp3",
+   "bytes": 835,
+   "sha256": "84964c80daefddeb68735b1acaa024879f057f808ee7cdee396e65945a15a2ec",
+   "cue": "geigerClick",
+   "durationS": 0.0202,
+   "mp3": {
+    "frames": 2,
+    "sampleRate": 44100,
+    "kbps": 128,
+    "decodeCheck": "MPEG-1 Layer III frame chain OK (not decoded on the worker)"
+   },
+   "source": {
+    "clip": "geiger-click-03",
+    "procedural": true,
+    "generator": "tools/audio-pipeline/geiger-render.mjs",
+    "generatorVersion": 1,
+    "seed": 15110103,
+    "discharges": 1,
+    "params": {
+     "modes": [
+      {
+       "name": "piezo",
+       "f": 3317.3163,
+       "q": 8.9549,
+       "levelDb": 0
+      },
+      {
+       "name": "piezoUpper",
+       "f": 6675.7777,
+       "q": 10.4205,
+       "levelDb": -14.708
+      },
+      {
+       "name": "housing",
+       "f": 1151.9671,
+       "q": 3.1379,
+       "levelDb": -6.7085
+      },
+      {
+       "name": "body",
+       "f": 195.3985,
+       "q": 0.7252,
+       "levelDb": -13.848
+      }
+     ],
+     "directLevelDb": -12.8253,
+     "speakerLowpassHz": 8584.4184,
+     "discharges": [
+      {
+       "atMs": 0,
+       "amp": 1,
+       "widthMs": 0.2028,
+       "edgeMs": 0.0357,
+       "fallRel": 0.7051,
+       "recoveryMs": 0.435,
+       "noiseMix": 0.162,
+       "noiseSeed": 2996452091
+      }
+     ]
+    },
+    "rawFile": "reference/tasks/reactor-glowing-zombies-20261115-013245/audio/raw/geiger-click-03.wav",
+    "rawSha256": "9eed18d0538b5854f5bd0f2c2222986d4226b74fc712d7e072be43701a0df1d6",
+    "rawSampleRate": 48000,
+    "rawBits": 16,
+    "rawSamples": 2400,
+    "rawAnalysis": {
+     "peakDbfs": -3,
+     "dcMean": -4.45e-7,
+     "decayTo40DbMs": 4.27,
+     "decayTo60DbMs": 6.5,
+     "decayTo60DbReTakePeakMs": 6.5,
+     "centroidHz": 3111,
+     "spectralPeakHz": 3316,
+     "bandShares": {
+      "below400": 0.005,
+      "from400to2k": 0.247,
+      "from2kto5k": 0.667,
+      "above5k": 0.081
+     }
+    },
+    "reRendered": "byte-identical",
+    "jobId": null
+   },
+   "structural": {
+    "peakDbfs": -1,
+    "dcMean": -0.00000135,
+    "decayTo40DbMs": 4.26,
+    "decayTo60DbMs": 6.51,
+    "decayTo60DbReTakePeakMs": 6.51,
+    "centroidHz": 3111,
+    "spectralPeakHz": 3316,
+    "bandShares": {
+     "below400": 0.005,
+     "from400to2k": 0.247,
+     "from2kto5k": 0.666,
+     "above5k": 0.081
+    },
+    "dischargesFound": 1,
+    "dischargeOffsetsMs": [
+     0.75
+    ],
+    "momentaryLufsAtUnity": -31.1
+   },
+   "ops": [
+    {
+     "op": "resample",
+     "fromHz": 48000,
+     "toHz": 44100,
+     "filter": "Kaiser-windowed sinc, 64 taps, beta 8.6, cutoff 0.9 x 22.05 kHz"
+    },
+    {
+     "op": "trim",
+     "startS": 0.00274,
+     "endS": 0.02,
+     "note": "0.25 ms before the first sample over -50 dB re peak, to the later of the last discharge window (17 ms) and the -80 dB point + 2 ms"
+    },
+    {
+     "op": "fade",
+     "inS": 0.00025,
+     "outS": 0,
+     "curve": "cosine",
+     "note": "fade-in over the near-silent lead only; the decay is the discharge window of the master"
+    },
+    {
+     "op": "pad",
+     "tailS": 0.003
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 1.97
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128,
+     "note": "constant encoder priming delay, skipped by the bank (leadOffset)"
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/geiger-click-04.mp3",
+   "url": "assets/audio/geiger-click-04.mp3",
+   "bytes": 835,
+   "sha256": "83ba985c746f8a0e071a20a8e5473ee501fdca01e5cf4424bb3e71436b3bdf93",
+   "cue": "geigerClick",
+   "durationS": 0.0202,
+   "mp3": {
+    "frames": 2,
+    "sampleRate": 44100,
+    "kbps": 128,
+    "decodeCheck": "MPEG-1 Layer III frame chain OK (not decoded on the worker)"
+   },
+   "source": {
+    "clip": "geiger-click-04",
+    "procedural": true,
+    "generator": "tools/audio-pipeline/geiger-render.mjs",
+    "generatorVersion": 1,
+    "seed": 15110104,
+    "discharges": 1,
+    "params": {
+     "modes": [
+      {
+       "name": "piezo",
+       "f": 3164.5743,
+       "q": 9.1278,
+       "levelDb": 0
+      },
+      {
+       "name": "piezoUpper",
+       "f": 6345.3325,
+       "q": 10.1041,
+       "levelDb": -13.538
+      },
+      {
+       "name": "housing",
+       "f": 1066.753,
+       "q": 2.8086,
+       "levelDb": -5.2901
+      },
+      {
+       "name": "body",
+       "f": 197.5588,
+       "q": 0.751,
+       "levelDb": -12.2975
+      }
+     ],
+     "directLevelDb": -11.9688,
+     "speakerLowpassHz": 9328.0335,
+     "discharges": [
+      {
+       "atMs": 0,
+       "amp": 1,
+       "widthMs": 0.1797,
+       "edgeMs": 0.0468,
+       "fallRel": 0.7333,
+       "recoveryMs": 0.5254,
+       "noiseMix": 0.1684,
+       "noiseSeed": 3840413262
+      }
+     ]
+    },
+    "rawFile": "reference/tasks/reactor-glowing-zombies-20261115-013245/audio/raw/geiger-click-04.wav",
+    "rawSha256": "768ad5548705e9b3b463bc616a596c214834d20943576aea62dc7f1d3132550c",
+    "rawSampleRate": 48000,
+    "rawBits": 16,
+    "rawSamples": 2400,
+    "rawAnalysis": {
+     "peakDbfs": -3,
+     "dcMean": -3.18e-7,
+     "decayTo40DbMs": 4.44,
+     "decayTo60DbMs": 6.79,
+     "decayTo60DbReTakePeakMs": 6.79,
+     "centroidHz": 3249,
+     "spectralPeakHz": 3176,
+     "bandShares": {
+      "below400": 0.005,
+      "from400to2k": 0.214,
+      "from2kto5k": 0.667,
+      "above5k": 0.114
+     }
+    },
+    "reRendered": "byte-identical",
+    "jobId": null
+   },
+   "structural": {
+    "peakDbfs": -1,
+    "dcMean": -9.45e-7,
+    "decayTo40DbMs": 4.44,
+    "decayTo60DbMs": 6.8,
+    "decayTo60DbReTakePeakMs": 6.8,
+    "centroidHz": 3249,
+    "spectralPeakHz": 3187,
+    "bandShares": {
+     "below400": 0.005,
+     "from400to2k": 0.214,
+     "from2kto5k": 0.667,
+     "above5k": 0.114
+    },
+    "dischargesFound": 1,
+    "dischargeOffsetsMs": [
+     0.25
+    ],
+    "momentaryLufsAtUnity": -31.4
+   },
+   "ops": [
+    {
+     "op": "resample",
+     "fromHz": 48000,
+     "toHz": 44100,
+     "filter": "Kaiser-windowed sinc, 64 taps, beta 8.6, cutoff 0.9 x 22.05 kHz"
+    },
+    {
+     "op": "trim",
+     "startS": 0.00274,
+     "endS": 0.02,
+     "note": "0.25 ms before the first sample over -50 dB re peak, to the later of the last discharge window (17 ms) and the -80 dB point + 2 ms"
+    },
+    {
+     "op": "fade",
+     "inS": 0.00025,
+     "outS": 0,
+     "curve": "cosine",
+     "note": "fade-in over the near-silent lead only; the decay is the discharge window of the master"
+    },
+    {
+     "op": "pad",
+     "tailS": 0.003
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 1.93
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128,
+     "note": "constant encoder priming delay, skipped by the bank (leadOffset)"
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/geiger-click-05.mp3",
+   "url": "assets/audio/geiger-click-05.mp3",
+   "bytes": 835,
+   "sha256": "9780f1e0b61d190bef5ad00e210f0c76719f638bae78287eb9d7c995d70cf103",
+   "cue": "geigerClick",
+   "durationS": 0.0202,
+   "mp3": {
+    "frames": 2,
+    "sampleRate": 44100,
+    "kbps": 128,
+    "decodeCheck": "MPEG-1 Layer III frame chain OK (not decoded on the worker)"
+   },
+   "source": {
+    "clip": "geiger-click-05",
+    "procedural": true,
+    "generator": "tools/audio-pipeline/geiger-render.mjs",
+    "generatorVersion": 1,
+    "seed": 15110105,
+    "discharges": 1,
+    "params": {
+     "modes": [
+      {
+       "name": "piezo",
+       "f": 3322.9309,
+       "q": 7.2822,
+       "levelDb": 0
+      },
+      {
+       "name": "piezoUpper",
+       "f": 6393.1407,
+       "q": 11.6752,
+       "levelDb": -12.1842
+      },
+      {
+       "name": "housing",
+       "f": 1187.4976,
+       "q": 2.7515,
+       "levelDb": -5.662
+      },
+      {
+       "name": "body",
+       "f": 189.5502,
+       "q": 0.7677,
+       "levelDb": -10.5842
+      }
+     ],
+     "directLevelDb": -10.0082,
+     "speakerLowpassHz": 10234.9698,
+     "discharges": [
+      {
+       "atMs": 0,
+       "amp": 1,
+       "widthMs": 0.2025,
+       "edgeMs": 0.037,
+       "fallRel": 0.7354,
+       "recoveryMs": 0.5483,
+       "noiseMix": 0.1074,
+       "noiseSeed": 1476237669
+      }
+     ]
+    },
+    "rawFile": "reference/tasks/reactor-glowing-zombies-20261115-013245/audio/raw/geiger-click-05.wav",
+    "rawSha256": "0e1f894427d80c92a9f074bed61bdc6c505011662a8330e9f3aeeaac942c9068",
+    "rawSampleRate": 48000,
+    "rawBits": 16,
+    "rawSamples": 2400,
+    "rawAnalysis": {
+     "peakDbfs": -3,
+     "dcMean": -1.27e-7,
+     "decayTo40DbMs": 3.38,
+     "decayTo60DbMs": 5.19,
+     "decayTo60DbReTakePeakMs": 5.19,
+     "centroidHz": 3359,
+     "spectralPeakHz": 3328,
+     "bandShares": {
+      "below400": 0.009,
+      "from400to2k": 0.248,
+      "from2kto5k": 0.593,
+      "above5k": 0.151
+     }
+    },
+    "reRendered": "byte-identical",
+    "jobId": null
+   },
+   "structural": {
+    "peakDbfs": -1,
+    "dcMean": -3.51e-7,
+    "decayTo40DbMs": 3.38,
+    "decayTo60DbMs": 5.19,
+    "decayTo60DbReTakePeakMs": 5.19,
+    "centroidHz": 3359,
+    "spectralPeakHz": 3316,
+    "bandShares": {
+     "below400": 0.009,
+     "from400to2k": 0.248,
+     "from2kto5k": 0.593,
+     "above5k": 0.151
+    },
+    "dischargesFound": 1,
+    "dischargeOffsetsMs": [
+     0.25
+    ],
+    "momentaryLufsAtUnity": -32.3
+   },
+   "ops": [
+    {
+     "op": "resample",
+     "fromHz": 48000,
+     "toHz": 44100,
+     "filter": "Kaiser-windowed sinc, 64 taps, beta 8.6, cutoff 0.9 x 22.05 kHz"
+    },
+    {
+     "op": "trim",
+     "startS": 0.00274,
+     "endS": 0.02,
+     "note": "0.25 ms before the first sample over -50 dB re peak, to the later of the last discharge window (17 ms) and the -80 dB point + 2 ms"
+    },
+    {
+     "op": "fade",
+     "inS": 0.00025,
+     "outS": 0,
+     "curve": "cosine",
+     "note": "fade-in over the near-silent lead only; the decay is the discharge window of the master"
+    },
+    {
+     "op": "pad",
+     "tailS": 0.003
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 1.93
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128,
+     "note": "constant encoder priming delay, skipped by the bank (leadOffset)"
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/geiger-click-06.mp3",
+   "url": "assets/audio/geiger-click-06.mp3",
+   "bytes": 835,
+   "sha256": "1d637a888dc999861d7086876df3b0c4b9367a86f9ab49bb51fa87ef8ec3c8f1",
+   "cue": "geigerClick",
+   "durationS": 0.0202,
+   "mp3": {
+    "frames": 2,
+    "sampleRate": 44100,
+    "kbps": 128,
+    "decodeCheck": "MPEG-1 Layer III frame chain OK (not decoded on the worker)"
+   },
+   "source": {
+    "clip": "geiger-click-06",
+    "procedural": true,
+    "generator": "tools/audio-pipeline/geiger-render.mjs",
+    "generatorVersion": 1,
+    "seed": 15110106,
+    "discharges": 1,
+    "params": {
+     "modes": [
+      {
+       "name": "piezo",
+       "f": 2973.3979,
+       "q": 7.1993,
+       "levelDb": 0
+      },
+      {
+       "name": "piezoUpper",
+       "f": 6780.4518,
+       "q": 12.7401,
+       "levelDb": -15.5353
+      },
+      {
+       "name": "housing",
+       "f": 1139.4535,
+       "q": 2.642,
+       "levelDb": -7.1192
+      },
+      {
+       "name": "body",
+       "f": 198.781,
+       "q": 0.6919,
+       "levelDb": -10.1312
+      }
+     ],
+     "directLevelDb": -11.2258,
+     "speakerLowpassHz": 8877.4502,
+     "discharges": [
+      {
+       "atMs": 0,
+       "amp": 1,
+       "widthMs": 0.1573,
+       "edgeMs": 0.0547,
+       "fallRel": 0.8376,
+       "recoveryMs": 0.4802,
+       "noiseMix": 0.209,
+       "noiseSeed": 1362598966
+      }
+     ]
+    },
+    "rawFile": "reference/tasks/reactor-glowing-zombies-20261115-013245/audio/raw/geiger-click-06.wav",
+    "rawSha256": "19c7392f04b3b9f3931544be5afb485791d4edb3557de5ec304db32f24664131",
+    "rawSampleRate": 48000,
+    "rawBits": 16,
+    "rawSamples": 2400,
+    "rawAnalysis": {
+     "peakDbfs": -3,
+     "dcMean": -3.31e-7,
+     "decayTo40DbMs": 3.54,
+     "decayTo60DbMs": 5.25,
+     "decayTo60DbReTakePeakMs": 5.25,
+     "centroidHz": 3059,
+     "spectralPeakHz": 3000,
+     "bandShares": {
+      "below400": 0.004,
+      "from400to2k": 0.118,
+      "from2kto5k": 0.849,
+      "above5k": 0.029
+     }
+    },
+    "reRendered": "byte-identical",
+    "jobId": null
+   },
+   "structural": {
+    "peakDbfs": -1,
+    "dcMean": -9.74e-7,
+    "decayTo40DbMs": 3.51,
+    "decayTo60DbMs": 5.22,
+    "decayTo60DbReTakePeakMs": 5.22,
+    "centroidHz": 3059,
+    "spectralPeakHz": 3015,
+    "bandShares": {
+     "below400": 0.004,
+     "from400to2k": 0.118,
+     "from2kto5k": 0.849,
+     "above5k": 0.029
+    },
+    "dischargesFound": 1,
+    "dischargeOffsetsMs": [
+     0.25
+    ],
+    "momentaryLufsAtUnity": -30.3
+   },
+   "ops": [
+    {
+     "op": "resample",
+     "fromHz": 48000,
+     "toHz": 44100,
+     "filter": "Kaiser-windowed sinc, 64 taps, beta 8.6, cutoff 0.9 x 22.05 kHz"
+    },
+    {
+     "op": "trim",
+     "startS": 0.00274,
+     "endS": 0.02,
+     "note": "0.25 ms before the first sample over -50 dB re peak, to the later of the last discharge window (17 ms) and the -80 dB point + 2 ms"
+    },
+    {
+     "op": "fade",
+     "inS": 0.00025,
+     "outS": 0,
+     "curve": "cosine",
+     "note": "fade-in over the near-silent lead only; the decay is the discharge window of the master"
+    },
+    {
+     "op": "pad",
+     "tailS": 0.003
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 1.79
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128,
+     "note": "constant encoder priming delay, skipped by the bank (leadOffset)"
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/geiger-cluster-01.mp3",
+   "url": "assets/audio/geiger-cluster-01.mp3",
+   "bytes": 1253,
+   "sha256": "5b9b1b22fd56ad98f2e6b75bc579f46cdfb11e0d974b9298bb927e5e36b979ed",
+   "cue": "geigerCluster",
+   "durationS": 0.0319,
+   "mp3": {
+    "frames": 3,
+    "sampleRate": 44100,
+    "kbps": 128,
+    "decodeCheck": "MPEG-1 Layer III frame chain OK (not decoded on the worker)"
+   },
+   "source": {
+    "clip": "geiger-cluster-01",
+    "procedural": true,
+    "generator": "tools/audio-pipeline/geiger-render.mjs",
+    "generatorVersion": 1,
+    "seed": 15110201,
+    "discharges": 2,
+    "params": {
+     "modes": [
+      {
+       "name": "piezo",
+       "f": 3392.7776,
+       "q": 8.1669,
+       "levelDb": 0
+      },
+      {
+       "name": "piezoUpper",
+       "f": 6971.2602,
+       "q": 10.3872,
+       "levelDb": -15.7907
+      },
+      {
+       "name": "housing",
+       "f": 1124.5314,
+       "q": 3.2317,
+       "levelDb": -7.161
+      },
+      {
+       "name": "body",
+       "f": 185.0056,
+       "q": 0.794,
+       "levelDb": -11.5029
+      }
+     ],
+     "directLevelDb": -12.0714,
+     "speakerLowpassHz": 9977.0504,
+     "discharges": [
+      {
+       "atMs": 0,
+       "amp": 0.8986,
+       "widthMs": 0.1756,
+       "edgeMs": 0.0488,
+       "fallRel": 0.7882,
+       "recoveryMs": 0.3572,
+       "noiseMix": 0.1202,
+       "noiseSeed": 1577113987
+      },
+      {
+       "atMs": 11.616,
+       "amp": 0.8306,
+       "widthMs": 0.1986,
+       "edgeMs": 0.0473,
+       "fallRel": 0.8236,
+       "recoveryMs": 0.5218,
+       "noiseMix": 0.2058,
+       "noiseSeed": 203875658
+      }
+     ]
+    },
+    "rawFile": "reference/tasks/reactor-glowing-zombies-20261115-013245/audio/raw/geiger-cluster-01.wav",
+    "rawSha256": "ae8b6321047c0c0281eca8d4bab735c75806f50495f6a23d81e5e4254fd278a2",
+    "rawSampleRate": 48000,
+    "rawBits": 16,
+    "rawSamples": 2958,
+    "rawAnalysis": {
+     "peakDbfs": -3,
+     "dcMean": -8.25e-8,
+     "decayTo40DbMs": 4.15,
+     "decayTo60DbMs": 6.65,
+     "decayTo60DbReTakePeakMs": 5.75,
+     "centroidHz": 3329,
+     "spectralPeakHz": 3434,
+     "bandShares": {
+      "below400": 0.005,
+      "from400to2k": 0.181,
+      "from2kto5k": 0.744,
+      "above5k": 0.071
+     }
+    },
+    "reRendered": "byte-identical",
+    "jobId": null
+   },
+   "structural": {
+    "peakDbfs": -1,
+    "dcMean": -1.77e-7,
+    "decayTo40DbMs": 4.42,
+    "decayTo60DbMs": 6.67,
+    "decayTo60DbReTakePeakMs": 5.78,
+    "centroidHz": 3329,
+    "spectralPeakHz": 3359,
+    "bandShares": {
+     "below400": 0.005,
+     "from400to2k": 0.181,
+     "from2kto5k": 0.744,
+     "above5k": 0.07
+    },
+    "dischargesFound": 2,
+    "dischargeOffsetsMs": [
+     0.25,
+     11.72
+    ],
+    "momentaryLufsAtUnity": -28.4
+   },
+   "ops": [
+    {
+     "op": "resample",
+     "fromHz": 48000,
+     "toHz": 44100,
+     "filter": "Kaiser-windowed sinc, 64 taps, beta 8.6, cutoff 0.9 x 22.05 kHz"
+    },
+    {
+     "op": "trim",
+     "startS": 0.00274,
+     "endS": 0.03163,
+     "note": "0.25 ms before the first sample over -50 dB re peak, to the later of the last discharge window (17 ms) and the -80 dB point + 2 ms"
+    },
+    {
+     "op": "fade",
+     "inS": 0.00025,
+     "outS": 0,
+     "curve": "cosine",
+     "note": "fade-in over the near-silent lead only; the decay is the discharge window of the master"
+    },
+    {
+     "op": "pad",
+     "tailS": 0.003
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 1.94
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128,
+     "note": "constant encoder priming delay, skipped by the bank (leadOffset)"
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/geiger-cluster-02.mp3",
+   "url": "assets/audio/geiger-cluster-02.mp3",
+   "bytes": 2089,
+   "sha256": "424137e9e316741761e00608d56a3d85cb9e863e84e84226677fd2ee71baf1e0",
+   "cue": "geigerCluster",
+   "durationS": 0.0812,
+   "mp3": {
+    "frames": 5,
+    "sampleRate": 44100,
+    "kbps": 128,
+    "decodeCheck": "MPEG-1 Layer III frame chain OK (not decoded on the worker)"
+   },
+   "source": {
+    "clip": "geiger-cluster-02",
+    "procedural": true,
+    "generator": "tools/audio-pipeline/geiger-render.mjs",
+    "generatorVersion": 1,
+    "seed": 15110202,
+    "discharges": 3,
+    "params": {
+     "modes": [
+      {
+       "name": "piezo",
+       "f": 3082.6645,
+       "q": 7.1264,
+       "levelDb": 0
+      },
+      {
+       "name": "piezoUpper",
+       "f": 6556.3838,
+       "q": 10.6795,
+       "levelDb": -12.9307
+      },
+      {
+       "name": "housing",
+       "f": 1211.6944,
+       "q": 2.9189,
+       "levelDb": -5.5969
+      },
+      {
+       "name": "body",
+       "f": 194.8608,
+       "q": 0.6388,
+       "levelDb": -11.9963
+      }
+     ],
+     "directLevelDb": -11.3409,
+     "speakerLowpassHz": 8931.5382,
+     "discharges": [
+      {
+       "atMs": 0,
+       "amp": 0.8661,
+       "widthMs": 0.1665,
+       "edgeMs": 0.0408,
+       "fallRel": 0.7529,
+       "recoveryMs": 0.5353,
+       "noiseMix": 0.1363,
+       "noiseSeed": 3701122369
+      },
+      {
+       "atMs": 28.1304,
+       "amp": 0.9801,
+       "widthMs": 0.203,
+       "edgeMs": 0.0386,
+       "fallRel": 0.8355,
+       "recoveryMs": 0.4343,
+       "noiseMix": 0.0998,
+       "noiseSeed": 1102462322
+      },
+      {
+       "atMs": 60.9069,
+       "amp": 0.7937,
+       "widthMs": 0.1604,
+       "edgeMs": 0.0516,
+       "fallRel": 0.7381,
+       "recoveryMs": 0.4978,
+       "noiseMix": 0.1811,
+       "noiseSeed": 3292060805
+      }
+     ]
+    },
+    "rawFile": "reference/tasks/reactor-glowing-zombies-20261115-013245/audio/raw/geiger-cluster-02.wav",
+    "rawSha256": "112244edb705dde0dad0160e169e3e5244043b26434d6a497908e8b8c2620e7f",
+    "rawSampleRate": 48000,
+    "rawBits": 16,
+    "rawSamples": 5324,
+    "rawAnalysis": {
+     "peakDbfs": -3,
+     "dcMean": -4.01e-8,
+     "decayTo40DbMs": 3.9,
+     "decayTo60DbMs": 5.54,
+     "decayTo60DbReTakePeakMs": 5.5,
+     "centroidHz": 3078,
+     "spectralPeakHz": 3053,
+     "bandShares": {
+      "below400": 0.003,
+      "from400to2k": 0.185,
+      "from2kto5k": 0.756,
+      "above5k": 0.056
+     }
+    },
+    "reRendered": "byte-identical",
+    "jobId": null
+   },
+   "structural": {
+    "peakDbfs": -1,
+    "dcMean": -5.37e-8,
+    "decayTo40DbMs": 3.72,
+    "decayTo60DbMs": 5.37,
+    "decayTo60DbReTakePeakMs": 5.01,
+    "centroidHz": 3078,
+    "spectralPeakHz": 3058,
+    "bandShares": {
+     "below400": 0.003,
+     "from400to2k": 0.185,
+     "from2kto5k": 0.756,
+     "above5k": 0.056
+    },
+    "dischargesFound": 3,
+    "dischargeOffsetsMs": [
+     0.25,
+     28.44,
+     61.36
+    ],
+    "momentaryLufsAtUnity": -27
+   },
+   "ops": [
+    {
+     "op": "resample",
+     "fromHz": 48000,
+     "toHz": 44100,
+     "filter": "Kaiser-windowed sinc, 64 taps, beta 8.6, cutoff 0.9 x 22.05 kHz"
+    },
+    {
+     "op": "trim",
+     "startS": 0.00274,
+     "endS": 0.08091,
+     "note": "0.25 ms before the first sample over -50 dB re peak, to the later of the last discharge window (17 ms) and the -80 dB point + 2 ms"
+    },
+    {
+     "op": "fade",
+     "inS": 0.00025,
+     "outS": 0,
+     "curve": "cosine",
+     "note": "fade-in over the near-silent lead only; the decay is the discharge window of the master"
+    },
+    {
+     "op": "pad",
+     "tailS": 0.003
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 1.6
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128,
+     "note": "constant encoder priming delay, skipped by the bank (leadOffset)"
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/geiger-cluster-03.mp3",
+   "url": "assets/audio/geiger-cluster-03.mp3",
+   "bytes": 1671,
+   "sha256": "0c5b6938e1127926756864ce4bc6c2a1166cdd94a5c860377f65cdb95af8f003",
+   "cue": "geigerCluster",
+   "durationS": 0.0746,
+   "mp3": {
+    "frames": 4,
+    "sampleRate": 44100,
+    "kbps": 128,
+    "decodeCheck": "MPEG-1 Layer III frame chain OK (not decoded on the worker)"
+   },
+   "source": {
+    "clip": "geiger-cluster-03",
+    "procedural": true,
+    "generator": "tools/audio-pipeline/geiger-render.mjs",
+    "generatorVersion": 1,
+    "seed": 15110203,
+    "discharges": 4,
+    "params": {
+     "modes": [
+      {
+       "name": "piezo",
+       "f": 3142.0977,
+       "q": 7.4572,
+       "levelDb": 0
+      },
+      {
+       "name": "piezoUpper",
+       "f": 6472.8519,
+       "q": 12.9109,
+       "levelDb": -15.4235
+      },
+      {
+       "name": "housing",
+       "f": 1167.5807,
+       "q": 2.5446,
+       "levelDb": -7.5437
+      },
+      {
+       "name": "body",
+       "f": 188.1483,
+       "q": 0.6099,
+       "levelDb": -13.8213
+      }
+     ],
+     "directLevelDb": -10.4342,
+     "speakerLowpassHz": 8733.3755,
+     "discharges": [
+      {
+       "atMs": 0,
+       "amp": 0.8486,
+       "widthMs": 0.2156,
+       "edgeMs": 0.0426,
+       "fallRel": 0.7126,
+       "recoveryMs": 0.4329,
+       "noiseMix": 0.0838,
+       "noiseSeed": 328987358
+      },
+      {
+       "atMs": 24.5915,
+       "amp": 0.9346,
+       "widthMs": 0.1513,
+       "edgeMs": 0.0535,
+       "fallRel": 0.8026,
+       "recoveryMs": 0.5894,
+       "noiseMix": 0.215,
+       "noiseSeed": 1590141613
+      },
+      {
+       "atMs": 41.608,
+       "amp": 0.8941,
+       "widthMs": 0.1572,
+       "edgeMs": 0.0534,
+       "fallRel": 0.7467,
+       "recoveryMs": 0.4909,
+       "noiseMix": 0.1605,
+       "noiseSeed": 3526168869
+      },
+      {
+       "atMs": 54.3734,
+       "amp": 0.8215,
+       "widthMs": 0.1757,
+       "edgeMs": 0.0511,
+       "fallRel": 0.7498,
+       "recoveryMs": 0.5145,
+       "noiseMix": 0.1528,
+       "noiseSeed": 1064764169
+      }
+     ]
+    },
+    "rawFile": "reference/tasks/reactor-glowing-zombies-20261115-013245/audio/raw/geiger-cluster-03.wav",
+    "rawSha256": "84f8dd2b6f7acc2083f3e4e42f6c388af025f5cd308d060b25ac5a6a95723b25",
+    "rawSampleRate": 48000,
+    "rawBits": 16,
+    "rawSamples": 5010,
+    "rawAnalysis": {
+     "peakDbfs": -3,
+     "dcMean": 3.29e-7,
+     "decayTo40DbMs": 3.63,
+     "decayTo60DbMs": 5.56,
+     "decayTo60DbReTakePeakMs": 4.96,
+     "centroidHz": 3192,
+     "spectralPeakHz": 3053,
+     "bandShares": {
+      "below400": 0.002,
+      "from400to2k": 0.111,
+      "from2kto5k": 0.852,
+      "above5k": 0.034
+     }
+    },
+    "reRendered": "byte-identical",
+    "jobId": null
+   },
+   "structural": {
+    "peakDbfs": -1,
+    "dcMean": 5.96e-7,
+    "decayTo40DbMs": 3.36,
+    "decayTo60DbMs": 5.58,
+    "decayTo60DbReTakePeakMs": 4.97,
+    "centroidHz": 3192,
+    "spectralPeakHz": 3219,
+    "bandShares": {
+     "below400": 0.002,
+     "from400to2k": 0.111,
+     "from2kto5k": 0.852,
+     "above5k": 0.034
+    },
+    "dischargesFound": 4,
+    "dischargeOffsetsMs": [
+     0.25,
+     24.94,
+     41.9,
+     54.63
+    ],
+    "momentaryLufsAtUnity": -25.7
+   },
+   "ops": [
+    {
+     "op": "resample",
+     "fromHz": 48000,
+     "toHz": 44100,
+     "filter": "Kaiser-windowed sinc, 64 taps, beta 8.6, cutoff 0.9 x 22.05 kHz"
+    },
+    {
+     "op": "trim",
+     "startS": 0.00274,
+     "endS": 0.07438,
+     "note": "0.25 ms before the first sample over -50 dB re peak, to the later of the last discharge window (17 ms) and the -80 dB point + 2 ms"
+    },
+    {
+     "op": "fade",
+     "inS": 0.00025,
+     "outS": 0,
+     "curve": "cosine",
+     "note": "fade-in over the near-silent lead only; the decay is the discharge window of the master"
+    },
+    {
+     "op": "pad",
+     "tailS": 0.003
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 2.02
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128,
+     "note": "constant encoder priming delay, skipped by the bank (leadOffset)"
+    }
+   ]
+  }
+ ]
+}

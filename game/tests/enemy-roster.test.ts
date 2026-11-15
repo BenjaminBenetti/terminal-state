@@ -192,6 +192,12 @@ describe('seeded roster: real levels through the registry', () => {
         const a = LEVELS[level].generate('main', {levelSeed: seed}), b = LEVELS[level].generate('main', {levelSeed: seed, rosterVersion: ROSTER_VERSION});
         const again = LEVELS[level].generate('main', {levelSeed: seed, rosterVersion: ROSTER_VERSION});
         expect(JSON.stringify(again.zombies), `${level} ${seed}: deterministic`).toBe(JSON.stringify(b.zombies));
+        // (roster v4, task studio-reactor-glowing-zombies-20261115-013245-01: the Reactor's irradiated zombies are APPENDED right after this
+        // pass by the registry — gen/reactor/irradiated.ts, tests/irradiated-spawns.test.ts; this test is the pass itself: compare without them)
+        const extra = b.zombies.slice(a.zombies.length);
+        expect(extra.every(z => z.irradiated === true), `${level} ${seed}: only irradiated additions are appended`).toBe(true);
+        if (level !== 'reactor') expect(extra.length).toBe(0);
+        b.zombies.length = a.zombies.length;
         // nothing but archetype / variant differs: the same spawns, positions, order, types, areas, hordes, looks — and everything else
         expect(strip(b)).toBe(strip(a));
         expect(JSON.stringify({...b, zombies: null})).toBe(JSON.stringify({...a, zombies: null}));
@@ -283,18 +289,21 @@ describe('seeded roster: the version pin (saves)', () => {
     // (2 since task studio-sprinter-zombies-20261112-033210-01: version 1's families + the sprinters; a station recorded at 1 stays at 1)
     // (3 since task studio-bb-production-20261112-234540-01: version 2 + BB, placed last; a station recorded at 2 or 1 stays there —
     // tests/bb-roster.test.ts)
-    expect(ROSTER_VERSION).toBe(3);
-    expect(rosterVersionFor(undefined)).toBe(3);
-    expect(rosterVersionFor({visits: 0, lanes: {}})).toBe(3);
+    // (4 since task studio-reactor-glowing-zombies-20261115-013245-01: version 3 + the Reactor's appended irradiated zombies; a station
+    // recorded at 3 or lower stays there — tests/irradiated-spawns.test.ts)
+    expect(ROSTER_VERSION).toBe(4);
+    expect(rosterVersionFor(undefined)).toBe(4);
+    expect(rosterVersionFor({visits: 0, lanes: {}})).toBe(4);
     expect(rosterVersionFor({visits: 3, lanes: {}})).toBe(0);
     expect(rosterVersionFor({visits: 3, lanes: {[ROSTER_LANE]: {v: 1}}})).toBe(1);
     expect(rosterVersionFor({visits: 3, lanes: {[ROSTER_LANE]: {v: 2}}})).toBe(2);
     expect(rosterVersionFor({visits: 3, lanes: {[ROSTER_LANE]: {v: 3}}})).toBe(3);
+    expect(rosterVersionFor({visits: 3, lanes: {[ROSTER_LANE]: {v: 4}}})).toBe(4);
     expect(rosterVersionFor({visits: 0, lanes: {[ROSTER_LANE]: {v: 0}}})).toBe(0);
     // a damaged / future record falls back to the visits rule
     expect(rosterVersionFor({visits: 2, lanes: {[ROSTER_LANE]: {v: 99}}})).toBe(0);
-    expect(rosterVersionFor({visits: 0, lanes: {[ROSTER_LANE]: {v: -1}}})).toBe(3);
-    expect(rosterVersionFor({visits: 0, lanes: {[ROSTER_LANE]: 'x'}})).toBe(3);
+    expect(rosterVersionFor({visits: 0, lanes: {[ROSTER_LANE]: {v: -1}}})).toBe(4);
+    expect(rosterVersionFor({visits: 0, lanes: {[ROSTER_LANE]: 'x'}})).toBe(4);
   });
 
   it('a campaign: an old visited station keeps version 0 (its enemies exact), a new one records the current version on its first build', () => {

@@ -1,0 +1,671 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "zombie-skin-mask",
+ "task": "studio-reactor-glowing-zombies-20261115-013245-01",
+ "lane": "MASK",
+ "status": "runtime DATA texture (a mask; root CLAUDE.md: data textures are exempt from the Codex rule, processing is not authoring) derived deterministically from the shipped ordinary zombie body GLBs (their meshes, skinning weights and embedded base-colour atlases); no image or model generation; unapproved prototype, no licence or commercial clearance implied beyond the source models' own status",
+ "rebuild": "node tools/asset-pipeline/zombie/build-skin-mask.mjs",
+ "tool": "@gltf-transform/core + sharp (libvips) via tools/asset-pipeline/zombie/build-skin-mask.mjs",
+ "output": {
+  "url": "assets/textures/zombie-skin-mask.png",
+  "width": 1024,
+  "height": 1024,
+  "format": "png",
+  "channels": "RGB (8-bit, linear data: load with NoColorSpace, flipY = false like the glTF UVs)",
+  "tile": 512,
+  "layout": "2 x 2 tiles of 512²; each body = one channel (R, G, B) of one tile; alpha deliberately unused (premultiplied-alpha uploads would wipe RGB where alpha is 0); tile [1, 1] free",
+  "bytes": 153849,
+  "sha256": "3d6729d800160f3da3ec12cf99c1d887eda5e46117617706698b3a2df5722597"
+ },
+ "method": {
+  "grid": "1024² classification in the mesh's TEXCOORD_0 space (texel centres), feathered (Gaussian sigma 1 px at 1024 inside each UV island) and downsampled 2x2 (coverage-normalised) to 512²; island values dilated 4 px (at 512) into empty UV gutters, never over another island",
+  "regions": "per-texel skinning-weight prior: Root->pelvis, Hips->pelvis, Spine->spine, Chest->chest, Neck->neck, Head->head, L_UpperArm->upperArm, R_UpperArm->upperArm, L_Forearm->forearm, R_Forearm->forearm, L_Hand->hand, R_Hand->hand, L_Thigh->thigh, R_Thigh->thigh, L_Shin->shin, R_Shin->shin, L_Foot->foot, R_Foot->foot",
+  "colour": "CIE Lab; skin Gaussian from seed-region texels (median/MAD 2.5 trim, then two Mahalanobis-3 trims, lightness axis stretched) vs a k-means (k=12, 40000 seeded samples) Gaussian mixture of the atlas, clusters within \"drop\" of the skin model removed; posterior = prior-weighted likelihood ratio, cut beyond dMax",
+  "cleanup": "inside each UV island only: Gaussian smoothing (sigma 1.5 px) + 0.5 threshold, skin specks < minSkin px removed, enclosed non-skin holes <= maxHole px filled, skin components enclosed in non-skin (>= 0.75 of their outline) and <= enclosedMax px removed, islands < 40 px take their majority",
+  "coverage": "surface = 3D-area-weighted mean of the 512 tile sampled bilinearly at 4 interior points of every triangle (what the shader sees); uv = mean over covered 1024 texels"
+ },
+ "bodies": {
+  "lastshift": {
+   "input": {
+    "glb": "assets/models/zombie-body-lastshift-t25.glb",
+    "sha256": "8214232e2bcda8f40b6828b0468be9b51373f9f988cdff8ffb4573c0496cc7f7",
+    "bytes": 719216,
+    "baseColorSha256": "8bf8bb90babbaeb972d17f47b7ea60fb7bd69cc1397be05e3b574fa71b237611"
+   },
+   "slot": {
+    "tile": [
+     0,
+     0
+    ],
+    "channel": 0,
+    "channelName": "R"
+   },
+   "parameters": {
+    "seed": [
+     "forearm",
+     "hand"
+    ],
+    "allow": {
+     "foot": 0
+    },
+    "prior": 0.5,
+    "dMax": 3.6,
+    "lStretch": 1.6,
+    "drop": 2.2,
+    "minSkin": 24,
+    "maxHole": 64,
+    "facing": {},
+    "xMax": {},
+    "abFloor": 1,
+    "enclosedMax": 800
+   },
+   "reasons": {
+    "allow": "boots + socks on the feet; grey tee and denim cargo shorts are told apart by colour",
+    "enclosedMax": "a tan repair patch printed on the cargo shorts matches the skin tone; it sits enclosed in the denim"
+   },
+   "skinModel": {
+    "mean": [
+     71.07,
+     10.64,
+     9.8
+    ],
+    "sd": [
+     4.24,
+     3.01,
+     0.88
+    ],
+    "seeds": 22828,
+    "kept": 22679
+   },
+   "uvIslands": 545,
+   "uvRange": {
+    "min": [
+     0.0029,
+     0.0029
+    ],
+    "max": [
+     0.9961,
+     0.9855
+    ]
+   },
+   "coverage": {
+    "surface": 0.1776,
+    "uv": 0.1644
+   }
+  },
+  "courier": {
+   "input": {
+    "glb": "assets/models/zombie-body-courier-t25.glb",
+    "sha256": "be7b01ecd1259293b4f34713a2a76821514f55fef7cbcae504b27dfbafa2fc04",
+    "bytes": 679644,
+    "baseColorSha256": "70497de29381cc98f89bb14723fe6ff1ffc8964196a2e3dc8a6e24d075691650"
+   },
+   "slot": {
+    "tile": [
+     0,
+     0
+    ],
+    "channel": 1,
+    "channelName": "G"
+   },
+   "parameters": {
+    "seed": [
+     "forearm",
+     "hand"
+    ],
+    "allow": {
+     "pelvis": 0,
+     "thigh": 0,
+     "shin": 0,
+     "foot": 0
+    },
+    "prior": 0.5,
+    "dMax": 3.6,
+    "lStretch": 1.6,
+    "drop": 2.2,
+    "minSkin": 24,
+    "maxHole": 64,
+    "facing": {},
+    "xMax": {},
+    "abFloor": 1,
+    "enclosedMax": 6000
+   },
+   "reasons": {
+    "allow": "full-length jeans and sneakers: legs / pelvis / feet are never skin (rips are too small to matter)",
+    "enclosedMax": "dark-red blood stains printed on the white tank top match the wounded skin tone; they sit enclosed in the cloth"
+   },
+   "skinModel": {
+    "mean": [
+     45.92,
+     6.62,
+     8.1
+    ],
+    "sd": [
+     6.28,
+     1.97,
+     1.76
+    ],
+    "seeds": 37154,
+    "kept": 36514
+   },
+   "uvIslands": 241,
+   "uvRange": {
+    "min": [
+     0.0029,
+     0.0029
+    ],
+    "max": [
+     0.9957,
+     0.9962
+    ]
+   },
+   "coverage": {
+    "surface": 0.2051,
+    "uv": 0.2599
+   }
+  },
+  "agent": {
+   "input": {
+    "glb": "assets/models/zombie-body-agent-t25.glb",
+    "sha256": "406c3aa40e086b13b7ed2263d7d4dd5c8a7f8b49f818be339a65b9f67aece27e",
+    "bytes": 657976,
+    "baseColorSha256": "5bc8269e21d6d3e0739db5671867bd22784a61d44a75c807a122e3378399581a"
+   },
+   "slot": {
+    "tile": [
+     0,
+     0
+    ],
+    "channel": 2,
+    "channelName": "B"
+   },
+   "parameters": {
+    "seed": [
+     "forearm",
+     "hand"
+    ],
+    "allow": {
+     "pelvis": 0,
+     "thigh": 0,
+     "shin": 0,
+     "foot": 0
+    },
+    "prior": 0.5,
+    "dMax": 3.6,
+    "lStretch": 1.6,
+    "drop": 2.2,
+    "minSkin": 24,
+    "maxHole": 64,
+    "facing": {},
+    "xMax": {},
+    "abFloor": 1,
+    "enclosedMax": 0
+   },
+   "reasons": {
+    "allow": "uniform trousers and shoes: legs / pelvis / feet are never skin"
+   },
+   "skinModel": {
+    "mean": [
+     72.97,
+     8.35,
+     9.36
+    ],
+    "sd": [
+     5.76,
+     2.56,
+     1.17
+    ],
+    "seeds": 33753,
+    "kept": 32046
+   },
+   "uvIslands": 386,
+   "uvRange": {
+    "min": [
+     0.0029,
+     0.0029
+    ],
+    "max": [
+     0.996,
+     0.9971
+    ]
+   },
+   "coverage": {
+    "surface": 0.123,
+    "uv": 0.1493
+   }
+  },
+  "scavenger": {
+   "input": {
+    "glb": "assets/models/zombie-body-scavenger-t25.glb",
+    "sha256": "b8acc6a5937a3e96d053be9845bbf0b520d1584c5f642142da7f909b579a376d",
+    "bytes": 700768,
+    "baseColorSha256": "4de566a4e95ed97fbbfd0ed0f1865fda3973a66e05efa54fa1a40da7e165ac6f"
+   },
+   "slot": {
+    "tile": [
+     1,
+     0
+    ],
+    "channel": 0,
+    "channelName": "R"
+   },
+   "parameters": {
+    "seed": [
+     "hand"
+    ],
+    "allow": {
+     "head": 0,
+     "pelvis": 0,
+     "upperArm": 0,
+     "forearm": 0,
+     "thigh": 0,
+     "shin": 0,
+     "foot": 0
+    },
+    "prior": 0.5,
+    "dMax": 3.6,
+    "lStretch": 1.6,
+    "drop": 2.2,
+    "minSkin": 24,
+    "maxHole": 400,
+    "facing": {
+     "neck": 0.3,
+     "chest": 0.6,
+     "spine": 0.6
+    },
+    "xMax": {
+     "neck": 0.08,
+     "chest": 0.085,
+     "spine": 0.085
+    },
+    "abFloor": 1,
+    "enclosedMax": 0
+   },
+   "reasons": {
+    "seed": "only the bare hands are reliably skin (sleeves cover the forearms)",
+    "allow": "built-in gas mask + hood on the head, jacket sleeves / trousers / boots everywhere else: only the hands and the open throat / chest",
+    "facing": "the jacket back, collar and the mask straps behind the neck share the skin tone: neck / chest / belly count only where they face forward",
+    "xMax": "the open jacket front: its lapels are as pink-brown as the skin, so the torso counts only between them (|x| <= 8.5 cm)",
+    "maxHole": "the throat / chest skin is mottled with dark veins: fill them; the eyes are behind the mask anyway"
+   },
+   "skinModel": {
+    "mean": [
+     48.51,
+     6.11,
+     9.57
+    ],
+    "sd": [
+     7.92,
+     1.24,
+     1.51
+    ],
+    "seeds": 17720,
+    "kept": 17383
+   },
+   "uvIslands": 353,
+   "uvRange": {
+    "min": [
+     0.0029,
+     0.0029
+    ],
+    "max": [
+     0.996,
+     0.9877
+    ]
+   },
+   "coverage": {
+    "surface": 0.079,
+    "uv": 0.0898
+   }
+  },
+  "heavyset": {
+   "input": {
+    "glb": "assets/models/zombie-body-heavyset-t25.glb",
+    "sha256": "6638029e9032cd1a2b4760183afb36f0dd42468fe4f49e5cebe6197380b67d3f",
+    "bytes": 588444,
+    "baseColorSha256": "3738de832a22b1b41f0066caf664cc7cc5a0ac44ef2013f1418cac46972cc92c"
+   },
+   "slot": {
+    "tile": [
+     1,
+     0
+    ],
+    "channel": 1,
+    "channelName": "G"
+   },
+   "parameters": {
+    "seed": [
+     "forearm",
+     "hand"
+    ],
+    "allow": {
+     "foot": 0
+    },
+    "prior": 0.5,
+    "dMax": 3.6,
+    "lStretch": 1.6,
+    "drop": 2.2,
+    "minSkin": 24,
+    "maxHole": 200,
+    "facing": {},
+    "xMax": {},
+    "abFloor": 4,
+    "enclosedMax": 0
+   },
+   "reasons": {
+    "seed": "forearms and hands share the one brown skin tone",
+    "allow": "dark socks on the feet; grey tank top / dark trunks are told apart by colour",
+    "abFloor": "the shaved scalp and knees are darker / less saturated than the forearms: widen the hue tolerance",
+    "maxHole": "bruises on the knees and scalp stubble patches are skin; the eyes are larger"
+   },
+   "skinModel": {
+    "mean": [
+     51.01,
+     4.85,
+     10.23
+    ],
+    "sd": [
+     10.3,
+     1.13,
+     1.15
+    ],
+    "seeds": 48492,
+    "kept": 48266
+   },
+   "uvIslands": 163,
+   "uvRange": {
+    "min": [
+     0.0029,
+     0.0029
+    ],
+    "max": [
+     0.9961,
+     0.997
+    ]
+   },
+   "coverage": {
+    "surface": 0.5155,
+    "uv": 0.591
+   }
+  },
+  "tall": {
+   "input": {
+    "glb": "assets/models/zombie-body-tall-t25.glb",
+    "sha256": "fa26aa32701d1eae50a6ee0f54299a0b9810e74d9afd0c41c136e970e5cda314",
+    "bytes": 632528,
+    "baseColorSha256": "a026c0e37083efd0809e57db42606793b8f80813a362899d7f9eb0d7550be653"
+   },
+   "slot": {
+    "tile": [
+     1,
+     0
+    ],
+    "channel": 2,
+    "channelName": "B"
+   },
+   "parameters": {
+    "seed": [
+     "forearm",
+     "hand"
+    ],
+    "allow": {
+     "foot": 0
+    },
+    "prior": 0.5,
+    "dMax": 3.6,
+    "lStretch": 1.6,
+    "drop": 2.2,
+    "minSkin": 24,
+    "maxHole": 64,
+    "facing": {},
+    "xMax": {},
+    "abFloor": 1,
+    "enclosedMax": 0
+   },
+   "reasons": {
+    "allow": "grey socks on the feet; grey tee / black shorts are told apart by colour"
+   },
+   "skinModel": {
+    "mean": [
+     71.16,
+     6.67,
+     7.53
+    ],
+    "sd": [
+     4.24,
+     1.75,
+     1.04
+    ],
+    "seeds": 34776,
+    "kept": 34524
+   },
+   "uvIslands": 294,
+   "uvRange": {
+    "min": [
+     0.0029,
+     0.0029
+    ],
+    "max": [
+     0.9955,
+     0.9971
+    ]
+   },
+   "coverage": {
+    "surface": 0.365,
+    "uv": 0.3261
+   }
+  },
+  "paleGaze": {
+   "input": {
+    "glb": "assets/models/zombie-body-pale-gaze-t25.glb",
+    "sha256": "e4ca91a100673fc967987c2f896fb95e0e93f385b36ef676a40d24143c356434",
+    "bytes": 707900,
+    "baseColorSha256": "0d140db0ee9717c44c792766734857a265c7bd4439ff556d8fe76abb83340e21"
+   },
+   "slot": {
+    "tile": [
+     0,
+     1
+    ],
+    "channel": 0,
+    "channelName": "R"
+   },
+   "parameters": {
+    "seed": [
+     "forearm",
+     "hand",
+     "thigh",
+     "shin"
+    ],
+    "allow": {},
+    "prior": 0.5,
+    "dMax": 3.6,
+    "lStretch": 1.6,
+    "drop": 2.2,
+    "minSkin": 24,
+    "maxHole": 64,
+    "facing": {},
+    "xMax": {},
+    "abFloor": 3,
+    "enclosedMax": 0
+   },
+   "reasons": {
+    "seed": "nude: arms and legs seed the pale skin model",
+    "abFloor": "the grey-beige limbs give a very tight hue model; the pinker fingertips / claws and lips-adjacent skin need a wider one"
+   },
+   "skinModel": {
+    "mean": [
+     46.09,
+     5.9,
+     10.07
+    ],
+    "sd": [
+     4.71,
+     0.8,
+     0.85
+    ],
+    "seeds": 41771,
+    "kept": 38428
+   },
+   "uvIslands": 1193,
+   "uvRange": {
+    "min": [
+     0.0029,
+     0.0029
+    ],
+    "max": [
+     0.9961,
+     0.9956
+    ]
+   },
+   "coverage": {
+    "surface": 0.5625,
+    "uv": 0.3664
+   }
+  },
+  "paleRevenant": {
+   "input": {
+    "glb": "assets/models/zombie-body-pale-revenant-t25.glb",
+    "sha256": "8c25eb7e6c4b7f474c4f35f43b8923ff30804e687c85b036f89c1c1ab6f4e15d",
+    "bytes": 733304,
+    "baseColorSha256": "e6853f9faeae62b452f58fa96bdecc6009eb55dc616356dc931b696233ed313b"
+   },
+   "slot": {
+    "tile": [
+     0,
+     1
+    ],
+    "channel": 1,
+    "channelName": "G"
+   },
+   "parameters": {
+    "seed": [
+     "forearm",
+     "hand",
+     "thigh",
+     "shin"
+    ],
+    "allow": {},
+    "prior": 0.5,
+    "dMax": 3.6,
+    "lStretch": 1.6,
+    "drop": 2.2,
+    "minSkin": 24,
+    "maxHole": 64,
+    "facing": {},
+    "xMax": {},
+    "abFloor": 1,
+    "enclosedMax": 0
+   },
+   "reasons": {
+    "seed": "nude: arms and legs seed the pale skin model"
+   },
+   "skinModel": {
+    "mean": [
+     56.15,
+     -1.57,
+     8.78
+    ],
+    "sd": [
+     4.07,
+     0.54,
+     0.55
+    ],
+    "seeds": 52377,
+    "kept": 52185
+   },
+   "uvIslands": 984,
+   "uvRange": {
+    "min": [
+     0.0029,
+     0.0029
+    ],
+    "max": [
+     0.9961,
+     0.997
+    ]
+   },
+   "coverage": {
+    "surface": 0.604,
+    "uv": 0.3761
+   }
+  },
+  "paleApparition": {
+   "input": {
+    "glb": "assets/models/zombie-body-pale-apparition-t25.glb",
+    "sha256": "981a00337776b3dae885a7ba8f7015f9dad61c63417a92b7a61f67dd87c10278",
+    "bytes": 593440,
+    "baseColorSha256": "952c91f43bf09170565fab6d790c90ffee779cac62db0a4ba030054a54417389"
+   },
+   "slot": {
+    "tile": [
+     0,
+     1
+    ],
+    "channel": 2,
+    "channelName": "B"
+   },
+   "parameters": {
+    "seed": [
+     "forearm",
+     "hand",
+     "thigh",
+     "shin"
+    ],
+    "allow": {},
+    "prior": 0.5,
+    "dMax": 3.6,
+    "lStretch": 1.6,
+    "drop": 2.2,
+    "minSkin": 24,
+    "maxHole": 64,
+    "facing": {},
+    "xMax": {},
+    "abFloor": 1,
+    "enclosedMax": 0
+   },
+   "reasons": {
+    "seed": "nude: arms and legs seed the pale skin model"
+   },
+   "skinModel": {
+    "mean": [
+     72.58,
+     4.7,
+     5.16
+    ],
+    "sd": [
+     2.86,
+     1.08,
+     1.13
+    ],
+    "seeds": 110578,
+    "kept": 107859
+   },
+   "uvIslands": 314,
+   "uvRange": {
+    "min": [
+     0.0029,
+     0.0029
+    ],
+    "max": [
+     0.9961,
+     0.9969
+    ]
+   },
+   "coverage": {
+    "surface": 0.7533,
+    "uv": 0.5486
+   }
+  }
+ },
+ "limits": [
+  "Heuristic segmentation (colour + skinning-weight region prior + UV-island clean-up), checked by eye on atlas overlays and bind-pose CPU renders, not hand-painted: expect a few px of error along skin / cloth borders inside an island and on tiny Meshy fragments.",
+  "Mask resolution is 512² per body (half the 1024² base colour); edges are feathered ~1 px at 512.",
+  "Mipmaps would bleed neighbouring tiles (other bodies) at low levels: sample with a linear filter and no (or capped) mipmaps. Every body's UVs lie in [0.0029, 0.9971], so bilinear mip-0 sampling never leaves its tile.",
+  "Wounds / blood larger than maxHole on skin stay non-skin; skin-coloured blood stains / patches printed on baked cloth are removed only where enclosed in the cloth (courier, lastshift); a few px at the courier's tank-top hem remain.",
+  "scavenger: whether the pink, vein-mottled torso under its open jacket is bare skin or a flesh-toned torn shirt is ambiguous in the texture; it is treated as skin between the lapels (throat to belt) plus the hands; the gas-mask head, jacket, trousers and boots are never skin.",
+  "heavyset: the short beard stubble counts as skin (the colour tolerance that covers the darker shaved scalp includes it); eyes stay out.",
+  "Hair: dark / brown / blonde hair is excluded by colour; pale strands lying on skin and a thin line along some hairlines are approximate. Eyes and mouth interiors stay out where larger than maxHole.",
+  "Runtime garments (upper / lower slots) cover much of the body; the mask under them is irrelevant but harmless."
+ ]
+}

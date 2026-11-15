@@ -47,11 +47,11 @@ import {MAX_SLOTS} from '../world/lightField';
 import {GAS} from '../world/gas/field';
 import {REACTOR_AIR, REACTOR_GAS_LOOK} from '../world/reactor/air'; // task reactor-build-20261101 (lane AIR): the depth gas table size / look
 import {BILATERAL_K, DENSITY_MAP_RANGE} from './atmosphere';
-import {SMOKE_LIMITS, VIS_WINDOWS} from './smoke';
+import {GLOW_SCATTER_NEAR_M, SCATTER_SLOTS, SMOKE_LIMITS, VIS_WINDOWS} from './smoke';
 import {applyAmbientOcclusion, type AoComposite} from './ambientOcclusion'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO)
 
 /** Uniform array sizes (render/smoke.ts SMOKE_LIMITS). */
-export const VF_LIMITS = {smoke: SMOKE_LIMITS.emitters, puffsPer: SMOKE_LIMITS.puffsPerEmitter, puffs: SMOKE_LIMITS.emitters * SMOKE_LIMITS.puffsPerEmitter, scatter: SMOKE_LIMITS.scatterLights, windows: VIS_WINDOWS} as const;
+export const VF_LIMITS = {smoke: SMOKE_LIMITS.emitters, puffsPer: SMOKE_LIMITS.puffsPerEmitter, puffs: SMOKE_LIMITS.emitters * SMOKE_LIMITS.puffsPerEmitter, scatter: SCATTER_SLOTS, windows: VIS_WINDOWS} as const; // (scatter: + the reserved glow-light slots, task studio-reactor-glowing-zombies-20261115-013245-01)
 
 /** Names of the TSL variables that mark our programs (shader-error attribution in the generated GLSL / WGSL). */
 export const VF_MARK = {march: 'vfMarchAcc', temporal: 'vfTemporalOut', composite: 'vfCompositeFog'} as const;
@@ -453,7 +453,8 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
             });
           });
         }
-        // scatter lights (thrown flares), occlusion-windowed, no closer than 0.3 m (no singular glow)
+        // scatter lights (thrown flares), occlusion-windowed, no closer than 0.3 m (no singular glow); the reserved glow slots (an
+        // irradiated zombie's light, inside its body) no closer than GLOW_SCATTER_NEAR_M
         Loop({start: 0, end: VF_LIMITS.scatter, type: 'int', condition: '<', name: 'k'}, ({k}: {k: N}) => {
           If(k.lessThan(u.scatCount), () => {
             const sp = n(u.scatPos).element(k).toVar();
@@ -462,7 +463,8 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
             const sd = max(length(sv), 1e-4).toVar();
             If(sp.w.lessThanEqual(0).or(sd.lessThanEqual(sp.w)), () => {
               const vis = windowAt(p, k);
-              L.addAssign(scc.xyz.mul(distAtt(max(sd, 0.3), sp.w, scc.w).mul(phaseOf(u, dot(sv.div(sd), n(dir).negate()))).mul(vis)));
+              const near = select(k.greaterThanEqual(SMOKE_LIMITS.scatterLights), float(GLOW_SCATTER_NEAR_M), float(0.3));
+              L.addAssign(scc.xyz.mul(distAtt(max(sd, near), sp.w, scc.w).mul(phaseOf(u, dot(sv.div(sd), n(dir).negate()))).mul(vis)));
             });
           });
         });

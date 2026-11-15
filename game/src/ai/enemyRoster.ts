@@ -36,6 +36,12 @@
 // in place of ordinary ambient zombies. BB is placed LAST (RosterRule.last), after every earlier family has taken its slots, so each
 // earlier family stands exactly where version 2 put it; then the sprinters, as before, among the ordinary zombies that are left. A
 // station recorded at 2 or lower regenerates without BB: no visited station's enemies are rerolled.
+//
+// Task studio-reactor-glowing-zombies-20261115-013245-01: version 4 = version 3, unchanged, + the Reactor's IRRADIATED ZOMBIES: about 40 %
+// more regular zombies on its lower storeys, APPENDED after every existing spawn by the level registry right after this pass
+// (gen/reactor/irradiated.ts applyIrradiatedAdditions; the rule: ai/irradiated.ts). This pass itself is unchanged: it still never adds,
+// removes, moves or reorders a spawn, and every other level at version 4 is its version-3 layout record for record. A station recorded at 3
+// or lower regenerates without them.
 
 import {hashString, mulberry32} from '../core/rng';
 import type {Area, AreaKind, ZombieSpawn} from '../gen/stationTypes';
@@ -51,9 +57,9 @@ export const ROSTER_LANE = 'enemy.roster';
 /**
  * 0 = before the roster (no pass); 1 = the seeded roster: the Screacher's 40 % and the user-approved rates of the existing families
  * (one version: it was finalised before its first release); 2 = the same families + the sprinters (ai/sprinter.ts SPRINTER.since);
- * 3 = the same + BB (FAMILY_ROSTER.bb.since).
+ * 3 = the same + BB (FAMILY_ROSTER.bb.since); 4 = the same + the Reactor's appended irradiated zombies (ai/irradiated.ts IRRADIATED.since).
  */
-export const ROSTER_VERSION = 3;
+export const ROSTER_VERSION = 4;
 
 /** The roster version a station regenerates with, from its section memory (undefined = never touched). */
 export function rosterVersionFor(mem: {visits: number; lanes: Record<string, unknown>} | undefined): number {

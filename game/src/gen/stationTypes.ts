@@ -223,6 +223,12 @@ export interface ZombieSpawn {
    * 10 % of eligible spawns), set by the roster pass from roster version 2. Absent = the ordinary chase pace (every other spawn).
    */
   sprinter?: true;
+  /**
+   * Task studio-reactor-glowing-zombies-20261115-013245-01: an IRRADIATED regular zombie (ai/irradiated.ts) — one of the ADDITIONAL
+   * ordinary zombies roster version 4 appends on the Reactor's lower storeys (gen/reactor/irradiated.ts): green glowing skin, a local
+   * green light, a short-range radiation dose and 1.5x its type's hp. Never set on a spawn the generator placed. Absent = ordinary.
+   */
+  irradiated?: true;
 }
 /**
  * Task mall-lingerie-20261102-221554 (lane CONTEXT): store-local look selectors of ZombieSpawn.look. (Task
