@@ -19,6 +19,7 @@ import type {StationLayout} from '../gen/stationTypes';
 import {SKYWAYS_ADDON_ART, SKYWAYS_STANCHION, type SkywaysAddonArtKey} from '../gen/skyways/addonKinds';
 import {SKYWAYS_ROPE, SKYWAYS_TURNTABLE_R} from '../gen/skyways/addonPrize';
 import {SurfaceNodeMaterial} from './materials';
+import {tagReflect} from '../render/reflectTag'; // task studio-pbr-material-pass-20261115-192427-01
 import {setSkywaysAddonArtMaterial, skywaysAddonAtlases} from './skywaysAddon';
 
 /** Longest wait for the art atlases before the world is built (then: the plain boards). */
@@ -198,7 +199,9 @@ export class SkywaysAddonRuntime {
     root.name = 'skyways-addon';
     if (car) {
       // --- the turntable: a dark lacquered disc 2.5 cm high with a brushed rim stripe (render only) ---
-      const discMat = new SurfaceNodeMaterial({color: 0x15171a, roughness: 0.32, metalness: 0.35});
+      // (task studio-pbr-material-pass-20261115-192427-01: lacquer is a glossy dielectric coat — metalness 0 (was 0.35, which on a
+      // near-black colour only dulled it), 'gloss' like the glazed tile: the probes by its Fresnel; colour x0.82 sRGB keeps the tone)
+      const discMat = tagReflect(new SurfaceNodeMaterial({color: 0x111315, roughness: 0.32, metalness: 0}), 'gloss');
       const rimMat = new SurfaceNodeMaterial({color: 0x9aa0a8, roughness: 0.38, metalness: 0.8});
       const disc = new THREE.CylinderGeometry(SKYWAYS_TURNTABLE_R, SKYWAYS_TURNTABLE_R + 0.02, 0.025, 72);
       disc.translate(0, 0.0125, 0);

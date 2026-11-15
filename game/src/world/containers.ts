@@ -324,8 +324,9 @@ export class ContainerManager {
     // Inside matches outside: the interior, door backs and shelving take the cabinet's own paint.
     const paint = averageColor(firstMaterial(gltf)) ?? new THREE.Color(0x3a3d38);
     // Iteration 12 (ATMOS, #4): the back-side interior box shadows from its inner faces, not its opening face (openables.ts).
-    const interiorMat = interiorShadowSide(std(paint.clone().multiplyScalar(0.42), 0.92, 0.2, THREE.BackSide));
-    const plateMat = std(paint.clone().multiplyScalar(0.6), 0.85, 0.25);
+    // (task studio-pbr-material-pass-20261115-192427-01: paint is dielectric — metalness 0, was 0.2 / 0.25; the factors keep the tone)
+    const interiorMat = interiorShadowSide(std(paint.clone().multiplyScalar(0.42 * 0.8), 0.92, 0, THREE.BackSide));
+    const plateMat = std(paint.clone().multiplyScalar(0.6 * 0.75), 0.85, 0);
     const body: Part[] = [];
     const doorParts: Part[][] = [[], []];
     const doorData: {soup: Soup; data: number[]; mat: THREE.Material}[][] = [[], []];
@@ -419,7 +420,7 @@ export class ContainerManager {
       if (parts.length) return {parts, owned, source: `models.shelf fitted: ${ins.sections.length} section(s), cut at ${cutY.toFixed(2)} m, tiers ${ins.tiers.map(t => t.toFixed(2)).join('/')} m, tinted to cabinet paint`};
     }
     // Fallback: boards + corner posts at the same tier heights, in the cabinet's paint.
-    const boardMat = std(paint.clone().multiplyScalar(0.85), 0.75, 0.35);
+    const boardMat = std(paint.clone().multiplyScalar(0.85 * 0.65), 0.75, 0); // (dielectric paint: was metalness 0.35, x0.65 keeps the tone)
     const geos: THREE.BufferGeometry[] = [];
     for (const s of ins.sections) {
       const x0 = s.cx - s.w / 2 + 0.006, x1 = s.cx + s.w / 2 - 0.006;

@@ -193,7 +193,8 @@ function mat(key: string, make: () => THREE.Material): THREE.Material {
 }
 
 const M = {
-  batteryLabel: () => mat('batteryLabel', () => new THREE.MeshStandardMaterial({name: 'authored-battery-label', map: batteryLabel(), roughness: 0.48, metalness: 0.1})),
+  // (the printed film label is a dielectric: metalness 0, was 0.1 — task studio-pbr-material-pass-20261115-192427-01; the crimp is steel)
+  batteryLabel: () => mat('batteryLabel', () => new THREE.MeshStandardMaterial({name: 'authored-battery-label', map: batteryLabel(), roughness: 0.48, metalness: 0})),
   steel: () => mat('steel', () => new THREE.MeshStandardMaterial({name: 'authored-battery-steel', color: 0xb4b5b0, roughness: 0.38, metalness: 0.35})),
   flareLabel: () => mat('flareLabel', () => new THREE.MeshStandardMaterial({name: 'authored-flare-paper', map: flareLabel(), roughness: 0.52, metalness: 0})),
   plug: () => mat('plug', () => new THREE.MeshStandardMaterial({name: 'authored-flare-plug', color: 0x5a3f2c, roughness: 0.8, metalness: 0})),

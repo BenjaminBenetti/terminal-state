@@ -512,7 +512,8 @@ const ORM: Partial<Record<LabelKind | `swatch:${Swatch}`, [number, number]>> = {
   soda: [0.66, 0.32], energy: [0.66, 0.32], tin: [0.72, 0.28], paint: [0.78, 0.25], bottle: [0.62, 0], bigbottle: [0.62, 0], jar: [0.78, 0],
   magazine: [0.78, 0], blister: [0.62, 0], phone: [0.72, 0], tablet: [0.72, 0], chips: [0.66, 0.05], snack: [0.68, 0.04],
   trash: [0.88, 0], rusttin: [0.92, 0.12], oldbottle: [0.64, 0],
-  'swatch:metal': [0.66, 0.42], 'swatch:clear': [0.48, 0], 'swatch:glass': [0.38, 0.04], 'swatch:dark': [0.74, 0], 'swatch:foil': [0.64, 0.36],
+  // (task studio-pbr-material-pass-20261115-192427-01: glass is a dielectric — its 0.04 was the reflectance typed into the metalness slot)
+  'swatch:metal': [0.66, 0.42], 'swatch:clear': [0.48, 0], 'swatch:glass': [0.38, 0], 'swatch:dark': [0.74, 0], 'swatch:foil': [0.64, 0.36],
   'swatch:peel': [0.72, 0],
 };
 

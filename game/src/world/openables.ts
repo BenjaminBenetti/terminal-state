@@ -131,6 +131,12 @@ export interface OpenHolder {
 // ---------------------------------------------------------------------------------------
 // Materials
 
+/**
+ * Task studio-pbr-material-pass-20261115-192427-01: holder interiors (body / inner plates, cavity liners) are dielectric now; their
+ * colours take the factor that keeps the diffuse tone they were tuned with as metalness 0.2 (plates) / 0.15 (cavities): x (1 - m).
+ */
+export const INTERIOR_DIELECTRIC = {body: 0.8, cavity: 0.85};
+
 const ROLE: Record<Exclude<MatRole, 'body' | 'inner' | 'accent'>, {color: number; map: SurfaceName; rough: number; metal: number}> = {
   liner: {color: 0x1c1f1d, map: 'black', rough: 0.55, metal: 0},
   fill: {color: 0x3b362e, map: 'black', rough: 0.95, metal: 0},
@@ -139,8 +145,10 @@ const ROLE: Record<Exclude<MatRole, 'body' | 'inner' | 'accent'>, {color: number
   stock: {color: 0x6f86a6, map: 'plastic', rough: 0.7, metal: 0},
   steelDark: {color: 0x3d4044, map: 'paintedSteel', rough: 0.7, metal: 0.35},
   steelBright: {color: 0x9ca2a8, map: 'brushedSteel', rough: 0.4, metal: 0.7},
-  black: {color: 0x141414, map: 'black', rough: 0.8, metal: 0.1},
-  white: {color: 0xe6e2d8, map: 'paintedPanel', rough: 0.85, metal: 0.05},
+  // (task studio-pbr-material-pass-20261115-192427-01: black plastic / rubber and white liner paint are dielectric — metal 0; was
+  // 0.1 / 0.05: the sRGB colours x0.953 / x0.977 (linear x0.9 / x0.95) keep the drawn diffuse tone)
+  black: {color: 0x131313, map: 'black', rough: 0.8, metal: 0},
+  white: {color: 0xe1ddd3, map: 'paintedPanel', rough: 0.85, metal: 0},
   shadow: {color: 0x040404, map: 'black', rough: 1, metal: 0},
   wood: {color: 0x7b5d43, map: 'woodVeneer', rough: 0.75, metal: 0},
   // Task office-overhaul-20261030 (lane INTERACT): toilet-stall door leaf — world/shapeMaterials.ts 'partition' tint, mesh UVs (it moves)
@@ -245,8 +253,11 @@ export class OpenableSet {
     if (m) return m;
     const side = o.back ? THREE.BackSide : o.double ? THREE.DoubleSide : THREE.FrontSide;
     if (role === 'body' || role === 'inner') {
-      const c = paint.clone().multiplyScalar(role === 'body' ? 0.62 : 0.5);
-      m = new MeshStandardNodeMaterial({color: c, roughness: 0.88, metalness: 0.2, side, map: surface('paintedPanel').map});
+      // task studio-pbr-material-pass-20261115-192427-01: the plates / liners extending a holder's body are paint, plastic or card
+      // (the models' own metalness maps say so, p50 ~0 even for safes and filing cabinets) — a dielectric, no longer metalness 0.2
+      // on every kind; INTERIOR_DIELECTRIC keeps the drawn diffuse tone the multipliers were tuned to (x (1 - 0.2))
+      const c = paint.clone().multiplyScalar((role === 'body' ? 0.62 : 0.5) * INTERIOR_DIELECTRIC.body);
+      m = new MeshStandardNodeMaterial({color: c, roughness: 0.88, metalness: 0, side, map: surface('paintedPanel').map});
     } else if (role === 'accent') {
       m = new MeshStandardNodeMaterial({color: o.accent ?? 0xffffff, roughness: 0.6, metalness: 0.3, side, map: surface('paintedSteel').map});
     } else {
@@ -266,8 +277,8 @@ export class OpenableSet {
     let m = this.roleMats.get(key);
     if (m) return m;
     const base = role && role !== 'body' && role !== 'inner' && role !== 'accent' ? new THREE.Color(ROLE[role].color) : paint.clone();
-    const k = role === 'frost' || role === 'white' ? 0.75 : 0.42;
-    m = new MeshStandardNodeMaterial({color: base.multiplyScalar(k), roughness: 0.92, metalness: 0.15, side: THREE.BackSide, map: surface(role === 'frost' ? 'plastic' : 'paintedPanel').map});
+    const k = (role === 'frost' || role === 'white' ? 0.75 : 0.42) * INTERIOR_DIELECTRIC.cavity; // (dielectric: see roleMat)
+    m = new MeshStandardNodeMaterial({color: base.multiplyScalar(k), roughness: 0.92, metalness: 0, side: THREE.BackSide, map: surface(role === 'frost' ? 'plastic' : 'paintedPanel').map});
     interiorShadowSide(m);
     m.name = 'openable-cavity';
     this.roleMats.set(key, m);

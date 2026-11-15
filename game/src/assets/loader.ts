@@ -6,6 +6,7 @@ import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {MODEL_FILES, TEXTURE_FILES, type ModelKey, type TextureKey} from './manifest';
 import {requestSurfaceAnisotropy, type SurfaceRole} from '../render/anisotropy'; // lane FIX (U08)
 import {reflectTagOf, tagReflect} from '../render/reflectTag'; // task baked-gi-visual-uplift-20261115-004324 (lane MIRROR)
+import {applyModelMaterialFix} from './modelMaterialFixes'; // task studio-pbr-material-pass-20261115-192427-01
 
 /**
  * Task baked-gi-visual-uplift-20261115-004324 (lane MIRROR): a loaded model's see-through GLASS — a transparent material whose own
@@ -103,7 +104,7 @@ export class PropModelLibrary {
         if (!p) {
           if (this.sealed) { this.stats.late++; console.warn(`Lazy model fetched mid-level (not behind a loading screen): ${key}`); }
           p = this.load(assetUrl(f.url), fr => { part.set(key, f.bytes * fr * 0.98); report(f.url.split('/').pop() ?? key); })
-            .then(g => { tagModelGlass(g); /* (lane MIRROR) */ this.models.set(key, g); g.scene.traverse(o => { if ((o as THREE.Mesh).isMesh) this.geometries.add((o as THREE.Mesh).geometry); }); this.stats.fetched++; this.stats.bytes += f.bytes; fetchedBytes += f.bytes; return g; })
+            .then(g => { tagModelGlass(g); /* (lane MIRROR) */ applyModelMaterialFix(key, g); /* (PBR pass) */ this.models.set(key, g); g.scene.traverse(o => { if ((o as THREE.Mesh).isMesh) this.geometries.add((o as THREE.Mesh).geometry); }); this.stats.fetched++; this.stats.bytes += f.bytes; fetchedBytes += f.bytes; return g; })
             .catch(err => { this.failures.push({key, url: f.url, reason: err instanceof Error ? err.message : String(err)}); return null; })
             .finally(() => this.pending.delete(key));
           this.pending.set(key, p);
@@ -177,7 +178,7 @@ export async function loadAssets(onProgress: (frac: number, label: string) => vo
       done();
     };
     if (e.kind === 'model') {
-      gltf.load(url, g => { tagModelGlass(g); /* (lane MIRROR) */ models[e.key as ModelKey] = g; done(); }, ev => {
+      gltf.load(url, g => { tagModelGlass(g); /* (lane MIRROR) */ applyModelMaterialFix(e.key, g); /* (PBR pass) */ models[e.key as ModelKey] = g; done(); }, ev => {
         if (ev.lengthComputable && ev.total > 0) { loaded.set(e.key, e.weight * (ev.loaded / ev.total) * 0.98); report(e.url.split('/').pop() ?? ''); }
       }, fail);
     } else {
