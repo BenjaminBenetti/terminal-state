@@ -3084,6 +3084,11 @@
       "sha256": "02a93765405f85972c30ffccae89c79416cbb8c40b4cd7099934e537b218905d"
     },
     {
+      "path": "assets/derivatives/weapon-putter.json",
+      "bytes": 3404,
+      "sha256": "885c4f68df457c1a21f00ec663881a53cb92130c69bd99f14287e38697de9199"
+    },
+    {
       "path": "assets/derivatives/weapon-turnstile.json",
       "bytes": 18079,
       "sha256": "da6c54b06c70b3f09c3ea1cba28d19da5e0538cf041e4d2f228d7c7d0e9f1318"
@@ -5632,6 +5637,11 @@
       "path": "assets/models/weapon-overwatch.glb",
       "bytes": 3913816,
       "sha256": "577e853ada33e7d5c47a04ee0f969d49d7106706f4678053743a35eba1948a77"
+    },
+    {
+      "path": "assets/models/weapon-putter.glb",
+      "bytes": 14008,
+      "sha256": "eebaad15886d124e06b93aeeeeea5c335f66df37b05b4c043e6408eade12fbef"
     },
     {
       "path": "assets/models/weapon-sledgehammer.glb",

@@ -12,6 +12,7 @@
 import type {MeleeSpec, MeleeStage} from './weapons';
 import {VARIETY_MELEE_IDS, type VarietyMeleeId} from './varietyIds'; // lane MELEE (weapon variety)
 import {WEAPON_VARIETY_MODELS} from '../assets/weaponVarietyModels.generated'; // lane MELEE: the delivered models' lengths / Tip markers
+import {PUTTER_MODEL} from '../assets/putterModel.generated'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): the putter's Tip
 
 /** Additive camera-space offset: position (m; x right, y up, z toward the eye) and Euler XYZ angles (rad). */
 export interface PoseOffset { x: number; y: number; z: number; rx: number; ry: number; rz: number }
@@ -264,8 +265,28 @@ export const LARGE_MELEE_IDS: readonly VarietyMeleeId[] = VARIETY_MELEE_IDS.filt
 export const VARIETY_MELEE_POSES: Readonly<Record<VarietyMeleeId, MeleePoses>> = Object.fromEntries(
   VARIETY_MELEE_IDS.map(id => [id, aimPoses(VARIETY_MELEE_AIMS[id], varietyTip(id))])) as Record<VarietyMeleeId, MeleePoses>;
 
+// ---- task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): the mini-golf PUTTER (weapons/putter.ts) ----------------------------
+// A face-on putting stroke (the player faces the target; the club hangs in front with its face to the target): carry = the head in the
+// lower middle of the frame, the shaft leaning out of the bottom-right corner (the hands below the frame); the windup draws the head BACK
+// toward the eye and right (the charge further back: the visible power cue); the swing brings it forward through the lower centre
+// (contact) and on, up the frame (follow-through). Solved for the hand-built model's own Tip (its face centre: PUTTER_MODEL markers).
+/** The putter model's Tip relative to its Grip (assets/putterModel.generated.ts markers). */
+export function putterTip(): V3 {
+  const mk = PUTTER_MODEL.markers;
+  return [mk.Tip[0] - mk.Grip[0], mk.Tip[1] - mk.Grip[1], mk.Tip[2] - mk.Grip[2]];
+}
+export const PUTTER_AIMS: MeleeAims = {
+  carry: {grip: [0.20, -0.36, -0.42], tip: [0.12, -0.62], up: [-1, 0.2, 0]},
+  raised: {grip: [0.24, -0.31, -0.37], tip: [0.40, -0.92], up: [-0.7, 0.2, 0.7]},
+  charged: {grip: [0.26, -0.27, -0.33], tip: [0.55, -1.2], up: [-0.45, 0.2, 1]},
+  contact: {grip: [0.14, -0.38, -0.46], tip: [0.0, -0.55], up: [-1, 0.2, 0]},
+  through: {grip: [0.07, -0.36, -0.50], tip: [-0.18, -0.22], up: [-1, 0.3, -0.35]},
+  dip: 1.0,
+};
+export const PUTTER_POSES: MeleePoses = aimPoses(PUTTER_AIMS, putterTip());
+
 /** Key poses per held melee model (WeaponDef.view.model); a future club / crowbar adds its own entry. */
-export const MELEE_POSES: Record<string, MeleePoses> = {knife: KNIFE_POSES, ...VARIETY_MELEE_POSES};
+export const MELEE_POSES: Record<string, MeleePoses> = {knife: KNIFE_POSES, ...VARIETY_MELEE_POSES, putter: PUTTER_POSES}; // (+ the putter: lane GOLF-PLAY)
 
 /** WeaponDef.view fields (hip / aim / hipPitch / hipYaw / hipRoll) of a carry pose (melee: no ADS, aim = hip). */
 export function carryView(p: HeldPose): {hip: [number, number, number]; aim: [number, number, number]; hipPitch: number; hipYaw: number; hipRoll: number} {

@@ -83,7 +83,7 @@ export interface PropDef {
    * (lane FOOD): + `onHost` / `contact` and the calibrated `castor` / `pad` contacts (damage/materials.ts PropPhysics / PHYS_MATS) for on-host
    * decor declared with its kind (gen/skyways/kitchenKinds.ts).
    */
-  physics?: {mass: number; dynamic: boolean; shape?: 'box' | 'cylinder'; mat?: 'metal' | 'plastic' | 'soft' | 'heavy' | 'wood' | 'glass' | 'stone' | 'cloth' | 'flesh' | 'castor' | 'pad'; onHost?: boolean; contact?: boolean};
+  physics?: {mass: number; dynamic: boolean; shape?: 'box' | 'cylinder'; mat?: 'metal' | 'plastic' | 'soft' | 'heavy' | 'wood' | 'glass' | 'stone' | 'cloth' | 'flesh' | 'castor' | 'pad' | 'ball'; onHost?: boolean; contact?: boolean}; // (+ 'ball': damage/materials.ts PhysMat, lane GOLF-PLAY)
   /**
    * Task studio-skywalk-variety-20261107-231448-01 (lane MERCH): the OPEN support surfaces inside a non-holder host's box (prop frame:
    * origin bottom centre, front +Z; like a loot holder's surfaces) — the shelves / tiers / bin floors its movable on-host decor stands on

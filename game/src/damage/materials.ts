@@ -19,6 +19,7 @@ import {PANTRY_CLASS, PANTRY_MODEL_CLASS, PANTRY_PHYSICS} from '../items/pantryF
 import {WEAPON_VARIETY_CLASS, WEAPON_VARIETY_PHYSICS} from '../items/weaponVarietyItems'; // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI)
 import {FLAMETHROWER_CLASS, FLAMETHROWER_PHYSICS} from '../items/flamethrowerItems'; // task studio-flamethrower-fire-20261114-031614-01
 import {FLAMETHROWER_ID, FUEL_TANK_ID} from '../fire/flamethrowerSpec';
+import {GOLF_CLASS, GOLF_PHYSICS} from '../items/golfItems'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): the putter and golf ball
 import {SKYWAYS_KITCHEN_DAMAGE_CLASS} from '../gen/skyways/kitchenKinds'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {SKYWAYS_ADDON_DAMAGE_CLASS} from '../gen/skyways/addonKinds'; // task studio-skyways-level-20261106-054448 (lane ADDON)
 import {SKYWAYS_DEST_DAMAGE_CLASS} from '../gen/skyways/destinations/registry'; // task studio-skyways-destinations-20261106-170011-01
@@ -298,6 +299,7 @@ export const ITEM_CLASS: Record<string, DamageClass> = {
   acid_grenade: 'sheetMetal', lure_grenade: 'sheetMetal', // task studio-refinement-batch-20261113-035659-01: the crafted throwables' pressed-steel canisters
   // task studio-flamethrower-fire-20261114-031614-01: the steel burner lance; a steel jerrycan clamped to a welded pack frame
   [FLAMETHROWER_ID]: FLAMETHROWER_CLASS, [FUEL_TANK_ID]: 'steel',
+  ...GOLF_CLASS, // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): a steel-shafted putter; a hard plastic golf ball
 };
 export function itemClass(itemId: string): DamageClass {
   return ITEM_CLASS[itemId] ?? 'plastic';
@@ -314,7 +316,8 @@ export function itemClass(itemId: string): DamageClass {
  * (lane PHYS): the Subway's light kinds use them too (SUBWAY_CONTACT: suitcases / strollers / wheelchairs roll, chairs / signs /
  * bags slide on pads), so walking into one shoves it in every world.
  */
-export type PhysMat = 'metal' | 'plastic' | 'soft' | 'heavy' | 'stone' | 'wood' | 'glass' | 'flesh' | 'cloth' | 'castor' | 'pad';
+export type PhysMat = 'metal' | 'plastic' | 'soft' | 'heavy' | 'stone' | 'wood' | 'glass' | 'flesh' | 'cloth' | 'castor' | 'pad'
+  | 'ball'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): the golf ball (a lively hard sphere: rebounds off the course's rails; rolling resistance in physics/golfBall.ts)
 /**
  * Friction / restitution against the station (floors, walls, prop boxes, holder shelves).
  * Lane PHYS — CALIBRATED office materials: cannon-es (GSSolver) clamps each friction equation's IMPULSE by μ·m·g (a force), so per
@@ -329,6 +332,7 @@ export const PHYS_MATS: Readonly<Record<PhysMat, {friction: number; restitution:
   heavy: {friction: 0.55, restitution: 0.1}, stone: {friction: 0.7, restitution: 0.2}, wood: {friction: 0.6, restitution: 0.24},
   glass: {friction: 0.45, restitution: 0.14}, flesh: {friction: 0.95, restitution: 0.02}, cloth: {friction: 0.98, restitution: 0},
   castor: {friction: 0.0005, restitution: 0.1}, pad: {friction: 0.0012, restitution: 0.1}, // lane PHYS (calibrated, see above)
+  ball: {friction: 0.5, restitution: 0.55}, // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): the golf ball — grips the turf to roll, rebounds ~0.55 off a rail
 };
 /**
  * Task office-interactions-layout-20261030 (lane PHYS): why a prop kind stays static (damage/physicsAudit.ts PROP_PHYSICS_AUDIT;
@@ -343,8 +347,11 @@ export type StaticWhy = 'holder' | 'anchored' | 'built-in' | 'too heavy' | 'fixt
 export interface ItemPhysics {
   /** Mass (kg) of one loose item (a full can, a box of rounds). */
   mass: number;
-  /** Collider in the item's model frame (origin bottom-centre): upright cylinder (cans, bottles, cups) or box. */
-  shape: 'cylinder' | 'box';
+  /**
+   * Collider in the item's model frame (origin bottom-centre): upright cylinder (cans, bottles, cups) or box. Task
+   * studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): or a SPHERE (the golf ball: radius = its model's half size, it rolls).
+   */
+  shape: 'cylinder' | 'box' | 'sphere';
   mat: PhysMat;
 }
 
@@ -390,6 +397,7 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   // task studio-flamethrower-fire-20261114-031614-01: the lance (items/flamethrowerItems.ts); a steel jerrycan with fuel in it on a
   // welded frame with its pump and hose ~9 kg
   [FLAMETHROWER_ID]: FLAMETHROWER_PHYSICS, [FUEL_TANK_ID]: {mass: 9, shape: 'box', mat: 'heavy'},
+  ...GOLF_PHYSICS, // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): a ~0.5 kg putter (box); the 45.9 g golf ball (a SPHERE, physics/golfBall.ts)
 };
 export function itemPhysics(itemId: string): ItemPhysics {
   return ITEM_PHYSICS[itemId] ?? {mass: 0.3, shape: 'box', mat: 'plastic'};

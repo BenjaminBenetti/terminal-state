@@ -10,9 +10,13 @@ import {FLAMETHROWER_MODEL} from '../assets/flamethrowerModels.generated';
 import {WEAPON_VARIETY_MODELS} from '../assets/weaponVarietyModels.generated';
 import {FLAMETHROWER_ID} from '../fire/flamethrowerSpec';
 import {VARIETY_WEAPON_IDS, isVarietyWeapon} from './varietyIds';
+import {PUTTER_MODEL} from '../assets/putterModel.generated'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY)
 
-/** The lazily delivered weapon models that are not weapon-variety identities: item id -> its cooked registry row. */
-const EXTRA_MODELS: Readonly<Record<string, {readonly url: string}>> = {[FLAMETHROWER_ID]: FLAMETHROWER_MODEL};
+/**
+ * The lazily delivered weapon models that are not weapon-variety identities: item id -> its cooked registry row. Task
+ * studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): + the mini-golf PUTTER (placed only on the course's front desk; never a find).
+ */
+const EXTRA_MODELS: Readonly<Record<string, {readonly url: string}>> = {[FLAMETHROWER_ID]: FLAMETHROWER_MODEL, [PUTTER_MODEL.itemId]: PUTTER_MODEL};
 
 /** Their ids (sorted). */
 export const LAZY_EXTRA_WEAPON_IDS: readonly string[] = Object.keys(EXTRA_MODELS).sort();

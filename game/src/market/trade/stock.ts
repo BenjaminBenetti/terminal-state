@@ -48,6 +48,7 @@ import {TrainLockbox} from '../../run/trainLockbox';
 import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL, type MarketShopId, type MarketStallId} from '../../gen/market/marketTypes';
 import {BEER_IDS, type BeerId} from '../../items/beers';
 import {GAS_FILTER_ID} from './value';
+import {isGolfEventItem} from '../../items/golfItems'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY)
 
 /** Section-memory lane of a market station's stock (save/validate.ts checks it strictly). */
 export const MARKET_STOCK_LANE = 'market.stock';
@@ -115,8 +116,10 @@ const box = (rng: Rng) => (d: ItemDef) => { const b = BOX_COUNT[d.id]; return b 
  * here — the gunsmith keeps exactly its baseline rows and draws (they arrive only as diversified weapon finds; a player may still sell one).
  * Task studio-flamethrower-fire-20261114-031614-01: nor a STREAM weapon (the flamethrower) — it is never a draw (the rows, and so every
  * seed's picks, are what they were): each gun stall stocks exactly one as an additive lot (STOCK_EXTRAS).
+ * Task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): nor the mini-golf PUTTER (items/golfItems.ts GOLF_EVENT_ONLY: placed only
+ * on the course's front desk; the rows are what they were).
  */
-const weaponRows = (): ItemRows => Object.values(ITEMS).filter(d => d.kind === 'weapon' && d.weaponId && WEAPONS[d.weaponId] && !isVarietyWeapon(d.id) && !WEAPONS[d.weaponId].stream)
+const weaponRows = (): ItemRows => Object.values(ITEMS).filter(d => d.kind === 'weapon' && d.weaponId && WEAPONS[d.weaponId] && !isVarietyWeapon(d.id) && !WEAPONS[d.weaponId].stream && !isGolfEventItem(d.id))
   .map(d => [d.id, WEAPONS[d.weaponId!].melee ? 0.5 : 1] as const);
 
 /** What one stall stocks (the draws of its own stream; counts before merging). */

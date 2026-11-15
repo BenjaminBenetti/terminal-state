@@ -1,0 +1,193 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "weapon-putter",
+ "itemId": "putter",
+ "name": "Putter",
+ "kind": "melee",
+ "role": "held / pickup / icon model of the mini-golf Putter (a light melee club placed on the Skyways mini-golf course's front desk; never loot, a find or market stock)",
+ "task": "studio-skywalk-events-20261115-193624-01",
+ "origin": "hand-built from code primitives by this script (capped cylinders and boxes from the dimensions in its SPEC); no generation service, image, scan, texture or third-party asset was used",
+ "source": {
+  "kind": "this script is the master: deterministic output (node tools/asset-pipeline/weapons/build-putter.mjs --check verifies the written bytes)",
+  "spec": {
+   "length": 0.89,
+   "grip": {
+    "z0": 0.18,
+    "z1": 0.445,
+    "r0": 0.0115,
+    "r1": 0.0145,
+    "seg": 16
+   },
+   "ferrule": {
+    "z0": 0.168,
+    "z1": 0.18,
+    "r": 0.0072,
+    "seg": 12
+   },
+   "shaft": {
+    "z0": -0.41,
+    "z1": 0.168,
+    "r": 0.0055,
+    "seg": 12
+   },
+   "hosel": {
+    "z0": -0.4205,
+    "z1": -0.41,
+    "r": 0.0064,
+    "seg": 12
+   },
+   "head": {
+    "x": [
+     -0.0125,
+     0.0125
+    ],
+    "y": [
+     -0.086,
+     0.016
+    ],
+    "z": [
+     -0.445,
+     -0.4205
+    ]
+   },
+   "insert": {
+    "x": [
+     0.0125,
+     0.0135
+    ],
+    "y": [
+     -0.081,
+     0.011
+    ],
+    "z": [
+     -0.4425,
+     -0.423
+    ]
+   },
+   "sight": {
+    "x": [
+     -0.011,
+     0.011
+    ],
+    "y": [
+     -0.0365,
+     -0.0325
+    ],
+    "z": [
+     -0.4205,
+     -0.4199
+    ]
+   },
+   "markers": {
+    "Grip": [
+     0,
+     0,
+     0.385
+    ],
+    "Tip": [
+     0.0135,
+     -0.035,
+     -0.43275
+    ]
+   }
+  }
+ },
+ "materials": {
+  "rubber": {
+   "baseColorFactor": [
+    0.018,
+    0.018,
+    0.02,
+    1
+   ],
+   "metallic": 0,
+   "roughness": 0.82
+  },
+  "steel": {
+   "baseColorFactor": [
+    0.62,
+    0.64,
+    0.66,
+    1
+   ],
+   "metallic": 0.55,
+   "roughness": 0.3
+  },
+  "satin": {
+   "baseColorFactor": [
+    0.42,
+    0.43,
+    0.45,
+    1
+   ],
+   "metallic": 0.5,
+   "roughness": 0.48
+  },
+  "paint": {
+   "baseColorFactor": [
+    0.86,
+    0.86,
+    0.84,
+    1
+   ],
+   "metallic": 0,
+   "roughness": 0.6
+  }
+ },
+ "output": {
+  "url": "assets/models/weapon-putter.glb",
+  "file": "game/public/assets/models/weapon-putter.glb",
+  "bytes": 14008,
+  "sha256": "eebaad15886d124e06b93aeeeeea5c335f66df37b05b4c043e6408eade12fbef",
+  "triangles": 244,
+  "vertices": 304,
+  "dims": [
+   0.029,
+   0.102,
+   0.89
+  ],
+  "bounds": {
+   "min": [
+    -0.0145,
+    -0.051,
+    -0.445
+   ],
+   "max": [
+    0.0145,
+    0.051,
+    0.445
+   ]
+  },
+  "nodes": {
+   "parts": [
+    "putter-grip",
+    "putter-ferrule",
+    "putter-shaft",
+    "putter-hosel",
+    "putter-head",
+    "putter-insert",
+    "putter-sight"
+   ],
+   "markers": [
+    "Grip",
+    "Tip"
+   ]
+  },
+  "markers": {
+   "Grip": [
+    0,
+    0.035,
+    0.385
+   ],
+   "Tip": [
+    0.0135,
+    0,
+    -0.43275
+   ]
+  }
+ },
+ "texturePolicy": "no texture maps: plain PBR material factors only",
+ "convention": "metres at real size, +Y up, the head toward -Z, the striking face looking along +X, the toe toward -Y; bounding box centred on the origin; empty marker nodes Grip / Tip",
+ "licence": "authored for this project (assets/CREDITS.md: simple pickup / trim geometry authored for this project)",
+ "rebuild": "node tools/asset-pipeline/weapons/build-putter.mjs"
+}
