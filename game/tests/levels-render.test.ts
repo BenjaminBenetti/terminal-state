@@ -21,6 +21,7 @@ import {StationLighting} from '../src/world/lights';
 import {CULL_LAYER, fogCullDistance} from '../src/world/levelCulling';
 import {MOOD} from '../src/world/lights';
 import {createFogUniforms, createMarchMaterial} from '../src/render/volumetricShaders';
+import {SCATTER_SLOTS} from '../src/render/smoke';
 import {compileQuad} from './helpers/fogCompile';
 import {overdraw} from './helpers/overdraw';
 import {codeToSeed} from '../src/core/rng';
@@ -553,7 +554,9 @@ describe('render cost: triangle sanity, overdraw, level / fog culling, draw-call
     const fetches = sampler3D.reduce((n, name) => n + (f.match(new RegExp(`texelFetch\\( ${name},`, 'g')) ?? []).length, 0);
     expect(fetches).toBe(3);
     const loops = [...f.matchAll(/for \( int (\w+) = 0; \1 < (\w+); \1 \+\+ \)/g)].map(m => m[2]);
-    expect(loops).toEqual(['8', '4', '8', '4']); // steps; smoke emitters + their puffs; scatter lights (no per-slot loop)
+    // steps; smoke emitters + their puffs; scatter lights = the ordinary + the reserved glow slots (no per-slot loop)
+    expect(loops).toEqual(['8', '4', '8', String(SCATTER_SLOTS)]);
+    expect(SCATTER_SLOTS).toBe(8); // (task studio-reactor-glowing-zombies-20261115-013245-01: 4 + 4 glow)
   });
 
   it('draw-call budget with level + fog culling (no GLB models; every family, cameras on every level)', () => {

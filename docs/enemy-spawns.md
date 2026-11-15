@@ -868,8 +868,8 @@ is unchanged, and the roster censuses on this page do not include them.
   core floor; contexts `ring` and `pit`). Never the rim, tiers 1-2, the surface storey or any other level.
 - **How many.** `R` = the regular zombies (the ordinary family, either type, sprinter or not) standing on those storeys after the
   pass. `N = round(0.4 × R)`, computed as `floor((2R + 2) / 5)`; `0.4R` is never exactly a half, so no tie rule is needed. `N` is split
-  over the three storeys in proportion to each one's `R` (largest remainder, ties to the deeper storey). Census, 12 seeds
-  `1201 + 7919k`: `R` 16-25, `N` 6-10 (mean ~8), reactor totals 44-52 → 51-61. None short.
+  over the three storeys in proportion to each one's `R` (largest remainder, ties to the deeper storey). Census, 16 seeds
+  `1201 + 7919k` (k 0-15; the test keeps the first 12): `R` 16-25, `N` 6-10 (mean ~8), reactor totals 44-52 → 51-61. None short.
 - **Placement.** The storey's own context rules (`REACTOR_SPAWN_PROFILE`: area weights, caps, 4 m spacing from every enemy on the
   storey, 36 walking cells from the platform start, 5 m off landings / use points / complex entrances) on the generator's own spawn
   field, through `placeOfficeEnemies` with a fixed count. The stream is a fresh `Rng` from a hash of the level seed and the storey:
