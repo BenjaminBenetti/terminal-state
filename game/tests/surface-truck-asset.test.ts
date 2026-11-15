@@ -6,7 +6,10 @@ import {NodeIO} from '@gltf-transform/core';
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {SURFACE_TRUCK_SPEC} from '../src/world/surfaceTruckSpec';
-import {buildCarView, setRoadWheels, setSkywaysCarModelsForTests} from '../src/world/skywaysCarModel';
+import {buildCarView, releaseSkywaysCarModel, setRoadWheels, setSkywaysCarModelsForTests} from '../src/world/skywaysCarModel';
+import {cabGlassMaterial} from '../src/world/elevator';
+import {reflectTagOf} from '../src/render/reflectTag';
+import {CAR_SPEC} from '../src/world/skywaysCarSpec';
 
 const pub = (path: string) => fileURLToPath(new URL('../public/' + path, import.meta.url));
 const bytes = readFileSync(pub('assets/models/surface-military-truck.glb'));
@@ -59,6 +62,33 @@ describe('supplied military truck runtime derivative', () => {
     expect(view.roadWheels!.slice(0, 4).map(w => w.steer.rotation.y)).toEqual([0.3, 0.3, 0.3, 0.3]);
     expect(view.roadWheels!.slice(4).map(w => w.steer.rotation.y)).toEqual([0, 0, 0, 0]);
     expect(view.roadWheels!.map(w => w.roll.rotation.x)).toEqual([-1, -1, -1, -1, -1, -1, -1, -1]);
+  });
+  it('truck glazing reuses the eye-facing cab factory without mutating its source or disposing shared glass; prize-car glass stays original', () => {
+    const source = new THREE.Group(), original = new THREE.MeshStandardMaterial({name: 'glass', opacity: 0.41});
+    const pane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), original); pane.name = 'surface-truck-glass';
+    const mirrored = pane.clone(); mirrored.name = 'surface-truck-glass-mirrored'; mirrored.scale.x = -1;
+    source.add(pane, mirrored);
+    setSkywaysCarModelsForTests({car: {scene: source, animations: []} as unknown as GLTF, dash: null, seat: null});
+    const shared = cabGlassMaterial(), normal = shared.normalNode;
+    const before = {opacity: shared.opacity, roughness: shared.roughness, side: shared.side, depthWrite: shared.depthWrite, forceSinglePass: shared.forceSinglePass};
+    let sharedDisposed = 0, originalDisposed = 0;
+    const dispose = () => sharedDisposed++;
+    shared.addEventListener('dispose', dispose); original.addEventListener('dispose', () => originalDisposed++);
+    try {
+      for (let i = 0; i < 2; i++) {
+        const view = buildCarView(SURFACE_TRUCK_SPEC);
+        for (const name of ['surface-truck-glass', 'surface-truck-glass-mirrored']) {
+          const mesh = view.body.getObjectByName(name) as THREE.Mesh;
+          expect(mesh.material).toBe(shared); expect(mesh.castShadow).toBe(false);
+        }
+      }
+      expect(reflectTagOf(shared)).toBe('cab'); expect(normal).not.toBeNull(); expect(shared.normalNode).toBe(normal);
+      expect({opacity: shared.opacity, roughness: shared.roughness, side: shared.side, depthWrite: shared.depthWrite, forceSinglePass: shared.forceSinglePass}).toEqual(before);
+      expect(pane.material).toBe(original); expect(original.opacity).toBe(0.41); expect(original.side).toBe(THREE.FrontSide); expect(original.transparent).toBe(false);
+      const prize = buildCarView(CAR_SPEC), glass = prize.body.getObjectByName('surface-truck-glass') as THREE.Mesh;
+      expect(glass.material).toBe(original); expect(reflectTagOf(original)).toBeUndefined(); expect(original.forceSinglePass).toBe(true);
+      expect(releaseSkywaysCarModel()).toBe(true); expect(originalDisposed).toBeGreaterThan(0); expect(sharedDisposed).toBe(0);
+    } finally { shared.removeEventListener('dispose', dispose); }
   });
 });
 afterAll(() => setSkywaysCarModelsForTests({car: null, dash: null, seat: null}));

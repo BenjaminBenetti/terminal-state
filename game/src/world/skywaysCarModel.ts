@@ -27,7 +27,7 @@ import type {CarSpec} from './skywaysCarSpec';
 import {COCKPIT_URLS, FILL_COLOR, cockpitLayout, fillMesh} from './skywaysCarCockpit';
 import {WHEEL_RIM, ringNormal, splitWheel, type WheelSplit} from './skywaysCarWheel';
 import {CAR_LAMPS, lampTriangles, lensMaterialFrom} from './skywaysCarLights';
-import {tagReflect} from '../render/reflectTag';
+import {cabGlassMaterial} from './elevator';
 
 /** Steering-wheel turns per front-wheel radian (a quick rack: full lock 0.55 rad ~ 140°). */
 export const WHEEL_RATIO = 4.4;
@@ -280,8 +280,10 @@ function modelBody(g: GLTF, spec: CarSpec): {group: THREE.Group; lens: THREE.Mes
   for (const m of meshes) {
     const mats = Array.isArray(m.material) ? m.material : [m.material];
     if (isGlass(m)) {
-      for (const mat of mats) { mat.side = THREE.DoubleSide; mat.forceSinglePass = true; mat.depthWrite = false; mat.transparent = true; }
-      if (spec.proceduralCab) for (const mat of mats) tagReflect(mat, 'glass');
+      // Only the cloned truck view adopts this shared, eye-facing cab material. The loaded GLB keeps its
+      // own materials for disposal; do not mutate/dispose the train/lift's factory material as truck-owned.
+      if (spec.proceduralCab) m.material = cabGlassMaterial();
+      else for (const mat of mats) { mat.side = THREE.DoubleSide; mat.forceSinglePass = true; mat.depthWrite = false; mat.transparent = true; }
       m.castShadow = false;
       m.userData.carPart = 'glass';
       continue;

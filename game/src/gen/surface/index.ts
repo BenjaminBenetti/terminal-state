@@ -2,6 +2,7 @@
 import {hashString, Rng} from '../../core/rng';
 import {FILTER_LIFE_S} from '../../items/gear';
 import type {LevelId, SectionGenContext} from '../../levels/types';
+import {ANNEX_CACHE} from '../annexCache';
 import {CELL, FLOOR, Grid, SOLID} from '../grid';
 import {PROP_DEFS, type PropKind, type PropPlacement} from '../props';
 import type {Area, Door, Rect, RoomType, StationLayout, Trench} from '../stationTypes';
@@ -16,6 +17,7 @@ export const SURFACE_BLOCKS = 8;
 const SKY_CEIL = 12;
 const BOUNDS: SurfaceRect = {x: 4, z: 4, w: 232, d: 232};
 const CORE: SurfaceRect = {x: 68, z: 68, w: 104, d: 104};
+const SKY_TINT = [0.68, 0.88, 0.75] as const;
 
 export function isSurfaceBaseLevel(level: LevelId | string): level is SurfaceBaseLevel {
   return level === 'subway' || level === 'office' || level === 'mall';
@@ -66,7 +68,8 @@ export function generateSurfaceLevel(ctx: SectionGenContext, baseLevel: SurfaceB
     const block: SurfaceBlock = {id: `${String.fromCharCode(65 + col)}${row + 1}`, col, row, x: 12 + col * 28, z: 12 + row * 28, w: 20, d: 20, core: col >= 2 && col <= 5 && row >= 2 && row <= 5};
     info.blocks.push(block);
     const br = rng.fork(`block:${block.id}`);
-    if ((row + col) % 2 === 0) layout.lights.push({x: block.x - 3, y: 7, z: block.z - 3, rot: 0, area: 0, broken: false, flicker: false, warm: false, power: 0.32, dying: false, virtual: true, tint: [0.68, 0.88, 0.75]});
+    // The Office roof's existing source height/power reaches ground level within the field's finite range.
+    if ((row + col) % 2 === 0) layout.lights.push({x: block.x - 3, y: 4.2, z: block.z - 3, rot: 0, area: 0, broken: false, flicker: false, warm: false, power: 0.8, dying: false, virtual: true, tint: SKY_TINT});
     if (block.core) {
       const n = (row - 2) * 4 + col - 2;
       addDestination(layout, info, block, programmes[n], n, br);
@@ -91,7 +94,13 @@ export function generateSurfaceLevel(ctx: SectionGenContext, baseLevel: SurfaceB
   fixedBox(layout, 45, 185, 2.8, 2.1, 0.82);
   placeProp(layout, 'footlocker', 42, 183, 0, 0);
   placeProp(layout, 'bedroll', 42, 187, 0, 0);
-  placeProp(layout, 'campLantern', 46.1, 185.75, 0, 0, 0.83);
+  const lantern = {x: 46.1, y: 0.83, z: 185.75};
+  placeProp(layout, 'campLantern', lantern.x, lantern.z, 0, 0, lantern.y);
+  // Appending preserves every existing fixture's index and flicker circuit. These are local baked sources, not live lights.
+  layout.lights.push({...lantern, y: lantern.y + ANNEX_CACHE.lantern.lift, rot: 0, area: 0, broken: false, flicker: false,
+    warm: true, power: ANNEX_CACHE.lantern.power, dying: false, virtual: true});
+  for (const z of [truck.z, 185]) layout.lights.push({x: truck.x, y: 4.2, z, rot: 0, area: 0, broken: false, flicker: false,
+    warm: false, power: 0.8, dying: false, virtual: true, tint: SKY_TINT});
   for (const x of [40.5, 49.5]) for (const z of [180.5, 189.5]) fixedBox(layout, x, z, 0.1, 0.1, 3);
   fixedBox(layout, 40.35, 185, 0.055, 9.6, 2.35);
   fixedBox(layout, 49.65, 185, 0.055, 9.6, 2.35);

@@ -133,15 +133,19 @@ try {
         const local = car.spec.exits.left, c = Math.cos(car.yaw), s = Math.sin(car.yaw);
         await pose({x: car.x + c * local.x + s * local.z, z: car.z - s * local.x + c * local.z, y: car.y}, {x: car.x, y: car.y + 1.8, z: car.z});
         await key('KeyQ'); await gameTime(0.55); await key('KeyE'); assert(await ev(() => window.__game.skywaysCar.driving));
+        await ev(() => { const g = window.__game; g.player.yaw = g.skywaysCar.body.yaw; g.player.pitch = 0; }); // labelled camera fixture: forward cab view
         await key('KeyF'); await gameTime(0.3); await shot('04-first-person-cab');
-        record('enclosed cab', await ev(() => ({car: window.__game.skywaysCar.state(), gas: {...window.__game.gas.exposure}, mask: window.__LL.mask()})));
+        record('enclosed cab', await ev(() => ({car: window.__game.skywaysCar.state(), headlights: window.__game.skywaysCar.lights,
+          cameraFixture: 'facing forward', gas: {...window.__game.gas.exposure}, mask: window.__LL.mask()})));
         assert.equal(await ev(() => window.__game.gas.exposure.dps), 0);
         await page.keyboard.down('KeyW'); await gameTime(0.9); await page.keyboard.down('KeyA'); await gameTime(0.25);
-        await page.keyboard.up('KeyA'); await page.keyboard.up('KeyW'); await page.keyboard.down('Space'); await gameTime(1); await page.keyboard.up('Space');
+        await page.keyboard.up('KeyA'); await page.keyboard.up('KeyW'); await page.keyboard.down(' '); await gameTime(1); await page.keyboard.up(' ');
         record('normal arcade drive inputs', await ev(() => window.__game.skywaysCar.state()));
         await key('KeyE'); assert(!(await ev(() => window.__game.skywaysCar.driving))); await key('KeyQ'); await gameTime(0.8);
         record('finite storage transfer', await ev(() => { const g = window.__game, st = g.inv.makeStack('pistol', 1, 3); if (g.inv.add(st)) throw new Error('Fixture inventory full');
-          const ref = g.inv.find(st.uid), result = g.inv.storeMove(g.surfaceTruck.stores[0].slots, ref, {bar: 'store', index: 0}); g.skywaysCar.store(); return {uid: st.uid, result, stored: g.surfaceTruck.stores[0].toJSON()}; }));
+          const ref = g.inv.find(st.uid), result = g.inv.storeMove(g.surfaceTruck.stores[0].slots, ref, {bar: 'store', index: 0});
+          if (result === 'refused' || g.surfaceTruck.stores[0].slots[0]?.uid !== st.uid || g.inv.find(st.uid)) throw new Error('Storage transfer did not conserve fixture UID');
+          g.skywaysCar.store(); return {uid: st.uid, result, stored: g.surfaceTruck.stores[0].toJSON()}; }));
         const cargo = await ev(() => window.__game.surfaceTruck.cargo.records.find(r => r.state === 'depot'));
         await pose({x: cargo.x, y: cargo.y, z: cargo.z + 2}, {x: cargo.x, y: cargo.y + 0.35, z: cargo.z}); await shot('05-depot-interior'); await key('KeyE');
         assert.equal(await ev(() => window.__game.surfaceTruck.cargo.carried?.uid), cargo.uid);
