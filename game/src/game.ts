@@ -197,6 +197,7 @@ import {setObjectiveTitle} from './ui/objectiveTitle'; // task studio-bunker-rew
 import {installSkywaysDestAudio} from './world/skywaysDestAudio'; // task skyways-destinations-20261106 (lane AUDIO): the destinations' location sounds
 import {installSubwayMapRead} from './world/subwayMapRead'; // task studio-ui-subway-maps-20261108-074144-01: the station map kiosks' close-up read
 import {installSkywaysMapRead} from './world/skywaysMapRead'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the directory boards' close-up read
+import {installSkywaysNotes} from './world/skywaysNotes'; // task studio-skywalk-events-20261115-193624-01 (lane EVAC): the evacuation centre's notes, read up close
 import {installMarketTrade, type TradeSystem} from './market/trade/tradeSystem';
 import {MARKET_HUMAN_MODEL_FILES} from './market/humanLooks'; // task studio-survivor-market-20261108-005807-01 (lane HUMANS): the friendly cast file
 import {installMarketPeople, type MarketPeople} from './market/marketPeople'; // (lane HUMANS): the market's residents + stall traders // task studio-survivor-market-20261108-005807-01 (lane TRADE): Rail Ties + the six stalls
@@ -890,6 +891,7 @@ export class Game {
     installMarketTextures(this); // task studio-survivor-market-20261108-005807-01 (lane LEVEL): the market's Codex surface textures before the build; inert elsewhere
     installMarketVisuals(this); hookName('marketVisuals'); // (lane LEVEL) the market's slow ceiling fans (frame hook) and stall awnings; inert elsewhere
     installSkywaysMapRead(this); hookName('skywaysMapRead'); // task studio-skyways-rework-20261107-054512-01 (lane MAPS): E at a directory board reads its face (inert without boards)
+    installSkywaysNotes(this); hookName('skywaysNotes'); // task studio-skywalk-events-20261115-193624-01 (lane EVAC): E at an evacuation-centre note reads it (inert without notes)
     installSubwayMapRead(this); hookName('subwayMapRead'); // task studio-ui-subway-maps-20261108-074144-01: E at a Subway station map kiosk reads its face (inert without kiosks)
     installSkywaysDestAudio(this); // task skyways-destinations-20261106 (lane AUDIO): clock tick / chime, arcade attract, cinema projector emitters per section (inert elsewhere)
     installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
