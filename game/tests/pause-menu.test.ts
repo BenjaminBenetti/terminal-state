@@ -159,7 +159,8 @@ describe('Settings: four tabs over the one settings form', () => {
       expect(m.menu.tab).toBe('audio');
       expect(m.active()).toBe(tabs[1]);
       expect(m.q('#pause-settings').getAttribute('data-show')).toBe('audio');
-      expect(m.shown(m.q('.pause-details'))).toBe(false); // (only Graphics has details)
+      expect(m.q('.set-details')).not.toBe(null);
+      expect(m.shown(m.q('.set-details'))).toBe(false); // (only Graphics has details)
       m.key('End');
       expect(m.menu.tab).toBe('performance');
       expect(m.shown(m.q('#pause-settings'))).toBe(false);
