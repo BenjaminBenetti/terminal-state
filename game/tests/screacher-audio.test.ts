@@ -229,8 +229,12 @@ describe('Screacher cues: registration + shipped Sound Lab derivatives', () => {
     // pinned addition — tests/fire-audio.test.ts / audio-bank.test.ts; excluded the same way)
     const FIRE = ['flameIgnite', 'flameRoar', 'flameOut', 'fireBurn', 'fireCatch', 'fireCollapse', 'fireEmbers'];
     expect(FIRE.map(c => [CUES.includes(c as never), CUE_GAIN[c as keyof typeof CUE_GAIN]])).toEqual([[true, 0.6], [true, 0.76], [true, 0.39], [true, 0.54], [true, 0.54], [true, 0.92], [true, 0.92]]);
-    const others = CUES.filter(c => !(SCR as readonly string[]).includes(c) && !CHIP.includes(c) && !BB.includes(c) && !FIRE.includes(c));
-    expect(CUES.length).toBe(others.length + 4 + CHIP.length + BB.length + FIRE.length);
+    // (task studio-reactor-glowing-zombies-20261115-013245-01, lane AUDIO: the procedural Geiger ticks' two cues are a fifth, separately
+    // pinned addition — tests/geiger-audio.test.ts / audio-bank.test.ts; excluded the same way)
+    const GEIGER = ['geigerClick', 'geigerCluster'];
+    expect(GEIGER.map(c => [CUES.includes(c as never), CUE_GAIN[c as keyof typeof CUE_GAIN]])).toEqual([[true, 0.57], [true, 0.57]]);
+    const others = CUES.filter(c => !(SCR as readonly string[]).includes(c) && !CHIP.includes(c) && !BB.includes(c) && !FIRE.includes(c) && !GEIGER.includes(c));
+    expect(CUES.length).toBe(others.length + 4 + CHIP.length + BB.length + FIRE.length + GEIGER.length);
     expect(Object.keys(CUE_GAIN).sort()).toEqual([...CUES].sort());
     expect(others.length).toBe(161);
     expect(sha(JSON.stringify(others))).toBe('3d4982c30a801d4287f78f2f519ffe942425d7ae775e9f90e1702dfcfa6bd521');
