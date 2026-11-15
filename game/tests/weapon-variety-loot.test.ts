@@ -31,6 +31,7 @@ vi.mock('../src/weapons/varietyMelee', async importOriginal => {
 
 import {ITEMS, itemDef} from '../src/items/items';
 import {GRENADE_IDS} from '../src/items/grenades';
+import {isGolfEventItem} from '../src/items/golfItems'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY)
 import {ICONS} from '../src/ui/icons';
 import {WEAPONS} from '../src/weapons/weapons';
 import {VARIETY_GUN_IDS, VARIETY_MELEE_IDS, VARIETY_WEAPONS, VARIETY_WEAPON_IDS, isVarietyWeapon} from '../src/weapons/varietyIds';
@@ -97,7 +98,9 @@ describe('weapon variety: the twelve ItemDefs', () => {
     }
   });
   it('the old items keep their catalogue order (the twelve are appended last)', () => {
-    const keys = Object.keys(ITEMS);
+    // (task studio-skywalk-events-20261115-193624-01, lane GOLF-PLAY: the mini-golf putter and ball are appended after everything — pinned
+    // in tests/skyways-event-golf-play-registry.test.ts; excluded here)
+    const keys = Object.keys(ITEMS).filter(k => !isGolfEventItem(k));
     // (re-pin, task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades are appended after the twelve — the
     // twelve still follow every older item in order, and only the grenades come after them)
     // (re-pin, task studio-flamethrower-fire-20261114-031614-01: the flamethrower is appended after the grenades — the twelve and the grenades keep their

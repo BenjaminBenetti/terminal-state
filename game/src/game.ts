@@ -71,7 +71,10 @@ import {nearestEnemyHit} from './combat/enemyRay'; // lane COMBAT (reactor-playt
 import {meleeRayDirs, resolveMelee, resolveMeleeSweep, asMeleeSweep} from './combat/melee'; // lane KNIFE (knife-melee-20261030)
 // task studio-weapon-variety-production-20261109-224355-01 (lane MELEE): heavy melee hits — charge / stamina / per-target damage, mass knockback, stagger
 import {MeleeShoves, meleeHint, meleeHitDamage, meleeKillStrength, meleeKnockFor, meleePushDir, meleeShoveStep, meleeStaggerOpts, meleeStaminaCost, meleeSwing} from './combat/meleeImpact';
-import {DAMAGE_MATERIALS, propDamageSpec} from './damage/materials'; // lane KNIFE: blade-on-surface cue / chips
+import {DAMAGE_MATERIALS, itemClass, propDamageSpec} from './damage/materials'; // lane KNIFE: blade-on-surface cue / chips
+import {isPuttable, strikeGolfBall} from './combat/putterStrike'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): the putter's stroke
+import {golfBallCentre, golfRestY} from './physics/golfBall'; // lane GOLF-PLAY
+import {GOLF_BALL_ITEM, PUTTER_ITEM} from './gen/skyways/events/golfContract'; // lane GOLF-PLAY
 import {Hud} from './ui/hud';
 import {InventoryUI} from './ui/inventoryUI';
 import {hideTooltip} from './ui/tooltip'; // task studio-ui-subway-maps-20261108-074144-01 (the game's own tooltip)
@@ -1244,6 +1247,7 @@ export class Game {
       const mem = key ? run.peekMemory(key) ?? null : null;
       const ids = lazyWeaponIdsIn([this.inv.toJSON(), this.playerTrain.lockbox.toJSON(), this.playerTrain.cargo.toJSON(), mem]);
       if (layout && key && !late && !mem?.pickups) for (const id of plannedVarietyIds(layout, key.level, mem?.id ?? sectionId(key), {pool: sectionWeaponPool(mem?.lanes, mem?.visits ?? 0)})) ids.add(id); // (before the entry: visits = earlier entries)
+      if (layout && !late && !mem?.pickups) lazyWeaponIdsIn(layout.pickups, ids); // (task studio-skywalk-events-20261115-193624-01, lane GOLF-PLAY: a first spawn's PLACED lazy-model weapons — the mini-golf desk's putter)
       await ensureWeaponVarietyModels(ids, {late});
       if (!late) await this.weaponVariety.settled();
     } catch (err) { console.warn('weapon variety: model preparation failed', err); }
@@ -3380,7 +3384,11 @@ export class Game {
       st.count = 1;
       this.pickups.add(st, spots[0].x, spots[0].y, spots[0].z, p.yaw);
       for (let k = 1; k < n; k++) { const one = this.inv.makeStack(FUEL.canItem, 1); one.count = 1; this.pickups.add(one, spots[k].x, spots[k].y, spots[k].z, p.yaw); }
-    } else this.pickups.add(st, spots[0].x, spots[0].y, spots[0].z, p.yaw);
+    } else {
+      // (task studio-skywalk-events-20261115-193624-01, lane GOLF-PLAY) a golf ball put down on the course lies ON its turf (never inside the deck)
+      const y = st.itemId === GOLF_BALL_ITEM ? golfRestY(this.layout.props, spots[0].x, spots[0].z, spots[0].y) : spots[0].y;
+      this.pickups.add(st, spots[0].x, y, spots[0].z, p.yaw);
+    }
     this.hud.toast(`Dropped ${n > 1 ? `${n} × ` : ''}${itemDef(st.itemId).short}`);
     this.syncHeld();
   }
@@ -4199,6 +4207,9 @@ export class Game {
     // lane MELEE: the swing's stamina is paid at its contact (a cancelled swing costs nothing; the knife costs 0), then its scaling
     const charge = this.weapon.swingCharge;
     const swing = meleeSwing(m, charge, !this.player.spendStamina(meleeStaminaCost(m, charge)));
+    // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): the putter's own low head sweep putts the golf ball at the feet
+    // (combat/putterStrike.ts); a stroke that met a ball and no enemy is done there (the ball took the club: no loose-item knock / chips)
+    if (def.id === PUTTER_ITEM && this.puttGolfBall(fwd, charge) && !sweep.hits.length) return;
     const res0 = sweep.contact;
     if (!sweep.hits.length && !res0) { if (m.propHits) this.meleeProps(def, o, dirs[0], def.range, null, swing.damageMult); this.logMelee({kind: 'miss'}); return; } // a clean miss: only the swing's rustle (lane MELEE: loose items on the line still take it)
     this.damage.beginShot(); // one wound / tear group per swing
@@ -4279,6 +4290,28 @@ export class Game {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): the putter's stroke at a swing's contact — the golf ball in the head's
+   * low sector in front of the feet (combat/putterStrike.ts PUTT_SECTOR; nothing behind the level's walls) is putted along the horizontal
+   * facing, its power from the swing's charge (weapons/putter.ts puttSpeed). Returns whether a ball was struck.
+   */
+  private puttGolfBall(fwd: THREE.Vector3, charge: number): boolean {
+    const p = this.player, L = this.levels, trench = this.layout.trench.floorY, c = new THREE.Vector3();
+    const hit = strikeGolfBall({
+      balls: () => this.pickups.list.filter(isPuttable).map(b => { golfBallCentre(b.obj, c); return {ball: b, x: c.x, y: c.y, z: c.z}; }),
+      putt: (b, dx, dz, speed) => this.physics.dynamicItems.putt(b, dx, dz, speed),
+      // the level's walls / slabs only (the course's own low turf / rails are no cover): a level ray at the ball's height
+      clear: (x, y, z) => {
+        const dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz);
+        return d < 1e-3 || raycastWorld(L, [], {x: p.x, y, z: p.z}, {x: dx / d, y: 0, z: dz / d}, d, trench).t >= d - 1e-3;
+      },
+    }, {x: p.x, y: p.y, z: p.z}, fwd.x, fwd.z, charge);
+    if (!hit) return false;
+    this.sfx.impact(hit.x, hit.y, hit.z, DAMAGE_MATERIALS[itemClass(GOLF_BALL_ITEM)].sound);
+    this.logMelee({kind: 'putt', speed: +hit.speed.toFixed(3), dist: +hit.dist.toFixed(3), charge: +charge.toFixed(3)});
+    return true;
   }
 
   /**

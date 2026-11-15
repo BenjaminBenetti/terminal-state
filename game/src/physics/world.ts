@@ -38,6 +38,8 @@ import type {PropPlacement} from '../gen/props';
 import {isLootHolderKind} from '../items/loot';
 import {holderBoxes} from './holderShapes';
 import {SHELF_BOARD, hostShelves} from './merchOnHost'; // task studio-skywalk-variety-20261107-231448-01 (lane MERCH)
+import {golfColliderBoxes} from '../gen/skyways/events/golfContract'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY)
+import {GOLF_ROLL} from './golfBall'; // lane GOLF-PLAY
 
 export type {KillImpulse, RagdollTarget} from './ragdoll';
 export type {CasingKind} from './casings';
@@ -321,8 +323,13 @@ export class PhysicsSystem implements BodyHost {
       const c = PHYS_MATS[k];
       w.addContactMaterial(new CANNON.ContactMaterial(this.material(k), this.staticMat, {friction: c.friction, restitution: c.restitution, contactEquationStiffness: 1e7, contactEquationRelaxation: 3}));
     }
+    // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): two golf balls click off each other (vs the course: PHYS_MATS.ball)
+    w.addContactMaterial(new CANNON.ContactMaterial(this.material('ball'), this.material('ball'), {friction: GOLF_ROLL.ballFriction, restitution: GOLF_ROLL.ballRestitution}));
     w.addEventListener('preStep', () => { for (const r of this.ragdolls) r.preStep(FIXED_DT); });
     w.addEventListener('postStep', () => { for (const r of this.ragdolls) r.postStep(FIXED_DT); });
+    // lane GOLF-PLAY: the golf balls' rolling resistance + CCD clamp (physics/golfBall.ts; nothing to do without a simulating ball)
+    w.addEventListener('preStep', () => this.dynamicItems.preStep(w, FIXED_DT));
+    w.addEventListener('postStep', () => this.dynamicItems.postStep());
     this.world = w;
     if (!warmedUp) warmUp();
     this.casings.audio = this.audio;
@@ -725,6 +732,14 @@ export class PhysicsSystem implements BodyHost {
     }
     for (const p of q.props) {
       if (Math.floor(p.x / span) !== cx0 / CHUNK || Math.floor(p.z / span) !== cy0 / CHUNK) continue;
+      // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): a mini-golf turf / cup piece collides for items by its own boxes
+      // (gen/skyways/events/golfContract.ts: the cup is a real GAP the ball drops through); ragdolls keep its plain box
+      const gb = p.hx > 0 && p.hz > 0 ? golfColliderBoxes(p) : null;
+      if (gb) {
+        if (p.h > 0.02) box(p.x - p.hx, p.x + p.hx, p.y, p.y + p.h, p.z - p.hz, p.z + p.hz, GROUP_RAGDOLL);
+        for (const b of gb) if (b.x1 > b.x0 && b.y1 > b.y0 && b.z1 > b.z0) box(b.x0, b.x1, b.y0, b.y1, b.z0, b.z1, GROUP_ITEM | GROUP_CHUNK);
+        continue;
+      }
       if (p.h <= 0.02 || p.hx <= 0 || p.hz <= 0) continue;
       // Iteration 07: loot holders are solid for ragdolls, but items / chunks rest on their real shelves
       // (task studio-skywalk-variety-20261107-231448-01, lane MERCH: a non-holder host's declared open shelves the same way — gen/props.ts

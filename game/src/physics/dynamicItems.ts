@@ -65,6 +65,8 @@ import {GROUP_CHUNK, GROUP_ITEM, GROUP_RAGDOLL, GROUP_STATIC} from './ragdoll';
 import {STATIC_CHUNK_M, groundClamp, restTime, staticChunkKey, type BodyHost, type ImpactFamily} from './chunks';
 import {dynamicKind, hostRest, hostShelves, restsOnHost} from './merchOnHost'; // task studio-skywalk-variety-20261107-231448-01 (lane MERCH)
 import type {StaticQuery} from './staticQuery';
+import {GOLF_ROLL, groundedBalls, restoreClamped, rollingSpin, stepGolfBalls} from './golfBall'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY)
+import {GOLF_BALL_ITEM, GOLF_BALL_R} from '../gen/skyways/events/golfContract'; // lane GOLF-PLAY
 
 export const MAX_DYNAMIC_ITEMS = 16;
 export const MAX_DYNAMIC_PROPS = 4;
@@ -163,7 +165,7 @@ interface Ent {
   /** Collider centre in the object frame (items: model frame, origin bottom-centre). */
   center: THREE.Vector3;
   half: THREE.Vector3;
-  shape: 'box' | 'cylinder';
+  shape: 'box' | 'cylinder' | 'sphere'; // (lane GOLF-PLAY: + the golf ball's sphere)
   mass: number;
   mat: PhysMat;
   fam: ImpactFamily;
@@ -249,7 +251,7 @@ function obbBox(m: THREE.Matrix4, c: THREE.Vector3, h: THREE.Vector3, out: THREE
   return out;
 }
 
-const FAM: Record<PhysMat, ImpactFamily> = {metal: 'can', plastic: 'light', soft: 'light', heavy: 'heavy', stone: 'stone', wood: 'wood', glass: 'glass', flesh: 'flesh', cloth: 'flesh', castor: 'heavy', pad: 'light'};
+const FAM: Record<PhysMat, ImpactFamily> = {metal: 'can', plastic: 'light', soft: 'light', heavy: 'heavy', stone: 'stone', wood: 'wood', glass: 'glass', flesh: 'flesh', cloth: 'flesh', castor: 'heavy', pad: 'light', ball: 'light'}; // (lane GOLF-PLAY: + the golf ball)
 
 export class DynamicItems {
   private readonly ents = new Map<object, Ent>();
@@ -305,6 +307,11 @@ export class DynamicItems {
   private sweep: IterableIterator<Ent> | null = null;
   private readonly scratch: Ent[] = [];
   private readonly nearBuf: Ent[] = [];
+  /** Lane GOLF-PLAY: per-step scratch of the golf-ball pass (simulating ball bodies, the grounded ones, CCD-clamped velocities). */
+  private readonly ballSet = new Set<CANNON.Body>();
+  private readonly ballList: CANNON.Body[] = [];
+  private readonly ballGround = new Set<CANNON.Body>();
+  private readonly ballClamped = new Map<CANNON.Body, CANNON.Vec3>();
   /**
    * Counters (QA/tests). Lane PHYS: + contacts (props woken by a walker), carried (cab riders), hostSlabs. Task
    * office-props-physics-scale-20261030: + reclaimed (renders handed back), redetached (reclaimed props woken again), riders
@@ -312,7 +319,8 @@ export class DynamicItems {
    */
   readonly counts = {activated: 0, shots: 0, retired: 0, frozen: 0, reactivated: 0, pushes: 0, impacts: 0, props: 0, knockOn: 0, clamped: 0, contacts: 0, carried: 0, hostSlabs: 0,
     reclaimed: 0, redetached: 0, riders: 0, clipped: 0,
-    drags: 0, dragStops: 0}; // task mall-round2-20261031 (lane AUDIO, M01): cardboard drag ticks sent / drag releases
+    drags: 0, dragStops: 0, // task mall-round2-20261031 (lane AUDIO, M01): cardboard drag ticks sent / drag releases
+    putts: 0, nudges: 0, ballCcd: 0, ballStops: 0}; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): putter strikes / walk nudges / CCD clamps / roll stops
 
   /** Lane PHYS: whether walking into a light prop wakes it (see contactWake; task office-props-physics-scale-20261030: every world). */
   get contactOn(): boolean {
@@ -359,7 +367,15 @@ export class DynamicItems {
       allowSleep: true, sleepSpeedLimit: 0.14, sleepTimeLimit: 0.35,
     });
     const h = e.half;
-    if (e.shape === 'cylinder') body.addShape(new CANNON.Cylinder(Math.max(h.x, h.z), Math.max(h.x, h.z), h.y * 2, 12));
+    if (e.shape === 'sphere') {
+      // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): a ball — its radius from its model, next to no air drag (the turf's
+      // rolling resistance and the CCD clamp are stepped in preStep: physics/golfBall.ts), a quick sleep once it stopped
+      body.addShape(new CANNON.Sphere(Math.max(h.x, h.y, h.z)));
+      body.linearDamping = GOLF_ROLL.linearDamping;
+      body.angularDamping = GOLF_ROLL.angularDamping;
+      body.sleepSpeedLimit = GOLF_ROLL.sleepSpeedLimit;
+      body.sleepTimeLimit = GOLF_ROLL.sleepTimeLimit;
+    } else if (e.shape === 'cylinder') body.addShape(new CANNON.Cylinder(Math.max(h.x, h.z), Math.max(h.x, h.z), h.y * 2, 12));
     else body.addShape(new CANNON.Box(new CANNON.Vec3(h.x, h.y, h.z)));
     const m = tm.copy(world).multiply(tm2.makeTranslation(e.center.x, e.center.y, e.center.z));
     m.decompose(tv, tq, ts);
@@ -643,6 +659,83 @@ export class DynamicItems {
     if (!this.activate(e)) return false;
     this.counts.knockOn++;
     return true;
+  }
+
+  /**
+   * Task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): the putter's stroke on a golf ball (combat/putterStrike.ts) — the
+   * impulse that gives the ball the horizontal launch velocity (dirX, dirZ) * speed (m/s, any earlier ground motion replaced) with the
+   * matching rolling spin (it leaves the putter face rolling, no skid). Returns false without a world / for a non-ball.
+   */
+  putt(p: PickupLike, dirX: number, dirZ: number, speed: number): boolean {
+    if (!this.launchBall(p, dirX, dirZ, speed)) return false;
+    this.counts.putts++;
+    return true;
+  }
+
+  /** Lane GOLF-PLAY: a ball's launch (putt / walk nudge): the horizontal velocity set by an impulse at its centre, its rolling spin. */
+  private launchBall(p: PickupLike, dirX: number, dirZ: number, speed: number): boolean {
+    const e = this.entForPickup(p), h = Math.hypot(dirX, dirZ);
+    if (e.shape !== 'sphere' || h < 1e-6 || !(speed > 0)) return false;
+    const b = this.activate(e);
+    if (!b) return false;
+    const r = Math.max(e.half.x, e.half.y, e.half.z), ux = dirX / h, uz = dirZ / h;
+    b.applyImpulse(cv.set((ux * speed - b.velocity.x) * e.mass, 0, (uz * speed - b.velocity.z) * e.mass)); // at the centre: no torque
+    if (b.velocity.y < 0) b.velocity.y = 0;
+    rollingSpin(b.velocity.x, b.velocity.z, r, b.angularVelocity);
+    b.wakeUp();
+    e.shots++;
+    e.sleepT = 0;
+    return true;
+  }
+
+  /** Lane GOLF-PLAY: the station's golf-ball pickups (re-listed when the pickup list changes, else at most once a second). */
+  private ballPickups(): readonly PickupLike[] {
+    const list = this.pickups?.(), c = this.ballCache;
+    if (!list) { c.balls = []; c.list = null; return c.balls; }
+    if (c.list !== list || c.n !== list.length || this.clock - c.t > 1) { c.balls = list.filter(pk => pk.stack.itemId === GOLF_BALL_ITEM); c.list = list; c.n = list.length; c.t = this.clock; }
+    return c.balls;
+  }
+  private readonly ballCache: {list: readonly PickupLike[] | null; n: number; t: number; balls: readonly PickupLike[]} = {list: null, n: -1, t: -1, balls: []};
+
+  /**
+   * Lane GOLF-PLAY: the player walking into a golf ball at their feet nudges it ahead (away from them, at ~their speed, at most
+   * GOLF_ROLL.nudgeMax): a gentle kick, never a putt. Bounded: the station's balls only.
+   */
+  private nudgeBalls(a: Walker, ux: number, uz: number, sp: number): void {
+    const balls = this.ballPickups();
+    if (!balls.length) return;
+    const reach = a.r + GOLF_BALL_R + 0.02, want = Math.min(sp * 1.1, GOLF_ROLL.nudgeMax);
+    for (const pk of balls) {
+      if (!pk.obj.parent) continue;
+      const b = this.ents.get(pk.obj)?.body;
+      const o = pk.obj.position, px = b ? b.position.x : o.x, pz = b ? b.position.z : o.z, py = b ? b.position.y : o.y + GOLF_BALL_R;
+      const dx = px - a.x, dz = pz - a.z;
+      if (Math.abs(dx) > reach || Math.abs(dz) > reach || py < a.y - 0.1 || py > a.y + 0.4) continue;
+      const d = Math.hypot(dx, dz);
+      if (d > reach) continue;
+      const nx = d > 1e-4 ? dx / d : ux, nz = d > 1e-4 ? dz / d : uz;
+      if (nx * ux + nz * uz < 0.2) continue; // only when walking into it
+      if (b && b.type === CANNON.Body.DYNAMIC && b.velocity.x * nx + b.velocity.z * nz >= want * 0.9) continue; // already rolling away
+      if (this.launchBall(pk, nx, nz, want)) this.counts.nudges++;
+    }
+  }
+
+  /**
+   * Lane GOLF-PLAY: the golf-ball pass of one world step (PhysicsSystem's preStep listener: after the solver, before the integration) —
+   * rolling resistance on the turf and the CCD clamp of the simulating balls (physics/golfBall.ts). O(simulating items).
+   */
+  preStep(world: CANNON.World, dt: number): void {
+    const set = this.ballSet, list = this.ballList;
+    set.clear();
+    list.length = 0;
+    for (const e of this.active) if (e.shape === 'sphere' && e.body && e.body.type === CANNON.Body.DYNAMIC) { set.add(e.body); list.push(e.body); }
+    if (!list.length) return;
+    stepGolfBalls(world, list, groundedBalls(world, set, this.ballGround), dt, this.ballClamped, this.counts);
+  }
+
+  /** Lane GOLF-PLAY: after the integration (postStep listener): the CCD-clamped balls get their velocity back. */
+  postStep(): void {
+    if (this.ballClamped.size) restoreClamped(this.ballClamped);
   }
 
   /** Bullet into a light dynamic prop (first hit detaches it from shared rendering). */
@@ -1205,6 +1298,7 @@ export class DynamicItems {
       if (!last) continue;
       const vx = (a.x - last.x) / dt, vz = (a.z - last.z) / dt, sp = Math.hypot(vx, vz);
       if (sp < 0.3 || sp > 12) continue;
+      if (a.wake) this.nudgeBalls(a, vx / sp, vz / sp, sp); // lane GOLF-PLAY: the player kicks a golf ball at their feet along
       // lane PHYS: walking into a light prop wakes it (the player; AI only near the player)
       if (contact && (a.wake || wakers.some(w => Math.abs(w.y - a.y) < 3 && Math.hypot(w.x - a.x, w.z - a.z) < CONTACT_RANGE))) this.contactScan(a, vx / sp, vz / sp);
       if (!this.counts.props) continue;

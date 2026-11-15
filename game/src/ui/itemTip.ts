@@ -17,6 +17,7 @@ import {materialNote} from '../items/craftMaterials';
 import type {TipContent, TipTone} from './tooltip';
 import {CURRENCY_NOTE} from '../items/railTies'; // task studio-market-rework-20261108-074144-01: the market's physical Rail Ties
 import {BEER_RULE_NOTE, isTimedBeer} from '../items/beers'; // task studio-market-bar-20261108-225231-01 (lane BEER)
+import {GOLF_BALL_ITEM} from '../gen/skyways/events/golfContract'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY)
 
 /** Mask lane: a gas mask's fitted filter in whole percent (rounded up: 0 only when empty). */
 export const filterPct = (filter: number | undefined) => Math.ceil(Math.max(0, Math.min(1, (filter ?? 0) / FILTER_LIFE_S)) * 100 - 1e-9);
@@ -48,9 +49,10 @@ export function streamText(inv?: Pick<Inventory, 'gearSlots'>): string {
 
 /**
  * A supply item's line: the spare gas filter's (mask lane), or — task studio-flamethrower-fire-20261114-031614-01 — the ordinary fuel
- * can's: what it is for (it is no filter).
+ * can's: what it is for (it is no filter). Task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): + the mini-golf ball's.
  */
 export function supplyText(itemId: string): string {
+  if (itemId === GOLF_BALL_ITEM) return 'Mini-golf: drop it on the turf and putt it with the putter (hold for a harder stroke)';
   return itemId === FLAME_FUEL_CAN
     ? `Train fuel: pour it in at the fuel cap · refills a worn ${itemDef(FUEL_TANK_ID).name} (R with the flamethrower in your hands) · a bench ingredient`
     : 'A worn gas mask fits one by itself when its filter runs out';

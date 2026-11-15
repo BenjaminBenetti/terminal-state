@@ -35,6 +35,7 @@ const {Viewmodel} = await import('../src/weapons/viewmodel');
 const {VARIETY_MELEE_IDS} = await import('../src/weapons/varietyIds');
 const {WEAPON_VARIETY_MODELS} = await import('../src/assets/weaponVarietyModels.generated');
 const {Inventory} = await import('../src/items/inventory');
+const {isGolfEventItem} = await import('../src/items/golfItems'); // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY)
 
 const GAME = fileURLToPath(new URL('..', import.meta.url));
 const DT = 1 / 60;
@@ -249,7 +250,9 @@ describe('(b) the hit is unchanged: timing, damage, reach and cooldown (main val
   const row = (d: WeaponDef) => { const m = d.melee!; return [m.windup, m.strike, m.sweep, m.recovery, d.interval, d.damage, d.headMult, d.limbMult, d.range, m.maxTargets ?? 1, m.knockback ?? 0, m.stagger ?? 0, m.stamina ?? 0]; };
 
   it('every melee WeaponDef: the timing / damage / reach / cooldown numbers and sweep rays are main\'s', () => {
-    expect(Object.keys(MAIN).sort()).toEqual(Object.values(WEAPONS).filter(d => d.melee).map(d => d.id).sort());
+    // (task studio-skywalk-events-20261115-193624-01, lane GOLF-PLAY: + the mini-golf putter, new — its numbers are pinned in
+    // tests/skyways-event-golf-play-registry.test.ts; excluded here)
+    expect(Object.keys(MAIN).sort()).toEqual(Object.values(WEAPONS).filter(d => d.melee && !isGolfEventItem(d.id)).map(d => d.id).sort());
     for (const [id, want] of Object.entries(MAIN)) {
       const d = WEAPONS[id], got = row(d);
       for (let i = 0; i < want.length; i++) expect(got[i], `${id} [${i}]`).toBeCloseTo(want[i], 9);
