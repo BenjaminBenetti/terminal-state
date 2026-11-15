@@ -47,7 +47,7 @@ export const EXPO_LED_IN_TRUSS = {dz: 0.08, y0: 0.06} as const;
 const D = EXPO_DIMS;
 const box = (m: PartMat, s: readonly [number, number, number], p: readonly [number, number, number], rx?: number): DestDrawnPart => ({m, s, p, ...(rx ? {rx} : {})});
 const def = (k: keyof typeof EXPO_DIMS, o: Partial<PropDef> = {}): PropDef => ({w: D[k].w, d: D[k].d, h: D[k].h, blocksSight: false, ...o});
-const dyn = (mass: number, mat: 'metal' | 'wood' | 'plastic', onHost = false): PropDef['physics'] => ({mass, dynamic: true, shape: 'box', mat, contact: true, ...(onHost ? {onHost: true} : {})});
+const dyn = (mass: number, mat: 'metal' | 'wood' | 'plastic' | 'pad', onHost = false): PropDef['physics'] => ({mass, dynamic: true, shape: 'box', mat, contact: true, ...(onHost ? {onHost: true} : {})});
 /** The exhibitors' booth panel colours (an existing paint key per exhibitor index). */
 const PANEL: readonly PartMat[] = ['paintGreen', 'paintBlue', 'black', 'paintWhite', 'steelDark', 'paintBlue', 'paintOrange', 'paintGreen', 'paintRed', 'paintOrange', 'black', 'paintBlue', 'paintGreen', 'paintYellow'];
 export const expoPanelMat = (v: number): PartMat => PANEL[((Math.floor(v) % EXPO_EXHIBITORS.length) + EXPO_EXHIBITORS.length) % EXPO_EXHIBITORS.length % PANEL.length];
@@ -59,10 +59,10 @@ const phys = {
   counter: {dynamic: false, why: 'fixture', how: 'a closed booth demo counter (~45 kg, solid panels on a kick plinth): the host of the demo devices on its top (they go loose when shot; a prop something rests on never moves)'},
   table: {dynamic: false, why: 'fixture', how: 'a booth demo table (aluminium legs, laminate top, modesty panel): the host of the monitors / keyboards / devices on it (they go loose when shot; a prop something rests on never moves)'},
   plinth: {dynamic: false, why: 'fixture', how: 'a solid display plinth (painted MDF box): the host of the device on it (the device goes loose when shot; a prop something rests on never moves)'},
-  screenStand: {dynamic: true, mass: 45, mat: 'metal', shape: 'box', how: 'a 65-inch display on a steel floor stand (~45 kg, flat base plate): walked into it shoves / rocks, a shot can tip it over'},
-  towerPc: {dynamic: true, mass: 9, mat: 'metal', shape: 'box', onHost: true, how: 'a desktop tower case (~9 kg) on or beside a demo table: a bump shoves it, a shot knocks it over / off its table'},
+  screenStand: {dynamic: true, mass: 45, mat: 'pad', shape: 'box', how: 'a 65-inch display on a steel floor stand (~45 kg, flat base plate on felt pads): walked into it shoves / rocks, a shot can tip it over'},
+  towerPc: {dynamic: true, mass: 9, mat: 'metal', shape: 'box', onHost: true, how: 'a desktop tower case (~9 kg) on a demo table: a shot knocks it over / off its table'},
   hangSign: {dynamic: false, why: 'mounted', how: 'a printed booth sign board hung from the ceiling on two cables (2.5 m+ clear under it): mounted'},
-  signStand: {dynamic: true, mass: 14, mat: 'metal', shape: 'box', how: 'a freestanding sign totem (~14 kg, flat steel base): walked into it slides / tips, a shot rocks it over'},
+  signStand: {dynamic: true, mass: 14, mat: 'pad', shape: 'box', how: 'a freestanding sign totem (~14 kg, flat steel base on felt pads): walked into it slides / tips, a shot rocks it over'},
 } satisfies Record<string, DestPhys>;
 
 const NONE = (role: 'equipment' | 'decor' | 'surface', how: string) => ({cls: 'none' as const, role, how});
@@ -122,7 +122,7 @@ export const EXPO_SPECS: Readonly<Record<ExpoKind, EventKindSpec>> = {
     parts: v => [box(v % 2 ? 'black' : 'accent', [0.5, 0.97, 0.5], [0, 0.485, 0]), box(v % 2 ? 'steelBright' : 'counter', [0.52, 0.03, 0.52], [0, 0.985, 0])],
   },
   skyExpoScreenStand: {
-    def: def('screenStand', {physics: dyn(45, 'metal')}), phys: phys.screenStand, damage: 'screen', open: NONE('equipment', 'a display on a stand: nothing to open'),
+    def: def('screenStand', {physics: dyn(45, 'pad')}), phys: phys.screenStand, damage: 'screen', open: NONE('equipment', 'a display on a stand: nothing to open'),
     parts: () => [
       box('steelDark', [0.9, 0.03, 0.65], [0, 0.015, 0]),
       box('steelBright', [0.06, 1.55, 0.05], [-0.3, 0.8, -0.07]), box('steelBright', [0.06, 1.55, 0.05], [0.3, 0.8, -0.07]),
@@ -148,7 +148,7 @@ export const EXPO_SPECS: Readonly<Record<ExpoKind, EventKindSpec>> = {
     faces: () => [{paint: 'expo-hang', w: 2.36, h: 0.52, p: [0, 0.3, 0.007], back: true}],
   },
   skyExpoSignStand: {
-    def: def('signStand', {physics: dyn(14, 'metal')}), phys: phys.signStand, damage: 'plastic', open: NONE('decor', 'a sign totem: nothing to open'),
+    def: def('signStand', {physics: dyn(14, 'pad')}), phys: phys.signStand, damage: 'plastic', open: NONE('decor', 'a sign totem: nothing to open'),
     parts: () => [
       box('steelDark', [0.9, 0.03, 0.45], [0, 0.015, 0]),
       box('steelBright', [0.04, 1.96, 0.05], [-0.43, 1.0, 0]), box('steelBright', [0.04, 1.96, 0.05], [0.43, 1.0, 0]),
@@ -159,4 +159,15 @@ export const EXPO_SPECS: Readonly<Record<ExpoKind, EventKindSpec>> = {
 };
 
 /** Scale-check records (tools/asset-pipeline/props/scale-check.mjs --kind <kind> beside zombie lastshift, viewed): W x H x D, contact. */
-export const EXPO_SCALE: Readonly<Partial<Record<ExpoKind, string>>> = {};
+export const EXPO_SCALE: Readonly<Record<ExpoKind, string>> = {
+  skyExpoLedWall: '6.20 x 3.30 x 0.11 m (W x H x D); its base 0.06 m over the stage deck (1.09 m), its top 4.39 m under the truss beam; 4 contacts on the deck',
+  skyExpoLectern: '0.62 x 1.39 x 0.52 m (sloped top at 1.12 m, gooseneck to 1.39); grounded, 4 contacts on the deck',
+  skyExpoBoothWall: '3.00 x 2.50 x 0.06 m drawn (0.12 m collider); header band 2.05-2.45 m; grounded, 2 contact runs',
+  skyExpoDemoCounter: '1.60 x 1.00 x 0.60 m; top 1.00 m (a standing counter); grounded, 4 contacts',
+  skyExpoDemoTable: '1.60 x 0.75 x 0.80 m; top 0.75 m (desk height); grounded on 4 legs',
+  skyExpoPlinth: '0.52 x 1.00 x 0.52 m; top 1.00 m; grounded, 4 contacts',
+  skyExpoScreenStand: '1.55 x 1.99 x 0.65 m (a 65-inch panel, its centre 1.54 m); grounded base plate, 4 contacts',
+  skyExpoTowerPc: '0.20 x 0.44 x 0.45 m (a mid tower); grounded, 4 contacts',
+  skyExpoHangSign: '2.45 x 1.10 x 0.04 m (board 0.60 m + 0.50 m cables); hung: its top at the ceiling, >= 2.5 m clear under the board',
+  skyExpoSignStand: '0.90 x 1.98 x 0.45 m (a 0.80 x 1.60 m totem face); grounded base plate, 4 contacts',
+};

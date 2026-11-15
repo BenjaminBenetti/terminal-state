@@ -718,8 +718,8 @@ const BOOTH_PLANS: Readonly<Record<ExpoBoothTheme, readonly BoothItem[]>> = {
     {k: 'beanBag', lx: -0.75, lz: 2.1, turn: PI},
   ],
   workstation: [
-    {k: 'skyExpoDemoTable', lx: -0.5, lz: BACK, variant: 'e', req: true, top: [['officeMonitor', -0.35, -0.15], ['officeMonitor', 0.35, -0.15], ['tradingKeyboard', 0, 0.22]]},
-    {k: 'skyExpoTowerPc', lx: 0.65, lz: BACK},
+    {k: 'skyExpoDemoTable', lx: -0.5, lz: BACK, variant: 'e', req: true,
+      top: [['officeMonitor', -0.42, -0.15], ['officeMonitor', 0.22, -0.15], ['tradingKeyboard', -0.1, 0.22], ['skyExpoTowerPc', 0.66, -0.1]]},
     {k: 'foldingChair', lx: -0.5, lz: 1.4, turn: PI},
     {k: 'skyExpoDemoTable', lx: 0.6, lz: 2.45, variant: 'e', req: true, top: [['officeMonitor', 0, -0.15], ['tradingKeyboard', 0, 0.22], ['skyExpoTowerPc', 0.6, -0.1]]},
   ],
