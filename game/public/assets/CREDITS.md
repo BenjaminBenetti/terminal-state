@@ -8,7 +8,9 @@ asserted** for any generated source. Full per-file provenance: `assets/derivativ
 - cannon-es 0.20.0 (MIT, Copyright (c) 2015 cannon.js Authors) — https://github.com/pmndrs/cannon-es — ragdoll physics, bundled into the game script.
 - Game code, procedural canvas textures (terrazzo, painted block, ballast, steel paint, crates,
   signs) and simple pickup/trim geometry: authored for this project. (Procedural WebAudio cues were retired in
-  iteration 05; all sound effects are now Sound Lab clips — see Audio below.)
+  iteration 05; all sound effects are now Sound Lab clips — see Audio below. The one exception, the Geiger-counter ticks
+  geiger-*.mp3, are procedural clips rendered offline by the project's own script and also play as bundled clips — see
+  "Geiger-counter ticks" below.)
 
 ## Models and textures (runtime derivatives)
 - Iteration 10: the held/world RIFLE, SHOTGUN and PISTOL models are user-supplied models (uploaded 2026-10-28; upload
@@ -71,6 +73,7 @@ asserted** for any generated source. Full per-file provenance: `assets/derivativ
   conditional prototype status, not production or commercial clearance. Details: `assets/audio/NOTICE.md`,
   per-file provenance `assets/derivatives/audio-iteration05.json`. Room reverb impulse responses are computed in
   code and only process these clips (never played as a sound source).
+- Exception: the Geiger-counter ticks (`assets/audio/geiger-*.mp3`) are not Sound Lab clips — see "Geiger-counter ticks" below.
 
 ## Zombie variants (iteration 05)
 - Bodies: Last-shift (existing), Courier and Station agent (new: native Codex image → local F16 SV), Masked scavenger
@@ -821,3 +824,24 @@ reviewed by ear on the build worker. Raw takes are kept outside Git.
 - `assets/audio/fire-collapse-01.mp3` — fireCollapse (Sound Lab job 20261114T035601-1267916011)
 - `assets/audio/fire-embers-01.mp3` — fireEmbers (Sound Lab job 20261114T035203-1819897513)
 <!-- END flamethrower-fire-audio-20261114 -->
+
+<!-- BEGIN geiger-audio-20261115 (geiger-build.mjs) -->
+## Geiger-counter ticks (near the Reactor's irradiated zombies)
+Procedural audio authored for this project: rendered offline, deterministically, by the project's own script
+`tools/audio-pipeline/geiger-render.mjs` (a physical tick model: a short GM-tube discharge pulse into a small piezo / speaker
+resonator bank) from fixed seeds, under the irradiated-zombies task's authorization for procedural Geiger clicks. No Sound Lab,
+no generative model and no third-party, stock, sampled or downloaded audio. Runtime derivatives (resample, trim, levelling, MP3)
+built by `tools/audio-pipeline/geiger-build.mjs` (provenance: `assets/derivatives/audio-geiger.json`); they play as ordinary
+bundled clips, with no synthesis at runtime. The project's conditional prototype status is unchanged, not production or
+commercial clearance. Not reviewed by ear on the build worker. The 48 kHz masters are kept outside Git.
+
+- `assets/audio/geiger-click-01.mp3` — geigerClick (one discharge; seed 15110101)
+- `assets/audio/geiger-click-02.mp3` — geigerClick (one discharge; seed 15110102)
+- `assets/audio/geiger-click-03.mp3` — geigerClick (one discharge; seed 15110103)
+- `assets/audio/geiger-click-04.mp3` — geigerClick (one discharge; seed 15110104)
+- `assets/audio/geiger-click-05.mp3` — geigerClick (one discharge; seed 15110105)
+- `assets/audio/geiger-click-06.mp3` — geigerClick (one discharge; seed 15110106)
+- `assets/audio/geiger-cluster-01.mp3` — geigerCluster (2 discharges; seed 15110201)
+- `assets/audio/geiger-cluster-02.mp3` — geigerCluster (3 discharges; seed 15110202)
+- `assets/audio/geiger-cluster-03.mp3` — geigerCluster (4 discharges; seed 15110203)
+<!-- END geiger-audio-20261115 -->

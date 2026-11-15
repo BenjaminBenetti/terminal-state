@@ -4,6 +4,9 @@
 // public/assets/derivatives/audio-iteration05.json). Bytes are fetched while the page loads (no
 // AudioContext needed); decodeAudioData runs in the game's single AudioContext after the first user
 // gesture. A cue with no decoded clip is SILENT (counted in stats().silentPlays) — never synthesised.
+// One set is not a Sound Lab derivative: the Geiger-counter ticks (geiger-*.mp3, task studio-reactor-glowing-zombies-20261115-013245-01)
+// were rendered OFFLINE by the repository's own procedural script (tools/audio-pipeline/geiger-render.mjs, user-authorized for the
+// Geiger clicks; provenance derivatives/audio-geiger.json). Here they are ordinary bundled clips like every other cue.
 
 import {CLIP_MANIFEST as CLIP_MANIFEST_I05, type ClipRef} from './manifest.generated';
 import {CLIP_MANIFEST_I06} from './manifest.iteration06.generated';
@@ -27,6 +30,7 @@ import {CLIP_MANIFEST_SCREACHER, SCREACHER_CUES} from './manifest.screacher.gene
 import {CLIP_MANIFEST_CHIPPER} from './manifest.chipper.generated'; // task studio-corpse-chipper-fuel-20261110-235304-01 (lane AUDIO): the train chipper set
 import {BB_VOICE_CUES, CLIP_MANIFEST_BB} from './manifest.bb.generated'; // task studio-bb-production-20261112-234540-01 (lane AUDIO): BB's voice (cackle, giggle, pounce squeal, hurt, death)
 import {CLIP_MANIFEST_FIRE, FIRE_CUES} from './manifest.fire.generated'; // task studio-flamethrower-fire-20261114-031614-01 (lane AUDIO): the flamethrower's jet + fire (ignition, roar loop, cut-off, fire bed loop, catch, collapse, embers)
+import {CLIP_MANIFEST_GEIGER, GEIGER_CUES} from './manifest.geiger.generated'; // task studio-reactor-glowing-zombies-20261115-013245-01 (lane AUDIO): the Geiger-counter ticks near the irradiated zombies (procedural, rendered offline: tools/audio-pipeline/geiger-render.mjs)
 
 /**
  * Runtime manifest: the iteration-05 bank plus the iteration-06 material-breaking cues
@@ -37,7 +41,7 @@ import {CLIP_MANIFEST_FIRE, FIRE_CUES} from './manifest.fire.generated'; // task
  * 20261101-201110-01 (lane AUDIO): + the Strainer's wet footfalls / arm swing / claw contact / hit squish (tools/audio-pipeline/
  * strainer-build.mjs; provenance derivatives/audio-strainer.json).
  */
-export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT, ...CLIP_MANIFEST_MARKET_BAR, ...CLIP_MANIFEST_GUN_VARIETY, ...CLIP_MANIFEST_SCREACHER, ...CLIP_MANIFEST_CHIPPER, ...CLIP_MANIFEST_BB, ...CLIP_MANIFEST_FIRE};
+export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT, ...CLIP_MANIFEST_MARKET_BAR, ...CLIP_MANIFEST_GUN_VARIETY, ...CLIP_MANIFEST_SCREACHER, ...CLIP_MANIFEST_CHIPPER, ...CLIP_MANIFEST_BB, ...CLIP_MANIFEST_FIRE, ...CLIP_MANIFEST_GEIGER};
 
 /** Every cue the game can play, in decode-priority order (most frequent / important first). */
 export const CUES = [
@@ -113,6 +117,9 @@ export const CUES = [
   'batteryInsert', 'flareIgnite', 'flareBurn', 'flareOut', 'flashlightFlicker',
   // Task gas-mask-roof-feedback-20261030 (tools/audio-pipeline/build-cough.mjs): the player coughing while toxic gas hurts them.
   'cough',
+  // Task studio-reactor-glowing-zombies-20261115-013245-01 (lane AUDIO, tools/audio-pipeline/geiger-build.mjs): the player's Geiger counter
+  // near the irradiated zombies — single discharge ticks and 2-4 tick clusters for high count rates (Sfx.geigerClick).
+  ...GEIGER_CUES,
 ] as const;
 export type CueId = (typeof CUES)[number];
 

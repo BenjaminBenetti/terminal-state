@@ -23,6 +23,7 @@ screacher-*.mp3; seeds and hashes only, the prompts stay with the private raw ta
 chipper-feed.mp3, spin-up chipper-start.mp3, wind-down chipper-stop.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-chipper.json; the BB voice set (cackle, giggle, pounce squeal, hurt squawk, wind-down death,
 bb-*.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-bb.json; the flamethrower and fire set (jet ignition, roar loop, cut-off, fire bed loop, catching fire, collapse, ember crackle,
 fire-*.mp3; seeds and hashes only, the prompts stay with the private raw takes): ../derivatives/audio-fire.json).
+The one exception is the Geiger-counter tick set (geiger-*.mp3), described at the end of this notice.
 
 Powered by Stability AI.
 
@@ -30,4 +31,15 @@ Powered by Stability AI.
 - Text encoder / tokenizer (T5Gemma): Gemma Terms of Use (Last modified 2026-04-01).
 - Status: conditional prototype status, not production or commercial clearance. Outputs may not be used to build
   or improve a foundational generative AI model. Unreviewed by ear on the build worker; not approved, not game-ready.
-- No synthesised, stock, downloaded or hosted audio is included.
+- No synthesised, stock, downloaded or hosted audio is included, except the procedural Geiger-counter ticks below.
+
+## Geiger-counter ticks (geiger-*.mp3)
+
+These are not Sound Lab clips and are not "Powered by Stability AI". The project's own script
+tools/audio-pipeline/geiger-render.mjs renders them offline and deterministically from fixed seeds. Each is a physical
+model of one GM-tube discharge pulse driving a small piezo / speaker resonator bank. The task's authorization covered
+procedural Geiger clicks. tools/audio-pipeline/geiger-build.mjs cooks them (resample, trim, levelling, MP3); per-file
+seeds, parameters and hashes: ../derivatives/audio-geiger.json. They use no model, Sound Lab or third-party, stock,
+sampled or downloaded audio. The game plays them as ordinary bundled clips and never synthesises at runtime.
+Status: the project's conditional prototype status, unchanged; not production or commercial clearance. Not listened
+to on the build worker.
