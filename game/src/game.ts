@@ -7,7 +7,7 @@ import {ensureSurfaceTruckReady, installSurfaceTruck, type SurfaceTruck} from '.
 import {installSurfaceRun, type SurfaceRunHost, type SurfaceRunRuntime} from './world/surface/runtime';
 import {SURFACE_VERSION_LANE, surfaceBaseKey, surfaceVersionFor, surfaceBaseLevel} from './run/surfaceRun';
 import {runSurfaceBoundary} from './run/surfaceBoundary';
-import {drainSurfaceGpu, type SurfaceGpuBackend} from './world/surface/gpuBoundary';
+import {drainSurfaceGpu, releaseSurfaceMaterialPrograms, type SurfaceGpuBackend} from './world/surface/gpuBoundary';
 import {GAS} from './world/gas/field';
 import {freshSeed, hashString, mulberry32, seedToCode} from './core/rng';
 import {PropIndex, moveCircle} from './core/physics';
@@ -2554,9 +2554,12 @@ export class Game {
               await drain();
               if (cancelled()) throw new PacedBuildCancelled();
               phase('saving-and-releasing-source');
+              // Lane teardown may empty reusable groups, so retire their programs while their children are still present.
+              const programs = releaseSurfaceMaterialPrograms([...this.scene.children, this.viewmodel.scene]);
               this.leaveSection(true); generation = this.stationGen;
               snapshot = this.levelEntrySnapshot(); // post-teardown lane saves, remaining loot and permanent kills
               this.flushRetired();
+              phase(`source-material-programs-released ${programs}`);
               this.propModels.trim(new Set(), 0); // no outgoing world is retained while the city is decoded/prepared
               await drain();
               phase('source-released');
@@ -2568,6 +2571,7 @@ export class Game {
               this.warming = true;
               phase('restoring-source');
               await drain();
+              releaseSurfaceMaterialPrograms([...this.scene.children, this.viewmodel.scene]);
               if (targetStarted) { this.leaveSection(false); generation = this.stationGen; }
               this.flushRetired(); this.propModels.trim(new Set(), 0);
               await drain();
@@ -2933,13 +2937,14 @@ export class Game {
    * peak on a software rasterizer). Frames are held meanwhile (`warming`); prepareGraphics' finally clears it. No-op elsewhere.
    */
   private async stageLevelTextures(ui: WarmupUi): Promise<void> {
-    if (!(this.layout?.mall || this.layout?.surface) || !this.world || !this.gpu || this.gpu.deviceLost || !this.renderer.initialized) return;
+    if (!(this.layout?.mall || this.layout?.surface || this.surfaceBoundaryWarming) || !this.world || !this.gpu || this.gpu.deviceLost || !this.renderer.initialized) return;
     const textures = new Set<THREE.Texture>();
     this.scene.traverse(o => collectTextures(o, textures));
     const gen = this.stationGen;
     this.warming = true;
     ui.label.textContent = 'Preparing textures…';
     await stageUploads(t => this.renderer.initTexture(t), textures, {
+      ...((this.layout.surface || this.surfaceBoundaryWarming) ? {batchBytes: 16 * 1048576} : {}),
       progress: (done, total) => { ui.meter?.stage('textures', done / Math.max(1, total)); },
       alive: () => gen === this.stationGen && !this.gpu?.deviceLost,
     });
@@ -2971,13 +2976,21 @@ export class Game {
       sceneTarget: () => this.atmosphereBypass ? null : this.atmosphere.warmTarget(this.scene, this.camera),
       torch: this.flashlight, torchIntensity: MOOD.flashlight,
       frame: () => this.drawFrame(),
-      finish: () => { this.world.culler.update(this.camera, true); this.atmosphere.resetHistory(); this.render(); },
+      finish: () => { this.world.culler.update(this.camera, true); if (surfaceBoundary) this.surfaceRuntime.beforeRender(true); this.atmosphere.resetHistory(); this.render(); },
       hide: hidden => { this.canvas.style.visibility = hidden ? 'hidden' : ''; },
       alive: () => gen === this.stationGen && !this.gpu?.deviceLost,
       sceneDepth: () => this.sceneDepth(true), // lane RENDER-CPU: compile into the context the real frame draws the station in
     }, {
-      ...(surfaceBoundary ? {budgetMs: Number.MAX_SAFE_INTEGER} : {}),
-      onProgress: (p: WarmupProgress) => { meter?.stage('graphics', p.done / Math.max(1, p.total)); label.textContent = warmupLabel(p); },
+      ...(surfaceBoundary ? {budgetMs: Number.MAX_SAFE_INTEGER, compileChunk: 1, frameChunk: 8,
+        yieldFrame: async () => {
+          shareShaderText(this.renderer);
+          await drainSurfaceGpu(this.renderer.backend as unknown as SurfaceGpuBackend, () => gen === this.stationGen && !this.gpu?.deviceLost);
+          await nextPaint();
+        }} : {}),
+      onProgress: (p: WarmupProgress) => {
+        if (surfaceBoundary) shareShaderText(this.renderer);
+        meter?.stage('graphics', p.done / Math.max(1, p.total)); label.textContent = warmupLabel(p);
+      },
     });
     this.warmup = res;
     shareShaderText(this.renderer); // (one copy of each shader text among the states the warm-up built: render/shaderTextShare.ts)

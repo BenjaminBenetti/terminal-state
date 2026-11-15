@@ -1,3 +1,23 @@
+import type {Material, Object3D} from 'three';
+
+type SurfaceDrawable = Object3D & {
+  isMesh?: boolean; isLine?: boolean; isPoints?: boolean; isSprite?: boolean;
+  material?: Material | Material[];
+};
+
+/** Retire outgoing render-object programs while keeping the reusable materials, maps and geometry intact. */
+export function releaseSurfaceMaterialPrograms(roots: readonly Object3D[]): number {
+  const materials = new Set<Material>();
+  for (const root of roots) root.traverse(object => {
+    const drawable = object as SurfaceDrawable;
+    if (!drawable.isMesh && !drawable.isLine && !drawable.isPoints && !drawable.isSprite) return;
+    const list = Array.isArray(drawable.material) ? drawable.material : [drawable.material];
+    for (const material of list) if (material?.isMaterial === true) materials.add(material);
+  });
+  for (const material of materials) material.dispose();
+  return materials.size;
+}
+
 type SurfaceGl = Pick<WebGL2RenderingContext,
   'SYNC_GPU_COMMANDS_COMPLETE' | 'ALREADY_SIGNALED' | 'CONDITION_SATISFIED' | 'TIMEOUT_EXPIRED' | 'WAIT_FAILED' |
   'fenceSync' | 'flush' | 'clientWaitSync' | 'deleteSync' | 'isContextLost'>;

@@ -52,6 +52,7 @@ try {
       page.on('pageerror', e => { if (report.errors.length < 50) report.errors.push(String(e).slice(0, 700)); });
       page.on('console', m => { if (m.type() === 'error' && report.errors.length < 50) report.errors.push(m.text().slice(0, 700));
         if (m.text().startsWith('Surface Run: boundary')) record('boundary phase', {message: m.text(), memory: memory()});
+        if (m.text().startsWith('SURFACE_QA_GRAPHICS')) record('graphics preparation progress', {message: m.text(), memory: memory()});
         if (['warn', 'warning'].includes(m.type()) && report.warnings.length < 50) report.warnings.push(m.text().slice(0, 700)); });
       const ev = (fn, ...args) => page.evaluate(fn, ...args);
       const wait = async (fn, arg, seconds = 600) => { const end = Date.now() + seconds * 1000; let nextLog = Date.now() + 5000, last = '';
@@ -97,6 +98,11 @@ try {
       await page.goto(`http://127.0.0.1:${served.port}/?qa=1&qaPrebuild=0&menuScene=0&lighting=${backend === 'webgl2' ? 'off' : 'on'}&reflections=high${backend === 'webgl2' ? '&renderer=webgl2' : ''}`, {waitUntil: 'load'});
       await wait(() => !!window.__game?.assets?.models && !document.querySelector('#btn-start')?.disabled);
       record('boot ready', {qaMenuDioramaOmitted: true, gameplayQualityUnchanged: true});
+      await ev(() => { const label = document.querySelector('#load .label'); let seen = 0;
+        if (label) new MutationObserver(() => { if (window.__game.surfaceBoundaryPhase !== 'warming-target') return;
+          const text = label.textContent ?? ''; if (!text.startsWith('Preparing graphics')) return;
+          if (seen++ < 40 || seen % 40 === 0) console.info('SURFACE_QA_GRAPHICS', text);
+        }).observe(label, {childList: true, characterData: true, subtree: true}); });
       await ev(() => { window.__surfaceFrameProbe = {raf: 0, timers: 0};
         const raf = () => { window.__surfaceFrameProbe.raf++; requestAnimationFrame(raf); }; requestAnimationFrame(raf);
         window.__surfaceTimer = setInterval(() => {window.__surfaceFrameProbe.timers++;}, 500); });

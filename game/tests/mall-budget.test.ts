@@ -152,9 +152,9 @@ describe('attribute instancing (render/instancing.ts)', () => {
   });
 
   // (task reactor-build-20261101: + the Reactor's open pit — every tier in view — exactly like the mall's atrium)
-  it('the game turns it on for the mall and the Reactor only, before the world is built (Subway / Office keep three\'s default path)', () => {
+  it('the game turns it on for the mall, Reactor and surface before the world is built (ordinary Subway / Office keep three\'s default path)', () => {
     const src = readFileSync(fileURLToPath(new URL('../src/game.ts', import.meta.url)), 'utf8');
-    const i = src.indexOf('setAttributeInstancing(!!this.layout.mall || !!this.layout.reactor)'), w = src.indexOf('this.world = yield* buildWorldSteps('); // (lane BUILD: the stepped world builder)
+    const i = src.indexOf('setAttributeInstancing(!!this.layout.mall || !!this.layout.reactor || !!this.layout.surface)'), w = src.indexOf('this.world = yield* buildWorldSteps('); // (lane BUILD: the stepped world builder)
     expect(i).toBeGreaterThan(0);
     expect(i).toBeLessThan(w);
   });
@@ -253,18 +253,26 @@ describe('decoded model images released after upload in the mall (assets/texture
     expect(releaseModelTexturesAfterUpload({scene})).toBe(0);
   });
 
-  it('game wiring: boot models tracked at load, lazy models after fetch, both released in the mall only, uploads staged before the warm-up mode check', () => {
+  it('game wiring: models tracked after fetch, mall/surface images released and uploads staged before the warm-up mode check', () => {
     const src = readFileSync(fileURLToPath(new URL('../src/game.ts', import.meta.url)), 'utf8');
     const load = src.indexOf('async load('), icons = src.indexOf('await buildItemIcons(');
     const track = src.indexOf('for (const g of Object.values(m)) trackUploads(modelTextures(g));');
     expect(track).toBeGreaterThan(load);
     expect(track).toBeLessThan(icons); // before the icons upload the guns / items
-    expect(src).toMatch(/await this\.propModels\.ensure\(lazyKeys, onProgress\);\s*for \(const k of lazyKeys\) \{ const g = this\.propModels\.get\(k\); if \(g\) trackUploads\(modelTextures\(g\)\); \}/);
-    expect(src).toMatch(/if \(this\.layout\.mall\) \{\s*for \(const k of keep\) \{ const g = this\.propModels\.get\(k\); if \(g\) releaseModelTexturesAfterUpload\(g\); \}\s*for \(const g of Object\.values\(this\.assets\.models\)\) releaseModelTexturesAfterUpload\(g\);\s*\}/);
-    const run = src.indexOf('private async runWarmup('), stage = src.indexOf('await this.stageLevelTextures(ui);', run), mode = src.indexOf('const mode = warmupMode(', run);
+    const ensure = src.indexOf('await this.propModels.ensure(lazyKeys, onProgress);');
+    const lazyTrack = src.indexOf('for (const k of lazyKeys) { const g = this.propModels.get(k); if (g) trackUploads(modelTextures(g)); }', ensure);
+    expect(ensure).toBeGreaterThan(0);
+    expect(lazyTrack).toBeGreaterThan(ensure);
+    // The only work between fetch and tracking is the synchronous, surface-local missing-asset guard.
+    const afterFetch = src.slice(ensure + 'await this.propModels.ensure(lazyKeys, onProgress);'.length, lazyTrack);
+    expect(afterFetch).toMatch(/^\s*if \(layout\.surface \|\| this\.surfaceBoundaryWarming\) \{\s*const missing = lazyKeys\.filter\(k => this\.propModels\.catalogue\[k\] && !this\.propModels\.has\(k\)\);\s*if \(missing\.length\) throw new Error\(`Expedition transition assets unavailable: \$\{missing\.join\(', '\)\}`\);\s*\}\s*$/);
+    expect(src).toMatch(/if \(this\.layout\.mall \|\| this\.layout\.surface\) \{\s*for \(const k of keep\) \{ const g = this\.propModels\.get\(k\); if \(g\) releaseModelTexturesAfterUpload\(g\); \}\s*for \(const g of Object\.values\(this\.assets\.models\)\) releaseModelTexturesAfterUpload\(g\);\s*\}/);
+    const run = src.indexOf('private async runWarmup('), stage = src.indexOf('await this.stageLevelTextures(ui);', run), mode = src.indexOf('const mode = surfaceBoundary', run);
     expect(stage).toBeGreaterThan(run);
     expect(stage).toBeLessThan(mode); // runs with ?warmup=off too
-    expect(src).toMatch(/private async stageLevelTextures\(ui: WarmupUi\): Promise<void> \{\s*if \(!this\.layout\?\.mall/);
+    expect(src).toContain("const surfaceBoundary = !!this.layout.surface || this.surfaceBoundaryWarming;");
+    expect(src).toContain("const mode = surfaceBoundary ? 'full' : warmupMode(location.search, this.softwareGl?.software === true);");
+    expect(src).toMatch(/private async stageLevelTextures\(ui: WarmupUi\): Promise<void> \{\s*if \(!\(this\.layout\?\.mall \|\| this\.layout\?\.surface \|\| this\.surfaceBoundaryWarming\) \|\| !this\.world \|\| !this\.gpu \|\| this\.gpu\.deviceLost \|\| !this\.renderer\.initialized\) return;/);
   });
 });
 

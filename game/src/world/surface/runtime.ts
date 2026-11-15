@@ -196,9 +196,9 @@ export class SurfaceRunRuntime {
     return this.info ? surfaceMapState(this.info, this.explored, this.host.player, this.host.skywaysCar?.body ?? null) : null;
   }
 
-  /** Called after the player's camera/torch pose is final for this frame, never inside the warm-up's hidden draws. */
-  beforeRender(): void {
-    if (!this.info || this.host.warming) return;
+  /** Final camera/torch cull. The explicit override is only for warm-up's final view after all hidden variants are prepared. */
+  beforeRender(finalWarmupView = false): void {
+    if (!this.info || this.host.warming && !finalWarmupView) return;
     this.applyAir();
     const light = this.host.flashlight;
     if (light && light.intensity > 0) {

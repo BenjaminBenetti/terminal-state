@@ -169,12 +169,19 @@ describe('the journey builds the next station paced (lane BUILD)', async () => {
     expect(p.pregenerated).toBeNull();
   });
 
-  it('only the journey paces between frames; the loading screen\'s routes (newGame / Continue / Retry / menu travel) build in time slices with no frame; the synchronous wrapper stays', async () => {
+  it('only the journey paces between frames; four loading routes and surface rollback build in time slices with no frame; the synchronous wrapper stays', async () => {
     const fs = await import('node:fs');
     const src = fs.readFileSync(new URL('../src/game.ts', import.meta.url), 'utf8');
-    const paced = [...src.matchAll(/this\.buildSectionPaced\(/g)].length, sliced = [...src.matchAll(/this\.buildSectionSliced\(/g)].length, sync = [...src.matchAll(/this\.buildSection\(/g)].length;
+    const paced = [...src.matchAll(/this\.buildSectionPaced\(/g)].length, sliced = [...src.matchAll(/this\.buildSectionSliced\(/g)], sync = [...src.matchAll(/this\.buildSection\(/g)].length;
     expect(paced).toBe(1);
-    expect(sliced).toBe(4); // (tests/loading-build-sliced.test.ts: what that drain does)
+    expect(sliced).toHaveLength(5); // (tests/loading-build-sliced.test.ts: what that drain does)
+    const rollback = 'this.buildSectionSliced(from, layout, sourceArrival, false, ui);';
+    expect(sliced.filter(r => src.startsWith(rollback, r.index))).toHaveLength(1);
+    expect(sliced.filter(r => !src.startsWith(rollback, r.index))).toHaveLength(4); // newGame / Continue / Retry / shared menu + surface travel
+    const restoreStart = src.indexOf('            restore: async () => {'), restoreEnd = src.indexOf('\n            },', restoreStart);
+    expect(restoreStart).toBeGreaterThan(0);
+    expect(restoreEnd).toBeGreaterThan(restoreStart);
+    expect(src.slice(restoreStart, restoreEnd)).toContain(rollback);
     expect(sync).toBe(0); // (the game itself no longer builds a station in one block; tests and tools do, through the wrapper below)
     const journey = src.slice(src.indexOf('async travelToStation('), src.indexOf('private fuelCartsLike('));
     expect(journey).toContain('await this.buildSectionPaced(key, layout, {kind: \'start\'}, false)');

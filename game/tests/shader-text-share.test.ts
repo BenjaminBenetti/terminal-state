@@ -133,7 +133,10 @@ describe('shareShaderText', () => {
     expect(three.match(/nodeBuilderState\.vertexShader/g)!.length).toBe(three.match(/this\.programs\.vertex\.(get|set)\( nodeBuilderState\.vertexShader|new ProgrammableStage\( nodeBuilderState\.vertexShader/g)!.length);
     expect(three.match(/nodeBuilderState\.fragmentShader/g)!.length).toBe(three.match(/this\.programs\.fragment\.(get|set)\( nodeBuilderState\.fragmentShader|new ProgrammableStage\( nodeBuilderState\.fragmentShader/g)!.length);
     const game = readFileSync(new URL('../src/game.ts', import.meta.url), 'utf8');
-    expect(game.match(/shareShaderText\(this\.renderer\)/g)).toHaveLength(2);
+    const frame = game.slice(game.indexOf('frame(time?: number)'), game.indexOf('render(): boolean'));
+    expect(frame.match(/shareShaderText\(this\.renderer\)/g)).toHaveLength(1);
     expect(game).toMatch(/this\.warmup = res;\n\s+shareShaderText\(this\.renderer\);/);
+    // Surface loading also shares completed program text between bounded batches; the ordinary frame still does it once.
+    expect(game).toMatch(/if \(surfaceBoundary\) shareShaderText\(this\.renderer\);/);
   });
 });

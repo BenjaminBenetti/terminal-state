@@ -269,14 +269,29 @@ describe('the loading screen builds the station in time slices (Game.buildSectio
     expect(b.held()).toBe(false);
   });
 
-  it('game.ts: all four loading-screen routes build this way and go on to the warm-up right after; the frame loop checks the hold where it checks the warm-up', () => {
+  it('game.ts: four loading-screen routes and surface rollback use sliced builds, then warm-up; the frame loop checks both holds', () => {
     const routes = [...SRC.matchAll(/await this\.buildSectionSliced\(/g)];
-    expect(routes).toHaveLength(4);
-    for (const r of routes) {
+    expect(routes).toHaveLength(5);
+    const rollback = 'await this.buildSectionSliced(from, layout, sourceArrival, false, ui);';
+    expect(routes.filter(r => SRC.startsWith(rollback, r.index))).toHaveLength(1);
+    const normalRoutes = routes.filter(r => !SRC.startsWith(rollback, r.index));
+    expect(normalRoutes).toHaveLength(4);
+    for (const r of normalRoutes) {
       const after = SRC.slice(r.index! + r[0].length, r.index! + 700);
       expect(after).toMatch(/const w = await this\.prepareGraphics\(ui\);/);
       expect(after.slice(0, after.indexOf('await this.prepareGraphics(ui)'))).not.toMatch(/await (?!this\.prepareGraphics)|setTimeout|nextPaint|requestAnimationFrame/); // nothing else is waited for in between
     }
+    // A failed surface crossing rebuilds the saved source and restores its pose before warming, in the restore callback only.
+    const restoreStart = SRC.indexOf('            restore: async () => {'), restoreEnd = SRC.indexOf('\n            },', restoreStart);
+    expect(restoreStart).toBeGreaterThan(0);
+    expect(restoreEnd).toBeGreaterThan(restoreStart);
+    const restoring = SRC.slice(restoreStart, restoreEnd);
+    const restoreBuild = restoring.indexOf(rollback), restoreWarm = restoring.indexOf('const warm = await this.prepareGraphics(ui);');
+    const restoreReady = restoring.indexOf("if (warm.status !== 'complete') throw new Error('Checkpoint restoration graphics are not ready');");
+    expect(restoreBuild).toBeGreaterThan(0);
+    expect(restoreWarm).toBeGreaterThan(restoreBuild);
+    expect(restoreReady).toBeGreaterThan(restoreWarm);
+    expect(restoring.slice(restoreBuild + rollback.length, restoreWarm)).not.toMatch(/await|setTimeout|nextPaint|requestAnimationFrame/);
     const sliced = SRC.slice(SRC.indexOf('  private async buildSectionSliced('), SRC.indexOf('  /** True while the loading screen\'s station build runs'));
     expect(sliced).toContain('this.buildHold = true;');
     expect(sliced).toMatch(/await runSliced\(stageLabels\(this\.buildSectionSteps\(key, layout, arrival, fresh, true\), started\), \{\.\.\.this\.slicePacing, stats, alive: \(\) => gen === this\.stationGen\}\);/);

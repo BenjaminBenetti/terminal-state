@@ -386,7 +386,7 @@ describe('game.ts: the map is told the truth, and only the loading screen change
     expect(body('  private async stageLevelTextures(', '\n  }')).toContain("progress: (done, total) => { ui.meter?.stage('textures', done / Math.max(1, total)); },");
     const warm = body('  private async runWarmup(', '\n  }');
     expect(warm).toContain("meter?.stage('graphics', 0);");
-    expect(warm).toContain("onProgress: (p: WarmupProgress) => { meter?.stage('graphics', p.done / Math.max(1, p.total)); label.textContent = warmupLabel(p); },");
+    expect(warm).toMatch(/onProgress: \(p: WarmupProgress\) => \{\s*if \(surfaceBoundary\) shareShaderText\(this\.renderer\);\s*meter\?\.stage\('graphics', p\.done \/ Math\.max\(1, p\.total\)\); label\.textContent = warmupLabel\(p\);\s*\},/);
     // the station build between them: a stage that STARTS reports the ones before it as done; the whole share only after the last step
     const build = body('  private async buildSectionSliced(', '\n  }\n');
     expect(build).toContain("if (i >= 0) ui.meter?.stage('build', i / BUILD_STAGES.length);");
@@ -399,11 +399,19 @@ describe('game.ts: the map is told the truth, and only the loading screen change
     expect(game.match(/meter\?\.complete\(\)/g)).toHaveLength(1);
     expect(body('  private readyLine(', '\n  }')).toContain('ui.meter?.complete();');
     const calls = [...game.matchAll(/this\.readyLine\(ui, w\);/g)];
-    expect(calls).toHaveLength(4); // continue / new game / retry / menu travel
+    expect(calls).toHaveLength(4); // continue / new game / retry / shared menu + surface travel
+    let cancelledReturns = 0, cancelledThrows = 0;
     for (const c of calls) {
       const before = game.slice(c.index! - 320, c.index!);
-      expect(before).toMatch(/const w = await this\.prepareGraphics\(ui\);[^\n]*\n\s*if \(w\.status === 'cancelled'\) return [^\n]*\n\s*$/);
+      expect(before).toMatch(/const w = await this\.prepareGraphics\(ui\);[^\n]*\n\s*if \(w\.status === 'cancelled'\) (?:return [^\n]*|throw new PacedBuildCancelled\(\);)\n\s*$/);
+      if (before.includes("if (w.status === 'cancelled') throw new PacedBuildCancelled();")) cancelledThrows++;
+      else cancelledReturns++;
     }
+    expect(cancelledReturns).toBe(3);
+    expect(cancelledThrows).toBe(1);
+    const target = body('        const enterTarget = async (', '\n        };');
+    expect(target).toMatch(/if \(w\.status === 'cancelled'\) throw new PacedBuildCancelled\(\);\s*this\.readyLine\(ui, w\);/);
+    expect(game).toContain("if (err instanceof PacedBuildCancelled) return {ok: false, reason: 'cancelled'};");
     // and nothing waits on the map: no timer / frame wait between "ready" and entering play
     const ready = body('  private readyLine(', '\n  }');
     expect(ready).not.toMatch(/await|setTimeout|requestAnimationFrame|then\(/);

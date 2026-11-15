@@ -12,6 +12,7 @@ import {PropIndex, resolveCircle} from '../core/physics';
 import type {TrainUpgradesApi} from '../run/trainUpgrades';
 import {LockboxView, lockboxKeyAction} from '../ui/lockboxView';
 import {loadSkywaysCarModel, releaseSkywaysCarModel} from './skywaysCarModel';
+import {releaseModelTexturesAfterUpload} from '../assets/textureRelease';
 import {carToWorld, worldToCar} from './skywaysCarSpec';
 import type {SkywaysCar, SkywaysCarHost} from './skywaysCar';
 import {SURFACE_TRUCK_LANE, SURFACE_TRUCK_SPEC, TRUCK_COMPARTMENTS, TRUCK_TIE_POINTS} from './surfaceTruckSpec';
@@ -23,6 +24,7 @@ export {SURFACE_TRUCK_LANE, SURFACE_TRUCK_SPEC} from './surfaceTruckSpec';
 export async function ensureSurfaceTruckReady(layout: StationLayout): Promise<void> {
   if (!layout.surface) return;
   const models = await loadSkywaysCarModel(SURFACE_TRUCK_SPEC);
+  if (models.car) releaseModelTexturesAfterUpload(models.car);
   if (typeof document !== 'undefined' && !models.car) {
     releaseSkywaysCarModel(); // a retry may fetch again; never cache the failed readiness promise forever
     throw new Error('Military truck model unavailable; retry the surface transition');

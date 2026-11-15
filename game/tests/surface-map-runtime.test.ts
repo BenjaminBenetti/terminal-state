@@ -1,4 +1,4 @@
-import {afterAll, describe, expect, it} from 'vitest';
+import {afterAll, describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {generateSurfaceLevel} from '../src/gen/surface/index';
@@ -90,6 +90,32 @@ function host() {
 }
 
 describe('Surface Run section runtime', () => {
+  it('keeps hidden warm-up sectors available, then explicitly culls the prepared final camera/torch view', () => {
+    const {h, geometry, material} = host(); h.warming = true;
+    const light = new THREE.SpotLight(0xffffff, 1, 100, Math.PI / 6);
+    light.position.copy(h.camera.position); light.target.position.set(h.player.x, 1.7, h.player.z + 50);
+    h.flashlight = light; h.scene.add(light, light.target);
+    const shadowUpdates = vi.spyOn(light.shadow, 'updateMatrices');
+    const rt = installSurfaceRun(h); rt.build(layout);
+    const sectors = rt.city!.sectors;
+    expect(sectors.sectors).toHaveLength(64);
+    expect(sectors.sectors.every(s => s.root.visible)).toBe(true);
+    rt.beforeRender();
+    expect(sectors.stats.updates).toBe(0); expect(shadowUpdates).not.toHaveBeenCalled();
+    expect(sectors.sectors.every(s => s.root.visible)).toBe(true);
+    rt.beforeRender(true);
+    expect(h.warming).toBe(true); expect(sectors.stats.updates).toBe(1);
+    expect(shadowUpdates).toHaveBeenCalledExactlyOnceWith(light);
+    expect(sectors.stats.visible).toBeGreaterThan(0); expect(sectors.stats.visible).toBeLessThan(64);
+    const finalVisibility = sectors.sectors.map(s => s.root.visible);
+    rt.beforeRender();
+    expect(sectors.stats.updates).toBe(1); expect(sectors.sectors.map(s => s.root.visible)).toEqual(finalVisibility);
+    // The prepared finish view uses the same bounded cull as the following real gameplay frame.
+    h.warming = false; rt.beforeRender();
+    expect(sectors.stats.updates).toBe(2); expect(sectors.sectors.map(s => s.root.visible)).toEqual(finalVisibility);
+    rt.teardown(); light.dispose(); geometry.dispose(); material.dispose();
+  });
+
   it('owns64sectors only while outside, restores atmosphere, saves to the old section key and leaves shared asset resources intact', () => {
     const {h, lanes, pools, originalBackground, geometry, material, key} = host();
     let sourceDisposed = 0; geometry.addEventListener('dispose', () => {sourceDisposed++;}); material.addEventListener('dispose', () => {sourceDisposed++;});
