@@ -16,6 +16,7 @@ import {buildWorldSteps, type BuiltWorld} from './world/builder';
 import {fogCullDistance} from './world/levelCulling';
 import {WorldMaterials} from './world/materials';
 import {FLASH_BOUNCE, MOOD, StationLighting, stationBakeInput} from './world/lights';
+import {flashOccluders, type StationFlashOccluders} from './world/flashOccluders';
 import {ENHANCED_LIGHTING_DEFAULT, MIRROR_TEXELS, REFLECTIONS_DEFAULT, type EnhancedLightingMode, type ReflectionQuality} from './world/enhancedLighting'; // task studio-baked-lighting-reflections-20261114-050258-01
 import {EnhancedLightingRuntime, lightingCapabilities} from './world/enhancedLightingRuntime';
 import {VolumetricAtmosphere} from './render/volumetric';
@@ -706,6 +707,11 @@ export class Game {
    * told the plane in view once per update and draws right before the scene pass. Null with Enhanced lighting / Reflections off.
    */
   glassMirror: GlassMirror | null = null;
+  /**
+   * Task studio-gi-mood-bounce-loading-20261115-081523-01: what stops the flashlight's beam for its live bounce besides the fixed
+   * architecture (world/flashOccluders.ts): the live station's prop boxes, its glass, this frame's enemies. Null with no station.
+   */
+  private beamOccluders: StationFlashOccluders | null = null;
   private readonly mirrorPassInfo: MirrorScenePass = {target: null as unknown as THREE.RenderTarget, depth: 0};
   private readonly mirrorSightA = {x: 0, y: 0, z: 0};
   private readonly mirrorSightB = {x: 0, y: 0, z: 0};
@@ -1329,6 +1335,7 @@ export class Game {
       this.lightPool.dispose(this.scene, fn => this.retire(fn));
       this.glassMirror?.setPlanes(null); // the planes belong to the torn-down station
     }
+    FLASH_BOUNCE.occlude((this.beamOccluders = null)); // the beam's bounce: the torn-down station's props stop nothing any more
     for (const z of this.zombies) { this.scene.remove(z.root); const old = z; this.retire(() => old.dispose()); }
     this.zombies = [];
     this.screacherBrains.length = 0;
@@ -1427,6 +1434,10 @@ export class Game {
     applySkywaysStageSupport(this.layout); // (lane VENUE) after the world is drawn, before levels / prop index / paths / physics read the grid
     this.levels = levelsOf(this.layout);
     this.propIndex = new PropIndex(this.levels, this.layout.props);
+    // the flashlight's bounce sees this station's prop boxes (the live list) and its glass; the car's window glass passes, and so
+    // does the whole car while it moves (its boxes stand at its parked place)
+    this.beamOccluders = flashOccluders(this.layout, box => this.trainRuntime.isGlass(box) || (this.trainRide.moving && !!this.trainRuntime.train?.layoutBoxes.includes(box)));
+    FLASH_BOUNCE.occlude(this.beamOccluders);
     yield;
     this.pathfinder = yield* PathFinder.steps(this.levels); // Lane B: (level, cell) nodes; stairs join levels
     yield;
@@ -3696,7 +3707,8 @@ export class Game {
     this.muzzleLight.color.setHex(flameLight ? FIRE_FX.streamLight.color : MUZZLE_FLASH_COLOR);
     this.muzzleLight.intensity = this.muzzleT > 0 ? 18 * (flameLight ? streamLightLevel(this.fireSys.stream.reach, this.time) : 0.65 + Math.random() * 0.7) : 0; // flicker
     this.updatePlayerLight(dt, eye); // Iteration 12 (LIGHT): battery drain / flicker -> SpotLight, body glow, light sources
-    FLASH_BOUNCE.update(dt, this.flashlight); // the beam's bounce off the architecture it lands on (zero unless the station is shaded in full)
+    this.beamOccluders?.setBodies(this.zombies, eye); // (the enemies standing in the beam's reach stop it too)
+    FLASH_BOUNCE.update(dt, this.flashlight); // the beam's bounce off what it lands on: architecture, a prop, an enemy (zero unless the station is shaded in full)
     this.lightPool.update(dt, eye);
     if (!this.transitGap) this.glassMirror?.select(this.camera, dt); // the glass plane in view, for this frame's draw
     prof.lap(SPAN.fx);
