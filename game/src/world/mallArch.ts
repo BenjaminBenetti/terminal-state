@@ -33,7 +33,8 @@ import type {Level} from '../gen/levels';
 import type {Area, StationLayout} from '../gen/stationTypes';
 import type {MallInfo, MallProgram, MallShop} from '../gen/mall/mallTypes';
 import {canvasTexture} from './canvasTextures';
-import {SurfaceNodeMaterial, cloneSurfaceMaterial, surfaceMaterial, thinTrim, type WorldMaterials} from './materials';
+import {SurfaceNodeMaterial, cloneSurfaceMaterial, finishRoughness, surfaceMaterial, thinTrim, type WorldMaterials} from './materials';
+import {tagReflect} from '../render/reflectTag'; // task studio-pbr-material-pass-20261115-192427-01
 import {shapeMaterial} from './shapeMaterials';
 import {SIGN_ATLAS_CONTEXT, wmHash} from './surfaceNodes';
 import {CHUNK_M, LevelColumns, RAIL_HEIGHT, cellCeil, type RailRun} from './levelGeometry';
@@ -76,6 +77,14 @@ export interface MallDressMaterials {
   fountainStone: THREE.Material; fountainCoping: THREE.Material; fountainWater: THREE.Material; fountainBronze: THREE.Material;
 }
 const dressCache = new WeakMap<WorldMaterials, MallDressMaterials>();
+
+/**
+ * Task studio-pbr-material-pass-20261115-192427-01: mean finishes of the dress materials whose surface set was chosen for its look,
+ * not its gloss (materials.ts finishRoughness): the roof deck is a matte membrane (the Office's is 0.95), the fountain's sitting ledge
+ * honed pale stone (the porcelain set alone drew 0.09 — wetter than the glazing), the centrepiece a matte verdigris patina (not the
+ * brushed set's polished 0.39).
+ */
+export const MALL_DRESS_FINISH = {membrane: 0.9, coping: 0.5, bronze: 0.62};
 
 /** Distance (in pane units) to the nearest pane edge of a unit grid at q. */
 const edge01 = (q: AnyNode): AnyNode => { const f = fract(q) as AnyNode; return min(min(f.x, f.x.oneMinus()), min(f.y, f.y.oneMinus())); };
@@ -130,6 +139,7 @@ export function mallDressMaterials(mats: WorldMaterials): MallDressMaterials {
   let d = dressCache.get(mats);
   if (d) return d;
   const named = <M extends THREE.Material>(m: M, name: string): M => { m.name = name; return m; };
+  const finished = <M extends SurfaceNodeMaterial>(m: M, finish: number): M => { m.roughness = finishRoughness(m, finish); return m; };
   d = {
     glassRoof: roofGlass(),
     glassRail: railGlass(),
@@ -137,8 +147,9 @@ export function mallDressMaterials(mats: WorldMaterials): MallDressMaterials {
     stainless: shapeMaterial(mats, 'kitchenSteel'),
     darkSteel: named(thinTrim(surfaceMaterial('paintedSteel', {color: 0x3a3d40, metalness: 0.35}, {grime: [0.2, 0.5], macro: 0.12})), 'mall-dark-steel'),
     columnRender: named(surfaceMaterial('paintedPanel', {color: 0xeeece6, roughness: 1}, {grime: [0.35, 0.9], macro: 0.08}), 'mall-column-render'),
-    columnTile: named(surfaceMaterial('shopTile', {color: 0x3a3c40, roughness: 1}, {grime: [0.2, 0.5], macro: 0.12}), 'mall-column-tile'),
-    membrane: named(surfaceMaterial('paintedPanel', {color: 0x4a4b48, roughness: 1}, {macro: 0.2}), 'mall-roof-deck'),
+    // (task studio-pbr-material-pass-20261115-192427-01: glazed tile like the station's wall tile — 'gloss', the probes by its Fresnel)
+    columnTile: named(tagReflect(surfaceMaterial('shopTile', {color: 0x3a3c40, roughness: 1}, {grime: [0.2, 0.5], macro: 0.12}), 'gloss'), 'mall-column-tile'),
+    membrane: named(finished(surfaceMaterial('paintedPanel', {color: 0x4a4b48, roughness: 1}, {macro: 0.2}), MALL_DRESS_FINISH.membrane), 'mall-roof-deck'),
     sky: mallSkyMaterial(), // task mall-playtest-revision (U02): the Office's exterior murk (world/mallExterior.ts)
     can: named(surfaceMaterial('paintedPanel', {color: 0xdedcd6, roughness: 1}, {macro: 0.05}), 'mall-downlight-can'),
     trimLight: named(thinTrim(surfaceMaterial('paintedPanel', {color: 0xd8d6d0, roughness: 1}, {grime: [0.2, 0.4], macro: 0.1})), 'mall-trim-light'),
@@ -146,9 +157,9 @@ export function mallDressMaterials(mats: WorldMaterials): MallDressMaterials {
     trimWood: named(thinTrim(surfaceMaterial('woodVeneer', {color: 0xc8a888, roughness: 1}, {grime: [0.2, 0.4], macro: 0.1})), 'mall-trim-wood'),
     soffit: named(surfaceMaterial('paintedPanel', {color: 0xe6e4de, roughness: 1}, {macro: 0.06}), 'mall-escalator-soffit'),
     fountainStone: named(surfaceMaterial('black', {color: 0x6a6a6c, roughness: 0.55}, {grime: [0.4, 0.4], macro: 0.15}), 'mall-fountain-stone'),
-    fountainCoping: named(surfaceMaterial('porcelain', {color: 0xcdc4b2, roughness: 0.7}, {grime: [0.3, 0.3], macro: 0.12}), 'mall-fountain-coping'),
+    fountainCoping: named(finished(surfaceMaterial('porcelain', {color: 0xcdc4b2, roughness: 0.7}, {grime: [0.3, 0.3], macro: 0.12}), MALL_DRESS_FINISH.coping), 'mall-fountain-coping'),
     fountainWater: named(new SurfaceNodeMaterial({map: stagnantWaterTexture(), roughness: 0.12, metalness: 0}), 'mall-fountain-water'),
-    fountainBronze: named(surfaceMaterial('brushedSteel', {color: 0x6f8f74, metalness: 0.45}, {grime: [0.3, 0.6], macro: 0.25}), 'mall-fountain-bronze'),
+    fountainBronze: named(finished(surfaceMaterial('brushedSteel', {color: 0x6f8f74, metalness: 0.45}, {grime: [0.3, 0.6], macro: 0.25}), MALL_DRESS_FINISH.bronze), 'mall-fountain-bronze'),
   };
   dressCache.set(mats, d);
   return d;

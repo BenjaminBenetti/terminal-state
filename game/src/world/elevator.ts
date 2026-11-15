@@ -27,8 +27,8 @@
 //    materials so nothing swims while it moves.
 
 import * as THREE from 'three';
-import {MeshBasicNodeMaterial} from 'three/webgpu';
-import {abs, cameraPosition, clamp, dot, float, normalWorld, normalize, positionWorld, vec3} from 'three/tsl'; // task track3 (lane ARCH): glass car
+import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu';
+import {tagReflect} from '../render/reflectTag'; // task studio-pbr-material-pass-20261115-192427-01: the glass car's lit glass
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {surface, type SurfaceName} from './canvasTextures';
 import {SurfaceNodeMaterial, type WorldMaterials} from './materials';
@@ -1120,18 +1120,25 @@ function rigMaterials() {
 /** Builds the moving cab and every stop's landing (doors, linings, frame, lantern, indicator, call station). */
 /**
  * Task track3-eaton-centre-20261031 (lane ARCH): the glass car of The Eaton's Center's glass elevator — every side / rear panel
- * above the stainless wainscot is clear glass (no dark shell behind it): unlit, transparent, a little fresnel; never a shadow
- * caster (transparent). One material, created once.
+ * above the stainless wainscot is clear glass (no dark shell behind it); never a shadow caster (transparent). One material,
+ * created once; also the player train's window and door-leaf glass (world/playerTrainView.ts).
+ *
+ * Task studio-pbr-material-pass-20261115-192427-01: LIT glass on the station's glass path (render/reflectTag.ts 'glass': the
+ * probes by its Fresnel, the live sheen, the field's highlight and the flashlight's), no longer an unlit tinted film that showed
+ * the same faint colour in a dark tunnel as under a lamp and darkened toward a grazing view instead of reflecting. Clean
+ * (CAB_GLASS.roughness), dielectric, the same dark green-grey tint, a constant opacity as the station's panes have (the probe
+ * reflection is compensated by the material's opacity: world/reflectionNode.ts); no world mapping, so nothing swims on the
+ * moving car.
  */
-let cabGlassMat: MeshBasicNodeMaterial | null = null;
-export function cabGlassMaterial(): MeshBasicNodeMaterial {
+export const CAB_GLASS = {tint: [0.12, 0.16, 0.15] as const, opacity: 0.2, roughness: 0.08};
+let cabGlassMat: MeshStandardNodeMaterial | null = null;
+export function cabGlassMaterial(): MeshStandardNodeMaterial {
   if (cabGlassMat) return cabGlassMat;
-  const m = new MeshBasicNodeMaterial({transparent: true, depthWrite: false, side: THREE.DoubleSide});
+  const m = tagReflect(new MeshStandardNodeMaterial({
+    color: new THREE.Color(...CAB_GLASS.tint), roughness: CAB_GLASS.roughness, metalness: 0,
+    transparent: true, opacity: CAB_GLASS.opacity, depthWrite: false, side: THREE.DoubleSide,
+  }), 'glass');
   m.name = 'tower-cab-glass';
-  const v = normalize(cameraPosition.sub(positionWorld) as never) as unknown as ReturnType<typeof vec3>;
-  const fres = float(1).sub(abs(dot(normalize(normalWorld as never), v as never))).pow(2.5);
-  m.colorNode = vec3(0.12, 0.16, 0.15);
-  m.opacityNode = clamp(float(0.14).add(fres.mul(0.4)), 0, 0.8);
   return (cabGlassMat = m);
 }
 

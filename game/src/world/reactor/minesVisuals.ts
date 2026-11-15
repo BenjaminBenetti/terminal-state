@@ -275,8 +275,9 @@ function material(mats: WorldMaterials, m: MineMat): THREE.Material {
     case 'rope': return reactorDress(mats).cable;
     case 'rock': return reactorSurfaceMaterial(mats, 'reactor-wall');
     case 'water': {
-      // dynamic effect surface (no texture): dark, glossy standing water
-      if (!c.water) { const w = new MeshStandardNodeMaterial({color: 0x121a14, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.86, depthWrite: false}); w.name = 'reactor-mines-water'; c.water = w; }
+      // dynamic effect surface (no texture): dark, glossy standing water (a dielectric: task studio-pbr-material-pass-20261115-192427-01,
+      // metalness 0 — was 0.2, which tinted its reflection with the water's colour)
+      if (!c.water) { const w = new MeshStandardNodeMaterial({color: 0x121a14, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.86, depthWrite: false}); w.name = 'reactor-mines-water'; c.water = w; }
       return c.water;
     }
     case 'hole': {

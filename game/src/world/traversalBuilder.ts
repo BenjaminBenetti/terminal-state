@@ -24,7 +24,7 @@ import {CELL, FLOOR, SOLID, rampHeight, type Grid, type Ramp} from '../gen/grid'
 import type {Level} from '../gen/levels';
 import type {StationLayout} from '../gen/station';
 import type {LevelColumns} from './levelGeometry';
-import {SurfaceNodeMaterial, surfaceMaterial, thinTrim, type MatKey, type WorldMaterials} from './materials';
+import {SurfaceNodeMaterial, finishRoughness, surfaceMaterial, thinTrim, type MatKey, type WorldMaterials} from './materials';
 import {canvasTexture} from './canvasTextures';
 import {flightRailRuns} from '../gen/doorways';
 import {shapeMaterial} from './shapeMaterials';
@@ -45,11 +45,20 @@ const RAIL_Y = 0.9, RAIL_OFF = 0.07;
 const yellowSteel = new WeakMap<WorldMaterials, THREE.Material>();
 const hazardMats = new WeakMap<WorldMaterials, SurfaceNodeMaterial>();
 
+/** The ladders' yellow enamel: mean finish (materials.ts finishRoughness) and how much of the brushed set's grain shows through. */
+export const LADDER_PAINT = {finish: 0.6, normal: 0.5};
+
 /** Safety-yellow painted steel (rescue ladders), world-mapped like the other steel keys. */
-function ladderMaterial(mats: WorldMaterials): THREE.Material {
+export function ladderMaterial(mats: WorldMaterials): THREE.Material {
   let m = yellowSteel.get(mats);
   // Iteration 08 (primary): thin rungs/stiles sample without anisotropy (see materials.ts thinTrim).
-  if (!m) { m = thinTrim(surfaceMaterial('brushedSteel', {color: 0xd6a020, metalness: 0.35}, {grime: [0.3, 0.6], macro: 0.15})); m.name = 'ladder-steel'; yellowSteel.set(mats, m); }
+  // (task studio-pbr-material-pass-20261115-192427-01: the light brushed set carries the yellow, but as PAINT — a satin enamel finish,
+  // no longer the set's polished 0.39, and the stainless brushing only faintly through the paint)
+  if (!m) {
+    const s = surfaceMaterial('brushedSteel', {color: 0xd6a020, metalness: 0.35}, {grime: [0.3, 0.6], macro: 0.15, normal: LADDER_PAINT.normal});
+    s.roughness = finishRoughness(s, LADDER_PAINT.finish);
+    m = thinTrim(s); m.name = 'ladder-steel'; yellowSteel.set(mats, m);
+  }
   return m;
 }
 

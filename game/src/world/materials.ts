@@ -10,7 +10,7 @@ import {ENV_TEXTURE_LAYOUT} from '../assets/manifest';
 import {addNodeHook, copyNodeHooks, hasNodeHook} from '../render/nodeHooks';
 import {ANISO_ROLE, requestSurfaceAnisotropy} from '../render/anisotropy'; // lane FIX (U08)
 import {reflectTagOf, tagReflect} from '../render/reflectTag'; // task studio-baked-lighting-reflections-20261114-050258-01
-import {ballast, concreteFloor, crateWood, paintedBlock, signPlate, terrazzo, canvasTexture, surface, type SurfaceName} from './canvasTextures';
+import {ROUGHNESS_MEAN, ballast, concreteFloor, crateWood, paintedBlock, signPlate, terrazzo, canvasTexture, surface, type SurfaceName} from './canvasTextures';
 import {WM_CONTEXT, WM_NORMAL, asColor, isNodeMaterial, lfFloorAtNode, matRef, sharedStage, skipInShadowPass, wmNoise, wmUp} from './surfaceNodes';
 
 /**
@@ -113,6 +113,17 @@ export function surfaceMaterial(name: SurfaceName, params: MeshStandardNodeMater
 }
 
 /**
+ * Task studio-pbr-material-pass-20261115-192427-01: the `roughness` value that gives a surface-set material the mean FINISH `finish`
+ * (0..1). Its roughness multiplies the set's roughness map (three: roughness x map.g), so a plain 0.95 on the painted-panel set
+ * (map mean ~0.53) drew 0.5 — half-gloss canvas. The set's wear (rubbed chips, grime) keeps its contrast around the new mean; three
+ * clamps the product to 1. Without a measured map (no map, or a map from elsewhere) the finish is returned as it is.
+ */
+export function finishRoughness(m: THREE.Material, finish: number): number {
+  const mean = (m as THREE.MeshStandardMaterial).roughnessMap?.userData[ROUGHNESS_MEAN];
+  return typeof mean === 'number' && mean > 0.05 ? finish / mean : finish;
+}
+
+/**
  * Iteration 08 (primary): world-mapped trim on THIN geometry (railings, handrails, rods, conduits, pipes, rails)
  * samples its shared surface maps without anisotropic filtering. World mapping switches projection plane around a
  * thin cylinder/box, so UV derivatives across it are extreme; with 8x anisotropy Mesa llvmpipe spent ~110 s drawing
@@ -142,6 +153,10 @@ export function cloneSurfaceMaterial<M extends THREE.Material>(m: M): M {
   // three r186 NodeMaterial.copy() drops alphaTest (side / shadowSide / transparent / depthWrite / polygon offset survive).
   c.alphaTest = m.alphaTest;
   if (isNodeMaterial(m)) copyNodeHooks(m, c as unknown as NodeMaterial);
+  // task studio-pbr-material-pass-20261115-192427-01: a plain three clone (a loaded model's classic material) drops the reflection
+  // tag — the aim highlight of a cooler / cabinet door turned its 'glass' pane into an untagged one: no reflections while aimed
+  const tag = reflectTagOf(m);
+  if (tag && reflectTagOf(c) !== tag) tagReflect(c, tag);
   return c;
 }
 

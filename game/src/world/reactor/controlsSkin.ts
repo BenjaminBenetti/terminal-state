@@ -11,7 +11,7 @@
 
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial} from 'three/webgpu';
-import {surfaceMaterial} from '../materials';
+import {finishRoughness, surfaceMaterial} from '../materials';
 import {slotMaterial} from './archMaterials';
 import {reactorTextureStore} from './archAssets';
 import type {HostPiece} from './controlsMount';
@@ -43,7 +43,9 @@ function make(key: SkinKey): THREE.Material {
     case 'wheelRed': return paint(0x8e2a1e, 0.25);
     case 'green': return paint(0x2f7d3a, 0.2);
     case 'yellow': return paint(0xc99a22, 0.25);
-    case 'phenolic': return paint(0x2a2623, 0.05);
+    // task studio-pbr-material-pass-20261115-192427-01: phenolic resin is a moulded dielectric — the black plastic set, not paint chips
+    // and rust on painted steel with a little metalness
+    case 'phenolic': return headless() ? paint(0x2a2623, 0) : Object.assign(surfaceMaterial('black', {color: 0x2a2623, metalness: 0}, {macro: 0.15}), {name: 'reactor-ctl-phenolic'});
     case 'steel': return Object.assign(slotMaterial('rustedSteel', {color: 0xb4b2aa, macro: 0.15}) ?? (headless() ? paint(0x6a6e70, 0.6) : surfaceMaterial('brushedSteel', {color: 0x6a6e70, metalness: 0.6}, {macro: 0.1})), {name: 'reactor-ctl-steel'});
     default: {
       const m = slotMaterial('rustedSteel', {color: HOST_TINT[key], macro: 0.15, grime: [0.15, 0.6]}, `reactor-ctl-host-${key}`);
@@ -60,13 +62,23 @@ export function controlSkin(key: SkinKey): THREE.Material {
   return m;
 }
 
+/** Task studio-pbr-material-pass-20261115-192427-01: an off signal lens's mean finish (polished glass / acrylic with dust). */
+export const LENS_FINISH = 0.25;
+function lensMaterial(): THREE.Material {
+  const m = surfaceMaterial('black', {color: 0x22282a, metalness: 0}, {macro: 0});
+  m.roughness = finishRoughness(m, LENS_FINISH);
+  return m;
+}
+
 let lamps: Record<LampKey, THREE.Material> | null = null;
 /** Signal lamp lenses (unlit when lit; a dark glassy lens off). */
 export function lampSkin(k: LampKey): THREE.Material {
   if (!lamps) {
     const lit = (name: string, color: number) => { const m = new MeshBasicNodeMaterial({color: new THREE.Color(color)}); m.name = `reactor-lamp-${name}`; return m; };
     lamps = {
-      lens: Object.assign(headless() ? new THREE.MeshStandardMaterial({color: 0x22282a, metalness: 0.2, roughness: 0.3}) : surfaceMaterial('paintedSteel', {color: 0x22282a, metalness: 0.2, roughness: 0.3}, {macro: 0}), {name: 'reactor-lamp-lens'}),
+      // (task studio-pbr-material-pass-20261115-192427-01: an off lens is glossy glass / acrylic — a dielectric on the smooth black
+      // set, no longer painted steel with chips and metalness 0.2)
+      lens: Object.assign(headless() ? new THREE.MeshStandardMaterial({color: 0x22282a, metalness: 0, roughness: LENS_FINISH}) : lensMaterial(), {name: 'reactor-lamp-lens'}),
       litGreen: lit('green', 0x5cff70), litRed: lit('red', 0xff4030), litAmber: lit('amber', 0xffb432),
     };
   }

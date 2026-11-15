@@ -145,7 +145,7 @@ const std = (name: string, o: THREE.MeshStandardMaterialParameters) => new THREE
 const M = {
   pcb: () => mat('pcb', () => std('material-pcb', {map: pcbTex(), roughness: 0.55, metalness: 0.05})),
   pcbEdge: () => mat('pcbEdge', () => std('material-pcb-edge', {color: 0x2c4f33, roughness: 0.7, metalness: 0})),
-  chip: () => mat('chip', () => std('material-chip', {color: 0x161718, roughness: 0.45, metalness: 0.1})),
+  chip: () => mat('chip', () => std('material-chip', {color: 0x161718, roughness: 0.45, metalness: 0})), // (black epoxy: dielectric — task studio-pbr-material-pass-20261115-192427-01)
   relay: () => mat('relay', () => std('material-relay', {color: 0x2c4f8a, roughness: 0.5, metalness: 0})),
   wireRed: () => mat('wireRed', () => std('material-wire-red', {color: 0xa3291f, roughness: 0.5, metalness: 0})),
   wireCopper: () => mat('wireCopper', () => std('material-wire-copper', {color: 0xb5713a, roughness: 0.35, metalness: 0.75})),

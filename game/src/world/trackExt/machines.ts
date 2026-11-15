@@ -21,7 +21,7 @@ import * as THREE from 'three';
 import type {StationLayout} from '../../gen/station';
 import {CELL} from '../../gen/grid';
 import {MACHINE_DIMS, channelSegments, chuteStepLevel, chuteSteps, type AnnexMachine} from '../../gen/annexRooms';
-import {cloneSurfaceMaterial, type WorldMaterials} from '../materials';
+import {cloneSurfaceMaterial, finishRoughness, type WorldMaterials} from '../materials';
 import {shapeMaterial} from '../shapeMaterials';
 import {Acc, hashOf, prng} from './mesh';
 import {FlowAcc, MOTION, RotorSet, flowMaterial, motionClock, rotorMaterial, wallFanRotor, type FlowState, type RotorSpec} from './motion';
@@ -30,7 +30,10 @@ import {FlowAcc, MOTION, RotorSet, flowMaterial, motionClock, rotorMaterial, wal
 export type MachineMat = 'boiler' | 'genset' | 'turbine' | 'grey' | 'galv' | 'dark' | 'yellow' | 'concrete' | 'water' | 'foam' | 'grate' | 'black' | 'lagging';
 export const MACHINE_MATS: readonly MachineMat[] = ['boiler', 'genset', 'turbine', 'grey', 'galv', 'dark', 'yellow', 'concrete', 'water', 'foam', 'grate', 'black', 'lagging'];
 
-/** Base shape material, colour, roughness / metalness overrides of each machinery material (value-only clones: shared programs). */
+/**
+ * Base shape material, colour, roughness / metalness overrides of each machinery material (value-only clones: shared programs).
+ * `rough` is the part's mean finish (materials.ts finishRoughness divides it by the base set's roughness map).
+ */
 const SPEC: Readonly<Record<MachineMat, {base: string; color?: number; rough?: number; metal?: number}>> = {
   boiler: {base: 'accent', color: 0x7e2e22, rough: 0.8, metal: 0.25},
   genset: {base: 'accent', color: 0xb98d26, rough: 0.75, metal: 0.2},
@@ -60,7 +63,9 @@ export function machineMaterial(mats: WorldMaterials, k: MachineMat): THREE.Mate
     const sm = m as THREE.MeshStandardMaterial;
     if (m !== src) {
       if (s.color !== undefined && sm.color) sm.color.setHex(s.color);
-      if (s.rough !== undefined) sm.roughness = s.rough;
+      // task studio-pbr-material-pass-20261115-192427-01: SPEC.rough is the part's FINISH; the base set's roughness map multiplies
+      // the material value (lagging drew 0.5, galvanised 0.22 — near-polished)
+      if (s.rough !== undefined) sm.roughness = finishRoughness(src, s.rough);
       if (s.metal !== undefined) sm.metalness = s.metal;
       m.name = `annex-machine-${k}`;
     }

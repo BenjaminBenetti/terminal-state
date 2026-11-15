@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import {SHAPE_MAT_KEYS, type ShapeMat} from '../gen/propShapes';
 import {fareScreenTexture, lanternGlowTexture, menuBoardTexture, vendFrontTexture} from './canvasTextures';
 import {SurfaceNodeMaterial, surfaceMaterial, worldMapped, type WorldMaterials} from './materials';
-import {tagReflect} from '../render/reflectTag'; // task studio-baked-lighting-reflections-20261114-050258-01: glazing shows the cached reflection probes
+import {tagReflect} from '../render/reflectTag'; // task studio-baked-lighting-reflections-20261114-050258-01: glazing shows the cached reflection probes (+ glazed ceramics: 'gloss')
 
 export type ShapeUv = 'world' | 'face';
 
@@ -37,7 +37,10 @@ const SPECS: Record<ShapeMat, Spec> = {
   glass: {uv: 'world', make: () => tagReflect(surfaceMaterial('glass', {transparent: true, opacity: 0.55, depthWrite: false, metalness: 0.1}, {macro: 0.1}), 'glass')},
   screen: {uv: 'face', make: () => glow(fareScreenTexture(), 0.6, 0.25)},
   vendFront: {uv: 'face', make: () => glow(vendFrontTexture(), 0.45, 0.2)},
-  porcelain: {uv: 'world', make: () => surfaceMaterial('porcelain', {}, {grime: [0.25, 0.3], macro: 0.08})},
+  // Glazed sanitary porcelain and (tileShop) glazed wall tile are 'gloss' like the station's wall tile (task
+  // studio-pbr-material-pass-20261115-192427-01): with the reflection probes a glaze shows the room by its Fresnel; grout, limescale
+  // and grime, rougher, fade out (world/reflectionNode.ts GLOSS_ROUGHNESS_*).
+  porcelain: {uv: 'world', make: () => tagReflect(surfaceMaterial('porcelain', {}, {grime: [0.25, 0.3], macro: 0.08}), 'gloss')},
   partition: {uv: 'world', make: () => surfaceMaterial('paintedPanel', {color: 0xa3b3ae, metalness: 0.15}, WORN)},
   // Same concrete texture as the service floors, world-mapped for stair blocks.
   concrete: {uv: 'world', make: mats => worldMapped(new SurfaceNodeMaterial({map: (mats.get('concrete') as THREE.MeshStandardMaterial).map, roughness: 0.92, metalness: 0}), {span: [2, 2], grime: [0.2, 0.3], macro: 0.15})},
@@ -56,7 +59,7 @@ const SPECS: Record<ShapeMat, Spec> = {
   shutterSteel: {alias: 'shutter'},
   kitchenSteel: {uv: 'world', make: () => surfaceMaterial('brushedSteel', {color: 0xf4f4f4, metalness: 0.5}, {grime: [0.3, 0.4], macro: 0.12})},
   laminate: {uv: 'world', make: () => surfaceMaterial('laminate', {}, {grime: [0.2, 0.35], macro: 0.12})},
-  tileShop: {uv: 'world', make: () => surfaceMaterial('shopTile', {}, {grime: [0.3, 0.4], macro: 0.12})},
+  tileShop: {uv: 'world', make: () => tagReflect(surfaceMaterial('shopTile', {}, {grime: [0.3, 0.4], macro: 0.12}), 'gloss')},
   quarryTile: {uv: 'world', make: () => surfaceMaterial('quarryTile', {}, {macro: 0.2})},
   woodVeneer: {alias: 'wood'},
   plasticSeat: {uv: 'world', make: () => surfaceMaterial('plastic', {color: 0xc98a2a}, {grime: [0.15, 0.3], macro: 0.1})},
