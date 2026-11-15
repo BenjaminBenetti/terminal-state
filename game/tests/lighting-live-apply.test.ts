@@ -69,7 +69,16 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
       captureSave(reason: string): {meta: Record<string, unknown>} & Record<string, unknown>;
     };
     const frameErrors: string[] = [];
-    const loop = (t: number) => { try { game.frame(t); } catch (err) { frameErrors.push(String((err as Error)?.stack ?? err).slice(0, 400)); } requestAnimationFrame(loop); };
+    // (the loading screen's station build runs in time slices: the frames that go by between two slices, and what they drew)
+    const buildFrames = {held: 0, drawn: 0};
+    const loop = (t: number) => {
+      try {
+        const held = (game as unknown as {buildHold: boolean}).buildHold;
+        game.frame(t);
+        if (held) { buildFrames.held++; if (game.frameCpu.rendered) buildFrames.drawn++; }
+      } catch (err) { frameErrors.push(String((err as Error)?.stack ?? err).slice(0, 400)); }
+      requestAnimationFrame(loop);
+    };
     game.applySettings();
     game.setState('title');
     requestAnimationFrame(loop);
@@ -144,8 +153,22 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     };
 
     // --- a new campaign under the defaults (Auto, Standard reflections) ---
+    // (Node hands a MessagePort every message already waiting before it returns to its timers, so the default turn would run the whole
+    // build without this host's timer-driven frames getting a look in; a browser gives every message its own task. A timer turn shows
+    // the frames between the slices here: the slices and their bound are the same.)
+    game.slicePacing = {turn: go => { setTimeout(go, 0); }};
     expect(await game.newCampaign(1, {overwrite: true, dev: {level: 'market'}})).toMatchObject({ok: true, saved: true});
     expect(await until(() => g.state === 'playing')).toBe(true);
+    game.slicePacing = {};
+    // the load built the station in time slices behind the loading screen: frames went by between the slices and none of them drew
+    // (a half-built station is not a scene), and the turns it took are bounded by its work
+    const built = game.loadBuildStats!;
+    expect(built.slices).toBe(built.waits + 1);
+    expect(built.waits).toBeGreaterThan(0);
+    expect(built.waits).toBeLessThanOrEqual(Math.floor(built.workMs / 40));
+    expect(buildFrames.held, 'frames went by while the station was built').toBeGreaterThan(0);
+    expect(buildFrames.drawn, 'none of them drew anything').toBe(0);
+    expect(game.genMs).toBe(built.workMs);
     expect(await sweep('play')).toMatchObject({dropped: 0, issues: []});
     const st0 = game.enhancedLighting.status();
     expect(st0).toMatchObject({pending: false, applying: false, error: null, active: {gi: 'standard', shading: 'full', shadingReason: null, mirror: true, reflections: 'standard'}});
@@ -292,6 +315,50 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     expect(await sweep('end'), 'at the end: nothing dropped').toMatchObject({dropped: 0, issues: []});
     expect(stationPrint(), 'the same station at the end').toBe(print0);
     expect(g.stationGen).toBe(gen0);
+
+    // --- 7. a rebuild that is abandoned mid-bake (here: the device is lost while the bake runs) stops between two slices and leaves
+    //        the station as it was: the lighting it had, the record it had, the change still pending, nothing counted as failed ---
+    await pause();
+    const pool7 = game.lightPool, counts7 = {...game.relightCounts}, active7 = JSON.stringify(game.enhancedLighting.status().active), line7 = pauseLine.textContent;
+    const realBake = game.enhancedLighting.bakeSteps.bind(game.enhancedLighting);
+    const gpu = (game as unknown as {gpu: {deviceLost: string | null}}).gpu;
+    let lostAt = '', stepsAfter = 0, closed = false;
+    const bake7 = vi.spyOn(game.enhancedLighting, 'bakeSteps').mockImplementationOnce(function* (...a: Parameters<typeof realBake>) {
+      const inner = realBake(...a);
+      try {
+        for (;;) {
+          const r = inner.next();
+          if (r.done) return r.value;
+          if (lostAt) stepsAfter++;
+          else if (typeof r.value === 'string') { lostAt = r.value; gpu.deviceLost = 'simulated loss'; } // the first labelled stage of the bake
+          yield r.value;
+        }
+      } finally { closed = true; inner.return(undefined as never); }
+    } as never);
+    const sliceBefore = game.slicePacing;
+    game.slicePacing = {sliceMs: 0}; // (one step a slice: the bake is checked right after the loss)
+    await apply({enhancedLighting: 'on', reflections: 'standard'}); // (a plan this session has not baked)
+    game.slicePacing = sliceBefore;
+    bake7.mockRestore();
+    expect(lostAt, 'the bake had started').not.toBe('');
+    expect([closed, stepsAfter], 'the bake was closed at the next check: no step ran after the loss').toEqual([true, 0]);
+    gpu.deviceLost = null;
+    expect(game.lightPool, 'the lighting it had').toBe(pool7);
+    expect(JSON.stringify(game.enhancedLighting.status().active), 'the record it had').toBe(active7);
+    expect(game.enhancedLighting.status()).toMatchObject({pending: true, applying: false, error: null});
+    expect(game.relightCounts, 'one more run, no swap, no failure').toEqual({...counts7, runs: counts7.runs + 1});
+    expect([resume.disabled, pauseLine.textContent]).toEqual([false, line7]);
+    expect(lighting()).toEqual(full(gi, 'high'));
+    // ... and the change, still pending, is applied whole by the next rebuild
+    await apply({});
+    expect(game.enhancedLighting.status()).toMatchObject({pending: false, applying: false, error: null, active: {gi: 'high', shading: 'full', mirror: true, reflections: 'standard'}});
+    expect(game.relightCounts).toEqual({...counts7, runs: counts7.runs + 2, swaps: counts7.swaps + 1});
+    const rb = game.relightBuildStats!;
+    expect(rb.slices).toBe(rb.waits + 1);
+    expect(rb.waits, 'the turns of a rebuild are bounded by its work').toBeLessThanOrEqual(Math.floor(rb.workMs / 40));
+    await play();
+    expect(await sweep('after-abandon'), 'after an abandoned rebuild and a whole one: nothing dropped').toMatchObject({dropped: 0, issues: []});
+    expect(stationPrint(), 'the same station').toBe(print0);
 
     expect(frameErrors).toEqual([]);
     expect(errors).toEqual([]);

@@ -4,8 +4,7 @@
 // (world/builder.ts buildWorldSteps, Game.buildSectionSteps, ContainerManager.buildSteps, ShelfStock.buildSteps, the light field bake,
 // the fog maps): every `yield` marks a point where the build MAY pause — legal to resume at once or a frame later, never with shared
 // state half-written where a frame could read it — and each keeps a synchronous wrapper (drainSync) that runs the identical steps to
-// completion, so every other caller (new game, Continue, Retry, menu travel: behind a loading screen; tests; tools) is unchanged: same
-// code, same order, same result.
+// completion, so every caller that wants the whole build at once (tests, tools) is unchanged: same code, same order, same result.
 //
 // runPaced drains such a generator in SLICES (the journey route only): steps run until `sliceMs` of real time is used, then it waits
 // for the next frame to be drawn — requestAnimationFrame, then a zero timer, so the next slice runs after that frame's paint, in the
@@ -16,6 +15,15 @@
 // run) and rejects with PacedBuildCancelled. A slice is never cut inside a step: its length is `sliceMs` plus at most one step, so the
 // builders yield at least every few ms of work (tests/paced-build*.test.ts). Stats are main-thread durations (Node or browser), never
 // GPU time.
+//
+// runSliced drains the same generators where NO frame is drawn meanwhile (the loading screen's station build — new game, Continue,
+// Retry, menu travel: Game.buildSectionSliced — and the pause menu's lighting rebuild: the frame loop is held). Waiting for a frame
+// there is idle time — the pause menu's rebuild spent half its wall time in such waits — and one synchronous block of seconds leaves
+// the page unresponsive, so its slices are long (`SLICED_BUILD.sliceMs`) and separated only by a turn of the event loop: a new TASK, after
+// which the browser may paint the progress line and deliver input. The turn is a MessageChannel message (not throttled in a hidden tab,
+// not clamped like a nested zero timer), so a background tab does not stall it. The same contract as runPaced otherwise: `alive()` before
+// every slice (false -> the generator is closed, PacedBuildCancelled), the result once, a throw rejects, a slice is never cut inside
+// a step, the same stats (`waits` = the turns taken: at most work / sliceMs).
 
 /** A build as steps: `yield` = a possible pause (an optional stage label for diagnostics), the return value = the build's result. */
 export type BuildSteps<T> = Generator<string | void, T, void>;
@@ -88,40 +96,109 @@ const defaultFrame = (go: () => void): void => {
 };
 const defaultHidden = (): boolean => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
+/**
+ * One slice: steps of `steps` until `sliceMs` of real time is used and `cut()` agrees to stop there (or the build ends); never cut
+ * inside a step. `cur.stage` is the stage the next step belongs to (a labelled yield starts the next one). The stats are updated.
+ */
+function runSlice<T>(steps: BuildSteps<T>, st: PacedBuildStats, cur: {stage: string}, now: () => number, sliceMs: number, cut: () => boolean): IteratorResult<string | void, T> {
+  const t0 = now();
+  let t = t0, r: IteratorResult<string | void, T>;
+  for (;;) {
+    r = steps.next();
+    const t1 = now(), d = t1 - t;
+    t = t1;
+    st.steps++;
+    if (d > st.maxStepMs) st.maxStepMs = d;
+    st.stages[cur.stage] = (st.stages[cur.stage] ?? 0) + d;
+    if (r.done) break;
+    if (typeof r.value === 'string') cur.stage = r.value; // a labelled yield starts the next stage
+    if (t - t0 >= sliceMs && cut()) break;
+  }
+  const ms = t - t0;
+  st.slices++;
+  st.workMs += ms;
+  if (ms > st.maxSliceMs) st.maxSliceMs = ms;
+  if (st.sliceMs.length < PACED_BUILD.maxSamples) st.sliceMs.push(ms);
+  return r;
+}
+
 /** Drains `steps` in slices of about `sliceMs` between drawn frames; resolves with its result (see the file comment). */
 export async function runPaced<T>(steps: BuildSteps<T>, o: PacedBuildOptions = {}): Promise<T> {
   const now = o.now ?? (() => performance.now());
   const sliceMs = o.sliceMs ?? PACED_BUILD.sliceMs, hidden = o.hidden ?? defaultHidden;
   const st = o.stats ?? newPacedStats();
-  let finished = false, stage = '(start)';
+  const cur = {stage: '(start)'};
+  // (while the page is hidden nothing is drawn: no reason to wait for a frame)
+  const cut = (): boolean => { if (!hidden()) return true; st.hiddenSteps++; return false; };
+  let finished = false;
   try {
     for (;;) {
       if (o.alive && !o.alive()) throw new PacedBuildCancelled();
-      const t0 = now();
-      let t = t0, r: IteratorResult<string | void, T>;
-      for (;;) {
-        r = steps.next();
-        const t1 = now(), d = t1 - t;
-        t = t1;
-        st.steps++;
-        if (d > st.maxStepMs) st.maxStepMs = d;
-        st.stages[stage] = (st.stages[stage] ?? 0) + d;
-        if (r.done) break;
-        if (typeof r.value === 'string') stage = r.value; // a labelled yield starts the next stage
-        if (t - t0 >= sliceMs) {
-          if (!hidden()) break;
-          st.hiddenSteps++; // nothing is drawn: no reason to wait for a frame
-        }
-      }
-      const ms = t - t0;
-      st.slices++;
-      st.workMs += ms;
-      if (ms > st.maxSliceMs) st.maxSliceMs = ms;
-      if (st.sliceMs.length < PACED_BUILD.maxSamples) st.sliceMs.push(ms);
+      const r = runSlice(steps, st, cur, now, sliceMs, cut);
       if (r.done) { finished = true; return r.value; }
       await nextFrame(o, st);
     }
   } finally {
+    if (!finished) { try { steps.return(undefined as never); } catch { /* the build's own error is the one that propagates */ } }
+  }
+}
+
+/** Defaults of the time-sliced drain (runSliced; tests override per call). */
+export const SLICED_BUILD = {
+  /**
+   * Real time a slice may use before the event loop gets a turn (ms): long enough that the turns cost next to nothing (a 10 s bake is
+   * ~250 of them), short enough that a progress line or a click is never more than a few frames late.
+   */
+  sliceMs: 40,
+} as const;
+
+export interface SlicedBuildOptions {
+  sliceMs?: number;
+  /** Main-thread clock (ms; default performance.now). */
+  now?: () => number;
+  /** Calls `go` in a later task of the event loop (default: a MessageChannel message; a zero timer where there is no MessageChannel). */
+  turn?: (go: () => void) => void;
+  /** False = the build must stop (checked before every slice). */
+  alive?: () => boolean;
+  /** Filled while the build runs (default: a fresh object, discarded). `waits` = turns taken; `fallbacks` / `hiddenSteps` stay 0. */
+  stats?: PacedBuildStats;
+}
+
+/** The default turn: one MessageChannel per run (closed when the run ends, so nothing keeps a Node process or a page alive). */
+function taskTurns(): {turn: (go: () => void) => void; close: () => void} {
+  if (typeof MessageChannel !== 'function') return {turn: go => { setTimeout(go, 0); }, close: () => {}};
+  const ch = new MessageChannel();
+  let next: (() => void) | null = null;
+  ch.port1.onmessage = () => { const go = next; next = null; go?.(); };
+  return {
+    turn: go => { next = go; ch.port2.postMessage(0); },
+    close: () => { ch.port1.onmessage = null; ch.port1.close(); ch.port2.close(); },
+  };
+}
+
+/**
+ * Drains `steps` in slices of about `sliceMs` separated by one turn of the event loop — for a build during which no frame is drawn
+ * (see the file comment). Resolves with the build's result; the same cancellation and error contract as runPaced.
+ */
+export async function runSliced<T>(steps: BuildSteps<T>, o: SlicedBuildOptions = {}): Promise<T> {
+  const now = o.now ?? (() => performance.now());
+  const sliceMs = o.sliceMs ?? SLICED_BUILD.sliceMs;
+  const st = o.stats ?? newPacedStats();
+  const cur = {stage: '(start)'};
+  const always = (): boolean => true;
+  const own: {turns: ReturnType<typeof taskTurns> | null} = {turns: null};
+  const turn = o.turn ?? ((go: () => void) => { (own.turns ??= taskTurns()).turn(go); });
+  let finished = false;
+  try {
+    for (;;) {
+      if (o.alive && !o.alive()) throw new PacedBuildCancelled();
+      const r = runSlice(steps, st, cur, now, sliceMs, always);
+      if (r.done) { finished = true; return r.value; }
+      st.waits++;
+      await new Promise<void>(resolve => { turn(resolve); });
+    }
+  } finally {
+    own.turns?.close();
     if (!finished) { try { steps.return(undefined as never); } catch { /* the build's own error is the one that propagates */ } }
   }
 }

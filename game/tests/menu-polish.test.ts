@@ -697,6 +697,9 @@ describe('item 9 / DEATH (real Game methods, recorded fakes)', async () => {
       buildSection(this: {run: ReturnType<typeof createRun>; layout: unknown}, k: SectionKey) {
         log.push(`build:${k.station}`); this.run.current = {...k}; this.layout = {name: this.run.node(k.station)?.name ?? 'x', areas: []};
       },
+      // (the loading screen's routes build through the real Game.buildSectionSliced, which drains buildSectionSteps in time slices: this
+      // shell's steps are its recorded build, with a pause around it and one of the build's own stage labels before it)
+      *buildSectionSteps(this: {buildSection(k: SectionKey): void}, k: SectionKey) { yield 'lighting'; this.buildSection(k); yield; },
       setState(this: {state: string}, st: string) { this.state = st; log.push(`state:${st}`); },
       lifecycleFailed: () => log.push('lifecycleFailed'),
       beginGesture: () => Promise.resolve(true),
@@ -762,8 +765,10 @@ describe('item 9 / DEATH (real Game methods, recorded fakes)', async () => {
       calls.length = 0;
       expect(await g.continueCampaign(1)).toEqual({ok: true});
       await Promise.resolve();
-      // the one timer is the existing paint before the generation (game.ts nextPaint); nothing waits between "ready" and play
-      expect(calls).toEqual(['reset', 'timer:30', 'prepare', 'props:0.5', 'props:1', 'warm-up', 'graphics:0', 'graphics:1', 'warmed', 'complete', 'enterPlay']);
+      // the one timer is the existing paint before the generation (game.ts nextPaint); nothing waits between "ready" and play.
+      // The station build reports its own share: a stage that starts (here 'lighting', the 7th of 11) says the six before it are
+      // done, and the whole share is reported only after the build's last step — before the warm-up starts.
+      expect(calls).toEqual(['reset', 'timer:30', 'prepare', 'props:0.5', 'props:1', `build:${6 / 11}`, 'build:1', 'warm-up', 'graphics:0', 'graphics:1', 'warmed', 'complete', 'enterPlay']);
       expect(page.el('#load .label').textContent).toBe('Ready · 0 spaces generated · graphics prepared in 1.2 s');
       expect(g.state).toBe('playing');
       // a load that fails before the build never finishes the map

@@ -169,16 +169,17 @@ describe('the journey builds the next station paced (lane BUILD)', async () => {
     expect(p.pregenerated).toBeNull();
   });
 
-  it('every other route still calls the synchronous buildSection (newGame / Continue / Retry / menu travel); only the journey paces', async () => {
+  it('only the journey paces between frames; the loading screen\'s routes (newGame / Continue / Retry / menu travel) build in time slices with no frame; the synchronous wrapper stays', async () => {
     const fs = await import('node:fs');
     const src = fs.readFileSync(new URL('../src/game.ts', import.meta.url), 'utf8');
-    const paced = [...src.matchAll(/this\.buildSectionPaced\(/g)].length, sync = [...src.matchAll(/this\.buildSection\(/g)].length;
+    const paced = [...src.matchAll(/this\.buildSectionPaced\(/g)].length, sliced = [...src.matchAll(/this\.buildSectionSliced\(/g)].length, sync = [...src.matchAll(/this\.buildSection\(/g)].length;
     expect(paced).toBe(1);
-    expect(sync).toBe(4);
+    expect(sliced).toBe(4); // (tests/loading-build-sliced.test.ts: what that drain does)
+    expect(sync).toBe(0); // (the game itself no longer builds a station in one block; tests and tools do, through the wrapper below)
     const journey = src.slice(src.indexOf('async travelToStation('), src.indexOf('private fuelCartsLike('));
     expect(journey).toContain('await this.buildSectionPaced(key, layout, {kind: \'start\'}, false)');
-    expect(journey).not.toMatch(/this\.buildSection\(/);
+    expect(journey).not.toMatch(/this\.buildSection(Sliced)?\(/);
     // the wrapper drains the very same steps
-    expect(src).toMatch(/private buildSection\(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean\): void \{ drainSync\(this\.buildSectionSteps\(key, layout, arrival, fresh\)\); \}/);
+    expect(src).toMatch(/\n {2}buildSection\(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean\): void \{ drainSync\(this\.buildSectionSteps\(key, layout, arrival, fresh\)\); \}/);
   });
 });
