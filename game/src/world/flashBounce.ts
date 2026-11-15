@@ -16,11 +16,16 @@
 //    Inside a sector the hits are grouped by PLANE; the sector's VIRTUAL LIGHT stands on its dominant plane, at the centroid of that
 //    plane's hits, with that plane's normal: a Lambert emitter with the colour and the flux the game's own spot light puts on those
 //    rays' parts of the surface, and a patch size from their footprints. A ray on another plane gives its flux to the nearest light
-//    of another sector on THAT plane, or to none: flux never moves to a plane it did not land on.
+//    of another sector on THAT plane. The rays no sector's light stands for are grouped by plane over the whole beam (the ORPHAN
+//    planes: a prop in a corner of the beam, the wall seen through a doorway, the strip of ceiling at the beam's edge), and the
+//    FLASH_EXTRA extra lights stand on the ones with the most flux, each on its plane at its hits' centroid. What is left when
+//    there are more planes than lights is `dropped` (FlashBounceDebug). Flux never moves to a plane it did not land on.
 //  - Time: a light glides only WITHIN its plane (position, colour and patch size, exponential, frame-rate independent). When a
-//    sector's plane changes, its light is handed to one of the two FADING slots, where it stays and fades out, and the sector's
-//    light starts on the new plane from nothing (lights that leave the same plane share a slot as one light: FlashBounce.fade).
-//    Nothing is ever interpolated between two planes.
+//    sector's plane changes and an extra light stands on the new plane there, the two change places — each plane keeps its light
+//    where it is, nothing starts over. Else the sector's light is handed to an extra light, where it stays (the light of the rays
+//    still on that plane, or fading out when there are none; lights that leave one plane together become one: FlashBounce.fade),
+//    and the sector's light starts on the new plane from nothing. An extra light whose plane has no rays any more fades out where
+//    it stands. Nothing is ever interpolated between two planes.
 //  - GPU, per fragment (flashBounceIrradiance): the sum of the FLASH_VPLS emitters as irradiance, in the light field's convention
 //    (three shows a Lambert surface as albedo x E / pi): pure arithmetic on plain render-group uniforms — no texture, no array, no
 //    uniform buffer of its own (the fog march's fragment stage is at WebGPU's 12 uniform buffers; every uniformArray would be one more).
@@ -38,8 +43,10 @@
 //   E(p, n) = gain * sum_i  J_i * max(0, n.L_i) * max(0, -L_i.n_i) / (r_i^2 + r0_i^2) * window(r_i),   J_i = phi_i / pi
 // (L_i: unit direction from p to light i, r_i its distance; window = saturate(1 - (r / range)^4)^2).
 // r0_i is the size of light i's OWN patch: r0_i^2 = max(soft * A_i / pi, r0min^2), A_i the sum of its rays' footprints
-// (d^2 w / max(cos t, 0.25) each). Far from the patch that is the point light J / r^2; next to it the sum stays near J / r0^2 =
-// (the patch's radiosity) / soft, at any distance of the patch from the flashlight — a far wall is a wide dim glow, never a hot point.
+// (d^2 w / max(cos t, 0.25) each; an extra light's rays can come from all over the beam: the spread of its hits is added). With
+// soft = 1 that is the on-axis irradiance of a uniformly lit disc of the patch's own area, exactly: far from the patch the point
+// light J / r^2, in front of it never more than (the patch's radiosity) / soft — at any distance of the patch from the flashlight.
+// A far wall is a wide dim glow, never a hot point.
 //
 // LIMITS (by design, stated to the player-facing docs):
 //  1. Virtual lights cast NO SHADOWS: their light is not stopped by walls, slabs or props between them and a surface. Only the
@@ -48,8 +55,11 @@
 //  2. The beam's rays stop on fixed architecture, a prop's BOX and a character's cylinder — nothing finer: a prop is its box (thin model
 //     detail inside the box, a gap between a table's legs do not exist for the rays); loose physics bodies, pickups, a prop gone loose
 //     and whatever else is in neither list do not stop them.
-//  3. A sector has one light: of a sector's rays on several planes only the dominant plane's are sure to be carried (the others when
-//     another sector's light stands on their plane). In clutter the bounce is dimmer than the beam's flux, never misplaced.
+//  3. FLASH_VPLS lights stand for the whole lit patch: one per sector on its dominant plane and FLASH_EXTRA more for the other
+//     planes. Next to a large lit surface the bounce is patchier and dimmer than the surface's true glow (a foot of a lit wall gets
+//     less than it should); with more planes in the beam than lights the weakest planes' flux is dropped — dimmer, never misplaced.
+//  4. A light stands at the centroid of its hits on their plane: that point can lie over an opening in the plane or under another
+//     thing standing on it (hits either side of a doorway, of a pier) — it lights what is in front of the plane all the same.
 // Deterministic: no random number, no clock (the caller's dt only), nothing of the save / layout is written.
 
 import * as THREE from 'three';
@@ -63,8 +73,13 @@ import {ALBEDO_LUT, ALBEDO_STRIDE, ALB_CEIL, ALB_FLOOR, ALB_WALL, type SurfaceAl
 export const FLASH_RAYS = 30;
 /** Sectors of the cone (a cap round the axis + five wedges), FLASH_RAYS / FLASH_SECTORS rays each: one virtual light per sector. */
 export const FLASH_SECTORS = 6;
-/** Virtual lights: one per sector and two fading ones (a sector's light on the plane it just left). */
-export const FLASH_VPLS = 8;
+/**
+ * Extra lights beside the sectors': each stands on a plane the beam lands on that no sector's light stands on (an ORPHAN plane;
+ * the planes with the most flux first), or is what a sector's light left behind on the plane it just left, fading out.
+ */
+export const FLASH_EXTRA = 4;
+/** Virtual lights in all: 3 vec4 uniforms each, and one for the parameters. */
+export const FLASH_VPLS = FLASH_SECTORS + FLASH_EXTRA;
 const SECTOR_RAYS = FLASH_RAYS / FLASH_SECTORS;
 /** Time constant (s) of the smoothing of a light's position, colour and patch size, and of a fade. */
 export const FLASH_BOUNCE_TAU = 0.07;
@@ -82,13 +97,15 @@ export const FLASH_BOUNCE_REACH = 60;
 export const FLASH_BOUNCE_DEFAULTS = {gain: 2, r0min: 0.35, range: 11} as const;
 /**
  * Tuned at run time (read at every update; QA sets them on pictures):
- *  - soft: a light's patch area is `soft` x the footprints of its rays (r0^2 = soft * A / pi): next to a patch the bounce is about
- *    (the patch's radiosity) / soft; 1 = the bare footprints.
+ *  - soft: a light's patch area is `soft` x the footprints of its rays (r0^2 = soft * A / pi). 1 = the footprints themselves: the
+ *    light of a uniformly lit disc of that area (in front of the patch at most its radiosity x the gain); more = a wider, dimmer
+ *    glow next to the patch (at most radiosity x gain / soft) and the same light far from it.
  *  - planeAngle (degrees) / planeGap (m): two hits lie on the same plane when their normals are within the angle and each lies
  *    within the gap of the other's plane.
- *  - keep: the plane a sector's light is on stays its dominant plane while it holds at least this share of the strongest plane's flux.
+ *  - keep: the plane a sector's light is on stays its dominant plane while it holds at least this share of the strongest plane's
+ *    flux; and an extra light gives its place up only to a plane whose flux x keep is more than what it holds it with.
  */
-export const FLASH_BOUNCE_TUNING = {soft: 2, planeAngle: 25, planeGap: 0.25, keep: 0.8};
+export const FLASH_BOUNCE_TUNING = {soft: 1, planeAngle: 25, planeGap: 0.25, keep: 0.8};
 
 /**
  * The rays in the cone: per ray the share of the beam's flux that lies nearer the axis than the ray (0 = the axis, 1 = the cone's
@@ -159,7 +176,7 @@ export interface FlashRayDebug {
   t: number; x: number; y: number; z: number; nx: number; ny: number; nz: number;
   /** The share of the light's intensity it sends back / pi, per channel (albedo x d^2 atten(d) x w / pi), and its footprint (m^2). */
   transfer: [number, number, number]; area: number;
-  /** The light (0 .. FLASH_SECTORS - 1) that carries its flux; -1: none (it landed nowhere, or on a plane no light stands on). */
+  /** The light (0 .. FLASH_VPLS - 1: a sector's or an extra one) that carries its flux; -1: none (it landed nowhere, or on a plane no light stands on). */
   light: number;
 }
 
@@ -174,8 +191,14 @@ export interface FlashBounceDebug {
   origin: 'light' | 'parent' | 'none';
   /** The cone as sampled: its profile-weighted solid angle (sr; the beam's flux = intensity x it), one ray's share, the outermost ray's angle off the axis (rad). */
   solidAngle: number; weight: number; ringAngle: number;
-  /** Lights carrying light now: the sectors' and the fading ones. */
-  lights: number; fading: number;
+  /**
+   * Lights carrying light now: the sectors'; the extra ones that stand for an orphan plane's rays; the extra ones with no rays,
+   * fading out — and the share of the lights' flux those hold (a fading light counts until it is below a billionth: long after
+   * nothing of it is seen).
+   */
+  lights: number; extra: number; fading: number; fadingFlux: number;
+  /** Orphan planes at the last update (planes with rays no sector's light stands for; each takes an extra light while there is one). */
+  planes: number;
   /** The share of the landed rays' reflected flux that no light carries (the last update's targets, before smoothing). */
   dropped: number;
   /** The flux the lights carry now (linear rgb; pi x the sum of their radiant intensities). */
@@ -235,6 +258,9 @@ const RS = 12;
 // a sector's target: 0 set, 1..3 its own hits' centroid on the plane, 4..6 normal, 7 the plane's offset along it, 8..10 transfer,
 // 11 footprints, 12 weight, 13..15 weight x point (own and given rays)
 const TS = 16;
+// an orphan plane (rays no sector's light stands for, grouped by plane over the whole beam): 0 weight, 1..3 weight x point,
+// 4..6 weight x normal, 7..9 transfer, 10 footprints
+const OG = 11;
 // an occluder in the beam: 0 = box (x0, y0, z0, x1, y1, z1), 1 = upright cylinder (x, z, radius, y0, y1)
 const CS = 7;
 const RAY_NONE = 0, RAY_ARCH = 1, RAY_PROP = 2, RAY_BODY = 3;
@@ -273,6 +299,15 @@ export class FlashBounce {
   private readonly leave = new Uint8Array(FLASH_SECTORS);
   private readonly gSeed = new Int32Array(SECTOR_RAYS);
   private readonly gFlux = new Float64Array(SECTOR_RAYS);
+  // this update's orphan planes: their sums, the ray each was started by, the light each is to have (a light's state), the extra
+  // light that has it (-1: none); per ray its orphan plane (-1: a sector's light stands for it); per extra light its orphan plane
+  private readonly orphan = new Float64Array(FLASH_RAYS * OG);
+  private readonly oSeed = new Int32Array(FLASH_RAYS);
+  private readonly oWant = new Float64Array(FLASH_RAYS * SS);
+  private readonly oSlot = new Int8Array(FLASH_RAYS);
+  private readonly rayGroup = new Int8Array(FLASH_RAYS);
+  private readonly slotGroup = new Int8Array(FLASH_EXTRA).fill(-1);
+  private groups = 0;
   private cand = new Float64Array(32 * CS);
   private candRef = new Int32Array(32);
   private candidates = 0;
@@ -509,13 +544,7 @@ export class FlashBounce {
         carrier[j] = -1;
         if (!(ray[o] >= 0)) continue;
         let g = -1;
-        for (let c = 0; c < ng && g < 0; c++) {
-          const e = gSeed[c] * RS;
-          if (ray[o + 4] * ray[e + 4] + ray[o + 5] * ray[e + 5] + ray[o + 6] * ray[e + 6] < pcos) continue;
-          const ex = ray[o + 1] - ray[e + 1], ey = ray[o + 2] - ray[e + 2], ez = ray[o + 3] - ray[e + 3];
-          const a = ray[e + 4] * ex + ray[e + 5] * ey + ray[e + 6] * ez, b = ray[o + 4] * ex + ray[o + 5] * ey + ray[o + 6] * ez;
-          if (a <= gap && a >= -gap && b <= gap && b >= -gap) g = c;
-        }
+        for (let c = 0; c < ng && g < 0; c++) if (this.together(o, gSeed[c] * RS, pcos, gap)) g = c;
         if (g < 0) { g = ng++; gSeed[g] = j; gFlux[g] = 0; }
         gFlux[g] += ray[o + 11];
         carrier[j] = g;
@@ -564,10 +593,13 @@ export class FlashBounce {
       tg[G + 8] = cr; tg[G + 9] = cg; tg[G + 10] = cb; tg[G + 11] = area; tg[G + 12] = W; tg[G + 13] = cx; tg[G + 14] = cy; tg[G + 15] = cz;
     }
 
-    // 6. a ray off its sector's plane gives its flux to the nearest light of another sector that stands on the ray's plane, or to none
-    let lost = 0, landed = 0;
+    // 6. a ray off its sector's plane gives its flux to the nearest light of another sector that stands on the ray's plane. The rays
+    //    no sector's light stands for are grouped by plane over the whole beam: the ORPHAN planes, for the extra lights
+    const og = this.orphan, oSeed = this.oSeed, group = this.rayGroup;
+    let landed = 0, ng = 0;
     for (let j = 0; j < FLASH_RAYS; j++) {
       const o = j * RS;
+      group[j] = -1;
       if (!(ray[o] >= 0)) continue;
       const w = ray[o + 11];
       landed += w;
@@ -582,17 +614,28 @@ export class FlashBounce {
         const d2 = ex * ex + ey * ey + ez * ez;
         if (d2 < least) { least = d2; to = s; }
       }
-      if (to < 0) { lost += w; continue; }
-      const G = to * TS;
-      carrier[j] = to;
-      tg[G + 8] += ray[o + 7]; tg[G + 9] += ray[o + 8]; tg[G + 10] += ray[o + 9]; tg[G + 11] += ray[o + 10];
-      tg[G + 12] += w; tg[G + 13] += w * ray[o + 1]; tg[G + 14] += w * ray[o + 2]; tg[G + 15] += w * ray[o + 3];
+      if (to >= 0) {
+        const G = to * TS;
+        carrier[j] = to;
+        tg[G + 8] += ray[o + 7]; tg[G + 9] += ray[o + 8]; tg[G + 10] += ray[o + 9]; tg[G + 11] += ray[o + 10];
+        tg[G + 12] += w; tg[G + 13] += w * ray[o + 1]; tg[G + 14] += w * ray[o + 2]; tg[G + 15] += w * ray[o + 3];
+        continue;
+      }
+      let g = -1;
+      for (let c = 0; c < ng && g < 0; c++) if (this.together(o, oSeed[c] * RS, pcos, gap)) g = c;
+      if (g < 0) { g = ng++; oSeed[g] = j; for (let q = 0; q < OG; q++) og[g * OG + q] = 0; }
+      const Q = g * OG;
+      og[Q] += w; og[Q + 1] += w * ray[o + 1]; og[Q + 2] += w * ray[o + 2]; og[Q + 3] += w * ray[o + 3];
+      og[Q + 4] += w * ray[o + 4]; og[Q + 5] += w * ray[o + 5]; og[Q + 6] += w * ray[o + 6];
+      og[Q + 7] += ray[o + 7]; og[Q + 8] += ray[o + 8]; og[Q + 9] += ray[o + 9]; og[Q + 10] += ray[o + 10];
+      group[j] = g;
     }
-    this.dropped = landed > 0 ? lost / landed : 0;
+    this.groups = ng;
 
-    // 7. time: a light glides within its plane; a sector on a new plane hands its light to a fading slot and starts there from nothing
+    // 7. time: a light glides within its plane; a sector on a new plane hands its light to an extra light and starts there from nothing
     const a = dt > 0 ? 1 - Math.exp(-dt / FLASH_BOUNCE_TAU) : 0;
     const soft = T.soft / Math.PI, r0min = FB.params.value.y, r0minSq = r0min * r0min, want = this.want, leave = this.leave;
+    const ow = this.oWant, oSlot = this.oSlot, slotGroup = this.slotGroup;
     // 7a. where each sector's light is to stand — the centroid of the hits it carries, on the plane, FLASH_BOUNCE_LIFT off it — and
     //     whether that is another plane than the one its light is on
     for (let s = 0; s < FLASH_SECTORS; s++) {
@@ -606,7 +649,34 @@ export class FlashBounce {
       want[S + 6] = tg[G + 8]; want[S + 7] = tg[G + 9]; want[S + 8] = tg[G + 10]; want[S + 9] = r0 > r0minSq ? r0 : r0minSq;
       if (!snap && st[S + 6] + st[S + 7] + st[S + 8] > 0 && !this.samePlane(st, S, want, S)) leave[s] = 1;
     }
-    // 7b. the sectors' lights
+    // 7b. the light an orphan plane is to have: on the plane (its hits' mean normal, through the one of them that stands farthest
+    //     out), at their centroid, with their flux; as large as their footprints AND their spread (they can come from all over the beam)
+    for (let g = 0; g < ng; g++) {
+      const Q = g * OG, O = g * SS, W = og[Q];
+      let mx = og[Q + 4], my = og[Q + 5], mz = og[Q + 6];
+      const ml = Math.sqrt(mx * mx + my * my + mz * mz);
+      mx /= ml; my /= ml; mz /= ml;
+      const px = og[Q + 1] / W, py = og[Q + 2] / W, pz = og[Q + 3] / W;
+      let off = -NEVER, spread = 0;
+      for (let j = 0; j < FLASH_RAYS; j++) {
+        if (group[j] !== g) continue;
+        const o = j * RS, v = mx * ray[o + 1] + my * ray[o + 2] + mz * ray[o + 3];
+        if (v > off) off = v;
+        const ex = ray[o + 1] - px, ey = ray[o + 2] - py, ez = ray[o + 3] - pz;
+        spread += ray[o + 11] * (ex * ex + ey * ey + ez * ez);
+      }
+      const lift = off - (mx * px + my * py + mz * pz) + FLASH_BOUNCE_LIFT, r0 = soft * og[Q + 10] + spread / W;
+      ow[O] = px + mx * lift; ow[O + 1] = py + my * lift; ow[O + 2] = pz + mz * lift; ow[O + 3] = mx; ow[O + 4] = my; ow[O + 5] = mz;
+      ow[O + 6] = og[Q + 7]; ow[O + 7] = og[Q + 8]; ow[O + 8] = og[Q + 9]; ow[O + 9] = r0 > r0minSq ? r0 : r0minSq;
+      oSlot[g] = -1;
+    }
+    // 7c. an extra light that stands on an orphan plane is that plane's light (it stays, and follows it)
+    for (let f = FLASH_SECTORS; f < FLASH_VPLS; f++) {
+      slotGroup[f - FLASH_SECTORS] = -1;
+      if (snap) for (let q = 0; q < SS; q++) st[f * SS + q] = 0;
+      else if (!this.empty(f)) this.match(f);
+    }
+    // 7d. the sectors' lights
     for (let s = 0; s < FLASH_SECTORS; s++) {
       const S = s * SS;
       if (!tg[s * TS]) {
@@ -619,53 +689,69 @@ export class FlashBounce {
         continue;
       }
       if (snap) { for (let q = 0; q < SS; q++) st[S + q] = want[S + q]; continue; }
-      let have = st[S + 6] + st[S + 7] + st[S + 8];
       if (leave[s]) {
         leave[s] = 0;
-        // a fading light that stands on the new plane at this place comes back (the two change places: a sector whose rays straddle
-        // an edge can flip as often as it likes)
+        // an extra light that stands on the new plane at this place becomes the sector's, and the sector's light the extra one of
+        // the plane it leaves (the two change places: a sector whose rays straddle an edge can flip as often as it likes, each
+        // plane's light stays where it is)
         let slot = -1;
         for (let f = FLASH_SECTORS; f < FLASH_VPLS && slot < 0; f++) {
           const F = f * SS;
-          if (!(st[F + 6] + st[F + 7] + st[F + 8] > 0) || !this.samePlane(st, F, want, S)) continue;
+          if (this.empty(f) || !this.samePlane(st, F, want, S)) continue;
           const ex = st[F] - want[S], ey = st[F + 1] - want[S + 1], ez = st[F + 2] - want[S + 2];
           if (ex * ex + ey * ey + ez * ez <= 4 * (st[F + 9] > want[S + 9] ? st[F + 9] : want[S + 9])) slot = f;
         }
         if (slot >= 0) {
           const F = slot * SS;
           for (let q = 0; q < SS; q++) { const v = st[S + q]; st[S + q] = st[F + q]; st[F + q] = v; }
-          have = st[S + 6] + st[S + 7] + st[S + 8];
+          this.release(slot);
+          this.match(slot);
         } else {
           // (what leaves its plane with it in this update: the lights of the sectors after it that leave the same plane)
-          let all = have;
+          let all = st[S + 6] + st[S + 7] + st[S + 8];
           for (let q = s + 1; q < FLASH_SECTORS; q++) if (leave[q] && this.samePlane(st, q * SS, st, S)) all += st[q * SS + 6] + st[q * SS + 7] + st[q * SS + 8];
           this.fade(S, all);
           st[S + 6] = st[S + 7] = st[S + 8] = 0;
-          have = 0;
         }
       }
-      const nx = want[S + 3], ny = want[S + 4], nz = want[S + 5];
-      if (have > FLASH_BOUNCE_REVIVE * (want[S + 6] + want[S + 7] + want[S + 8])) {
-        st[S] += (want[S] - st[S]) * a; st[S + 1] += (want[S + 1] - st[S + 1]) * a; st[S + 2] += (want[S + 2] - st[S + 2]) * a;
-        // (and exactly on the plane as it is now: the glide is along it)
-        const e = nx * (want[S] - st[S]) + ny * (want[S + 1] - st[S + 1]) + nz * (want[S + 2] - st[S + 2]);
-        st[S] += nx * e; st[S + 1] += ny * e; st[S + 2] += nz * e;
-        st[S + 9] += (want[S + 9] - st[S + 9]) * a;
-      } else {
-        // it is off, or as good as: it stands at its place at once and fades in there
-        st[S] = want[S]; st[S + 1] = want[S + 1]; st[S + 2] = want[S + 2]; st[S + 9] = want[S + 9];
-      }
-      st[S + 3] = nx; st[S + 4] = ny; st[S + 5] = nz;
-      st[S + 6] += (want[S + 6] - st[S + 6]) * a; st[S + 7] += (want[S + 7] - st[S + 7]) * a; st[S + 8] += (want[S + 8] - st[S + 8]) * a;
+      this.glide(S, want, S, a);
     }
-    // the fading lights (one handed over in this very update too: it fades by as much as it would have changed)
+    // 7e. the orphan planes that have no light yet, the one with the most flux first: an empty extra light, or the place of the one
+    //     with the least claim when the plane clearly outweighs it. The new light starts there from nothing.
+    for (;;) {
+      let g = -1;
+      for (let c = 0; c < ng; c++) if (oSlot[c] === -1 && (g < 0 || og[c * OG] > og[g * OG])) g = c;
+      if (g < 0) break;
+      let slot = -1, least = NEVER;
+      for (let f = FLASH_SECTORS; f < FLASH_VPLS; f++) {
+        if (this.empty(f)) { slot = f; least = -1; break; }
+        const c = this.claim(f);
+        if (c < least) { least = c; slot = f; }
+      }
+      // (no lighter plane can win where this one cannot)
+      if (!(og[g * OG] * keep > least)) break;
+      this.release(slot);
+      const F = slot * SS, O = g * SS;
+      for (let q = 0; q < SS; q++) st[F + q] = ow[O + q];
+      if (!snap) st[F + 6] = st[F + 7] = st[F + 8] = 0;
+      slotGroup[slot - FLASH_SECTORS] = g;
+      oSlot[g] = slot;
+    }
+    // 7f. the extra lights: one with a plane's rays follows them; one without fades out where it stands (one handed over in this very
+    //     update too: it fades by as much as it would have changed)
     if (!snap) {
       for (let f = FLASH_SECTORS; f < FLASH_VPLS; f++) {
-        const F = f * SS;
+        const F = f * SS, g = slotGroup[f - FLASH_SECTORS];
+        if (g >= 0) { this.glide(F, ow, g * SS, a); continue; }
         st[F + 6] -= st[F + 6] * a; st[F + 7] -= st[F + 7] * a; st[F + 8] -= st[F + 8] * a;
-        if (st[F + 6] + st[F + 7] + st[F + 8] < DARK) st[F + 6] = st[F + 7] = st[F + 8] = 0;
+        if (st[F + 6] + st[F + 7] + st[F + 8] < DARK) for (let q = 0; q < SS; q++) st[F + q] = 0;
       }
     }
+    // the light each orphan ray is carried by, and what no light carries
+    let lost = 0;
+    for (let g = 0; g < ng; g++) if (oSlot[g] < 0) lost += og[g * OG];
+    for (let j = 0; j < FLASH_RAYS; j++) if (group[j] >= 0) carrier[j] = oSlot[group[j]] >= 0 ? oSlot[group[j]] : -1;
+    this.dropped = landed > 0 ? lost / landed : 0;
 
     // 8. the lights as shown: the state times the light's own intensity and colour (never smoothed: a battery dip dims them at once)
     const ir = spot.color.r * intensity, ig = spot.color.g * intensity, ib = spot.color.b * intensity, out = this.out;
@@ -697,14 +783,19 @@ export class FlashBounce {
 
   /** What the bounce is doing (QA / tests; allocates its answer). */
   debug(): FlashBounceDebug {
-    let r = 0, g = 0, b = 0, lights = 0, fading = 0, onProps = 0, onBodies = 0, cmin = 1;
-    this.out.forEach((v, i) => { r += v.r; g += v.g; b += v.b; if (v.r + v.g + v.b > 0) { if (i < FLASH_SECTORS) lights++; else fading++; } });
+    let r = 0, g = 0, b = 0, lights = 0, extra = 0, fading = 0, gone = 0, onProps = 0, onBodies = 0, cmin = 1;
+    this.out.forEach((v, i) => {
+      r += v.r; g += v.g; b += v.b;
+      if (!(v.r + v.g + v.b > 0)) return;
+      if (i < FLASH_SECTORS) lights++; else if (this.slotGroup[i - FLASH_SECTORS] >= 0) extra++; else { fading++; gone += v.r + v.g + v.b; }
+    });
     if (this.lit) for (let j = 0; j < FLASH_RAYS; j++) { if (!(this.ray[j * RS] >= 0)) continue; if (this.rayKind[j] === RAY_PROP) onProps++; else if (this.rayKind[j] === RAY_BODY) onBodies++; }
     for (let j = 0; j < FLASH_RAYS; j++) cmin = Math.min(cmin, Number.isFinite(this.coneAngle) ? this.cone[j * 3] : 1);
     return {
       bound: this.src !== null, lit: this.lit, occluded: this.occ !== null, hits: this.hits, onProps, onBodies, candidates: this.candidates,
       origin: this.origin === 0 ? 'light' : this.origin === 1 ? 'parent' : 'none',
-      solidAngle: this.weight * FLASH_RAYS, weight: this.weight, ringAngle: Math.acos(cmin), lights, fading, dropped: this.dropped,
+      solidAngle: this.weight * FLASH_RAYS, weight: this.weight, ringAngle: Math.acos(cmin), lights, extra, fading,
+      fadingFlux: gone > 0 ? gone / (r + g + b) : 0, planes: this.groups, dropped: this.dropped,
       flux: [r * Math.PI, g * Math.PI, b * Math.PI], updates: this.updates,
     };
   }
@@ -718,37 +809,101 @@ export class FlashBounce {
     return u <= gap && u >= -gap && v <= gap && v >= -gap;
   }
 
+  /** Two rays of this update (at `o` and `e` in the ray buffer) landed on one plane: the normals agree and each point lies on the other's plane. */
+  private together(o: number, e: number, pcos: number, gap: number): boolean {
+    const ray = this.ray;
+    if (ray[o + 4] * ray[e + 4] + ray[o + 5] * ray[e + 5] + ray[o + 6] * ray[e + 6] < pcos) return false;
+    const ex = ray[o + 1] - ray[e + 1], ey = ray[o + 2] - ray[e + 2], ez = ray[o + 3] - ray[e + 3];
+    const a = ray[e + 4] * ex + ray[e + 5] * ey + ray[e + 6] * ez, b = ray[o + 4] * ex + ray[o + 5] * ey + ray[o + 6] * ez;
+    return a <= gap && a >= -gap && b <= gap && b >= -gap;
+  }
+
+  /** The extra light `f` is nobody's: it stands on no plane (all zero). */
+  private empty(f: number): boolean {
+    const st = this.state, F = f * SS;
+    return st[F + 3] === 0 && st[F + 4] === 0 && st[F + 5] === 0;
+  }
+
+  /** The extra light `f` takes the orphan plane it stands on, if there is one without a light (the one with the most flux). */
+  private match(f: number): void {
+    const og = this.orphan, oSlot = this.oSlot;
+    let best = -1;
+    for (let g = 0; g < this.groups; g++) {
+      if (oSlot[g] !== -1 || !this.samePlane(this.state, f * SS, this.oWant, g * SS)) continue;
+      if (best < 0 || og[g * OG] > og[best * OG]) best = g;
+    }
+    this.slotGroup[f - FLASH_SECTORS] = best;
+    if (best >= 0) oSlot[best] = f;
+  }
+
+  /** The extra light `f` gives up its orphan plane. */
+  private release(f: number): void {
+    const g = this.slotGroup[f - FLASH_SECTORS];
+    if (g >= 0) this.oSlot[g] = -1;
+    this.slotGroup[f - FLASH_SECTORS] = -1;
+  }
+
+  /** What the extra light `f` holds its place with: the flux it carries now or the flux of its plane's rays, whichever is more. */
+  private claim(f: number): number {
+    const st = this.state, F = f * SS, g = this.slotGroup[f - FLASH_SECTORS];
+    const have = st[F + 6] + st[F + 7] + st[F + 8], rays = g >= 0 ? this.orphan[g * OG] : 0;
+    return have > rays ? have : rays;
+  }
+
   /**
-   * The sector light at `S` leaves its plane: it is handed to a fading slot, where it stays and fades out. `all`: the flux (sum of
-   * transfer) that leaves that plane in this update, this light's and the later sectors'.
-   *  - A fading light already on ITS plane takes it in: the two become one light on that plane, at their flux-weighted centre, with
+   * The light at `S` moves toward what it is to be (a light's state at `W` in `want`, on the plane the light is on, or the light is
+   * off): its position along the plane, its patch size and its flux, by the share `a`; the plane's normal is taken as it is now.
+   */
+  private glide(S: number, want: Float64Array, W: number, a: number): void {
+    const st = this.state, nx = want[W + 3], ny = want[W + 4], nz = want[W + 5];
+    if (st[S + 6] + st[S + 7] + st[S + 8] > FLASH_BOUNCE_REVIVE * (want[W + 6] + want[W + 7] + want[W + 8])) {
+      st[S] += (want[W] - st[S]) * a; st[S + 1] += (want[W + 1] - st[S + 1]) * a; st[S + 2] += (want[W + 2] - st[S + 2]) * a;
+      // (and exactly on the plane as it is now: the glide is along it)
+      const e = nx * (want[W] - st[S]) + ny * (want[W + 1] - st[S + 1]) + nz * (want[W + 2] - st[S + 2]);
+      st[S] += nx * e; st[S + 1] += ny * e; st[S + 2] += nz * e;
+      st[S + 9] += (want[W + 9] - st[S + 9]) * a;
+    } else {
+      // it is off, or as good as: it stands at its place at once and fades in there
+      st[S] = want[W]; st[S + 1] = want[W + 1]; st[S + 2] = want[W + 2]; st[S + 9] = want[W + 9];
+    }
+    st[S + 3] = nx; st[S + 4] = ny; st[S + 5] = nz;
+    st[S + 6] += (want[W + 6] - st[S + 6]) * a; st[S + 7] += (want[W + 7] - st[S + 7]) * a; st[S + 8] += (want[W + 8] - st[S + 8]) * a;
+  }
+
+  /**
+   * The sector light at `S` leaves its plane: it is handed to an extra light, where it stays — as the light of that plane's rays
+   * when some still land there, else fading out. `all`: the flux (sum of transfer) that leaves that plane in this update, this
+   * light's and the later sectors'.
+   *  - An extra light already on ITS plane takes it in: the two become one light on that plane, at their flux-weighted centre, with
    *    both fluxes and a patch as large as both and their distance (when the whole beam leaves a wall at once, the wall keeps one
-   *    fading light with all its flux — nothing is lost to the two slots);
-   *  - else a dark slot;
-   *  - else the dimmest slot's place, when what leaves this light's plane is more than that slot holds (what goes dark at once is
-   *    the least there is); else this light goes dark at once.
+   *    light with all its flux);
+   *  - else an empty extra light;
+   *  - else the place of the extra light with the least claim, when what leaves this light's plane clearly outweighs it (what goes
+   *    dark at once is the least there is); else this light goes dark at once.
    */
   private fade(S: number, all: number): void {
     const st = this.state, mine = st[S + 6] + st[S + 7] + st[S + 8];
-    let dark = -1, dim = -1, least = NEVER;
+    let to = -1, least = NEVER;
     for (let f = FLASH_SECTORS; f < FLASH_VPLS; f++) {
-      const F = f * SS, w = st[F + 6] + st[F + 7] + st[F + 8];
-      if (!(w > 0)) { if (dark < 0) dark = f; continue; }
+      const F = f * SS;
+      if (this.empty(f)) { if (least >= 0) { to = f; least = -1; } continue; }
       if (this.samePlane(st, F, st, S)) {
-        const t = mine / (w + mine), ex = st[S] - st[F], ey = st[S + 1] - st[F + 1], ez = st[S + 2] - st[F + 2];
+        const w = st[F + 6] + st[F + 7] + st[F + 8], t = mine / (w + mine), ex = st[S] - st[F], ey = st[S + 1] - st[F + 1], ez = st[S + 2] - st[F + 2];
         st[F] += ex * t; st[F + 1] += ey * t; st[F + 2] += ez * t;
         const nx = st[F + 3] + (st[S + 3] - st[F + 3]) * t, ny = st[F + 4] + (st[S + 4] - st[F + 4]) * t, nz = st[F + 5] + (st[S + 5] - st[F + 5]) * t;
         const nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
         st[F + 3] = nx / nl; st[F + 4] = ny / nl; st[F + 5] = nz / nl;
         st[F + 6] += st[S + 6]; st[F + 7] += st[S + 7]; st[F + 8] += st[S + 8];
-        st[F + 9] += st[S + 9] + t * (1 - t) * (ex * ex + ey * ey + ez * ez);
+        st[F + 9] = (w > 0 ? st[F + 9] : 0) + st[S + 9] + t * (1 - t) * (ex * ex + ey * ey + ez * ez);
         return;
       }
-      if (w < least) { least = w; dim = f; }
+      const c = this.claim(f);
+      if (c < least) { least = c; to = f; }
     }
-    const to = dark >= 0 ? dark : all > least ? dim : -1;
-    if (to < 0) return;
+    if (to < 0 || !(all * FLASH_BOUNCE_TUNING.keep > least)) return;
+    this.release(to);
     for (let q = 0; q < SS; q++) st[to * SS + q] = st[S + q];
+    this.match(to);
   }
 
   /** Room for more occluders in the beam (rare: the buffers double and stay). */
@@ -761,6 +916,8 @@ export class FlashBounce {
   /** Everything zero: the state, the lights and the uniforms (the shader's sum is then exactly zero). */
   private zero(): void {
     this.state.fill(0);
+    this.slotGroup.fill(-1);
+    this.groups = 0;
     this.lit = false;
     this.hits = 0;
     this.candidates = 0;
