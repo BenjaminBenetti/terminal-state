@@ -21,6 +21,7 @@ import {SKYWAYS_RAMEN_PURPOSE} from '../src/gen/skyways/ramenPurposes';
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
 import {outfitterDressOf} from '../src/gen/skyways/stores/outfitterDress'; // (task studio-alpha-skyways-shops-20261107-054512-01, lane STORE-OUTFITTER)
 import {skywaysConSnacksOf} from '../src/gen/skyways/skywaysConSnacks'; // (task studio-skywalk-variety-20261107-231448-01, lane DRESS)
+import {evacPickupsOf} from '../src/gen/skyways/events/evacDress'; // (task studio-skywalk-events-20261115-193624-01)
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const cache = new Map<number, StationLayout>();
@@ -173,6 +174,8 @@ describe('Skyways: generated layouts', () => {
         // task studio-skywalk-events-20261115-193624-01 (lane GOLF-COURSE): the mini-golf course's balls on its tees / at the front desk and its one putter on the desk
         const golf = l.skyways!.addon.golf;
         if (golf && [...golf.holes.map(h => h.ball), golf.desk?.putter, ...(golf.desk?.balls ?? [])].some(i => i !== undefined && l.pickups[i] === p)) continue;
+        // (lead) the evacuation centre's few ration packs stand on its distribution tables (gen/skyways/events/evacDress.ts), never the floor
+        if (evacPickupsOf(l).some(i => l.pickups[i] === p)) { expect(p.y - l.levels[p.level ?? 0].baseY, `seed ${s}: ${p.itemId} on a table`).toBeGreaterThan(0.5); continue; }
         expect(/^(rifle|shotgun|pistol|ammo_|gas_mask|gas_filter)/.test(p.itemId) || p.reward !== undefined, `seed ${s}: ${p.itemId}`).toBe(true);
       }
       void r;
