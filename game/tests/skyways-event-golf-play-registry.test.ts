@@ -39,7 +39,8 @@ import {starterInventory} from '../src/run/starter';
 import {devGrantBundle} from '../src/items/devGrant';
 import {BENCH_RECIPES} from '../src/craft/recipes';
 import {stallDraws, stockRng} from '../src/market/trade/stock';
-import {baseCents} from '../src/market/trade/value';
+import {CENTS, VALUE, baseCents} from '../src/market/trade/value';
+import {sellQuote} from '../src/market/trade/stalls';
 import {MARKET_STALLS_ALL} from '../src/gen/market/marketTypes';
 import type {LevelId} from '../src/levels/types';
 import {installCanvasShim, ShimContext} from './helpers/canvas2d';
@@ -245,7 +246,8 @@ describe('placed only: never loot, a find, market stock, a recipe, the starter k
     for (const stall of MARKET_STALLS_ALL) for (let seed = 1; seed <= 200; seed++) for (const d of stallDraws(stall, stockRng(`st-${seed % 17}`, seed, stall))) stocked.add(d.itemId);
     expect(stocked.has('knife') || stocked.has('pistol')).toBe(true);
     for (const id of IDS) expect(stocked.has(id), id).toBe(false);
-    expect(baseCents(GOLF_BALL_ITEM)).toBe(100); // one tie
+    expect(baseCents(GOLF_BALL_ITEM)).toBe(VALUE.minUnit * CENTS); // the smallest unit value: one ball still sells for a tie at the general store
+    expect(sellQuote('general', new Inventory().makeStack(GOLF_BALL_ITEM, 1), 1)).toMatchObject({ok: true, price: 1});
     expect(baseCents(PUTTER_ITEM)).toBeGreaterThan(0);
     expect(baseCents(PUTTER_ITEM)).toBeLessThan(baseCents('knife') * 2);
   });
