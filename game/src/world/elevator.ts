@@ -28,6 +28,7 @@
 
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu';
+import {normalViewGeometry, positionViewDirection, select} from 'three/tsl'; // task train-glass-reflection-fix-20261115-213533: the glass's facing normal
 import {tagReflect} from '../render/reflectTag'; // task studio-pbr-material-pass-20261115-192427-01: the glass car's lit glass
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {surface, type SurfaceName} from './canvasTextures';
@@ -1129,6 +1130,16 @@ function rigMaterials() {
  * (CAB_GLASS.roughness), dielectric, the same dark green-grey tint, a constant opacity as the station's panes have (the probe
  * reflection is compensated by the material's opacity: world/reflectionNode.ts); no world mapping, so nothing swims on the
  * moving car.
+ *
+ * Task train-glass-reflection-fix-20261115-213533 (the player's WebGPU screenshot: train panes milky with a warped, blurry
+ * reflection):
+ *  - tagged 'cab', not 'glass' (render/reflectTag.ts): the probes by the glass's own Fresnel only. A cab's sheet is never one of
+ *    the live mirror's planes, so the station glazing's pane boost (GLASS_PANE_F0, 7.5x face-on) only ever multiplied the coarse
+ *    cached probes there — on both faces of the double-sided sheet;
+ *  - the shading normal faces the eye from the geometry alone. The train's +X door leaves are MIRRORED instances of one
+ *    instanced mesh (world/playerTrainView.ts): their triangles wind backwards, so three's two-sided normal (flipped by the
+ *    winding) faced away from the eye on both faces, and the Fresnel response read every face-on pane of them as grazing
+ *    (about 20x the reflection). Both faces of a thin pane are its lit face.
  */
 export const CAB_GLASS = {tint: [0.12, 0.16, 0.15] as const, opacity: 0.2, roughness: 0.08};
 let cabGlassMat: MeshStandardNodeMaterial | null = null;
@@ -1137,8 +1148,10 @@ export function cabGlassMaterial(): MeshStandardNodeMaterial {
   const m = tagReflect(new MeshStandardNodeMaterial({
     color: new THREE.Color(...CAB_GLASS.tint), roughness: CAB_GLASS.roughness, metalness: 0,
     transparent: true, opacity: CAB_GLASS.opacity, depthWrite: false, side: THREE.DoubleSide,
-  }), 'glass');
+  }), 'cab');
   m.name = 'tower-cab-glass';
+  const n = normalViewGeometry;
+  m.normalNode = select(n.dot(positionViewDirection).lessThan(0), n.negate(), n);
   return (cabGlassMat = m);
 }
 

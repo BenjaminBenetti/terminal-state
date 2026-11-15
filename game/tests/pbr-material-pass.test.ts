@@ -119,12 +119,13 @@ describe('a plain clone keeps a loaded model\'s reflection tag', () => {
 });
 
 describe('the player train windows and the glass lift: lit glass on the station glass path', () => {
-  it('one shared material: lit, tagged glass, clean, dielectric, the old tint, see-through, both faces, no depth write', () => {
+  it('one shared material: lit, tagged cab glass, clean, dielectric, the old tint, see-through, both faces, no depth write', () => {
     const g = cabGlassMaterial() as unknown as THREE.MeshStandardMaterial;
     expect(new TrainMaterials().glass()).toBe(g);
     expect(g.isMeshStandardMaterial).toBe(true); // lit: the field, its highlight and the flashlight's (no longer MeshBasic)
-    expect(reflectTagOf(g)).toBe('glass');
-    expect(reflectClass(g)).toBe('glass');
+    // (task train-glass-reflection-fix-20261115-213533: the glass path's probes without the pane boost or the mirror: 'cab')
+    expect(reflectTagOf(g)).toBe('cab');
+    expect(reflectClass(g)).toBe('cab');
     expect(g.metalness).toBe(0);
     expect(g.roughness).toBe(CAB_GLASS.roughness);
     expect(g.roughness).toBeLessThan(0.15);

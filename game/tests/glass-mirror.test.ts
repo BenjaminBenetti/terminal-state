@@ -25,6 +25,7 @@ import type {StationLayout} from '../src/gen/station';
 import {levelsOf} from '../src/gen/levels';
 import {LEVELS} from '../src/levels/registry';
 import {tagReflect} from '../src/render/reflectTag';
+import {cabGlassMaterial} from '../src/world/elevator';
 import {bindingRefreshStats} from '../src/render/bindingRefresh';
 import {installLightFieldNode} from '../src/world/lightFieldNode';
 import {installReflectNode, stationReflectLight} from '../src/world/reflectionNode';
@@ -424,6 +425,8 @@ describe('the shader', () => {
     const mats = {
       glass: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'glass'),
       window: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'window'),
+      // (task train-glass-reflection-fix-20261115-213533: a cab's glass is never a mirror plane — the same probes-only program)
+      cab: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'cab'),
       steel: () => new MeshStandardNodeMaterial({metalness: 0.45, roughness: 0.4}),
       tile: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0, roughness: 0.3}), 'gloss'),
       wall: () => new MeshStandardNodeMaterial({metalness: 0, roughness: 0.8}),
@@ -467,6 +470,23 @@ describe('the shader', () => {
     // the globals a program is built against: a placeholder picture, the mirror inactive
     expect(isGlassMirrorPlaceholder(GM.tex.value)).toBe(true);
     expect(GM.plane.value.w).toBe(0);
+  });
+
+  // Task train-glass-reflection-fix-20261115-213533: the train's +X door leaves are mirrored instances (player-train-fit.test.ts), whose
+  // triangles wind against their normals — a two-sided normal flipped by the winding faces away from the eye there, and the Fresnel
+  // response reads a face-on pane as grazing. The cab glass's normal faces the eye from the geometry alone: its program never reads
+  // the front-facing builtin, where the same two-sided glass without that normal does.
+  it("a cab's glass shades with a normal facing the eye, never by the winding: both backends, both reflecting lights", () => {
+    const FRONT = /gl_FrontFacing|front_facing/;
+    const plain = () => tagReflect(new MeshStandardNodeMaterial({metalness: 0, roughness: 0.08, transparent: true, opacity: 0.2, side: THREE.DoubleSide}), 'cab');
+    for (const backend of ['wgsl', 'glsl'] as const) for (const mirror of [false, true]) {
+      const lights = () => [stationReflectLight(true, mirror), new THREE.HemisphereLight()];
+      const cab = compile(backend, cabGlassMaterial(), lights());
+      const control = compile(backend, plain(), lights());
+      expect(FRONT.test(control), `${backend}: a two-sided material's normal follows the winding`).toBe(true);
+      expect(FRONT.test(cab), `${backend}${mirror ? ' (mirror light)' : ''}: the cab glass's does not`).toBe(false);
+      expect(bindings(backend, cab), `${backend}: the same bindings (the probes)`).toEqual(bindings(backend, control));
+    }
   });
 });
 
@@ -815,6 +835,23 @@ describe('the draw', () => {
     expect(released).toBe(1);
     expect(gm.render(r, W.scene, c)).toBe(false);
     expect(r.draws.length).toBe(2);
+  });
+
+  // Task train-glass-reflection-fix-20261115-213533: a cab's glass (the train's windows and door leaves, the glass lift) never samples
+  // the picture (its program has no lookup: the mirror light test below), so it is drawn into the mirror like any other surface.
+  it("a cab's glass is drawn into the mirror: only 'glass' is left out", () => {
+    const st = sceneTarget(1280, 720, 4), W = world();
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), cabGlassMaterial());
+    W.scene.add(cab);
+    const r = new FakeRenderer();
+    const gm = new GlassMirror({scenePass: () => ({target: st, depth: 1}), cap: GLASS_MIRROR_CAPS.standard});
+    gm.setPlanes([A]);
+    const c = cam();
+    settle(gm, c);
+    expect(gm.render(r, W.scene, c)).toBe(true);
+    expect(r.draws[0].drawn).toEqual([W.wall, cab]);
+    expect((gm.debug() as {skipped: number}).skipped).toBe(2);
+    gm.dispose();
   });
 
   it('restores the renderer and the shadow flags when the draw throws, stays off afterwards, and never throws into the frame', () => {
