@@ -7,12 +7,14 @@
 //    uniform buffer more on glass under the mirror light, nothing at all without it;
 //  - selection: the plane in view, hysteresis, the fade of a change, shot-out panes, the distance cap, line of sight;
 //  - the draw: the scene pass's signature and call depth, glass left out (no feedback), renderer state and shadow flags restored
-//    — also when the draw throws — and no material or light flag touched.
+//    — also when the draw throws — and no material or light flag touched;
+//  - instanced pools in the draw: one is drawn only when an instance of it is inside the mirror's frustum (the glass to the reach,
+//    the window's four sides), judged against the test's own view-space frustum (helpers/mirrorFrustum.ts).
 // The proof on the real Game (builds / pipelines / render contexts / shadow draws) is tests/glass-mirror-game.test.ts.
-import {afterEach, describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
 import {GLSLNodeBuilder, MeshStandardNodeMaterial, NodeMaterial, QuadMesh, WGSLNodeBuilder, WebGPURenderer} from 'three/webgpu';
-import {Fn, cameraPosition, uniform} from 'three/tsl';
+import {Fn, cameraPosition, positionLocal, uniform, vec4} from 'three/tsl';
 import {
   GLASS_MIRROR, GLASS_MIRROR_CAPS, GLASS_MIRROR_TUNING, GM, GlassMirror, PaneCamera, clipPane, glassMirrorSample, isGlassMirrorPlaceholder, mirrorAlpha, mirrorCameraPose,
   mirrorFace, mirrorUv, mirrorWindow, type MirrorFace, type MirrorRenderer, type MirrorScenePass, type MirrorWindow, type PaneView,
@@ -28,6 +30,7 @@ import {installLightFieldNode} from '../src/world/lightFieldNode';
 import {installReflectNode, stationReflectLight} from '../src/world/reflectionNode';
 import {rendererFor} from './helpers/fogCompile';
 import {BUILTINS, mainBody, runFlow, type Env, type Val} from './helpers/glslEval';
+import {sphereReach, viewDirection, windowPoint} from './helpers/mirrorFrustum';
 
 const face0 = (): MirrorFace => ({side: 1, nx: 1, nz: 0, d: 0, dist: 0, sigma: 1});
 const win0 = (): MirrorWindow => ({a0: 0, a1: 1, y0: 0, y1: 1, texel: 1, w: 1, h: 1});
@@ -480,8 +483,10 @@ class FakeRenderer implements MirrorRenderer {
   transparent = true; opaque = false;
   size = new THREE.Vector2(1280, 720);
   boom: Error | null = null;
-  readonly draws: {target: THREE.RenderTarget | null; mrt: unknown; viewport: number[]; camera: THREE.Camera; autoClear: boolean[]; toneMapping: THREE.ToneMapping; outputColorSpace: string; flags: boolean[]; drawn: THREE.Object3D[]; layers: number; transparent: boolean; opaque: boolean}[] = [];
+  /** (drawn / mats: the object and the material of every renderObject call of the draw, in order) */
+  readonly draws: {target: THREE.RenderTarget | null; mrt: unknown; viewport: number[]; camera: THREE.Camera; autoClear: boolean[]; toneMapping: THREE.ToneMapping; outputColorSpace: string; flags: boolean[]; drawn: THREE.Object3D[]; mats: THREE.Material[]; layers: number; transparent: boolean; opaque: boolean}[] = [];
   private current: THREE.Object3D[] = [];
+  private currentMats: THREE.Material[] = [];
   lights: THREE.SpotLight[] = [];
   getRenderTarget() { return this.target; }
   setRenderTarget(t: THREE.RenderTarget | null) { this.target = t; }
@@ -490,19 +495,22 @@ class FakeRenderer implements MirrorRenderer {
   getRenderObjectFunction() { return this.fn; }
   setRenderObjectFunction(f: unknown) { this.fn = f; }
   getDrawingBufferSize(v: THREE.Vector2) { return v.copy(this.size); }
-  renderObject(...a: unknown[]) { this.current.push(a[0] as THREE.Object3D); }
+  renderObject(...a: unknown[]) { this.current.push(a[0] as THREE.Object3D); this.currentMats.push(a[4] as THREE.Material); }
   render(scene: THREE.Scene, camera: THREE.Camera) {
-    this.current = [];
-    // three: every renderable through the render-object function (or renderObject itself)
+    this.current = []; this.currentMats = [];
+    scene.updateMatrixWorld(); // (three: the scene's world matrices, once per render call)
+    // three: every renderable through the render-object function (or renderObject itself) — a mesh with a material array once per
+    // geometry group, with that group's material
     scene.traverse(o => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
       const f = (this.fn ?? this.renderObject.bind(this)) as (...a: unknown[]) => void;
-      f.call(this, mesh, scene, camera, mesh.geometry, mesh.material, null, null, null, null);
+      if (Array.isArray(mesh.material)) for (const g of mesh.geometry.groups) f.call(this, mesh, scene, camera, mesh.geometry, mesh.material[g.materialIndex ?? 0], g, null, null, null);
+      else f.call(this, mesh, scene, camera, mesh.geometry, mesh.material, null, null, null, null);
     });
     this.draws.push({
       target: this.target, mrt: this.mrt, viewport: this.target ? this.target.viewport.toArray() : [], camera, autoClear: [this.autoClear, this.autoClearColor, this.autoClearDepth, this.autoClearStencil],
-      toneMapping: this.toneMapping, outputColorSpace: this.outputColorSpace, flags: this.lights.flatMap(l => [l.shadow.autoUpdate, l.shadow.needsUpdate]), drawn: this.current,
+      toneMapping: this.toneMapping, outputColorSpace: this.outputColorSpace, flags: this.lights.flatMap(l => [l.shadow.autoUpdate, l.shadow.needsUpdate]), drawn: this.current, mats: this.currentMats,
       layers: camera.layers.mask, transparent: this.transparent, opaque: this.opaque,
     });
     if (this.boom) throw this.boom;
@@ -953,5 +961,280 @@ describe('the draw', () => {
     expect(gm.render(r, W.scene, c)).toBe(true);
     expect(r.draws[1].drawn).toEqual([W.wall, empty]);
     gm.dispose();
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Task studio-baked-gi-visual-uplift-20261115-004324-01 (lane TESTS): instanced pools in the mirror's draw. three culls an
+// InstancedMesh by one sphere round ALL its instances (a station-wide pool is always "in view"); the mirror's render-object function
+// draws a pool only when one of its instances' own spheres meets the mirror's frustum. Every place below is built from the mirror
+// camera's own window (helpers/mirrorFrustum.ts: view space, no projection matrix) and checked to be clearly inside or outside.
+describe('the draw: instanced pools', () => {
+  const A = plane('z', 0, -3, 3, 0.3, 2.3, {id: 'A'});
+  /** The pools' geometry: a 0.2 m cube (its bounding sphere: its centre, RADIUS). */
+  const cube = (): THREE.BufferGeometry => new THREE.BoxGeometry(0.2, 0.2, 0.2);
+  const RADIUS = 0.1 * Math.sqrt(3);
+  /** The cube in `k` material groups (indices 0..k-1). */
+  const grouped = (k: number): THREE.BufferGeometry => { const g = cube(); g.clearGroups(); for (let i = 0; i < k; i++) g.addGroup(i * 36 / k, 36 / k, i); return g; };
+  const plain = (): THREE.Material => new MeshStandardNodeMaterial();
+  /** Materials that place their vertices in the shader (the instance matrices do not say where the pool is drawn). */
+  const moved = (): THREE.Material => { const m = new MeshStandardNodeMaterial(); m.positionNode = positionLocal.add(1) as never; return m; };
+  const shaped = (): THREE.Material => { const m = new MeshStandardNodeMaterial(); m.vertexNode = vec4(positionLocal, 1) as never; return m; };
+  const CONVENTIONS = [
+    {name: 'WebGL clip space', cs: THREE.WebGLCoordinateSystem, reversed: false},
+    {name: 'WebGPU clip space', cs: THREE.WebGPUCoordinateSystem, reversed: false},
+    {name: 'WebGPU clip space with reversed depth', cs: THREE.WebGPUCoordinateSystem, reversed: true},
+  ] as const;
+
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  /** A mirror in front of pane A (the eye 3 m from it), one plain wall in the scene, and places inside / outside its frustum. */
+  function stage(convention: (typeof CONVENTIONS)[number] = CONVENTIONS[1]) {
+    const st = sceneTarget(1280, 720, 4), r = new FakeRenderer(), scene = new THREE.Scene();
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new MeshStandardNodeMaterial({roughness: 0.8}));
+    wall.name = 'wall';
+    scene.add(wall);
+    const gm = new GlassMirror({scenePass: () => ({target: st, depth: 1})});
+    // (three gives a camera the renderer's clip-space convention when it first draws with it; the mirror's projection follows it)
+    gm.camera.coordinateSystem = convention.cs;
+    (gm.camera as unknown as {_reversedDepth: boolean})._reversedDepth = convention.reversed;
+    gm.setPlanes([A]);
+    const c = eyeCam([0.5, 1.6, 3], [0, 1.5, 0]);
+    for (let i = 0; i < 20; i++) gm.select(c, 1 / 60);
+    const draw = (camera: THREE.PerspectiveCamera = c): {names: string[]; mats: THREE.Material[]; pools: number} => {
+      expect(gm.render(r, scene, camera)).toBe(true);
+      const d = r.draws[r.draws.length - 1];
+      return {names: d.drawn.map(o => o.name), mats: d.mats, pools: gm.stats.pools};
+    };
+    // one draw before any pool exists: the mirror camera of this view (the eye stands still: the same for every draw below)
+    const first = draw();
+    expect([first.names, first.pools]).toEqual([['wall'], 0]);
+    const mc = gm.camera, n = mc.near, f = mc.far;
+    expect([mc.coordinateSystem, mc.reversedDepth]).toEqual([convention.cs, convention.reversed]);
+    expect(f).toBeCloseTo(GLASS_MIRROR.reach, 3);
+    const P = {
+      inside: windowPoint(mc, 0.5, 0.5, n + 3), // 3 m in front of the glass, in the middle of the window
+      nearGlass: windowPoint(mc, 0.7, 0.4, n + 0.5),
+      farEnd: windowPoint(mc, 0.3, 0.6, f - 2),
+      behindGlass: windowPoint(mc, 0.5, 0.5, n * 0.8), // on the shop's side of the pane: between the mirrored eye and the glass
+      behindEye: windowPoint(mc, 0.5, 0.5, -2),
+      beyond: windowPoint(mc, 0.5, 0.5, f + 2),
+      left: windowPoint(mc, -1, 0.5, n + 3), right: windowPoint(mc, 2, 0.5, n + 3), above: windowPoint(mc, 0.5, 2, n + 3), below: windowPoint(mc, 0.5, -1, n + 3),
+    };
+    const outs = [P.behindGlass, P.behindEye, P.beyond, P.left, P.right, P.above, P.below];
+    // clearly inside (the cube's whole sphere and 0.1 m more) or clearly outside (its sphere by 0.2 m), by the test's own frustum
+    for (const p of [P.inside, P.nearGlass, P.farEnd]) expect(sphereReach(mc, p.x, p.y, p.z, 0)).toBeGreaterThan(RADIUS + 0.1);
+    for (const p of outs) expect(sphereReach(mc, p.x, p.y, p.z, RADIUS)).toBeLessThan(-0.2);
+    const put = (mesh: THREE.InstancedMesh, i: number, p: THREE.Vector3, scale = 1, q = new THREE.Quaternion()): void => {
+      mesh.setMatrixAt(i, new THREE.Matrix4().compose(p, q, new THREE.Vector3(scale, scale, scale)));
+    };
+    const pool = (name: string, at: THREE.Vector3[], o: {material?: THREE.Material | THREE.Material[]; geometry?: THREE.BufferGeometry; parent?: THREE.Object3D} = {}): THREE.InstancedMesh => {
+      const mesh = new THREE.InstancedMesh(o.geometry ?? cube(), o.material ?? plain(), Math.max(1, at.length));
+      mesh.name = name;
+      mesh.count = at.length;
+      at.forEach((p, i) => put(mesh, i, p));
+      (o.parent ?? scene).add(mesh);
+      return mesh;
+    };
+    return {gm, r, scene, wall, c, mc, P, outs, put, pool, draw};
+  }
+
+  for (const convention of CONVENTIONS) {
+    it(`${convention.name}: a pool with an instance inside the mirror's frustum is drawn; one with none (behind the glass, behind the mirrored eye, beyond the reach, off any side) is left out and counted`, () => {
+      const S = stage(convention), {P, outs, pool, mc} = S;
+      pool('inside', [P.inside]);
+      pool('near the glass', [P.nearGlass]);
+      pool('at the far end', [P.farEnd]);
+      pool('behind the glass', [P.behindGlass]);
+      pool('behind the mirrored eye', [P.behindEye]);
+      pool('beyond the reach', [P.beyond]);
+      pool('left', [P.left]); pool('right', [P.right]); pool('above', [P.above]); pool('below', [P.below]);
+      pool('all over, none inside', outs);
+      pool('the first of many inside', [P.inside, ...outs]);
+      pool('one in the middle inside', [...outs.slice(0, 4), P.farEnd, ...outs.slice(4)]);
+      pool('only the last inside', [...Array.from({length: 9}, () => outs).flat(), P.nearGlass]); // 63 outside, then the one
+      // a sphere that crosses a plane of the frustum reaches into it
+      const acrossGlass = windowPoint(mc, 0.5, 0.5, mc.near - RADIUS / 2), acrossFar = windowPoint(mc, 0.5, 0.5, mc.far + RADIUS / 2);
+      for (const p of [acrossGlass, acrossFar]) {
+        expect(sphereReach(mc, p.x, p.y, p.z, 0)).toBeLessThan(0);
+        expect(sphereReach(mc, p.x, p.y, p.z, RADIUS)).toBeGreaterThan(0.05);
+      }
+      pool('across the glass', [acrossGlass]);
+      pool('across the far plane', [acrossFar]);
+      // not the pool test's business: a plain mesh (three culls those itself), glass (left out as glass)
+      const far = new THREE.Mesh(cube(), plain());
+      far.name = 'a plain mesh beyond the reach';
+      far.position.copy(P.beyond);
+      S.scene.add(far);
+      pool('glass, inside', [P.inside], {material: tagReflect(new MeshStandardNodeMaterial({transparent: true, opacity: 0.4}), 'glass')});
+      const d = S.draw();
+      expect(d.names).toEqual([
+        'wall', 'inside', 'near the glass', 'at the far end', 'the first of many inside', 'one in the middle inside', 'only the last inside', 'across the glass', 'across the far plane',
+        'a plain mesh beyond the reach',
+      ]);
+      expect(d.pools).toBe(8);
+      expect(S.gm.debug()).toMatchObject({drawn: 10, pools: 8, skipped: 1});
+      // the same answer draw after draw (the counter is the last draw's, not a running total)
+      for (let i = 0; i < 3; i++) { const again = S.draw(); expect([again.names, again.pools]).toEqual([d.names, d.pools]); }
+      S.gm.dispose();
+    });
+  }
+
+  it('instances that move between draws: the answer is this draw\'s; the instance that was inside last time is asked first, and is no answer once it has left', () => {
+    const S = stage(), {P, put} = S;
+    const tests = vi.spyOn(THREE.Frustum.prototype, 'intersectsSphere');
+    const asked = (): number => { const k = tests.mock.calls.length; tests.mockClear(); return k; };
+    const p = S.pool('p', [P.left, P.behindGlass, P.beyond, P.right]);
+    const out = {names: ['wall'], pools: 1}, drawn = {names: ['wall', 'p'], pools: 0};
+    expect(S.draw()).toMatchObject(out);
+    expect(asked()).toBe(4);
+    put(p, 2, P.inside); // (one moved into view)
+    expect(S.draw()).toMatchObject(drawn);
+    expect(asked()).toBeLessThanOrEqual(4);
+    expect(S.draw()).toMatchObject(drawn);
+    expect(asked(), 'the one that was inside is asked first').toBe(1);
+    put(p, 2, P.beyond); // (and out again)
+    expect(S.draw()).toMatchObject(out);
+    expect(asked(), 'every instance once, the one asked first not twice').toBe(4);
+    put(p, 0, P.farEnd); // (another one in)
+    expect(S.draw()).toMatchObject(drawn);
+    expect(S.draw()).toMatchObject(drawn);
+    asked();
+    // the pool shrinks: an instance past `count` is not there
+    put(p, 0, P.left); put(p, 3, P.inside);
+    p.count = 2;
+    expect(S.draw()).toMatchObject(out);
+    expect(asked()).toBe(2);
+    p.count = 4;
+    expect(S.draw()).toMatchObject(drawn);
+    // ... also when the instance that was inside last time is the one past the new count
+    p.count = 3;
+    expect(S.draw()).toMatchObject(out);
+    expect(asked()).toBeLessThanOrEqual(4 + 3);
+    put(p, 1, P.nearGlass);
+    expect(S.draw()).toMatchObject(drawn);
+    p.count = 4;
+    expect(S.draw()).toMatchObject(drawn);
+    S.gm.dispose();
+  });
+
+  it('where an instance is: its own matrix (scale, rotation), the geometry\'s own centre, the mesh\'s and its parent\'s matrixWorld; one scaled to nothing is not there', () => {
+    const S = stage(), {P, mc, put, pool} = S;
+    // half a metre past the reach: the cube's own sphere does not come back in, one four times the size does
+    const past = windowPoint(mc, 0.5, 0.5, mc.far + 0.5);
+    expect(sphereReach(mc, past.x, past.y, past.z, RADIUS)).toBeLessThan(-0.2);
+    expect(sphereReach(mc, past.x, past.y, past.z, 4 * RADIUS)).toBeGreaterThan(0.1);
+    // the instance's own scale
+    put(pool('scaled to nothing', [P.inside, P.left]), 0, P.inside, 0);
+    put(pool('a thousandth of its size', [P.inside]), 0, P.inside, 0.001);
+    pool('past the reach', [past]);
+    put(pool('past the reach, four times the size', [past]), 0, past, 4);
+    // its rotation and the geometry's own centre: a cube modelled 4 m off its origin, turned toward the mirrored eye / away from it
+    const off = (): THREE.BufferGeometry => cube().translate(4, 0, 0);
+    const toward = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), viewDirection(mc).negate());
+    const away = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), viewDirection(mc));
+    put(pool('origin beyond the reach, the cube turned back inside', [P.beyond], {geometry: off()}), 0, P.beyond, 1, toward);
+    put(pool('origin inside, the cube turned out beyond the reach', [P.farEnd], {geometry: off()}), 0, P.farEnd, 1, away);
+    // the mesh's own matrixWorld: its position, a parent's, its scale
+    const shift = viewDirection(mc).multiplyScalar(100);
+    const local = P.inside.clone().sub(shift);
+    expect(sphereReach(mc, local.x, local.y, local.z, RADIUS)).toBeLessThan(-0.2);
+    pool('moved inside by the mesh', [local]).position.copy(shift);
+    pool('moved outside by the mesh', [P.inside]).position.copy(shift);
+    const group = new THREE.Group();
+    group.position.copy(shift);
+    S.scene.add(group);
+    pool('moved inside by a parent', [local], {parent: group});
+    const tenfold = P.inside.clone().multiplyScalar(10);
+    expect(sphereReach(mc, tenfold.x, tenfold.y, tenfold.z, RADIUS)).toBeLessThan(-0.2);
+    pool('brought inside by the mesh\'s scale', [tenfold]).scale.setScalar(0.1);
+    pool('past the reach, four times the size by the mesh\'s scale', [past.clone().multiplyScalar(1 / 4)]).scale.setScalar(4);
+    const d = S.draw();
+    expect(d.names).toEqual([
+      'wall', 'a thousandth of its size', 'past the reach, four times the size', 'origin beyond the reach, the cube turned back inside',
+      'moved inside by the mesh', 'moved inside by a parent', 'brought inside by the mesh\'s scale', 'past the reach, four times the size by the mesh\'s scale',
+    ]);
+    expect(d.pools).toBe(4);
+    S.gm.dispose();
+  });
+
+  it('always drawn: a pool that asks not to be culled, a material that places its vertices in the shader (asked per material group); a pool of several materials is answered and counted once', () => {
+    const S = stage(), {P, pool} = S;
+    const tests = vi.spyOn(THREE.Frustum.prototype, 'intersectsSphere');
+    const outs = [P.left, P.beyond, P.behindGlass];
+    pool('not culled', outs).frustumCulled = false;
+    pool('position node', outs, {material: moved()});
+    pool('vertex node', outs, {material: shaped()});
+    const m1 = [plain(), moved()], m2 = [shaped(), plain()], m3 = [plain(), plain(), plain()], m4 = [plain(), plain()];
+    pool('plain + position node', outs, {material: m1, geometry: grouped(2)});
+    pool('vertex node + plain', outs, {material: m2, geometry: grouped(2)});
+    pool('three materials, outside', outs, {material: m3, geometry: grouped(3)});
+    pool('two materials, one instance inside', [...outs, P.inside], {material: m4, geometry: grouped(2)});
+    const d = S.draw();
+    expect(d.names).toEqual(['wall', 'not culled', 'position node', 'vertex node', 'plain + position node', 'vertex node + plain', 'two materials, one instance inside', 'two materials, one instance inside']);
+    // of a mixed pool only the group whose material moves its vertices; of a pool in view every group
+    const want = [m1[1], m2[0], m4[0], m4[1]];
+    d.mats.slice(4).forEach((m, i) => expect(m === want[i], `material of draw ${4 + i}`).toBe(true));
+    expect(d.pools, 'the two mixed pools and the three-material one, each once').toBe(3);
+    expect(tests, 'each asked pool\'s instances once, not once per material group').toHaveBeenCalledTimes(3 + 3 + 3 + 4);
+    S.gm.dispose();
+  });
+
+  it('a draw the warm-up asked for (prime) leaves no pool out, once; an empty pool draws nothing in either', () => {
+    const S = stage(), {P, pool} = S;
+    const built = vi.spyOn(THREE.Frustum.prototype, 'setFromProjectionMatrix'), tests = vi.spyOn(THREE.Frustum.prototype, 'intersectsSphere');
+    pool('inside', [P.inside]);
+    pool('outside', [P.left, P.beyond]);
+    pool('empty', [P.inside]).count = 0;
+    const culled = {names: ['wall', 'inside'], pools: 1}, all = {names: ['wall', 'inside', 'outside'], pools: 0};
+    expect(S.draw()).toMatchObject(culled);
+    built.mockClear(); tests.mockClear();
+    S.gm.prime();
+    expect(S.draw()).toMatchObject(all);
+    expect(S.gm.debug()).toMatchObject({drawn: 3, pools: 0});
+    expect([built.mock.calls.length, tests.mock.calls.length], 'nothing is asked in a primed draw').toEqual([0, 0]);
+    // the next draws are ordinary ones again
+    expect(S.draw()).toMatchObject(culled);
+    expect(S.draw()).toMatchObject(culled);
+    // the warm-up's own case — no plane in view, the nearest one drawn unseen: everything as well, and once
+    const turnedAway = eyeCam([0.5, 1.6, 3], [0.5, 1.6, 9]);
+    expect(S.gm.render(S.r, S.scene, turnedAway)).toBe(false);
+    S.gm.prime();
+    expect(S.draw(turnedAway)).toMatchObject(all);
+    expect(GM.plane.value.w).toBe(0);
+    expect(S.gm.render(S.r, S.scene, turnedAway)).toBe(false);
+    expect(S.draw()).toMatchObject(culled);
+    S.gm.dispose();
+  });
+
+  it('the work of a draw: the frustum once and only when a pool asks, a pool\'s instances once, and the same scratch frustum, matrix and sphere every time (nothing allocated per pool or per draw)', () => {
+    const S = stage(), {P, pool, mc} = S;
+    const built = vi.spyOn(THREE.Frustum.prototype, 'setFromProjectionMatrix'), tests = vi.spyOn(THREE.Frustum.prototype, 'intersectsSphere');
+    const counts = (): number[] => [built.mock.calls.length, tests.mock.calls.length];
+    // no pool to ask (none at all; then an empty one, one that is not culled, one moved in the shader): no frustum is built
+    S.draw();
+    pool('empty', [P.inside]).count = 0;
+    pool('not culled', [P.left]).frustumCulled = false;
+    pool('position node', [P.left], {material: moved()});
+    expect(S.draw()).toMatchObject({names: ['wall', 'not culled', 'position node'], pools: 0});
+    expect(counts()).toEqual([0, 0]);
+    // 50 instances in three material groups, only the last one inside; ten more in another pool, all outside
+    const g3 = grouped(3), bounds = vi.spyOn(g3, 'computeBoundingSphere');
+    pool('many', [...Array.from({length: 49}, (_, i) => S.outs[i % S.outs.length]), P.inside], {material: [plain(), plain(), plain()], geometry: g3});
+    pool('others', Array.from({length: 10}, (_, i) => S.outs[i % S.outs.length]));
+    expect(S.draw()).toMatchObject({names: ['wall', 'not culled', 'position node', 'many', 'many', 'many'], pools: 1});
+    expect(counts()).toEqual([1, 50 + 10]);
+    for (let i = 0; i < 5; i++) expect(S.draw()).toMatchObject({pools: 1});
+    expect(counts(), 'per draw: one frustum; "many" by the instance that was inside last time, "others" all ten').toEqual([1 + 5, 60 + 5 * (1 + 10)]);
+    expect(bounds, 'the geometry\'s sphere is computed once').toHaveBeenCalledTimes(1);
+    // the same objects every time: one frustum, one matrix handed to it, one sphere asked
+    expect(new Set(built.mock.contexts).size).toBe(1);
+    expect(new Set(built.mock.calls.map(a => a[0])).size).toBe(1);
+    expect(new Set(tests.mock.calls.map(a => a[0])).size).toBe(1);
+    // ... and it is the mirror camera's frustum: this draw's projection x view, in the camera's own clip-space convention
+    const last = built.mock.calls[built.mock.calls.length - 1];
+    expect(last[0].elements).toEqual(new THREE.Matrix4().multiplyMatrices(mc.projectionMatrix, mc.matrixWorldInverse).elements);
+    expect([last[1], last[2]]).toEqual([mc.coordinateSystem, mc.reversedDepth]);
+    S.gm.dispose();
   });
 });
