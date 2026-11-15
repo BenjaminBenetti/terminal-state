@@ -309,12 +309,16 @@ Frame cost:
 - **The mirror**: one more draw of the part of the scene the mirrored eye sees, into its fixed-size target, only
   while a pane covers at least 1.5 % of the screen within 12 m. It is the feature's one real main-thread cost. In
   the real Game in Node (a validating no-op device, Subway, 2.2 m from a storefront, flashlight on) a frame
-  submitted about 170 draws for the mirror next to about 151 for the scene pass and 71 for the flashlight's shadow:
-  while a pane is in view the frame's draw submissions grow by about three quarters, and three's own submit path
-  took about as long for the mirror as for the scene pass and shadow together. Away from glass, and with the
-  feature Off, the mirror draws nothing. It builds no program, pipeline or render context, and it draws no second
-  shadow map. These are counts and Node timings of three's submit path, not frame times: no frame rate is claimed
-  from them, and the cost on a player's hardware is not measured.
+  submitted about 140 draws for the mirror next to about 151 for the scene pass and 71 for the flashlight's shadow:
+  while a pane is in view the frame's draw submissions grow by about two thirds, and three's own submit path took
+  about 12.7 ms for the mirror next to about 15.5 ms for the scene pass and shadow. (Leaving out instanced pools
+  with no instance in the mirror's view took it there from about 170 draws and 15.4 ms.) Away from glass, and
+  with Reflections or the feature off, the mirror draws nothing. It builds no program, pipeline or render context,
+  and it draws no second shadow map. These are counts and Node timings of three's submit path, not frame times: no
+  frame rate is claimed from them, and the cost on a player's hardware is not measured.
+- **Warm-up**: a lit material's program with full shading takes about a tenth more CPU to build (Node, validating
+  device, Auto: about 100 ms a material against 89 ms before; Off 74 against 70), at a station load and when a
+  lighting choice is applied.
 
 Main-thread fixes of the previous task that still hold: per-object texture-matrix updates avoided through
 `render/textureFetch.ts` (the cube's fetches and the mirror's lookup use it too), and shared shader text
@@ -366,9 +370,10 @@ compiled module).
   tier, the full and mirror variants of the reflecting light, the pane reflectance, binding counts.
 - `game/tests/glass-panes.test.ts`: the station's glass planes, merging, a broken pane.
 - `game/tests/glass-mirror.test.ts`: the reflection geometry, the window, clipping, selection and sight (the booth),
-  shader parity, the draw's state.
+  shader parity, the draw's state, which instanced pools a draw leaves out.
 - `game/tests/glass-mirror-game.test.ts`: the real Game on a validating WebGPU device: nothing built while the
-  mirror draws, one shadow draw a frame, no texture read while written, Off has none of it.
+  mirror draws (also when a pool it left out comes into view), one shadow draw a frame, no texture read while
+  written, every pool answer against the test's own frustum, Off has none of it.
 - `game/tests/enhanced-lighting-policy.test.ts`: what Off / Auto / On plan for each kind of renderer (shading,
   reflections, the mirror), the reasons, the texture-size fallbacks, the bounded tiers.
 - `game/tests/enhanced-lighting-runtime.test.ts`: Off / Reactor, miss / hit / stale / cleared / unavailable, the
