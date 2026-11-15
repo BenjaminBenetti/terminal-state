@@ -314,9 +314,9 @@ describe('direction and colour (the ambient cube)', () => {
     for (const [x, y, z] of [[5, 2, 6], [2, 1.4, 8], [3, 3, 4]] as const) {
       // the rows: face 3 looks west (normal -x) at the red wall, face 2 looks east at the grey one
       const west = faceAt(e, 3, x, y, z), east = faceAt(e, 2, x, y, z);
-      // the field: a west-facing and an east-facing surface there
-      const fw = irrRgb(e.field, x, y, z, [-1, 0, 0]), fe = irrRgb(e.field, x, y, z, [1, 0, 0]);
-      rows.push(`(${x}, ${y}, ${z}) r/g gathered west ${(west[0] / west[1]).toFixed(2)} east ${(east[0] / east[1]).toFixed(2)}; shaded west ${(fw[0] / fw[1]).toFixed(2)} east ${(fe[0] / fe[1]).toFixed(2)}`);
+      // the field: the ambient light of a west-facing and of an east-facing surface there (the white direct light aside)
+      const fw = sampleField(e.field, x, y, z, [1, 1, 1], [-1, 0, 0]).amb, fe = sampleField(e.field, x, y, z, [1, 1, 1], [1, 0, 0]).amb;
+      rows.push(`(${x}, ${y}, ${z}) r/g gathered west ${(west[0] / west[1]).toFixed(2)} east ${(east[0] / east[1]).toFixed(2)}; ambient west ${(fw[0] / fw[1]).toFixed(2)} east ${(fe[0] / fe[1]).toFixed(2)}`);
       checks.push([west[1], east[1], west[0] / west[1], east[0] / east[1], fw[0] / fw[1], fe[0] / fe[1]]);
     }
     console.log(`red west wall: ${rows.join('; ')}`);
@@ -327,7 +327,11 @@ describe('direction and colour (the ambient cube)', () => {
       expect(west).toBeGreaterThan(1.4); // (the red wall, and the grey floor and ceiling it also sees)
       expect(east).toBeLessThan(1.3); // (the grey room's second bounce carries a little of the red round)
       expect(east).toBeGreaterThan(0.99); // white light on grey and red surfaces: never less red than green
-      expect(fw).toBeGreaterThan(fe * 1.15);
+      // as shaded: the same picture — and no complementary cast on the side turned away (the main texel's one directional share
+      // is corrected per channel in the cube: light-field-cube.test.ts)
+      expect(fw).toBeGreaterThan(fe * 1.2);
+      expect(fe).toBeGreaterThan(0.9);
+      expect(fe).toBeLessThan(1.4);
     }
   });
 
