@@ -10,6 +10,12 @@
 //     The flashlight's shadow map is still drawn exactly once per frame. The mirror's texture is an
 //     attachment in its own pass and a sampled texture in the scene pass, never both in one pass (checked for EVERY pass and
 //     texture of the run). Nothing is dropped by the device.
+//     INSTANCED POOLS (task studio-baked-gi-visual-uplift-20261115-004324-01): the mirror draws a pool only when one of its
+//     instances is inside the mirror's frustum. Seen at the mirror's own render-object function (what three handed it, what it
+//     passed on) and judged by the test's own frustum (helpers/mirrorFrustum.ts): every pool it drew has an instance inside, every
+//     pool it left out has none, and its counter says how many. Pools go from left out to drawn during the walks — and still
+//     nothing is built: 2b the same walk with every draw primed (no pool left out: the draw as it was) next to the walk as it is
+//     (the numbers of the pool test), 2c a wide turn and a walk along the glass.
 //  3. The same with a target of the scene target's size (`match`) instead of the cap's: still nothing built — and the refresh
 //     census / main-thread cost of both variants is printed (the numbers behind the `match` default: the cap-sized target).
 //  4. Enhanced lighting Off (applied live from the pause menu): no mirror object, no mirror draw, the plain field light, and nothing
@@ -20,6 +26,7 @@
 import {afterAll, describe, expect, it, vi} from 'vitest';
 import type {GlassPlane} from '../src/world/glassPanes';
 import {installHeadless} from './helpers/headlessGame';
+import type {WindowCamera} from './helpers/mirrorFrustum';
 
 afterAll(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -37,6 +44,10 @@ interface Target { width: number; height: number; samples: number; texture: {nam
 const zero = (): Record<Kind, number> => ({mirror: 0, shadow: 0, main: 0, other: 0});
 interface Made { builds: number; modules: number; pipelines: number; renderObjects: number }
 const NOTHING: Made = {builds: 0, modules: 0, pipelines: 0, renderObjects: 0};
+/** three's render-object function (Renderer.renderObject and what setRenderObjectFunction takes). */
+type ObjectFn = (object: unknown, scene: unknown, camera: unknown, geometry: unknown, material: unknown, group: unknown, lightsNode: unknown, clippingContext: unknown, passId: unknown) => unknown;
+interface PoolMesh { isInstancedMesh?: boolean; count: number; name: string; frustumCulled: boolean }
+interface PoolMaterial { name?: string; type?: string; positionNode?: unknown; vertexNode?: unknown }
 
 describe('The live glass mirror in the real Game (WebGPU path, validating device)', () => {
   it('draws with the scene pass\'s own programs: nothing built in play, one shadow draw per frame, no texture read while it is written; Off has none of it', async () => {
@@ -50,6 +61,8 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     const {stationReflectLight} = await import('../src/world/reflectionNode');
     const {LF, stationFieldLight, stationLights} = await import('../src/world/lightFieldNode');
     const {FLASH_BOUNCE} = await import('../src/world/lights');
+    const {reflectTagOf} = await import('../src/render/reflectTag');
+    const {poolReach} = await import('./helpers/mirrorFrustum');
     const game = new Game(h.canvas, false);
     /** The station field lights in the scene, by name (exactly one while a station stands). */
     const fieldLights = (): string[] => (g.scene.children.filter(c => (stationLights() as unknown[]).includes(c)) as {name: string}[]).map(l => l.name);
@@ -76,6 +89,7 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
       _renderContexts: {get(t: unknown, mrt?: unknown, d?: number): object};
       _objects: {createRenderObject(...a: unknown[]): unknown};
       render(scene: unknown, camera: unknown): unknown; getRenderTarget(): {texture?: {name?: string}; depthTexture?: {name?: string} | null} | null;
+      renderObject: ObjectFn; getRenderObjectFunction(): ObjectFn | null; setRenderObjectFunction(f: ObjectFn | null): void;
     };
     // (what was made, by the render call it was made in: the mirror's draw, the scene pass, the shadow pass, anything else)
     const made: Record<Kind, Made> = {mirror: {...NOTHING}, shadow: {...NOTHING}, main: {...NOTHING}, other: {...NOTHING}};
@@ -87,6 +101,15 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     const stack: Kind[] = [];
     const now = (): Kind => stack[stack.length - 1] ?? 'other';
     const drawnNow = new Map<number, RenderObject>();
+    // the mirror's instanced pools, per mirror draw: the pool groups three handed to the mirror's render-object function, the ones
+    // it passed on, the pools it left out (range over the draws, and the mirror's own counter's largest), the pools judged by the
+    // test's frustum, pools drawn again after being left out the draw before, pools the mirror drew for the first time ever, and
+    // the time inside the mirror's function / inside three's renderObject under it
+    const pools = {draws: 0, handed: 0, passed: 0, leftOut: 0, leftOutMin: Infinity, leftOutMax: 0, counterMax: 0, checked: 0, returned: 0, first: 0, filterMs: 0, objectMs: 0, wrong: [] as string[]};
+    /** 'pools': an ordinary draw is judged pool by pool; 'all': every draw is primed, no pool may be left out; 'off': not judged (the warm-up's own draws). */
+    let judge: 'off' | 'pools' | 'all' = 'off';
+    const poolWas = new Map<object, boolean>(); // a pool's answer in the mirror draw before
+    const poolEver = new Set<object>(); // pools the mirror has drawn at least once (the warm-up's draws included)
     const reset = () => {
       for (const k of KINDS) made[k] = {...NOTHING};
       contexts = 0;
@@ -94,6 +117,8 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
       for (const k of KINDS) { calls[k] = draws[k] = ms[k] = 0; refresh[k] = [0, 0, 0]; }
       gpu.passes = gpu.mirrorPasses = gpu.mirrorSampled = 0;
       drawnNow.clear();
+      Object.assign(pools, {draws: 0, handed: 0, passed: 0, leftOut: 0, leftOutMin: Infinity, leftOutMax: 0, counterMax: 0, checked: 0, returned: 0, first: 0, filterMs: 0, objectMs: 0});
+      pools.wrong.length = 0;
       h.log.reset();
     };
 
@@ -147,6 +172,74 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     };
     const createRenderObject = R._objects.createRenderObject.bind(R._objects);
     R._objects.createRenderObject = (...a) => { made[now()].renderObjects++; return createRenderObject(...a); };
+    // the mirror's own render-object function, seen from outside: a timed stand-in around it for the length of the mirror's draw
+    // (what three hands it), three's renderObject under it (what it passes on)
+    const handed: unknown[] = [], passedOn: unknown[] = []; // (object, material) pairs of the mirror draw in progress, in order
+    const standIns = new Map<ObjectFn, ObjectFn>();
+    const standIn = (fn: ObjectFn): ObjectFn => {
+      let w = standIns.get(fn);
+      if (!w) {
+        w = (o, s, c, geo, m, gr, l, cc, p) => { handed.push(o, m); const t0 = performance.now(); fn(o, s, c, geo, m, gr, l, cc, p); pools.filterMs += performance.now() - t0; };
+        standIns.set(fn, w);
+      }
+      return w;
+    };
+    const renderObject = R.renderObject.bind(R);
+    R.renderObject = (o, s, c, geo, m, gr, l, cc, p) => {
+      if (now() !== 'mirror') return renderObject(o, s, c, geo, m, gr, l, cc, p);
+      passedOn.push(o, m);
+      const t0 = performance.now();
+      try { return renderObject(o, s, c, geo, m, gr, l, cc, p); } finally { pools.objectMs += performance.now() - t0; }
+    };
+    const EPS = 1e-3; // (m: the mirror's test runs on the instance matrices' 32-bit floats)
+    const reaches = new Map<object, {tight: number; loose: number; there: number}>();
+    const outNow = new Set<object>(), seenNow = new Set<object>();
+    const note = (s: string) => { if (pools.wrong.length < 12) pools.wrong.push(s); };
+    /** After a mirror draw: its instanced pools against the test's own frustum of the camera it drew with. */
+    const mirrorDrawn = (cam: WindowCamera) => {
+      pools.draws++;
+      reaches.clear(); outNow.clear(); seenNow.clear();
+      let j = 0;
+      for (let i = 0; i < handed.length; i += 2) {
+        const o = handed[i] as PoolMesh, mat = handed[i + 1] as PoolMaterial;
+        const passed = passedOn[j] === o && passedOn[j + 1] === mat;
+        if (passed) j += 2;
+        // (glass and empty pools are left out for their own reasons)
+        if (o.isInstancedMesh !== true || !(o.count > 0) || reflectTagOf(mat as never) === 'glass') continue;
+        pools.handed++;
+        seenNow.add(o);
+        if (passed) pools.passed++; else outNow.add(o);
+        if (judge === 'off') continue;
+        const label = `${o.name || '(unnamed pool)'} / ${mat.name || mat.type || '?'} (${o.count} instances)`;
+        if (judge === 'all') { if (!passed) note(`left out of a primed draw: ${label}`); continue; }
+        // never part of the test: a pool that asks not to be culled, a material that places its vertices in the shader
+        const exempt = o.frustumCulled === false || mat.positionNode != null || mat.vertexNode != null;
+        let reach = reaches.get(o);
+        if (!reach) { reach = poolReach(cam, o as never); reaches.set(o, reach); }
+        if (!passed) {
+          if (exempt) note(`left out, though it is never to be: ${label}`);
+          else if (reach.tight > EPS) note(`left out with an instance ${reach.tight.toFixed(3)} m inside the mirror's frustum: ${label}`);
+        } else if (!exempt) {
+          pools.checked++;
+          if (!(reach.loose >= -EPS)) note(`drawn with no instance in the mirror's frustum (the nearest misses it by ${(-reach.loose).toFixed(3)} m): ${label}`);
+        }
+      }
+      if (j !== passedOn.length) note(`${(passedOn.length - j) / 2} objects were passed on that the mirror's function was never handed`);
+      for (const o of seenNow) {
+        const inNow = !outNow.has(o);
+        if (inNow) {
+          if (poolWas.get(o) === false) pools.returned++;
+          if (!poolEver.has(o)) { poolEver.add(o); pools.first++; }
+        }
+        poolWas.set(o, inNow);
+      }
+      const n = outNow.size, counted = game.glassMirror?.stats.pools ?? -1;
+      pools.leftOut += n;
+      pools.leftOutMin = Math.min(pools.leftOutMin, n);
+      pools.leftOutMax = Math.max(pools.leftOutMax, n);
+      pools.counterMax = Math.max(pools.counterMax, counted);
+      if (counted !== n) note(`the mirror counts ${counted} pools left out of the draw, the test ${n}`);
+    };
     const render = R.render.bind(R);
     R.render = (scene, camera) => {
       const t = R.getRenderTarget();
@@ -154,8 +247,17 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
         : scene === g.scene && camera === g.camera ? 'main' : 'other';
       calls[kind]++;
       stack.push(kind);
+      const fn = kind === 'mirror' ? R.getRenderObjectFunction() : null;
+      if (fn) { handed.length = 0; passedOn.length = 0; R.setRenderObjectFunction(standIn(fn)); }
       const t0 = performance.now();
-      try { return render(scene, camera); } finally { ms[kind] += performance.now() - t0; stack.pop(); }
+      try { return render(scene, camera); } finally {
+        ms[kind] += performance.now() - t0;
+        stack.pop();
+        if (fn) {
+          R.setRenderObjectFunction(fn);
+          try { mirrorDrawn(camera as WindowCamera); } catch (err) { note(`the pool check threw: ${String((err as Error)?.stack ?? err).slice(0, 300)}`); }
+        }
+      }
     };
     const draw = R.backend.draw.bind(R.backend);
     R.backend.draw = (ro, info) => { draws[now()]++; drawnNow.set(ro.id, ro); draw(ro, info); };
@@ -174,6 +276,14 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
         refreshPerFrame: {mirror: refresh.mirror.map(v => perFrame(v, f)), main: refresh.main.map(v => perFrame(v, f))},
         gpu: {passes: gpu.passes, mirrorPasses: gpu.mirrorPasses, mirrorSampled: gpu.mirrorSampled, feedback: [...gpu.feedback]},
         device: {submits: h.log.submits, dropped: h.log.dropped, issues: h.log.issues.slice(0, 5).map(i => i.detail)},
+        // (per mirror draw; ownMs: inside the mirror's render-object function less three's renderObject under it — the tag check,
+        // the pool test, and this test's two clock reads per object)
+        pools: {
+          mirrorDraws: pools.draws, handedPerDraw: perFrame(pools.handed, pools.draws), drawnPerDraw: perFrame(pools.passed, pools.draws),
+          leftOutPerDraw: perFrame(pools.leftOut, pools.draws), leftOut: pools.draws ? [pools.leftOutMin, pools.leftOutMax] : [0, 0], counterMax: pools.counterMax,
+          checked: pools.checked, returned: pools.returned, firstDrawn: pools.first,
+          ownMsPerDraw: +((pools.filterMs - pools.objectMs) / Math.max(1, pools.draws)).toFixed(4), wrong: [...pools.wrong],
+        },
       };
     };
     const say = (o: unknown) => process.stdout.write(`glass-mirror-game: ${JSON.stringify(o)}\n`);
@@ -229,9 +339,27 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
       g.player.x = at.x + at.tx * sidestep; g.player.z = at.z + at.tz * sidestep; g.player.y = at.y;
       g.player.vx = 0; g.player.vz = 0; g.player.yaw = at.yaw + yawOff; g.player.pitch = 0;
     };
-    /** `frames` frames in front of the pane: the view swings +-0.3 rad and the eye steps +-0.5 m along the glass. */
-    const look = async (frames: number) => {
-      for (let i = 0; i < frames; i++) { stand(0.3 * Math.sin(i * 0.37), 0.5 * Math.sin(i * 0.11)); await h.waitFrames(1); }
+    /**
+     * `frames` frames in front of the pane: the view swings +-0.3 rad and the eye steps +-0.5 m along the glass. `primed`: every
+     * frame's mirror draw is primed (GlassMirror.prime(): no pool is left out of it — the draw as it was before the pool test).
+     */
+    const look = async (frames: number, primed = false) => {
+      for (let i = 0; i < frames; i++) {
+        stand(0.3 * Math.sin(i * 0.37), 0.5 * Math.sin(i * 0.11));
+        if (primed) game.glassMirror?.prime();
+        await h.waitFrames(1);
+      }
+      stand();
+    };
+    // how far the eye may step along the glass each way (clear floor at the same height, up to 3 m), for the wide walk
+    let along = 0;
+    for (let s = 0.25; s <= 3; s += 0.25) {
+      if (![-s, s].every(t => grid.circleClear(at.x + at.tx * t, at.z + at.tz * t, 0.45) && Math.abs(grid.floorAt(at.x + at.tx * t, at.z + at.tz * t) - at.y) < 0.05)) break;
+      along = s;
+    }
+    /** `frames` frames of a wide turn (+-1.1 rad) while the eye walks `along` metres each way along the glass. */
+    const wander = async (frames: number) => {
+      for (let i = 0; i < frames; i++) { stand(1.1 * Math.sin(i * 0.19), along * Math.sin(i * 0.07)); await h.waitFrames(1); }
       stand();
     };
 
@@ -250,6 +378,7 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
 
     // ---- 2. the mirror on, the same walk ----
     gm.setPlanes(planes);
+    judge = 'pools'; // (from here on every mirror draw is an ordinary one, unless a phase primes it)
     stand();
     expect(await until(() => { const d = gm.debug() as {active: boolean; strength: number}; return d.active && d.strength === 1; }, 120), JSON.stringify(gm.debug())).toBe(true);
     expect(gm.plane).toBe(at.plane);
@@ -280,6 +409,72 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     const shadowLights: {shadow: {autoUpdate: boolean}; castShadow: boolean; intensity: number; visible: boolean}[] = [];
     (game.scene as unknown as {traverse(f: (o: unknown) => void): void}).traverse(o => { const l = o as {isLight?: boolean; shadow?: {autoUpdate: boolean}}; if (l.isLight && l.shadow) shadowLights.push(l as never); });
     expect(shadowLights.some(l => l.castShadow && l.shadow.autoUpdate), 'a shadow light is still updating').toBe(true);
+    // the instanced pools of that walk: some are left out of every draw (the mirror's own counter says so too), some come back
+    // after being left out — into a draw that built nothing — and each answer is the test's own frustum's
+    expect(on.pools.wrong, 'every pool the mirror drew has an instance in its frustum, every pool it left out has none').toEqual([]);
+    expect(on.pools.mirrorDraws).toBe(on.frames);
+    expect(on.pools.checked, 'pools were judged').toBeGreaterThan(0);
+    expect(on.pools.leftOut[0], 'pools are left out of every draw in front of the storefront').toBeGreaterThan(0);
+    expect(on.pools.counterMax, 'stats.pools counts them').toBe(on.pools.leftOut[1]);
+    expect(on.pools.returned, 'pools left out of one draw are drawn in the next during the walk').toBeGreaterThan(0);
+
+    // ---- 2b. the pool test's worth: the same walk with every draw primed (no pool left out: the draw as it was before the test),
+    // then as it is; twice ----
+    const rounds: {allDrawn: ReturnType<typeof report>; leftOut: ReturnType<typeof report>}[] = [];
+    for (let round = 1; round <= 2; round++) {
+      judge = 'all';
+      reset();
+      await look(60, true);
+      const allDrawn = report(`every pool drawn (each draw primed), round ${round}`);
+      judge = 'pools';
+      reset();
+      await look(60);
+      const leftOut = report(`pools left out, round ${round}`);
+      rounds.push({allDrawn, leftOut});
+      for (const r of [allDrawn, leftOut]) {
+        expect(r.renders.mirror, r.name).toBe(r.frames);
+        expect({mirror: r.made.mirror, scenePass: r.made.main, contexts: r.contexts}, `${r.name}: nothing is built (${r.built.join('; ')})`).toEqual({mirror: NOTHING, scenePass: NOTHING, contexts: 0});
+        expect(r.pools.wrong, r.name).toEqual([]);
+        expect(r.gpu.feedback, r.name).toEqual([]);
+        expect(r.device, r.name).toMatchObject({dropped: 0, issues: []});
+      }
+      expect([allDrawn.pools.leftOut, allDrawn.pools.counterMax], 'a primed draw leaves no pool out').toEqual([[0, 0], 0]);
+      expect(allDrawn.pools.drawnPerDraw).toBe(allDrawn.pools.handedPerDraw);
+      expect(leftOut.pools.leftOut[0]).toBeGreaterThan(0);
+      expect(leftOut.pools.returned).toBeGreaterThan(0);
+      expect(leftOut.drawsPerFrame.mirror, 'fewer draws in the mirror').toBeLessThan(allDrawn.drawsPerFrame.mirror);
+    }
+    const brief = (r: ReturnType<typeof report>) => ({
+      mirrorDrawsPerFrame: r.drawsPerFrame.mirror, mirrorMsPerFrame: r.msPerFrame.mirror, poolGroupsHanded: r.pools.handedPerDraw, poolGroupsDrawn: r.pools.drawnPerDraw,
+      poolsLeftOut: r.pools.leftOutPerDraw, poolsLeftOutRange: r.pools.leftOut, returned: r.pools.returned, firstDrawn: r.pools.firstDrawn, functionOwnMs: r.pools.ownMsPerDraw,
+      mirrorRefresh: r.refreshPerFrame.mirror, scenePassDrawsPerFrame: r.drawsPerFrame.main, scenePassMsPerFrame: r.msPerFrame.mainIncludingShadow,
+    });
+    say({name: 'the pool test over the same 60-frame walk (Node, no-op device: three\'s submit path on the main thread, not a frame time)', rounds: rounds.map(r => ({everyPoolDrawn: brief(r.allDrawn), poolsLeftOut: brief(r.leftOut)}))});
+
+    // ---- 2c. a wide turn and a walk along the glass: the mirror's frustum sweeps the station, pools come and go, the plane in
+    // view may change — and still nothing is built. (As in 2: the place itself first, without the mirror, turning right round at
+    // five points of the walk — what the scene pass still builds on a first sight is the station's own.) ----
+    gm.setPlanes([]);
+    for (const s of [-1, -0.5, 0, 0.5, 1]) for (let i = 0; i < 24; i++) { stand((i / 24) * Math.PI * 2, s * along); await h.waitFrames(2); }
+    await wander(90);
+    gm.setPlanes(planes);
+    stand();
+    expect(await until(() => { const d = gm.debug() as {active: boolean; strength: number}; return d.active && d.strength === 1; }, 120), JSON.stringify(gm.debug())).toBe(true);
+    await h.waitFrames(4);
+    reset();
+    await wander(90);
+    const wide = report('mirror, a wide turn and a walk along the glass');
+    say({...wide, along, mirror: gm.debug()});
+    expect(wide.frames).toBeGreaterThanOrEqual(85);
+    expect(wide.renders.mirror, 'the mirror draws through most of it').toBeGreaterThan(wide.frames / 2);
+    expect({mirror: wide.made.mirror, scenePass: wide.made.main, contexts: wide.contexts}, `nothing is built while pools come and go (${wide.built.join('; ')})`).toEqual({mirror: NOTHING, scenePass: NOTHING, contexts: 0});
+    expect(wide.pools.wrong).toEqual([]);
+    expect(wide.pools.returned, 'pools left out of one draw are drawn in the next').toBeGreaterThan(0);
+    expect(wide.pools.leftOut[1]).toBeGreaterThan(wide.pools.leftOut[0]); // (the set changes over the walk)
+    expect(wide.gpu.feedback).toEqual([]);
+    expect(wide.device).toMatchObject({dropped: 0, issues: []});
+    stand();
+    expect(await until(() => { const d = gm.debug() as {active: boolean; strength: number}; return d.active && d.strength === 1 && gm.plane === at.plane; }, 240), JSON.stringify(gm.debug())).toBe(true);
 
     // ---- 3. a target of the scene target's size instead (`match`): nothing built either; the census of both ----
     (gm as unknown as {match: boolean}).match = true;
@@ -291,6 +486,7 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     expect((gm.debug() as {target: {size: number[]; matched: boolean}}).target).toMatchObject({size: [sceneTarget.width, sceneTarget.height], matched: true});
     expect(matched.renders.mirror).toBe(matched.frames);
     expect({mirror: matched.made.mirror, scenePass: matched.made.main, contexts: matched.contexts}, `a target of another size builds nothing (${matched.built.join('; ')})`).toEqual({mirror: NOTHING, scenePass: NOTHING, contexts: 0});
+    expect(matched.pools.wrong).toEqual([]);
     expect(matched.gpu.feedback).toEqual([]);
     expect(matched.device).toMatchObject({dropped: 0, issues: []});
     (gm as unknown as {match: boolean}).match = false;
@@ -303,6 +499,7 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
 
     // ---- 4. Enhanced lighting Off, applied live from the pause menu: none of it exists ----
     const apply = async (patch: Partial<{enhancedLighting: string; reflections: string}>) => {
+      judge = 'off'; // (the apply's warm-up primes its mirror draws)
       game.setState('paused');
       await h.waitFrames(6);
       Object.assign(g.settings, patch);
@@ -348,11 +545,14 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     stand();
     expect(await until(() => { const d = gm2.debug() as {active: boolean; strength: number}; return d.active && d.strength === 1; }, 120), JSON.stringify(gm2.debug())).toBe(true);
     await h.waitFrames(4);
+    judge = 'pools';
     reset();
     await look(40);
     const again = report('Auto again');
     say(again);
     expect(again.renders.mirror).toBe(again.frames);
+    expect(again.pools.wrong, 'the new mirror\'s pools, by the test\'s own frustum').toEqual([]);
+    expect(again.pools.leftOut[0]).toBeGreaterThan(0);
     // (what a live apply leaves for play to build outside the mirror — first shows of things its warm-up did not draw — is not
     // this lane's: the mirror's own draws build nothing, and no render context is added)
     expect({mirror: again.made.mirror, contexts: again.contexts}, `Auto again: the mirror's draws build nothing (${again.built.join('; ')})`).toEqual({mirror: NOTHING, contexts: 0});
