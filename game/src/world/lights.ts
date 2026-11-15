@@ -32,7 +32,7 @@ import {
   type BakedField, type FieldParams, type FieldSample, type FieldSource,
 } from './lightField';
 import type {BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
-import {FULL_IRRADIANCE, LF, activeLightField, bindLightField, installLightFieldNode, setLightFieldLevels, stationFieldLight, stationLights, type LightFieldLight} from './lightFieldNode';
+import {FULL_IRRADIANCE, FULL_RADIANCE, LF, activeLightField, bindLightField, installLightFieldNode, setLightFieldLevels, stationFieldLight, stationLights, type LightFieldLight} from './lightFieldNode';
 import {FlashBounce, flashBounceIrradiance} from './flashBounce';
 import {addNodeHook} from '../render/nodeHooks';
 import {stationLevels} from './levelGeometry';
@@ -308,6 +308,13 @@ const tmpColor = new THREE.Color();
  */
 export const FLASH_BOUNCE = new FlashBounce();
 FULL_IRRADIANCE.push(() => flashBounceIrradiance(positionWorld, normalWorld));
+/**
+ * On metal, glass and glazed tile the bounce also shows as a soft sheen: the radiance of the lit patches round the mirror direction,
+ * estimated as their irradiance on a plane facing that direction / pi (a wide lobe), up to FLASH_BOUNCE_SHEEN times that on a smooth
+ * surface (its lobe is narrower than the patch is wide). three's own Fresnel / roughness response weighs it, as it does the probes.
+ */
+export const FLASH_BOUNCE_SHEEN = 3;
+FULL_RADIANCE.push((dir, rough) => n(flashBounceIrradiance(positionWorld, dir)).mul(n(mix(float(FLASH_BOUNCE_SHEEN), float(1), n(rough))).mul(1 / Math.PI)));
 let bounceOwner: StationLighting | null = null;
 function bindBounce(owner: StationLighting | null): void {
   bounceOwner = owner;

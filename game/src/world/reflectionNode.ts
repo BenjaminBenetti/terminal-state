@@ -28,7 +28,7 @@ import {
   If, abs, cameraWorldMatrix, clamp, float, floor, int, ivec2, ivec3, materialOpacity, max, metalness, min, mix, mod, normalView, normalWorld, positionWorld, pow4,
   reflectView, renderGroup, roughness, select, smoothstep, step, texture, texture3D, uniform, vec2, vec3,
 } from 'three/tsl';
-import {LightFieldLight, LightFieldNode, lightFieldCell, lightFieldSample, sharedFieldLight, type LightFieldSampleNodes, type NodeLibraryLike} from './lightFieldNode';
+import {FULL_RADIANCE, LightFieldLight, LightFieldNode, lightFieldCell, lightFieldSample, sharedFieldLight, type LightFieldSampleNodes, type NodeLibraryLike} from './lightFieldNode';
 import {fieldSlot, sampleField, type BakedField} from './lightField';
 import {PROBE_COLS, PROBE_GUTTER, PROBE_LEVELS, PROBE_LEVEL_PER_ROUGHNESS, PROBE_RATIO_MAX, octEncode, probeAtlasLayout, probeBytes, probeTileOrigin, type BakedProbes} from './reflectionProbes';
 import {CELL} from '../gen/grid';
@@ -311,23 +311,33 @@ export class LightFieldReflectNode extends LightFieldNode {
     // three's own environment lookup direction: the mirror direction, pulled toward the normal as the surface gets rough
     const dir = n(mix(reflectView, normalView, pow4(rough))).normalize().transformDirection(cameraWorldMatrix);
     const rad = n(vec3(0, 0, 0)).toVar();
+    // Task studio-baked-gi-visual-uplift-20261115-004324-01: under full shading a reflective surface also shows what is lit live
+    // (FULL_RADIANCE: the flashlight's bounce as a soft sheen) — the probes hold the fixtures' light only
+    const live = (w?: N): void => {
+      if (!this.light?.full) return;
+      for (const extra of FULL_RADIANCE) rad.addAssign(w ? n(extra(dir, rough)).mul(w) : extra(dir, rough));
+    };
     if (cls === 'glass') {
       // a see-through pane: its reflection is not dimmed by how much it lets through (the blend multiplies by the opacity)
       rad.assign(n(probeRadiance(s, dir, rough)).div(clamp(materialOpacity, 0.25, 1)));
+      live();
     } else if (cls === 'window') {
       // a pane inside its wall's own cell: the field and the probes of the room it is seen from, a cell out along the normal
       const cell = n(lightFieldCell());
       const at = n(n(positionWorld).add(n(normalWorld).mul(vec3(n(cell.x).mul(WINDOW_REACH), 0, n(cell.y).mul(WINDOW_REACH))))).toVar();
       const sw = lightFieldSample(positionWorld, {normal: normalWorld, reach: WINDOW_REACH});
       rad.assign(n(probeRadiance(sw, dir, rough, at)).div(clamp(materialOpacity, 0.25, 1)));
+      live();
     } else if (cls === 'gloss') {
       // a glossy non-metal (glazed tile): three's Fresnel keeps it faint face-on and strong at a grazing angle. Fading out toward
       // rough texels (see GLOSS_ROUGHNESS_FULL); no lookup where the weight is nothing (REFL.params.y: 0 while nothing is bound)
       const w = n(n(REFL.params).y.mul(float(1).sub(smoothstep(GLOSS_ROUGHNESS_FULL, GLOSS_ROUGHNESS_NONE, rough)))).toVar();
       If(n(w).greaterThan(0.004), () => { rad.assign(n(probeRadiance(s, dir, rough)).mul(w)); });
+      live(float(1).sub(smoothstep(GLOSS_ROUGHNESS_FULL, GLOSS_ROUGHNESS_NONE, rough)));
     } else {
       // a rough non-metal texel reflects next to nothing: no lookup there (the real, per-fragment metalness and roughness decide)
       If(n(metalness).greaterThan(REFLECT_METALNESS_MIN).or(n(rough).lessThan(REFLECT_ROUGHNESS_MAX)), () => { rad.assign(probeRadiance(s, dir, rough)); });
+      live();
     }
     b.context.radiance.addAssign(rad);
     return null;
