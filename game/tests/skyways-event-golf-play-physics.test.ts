@@ -6,7 +6,7 @@
 //  - the cup: a ball of the right pace drops THROUGH the gap onto the floor (below the turf line: golfBallInCup), settles and stays; a
 //    ball put down over the gap drops in; a too-fast ball lips out and rolls on; the capture window is pinned;
 //  - rails: off-line putts at the maximum putt speed and at the bullet cap rebound off the 8 cm rails and never cross one (the CCD clamp
-//    is engaged); straight on it comes back at ~ the restitution;
+//    is engaged); straight on it comes back at ~ the solver's effective restitution; a long putt comes back off the end rail;
 //  - two balls click off each other; the player walking into a ball nudges it gently; every run is deterministic.
 import {describe, expect, it} from 'vitest';
 import * as CANNON from 'cannon-es';
@@ -110,9 +110,9 @@ describe('the cup: a real gap in the turf colliders, never a decal or a trigger'
         expect(r.end.y).toBeCloseTo(ON_TURF, 3); // back on the turf
       }
     }
-    // 1.4 m/s stops short; 1.5 .. 2.1 m/s (arriving at ~0.3 .. 1.5 m/s) drop; from 2.5 m/s (arriving ~2 m/s) it never does
-    expect(pattern.slice(0, 8)).toEqual(['short', 'in', 'in', 'in', 'in', 'in', 'in', 'in']);
-    expect(pattern.slice(11)).toEqual(['over', 'over', 'over', 'over', 'over', 'over']);
+    // 1.4 m/s stops short; 1.5 .. 1.9 m/s (arriving at 0.28 .. 1.2 m/s: v^2 - 2 decel 1.75 m) drop in; from 2.0 m/s (arriving at
+    // 1.35 m/s and faster) it rides over the gap / off the far lip (measured 2026-11-15 at 0.05 m/s steps: in up to 1.28 m/s arriving)
+    expect(pattern).toEqual(['short', 'in', 'in', 'in', 'in', 'in', ...Array(11).fill('over')]);
   });
 });
 
@@ -129,7 +129,7 @@ describe('rails: rebound without tunnelling', () => {
         expect(Math.abs(r.end.z - LANE_Z)).toBeLessThanOrEqual(INNER + 1e-3); // ends inside the lane
         expect(r.end.y).toBeCloseTo(ON_TURF, 3);
         // it came back: z turned round at the first rail
-        const zs = r.track.map(p => p.z - LANE_Z), turn = zs.findIndex((z, i) => i > 0 && Math.sign(zs[i] - zs[i - 1]) < 0);
+        const zs = r.track.map(p => p.z - LANE_Z), turn = zs.findIndex((_z, i) => i > 0 && zs[i] < zs[i - 1]); // (every a here aims at +z first)
         expect(turn, `v ${v} a ${a} rebounds`).toBeGreaterThan(0);
         ccd += w.ph.dynamicItems.stats().counts.ballCcd;
       }
@@ -137,7 +137,9 @@ describe('rails: rebound without tunnelling', () => {
     expect(ccd).toBeGreaterThan(0);
   });
 
-  it('straight into a rail at the maximum putt speed it comes back at ~ the restitution', () => {
+  it('straight into a rail at the maximum putt speed it comes back at ~ the effective restitution', () => {
+    // cannon's SPOOK contact (relaxation d = 3: physics/world.ts) restores (1 + e) 4d / (1 + 4d) - 1 of the approach speed: 0.52 at e 0.65
+    const d = 3, eff = (1 + PHYS_MATS.ball.restitution) * (4 * d) / (1 + 4 * d) - 1;
     const w = golfWorld(), b = w.ball(4.5, LANE_Z);
     expect(w.ph.dynamicItems.putt(b, 0, 1, PUTT_POWER.maxSpeed)).toBe(true);
     let before = 0, after = 0, maxZ = 0;
@@ -145,12 +147,13 @@ describe('rails: rebound without tunnelling', () => {
       w.ph.update(DT);
       const body = sphereOf(w)!;
       maxZ = Math.max(maxZ, body.position.z - LANE_Z);
-      if (body.velocity.z > 0) before = body.velocity.z;
-      else if (!after) after = -body.velocity.z;
+      if (!after && body.velocity.z > 0) before = body.velocity.z; // the last pace towards the rail ...
+      else if (!after && before) after = -body.velocity.z; // ... and the first pace back (later bounces are not this one)
     }
     expect(maxZ).toBeLessThan(HALF);
-    expect(after / before).toBeGreaterThan(PHYS_MATS.ball.restitution - 0.12);
-    expect(after / before).toBeLessThan(PHYS_MATS.ball.restitution + 0.12);
+    expect(eff).toBeGreaterThan(0.45); // a lively bumper
+    expect(after / before).toBeGreaterThan(eff - 0.05);
+    expect(after / before).toBeLessThan(eff + 0.05);
     expect(w.ph.dynamicItems.stats().counts.ballCcd).toBeGreaterThan(0);
   });
 

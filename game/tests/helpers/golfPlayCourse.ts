@@ -27,7 +27,7 @@ export const TURF = GOLF_GREEN_H, ON_TURF = GOLF_GREEN_H + GOLF_BALL_R;
 const piece = (kind: string, x: number, z: number, hx: number, hz: number, y: number, h: number): PropPlacement =>
   ({kind: kind as PropKind, x, z, y, rot: 0, area: 0, hx, hz, h, blocksSight: false, variant: 0});
 
-/** The lane's layout: `len` m of turf (0.5 m pieces; the cup piece centred at cupX), rails both sides, an end rail; optional walls (cells). */
+/** The lane's layout: `len` m of turf (0.5 m pieces; the cup piece centred at cupX), rails both sides, both ends closed; optional walls (cells). */
 export function golfLane(o: {cupX?: number | null; len?: number; solid?: [number, number][]} = {}) {
   const len = o.len ?? 10, cupX = o.cupX ?? null;
   const g = new Grid(48, 32);
@@ -39,7 +39,8 @@ export function golfLane(o: {cupX?: number | null; len?: number; solid?: [number
     props.push(piece(cupX !== null && Math.abs(x - cupX) < 1e-6 ? 'golfCup' : 'golfGreen', x, LANE_Z, 0.25, 0.25, 0, GOLF_GREEN_H));
   }
   for (let k = 0; k < len; k++) for (const s of [-1, 1]) props.push(piece('golfRail', X0 + 0.5 + k, LANE_Z + s * (HALF + RAIL_T / 2), 0.5, RAIL_T / 2, GOLF_GREEN_H, RAIL_H));
-  props.push(piece('golfRail', X0 + len + RAIL_T / 2, LANE_Z, RAIL_T / 2, HALF + RAIL_T, GOLF_GREEN_H, RAIL_H));
+  // the end rails: across the far end and (just off the first turf piece) across the tee end
+  for (const x of [X0 + len + RAIL_T / 2, X0 - RAIL_T / 2]) props.push(piece('golfRail', x, LANE_Z, RAIL_T / 2, HALF + RAIL_T, GOLF_GREEN_H, RAIL_H));
   return {grid: g, props, trench: {floorY: -1.15}};
 }
 export type GolfLane = ReturnType<typeof golfLane>;

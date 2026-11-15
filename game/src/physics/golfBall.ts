@@ -7,10 +7,14 @@
 //    stopSpeed it stops dead and the body sleeps / retires like any loose item.
 //    A constant drag makes the roll distance v^2 / (2 decel): a 2.5 m/s putt rolls ~5 m.
 //  - CCD: at putt speeds a 42.7 mm ball moves up to ~8 cm per 1/60 s step — the depth of a course rail — so its centre could end past
-//    a rail's middle and be pushed out on the far side. Before each step a moving ball casts its centre line (cannon raycast vs the
-//    statics) and, if this step would carry its centre deeper than GOLF_ROLL.ccdKeep of a radius into what lies ahead, it integrates
-//    only that far (its velocity is restored right after the integration): the next step's contact then rebounds it with the solver's
-//    restitution. Nothing is teleported; the ball only loses a fraction of one step's travel.
+//    a rail's middle and be pushed out on the far side; even a shallow overlap at the seam of two rail pieces makes the next piece's END
+//    face a "ghost" contact that throws the ball back along the lane. Before each step a moving ball sweeps its sphere along this step's
+//    motion against the axis-aligned static boxes it can collide with (each box grown by the radius less GOLF_ROLL.ccdSlop: a ray test)
+//    and, if it would sink more than ccdSlop into one, integrates only that far (its velocity is restored right after the integration):
+//    the next step's contact then rebounds it with the solver's restitution, never deeper than a millimetre. Landing on a box TOP may sink
+//    GOLF_ROLL.ccdTopSink (a slow drop / bounce is the solver's normal resting contact: clamping it to a millimetre each step would keep
+//    a dropped ball hopping for ever). The turf it rolls on (the solver keeps it well under a millimetre deep) and the next turf piece at a
+//    seam are never "hit". Nothing is teleported; the ball only loses a fraction of one step's travel at a rail.
 //  - the CUP: nothing special — a cup is a real gap in the turf's collider boxes (gen/skyways/events/golfContract.ts golfColliderBoxes):
 //    a slow ball drops through it onto the floor GOLF_GREEN_H below and settles there (below the turf line: golfBallInCup), a fast one
 //    rolls over the gap / off the far lip.
@@ -19,7 +23,7 @@ import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import {GOLF_BALL_ITEM, GOLF_BALL_R, golfColliderBoxes} from '../gen/skyways/events/golfContract';
 import type {PropPlacement} from '../gen/props';
-import {GROUP_CHUNK, GROUP_ITEM, GROUP_STATIC} from './ragdoll';
+import {GROUP_CHUNK, GROUP_STATIC} from './ragdoll';
 
 /** The ball's arcade physics constants (measured in tests/skyways-event-golf-play-physics.test.ts). */
 export const GOLF_ROLL = {
@@ -34,8 +38,12 @@ export const GOLF_ROLL = {
   angularDamping: 0.01,
   /** A contact normal with |n.y| above this is a floor under the ball (rolling resistance applies). */
   groundNormal: 0.7,
-  /** CCD: per step the centre may end at most this share of a radius inside what lies ahead (the solver resolves that shallow depth). */
-  ccdKeep: 0.5,
+  /** CCD: a ball sinks at most this far (m) into the side of what lies ahead in one step (a contact for the solver's rebound, no deeper). */
+  ccdSlop: 0.001,
+  /** CCD: ... and at most this far (m) into a box top it lands on (a drop into a cup: the solver settles that resting contact itself). */
+  ccdTopSink: 0.006,
+  /** CCD runs for a ball moving more than this per step (m). */
+  ccdMin: 0.002,
   /** Cannon sleep (a stopped ball sleeps at once; the loose-item retirement then hands it back to its pickup). */
   sleepSpeedLimit: 0.03,
   sleepTimeLimit: 0.3,
@@ -73,8 +81,52 @@ export function rollingSpin(vx: number, vz: number, r: number, out = new CANNON.
   return out.set(vz / r, 0, -vx / r);
 }
 
-const RAY_OPTS = {collisionFilterGroup: GROUP_ITEM, collisionFilterMask: GROUP_STATIC | GROUP_CHUNK, skipBackfaces: true};
-const ray = new CANNON.RaycastResult(), from = new CANNON.Vec3(), to = new CANNON.Vec3();
+const SWEEP_MASK = GROUP_STATIC | GROUP_CHUNK;
+const sweepBox = new CANNON.AABB(), near: CANNON.Body[] = [];
+
+/**
+ * How far (m, along this step's motion (ex, ey, ez) * dt) a sphere of centre p can move before it sinks into an axis-aligned static box it
+ * collides with — through a side / the bottom deeper than its radius less `g`, through the top deeper than its radius less `gTop` (each
+ * box grown by those) — or Infinity. A box it is already in that deep (a rail it leans on, the rounded lip of a cup it rides, the turf
+ * under a ball just landed) is left to the solver.
+ */
+function sweepTouch(world: CANNON.World, self: CANNON.Body, p: CANNON.Vec3, ex: number, ey: number, ez: number, dt: number, g: number, gTop: number): number {
+  const dx = ex * dt, dy = ey * dt, dz = ez * dt, len = Math.hypot(dx, dy, dz);
+  if (!(len > 0)) return Infinity;
+  sweepBox.lowerBound.set(Math.min(p.x, p.x + dx) - g, Math.min(p.y, p.y + dy) - g, Math.min(p.z, p.z + dz) - g);
+  sweepBox.upperBound.set(Math.max(p.x, p.x + dx) + g, Math.max(p.y, p.y + dy) + g, Math.max(p.z, p.z + dz) + g);
+  near.length = 0;
+  world.broadphase.aabbQuery(world, sweepBox, near);
+  let best = Infinity;
+  const ux = dx / len, uy = dy / len, uz = dz / len;
+  for (const o of near) {
+    if (o === self || o.type !== CANNON.Body.STATIC || !(o.collisionFilterGroup & SWEEP_MASK) || !(o.collisionFilterMask & self.collisionFilterGroup) || !(self.collisionFilterMask & o.collisionFilterGroup)) continue;
+    if (o.shapes.length !== 1 || !(o.shapes[0] instanceof CANNON.Box) || Math.abs(Math.abs(o.quaternion.w) - 1) > 1e-6) continue;
+    const he = (o.shapes[0] as CANNON.Box).halfExtents, off = o.shapeOffsets[0], c = o.position;
+    // the box grown by g (its rounded edges counted square: a touch found there is early, never late)
+    const x0 = c.x + off.x - he.x - g, x1 = c.x + off.x + he.x + g, y0 = c.y + off.y - he.y - g, y1 = c.y + off.y + he.y + gTop, z0 = c.z + off.z - he.z - g, z1 = c.z + off.z + he.z + g;
+    const e = 1e-5;
+    if (p.x >= x0 - e && p.x <= x1 + e && p.y >= y0 - e && p.y <= y1 + e && p.z >= z0 - e && p.z <= z1 + e) continue; // in it already: the solver's
+    const t = slabEntry(p.x, p.y, p.z, ux, uy, uz, len, x0, x1, y0, y1, z0, z1);
+    if (t < best) best = t;
+  }
+  return best;
+}
+
+/** Entry distance (0..len) of the ray p + u s into the box [x0, x1] x [y0, y1] x [z0, z1], or Infinity. */
+function slabEntry(px: number, py: number, pz: number, ux: number, uy: number, uz: number, len: number, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number): number {
+  let t0 = 0, t1 = len;
+  const axis = (a: number, u: number, lo: number, hi: number): boolean => {
+    if (Math.abs(u) < 1e-12) return a > lo && a < hi;
+    let ta = (lo - a) / u, tb = (hi - a) / u;
+    if (ta > tb) { const q = ta; ta = tb; tb = q; }
+    if (ta > t0) t0 = ta;
+    if (tb < t1) t1 = tb;
+    return t0 <= t1;
+  };
+  if (!axis(px, ux, x0, x1) || !axis(py, uy, y0, y1) || !axis(pz, uz, z0, z1)) return Infinity;
+  return t0;
+}
 
 /**
  * One world step's ball pass (call from the world's preStep: velocities are the solver's, the integration is next). `balls` = the
@@ -96,7 +148,7 @@ export function stepGolfBalls(world: CANNON.World, balls: readonly CANNON.Body[]
         if (counts && (h > 0 || w.lengthSquared() > 0)) counts.ballStops++;
         v.x = -ax; v.z = -az; w.setZero();
       } else {
-        const k = Math.max(0, h - G.decel * dt) / h, wy = w.y * Math.max(0, 1 - G.ySpinDamp * dt);
+        const k = h > 0 ? Math.max(0, h - G.decel * dt) / h : 0, wy = w.y * Math.max(0, 1 - G.ySpinDamp * dt); // (h 0: a straight drop)
         v.x = (v.x + ax) * k - ax; v.z = (v.z + az) * k - az;
         // arcade: on the turf it always ROLLS (no skid): the spin follows the ground velocity — so a rail rebound leaves at once at the
         // solver's restitution (a skidding sphere's forward spin would brake it to a crawl: v' = (2 - 5e) / 7 v)
@@ -104,20 +156,14 @@ export function stepGolfBalls(world: CANNON.World, balls: readonly CANNON.Body[]
         w.y = wy;
       }
     }
-    // CCD along the centre line of this step's motion
+    // CCD: sweep this step's motion against the static boxes; stop where it would sink ccdSlop (a top: ccdTopSink) into the first one
     const ex = v.x + ax, ey = v.y + ay, ez = v.z + az, sp = Math.hypot(ex, ey, ez), travel = sp * dt;
-    if (travel <= r * G.ccdKeep) continue;
-    const p = b.position;
-    from.set(p.x, p.y, p.z);
-    const reach = (travel + r) / sp;
-    to.set(p.x + ex * reach, p.y + ey * reach, p.z + ez * reach);
-    ray.reset();
-    if (!world.raycastClosest(from, to, RAY_OPTS, ray) || !ray.hasHit) continue;
-    const allowed = Math.max(0, ray.distance - r * G.ccdKeep);
-    if (allowed >= travel) continue;
-    // this integration moves it only `allowed` along the same line; afterwards it has its full motion back (restoreClamped)
+    if (travel <= G.ccdMin) continue;
+    const touch = sweepTouch(world, b, b.position, ex, ey, ez, dt, r - G.ccdSlop, r - G.ccdTopSink);
+    if (touch >= travel) continue;
+    // this integration moves it only that far along the same line; afterwards it has its full motion back (restoreClamped)
     clamped.set(b, new CANNON.Vec3(ex, ey, ez));
-    const s = allowed / travel;
+    const s = Math.max(0, touch) / travel;
     v.set(ex * s - ax, ey * s - ay, ez * s - az);
     if (counts) counts.ballCcd++;
   }
