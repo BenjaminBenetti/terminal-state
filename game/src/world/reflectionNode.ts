@@ -196,8 +196,9 @@ export type {ReflectClass} from '../render/reflectTag';
 /**
  * Whether a material shows the probes, and how. Decided while its program is built, so from nothing but what three's program cache
  * key holds (render/reflectTag.ts explains): two materials that share a program always get the same answer.
- *  - a TAG (tagReflect) wins: 'glass', 'window', 'metal', 'gloss' or 'none' — the station's glazing is tagged glass, the tower's
- *    wall-set panes window, the glazed wall tile gloss, the floor / ceiling / slab sets none;
+ *  - a TAG (tagReflect) wins: 'glass', 'window', 'metal', 'gloss', 'cab' or 'none' — the station's glazing is tagged glass, the
+ *    tower's wall-set panes window, the glazed wall tile gloss, the train's and the glass lift's glass cab, the floor / ceiling /
+ *    slab sets none;
  *  - never a skinned mesh (characters), never a non-standard material;
  *  - an untagged see-through material: 'none' (decals, particles, liquids: only tagged panes are glass);
  *  - 'metal': a metalness map (model materials) or a metalness that is not zero. This is a CANDIDATE: the shader then decides per
@@ -353,8 +354,10 @@ export class LightFieldReflectNode extends LightFieldNode {
       If(n(m.a).lessThan(0.996), () => { pr.assign(probeRadiance(s, dir, rough)); });
       rad.assign(n(mix(pr, m.rgb, m.a)).mul(boost()).div(clamp(materialOpacity, 0.25, 1)));
       live(n(m.a).oneMinus());
-    } else if (cls === 'glass') {
-      // a see-through pane: its reflection is not dimmed by how much it lets through (the blend multiplies by the opacity)
+    } else if (cls === 'glass' || cls === 'cab') {
+      // a see-through pane: its reflection is not dimmed by how much it lets through (the blend multiplies by the opacity).
+      // (Task train-glass-reflection-fix-20261115-213533: a cab's glass — the train, the glass lift — always takes this branch: it is
+      // never one of the mirror's planes, and the pane boost is the station glazing's look under the mirror, not a cab sheet's.)
       rad.assign(n(probeRadiance(s, dir, rough)).div(clamp(materialOpacity, 0.25, 1)));
       live();
     } else if (cls === 'window') {
