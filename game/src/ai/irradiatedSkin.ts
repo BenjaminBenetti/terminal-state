@@ -3,7 +3,7 @@
 // User: "Reuse regular zombie models: their SKIN is green and visibly emissive, not just green clothing or a screen tint."
 // Each ordinary body (ai/outfits.ts ZOMBIE_BODIES) is ONE skinned mesh with ONE base-colour atlas that also holds baked clothing,
 // hair and gear, so the skin is found by a per-body DATA MASK in the body's own UV space (zombie-skin-mask.png: 2 x 2 tiles of
-// 512², one RGBA channel per body; built from the shipped atlases by tools/asset-pipeline/zombie/build-skin-mask.mjs — processing,
+// 512², one RGB channel per body: ai/irradiatedSkinMask.ts; built from the shipped atlases by tools/asset-pipeline/zombie/build-skin-mask.mjs — processing,
 // not authoring). Two node stages on the body mesh's own material only (garment meshes are untouched: clothing stays its colour):
 //  - colour (order 250, before the wounds' 300 so a fresh wound still shows raw flesh): the masked texels pushed toward a sickly
 //    green of their own luminance (shading and detail of the atlas kept);
@@ -24,11 +24,10 @@ import {memoNode, objectData, type TNode} from '../damage/tsl';
 import {plainTexture, sampleAt} from '../render/textureFetch';
 import {refreshTextureBindings} from '../render/bindingRefresh';
 import {assetUrl} from '../assets/loader';
-import {ZOMBIE_SKIN_MASK} from '../assets/zombieSkinMask.generated';
-import {skinMaskSlot} from './irradiatedSkinMask';
+import {SKIN_MASK_URL, skinMaskSlot} from './irradiatedSkinMask';
 
 export const IRRADIATED_SKIN = {
-  /** Per-object data key (2 vec4: (u0, v0, channel, tint), (glow, phase, 0, 0)). */
+  /** Per-object data key (2 vec4: (u0, v0, channel, tint), (glow, phase, tile scale, 0)). */
   key: 'irrSkin',
   /** The material's own string property (program cache key) and its value. */
   prop: 'irradiatedSkin',
@@ -73,12 +72,12 @@ export function skinMaskTexture(): THREE.Texture | null {
 
 /** Load the mask once (a section preload when its layout has irradiated zombies). Never throws; null on failure (no green skin). */
 export function preloadSkinMask(load: (url: string) => Promise<THREE.Texture> = url => new THREE.TextureLoader().loadAsync(url)): Promise<THREE.Texture | null> {
-  pending ??= load(assetUrl(ZOMBIE_SKIN_MASK.url)).then(t => {
+  pending ??= load(assetUrl(SKIN_MASK_URL)).then(t => {
     t.flipY = false; // (glTF UV convention: the body atlases' own)
     t.colorSpace = THREE.NoColorSpace;
     t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-    t.generateMipmaps = true;
-    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.generateMipmaps = false; // (a lower mip would blend the neighbouring tiles = other bodies' masks)
+    t.minFilter = THREE.LinearFilter;
     t.magFilter = THREE.LinearFilter;
     t.needsUpdate = true;
     mask = t;
@@ -101,7 +100,7 @@ function skinNodes(): SkinShared {
   if (shared) return shared;
   const D = objectData(IRRADIATED_SKIN.key, DATA_VEC4);
   const a = D.element(0), b = D.element(1);
-  const at = vec2(n(a).x, n(a).y).add(n(uv()).mul(0.5));
+  const at = vec2(n(a).x, n(a).y).add(n(uv()).mul(n(b).z));
   const texel = n(sampleAt(SKIN_MASK, at));
   const pick = clamp(float(1).sub(abs(vec4(0, 1, 2, 3).sub(n(a).z))), 0, 1);
   const m = n(dot(texel, pick)).toVar();
@@ -166,7 +165,7 @@ export function installIrradiatedSkin(actor: SkinActor, phase: number): Float32A
   addNodeHook(mat, {key: 'irradiated-skin.color', stage: 'color', order: 250, fn: prev => irradiatedColorNode(prev)});
   addNodeHook(mat, {key: 'irradiated-skin.emissive', stage: 'emissive', order: 400, fn: prev => irradiatedEmissiveNode(prev)});
   const data = new Float32Array(DATA_VEC4 * 4);
-  data.set([slot.u0, slot.v0, slot.channel, IRRADIATED_SKIN.tint, 1, phase, 0, 0]);
+  data.set([slot.u0, slot.v0, slot.channel, IRRADIATED_SKIN.tint, 1, phase, slot.scale, 0]);
   mesh.userData[IRRADIATED_SKIN.key] = data;
   DATA.set(actor, data);
   return data;

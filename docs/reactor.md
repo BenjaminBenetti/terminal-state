@@ -704,6 +704,75 @@ families that pit holds at all. Counts and positions are unchanged.
 - BBs (`docs/bb.md`; pits first built at roster version 3): 1–3 in 40 % of pits, an independent roll, in place of ordinary
   zombies of the rim, the walkway tiers or the core floor. They are placed last, so the families above stand where they did before.
 
+### Irradiated zombies (task studio-reactor-glowing-zombies-20261115-013245-01; roster version 4)
+User: keep all the regular zombies, add a 40 % boost on the lower levels, and make every added zombie a glowing irradiated regular
+zombie with 1.5x health. Their skin glows green, they cast real green light into the fog, and standing near one gives slow
+radiation damage and Geiger-counter clicks.
+
+- **The lower levels** are the bottom half of the pit's six storeys, `layout.levels` 3, 4 and 5 (`REACTOR_LOWER_LEVELS`):
+
+  | Storey | Floor (y, m) | Spawn context |
+  |---|---|---|
+  | Tier 3 | about -17.6 to -18.6 | `ring`: deep gas zone |
+  | Tier 4 | about -23.8 to -24.9 | `ring`: deep gas zone, waste repository |
+  | Core floor | about -29.5 to -31.0 | `pit` |
+
+  Measured on four seeds. The rim, tiers 1-2 (the bunker and the mines) and the surface storey never get one, and no other level
+  does.
+- **How many and where:** `docs/enemy-spawns.md` "Irradiated zombies". In short, `N = round(0.4R)` of the regular zombies already
+  on those storeys, appended after every existing spawn. They are placed on each storey by its own rules from a hash-seeded stream,
+  so no existing zombie, special, animal, loot or pose changes.
+- **Health only.** Shambler 150 hp, coated 247.5 hp (1.5x). Speed, damage, senses and AI are the ordinary type's. They are never
+  sprinters.
+- **Green skin** (`ai/irradiatedSkin.ts`): they use the ordinary body and outfit models. Each body has a data mask of its skin
+  texels (`assets/textures/zombie-skin-mask.png`, built from the shipped atlases by
+  `tools/asset-pipeline/zombie/build-skin-mask.mjs`). Only the body mesh's own material is touched, so garments, hair and baked
+  clothing keep their colours.
+  - Colour stage (order 250, before the wounds): skin is pushed to a sickly green of its own brightness. Wounds still show flesh.
+  - Emissive stage (order 400): masked green emission with a slow per-zombie pulse. The hit flash still works.
+  - Per-zombie values are per-object data, so all irradiated bodies share one program. The material has its own tag (`irradiatedSkin`),
+    so it never shares an ordinary body's program.
+  - The mask loads behind the loading screen of a section that has irradiated zombies. Without it, nothing turns green.
+- **Green light** (`world/glowLights.ts`): a boot-time pool of 4 unshadowed point lights (`GLOW_LIGHT`: lime 0x8cff3c, 7 cd, 9 m
+  cutoff, decay 2, at chest height). The pool follows the irradiated zombies nearest the eye within 32 m, with 2 m hysteresis and a
+  0.35 s fade.
+  - Surfaces: the light is occluded by the same per-light line-of-sight window as a flare's (`flareVisibility`), so it never shines
+    through a wall or a slab.
+  - Fog: each lit light is a scatter light in the march's own reserved glow slots (`SMOKE_LIMITS.glowLights` = 4, beside the 4
+    ordinary slots used by flares, fire, the core lights and the beam). So it can never take a flare's slot, or be refused because
+    the core took them. It lights the haze and smoke green but adds no fog or green density. Gas stays the gas field, and ordinary
+    fog stays its colour.
+  - Cost: the 4 lights are in every scene from boot at intensity 0, so the light set never changes and the warm-up builds them.
+    `GlowLightNode` evaluates a light only where it is on and within its cutoff. An idle pool costs a branch per light per lit
+    fragment, and there are no shadow maps. The march's scatter loop is bounded by the 8 slots and gated by the live count. Its
+    windows use the shared visibility texture (12 layers now), and a refreshed layer uploads alone.
+- **Radiation** (`world/irradiation.ts` `RADIATION`), from living irradiated zombies only. Distance is feet to feet in 3D, same
+  storey only (|dy| <= 2.5 m). There is no line-of-sight shielding; that is deliberately simple, given the small radius.
+  - One zombie: 1 hp/s within 1.2 m, falling quadratically to 0 at 4 m (2 m: 0.65 hp/s, 2.5 m: 0.29, 3 m: 0.13).
+  - A group: the exact sum up to one zombie's peak, then soft-capped smoothly to at most 2.5 hp/s. A 100 hp player needs at least
+    40 s of radiation alone to die, in any crowd.
+  - Damage goes through `Player.takeDamage` in whole hit points as it accrues. The pain vignette shows at most every 1.5 s, and a
+    "Radiation!" toast after 20 s without a dose. No equipment changes it, and none is needed.
+  - It counts active play time only (frame hooks: playing, not the transit gap). Menus, pause, death and travel stop it. Enemy
+    hits are unchanged.
+- **Geiger counter** (`GEIGER`): a random (Poisson) count rate from each living irradiated zombie within 7 m, on the same storey.
+  - Rate: 22 ticks/s touching, falling with the inverse square (8/s at 2 m, 2/s at 4 m, about 1/s at 5.5 m), faded out over the
+    last 1.5 m. It starts about 3 m before the dose does.
+  - A group is soft-capped at 32/s. Above 12/s, a growing share plays as 2-4 tick burst takes.
+  - Each tick's loudness ramps with the reading. The ticks go through the master, so volume and mute apply. They are silent while
+    paused, and the scheduler resets on any state change.
+  - Clips: procedural ticks rendered offline by `tools/audio-pipeline/geiger-render.mjs` (`geiger-*.mp3`; provenance in
+    `derivatives/audio-geiger.json`). Nothing is synthesised at runtime.
+- **Lifecycle.** When an irradiated zombie dies, its dose and ticks stop at once. Its skin emission and its light fade to 0 over
+  1.8 s; the green tint stays, since it is still an irradiated body. A body picked up is forgotten: no glow, no dose. It is never a
+  radiation source as a corpse or as cargo. A section teardown (travel, Retry, new game) releases every light and the scheduler.
+- **Saves.** Additions only appear in Reactors first built at roster version 4: a new campaign, or a Reactor an older save has not
+  visited yet. An existing save's visited Reactor keeps exactly its old enemies and kills. Revisits, Continue and Retry rebuild the
+  same additions, and a killed one stays dead (kill memory by index). Nothing refills or respawns.
+- **Tests:** `game/tests/irradiated-spawns.test.ts` (rule, placement, baseline identity, versions),
+  `game/tests/irradiation.test.ts` (dose, Geiger, lifecycle, light pool, light node on both backends),
+  `game/tests/irradiated-skin.test.ts` (skin stages, data, tag) and `game/tests/smoke.test.ts` (the reserved glow slots).
+
 ### Cross-storey hits (task reactor-playtest-round2-20261102, lane COMBAT; every level)
 User: enemies on another storey (down the stairs, across an atrium, in the pit) could not be damaged, on every level.
 
