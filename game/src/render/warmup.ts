@@ -41,6 +41,11 @@
 // reported as such, never as ready. Nothing here touches gameplay: no update tick, no AI / physics / loot / battery /
 // flare timers, no sounds; the game loop does not render while it runs (Game.warming).
 //
+// Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane LOAD): three yields between a compile's build stages and objects with
+// scheduler.yield() where the browser has it, and with ONE animation frame per yield elsewhere (~11 000 per station). Stages 1 and 2
+// hold the game's frames anyway, so where scheduler.yield is missing each compileAsync call here runs with a task-boundary yield
+// installed (render/compileYield.ts; restored in a finally — never in play or on the journey).
+//
 // On a software rasterizer (llvmpipe & co. JIT every program into system RAM: the iteration-13 QA saw Firefox pass
 // 6 GiB walking into new views) only the camera's neighbourhood is warmed ('view'); hardware GPUs get everything
 // ('full'). `?warmup=off|view|full` overrides.
@@ -48,6 +53,7 @@
 import * as THREE from 'three';
 import {CULL_LAYER} from '../world/levelCulling';
 import {compileAtDepth} from './renderContextDepth';
+import {installTaskYield} from './compileYield';
 import {instancingSignature, sharedInstancing} from './sharedInstancing';
 
 export type WarmupMode = 'full' | 'view' | 'off';
@@ -363,6 +369,11 @@ export interface WarmupOptions {
   now?: () => number;
   /** Lets the page paint between hidden frames (rAF, or a short timeout in a background tab). */
   yieldFrame?: () => Promise<void>;
+  /**
+   * (lane LOAD) Where the browser has no scheduler.yield, run the compile calls with a task-boundary yield instead of three's
+   * one-animation-frame-per-yield fallback (render/compileYield.ts). Default true; false = three's own fallback (tests).
+   */
+  taskYield?: boolean;
 }
 
 // Task static-batching-warmup-20261105 (user: "You mentiona a 60 limit. Lets double that to 120s"): the MAXIMUM work budget — the warm-up
@@ -497,9 +508,13 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
   const compileIn = async (target: unknown, scene: THREE.Object3D, camera: THREE.Camera, onP: ((e: {loaded: number; total: number}) => void) | null, depth = 0) => {
     r.setRenderTarget(target);
     r.setMRT(null);
+    // frames are held for the whole warm-up: where the browser has no scheduler.yield, three's yields end at the next task for this
+    // call instead of the next animation frame (restored below, whatever happens)
+    const ty = opts.taskYield === false ? null : installTaskYield(now);
     try {
       await compileAtDepth(r, depth, () => r.compileAsync(scene, camera, null, onP));
     } finally {
+      ty?.restore();
       r.setRenderTarget(prevTarget);
       r.setMRT(prevMRT);
     }

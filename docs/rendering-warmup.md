@@ -659,6 +659,33 @@ build loses partial instance uploads (three's own frame hook consumes its update
 buffers; the game sets no ranges on instance attributes. Shadow-pass builds stay one per caster material instance where
 the material has a map, so they do not collapse the same way.
 
+## Yields during the blocking warm-up (task studio-gi-mood-bounce-loading-20261115-081523-01, lane LOAD)
+
+three's `compileAsync` yields after every object and after every shader stage of every build: about 11,000 yields in a
+Subway station load before shared builds, about 2,650 with them. `yieldToMain` is the browser's `scheduler.yield()`
+where it exists and **one `requestAnimationFrame` per yield** elsewhere. While the loading warm-up holds the game's
+frames, that fallback is a whole display refresh of waiting per yield with nothing to draw, and no progress at all in a
+hidden tab (no animation frames there).
+
+**Measured before** (the real Game in Node, 16 ms frames, no `scheduler.yield`, the 120 s budget, before shared builds):
+the materials stage reached 816 of 1518 items when the budget cut it, 58.6 s of that waiting for frames; the hidden
+frames were skipped and the final view frame then built 231 programs in one 16.4 s block.
+
+**What changed.** `render/compileYield.ts` `installTaskYield()` gives three a yield that ends at the next *task* (a
+`MessageChannel` post: no timer clamp). The warm-up installs it around each of its own `compileAsync` calls (stages 1
+and 2) and removes it in a `finally`.
+- Only where `scheduler.yield` is missing. A browser that has it is left exactly as it is.
+- Only in the blocking warm-up. Play and the train journey are untouched: there three's yields keep following the
+  browser's own scheduling (`render/journeyCompile.ts`).
+- Task boundaries are real: the loading screen still paints, input still runs, the budget clock is unchanged.
+- Nothing about what is compiled, in which order, or when the warm-up reports ready changes.
+
+**Checks** (`game/tests/warmup-compile-yield.test.ts`, three's real renderer): without `scheduler.yield` the materials
+stage takes no animation frame and the global is restored afterwards, also when the compile throws; with
+`taskYield: false` three's fallback is used as before; with a `scheduler.yield` present the browser's own function is
+called and never replaced; `prepareObjects` (content added in play) still uses animation frames; and the journey, the
+runtime variants and `game.ts` do not name the module.
+
 ## Lifecycle and guarantees
 
 - `Game.prepareGraphics()` is single-flight. It resolves (never rejects) with a `WarmupResult` whose status is one of:
