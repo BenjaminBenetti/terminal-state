@@ -6,6 +6,9 @@
 //  - The IndexedDB backend over tests/helpers/fakeIndexedDb.ts: persistence across a "reload", LRU across it, damaged records are
 //    misses and are deleted, a quota failure is one failed put and nothing else, every way IndexedDB can be unusable ends on the
 //    in-memory backend with a reason and working operations. Nothing ever rejects.
+//  - The two time limits (open, one transaction) count time in which the event loop ran: a thread blocked for longer than the
+//    limit with a healthy database behind it keeps IndexedDB (the write is on disk, a read returns its entry, the open is kept);
+//    a database that does not answer while the loop turns is still given up after the limit.
 //  - The cache stays out of the save: its sources do not touch the save's storage, and the save's sources do not know it.
 // Recency runs on an injected clock, never on real time.
 import fs from 'node:fs';
@@ -14,10 +17,11 @@ import {fileURLToPath} from 'node:url';
 import {afterEach, beforeEach, describe, expect, it, vi, type MockInstance} from 'vitest';
 import {ContentHasher} from '../src/core/contentHash';
 import {
-  DERIVED_CACHE_LIMITS, DERIVED_CONTAINER_VERSION, DERIVED_DB_NAME, DERIVED_MEMORY_MAX_BYTES, DERIVED_SLICE_MS, openDerivedCache, packBundle, unpackBundle,
+  DERIVED_CACHE_LIMITS, DERIVED_CONTAINER_VERSION, DERIVED_DB_NAME, DERIVED_MEMORY_MAX_BYTES, DERIVED_SLICE_MS, WATCH_SLACK_MS, WATCH_TICKS, openDerivedCache, packBundle,
+  unpackBundle,
   type DerivedArray, type DerivedBundle, type DerivedCache, type DerivedCacheOptions,
 } from '../src/core/derivedCache';
-import {FakeIndexedDb, type FakeDatabase, type FakeOpenRequest} from './helpers/fakeIndexedDb';
+import {FakeDatabase, FakeIndexedDb, type FakeOpenRequest} from './helpers/fakeIndexedDb';
 
 // ---------------------------------------------------------------------------------------------
 // Helpers
@@ -1211,6 +1215,158 @@ describe('derived cache: when IndexedDB cannot be used', () => {
     await expect(broken.put('a', bundle(1))).resolves.toBe(false);
     await expect(broken.get('a')).resolves.toBeNull();
     await expect(broken.stats()).resolves.toMatchObject({backend: 'memory'});
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+
+describe('derived cache: the time limits count a running event loop, not wall time', () => {
+  const NAME = DERIVED_DB_NAME;
+  const open = (fake: FakeIndexedDb, o: DerivedCacheOptions = {}): DerivedCache => openDerivedCache({indexedDB: fake, now: ticking().now, compress: false, ...o});
+  /** The thread does nothing else for `ms` (a station built in one block, a warm-up frame of seconds). */
+  const busy = (ms: number): void => { const end = performance.now() + ms; while (performance.now() < end) { /* busy */ } };
+  /** A block the watchdog of a `limit` ms limit sees as a LATE tick (longer than a tick with its slack). */
+  const lateBlock = (limit: number): number => limit / WATCH_TICKS + Math.max(limit / WATCH_TICKS, WATCH_SLACK_MS) + 150;
+  const LIMIT = 100;
+  // Both are several times the limit: a timer of the limit's own length would be overdue when the thread comes back.
+  const BLOCKS: [string, number][] = [['longer than a late tick', lateBlock(LIMIT)], ['four times the limit', 4 * LIMIT]];
+
+  const transaction = FakeDatabase.prototype.transaction;
+  afterEach(() => { FakeDatabase.prototype.transaction = transaction; });
+  /**
+   * The first transaction of `mode` is followed by a block of `ms`, begun in the task that created it (right after the cache
+   * armed its limit; before any of the transaction's events can be delivered). `count` says how many such transactions came.
+   */
+  function blockAfter(mode: 'readonly' | 'readwrite', ms: number): {count: number} {
+    const made = {count: 0};
+    FakeDatabase.prototype.transaction = function (this: FakeDatabase, names: string | string[], m: 'readonly' | 'readwrite' = 'readonly') {
+      const t = transaction.call(this, names, m);
+      if (m === mode && made.count++ === 0) queueMicrotask(() => busy(ms));
+      return t;
+    };
+    return made;
+  }
+
+  it('the numbers the tests rest on', () => {
+    expect(WATCH_TICKS).toBeGreaterThanOrEqual(4);
+    expect(WATCH_SLACK_MS, 'a hidden tab\'s once-a-second timers still count').toBeGreaterThan(1000);
+    expect(lateBlock(LIMIT)).toBeGreaterThan(4 * LIMIT);
+  });
+
+  for (const [what, ms] of BLOCKS) {
+    it(`a WRITE whose thread is blocked (${what}) is stored in IndexedDB, and so is the next one`, async () => {
+      const fake = newFake(), cache = open(fake, {txTimeoutMs: LIMIT});
+      await cache.ready();
+      const made = blockAfter('readwrite', ms);
+      const t = performance.now();
+      await expect(cache.put('blocked', bundle(1))).resolves.toBe(true);
+      expect(made.count, 'the block was made').toBeGreaterThanOrEqual(1);
+      expect(performance.now() - t, 'the thread really was away for longer than the limit').toBeGreaterThan(LIMIT);
+      expect(cache.backend).toBe('indexeddb');
+      expect(cache.reason).toBeNull();
+      expect(fake.records(NAME, 'data').has('blocked'), 'on disk').toBe(true);
+      await expect(cache.put('later', bundle(2))).resolves.toBe(true);
+      expect(await cache.stats()).toMatchObject({backend: 'indexeddb', reason: null, entries: 2, puts: 2, failedPuts: 0});
+      expect(warnings(/./), 'nothing was warned about').toBe(0);
+      // "The next page load": another cache over the same profile reads both.
+      const next = open(fake);
+      expectSameBundle(await next.get('blocked'), bundle(1));
+      expectSameBundle(await next.get('later'), bundle(2));
+      expect(next.backend).toBe('indexeddb');
+    });
+
+    it(`a READ whose thread is blocked (${what}) returns its entry`, async () => {
+      const fake = newFake(), cache = open(fake, {txTimeoutMs: LIMIT});
+      await expect(cache.put('a', bundle(7))).resolves.toBe(true);
+      const made = blockAfter('readonly', ms);
+      expectSameBundle(await cache.get('a'), bundle(7));
+      expect(made.count).toBeGreaterThanOrEqual(1);
+      expect(cache.backend).toBe('indexeddb');
+      expect(await cache.stats()).toMatchObject({backend: 'indexeddb', reason: null, hits: 1, misses: 0, corrupt: 0});
+      expect(warnings(/./)).toBe(0);
+    });
+
+    it(`an OPEN whose thread is blocked (${what}) is kept`, async () => {
+      const fake = newFake(), cache = open(fake, {openTimeoutMs: LIMIT});
+      // In the task that placed the open request: its events cannot be delivered before the block is over.
+      busy(ms);
+      await cache.ready();
+      expect(cache.backend).toBe('indexeddb');
+      expect(cache.reason).toBeNull();
+      await expect(cache.put('a', bundle(1))).resolves.toBe(true);
+      expect(fake.records(NAME, 'data').has('a')).toBe(true);
+      expect(fake.openConnections()).toBe(1);
+      expect(warnings(/./)).toBe(0);
+    });
+  }
+
+  it('a database that does not answer while the loop keeps turning is given up after the limit, not before', async () => {
+    const fake = newFake(), cache = open(fake, {txTimeoutMs: LIMIT});
+    await cache.ready();
+    fake.hangTransactions = true;
+    const t = performance.now();
+    await expect(cache.put('a', bundle(1))).resolves.toBe(true);
+    const took = performance.now() - t;
+    // (Node may run a timer a millisecond early per tick.)
+    expect(took, 'not before the limit').toBeGreaterThanOrEqual(LIMIT - WATCH_TICKS);
+    expect(cache.backend).toBe('memory');
+    expect(cache.reason).toMatch(/stopped working \(a transaction did not finish in 100 ms\)/);
+    expectSameBundle(await cache.get('a'), bundle(1));
+    expect(fake.records(NAME, 'data').size, 'nothing reached the disk').toBe(0);
+    expect(fake.openConnections(), 'the stuck connection was closed').toBe(0);
+    expect(warnings(/kept in memory for this session only/)).toBe(1);
+  });
+
+  it('a blocked thread does not hide a database that hangs: it is given up once the limit has passed in running time', async () => {
+    const fake = newFake(), cache = open(fake, {txTimeoutMs: LIMIT});
+    await cache.ready();
+    fake.hangTransactions = true;
+    const ms = lateBlock(LIMIT);
+    blockAfter('readwrite', ms);
+    const t = performance.now();
+    await expect(cache.put('a', bundle(1))).resolves.toBe(true);
+    const took = performance.now() - t;
+    expect(took, 'the block counted nothing: the whole limit ran after it').toBeGreaterThanOrEqual(ms + LIMIT - WATCH_TICKS);
+    expect(cache.backend).toBe('memory');
+    expect(cache.reason).toMatch(/did not finish in 100 ms/);
+  });
+
+  it('an open that never settles is given up after the limit of running time, also behind a blocked thread', async () => {
+    const fake = newFake();
+    fake.openMode = 'hang';
+    const ms = lateBlock(LIMIT), t = performance.now();
+    const cache = open(fake, {openTimeoutMs: LIMIT});
+    busy(ms);
+    await cache.ready();
+    expect(performance.now() - t).toBeGreaterThanOrEqual(ms + LIMIT - WATCH_TICKS);
+    expect(cache.backend).toBe('memory');
+    expect(cache.reason).toMatch(/did not open within 100 ms/);
+  });
+
+  it('no limit (0, Infinity) never gives up and arms no timer', async () => {
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    for (const limit of [0, Infinity]) {
+      const fake = newFake(), cache = open(fake, {txTimeoutMs: limit, openTimeoutMs: limit, sliceMs: Infinity});
+      await expect(cache.put('a', bundle(1))).resolves.toBe(true);
+      expectSameBundle(await cache.get('a'), bundle(1));
+      expect(cache.backend).toBe('indexeddb');
+    }
+    expect(timers).not.toHaveBeenCalled();
+  });
+
+  it('a finished transaction cancels its limit: every tick it armed has fired or was cleared, and nothing expires later', async () => {
+    const set = vi.spyOn(globalThis, 'setTimeout'), cleared = vi.spyOn(globalThis, 'clearTimeout');
+    const fake = newFake(), cache = open(fake, {txTimeoutMs: 20, openTimeoutMs: 20, sliceMs: Infinity});
+    await expect(cache.put('a', bundle(1))).resolves.toBe(true);
+    expectSameBundle(await cache.get('a'), bundle(1));
+    expect(set.mock.calls.length, 'limits were armed').toBeGreaterThanOrEqual(4);
+    // Each watchdog holds one timer at a time: the last one of each chain was cleared when its wait was over.
+    const armed = set.mock.results.map(r => r.value as unknown), gone = new Set(cleared.mock.calls.map(call => call[0] as unknown));
+    expect(armed.filter(timer => gone.has(timer)).length, 'one cleared timer per finished wait').toBeGreaterThanOrEqual(4);
+    set.mockRestore(); cleared.mockRestore();
+    await new Promise(resolve => { setTimeout(resolve, 60); });
+    expect(cache.backend, 'no limit expired later').toBe('indexeddb');
+    expect(warnings(/./)).toBe(0);
   });
 });
 
