@@ -93,12 +93,12 @@ export const IND_CIRCUITS = 18;
  * Task studio-baked-gi-visual-uplift-20261115-004324-01: the AMBIENT CUBE slices of an enhanced field (BakedField.gi: its first one).
  * After the last slot (and the extended headers' group slices), per slot, per face of the gather's cube (lightFieldGather.ts
  * CUBE_FACES: +y, -y, +x, -x, +z, -z), one slice per height layer — a face's layers are consecutive slices, so ONE filtered fetch
- * between two of them is the face at any height. A texel is what that face receives MORE (or less) than the voxel's main texel
- * already holds (rgb, signed: byte 128 = nothing, sqrt-encoded either way up to FIELD_DMAX), so a reader that knows nothing of
- * these slices (the fog, a renderer that keeps the plain light node) still reads a complete field.
+ * between two of them is the face at any height. A texel is the COMPLETE AMBIENT a surface facing that way receives there: the
+ * direct light's scattered share + the gathered face (rgb, encoded as the main texels are: sqrt up to FIELD_EMAX; 0 in closed
+ * cells). The full light node reads it INSTEAD of the main texel's ambient part; a reader that knows nothing of these slices (the
+ * fog, a renderer that keeps the plain light node) still reads a complete field from the main texels alone.
  */
 export const GI_FACES = 6;
-export const FIELD_DMAX = 8;
 /** First cube slice of slot s relative to BakedField.gi; cube slices for S slots. */
 export const giSlotBase = (s: number) => (s === 0 ? 0 : GI_FACES * (LAYERS + (s - 1) * AUX_LAYERS));
 export const giDepth = (slots: number) => GI_FACES * (LAYERS + (slots - 1) * AUX_LAYERS);
@@ -256,7 +256,7 @@ export interface BakedField {
     extra?: Record<string, number>;
     /** Task studio-baked-lighting-reflections-20261114-050258-01: FieldSource.indirect's stats (the enhanced gather), when present. */
     indirect?: IndirectLight['stats'];
-    /** Task studio-baked-gi-visual-uplift-20261115-004324-01: cube texels whose difference was past FIELD_DMAX (stored at the limit). */
+    /** Task studio-baked-gi-visual-uplift-20261115-004324-01: cube texel channels past FIELD_EMAX (stored at the limit). */
     cubeClipped?: number};
 }
 
@@ -699,7 +699,6 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
   }
   const gs0 = fieldDepth(S), cube = !!ind && src.cube !== false, gi0 = gs0 + hdr, depth = gi0 + (cube ? giDepth(S) : 0);
   const data = new Uint8Array(W * H * depth * 4);
-  if (cube) data.fill(128, gi0 * n * 4); // (the cube's texels are signed: 128 = no difference, also in closed cells)
   yield;
   // Packed slot choice (no per-slot loop in the shader). Legacy columns (the iteration-08 texel, byte for byte): R = slot
   // mask, G / B = heights between consecutive bands (mid-slab), A = band count << 6 | slot of band k in bits 2k. Extended
@@ -777,9 +776,10 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
     //    layer is what floors read (the cube's up-facing face), the top layer what ceilings read (its down-facing face), the layers
     //    between hold the mean of the four wall faces. A floor is not lit by its own bounce; a ceiling gets the floor's in full.
     //    This is all a plain light node, the fog and the CPU sampler without a normal know of it;
-    //  - in the cube slices, per face, as the DIFFERENCE between that face and the main texel's share: the enhanced light node adds
-    //    the faces its normal points at, so every surface gets what its own orientation receives (main texel + difference = the face;
-    //    the difference also carries a per-channel correction of the main texel's one-share split, see below).
+    //  - in the cube slices, per face, as the complete ambient of a surface facing that way: the direct light's scattered share +
+    //    that face. The full light node reads the faces its normal points at instead of the main texel's ambient part, so every
+    //    surface gets what its own orientation receives, per channel (the main texel has ONE scalar share for its three channels:
+    //    its ambient part alone would lose most of a coloured bounce next to a strong direct light).
     // The flicker shares count the gathered light's own circuits.
     const ix = ind ? ind.index[s] : null, id = ind ? ind.data : null, cohK = new Float32Array(LAYERS), baseK = new Float32Array(LAYERS * 4);
     const gb = gi0 + giSlotBase(s);
@@ -797,11 +797,9 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
       const d = id!;
       return lum(d[q] + d[q + 3] + d[q + 6] + d[q + 9] + d[q + 12] + d[q + 15], d[q + 1] + d[q + 4] + d[q + 7] + d[q + 10] + d[q + 13] + d[q + 16], d[q + 2] + d[q + 5] + d[q + 8] + d[q + 11] + d[q + 14] + d[q + 17]) / 6;
     };
-    const encD = (v: number): number => {
-      const a = v < 0 ? -v : v;
-      if (a > FIELD_DMAX) cubeClipped++;
-      const e = Math.round(Math.sqrt(a >= FIELD_DMAX ? 1 : a / FIELD_DMAX) * 127);
-      return v < 0 ? 128 - e : 128 + e;
+    const encC = (v: number): number => {
+      if (v > FIELD_EMAX) cubeClipped++;
+      return enc(v);
     };
     const encodeRowEnhanced = (cy: number): void => { for (let cx = 0; cx < W; cx++) {
       const i = cy * W + cx;
@@ -847,16 +845,13 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
         data[ob + 2] = u8(dl > 1e-6 ? dzv * inv * 0.5 + 0.5 : 0.5);
         data[ob + 3] = tl > 0 ? u8((G2Ls[i * L + k] * coh + (ml > 0 ? id![q + 20] / ml * bl : 0)) / tl) : 0;
         if (!cube) continue;
-        // The main texel has ONE scalar share (rho) for its three channels, so its directional part T x rho carries the gathered
-        // light's colour along with the direct light's, and its ambient part lacks it: on a surface turned away from a strong
-        // direct light a red floor's bounce would arrive nearly grey. The cube gives the ambient part back what the split took
-        // (per channel: T x rho - the direct light's own directional part), the same on every face: under full shading the
-        // ambient is then exactly the direct light's scatter + the gathered face, per channel.
-        const sh = el > 0 ? dl / el : 0;
-        const kr = r * rho - Es[vi] * sh - br, kg = gg * rho - Es[vi + 1] * sh - bg, kb = b * rho - Es[vi + 2] * sh - bb;
+        // the complete ambient per face: what the direct light scatters (its share that has no direction: coh - dl / el of it,
+        // per channel) + the gathered face
+        const sc = el > 0 ? coh - dl / el : 0;
+        const kr = Es[vi] * sc, kg = Es[vi + 1] * sc, kb = Es[vi + 2] * sc;
         for (let f = 0; f < GI_FACES; f++) {
           const og = (((gb + f * L + k) * H + cy) * W + cx) * 4, qf = q + f * 3;
-          data[og] = encD(id![qf] + kr); data[og + 1] = encD(id![qf + 1] + kg); data[og + 2] = encD(id![qf + 2] + kb); data[og + 3] = 255;
+          data[og] = encC(id![qf] + kr); data[og + 1] = encC(id![qf + 1] + kg); data[og + 2] = encC(id![qf + 2] + kb); data[og + 3] = 255;
         }
       }
     } };
@@ -1070,9 +1065,8 @@ export interface FieldSample {
 }
 
 const dec = (b: number) => { const v = b / 255; return v * v * FIELD_EMAX; };
-/** A cube texel's byte (filtered: any value 0..255) as the signed difference it stores. */
-export const cubeDifference = (b: number): number => { const v = (b - 128) / 127; return v * (v < 0 ? -v : v) * FIELD_DMAX; };
-const decD = cubeDifference;
+/** A cube texel's byte (filtered: any value 0..255) as the ambient irradiance it stores. */
+export const cubeAmbient = (b: number): number => dec(b);
 
 /**
  * Level slot whose band at texel column (ci, cj) contains height y (else the nearest band); only slots
@@ -1146,15 +1140,16 @@ export function sampleField(f: BakedField, x: number, y: number, z: number, leve
   const m = Math.max(0, 1 - f0 * (1 - levels[0]) - f1 * (1 - levels[1]) - f2 * (1 - levels[2]));
   const amb: [number, number, number] = [T[0] * (1 - rho), T[1] * (1 - rho), T[2] * (1 - rho)];
   if (normal && f.gi !== undefined) {
-    // the ambient cube (world/lightFieldNode.ts lightFieldCube): per axis the face the normal points at, weighted by its square
+    // the ambient cube instead (world/lightFieldNode.ts lightFieldSample): per axis the face the normal points at, weighted by
+    // the component's square; one filtered value between the two layers of a face, decoded after
     const gb = f.gi + giSlotBase(slot);
+    amb[0] = amb[1] = amb[2] = 0;
     for (let a = 0; a < 3; a++) {
       const na = normal[a], w = na * na;
       if (w <= 0) continue;
       const face = a === 1 ? (na > 0 ? 0 : 1) : a === 0 ? (na > 0 ? 2 : 3) : (na > 0 ? 4 : 5), s0 = gb + face * L;
-      for (let c = 0; c < 3; c++) amb[c] += w * decD(mix(tex(s0 + k0, c), tex(s0 + k1, c)));
+      for (let c = 0; c < 3; c++) amb[c] += w * dec(mix(tex(s0 + k0, c), tex(s0 + k1, c)));
     }
-    for (let c = 0; c < 3; c++) if (amb[c] < 0) amb[c] = 0;
   }
   return {
     amb: [amb[0] * m, amb[1] * m, amb[2] * m],

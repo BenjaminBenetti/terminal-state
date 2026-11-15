@@ -29,7 +29,7 @@ import type {BuildSteps} from '../core/pacedBuild';
 import type {Level} from '../gen/levels';
 import type {LightPlacement} from '../gen/station';
 import type {ReflectionTier} from './enhancedLighting';
-import {FIELD_EMAX, cubeDifference, fixtureGroup, fixtureTint, giSlotBase, slotBase, slotLayers, type BakedField, type ColumnGeometry} from './lightField';
+import {FIELD_EMAX, fixtureGroup, fixtureTint, giSlotBase, slotBase, slotLayers, type BakedField, type ColumnGeometry} from './lightField';
 import {BandScene, HIT_CEIL, HIT_FLOOR} from './lightScene';
 import {ALBEDO_LUT, ALBEDO_STRIDE, ALB_CEIL, ALB_FLOOR, ALB_WALL, type SurfaceAlbedo} from './surfaceAlbedo';
 
@@ -544,19 +544,19 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
       }
       const oa = (bases[hs] + 1 + 2 * k) * n4 + hi * 4, ob = oa + n4;
       const rho = data[oa + 3] / 255;
-      let e = 1 - rho;
+      let e = 1 - rho, ed = 0;
       if (rho > 0) {
         const vx = data[ob] / 255 * 2 - 1, vy = data[ob + 1] / 255 * 2 - 1, vz = data[ob + 2] / 255 * 2 - 1;
         const vl = Math.sqrt(vx * vx + vy * vy + vz * vz), ndl = vl < 1e-4 ? ny : (nx * vx + ny * vy + nz * vz) / vl;
-        if (ndl > 0) e += rho * ndl;
+        if (ndl > 0) { ed = rho * ndl; e += ed; }
       }
-      e *= INV_PI;
+      e *= INV_PI; ed *= INV_PI;
       if (sky) { cap[o] = DEC[data[oa]] * e; cap[o + 1] = DEC[data[oa + 1]] * e; cap[o + 2] = DEC[data[oa + 2]] * e; }
       else if (gi0 >= 0) {
-        // a field with its ambient cube (task studio-baked-gi-visual-uplift-20261115-004324-01): the surface also gets what its own
-        // orientation receives of the gathered light — as the full light node shades it
+        // a field with its ambient cube (task studio-baked-gi-visual-uplift-20261115-004324-01): the surface's ambient is what its
+        // own orientation receives (the cube's face of its normal) — as the full light node shades it
         const og = (gi0 + giSlotBase(hs) + face * Lh + k) * n4 + hi * 4;
-        for (let c = 0; c < 3; c++) { const v = DEC[data[oa + c]] * e + cubeDifference(data[og + c]) * INV_PI; cap[o + c] = v > 0 ? v * ALBEDO_LUT[A[ao + c]] : 0; }
+        for (let c = 0; c < 3; c++) cap[o + c] = (DEC[data[oa + c]] * ed + DEC[data[og + c]] * INV_PI) * ALBEDO_LUT[A[ao + c]];
       } else { cap[o] = DEC[data[oa]] * e * ALBEDO_LUT[A[ao]]; cap[o + 1] = DEC[data[oa + 1]] * e * ALBEDO_LUT[A[ao + 1]]; cap[o + 2] = DEC[data[oa + 2]] * e * ALBEDO_LUT[A[ao + 2]]; }
     }
     rays += b - a;

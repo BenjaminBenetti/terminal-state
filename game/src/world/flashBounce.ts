@@ -57,7 +57,7 @@ export const FLASH_BOUNCE_REACH = 60;
  * the game draws it stronger, like the baked bounce (world/lightFieldGather.ts GATHER_GAIN): a stylised choice, on real finishes
  * (concrete ~0.15, floors ~0.26) one physical bounce of a hand lamp is hardly seen.
  */
-export const FLASH_BOUNCE_DEFAULTS = {gain: 2.5, r0: 0.5, range: 11} as const;
+export const FLASH_BOUNCE_DEFAULTS = {gain: 2, r0: 0.5, range: 11} as const;
 
 /** What the bounce is cast over: a station's ray scene and its surface colours (world/enhancedLightingRuntime.ts builds both). */
 export interface FlashBounceSource { scene: BandScene; albedo: SurfaceAlbedo }
