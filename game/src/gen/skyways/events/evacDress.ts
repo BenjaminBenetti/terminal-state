@@ -252,6 +252,15 @@ function noticeBoard(S: Shelter, areas: readonly Area[]): void {
       for (let t = lo + 1.0; t <= hi - 1.0; t += 0.5) {
         if (!backed(v.ctx, a, side, t - def.w / 2, t + def.w / 2, v.base + 1.15) || !backed(v.ctx, a, side, t - def.w / 2, t + def.w / 2, v.base + 1.95)) continue;
         if (v.layout.signs.some(s => (s.level ?? 0) === v.level && Math.hypot(s.x - wallXZ(a, side, t, 0)[0], s.z - wallXZ(a, side, t, 0)[1]) < 1.6)) continue;
+        // open floor in front of it (the notes are read standing there): nothing standing 0.25-1.25 m out across its width
+        const g = v.g;
+        const open = [0.4, 0.8, 1.2].every(d => [-0.45, 0, 0.45].every(o => {
+          const [cx, cy] = g.cellOf(...wallXZ(a, side, t + o, d));
+          if (!g.inBounds(cx, cy)) return false;
+          const i = g.idx(cx, cy);
+          return g.cells[i] === FLOOR && g.area[i] === a.id && !g.blocked[i];
+        }));
+        if (!open) continue;
         const b = group(vc, [a], () => mountProp(v.ctx, a, side, t, 'noticeBoard', 1.1, v.base));
         if (!b) continue;
         v.placed.push(b);
@@ -423,6 +432,20 @@ function interiorReached(S: Shelter, a: Area, door: Portal, beyond: (x: number, 
   }
   return false;
 }
+/** Cells of `a` a player (0.3 m radius) reaches from an opening's band (the notes behind a barricade lie only there). */
+function reachIn(S: Shelter, a: Area, door: Portal): Uint8Array {
+  const g = S.vc.v.g, seen = new Uint8Array(g.w * g.h), q: number[] = [];
+  for (const i of bandCells(g, a, door)) if (routeCell(g, a, i, 0.3)) { seen[i] = 1; q.push(i); }
+  for (let k = 0; k < q.length; k++) {
+    const i = q[k];
+    for (const j of [i - 1, i + 1, i - g.w, i + g.w]) if (!seen[j] && routeCell(g, a, j, 0.3)) { seen[j] = 1; q.push(j); }
+  }
+  return seen;
+}
+const reachedAt = (S: Shelter, seen: Uint8Array) => (x: number, z: number): boolean => {
+  const g = S.vc.v.g, [cx, cy] = g.cellOf(x, z);
+  return g.inBounds(cx, cy) && !!seen[g.idx(cx, cy)];
+};
 
 /**
  * The squeeze gap of a barricade line whose u runs from world `lo` (along x or z), centred near `mid` (u): [u0, u1] on whole cells, so
@@ -492,9 +515,9 @@ function quarantineRoom(S: Shelter, a: Area): boolean {
     const p = group(vc, [a], () => { const q = v.put(kind, snapC(x), snapC(z), WALL_ROT[rng.pick(SIDES)], {area: a, variant: kind === 'evacCot' ? rng.pick([0, 2]) : 0}); return q && interiorReached(S, a, door, beyond) ? q : null; });
     if (p) n++;
   }
-  floorSite(S, a, 'quarantine', beyond);
-  floorSite(S, a, 'quarantine', beyond);
   const [gx, gz] = uvXZ(fr, line.gap, line.vv);
+  // note spots: a cell clear of the line's far face (half a lying cot + half a cell), not in the gap's mouth, reached through the gap
+  { const at = reachedAt(S, reachIn(S, a, door)); floorSitesIn(S, a, 'quarantine', (x, z) => xzUV(fr, x, z)[1] > line!.vv + 0.75 && Math.hypot(x - gx, z - gz) > 1.0 && at(x, z), 3); }
   S.rec.quarantine = {area: a.id, corner: null, gap: {x: r3(gx), z: r3(gz)}};
   // the warnings outside the door: the isolation plate over it, the painted plywood beside it
   const other = door.to, op = vc.portals.get(other)?.find(q => q.to === a.id && q.door);
@@ -581,8 +604,7 @@ function quarantineCorner(S: Shelter, hall: Area): boolean {
       const x = rng.range(R.x0 + 0.9, R.x1 - 0.9), z = rng.range(R.z0 + 0.9, R.z1 - 0.9);
       if (group(vc, [hall], () => { const q = v.put(kind, snapC(x), snapC(z), WALL_ROT[rng.pick(SIDES)], {area: hall, variant: kind === 'evacCot' ? rng.pick([0, 2]) : 0}); return q && interiorFromHub(S, hall, hub, inner) ? q : null; })) n++;
     }
-    floorSite(S, hall, 'quarantine', inner, R);
-    floorSite(S, hall, 'quarantine', inner, R);
+    { const at = reachedAt(S, reachIn(S, hall, hub)); for (let k = 0; k < 3; k++) floorSite(S, hall, 'quarantine', (x, z) => inner(x, z) && at(x, z), R); }
     // the painted warning on a hall wall inside the corner
     const wallSides = (Object.keys(open) as Side[]).filter(s => !open[s]);
     for (const s of wallSides) {
@@ -590,6 +612,11 @@ function quarantineCorner(S: Shelter, hall: Area): boolean {
       const b = group(vc, [hall], () => mountProp(v.ctx, hall, s, mid, 'evacWarnBoard', EVAC_WARN.y, v.base));
       if (b) { b.variant = rng.int(0, EVAC_WARN_TEXTS.length - 1); v.placed.push(b); break; }
     }
+    // a lane from the squeeze gap out to the dormitory's central aisle (the cot field never walls the gap off)
+    const out = {N: [0, -1], S: [0, 1], W: [-1, 0], E: [1, 0]}[gapSide], sp = S.rec.dorm?.spine;
+    const ox = gapAt.x + out[0] * 1.5, oz = gapAt.z + out[1] * 1.5;
+    v.keepSegment(gapAt.x, gapAt.z, ox, oz, 0.8);
+    if (sp) v.keepSegment(ox, oz, Math.abs(sp.bx - sp.ax) >= Math.abs(sp.bz - sp.az) ? ox : sp.ax, Math.abs(sp.bx - sp.ax) >= Math.abs(sp.bz - sp.az) ? sp.az : oz, 0.8);
     // nothing else of the shelter goes inside the cordon or right up against it (the ration line / supply drop / belongings keep 1.2 m off)
     const K = {x0: R.x0 - (open.W ? 1.2 : 0), z0: R.z0 - (open.N ? 1.2 : 0), x1: R.x1 + (open.E ? 1.2 : 0), z1: R.z1 + (open.S ? 1.2 : 0)};
     for (let cy = Math.floor(K.z0 / CELL); cy < Math.ceil(K.z1 / CELL); cy++) for (let cx = Math.floor(K.x0 / CELL); cx < Math.ceil(K.x1 / CELL); cx++) v.keepCell(cx, cy);
@@ -810,13 +837,21 @@ function floorSite(S: Shelter, a: Area, slot: EvacNoteSlot, ok?: (x: number, z: 
     if (floorSiteAt(S, a, x, z, slot)) return;
   }
 }
+/** Up to `n` floor sites on cells of `a` that pass `ok` (every cell considered: for a small region a random probe would miss). */
+function floorSitesIn(S: Shelter, a: Area, slot: EvacNoteSlot, ok: (x: number, z: number) => boolean, n: number): void {
+  const cells: [number, number][] = [];
+  for (let cy = a.y; cy < a.y + a.h; cy++) for (let cx = a.x; cx < a.x + a.w; cx++) if (ok((cx + 0.5) * CELL, (cy + 0.5) * CELL)) cells.push([cx, cy]);
+  let k = 0;
+  for (const [cx, cy] of S.rng.shuffle(cells)) if (k < n && floorSiteAt(S, a, (cx + 0.5) * CELL, (cy + 0.5) * CELL, slot)) k++;
+}
 function floorSiteAt(S: Shelter, a: Area, x: number, z: number, slot: EvacNoteSlot): boolean {
   const g = S.vc.v.g, [cx, cy] = g.cellOf(x, z);
   if (!g.inBounds(cx, cy)) return false;
   const i = g.idx(cx, cy);
   if (g.cells[i] !== FLOOR || g.area[i] !== a.id || g.blocked[i] || g.rampIdx[i] >= 0 || !g.circleClear((cx + 0.5) * CELL, (cy + 0.5) * CELL, 0.3)) return false;
   if (S.sites.some(s => s.on === 'floor' && Math.hypot((s.x ?? 0) - x, (s.z ?? 0) - z) < 1.5)) return false;
-  S.sites.push({slot, on: 'floor', area: a, x: r3(x), z: r3(z), rot: r3(normYaw(S.rng.range(-Math.PI, Math.PI)))});
+  // (on the cell's centre: the sheet stays inside its own free cell)
+  S.sites.push({slot, on: 'floor', area: a, x: r3((cx + 0.5) * CELL), z: r3((cy + 0.5) * CELL), rot: r3(normYaw(S.rng.range(-Math.PI, Math.PI)))});
   return true;
 }
 
@@ -828,10 +863,48 @@ function officeSites(S: Shelter, rooms: readonly Area[]): void {
   }
 }
 
+/** Floor cells of the storey a player (0.3 m radius, the grid's conservative reading) reaches from the bridge mouths. */
+function reachedCells(S: Shelter): Uint8Array {
+  const g = S.vc.v.g, seen = new Uint8Array(g.w * g.h), q: number[] = [];
+  const ok = (i: number) => g.cells[i] === FLOOR && !g.blocked[i] && g.circleClear((i % g.w + 0.5) * CELL, (Math.floor(i / g.w) + 0.5) * CELL, 0.3);
+  for (const i of S.vc.walk.sources) if (!seen[i] && ok(i)) { seen[i] = 1; q.push(i); }
+  for (let k = 0; k < q.length; k++) {
+    const i = q[k], x = i % g.w;
+    for (const j of [x > 0 ? i - 1 : -1, x < g.w - 1 ? i + 1 : -1, i - g.w, i + g.w]) if (j >= 0 && j < seen.length && !seen[j] && ok(j)) { seen[j] = 1; q.push(j); }
+  }
+  return seen;
+}
+/** Is a note at (x, z) read from a reached cell (within 1.3 m, nothing solid between; `front`: from in front of its board)? */
+function readableFrom(S: Shelter, seen: Uint8Array, x: number, z: number, front?: {fx: number; fz: number}): boolean {
+  const g = S.vc.v.g, [cx, cy] = g.cellOf(x, z);
+  for (let y = cy - 3; y <= cy + 3; y++) for (let xx = cx - 3; xx <= cx + 3; xx++) {
+    if (!g.inBounds(xx, y) || !seen[g.idx(xx, y)]) continue;
+    const px = (xx + 0.5) * CELL, pz = (y + 0.5) * CELL, d = Math.hypot(px - x, pz - z);
+    if (d > 1.3 || (front && (px - x) * front.fx + (pz - z) * front.fz < 0.2)) continue;
+    let clear = true;
+    for (let k = 0, n = Math.max(1, Math.ceil(d / 0.1)); k <= n && clear; k++) {
+      const [qx, qy] = g.cellOf(px + (x - px) * k / n, pz + (z - pz) * k / n);
+      clear = g.inBounds(qx, qy) && g.cells[g.idx(qx, qy)] === FLOOR;
+    }
+    if (clear) return true;
+  }
+  return false;
+}
+
 /** 6-10 notes over the sites: one per theme first (each to a site its text suits), then the rest; every slot at most twice. */
 function chooseNotes(S: Shelter): [NoteSite, number][] {
-  const {rng} = S;
-  const sites = rng.shuffle(S.sites.slice());
+  const {rng} = S, g = S.vc.v.g, seen = reachedCells(S);
+  // (a floor spot something was placed over since it was found is no spot any more; every note is read from floor a player reaches)
+  const valid = (s: NoteSite) => {
+    if (s.on !== 'floor') {
+      if (!s.host || !S.layout.props.includes(s.host)) return false;
+      const [x, z] = toWorld(s.host, s.lx ?? 0, s.lz ?? 0);
+      return readableFrom(S, seen, x, z, s.on === 'board' ? {fx: Math.sin(s.host.rot), fz: Math.cos(s.host.rot)} : undefined);
+    }
+    const [cx, cy] = g.cellOf(s.x!, s.z!), i = g.idx(cx, cy);
+    return !g.blocked[i] && g.circleClear((cx + 0.5) * CELL, (cy + 0.5) * CELL, 0.3) && readableFrom(S, seen, s.x!, s.z!);
+  };
+  const sites = rng.shuffle(S.sites.filter(valid));
   const want = Math.min(sites.length, rng.int(EVAC_NOTE_COUNT[0], EVAC_NOTE_COUNT[1]));
   const free = new Set(sites), used = new Set<number>(), out: [NoteSite, number][] = [];
   const perSlot = new Map<string, number>();
@@ -871,6 +944,17 @@ function chooseNotes(S: Shelter): [NoteSite, number][] {
   return out;
 }
 
+/** The host-local x range a note's centre may take on a support's top (the sheet whole on the top; on a bedroll, on the bag's flat
+ *  run between the folded pad at its head end and the bundle at its foot: gen/purposeShapes.ts bedroll). */
+export function noteRange(host: PropPlacement): [number, number] {
+  const half = EVAC_NOTE.w / 2 + 0.02;
+  if (host.kind === 'bedroll') return [-0.3 + half, 0.58 - half];
+  if (host.kind === 'skywaysConMerchTable') return [-SKYWAYS_MERCH_TOP.x + half, SKYWAYS_MERCH_TOP.x - half];
+  if (host.kind === 'noticeBoard') return [-PROP_DEFS.noticeBoard.w / 2 + half, PROP_DEFS.noticeBoard.w / 2 - half];
+  const w = PROP_DEFS[host.kind].w;
+  return [-w / 2 + 0.06 + half, w / 2 - 0.06 - half];
+}
+
 /** Places one note prop on its site (on-host decor on a table / desk / bedroll / board; or flat on the floor). */
 function placeNote(S: Shelter, site: NoteSite, text: number): PropPlacement | null {
   const {layout} = S, v = S.vc.v;
@@ -879,20 +963,32 @@ function placeNote(S: Shelter, site: NoteSite, text: number): PropPlacement | nu
   if (site.host) {
     const host = site.host, hi = layout.props.indexOf(host);
     if (hi < 0) return null;
-    const [x, z] = toWorld(host, site.lx ?? 0, site.lz ?? 0);
     const along = Math.abs(Math.sin(site.rot)) < 0.5;
     const f = pinned ? {hx: along ? EVAC_NOTE.w / 2 : 0.002, hz: along ? 0.002 : EVAC_NOTE.w / 2} : footprint('evacNote', site.rot);
+    // the spot on the support's top (host-local x), shifted along it clear of any other decor on the same top
+    const [xLo, xHi] = noteRange(host);
+    let at: [number, number] | null = null, lx = site.lx ?? 0;
+    for (const dx of [0, 0.25, -0.25, 0.5, -0.5]) {
+      const cx = (site.lx ?? 0) + dx;
+      if (cx < xLo || cx > xHi) continue;
+      const [x, z] = toWorld(host, cx, site.lz ?? 0);
+      if (layout.props.some(q => q.host === hi && Math.abs(q.x - x) < q.hx + f.hx + 0.02 && Math.abs(q.z - z) < q.hz + f.hz + 0.02)) continue;
+      at = [x, z]; lx = cx;
+      break;
+    }
+    if (!at) return null;
+    const [x, z] = at;
     const p: PropPlacement = {kind: 'evacNote', x: r3(x), z: r3(z), y: r3(host.y + (site.top ?? 0)), rot: r3(site.rot), area: host.area, hx: r3(f.hx), hz: r3(f.hz),
       h: pinned ? EVAC_NOTE.d : EVAC_NOTE.h, blocksSight: false, variant, host: hi, ...(pinned ? {mounted: true} : {}), ...(host.level ? {level: host.level} : {})};
     // a holder's loot surface skips the sheet (PropPlacement.cut)
-    if (!pinned && (host.kind === 'desk' || host.kind === 'table')) (host.cut ??= []).push({y: site.top ?? host.h, x0: r3((site.lx ?? 0) - 0.16), x1: r3((site.lx ?? 0) + 0.16)});
+    if (!pinned && (host.kind === 'desk' || host.kind === 'table')) (host.cut ??= []).push({y: site.top ?? host.h, x0: r3(lx - 0.16), x1: r3(lx + 0.16)});
     layout.props.push(p);
     if (!site.late) v.placed.push(p);
     return p;
   }
   if (!site.area || site.x === undefined || site.z === undefined) return null;
-  const f = footprint('evacNote', 0);
   const rot = Math.round(site.rot / (Math.PI / 2)) * (Math.PI / 2);
+  const f = footprint('evacNote', rot);
   return v.push({kind: 'evacNote', x: site.x, z: site.z, y: 0, rot: r3(normYaw(rot)), area: site.area.id, hx: r3(f.hx), hz: r3(f.hz), h: EVAC_NOTE.h, blocksSight: false, variant});
 }
 

@@ -132,4 +132,9 @@ export const EVAC_SPECS: Readonly<Record<EvacKind, EventKindSpec>> = {
   },
 };
 /** Scale-check records (tools/asset-pipeline/props/scale-check.mjs --kind <kind> beside zombie lastshift, viewed): W x H x D, contact. */
-export const EVAC_SCALE: Readonly<Partial<Record<EvacKind, string>>> = {};
+export const EVAC_SCALE: Readonly<Partial<Record<EvacKind, string>>> = {
+  evacCot: '0.70 x 0.40 (bare; 0.47-0.48 with pillow / blanket) x 1.90 m; grounded, 6 contacts (three floor bars, rubber caps), bed at 0.40 m: just under the 0.45 m seat line, a camp cot',
+  evacScreen: '1.60 x 1.75 x 0.45 m; grounded, 8 contacts (feet / castors); panels to 1.74 m: head height of the reference zombie',
+  evacNote: 'flat 0.216 x 0.002 x 0.279 m (a letter-size sheet), lies on its support (4 contacts); pinned 0.216 x 0.279 x 0.011 m on the board face, no floor contact (mounted)',
+  evacWarnBoard: '1.20 x 0.80 x 0.024 m plywood sheet, wall-mounted 1.15-1.95 m (eye level of the reference zombie), no floor contact (mounted)',
+};

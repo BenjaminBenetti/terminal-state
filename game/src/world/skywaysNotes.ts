@@ -98,21 +98,23 @@ export class SkywaysNotes {
     return true;
   }
 
-  /** The note the player stands at (reach, storey, looking toward it, nothing solid between; pinned: in front of its board), or null. */
+  /**
+   * The note the player stands at (reach, storey, looking toward it, nothing solid between; pinned: in front of its board), or null.
+   * Of several (the notes pinned side by side on one board), the one looked at most directly.
+   */
   aimed(): PropPlacement | null {
     const p = this.host.player;
-    let best: PropPlacement | null = null, bd = Infinity;
+    let best: PropPlacement | null = null, bs = Infinity;
     for (const n of this.notes) {
       const dx = p.x - n.x, dz = p.z - n.z, d = Math.hypot(dx, dz), up = n.y - p.y;
       if (d > NOTE_READ.reach || up < NOTE_READ.below || up > NOTE_READ.above) continue;
       if (n.mounted && dx * Math.sin(n.rot) + dz * Math.cos(n.rot) < NOTE_READ.front) continue;
-      if (d > 0.25) {
-        // the view (forward = (-sin yaw, -cos yaw)) toward the note
-        const cos = (Math.sin(p.yaw) * dx + Math.cos(p.yaw) * dz) / d;
-        if (Math.acos(Math.max(-1, Math.min(1, cos))) > NOTE_READ.look) continue;
-      }
+      // the view (forward = (-sin yaw, -cos yaw)) toward the note (straight down at one's feet counts as looked at)
+      const ang = d > 0.25 ? Math.acos(Math.max(-1, Math.min(1, (Math.sin(p.yaw) * dx + Math.cos(p.yaw) * dz) / d))) : 0;
+      if (ang > NOTE_READ.look) continue;
       if (!this.clear(n, p.x, p.z)) continue;
-      if (d < bd) { bd = d; best = n; }
+      const score = ang + 0.1 * d;
+      if (score < bs) { bs = score; best = n; }
     }
     return best;
   }
