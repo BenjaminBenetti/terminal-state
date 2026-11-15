@@ -25,8 +25,8 @@ import {
 } from '../src/ui/settingsStore';
 import {STORAGE_KEYS} from '../src/campaign/types';
 import {
-  APPLYING_NOTE, ENHANCED_LIGHTING_DEFAULT, ENHANCED_LIGHTING_LABEL, ENHANCED_LIGHTING_MODES, ENHANCED_LIGHTING_OPTIONS, PENDING_NOTE, REACTOR_REASON, REFLECTIONS_DEFAULT,
-  REFLECTIONS_LABEL, REFLECTION_OPTIONS, REFLECTION_QUALITIES, SOFTWARE_REASON, applyFailedNote, describeEnhancedLighting, describeReflections, enhancedLightingLine,
+  APPLYING_NOTE, ENHANCED_LIGHTING_DEFAULT, ENHANCED_LIGHTING_LABEL, ENHANCED_LIGHTING_MODES, ENHANCED_LIGHTING_OPTIONS, FALLBACK_REASON, PENDING_NOTE, REACTOR_REASON, REFLECTIONS_DEFAULT,
+  REFLECTIONS_LABEL, REFLECTION_OPTIONS, REFLECTION_QUALITIES, SOFTWARE_REASON, SOFTWARE_SHADING_REASON, applyFailedNote, describeEnhancedLighting, describeReflections, enhancedLightingLine,
   enhancedLightingSummary, isEnhancedLightingMode, isReflectionQuality, reflectionsSummary,
   type EnhancedLightingActive, type EnhancedLightingStatus,
 } from '../src/world/enhancedLighting';
@@ -46,7 +46,8 @@ class MemStorage implements SettingsStorage {
 }
 
 const MIB = 1048576;
-const ACTIVE: EnhancedLightingActive = {gi: 'standard', giReason: null, reflections: 'standard', reflectionsReason: null, cache: 'hit', giMs: 0, probeMs: 0, probes: 42, probeBytes: 1_500_000};
+/** The live station of a hardware renderer: the enhanced bake, shaded full (the mirror has its own test below). */
+const ACTIVE: EnhancedLightingActive = {gi: 'standard', giReason: null, shading: 'full', shadingReason: null, mirror: false, reflections: 'standard', reflectionsReason: null, cache: 'hit', giMs: 0, probeMs: 0, probes: 42, probeBytes: 1_500_000};
 /** A runtime status: `a` overrides the live station's fields (null = no station built yet). */
 const status = (o: Partial<EnhancedLightingStatus> = {}, a: Partial<EnhancedLightingActive> | null = {}): EnhancedLightingStatus => ({
   requested: {lighting: 'auto', reflections: 'standard'}, active: a === null ? null : {...ACTIVE, ...a}, pending: false, cacheBackend: 'indexeddb', ...o});
@@ -374,14 +375,14 @@ describe('the settings form: "Enhanced lighting" and "Reflections" after Ambient
       expect(m.el('reflections-help').textContent).toBe(`This station: 42 probes (standard). ${APPLYING_NOTE}`);
       expect(APPLYING_NOTE).toBe('Rebuilding this station\'s lighting…');
       expect([m.el('lighting').disabled, m.el('reflections').disabled]).toEqual([true, true]);
-      expect(enhancedLightingLine(st)).toBe('on: bake standard · refl standard ×42 · cache miss · applying a change');
+      expect(enhancedLightingLine(st)).toBe('on: bake standard full · refl standard ×42 · cache miss · applying a change');
       // it failed: the station keeps what it had, the reason is shown (never hidden behind "pending"), the choices are free again
       st = status({requested: {lighting: 'on', reflections: 'high'}, pending: true, applying: false, error: 'the bake ran out of memory'}, {cache: 'miss'});
       store.set({fov: 91}); // any store event re-reads the status
       expect(m.el('lighting-help').textContent).toBe('This station: enhanced bake (standard), baked and cached. The change could not be applied (the bake ran out of memory): the station keeps this lighting.');
       expect(m.el('reflections-help').textContent).toBe(`This station: 42 probes (standard). ${applyFailedNote('the bake ran out of memory')}`);
       expect([m.el('lighting').disabled, m.el('reflections').disabled]).toEqual([false, false]);
-      expect(enhancedLightingLine(st)).toBe('on: bake standard · refl standard ×42 · cache miss · change failed');
+      expect(enhancedLightingLine(st)).toBe('on: bake standard full · refl standard ×42 · cache miss · change failed');
       // applied: neither note
       st = status({requested: {lighting: 'on', reflections: 'high'}, pending: false, applying: false, error: null}, {gi: 'high', reflections: 'high', cache: 'miss'});
       store.set({fov: 92});
@@ -418,6 +419,63 @@ describe('the settings form: "Enhanced lighting" and "Reflections" after Ambient
       expect(c.el('lighting-help').textContent).toMatch(/browser storage is unavailable/);
       c.off();
     } finally { c.dom.uninstall(); }
+  });
+
+  it('(e) how the bake is shaded: full is the plain statement, plain says why; the compact line names it either way', () => {
+    // task studio-baked-gi-visual-uplift-20261115-004324-01
+    const full = status(), plain = status({}, {shading: 'plain', shadingReason: SOFTWARE_SHADING_REASON, reflections: 'off', reflectionsReason: SOFTWARE_REASON, probes: 0, probeBytes: 0});
+    expect(describeEnhancedLighting(full)).toBe('This station: enhanced bake (standard), from the cache');
+    expect(describeEnhancedLighting(plain)).toBe(`This station: enhanced bake (standard), from the cache — ${SOFTWARE_SHADING_REASON}`);
+    expect(enhancedLightingLine(full)).toBe('auto: bake standard full · refl standard ×42 · cache hit');
+    expect(enhancedLightingLine(plain)).toBe(`auto: bake standard plain · refl off (${SOFTWARE_REASON}) · cache hit`);
+    // the form shows exactly that, and the reason survives a pending change
+    const m = mountForm({lightingStatus: () => plain});
+    try {
+      expect(m.el('lighting-help').textContent).toBe(describeEnhancedLighting(plain));
+      expect(m.el('reflections-help').textContent).toBe(`This station: no reflections — ${SOFTWARE_REASON}`);
+      expect(m.copy()).not.toMatch(OVERCLAIM);
+      m.off();
+    } finally { m.dom.uninstall(); }
+    expect(describeEnhancedLighting({...plain, pending: true})).toBe(`This station: enhanced bake (standard), from the cache — ${SOFTWARE_SHADING_REASON}. ${PENDING_NOTE}`);
+    // any other reason is shown as given (a field too deep for the renderer's 3D textures, say)
+    expect(describeEnhancedLighting(status({}, {shading: 'plain', shadingReason: 'the field is too deep'}))).toBe('This station: enhanced bake (standard), from the cache — the field is too deep');
+    // plain without a reason has nothing to explain; a reason is never shown beside full shading
+    expect(describeEnhancedLighting(status({}, {shading: 'plain', shadingReason: null}))).toBe('This station: enhanced bake (standard), from the cache');
+    expect(describeEnhancedLighting(status({}, {shading: 'full', shadingReason: 'x'}))).toBe('This station: enhanced bake (standard), from the cache');
+    // a record from before the shading existed reads as plain (it was): no reason, no claim of full shading
+    const {shading: _s, shadingReason: _r, mirror: _m, ...old} = ACTIVE;
+    const before: EnhancedLightingStatus = {requested: {lighting: 'auto', reflections: 'standard'}, active: old, pending: false, cacheBackend: 'indexeddb'};
+    expect(describeEnhancedLighting(before)).toBe('This station: enhanced bake (standard), from the cache');
+    expect(enhancedLightingLine(before)).toBe('auto: bake standard plain · refl standard ×42 · cache hit');
+    expect(describeReflections(before)).toBe('This station: 42 probes (standard)');
+    // the baseline has no shading to name
+    const base = status({requested: {lighting: 'off', reflections: 'standard'}, cacheBackend: 'none'}, {gi: 'baseline', shading: 'plain', reflections: 'off', cache: 'none', probes: 0, probeBytes: 0});
+    expect(enhancedLightingLine(base)).toBe('off: baseline · refl off');
+    for (const st of [full, plain, before, base]) expect(describeEnhancedLighting(st) + describeReflections(st) + enhancedLightingLine(st)).not.toMatch(OVERCLAIM);
+  });
+
+  it('(f) the live glass mirror is named only for a station that has it', () => {
+    // (the wording is the contract's: this pins that it is said when — and only when — the station's lighting includes the mirror)
+    const without = status(), withMirror = status({}, {mirror: true});
+    expect(describeReflections(without)).toBe('This station: 42 probes (standard)');
+    expect(describeReflections(without)).not.toMatch(/mirror/i);
+    expect(enhancedLightingLine(without)).not.toMatch(/mirror/i);
+    expect(describeReflections(withMirror)).toMatch(/mirror/i);
+    expect(describeReflections(withMirror)).toMatch(/^This station: .*42 probes \(standard\)$/);
+    expect(enhancedLightingLine(withMirror)).toMatch(/^auto: bake standard full · refl standard ×42.*mirror.* · cache hit$/);
+    // a station without reflections never names one, whatever the record holds
+    const none = status({}, {mirror: true, reflections: 'off', reflectionsReason: FALLBACK_REASON, probes: 0, probeBytes: 0});
+    expect(describeReflections(none)).toBe(`This station: no reflections — ${FALLBACK_REASON}`);
+    expect(enhancedLightingLine(none)).not.toMatch(/mirror/i);
+    const m = mountForm({lightingStatus: () => withMirror});
+    try {
+      expect(m.el('reflections-help').textContent).toBe(describeReflections(withMirror));
+      expect(m.copy()).not.toMatch(OVERCLAIM);
+      m.off();
+    } finally { m.dom.uninstall(); }
+    // what each choice means, before a station exists: no promise the renderer may not keep is worded as a fact about this machine
+    for (const mode of ENHANCED_LIGHTING_MODES) expect(enhancedLightingSummary(mode)).not.toMatch(OVERCLAIM);
+    for (const q of REFLECTION_QUALITIES) expect(reflectionsSummary(q)).not.toMatch(OVERCLAIM);
   });
 
   it('bound both ways: a choice is stored (nothing else changes), another form\'s change shows here, an unknown value is ignored', () => {
@@ -834,7 +892,7 @@ describe('diagnostics: the perf overlay\'s Lighting row, the recorder\'s environ
       st = status({requested: {lighting: 'on', reflections: 'high'}, pending: true}, {cache: 'miss'});
       o.frame(1000, 5);
       expect(o.snapshot().text.light).toBe(enhancedLightingLine(st));
-      expect(o.snapshot().text.light).toBe('on: bake standard · refl standard ×42 · cache miss · change pending');
+      expect(o.snapshot().text.light).toBe('on: bake standard full · refl standard ×42 · cache miss · change pending');
       expect(o.snapshot().text.output).toBe('1280×720 · DPR 1.00 · quality high');
       o.hide();
     } finally { dom.uninstall(); }
