@@ -579,7 +579,9 @@ describe('perf recorder: the recent warm-up result (schemaMinor 5, task static-b
     vi.spyOn(performance, 'now').mockImplementation(() => clock.t);
     const g = new FakeGame() as FakeGame & {warmup?: unknown};
     g.warmup = {status: 'partial', mode: 'full', ms: 120004.2, budgetMs: 120000, cutStage: 'materials', reason: 'time budget (120 s) reached in materials',
-      plan: {items: 1366, others: 722, casters: 900}, stages: {materials: {done: 900, total: 1366, ms: 119000}, passes: {done: 1, total: 1, ms: 300}, shadows: {done: 0, total: 20, ms: 0}, view: {done: 1, total: 1, ms: 40}}};
+      plan: {items: 1366, others: 722, casters: 900}, stages: {materials: {done: 900, total: 1366, ms: 119000}, passes: {done: 1, total: 1, ms: 300}, shadows: {done: 0, total: 20, ms: 0}, view: {done: 1, total: 1, ms: 40}},
+      // (task studio-gi-mood-bounce-loading-20261115-081523-01) where the materials stage's time went: numbers and the yield's name only
+      compile: {yield: 'task', builds: 199, buildMs: 25300.126, pipelines: 170, pipelineWaitMs: 812.5, yields: 2890, yieldWaitMs: null, note: 'https://x.example/not-copied'}};
     const ctl = new PerfRecorderController(asGame(g), quick);
     ctl.start('qa');
     for (let k = 0; k < 5; k++) playFrame(g, ctl, clock);
@@ -590,6 +592,9 @@ describe('perf recorder: the recent warm-up result (schemaMinor 5, task static-b
       stages: {materials: {done: 900, total: 1366, ms: 119000}, shadows: {done: 0, total: 20, ms: 0}}, plan: {items: 1366}};
     expect(r.world.segments[0]).toMatchObject({route: 'recording-start', lastWarmup: want});
     expect(r.environment.warmup).toMatchObject(want);
+    const split = {yield: 'task', builds: 199, buildMs: 25300.13, pipelines: 170, pipelineWaitMs: 812.5, yields: 2890, yieldWaitMs: null};
+    expect(r.environment.warmup.compile).toEqual(split); // (exactly these keys: nothing else of the object is copied)
+    expect(r.world.segments[0].lastWarmup.compile).toEqual(split);
     // an error-message reason (may hold a path / URL) is withheld
     g.warmup = {status: 'failed', mode: 'full', ms: 3, reason: 'fetch https://x.example/a?b=1 failed', stages: {}};
     const c2 = new PerfRecorderController(asGame(g), quick);
@@ -598,6 +603,7 @@ describe('perf recorder: the recent warm-up result (schemaMinor 5, task static-b
     await c2.stop('manual', 'qa');
     const r2 = c2.reportObject() as any;
     expect(r2.world.segments[0].lastWarmup.reason).toBe('withheld (not a plain reason)');
+    expect(r2.world.segments[0].lastWarmup.compile).toBe(null); // (a result without the split)
     expect(JSON.stringify(r2)).not.toContain('x.example');
     vi.restoreAllMocks();
   });

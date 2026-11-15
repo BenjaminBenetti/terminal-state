@@ -222,6 +222,11 @@ what they were for.
 * **`environment.warmup`** carries the same summary (was: mode and status only).
 * **Sanitized reasons:** a reason containing URL or path characters (an error message) is stored as `withheld (not a plain
   reason)`.
+* **`compile`** (an additive key of the same summary; schemaMinor unchanged): where the warm-up's materials stage spent its time
+  on this page. Fields: `yield` (`scheduler`, `task` or `frame`: how the compile gave the page a turn), `builds` and `buildMs` (node
+  builds and their wall time), `pipelines` and `pipelineWaitMs` (asynchronous pipeline requests and the time waited for them),
+  `yields` and `yieldWaitMs` (counted with the warm-up's own task yield only). `null` for a result without the split. These are
+  wall times of the page's own thread, not GPU times (`docs/rendering-warmup.md`).
 
 **The capture that uses this** (Office top floor, or wherever the hitches are felt): about 60 s of the same kind of play. Walk
 and turn through the heavy views, fire a few shots at enemies, and have the flashlight on part of the time. Press F9 at stalls

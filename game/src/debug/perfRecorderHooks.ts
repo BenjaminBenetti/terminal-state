@@ -135,9 +135,11 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 /**
  * A warm-up result (render/warmup.ts WarmupResult) as the report stores it (numbers / short strings only): status, reason, mode, ms,
  * (schemaMinor 5) budgetMs and cutStage, per-stage done / total / ms, the plan's counts. Null when absent.
+ * Task studio-gi-mood-bounce-loading-20261115-081523-01 (an additive key: schemaMinor unchanged): `compile`, where the materials
+ * stage's time went (render/compileYield.ts CompileSplit: node builds, asynchronous pipeline waits, yields) — null for a result without it.
  */
 function warmupSummary(r: unknown): Record<string, unknown> | null {
-  const w = r as {status?: unknown; mode?: unknown; reason?: unknown; ms?: unknown; budgetMs?: unknown; cutStage?: unknown; plan?: Record<string, unknown>; stages?: Record<string, {done?: number; total?: number; ms?: number}>} | null;
+  const w = r as {status?: unknown; mode?: unknown; reason?: unknown; ms?: unknown; budgetMs?: unknown; cutStage?: unknown; plan?: Record<string, unknown>; stages?: Record<string, {done?: number; total?: number; ms?: number}>; compile?: Record<string, unknown> | null} | null;
   if (!w || typeof w !== 'object') return null;
   const stages: Record<string, unknown> = {};
   for (const [k, s] of Object.entries(w.stages ?? {})) stages[k] = {done: s?.done ?? null, total: s?.total ?? null, ms: typeof s?.ms === 'number' ? r2(s.ms) : null};
@@ -145,8 +147,11 @@ function warmupSummary(r: unknown): Record<string, unknown> | null {
   for (const [k, v] of Object.entries(w.plan ?? {})) if (typeof v === 'number') plan[k] = v;
   // (a reason may be an error message: kept only without URL / path characters, else withheld)
   const reason = typeof w.reason === 'string' ? (/[?#:/\\@]/.test(w.reason) ? 'withheld (not a plain reason)' : w.reason.slice(0, 120)) : null;
+  const c = w.compile, num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? r2(v) : null);
+  const compile = c && typeof c === 'object' ? {yield: str(c.yield, 16), builds: num(c.builds), buildMs: num(c.buildMs), pipelines: num(c.pipelines),
+    pipelineWaitMs: num(c.pipelineWaitMs), yields: num(c.yields), yieldWaitMs: num(c.yieldWaitMs)} : null;
   return {status: str(w.status), mode: str(w.mode), reason, warmupMs: typeof w.ms === 'number' ? r2(w.ms) : null,
-    budgetMs: typeof w.budgetMs === 'number' ? w.budgetMs : null, cutStage: str(w.cutStage), stages, plan: w.plan ? plan : null};
+    budgetMs: typeof w.budgetMs === 'number' ? w.budgetMs : null, cutStage: str(w.cutStage), stages, plan: w.plan ? plan : null, compile};
 }
 
 /** The three ways a station is built: at once (tests, tools), paced between the journey's frames, in time slices behind the loading screen. */
@@ -193,7 +198,7 @@ interface GameExtras {
   world?: {culler?: {stats?: {culled?: number; level?: number}}} | null;
   layout?: {name?: unknown} | null;
   softwareGl?: {software?: boolean} | null;
-  warmup?: {mode?: unknown; status?: unknown; reason?: unknown; ms?: unknown; budgetMs?: unknown; cutStage?: unknown; plan?: Record<string, unknown>; stages?: Record<string, {done?: number; total?: number; ms?: number}>} | null;
+  warmup?: {mode?: unknown; status?: unknown; reason?: unknown; ms?: unknown; budgetMs?: unknown; cutStage?: unknown; plan?: Record<string, unknown>; stages?: Record<string, {done?: number; total?: number; ms?: number}>; compile?: Record<string, unknown> | null} | null;
   atmosphereBypass?: string | null;
   frameBudget?: {diagnostics(): {refresh?: {hz?: number; measured?: boolean}}};
   camera?: {fov?: number};
