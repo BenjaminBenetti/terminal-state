@@ -44,4 +44,8 @@ export class SingleFlight {
     this.current = p;
     return p;
   }
+  /** Resolves once the running flight has ended, however it ended (at once when none is running). */
+  settled(): Promise<void> {
+    return this.current ? this.current.then(() => {}, () => {}) : Promise.resolve();
+  }
 }

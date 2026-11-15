@@ -8,11 +8,11 @@
 //  2. the cache line's wording (lightingCacheLine) from the derived cache's own numbers;
 //  3. the settings form (ui/mainMenu.ts, menu AND pause menu): "Enhanced lighting" and "Reflections" after Ambient occlusion — ids,
 //     options and their order from the contract, help lines equal to the contract's describe functions for (a) no status, (b) an active
-//     enhanced station, (c) a pending change, (d) a fallback reason; Reflections disabled while Enhanced lighting is Off (its value
+//     enhanced station, (c) a change not applied yet / being applied / failed, (d) a fallback reason; Reflections disabled while Enhanced lighting is Off (its value
 //     kept); the cache line for the IndexedDB / session-only / unopened cases, the Clear button, and that late or failed async answers
 //     never reach a replaced form or throw;
 //  4. the plumbing (main.ts source text): both forms get the runtime's status / cache / clear / change signal; ?lighting= and
-//     ?reflections= are session overrides; a change re-applies nothing;
+//     ?reflections= are session overrides; a change asks the game to relight the live station;
 //  5. diagnostics: the perf overlay's Lighting row, the recorder's environment value, the QA hooks.
 import {describe, expect, it, vi} from 'vitest';
 import * as fs from 'node:fs';
@@ -25,9 +25,9 @@ import {
 } from '../src/ui/settingsStore';
 import {STORAGE_KEYS} from '../src/campaign/types';
 import {
-  ENHANCED_LIGHTING_DEFAULT, ENHANCED_LIGHTING_LABEL, ENHANCED_LIGHTING_MODES, ENHANCED_LIGHTING_OPTIONS, REACTOR_REASON, REFLECTIONS_DEFAULT, REFLECTIONS_LABEL,
-  REFLECTION_OPTIONS, REFLECTION_QUALITIES, SOFTWARE_REASON, describeEnhancedLighting, describeReflections, enhancedLightingLine, enhancedLightingSummary,
-  isEnhancedLightingMode, isReflectionQuality, reflectionsSummary,
+  APPLYING_NOTE, ENHANCED_LIGHTING_DEFAULT, ENHANCED_LIGHTING_LABEL, ENHANCED_LIGHTING_MODES, ENHANCED_LIGHTING_OPTIONS, PENDING_NOTE, REACTOR_REASON, REFLECTIONS_DEFAULT,
+  REFLECTIONS_LABEL, REFLECTION_OPTIONS, REFLECTION_QUALITIES, SOFTWARE_REASON, applyFailedNote, describeEnhancedLighting, describeReflections, enhancedLightingLine,
+  enhancedLightingSummary, isEnhancedLightingMode, isReflectionQuality, reflectionsSummary,
   type EnhancedLightingActive, type EnhancedLightingStatus,
 } from '../src/world/enhancedLighting';
 import {EnhancedLightingRuntime} from '../src/world/enhancedLightingRuntime';
@@ -349,14 +349,47 @@ describe('the settings form: "Enhanced lighting" and "Reflections" after Ambient
     } finally { m.dom.uninstall(); }
   });
 
-  it('(c) a pending change: what the live station uses now, and that the change applies when a station next loads', () => {
+  it('(c) a change the live station does not use yet: what it uses now, and when the change is applied', () => {
     const st = status({requested: {lighting: 'on', reflections: 'high'}, pending: true}, {cache: 'miss'});
     const m = mountForm({lightingStatus: () => st});
     try {
       expect(m.el('lighting-help').textContent).toBe(describeEnhancedLighting(st));
       expect(m.el('reflections-help').textContent).toBe(describeReflections(st));
-      expect(m.el('lighting-help').textContent).toBe('This station: enhanced bake (standard), baked and cached. Applies when a station next loads.');
-      expect(m.el('reflections-help').textContent).toMatch(/^This station: 42 probes \(standard\)\. Applies when a station next loads\.$/);
+      expect(m.el('lighting-help').textContent).toBe(`This station: enhanced bake (standard), baked and cached. ${PENDING_NOTE}`);
+      expect(m.el('reflections-help').textContent).toBe(`This station: 42 probes (standard). ${PENDING_NOTE}`);
+      expect(PENDING_NOTE).toBe('Not applied yet: it is applied when the game is paused, or when a station next loads.');
+      expect([m.el('lighting').disabled, m.el('reflections').disabled]).toEqual([false, false]);
+      m.off();
+    } finally { m.dom.uninstall(); }
+  });
+
+  it('(c2) a change being applied to the live station: both lines say so and both choices are held; a failed one says why, and the choices work again', () => {
+    // task studio-graphics-gpu-materials-toggle-20261114-212239-01
+    let st = status({requested: {lighting: 'on', reflections: 'high'}, pending: true, applying: true}, {cache: 'miss'});
+    const store = new SettingsStore(new MemStorage());
+    store.set({enhancedLighting: 'on', reflections: 'high'});
+    const m = mountForm({store, lightingStatus: () => st});
+    try {
+      expect(m.el('lighting-help').textContent).toBe(`This station: enhanced bake (standard), baked and cached. ${APPLYING_NOTE}`);
+      expect(m.el('reflections-help').textContent).toBe(`This station: 42 probes (standard). ${APPLYING_NOTE}`);
+      expect(APPLYING_NOTE).toBe('Rebuilding this station\'s lighting…');
+      expect([m.el('lighting').disabled, m.el('reflections').disabled]).toEqual([true, true]);
+      expect(enhancedLightingLine(st)).toBe('on: bake standard · refl standard ×42 · cache miss · applying a change');
+      // it failed: the station keeps what it had, the reason is shown (never hidden behind "pending"), the choices are free again
+      st = status({requested: {lighting: 'on', reflections: 'high'}, pending: true, applying: false, error: 'the bake ran out of memory'}, {cache: 'miss'});
+      store.set({fov: 91}); // any store event re-reads the status
+      expect(m.el('lighting-help').textContent).toBe('This station: enhanced bake (standard), baked and cached. The change could not be applied (the bake ran out of memory): the station keeps this lighting.');
+      expect(m.el('reflections-help').textContent).toBe(`This station: 42 probes (standard). ${applyFailedNote('the bake ran out of memory')}`);
+      expect([m.el('lighting').disabled, m.el('reflections').disabled]).toEqual([false, false]);
+      expect(enhancedLightingLine(st)).toBe('on: bake standard · refl standard ×42 · cache miss · change failed');
+      // applied: neither note
+      st = status({requested: {lighting: 'on', reflections: 'high'}, pending: false, applying: false, error: null}, {gi: 'high', reflections: 'high', cache: 'miss'});
+      store.set({fov: 92});
+      expect(m.el('lighting-help').textContent).toBe('This station: enhanced bake (high), baked and cached');
+      expect(m.el('reflections-help').textContent).toBe('This station: 42 probes (high)');
+      // Reflections stays disabled under Off whatever the status says
+      store.set({enhancedLighting: 'off'});
+      expect([m.el('lighting').disabled, m.el('reflections').disabled]).toEqual([false, true]);
       m.off();
     } finally { m.dom.uninstall(); }
   });
@@ -460,7 +493,7 @@ describe('the settings form: "Enhanced lighting" and "Reflections" after Ambient
       m.choose('lighting', 'on'); // the runtime now reports the change as pending
       rt.live.pending = true;
       rt.changed();
-      expect(m.el('lighting-help').textContent).toBe(`This station: enhanced bake (standard), baked and cached. Applies when a station next loads.`);
+      expect(m.el('lighting-help').textContent).toBe(`This station: enhanced bake (standard), baked and cached. ${PENDING_NOTE}`);
       // the store events refresh the lines too (any setting: the status is re-read)
       rt.live.pending = false;
       store.set({fov: 90});
@@ -701,7 +734,7 @@ describe('the settings form: the lighting cache line and "Clear lighting cache"'
 });
 
 // =============================================================================================
-describe('the plumbing: main.ts hands both forms the runtime; ?lighting= / ?reflections= are session overrides; nothing is re-applied', () => {
+describe('the plumbing: main.ts hands both forms the runtime; ?lighting= / ?reflections= are session overrides; a change relights the live station', () => {
   const main = SRC('src/main.ts');
 
   it('both mounts (the pause menu\'s and the main menu\'s form) get the status, the cache numbers, the clear and the change signal', () => {
@@ -743,13 +776,18 @@ describe('the plumbing: main.ts hands both forms the runtime; ?lighting= / ?refl
     for (const q of ['?lighting=off&reflections=high', '?lighting=bogus']) expect([run(q).stored, run(q).writes], q).toEqual([['auto', 'standard'], 0]);
   });
 
-  it('a change of either setting re-applies nothing: no applySettings, no resize, no re-warm (the game reads them when a station is built)', () => {
+  it('a change of either setting asks the game to relight the LIVE station, and nothing else: no applySettings, no resize, no quality re-warm', () => {
+    // task studio-graphics-gpu-materials-toggle-20261114-212239-01 (the former "applies when a station next loads" hold is superseded)
     const at = main.indexOf('settings.subscribe((s, changed) => {');
     const handler = main.slice(at, main.indexOf('game.onSettingsChanged', at));
     expect(handler).toMatch(/if \(qualityChanged\) void game\.rewarmAfterSettings\(\);/);
-    expect(handler).not.toMatch(/enhancedLighting|reflections|lighting/i);
-    expect(main).not.toMatch(/changed\.(includes|some)\([^)]*(enhancedLighting|reflections)/);
-    // what the handler does for them, replayed: only the copy (the two keys match none of its branches)
+    expect(handler).toMatch(/if \(changed\.some\(k => k === 'enhancedLighting' \|\| k === 'reflections'\)\) void game\.relightAfterSettings\(\);/);
+    // the relight line is the only place the handler names them, and it comes after the copy and the quality re-warm
+    expect(handler.match(/enhancedLighting/g)).toHaveLength(1);
+    expect(handler.match(/'reflections'/g)).toHaveLength(1);
+    expect(handler.indexOf('game.relightAfterSettings()')).toBeGreaterThan(handler.indexOf('game.rewarmAfterSettings()'));
+    expect(handler.indexOf('game.rewarmAfterSettings()')).toBeGreaterThan(handler.indexOf('copySettingsInto(game.settings, s)'));
+    // what the handler does for them, replayed: the copy, then the relight request (the two keys match none of the other branches)
     const applied: string[] = [];
     const store = new SettingsStore(new MemStorage());
     const game = {settings: {...SETTINGS_DEFAULTS}};
@@ -759,11 +797,13 @@ describe('the plumbing: main.ts hands both forms the runtime; ?lighting= / ?refl
       else if (changed.includes('ambientOcclusion')) applied.push('applySettings');
       else if (changed.some(k => k === 'volume' || k === 'muted')) applied.push('audio');
       if (qualityChanged) applied.push('rewarm');
+      if (changed.some(k => k === 'enhancedLighting' || k === 'reflections')) applied.push(`relight ${game.settings.enhancedLighting}/${game.settings.reflections}`);
     });
     store.set({enhancedLighting: 'on'});
     store.set({reflections: 'off'});
     store.set({enhancedLighting: 'off', reflections: 'high'});
-    expect(applied).toEqual([]);
+    store.set({fov: 80});
+    expect(applied).toEqual(['relight on/standard', 'relight on/off', 'relight off/high', 'applySettings']); // the game already holds the new values
     expect(game.settings).toMatchObject({enhancedLighting: 'off', reflections: 'high'});
   });
 });

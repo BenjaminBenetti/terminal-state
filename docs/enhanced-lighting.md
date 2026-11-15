@@ -1,7 +1,9 @@
 # Enhanced lighting
 
 Enhanced lighting improves the **existing** load-time station light field and adds **cached local reflections** for
-metal and glass. It is one feature with two settings (task studio-baked-lighting-reflections-20261114-050258-01):
+metal and glass (and, at High, a sheen on glazed wall tile). It is one feature with two settings (task
+studio-baked-lighting-reflections-20261114-050258-01; applied during play, the tile and column materials and the
+per-frame CPU work: task studio-graphics-gpu-materials-toggle-20261114-212239-01):
 
 - **Enhanced lighting**: Off / Auto / On (default **Auto**).
 - **Reflections**: Standard / High / Off (default **Standard**; needs Enhanced lighting).
@@ -83,8 +85,21 @@ The enhanced bake costs **load time only**. It adds no frame time and no GPU mem
 - Only **metal and glass** sample the probes. A material is chosen while its program is built: tagged glazing
   (`render/reflectTag.ts` `tagReflect(material, 'glass')`, or `'window'` for a pane set inside its wall, below), and
   metal candidates (a metalness map or a non-zero metalness). A metal candidate's fragment looks a probe up only when its real metalness is above 0.2 or its
-  roughness below 0.45. The station's tile, slab and ceiling sets are tagged `none`. Floors, walls, wood, cloth and
-  characters (skinned meshes) never reflect.
+  roughness below 0.45. The station's slab, ceiling and tunnel sets are tagged `none`. Floors, painted walls, wood,
+  cloth and characters (skinned meshes) never reflect.
+- **Glazed wall tile** is tagged `gloss` and reflects with the **High** probes only. The tile's authored roughness
+  map already says a tile face is glazed (0.38 to 0.42); the material scales it by 0.7 (`TILE_GLAZE_ROUGHNESS`, in
+  every lighting mode, so the lights' own highlights are tighter too). With High a tile face shows the station by
+  its Fresnel term: faint face-on, clear at a grazing angle. The weight is 1 up to roughness 0.45 and fades to 0 at
+  0.6, so grout and grime do not reflect, and no probe is looked up where the weight is nothing. At Standard the
+  weight is 0 everywhere: a wall costs no probe lookup. Both tiers use the same program (the tier is a uniform), so
+  changing between them compiles nothing.
+- The station **columns** are clad in the existing brushed-steel set (`WorldMaterials` `'pillar'`:
+  metalness 0.65, roughness 0.7 x the set's map, normal strength 1.3) instead of the charcoal trim paint, which read
+  as a black slab. They are metal candidates: with probes they show the lit station and its fixtures. The
+  station's baked light is diffuse only, so a pure metal would be black wherever no probe is in use; the diffuse
+  part that is left keeps the cladding a grey brushed metal there (Enhanced lighting Off, Reflections Off, the
+  renderers Auto leaves reflections off on).
 - three's physical lighting model does the rest: Fresnel, the roughness and metalness response, a metal's base colour.
 - A probe's light is scaled by the baked field's light at the surface (capped). Reflections dim with a flicker
   circuit, in a passing train's shadow and in a dark side room.
@@ -129,10 +144,39 @@ What Auto reads, and what it never reads:
 The status is always the truth about the **live** station: the settings form's help lines, the perf overlay's
 **Lighting** row, the performance recorder's environment and `__LL.lighting()` say what it was built with, where the
 data came from (cache hit / baked now / baked again) and why something asked for is not in use (for example "Auto
-skips reflections on a software renderer (On forces them)", or the Reactor). A changed setting applies when a
-station next loads; until then the status says a change is pending.
+skips reflections on a software renderer (On forces them)", or the Reactor). A changed setting is applied to the
+live station from the pause menu (below); until it is, the status says the change is pending.
 
 URL overrides for one session: `?lighting=off|auto|on`, `?reflections=off|standard|high`.
+
+## Changing the settings during play
+
+A changed Enhanced lighting or Reflections choice is applied to the station the player is in
+(`Game.relightAfterSettings`): at once when it is made in the pause menu, else the next time the game is paused (a
+choice that changes while playing, for example from another tab, waits; the status says "Not applied yet"). No main
+menu, Continue, station load or reroll is involved.
+
+- Only the station's **lighting** is rebuilt: the field bake of the new choice (from the derived cache when this
+  layout's entry matches, else baked now in the same paced steps, under the pause menu), then one step that swaps
+  the station lighting (`StationLighting.replaceSteps`: the flicker clock, the circuit levels and the fixtures
+  carry over; the fog keeps its maps, gas, smoke and clock and only gets the new field).
+- A changed light set compiles every lit material again, so the same **blocking warm-up** as a quality change
+  follows. No frame is drawn meanwhile. **Resume**, the two choices and the quality choice are held, and the pause
+  line says what is being done ("Rebuilding this station's lighting: bounced light…", "…: reflections…", then the
+  warm-up's own progress). A new game, Continue, Retry and travel wait for it, as for any warm-up.
+- The world, its seed and random stream, enemies, loot, identities, the player, the inventory and the save are not
+  touched. The replaced field and probe textures are released after the warm-up; render objects that outlive the
+  swap re-read their texture bindings (`render/bindingRefresh.ts`).
+- The status says `applying` while it runs and the new live state afterwards. If the bake or the install fails:
+  "The change could not be applied (reason): the station keeps this lighting." A failure after the swap leaves the
+  baseline lighting, and the status says baseline. A failed plan is not retried until the choice changes again.
+- A lost device or a station replaced meanwhile ends the rebuild without touching the new station.
+- Between two stations (the train is in the tunnel: the station left is gone, the next one is not built) and inside
+  a transition nothing is rebuilt: the next station's load applies the choice, and a pause that outlives the
+  transition applies it then. The status says "Not applied yet" meanwhile.
+- While it runs the status keeps saying what the station is still lit by, and the new lighting from the swap on.
+- Switching Reflections between Standard and High with a cached bake is the cheapest change (the probes only); Off
+  to On is the most expensive (the high bake, the probes and every lit program).
 
 ## The derived cache
 
@@ -173,6 +217,8 @@ time differs. The settings form shows the cache's size and has a **Clear lightin
   old ones afterwards, like the light field. A changed probe texture makes every render object re-read its texture
   bindings (`render/bindingRefresh.ts`), so parts that outlive the station (the parked car, the held weapon) follow.
 - Off and the Reactor return nothing from `bakeSteps`; `StationLighting` then bakes the baseline as before.
+- A changed choice in the pause menu rebuilds the live station's lighting in place (*Changing the settings during
+  play*).
 
 ## Costs
 
@@ -202,14 +248,43 @@ work is cut into paced build steps of a few milliseconds (the longest enhanced s
 
 Frame cost: the enhanced field has none (same texture, same shader). A reflective fragment adds one filtered and
 one unfiltered grid fetch, and per probe that weighs in (one in a block's core, up to four at a corner) three
-texel loads and two atlas samples; a tower window pane also samples the field a second time. Its frame-time cost
-on a real GPU has **not** been measured: the studio pod only has software rasterizers. `docs/performance-recorder.md` explains how to record it on a real machine; the recorder's
-environment block includes the lighting status.
+texel loads and two atlas samples; a tower window pane also samples the field a second time. A glazed tile
+fragment pays the same per probe, at High only.
+
+Main-thread cost per frame. One real-player recording exists (Chrome 157, WebGPU on an AMD RDNA4 card, 3456 x 1944,
+Skyways, On + High, 120 s): the main thread was the limit, not the GPU: about 16 ms of CPU a frame, 14 ms of it in
+the draw submit, against about 7 ms of GPU time. The bake was not part of it (3.3 s, once, at the load). Two causes
+found from it were this feature's and are fixed:
+
+- three r186 gives every `.load()` / `.sample()` of a uv-less texture node its own uv-transform matrix: a mat3
+  uniform, a multiply in the shader and an update per object, per pass, per frame. The probe table is fetched 48
+  times in a reflecting material; with the decay and light-occlusion lookups that was about 27 such updates per drawn
+  object on average. `render/textureFetch.ts` makes those lookups without the matrix (these textures are never
+  transformed). In the real Game in Node (Skyways, On + High, the same resolution, a no-op device; the same script
+  on the code before and after) the per-object texture updates fell from about 28 to about 3 per drawn object, and
+  in a CPU profile of 240 frames three's per-object node updates from 3.0 to 2.2 ms a frame (the texture updates
+  in it from 0.74 to 0.16 ms), which is what Off spends there (2.0 to 2.2 ms). Off itself is unchanged within the
+  spread between two runs. On WebGL2 a lookup keeps its per-object update (three's flip-Y uniform there); the mat3
+  and its multiply go on both.
+- three keeps a flat copy of the shader text on every node-builder state. After a load that was 134 M characters
+  for 23 M distinct ones, about 118 MB of duplicate strings in the JS heap that every full garbage collection had
+  to walk. `render/shaderTextShare.ts` points the states at the program maps' own strings. With both changes the
+  live JS heap in the same runs fell from about 540 to about 320 MB (On + High) and from about 420 to about 270 MB
+  (Off).
+
+Node numbers are relative (a no-op device has no driver or GPU-process cost): they say the work is gone, not what
+frame rate a player's machine reaches. The whole frame's time in those runs moved less than it differs between two
+runs of the same code (what is in view differs), so no frame-time gain is claimed from them. What is left of the
+submit is three's per-object refresh, spread about evenly over its change checks, its uniform groups, its bindings
+and the node updates (most of those are the uniforms of the pooled lights), with no single cost standing out.
+`docs/performance-recorder.md` explains how to record the frame rate on a real machine; the recorder's environment
+block includes the lighting status.
 
 Shader bindings: a reflective material binds three more sampled textures and no uniform buffer more. In the real
 game on the validating WebGPU device, the worst shader stage of a Market station with reflections had 12 uniform
-buffers (the fog march, unchanged), 10 sampled textures and 9 samplers; WebGPU's default limits are 12 / 16 / 16
-(`game/tests/enhanced-lighting-game.test.ts` asserts this for every compiled module).
+buffers (the fog march, unchanged), 12 sampled textures and 11 samplers (a glazed tile or a column: its own maps
+plus the three); WebGPU's default limits are 12 / 16 / 16 (`game/tests/enhanced-lighting-game.test.ts` asserts
+this for every compiled module).
 
 ## Known limits
 
@@ -227,15 +302,29 @@ buffers (the fog march, unchanged), 10 sampled textures and 9 samplers; WebGPU's
 - Travelling between a station with probes and one without (the Reactor, or reflections unavailable) recompiles
   once the materials of what outlives a station (the held weapon, the parked car): the scene's field light is
   the other one.
-- Frame cost on a real GPU is not measured (see Costs). Every picture and timing of this feature so far comes from
-  software rasterizers.
+- Glazed tile reflects at High only, and a dielectric's reflection is faint face-on by its physics: the sheen
+  shows along a wall, not on the tile in front of the player.
+- A column is as dark as what it mirrors: facing an unlit stretch of the station it is a dark steel, not a bright
+  one. Without probes it only has its diffuse part and the nearby lights' own highlights.
+- The frame-cost fixes are measured in Node and not yet on a real GPU (see Costs). Every picture of this feature
+  comes from software rasterizers.
+- What the recording showed and this does not change: three refreshes every drawn object's uniforms every frame
+  (about 90 update nodes per object after the fix, most of them the pooled lights'), and programs first needed
+  during play are built on the main thread when the background compile is starved by frames that are already over
+  budget.
 
 ## Tests
 
 - `game/tests/light-gather.test.ts`: occlusion, colour, energy, flicker shares, determinism, no movable props.
 - `game/tests/reflection-probes.test.ts`: placement, weights (walked, across a floor step, into the wall's cell),
   capture, fixtures, levels, the atlas.
-- `game/tests/reflection-node.test.ts`: which materials reflect, both shader backends, binding counts, the lookup.
+- `game/tests/reflection-node.test.ts`: which materials reflect (metal, glass, window, gloss), both shader backends,
+  binding counts, the High-tier tile weight, the lookup.
+- `game/tests/texture-fetch.test.ts`, `game/tests/shader-text-share.test.ts`: the two per-frame / heap fixes.
+- `game/tests/station-pillar-material.test.ts`: the columns' material on a Subway station and the Office's station
+  storey.
+- `game/tests/lighting-live-apply.test.ts`: the real Game on a validating WebGPU device: a change applied from the
+  pause menu (only the lighting rebuilt, the station and the save conserved, the status, a failed bake).
 - `game/tests/reflection-window.test.ts`: every window span of a generated Office: the slot, light and probes a
   pane reads, against the plain glass rule.
 - `game/tests/enhanced-lighting-policy.test.ts`: what Off / Auto / On plan for each kind of renderer, the reasons,
@@ -244,5 +333,6 @@ buffers (the fog march, unchanged), 10 sampled textures and 9 samplers; WebGPU's
   the bake may never touch, capabilities and reasons, the station lighting with and without probes.
 - `game/tests/enhanced-lighting-game.test.ts`: the real Game on a validating WebGPU device: binding limits, death
   and reload, Off and back.
-- `game/tests/enhanced-lighting-settings.test.ts`: the settings, their form rows, the cache line and diagnostics.
+- `game/tests/enhanced-lighting-settings.test.ts`: the settings, their form rows (applying / failed / pending), the
+  cache line and diagnostics.
 - `game/tests/content-hash.test.ts`, `game/tests/derived-cache.test.ts`: the hash and the cache.

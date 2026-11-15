@@ -180,6 +180,9 @@ async function boot(): Promise<void> {
     else if (changed.includes('ambientOcclusion')) game.applySettings(); // (lane AO: the atmosphere's AO gate; applies volume / mute too)
     else if (changed.some(k => k === 'volume' || k === 'muted')) { game.sfx.setVolume(s.volume); game.sfx.setMuted(s.muted); }
     if (qualityChanged) void game.rewarmAfterSettings(); // Iteration 14: new render targets -> prepare their pipelines before Resume
+    // task studio-graphics-gpu-materials-toggle-20261114-212239-01: Enhanced lighting / Reflections apply to the LIVE station (pause menu:
+    // the lighting is rebuilt and re-warmed before Resume; elsewhere the change waits for the next pause or station — Game.relightAfterSettings)
+    if (changed.some(k => k === 'enhancedLighting' || k === 'reflections')) void game.relightAfterSettings();
   });
   game.onSettingsChanged = key => { if (key === 'muted') settings.set({muted: game.settings.muted}); }; // the M key
   window.addEventListener('storage', e => { if (e.key === settings.key) settings.reload(); }); // another tab changed them
@@ -187,8 +190,8 @@ async function boot(): Promise<void> {
   const aoUnavailable = () => game.atmosphere.aoUnavailable();
   // (task studio-baked-lighting-reflections-20261114-050258-01, lane SETTINGS: both forms show enhanced lighting's truthful status — what
   // the live station was built with, a pending change — and the derived cache's numbers, and re-read them when the runtime says they
-  // changed. The two settings are only copied into game.settings (the subscription above, which runs before the forms' own): the game
-  // reads them when a station is built, so there is nothing to apply and no re-warm.)
+  // changed. The two settings are copied into game.settings by the subscription above (which runs before the forms' own); a change is
+  // then applied to the live station by Game.relightAfterSettings, and the status says while it runs, and if it failed.)
   const lightingStatus = () => game.enhancedLighting.status();
   const lightingCache = () => game.enhancedLighting.cacheStats();
   const clearLightingCache = () => game.enhancedLighting.clearCache();

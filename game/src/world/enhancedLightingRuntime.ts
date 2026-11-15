@@ -147,10 +147,63 @@ export class EnhancedLightingRuntime {
     return planEnhancedLighting(this.request(), this.caps, {reactor});
   }
 
-  /** What the live station uses, what was asked, and whether a change is waiting for the next station load. */
+  /** What the live station uses, what was asked, whether a change is not applied yet, being applied, or failed to apply. */
   status(): EnhancedLightingStatus {
-    const pending = !!this.live && planSignature(this.plan(this.live.reactor)) !== this.live.signature;
-    return {requested: this.request(), active: this.active, pending, cacheBackend: this.cache ? this.cache.backend : 'none'};
+    const want = this.live ? planSignature(this.plan(this.live.reactor)) : null;
+    const pending = !!this.live && want !== this.live.signature;
+    return {
+      // (during a rebuild in place the station is lit by what it had until the new lighting is installed: bakeSteps writes its record earlier)
+      requested: this.request(), active: this.applying && this.litBy ? this.litBy.active : this.active, pending, cacheBackend: this.cache ? this.cache.backend : 'none',
+      applying: this.applying, error: pending && this.failure?.signature === want ? this.failure.reason : null,
+    };
+  }
+
+  // Task studio-graphics-gpu-materials-toggle-20261114-212239-01: a changed choice applied to the LIVE station (Game.relightAfterSettings).
+  private applying = false;
+  /** The plan that could not be applied to the live station, and why (reported while that plan is still the pending one). */
+  private failure: {signature: string; reason: string} | null = null;
+  /** What the station was lit by when a rebuild in place began (checkpoint): the status's `active` until the new lighting is installed. */
+  private litBy: {active: EnhancedLightingActive | null} | null = null;
+
+  /** The live station's lighting is being rebuilt (true) / the rebuild ended (false): the forms say so and hold their choices. */
+  setApplying(on: boolean): void {
+    if (!on) this.litBy = null;
+    if (this.applying === on) return;
+    this.applying = on;
+    this.changed();
+  }
+
+  /** The signature of what the settings now plan for the live station (null: no station). */
+  pendingSignature(): string | null {
+    return this.live ? planSignature(this.plan(this.live.reactor)) : null;
+  }
+
+  /** Whether `signature` (pendingSignature) is the plan that already failed to apply: the game does not retry it by itself. */
+  failedFor(signature: string | null): boolean {
+    return !!this.failure && this.failure.signature === signature;
+  }
+
+  /**
+   * The live station's record before a rebuild in place (bakeSteps replaces it at its first step): restore() puts it back when the
+   * rebuild did not happen, and records why — the status then says what the station still uses and that the change failed.
+   */
+  checkpoint(): () => void {
+    const active = this.active, live = this.live, timings = this.timings;
+    this.litBy = {active};
+    return () => { this.active = active; this.live = live; this.timings = timings; this.litBy = null; };
+  }
+  /** A rebuild in place ended with the BASELINE lighting installed instead of what was planned (world/lights.ts replaceSteps). */
+  installedBaseline(reason: string): void {
+    if (this.live) this.live = {...this.live, signature: planSignature({gi: null, reflections: null, giReason: null, reflectionsReason: null})};
+    this.timings = null;
+    this.litBy = null;
+    this.active = {gi: 'baseline', giReason: reason, reflections: 'off', reflectionsReason: null, cache: 'none', giMs: 0, probeMs: 0, probes: 0, probeBytes: 0};
+    this.changed();
+  }
+  failed(signature: string | null, reason: string, restore?: () => void): void {
+    restore?.();
+    this.failure = signature ? {signature, reason} : null;
+    this.changed();
   }
 
   private readonly listeners = new Set<() => void>();
@@ -220,6 +273,7 @@ export class EnhancedLightingRuntime {
   *bakeSteps(input: StationBakeInput, drawn: DrawnSurfaces | null | undefined, o: {max3DTextureSize?: number} = {}): BuildSteps<EnhancedBake> {
     const plan = this.plan(input.reactor);
     this.live = {signature: planSignature(plan), reactor: input.reactor};
+    this.failure = null; // (a station is being lit for the current choice: an earlier failed change is history)
     if (!plan.gi) {
       this.fetched = null;
       this.timings = null;
@@ -322,9 +376,11 @@ export class EnhancedLightingRuntime {
    * usable after all (no node library, a grid past the 3D texture limit) — the status says so.
    */
   applied(skipped: string | null): void {
+    const inPlace = this.litBy !== null; // (a rebuild in place: from here the status describes the new lighting)
+    this.litBy = null;
     const a = this.active;
-    if (!a || !skipped || a.reflections === 'off') return;
-    this.active = {...a, reflections: 'off', reflectionsReason: skipped, probes: 0, probeBytes: 0};
+    if (a && skipped && a.reflections !== 'off') this.active = {...a, reflections: 'off', reflectionsReason: skipped, probes: 0, probeBytes: 0};
+    else if (!inPlace) return;
     this.changed();
   }
 

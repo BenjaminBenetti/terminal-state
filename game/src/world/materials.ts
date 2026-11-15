@@ -145,9 +145,22 @@ export function cloneSurfaceMaterial<M extends THREE.Material>(m: M): M {
   return c;
 }
 
+/**
+ * The station columns' brushed-steel cladding (WorldMaterials 'pillar'). Mostly, not fully, metal: the station's baked light is
+ * diffuse only, so a pure metal is black wherever no reflection probe is in use (Enhanced lighting Off, Reflections Off, the
+ * renderers Auto leaves them off on). The diffuse part keeps it a grey brushed metal there; with probes it mirrors the station.
+ */
+export const PILLAR_METALNESS = 0.65;
+/** x the set's roughness map (0.30-0.46 on the brushed face): a satin finish that still shows what is around it. */
+export const PILLAR_ROUGHNESS = 0.7;
+/** The brushing's normal strength: the grain stretches a reflected light along the column. */
+export const PILLAR_NORMAL = 1.3;
+/** x the wall tile's authored roughness map (0.38-0.42 on a glazed face). */
+export const TILE_GLAZE_ROUGHNESS = 0.7;
+
 export type MatKey =
   | 'tileLower' | 'tileUpper' | 'tileBase' | 'paint' | 'terrazzo' | 'concrete' | 'platformSlab' | 'safetyEdge' | 'platformFace'
-  | 'ceiling' | 'ceilingService' | 'tunnel' | 'ballast' | 'steel' | 'rail' | 'sleeper' | 'coverboard'
+  | 'ceiling' | 'ceilingService' | 'tunnel' | 'ballast' | 'steel' | 'pillar' | 'rail' | 'sleeper' | 'coverboard'
   | 'crate' | 'bin' | 'gate' | 'tube';
 
 /**
@@ -203,7 +216,7 @@ export class WorldMaterials {
       ceilingService: {u: L.ceiling.w, v: L.ceiling.h},
       tunnel: {u: L.tunnel.w, v: L.tunnel.h},
       ballast: {u: 2, v: 2},
-      steel: {u: 1, v: 1}, rail: {u: 1, v: 1}, sleeper: {u: 1, v: 1}, coverboard: {u: 1, v: 1},
+      steel: {u: 1, v: 1}, pillar: {u: 1, v: 1}, rail: {u: 1, v: 1}, sleeper: {u: 1, v: 1}, coverboard: {u: 1, v: 1},
       crate: {u: 1, v: 1}, bin: {u: 1, v: 1}, gate: {u: 1, v: 1}, tube: {u: 1, v: 1},
     };
     // Iteration 13 (MAT-A): node materials (decay and other lanes' hooks layer onto them).
@@ -213,16 +226,21 @@ export class WorldMaterials {
     const pbr = (color: THREE.Texture, orm: THREE.Texture, normal: THREE.Texture, extra: MeshStandardNodeMaterialParameters = {}) =>
       tagReflect(std({map: color, roughnessMap: orm, metalnessMap: orm, normalMap: normal, normalScale: new THREE.Vector2(L.normalScale, L.normalScale), roughness: 1, metalness: 1, ...extra}), 'none');
 
-    this.mats.set('tileLower', pbr(tex.wallColor, tex.wallOrm, tex.wallNormal));
-    this.mats.set('tileUpper', pbr(
+    // (task studio-graphics-gpu-materials-toggle-20261114-212239-01: the wall tile is GLAZED — its authored roughness map says so,
+    // 0.38-0.42 on a tile face — so it is tagged 'gloss': with the High reflection probes a tile face shows the station at a grazing
+    // angle, by its Fresnel; grout and grime, rougher, do not. world/reflectionNode.ts)
+    const glazed = <M extends THREE.Material>(m: M): M => tagReflect(m, 'gloss');
+    const glaze = {roughness: TILE_GLAZE_ROUGHNESS};
+    this.mats.set('tileLower', glazed(pbr(tex.wallColor, tex.wallOrm, tex.wallNormal, glaze)));
+    this.mats.set('tileUpper', glazed(pbr(
       cropTexture(tex.wallColor, c.u0, c.v0, c.u1, c.v1, true),
       cropTexture(tex.wallOrm, c.u0, c.v0, c.u1, c.v1, false),
-      cropTexture(tex.wallNormal, c.u0, c.v0, c.u1, c.v1, false)));
+      cropTexture(tex.wallNormal, c.u0, c.v0, c.u1, c.v1, false), glaze)));
     // Iteration 12 (ARCH): the two charcoal base courses alone, for the raked skirting of stair-flight walls.
-    this.mats.set('tileBase', pbr(
+    this.mats.set('tileBase', glazed(pbr(
       cropTexture(tex.wallColor, 0, bc.v0, 1, bc.v1, true),
       cropTexture(tex.wallOrm, 0, bc.v0, 1, bc.v1, false),
-      cropTexture(tex.wallNormal, 0, bc.v0, 1, bc.v1, false)));
+      cropTexture(tex.wallNormal, 0, bc.v0, 1, bc.v1, false), glaze)));
     this.mats.set('platformSlab', pbr(tex.platformColor, tex.platformOrm, tex.platformNormal));
     this.mats.set('safetyEdge', pbr(tex.edgeColor, tex.edgeOrm, tex.edgeNormal));
     this.mats.set('ceiling', pbr(tex.ceilingColor, tex.ceilingOrm, tex.ceilingNormal));
@@ -237,6 +255,10 @@ export class WorldMaterials {
     // Iteration 04: trim/columns/track use shared world-mapped surface sets (real-scale, no stretching
     // on instance-scaled columns or long boxes), consistent with the procedural prop materials.
     this.mats.set('steel', thinTrim(surfaceMaterial('paintedSteel', {metalness: 0.3}, {grime: [0.3, 0.45], macro: 0.15})));
+    // Task studio-graphics-gpu-materials-toggle-20261114-212239-01 ("subway platform pillars must visibly read as metal"): the station's
+    // columns are clad in brushed stainless (the existing brushedSteel set) instead of the charcoal trim paint, which read as a black
+    // slab. A 'metal' reflection candidate by its metalness: with probes it shows the lit station around it (see PILLAR_METALNESS).
+    this.mats.set('pillar', surfaceMaterial('brushedSteel', {metalness: PILLAR_METALNESS, roughness: PILLAR_ROUGHNESS}, {grime: [0.3, 0.45], macro: 0.15, normal: PILLAR_NORMAL}));
     this.mats.set('rail', thinTrim(surfaceMaterial('railSteel', {metalness: 0.45}, {grime: [0.12, 0.4], macro: 0.12})));
     this.mats.set('sleeper', surfaceMaterial('timberTie', {}, {topAlongZ: true, macro: 0.2}));
     this.mats.set('coverboard', surfaceMaterial('coverboard', {}, {macro: 0.2}));
