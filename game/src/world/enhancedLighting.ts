@@ -178,7 +178,10 @@ export interface EnhancedLightingActive {
   /** 'hit' = read from the derived cache; 'miss' = baked now and stored; 'stale' = an entry existed but its inputs differed (baked again);
    *  'unavailable' = baked now, nothing could be stored; 'none' = nothing enhanced, the cache was not touched. */
   cache: LightingCacheUse;
-  /** Main-thread time of the enhanced work in this load (ms; 0 on a cache hit): the gather / the probes. */
+  /**
+   * Time of the enhanced work in this load (ms; 0 on a cache hit): the gather / the probes. This thread's own time when it made
+   * them itself; the time from asking for them to having them when the bake's workers did (EnhancedLightingStatus.bake).
+   */
   giMs: number;
   probeMs: number;
   /** Probes in the station (0 without reflections) and the reflection textures' GPU bytes. */
@@ -201,6 +204,13 @@ export interface EnhancedLightingStatus {
   applying?: boolean;
   /** Why the last change could not be applied to the live station (null / absent: none failed; cleared by the next one that works). */
   error?: string | null;
+  /**
+   * How the last enhanced bake was made (task studio-gi-mood-bounce-loading-20261115-081523-01; null / absent: nothing was baked —
+   * baseline lighting, or everything came from the cache): on how many of the bake's workers (world/lightBakePool.ts; 0: on the
+   * main thread), and — when it was to run on workers and did not, or not all of it — why. Where it was made changes the load time
+   * only, never the light.
+   */
+  bake?: {workers: number; fallback: string | null} | null;
 }
 
 export const ENHANCED_LIGHTING_LABEL = 'Enhanced lighting';
@@ -259,13 +269,17 @@ export function describeReflections(s: EnhancedLightingStatus): string {
   return note ? `${now}. ${note}` : want === 'off' && a.reflections === 'off' && !a.reflectionsReason ? reflectionsSummary('off') : now;
 }
 
-/** One compact line (perf overlay / recorder / QA): 'auto: bake standard full · refl standard ×187 + mirror · cache hit', 'off: baseline · refl off'. */
+/**
+ * One compact line (perf overlay / recorder / QA): 'auto: bake standard full · refl standard ×187 + mirror · cache hit', 'off: baseline · refl off'.
+ * A bake that was to run on its workers and ran on the main thread instead says so at the end, with the reason.
+ */
 export function enhancedLightingLine(s: EnhancedLightingStatus): string {
   const a = s.active;
   if (!a) return `${s.requested.lighting} (no station)`;
   const gi = a.gi === 'baseline' ? `baseline${a.giReason ? ` (${a.giReason})` : ''}` : `bake ${a.gi}${a.shading === 'full' ? ' full' : ' plain'}`;
   const rf = a.reflections === 'off' ? `refl off${a.reflectionsReason ? ` (${a.reflectionsReason})` : ''}` : `refl ${a.reflections} ×${a.probes}${a.mirror ? ' + mirror' : ''}`;
-  return `${s.requested.lighting}: ${gi} · ${rf}${a.cache !== 'none' ? ` · cache ${a.cache}` : ''}${s.applying ? ' · applying a change' : s.error ? ' · change failed' : s.pending ? ' · change pending' : ''}`;
+  const change = s.applying ? ' · applying a change' : s.error ? ' · change failed' : s.pending ? ' · change pending' : '';
+  return `${s.requested.lighting}: ${gi} · ${rf}${a.cache !== 'none' ? ` · cache ${a.cache}` : ''}${change}${s.bake?.fallback ? ` · baked on the main thread (${s.bake.fallback})` : ''}`;
 }
 
 /** The plan as the `active` fields it would produce (to tell whether a settings change is pending). */

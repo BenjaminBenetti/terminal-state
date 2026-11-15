@@ -47,20 +47,23 @@ import type {Level} from '../gen/levels';
 import type {LightPlacement} from '../gen/station';
 import {drainSync, type BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import type {IndirectContext, IndirectLight} from './lightFieldGather'; // task studio-baked-lighting-reflections-20261114-050258-01 (types only)
+// Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane WORKERS): the layout numbers and the fixtures' colour / circuit rules
+// that the gather and the probe bake read live in world/lightFieldLayout.ts (those two bakes also run in workers, which must not
+// load this module's renderer library); they are this module's names as before (re-exported below).
+import {
+  AUX_LAYERS, AUX_SLOT_DEPTH, CUBE_FACES, FIELD_EMAX, FLICKER_GROUPS, GI_FACES, IND_CIRCUITS, IND_STRIDE, LAYERS, SLOT_DEPTH, TINT, fixtureGroup, fixtureTint, giSlotBase, slotBase,
+  slotLayers,
+} from './lightFieldLayout';
+
+export {
+  AUX_LAYERS, AUX_SLOT_DEPTH, CUBE_FACES, FIELD_EMAX, FLICKER_GROUPS, GI_FACES, IND_CIRCUITS, IND_STRIDE, LAYERS, SLOT_DEPTH, TINT, fixtureGroup, fixtureTint, giSlotBase, slotBase,
+  slotLayers,
+};
 
 // ---------------------------------------------------------------------------------------------
-// Tunables
+// Tunables (the slots' layers and depths, the encoded range, the gathered rows' format and the ambient cube's faces:
+// world/lightFieldLayout.ts)
 
-/** Height layers per column and level slot (relative floor..ceiling). */
-export const LAYERS = 4;
-/** Slices of the main level's slot: header (floor, ceil, circuit shares) + 2 per layer. */
-export const SLOT_DEPTH = 1 + 2 * LAYERS;
-/**
- * Height layers of every other level's slot (upper decks / lower crossings are <= ~3.2 m tall: about
- * the main level's 4 layers over 4.4 m) - keeps a 3-level volume ~2.4x a single-level one, not 3x.
- */
-export const AUX_LAYERS = 3;
-export const AUX_SLOT_DEPTH = 1 + 2 * AUX_LAYERS;
 /** Most level slots a field holds (extended column headers store 4-bit slot ids). */
 export const MAX_SLOTS = 16;
 /** Slots / bands the iteration-08 (legacy) column header can name: 2-bit slot ids, a 2-bit band count. */
@@ -70,37 +73,11 @@ export const LEGACY_BANDS = 3;
 export const GROUP_BANDS = 3;
 export const MAX_GROUPS = 4;
 export const MAX_BANDS = GROUP_BANDS * MAX_GROUPS;
-/** Layers / first slice of level slot s; texture depth for S slots. */
-export const slotLayers = (s: number) => (s === 0 ? LAYERS : AUX_LAYERS);
-export const slotBase = (s: number) => (s === 0 ? 1 : 1 + SLOT_DEPTH + (s - 1) * AUX_SLOT_DEPTH);
+/** Texture depth for S slots (slotLayers / slotBase: the layers / the first slice of level slot s). */
 export const fieldDepth = (slots: number) => 1 + SLOT_DEPTH + (slots - 1) * AUX_SLOT_DEPTH;
 /** Relative height of layer k of L between the column floor (0) and ceiling (1). */
 const layerT = (k: number, L: number) => (L > 1 ? k / (L - 1) : 0);
-/** Encoded irradiance range (sqrt-encoded in 8 bits: fine steps in the dark, headroom in pools). */
-export const FIELD_EMAX = 12;
-/**
- * Task studio-baked-gi-visual-uplift-20261115-004324-01: the gathered light's row format (world/lightFieldGather.ts makes the rows; they
- * are declared here so this module needs nothing of the gather at run time). The ambient cube's faces, in the order of the gather's surface codes: face f is the irradiance of a surface whose normal is
- * CUBE_FACES[f] — 0 a floor (+y), 1 a ceiling (-y), 2 / 3 a wall facing +x / -x, 4 / 5 a wall facing +z / -z.
- */
-export const CUBE_FACES: readonly (readonly [number, number, number])[] = [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
-/** Channels per voxel of IndirectLight.data: six faces x rgb, then the three flicker circuits. */
-export const IND_STRIDE = 21;
-/** First circuit channel of a row. */
-export const IND_CIRCUITS = 18;
-
-/**
- * Task studio-baked-gi-visual-uplift-20261115-004324-01: the AMBIENT CUBE slices of an enhanced field (BakedField.gi: its first one).
- * After the last slot (and the extended headers' group slices), per slot, per face of the gather's cube (lightFieldGather.ts
- * CUBE_FACES: +y, -y, +x, -x, +z, -z), one slice per height layer — a face's layers are consecutive slices, so ONE filtered fetch
- * between two of them is the face at any height. A texel is the COMPLETE AMBIENT a surface facing that way receives there: the
- * direct light's scattered share + the gathered face (rgb, encoded as the main texels are: sqrt up to FIELD_EMAX; 0 in closed
- * cells). The full light node reads it INSTEAD of the main texel's ambient part; a reader that knows nothing of these slices (the
- * fog, a renderer that keeps the plain light node) still reads a complete field from the main texels alone.
- */
-export const GI_FACES = 6;
-/** First cube slice of slot s relative to BakedField.gi; cube slices for S slots. */
-export const giSlotBase = (s: number) => (s === 0 ? 0 : GI_FACES * (LAYERS + (s - 1) * AUX_LAYERS));
+/** Cube slices for S slots (the ambient cube of an enhanced field — GI_FACES, giSlotBase: world/lightFieldLayout.ts). */
 export const giDepth = (slots: number) => GI_FACES * (LAYERS + (slots - 1) * AUX_LAYERS);
 /** Soft transmittance through cells holding sight-blocking props (columns, tall cabinets). */
 const PROP_TRANSMITTANCE = 0.55;
@@ -125,35 +102,10 @@ export interface FieldParams {
 
 export const DEFAULT_FIELD: FieldParams = {gain: 21, range: 9, uplight: 0.16, lobe: 2, scatter: 0.17, bounce: 0.1};
 
-/**
- * Light colour per fixture kind (linear RGB, ~unit luminance). Concept-board grading: cool-white
- * fluorescents with a sickly green cast, aged tubes yellow-green, a minority of warm sodium/incandescent.
- */
-export const TINT = {
-  cool: [0.88, 1.03, 0.92] as const,
-  aged: [0.95, 1.04, 0.6] as const,
-  warm: [1.38, 0.86, 0.42] as const,
-};
-
-export function fixtureTint(l: Pick<LightPlacement, 'warm' | 'power'> & {tint?: LightPlacement['tint']}): readonly [number, number, number] {
-  // Iteration 16 (WORLD-GEN): an explicit tint (office daylight through the windows) wins.
-  if (l.tint) return l.tint;
-  return l.warm ? TINT.warm : l.power < 0.8 ? TINT.aged : TINT.cool;
-}
-
 // ---------------------------------------------------------------------------------------------
 // Flicker circuits: fixture state is layout data; time-varying fixtures share one of three circuits so
 // the baked field can follow them (the shader scales each circuit's share by its current level).
-
-export const FLICKER_GROUPS = 3;
-
-/** -1 = steady (or broken), 0/1 = flickering circuits, 2 = dying (sputtering) circuit. */
-export function fixtureGroup(l: Pick<LightPlacement, 'broken' | 'flicker' | 'dying'>, index: number): number {
-  if (l.broken) return -1;
-  if (l.dying) return 2;
-  if (l.flicker) return ((index * 2654435761) >>> 0) % 2;
-  return -1;
-}
+// (The fixtures' colours — TINT, fixtureTint — and their circuits — FLICKER_GROUPS, fixtureGroup: world/lightFieldLayout.ts.)
 
 /** Brightness 0..1 of a flicker circuit at time t (s). Deterministic; never depends on the camera. */
 export function groupLevel(g: number, t: number): number {

@@ -6,20 +6,21 @@
 // network, a layout or a save, so it cannot show or change the player's map (ui/paperMap.ts is that map).
 //
 // Its progress is the load's own. game.ts reports every stage where it used to write the bar's width (the prop models, the mall's
-// texture uploads, the graphics warm-up) and LoadProgress places those stages on one 0..1 scale that never runs backwards within a
+// texture uploads, the graphics warm-up) — and the station build between the models and the warm-up, by its finished stages, now that
+// it runs in time slices and the screen can paint meanwhile — and LoadProgress places those stages on one 0..1 scale that never runs backwards within a
 // load and reaches 1 only when the game says the load is ready (complete()). The drawing is a pure function of that number
 // (loadingMapFrame): nothing waits for an animation, and play is never held back for one.
 
 type Pt = readonly [number, number];
 
-/** A stage of a load, in the order game.ts runs them ('textures': the mall's staged uploads only). */
-export type LoadStage = 'props' | 'textures' | 'graphics';
+/** A stage of a load, in the order game.ts runs them ('build': the station build's finished stages; 'textures': the mall's staged uploads only). */
+export type LoadStage = 'props' | 'build' | 'textures' | 'graphics';
 
 /**
- * Each stage's share of the whole load. The gaps are the steps that report nothing (the world build sits between the models and
- * the warm-up); the last stretch belongs to complete(), so no stage can draw the finished map.
+ * Each stage's share of the whole load (the station build has the stretch between the models and the warm-up that used to report
+ * nothing); the last stretch belongs to complete(), so no stage can draw the finished map.
  */
-export const LOAD_STAGES: Readonly<Record<LoadStage, readonly [number, number]>> = {props: [0, 0.42], textures: [0.46, 0.52], graphics: [0.52, 0.96]};
+export const LOAD_STAGES: Readonly<Record<LoadStage, readonly [number, number]>> = {props: [0, 0.42], build: [0.42, 0.46], textures: [0.46, 0.52], graphics: [0.52, 0.96]};
 
 const unit = (v: number): number => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
 

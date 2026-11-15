@@ -184,7 +184,7 @@ describe('loading, fallback and warm-up', () => {
     expect(src).toMatch(/sectionModelKeys[^\n]*=\s*\[[^\]]*cosplayModelKeysFor[^\]]*\]/);
     expect(src).toMatch(/const lazyKeys = this\.modelKeysFor\(layout, key\.level\);\s*\n\s*await this\.propModels\.ensure\(lazyKeys, onProgress\);/);
     // a section is prepared (lazy files fetched), then built (enemies spawned: the cosplay actors), then warmed up
-    const flow = /layout = await this\.prepareSection\([^;]*;[\s\S]{0,900}?this\.buildSection\(key, layout[\s\S]{0,600}?await this\.prepareGraphics\(ui\)/g;
+    const flow = /layout = await this\.prepareSection\([^;]*;[\s\S]{0,900}?await this\.buildSectionSliced\(key, layout[\s\S]{0,600}?await this\.prepareGraphics\(ui\)/g;
     expect((src.match(flow) ?? []).length).toBeGreaterThanOrEqual(2);
     expect(src).toMatch(/s\.look === 'cosplay' \? this\.cosplayLookLibrary\(models\)/);
     const z = (look?: 'cosplay') => ({x: 0, z: 0, yaw: 0, type: 'shambler' as const, area: 0, ...(look ? {look} : {})});

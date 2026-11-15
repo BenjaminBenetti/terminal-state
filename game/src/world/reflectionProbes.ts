@@ -24,14 +24,17 @@
 //    PROBE_NORM_MIN — the shader scales a probe by min(local field luminance / NORM, PROBE_RATIO_MAX), so reflections dim with the
 //    light around the surface: flicker, a passing train's shadow, a dark side room); row 1 / 2 = the probe's parallax box min / max.
 
+// (This module runs in the bake's workers too — world/lightBakeTasks.ts — so it imports no renderer code: what it shares with the
+// field and the surface colours comes from world/lightFieldLayout.ts, and those two modules are imported for their types alone.)
 import {CELL} from '../gen/grid';
 import type {BuildSteps} from '../core/pacedBuild';
 import type {Level} from '../gen/levels';
 import type {LightPlacement} from '../gen/station';
 import type {ReflectionTier} from './enhancedLighting';
-import {FIELD_EMAX, fixtureGroup, fixtureTint, giSlotBase, slotBase, slotLayers, type BakedField, type ColumnGeometry} from './lightField';
+import type {BakedField, ColumnGeometry} from './lightField';
+import {ALBEDO_LUT, ALBEDO_STRIDE, ALB_CEIL, ALB_FLOOR, ALB_WALL, FIELD_EMAX, fixtureGroup, fixtureTint, giSlotBase, slotBase, slotLayers} from './lightFieldLayout';
 import {BandScene, HIT_CEIL, HIT_FLOOR} from './lightScene';
-import {ALBEDO_LUT, ALBEDO_STRIDE, ALB_CEIL, ALB_FLOOR, ALB_WALL, type SurfaceAlbedo} from './surfaceAlbedo';
+import type {SurfaceAlbedo} from './surfaceAlbedo';
 
 /** Probe tiles per atlas row, roughness levels per probe, gutter texels around every tile. */
 export const PROBE_COLS = 16;
@@ -231,7 +234,7 @@ const HALF_ONE = 0x3c00;
 // ---------------------------------------------------------------------------------------------
 // The roughness levels: a Gaussian on the sphere per level, as a sparse matrix per tile size (built once, reused for every probe)
 
-interface LevelKernel {
+export interface LevelKernel {
   /** Tile edge of the level. */
   t: number;
   /** Per texel of the level before (2t px): its share of the level-t texel it is halved into (its solid angle / its four's). */
@@ -252,7 +255,7 @@ const KERNEL_CUT = 1e-4;
  * solid angle, with one scale per texel (near 1 / the Gaussian's integral) solved so that every row sums to 1 (a flat map stays flat)
  * AND the solid-angle-weighted mean of a map is kept (no energy made or lost where the texels are coarse against the Gaussian).
  */
-function* levelKernelsSteps(tile: number): BuildSteps<LevelKernel[]> {
+export function* levelKernelsSteps(tile: number): BuildSteps<LevelKernel[]> {
   const hit = KERNELS.get(tile);
   if (hit) return hit;
   const out: LevelKernel[] = [];
@@ -326,8 +329,15 @@ function applyKernel(K: LevelKernel, src: Float32Array, dst: Float32Array): void
 // ---------------------------------------------------------------------------------------------
 // Placement
 
-/** Where the probes of a station sit (probe p: its level slot, its block, its cell). */
-interface ProbePlacement { block: number; ramp: number; slot: number[]; bx: number[]; bz: number[]; cell: number[] }
+/** A placement while it is made (placeSlot appends to it). */
+interface PlacementLists { block: number; ramp: number; slot: number[]; bx: number[]; bz: number[]; cell: number[] }
+
+/** Where the probes of a station sit (probe p: its level slot, its block, its cell, its position — xyz at p x 3). */
+export interface ProbePlacement {
+  block: number; ramp: number; count: number;
+  slot: Int32Array; bx: Int32Array; bz: Int32Array; cell: Int32Array;
+  pos: Float64Array;
+}
 
 /** The block edge (cells) a tier starts from: the even number of cells nearest its spacing, at least 8. */
 export function probeBlockCells(spacing: number): number {
@@ -335,10 +345,12 @@ export function probeBlockCells(spacing: number): number {
   return b >= 8 ? b : 8;
 }
 
-/** The probes of level slot s at a placement's block size, appended to it; false as soon as it would hold more than `limit`. */
-function placeSlot(out: ProbePlacement, s: number, W: number, H: number, geos: readonly ColumnGeometry[], levels: readonly Level[], limit: number): boolean {
+/**
+ * The probes of level slot s (its open cells, its cells' area ids — null: one space) at a placement's block size, appended to it;
+ * false as soon as it would hold more than `limit`.
+ */
+function placeSlot(out: PlacementLists, s: number, W: number, H: number, open: Uint8Array, area: ArrayLike<number> | null, limit: number): boolean {
   const block = out.block, nbx = Math.ceil(W / block), nbz = Math.ceil(H / block);
-  const open = geos[s].open, ar = levels[s]?.grid.area, area = ar && ar.length === W * H ? ar : null;
   const groups = new Map<number, number>();
   for (let bz = 0; bz < nbz; bz++) for (let bx = 0; bx < nbx; bx++) {
     const x0 = bx * block, x1 = Math.min(W, x0 + block), z0 = bz * block, z1 = Math.min(H, z0 + block);
@@ -387,61 +399,87 @@ const TUBE_SLACK = 0.4;
 /** Parallax box half-extents (m): at least / at most (also the extent along a ray that hit nothing). */
 const BOX_MIN = 0.5, BOX_MAX = 30;
 
+
+// ---------------------------------------------------------------------------------------------
+// The bake, in parts (task studio-gi-mood-bounce-loading-20261115-081523-01, lane WORKERS)
+//
+// bakeReflectionProbesSteps at the end of this file is the bake on one thread, the reference; the bake's workers
+// (world/lightBakeTasks.ts) run the same parts over shares of the probes:
+//  - probeSource: what the bake reads, as plain arrays (a worker is handed exactly that);
+//  - probePlacementSteps and probeGridSteps: where the probes sit and what each weighs on — one pass over the station (ONE thread);
+//  - probeCapture and probeFilter: a RANGE of probes. A probe's rays read the scene, the field and the fixtures — all fixed before
+//    the first ray — and write that probe's own level 0, meta row and atlas tiles; so any split of the probes into ranges gives
+//    the atlas and the meta of one pass over all of them, bit for bit (copyProbeTiles / copyProbeMeta put the ranges together).
+
+/** What the probe bake reads, as plain arrays. */
+export interface ProbeSource {
+  W: number; H: number;
+  /** The final field's texels (BakedField.data) and its first ambient-cube slice (-1: none). */
+  data: Uint8Array; gi: number;
+  geos: readonly ColumnGeometry[];
+  /** Per level slot: its cells' area ids (gen/grid.ts Grid.area; null: none — the slot is one space). */
+  areas: readonly (ArrayLike<number> | null)[];
+  /** SurfaceAlbedo.slots. */
+  albedo: readonly Uint8Array[];
+  /** probeFixtures of the station's fixtures. */
+  fixtures: Float64Array;
+}
+
+/** Floats per working fixture of probeFixtures: tube centre (xyz), tube axis (x, z), radiance (rgb). */
+const FX = 8;
+
 /**
- * Bake a station's probes, as build steps (core/pacedBuild.ts: a yield at least every couple of milliseconds of work). Deterministic
- * (no random numbers, no clock but the statistics). A station with no open cell returns count 0 (a 1-probe-sized zero atlas).
- *
- * What the contract leaves to the bake:
- *  - the block is the even number of cells nearest the tier's spacing (at least 8), grown by 2 until the station holds no more probes
- *    than the tier allows; a block holds a probe when it has 4 or more open cells of the slot; probes are numbered by slot, then
- *    block row, then block column. A probe sits at its cell's centre, min(1.5 m, half the room height) above the floor; its weights
- *    reach the cells it can walk to inside its block grown by ramp + 1 cells (4-neighbour steps over open cells of its slot, floors
- *    less than 0.6 m apart); a cell NO probe can walk to takes the probes that reach it the same way across floor steps of any
- *    height (a track bed below a platform edge: the same air); and a probe's weights go one cell further into the solid cells
- *    beside its cells (the largest weight of those next to it: what is set into a wall's own cell still reflects the room it faces);
- *  - level 0 texel (i, j) looks along octDecode((i + 0.5) / tile, (j + 0.5) / tile), at most PROBE_REACH far (nothing there: black);
- *  - a fixture is drawn when it works (not broken, power above 0.01, not a `virtual` light source: that one has no tube), is within
- *    PROBE_REACH and the ray to its tube's centre is not stopped more than 0.4 m short of it; its radiance is added on top of the
- *    surface behind it: the tube's solid angle (from its centre), split evenly over points along it (five, more for a tube close
- *    enough to span more texels) and splatted bilinearly — a texel gains the tube's radiance x the share of the texel's own solid
- *    angle the tube covers (the map's texels differ fivefold in size), and its added fixture radiance is never raised above the
- *    radiance of the fixture being added (one running total per texel over all the fixtures of a probe, in the lights' order);
- *  - level l is level l - 1 halved (each texel the mean of its four over their solid angle) and blurred by a Gaussian on the sphere
- *    (levelKernelsSteps): a level's solid-angle-weighted mean radiance is level 0's;
- *  - the parallax box reaches 0.5 .. 30 m from the probe along each axis (the first surface a ray along it meets; the level rays
- *    are turned 0.001 off their axis);
- *  - every tile (all four levels) is written with its gutter and alpha 1; the tiles of unused atlas slots stay 0.
+ * The working fixtures as a probe draws them: tube centre, tube axis, radiance (the tube colour world/lights.ts applyLevels draws,
+ * x PROBE_FIXTURE_RADIANCE), in the lights' order.
  */
-export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: ReflectionTier): BuildSteps<BakedProbes> {
-  const t0 = performance.now();
-  const {field, geos, levels, albedo, lights} = input;
-  const W = field.w, H = field.h, n = W * H, S = geos.length, tile = tier.tile;
+export function probeFixtures(lights: readonly LightPlacement[]): Float64Array {
+  const fx: number[] = [];
+  lights.forEach((l, li) => {
+    if (l.broken || !(l.power > 0.01) || l.virtual) return;
+    // its circuit as a probe keeps it: a steady tube full on, a flickering one at its usual level, a dying one at a tenth
+    const g = fixtureGroup(l, li), out = l.power * (g < 0 ? 1 : g === 2 ? 0.1 : 0.92);
+    const [tr, tg, tb] = fixtureTint(l), mx = Math.max(tr, tg, tb), s = l.tint ? 0.65 : 0.35, k = PROBE_FIXTURE_RADIANCE * (0.12 + 0.88 * out);
+    fx.push(l.x, l.y - TUBE_DROP, l.z, Math.cos(l.rot), -Math.sin(l.rot), k * (1 - s + s * tr / mx), k * (1 - s + s * tg / mx), k * (1 - s + s * tb / mx));
+  });
+  return Float64Array.from(fx);
+}
+
+/** The source of a bake (checked: the tier's tile, a full-resolution field). */
+export function probeSource(input: ProbeBakeInput, tier: Pick<ReflectionTier, 'tile'>): ProbeSource {
+  const {field, geos, levels, albedo, lights} = input, tile = tier.tile;
   if (!(tile >= 8 && tile <= 256 && (tile & (tile - 1)) === 0)) throw new Error(`bakeReflectionProbesSteps: tile ${tile} is not a power of two in 8..256`);
   if ((field.cellScale ?? 1) !== 1) throw new Error('bakeReflectionProbesSteps: the field must be the full-resolution one');
-  const scene = input.scene ?? new BandScene(W, H, geos);
+  const W = field.w, H = field.h;
+  const areas = geos.map((_, s) => { const ar = levels[s]?.grid.area; return ar && ar.length === W * H ? ar : null; });
+  return {W, H, data: field.data, gi: field.gi ?? -1, geos, areas, albedo: albedo.slots, fixtures: probeFixtures(lights)};
+}
 
-  yield 'probes.place';
-  // --- placement: the tier's block, grown until the station fits the tier's probe count ----------------------------------------
+/** Where the probes of a station sit, as build steps: the tier's block, grown until the station fits the tier's probe count. */
+export function* probePlacementSteps(src: ProbeSource, tier: Pick<ReflectionTier, 'maxProbes' | 'spacing'>): BuildSteps<ProbePlacement> {
+  const {W, H, geos} = src, S = geos.length;
   const limit = Math.max(1, Math.min(255, Math.floor(tier.maxProbes))), coarsest = Math.max(W, H);
-  let block = probeBlockCells(tier.spacing), pl: ProbePlacement;
+  let block = probeBlockCells(tier.spacing), pl: PlacementLists;
   for (;;) {
     pl = {block, ramp: block / 2 - 2, slot: [], bx: [], bz: [], cell: []};
     // (one block a slot is as coarse as it gets: with more level slots than the tier has probes, the first `limit` are kept)
     const most = block < coarsest ? limit : Infinity;
     let fits = true;
-    for (let s = 0; s < S && fits; s++) { fits = placeSlot(pl, s, W, H, geos, levels, most); yield; }
+    for (let s = 0; s < S && fits; s++) { fits = placeSlot(pl, s, W, H, geos[s].open, src.areas[s] ?? null, most); yield; }
     if (fits) break;
     block += 2;
   }
-  const count = Math.min(limit, pl.cell.length), ramp = pl.ramp;
+  const count = Math.min(limit, pl.cell.length);
   const pos = new Float64Array(count * 3);
   for (let p = 0; p < count; p++) {
     const g = geos[pl.slot[p]], i = pl.cell[p], cx = i % W, cz = (i - cx) / W, f = g.floorH[i];
     pos[p * 3] = (cx + 0.5) * CELL; pos[p * 3 + 1] = Math.fround(f + Math.min(1.5, 0.5 * (g.ceilH[i] - f))); pos[p * 3 + 2] = (cz + 0.5) * CELL;
   }
+  return {block, ramp: pl.ramp, count, slot: Int32Array.from(pl.slot), bx: Int32Array.from(pl.bx), bz: Int32Array.from(pl.bz), cell: Int32Array.from(pl.cell), pos};
+}
 
-  yield 'probes.grid';
-  // --- the grid: ids over each probe's expanded block, weights where its probe can walk to ---------------------------------------
+/** The probes' grid, as build steps: ids over each probe's expanded block, weights where its probe can walk to. */
+export function* probeGridSteps(src: ProbeSource, pl: ProbePlacement): BuildSteps<{grid: Uint8Array; gridDepth: number; orphanCells: number}> {
+  const {W, H, geos} = src, n = W * H, S = geos.length, {block, ramp, count} = pl;
   const gridDepth = 2 * Math.max(1, S), grid = new Uint8Array(n * gridDepth * 4);
   const stamp = new Int32Array(n), queue = new Int32Array(n);
   const w1 = (a: number, b: number): number => { const v = 0.5 + 0.5 * (a < b ? a : b) / ramp; return v < 0 ? 0 : v > 1 ? 1 : v; };
@@ -508,24 +546,36 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
   };
   let orphanCells = 0;
   for (let s = 0; s < S; s++) { orphanCells += orphansOf(s); yield; }
+  return {grid, gridDepth, orphanCells};
+}
 
-  if (!count) {
-    const layout = probeAtlasLayout(tile, 1);
-    const empty = {atlas: new Uint16Array(layout.width * layout.height * 4), meta: new Float32Array(12), grid};
-    return {tier: tier.id, count: 0, block, ramp, layout, ...empty, gridW: W, gridH: H, gridDepth, slots: S,
-      stats: {ms: performance.now() - t0, rays: 0, fixtures: 0, orphanCells, bytes: probeBytes(empty)}};
-  }
+/** Level-0 texels captured per build step: a step every ~1500 rays (a millisecond or two). */
+export const PROBE_CHUNK = 1536;
 
-  yield 'probes.capture';
-  // --- capture: level 0 of every probe (what each direction sees, lit by the field), its fixtures, its NORM and parallax box ------
-  const T2 = tile * tile, data = field.data, n4 = n * 4, INV_PI = 1 / Math.PI, gi0 = field.gi ?? -1;
+/** The capture of the probes [p0, p1) of a placement: level 0 of each (what each direction sees, lit by the field), its fixtures, its NORM and parallax box. */
+export interface ProbeCapture {
+  /** Level 0 of the range's probes: probe p at (p - p0) x tile^2 x 3 (rgb per texel). */
+  cap: Float32Array;
+  /** The meta of every probe of the placement (count x 3 x 4 floats); the range's rows are written. */
+  meta: Float32Array;
+  /** Texels [a, b) of probe p's level 0. */
+  texels(p: number, a: number, b: number): void;
+  /** Probe p's fixtures (added on top of its texels: after all of them) and its meta rows. */
+  finish(p: number): void;
+  /** Rays cast / fixtures drawn so far. */
+  rays(): number; fixtures(): number;
+}
+
+export function probeCapture(src: ProbeSource, pl: ProbePlacement, tile: number, scene: BandScene, p0: number, p1: number): ProbeCapture {
+  const {W, H, data, geos} = src, n = W * H, count = pl.count, pos = pl.pos;
+  const T2 = tile * tile, n4 = n * 4, INV_PI = 1 / Math.PI, gi0 = src.gi;
   const bases = Int32Array.from(geos, (_, s) => slotBase(s)), layersOf = Int32Array.from(geos, (_, s) => slotLayers(s));
-  const dirs = octTexelDirections(tile), sf = scene.f, sc = scene.c, sslot = scene.slot, alb = albedo.slots;
-  const cap = new Float32Array(count * T2 * 3);
+  const dirs = octTexelDirections(tile), sf = scene.f, sc = scene.c, sslot = scene.slot, alb = src.albedo;
+  const cap = new Float32Array(Math.max(0, p1 - p0) * T2 * 3);
   let rays = 0, fixtures = 0;
-  const captureTexels = (p: number, a: number, b: number): void => {
+  const texels = (p: number, a: number, b: number): void => {
     const px = pos[p * 3], py = pos[p * 3 + 1], pz = pos[p * 3 + 2];
-    for (let q = a, o = (p * T2 + a) * 3; q < b; q++, o += 3) {
+    for (let q = a, o = ((p - p0) * T2 + a) * 3; q < b; q++, o += 3) {
       if (!scene.trace(px, py, pz, dirs[q * 3], dirs[q * 3 + 1], dirs[q * 3 + 2], PROBE_REACH)) continue; // (nothing there: black)
       const band = scene.hitBand, hs = sslot[band], hi = scene.hitCol, kind = scene.hitKind, Lh = layersOf[hs], A = alb[hs];
       // the field voxel of the hit (world/lightFieldGather.ts: the same mapping), the surface's normal and its colour
@@ -562,16 +612,7 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
     rays += b - a;
   };
 
-  // the working fixtures: tube centre, tube axis, radiance (the tube colour world/lights.ts applyLevels draws, x PROBE_FIXTURE_RADIANCE)
-  const FX = 8, fx: number[] = [];
-  lights.forEach((l, li) => {
-    if (l.broken || !(l.power > 0.01) || l.virtual) return;
-    // its circuit as a probe keeps it: a steady tube full on, a flickering one at its usual level, a dying one at a tenth
-    const g = fixtureGroup(l, li), out = l.power * (g < 0 ? 1 : g === 2 ? 0.1 : 0.92);
-    const [tr, tg, tb] = fixtureTint(l), mx = Math.max(tr, tg, tb), s = l.tint ? 0.65 : 0.35, k = PROBE_FIXTURE_RADIANCE * (0.12 + 0.88 * out);
-    fx.push(l.x, l.y - TUBE_DROP, l.z, Math.cos(l.rot), -Math.sin(l.rot), k * (1 - s + s * tr / mx), k * (1 - s + s * tg / mx), k * (1 - s + s * tb / mx));
-  });
-  const fxs = Float64Array.from(fx), fxCount = fxs.length / FX;
+  const fxs = src.fixtures, fxCount = fxs.length / FX;
   /** Fixture radiance added per level-0 texel of the probe in work. */
   const glow = new Float32Array(T2 * 3), uv: [number, number] = [0, 0], texelSr = octTexelSolidAngles(tile);
   /** Adds a fixture's radiance to a texel for the solid angle `sr` of the tube that falls on it: the part of the texel it covers. */
@@ -613,7 +654,7 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
         put(i0, j0 + 1, sr * (1 - tx) * ty, lr, lg, lb); put(i0 + 1, j0 + 1, sr * tx * ty, lr, lg, lb);
       }
     }
-    if (any) for (let q = 0, o = p * T2 * 3, e = T2 * 3; q < e; q++) cap[o + q] += glow[q];
+    if (any) for (let q = 0, o = (p - p0) * T2 * 3, e = T2 * 3; q < e; q++) cap[o + q] += glow[q];
   };
 
   const meta = new Float32Array(count * 3 * 4);
@@ -639,19 +680,15 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
     meta[m1 + 2] = pz - reachOf(px, py, pz, 1e-3, 0, -1); meta[m2 + 2] = pz + reachOf(px, py, pz, 1e-3, 0, 1);
     meta[m1 + 3] = 0; meta[m2 + 3] = 0;
   };
-  // a step every ~1500 rays (a millisecond or two)
-  const CHUNK = 1536;
-  for (let p = 0; p < count; p++) {
-    for (let a = 0; a < T2; a += CHUNK) { captureTexels(p, a, Math.min(T2, a + CHUNK)); if (a + CHUNK < T2) yield; }
-    fixturesOf(p);
-    metaOf(p);
-    yield;
-  }
+  return {cap, meta, texels, finish: p => { fixturesOf(p); metaOf(p); }, rays: () => rays, fixtures: () => fixtures};
+}
 
-  yield 'probes.filter';
-  // --- levels 1..3 (each the level before, halved and blurred on the sphere), and everything into the atlas with its gutters --------
-  const kernels = yield* levelKernelsSteps(tile);
-  const layout = probeAtlasLayout(tile, count), AW = layout.width, atlas = new Uint16Array(AW * layout.height * 4);
+/**
+ * The filter of the probes of a capture that starts at probe `p0` (`cap`: ProbeCapture.cap): the returned function writes probe p's
+ * four levels (each the level before, halved and blurred on the sphere) into `atlas`, every tile with its gutters.
+ */
+export function probeFilter(layout: ProbeAtlasLayout, kernels: readonly LevelKernel[], cap: Float32Array, p0: number, atlas: Uint16Array): (p: number) => void {
+  const tile = layout.tile, T2 = tile * tile, AW = layout.width;
   const halved = kernels.map(K => new Float32Array(K.t * K.t * 3)), blurred = kernels.map(K => new Float32Array(K.t * K.t * 3));
   const writeTile = (p: number, l: number, src: Float32Array, so: number, t: number): void => {
     const [ox, oy] = probeTileOrigin(layout, p, l);
@@ -660,9 +697,10 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
       atlas[o] = probeHalf(src[s]); atlas[o + 1] = probeHalf(src[s + 1]); atlas[o + 2] = probeHalf(src[s + 2]); atlas[o + 3] = HALF_ONE;
     }
   };
-  const filterOf = (p: number): void => {
-    writeTile(p, 0, cap, p * T2 * 3, tile);
-    let src = cap, so = p * T2 * 3;
+  return (p: number): void => {
+    const base = (p - p0) * T2 * 3;
+    writeTile(p, 0, cap, base, tile);
+    let src = cap, so = base;
     for (let l = 1; l < PROBE_LEVELS; l++) {
       const K = kernels[l - 1];
       boxDown(src, so, K.t, K.share, halved[l - 1]);
@@ -671,10 +709,93 @@ export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: Reflecti
       src = blurred[l - 1]; so = 0;
     }
   };
-  for (let p = 0; p < count; p++) { filterOf(p); yield; }
-
-  const baked = {atlas, meta, grid};
-  return {tier: tier.id, count, block, ramp, layout, ...baked, gridW: W, gridH: H, gridDepth, slots: S,
-    stats: {ms: performance.now() - t0, rays, fixtures, orphanCells, bytes: probeBytes(baked)}};
 }
 
+/** The tiles (all four levels, with their gutters) of probes [p0, p1) from `src` into `dst`: two atlases of one layout. */
+export function copyProbeTiles(dst: Uint16Array, src: Uint16Array, layout: ProbeAtlasLayout, p0: number, p1: number): void {
+  const AW = layout.width;
+  for (let p = p0; p < p1; p++) for (let l = 0; l < PROBE_LEVELS; l++) {
+    const [ox, oy] = probeTileOrigin(layout, p, l), t = layout.levelTile[l], row = (t + 2 * PROBE_GUTTER) * 4;
+    for (let j = oy - PROBE_GUTTER; j < oy + t + PROBE_GUTTER; j++) { const o = (j * AW + ox - PROBE_GUTTER) * 4; dst.set(src.subarray(o, o + row), o); }
+  }
+}
+
+/** The meta rows of probes [p0, p1) from `src` into `dst`: two metas of `count` probes. */
+export function copyProbeMeta(dst: Float32Array, src: Float32Array, count: number, p0: number, p1: number): void {
+  for (let row = 0; row < 3; row++) { const a = (row * count + p0) * 4, b = (row * count + p1) * 4; dst.set(src.subarray(a, b), a); }
+}
+
+/** A station's baked probes from their parts (`atlas` / `meta` of a station without a probe: emptyProbeMaps). */
+export function assembleProbes(
+  tier: Pick<ReflectionTier, 'id' | 'tile'>, src: Pick<ProbeSource, 'W' | 'H' | 'geos'>, pl: Pick<ProbePlacement, 'block' | 'ramp' | 'count'>,
+  maps: {atlas: Uint16Array; meta: Float32Array; grid: Uint8Array; gridDepth: number}, counts: {rays: number; fixtures: number; orphanCells: number}, ms: number,
+): BakedProbes {
+  const baked = {atlas: maps.atlas, meta: maps.meta, grid: maps.grid};
+  return {tier: tier.id, count: pl.count, block: pl.block, ramp: pl.ramp, layout: probeAtlasLayout(tier.tile, Math.max(1, pl.count)), ...baked, gridW: src.W, gridH: src.H, gridDepth: maps.gridDepth, slots: src.geos.length,
+    stats: {ms, rays: counts.rays, fixtures: counts.fixtures, orphanCells: counts.orphanCells, bytes: probeBytes(baked)}};
+}
+
+/** The atlas and meta of a station with no probe: a 1-probe-sized zero atlas. */
+export function emptyProbeMaps(tile: number): {atlas: Uint16Array; meta: Float32Array} {
+  const layout = probeAtlasLayout(tile, 1);
+  return {atlas: new Uint16Array(layout.width * layout.height * 4), meta: new Float32Array(12)};
+}
+
+/**
+ * Bake a station's probes, as build steps (core/pacedBuild.ts: a yield at least every couple of milliseconds of work). Deterministic
+ * (no random numbers, no clock but the statistics). A station with no open cell returns count 0 (a 1-probe-sized zero atlas).
+ *
+ * What the contract leaves to the bake:
+ *  - the block is the even number of cells nearest the tier's spacing (at least 8), grown by 2 until the station holds no more probes
+ *    than the tier allows; a block holds a probe when it has 4 or more open cells of the slot; probes are numbered by slot, then
+ *    block row, then block column. A probe sits at its cell's centre, min(1.5 m, half the room height) above the floor; its weights
+ *    reach the cells it can walk to inside its block grown by ramp + 1 cells (4-neighbour steps over open cells of its slot, floors
+ *    less than 0.6 m apart); a cell NO probe can walk to takes the probes that reach it the same way across floor steps of any
+ *    height (a track bed below a platform edge: the same air); and a probe's weights go one cell further into the solid cells
+ *    beside its cells (the largest weight of those next to it: what is set into a wall's own cell still reflects the room it faces);
+ *  - level 0 texel (i, j) looks along octDecode((i + 0.5) / tile, (j + 0.5) / tile), at most PROBE_REACH far (nothing there: black);
+ *  - a fixture is drawn when it works (not broken, power above 0.01, not a `virtual` light source: that one has no tube), is within
+ *    PROBE_REACH and the ray to its tube's centre is not stopped more than 0.4 m short of it; its radiance is added on top of the
+ *    surface behind it: the tube's solid angle (from its centre), split evenly over points along it (five, more for a tube close
+ *    enough to span more texels) and splatted bilinearly — a texel gains the tube's radiance x the share of the texel's own solid
+ *    angle the tube covers (the map's texels differ fivefold in size), and its added fixture radiance is never raised above the
+ *    radiance of the fixture being added (one running total per texel over all the fixtures of a probe, in the lights' order);
+ *  - level l is level l - 1 halved (each texel the mean of its four over their solid angle) and blurred by a Gaussian on the sphere
+ *    (levelKernelsSteps): a level's solid-angle-weighted mean radiance is level 0's;
+ *  - the parallax box reaches 0.5 .. 30 m from the probe along each axis (the first surface a ray along it meets; the level rays
+ *    are turned 0.001 off their axis);
+ *  - every tile (all four levels) is written with its gutter and alpha 1; the tiles of unused atlas slots stay 0.
+ */
+export function* bakeReflectionProbesSteps(input: ProbeBakeInput, tier: ReflectionTier): BuildSteps<BakedProbes> {
+  const t0 = performance.now();
+  const src = probeSource(input, tier), tile = tier.tile;
+  const scene = input.scene ?? new BandScene(src.W, src.H, src.geos);
+
+  yield 'probes.place';
+  // --- placement: the tier's block, grown until the station fits the tier's probe count ----------------------------------------
+  const pl = yield* probePlacementSteps(src, tier);
+
+  yield 'probes.grid';
+  // --- the grid: ids over each probe's expanded block, weights where its probe can walk to ---------------------------------------
+  const {grid, gridDepth, orphanCells} = yield* probeGridSteps(src, pl);
+  const count = pl.count;
+  if (!count) return assembleProbes(tier, src, pl, {...emptyProbeMaps(tile), grid, gridDepth}, {rays: 0, fixtures: 0, orphanCells}, performance.now() - t0);
+
+  yield 'probes.capture';
+  // --- capture: level 0 of every probe (what each direction sees, lit by the field), its fixtures, its NORM and parallax box ------
+  const capture = probeCapture(src, pl, tile, scene, 0, count), T2 = tile * tile;
+  for (let p = 0; p < count; p++) {
+    for (let a = 0; a < T2; a += PROBE_CHUNK) { capture.texels(p, a, Math.min(T2, a + PROBE_CHUNK)); if (a + PROBE_CHUNK < T2) yield; }
+    capture.finish(p);
+    yield;
+  }
+
+  yield 'probes.filter';
+  // --- levels 1..3 (each the level before, halved and blurred on the sphere), and everything into the atlas with its gutters --------
+  const kernels = yield* levelKernelsSteps(tile);
+  const layout = probeAtlasLayout(tile, count), atlas = new Uint16Array(layout.width * layout.height * 4);
+  const filter = probeFilter(layout, kernels, capture.cap, 0, atlas);
+  for (let p = 0; p < count; p++) { filter(p); yield; }
+
+  return assembleProbes(tier, src, pl, {atlas, meta: capture.meta, grid, gridDepth}, {rays: capture.rays(), fixtures: capture.fixtures(), orphanCells}, performance.now() - t0);
+}

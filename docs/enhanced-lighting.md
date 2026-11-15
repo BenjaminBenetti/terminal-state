@@ -300,6 +300,14 @@ an entry, the digest decides. A mismatch is reported as "baked again" and the en
 or probe code itself needs a version bump (`DERIVED_LIGHTING_VERSIONS` in `world/enhancedLightingRuntime.ts`; this
 rebuild bumped all three, so every entry of the earlier version is a miss and leaves by eviction).
 
+**When IndexedDB is given up.** A browser that does not answer (an open that does not settle in 3 s, a transaction
+that does not finish in 10 s) moves the cache to memory for the session. Both limits count time in which the page's
+**event loop ran**, not wall time: IndexedDB answers through events, and while the main thread is busy in one piece
+(a station build, a warm-up frame of seconds) a healthy database cannot answer either. A limit is cut into ten timer
+ticks; a tick that fires late counts nothing, so one block of any length never uses a limit up. Before, a main
+thread that was busy for 10 s after a write began switched a working cache off for the session, and the next page
+load baked again.
+
 **What it can never do.** The cache holds derived data only. Nothing in it is read by the generator, the save or the
 campaign. A hit, a miss, a cleared cache, a full disk or a browser without IndexedDB (the cache then lives in memory
 for the session, and the status says so) give the same station, loot, identities, cargo and travel: only the load

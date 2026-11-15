@@ -92,6 +92,8 @@ describe('the manual save (Game.saveNow: the real game.ts methods on a minimal s
       leaveSection: (save: boolean) => order.push(`leave:${save}`),
       prepareSection: async (k: SectionKey) => { order.push(`prepare:${k.station}`); return {station: k.station}; },
       buildSection(this: {run: RunState}, k: SectionKey) { order.push(`build:${k.station}`); this.run.current = {...k}; },
+      // (Continue builds through the real Game.buildSectionSliced, which drains buildSectionSteps: this shell's steps are its recorded build)
+      *buildSectionSteps(this: {buildSection(k: SectionKey): void}, k: SectionKey) { yield; this.buildSection(k); yield; },
       updateStationIntro: () => {}, lifecycleFailed: () => order.push('lifecycleFailed'), beginGesture: () => Promise.resolve(true),
       showLoading: () => ({meter: null, label: {textContent: ''}, button: null}), progressTo: () => () => {},
       prepareGraphics: async () => ({status: 'done'}), readyLine: () => {}, enterPlay: () => { order.push('enterPlay'); return Promise.resolve(); },

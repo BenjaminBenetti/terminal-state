@@ -17,6 +17,11 @@ import {textureMean} from '../damage/sample';
 import {mallTableData} from './mallSurfaces';
 import type {ColumnGeometry} from './lightField';
 import {drainSync, type BuildSteps} from '../core/pacedBuild';
+// (the bytes' layout — ALBEDO_STRIDE, ALB_FLOOR / ALB_CEIL / ALB_WALL, ALBEDO_LUT — lives in world/lightFieldLayout.ts: the gather
+// and the probe bake read it in workers, which must not load this module's renderer library; the names are this module's as before)
+import {ALBEDO_LUT, ALBEDO_STRIDE, ALB_CEIL, ALB_FLOOR, ALB_WALL} from './lightFieldLayout';
+
+export {ALBEDO_LUT, ALBEDO_STRIDE, ALB_CEIL, ALB_FLOOR, ALB_WALL};
 
 /** What the architecture pass drew (world/builder.ts BuiltWorld.drawn). */
 export interface DrawnSurfaces {
@@ -30,18 +35,12 @@ export interface DrawnSurfaces {
   material(key: string): THREE.Material | undefined;
 }
 
-/** Bytes per cell of a slot's albedo: floor rgb, ceiling rgb, wall rgb. */
-export const ALBEDO_STRIDE = 9;
-export const ALB_FLOOR = 0, ALB_CEIL = 3, ALB_WALL = 6;
-
 export interface SurfaceAlbedo {
-  /** Per level slot, per cell: ALBEDO_STRIDE bytes, each round(sqrt(linear) * 255). A black ceiling = none. */
+  /** Per level slot, per cell: ALBEDO_STRIDE bytes (floor rgb, ceiling rgb, wall rgb), each round(sqrt(linear) * 255). A black ceiling = none. */
   slots: Uint8Array[];
   stats: {keys: number; floors: number; ceils: number; open: number; walls: number; defaults: number};
 }
 
-/** Linear value of an albedo byte. */
-export const ALBEDO_LUT: Float32Array = (() => { const t = new Float32Array(256); for (let i = 0; i < 256; i++) t[i] = (i / 255) ** 2; return t; })();
 const enc = (v: number): number => Math.round(Math.sqrt(Math.min(1, Math.max(0, v))) * 255);
 
 const C = new THREE.Color();
