@@ -43,6 +43,10 @@ import {ACID_MELT_LANE, ACID_MELT_LIMITS, acidMeltedProblem} from '../run/acidMe
 import {WALLET_PARTICIPANT, walletProblem} from '../market/trade/wallet';
 import {BEER_PARTICIPANT, beerSaveProblem} from '../market/beer/beerSave'; // task studio-market-bar-20261108-225231-01 (lane BEER): the timed beer's record
 import {SURVIVAL_OVERFILL} from '../player/survival'; // (lane BEER) food / water may hold the Bock's overfill (0..200)
+import {SURFACE_VERSION_LANE, surfaceVersionProblem} from '../run/surfaceRun';
+import {SURFACE_TRUCK_LANE} from '../world/surfaceTruckSpec';
+import {SURFACE_SALVAGE_PARTICIPANT, surfaceCargoProblem} from '../world/surfaceTruckCargo';
+import {SURFACE_EXPLORATION_LANE, surfaceExplorationProblem} from '../ui/surfaceMap';
 import {checksumOf, utf8Bytes} from './checksum';
 import {transitRouteProblem} from '../campaign/discovery';
 import {hashString} from '../core/rng'; // (task studio-skyways-level-20261106-054448-01: the pre-Skyways seed default)
@@ -535,6 +539,7 @@ function participants(v: unknown, path: string, seen: Set<number>): void {
   const keys = Object.keys(o);
   if (keys.length > SAVE_LIMITS.participants) bad(path, 'too many run participants');
   for (const k of keys) str(k, path, 48, LANE_ID, 'a participant id');
+  if (o[SURFACE_SALVAGE_PARTICIPANT] !== undefined) { const problem = surfaceCargoProblem(o[SURFACE_SALVAGE_PARTICIPANT]); if (problem) bad(`${path}.${SURFACE_SALVAGE_PARTICIPANT}`, problem); }
   if (o[WALLET_PARTICIPANT] !== undefined) { const wp = walletProblem(o[WALLET_PARTICIPANT]); if (wp) bad(`${path}.${WALLET_PARTICIPANT}`, wp); } // lane TRADE: an old Rail Ties balance still owed ({v: 1}) or settled ({v: 2})
   if (o[BEER_PARTICIPANT] !== undefined) { const bp = beerSaveProblem(o[BEER_PARTICIPANT]); if (bp) bad(`${path}.${BEER_PARTICIPANT}`, bp); } // (task studio-market-bar-20261108-225231-01, lane BEER) the timed beer + the Pilsner's rolls
   const t = o[PLAYER_TRAIN_PARTICIPANT];
@@ -626,6 +631,14 @@ function lanes(v: unknown, path: string): void {
   if (keys.length > SAVE_LIMITS.lanes) bad(path, 'too many lane stores');
   for (const k of keys) str(k, path, 48, LANE_ID, 'a lane id');
   if (has(o, BAG_LANE)) sectionBags(o[BAG_LANE], `${path}.${BAG_LANE}`);
+  if (has(o, SURFACE_VERSION_LANE)) { const problem = surfaceVersionProblem(o[SURFACE_VERSION_LANE]); if (problem) bad(`${path}.${SURFACE_VERSION_LANE}`, problem); }
+  if (has(o, SURFACE_EXPLORATION_LANE)) { const problem = surfaceExplorationProblem(o[SURFACE_EXPLORATION_LANE]); if (problem) bad(`${path}.${SURFACE_EXPLORATION_LANE}`, problem); }
+  if (has(o, SURFACE_TRUCK_LANE)) {
+    const truck = o[SURFACE_TRUCK_LANE], problem = skywaysCarProblem(truck);
+    if (problem) bad(`${path}.${SURFACE_TRUCK_LANE}`, problem);
+    if ((truck as {v: number}).v !== 2) bad(`${path}.${SURFACE_TRUCK_LANE}`, 'unsupported truck record version');
+    slotList((truck as {trunk: unknown}).trunk, `${path}.${SURFACE_TRUCK_LANE}.trunk`, TRUNK_SLOTS, uidScope);
+  }
   if (has(o, FUEL_LANE)) { const fp = stationFuelProblem(o[FUEL_LANE]); if (fp) bad(`${path}.${FUEL_LANE}`, fp); } // task train-fuel-system
   if (has(o, BUNKER_LANE)) { const bp = bunkerStateProblem(o[BUNKER_LANE]); if (bp) bad(`${path}.${BUNKER_LANE}`, bp); } // task bunker-level (lane OBJECTIVE): a Bunker station's generators + intel claim
   if (has(o, SKYWAYS_CAR_LANE)) { // task skyways-level-20261106 (lane CAR)

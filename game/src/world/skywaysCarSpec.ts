@@ -16,6 +16,12 @@ export interface CarPoint { x: number; y: number; z: number }
 export interface CarSpec {
   /** The runtime GLB (nodes `body`, `glass`; the glass material named `glass`). */
   url: string;
+  /** Reused arcade controller with a measured handmade cab (Surface Run truck). */
+  proceduralCab?: boolean;
+  /** Optional car-frame lamp anchors; the prize car retains its original anchors. */
+  lamp?: {y: number; z: number};
+  /** Conservative overhead collision envelope for an attached rack; never scales the body/cab artwork. */
+  clearance?: number;
   /** Overall size (m): length along z, width along x (incl. mirrors), height. */
   length: number;
   width: number;

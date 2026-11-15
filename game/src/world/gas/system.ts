@@ -159,6 +159,8 @@ export class GasSystem {
    * complete, filter > 0). Default: never protected.
    */
   protection: () => boolean = () => false;
+  /** Local outdoor source; the usual mask/filter/exposure calculation still applies once. */
+  outdoorConcentration: () => number = () => 0;
   /** Integration point: the HUD hint while in gas ("Put on your gas mask (Q)" / "No filter" …). */
   hintFor: (protectedNow: boolean) => string = p => (p ? '' : 'Put on your gas mask (Q)');
   /** This frame's exposure. */
@@ -457,7 +459,7 @@ export class GasSystem {
   frame(dt: number): void {
     const f = this.field, roof = this.roof, P = this.puffs;
     const D = this.depth && this.host.layout.reactor ? this.depth : null; // task reactor-build-20261101 (lane AIR): only on the Reactor
-    if (!f && !roof && !P.active && !D) { if (this.exposure.fallback) { this.exposure.fallback = 0; this.host.atmosphere.setGasFallback?.(0); } this.hud.clear(); return; } // lane BLIGHT: + one boolean (no puff); lane AIR: + no depth gas (lane GASLIGHT: the fallback closes with the last puff)
+    if (!f && !roof && !P.active && !D && !this.host.layout.surface) { if (this.exposure.fallback) { this.exposure.fallback = 0; this.host.atmosphere.setGasFallback?.(0); } this.hud.clear(); return; } // lane BLIGHT: + one boolean (no puff); lane AIR: + no depth gas (lane GASLIGHT: the fallback closes with the last puff)
     if (f) f.tick(dt);
     if (P.active) P.tick(dt);
     this.upload();
@@ -469,7 +471,8 @@ export class GasSystem {
     // lane BLIGHT: the breach field + the temporary puffs share the gas (saturating at the cap, never stacking beyond it)
     const cPuff = pl.alive && P.active ? P.concentrationAt(pl.x, pl.eye, pl.z) : 0;
     const cField = pl.alive ? Math.min(GAS.CAP, (f ? f.concentrationAt(pl.x, pl.eye, pl.z) : 0) + cPuff) : 0;
-    const cOut = pl.alive && roof ? GAS.ROOF_OUTDOOR_C * roofBlend(pl.x, pl.eye, pl.z, roof) : 0;
+    const cOut = pl.alive ? Math.max(roof ? GAS.ROOF_OUTDOOR_C * roofBlend(pl.x, pl.eye, pl.z, roof) : 0,
+      Math.min(GAS.CAP, Math.max(0, this.outdoorConcentration()))) : 0;
     // task reactor-build-20261101 (lane AIR): the Reactor's depth gas at the eye — max with the other sources, never a sum
     const cDepth = pl.alive && D ? D.depthGasAt(pl.x, pl.eye, pl.z) : 0;
     const c = Math.max(cField, cOut, cDepth);

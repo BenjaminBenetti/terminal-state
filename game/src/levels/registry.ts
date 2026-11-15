@@ -26,6 +26,7 @@ import {trainSpawnPose, type TrainPlacement} from '../gen/playerTrain'; // task 
 import {applyEnemyRoster} from '../ai/enemyRoster'; // task studio-screacher-production-20261110-221858-01: the per-level seeded family roster
 import {applyIrradiatedAdditions} from '../gen/reactor/irradiated'; // task studio-reactor-glowing-zombies-20261115-013245-01: + the Reactor's lower-storey irradiated zombies (roster v4)
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
+import {appendSurfaceAccess, generateSurfaceLevel, isSurfaceBaseLevel, surfaceEligible} from '../gen/surface/index';
 
 /** Logical levels in tier order (subway 0, office 1, mall 2 — task track3-eaton-centre-20261031, lane GEN). */
 export const LEVEL_IDS: readonly LevelId[] = ['subway', 'office', 'mall', 'market', 'bunker', 'skyways', 'reactor']; // (+ reactor, tier 3: task reactor-build-20261101; + skyways: task studio-skyways-level-20261106-054448-01, before the Reactor; + market: task studio-survivor-market-20261108-005807-01, before Skyways; + bunker: task studio-bunker-level-20261109-072224-01, after the market — Skyways stays second-to-last, the Reactor last)
@@ -175,9 +176,14 @@ export const LEVELS: Record<LevelId, LevelDef> = {
 for (const id of LEVEL_IDS) {
   const generate = LEVELS[id].generate;
   LEVELS[id].generate = (section, ctx) => {
+    if (section === 'surface') {
+      if (!isSurfaceBaseLevel(id) || !surfaceEligible(id, ctx.levelSeed, ctx.surfaceVersion ?? 0)) throw new Error('This station has no Surface Run expedition');
+      return generateSurfaceLevel(ctx, id);
+    }
     const layout = generate(section, ctx);
     applyEnemyRoster(layout, id, ctx.levelSeed, ctx.rosterVersion ?? 0);
     applyIrradiatedAdditions(layout, id, ctx.levelSeed, ctx.rosterVersion ?? 0); // (roster v4) the Reactor's irradiated zombies, APPENDED after it
+    if (isSurfaceBaseLevel(id) && surfaceEligible(id, ctx.levelSeed, ctx.surfaceVersion ?? 0)) appendSurfaceAccess(layout, id, ctx.levelSeed);
     return layout;
   };
 }
@@ -222,6 +228,7 @@ export function levelDisplayName(level: LevelId, levelSeed?: number): string {
 
 /** Short human label of a level's world ("Station", "Station and tower", "Station and mall"). */
 export function sectionLabel(key: SectionKey): string {
+  if (key.section === 'surface') return 'Surface Run';
   return key.level === 'office' ? 'Station and tower' : key.level === 'mall' ? 'Station and mall' : key.level === 'reactor' ? 'Station and pit' : key.level === 'skyways' ? 'Station and skyways' : key.level === 'market' ? 'Station and settlement' : key.level === 'bunker' ? 'Station and shelter' : 'Station';
 }
 
@@ -261,6 +268,7 @@ export interface ArrivalPose { x: number; z: number; yaw: number; level?: number
  * function so the legitimately saved position always wins (tests/player-train-placement.test.ts).
  */
 export function arrivalPose(layout: StationLayout, arrival: Arrival, train?: TrainPlacement | null): ArrivalPose {
+  if (arrival.kind === 'return' && layout.surfaceAccess) return {...layout.surfaceAccess, yaw: layout.surfaceAccess.yaw + Math.PI, source: 'surface-return'};
   if (train && arrival.kind === 'start') return trainSpawnPose(layout, train);
   const start = layout.office?.start ?? layout.mall?.start ?? layout.reactor?.start ?? layout.skyways?.start ?? layout.bunker?.start; // (lane GEN: + the mall's platform start; + the reactor's rim platform start; + Skyways'; + the Bunker's: task studio-bunker-level-20261109-072224-01)
   if (start) return {...start, source: 'start'};

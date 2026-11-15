@@ -1,3 +1,4 @@
+import type {SurfaceInfo, SurfaceAccess} from './surface/types';
 // Station layout data types and scale constants (pure data, no three.js). Re-exported by station.ts.
 
 import type {Grid} from './grid';
@@ -403,6 +404,10 @@ export interface StationLayout {
    * (gen/trackExt); absent on levels without them ('none').
    */
   extensions?: TrackExtensions;
+  /** Surface Run: separately loaded local expedition; absent from the underground section. */
+  surface?: SurfaceInfo;
+  /** An occluded access vestibule on an eligible, newly generated base section. */
+  surfaceAccess?: SurfaceAccess;
 }
 
 // ---------------------------------------------------------------------------------------

@@ -64,7 +64,7 @@ import {CAR_SPEC, carToWorld, worldToCar, type CarSpec} from './skywaysCarSpec';
 import {CAR_PHYS, CAR_STAIRS, NO_CONTROLS, carPose, nearestCircle, settlePose, stepCar, wrapAngle, type CarBody, type CarControls, type CarImpact, type CarPose, type CarStep, type CarWorld} from './skywaysCarPhysics';
 import {SKYWAYS_CAR_LANE, emptyTrunk, skywaysCarProblem, skywaysCarRecord, upgradeCarRecord, type SkywaysCarRecord, type SkywaysCarRecordV1} from './skywaysCarStore';
 import type {StackJSON} from '../items/inventory';
-import {buildCarView, carModelsGen, loadSkywaysCarModel, refreshCarView, releaseSkywaysCarModel, setWheel, type CarView} from './skywaysCarModel';
+import {buildCarView, carModelsGen, loadSkywaysCarModel, refreshCarView, releaseSkywaysCarModel, setWheel, setRoadWheels, type CarView} from './skywaysCarModel';
 import {attachCarBeam, createCarBeam, setCarLamps, type CarBeam} from './skywaysCarLights';
 
 export const CAR_RT = {
@@ -233,6 +233,14 @@ export interface SkywaysCarHost {
 /** Keys the driver uses (MoveInput-like; Game's Input also carries mousePressed). */
 export interface DriveInput { down(code: string): boolean; hit(code: string): boolean; mousePressed?: readonly boolean[] }
 
+/** A second vehicle uses this controller, its input, collision, lamps and zombie contacts unchanged. */
+export interface ArcadeVehicleVariant {
+  matches(layout: StationLayout): boolean;
+  spec: CarSpec;
+  lane: string;
+  spawn(layout: StationLayout): {x: number; y: number; z: number; yaw: number; level: number} | undefined;
+}
+
 const tv = new THREE.Vector3(), tv2 = new THREE.Vector3(), tn = new THREE.Vector3(), tq = new THREE.Quaternion();
 const near = new Set<number>();
 const approach = (v: number, to: number, step: number): number => (v < to ? Math.min(to, v + step) : Math.max(to, v - step));
@@ -241,7 +249,11 @@ const clamp = (v: number, a: number, b: number): number => (v < a ? a : v > b ? 
 export class SkywaysCar {
   /** The car's view root lives here (one car per world). */
   readonly root = new THREE.Group();
-  readonly spec: CarSpec;
+  spec: CarSpec;
+  /** Surface Run supplies one localized variant; ordinary prize-car worlds keep the original path. */
+  variant: ArcadeVehicleVariant | null = null;
+  private activeVariant: ArcadeVehicleVariant | null = null;
+  private readonly defaultSpec: CarSpec;
   /** The car's controller state (null: no car in this world). */
   body: CarBody | null = null;
   view: CarView | null = null;
@@ -305,6 +317,7 @@ export class SkywaysCar {
 
   constructor(readonly host: SkywaysCarHost, spec: CarSpec = CAR_SPEC) {
     this.spec = spec;
+    this.defaultSpec = spec;
     this.root.name = 'skyways-car-root';
     this.audio = sfxCarAudio(() => this.host.sfx);
     this.walkerIds = spec.circles.map(() => ({}));
@@ -322,9 +335,16 @@ export class SkywaysCar {
     h.inputOwners?.push(this.ownsInput);
     h.stateListeners?.push(((s: string) => this.onState(s)) as (s: never, p: never) => void);
     h.sectionHooks.push({build: ((layout: StationLayout) => this.onBuild(layout)) as (l: never) => void, teardown: () => this.onTeardown()});
-    h.sectionPreloads?.push(((layout: StationLayout) => (layout.skyways?.addon?.car
-      ? Promise.race([loadSkywaysCarModel(this.spec).then(() => undefined), new Promise<void>(r => setTimeout(r, CAR_RT.modelWaitMs))])
-      : Promise.resolve())) as (l: never) => Promise<void>);
+    h.sectionPreloads?.push((async (layout: StationLayout) => {
+      const variant = this.variant?.matches(layout) ? this.variant : null;
+      if (variant?.spawn(layout)) {
+        // A surface transition is a readiness boundary: never let the truck arrive in visible play.
+        const models = await loadSkywaysCarModel(variant.spec);
+        if (!models.car && typeof document !== 'undefined') throw new Error('The military truck could not be loaded');
+      } else if (layout.skyways?.addon?.car) {
+        await Promise.race([loadSkywaysCarModel(this.defaultSpec).then(() => undefined), new Promise<void>(r => setTimeout(r, CAR_RT.modelWaitMs))]);
+      }
+    }) as (l: never) => Promise<void>);
     h.warmRegistry.addPool('skyways-car', () => (this.view ? [this.view.group] : []));
     h.bulletHitHandlers?.push(((wh: {t: number}, point: THREE.Vector3, dir: THREE.Vector3) => this.bulletHit(wh, point, dir)) as never);
     h.gear?.placeRules?.push(() => (this.driving ? CAR_TEXT.placeRule : null));
@@ -336,7 +356,10 @@ export class SkywaysCar {
 
   onBuild(layout: StationLayout): void {
     if (this.worldLive) this.onTeardown();
-    const spawn = layout?.skyways?.addon?.car;
+    this.activeVariant = this.variant?.matches(layout) ? this.variant : null;
+    this.spec = this.activeVariant?.spec ?? this.defaultSpec;
+    while (this.walkerIds.length < this.spec.circles.length) this.walkerIds.push({});
+    const spawn = this.activeVariant?.spawn(layout) ?? layout?.skyways?.addon?.car;
     const L = this.host.levels;
     if (!spawn || !L) { if (releaseSkywaysCarModel()) this.counts.released++; return; }
     const rec = this.readRecord();
@@ -362,6 +385,13 @@ export class SkywaysCar {
     // on is its intensity only — the scene's light set never changes during play
     this.beam ??= createCarBeam();
     attachCarBeam(this.beam, this.view.group);
+    if (this.spec.lamp) {
+      this.beam.light.position.set(0, this.spec.lamp.y, this.spec.lamp.z);
+      this.beam.target.position.set(0, this.spec.lamp.y - 0.6, this.spec.lamp.z - 14);
+    } else {
+      this.beam.light.position.set(0, 0.72, -2.47);
+      this.beam.target.position.set(0, -0.15, -14.5);
+    }
     this.decorateView();
     this.syncView();
     // the layout props the car can shove (dynamic kinds) / shatter (glazed kinds), by their layout index (shootProp / hitWorld need it)
@@ -403,7 +433,7 @@ export class SkywaysCar {
   /** The station's car record (valid, else null), as v2 (a v1 record: lamps off, an empty trunk). */
   readRecord(): SkywaysCarRecord | null {
     let raw: unknown;
-    try { raw = this.host.run.laneStore(SKYWAYS_CAR_LANE); } catch { raw = undefined; }
+    try { raw = this.host.run.laneStore(this.activeVariant?.lane ?? SKYWAYS_CAR_LANE); } catch { raw = undefined; }
     return raw !== undefined && skywaysCarProblem(raw) === null ? upgradeCarRecord(raw as SkywaysCarRecordV1 | SkywaysCarRecord) : null;
   }
 
@@ -413,7 +443,7 @@ export class SkywaysCar {
     if (!b || !this.worldLive) return;
     try {
       if (this.trunkSource) this.trunkJSON = this.trunkSource();
-      this.host.run.setLaneStore(SKYWAYS_CAR_LANE, skywaysCarRecord(b.x, b.y, b.z, b.yaw, b.level, {lights: this.lights, trunk: this.trunkJSON}));
+      this.host.run.setLaneStore(this.activeVariant?.lane ?? SKYWAYS_CAR_LANE, skywaysCarRecord(b.x, b.y, b.z, b.yaw, b.level, {lights: this.lights, trunk: this.trunkJSON}));
       this.counts.stores++;
     } catch (err) { console.warn('skyways car: storing the record failed', err); }
   }
@@ -696,6 +726,7 @@ export class SkywaysCar {
       g.updateMatrixWorld(true);
     }
     setWheel(v, b.steer, dt);
+    setRoadWheels(v, b.steer, b.v * (dt ?? 0));
     setCarLamps(this.lights, v.lens, this.beam);
   }
 

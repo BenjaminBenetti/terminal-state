@@ -404,6 +404,12 @@ export class ZombieBrain {
     return this.state !== 'dead';
   }
 
+  /** Reuse an ordinary exterior slot without retaining a previous chase, attack or queued path. */
+  resetAt(x: number, y: number, z: number, yaw: number): void {
+    Object.assign(this, new ZombieBrain(this.type, x, z, yaw, this.stats));
+    this.y = y;
+  }
+
   /** Task track3-eaton-centre-20261031 (lane HORDE): start walking with the group (an idle / wandering member with an escort). */
   joinPatrol(): boolean {
     if (!this.escort || (this.state !== 'idle' && this.state !== 'wander' && this.state !== 'patrol')) return false;

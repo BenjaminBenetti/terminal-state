@@ -179,6 +179,11 @@ tunnel, or a service hatch in a track-bed wall. Graffiti arrows point the way on
 ladders take you back up. See
 [docs/track-extensions.md](docs/track-extensions.md).
 
+**Surface Run** (preview-only Codex experiment): a deterministic 25% of new or unvisited Subway, Office and Mall stations open
+a local military checkpoint and a ruined 8×8-block expedition, with sixteen destinations in its 4×4 core, a drivable military
+truck, finite storage and recoverable existing train equipment. Visited stations and their loot/kills stay pinned. See
+[docs/surface-run.md](docs/surface-run.md) for access, controls, persistence and the separate-preview save precautions.
+
 **Office Space overhaul** (task office-overhaul-20261030): every office floor 2–8 is leased to one of **20 fictional
 companies** (a different seeded mix each run; sometimes one company takes two floors), each with its own floor program,
 palette, signage and two signature Meshy props — a law firm's library and Lady Justice, a game studio's arcade lounge,

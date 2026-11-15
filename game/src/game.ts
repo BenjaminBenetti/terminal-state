@@ -2,6 +2,13 @@
 // combat resolution, zombie updates, pickups and the station lifecycle (new seed per run).
 
 import * as THREE from 'three';
+import {SurfacePopulation} from './world/surfacePopulation';
+import {ensureSurfaceTruckReady, installSurfaceTruck, type SurfaceTruck} from './world/surfaceTruck';
+import {installSurfaceRun, type SurfaceRunHost, type SurfaceRunRuntime} from './world/surface/runtime';
+import {SURFACE_VERSION_LANE, surfaceBaseKey, surfaceVersionFor, surfaceBaseLevel} from './run/surfaceRun';
+import {runSurfaceBoundary} from './run/surfaceBoundary';
+import {drainSurfaceGpu, type SurfaceGpuBackend} from './world/surface/gpuBoundary';
+import {GAS} from './world/gas/field';
 import {freshSeed, hashString, mulberry32, seedToCode} from './core/rng';
 import {PropIndex, moveCircle} from './core/physics';
 import {CELL, PathFinder, nearestWalkable} from './gen/grid';
@@ -412,6 +419,9 @@ export class Game {
   weapon = new WeaponController();
   /** Every enemy actor (zombies + iteration-07 archetypes such as the rat/dog; ai/creatureArchetypes.ts EnemyActor). */
   zombies: EnemyActor[] = [];
+  private readonly surfaceEnemyFrustum = new THREE.Frustum();
+  private readonly surfaceEnemyProjection = new THREE.Matrix4();
+  private readonly surfaceEnemySphere = new THREE.Sphere(new THREE.Vector3(), 2);
   /** Spawns whose archetype model was missing and fell back to a zombie (QA). */
   enemyFallbacks = 0;
   /** Iteration 05 body x outfit registry/assembler (ai/outfits.ts), built once from the loaded GLBs. */
@@ -640,6 +650,11 @@ export class Game {
   readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys, lingerieModelKeysFor, cosplayModelKeysFor, shelfJunkModelKeysFor, bunkerModelKindKeysFor, corpseDenModelKeysFor]; // (+ task studio-food-shelf-production-20261109-002816-01: the shelf-junk atlas only on layouts with stockable holders)
   /** One lifecycle operation at a time: travel, new game, retry level. */
   private readonly lifecycle = new SingleFlight();
+  private surfaceBoundaryWarming = false;
+  surfaceBoundaryPhase = 'idle';
+  surfacePopulation!: SurfacePopulation;
+  surfaceTruck!: SurfaceTruck;
+  surfaceRuntime!: SurfaceRunRuntime;
   /** Live pickups that are (what is left of) a generated layout pickup -> its layout.pickups index. */
   private readonly layoutPickup = new Map<Pickup, number>();
   /** Live enemies -> their layout.zombies index (kills are remembered per index). */
@@ -903,7 +918,8 @@ export class Game {
     this.gas.zoneSources.push(bunkerGasSource); // task studio-bunker-level-20261109-072224-01: the Bunker's gas zones (visible green fog + exposure, one field)
     // Task gasmask-breach-20261030 (primary): breach gas spares the player only behind a mask that is on with a working filter.
     // The mask's frame hook runs first (installed earlier), so a filter swapped in this frame already counts.
-    this.gas.protection = () => this.gasMask.protects();
+    this.gas.protection = () => (!!this.layout?.surface && this.skywaysCar.driving) || this.gasMask.protects();
+    this.gas.outdoorConcentration = () => this.layout?.surface ? GAS.ROOF_OUTDOOR_C : 0;
     this.gas.hintFor = protectedNow => {
       const m = this.gasMask;
       if (protectedNow || m.state === 'donning') return '';
@@ -1029,6 +1045,12 @@ export class Game {
       rendererReady: () => !!this.gpu && this.renderer.initialized === true, rendererFree: () => this.warmRun});
     this.trainUpgrades = this.trainArmor;
     hookName('trainArmor');
+    this.surfacePopulation = new SurfacePopulation(this).install();
+    hookName('surfacePopulation');
+    this.surfaceTruck = installSurfaceTruck(this);
+    hookName('surfaceTruck');
+    this.surfaceRuntime = installSurfaceRun(this as unknown as SurfaceRunHost);
+    hookName('surfaceRun');
     // task studio-first-player-onboarding-20261111-234657-01: after the train / chipper (its section build reads the placed console desk) —
     // seven world-space markers at the parked train until the player first walks 10 m from it (world/trainOnboarding.ts); warm pool
     // 'train-onboarding'; nothing collides, casts or takes [E]
@@ -1169,6 +1191,8 @@ export class Game {
     // (task studio-screacher-production-20261110-221858-01) every level: the enemy-roster version this station was first built with
     // (ai/enemyRoster.ts: a station visited before the roster existed stays at 0 — its enemies and kills exact; an unvisited one gets the current)
     if (run.laneStore(ROSTER_LANE, key) === undefined) run.setLaneStore(ROSTER_LANE, {v: ctx.rosterVersion ?? 0}, key);
+    const base = surfaceBaseKey(key);
+    if (surfaceBaseLevel(key.level) && run.laneStore(SURFACE_VERSION_LANE, base) === undefined) run.setLaneStore(SURFACE_VERSION_LANE, {v: ctx.surfaceVersion ?? 0}, base);
     const node = key.station ? run.node(key.station) : null;
     if (node) adoptStationName(layout, node.name); // campaign: the map's / save's name is the one on the signs and the HUD
     return layout;
@@ -1178,7 +1202,7 @@ export class Game {
   private sectionGenInputs(key: SectionKey, run: RunState): {layoutVersion: number | undefined; ctx: SectionGenContext} {
     const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : key.level === 'bunker' ? bunkerLayoutVersionFor(run.peekMemory(key)) : undefined;
     return {layoutVersion, ctx: {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {}),
-      rosterVersion: rosterVersionFor(run.peekMemory(key))}}; // (the seeded enemy roster: always explicit — levels/types.ts SectionGenContext.rosterVersion)
+      rosterVersion: rosterVersionFor(run.peekMemory(key)), surfaceVersion: surfaceVersionFor(run.peekMemory(surfaceBaseKey(key)))}}; // (the seeded enemy roster: always explicit — levels/types.ts SectionGenContext.rosterVersion)
   }
 
   /**
@@ -1216,14 +1240,26 @@ export class Game {
     this.levelResources.beginSection(); // (task train-all-cargo: a carried prop's art, whatever its level, stays with this section)
     const layout = this.generateSection(key, run);
     for (const f of this.sectionLayoutHooks) { try { f(layout, key, run, 'prepare'); } catch (err) { console.warn('train-all-cargo: a layout hook failed', err); } }
+    if (layout.surface || this.surfaceBoundaryWarming) {
+      // The sealed door is a loading boundary. Keep the exact GPU maps, but release their redundant decoded CPU copies
+      // before fetching the next section. This is the existing mall upload/sampling contract, local to this crossing.
+      for (const g of Object.values(this.assets.models)) releaseModelTexturesAfterUpload(g);
+      for (const k of this.propModels.loadedKeys()) { const g = this.propModels.get(k); if (g) releaseModelTexturesAfterUpload(g); }
+      await nextPaint(); // lets already-uploaded ImageBitmaps close before the next decode batch
+    }
     const lazyKeys = this.modelKeysFor(layout, key.level);
     await this.propModels.ensure(lazyKeys, onProgress);
+    if (layout.surface || this.surfaceBoundaryWarming) {
+      const missing = lazyKeys.filter(k => this.propModels.catalogue[k] && !this.propModels.has(k));
+      if (missing.length) throw new Error(`Expedition transition assets unavailable: ${missing.join(', ')}`);
+    }
     for (const k of lazyKeys) { const g = this.propModels.get(k); if (g) trackUploads(modelTextures(g)); } // (lane PERF, track3) upload recorder only
     for (const pre of this.sectionPreloads) {
       try { await pre(layout); } catch (err) { console.warn('Iteration 16: a section preload failed', err); }
     }
     await this.preparePantry(key, run); // task studio-food-shelf-production-20261109-002816-01 (lane ITEMS): the pantry models this section can show
     await this.prepareWeaponVariety(layout, key, run); // task studio-weapon-variety-production-20261109-224355-01 (lane LOOT-UI): the new weapons it can show
+    await ensureSurfaceTruckReady(layout);
     return layout;
   }
 
@@ -1420,10 +1456,10 @@ export class Game {
     this.levelResources.retainOnly(key.level, fn => this.retire(fn)); // lane PACKAGE (track3): the previous level's textures now, its owned GPU resources after the warm-up
     // Task track3-eaton-centre-20261031 (lane PERF): the mall's InstancedMeshes share one program per material (render/instancing.ts:
     // three gives every small InstancedMesh its own program; the atrium shows ~740 at once); Subway / Office build as before.
-    setAttributeInstancing(!!this.layout.mall || !!this.layout.reactor); // task reactor-build-20261101 (lane ARCH): + the Reactor's open pit (every tier in view)
+    setAttributeInstancing(!!this.layout.mall || !!this.layout.reactor || !!this.layout.surface); // shared programs also cover Surface Run's bounded city sectors
     // (lane PERF) in the mall the level's lazy models AND the boot models drop their decoded images once uploaded (GPU textures and
     // what is drawn unchanged; the colour samplers read exact thumbnails: assets/textureRelease.ts)
-    if (this.layout.mall) {
+    if (this.layout.mall || this.layout.surface) {
       for (const k of keep) { const g = this.propModels.get(k); if (g) releaseModelTexturesAfterUpload(g); }
       for (const g of Object.values(this.assets.models)) releaseModelTexturesAfterUpload(g);
     }
@@ -1558,7 +1594,7 @@ export class Game {
     // only in 'playing' (after this build and the warm-up), and lane TRAIN's sectionHooks.build below adds the car's floor volume and
     // colliders synchronously, so the player is never simulated before the train exists. The train identity follows the level.
     this.trainPlacement = playerTrainPlacement(this.layout);
-    this.playerTrain.parkAt(key);
+    if (!layout.surface) this.playerTrain.parkAt(key);
     const pose = arrivalPose(this.layout, arrival, this.trainPlacement);
     const lv = pose.level !== undefined && pose.level > 0 && pose.level < this.levels.count ? pose.level : 0;
     const y = pose.y ?? this.levels.grid(lv).floorAt(pose.x, pose.z); // Lane B: the arrival's own storey
@@ -1567,6 +1603,8 @@ export class Game {
     if (fresh) this.trainRide?.reset();
     if (this.trainRide?.riding) { /* the car drives into this station; TrainRide.arrive() parks it at trainPlacement */ }
     else if (fresh) this.player.spawn(pose.x, pose.z, pose.yaw, y); else this.player.place(pose.x, pose.z, pose.yaw, y);
+    // The Subway return lands eight metres up. Warm its real first view before any Player.update can settle the eye.
+    if (pose.source === 'surface-return') this.player.eye += y;
     this.ladderAim = null;
     this.recoilPitch = this.recoilYaw = this.bloom = this.shake = 0;
     this.lightSources.clear(); // Iteration 12: lights of the previous section (the flashlight / body glow re-register on the next update)
@@ -2442,11 +2480,25 @@ export class Game {
    * target behind the full loading screen, applies its memory, places the player at its start (nothing about the player
    * is reset), runs the iteration-14 warm-up, then resumes play. Entering another level takes its Retry snapshot.
    */
+  /** A local expedition crossing. Campaign routing, train fuel and the pending train journey are untouched. */
+  surfaceTravel(section: 'surface' | 'main'): Promise<TravelResult> {
+    const from = this.run.current;
+    if (!surfaceBaseLevel(from.level) || from.section === section ||
+        (section === 'surface' ? !this.layout.surfaceAccess : !this.layout.surface)) return Promise.resolve({ok: false, reason: 'unknown-section'});
+    if (this.skywaysCar.driving || this.trainRide.riding || this.run.campaign?.transit) return Promise.resolve({ok: false, reason: 'busy'});
+    if (this.trainEquipment?.dragging || this.corpses?.carrying || this.fuelCarts?.grab) {
+      this.hud.toast('Put down what you are moving before using the expedition door', true);
+      return Promise.resolve({ok: false, reason: 'busy'});
+    }
+    return this.travel({to: {...from, section}, arrival: {kind: section === 'main' ? 'return' : 'start'},
+      via: 'surface', label: section === 'surface' ? 'Surface Run · checkpoint' : 'Returned to the station'});
+  }
+
   travel(req: TravelRequest): Promise<TravelResult> {
     this.lifecycleCounts.travel++;
     const refusal = travelRefusal(req, {
       busy: this.lifecycle.busy, alive: this.player.alive, state: this.state, ready: !!this.world && !!this.gpu,
-      sections: l => LEVELS[l]?.sections(this.run.seeds[l]) ?? null, current: this.run.current.level,
+      sections: l => req.via === 'surface' && l === this.run.current.level && (this.layout.surfaceAccess || this.layout.surface) ? ['main', 'surface'] : LEVELS[l]?.sections(this.run.seeds[l]) ?? null, current: this.run.current.level, currentKey: this.run.current,
     });
     if (refusal) return Promise.resolve({ok: false, reason: refusal});
     const lock = this.beginGesture(); // a menu click: pointer lock is requested inside the gesture
@@ -2454,23 +2506,103 @@ export class Game {
       const from = {...this.run.current};
       const levelChange = req.to.level !== from.level;
       this.travelReq = req;
+      this.surfaceBoundaryWarming = req.via === 'surface';
       this.cancelUse('travel');
       this.cancelFlareHold();
       this.aiming = false;
       const shown = levelDisplayName(req.to.level, this.run.seeds[req.to.level]); // (lane GEN: the seeded mall name)
-      const ui = this.showLoading(shown, `Building ${shown} · ${sectionLabel(req.to)}…`); // (lane MENU, campaign polish item 9: the location name only)
+      const ui = this.showLoading(req.to.section === 'surface' ? 'Surface Run' : shown, `Building ${shown} · ${sectionLabel(req.to)}…`); // (lane MENU, campaign polish item 9: the location name only)
+      const phase = (value: string) => { this.surfaceBoundaryPhase = value; console.info('Surface Run: boundary', value); };
       let built = false;
       try {
         await nextPaint();
-        const layout = await this.prepareSection(req.to, this.run, this.progressTo(ui, 'Loading props'));
-        await this.warmRun;
-        this.leaveSection(true);
-        built = true;
-        await this.buildSectionSliced(req.to, layout, req.arrival, false, ui);
-        if (levelChange) { this.run.entered.push(req.to.level); this.run.entry = this.levelEntrySnapshot(); }
-        const w = await this.prepareGraphics(ui); // (a menu travel's loading screen keeps its carry-over line)
-        if (w.status === 'cancelled') return {ok: false, reason: 'cancelled'};
-        this.readyLine(ui, w);
+        let targetStarted = false;
+        const enterTarget = async (released = false, cancelled = () => false): Promise<void> => {
+          if (released) phase('loading-target');
+          const layout = await this.prepareSection(req.to, this.run, this.progressTo(ui, 'Loading props'));
+          if (cancelled()) throw new PacedBuildCancelled();
+          if (!released) { await this.warmRun; this.leaveSection(true); }
+          built = targetStarted = true;
+          if (released) phase('building-target');
+          await this.buildSectionSliced(req.to, layout, req.arrival, false, ui);
+          if (levelChange) { this.run.entered.push(req.to.level); this.run.entry = this.levelEntrySnapshot(); }
+          if (released) phase('warming-target');
+          const w = await this.prepareGraphics(ui);
+          if (w.status === 'cancelled') throw new PacedBuildCancelled();
+          this.readyLine(ui, w);
+        };
+        if (req.via === 'surface') {
+          const sourceRun = this.run, sourceArrival = {...this.arrival};
+          const p = this.player, sourcePose = {x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, eye: p.eye, crouched: p.crouched};
+          let snapshot: RunSnapshot | null = null, generation = this.stationGen;
+          const cancelled = () => !!this.gpu?.deviceLost || this.run !== sourceRun || this.stationGen !== generation;
+          const backend = this.renderer.backend as unknown as SurfaceGpuBackend;
+          const drain = async () => {
+            try { await drainSurfaceGpu(backend, () => !cancelled()); }
+            catch (error) { if (cancelled()) throw new PacedBuildCancelled(); throw error; }
+          };
+          const result = await runSurfaceBoundary({cancelled,
+            suspend: async () => {
+              await this.warmRun;
+              if (cancelled()) throw new PacedBuildCancelled();
+              ui.label.textContent = 'Sealing checkpoint…';
+              this.warming = true; built = true; // the sealed door owns rendering throughout the resource handoff
+              phase('draining-source');
+              for (const g of Object.values(this.assets.models)) releaseModelTexturesAfterUpload(g);
+              for (const k of this.propModels.loadedKeys()) { const g = this.propModels.get(k); if (g) releaseModelTexturesAfterUpload(g); }
+              await nextPaint();
+              await drain();
+              if (cancelled()) throw new PacedBuildCancelled();
+              phase('saving-and-releasing-source');
+              this.leaveSection(true); generation = this.stationGen;
+              snapshot = this.levelEntrySnapshot(); // post-teardown lane saves, remaining loot and permanent kills
+              this.flushRetired();
+              this.propModels.trim(new Set(), 0); // no outgoing world is retained while the city is decoded/prepared
+              await drain();
+              phase('source-released');
+              await nextPaint();
+            },
+            enter: () => enterTarget(true, cancelled),
+            restore: async () => {
+              if (!snapshot || cancelled()) throw new PacedBuildCancelled();
+              this.warming = true;
+              phase('restoring-source');
+              await drain();
+              if (targetStarted) { this.leaveSection(false); generation = this.stationGen; }
+              this.flushRetired(); this.propModels.trim(new Set(), 0);
+              await drain();
+              sourceRun.restoreScopeMemories(from, snapshot.memories);
+              sourceRun.current = {...from}; sourceRun.arrival = {...sourceArrival}; this.arrival = {...sourceArrival};
+              this.restoreCarryFrom(snapshot);
+              const layout = await this.prepareSection(from, sourceRun, this.progressTo(ui, 'Restoring station'));
+              if (cancelled()) throw new PacedBuildCancelled();
+              await this.buildSectionSliced(from, layout, sourceArrival, false, ui);
+              // A failed crossing is not another visit and does not move the player back to the train.
+              sourceRun.memory(from).visits = snapshot.memories[sectionId(from)].visits;
+              p.place(sourcePose.x, sourcePose.z, sourcePose.yaw, sourcePose.y); p.pitch = sourcePose.pitch;
+              if (sourcePose.crouched) {
+                p.update(0, {down: () => false, hit: code => code === 'KeyC'}, this.levels, this.propIndex, {aiming: false, speedMult: 1, canSprint: false});
+                p.crouchBlend = 1;
+              }
+              p.eye = sourcePose.eye;
+              this.updateCamera(0);
+              const warm = await this.prepareGraphics(ui);
+              if (warm.status !== 'complete') throw new Error('Checkpoint restoration graphics are not ready');
+            },
+          });
+          if (!result.ok) {
+            if ('cancelled' in result && result.cancelled) return {ok: false, reason: 'cancelled'};
+            console.error('Surface Run: transition failed', result.error);
+            this.lastError = String((result.error as Error)?.stack ?? result.error);
+            if (result.restored) {
+              this.setState('paused'); $('#pause .fine').textContent = 'The expedition could not load. Your saved section and position were restored.';
+            } else {
+              $('#error-msg').textContent = `Checkpoint load and restoration failed: ${String(result.restoreError ?? result.error).slice(0, 180)}`;
+              this.setState('error');
+            }
+            return {ok: false, reason: 'failed'};
+          }
+        } else await enterTarget();
         const ok = await lock;
         if (ok) await this.enterPlay();
         else this.setState('paused');
@@ -2486,6 +2618,9 @@ export class Game {
         return {ok: false, reason: 'failed'};
       } finally {
         this.travelReq = null;
+        if (req.via === 'surface' && !this.warmRun) this.warming = false;
+        if (req.via === 'surface') phase('idle');
+        this.surfaceBoundaryWarming = false;
       }
     });
     return flight ?? Promise.resolve({ok: false, reason: 'busy'});
@@ -2798,7 +2933,7 @@ export class Game {
    * peak on a software rasterizer). Frames are held meanwhile (`warming`); prepareGraphics' finally clears it. No-op elsewhere.
    */
   private async stageLevelTextures(ui: WarmupUi): Promise<void> {
-    if (!this.layout?.mall || !this.world || !this.gpu || this.gpu.deviceLost || !this.renderer.initialized) return;
+    if (!(this.layout?.mall || this.layout?.surface) || !this.world || !this.gpu || this.gpu.deviceLost || !this.renderer.initialized) return;
     const textures = new Set<THREE.Texture>();
     this.scene.traverse(o => collectTextures(o, textures));
     const gen = this.stationGen;
@@ -2814,7 +2949,8 @@ export class Game {
     this.lifecycleCounts.warmup++;
     const {meter, label, button} = ui;
     await this.stageLevelTextures(ui); // Task track3-eaton-centre-20261031 (lane PERF): mall only; runs with ?warmup=off too
-    const mode = warmupMode(location.search, this.softwareGl?.software === true);
+    const surfaceBoundary = !!this.layout.surface || this.surfaceBoundaryWarming;
+    const mode = surfaceBoundary ? 'full' : warmupMode(location.search, this.softwareGl?.software === true);
     if (mode === 'off') return (this.warmup = skippedWarmup('disabled by ?warmup=off'));
     if (!this.world || !this.gpu || this.gpu.deviceLost || !this.renderer.initialized) return (this.warmup = skippedWarmup('renderer or station not ready'));
     this.refreshRuntimeVariants(mode); // task runtime-variant-warmup-20261105: the play-only variants join the plan (a pool)
@@ -2840,6 +2976,7 @@ export class Game {
       alive: () => gen === this.stationGen && !this.gpu?.deviceLost,
       sceneDepth: () => this.sceneDepth(true), // lane RENDER-CPU: compile into the context the real frame draws the station in
     }, {
+      ...(surfaceBoundary ? {budgetMs: Number.MAX_SAFE_INTEGER} : {}),
       onProgress: (p: WarmupProgress) => { meter?.stage('graphics', p.done / Math.max(1, p.total)); label.textContent = warmupLabel(p); },
     });
     this.warmup = res;
@@ -2854,6 +2991,7 @@ export class Game {
     const cs = res.compile, sec = (ms: number | null) => (ms === null ? 'n/a' : `${(ms / 1000).toFixed(1)} s`);
     console.info(`Terminal State: warm-up materials ${sec(st.materials.ms)} · ${cs.builds ?? 'n/a'} node builds ${sec(cs.buildMs)} · ${cs.pipelines ?? 'n/a'} async pipelines waited ${sec(cs.pipelineWaitMs)} · `
       + `yield ${cs.yield}${cs.yields === null ? '' : ` x${cs.yields} waited ${sec(cs.yieldWaitMs)}`} · shadow frames ${sec(st.shadows.ms)} · shared instancing ${sharedInstancing() ? 'on' : 'off'}`);
+    if (surfaceBoundary && res.status !== 'complete' && res.status !== 'cancelled') throw new Error(`Surface transition graphics preparation ${res.status}: ${res.reason ?? 'not ready'}`);
     return res;
   }
 
@@ -3060,7 +3198,7 @@ export class Game {
       if (playing) this.update(dt);
       const r0 = performance.now();
       if (playing) cpu.updateMs = r0 - now;
-      cpu.rendered = this.render();
+      cpu.rendered = !this.surfaceBoundaryWarming && this.render();
       cpu.renderMs = performance.now() - r0;
       // lane SCHED: deferred chunks AFTER the critical update and the render submission, so the main-thread time this frame
       // already spent is measured, not predicted; still inside this callback, so the overlay's game CPU includes them
@@ -3094,6 +3232,7 @@ export class Game {
   render(): boolean {
     if (this.gpu?.deviceLost || !this.renderer.initialized) return false; // Iteration 13 (CORE): lost device / not initialized: nothing to draw with
     this.prof.lap(SPAN.cull); // lane MEASURE
+    if (!this.transitGap) this.surfaceRuntime?.beforeRender();
     if (!this.transitGap) this.world?.culler.update(this.camera); // Iteration 08 (Lane G): level / fog culling (cheap; skipped while still); (lane BUILD) never in the transit gap: no station is live (a paced build is in progress)
     this.prof.lap(SPAN.draw); // lane MEASURE
     this.drawFrame();
@@ -3811,6 +3950,8 @@ export class Game {
     if (carryHolster > 0) this.viewmodel.setHolstered(Math.max(carryHolster, vomitHolster, this.consumeView.holster, this.skywaysCar.holster));
     const chestHolster = this.trainEquipment?.holster ?? 0; // (task train-crafting, lane EQUIP) carrying a storage chest: the same lowering
     if (chestHolster > 0) this.viewmodel.setHolstered(Math.max(chestHolster, carryHolster, vomitHolster, this.consumeView.holster, this.skywaysCar.holster));
+    const salvageHolster = this.surfaceTruck?.holster ?? 0;
+    if (salvageHolster > 0) this.viewmodel.setHolstered(Math.max(salvageHolster, chestHolster, carryHolster, vomitHolster, this.consumeView.holster, this.skywaysCar.holster));
     this.viewmodel.update(dt, {
       // (task mouse-axis-invert: the sway follows the EFFECTIVE turn, so an inverted axis sways with the view, not against it)
       moving: Math.min(1, p.speed / WALK_SPEED), sprint: p.sprinting, aiming: this.aiming, lookDX: inp.dx * lookSigns(this.settings).x, lookDY: inp.dy * lookSigns(this.settings).y,
@@ -3839,7 +3980,7 @@ export class Game {
     // Iteration 16 (RUN): a SECTION is cleared once per run (remembered); the clear screen shows when its whole LEVEL is clear
     // (the subway: its one station; the office: the street station and every floor), else a toast points onward.
     const remaining = this.aliveEnemies();
-    if (remaining === 0 && this.wonAt < 0 && !this.sectionCleared && this.layout.zombies.length > 0 && this.state === 'playing') {
+    if (!this.layout.surface && remaining === 0 && this.wonAt < 0 && !this.sectionCleared && this.layout.zombies.length > 0 && this.state === 'playing') {
       this.wonAt = this.time;
       this.sectionCleared = true;
       this.run.memory().cleared = true;
@@ -4440,8 +4581,18 @@ export class Game {
     const H = this.hordes;
     this.chaseShare?.tick(dt); // lane HORDE (atrium AI): the shared routes' clock
     H?.update(dt, w, p);
+    if (this.layout.surface) {
+      this.camera.updateMatrixWorld();
+      this.surfaceEnemyProjection.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
+      this.surfaceEnemyFrustum.setFromProjectionMatrix(this.surfaceEnemyProjection, this.camera.coordinateSystem);
+    }
     for (const z of this.zombies) {
+      if (this.surfacePopulation?.sleeping(z)) continue;
       const b = z.brain;
+      if (this.layout.surface && Math.hypot(b.x - p.x, b.z - p.z) > 100) {
+        this.surfaceEnemySphere.center.set(b.x, b.y + 1, b.z);
+        if (!this.surfaceEnemyFrustum.intersectsSphere(this.surfaceEnemySphere)) continue;
+      }
       const seqBefore = b.attackSeq;
       prof.begin(SPAN.brain);
       const home = this.wanderHomes.get(z); // (lane SPAWNS: a zone-local enemy's random walk targets stay in its zone while it stands there)
@@ -4596,7 +4747,7 @@ export class Game {
   private showEnd(kind: 'dead' | 'won'): void {
     const s = this.stats, k = this.run.current;
     const acc = s.shots ? Math.round(s.hits / s.shots * 100) : 0;
-    const total = this.layout.zombies.length, down = total - this.zombies.filter(z => z.brain.alive).length;
+    const total = this.layout.zombies.length, down = total - this.zombies.filter(z => z.brain.alive && (!this.layout.surface || this.enemyIndex.has(z))).length;
     // Iteration 16 (RUN): the section / level, its code, this section's kills and the run totals (time, kills, shots, damage)
     const text = `${levelDisplayName(k.level, this.run.seeds[k.level])} · ${sectionLabel(k)} · ${this.layout.name} · code ${seedToCode(this.run.seeds[k.level])}\n`
       + `Run time ${Math.floor(s.time / 60)}:${String(Math.floor(s.time % 60)).padStart(2, '0')} · Infected down here ${down}/${total} · this run ${s.kills}\n`

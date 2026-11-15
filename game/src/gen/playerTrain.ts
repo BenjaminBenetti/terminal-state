@@ -265,6 +265,7 @@ const cache = new WeakMap<StationLayout, TrainPlacement | null>();
  * Memoized per layout for the default spec (the same frozen object for the spawn and lane TRAIN's runtime).
  */
 export function playerTrainPlacement(layout: StationLayout, spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC): TrainPlacement | null {
+  if (layout.surface) return null; // the same train stays parked in the station's main section
   const useCache = spec === PLAYER_TRAIN_SPEC;
   if (useCache && cache.has(layout)) return cache.get(layout)!;
   const p = place(layout, spec, TRAIN_CLEAR.ladder) ?? place(layout, spec, TRAIN_CLEAR.ladderMin);

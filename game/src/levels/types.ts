@@ -53,7 +53,7 @@ export interface TravelRequest {
   /** UI text while travelling ("Travelling to Office Space"). */
   label: string;
   /** 'menu' (the legacy pause / clear menus, QA) or 'train' (campaign: the player's train between network stations). */
-  via: 'menu' | 'train';
+  via: 'menu' | 'train' | 'surface';
 }
 
 /** Generation context handed to a section generator. */
@@ -78,6 +78,8 @@ export interface SectionGenContext {
    * output every pinned layout fingerprint and census was taken with — a direct registry caller opts in with ROSTER_VERSION.
    */
   rosterVersion?: number;
+  /** Surface Run pin: absent/0 preserves old worlds; 1 enables the independent eligible quarter roll. */
+  surfaceVersion?: number;
 }
 
 /**

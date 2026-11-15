@@ -59,7 +59,7 @@ export const CAR_PHYS = {
   /** Floor rule (m): the most the floor under any footprint sample may differ from the car's; rim samples at rim x radius. */
   floorTol: 0.25,
   rim: 0.9,
-  /** Collision clear height over the floor (m): the roof + a little (CarSpec.height + clearPad). */
+  /** Collision clear height over the floor: the roof / optional loaded-rack clearance plus this pad. */
   clearPad: 0.06,
   /** Sub-step limits (m / rad) and the frame dt cap (s: hitches never teleport the car). */
   subStep: 0.2,
@@ -79,7 +79,7 @@ export const CAR_PHYS = {
 } as const;
 
 /** What the controller needs of the car's anchors (`wheels`: the axles for stairs; absent = axles at ±wheelBase / 2, track 1.6 m). */
-export type CarGeom = Pick<CarSpec, 'circles' | 'wheelBase' | 'height'> & Partial<Pick<CarSpec, 'wheels'>>;
+export type CarGeom = Pick<CarSpec, 'circles' | 'wheelBase' | 'height'> & Partial<Pick<CarSpec, 'wheels' | 'clearance'>>;
 
 /** Stairs (see the header). */
 export const CAR_STAIRS = {
@@ -257,7 +257,7 @@ const FEET: number[] = [];
  * car's clear height; a circle over a flight: circleFeet). False when it does not come free in a few iterations (wedged).
  */
 export function settlePose(w: CarWorld, g: CarGeom, x: number, z: number, yaw: number, y: number, out: Settled, pitch = 0): boolean {
-  const s = Math.sin(yaw), c = Math.cos(yaw), H = g.height + CAR_PHYS.clearPad, tp = Math.tan(pitch);
+  const s = Math.sin(yaw), c = Math.cos(yaw), H = Math.max(g.height, g.clearance ?? g.height) + CAR_PHYS.clearPad, tp = Math.tan(pitch);
   for (let i = 0; i < g.circles.length; i++) { const k = g.circles[i]; FEET[i] = circleFeet(w.levels, x + k.z * s, z + k.z * c, k.r, y - k.z * tp); }
   let cx = x, cz = z;
   out.sx = out.sz = 0;

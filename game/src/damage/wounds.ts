@@ -516,6 +516,14 @@ export class WoundController {
     return this.wounds.length;
   }
 
+  /** A recycled exterior actor keeps its compiled materials, with fresh wound data. */
+  reset(): void {
+    this.wounds.length = 0;
+    this.hits = this.tears = 0;
+    this.seed = 1;
+    this.uniforms.n = 0;
+  }
+
   /** Dispose the per-actor wound material clones (idempotent; the actor may dispose them too). */
   dispose(): void {
     for (const m of new Set(this.layers.map(l => l.material))) m.dispose();

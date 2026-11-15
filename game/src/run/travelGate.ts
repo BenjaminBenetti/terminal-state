@@ -2,7 +2,8 @@
 // Iteration 17 (seamless): a travel only ever changes the LOGICAL level — moving inside a level (its storeys, stairs, the
 // elevator) is never a travel, so a request for the level you are in is refused ('same-level').
 
-import type {LevelId, TravelRequest} from '../levels/types';
+import type {LevelId, SectionKey, TravelRequest} from '../levels/types';
+import {isSurfaceTransition} from './surfaceRun';
 
 export type TravelRefusal = 'busy' | 'dead' | 'not-ready' | 'unknown-section' | 'same-level';
 export type TravelResult = {ok: true} | {ok: false; reason: TravelRefusal | 'cancelled' | 'failed'};
@@ -21,6 +22,8 @@ export interface TravelGateState {
   sections(level: LevelId): readonly string[] | null;
   /** The logical level being played (a travel must go to ANOTHER level). */
   current: LevelId;
+  /** Only the explicit local Surface Run request may change sections within a station. */
+  currentKey?: SectionKey;
 }
 
 /** Why a travel may not start now (null = it may). Dead players never travel; one travel at a time. */
@@ -30,6 +33,7 @@ export function travelRefusal(req: TravelRequest, s: TravelGateState): TravelRef
   if (!s.ready || !TRAVEL_FROM_STATES.includes(s.state)) return 'not-ready';
   const secs = s.sections(req.to.level);
   if (!secs || !secs.includes(req.to.section)) return 'unknown-section';
+  if (req.via === 'surface') return s.currentKey && isSurfaceTransition(s.currentKey, req.to) ? null : 'unknown-section';
   if (req.to.level === s.current) return 'same-level';
   return null;
 }

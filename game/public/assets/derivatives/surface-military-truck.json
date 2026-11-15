@@ -1,0 +1,146 @@
+{
+  "schema": "terminal-state-derivative/1",
+  "asset": "surface-military-truck",
+  "task": "surface-run-codex-20261115-200810",
+  "status": "User-supplied model, optimized offline for the Surface Run preview. Provider/owner terms remain applicable; no blanket license or commercial clearance implied.",
+  "master": {
+    "filename": "Meshy_AI_Camouflaged_Military__1115093536_texture.glb",
+    "bytes": 144978172,
+    "sha256": "44d12d07e54e49530d74f6e528e40864e0e6e373caa8f93fd772d279e08f6b4a",
+    "private": true,
+    "immutable": true,
+    "notInGitCiRuntime": true
+  },
+  "backup": {
+    "evidence": "Main INPUT-MANIFEST attests independent durable raw-art backup; two private read-only staged copies independently SHA-256 checked before cook",
+    "sha256": "44d12d07e54e49530d74f6e528e40864e0e6e373caa8f93fd772d279e08f6b4a"
+  },
+  "rebuild": "node tools/asset-pipeline/surface/build-truck.mjs <private-master.glb> <private-intermediate.glb>; node tools/asset-pipeline/surface/refine-truck.mjs <private-intermediate.glb>",
+  "derivative": {
+    "convention": "metres; +Y up; nose -Z; grounded; footprint centred",
+    "lengthM": 6.8,
+    "uniformScale": 3.601378362536621,
+    "dimensionsM": [
+      2.323,
+      2.9155,
+      6.799
+    ],
+    "triangles": 116766,
+    "textures": [
+      {
+        "mime": "image/jpeg",
+        "size": [
+          2048,
+          2048
+        ],
+        "bytes": 828255,
+        "sha256": "5fea08af75913b18888baf8765195ac15357906cb825e71b113436d9ee857f9a"
+      },
+      {
+        "mime": "image/jpeg",
+        "size": [
+          512,
+          512
+        ],
+        "bytes": 79056,
+        "sha256": "91ae05a234af07d851b78913fbe440aaec562d479841dea367ba9d68a8e99da5"
+      },
+      {
+        "mime": "image/jpeg",
+        "size": [
+          1024,
+          1024
+        ],
+        "bytes": 137754,
+        "sha256": "acebb0d559dbc17bd61a863fd2d35ce86f3362f87d7ea29316403d5e8fe2c614"
+      }
+    ],
+    "geometry": "0.5 mm position snap + weld + meshoptimizer attribute-aware simplification, UV weights 2/2 and normal weights .3/.3/.3, ratio .025 bounded by error .004; independent authored PBR maps retained; cab-over windshield/side-window and eight wheel triangle partitions; no further simplification, authored PBR pixels retained byte-for-byte",
+    "passes": [
+      {
+        "beforeTriangles": 4680288,
+        "triangles": 116766,
+        "error": 0.0029294558335095644
+      }
+    ],
+    "runtimeCab": "Same existing arcade controller, supplied cab-over 8x8 shell, handmade first-person cab, no generation services",
+    "priorCook": {
+      "bytes": 5453536,
+      "sha256": "3882f0531297705b86b58fe514044727f67fe55f1bf0bcb13ae5f97580b38103",
+      "triangles": 116766,
+      "preservedPrivately": true
+    },
+    "parts": {
+      "bodyTriangles": 98123,
+      "glassTriangles": 1187,
+      "wheels": [
+        {
+          "id": "f1l",
+          "x": -0.96,
+          "y": 0.52,
+          "z": -2.18,
+          "triangles": 1891
+        },
+        {
+          "id": "f1r",
+          "x": 0.96,
+          "y": 0.52,
+          "z": -2.18,
+          "triangles": 2543
+        },
+        {
+          "id": "f2l",
+          "x": -0.96,
+          "y": 0.52,
+          "z": -1.02,
+          "triangles": 1588
+        },
+        {
+          "id": "f2r",
+          "x": 0.96,
+          "y": 0.52,
+          "z": -1.02,
+          "triangles": 2118
+        },
+        {
+          "id": "r1l",
+          "x": -0.96,
+          "y": 0.52,
+          "z": 1.36,
+          "triangles": 1976
+        },
+        {
+          "id": "r1r",
+          "x": 0.96,
+          "y": 0.52,
+          "z": 1.36,
+          "triangles": 2602
+        },
+        {
+          "id": "r2l",
+          "x": -0.96,
+          "y": 0.52,
+          "z": 2.36,
+          "triangles": 2085
+        },
+        {
+          "id": "r2r",
+          "x": 0.96,
+          "y": 0.52,
+          "z": 2.36,
+          "triangles": 2653
+        }
+      ]
+    },
+    "textureHashes": [
+      "5fea08af75913b18888baf8765195ac15357906cb825e71b113436d9ee857f9a",
+      "91ae05a234af07d851b78913fbe440aaec562d479841dea367ba9d68a8e99da5",
+      "acebb0d559dbc17bd61a863fd2d35ce86f3362f87d7ea29316403d5e8fe2c614"
+    ]
+  },
+  "output": {
+    "url": "assets/models/surface-military-truck.glb",
+    "bytes": 5386464,
+    "sha256": "9850da13da0f539f8bb3a5f2197cd2bbd8a6be305326b17fc07e707e0f65b3e4"
+  }
+}

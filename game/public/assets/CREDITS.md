@@ -845,3 +845,8 @@ commercial clearance. Not reviewed by ear on the build worker. The 48 kHz master
 - `assets/audio/geiger-cluster-02.mp3` — geigerCluster (3 discharges; seed 15110202)
 - `assets/audio/geiger-cluster-03.mp3` — geigerCluster (4 discharges; seed 15110203)
 <!-- END geiger-audio-20261115 -->
+
+
+## Surface Run military truck
+
+User-supplied military truck, originally named `Meshy_AI_Camouflaged_Military__1115093536_texture.glb`. Only the optimized runtime derivative is included. The immutable private master (144,978,172 bytes; SHA-256 `44d12d07e54e49530d74f6e528e40864e0e6e373caa8f93fd772d279e08f6b4a`) and independent raw backup remain outside Git, CI and the game. No generation service was called for this feature. Source-owner/provider terms still apply; this is no blanket license or production/commercial clearance. See [derivative provenance](derivatives/surface-military-truck.json). The cabin finishing and cargo cases use handmade geometry and existing game materials.

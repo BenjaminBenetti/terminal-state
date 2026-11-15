@@ -196,6 +196,24 @@ export class ZombieActor implements RagdollTarget {
     return this.bones.size === BONES.length && this.actions.size - (this.sprints ? 1 : 0) >= 6; // (the body's own clips: not the built Sprint)
   }
 
+  /** Surface exterior pool only: keep all render objects/materials warmed at the transition. */
+  resetExterior(spawn: ZombieSpawn): void {
+    this.brain.resetAt(spawn.x, spawn.y ?? 0, spawn.z, spawn.yaw);
+    this.ragdolled = false;
+    this.deadT = this.hitFlash = this.footfalls = this.lastAttackSeq = 0;
+    this.histFrames = 0;
+    this.histDt = this.lastDt = 0;
+    this.mixer.stopAllAction();
+    for (const mesh of this.skinned) mesh.skeleton.pose();
+    this.current = null;
+    this.play('Idle', 0);
+    this.root.rotation.set(0, spawn.yaw, 0);
+    this.syncTransform();
+    this.root.position.y = this.brain.y;
+    this.root.updateMatrixWorld(true);
+    this.updateVolumes();
+  }
+
   play(name: ActorClip, fade = 0.2): void {
     const next = this.actions.get(name);
     if (!next) return;

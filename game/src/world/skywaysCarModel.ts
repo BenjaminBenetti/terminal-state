@@ -27,6 +27,7 @@ import type {CarSpec} from './skywaysCarSpec';
 import {COCKPIT_URLS, FILL_COLOR, cockpitLayout, fillMesh} from './skywaysCarCockpit';
 import {WHEEL_RIM, ringNormal, splitWheel, type WheelSplit} from './skywaysCarWheel';
 import {CAR_LAMPS, lampTriangles, lensMaterialFrom} from './skywaysCarLights';
+import {tagReflect} from '../render/reflectTag';
 
 /** Steering-wheel turns per front-wheel radian (a quick rack: full lock 0.55 rad ~ 140°). */
 export const WHEEL_RATIO = 4.4;
@@ -49,20 +50,21 @@ export function skywaysCarModels(): CarModels {
 /** Fetches the car + the cockpit parts once per session (browser only; never rejects: a failure keeps the stand-in / fallback). */
 export function loadSkywaysCarModel(spec: CarSpec): Promise<CarModels> {
   if (typeof document === 'undefined') return Promise.resolve(loaded);
-  const key = `${spec.url}|${COCKPIT_URLS.dash}|${COCKPIT_URLS.seat}`;
+  const key = `${spec.url}|${spec.proceduralCab ? 'handmade' : COCKPIT_URLS.dash + COCKPIT_URLS.seat}`;
   if (cache && cacheUrls === key) return cache;
+  if (cache && cacheUrls !== key) releaseSkywaysCarModel();
   cacheUrls = key;
   cache = (async () => {
     const one = (url: string): Promise<GLTF | null> => new Promise(resolve => new GLTFLoader().load(assetUrl(url), g => resolve(g), undefined, err => {
       console.warn(`skyways car: model ${url} failed (stand-in kept)`, err);
       resolve(null);
     }));
-    const [car, dash, seat] = await Promise.all([one(spec.url), one(COCKPIT_URLS.dash), one(COCKPIT_URLS.seat)]);
+    const [car, dash, seat] = await Promise.all([one(spec.url), spec.proceduralCab ? null : one(COCKPIT_URLS.dash), spec.proceduralCab ? null : one(COCKPIT_URLS.seat)]);
     loaded = {car, dash, seat};
     carModelsGen++;
     // (lane VIS) the wheel split and the lamp lenses now, behind the loading screen (cached: the views only look them up)
     if (dash) dashWheel(dash);
-    if (car) carLens(car);
+    if (car && !spec.proceduralCab) carLens(car);
     return loaded;
   })();
   return cache;
@@ -70,7 +72,7 @@ export function loadSkywaysCarModel(spec: CarSpec): Promise<CarModels> {
 
 /** The car left the current world for good (a build without it): its GPU resources go, the next Skyways fetches again. */
 export function releaseSkywaysCarModel(): boolean {
-  if (!loaded.car && !loaded.dash && !loaded.seat) return false;
+  if (!loaded.car && !loaded.dash && !loaded.seat) { cache = null; cacheUrls = ''; return false; }
   for (const g of [loaded.car, loaded.dash, loaded.seat]) g?.scene.traverse(o => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
@@ -247,6 +249,8 @@ export interface CarView {
   /** carModelsGen the body was built with; stand-in = no car model was available. */
   gen: number;
   standIn: boolean;
+  /** Supplied truck's authored wheel partitions; ordinary prize-car views keep their original model. */
+  roadWheels?: {steer: THREE.Object3D; roll: THREE.Object3D; front: boolean; radius: number}[];
 }
 
 const isGlass = (m: THREE.Mesh): boolean => {
@@ -257,14 +261,14 @@ const isGlass = (m: THREE.Mesh): boolean => {
 };
 
 /** The approved model: paint outside, the BackSide trim twin inside, the glass both sides in one pass; (lane VIS) the lamp lenses. */
-function modelBody(g: GLTF): {group: THREE.Group; lens: THREE.MeshStandardMaterial | null} {
+function modelBody(g: GLTF, spec: CarSpec): {group: THREE.Group; lens: THREE.MeshStandardMaterial | null} {
   const S = carMaterials(), root = new THREE.Group();
   root.name = 'skyways-car-body';
   const scene = g.scene.clone(true);
   scene.name = 'skyways-car-model';
   const meshes = meshesOf(scene);
   // (lane VIS) the lenses: the body's own lamp triangles over its paint (shared geometry + material, a child of that body mesh)
-  const L = carLens(g), host = L ? meshes[L.mesh] : undefined;
+  const L = spec.proceduralCab ? null : carLens(g), host = L ? meshes[L.mesh] : undefined;
   if (L && host) {
     const lens = new THREE.Mesh(L.geo, L.material);
     lens.name = 'skyways-car-lamp-lens';
@@ -277,6 +281,7 @@ function modelBody(g: GLTF): {group: THREE.Group; lens: THREE.MeshStandardMateri
     const mats = Array.isArray(m.material) ? m.material : [m.material];
     if (isGlass(m)) {
       for (const mat of mats) { mat.side = THREE.DoubleSide; mat.forceSinglePass = true; mat.depthWrite = false; mat.transparent = true; }
+      if (spec.proceduralCab) for (const mat of mats) tagReflect(mat, 'glass');
       m.castShadow = false;
       m.userData.carPart = 'glass';
       continue;
@@ -289,8 +294,16 @@ function modelBody(g: GLTF): {group: THREE.Group; lens: THREE.MeshStandardMateri
     twin.userData.noShadow = true;
     m.add(twin);
   }
+  if (spec.proceduralCab && spec.lamp) {
+    for (const side of [-1, 1]) {
+      const lens = new THREE.Mesh(S.box, S.standLens);
+      lens.name = 'surface-truck-headlight-lens'; lens.position.set(side * 0.78, spec.lamp.y, spec.lamp.z);
+      lens.scale.set(0.27, 0.18, 0.035); lens.userData.carPart = 'lens'; lens.userData.noShadow = true;
+      root.add(lens);
+    }
+  }
   root.add(scene);
-  return {group: root, lens: L && host ? L.material : null};
+  return {group: root, lens: spec.proceduralCab ? S.standLens : L && host ? L.material : null};
 }
 
 /** No model (Node tests / a failed fetch): a plain coupe-sized stand-in, its cabin glazed so the view out still works; two lens boxes. */
@@ -351,7 +364,31 @@ function proceduralCockpit(spec: CarSpec): {group: THREE.Group; wheel: THREE.Obj
     back.rotation.x = 0.2;
   }
   box(0.2, Math.max(0.1, cushionTop - I.y0 + 0.04), 0.95, (I.x0 + I.x1) / 2, (I.y0 + cushionTop + 0.04) / 2, E.z - 0.2, S.dash).name = 'skyways-car-console';
+  if (spec.proceduralCab) {
+    // The imported shell supplies the windows and exterior. These simple pieces finish its enclosed, fog-safe cabin.
+    box(I.x1 - I.x0, 0.08, I.z1 - I.z0, 0, I.y0, (I.z0 + I.z1) / 2, S.dash).name = 'surface-truck-cab-floor';
+    box(I.x1 - I.x0, 0.08, I.z1 - I.z0, 0, I.y1 + 0.12, (I.z0 + I.z1) / 2, S.dash).name = 'surface-truck-cab-roof';
+    box(I.x1 - I.x0, I.y1 - I.y0, 0.07, 0, (I.y0 + I.y1) / 2, I.z1 + 0.03, S.dash).name = 'surface-truck-cab-back';
+    for (const side of [-1, 1]) {
+      box(0.07, 0.6, I.z1 - I.z0, side * (I.x1 - 0.02), I.y0 + 0.34, (I.z0 + I.z1) / 2, S.dash);
+      box(0.065, 0.8, 0.075, side * (I.x1 - 0.03), (I.y1 + spec.cowl.y) / 2, I.z0 + 0.07, S.dash);
+    }
+  }
   return {group: g, wheel: spin};
+}
+
+/** The normalized truck GLB gives each tyre its actual axle pivot; no new driving controller. */
+function roadWheelsOf(body: THREE.Group, spec: CarSpec): NonNullable<CarView['roadWheels']> {
+  if (!spec.proceduralCab) return [];
+  const out: NonNullable<CarView['roadWheels']> = [];
+  ['f1l', 'f1r', 'f2l', 'f2r', 'r1l', 'r1r', 'r2l', 'r2r'].forEach((id, i) => {
+    const roll = body.getObjectByName(`surface-truck-wheel-${id}`), parent = roll?.parent;
+    if (!roll || !parent) return;
+    const steer = new THREE.Group(); steer.name = `surface-truck-axle-${id}`; steer.position.copy(roll.position);
+    parent.add(steer); steer.add(roll); roll.position.set(0, 0, 0);
+    out.push({steer, roll, front: id[0] === 'f', radius: spec.wheels[i]?.r ?? 0.52});
+  });
+  return out;
 }
 
 let fillCache: {spec: CarSpec; geo: THREE.BufferGeometry} | null = null;
@@ -425,7 +462,7 @@ function mountWheel(src: GLTF, dashRoot: THREE.Object3D): THREE.Object3D | null 
 
 /** The body (model or stand-in) and its lens material. */
 function bodyOf(spec: CarSpec, m: CarModels): {group: THREE.Group; lens: THREE.MeshStandardMaterial | null} {
-  return m.car ? modelBody(m.car) : {group: standInBody(spec), lens: carMaterials().standLens};
+  return m.car ? modelBody(m.car, spec) : {group: standInBody(spec), lens: carMaterials().standLens};
 }
 
 /** A car's view (car frame) from the current models (else the stand-in / procedural cockpit). */
@@ -437,7 +474,7 @@ export function buildCarView(spec: CarSpec): CarView {
   group.add(body);
   const {group: cockpit, wheel} = m.dash && m.seat ? modelCockpit(spec, m.dash, m.seat) : proceduralCockpit(spec);
   group.add(cockpit);
-  return {group, body, cockpit, wheel, wheelAngle: 0, lens, gen: carModelsGen, standIn: !m.car};
+  return {group, body, cockpit, wheel, wheelAngle: 0, lens, gen: carModelsGen, standIn: !m.car, roadWheels: roadWheelsOf(body, spec)};
 }
 
 /** Rebuild the body / cockpit from the current models (they arrived after the view was built). */
@@ -447,6 +484,7 @@ export function refreshCarView(v: CarView, spec: CarSpec): void {
   const m = skywaysCarModels();
   v.group.remove(v.body, v.cockpit);
   ({group: v.body, lens: v.lens} = bodyOf(spec, m));
+  v.roadWheels = roadWheelsOf(v.body, spec);
   v.standIn = !m.car;
   ({group: v.cockpit, wheel: v.wheel} = m.dash && m.seat ? modelCockpit(spec, m.dash, m.seat) : proceduralCockpit(spec));
   if (v.wheel) v.wheel.rotation.z = v.wheelAngle;
@@ -461,4 +499,12 @@ export function setWheel(v: CarView, steer: number, dt?: number): void {
   const to = steer * WHEEL_RATIO;
   v.wheelAngle = dt !== undefined && dt > 0 ? v.wheelAngle + (to - v.wheelAngle) * (1 - Math.exp(-dt / WHEEL_EASE)) : to;
   if (v.wheel) v.wheel.rotation.z = v.wheelAngle;
+}
+
+/** Exterior tyres turn/roll with the existing controller's steering and signed travel distance. */
+export function setRoadWheels(v: CarView, steer: number, distance: number): void {
+  for (const w of v.roadWheels ?? []) {
+    if (w.front) w.steer.rotation.y = steer;
+    w.roll.rotation.x = (w.roll.rotation.x - distance / w.radius) % (Math.PI * 2);
+  }
 }
