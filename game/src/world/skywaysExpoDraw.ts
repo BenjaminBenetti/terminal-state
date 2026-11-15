@@ -254,7 +254,7 @@ export const EXPO_PAINTERS: Readonly<Record<string, EventPainter>> = {
   'expo-header': {px: [1024, 128], draw: drawHeader},
   'expo-graphic': {px: [768, 512], draw: drawGraphic},
   'expo-counter': {px: [1024, 256], draw: drawCounter},
-  'expo-hang': {px: [1024, 256], draw: drawHang},
+  'expo-hang': {px: [1024, 224], draw: drawHang},
   'expo-slide': {px: [1024, 576], draw: drawSlide},
   'expo-totem': {px: [512, 1024], draw: drawTotem},
   'expo-lectern': {px: [512, 512], draw: drawLectern},

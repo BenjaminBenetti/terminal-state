@@ -36,15 +36,14 @@ export const EXPO_DIMS = {
   screenStand: {w: 1.55, h: 2.0, d: 0.65},
   towerPc: {w: 0.2, h: 0.44, d: 0.45},
   /** The hanging sign: its board (2.4 x 0.6) under SIGN_CABLE m of cable to the ceiling (the placement's top = the ceiling). */
-  hangSign: {w: 2.4, h: 1.4, d: 0.06},
+  hangSign: {w: 2.4, h: 1.1, d: 0.06},
   signStand: {w: 0.9, h: 2.0, d: 0.45},
 } as const;
-/** Cable drop of the hanging booth sign (top batten -> ceiling, m). */
-export const EXPO_SIGN_CABLE = 0.8;
+/** Cable drop of the hanging booth sign (top batten -> ceiling, m: a 3.9 m expo floor ceiling leaves 2.78 m clear under the board). */
+export const EXPO_SIGN_CABLE = 0.5;
 /** The keynote LED wall's place in the stage truss: its centre this far (model z) behind the uprights' back face; its base above the deck. */
 export const EXPO_LED_IN_TRUSS = {dz: 0.08, y0: 0.06} as const;
 
-const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const D = EXPO_DIMS;
 const box = (m: PartMat, s: readonly [number, number, number], p: readonly [number, number, number], rx?: number): DestDrawnPart => ({m, s, p, ...(rx ? {rx} : {})});
 const def = (k: keyof typeof EXPO_DIMS, o: Partial<PropDef> = {}): PropDef => ({w: D[k].w, d: D[k].d, h: D[k].h, blocksSight: false, ...o});
@@ -62,7 +61,7 @@ const phys = {
   plinth: {dynamic: false, why: 'fixture', how: 'a solid display plinth (painted MDF box): the host of the device on it (the device goes loose when shot; a prop something rests on never moves)'},
   screenStand: {dynamic: true, mass: 45, mat: 'metal', shape: 'box', how: 'a 65-inch display on a steel floor stand (~45 kg, flat base plate): walked into it shoves / rocks, a shot can tip it over'},
   towerPc: {dynamic: true, mass: 9, mat: 'metal', shape: 'box', onHost: true, how: 'a desktop tower case (~9 kg) on or beside a demo table: a bump shoves it, a shot knocks it over / off its table'},
-  hangSign: {dynamic: false, why: 'mounted', how: 'a printed booth sign board hung from the ceiling on two cables (2.6 m+ clear under it): mounted'},
+  hangSign: {dynamic: false, why: 'mounted', how: 'a printed booth sign board hung from the ceiling on two cables (2.5 m+ clear under it): mounted'},
   signStand: {dynamic: true, mass: 14, mat: 'metal', shape: 'box', how: 'a freestanding sign totem (~14 kg, flat steel base): walked into it slides / tips, a shot rocks it over'},
 } satisfies Record<string, DestPhys>;
 
@@ -138,14 +137,15 @@ export const EXPO_SPECS: Readonly<Record<ExpoKind, EventKindSpec>> = {
   skyExpoHangSign: {
     def: def('hangSign'), phys: phys.hangSign, damage: 'plastic', open: NONE('decor', 'a hanging sign board: nothing to open'),
     parts: () => {
-      const {w, h} = D.hangSign, top = h - EXPO_SIGN_CABLE, bh = 0.6;
+      // the board from the placement's base (y 0) to the top batten (0.6), the cables from there up to the ceiling (h)
+      const {w, h} = D.hangSign, top = h - EXPO_SIGN_CABLE, bh = top - 0.035;
       return [
-        box('steelDark', [w + 0.05, 0.035, 0.035], [0, top - 0.0175, 0]), box('steelDark', [w + 0.05, 0.03, 0.03], [0, top - bh - 0.05, 0]),
+        box('steelDark', [w + 0.05, 0.035, 0.035], [0, top - 0.0175, 0]), box('steelDark', [w + 0.05, 0.03, 0.03], [0, 0.015, 0]),
         box('steelDark', [0.008, EXPO_SIGN_CABLE, 0.008], [-(w / 2 - 0.1), top + EXPO_SIGN_CABLE / 2, 0]), box('steelDark', [0.008, EXPO_SIGN_CABLE, 0.008], [w / 2 - 0.1, top + EXPO_SIGN_CABLE / 2, 0]),
-        box('paintWhite', [w, bh, 0.01], [0, top - 0.035 - bh / 2, 0]),
+        box('paintWhite', [w, bh, 0.01], [0, bh / 2, 0]),
       ];
     },
-    faces: () => [{paint: 'expo-hang', w: 2.36, h: 0.56, p: [0, r3(EXPO_DIMS.hangSign.h - EXPO_SIGN_CABLE - 0.035 - 0.3), 0.007], back: true}],
+    faces: () => [{paint: 'expo-hang', w: 2.36, h: 0.52, p: [0, 0.3, 0.007], back: true}],
   },
   skyExpoSignStand: {
     def: def('signStand', {physics: dyn(14, 'metal')}), phys: phys.signStand, damage: 'plastic', open: NONE('decor', 'a sign totem: nothing to open'),
