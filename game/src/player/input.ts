@@ -155,7 +155,8 @@ export class Input {
   private fullscreenUi(note?: string): void {
     const fs = !!document.fullscreenElement;
     for (const b of document.querySelectorAll<HTMLButtonElement>('.btn-fullscreen')) b.textContent = fs ? 'Exit fullscreen' : 'Fullscreen';
-    const text = note ?? (fs ? 'Fullscreen. Esc pauses; press Esc again (or the button) to leave fullscreen.' : 'Optional: play fullscreen.');
+    // (task studio-pause-menu-cleanup-20261115-000847-01: the button's own label says what it does; the line only carries a refusal)
+    const text = note ?? '';
     for (const el of document.querySelectorAll<HTMLElement>('.fs-status')) el.textContent = text;
   }
 

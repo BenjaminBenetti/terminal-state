@@ -21,6 +21,7 @@ import {ATMOSPHERE_QUALITY} from './render/atmosphere'; // (lane MENU, campaign 
 import {installTooltips, setTip} from './ui/tooltip'; // task studio-ui-subway-maps-20261108-074144-01
 import {coverUntilPlayDrawn, lastSaveNote} from './ui/loadingScreen'; // (lane MENU, DEATH: the death screen's last-save line; + the loading screen's hand-off to play)
 import {LoadingMapView} from './ui/loadingMap'; // task studio-initial-loading-subway-graphic-20261111-070741-01: the loading screen's map
+import {PauseMenu, leaveSummary} from './ui/pauseMenu'; // task studio-pause-menu-cleanup-20261115-000847-01: the pause menu's views
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 const params = new URLSearchParams(location.search);
@@ -159,8 +160,9 @@ async function boot(): Promise<void> {
   const perf = installPerfOverlay(game, {visible: params.get('perf') === '1'});
   (window as unknown as {__perf?: PerfOverlay}).__perf = qa ? perf : undefined;
   // Lane RECORDER: Pause / main-menu Settings -> Performance (Start / Stop & Download / Download last), F8 start / stop, F9 mark; QA __LL.perfRecorder()
+  // (task studio-pause-menu-cleanup-20261115-000847-01: the pause menu's Settings -> Performance tab, above the run codes)
   const recorder = installPerfRecorder(game, {overlay: perf, qa});
-  recorder.mountPanel(document.querySelector<HTMLElement>('#pause .panel'), {idPrefix: 'pause-', before: document.getElementById('controls-pause')});
+  recorder.mountPanel(document.querySelector<HTMLElement>('#pause-perf'), {idPrefix: 'pause-', before: document.getElementById('seed-line')});
 
   // --- settings (lane MENU): ONE persisted store for the menu, the pause menu and the game ---
   const settings = new SettingsStore(browserSettingsStorage());
@@ -271,9 +273,10 @@ async function boot(): Promise<void> {
     const cur = game.run.current, targets = travelTargets(cur.level), other = targets[0];
     targets.forEach((t, slot) => { for (const id of [['#btn-travel', '#btn-win-travel'], ['#btn-travel-2', '#btn-win-travel-2'], ['#btn-travel-3', '#btn-win-travel-3'], ['#btn-travel-4', '#btn-win-travel-4']][slot] ?? []) $(id).textContent = `Travel to ${nameOf(t)}`; }); // (+ slot 3: task reactor-build-20261101; + slot 4)
     $('#confirm-travel .to').textContent = nameOf(other);
-    // (lane MENU, campaign polish item 2: one short line, and no "nothing is saved" claim for a campaign run — it autosaves)
+    // (lane MENU, campaign polish item 2: one short line, and no "nothing is saved" claim for a campaign run — it autosaves;
+    // task studio-pause-menu-cleanup-20261115-000847-01: just where the player is, under "Paused")
     const here = cur.station ? game.run.node(cur.station)?.name : undefined;
-    $('#pause-run').textContent = here ? `This run: ${here}` : `This run: ${nameOf(cur.level)} · ${sectionLabel(cur)} (not saved)`;
+    $('#pause-run').textContent = here ?? `${nameOf(cur.level)} · ${sectionLabel(cur)} · not saved`;
     // a new game rolls fresh seeds: the static (generic) names
     $('#btn-death-new').textContent = `New game · ${LEVELS[cur.level].name}`;
     $('#btn-death-new-other').textContent = `New game · ${LEVELS[other].name}`;
@@ -379,29 +382,45 @@ async function boot(): Promise<void> {
   };
   // (task refinement-batch, lane SAVE: the slot's latest save may be the player's own — the train's Save terminal — so "Last save", with
   // its real reason; the game autosaves at every departure / arrival and saves on demand at the Save terminal)
-  const autosaveNote = (): string => {
+  const lastSave = () => {
     const slot = game.currentSlot;
     const v = slot ? game.saves.list().find(x => x.slot === slot) : undefined;
-    if (!slot || !v?.meta) return 'This run has no save yet — leaving now loses it.';
-    const at = new Date(v.meta.savedAt), when = isNaN(at.getTime()) ? v.meta.savedAt : at.toLocaleString();
-    const why = v.meta.reason === 'manual' ? 'saved at the Save terminal' : v.meta.reason === 'new-game' ? 'new game' : v.meta.reason;
-    return `Last save (slot ${slot}): ${when}, at ${v.meta.station} (${why}). Progress since then is NOT saved — the game autosaves at every train departure and arrival, and the Save terminal left of the train's driving desk saves any time the train is stopped.`;
+    if (!slot || !v?.meta) return null;
+    const at = new Date(v.meta.savedAt);
+    return {slot, meta: v.meta, when: isNaN(at.getTime()) ? v.meta.savedAt : at.toLocaleString()};
   };
+  const autosaveNote = (): string => {
+    const l = lastSave();
+    if (!l) return 'This run has no save yet — leaving now loses it.';
+    const why = l.meta.reason === 'manual' ? 'saved at the Save terminal' : l.meta.reason === 'new-game' ? 'new game' : l.meta.reason;
+    return `Last save (slot ${l.slot}): ${l.when}, at ${l.meta.station} (${why}). Progress since then is NOT saved — the game autosaves at every train departure and arrival, and the Save terminal left of the train's driving desk saves any time the train is stopped.`;
+  };
+  // the death screen's Main menu: a second click confirms (its tooltip says what the last save holds)
   const toMenu = (b: HTMLButtonElement) => b.addEventListener('click', () => {
     if (!game.run.campaign) { game.setState('title'); return; }
-    if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Confirm: back to the main menu'; setTip(b, {head: 'Back to the main menu', hint: autosaveNote()}); const n = document.querySelector('#pause .fine'); if (n && game.state === 'paused') n.textContent = autosaveNote(); return; }
+    if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Confirm: back to the main menu'; setTip(b, {head: 'Back to the main menu', hint: autosaveNote()}); return; }
     b.dataset.armed = ''; b.textContent = 'Main menu';
     game.returnToMenu(); // (trainRide.reset + the title; lane CREDITS' end card takes the same path after its save)
   });
-  toMenu(mainMenuButton('#pause', 'btn-main-menu'));
   toMenu(mainMenuButton('#death', 'btn-death-menu'));
+  // task studio-pause-menu-cleanup-20261115-000847-01: the pause menu (ui/pauseMenu.ts) — every pause opens on its main list; its Main
+  // menu asks first in a campaign run (the same facts as the note above, short), a scratch run leaves at once (never saved)
+  const pauseMenu = new PauseMenu($('#pause'), {
+    confirmLeave: () => !!game.run.campaign,
+    leaveInfo: () => { const l = lastSave(); return leaveSummary(l && {slot: l.slot, when: l.when, station: l.meta.station, reason: l.meta.reason}); },
+    leave: () => {
+      if (game.state !== 'paused') return;
+      if (game.run.campaign) game.returnToMenu(); else game.setState('title');
+    },
+  });
   const legacyRunUi = ['#btn-travel', '#btn-travel-2', '#btn-travel-3', '#btn-travel-4', '#btn-new-game', '#btn-death-new', '#btn-death-new-other', '#btn-death-new-third', '#btn-death-new-fourth', '#btn-death-new-fifth',
     '#btn-win-travel', '#btn-win-travel-2', '#btn-win-travel-3', '#btn-win-travel-4', '#btn-win-new'];
-  game.stateListeners.push((s: GameState) => {
+  game.stateListeners.push(() => {
     const campaign = !!game.run.campaign;
     for (const id of legacyRunUi) document.querySelector(id)?.classList.toggle('hidden', campaign);
-    if (s !== 'paused') { const b = document.getElementById('btn-main-menu'); if (b) { b.dataset.armed = ''; b.textContent = 'Main menu'; } }
   });
+  // (after the legacy buttons' visibility: the main list's focus lands on a shown button)
+  game.stateListeners.push((s: GameState, prev: GameState) => { if (s === 'paused' && prev !== 'paused') pauseMenu.open(); });
 
   if (qaPrebuild) game.setState('loading'); // (QA: the loading card until the scratch run is ready, as the old boot)
   else { titleEl.dataset.mode = 'menu'; game.setState('title'); }
