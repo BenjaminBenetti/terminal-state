@@ -78,8 +78,11 @@ export const FLASH_SECTORS = 6;
 /**
  * Extra lights beside the sectors': each stands on a plane the beam lands on that no sector's light stands on (an ORPHAN plane;
  * the planes with the most flux first), or is what a sector's light left behind on the plane it just left, fading out.
+ * Eight, for motion: along a walk through a station's clutter with the head turning, four gave a fading light's place to a new
+ * plane often enough to let go up to 8.9 % of the bounce's flux in one frame (more than 2 % in every twelfth frame); eight let
+ * go 3.8 % at the most and leave 0.3 % of the landed flux without a light (game/tests/flash-bounce.test.ts, the walk).
  */
-export const FLASH_EXTRA = 4;
+export const FLASH_EXTRA = 8;
 /** Virtual lights in all: 3 vec4 uniforms each, and one for the parameters. */
 export const FLASH_VPLS = FLASH_SECTORS + FLASH_EXTRA;
 const SECTOR_RAYS = FLASH_RAYS / FLASH_SECTORS;

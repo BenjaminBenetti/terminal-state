@@ -104,14 +104,14 @@ full shading the beam also lights its surroundings (`world/flashBounce.ts`):
   spot light puts on them. It is **as large as its rays' footprints** (`FLASH_BOUNCE_TUNING.soft` = 1), so a wall
   lit from 8 m is a patch about 1.5 m across, not a point: right in front of it the bounce is a little under the
   wall's own brightness times the gain, at any distance. A ray on another plane gives its flux to a neighbouring
-  sector's light on that plane, or to one of **four extra lights** that stand on the planes no sector's light
+  sector's light on that plane, or to one of **eight extra lights** that stand on the planes no sector's light
   stands on (a prop in a corner of the beam, the strip of ceiling at its edge). Flux never moves to a plane it
   did not land on.
 - **In time** a light glides only along its own plane, and its flux follows over about 70 ms. When a sector's rays
   move to another plane its light stays on the old plane and fades there, and the light on the new plane rises
   from nothing (or changes places with that plane's extra light). Nothing travels through the air between two
   surfaces, and a frame changes the total by its share of the way to the new place and no more.
-- The GPU adds the ten lights' sum to the full field light's irradiance: arithmetic on 31 plain uniforms, no
+- The GPU adds the fourteen lights' sum to the full field light's irradiance: arithmetic on 43 plain uniforms, no
   texture, no array and no uniform buffer of its own. A dark room is softly lit outside the beam; a red tile wall
   throws warm light on the floor beside it.
 - On metal, glass and glazed tile the lit patches also show as a soft sheen round the mirror direction
@@ -126,12 +126,13 @@ Limits, by design:
    chair is its box, the gap between a table's legs does not exist, and glass inside a model (a ticket booth, a
    display case, a cooler) is part of its box. Loose physics bodies, pickups and a prop gone loose stop nothing.
    Tower and bridge windows are wall to the rays, as they are to the bake.
-3. **Ten lights stand for the whole lit patch.** Next to a large lit surface the bounce is patchier and dimmer
-   than that surface's true glow (the foot of a lit wall gets less than it should). When the beam lands on more
-   planes than there are lights, the planes with the least flux have none: dimmer, never misplaced (0.4 % of the
-   reflected flux over a Subway station's standing places; about 2 % on a brisk walk through its clutter with the
-   head turning). A fading light is cut short when a new plane needs its place: on that walk at most 9 % of the
-   bounce in one frame, under 5 % in 99 frames of 100.
+3. **Fourteen lights stand for the whole lit patch.** Next to a large lit surface the bounce is patchier and
+   dimmer than that surface's true glow (the foot of a lit wall gets less than it should). When the beam lands on
+   more planes than there are lights, the planes with the least flux have none: dimmer, never misplaced (0.001 %
+   of the reflected flux over a Subway station's standing places; 0.3 % on a brisk walk through its clutter with
+   the head turning). A fading light is cut short when a new plane needs its place: on that walk at most 3.8 %
+   of the bounce in one frame at 60 Hz (2.8 % at 30 Hz), and no more than 2 % in 99 frames of 100. There are eight
+   extra lights for this: with four it was 8.9 % and 4.3 %.
 4. A light stands at the centre of its hits on their plane. With hits either side of a doorway or a pier that
    point can lie over the opening or under the pier; it lights what is in front of the plane all the same.
 
@@ -348,10 +349,10 @@ Frame cost:
 
 - **Full shading**: three more filtered fetches of the field texture per lit pixel. No new texture, sampler or
   uniform buffer.
-- **The flashlight's bounce**: ten small light terms per lit pixel on plain uniforms (three dot products and one
-  division each; ten more on a reflective surface for the sheen). It was six. On the CPU 30 rays over the
+- **The flashlight's bounce**: fourteen small light terms per lit pixel on plain uniforms (three dot products and
+  one division each; fourteen more on a reflective surface for the sheen). It was six. On the CPU 30 rays over the
   architecture and one pass over the station's prop boxes a frame: in Node on a base Subway station with its 635
-  boxes a median of about 75 microseconds, about 85 with 32 characters in reach (it was about 18 with six rays and
+  boxes a median of about 75 microseconds, 85 to 90 with 32 characters in reach (it was about 18 with six rays and
   no boxes). The update keeps nothing on the heap.
 - **A reflective fragment**: one filtered and one unfiltered grid fetch, and per probe that weighs in (one in a
   block's core, up to four at a corner) three texel loads and two atlas samples. Glazed tile now pays that at
@@ -390,7 +391,7 @@ compiled module).
 - Auto on a software renderer or the WebGL 2 fallback looks closer to Off than to On: plain shading or no
   reflections (the status says which and why).
 - The flashlight's bounce casts no shadows, treats a prop as its box and a character as a cylinder, and stands
-  for the whole lit patch with ten lights (its four limits above).
+  for the whole lit patch with fourteen lights (its four limits above).
 - The mirror: one plane at a time; no player body or weapon; no volumetric fog in the reflection; a brightly lit
   interior behind a pane leaves only the hall's lights and signs visible in it face-on.
 - Glass inside a model, curved glass and tower windows reflect the probes, not a live image.

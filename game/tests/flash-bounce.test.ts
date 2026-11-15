@@ -360,7 +360,7 @@ describe('the rays: thirty of equal flux, in six sectors', () => {
   }
 
   it('RAY_PATTERN: every ray in its own cell of a thirtieth of the flux — a cap of five round the axis and five wedges of five', () => {
-    expect([FLASH_RAYS, FLASH_SECTORS, FLASH_EXTRA, FLASH_VPLS, RAY_PATTERN.length, cells.length]).toEqual([30, 6, 4, 10, 60, 30]);
+    expect([FLASH_RAYS, FLASH_SECTORS, FLASH_EXTRA, FLASH_VPLS, RAY_PATTERN.length, cells.length]).toEqual([30, 6, 8, 14, 60, 30]);
     expect(SECTOR_RAYS).toBe(5);
     cells.forEach((c, j) => {
       // equal flux: (the share of the flux between its two rings) x (its part of the turn)
@@ -1147,14 +1147,15 @@ describe('on a surface, always: aim sweeps and a sudden turn', () => {
   };
   /**
    * Stated bounds (measured over the three sweeps at the three frame rates, with a margin):
-   *  STEP — the largest change of the lights' flux in one frame, of its peak over the sweep (measured: 5.5 % at 30 Hz, 3.2 % at
-   *         60 Hz, 1.6 % at 144 Hz — the frame's share of the way to where the beam now is, nothing sudden);
-   *  BAND — the lights' flux against the settled flux of the frame's pose (measured: 88 % to 123 %: the lights trail the beam by the
+   *  STEP — the largest change of the lights' flux in one frame, of its peak over the sweep (measured: 5.4 % at 30 Hz, 2.8 % at
+   *         60 Hz, 1.2 % at 144 Hz — the frame's share of the way to where the beam now is, nothing sudden);
+   *  BAND — the lights' flux against the settled flux of the frame's pose (measured: 88 % to 124 %: the lights trail the beam by the
    *         time constant, so sweeping fast onto a darker or nearer surface they are over it for a moment, onto a brighter one under);
-   *  LOST — the share of the landed flux on a plane no light is free for (`dropped`; measured: 1.1 % at the most), and what a light
-   *         given up for a new plane lets go at once in a frame, of the peak (measured: 0.7 % at the most; none in three sweeps).
+   *  LOST — nothing: every plane these sweeps land on has a light at every frame (`dropped` is 0), and no light is given up for
+   *         another — the flux is what it is due to be at every frame, to a millionth of its peak. (With four extra lights 1.1 %
+   *         of the landed flux had no light and a light given up let go 0.6 % of the peak in a frame, at the most.)
    */
-  const STEP: Record<number, number> = {30: 0.07, 60: 0.04, 144: 0.02}, BAND: [number, number] = [0.85, 1.3], LOST = 0.02;
+  const STEP: Record<number, number> = {30: 0.07, 60: 0.04, 144: 0.02}, BAND: [number, number] = [0.85, 1.3], LOST = 1e-6;
 
   it('every lit light, at every step of the sweeps, lies on a traced surface with that surface\'s own normal — never between two; the flux follows the pose\'s settled flux with the time constant and has no pop (30, 60 and 144 Hz)', () => {
     const rows = [30, 60, 144].flatMap(hz => SWEEPS.map(sweep => gameSweep(hz, sweep)));
@@ -1170,14 +1171,12 @@ describe('on a surface, always: aim sweeps and a sudden turn', () => {
       expect(r.step, label).toBeLessThan(STEP[r.hz]);
       expect(r.lo, label).toBeGreaterThan(BAND[0]);
       expect(r.hi, label).toBeLessThan(BAND[1]);
-      expect(r.dropped, label).toBeLessThan(LOST);
+      expect(r.dropped, label).toBe(0);
       expect(r.gone, label).toBeLessThan(LOST);
     }
-    // in some sweeps no light is ever given up: there the flux is exactly what it is due to be at every frame
-    expect(rows.filter(r => r.gone < 1e-6).length).toBeGreaterThanOrEqual(3);
   });
 
-  it('with a physical falloff and one colour on everything the lights\' flux is the beam\'s through every plane change of every sweep — never above it, and under it only by a faintest light given up', () => {
+  it('with a physical falloff and one colour on everything the lights\' flux is the beam\'s through every plane change of every sweep, to a millionth: no light is given up', () => {
     const U = rig(hall(24, 24)), grey: V3 = [0.4, 0.4, 0.4];
     const rho = paint(U.albedo, ALB_WALL, grey);
     expect(paint(U.albedo, ALB_FLOOR, grey)).toEqual(rho);
@@ -1217,12 +1216,13 @@ describe('on a surface, always: aim sweeps and a sudden turn', () => {
       expect(r.changes, label).toBeGreaterThanOrEqual(2);
       expect(r.fading, label).toBeGreaterThanOrEqual(1);
       expect(r.hi, label).toBeLessThan(1 + 1e-9);
-      // (measured: never under 96.1 % of the beam's flux, and no more than 2.4 % of it let go in one frame — a faint fading light
-      // whose place a new plane needs; in most frames of most sweeps it is the beam's flux exactly)
-      expect(r.lo, label).toBeGreaterThan(0.95);
-      expect(r.drop, label).toBeLessThan(0.03);
+      // (measured: the beam's flux to nine places in 95 of 100 frames at the least; in the others a fading light under a billionth
+      // of the transfer went out. With four extra lights a faint fading light whose place a new plane needed let go up to 2.4 %
+      // of the beam's flux in one frame.)
+      expect(r.lo, label).toBeGreaterThan(1 - 1e-6);
+      expect(r.drop, label).toBeLessThan(1e-6);
+      expect(r.exact, label).toBeGreaterThanOrEqual(r.frames * 0.9);
     }
-    expect(rows.filter(r => r.exact >= r.frames / 3).length).toBeGreaterThanOrEqual(5);
   });
 
   it('a sudden quarter turn: nine tenths of the bounce stand at the new place within 0.25 s, and under a twentieth is left at the old after 0.3 s', () => {
@@ -1630,10 +1630,13 @@ describe('the extra lights: a plane the beam lands on that no sector\'s light st
     if (!cached) { const fb = new FlashBounce(); fb.bind(R.src); fb.update(1 / 60, aim(spot(PHYSICAL), L, TO)); cached = fb.rays().map(r => unit(sub([r.x, r.y, r.z], L))); }
     return cached;
   };
-  /** A small box in ray j's way, its face toward the light at x = `face`: the ray lands in the face's middle and no other ray touches the box. */
-  const boxOn = (j: number, face: number): FlashBox => {
-    const d = dirs()[j], t = (face - L[0]) / d[0];
-    return {x: face - 0.05, y: L[1] + d[1] * t - 0.03, z: L[2] + d[2] * t, hx: 0.05, hz: 0.03, h: 0.06};
+  /**
+   * A small box in ray j's way, its face toward the light at x = `face`: the ray lands in the face's middle and no other ray touches
+   * the box. `from`: where the light stands (anywhere, aimed the same way: the rays' directions are the same).
+   */
+  const boxOn = (j: number, face: number, from: V3 = L): FlashBox => {
+    const d = dirs()[j], t = (face - from[0]) / d[0];
+    return {x: face - 0.05, y: from[1] + d[1] * t - 0.03, z: from[2] + d[2] * t, hx: 0.05, hz: 0.03, h: 0.06};
   };
   const a = 1 - Math.exp(-(1 / 60) / FLASH_BOUNCE_TAU);
   const onPlane = (fb: FlashBounce, x: number): FlashVpl[] => litOf(fb).filter(v => Math.abs(v.x - x) < 1e-9 && v.nx === 1);
@@ -1704,19 +1707,29 @@ describe('the extra lights: a plane the beam lands on that no sector\'s light st
   });
 
   it('more orphan planes than extra lights: the planes with the most flux have them and `dropped` is the rest; a plane takes a fading light\'s place once it clearly outweighs what is left of it', () => {
-    // six small boxes, each in the way of one ray of another sector, at six depths: six planes. With the game's falloff a box
-    // sends back more the farther it is from the light
-    const faces = [5.5, 5, 4.5, 4, 3.5, 3], on = [1, 5, 10, 15, 20, 25];
-    const boxes = on.map((j, k) => boxOn(j, faces[k])), fb = new FlashBounce(), s = aim(spot(GAME), L, TO);
+    // two planes more than there are extra lights: small boxes, each in the way of one ray (at most two of a sector's five: the
+    // wall keeps every sector's light), each 1.2 times as far from the light as the one before, each on a plane of its own. With
+    // the game's falloff a box sends back more the farther it is from the light. The light stands 12 m from the wall here (room
+    // for that many depths).
+    const N = FLASH_EXTRA + 2, FROM: V3 = [12.5, 15, 20];
+    // (the rays by their angle off the axis, the outermost first: the faces then lie more than the plane gap apart)
+    const on = Array.from({length: FLASH_SECTORS * 2}, (_, i) => Math.floor(i / 2) * SECTOR_RAYS + 1 + (i % 2) * 2).sort((i, j) => dirs()[j][0] - dirs()[i][0]).slice(0, N);
+    const faces = on.map((j, k) => FROM[0] + dirs()[j][0] * 2 * 1.2 ** k);
+    const boxes = on.map((j, k) => boxOn(j, faces[k], FROM)), fb = new FlashBounce(), s = aim(spot(GAME), FROM, TO);
     fb.bind(R.src);
     fb.occlude(literal(boxes, rho));
     fb.update(1 / 60, s);
-    expect(fb.debug()).toMatchObject({hits: FLASH_RAYS, onProps: 6, lights: FLASH_SECTORS, planes: 6, extra: FLASH_EXTRA, fading: 0});
+    expect(fb.debug()).toMatchObject({hits: FLASH_RAYS, onProps: N, lights: FLASH_SECTORS, planes: N, extra: FLASH_EXTRA, fading: 0});
+    for (const v of fb.vpls.slice(0, FLASH_SECTORS)) expect(v.x).toBeCloseTo(WALL, 12);
     const weight = (r: FlashRayDebug): number => r.transfer[0] + r.transfer[1] + r.transfer[2];
     let rays = fb.rays();
     const w = on.map(j => weight(rays[j]));
-    on.forEach((j, k) => { expect(rays[j].on).toBe('prop'); expect(rays[j].x).toBe(faces[k]); if (k) expect(w[k]).toBeGreaterThan(w[k - 1] * 1.1); });
-    // the four farthest boxes have the lights, each where its ray lands
+    on.forEach((j, k) => {
+      expect(rays[j].on).toBe('prop');
+      expect(rays[j].x).toBeCloseTo(faces[k], 12);
+      if (k) { expect(w[k]).toBeGreaterThan(w[k - 1] * 1.1); expect(faces[k - 1] - faces[k]).toBeGreaterThan(FLASH_BOUNCE_TUNING.planeGap); }
+    });
+    // the farthest boxes, as many as there are extra lights, have the lights, each where its ray lands
     on.forEach((j, k) => {
       expect(rays[j].light >= FLASH_SECTORS, `box ${k}`).toBe(k >= 2);
       if (k >= 2) [faces[k] + LIFT, rays[j].y, rays[j].z].forEach((c, q) => expect(posOf(fb.vpls[rays[j].light])[q]).toBeCloseTo(c, 12));
@@ -1727,30 +1740,30 @@ describe('the extra lights: a plane the beam lands on that no sector\'s light st
     expectLightsAreTheirRays(fb, s);
     // the brightest box goes: its light fades where it stands; the next plane in line (box 1) takes that light's place in the first
     // frame in which keep x its flux is more than what is left there — not before, and no other light gives way
-    const slot = rays[on[5]].light, keep = FLASH_BOUNCE_TUNING.keep;
-    const first = 1 + Math.ceil(Math.log(w[5] / (keep * w[1])) * FLASH_BOUNCE_TAU * 60);
+    const slot = rays[on[N - 1]].light, keep = FLASH_BOUNCE_TUNING.keep;
+    const first = 1 + Math.ceil(Math.log(w[N - 1] / (keep * w[1])) * FLASH_BOUNCE_TAU * 60);
     expect(first).toBeGreaterThan(2);
     // (box 1's flux, as a light's: its ray's transfer times the light)
     const coming = Math.PI * s.intensity * lum([rays[on[1]].transfer[0] * s.color.r, rays[on[1]].transfer[1] * s.color.g, rays[on[1]].transfer[2] * s.color.b]);
-    boxes[5].h = 0;
+    boxes[N - 1].h = 0;
     for (let k = 1; k <= first + 3; k++) {
       const left = fluxOf([fb.vpls[slot]]);
       fb.update(1 / 60, s);
       rays = fb.rays();
-      expect(rays[on[5]].on).toBe('architecture');
+      expect(rays[on[N - 1]].on).toBe('architecture');
       expect(rays[on[0]].light, `frame ${k}`).toBe(-1);
-      for (const q of [2, 3, 4]) { expect(rays[on[q]].light, `frame ${k}`).toBeGreaterThanOrEqual(FLASH_SECTORS); expect(rays[on[q]].light, `frame ${k}`).not.toBe(slot); }
+      for (let q = 2; q < N - 1; q++) { expect(rays[on[q]].light, `frame ${k}`).toBeGreaterThanOrEqual(FLASH_SECTORS); expect(rays[on[q]].light, `frame ${k}`).not.toBe(slot); }
       if (k < first) {
         expect(left, `frame ${k}`).toBeGreaterThanOrEqual(keep * coming);
         expect(rays[on[1]].light, `frame ${k}`).toBe(-1);
-        expect(fb.debug()).toMatchObject({planes: 5, extra: FLASH_EXTRA - 1, fading: 1});
-        expect(fb.vpls[slot].x).toBeCloseTo(faces[5] + LIFT, 12);
+        expect(fb.debug()).toMatchObject({planes: N - 1, extra: FLASH_EXTRA - 1, fading: 1});
+        expect(fb.vpls[slot].x).toBeCloseTo(faces[N - 1] + LIFT, 12);
         expect(fluxOf([fb.vpls[slot]]) / left).toBeCloseTo(1 - a, 9);
       } else {
         // (in the frame it comes, what goes dark at once is less than the plane that comes)
         if (k === first) expect(left).toBeLessThan(keep * coming);
         expect(rays[on[1]].light, `frame ${k}`).toBe(slot);
-        expect(fb.debug()).toMatchObject({planes: 5, extra: FLASH_EXTRA, fading: 0});
+        expect(fb.debug()).toMatchObject({planes: N - 1, extra: FLASH_EXTRA, fading: 0});
         expect(fb.vpls[slot].x).toBeCloseTo(faces[1] + LIFT, 12);
         expect(fluxOf([fb.vpls[slot]]) / coming).toBeCloseTo(1 - (1 - a) ** (k - first + 1), 9);
       }
@@ -1767,7 +1780,7 @@ describe('the extra lights: a plane the beam lands on that no sector\'s light st
     const full = fluxOf(fb.vpls), one = full / FLASH_RAYS, BOX = 4.5 + LIFT;
     // (a fading light whose transfer is under a billionth goes out at once: all the flux that is ever let go)
     const gone = FLASH_EXTRA * 1e-9 / fb.rays().reduce((t, r) => t + r.transfer[0] + r.transfer[1] + r.transfer[2], 0);
-    expect(gone).toBeLessThan(2e-8);
+    expect(gone).toBeLessThan(4e-8);
     fb.bind(R.src);
     fb.occlude(literal(boxes, rho));
     fb.update(1 / 60, s);
@@ -1829,15 +1842,21 @@ describe('the extra lights: a plane the beam lands on that no sector\'s light st
   });
 
   it('the whole beam leaves a wall while every extra light is taken: the wall\'s lights go as ONE, in the place of the least — what goes dark at once is the least there is', () => {
-    // four planes of two small bright boxes each (two rays of two sectors: no sector's light stands on them), each plane brighter
+    // as many planes as there are extra lights, of two small bright boxes each (one ray each of two sectors, and of no sector more
+    // than three rays, each on another plane: the wall keeps every sector's light and none stands on a box), each plane brighter
     // than any one sector's light on the wall; then a slab stands in front of everything, 0.75 m from the light
-    const pairs: [number, number, number][] = [[1, 5, 5], [6, 10, 4.5], [15, 20, 4], [21, 25, 3.5]];
+    const taken = new Array<number>(FLASH_SECTORS).fill(0);
+    const pairs = Array.from({length: FLASH_EXTRA}, (_, p): [number, number, number] => {
+      const sa = p % FLASH_SECTORS, sb = (p + 1 + Math.floor(p / FLASH_SECTORS)) % FLASH_SECTORS;
+      return [sa * SECTOR_RAYS + 1 + taken[sa]++, sb * SECTOR_RAYS + 1 + taken[sb]++, 5.5 - 0.5 * p];
+    });
+    expect(Math.max(...taken)).toBeLessThanOrEqual(3);
     const boxes = pairs.flatMap(([i, j, face]) => [boxOn(i, face), boxOn(j, face)]), bright: V3 = [0.9, 0.9, 0.9];
     const fb = new FlashBounce(), s = aim(spot(PHYSICAL), L, TO);
     fb.bind(R.src);
     fb.occlude(literal(boxes, bright));
     fb.update(1 / 60, s);
-    expect(fb.debug()).toMatchObject({hits: FLASH_RAYS, onProps: 8, lights: FLASH_SECTORS, planes: 4, extra: FLASH_EXTRA, dropped: 0});
+    expect(fb.debug()).toMatchObject({hits: FLASH_RAYS, onProps: 2 * FLASH_EXTRA, lights: FLASH_SECTORS, planes: FLASH_EXTRA, extra: FLASH_EXTRA, dropped: 0});
     const was = copy(fb), sum = (v: FlashVpl): number => v.r + v.g + v.b;
     const sectors = was.slice(0, FLASH_SECTORS), extras = was.slice(FLASH_SECTORS), wall = sectors.reduce((t, v) => t + sum(v), 0);
     for (const v of sectors) expect(v.x).toBeCloseTo(WALL, 12);
@@ -1849,7 +1868,7 @@ describe('the extra lights: a plane the beam lands on that no sector\'s light st
     expect(fb.debug()).toMatchObject({hits: FLASH_RAYS, onProps: FLASH_RAYS, lights: FLASH_SECTORS, planes: 0, extra: 0, fading: FLASH_EXTRA});
     for (const v of fb.vpls.slice(0, FLASH_SECTORS)) { expect(nrmOf(v)).toEqual([1, 0, 0]); expect(v.x).toBeCloseTo(5.75 + LIFT, 12); }
     const now = fb.vpls.slice(FLASH_SECTORS), onWall = now.filter(v => Math.abs(v.x - WALL) < 1e-9);
-    // one light on the wall with all six lights' flux, at their centre; three of the four box lights where they stood
+    // one light on the wall with all six lights' flux, at their centre; all but one of the box lights where they stood
     expect(onWall).toHaveLength(1);
     expect(sum(onWall[0])).toBeCloseTo(wall * (1 - a), 9);
     [1, 2].forEach(q => expect(posOf(onWall[0])[q]).toBeCloseTo(sectors.reduce((t, v) => t + sum(v) * posOf(v)[q], 0) / wall, 9));
@@ -2075,8 +2094,8 @@ describe('the sum: CPU mirror and shader', () => {
     }
   });
 
-  it('in a lit material the bounce adds no uniform buffer, no array, no texture: thirty-one vec4 in the render group\'s buffer', () => {
-    expect(FLASH_VPLS * 3 + 1).toBe(31);
+  it('in a lit material the bounce adds no uniform buffer, no array, no texture: forty-three vec4 in the render group\'s buffer', () => {
+    expect(FLASH_VPLS * 3 + 1).toBe(43);
     for (const backend of ['wgsl', 'glsl'] as const) {
       const std = () => new MeshStandardNodeMaterial({color: 0x808080, roughness: 0.7});
       const plain = compile(backend, std(), [new LightFieldLight()]);
@@ -2086,7 +2105,7 @@ describe('the sum: CPU mirror and shader', () => {
       expect(bindings(backend, plain).ubos).toBeGreaterThan(0);
       const arrays = (s: string) => (s.match(backend === 'wgsl' ? /array\s*</g : /\w+\s*\[\s*\d+\s*\]\s*;/g) ?? []).length;
       expect(arrays(bounce), backend).toBe(arrays(plain));
-      // the thirty-one uniforms, as plain members of the render group's block
+      // the forty-three uniforms, as plain members of the render group's block
       const member = (name: string) => (backend === 'wgsl' ? new RegExp(`\\b${name} : vec4<f32>`) : new RegExp(`\\bvec4 ${name};`));
       for (const name of ['fbParams', ...['fbPos', 'fbNrm', 'fbCol'].flatMap(k => Array.from({length: FLASH_VPLS}, (_, i) => `${k}${i}`))]) {
         expect(bounce, `${backend} ${name}`).toMatch(member(name));
@@ -2095,7 +2114,7 @@ describe('the sum: CPU mirror and shader', () => {
       if (backend === 'wgsl') {
         const block = /struct renderStruct \{([^}]*)\}/.exec(bounce)![1];
         expect((block.match(/\bfb\w+ : vec4<f32>/g) ?? [])).toHaveLength(FLASH_VPLS * 3 + 1);
-        expect(bounce).toMatch(/render\.fbCol9\.xyz/);
+        expect(bounce).toMatch(/render\.fbCol13\.xyz/);
         // every light's patch size is read from its own position uniform
         for (let i = 0; i < FLASH_VPLS; i++) expect(bounce).toMatch(new RegExp(`render\\.fbPos${i}\\.w\\b`));
       }
@@ -2119,7 +2138,7 @@ describe('the sum: CPU mirror and shader', () => {
     expect(code.match(/uniform\(/g)).toHaveLength(2); // the per-light vec4 factory and params
     expect(code.match(/\.setGroup\(renderGroup\)/g)).toHaveLength(2);
     expect(FB.pos.length + FB.nrm.length + FB.col.length).toBe(FLASH_VPLS * 3);
-    // one light per sector and the extra ones: 31 vec4 beside the render group's own (the fog march's fragment stage is at WebGPU's
+    // one light per sector and the extra ones: 43 vec4 beside the render group's own (the fog march's fragment stage is at WebGPU's
     // twelve uniform buffers: nothing here may become one)
     expect(FLASH_VPLS).toBe(FLASH_SECTORS + FLASH_EXTRA);
     expect(FLASH_RAYS % FLASH_SECTORS).toBe(0);
@@ -2200,14 +2219,15 @@ describe('the real base Subway, with the finishes the builder drew and its prop 
     }
     console.log(`flash bounce, Subway seed ${SEED}, the architecture alone: ${open.length} poses, ${landed} of ${total} rays landed (${(landed / total * 100).toFixed(1)} %), ${checked} re-cast and verified ` +
       `(${walls} on walls, ${floors} on floors, ${ceils} on ceilings; ${colours.size} finish colours: ${[...colours].sort().join(' ')}); ${lights} lights lit, ${inSolid} of them inside the solid; ` +
-      `${(lostFlux / allFlux * 100).toFixed(1)} % of the reflected flux on a plane no light stands on; the light sat inside a wall at ${parents} poses (rays from the eye); ` +
+      `${(lostFlux / allFlux * 100).toFixed(3)} % of the reflected flux on a plane no light stands on; the light sat inside a wall at ${parents} poses (rays from the eye); ` +
       `mean reflected flux ${(sumFlux / (total / FLASH_RAYS)).toFixed(2)} of ${(GAME.intensity * spotConeSolidAngle(GAME.angle, GAME.penumbra)).toFixed(1)} emitted (x d^0.8: the game's falloff)`);
     expect(landed / total).toBeGreaterThan(0.9);
     expect(checked / landed).toBeGreaterThan(0.98);
     expect(Math.min(walls, floors, ceils)).toBeGreaterThan(1000);
     expect(colours.size).toBeGreaterThanOrEqual(5);
-    // (measured: 0.1 % of the flux on a plane no light stands on; 35 of 27 139 lights under a pier or a lintel)
-    expect(lostFlux / allFlux).toBeLessThan(0.01);
+    // (measured: 0.000 % of the flux on a plane no light stands on — 0.1 % with four extra lights; 35 of 27 217 lights under a
+    // pier or a lintel)
+    expect(lostFlux / allFlux).toBeLessThan(0.002);
     expect(inSolid / lights).toBeLessThan(0.005);
   });
 
@@ -2255,15 +2275,15 @@ describe('the real base Subway, with the finishes the builder drew and its prop 
     console.log(`flash bounce, Subway seed ${SEED} with its ${props.length} prop boxes (${glazing} of them glass): ${poses} poses, ${tally.prop} rays on props (${(tally.prop / (poses * FLASH_RAYS) * 100).toFixed(1)} %), ` +
       `${tally.architecture} on the architecture, ${tally.none} nowhere; at most ${most} boxes in the beam at once; the game's own ray lands on a prop at the same distance for ${agreed} of ${game} of them ` +
       `(of the rest ${glassFirst} stop on glazing the beam passes, ${startsInside} start inside a box); ` +
-      `${(lostFlux / allFlux * 100).toFixed(1)} % of the reflected flux on a plane no light stands on`);
+      `${(lostFlux / allFlux * 100).toFixed(3)} % of the reflected flux on a plane no light stands on`);
     expect(tally.prop / (poses * FLASH_RAYS)).toBeGreaterThan(0.05);
     expect(tally.body).toBe(0);
     expect(glazing).toBeGreaterThan(0);
     expect(agreed + glassFirst + startsInside).toBe(game);
     expect(agreed / game).toBeGreaterThan(0.97);
     expect(Math.min(glassFirst, startsInside)).toBeGreaterThan(0);
-    // (measured: 0.4 %)
-    expect(lostFlux / allFlux).toBeLessThan(0.02);
+    // (measured: 0.001 % — 0.4 % with four extra lights)
+    expect(lostFlux / allFlux).toBeLessThan(0.005);
     // the bounce reads the boxes and writes nothing: the layout's list is what it was (what a save holds of a station is untouched)
     expect(JSON.stringify(props)).toBe(before);
   });
@@ -2361,18 +2381,21 @@ describe('the real base Subway, with the finishes the builder drew and its prop 
     console.log(`flash bounce, a walk through Subway seed ${SEED} with its prop boxes and 16 characters: ${rows.map(r => `at ${r.hz} Hz (${r.frames} frames, a light fading in ${(r.fading * 100).toFixed(0)} % of them): ` +
       `a light is given up in ${(r.share * 100).toFixed(1)} % of the frames; it lets go more than 2 % of the frame's flux in ${(r.over * 100).toFixed(1)} % of them, ${(r.p99 * 100).toFixed(2)} % at the 99th percentile ` +
       `and ${(r.most * 100).toFixed(2)} % at the most; ${(r.mean * 100).toFixed(2)} % of the landed flux on a plane no light is free for on average, ${(r.dropped * 100).toFixed(1)} % at the most`).join('; ')}`);
-    // The beam here lands on more planes than there are lights for much of the time (limit 3): the plane with the least flux then
-    // has none, and a light that is fading out gives its place to a plane that needs one. What that lets go at once is stated here.
-    // (measured at 60 Hz / 30 Hz: a light fading in 77 % / 81 % of the frames; more than 2 % let go in 8.4 % / 8.7 % of them,
-    // 4.28 % / 3.77 % at the 99th percentile, 8.86 % / 4.59 % at the most; 2.2 % / 2.4 % of the landed flux without a light on
-    // average, 20.1 % / 19.4 % at the most)
+    // Here the beam at times lands on more planes than there are lights (limit 3): the plane with the least flux then has none,
+    // and a light that is fading out gives its place to a plane that needs one (most often one that is all but dark already).
+    // What that lets go at once is stated here. Measured at 60 Hz / 30 Hz: a light fading in 97 % / 97 % of the frames; more
+    // than 2 % let go in 1.0 % / 0.3 % of them, 2.01 % / 1.74 % at the 99th percentile, 3.81 % / 2.84 % at the most — within the
+    // bound the aim sweeps state for a frame's step (STEP: 4 % at 60 Hz, 7 % at 30 Hz); 0.30 % / 0.36 % of the landed flux
+    // without a light on average, 8.3 % / 11.5 % at the most. The pins leave room for another station layout.
+    // (With four extra lights: more than 2 % in 8.4 % / 8.7 % of the frames, 4.28 % / 3.77 % at the 99th percentile, 8.86 % /
+    // 4.59 % at the most; 2.2 % / 2.4 % without a light on average, 20.1 % / 19.4 % at the most — why there are eight.)
     for (const r of rows) {
       expect(r.fading, `${r.hz} Hz`).toBeGreaterThan(0.5);
-      expect(r.most, `${r.hz} Hz`).toBeLessThan(0.15);
-      expect(r.p99, `${r.hz} Hz`).toBeLessThan(0.07);
-      expect(r.over, `${r.hz} Hz`).toBeLessThan(0.15);
-      expect(r.mean, `${r.hz} Hz`).toBeLessThan(0.05);
-      expect(r.dropped, `${r.hz} Hz`).toBeLessThan(0.3);
+      expect(r.most, `${r.hz} Hz`).toBeLessThan(0.06);
+      expect(r.p99, `${r.hz} Hz`).toBeLessThan(0.035);
+      expect(r.over, `${r.hz} Hz`).toBeLessThan(0.03);
+      expect(r.mean, `${r.hz} Hz`).toBeLessThan(0.01);
+      expect(r.dropped, `${r.hz} Hz`).toBeLessThan(0.2);
     }
   });
 
