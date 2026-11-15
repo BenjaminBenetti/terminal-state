@@ -207,7 +207,9 @@ describe('the tech expo on real version-7 seeds', () => {
       expect(ex.booths.length, `seed ${seed}: booths`).toBeGreaterThanOrEqual(2);
       expect(new Set(ex.booths.map(b => b.exhibitor)).size, 'distinct exhibitors').toBe(ex.booths.length);
       for (const b of ex.booths) {
-        expect(roleOf(b.area)).toBe('exhibitors');
+        // (an exhibitors' piece, or a sponsor's wall booth in a side bay of the keynote hall)
+        expect(roleOf(b.area)).toBe(b.sponsor ? 'main-hall' : 'exhibitors');
+        if (b.sponsor) expect(b.island).toBe(false);
         expect(b.theme).toBe(EXPO_EXHIBITORS[b.exhibitor].theme);
         const floor = b.props.filter(p => p.host === undefined && !p.mounted);
         if (b.island) {

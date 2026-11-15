@@ -49,7 +49,7 @@ export const EXPO_SIGN_STYLE = {bg: 0x0b1f3a, fg: 0xffffff, accent: 0x3fa9ff, fo
 export const EXPO_HOLDER_PURPOSE = 'mall-electronics';
 export const EXPO_CASE_PURPOSE = 'mall-electronics-back';
 /** A wall booth's plot (m: along the wall x into the room) and the aisle kept in front of it. */
-export const EXPO_BOOTH = {w: 3.0, d: 3.0, aisle: 2.0, max: 10} as const;
+export const EXPO_BOOTH = {w: 3.0, d: 3.0, aisle: 2.0, max: 12} as const;
 /** The compact wall booth of a shallow piece (the booth wall, a demo counter and a plinth: 1 m deep) and the aisle kept before it. */
 export const EXPO_COMPACT = {d: 1.0, aisle: 1.6} as const;
 /** Half width of the keynote hall's reserved lanes (entry -> aisle -> stage front -> the steps' foot; entry -> every hall door). */
@@ -70,7 +70,7 @@ export interface ExpoDressResult extends EventDressResult {
   screens: PropPlacement[];
   foh: PropPlacement[];
   /** Per booth: its area, exhibitor, theme, wall / island, its placements (booth wall, fixtures, hosts and the decor on them). */
-  booths: {area: number; exhibitor: number; theme: ExpoBoothTheme; island: boolean; compact: boolean; props: PropPlacement[]}[];
+  booths: {area: number; exhibitor: number; theme: ExpoBoothTheme; island: boolean; compact: boolean; sponsor?: boolean; props: PropPlacement[]}[];
   theatres: {area: number; screen: PropPlacement | null; table: PropPlacement | null; chairs: PropPlacement[]; decor: PropPlacement[]}[];
   lounge: {area: number; props: PropPlacement[]} | null;
   desks: PropPlacement[];
@@ -129,7 +129,7 @@ export function dressTechExpo(layout: StationLayout, rng: Rng): EventDressResult
   areasOf('panel').forEach((a, k) => theatre(ex, a, (talk0 + k) % EXPO_TALKS.length));
   for (const a of areasOf('photo-lounge')) lounge(ex, a);
   const pieces = areasOf('exhibitors').sort((p, q) => q.w * q.h - p.w * p.h);
-  booths(ex, pieces);
+  booths(ex, pieces, hall ?? null);
   // --- 2. the routes become lanes; then the smaller pieces ----------------------------------------------------------------------
   for (const a of vc.walk.pub) {
     const l0 = vc.res.lanes.length;
@@ -549,7 +549,7 @@ function lounge(ex: Ex, a: Area): void {
 interface Plot { a: Area; x: number; z: number; rot: number; island: boolean; side: Side | null; t0: number }
 type Put = (kind: PropKind, lx: number, lz: number, turn?: number, o?: {front?: number; variant?: number; purpose?: string}) => PropPlacement | null;
 
-function booths(ex: Ex, pieces: readonly Area[]): void {
+function booths(ex: Ex, pieces: readonly Area[], hall: Area | null): void {
   const {v, vc, res} = ex;
   const taken: {x0: number; z0: number; x1: number; z1: number}[] = [];
   const rectOf = (p: Plot, w: number, d: number) => {
@@ -559,8 +559,8 @@ function booths(ex: Ex, pieces: readonly Area[]): void {
   const clash = (r: {x0: number; z0: number; x1: number; z1: number}, pad = 0) => taken.some(q => q.x0 < r.x1 + pad && q.x1 > r.x0 - pad && q.z0 < r.z1 + pad && q.z1 > r.z0 - pad);
   const nextEx = () => (ex.next < ex.exOrder.length ? ex.exOrder[ex.next++] : null);
   // wall booths first (every piece deep enough: the full booth, else the compact one), then island booths in the roomiest
-  for (const a of pieces) {
-    if (Math.min(a.w, a.h) * CELL < EXPO_COMPACT.d + EXPO_COMPACT.aisle) continue;
+  const wallRow = (a: Area): void => {
+    if (Math.min(a.w, a.h) * CELL < EXPO_COMPACT.d + EXPO_COMPACT.aisle) return;
     for (const plot of wallPlots(ex, a)) {
       if (ex.next >= EXPO_BOOTH.max) break;
       const deep = (plot.side === 'N' || plot.side === 'S' ? a.h : a.w) * CELL;
@@ -577,10 +577,11 @@ function booths(ex: Ex, pieces: readonly Area[]): void {
         break;
       }
     }
-  }
+  };
+  for (const a of pieces) wallRow(a);
   for (const a of pieces) {
     if (Math.min(a.w, a.h) * CELL < 8.5) continue;
-    const want =Math.max(1, Math.min(3, Math.floor(a.w * a.h * CELL * CELL / 60)));
+    const want = Math.max(1, Math.min(3, Math.floor(a.w * a.h * CELL * CELL / 60)));
     const hub = vc.hub.get(a.id);
     const cx = (a.x + a.w / 2) * CELL, cz = (a.y + a.h / 2) * CELL;
     // (the island faces the piece's way in; its across axis on a cell line so its pieces fill whole cells)
@@ -608,6 +609,14 @@ function booths(ex: Ex, pieces: readonly Area[]): void {
       if (sign) props.push(sign);
       res.booths.push({area: a.id, exhibitor: e, theme: EXPO_EXHIBITORS[e].theme, island: true, compact: false, props});
     }
+  }
+  // the keynote hall's side bays (beyond the stage, its screens and the audience, 2 m kept clear round them): sponsor wall booths
+  if (hall && res.stage) {
+    const ps = [res.stage, ...res.treads, ...res.chairs, ...res.barrier, ...res.screens, ...res.foh];
+    taken.push({x0: Math.min(...ps.map(p => p.x - p.hx)) - 2, z0: Math.min(...ps.map(p => p.z - p.hz)) - 2, x1: Math.max(...ps.map(p => p.x + p.hx)) + 2, z1: Math.max(...ps.map(p => p.z + p.hz)) + 2});
+    const n0 = res.booths.length;
+    wallRow(hall);
+    for (const b of res.booths.slice(n0)) b.sponsor = true;
   }
   if (res.booths.length < 3) res.skipped.push(`expo: ${res.booths.length} booths`);
   // the narrow pieces (no booth): display plinths with a demo device along a long wall
