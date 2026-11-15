@@ -1390,8 +1390,10 @@ export class Game {
    * frames run only the transit gap (updateTransitGap; render() skips the level culler while transitGap) and draw the scene, where the
    * station's parts stand far outside the riding camera's view. The loading screen's routes (Continue, New game, Retry, menu travel)
    * drain it in time slices with no frame drawn between them (buildSectionSliced); buildSection drains it at once (tests, tools).
+   * `offThread` (the paced and the sliced drain: they can wait): the lighting bake may run on its workers, and these steps then
+   * PARK while the workers work (core/pacedBuild.ts BuildWait). The synchronous drain never asks for it: the whole build on this thread.
    */
-  private *buildSectionSteps(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean): BuildSteps<void> {
+  private *buildSectionSteps(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean, offThread = false): BuildSteps<void> {
     this.lifecycleCounts.build++;
     const t0 = performance.now();
     this.layout = layout;
@@ -1509,7 +1511,10 @@ export class Game {
     // Task studio-baked-lighting-reflections-20261114-050258-01: Enhanced lighting (world/enhancedLightingRuntime.ts) — the same field
     // baked with a ray-gathered, finish-coloured indirect term, and cached reflection probes for metal and glass; each from the derived
     // cache when its inputs still match, else made here in the same paced steps. Off / the Reactor: nothing (the baseline bake below).
-    const enhanced = yield* this.enhancedLighting.bakeSteps(stationBakeInput(this.layout), this.world.drawn, {max3DTextureSize: max3D});
+    // Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane WORKERS): with `offThread` the gather and the probes are made by
+    // the bake's workers (world/lightBakePool.ts) while this build is parked — the same bytes, and the build goes on only with the
+    // complete result (nothing below starts early); without workers, or when they give up, they are made here as before.
+    const enhanced = yield* this.enhancedLighting.bakeSteps(stationBakeInput(this.layout), this.world.drawn, {max3DTextureSize: max3D, offThread});
     this.lightPool = yield* StationLighting.steps(this.scene, this.layout, this.world.fixtures, this.world.tubes, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes, shading: enhanced.shading, mirror: enhanced.mirror, bounce: enhanced.bounce});
     this.syncGlassMirror();
     this.enhancedLighting.applied(this.lightPool.reflectionsSkipped, this.lightPool.shadingSkipped);
@@ -2064,7 +2069,7 @@ export class Game {
    */
   private async buildSectionPaced(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean): Promise<void> {
     const gen = this.stationGen, stats = (this.journeyBuild = newPacedStats());
-    await runPaced(this.buildSectionSteps(key, layout, arrival, fresh), {...this.buildPacing, stats, alive: () => gen === this.stationGen});
+    await runPaced(this.buildSectionSteps(key, layout, arrival, fresh, true), {...this.buildPacing, stats, alive: () => gen === this.stationGen});
     this.genMs = stats.workMs;
   }
   /**
@@ -2086,7 +2091,7 @@ export class Game {
     };
     this.buildHold = true;
     try {
-      await runSliced(stageLabels(this.buildSectionSteps(key, layout, arrival, fresh), started), {...this.slicePacing, stats, alive: () => gen === this.stationGen});
+      await runSliced(stageLabels(this.buildSectionSteps(key, layout, arrival, fresh, true), started), {...this.slicePacing, stats, alive: () => gen === this.stationGen});
     } finally {
       this.buildHold = false;
     }
@@ -2569,7 +2574,11 @@ export class Game {
           // slices with one turn of the event loop between them (core/pacedBuild.ts runSliced — the line above paints, input is
           // delivered, a hidden tab does not stall it). The same steps and the same `alive` check as the frame-paced drain it replaces.
           const stats = (this.relightBuild = newPacedStats());
-          const r = await runSliced(stageLabels(this.relightSteps(input), stage => { label.textContent = relightLabel(stage); }), {...this.slicePacing, stats, alive});
+          // (lane WORKERS) ... and a bake whose choice is no longer the one asked for (it changed under the bake: another tab) is
+          // abandoned like one whose station was replaced: its workers are stopped, nothing of it is installed, and the next pass
+          // bakes what is asked for now.
+          const wanted = () => alive() && el.pendingSignature() === signature;
+          const r = await runSliced(stageLabels(this.relightSteps(input), stage => { label.textContent = relightLabel(stage); }), {...this.slicePacing, stats, alive: wanted});
           installed = swapped = true;
           this.relightCounts.swaps++;
           if (r.error) throw r.error; // (the station is lit by the baseline now: relightSteps recorded it)
@@ -2577,6 +2586,7 @@ export class Game {
           if (err instanceof PacedBuildCancelled) {
             // a replaced station's own build owns the record by now; this station (a lost device) keeps the lighting and the record it had
             if (!installed && gen === this.stationGen && this.world) restore();
+            if (alive()) continue; // (only the choice changed: this station is still here to be lit by the new one)
             break;
           }
           this.relightCounts.failed++;
@@ -2600,7 +2610,8 @@ export class Game {
   /** The live station's lighting for the current choice, as steps (runRelight): the bake, then the swap in ONE step. */
   private *relightSteps(input: ReturnType<typeof stationBakeInput>): BuildSteps<{error: unknown}> {
     const max3D = maxTexture3DSize(this.renderer.backend as never);
-    const enhanced = yield* this.enhancedLighting.bakeSteps(input, this.world.drawn, {max3DTextureSize: max3D});
+    // (its one caller drains these steps in time slices and can wait: the bake may run on its workers — lane WORKERS, see buildSectionSteps)
+    const enhanced = yield* this.enhancedLighting.bakeSteps(input, this.world.drawn, {max3DTextureSize: max3D, offThread: true});
     const r = yield* StationLighting.replaceSteps(this.lightPool, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes, shading: enhanced.shading, mirror: enhanced.mirror, bounce: enhanced.bounce}, fn => this.retire(fn));
     this.lightPool = r.lighting;
     this.syncGlassMirror(); // made / released with the lighting; the warm-up that follows draws it once

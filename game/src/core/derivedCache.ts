@@ -245,8 +245,9 @@ export const WATCH_SLACK_MS = 1250;
  * So one block of any length never uses up more than one tick of the limit, a long one none, and after it the answer has the
  * turns that are left to arrive. A hidden tab's timers (about one a second) still count; a tab throttled harder than that
  * counts again once it is back. Returns the cancel. A limit that is not a positive finite number never expires.
+ * (Exported: the lighting bake's workers are waited for the same way — world/lightBakePool.ts.)
  */
-function watchdog(limitMs: number, expire: () => void): () => void {
+export function watchdog(limitMs: number, expire: () => void): () => void {
   if (!(Number.isFinite(limitMs) && limitMs > 0)) return () => {};
   const step = limitMs / WATCH_TICKS, late = step + Math.max(step, WATCH_SLACK_MS);
   let ran = 0, last = clock(), timer: ReturnType<typeof setTimeout> | null = null;

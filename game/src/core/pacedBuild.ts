@@ -24,14 +24,41 @@
 // not clamped like a nested zero timer), so a background tab does not stall it. The same contract as runPaced otherwise: `alive()` before
 // every slice (false -> the generator is closed, PacedBuildCancelled), the result once, a throw rejects, a slice is never cut inside
 // a step, the same stats (`waits` = the turns taken: at most work / sliceMs).
+//
+// A build may also WAIT for work done elsewhere (task studio-gi-mood-bounce-loading-20261115-081523-01, lane WORKERS: the Enhanced-
+// lighting bake's workers, world/lightBakePool.ts): it yields a BuildWait — "nothing for this thread to do until this settles". Both
+// drivers then PARK: the slice ends there, the thread is free (frames, input, the progress line), and the build is resumed when the
+// wait settles — resolved or rejected alike: the build looks for itself at what came. While parked `alive()` is asked every
+// BUILD_PARK.pollMs, so a build whose world was replaced is closed (its finally blocks stop the work it waits for) and rejects with
+// PacedBuildCancelled exactly as between two slices. Parked time is not work: `workMs` / `stages` stay this thread's own time,
+// `parkedMs` / `parked` are the wall time spent waiting, by stage (a stage's wall time = both). drainSync cannot wait: handed a build
+// that parks, it closes it and throws — a synchronous caller must ask for a build that does all its work on this thread.
 
-/** A build as steps: `yield` = a possible pause (an optional stage label for diagnostics), the return value = the build's result. */
-export type BuildSteps<T> = Generator<string | void, T, void>;
+/** A yielded wait: the build has nothing to do on this thread until `wait` settles (see the file comment). */
+export interface BuildWait { readonly wait: PromiseLike<unknown> }
 
-/** Runs every step of `steps` now, in order (the synchronous wrapper of a stepped builder): exactly the work of a paced run. */
+/**
+ * A build as steps: `yield` = a possible pause (an optional stage label for diagnostics; a BuildWait: park until it settles), the
+ * return value = the build's result.
+ */
+export type BuildSteps<T> = Generator<string | void | BuildWait, T, void>;
+
+/** True for a yielded BuildWait. */
+export const isBuildWait = (v: unknown): v is BuildWait => typeof v === 'object' && v !== null && 'wait' in v;
+
+/**
+ * Runs every step of `steps` now, in order (the synchronous wrapper of a stepped builder): exactly the work of a paced run. A build
+ * that waits for work done elsewhere cannot be run this way: it is closed and this throws.
+ */
 export function drainSync<T>(steps: BuildSteps<T>): T {
   let r = steps.next();
-  while (!r.done) r = steps.next();
+  while (!r.done) {
+    if (isBuildWait(r.value)) {
+      try { steps.return(undefined as never); } catch { /* the error below is the one that matters */ }
+      throw new Error('drainSync: this build waits for work done off this thread; drain it with runPaced or runSliced');
+    }
+    r = steps.next();
+  }
   return r.value;
 }
 
@@ -68,9 +95,20 @@ export interface PacedBuildStats {
   sliceMs: number[];
   /** Stage label -> main-thread ms (a labelled yield starts a stage: its steps up to the next labelled yield; '(start)' before the first). */
   stages: Record<string, number>;
+  /** Times the build parked on a BuildWait, and the wall time it stayed parked (ms; not in workMs: this thread was free). */
+  parks: number;
+  parkedMs: number;
+  /** Stage label -> wall ms parked in that stage (a stage's wall time = its `stages` + its `parked`). */
+  parked: Record<string, number>;
 }
 
-export const newPacedStats = (): PacedBuildStats => ({slices: 0, steps: 0, workMs: 0, maxSliceMs: 0, maxStepMs: 0, waits: 0, fallbacks: 0, hiddenSteps: 0, sliceMs: [], stages: {}});
+export const newPacedStats = (): PacedBuildStats => ({slices: 0, steps: 0, workMs: 0, maxSliceMs: 0, maxStepMs: 0, waits: 0, fallbacks: 0, hiddenSteps: 0, sliceMs: [], stages: {}, parks: 0, parkedMs: 0, parked: {}});
+
+/** A parked build (a yielded BuildWait). */
+export const BUILD_PARK = {
+  /** How often `alive()` is asked while the build is parked (ms). */
+  pollMs: 100,
+} as const;
 
 export interface PacedBuildOptions {
   sliceMs?: number;
@@ -97,12 +135,13 @@ const defaultFrame = (go: () => void): void => {
 const defaultHidden = (): boolean => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
 /**
- * One slice: steps of `steps` until `sliceMs` of real time is used and `cut()` agrees to stop there (or the build ends); never cut
- * inside a step. `cur.stage` is the stage the next step belongs to (a labelled yield starts the next one). The stats are updated.
+ * One slice: steps of `steps` until `sliceMs` of real time is used and `cut()` agrees to stop there, the build ends, or it yields a
+ * BuildWait (the slice ends there whatever `cut()` says: the caller parks); never cut inside a step. `cur.stage` is the stage the
+ * next step belongs to (a labelled yield starts the next one). The stats are updated.
  */
-function runSlice<T>(steps: BuildSteps<T>, st: PacedBuildStats, cur: {stage: string}, now: () => number, sliceMs: number, cut: () => boolean): IteratorResult<string | void, T> {
+function runSlice<T>(steps: BuildSteps<T>, st: PacedBuildStats, cur: {stage: string}, now: () => number, sliceMs: number, cut: () => boolean): IteratorResult<string | void | BuildWait, T> {
   const t0 = now();
-  let t = t0, r: IteratorResult<string | void, T>;
+  let t = t0, r: IteratorResult<string | void | BuildWait, T>;
   for (;;) {
     r = steps.next();
     const t1 = now(), d = t1 - t;
@@ -112,6 +151,7 @@ function runSlice<T>(steps: BuildSteps<T>, st: PacedBuildStats, cur: {stage: str
     st.stages[cur.stage] = (st.stages[cur.stage] ?? 0) + d;
     if (r.done) break;
     if (typeof r.value === 'string') cur.stage = r.value; // a labelled yield starts the next stage
+    else if (isBuildWait(r.value)) break;
     if (t - t0 >= sliceMs && cut()) break;
   }
   const ms = t - t0;
@@ -120,6 +160,26 @@ function runSlice<T>(steps: BuildSteps<T>, st: PacedBuildStats, cur: {stage: str
   if (ms > st.maxSliceMs) st.maxSliceMs = ms;
   if (st.sliceMs.length < PACED_BUILD.maxSamples) st.sliceMs.push(ms);
   return r;
+}
+
+/**
+ * Parks on a yielded wait: returns once it has settled (either way), or once `alive()` turned false (asked every BUILD_PARK.pollMs;
+ * the caller's own check then cancels the build). The wall time parked goes to the stats under the stage in work.
+ */
+async function park(w: BuildWait, st: PacedBuildStats, cur: {stage: string}, now: () => number, alive: (() => boolean) | undefined): Promise<void> {
+  const t0 = now();
+  let settled = false;
+  const mark = (): void => { settled = true; };
+  const done = Promise.resolve(w.wait).then(mark, mark);
+  st.parks++;
+  while (!settled && !(alive && !alive())) {
+    let handle: ReturnType<typeof setTimeout> | null = null;
+    await Promise.race([done, new Promise<void>(resolve => { handle = setTimeout(resolve, BUILD_PARK.pollMs); })]);
+    if (handle !== null) clearTimeout(handle);
+  }
+  const d = now() - t0;
+  st.parkedMs += d;
+  st.parked[cur.stage] = (st.parked[cur.stage] ?? 0) + d;
 }
 
 /** Drains `steps` in slices of about `sliceMs` between drawn frames; resolves with its result (see the file comment). */
@@ -136,7 +196,8 @@ export async function runPaced<T>(steps: BuildSteps<T>, o: PacedBuildOptions = {
       if (o.alive && !o.alive()) throw new PacedBuildCancelled();
       const r = runSlice(steps, st, cur, now, sliceMs, cut);
       if (r.done) { finished = true; return r.value; }
-      await nextFrame(o, st);
+      if (isBuildWait(r.value)) await park(r.value, st, cur, now, o.alive);
+      else await nextFrame(o, st);
     }
   } finally {
     if (!finished) { try { steps.return(undefined as never); } catch { /* the build's own error is the one that propagates */ } }
@@ -194,6 +255,7 @@ export async function runSliced<T>(steps: BuildSteps<T>, o: SlicedBuildOptions =
       if (o.alive && !o.alive()) throw new PacedBuildCancelled();
       const r = runSlice(steps, st, cur, now, sliceMs, always);
       if (r.done) { finished = true; return r.value; }
+      if (isBuildWait(r.value)) { await park(r.value, st, cur, now, o.alive); continue; }
       st.waits++;
       await new Promise<void>(resolve => { turn(resolve); });
     }

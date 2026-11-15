@@ -11,7 +11,7 @@ import {afterEach, describe, expect, it, vi} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {FakeIndexedDb} from './helpers/fakeIndexedDb';
 import {FIX as RFIX, levelFixture as renderFixture} from './helpers/levelRenderFixture';
-import {PACED_BUILD, PacedBuildCancelled, SLICED_BUILD, drainSync, newPacedStats, runPaced, runSliced, type BuildSteps, type SlicedBuildOptions} from '../src/core/pacedBuild';
+import {BUILD_PARK, PACED_BUILD, PacedBuildCancelled, SLICED_BUILD, drainSync, newPacedStats, runPaced, runSliced, type BuildSteps, type SlicedBuildOptions} from '../src/core/pacedBuild';
 import {openDerivedCache} from '../src/core/derivedCache';
 import type {LightingCapabilities} from '../src/world/enhancedLighting';
 import {EnhancedLightingRuntime, type EnhancedBake, type EnhancedLightingSettings, type StationBakeInput} from '../src/world/enhancedLightingRuntime';
@@ -200,6 +200,91 @@ describe('time-sliced drain: slices with one turn of the event loop between them
 });
 
 // ---------------------------------------------------------------------------------------------
+// A build that waits for work done off this thread (task studio-gi-mood-bounce-loading-20261115-081523-01, lane WORKERS: the lighting
+// bake's workers): it yields {wait}; both drivers park there. (tests/light-bake-workers.test.ts has the real bake on real threads.)
+describe('a build that waits: both drivers park on a yielded wait', () => {
+  /** Four steps of 5 ms on `clock`, a wait for `gate` after the second (in stage 'one'); finally -> 'closed'. */
+  function* waiting(clock: {t: number}, log: string[], gate: PromiseLike<unknown>): BuildSteps<string> {
+    try {
+      clock.t += 5; log.push('a');
+      yield 'one';
+      clock.t += 5; log.push('b');
+      yield {wait: gate};
+      clock.t += 5; log.push('c');
+      yield 'two';
+      clock.t += 5; log.push('d');
+      return 'done';
+    } finally { log.push('closed'); }
+  }
+  const drivers = {
+    sliced: (steps: BuildSteps<string>, clock: {t: number}, o: {stats?: ReturnType<typeof newPacedStats>; alive?: () => boolean}) =>
+      runSliced(steps, {now: () => clock.t, sliceMs: 40, turn: () => { throw new Error('no turn is taken: every slice is short'); }, ...o}),
+    paced: (steps: BuildSteps<string>, clock: {t: number}, o: {stats?: ReturnType<typeof newPacedStats>; alive?: () => boolean}) =>
+      runPaced(steps, {now: () => clock.t, sliceMs: 40, hidden: () => false, frame: () => { throw new Error('no frame is waited for: a park is not a frame wait'); }, timer: () => 0, clearTimer: () => {}, ...o}),
+  };
+
+  for (const how of ['sliced', 'paced'] as const) {
+    it(`${how}: the slice ends at the wait, nothing runs until it settles, then the build goes on; the parked time is not work`, async () => {
+      const clock = {t: 0}, log: string[] = [], stats = newPacedStats();
+      let release!: () => void;
+      const gate = new Promise<void>(r => { release = r; });
+      const p = drivers[how](waiting(clock, log, gate), clock, {stats});
+      for (let i = 0; i < 20; i++) await settle();
+      expect(log).toEqual(['a', 'b']); // parked: the step after the wait has not run
+      expect([stats.slices, stats.parks]).toEqual([1, 1]);
+      clock.t += 250; // (the wall time the work elsewhere took)
+      release();
+      expect(await p).toBe('done');
+      expect(log).toEqual(['a', 'b', 'c', 'd', 'closed']);
+      expect([stats.slices, stats.steps, stats.waits, stats.parks]).toEqual([2, 4, 0, 1]);
+      expect(stats.workMs).toBe(20); // this thread's own time: the wait is not in it
+      expect(stats.stages).toEqual({'(start)': 5, one: 10, two: 5});
+      expect(stats.parkedMs).toBe(250);
+      expect(stats.parked).toEqual({one: 250}); // under the stage that waited
+    });
+
+    it(`${how}: a wait that fails resumes the build all the same (the build looks at what came); a wait settled beforehand costs no poll`, async () => {
+      for (const gate of [Promise.reject(new Error('the work elsewhere failed')), Promise.resolve(1), {then: (ok: (v: number) => void) => { ok(1); }} as PromiseLike<number>]) {
+        const clock = {t: 0}, log: string[] = [], stats = newPacedStats();
+        const t0 = performance.now();
+        expect(await drivers[how](waiting(clock, log, gate), clock, {stats})).toBe('done');
+        expect(performance.now() - t0).toBeLessThan(BUILD_PARK.pollMs);
+        expect(log).toEqual(['a', 'b', 'c', 'd', 'closed']);
+        expect([stats.parks, stats.parkedMs]).toEqual([1, 0]);
+      }
+    });
+
+    it(`${how}: abandoned while parked — alive() is asked while it waits: the generator is closed (its finally runs) and the run rejects PacedBuildCancelled`, async () => {
+      const clock = {t: 0}, log: string[] = [], stats = newPacedStats();
+      let alive = true, asked = 0;
+      const p = drivers[how](waiting(clock, log, new Promise<void>(() => {})), clock, {stats, alive: () => { asked++; return alive; }}); // (a wait that never settles)
+      void p.catch(() => {});
+      for (let i = 0; i < 20; i++) await settle();
+      expect(log).toEqual(['a', 'b']);
+      const before = asked;
+      await new Promise<void>(r => setTimeout(r, BUILD_PARK.pollMs * 2 + 50));
+      expect(asked).toBeGreaterThan(before); // polled while parked, and still parked
+      expect(log).toEqual(['a', 'b']);
+      alive = false; // the world generation changed
+      await expect(p).rejects.toBeInstanceOf(PacedBuildCancelled);
+      expect(log).toEqual(['a', 'b', 'closed']);
+      expect([stats.slices, stats.parks]).toEqual([1, 1]);
+    });
+  }
+
+  it('drainSync cannot wait: handed a build that parks, it closes it (its finally runs) and throws', () => {
+    const clock = {t: 0}, log: string[] = [];
+    expect(() => drainSync(waiting(clock, log, new Promise<void>(() => {})))).toThrow('drainSync: this build waits for work done off this thread');
+    expect(log).toEqual(['a', 'b', 'closed']);
+  });
+
+  it('the poll is short against a bake and long against a frame', () => {
+    expect(BUILD_PARK.pollMs).toBeGreaterThanOrEqual(50);
+    expect(BUILD_PARK.pollMs).toBeLessThanOrEqual(250);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
 describe('the real lighting bake through the three drains', () => {
   const HW: LightingCapabilities = {backend: 'webgpu', software: false, maxTextureSize: 8192, max3DTextureSize: 2048, halfFloatLinear: true};
   const HIGH: EnhancedLightingSettings = {enhancedLighting: 'on', reflections: 'high'};
@@ -299,10 +384,13 @@ describe('game.ts: which drain runs where', () => {
     const relight = body('  private async runRelight(', '\n  }\n');
     expect(relight).toContain('this.warming = true;');
     expect(relight).toContain('const alive = () => gen === this.stationGen && !this.gpu?.deviceLost && !!this.world;');
-    expect(relight).toMatch(/await runSliced\(stageLabels\(this\.relightSteps\(input\), [^\n]*\{\.\.\.this\.slicePacing, stats, alive\}\);/);
+    // (task studio-gi-mood-bounce-loading-20261115-081523-01, lane WORKERS: ... and a bake whose choice changed under it is abandoned the same way)
+    expect(relight).toContain('const wanted = () => alive() && el.pendingSignature() === signature;');
+    expect(relight).toMatch(/await runSliced\(stageLabels\(this\.relightSteps\(input\), [^\n]*\{\.\.\.this\.slicePacing, stats, alive: wanted\}\);/);
     expect(relight).not.toMatch(/runPaced\(/);
     expect(relight).toContain('if (err instanceof PacedBuildCancelled) {');
     const journey = body('  private async buildSectionPaced(', '\n  }\n');
-    expect(journey).toContain('await runPaced(this.buildSectionSteps(key, layout, arrival, fresh), {...this.buildPacing, stats, alive: () => gen === this.stationGen});');
+    // (lane WORKERS: the last argument — the lighting bake may wait for its workers under a drain that can wait)
+    expect(journey).toContain('await runPaced(this.buildSectionSteps(key, layout, arrival, fresh, true), {...this.buildPacing, stats, alive: () => gen === this.stationGen});');
   });
 });

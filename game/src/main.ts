@@ -14,6 +14,8 @@ import {milestoneBadge, readMilestones} from './run/milestones'; // task reactor
 import {MainMenuController, MainMenuView, bootLine, mountControlsForm, mountSettingsForm, mountTutorialReset, type DevStart, type MenuHost, type SlotView} from './ui/mainMenu';
 import {SettingsStore, browserSettingsStorage, copySettingsInto} from './ui/settingsStore';
 import {isEnhancedLightingMode, isReflectionQuality} from './world/enhancedLighting'; // task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): ?lighting= / ?reflections=
+import {bakeWorkerCount} from './world/lightBakePool'; // task studio-gi-mood-bounce-loading-20261115-081523-01 (lane WORKERS): the lighting bake's workers
+import LightBakeWorker from './world/lightBakeWorker?worker&inline'; // (the worker's script, inlined in this bundle and started from a Blob)
 import {MENU_TRAIN_KEYS, MenuScene, type MenuRenderer, type MenuSceneAssets} from './world/menuScene';
 import {OFFICE_ASSETS, loadOfficeAsset, loadOfficeTexture, type OfficeAssetId} from './assets/officeAssets';
 import {setSkylineTexture} from './world/exterior';
@@ -163,6 +165,18 @@ async function boot(): Promise<void> {
   // (task studio-pause-menu-cleanup-20261115-000847-01: the pause menu's Settings -> Performance tab, above the run codes)
   const recorder = installPerfRecorder(game, {overlay: perf, qa});
   recorder.mountPanel(document.querySelector<HTMLElement>('#pause-perf'), {idPrefix: 'pause-', before: document.getElementById('seed-line')});
+
+  // --- task studio-gi-mood-bounce-loading-20261115-081523-01 (lane WORKERS): the Enhanced-lighting bake's workers ---
+  // How many this machine gets (world/lightBakePool.ts bakeWorkerCount: its cores less one, at most three; one where the browser
+  // reports 4 GB of memory or less; none without Workers) is a question of load time alone: a station's bake is the same bytes on
+  // any number of them, and on none. The worker's script is INLINED in this bundle and started from a Blob (no second script to
+  // deploy; the content security policy's worker-src allows blob:). A browser that refuses to start one only costs time: the bake
+  // then runs on this thread as it always did, and the lighting status says so. ?bakeworkers=0..3 sets the number for this session
+  // (QA / comparisons).
+  const canBakeOffThread = typeof Worker === 'function', bakeWorkersAsked = params.get('bakeworkers');
+  const bakeWorkers = canBakeOffThread && bakeWorkersAsked !== null && /^[0-3]$/.test(bakeWorkersAsked) ? Number(bakeWorkersAsked)
+    : bakeWorkerCount({workers: canBakeOffThread, hardwareConcurrency: navigator.hardwareConcurrency, deviceMemory: (navigator as {deviceMemory?: number}).deviceMemory});
+  game.enhancedLighting.setBakeWorkers({count: bakeWorkers, unavailable: canBakeOffThread ? 'the bake workers are switched off (?bakeworkers=0)' : 'this browser has no Workers', spawn: () => new LightBakeWorker({name: 'light-bake'})});
 
   // --- settings (lane MENU): ONE persisted store for the menu, the pause menu and the game ---
   const settings = new SettingsStore(browserSettingsStorage());

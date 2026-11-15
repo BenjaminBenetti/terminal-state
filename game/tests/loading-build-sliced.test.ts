@@ -193,6 +193,59 @@ describe('the loading screen builds the station in time slices (Game.buildSectio
     expect(log.filter(l => l.startsWith('save:'))).toEqual([]);
   });
 
+  // (task studio-gi-mood-bounce-loading-20261115-081523-01, lane WORKERS: the lighting bake may wait for its workers — the build
+  // yields a wait and the drain parks; tests/light-bake-workers.test.ts has the real bake)
+  it('a build that waits for work done off the thread: the frames stay held while it waits, and the warm-up still starts only after the build\'s last step', async () => {
+    let release!: () => void, parked = false;
+    const gate = new Promise<void>(r => { release = r; });
+    const {g, log, drive, held, stats, clock} = shell(function* (self, k, lg, clk) {
+      for (let i = 0; i < 10; i++) { clk.t += 1; yield; }
+      parked = true;
+      yield {wait: gate};
+      lg.push('after the wait');
+      for (let i = 0; i < 10; i++) { clk.t += 1; yield; }
+      (self as {buildSection(k: SectionKey): void}).buildSection(k);
+    });
+    const p = g.continueCampaign(1);
+    for (let i = 0; i < 500 && !parked; i++) await new Promise<void>(r => setTimeout(r, 0));
+    expect(parked).toBe(true);
+    await new Promise<void>(r => setTimeout(r, 30));
+    expect(held()).toBe(true);
+    expect(log).not.toContain('after the wait');
+    g.frame(clock.t); // a frame goes by while the build waits: held, nothing updated or drawn
+    expect(log.slice(-2)).toEqual(['frame', 'frame:held']);
+    expect(log.filter(l => /^(DRAW|UPDATE|warm-up|ready|enterPlay)/.test(l))).toEqual([]);
+    release();
+    expect(await drive(p)).toEqual({ok: true});
+    const main = log.filter(l => !/^(stage|done|meter|turn|frame)/.test(l));
+    expect(main).toEqual(['prepare:st-00', 'leave:false', 'after the wait', 'build:st-00', 'warm-up:hold=false', 'ready', 'enterPlay']);
+    expect([stats().parks, stats().workMs]).toEqual([1, 20]); // (the wait is not this thread's work)
+    expect(g.genMs).toBe(20);
+    expect(held()).toBe(false);
+  });
+
+  it('a station replaced while the build waits abandons it there: generator closed (what it waited for is stopped by its finally), hold released, no warm-up, no play, no save', async () => {
+    let closed = false, parked = false;
+    const {g, s, log, drive, held, stats} = shell(function* (_self, _k, lg, clk) {
+      try {
+        for (let i = 0; i < 10; i++) { clk.t += 1; yield; }
+        parked = true;
+        yield {wait: new Promise<void>(() => {})}; // (work elsewhere that never answers)
+        lg.push('unreachable end');
+      } finally { closed = true; }
+    });
+    const p = g.continueCampaign(1);
+    for (let i = 0; i < 500 && !parked; i++) await new Promise<void>(r => setTimeout(r, 0));
+    expect([parked, closed, held()]).toEqual([true, false, true]);
+    s.stationGen = (s.stationGen as number) + 1; // a teardown
+    expect(await drive(p)).toEqual({ok: false, error: 'The load was interrupted.'});
+    expect(closed).toBe(true);
+    expect(held()).toBe(false);
+    expect(stats().parks).toBe(1);
+    for (const never of ['unreachable end', 'warm-up:hold=false', 'warm-up:hold=true', 'ready', 'enterPlay', 'meter:build:1.0000']) expect(log, never).not.toContain(never);
+    expect(log.filter(l => l.startsWith('save:'))).toEqual([]);
+  });
+
   it('a build error propagates out of the load as the synchronous build\'s did; the hold is released', async () => {
     const {g, log, drive, held} = shell(function* (_s, _k, _l, clock) { for (let i = 0; i < 90; i++) { clock.t += 1; yield; } throw new Error('builder failed'); });
     await expect(drive(g.continueCampaign(1))).rejects.toThrow('builder failed');
@@ -226,7 +279,7 @@ describe('the loading screen builds the station in time slices (Game.buildSectio
     }
     const sliced = SRC.slice(SRC.indexOf('  private async buildSectionSliced('), SRC.indexOf('  /** True while the loading screen\'s station build runs'));
     expect(sliced).toContain('this.buildHold = true;');
-    expect(sliced).toMatch(/await runSliced\(stageLabels\(this\.buildSectionSteps\(key, layout, arrival, fresh\), started\), \{\.\.\.this\.slicePacing, stats, alive: \(\) => gen === this\.stationGen\}\);/);
+    expect(sliced).toMatch(/await runSliced\(stageLabels\(this\.buildSectionSteps\(key, layout, arrival, fresh, true\), started\), \{\.\.\.this\.slicePacing, stats, alive: \(\) => gen === this\.stationGen\}\);/);
     expect(sliced).toMatch(/\} finally \{\s*this\.buildHold = false;\s*\}/);
     expect(sliced).not.toMatch(/label\.textContent/);
     expect(SRC).toContain('if (this.warming || this.buildHold) { this.input.endFrame(); return; }');
