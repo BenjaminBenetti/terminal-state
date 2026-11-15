@@ -128,6 +128,8 @@ export function installQaHooks(game: Game): void {
         // Task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): enhanced lighting's status — what was asked, what the
         // live station was really built with (bake tier, reflections, reasons, cache use), a pending change, the cache backend.
         enhancedLighting: game.enhancedLighting.status(),
+        // task baked-gi-visual-uplift-20261115-004324 (lane MIRROR): the live glass mirror (null: the station is not lit with it)
+        glassMirror: game.glassMirror?.debug() ?? null,
         layout: game.layout && {areas: game.layout.areas.map(a => ({kind: a.kind, type: a.type, x: a.x, y: a.y, w: a.w, h: a.h})), doors: game.layout.doors.length, props: game.layout.props.length, lights: game.layout.lights.length,
           // Iteration 04 (Lane B): macro archetype + storefront bays (name, use, hall wall, shutter, unit area) for the layout-variety check.
           archetype: game.layout.archetype, tracks: game.layout.trenches.reduce((n, t) => n + t.tracks.length, 0),
@@ -487,7 +489,7 @@ export function installQaHooks(game: Game): void {
      */
     lighting: async () => {
       const status = game.enhancedLighting.status();
-      return {status, line: enhancedLightingLine(status), cache: await game.enhancedLighting.cacheStats()};
+      return {status, line: enhancedLightingLine(status), cache: await game.enhancedLighting.cacheStats(), mirror: game.glassMirror?.debug() ?? null}; // (lane MIRROR: + mirror)
     },
     /**
      * Iteration 13 (FOG): the world haze at (x, y, z) — sigma (1/m), patch / wisp values, area multiplier, level slot — at the

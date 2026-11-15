@@ -35,6 +35,7 @@ import {CELL} from '../gen/grid';
 import {refreshTextureBindings} from '../render/bindingRefresh';
 import {fetchTexel, plainTexture} from '../render/textureFetch';
 import {reflectTagOf, type ReflectClass} from '../render/reflectTag';
+import {glassMirrorSample} from '../render/glassMirror'; // (lane MIRROR, task baked-gi-visual-uplift-20261115-004324)
 
 // TSL nodes are chained untyped here (three's TSL typings reject most mixed-type chains).
 type N = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -275,16 +276,26 @@ export const WINDOW_REACH = 1;
 /** The station light field WITH reflection probes as a scene light (see module doc). */
 export class LightFieldReflectLight extends LightFieldLight {
   readonly isLightFieldReflectLight = true;
-  constructor() {
+  /**
+   * (lane MIRROR, task baked-gi-visual-uplift-20261115-004324) `mirror`: glass under this light also reads the live glass mirror
+   * (render/glassMirror.ts). A second light, not a flag on the first: the choice is made where a program is built, and a light's
+   * id is in three's program key — a station lit with the mirror light never shares a glass program with one lit without.
+   */
+  constructor(readonly mirror = false) {
     super();
     (this as {type: string}).type = 'LightFieldReflectLight';
-    this.name = 'light-field-reflect';
+    this.name = mirror ? 'light-field-reflect-mirror' : 'light-field-reflect';
   }
 }
 
 let shared: LightFieldReflectLight | null = null;
-/** The single session-wide reflecting field light (stable id => stable light set across stations that use it). */
-export function stationReflectLight(): LightFieldReflectLight {
+let sharedMirror: LightFieldReflectLight | null = null; // (lane MIRROR)
+/**
+ * The single session-wide reflecting field light (stable id => stable light set across stations that use it). `mirror` (lane
+ * MIRROR): the session's one reflecting light whose glass also reads the live glass mirror.
+ */
+export function stationReflectLight(mirror = false): LightFieldReflectLight {
+  if (mirror) return (sharedMirror ??= new LightFieldReflectLight(true));
   return (shared ??= new LightFieldReflectLight());
 }
 
@@ -307,7 +318,14 @@ export class LightFieldReflectNode extends LightFieldNode {
     // three's own environment lookup direction: the mirror direction, pulled toward the normal as the surface gets rough
     const dir = n(mix(reflectView, normalView, pow4(rough))).normalize().transformDirection(cameraWorldMatrix);
     const rad = n(vec3(0, 0, 0)).toVar();
-    if (cls === 'glass') {
+    if (cls === 'glass' && (this as unknown as {light?: {mirror?: boolean}}).light?.mirror === true) {
+      // (lane MIRROR, task baked-gi-visual-uplift-20261115-004324) under the mirror light: the live glass mirror where this
+      // fragment lies on the plane it shows (m.a: how much), the probes everywhere else — and no probe lookup under a full mirror
+      const m = n(glassMirrorSample(positionWorld)).toVar();
+      const pr = n(vec3(0, 0, 0)).toVar();
+      If(n(m.a).lessThan(0.996), () => { pr.assign(probeRadiance(s, dir, rough)); });
+      rad.assign(n(mix(pr, m.rgb, m.a)).div(clamp(materialOpacity, 0.25, 1)));
+    } else if (cls === 'glass') {
       // a see-through pane: its reflection is not dimmed by how much it lets through (the blend multiplies by the opacity)
       rad.assign(n(probeRadiance(s, dir, rough)).div(clamp(materialOpacity, 0.25, 1)));
     } else if (cls === 'window') {

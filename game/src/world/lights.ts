@@ -121,6 +121,12 @@ export interface StationLightingOptions {
    * game's enhanced lighting makes or reads them: world/enhancedLightingRuntime.ts). Absent / null / none in it: no reflections.
    */
   probes?: BakedProbes | null;
+  /**
+   * (lane MIRROR, task baked-gi-visual-uplift-20261115-004324) with probes: light the station with the reflecting light whose glass
+   * also reads the live glass mirror (render/glassMirror.ts; world/reflectionNode.ts stationReflectLight(true)). Decided here, where
+   * the light is chosen: a change goes through a relight and its warm-up like every other lighting change.
+   */
+  mirror?: boolean;
 }
 
 /** The light field source of a station (StationLighting's bake input). */
@@ -336,7 +342,7 @@ export class StationLighting {
       : Math.max(p.gridW, p.gridH, p.gridDepth) > max ? `the probe grid (${p.gridW} x ${p.gridH}) is larger than this renderer's 3D textures (${max})`
         : !installReflectNode(opts.renderer) ? 'the renderer has no node library' : null;
     this.reflections = p && p.count > 0 && !this.reflectionsSkipped ? new ReflectionProbeVolume(p) : null;
-    this.fieldLight = this.reflections ? stationReflectLight() : stationFieldLight();
+    this.fieldLight = this.reflections ? stationReflectLight(!!opts.mirror) : stationFieldLight(); // (lane MIRROR: opts.mirror)
     scene.add(this.fieldLight);
     bindLightField(this.volume);
     bindReflectionProbes(this.reflections);
@@ -440,7 +446,7 @@ export class StationLighting {
    */
   private reinstate(): void {
     const scene = this.scene;
-    for (const l of [stationFieldLight(), stationReflectLight()]) if (l !== this.fieldLight && l.parent === scene) scene.remove(l);
+    for (const l of [stationFieldLight(), stationReflectLight(), stationReflectLight(true)]) if (l !== this.fieldLight && l.parent === scene) scene.remove(l); // (lane MIRROR: + the mirror light)
     if (this.fieldLight.parent !== scene) scene.add(this.fieldLight);
     for (const c of [...scene.children]) {
       if (c.name !== 'light-glow' || c === this.glow) continue;
