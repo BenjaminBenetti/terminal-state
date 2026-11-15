@@ -26,7 +26,7 @@ import {
   type LightingCapabilities, type ReflectionTier,
 } from './enhancedLighting';
 import {MAX_GROUPS, MAX_SLOTS, bakeLightFieldSteps, fieldDepth, giDepth, type BakedField, type ColumnGeometry, type FieldParams, type FieldSource} from './lightField';
-import {GATHER_GAIN, GATHER_REACH, GATHER_SATURATION, IND_STRIDE, gatherIndirectSteps, indirectIndex, rowBits, rowValue, type IndirectContext, type IndirectLight} from './lightFieldGather';
+import {GATHER_REACH, GATHER_TUNING, IND_STRIDE, gatherIndirectSteps, indirectIndex, rowBits, rowValue, type IndirectContext, type IndirectLight} from './lightFieldGather';
 import {BandScene} from './lightScene';
 import {
   PROBE_FIXTURE_RADIANCE, PROBE_LEVEL_SIGMA, PROBE_NORM_MIN, PROBE_REACH, bakeReflectionProbesSteps, probeBytes, type BakedProbes, type ProbeAtlasLayout,
@@ -345,7 +345,7 @@ export class EnhancedLightingRuntime {
       }
       hook.use = g ? 'stale' : 'miss';
       const scene = new BandScene(ctx.W, ctx.H, ctx.geos);
-      const ind = yield* gatherIndirectSteps(ctx, {rays: gi.rays, bounces: gi.bounces, stride: gi.stride, reach: GATHER_REACH, gain: GATHER_GAIN, saturation: GATHER_SATURATION, albedo, scene});
+      const ind = yield* gatherIndirectSteps(ctx, {rays: gi.rays, bounces: gi.bounces, stride: gi.stride, reach: GATHER_REACH, gain: GATHER_TUNING.gain, saturation: GATHER_TUNING.saturation, ...(GATHER_TUNING.lift > 0 ? {response: {lift: GATHER_TUNING.lift, ceiling: GATHER_TUNING.ceiling}} : {}), albedo, scene});
       timings.giMs = ind.stats.ms;
       hook.got = {geos: ctx.geos, albedo, scene, digest, rows: ind.data, stats: ind.stats};
       return ind;
@@ -464,7 +464,7 @@ export async function layoutAddress(input: StationBakeInput, now: () => number =
 /** The digest of everything the gather reads: its options, the columns, the direct light the bake just made, the surface colours. */
 function* gatherDigestSteps(ctx: IndirectContext, albedo: SurfaceAlbedo, gi: GiTier): BuildSteps<string> {
   const h = new ContentHasher().str('terminal-state.lighting.gather').num(DERIVED_LIGHTING_VERSIONS.gather)
-    .num(gi.rays, gi.stride, gi.bounces, GATHER_REACH, GATHER_GAIN, GATHER_SATURATION, ctx.scatter, ctx.W, ctx.H, ctx.geos.length).num(...ctx.layers);
+    .num(gi.rays, gi.stride, gi.bounces, GATHER_REACH, GATHER_TUNING.gain, GATHER_TUNING.saturation, GATHER_TUNING.lift, GATHER_TUNING.ceiling, ctx.scatter, ctx.W, ctx.H, ctx.geos.length).num(...ctx.layers);
   for (let s = 0; s < ctx.geos.length; s++) {
     const g = ctx.geos[s];
     h.num(g.yMin, g.yMax).view(g.open).view(g.floorH).view(g.ceilH).view(g.layerY);
