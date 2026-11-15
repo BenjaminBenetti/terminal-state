@@ -335,7 +335,7 @@ export interface GolfBay {
 export interface HallPlan { bays: GolfBay[]; aisles: GRect[]; alongX: boolean; rows: number; depth: number }
 
 /** Walking aisles: the promenade between rows, end aisles where openings are, gaps in a row in front of an opening (m). */
-export const GOLF_AISLES = {wall: 0.45, promenade: 2.0, end: 2.0, gap: 0.8, between: 1.2, minBay: 3.4, maxBay: 7.0, maxDepth: 7.5} as const;
+export const GOLF_AISLES = {wall: 0.45, promenade: 2.0, end: 2.0, gap: 1.3, between: 1.2, minBay: 3.4, maxBay: 7.0, maxDepth: 7.5} as const;
 
 export function planHall(hall: GRect, openings: readonly HallOpening[]): HallPlan {
   const A = GOLF_AISLES, alongX = hall.x1 - hall.x0 >= hall.z1 - hall.z0;
@@ -343,7 +343,8 @@ export function planHall(hall: GRect, openings: readonly HallOpening[]): HallPla
   const endLo: Side = alongX ? 'W' : 'N', endHi: Side = alongX ? 'E' : 'S', longLo: Side = alongX ? 'N' : 'W', longHi: Side = alongX ? 'S' : 'E';
   const along = (o: HallOpening) => (alongX ? o.x : o.z);
   const rows = Math.max(1, Math.min(3, Math.floor((B - 2 * A.wall + A.promenade) / (A.minBay + 0.6 + A.promenade))));
-  const band = (B - 2 * A.wall - (rows - 1) * A.promenade) / rows, depth = Math.min(A.maxDepth, band);
+  // (one row: the promenade runs past its tee end on the high side)
+  const band = (B - 2 * A.wall - Math.max(1, rows - 1) * A.promenade) / rows, depth = Math.min(A.maxDepth, band);
   const aisles: GRect[] = [];
   const toWorld = (pa0: number, pb0: number, pa1: number, pb1: number): GRect => alongX ? R(pa0, pb0, pa1, pb1) : R(pb0, pa0, pb1, pa1);
   // end aisles
@@ -355,7 +356,7 @@ export function planHall(hall: GRect, openings: readonly HallOpening[]): HallPla
   for (let k = 0; k < rows; k++) {
     const s0 = b0 + A.wall + k * (band + A.promenade), s1 = s0 + band;
     // the tee end faces the promenade (row 0: its high side; the last row: its low side; a middle row: its low side)
-    const teeSide: -1 | 1 = k === 0 && rows > 1 ? 1 : -1;
+    const teeSide: -1 | 1 = k === 0 ? 1 : -1;
     const bLo = teeSide > 0 ? s1 - depth : s0, bHi = teeSide > 0 ? s1 : s0 + depth;
     if (k > 0) aisles.push(toWorld(a0, s0 - A.promenade, a1, s0));
     // gaps in front of the openings in the row's own wall (row 0: the low long wall; the last row: the high long wall)
@@ -371,8 +372,8 @@ export function planHall(hall: GRect, openings: readonly HallOpening[]): HallPla
   }
   // bay widths: aim for 6-9 holes (wider bays when more would fit)
   const count = (target: number) => rowSpans.reduce((n, r) => n + r.free.reduce((m, [f0, f1]) => m + Math.max(0, Math.floor((f1 - f0 + A.between) / (target + A.between))), 0), 0);
-  let target = 5.2;
-  if (count(target) < 6) for (const t of [4.8, 4.4, 4.0, 3.7, A.minBay]) { target = t; if (count(t) >= 6) break; }
+  let target = 4.4;
+  if (count(target) < 6) for (const t of [4.0, 3.7, A.minBay]) { target = t; if (count(t) >= 6) break; }
   else while (count(target) > 9 && target < 12) target += 0.3;
   for (const r of rowSpans) for (const [f0, f1] of r.free) {
     const n = Math.max(0, Math.floor((f1 - f0 + A.between) / (target + A.between)));
@@ -384,7 +385,7 @@ export function planHall(hall: GRect, openings: readonly HallOpening[]): HallPla
     }
   }
   // the promenade between rows also runs past a single row's tee end
-  if (rows === 1) aisles.push(toWorld(a0, b1 - A.wall - A.promenade, a1, b1 - A.wall));
+  if (rows === 1) aisles.push(toWorld(a0, b0 + A.wall + band, a1, b0 + A.wall + band + A.promenade));
   return {bays, aisles, alongX, rows, depth};
 }
 
