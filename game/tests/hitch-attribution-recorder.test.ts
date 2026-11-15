@@ -244,9 +244,12 @@ describe('flashlight flags (frames.flagBits torchLit / torchShadow)', () => {
 
 describe('shot / hit spans (debug/updateProfile.ts)', () => {
   it('appended after the hook slots: every earlier id unchanged; names and parents as nested', () => {
-    expect([S.weapon, S.ai, S.path, S.hook0, S.fire, S.alert, SPAN_COUNT]).toEqual([3, 5, 24, 27, 35, 44, 45]);
-    expect(NAMES.slice(35)).toEqual(['weapon.fire', 'weapon.melee', 'fire.fx', 'fire.rays', 'hit.world', 'hit.zombie', 'hit.tearChunk', 'hit.extractPatch', 'hit.ragdoll', 'hit.alert']);
+    expect([S.weapon, S.ai, S.path, S.hook0, S.fire, S.alert]).toEqual([3, 5, 24, 27, 35, 44]);
+    expect(NAMES.slice(35, S.alert + 1)).toEqual(['weapon.fire', 'weapon.melee', 'fire.fx', 'fire.rays', 'hit.world', 'hit.zombie', 'hit.tearChunk', 'hit.extractPatch', 'hit.ragdoll', 'hit.alert']);
     const parent = (id: number) => (PARENT[id] >= 0 ? NAMES[PARENT[id]] : null);
+    // (task studio-baked-gi-visual-uplift-20261115-004324-01: one more span appended after the hit spans — the live glass mirror's own
+    // scene draw, nested in 'render.draw' and not in 'weapon'; every earlier id is unchanged, and it is the last one)
+    expect([S.mirror, SPAN_COUNT, NAMES[S.mirror], parent(S.mirror), isHookSpan(S.mirror)]).toEqual([45, 46, 'render.mirror', 'render.draw', false]);
     expect([S.fire, S.melee, S.fireFx, S.fireRays, S.hitWorld, S.hitZombie, S.tearChunk, S.extractPatch, S.ragdoll, S.alert].map(parent))
       .toEqual(['weapon', 'weapon', 'weapon.fire', 'weapon.fire', 'weapon.fire', 'weapon', 'hit.zombie', 'hit.tearChunk', 'weapon', 'weapon']);
     expect([isHookSpan(27), isHookSpan(34), isHookSpan(35)]).toEqual([true, true, false]);
