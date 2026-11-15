@@ -17,8 +17,11 @@ import {
   GLASS_MIRROR, GLASS_MIRROR_CAPS, GLASS_MIRROR_TUNING, GM, GlassMirror, PaneCamera, clipPane, glassMirrorSample, isGlassMirrorPlaceholder, mirrorAlpha, mirrorCameraPose,
   mirrorFace, mirrorUv, mirrorWindow, type MirrorFace, type MirrorRenderer, type MirrorScenePass, type MirrorWindow, type PaneView,
 } from '../src/render/glassMirror';
-import {GlassPane, type GlassPlane} from '../src/world/glassPanes';
+import {GlassPane, collectGlassPlanes, type GlassPlane} from '../src/world/glassPanes';
 import type {PropPlacement} from '../src/gen/props';
+import type {StationLayout} from '../src/gen/station';
+import {levelsOf} from '../src/gen/levels';
+import {LEVELS} from '../src/levels/registry';
 import {tagReflect} from '../src/render/reflectTag';
 import {bindingRefreshStats} from '../src/render/bindingRefresh';
 import {installLightFieldNode} from '../src/world/lightFieldNode';
@@ -616,6 +619,96 @@ describe('selection', () => {
     gm2.setPlanes(null);
     expect(gm2.select(cam)).toBeNull();
     expect(gm2.debug().planes).toBe(0);
+  });
+
+  // Task studio-baked-gi-visual-uplift-20261115-004324-01: the sight probes stand GLASS_MIRROR.probe in front of the glass and, when
+  // none of those is seen, GLASS_MIRROR.standoff (just past a grid cell).
+  it('sight: a second ring of probes a cell out finds glass that stands in sight-blocking cells; a pane behind a wall is seen from neither ring', () => {
+    expect(GLASS_MIRROR.standoff).toBeGreaterThan(0.5); // (past one 0.5 m grid cell)
+    expect(GLASS_MIRROR.probe).toBeLessThan(0.2);
+    // a pane at z = 0 seen from z = 3; `wall`: nothing is seen across the plane z = wall (a sight test of the test's own)
+    const A = plane('z', 0, -3, 3, 0.3, 2.3, {id: 'A'});
+    const cam = eyeCam([0, 1.6, 3], [0, 1.5, 0]);
+    let wall = NaN;
+    const calls: {z: number; seen: boolean}[] = [];
+    const gm = new GlassMirror({scenePass: pass, sight: (_ax, _ay, az, _bx, _by, bz) => { const seen = !((az - wall) * (bz - wall) < 0); calls.push({z: bz, seen}); return seen; }});
+    gm.setPlanes([A]);
+    const ring1 = A.half + GLASS_MIRROR.probe, ring2 = A.half + GLASS_MIRROR.standoff;
+    const look = (): GlassPlane | null => { calls.length = 0; return gm.select(cam); };
+    // nothing in the way: the first probe sees it — one call, in the first ring
+    expect(look()).toBe(A);
+    expect(calls.map(c => [+c.z.toFixed(6), c.seen])).toEqual([[+ring1.toFixed(6), true]]);
+    // the glass stands in cells that block sight up to 0.3 m in front of it (a booth's own footprint): the first ring's three
+    // probes are blocked, the second ring's first one is seen
+    wall = 0.3;
+    expect(look()).toBe(A);
+    expect(calls.map(c => [+c.z.toFixed(6), c.seen])).toEqual([[+ring1.toFixed(6), false], [+ring1.toFixed(6), false], [+ring1.toFixed(6), false], [+ring2.toFixed(6), true]]);
+    // a wall a metre in front of the pane: both rings are behind it — three probes each, none seen, no mirror
+    wall = 1;
+    expect(look()).toBeNull();
+    expect(calls.map(c => [+c.z.toFixed(6), c.seen])).toEqual([...Array(3).fill([+ring1.toFixed(6), false]), ...Array(3).fill([+ring2.toFixed(6), false])]);
+    // an eye closer to the glass than the second ring stands: that ring is 0.9 of the eye's distance, never behind the eye
+    const close = eyeCam([0, 1.6, 0.4], [0, 1.5, 0]);
+    wall = 0.2;
+    calls.length = 0;
+    expect(gm.select(close)).toBe(A);
+    expect(calls.length).toBe(4);
+    expect(calls[3].seen).toBe(true);
+    expect(calls[3].z).toBeGreaterThan(wall);
+    expect(calls[3].z).toBeLessThan(0.4);
+    expect(calls[3].z).toBeCloseTo(A.half + (0.4 - A.half) * 0.9, 9);
+  });
+
+  it('sight on the real Subway (seed 93, the game\'s own line of sight): the ticket booth\'s panes are seen through the second ring; glass with both rings blocked is never picked', () => {
+    const L = LEVELS.subway.generate('main', {levelSeed: 93}) as StationLayout, levels = levelsOf(L);
+    const a = {x: 0, y: 0, z: 0}, b = {x: 0, y: 0, z: 0};
+    const calls: {x: number; z: number; seen: boolean}[] = [];
+    // (as Game.syncGlassMirror wires it)
+    const sight = (ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean => {
+      a.x = ax; a.y = ay; a.z = az; b.x = bx; b.y = by; b.z = bz;
+      const seen = levels.lineOfSight(a, b);
+      calls.push({x: bx, z: bz, seen});
+      return seen;
+    };
+    const planes = collectGlassPlanes(L);
+    const gm = new GlassMirror({scenePass: pass, sight});
+    gm.setPlanes(planes);
+    // standing beside the booth, looking at its side pane
+    const eye: [number, number, number] = [249.43, 1.62, 22.9];
+    const got = gm.select(eyeCam(eye, [246.13, 1.5, 24]));
+    expect(got).not.toBeNull();
+    expect([got!.axis, +got!.coord.toFixed(1), got!.panes.every(p => p.source === 'booth')]).toEqual(['x', 247.2, true]);
+    // its probes: the three of the first ring stand in the booth's own footprint cells and are blocked; the second ring is seen
+    const side = eye[0] >= got!.coord ? 1 : -1;
+    const at = (off: number) => calls.filter(c => Math.abs(c.x - (got!.coord + side * (got!.half + off))) < 1e-9);
+    expect(at(GLASS_MIRROR.probe).map(c => c.seen)).toEqual([false, false, false]);
+    expect(at(GLASS_MIRROR.standoff).some(c => c.seen)).toBe(true);
+
+    // every plane of the main level, from eyes around it (on clear floor, looking at its middle): it is picked only when one of its
+    // probes is seen, and when all six are blocked (a wall in between) it never is
+    let picked = 0, viaSecond = 0, blocked = 0, views = 0;
+    for (const P of planes) {
+      if (P.slot !== 0) continue;
+      const one = new GlassMirror({scenePass: pass, sight});
+      one.setPlanes([P]);
+      const um = (P.u0 + P.u1) / 2, ym = (P.y0 + P.y1) / 2;
+      for (const d of [-9, -6, -3.5, -2, 2, 3.5, 6, 9]) for (const s of [-7, -3.5, 0, 3.5, 7]) {
+        const c = P.coord + d, u = um + s, x = P.axis === 'x' ? c : u, z = P.axis === 'x' ? u : c;
+        if (!(x > 1 && z > 1 && x < L.grid.w * 0.5 - 1 && z < L.grid.h * 0.5 - 1) || !L.grid.circleClear(x, z, 0.3)) continue;
+        const floor = L.grid.floorAt(x, z);
+        if (!(Math.abs(floor) < 0.2)) continue; // (the concourse floor, not a track bed)
+        calls.length = 0;
+        const sel = one.select(eyeCam([x, floor + 1.62, z], P.axis === 'x' ? [P.coord, ym, um] : [um, ym, P.coord]));
+        views++;
+        const seen = calls.some(q => q.seen);
+        if (sel) { picked++; expect(sel).toBe(P); expect(seen, `${P.id} from ${x.toFixed(1)}, ${z.toFixed(1)}`).toBe(true); if (calls.length > 3) viaSecond++; }
+        else if (calls.length > 0) { expect(seen).toBe(false); expect(calls.length, 'both rings were tried').toBe(6); blocked++; }
+      }
+    }
+    console.log(`glass-mirror sight, Subway 93: ${planes.length} planes, ${views} views, ${picked} picked (${viaSecond} through the second ring), ${blocked} with both rings blocked`);
+    expect(picked).toBeGreaterThan(20);
+    expect(viaSecond).toBeGreaterThan(0);
+    expect(blocked).toBeGreaterThan(0);
   });
 
   it('a sliver of glass at the screen edge is not worth a mirror; selection allocates nothing', () => {

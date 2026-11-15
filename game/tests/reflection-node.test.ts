@@ -20,9 +20,10 @@ import {renderGroup, uniform} from 'three/tsl';
 import {FULL_RADIANCE, LF, LightFieldLight, LightFieldNode, installLightFieldNode, stationFieldLight, stationLights} from '../src/world/lightFieldNode';
 import {
   LightFieldReflectLight, LightFieldReflectNode, REFL, REFLECTION_TUNING, ReflectionProbeVolume, activeReflectionProbes, bindReflectionProbes, installReflectNode,
-  GLOSS_ROUGHNESS_FULL, GLOSS_ROUGHNESS_NONE, REFLECT_METALNESS_MIN, REFLECT_ROUGHNESS_MAX, WINDOW_REACH, glossWeight, reflectClass, reflectLookup, sampleProbeLevel, sampleProbes, stationReflectLight,
-  syncReflectionTuning,
+  GLASS_PANE_F0, GLOSS_ROUGHNESS_FULL, GLOSS_ROUGHNESS_NONE, REFLECT_METALNESS_MIN, REFLECT_ROUGHNESS_MAX, WINDOW_REACH, glossWeight, paneBoost, reflectClass, reflectLookup, sampleProbeLevel,
+  sampleProbes, stationReflectLight, syncReflectionTuning,
 } from '../src/world/reflectionNode';
+import {BUILTINS, runBlock, type Env, type Val} from './helpers/glslEval';
 import {GM} from '../src/render/glassMirror';
 import {FLASH_BOUNCE_SHEEN} from '../src/world/lights'; // (registers the flashlight bounce's sheen in FULL_RADIANCE)
 import {sampleField, withoutCube} from '../src/world/lightField';
@@ -338,6 +339,75 @@ describe('the reflecting field light', () => {
     expect(count(compile('wgsl', box(new MeshStandardNodeMaterial({metalness: 0.45, roughness: 0.4})), [stationReflectLight(true), new THREE.HemisphereLight()]), /sheenMark/g)).toBe(0);
   });
 
+  // Task studio-baked-gi-visual-uplift-20261115-004324-01: under the mirror light a glass pane reflects GLASS_PANE_F0 seen face-on
+  // (REFL.params.z), by the ratio of two Schlick curves.
+  it('the pane boost: the CPU formula\'s limits; the mirror light\'s glass program computes the same numbers; no other program has it', () => {
+    const schlick = (f0: number, cos: number) => f0 + (1 - f0) * (1 - cos) ** 5;
+    expect(REFLECTION_TUNING.paneF0).toBe(GLASS_PANE_F0);
+    expect(GLASS_PANE_F0).toBeGreaterThan(0.04); // (more than a bare glass face)
+    expect(GLASS_PANE_F0).toBeLessThan(1);
+    const P = GLASS_PANE_F0;
+    for (const f0 of [0.02, 0.04, 0.1, P * 0.9]) {
+      // face-on the pane reflects paneF0 (paneF0 / f0 times what the material would); at a grazing angle nothing is added
+      expect(paneBoost(f0, P, 1)).toBeCloseTo(P / f0, 12);
+      expect(schlick(f0, 1) * paneBoost(f0, P, 1)).toBeCloseTo(P, 12);
+      expect(paneBoost(f0, P, 0)).toBeCloseTo(1, 12);
+      let last = 1;
+      for (let c = 0; c <= 1.0001; c += 0.05) {
+        const cos = Math.min(1, c), b = paneBoost(f0, P, cos);
+        // the ratio of the two curves; never below 1, rising toward face-on; the boosted pane is the paneF0 curve
+        expect(b).toBeCloseTo(schlick(P, cos) / schlick(f0, cos), 12);
+        expect(b).toBeGreaterThanOrEqual(last - 1e-12);
+        expect(paneBoost(f0, P, -cos)).toBe(b); // (either side of the pane)
+        last = b;
+      }
+      expect(paneBoost(f0, P, 1.7)).toBe(paneBoost(f0, P, 1));
+    }
+    // a material that reflects more by itself is never lowered; no reflectance asked (nothing bound: params.z 0) changes nothing
+    for (const cos of [0, 0.3, 0.8, 1]) {
+      expect(paneBoost(0.6, P, cos)).toBe(1);
+      expect(paneBoost(0.04, 0, cos)).toBe(1);
+      expect(paneBoost(P, P, cos)).toBe(1);
+    }
+    // (a material with no specular colour at all is taken as 0.02: the boost stays finite)
+    expect(paneBoost(0, P, 1)).toBeCloseTo(P / 0.02, 12);
+
+    // the shader: its boost is a run of statements from the mean of the specular colour to the ratio — only in the glass program
+    // of a MIRROR light (with full shading or without); there it reads the pane reflectance from REFL.params (no uniform or
+    // texture of its own: glass-mirror.test.ts counts the bindings)
+    const BOOST = /dot\(\s*SpecularColor\s*,\s*vec3(?:<f32>)?\(\s*0\.3333/g;
+    const mats = {
+      wall: () => new MeshStandardNodeMaterial({metalness: 0, roughness: 0.8}),
+      steel: () => new MeshStandardNodeMaterial({metalness: 0.45, roughness: 0.4}),
+      glass: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'glass'),
+      window: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'window'),
+      tile: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0, roughness: 0.3}), 'gloss'),
+    };
+    for (const backend of ['wgsl', 'glsl'] as const) for (const full of [false, true]) for (const mirror of [false, true]) for (const [k, make] of Object.entries(mats)) {
+      const frag = compile(backend, box(make()), [stationReflectLight(full, mirror), new THREE.HemisphereLight()]);
+      expect(count(frag, BOOST), `${backend} ${k} under the ${full ? 'full ' : ''}${mirror ? 'mirror ' : ''}reflecting light`).toBe(mirror && k === 'glass' ? 1 : 0);
+    }
+    let checked = 0;
+    for (const full of [false, true]) {
+      const b = build('glsl', box(mats.glass()), [stationReflectLight(full, true), new THREE.HemisphereLight()]);
+      const params = b.uniforms.find(u => u.node === (REFL.params as unknown))?.name;
+      expect(params, 'the program reads REFL.params').toBeTruthy();
+      // the run of statements: "v = dot( SpecularColor, 1/3 )" ... "v = ( a / b )" (the first ratio after the fifth power)
+      const lines = b.frag.split('\n'), i0 = lines.findIndex(l => count(l, BOOST) > 0), iPow = lines.findIndex((l, i) => i > i0 && /=\s*pow\(\s*\w+\s*,\s*5\.0\s*\)/.test(l));
+      const i1 = lines.findIndex((l, i) => i > iPow && /^\s*\w+\s*=\s*\(\s*\w+\s*\/\s*\w+\s*\)\s*;/.test(l));
+      expect([i0 > 0, iPow > i0, i1 > iPow, i1 - i0 < 14]).toEqual([true, true, true, true]);
+      const code = lines.slice(i0, i1 + 1).join('\n'), out = /^\s*(\w+)\s*=/.exec(lines[i1])![1];
+      expect(code).toContain(`${params}.z`);
+      for (const spec of [[0.04, 0.04, 0.04], [0.1, 0.02, 0.06], [0, 0, 0], [0.7, 0.6, 0.8]]) for (const cos of [1, 0.8, 0.45, 0.1, 0, -0.6]) for (const z of [P, 0, 0.12, 0.9]) {
+        const env: Env = new Map<string, Val>([['SpecularColor', spec], ['normalView', [0, 0, 1]], ['positionViewDirection', [Math.sqrt(1 - cos * cos), 0, cos]], [params!, [1, 1, z, 0]]]);
+        const got = runBlock(code, env, BUILTINS, out) as number;
+        expect(got, `spec ${spec}, cos ${cos}, paneF0 ${z}`).toBeCloseTo(paneBoost((spec[0] + spec[1] + spec[2]) / 3, z, cos), 12);
+        checked++;
+      }
+    }
+    expect(checked).toBe(2 * 4 * 6 * 4);
+  });
+
   it('plain light: no probe texture in any material; reflecting light: only metal and glass get the probes, on both backends, inside the WebGPU limits', () => {
     const rows: string[] = [];
     const mats = {
@@ -481,6 +551,34 @@ describe('binding the probes', () => {
     }
     expect(glossWeight((GLOSS_ROUGHNESS_FULL + GLOSS_ROUGHNESS_NONE) / 2, true)).toBeCloseTo(0.5, 6);
     expect(GLOSS_ROUGHNESS_NONE).toBeGreaterThan(GLOSS_ROUGHNESS_FULL);
+  });
+  // Task studio-baked-gi-visual-uplift-20261115-004324-01
+  it('a pane\'s face-on reflectance (params.z) is the tuning value while probes are bound and 0 with none; syncReflectionTuning re-applies it', () => {
+    const v = new ReflectionProbeVolume(fakeProbes({colors: [[1, 1, 1]]}));
+    const none = new ReflectionProbeVolume({...fakeProbes({colors: [[1, 1, 1]]}), count: 0, meta: new Float32Array(12)});
+    try {
+      bindReflectionProbes(null);
+      expect(REFL.params.value.toArray()).toEqual([0, 0, 0, 0]);
+      bindReflectionProbes(v);
+      expect(REFL.params.value.toArray()).toEqual([1, 1, GLASS_PANE_F0, 0]);
+      REFLECTION_TUNING.paneF0 = 0.5; REFLECTION_TUNING.strength = 0.25;
+      expect(REFL.params.value.toArray(), 'a tuning value is applied by a sync or a bind').toEqual([1, 1, GLASS_PANE_F0, 0]);
+      syncReflectionTuning();
+      expect(REFL.params.value.toArray()).toEqual([0.25, 1, 0.5, 0]);
+      for (const off of [none, null]) {
+        bindReflectionProbes(off);
+        expect(REFL.params.value.toArray()).toEqual([0, 0, 0, 0]);
+        syncReflectionTuning(); // (no probes: nothing to apply to)
+        expect(REFL.params.value.toArray()).toEqual([0, 0, 0, 0]);
+      }
+      bindReflectionProbes(v); // a bind applies the tuning as it stands
+      expect(REFL.params.value.toArray()).toEqual([0.25, 1, 0.5, 0]);
+    } finally {
+      REFLECTION_TUNING.paneF0 = GLASS_PANE_F0; REFLECTION_TUNING.strength = 1;
+      bindReflectionProbes(null);
+      v.dispose(); none.dispose();
+    }
+    expect(REFL.params.value.toArray()).toEqual([0, 0, 0, 0]);
   });
 });
 
