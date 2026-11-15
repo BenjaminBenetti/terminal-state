@@ -40,3 +40,6 @@ export const GOLF_COURSE_NAMES = [
   'Skyline Putt Club', 'Fairway Fun Mini Golf', 'Hole in Fun', 'Par-Tee Palace', 'Lucky Putt Links', 'Tiny Links Mini Golf',
   'Up & Down Putt Course', 'Birdie Bay Mini Golf', 'Rooftop Putt Hall', 'Putter Pines', 'Ace Alley Mini Golf', 'Greenlight Putt Club',
 ] as const;
+
+/** (lane GOLF-COURSE) The birthday names on the party rooms' banners (fictional; the banner's variant). */
+export const GOLF_PARTY_NAMES = ['MAYA', 'OWEN', 'PRIYA', 'LIAM', 'ZOE', 'NOAH', 'AVA', 'ELI'] as const;

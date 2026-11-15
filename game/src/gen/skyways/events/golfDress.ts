@@ -34,14 +34,12 @@ import type {EventDressResult} from './eventResult';
 import {GOLF_BALL_ITEM, GOLF_CUP_R, GOLF_GREEN_H, GOLF_RAIL, GOLF_TIER_H, PUTTER_ITEM} from './golfContract';
 import {GOLF_TEE_MARGIN, bayFrame, bayOrder, buildHole, planHall, planHole, type BayFrame, type BuiltHole, type GolfBay, type GPt, type GRect, type HallOpening} from './golfCourse';
 import {GOLF_ARCH_MATS, GOLF_BANNER, GOLF_BLOCK_MATS, GOLF_CARD, GOLF_FLAG, GOLF_RACK, GOLF_RAIL_MATS, GOLF_TEE_MAT, GOLF_TEE_SIGN, GOLF_TINTS, golfCardVariant, golfSignVariant, type GolfKind} from './golfKinds';
-import {GOLF_COURSE_NAMES, type GolfDesign, type SkywaysGolfHole, type SkywaysGolfRecord} from './golfTypes';
+import {GOLF_COURSE_NAMES, GOLF_PARTY_NAMES, type GolfDesign, type SkywaysGolfHole, type SkywaysGolfRecord} from './golfTypes';
 
 /** The course's plates (deep fairway green, warm white letters, a gold accent). */
 export const GOLF_SIGN_STYLE = {bg: 0x1d5a33, fg: 0xfdfbef, accent: 0xf5c542, font: 'rounded'} as const;
 /** The front desk: its counter's distance off the wall (staff room behind it), its customer strip; the on-top spots (counter-local m). */
 export const GOLF_DESK = {offs: [0.75, 0.5], front: 1.2, putter: {len: 0.9, lz: 0.12}, balls: 3, ballPitch: 0.06, ballLz: 0.2, cardLz: -0.18} as const;
-/** The birthday names on the party banners (fictional; the banner's variant). */
-export const GOLF_PARTY_NAMES = ['MAYA', 'OWEN', 'PRIYA', 'LIAM', 'ZOE', 'NOAH', 'AVA', 'ELI'] as const;
 
 const SIDES: Side[] = ['N', 'S', 'W', 'E'];
 const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
