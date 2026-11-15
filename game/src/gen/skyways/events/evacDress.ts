@@ -58,7 +58,6 @@ export const EVAC_RATIONS = [2, 4] as const;
 export const EVAC_PURPOSE = {rations: 'stock-room', medical: 'first-aid-room'} as const;
 
 const SIDES: Side[] = ['N', 'S', 'W', 'E'];
-const DBG = (m: string) => { if ((globalThis as {EVAC_DEBUG?: boolean}).EVAC_DEBUG) console.log(m); }; // TEMP
 const MERCH = PROP_DEFS.skywaysConMerchTable;
 const inside = (p: Portal, d: number): [number, number] => [p.x + p.nx * d, p.z + p.nz * d];
 const sideLen = (a: Area, s: Side) => (s === 'N' || s === 'S' ? a.w : a.h) * CELL;
@@ -547,7 +546,7 @@ function quarantineCorner(S: Shelter, hall: Area): boolean {
   for (const R0 of cands) {
     const R = {x0: Math.max(R0.x0, hx0), z0: Math.max(R0.z0, hz0), x1: Math.min(R0.x1, hx1), z1: Math.min(R0.z1, hz1)};
     if (R.x1 - R.x0 < 4.0 || R.z1 - R.z0 < 3.5) continue;
-    if (portals.some(p => p.x > R.x0 - 1.6 && p.x < R.x1 + 1.6 && p.z > R.z0 - 1.6 && p.z < R.z1 + 1.6)) { DBG(`corner ${JSON.stringify(R)} portal`); continue; }
+    if (portals.some(p => p.x > R.x0 - 1.6 && p.x < R.x1 + 1.6 && p.z > R.z0 - 1.6 && p.z < R.z1 + 1.6)) continue;
     // the open sides (not on the hall's walls) get a barrier line 0.35 m inside the rect
     const open = {N: R.z0 > hz0 + 0.1, S: R.z1 < hz1 - 0.1, W: R.x0 > hx0 + 0.1, E: R.x1 < hx1 - 0.1};
     const sides = (Object.keys(open) as Side[]).filter(s => open[s]);
@@ -571,12 +570,10 @@ function quarantineCorner(S: Shelter, hall: Area): boolean {
           gapAt = ax ? {x: lo + (g0 + g1) / 2, z: at} : {x: at, z: lo + (g0 + g1) / 2};
         } else barricadeRun(S, hall, fr, 0.1, len - 0.1, 0, out);
       }
-      if (out.length < 3) { DBG(`corner ${JSON.stringify(R)} pieces ${out.length}`); return null; }
-      const ok = interiorFromHub(S, hall, hub, inner);
-      DBG(`corner ${JSON.stringify(R)} pieces ${out.length} reached ${ok}`);
-      return ok ? out : null;
+      if (out.length < 3) return null;
+      return interiorFromHub(S, hall, hub, inner) ? out : null;
     });
-    if (!items) { DBG('rejected by group'); continue; }
+    if (!items) continue;
     S.exclude.push(R);
     // abandoned cots inside, a trash bag pile; a dropped note
     for (let tr = 0, n = 0; tr < 30 && n < 3; tr++) {
@@ -668,9 +665,9 @@ function dormitory(S: Shelter, hall: Area): boolean {
   /** World (x, z) of a point `u` along the hall's long axis and `c` across it (absolute). */
   const P = (u: number, c: number): [number, number] => (alongX ? [u, c] : [c, u]);
   // (the aisles are reserved before anything else of the shelter: dormAisles)
-  // the supply drop in the stage box (unless the quarantine took the stage)
+  // the supply drop in the stage box (what of it the quarantine cordon left: the cordon's cells are reserved)
   const st = layout.skyways?.addon.stage;
-  if (st && !(S.rec.quarantine?.corner && overlaps(S.rec.quarantine.corner, st))) supplyDrop(S, hall, st);
+  if (st) supplyDrop(S, hall, st);
   // the cot rows, on whole cells (two cots 0.1 m head to head never share a cell: placeKit claims every cell a box enters by > 4 cm):
   // per side of the aisle, row pairs head to head — the inner row's feet toward the aisle — with a foot aisle between pairs
   const rows: {c: number; side: 1 | -1; face: 1 | -1}[] = []; // c = the cots' centre line across the hall; face +1 = feet toward the aisle
@@ -781,7 +778,6 @@ function overflowCots(S: Shelter, a: Area): number {
   return 0;
 }
 
-const overlaps = (a: Rect, b: Rect) => a.x0 < b.x1 && a.x1 > b.x0 && a.z0 < b.z1 && a.z1 > b.z0;
 
 /** The supply drop in the stage box: sealed carton pallets, a water cooler and a supply tote against the back wall. */
 function supplyDrop(S: Shelter, hall: Area, st: Rect): void {
