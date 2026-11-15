@@ -121,6 +121,7 @@ import {installReactorCoreLights} from './world/reactor/coreLights'; // task rea
 import {REACTOR_MODEL_FILES} from './world/reactor/archAssets'; // task reactor-build-20261101 (lane ARCH): the lead's Reactor GLB kit (level-only)
 import {WASTE_MODEL_FILES} from './world/reactor/wasteAssets'; // task reactor-expansion-20261101 (lane WASTE): the waste set of REACTOR_X_KIT (level-only)
 import {attributeInstancing, setAttributeInstancing} from './render/instancing'; // Task track3-eaton-centre-20261031 (lane PERF): shared instancing programs in the mall
+import {installSharedInstancing, setSharedInstancing, sharedInstancing} from './render/sharedInstancing'; // task studio-gi-mood-bounce-loading-20261115-081523-01 (lane LOAD): one node build per instanced material variant
 import {collectTextures, modelTextures, releaseModelTexturesAfterUpload, stageUploads, textureReleaseStats, trackUploads} from './assets/textureRelease'; // (lane PERF) mall: decoded images freed after upload, uploads staged
 import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
 import {bunkerGasSource} from './world/gas/zones'; // task studio-bunker-level-20261109-072224-01: the Bunker's local gas leaks (a gas zone world)
@@ -1064,6 +1065,10 @@ export class Game {
       installGlowLightNode(this.renderer); // task studio-reactor-glowing-zombies-20261115-013245-01: the irradiated zombies' gated, occluded glow lights
       installUploadDedupe(this.renderer); // task mall-horde-performance-20261105: no identical / split per-frame uniform uploads (WebGPU only)
       installBindingRefresh(this.renderer); // task studio-death-retry-render-fix-20261114-044607-01: a swapped shared texture (the station light field) reaches unchanged objects too
+      // Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane LOAD): the pools of one instanced material share ONE node build (three
+      // builds every InstancedMesh on its own: 903 of a Subway station's 1044 loading builds); `?instshare=off` = three's keyed builds
+      installSharedInstancing(this.renderer);
+      setSharedInstancing(true);
       this.overlay.target.samples = this.renderer.samples; // 0 in WebGPU compatibility mode
       console.info(`Terminal State: ${gpu.label}${gpu.adapter ? ` · ${[gpu.adapter.vendor, gpu.adapter.architecture, gpu.adapter.description].filter(Boolean).join(' ')}` : gpu.glRenderer ? ` · ${gpu.glRenderer}` : ''}`);
       return gpu;
@@ -1293,7 +1298,7 @@ export class Game {
       library: {...this.propModels.stats},
       levelResources: {summary: this.levelResources.summary(), stats: {...this.levelResources.stats}},
       // Task track3-eaton-centre-20261031 (lane PERF): mall lazy-model decoded images released after upload; shared instancing programs
-      perf: {cpuCopies: {...textureReleaseStats}, attributeInstancing: attributeInstancing()}};
+      perf: {cpuCopies: {...textureReleaseStats}, attributeInstancing: attributeInstancing(), sharedInstancing: sharedInstancing()}};
   }
 
   /**
@@ -2771,6 +2776,11 @@ export class Game {
     if (quality) quality.disabled = qualityWas;
     console.info(`Terminal State: graphics warm-up ${res.status}${res.reason ? ` (${res.reason})` : ''} · ${res.mode} · ${(res.ms / 1000).toFixed(1)} s · `
       + `materials ${st.materials.done}/${st.materials.total} · passes ${st.passes.done}/${st.passes.total} · shadow frames ${st.shadows.done}/${st.shadows.total}`);
+    // Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane LOAD): where the materials stage's time went (JavaScript node builds
+    // vs waiting for the GPU process's pipelines vs yields) — wall times of this page, for a player's own capture
+    const cs = res.compile, sec = (ms: number | null) => (ms === null ? 'n/a' : `${(ms / 1000).toFixed(1)} s`);
+    console.info(`Terminal State: warm-up materials ${sec(st.materials.ms)} · ${cs.builds ?? 'n/a'} node builds ${sec(cs.buildMs)} · ${cs.pipelines ?? 'n/a'} async pipelines waited ${sec(cs.pipelineWaitMs)} · `
+      + `yield ${cs.yield}${cs.yields === null ? '' : ` x${cs.yields} waited ${sec(cs.yieldWaitMs)}`} · shadow frames ${sec(st.shadows.ms)} · shared instancing ${sharedInstancing() ? 'on' : 'off'}`);
     return res;
   }
 
