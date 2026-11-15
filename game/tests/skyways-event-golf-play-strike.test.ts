@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
-import {DT, LANE_Z, TURF, golfLane, golfWorld, type GolfLane, type GolfWorld} from './helpers/golfPlayCourse';
+import {DT, LANE_Z, TURF, golfLane, golfWorld, type GolfLane} from './helpers/golfPlayCourse';
 import {WEAPONS, WeaponController, type TriggerInput, type WeaponDef, type WeaponEvent} from '../src/weapons/weapons';
 import {PUTTER_DEF, PUTTER_MELEE, PUTT_POWER, puttSpeed} from '../src/weapons/putter';
 import {PUTT_SECTOR, isPuttable} from '../src/combat/putterStrike';
@@ -236,11 +236,11 @@ describe('the stroke: Game.meleeContact -> puttGolfBall on the real pickups / ph
 
   it('owned wares are never struck; only golf balls are puttable; the stroke sits after the charge / stamina and before the ray-fan results', async () => {
     expect(isPuttable({stack: {itemId: GOLF_BALL_ITEM}})).toBe(true);
-    expect(isPuttable({stack: {itemId: GOLF_BALL_ITEM}, owner: {stall: 1}})).toBe(false);
+    expect(isPuttable({stack: {itemId: GOLF_BALL_ITEM}, owner: 'general'})).toBe(false);
     expect(isPuttable({stack: {itemId: 'bandage'}})).toBe(false);
     const r = await rig();
     const ball = r.w.ball(6.6, LANE_Z), before = pose(ball);
-    (ball as Pickup & {owner?: unknown}).owner = {stall: 3};
+    ball.owner = 'general'; // (a market stall's displayed ware)
     r.look(6.6, TURF, LANE_Z);
     r.swing(0);
     expect(r.putts()).toBe(0);
