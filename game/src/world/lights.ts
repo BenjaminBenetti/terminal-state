@@ -398,6 +398,74 @@ export class StationLighting {
   }
 
   /**
+   * Task studio-graphics-gpu-materials-toggle-20261114-212239-01: the SAME station's lighting rebuilt in place (Game.relightAfterSettings:
+   * an Enhanced lighting / Reflections change in the pause menu). The field is baked first, in paced steps, while `prev` still lights
+   * the station: a throw there leaves `prev` exactly as it was. Then ONE step makes the new lighting where `prev` stands — no frame is
+   * drawn inside a step — and only once it exists releases `prev` (the scene removal now, its GPU releases to `retire`: the game runs
+   * them after the warm-up that follows); the new lighting continues `prev`'s flicker clock, circuit override and levels (adopt), so
+   * the fixtures, tubes and glow cards do not jump. `opts` as for steps() (`baked` / `probes` from the enhanced runtime; without
+   * `baked` the baseline bake runs here). Should the new lighting fail to install, the station gets the baseline lighting instead and
+   * `error` says why; should that fail too, `prev` is put back as it was (reinstate) and the first error is thrown.
+   */
+  static *replaceSteps(prev: StationLighting, opts: StationLightingOptions = {}, retire?: (release: () => void) => void): BuildSteps<{lighting: StationLighting; error: unknown}> {
+    const baked = opts.baked ?? (yield* bakeLightFieldSteps(stationFieldSource(prev.layout), StationLighting.fieldParams(opts)));
+    yield 'lighting.install';
+    const {scene, layout, fixtures, tubes} = prev;
+    let lighting: StationLighting, error: unknown = null;
+    const o: StationLightingOptions = {...opts, baked};
+    try {
+      lighting = new StationLighting(scene, layout, fixtures, tubes, o);
+    } catch (err) {
+      error = err ?? new Error('the lighting could not be installed');
+      prev.reinstate(); // (whatever the failed constructor had already put in the scene or bound)
+      const base: StationLightingOptions = {...opts};
+      delete base.baked; delete base.probes;
+      try {
+        lighting = new StationLighting(scene, layout, fixtures, tubes, base);
+      } catch {
+        prev.reinstate();
+        throw error;
+      }
+    }
+    delete o.baked; // (the bake is the field now or was downsampled into it: never kept twice)
+    prev.dispose(scene, retire);
+    if (lighting.fieldLight.parent !== scene) scene.add(lighting.fieldLight); // (the same session-wide light as `prev`'s: its dispose took it out)
+    lighting.adopt(prev);
+    return {lighting, error};
+  }
+
+  /**
+   * This lighting put back after another one failed to be made over it (replaceSteps): its field light alone in the scene, its field
+   * and probes bound, its levels on the fixtures, and no glow cards but its own.
+   */
+  private reinstate(): void {
+    const scene = this.scene;
+    for (const l of [stationFieldLight(), stationReflectLight()]) if (l !== this.fieldLight && l.parent === scene) scene.remove(l);
+    if (this.fieldLight.parent !== scene) scene.add(this.fieldLight);
+    for (const c of [...scene.children]) {
+      if (c.name !== 'light-glow' || c === this.glow) continue;
+      scene.remove(c); // (never drawn: nothing of it is on the GPU)
+      const g = c as THREE.InstancedMesh;
+      g.geometry?.dispose(); (g.material as THREE.Material | undefined)?.dispose(); g.dispose?.();
+    }
+    bindLightField(this.volume);
+    bindReflectionProbes(this.reflections);
+    this.setFieldLevels();
+    this.applyLevels(true);
+  }
+
+  /** Continue `prev`'s flicker clock, circuit override and profile (replaceSteps: the same station, relit). */
+  private adopt(prev: StationLighting): void {
+    this.t = prev.t;
+    this.circuitLevel = prev.circuitLevel;
+    this.profile = prev.profile;
+    this.areaIndex = prev.areaIndex;
+    for (let g = 0; g < 3; g++) this.levels[g] = this.circuitLevel?.[g] ?? groupLevel(g, this.t);
+    this.setFieldLevels();
+    this.applyLevels(true);
+  }
+
+  /**
    * `retire` (iteration 14): when given, the GPU releases (field volume, glow mesh / material) are handed to it — the
    * scene removal stays immediate — so the game can run them after the next station's warm-up; else immediate.
    */

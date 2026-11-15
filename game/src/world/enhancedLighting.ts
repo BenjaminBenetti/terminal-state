@@ -156,10 +156,17 @@ export interface EnhancedLightingStatus {
   requested: EnhancedLightingRequest;
   /** null before the first station of the session is built. */
   active: EnhancedLightingActive | null;
-  /** The settings would build the live station differently: the change applies when a station next loads. */
+  /**
+   * The settings would build the live station differently. The game applies such a change to the live station from the pause menu
+   * (Game.relightAfterSettings: at once when it is made there, else the next time the game is paused); a station load applies it too.
+   */
   pending: boolean;
   /** The derived cache's backend: 'indexeddb', 'memory' (this session only: storage is unavailable) or 'none' (not opened: Off). */
   cacheBackend: 'indexeddb' | 'memory' | 'none';
+  /** The live station's lighting is being rebuilt for a changed choice right now (the pause menu holds Resume meanwhile). */
+  applying?: boolean;
+  /** Why the last change could not be applied to the live station (null / absent: none failed; cleared by the next one that works). */
+  error?: string | null;
 }
 
 export const ENHANCED_LIGHTING_LABEL = 'Enhanced lighting';
@@ -176,11 +183,21 @@ export function enhancedLightingSummary(mode: EnhancedLightingMode): string {
 
 export function reflectionsSummary(q: ReflectionQuality): string {
   return q === 'off' ? 'Off: no cached reflections'
-    : q === 'high' ? 'High: sharper cached reflections of the station on metal and glass (more probes, about four times the texture memory)'
+    : q === 'high' ? 'High: sharper cached reflections of the station on metal and glass, and a sheen on glazed wall tile (more probes, about four times the texture memory)'
       : 'Standard: cached reflections of the station on metal and glass';
 }
 
-export const PENDING_NOTE = 'Applies when a station next loads.';
+/** A changed choice that the live station does not use yet (see EnhancedLightingStatus.pending). */
+export const PENDING_NOTE = 'Not applied yet: it is applied when the game is paused, or when a station next loads.';
+/** The live station's lighting is being rebuilt for a changed choice. */
+export const APPLYING_NOTE = 'Rebuilding this station\'s lighting…';
+/** A change that could not be applied: the station keeps what it had (`reason` as reported). */
+export const applyFailedNote = (reason: string): string => `The change could not be applied (${reason}): the station keeps this lighting.`;
+
+/** What follows a "This station: …" line: the rebuild in progress, a failed change, a change not applied yet — or nothing. */
+function changeNote(s: EnhancedLightingStatus): string {
+  return s.applying ? APPLYING_NOTE : s.error ? applyFailedNote(s.error) : s.pending ? PENDING_NOTE : '';
+}
 
 const cacheText = (c: LightingCacheUse): string => c === 'hit' ? 'from the cache' : c === 'miss' ? 'baked and cached' : c === 'stale' ? 'baked again (the cached one no longer matched)'
   : c === 'unavailable' ? 'baked (browser storage is unavailable: it is baked on every load)' : '';
@@ -192,7 +209,8 @@ export function describeEnhancedLighting(s: EnhancedLightingStatus): string {
   const now = a.gi === 'baseline'
     ? (a.giReason ? `This station: baseline lighting — ${a.giReason}` : 'This station: baseline lighting')
     : `This station: enhanced bake (${a.gi}), ${cacheText(a.cache)}`;
-  return s.pending ? `${now}. ${PENDING_NOTE}` : want === 'off' && a.gi === 'baseline' && !a.giReason ? enhancedLightingSummary('off') : now;
+  const note = changeNote(s);
+  return note ? `${now}. ${note}` : want === 'off' && a.gi === 'baseline' && !a.giReason ? enhancedLightingSummary('off') : now;
 }
 
 /** The line under the Reflections choice. */
@@ -203,7 +221,8 @@ export function describeReflections(s: EnhancedLightingStatus): string {
   const now = a.reflections === 'off'
     ? (a.reflectionsReason ? `This station: no reflections — ${a.reflectionsReason}` : 'This station: no reflections')
     : `This station: ${a.probes} probes (${a.reflections})${a.reflectionsReason ? ` — ${a.reflectionsReason}` : ''}`;
-  return s.pending ? `${now}. ${PENDING_NOTE}` : want === 'off' && a.reflections === 'off' && !a.reflectionsReason ? reflectionsSummary('off') : now;
+  const note = changeNote(s);
+  return note ? `${now}. ${note}` : want === 'off' && a.reflections === 'off' && !a.reflectionsReason ? reflectionsSummary('off') : now;
 }
 
 /** One compact line (perf overlay / recorder / QA): 'off', 'standard · refl high · hit', 'baseline (reason)'. */
@@ -212,7 +231,7 @@ export function enhancedLightingLine(s: EnhancedLightingStatus): string {
   if (!a) return `${s.requested.lighting} (no station)`;
   const gi = a.gi === 'baseline' ? `baseline${a.giReason ? ` (${a.giReason})` : ''}` : `bake ${a.gi}`;
   const rf = a.reflections === 'off' ? `refl off${a.reflectionsReason ? ` (${a.reflectionsReason})` : ''}` : `refl ${a.reflections} ×${a.probes}`;
-  return `${s.requested.lighting}: ${gi} · ${rf}${a.cache !== 'none' ? ` · cache ${a.cache}` : ''}${s.pending ? ' · change pending' : ''}`;
+  return `${s.requested.lighting}: ${gi} · ${rf}${a.cache !== 'none' ? ` · cache ${a.cache}` : ''}${s.applying ? ' · applying a change' : s.error ? ' · change failed' : s.pending ? ' · change pending' : ''}`;
 }
 
 /** The plan as the `active` fields it would produce (to tell whether a settings change is pending). */

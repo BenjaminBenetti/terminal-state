@@ -556,6 +556,18 @@ export class VolumetricAtmosphere {
     };
   }
 
+  /**
+   * Task studio-graphics-gpu-materials-toggle-20261114-212239-01: the SAME station's light field replaced (Game.relightAfterSettings).
+   * Nothing else of the station changes: its maps, gas, smoke, fog clock and shadow marks stay. The march reads the field through the
+   * global light-field nodes (world/lightFieldNode.ts: rebound by the new StationLighting), so only the fixture scatter's gate and the
+   * temporal history (it holds the old field's light) follow.
+   */
+  setLightField(field: LightFieldVolume | null): void {
+    this.field = field;
+    this.statsCache = null;
+    this.historyValid = false;
+  }
+
   /** Mark flashlight shadow casters/receivers (call for the station structure, containers, zombies). */
   markShadows(root: THREE.Object3D, structure: boolean): void {
     const r = markShadows(root, this.params.surfaceShadows, structure);

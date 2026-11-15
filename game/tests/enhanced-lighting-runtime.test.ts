@@ -20,12 +20,12 @@ import {FLOOR, Grid, SOLID} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {dropUnloadedP7, p7ModelKeysFor} from '../src/gen/props07';
 import {buildWorldSteps, type BuiltWorld} from '../src/world/builder';
-import {REACTOR_REASON, SOFTWARE_REASON, enhancedLightingLine, type LightingCapabilities} from '../src/world/enhancedLighting';
+import {APPLYING_NOTE, REACTOR_REASON, SOFTWARE_REASON, describeEnhancedLighting, enhancedLightingLine, type LightingCapabilities} from '../src/world/enhancedLighting';
 import {
   DERIVED_LIGHTING_VERSIONS, EnhancedLightingRuntime, layoutAddress, lightingCapabilities, type EnhancedBake, type EnhancedLightingSettings, type StationBakeInput,
 } from '../src/world/enhancedLightingRuntime';
 import {DEFAULT_FIELD, bakeLightField, type FieldSource} from '../src/world/lightField';
-import {stationFieldLight} from '../src/world/lightFieldNode';
+import {activeLightField, stationFieldLight} from '../src/world/lightFieldNode';
 import {MOOD, StationLighting, stationBakeInput, stationFieldSource} from '../src/world/lights';
 import {REFL, activeReflectionProbes, stationReflectLight} from '../src/world/reflectionNode';
 import type {DrawnSurfaces} from '../src/world/surfaceAlbedo';
@@ -357,6 +357,127 @@ describe('capabilities, reasons and pending changes', () => {
     await r.rt.clearCache();
     expect(heard).toBe(n + 1);
   });
+
+  it('a change applied to the LIVE station: applying, a failed change (kept lighting, reason, no blind retry), the baseline fallback', async () => {
+    // task studio-graphics-gpu-materials-toggle-20261114-212239-01 (Game.relightAfterSettings drives these)
+    const settings: EnhancedLightingSettings = {enhancedLighting: 'auto', reflections: 'standard'};
+    const r = runtime(settings);
+    let heard = 0;
+    r.rt.subscribe(() => { heard++; });
+    expect(r.rt.pendingSignature()).toBeNull(); // no station: nothing to apply to
+    expect(r.rt.failedFor(null)).toBe(false);
+    await load(r, rooms());
+    const before = r.rt.status();
+    expect(before).toMatchObject({pending: false, applying: false, error: null, active: {gi: 'standard', reflections: 'standard'}});
+
+    // the rebuild is announced once per edge
+    let n = heard;
+    r.rt.setApplying(true);
+    r.rt.setApplying(true);
+    expect(heard).toBe(n + 1);
+    expect(r.rt.status().applying).toBe(true);
+    r.rt.setApplying(false);
+    expect([heard, r.rt.status().applying]).toEqual([n + 2, false]);
+
+    // a rebuild that fails BEFORE anything was installed: the record is restored, the reason is reported while that plan is pending
+    settings.reflections = 'high';
+    const want = r.rt.pendingSignature();
+    expect(want).not.toBeNull();
+    const restore = r.rt.checkpoint();
+    const steps = r.rt.bakeSteps(rooms(), null, {max3DTextureSize: 2048});
+    steps.next(); // the bake started: the runtime already describes the station as being lit for the new plan
+    expect(r.rt.status().pending).toBe(false);
+    n = heard;
+    r.rt.failed(want, 'simulated failure', restore);
+    expect(heard).toBe(n + 1);
+    expect(r.rt.status()).toMatchObject({pending: true, error: 'simulated failure', active: before.active});
+    expect(r.rt.failedFor(want)).toBe(true);
+    expect(r.rt.failedFor(r.rt.pendingSignature())).toBe(true); // the game does not retry this plan by itself
+    // another choice is a new plan: not marked failed, and the old reason is not shown for it
+    settings.reflections = 'off';
+    expect(r.rt.failedFor(r.rt.pendingSignature())).toBe(false);
+    expect(r.rt.status()).toMatchObject({pending: true, error: null});
+    // back to the failed plan: its reason shows again; back to what the station has: nothing pending, no error
+    settings.reflections = 'high';
+    expect(r.rt.status()).toMatchObject({pending: true, error: 'simulated failure'});
+    settings.reflections = 'standard';
+    expect(r.rt.status()).toMatchObject({pending: false, error: null});
+    // a station lit for the failed plan after all clears the failure
+    settings.reflections = 'high';
+    await load(r, rooms());
+    expect(r.rt.status()).toMatchObject({pending: false, error: null, active: {reflections: 'high'}});
+    expect(r.rt.failedFor(want)).toBe(false);
+
+    // the install itself failed and the baseline lighting was put in instead: the status says baseline and why, and the change is
+    // still pending (the station does not have what was asked)
+    n = heard;
+    r.rt.installedBaseline('the lighting could not be installed (out of memory)');
+    expect(heard).toBe(n + 1);
+    expect(r.rt.status()).toMatchObject({
+      pending: true, error: null,
+      active: {gi: 'baseline', giReason: 'the lighting could not be installed (out of memory)', reflections: 'off', cache: 'none', probes: 0, probeBytes: 0, giMs: 0, probeMs: 0},
+    });
+    r.rt.failed(r.rt.pendingSignature(), 'the lighting could not be installed (out of memory)');
+    expect(r.rt.status()).toMatchObject({pending: true, error: 'the lighting could not be installed (out of memory)'});
+    // Off is exactly what a baseline station has: choosing it leaves nothing pending
+    settings.enhancedLighting = 'off';
+    expect(r.rt.status()).toMatchObject({pending: false, error: null});
+  });
+
+  it('while a rebuild in place runs, the status says what the station is still lit by — and the new lighting from the swap on', async () => {
+    const settings: EnhancedLightingSettings = {enhancedLighting: 'auto', reflections: 'standard'};
+    const r = runtime(settings);
+    await load(r, rooms());
+    const before = r.rt.status().active!;
+    expect(before).toMatchObject({gi: 'standard', reflections: 'standard'});
+    let heard = 0;
+    r.rt.subscribe(() => { heard++; });
+
+    // Off: bakeSteps writes the baseline record at its first step, before the station lighting is swapped (the baseline bake runs
+    // in between). Until the swap the station still has the enhanced lighting, and the status says so
+    settings.enhancedLighting = 'off';
+    r.rt.setApplying(true);
+    r.rt.checkpoint();
+    expect(drainSync(r.rt.bakeSteps(rooms(), null, {max3DTextureSize: 2048})).baked).toBeUndefined();
+    expect(r.rt.status()).toMatchObject({applying: true, pending: false, active: before});
+    expect(describeEnhancedLighting(r.rt.status())).toMatch(/^This station: enhanced bake \(standard\), .*\. Rebuilding this station's lighting…$/);
+    expect(describeEnhancedLighting(r.rt.status()).endsWith(APPLYING_NOTE)).toBe(true);
+    let n = heard;
+    r.rt.applied(null); // (the swap: world/lights.ts replaceSteps returned)
+    expect(heard, 'the forms hear the swap').toBe(n + 1);
+    expect(r.rt.status()).toMatchObject({applying: true, pending: false, active: {gi: 'baseline', reflections: 'off'}});
+    expect(describeEnhancedLighting(r.rt.status())).toBe(`This station: baseline lighting. ${APPLYING_NOTE}`); // (the warm-up still runs)
+    r.rt.setApplying(false);
+    expect(r.rt.status()).toMatchObject({applying: false, pending: false, active: {gi: 'baseline', reflections: 'off'}});
+
+    // On again, with the probes: the record is written at the END of the bake — still before the swap
+    settings.enhancedLighting = 'auto';
+    r.rt.setApplying(true);
+    r.rt.checkpoint();
+    expect((await load(r, rooms())).baked).toBeDefined();
+    expect(r.rt.status()).toMatchObject({applying: true, active: {gi: 'baseline', reflections: 'off'}});
+    r.rt.applied(null);
+    expect(r.rt.status()).toMatchObject({applying: true, active: {gi: 'standard', reflections: 'standard'}});
+    r.rt.setApplying(false);
+
+    // a rebuild that ends without a swap (the station was replaced, a lost device): nothing of the checkpoint outlives it
+    settings.enhancedLighting = 'off';
+    r.rt.setApplying(true);
+    const undo = r.rt.checkpoint();
+    drainSync(r.rt.bakeSteps(rooms(), null, {max3DTextureSize: 2048}));
+    undo();
+    r.rt.setApplying(false);
+    expect(r.rt.status()).toMatchObject({applying: false, pending: true, active: {gi: 'standard', reflections: 'standard'}});
+    r.rt.setApplying(true);
+    r.rt.checkpoint();
+    r.rt.setApplying(false); // (ended before any bake step)
+    drainSync(r.rt.bakeSteps(rooms(), null, {max3DTextureSize: 2048})); // a station LOAD: its record is the status at once
+    expect(r.rt.status()).toMatchObject({applying: false, pending: false, active: {gi: 'baseline'}});
+    // …and applied() with nothing to report stays silent there, as before
+    n = heard;
+    r.rt.applied(null);
+    expect(heard).toBe(n);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -461,5 +582,129 @@ describe('a real station: what the builder drew, and the station lighting', () =
     expect(activeReflectionProbes()).toBeNull();
     expect(same(plain.field.data, bakeLightField(stationFieldSource(layout), StationLighting.fieldParams({})).data)).toBe(true);
     plain.dispose(scene);
+  }, 240000);
+
+  // Task studio-graphics-gpu-materials-toggle-20261114-212239-01: the SAME station relit in place (StationLighting.replaceSteps — what
+  // Game.relightAfterSettings runs for a changed choice in the pause menu).
+  it('relit in place: the new lighting stands where the old one stood (clock, circuit levels, one field light, one set of glow cards); the old one is released afterwards; a failed install falls back to the baseline, and a double failure leaves the old lighting standing', async () => {
+    await build();
+    const settings: EnhancedLightingSettings = {enhancedLighting: 'on', reflections: 'standard'};
+    const a = runtime(settings, new FakeIndexedDb());
+    const enhanced = await load(a, stationBakeInput(layout), world.drawn);
+    expect(enhanced.probes!.count).toBeGreaterThan(8);
+    const scene = new THREE.Scene();
+    const opts = {hemi: new THREE.HemisphereLight(), fogDensity: MOOD.fogDensity, far: 70, max3DTextureSize: 2048, renderer: fakeRenderer()};
+    const fieldLights = () => scene.children.filter(c => c === stationFieldLight() || c === stationReflectLight());
+    const glows = () => scene.children.filter(c => c.name === 'light-glow');
+    const clock = (l: StationLighting) => (l as unknown as {t: number}).t;
+
+    // the station as it stands: the baseline lighting, its flicker clock running, a circuit held by an override
+    const plain = drainSync(StationLighting.steps(scene, layout, world.fixtures, world.tubes, {...opts}));
+    plain.circuitLevel = [null, 0.25, null];
+    for (let i = 0; i < 90; i++) plain.update(1 / 60);
+    expect(plain.levels[1]).toBe(0.25);
+    expect(fieldLights()).toEqual([stationFieldLight()]);
+    expect(glows()).toEqual([plain.glow]);
+    const levels0 = [...plain.levels], t0 = clock(plain);
+    expect(t0).toBeCloseTo(1.5, 6);
+
+    // 1. Off -> On with reflections: the other field light, the probes bound, the same clock and levels; the old lighting's GPU
+    //    objects are handed to `retire` (the game runs them after the warm-up), nothing is released inside the step
+    const retired: (() => void)[] = [];
+    const releasedPlain = vi.spyOn(plain.volume, 'dispose');
+    const r1 = drainSync(StationLighting.replaceSteps(plain, {...opts, baked: enhanced.baked, probes: enhanced.probes}, f => retired.push(f)));
+    const lit = r1.lighting;
+    expect(r1.error).toBeNull();
+    expect(lit).not.toBe(plain);
+    expect(lit.fieldLight).toBe(stationReflectLight());
+    expect(fieldLights()).toEqual([stationReflectLight()]);
+    expect(activeLightField()).toBe(lit.volume);
+    expect(activeReflectionProbes()).toBe(lit.reflections);
+    expect(lit.field).toBe(enhanced.baked);
+    expect([clock(lit), lit.circuitLevel, [...lit.levels]]).toEqual([t0, [null, 0.25, null], levels0]);
+    expect(glows()).toEqual([lit.glow]);
+    expect(retired).toHaveLength(1);
+    expect(releasedPlain).not.toHaveBeenCalled();
+    for (const f of retired.splice(0)) f();
+    expect(releasedPlain).toHaveBeenCalledTimes(1);
+    expect(activeLightField(), 'releasing the old field leaves the new one bound').toBe(lit.volume);
+
+    // 2. Standard -> another bake with probes: the SAME session-wide reflecting light stays in the scene (the old lighting's dispose
+    //    takes it out, the new one is put back)
+    const r2 = drainSync(StationLighting.replaceSteps(lit, {...opts, baked: enhanced.baked, probes: enhanced.probes}, f => retired.push(f)));
+    expect(r2.error).toBeNull();
+    expect(r2.lighting.fieldLight).toBe(stationReflectLight());
+    expect(fieldLights()).toEqual([stationReflectLight()]);
+    expect(activeReflectionProbes()).toBe(r2.lighting.reflections);
+    expect(activeReflectionProbes()).not.toBe(lit.reflections);
+    expect(glows()).toEqual([r2.lighting.glow]);
+    for (const f of retired.splice(0)) f();
+
+    // (the same double failure as 5 below, over a lighting WITH probes: it stands as it stood, its probes bound)
+    const hemiDead = new THREE.HemisphereLight();
+    Object.defineProperty(hemiDead, 'intensity', {get: () => 1, set: () => { throw new Error('simulated: nothing installs'); }});
+    expect(() => drainSync(StationLighting.replaceSteps(r2.lighting, {...opts, hemi: hemiDead, baked: enhanced.baked}, f => retired.push(f)))).toThrow('simulated: nothing installs');
+    expect(fieldLights()).toEqual([stationReflectLight()]);
+    expect([activeLightField(), activeReflectionProbes()]).toEqual([r2.lighting.volume, r2.lighting.reflections]);
+    expect(REFL.atlas.value).toBe(r2.lighting.reflections!.atlas);
+    expect(glows()).toEqual([r2.lighting.glow]);
+    expect(retired).toHaveLength(0);
+
+    // 3. the planned lighting cannot be installed (it throws after its light is in the scene and its textures are bound): the station
+    //    gets the BASELINE lighting, the error is reported, and nothing of the failed one is left behind
+    let throwsLeft = 1;
+    const hemiOnce = new THREE.HemisphereLight();
+    Object.defineProperty(hemiOnce, 'intensity', {get: () => 1, set: () => { if (throwsLeft-- > 0) throw new Error('simulated install failure'); }});
+    const r3 = drainSync(StationLighting.replaceSteps(r2.lighting, {...opts, hemi: hemiOnce, baked: enhanced.baked, probes: enhanced.probes}, f => retired.push(f)));
+    expect(String((r3.error as Error).message)).toBe('simulated install failure');
+    const base = r3.lighting;
+    expect(base.fieldLight).toBe(stationFieldLight());
+    expect(base.reflections).toBeNull();
+    expect(fieldLights(), 'the failed lighting\'s reflecting light is not left beside the baseline\'s').toEqual([stationFieldLight()]);
+    expect(activeLightField()).toBe(base.volume);
+    expect(activeReflectionProbes()).toBeNull();
+    expect(REFL.params.value.x).toBe(0);
+    expect(glows()).toEqual([base.glow]);
+    expect(same(base.field.data, bakeLightField(stationFieldSource(layout), StationLighting.fieldParams({})).data)).toBe(true);
+    expect([clock(base), [...base.levels]]).toEqual([t0, levels0]);
+    expect(retired, 'the replaced lighting is released once').toHaveLength(1);
+    for (const f of retired.splice(0)) f();
+
+    // 4. …and when it fails at its very end, its glow cards already in the scene: they go too (one set of cards, the baseline's)
+    const tubes = world.tubes!;
+    expect(base.glow).not.toBeNull();
+    let tubeThrows = 1, cardSets = 0;
+    const setColorAt = tubes.setColorAt;
+    tubes.setColorAt = function (this: THREE.InstancedMesh, i: number, c: THREE.Color) { if (tubeThrows-- > 0) throw new Error('simulated late install failure'); return setColorAt.call(this, i, c); } as typeof tubes.setColorAt;
+    const add = scene.add;
+    scene.add = function (this: THREE.Scene, ...o: THREE.Object3D[]) { for (const x of o) if (x.name === 'light-glow') cardSets++; return add.apply(this, o); } as typeof scene.add;
+    const r4 = drainSync(StationLighting.replaceSteps(base, {...opts, baked: enhanced.baked, probes: enhanced.probes}, f => retired.push(f)));
+    tubes.setColorAt = setColorAt;
+    scene.add = add;
+    const late = r4.lighting;
+    expect(String((r4.error as Error).message)).toBe('simulated late install failure');
+    expect(cardSets, 'the failed lighting had put its cards in, then the baseline put its own').toBe(2);
+    expect(glows()).toEqual([late.glow]);
+    expect(late.glow).not.toBe(base.glow);
+    expect(fieldLights()).toEqual([stationFieldLight()]);
+    expect([activeLightField(), activeReflectionProbes(), late.reflections]).toEqual([late.volume, null, null]);
+    expect([clock(late), [...late.levels]]).toEqual([t0, levels0]);
+    expect(world.fixtures.map(f => f.level), 'the fixtures carry the levels').toEqual(world.fixtures.map((_, i) => late.fixtureLevel(i)));
+    expect(retired).toHaveLength(1);
+    for (const f of retired.splice(0)) f();
+
+    // 5. neither the planned lighting nor the baseline can be installed: the step throws the FIRST error and the old lighting stands
+    //    exactly as it stood — in the scene, bound, not released
+    const releasedLate = vi.spyOn(late.volume, 'dispose');
+    expect(() => drainSync(StationLighting.replaceSteps(late, {...opts, hemi: hemiDead, baked: enhanced.baked, probes: enhanced.probes}, f => retired.push(f)))).toThrow('simulated: nothing installs');
+    expect(fieldLights()).toEqual([stationFieldLight()]);
+    expect(activeLightField()).toBe(late.volume);
+    expect(activeReflectionProbes()).toBeNull();
+    expect(glows()).toEqual([late.glow]);
+    expect(retired).toHaveLength(0);
+    expect(releasedLate).not.toHaveBeenCalled();
+    expect([clock(late), [...late.levels]]).toEqual([t0, levels0]);
+    late.update(1 / 60); // (still a working lighting)
+    late.dispose(scene);
   }, 240000);
 });
