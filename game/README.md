@@ -357,9 +357,11 @@ one grid row each (slot, name + metadata ellipsized, actions), stacked on narrow
 slow orbit reached about 25 s in (`MENU_SCENE.orbit.startAt`) and keeps orbiting from there. The loading screen (New game /
 Continue / Load save; never the train journey) is opaque and shows the destination's location name over a small decorative subway
 map with the line `The Reactor .... Restart the Reactor` under it (`src/ui/loadingMap.ts`). The map is a fixed drawing, not the
-campaign's network: its lines, branches and stations fill in with the load's own progress (props, textures, graphics warm-up) and
-it is complete only when the load is. It replaces the progress bar; nothing waits for it. The screen stays up until the first
-play frame is drawn.
+campaign's network: its lines, branches and stations fill in with the load's own progress (props, the station build's finished
+stages, textures, graphics warm-up) and it is complete only when the load is. It replaces the progress bar; nothing waits for it.
+The station is built in time slices with a turn of the event loop between them (`src/core/pacedBuild.ts` `runSliced`,
+`Game.buildSectionSliced`): no frame is drawn meanwhile, the page stays responsive, and the warm-up still starts only after the
+build's last step. The screen stays up until the first play frame is drawn.
 - **Fog, shadows & anti-aliasing** (the stored `quality`, High / Low): exactly the volumetric fog march (High ½ of the drawing
   buffer up to 960 × 540, 24 steps; Low ¼ up to 480 × 270, 14 steps — `ATMOSPHERE_QUALITY` in `src/render/atmosphere.ts`), the
   flashlight's shadow map (1024 / 512 px), the scene pass MSAA (4× / none; the fog and the MSAA only while the volumetric pass

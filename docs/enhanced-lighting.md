@@ -201,7 +201,9 @@ Bounded resources, and what happens when one does not fit:
   enhanced bake and is shaded plain; the status says why.
 - The mirror's target is a fixed size per tier, whatever the display's resolution.
 - A browser does **not** expose total or free video memory. `navigator.deviceMemory` and adapter limits prove
-  nothing about it, so nothing here reads them, and no minimum amount of video memory is claimed.
+  nothing about it, so nothing that decides how a station is lit reads them, and no minimum amount of video memory
+  is claimed. (The one thing that reads `navigator.deviceMemory` and `navigator.hardwareConcurrency` is the number
+  of bake workers: load time only, never the light. See *Loading: the bake's workers*.)
 
 What Auto reads: the backend that actually started (WebGPU or the WebGL 2 fallback), whether it is a software
 rasterizer (`render/softwareGl.ts`), and the backend's own largest 2D / 3D texture sizes. Auto leaves reflections off
@@ -224,10 +226,11 @@ choice that changes while playing, for example from another tab, waits; the stat
 menu, Continue, station load or reroll is involved.
 
 - Only the station's **lighting** is rebuilt: the field bake of the new choice (from the derived cache when this
-  layout's entry matches, else baked now in the same paced steps, under the pause menu), then one step that swaps
-  the station lighting (`StationLighting.replaceSteps`: the flicker clock, the circuit levels and the fixtures
-  carry over; the fog keeps its maps, gas, smoke and clock and only gets the new field). The glass mirror is made
-  or released with it, and the flashlight's bounce is bound to the new lighting.
+  layout's entry matches, else baked now under the pause menu: the same build steps, run in time slices of about
+  40 ms with a turn of the event loop between them, the gather and the probes on the bake's workers), then one
+  step that swaps the station lighting (`StationLighting.replaceSteps`: the flicker clock, the circuit levels and
+  the fixtures carry over; the fog keeps its maps, gas, smoke and clock and only gets the new field). The glass
+  mirror is made or released with it, and the flashlight's bounce is bound to the new lighting.
 - A changed light set compiles every lit material again, so the same **blocking warm-up** as a quality change
   follows; its hidden frames also draw the mirror once. No frame is drawn meanwhile. **Resume**, the two choices and
   the quality choice are held, and the pause line says what is being done. A new game, Continue, Retry and travel
@@ -238,7 +241,9 @@ menu, Continue, station load or reroll is involved.
 - The status says `applying` while it runs and the new live state afterwards. If the bake or the install fails:
   "The change could not be applied (reason): the station keeps this lighting." A failure after the swap leaves the
   baseline lighting, and the status says baseline. A failed plan is not retried until the choice changes again.
-- A lost device or a station replaced meanwhile ends the rebuild without touching the new station.
+- A lost device or a station replaced meanwhile ends the rebuild without touching the new station. A choice that
+  changes again while its bake runs (another tab) drops that bake the same way: its workers are stopped, nothing
+  of it is installed or cached, and the same rebuild goes on to bake what is asked for now.
 - Between two stations and inside a transition nothing is rebuilt: the next station's load applies the choice, and a
   pause that outlives the transition applies it then.
 - There is one session-wide field light per combination that was ever used (plain or full, with probes or without,
@@ -286,9 +291,11 @@ flashlight's bounce are live and cache nothing.
 
 - `Game.prepareSection` (behind the loading screen, or during the ride): `EnhancedLightingRuntime.prefetch` hashes
   the address in pieces and reads the entry.
-- `Game.buildSectionSteps`, step `lighting`: `EnhancedLightingRuntime.bakeSteps` runs in the same paced build steps
-  as the baseline bake (`core/pacedBuild.ts`); `StationLighting.steps` gets the field, the probes, the shading, the
-  mirror choice and what the flashlight's bounce traces; `Game.syncGlassMirror` makes or releases the mirror.
+- `Game.buildSectionSteps`, step `lighting`: `EnhancedLightingRuntime.bakeSteps` runs in the same build steps as
+  the baseline bake (`core/pacedBuild.ts`: frame-paced during a train journey, in time slices behind the loading
+  screen); its two long parts, the gather and the probes, run on the bake's workers while the build waits (below).
+  `StationLighting.steps` gets the field, the probes, the shading, the mirror choice and what the flashlight's
+  bounce traces; `Game.syncGlassMirror` makes or releases the mirror.
 - Each frame: `FLASH_BOUNCE.update` after the player light moved; `GlassMirror.select` picks the plane; the mirror
   is drawn right before the scene pass, inside the frame's one scene-matrix update.
 - A station swap (travel, Retry, Load last save, Continue) binds the new station's textures first and retires the
@@ -297,6 +304,41 @@ flashlight's bounce are live and cache nothing.
   bounce is unbound and no mirror exists.
 - A changed choice in the pause menu rebuilds the live station's lighting in place (*Changing the settings during
   play*).
+
+## Loading: the bake's workers
+
+The two long parts of a station's lighting bake, the **gather** and the **reflection probes**, run on Web Workers
+(`world/lightBakePool.ts`, `world/lightBakeTasks.ts`, `world/lightBakeWorker.ts`) wherever the build can wait for
+them: behind the loading screen, during a train journey and under the pause menu. The build parks while they work
+(`core/pacedBuild.ts`: a yielded wait), so the page keeps drawing the ride or painting the progress line. The
+stage labels shown are the workers' own: a label appears when the stage before it is finished.
+
+- **The same light.** The workers run the bake's own code over shares that split it exactly. A gathering voxel's
+  rays and bounces, and a probe's capture and filter, read only inputs that are complete before the first ray. The
+  sums over the bounces, the smoothing, the rounding and the probes' placement and grid stay one pass on one
+  worker. The result is the bake on one thread, bit for bit, for one, two or three workers
+  (`game/tests/light-bake-workers.test.ts`: a generated Subway station at Standard and at High). The cache address
+  and the digests are made on the main thread before a worker starts, so the number of workers never changes what
+  is read from or written to the derived cache.
+- **Bounds.** `min(hardwareConcurrency - 1, 3)` workers and at least one; one where the browser reports 4 GB of
+  memory or less (`navigator.deviceMemory`); none without `Worker`. One worker leads and hands shares to the
+  others over direct ports. Before a job starts, the typed arrays its workers will hold are estimated: over 512 MB
+  the job uses fewer workers, then none. The workers live for one bake and are terminated when it ends, so nothing
+  idles between two stations.
+- **Fallback, never silent.** No `Worker`, a worker that cannot start, throws, answers something else or sends
+  nothing for 20 s (counted in time the event loop ran), or a station past the memory bound: that part is baked on
+  the main thread by the same code, and the status says so (`... · baked on the main thread (reason)` in the
+  Lighting row and `__LL.lighting()`, the bake's timings, a console warning). After a failure that is about the
+  workers themselves, no worker is started again until the page is reloaded.
+- **Cancellation.** A station replaced mid-bake, a lost device, back to the menu, or a choice changed again during
+  an apply closes the build where it waits: the workers are terminated and nothing of that bake is installed or
+  cached.
+- **What stays on the main thread:** the direct light, the surface colours, the digests and the cache, the field's
+  encoding, the textures and the install, and one copy of each job's inputs into the lead worker's message (no
+  `SharedArrayBuffer` is used; results come back by transfer).
+- The worker is one inline script inside the bundle, started from a Blob (the deploy's content security policy
+  allows `worker-src 'self' blob:`). `?bakeworkers=0..3` sets the count for one session (0: everything on the main
+  thread).
 
 ## Costs
 
@@ -315,11 +357,32 @@ The mirror's target (colour and depth, 4x MSAA): about 29 MB at Standard and 66 
 resolution. On the largest station measured (the Office) the feature's own video memory is about 70 MB at Standard
 (32 MB of cube, the mirror, the probes) and about 115 MB at High.
 
-Bake time of the lighting step on the main thread, cut into paced build steps of a few milliseconds. In Node on the
-studio pod, the Standard gather (Auto): Subway 1.4 s, Office 1.3 s, Mall 0.9 s, Skyways 1.3 s, Bunker 1.1 s, Market
-0.3 s. In Firefox 158 on the same pod (a shared server CPU, other work running), On with Standard reflections on
-Subway seed 93: 4.2 s in all (gather 3.2 s, probes 0.2 s); on seed 19: 2.9 s (gather 2.1 s). A cache hit skips the
-gather and the probe capture.
+Bake time on one thread (no workers: the fallback, and every synchronous build), cut into build steps of a few
+milliseconds. In Node on the studio pod, the Standard gather (Auto): Subway 1.4 s, Office 1.3 s, Mall 0.9 s,
+Skyways 1.3 s, Bunker 1.1 s, Market 0.3 s. In Firefox 158 on the same pod (a shared server CPU, other work
+running), On with Standard reflections on Subway seed 93: 4.2 s in all (gather 3.2 s, probes 0.2 s); on seed 19:
+2.9 s (gather 2.1 s). A cache hit skips the gather and the probe capture.
+
+Bake time with the workers, in the real game in Node on the studio pod (the first Subway station of a new campaign;
+Node worker threads stand in for Web Workers, so a browser's worker start-up, Blob and structured-clone costs are
+not in these numbers; no browser was measured):
+
+| Uncached lighting step | Main thread, no workers | Main thread, with workers | Waiting for 1 worker | Waiting for 3 workers |
+|---|---|---|---|---|
+| Auto, Standard reflections (166 probes) | 3.0 s | 1.4 s | 1.1 s | 1.0 s |
+| On, High reflections (239 probes) | 7.5 s | 1.3 to 1.5 s | 3.2 s | 1.9 s |
+
+The 1.4 s left on the main thread: the direct light about 0.4 s, the surface colours and digests 0.15 s, the
+field's encoding 0.35 s, packing the cache entry 0.15 to 0.2 s, the install and the fog's maps 0.25 s, and the two
+copies to the lead worker under 0.1 s (115 MB). A cache hit runs the same parts but the packing and the copies:
+about 1 s. On this station the lead worker held 141 to 165 MB of typed arrays at its fullest and each other worker
+61 to 78 MB, for the length of the bake; nothing is held afterwards. At Standard the workers' own time is mostly
+their one-pass stages (the gather's index, bounce sums and smoothing; the probes' placement and grid), so a second
+and third worker add little there; at High the rays dominate and they do.
+
+Changing Auto to On with High reflections from the pause menu, same station: 21.4 s before (the bake waited for a
+display frame after every 6 ms of work while no frame was drawn); 8.9 to 9.5 s in time slices without workers;
+5.5 s with one worker; 4.3 s with three (1.2 s of it main-thread work, 1.0 s the warm-up).
 
 Frame cost:
 
@@ -405,7 +468,14 @@ compiled module).
 - `game/tests/enhanced-lighting-game.test.ts`: the real Game on a validating WebGPU device: binding limits, death
   and reload, Off and back.
 - `game/tests/lighting-live-apply.test.ts`: a change applied from the pause menu (only the lighting rebuilt, the
-  station and the save conserved, the status, a failed bake).
+  station and the save conserved, the status, a failed bake, an abandoned bake, the bake on worker threads and a
+  choice changed while it waits for them).
+- `game/tests/light-bake-workers.test.ts`: the bake's workers: how many, the same bytes as the bake on one thread
+  for 1, 2 and 3 real worker threads (a generated Subway station, Standard and High), every fallback with its
+  reason, the memory bound, cancellation while the build waits, the worker script's contents.
+- `game/tests/paced-build-sliced.test.ts`, `game/tests/loading-build-sliced.test.ts`: the time-sliced drain and a
+  build that waits for work off the thread (parking, cancellation while parked); the loading screen's station
+  build (readiness order, held frames, truthful progress, an abandoned build).
 - `game/tests/enhanced-lighting-settings.test.ts`: the settings, their form rows, the cache line and diagnostics.
 - `game/tests/reflection-window.test.ts`, `game/tests/station-pillar-material.test.ts`,
   `game/tests/texture-fetch.test.ts`, `game/tests/shader-text-share.test.ts`, `game/tests/content-hash.test.ts`,
