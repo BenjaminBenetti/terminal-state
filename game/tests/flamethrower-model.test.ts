@@ -24,6 +24,7 @@ import {FLAMETHROWER_MODEL as M} from '../src/assets/flamethrowerModels.generate
 import {WEAPON_VARIETY_MODELS} from '../src/assets/weaponVarietyModels.generated';
 import {FLAMETHROWER_ID} from '../src/fire/flamethrowerSpec';
 import {FLAMETHROWER_DIMS} from '../src/items/flamethrowerItems';
+import {isGolfEventItem} from '../src/items/golfItems'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY)
 import {ITEMS, itemDef, itemDims} from '../src/items/items';
 import {GUN_CATEGORIES, GUN_LEAVES, MELEE_LEAVES, WEAPON_POOL_VERSION, slotRows, varietyIdsIn, weaponLength, type SlotKind} from '../src/items/weaponVariety';
 import {FLAMETHROWER_DEF} from '../src/weapons/flamethrower';
@@ -190,8 +191,11 @@ describe('the Flamethrower: not a weapon-variety identity, never a find', () => 
   });
 
   it('its model takes the lazy route: one more lazily delivered weapon, the same loader', () => {
-    expect(LAZY_EXTRA_WEAPON_IDS).toEqual([ID]);
-    expect(LAZY_MODEL_WEAPON_IDS).toEqual([...VARIETY_WEAPON_IDS, ID]);
+    // (task studio-skywalk-events-20261115-193624-01, lane GOLF-PLAY: the mini-golf putter is the other lazy extra — pinned in
+    // tests/skyways-event-golf-play-registry.test.ts; excluded here)
+    const notGolf = (ids: readonly string[]) => ids.filter(id => !isGolfEventItem(id));
+    expect(notGolf(LAZY_EXTRA_WEAPON_IDS)).toEqual([ID]);
+    expect(notGolf(LAZY_MODEL_WEAPON_IDS)).toEqual([...VARIETY_WEAPON_IDS, ID]);
     expect([isLazyModelWeapon(ID), isLazyModelWeapon('rifle'), isLazyModelWeapon('fuel_tank'), isLazyModelWeapon(null)]).toEqual([true, false, false, false]);
     expect([lazyWeaponModelUrl(ID), weaponVarietyModelUrl(ID), lazyWeaponModelUrl('rifle')]).toEqual([M.url, M.url, null]);
     for (const id of VARIETY_WEAPON_IDS) expect([isLazyModelWeapon(id), lazyWeaponModelUrl(id)]).toEqual([true, WEAPON_VARIETY_MODELS[id]!.url]);
