@@ -414,13 +414,7 @@ describe('the shader', () => {
   }
 
   it('the mirror light is a second session-wide light; under it ONLY glass gains the mirror: one sampled texture, no uniform buffer more, on both backends', () => {
-    const plain = stationReflectLight(), mirror = stationReflectLight(true);
-    expect(mirror).not.toBe(plain);
-    expect(stationReflectLight(true)).toBe(mirror);
-    expect(stationReflectLight(false)).toBe(plain);
-    expect(mirror.mirror).toBe(true); expect(plain.mirror).toBe(false);
-    expect(mirror.id).not.toBe(plain.id); // (a light's id is in three's program key)
-    expect(mirror.castShadow).toBe(false);
+    // (stationReflectLight(full, mirror): the mirror is the SECOND choice — with the plain shading and with the full one)
     const mats = {
       glass: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'glass'),
       window: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'window'),
@@ -429,29 +423,40 @@ describe('the shader', () => {
       wall: () => new MeshStandardNodeMaterial({metalness: 0, roughness: 0.8}),
     };
     const rows: string[] = [];
-    for (const backend of ['wgsl', 'glsl'] as const) {
-      for (const [k, make] of Object.entries(mats)) {
-        const a = compile(backend, make(), [plain, new THREE.HemisphereLight()]);
-        const b = compile(backend, make(), [mirror, new THREE.HemisphereLight()]);
-        const ba = bindings(backend, a), bb = bindings(backend, b);
-        rows.push(`${backend} ${k}: probes ${a.length} chars ${JSON.stringify(ba)} -> mirror light ${b.length} chars ${JSON.stringify(bb)}`);
-        expect(bb.ubos, `${backend} ${k}: no uniform buffer more`).toBe(ba.ubos);
-        expect(bb.ubos).toBeLessThanOrEqual(12);
-        if (k === 'glass') {
-          expect(bb.textures, `${backend} glass: + the mirror picture`).toBe(ba.textures + 1);
-          expect(bb.textures).toBeLessThanOrEqual(16);
-          expect(b).not.toBe(a);
-          expect(b).toContain(backend === 'wgsl' ? 'textureSampleLevel' : 'textureLod');
-          // the picture is looked up once, behind the plane test; the probes behind "not a full mirror"
-          expect(count(b, /cameraPosition/g)).toBeGreaterThan(count(a, /cameraPosition/g));
-          expect(/[^\x00-\x7F]/.test(b)).toBe(false);
-        } else {
-          // every other class is the same program text under either reflecting light
-          expect(bb.textures, `${backend} ${k}`).toBe(ba.textures);
-          expect(b.length, `${backend} ${k}`).toBe(a.length);
+    for (const full of [false, true]) {
+      const plain = stationReflectLight(full), mirror = stationReflectLight(full, true);
+      expect(mirror).not.toBe(plain);
+      expect(stationReflectLight(full, true)).toBe(mirror);
+      expect(stationReflectLight(full, false)).toBe(plain);
+      expect([mirror.mirror, plain.mirror, mirror.full, plain.full]).toEqual([true, false, full, full]);
+      expect(mirror.id).not.toBe(plain.id); // (a light's id is in three's program key)
+      expect(mirror.castShadow).toBe(false);
+      for (const backend of ['wgsl', 'glsl'] as const) {
+        for (const [k, make] of Object.entries(mats)) {
+          const a = compile(backend, make(), [plain, new THREE.HemisphereLight()]);
+          const b = compile(backend, make(), [mirror, new THREE.HemisphereLight()]);
+          const ba = bindings(backend, a), bb = bindings(backend, b), tag = `${backend} ${k}${full ? ' (full shading)' : ''}`;
+          rows.push(`${tag}: probes ${a.length} chars ${JSON.stringify(ba)} -> mirror light ${b.length} chars ${JSON.stringify(bb)}`);
+          expect(bb.ubos, `${tag}: no uniform buffer more`).toBe(ba.ubos);
+          expect(bb.ubos).toBeLessThanOrEqual(12);
+          if (k === 'glass') {
+            expect(bb.textures, `${tag}: + the mirror picture`).toBe(ba.textures + 1);
+            expect(bb.textures).toBeLessThanOrEqual(16);
+            expect(b).not.toBe(a);
+            expect(b).toContain(backend === 'wgsl' ? 'textureSampleLevel' : 'textureLod');
+            // the picture is looked up once, behind the plane test; the probes behind "not a full mirror"
+            expect(count(b, /cameraPosition/g)).toBeGreaterThan(count(a, /cameraPosition/g));
+            expect(/[^\x00-\x7F]/.test(b)).toBe(false);
+          } else {
+            // every other class is the same program text under either reflecting light
+            expect(bb.textures, tag).toBe(ba.textures);
+            expect(b.length, tag).toBe(a.length);
+          }
         }
       }
     }
+    // (the four reflecting lights are four lights)
+    expect(new Set([stationReflectLight(), stationReflectLight(true), stationReflectLight(false, true), stationReflectLight(true, true)].map(l => l.id)).size).toBe(4);
     console.log(rows.join('\n'));
     // the globals a program is built against: a placeholder picture, the mirror inactive
     expect(isGlassMirrorPlaceholder(GM.tex.value)).toBe(true);
