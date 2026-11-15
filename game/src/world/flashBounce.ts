@@ -18,8 +18,9 @@
 //    rays' parts of the surface, and a patch size from their footprints. A ray on another plane gives its flux to the nearest light
 //    of another sector on THAT plane, or to none: flux never moves to a plane it did not land on.
 //  - Time: a light glides only WITHIN its plane (position, colour and patch size, exponential, frame-rate independent). When a
-//    sector's plane changes, its light is handed to one of the two FADING slots, where it stays put and fades out, and the sector's
-//    light starts on the new plane from nothing. Nothing is ever interpolated between two planes.
+//    sector's plane changes, its light is handed to one of the two FADING slots, where it stays and fades out, and the sector's
+//    light starts on the new plane from nothing (lights that leave the same plane share a slot as one light: FlashBounce.fade).
+//    Nothing is ever interpolated between two planes.
 //  - GPU, per fragment (flashBounceIrradiance): the sum of the FLASH_VPLS emitters as irradiance, in the light field's convention
 //    (three shows a Lambert surface as albedo x E / pi): pure arithmetic on plain render-group uniforms — no texture, no array, no
 //    uniform buffer of its own (the fog march's fragment stage is at WebGPU's 12 uniform buffers; every uniformArray would be one more).
@@ -267,7 +268,9 @@ export class FlashBounce {
   /** Per ray: its group inside its sector while the sectors are made, then the light that carries it (-1: none). */
   private readonly rayLight = new Int8Array(FLASH_RAYS);
   private readonly target = new Float64Array(FLASH_SECTORS * TS);
-  private readonly cur = new Float64Array(SS);
+  /** Per sector: the light it is to be (a light's state), and whether that is off the plane its light stands on. */
+  private readonly want = new Float64Array(FLASH_SECTORS * SS);
+  private readonly leave = new Uint8Array(FLASH_SECTORS);
   private readonly gSeed = new Int32Array(SECTOR_RAYS);
   private readonly gFlux = new Float64Array(SECTOR_RAYS);
   private cand = new Float64Array(32 * CS);
@@ -382,15 +385,15 @@ export class FlashBounce {
         if (!(h > 0.02)) continue;
         const hx = p.hx, hz = p.hz, ex = p.x - ox, ez = p.z - oz, r2 = far + hx + hz;
         if (ex * ex + ez * ez > r2 * r2) continue;
-        const y0 = p.y;
-        if (!occ.stops(p)) continue;
-        const top = occ.solidH < h ? occ.solidH : h;
-        if (!(top > 0.02)) continue;
         // its bounding sphere against the cone that holds the rays
-        const ey = y0 + top / 2 - oy, rad = Math.sqrt(hx * hx + hz * hz + top * top / 4), along = ex * ax + ey * ay + ez * az;
+        const y0 = p.y, ey = y0 + h / 2 - oy, rad = Math.sqrt(hx * hx + hz * hz + h * h / 4), along = ex * ax + ey * ay + ez * az;
         if (along < -rad) continue;
         const perp2 = ex * ex + ey * ey + ez * ez - along * along;
         if ((perp2 > 0 ? Math.sqrt(perp2) : 0) * cc - along * cs > rad) continue;
+        // (asked of the few boxes in the beam only) glass passes; glazing on a solid base stops up to that
+        if (!occ.stops(p)) continue;
+        const top = occ.solidH < h ? occ.solidH : h;
+        if (!(top > 0.02)) continue;
         const round = p.round === true;
         // a box the rays start in is not there for them (the player inside the train's shell box, or hugging furniture)
         if (oy >= y0 && oy <= y0 + top && (round ? ex * ex + ez * ez <= hx * hx : ex >= -hx && ex <= hx && ez >= -hz && ez <= hz)) continue;
@@ -544,7 +547,8 @@ export class FlashBounce {
         mx += w * ray[o + 4]; my += w * ray[o + 5]; mz += w * ray[o + 6];
         cr += ray[o + 7]; cg += ray[o + 8]; cb += ray[o + 9]; area += ray[o + 10];
       }
-      // the plane: the hits' mean normal, through the one of them that stands farthest out along it (a light is never inside its surface)
+      // the plane: the hits' mean normal, through the one of them that stands farthest out along it (on a flat surface that is the
+      // surface itself; on a round one the light is never behind the hits it stands for)
       const ml = Math.sqrt(mx * mx + my * my + mz * mz);
       mx /= ml; my /= ml; mz /= ml;
       let off = -NEVER;
@@ -588,10 +592,24 @@ export class FlashBounce {
 
     // 7. time: a light glides within its plane; a sector on a new plane hands its light to a fading slot and starts there from nothing
     const a = dt > 0 ? 1 - Math.exp(-dt / FLASH_BOUNCE_TAU) : 0;
-    const soft = T.soft / Math.PI, r0min = FB.params.value.y, r0minSq = r0min * r0min, cur = this.cur;
+    const soft = T.soft / Math.PI, r0min = FB.params.value.y, r0minSq = r0min * r0min, want = this.want, leave = this.leave;
+    // 7a. where each sector's light is to stand — the centroid of the hits it carries, on the plane, FLASH_BOUNCE_LIFT off it — and
+    //     whether that is another plane than the one its light is on
     for (let s = 0; s < FLASH_SECTORS; s++) {
       const S = s * SS, G = s * TS;
-      if (!tg[G]) {
+      leave[s] = 0;
+      if (!tg[G]) continue;
+      const nx = tg[G + 4], ny = tg[G + 5], nz = tg[G + 6], W = tg[G + 12];
+      const px = tg[G + 13] / W, py = tg[G + 14] / W, pz = tg[G + 15] / W, lift = tg[G + 7] - (nx * px + ny * py + nz * pz) + FLASH_BOUNCE_LIFT;
+      const r0 = soft * tg[G + 11];
+      want[S] = px + nx * lift; want[S + 1] = py + ny * lift; want[S + 2] = pz + nz * lift; want[S + 3] = nx; want[S + 4] = ny; want[S + 5] = nz;
+      want[S + 6] = tg[G + 8]; want[S + 7] = tg[G + 9]; want[S + 8] = tg[G + 10]; want[S + 9] = r0 > r0minSq ? r0 : r0minSq;
+      if (!snap && st[S + 6] + st[S + 7] + st[S + 8] > 0 && !this.samePlane(st, S, want, S)) leave[s] = 1;
+    }
+    // 7b. the sectors' lights
+    for (let s = 0; s < FLASH_SECTORS; s++) {
+      const S = s * SS;
+      if (!tg[s * TS]) {
         // no ray of the sector landed: its light fades out where it stood
         if (snap) st[S + 6] = st[S + 7] = st[S + 8] = 0;
         else {
@@ -600,51 +618,47 @@ export class FlashBounce {
         }
         continue;
       }
-      // where the light is to stand: the centroid of the hits it carries, on the plane, FLASH_BOUNCE_LIFT off it
-      const nx = tg[G + 4], ny = tg[G + 5], nz = tg[G + 6], W = tg[G + 12];
-      const px = tg[G + 13] / W, py = tg[G + 14] / W, pz = tg[G + 15] / W, lift = tg[G + 7] - (nx * px + ny * py + nz * pz) + FLASH_BOUNCE_LIFT;
-      const r0 = soft * tg[G + 11];
-      cur[0] = px + nx * lift; cur[1] = py + ny * lift; cur[2] = pz + nz * lift; cur[3] = nx; cur[4] = ny; cur[5] = nz;
-      cur[6] = tg[G + 8]; cur[7] = tg[G + 9]; cur[8] = tg[G + 10]; cur[9] = r0 > r0minSq ? r0 : r0minSq;
-      if (snap) { for (let q = 0; q < SS; q++) st[S + q] = cur[q]; continue; }
+      if (snap) { for (let q = 0; q < SS; q++) st[S + q] = want[S + q]; continue; }
       let have = st[S + 6] + st[S + 7] + st[S + 8];
-      if (have > 0 && !this.onPlane(S)) {
+      if (leave[s]) {
+        leave[s] = 0;
         // a fading light that stands on the new plane at this place comes back (the two change places: a sector whose rays straddle
-        // an edge can flip as often as it likes); else the sector's light goes to a fading slot — a dark one, else the dimmest
+        // an edge can flip as often as it likes)
         let slot = -1;
         for (let f = FLASH_SECTORS; f < FLASH_VPLS && slot < 0; f++) {
           const F = f * SS;
-          if (!(st[F + 6] + st[F + 7] + st[F + 8] > 0) || !this.onPlane(F)) continue;
-          const ex = st[F] - cur[0], ey = st[F + 1] - cur[1], ez = st[F + 2] - cur[2];
-          if (ex * ex + ey * ey + ez * ez <= 4 * (st[F + 9] > cur[9] ? st[F + 9] : cur[9])) slot = f;
+          if (!(st[F + 6] + st[F + 7] + st[F + 8] > 0) || !this.samePlane(st, F, want, S)) continue;
+          const ex = st[F] - want[S], ey = st[F + 1] - want[S + 1], ez = st[F + 2] - want[S + 2];
+          if (ex * ex + ey * ey + ez * ez <= 4 * (st[F + 9] > want[S + 9] ? st[F + 9] : want[S + 9])) slot = f;
         }
         if (slot >= 0) {
           const F = slot * SS;
           for (let q = 0; q < SS; q++) { const v = st[S + q]; st[S + q] = st[F + q]; st[F + q] = v; }
           have = st[S + 6] + st[S + 7] + st[S + 8];
         } else {
-          let least = NEVER;
-          for (let f = FLASH_SECTORS; f < FLASH_VPLS; f++) { const v = st[f * SS + 6] + st[f * SS + 7] + st[f * SS + 8]; if (v < least) { least = v; slot = f; } }
-          const F = slot * SS;
-          for (let q = 0; q < SS; q++) st[F + q] = st[S + q];
+          // (what leaves its plane with it in this update: the lights of the sectors after it that leave the same plane)
+          let all = have;
+          for (let q = s + 1; q < FLASH_SECTORS; q++) if (leave[q] && this.samePlane(st, q * SS, st, S)) all += st[q * SS + 6] + st[q * SS + 7] + st[q * SS + 8];
+          this.fade(S, all);
           st[S + 6] = st[S + 7] = st[S + 8] = 0;
           have = 0;
         }
       }
-      if (have > FLASH_BOUNCE_REVIVE * (cur[6] + cur[7] + cur[8])) {
-        st[S] += (cur[0] - st[S]) * a; st[S + 1] += (cur[1] - st[S + 1]) * a; st[S + 2] += (cur[2] - st[S + 2]) * a;
+      const nx = want[S + 3], ny = want[S + 4], nz = want[S + 5];
+      if (have > FLASH_BOUNCE_REVIVE * (want[S + 6] + want[S + 7] + want[S + 8])) {
+        st[S] += (want[S] - st[S]) * a; st[S + 1] += (want[S + 1] - st[S + 1]) * a; st[S + 2] += (want[S + 2] - st[S + 2]) * a;
         // (and exactly on the plane as it is now: the glide is along it)
-        const e = nx * (cur[0] - st[S]) + ny * (cur[1] - st[S + 1]) + nz * (cur[2] - st[S + 2]);
+        const e = nx * (want[S] - st[S]) + ny * (want[S + 1] - st[S + 1]) + nz * (want[S + 2] - st[S + 2]);
         st[S] += nx * e; st[S + 1] += ny * e; st[S + 2] += nz * e;
-        st[S + 9] += (cur[9] - st[S + 9]) * a;
+        st[S + 9] += (want[S + 9] - st[S + 9]) * a;
       } else {
         // it is off, or as good as: it stands at its place at once and fades in there
-        st[S] = cur[0]; st[S + 1] = cur[1]; st[S + 2] = cur[2]; st[S + 9] = cur[9];
+        st[S] = want[S]; st[S + 1] = want[S + 1]; st[S + 2] = want[S + 2]; st[S + 9] = want[S + 9];
       }
       st[S + 3] = nx; st[S + 4] = ny; st[S + 5] = nz;
-      st[S + 6] += (cur[6] - st[S + 6]) * a; st[S + 7] += (cur[7] - st[S + 7]) * a; st[S + 8] += (cur[8] - st[S + 8]) * a;
+      st[S + 6] += (want[S + 6] - st[S + 6]) * a; st[S + 7] += (want[S + 7] - st[S + 7]) * a; st[S + 8] += (want[S + 8] - st[S + 8]) * a;
     }
-    // the fading lights (one handed over in this very update too: it fades as it would have changed)
+    // the fading lights (one handed over in this very update too: it fades by as much as it would have changed)
     if (!snap) {
       for (let f = FLASH_SECTORS; f < FLASH_VPLS; f++) {
         const F = f * SS;
@@ -695,13 +709,46 @@ export class FlashBounce {
     };
   }
 
-  /** Light `S` (its state's offset) stands on the plane of `cur` (the light a sector is to be): the normals agree and each stands on the other's plane. */
-  private onPlane(S: number): boolean {
-    const st = this.state, c = this.cur, T = FLASH_BOUNCE_TUNING, gap = T.planeGap;
-    if (st[S + 3] * c[3] + st[S + 4] * c[4] + st[S + 5] * c[5] < Math.cos(T.planeAngle * Math.PI / 180)) return false;
-    const ex = st[S] - c[0], ey = st[S + 1] - c[1], ez = st[S + 2] - c[2];
-    const a = c[3] * ex + c[4] * ey + c[5] * ez, b = st[S + 3] * ex + st[S + 4] * ey + st[S + 5] * ez;
-    return a <= gap && a >= -gap && b <= gap && b >= -gap;
+  /** Two lights (a position and a unit normal each, at `A` in `a` and at `B` in `b`) stand on one plane: the normals agree and each stands on the other's plane. */
+  private samePlane(a: Float64Array, A: number, b: Float64Array, B: number): boolean {
+    const T = FLASH_BOUNCE_TUNING, gap = T.planeGap;
+    if (a[A + 3] * b[B + 3] + a[A + 4] * b[B + 4] + a[A + 5] * b[B + 5] < Math.cos(T.planeAngle * Math.PI / 180)) return false;
+    const ex = a[A] - b[B], ey = a[A + 1] - b[B + 1], ez = a[A + 2] - b[B + 2];
+    const u = b[B + 3] * ex + b[B + 4] * ey + b[B + 5] * ez, v = a[A + 3] * ex + a[A + 4] * ey + a[A + 5] * ez;
+    return u <= gap && u >= -gap && v <= gap && v >= -gap;
+  }
+
+  /**
+   * The sector light at `S` leaves its plane: it is handed to a fading slot, where it stays and fades out. `all`: the flux (sum of
+   * transfer) that leaves that plane in this update, this light's and the later sectors'.
+   *  - A fading light already on ITS plane takes it in: the two become one light on that plane, at their flux-weighted centre, with
+   *    both fluxes and a patch as large as both and their distance (when the whole beam leaves a wall at once, the wall keeps one
+   *    fading light with all its flux — nothing is lost to the two slots);
+   *  - else a dark slot;
+   *  - else the dimmest slot's place, when what leaves this light's plane is more than that slot holds (what goes dark at once is
+   *    the least there is); else this light goes dark at once.
+   */
+  private fade(S: number, all: number): void {
+    const st = this.state, mine = st[S + 6] + st[S + 7] + st[S + 8];
+    let dark = -1, dim = -1, least = NEVER;
+    for (let f = FLASH_SECTORS; f < FLASH_VPLS; f++) {
+      const F = f * SS, w = st[F + 6] + st[F + 7] + st[F + 8];
+      if (!(w > 0)) { if (dark < 0) dark = f; continue; }
+      if (this.samePlane(st, F, st, S)) {
+        const t = mine / (w + mine), ex = st[S] - st[F], ey = st[S + 1] - st[F + 1], ez = st[S + 2] - st[F + 2];
+        st[F] += ex * t; st[F + 1] += ey * t; st[F + 2] += ez * t;
+        const nx = st[F + 3] + (st[S + 3] - st[F + 3]) * t, ny = st[F + 4] + (st[S + 4] - st[F + 4]) * t, nz = st[F + 5] + (st[S + 5] - st[F + 5]) * t;
+        const nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        st[F + 3] = nx / nl; st[F + 4] = ny / nl; st[F + 5] = nz / nl;
+        st[F + 6] += st[S + 6]; st[F + 7] += st[S + 7]; st[F + 8] += st[S + 8];
+        st[F + 9] += st[S + 9] + t * (1 - t) * (ex * ex + ey * ey + ez * ez);
+        return;
+      }
+      if (w < least) { least = w; dim = f; }
+    }
+    const to = dark >= 0 ? dark : all > least ? dim : -1;
+    if (to < 0) return;
+    for (let q = 0; q < SS; q++) st[to * SS + q] = st[S + q];
   }
 
   /** Room for more occluders in the beam (rare: the buffers double and stay). */
