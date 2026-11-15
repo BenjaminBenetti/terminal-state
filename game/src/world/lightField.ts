@@ -778,7 +778,8 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
     //    between hold the mean of the four wall faces. A floor is not lit by its own bounce; a ceiling gets the floor's in full.
     //    This is all a plain light node, the fog and the CPU sampler without a normal know of it;
     //  - in the cube slices, per face, as the DIFFERENCE between that face and the main texel's share: the enhanced light node adds
-    //    the faces its normal points at, so every surface gets what its own orientation receives (main texel + difference = the face).
+    //    the faces its normal points at, so every surface gets what its own orientation receives (main texel + difference = the face;
+    //    the difference also carries a per-channel correction of the main texel's one-share split, see below).
     // The flicker shares count the gathered light's own circuits.
     const ix = ind ? ind.index[s] : null, id = ind ? ind.data : null, cohK = new Float32Array(LAYERS), baseK = new Float32Array(LAYERS * 4);
     const gb = gi0 + giSlotBase(s);
@@ -846,9 +847,16 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
         data[ob + 2] = u8(dl > 1e-6 ? dzv * inv * 0.5 + 0.5 : 0.5);
         data[ob + 3] = tl > 0 ? u8((G2Ls[i * L + k] * coh + (ml > 0 ? id![q + 20] / ml * bl : 0)) / tl) : 0;
         if (!cube) continue;
+        // The main texel has ONE scalar share (rho) for its three channels, so its directional part T x rho carries the gathered
+        // light's colour along with the direct light's, and its ambient part lacks it: on a surface turned away from a strong
+        // direct light a red floor's bounce would arrive nearly grey. The cube gives the ambient part back what the split took
+        // (per channel: T x rho - the direct light's own directional part), the same on every face: under full shading the
+        // ambient is then exactly the direct light's scatter + the gathered face, per channel.
+        const sh = el > 0 ? dl / el : 0;
+        const kr = r * rho - Es[vi] * sh - br, kg = gg * rho - Es[vi + 1] * sh - bg, kb = b * rho - Es[vi + 2] * sh - bb;
         for (let f = 0; f < GI_FACES; f++) {
           const og = (((gb + f * L + k) * H + cy) * W + cx) * 4, qf = q + f * 3;
-          data[og] = encD(id![qf] - br); data[og + 1] = encD(id![qf + 1] - bg); data[og + 2] = encD(id![qf + 2] - bb); data[og + 3] = 255;
+          data[og] = encD(id![qf] + kr); data[og + 1] = encD(id![qf + 1] + kg); data[og + 2] = encD(id![qf + 2] + kb); data[og + 3] = 255;
         }
       }
     } };
