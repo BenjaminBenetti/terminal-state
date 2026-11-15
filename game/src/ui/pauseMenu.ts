@@ -107,8 +107,10 @@ const CSS = `
 #pause .pause-perf .perf-rec { margin-top: 0; }
 #pause .pause-perf .perf-rec > h3 { display: none; }
 #pause .pause-perf #seed-line { margin: 14px 0 0; overflow-wrap: anywhere; }
+#pause #pause-controls-form { margin-top: 12px; }
 #pause .controls-grid { margin-top: 14px; font-size: 13.5px; }
-#pause .controls-grid kbd { font-size: 13px; }
+#pause .controls-grid div { align-items: baseline; }
+#pause .controls-grid kbd { flex: none; font-size: 13px; white-space: nowrap; text-align: right; }
 #pause .pause-leave-save { margin: 14px 0 6px; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
 #pause .pause-leave-warn { margin: 0 0 8px; font-size: 15px; font-weight: 700; color: #f0a497; }
 #pause .pause-leave-warn:empty, #pause #pause-leave-hint:empty { display: none; }

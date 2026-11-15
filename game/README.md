@@ -340,8 +340,15 @@ city in green fog, surface tracks, the player train; render only, no world state
 first, then loads the game files in the background (a line at the foot of the menu); New game / Continue wait for them. No
 level is built before New game / Continue. Settings (FOV 60-100, master volume 0-100 %, mute, quality, render resolution, and train
 sway 0-100 % = the moving train's jostle on the view, 0 = off) and the Controls' input preferences (mouse sensitivity, invert X / Y:
-the main menu's Controls view and the pause menu's Controls section, above the key bindings) persist in one record in `localStorage` (`terminal-state.settings.v1`, `src/ui/settingsStore.ts`); the pause menu edits
+the main menu's Controls view and the pause menu's Controls view, above the key bindings) persist in one record in `localStorage` (`terminal-state.settings.v1`, `src/ui/settingsStore.ts`); the pause menu edits
 the same store.
+
+Pause menu (task studio-pause-menu-cleanup-20261115-000847-01, `src/ui/pauseMenu.ts`): Esc opens a short list — Resume, Settings,
+Controls, Fullscreen, Main menu. **Settings** has Graphics / Audio / Gameplay / Performance tabs over the same form (Graphics keeps
+the technical read-outs behind *Show details*; the live lighting status and warnings stay visible; Performance holds the recorder
+and the run codes); **Controls** holds the input preferences and the bindings; **Main menu** in a campaign asks first, with the last
+save and what is lost. Esc / Back go one level up, the arrow keys move through the lists and tabs, and the header line under
+*Paused* shows warm-up progress or a failed mouse capture in every view.
 
 Campaign polish (task campaign-polish-20261103, lane MENU): the side column lists only Continue / New game / Load save / Settings /
 **Controls** / Dev start; every submenu opens as a centred dialog over a light dimmer (Esc / Back step back). Controls shows the
@@ -375,7 +382,7 @@ of the URL's level / seeds is prepared (never saved, no slot), then `__LL.state(
 settings, slots) with the QA hooks (`window.__menu`); there `#btn-start` builds the scratch run when clicked.
 
 ## URL parameters (optional, session-only)
-- `?seed=CODE` — replay a station code shown in the pause menu (debug/share): the menu's Dev start (Subway seed).
+- `?seed=CODE` — replay a station code shown in the pause menu (Settings › Performance, the run codes for bug reports): the menu's Dev start (Subway seed).
   Reloading without it always makes a new station. (`?officeSeed=` / `?mallSeed=` / `?reactorSeed=`, `?level=` likewise.)
 - `?quality=low` — the Low "Fog, shadows & anti-aliasing" setting (the 0.85 pixel-ratio cap, the low volumetric-haze preset, the
   512 px flashlight shadow, no MSAA; no light is removed). Session-only: it overrides the stored setting without changing it.
