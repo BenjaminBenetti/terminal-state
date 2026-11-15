@@ -92,7 +92,7 @@ export function eventFaceMaterial(paint: string, variant: number, glow = 0): THR
   if (m) return m;
   const painter = PAINTERS[paint];
   if (!painter || !hasDom()) {
-    if (!plain) { plain = new SurfaceNodeMaterial({color: 0xd9d5cc, roughness: 0.85, metalness: 0}); plain.name = 'skyways-event-face-plain'; }
+    if (!plain) { plain = new SurfaceNodeMaterial({color: 0xd9d5cc, roughness: 0.85, metalness: 0}); plain.name = 'event-face-plain'; }
     return plain;
   }
   const c = document.createElement('canvas');
@@ -106,7 +106,7 @@ export function eventFaceMaterial(paint: string, variant: number, glow = 0): THR
   t.generateMipmaps = true;
   m = glow > 0 ? new SurfaceNodeMaterial({map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: glow, roughness: 0.3, metalness: 0})
     : new SurfaceNodeMaterial({map: t, roughness: 0.8, metalness: 0});
-  m.name = `skyways-event-face-${paint}`;
+  m.name = `event-face-${paint}`; // (never 'skyways-…': that prefix names the Skyways ARCHITECTURE's materials, tests/skyways-view.test.ts)
   FACE_MATS.set(key, m);
   return m;
 }

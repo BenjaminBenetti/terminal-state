@@ -55,7 +55,7 @@ export function golfTurfTexture(): THREE.DataTexture {
   t.minFilter = THREE.LinearMipmapLinearFilter;
   t.generateMipmaps = true;
   t.anisotropy = 4;
-  t.name = 'skyways-golf-turf';
+  t.name = 'event-golf-turf';
   t.needsUpdate = true;
   return (turfTex = t);
 }
@@ -69,7 +69,7 @@ export function golfTurfMaterial(tint: number): SurfaceNodeMaterial {
   m = new SurfaceNodeMaterial({map: golfTurfTexture(), color: GOLF_TINTS[k], roughness: GOLF_TURF.roughness, metalness: 0});
   worldMapped(m, {span: [GOLF_TURF.span, GOLF_TURF.span], macro: 0.12});
   tagReflect(m, 'none');
-  m.name = `skyways-golf-turf-${k}`;
+  m.name = `event-golf-turf-${k}`;
   TURF_MATS.set(k, m);
   return m;
 }
