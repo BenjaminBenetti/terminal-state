@@ -71,7 +71,7 @@
     .confirm p { margin: 0; }
     .confirm .actions { margin: 10px 0 8px; }
     .confirm.danger { border-left-color: var(--red); }
-    .run-line { color: var(--cream); }
+    /* (the pause menu's own layout: ui/pauseMenu.ts, task studio-pause-menu-cleanup-20261115-000847-01) */
   </style>
 </head>
 <body>
@@ -137,38 +137,78 @@
       </div>
     </section>
 
+    <!-- task studio-pause-menu-cleanup-20261115-000847-01: the pause menu = a short main list + submenus (ui/pauseMenu.ts: the views,
+         Esc / Back, focus, the Settings tabs). The header's status line is the FIRST `#pause .fine` (game.ts writes warm-up / relight
+         progress, a failed mouse capture or travel into it) and shows in every view. -->
     <section id="pause" class="screen hidden">
-      <div class="panel">
+      <div class="panel pause-panel" role="dialog" aria-modal="true" aria-labelledby="pause-title" data-view="main">
         <div class="stripe"></div>
-        <h2>Paused</h2>
-        <p class="fine">Combat is frozen while this menu is open.</p>
-        <p class="fine run-line" id="pause-run"></p>
-        <div class="actions">
-          <button id="btn-resume" class="primary">Resume</button>
-          <button id="btn-travel">Travel to Office Space</button>
-          <button id="btn-travel-2">Travel to the Shopping Center</button>
-          <button id="btn-travel-3">Travel to the Reactor</button>
-          <button id="btn-travel-4">Travel to Skyways</button>
-          <button id="btn-new-game">New game</button>
-          <button class="btn-fullscreen" type="button">Fullscreen</button>
+        <div class="pause-head">
+          <h2 id="pause-title">Paused</h2>
+          <p class="pause-where" id="pause-run"></p>
+          <p class="fine pause-status" role="status" aria-live="polite"></p>
         </div>
-        <div class="confirm hidden" id="confirm-travel">
-          <p>Travel to <b class="to">Office Space</b>? Your inventory, gear and backpack, health, food and water, battery and injuries come with you. This level stays as you leave it.</p>
-          <div class="actions"><button id="btn-travel-go" class="primary">Travel</button><button class="btn-cancel" type="button">Cancel</button></div>
+        <div class="pause-view" data-pause-view="main">
+          <div class="actions pause-list" role="group" aria-label="Pause menu">
+            <button id="btn-resume" class="primary" type="button">Resume</button>
+            <button id="btn-pause-settings" type="button" data-pause-open="settings">Settings</button>
+            <button id="btn-pause-controls" type="button" data-pause-open="controls">Controls</button>
+            <button class="btn-fullscreen" type="button">Fullscreen</button>
+            <button id="btn-travel" type="button">Travel to Office Space</button>
+            <button id="btn-travel-2" type="button">Travel to the Shopping Center</button>
+            <button id="btn-travel-3" type="button">Travel to the Reactor</button>
+            <button id="btn-travel-4" type="button">Travel to Skyways</button>
+            <button id="btn-new-game" type="button">New game</button>
+            <button id="btn-main-menu" type="button" data-pause-leave>Main menu</button>
+          </div>
+          <p class="fine fs-status"></p>
+          <!-- (Iteration 16, lane RUN) a scratch (non-campaign) run's travel / new game; main.ts hides them in a campaign -->
+          <div class="confirm hidden" id="confirm-travel">
+            <p>Travel to <b class="to">Office Space</b>? Your inventory, gear and backpack, health, food and water, battery and injuries come with you. This level stays as you leave it.</p>
+            <div class="actions"><button id="btn-travel-go" class="primary">Travel</button><button class="btn-cancel" type="button">Cancel</button></div>
+          </div>
+          <div class="confirm danger hidden" id="confirm-new">
+            <p><b>Start a new game?</b> Everything resets — a fresh starter kit, full health, no gear or injuries — and every level is generated anew. This run is lost.</p>
+            <div class="actions"><button class="btn-new-level primary" type="button" data-level="subway">New game · Subway</button><button class="btn-new-level" type="button" data-level="office">New game · Office Space</button><button class="btn-new-level" type="button" data-level="mall">New game · Shopping Center</button><button class="btn-new-level" type="button" data-level="skyways">New game · Skyways</button><button class="btn-new-level" type="button" data-level="reactor">New game · Reactor</button><button class="btn-cancel" type="button">Cancel</button></div>
+          </div>
         </div>
-        <div class="confirm danger hidden" id="confirm-new">
-          <p><b>Start a new game?</b> Everything resets — a fresh starter kit, full health, no gear or injuries — and every level is generated anew. This run is lost.</p>
-          <div class="actions"><button class="btn-new-level primary" type="button" data-level="subway">New game · Subway</button><button class="btn-new-level" type="button" data-level="office">New game · Office Space</button><button class="btn-new-level" type="button" data-level="mall">New game · Shopping Center</button><button class="btn-new-level" type="button" data-level="skyways">New game · Skyways</button><button class="btn-new-level" type="button" data-level="reactor">New game · Reactor</button><button class="btn-cancel" type="button">Cancel</button></div>
+        <div class="pause-view hidden" data-pause-view="settings">
+          <div class="pause-tabs" role="tablist" aria-label="Settings">
+            <button type="button" role="tab" id="pause-tab-graphics" data-tab="graphics" aria-controls="pause-settings">Graphics</button>
+            <button type="button" role="tab" id="pause-tab-audio" data-tab="audio" aria-controls="pause-settings">Audio</button>
+            <button type="button" role="tab" id="pause-tab-gameplay" data-tab="gameplay" aria-controls="pause-settings">Gameplay</button>
+            <button type="button" role="tab" id="pause-tab-performance" data-tab="performance" aria-controls="pause-perf">Performance</button>
+          </div>
+          <div class="pause-body">
+            <!-- (lane MENU) the same settings form as the main menu, bound to the persisted settings store (ui/mainMenu.ts mountSettingsForm; ids set-*); each row's data-group puts it on its tab -->
+            <div class="settings" id="pause-settings" role="tabpanel"></div>
+            <div class="pause-details"><button type="button" id="pause-details" aria-controls="pause-settings" aria-expanded="false">Show details</button></div>
+            <!-- (lane RECORDER) the performance recorder (debug/perfRecorderUi.ts mountPanel, ids pause-perf-*) and the run codes (game.ts) -->
+            <div class="pause-perf hidden" id="pause-perf" role="tabpanel" aria-labelledby="pause-tab-performance"><p class="fine" id="seed-line"></p></div>
+          </div>
         </div>
-        <p class="fine fs-status"></p>
-        <!-- (lane MENU) the same settings form as the main menu, bound to the persisted settings store (ui/mainMenu.ts mountSettingsForm; ids set-*) -->
-        <h3 class="pause-sub">Settings</h3>
-        <div class="settings" id="pause-settings"></div>
-        <!-- (task studio-alpha-survival-controls-20261107-060450-01) Controls: the input preferences (mountControlsForm; ids set-sens / set-invert-x / set-invert) + the bindings -->
-        <h3 class="pause-sub">Controls</h3>
-        <div class="settings" id="pause-controls-form"></div>
-        <div class="controls-grid" id="controls-pause"></div>
-        <p class="fine" id="seed-line"></p>
+        <div class="pause-view hidden" data-pause-view="controls">
+          <div class="pause-body">
+            <!-- (task studio-alpha-survival-controls-20261107-060450-01) Controls: the input preferences (mountControlsForm; ids set-sens / set-invert-x / set-invert) + the bindings -->
+            <div class="settings" id="pause-controls-form"></div>
+            <div class="controls-grid" id="controls-pause"></div>
+          </div>
+        </div>
+        <div class="pause-view hidden" data-pause-view="leave">
+          <div class="pause-body">
+            <p class="pause-leave-save" id="pause-leave-save"></p>
+            <p class="pause-leave-warn" id="pause-leave-warn"></p>
+            <p class="fine" id="pause-leave-hint"></p>
+          </div>
+          <div class="actions pause-confirm" role="group" aria-label="Leave to the main menu">
+            <button id="btn-leave-go" class="danger" type="button">Leave to main menu</button>
+            <button type="button" data-pause-back>Cancel</button>
+          </div>
+        </div>
+        <div class="pause-foot hidden">
+          <button type="button" class="pause-back" data-pause-back aria-keyshortcuts="Escape">Back</button>
+          <span class="pause-keyhint"><kbd>Esc</kbd> back</span>
+        </div>
       </div>
     </section>
 

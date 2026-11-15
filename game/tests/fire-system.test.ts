@@ -623,6 +623,8 @@ describe('fire: presentation rules', () => {
     // nothing ON the non-graphic body: with only it alight (no stream, no patches) no flame is spawned
     w.sys.streamEnd(false);
     w.sys.patches.length = 0;
+    // (the released stream's head burns on while its last flame is still in flight: let that tail end first)
+    for (let k = 0; k < 60; k++) fx.frame(1 / 60, w.sys, {muzzle: null, pilot: false, eye});
     const before = fx.counts.flames;
     for (let k = 0; k < 30; k++) fx.frame(1 / 60, w.sys, {muzzle: null, pilot: false, eye});
     expect(w.sys.alight.has(bb)).toBe(true);

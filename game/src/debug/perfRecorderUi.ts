@@ -1,8 +1,8 @@
 // Task studio-performance-recorder-20261103-043629 (lane RECORDER): the performance recorder's IN-GAME UI.
 //
-//  - A "Performance" section in the pause menu (and the main menu's Settings): Start recording / Stop & Download report /
-//    Download last report / Discard, the keys, and the privacy line. Start, then Resume and play: the capture runs through play,
-//    pause, menus, loading and travel (every frame tagged with its state); stop here or with the key.
+//  - A "Performance" section in the pause menu's Settings (its Performance tab) and the main menu's Settings: Start recording /
+//    Stop & Download report / Download last report / Discard, the keys, and the privacy line. Start, then Resume and play: the capture
+//    runs through play, pause, menus, loading and travel (every frame tagged with its state); stop here or with the key.
 //  - A small recording badge + timer (top centre, pointer-events none) while recording, and a short notice when a report is ready.
 //  - Keys (inspected against every existing binding — game input WASD / Space / Shift / C / E / Q / F / G / T / H / R / M / I / Tab /
 //    Esc / 1-6 / ` / mouse, the inventory / Lockbox (digits, 1337) / bag views, the paper map (arrows, +/-, F, Home, Enter, Backspace,
@@ -162,7 +162,7 @@ export class PerfRecorderUi {
     if (c.phase === 'recording') this.startTick();
     if (c.phase === 'ready' && c.report) {
       if (this.pendingDownload) { this.pendingDownload = false; this.download(); this.flash('Performance report downloaded', 4000); }
-      else this.flash(`Performance report ready (${TERMINATION_TEXT[c.report.termination] ?? c.report.termination}) — Esc, Performance, Download`, 9000);
+      else this.flash(`Performance report ready (${TERMINATION_TEXT[c.report.termination] ?? c.report.termination}) — Esc › Settings › Performance to download`, 9000); // (task studio-pause-menu-cleanup-20261115-000847-01: the pause menu's path)
     }
     if (c.phase === 'idle' && c.error) this.flash(`Performance recorder: ${c.error}`, 8000);
     this.renderPanels();

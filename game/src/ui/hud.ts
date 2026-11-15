@@ -686,7 +686,7 @@ export const CONTROLS: [string, string][] = [
   ['Quick slots', '1 – 5 · wheel'], ['Melee weapon', '~'], ['Throw equipped grenade', 'Hold G'],
   ['Gas mask on/off', 'Q'], ['Flashlight', 'F'], ['Quick heal', 'H'], ['Inventory', 'Tab or I'], ['Backpack slot', '6'],
   ['Climb ladder · let go', 'E · Space or S'], ['Mute', 'M'], ['Pause / release mouse', 'Esc'],
-  // task studio-performance-recorder-20261103-043629 (lane RECORDER): debug/perfRecorderUi.ts RECORDER_KEYS (also Pause → Performance)
+  // task studio-performance-recorder-20261103-043629 (lane RECORDER): debug/perfRecorderUi.ts RECORDER_KEYS (also Pause → Settings → Performance)
   ['Performance recording: start / stop · mark a stutter', 'F8 · F9'],
 ];
 

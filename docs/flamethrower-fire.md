@@ -105,13 +105,32 @@ green fog is reserved for toxic gas.
 
 `game/src/fire/fireFx.ts`. Everything is pooled; nothing is allocated while playing.
 
-- **Flames**: one additive sprite ring (768). A flame is drawn inside its sprite: a standing tongue with its foot on the surface,
-  torn into licks by noise that streams up through it, or a rolling gout for the stream and splashes. Colour follows density, from
-  white-yellow at the foot to deep red at the tips.
+- **Flames**: one sprite ring (768). A flame is drawn inside its sprite: a standing tongue with its foot on the surface, torn into
+  licks by noise that streams up through it, or a rolling gout for splashes. Colour follows density, from white-yellow at the foot to
+  deep red at the tips. The ring blends premultiplied light plus an occlusion share (`ONE, ONE_MINUS_SRC_ALPHA`; the target's alpha
+  is kept). The clinging fire's shapes occlude nothing and so look as they always did (additive). The stream's gouts hide a share of
+  what is behind them, so the jet has body instead of glowing like gas.
+- **The stream**: a burning jet from the burner bell to where the rules' aim ray stops, inside the rules' cone. It is built from:
+  - a white-hot flicker at the nozzle;
+  - a core of fast hot streaks along the axis, each stretched along its own on-screen motion (motion blur, so the jet reads as speed);
+  - a rolling body of turbulent gouts, narrow near the bell and blooming toward the end, cooling from yellow to deep red. They are
+    stretched along their motion, and a smooth turbulence field pushes them across their flight, so the jet snakes without ever
+    surging past its end;
+  - tongues peeling off the body's upper edge and rising;
+  - the head where it stops. In open air these are rolling billows. On a surface it is a splash that runs on along the surface the way
+    the jet was going, with sparks;
+  - sooty smoke off the body's far half and the head.
+
+  The front travels at `FLAME.speed`, the rules' own delay, so the head appears only when the fire lands. After a release the head
+  burns on for the last flame's flight time. No stream sprite is drawn past the reach (`fire-stream-look.test.ts`).
+- **Stream light**: the game's pooled muzzle light, as before (half way to where the stream stops, at most 2.4 m out). While the
+  flamethrower is held it is fire-coloured (`FIRE_FX.streamLight`), breathes smoothly instead of strobing every frame, and is dimmed
+  when the stream hits something close. That keeps a near wall from washing out to white.
 - **Smoke**: a second sprite ring (256), lit orange-brown where it leaves the flames and going dark as it climbs.
 - **Glow and soot**: instanced marks on the burning surface. Soot stays about 80 s and is never saved.
 - **Light**: one pooled fire light, created at start-up and dark when idle, so the scene's light set never changes. It follows the
-  strongest fire near the camera and is occluded by walls like a flare's.
+  strongest fire near the camera and is occluded by walls like a flare's. A fire on a wall puts it about a metre out from the wall, so
+  it lights the room instead of overexposing the wall it is on. The stream's open-air head is a candidate too.
 - **Volumetric smoke**: the two strongest fires raise plumes in the existing fog pass (the flare's smoke emitters). With the fog
   pass off or unsupported, the sprite smoke and the light still show.
 - A burning prop is overlaid by a charring shell that glows faintly and collapses at the end.
@@ -159,6 +178,8 @@ Both are Meshy image-to-3D models of one Codex design image each, with Meshy's o
 - `flamethrower-stream`: exact fuel accounting at four frame rates, taps, a long frame, dry and no-tank triggers, the pour.
 - `fire-system`: the cone, shielding, afterburn, kills, patches on wall / floor / ceiling, merging and the cap, the player's burn
   rules, prop heating, embers, `clear()`, the colour rules, the look's state.
+- `fire-stream-look`: the stream's layers, its reach and cone (open air and two walls), the front's speed and the release tail, the
+  stream light, the flame blend and the fixed ring sizes.
 - `fire-props`: the real melt engine over a real station: a holder burning out with its lots, no salvage, the record, a chest's
   stacks, a fuel cart's cans, protected props.
 - `fuel-tank-state`, `flamethrower-economy`, `flamethrower-market`: the tank's fuel through every store and save, the recipes, the
