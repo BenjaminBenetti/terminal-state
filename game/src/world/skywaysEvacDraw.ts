@@ -41,6 +41,14 @@ export function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxW: num
   return out;
 }
 
+/** Sets the largest font (`size` px down to 10) at which one line of `text` fits `maxW` px; returns its size. */
+function fitFont(ctx: CanvasRenderingContext2D, text: string, maxW: number, size: number, face: string, style = ''): number {
+  let s = Math.round(size);
+  for (; s > 10; s--) { ctx.font = `${style}${s}px ${face}`; if (ctx.measureText(text).width <= maxW) break; }
+  ctx.font = `${style}${s}px ${face}`;
+  return s;
+}
+
 /** Draws a note's paper and text (w x h px). */
 export function drawEvacNote(ctx: CanvasRenderingContext2D, w: number, h: number, note: EvacNote, seed: number): void {
   const j = jitter(seed + 17);
@@ -49,8 +57,9 @@ export function drawEvacNote(ctx: CanvasRenderingContext2D, w: number, h: number
   if (note.paper === 'notice') {
     ctx.fillStyle = '#f4f2ec'; ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = '#1f4e79'; ctx.fillRect(0, 0, w, h * 0.085);
-    ctx.fillStyle = '#ffffff'; ctx.font = `bold ${Math.round(h * 0.04)}px ${PRINT_FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText('EMERGENCY SHELTER · STAFF NOTICE', m * 0.6, h * 0.043);
+    const head = 'EMERGENCY SHELTER · STAFF NOTICE';
+    ctx.fillStyle = '#ffffff'; fitFont(ctx, head, w - m * 1.2, h * 0.04, PRINT_FONT, 'bold '); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(head, m * 0.6, h * 0.043);
   } else if (note.paper === 'lined') {
     ctx.fillStyle = '#f6efc9'; ctx.fillRect(0, 0, w, h);
     ctx.strokeStyle = 'rgba(70,110,170,0.45)'; ctx.lineWidth = Math.max(1, h * 0.002);
@@ -85,9 +94,10 @@ export function drawEvacNote(ctx: CanvasRenderingContext2D, w: number, h: number
     if (y > h * 0.94) break;
   }
   if (note.sign && y < h * 0.92) {
-    ctx.font = `italic ${Math.round(h * 0.038)}px ${EVAC_HAND_FONT}`;
+    const sign = `- ${note.sign}`;
+    fitFont(ctx, sign, w - 2 * m, h * 0.038, EVAC_HAND_FONT, 'italic ');
     ctx.textAlign = 'right';
-    ctx.fillText(`- ${note.sign}`, w - m, Math.min(h * 0.94, y + h * 0.05));
+    ctx.fillText(sign, w - m, Math.min(h * 0.94, y + h * 0.05));
   }
 }
 
@@ -97,8 +107,8 @@ export function drawEvacWarn(ctx: CanvasRenderingContext2D, w: number, h: number
   ctx.fillStyle = '#e4ded0'; ctx.fillRect(0, 0, w, h);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   lines.forEach((ln, k) => {
-    const size = Math.round(h * (k === 0 ? 0.3 : 0.24));
-    ctx.font = `${size}px ${MARKER_FONT}`;
+    // (fitted to the sheet: a wide fallback face shrinks instead of running off the board)
+    const size = fitFont(ctx, ln, w * 0.9, h * (k === 0 ? 0.3 : 0.24), MARKER_FONT);
     ctx.fillStyle = k === 0 ? '#b3121b' : '#151515';
     ctx.save();
     ctx.translate(w / 2 + j() * w * 0.02, h * (k === 0 ? 0.34 : 0.72));
