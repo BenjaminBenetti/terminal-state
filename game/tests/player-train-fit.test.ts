@@ -12,6 +12,7 @@ import {loadStripped} from './helpers/openablesFixture';
 import {PLAYER_TRAIN_SPEC as S} from '../src/world/playerTrainSpec';
 import {TRAIN_GLASS, TRAIN_VIEW, TrainMaterials, buildTrainView, type TrainView} from '../src/world/playerTrainView';
 import {trainColliders} from '../src/world/playerTrain';
+import {cabGlassMaterial} from '../src/world/elevator';
 
 installCanvasShim(false);
 
@@ -224,5 +225,44 @@ describe('player train fit: conformal window glass (lane ASSETS\' sheets + revea
       }
       expect(outside, `${q.node}: vertices outside its hitscan slabs`).toBe(0);
     }
+  });
+});
+
+// Task train-glass-reflection-fix-20261115-213533 (the player's screenshot: milky, warped panes): what the glass's shading may not
+// rely on. Three draws an instanced mesh with the OBJECT's winding, so a mirrored instance's triangles wind against their normals.
+describe('player train fit: the glass\'s winding', () => {
+  it('the fixed panes wind with their normals; every +X door leaf\'s glass is a mirrored instance winding against them — the glass faces the eye by the geometry alone', () => {
+    const census = (g: THREE.BufferGeometry, m: THREE.Matrix4): {agree: number; against: number} => {
+      const pos = g.attributes.position, nor = g.attributes.normal, idx = g.index, nm = new THREE.Matrix3().getNormalMatrix(m);
+      const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), w = new THREE.Vector3();
+      const r = {agree: 0, against: 0};
+      for (let t = 0, T = (idx ? idx.count : pos.count) / 3; t < T; t++) {
+        const i = [0, 1, 2].map(k => (idx ? idx.getX(3 * t + k) : 3 * t + k));
+        a.fromBufferAttribute(pos, i[0]).applyMatrix4(m); b.fromBufferAttribute(pos, i[1]).applyMatrix4(m); c.fromBufferAttribute(pos, i[2]).applyMatrix4(m);
+        w.subVectors(b, a).cross(c.sub(a));
+        n.set(0, 0, 0);
+        for (const k of i) n.add(new THREE.Vector3().fromBufferAttribute(nor, k));
+        n.applyMatrix3(nm);
+        if (w.dot(n) >= 0) r.agree++; else r.against++;
+      }
+      return r;
+    };
+    const fixed = view.fixed.getObjectByName('train-glass') as THREE.Mesh;
+    const f = census(fixed.geometry, fixed.matrixWorld);
+    expect(f.against).toBe(0);
+    expect(f.agree).toBeGreaterThan(0);
+    const im = view.leafGlass!.mesh, mi = new THREE.Matrix4(), mm = new THREE.Matrix4();
+    expect(im.matrixWorld.determinant()).toBeGreaterThan(0); // (three flips the winding per object only)
+    let mirrored = 0;
+    for (let i = 0; i < im.count; i++) {
+      im.getMatrixAt(i, mi);
+      const r = census(im.geometry, mm.multiplyMatrices(im.matrixWorld, mi));
+      if (mi.determinant() < 0) { mirrored++; expect(r.agree, `leaf glass ${i}`).toBe(0); } else expect(r.against, `leaf glass ${i}`).toBe(0);
+    }
+    expect(mirrored).toBe(S.doors.length);
+    // ... so the shared glass's shading normal is not the two-sided winding one (glass-mirror.test.ts: no front-facing builtin)
+    expect(im.material).toBe(cabGlassMaterial());
+    expect(fixed.material).toBe(cabGlassMaterial());
+    expect((cabGlassMaterial() as unknown as {normalNode: unknown}).normalNode).toBeTruthy();
   });
 });

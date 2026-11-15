@@ -382,6 +382,8 @@ describe('the reflecting field light', () => {
       glass: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'glass'),
       window: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'window'),
       tile: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0, roughness: 0.3}), 'gloss'),
+      // (task train-glass-reflection-fix-20261115-213533: a cab's glass — the train, the glass lift — reflects by its own Fresnel)
+      cab: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0, roughness: 0.08, transparent: true, opacity: 0.2}), 'cab'),
     };
     for (const backend of ['wgsl', 'glsl'] as const) for (const full of [false, true]) for (const mirror of [false, true]) for (const [k, make] of Object.entries(mats)) {
       const frag = compile(backend, box(make()), [stationReflectLight(full, mirror), new THREE.HemisphereLight()]);
@@ -416,9 +418,10 @@ describe('the reflecting field light', () => {
       glass: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'glass'),
       window: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'window'),
       tile: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0, roughness: 0.3}), 'gloss'),
+      cab: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'cab'),
     };
     for (const backend of ['wgsl', 'glsl'] as const) {
-      const plain = Object.fromEntries(Object.entries(mats).map(([k, f]) => [k, compile(backend, box(f()), [stationFieldLight(), new THREE.HemisphereLight()])]));
+      const plain =Object.fromEntries(Object.entries(mats).map(([k, f]) => [k, compile(backend, box(f()), [stationFieldLight(), new THREE.HemisphereLight()])]));
       const refl = Object.fromEntries(Object.entries(mats).map(([k, f]) => [k, compile(backend, box(f()), [stationReflectLight(), new THREE.HemisphereLight()])]));
       for (const k of Object.keys(mats)) {
         expect(/[^\x00-\x7F]/.test(refl[k]), `${backend} ${k}: ASCII-only shader`).toBe(false);
@@ -446,6 +449,10 @@ describe('the reflecting field light', () => {
       // reflecting light it samples the field a second time, a cell out: more code, the same bindings
       expect(plain.window).toBe(plain.glass);
       expect(refl.window.length).toBeGreaterThan(refl.glass.length);
+      // a cab's glass is the glass program under both (task train-glass-reflection-fix-20261115-213533; the mirror light keeps it so:
+      // glass-mirror.test.ts)
+      expect(plain.cab).toBe(plain.glass);
+      expect(refl.cab).toBe(refl.glass);
       expect(bindings(backend, refl.window)).toEqual(bindings(backend, refl.glass));
       // glazed tile is the untagged program under the plain light; under the reflecting one its lookup sits behind its weight
       // (probes bound x a smoothstep over the roughness the fragment really has)
