@@ -385,6 +385,8 @@ export interface PropPlacement {
    * / after it dissolves — the same "not part of this station any more" for every reader.
    */
   cargoGone?: boolean;
+  /** Task studio-skywalk-events-20261115-193624-01 (lane GOLF-COURSE): a low piece a walker crosses (the mini-golf deck / rails): core/physics.ts walker push-out skips it; its box stays for every other reader. */
+  walkOver?: boolean;
 }
 
 /**
