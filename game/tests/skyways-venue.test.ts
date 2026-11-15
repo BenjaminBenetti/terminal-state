@@ -38,9 +38,11 @@ import type {Area, StationLayout} from '../src/gen/stationTypes';
 const SEEDS = [4, 5, 7, 9, 13, 29]; // (29: a carve that fits the photo lounge)
 const DT = 1 / 60;
 const cache = new Map<string, StationLayout>();
-const gen = (seed: number, layoutVersion?: number): StationLayout => {
-  const key = `${seed}/${layoutVersion ?? 3}`;
-  if (!cache.has(key)) cache.set(key, LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', ...(layoutVersion ? {layoutVersion} : {})} as never));
+// Unversioned calls build layout version 6, the last version before the event add-ons (version 7 rolls some of these seeds' add-on
+// to a new event: tests/skyways-event-pool.test.ts).
+const gen = (seed: number, layoutVersion = 6): StationLayout => {
+  const key = `${seed}/${layoutVersion}`;
+  if (!cache.has(key)) cache.set(key, LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', layoutVersion} as never));
   return cache.get(key)!;
 };
 const deg = (r: number) => (r * 180) / Math.PI;

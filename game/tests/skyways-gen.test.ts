@@ -1,5 +1,6 @@
 // Task studio-skyways-level-20261106-054448-01: SKYWAYS (gen/skyways) — the generated level as the game builds it
-// (LEVELS.skyways.generate): valid on a seed sample, deterministic, ONE localized add-on (convention / prize car, equal weights), the
+// (LEVELS.skyways.generate): valid on a seed sample, deterministic, ONE localized add-on (convention / prize car, equal weights; layout
+// version 7 adds the tech expo / mini-golf / evacuation centre to the pool: tests/skyways-event-pool.test.ts), the
 // lower arrival (train in the station under the station building) and the climb (concourse -> street level -> "+15" skyway level) by
 // real stairs / escalators, the bridge network (branches + loops), glazing in solid walls with pre-breached spans, the ramen restaurant
 // with its edible food, the campaign share (10 % from the Subway's) and the fuel placement contract.
@@ -7,7 +8,9 @@ import {describe, expect, it} from 'vitest';
 import {LEVELS, LEVEL_IDS, arrivalPose, storeyLabel} from '../src/levels/registry';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {skywaysIssues} from '../src/gen/skyways/validate';
-import {skywaysAddonOf, skywaysFrame} from '../src/gen/skyways/frame';
+import {skywaysAddonFor, skywaysAddonOf, skywaysFrame} from '../src/gen/skyways/frame';
+import {SKYWAYS_ADDON_POOL_V7} from '../src/gen/skyways/skywaysTypes'; // (task studio-skywalk-events-20261115-193624-01: the version-7 pool)
+import {SKYWAYS_LAYOUT_VERSION} from '../src/gen/skyways/layoutVersion';
 import {levelDistance} from '../src/gen/levelGen';
 import {playerTrainPlacement} from '../src/gen/playerTrain';
 import {placeStationFuel} from '../src/gen/fuelPlacement';
@@ -52,15 +55,15 @@ describe('Skyways: registration and the campaign share', () => {
 });
 
 describe('Skyways: generated layouts', () => {
-  it('validate on a seed sample, regenerate identically, and hold exactly one add-on each (both kinds occur)', () => {
+  it('validate on a seed sample, regenerate identically, and hold exactly one add-on each (every kind occurs)', () => {
     const kinds = new Set<string>();
     for (const s of SEEDS) {
       const l = gen(s);
       expect(skywaysIssues(l), `seed ${s}`).toEqual([]);
-      expect(l.skyways!.addon.id).toBe(skywaysAddonOf(s));
+      expect(l.skyways!.addon.id).toBe(skywaysAddonFor(s, SKYWAYS_LAYOUT_VERSION));
       kinds.add(l.skyways!.addon.id);
     }
-    expect([...kinds].sort()).toEqual(['convention', 'prize-car']);
+    expect([...kinds].sort()).toEqual([...SKYWAYS_ADDON_POOL_V7].sort()); // (seeds 1-10 hold all five at version 7)
     const a = LEVELS.skyways.generate('main', {levelSeed: 3, startWeapon: 'pistol'});
     expect(JSON.stringify(a.skyways)).toBe(JSON.stringify(gen(3).skyways));
     expect(a.areas.length).toBe(gen(3).areas.length);

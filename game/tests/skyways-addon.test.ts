@@ -65,9 +65,11 @@ const deg = (r: number) => (r * 180) / Math.PI;
 const angDiff = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 
 const layouts = new Map<number, StationLayout>();
+// (task studio-skywalk-events-20261115-193624-01) layout version 6, the last before the event add-ons: version 7 rolls some of these
+// seeds to a new event (tests/skyways-event-pool.test.ts); a convention / prize-car draw that survives it regenerates identically.
 const gen = (seed: number): StationLayout => {
   let L = layouts.get(seed);
-  if (!L) layouts.set(seed, (L = LEVELS.skyways.generate('main', {levelSeed: seed} as never)));
+  if (!L) layouts.set(seed, (L = LEVELS.skyways.generate('main', {levelSeed: seed, layoutVersion: 6} as never)));
   return L;
 };
 /** (task studio-skyways-rework-20261107-054512-01) a station entered before the rework: the frozen GAME77 generator (layout version 2). */
@@ -350,7 +352,7 @@ describe('the convention hall on the real seeds', () => {
   }
 
   it('deterministic per seed (two generations of seed 4 dress identically)', () => {
-    const a = LEVELS.skyways.generate('main', {levelSeed: 4} as never), b = LEVELS.skyways.generate('main', {levelSeed: 4} as never);
+    const a = LEVELS.skyways.generate('main', {levelSeed: 4, layoutVersion: 6} as never), b = LEVELS.skyways.generate('main', {levelSeed: 4, layoutVersion: 6} as never);
     const pick = (L: StationLayout) => JSON.stringify([skywaysAddonDressOf(L)!.props, L.skyways!.addon]);
     expect(pick(a)).toBe(pick(b));
   });

@@ -126,9 +126,11 @@ Every kit model is a Codex concept turned into a Meshy T2.5 model with its PBR m
 - Version 4, the building programmes (task studio-skywalk-variety-20261107-231448-01), came next.
 - Version 5, the encounters pass (task studio-skywalk-encounters-20261108-074144-01: the Siren, the horde, the convention's cosplay
   zombies, the Mall store families), followed (fingerprints pinned as GAME87).
-- **Version 6, the convention's cosplay crowd on both floors of its building** (task studio-cosplay-general-20261108-225231-01,
-  `gen/skyways/cosplayFloors.ts`; see `docs/enemy-spawns.md`), is what every station not yet entered gets now, in new and existing
-  campaigns. Versions 4–6 share the live generator, with every change gated on the version.
+- Version 6, the convention's cosplay crowd on both floors of its building (task studio-cosplay-general-20261108-225231-01,
+  `gen/skyways/cosplayFloors.ts`; see `docs/enemy-spawns.md`), followed (fingerprints pinned as GAME129).
+- **Version 7, the major-event pool** (task studio-skywalk-events-20261115-193624-01; see "The major events" below), is what every
+  station not yet entered gets now, in new and existing campaigns. Versions 4–7 share the live generator, with every change gated on
+  the version. A version-7 station whose draw stays the convention or the prize car is byte-identical to version 6.
 - Versions 1 and 2 regenerate through a FROZEN snapshot of the GAME77 generator (`gen/skyways/legacy77/`), version 3 through a frozen
   snapshot of its core (`gen/skyways/legacy80/`: index / carve / frame / validate). The test pins all three versions' fingerprints, so a
   station a player already entered keeps its holders, pickups, kills and add-on.
@@ -236,6 +238,20 @@ lobby or through a FOYER (`addon.approach`; the foyer is an add-on area of conco
   `addon.car`, and the turntable, stanchions and prize board are placed around it. The car is drivable in first person (see
   `game/src/world/skywaysCar.ts`). By design, its drivability is never advertised outside the close-up Enter / Exit prompt and the
   controls hint shown while driving.
+
+## The major events (layout version 7)
+
+From layout version 7 the one add-on is drawn from five equal-weight events (`frame.ts skywaysAddonFor`, stream `skyways:events`):
+the convention, the prize car, and three new venue-shaped events (`gen/skyways/events/`). The old draw (`skywaysAddonOf`) still
+decides versions 1–6, and a version-7 seed that keeps an old event keeps the same one. The new events are pool additions: one event
+per map, the rest of the map stays ordinary.
+- Each new event takes the convention's venue carve unchanged (`carveVenue`, the same cells, doors and roles on the same seed), under
+  its own room names (`events/eventVenue.ts relabelEventVenue`). It keeps the washrooms and the stage box (`addon.stage`) as the main
+  hall's anchor.
+- Its dresser (`events/expoDress.ts`, `golfDress.ts`, `evacDress.ts`) replaces the convention's venue dressing and reuses the venue
+  circulation kit (`venueDress.ts eventVenueContext`, `group`, `markRoutes`). Its prop kinds live in `events/*Kinds.ts`, spread into the
+  destination registry (both audits), and are drawn by `world/skywaysEventDraw.ts`.
+- Saves: a station entered at versions 1–6 keeps its version and its old event; only stations not yet entered can get a new event.
 
 ## Gas
 
