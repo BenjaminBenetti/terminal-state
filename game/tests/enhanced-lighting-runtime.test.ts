@@ -460,7 +460,7 @@ describe('full shading where the field with its cube fits; else the same bake sh
   }, 120000);
 
   it('applied(): the station lighting could not keep the cube after all — the status turns plain with its reason, once', async () => {
-    const r = runtime({});
+    const r = runtime({}, new FakeIndexedDb());
     await load(r, rooms());
     expect(r.rt.status().active).toMatchObject({shading: 'full', shadingReason: null, reflections: 'standard', mirror: true});
     let heard = 0;
