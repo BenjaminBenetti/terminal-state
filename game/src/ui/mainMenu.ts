@@ -1110,9 +1110,10 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
   }
   // task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): Enhanced lighting (Auto / On / Off) and Reflections
   // (Standard / High / Off) — labels, choices and help lines are the contract's (world/enhancedLighting.ts). The help lines describe the
-  // game's status (o.lightingStatus: what the LIVE station really uses, why not what was asked, "Applies when a station next loads."
-  // for a pending change); without one, what the stored choices mean. A change is only stored: the game reads it when a station is
-  // built. Reflections needs Enhanced lighting: its choice is disabled while that is Off (the stored value is kept).
+  // game's status (o.lightingStatus: what the LIVE station really uses, why not what was asked, a change being applied / not applied
+  // yet / failed); without one, what the stored choices mean. The form only stores a change: the game applies it to the live station
+  // (main.ts -> Game.relightAfterSettings). Reflections needs Enhanced lighting: its choice is disabled while that is Off (the stored
+  // value is kept).
   let syncLighting: (s: Readonly<GameSettings>) => void = () => {};
   {
     const choice = <V extends string>(id: string, text: string, options: readonly {value: V; label: string}[], valid: (v: unknown) => v is V, patch: (v: V) => Partial<GameSettings>) => {
@@ -1139,8 +1140,11 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
     syncLighting = s => {
       if (light.sel.value !== s.enhancedLighting) light.sel.value = s.enhancedLighting;
       if (refl.sel.value !== s.reflections) refl.sel.value = s.reflections;
-      refl.sel.disabled = s.enhancedLighting === 'off';
       const st = statusOf(s);
+      // (task studio-graphics-gpu-materials-toggle-20261114-212239-01) both choices are held while the game rebuilds the live station's
+      // lighting for the last change (Game.relightAfterSettings); the help lines say so, and say when a change could not be applied
+      light.sel.disabled = st.applying === true;
+      refl.sel.disabled = st.applying === true || s.enhancedLighting === 'off';
       light.help.textContent = describeEnhancedLighting(st);
       refl.help.textContent = describeReflections(st);
     };

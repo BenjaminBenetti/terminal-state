@@ -17,6 +17,7 @@ import * as THREE from 'three';
 import {PointLightNode, type Node, type NodeBuilder, type NodeFrame} from 'three/webgpu';
 import {clamp, float, int, max, positionWorld, renderGroup, select, smoothstep, texture, uniform} from 'three/tsl';
 import {refreshTextureBindings} from '../render/bindingRefresh'; // task studio-death-retry-render-fix-20261114-044607-01
+import {plainTexture} from '../render/textureFetch';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type N = any;
@@ -47,7 +48,7 @@ const placeholder = (() => {
 })();
 
 /** The shared occlusion-window texture (the atmosphere binds its own; a 1x1 'visible' placeholder before). */
-export const FLARE_VIS = texture(placeholder);
+export const FLARE_VIS = plainTexture(texture(placeholder)); // (render/textureFetch.ts: looked up at computed coordinates only)
 
 /** Bind the atmosphere's window texture (render/volumetric.ts); null restores the placeholder. */
 export function bindFlareVisibility(tex: THREE.DataArrayTexture | null): void {

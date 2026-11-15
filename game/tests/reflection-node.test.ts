@@ -1,5 +1,6 @@
 // Task studio-baked-lighting-reflections-20261114-050258-01: the reflection probes' lighting node (world/reflectionNode.ts).
-// - which materials reflect (metal / glass / a wall-set window pane) and which never do (walls, floors, characters, unlit materials);
+// - which materials reflect (metal / glass / a wall-set window pane; glazed tile with the High probes — task
+//   studio-graphics-gpu-materials-toggle-20261114-212239-01) and which never do (walls, floors, characters, unlit materials);
 // - with the PLAIN field light every material compiles to the program it always had: no probe texture, no extra code — the
 //   reflecting light is a second session-wide light a station only uses when it was built with probes;
 // - a reflective material builds on BOTH backends (WGSL = WebGPU, GLSL = WebGL2 fallback) within WebGPU's per-stage limits, with
@@ -14,11 +15,12 @@ import {GLSLNodeBuilder, MeshBasicNodeMaterial, MeshLambertNodeMaterial, MeshSta
 import {LightFieldLight, LightFieldNode, installLightFieldNode, stationFieldLight} from '../src/world/lightFieldNode';
 import {
   LightFieldReflectLight, LightFieldReflectNode, REFL, REFLECTION_TUNING, ReflectionProbeVolume, activeReflectionProbes, bindReflectionProbes, installReflectNode,
-  REFLECT_METALNESS_MIN, REFLECT_ROUGHNESS_MAX, WINDOW_REACH, reflectClass, sampleProbeLevel, sampleProbes, stationReflectLight, syncReflectionTuning,
+  GLOSS_ROUGHNESS_FULL, GLOSS_ROUGHNESS_NONE, REFLECT_METALNESS_MIN, REFLECT_ROUGHNESS_MAX, WINDOW_REACH, glossWeight, reflectClass, sampleProbeLevel, sampleProbes, stationReflectLight,
+  syncReflectionTuning,
 } from '../src/world/reflectionNode';
 import {reflectTagOf, tagReflect} from '../src/render/reflectTag';
 import {materialKey} from '../src/render/runtimeVariants';
-import {WorldMaterials, cloneSurfaceMaterial} from '../src/world/materials';
+import {PILLAR_METALNESS, PILLAR_ROUGHNESS, TILE_GLAZE_ROUGHNESS, WorldMaterials, cloneSurfaceMaterial} from '../src/world/materials';
 import {shapeMaterial} from '../src/world/shapeMaterials';
 import {crackedGlassMaterial, officeGlassMaterial} from '../src/world/officeWindows';
 import {fakeEnvTextures} from './helpers/openablesFixture';
@@ -129,6 +131,12 @@ describe('which materials reflect', () => {
     const set = tagReflect(std({metalness: 0.1, transparent: true, opacity: 0.42}), 'window');
     expect([reflectClass(set), reflectTagOf(set)]).toEqual(['window', 'window']);
     expect(materialKey(set)).not.toBe(materialKey(pane));
+    // a glossy non-metal (glazed tile): its own class and program
+    const tile = tagReflect(std({metalness: 0, roughness: 0.3}), 'gloss');
+    expect([reflectClass(tile), reflectTagOf(tile)]).toEqual(['gloss', 'gloss']);
+    expect(materialKey(tile)).not.toBe(materialKey(std({metalness: 0, roughness: 0.3})));
+    expect(materialKey(tile)).not.toBe(materialKey(tagReflect(std({metalness: 0, roughness: 0.3}), 'none')));
+    expect(reflectClass(tile, new THREE.SkinnedMesh())).toBe('gloss'); // (an explicit tag wins, as for metal)
     expect(reflectTagOf(tagReflect(std({}), 'mirror' as never))).toBeUndefined(); // an unknown tag is no tag
     const steel = std({metalness: 0.5});
     expect(reflectClass(steel, new THREE.SkinnedMesh())).toBe('none');
@@ -157,12 +165,33 @@ describe('which materials reflect', () => {
     expect(key(tagReflect(std({transparent: true, opacity: 0.4}), 'glass'))).not.toBe(key(std({transparent: true, opacity: 0.4})));
     expect(key(tagReflect(std({metalness: 1}), 'none'))).not.toBe(key(std({metalness: 1})));
   });
-  it('the station kit: glazing is glass (clones too), the tower\'s wall-set panes are windows, tile / slab / ceiling sets never reflect, painted and brushed steel are metal candidates', () => {
+  it('the station kit: glazing is glass (clones too), the tower\'s wall-set panes are windows, glazed wall tile is gloss, slab / ceiling sets never reflect, painted and brushed steel are metal candidates', () => {
     installCanvasShim(false);
     const mats = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
-    for (const k of ['tileLower', 'tileUpper', 'platformSlab', 'ceiling', 'tunnel', 'platformFace', 'safetyEdge'] as const) expect(reflectClass(mats.get(k)), k).toBe('none');
+    // the glazed wall tile (its three bands): gloss, and smooth enough on its glazed face for the full weight
+    for (const k of ['tileLower', 'tileUpper', 'tileBase'] as const) {
+      const m = mats.get(k) as MeshStandardNodeMaterial;
+      expect(reflectClass(m), k).toBe('gloss');
+      expect(m.roughness, k).toBe(TILE_GLAZE_ROUGHNESS); // (x the authored roughness map; the other packed sets keep 1)
+      expect(TILE_GLAZE_ROUGHNESS * 0.42, 'the glazed face of the authored roughness map (0.38-0.42)').toBeLessThan(GLOSS_ROUGHNESS_FULL);
+    }
+    for (const k of ['platformSlab', 'ceiling', 'tunnel', 'platformFace', 'safetyEdge'] as const) {
+      expect(reflectClass(mats.get(k)), k).toBe('none');
+      expect((mats.get(k) as MeshStandardNodeMaterial).roughness, k).toBe(1);
+    }
     for (const k of ['terrazzo', 'concrete', 'paint', 'ballast'] as const) expect(reflectClass(mats.get(k)), k).toBe('none');
-    for (const k of ['steel', 'rail', 'gate'] as const) expect(reflectClass(mats.get(k)), k).toBe('metal');
+    for (const k of ['steel', 'pillar', 'rail', 'gate'] as const) expect(reflectClass(mats.get(k)), k).toBe('metal');
+    // the columns' cladding: the brushed-steel set, metal enough to always look the probes up, with a diffuse part left for a
+    // station without probes (a pure metal is black under the diffuse-only baked light)
+    const pillar = mats.get('pillar') as MeshStandardNodeMaterial, trim = mats.get('steel') as MeshStandardNodeMaterial;
+    expect([pillar.metalness, pillar.roughness]).toEqual([PILLAR_METALNESS, PILLAR_ROUGHNESS]);
+    expect(PILLAR_METALNESS).toBeGreaterThan(REFLECT_METALNESS_MIN);
+    expect(PILLAR_METALNESS).toBeGreaterThanOrEqual(0.6);
+    expect(PILLAR_METALNESS).toBeLessThanOrEqual(0.85);
+    expect(pillar).not.toBe(trim);
+    expect(pillar.map).not.toBe(trim.map); // (not the charcoal trim paint)
+    expect(pillar.normalMap).toBeTruthy();
+    expect(pillar.roughnessMap).toBeTruthy();
     const glass = shapeMaterial(mats, 'glass'), front = shapeMaterial(mats, 'glassShopfront');
     expect(reflectClass(glass)).toBe('glass');
     expect(reflectClass(front)).toBe('glass');
@@ -201,6 +230,7 @@ describe('the reflecting field light', () => {
       steel: () => new MeshStandardNodeMaterial({metalness: 0.45, roughness: 0.4}),
       glass: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'glass'),
       window: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'window'),
+      tile: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0, roughness: 0.3}), 'gloss'),
     };
     for (const backend of ['wgsl', 'glsl'] as const) {
       const plain = Object.fromEntries(Object.entries(mats).map(([k, f]) => [k, compile(backend, box(f()), [stationFieldLight(), new THREE.HemisphereLight()])]));
@@ -232,6 +262,11 @@ describe('the reflecting field light', () => {
       expect(plain.window).toBe(plain.glass);
       expect(refl.window.length).toBeGreaterThan(refl.glass.length);
       expect(bindings(backend, refl.window)).toEqual(bindings(backend, refl.glass));
+      // glazed tile is the untagged program under the plain light; under the reflecting one its lookup sits behind the High-tier
+      // weight (a smoothstep over the roughness the fragment really has)
+      expect(plain.tile).toBe(compile(backend, box(new MeshStandardNodeMaterial({metalness: 0, roughness: 0.3})), [stationFieldLight(), new THREE.HemisphereLight()]));
+      expect(refl.tile).toContain('smoothstep');
+      expect(refl.steel).not.toContain('smoothstep');
       // unlit / non-physical materials: nothing under the reflecting light either
       const basic = compile(backend, box(new MeshBasicNodeMaterial()), [stationReflectLight()]);
       expect(bindings(backend, basic).textures).toBe(0);
@@ -286,8 +321,44 @@ describe('binding the probes', () => {
     const v = new ReflectionProbeVolume({...empty, count: 0, meta: new Float32Array(12)});
     bindReflectionProbes(v);
     expect(REFL.params.value.x).toBe(0);
+    expect(REFL.params.value.y).toBe(0);
     bindReflectionProbes(null);
     v.dispose();
+  });
+  it('glazed tile reflects with the High probes only: the tier flag follows the bound probes, the weight fades out toward rough texels', () => {
+    const std = new ReflectionProbeVolume(fakeProbes({colors: [[1, 1, 1]]}));
+    const high = new ReflectionProbeVolume({...fakeProbes({colors: [[1, 1, 1]]}), tier: 'high'});
+    const none = new ReflectionProbeVolume({...fakeProbes({colors: [[1, 1, 1]]}), tier: 'high', count: 0, meta: new Float32Array(12)});
+    bindReflectionProbes(std);
+    expect([REFL.params.value.x, REFL.params.value.y]).toEqual([1, 0]);
+    bindReflectionProbes(high);
+    expect([REFL.params.value.x, REFL.params.value.y]).toEqual([1, 1]);
+    REFLECTION_TUNING.strength = 0.5;
+    syncReflectionTuning(); // (the strength alone: the tier flag stays)
+    expect([REFL.params.value.x, REFL.params.value.y]).toEqual([0.5, 1]);
+    REFLECTION_TUNING.strength = 1;
+    syncReflectionTuning();
+    bindReflectionProbes(none);
+    expect([REFL.params.value.x, REFL.params.value.y]).toEqual([0, 0]);
+    bindReflectionProbes(std); // High -> Standard (a live change of the choice): the tile stops reflecting
+    expect(REFL.params.value.y).toBe(0);
+    bindReflectionProbes(null);
+    expect([REFL.params.value.x, REFL.params.value.y]).toEqual([0, 0]);
+    for (const v of [std, high, none]) v.dispose();
+    // the weight (CPU mirror of the shader's): nothing without the High tier; full on a glazed face, none on grout / grime, monotonic between
+    for (const r of [0, 0.2, 0.5, 0.9]) expect(glossWeight(r, false)).toBe(0);
+    expect(glossWeight(0, true)).toBe(1);
+    expect(glossWeight(GLOSS_ROUGHNESS_FULL, true)).toBe(1);
+    expect(glossWeight(GLOSS_ROUGHNESS_NONE, true)).toBe(0);
+    expect(glossWeight(1, true)).toBe(0);
+    let last = 1;
+    for (let r = GLOSS_ROUGHNESS_FULL; r <= GLOSS_ROUGHNESS_NONE + 1e-9; r += 0.01) {
+      const w = glossWeight(r, true);
+      expect(w).toBeLessThanOrEqual(last + 1e-12);
+      last = w;
+    }
+    expect(glossWeight((GLOSS_ROUGHNESS_FULL + GLOSS_ROUGHNESS_NONE) / 2, true)).toBeCloseTo(0.5, 6);
+    expect(GLOSS_ROUGHNESS_NONE).toBeGreaterThan(GLOSS_ROUGHNESS_FULL);
   });
 });
 
