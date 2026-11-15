@@ -256,6 +256,36 @@ describe('shot / hit spans (debug/updateProfile.ts)', () => {
     expect(PARENT[34]).toBe(S.hooks);
   });
 
+  // Task studio-baked-gi-visual-uplift-20261115-004324-01: the glass mirror's span has the id after the hit spans and is closed once
+  // per drawn frame of a mirror-lit station (Game.drawFrame) — it is a part of the draw, never of a frame's shot / hit path.
+  it('a frame\'s hit path holds the shot / hit spans only: the glass mirror\'s draw (the span appended after them) is not a hit', () => {
+    const c = new PerfCapture({worst: 4, spikeDetail: 4});
+    c.start(0, 0);
+    const prof = {on: true, head: 0, capacity: 4, ms: new Float32Array(4 * SPAN_COUNT), calls: new Uint16Array(4 * SPAN_COUNT)};
+    const i = new FrameInput();
+    // two long frames, the mirror drawn in both: nothing is fired in frame 20, a shot is in frame 30
+    const long: Record<number, number> = {20: 120, 30: 90};
+    for (let k = 0; k < 40; k++) {
+      i.time += long[k - 1] ?? 16.7;
+      i.cpuMs = (long[k] ?? 10) - 2; i.state = 0; i.flags = F.rendered;
+      prof.head = (prof.head + 1) % prof.capacity;
+      const o = ((prof.head - 1 + prof.capacity) % prof.capacity) * SPAN_COUNT;
+      prof.ms.fill(0, o, o + SPAN_COUNT); prof.calls.fill(0, o, o + SPAN_COUNT);
+      prof.ms[o + S.draw] = 6; prof.calls[o + S.draw] = 1;
+      prof.ms[o + S.mirror] = 2; prof.calls[o + S.mirror] = 1;
+      if (k === 30) { prof.ms[o + S.weapon] = 3; prof.calls[o + S.weapon] = 1; prof.ms[o + S.fire] = 2; prof.calls[o + S.fire] = 1; }
+      c.frame(i, prof);
+    }
+    c.stop(i.time + 20, 'manual');
+    const w = parse(c).worst.gameplay as {frame: number; spans: {hitPath: Record<string, {ms: number; calls: number}> | null; dominant: {name: string; ms: number}[]}}[];
+    expect(w.slice(0, 2).map(f => f.frame)).toEqual([20, 30]);
+    expect(w[0].spans.hitPath, 'no shot in that frame').toBeNull();
+    expect(w[1].spans.hitPath, 'the shot, and nothing of the mirror').toEqual({'weapon.fire': {ms: 2, calls: 1}});
+    // (the mirror's time is in the frame's spans under its own name, beside the draw without it)
+    expect(w[0].spans.dominant.map(d => [d.name, d.ms])).toEqual([['render.draw (excl. mirror)', 4], ['render.mirror', 2]]);
+    expect(w[1].spans.dominant.map(d => d.name).sort()).toEqual(['render.draw (excl. mirror)', 'render.mirror', 'weapon (rest)', 'weapon.fire']);
+  });
+
   it('source boundaries: Game.fire / meleeContact / alertZombies and the DamageSystem spans are at the real call sites', () => {
     const game = readFileSync(fileURLToPath(new URL('../src/game.ts', import.meta.url)), 'utf8');
     expect(game).toMatch(/if \(e\.type === 'fire'\) \{ prof\.begin\(SPAN\.fire\); this\.fire\(e\.def\); prof\.end\(SPAN\.fire\); \}/);
