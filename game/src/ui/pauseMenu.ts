@@ -18,13 +18,17 @@
 // Keyboard: player/input.ts cancels Tab / Space / the arrows on the window for the game, so keys meant for the menu (focus moves, a
 // button press, a select or slider step) stop at the pause screen; everything else (M = mute, F8 / F9, Esc on the main list = the QA
 // resume) still reaches the game.
+//
+// Task studio-settings-menu-parity-20261115-191601-01: the Settings view's tabs, details toggle and their look are ui/settingsTabs.ts,
+// shared with the main menu's Settings dialog (one presentation; this file keeps the views, Esc / Back and the focus around it).
+
+import {SettingsTabs, type SettingsTab} from './settingsTabs';
+
+export {SETTINGS_TABS, type SettingsTab} from './settingsTabs';
 
 /** The pause screen's views. */
 export type PauseViewId = 'main' | 'settings' | 'controls' | 'leave';
-/** The Settings view's tabs (the first three = the settings form's data-group values). */
-export type SettingsTab = 'graphics' | 'audio' | 'gameplay' | 'performance';
 
-export const SETTINGS_TABS: readonly SettingsTab[] = ['graphics', 'audio', 'gameplay', 'performance'];
 export const PAUSE_TITLES: Record<PauseViewId, string> = {main: 'Paused', settings: 'Settings', controls: 'Controls', leave: 'Leave to the main menu?'};
 
 /** The Main menu confirmation's lines (main.ts: the active slot's latest save). */
@@ -87,26 +91,8 @@ const CSS = `
 #pause button.danger:hover:not(:disabled) { background: #3a2321; }
 #pause button:focus { outline: none; }
 #pause button:focus-visible, #pause input:focus-visible, #pause select:focus-visible { outline: 2px solid var(--mustard); outline-offset: 2px; }
-#pause .pause-tabs { display: flex; flex: none; gap: 2px; margin: 14px 0 12px; border-bottom: 1px solid #3a3f44; overflow-x: auto; }
-#pause .pause-tabs [role="tab"] { background: none; border: none; border-bottom: 3px solid transparent; margin-bottom: -1px; padding: 9px 14px 8px; color: var(--cream-dim); white-space: nowrap; }
-#pause .pause-tabs [role="tab"]:hover:not(:disabled) { background: none; color: var(--cream); }
-#pause .pause-tabs [role="tab"][aria-selected="true"] { color: var(--cream); border-bottom-color: var(--mustard); }
-#pause .pause-tabs [role="tab"]:focus-visible { outline-offset: -2px; }
-#pause .settings { grid-template-columns: 1fr; gap: 12px; margin: 2px 0 6px; font-size: 14px; }
-#pause .settings label { min-height: 30px; gap: 14px; }
-#pause .settings select { min-width: 10em; max-width: 60%; padding: 4px 6px; font-size: 14px; }
-#pause .settings .set-readout { font-size: 12.5px; margin-top: -8px; line-height: 1.4; }
-#pause .settings .set-note { font-size: 12.5px; }
-#pause .settings .set-tutorials button, #pause .settings .set-actions button { font-size: 14px; }
-#pause-settings[data-show="graphics"] [data-group]:not([data-group="graphics"]),
-#pause-settings[data-show="audio"] [data-group]:not([data-group="audio"]),
-#pause-settings[data-show="gameplay"] [data-group]:not([data-group="gameplay"]) { display: none; }
-#pause-settings:not(.show-details) .set-detail { display: none; }
-#pause .pause-details { margin: 2px 0 4px; }
-#pause .pause-details button { padding: 6px 12px; font-size: 13.5px; background: none; color: var(--cream-dim); }
-#pause .pause-perf .perf-rec { margin-top: 0; }
-#pause .pause-perf .perf-rec > h3 { display: none; }
-#pause .pause-perf #seed-line { margin: 14px 0 0; overflow-wrap: anywhere; }
+#pause .set-tabs [role="tab"]:focus-visible { outline-offset: -2px; } /* (ui/settingsTabs.ts: the tab's ring inside the tab; this file's id rule above outranks it) */
+#pause #seed-line { margin: 14px 0 0; overflow-wrap: anywhere; }
 #pause #pause-controls-form { margin-top: 12px; }
 #pause .controls-grid { margin-top: 14px; font-size: 13.5px; }
 #pause .controls-grid div { align-items: baseline; }
@@ -122,7 +108,6 @@ const CSS = `
   #pause.screen { padding: 8px 8px 40px; }
   #pause .pause-panel { padding: 20px 16px 14px; }
   #pause .controls-grid { grid-template-columns: 1fr; }
-  #pause .settings select { max-width: 55%; min-width: 0; }
 }
 @media (max-height: 520px) {
   #pause.screen { padding-top: 8px; }
@@ -130,7 +115,6 @@ const CSS = `
   #pause .pause-head h2 { font-size: 24px; margin-top: 2px; }
   #pause .pause-list { gap: 6px; margin-top: 10px; }
   #pause .pause-list > button { padding: 8px 18px; }
-  #pause .pause-tabs { margin: 8px 0 8px; }
   #pause .pause-foot { margin-top: 8px; padding-top: 8px; }
   #pause .pause-foot button { padding: 8px 18px; }
 }
@@ -144,33 +128,30 @@ function injectCss(doc: Document): void {
   doc.head.appendChild(st);
 }
 
-const isTab = (v: unknown): v is SettingsTab => typeof v === 'string' && (SETTINGS_TABS as readonly string[]).includes(v);
-
 /**
  * The pause screen's navigation over the static markup in index.html (#pause): the views ([data-pause-view]), the buttons that open
- * them ([data-pause-open] / [data-pause-leave] / [data-pause-back]), the Settings tabs ([role=tab][data-tab]) and the details toggle.
+ * them ([data-pause-open] / [data-pause-leave] / [data-pause-back]) and the Settings view's tabs (ui/settingsTabs.ts SettingsTabs).
  * main.ts calls open() whenever the game enters the pause.
  */
 export class PauseMenu {
   private viewId: PauseViewId = 'main';
-  private tabId: SettingsTab = 'graphics';
-  private detailsOn = false;
   private opener: HTMLElement | null = null;
   private readonly doc: Document;
   private readonly panel: HTMLElement;
+  /** The Settings view's tabs + details toggle (the shared presentation). */
+  readonly settings: SettingsTabs;
 
   constructor(readonly root: HTMLElement, private readonly o: PauseMenuOptions) {
     this.doc = root.ownerDocument;
     injectCss(this.doc);
     this.panel = root.querySelector<HTMLElement>('.pause-panel') ?? root;
+    this.settings = new SettingsTabs(this.viewEl('settings') ?? root);
     for (const b of root.querySelectorAll<HTMLElement>('[data-pause-open]')) {
       b.addEventListener('click', () => { const v = b.getAttribute('data-pause-open'); if (v === 'settings' || v === 'controls') this.show(v); });
     }
     for (const b of root.querySelectorAll<HTMLElement>('[data-pause-back]')) b.addEventListener('click', () => { this.back(); });
     for (const b of root.querySelectorAll<HTMLElement>('[data-pause-leave]')) b.addEventListener('click', () => this.leaveRequested());
     this.el('#btn-leave-go')?.addEventListener('click', () => { if (this.viewId === 'leave') this.o.leave(); });
-    for (const t of this.tabs()) t.addEventListener('click', () => { const v = t.getAttribute('data-tab'); if (isTab(v)) this.setTab(v); });
-    this.el('#pause-details')?.addEventListener('click', () => { this.detailsOn = !this.detailsOn; this.render(); });
     root.addEventListener('keydown', e => this.onKey(e as KeyboardEvent));
     // a click on the dimmed backdrop leaves the focus on the page: the menu's keys still work from there
     this.doc.addEventListener('keydown', e => this.onPageKey(e as KeyboardEvent));
@@ -178,8 +159,8 @@ export class PauseMenu {
   }
 
   get view(): PauseViewId { return this.viewId; }
-  get tab(): SettingsTab { return this.tabId; }
-  get details(): boolean { return this.detailsOn; }
+  get tab(): SettingsTab { return this.settings.tab; }
+  get details(): boolean { return this.settings.details; }
 
   /** A fresh pause: the main list, focus on its first enabled button (Resume). The Settings tab and the details choice are kept. */
   open(): void {
@@ -212,9 +193,7 @@ export class PauseMenu {
 
   /** Switch the Settings tab (focus = move the focus to the tab). */
   setTab(tab: SettingsTab, focus = false): void {
-    this.tabId = tab;
-    this.render();
-    if (focus) { const t = this.tabs().find(x => x.getAttribute('data-tab') === tab); if (t) this.focus(t); }
+    this.settings.setTab(tab, focus);
   }
 
   private leaveRequested(): void {
@@ -234,42 +213,19 @@ export class PauseMenu {
     return this.root.querySelector<HTMLElement>(sel);
   }
 
-  private tabs(): HTMLElement[] {
-    return [...this.root.querySelectorAll<HTMLElement>('[role="tab"]')];
-  }
-
   private viewEl(v: PauseViewId): HTMLElement | null {
     return this.root.querySelector<HTMLElement>(`[data-pause-view="${v}"]`);
   }
 
   render(): void {
-    const v = this.viewId, tab = this.tabId;
+    const v = this.viewId;
     this.panel.setAttribute('data-view', v);
     for (const id of ['main', 'settings', 'controls', 'leave'] as const) this.viewEl(id)?.classList.toggle('hidden', id !== v);
     const title = this.el('#pause-title');
     if (title) title.textContent = PAUSE_TITLES[v];
     this.el('#pause-run')?.classList.toggle('hidden', v !== 'main');
     this.el('.pause-foot')?.classList.toggle('hidden', v !== 'settings' && v !== 'controls');
-    for (const t of this.tabs()) {
-      const on = t.getAttribute('data-tab') === tab;
-      t.setAttribute('aria-selected', String(on));
-      t.setAttribute('tabindex', on ? '0' : '-1');
-    }
-    const form = this.el('#pause-settings'), perf = this.el('#pause-perf');
-    const formTab = tab !== 'performance';
-    if (form) {
-      form.classList.toggle('hidden', !formTab);
-      form.setAttribute('data-show', formTab ? tab : '');
-      form.setAttribute('aria-labelledby', `pause-tab-${formTab ? tab : 'graphics'}`);
-      form.classList.toggle('show-details', this.detailsOn);
-    }
-    perf?.classList.toggle('hidden', formTab);
-    const details = this.el('#pause-details');
-    if (details) {
-      details.parentElement?.classList.toggle('hidden', tab !== 'graphics');
-      details.textContent = this.detailsOn ? 'Hide details' : 'Show details';
-      details.setAttribute('aria-expanded', String(this.detailsOn));
-    }
+    this.settings.render();
   }
 
   /** Whether an element can take the focus: connected to this screen, not hidden (itself or a container) and not disabled. */
@@ -288,7 +244,7 @@ export class PauseMenu {
     const v = this.viewId;
     let target: HTMLElement | undefined;
     if (v === 'main') target = this.listButtons(this.el('.pause-list')).find(b => this.usable(b));
-    else if (v === 'settings') target = this.tabs().find(t => t.getAttribute('data-tab') === this.tabId);
+    else if (v === 'settings') target = this.settings.selected;
     else if (v === 'controls') target = [...(this.viewEl('controls')?.querySelectorAll<HTMLElement>('input, select, button') ?? [])].find(b => this.usable(b));
     else target = [...(this.viewEl('leave')?.querySelectorAll<HTMLElement>('[data-pause-back]') ?? [])].find(b => this.usable(b));
     target ??= [...this.panel.querySelectorAll<HTMLElement>('button')].find(b => this.usable(b));
@@ -325,14 +281,7 @@ export class PauseMenu {
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return; // native controls keep their own keys
     if (!STEP_KEYS.has(e.code)) return;
     if (t.getAttribute('role') === 'tab') {
-      const tabs = this.tabs(), i = tabs.indexOf(t);
-      const next = e.code === 'Home' ? 0 : e.code === 'End' ? tabs.length - 1
-        : e.code === 'ArrowRight' ? (i + 1) % tabs.length : e.code === 'ArrowLeft' ? (i - 1 + tabs.length) % tabs.length : -1;
-      if (next >= 0) {
-        e.preventDefault();
-        const v = tabs[next].getAttribute('data-tab');
-        if (isTab(v)) this.setTab(v, true);
-      }
+      if (this.settings.key(e)) e.preventDefault();
       return;
     }
     const list = t.closest<HTMLElement>('.pause-list, .pause-confirm');

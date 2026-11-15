@@ -108,7 +108,9 @@ let shared: {
 
 export function cartMaterials(): NonNullable<typeof shared> {
   if (shared) return shared;
-  const std = (name: string, color: number, o: THREE.MeshStandardMaterialParameters = {}) => { const m = new THREE.MeshStandardMaterial({color, roughness: 0.8, metalness: 0.1, ...o}); m.name = name; return m; };
+  // (task studio-pbr-material-pass-20261115-192427-01: the default part is rubber / plastic — the hose every train cable shares, gauges,
+  // the tyre: metalness 0, was 0.1; the steel stand-ins say their own metalness)
+  const std = (name: string, color: number, o: THREE.MeshStandardMaterialParameters = {}) => { const m = new THREE.MeshStandardMaterial({color, roughness: 0.8, metalness: 0, ...o}); m.name = name; return m; };
   shared = {
     gaugeBack: std('fuel-cart-gauge-back', 0x161616, {roughness: 0.6}),
     gaugeFull: std('fuel-cart-gauge-full', 0x1d5c22, {emissive: 0x46e04f, emissiveIntensity: 0.9}),

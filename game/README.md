@@ -348,7 +348,9 @@ Controls, Fullscreen, Main menu. **Settings** has Graphics / Audio / Gameplay / 
 the technical read-outs behind *Show details*; the live lighting status and warnings stay visible; Performance holds the recorder
 and the run codes); **Controls** holds the input preferences and the bindings; **Main menu** in a campaign asks first, with the last
 save and what is lost. Esc / Back go one level up, the arrow keys move through the lists and tabs, and the header line under
-*Paused* shows warm-up progress or a failed mouse capture in every view.
+*Paused* shows warm-up progress or a failed mouse capture in every view. The main menu's **Settings** dialog is the same tabbed view
+(task studio-settings-menu-parity-20261115-191601-01, `src/ui/settingsTabs.ts`: one presentation for both; Performance holds the recorder),
+with Back pinned under the scrolling tab. The tab strip never scrolls: on a narrow screen the tabs wrap to a second row.
 
 Campaign polish (task campaign-polish-20261103, lane MENU): the side column lists only Continue / New game / Load save / Settings /
 **Controls** / Dev start; every submenu opens as a centred dialog over a light dimmer (Esc / Back step back). Controls shows the

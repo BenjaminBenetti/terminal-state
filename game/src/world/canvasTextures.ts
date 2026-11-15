@@ -264,6 +264,21 @@ function layerCanvas(w: number, h: number, scale: number): [HTMLCanvasElement, C
   return [c, ctx];
 }
 
+/**
+ * Task studio-pbr-material-pass-20261115-192427-01: the userData key of a surface set's roughness map that holds the map's mean
+ * (0..1). A material's `roughness` MULTIPLIES its roughness map, so a finish meant as an absolute value (0.95 canvas lagging, 0.6
+ * yellow paint) has to be divided by it — materials.ts finishRoughness. Texture.clone() carries userData (thinTrim's clones).
+ */
+export const ROUGHNESS_MEAN = 'roughnessMean';
+
+/** Mean of a greyscale canvas's red channel, 0..1. */
+function canvasMean(c: HTMLCanvasElement): number {
+  const d = c.getContext('2d', {willReadFrequently: true})!.getImageData(0, 0, c.width, c.height).data;
+  let s = 0;
+  for (let i = 0; i < d.length; i += 4) s += d[i];
+  return s / (255 * (d.length / 4));
+}
+
 function surfaceTexture(c: HTMLCanvasElement, srgb: boolean): THREE.CanvasTexture {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
@@ -418,9 +433,11 @@ export class Painter {
     ctx.putImageData(img, 0, 0);
   }
   finish(span: [number, number], normalStrength = 0): SurfaceSet {
+    const roughnessMap = this.rough ? surfaceTexture(this.rough, false) : null;
+    if (roughnessMap && this.rough) roughnessMap.userData[ROUGHNESS_MEAN] = canvasMean(this.rough);
     return {
       map: surfaceTexture(this.color, true),
-      roughnessMap: this.rough ? surfaceTexture(this.rough, false) : null,
+      roughnessMap,
       normalMap: this.height && normalStrength > 0 ? surfaceTexture(normalFromHeight(this.height, normalStrength), false) : null,
       span,
     };

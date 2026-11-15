@@ -113,7 +113,9 @@ let shared: {
 
 export function equipmentMaterials(): NonNullable<typeof shared> {
   if (shared) return shared;
-  const std = (name: string, color: number, o: THREE.MeshStandardMaterialParameters = {}) => { const m = new THREE.MeshStandardMaterial({color, roughness: 0.75, metalness: 0.2, ...o}); m.name = name; return m; };
+  // (task studio-pbr-material-pass-20261115-192427-01: the default part is plastic — socket faces, lamp lenses: metalness 0, was 0.2;
+  // the steel parts say their own metalness)
+  const std = (name: string, color: number, o: THREE.MeshStandardMaterialParameters = {}) => { const m = new THREE.MeshStandardMaterial({color, roughness: 0.75, metalness: 0, ...o}); m.name = name; return m; };
   shared = {
     standIn: std('train-equipment-stand-in', 0x4b5650, {metalness: 0.4, roughness: 0.6}),
     standInFace: std('train-equipment-stand-in-face', 0x1b1f1e, {roughness: 0.5}),

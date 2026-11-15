@@ -172,25 +172,27 @@
             <div class="actions"><button class="btn-new-level primary" type="button" data-level="subway">New game · Subway</button><button class="btn-new-level" type="button" data-level="office">New game · Office Space</button><button class="btn-new-level" type="button" data-level="mall">New game · Shopping Center</button><button class="btn-new-level" type="button" data-level="skyways">New game · Skyways</button><button class="btn-new-level" type="button" data-level="reactor">New game · Reactor</button><button class="btn-cancel" type="button">Cancel</button></div>
           </div>
         </div>
-        <div class="pause-view hidden" data-pause-view="settings">
-          <div class="pause-tabs" role="tablist" aria-label="Settings">
+        <!-- (task studio-settings-menu-parity-20261115-191601-01) the Settings tabs: ui/settingsTabs.ts drives and styles them; the main
+             menu's Settings dialog builds the same markup (buildSettingsTabs, ids mm-*) -->
+        <div class="pause-view set-tabbed hidden" data-pause-view="settings">
+          <div class="set-tabs" role="tablist" aria-label="Settings">
             <button type="button" role="tab" id="pause-tab-graphics" data-tab="graphics" aria-controls="pause-settings">Graphics</button>
             <button type="button" role="tab" id="pause-tab-audio" data-tab="audio" aria-controls="pause-settings">Audio</button>
             <button type="button" role="tab" id="pause-tab-gameplay" data-tab="gameplay" aria-controls="pause-settings">Gameplay</button>
             <button type="button" role="tab" id="pause-tab-performance" data-tab="performance" aria-controls="pause-perf">Performance</button>
           </div>
-          <div class="pause-body">
+          <div class="set-body">
             <!-- (lane MENU) the same settings form as the main menu, bound to the persisted settings store (ui/mainMenu.ts mountSettingsForm; ids set-*); each row's data-group puts it on its tab -->
-            <div class="settings" id="pause-settings" role="tabpanel"></div>
-            <div class="pause-details"><button type="button" id="pause-details" aria-controls="pause-settings" aria-expanded="false">Show details</button></div>
+            <div class="settings set-look set-form" id="pause-settings" role="tabpanel"></div>
+            <div class="set-details"><button type="button" id="pause-details" aria-controls="pause-settings" aria-expanded="false">Show details</button></div>
             <!-- (lane RECORDER) the performance recorder (debug/perfRecorderUi.ts mountPanel, ids pause-perf-*) and the run codes (game.ts) -->
-            <div class="pause-perf hidden" id="pause-perf" role="tabpanel" aria-labelledby="pause-tab-performance"><p class="fine" id="seed-line"></p></div>
+            <div class="set-perf hidden" id="pause-perf" role="tabpanel" aria-labelledby="pause-tab-performance"><p class="fine" id="seed-line"></p></div>
           </div>
         </div>
         <div class="pause-view hidden" data-pause-view="controls">
           <div class="pause-body">
             <!-- (task studio-alpha-survival-controls-20261107-060450-01) Controls: the input preferences (mountControlsForm; ids set-sens / set-invert-x / set-invert) + the bindings -->
-            <div class="settings" id="pause-controls-form"></div>
+            <div class="settings set-look" id="pause-controls-form"></div>
             <div class="controls-grid" id="controls-pause"></div>
           </div>
         </div>
