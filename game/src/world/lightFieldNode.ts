@@ -30,7 +30,7 @@ import {
   Fn, If, abs, cameraViewMatrix, clamp, float, floor, int, ivec2, ivec3, length, max, min, mix, mod, normalWorld, positionWorld, renderGroup,
   screenCoordinate, select, step, texture3D, textureLoad, uniform, uniformArray, vec2, vec3, vec4,
 } from 'three/tsl';
-import {AUX_LAYERS, AUX_SLOT_DEPTH, FIELD_DMAX, FIELD_EMAX, GI_FACES, GROUP_BANDS, LAYERS, MAX_SLOTS, SLOT_DEPTH, configureFieldTexture, fieldDepth, slotRange, type LightFieldVolume} from './lightField';
+import {AUX_LAYERS, AUX_SLOT_DEPTH, FIELD_EMAX, GI_FACES, GROUP_BANDS, LAYERS, MAX_SLOTS, SLOT_DEPTH, configureFieldTexture, fieldDepth, slotRange, type LightFieldVolume} from './lightField';
 import {RIDE_MASK, RIDE_MASK_SKIN} from './rideMask';
 import {refreshTextureBindings} from '../render/bindingRefresh';
 
@@ -279,9 +279,10 @@ export interface LightFieldSampleNodes {
  * behind). `slot`: reuse an already picked level slot (the volumetric march picks one per step for density and field).
  * `reach`: how many cells the normal offset spans sideways (half a cell unless given; world/reflectionNode.ts reads a pane set
  * inside its wall a whole cell out).
- * `cube` (task studio-baked-gi-visual-uplift-20261115-004324-01): a unit WORLD normal — `amb` then also holds what a surface of that
- * orientation receives of the gathered light (the field's ambient cube: three more filtered fetches, one per axis for the face the
- * normal points at, weighted by the normal's squares); a field without a cube adds nothing. Without it: the nodes this always built.
+ * `cube` (task studio-baked-gi-visual-uplift-20261115-004324-01): a unit WORLD normal — `amb` is then what a surface of that
+ * orientation receives (the field's ambient cube: three more filtered fetches, one per axis for the face the normal points at,
+ * weighted by the normal's squares; a face texel is that face's complete ambient); while no cube is bound (LF.cube.y 0) it is the
+ * main texel's ambient part, as without `cube`. Without it: the nodes this always built.
  * Mirrors sampleField(): slot by height, bilinear in XZ (texel centres = cell centres), linear between height layers, the
  * flicker circuits' shares scaled by LF.levels. Zero when no field is bound.
  */
@@ -326,10 +327,10 @@ export function lightFieldSample(p: Node, o: {normal?: Node; slot?: Node; reach?
     const layers = n(h.top).add(1).toVar();
     // face of an axis: the positive one (0 / 2 / 4) or, for a component <= 0, the negative one (step, not select: no ternary to print)
     const face = (first: number, c: N) => at(n(gb).add(n(float(first).add(step(c, 0))).mul(layers)));
-    const decD = (v: N) => { const d = n(n(v).mul(255).sub(128).div(127)).toVar(); return n(d).mul(abs(d)).mul(FIELD_DMAX); };
     const n2 = n(N).mul(N);
-    const more = n(decD(face(0, N.y).rgb)).mul(n2.y).add(n(decD(face(2, N.x).rgb)).mul(n2.x)).add(n(decD(face(4, N.z).rgb)).mul(n2.z));
-    amb = max(n(amb).add(n(more).mul(n(LF.cube).y)), 0);
+    // (a face texel is that face's complete ambient: it stands in for the main texel's ambient part while a cube is bound)
+    const faces = n(dec(face(0, N.y).rgb)).mul(n2.y).add(n(dec(face(2, N.x).rgb)).mul(n2.x)).add(n(dec(face(4, N.z).rgb)).mul(n2.z));
+    amb = mix(amb, faces, n(LF.cube).y);
   }
   return {
     amb: n(amb).mul(g),
