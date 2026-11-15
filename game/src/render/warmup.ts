@@ -471,7 +471,9 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
   const casterTier = (i: WarmItem) => (!i.flips.length && dist(i) <= TORCH_REACH ? 0 : i.flips.length ? 1 : 2);
   const casters = torch?.castShadow ? items.filter(i => i.caster).sort((a, b) => casterTier(a) - casterTier(b) || dist(a) - dist(b)) : [];
   // (lane RENDER-CPU) 'full': every other eligible renderable is drawn once in the hidden frames as well (its own render objects in the
-  // real scene / shadow pass contexts; node builds are cache hits by then) — a first view in play then creates nothing
+  // real scene / shadow pass contexts; node builds are cache hits by then) — a first view in play then creates nothing. One exception
+  // to "cache hits" (lane LOAD, measured): a pool of a two-pass material (drawsDoublePass) that shares its build with a representative
+  // is first met by a real draw here, which asks for the BackSide and the FrontSide key — two builds per such material, in these frames
   const rest = plan.mode === 'full' ? [...plan.others].sort((a, b) => dist(a) - dist(b)) : [];
   const compileChunks = chunks(items, opts.compileChunk ?? WARMUP_DEFAULTS.compileChunk);
   // Task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): the representatives drawn in TWO passes (drawsDoublePass:

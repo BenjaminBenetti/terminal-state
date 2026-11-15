@@ -579,6 +579,10 @@ every pool is built on its own. With the uuid taken out, those 903 builds fall i
 Continue of the same station needs 21 builds instead of 867 (its materials stage: 3.2 s instead of 137.3 s). After the
 warm-up, 312 frames of full turns at 11 spots over the station, the flashlight lit (56,404 draws of pools on the shared
 path, 32,730 draws in the flashlight's shadow pass), created 0 node builds, 0 pipelines and 0 shader modules.
+The other level kinds, one cold load each with the kill switch and with shared builds: Office 209.5 s and 54.8 s, Mall
+222.8 s and 48.2 s, Skyways 298.6 s and 52.1 s, Reactor 147.4 s and 38.7 s, Bunker 153.3 s and 40.7 s, Market 52.0 s
+and 27.5 s. The same turns after their warm-ups created nothing either, except on the Skyways station: 2 builds of a
+plain (not instanced) cooler-glass mesh at one spot, the same 2 with the kill switch.
 These are Node numbers on a shared pod: they show where the work is and how much of it is gone, not how long a player's
 machine takes — there, pipeline creation on the GPU is part of the wait and is not measured here.
 
@@ -615,7 +619,12 @@ enforce limits; **nobody measured it failing on a device.**
 **The warm-up plan.** In `full` mode with shared builds on, `planWarmup` keeps one representative per variant; the
 other pools become `others` and are drawn once in the hidden frames, like every renderable a representative covers. That
 is where each of them gets its render objects, its own instance buffers and — when its render state differs from the
-representative's, e.g. a mirrored pool — its pipeline. The count on the loading line is the number of representatives
+representative's, e.g. a mirrored pool — its pipeline. A material drawn in two passes (transparent and double-sided:
+glass) also gets two node builds there, once per material: three keys a build by the exact `side`, the loading compile
+prepares the double-sided key for the representative, and a pool first met by a real draw asks for the back-side and
+the front-side key. In the Subway start station that is 4 builds for 2 glass materials, about 0.5 s inside the hidden
+frames, before the warm-up reports ready; with the kill switch every pool is compiled and none is needed. The count on
+the loading line is the number of representatives
 really compiled (Subway start station: 828 instead of 1518). `view` mode (software rasterizers) keeps one item per pool,
 because nothing draws its `others`; their builds are still shared.
 
@@ -670,6 +679,11 @@ hidden tab (no animation frames there).
 **Measured before** (the real Game in Node, 16 ms frames, no `scheduler.yield`, the 120 s budget, before shared builds):
 the materials stage reached 816 of 1518 items when the budget cut it, 58.6 s of that waiting for frames; the hidden
 frames were skipped and the final view frame then built 231 programs in one 16.4 s block.
+
+**Measured after** (same harness, station and budget, shared builds on). With three's frame fallback — no task yield
+possible — the warm-up completes in 70.2 s: the materials stage takes 59.2 s, 32.0 s of it waiting for frames. With the
+task yield it completes in 33.8 s: the materials stage takes 26.3 s and its 2649 yields wait 0.1 s in all. Both are the
+same 199 node builds; the difference is the waiting.
 
 **What changed.** `render/compileYield.ts` `installTaskYield()` gives three a yield that ends at the next *task* (a
 `MessageChannel` post: no timer clamp). The warm-up installs it around each of its own `compileAsync` calls (stages 1
