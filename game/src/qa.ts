@@ -489,8 +489,14 @@ export function installQaHooks(game: Game): void {
      */
     lighting: async () => {
       const status = game.enhancedLighting.status();
-      return {status, line: enhancedLightingLine(status), cache: await game.enhancedLighting.cacheStats(), mirror: game.glassMirror?.debug() ?? null}; // (lane MIRROR: + mirror)
+      return {status, line: enhancedLightingLine(status), cache: await game.enhancedLighting.cacheStats()};
     },
+    /**
+     * Task baked-gi-visual-uplift-20261115-004324 (lane MIRROR): the live glass mirror (render/glassMirror.ts debug()) — planes, the
+     * plane shown and its strength, the drawn window, the target, draw / idle counters; null: the station is not lit with it
+     * (also snapshot().glassMirror). Read-only.
+     */
+    mirror: () => game.glassMirror?.debug() ?? null,
     /**
      * Iteration 13 (FOG): the world haze at (x, y, z) — sigma (1/m), patch / wisp values, area multiplier, level slot — at the
      * current fog time, or at fog time `t` (s). The CPU mirror of what the march integrates there; independent of the camera,
