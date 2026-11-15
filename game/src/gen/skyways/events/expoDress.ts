@@ -38,7 +38,7 @@ import {SKYWAYS_STAGE_DECK_EDGE, SKYWAYS_STAGE_SURFACES, stageWorldXZ, type Stag
 import type {SkywaysRect, SkywaysVenueRole} from '../skywaysTypes';
 import {VENUE_SIGN, arrowFor, entryAreas, eventVenueContext, group, markRoutes, markWalkRoutes, portalsOf, routeTable, type Portal, type VenueCtx} from '../venueDress';
 import type {EventDressResult} from './eventResult';
-import {EXPO_DIMS, EXPO_LED_IN_TRUSS, EXPO_SIGN_CABLE} from './expoKinds';
+import {EXPO_DIMS, EXPO_LED_IN_TRUSS} from './expoKinds';
 import {EXPO_EXHIBITORS, EXPO_KEYNOTE_SLIDES, EXPO_NAMES, EXPO_TALKS, type ExpoBoothTheme, type SkywaysExpoRecord} from './expoTypes';
 
 /** The expo's public venue roles (the washrooms / backstage / storage keep the station's ordinary dressing). */
@@ -55,7 +55,7 @@ export const EXPO_COMPACT = {d: 1.0, aisle: 1.6} as const;
 /** Half width of the keynote hall's reserved lanes (entry -> aisle -> stage front -> the steps' foot; entry -> every hall door). */
 export const EXPO_LANE_HALF = 0.9;
 /** Audience: rows at most, chairs per side of the centre aisle at most, row pitch, chair pitch along a row, the side aisles (m). */
-export const EXPO_AUDIENCE = {rows: 7, perSide: 9, pitch: 1.0, seat: 0.5, side: 1.3} as const;
+export const EXPO_AUDIENCE = {rows: 7, perSide: 9, wide: 14, seats: 126, pitch: 1.0, seat: 0.5, side: 1.3} as const;
 
 const SIDES: readonly Side[] = ['N', 'S', 'W', 'E'];
 
@@ -126,7 +126,7 @@ export function dressTechExpo(layout: StationLayout, rng: Rng): EventDressResult
     if (!mouth && a.kind === 'concourse' && a.type === 'concourse') continue; // the keynote foyer: its totem only (below)
     registration(ex, a);
   }
-  areasOf('panel').forEach((a, k) => theatre(ex, a, k, (talk0 + k) % EXPO_TALKS.length));
+  areasOf('panel').forEach((a, k) => theatre(ex, a, (talk0 + k) % EXPO_TALKS.length));
   for (const a of areasOf('photo-lounge')) lounge(ex, a);
   const pieces = areasOf('exhibitors').sort((p, q) => q.w * q.h - p.w * p.h);
   booths(ex, pieces);
@@ -281,8 +281,9 @@ function keynote(ex: Ex, hall: Area): void {
       }
       return out.length ? out : null;
     });
-    res.chairs = seat(P.perSide, nRows) ?? (DBG(`seat1 fail W=${fr.W} D=${fr.D} rows=${nRows} vFirst=${vFirst}`), seat(5, Math.min(5, nRows))) ?? [];
-    DBG(`seat W=${fr.W} D=${fr.D} rows=${nRows} chairs=${res.chairs.length} us=${us} vFirst=${vFirst}`);
+    // (about P.seats chairs: a shallow hall's fewer rows run wider, up to P.wide per side)
+    const perSide = Math.max(P.perSide, Math.min(P.wide, Math.round(P.seats / nRows / 2)));
+    res.chairs = seat(perSide, nRows) ?? seat(5, Math.min(5, nRows)) ?? [];
     if (res.chairs.length < 12) res.skipped.push(`expo: keynote audience (${res.chairs.length})`);
   }
 
@@ -440,7 +441,7 @@ function deskRow(ex: Ex, a: Area, mouth: Portal | null): boolean {
 // Demo theatres
 
 /** A demo theatre: the talk's title slide on a presentation screen at the back wall, the presenter's table beside it, audience rows. */
-function theatre(ex: Ex, a: Area, k: number, talk: number): void {
+function theatre(ex: Ex, a: Area, talk: number): void {
   const {v, vc, res} = ex, ps = vc.portals.get(a.id)!, rng = v.rng;
   const door = ps.find(p => p.door) ?? ps[0] ?? null;
   const fr = hallFrame(a, door?.side ?? 'S');
@@ -495,7 +496,6 @@ function theatre(ex: Ex, a: Area, k: number, talk: number): void {
     }
   }
   if (out.chairs.length < 4) res.skipped.push(`expo: theatre ${a.id} audience (${out.chairs.length})`);
-  void k;
   res.theatres.push(out);
 }
 
@@ -567,11 +567,9 @@ function booths(ex: Ex, pieces: readonly Area[]): void {
       for (const compact of deep >= EXPO_BOOTH.d + EXPO_BOOTH.aisle ? [false, true] : [true]) {
         // the plot with its aisle (booths side by side may touch; never one booth in another's aisle)
         const r = rectOf(plot, EXPO_BOOTH.w, compact ? EXPO_COMPACT.d + EXPO_COMPACT.aisle : EXPO_BOOTH.d + EXPO_BOOTH.aisle);
-        if (clash(r, -0.02)) { DBG(`plot ${a.id} ${plot.side} ${plot.t0}: clash`); continue; }
+        if (clash(r, -0.02)) continue;
         const e = ex.exOrder[ex.next];
-        WHY = 'route';
         const got = group(vc, [a], () => wallBooth(ex, plot, e, compact));
-        DBG(`plot ${a.id} ${plot.side} ${plot.t0} ${EXPO_EXHIBITORS[e].theme}${compact ? '/c' : ''}: ${got ? 'OK' : WHY}`);
         if (!got) continue;
         nextEx();
         taken.push(r);
@@ -581,8 +579,8 @@ function booths(ex: Ex, pieces: readonly Area[]): void {
     }
   }
   for (const a of pieces) {
-    if (Math.min(a.w, a.h) * CELL < 9.5) continue;
-    const want = Math.max(1, Math.min(3, Math.floor(a.w * a.h * CELL * CELL / 60)));
+    if (Math.min(a.w, a.h) * CELL < 8.5) continue;
+    const want =Math.max(1, Math.min(3, Math.floor(a.w * a.h * CELL * CELL / 60)));
     const hub = vc.hub.get(a.id);
     const cx = (a.x + a.w / 2) * CELL, cz = (a.y + a.h / 2) * CELL;
     // (the island faces the piece's way in; its across axis on a cell line so its pieces fill whole cells)
@@ -732,12 +730,28 @@ const BOOTH_PLANS: Readonly<Record<ExpoBoothTheme, readonly BoothItem[]>> = {
   ],
 };
 
+/** The demo devices on a compact booth's counter per theme (counter-local lx, lz; facing the aisle). */
+const COMPACT_TOP: Readonly<Record<ExpoBoothTheme, readonly (readonly [PropKind, number, number])[]>> = {
+  mobile: [['skyMerchDemoPhone', -0.5, 0.02], ['skyMerchDemoPhone', -0.2, 0.02], ['skyMerchDemoPhone', 0.1, 0.02], ['skyMerchDemoTablet', 0.45, 0.02]],
+  display: [['flatScreenTv', 0, -0.02]],
+  data: [['officeMonitor', -0.3, -0.08], ['tradingKeyboard', -0.3, 0.2], ['skyExpoTowerPc', 0.55, -0.05]],
+  retro: [['crtTerminal', -0.3, -0.04], ['skyMerchDemoTablet', 0.45, 0.02]],
+  games: [['skyMerchDemoTablet', -0.45, 0.02], ['skyMerchDemoTablet', -0.1, 0.02], ['officeMonitor', 0.45, -0.08]],
+  workstation: [['officeMonitor', -0.3, -0.08], ['tradingKeyboard', -0.3, 0.2], ['skyExpoTowerPc', 0.55, -0.05]],
+  showcase: [['skyMerchDemoPhone', -0.45, 0.02], ['skyMerchDemoPhone', 0, 0.02], ['skyMerchDemoPhone', 0.45, 0.02]],
+};
+/** A compact booth (a shallow piece): the exhibitor's demo counter with the theme's devices and a plinth, both against the booth wall. */
+const compactPlan = (theme: ExpoBoothTheme): readonly BoothItem[] => [
+  {k: 'skyExpoDemoCounter', lx: -0.4, lz: BACK, variant: 'e', req: true, top: COMPACT_TOP[theme]},
+  {k: 'skyExpoPlinth', lx: 0.95, lz: BACK, variant: 1, top: [[theme === 'mobile' || theme === 'showcase' ? 'skyMerchDemoTablet' : 'skyMerchDemoPhone', 0, 0.02]]},
+];
+
 /**
  * A wall booth: the theme's fixtures (the reused kinds first), then the shell-scheme booth wall behind them — pushed last so the
  * fixtures can stand against its face (it shares the wall-side cell row with them; its other cells of that row are blocked here) —
  * and a plinth with a device in a free front corner. Null (the group rolls everything back) if a required fixture does not fit.
  */
-function wallBooth(ex: Ex, plot: Plot, e: number): PropPlacement[] | null {
+function wallBooth(ex: Ex, plot: Plot, e: number, compact = false): PropPlacement[] | null {
   const {v} = ex, list: PropPlacement[] = [], put = putter(ex, plot, list), theme = EXPO_EXHIBITORS[e].theme, rng = v.rng, g = v.g;
   const bwD = EXPO_DIMS.boothWall.d, W0 = bwD + 0.02; // the booth wall's face
   const [bx, bz] = toWorld(plot, 0, bwD / 2 + 0.005), bf = footprint('skyExpoBoothWall', plot.rot), [c0, r0, c1, r1] = cellsOfBox(bx, bz, bf.hx, bf.hz);
@@ -745,24 +759,24 @@ function wallBooth(ex: Ex, plot: Plot, e: number): PropPlacement[] | null {
   for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) {
     if (!g.inBounds(cx, cy)) return null;
     const i = g.idx(cx, cy);
-    if (!v.freeAt((cx + 0.5) * CELL, (cy + 0.5) * CELL, plot.a) || v.ctx.lane[i] || v.ctx.doorCell[i] || v.ctx.zone[i] || v.ctx.edge[i]) { WHY = `cell free=${v.freeAt((cx + 0.5) * CELL, (cy + 0.5) * CELL, plot.a)} blk=${g.blocked[i]} keep=${v.ctx.keep[i]} lane=${v.ctx.lane[i]} door=${v.ctx.doorCell[i]} zone=${v.ctx.zone[i]} edge=${v.ctx.edge[i]}`; return null; }
+    if (!v.freeAt((cx + 0.5) * CELL, (cy + 0.5) * CELL, plot.a) || v.ctx.lane[i] || v.ctx.doorCell[i] || v.ctx.zone[i] || v.ctx.edge[i]) return null;
     wallCells.push(i);
   }
-  for (const it of BOOTH_PLANS[theme]) {
+  for (const it of compact ? compactPlan(theme) : BOOTH_PLANS[theme]) {
     const def = PROP_DEFS[it.k], turned = Math.abs(Math.sin(it.turn ?? 0)) > 0.5;
     const lz = it.lz === BACK ? W0 + (turned ? def.w : def.d) / 2 : it.lz;
     const p = put(it.k, it.lx, lz, it.turn ?? 0, {front: it.front, variant: it.variant === 'e' ? e : it.variant, purpose: it.purpose});
-    if (!p) { if (it.req) { WHY = 'req ' + it.k; return null; } continue; }
+    if (!p) { if (it.req) return null; continue; }
     for (const [k, lx, tz, turn] of it.top ?? []) decor(ex, p, list, k, lx, tz, turn ?? 0);
   }
   // the booth wall (its row's cells not under a fixture blocked now; the area must stay connected)
   for (const i of wallCells) if (!g.blocked[i]) markCell(v.ctx, g.blocked, i);
-  if (!areaConnected(v.ctx, plot.a)) { WHY = 'conn'; return null; }
+  if (!areaConnected(v.ctx, plot.a)) return null;
   list.unshift(v.push({kind: 'skyExpoBoothWall', x: r3(bx), z: r3(bz), y: 0, rot: r3(plot.rot), area: plot.a.id, hx: r3(bf.hx), hz: r3(bf.hz), h: EXPO_DIMS.boothWall.h,
     blocksSight: false, variant: e}));
-  // the front corner's plinth with a demo device (where it fits)
+  // the front corner's plinth with a demo device (where it fits; a compact booth has none)
   const s = rng.chance(0.5) ? 1 : -1;
-  for (const side of [s, -s]) {
+  if (!compact) for (const side of [s, -s]) {
     const pl = put('skyExpoPlinth', side * 1.2, 2.7, 0, {variant: rng.int(0, 1)});
     if (!pl) continue;
     decor(ex, pl, list, theme === 'mobile' || theme === 'showcase' ? 'skyMerchDemoPhone' : 'skyMerchDemoTablet', 0, 0.02);
@@ -806,7 +820,6 @@ function hangSign(ex: Ex, a: Area, x: number, z: number, rot: number, e: number)
   res.hangSigns.push(p);
   return p;
 }
-void EXPO_SIGN_CABLE;
 
 // ---------------------------------------------------------------------------------------------
 // Totems, back of house
@@ -949,5 +962,3 @@ function wayfinding(ex: Ex, areas: readonly Area[]): void {
     }
   }
 }
-let WHY = '';
-const DBG = (s: string) => { (globalThis as {__expoDbg?: string[]}).__expoDbg?.push(s); };
