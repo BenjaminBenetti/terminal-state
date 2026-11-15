@@ -88,7 +88,7 @@ import {FlareHold} from './weapons/flareHold'; // Iteration 15: hold to ready, r
 import {GrenadeSystem, throwHoldTarget, throwOneGrenade} from './weapons/grenades'; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades
 // task studio-flamethrower-fire-20261114-031614-01: the flamethrower's fire — what burns (fire/fireSystem.ts), how it looks (fire/fireFx.ts), its fuel (fire/fuelTank.ts)
 import {FireSystem, streamFalloff, type FireEnemy} from './fire/fireSystem';
-import {FireFx} from './fire/fireFx';
+import {FIRE_FX, FireFx, streamLightAt, streamLightLevel} from './fire/fireFx';
 import {FLAME_FUEL_CAN} from './fire/flamethrowerSpec';
 import {canPourCan, tankFuel, wornFuelTank} from './fire/fuelTank';
 import type {FlameSound} from './fire/sound';
@@ -281,6 +281,9 @@ const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
  * progress bar's place; it is told each stage's real progress and that the load is ready, nothing else.
  */
 export interface WarmupUi { meter: LoadMeter | null; label: HTMLElement; button: HTMLButtonElement | null }
+/** The pooled muzzle light's colour for a gun's flash (the flamethrower's stream uses FIRE_FX.streamLight.color). */
+const MUZZLE_FLASH_COLOR = 0xffb468;
+
 /** Iteration 16: let the browser paint a loading screen / overlay before a long synchronous generation. */
 const nextPaint = () => new Promise<void>(r => setTimeout(r, 30));
 
@@ -610,7 +613,7 @@ export class Game {
   /** Flashlight switched on (Iteration 12: backed by the battery; a flat battery keeps it off). */
   get flashlightOn(): boolean { return this.torch.battery.on; }
   set flashlightOn(v: boolean) { this.torch.battery.setOn(v); }
-  private readonly muzzleLight = new THREE.PointLight(0xffb468, 0, 8, 2);
+  private readonly muzzleLight = new THREE.PointLight(MUZZLE_FLASH_COLOR, 0, 8, 2);
   /** Iteration 06 (Lane F): volumetric haze pass + flashlight shadow map (render/volumetric.ts). */
   readonly atmosphere: VolumetricAtmosphere;
   // Constant dim ambient floor (iteration 05: no longer follows the player's area; the baked light
@@ -3456,9 +3459,13 @@ export class Game {
 
     prof.lap(SPAN.lights);
     // (task studio-flamethrower-fire-20261114-031614-01) the running stream lights what it sprays: the pooled muzzle light, ahead of the lance
-    if (this.fireSys.stream.on) { this.muzzleT = Math.max(this.muzzleT, 0.07); this.muzzleLight.position.copy(eye).addScaledVector(look, Math.min(2.4, Math.max(0.8, this.fireSys.stream.reach * 0.5))); }
+    if (this.fireSys.stream.on) { this.muzzleT = Math.max(this.muzzleT, 0.07); this.muzzleLight.position.copy(eye).addScaledVector(look, streamLightAt(this.fireSys.stream.reach)); }
     this.muzzleT -= dt;
-    this.muzzleLight.intensity = this.muzzleT > 0 ? 18 * (0.65 + Math.random() * 0.7) : 0; // flicker
+    // (task studio-flamethrower-vfx-20261115-001305-01) with the flamethrower in the hands the light is only ever its stream's: fire-coloured,
+    // breathing instead of strobing per frame, dimmed when the stream hits something close (fire/fireFx.ts FIRE_FX.streamLight)
+    const flameLight = !!wdef?.stream;
+    this.muzzleLight.color.setHex(flameLight ? FIRE_FX.streamLight.color : MUZZLE_FLASH_COLOR);
+    this.muzzleLight.intensity = this.muzzleT > 0 ? 18 * (flameLight ? streamLightLevel(this.fireSys.stream.reach, this.time) : 0.65 + Math.random() * 0.7) : 0; // flicker
     this.updatePlayerLight(dt, eye); // Iteration 12 (LIGHT): battery drain / flicker -> SpotLight, body glow, light sources
     this.lightPool.update(dt, eye);
     prof.lap(SPAN.fx);
