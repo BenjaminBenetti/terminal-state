@@ -14,8 +14,9 @@ The warm-up **discovers** what to prepare by walking the live station scene afte
 - their *runtime* materials (whatever the object carries after decay, damage clones, wardrobe and so on, not the raw
   GLB material).
 
-It keeps one representative per three cache-key group: material, geometry attribute layout, instancing (every
-InstancedMesh is its own group in three r186), skeleton, and shadow flags. Representatives are compiled with the
+It keeps one representative per three cache-key group: material, geometry attribute layout, instancing, skeleton, and
+shadow flags. In three r186 every InstancedMesh is its own group; with shared instanced builds (below) the pools of one
+material variant are one group. Representatives are compiled with the
 real camera into the real render target the station is drawn into. Then the torch-lit shadow pass, the fog passes,
 the output pass and the overlay composite run through a few hidden real frames.
 
@@ -566,6 +567,98 @@ Not changed, with the reason:
 - Node only, and no native GPU. GPU-side pipeline creation, driver work and GC pause lengths need a native capture.
 - The census covers the rig's events, not every play path (see the list above).
 
+## Shared node builds for instanced meshes (task studio-gi-mood-bounce-loading-20261115-081523-01, lane LOAD)
+
+**What was measured.** The real Game in Node on a validating WebGPU device, Subway start station, Enhanced lighting Auto, no
+time budget: the materials stage was about 90 % of a station load, and 903 of its 1044 node builds were InstancedMeshes
+(125.7 s of 141.5 s of JavaScript). three r186 puts the object's `uuid` into the cache key of anything instanced, so
+every pool is built on its own. With the uuid taken out, those 903 builds fall into 55 groups.
+
+**After, same harness and station.** The materials stage needs 199 node builds instead of 1044 (58 instanced instead of
+903) and took 25.6 s instead of 152.5 s; the whole call from "New game" to playing took 42.9 s instead of 170.2 s. A
+Continue of the same station needs 21 builds instead of 867 (its materials stage: 3.2 s instead of 137.3 s). After the
+warm-up, 312 frames of full turns at 11 spots over the station, the flashlight lit (56,404 draws of pools on the shared
+path, 32,730 draws in the flashlight's shadow pass), created 0 node builds, 0 pipelines and 0 shader modules.
+These are Node numbers on a shared pod: they show where the work is and how much of it is gone, not how long a player's
+machine takes — there, pipeline creation on the GPU is part of the wait and is not measured here.
+
+**What a build really holds of its pool.** On the attribute path (`render/instancing.ts`: the matrices as four
+instanced vec4 attributes) the shader text of every pool of a material is already identical. What is left per object is
+which instance buffers the build captured, and a frame hook that keeps those buffers' versions in step.
+
+**The mechanism** (`render/sharedInstancing.ts`, installed in `Game.initRenderer` on both backends):
+- **Key.** A plain InstancedMesh's build is looked up under three's own cache key with a *signature* in place of the
+  uuid: instance colours present or not, and the two buffers' usage (static / dynamic). Everything else three keys by
+  stays: material values and node graph, geometry layout, `receiveShadow`, lights / fog / environment, render context,
+  clipping. The render object's own key (what decides whether three re-creates it) is untouched.
+- **Path.** Such a build always takes the attribute path, so its text holds no instance count and no global node id.
+- **Data.** The render object's `getAttributes` swaps the build's captured instance buffers for the mesh's own: one
+  interleaved buffer over its own `instanceMatrix.array` (and one over its `instanceColor.array`), shared by all of the
+  mesh's render objects (scene pass, flashlight shadow pass, glass mirror). Layout, stride, step mode and usage are the
+  build's, so the pipeline is too.
+- Bindings, per-object uniforms, the draw's instance count, culling, `onBeforeRender` and the mirror's per-pool skip are
+  per render object in three already, exactly as for plain meshes of one material.
+
+**What keeps three's own keyed build:** storage-buffer instances, morph targets, anything that is not a plain
+InstancedMesh (skinned meshes, instanced sprites), a render object built with previous-frame data (a velocity MRT; the
+game has none), and a pool with no room for the instance attributes.
+
+**The vertex-buffer budget.** WebGPU binds at most 8 vertex buffers and 16 attributes per pipeline by default, and the
+game requests no higher limits. The attribute path adds one buffer with four attributes, plus one each for instance
+colours. `instanceAttributesFit` counts a pool's geometry attributes, and a pool that would not fit keeps three's
+uniform-buffer path — under shared builds **and** under the mall / Reactor attribute switch (`setAttributeInstancing`).
+The real case is the bullet-crater pool (`damage-craters`, `damage/craters.ts`): position, normal, uv and five instanced
+attributes are 8 buffers already, so the attribute path would have asked for 9. That was a pre-existing risk on the mall
+and the Reactor on real WebGPU. It was found by counting the pipeline's vertex layout in Node, whose device does not
+enforce limits; **nobody measured it failing on a device.**
+
+**The warm-up plan.** In `full` mode with shared builds on, `planWarmup` keeps one representative per variant; the
+other pools become `others` and are drawn once in the hidden frames, like every renderable a representative covers. That
+is where each of them gets its render objects, its own instance buffers and — when its render state differs from the
+representative's, e.g. a mirrored pool — its pipeline. The count on the loading line is the number of representatives
+really compiled (Subway start station: 828 instead of 1518). `view` mode (software rasterizers) keeps one item per pool,
+because nothing draws its `others`; their builds are still shared.
+
+**Lifetime.** A station's pools are warmed while the previous station's meshes still wait to be disposed, so a build
+made from an old pool can serve later stations for the whole session.
+- A kept build still references its first mesh's `instanceMatrix` / `instanceColor` attribute objects and three's two
+  buffer objects over the same arrays: one pool's instance floats per live build, and never more — a later station
+  neither adds to it nor replaces it. It does not reference the mesh, its geometry or its material (by reading three's
+  `accessors/Instance.js`; not measured with a heap snapshot).
+- A mesh's own instance buffers are released on the GPU when the **mesh** is disposed, and a disposed mesh that is drawn
+  again gets new ones. Two meshes that share an instance attribute (the Reactor's lamp glass draws with the tubes'
+  `instanceColor`) share the buffer made over it, and it is released with the last of them.
+- three r186's WebGPU backend keeps a destroyed GPUBuffer in its record of an interleaved buffer whose geometry was
+  disposed. Such a record is dropped before the next upload, so a live pool whose geometry is replaced draws correctly.
+
+**Switches.** On for every level kind on both backends. `?instshare=off` is the kill switch (three's keyed builds
+everywhere, the plan as before); `?instshare=on` forces it on. A render object keeps the choice made at its first build
+lookup. `installSharedInstancing(renderer)` + `setSharedInstancing(bool)` also work on a page that owns its renderer.
+
+**Checks** (`game/tests/shared-instancing.test.ts`, three's real renderer on a validating device that records what
+the GPU was given):
+- every pool's draws are bound to its own matrix and colour bytes and to no other pool's, in the scene and the shadow
+  pass, for the build's first mesh and later ones, after instances move, and through `compileAsync`;
+- a station change over four stations: old geometries destroyed at once, old meshes disposed after the next station is
+  warm; no destroyed buffer is bound or submitted; the live buffer count and the node manager's cache do not grow;
+- a pool whose geometry is replaced, a pool disposed while still in the scene, and two pools on one colour attribute;
+- `receiveShadow` gives its own build, `castShadow` does not; velocity-flagged, morphed and skinned meshes stay keyed;
+- a pool's own `onBeforeRender`, `count` and frustum culling behave the same with shared builds on and off;
+- the attribute switch with shared builds on top gives the same shader texts and pipeline layouts as the switch alone;
+- after a full warm-up, frames create 0 builds, 0 pipelines and 0 render objects — including a mirrored pool, whose
+  pipeline a hidden frame created;
+- the crater pool's pipeline stays at 8 vertex buffers under both switches; WebGL 2 shares builds the same way.
+
+`game/tests/shared-instancing-station.test.ts` runs the same on a real station: the mall built through the game's build
+path, warmed by `runWarmup` inside a nested scene pass. The plan lists every renderable with shared builds on and off;
+after the warm-up, yaw sweeps at three poses with the torch lit create 0 builds, 0 render objects, 0 pipelines and 0
+shader modules; every instanced draw names its own mesh's matrices; no pipeline asks for more than 8 vertex buffers.
+
+**Limits.** Node only: no pixels were compared here, and GPU-side pipeline creation was not timed. The first mesh of a
+build loses partial instance uploads (three's own frame hook consumes its update ranges first), so its uploads are whole
+buffers; the game sets no ranges on instance attributes. Shadow-pass builds stay one per caster material instance where
+the material has a map, so they do not collapse the same way.
+
 ## Lifecycle and guarantees
 
 - `Game.prepareGraphics()` is single-flight. It resolves (never rejects) with a `WarmupResult` whose status is one of:
@@ -585,7 +678,8 @@ Not changed, with the reason:
   `Game.newStation` removes the old station from the scene immediately, but queues its GPU releases until after the
   new station's warm-up. Those releases are zombie, wound and wardrobe materials, the fixture glow, world instanced
   meshes and the light-field volume. Programs both stations share are therefore reused, not rebuilt. New per-object
-  work, such as each new InstancedMesh's own node build, is prepared on the loading screen.
+  work is prepared on the loading screen: each new pool's render objects, instance buffers and pipelines, and — only
+  with `?instshare=off` — each new InstancedMesh's own node build.
 - Progress reports done/total over real units:
   - representatives compiled;
   - passes;

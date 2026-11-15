@@ -5,7 +5,8 @@
 //
 // What is cold without it (three r186 WebGPURenderer):
 //  - every new material / geometry-layout combination builds its TSL node graph in JS on first draw, and every
-//    InstancedMesh (and instanced Sprite) gets its OWN node build (the object uuid is part of three's cache key);
+//    InstancedMesh (and instanced Sprite) gets its OWN node build (the object uuid is part of three's cache key) — unless the
+//    pools of a material share theirs (render/sharedInstancing.ts: then one build per material variant, like plain meshes);
 //  - the backend then creates the GPU pipeline synchronously (WebGPU createRenderPipeline / a WebGL2 program link);
 //  - the flashlight shadow pass compiles a shadow variant per caster the first time the lit torch sees it;
 //  - textures upload (and mip) on first use; the fog march / temporal / composite, the output transform and the
@@ -47,6 +48,7 @@
 import * as THREE from 'three';
 import {CULL_LAYER} from '../world/levelCulling';
 import {compileAtDepth} from './renderContextDepth';
+import {instancingSignature, sharedInstancing} from './sharedInstancing';
 
 export type WarmupMode = 'full' | 'view' | 'off';
 export type WarmupStatus = 'complete' | 'partial' | 'cancelled' | 'failed' | 'skipped';
@@ -157,16 +159,20 @@ export function geometryKey(g: THREE.BufferGeometry | undefined): string {
 
 /**
  * Cache-key groups an object's draws fall into: a SUPERSET of three's key (material identity instead of its property
- * hash, so two equal materials are two groups — the second compiles as a cache hit).
+ * hash, so two equal materials are two groups — the second compiles as a cache hit). `shareInstanced`: group the pools of an
+ * instanced material as three now builds them (render/sharedInstancing.ts) instead of one group per InstancedMesh; default: off.
  */
-export function warmKeys(o: Renderable): string[] {
+export function warmKeys(o: Renderable, shareInstanced = false): string[] {
   const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[];
   const mats = (Array.isArray(m) ? m : [m]).filter(x => x && x.visible !== false);
   const kind = (o as THREE.SkinnedMesh).isSkinnedMesh ? 'skin' : (o as THREE.InstancedMesh).isInstancedMesh ? 'inst'
     : (o as THREE.Sprite).isSprite ? 'sprite' : (o as THREE.Points).isPoints ? 'points' : (o as THREE.LineSegments).isLineSegments ? 'segs'
       : (o as THREE.Line).isLine ? 'line' : 'mesh';
-  // three keys every InstancedMesh (and anything drawn with count > 1) by its own uuid
-  const own = (o as THREE.InstancedMesh).isInstancedMesh || ((o as {count?: number}).count ?? 1) > 1 ? o.uuid : '';
+  // three keys every InstancedMesh (and anything drawn with count > 1) by its own uuid — unless the pools of a material share their
+  // builds (render/sharedInstancing.ts; task studio-gi-mood-bounce-loading-20261115-081523-01, lane LOAD): then by what that shared key
+  // holds in the uuid's place, so ONE pool represents a material's pools and the others are drawn once like every covered renderable
+  const shared = shareInstanced ? instancingSignature(o) : null;
+  const own = shared ?? ((o as THREE.InstancedMesh).isInstancedMesh || ((o as {count?: number}).count ?? 1) > 1 ? o.uuid : '');
   const bones = (o as THREE.SkinnedMesh).skeleton?.bones.length ?? 0;
   const g = geometryKey(o.geometry as THREE.BufferGeometry);
   return mats.map(x => `${kind}|${x.uuid}|${g}|${own}|${bones}|${o.receiveShadow ? 1 : 0}|${o.castShadow ? 1 : 0}`);
@@ -199,6 +205,13 @@ export interface PlanOptions {
   near?: {center: THREE.Vector3; radius: number};
   /** Off-layer objects hidden by the level / fog culler count as candidates (default: 'full' mode only). */
   includeCulled?: boolean;
+  /**
+   * (lane LOAD) One representative for the pools of an instanced material whose builds are shared (render/sharedInstancing.ts); the
+   * other pools become `others`. Default: 'full' mode while shared builds are on — there every `other` is drawn once before the
+   * warm-up ends (its own render objects, pipeline and instance buffers). 'view' keeps one item per pool: nothing draws its `others`,
+   * and a pool's first sight would create its render object in play.
+   */
+  shareInstanced?: boolean;
 }
 
 const CULLED_MASK = new THREE.Layers();
@@ -228,6 +241,7 @@ function itemDistance(o: Renderable, eye: THREE.Vector3): number {
 export function planWarmup(root: THREE.Object3D, opts: PlanOptions): WarmupPlan {
   const pools = new Set(opts.pools ?? []);
   const includeCulled = opts.includeCulled ?? opts.mode === 'full';
+  const shareInstanced = opts.shareInstanced ?? (opts.mode === 'full' && sharedInstancing());
   const seen = new Set<string>();
   const items: WarmItem[] = [], renderables: Renderable[] = [], others: WarmItem[] = [];
   let skipped = 0;
@@ -248,7 +262,7 @@ export function planWarmup(root: THREE.Object3D, opts: PlanOptions): WarmupPlan 
         const s = worldSphere(o);
         ok = !!s && s.center.distanceTo(opts.near.center) - s.radius <= opts.near.radius;
       }
-      const fresh = ok ? warmKeys(o).filter(k => !seen.has(k)) : [];
+      const fresh = ok ? warmKeys(o, shareInstanced).filter(k => !seen.has(k)) : [];
       if (fresh.length) {
         for (const k of fresh) seen.add(k);
         items.push({object: o, flips: here ?? [], caster: o.castShadow});

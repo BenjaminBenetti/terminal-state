@@ -23,8 +23,42 @@
 
 import {NodeBuilder} from 'three/webgpu';
 
-interface LimitHost { object?: {isInstancedMesh?: boolean} | null }
+/** Set on ONE builder: it takes the attribute path whatever the switch says (render/sharedInstancing.ts: a shared build). */
+const FORCED = Symbol('attributeInstancing');
+
+interface GeometryAttr { isInterleavedBufferAttribute?: boolean; data?: object }
+interface InstancedHost { isInstancedMesh?: boolean; instanceColor?: unknown; geometry?: {attributes?: Record<string, GeometryAttr>} | null }
+interface LimitHost { object?: InstancedHost | null; [FORCED]?: boolean }
 type LimitFn = (this: LimitHost) => number;
+
+/**
+ * What one pipeline may bind: WebGPU's default limits (maxVertexBuffers / maxVertexAttributes — the game requests no higher ones, and
+ * WebGL 2 guarantees 16 attributes).
+ */
+export const VERTEX_LIMITS = {buffers: 8, attributes: 16} as const;
+
+/**
+ * Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane LOAD): true when `object`'s geometry leaves room for the attribute
+ * path's instance data — one more vertex buffer with four vec4 attributes for the matrices, and one buffer / attribute for instance
+ * colours. Counted from the geometry's whole attribute list (a build may use fewer: the conservative side). The bullet-crater pool
+ * (damage/craters.ts: position, normal, uv and five instanced attributes = 8 buffers) does NOT fit: on the attribute path its pipeline
+ * would ask for 9 vertex buffers, which WebGPU rejects — such a pool keeps three's own choice (its matrices in a uniform buffer).
+ */
+export function instanceAttributesFit(object: unknown): boolean {
+  const o = object as InstancedHost | null | undefined;
+  const attrs = o?.geometry?.attributes;
+  if (!attrs) return true;
+  const buffers = new Set<object>();
+  let attributes = 0;
+  for (const name in attrs) {
+    const a = attrs[name];
+    if (!a) continue;
+    attributes++;
+    buffers.add(a.isInterleavedBufferAttribute === true && a.data ? a.data : a);
+  }
+  const colour = o.instanceColor ? 1 : 0;
+  return buffers.size + 1 + colour <= VERTEX_LIMITS.buffers && attributes + 4 + colour <= VERTEX_LIMITS.attributes;
+}
 
 let attribute = false;
 let installed: LimitFn | null = null;
@@ -38,8 +72,18 @@ function install(): void {
   // three reads this limit for instance matrices (accessors/Instance.js), bone matrices (Skinning.js) and range() values; only an
   // InstancedMesh object is affected, and on it only the instance-matrix choice (no range() / skinning on instanced meshes here).
   proto.getUniformBufferLimit = function (this: LimitHost): number {
-    return attribute && this.object?.isInstancedMesh === true ? 0 : inner.call(this);
+    // (lane LOAD: a pool with no room for the instance attributes keeps three's own choice — instanceAttributesFit)
+    return (attribute || this[FORCED] === true) && this.object?.isInstancedMesh === true && instanceAttributesFit(this.object) ? 0 : inner.call(this);
   };
+}
+
+/**
+ * Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane LOAD): this ONE builder takes the attribute path, switch on or off —
+ * a build shared by every pool of a material (render/sharedInstancing.ts) must not hold a pool's instance count.
+ */
+export function forceAttributeInstancing(builder: object): void {
+  install();
+  (builder as LimitHost)[FORCED] = true;
 }
 
 /** Attribute instancing on / off for render objects built from now on (the mall: on; Subway / Office: off). */
