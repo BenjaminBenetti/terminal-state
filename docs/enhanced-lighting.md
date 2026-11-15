@@ -89,20 +89,51 @@ is open space to the gather. So nothing that can move, break or leave is frozen 
 Most of a base Subway station is dark and lit by the flashlight alone, so baked light changes nothing there. With
 full shading the beam also lights its surroundings (`world/flashBounce.ts`):
 
-- Each frame the beam's axis and a ring of five rays inside its cone are cast over the station's fixed architecture
-  on the CPU (about 8 microseconds). Where a ray lands stands a **virtual light**: a small emitter on the surface
-  with the surface's colour and the flux the game's own spot light puts there. The six lights carry equal shares of
-  the beam; their positions and colours are smoothed over about 70 ms.
-- The GPU adds their sum to the full field light's irradiance: arithmetic on 19 plain uniforms, no texture and no
-  uniform buffer of its own. A dark room is softly lit outside the beam; a red tile wall throws warm light on the
-  floor beside it.
+- **Thirty rays of equal flux.** Each frame the beam is cast on the CPU as 30 rays, each standing for a thirtieth of
+  the cone's flux, in six sectors of five (a cap round the axis and five wedges). The rays are spread so that
+  every strip across the beam holds its share of them: a pole or a wall's edge crossing the beam takes the rays one
+  at a time and never more than its share.
+- **What stops a ray** is the nearest of the station's fixed architecture, a **prop's box** (the boxes bullets
+  hit, read live each frame: a prop that is carried off, broken or melted stops nothing any more) and a living,
+  standing **character** (an upright cylinder; the nearest 32 within the light's 30 m). **Glass passes**: shopfront
+  glazing, the hockey store's boards above 1.1 m, the player train's windows (and the whole car while it moves) and
+  the Bunker ward's glazed cubicles (`world/flashOccluders.ts`). So a locker, a column or an enemy close up takes
+  the bounce itself; none of it lands on the wall behind.
+- **A light stands on a plane.** Inside a sector the hits are grouped by plane. The sector's **virtual light**
+  stands on the plane most of them hit, at their centre, with that surface's colour and the flux the game's own
+  spot light puts on them. It is **as large as its rays' footprints** (`FLASH_BOUNCE_TUNING.soft` = 1), so a wall
+  lit from 8 m is a patch about 1.5 m across, not a point: right in front of it the bounce is a little under the
+  wall's own brightness times the gain, at any distance. A ray on another plane gives its flux to a neighbouring
+  sector's light on that plane, or to one of **four extra lights** that stand on the planes no sector's light
+  stands on (a prop in a corner of the beam, the strip of ceiling at its edge). Flux never moves to a plane it
+  did not land on.
+- **In time** a light glides only along its own plane, and its flux follows over about 70 ms. When a sector's rays
+  move to another plane its light stays on the old plane and fades there, and the light on the new plane rises
+  from nothing (or changes places with that plane's extra light). Nothing travels through the air between two
+  surfaces, and a frame changes the total by its share of the way to the new place and no more.
+- The GPU adds the ten lights' sum to the full field light's irradiance: arithmetic on 31 plain uniforms, no
+  texture, no array and no uniform buffer of its own. A dark room is softly lit outside the beam; a red tile wall
+  throws warm light on the floor beside it.
 - On metal, glass and glazed tile the lit patches also show as a soft sheen round the mirror direction
   (`FLASH_BOUNCE_SHEEN`), weighed by three's own Fresnel and roughness response like the probes.
 - The gain is 2 (`FLASH_BOUNCE_DEFAULTS.gain`): stylised like the baked bounce, and for the same reason.
 
-Limits, by design: the beam passes through everything that is not fixed architecture (glass, props, door leaves,
-characters, the train), so its virtual lights stand on the wall behind such a thing; and virtual lights cast no
-shadows (only the emitter's own normal cuts: nothing reaches the back of the lit surface).
+Limits, by design:
+
+1. Virtual lights cast **no shadows**. Their light is not stopped by a wall, a slab or a prop between them and a
+   surface. Only the emitter's own normal cuts: nothing reaches the back of the lit surface or its own plane.
+2. A ray stops on fixed architecture, a prop's **box** and a character's **cylinder**, and on nothing finer. A
+   chair is its box, the gap between a table's legs does not exist, and glass inside a model (a ticket booth, a
+   display case, a cooler) is part of its box. Loose physics bodies, pickups and a prop gone loose stop nothing.
+   Tower and bridge windows are wall to the rays, as they are to the bake.
+3. **Ten lights stand for the whole lit patch.** Next to a large lit surface the bounce is patchier and dimmer
+   than that surface's true glow (the foot of a lit wall gets less than it should). When the beam lands on more
+   planes than there are lights, the planes with the least flux have none: dimmer, never misplaced (0.4 % of the
+   reflected flux over a Subway station's standing places; about 2 % on a brisk walk through its clutter with the
+   head turning). A fading light is cut short when a new plane needs its place: on that walk at most 9 % of the
+   bounce in one frame, under 5 % in 99 frames of 100.
+4. A light stands at the centre of its hits on their plane. With hits either side of a doorway or a pier that
+   point can lie over the opening or under the pier; it lights what is in front of the plane all the same.
 
 ### 3. Reflection probes for metal, glazed tile and glass
 
@@ -325,8 +356,11 @@ Frame cost:
 
 - **Full shading**: three more filtered fetches of the field texture per lit pixel. No new texture, sampler or
   uniform buffer.
-- **The flashlight's bounce**: six small light sums per lit pixel on plain uniforms; about 8 microseconds of CPU a
-  frame for the trace.
+- **The flashlight's bounce**: ten small light terms per lit pixel on plain uniforms (three dot products and one
+  division each; ten more on a reflective surface for the sheen). It was six. On the CPU 30 rays over the
+  architecture and one pass over the station's prop boxes a frame: in Node on a base Subway station with its 635
+  boxes a median of about 75 microseconds, about 85 with 32 characters in reach (it was about 18 with six rays and
+  no boxes). The update keeps nothing on the heap.
 - **A reflective fragment**: one filtered and one unfiltered grid fetch, and per probe that weighs in (one in a
   block's core, up to four at a corner) three texel loads and two atlas samples. Glazed tile now pays that at
   Standard too, where its weight is not zero.
@@ -363,7 +397,8 @@ compiled module).
   Subway: their ceilings and walls gain the most.
 - Auto on a software renderer or the WebGL 2 fallback looks closer to Off than to On: plain shading or no
   reflections (the status says which and why).
-- The flashlight's bounce passes through glass and movable things and casts no shadows.
+- The flashlight's bounce casts no shadows, treats a prop as its box and a character as a cylinder, and stands
+  for the whole lit patch with ten lights (its four limits above).
 - The mirror: one plane at a time; no player body or weapon; no volumetric fog in the reflection; a brightly lit
   interior behind a pane leaves only the hall's lights and signs visible in it face-on.
 - Glass inside a model, curved glass and tower windows reflect the probes, not a live image.
@@ -386,8 +421,12 @@ compiled module).
   the normal, the between-layers bound on Subway seed 93, downsampling, `withoutCube`.
 - `game/tests/lighting-node.test.ts`: the plain and full field lights' programs on both shader backends (three more
   field samples, no texture or buffer more), parity with the CPU sampler.
-- `game/tests/flash-bounce.test.ts`: the virtual lights' flux, colours, smoothing, the shader's sum against the CPU
-  mirror, no allocation.
+- `game/tests/flash-bounce.test.ts`: the rays' equal flux, what stops the beam (a prop box, a round prop, a
+  character, a thin pole; glass passes), every light on the plane of its rays through aim sweeps at 30, 60 and
+  144 Hz, the extra lights, near and far field against the six point lights it replaces, off = exactly zero, the
+  shader's sum against the CPU mirror, no uniform buffer, no allocation, a frame's cost on a real station.
+- `game/tests/flash-occluders.test.ts`: which boxes pass the beam (by kind, by the train's word, the Bunker's
+  panes; a census of real levels), a colour for every prop kind, which characters count, the game's wiring.
 - `game/tests/reflection-probes.test.ts`: placement, weights, capture with and without the cube, fixtures, levels,
   the atlas.
 - `game/tests/reflection-node.test.ts`: which materials reflect (metal, glass, window, gloss), glazed tile at either
