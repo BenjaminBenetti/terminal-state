@@ -171,7 +171,8 @@ export class TrainMaterials {
   /**
    * Task train-shell-followup-20261101-221246: the window glass — the moving glass lift's clear glass (world/elevator.ts
    * cabGlassMaterial: transparent, depthWrite off, both faces, no world mapping, so nothing swims when the car moves; never a shadow
-   * caster; lit 'glass' since task studio-pbr-material-pass-20261115-192427-01). Shared, never disposed here.
+   * caster; lit glass since task studio-pbr-material-pass-20261115-192427-01, its own 'cab' reflect class and a normal facing the eye
+   * — the +X leaves are mirrored instances — since task train-glass-reflection-fix-20261115-213533). Shared, never disposed here.
    */
   glass(): THREE.Material { return cabGlassMaterial(); }
 

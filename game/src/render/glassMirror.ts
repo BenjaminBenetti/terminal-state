@@ -22,7 +22,7 @@
 //  - NO FEEDBACK, by construction: exactly the materials whose program can sample the mirror — the 'glass' reflect tag
 //    (render/reflectTag.ts), the one class world/reflectionNode.ts builds the lookup into — are not drawn in the mirror pass (the
 //    renderer's render-object function, restored in `finally`), so the target is never bound for sampling while it is the
-//    attachment. No material flag is touched.
+//    attachment. No material flag is touched. (A cab's glass — 'cab': the train, the glass lift — never samples it: drawn.)
 //  - NO SECOND SHADOW PASS: every shadow light's `shadow.autoUpdate` / `needsUpdate` is off for the draw (restored): the mirror
 //    reads the flashlight shadow the previous frame left; the scene pass then draws this frame's as always. The light set, the
 //    lights' `visible` / `castShadow` and the camera `layers` (the level culler's result for the MAIN camera) are never changed.
