@@ -35,6 +35,7 @@ import {CELL} from '../gen/grid';
 import {refreshTextureBindings} from '../render/bindingRefresh';
 import {fetchTexel, plainTexture} from '../render/textureFetch';
 import {reflectTagOf, type ReflectClass} from '../render/reflectTag';
+import {glassMirrorSample} from '../render/glassMirror';
 
 // TSL nodes are chained untyped here (three's TSL typings reject most mixed-type chains).
 type N = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -317,7 +318,16 @@ export class LightFieldReflectNode extends LightFieldNode {
       if (!this.light?.full) return;
       for (const extra of FULL_RADIANCE) rad.addAssign(w ? n(extra(dir, rough)).mul(w) : extra(dir, rough));
     };
-    if (cls === 'glass') {
+    if (cls === 'glass' && (this.light as LightFieldReflectLight | null)?.mirror === true) {
+      // under the mirror light: the live glass mirror where this fragment lies on the plane it shows (m.a: how much; it holds the
+      // room as it is lit this frame, flashlight included), the probes and the live sheen everywhere else — and no probe lookup
+      // under a full mirror
+      const m = n(glassMirrorSample(positionWorld)).toVar();
+      const pr = n(vec3(0, 0, 0)).toVar();
+      If(n(m.a).lessThan(0.996), () => { pr.assign(probeRadiance(s, dir, rough)); });
+      rad.assign(n(mix(pr, m.rgb, m.a)).div(clamp(materialOpacity, 0.25, 1)));
+      live(n(m.a).oneMinus());
+    } else if (cls === 'glass') {
       // a see-through pane: its reflection is not dimmed by how much it lets through (the blend multiplies by the opacity)
       rad.assign(n(probeRadiance(s, dir, rough)).div(clamp(materialOpacity, 0.25, 1)));
       live();

@@ -113,7 +113,7 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
     expect(st1.active!.probes).toBeGreaterThan(0);
     expect(st1.active!.probeBytes).toBeGreaterThan(0);
     expect(['miss', 'unavailable']).toContain(st1.active!.cache); // (Node has no IndexedDB: this session's memory only)
-    expect(g.scene.children).toContain(stationReflectLight());
+    expect(g.scene.children).toContain(stationReflectLight(true)); // (lane MIRROR, task baked-gi-visual-uplift-20261115-004324: with probes the Game lights the station with the reflecting light's MIRROR variant)
     expect(g.scene.children).not.toContain(stationFieldLight());
     const probes1 = activeReflectionProbes()!;
     expect(probes1).toBeTruthy();
@@ -178,6 +178,7 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
     expect(game.enhancedLighting.status()).toMatchObject({pending: false, active: {gi: 'baseline', giReason: null, reflections: 'off', cache: 'none', probes: 0, probeBytes: 0}});
     expect(g.scene.children).toContain(stationFieldLight());
     expect(g.scene.children).not.toContain(stationReflectLight());
+    expect(g.scene.children).not.toContain(stationReflectLight(true));
     expect(activeReflectionProbes()).toBeNull();
     expect(releaseProbes2).toHaveBeenCalled();
     expect([...drawn.get('off')!.values()].filter(ro => probeBindings(ro).length > 0).map(ro => ro.object.name), 'nothing drawn samples a probe texture under Off').toEqual([]);
@@ -196,7 +197,7 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
     const again = await sweep('auto-again');
     expect(again, 'Auto again: nothing dropped at any angle').toMatchObject({dropped: 0, issues: []});
     expect(game.enhancedLighting.status()).toMatchObject({pending: false, active: {gi: 'standard', reflections: 'standard', cache: 'hit'}});
-    expect(g.scene.children).toContain(stationReflectLight());
+    expect(g.scene.children).toContain(stationReflectLight(true)); // (lane MIRROR, task baked-gi-visual-uplift-20261115-004324: with probes the Game lights the station with the reflecting light's MIRROR variant)
     const probes3 = activeReflectionProbes()!;
     const reflective3 = [...drawn.get('auto-again')!.values()].filter(ro => probeBindings(ro).length > 0);
     expect(reflective3.length).toBeGreaterThan(0);

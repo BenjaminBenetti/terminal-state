@@ -938,6 +938,18 @@ export class VolumetricAtmosphere {
     return (this.scenePass as unknown as {renderTarget: unknown}).renderTarget;
   }
 
+  /**
+   * (lane MIRROR, task baked-gi-visual-uplift-20261115-004324) The scene pass's render target exactly as the NEXT frame draws the
+   * station into it — for a pass that shares its render context (render/glassMirror.ts: same signature, same samples) — or null:
+   * the frame is drawn directly (off / unsupported / failed), or the pipeline of this scene / camera / quality does not exist yet
+   * (the next render builds it). Builds nothing and changes nothing.
+   */
+  sceneTarget(scene: THREE.Scene, camera: THREE.Camera): THREE.RenderTarget | null {
+    if (!this.active || !this.pipeline || !this.scenePass || this.pipeScene !== scene || this.pipeCamera !== camera) return null;
+    if (this.pipeKey !== `${this.preset?.msaa ?? 0}|${this.history ? 't' : 'n'}`) return null;
+    return (this.scenePass as unknown as {renderTarget: THREE.RenderTarget}).renderTarget ?? null;
+  }
+
   /** Iteration 14: forget the temporal history (the warm-up's hidden frames drew other geometry at this pose). */
   resetHistory(): void {
     this.historyValid = false;

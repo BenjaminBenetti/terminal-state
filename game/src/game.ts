@@ -16,7 +16,7 @@ import {buildWorldSteps, type BuiltWorld} from './world/builder';
 import {fogCullDistance} from './world/levelCulling';
 import {WorldMaterials} from './world/materials';
 import {FLASH_BOUNCE, MOOD, StationLighting, stationBakeInput} from './world/lights';
-import {ENHANCED_LIGHTING_DEFAULT, REFLECTIONS_DEFAULT, type EnhancedLightingMode, type ReflectionQuality} from './world/enhancedLighting'; // task studio-baked-lighting-reflections-20261114-050258-01
+import {ENHANCED_LIGHTING_DEFAULT, MIRROR_TEXELS, REFLECTIONS_DEFAULT, type EnhancedLightingMode, type ReflectionQuality} from './world/enhancedLighting'; // task studio-baked-lighting-reflections-20261114-050258-01
 import {EnhancedLightingRuntime, lightingCapabilities} from './world/enhancedLightingRuntime';
 import {VolumetricAtmosphere} from './render/volumetric';
 import {PickupManager, makeSupplyMesh, refreshItemTemplates, registerItemModels, type Pickup} from './world/pickups';
@@ -245,6 +245,9 @@ import {RuntimeVariantPool, runtimeVariantsFirst} from './render/runtimeVariants
 import {drawWithSceneMatricesOnce} from './render/sceneMatrices'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane PLAY): one matrix update a frame
 import {woundsOf} from './damage/wounds'; // (the enemies' wound layers: their flesh-chunk material variants)
 import {renderContextDepth} from './render/renderContextDepth'; // task studio-performance-recorder-20261103 (lane RENDER-CPU)
+// task studio-baked-gi-visual-uplift-20261115-004324-01: the live glass mirror of the glass plane in view
+import {GlassMirror, type MirrorScenePass} from './render/glassMirror';
+import {collectGlassPlanes} from './world/glassPanes';
 import {installShadowAlphaTwin} from './render/shadowOverride'; // (lane RENDER-CPU)
 import {installUploadDedupe} from './render/uploadDedupe'; // task mall-horde-performance-20261105
 import {installBindingRefresh} from './render/bindingRefresh'; // task studio-death-retry-render-fix-20261114-044607-01
@@ -690,6 +693,15 @@ export class Game {
   /** Lane RENDER-CPU: the render-context call depth each scene-pass target is drawn at (render/renderContextDepth.ts), once measured. */
   private readonly sceneDepths = new WeakMap<object, number>();
   private sceneDepthLast: number | null = null;
+  /**
+   * Task studio-baked-gi-visual-uplift-20261115-004324-01: the live glass mirror (render/glassMirror.ts) — exists exactly while
+   * the station is lit with the mirror light (world/lights.ts StationLightingOptions.mirror), holds the station's glass planes, is
+   * told the plane in view once per update and draws right before the scene pass. Null with Enhanced lighting / Reflections off.
+   */
+  glassMirror: GlassMirror | null = null;
+  private readonly mirrorPassInfo: MirrorScenePass = {target: null as unknown as THREE.RenderTarget, depth: 0};
+  private readonly mirrorSightA = {x: 0, y: 0, z: 0};
+  private readonly mirrorSightB = {x: 0, y: 0, z: 0};
   private journeyCompile: JourneyCompile | null = null;
   /**
    * Iteration 14: what the warm-up prepares besides the discovered station scene (docs/rendering-warmup.md): effect pools /
@@ -1301,6 +1313,7 @@ export class Game {
       });
       this.retire(() => { for (const im of instanced) im.dispose(); }); // the object 'dispose' event frees its render objects
       this.lightPool.dispose(this.scene, fn => this.retire(fn));
+      this.glassMirror?.setPlanes(null); // the planes belong to the torn-down station
     }
     for (const z of this.zombies) { this.scene.remove(z.root); const old = z; this.retire(() => old.dispose()); }
     this.zombies = [];
@@ -1475,6 +1488,7 @@ export class Game {
     // cache when its inputs still match, else made here in the same paced steps. Off / the Reactor: nothing (the baseline bake below).
     const enhanced = yield* this.enhancedLighting.bakeSteps(stationBakeInput(this.layout), this.world.drawn, {max3DTextureSize: max3D});
     this.lightPool = yield* StationLighting.steps(this.scene, this.layout, this.world.fixtures, this.world.tubes, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes, shading: enhanced.shading, mirror: enhanced.mirror, bounce: enhanced.bounce});
+    this.syncGlassMirror();
     this.enhancedLighting.applied(this.lightPool.reflectionsSkipped, this.lightPool.shadingSkipped);
     // Iteration 06 (Lane F): haze density map + light-field rebind; station structure/containers cast the flashlight shadow.
     yield* this.atmosphere.setStationSteps(this.layout, this.lightPool.volume);
@@ -2524,10 +2538,47 @@ export class Game {
     const enhanced = yield* this.enhancedLighting.bakeSteps(input, this.world.drawn, {max3DTextureSize: max3D});
     const r = yield* StationLighting.replaceSteps(this.lightPool, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes, shading: enhanced.shading, mirror: enhanced.mirror, bounce: enhanced.bounce}, fn => this.retire(fn));
     this.lightPool = r.lighting;
+    this.syncGlassMirror(); // made / released with the lighting; the warm-up that follows draws it once
     if (r.error) this.enhancedLighting.installedBaseline('the enhanced lighting could not be installed');
     else this.enhancedLighting.applied(r.lighting.reflectionsSkipped, r.lighting.shadingSkipped);
     this.atmosphere.setLightField(r.lighting.volume); // (the station's fog maps, gas, smoke and fog clock stay)
     return {error: r.error};
+  }
+
+  /**
+   * Task studio-baked-gi-visual-uplift-20261115-004324-01: the glass mirror for the lighting that now stands (after StationLighting
+   * was made or replaced): made when the station is lit with the mirror light (StationLighting.mirror: the lighting plan's choice,
+   * world/enhancedLighting.ts), released when it is not; its planes are the station's (world/glassPanes.ts), a pane's glass state
+   * the damage system's. Its first draw happens in the warm-up's hidden frames (prime).
+   */
+  private syncGlassMirror(): void {
+    const lit = this.lightPool, on = !!lit && lit.mirror;
+    if (!on) { this.glassMirror?.dispose(); this.glassMirror = null; return; }
+    const gm = this.glassMirror ??= new GlassMirror({
+      scenePass: () => this.mirrorPass(),
+      sight: (ax, ay, az, bx, by, bz) => {
+        if (!this.levels) return true;
+        const a = this.mirrorSightA, b = this.mirrorSightB;
+        a.x = ax; a.y = ay; a.z = az; b.x = bx; b.y = by; b.z = bz;
+        return this.levels.lineOfSight(a, b);
+      },
+    });
+    gm.cap = MIRROR_TEXELS[lit.reflections?.probes.tier === 'high' ? 'high' : 'standard'];
+    // (a pane's glass state is asked while the plane is in view: the damage system of the station that is live then)
+    gm.setPlanes(collectGlassPlanes(this.layout, {broken: p => { const props = this.damage?.props, s = props?.states.get(p); return (!!s && (s.glassBroken || s.broken)) || !!props?.isRetired(p); }}));
+    gm.prime();
+  }
+
+  /** The scene pass the glass mirror shares its render context with (null: direct frame, or its call depth is not known yet). */
+  private mirrorPass(): MirrorScenePass | null {
+    if (this.atmosphereBypass || this.transitGap) return null;
+    const target = this.atmosphere.sceneTarget(this.scene, this.camera);
+    if (!target) return null;
+    const depth = this.sceneDepths.get(target);
+    if (depth === undefined) return null; // (a draw at a guessed depth would build a second set of programs: drawFrame measures it)
+    this.mirrorPassInfo.target = target;
+    this.mirrorPassInfo.depth = depth;
+    return this.mirrorPassInfo;
   }
 
   /** Iteration 14: queue a GPU-side release of the previous station (run after the next warm-up). */
@@ -2675,6 +2726,7 @@ export class Game {
     if (mode === 'off') return (this.warmup = skippedWarmup('disabled by ?warmup=off'));
     if (!this.world || !this.gpu || this.gpu.deviceLost || !this.renderer.initialized) return (this.warmup = skippedWarmup('renderer or station not ready'));
     this.refreshRuntimeVariants(mode); // task runtime-variant-warmup-20261105: the play-only variants join the plan (a pool)
+    this.glassMirror?.prime(); // (the glass mirror) its target, bindings and render list are made by a hidden frame of this warm-up
     this.warming = true;
     if (button) button.disabled = true;
     // a quality change mid-run would dispose the render target being compiled into
@@ -2958,7 +3010,24 @@ export class Game {
       try {
         // (task studio-perf-ao-train-continuity-20261110-022206-01, lane PLAY: the station's world matrices once for the frame, not
         // again in the shadow pass / every pass drawing the scene — render/sceneMatrices.ts)
-        drawWithSceneMatricesOnce(this.scene, () => this.atmosphere.render(this.scene, this.camera, this.time));
+        drawWithSceneMatricesOnce(this.scene, () => {
+          // task studio-baked-gi-visual-uplift-20261115-004324-01: the glass plane in view, drawn right before the scene pass
+          // that shows it (never on the direct path: mirrorPass() is null there, and glass keeps the probes)
+          const gm = this.glassMirror;
+          if (gm) {
+            this.prof.begin(SPAN.mirror);
+            gm.render(this.renderer, this.scene, this.camera);
+            this.prof.end(SPAN.mirror);
+            // (its render context is the scene pass's at the pass's call depth: learnt from this frame when no warm-up measured it)
+            const target = this.transitGap ? null : this.atmosphere.sceneTarget(this.scene, this.camera);
+            if (target && !this.sceneDepths.has(target)) {
+              const depth = renderContextDepth(this.renderer, target, () => this.atmosphere.render(this.scene, this.camera, this.time));
+              if (depth !== null) { this.sceneDepths.set(target, depth); this.sceneDepthLast = depth; }
+              return;
+            }
+          }
+          this.atmosphere.render(this.scene, this.camera, this.time);
+        });
       } catch (err) {
         this.atmosphereBypass = `atmosphere render failed: ${String((err as Error)?.message ?? err).slice(0, 300)}`;
         if (this.gpu) recordGpuError(this.gpu, this.atmosphereBypass);
@@ -3611,6 +3680,7 @@ export class Game {
     this.updatePlayerLight(dt, eye); // Iteration 12 (LIGHT): battery drain / flicker -> SpotLight, body glow, light sources
     FLASH_BOUNCE.update(dt, this.flashlight); // the beam's bounce off the architecture it lands on (zero unless the station is shaded in full)
     this.lightPool.update(dt, eye);
+    if (!this.transitGap) this.glassMirror?.select(this.camera, dt); // the glass plane in view, for this frame's draw
     prof.lap(SPAN.fx);
     this.fx.update(dt);
     // (task studio-flamethrower-fire-20261114-031614-01) the fire's look from the fire's state; the lance's muzzle while it is in the hands

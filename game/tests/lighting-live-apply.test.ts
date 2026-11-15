@@ -156,7 +156,7 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     const probes2 = activeReflectionProbes()!;
     expect(probes2).not.toBe(probes1);
     expect(REFL.atlas.value).toBe(probes2.atlas);
-    expect(g.scene.children.filter(c => c === stationReflectLight()).length, 'the reflecting field light, once').toBe(1);
+    expect(g.scene.children.filter(c => c === stationReflectLight(true)).length, 'the reflecting field light, once').toBe(1); // (lane MIRROR, task baked-gi-visual-uplift-20261115-004324: with probes the Game lights the station with the reflecting light's MIRROR variant)
     expect({save: savePrint(), enemies: enemiesPrint(), pose: posePrint(), light: lightPrint()}, 'the run, the enemies, the pose and the flicker circuits are untouched')
       .toEqual({save: before1.save, enemies: before1.enemies, pose: before1.pose, light: before1.light});
     expect(stationPrint(), 'the same station').toBe(print0);
@@ -180,6 +180,7 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     expect(game.enhancedLighting.status()).toMatchObject({pending: false, applying: false, error: null, active: {gi: 'baseline', giReason: null, reflections: 'off', cache: 'none', probes: 0, probeBytes: 0}});
     expect(g.scene.children).toContain(stationFieldLight());
     expect(g.scene.children).not.toContain(stationReflectLight());
+    expect(g.scene.children).not.toContain(stationReflectLight(true));
     expect(activeReflectionProbes()).toBeNull();
     expect(releaseProbes2).toHaveBeenCalled();
     expect({save: savePrint(), enemies: enemiesPrint(), light: lightPrint(), counts: counts()}).toEqual(before2);
@@ -193,7 +194,7 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
     expect(game.enhancedLighting.status()).toMatchObject({pending: false, error: null, active: {gi: 'high', reflections: 'high'}});
     await apply({enhancedLighting: 'auto', reflections: 'standard'});
     expect(game.enhancedLighting.status()).toMatchObject({pending: false, error: null, active: {gi: 'standard', reflections: 'standard', cache: 'hit', giMs: 0, probeMs: 0, probes: st0.active!.probes}});
-    expect(g.scene.children).toContain(stationReflectLight());
+    expect(g.scene.children).toContain(stationReflectLight(true));
     await play();
     expect(await sweep('auto-again'), 'Auto again: nothing dropped at any angle').toMatchObject({dropped: 0, issues: []});
     expect(stationPrint(), 'still the same station').toBe(print0);
