@@ -1344,12 +1344,13 @@ export class PerfCapture {
         else if (j === S.brain) v -= this.spanMs[o + S.path];
         else if (j === S.hooks) { for (let h = S.hook0; h < SPAN_COUNT; h++) if (isHookSpan(h)) v -= this.spanMs[o + h]; }
         else if (j === S.weapon) v -= this.spanMs[o + S.fire] + this.spanMs[o + S.melee]; // (the shot / hit spans run inside those)
-        if (v > 0.005) items.push({name: j === S.ai ? 'ai (rest)' : j === S.brain ? 'ai.brain (excl. path)' : j === S.hooks ? 'hooks (rest)' : j === S.weapon ? 'weapon (rest)' : names[j], ms: r2(v), calls: this.spanCalls[o + j]});
+        else if (j === S.draw) v -= this.spanMs[o + S.mirror]; // (the glass mirror's draw runs inside it and is listed on its own)
+        if (v > 0.005) items.push({name: j === S.ai ? 'ai (rest)' : j === S.brain ? 'ai.brain (excl. path)' : j === S.hooks ? 'hooks (rest)' : j === S.weapon ? 'weapon (rest)' : j === S.draw && this.spanMs[o + S.mirror] > 0.005 ? 'render.draw (excl. mirror)' : names[j], ms: r2(v), calls: this.spanCalls[o + j]});
       }
       items.sort((a, b) => b.ms - a.ms);
       // (revision 2) the shot / hit path of this frame, every nested span (inclusive ms; parents in spans.parents)
       const hit: Record<string, {ms: number; calls: number}> = {};
-      for (let j = S.fire; j < SPAN_COUNT; j++) if (this.spanCalls[o + j] > 0) hit[names[j]] = {ms: r2(this.spanMs[o + j]), calls: this.spanCalls[o + j]};
+      for (let j = S.fire; j <= S.alert; j++) if (this.spanCalls[o + j] > 0) hit[names[j]] = {ms: r2(this.spanMs[o + j]), calls: this.spanCalls[o + j]};
       spans = {dominant: items.slice(0, 6), pathSearches: this.spanCalls[o + S.path], brainUpdates: this.spanCalls[o + S.brain], hitPath: Object.keys(hit).length ? hit : null};
     }
     // camera pose: the newest cadence sample at or before the frame
