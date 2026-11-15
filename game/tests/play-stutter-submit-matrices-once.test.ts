@@ -152,7 +152,17 @@ describe('drawWithSceneMatricesOnce (render/sceneMatrices.ts)', () => {
   it('Game.drawFrame draws the atmosphere through it (the direct fallback path keeps three\'s own update)', () => {
     const src = readFileSync(new URL('../src/game.ts', import.meta.url), 'utf8');
     const body = src.slice(src.indexOf('  private drawFrame(): void {'), src.indexOf('  private renderDirect(): void {'));
-    expect(body).toContain('drawWithSceneMatricesOnce(this.scene, () => this.atmosphere.render(this.scene, this.camera, this.time));');
+    // (task studio-baked-gi-visual-uplift-20261115-004324-01: the one call now wraps the glass mirror's draw and the atmosphere's —
+    // both draw the station, both inside the frame's single matrix update; no atmosphere draw outside it)
     expect(body.match(/drawWithSceneMatricesOnce/g)).toHaveLength(1);
+    const from = body.indexOf('drawWithSceneMatricesOnce(this.scene, () => {'), to = body.indexOf('      } catch (err) {', from);
+    expect(from).toBeGreaterThan(-1);
+    expect(to).toBeGreaterThan(from);
+    const inside = body.slice(from, to), draw = /this\.atmosphere\.render\(this\.scene, this\.camera, this\.time\)/g;
+    expect(inside).toContain('gm.render(this.renderer, this.scene, this.camera);');
+    // (two call sites, one runs a frame: the frame that learns the scene pass's render-context depth returns after its own)
+    expect(inside.match(draw)).toHaveLength(2);
+    expect(inside.indexOf('gm.render(')).toBeLessThan(inside.search(draw)); // the mirror first: the scene pass samples it
+    expect(body.slice(0, from) + body.slice(to)).not.toContain('this.atmosphere.render(');
   });
 });

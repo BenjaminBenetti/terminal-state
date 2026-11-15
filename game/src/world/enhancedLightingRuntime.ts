@@ -21,12 +21,12 @@ import {ContentHasher} from '../core/contentHash';
 import {openDerivedCache, type DerivedBundle, type DerivedCache, type DerivedCacheStats} from '../core/derivedCache';
 import type {BuildSteps} from '../core/pacedBuild';
 import {
-  ENHANCED_LIGHTING_DEFAULT, REFLECTIONS_DEFAULT, planEnhancedLighting, planSignature,
-  type EnhancedLightingActive, type EnhancedLightingPlan, type EnhancedLightingRequest, type EnhancedLightingStatus, type GiTier, type LightingCacheUse,
+  ENHANCED_LIGHTING_DEFAULT, FIELD_CUBE_BYTES, REFLECTIONS_DEFAULT, baselinePlan, planEnhancedLighting, planSignature,
+  type EnhancedLightingActive, type EnhancedLightingPlan, type EnhancedLightingRequest, type EnhancedLightingStatus, type FieldShading, type GiTier, type LightingCacheUse,
   type LightingCapabilities, type ReflectionTier,
 } from './enhancedLighting';
-import {MAX_SLOTS, bakeLightFieldSteps, type BakedField, type ColumnGeometry, type FieldParams, type FieldSource} from './lightField';
-import {GATHER_GAIN, GATHER_REACH, IND_STRIDE, gatherIndirectSteps, indirectIndex, type IndirectContext, type IndirectLight} from './lightFieldGather';
+import {MAX_GROUPS, MAX_SLOTS, bakeLightFieldSteps, fieldDepth, giDepth, type BakedField, type ColumnGeometry, type FieldParams, type FieldSource} from './lightField';
+import {GATHER_GAIN, GATHER_REACH, GATHER_SATURATION, IND_STRIDE, gatherIndirectSteps, indirectIndex, rowBits, rowValue, type IndirectContext, type IndirectLight} from './lightFieldGather';
 import {BandScene} from './lightScene';
 import {
   PROBE_FIXTURE_RADIANCE, PROBE_LEVEL_SIGMA, PROBE_NORM_MIN, PROBE_REACH, bakeReflectionProbesSteps, probeBytes, type BakedProbes, type ProbeAtlasLayout,
@@ -41,7 +41,7 @@ export interface EnhancedLightingSettings { enhancedLighting?: EnhancedLightingR
  * different result for the same inputs, PROBES likewise for world/reflectionProbes.ts, ENTRY when the stored layout changes.
  * (Everything upstream — generation, fixtures, the direct bake, the finishes — is covered by content: see inputs digests.)
  */
-export const DERIVED_LIGHTING_VERSIONS = {entry: 1, gather: 1, probes: 3} as const;
+export const DERIVED_LIGHTING_VERSIONS = {entry: 2, gather: 2, probes: 4} as const;
 
 /** What a station's enhanced bake reads (world/lights.ts stationBakeInput). */
 export interface StationBakeInput {
@@ -58,6 +58,15 @@ export interface EnhancedBake {
   /** The enhanced field (undefined: bake the baseline). */
   baked: BakedField | undefined;
   probes: BakedProbes | null;
+  /** How the field is to be shaded ('full': it holds its ambient cube; world/enhancedLighting.ts). */
+  shading: FieldShading;
+  /** The live glass mirror is planned (with probes only). */
+  mirror: boolean;
+  /**
+   * With full shading: the station's fixed architecture as a ray scene and its surface colours — what the flashlight's bounce
+   * traces its beam against (world/flashBounce.ts). null otherwise.
+   */
+  bounce: {scene: BandScene; albedo: SurfaceAlbedo} | null;
 }
 
 /** Main-thread times of the last enhanced load (ms; diagnostics / the cost report). */
@@ -194,10 +203,10 @@ export class EnhancedLightingRuntime {
   }
   /** A rebuild in place ended with the BASELINE lighting installed instead of what was planned (world/lights.ts replaceSteps). */
   installedBaseline(reason: string): void {
-    if (this.live) this.live = {...this.live, signature: planSignature({gi: null, reflections: null, giReason: null, reflectionsReason: null})};
+    if (this.live) this.live = {...this.live, signature: planSignature(baselinePlan())};
     this.timings = null;
     this.litBy = null;
-    this.active = {gi: 'baseline', giReason: reason, reflections: 'off', reflectionsReason: null, cache: 'none', giMs: 0, probeMs: 0, probes: 0, probeBytes: 0};
+    this.active = {gi: 'baseline', giReason: reason, shading: 'plain', shadingReason: null, mirror: false, reflections: 'off', reflectionsReason: null, cache: 'none', giMs: 0, probeMs: 0, probes: 0, probeBytes: 0};
     this.changed();
   }
   failed(signature: string | null, reason: string, restore?: () => void): void {
@@ -236,8 +245,22 @@ export class EnhancedLightingRuntime {
   // -------------------------------------------------------------------------------------------
   // 1. prefetch
 
-  private entryKey(layoutKey: string, plan: EnhancedLightingPlan): string {
-    return `el${DERIVED_LIGHTING_VERSIONS.entry}-${plan.gi!.id}-${plan.reflections?.id ?? 'none'}-${layoutKey}`;
+  private entryKey(layoutKey: string, plan: EnhancedLightingPlan, shading: FieldShading): string {
+    // (the shading is part of the address: the probes of a fully shaded station are lit by its cube)
+    return `el${DERIVED_LIGHTING_VERSIONS.entry}-${plan.gi!.id}-${shading}-${plan.reflections?.id ?? 'none'}-${layoutKey}`;
+  }
+
+  /**
+   * How a station planned with `plan` is really shaded: full shading needs the field's ambient cube in the 3D texture, so only where
+   * the renderer's 3D textures and the byte bound (FIELD_CUBE_BYTES) take it — else plain, with the reason. (The plan itself, and
+   * with it what counts as a pending settings change, does not depend on the station.)
+   */
+  private shadingFor(plan: EnhancedLightingPlan, src: FieldSource, max3D: number): {shading: FieldShading; reason: string | null} {
+    if (plan.shading !== 'full') return {shading: 'plain', reason: plan.shadingReason};
+    const S = Math.min(MAX_SLOTS, src.levels?.length || 1), depth = fieldDepth(S) + MAX_GROUPS + giDepth(S), bytes = src.grid.w * src.grid.h * depth * 4;
+    if (depth > max3D) return {shading: 'plain', reason: `this station's field with its cube (${depth} slices) is deeper than this renderer's 3D textures (${max3D})`};
+    if (bytes > FIELD_CUBE_BYTES) return {shading: 'plain', reason: `this station's field with its cube (${Math.round(bytes / 1e6)} MB) is past the ${Math.round(FIELD_CUBE_BYTES / 1e6)} MB bound`};
+    return {shading: 'full', reason: null};
   }
 
   /**
@@ -252,7 +275,7 @@ export class EnhancedLightingRuntime {
       const layoutKey = await layoutAddress(input, this.now);
       const t1 = this.now();
       const cache = this.openCache();
-      const key = this.entryKey(layoutKey, plan);
+      const key = this.entryKey(layoutKey, plan, this.shadingFor(plan, input.source, this.caps.max3DTextureSize).shading);
       const bundle = await cache.get(key);
       await cache.ready();
       this.fetched = {grid: input.source.grid, layoutKey, key, bundle, persistent: cache.backend === 'indexeddb', addressMs: t1 - t0, fetchMs: this.now() - t1};
@@ -277,17 +300,19 @@ export class EnhancedLightingRuntime {
     if (!plan.gi) {
       this.fetched = null;
       this.timings = null;
-      this.active = {gi: 'baseline', giReason: plan.giReason, reflections: 'off', reflectionsReason: plan.reflectionsReason, cache: 'none', giMs: 0, probeMs: 0, probes: 0, probeBytes: 0};
+      this.active = {gi: 'baseline', giReason: plan.giReason, shading: 'plain', shadingReason: null, mirror: false, reflections: 'off', reflectionsReason: plan.reflectionsReason, cache: 'none', giMs: 0, probeMs: 0, probes: 0, probeBytes: 0};
       this.changed();
-      return {baked: undefined, probes: null};
+      return {baked: undefined, probes: null, shading: 'plain', mirror: false, bounce: null};
     }
     const now = this.now, tStart = now();
     const src = input.source, gi = plan.gi;
+    const max3D = o.max3DTextureSize ?? this.caps.max3DTextureSize;
+    const {shading, reason: shadingReason} = this.shadingFor(plan, src, max3D);
     // the fetched entry, if it is this station's and this plan's
     let fetched = this.fetched;
     this.fetched = null;
     if (fetched && fetched.grid !== src.grid) fetched = null;
-    if (fetched && fetched.key !== this.entryKey(fetched.layoutKey, plan)) fetched = {...fetched, key: this.entryKey(fetched.layoutKey, plan), bundle: null};
+    if (fetched && fetched.key !== this.entryKey(fetched.layoutKey, plan, shading)) fetched = {...fetched, key: this.entryKey(fetched.layoutKey, plan, shading), bundle: null};
     const entry = fetched?.bundle && isObject(fetched.bundle.meta) && fetched.bundle.meta.v === DERIVED_LIGHTING_VERSIONS.entry ? fetched.bundle : null;
     const timings: EnhancedLightingTimings = {addressMs: fetched?.addressMs ?? 0, fetchMs: fetched?.fetchMs ?? 0, albedoMs: 0, digestMs: 0, giMs: 0, probeMs: 0, totalMs: 0};
     const levels = (src.levels ?? [{id: 0, role: 'main', grid: src.grid, baseY: 0}]).slice(0, MAX_SLOTS) as NonNullable<FieldSource['levels']>;
@@ -307,9 +332,12 @@ export class EnhancedLightingRuntime {
       const g = entry && isObject(entry.meta.gi) ? entry.meta.gi : null;
       if (g && g.inputs === digest && isObject(g.stats)) {
         const {index, count} = indirectIndex(ctx.geos, ctx.layers, n);
-        const rows = arr(entry!, 'gi', Float32Array, count * IND_STRIDE);
-        if (rows) {
+        const halves = arr(entry!, 'gi', Uint16Array, count * IND_STRIDE);
+        if (halves) {
           hook.use = 'hit';
+          // (16 bits a value in the cache, and those 16 bits' values in a fresh gather: the same numbers)
+          const rows = new Float32Array(halves.length);
+          for (let q = 0; q < rows.length; q++) rows[q] = rowValue(halves[q]);
           const stats = g.stats as IndirectLight['stats'];
           hook.got = {geos: ctx.geos, albedo, scene: null, digest, rows, stats};
           return {index, data: rows, stats};
@@ -317,12 +345,12 @@ export class EnhancedLightingRuntime {
       }
       hook.use = g ? 'stale' : 'miss';
       const scene = new BandScene(ctx.W, ctx.H, ctx.geos);
-      const ind = yield* gatherIndirectSteps(ctx, {rays: gi.rays, bounces: gi.bounces, stride: gi.stride, reach: GATHER_REACH, gain: GATHER_GAIN, albedo, scene});
+      const ind = yield* gatherIndirectSteps(ctx, {rays: gi.rays, bounces: gi.bounces, stride: gi.stride, reach: GATHER_REACH, gain: GATHER_GAIN, saturation: GATHER_SATURATION, albedo, scene});
       timings.giMs = ind.stats.ms;
       hook.got = {geos: ctx.geos, albedo, scene, digest, rows: ind.data, stats: ind.stats};
       return ind;
     };
-    const baked = yield* bakeLightFieldSteps({...src, indirect}, input.params);
+    const baked = yield* bakeLightFieldSteps({...src, indirect, cube: shading === 'full'}, input.params);
     const got = hook.got, giUse = hook.use;
     if (!got) throw new Error('enhanced lighting: the bake did not run its indirect step');
 
@@ -330,7 +358,6 @@ export class EnhancedLightingRuntime {
     let probes: BakedProbes | null = null, rpUse: 'hit' | 'miss' | 'stale' | 'none' = 'none', rpDigest = '';
     let reflectionsReason = plan.reflectionsReason;
     const tier = plan.reflections;
-    const max3D = o.max3DTextureSize ?? this.caps.max3DTextureSize;
     if (tier && Math.max(baked.w, baked.h, 2 * baked.slots) > max3D) {
       reflectionsReason = `the station (${baked.w} x ${baked.h} cells) is larger than this renderer's 3D textures (${max3D})`;
     } else if (tier) {
@@ -357,29 +384,35 @@ export class EnhancedLightingRuntime {
     if (baked1) {
       const key = fetched?.key ?? null;
       if (key) this.store(key, got, probes, rpDigest);
-      else this.storeLater(input, plan, got, probes, rpDigest);
+      else this.storeLater(input, plan, shading, got, probes, rpDigest);
       if (fetched && !persistent) use = 'unavailable';
     }
     timings.totalMs = now() - tStart;
     this.timings = timings;
+    const usable = !!probes && probes.count > 0, mirror = usable && plan.mirror;
     this.active = {
-      gi: gi.id, giReason: null, reflections: probes && probes.count > 0 ? probes.tier : 'off',
+      gi: gi.id, giReason: null, shading, shadingReason, mirror, reflections: usable ? probes!.tier : 'off',
       reflectionsReason: tier && probes && probes.count < 1 ? 'this station has no place for a probe' : reflectionsReason,
-      cache: use, giMs: timings.giMs, probeMs: timings.probeMs, probes: probes?.count ?? 0, probeBytes: probes && probes.count > 0 ? probeBytes(probes) : 0,
+      cache: use, giMs: timings.giMs, probeMs: timings.probeMs, probes: probes?.count ?? 0, probeBytes: usable ? probeBytes(probes!) : 0,
     };
     this.changed();
-    return {baked, probes: probes && probes.count > 0 ? probes : null};
+    // the flashlight's bounce traces the same scene the gather did (a cache hit made none: it is cheap to make)
+    const bounce = shading === 'full' ? {scene: got.scene ?? new BandScene(baked.w, baked.h, got.geos), albedo: got.albedo} : null;
+    return {baked, probes: usable ? probes : null, shading, mirror, bounce};
   }
 
   /**
    * What the station lighting made of the probes (world/lights.ts StationLighting.reflectionsSkipped): they may not have been
-   * usable after all (no node library, a grid past the 3D texture limit) — the status says so.
+   * usable after all (no node library, a grid past the 3D texture limit) — the status says so. Likewise `plainBecause`
+   * (StationLighting.shadingSkipped): the field could not keep its cube on the GPU and is shaded plain.
    */
-  applied(skipped: string | null): void {
+  applied(skipped: string | null, plainBecause: string | null = null): void {
     const inPlace = this.litBy !== null; // (a rebuild in place: from here the status describes the new lighting)
     this.litBy = null;
-    const a = this.active;
-    if (a && skipped && a.reflections !== 'off') this.active = {...a, reflections: 'off', reflectionsReason: skipped, probes: 0, probeBytes: 0};
+    let a = this.active, changed = false;
+    if (a && skipped && a.reflections !== 'off') { a = {...a, reflections: 'off', reflectionsReason: skipped, mirror: false, probes: 0, probeBytes: 0}; changed = true; }
+    if (a && plainBecause && a.shading === 'full') { a = {...a, shading: 'plain', shadingReason: plainBecause}; changed = true; }
+    if (changed) this.active = a;
     else if (!inPlace) return;
     this.changed();
   }
@@ -387,7 +420,7 @@ export class EnhancedLightingRuntime {
   private store(key: string, got: {digest: string; rows: Float32Array; stats: IndirectLight['stats']}, probes: BakedProbes | null, rpDigest: string): void {
     const bundle: DerivedBundle = {
       meta: {v: DERIVED_LIGHTING_VERSIONS.entry, gi: {inputs: got.digest, stats: {...got.stats}}, rp: null},
-      arrays: {gi: got.rows},
+      arrays: {gi: halves(got.rows)},
     };
     if (probes) {
       bundle.meta.rp = {
@@ -400,8 +433,8 @@ export class EnhancedLightingRuntime {
   }
 
   /** No prefetch ran for this station (a caller that builds without preparing): hash the address now, off the build, then store. */
-  private storeLater(input: StationBakeInput, plan: EnhancedLightingPlan, got: {digest: string; rows: Float32Array; stats: IndirectLight['stats']}, probes: BakedProbes | null, rpDigest: string): void {
-    layoutAddress(input, this.now).then(k => this.store(this.entryKey(k, plan), got, probes, rpDigest), err => { console.warn('enhanced lighting: the bake could not be cached', err); });
+  private storeLater(input: StationBakeInput, plan: EnhancedLightingPlan, shading: FieldShading, got: {digest: string; rows: Float32Array; stats: IndirectLight['stats']}, probes: BakedProbes | null, rpDigest: string): void {
+    layoutAddress(input, this.now).then(k => this.store(this.entryKey(k, plan, shading), got, probes, rpDigest), err => { console.warn('enhanced lighting: the bake could not be cached', err); });
   }
 }
 
@@ -431,7 +464,7 @@ export async function layoutAddress(input: StationBakeInput, now: () => number =
 /** The digest of everything the gather reads: its options, the columns, the direct light the bake just made, the surface colours. */
 function* gatherDigestSteps(ctx: IndirectContext, albedo: SurfaceAlbedo, gi: GiTier): BuildSteps<string> {
   const h = new ContentHasher().str('terminal-state.lighting.gather').num(DERIVED_LIGHTING_VERSIONS.gather)
-    .num(gi.rays, gi.stride, gi.bounces, GATHER_REACH, GATHER_GAIN, ctx.scatter, ctx.W, ctx.H, ctx.geos.length).num(...ctx.layers);
+    .num(gi.rays, gi.stride, gi.bounces, GATHER_REACH, GATHER_GAIN, GATHER_SATURATION, ctx.scatter, ctx.W, ctx.H, ctx.geos.length).num(...ctx.layers);
   for (let s = 0; s < ctx.geos.length; s++) {
     const g = ctx.geos[s];
     h.num(g.yMin, g.yMax).view(g.open).view(g.floorH).view(g.ceilH).view(g.layerY);
@@ -446,7 +479,7 @@ function* gatherDigestSteps(ctx: IndirectContext, albedo: SurfaceAlbedo, gi: GiT
 function probesDigest(gatherDigest: string, field: BakedField, src: FieldSource, levels: readonly {id: number; baseY: number}[], tier: ReflectionTier): string {
   const h = new ContentHasher().str('terminal-state.lighting.probes').num(DERIVED_LIGHTING_VERSIONS.probes)
     .num(tier.tile, tier.maxProbes, tier.spacing, PROBE_FIXTURE_RADIANCE, PROBE_NORM_MIN, PROBE_REACH).num(...PROBE_LEVEL_SIGMA)
-    .str(gatherDigest).num(field.w, field.h, field.depth, field.slots, field.layers, field.yMin, field.yMax, field.hdr ?? 0).view(field.data).view(field.groups);
+    .str(gatherDigest).num(field.w, field.h, field.depth, field.slots, field.layers, field.yMin, field.yMax, field.hdr ?? 0, field.gi ?? -1).view(field.data).view(field.groups);
   if (field.slotY) h.view(field.slotY);
   for (const L of levels) h.num(L.id, L.baseY);
   return h.view(lightsView(src)).digest();
@@ -468,6 +501,13 @@ function probesFromEntry(entry: DerivedBundle, r: Record<string, unknown>, tier:
   if (!atlas || !grid || !(meta instanceof Float32Array) || meta.length < count * 12 || meta.length % 12 !== 0) return null;
   const layout: ProbeAtlasLayout = {tile: tier.tile, cols, rows, width, height, levelTile: lt as ProbeAtlasLayout['levelTile'], levelY: ly as ProbeAtlasLayout['levelY']};
   return {tier: tier.id, count, block, ramp: r.ramp, layout, atlas, meta, grid, gridW, gridH, gridDepth, slots, stats: r.stats as BakedProbes['stats']};
+}
+
+/** The gather's rows (world/lightFieldGather.ts: every value a rowValue) as their 16 bits: what the cache stores. */
+function halves(rows: Float32Array): Uint16Array {
+  const out = new Uint16Array(rows.length);
+  for (let q = 0; q < rows.length; q++) out[q] = rowBits(rows[q]);
+  return out;
 }
 
 /**

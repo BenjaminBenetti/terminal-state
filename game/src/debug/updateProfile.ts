@@ -27,17 +27,21 @@ export const S = {
   // task hitch-attribution-recorder-20261105: nested inside 'weapon' — the shot / hit path at its real function boundaries
   // (appended after the hook slots: every earlier id is unchanged)
   fire: 35, melee: 36, fireFx: 37, fireRays: 38, hitWorld: 39, hitZombie: 40, tearChunk: 41, extractPatch: 42, ragdoll: 43, alert: 44,
+  // task baked-gi-visual-uplift-20261115-004324 (lane MIRROR): nested inside 'draw' — the live glass mirror's own scene draw
+  // (appended: every earlier id is unchanged)
+  mirror: 45,
 } as const;
 /** Frame hooks timed individually (more share the last slot). */
 export const HOOK_SLOTS = 8;
 /** First id after the frame-hook slots (the shot / hit spans). */
 const HIT0 = S.hook0 + HOOK_SLOTS;
-export const SPAN_COUNT = S.alert + 1;
+export const SPAN_COUNT = S.mirror + 1;
 
 const BASE_NAMES = ['idle', 'input', 'player', 'weapon', 'survival', 'ai', 'hooks', 'physics', 'flares', 'camera', 'targets',
   'items', 'lights', 'fx', 'audio', 'view', 'hud', 'rules', 'render.cull', 'render.draw', 'deferred', 'other',
   'ai.vocalReach', 'ai.brain', 'ai.path', 'ai.motor', 'ai.anim'];
-const HIT_NAMES = ['weapon.fire', 'weapon.melee', 'fire.fx', 'fire.rays', 'hit.world', 'hit.zombie', 'hit.tearChunk', 'hit.extractPatch', 'hit.ragdoll', 'hit.alert'];
+const HIT_NAMES = ['weapon.fire', 'weapon.melee', 'fire.fx', 'fire.rays', 'hit.world', 'hit.zombie', 'hit.tearChunk', 'hit.extractPatch', 'hit.ragdoll', 'hit.alert',
+  'render.mirror']; // (lane MIRROR: S.mirror, the id after the hit spans)
 
 /** What each sequential span covers (Game.update order; QA read-out `about`). */
 export const SPAN_ABOUT: Readonly<Record<string, string>> = {
@@ -76,6 +80,7 @@ export const SPAN_ABOUT: Readonly<Record<string, string>> = {
   'hit.extractPatch': 'fleshPatch.extractPatch inside hit.tearChunk (count = attempts: up to 3 widening radii)',
   'hit.ragdoll': 'PhysicsSystem.ragdoll on a kill (fire and melee)',
   'hit.alert': 'Game.alertZombies after a shot / swing (hearing + wake-ups; their path searches run later, in ai.path)',
+  'render.mirror': 'the live glass mirror inside render.draw: the scene drawn once more from the mirrored eye for the glass plane in view (one call a frame while the station is lit with the mirror; about 0 ms = no plane in view; CPU encoding, not GPU execution)',
 };
 
 /**
@@ -90,6 +95,7 @@ export const PARENT: readonly number[] = Array.from({length: SPAN_COUNT}, (_, i)
   if (i === S.fireFx || i === S.fireRays || i === S.hitWorld) return S.fire;
   if (i === S.tearChunk) return S.hitZombie;
   if (i === S.extractPatch) return S.tearChunk;
+  if (i === S.mirror) return S.draw; // (lane MIRROR)
   if (i >= HIT0) return S.weapon;
   return -1;
 });
@@ -307,7 +313,8 @@ export class UpdateProfiler {
         else if (id === S.brain) v -= this.ms[o2 + S.path]; // path searches run inside brain updates
         else if (id === S.hooks) for (let h = S.hook0; h < HIT0; h++) v -= this.ms[o2 + h];
         else if (id === S.weapon) v -= this.ms[o2 + S.fire] + this.ms[o2 + S.melee]; // (the hit spans are inside those two)
-        if (v > 0.0005) items.push({name: id === S.ai ? 'ai (rest)' : id === S.brain ? 'ai.brain (excl. path)' : id === S.hooks ? 'hooks (rest)' : id === S.weapon ? 'weapon (rest)' : this.name(id), ms: v, count: this.calls[o2 + id]});
+        else if (id === S.draw) v -= this.ms[o2 + S.mirror]; // (the glass mirror's draw is inside it and listed on its own)
+        if (v > 0.0005) items.push({name: id === S.ai ? 'ai (rest)' : id === S.brain ? 'ai.brain (excl. path)' : id === S.hooks ? 'hooks (rest)' : id === S.weapon ? 'weapon (rest)' : id === S.draw && this.ms[o2 + S.mirror] > 0.0005 ? 'render.draw (excl. mirror)' : this.name(id), ms: v, count: this.calls[o2 + id]});
       }
       items.sort((a, b) => b.ms - a.ms);
       return {age: k, ms: frameMs[k], updateMs: updMs[k], dominant: items.slice(0, 4)};

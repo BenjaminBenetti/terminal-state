@@ -12,12 +12,13 @@ import {drainSync} from '../src/core/pacedBuild';
 import {LEVELS} from '../src/levels/registry';
 import {stationLevels} from '../src/world/levelGeometry';
 import {
-  FIELD_EMAX, TINT, bakeLightField, fixtureTint, levelGeometries, slotBase, slotLayers,
+  FIELD_EMAX, TINT, bakeLightField, fixtureTint, giSlotBase, levelGeometries, slotBase, slotLayers, withoutCube,
   type BakedField, type ColumnGeometry, type ExtraDirectContext, type FieldSource,
 } from '../src/world/lightField';
 import {BandScene, HIT_CEIL, HIT_FLOOR, HIT_WALL, sphereDirections} from '../src/world/lightScene';
 import {ALBEDO_LUT, ALBEDO_STRIDE, ALB_CEIL, ALB_FLOOR, ALB_WALL, surfaceAlbedo, type SurfaceAlbedo} from '../src/world/surfaceAlbedo';
-import {REFLECTION_TIERS, type ReflectionTier} from '../src/world/enhancedLighting';
+import {GI_TIERS, REFLECTION_TIERS, type ReflectionTier} from '../src/world/enhancedLighting';
+import {bakeRows, gatheredRows, uniformRows} from './helpers/lightCubeFixture';
 import {
   PROBE_COLS, PROBE_FIXTURE_RADIANCE, PROBE_GUTTER, PROBE_LEVELS, PROBE_NORM_MIN, PROBE_RADIANCE_MAX, PROBE_REACH,
   bakeReflectionProbesSteps, octDecode, octEncode, octTexelDirections, octTexelSolidAngles, octWrapTexel, probeAtlasLayout,
@@ -75,11 +76,11 @@ const idsAt = (b: BakedProbes, s: number, cx: number, cz: number): number[] => [
  * What a ray from `o` along `d` shows, read straight from the field's bytes and the albedo (the test's own reading of the contract):
  * the hit surface's finish colour x the irradiance its voxel gives its normal / pi; an open ceiling: the light arriving from above.
  */
-function shown(r: Rig, scene: BandScene, o: readonly number[], d: readonly number[]): {rgb: V3; kind: number; cell: number; up: number; down: number} | null {
+function shown(r: Rig, scene: BandScene, o: readonly number[], d: readonly number[]): {rgb: V3; kind: number; cell: number; up: number; down: number; layer: number; layers: number} | null {
   if (!scene.trace(o[0], o[1], o[2], d[0], d[1], d[2], PROBE_REACH)) return null;
   const s = scene.slot[scene.hitBand], cell = scene.hitCol, L = slotLayers(s), n = r.field.w * r.field.h, kind = scene.hitKind;
   const A = r.albedo.slots[s];
-  let k = 0, nrm: V3 = [0, 1, 0], off = ALB_FLOOR;
+  let k = 0, nrm: V3 = [0, 1, 0], off = ALB_FLOOR, sky = false;
   if (kind === HIT_CEIL) { k = L - 1; nrm = [0, -1, 0]; off = ALB_CEIL; }
   else if (kind === HIT_WALL) {
     const ly = r.geos[s].layerY;
@@ -87,7 +88,7 @@ function shown(r: Rig, scene: BandScene, o: readonly number[], d: readonly numbe
     nrm = [scene.hitNx, 0, scene.hitNz]; off = ALB_WALL;
   }
   let alb: V3 = [ALBEDO_LUT[A[cell * ALBEDO_STRIDE + off]], ALBEDO_LUT[A[cell * ALBEDO_STRIDE + off + 1]], ALBEDO_LUT[A[cell * ALBEDO_STRIDE + off + 2]]];
-  if (kind === HIT_CEIL && A[cell * ALBEDO_STRIDE + off] + A[cell * ALBEDO_STRIDE + off + 1] + A[cell * ALBEDO_STRIDE + off + 2] === 0) { nrm = [0, 1, 0]; alb = [1, 1, 1]; }
+  if (kind === HIT_CEIL && A[cell * ALBEDO_STRIDE + off] + A[cell * ALBEDO_STRIDE + off + 1] + A[cell * ALBEDO_STRIDE + off + 2] === 0) { nrm = [0, 1, 0]; alb = [1, 1, 1]; sky = true; }
   const oa = ((slotBase(s) + 1 + 2 * k) * n + cell) * 4, ob = ((slotBase(s) + 2 + 2 * k) * n + cell) * 4, f = r.field.data;
   const T = [0, 1, 2].map(c => (f[oa + c] / 255) ** 2 * FIELD_EMAX), rho = f[oa + 3] / 255;
   let dir = [0, 1, 2].map(c => f[ob + c] / 255 * 2 - 1);
@@ -95,7 +96,15 @@ function shown(r: Rig, scene: BandScene, o: readonly number[], d: readonly numbe
   dir = dl < 1e-4 ? [0, 1, 0] : dir.map(v => v / dl);
   const E = (nn: readonly number[]): number => (1 - rho) + rho * Math.max(0, dot(nn, dir));
   const e = E(nrm);
-  return {rgb: [alb[0] * T[0] * e / Math.PI, alb[1] * T[1] * e / Math.PI, alb[2] * T[2] * e / Math.PI], kind, cell, up: lum(T) * E([0, 1, 0]), down: lum(T) * E([0, -1, 0])};
+  let rgb: V3 = [alb[0] * T[0] * e / Math.PI, alb[1] * T[1] * e / Math.PI, alb[2] * T[2] * e / Math.PI];
+  if (r.field.gi !== undefined && !sky) {
+    // Task studio-baked-gi-visual-uplift-20261115-004324-01: a field with its ambient cube — the surface's ambient is the cube's
+    // face of its own normal (the complete ambient of that orientation, encoded as the main texels), under its directional light
+    const face = kind === HIT_FLOOR ? 0 : kind === HIT_CEIL ? 1 : nrm[0] > 0 ? 2 : nrm[0] < 0 ? 3 : nrm[2] > 0 ? 4 : 5;
+    const og = ((r.field.gi + giSlotBase(s) + face * L + k) * n + cell) * 4, ed = rho * Math.max(0, dot(nrm, dir));
+    rgb = [0, 1, 2].map(c => alb[c] * (T[c] * ed + (f[og + c] / 255) ** 2 * FIELD_EMAX) / Math.PI) as V3;
+  }
+  return {rgb, kind, cell, up: lum(T) * E([0, 1, 0]), down: lum(T) * E([0, -1, 0]), layer: k, layers: L};
 }
 /** Half-float rounding (11 bits) and the bake's float32 working precision. */
 const near = (act: number, exp: number): boolean => Math.abs(act - exp) <= Math.abs(exp) * 6e-4 + 1e-7;
@@ -703,6 +712,114 @@ describe('what a probe shows', () => {
     // the same field under a REAL ceiling: the patch is a surface lit from behind — nearly dark
     const closed = rig(box(20, 20), [], sky), bc = bake(closed, TIER), cc = compare(closed, bc);
     for (let q = 0; q < T * T; q++) if (cc.kinds[q] === HIT_CEIL && patch(cc.cells[q] % 20, Math.floor(cc.cells[q] / 20))) expect(lum(rgbAt(bc, 0, 0, q % T, Math.floor(q / T)))).toBeLessThan(0.1 * brightest);
+  });
+
+  // Task studio-baked-gi-visual-uplift-20261115-004324-01: the enhanced field's ambient cube in the capture.
+  describe('a field with its ambient cube', () => {
+    const sameBake = (a: BakedProbes, b: BakedProbes): boolean => bytes(a.atlas).equals(bytes(b.atlas)) && bytes(a.meta).equals(bytes(b.meta)) && bytes(a.grid).equals(bytes(b.grid));
+    /** The lit room with the REAL gathered light (the game's standard bake) — as a field with its cube, or baked without one. */
+    const gathered = (cube?: boolean): Rig => {
+      const src: FieldSource = {grid: lit.grid, lights: [LAMP], trenchFloorY: -1.15};
+      return {...lit, field: bakeRows(src, gatheredRows(src, GI_TIERS.standard), {cube}).field};
+    };
+
+    it('every texel is the hit surface\'s finish colour x (its directional light on its normal + the cube face of its normal) / pi; the foot of a wall is lit as a wall, not as the floor beside it', () => {
+      const full = gathered();
+      expect(full.field.gi).toBeDefined();
+      expect(full.field.stats.cubeClipped).toBe(0);
+      const b = bake(full, TIER);
+      // (compare: every texel against the test's own reading of the field's bytes — it throws on one that is darker; what is left
+      // over is the tube alone)
+      const {glow, kinds} = compare(full, b);
+      const dir = tubeDir(LAMP), lit0 = glow.map((g, q) => (lum(g) > 0 ? q : -1)).filter(q => q >= 0);
+      expect(lit0.length).toBeGreaterThanOrEqual(4);
+      expect(lit0.length).toBeLessThanOrEqual(24);
+      for (const q of lit0) expect(angle(octDecode((q % T + 0.5) / T, (Math.floor(q / T) + 0.5) / T), dir)).toBeLessThan(20 * DEG);
+      expect(kinds.includes(-1)).toBe(false);
+
+      // the same field WITHOUT its cube (what a station shaded plain captures): its own reading holds too — and it is another picture
+      const flat: Rig = {...full, field: withoutCube(full.field)};
+      const p = bake(flat, TIER), plain = compare(flat, p);
+      const plain0 = plain.glow.map((g, q) => (lum(g) > 0 ? q : -1)).filter(q => q >= 0);
+      expect(plain0.length).toBeGreaterThanOrEqual(4);
+      expect(plain0.length).toBeLessThanOrEqual(24);
+      expect(sameBake(b, p)).toBe(false);
+      // NORM and the parallax box are the main texels' and the room's: the cube changes neither, nor the weight grid
+      expect(bytes(b.meta).equals(bytes(p.meta))).toBe(true);
+      expect(bytes(b.grid).equals(bytes(p.grid))).toBe(true);
+      // where they differ: a wall's lowest layer. The main texel there holds what the FLOOR receives (the up-facing light); the cube
+      // gives the wall its own face. Per surface kind: the share of texels that differ by more than 5 %, and the mean ratio
+      const scene = new BandScene(full.field.w, full.field.h, full.geos);
+      const tally = new Map<string, {n: number; off: number; ratio: number}>();
+      for (let q = 0; q < T * T; q++) {
+        if (lum(glow[q]) > 0) continue;
+        const d = octDecode((q % T + 0.5) / T, (Math.floor(q / T) + 0.5) / T), e = shown(full, scene, POS, d)!;
+        const key = e.kind === HIT_FLOOR ? 'floor' : e.kind === HIT_CEIL ? 'ceiling' : e.layer === 0 ? 'wall foot' : e.layer === e.layers - 1 ? 'wall head' : 'wall';
+        const w = lum(rgbAt(b, 0, 0, q % T, Math.floor(q / T))), wo = lum(rgbAt(p, 0, 0, q % T, Math.floor(q / T)));
+        if (!(wo > 1e-5)) continue;
+        const t = tally.get(key) ?? {n: 0, off: 0, ratio: 0};
+        t.n++; t.ratio += w / wo; if (Math.abs(w / wo - 1) > 0.05) t.off++;
+        tally.set(key, t);
+      }
+      const rows = [...tally].map(([k, t]) => `${k}: ${t.n} texels, ${(100 * t.off / t.n).toFixed(1)} % differ by > 5 %, mean with / without the cube ${(t.ratio / t.n).toFixed(3)}`);
+      console.log(`probe capture with / without the ambient cube (9 x 9 m room, standard gather):\n  ${rows.join('\n  ')}`);
+      for (const k of ['floor', 'ceiling', 'wall', 'wall foot', 'wall head']) expect(tally.get(k)?.n ?? 0, k).toBeGreaterThan(20);
+      const share = (k: string) => tally.get(k)!.off / tally.get(k)!.n;
+      // floors and ceilings: the main texel of their layer already is their face (bottom layer = the up-facing light, top = the down-facing)
+      // (measured: floor 0.6 %, ceiling 4.4 %, wall foot 97 %, wall 62 %, wall head 58 % — bounds with room for a retuned gather)
+      expect(share('floor')).toBeLessThan(0.15);
+      expect(share('ceiling')).toBeLessThan(0.15);
+      // the wall's foot and head: a good part of the texels change, the foot nearly everywhere
+      expect(share('wall foot')).toBeGreaterThan(0.5);
+      expect(share('wall head')).toBeGreaterThan(0.25);
+      expect(share('wall foot')).toBeGreaterThan(share('floor') + 0.4);
+    });
+
+    it('the cube-less view of a field captures exactly as a field that was baked without a cube', () => {
+      const full = gathered(), none = gathered(false);
+      expect([full.field.gi !== undefined, none.field.gi]).toEqual([true, undefined]);
+      expect(sameBake(bake({...full, field: withoutCube(full.field)}, TIER), bake(none, TIER))).toBe(true);
+    });
+
+    it('a cube that says nothing the main texels do not (the same gathered light on every face, no fixture) changes no texel', () => {
+      // an unlit room whose every voxel gathered the same light on all six faces: each layer's texel is that light, with no
+      // directional share, and every cube face is the same ambient
+      const src: FieldSource = {grid: box(20, 20), lights: [], trenchFloorY: -1.15};
+      const face = [0.31, 0.22, 0.12], rows = uniformRows([...face, ...face, ...face, ...face, ...face, ...face]);
+      const even: Rig = {...room([]), field: bakeRows(src, rows).field};
+      expect(even.field.gi).toBeDefined();
+      const b = bake(even, TIER), flat = bake({...even, field: withoutCube(even.field)}, TIER);
+      expect(sameBake(b, flat)).toBe(true);
+      // (and it is a lit picture: the room's own surfaces under that light)
+      const {glow, shownLum} = compare(even, b);
+      expect(glow.every(g => lum(g) === 0)).toBe(true);
+      expect(Math.min(...shownLum)).toBeGreaterThan(0.01);
+      // one face brighter than the others: only the surfaces of that orientation change — here the floor (the up-facing face)
+      const up = bakeRows(src, uniformRows([0.9, 0.9, 0.9, ...face, ...face, ...face, ...face, ...face])).field;
+      const lifted: Rig = {...even, field: up};
+      const bu = bake(lifted, TIER), fu = bake({...lifted, field: withoutCube(up)}, TIER), ku = compare(lifted, bu).kinds;
+      let floors = 0, others = 0;
+      for (let q = 0; q < T * T; q++) {
+        const w = rgbAt(bu, 0, 0, q % T, Math.floor(q / T)), wo = rgbAt(fu, 0, 0, q % T, Math.floor(q / T));
+        const equal = w.every((v, c) => v === wo[c]);
+        // (a floor texel reads the bottom layer, whose main texel already is the up-facing light: equal with and without)
+        if (ku[q] === HIT_FLOOR) { floors++; expect(equal, `floor texel ${q}`).toBe(true); }
+        else if (ku[q] === HIT_CEIL) { others++; expect(equal, `ceiling texel ${q}`).toBe(true); }
+      }
+      expect(floors).toBeGreaterThan(100);
+      expect(others).toBeGreaterThan(50);
+      // ... while the foot of every wall no longer shows the floor's light: with the cube it is darker there
+      let feet = 0, darker = 0;
+      const scene = new BandScene(up.w, up.h, lifted.geos);
+      for (let q = 0; q < T * T; q++) {
+        const e = shown(lifted, scene, POS, octDecode((q % T + 0.5) / T, (Math.floor(q / T) + 0.5) / T))!;
+        if (e.kind !== HIT_WALL || e.layer !== 0) continue;
+        feet++;
+        if (lum(rgbAt(bu, 0, 0, q % T, Math.floor(q / T))) < 0.6 * lum(rgbAt(fu, 0, 0, q % T, Math.floor(q / T)))) darker++;
+      }
+      expect(feet).toBeGreaterThan(20);
+      expect(darker).toBe(feet);
+    });
   });
 
   it('nothing movable is in a probe: a prop cell (sightBlocked / blocked) does not change the bake', () => {

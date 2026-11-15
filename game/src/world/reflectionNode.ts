@@ -26,15 +26,16 @@ import * as THREE from 'three';
 import {PhysicalLightingModel, type Node, type NodeBuilder} from 'three/webgpu';
 import {
   If, abs, cameraWorldMatrix, clamp, float, floor, int, ivec2, ivec3, materialOpacity, max, metalness, min, mix, mod, normalView, normalWorld, positionWorld, pow4,
-  reflectView, renderGroup, roughness, select, smoothstep, step, texture, texture3D, uniform, vec2, vec3,
+  positionViewDirection, pow, reflectView, renderGroup, roughness, select, smoothstep, specularColor, step, texture, texture3D, uniform, vec2, vec3,
 } from 'three/tsl';
-import {LightFieldLight, LightFieldNode, lightFieldCell, lightFieldSample, type LightFieldSampleNodes, type NodeLibraryLike} from './lightFieldNode';
-import {fieldSlot, sampleField, type BakedField} from './lightField';
+import {FULL_RADIANCE, LightFieldLight, LightFieldNode, lightFieldCell, lightFieldSample, sharedFieldLight, type LightFieldSampleNodes, type NodeLibraryLike} from './lightFieldNode';
+import {fieldSlot, sampleField, withoutCube, type BakedField} from './lightField';
 import {PROBE_COLS, PROBE_GUTTER, PROBE_LEVELS, PROBE_LEVEL_PER_ROUGHNESS, PROBE_RATIO_MAX, octEncode, probeAtlasLayout, probeBytes, probeTileOrigin, type BakedProbes} from './reflectionProbes';
 import {CELL} from '../gen/grid';
 import {refreshTextureBindings} from '../render/bindingRefresh';
 import {fetchTexel, plainTexture} from '../render/textureFetch';
 import {reflectTagOf, type ReflectClass} from '../render/reflectTag';
+import {glassMirrorSample} from '../render/glassMirror';
 
 // TSL nodes are chained untyped here (three's TSL typings reject most mixed-type chains).
 type N = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -84,13 +85,14 @@ export const REFLECT_ROUGHNESS_MAX = 0.45;
 /**
  * Task studio-graphics-gpu-materials-toggle-20261114-212239-01: a 'gloss' candidate (a glossy non-metal: the glazed wall tile) shows
  * the probes in full up to GLOSS_ROUGHNESS_FULL and not at all from GLOSS_ROUGHNESS_NONE on (grout, grime, dust): a fade, so a tile
- * face around the limit does not flip between the two. Only with the High probes (REFL.params.y).
+ * face around the limit does not flip between the two. With either probe tier (task studio-baked-gi-visual-uplift-20261115-004324-01:
+ * it was High only); REFL.params.y gates it at run time and is 0 while no probes are bound.
  */
 export const GLOSS_ROUGHNESS_FULL = 0.45;
 export const GLOSS_ROUGHNESS_NONE = 0.6;
-/** How much of the probes a 'gloss' fragment of roughness `rough` shows (the shader's weight; `high`: the bound probes are the High tier). */
-export function glossWeight(rough: number, high: boolean): number {
-  if (!high) return 0;
+/** How much of the probes a 'gloss' fragment of roughness `rough` shows (the shader's weight; `bound`: probes are bound). */
+export function glossWeight(rough: number, bound: boolean): number {
+  if (!bound) return 0;
   const t = Math.min(1, Math.max(0, (rough - GLOSS_ROUGHNESS_FULL) / (GLOSS_ROUGHNESS_NONE - GLOSS_ROUGHNESS_FULL)));
   return 1 - t * t * (3 - 2 * t);
 }
@@ -119,8 +121,8 @@ export class ReflectionProbeVolume {
 /**
  * The global reflection nodes. atlasInfo = atlas width, height (px), the sharpest tile's edge (px), probe tiles per row;
  * levelY = first texel row of each roughness level's band; gridInfo = grid width, height (cells), slices, metres per cell;
- * params.x = strength (0 while nothing is bound: the probes add nothing), params.y = 1 while the bound probes are the High tier
- * (glossy non-metals — 'gloss' — show them too), else 0.
+ * params.x = strength (0 while nothing is bound: the probes add nothing), params.y = 1 while probes are bound (glossy non-metals —
+ * 'gloss' — show them too), else 0; params.z = a glass pane's reflectance at normal incidence under the mirror light (GLASS_PANE_F0).
  */
 export const REFL = {
   // (render/textureFetch.ts: data textures — no uv-transform uniform, and none of its per-object updates)
@@ -133,8 +135,27 @@ export const REFL = {
   params: uniform(new THREE.Vector4(0, 0, 0, 0)).setGroup(renderGroup),
 };
 
-/** Overall reflection strength (1 = what the probes hold; QA / tuning). */
-export const REFLECTION_TUNING = {strength: 1};
+/**
+ * Task studio-baked-gi-visual-uplift-20261115-004324-01: how much a glass PANE reflects seen face-on, under the mirror light. A real
+ * window is two air-glass faces (about 0.08 together) and coated shop glazing more; the station's glass material alone gives the
+ * live mirror about 0.1 of the room, which a lit shop behind the pane washes out. 0.3 is a stated choice for the look — the room
+ * and the flashlight's light on it read in the glass from the front — not a measured glazing. The boost is the ratio of the two
+ * Fresnel curves (Schlick), so it is this at normal incidence and nothing at a grazing angle, where glass mirrors anyway; it never
+ * lowers a material that reflects more by itself.
+ */
+export const GLASS_PANE_F0 = 0.3;
+
+/**
+ * The shader's pane boost on the CPU: what multiplies a glass pane's reflection so that a material reflecting `f0` face-on reflects
+ * `paneF0` there (`cos` = |N.V|): the ratio of the two Schlick curves — paneF0 / f0 face-on, 1 at a grazing angle, never below 1.
+ */
+export function paneBoost(f0: number, paneF0: number, cos: number): number {
+  const f = Math.max(f0, 0.02), fp = Math.max(paneF0, f), x = Math.pow(1 - Math.min(1, Math.max(0, Math.abs(cos))), 5);
+  return (fp + (1 - fp) * x) / (f + (1 - f) * x);
+}
+
+/** Overall reflection strength (1 = what the probes hold) and a pane's face-on reflectance (QA / tuning). */
+export const REFLECTION_TUNING = {strength: 1, paneF0: GLASS_PANE_F0};
 
 let active: ReflectionProbeVolume | null = null;
 
@@ -158,12 +179,13 @@ export function bindReflectionProbes(v: ReflectionProbeVolume | null): void {
   REFL.levelY.value.set(L.levelY[0], L.levelY[1], L.levelY[2], L.levelY[3]);
   if (v) REFL.gridInfo.value.set(v.probes.gridW, v.probes.gridH, v.probes.gridDepth, CELL);
   else REFL.gridInfo.value.set(1, 1, 2, CELL);
-  REFL.params.value.set(v && v.probes.count > 0 ? REFLECTION_TUNING.strength : 0, v && v.probes.count > 0 && v.probes.tier === 'high' ? 1 : 0, 0, 0);
+  const on = !!v && v.probes.count > 0;
+  REFL.params.value.set(on ? REFLECTION_TUNING.strength : 0, on ? 1 : 0, on ? REFLECTION_TUNING.paneF0 : 0, 0);
 }
 
 /** Re-apply REFLECTION_TUNING to the bound probes (QA / tuning). */
 export function syncReflectionTuning(): void {
-  if (active && active.probes.count > 0) REFL.params.value.x = REFLECTION_TUNING.strength;
+  if (active && active.probes.count > 0) { REFL.params.value.x = REFLECTION_TUNING.strength; REFL.params.value.z = REFLECTION_TUNING.paneF0; }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -272,20 +294,23 @@ export const WINDOW_REACH = 1;
 // ---------------------------------------------------------------------------------------------
 // Scene light + lighting node
 
-/** The station light field WITH reflection probes as a scene light (see module doc). */
+/**
+ * The station light field WITH reflection probes as a scene light (see module doc). `full` as LightFieldLight's; `mirror`
+ * (task studio-baked-gi-visual-uplift-20261115-004324-01): its glass also samples the live glass mirror (render/glassMirror.ts).
+ * Both are fixed per instance: one session-wide light per combination that was ever used.
+ */
 export class LightFieldReflectLight extends LightFieldLight {
   readonly isLightFieldReflectLight = true;
-  constructor() {
-    super();
+  constructor(full = false, readonly mirror = false) {
+    super(full);
     (this as {type: string}).type = 'LightFieldReflectLight';
-    this.name = 'light-field-reflect';
+    this.name = `light-field-reflect${full ? '-full' : ''}${mirror ? '-mirror' : ''}`;
   }
 }
 
-let shared: LightFieldReflectLight | null = null;
-/** The single session-wide reflecting field light (stable id => stable light set across stations that use it). */
-export function stationReflectLight(): LightFieldReflectLight {
-  return (shared ??= new LightFieldReflectLight());
+/** The single session-wide reflecting field light of its kind (stable id => stable light set across stations that use it). */
+export function stationReflectLight(full = false, mirror = false): LightFieldReflectLight {
+  return sharedFieldLight(`reflect${full ? '-full' : ''}${mirror ? '-mirror' : ''}`, () => new LightFieldReflectLight(full, mirror));
 }
 
 interface ReflectBuilder extends NodeBuilder {
@@ -307,23 +332,48 @@ export class LightFieldReflectNode extends LightFieldNode {
     // three's own environment lookup direction: the mirror direction, pulled toward the normal as the surface gets rough
     const dir = n(mix(reflectView, normalView, pow4(rough))).normalize().transformDirection(cameraWorldMatrix);
     const rad = n(vec3(0, 0, 0)).toVar();
-    if (cls === 'glass') {
+    // Task studio-baked-gi-visual-uplift-20261115-004324-01: under full shading a reflective surface also shows what is lit live
+    // (FULL_RADIANCE: the flashlight's bounce as a soft sheen) — the probes hold the fixtures' light only
+    const live = (w?: N): void => {
+      if (!this.light?.full) return;
+      for (const extra of FULL_RADIANCE) rad.addAssign(w ? n(extra(dir, rough)).mul(w) : extra(dir, rough));
+    };
+    // a pane's reflectance at normal incidence raised to REFL.params.z (GLASS_PANE_F0): the ratio of the two Schlick curves (paneBoost)
+    const boost = (): N => {
+      const x = n(pow(float(1).sub(clamp(abs(n(normalView).dot(positionViewDirection)), 0, 1)), 5));
+      const f0 = n(max(n(specularColor).dot(vec3(1 / 3, 1 / 3, 1 / 3)), 0.02));
+      return n(mix(max(n(REFL.params).z, f0), float(1), x)).div(mix(f0, float(1), x));
+    };
+    if (cls === 'glass' && (this.light as LightFieldReflectLight | null)?.mirror === true) {
+      // under the mirror light: the live glass mirror where this fragment lies on the plane it shows (m.a: how much; it holds the
+      // room as it is lit this frame, flashlight included), the probes and the live sheen everywhere else — and no probe lookup
+      // under a full mirror
+      const m = n(glassMirrorSample(positionWorld)).toVar();
+      const pr = n(vec3(0, 0, 0)).toVar();
+      If(n(m.a).lessThan(0.996), () => { pr.assign(probeRadiance(s, dir, rough)); });
+      rad.assign(n(mix(pr, m.rgb, m.a)).mul(boost()).div(clamp(materialOpacity, 0.25, 1)));
+      live(n(m.a).oneMinus());
+    } else if (cls === 'glass') {
       // a see-through pane: its reflection is not dimmed by how much it lets through (the blend multiplies by the opacity)
       rad.assign(n(probeRadiance(s, dir, rough)).div(clamp(materialOpacity, 0.25, 1)));
+      live();
     } else if (cls === 'window') {
       // a pane inside its wall's own cell: the field and the probes of the room it is seen from, a cell out along the normal
       const cell = n(lightFieldCell());
       const at = n(n(positionWorld).add(n(normalWorld).mul(vec3(n(cell.x).mul(WINDOW_REACH), 0, n(cell.y).mul(WINDOW_REACH))))).toVar();
       const sw = lightFieldSample(positionWorld, {normal: normalWorld, reach: WINDOW_REACH});
       rad.assign(n(probeRadiance(sw, dir, rough, at)).div(clamp(materialOpacity, 0.25, 1)));
+      live();
     } else if (cls === 'gloss') {
-      // a glossy non-metal (glazed tile): three's Fresnel keeps it faint face-on and strong at a grazing angle. With the High probes
-      // only (REFL.params.y), and fading out toward rough texels (see GLOSS_ROUGHNESS_FULL); no lookup where the weight is nothing
+      // a glossy non-metal (glazed tile): three's Fresnel keeps it faint face-on and strong at a grazing angle. Fading out toward
+      // rough texels (see GLOSS_ROUGHNESS_FULL); no lookup where the weight is nothing (REFL.params.y: 0 while nothing is bound)
       const w = n(n(REFL.params).y.mul(float(1).sub(smoothstep(GLOSS_ROUGHNESS_FULL, GLOSS_ROUGHNESS_NONE, rough)))).toVar();
       If(n(w).greaterThan(0.004), () => { rad.assign(n(probeRadiance(s, dir, rough)).mul(w)); });
+      live(float(1).sub(smoothstep(GLOSS_ROUGHNESS_FULL, GLOSS_ROUGHNESS_NONE, rough)));
     } else {
       // a rough non-metal texel reflects next to nothing: no lookup there (the real, per-fragment metalness and roughness decide)
       If(n(metalness).greaterThan(REFLECT_METALNESS_MIN).or(n(rough).lessThan(REFLECT_ROUGHNESS_MAX)), () => { rad.assign(probeRadiance(s, dir, rough)); });
+      live();
     }
     b.context.radiance.addAssign(rad);
     return null;
@@ -414,7 +464,8 @@ export function reflectLookup(cls: ReflectClass, F: BakedField, x: number, y: nu
   const C = CELL * (F.cellScale ?? 1), reach = cls === 'window' ? WINDOW_REACH : 0.5;
   // the field sample: its point is (reach cells, 0.2 m, reach cells) along the normal; sampleField adds half a cell of that itself
   const px = x + normal[0] * C * (reach - 0.5), pz = z + normal[2] * C * (reach - 0.5);
-  const f = sampleField(F, px, y, pz, levels, normal);
+  // (a window pane's reaching sample is the plain one in the shader, also under the full light: no cube there)
+  const f = sampleField(cls === 'window' ? withoutCube(F) : F, px, y, pz, levels, normal);
   const ox = x + normal[0] * C * reach, oy = y + normal[1] * 0.2, oz = z + normal[2] * C * reach;
   const ci = Math.min(F.w - 1, Math.max(0, Math.floor(ox / C))), cj = Math.min(F.h - 1, Math.max(0, Math.floor(oz / C)));
   const lum = (c: readonly number[]): number => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];

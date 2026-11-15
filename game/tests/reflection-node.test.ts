@@ -1,6 +1,10 @@
 // Task studio-baked-lighting-reflections-20261114-050258-01: the reflection probes' lighting node (world/reflectionNode.ts).
-// - which materials reflect (metal / glass / a wall-set window pane; glazed tile with the High probes — task
-//   studio-graphics-gpu-materials-toggle-20261114-212239-01) and which never do (walls, floors, characters, unlit materials);
+// - which materials reflect (metal / glass / a wall-set window pane; glazed tile — task
+//   studio-graphics-gpu-materials-toggle-20261114-212239-01; with either probe tier since task
+//   studio-baked-gi-visual-uplift-20261115-004324-01) and which never do (walls, floors, characters, unlit materials);
+// - the reflecting light's variants (task studio-baked-gi-visual-uplift-20261115-004324-01): FULL (the field's ambient cube, and for
+//   the reflective classes what is lit live — the FULL_RADIANCE registry) and MIRROR (glass only: render/glassMirror.ts, its own
+//   tests in glass-mirror.test.ts) are other session-wide lights; the plain reflecting light's programs stay what they were;
 // - with the PLAIN field light every material compiles to the program it always had: no probe texture, no extra code — the
 //   reflecting light is a second session-wide light a station only uses when it was built with probes;
 // - a reflective material builds on BOTH backends (WGSL = WebGPU, GLSL = WebGL2 fallback) within WebGPU's per-stage limits, with
@@ -12,12 +16,18 @@
 import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
 import {GLSLNodeBuilder, MeshBasicNodeMaterial, MeshLambertNodeMaterial, MeshStandardNodeMaterial, WGSLNodeBuilder, WebGPURenderer} from 'three/webgpu';
-import {LightFieldLight, LightFieldNode, installLightFieldNode, stationFieldLight} from '../src/world/lightFieldNode';
+import {renderGroup, uniform} from 'three/tsl';
+import {FULL_RADIANCE, LF, LightFieldLight, LightFieldNode, installLightFieldNode, stationFieldLight, stationLights} from '../src/world/lightFieldNode';
 import {
   LightFieldReflectLight, LightFieldReflectNode, REFL, REFLECTION_TUNING, ReflectionProbeVolume, activeReflectionProbes, bindReflectionProbes, installReflectNode,
-  GLOSS_ROUGHNESS_FULL, GLOSS_ROUGHNESS_NONE, REFLECT_METALNESS_MIN, REFLECT_ROUGHNESS_MAX, WINDOW_REACH, glossWeight, reflectClass, sampleProbeLevel, sampleProbes, stationReflectLight,
-  syncReflectionTuning,
+  GLASS_PANE_F0, GLOSS_ROUGHNESS_FULL, GLOSS_ROUGHNESS_NONE, REFLECT_METALNESS_MIN, REFLECT_ROUGHNESS_MAX, WINDOW_REACH, glossWeight, paneBoost, reflectClass, reflectLookup, sampleProbeLevel,
+  sampleProbes, stationReflectLight, syncReflectionTuning,
 } from '../src/world/reflectionNode';
+import {BUILTINS, runBlock, type Env, type Val} from './helpers/glslEval';
+import {GM} from '../src/render/glassMirror';
+import {FLASH_BOUNCE_SHEEN} from '../src/world/lights'; // (registers the flashlight bounce's sheen in FULL_RADIANCE)
+import {sampleField, withoutCube} from '../src/world/lightField';
+import {bakeRows, cubeRoom, lum3, patternRows} from './helpers/lightCubeFixture';
 import {reflectTagOf, tagReflect} from '../src/render/reflectTag';
 import {materialKey} from '../src/render/runtimeVariants';
 import {PILLAR_METALNESS, PILLAR_ROUGHNESS, TILE_GLAZE_ROUGHNESS, WorldMaterials, cloneSurfaceMaterial} from '../src/world/materials';
@@ -46,7 +56,10 @@ function headless(backend: Backend): WebGPURenderer {
   renderers.set(backend, r);
   return r;
 }
-function compile(backend: Backend, mesh: THREE.Mesh, lights: THREE.Light[]): string {
+interface BuiltUniform { name: string; type: string; node: {value?: unknown} }
+interface Built { frag: string; uniforms: BuiltUniform[] }
+/** A material's fragment stage under `lights`: the shader text and the uniforms three declared for it. */
+function build(backend: Backend, mesh: THREE.Mesh, lights: THREE.Light[]): Built {
   const r = headless(backend);
   const scene = new THREE.Scene();
   scene.add(mesh);
@@ -56,7 +69,10 @@ function compile(backend: Backend, mesh: THREE.Mesh, lights: THREE.Light[]): str
   console.error = console.warn = (...a: unknown[]) => { errors.push(a.map(String).join(' ')); };
   try {
     const B = backend === 'glsl' ? GLSLNodeBuilder : WGSLNodeBuilder;
-    const b = new B(mesh, r) as unknown as {scene: THREE.Scene; camera: THREE.Camera; material: THREE.Material; context: {material: THREE.Material}; lightsNode: unknown; build(): void; fragmentShader: string};
+    const b = new B(mesh, r) as unknown as {
+      scene: THREE.Scene; camera: THREE.Camera; material: THREE.Material; context: {material: THREE.Material}; lightsNode: unknown; build(): void; fragmentShader: string;
+      uniforms: {fragment: BuiltUniform[]};
+    };
     b.scene = scene;
     b.camera = new THREE.PerspectiveCamera();
     b.material = mesh.material as THREE.Material;
@@ -64,15 +80,23 @@ function compile(backend: Backend, mesh: THREE.Mesh, lights: THREE.Light[]): str
     b.lightsNode = (r as unknown as {lighting: {getNode(s: THREE.Scene): {setLights(l: THREE.Light[]): unknown}}}).lighting.getNode(scene).setLights(lights);
     b.build();
     expect(errors, `${backend}: a clean build`).toEqual([]);
-    return b.fragmentShader;
+    return {frag: b.fragmentShader, uniforms: b.uniforms.fragment};
   } finally {
     console.error = oe; console.warn = ow;
     scene.remove(mesh);
     for (const l of lights) scene.remove(l);
   }
 }
+const compile = (backend: Backend, mesh: THREE.Mesh, lights: THREE.Light[]): string => build(backend, mesh, lights).frag;
 const box = (m: THREE.Material) => new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), m);
 const count = (s: string, re: RegExp) => (s.match(re) ?? []).length;
+/** How often a program samples (filtered, explicit level) the texture `tex` is bound to: 0 when it does not declare it. */
+function samplesOf(backend: Backend, b: Built, tex: unknown): number {
+  const names = [...new Set(b.uniforms.filter(u => u.node.value === tex).map(u => u.name))];
+  let total = 0;
+  for (const name of names) total += count(b.frag, new RegExp(`${backend === 'glsl' ? 'textureLod' : 'textureSampleLevel'}\\(\\s*${name}\\b`, 'g'));
+  return total;
+}
 /** Sampled textures, samplers and uniform buffers a fragment shader declares. */
 function bindings(backend: Backend, frag: string): {textures: number; samplers: number; ubos: number} {
   if (backend === 'wgsl') return {textures: count(frag, /var\s+\w+\s*:\s*texture_\w+(<\w+>)?\s*;/g), samplers: count(frag, /var\s+\w+\s*:\s*sampler(_comparison)?\s*;/g), ubos: count(frag, /var<uniform>/g)};
@@ -221,6 +245,167 @@ describe('the reflecting field light', () => {
     expect(a).not.toBe(stationFieldLight());
     expect(a.isLightFieldLight).toBe(true);
     expect(a.castShadow).toBe(false);
+    expect([a.full, a.mirror, a.name]).toEqual([false, false, 'light-field-reflect']);
+    // its variants (full shading, the glass mirror): one session-wide light per combination — its own id (three's program key
+    // holds a light's id: its own programs) and name, the same node class (registered by the light's class)
+    const made = new Set<THREE.Light>([stationFieldLight(), stationFieldLight(true)]);
+    for (const [full, mirror] of [[false, false], [true, false], [false, true], [true, true]] as const) {
+      const l = stationReflectLight(full, mirror);
+      expect(stationReflectLight(full, mirror), `${full} ${mirror}: stable`).toBe(l);
+      expect(made.has(l), `${full} ${mirror}: its own light`).toBe(false);
+      made.add(l);
+      expect([l.full, l.mirror, l.isLightFieldReflectLight, l.castShadow, l instanceof LightFieldReflectLight]).toEqual([full, mirror, true, false, true]);
+      expect(l.name).toBe(`light-field-reflect${full ? '-full' : ''}${mirror ? '-mirror' : ''}`);
+      expect(stationLights()).toContain(l);
+    }
+    expect(new Set([...made].map(l => l.id)).size).toBe(6);
+    expect(new Set([...made].map(l => l.name)).size).toBe(6);
+  });
+
+  // Task studio-baked-gi-visual-uplift-20261115-004324-01
+  it('the FULL reflecting light: the cube samples for every material, and what is lit live (FULL_RADIANCE) only on the reflective classes; the other lights never show it', () => {
+    // a marked entry in the registry (as world/lights.ts registers the flashlight bounce's sheen): where it is built in, its name is
+    const mark = uniform(new THREE.Vector3(0.25, 0.5, 0.75)).setGroup(renderGroup).setName('sheenMark');
+    const calls: number[] = [];
+    const entry = (dir: unknown, rough: unknown) => { calls.push(1); return (mark as unknown as {mul(x: unknown): {add(y: unknown): never}}).mul(rough).add((dir as {mul(x: number): unknown}).mul(0)); };
+    const before = FULL_RADIANCE.length;
+    expect(before, 'the flashlight bounce registered its sheen').toBeGreaterThan(0);
+    expect(FLASH_BOUNCE_SHEEN).toBeGreaterThan(0);
+    FULL_RADIANCE.push(entry as never);
+    try {
+      const mats = {
+        wall: () => new MeshStandardNodeMaterial({metalness: 0, roughness: 0.8}),
+        steel: () => new MeshStandardNodeMaterial({metalness: 0.45, roughness: 0.4}),
+        glass: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'glass'),
+        window: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'window'),
+        tile: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0, roughness: 0.3}), 'gloss'),
+      };
+      const rows: string[] = [];
+      for (const backend of ['wgsl', 'glsl'] as const) {
+        const under = (l: THREE.Light) => Object.fromEntries(Object.entries(mats).map(([k, f]) => [k, build(backend, box(f()), [l, new THREE.HemisphereLight()])])) as Record<keyof typeof mats, Built>;
+        const fieldPlain = under(stationFieldLight()), fieldFull = under(stationFieldLight(true));
+        const refl = under(stationReflectLight()), reflFull = under(stationReflectLight(true)), reflMirror = under(stationReflectLight(false, true)), reflFullMirror = under(stationReflectLight(true, true));
+        const marked = (b: Built) => count(b.frag, /sheenMark/g) > 0;
+        const fieldTex = LF.tex.value;
+        for (const k of Object.keys(mats) as (keyof typeof mats)[]) {
+          const tag = `${backend} ${k}`;
+          // the field: 5 filtered samples plain, 8 with the cube (lighting-node.test.ts) — under the reflecting lights too; a window
+          // pane samples it a second time, a cell out, and that sample is the plain one under either light (5 more, never the cube)
+          const second = k === 'window' ? 5 : 0;
+          expect(samplesOf(backend, fieldPlain[k], fieldTex), `${tag}: plain field light`).toBe(5);
+          expect(samplesOf(backend, fieldFull[k], fieldTex), `${tag}: full field light`).toBe(8);
+          expect(samplesOf(backend, refl[k], fieldTex), `${tag}: reflecting`).toBe(5 + second);
+          expect(samplesOf(backend, reflMirror[k], fieldTex), `${tag}: reflecting + mirror`).toBe(5 + second);
+          expect(samplesOf(backend, reflFull[k], fieldTex), `${tag}: full reflecting`).toBe(8 + second);
+          expect(samplesOf(backend, reflFullMirror[k], fieldTex), `${tag}: full reflecting + mirror`).toBe(8 + second);
+          // what is lit live: only under a FULL reflecting light, only on a reflective class
+          const reflective = k !== 'wall';
+          expect([marked(fieldPlain[k]), marked(fieldFull[k]), marked(refl[k]), marked(reflMirror[k])], `${tag}: never without a full reflecting light`).toEqual([false, false, false, false]);
+          expect([marked(reflFull[k]), marked(reflFullMirror[k])], `${tag}: under the full reflecting lights`).toEqual([reflective, reflective]);
+          // a non-reflective material under the full reflecting light is the full field light's program (the light's name aside)
+          if (!reflective) {
+            expect(reflFull[k].frag.length, tag).toBe(fieldFull[k].frag.length);
+            expect(bindings(backend, reflFull[k].frag), tag).toEqual(bindings(backend, fieldFull[k].frag));
+          }
+          // the limits, with everything on: uniform buffers as under the plain light (the bounce and the mark are render-group
+          // uniforms), sampled textures within WebGPU's 16
+          for (const b of [reflFull[k], reflFullMirror[k]]) {
+            const n = bindings(backend, b.frag);
+            expect(n.ubos, `${tag}: no uniform buffer more`).toBe(bindings(backend, fieldPlain[k].frag).ubos);
+            expect(n.ubos).toBeLessThanOrEqual(12);
+            expect(n.textures).toBeLessThanOrEqual(16);
+            if (backend === 'wgsl') expect(n.samplers).toBeLessThanOrEqual(16);
+            expect(/[^\x00-\x7F]/.test(b.frag), `${tag}: ASCII-only shader`).toBe(false);
+          }
+          // full adds no texture to a reflective program (the cube is in the field's own 3D texture)
+          expect(bindings(backend, reflFull[k].frag).textures, tag).toBe(bindings(backend, refl[k].frag).textures);
+          rows.push(`${tag}: reflecting ${refl[k].frag.length} chars -> full ${reflFull[k].frag.length} -> full + mirror ${reflFullMirror[k].frag.length} ${JSON.stringify(bindings(backend, reflFullMirror[k].frag))}`);
+        }
+        // the mirror changes the glass program only (glass-mirror.test.ts has what it adds there), with or without full shading
+        for (const k of ['wall', 'steel', 'window', 'tile'] as const) {
+          expect(reflMirror[k].frag.length, `${backend} ${k}`).toBe(refl[k].frag.length);
+          expect(reflFullMirror[k].frag.length, `${backend} ${k}`).toBe(reflFull[k].frag.length);
+        }
+        expect(bindings(backend, reflFullMirror.glass.frag).textures, `${backend} glass: + the mirror picture`).toBe(bindings(backend, reflFull.glass.frag).textures + 1);
+        expect(reflFullMirror.glass.uniforms.some(u => u.node.value === GM.tex.value)).toBe(true);
+        expect(reflFull.glass.uniforms.some(u => u.node.value === GM.tex.value)).toBe(false);
+      }
+      expect(calls.length, 'the registry is read while a program is built').toBeGreaterThan(0);
+      console.log(rows.join('\n'));
+    } finally {
+      FULL_RADIANCE.length = before;
+    }
+    // ... and without the marked entry the programs no longer hold it
+    expect(count(compile('wgsl', box(new MeshStandardNodeMaterial({metalness: 0.45, roughness: 0.4})), [stationReflectLight(true), new THREE.HemisphereLight()]), /sheenMark/g)).toBe(0);
+  });
+
+  // Task studio-baked-gi-visual-uplift-20261115-004324-01: under the mirror light a glass pane reflects GLASS_PANE_F0 seen face-on
+  // (REFL.params.z), by the ratio of two Schlick curves.
+  it('the pane boost: the CPU formula\'s limits; the mirror light\'s glass program computes the same numbers; no other program has it', () => {
+    const schlick = (f0: number, cos: number) => f0 + (1 - f0) * (1 - cos) ** 5;
+    expect(REFLECTION_TUNING.paneF0).toBe(GLASS_PANE_F0);
+    expect(GLASS_PANE_F0).toBeGreaterThan(0.04); // (more than a bare glass face)
+    expect(GLASS_PANE_F0).toBeLessThan(1);
+    const P = GLASS_PANE_F0;
+    for (const f0 of [0.02, 0.04, 0.1, P * 0.9]) {
+      // face-on the pane reflects paneF0 (paneF0 / f0 times what the material would); at a grazing angle nothing is added
+      expect(paneBoost(f0, P, 1)).toBeCloseTo(P / f0, 12);
+      expect(schlick(f0, 1) * paneBoost(f0, P, 1)).toBeCloseTo(P, 12);
+      expect(paneBoost(f0, P, 0)).toBeCloseTo(1, 12);
+      let last = 1;
+      for (let c = 0; c <= 1.0001; c += 0.05) {
+        const cos = Math.min(1, c), b = paneBoost(f0, P, cos);
+        // the ratio of the two curves; never below 1, rising toward face-on; the boosted pane is the paneF0 curve
+        expect(b).toBeCloseTo(schlick(P, cos) / schlick(f0, cos), 12);
+        expect(b).toBeGreaterThanOrEqual(last - 1e-12);
+        expect(paneBoost(f0, P, -cos)).toBe(b); // (either side of the pane)
+        last = b;
+      }
+      expect(paneBoost(f0, P, 1.7)).toBe(paneBoost(f0, P, 1));
+    }
+    // a material that reflects more by itself is never lowered; no reflectance asked (nothing bound: params.z 0) changes nothing
+    for (const cos of [0, 0.3, 0.8, 1]) {
+      expect(paneBoost(0.6, P, cos)).toBe(1);
+      expect(paneBoost(0.04, 0, cos)).toBe(1);
+      expect(paneBoost(P, P, cos)).toBe(1);
+    }
+    // (a material with no specular colour at all is taken as 0.02: the boost stays finite)
+    expect(paneBoost(0, P, 1)).toBeCloseTo(P / 0.02, 12);
+
+    // the shader: its boost is a run of statements from the mean of the specular colour to the ratio — only in the glass program
+    // of a MIRROR light (with full shading or without); there it reads the pane reflectance from REFL.params (no uniform or
+    // texture of its own: glass-mirror.test.ts counts the bindings)
+    const BOOST = /dot\(\s*SpecularColor\s*,\s*vec3(?:<f32>)?\(\s*0\.3333/g;
+    const mats = {
+      wall: () => new MeshStandardNodeMaterial({metalness: 0, roughness: 0.8}),
+      steel: () => new MeshStandardNodeMaterial({metalness: 0.45, roughness: 0.4}),
+      glass: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'glass'),
+      window: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0.1, roughness: 0.08, transparent: true, opacity: 0.42}), 'window'),
+      tile: () => tagReflect(new MeshStandardNodeMaterial({metalness: 0, roughness: 0.3}), 'gloss'),
+    };
+    for (const backend of ['wgsl', 'glsl'] as const) for (const full of [false, true]) for (const mirror of [false, true]) for (const [k, make] of Object.entries(mats)) {
+      const frag = compile(backend, box(make()), [stationReflectLight(full, mirror), new THREE.HemisphereLight()]);
+      expect(count(frag, BOOST), `${backend} ${k} under the ${full ? 'full ' : ''}${mirror ? 'mirror ' : ''}reflecting light`).toBe(mirror && k === 'glass' ? 1 : 0);
+    }
+    let checked = 0;
+    for (const full of [false, true]) {
+      const b = build('glsl', box(mats.glass()), [stationReflectLight(full, true), new THREE.HemisphereLight()]);
+      const params = b.uniforms.find(u => u.node === (REFL.params as unknown))?.name;
+      expect(params, 'the program reads REFL.params').toBeTruthy();
+      // the run of statements: "v = dot( SpecularColor, 1/3 )" ... "v = ( a / b )" (the first ratio after the fifth power)
+      const lines = b.frag.split('\n'), i0 = lines.findIndex(l => count(l, BOOST) > 0), iPow = lines.findIndex((l, i) => i > i0 && /=\s*pow\(\s*\w+\s*,\s*5\.0\s*\)/.test(l));
+      const i1 = lines.findIndex((l, i) => i > iPow && /^\s*\w+\s*=\s*\(\s*\w+\s*\/\s*\w+\s*\)\s*;/.test(l));
+      expect([i0 > 0, iPow > i0, i1 > iPow, i1 - i0 < 14]).toEqual([true, true, true, true]);
+      const code = lines.slice(i0, i1 + 1).join('\n'), out = /^\s*(\w+)\s*=/.exec(lines[i1])![1];
+      expect(code).toContain(`${params}.z`);
+      for (const spec of [[0.04, 0.04, 0.04], [0.1, 0.02, 0.06], [0, 0, 0], [0.7, 0.6, 0.8]]) for (const cos of [1, 0.8, 0.45, 0.1, 0, -0.6]) for (const z of [P, 0, 0.12, 0.9]) {
+        const env: Env = new Map<string, Val>([['SpecularColor', spec], ['normalView', [0, 0, 1]], ['positionViewDirection', [Math.sqrt(1 - cos * cos), 0, cos]], [params!, [1, 1, z, 0]]]);
+        const got = runBlock(code, env, BUILTINS, out) as number;
+        expect(got, `spec ${spec}, cos ${cos}, paneF0 ${z}`).toBeCloseTo(paneBoost((spec[0] + spec[1] + spec[2]) / 3, z, cos), 12);
+        checked++;
+      }
+    }
+    expect(checked).toBe(2 * 4 * 6 * 4);
   });
 
   it('plain light: no probe texture in any material; reflecting light: only metal and glass get the probes, on both backends, inside the WebGPU limits', () => {
@@ -262,8 +447,8 @@ describe('the reflecting field light', () => {
       expect(plain.window).toBe(plain.glass);
       expect(refl.window.length).toBeGreaterThan(refl.glass.length);
       expect(bindings(backend, refl.window)).toEqual(bindings(backend, refl.glass));
-      // glazed tile is the untagged program under the plain light; under the reflecting one its lookup sits behind the High-tier
-      // weight (a smoothstep over the roughness the fragment really has)
+      // glazed tile is the untagged program under the plain light; under the reflecting one its lookup sits behind its weight
+      // (probes bound x a smoothstep over the roughness the fragment really has)
       expect(plain.tile).toBe(compile(backend, box(new MeshStandardNodeMaterial({metalness: 0, roughness: 0.3})), [stationFieldLight(), new THREE.HemisphereLight()]));
       expect(refl.tile).toContain('smoothstep');
       expect(refl.steel).not.toContain('smoothstep');
@@ -325,27 +510,34 @@ describe('binding the probes', () => {
     bindReflectionProbes(null);
     v.dispose();
   });
-  it('glazed tile reflects with the High probes only: the tier flag follows the bound probes, the weight fades out toward rough texels', () => {
+  // (task studio-baked-gi-visual-uplift-20261115-004324-01: it was the High probes only)
+  it('glazed tile reflects with EITHER probe tier: the flag is on while probes are bound, off with none; the weight fades out toward rough texels', () => {
     const std = new ReflectionProbeVolume(fakeProbes({colors: [[1, 1, 1]]}));
     const high = new ReflectionProbeVolume({...fakeProbes({colors: [[1, 1, 1]]}), tier: 'high'});
     const none = new ReflectionProbeVolume({...fakeProbes({colors: [[1, 1, 1]]}), tier: 'high', count: 0, meta: new Float32Array(12)});
+    const noneStd = new ReflectionProbeVolume({...fakeProbes({colors: [[1, 1, 1]]}), count: 0, meta: new Float32Array(12)});
     bindReflectionProbes(std);
-    expect([REFL.params.value.x, REFL.params.value.y]).toEqual([1, 0]);
+    expect([REFL.params.value.x, REFL.params.value.y]).toEqual([1, 1]);
     bindReflectionProbes(high);
     expect([REFL.params.value.x, REFL.params.value.y]).toEqual([1, 1]);
     REFLECTION_TUNING.strength = 0.5;
-    syncReflectionTuning(); // (the strength alone: the tier flag stays)
+    syncReflectionTuning(); // (the strength alone: the flag stays)
     expect([REFL.params.value.x, REFL.params.value.y]).toEqual([0.5, 1]);
     REFLECTION_TUNING.strength = 1;
     syncReflectionTuning();
-    bindReflectionProbes(none);
-    expect([REFL.params.value.x, REFL.params.value.y]).toEqual([0, 0]);
-    bindReflectionProbes(std); // High -> Standard (a live change of the choice): the tile stops reflecting
-    expect(REFL.params.value.y).toBe(0);
+    // a station with no probe (either tier): nothing to show, the flag is off
+    for (const v of [none, noneStd]) {
+      bindReflectionProbes(v);
+      expect([REFL.params.value.x, REFL.params.value.y], v.probes.tier).toEqual([0, 0]);
+      syncReflectionTuning(); // (nothing to re-apply to)
+      expect([REFL.params.value.x, REFL.params.value.y], v.probes.tier).toEqual([0, 0]);
+    }
+    bindReflectionProbes(std); // High -> Standard (a live change of the choice): the tile keeps reflecting
+    expect([REFL.params.value.x, REFL.params.value.y]).toEqual([1, 1]);
     bindReflectionProbes(null);
     expect([REFL.params.value.x, REFL.params.value.y]).toEqual([0, 0]);
-    for (const v of [std, high, none]) v.dispose();
-    // the weight (CPU mirror of the shader's): nothing without the High tier; full on a glazed face, none on grout / grime, monotonic between
+    for (const v of [std, high, none, noneStd]) v.dispose();
+    // the weight (CPU mirror of the shader's): nothing while no probes are bound; full on a glazed face, none on grout / grime, monotonic between
     for (const r of [0, 0.2, 0.5, 0.9]) expect(glossWeight(r, false)).toBe(0);
     expect(glossWeight(0, true)).toBe(1);
     expect(glossWeight(GLOSS_ROUGHNESS_FULL, true)).toBe(1);
@@ -359,6 +551,34 @@ describe('binding the probes', () => {
     }
     expect(glossWeight((GLOSS_ROUGHNESS_FULL + GLOSS_ROUGHNESS_NONE) / 2, true)).toBeCloseTo(0.5, 6);
     expect(GLOSS_ROUGHNESS_NONE).toBeGreaterThan(GLOSS_ROUGHNESS_FULL);
+  });
+  // Task studio-baked-gi-visual-uplift-20261115-004324-01
+  it('a pane\'s face-on reflectance (params.z) is the tuning value while probes are bound and 0 with none; syncReflectionTuning re-applies it', () => {
+    const v = new ReflectionProbeVolume(fakeProbes({colors: [[1, 1, 1]]}));
+    const none = new ReflectionProbeVolume({...fakeProbes({colors: [[1, 1, 1]]}), count: 0, meta: new Float32Array(12)});
+    try {
+      bindReflectionProbes(null);
+      expect(REFL.params.value.toArray()).toEqual([0, 0, 0, 0]);
+      bindReflectionProbes(v);
+      expect(REFL.params.value.toArray()).toEqual([1, 1, GLASS_PANE_F0, 0]);
+      REFLECTION_TUNING.paneF0 = 0.5; REFLECTION_TUNING.strength = 0.25;
+      expect(REFL.params.value.toArray(), 'a tuning value is applied by a sync or a bind').toEqual([1, 1, GLASS_PANE_F0, 0]);
+      syncReflectionTuning();
+      expect(REFL.params.value.toArray()).toEqual([0.25, 1, 0.5, 0]);
+      for (const off of [none, null]) {
+        bindReflectionProbes(off);
+        expect(REFL.params.value.toArray()).toEqual([0, 0, 0, 0]);
+        syncReflectionTuning(); // (no probes: nothing to apply to)
+        expect(REFL.params.value.toArray()).toEqual([0, 0, 0, 0]);
+      }
+      bindReflectionProbes(v); // a bind applies the tuning as it stands
+      expect(REFL.params.value.toArray()).toEqual([0.25, 1, 0.5, 0]);
+    } finally {
+      REFLECTION_TUNING.paneF0 = GLASS_PANE_F0; REFLECTION_TUNING.strength = 1;
+      bindReflectionProbes(null);
+      v.dispose(); none.dispose();
+    }
+    expect(REFL.params.value.toArray()).toEqual([0, 0, 0, 0]);
   });
 });
 
@@ -410,5 +630,37 @@ describe('the lookup (CPU mirror of the shader)', () => {
     const faint = sampleProbes(B, 2, 1.2, 2, 0, [0, 1, 0], 0.2, 1);
     expect(faint[0]).toBeCloseTo(3 / 255 / 0.05, 3);
     expect(faint[0]).toBeLessThan(0.3);
+  });
+
+  // Task studio-baked-gi-visual-uplift-20261115-004324-01: the probes are scaled by the field's light at the surface — the light
+  // the node's own field sample holds. Under full shading that sample reads the ambient cube (LightFieldNode.shade: 8 samples); a
+  // window pane's second sample, a cell out, is built without it (5 samples: "the FULL reflecting light" above).
+  it('where each class reads in a field with its cube: glass, metal and glazed tile the light of their own full shading; a window pane the plain sample a cell out', () => {
+    const F = bakeRows(cubeRoom(), patternRows()).field, P = withoutCube(F);
+    expect([F.gi !== undefined, P.gi]).toEqual([true, undefined]);
+    const lum = (s: {amb: readonly number[]; dirColor: readonly number[]}) => lum3(s.amb) + lum3(s.dirColor);
+    type V = [number, number, number];
+    // wall faces of the room (its west wall, both sides of the pier), a pane lying flat, one set at an angle
+    const at: {p: V; n: V}[] = [];
+    for (const y of [0.4, 1.3, 2.2, 3.4]) for (const z of [1.3, 3.6, 5.2, 7.7]) at.push({p: [0.5, y, z], n: [1, 0, 0]});
+    for (const y of [0.5, 1.7, 2.9]) for (const z of [3.1, 3.7, 4.3]) at.push({p: [4.5, y, z], n: [-1, 0, 0]}, {p: [5.5, y, z], n: [1, 0, 0]});
+    for (const x of [2.2, 6.4, 8.1]) at.push({p: [x, 0.02, 4.9], n: [0, 1, 0]}, {p: [x, 1.5, 0.5], n: [0, 0, 1]}, {p: [x, 1.1, 4.4], n: [Math.SQRT1_2, 0, Math.SQRT1_2]});
+    let moved = 0, n = 0;
+    for (const {p: [x, y, z], n: nrm} of at) {
+      for (const cls of ['glass', 'metal', 'gloss'] as const) {
+        const got = reflectLookup(cls, F, x, y, z, nrm), plain = reflectLookup(cls, P, x, y, z, nrm);
+        expect(got.local, cls).toBe(lum(sampleField(F, x, y, z, [1, 1, 1], nrm)));
+        expect(plain.local, cls).toBe(lum(sampleField(P, x, y, z, [1, 1, 1], nrm)));
+        expect([got.slot, got.at], cls).toEqual([plain.slot, plain.at]);
+        if (Math.abs(got.local - plain.local) > 0.01 * Math.max(plain.local, 1e-6)) moved++;
+        n++;
+      }
+      // (a flicker circuit's level scales both)
+      expect(reflectLookup('glass', F, x, y, z, nrm, [0.4, 1, 0.7]).local).toBe(lum(sampleField(F, x, y, z, [0.4, 1, 0.7], nrm)));
+      const w = reflectLookup('window', F, x, y, z, nrm), wp = reflectLookup('window', P, x, y, z, nrm);
+      expect([w.slot, w.at]).toEqual([wp.slot, wp.at]);
+      expect(w.local, `window at ${x}, ${y}, ${z}: the shader's sample a cell out has no cube`).toBe(wp.local);
+    }
+    expect(moved / n, 'the cube changes what most of these surfaces are lit by').toBeGreaterThan(0.5);
   });
 });

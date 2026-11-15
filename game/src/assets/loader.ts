@@ -5,6 +5,27 @@ import * as THREE from 'three';
 import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {MODEL_FILES, TEXTURE_FILES, type ModelKey, type TextureKey} from './manifest';
 import {requestSurfaceAnisotropy, type SurfaceRole} from '../render/anisotropy'; // lane FIX (U08)
+import {reflectTagOf, tagReflect} from '../render/reflectTag'; // task baked-gi-visual-uplift-20261115-004324 (lane MIRROR)
+
+/**
+ * Task baked-gi-visual-uplift-20261115-004324 (lane MIRROR): a loaded model's see-through GLASS — a transparent material whose own
+ * name or whose mesh's name says glass (the cooler door, the display case, the extinguisher cabinet's pane ...) — is tagged 'glass'
+ * (render/reflectTag.ts) before anything draws it, like the station's procedural glazing: under Enhanced lighting's reflecting
+ * light it shows the cached probes (an untagged see-through material never does). With Enhanced lighting off the tag changes
+ * nothing that is drawn. Returns how many materials were tagged.
+ */
+export function tagModelGlass(g: GLTF): number {
+  let tagged = 0;
+  g.scene.traverse(o => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      if (!m || !m.transparent || reflectTagOf(m)) continue;
+      if (/glass/i.test(m.name) || /glass/i.test(mesh.name)) { tagReflect(m, 'glass'); tagged++; }
+    }
+  });
+  return tagged;
+}
 
 /**
  * Task mall-playtest-revision-20261031 (lane FIX, U08): the surface each environment texture maps — wall tiles, tunnel lining and
@@ -82,7 +103,7 @@ export class PropModelLibrary {
         if (!p) {
           if (this.sealed) { this.stats.late++; console.warn(`Lazy model fetched mid-level (not behind a loading screen): ${key}`); }
           p = this.load(assetUrl(f.url), fr => { part.set(key, f.bytes * fr * 0.98); report(f.url.split('/').pop() ?? key); })
-            .then(g => { this.models.set(key, g); g.scene.traverse(o => { if ((o as THREE.Mesh).isMesh) this.geometries.add((o as THREE.Mesh).geometry); }); this.stats.fetched++; this.stats.bytes += f.bytes; fetchedBytes += f.bytes; return g; })
+            .then(g => { tagModelGlass(g); /* (lane MIRROR) */ this.models.set(key, g); g.scene.traverse(o => { if ((o as THREE.Mesh).isMesh) this.geometries.add((o as THREE.Mesh).geometry); }); this.stats.fetched++; this.stats.bytes += f.bytes; fetchedBytes += f.bytes; return g; })
             .catch(err => { this.failures.push({key, url: f.url, reason: err instanceof Error ? err.message : String(err)}); return null; })
             .finally(() => this.pending.delete(key));
           this.pending.set(key, p);
@@ -156,7 +177,7 @@ export async function loadAssets(onProgress: (frac: number, label: string) => vo
       done();
     };
     if (e.kind === 'model') {
-      gltf.load(url, g => { models[e.key as ModelKey] = g; done(); }, ev => {
+      gltf.load(url, g => { tagModelGlass(g); /* (lane MIRROR) */ models[e.key as ModelKey] = g; done(); }, ev => {
         if (ev.lengthComputable && ev.total > 0) { loaded.set(e.key, e.weight * (ev.loaded / ev.total) * 0.98); report(e.url.split('/').pop() ?? ''); }
       }, fail);
     } else {

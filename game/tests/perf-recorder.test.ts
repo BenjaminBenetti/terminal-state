@@ -157,6 +157,32 @@ describe('perf recorder core: bounds, caps and disclosed drops', () => {
     expect(r.spikeDetail.frames[0].calls[S.path]).toBe(12);
     expect(r.summary.correlation.with.pathSearches.spikes).toBe(4);
   });
+
+  // Task studio-baked-gi-visual-uplift-20261115-004324-01: the glass mirror's scene draw is a span inside the draw lap (one call a
+  // frame while the station is lit with the mirror; time only with a plane in view)
+  it('a worst frame\'s dominant spans: the draw without the glass mirror\'s share and the mirror on its own; plain render.draw when the mirror took no time', () => {
+    const c = new PerfCapture({worst: 4, spikeDetail: 4});
+    c.start(0, 0);
+    const prof = {on: true, head: 0, capacity: 4, ms: new Float32Array(4 * SPAN_COUNT), calls: new Uint16Array(4 * SPAN_COUNT)};
+    const i = new FrameInput();
+    const long: Record<number, number> = {20: 120, 30: 90};
+    for (let k = 0; k < 40; k++) {
+      i.time += long[k - 1] ?? 16.7;
+      i.cpuMs = (long[k] ?? 10) - 2; i.state = 0; i.flags = F.rendered;
+      prof.head = (prof.head + 1) % prof.capacity;
+      const o = ((prof.head - 1 + prof.capacity) % prof.capacity) * SPAN_COUNT;
+      prof.ms.fill(0, o, o + SPAN_COUNT); prof.calls.fill(0, o, o + SPAN_COUNT);
+      prof.ms[o + S.draw] = 6; prof.calls[o + S.draw] = 1;
+      prof.calls[o + S.mirror] = 1; prof.ms[o + S.mirror] = k === 20 ? 2.5 : 0; // a plane in view in frame 20 only
+      c.frame(i, prof);
+    }
+    c.stop(i.time + 20, 'manual');
+    const w = parse(c).worst.gameplay;
+    expect(w.slice(0, 2).map((f: any) => f.frame)).toEqual([20, 30]);
+    expect(w[0].spans.dominant).toEqual([{name: 'render.draw (excl. mirror)', ms: 3.5, calls: 1}, {name: 'render.mirror', ms: 2.5, calls: 1}]);
+    expect(w[1].spans.dominant).toEqual([{name: 'render.draw', ms: 6, calls: 1}]);
+    expect([w[0].spans.hitPath, w[1].spans.hitPath], 'the mirror is no part of a shot / hit path').toEqual([null, null]);
+  });
 });
 
 describe('perf recorder core: summaries', () => {
@@ -600,7 +626,10 @@ describe('perf recorder: enhanced lighting in the environment block (an additive
     const r = ctl.reportObject() as any;
     expect(r.schemaMinor).toBe(5);
     expect(r.environment.enhancedLighting).toEqual({line: enhancedLightingLine(status), requested: status.requested, active: status.active, pending: true, cacheBackend: 'indexeddb'});
-    expect(r.environment.enhancedLighting.line).toBe('on: bake standard · refl off (Auto skips reflections on a software renderer (On forces them)) · cache miss · change pending');
+    // (task studio-baked-gi-visual-uplift-20261115-004324-01: the line names how the field is shaded — its format is pinned in
+    // enhanced-lighting-settings.test.ts; a record without the `shading` field, as this one and every record from before the field
+    // existed, reads as plain)
+    expect(r.environment.enhancedLighting.line).toBe('on: bake standard plain · refl off (Auto skips reflections on a software renderer (On forces them)) · cache miss · change pending');
     expect(r.environment.warmup).toBe(null); // the other environment keys are as before
     expect(r.environment.display).toMatchObject({quality: g.settings.quality});
   });

@@ -1,151 +1,202 @@
 # Enhanced lighting
 
-Enhanced lighting improves the **existing** load-time station light field and adds **cached local reflections** for
-metal and glass (and, at High, a sheen on glazed wall tile). It is one feature with two settings (task
-studio-baked-lighting-reflections-20261114-050258-01; applied during play, the tile and column materials and the
-per-frame CPU work: task studio-graphics-gpu-materials-toggle-20261114-212239-01):
+Enhanced lighting replaces the station's flat bounce fill with **baked bounce light that has a direction and a
+colour**, lets the **flashlight's beam light its surroundings**, and gives metal, glazed tile and glass **reflections
+of the real station**, with a **live mirror image in the glass the player faces**. It is one feature with two
+settings:
 
 - **Enhanced lighting**: Off / Auto / On (default **Auto**).
 - **Reflections**: Standard / High / Off (default **Standard**; needs Enhanced lighting).
 
-Off is the baseline exactly as before: the same bake, the same shader programs, no extra texture, and the cache is
-never opened. The Reactor always uses the baseline, whatever the settings say.
+Off is the baseline exactly as before: the same bake, the same shader programs, no extra texture, no mirror draw, and
+the cache is never opened. The Reactor always uses the baseline, whatever the settings say.
 
-Out of scope, on purpose: live mirrors, screen-space reflections, reflections of characters or other moving things,
-mirror floors, and any change to the Reactor.
+History: the settings, the probes and the derived cache come from task
+studio-baked-lighting-reflections-20261114-050258-01; applying a change during play, the tile and column materials
+and the per-frame CPU fixes from task studio-graphics-gpu-materials-toggle-20261114-212239-01. That version kept the
+baseline's amount of bounced light and looked like Off in play. Task studio-baked-gi-visual-uplift-20261115-004324-01
+rebuilt the lighting itself: the ambient cube, the flashlight's bounce and the glass mirror below.
 
 ## What it does
 
-### 1. The same light field, baked better
+### 1. Baked bounce light with a direction: the ambient cube
 
-The station light field (`game/src/world/lightField.ts`) is unchanged in format, shader, fog path and GPU memory. Its
-direct light is baked exactly as before. Only the **indirect** part differs:
+The station light field (`game/src/world/lightField.ts`) still bakes its direct light exactly as before. The
+**indirect** part is a **ray gather** (`world/lightFieldGather.ts`): every voxel of the field casts rays over the
+station's fixed architecture (`world/lightScene.ts`: the field's own floors, ceilings and wall faces) and collects
+the light those surfaces send back, over three bounces.
 
-- Baseline: a heuristic fill (`bounce` x a mix of one area's mean light and a local blur).
-- Enhanced: a **ray gather** (`world/lightFieldGather.ts`). Every voxel of the field casts rays over the station's
-  fixed architecture (`world/lightScene.ts`: the field's own floors, ceilings and wall faces) and collects the light
-  those surfaces send back, over several bounces.
-
-What that changes in the picture:
-
-- **Architectural occlusion.** Bounced light does not pass walls. It fades round corners, and an alcove that hides
-  from every lit surface stays dark. The baseline fill gave one area the same fill everywhere.
+- **Occlusion.** Bounced light does not pass walls. It fades round corners, a room lit through its door is lit from
+  the door, and an alcove that hides from every lit surface stays dark.
 - **Material colour.** A surface sends back its own colour: `world/surfaceAlbedo.ts` reads what the builder really
-  drew (`BuiltWorld.drawn`: every floor / ceiling rect and wall face with its finish), so a red quarry-tile floor
-  warms the wall above it and a dark tunnel returns little.
-- **No extra flat ambient: the amount of bounced light is the baseline's.** The gather itself is physical, and a pale
-  Office floor sends back several times what a dark tunnel does; stored as it is, it simply brightened every pale
-  level (measured: +49 % on an Office floor's ceilings). So each level's gathered light is scaled by one factor to
-  total what the baseline's fill totals there: `FieldParams.bounce` x the level's direct light. The gather decides
-  where that light goes and what colour it is, never how much there is. Measured with the finishes the builder drew
-  (seed 93, directly lit surfaces of the main level, against the baseline): Subway floors 0.97x, ceilings 1.04x,
-  walls 0.93x to 1.01x; Office floors 0.97x, ceilings 1.06x, walls 1.03x to 1.09x; Mall floors 0.97x, ceilings
-  1.10x, walls 1.10x, and its dim areas 0.65x to 0.93x.
-- **Flicker circuits.** Each of the three circuits keeps its share of the bounce: when a circuit is off, its
-  bounced light is off with it.
+  drew (`BuiltWorld.drawn`: every floor / ceiling rect and wall face with its finish). A red quarry-tile floor tints
+  the white tile and the counter fronts beside it; dark ballast returns almost nothing.
+- **Direction.** The gathered light is kept per voxel as an **ambient cube**: what a surface facing up, down and
+  each of the four wall directions receives there. A ceiling over a lit floor is lit by that floor, a floor is not
+  lit by itself, and the side of a column that faces a bright wall is brighter than the side that faces a dark
+  tunnel. The earlier version kept one mean per voxel, which is half of why it looked like the baseline.
+- **Flicker circuits.** Each of the three circuits keeps its share of the bounce: when a circuit is off, its bounced
+  light is off with it.
 
-How the field stores it (`lightField.ts` `encodeRowEnhanced`):
+**The bounce is drawn stronger than the finishes strictly give, and that is a stated choice.** Measured on the base
+Subway (seed 93), the station's dark, grimy finishes (floors 0.21 to 0.26, concrete walls about 0.15) send back
+about a seventh of the light that falls on them: 0.11 to 0.16 against about 0.96 of direct light on a floor. That is
+the size of the baseline's fill, so a physically exact bounce reads like Off, which is what the player reported. The
+gather is therefore multiplied by `GATHER_GAIN` = 2.5 and the surface colours it sees get a little more chroma
+(`GATHER_SATURATION` = 1.25). This scales **the bounce alone**, with all of its occlusion, direction and colour: the
+direct light, the hemisphere light and every place without a lit surface nearby are untouched. It is not a flat
+brightness boost and adds no light of its own.
 
-- The direct light is the baseline's, byte for byte in the direction slices: the gathered light never steers the
-  field's one direction. (A first version did, and drew thin bright lines on ceilings wherever the fixtures' own
-  directions cancel.)
-- The gather keeps a mean and a first moment per voxel. The field's bottom layer is what floors read and its top
-  layer what ceilings read, so each stores what that surface receives: the mean plus (minus) twice the moment's
-  height part. A floor is not lit by its own bounce; the ceiling above a lit floor gets that floor's bounce and its
-  colour. The layers between store the mean.
-- The level's scale (above) multiplies all of it; `BakedField.stats.indirectScale` reports it per level.
+Measured on Subway seed 93 (mean irradiance on the main level, baseline to enhanced): floors 0.96 to 1.15, ceilings
+0.43 to 0.75, walls 0.31 to 0.56. On the other levels (seed 93, same gain): ceilings 1.5x to 3.3x, walls 1.4x to
+2.5x, floors 1.1x to 1.35x; no value above the field's range anywhere (`BakedField.stats.cubeClipped` = 0).
+
+How the field stores it (`lightField.ts` `encodeRowEnhanced`, `world/lightFieldNode.ts`):
+
+- The main texels (direct light, its one direction, the fog's light) are the baseline's, byte for byte.
+- The cube lives in **extra slices of the same 3D texture** (`BakedField.gi`): per level slot, six faces, four height
+  layers. A cube texel holds the **complete ambient** of a surface facing that way: the direct light's scattered
+  share plus the gathered face, encoded exactly like a main texel. Storing the whole value (not a difference to the
+  main texel) keeps the filtered lookup accurate between two height layers: about 2 % mean error at mid-gap on
+  Subway seed 93 (`game/tests/light-field-cube.test.ts` pins a bound).
+- **Full shading** (the full field light, `LightFieldLight(full)`): the ambient of a lit pixel is the cube sampled by
+  the surface normal, `sum n_a^2 x face(sign n_a)`: three more filtered fetches of the same texture, no new binding.
+  The directional part is unchanged.
+- **Plain shading** is the baseline's light node on the enhanced field: the cube is left off the GPU. It costs no
+  frame time and shows the gather only through the main texels' mean.
 
 Nothing movable is in the ray scene: no prop, door leaf, character or train. A cell that holds a sight-blocking prop
 is open space to the gather. So nothing that can move, break or leave is frozen into the bounced light.
 
-The enhanced bake costs **load time only**. It adds no frame time and no GPU memory.
+### 2. The flashlight's bounce, live
 
-### 2. Reflection probes for metal and glass
+Most of a base Subway station is dark and lit by the flashlight alone, so baked light changes nothing there. With
+full shading the beam also lights its surroundings (`world/flashBounce.ts`):
+
+- Each frame the beam's axis and a ring of five rays inside its cone are cast over the station's fixed architecture
+  on the CPU (about 8 microseconds). Where a ray lands stands a **virtual light**: a small emitter on the surface
+  with the surface's colour and the flux the game's own spot light puts there. The six lights carry equal shares of
+  the beam; their positions and colours are smoothed over about 70 ms.
+- The GPU adds their sum to the full field light's irradiance: arithmetic on 19 plain uniforms, no texture and no
+  uniform buffer of its own. A dark room is softly lit outside the beam; a red tile wall throws warm light on the
+  floor beside it.
+- On metal, glass and glazed tile the lit patches also show as a soft sheen round the mirror direction
+  (`FLASH_BOUNCE_SHEEN`), weighed by three's own Fresnel and roughness response like the probes.
+- The gain is 2 (`FLASH_BOUNCE_DEFAULTS.gain`): stylised like the baked bounce, and for the same reason.
+
+Limits, by design: the beam passes through everything that is not fixed architecture (glass, props, door leaves,
+characters, the train), so its virtual lights stand on the wall behind such a thing; and virtual lights cast no
+shadows (only the emitter's own normal cuts: nothing reaches the back of the lit surface).
+
+### 3. Reflection probes for metal, glazed tile and glass
 
 `world/reflectionProbes.ts` bakes small environment maps of the **actual generated station** on the CPU:
 
 - Probes sit on a block lattice per level (about 9 m apart at Standard, 7 m at High; the block grows until the
-  station fits the tier's probe limit). Each probe is ray-cast from the same fixed architecture, lit by the
-  **final baked field** (what you see is what reflects), with the working light fixtures drawn in as bright tubes.
+  station fits the tier's probe limit). Each probe is ray-cast from the same fixed architecture, lit by the **final
+  baked field** including the cube face of each surface it sees, with the working light fixtures drawn in as bright
+  tubes.
 - Each probe is stored as four octahedral maps, sharp to blurred, for the roughness response.
 - A per-cell grid holds up to four probe weights and ids. Weights ramp across block borders (a continuous blend, no
   popping) and are zero where a probe cannot reach by walking inside its block: no reflection of the room behind a
-  wall.
-- A cell no probe can walk to takes the probes that reach it across a floor step instead (a track bed below the
-  platform its blocks' probes stand on: the same air). Without this the bed and its rails went without a probe
-  wherever the block lattice happened to fall that way: 4,953 open cells of Subway seed 93 at High, 16 at Standard;
-  now 32 and 0. What is left is walled off from every probe in reach (Mall seed 93: 124 cells at Standard, Office:
-  9; at High 0 and 110).
-- A probe's weights also go one cell into the solid cells beside its cells, so a fitting set into the wall's own
-  cell still reflects the room it faces.
+  wall. A cell no probe can walk to takes the probes that reach it across a floor step (a track bed below the
+  platform its blocks' probes stand on). A probe's weights also go one cell into the solid cells beside its cells,
+  so a fitting set into the wall's own cell still reflects the room it faces.
 - Each probe has a parallax box, so reflections line up with nearby walls instead of sliding with the camera.
 
 `world/reflectionNode.ts` shows them:
 
-- Only **metal and glass** sample the probes. A material is chosen while its program is built: tagged glazing
-  (`render/reflectTag.ts` `tagReflect(material, 'glass')`, or `'window'` for a pane set inside its wall, below), and
-  metal candidates (a metalness map or a non-zero metalness). A metal candidate's fragment looks a probe up only when its real metalness is above 0.2 or its
-  roughness below 0.45. The station's slab, ceiling and tunnel sets are tagged `none`. Floors, painted walls, wood,
-  cloth and characters (skinned meshes) never reflect.
-- **Glazed wall tile** is tagged `gloss` and reflects with the **High** probes only. The tile's authored roughness
-  map already says a tile face is glazed (0.38 to 0.42); the material scales it by 0.7 (`TILE_GLAZE_ROUGHNESS`, in
-  every lighting mode, so the lights' own highlights are tighter too). With High a tile face shows the station by
-  its Fresnel term: faint face-on, clear at a grazing angle. The weight is 1 up to roughness 0.45 and fades to 0 at
-  0.6, so grout and grime do not reflect, and no probe is looked up where the weight is nothing. At Standard the
-  weight is 0 everywhere: a wall costs no probe lookup. Both tiers use the same program (the tier is a uniform), so
-  changing between them compiles nothing.
-- The station **columns** are clad in the existing brushed-steel set (`WorldMaterials` `'pillar'`:
-  metalness 0.65, roughness 0.7 x the set's map, normal strength 1.3) instead of the charcoal trim paint, which read
-  as a black slab. They are metal candidates: with probes they show the lit station and its fixtures. The
-  station's baked light is diffuse only, so a pure metal would be black wherever no probe is in use; the diffuse
-  part that is left keeps the cladding a grey brushed metal there (Enhanced lighting Off, Reflections Off, the
-  renderers Auto leaves reflections off on).
-- three's physical lighting model does the rest: Fresnel, the roughness and metalness response, a metal's base colour.
-- A probe's light is scaled by the baked field's light at the surface (capped). Reflections dim with a flicker
+- A material is chosen while its program is built: tagged glazing (`render/reflectTag.ts`: `'glass'`, or `'window'`
+  for a pane set inside its wall), glazed tile (`'gloss'`) and metal candidates (a metalness map or a non-zero
+  metalness). A metal candidate's fragment looks a probe up only when its real metalness is above 0.2 or its
+  roughness below 0.45. Floors, painted walls, wood, cloth and characters never reflect.
+- **Glazed wall tile** reflects with **either** probe tier (it was High only). The tile's authored roughness map
+  says where a face is glazed; the weight is 1 up to roughness 0.45 and fades to 0 at 0.6, so grout and grime do not
+  reflect. A tile face shows the station by its Fresnel term: faint face-on, clear along a wall.
+- The station **columns** are clad in the brushed-steel set (`WorldMaterials` `'pillar'`: metalness 0.65). With
+  probes they show the lit station and its fixtures; without, the diffuse part keeps them a grey brushed metal.
+- **Glass inside a loaded model** (a see-through material named as glass: a cooler's door, a display case, the
+  extinguisher cabinet's pane) is tagged when the model loads (`assets/loader.ts`): it reflects the probes too.
+- A probe's light is scaled by the baked field's light at the surface (capped), so reflections dim with a flicker
   circuit, in a passing train's shadow and in a dark side room.
-- A tower window's glass sits 0.28 m **inside** its wall's own cell. The field there is the wall's: no light in its
-  texel, and a column that belongs to whichever storey is open at that cell (the lobby level, under an upper
-  storey's outer wall). Read at its own place, a pane got a fifth of the room's light (median 0.20x over the 252
-  window spans of Office seed 93), and at 40 of 756 sampled points another storey's probes. So those panes carry
-  their own tag, `window`: the reflection reads the field and names the probes **one cell out along the normal**,
-  in the room the pane is seen from (0.90x the room's light, the right storey at every point). It costs one more
-  field sample on those panes only; the pane's own diffuse shading is untouched.
-- A station with probes uses a second, session-wide field light (`LightFieldReflectLight`). A station without
-  probes keeps the plain one, so with reflections off every material compiles to exactly the program it always had.
+- A tower window's glass sits inside its wall's own cell; those panes (`'window'`) read the field and name the
+  probes one cell out along the normal, in the room the pane is seen from.
 
-Like the gather, a probe holds no prop, door, character or train.
+Like the gather, a probe holds no prop, door, character or train. That is what the mirror is for.
+
+### 4. The live glass mirror
+
+With reflections on, the **one glass plane the player faces** shows a real mirror image (`render/glassMirror.ts`,
+`world/glassPanes.ts`): the room behind the player with its props, characters, fixtures and signs, and the
+flashlight's light and bounce on them, as they are this frame.
+
+- **Which glass.** The station's flat vertical glass is collected as data when it is built: storefront glazing
+  spans, free-standing panes and the ticket booth's panes, merged per wall. Each frame the plane with the largest
+  on-screen area of intact panes within 12 m is the mirror; a pane that is shot out stops mirroring. A change of
+  plane fades over 0.18 s. No plane in view: nothing is drawn.
+- **How.** The real scene is drawn once more from the eye mirrored in the glass, through an off-axis frustum whose
+  near plane is the glass, into a fixed-size target (1024 x 512 at Standard, 1536 x 768 at High, at the scene
+  pass's sample count). The picture lies in the pane's own coordinates, so a glass fragment finds its texel from
+  its world position alone and the image stays glued to the pane.
+- **No new programs.** The target has the scene pass's exact signature and is drawn at the scene pass's
+  render-context depth, so the mirror draw reuses the station's render objects, programs and pipelines: after the
+  warm-up it builds nothing (`game/tests/glass-mirror-game.test.ts`: the real Game, zero node builds, pipelines
+  and render objects while the mirror draws). Glass itself is skipped in the mirror draw, so the target is never
+  sampled while it is drawn into. The flashlight's shadow map is not drawn a second time.
+- **Instanced pools.** three culls an instanced mesh by one sphere round all its instances, which for a
+  station-wide pool (the columns, the sleepers, every table) is the whole station. The mirror draws such a pool only
+  when one of its instances is inside the mirror's own frustum (the glass to the reach); the warm-up's draw leaves
+  nothing out.
+- **How much a pane reflects.** The station's glass material alone reflects about a tenth face-on, which a lit shop
+  behind the pane washes out. Under the mirror light a pane reflects **0.3 face-on** (`GLASS_PANE_F0`), by the ratio
+  of two Fresnel curves: nothing is added at a grazing angle, where glass mirrors anyway. That is about three times
+  a real double-faced pane, a stated choice so the room reads in the glass from the front.
+- **What decides what you see.** As with real glass, the reflection competes with what is behind the pane. A dark
+  shop in a lit hall mirrors the hall clearly: the opposite shopfronts, their signs (reversed), the ceiling tubes.
+  Point the flashlight into it and the lit interior shows through where the beam lands while the reflection stays
+  around it. A brightly lit shop shows mostly its interior, with the hall's lights and signs faintly over it;
+  along a wall of glass the reflection is strong either way.
+
+Limits, by design: one plane at a time (other glass keeps the probes); no player body or held weapon in the mirror
+(the weapon is its own overlay scene); no volumetric fog along the reflected path (the scene's distance fog only);
+glass does not show in glass; the flashlight's shadow in the mirror is one frame late; curved or tilted glass and
+glass inside models keep the probes; on the direct frame path (the volumetric pass off or failed) glass keeps the
+probes.
 
 ## Off / Auto / On
 
 `world/enhancedLighting.ts` holds the policy (`planEnhancedLighting`); it is a pure function of the two settings, the
 renderer's real capabilities and the level.
 
-| Setting | Field bake | Reflections |
-|---|---|---|
-| **Off** | baseline | none |
-| **Auto** (default) | enhanced, `standard` tier: 16 rays per gathering voxel on a 1 m lattice, 3 bounces | the chosen quality on the **hardware WebGPU** backend when its limits fit the probe textures; none on the WebGL 2 fallback or a software renderer |
-| **On** | enhanced, `high` tier: 32 rays in every cell, 3 bounces (a longer first load) | the chosen quality on any renderer that can run them, also a software one |
+| Setting | Bake | Shading | Reflections and mirror |
+|---|---|---|---|
+| **Off** | baseline | baseline | none |
+| **Auto** (default) | enhanced, `standard` tier: 16 rays per gathering voxel on a 1 m lattice, 3 bounces | **full** (the cube and the flashlight's bounce) on any hardware renderer; plain on a software renderer | the chosen quality, with the mirror, on the **hardware WebGPU** backend when its limits fit the probe textures; none on the WebGL 2 fallback or a software renderer |
+| **On** | enhanced, `high` tier: 32 rays in every cell, 3 bounces (a longer first load) | full on any renderer | the chosen quality, with the mirror, on any renderer that can run them, also a software one |
 
-Reflection quality: **Standard** = 32 px probe maps, at most 192 probes. **High** = 64 px, at most 240 probes (about
-four times the atlas memory). If High needs a larger texture than the renderer allows, Standard is used and the
-status says so.
+Reflection quality: **Standard** = 32 px probe maps, at most 192 probes, a 1024 x 512 mirror. **High** = 64 px, at
+most 240 probes (about four times the atlas memory), a 1536 x 768 mirror. If High needs a larger texture than the
+renderer allows, Standard is used and the status says so.
 
-What Auto reads, and what it never reads:
+Bounded resources, and what happens when one does not fit:
 
-- It reads the backend that actually started (WebGPU or the WebGL 2 fallback), whether it is a software rasterizer
-  (`render/softwareGl.ts`), and the backend's own largest 2D / 3D texture sizes.
-- Auto leaves reflections off on the WebGL 2 fallback and on software renderers because their frame budget is the
-  unknown one, not because they cannot run them: On enables them there. Auto's bake is on everywhere (it costs load
-  time only).
+- The field with its cube is about 3.5 times the baseline field (see Costs). A station whose field with the cube
+  would be deeper than the renderer's largest 3D texture, or larger than 96 MB (`FIELD_CUBE_BYTES`), keeps the
+  enhanced bake and is shaded plain; the status says why.
+- The mirror's target is a fixed size per tier, whatever the display's resolution.
 - A browser does **not** expose total or free video memory. `navigator.deviceMemory` and adapter limits prove
-  nothing about it, so nothing here reads them, and no minimum amount of video memory is claimed. The feature's own
-  GPU memory is small and bounded instead: the reflection textures of one station (see Costs).
+  nothing about it, so nothing here reads them, and no minimum amount of video memory is claimed.
+
+What Auto reads: the backend that actually started (WebGPU or the WebGL 2 fallback), whether it is a software
+rasterizer (`render/softwareGl.ts`), and the backend's own largest 2D / 3D texture sizes. Auto leaves reflections off
+on the WebGL 2 fallback and full shading off on software renderers because their frame budget is the unknown one,
+not because they cannot run them: On enables them there.
 
 The status is always the truth about the **live** station: the settings form's help lines, the perf overlay's
-**Lighting** row, the performance recorder's environment and `__LL.lighting()` say what it was built with, where the
-data came from (cache hit / baked now / baked again) and why something asked for is not in use (for example "Auto
-skips reflections on a software renderer (On forces them)", or the Reactor). A changed setting is applied to the
-live station from the pause menu (below); until it is, the status says the change is pending.
+**Lighting** row, the performance recorder's environment and `__LL.lighting()` say what it was built with (for
+example `auto: bake standard full · refl standard ×187 + mirror · cache hit`), where the data came from and why
+something asked for is not in use. No setting was added: the cube and the flashlight's bounce belong to Enhanced
+lighting, the mirror to Reflections.
 
 URL overrides for one session: `?lighting=off|auto|on`, `?reflections=off|standard|high`.
 
@@ -159,11 +210,12 @@ menu, Continue, station load or reroll is involved.
 - Only the station's **lighting** is rebuilt: the field bake of the new choice (from the derived cache when this
   layout's entry matches, else baked now in the same paced steps, under the pause menu), then one step that swaps
   the station lighting (`StationLighting.replaceSteps`: the flicker clock, the circuit levels and the fixtures
-  carry over; the fog keeps its maps, gas, smoke and clock and only gets the new field).
+  carry over; the fog keeps its maps, gas, smoke and clock and only gets the new field). The glass mirror is made
+  or released with it, and the flashlight's bounce is bound to the new lighting.
 - A changed light set compiles every lit material again, so the same **blocking warm-up** as a quality change
-  follows. No frame is drawn meanwhile. **Resume**, the two choices and the quality choice are held, and the pause
-  line says what is being done ("Rebuilding this station's lighting: bounced light…", "…: reflections…", then the
-  warm-up's own progress). A new game, Continue, Retry and travel wait for it, as for any warm-up.
+  follows; its hidden frames also draw the mirror once. No frame is drawn meanwhile. **Resume**, the two choices and
+  the quality choice are held, and the pause line says what is being done. A new game, Continue, Retry and travel
+  wait for it, as for any warm-up.
 - The world, its seed and random stream, enemies, loot, identities, the player, the inventory and the save are not
   touched. The replaced field and probe textures are released after the warm-up; render objects that outlive the
   swap re-read their texture bindings (`render/bindingRefresh.ts`).
@@ -171,168 +223,166 @@ menu, Continue, station load or reroll is involved.
   "The change could not be applied (reason): the station keeps this lighting." A failure after the swap leaves the
   baseline lighting, and the status says baseline. A failed plan is not retried until the choice changes again.
 - A lost device or a station replaced meanwhile ends the rebuild without touching the new station.
-- Between two stations (the train is in the tunnel: the station left is gone, the next one is not built) and inside
-  a transition nothing is rebuilt: the next station's load applies the choice, and a pause that outlives the
-  transition applies it then. The status says "Not applied yet" meanwhile.
-- While it runs the status keeps saying what the station is still lit by, and the new lighting from the swap on.
-- Switching Reflections between Standard and High with a cached bake is the cheapest change (the probes only); Off
-  to On is the most expensive (the high bake, the probes and every lit program).
+- Between two stations and inside a transition nothing is rebuilt: the next station's load applies the choice, and a
+  pause that outlives the transition applies it then.
+- There is one session-wide field light per combination that was ever used (plain or full, with probes or without,
+  with the mirror or without), so going back to a combination used before compiles nothing new.
 
 ## The derived cache
 
 Baked results are stored outside the save, in IndexedDB (`core/derivedCache.ts`, database
 `terminal-state.derived.v1`): at most 48 entries or 96 MiB, least recently used evicted first, compressed where the
-browser has `CompressionStream`. One entry per station and settings combination holds the gathered light and, when
-probes were baked, the probe atlas, grid and metadata. Stored sizes measured in Firefox (seed 93, compressed):
-Subway 5.2 MB without reflections, 6.4 MB with Standard, 9.1 MB with High; Office 4.3 / 5.2 MB; Mall 3.9 / 4.9 MB.
+browser has `CompressionStream`. One entry per station and settings combination holds the gathered light (the cube
+rows, 16 bits a value) and, when probes were baked, the probe atlas, grid and metadata. Stored size measured in
+Firefox: 5.3 MB compressed for a Subway station at On with Standard reflections (seed 19; 10.0 MB before
+compression).
 
 **Keys.** An entry is found by an **address**: a content hash (`core/contentHash.ts`) of the realized layout (every
-level's cells, floor and ceiling heights, sight blockers, ramps), the fixtures, the bake parameters, the tier names
-and the data versions. It is never the seed alone.
+level's cells, floor and ceiling heights, sight blockers, ramps), the fixtures, the bake parameters, the tier names,
+the shading and the data versions. It is never the seed alone.
 
 **Validation.** An entry is only **used** when the digest of the real inputs matches the digest stored with it:
 
-- for the gathered light: the tier's numbers, the column geometry, the direct light the bake just made (so every
-  fixture, tint, power and flicker state), and the surface colours the builder really drew;
+- for the gathered light: the tier's numbers, the gain and saturation, the column geometry, the direct light the
+  bake just made (so every fixture, tint, power and flicker state), and the surface colours the builder really drew;
 - for the probes: all of the above, the final field's bytes, the fixtures and the reflection tier.
 
 So the cache cannot serve stale lighting after a generator, material, fixture or parameter change: the address finds
 an entry, the digest decides. A mismatch is reported as "baked again" and the entry is replaced. Changing the gather
-or probe code itself needs a version bump (`DERIVED_LIGHTING_VERSIONS` in `world/enhancedLightingRuntime.ts`). The
-versions are part of the address, so a bump is a full miss for every station: both parts are baked again, and the
-old entries are never read again and leave by eviction.
+or probe code itself needs a version bump (`DERIVED_LIGHTING_VERSIONS` in `world/enhancedLightingRuntime.ts`; this
+rebuild bumped all three, so every entry of the earlier version is a miss and leaves by eviction).
 
 **What it can never do.** The cache holds derived data only. Nothing in it is read by the generator, the save or the
 campaign. A hit, a miss, a cleared cache, a full disk or a browser without IndexedDB (the cache then lives in memory
 for the session, and the status says so) give the same station, loot, identities, cargo and travel: only the load
-time differs. The settings form shows the cache's size and has a **Clear lighting cache** button.
+time differs. The settings form shows the cache's size and has a **Clear lighting cache** button. The mirror and the
+flashlight's bounce are live and cache nothing.
 
 ## Lifecycle
 
 - `Game.prepareSection` (behind the loading screen, or during the ride): `EnhancedLightingRuntime.prefetch` hashes
   the address in pieces and reads the entry.
 - `Game.buildSectionSteps`, step `lighting`: `EnhancedLightingRuntime.bakeSteps` runs in the same paced build steps
-  as the baseline bake (`core/pacedBuild.ts`), then `StationLighting.steps` gets the field and the probes.
+  as the baseline bake (`core/pacedBuild.ts`); `StationLighting.steps` gets the field, the probes, the shading, the
+  mirror choice and what the flashlight's bounce traces; `Game.syncGlassMirror` makes or releases the mirror.
+- Each frame: `FLASH_BOUNCE.update` after the player light moved; `GlassMirror.select` picks the plane; the mirror
+  is drawn right before the scene pass, inside the frame's one scene-matrix update.
 - A station swap (travel, Retry, Load last save, Continue) binds the new station's textures first and retires the
-  old ones afterwards, like the light field. A changed probe texture makes every render object re-read its texture
-  bindings (`render/bindingRefresh.ts`), so parts that outlive the station (the parked car, the held weapon) follow.
-- Off and the Reactor return nothing from `bakeSteps`; `StationLighting` then bakes the baseline as before.
+  old ones afterwards. The mirror's planes are dropped at teardown and set again for the next station.
+- Off and the Reactor return nothing from `bakeSteps`; `StationLighting` then bakes the baseline as before, the
+  bounce is unbound and no mirror exists.
 - A changed choice in the pause menu rebuilds the live station's lighting in place (*Changing the settings during
   play*).
 
 ## Costs
 
-GPU memory of the reflections for one station (atlas RGBA16F + grid RGBA8 + a small float metadata texture); the
-enhanced field itself adds none:
+GPU memory for one station (seed 93). The field is one RGBA8 3D texture; the cube is extra slices of it:
 
-| Station (seed 93) | Standard | High |
-|---|---|---|
-| Subway | 187 probes, 5.7 MiB | 210 probes, 16.7 MiB |
-| Office | 155 probes, 6.1 MiB | not measured |
-| Mall | 178 probes, 4.7 MiB | not measured |
-
-Main-thread bake time of the lighting step, measured in **Firefox 158 on the studio pod** (one run each, in a
-private harness page of the game's own modules; a shared server CPU, not a player's machine). The bake is CPU work,
-so the software renderer of that pod does not change it:
-
-| Station (seed 93) | Auto (Standard bake, no reflections) | On + Standard reflections | On + High reflections | cache hit |
+| Station | Field, baseline or plain | Field with the cube (full shading) | Probes, Standard | Probes, High |
 |---|---|---|---|---|
-| Subway | 1.0 s (gather 0.5 s) | 2.9 s (gather 2.2 s, probes 0.2 s) | 3.6 s (probes 0.7 s) | 0.5 s |
-| Office | not measured | 2.8 s (gather 1.8 s, probes 0.2 s) | not measured | 0.8 s |
-| Mall | not measured | 2.3 s (gather 1.5 s, probes 0.2 s) | not measured | 0.7 s |
+| Subway | 9.5 MB | 33.2 MB | 187 probes, 5.7 MiB | 210 probes, 16.7 MiB |
+| Office | 13.2 MB | 45.4 MB | 155 probes, 6.1 MiB | not measured |
+| Mall | 5.8 MB | 19.3 MB | 178 probes, 4.7 MiB | not measured |
+| Skyways | 11.1 MB | 39.0 MB | not measured | not measured |
+| Bunker | 3.9 MB | 13.5 MB | not measured | not measured |
+| Market | 0.7 MB | 2.6 MB | not measured | not measured |
 
-A cache hit is the unchanged direct bake plus about 0.1 s of hashing: what Off costs, nearly. In Node on the same pod
-the same bakes took: Subway seed 4242 Off about 0.6 s, Auto 1.4 to 1.7 s, On + High reflections about 4.7 s. The
-work is cut into paced build steps of a few milliseconds (the longest enhanced step measured in Node was about
-35 ms; the unchanged direct bake has steps of 35 to 60 ms).
+The mirror's target (colour and depth, 4x MSAA): about 29 MB at Standard and 66 MB at High, whatever the display's
+resolution. On the largest station measured (the Office) the feature's own video memory is about 70 MB at Standard
+(32 MB of cube, the mirror, the probes) and about 115 MB at High.
 
-Frame cost: the enhanced field has none (same texture, same shader). A reflective fragment adds one filtered and
-one unfiltered grid fetch, and per probe that weighs in (one in a block's core, up to four at a corner) three
-texel loads and two atlas samples; a tower window pane also samples the field a second time. A glazed tile
-fragment pays the same per probe, at High only.
+Bake time of the lighting step on the main thread, cut into paced build steps of a few milliseconds. In Node on the
+studio pod, the Standard gather (Auto): Subway 1.4 s, Office 1.3 s, Mall 0.9 s, Skyways 1.3 s, Bunker 1.1 s, Market
+0.3 s. In Firefox 158 on the same pod (a shared server CPU, other work running), On with Standard reflections on
+Subway seed 93: 4.2 s in all (gather 3.2 s, probes 0.2 s); on seed 19: 2.9 s (gather 2.1 s). A cache hit skips the
+gather and the probe capture.
 
-Main-thread cost per frame. One real-player recording exists (Chrome 157, WebGPU on an AMD RDNA4 card, 3456 x 1944,
-Skyways, On + High, 120 s): the main thread was the limit, not the GPU: about 16 ms of CPU a frame, 14 ms of it in
-the draw submit, against about 7 ms of GPU time. The bake was not part of it (3.3 s, once, at the load). Two causes
-found from it were this feature's and are fixed:
+Frame cost:
 
-- three r186 gives every `.load()` / `.sample()` of a uv-less texture node its own uv-transform matrix: a mat3
-  uniform, a multiply in the shader and an update per object, per pass, per frame. The probe table is fetched 48
-  times in a reflecting material; with the decay and light-occlusion lookups that was about 27 such updates per drawn
-  object on average. `render/textureFetch.ts` makes those lookups without the matrix (these textures are never
-  transformed). In the real Game in Node (Skyways, On + High, the same resolution, a no-op device; the same script
-  on the code before and after) the per-object texture updates fell from about 28 to about 3 per drawn object, and
-  in a CPU profile of 240 frames three's per-object node updates from 3.0 to 2.2 ms a frame (the texture updates
-  in it from 0.74 to 0.16 ms), which is what Off spends there (2.0 to 2.2 ms). Off itself is unchanged within the
-  spread between two runs. On WebGL2 a lookup keeps its per-object update (three's flip-Y uniform there); the mat3
-  and its multiply go on both.
-- three keeps a flat copy of the shader text on every node-builder state. After a load that was 134 M characters
-  for 23 M distinct ones, about 118 MB of duplicate strings in the JS heap that every full garbage collection had
-  to walk. `render/shaderTextShare.ts` points the states at the program maps' own strings. With both changes the
-  live JS heap in the same runs fell from about 540 to about 320 MB (On + High) and from about 420 to about 270 MB
-  (Off).
+- **Full shading**: three more filtered fetches of the field texture per lit pixel. No new texture, sampler or
+  uniform buffer.
+- **The flashlight's bounce**: six small light sums per lit pixel on plain uniforms; about 8 microseconds of CPU a
+  frame for the trace.
+- **A reflective fragment**: one filtered and one unfiltered grid fetch, and per probe that weighs in (one in a
+  block's core, up to four at a corner) three texel loads and two atlas samples. Glazed tile now pays that at
+  Standard too, where its weight is not zero.
+- **The mirror**: one more draw of the part of the scene the mirrored eye sees, into its fixed-size target, only
+  while a pane covers at least 1.5 % of the screen within 12 m. It is the feature's one real main-thread cost. In
+  the real Game in Node (a validating no-op device, Subway, 2.2 m from a storefront, flashlight on) a frame
+  submitted about 140 draws for the mirror next to about 151 for the scene pass and 71 for the flashlight's shadow:
+  while a pane is in view the frame's draw submissions grow by about two thirds, and three's own submit path took
+  about 12.7 ms for the mirror next to about 15.5 ms for the scene pass and shadow. (Leaving out instanced pools
+  with no instance in the mirror's view took it there from about 170 draws and 15.4 ms.) Away from glass, and
+  with Reflections or the feature off, the mirror draws nothing. It builds no program, pipeline or render context,
+  and it draws no second shadow map. These are counts and Node timings of three's submit path, not frame times: no
+  frame rate is claimed from them, and the cost on a player's hardware is not measured.
+- **Warm-up**: a lit material's program with full shading takes about a tenth more CPU to build (Node, validating
+  device, Auto: about 100 ms a material against 89 ms before; Off 74 against 70), at a station load and when a
+  lighting choice is applied.
 
-Node numbers are relative (a no-op device has no driver or GPU-process cost): they say the work is gone, not what
-frame rate a player's machine reaches. The whole frame's time in those runs moved less than it differs between two
-runs of the same code (what is in view differs), so no frame-time gain is claimed from them. What is left of the
-submit is three's per-object refresh, spread about evenly over its change checks, its uniform groups, its bindings
-and the node updates (most of those are the uniforms of the pooled lights), with no single cost standing out.
-`docs/performance-recorder.md` explains how to record the frame rate on a real machine; the recorder's environment
-block includes the lighting status.
+Main-thread fixes of the previous task that still hold: per-object texture-matrix updates avoided through
+`render/textureFetch.ts` (the cube's fetches and the mirror's lookup use it too), and shared shader text
+(`render/shaderTextShare.ts`).
 
-Shader bindings: a reflective material binds three more sampled textures and no uniform buffer more. In the real
-game on the validating WebGPU device, the worst shader stage of a Market station with reflections had 12 uniform
-buffers (the fog march, unchanged), 12 sampled textures and 11 samplers (a glazed tile or a column: its own maps
-plus the three); WebGPU's default limits are 12 / 16 / 16 (`game/tests/enhanced-lighting-game.test.ts` asserts
-this for every compiled module).
+Shader bindings: a reflective material binds three more sampled textures and no uniform buffer more; glass under the
+mirror light binds the mirror's texture as a fourth. The cube adds no binding (it is the field texture). In the real
+game on the validating WebGPU device, every compiled module stays inside WebGPU's default limits of 12 uniform
+buffers, 16 sampled textures and 16 samplers (`game/tests/enhanced-lighting-game.test.ts` asserts this for every
+compiled module).
 
 ## Known limits
 
-- Glass inside a prop's model is not tagged: a see-through pane there does not reflect (a part with metalness
-  does, as metal).
+- **Every picture of this feature comes from software rasterizers** (Firefox WebGL 2 on llvmpipe, through the game's
+  real volumetric frame path). They show what is drawn, never a frame rate. Firefox WebGPU on lavapipe dies in the
+  volumetric pass on the studio pod, so WebGPU is covered by the Node tests on a validating device, not by pictures.
+- The bounce's strength is a stylised choice (above). Pale levels gather more per unit of direct light than the
+  Subway: their ceilings and walls gain the most.
+- Auto on a software renderer or the WebGL 2 fallback looks closer to Off than to On: plain shading or no
+  reflections (the status says which and why).
+- The flashlight's bounce passes through glass and movable things and casts no shadows.
+- The mirror: one plane at a time; no player body or weapon; no volumetric fog in the reflection; a brightly lit
+  interior behind a pane leaves only the hall's lights and signs visible in it face-on.
+- Glass inside a model, curved glass and tower windows reflect the probes, not a live image.
 - A `virtual` light source (one with no tube) is not drawn into a probe; its light on the surfaces is.
 - Metal set inside a wall's own cell (window frames and mullions, a shutter) reads the field of that cell like any
-  surface there: its reflection is dimmer than the room's, and under an upper storey's outer wall it can be the
-  storey below's. Only the panes read a cell out.
-- Open cells walled off from every probe in reach get no reflection (the counts above).
-- A cell that takes a probe across a floor step is scaled by its own light against the probe's place, like every
-  reflection. A dark track bed under a platform probe therefore reflects little: in Subway seed 93 the rails in
-  view gain less at High (their probes stand on the platform) than at Standard (their probes stand in the bed),
-  and next to nothing at either. More probes at High do not make every surface reflect more.
-- Travelling between a station with probes and one without (the Reactor, or reflections unavailable) recompiles
-  once the materials of what outlives a station (the held weapon, the parked car): the scene's field light is
-  the other one.
-- Glazed tile reflects at High only, and a dielectric's reflection is faint face-on by its physics: the sheen
-  shows along a wall, not on the tile in front of the player.
-- A column is as dark as what it mirrors: facing an unlit stretch of the station it is a dark steel, not a bright
-  one. Without probes it only has its diffuse part and the nearby lights' own highlights.
-- The frame-cost fixes are measured in Node and not yet on a real GPU (see Costs). Every picture of this feature
-  comes from software rasterizers.
-- What the recording showed and this does not change: three refreshes every drawn object's uniforms every frame
-  (about 90 update nodes per object after the fix, most of them the pooled lights'), and programs first needed
-  during play are built on the main thread when the background compile is starved by frames that are already over
-  budget.
+  surface there: its reflection is dimmer than the room's.
+- Open cells walled off from every probe in reach get no reflection.
+- A column is as dark as what it mirrors: facing an unlit stretch of the station it is a dark steel. Without probes
+  it only has its diffuse part and the nearby lights' own highlights.
+- Travelling between stations lit by different field lights (for example into the Reactor) recompiles once the
+  materials of what outlives a station (the held weapon, the parked car).
+- What an earlier recording showed and this does not change: three refreshes every drawn object's uniforms every
+  frame, and programs first needed during play are built on the main thread when the background compile is starved.
 
 ## Tests
 
-- `game/tests/light-gather.test.ts`: occlusion, colour, energy, flicker shares, determinism, no movable props.
-- `game/tests/reflection-probes.test.ts`: placement, weights (walked, across a floor step, into the wall's cell),
-  capture, fixtures, levels, the atlas.
-- `game/tests/reflection-node.test.ts`: which materials reflect (metal, glass, window, gloss), both shader backends,
-  binding counts, the High-tier tile weight, the lookup.
-- `game/tests/texture-fetch.test.ts`, `game/tests/shader-text-share.test.ts`: the two per-frame / heap fixes.
-- `game/tests/station-pillar-material.test.ts`: the columns' material on a Subway station and the Office's station
-  storey.
-- `game/tests/lighting-live-apply.test.ts`: the real Game on a validating WebGPU device: a change applied from the
-  pause menu (only the lighting rebuilt, the station and the save conserved, the status, a failed bake).
-- `game/tests/reflection-window.test.ts`: every window span of a generated Office: the slot, light and probes a
-  pane reads, against the plain glass rule.
-- `game/tests/enhanced-lighting-policy.test.ts`: what Off / Auto / On plan for each kind of renderer, the reasons,
-  the texture-size fallbacks, the bounded tiers.
-- `game/tests/enhanced-lighting-runtime.test.ts`: Off / Reactor, miss / hit / stale / cleared / unavailable, what
-  the bake may never touch, capabilities and reasons, the station lighting with and without probes.
+- `game/tests/light-gather.test.ts`: the gather as an ambient cube: direction, colour, occlusion, energy, flicker
+  shares, 16-bit rows, determinism, no movable props.
+- `game/tests/light-field-cube.test.ts`: the cube in the field: layout, the complete-ambient encoding, sampling by
+  the normal, the between-layers bound on Subway seed 93, downsampling, `withoutCube`.
+- `game/tests/lighting-node.test.ts`: the plain and full field lights' programs on both shader backends (three more
+  field samples, no texture or buffer more), parity with the CPU sampler.
+- `game/tests/flash-bounce.test.ts`: the virtual lights' flux, colours, smoothing, the shader's sum against the CPU
+  mirror, no allocation.
+- `game/tests/reflection-probes.test.ts`: placement, weights, capture with and without the cube, fixtures, levels,
+  the atlas.
+- `game/tests/reflection-node.test.ts`: which materials reflect (metal, glass, window, gloss), glazed tile at either
+  tier, the full and mirror variants of the reflecting light, the pane reflectance, binding counts.
+- `game/tests/glass-panes.test.ts`: the station's glass planes, merging, a broken pane.
+- `game/tests/glass-mirror.test.ts`: the reflection geometry, the window, clipping, selection and sight (the booth),
+  shader parity, the draw's state, which instanced pools a draw leaves out.
+- `game/tests/glass-mirror-game.test.ts`: the real Game on a validating WebGPU device: nothing built while the
+  mirror draws (also when a pool it left out comes into view), one shadow draw a frame, no texture read while
+  written, every pool answer against the test's own frustum, Off has none of it.
+- `game/tests/enhanced-lighting-policy.test.ts`: what Off / Auto / On plan for each kind of renderer (shading,
+  reflections, the mirror), the reasons, the texture-size fallbacks, the bounded tiers.
+- `game/tests/enhanced-lighting-runtime.test.ts`: Off / Reactor, miss / hit / stale / cleared / unavailable, the
+  cube's fallbacks with their reasons, the bounce's binding, what the bake may never touch.
 - `game/tests/enhanced-lighting-game.test.ts`: the real Game on a validating WebGPU device: binding limits, death
   and reload, Off and back.
-- `game/tests/enhanced-lighting-settings.test.ts`: the settings, their form rows (applying / failed / pending), the
-  cache line and diagnostics.
-- `game/tests/content-hash.test.ts`, `game/tests/derived-cache.test.ts`: the hash and the cache.
+- `game/tests/lighting-live-apply.test.ts`: a change applied from the pause menu (only the lighting rebuilt, the
+  station and the save conserved, the status, a failed bake).
+- `game/tests/enhanced-lighting-settings.test.ts`: the settings, their form rows, the cache line and diagnostics.
+- `game/tests/reflection-window.test.ts`, `game/tests/station-pillar-material.test.ts`,
+  `game/tests/texture-fetch.test.ts`, `game/tests/shader-text-share.test.ts`, `game/tests/content-hash.test.ts`,
+  `game/tests/derived-cache.test.ts`: unchanged parts.

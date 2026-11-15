@@ -1,23 +1,27 @@
 // Task studio-baked-lighting-reflections-20261114-050258-01: ENHANCED LIGHTING — the contract, the capability policy and the status text.
 //
-// Enhanced lighting is two things, both made from the REALIZED station (never from its seed) and both cached as derived data outside
-// the save (core/derivedCache.ts):
-//  - the EXISTING load-time light field (world/lightField.ts) baked better: the heuristic bounce fill is replaced by a ray-gathered,
-//    material-coloured indirect term with real architectural occlusion (world/lightFieldGather.ts). Same texture format, same shader,
-//    same fog path, same GPU memory: it costs load time only, never frame time;
-//  - cached local reflection probes for metal and glass (world/reflectionProbes.ts, world/reflectionNode.ts): small prefiltered maps
-//    ray-cast on the CPU from the station's fixed architecture, its baked light and its fixtures. No movable prop, character or train is
-//    in them; no mirror, no screen-space reflection.
+// Enhanced lighting is made from the REALIZED station (never from its seed); what is baked is cached as derived data outside the save
+// (core/derivedCache.ts). Task studio-baked-gi-visual-uplift-20261115-004324-01 rebuilt it for a result that shows:
+//  - the load-time light field (world/lightField.ts) baked with a ray-gathered, material-coloured, multi-bounce indirect term with
+//    real architectural occlusion (world/lightFieldGather.ts), kept per voxel as an AMBIENT CUBE (what a floor, a ceiling and the
+//    four wall orientations there receive) and — FULL shading — read by the surface normal: three more filtered fetches of the same
+//    3D texture per lit pixel. PLAIN shading is the baseline's light node on the enhanced field: no frame cost;
+//  - with full shading, the FLASHLIGHT'S BOUNCE, live (world/flashBounce.ts): a few virtual lights where the beam lands, coloured by
+//    what it lands on — the only light there is in most of a station;
+//  - cached local reflection probes for metal, glazed tile and glass (world/reflectionProbes.ts, world/reflectionNode.ts): small
+//    prefiltered maps ray-cast on the CPU from the station's fixed architecture, its baked light and its fixtures;
+//  - on top of the probes, a LIVE GLASS MIRROR (render/glassMirror.ts): the real scene drawn once more from behind the glass plane
+//    the player faces — props, characters, the flashlight's light and its bounce.
 //
 // This module is a LEAF (no three, no DOM): the settings store, the menu, the game and the tests share it.
-//  - Off  = today's baseline: the unchanged bake, the unchanged light node, no cache access, no extra texture or shader.
-//  - Auto = enhanced where it is supported and cheap: the bounded 'standard' bake everywhere it applies (it has no frame cost), and
-//           reflections only on the hardware WebGPU backend when its real limits fit the probe textures (the WebGL 2 fallback and
-//           software renderers get the bake alone: their frame budget is the unknown one).
-//  - On   = the manual opt-in: the 'high' bake, and reflections on any renderer that can run them (also a software one).
+//  - Off  = the baseline: the unchanged bake, the unchanged light node, no cache access, no extra texture or shader.
+//  - Auto = everything a hardware renderer does cheaply: the 'standard' bake and full shading on any hardware backend; reflections
+//           and the mirror on the hardware WebGPU backend when its real limits fit them. A software renderer gets the bake with
+//           plain shading (its frame budget is the unknown one), the WebGL 2 fallback no reflections.
+//  - On   = the manual opt-in: the 'high' bake, full shading, reflections and the mirror on any renderer that can run them.
 // What a browser does NOT tell us is never guessed: total / free VRAM is not exposed, and navigator.deviceMemory or an adapter limit
-// proves nothing about it — so nothing here reads them. The feature's own GPU memory is small and bounded instead (see
-// REFLECTION_TIERS: a few MB of textures), and what could not be used is reported with its reason (EnhancedLightingStatus).
+// proves nothing about it — so nothing here reads them. The feature's own GPU memory is bounded instead (the field's cube and
+// FIELD_CUBE_BYTES, REFLECTION_TIERS, MIRROR_TEXELS), and what could not be used is reported with its reason (EnhancedLightingStatus).
 
 export type EnhancedLightingMode = 'off' | 'auto' | 'on';
 export type ReflectionQuality = 'off' | 'standard' | 'high';
@@ -85,15 +89,37 @@ export interface LightingCapabilities {
   halfFloatLinear: boolean;
 }
 
+/** How an enhanced field is shaded (see the module doc). */
+export type FieldShading = 'plain' | 'full';
+
 /** What a station is built with. null = that part is the baseline; the reason says why when it was asked for. */
 export interface EnhancedLightingPlan {
   gi: GiTier | null;
+  /** 'full' only with `gi`. */
+  shading: FieldShading;
   reflections: ReflectionTier | null;
+  /** The live glass mirror, with `reflections` only. */
+  mirror: boolean;
   giReason: string | null;
+  /** Why the shading is plain although the bake is enhanced. */
+  shadingReason: string | null;
   reflectionsReason: string | null;
 }
 
+/** The plan of a station that is not enhanced. */
+export const baselinePlan = (giReason: string | null = null, reflectionsReason: string | null = null): EnhancedLightingPlan =>
+  ({gi: null, shading: 'plain', reflections: null, mirror: false, giReason, shadingReason: null, reflectionsReason});
+
+/**
+ * Most bytes of a station's field texture WITH its ambient cube (RGBA8, 3D). A larger station keeps the enhanced bake and is
+ * shaded plain (the cube is left out). The six stations measured (seed 93): 3 to 45 MB.
+ */
+export const FIELD_CUBE_BYTES = 96e6;
+/** Texels of the glass mirror's target per reflection tier (width x height; drawn at the scene pass's sample count). */
+export const MIRROR_TEXELS: Readonly<Record<ReflectionTier['id'], readonly [number, number]>> = {standard: [1024, 512], high: [1536, 768]};
+
 export const REACTOR_REASON = 'not used in the Reactor (its lighting is unchanged)';
+export const SOFTWARE_SHADING_REASON = 'Auto keeps the baseline shader on a software renderer (On uses the full one)';
 export const SOFTWARE_REASON = 'Auto skips reflections on a software renderer (On forces them)';
 export const FALLBACK_REASON = 'Auto skips reflections on the WebGL 2 fallback renderer (On forces them)';
 
@@ -110,11 +136,14 @@ export function reflectionAtlasEdge(t: ReflectionTier): number {
  * capabilities do not show; On asks for everything that can run and says what cannot.
  */
 export function planEnhancedLighting(req: EnhancedLightingRequest, caps: LightingCapabilities, level: {reactor: boolean}): EnhancedLightingPlan {
-  if (req.lighting === 'off') return {gi: null, reflections: null, giReason: null, reflectionsReason: null};
-  if (level.reactor) return {gi: null, reflections: null, giReason: REACTOR_REASON, reflectionsReason: req.reflections === 'off' ? null : REACTOR_REASON};
+  if (req.lighting === 'off') return baselinePlan();
+  if (level.reactor) return baselinePlan(REACTOR_REASON, req.reflections === 'off' ? null : REACTOR_REASON);
   const gi = GI_TIERS[req.lighting === 'on' ? 'high' : 'standard'];
-  if (req.reflections === 'off') return {gi, reflections: null, giReason: null, reflectionsReason: null};
-  const no = (reflectionsReason: string): EnhancedLightingPlan => ({gi, reflections: null, giReason: null, reflectionsReason});
+  // full shading: asked for outright (On), or on any hardware renderer (Auto)
+  const shadingReason = !caps.backend ? 'the renderer is not ready' : req.lighting === 'auto' && caps.software ? SOFTWARE_SHADING_REASON : null;
+  const base = {gi, shading: (shadingReason ? 'plain' : 'full') as FieldShading, giReason: null, shadingReason};
+  const no = (reflectionsReason: string | null): EnhancedLightingPlan => ({...base, reflections: null, mirror: false, reflectionsReason});
+  if (req.reflections === 'off') return no(null);
   if (!caps.backend) return no('the renderer is not ready');
   if (!caps.halfFloatLinear) return no('this renderer cannot filter half-float textures');
   if (req.lighting === 'auto' && caps.software) return no(SOFTWARE_REASON);
@@ -123,9 +152,9 @@ export function planEnhancedLighting(req: EnhancedLightingRequest, caps: Lightin
   if (reflectionAtlasEdge(tier) > caps.maxTextureSize) {
     tier = REFLECTION_TIERS.standard;
     if (reflectionAtlasEdge(tier) > caps.maxTextureSize) return no(`this renderer's largest texture (${caps.maxTextureSize} px) is too small for the probe atlas`);
-    return {gi, reflections: tier, giReason: null, reflectionsReason: `High needs a larger texture than this renderer allows (${caps.maxTextureSize} px): Standard is used`};
+    return {...base, reflections: tier, mirror: true, reflectionsReason: `High needs a larger texture than this renderer allows (${caps.maxTextureSize} px): Standard is used`};
   }
-  return {gi, reflections: tier, giReason: null, reflectionsReason: null};
+  return {...base, reflections: tier, mirror: true, reflectionsReason: null};
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -139,6 +168,11 @@ export interface EnhancedLightingActive {
   /** The field bake: 'baseline' (today's) or the enhanced tier. */
   gi: 'baseline' | GiTier['id'];
   giReason: string | null;
+  /** How the field is shaded ('plain' with the baseline bake; absent in a record from before the field existed: plain). */
+  shading?: FieldShading;
+  shadingReason?: string | null;
+  /** The live glass mirror is part of the station's lighting (it draws only while the volumetric frame path is on). */
+  mirror?: boolean;
   reflections: 'off' | ReflectionTier['id'];
   reflectionsReason: string | null;
   /** 'hit' = read from the derived cache; 'miss' = baked now and stored; 'stale' = an entry existed but its inputs differed (baked again);
@@ -177,14 +211,14 @@ export const REFLECTION_OPTIONS: readonly {value: ReflectionQuality; label: stri
 /** What each choice means, without a station (the form's line before one is built). */
 export function enhancedLightingSummary(mode: EnhancedLightingMode): string {
   return mode === 'off' ? 'Off: the baseline station lighting'
-    : mode === 'on' ? 'On: bounced, material-coloured light baked per station at full quality (a longer first load), and reflections on any renderer'
-      : 'Auto: bounced, material-coloured light baked per station; reflections on a hardware WebGPU renderer';
+    : mode === 'on' ? 'On: bounced, material-coloured light baked per station at full quality (a longer first load) and the flashlight\'s bounce, on any renderer'
+      : 'Auto: bounced, material-coloured light baked per station and the flashlight\'s bounce; reflections on a hardware WebGPU renderer';
 }
 
 export function reflectionsSummary(q: ReflectionQuality): string {
-  return q === 'off' ? 'Off: no cached reflections'
-    : q === 'high' ? 'High: sharper cached reflections of the station on metal and glass, and a sheen on glazed wall tile (more probes, about four times the texture memory)'
-      : 'Standard: cached reflections of the station on metal and glass';
+  return q === 'off' ? 'Off: no reflections of the station'
+    : q === 'high' ? 'High: a live mirror image in the glass you face, sharper cached reflections on metal, glazed tile and other glass (more probes, about four times the texture memory)'
+      : 'Standard: a live mirror image in the glass you face, cached reflections of the station on metal, glazed tile and other glass';
 }
 
 /** A changed choice that the live station does not use yet (see EnhancedLightingStatus.pending). */
@@ -208,7 +242,7 @@ export function describeEnhancedLighting(s: EnhancedLightingStatus): string {
   if (!a) return enhancedLightingSummary(want);
   const now = a.gi === 'baseline'
     ? (a.giReason ? `This station: baseline lighting — ${a.giReason}` : 'This station: baseline lighting')
-    : `This station: enhanced bake (${a.gi}), ${cacheText(a.cache)}`;
+    : `This station: enhanced bake (${a.gi}), ${cacheText(a.cache)}${a.shading === 'plain' && a.shadingReason ? ` — ${a.shadingReason}` : ''}`;
   const note = changeNote(s);
   return note ? `${now}. ${note}` : want === 'off' && a.gi === 'baseline' && !a.giReason ? enhancedLightingSummary('off') : now;
 }
@@ -220,21 +254,21 @@ export function describeReflections(s: EnhancedLightingStatus): string {
   if (!a) return reflectionsSummary(want);
   const now = a.reflections === 'off'
     ? (a.reflectionsReason ? `This station: no reflections — ${a.reflectionsReason}` : 'This station: no reflections')
-    : `This station: ${a.probes} probes (${a.reflections})${a.reflectionsReason ? ` — ${a.reflectionsReason}` : ''}`;
+    : `This station: ${a.mirror ? 'glass mirror, ' : ''}${a.probes} probes (${a.reflections})${a.reflectionsReason ? ` — ${a.reflectionsReason}` : ''}`;
   const note = changeNote(s);
   return note ? `${now}. ${note}` : want === 'off' && a.reflections === 'off' && !a.reflectionsReason ? reflectionsSummary('off') : now;
 }
 
-/** One compact line (perf overlay / recorder / QA): 'off', 'standard · refl high · hit', 'baseline (reason)'. */
+/** One compact line (perf overlay / recorder / QA): 'auto: bake standard full · refl standard ×187 + mirror · cache hit', 'off: baseline · refl off'. */
 export function enhancedLightingLine(s: EnhancedLightingStatus): string {
   const a = s.active;
   if (!a) return `${s.requested.lighting} (no station)`;
-  const gi = a.gi === 'baseline' ? `baseline${a.giReason ? ` (${a.giReason})` : ''}` : `bake ${a.gi}`;
-  const rf = a.reflections === 'off' ? `refl off${a.reflectionsReason ? ` (${a.reflectionsReason})` : ''}` : `refl ${a.reflections} ×${a.probes}`;
+  const gi = a.gi === 'baseline' ? `baseline${a.giReason ? ` (${a.giReason})` : ''}` : `bake ${a.gi}${a.shading === 'full' ? ' full' : ' plain'}`;
+  const rf = a.reflections === 'off' ? `refl off${a.reflectionsReason ? ` (${a.reflectionsReason})` : ''}` : `refl ${a.reflections} ×${a.probes}${a.mirror ? ' + mirror' : ''}`;
   return `${s.requested.lighting}: ${gi} · ${rf}${a.cache !== 'none' ? ` · cache ${a.cache}` : ''}${s.applying ? ' · applying a change' : s.error ? ' · change failed' : s.pending ? ' · change pending' : ''}`;
 }
 
 /** The plan as the `active` fields it would produce (to tell whether a settings change is pending). */
 export function planSignature(p: EnhancedLightingPlan): string {
-  return `${p.gi?.id ?? 'baseline'}|${p.reflections?.id ?? 'off'}`;
+  return `${p.gi ? `${p.gi.id}-${p.shading}` : 'baseline'}|${p.reflections ? `${p.reflections.id}${p.mirror ? '+mirror' : ''}` : 'off'}`;
 }

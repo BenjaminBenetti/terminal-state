@@ -110,6 +110,45 @@ describe('update profiler: on', () => {
     expect(w.spans.find(s => s.name === 'ai.path')!.max).toBeCloseTo(0.4, 4);
   });
 
+  // Task studio-baked-gi-visual-uplift-20261115-004324-01: the glass mirror's own scene draw is a span inside the draw lap
+  it('a spike frame with the glass mirror: the draw is listed without the mirror\'s share and the mirror on its own; with no mirror time it is plain render.draw', () => {
+    useClock();
+    const p = new UpdateProfiler(16);
+    p.startRecording();
+    /** A play frame: input 1 ms, then a draw lap of `draw` ms, `mirror` of them inside the mirror span (null: no mirror, no span). */
+    const drawn = (draw: number, mirror: number | null) => {
+      p.frameBegin();
+      p.lap(S.input); clock += 1;
+      p.lap(S.draw);
+      if (mirror !== null) { p.begin(S.mirror); clock += mirror; p.end(S.mirror); }
+      clock += draw - (mirror ?? 0);
+      p.frameEnd();
+    };
+    drawn(9, 4); // a plane in view
+    drawn(7, 0); // the station is lit with the mirror, no plane in view: one call, no time
+    drawn(5, null); // no mirror at all
+    const r = p.report();
+    expect(r.spikes.map(s => [s.age, +s.ms.toFixed(4)])).toEqual([[2, 10], [1, 8], [0, 6]]); // slowest first
+    const dominant = r.spikes.map(s => s.dominant.map(d => [d.name, +d.ms.toFixed(4), d.count]));
+    expect(dominant[0]).toEqual([['render.draw (excl. mirror)', 5, 1], ['render.mirror', 4, 1], ['input', 1, 1]]);
+    expect(dominant[1]).toEqual([['render.draw', 7, 1], ['input', 1, 1]]);
+    expect(dominant[2]).toEqual([['render.draw', 5, 1], ['input', 1, 1]]);
+    // the span table stays inclusive (the draw lap holds the mirror, which names it as its parent), and counts the mirror's calls
+    const span = (n: string) => r.spans.find(s => s.name === n)!;
+    expect(span('render.draw').max).toBeCloseTo(9, 4);
+    expect(span('render.mirror')).toMatchObject({parent: 'render.draw', count: 2, frames: 2});
+    expect(span('render.mirror').max).toBeCloseTo(4, 4);
+    expect(PARENT[S.mirror]).toBe(S.draw);
+    let laps = 0;
+    for (let id = 0; id < SPAN_COUNT; id++) if (PARENT[id] < 0) laps += p.ms[id]; // (slot 0: the first frame) the mirror is not a lap
+    expect(laps).toBeCloseTo(p.total[0], 5);
+    expect(SPAN_ABOUT['render.mirror']).toBeTruthy();
+    // a window in which the mirror never ran does not list its span
+    p.reset();
+    drawn(5, null);
+    expect(p.report().spans.some(s => s.name === 'render.mirror')).toBe(false);
+  });
+
   it('frames without a world update (menus / warm-up) are not recorded; stop / reset', () => {
     useClock();
     const p = new UpdateProfiler(10);
