@@ -196,6 +196,31 @@ describe('atmosphere API (game.atmosphere, no GL)', () => {
     return {a, scene, camera};
   }
 
+  it('task studio-reactor-glowing-zombies-20261115-013245-01: a light\'s userData.vfScatterGain scales its in-scattering only (the glow lights)', () => {
+    const {a, scene, camera} = rig();
+    const l = station(1);
+    a.setStation(l, null);
+    const sp = l.playerSpawn;
+    camera.position.set(sp.x, 1.6, sp.z);
+    const plain = new THREE.PointLight(0x8cff3c, 4.5, 9, 2), glow = new THREE.PointLight(0x8cff3c, 4.5, 9, 2);
+    glow.userData.vfGlow = true;
+    glow.userData.vfScatterGain = 1.6;
+    plain.position.set(sp.x + 1, 1.2, sp.z);
+    glow.position.set(sp.x - 1, 1.2, sp.z);
+    scene.add(plain, glow);
+    expect(a.addScatterLight(plain)).toBe(true);
+    expect(a.addScatterLight(glow)).toBe(true);
+    a.sync(scene, camera, 1);
+    const pos = a.u.scatPos.array as THREE.Vector4[], col = a.u.scatCol.array as THREE.Vector4[];
+    expect(a.u.scatCount.value).toBe(2);
+    const at = (x: number) => [0, 1].find(k => Math.abs(pos[k].x - x) < 1e-6)!;
+    const cp = col[at(sp.x + 1)], cg = col[at(sp.x - 1)];
+    expect(cg.y / cp.y).toBeCloseTo(1.6, 5);
+    expect(cg.w).toBe(cp.w); // (decay: unchanged)
+    expect(glow.intensity).toBe(plain.intensity); // (its surface light: unchanged)
+    a.dispose();
+  });
+
   it('flare usage: emitter + scatter light packed into the march uniforms, windowed on the station grid; cleared by a new station', () => {
     const {a, scene, camera} = rig();
     const l = station(1);

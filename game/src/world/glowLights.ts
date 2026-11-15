@@ -30,9 +30,12 @@ export const GLOW_LIGHT = {
   /** Lime green (uranium glass): clearly green, distinct from the Reactor core's mint (0x52ff5e) and the gas tint. */
   color: 0x8cff3c,
   /** Candela at full strength; cutoff (m) and decay of three's physical attenuation. */
-  intensity: 7,
+  intensity: 4.5,
   distance: 9,
   decay: 2,
+  /** The fog march's in-scattering of a glow light, relative to its intensity (render/volumetric.ts userData.vfScatterGain): the haze
+   *  around a zombie glows clearly while the surface light stays soft enough not to paint its neighbours' clothes green. */
+  scatterGain: 1.6,
   /** Height of the light above the zombie's feet, x its body scale (about the chest). */
   lift: 1.15,
   /** Only zombies within this range (m) of the eye get a light. */
@@ -51,6 +54,7 @@ export class GlowLight extends FlareLight {
     this.name = 'irradiated-glow';
     this.castShadow = false;
     this.userData.vfGlow = true; // (render/smoke.ts isGlowScatter: the march's reserved glow slots)
+    this.userData.vfScatterGain = GLOW_LIGHT.scatterGain;
   }
 }
 

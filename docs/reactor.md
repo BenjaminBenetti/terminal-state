@@ -733,15 +733,16 @@ radiation damage and Geiger-counter clicks.
   - Per-zombie values are per-object data, so all irradiated bodies share one program. The material has its own tag (`irradiatedSkin`),
     so it never shares an ordinary body's program.
   - The mask loads behind the loading screen of a section that has irradiated zombies. Without it, nothing turns green.
-- **Green light** (`world/glowLights.ts`): a boot-time pool of 4 unshadowed point lights (`GLOW_LIGHT`: lime 0x8cff3c, 7 cd, 9 m
+- **Green light** (`world/glowLights.ts`): a boot-time pool of 4 unshadowed point lights (`GLOW_LIGHT`: lime 0x8cff3c, 4.5 cd, 9 m
   cutoff, decay 2, at chest height). The pool follows the irradiated zombies nearest the eye within 32 m, with 2 m hysteresis and a
   0.35 s fade.
   - Surfaces: the light is occluded by the same per-light line-of-sight window as a flare's (`flareVisibility`), so it never shines
     through a wall or a slab.
   - Fog: each lit light is a scatter light in the march's own reserved glow slots (`SMOKE_LIMITS.glowLights` = 4, beside the 4
     ordinary slots used by flares, fire, the core lights and the beam). So it can never take a flare's slot, or be refused because
-    the core took them. It lights the haze and smoke green but adds no fog or green density. Gas stays the gas field, and ordinary
-    fog stays its colour.
+    the core took them. Its in-scattering is 1.6x its intensity (`userData.vfScatterGain`), so the haze around a zombie glows
+    clearly while the surface light stays soft enough not to paint its neighbours' clothes green. It lights the haze and smoke
+    green but adds no fog or green density. Gas stays the gas field, and ordinary fog stays its colour.
   - Cost: the 4 lights are in every scene from boot at intensity 0, so the light set never changes and the warm-up builds them.
     `GlowLightNode` evaluates a light only where it is on and within its cutoff. An idle pool costs a branch per light per lit
     fragment, and there are no shadow maps. The march's scatter loop is bounded by the 8 slots and gated by the live count. Its

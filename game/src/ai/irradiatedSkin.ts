@@ -36,11 +36,12 @@ export const IRRADIATED_SKIN = {
   gain: [0.5, 1.55, 0.38] as const,
   lift: [0.012, 0.05, 0.01] as const,
   tint: 0.9,
-  /** Emission (linear rgb x strength) at full glow; x (lightFloor + lum x lightGain) of the atlas texel. */
-  emissive: [0.42, 1, 0.2] as const,
-  strength: 1.6,
-  lightFloor: 0.55,
-  lightGain: 1.4,
+  /** Emission (linear rgb x strength) at full glow; x (lightFloor + lum x lightGain) of the atlas texel. Saturated: a brighter or
+   *  whiter mix tone-maps (ACES) to a pale mint instead of radioactive green. */
+  emissive: [0.28, 1, 0.1] as const,
+  strength: 1.3,
+  lightFloor: 0.6,
+  lightGain: 1,
   /** Pulse: emission x (1 - amount + amount x (0.5 + 0.5 sin(t x rate + phase))). */
   pulse: {amount: 0.22, rate: 1.9},
 } as const;

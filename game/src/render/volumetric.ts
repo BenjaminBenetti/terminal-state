@@ -853,7 +853,9 @@ export class VolumetricAtmosphere {
       l.getWorldPosition(this.tmp);
       const layer = this.lightLayer.get(l) ?? n;
       if (this.densityMap) this.refreshWindow(layer, s, this.tmp.x, this.tmp.y, this.tmp.z, time);
-      const k = l.intensity * p.scatterLightScatter;
+      // (task studio-reactor-glowing-zombies-20261115-013245-01: `userData.vfScatterGain` = a light that scatters more in the haze than
+      // its intensity lights surfaces — the irradiated zombies' glow: a soft surface light, a clearly lit haze around it)
+      const k = l.intensity * p.scatterLightScatter * (l.userData?.vfScatterGain ?? 1);
       pos[n].set(this.tmp.x, this.tmp.y, this.tmp.z, l.distance);
       col[n].set(l.color.r * k, l.color.g * k, l.color.b * k, l.decay);
       // task reactor-expansion-20261101 (lane GASLIGHT): `userData.vfOpen` = a light in a big open volume (the Reactor core / coolant glow

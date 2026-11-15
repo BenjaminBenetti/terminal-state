@@ -232,6 +232,8 @@ describe('glow light pool: real, occluded, fog-scattering point lights within a 
     const l = new GlowLight();
     expect(isGlowLight(l) && isFlareLight(l) && l instanceof FlareLight && l instanceof THREE.PointLight).toBe(true);
     expect(isGlowScatter(l)).toBe(true);
+    expect(l.userData.vfScatterGain).toBe(GLOW_LIGHT.scatterGain);
+    expect(GLOW_LIGHT.scatterGain).toBeGreaterThan(1);
     expect(l.castShadow).toBe(false);
     expect(l.intensity).toBe(0);
     const c = new THREE.Color(GLOW_LIGHT.color);
