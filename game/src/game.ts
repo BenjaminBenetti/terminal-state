@@ -1548,7 +1548,8 @@ export class Game {
     // Lane F: enemies block the flashlight beam — marked once per actor in spawnEnemy (iteration 07, Lane Q)
     this.genMs = performance.now() - t0;
     const codes = LEVEL_IDS.map(l => `${levelDisplayName(l, this.run.seeds[l])} ${seedToCode(this.run.seeds[l])}`).join(' · ');
-    $('#seed-line').textContent = `${levelDisplayName(key.level, this.run.seeds[key.level])} · ${sectionLabel(key)}: ${this.layout.name}. Run codes: ${codes} (debug/share only; reloading the page always starts a new run).`;
+    // (task studio-pause-menu-cleanup-20261115-000847-01: the pause menu's Settings → Performance tab; for bug reports)
+    $('#seed-line').textContent = `${levelDisplayName(key.level, this.run.seeds[key.level])} · ${sectionLabel(key)}: ${this.layout.name}. Run codes for bug reports: ${codes}.`;
     const obj = document.querySelector('#objective .obj-title');
     // Task studio-alpha-campaign-foundation-20261102-230708-01 (user: "No ordinary clear-all-zombies objective: default objective says
     // scavenge for resources and return to the train when done"): no kill goal anywhere; the Reactor keeps its real endgame chain.
@@ -2670,8 +2671,8 @@ export class Game {
     this.sfx.setMuted(this.settings.muted);
     const ok = await this.input.lock();
     this.setState(ok ? 'playing' : 'paused');
-    if (!ok) $('#pause .fine').textContent = 'The browser did not capture the mouse — click Resume to try again.';
-    else $('#pause .fine').textContent = 'Combat is frozen while this menu is open.';
+    // (task studio-pause-menu-cleanup-20261115-000847-01: the pause header's status line is empty unless something needs saying)
+    $('#pause .fine').textContent = ok ? '' : 'The browser did not capture the mouse — click Resume to try again.';
   }
 
   private onKey(code: string): void {

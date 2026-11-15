@@ -960,9 +960,20 @@ export interface SettingsFormOptions {
   lightingChanged?: (refresh: () => void) => (() => void) | void;
 }
 
+/**
+ * Task studio-pause-menu-cleanup-20261115-000847-01: the settings form's rows by topic — each row (and its help line) carries
+ * data-group; the pause menu's Settings tabs show one group at a time (ui/pauseMenu.ts). Untagged rows (the store's note) show on
+ * every tab. Help lines that are technical read-outs rather than state or warnings also carry the class `set-detail` (the pause menu
+ * keeps them behind "Show details"; the main menu's dialog shows everything as before).
+ */
+export type SettingsGroup = 'graphics' | 'audio' | 'gameplay';
+
 /** The form's field builders (one store; ids P + id): shared by the Settings and the Controls forms. */
 function formKit(box: HTMLElement, store: SettingsStore, P: string) {
   const d = box.ownerDocument;
+  let group: SettingsGroup | null = null;
+  /** Append rows to the box, tagged with the current group (task studio-pause-menu-cleanup-20261115-000847-01). */
+  const place = (...els: HTMLElement[]) => { if (group) for (const e of els) e.setAttribute('data-group', group); box.append(...els); };
   const label = (text: string, cls?: string) => { const l = d.createElement('label'); if (cls) l.className = cls; l.append(text, ' '); return l; };
   const range = (id: string, text: string, min: number, max: number, step: number, fmt: (v: number) => string, get: (s: Readonly<GameSettings>) => number, set: (v: number) => Partial<GameSettings>) => {
     const l = label(text);
@@ -972,7 +983,7 @@ function formKit(box: HTMLElement, store: SettingsStore, P: string) {
     out.htmlFor.add?.(i.id);
     l.append(i, out);
     i.addEventListener('input', () => store.set(set(Number(i.value))));
-    box.append(l);
+    place(l);
     return (s: Readonly<GameSettings>) => { const v = get(s); if (Number(i.value) !== v) i.value = String(v); out.textContent = fmt(v); };
   };
   const check = (id: string, text: string, key: 'muted' | 'invertX' | 'invertY') => {
@@ -982,10 +993,10 @@ function formKit(box: HTMLElement, store: SettingsStore, P: string) {
     i.id = P + id; i.type = 'checkbox';
     i.addEventListener('change', () => store.set({[key]: i.checked} as Partial<GameSettings>));
     l.append(i, ' ', text);
-    box.append(l);
+    place(l);
     return (s: Readonly<GameSettings>) => { if (i.checked !== s[key]) i.checked = s[key]; };
   };
-  return {d, label, range, check};
+  return {d, label, range, check, place, setGroup: (g: SettingsGroup | null) => { group = g; }};
 }
 
 /** The short note shown only when the stored settings could not be read / saved (both forms). */
@@ -1030,19 +1041,25 @@ export function mountControlsForm(box: HTMLElement, store: SettingsStore, o: Pic
  * Builds the settings controls (view, audio, graphics: everything but the input preferences, which are the Controls form's) into `box`
  * (replacing its children), bound both ways to `store`. Returns an unsubscribe.
  * Ids (P = o.idPrefix): fov, vol, mute, sway, quality (+ -help), res (+ -readout), ao (+ -help), lighting (+ -help), reflections
- * (+ -help), then the store note, lighting-cache and lighting-cache-clear.
+ * (+ -help), then the store note, lighting-cache and lighting-cache-clear. Groups (data-group, SettingsGroup): fov + sway gameplay,
+ * vol + mute audio, quality … lighting-cache graphics; the store note has none (shown with every group).
  */
 export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: SettingsFormOptions): () => void {
   const P = o.idPrefix;
   const vp = o.viewport ?? (() => ({w: globalThis.innerWidth ?? 1280, h: globalThis.innerHeight ?? 720, dpr: globalThis.devicePixelRatio ?? 1}));
   box.replaceChildren();
-  const {d, label, range, check} = formKit(box, store, P);
+  const {d, label, range, check, place, setGroup} = formKit(box, store, P);
   const sync: ((s: Readonly<GameSettings>) => void)[] = [];
   const B = SETTINGS_BOUNDS;
+  // (task studio-pause-menu-cleanup-20261115-000847-01: the rows' topics — Gameplay: view + sway; Audio; Graphics: the rest)
+  setGroup('gameplay');
   sync.push(range('fov', 'Field of view', B.fov.min, B.fov.max, B.fov.step, v => `${v.toFixed(0)}°`, s => s.fov, v => ({fov: v})));
+  setGroup('audio');
   sync.push(range('vol', 'Master volume', 0, 100, 1, v => `${v} %`, s => volumePercent(s.volume), v => ({volume: volumeFromPercent(v)})));
   sync.push(check('mute', 'Mute audio (M)', 'muted'));
+  setGroup('gameplay');
   sync.push(range('sway', 'Train sway', 0, 100, 5, v => (v === 0 ? 'Off' : `${v} %`), s => Math.round(s.trainSway * 100), v => ({trainSway: v / 100})));
+  setGroup('graphics');
   // quality — named by what it ACTUALLY changes (lane MENU, campaign polish item 7: settingsStore.ts QUALITY_LABEL; the values stay
   // 'high' / 'low'): the volumetric fog's resolution + steps, the flashlight shadow map, MSAA and the pixel-ratio cap; one help line
   {
@@ -1051,12 +1068,12 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
     sel.id = P + 'quality';
     for (const q of QUALITY_OPTIONS) { const op = d.createElement('option'); op.value = q.value; op.textContent = q.label; sel.append(op); }
     const help = d.createElement('div');
-    help.className = 'set-readout set-help';
+    help.className = 'set-readout set-help set-detail';
     help.id = P + 'quality-help';
     sel.setAttribute('aria-describedby', help.id);
     sel.addEventListener('change', () => store.set({quality: sel.value === 'low' ? 'low' : 'high'}));
     l.append(sel);
-    box.append(l, help);
+    place(l, help);
     sync.push(s => { if (sel.value !== s.quality) sel.value = s.quality; help.textContent = qualityDescription(s.quality, o.qualityPresets?.[s.quality]); });
   }
   // render resolution — a 25-100 % slider in 1 % steps (lane MENU, campaign polish item 8): the canvas scale only. The percent and
@@ -1072,10 +1089,10 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
     out.htmlFor.add?.(i.id);
     l.append(i, out);
     const readout = d.createElement('div');
-    readout.className = 'set-readout';
+    readout.className = 'set-readout set-detail';
     readout.id = P + 'res-readout';
     i.setAttribute('aria-describedby', readout.id);
-    box.append(l, readout);
+    place(l, readout);
     const show = (pct: number, q: Quality) => {
       const {w, h, dpr} = vp();
       out.textContent = `${pct} %`;
@@ -1105,8 +1122,13 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
     sel.setAttribute('aria-describedby', help.id);
     sel.addEventListener('change', () => store.set({ambientOcclusion: sel.value !== 'off'}));
     l.append(sel);
-    box.append(l, help);
-    sync.push(s => { const v = s.ambientOcclusion ? 'on' : 'off'; if (sel.value !== v) sel.value = v; help.textContent = aoDescription(s.ambientOcclusion, o.aoUnavailable?.() ?? null); });
+    place(l, help);
+    sync.push(s => {
+      const v = s.ambientOcclusion ? 'on' : 'off', why = o.aoUnavailable?.() ?? null;
+      if (sel.value !== v) sel.value = v;
+      help.textContent = aoDescription(s.ambientOcclusion, why);
+      help.classList.toggle('set-detail', !why); // (pause menu: what AO does is a detail; that it cannot run here is a warning, always shown)
+    });
   }
   // task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): Enhanced lighting (Auto / On / Off) and Reflections
   // (Standard / High / Off) — labels, choices and help lines are the contract's (world/enhancedLighting.ts). The help lines describe the
@@ -1126,7 +1148,7 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
       sel.setAttribute('aria-describedby', help.id);
       sel.addEventListener('change', () => { const v: unknown = sel.value; if (valid(v)) store.set(patch(v)); });
       l.append(sel);
-      box.append(l, help);
+      place(l, help);
       return {sel, help};
     };
     const light = choice('lighting', ENHANCED_LIGHTING_LABEL, ENHANCED_LIGHTING_OPTIONS, isEnhancedLightingMode, v => ({enhancedLighting: v}));
@@ -1155,7 +1177,7 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
   // shown, an answer for an unmounted / replaced form is dropped, and a failed read or clear never reaches the UI as an error.
   let alive = true, cacheSeq = 0, cacheKey = '', clearing = false;
   const cacheLine = d.createElement('p');
-  cacheLine.className = 'set-note hidden';
+  cacheLine.className = 'set-note set-detail hidden';
   cacheLine.id = P + 'lighting-cache';
   cacheLine.setAttribute('aria-live', 'polite');
   const cacheRow = d.createElement('div');
@@ -1167,7 +1189,7 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
   clear.hidden = true;
   clear.setAttribute('aria-describedby', cacheLine.id);
   cacheRow.append(clear);
-  box.append(cacheLine, cacheRow);
+  place(cacheLine, cacheRow); // (graphics: the store's note above stays untagged, on every tab)
   const mounted = () => alive && cacheLine.parentElement === box;
   const showCache = (text: string | null) => {
     const button = !!text && !!o.clearLightingCache;
@@ -1237,6 +1259,7 @@ export function mountTutorialReset(box: HTMLElement, store: TutorialResetStore, 
   };
   b.addEventListener('click', click);
   row.appendChild(b);
+  for (const e of [row, note]) e.setAttribute('data-group', 'gameplay' satisfies SettingsGroup); // (the pause menu's Gameplay tab)
   box.appendChild(row);
   box.appendChild(note);
   return () => { b.removeEventListener('click', click); row.remove(); note.remove(); };
