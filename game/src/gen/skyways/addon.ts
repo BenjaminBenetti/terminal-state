@@ -1,5 +1,6 @@
 // Task studio-skyways-level-20261106-054448-01 (primary): the dressing of the ONE localized add-on of a Skyways level
-// (layout.skyways.addon) — the anime convention hall or the prize-car atrium — and the ramen restaurant hook. Pure data (props,
+// (layout.skyways.addon) — the anime convention hall or the prize-car atrium (layout version 7: or the technology expo, the mini-golf
+// course or the evacuation centre, gen/skyways/events/) — and the ramen restaurant hook. Pure data (props,
 // signs, statue records), run once after the station dresser on its own rng fork.
 //
 // Task studio-skyways-level-20261106-054448 (lane ADDON): the add-on dressers — gen/skyways/addonConvention.ts (stage + backdrop,
@@ -20,6 +21,11 @@ import {dressPrizeDisplay, prizeDisplayDresser} from './addonPrizeDisplay';
 import {dressSkywaysVenue, type VenueResult} from './venueDress';
 import {dressConventionSnacks, type ConSnackResult} from './skywaysConSnacks'; // task studio-skywalk-variety-20261107-231448-01 (lane DRESS)
 import {skywaysGenVersion} from './layoutVersion';
+// task studio-skywalk-events-20261115-193624-01 (layout version 7): the new events' dressers (each on the add-on's fork; the venue carve)
+import type {EventDressResult} from './events/eventResult';
+import {dressTechExpo} from './events/expoDress';
+import {dressMiniGolf} from './events/golfDress';
+import {dressEvacCentre} from './events/evacDress';
 
 export interface AddonDressResult {
   id: SkywaysAddon['id'] | null;
@@ -29,6 +35,8 @@ export interface AddonDressResult {
   venue?: VenueResult;
   /** (task studio-skywalk-variety-20261107-231448-01, lane DRESS; layout version 4) the drinks / snacks on the event's table tops. */
   snacks?: ConSnackResult;
+  /** (layout version 7, task studio-skywalk-events-20261115-193624-01) a new event's dress (the expo / mini-golf / evacuation centre). */
+  event?: EventDressResult;
   /** Every prop placed here (layout.props order). */
   props: PropPlacement[];
   /** Pieces that could not be placed (QA). */
@@ -61,6 +69,16 @@ export function dressSkywaysAddon(layout: StationLayout, rng: Rng): AddonDressRe
   const info = layout.skyways;
   const res: AddonDressResult = {id: info?.addon.id ?? null, props: [], skipped: []};
   if (!info) return res;
+  // (layout version 7) a new event dresses the venue carve itself (only ever drawn at version 7: gen/skyways/frame.ts skywaysAddonFor)
+  const ev = info.addon.id === 'tech-expo' ? dressTechExpo : info.addon.id === 'mini-golf' ? dressMiniGolf : info.addon.id === 'evac-centre' ? dressEvacCentre : null;
+  if (ev) {
+    const p0 = layout.props.length;
+    res.event = ev(layout, rng);
+    res.props = layout.props.slice(p0);
+    res.skipped.push(...res.event.skipped);
+    RESULTS.set(layout, {res, index: new Map(layout.props.map((p, i) => [p, i] as const).filter(([, i]) => i >= p0))});
+    return res;
+  }
   // (layout version 3) the prize car on its public display in the host's skyway court (no add-on rooms)
   const display = info.addon.id === 'prize-car' && info.addon.display && info.addon.car;
   const hall = display ? layout.areas[info.addon.car!.area] : layout.areas[info.addon.areas[0]];

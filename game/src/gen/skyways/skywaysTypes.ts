@@ -9,17 +9,38 @@
 //  - 1 'street':  street-level building lobbies / atrium floors / shops (the streets between buildings are OUTSIDE: solid in the
 //    grid, exterior scenery only — never walkable);
 //  - 2 'skyway':  the "+15" level — skyway concourses in every building and the glazed BRIDGES over the streets (branches + loops).
-// Exactly ONE localized major add-on per instance (SkywaysAddon): an anime convention hall OR a prize-car display atrium.
+// Exactly ONE localized major add-on per instance (SkywaysAddon): an anime convention hall OR a prize-car display atrium (layout
+// version 7, task studio-skywalk-events-20261115-193624-01: OR a technology expo, a mini-golf course or an evacuation centre).
 //
 // Gas: every SkywaysWindow is a breakable glazed span in a SOLID wall run (the Office window rule): shooting a pane admits real toxic
 // gas from outside (world/gas); `breached` spans start broken with gas already flowing.
 
 import type {MallPatrolNode} from '../mall/mallTypes'; // task studio-skywalk-encounters-20261108-074144-01: the horde patrol graph
 import type {OfficePose, Side} from '../stationTypes';
+// task studio-skywalk-events-20261115-193624-01 (layout version 7): the new events' records (each event's own types file)
+import type {SkywaysExpoRecord} from './events/expoTypes';
+import type {SkywaysGolfRecord} from './events/golfTypes';
+import type {SkywaysEvacRecord} from './events/evacTypes';
 
 /** The add-on pool (equal weights: one per level seed). */
-export type SkywaysAddonId = 'convention' | 'prize-car';
+export type SkywaysAddonId = 'convention' | 'prize-car' | SkywaysEventAddonId;
+/**
+ * The BASE pool of layout versions 1-6 (gen/skyways/frame.ts skywaysAddonOf; the frozen legacy77 / legacy80 frames pick from it too):
+ * never extended — a new event is a version-7 pool addition (SKYWAYS_EVENT_ADDONS).
+ */
 export const SKYWAYS_ADDONS: readonly SkywaysAddonId[] = ['convention', 'prize-car'];
+/**
+ * Task studio-skywalk-events-20261115-193624-01 (layout version 7): three more localized MAJOR EVENTS in the one-add-on pool — a
+ * technology expo, an indoor mini-golf course and an evacuation centre. Each takes the convention's VENUE (the host's whole skyway floor:
+ * gen/skyways/carve.ts carveVenue) and its own dresser (gen/skyways/events/). Never a theme over the whole map, never a shop.
+ */
+export type SkywaysEventAddonId = 'tech-expo' | 'mini-golf' | 'evac-centre';
+export const SKYWAYS_EVENT_ADDONS: readonly SkywaysEventAddonId[] = ['tech-expo', 'mini-golf', 'evac-centre'];
+/** Every add-on of the version-7 pool (equal weights). */
+export const SKYWAYS_ADDON_POOL_V7: readonly SkywaysAddonId[] = [...SKYWAYS_ADDONS, ...SKYWAYS_EVENT_ADDONS];
+export const isSkywaysEventAddon = (id: string | null | undefined): id is SkywaysEventAddonId => (SKYWAYS_EVENT_ADDONS as readonly string[]).includes(id ?? '');
+/** An add-on carved as a VENUE (the host's whole skyway floor: main hall + support strip, exhibitors' floor, registration, rooms). */
+export const skywaysVenueShaped = (id: SkywaysAddonId): boolean => id !== 'prize-car';
 
 /** Storey indices (layout.levels ids). */
 export const SKYWAYS_LEVEL = {station: 0, street: 1, skyway: 2} as const;
@@ -190,6 +211,14 @@ export interface SkywaysAddon {
   queues?: number[][];
   /** (layout version 3) 'prize-car': the car stands on a public display in its host's skyway court (`areas` empty, `hall` = the zone). */
   display?: boolean;
+  /** (layout version 7, task studio-skywalk-events-20261115-193624-01) a new event's main hall: the carve's stage box (the expo's keynote stage). */
+  stage?: SkywaysRect;
+  /** (layout version 7) 'tech-expo': what its dresser placed (gen/skyways/events/expoTypes.ts). */
+  expo?: SkywaysExpoRecord;
+  /** (layout version 7) 'mini-golf': the course (holes, cups, balls, the putter: gen/skyways/events/golfTypes.ts). */
+  golf?: SkywaysGolfRecord;
+  /** (layout version 7) 'evac-centre': the shelter's sections and its notes (gen/skyways/events/evacTypes.ts). */
+  evac?: SkywaysEvacRecord;
 }
 
 /** (layout version 3) A tenant's office wing: open plan, meeting room, private offices, break room (layout.areas ids by role). */

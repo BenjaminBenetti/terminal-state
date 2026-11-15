@@ -56,9 +56,9 @@ import {splitSkywaysMerch} from './skywaysMerchSplit'; // task studio-skywalk-va
 import {assignSkywaysMallStores, dressSkywaysMallStores, skywaysMallStoreHolds} from './skywaysMallStores'; // task studio-skywalk-encounters-20261108-074144-01 (lane STORES)
 import {dressSkywaysGardens} from './gardens'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): gallery troughs / court bench-planters
 import {skywaysSkylights} from './skylights'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): skylight coffers of the skyway courts
-import {SKYWAYS_LEVEL, type SkywaysInfo, type SkywaysRect, type SkywaysWindow} from './skywaysTypes';
+import {SKYWAYS_LEVEL, isSkywaysEventAddon, type SkywaysInfo, type SkywaysRect, type SkywaysWindow} from './skywaysTypes'; // (+ isSkywaysEventAddon: version 7)
 
-export {skywaysFrame, skywaysAddonOf, setSkywaysAddonOverride, skywaysSeed} from './frame';
+export {skywaysFrame, skywaysAddonOf, skywaysAddonFor, setSkywaysAddonOverride, skywaysSeed} from './frame'; // (+ skywaysAddonFor: version 7)
 export {skywaysIssues} from './validate';
 
 /** Generation attempts before the last generated layout is returned with its issues. */
@@ -97,7 +97,7 @@ export function generateSkywaysLevel(ctx: SectionGenContext, opts: SkywaysGenOpt
   // (task studio-skyways-destinations-20261106-170011-01) layout version 1 = GAME76's program (gen/skyways/layoutVersion.ts)
   const legacy = (ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) < 2;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-    const f = skywaysFrame(ctx.levelSeed, salt, {legacy});
+    const f = skywaysFrame(ctx.levelSeed, salt, {legacy, version: ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION}); // (+ the version: the version-7 event pool)
     const s = attempt === 0 ? seed : hashString('retry' + attempt, seed);
     const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns, trackExt, legacy);
     SKYWAYS_GEN_STATS.attempts = attempt + 1;
@@ -128,7 +128,7 @@ const startCells = (p: SpawnProfile): number => {
 /** QA / tests: one attempt of a frame salt (null when the program does not fit). */
 export function skywaysAttempt(ctx: SectionGenContext, salt = 0, opts: SkywaysGenOptions = {}): StationLayout | null {
   const seed = skywaysSeed(ctx.levelSeed);
-  return tryLevel(skywaysFrame(ctx.levelSeed, salt), seed, seed, 0, ctx, opts.loot ?? lootProfile('skyways'), opts.spawns ?? skywaysSpawnProfileFor(ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION), opts.trackExt ?? trackExtConfig('skyways'));
+  return tryLevel(skywaysFrame(ctx.levelSeed, salt, {version: ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION}), seed, seed, 0, ctx, opts.loot ?? lootProfile('skyways'), opts.spawns ?? skywaysSpawnProfileFor(ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION), opts.trackExt ?? trackExtConfig('skyways'));
 }
 
 /** The Skyways extendTracks context: east / south growth only from the fixed crop origin; only the station storey must be rock. */
@@ -325,6 +325,8 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
       // (layout version 3) the convention venue's areas by role; the prize car's public display
       ...(a.venue ? {venue: a.venue.map(v => ({role: v.role, area: v.area}))} : {}),
       ...(a.id === 'prize-car' && !a.areas.length ? {display: true} : {}),
+      // (layout version 7, task studio-skywalk-events-20261115-193624-01) a new event's main hall keeps the carve's stage box
+      ...(isSkywaysEventAddon(a.id) && a.stage ? {stage: rectW(a.stage)} : {}),
     },
     restaurant: sc.ramen ? {area: sc.ramen.dining, kitchen: sc.ramen.kitchen, building: sc.ramen.building, level: sc.ramen.level, name: layout.areas[sc.ramen.dining].label} : null,
     start: {x: start.x, z: start.z, yaw: start.yaw, level: 0},

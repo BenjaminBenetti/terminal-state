@@ -40,6 +40,8 @@ import {drawStoreGarden, isStoreGardenDrawn} from './skywaysStoreGarden'; // tas
 import {buildStoreBooksProp, isStoreBooksDrawnKind} from './skywaysStoreBooks'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-BOOKS)
 import {buildSkywaysStoreDesignProp, isDesignDrawnKind} from './skywaysStoreDesignDraw'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-DESIGN)
 import {buildMerchSplitProp, isMerchSplitDrawn} from './skywaysMerch'; // task studio-skywalk-variety-20261107-231448-01 (lane MERCH)
+import {isSkywaysEventKind} from '../gen/skyways/events/kinds'; // task studio-skywalk-events-20261115-193624-01 (layout version 7)
+import {buildSkywaysEventProp} from './skywaysEventDraw';
 
 type Fit = {w: number; h: number; d: number; anchor: 'bottom' | 'top'};
 type InstanceModel = (group: THREE.Group, gltf: GLTF, placements: THREE.Matrix4[], fit: Fit, name: string) => number;
@@ -246,6 +248,7 @@ export function buildSkywaysDestProp(group: THREE.Group, kind: SkywaysDestKind, 
   if (isStoreGardenDrawn(kind)) return drawStoreGarden(group, kind, draw, wm, layout);
   // (task studio-skywalk-variety-20261107-231448-01, lane MERCH) merchandise split off its fixture: the device wall's cut devices, faced LPs
   if (isMerchSplitDrawn(kind)) return buildMerchSplitProp(group, kind, draw, wm, lib);
+  if (isSkywaysEventKind(kind)) return buildSkywaysEventProp(group, kind, draw, wm, layout); // task studio-skywalk-events-20261115-193624-01: the version-7 events' kinds
   // (task studio-alpha-skyways-shops-20261107-054512-01, lane STORE-HOCKEY) a store kind drawn by code: its spec's parts, one batch per variant
   const drawn = (SKYWAYS_DEST_SPECS as Readonly<Record<string, {parts?: (variant: number) => readonly DestPart[]}>>)[kind]?.parts;
   if (drawn) {

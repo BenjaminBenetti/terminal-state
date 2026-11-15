@@ -21,7 +21,8 @@
 //    the bridges).
 
 import {Rng, hashString} from '../../core/rng';
-import {SKYWAYS_ADDONS, SKYWAYS_LANDMARK_FAMILIES, SKYWAYS_SHOP_FAMILIES, type SkywaysAddonId, type SkywaysBuildingRole, type SkywaysFamily, type SkywaysLandmarkFamily, type SkywaysPlan, type SkywaysProgramme, type SkywaysShopFamily, type SkywaysTopology} from './skywaysTypes';
+import {SKYWAYS_EVENTS_MIN_VERSION, SKYWAYS_LAYOUT_VERSION} from './layoutVersion'; // task studio-skywalk-events-20261115-193624-01
+import {SKYWAYS_ADDONS, SKYWAYS_ADDON_POOL_V7, SKYWAYS_EVENT_ADDONS, skywaysVenueShaped, type SkywaysEventAddonId, SKYWAYS_LANDMARK_FAMILIES, SKYWAYS_SHOP_FAMILIES, type SkywaysAddonId, type SkywaysBuildingRole, type SkywaysFamily, type SkywaysLandmarkFamily, type SkywaysPlan, type SkywaysProgramme, type SkywaysShopFamily, type SkywaysTopology} from './skywaysTypes';
 
 /** Storey height (m): storey k at y = STOREY * k (station 0, street level 5, skyway level 10). */
 export const STOREY = 5.0;
@@ -112,9 +113,20 @@ export function skywaysDestinationsOf(levelSeed: number): {shops: SkywaysShopFam
   return {shops: r.shuffle(SKYWAYS_SHOP_FAMILIES.slice()), landmarks: r.shuffle(SKYWAYS_LANDMARK_FAMILIES.slice())};
 }
 
-/** Add-on of a level seed: equal weights (one dedicated stream: never moved by any other roll). */
+/** Add-on of a level seed: equal weights (one dedicated stream: never moved by any other roll). Layout versions 1-6 (the base pool). */
 export function skywaysAddonOf(levelSeed: number): SkywaysAddonId {
   return new Rng(hashString('skyways:addon', levelSeed >>> 0)).pick(SKYWAYS_ADDONS as SkywaysAddonId[]);
+}
+
+/**
+ * (layout version 7, task studio-skywalk-events-20261115-193624-01) The add-on a station of a layout version gets: versions 1-6 the base
+ * draw above (exactly as built); version 7+ the five-event pool at equal weights — three in five a new event (its own stream), else the
+ * base draw (so the convention / prize-car split among the rest stays the seed's). A retry never changes it.
+ */
+export function skywaysAddonFor(levelSeed: number, version: number): SkywaysAddonId {
+  if (version < SKYWAYS_EVENTS_MIN_VERSION) return skywaysAddonOf(levelSeed);
+  const r = new Rng(hashString('skyways:events', levelSeed >>> 0));
+  return r.chance(SKYWAYS_EVENT_ADDONS.length / SKYWAYS_ADDON_POOL_V7.length) ? r.pick(SKYWAYS_EVENT_ADDONS as SkywaysEventAddonId[]) : skywaysAddonOf(levelSeed);
 }
 
 /** The add-on's storey: the prize car always drives the skyway level; the convention takes the +15 hall or a street-level ballroom
@@ -146,13 +158,13 @@ const FAMILIES: Record<SkywaysFamily, {cols: number; rows: number; lots: [number
  * The city frame of a level seed. `salt` > 0 re-rolls the free parameters (sizes, lots, offsets, bridge picks, plans) for a retry;
  * the family, the add-on and its storey stay those of the seed.
  */
-export function skywaysFrame(levelSeed: number, salt = 0, opts: {legacy?: boolean} = {}): SkywaysFrame {
+export function skywaysFrame(levelSeed: number, salt = 0, opts: {legacy?: boolean; version?: number} = {}): SkywaysFrame {
   const seed = skywaysSeed(levelSeed);
   const shape = new Rng(hashString('skyways:shape', seed));
   const rng = new Rng(salt ? hashString(`skyways:frame:${salt}`, seed) : hashString('skyways:frame', seed));
   const family = shape.weighted(Object.entries(FAMILIES).map(([k, v]) => [k as SkywaysFamily, v.weight] as const));
   const F = FAMILIES[family], {cols, rows} = F;
-  const addon = ADDON_OVERRIDE ?? skywaysAddonOf(levelSeed);
+  const addon = ADDON_OVERRIDE ?? skywaysAddonFor(levelSeed, opts.version ?? SKYWAYS_LAYOUT_VERSION); // (version 7: the five-event pool)
   // (layout version 3, task studio-skyways-rework-20261107-054512-01) the add-on always takes its host's BRIDGE level: the convention is
   // the host's whole skyway floor (a bridge leads straight into the event floor), the prize display stands in its skyway court
   const addonLevel: 1 | 2 = opts.legacy ? skywaysAddonLevelOf(levelSeed, addon) : 2;
@@ -263,7 +275,7 @@ export function skywaysFrame(levelSeed: number, salt = 0, opts: {legacy?: boolea
   const topology: SkywaysTopology = extra ? 'looped' : 'tree';
   for (const i of rng.shuffle(spare).slice(0, extra)) chosen.add(i);
   const bridgeEdges = [...chosen].sort((p, q) => p - q).map(i => edges[i]);
-  host.role = addon === 'convention' ? 'hotel' : 'hub';
+  host.role = skywaysVenueShaped(addon) ? 'hotel' : 'hub'; // (version 7: every venue-shaped event, like the convention; no draw)
   // Atriums: one or two other hubs (court plan); the prize-car host's display hall needs its floor (no atrium there).
   const others = rng.shuffle(buildings.filter(q => q.id !== host.id && q.id !== station.id));
   // (destinations pass: one to three atrium courts — the landmark courts under the glass)

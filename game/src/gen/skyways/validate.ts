@@ -21,6 +21,7 @@ import {traversalIssues} from '../traversal';
 import {doorwayIssues} from '../doorways';
 import type {StationLayout} from '../stationTypes';
 import {BASES} from './frame';
+import {skywaysVenueShaped} from './skywaysTypes'; // task studio-skywalk-events-20261115-193624-01 (layout version 7)
 
 export const SKYWAYS_LEVEL_RULES: LevelRules = {minLevels: 3, overlapRoles: [], maxRiser: 0.19, minFlightWidth: 1.5};
 /** Shop units the validation insists on (whole level). */
@@ -82,7 +83,7 @@ export function skywaysIssues(layout: StationLayout, opts: {startCells?: number}
   // --- The add-on -------------------------------------------------------------------------------------------------------------
   const ad = info.addon;
   for (const id of ad.areas) if (!seenArea(id)) issues.push(`add-on area ${id} unreachable`);
-  if (ad.id === 'convention' && !ad.areas.some(id => layout.areas[id]?.type === 'washroom')) issues.push('convention without washrooms');
+  if (skywaysVenueShaped(ad.id) && !ad.areas.some(id => layout.areas[id]?.type === 'washroom')) issues.push(`${ad.id} without washrooms`); // (version 7: every venue-shaped event)
   if (ad.id === 'prize-car') {
     if (!ad.car) issues.push('prize car without a spot');
     else {
