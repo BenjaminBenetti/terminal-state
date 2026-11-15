@@ -368,8 +368,9 @@ play frame is drawn.
   native buffer; not a quality preset. Stored as the fraction, so the former Native / Half / Quarter (1 / 0.5 / 0.25) read as
   exactly 100 / 50 / 25 %; other values round to a whole percent and clamp. A drag applies once it settles or on release.
 - **Enhanced lighting** (the stored `enhancedLighting`, Auto / On / Off, default Auto) and **Reflections** (`reflections`, Standard /
-  High / Off, default Standard; needs Enhanced lighting): a better baked station light field and cached reflections on metal and
-  glass (at High also a sheen on glazed wall tile), described in `docs/enhanced-lighting.md`. A change is applied to the live
+  High / Off, default Standard; needs Enhanced lighting): baked bounce light with direction and colour, the flashlight's own
+  bounce off what its beam lands on, cached reflections on metal, glazed tile and glass, and a live mirror image in the glass
+  the player faces, described in `docs/enhanced-lighting.md`. A change is applied to the live
   station from the pause menu: its lighting is rebuilt and its materials are prepared again before Resume is released (no
   station load, nothing of the run changes); each help line says what the live station really uses, a rebuild in progress or
   why a change failed. The baked data is a derived cache in this browser (the form shows its size and a **Clear lighting
