@@ -3,15 +3,20 @@
 // over the validating no-op device (helpers/headlessGame.ts, helpers/validatingWebgpu.ts).
 //  1. A new campaign under the defaults (Auto, Standard reflections): the station is lit with the MIRROR variant of the reflecting
 //     light, the mirror holds the station's glass planes, and the warm-up's hidden frames already drew it once (target, bindings).
-//  2. Standing in front of a storefront pane with the flashlight on: the mirror draws every frame, and those frames create NOTHING
-//     — no node build, no shader module, no pipeline, no render context, no render object: the mirror view is drawn with the scene
-//     pass's own programs. The flashlight's shadow map is still drawn exactly once per frame. The mirror's texture is an
+//  2. Standing in front of a storefront pane with the flashlight on: the mirror draws every frame, and neither its draws nor the
+//     scene pass's create anything — no node build, no shader module, no pipeline, no render object, and no render context at
+//     all: the mirror view is drawn with the scene pass's own programs. (Counted per render call: what the flashlight's shadow
+//     pass builds on a caster's first sight is the station's own and happens without the mirror too — printed, not judged here.)
+//     The flashlight's shadow map is still drawn exactly once per frame. The mirror's texture is an
 //     attachment in its own pass and a sampled texture in the scene pass, never both in one pass (checked for EVERY pass and
 //     texture of the run). Nothing is dropped by the device.
-//  3. The same with a target that does not match the scene target's size (the cap): still nothing built — and the refresh census /
-//     main-thread cost of both variants is printed (the numbers behind the `match` default).
+//  3. The same with a target of the scene target's size (`match`) instead of the cap's: still nothing built — and the refresh
+//     census / main-thread cost of both variants is printed (the numbers behind the `match` default: the cap-sized target).
 //  4. Enhanced lighting Off (applied live from the pause menu): no mirror object, no mirror draw, the plain field light, and nothing
-//     drawn binds the mirror's texture or its placeholder. Auto again: the mirror is back, warmed by the apply, nothing built in play.
+//     drawn binds the mirror's texture or its placeholder. Auto again: the mirror is back, warmed by the apply; its draws build
+//     nothing.
+// Printed (process.stdout): per phase the draws per frame of the mirror view / the scene pass / the shadow pass, three's refresh
+// census and the main-thread milliseconds of each (Node, no-op device: three's own submit path, not a frame time).
 import {afterAll, describe, expect, it, vi} from 'vitest';
 import type {GlassPlane} from '../src/world/glassPanes';
 import {installHeadless} from './helpers/headlessGame';
@@ -30,6 +35,8 @@ interface CmdEnc { beginRenderPass(d: PassDesc): PassEnc }
 interface Target { width: number; height: number; samples: number; texture: {name?: string} }
 
 const zero = (): Record<Kind, number> => ({mirror: 0, shadow: 0, main: 0, other: 0});
+interface Made { builds: number; modules: number; pipelines: number; renderObjects: number }
+const NOTHING: Made = {builds: 0, modules: 0, pipelines: 0, renderObjects: 0};
 
 describe('The live glass mirror in the real Game (WebGPU path, validating device)', () => {
   it('draws with the scene pass\'s own programs: nothing built in play, one shadow draw per frame, no texture read while it is written; Off has none of it', async () => {
@@ -67,8 +74,9 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
       _objects: {createRenderObject(...a: unknown[]): unknown};
       render(scene: unknown, camera: unknown): unknown; getRenderTarget(): {texture?: {name?: string}; depthTexture?: {name?: string} | null} | null;
     };
-    const made = {builds: 0, modules: 0, pipelines: 0, renderObjects: 0, contexts: 0};
-    const inMirror = {builds: 0, renderObjects: 0};
+    // (what was made, by the render call it was made in: the mirror's draw, the scene pass, the shadow pass, anything else)
+    const made: Record<Kind, Made> = {mirror: {...NOTHING}, shadow: {...NOTHING}, main: {...NOTHING}, other: {...NOTHING}};
+    let contexts = 0;
     const built: string[] = [];
     const calls = zero(), draws = zero(), ms = zero();
     const refresh: Record<Kind, number[]> = {mirror: [0, 0, 0], shadow: [0, 0, 0], main: [0, 0, 0], other: [0, 0, 0]};
@@ -77,8 +85,8 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     const now = (): Kind => stack[stack.length - 1] ?? 'other';
     const drawnNow = new Map<number, RenderObject>();
     const reset = () => {
-      made.builds = made.modules = made.pipelines = made.renderObjects = made.contexts = 0;
-      inMirror.builds = inMirror.renderObjects = 0;
+      for (const k of KINDS) made[k] = {...NOTHING};
+      contexts = 0;
       built.length = 0;
       for (const k of KINDS) { calls[k] = draws[k] = ms[k] = 0; refresh[k] = [0, 0, 0]; }
       gpu.passes = gpu.mirrorPasses = gpu.mirrorSampled = 0;
@@ -89,7 +97,7 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     const device = R.backend.device;
     for (const name of ['createShaderModule', 'createRenderPipeline', 'createRenderPipelineAsync', 'createComputePipeline', 'createComputePipelineAsync'] as const) {
       const inner = device[name].bind(device);
-      device[name] = ((...a: never[]) => { if (name === 'createShaderModule') made.modules++; else made.pipelines++; return inner(...a); }) as never;
+      device[name] = ((...a: never[]) => { if (name === 'createShaderModule') made[now()].modules++; else made[now()].pipelines++; return inner(...a); }) as never;
     }
     // every render pass of the run: a texture that is an attachment of the pass may not be in a bind group set inside it
     const createCommandEncoder = device.createCommandEncoder.bind(device) as unknown as (d?: unknown) => CmdEnc;
@@ -120,8 +128,7 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     const NM = R._nodes;
     const createNodeBuilder = NM._createNodeBuilder.bind(NM);
     NM._createNodeBuilder = (ro, m) => {
-      made.builds++;
-      if (now() === 'mirror') inMirror.builds++;
+      made[now()].builds++;
       if (built.length < 12) built.push(`${now()}: ${ro.object?.name || '(unnamed)'} / ${ro.material?.name || ro.material?.type || '?'}`);
       return createNodeBuilder(ro, m);
     };
@@ -132,11 +139,11 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     const getContext = RC.get;
     RC.get = function (this: unknown, t: unknown, mrt: unknown = null, d = 0) {
       const c = getContext.call(this, t, mrt, d);
-      if (!seenContexts.has(c)) { seenContexts.add(c); made.contexts++; }
+      if (!seenContexts.has(c)) { seenContexts.add(c); contexts++; }
       return c;
     };
     const createRenderObject = R._objects.createRenderObject.bind(R._objects);
-    R._objects.createRenderObject = (...a) => { made.renderObjects++; if (now() === 'mirror') inMirror.renderObjects++; return createRenderObject(...a); };
+    R._objects.createRenderObject = (...a) => { made[now()].renderObjects++; return createRenderObject(...a); };
     const render = R.render.bind(R);
     R.render = (scene, camera) => {
       const t = R.getRenderTarget();
@@ -158,7 +165,7 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     const report = (name: string) => {
       const f = calls.main;
       return {
-        name, frames: f, made: {...made}, inMirror: {...inMirror}, built: [...built],
+        name, frames: f, made: {mirror: {...made.mirror}, main: {...made.main}, shadow: {...made.shadow}, other: {...made.other}}, contexts, built: [...built],
         renders: {...calls}, drawsPerFrame: {mirror: perFrame(draws.mirror, f), shadow: perFrame(draws.shadow, f), main: perFrame(draws.main, f)},
         msPerFrame: {mirror: perFrame(ms.mirror, f), mainIncludingShadow: perFrame(ms.main, f), shadow: perFrame(ms.shadow, f)},
         refreshPerFrame: {mirror: refresh.mirror.map(v => perFrame(v, f)), main: refresh.main.map(v => perFrame(v, f))},
@@ -188,7 +195,7 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     expect(isGlassMirrorPlaceholder(GM.tex.value), 'the picture is bound after the first draw').toBe(false);
     const sceneTarget = game.atmosphere.sceneTarget(game.scene, game.camera) as unknown as Target;
     expect(sceneTarget).toBeTruthy();
-    expect(warm.target).toMatchObject({size: [sceneTarget.width, sceneTarget.height], samples: sceneTarget.samples, matched: true});
+    expect(warm.target, 'the scene pass\'s sample count at the cap\'s size').toMatchObject({size: [...gm.cap], samples: sceneTarget.samples, matched: false});
 
     // a place to stand: 2.2 m in front of an intact pane that spans the eye height, on clear floor of the main level, seeing it
     interface Pose { x: number; y: number; z: number; yaw: number; tx: number; tz: number; plane: GlassPlane; source: string }
@@ -244,11 +251,11 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     await h.waitFrames(4);
     reset();
     await look(60);
-    const on = report('mirror (target matched to the scene target)');
+    const on = report('mirror (cap-sized target: the default)');
     say({...on, pose: {plane: at.plane.id, source: at.source, panes: at.plane.panes.length}, mirror: gm.debug()});
     expect(on.frames).toBeGreaterThanOrEqual(55);
     expect(on.renders.mirror, 'the mirror is drawn every frame of the walk').toBe(on.frames);
-    expect(on.made, `nothing is built while the mirror draws (${on.built.join('; ')})`).toEqual({builds: 0, modules: 0, pipelines: 0, renderObjects: 0, contexts: 0});
+    expect({mirror: on.made.mirror, scenePass: on.made.main, contexts: on.contexts}, `nothing is built by the mirror's draws or the scene pass's (${on.built.join('; ')})`).toEqual({mirror: NOTHING, scenePass: NOTHING, contexts: 0});
     expect(on.renders.shadow, 'still ONE shadow draw per frame').toBe(on.frames);
     expect(on.gpu.feedback, 'no texture is read in a pass that writes it').toEqual([]);
     expect(on.gpu.mirrorPasses, 'one pass writes the mirror per frame').toBe(on.frames);
@@ -266,24 +273,24 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     (game.scene as unknown as {traverse(f: (o: unknown) => void): void}).traverse(o => { const l = o as {isLight?: boolean; shadow?: {autoUpdate: boolean}}; if (l.isLight && l.shadow) shadowLights.push(l as never); });
     expect(shadowLights.some(l => l.castShadow && l.shadow.autoUpdate), 'a shadow light is still updating').toBe(true);
 
-    // ---- 3. a target of the cap's size instead (not the scene target's): nothing built either; the census of both ----
-    (gm as unknown as {match: boolean}).match = false;
-    await h.waitFrames(6);
-    reset();
-    await look(60);
-    const cap = report('mirror (target of the cap size)');
-    say({...cap, mirror: gm.debug()});
-    expect((gm.debug() as {target: {size: number[]; matched: boolean}}).target).toMatchObject({size: [...gm.cap], matched: false});
-    expect(cap.renders.mirror).toBe(cap.frames);
-    expect({...cap.made, renderObjects: 0}, `a target of another size builds nothing (${cap.built.join('; ')})`).toEqual({builds: 0, modules: 0, pipelines: 0, renderObjects: 0, contexts: 0});
-    expect(cap.gpu.feedback).toEqual([]);
-    expect(cap.device).toMatchObject({dropped: 0, issues: []});
+    // ---- 3. a target of the scene target's size instead (`match`): nothing built either; the census of both ----
     (gm as unknown as {match: boolean}).match = true;
     await h.waitFrames(6);
     reset();
+    await look(60);
+    const matched = report('mirror (target of the scene target\'s size)');
+    say({...matched, mirror: gm.debug()});
+    expect((gm.debug() as {target: {size: number[]; matched: boolean}}).target).toMatchObject({size: [sceneTarget.width, sceneTarget.height], matched: true});
+    expect(matched.renders.mirror).toBe(matched.frames);
+    expect({mirror: matched.made.mirror, scenePass: matched.made.main, contexts: matched.contexts}, `a target of another size builds nothing (${matched.built.join('; ')})`).toEqual({mirror: NOTHING, scenePass: NOTHING, contexts: 0});
+    expect(matched.gpu.feedback).toEqual([]);
+    expect(matched.device).toMatchObject({dropped: 0, issues: []});
+    (gm as unknown as {match: boolean}).match = false;
+    await h.waitFrames(6);
+    reset();
     await look(20);
-    const back = report('mirror (matched again)');
-    expect(back.made).toEqual({builds: 0, modules: 0, pipelines: 0, renderObjects: 0, contexts: 0});
+    const back = report('mirror (cap-sized again)');
+    expect({mirror: back.made.mirror, scenePass: back.made.main, contexts: back.contexts}, back.built.join('; ')).toEqual({mirror: NOTHING, scenePass: NOTHING, contexts: 0});
     expect(back.device).toMatchObject({dropped: 0, issues: []});
 
     // ---- 4. Enhanced lighting Off, applied live from the pause menu: none of it exists ----
@@ -338,7 +345,9 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
     const again = report('Auto again');
     say(again);
     expect(again.renders.mirror).toBe(again.frames);
-    expect(again.made, `Auto again: nothing built in play (${again.built.join('; ')})`).toEqual({builds: 0, modules: 0, pipelines: 0, renderObjects: 0, contexts: 0});
+    // (what a live apply leaves for play to build outside the mirror — first shows of things its warm-up did not draw — is not
+    // this lane's: the mirror's own draws build nothing, and no render context is added)
+    expect({mirror: again.made.mirror, contexts: again.contexts}, `Auto again: the mirror's draws build nothing (${again.built.join('; ')})`).toEqual({mirror: NOTHING, contexts: 0});
     expect(again.renders.shadow).toBe(again.frames);
     expect(again.gpu.feedback).toEqual([]);
     expect(again.device).toMatchObject({dropped: 0, issues: []});

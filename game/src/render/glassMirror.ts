@@ -13,9 +13,12 @@
 //    depth, samples, no MRT) and is drawn at the scene pass's render-context call depth (render/renderContextDepth.ts), under the
 //    state the scene pass draws with. three keys render contexts by that signature and depth, and render objects, node builds and
 //    pipelines by the context: the mirror draw therefore re-uses the station's render objects, programs and pipelines — after
-//    warm-up it creates nothing. With `match` (default) the target is also the scene target's SIZE, the picture a sub-viewport of
-//    it: three's per-object change check includes the context's buffer size, and a different size would force a full refresh of
-//    every object drawn in both passes, twice per frame.
+//    warm-up it creates nothing (tests/glass-mirror-game.test.ts: the real Game, zero node builds / pipelines / render objects /
+//    render contexts while the mirror draws). The target is CAP-sized (a fixed 29 MB at Standard, 66 MB at High with 4x MSAA,
+//    whatever the display's resolution); the picture is a viewport of it. (`match`: a target of the scene target's size instead —
+//    three's per-object change check includes the context's buffer size, so about 25 more objects per pass take the full refresh
+//    path with the cap-sized target; measured in the real Game that costs nothing visible, while a matched 4x MSAA target is
+//    116 MB at 1080p and 464 MB at 4K.)
 //  - NO FEEDBACK, by construction: exactly the materials whose program can sample the mirror — the 'glass' reflect tag
 //    (render/reflectTag.ts), the one class world/reflectionNode.ts builds the lookup into — are not drawn in the mirror pass (the
 //    renderer's render-object function, restored in `finally`), so the target is never bound for sampling while it is the
@@ -56,8 +59,11 @@ export const GLASS_MIRROR = {
   cap: 12,
   /** Where the distance fade starts, as a fraction of `cap`. */
   fadeFrom: 0.8,
-  /** How far beyond the glass the mirror camera draws (m). */
-  reach: 40,
+  /**
+   * Length of the reflected path the mirror draws (m, from the eye to the glass and on to the thing): the flashlight's own
+   * distance — nothing farther answers to it, and the scene's fog leaves under a fifth of anything beyond.
+   */
+  reach: 30,
   /** A glass fragment within this of the mirrored face (m) takes the mirror. */
   tolerance: 0.04,
   /** Soft edge of the rendered window (mirror texels) and the margin drawn around the visible panes (texels). */
@@ -67,10 +73,13 @@ export const GLASS_MIRROR = {
   density: 0.8,
   /** Smallest picture drawn (texels a side). */
   minTexels: 16,
-  /** A plane becomes the mirror when its intact panes cover this much of the screen (0..1) ... */
-  enter: 0.006,
-  /** ... and stays it down to this. */
-  keep: 0.002,
+  /**
+   * A plane becomes the mirror when its intact panes cover this much of the screen (0..1; a whole storefront pane seen from the
+   * front at about 11 m) ...
+   */
+  enter: 0.015,
+  /** ... and stays it down to this. (The mirror is one more draw of the scene: slivers and far panes keep the probes.) */
+  keep: 0.006,
   /** Another plane takes over only when its score is this many times the current one's. */
   switchGain: 1.3,
   /** Seconds a change of plane fades out / in. */
@@ -359,8 +368,8 @@ export interface GlassMirrorOptions {
    */
   scenePass: () => MirrorScenePass | null;
   /**
-   * true (default): the target has the scene target's size, the picture is a sub-viewport (no per-object refresh from a changing
-   * buffer size: see the module doc). false: a target of exactly `cap` (less memory, a full refresh of what both passes draw).
+   * false (default): a target of exactly `cap`. true: the target has the scene target's size and the picture is a sub-viewport
+   * of it (memory that grows with the display; see the module doc).
    */
   match?: boolean;
   /** Line of sight between two world points (walls); a plane none of whose probe points the eye can see is not selected. */
@@ -408,12 +417,15 @@ export class GlassMirror {
 
   constructor(opts: GlassMirrorOptions) {
     this.cap = opts.cap ?? GLASS_MIRROR_CAPS.standard;
-    this.match = opts.match ?? true;
+    this.match = opts.match ?? false;
     this.scenePass = opts.scenePass;
     this.sight = opts.sight;
     // (one closure for the mirror's life: three calls it per object of the mirror draw)
     this.filter = (...a: unknown[]) => {
       if (reflectTagOf(a[4] as THREE.Material) === 'glass') { this.stats.skipped++; return; }
+      // (an instanced pool with nothing in it draws nothing — three still walks it through the whole per-object path)
+      const o = a[0] as {isInstancedMesh?: boolean; count?: number};
+      if (o.isInstancedMesh === true && !((o.count as number) > 0)) return;
       this.stats.drawn++;
       this.filterRenderer!.renderObject(...a);
     };
@@ -620,7 +632,8 @@ export class GlassMirror {
       if (win.h < target.height) { win.h++; win.y0 -= win.texel; } else { win.w++; win.a1 += win.texel; }
     }
     const cam = this.camera;
-    mirrorCameraPose(face, win, _eye.x, _eye.y, _eye.z, GLASS_MIRROR.reach, cam);
+    // (the reach is a length of the reflected path: the stretch from the eye to the glass is part of it)
+    mirrorCameraPose(face, win, _eye.x, _eye.y, _eye.z, Math.max(1, GLASS_MIRROR.reach - face.dist), cam);
     cam.far = Math.min(cam.far, Math.max(cam.near + 1, camera.far));
     cam.layers.mask = camera.layers.mask;
     cam.updateProjectionMatrix();

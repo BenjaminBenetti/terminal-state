@@ -651,9 +651,9 @@ describe('the draw', () => {
     expect(gm.render(r, W.scene, c)).toBe(true);
     expect(r.draws.length).toBe(1);
     const d = r.draws[0], t = d.target!;
-    // the target: the scene pass's signature and size, linear, its own depth texture of the same kind
+    // the target: the scene pass's signature at the cap's size, linear, its own depth texture of the same kind
     expect(t).not.toBe(st);
-    expect([t.width, t.height, t.samples, t.texture.type, t.texture.format, t.texture.colorSpace, t.depthBuffer, t.stencilBuffer]).toEqual([1280, 720, 4, st.texture.type, st.texture.format, st.texture.colorSpace, st.depthBuffer, st.stencilBuffer]);
+    expect([t.width, t.height, t.samples, t.texture.type, t.texture.format, t.texture.colorSpace, t.depthBuffer, t.stencilBuffer]).toEqual([...GLASS_MIRROR_CAPS.standard, 4, st.texture.type, st.texture.format, st.texture.colorSpace, st.depthBuffer, st.stencilBuffer]);
     expect([t.depthTexture!.type, t.depthTexture!.format]).toEqual([st.depthTexture!.type, st.depthTexture!.format]);
     expect(t.depthTexture).not.toBe(st.depthTexture);
     expect((t.depthTexture as unknown as {isRenderTargetTexture: boolean}).isRenderTargetTexture).toBe(true);
@@ -688,7 +688,7 @@ describe('the draw', () => {
     expect(GM.plane.value.toArray()).toEqual([0, 1, 0.01, 1]);
     const win = dbg.window as unknown as {a: [number, number]; y: [number, number]};
     expect(GM.rect.value.x).toBeCloseTo(win.a[0], 3); expect(GM.rect.value.y).toBeCloseTo(win.y[1], 3);
-    expect(GM.params.value.x).toBeCloseTo(dbg.window.size[0] / 1280, 12); expect(GM.params.value.y).toBeCloseTo(dbg.window.size[1] / 720, 12);
+    expect(GM.params.value.x).toBeCloseTo(dbg.window.size[0] / t.width, 12); expect(GM.params.value.y).toBeCloseTo(dbg.window.size[1] / t.height, 12);
     expect(GM.params.value.w).toBe(GLASS_MIRROR_TUNING.gain);
     // a second frame: the same target (never re-allocated), no further binding refresh
     expect(gm.render(r, W.scene, c)).toBe(true);
@@ -788,10 +788,10 @@ describe('the draw', () => {
     gm.dispose();
   });
 
-  it('follows the scene target: a new signature or size re-creates the target (placeholder bound in between); unmatched = the cap', () => {
+  it('follows the scene target: a new signature re-creates the target (placeholder bound in between) — at the cap\'s size, or matched to the scene target\'s', () => {
     const W = world(), r = new FakeRenderer();
     let st = sceneTarget(1280, 720, 4);
-    const gm = new GlassMirror({scenePass: () => ({target: st, depth: 1})});
+    const gm = new GlassMirror({scenePass: () => ({target: st, depth: 1}), match: true});
     gm.setPlanes([A]);
     const c = cam();
     settle(gm, c);
@@ -807,20 +807,53 @@ describe('the draw', () => {
     expect(released).toBe(1);
     expect(GM.tex.value).toBe(t1.texture);
     gm.dispose();
-    // unmatched: exactly the cap, whatever the scene target's size; a viewport that would equal the drawing buffer is nudged
+    // the default: exactly the cap, whatever the scene target's size (a size change of the scene target alone re-creates
+    // nothing; another sample count does); a viewport that would equal the drawing buffer is nudged
     const r2 = new FakeRenderer();
-    const gm2 = new GlassMirror({scenePass: () => ({target: st, depth: 1}), match: false, cap: [512, 256]});
+    const gm2 = new GlassMirror({scenePass: () => ({target: st, depth: 1}), cap: [512, 256]});
     gm2.setPlanes([A]);
     settle(gm2, c);
     expect(gm2.render(r2, W.scene, c)).toBe(true);
     const t2 = r2.draws[0].target!;
     expect([t2.width, t2.height, t2.samples]).toEqual([512, 256, 0]);
+    st = sceneTarget(2560, 1440, 0);
+    expect(gm2.render(r2, W.scene, c)).toBe(true);
+    expect(r2.draws[1].target).toBe(t2);
+    st = sceneTarget(2560, 1440, 4);
+    expect(gm2.render(r2, W.scene, c)).toBe(true);
+    const t3 = r2.draws[2].target!;
+    expect(t3).not.toBe(t2);
+    expect([t3.width, t3.height, t3.samples]).toEqual([512, 256, 4]);
     const [, , vw, vh] = r2.draws[0].viewport;
     expect(vw).toBeLessThanOrEqual(512); expect(vh).toBeLessThanOrEqual(256);
     r2.size.set(vw, vh); // the drawing buffer happens to be exactly the viewport's size
     expect(gm2.render(r2, W.scene, c)).toBe(true);
-    const v2 = r2.draws[1].viewport;
+    const v2 = r2.draws[3].viewport;
     expect(v2[2] !== vw || v2[3] !== vh).toBe(true);
     gm2.dispose();
+  });
+
+  it('draws as far as the reflected path reaches (eye to glass to the thing), and leaves out an instanced pool with nothing in it', () => {
+    const W = world(), r = new FakeRenderer(), st = sceneTarget(1280, 720, 4);
+    const empty = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new MeshStandardNodeMaterial(), 8);
+    empty.count = 0;
+    const filled = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new MeshStandardNodeMaterial(), 8);
+    filled.count = 3;
+    W.scene.add(empty, filled);
+    const gm = new GlassMirror({scenePass: () => ({target: st, depth: 1})});
+    gm.setPlanes([A]);
+    const c = cam(); // (3 m in front of the glass, less the glass's half thickness)
+    settle(gm, c);
+    expect(gm.render(r, W.scene, c)).toBe(true);
+    expect(r.draws[0].drawn).toEqual([W.wall, filled]);
+    const mc = r.draws[0].camera as THREE.PerspectiveCamera;
+    const eyeToGlass = (gm.debug() as {eyeDistance: number}).eyeDistance;
+    expect(eyeToGlass).toBeGreaterThan(2.9);
+    expect(mc.near).toBeCloseTo(eyeToGlass, 3);
+    expect(mc.far).toBeCloseTo(GLASS_MIRROR.reach, 3); // the camera sits at the mirrored eye: its far distance IS the path length
+    filled.count = 0; empty.count = 2; // (pools fill and drain in play)
+    expect(gm.render(r, W.scene, c)).toBe(true);
+    expect(r.draws[1].drawn).toEqual([W.wall, empty]);
+    gm.dispose();
   });
 });
