@@ -339,7 +339,8 @@ async function boot(): Promise<void> {
     qa: qa ? {label: qaPrebuild ? `QA quick start · ${LEVELS[dev?.level ?? 'subway'].name} (scratch, not saved)` : 'QA quick start (scratch build, not saved)', start: () => qaButton.click(), ready: () => qaReady || !qaPrebuild} : null,
   });
   const menuView = new MainMenuView($('#mm-view'), menu, {
-    settings: box => { mountSettingsForm(box, settings, {idPrefix: 'mm-set-', lightingStatus, lightingCache, clearLightingCache, lightingChanged, qualityPresets: ATMOSPHERE_QUALITY, aoUnavailable}); mountTutorialReset(box, game.onboarding, {idPrefix: 'mm-set-'}); recorder.mountPanel(box, {idPrefix: 'mm-'}); }, // (+ the tutorial reset; lane RECORDER's Performance section; lane MENU: the quality help line; lane SETTINGS: the lighting status / cache)
+    settings: box => { mountSettingsForm(box, settings, {idPrefix: 'mm-set-', lightingStatus, lightingCache, clearLightingCache, lightingChanged, qualityPresets: ATMOSPHERE_QUALITY, aoUnavailable}); mountTutorialReset(box, game.onboarding, {idPrefix: 'mm-set-'}); }, // (+ the tutorial reset; lane MENU: the quality help line; lane SETTINGS: the lighting status / cache)
+    performance: box => { recorder.mountPanel(box, {idPrefix: 'mm-'}); }, // (lane RECORDER's panel; task studio-settings-menu-parity-20261115-191601-01: the Settings dialog's Performance tab, as the pause menu's)
     controlsForm: box => { mountControlsForm(box, settings, {idPrefix: 'mm-set-'}); }, // (task studio-alpha-survival-controls-20261107-060450-01: input preferences under Controls)
     qaButton: qa ? qaButton : null,
     overlayHost: titleEl, // (lane MENU, campaign polish item 4: submenus open front and centre over the diorama)

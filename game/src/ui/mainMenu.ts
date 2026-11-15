@@ -26,6 +26,10 @@
 // (world/enhancedLighting.ts); the help lines say what the LIVE station really uses and why (the game's runtime status, handed in by
 // main.ts), and that a change applies when a station next loads. Under the form's note: the lighting cache line (the derived cache's
 // own numbers) and "Clear lighting cache". Nothing here bakes, renders or touches a save.
+//
+// Task studio-settings-menu-parity-20261115-191601-01: the Settings dialog is the pause menu's Settings presentation (ui/settingsTabs.ts:
+// Graphics / Audio / Gameplay / Performance tabs over the same form, the technical read-outs behind "Show details", the recorder on the
+// Performance tab) — the selected tab's rows scroll inside the dialog and Back stays pinned under them. The other dialogs are unchanged.
 
 import {SAVE_SLOTS, type SaveMeta} from '../campaign/types';
 import type {LevelId} from '../levels/types';
@@ -42,6 +46,7 @@ import {
   isEnhancedLightingMode, isReflectionQuality, type EnhancedLightingStatus,
 } from '../world/enhancedLighting';
 import type {DerivedCacheStats} from '../core/derivedCache';
+import {SettingsTabs, buildSettingsTabs} from './settingsTabs'; // (task studio-settings-menu-parity-20261115-191601-01)
 
 // ---------------------------------------------------------------------------------------------
 // The host contract (primary + lane SAVE implement it; tests use a fake)
@@ -632,6 +637,16 @@ const CSS = `
 .mm-dialog[data-view="new"], .mm-dialog[data-view="slots"] { width: min(880px, 100%); }
 .mm-dialog[data-view="controls"] { width: min(940px, 100%); }
 .mm-dialog h2 { font-size: 22px; letter-spacing: 0.06em; margin: 4px 0 12px; }
+/* Settings (task studio-settings-menu-parity-20261115-191601-01): the pause menu's tabbed form (ui/settingsTabs.ts); the tab's rows scroll,
+   the title, the tabs and the Back row stay in place */
+.mm-dialog.panel[data-view="settings"] { width: min(780px, 100%); display: flex; flex-direction: column; overflow: hidden; }
+.mm-dialog.panel[data-view="settings"] > .mm-head-box, .mm-dialog.panel[data-view="settings"] > .mm-body { flex: none; }
+.mm-dialog.panel[data-view="settings"] h2 { margin-bottom: 2px; }
+.mm-dialog.panel[data-view="settings"] > .mm-body { margin-top: 12px; padding-top: 8px; border-top: 1px solid #3a3f44; }
+.mm-dialog.panel[data-view="settings"] > .mm-body .mm-acts { align-items: center; column-gap: 14px; }
+.mm-dialog.panel[data-view="settings"] .mm-status { margin: 0; min-height: 0; }
+.mm-keyhint { font-size: 13px; color: var(--cream-dim); }
+.mm-keyhint kbd { font-family: var(--font); color: var(--mustard); }
 .mm-dialog p.mm-text { margin: 0 0 10px; font-size: 14px; line-height: 1.45; color: var(--cream-dim); overflow-wrap: anywhere; }
 .mm-dialog .mm-body .mm-rows > .mm-row:not(.slot) > .mm-acts { margin-top: 4px; }
 /* slot rows: ONE grid row per slot — slot | name + metadata (ellipsized) | actions (a fixed column, right-aligned) */
@@ -649,7 +664,7 @@ const CSS = `
 .mm-controls.controls-grid div { align-items: baseline; }
 .mm-controls.controls-grid kbd { flex: none; white-space: nowrap; text-align: right; }
 .mm-dialog .mm-hint { margin: 10px 0 2px; font-size: 12px; color: var(--cream-dim); }
-.mm-settings.settings { grid-template-columns: 1fr; gap: 10px; margin: 2px 0 12px; }
+.mm-controls-form.settings { grid-template-columns: 1fr; gap: 10px; margin: 2px 0 12px; }
 .settings .set-note { grid-column: 1 / -1; font-size: 12px; color: var(--cream-dim); margin: 0; }
 .settings .set-note:empty { display: none; }
 .settings select { max-width: 62%; }
@@ -677,8 +692,13 @@ function injectCss(doc: Document): void {
 }
 
 export interface MainMenuViewOptions {
-  /** The settings form for the Settings view (mounted once, shown only there). */
+  /** The settings form for the Settings view (mounted once, shown only there; its rows' data-group puts them on the tabs). */
   settings?: (container: HTMLElement) => void;
+  /**
+   * Task studio-settings-menu-parity-20261115-191601-01: the Settings view's Performance tab (the recorder panel; mounted once). Absent:
+   * no Performance tab.
+   */
+  performance?: (container: HTMLElement) => void;
   /**
    * Task studio-alpha-survival-controls-20261107-060450-01: the input-preferences form (mountControlsForm: sensitivity, invert X / Y)
    * for the Controls view, above the bindings (mounted once, shown only there).
@@ -700,6 +720,9 @@ export class MainMenuView {
   private readonly side: HTMLElement | null;
   private readonly overlay: HTMLElement;
   private readonly dialog: HTMLElement;
+  /** The Settings view: the tabs over the settings form (ui/settingsTabs.ts, as the pause menu's). */
+  private readonly settingsView: HTMLElement;
+  readonly settingsTabs: SettingsTabs;
   private readonly settingsBox: HTMLElement;
   /** (task studio-alpha-survival-controls-20261107-060450-01) the Controls view's input preferences. */
   private readonly controlsFormBox: HTMLElement;
@@ -723,14 +746,20 @@ export class MainMenuView {
     this.dialog.setAttribute('aria-modal', 'true');
     this.dialog.setAttribute('aria-labelledby', 'mm-dialog-title');
     this.head = el('mm-view mm-head-box');
-    this.settingsBox = el('mm-settings settings hidden'); // (the class, not [hidden]: .settings sets display: grid)
+    // (task studio-settings-menu-parity-20261115-191601-01) the pause menu's Settings markup, ids mm-tab-* / mm-settings / mm-details / mm-perf
+    const tabs = buildSettingsTabs(this.doc, {idPrefix: 'mm-', performance: !!o.performance, formClass: 'mm-settings'});
+    this.settingsView = tabs.view;
+    this.settingsView.classList.add('mm-set-view', 'hidden'); // (the class, not [hidden]: the view sets display: flex)
+    this.settingsBox = tabs.form;
+    this.settingsTabs = new SettingsTabs(this.settingsView);
     this.controlsFormBox = el('mm-settings mm-controls-form settings hidden');
     this.controlsBox = el('mm-controls controls-grid hidden');
     this.body = el('mm-body');
-    this.dialog.append(el('stripe'), this.head, this.settingsBox, this.controlsFormBox, this.controlsBox, this.body);
+    this.dialog.append(el('stripe'), this.head, this.settingsView, this.controlsFormBox, this.controlsBox, this.body);
     this.overlay.append(this.dialog);
     (o.overlayHost ?? this.side?.parentElement ?? root).append(this.overlay);
     o.settings?.(this.settingsBox);
+    if (tabs.perf) o.performance?.(tabs.perf);
     o.controlsForm?.(this.controlsFormBox);
     ctl.onChange(() => this.render());
     for (const box of [root, this.overlay]) {
@@ -763,6 +792,8 @@ export class MainMenuView {
     // native controls keep their own keys (range / select use the arrows; Enter / Space click the focused button)
     if (e.code === 'Escape') { if (this.ctl.key('Escape')) { e.preventDefault(); e.stopPropagation(); } return; }
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+    // the Settings tabs (as in the pause menu): Left / Right / Home / End switch the tab; the other arrows stay on it
+    if (t?.getAttribute?.('role') === 'tab') { if (this.settingsTabs.key(e)) e.preventDefault(); return; }
     if (['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.code)) {
       if (this.ctl.key(e.code)) { e.preventDefault(); this.focusCurrent(true); }
     }
@@ -841,7 +872,7 @@ export class MainMenuView {
     if (open) this.side?.setAttribute('inert', ''); else this.side?.removeAttribute('inert');
     this.overlay.classList.toggle('hidden', !open);
     this.dialog.dataset.view = m.view;
-    this.settingsBox.classList.toggle('hidden', m.view !== 'settings');
+    this.settingsView.classList.toggle('hidden', m.view !== 'settings');
     this.controlsFormBox.classList.toggle('hidden', m.view !== 'controls' || !this.o.controlsForm);
     this.controlsBox.classList.toggle('hidden', m.view !== 'controls');
     if (open) {
@@ -863,6 +894,16 @@ export class MainMenuView {
       }
       const body = this.rows(m, m.status);
       if (m.hint) { const p = d.createElement('p'); p.className = 'mm-hint'; p.textContent = m.hint; body.prepend(p); }
+      const back = m.view === 'settings' ? body.querySelector<HTMLElement>('[data-action="back"]') : null;
+      if (back) {
+        // (task studio-settings-menu-parity-20261115-191601-01) the pinned Back row, as the pause menu's: Back + "Esc back"
+        back.setAttribute('aria-keyshortcuts', 'Escape');
+        const hint = d.createElement('span'), k = d.createElement('kbd');
+        hint.className = 'mm-keyhint';
+        k.textContent = 'Esc';
+        hint.append(k, ' back');
+        back.parentElement?.append(hint);
+      }
       this.body.replaceChildren(body);
     } else this.body.replaceChildren();
     this.root.setAttribute('aria-busy', String(m.busy));
@@ -870,8 +911,9 @@ export class MainMenuView {
     this.lastView = m.view;
     if (!this.visibleFlag) return;
     if (opened) {
-      // a freshly opened Settings / Controls view starts on its first control (its only action is Back, at the foot of the form)
-      const first = m.view === 'settings' ? this.settingsBox.querySelector<HTMLElement>('input, select')
+      // a freshly opened Settings view starts on its selected tab (as the pause menu's), Controls on its first control (their only
+      // action is Back, at the foot of the view)
+      const first = m.view === 'settings' ? this.settingsTabs.selected ?? null
         : m.view === 'controls' ? this.controlsFormBox.querySelector<HTMLElement>('input, select') : null;
       if (first) { this.programmatic = true; try { first.focus({preventScroll: true}); } finally { this.programmatic = false; } this.lastFocus = null; }
       else this.focusCurrent(true);
@@ -962,9 +1004,9 @@ export interface SettingsFormOptions {
 
 /**
  * Task studio-pause-menu-cleanup-20261115-000847-01: the settings form's rows by topic — each row (and its help line) carries
- * data-group; the pause menu's Settings tabs show one group at a time (ui/pauseMenu.ts). Untagged rows (the store's note) show on
- * every tab. Help lines that are technical read-outs rather than state or warnings also carry the class `set-detail` (the pause menu
- * keeps them behind "Show details"; the main menu's dialog shows everything as before).
+ * data-group; the Settings tabs show one group at a time (ui/settingsTabs.ts: the pause menu's and, since task
+ * studio-settings-menu-parity-20261115-191601-01, the main menu's). Untagged rows (the store's note) show on every tab. Help lines that
+ * are technical read-outs rather than state or warnings also carry the class `set-detail` (kept behind "Show details").
  */
 export type SettingsGroup = 'graphics' | 'audio' | 'gameplay';
 
@@ -1127,7 +1169,7 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
       const v = s.ambientOcclusion ? 'on' : 'off', why = o.aoUnavailable?.() ?? null;
       if (sel.value !== v) sel.value = v;
       help.textContent = aoDescription(s.ambientOcclusion, why);
-      help.classList.toggle('set-detail', !why); // (pause menu: what AO does is a detail; that it cannot run here is a warning, always shown)
+      help.classList.toggle('set-detail', !why); // (the Settings tabs: what AO does is a detail; that it cannot run here is a warning, always shown)
     });
   }
   // task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): Enhanced lighting (Auto / On / Off) and Reflections
@@ -1263,7 +1305,7 @@ export function mountTutorialReset(box: HTMLElement, store: TutorialResetStore, 
   };
   b.addEventListener('click', click);
   row.appendChild(b);
-  for (const e of [row, note]) e.setAttribute('data-group', 'gameplay' satisfies SettingsGroup); // (the pause menu's Gameplay tab)
+  for (const e of [row, note]) e.setAttribute('data-group', 'gameplay' satisfies SettingsGroup); // (the Settings tabs' Gameplay tab)
   box.appendChild(row);
   box.appendChild(note);
   return () => { b.removeEventListener('click', click); row.remove(); note.remove(); };
