@@ -97,9 +97,12 @@ export class BandScene {
     if (b < 0) return false;
     const stepX = dx > 0 ? 1 : -1, stepZ = dz > 0 ? 1 : -1;
     const adx = dx < 0 ? -dx : dx, adz = dz < 0 ? -dz : dz;
-    const tDX = adx > 1e-9 ? CELL / adx : Infinity, tDZ = adz > 1e-9 ? CELL / adz : Infinity;
-    let tMaxX = adx > 1e-9 ? (dx > 0 ? (cx + 1) * CELL - ox : ox - cx * CELL) / adx : Infinity;
-    let tMaxZ = adz > 1e-9 ? (dz > 0 ? (cz + 1) * CELL - oz : oz - cz * CELL) / adz : Infinity;
+    // (task studio-baked-gi-visual-uplift-20261115-004324-01, lane BOUNCE: NEVER as the bare global `Infinity` — V8 then keeps these
+    // four as boxed numbers and allocates one for every cell a ray crosses, in a function that must not allocate. The same value.)
+    const NEVER = Number.POSITIVE_INFINITY;
+    const tDX = adx > 1e-9 ? CELL / adx : NEVER, tDZ = adz > 1e-9 ? CELL / adz : NEVER;
+    let tMaxX = adx > 1e-9 ? (dx > 0 ? (cx + 1) * CELL - ox : ox - cx * CELL) / adx : NEVER;
+    let tMaxZ = adz > 1e-9 ? (dz > 0 ? (cz + 1) * CELL - oz : oz - cz * CELL) / adz : NEVER;
     const down = dy < 0, level = dy === 0, invDy = level ? 0 : 1 / dy;
     for (let guard = 0; guard < 4096; guard++) {
       const tExit = tMaxX < tMaxZ ? tMaxX : tMaxZ;
