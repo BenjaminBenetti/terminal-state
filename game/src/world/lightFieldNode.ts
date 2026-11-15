@@ -382,6 +382,11 @@ interface LightingBuilder extends NodeBuilder {
  * its own module and this one stays free of it). Read when a program is built.
  */
 export const FULL_IRRADIANCE: (() => Node)[] = [];
+/**
+ * What a FULL reflecting field light adds to a reflective material's radiance besides the probes: `dir` = the lookup direction
+ * (world), `rough` = the fragment's roughness. The flashlight's bounce registers its sheen here (world/lights.ts).
+ */
+export const FULL_RADIANCE: ((dir: Node, rough: Node) => Node)[] = [];
 
 /** Per-fragment field lighting for every lit node material in a scene holding the LightFieldLight. */
 export class LightFieldNode extends LightingNode {
