@@ -686,6 +686,20 @@ stage takes no animation frame and the global is restored afterwards, also when 
 called and never replaced; `prepareObjects` (content added in play) still uses animation frames; and the journey, the
 runtime variants and `game.ts` do not name the module.
 
+**Where the materials stage's time goes.** `WarmupResult.compile` — and a second console line after the warm-up summary —
+splits the materials stage on the page that ran it:
+- node builds and their wall time (JavaScript, with the yields inside them);
+- pipelines requested asynchronously and the time waited for them (the GPU process and the driver);
+- how three yielded (`scheduler`, `task` or `frame`) and, with the warm-up's own task yield, how many yields there were
+  and how long they waited. The browser's own `scheduler.yield` is not instrumented, so those two stay null there.
+
+`observeCompile` reads this from three's node manager and pipelines by wrapping instance methods for the duration of each
+compile call. They are put back in a `finally`, and a part that cannot be read stays null. Example (Node, Subway start
+station): `warm-up materials 25.1 s · 199 node builds 24.2 s · 170 async pipelines waited 0.0 s · yield scheduler ·
+shadow frames 7.5 s · shared instancing on`. Node resolves a pipeline at once; on a player's machine the second and
+third numbers tell JavaScript from GPU-side pipeline creation, which no measurement in this repository has split yet.
+Checks: `game/tests/warmup-compile-split.test.ts`.
+
 ## Lifecycle and guarantees
 
 - `Game.prepareGraphics()` is single-flight. It resolves (never rejects) with a `WarmupResult` whose status is one of:

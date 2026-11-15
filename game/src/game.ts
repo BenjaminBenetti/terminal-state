@@ -2776,6 +2776,11 @@ export class Game {
     if (quality) quality.disabled = qualityWas;
     console.info(`Terminal State: graphics warm-up ${res.status}${res.reason ? ` (${res.reason})` : ''} · ${res.mode} · ${(res.ms / 1000).toFixed(1)} s · `
       + `materials ${st.materials.done}/${st.materials.total} · passes ${st.passes.done}/${st.passes.total} · shadow frames ${st.shadows.done}/${st.shadows.total}`);
+    // Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane LOAD): where the materials stage's time went (JavaScript node builds
+    // vs waiting for the GPU process's pipelines vs yields) — wall times of this page, for a player's own capture
+    const cs = res.compile, sec = (ms: number | null) => (ms === null ? 'n/a' : `${(ms / 1000).toFixed(1)} s`);
+    console.info(`Terminal State: warm-up materials ${sec(st.materials.ms)} · ${cs.builds ?? 'n/a'} node builds ${sec(cs.buildMs)} · ${cs.pipelines ?? 'n/a'} async pipelines waited ${sec(cs.pipelineWaitMs)} · `
+      + `yield ${cs.yield}${cs.yields === null ? '' : ` x${cs.yields} waited ${sec(cs.yieldWaitMs)}`} · shadow frames ${sec(st.shadows.ms)} · shared instancing ${sharedInstancing() ? 'on' : 'off'}`);
     return res;
   }
 

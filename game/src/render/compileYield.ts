@@ -1,4 +1,5 @@
-// Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane LOAD): how three's compileAsync yields during the BLOCKING warm-up.
+// Task studio-gi-mood-bounce-loading-20261115-081523-01 (lane LOAD): how three's compileAsync yields during the BLOCKING warm-up, and
+// where a warm-up's compile time goes.
 //
 // three r186's compileAsync awaits yieldToMain() after every object, and NodeBuilder.buildAsync after every shader stage of every build
 // stage (9 per new build): ~11 000 yields in a station load. yieldToMain is the browser's scheduler.yield() where it has one and ONE
@@ -12,6 +13,10 @@
 // installs it around each of its compileAsync calls and restores it in a finally. A browser that has scheduler.yield is left exactly
 // as it is. NEVER during play or the journey: there three's yields must keep following the browser's own scheduling (the in-play
 // compile pacing: render/journeyCompile.ts).
+//
+// observeCompile() reads where a compile call's time went from three's node manager / pipelines (private fields, read defensively:
+// anything missing and that part stays null): node builds started and their wall time, pipelines requested asynchronously and the
+// time waited for them — so a capture can tell JavaScript from waiting on the GPU process.
 
 interface SchedulerLike { yield?: unknown }
 interface SelfLike { scheduler?: SchedulerLike }
@@ -88,4 +93,74 @@ export function installTaskYield(now: () => number = () => performance.now()): T
     if (waiting.length === 0) { port?.close(); port = null; }
   };
   return out;
+}
+
+/** Where a compile's time went (render/warmup.ts WarmupResult.compile). */
+export interface CompileSplit {
+  /** How three yielded between build stages and objects. */
+  yield: YieldMode;
+  /** Node builds started and their wall time (ms; the yields inside a build included). Null: three's node manager could not be read. */
+  builds: number | null;
+  buildMs: number | null;
+  /** Pipelines requested asynchronously and the time waited for them (ms: the GPU process / driver). Null: not readable. */
+  pipelines: number | null;
+  pipelineWaitMs: number | null;
+  /** Yields taken and the time waited in them (ms). Null with the browser's own scheduler.yield or animation frames (not instrumented). */
+  yields: number | null;
+  yieldWaitMs: number | null;
+}
+
+export const emptyCompileSplit = (mode: YieldMode = 'frame'): CompileSplit =>
+  ({yield: mode, builds: null, buildMs: null, pipelines: null, pipelineWaitMs: null, yields: null, yieldWaitMs: null});
+
+interface NodesLike { _createNodeBuilder?: (...a: unknown[]) => unknown; _createNodeBuilderState?: (...a: unknown[]) => unknown }
+interface PipelinesLike { getForRender?: (renderObject: unknown, promises?: unknown[] | null) => unknown }
+
+/**
+ * Count into `split` while the returned function has not been called: node builds (from the builder's creation to its finished
+ * state) and asynchronous pipeline requests (from the request to the promises' settlement). Wraps instance methods of `renderer`'s
+ * node manager / pipelines and puts back exactly what was there. Call the returned function in a finally.
+ */
+export function observeCompile(renderer: unknown, split: CompileSplit, now: () => number = () => performance.now()): () => void {
+  const r = renderer as {_nodes?: NodesLike | null; _pipelines?: PipelinesLike | null} | null;
+  const undo: (() => void)[] = [];
+  let live = true;
+  const wrap = <T extends object>(obj: T, name: keyof T & string, make: (inner: (...a: unknown[]) => unknown) => (...a: unknown[]) => unknown): void => {
+    const o = obj as unknown as Record<string, unknown>;
+    const inner = o[name] as (...a: unknown[]) => unknown;
+    const own = Object.prototype.hasOwnProperty.call(o, name);
+    const wrapper = make(inner);
+    o[name] = wrapper;
+    undo.push(() => { if (o[name] !== wrapper) return; if (own) o[name] = inner; else delete o[name]; });
+  };
+  const nodes = r?._nodes, pipes = r?._pipelines;
+  if (nodes && typeof nodes._createNodeBuilder === 'function' && typeof nodes._createNodeBuilderState === 'function') {
+    split.builds ??= 0;
+    split.buildMs ??= 0;
+    let t0 = -1;
+    wrap(nodes, '_createNodeBuilder', inner => function (this: unknown, ...a: unknown[]) { if (live && t0 < 0) t0 = now(); return inner.apply(this, a); });
+    wrap(nodes, '_createNodeBuilderState', inner => function (this: unknown, ...a: unknown[]) {
+      const res = inner.apply(this, a);
+      if (live && t0 >= 0) { split.builds = (split.builds ?? 0) + 1; split.buildMs = (split.buildMs ?? 0) + (now() - t0); }
+      t0 = -1;
+      return res;
+    });
+  }
+  if (pipes && typeof pipes.getForRender === 'function') {
+    split.pipelines ??= 0;
+    split.pipelineWaitMs ??= 0;
+    wrap(pipes, 'getForRender', inner => function (this: unknown, ...a: unknown[]) {
+      const promises = a[1] as unknown[] | null | undefined;
+      const n0 = Array.isArray(promises) ? promises.length : 0;
+      const res = inner.apply(this, a);
+      if (live && Array.isArray(promises) && promises.length > n0) {
+        const added = promises.slice(n0), t = now();
+        split.pipelines = (split.pipelines ?? 0) + added.length;
+        const done = () => { split.pipelineWaitMs = (split.pipelineWaitMs ?? 0) + (now() - t); };
+        void Promise.all(added).then(done, done);
+      }
+      return res;
+    });
+  }
+  return () => { live = false; for (let i = undo.length - 1; i >= 0; i--) undo[i](); undo.length = 0; };
 }
