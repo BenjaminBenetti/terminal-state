@@ -58,6 +58,8 @@
 //  3. FLASH_VPLS lights stand for the whole lit patch: one per sector on its dominant plane and FLASH_EXTRA more for the other
 //     planes. Next to a large lit surface the bounce is patchier and dimmer than the surface's true glow (a foot of a lit wall gets
 //     less than it should); with more planes in the beam than lights the weakest planes' flux is dropped — dimmer, never misplaced.
+//     A light that is fading out is cut short when a plane with clearly more flux needs its place (how much that lets go in one
+//     frame along a walk through a station's clutter is measured and bounded in game/tests/flash-bounce.test.ts).
 //  4. A light stands at the centroid of its hits on their plane: that point can lie over an opening in the plane or under another
 //     thing standing on it (hits either side of a doorway, of a pier) — it lights what is in front of the plane all the same.
 // Deterministic: no random number, no clock (the caller's dt only), nothing of the save / layout is written.
