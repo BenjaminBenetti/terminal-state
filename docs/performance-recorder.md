@@ -8,7 +8,7 @@ section, badge and keys). Tests: `game/tests/perf-recorder.test.ts`, `hitch-attr
 
 ## For the player
 
-1. Press **Esc** to pause, then open **Settings** › **Performance** and choose **Start recording**. The section is also in the
+1. Press **Esc** to pause, then open **Settings** › **Performance** and choose **Start recording**. The same tab is in the
    main menu's **Settings**. You can also press **F8** at any time.
 2. Choose **Resume** and play the part that stutters. For example, turn the camera around in the Mall, walk into new shops or
    ride the train. A small **REC m:ss** badge at the top of the screen shows that recording is on.

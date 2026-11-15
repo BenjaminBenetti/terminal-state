@@ -372,15 +372,20 @@ describe('item 4: submenus open front and centre (the real view)', () => {
     } finally { m.dom.uninstall(); }
   });
 
-  it('Settings opens on its first control, and a re-render (boot progress) never pulls the focus off it', () => {
+  // (task studio-settings-menu-parity-20261115-191601-01: Settings is the pause menu's tabbed view, so it opens on its selected tab)
+  it('Settings opens on its selected tab, and a re-render (boot progress) never pulls the focus off it or off a control', () => {
     const m = mountMenu();
     try {
       m.press(m.btn('settings'));
-      const first = m.dialog.querySelector('#mm-set-fov'); // (the input preferences moved to Controls: task studio-alpha-survival-controls-20261107-060450-01)
-      expect(m.dom.doc.activeElement).toBe(first);
+      const tab = m.dialog.querySelector('#mm-tab-graphics');
+      expect(m.dom.doc.activeElement).toBe(tab);
       m.ctl.setBoot(true, 1);
       m.ctl.refresh(); // a controller re-render
-      expect(m.dom.doc.activeElement).toBe(first);
+      expect(m.dom.doc.activeElement).toBe(tab);
+      const quality = m.dialog.querySelector('#mm-set-quality')!;
+      quality.focus();
+      m.ctl.refresh();
+      expect(m.dom.doc.activeElement).toBe(quality);
     } finally { m.dom.uninstall(); }
   });
 
