@@ -785,8 +785,9 @@ and the reference read it.
 
 ### Version and saves
 
-- `ROSTER_VERSION` is 3. Version 0 means "before the roster": no pass. Version 1 is the seeded families. Version 2 is the same
-  families, placed identically, plus the sprinters (below). Version 3 is version 2, placed identically, plus BB (below).
+- `ROSTER_VERSION` is 4. Version 0 means "before the roster": no pass. Version 1 is the seeded families. Version 2 is the same
+  families, placed identically, plus the sprinters (below). Version 3 is version 2, placed identically, plus BB (below). Version 4 is
+  version 3, placed identically, plus the Reactor's irradiated zombies APPENDED after the pass (below).
 - A station records the version it was first built with in its section memory (lane `ROSTER_LANE` = `enemy.roster`, `{v}`).
   `rosterVersionFor(memory)`: the recorded version; else 0 for a station that has visits but no record (built before the roster
   existed); else the current version.
@@ -852,6 +853,38 @@ pursues, instead of the usual chase gait.
 - **Never the Survivor Market** (`ZOMBIE_FREE_LEVELS`), at any version.
 - **Tests.** `game/tests/bb-roster.test.ts`: the rate, the counts and looks, the slot rule, version 3 against version 2 on every
   combat level, the version pin, the registry classification.
+
+### Irradiated zombies (roster version 4, the Reactor only)
+
+<!-- Task studio-reactor-glowing-zombies-20261115-013245-01. User: "keep ALL existing regular zombies, then add a 40% zombie-population
+boost on the lower levels. EVERY added zombie is a glowing irradiated regular zombie with 1.5x normal health. These are additions, not
+replacements." -->
+
+`game/src/ai/irradiated.ts` (the rule), `game/src/gen/reactor/irradiated.ts` (the placement). Unlike every family above, these are
+ADDED: the level registry appends them right after the roster pass (`applyIrradiatedAdditions`, `levels/registry.ts`). The pass itself
+is unchanged, and the roster censuses on this page do not include them.
+
+- **Where.** The Reactor's lower storeys = the bottom half of its six pit storeys: `layout.levels` 3, 4 and 5 (tier 3, tier 4 and the
+  core floor; contexts `ring` and `pit`). Never the rim, tiers 1-2, the surface storey or any other level.
+- **How many.** `R` = the regular zombies (the ordinary family, either type, sprinter or not) standing on those storeys after the
+  pass. `N = round(0.4 × R)`, computed as `floor((2R + 2) / 5)`; `0.4R` is never exactly a half, so no tie rule is needed. `N` is split
+  over the three storeys in proportion to each one's `R` (largest remainder, ties to the deeper storey). Census, 12 seeds
+  `1201 + 7919k`: `R` 16-25, `N` 6-10 (mean ~8), reactor totals 44-52 → 51-61. None short.
+- **Placement.** The storey's own context rules (`REACTOR_SPAWN_PROFILE`: area weights, caps, 4 m spacing from every enemy on the
+  storey, 36 walking cells from the platform start, 5 m off landings / use points / complex entrances) on the generator's own spawn
+  field, through `placeOfficeEnemies` with a fixed count. The stream is a fresh `Rng` from a hash of the level seed and the storey:
+  nothing else draws differently. A storey that cannot seat its share retries the rest at 2.5 m; whatever is still left is reported
+  (`irradiatedOf(layout).short`), never silent. The ambient budget (`budgets.ambient`) caps the generator's context runs; the
+  additions are outside it, on purpose (the user asked for the boost, not a cap).
+- **What they are.** `ZombieSpawn.irradiated = true`, the ordinary family, shambler or coated (40 % coated, per addition). Only the
+  hp differs: 1.5× the type's (`IRRADIATED_STATS`: 150 / 247.5). Never a sprinter, horde member, outfit zombie or special family.
+  Their look, light, dose and Geiger clicks: `docs/reactor.md` "Irradiated zombies".
+- **Indices and loot.** They are appended after every existing spawn, so no existing index, family, sprinter tag, look, position or
+  pickup changes; the kill memory records them by their own indices.
+- **Saves.** A station recorded at roster version 3 or lower regenerates without them: an existing save's visited Reactor keeps its
+  enemies and kills exactly. A Reactor first entered at version 4 (a new campaign, or an unvisited Reactor node of an older save) gets
+  them, once: the same seed gives the same additions on every revisit, Continue, Retry and import, and a killed one stays dead.
+- **Tests.** `game/tests/irradiated-spawns.test.ts`.
 
 ### Census with the roster
 

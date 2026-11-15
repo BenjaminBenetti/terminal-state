@@ -24,7 +24,7 @@ import {applyLighting, dress} from '../stationDress';
 import {planPitLamps} from './gaslightLamps'; // task reactor-expansion-20261101 (lane GASLIGHT)
 import {finishTraversal, placeLadders} from '../traversal';
 import {assignEnemyArchetypes} from '../../ai/creatureSpawn';
-import {spawnProfile, type SpawnContextId, type SpawnProfile} from '../../ai/spawnTables';
+import {spawnProfile, type SpawnProfile} from '../../ai/spawnTables';
 import {applyFamilySpacing} from '../../ai/familySpacing';
 import {lootProfile, type LootProfile} from '../../items/lootTables';
 import type {LevelId, SectionGenContext} from '../../levels/types';
@@ -38,7 +38,7 @@ import type {TrackExtConfig} from '../trackExt/types';
 import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EXT_STATS} from '../trackExt/index';
 import {populateExtensions} from '../annexContent';
 import type {ReactorComponent, ReactorPose, ReactorSite} from './reactorTypes';
-import {CORE_LEVEL, PIT_ROCK, REACTOR_LEVELS, reactorFrame, reactorSeed, type ReactorFrame} from './frame';
+import {CORE_LEVEL, PIT_ROCK, REACTOR_LEVELS, reactorFrame, reactorSeed, reactorSpawnContext, type ReactorFrame} from './frame';
 import {carveReactor, reactorCanvas, type ReactorCarve} from './carve';
 import {
   buildSites, deckHolds, deckLights, maintenanceLadders, mouthHolds, placeFans, reactorInfo, reactorLinks, reactorRails,
@@ -53,8 +53,9 @@ import {carveComplexes, clearEntranceLamps, complexLights, dressComplexes, finis
 // task studio-reactor-surface-ending-20261102 (lane ENDING): the sealed exterior door -> U-stair -> the open-air SURFACE storey
 import {carveSurface, finishSurface, planSurface} from './surface';
 import {extensionRects} from '../trackExt/index';
+import {rememberReactorSpawnField} from './irradiated'; // task studio-reactor-glowing-zombies-20261115-013245-01
 
-export {reactorFrame, reactorSeed, reactorStoreyLabel, setReactorVariantOverride, TIERS, CORE_LEVEL, REACTOR_LEVELS} from './frame';
+export {reactorFrame, reactorSeed, reactorSpawnContext, reactorStoreyLabel, setReactorVariantOverride, TIERS, CORE_LEVEL, REACTOR_LEVELS} from './frame';
 export {reactorIssues, routeIssues as reactorRouteIssues} from './validate';
 
 /** The level id (levels/registry.ts LEVELS.reactor). */
@@ -125,11 +126,6 @@ const startCells = (p: SpawnProfile): number => {
   const c = p.contexts.floor ?? p.contexts.ring ?? p.contexts.station;
   return c?.placement.startCells ?? 36;
 };
-
-/** Spawn context of a storey (the primary's SPAWN_PROFILES.reactor): rim 'station', tiers 1-2 'floor', tiers 3-4 'ring', core 'pit'. */
-export function reactorSpawnContext(lv: number): SpawnContextId {
-  return lv === 0 ? 'station' : lv === CORE_LEVEL ? 'pit' : lv <= 2 ? 'floor' : 'ring';
-}
 
 // ---------------------------------------------------------------------------------------------
 // One attempt
@@ -208,6 +204,7 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   const keep: SpawnField['keep'] = [...sb.keep, ...gens.keep];
   for (const kk of layout.levelLinks) keep.push({level: kk.lower, x: kk.bottom.x, z: kk.bottom.z}, {level: kk.upper, x: kk.top.x, z: kk.top.z});
   const field: SpawnField = {dist: levelDistance(layout.levels, sx, sy, 0, layout.levelLinks), keep};
+  rememberReactorSpawnField(layout, field); // task studio-reactor-glowing-zombies-20261115-013245-01: the irradiated additions place on this same field (gen/reactor/irradiated.ts)
   for (let lv = 0; lv < REACTOR_LEVELS; lv++) {
     const context = reactorSpawnContext(lv);
     if (!spawns.contexts[context]) continue;

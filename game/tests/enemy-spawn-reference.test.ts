@@ -218,6 +218,11 @@ describe('enemy spawn reference: runtime agreement', () => {
       const seed = ENEMY_CENSUS_SEEDS[1];
       const fresh = LEVELS[l].generate('main', {levelSeed: seed, startWeapon: startWeaponFor(false), rosterVersion: ROSTER_VERSION});
       const plain = LEVELS[l].generate('main', {levelSeed: seed, startWeapon: startWeaponFor(false)});
+      // (roster v4: the Reactor's irradiated zombies are appended AFTER the pass — not part of the roster census; tests/irradiated-spawns.test.ts)
+      const added = fresh.zombies.slice(plain.zombies.length);
+      expect(added.every(z => z.irradiated === true), l).toBe(true);
+      if (l !== 'reactor') expect(added.length, l).toBe(0);
+      fresh.zombies.length = plain.zombies.length;
       const cen = enemyCensus(l, [seed]);
       expect(cen.spawns.map(s => s.rolled), `${l} before the pass`).toEqual(plain.zombies.filter(z => z.horde === undefined).map(z => z.archetype ?? 'zombie'));
       // the pass keeps every spawn where it is: only family / variant differ between the two generations
@@ -513,6 +518,8 @@ describe('enemy spawn reference: the seeded roster (ai/enemyRoster.ts)', () => {
       const seed = ENEMY_ROSTER_SEEDS[2];
       const on = LEVELS[id].generate('main', {levelSeed: seed, startWeapon: startWeaponFor(false), rosterVersion: ROSTER_VERSION});
       const off = LEVELS[id].generate('main', {levelSeed: seed, startWeapon: startWeaponFor(false)});
+      // (roster v4: the Reactor's appended irradiated zombies are not part of the roster pass / census — tests/irradiated-spawns.test.ts)
+      on.zombies = on.zombies.filter(z => z.irradiated !== true);
       const rep = rosterOf(on)!, one = rosterCensus(id, [seed]);
       expect(rosterOf(off), id).toBeUndefined(); // no roster version = no pass (the pinned fingerprints' path)
       expect(rep.version).toBe(ROSTER_VERSION);

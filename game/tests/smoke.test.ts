@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import {generateStation, type StationLayout} from '../src/gen/station';
 import {CELL, FLOOR, Grid, SOLID} from '../src/gen/grid';
 import {
-  PUFF_DENSITY, SMOKE_LIMITS, ScatterLights, SmokeField, VIS_RES, computeVisWindow, gridLineOfSight, puffKernel, smokeTint, spawnInterval, windowStale,
+  PUFF_DENSITY, SCATTER_SLOTS, SMOKE_LIMITS, ScatterLights, SmokeField, VIS_RES, VIS_WINDOWS, computeVisWindow, isGlowScatter, gridLineOfSight, puffKernel, smokeTint, spawnInterval, windowStale,
 } from '../src/render/smoke';
 import {VolumetricAtmosphere} from '../src/render/volumetric';
 import {VF_LIMITS, createFogUniforms, createMarchMaterial} from '../src/render/volumetricShaders';
@@ -143,6 +143,25 @@ describe('scatter lights + occlusion windows', () => {
     expect(s.list.length).toBe(0);
   });
 
+  it('task studio-reactor-glowing-zombies-20261115-013245-01: the glow lights have their OWN reserved slots (neither kind starves the other)', () => {
+    expect(SMOKE_LIMITS.glowLights).toBe(4);
+    expect(SCATTER_SLOTS).toBe(SMOKE_LIMITS.scatterLights + SMOKE_LIMITS.glowLights);
+    expect(VF_LIMITS.scatter).toBe(SCATTER_SLOTS);
+    expect(VIS_WINDOWS).toBe(SCATTER_SLOTS + SMOKE_LIMITS.emitters);
+    const s = new ScatterLights();
+    const glow = Array.from({length: 6}, () => { const l = new THREE.PointLight(0x6bff8a, 5, 8, 2); l.userData.vfGlow = true; return l; });
+    const plain = Array.from({length: 6}, () => new THREE.PointLight(0xff2a12, 7, 10, 2));
+    expect(glow.every(isGlowScatter)).toBe(true);
+    expect(plain.some(isGlowScatter)).toBe(false);
+    // glow lights first: they fill only their own 4; every ordinary light still gets its 4
+    expect(glow.map(l => s.add(l))).toEqual([true, true, true, true, false, false]);
+    expect(plain.map(l => s.add(l))).toEqual([true, true, true, true, false, false]);
+    expect(s.list.length).toBe(SCATTER_SLOTS);
+    expect(s.remove(glow[0])).toBe(true);
+    expect(s.add(plain[4])).toBe(false); // a freed glow slot is not an ordinary one
+    expect(s.add(glow[4])).toBe(true);
+  });
+
   it('a window sees its own room and is dark behind walls; recomputed only when the source moved', () => {
     const g = new Grid(60, 60);
     for (let y = 0; y < 60; y++) for (let x = 0; x < 60; x++) g.set(x, y, x === 30 && (y < 25 || y > 27) ? SOLID : FLOOR); // wall at x 15 m with a 1.5 m doorway
@@ -199,7 +218,7 @@ describe('atmosphere API (game.atmosphere, no GL)', () => {
     expect(col.x).toBeGreaterThan(col.y * 10); // red
     const win = u.win.array as THREE.Vector4[];
     expect(win[0].w).toBeGreaterThanOrEqual(0);                  // light window bound
-    expect(win[VF_LIMITS.scatter].w).toBeGreaterThanOrEqual(SMOKE_LIMITS.scatterLights); // smoke window layer 4..7
+    expect(win[VF_LIMITS.scatter].w).toBeGreaterThanOrEqual(SCATTER_SLOTS); // smoke window layer 8..11 (after the ordinary and the glow scatter layers)
     const d = a.debug();
     expect(d.smoke).toMatchObject({emitters: 1, limits: SMOKE_LIMITS});
     expect(d.scatter).toMatchObject({lights: 1, active: 1});
@@ -233,7 +252,7 @@ describe('atmosphere API (game.atmosphere, no GL)', () => {
     const {a} = rig();
     expect(a.u.puff.array.length).toBe(SMOKE_LIMITS.emitters * SMOKE_LIMITS.puffsPerEmitter);
     expect(a.u.puffD.array.length).toBe(SMOKE_LIMITS.emitters * SMOKE_LIMITS.puffsPerEmitter);
-    expect(a.u.scatPos.array.length).toBe(SMOKE_LIMITS.scatterLights);
+    expect(a.u.scatPos.array.length).toBe(SCATTER_SLOTS);
     expect(a.u.smokeBound.array.length).toBe(SMOKE_LIMITS.emitters);
     a.dispose();
     const arr = (c: number) => new THREE.DataArrayTexture(new Uint8Array(4 * c), 1, 1, 4);
@@ -242,7 +261,7 @@ describe('atmosphere API (game.atmosphere, no GL)', () => {
     // every loop has a constant bound: the step loop, then per step the emitter loop with its puff loop and the
     // scatter-light loop (counts gate the work inside: uniform trip counts)
     const loops = [...f.matchAll(/for \( int (\w+) = 0; \1 < (\w+); \1 \+\+ \)/g)].map(x => x[2]);
-    expect(loops).toEqual(['8', String(SMOKE_LIMITS.emitters), String(SMOKE_LIMITS.puffsPerEmitter), String(SMOKE_LIMITS.scatterLights)]);
+    expect(loops).toEqual(['8', String(SMOKE_LIMITS.emitters), String(SMOKE_LIMITS.puffsPerEmitter), String(SCATTER_SLOTS)]);
     expect(f).not.toMatch(/while \(/);
   });
 });

@@ -39,6 +39,7 @@ import {SCENT, perceiveScent, type ScentEmitter, type ScentSighting} from './sce
 import type {CrawlWorld} from './bbSurface';
 import {ATRIUM_CHASE} from './chaseShare'; // Task track3-eaton-centre-20261031 (lane HORDE, atrium AI)
 import {SPRINTER, isSprinter} from './sprinter'; // Task studio-sprinter-zombies-20261112-033210-01
+import {IRRADIATED, isIrradiated} from './irradiated'; // Task studio-reactor-glowing-zombies-20261115-013245-01
 
 export interface ZombieStats {
   hp: number;
@@ -86,9 +87,18 @@ export const SPRINTER_STATS: Record<ZombieType, ZombieStats> = {
   coated: {...ZOMBIE_STATS.coated, chaseSpeed: SPRINTER.chaseSpeed},
 };
 
-/** The brain stats of an ordinary-zombie spawn: its type's sprinter stats when it is one (isSprinter), else its type's. */
-export function spawnStats(s: Pick<ZombieSpawn, 'archetype' | 'type' | 'sprinter'>): ZombieStats {
-  return (isSprinter(s) ? SPRINTER_STATS : ZOMBIE_STATS)[s.type];
+/**
+ * Task studio-reactor-glowing-zombies-20261115-013245-01: an IRRADIATED zombie (ai/irradiated.ts) is an ordinary zombie of either type with
+ * ONLY its hp raised: IRRADIATED.hpScale x the type's (shambler 150, coated 247.5). Every other number is its type's.
+ */
+export const IRRADIATED_STATS: Record<ZombieType, ZombieStats> = {
+  shambler: {...ZOMBIE_STATS.shambler, hp: ZOMBIE_STATS.shambler.hp * IRRADIATED.hpScale},
+  coated: {...ZOMBIE_STATS.coated, hp: ZOMBIE_STATS.coated.hp * IRRADIATED.hpScale},
+};
+
+/** The brain stats of an ordinary-zombie spawn: its type's irradiated stats (isIrradiated) or sprinter stats (isSprinter) when it is one, else its type's. */
+export function spawnStats(s: Pick<ZombieSpawn, 'archetype' | 'type' | 'sprinter' | 'irradiated'>): ZombieStats {
+  return (isIrradiated(s) ? IRRADIATED_STATS : isSprinter(s) ? SPRINTER_STATS : ZOMBIE_STATS)[s.type];
 }
 
 // Task track3-eaton-centre-20261031 (lane HORDE): 'patrol' = a roaming-horde member walking in its group's formation (ai/horde.ts

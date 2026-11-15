@@ -47,11 +47,11 @@ import {MAX_SLOTS} from '../world/lightField';
 import {GAS} from '../world/gas/field';
 import {REACTOR_AIR, REACTOR_GAS_LOOK} from '../world/reactor/air'; // task reactor-build-20261101 (lane AIR): the depth gas table size / look
 import {BILATERAL_K, DENSITY_MAP_RANGE} from './atmosphere';
-import {SMOKE_LIMITS, VIS_WINDOWS} from './smoke';
+import {SCATTER_SLOTS, SMOKE_LIMITS, VIS_WINDOWS} from './smoke';
 import {applyAmbientOcclusion, type AoComposite} from './ambientOcclusion'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane AO)
 
 /** Uniform array sizes (render/smoke.ts SMOKE_LIMITS). */
-export const VF_LIMITS = {smoke: SMOKE_LIMITS.emitters, puffsPer: SMOKE_LIMITS.puffsPerEmitter, puffs: SMOKE_LIMITS.emitters * SMOKE_LIMITS.puffsPerEmitter, scatter: SMOKE_LIMITS.scatterLights, windows: VIS_WINDOWS} as const;
+export const VF_LIMITS = {smoke: SMOKE_LIMITS.emitters, puffsPer: SMOKE_LIMITS.puffsPerEmitter, puffs: SMOKE_LIMITS.emitters * SMOKE_LIMITS.puffsPerEmitter, scatter: SCATTER_SLOTS, windows: VIS_WINDOWS} as const; // (scatter: + the reserved glow-light slots, task studio-reactor-glowing-zombies-20261115-013245-01)
 
 /** Names of the TSL variables that mark our programs (shader-error attribution in the generated GLSL / WGSL). */
 export const VF_MARK = {march: 'vfMarchAcc', temporal: 'vfTemporalOut', composite: 'vfCompositeFog'} as const;

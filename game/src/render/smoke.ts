@@ -16,6 +16,9 @@
 // each limited to its distance cutoff and gated by its own occlusion window (2D line of sight on the light's storey grid
 // at the light's height + the storey's floor..ceiling band), so a flare in the next room does not light this room's haze
 // through the wall.
+// Task studio-reactor-glowing-zombies-20261115-013245-01: + SMOKE_LIMITS.glowLights RESERVED slots for the irradiated zombies' green glow
+// lights (world/glowLights.ts; a light marked `userData.vfGlow`): they never take an ordinary slot (flares, fire, the Reactor's core /
+// startup lights keep their four) and ordinary lights never take theirs. Their windows are the compact 0.5 m kind (their reach is short).
 //
 // Pure CPU state (no GL): tests drive it directly; volumetric.ts packs it into uniforms each frame.
 
@@ -26,9 +29,15 @@ export const SMOKE_LIMITS = {
   emitters: 4,
   puffsPerEmitter: 8,
   scatterLights: 4,
+  /** Reserved scatter slots of the irradiated zombies' glow lights (`userData.vfGlow`; world/glowLights.ts GLOW_LIGHTS.count). */
+  glowLights: 4,
 } as const;
-/** Occlusion windows: scatter lights use layers 0..3, smoke emitters layers 4..7. */
-export const VIS_WINDOWS = SMOKE_LIMITS.scatterLights + SMOKE_LIMITS.emitters;
+/** Every scatter-light slot of the march: the ordinary ones first, then the reserved glow ones. */
+export const SCATTER_SLOTS = SMOKE_LIMITS.scatterLights + SMOKE_LIMITS.glowLights;
+/** Occlusion windows: ordinary scatter lights use layers 0..3, glow lights 4..7, smoke emitters 8..11. */
+export const VIS_WINDOWS = SCATTER_SLOTS + SMOKE_LIMITS.emitters;
+/** A scatter light that uses the reserved glow slots (world/glowLights.ts marks its lights). */
+export const isGlowScatter = (l: THREE.Object3D): boolean => l.userData?.vfGlow === true;
 /**
  * Window size in TEXELS per side (every layer of the shared texture). (task studio-general-armor-20261107-231448-01, user: flare light
  * distance x4) The flare lights' windows (scatter layers) span 192 x 0.5 m = 96 m, +-48 m around the flare — past its 46 m reach, so the
@@ -293,10 +302,14 @@ export interface ScatterLightState {
 
 export class ScatterLights {
   readonly list: ScatterLightState[] = [];
-  /** Registers a PointLight for in-scattering; false when SMOKE_LIMITS.scatterLights are already in use (or it is in). */
+  /**
+   * Registers a PointLight for in-scattering; false when its kind's slots are already in use (or it is in): SMOKE_LIMITS.scatterLights
+   * ordinary lights, SMOKE_LIMITS.glowLights glow lights (isGlowScatter) — separate budgets, so neither kind can starve the other.
+   */
   add(light: THREE.PointLight): boolean {
     if (this.list.some(s => s.light === light)) return true;
-    if (this.list.length >= SMOKE_LIMITS.scatterLights) return false;
+    const glow = isGlowScatter(light), mine = this.list.reduce((n, s) => n + (isGlowScatter(s.light) === glow ? 1 : 0), 0);
+    if (mine >= (glow ? SMOKE_LIMITS.glowLights : SMOKE_LIMITS.scatterLights)) return false;
     this.list.push({light, winX: NaN, winY: NaN, winZ: NaN, winT: -Infinity});
     return true;
   }

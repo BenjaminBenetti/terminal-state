@@ -23,7 +23,7 @@ import type {Area, PickupPlacement, StationLayout} from '../stationTypes';
 // Task enemy-spawn-tables-20261030 (lane SPAWN): the enemy controls are the Office's spawn profile (contexts street / floor / roof).
 import {
   areaCap, areaSpawnWeight, markSpawnContext, reportSpawnCandidates, rollZombieTypes, spawnContext, spawnProfile,
-  type SpawnContextId, type SpawnProfile,
+  type SpawnContextId, type SpawnProfile, type ZombieTypeRule,
 } from '../../ai/spawnTables';
 import {OFFICE_FLOORS} from './frame';
 import {COMPANIES, type LootTilt} from './companies';
@@ -72,12 +72,15 @@ const NO_SPAWN_TYPES = new Set(['office-stair', 'stair-core', 'office-elevator']
  * Enemies of the storeys `levels` (station + lobby: [0, 1]; office floor n: [n]; the roof: [9]) for the generation context `context`
  * of the level's spawn `profile` (lane SPAWN: count, type roll, keep-away, area weights x room intensity, caps, tries, spacing — the
  * established values, same draws). Returns the placed count.
+ * Task studio-reactor-glowing-zombies-20261115-013245-01: `fixed` = an ADDITIVE run with its own count (gen/reactor/irradiated.ts: the
+ * Reactor's irradiated additions on their own hash-seeded stream): the count is not drawn, the candidate census is not reported; the
+ * placement rules are the context's. Without it the draws are exactly the historical ones.
  */
-export function placeOfficeEnemies(layout: StationLayout, rng: Rng, field: SpawnField, levels: readonly number[], profile: SpawnProfile, context: SpawnContextId): number {
+export function placeOfficeEnemies(layout: StationLayout, rng: Rng, field: SpawnField, levels: readonly number[], profile: SpawnProfile, context: SpawnContextId, fixed?: {count: number; types: ZombieTypeRule}): number {
   const ctx = spawnContext(profile, context), pl = ctx.placement;
   const first = layout.zombies.length; // Task track1-siren-blightbelly-20261031 (lane SPAWN): context tag below (no RNG, no data change)
-  const count = rng.int(ctx.count[0], ctx.count[1]);
-  const types = rollZombieTypes(rng, count, profile.zombieTypes);
+  const count = fixed ? fixed.count : rng.int(ctx.count[0], ctx.count[1]);
+  const types = rollZombieTypes(rng, count, fixed ? fixed.types : profile.zombieTypes);
   const areaW = new Map<number, number>();
   const weightOf = (a: Area): number => {
     let w = areaW.get(a.id);
@@ -99,7 +102,7 @@ export function placeOfficeEnemies(layout: StationLayout, rng: Rng, field: Spawn
       l.push([L.id, x, y]);
     }
   }
-  reportSpawnCandidates(layout, context, byArea);
+  if (!fixed) reportSpawnCandidates(layout, context, byArea);
   const order = [...byArea.keys()].map(id => ({id, k: Math.pow(rng.next(), 1 / weightOf(layout.areas[id]))})).sort((p, q) => q.k - p.k).map(o => o.id);
   const perArea = new Map<number, number>();
   let placed = 0;
