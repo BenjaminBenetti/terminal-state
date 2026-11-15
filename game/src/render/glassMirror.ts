@@ -103,7 +103,7 @@ PLACEHOLDER.needsUpdate = true;
  *  - plane = (nx, nz, d, strength): the mirrored FACE of the glass is nx * x + nz * z = d, its normal toward the eye; strength 0..1
  *    (0 = inactive: the lookup is skipped);
  *  - rect = (a0, yTop, 1 / width, 1 / height) of the drawn window (m): a = nx * z - nz * x runs to the mirror camera's right;
- *  - params = (viewport width / target width, viewport height / target height, soft edge as a fraction of the window, gain).
+ *  - params = (viewport width / target width, viewport height / target height, soft edge as a fraction of the window (edgeTexels of its LONGER side: never wider than the pad), gain).
  */
 export const GM = {
   // (render/textureFetch.ts: no uv-transform uniform — the picture is looked up with its own uv)
@@ -121,16 +121,17 @@ export function isGlassMirrorPlaceholder(t: unknown): boolean {
 /**
  * The mirror at world point `positionWorld` of a glass fragment: rgb = the mirror's radiance (scene-linear, gain applied),
  * a = how much of it shows — 1 on the active plane inside the drawn window (a soft edge of a few texels, a fade toward CAP),
- * 0 anywhere else (another pane, no mirror). Declares vars and branches: call inside a material / lighting stack.
+ * 0 anywhere else (another pane, no mirror). `normal`: the fragment's world normal (default: the material's). Declares vars and
+ * branches: call inside a material / lighting stack.
  */
-export function glassMirrorSample(positionWorld: Node): Node {
-  const P = n(positionWorld), pl = n(GM.plane), rc = n(GM.rect), pr = n(GM.params);
+export function glassMirrorSample(positionWorld: Node, normal: Node = normalWorld): Node {
+  const P = n(positionWorld), Nw = n(normal), pl = n(GM.plane), rc = n(GM.rect), pr = n(GM.params);
   const out = n(vec4(0, 0, 0, 0)).toVar();
   If(n(pl.w).greaterThan(0.002), () => {
     const sd = n(pl.x).mul(P.x).add(n(pl.y).mul(P.z)).sub(pl.z);
     const a = n(pl.x).mul(P.z).sub(n(pl.y).mul(P.x));
     const u = n(n(a).sub(rc.x).mul(rc.z)).toVar(), v = n(n(rc.y).sub(P.y).mul(rc.w)).toVar();
-    const facing = abs(n(pl.x).mul(n(normalWorld).x).add(n(pl.y).mul(n(normalWorld).z)));
+    const facing = abs(n(pl.x).mul(Nw.x).add(n(pl.y).mul(Nw.z)));
     const edge = n(smoothstep(0, pr.z, min(u, float(1).sub(u)))).mul(smoothstep(0, pr.z, min(v, float(1).sub(v))));
     const dist = n(P).sub(cameraPosition).length();
     const far = float(1).sub(smoothstep(GLASS_MIRROR.cap * GLASS_MIRROR.fadeFrom, GLASS_MIRROR.cap, dist));
@@ -238,7 +239,7 @@ export function mirrorAlpha(face: MirrorFace, win: MirrorWindow, x: number, y: n
   if (!(Math.abs(sd) < GLASS_MIRROR.tolerance) || !(Math.abs(face.nx * normal[0] + face.nz * normal[2]) > 0.5)) return 0;
   const [u, v] = mirrorUv(face, win, x, y, z);
   const ss = (e0: number, e1: number, t: number): number => { const k = Math.min(1, Math.max(0, (t - e0) / (e1 - e0))); return k * k * (3 - 2 * k); };
-  const e = GLASS_MIRROR.edgeTexels / Math.min(win.w, win.h);
+  const e = GLASS_MIRROR.edgeTexels / Math.max(win.w, win.h);
   const edge = ss(0, e, Math.min(u, 1 - u)) * ss(0, e, Math.min(v, 1 - v));
   const dist = Math.hypot(x - eye[0], y - eye[1], z - eye[2]);
   const w = edge * (1 - ss(GLASS_MIRROR.cap * GLASS_MIRROR.fadeFrom, GLASS_MIRROR.cap, dist)) * strength;
@@ -672,7 +673,7 @@ export class GlassMirror {
     if (!this.bound || GM.tex.value !== target.texture) { GM.tex.value = target.texture; this.bound = true; refreshTextureBindings(); }
     GM.plane.value.set(face.nx, face.nz, face.d, strength);
     GM.rect.value.set(win.a0, win.y1, 1 / (win.a1 - win.a0), 1 / (win.y1 - win.y0));
-    GM.params.value.set(win.w / target.width, win.h / target.height, GLASS_MIRROR.edgeTexels / Math.min(win.w, win.h), GLASS_MIRROR_TUNING.gain);
+    GM.params.value.set(win.w / target.width, win.h / target.height, GLASS_MIRROR.edgeTexels / Math.max(win.w, win.h), GLASS_MIRROR_TUNING.gain);
     return true;
   }
 
