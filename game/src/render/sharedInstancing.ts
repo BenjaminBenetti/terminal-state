@@ -16,7 +16,8 @@
 //  1. KEY: the node manager looks its build up under three's own cache key computed with a SIGNATURE in place of the object's uuid
 //     (NodeManager.getForRenderCacheKey, three's seam for exactly this lookup): everything else three puts in the key stays — material
 //     values and node graph, geometry layout, receiveShadow, lights / fog / environment, render context, clipping. The signature holds
-//     what accessors/Instance.js still branches on: instance colour present or not and the two buffers' usage (static / dynamic).
+//     what accessors/Instance.js still branches on: instance colour present or not and the two buffers' usage (static / dynamic) —
+//     and one thing of the MATERIAL that three's key leaves out: which of its texture slots hold one texture (textureSlotSignature).
 //     Storage-buffer instances, morph targets, anything that is not a plain InstancedMesh, a pool whose geometry leaves no room
 //     for the instance attributes (render/instancing.ts instanceAttributesFit: WebGPU binds 8 vertex buffers / 16 attributes per
 //     pipeline — the bullet-crater pool is at 8 already) and a render object built with previous-frame data (a velocity MRT: three's
@@ -116,6 +117,7 @@ interface AttrLike { isInterleavedBufferAttribute?: boolean; isInstancedBufferAt
 interface AttributeStore { has(attribute: object): boolean; delete(attribute: object): unknown; backend?: {has(o: object): boolean; delete(o: object): void} | null }
 interface RenderObjectLike {
   object: InstancedLike;
+  material?: unknown;
   attributes: AttrLike[] | null;
   vertexBuffers: unknown[] | null;
   renderer?: {getMRT?(): {has?(name: string): boolean} | null} | null;
@@ -147,6 +149,35 @@ export function instancingSignature(object: unknown): string | null {
   if (!instanceAttributesFit(o)) return null; // (no room for the instance attributes in one pipeline: three's uniform-buffer path, keyed)
   const dyn = (a: InstanceAttr) => (a.usage === THREE.DynamicDrawUsage ? 'dynamic' : 'static');
   return `shared-instancing:matrix-${dyn(m)}:colour-${c ? dyn(c) : 'none'}`;
+}
+
+/**
+ * WHICH of a material's texture slots hold one and the same texture, as a key part ('' when every slot has its own, or there is none).
+ *
+ * three gives two slots that hold one texture a single binding (TextureNode.getUniformHash: the texture's uuid), so the shader text of
+ * a material with a packed roughness / metalness map has one texture binding where a material with a texture per slot has two — and
+ * three's key cannot tell the two apart: it holds each texture's mapping and sampler settings, not which texture it is. A build made
+ * from the first kind then samples ONE texture for both slots, whatever material it is drawn with. three accepts that for the plain
+ * meshes of two such materials; the pools that share a build here do not join it.
+ *
+ * Measured (lane LOAD, every pool of the Reactor built on its own and the texts under one shared key compared): the kit's thin-trim
+ * steel (world/materials.ts thinTrim: one clone of its packed map per slot) and its concrete (the packed map itself in both slots)
+ * came under one key with two texts. Both clones hold the same image there, so nothing was drawn wrongly; with two different images
+ * it would have been.
+ */
+export function textureSlotSignature(material: unknown): string {
+  if (!material || typeof material !== 'object') return '';
+  const m = material as Record<string, unknown>;
+  const first = new Map<string, number>();
+  let n = 0, out = '';
+  for (const k of Object.keys(m)) { // (the slots are own properties, in the material class's own order)
+    const v = m[k] as {isTexture?: boolean; uuid?: string} | null | undefined;
+    if (!v || typeof v !== 'object' || v.isTexture !== true || typeof v.uuid !== 'string') continue;
+    const at = first.get(v.uuid);
+    if (at === undefined) first.set(v.uuid, n); else out += `:${n}=${at}`;
+    n++;
+  }
+  return out === '' ? '' : `:one-texture${out}`;
 }
 
 /** The shared build key of each render object on the shared path (kept for its lifetime: the lookup and the release use the same key). */
@@ -358,7 +389,7 @@ export function installSharedInstancing(renderer: unknown): boolean {
     // three's own key of this render object, with the signature where the object's uuid goes (the only use of the uuid in it)
     const o = ro.object, uuid = o.uuid;
     let key: number;
-    o.uuid = sig;
+    o.uuid = sig + textureSlotSignature(ro.material);
     try { key = ro.getCacheKey(); } finally { o.uuid = uuid; }
     sharedKey.set(ro, key);
     protoGetAttributes ??= proto.getAttributes;

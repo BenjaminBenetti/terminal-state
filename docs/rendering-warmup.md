@@ -595,6 +595,13 @@ which instance buffers the build captured, and a frame hook that keeps those buf
   uuid: instance colours present or not, and the two buffers' usage (static / dynamic). Everything else three keys by
   stays: material values and node graph, geometry layout, `receiveShadow`, lights / fog / environment, render context,
   clipping. The render object's own key (what decides whether three re-creates it) is untouched.
+- **One thing three's key leaves out is added: which texture slots of the material hold one texture.** three gives two
+  slots with the same texture a single binding, so a material with a packed roughness / metalness map has a different
+  shader text from one with a texture per slot — but three's key holds each texture's mapping and sampler, not which
+  texture it is. A build made from the packed kind samples one texture for both slots whatever it is drawn with. three
+  accepts that for the plain meshes of two such materials; pools that share a build do not join it
+  (`textureSlotSignature`). The real case is the Reactor's kit: its thin-trim steel has one clone of the packed map per
+  slot, its concrete the packed map in both. Both clones hold the same image, so nothing was drawn wrongly there.
 - **Path.** Such a build always takes the attribute path, so its text holds no instance count and no global node id.
 - **Data.** The render object's `getAttributes` swaps the build's captured instance buffers for the mesh's own: one
   interleaved buffer over its own `instanceMatrix.array` (and one over its `instanceColor.array`), shared by all of the
@@ -652,6 +659,8 @@ the GPU was given):
   warm; no destroyed buffer is bound or submitted; the live buffer count and the node manager's cache do not grow;
 - a pool whose geometry is replaced, a pool disposed while still in the scene, and two pools on one colour attribute;
 - `receiveShadow` gives its own build, `castShadow` does not; velocity-flagged, morphed and skinned meshes stay keyed;
+- two materials that are equal in three's key, one with a packed map in two slots and one with a texture per slot:
+  three shares one build between their plain meshes; their pools do not share, and each kind's own pools still do;
 - a pool's own `onBeforeRender`, `count` and frustum culling behave the same with shared builds on and off;
 - the attribute switch with shared builds on top gives the same shader texts and pipeline layouts as the switch alone;
 - after a full warm-up, frames create 0 builds, 0 pipelines and 0 render objects — including a mirrored pool, whose
@@ -662,6 +671,18 @@ the GPU was given):
 path, warmed by `runWarmup` inside a nested scene pass. The plan lists every renderable with shared builds on and off;
 after the warm-up, yaw sweeps at three poses with the torch lit create 0 builds, 0 render objects, 0 pipelines and 0
 shader modules; every instanced draw names its own mesh's matrices; no pipeline asks for more than 8 vertex buffers.
+
+**The shader texts under one shared key, measured.** A private measurement mode gives every pool a key of its own, so
+every pool is built, and compares the texts of all builds that would have shared a key. Start stations of all seven
+level kinds, 411 to 2,968 pool builds each: on six kinds every key gave one text. On the Reactor three keys gave two.
+- The kit's steel and concrete: the texture-slot case above. They are two keys now.
+- The coolant tubes and windows: the same statements, with three's helper functions declared in another order. That
+  order does not change the program.
+- The light tubes and the lamp glass, which draw with one display-referred material. `displayLinear` reads the
+  renderer's tone mapping when the build runs, and three's render pipeline sets it to none while a frame is drawn, so a
+  build made inside a frame gets the pass-through text. In that mode the glass was built inside a hidden frame. As
+  shipped it shares the tubes' build from the loading compile, which is where every pool was built before. The rule
+  this shows is older than shared builds: a display-referred material must first be built outside a drawn frame.
 
 **Limits.** Node only: no pixels were compared here, and GPU-side pipeline creation was not timed. The first mesh of a
 build loses partial instance uploads (three's own frame hook consumes its update ranges first), so its uploads are whole

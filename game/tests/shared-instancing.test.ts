@@ -14,7 +14,7 @@ import {stubWebgpuGlobals} from './helpers/fakeWebgpu';
 import {VERTEX_LIMITS, attributeInstancing, instanceAttributesFit, setAttributeInstancing} from '../src/render/instancing';
 import {CraterField} from '../src/damage/craters';
 import {installSharedInstancing, instancingSignature, isSharedRenderObject, overrideSharedInstancing, releaseInstanceBuffers, setSharedInstancing, sharedInstancing,
-  sharedInstancingOverride, sharedInstancingStats} from '../src/render/sharedInstancing';
+  sharedInstancingOverride, sharedInstancingStats, textureSlotSignature} from '../src/render/sharedInstancing';
 import {WarmupRegistry, planWarmup, runWarmup, type WarmupProgress, type WarmupRenderer} from '../src/render/warmup';
 
 afterEach(() => { overrideSharedInstancing(undefined); setSharedInstancing(false); setAttributeInstancing(false); });
@@ -275,6 +275,23 @@ describe('the switch and the signature (render/sharedInstancing.ts)', () => {
     const morphGeo = new THREE.BoxGeometry(1, 1, 1);
     morphGeo.morphAttributes.position = [morphGeo.attributes.position.clone() as THREE.BufferAttribute];
     expect(instancingSignature(new THREE.InstancedMesh(morphGeo, mat, 2))).toBeNull();
+  });
+
+  it('the material\'s part of the signature: WHICH texture slots hold one texture (nothing when every slot has its own)', () => {
+    const tex = () => new THREE.DataTexture(new Uint8Array(4), 1, 1);
+    const a = tex(), b = tex(), c = tex();
+    const packed = textureSlotSignature(new THREE.MeshStandardMaterial({map: a, roughnessMap: b, metalnessMap: b}));
+    expect(packed).not.toBe('');
+    // a texture per slot, no texture at all, nothing to read: no part (the key is three's own with the object's signature)
+    expect(textureSlotSignature(new THREE.MeshStandardMaterial({map: a, roughnessMap: b, metalnessMap: c}))).toBe('');
+    expect(textureSlotSignature(new THREE.MeshStandardMaterial({map: a, roughnessMap: b, metalnessMap: b.clone()}))).toBe(''); // (a clone is another texture)
+    expect(textureSlotSignature(new THREE.MeshStandardMaterial())).toBe('');
+    expect(textureSlotSignature(null)).toBe('');
+    expect(textureSlotSignature(undefined)).toBe('');
+    // which TEXTURE it is does not matter (three's key does not hold it either), which SLOTS do
+    expect(textureSlotSignature(new THREE.MeshStandardMaterial({map: c, roughnessMap: a, metalnessMap: a}))).toBe(packed);
+    expect(textureSlotSignature(new THREE.MeshStandardMaterial({map: a, roughnessMap: a, metalnessMap: b}))).not.toBe(packed);
+    expect(textureSlotSignature(new THREE.MeshStandardMaterial({map: a, roughnessMap: a, metalnessMap: a}))).not.toBe(packed);
   });
 });
 
@@ -689,6 +706,49 @@ describe('what a build is keyed by besides the material (three\'s own key, kept)
     expect(instancingSignature(skinned)).toBeNull();
     expectOwnData(s, [false]);
     for (const p of Object.values(s.pools)) if (p !== noCast) for (const d of drawsOf(s, p, true)) expect(d.bound.some(b => holdsExactly(b, p.instanceMatrix.array)), `${p.name} (shadow)`).toBe(true);
+    expect(s.log!.issues).toEqual([]);
+    expect(s.log!.dropped).toBe(0);
+  }, 120_000);
+
+  it('two texture slots on ONE texture get a single binding, and three\'s key does not say so: the pools of such a material never share a build with a texture-per-slot one', async () => {
+    const s = await build('webgpu', {share: true, empty: true});
+    const {box, tall} = s.geometries;
+    const tex = (v: number) => { const t = new THREE.DataTexture(new Uint8Array([v, v, v, 255]), 1, 1); t.needsUpdate = true; return t; };
+    const copy = (t: THREE.Texture) => { const c = t.clone(); c.needsUpdate = true; return c; };
+    const colour = tex(200), orm = tex(120);
+    // equal in everything three keys a build by (the same slots filled, the same samplers): a packed roughness / metalness map — and a
+    // texture per slot (world/materials.ts thinTrim leaves the Reactor's steel with one clone of its packed map per slot)
+    const packed = new THREE.MeshStandardMaterial({map: colour, roughnessMap: orm, metalnessMap: orm, name: 'packed'});
+    const packedTwin = new THREE.MeshStandardMaterial({map: tex(90), roughnessMap: colour, metalnessMap: colour, name: 'packed-twin'});
+    const perSlot = new THREE.MeshStandardMaterial({map: colour, roughnessMap: copy(orm), metalnessMap: copy(orm), name: 'per-slot'});
+    const perSlotTwin = new THREE.MeshStandardMaterial({map: tex(60), roughnessMap: tex(30), metalnessMap: tex(10), name: 'per-slot-twin'});
+    const pools = {
+      packed: pool('packed', box, packed, 3, new THREE.Vector3(-1, 0.2, 0)),
+      packedTwin: pool('packed-twin', tall, packedTwin, 4, new THREE.Vector3(-1, 0.5, 1)),
+      perSlot: pool('per-slot', box, perSlot, 5, new THREE.Vector3(-1, 0.2, 2)),
+      perSlotTwin: pool('per-slot-twin', tall, perSlotTwin, 2, new THREE.Vector3(-1, 0.5, 3)),
+    };
+    Object.assign(s.pools, pools);
+    // three's own rule, on plain meshes (no instancing in it): ONE build for the two kinds of material, whichever is drawn first
+    const plain = [packed, perSlot].map((m, i) => { const o = new THREE.Mesh(box, m); o.position.set(2, 0.2, i); o.frustumCulled = false; return o; });
+    s.scene.add(...Object.values(pools), ...plain);
+    for (let i = 0; i < 2; i++) s.frame();
+    const ro = (o: THREE.Object3D) => s.ros().get(o)!.scene!;
+    const state = (o: THREE.Object3D) => ro(o).getNodeBuilderState() as {fragmentShader: string};
+    const textures = (o: THREE.Object3D) => (state(o).fragmentShader.match(/:\s*texture_2d<\s*f32\s*>/g) ?? []).length;
+    expect(state(plain[1]), 'three: plain meshes of the two materials share one build').toBe(state(plain[0]));
+    for (const p of Object.values(pools)) expect(isSharedRenderObject(ro(p)), `${p.name} is on the shared path`).toBe(true);
+    // shared builds: one per kind — the twins join their kind's build, the two kinds stay apart
+    expect(state(pools.packedTwin)).toBe(state(pools.packed));
+    expect(state(pools.perSlotTwin)).toBe(state(pools.perSlot));
+    expect(state(pools.perSlot)).not.toBe(state(pools.packed));
+    expect(instancedBuilds(s, false).length).toBe(2);
+    // and each kind's text has its own bindings: one texture for the packed map, one per slot otherwise (besides the colour map and
+    // whatever three itself samples for a standard material)
+    expect(textures(pools.packed)).toBeGreaterThanOrEqual(2);
+    expect(textures(pools.perSlot) - textures(pools.packed)).toBe(1);
+    expect(textures(pools.packedTwin)).toBe(textures(pools.packed));
+    expectOwnData(s);
     expect(s.log!.issues).toEqual([]);
     expect(s.log!.dropped).toBe(0);
   }, 120_000);
