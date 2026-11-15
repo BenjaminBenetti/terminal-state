@@ -1,7 +1,8 @@
 // Task studio-pbr-material-pass-20261115-192427-01 (PBR material pass): surfaces behave like their intended substance. A material's
 // `roughness` MULTIPLIES its surface set's roughness map, so finishes written as absolute values drew far glossier than meant
 // (finishRoughness); glazed ceramics show the reflection probes like the station's wall tile ('gloss'); a plain clone keeps a
-// loaded model's glass tag (the aim highlight). Painted at full resolution through the canvas shim: the sets' real roughness maps.
+// loaded model's glass tag (the aim highlight); the player train's windows (and the glass lift) are lit glass, not an unlit film.
+// Painted at full resolution through the canvas shim: the sets' real roughness maps.
 import * as THREE from 'three';
 import {describe, expect, it} from 'vitest';
 import {installCanvasShim} from './helpers/canvas2d';
@@ -20,6 +21,8 @@ import {INTERIOR_DIELECTRIC, OpenableSet} from '../src/world/openables';
 import {LENS_FINISH, controlSkin, lampSkin} from '../src/world/reactor/controlsSkin';
 import {equipmentMaterials} from '../src/world/trainEquipmentModel';
 import {cartMaterials} from '../src/world/fuelCartModel';
+import {CAB_GLASS, cabGlassMaterial} from '../src/world/elevator';
+import {TrainMaterials} from '../src/world/playerTrainView';
 import {MODEL_MATERIAL_FIXES, applyModelMaterialFix} from '../src/assets/modelMaterialFixes';
 import {MODEL_FILES} from '../src/assets/manifest';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
@@ -112,6 +115,28 @@ describe('a plain clone keeps a loaded model\'s reflection tag', () => {
     expect(reflectClass(c)).toBe('glass');
     // an untagged material stays untagged
     expect(reflectTagOf(cloneSurfaceMaterial(new THREE.MeshStandardMaterial()))).toBeUndefined();
+  });
+});
+
+describe('the player train windows and the glass lift: lit glass on the station glass path', () => {
+  it('one shared material: lit, tagged glass, clean, dielectric, the old tint, see-through, both faces, no depth write', () => {
+    const g = cabGlassMaterial() as THREE.MeshStandardMaterial;
+    expect(new TrainMaterials().glass()).toBe(g);
+    expect(g.isMeshStandardMaterial).toBe(true); // lit: the field, its highlight and the flashlight's (no longer MeshBasic)
+    expect(reflectTagOf(g)).toBe('glass');
+    expect(reflectClass(g)).toBe('glass');
+    expect(g.metalness).toBe(0);
+    expect(g.roughness).toBe(CAB_GLASS.roughness);
+    expect(g.roughness).toBeLessThan(0.15);
+    expect(g.color.toArray()).toEqual([...CAB_GLASS.tint]);
+    expect(g.transparent).toBe(true);
+    expect(g.opacity).toBe(CAB_GLASS.opacity);
+    expect(g.opacity).toBeLessThanOrEqual(0.25); // as clear as before face-on (0.14 rising toward a grazing view)
+    expect(g.depthWrite).toBe(false);
+    expect(g.side).toBe(THREE.DoubleSide);
+    expect(g.name).toBe('tower-cab-glass');
+    // no per-fragment opacity: the probe reflection's compensation divides by the material's opacity (world/reflectionNode.ts)
+    expect((g as unknown as {opacityNode: unknown}).opacityNode ?? null).toBeNull();
   });
 });
 
