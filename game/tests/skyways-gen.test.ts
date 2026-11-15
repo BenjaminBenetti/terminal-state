@@ -167,6 +167,9 @@ describe('Skyways: generated layouts', () => {
         if (snacks.has(p)) { expect(p.y - l.levels[p.level ?? 0].baseY, `seed ${s}: ${p.itemId} on a table`).toBeGreaterThan(0.7); continue; }
         // (lane STORE-OUTFITTER: the outfitter's ONE real backpack, a gear find standing on its pack-wall shelf — not a floor pile)
         if (outfitterDressOf(l).some(r => r.backpack && l.pickups[r.backpack.pickup] === p)) continue;
+        // task studio-skywalk-events-20261115-193624-01 (lane GOLF-COURSE): the mini-golf course's balls on its tees / at the front desk and its one putter on the desk
+        const golf = l.skyways!.addon.golf;
+        if (golf && [...golf.holes.map(h => h.ball), golf.desk?.putter, ...(golf.desk?.balls ?? [])].some(i => i !== undefined && l.pickups[i] === p)) continue;
         expect(/^(rifle|shotgun|pistol|ammo_|gas_mask|gas_filter)/.test(p.itemId) || p.reward !== undefined, `seed ${s}: ${p.itemId}`).toBe(true);
       }
       void r;

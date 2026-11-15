@@ -32,7 +32,7 @@ import {VENUE_DOOR_CLEAR, VENUE_SIGN, arrowFor, doorPlate, entryAreas, eventVenu
 import type {SkywaysVenueRole} from '../skywaysTypes';
 import type {EventDressResult} from './eventResult';
 import {GOLF_BALL_ITEM, GOLF_CUP_R, GOLF_GREEN_H, GOLF_RAIL, GOLF_TIER_H, PUTTER_ITEM} from './golfContract';
-import {GOLF_TEE_MARGIN, bayFrame, bayOrder, buildHole, planHall, planHole, type BayFrame, type BuiltHole, type GolfBay, type GPt, type GRect, type HallOpening} from './golfCourse';
+import {GOLF_TEE_MARGIN, bayFrame, bayOrder, buildHole, planHall, planHole, splitPiece, type BayFrame, type BuiltHole, type GolfBay, type GPt, type GRect, type HallOpening} from './golfCourse';
 import {GOLF_ARCH_MATS, GOLF_BANNER, GOLF_BLOCK_MATS, GOLF_CARD, GOLF_FLAG, GOLF_RACK, GOLF_RAIL_MATS, GOLF_TEE_MAT, GOLF_TEE_SIGN, GOLF_TINTS, golfCardVariant, golfSignVariant, type GolfKind} from './golfKinds';
 import {GOLF_COURSE_NAMES, GOLF_PARTY_NAMES, type GolfDesign, type SkywaysGolfHole, type SkywaysGolfRecord} from './golfTypes';
 
@@ -190,7 +190,9 @@ function placeCourse(vc: VenueCtx, hall: Area, name: number, info: GolfDressInfo
     const cupW = W(built.cup);
     const cup = push('golfCup', cupW, 0, GOLF_GREEN_H, tint);
     const rails = built.rails.map(q => { const r = W(q.r); return push('golfRail', r, q.tier ? GOLF_TIER_H : GOLF_GREEN_H, GOLF_RAIL.h, rail, along(r)); });
-    const blocks = plan.blocks.map((b, j) => push('golfBlock', W(b), deckTopAt(built, {x: (b.x0 + b.x1) / 2, z: (b.z0 + b.z1) / 2}), PROP_DEFS.golfBlock.h, (block0 + k + j) % GOLF_BLOCK_MATS.length));
+    // (a long block — the island — in pieces under the collider size rule, like the deck)
+    const blocks = plan.blocks.flatMap((b, j) => splitPiece(b).map(q => push('golfBlock', W(q), deckTopAt(built, {x: (q.x0 + q.x1) / 2, z: (q.z0 + q.z1) / 2}), PROP_DEFS.golfBlock.h,
+      (block0 + k + j) % GOLF_BLOCK_MATS.length)));
     const archRot = fr.sAlongX ? 0 : Math.PI / 2, archF = footprint('golfArch', archRot);
     const arches = plan.arches.map(a => { const c = fr.toWorld(a); return push('golfArch', {x0: c.x - archF.hx, z0: c.z - archF.hz, x1: c.x + archF.hx, z1: c.z + archF.hz}, deckTopAt(built, a), PROP_DEFS.golfArch.h, k % GOLF_ARCH_MATS.length, archRot); });
     const tee = fr.toWorld(plan.tee), matF = footprint('golfTeeMat', archRot);

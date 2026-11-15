@@ -213,4 +213,17 @@ export const GOLF_SPECS: Readonly<Record<GolfKind, EventKindSpec>> = {
   },
 };
 /** Scale-check records (tools/asset-pipeline/props/scale-check.mjs --kind <kind> beside zombie lastshift, viewed): W x H x D, contact. */
-export const GOLF_SCALE: Readonly<Partial<Record<GolfKind, string>>> = {};
+export const GOLF_SCALE: Readonly<Partial<Record<GolfKind, string>>> = {
+  golfGreen: 'unit piece 1.00 x 0.06 x 1.00 m (sized per placement, each piece <= 2.8 m across: GOLF_PIECE_MAX_R); turf top 0.06 m, ankle height; grounded, 4 corners',
+  golfCup: '0.50 x 0.06 x 0.50 m deck square, the 108 mm cup open in its top; grounded, full base (the liner floor 1.5 mm over the hall floor)',
+  golfTier: 'unit piece 1.00 x 0.11 x 1.00 m (sized per placement): 5 cm over the green it steps down to; grounded, 4 corners',
+  golfRail: 'unit run 1.00 x 0.11 x 0.086 m (cap incl.; length per placement), standing on the deck top: 0.17 m over the floor, shin-low; on the deck, 2 ends',
+  golfBlock: '0.36 x 0.12 x 0.36 m (sized per placement: the island block 0.7 m wide, in pieces <= 2.8 m long), standing on the turf; on the deck, full base',
+  golfArch: '1.00 x 0.30 x 0.16 m tunnel gate (0.34 m wide x 0.20 m high opening) across a 1 m lane, knee-low; on the deck, 2 posts',
+  golfTeeMat: '0.50 x 0.004 x 0.36 m rubber mat on the turf; flat, full base',
+  golfTeeSign: '0.34 x 0.92 x 0.22 m (plate 0.34 x 0.26 at 0.79 m, about a zombie\'s hip); grounded, 4 corners of its weighted base',
+  golfFlag: '0.25 x 0.62 x 0.05 m pole and pennant beside the cup (outside the rail), below a zombie\'s knee + 0.1 m; grounded on its clamp foot, 1 contact',
+  golfScorecardStand: '0.16 x 0.18 x 0.09 m card stand + pencil cup on the 1.05 m front desk; on its host top, 2 contacts',
+  golfPutterRack: '0.90 x 0.50 x 0.09 m wall board, mounted 0.95-1.45 m (hooks at 1.27 m); wall-mounted (no floor contact in game)',
+  golfPartyBanner: '1.80 x 0.45 x 0.01 m banner board, mounted 1.55-2.00 m (over a zombie\'s shoulder); wall-mounted',
+};
