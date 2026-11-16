@@ -41,6 +41,7 @@ import type {SRect, SurfaceInfo} from '../../gen/surface/surfaceTypes';
 import type {EnemyArchetypeId} from '../../ai/creatureSpawn';
 import {CONTEXT_LOCKED_FAMILIES, ROSTER_ONLY_FAMILIES, spawnProfile, type EnemyFamilyId, type FamilyPool} from '../../ai/spawnTables';
 import {hashString, mulberry32} from '../../core/rng';
+import {FLOOR} from '../../gen/grid';
 
 /** The replenisher's tuning (one place; tests read it). */
 export const REPLENISH = {
@@ -51,9 +52,10 @@ export const REPLENISH = {
   /** Spawn annulus around the player (m). */
   spawnMin: 35,
   spawnMax: 80,
-  /** Seconds between spawn rounds; candidates tried per spawn. */
+  /** Seconds between spawn rounds; candidates tried per spawn; seconds between despawn / corpse sweeps (bounded line-of-sight work). */
   tickS: 1,
   tries: 24,
+  sweepS: 0.25,
   /** A living outdoor actor this far (m) and unseen this long (s) is removed; beyond hardM always. */
   despawnM: 110,
   unseenS: 3,
@@ -92,8 +94,7 @@ export function inViewCone(v: Viewer, p: P3, margin: number = REPLENISH.coneMarg
   const ox = p.x - v.x, oy = p.y - v.y, oz = p.z - v.z;
   const d = Math.hypot(ox, oy, oz);
   if (d < 1e-6) return true;
-  const fwd = (ox * v.dx + oy * v.dy + oz * v.dz);
-  if (fwd <= 0) return false; // behind the eye
+  const fwd = (ox * v.dx + oy * v.dy + oz * v.dz); // (behind the eye: both angles below exceed 90 deg — outside any camera cone)
   // right / up axes of the view (right = forward x world up, normalised; up = right x forward): the frustum's rectangular pyramid
   let rx = -v.dz, rz = v.dx;
   const rl = Math.hypot(rx, rz) || 1;
@@ -101,6 +102,29 @@ export function inViewCone(v: Viewer, p: P3, margin: number = REPLENISH.coneMarg
   const ux = -rz * v.dy, uy = rz * v.dx - rx * v.dz, uz = rx * v.dy;
   const side = ox * rx + oz * rz, up = ox * ux + oy * uy + oz * uz;
   return Math.abs(Math.atan2(side, fwd)) <= v.halfH + margin && Math.abs(Math.atan2(up, fwd)) <= v.halfV + margin;
+}
+
+/** The grid queries standableOn reads (gen/grid.ts Grid satisfies it). */
+export interface StandGrid {
+  readonly cells: ArrayLike<number>;
+  readonly area: ArrayLike<number>;
+  cellOf(x: number, z: number): [number, number];
+  inBounds(cx: number, cy: number): boolean;
+  idx(cx: number, cy: number): number;
+  floorAt(x: number, z: number): number;
+}
+
+/**
+ * A standable OUTDOOR street point: the street-level grid's cell is FLOOR of an outdoor area, and a body circle of radius `r` stands
+ * clear there (`clear` = gen/levels.ts Levels.circleClear: no wall, slab edge or blocking prop). Else null.
+ */
+export function standableOn(grid: StandGrid, clear: (x: number, z: number, r: number, feet: number) => boolean, outdoor: ReadonlySet<number>, x: number, z: number, r: number): Standable | null {
+  const [cx, cy] = grid.cellOf(x, z);
+  if (!grid.inBounds(cx, cy)) return null;
+  const i = grid.idx(cx, cy);
+  if (grid.cells[i] !== FLOOR || !outdoor.has(grid.area[i])) return null;
+  const floor = grid.floorAt(x, z);
+  return clear(x, z, r, floor) ? {floor, area: grid.area[i]} : null;
 }
 
 /** The minimal actor the replenisher tracks (an EnemyActor in the game). */
@@ -189,6 +213,7 @@ export class OutdoorReplenisher<A extends ReplenishActor> {
   private readonly dead: Tracked<A>[] = [];
   private clock = 0;
   private due = 0;
+  private sweepDue = 0;
   private serial = 0;
   readonly counts: ReplenishCounts = {spawned: 0, initial: 0, despawned: 0, retired: 0, refused: 0, tries: 0, rejected: {}};
   /** Families the host can build now (a lazily loaded model missing -> that family becomes an ordinary zombie). */
@@ -225,9 +250,12 @@ export class OutdoorReplenisher<A extends ReplenishActor> {
   tick(dt: number): void {
     if (!this.host.active()) return;
     this.clock += dt;
-    const v = this.host.viewer();
-    this.sweepLive(v);
-    this.sweepDead(v);
+    if (this.clock >= this.sweepDue) {
+      this.sweepDue = this.clock + REPLENISH.sweepS;
+      const v = this.host.viewer();
+      this.sweepLive(v);
+      this.sweepDead(v);
+    }
     if (this.clock < this.due) return;
     this.due = this.clock + REPLENISH.tickS;
     const want = this.live.length < REPLENISH.cap / 2 ? 2 : 1;

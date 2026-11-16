@@ -23,9 +23,8 @@ import type {EnemyActor} from '../../ai/creatureArchetypes';
 import {ENEMY_ARCHETYPES} from '../../ai/creatureArchetypes';
 import {ENEMY_MODEL_FILES} from '../../ai/enemyModels';
 import {spawnProfile, type EnemyFamilyId} from '../../ai/spawnTables';
-import {FLOOR} from '../../gen/grid';
 import {mulberry32} from '../../core/rng';
-import {OutdoorReplenisher, REPLENISH, outdoorFamilyPool, outdoorRulesOf, viewerOf, type ReplenishHost, type Standable} from './replenish';
+import {OutdoorReplenisher, REPLENISH, outdoorFamilyPool, outdoorRulesOf, standableOn, viewerOf, type ReplenishHost, type Standable} from './replenish';
 
 const runtimes = new WeakMap<object, SurfaceReplenishRuntime>();
 /** The replenisher runtime installed into a game (QA / tests). */
@@ -170,15 +169,8 @@ export class SurfaceReplenishRuntime {
 
   /** A standable OUTDOOR street point (level 0, an outdoor area's FLOOR cell, a clear body circle: no wall / blocking prop). */
   standable(x: number, z: number, r: number): Standable | null {
-    const g = this.game, grid = g.levels?.main;
-    if (!grid) return null;
-    const [cx, cy] = grid.cellOf(x, z);
-    if (!grid.inBounds(cx, cy)) return null;
-    const i = grid.idx(cx, cy);
-    if (grid.cells[i] !== FLOOR || !this.outdoor.has(grid.area[i])) return null;
-    const floor = grid.floorAt(x, z);
-    if (!g.levels.circleClear(x, z, r, floor)) return null;
-    return {floor, area: grid.area[i]};
+    const L = this.game.levels, grid = L?.main;
+    return grid ? standableOn(grid, (a, b, c, d) => L.circleClear(a, b, c, d), this.outdoor, x, z, r) : null;
   }
 
   qa(): Record<string, unknown> {
