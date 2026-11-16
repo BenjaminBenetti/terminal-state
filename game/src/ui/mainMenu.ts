@@ -30,6 +30,10 @@
 // Task studio-settings-menu-parity-20261115-191601-01: the Settings dialog is the pause menu's Settings presentation (ui/settingsTabs.ts:
 // Graphics / Audio / Gameplay / Performance tabs over the same form, the technical read-outs behind "Show details", the recorder on the
 // Performance tab) — the selected tab's rows scroll inside the dialog and Back stays pinned under them. The other dialogs are unchanged.
+//
+// Task rt-flashlight-compute-20261115-233136 (lane UI): "RT Flashlight" (On / Off) right after Reflections — name, choices and help line
+// from the contracts (world/rtFlashlight.ts, world/enhancedLighting.ts rtFlashlightHelp): what the live station's flashlight bounce
+// really is (traced on the GPU, or the standard bounce and why), held while a change is applied, disabled while Enhanced lighting is Off.
 
 import {SAVE_SLOTS, type SaveMeta} from '../campaign/types';
 import type {LevelId} from '../levels/types';
@@ -43,8 +47,9 @@ import {
 // task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): the enhanced-lighting contract (a leaf: no three, no DOM)
 import {
   ENHANCED_LIGHTING_LABEL, ENHANCED_LIGHTING_OPTIONS, REFLECTIONS_LABEL, REFLECTION_OPTIONS, describeEnhancedLighting, describeReflections,
-  isEnhancedLightingMode, isReflectionQuality, type EnhancedLightingStatus,
+  isEnhancedLightingMode, isReflectionQuality, rtFlashlightHelp, type EnhancedLightingStatus,
 } from '../world/enhancedLighting';
+import {RT_FLASHLIGHT_LABEL, RT_FLASHLIGHT_OPTIONS, isRtFlashlightChoice, rtFlashlightChoice} from '../world/rtFlashlight'; // (lane UI: RT Flashlight)
 import type {DerivedCacheStats} from '../core/derivedCache';
 import {SettingsTabs, buildSettingsTabs} from './settingsTabs'; // (task studio-settings-menu-parity-20261115-191601-01)
 
@@ -1083,7 +1088,7 @@ export function mountControlsForm(box: HTMLElement, store: SettingsStore, o: Pic
  * Builds the settings controls (view, audio, graphics: everything but the input preferences, which are the Controls form's) into `box`
  * (replacing its children), bound both ways to `store`. Returns an unsubscribe.
  * Ids (P = o.idPrefix): fov, vol, mute, sway, quality (+ -help), res (+ -readout), ao (+ -help), lighting (+ -help), reflections
- * (+ -help), then the store note, lighting-cache and lighting-cache-clear. Groups (data-group, SettingsGroup): fov + sway gameplay,
+ * (+ -help), rt (+ -help; RT Flashlight), then the store note, lighting-cache and lighting-cache-clear. Groups (data-group, SettingsGroup): fov + sway gameplay,
  * vol + mute audio, quality … lighting-cache graphics; the store note has none (shown with every group).
  */
 export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: SettingsFormOptions): () => void {
@@ -1196,21 +1201,31 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
     };
     const light = choice('lighting', ENHANCED_LIGHTING_LABEL, ENHANCED_LIGHTING_OPTIONS, isEnhancedLightingMode, v => ({enhancedLighting: v}));
     const refl = choice('reflections', REFLECTIONS_LABEL, REFLECTION_OPTIONS, isReflectionQuality, v => ({reflections: v}));
+    // (task rt-flashlight-compute-20261115-233136, lane UI) RT Flashlight On / Off: how the flashlight's bounce is made (the stored boolean
+    // rtFlashlight). Its help line is the status's (rtFlashlightHelp): a plain description waits behind "Show details", what the live
+    // station really uses, a reason it is not traced and a change note always show. Applied like the two above (main.ts -> relight).
+    const rt = choice('rt', RT_FLASHLIGHT_LABEL, RT_FLASHLIGHT_OPTIONS, isRtFlashlightChoice, v => ({rtFlashlight: v === 'on'}));
     const statusOf = (s: Readonly<GameSettings>): EnhancedLightingStatus => {
       let st: EnhancedLightingStatus | null = null;
       try { st = o.lightingStatus?.() ?? null; } catch (err) { console.warn('settings: the lighting status could not be read', err); }
-      return st ?? {requested: {lighting: s.enhancedLighting, reflections: s.reflections}, active: null, pending: false, cacheBackend: 'none'};
+      return st ?? {requested: {lighting: s.enhancedLighting, reflections: s.reflections, rt: s.rtFlashlight}, active: null, pending: false, cacheBackend: 'none'};
     };
     syncLighting = s => {
       if (light.sel.value !== s.enhancedLighting) light.sel.value = s.enhancedLighting;
       if (refl.sel.value !== s.reflections) refl.sel.value = s.reflections;
+      const rtValue = rtFlashlightChoice(s.rtFlashlight !== false);
+      if (rt.sel.value !== rtValue) rt.sel.value = rtValue;
       const st = statusOf(s);
       // (task studio-graphics-gpu-materials-toggle-20261114-212239-01) both choices are held while the game rebuilds the live station's
       // lighting for the last change (Game.relightAfterSettings); the help lines say so, and say when a change could not be applied
       light.sel.disabled = st.applying === true;
       refl.sel.disabled = st.applying === true || s.enhancedLighting === 'off';
+      rt.sel.disabled = st.applying === true || s.enhancedLighting === 'off'; // (lane UI: held like them; needs Enhanced lighting like Reflections)
       light.help.textContent = describeEnhancedLighting(st);
       refl.help.textContent = describeReflections(st);
+      const rtHelp = rtFlashlightHelp(st);
+      rt.help.textContent = rtHelp.text;
+      rt.help.classList.toggle('set-detail', rtHelp.detail);
     };
     sync.push(s => syncLighting(s));
   }

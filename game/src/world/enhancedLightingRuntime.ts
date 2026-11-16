@@ -24,16 +24,24 @@
 // like — knows or cares where they were made. Everything else of step 2 stays on this thread (the direct light, the surface
 // colours, the digests, the field's encoding). When the workers cannot be used or give up, that part is baked here as before and
 // the reason is reported (timings.bake, status().bake, a console warning): never silently, never a different station.
+//
+// Task rt-flashlight-compute-20261115-233136 (lane UI): RT FLASHLIGHT (world/rtFlashlight.ts). The plan says whether a station's bounce
+// is to be traced on the GPU (plan.rt); bakeSteps hands that on (EnhancedBake.rt: only when the station's final shading is full) and
+// records it (status().active.rt / rtReason); the lead's RT runtime reports what it could prepare (rtInstalled: the traced scene, or why
+// the station keeps the standard bounce). The compute probe answers after the renderer is initialised: setRtCapability. A station that
+// cannot take the traced bounce whatever the choice (its shading ended plain, its traced scene could not be prepared) makes the choice
+// moot for it: an RT On / Off change is then not a pending change (no relight that would build the same station).
 
 import {ContentHasher} from '../core/contentHash';
 import {openDerivedCache, type DerivedBundle, type DerivedCache, type DerivedCacheStats} from '../core/derivedCache';
 import type {BuildSteps} from '../core/pacedBuild';
 import {BakeWorkersFailed, LightBakeSession, type LightBakeReport, type LightBakeWorkers} from './lightBakePool';
 import {
-  ENHANCED_LIGHTING_DEFAULT, FIELD_CUBE_BYTES, REFLECTIONS_DEFAULT, baselinePlan, planEnhancedLighting, planSignature,
+  ENHANCED_LIGHTING_DEFAULT, FIELD_CUBE_BYTES, REFLECTIONS_DEFAULT, baselinePlan, planEnhancedLighting, planSignature, rtCapability,
   type EnhancedLightingActive, type EnhancedLightingPlan, type EnhancedLightingRequest, type EnhancedLightingStatus, type FieldShading, type GiTier, type LightingCacheUse,
   type LightingCapabilities, type ReflectionTier,
 } from './enhancedLighting';
+import {RT_NOT_INSTALLED_REASON, type RtCapability, type RtSceneInfo} from './rtFlashlight';
 import {MAX_GROUPS, MAX_SLOTS, bakeLightFieldSteps, fieldDepth, giDepth, type BakedField, type ColumnGeometry, type FieldParams, type FieldSource} from './lightField';
 import {GATHER_REACH, GATHER_TUNING, IND_STRIDE, gatherIndirectSteps, indirectIndex, rowBits, rowValue, type GatherOptions, type IndirectContext, type IndirectLight} from './lightFieldGather';
 import {BandScene} from './lightScene';
@@ -42,8 +50,8 @@ import {
 } from './reflectionProbes';
 import {surfaceAlbedoSteps, type DrawnSurfaces, type SurfaceAlbedo} from './surfaceAlbedo';
 
-/** The two settings as the game holds them (game.ts Settings; optional: hosts / tests from before them read the defaults). */
-export interface EnhancedLightingSettings { enhancedLighting?: EnhancedLightingRequest['lighting']; reflections?: EnhancedLightingRequest['reflections'] }
+/** The settings as the game holds them (game.ts Settings; optional: hosts / tests from before them read the defaults). (lane UI: + rtFlashlight, default On) */
+export interface EnhancedLightingSettings { enhancedLighting?: EnhancedLightingRequest['lighting']; reflections?: EnhancedLightingRequest['reflections']; rtFlashlight?: boolean }
 
 /**
  * Versions of the cached data. Bump GATHER when world/lightFieldGather.ts (or the ray scene / the albedo bytes it reads) gives a
@@ -76,6 +84,13 @@ export interface EnhancedBake {
    * traces its beam against (world/flashBounce.ts). null otherwise.
    */
   bounce: {scene: BandScene; albedo: SurfaceAlbedo} | null;
+  /**
+   * (lane UI) The bounce is to be traced on the GPU (RT Flashlight: the plan's rt, and the station's shading really is full) — the RT
+   * light variant replaces the virtual-light bounce; false: the bounce (where there is one) is the standard one.
+   */
+  rt: boolean;
+  /** Why not although it was asked for (null: it is, or it was not asked for). */
+  rtReason: string | null;
 }
 
 /**
@@ -146,8 +161,12 @@ function lightsView(src: FieldSource): Float64Array {
 
 export class EnhancedLightingRuntime {
   private active: EnhancedLightingActive | null = null;
-  /** What the live station was planned with (pending = the settings now plan something else for it). */
-  private live: {signature: string; reactor: boolean} | null = null;
+  /**
+   * What the live station was planned with (pending = the settings now plan something else for it). (lane UI) `plan`: that plan;
+   * `rtBlocked`: the station cannot take the traced bounce whatever the choice (its shading ended plain, its traced scene could not be
+   * prepared) — its signature and the one it is compared with leave RT out.
+   */
+  private live: {signature: string; reactor: boolean; plan?: EnhancedLightingPlan; rtBlocked?: boolean} | null = null;
   private caps: LightingCapabilities = {backend: null, software: false, maxTextureSize: 0, max3DTextureSize: 0, halfFloatLinear: false};
   private cache: DerivedCache | null = null;
   private fetched: Fetched | null = null;
@@ -172,16 +191,31 @@ export class EnhancedLightingRuntime {
     this.bakeWorkersOff = null;
   }
 
-  /** What the initialised renderer really offers (Game.initRenderer; before it: nothing — no reflections are planned). */
+  /**
+   * What the initialised renderer really offers (Game.initRenderer; before it: nothing — no reflections are planned). Everything is
+   * replaced: caps without `rt` = RT Flashlight's compute path not probed yet on this renderer (setRtCapability answers it later).
+   */
   setCapabilities(caps: LightingCapabilities): void {
-    this.caps = {...caps};
+    this.caps = {...caps, ...(caps.rt ? {rt: {...caps.rt}} : {})};
     this.changed();
   }
   capabilities(): LightingCapabilities { return {...this.caps}; }
 
+  /**
+   * (lane UI) The answer of RT Flashlight's compute probe for the renderer of the last setCapabilities (it finishes after the renderer is
+   * initialised; null: not known — not used). Only this capability changes; the plan, pending and the status follow it like any other
+   * capability change (a live station that would now be built differently has a pending change).
+   */
+  setRtCapability(cap: RtCapability | null): void {
+    const was = this.caps.rt ?? null;
+    if (was === cap || (was && cap && was.ok === cap.ok && was.reason === cap.reason)) return;
+    this.caps = {...this.caps, rt: cap ? {ok: cap.ok, reason: cap.reason} : null};
+    this.changed();
+  }
+
   /** What the player asked for right now. */
   request(): EnhancedLightingRequest {
-    return {lighting: this.settings.enhancedLighting ?? ENHANCED_LIGHTING_DEFAULT, reflections: this.settings.reflections ?? REFLECTIONS_DEFAULT};
+    return {lighting: this.settings.enhancedLighting ?? ENHANCED_LIGHTING_DEFAULT, reflections: this.settings.reflections ?? REFLECTIONS_DEFAULT, rt: this.settings.rtFlashlight !== false};
   }
 
   /** The plan for a station under the settings and capabilities of this moment. */
@@ -191,14 +225,27 @@ export class EnhancedLightingRuntime {
 
   /** What the live station uses, what was asked, whether a change is not applied yet, being applied, or failed to apply. */
   status(): EnhancedLightingStatus {
-    const want = this.live ? planSignature(this.plan(this.live.reactor)) : null;
+    const want = this.pendingSignature();
     const pending = !!this.live && want !== this.live.signature;
     return {
       // (during a rebuild in place the station is lit by what it had until the new lighting is installed: bakeSteps writes its record earlier)
       requested: this.request(), active: this.applying && this.litBy ? this.litBy.active : this.active, pending, cacheBackend: this.cache ? this.cache.backend : 'none',
       applying: this.applying, error: pending && this.failure?.signature === want ? this.failure.reason : null,
       bake: this.timings?.bake ? {workers: this.timings.bake.workers, fallback: this.timings.bake.fallback} : null,
+      rtCapability: rtCapability(this.caps), // (lane UI)
     };
+  }
+
+  /** (lane UI) A plan's signature as the live station compares it: without RT where the station cannot take the traced bounce. */
+  private liveSignature(plan: EnhancedLightingPlan): string {
+    return planSignature(this.live?.rtBlocked && plan.rt ? {...plan, rt: false} : plan);
+  }
+
+  /** (lane UI) The live station cannot take the traced bounce whatever the choice: RT leaves its signature (no pending churn). */
+  private blockRt(): void {
+    const L = this.live;
+    if (!L || L.rtBlocked || !L.plan?.rt) return;
+    this.live = {...L, rtBlocked: true, signature: planSignature({...L.plan, rt: false})};
   }
 
   // Task studio-graphics-gpu-materials-toggle-20261114-212239-01: a changed choice applied to the LIVE station (Game.relightAfterSettings).
@@ -218,7 +265,7 @@ export class EnhancedLightingRuntime {
 
   /** The signature of what the settings now plan for the live station (null: no station). */
   pendingSignature(): string | null {
-    return this.live ? planSignature(this.plan(this.live.reactor)) : null;
+    return this.live ? this.liveSignature(this.plan(this.live.reactor)) : null;
   }
 
   /** Whether `signature` (pendingSignature) is the plan that already failed to apply: the game does not retry it by itself. */
@@ -237,10 +284,30 @@ export class EnhancedLightingRuntime {
   }
   /** A rebuild in place ended with the BASELINE lighting installed instead of what was planned (world/lights.ts replaceSteps). */
   installedBaseline(reason: string): void {
-    if (this.live) this.live = {...this.live, signature: planSignature(baselinePlan())};
+    const base = baselinePlan();
+    if (this.live) this.live = {...this.live, signature: planSignature(base), plan: base, rtBlocked: false};
     this.timings = null;
     this.litBy = null;
-    this.active = {gi: 'baseline', giReason: reason, shading: 'plain', shadingReason: null, mirror: false, reflections: 'off', reflectionsReason: null, cache: 'none', giMs: 0, probeMs: 0, probes: 0, probeBytes: 0};
+    this.active = {gi: 'baseline', giReason: reason, shading: 'plain', shadingReason: null, mirror: false, reflections: 'off', reflectionsReason: null, cache: 'none', giMs: 0, probeMs: 0, probes: 0, probeBytes: 0,
+      rt: false, rtReason: this.request().rt !== false ? reason : null, rtScene: null}; // (lane UI: no bounce — the same reason)
+    this.changed();
+  }
+
+  /**
+   * (lane UI) What the lead's RT runtime could make of the live station's traced bounce, once its scene is prepared (or could not be):
+   * `ok` with the scene's size — the status says the bounce is traced on the GPU; not ok with the reason (too much geometry, a pipeline
+   * that failed for this station) — the station keeps the standard bounce, the status says why, and the choice is moot for this station
+   * (no pending change). Ignored for a station whose bounce was not planned traced (nothing is ever claimed that was not built).
+   */
+  rtInstalled(ok: boolean, reason: string | null, scene: RtSceneInfo | null = null): void {
+    const a = this.active;
+    if (!a || a.rt !== true) return;
+    const sc = scene ? {...scene} : null;
+    if (ok) this.active = {...a, rtReason: null, rtScene: sc};
+    else {
+      this.active = {...a, rt: false, rtReason: reason || RT_NOT_INSTALLED_REASON, rtScene: sc};
+      this.blockRt();
+    }
     this.changed();
   }
   failed(signature: string | null, reason: string, restore?: () => void): void {
@@ -346,19 +413,24 @@ export class EnhancedLightingRuntime {
   /** bakeSteps with its workers (`session`; null: none — `unavailable` says why when there were to be some). */
   private *bakeWith(session: LightBakeSession | null, unavailable: string | null, input: StationBakeInput, drawn: DrawnSurfaces | null | undefined, o: {max3DTextureSize?: number}): BuildSteps<EnhancedBake> {
     const plan = this.plan(input.reactor);
-    this.live = {signature: planSignature(plan), reactor: input.reactor};
+    this.live = {signature: planSignature(plan), reactor: input.reactor, plan, rtBlocked: false};
     this.failure = null; // (a station is being lit for the current choice: an earlier failed change is history)
     if (!plan.gi) {
       this.fetched = null;
       this.timings = null;
-      this.active = {gi: 'baseline', giReason: plan.giReason, shading: 'plain', shadingReason: null, mirror: false, reflections: 'off', reflectionsReason: plan.reflectionsReason, cache: 'none', giMs: 0, probeMs: 0, probes: 0, probeBytes: 0};
+      this.active = {gi: 'baseline', giReason: plan.giReason, shading: 'plain', shadingReason: null, mirror: false, reflections: 'off', reflectionsReason: plan.reflectionsReason, cache: 'none', giMs: 0, probeMs: 0, probes: 0, probeBytes: 0,
+        rt: false, rtReason: plan.rtReason, rtScene: null};
       this.changed();
-      return {baked: undefined, probes: null, shading: 'plain', mirror: false, bounce: null};
+      return {baked: undefined, probes: null, shading: 'plain', mirror: false, bounce: null, rt: false, rtReason: plan.rtReason};
     }
     const now = this.now, tStart = now();
     const src = input.source, gi = plan.gi;
     const max3D = o.max3DTextureSize ?? this.caps.max3DTextureSize;
     const {shading, reason: shadingReason} = this.shadingFor(plan, src, max3D);
+    // (lane UI) the traced bounce needs the bounce: a station shaded plain after all has none (the reason it is plain says why)
+    const rt = plan.rt && shading === 'full';
+    const rtReason = shading === 'full' ? plan.rtReason : plan.rt || plan.rtReason !== null ? shadingReason : null;
+    if (plan.rt && !rt) this.blockRt();
     // the fetched entry, if it is this station's and this plan's
     let fetched = this.fetched;
     this.fetched = null;
@@ -471,24 +543,31 @@ export class EnhancedLightingRuntime {
       gi: gi.id, giReason: null, shading, shadingReason, mirror, reflections: usable ? probes!.tier : 'off',
       reflectionsReason: tier && probes && probes.count < 1 ? 'this station has no place for a probe' : reflectionsReason,
       cache: use, giMs: timings.giMs, probeMs: timings.probeMs, probes: probes?.count ?? 0, probeBytes: usable ? probeBytes(probes!) : 0,
+      rt, rtReason, rtScene: null, // (lane UI: the traced scene is reported by rtInstalled once it is prepared)
     };
     this.changed();
     // the flashlight's bounce traces the same scene the gather did (a cache hit made none: it is cheap to make)
     const bounce = shading === 'full' ? {scene: got.scene ?? new BandScene(baked.w, baked.h, got.geos), albedo: got.albedo} : null;
-    return {baked, probes: usable ? probes : null, shading, mirror, bounce};
+    return {baked, probes: usable ? probes : null, shading, mirror, bounce, rt, rtReason};
   }
 
   /**
    * What the station lighting made of the probes (world/lights.ts StationLighting.reflectionsSkipped): they may not have been
    * usable after all (no node library, a grid past the 3D texture limit) — the status says so. Likewise `plainBecause`
-   * (StationLighting.shadingSkipped): the field could not keep its cube on the GPU and is shaded plain.
+   * (StationLighting.shadingSkipped): the field could not keep its cube on the GPU and is shaded plain — (lane UI) and so has no
+   * flashlight bounce to trace: RT Flashlight is moot for this station.
    */
   applied(skipped: string | null, plainBecause: string | null = null): void {
     const inPlace = this.litBy !== null; // (a rebuild in place: from here the status describes the new lighting)
     this.litBy = null;
     let a = this.active, changed = false;
     if (a && skipped && a.reflections !== 'off') { a = {...a, reflections: 'off', reflectionsReason: skipped, mirror: false, probes: 0, probeBytes: 0}; changed = true; }
-    if (a && plainBecause && a.shading === 'full') { a = {...a, shading: 'plain', shadingReason: plainBecause}; changed = true; }
+    if (a && plainBecause && a.shading === 'full') {
+      const rt = a.rt === undefined ? {} : {rt: false, rtReason: a.rt || a.rtReason ? plainBecause : null, rtScene: null};
+      if (a.rt) this.blockRt();
+      a = {...a, shading: 'plain', shadingReason: plainBecause, ...rt};
+      changed = true;
+    }
     if (changed) this.active = a;
     else if (!inPlace) return;
     this.changed();

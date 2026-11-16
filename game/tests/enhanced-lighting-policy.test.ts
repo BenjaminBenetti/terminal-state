@@ -12,6 +12,9 @@
 //   each with its reason. Never full without an enhanced bake;
 // - the live glass MIRROR comes with a reflection tier only;
 // - the signature tells plain from full and a mirror from none (so such a change is a pending change).
+// Task rt-flashlight-compute-20261115-233136 (lane UI): every plan also says whether the flashlight's bounce is traced on the GPU
+// (rt / rtReason). The renderers here have no compute probe answer (no `rt` capability): RT Flashlight is asked for (its default) and
+// not used, with the reason — the renderer is not ready, the WebGL 2 fallback, or why there is no bounce (rt-flashlight-settings.test.ts).
 import {describe, expect, it} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {
@@ -19,12 +22,15 @@ import {
   REFLECTION_TIERS, SOFTWARE_REASON, SOFTWARE_SHADING_REASON,
   baselinePlan, planEnhancedLighting, planSignature, reflectionAtlasEdge, type EnhancedLightingPlan, type LightingCapabilities,
 } from '../src/world/enhancedLighting';
+import {RT_FALLBACK_REASON, RT_NOT_READY_REASON} from '../src/world/rtFlashlight';
 import {PROBE_COLS, probeAtlasLayout} from '../src/world/reflectionProbes';
 
 const GPU: LightingCapabilities = {backend: 'webgpu', software: false, maxTextureSize: 8192, max3DTextureSize: 2048, halfFloatLinear: true};
 const station = {reactor: false};
 /** The plan of a station that is not enhanced, written out (baselinePlan must be exactly this). */
-const BASELINE: EnhancedLightingPlan = {gi: null, shading: 'plain', reflections: null, mirror: false, giReason: null, shadingReason: null, reflectionsReason: null};
+const BASELINE: EnhancedLightingPlan = {gi: null, shading: 'plain', reflections: null, mirror: false, giReason: null, shadingReason: null, reflectionsReason: null, rt: false, rtReason: null};
+/** (lane UI) A full-shaded plan on a WebGPU renderer whose compute probe has not answered: RT Flashlight asked for, not used. */
+const NO_RT = {rt: false, rtReason: RT_NOT_READY_REASON} as const;
 /** Renderers the policy is asked about. */
 const RENDERERS: Record<string, LightingCapabilities> = {
   'hardware webgpu': GPU,
@@ -40,7 +46,7 @@ describe('the plan', () => {
   it('defaults: Auto with Standard reflections — on a hardware WebGPU renderer the standard bake, full shading, probes and the mirror', () => {
     expect([ENHANCED_LIGHTING_DEFAULT, REFLECTIONS_DEFAULT]).toEqual(['auto', 'standard']);
     expect(planEnhancedLighting({lighting: ENHANCED_LIGHTING_DEFAULT, reflections: REFLECTIONS_DEFAULT}, GPU, station))
-      .toEqual({gi: GI_TIERS.standard, shading: 'full', reflections: REFLECTION_TIERS.standard, mirror: true, giReason: null, shadingReason: null, reflectionsReason: null});
+      .toEqual({gi: GI_TIERS.standard, shading: 'full', reflections: REFLECTION_TIERS.standard, mirror: true, giReason: null, shadingReason: null, reflectionsReason: null, ...NO_RT});
   });
 
   it('Off builds nothing and gives no reason, whatever the reflections choice or the renderer', () => {
@@ -54,18 +60,18 @@ describe('the plan', () => {
   it('the Reactor keeps its lighting under Auto and On, and says why', () => {
     expect(baselinePlan('a', 'b')).toEqual({...BASELINE, giReason: 'a', reflectionsReason: 'b'});
     for (const lighting of ['auto', 'on'] as const) for (const caps of Object.values(RENDERERS)) {
-      expect(planEnhancedLighting({lighting, reflections: 'high'}, caps, {reactor: true})).toEqual({...BASELINE, giReason: REACTOR_REASON, reflectionsReason: REACTOR_REASON});
-      expect(planEnhancedLighting({lighting, reflections: 'off'}, caps, {reactor: true})).toEqual({...BASELINE, giReason: REACTOR_REASON});
+      expect(planEnhancedLighting({lighting, reflections: 'high'}, caps, {reactor: true})).toEqual({...BASELINE, giReason: REACTOR_REASON, reflectionsReason: REACTOR_REASON, rtReason: REACTOR_REASON});
+      expect(planEnhancedLighting({lighting, reflections: 'off'}, caps, {reactor: true})).toEqual({...BASELINE, giReason: REACTOR_REASON, rtReason: REACTOR_REASON});
     }
   });
 
   it('Auto: the standard bake everywhere; reflections only on the hardware WebGPU backend', () => {
     const auto = (caps: LightingCapabilities, reflections: 'standard' | 'high' | 'off' = 'standard') => planEnhancedLighting({lighting: 'auto', reflections}, caps, station);
     const full = {gi: GI_TIERS.standard, shading: 'full', giReason: null, shadingReason: null} as const;
-    expect(auto(GPU, 'high')).toEqual({...full, reflections: REFLECTION_TIERS.high, mirror: true, reflectionsReason: null});
-    expect(auto(GPU, 'off')).toEqual({...full, reflections: null, mirror: false, reflectionsReason: null});
-    expect(auto({...GPU, software: true})).toEqual({gi: GI_TIERS.standard, shading: 'plain', reflections: null, mirror: false, giReason: null, shadingReason: SOFTWARE_SHADING_REASON, reflectionsReason: SOFTWARE_REASON});
-    expect(auto({...GPU, backend: 'webgl2'})).toEqual({...full, reflections: null, mirror: false, reflectionsReason: FALLBACK_REASON});
+    expect(auto(GPU, 'high')).toEqual({...full, reflections: REFLECTION_TIERS.high, mirror: true, reflectionsReason: null, ...NO_RT});
+    expect(auto(GPU, 'off')).toEqual({...full, reflections: null, mirror: false, reflectionsReason: null, ...NO_RT});
+    expect(auto({...GPU, software: true})).toEqual({gi: GI_TIERS.standard, shading: 'plain', reflections: null, mirror: false, giReason: null, shadingReason: SOFTWARE_SHADING_REASON, reflectionsReason: SOFTWARE_REASON, rt: false, rtReason: SOFTWARE_SHADING_REASON});
+    expect(auto({...GPU, backend: 'webgl2'})).toEqual({...full, reflections: null, mirror: false, reflectionsReason: FALLBACK_REASON, rt: false, rtReason: RT_FALLBACK_REASON});
     expect(auto({...GPU, backend: 'webgl2', software: true}).reflectionsReason).toBe(SOFTWARE_REASON);
     expect(auto({...GPU, backend: null})).toMatchObject({gi: GI_TIERS.standard, reflections: null, mirror: false, reflectionsReason: 'the renderer is not ready'});
     expect(auto({...GPU, halfFloatLinear: false})).toMatchObject({...full, reflections: null, mirror: false, reflectionsReason: 'this renderer cannot filter half-float textures'});
@@ -74,10 +80,10 @@ describe('the plan', () => {
   it('On: the high bake, and reflections on any renderer that can run them', () => {
     const on = (caps: LightingCapabilities, reflections: 'standard' | 'high' | 'off' = 'standard') => planEnhancedLighting({lighting: 'on', reflections}, caps, station);
     const full = {gi: GI_TIERS.high, shading: 'full', giReason: null, shadingReason: null} as const;
-    expect(on(GPU)).toEqual({...full, reflections: REFLECTION_TIERS.standard, mirror: true, reflectionsReason: null});
+    expect(on(GPU)).toEqual({...full, reflections: REFLECTION_TIERS.standard, mirror: true, reflectionsReason: null, ...NO_RT});
     expect(on({...GPU, software: true})).toMatchObject({...full, reflections: REFLECTION_TIERS.standard, reflectionsReason: null});
     expect(on({...GPU, backend: 'webgl2'}, 'high')).toMatchObject({...full, reflections: REFLECTION_TIERS.high, reflectionsReason: null});
-    expect(on(GPU, 'off')).toEqual({...full, reflections: null, mirror: false, reflectionsReason: null});
+    expect(on(GPU, 'off')).toEqual({...full, reflections: null, mirror: false, reflectionsReason: null, ...NO_RT});
     expect(on({...GPU, backend: null})).toMatchObject({gi: GI_TIERS.high, reflections: null, mirror: false, reflectionsReason: 'the renderer is not ready'});
   });
 

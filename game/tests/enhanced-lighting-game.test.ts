@@ -55,13 +55,16 @@ describe('Enhanced lighting in the real Game (WebGPU path, validating device)', 
       player: {yaw: number; takeDamage(n: number): void}; state: string; scene: {children: unknown[]};
       layout: {grid: {cells: Uint8Array}; props: {kind: string; x: number; z: number}[]; lights: unknown[]};
       containers: {all: {state: {lots: {itemId: string; count?: number}[]}}[]};
-      settings: {enhancedLighting: string; reflections: string};
+      settings: {enhancedLighting: string; reflections: string; rtFlashlight: boolean};
       lightPool: Lit;
     };
     /** The station field lights in the scene, by name (exactly one while a station stands). */
     const fieldLights = (): string[] => g.scene.children.filter(c => (stationLights() as unknown[]).includes(c)).map(l => (l as {name: string}).name);
     const frameErrors: string[] = [];
     const loop = (t: number) => { try { game.frame(t); } catch (err) { frameErrors.push(String((err as Error)?.stack ?? err).slice(0, 400)); } requestAnimationFrame(loop); };
+    // (task rt-flashlight-compute-20261115-233136: RT Flashlight Off — these pins are the CURRENT flashlight bounce, which Off keeps
+    // unchanged; the RT default is tests/rt-flashlight-game.test.ts)
+    g.settings.rtFlashlight = false;
     game.applySettings();
     game.setState('title');
     requestAnimationFrame(loop);
