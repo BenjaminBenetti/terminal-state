@@ -313,8 +313,9 @@ function* bakeDaylight(layout: StationLayout, plan: SurfaceLookPlan, ctx: Ctx): 
     }
   }
   // --- the tent: diffuse daylight through the canvas over its whole floor ---
+  const Ls = ctx.layers[0], E = ctx.E[0], Dv = ctx.D[0], EL = ctx.EL[0];
   if (plan.tent) for (let i = 0; i < W * H; i++) {
-    if (plan.ground[i] !== GROUND.tent || !geo.open[i]) continue;
+    if (plan.ground[i] !== GROUND.tent || !geo0.open[i]) continue;
     const e = 2 * Math.PI * L * DAYLIGHT.canvas;
     for (let k = 0; k < Ls; k++) {
       const vi = (i * Ls + k) * 3;

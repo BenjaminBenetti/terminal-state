@@ -44,7 +44,8 @@ describe('Surface Run v2: deep interiors', () => {
           p.deep++;
           expect(labels.some(l => l.startsWith(`${b.name} ·`)), `${c.tag}: ${b.name} labels`).toBe(true);
           expect(b.areas.some(a => L.areas[a].publicSpace && (L.areas[a].level ?? 0) === 0), `${c.tag}: ${b.name} sales floor`).toBe(true);
-          expect(b.areas.some(a => L.areas[a].type === 'stair-core'), `${c.tag}: ${b.name} stair core`).toBe(true);
+          // (a stair core where there is a second storey: the upper floor or the roof; a shallow plot keeps one storey)
+          if (b.levels.includes(1)) expect(b.areas.some(a => L.areas[a].type === 'stair-core'), `${c.tag}: ${b.name} stair core`).toBe(true);
         }
         if (upperRooms(L, b).length) p.upper++;
         if (b.roofAccess) p.roofs++;

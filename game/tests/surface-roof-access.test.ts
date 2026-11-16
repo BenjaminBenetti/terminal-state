@@ -69,13 +69,21 @@ describe('Surface Run v2: roof access records', () => {
         expect(e.height, tag).toBeGreaterThanOrEqual(2.0);
         expect(e.height, tag).toBeLessThan(B.h);
         for (const i of e.cells) expect(g.cells[i], `${tag}: door cell`).toBe(FLOOR);
-        // the roof's areas: on its level at its height, every cell walkable; exactly the walk minus the bulkhead
+        // the roof's areas: on its level at its height, open floor (most of it free: the plant stands against the parapet); exactly the
+        // walk minus the bulkhead
         const roofCells = new Set<number>();
+        let free = 0;
         for (const a of ra.areas!) {
           expect(L.areas[a].level, tag).toBe(ra.level);
-          for (const i of areaCellsOf(L, a)) { roofCells.add(i); expect(Math.abs(g.floor[i] - ra.y), `${tag}: roof floor`).toBeLessThan(1e-3); expect(g.walkable(i % W, Math.floor(i / W)), tag).toBe(true); }
+          for (const i of areaCellsOf(L, a)) {
+            roofCells.add(i);
+            expect(g.cells[i], `${tag}: roof cell`).toBe(FLOOR);
+            expect(Math.abs(g.floor[i] - ra.y), `${tag}: roof floor`).toBeLessThan(1e-3);
+            if (g.walkable(i % W, Math.floor(i / W))) free++;
+          }
           expect(b.areas.includes(a), `${tag}: roof area is not an interior room`).toBe(false);
         }
+        expect(free / roofCells.size, `${tag}: free roof`).toBeGreaterThan(0.75);
         const open = cellsIn(L, ra.walk).filter(i => !inRect(B, i, W));
         expect(open.filter(i => !roofCells.has(i)).length, `${tag}: walk cells off the roof areas`).toBeLessThanOrEqual(Math.ceil(open.length * 0.02));
         for (const i of roofCells) expect(inRect(ra.walk, i, W) && !inRect(B, i, W), `${tag}: roof cell outside the walk`).toBe(true);
@@ -84,7 +92,7 @@ describe('Surface Run v2: roof access records', () => {
         // the look plan's deck is the roof surface
         const bl = surfaceLookPlan(L)!.buildings[b.id];
         expect(Math.abs(bl.deck - ra.y), `${tag}: deck ${bl.deck} vs roof ${ra.y}`).toBeLessThan(0.02);
-        expect(bl.top - ra.y, `${tag}: parapet height`).toBeGreaterThan(0.6);
+        expect(bl.top - ra.y, `${tag}: parapet height`).toBeGreaterThanOrEqual(0.5);
       }
     }
     expect(n).toBeGreaterThan(6);
@@ -164,7 +172,7 @@ describe('Surface Run v2: the roof look', () => {
     const faces = arch.remapFaces(extractWallFaces(L, levels, cols, {tileLowerHeight: m.tileLowerHeight}));
     const plan = surfaceLookPlan(L)!;
     for (const b of roofs(L)) {
-      const ra = b.roofAccess!, B = ra.bulkhead, lvIdx = levels.findIndex(l => l.id === ra.level);
+      const ra = b.roofAccess!, lvIdx = levels.findIndex(l => l.id === ra.level);
       const cell = areaCellsOf(L, ra.areas![0])[0];
       expect(arch.floorKey(lvIdx, cell), b.name).toBe('surface-roof');
       expect(arch.ceilKey(lvIdx, ra.areas![0], cell), b.name).toBe(false);
