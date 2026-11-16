@@ -2,7 +2,8 @@
 // world/surface/mapModel.ts, the drawing mapDraw.ts, the overlay mapView.ts, the exploration record mapExplore.ts). Installed once by
 // world/surface/life.ts; INERT on every layout without `layout.surface`.
 //  - sectionHooks.build (before the warm-up): the district's exploration record from its memory lane ('surface.life'), the map table
-//    (surface.checkpoint.mapTable.prop: lane KIT's srMapTable placement; its read pose when there is no placement), and the table-top copy
+//    (mapTablePlacement: surface.checkpoint.mapTable.prop when it indexes lane KIT's srMapTable, else the srMapTable nearest the read pose,
+//    else a reading box at the read pose), and the table-top copy
 //    of the map as a RUNTIME CANVAS TEXTURE on a thin sheet laid on the table's top (dynamic content: the texture rule allows it);
 //  - frameHooks (play only): exploration — the cells around the player (EXPLORE.revealM outdoors, interiorRevealM inside a building) and
 //    the buildings entered, written to the lane on change (the record is current at any save); the aim at the table (prompt); the
@@ -10,21 +11,37 @@
 //  - E at the table (aimed, within reach, not seated in the truck): the full-screen planning map (the game holds in the 'map' state —
 //    nothing updates, spawns or moves behind it; Esc / E / Tab close and play resumes);
 //  - sectionHooks.teardown: the record written, the table's GPU resources released, the overlay closed.
-// Reports from other lanes: surfaceMapSources(game) (a registry like world/surface/crossing.ts) — e.g. AIR's live gas breaches, CARGO's
-// recoverables at the depot / on the truck — each a MapReportInput at a real place (mapModel.ts drops one that stands on nothing).
+// Reports from other lanes: surfaceMapSources(game) (a registry like world/surface/crossing.ts) — AIR's live openings, CARGO's units at the
+// depot / on the truck (world/surface/mapSources.ts, registered by life.ts) — each a MapReportInput at a real place (mapModel.ts drops one
+// that stands on nothing).
 
 import * as THREE from 'three';
 import type {Game} from '../../game';
 import type {StationLayout} from '../../gen/stationTypes';
+import type {PropPlacement} from '../../gen/props';
 import type {SectionKey} from '../../levels/types';
 import type {SBox, SurfaceInfo} from '../../gen/surface/surfaceTypes';
 import {EXPLORE, SURFACE_LIFE_LANE, markDisc, readLifeRecord, writeLifeRecord, type ExploreGrid} from './mapExplore';
-import {buildPlanningMap, mapSignature, type BuildingStats, type MapReportInput, type PlanningMap} from './mapModel';
+import {buildPlanningMap, mapSignature, rectExplored, vehiclePoseOf, type BuildingStats, type MapReportInput, type PlanningMap} from './mapModel';
 import {drawPlanningCanvas, type MapCtx} from './mapDraw';
 import {PlanningMapView} from './mapView';
 
-/** A lane's live map reports (registered at install). */
-export interface SurfaceMapReportSource { readonly name: string; reports(surface: SurfaceInfo): readonly MapReportInput[] }
+/** What the player knows of the district now (a source reports a building's interior state only once it is known). */
+export interface MapReportContext {
+  /** The building was entered, or any part of its footprint explored. */
+  known(building: number): boolean;
+  readonly entered: ReadonlySet<number>;
+}
+
+/**
+ * A lane's live map reports (registered at install). `reports` returns null while the lane has no live state here (its defaults stay);
+ * while live, its `keys` replace those default report families even when it reports nothing (world/surface/mapSources.ts: CARGO, AIR).
+ */
+export interface SurfaceMapReportSource {
+  readonly name: string;
+  readonly keys?: readonly string[];
+  reports(surface: SurfaceInfo, ctx: MapReportContext): readonly MapReportInput[] | null;
+}
 
 const sourceRegistry = new WeakMap<object, SurfaceMapReportSource[]>();
 /** The planning map's report sources of `game` (register at install, in order). */
@@ -39,6 +56,8 @@ export const TABLE = {
   /** Eye-to-table reach for [E] (m) and the aim box's padding (m). */
   reach: 2.6,
   pad: 0.12,
+  /** A map table this near the read pose (m) is THE table when checkpoint.mapTable.prop does not index one. */
+  findM: 4,
   /** The table-top canvas (px, square), its redraw cadence (s) and the distance it redraws within (m). */
   px: 1024,
   redrawS: 1.5,
@@ -52,6 +71,27 @@ export const MAP_TEXT = {prompt: '<b>[E]</b> Read the planning map'} as const;
 const runtimes = new WeakMap<object, SurfaceMapRuntime>();
 /** The planning-map runtime installed into a game (QA / tests). */
 export const surfaceMapOf = (game: object): SurfaceMapRuntime | undefined => runtimes.get(game);
+
+/** The map table's prop kind (lane KIT, gen/surface/kinds.ts). */
+export const MAP_TABLE_KIND = 'srMapTable';
+
+/**
+ * The checkpoint's map-table placement: `checkpoint.mapTable.prop` when that index IS a map table; else the map table nearest the read
+ * pose (within TABLE.findM: a stale / not yet re-pointed index); else null (the runtime falls back to a reading box at the read pose).
+ */
+export function mapTablePlacement(layout: Pick<StationLayout, 'props'>, s: SurfaceInfo): PropPlacement | null {
+  const mt = s.checkpoint.mapTable;
+  const byIndex = mt.prop >= 0 ? layout.props[mt.prop] : undefined;
+  if (byIndex && byIndex.kind === MAP_TABLE_KIND) return byIndex;
+  const r = mt.read;
+  let best: PropPlacement | null = null, bestD: number = TABLE.findM;
+  for (const p of layout.props) {
+    if (p.kind !== MAP_TABLE_KIND) continue;
+    const d = Math.hypot(p.x - r.x, p.z - r.z);
+    if (d < bestD) { best = p; bestD = d; }
+  }
+  return best;
+}
 
 /** Ray (o, unit d) vs box: the entry distance, or null. */
 export function rayBox(o: {x: number; y: number; z: number}, d: {x: number; y: number; z: number}, b: SBox): number | null {
@@ -135,9 +175,9 @@ export class SurfaceMapRuntime {
     this.prompt = null;
   }
 
-  /** The map table's [E] box: its placement's AABB, else a reading surface in front of the read pose. */
+  /** The map table's [E] box: its placement's AABB (mapTablePlacement), else a reading surface in front of the read pose. */
   tableBox(layout: StationLayout, s: SurfaceInfo): SBox | null {
-    const mt = s.checkpoint.mapTable, p = mt.prop >= 0 ? layout.props[mt.prop] : undefined;
+    const mt = s.checkpoint.mapTable, p = mapTablePlacement(layout, s);
     if (p) return {x0: p.x - p.hx, z0: p.z - p.hz, x1: p.x + p.hx, z1: p.z + p.hz, y0: p.y, y1: p.y + p.h};
     const r = mt.read;
     if (!r) return null;
@@ -214,11 +254,23 @@ export class SurfaceMapRuntime {
   model(): PlanningMap | null {
     const s = this.surface, grid = this.grid;
     if (!s || !grid) return null;
-    const g = this.game, p = g.player, car = g.skywaysCar, body = car?.worldLive ? car.body : null;
-    const reports: MapReportInput[] = [];
-    for (const src of surfaceMapSources(g)) { try { reports.push(...src.reports(s)); } catch (err) { console.warn(`planning map: report source ${src.name} failed`, err); } }
-    return buildPlanningMap(s, {explore: grid, entered: this.entered, stats: this.stats(), reports,
-      player: {x: p.x, z: p.z, yaw: car?.driving && body ? body.yaw : p.yaw}, truck: body ? {x: body.x, z: body.z, yaw: body.yaw} : null});
+    const g = this.game, p = g.player, car = g.skywaysCar, truck = vehiclePoseOf(car); // (lane TRUCK's truck: its transform)
+    const reports: MapReportInput[] = [], replace: string[] = [];
+    const ctx: MapReportContext = {entered: this.entered, known: b => {
+      if (this.entered.has(b)) return true;
+      const q = s.buildings.find(x => x.id === b);
+      return !!q && rectExplored(grid, q.footprint);
+    }};
+    for (const src of surfaceMapSources(g)) {
+      try {
+        const got = src.reports(s, ctx);
+        if (!got) continue;
+        reports.push(...got);
+        replace.push(...(src.keys ?? []));
+      } catch (err) { console.warn(`planning map: report source ${src.name} failed`, err); }
+    }
+    return buildPlanningMap(s, {explore: grid, entered: this.entered, stats: this.stats(), reports, replace,
+      player: {x: p.x, z: p.z, yaw: car?.driving && truck ? truck.yaw : p.yaw}, truck}); // (seated: the player faces the truck's way)
   }
 
   /** Open the full-screen planning map (as E at the table does). */
@@ -236,7 +288,7 @@ export class SurfaceMapRuntime {
   // --- the table-top copy ------------------------------------------------------------------------------------------------------
 
   private buildTable(layout: StationLayout, s: SurfaceInfo): void {
-    const mt = s.checkpoint.mapTable, p = mt.prop >= 0 ? layout.props[mt.prop] : undefined;
+    const p = mapTablePlacement(layout, s);
     if (!p || typeof document === 'undefined') return;
     const side = Math.min(p.hx, p.hz) * 2 * 0.9;
     if (!(side > 0.2)) return;

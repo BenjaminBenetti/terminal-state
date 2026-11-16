@@ -4,6 +4,8 @@
 
 import {fuelQaApi} from './fuel/fuelQa'; // task train-fuel-system
 import {surfaceAccessQaApi} from './world/surface/accessQa'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ACCESS)
+import {surfaceMapOf} from './world/surface/mapRuntime'; // (Surface Run, lane LIFE: the planning map)
+import {surfaceReplenishOf} from './world/surface/replenishRuntime'; // (Surface Run, lane LIFE: the outdoor replenisher)
 import {isP7Kind, p7ModelKeysFor} from './gen/props07';
 import * as THREE from 'three';
 import type {Game} from './game';
@@ -423,6 +425,10 @@ export function installQaHooks(game: Game): void {
     ...fuelQaApi(game), // task train-fuel-system: fuel(), fuelSetTank(units)
     // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ACCESS): surface.access() / go() / cross('up' | 'down') / refusal() / state() / find(level)
     surface: surfaceAccessQaApi(game, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
+    // (Surface Run, lane LIFE) surfaceMap() — the planning map's state; surfaceMapOpen() — open it like [E] at the table; surfaceReplenish() — the outdoor population / counters
+    surfaceMap: (): object => surfaceMapOf(game)?.qa() ?? {installed: false},
+    surfaceMapOpen: (): boolean => surfaceMapOf(game)?.open() ?? false,
+    surfaceReplenish: (): object => surfaceReplenishOf(game)?.qa() ?? {installed: false},
     ...trainQaApi(game), // Task player-train-shell-20261101-202805 (lane TRAIN): train(), trainDoor(i, open), trainFaceDoor(i?), trainLights(); train-shell-followup: trainGo('cab' | 'rear' | 'spawn'); train-lockbox: trainGo('lockbox')
     ...chipperQaApi(game), // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): chipper() — state / progress / credit / pools; chipperGo() — stand at the hopper
     ...trainEquipmentQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane EQUIP): equipment() — units / plugs / grab / carry / counters; equipmentCraft(kind) — a unit on the car floor; equipmentToPlug(uid, i) — stand it beside a plug
