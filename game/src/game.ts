@@ -740,6 +740,12 @@ export class Game {
   private rtScene: RtScene | null = null;
   /** Set by render() for the frame it draws (the warm-up's hidden frames trace nothing). */
   private rtTraceFrame = false;
+  /**
+   * Task studio-rt-flashlight-toggle-hitch-20261116-052336-01: in play, a traced station keeps tracing while the flashlight is off
+   * (battery not flat), the result not shown (rtFlashlightRuntime.ts STANDBY), so switching it on adds no GPU load. `?rtstandby=off`
+   * (main.ts, session only): the torch-off frames trace nothing, as before.
+   */
+  rtStandby = true;
   private readonly rtDrawSize = new THREE.Vector2();
   private readonly mirrorPassInfo: MirrorScenePass = {target: null as unknown as THREE.RenderTarget, depth: 0};
   private readonly mirrorSightA = {x: 0, y: 0, z: 0};
@@ -1198,7 +1204,8 @@ export class Game {
 
   /**
    * This frame's traced bounce (inside the frame's scene-matrix scope, before the glass mirror and the scene pass): only for a frame
-   * render() draws, with the station lit by the RT light variant; otherwise the gate stays shut (the materials add nothing).
+   * render() draws, with the station lit by the RT light variant; otherwise the gate stays shut (the materials add nothing). In play
+   * an unlit flashlight is traced in standby (rtStandby), its gate shut too.
    */
   private traceFlashBounce(): void {
     const rt = this.rtFlashlight;
@@ -1206,8 +1213,9 @@ export class Game {
     if (!this.lightPool?.rt || this.transitGap || !rt.hasScene) { rt.skip(this.transitGap ? 'transit' : 'not traced'); return; }
     this.renderer.getDrawingBufferSize(this.rtDrawSize);
     const occ = this.beamOccluders;
+    const standby = this.rtStandby && this.state === 'playing' && !this.torch.battery.dead;
     try {
-      rt.frame(this.time, this.flashlight, this.camera, this.rtDrawSize.x, this.rtDrawSize.y, occ?.bodies ?? null, occ?.bodyCount ?? 0);
+      rt.frame(this.time, this.flashlight, this.camera, this.rtDrawSize.x, this.rtDrawSize.y, occ?.bodies ?? null, occ?.bodyCount ?? 0, standby);
     } catch (err) {
       rt.failWith(`its frame failed (${String((err as Error)?.message ?? err).slice(0, 160)})`); // (-> rtFailed)
     }

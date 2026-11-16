@@ -83,8 +83,9 @@ The camera's rig (the viewmodel) and the effects group are not station geometry 
 All of the following is raw WebGPU on three's own device, in one compute pass of six dispatches
 (`render/rt/rtKernels.ts`, `render/rt/rtGpu.ts`). It is encoded inside the frame's scene-matrix scope, before the
 glass mirror and the scene pass, so every pass that reads the result reads this frame's. It is skipped (nothing
-dispatched, the materials' gate shut, exactly zero) while the flashlight is off, in the transit gap, and in any frame
-that is not drawn. The warm-up's hidden frames are not traced.
+dispatched, the materials' gate shut, exactly zero) in the transit gap and in any frame that is not drawn. The
+warm-up's hidden frames are not traced. While the flashlight is off in play, the frame is traced in **standby**
+with the gate shut (next section); in the menus, or with the battery flat, it is skipped.
 
 1. **LIGHT: 1024 light rays of equal flux.** The cone is cut into 32 x 32 cells of equal flux by a concentric map,
    with the same falloff math as the virtual-light bounce (`render/rt/rtCone.ts`). Each ray is traced through the
@@ -126,6 +127,45 @@ No VPL is visible as a circle: each is an area light as large as its footprint, 
 not screen-space gathering either: both the light rays and the shadow rays run through the scene's own geometry,
 including what the camera does not see.
 
+## Switching the flashlight on: standby
+
+**What a player's recording showed** (the perf recorder on real hardware, WebGPU at 60 Hz, a drawing buffer large
+enough for the 640 x 360 grid; standing still, the flashlight switched on and off four times each in 10.7 s, 625
+frames; the bundle of PR #131):
+
+- All 16 missed refreshes (33.3 ms intervals) came 6 to 19 frames after an On, four per On. There were none after
+  an Off and none elsewhere.
+- **Nothing was built or allocated.** The recorder counted no pipeline, program, node build or new texture in play.
+  The runtime keeps its pipelines, device buffers and bind groups across a switch.
+- **CPU was not the cause.** The On frame took 10.5 to 11.1 ms of main-thread time (about 7 ms otherwise) and the
+  frames after it 7 to 10 ms, all inside the refresh. The On frame's extra time is in the render submission and the
+  culler (the recorder's spans). In the code, that frame is also where the scene's sync catches up with a full
+  inventory, because sync did not run while the torch was off.
+- **GPU execution was.** After each On the queue probe climbed from about 15 ms to 35 to 51 ms within 10 frames and
+  stayed there until about frame 19. The off baseline is about 9 ms. The render passes' own GPU time (timestamp queries;
+  the compute pass is not in it) stayed at the torch-off level, 7.5 to 8.2 ms, for about 17 frames after each On. Then
+  it fell to 5.3 to 5.6 ms, though a lit frame draws more (10 passes and about 460 draws against 9 and 300). After
+  each Off it rose back to 7.1 to 7.4 ms within about 6 frames. That is the GPU's clock. The trace's load arrived at
+  the clock the lighter torch-off load had settled to, the frames' GPU work outran the refresh, and the queue backed up
+  until the clock rose, about 0.3 s later.
+
+**Standby.** In play, with the flashlight off but able to light (its battery not flat), every drawn frame is traced
+exactly as a lit one: the same six dispatches, the same grid and rays, at the spot's last lit intensity. The
+intensity matters because the gather skips a light ray of zero flux, so an unlit trace would be a lighter load. The
+gate stays shut. The materials add exactly zero, so the picture with the torch off is unchanged, and the torch's direct
+light and shadow are not drawn. The GPU's load does not change when the flashlight is switched, so there is no step for
+the clock to catch up with. The scene's sync and the history go on too, so the first lit frame is a steady one: no
+catch-up inventory and no restarted history. A low battery's flicker no longer restarts the history either.
+
+- **Not in standby:** the menus and the pause (their frozen frame traces only a lit torch, as before), a flat
+  battery, the transit gap, the warm-up's hidden frames, and every case without a traced station: RT Flashlight Off,
+  a renderer that cannot run it, after a device error, and Enhanced lighting Off or plain shading. These dispatch
+  nothing with the torch off.
+- **Cost:** with RT Flashlight On, a torch-off frame in play costs the GPU what a torch-on frame's trace costs, so the
+  GPU usage with the torch off is the torch-on usage. On the CPU it costs the scene's sync and the encode (Node, the
+  real Game: see *Measured in Node*). With RT Flashlight Off nothing changes.
+- `?rtstandby=off` (session only) turns standby off for an A/B comparison: torch-off frames trace nothing, as before.
+
 ## Limits
 
 1. **Receivers are where the camera looks.** The traced result exists at the surfaces the main camera's grid sees.
@@ -148,7 +188,7 @@ including what the camera does not see.
 
 ## Costs
 
-Per drawn frame with the flashlight on (grid W x H, at most 640 x 360):
+Per drawn frame with the flashlight on, and in play with it off (standby, above) (grid W x H, at most 640 x 360):
 
 - **Rays:** 1024 light rays, W x H camera rays (230,400 at the cap) and at most 2 x W x H shadow rays (460,800).
 - **The gather:** W x H x 1024 kernel evaluations (about 236 M at the cap), plus the reservoir picks. This is the
@@ -254,8 +294,9 @@ Sources (retrieved 2026-11-15):
 - `game/tests/rt-flashlight.test.ts`: the cone's equal flux, the grid size, the required limits against WebGPU's
   defaults, the kernels' bindings and WGSL (no reserved words), the probe on a validating device (WebGL 2, limits, a
   compile error), the device resources' lifecycle and placeholders, the frame block's camera, light, grid and
-  history rules, a device error, the RT light variants' programs (no virtual-light uniform, two textures more, the
-  same uniform buffers).
+  history rules, standby (the lit frame's block with the gate shut, the history going on, nothing without standby or
+  a scene), a device error, the RT light variants' programs (no virtual-light uniform, two textures more, the same
+  uniform buffers).
 - `game/tests/rt-flashlight-estimator.test.ts`: the estimator's CPU mirror on a traced hall against the virtual-light
   bounce (flux parity, irradiance by distance, smoothness, a wall stub's shadow, an aim sweep past a door jamb).
 - `game/tests/rt-bvh.test.ts`, `game/tests/rt-scene.test.ts`: the trees, the packing and the traversal; the
@@ -264,7 +305,8 @@ Sources (retrieved 2026-11-15):
 - `game/tests/rt-flashlight-game.test.ts`: the real Game on a validating WebGPU device. Under the defaults the
   traced bounce replaces the virtual lights (none bound, none in a drawn program) and every drawn frame dispatches
   the kernels. Nothing is dropped or compiled while playing, and every module stays inside the binding limits. It
-  then covers the flashlight off, pause Off and On, death and reload, Continue, a device error and its fallback,
+  then covers the flashlight off (standby in play, nothing with `?rtstandby=off` or in the pause menu), pause Off
+  and On, death and reload, Continue, a device error and its fallback (with the torch off too: nothing dispatched),
   and every allocation freed.
 - The other real-Game lighting tests (`enhanced-lighting-game`, `lighting-live-apply`, `glass-mirror-game`) run with
   RT Flashlight Off. Their pins are the virtual-light bounce, which Off keeps unchanged.
