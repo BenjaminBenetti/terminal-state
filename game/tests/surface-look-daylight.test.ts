@@ -6,11 +6,17 @@
 import {describe, expect, it} from 'vitest';
 import {drainSync} from '../src/core/pacedBuild';
 import {bakeLightFieldSteps, downsampleField, sampleField, type BakedField, type FieldSource} from '../src/world/lightField';
-import {StationLighting, stationFieldSource} from '../src/world/lights';
-import {SIDE_NORMAL, surfaceLookPlan} from '../src/world/surface/archPlan';
+import {StationLighting, stationBakeInput, stationFieldSource} from '../src/world/lights';
+import {SIDE_NORMAL, surfaceLookPlan, surfaceLookPlanSteps, surfaceLookPlanned} from '../src/world/surface/archPlan';
 import {CELL, FLOOR} from '../src/gen/grid';
-import {DAYLIGHT, daylightStats, surfaceSkyField} from '../src/world/surface/lookDaylight';
+import {DAYLIGHT, daylightStats, surfaceDaylightDigest, surfaceSkyField} from '../src/world/surface/lookDaylight';
+import {WorldMaterials} from '../src/world/materials';
+import {buildWorldSteps} from '../src/world/builder';
+import {installCanvasShim} from './helpers/canvas2d';
+import {fakeEnvTextures} from './helpers/openablesFixture';
 import {lookFixture} from './helpers/surfaceLookFixture';
+
+installCanvasShim(false);
 
 type V3 = [number, number, number];
 const UP: V3 = [0, 1, 0];
@@ -135,5 +141,39 @@ describe('Surface Run look: the baked daylight', () => {
     }
     expect(n).toBeGreaterThan(40);
     expect(worst).toBeLessThan(0.2);
+  });
+
+  it("the look plan is paced: the section preload's bake input does not plan it, the world build plans it in slices, one plan per layout", () => {
+    const base = lookFixture().layout;
+    // the section preload (game.ts: enhancedLighting.prefetch(stationBakeInput(layout))) on a layout nobody planned yet
+    const d = {...base};
+    expect(surfaceLookPlanned(d)).toBe(false);
+    const input = stationBakeInput(d);
+    expect(surfaceLookPlanned(d)).toBe(false);
+    expect(typeof input.source.extraDirectSteps).toBe('function');
+    // its digest is the layout's (plan-free, deterministic) and moves with what the plan reads
+    expect(input.extra).toBe(stationBakeInput(base).extra);
+    expect(input.extra).toContain('surface-daylight-2');
+    const taller = {...base, surface: {...base.surface!, buildings: base.surface!.buildings.map((b, i) => (i === 0 ? {...b, height: b.height + 3} : b))}};
+    expect(surfaceDaylightDigest(taller)).not.toBe(surfaceDaylightDigest(base));
+    // the world build plans it, in many steps (its label), before the arch takes it
+    const steps = buildWorldSteps(d, new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17}), {});
+    let planSteps = 0;
+    for (let r = steps.next(); !r.done; r = steps.next()) {
+      if (r.value === 'world.surface.plan') planSteps++;
+      else if (planSteps > 0 && typeof r.value === 'string') break;
+    }
+    steps.return(undefined as never);
+    expect(planSteps).toBeGreaterThan(20);
+    expect(surfaceLookPlanned(d)).toBe(true);
+    // the same plan as the synchronous one, memoized: a second walk has no steps
+    const p = surfaceLookPlan(d)!, q = surfaceLookPlan(base)!;
+    expect(p).not.toBe(q);
+    expect(p.stats).toEqual(q.stats);
+    expect(p.buildings.map(b => [b.key, b.trimKey, b.top, b.holes.length, b.decks.length])).toEqual(q.buildings.map(b => [b.key, b.trimKey, b.top, b.holes.length, b.decks.length]));
+    expect(p.owner.every((v, i) => v === q.owner[i]) && p.ground.every((v, i) => v === q.ground[i])).toBe(true);
+    const again = surfaceLookPlanSteps(d).next();
+    expect(again.done).toBe(true);
+    expect(again.value).toBe(p);
   });
 });

@@ -20,6 +20,7 @@ import {CELL, FLOOR, SOLID} from '../../gen/grid';
 import type {Side, StationLayout} from '../../gen/stationTypes';
 import type {SRect, SurfaceBuilding, SurfaceInfo, SurfaceStreet, SurfaceWindowSpan} from '../../gen/surface/surfaceTypes';
 import {mulberry32} from '../../core/rng';
+import {drainSync, type BuildSteps} from '../../core/pacedBuild';
 import {FACADE_STYLES, INTERIOR_LOOKS, SHOPFRONT_NAMES, interiorFamilyOf, surfaceStyleOf, type FacadeStyle, type InteriorFamily} from './archStyles';
 
 /**
@@ -211,12 +212,32 @@ const cache = new WeakMap<StationLayout, SurfaceLookPlan | null>();
 
 /** The district look plan of a layout (null: no `layout.surface`). Memoized per layout object. */
 export function surfaceLookPlan(layout: StationLayout): SurfaceLookPlan | null {
+  return cache.has(layout) ? cache.get(layout)! : drainSync(surfaceLookPlanSteps(layout));
+}
+
+/**
+ * Follow-up 1 (lane LOOK): the plan as BUILD STEPS (core/pacedBuild.ts) — ~0.9 s of work on a real district, so the world build plans
+ * it in slices (world/builder.ts, before SurfaceArch.for) and the loading screen keeps painting. The same work in the same order as
+ * surfaceLookPlan; memoized alike (a plan someone finished meanwhile wins: one plan object per layout).
+ */
+export function* surfaceLookPlanSteps(layout: StationLayout): BuildSteps<SurfaceLookPlan | null> {
   if (cache.has(layout)) return cache.get(layout)!;
   const s = (layout as {surface?: SurfaceInfo}).surface;
-  const p = s ? planSurfaceLook(layout, s) : null;
+  const p = s ? yield* planSurfaceLook(layout, s) : null;
+  if (cache.has(layout)) return cache.get(layout)!;
   cache.set(layout, p);
   return p;
 }
+
+/** Whether the plan of `layout` is made (QA / tests: the section preload must not plan it). */
+export const surfaceLookPlanned = (layout: StationLayout): boolean => cache.has(layout);
+
+/**
+ * Plan step label; cells per step of the plan's full-grid passes (a district grid is ~1.1 M cells: ~18 steps per pass, each a few ms
+ * up to ~25 ms measured in Node; the whole plan ~0.4-0.7 s in ~200 steps).
+ */
+const PLAN_STEP = 'world.surface.plan';
+const PLAN_CELLS = 1 << 16;
 
 /** A seeded stream for one purpose (never GEN's generator streams). */
 const stream = (seed: number, tag: number) => mulberry32(((seed ^ Math.imul(tag + 0x9e37, 0x85ebca6b)) >>> 0) || 1);
@@ -279,7 +300,7 @@ export function topAt(side: FacadeSide, s: number, fallback: number): number {
   return fallback;
 }
 
-function planSurfaceLook(layout: StationLayout, S: SurfaceInfo): SurfaceLookPlan {
+function* planSurfaceLook(layout: StationLayout, S: SurfaceInfo): BuildSteps<SurfaceLookPlan> {
   const g = layout.grid, W = g.w, H = g.h, n = W * H;
   const seed = S.seed >>> 0;
   const stats: Record<string, number> = {};
@@ -295,7 +316,9 @@ function planSurfaceLook(layout: StationLayout, S: SurfaceInfo): SurfaceLookPlan
   const owner = new Int16Array(n).fill(OWNER.none);
   const tentIds = new Set(S.buildings.filter(isTentBuilding).map(b => b.id));
   const tentAreas = new Set<number>([...S.buildings.filter(b => tentIds.has(b.id)).flatMap(b => b.areas), S.checkpoint.tent.area]);
+  let fpK = 0;
   for (const b of S.buildings) {
+    if (++fpK % 8 === 0) yield PLAN_STEP;
     if (tentIds.has(b.id)) continue;
     const f = b.footprint;
     for (let y = Math.max(0, cellOf(f.z0)); y < Math.min(H, cellOf(f.z1)); y++) for (let x = Math.max(0, cellOf(f.x0)); x < Math.min(W, cellOf(f.x1)); x++) {
@@ -303,7 +326,11 @@ function planSurfaceLook(layout: StationLayout, S: SurfaceInfo): SurfaceLookPlan
       if (g.cells[i] === SOLID || areaBuilding.has(g.area[i])) owner[i] = b.id;
     }
   }
-  for (let i = 0; i < n; i++) if (g.cells[i] === FLOOR && areaBuilding.has(g.area[i]) && !tentIds.has(areaBuilding.get(g.area[i])!)) owner[i] = areaBuilding.get(g.area[i])!;
+  yield PLAN_STEP;
+  for (let i0 = 0; i0 < n; i0 += PLAN_CELLS) {
+    for (let i = i0, e = Math.min(n, i0 + PLAN_CELLS); i < e; i++) if (g.cells[i] === FLOOR && areaBuilding.has(g.area[i]) && !tentIds.has(areaBuilding.get(g.area[i])!)) owner[i] = areaBuilding.get(g.area[i])!;
+    yield PLAN_STEP;
+  }
   // the playable rect: the extent minus the SOLID cordon band (measured on the extent's mid lines)
   const ext = S.extent;
   const band = (x0: number, y0: number, dx: number, dy: number) => { let k = 0; for (let x = x0, y = y0; x >= 0 && y >= 0 && x < W && y < H && g.cells[y * W + x] === SOLID && k < 64; x += dx, y += dy) k++; return k; };
@@ -315,18 +342,22 @@ function planSurfaceLook(layout: StationLayout, S: SurfaceInfo): SurfaceLookPlan
   };
   const tentB = S.buildings.find(b => tentIds.has(b.id));
   const tentR = tentB ? tentB.footprint : S.checkpoint.tent.rect;
-  for (let i = 0; i < n; i++) {
-    if (g.cells[i] !== SOLID || owner[i] !== OWNER.none) continue;
-    const x = (i % W + 0.5) * CELL, z = (Math.floor(i / W) + 0.5) * CELL;
-    if (x >= tentR.x0 - 0.6 && x <= tentR.x1 + 0.6 && z >= tentR.z0 - 0.6 && z <= tentR.z1 + 0.6) owner[i] = OWNER.tent;
-    else if (x < inner.x0 + 0.01 || x > inner.x1 - 0.01 || z < inner.z0 + 0.01 || z > inner.z1 - 0.01) owner[i] = OWNER.cordon;
-    else owner[i] = OWNER.debris;
+  for (let i0 = 0; i0 < n; i0 += PLAN_CELLS) {
+    for (let i = i0, e = Math.min(n, i0 + PLAN_CELLS); i < e; i++) {
+      if (g.cells[i] !== SOLID || owner[i] !== OWNER.none) continue;
+      const x = (i % W + 0.5) * CELL, z = (Math.floor(i / W) + 0.5) * CELL;
+      if (x >= tentR.x0 - 0.6 && x <= tentR.x1 + 0.6 && z >= tentR.z0 - 0.6 && z <= tentR.z1 + 0.6) owner[i] = OWNER.tent;
+      else if (x < inner.x0 + 0.01 || x > inner.x1 - 0.01 || z < inner.z0 + 0.01 || z > inner.z1 - 0.01) owner[i] = OWNER.cordon;
+      else owner[i] = OWNER.debris;
+    }
+    yield PLAN_STEP;
   }
 
   // --- streets -----------------------------------------------------------------------------------------------------------------------
   const segments: StreetSeg[] = S.streets.length ? S.streets.map(streetSeg) : deriveSegments(S, inner);
   stats.segments = segments.length;
   stats.derivedStreets = S.streets.length ? 0 : 1;
+  yield PLAN_STEP;
 
   // --- ground ------------------------------------------------------------------------------------------------------------------------
   const ground = new Uint8Array(n);
@@ -334,7 +365,9 @@ function planSurfaceLook(layout: StationLayout, S: SurfaceInfo): SurfaceLookPlan
   for (const bl of S.blocks) {
     const r = bl.rect;
     for (let y = Math.max(0, cellOf(r.z0)); y < Math.min(H, cellOf(r.z1)); y++) for (let x = Math.max(0, cellOf(r.x0)); x < Math.min(W, cellOf(r.x1)); x++) blockOf[y * W + x] = bl.id;
+    if (bl.id % 8 === 7) yield PLAN_STEP;
   }
+  yield PLAN_STEP;
   // per block side: sidewalk width (the nearest building's setback, else the default)
   const swOf = S.blocks.map(bl => {
     const fps = bl.buildings.map(id => S.buildings[id]?.footprint).filter((f): f is SRect => !!f);
@@ -357,32 +390,46 @@ function planSurfaceLook(layout: StationLayout, S: SurfaceInfo): SurfaceLookPlan
     parking: GROUND.lot, loading: GROUND.yard, yard: GROUND.yard, compound: GROUND.check, gangway: GROUND.lot, alley: GROUND.lot, rail: GROUND.yard,
   };
   const lots = (GG.lots ?? []).filter(l => LOT_GROUND[l.use] !== undefined);
-  const lotAt = (x: number, z: number): number => {
-    for (const l of lots) if (x >= l.rect.x0 && x < l.rect.x1 && z >= l.rect.z0 && z < l.rect.z1) return LOT_GROUND[l.use];
-    return 0;
-  };
-  stats.genLots = lots.length;
-  for (let i = 0; i < n; i++) {
-    if (g.cells[i] !== FLOOR) continue;
-    const a = g.area[i];
-    if (tentAreas.has(a)) { ground[i] = GROUND.tent; continue; }
-    if (areaBuilding.has(a)) { ground[i] = GROUND.interior; continue; }
-    if (!outdoorAreas.has(a) && !(a >= 0 && layout.areas[a]?.type === 'street')) continue;
-    const x = (i % W + 0.5) * CELL, z = (Math.floor(i / W) + 0.5) * CELL;
-    if (x >= tentR.x0 && x < tentR.x1 && z >= tentR.z0 && z < tentR.z1) { ground[i] = GROUND.tent; continue; }
-    if (x >= cp.x0 && x < cp.x1 && z >= cp.z0 && z < cp.z1) { ground[i] = GROUND.check; continue; }
-    const lot = lotAt(x, z);
-    if (lot) { ground[i] = lot; continue; }
-    const bl = blockOf[i];
-    if (bl >= 0) {
-      const r = S.blocks[bl].rect, sw = swOf[bl];
-      const walk = z - r.z0 < sw.N || r.z1 - z < sw.S || x - r.x0 < sw.W || r.x1 - x < sw.E;
-      ground[i] = walk ? GROUND.walk : yardBlocks.has(bl) ? GROUND.yard : plazaBlocks.has(bl) ? GROUND.plaza : GROUND.lot;
-      continue;
+  // the lot under each cell centre: painted once, last listed first, so the FIRST lot listed holding the centre wins (the per-cell scan
+  // of every lot this replaces: the same centre test, the same result, a fraction of the ground pass's time)
+  const lotOf = new Uint8Array(n);
+  for (let k = lots.length - 1; k >= 0; k--) {
+    if (k % 8 === 0) yield PLAN_STEP;
+    const r = lots[k].rect, v = LOT_GROUND[lots[k].use];
+    for (let y = Math.max(0, Math.floor(r.z0 / CELL) - 1); y <= Math.min(H - 1, Math.floor(r.z1 / CELL) + 1); y++) {
+      const z = (y + 0.5) * CELL;
+      if (!(z >= r.z0 && z < r.z1)) continue;
+      for (let x = Math.max(0, Math.floor(r.x0 / CELL) - 1); x <= Math.min(W - 1, Math.floor(r.x1 / CELL) + 1); x++) {
+        const xc = (x + 0.5) * CELL;
+        if (xc >= r.x0 && xc < r.x1) lotOf[y * W + x] = v;
+      }
     }
-    // outside every block: the carriageway, except the cordon-side outer sidewalk and a rubble verge along the cordon itself
-    const d = Math.min(x - inner.x0, inner.x1 - x, z - inner.z0, inner.z1 - z);
-    ground[i] = d < 0.9 ? GROUND.verge : d < LOOK_TUNE.outerWalk + 0.9 ? GROUND.walk : GROUND.road;
+  }
+  stats.genLots = lots.length;
+  for (let i0 = 0; i0 < n; i0 += PLAN_CELLS) {
+    for (let i = i0, e = Math.min(n, i0 + PLAN_CELLS); i < e; i++) {
+      if (g.cells[i] !== FLOOR) continue;
+      const a = g.area[i];
+      if (tentAreas.has(a)) { ground[i] = GROUND.tent; continue; }
+      if (areaBuilding.has(a)) { ground[i] = GROUND.interior; continue; }
+      if (!outdoorAreas.has(a) && !(a >= 0 && layout.areas[a]?.type === 'street')) continue;
+      const x = (i % W + 0.5) * CELL, z = (Math.floor(i / W) + 0.5) * CELL;
+      if (x >= tentR.x0 && x < tentR.x1 && z >= tentR.z0 && z < tentR.z1) { ground[i] = GROUND.tent; continue; }
+      if (x >= cp.x0 && x < cp.x1 && z >= cp.z0 && z < cp.z1) { ground[i] = GROUND.check; continue; }
+      const lot = lotOf[i];
+      if (lot) { ground[i] = lot; continue; }
+      const bl = blockOf[i];
+      if (bl >= 0) {
+        const r = S.blocks[bl].rect, sw = swOf[bl];
+        const walk = z - r.z0 < sw.N || r.z1 - z < sw.S || x - r.x0 < sw.W || r.x1 - x < sw.E;
+        ground[i] = walk ? GROUND.walk : yardBlocks.has(bl) ? GROUND.yard : plazaBlocks.has(bl) ? GROUND.plaza : GROUND.lot;
+        continue;
+      }
+      // outside every block: the carriageway, except the cordon-side outer sidewalk and a rubble verge along the cordon itself
+      const d = Math.min(x - inner.x0, inner.x1 - x, z - inner.z0, inner.z1 - z);
+      ground[i] = d < 0.9 ? GROUND.verge : d < LOOK_TUNE.outerWalk + 0.9 ? GROUND.walk : GROUND.road;
+    }
+    yield PLAN_STEP;
   }
 
   // --- markings, wear, street furniture of the ground -------------------------------------------------------------------------------
@@ -406,7 +453,9 @@ function planSurfaceLook(layout: StationLayout, S: SurfaceInfo): SurfaceLookPlan
       s = e + (dash ? gap : mr() < 0.3 ? 0.4 + mr() * 1.6 : 0);
     }
   };
+  let segK = 0;
   for (const sg of segments) {
+    if (++segK % 8 === 0) yield PLAN_STEP;
     const L = sg.s1 - sg.s0, hw = sg.w / 2;
     if (L < 6 || sg.w < 4) continue;
     const from = sg.s0 + 5.2, to = sg.s1 - 5.2;
@@ -483,8 +532,14 @@ function planSurfaceLook(layout: StationLayout, S: SurfaceInfo): SurfaceLookPlan
   }
 
   // --- buildings -----------------------------------------------------------------------------------------------------------------
+  yield PLAN_STEP;
   const spans = new Map(S.windows.map(w => [w.id, w]));
-  const buildings = S.buildings.map(b => planBuilding(layout, b, ground, spans, seed));
+  const buildings: BuildingLook[] = [];
+  for (const b of S.buildings) {
+    buildings.push(planBuilding(layout, b, ground, spans, seed));
+    if (buildings.length % 4 === 0) yield PLAN_STEP;
+  }
+  yield PLAN_STEP;
   // the tent is drawn by the tent build (canvas walls via OWNER.tent, the roof, the flap): no facade parts of its own
   for (const bl of buildings) if (tentIds.has(bl.id)) { bl.sides = []; bl.holes = []; bl.signs = []; bl.escapes = []; bl.decks = []; }
   // scorch decals on the ground below burnt-out openings (soot fans) — on the sidewalk only
@@ -515,7 +570,9 @@ function planSurfaceLook(layout: StationLayout, S: SurfaceInfo): SurfaceLookPlan
     }
   }
 
+  yield PLAN_STEP;
   const tent = planTent(S, owner, W, tentB ?? null, floorAt);
+  yield PLAN_STEP;
   const depot = depotGear(S, floorAt);
   const rail = genRail(GG, floorAt) ?? planRail(S, buildings, segments, floorAt, !!depot?.tracks.length);
   stats.buildings = buildings.length;
