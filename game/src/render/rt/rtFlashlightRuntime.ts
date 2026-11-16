@@ -8,6 +8,13 @@
 // (RTB.cam.w) is 0 — the materials' lookup adds exactly nothing — and nothing is dispatched. The history restarts (no reprojection)
 // after a frame without a dispatch, a new station, a resize of the receiver grid, and a jump of the camera.
 //
+// STANDBY (task studio-rt-flashlight-toggle-hitch-20261116-052336-01): with the flashlight unlit, a frame the caller marks `standby`
+// (Game: in play, the battery not flat) is traced exactly as a lit one — the same kernels, grid and rays, at the last lit intensity —
+// with the gate shut, so nothing of it is shown. The GPU's load then does not step when the torch is switched on: the player's
+// recording showed every On's hitch was GPU execution at the clock the lighter torch-off load had settled to (no compile, no
+// allocation), the queue backing up for ~0.3 s until the clock rose. The history and the scene's sync stay current, so the first lit
+// frame is a steady one.
+//
 // Temporal blend floor (params2.x): RT_ALPHA.base, raised by how far the beam turned (rad) and the light moved (m) since the last frame,
 // so a fast aim sweep follows within a frame or two; the history is also clamped to this frame's neighbourhood and rejected where the
 // surface differs (rtKernels.ts TEMPORAL).
@@ -40,9 +47,11 @@ export type RtSceneLike = Pick<RtScene, 'sync' | 'buffers'>;
 export const RT_SYNC_BUDGET_MS = 2;
 
 export interface RtFlashlightStats {
-  /** Frames dispatched this session / skipped (torch off, no scene). */
+  /** Frames dispatched this session / skipped (torch off without standby, no scene). */
   dispatched: number;
   skipped: number;
+  /** Of the dispatched frames, those traced in standby (the torch unlit: the gate shut, nothing shown). */
+  standby: number;
   /** The receiver grid in use. */
   grid: {w: number; h: number};
   /** Rays per dispatched frame: light, primary, shadow (upper bound: two per receiver that a VPL reaches). */
@@ -76,8 +85,12 @@ export class RtFlashlight {
 
   constructor(renderer: ConstructorParameters<typeof RtGpu>[0], probe: RtProbe) {
     this.gpu = new RtGpu(renderer, probe);
-    this.stats = {dispatched: 0, skipped: 0, grid: {w: 0, h: 0}, rays: {light: 0, primary: 0, shadowMax: 0}, syncMs: 0, encodeMs: 0, alpha: RT_ALPHA.base, historyReset: 'start', gpu: this.gpu.stats};
+    this.stats = {dispatched: 0, skipped: 0, standby: 0, grid: {w: 0, h: 0}, rays: {light: 0, primary: 0, shadowMax: 0}, syncMs: 0, encodeMs: 0, alpha: RT_ALPHA.base, historyReset: 'start', gpu: this.gpu.stats};
   }
+
+  // the intensity a standby frame traces at: the spot's last lit one (any positive scale gives the kernels the same work — the gather
+  // skips a VPL of zero flux, the visibility it accumulates is a ratio — so before the first lit frame 1 does)
+  private litIntensity = 1;
 
   /**
    * The station's traced scene (null: none — nothing is dispatched and every device resource is released, the materials' lookup back
@@ -129,12 +142,15 @@ export class RtFlashlight {
 
   /**
    * One frame: `spot` the player's flashlight as three shades it, `camera` the main camera (matrices current), the drawing buffer's
-   * size (px), this frame's characters (render/../world/flashOccluders.ts StationFlashOccluders.bodies / bodyCount). Returns whether
-   * the traced bounce is bound for this frame's draws.
+   * size (px), this frame's characters (render/../world/flashOccluders.ts StationFlashOccluders.bodies / bodyCount); `standby`: an
+   * unlit flashlight is traced all the same, with the gate shut (see the module doc). Returns whether the traced bounce is bound for
+   * this frame's draws.
    */
-  frame(nowSeconds: number, spot: THREE.SpotLight, camera: THREE.PerspectiveCamera, drawW: number, drawH: number, bodies: Float32Array | null, bodyCount: number): boolean {
+  frame(nowSeconds: number, spot: THREE.SpotLight, camera: THREE.PerspectiveCamera, drawW: number, drawH: number, bodies: Float32Array | null, bodyCount: number, standby = false): boolean {
     const scene = this.scene;
-    if (!scene || !this.gpu.allocated || !(spot.intensity > 0) || !spot.visible) { this.skip(!scene ? 'no scene' : 'flashlight off'); return false; }
+    const lit = spot.intensity > 0 && spot.visible;
+    if (!scene || !this.gpu.allocated || (!lit && !standby)) { this.skip(!scene ? 'no scene' : 'flashlight off'); return false; }
+    if (lit) this.litIntensity = spot.intensity;
     const t0 = performance.now();
     scene.sync(nowSeconds, bodies, bodyCount, RT_SYNC_BUDGET_MS);
     const t1 = performance.now();
@@ -189,7 +205,7 @@ export class RtFlashlight {
     f[36] = axis.x; f[37] = axis.y; f[38] = axis.z; f[39] = cutoff;
     f[40] = bx; f[41] = by; f[42] = bz; f[43] = spot.decay;
     f[44] = vx; f[45] = vy; f[46] = vz; f[47] = share;
-    const I = spot.intensity, c = spot.color;
+    const I = lit ? spot.intensity : this.litIntensity, c = spot.color;
     f[48] = c.r * I; f[49] = c.g * I; f[50] = c.b * I; f[51] = cutoff > 0 ? cutoff : RT_RECEIVER_REACH;
     // the bounce's own constants are the virtual-light bounce's (FB.params: gain, r0min, range; flashBounce.ts soft = 1)
     const fb = FB.params.value;
@@ -221,10 +237,12 @@ export class RtFlashlight {
     }
     if (!sent) { this.skip('not uploaded'); return false; }
 
-    // what the materials read this frame
-    RTB.viewProj.value.copy(this.viewProj);
-    RTB.cam.value.set(ex, ey, ez, 1);
-    RTB.grid.value.set(grid.w, grid.h, RT_TOLERANCE.base, RT_TOLERANCE.perMetre);
+    // what the materials read this frame (standby: nothing — the gate stays shut)
+    if (lit) {
+      RTB.viewProj.value.copy(this.viewProj);
+      RTB.cam.value.set(ex, ey, ez, 1);
+      RTB.grid.value.set(grid.w, grid.h, RT_TOLERANCE.base, RT_TOLERANCE.perMetre);
+    } else RTB.cam.value.w = 0;
 
     this.prevViewProj.copy(this.viewProj);
     this.prevGrid = grid;
@@ -234,12 +252,13 @@ export class RtFlashlight {
     this.prevValid = true;
     const st = this.stats;
     st.dispatched++;
+    if (!lit) st.standby++;
     st.grid = grid;
     st.rays.light = VPL_COUNT; st.rays.primary = grid.w * grid.h; st.rays.shadowMax = 2 * grid.w * grid.h;
     st.syncMs = t1 - t0;
     st.encodeMs = performance.now() - t1;
     st.alpha = alpha;
-    return true;
+    return lit;
   }
 
   /** Release the device resources (the materials' lookup back on the zero placeholders). */

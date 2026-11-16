@@ -317,6 +317,57 @@ describe('the device resources: only while a station is traced', () => {
     rt.dispose();
   });
 
+  // task studio-rt-flashlight-toggle-hitch-20261116-052336-01: the toggle hitch was GPU execution (the clock the torch-off load had
+  // settled to), so a standby frame must give the device the lit frame's work: the same block, kernels and grid, a positive flux
+  it('standby: an unlit flashlight is traced exactly as a lit one, the gate shut; without standby nothing is', async () => {
+    const {renderer, log} = fakeRenderer();
+    const rt = new RtFlashlight(renderer, await probeRtCompute(renderer) as RtProbe);
+    const scene = stubScene();
+    rt.setScene(scene);
+    const {camera, spot} = flashlightRig();
+    let block: {f32: Float32Array; u32: Uint32Array} | null = null;
+    const dispatch = rt.gpu.dispatch.bind(rt.gpu);
+    rt.gpu.dispatch = b => { block = {f32: b.f32.slice(), u32: b.u32.slice()}; return dispatch(b); };
+    /** The block without its frame index and parity (u32 72, 73): what differs between any two frames at one pose. */
+    const work = (): number[] => { const u = [...block!.u32]; u[72] = u[73] = 0; return u; };
+    // before any lit frame: traced at intensity 1 (the kernels' work does not depend on the scale), the gate shut
+    spot.intensity = 0;
+    expect(rt.frame(0, spot, camera, 1280, 720, null, 0, true)).toBe(false);
+    expect([RTB.cam.value.w, log.submits, rt.stats.dispatched, rt.stats.standby]).toEqual([0, 1, 1, 1]);
+    expect([...block!.f32.slice(48, 51)].map(v => +v.toFixed(5))).toEqual([spot.color.r, spot.color.g, spot.color.b].map(v => +v.toFixed(5)));
+    spot.intensity = 34;
+    expect(rt.frame(0.016, spot, camera, 1280, 720, null, 0, true)).toBe(true);
+    expect(RTB.cam.value.w).toBe(1);
+    const lit = work();
+    expect(block!.f32[58], 'the standby frame\'s history counts').toBe(1);
+    RTB.grid.value.set(1, 2, 3, 4);
+    const vp = RTB.viewProj.value.clone();
+    // the torch off (intensity 0, or the spot hidden): the lit frame's work, nothing shown, nothing of the materials' uniforms touched
+    spot.intensity = 0;
+    expect(rt.frame(0.033, spot, camera, 1280, 720, null, 0, true)).toBe(false);
+    expect(work(), 'the same frame block as the lit frame (light colour x the last lit intensity)').toEqual(lit);
+    expect([RTB.cam.value.w, ...RTB.grid.value.toArray(), RTB.viewProj.value.equals(vp)]).toEqual([0, 1, 2, 3, 4, true]);
+    spot.intensity = 34;
+    spot.visible = false;
+    expect(rt.frame(0.05, spot, camera, 1280, 720, null, 0, true)).toBe(false);
+    expect(work()).toEqual(lit);
+    spot.visible = true;
+    expect([log.submits, rt.stats.dispatched, rt.stats.standby, scene.syncs]).toEqual([4, 4, 3, 4]);
+    // on again: the history went on through standby (its last restart is still the new scene's), the gate opens
+    expect(rt.frame(0.066, spot, camera, 1280, 720, null, 0, true)).toBe(true);
+    expect([block!.f32[58], RTB.cam.value.w, rt.stats.historyReset]).toEqual([1, 1, 'scene']);
+    // without standby (the menus, a flat battery, ?rtstandby=off): skipped as before — nothing submitted, the history restarts
+    spot.intensity = 0;
+    expect(rt.frame(0.083, spot, camera, 1280, 720, null, 0)).toBe(false);
+    expect([log.submits, RTB.cam.value.w, rt.stats.historyReset, rt.stats.standby]).toEqual([5, 0, 'flashlight off', 3]);
+    // no traced scene (RT Off, a fallback, the transit): standby traces nothing either
+    rt.setScene(null);
+    expect(rt.frame(0.1, spot, camera, 1280, 720, null, 0, true)).toBe(false);
+    expect([log.submits, rt.stats.dispatched, RTB.cam.value.w]).toEqual([5, 5, 0]);
+    expect(log.issues).toEqual([]);
+    rt.dispose();
+  });
+
   it('a device error in its first frames stops the traced bounce for the session and says so', async () => {
     const {renderer, device} = fakeRenderer();
     const rt = new RtFlashlight(renderer, await probeRtCompute(renderer) as RtProbe);
