@@ -11,7 +11,7 @@ import type {Rng} from '../../../core/rng';
 import {CELL, FLOOR} from '../../grid';
 import {FLARE_ID, BATTERY_ID, SURFACE_INTERIOR_FLOOR} from '../../../items/lootTables';
 import {DAYLIGHT_TINT} from '../../office/windows';
-import type {LightPlacement, Side, ZombieSpawn} from '../../stationTypes';
+import type {Door, LightPlacement, Side, ZombieSpawn} from '../../stationTypes';
 import type {SurfaceEntrance, SurfaceWindowSpan} from '../surfaceTypes';
 import type {InteriorBuilder, RoomInfo, WindowStyle} from './builder';
 
@@ -184,9 +184,10 @@ export function planEnemies(b: InteriorBuilder): void {
   const pool = b.rooms.filter(r => r.enemies > 0 && r.area.w * r.area.h * CELL * CELL >= 6);
   if (!pool.length) return;
   const placed: ZombieSpawn[] = [];
+  const doors = b.doorIndex();
   for (let k = 0; k < n; k++) {
     const room = weightedRoom(pool, rng);
-    const z = spawnIn(b, room, placed, rng);
+    const z = spawnIn(b, room, placed, rng, doors.get(room.area.id) ?? []);
     if (z) placed.push(z);
   }
   b.stub.zombies.push(...placed);
@@ -197,10 +198,10 @@ function weightedRoom(pool: readonly RoomInfo[], rng: Rng): RoomInfo {
 }
 
 /** A free floor cell of the room: walkable with a clear ring, off its doorways / entrances (2 cells), 3 m from the others. */
-function spawnIn(b: InteriorBuilder, r: RoomInfo, placed: readonly ZombieSpawn[], rng: Rng): ZombieSpawn | null {
+function spawnIn(b: InteriorBuilder, r: RoomInfo, placed: readonly ZombieSpawn[], rng: Rng, doors: readonly Door[]): ZombieSpawn | null {
   const a = r.area, f = b.storeys[r.storey], g = b.kit.grid(f.level);
   const near = (x: number, y: number): boolean => {
-    for (const d of b.kit.doors) if ((d.a === a.id || d.b === a.id) && x >= d.x - 2 && x < d.x + d.w + 2 && y >= d.y - 2 && y < d.y + d.h + 2) return true;
+    for (const d of doors) if (x >= d.x - 2 && x < d.x + d.w + 2 && y >= d.y - 2 && y < d.y + d.h + 2) return true;
     if (r.storey === 0) for (const en of b.ents) for (const c of en.inner) if (Math.abs(c.x - x) <= 3 && Math.abs(c.y - y) <= 3) return true;
     return false;
   };
@@ -226,6 +227,7 @@ function spawnIn(b: InteriorBuilder, r: RoomInfo, placed: readonly ZombieSpawn[]
 
 export function planLoose(b: InteriorBuilder): void {
   const P = SURFACE_INTERIOR_FLOOR;
+  const doors = b.doorIndex();
   for (let k = 0; k < b.carvedStoreys; k++) {
     const rng = b.rng.fork(`loose-${k}`);
     const rooms = b.roomsOn(k).filter(r => !r.noLoose && r.role !== 'stair' && r.role !== 'stair-run');
@@ -242,19 +244,19 @@ export function planLoose(b: InteriorBuilder): void {
     for (let s = 0; s < salv; s++) salvage.push(rng.weighted(P.salvage.items));
     for (const [list, from] of [[finds, rooms], [salvage, back.length ? back : rooms]] as const) for (const itemId of list) {
       const r = rng.pick(from);
-      const spot = freeCell(b, r, rng);
+      const spot = freeCell(b, r, rng, doors.get(r.area.id) ?? []);
       if (!spot) continue;
       b.stub.pickups.push({itemId, count: 1, x: spot.x, y: spot.y, z: spot.z, area: r.area.id, ...(spot.level ? {level: spot.level} : {})});
     }
   }
 }
 
-function freeCell(b: InteriorBuilder, r: RoomInfo, rng: Rng): {x: number; y: number; z: number; level: number} | null {
+function freeCell(b: InteriorBuilder, r: RoomInfo, rng: Rng, doors: readonly Door[]): {x: number; y: number; z: number; level: number} | null {
   const a = r.area, f = b.storeys[r.storey], g = b.kit.grid(f.level);
   for (let t = 0; t < 20; t++) {
     const x = rng.int(a.x, a.x + a.w - 1), y = rng.int(a.y, a.y + a.h - 1), i = g.idx(x, y);
     if (g.area[i] !== a.id || !g.walkable(x, y) || g.rampIdx[i] >= 0) continue;
-    if (b.kit.doors.some(d => (d.a === a.id || d.b === a.id) && x >= d.x - 1 && x <= d.x + d.w && y >= d.y - 1 && y <= d.y + d.h)) continue;
+    if (doors.some(d => x >= d.x - 1 && x <= d.x + d.w && y >= d.y - 1 && y <= d.y + d.h)) continue;
     if (b.stub.pickups.some(p => Math.hypot(p.x - (x + 0.5) * CELL, p.z - (y + 0.5) * CELL) < 0.6)) continue;
     return {x: r3((x + 0.5) * CELL), y: r3(g.floorOf(i)), z: r3((y + 0.5) * CELL), level: f.level};
   }

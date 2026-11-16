@@ -293,6 +293,15 @@ export class InteriorBuilder {
       g.ceil[i] = ceil;
     }
   }
+  /**
+   * The doorways of each of this plan's rooms (built on call from the district's door list: call it once the rooms are carved — the
+   * finishing passes read it instead of scanning every district door per candidate cell).
+   */
+  doorIndex(): Map<number, Door[]> {
+    const mine = new Set(this.rooms.map(r => r.area.id)), out = new Map<number, Door[]>();
+    for (const d of this.kit.doors) for (const id of [d.a, d.b]) if (mine.has(id)) out.set(id, [...(out.get(id) ?? []), d]);
+    return out;
+  }
   /** Whether a doorway joins two rooms. */
   joined(a: RoomInfo, b: RoomInfo): boolean {
     return this.kit.doors.some(d => (d.a === a.area.id && d.b === b.area.id) || (d.a === b.area.id && d.b === a.area.id));
