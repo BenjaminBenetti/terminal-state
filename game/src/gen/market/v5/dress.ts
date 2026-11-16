@@ -56,7 +56,7 @@ export const CREVICE_DRESS = {
   wallLampY: 2.4,
   wallLampOff: 0.15,
   /** Wall lamps along a frontage: about every `lampEvery` m (seeded +-1 m). */
-  lampEvery: 6.0,
+  lampEvery: 5.0,
   /** Cells next to a frontage that may be dressed: the terraces' first two (1 m), the storey-0 floor's first (0.5 m); the rest of the
    *  walk is the clear lane (>= 2 m on the 3 m terraces and the 2.5 m low walks). */
   dressCells: {walk: 2, low: 1},
@@ -766,12 +766,12 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
       const p = frontThing(fr, y, kind);
       if (p) {
         // a pair now and then (a chair and a plant, two crates)
-        if (rng.chance(0.35)) {
+        if (rng.chance(0.45)) {
           const k2 = kinds[rng.int(0, kinds.length - 1)];
           const {hz} = footprint(kind, p.rot);
           frontThing(fr, Math.floor((p.z + hz) / CELL) + 1, k2);
         }
-        y += rng.int(5, 9);
+        y += rng.int(4, 7);
       } else y += 1;
     }
     // wall lamps: about every 6 m on the container fronts (never the den's entry; a shop's board keeps its own lamp-free stretch)
@@ -858,6 +858,10 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
   for (const st of cc.stairs) {
     const f = area(st.foot);
     light(f, st.from, (f.x + f.w / 2) * CELL, (f.y + 1.5) * CELL, B[st.from] + D.wallLampY + 0.05, 0.65);
+    // and over its head (the storey above, just past the run's top: the walk there, its rod a canopy bracket)
+    const up = st.from + 1, zTop = (st.rect.y + st.rect.h + 1) * CELL, xTop = (st.rect.x + st.rect.w / 2) * CELL;
+    const canopy = canopyOf(up, {s: st.side, y: st.rect.y + st.rect.h});
+    if (canopy) light(canopy, up, xTop, zTop, B[up] + D.wallLampY, 0.6);
   }
   for (const b of cc.bridges) {
     // under the deck: over the walk / low walk below its two ends (the deck lowers their ceiling)
@@ -932,7 +936,7 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
     use('idle', fromK(4.5), a.y * CELL + 0.9, a, fromK(4.5), a.y * CELL - 3);
     // lamps on the rock over the tables (the kitchen's roof edge carries them: the weir is open above)
     const canopy = kitchen && kitchen.area >= 0 ? area(kitchen.area) : canopyOf(0);
-    if (canopy) for (const t of [0.3, 0.7]) light(canopy, 0, ex0 + (ex1 - ex0) * t, Zb - D.wallLampOff, D.wallLampY, 0.8);
+    if (canopy) for (const t of [0.2, 0.5, 0.8]) light(canopy, 0, ex0 + (ex1 - ex0) * t, Zb - D.wallLampOff, D.wallLampY, 0.75);
   }
 
   // --- 8. The platform (version 1 / 2's): benches between the gates, the station's name plates, MARKET boards, lamps --------------
