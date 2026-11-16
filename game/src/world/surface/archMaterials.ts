@@ -9,7 +9,8 @@
 //  - the repo's shared surface sets (world/materials.ts surfaceMaterial: lane paint, cast iron, rails, ties, boards, shutters).
 // Without a loaded map (Node tests, a failed fetch) every key falls back to the shared surface sets, tinted — never a new texture.
 // Materials this module creates are cached per WorldMaterials and handed to the runtime's owner (LevelResources 'surface': released
-// with the district's asset family); a released material leaves the cache. Office-registry / shape materials are shared (not owned).
+// with the district's asset family); a released material leaves the cache. Office-registry / shape materials are shared (not owned);
+// the decorative panes' glass is the district's own owned copy of the shared glazing (lane FACADE: surfacePaneMaterial below).
 
 import * as THREE from 'three';
 import {materialColor, vec4, vertexColor} from 'three/tsl';
@@ -17,7 +18,9 @@ import {SKYWAYS_ARCH_TEXTURES} from '../../assets/skywaysArchTextures.generated'
 import {REACTOR_TEXTURES as KIT_TEXTURES} from '../../assets/reactorKit.generated';
 import {REACTOR_X_TEXTURES} from '../../assets/reactorExpansionKit.generated';
 import {OFFICE_TEXTURES} from '../../assets/officeAssets';
-import {SurfaceNodeMaterial, surfaceMaterial, thinTrim, worldMapped, type WorldMaterials} from '../materials';
+import {SurfaceNodeMaterial, cloneSurfaceMaterial, surfaceMaterial, thinTrim, worldMapped, type WorldMaterials} from '../materials';
+import {tagReflect} from '../../render/reflectTag';
+import type {OutdoorFacadeKind} from './lookSky';
 import {applyDecay, type DecayProfile} from '../decay';
 import {addNodeHook} from '../../render/nodeHooks';
 import {asColor, sharedStage, skipInShadowPass} from '../surfaceNodes';
@@ -230,9 +233,9 @@ export function surfaceArchMaterial(mats: WorldMaterials, key: string): THREE.Ma
   const c = cacheOf(mats);
   const hit = c.m.get(key);
   if (hit) return hit;
+  // the decorative panes: the district's own 'window' copies of the shared glazing (below; owned)
+  if (key === SURFACE_PANE_KEYS.glass || key === SURFACE_PANE_KEYS.shop) return adopt(mats, key, surfacePaneMaterial(mats, key));
   // shared materials (never owned: other levels use them too)
-  if (key === 'surface-glass') return shapeMaterial(mats, 'glass');
-  if (key === 'surface-glass-shop') return shapeMaterial(mats, 'glassShopfront');
   if (key === 'surface-steel') return shapeMaterial(mats, 'steelDark');
   if (key === 'surface-walk') return floorMaterial(mats, key, 'concrete', 0x9b988f);
   if (key === 'surface-tent-floor') return floorMaterial(mats, key, 'wood', 0x6f5d44);
@@ -268,6 +271,44 @@ export function surfaceArchMaterial(mats: WorldMaterials, key: string): THREE.Ma
   if (!m) return undefined;
   if (key.startsWith('surface-facade-')) applyDecay(m, key.includes('-metal-') ? DECAY.metal : DECAY.facade);
   return adopt(mats, key, m);
+}
+
+/** The decorative pane keys (arch.ts: glazed / shop / broken-shard panes behind the reveals). */
+export const SURFACE_PANE_KEYS = {glass: 'surface-glass', shop: 'surface-glass-shop'} as const;
+
+/**
+ * Task studio-surface-run-field-followup-20261116-211729-01 (lane FACADE): THE DECORATIVE PANES' GLASS — the district's own copy of the
+ * shared station glazing ('glass' / 'glassShopfront': colour, opacity, transparency, depth write and node hooks kept: a plain
+ * cloneSurfaceMaterial) re-tagged 'window'. The pane stands REVEAL x 0.6 inside its facade, in the wall's own SOLID cell (arch.ts); on
+ * the 'glass' rule (render/reflectTag.ts) its field sample and slot came from the texel holding the wall (the district's field is
+ * drawn at 1 m texels: half wall, half street) and its reflection read ~3/4 of the street's light, none on some panes and another
+ * storey's slot on a few. 'window' is the contract class for exactly this (world/reflectionNode.ts: the field and the probes one cell
+ * out along the normal, as the tower's and AIR's live panes read): no material boost, the opacity constant, nothing else changed —
+ * the shared station glazing keeps its 'glass' tag. Reflections Off / no probes: the plain field light ignores the tag (unchanged).
+ */
+function surfacePaneMaterial(mats: WorldMaterials, key: string): THREE.Material {
+  const c = cloneSurfaceMaterial(shapeMaterial(mats, key === SURFACE_PANE_KEYS.shop ? 'glassShopfront' : 'glass'));
+  return tagReflect(c, 'window');
+}
+
+/**
+ * (lane FACADE) The outdoor-lit variant of a facade key (lookSky.ts outdoorFacadeMaterial: party walls over a lower neighbour's roof):
+ * its finish kind, the texture slot it samples, the slot's span (m: the part's UVs are metres / span) and the member's linear tint
+ * (its own material's colour factor; stucco: its paint colour). Null: not a facade key.
+ */
+export function surfaceOutdoorFacade(mats: WorldMaterials, key: string): {kind: OutdoorFacadeKind; slot: SurfaceTexSlot | null; span: [number, number]; tint: THREE.Color} | null {
+  const m = /^surface-facade-([a-z]+)-([0-9a-f]{6})$/.exec(key);
+  if (!m) return null;
+  const wall = m[1] as FacadeWall, hex = parseInt(m[2], 16);
+  if (wall === 'stucco') return {kind: 'flat', slot: null, span: [1, 1], tint: lin(hex)};
+  const tint = surfaceTintOf(mats, key)?.clone() ?? lin(hex);
+  const map = (slot: SurfaceTexSlot) => (surfaceTexture(slot) ? slot : null);
+  switch (wall) {
+    case 'brick': { const s = map('brick'); return s ? {kind: 'brick', slot: s, span: [SPAN.brick[0], SPAN.brick[1]], tint} : {kind: 'flat', slot: null, span: [1, 1], tint}; }
+    case 'concrete': case 'stone': { const s = map('concrete:color'); return s ? {kind: 'concrete', slot: s, span: [...SPAN.concrete], tint} : {kind: 'flat', slot: null, span: [1, 1], tint}; }
+    case 'metal': { const s = map('rusted:color'); return s ? {kind: 'rusted', slot: s, span: [...SPAN.rusted], tint} : {kind: 'flat', slot: null, span: [1, 1], tint}; }
+    default: return {kind: 'flat', slot: null, span: [1, 1], tint};
+  }
 }
 
 /** 'surface-facade-<wall>-<hex>' (brick / concrete / stone / metal / curtain / canvas). */
