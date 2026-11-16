@@ -67,7 +67,7 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
       containers: {all: {state: {lots: {itemId: string; count?: number}[]}}[]};
       zombies: {brain: {x: number; y: number; z: number; hp: number; alive: boolean}}[];
       world: {fixtures: {level: number}[]};
-      settings: {enhancedLighting: string; reflections: string};
+      settings: {enhancedLighting: string; reflections: string; rtFlashlight: boolean};
       captureSave(reason: string): {meta: Record<string, unknown>} & Record<string, unknown>;
     };
     const frameErrors: string[] = [];
@@ -81,6 +81,9 @@ describe('Enhanced lighting / Reflections applied to the live station (real Game
       } catch (err) { frameErrors.push(String((err as Error)?.stack ?? err).slice(0, 400)); }
       requestAnimationFrame(loop);
     };
+    // (task rt-flashlight-compute-20261115-233136: RT Flashlight Off — these pins are the CURRENT flashlight bounce, which Off keeps
+    // unchanged; the RT default is tests/rt-flashlight-game.test.ts)
+    g.settings.rtFlashlight = false;
     game.applySettings();
     game.setState('title');
     requestAnimationFrame(loop);

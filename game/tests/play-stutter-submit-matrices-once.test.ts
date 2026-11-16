@@ -154,7 +154,12 @@ describe('drawWithSceneMatricesOnce (render/sceneMatrices.ts)', () => {
     const body = src.slice(src.indexOf('  private drawFrame(): void {'), src.indexOf('  private renderDirect(): void {'));
     // (task studio-baked-gi-visual-uplift-20261115-004324-01: the one call now wraps the glass mirror's draw and the atmosphere's —
     // both draw the station, both inside the frame's single matrix update; no atmosphere draw outside it)
-    expect(body.match(/drawWithSceneMatricesOnce/g)).toHaveLength(1);
+    // (task studio-rt-flashlight-compute-20261115-233136-01: plus one on the direct path, only while RT Flashlight traces the bounce
+    // there — its trace reads this frame's world matrices before the station is drawn, so that frame takes the same single update;
+    // without RT the direct path keeps three's own)
+    expect(body.match(/drawWithSceneMatricesOnce/g)).toHaveLength(2);
+    expect(body).toContain('else if (trace && this.lightPool?.rt) drawWithSceneMatricesOnce(this.scene, () => { this.traceFlashBounce(); this.renderDirect(); });');
+    expect(body).toMatch(/\n\s+else this\.renderDirect\(\);/);
     const from = body.indexOf('drawWithSceneMatricesOnce(this.scene, () => {'), to = body.indexOf('      } catch (err) {', from);
     expect(from).toBeGreaterThan(-1);
     expect(to).toBeGreaterThan(from);

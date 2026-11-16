@@ -24,7 +24,7 @@ import {
 // task studio-screacher-production-20261110-221858-01: the seeded roster and the Screacher's exported constants
 import {FAMILY_ROSTER, ROSTER_LANE, ROSTER_PLACE_LAST, ROSTER_PLACE_PRIORITY, ROSTER_VERSION, ZOMBIE_FREE_LEVELS, familyInRoster, rosterOf, rosterRate} from '../src/ai/enemyRoster';
 import {
-  IMPACT_FAMILY_LOUDNESS, SCREACHER_AGGRO, SCREACHER_ASSET, SCREACHER_ECHO, SCREACHER_MAX_TOP_M, SCREACHER_NOISE, SCREACHER_SCALE, SCREACHER_SENSE, SCREACHER_SPEED, SCREACHER_STATS,
+  IMPACT_FAMILY_LOUDNESS, SCREACHER_AGGRO, SCREACHER_ASSET, SCREACHER_ECHO, SCREACHER_MAX_TOP_M, SCREACHER_NOISE, SCREACHER_REACH, SCREACHER_SCALE, SCREACHER_SENSE, SCREACHER_SPEED, SCREACHER_STATS,
   SCREACHER_VARIANTS, SCREACHER_VOICE_Y,
 } from '../src/ai/screacher';
 // task studio-bb-production-20261112-234540-01: BB's exported constants (the second roster-only family)
@@ -625,7 +625,7 @@ describe('enemy spawn reference: maths, determinism, failures, docs', () => {
     const doc = readSource('docs/screacher.md');
     expect(doc).not.toBeNull();
     const ROOTS: Record<string, unknown> = {
-      SCREACHER_STATS, SCREACHER_ASSET, SCREACHER_SPEED, SCREACHER_AGGRO, SCREACHER_NOISE, SCREACHER_SENSE, SCREACHER_ECHO, SCREACHER_SCALE, SCREACHER_MAX_TOP_M,
+      SCREACHER_STATS, SCREACHER_ASSET, SCREACHER_SPEED, SCREACHER_AGGRO, SCREACHER_NOISE, SCREACHER_SENSE, SCREACHER_ECHO, SCREACHER_SCALE, SCREACHER_MAX_TOP_M, SCREACHER_REACH,
       SCREACHER_VOICE_Y, IMPACT_FAMILY_LOUDNESS, HEARING, FAMILY_ROSTER, MELEE_MASS,
     };
     const resolve = (path: string): unknown => path.split('.').reduce<unknown>((o, k, i) => (i === 0 ? ROOTS[k] : (o as Record<string, unknown> | undefined)?.[k]), undefined);
@@ -653,7 +653,7 @@ describe('enemy spawn reference: maths, determinism, failures, docs', () => {
     for (const r of ['SCREACHER_STATS', 'SCREACHER_SENSE', 'SCREACHER_NOISE', 'SCREACHER_AGGRO', 'SCREACHER_SPEED', 'SCREACHER_ECHO', 'HEARING', 'FAMILY_ROSTER']) expect(roots, r).toContain(r);
     // every leaf of the constants a player's choices depend on has its row (nothing of them is left to prose)
     const leafPaths = (name: string, o: object): string[] => Object.entries(o).flatMap(([k, v]) => (v && typeof v === 'object' ? leafPaths(`${name}.${k}`, v) : [`${name}.${k}`]));
-    for (const [name, o] of [['SCREACHER_NOISE', SCREACHER_NOISE], ['SCREACHER_SENSE', SCREACHER_SENSE], ['SCREACHER_ECHO', SCREACHER_ECHO], ['SCREACHER_SPEED', SCREACHER_SPEED], ['HEARING', HEARING]] as const) {
+    for (const [name, o] of [['SCREACHER_NOISE', SCREACHER_NOISE], ['SCREACHER_SENSE', SCREACHER_SENSE], ['SCREACHER_ECHO', SCREACHER_ECHO], ['SCREACHER_SPEED', SCREACHER_SPEED], ['SCREACHER_REACH', SCREACHER_REACH], ['HEARING', HEARING]] as const) {
       for (const p of leafPaths(name, o)) expect(doc!.includes(`\`${p}\``), `${p} has a row`).toBe(true);
     }
     // the derived statements, recomputed from the constants

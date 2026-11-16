@@ -71,11 +71,14 @@ describe('The live glass mirror in the real Game (WebGPU path, validating device
       scene: {children: unknown[]}; camera: object;
       layout: {grid: {circleClear(x: number, z: number, r: number): boolean; floorAt(x: number, z: number): number}};
       levels: {lineOfSight(a: {x: number; y: number; z: number}, b: {x: number; y: number; z: number}): boolean};
-      settings: {enhancedLighting: string; reflections: string};
+      settings: {enhancedLighting: string; reflections: string; rtFlashlight: boolean};
       atmosphereBypass: string | null;
     };
     const frameErrors: string[] = [];
     const loop = (t: number) => { try { game.frame(t); } catch (err) { frameErrors.push(String((err as Error)?.stack ?? err).slice(0, 400)); } requestAnimationFrame(loop); };
+    // (task rt-flashlight-compute-20261115-233136: RT Flashlight Off — these pins are the CURRENT flashlight bounce, which Off keeps
+    // unchanged; the RT default is tests/rt-flashlight-game.test.ts)
+    g.settings.rtFlashlight = false;
     game.applySettings();
     game.setState('title');
     requestAnimationFrame(loop);

@@ -326,8 +326,9 @@ describe.each(VARIANTS.map(V => [V.v, V] as const))('Screacher derivative %s (en
 
   it('rakes with the right hand to the contract reach at the hit frame, at chest height in front (three.js skinning)', () => {
     const gltf = loaded.get(V.v)!, X = extrasOf(V), prov = provOf(V), P = poser(gltf);
-    expect(X.reachM).toBeGreaterThanOrEqual(1.1);
-    expect(X.reachM).toBeLessThanOrEqual(1.3);
+    // (task studio-screacher-reach-swing-20261116-053933-01: the long arms used, 1.2 -> 1.45 m)
+    expect(X.reachM).toBeGreaterThanOrEqual(1.43);
+    expect(X.reachM).toBeLessThanOrEqual(1.47);
     const rHand = P.dominant('R_Hand');
     expect(rHand.length).toBeGreaterThan(50);
     const tipAt = (t: number) => { P.at('Attack', t); let best = new THREE.Vector3(), d = 0; for (const i of rHand) { const q = P.vertex(i), r = Math.hypot(q.x, q.z); if (r > d) { d = r; best = q; } } return {tip: best, reach: d}; };
@@ -343,7 +344,12 @@ describe.each(VARIANTS.map(V => [V.v, V] as const))('Screacher derivative %s (en
     expect(hit.tip.z).toBeGreaterThan(tipAt(0.62).tip.z + 0.1); // raked down and back in
     expect(tipAt(0.62).tip.y).toBeLessThan(hit.tip.y - 0.25);
     expect(prov.verification.attack.hit).toMatchObject({t: 0.42, reachM: X.reachM});
-    expect(prov.clips.attackSolve.target).toBe(1.2);
+    expect(prov.clips.attackSolve.target).toBe(1.45);
+    // the reach comes from a visible step, not a slide: a modest pelvis lunge, the legs never at full stretch
+    expect(prov.clips.attackSolve.lunge).toBeGreaterThan(0.1);
+    expect(prov.clips.attackSolve.lunge).toBeLessThan(0.35);
+    expect(prov.clips.attackSolve.legReach).toBeLessThan(0.95);
+    expect(prov.revisions.map((r: {task: string}) => r.task)).toEqual(['studio-screacher-reach-swing-20261116-053933-01']);
   });
 
   it('screams with the feet planted: arched with the stump thrown back and the arms flung down, back and out by the cue; ends in the Idle pose', () => {

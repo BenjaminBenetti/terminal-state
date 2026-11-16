@@ -32,9 +32,15 @@
 //    same SETTINGS_VERSION (records are read field by field). The game reads them when a station is BUILT: a change never rebuilds the
 //    live station and re-applies nothing. Never part of a save slot; the baked data itself lives in the derived cache
 //    (core/derivedCache.ts), outside this record and outside every save.
+//  - Task rt-flashlight-compute-20261115-233136 (lane UI): rtFlashlight (boolean, default ON: world/rtFlashlight.ts RT_FLASHLIGHT_DEFAULT) —
+//    the RT Flashlight choice: how the flashlight's bounce is made under Enhanced lighting's full shading (traced on the GPU where the
+//    renderer runs the compute path; else, and when Off, the standard bounce). A record from before it existed reads it as on (missing =
+//    just defaulted, not "fixed"); a non-boolean falls back to on (fixed), like ambientOcclusion. An explicit Off is stored and stays
+//    Off. Same record, same SETTINGS_VERSION; never part of a save slot.
 
 import {STORAGE_KEYS} from '../campaign/types';
 import {ENHANCED_LIGHTING_DEFAULT, REFLECTIONS_DEFAULT, isEnhancedLightingMode, isReflectionQuality, type EnhancedLightingMode, type ReflectionQuality} from '../world/enhancedLighting';
+import {RT_FLASHLIGHT_DEFAULT} from '../world/rtFlashlight';
 import type {DerivedCacheStats} from '../core/derivedCache';
 
 export type Quality = 'low' | 'high';
@@ -67,11 +73,14 @@ export interface GameSettings {
   enhancedLighting: EnhancedLightingMode;
   /** Cached reflection probes for metal and glass: Off / Standard / High (used only while enhancedLighting is not 'off'; kept either way). */
   reflections: ReflectionQuality;
+  /** Lane UI (RT Flashlight): the flashlight's bounce traced on the GPU where it can run (true, the default) or the standard bounce (false). */
+  rtFlashlight: boolean;
 }
 
 /** The game's historical defaults (game.ts Settings) + native resolution. */
 export const SETTINGS_DEFAULTS: Readonly<GameSettings> = Object.freeze({sens: 1, fov: 75, volume: 0.7, muted: false, invertX: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1, ambientOcclusion: true,
-  enhancedLighting: ENHANCED_LIGHTING_DEFAULT, reflections: REFLECTIONS_DEFAULT}); // (lane SETTINGS: the contract's defaults, Auto / Standard)
+  enhancedLighting: ENHANCED_LIGHTING_DEFAULT, reflections: REFLECTIONS_DEFAULT, // (lane SETTINGS: the contract's defaults, Auto / Standard)
+  rtFlashlight: RT_FLASHLIGHT_DEFAULT}); // (lane UI: the contract's default, On)
 
 /** The existing UI bounds (index.html ranges): sensitivity 0.2-3, FOV 60-100 degrees, volume 0-100 %, train sway 0-100 %. */
 export const SETTINGS_BOUNDS = {
@@ -85,7 +94,7 @@ export const SETTINGS_BOUNDS = {
 export const SETTINGS_VERSION = 1;
 
 export type SettingsKey = keyof GameSettings;
-export const SETTINGS_KEYS: readonly SettingsKey[] = ['sens', 'fov', 'volume', 'muted', 'invertX', 'invertY', 'quality', 'renderScale', 'trainSway', 'ambientOcclusion', 'enhancedLighting', 'reflections'];
+export const SETTINGS_KEYS: readonly SettingsKey[] = ['sens', 'fov', 'volume', 'muted', 'invertX', 'invertY', 'quality', 'renderScale', 'trainSway', 'ambientOcclusion', 'enhancedLighting', 'reflections', 'rtFlashlight'];
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -114,7 +123,7 @@ function field<K extends SettingsKey>(k: K, raw: unknown): {value: GameSettings[
       const c = clamp(n, b.min, b.max);
       return {value: c as GameSettings[K], fixed: c !== n};
     }
-    case 'muted': case 'invertX': case 'invertY': case 'ambientOcclusion': // (lane AO: a non-boolean falls back to its default, on)
+    case 'muted': case 'invertX': case 'invertY': case 'ambientOcclusion': case 'rtFlashlight': // (lane AO / lane UI: a non-boolean falls back to its default, on)
       return typeof raw === 'boolean' ? {value: raw as GameSettings[K], fixed: false} : {value: d, fixed: true};
     case 'quality':
       return raw === 'low' || raw === 'high' ? {value: raw as GameSettings[K], fixed: false} : {value: d, fixed: true};
@@ -434,11 +443,12 @@ export function browserSettingsStorage(): SettingsStorage | null {
 }
 
 /** Copy the effective settings into the game's Settings object (game.ts reads `game.settings.*`); true when render-affecting quality changed. */
-export function copySettingsInto(target: {sens: number; fov: number; volume: number; muted: boolean; invertX: boolean; invertY: boolean; quality: Quality; renderScale: RenderScale; trainSway: number; ambientOcclusion?: boolean; enhancedLighting?: EnhancedLightingMode; reflections?: ReflectionQuality}, s: Readonly<GameSettings>): {qualityChanged: boolean} {
+export function copySettingsInto(target: {sens: number; fov: number; volume: number; muted: boolean; invertX: boolean; invertY: boolean; quality: Quality; renderScale: RenderScale; trainSway: number; ambientOcclusion?: boolean; enhancedLighting?: EnhancedLightingMode; reflections?: ReflectionQuality; rtFlashlight?: boolean}, s: Readonly<GameSettings>): {qualityChanged: boolean} {
   const qualityChanged = target.quality !== s.quality;
   target.sens = s.sens; target.fov = s.fov; target.volume = s.volume; target.muted = s.muted;
   target.invertX = s.invertX; target.invertY = s.invertY; target.quality = s.quality; target.renderScale = s.renderScale; target.trainSway = s.trainSway;
   target.ambientOcclusion = s.ambientOcclusion; // (lane AO)
   target.enhancedLighting = s.enhancedLighting; target.reflections = s.reflections; // (lane SETTINGS: read when a station is built, nothing to re-apply)
+  target.rtFlashlight = s.rtFlashlight; // (lane UI: read by the lighting plan; main.ts asks the game to relight the live station)
   return {qualityChanged};
 }

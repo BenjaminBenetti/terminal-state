@@ -351,10 +351,17 @@ export function lightFieldSample(p: Node, o: {normal?: Node; slot?: Node; reach?
  */
 export class LightFieldLight extends THREE.Light {
   readonly isLightFieldLight = true;
-  constructor(readonly full = false) {
+  /**
+   * Task studio-rt-flashlight-compute-20261115-233136-01: `rt` (with `full` only) — the flashlight's bounce is the one traced by
+   * WebGPU compute (render/rt/, world/rtBounceNode.ts), read from its result texture, INSTEAD of the virtual lights of
+   * world/flashBounce.ts (whose term is then not in the program at all). Fixed per instance like `full`: its own light id.
+   */
+  readonly rt: boolean;
+  constructor(readonly full = false, rt = false) {
     super(0xffffff, 1);
     (this as {type: string}).type = 'LightFieldLight';
-    this.name = full ? 'light-field-full' : 'light-field';
+    this.rt = full && rt;
+    this.name = full ? `light-field-full${this.rt ? '-rt' : ''}` : 'light-field';
     this.castShadow = false;
   }
 }
@@ -369,8 +376,9 @@ export function sharedFieldLight<T extends LightFieldLight>(key: string, make: (
   return l;
 }
 /** The single session-wide field light of its kind (stable id => stable light set). */
-export function stationFieldLight(full = false): LightFieldLight {
-  return sharedFieldLight(full ? 'field-full' : 'field', () => new LightFieldLight(full));
+export function stationFieldLight(full = false, rt = false): LightFieldLight {
+  const traced = full && rt;
+  return sharedFieldLight(full ? `field-full${traced ? '-rt' : ''}` : 'field', () => new LightFieldLight(full, traced));
 }
 
 interface LightingBuilder extends NodeBuilder {
@@ -380,14 +388,17 @@ interface LightingBuilder extends NodeBuilder {
 
 /**
  * What a FULL field light adds to the indirect irradiance besides the field (the flashlight's bounce registers here: it lives in
- * its own module and this one stays free of it). Read when a program is built.
+ * its own module and this one stays free of it). Read when a program is built. Task studio-rt-flashlight-compute-20261115-233136-01:
+ * each term is asked with the light the program is built for and may decline it (null): the virtual-light bounce declines an
+ * `rt` light, the traced bounce every other one — a program holds one of the two, never both.
  */
-export const FULL_IRRADIANCE: (() => Node)[] = [];
+export const FULL_IRRADIANCE: ((light: LightFieldLight) => Node | null)[] = [];
 /**
  * What a FULL reflecting field light adds to a reflective material's radiance besides the probes: `dir` = the lookup direction
- * (world), `rough` = the fragment's roughness. The flashlight's bounce registers its sheen here (world/lights.ts).
+ * (world), `rough` = the fragment's roughness, `light` as for FULL_IRRADIANCE (null: decline). The flashlight's bounce registers
+ * its sheen here (world/lights.ts).
  */
-export const FULL_RADIANCE: ((dir: Node, rough: Node) => Node)[] = [];
+export const FULL_RADIANCE: ((dir: Node, rough: Node, light: LightFieldLight) => Node | null)[] = [];
 
 /** Per-fragment field lighting for every lit node material in a scene holding the LightFieldLight. */
 export class LightFieldNode extends LightingNode {
@@ -415,7 +426,7 @@ export class LightFieldNode extends LightingNode {
     const full = !!this.light?.full;
     const s = lightFieldSample(positionWorld, full ? {normal: normalWorld, cube: normalWorld} : {normal: normalWorld});
     b.context.irradiance.addAssign(s.amb);
-    if (full) for (const extra of FULL_IRRADIANCE) b.context.irradiance.addAssign(extra());
+    if (full) for (const extra of FULL_IRRADIANCE) { const x = extra(this.light!); if (x) b.context.irradiance.addAssign(x); }
     const dirView = n(n(cameraViewMatrix).mul(vec4(n(s.dir), 0)).xyz).normalize();
     b.lightsNode.setupDirectLight(b, this, {lightDirection: dirView, lightColor: s.dirColor});
     return s;

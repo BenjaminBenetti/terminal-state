@@ -49,8 +49,11 @@ export function screacherVariantOf(spawn: {variant?: string}): ScreacherVariantI
 export const SCREACHER_ASSET = {
   /** Bind height (feet -> the top of the neck stump, m): "a bit taller" than the 1.78 m zombie, well under the Strainer's 2.15. */
   heightM: 2.0,
-  /** Horizontal reach (m) of the striking hand from the feet origin at the Attack clip's hit frame (variants: 1.10-1.30). */
-  reachM: 1.2,
+  /**
+   * Horizontal reach (m) of the striking hand from the feet origin at the Attack clip's hit frame, straight ahead (variants:
+   * 1.44-1.46). Task studio-screacher-reach-swing-20261116-053933-01: 1.2 -> 1.45 (the re-authored lunging long-arm rake).
+   */
+  reachM: 1.45,
   attackHitTime: 0.42,
   attackDuration: 1.0,
   /** Ground speeds (m/s) the in-place Walk / Run clips were authored for at timeScale 1. */
@@ -70,6 +73,22 @@ export const SCREACHER_MAX_TOP_M = 2.1;
 const PLAYER_BODY_RADIUS = 0.3;
 
 /**
+ * THE REACH OF THE SWING (task studio-screacher-reach-swing-20261116-053933-01; user: it "underuses its long arms and should reach
+ * a bit farther"). The Attack clip now steps into a lunge and whips the long right arm round nearly straight, so the hand tip is
+ * `frontM` straight ahead at the hit frame (was `previousM`). The claw is granted that extra reach only where the arm visibly
+ * sweeps it around the hit frame: in full straight ahead, tapering linearly to none at `taperA` either side (the swept hand of
+ * every variant stays at or beyond this profile: tests/screacher-reach.test.ts); from there to the swing's unchanged cone
+ * (`coneA`) the previous reach holds. The connect distance is that reach + the player's body radius + the unchanged 0.45 m
+ * step-away slack. No lunge moves the body: the brain stays where it stands (the clip's step is in place).
+ */
+export const SCREACHER_REACH = {previousM: 1.2, frontM: SCREACHER_ASSET.reachM, taperA: 0.6, coneA: 1.2, slackM: 0.45} as const;
+/** The hand reach (m from the feet origin) the swing is granted at `bearing` (rad off its facing) inside its cone. */
+export function screacherReachAt(bearing: number): number {
+  const R = SCREACHER_REACH;
+  return R.previousM + (R.frontM - R.previousM) * Math.max(0, 1 - Math.abs(bearing) / R.taperA);
+}
+
+/**
  * The paces of its three aggression tiers (m/s). For scale: the player walks 3.4 and sprints 5.8, crouch-walks 1.7; the ordinary
  * zombie chases at 2.55. `frenzy` outruns a walking player — breaking away means sprinting (which it hears) or going quiet and
  * stepping aside so it runs to where the noise was.
@@ -82,7 +101,8 @@ export const SCREACHER_SPEED = {investigate: SCREACHER_ASSET.walkGroundSpeed, hu
  *  - hp 600 (user retune 2026-11-11: 4x the first 150, every body): a body with no head has no weak spot (every hit is a body hit),
  *    so it soaks far more rounds than a zombie — and every shot is a sound it hears;
  *  - chaseSpeed = the frenzy pace (the top speed; the brain commands the pace of the current tier);
- *  - attackRange 1.55 (the long arm: visible contact 1.2 + 0.3 = 1.5), hitRange = contact + the usual 0.45 m step-away slack;
+ *  - attackRange 1.8 (the long arm: visible contact 1.45 + 0.3 = 1.75; was 1.55 for the 1.2 m reach), hitRange = that contact + the
+ *    usual 0.45 m step-away slack straight ahead (2.2, was 1.95), tapering to the previous 1.95 off to the sides (SCREACHER_REACH);
  *  - attackDamage 16 (between the shambler's 10 and the Strainer's 24); swing 1.0 s, impact 0.42 s (the Attack clip), cooldown 0.6 s;
  *  - sightRange 0: BLIND (its brain never uses sight; the number documents it);
  *  - no `height` (the body-clear height stays the shared BODY_CLEAR, like the 2.15 m Strainer: the pathfinder plans with it).
@@ -92,8 +112,8 @@ export const SCREACHER_STATS: ZombieStats = {
   hp: 600,
   wanderSpeed: 0.5,
   chaseSpeed: SCREACHER_SPEED.frenzy,
-  attackRange: 1.55,
-  hitRange: SCREACHER_ASSET.reachM + PLAYER_BODY_RADIUS + 0.45,
+  attackRange: SCREACHER_ASSET.reachM + PLAYER_BODY_RADIUS + 0.05,
+  hitRange: SCREACHER_ASSET.reachM + PLAYER_BODY_RADIUS + SCREACHER_REACH.slackM,
   attackDamage: 16,
   attackDuration: SCREACHER_ASSET.attackDuration,
   attackImpact: SCREACHER_ASSET.attackHitTime,
@@ -402,8 +422,9 @@ export class ScreacherBrain extends ZombieBrain {
         this.swingDone = true;
         const dx = w.px - this.x, dz = w.pz - this.z, d = Math.hypot(dx, dz);
         const ang = Math.atan2(dx, dz) - this.yaw, a = Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang)));
-        const hitRange = this.stats.hitRange ?? this.stats.attackRange + 0.45;
-        const hit = w.playerAlive && d <= hitRange && a < 1.2 && (w.py === undefined || Math.abs(w.py - this.y) <= ATTACK_REACH_Y + 0.15) && w.los(this.x, this.z, w.px, w.pz, this.y, w.py);
+        // the full reach straight ahead, less off to the side where the swept arm reaches less (SCREACHER_REACH)
+        const hitRange = (this.stats.hitRange ?? this.stats.attackRange + 0.45) - (SCREACHER_REACH.frontM - screacherReachAt(a));
+        const hit = w.playerAlive && d <= hitRange && a < SCREACHER_REACH.coneA && (w.py === undefined || Math.abs(w.py - this.y) <= ATTACK_REACH_Y + 0.15) && w.los(this.x, this.z, w.px, w.pz, this.y, w.py);
         if (hit) { out.attackHit = true; this.sense(w.px, w.pz, w.py ?? this.y, 'touch'); }
         else if (this.belief && this.belief.t <= this.swingStart) this.belief = null; // it struck where the sound was: nothing there
       }

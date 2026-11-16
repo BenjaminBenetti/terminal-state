@@ -42,7 +42,7 @@ describe('settings store: persistence', () => {
     const a = new SettingsStore(mem);
     a.set({sens: 1.85, fov: 92, volume: 0.35, muted: true, invertY: true, quality: 'low', renderScale: 0.25});
     const b = new SettingsStore(mem);
-    expect(b.get()).toEqual({sens: 1.85, fov: 92, volume: 0.35, muted: true, invertX: false, invertY: true, quality: 'low', renderScale: 0.25, trainSway: 1, ambientOcclusion: true, enhancedLighting: 'auto', reflections: 'standard'}); // (task studio-baked-lighting-reflections-20261114-050258-01, lane SETTINGS: + the two enhanced-lighting choices at their defaults)
+    expect(b.get()).toEqual({sens: 1.85, fov: 92, volume: 0.35, muted: true, invertX: false, invertY: true, quality: 'low', renderScale: 0.25, trainSway: 1, ambientOcclusion: true, enhancedLighting: 'auto', reflections: 'standard', rtFlashlight: true}); // (task studio-baked-lighting-reflections-20261114-050258-01, lane SETTINGS: + the two enhanced-lighting choices at their defaults; task rt-flashlight-compute-20261115-233136, lane UI: + RT Flashlight, On)
     expect(b.loadReport.source).toBe('stored');
     expect(JSON.parse(mem.map.get(STORAGE_KEYS.settings)!).v).toBe(1);
   });
@@ -101,7 +101,7 @@ describe('settings store: invalid storage falls back sanely', () => {
     // (task studio-beta-campaign-polish-20261103-063841-01, lane MENU: render scale is a 25-100 % slider now — 0.333 rounds to 33 %)
     mem.setItem(STORAGE_KEYS.settings, JSON.stringify({v: 1, sens: 'fast', fov: 500, volume: -3, muted: 'yes', invertY: true, quality: 'ultra', renderScale: 0.333}));
     const s = new SettingsStore(mem);
-    expect(s.get()).toEqual({sens: SETTINGS_DEFAULTS.sens, fov: 100, volume: 0, muted: false, invertX: false, invertY: true, quality: 'high', renderScale: 0.33, trainSway: 1, ambientOcclusion: true, enhancedLighting: 'auto', reflections: 'standard'});
+    expect(s.get()).toEqual({sens: SETTINGS_DEFAULTS.sens, fov: 100, volume: 0, muted: false, invertX: false, invertY: true, quality: 'high', renderScale: 0.33, trainSway: 1, ambientOcclusion: true, enhancedLighting: 'auto', reflections: 'standard', rtFlashlight: true});
     expect(s.loadReport.source).toBe('invalid');
     expect([...s.loadReport.fixed].sort()).toEqual(['fov', 'muted', 'quality', 'renderScale', 'sens', 'volume']);
     // NaN / Infinity never survive (JSON has none, but a patch could carry them)
@@ -110,7 +110,7 @@ describe('settings store: invalid storage falls back sanely', () => {
 
   it('an older / partial record keeps what it has and defaults the rest (missing = not "fixed")', () => {
     const r = parseStoredSettings(JSON.stringify({sens: 2, fov: 66, volume: 0.5, muted: true, invertY: false, quality: 'low'}));
-    expect(r.settings).toEqual({sens: 2, fov: 66, volume: 0.5, muted: true, invertX: false, invertY: false, quality: 'low', renderScale: 1, trainSway: 1, ambientOcclusion: true, enhancedLighting: 'auto', reflections: 'standard'}); // (task mouse-axis-invert: a record without invertX reads it as false; lane AO: without ambientOcclusion, on; lane SETTINGS: without the enhanced-lighting choices, Auto / Standard)
+    expect(r.settings).toEqual({sens: 2, fov: 66, volume: 0.5, muted: true, invertX: false, invertY: false, quality: 'low', renderScale: 1, trainSway: 1, ambientOcclusion: true, enhancedLighting: 'auto', reflections: 'standard', rtFlashlight: true}); // (task mouse-axis-invert: a record without invertX reads it as false; lane AO: without ambientOcclusion, on; lane SETTINGS: without the enhanced-lighting choices, Auto / Standard; lane UI: without RT Flashlight, On)
     expect(r.fixed).toEqual([]);
     expect(r.source).toBe('stored');
   });

@@ -79,7 +79,7 @@ describe('the store: enhancedLighting / reflections in the browser settings reco
 
   it('a record from before the settings existed reads the defaults and is not "fixed"; everything else in it is kept', () => {
     const old = parseStoredSettings(JSON.stringify({v: 1, sens: 1.4, fov: 80, volume: 0.5, muted: false, invertX: false, invertY: true, quality: 'low', renderScale: 0.5, trainSway: 1, ambientOcclusion: false}));
-    expect(old.settings).toEqual({sens: 1.4, fov: 80, volume: 0.5, muted: false, invertX: false, invertY: true, quality: 'low', renderScale: 0.5, trainSway: 1, ambientOcclusion: false, enhancedLighting: 'auto', reflections: 'standard'});
+    expect(old.settings).toEqual({sens: 1.4, fov: 80, volume: 0.5, muted: false, invertX: false, invertY: true, quality: 'low', renderScale: 0.5, trainSway: 1, ambientOcclusion: false, enhancedLighting: 'auto', reflections: 'standard', rtFlashlight: true}); // (task rt-flashlight-compute-20261115-233136, lane UI: + RT Flashlight at its default)
     expect([old.source, old.fixed]).toEqual(['stored', []]);
     // one of the two present: the other is defaulted, still nothing "fixed"
     const half = parseStoredSettings(JSON.stringify({v: 1, reflections: 'high'}));
@@ -181,9 +181,9 @@ describe('the store: enhancedLighting / reflections in the browser settings reco
     expect(older).toMatchObject({enhancedLighting: 'off', reflections: 'high'});
     // the runtime reads the game's live Settings object: what the store copied in is what it reports as requested
     const rt = new EnhancedLightingRuntime(target);
-    expect(rt.request()).toEqual({lighting: 'on', reflections: 'off'});
+    expect(rt.request()).toEqual({lighting: 'on', reflections: 'off', rt: true}); // (lane UI: + RT Flashlight, copied in too)
     copySettingsInto(target, {...SETTINGS_DEFAULTS, enhancedLighting: 'auto', reflections: 'high'});
-    expect(rt.status().requested).toEqual({lighting: 'auto', reflections: 'high'});
+    expect(rt.status().requested).toEqual({lighting: 'auto', reflections: 'high', rt: true});
   });
 
   it('not save content: no save source mentions the two settings; the settings module opens no cache', () => {
@@ -288,7 +288,8 @@ describe('the settings form: "Enhanced lighting" and "Reflections" after Ambient
       expect(m.el('lighting-help')).not.toBe(null);
       expect(m.el('reflections-help')).not.toBe(null);
       // the whole form's controls, in order: view / audio, then the graphics choices — the two new ones after Ambient occlusion
-      expect(m.box.querySelectorAll('select, input').map(e => e.id)).toEqual(['mm-set-fov', 'mm-set-vol', 'mm-set-mute', 'mm-set-sway', 'mm-set-quality', 'mm-set-res', 'mm-set-ao', 'mm-set-lighting', 'mm-set-reflections']);
+      // (task rt-flashlight-compute-20261115-233136, lane UI: + RT Flashlight right after Reflections — rt-flashlight-settings.test.ts)
+      expect(m.box.querySelectorAll('select, input').map(e => e.id)).toEqual(['mm-set-fov', 'mm-set-vol', 'mm-set-mute', 'mm-set-sway', 'mm-set-quality', 'mm-set-res', 'mm-set-ao', 'mm-set-lighting', 'mm-set-reflections', 'mm-set-rt']);
       expect(m.box.querySelectorAll('button').map(e => e.id)).toEqual(['mm-set-lighting-cache-clear']);
       // each help line directly follows its own row; the cache line and the button come after the form's (first) note
       const kids = m.box.elements.map(e => e.id || e.className);
@@ -296,8 +297,9 @@ describe('the settings form: "Enhanced lighting" and "Reflections" after Ambient
       expect(at('mm-set-ao-help')).toBeGreaterThan(0);
       expect(at('mm-set-lighting-help')).toBe(at('mm-set-ao-help') + 2);
       expect(at('mm-set-reflections-help')).toBe(at('mm-set-lighting-help') + 2);
-      expect(kids[at('mm-set-reflections-help') + 1]).toBe('set-note'); // the store's own note: still the first .set-note
-      expect(at('mm-set-lighting-cache')).toBe(at('mm-set-reflections-help') + 2);
+      expect(at('mm-set-rt-help')).toBe(at('mm-set-reflections-help') + 2); // (lane UI: the RT Flashlight row)
+      expect(kids[at('mm-set-rt-help') + 1]).toBe('set-note'); // the store's own note: still the first .set-note
+      expect(at('mm-set-lighting-cache')).toBe(at('mm-set-rt-help') + 2);
       expect(m.box.querySelector('.set-note')!.id).toBe('');
       expect(m.el('lighting-cache-clear').parentElement!.parentElement).toBe(m.box);
       expect(m.el('lighting-cache-clear').textContent).toBe('Clear lighting cache');
@@ -779,7 +781,7 @@ describe('the settings form: the lighting cache line and "Clear lighting cache"'
       const line = m.el('lighting-cache');
       expect(line.textContent).toBe(lightingCacheLine(await rt.cacheStats()) ?? '');
       m.choose('lighting', 'off');
-      expect(rt.request()).toEqual({lighting: 'off', reflections: 'standard'});
+      expect(rt.request()).toEqual({lighting: 'off', reflections: 'standard', rt: true}); // (lane UI: + RT Flashlight, its default)
       expect(m.el('reflections-help').textContent).toBe(describeReflections(rt.status()));
       if (!m.el('lighting-cache-clear').hidden) { m.dom.click(m.el('lighting-cache-clear')); await settle(); expect(clearSpy).toHaveBeenCalledTimes(1); }
       const reads = cacheSpy.mock.calls.length;
@@ -836,10 +838,11 @@ describe('the plumbing: main.ts hands both forms the runtime; ?lighting= / ?refl
 
   it('a change of either setting asks the game to relight the LIVE station, and nothing else: no applySettings, no resize, no quality re-warm', () => {
     // task studio-graphics-gpu-materials-toggle-20261114-212239-01 (the former "applies when a station next loads" hold is superseded)
+    // (task rt-flashlight-compute-20261115-233136, lane UI: RT Flashlight shares the relight line — rt-flashlight-settings.test.ts)
     const at = main.indexOf('settings.subscribe((s, changed) => {');
     const handler = main.slice(at, main.indexOf('game.onSettingsChanged', at));
     expect(handler).toMatch(/if \(qualityChanged\) void game\.rewarmAfterSettings\(\);/);
-    expect(handler).toMatch(/if \(changed\.some\(k => k === 'enhancedLighting' \|\| k === 'reflections'\)\) void game\.relightAfterSettings\(\);/);
+    expect(handler).toMatch(/if \(changed\.some\(k => k === 'enhancedLighting' \|\| k === 'reflections' \|\| k === 'rtFlashlight'\)\) void game\.relightAfterSettings\(\);/);
     // the relight line is the only place the handler names them, and it comes after the copy and the quality re-warm
     expect(handler.match(/enhancedLighting/g)).toHaveLength(1);
     expect(handler.match(/'reflections'/g)).toHaveLength(1);
@@ -855,7 +858,7 @@ describe('the plumbing: main.ts hands both forms the runtime; ?lighting= / ?refl
       else if (changed.includes('ambientOcclusion')) applied.push('applySettings');
       else if (changed.some(k => k === 'volume' || k === 'muted')) applied.push('audio');
       if (qualityChanged) applied.push('rewarm');
-      if (changed.some(k => k === 'enhancedLighting' || k === 'reflections')) applied.push(`relight ${game.settings.enhancedLighting}/${game.settings.reflections}`);
+      if (changed.some(k => k === 'enhancedLighting' || k === 'reflections' || k === 'rtFlashlight')) applied.push(`relight ${game.settings.enhancedLighting}/${game.settings.reflections}`);
     });
     store.set({enhancedLighting: 'on'});
     store.set({reflections: 'off'});

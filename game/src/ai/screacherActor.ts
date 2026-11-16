@@ -214,8 +214,10 @@ export class ScreacherActor {
       if (B.screamSeq !== this.lastScreamSeq) { this.lastScreamSeq = B.screamSeq; this.current = null; this.play('Scream', 0.12); }
       else if (this.current !== 'Scream') this.play('Scream', 0.12);
     } else if (anim === 'Attack' && this.brain.attackSeq !== this.lastAttackSeq) {
+      // (task studio-screacher-reach-swing-20261116-053933-01) a real cross-fade from the clip it was in (play() restarts an
+      // Attack by itself): with `current` cleared first, the Idle / Walk / Run kept weight 1 under the swing and three averaged the
+      // two poses, so the long-arm rake showed only about two thirds of its reach — and less than the claw's contact distance
       this.lastAttackSeq = this.brain.attackSeq;
-      this.current = null;
       this.play('Attack', 0.12);
     } else if (anim !== 'Attack' || this.current !== 'Attack') {
       this.play(anim, anim === 'Death' ? 0.12 : 0.22);
