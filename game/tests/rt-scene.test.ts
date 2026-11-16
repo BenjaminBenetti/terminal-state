@@ -215,6 +215,52 @@ describe('rt scene per frame', () => {
     expect(rt.debugEntries(b)).toBeNull();
   });
 
+  it('builds the static rebuild across frames over a snapshot: what moves or goes meanwhile stays traced right', () => {
+    const scene = new THREE.Scene(), box = new THREE.BoxGeometry(1, 1, 1), ms: THREE.Mesh[] = [];
+    for (let i = 0; i < 600; i++) { const m = mesh(box, std(), (i % 30) * 3, 0, Math.floor(i / 30) * 3); ms.push(m); scene.add(m); }
+    scene.updateMatrixWorld(true);
+    const rt = new RtScene({staticBudgetMs: 0}), B = rt.buffers;
+    rt.prepare([scene]);
+    const [a, c, d] = [ms[0], ms[1], ms[2]];
+    a.position.z = -6; // (a: moves, then rests into the pending rebuild)
+    scene.updateMatrixWorld(true);
+    rt.sync(0.1, null, 0, 5);
+    expect(rt.debugEntries(a)![0].state).toBe('moving');
+    let t = 1.2;
+    rt.sync(t, null, 0, 5); // (a has rested: a rebuild starts, one chunk a frame)
+    expect(rt.stats().staticBuildPending).toBe(true);
+    expect(rt.debugEntries(a)![0].state).toBe('moving'); // (still traced from the dynamic tree until the commit)
+    // meanwhile c (in the snapshot) moves and d is removed
+    c.position.z = -9;
+    scene.remove(d);
+    scene.updateMatrixWorld(true);
+    const rebuilds = rt.stats().staticRebuilds;
+    let frames = 0;
+    const check = (): void => {
+      expect(down(B, 0, -6)?.t).toBeCloseTo(9.5, 6);
+      expect(down(B, 3, -9)?.t).toBeCloseTo(9.5, 6);
+      expect(down(B, 3, 0)).toBeNull();
+      expect(down(B, 6, 0)).toBeNull();
+      expect(down(B, 9, 0)?.t).toBeCloseTo(9.5, 6);
+    };
+    while (rt.stats().staticBuildPending) { t += 0.01; rt.sync(t, null, 0, 5); check(); frames++; expect(frames).toBeLessThan(500); }
+    expect(frames).toBeGreaterThan(2);
+    expect(rt.stats().staticRebuilds).toBe(rebuilds + 1);
+    expect(rt.debugEntries(a)![0].state).toBe('static');
+    expect(rt.debugEntries(c)![0].state).toBe('moving');
+    expect(rt.debugEntries(c)![0].staticSlot).toBe(-1);
+    expect(B.layout.staticInstanceCount).toBe(600); // (d and c were in the snapshot: written DISABLED; c traced dynamic)
+    // c rests: the next rebuild takes it and drops the disabled slots
+    for (t += 0.5; t < 4; t += 0.05) { rt.sync(t, null, 0, 5); check(); }
+    expect(rt.stats().staticBuildPending).toBe(false);
+    expect(rt.debugEntries(c)![0].state).toBe('static');
+    expect(B.layout.staticInstanceCount).toBe(599);
+    expect(B.layout.dynamicInstanceCount).toBe(0);
+    let disabled = 0;
+    for (let k = 0; k < B.layout.staticInstanceCount; k++) if (B.tlasU32[(B.layout.instances + RT_INSTANCE_VEC4 * k) * 4 + 14] & RT_INST_DISABLED) disabled++;
+    expect(disabled).toBe(0);
+  });
+
   it('traces the bodies as PROXY capsules from the dynamic tree, frame by frame', () => {
     const rt = new RtScene({bodyAlbedo: [0.1, 0.2, 0.3]}), B = rt.buffers;
     rt.prepare([new THREE.Scene()]);
@@ -328,6 +374,25 @@ describe('rt scene caps, dirty spans, cost', () => {
     expect(rt.stats().staticRebuilds).toBeGreaterThan(2);
     expect(expectDirtyCovers(B, snap, lvs)).toBeGreaterThan(0);
     expect(rt.stats().instances.dynamic).toBe(0);
+  });
+
+  it('compacts the BLAS streams once removed geometry wastes a quarter of them, still tracing what is left', () => {
+    const scene = new THREE.Scene(), ms: THREE.Mesh[] = [];
+    for (let i = 0; i < 30; i++) { const m = mesh(new THREE.SphereGeometry(0.5, 48, 28), std(), i * 2, 0, 0); ms.push(m); scene.add(m); }
+    scene.updateMatrixWorld(true);
+    const rt = new RtScene(), B = rt.buffers;
+    rt.prepare([scene]);
+    const per = rt.stats().triangles / 30;
+    for (let i = 0; i < 26; i++) scene.remove(ms[i]);
+    B.markUploaded();
+    rt.sync(0, null, 0, 5); // (inventory: 26 gone, their BLAS dead; the static rebuild compacts)
+    const st = rt.stats();
+    expect(st.compactions).toBe(1);
+    expect(st.triangles).toBe(4 * per);
+    expect(st.deadTriangles).toBe(0);
+    expect(B.blasDirtyTriStart).toBe(0);
+    expect(B.blasDirtyTriEnd).toBe(4 * per);
+    for (let i = 0; i < 30; i++) expect(down(B, i * 2, 0) !== null).toBe(i >= 26);
   });
 
   it('prepares as labelled paced steps and clears', () => {

@@ -14,7 +14,9 @@
 // PER FRAME (sync): a cheap change check per traced object (its ancestors' visibility, matrixWorld, instanceMatrix.version, its
 // geometry / material / draw range / attribute versions). A moved entry is DISABLED in the static TLAS and traced from the dynamic
 // TLAS (rebuilt every frame: the moving entries + the capsules); an entry resting RT_SCENE.restSeconds returns to a rebuilt static
-// TLAS (coalesced: at most one rebuild per RT_SCENE.staticInterval). A full re-inventory runs every RT_SCENE.inventoryInterval: new
+// TLAS (coalesced: at most one rebuild per RT_SCENE.staticInterval; built across frames, RT_SCENE.staticBudgetMs a frame, over a
+// snapshot of the resting entries' boxes while the current static tree stays in use; at the commit an entry that moved or went
+// since the snapshot is written DISABLED and stays dynamic). A full re-inventory runs every RT_SCENE.inventoryInterval: new
 // meshes get their BLAS (cached per geometry for the session: render/rt/bvh.ts) built under the frame's ms budget, never blocking —
 // they trace from the dynamic TLAS until they rest into the static one; meshes gone leave at the next static rebuild (DISABLED
 // meanwhile). A changed geometry keeps its old BLAS until the new one is built (rebuilt at most every RT_SCENE.rebuildInterval).
@@ -41,6 +43,12 @@ export const RT_SCENE = {
   chunkWork: 40_000,
   /** prepareSteps yields after about this much BLAS work (a few ms). */
   prepareWork: 160_000,
+  /** Main-thread ms a frame a pending static TLAS rebuild may use (at least one chunk of staticWork a frame). */
+  staticBudgetMs: 1,
+  /** Static TLAS build work per chunk (BvhBuilder work units; ~0.2 ms). */
+  staticWork: 4_000,
+  /** A material whose texture had not decoded is asked again after 1, 2, 4 ... up to this many re-inventories. */
+  provisionalMaxWait: 64,
 } as const;
 
 export interface RtSceneOptions {
@@ -53,6 +61,8 @@ export interface RtSceneOptions {
   dynamicInstanceCap?: number;
   /** Linear albedo of the capsules (default rtBodyAlbedo(): world/flashOccluders.ts bodyAlbedo). */
   bodyAlbedo?: ArrayLike<number>;
+  /** Main-thread ms a frame of a pending static TLAS rebuild (default RT_SCENE.staticBudgetMs; 0: one chunk a frame). */
+  staticBudgetMs?: number;
   /**
    * Subtrees the inventory never walks (true: `o` and everything under it is pruned; counted as excluded 'skipped'): the camera,
    * the effects group ... Asked of every object an inventory walk reaches (keep it cheap).
@@ -76,10 +86,11 @@ export interface RtSceneStats {
   blasNodes: number;
   blasCount: number;
   deadTriangles: number;
-  /** Traced objects (Mesh / InstancedMesh), their entries, BLAS jobs waiting. */
+  /** Traced objects (Mesh / InstancedMesh), their entries, BLAS jobs waiting, a static TLAS rebuild under way. */
   meshes: number;
   entries: number;
   pendingBuilds: number;
+  staticBuildPending: boolean;
   instances: {static: number; dynamic: number; capsules: number; moving: number; hidden: number};
   materials: number;
   /** Used bytes per stream (and the allocated ones). */
@@ -115,7 +126,7 @@ const zeroOmit = (): Record<RtOmitReason, number> => ({triangles: 0, blasNodeByt
 const zeroExcluded = (): Record<RtExcludeReason, number> => ({material: 0, skinned: 0, batched: 0, noPosition: 0, morph: 0, displaced: 0, customInstanced: 0, character: 0, skipped: 0});
 
 /** A packed BLAS (global bases in the scene's streams) and how many traced objects use it. */
-interface Packed { build: BlasBuild; nodeBase: number; triBase: number; refs: number }
+interface Packed { build: BlasBuild; nodeBase: number; triBase: number; refs: number; dead: boolean }
 
 /** One traced Mesh / InstancedMesh. */
 class Rec {
@@ -232,6 +243,7 @@ export class RtScene {
   readonly maxBlasNodeBytes: number;
   readonly maxBlasTriBytes: number;
   readonly dynamicInstanceCap: number;
+  readonly staticBudgetMs: number;
   private readonly bodyAlbedo: Float32Array;
   private readonly skip: ((o: THREE.Object3D) => boolean) | null;
   private roots: THREE.Object3D[] = [];
@@ -253,12 +265,15 @@ export class RtScene {
   // materials: one slot per material / per material array (slot 0 = the capsules)
   private readonly matSlot = new Map<THREE.Material, number>();
   private readonly matRun = new Map<string, number>();
-  private readonly provisional: {m: THREE.Material; slot: number}[] = [];
+  private readonly provisional: {m: THREE.Material; slot: number; at: number; wait: number}[] = [];
   private matRecords = new Float32Array(16);
   // state
   private prepared = false;
   private lastInventory = -Infinity;
   private lastStatic = -Infinity;
+  /** A static rebuild under way (staticBuilder over staticList's boxes snapshotted at staticAt). */
+  private staticPending = false;
+  private staticAt = 0;
   private seenStamp = 0;
   /** Static slots disabled for entries hidden / removed (a rebuild drops them). */
   private staticGarbage = 0;
@@ -279,6 +294,7 @@ export class RtScene {
     this.maxBlasNodeBytes = o.maxBlasNodeBytes ?? 128 * 1024 * 1024;
     this.maxBlasTriBytes = o.maxBlasTriBytes ?? 128 * 1024 * 1024;
     this.dynamicInstanceCap = Math.max(1, o.dynamicInstanceCap ?? 1024);
+    this.staticBudgetMs = Math.max(0, o.staticBudgetMs ?? RT_SCENE.staticBudgetMs);
     this.skip = o.skip ?? null;
     this.bodyAlbedo = new Float32Array(3);
     const ba = o.bodyAlbedo ?? rtBodyAlbedo();
@@ -305,6 +321,7 @@ export class RtScene {
     this.roots = [];
     this.prepared = false;
     this.lastInventory = this.lastStatic = -Infinity;
+    this.staticPending = false;
     this.staticGarbage = 0;
     this.deadTris = 0;
     this.lastDynamicCount = 0;
@@ -407,8 +424,9 @@ export class RtScene {
       const j = this.jobs[0];
       if (j.job.run(RT_SCENE.chunkWork)) { this.jobs.shift(); this.finishJob(j, now, false); }
     }
-    // rested entries back into the static tree
-    if (now - this.lastStatic >= RT_SCENE.staticInterval && (this.staticGarbage > 0 || this.anyRested(now))) this.rebuildStatic(now);
+    // rested entries back into the static tree (built across frames)
+    if (!this.staticPending && now - this.lastStatic >= RT_SCENE.staticInterval && (this.staticGarbage > 0 || this.anyRested(now))) this.beginStatic(now);
+    if (this.staticPending) this.runStatic(now, this.staticBudgetMs);
     this.writeDynamic(bodies, bodyCount);
     const us = (performance.now() - t0) * 1000;
     this.st.lastSyncUs = us;
@@ -465,11 +483,15 @@ export class RtScene {
     }
     // gone (not found under a visible root)
     for (let i = this.recs.length - 1; i >= 0; i--) if (this.recs[i].seen !== stamp) this.removeRec(this.recs[i]);
-    // provisional material colours (an image decoded since)
+    // provisional material colours (an image decoded since; asked again after 1, 2, 4 ... re-inventories)
+    const inv = this.st.inventories;
     for (let i = this.provisional.length - 1; i >= 0; i--) {
-      const p = this.provisional[i], ok = {ok: false};
+      const p = this.provisional[i];
+      if (inv < p.at) continue;
+      const ok = {ok: false};
       const rec = rtMaterialRecord(p.m, ok);
       if (ok.ok) { this.writeMaterial(p.slot, rec); this.provisional.splice(i, 1); }
+      else { p.wait = Math.min(p.wait * 2, RT_SCENE.provisionalMaxWait); p.at = inv + p.wait; }
     }
     this.excluded = ex;
     this.st.inventories++;
@@ -558,7 +580,7 @@ export class RtScene {
     this.release(rec);
     rec.omitted = null;
     rec.packed = p.packed;
-    p.packed.refs++;
+    if (p.packed.refs++ === 0 && p.packed.dead) { p.packed.dead = false; this.deadTris -= build.triCount; } // (used again before a compaction)
     rec.empty = build.triCount === 0;
     if (rec.empty) {
       for (const e of rec.entries) this.hide(e);
@@ -576,7 +598,7 @@ export class RtScene {
     const p = rec.packed;
     if (!p) return;
     rec.packed = null;
-    if (--p.refs === 0) this.deadTris += p.build.triCount;
+    if (--p.refs === 0) { p.dead = true; this.deadTris += p.build.triCount; }
   }
 
   private captureWorld(rec: Rec): void {
@@ -654,6 +676,8 @@ export class RtScene {
 
   private detect(now: number): void {
     const R = this.recs;
+    // (siblings are mostly adjacent in recs: the last parent's chain visibility is reused)
+    let lastParent: THREE.Object3D | null | undefined, lastParentOk = false;
     for (let i = 0; i < R.length; i++) {
       const rec = R[i], o = rec.obj;
       if (!rec.packed || rec.empty) {
@@ -663,7 +687,15 @@ export class RtScene {
         if (rec.geoDirty && now >= rec.nextBuildAt) this.requestBlas(rec, now, false);
         continue;
       }
-      if (!this.visibleChain(o)) {
+      let vis: boolean;
+      if (!o.visible) vis = false;
+      else if (this.isRoot(o)) vis = true;
+      else {
+        const p = o.parent;
+        if (p !== lastParent) { lastParent = p; lastParentOk = p !== null && this.visibleChain(p); }
+        vis = lastParentOk;
+      }
+      if (!vis) {
         if (!rec.hidden) { rec.hidden = true; for (let k = 0; k < rec.entries.length; k++) this.hide(rec.entries[k]); }
         continue;
       }
@@ -792,7 +824,7 @@ export class RtScene {
     B.blasNodeCount = nodes;
     B.blasTriCount = tris;
     B.dirtyBlas(nodeBase, nodes, triBase, tris);
-    const p: Packed = {build, nodeBase, triBase, refs: 0};
+    const p: Packed = {build, nodeBase, triBase, refs: 0, dead: false};
     this.packedOf.set(build, p);
     return {packed: p, reason: null};
   }
@@ -877,7 +909,7 @@ export class RtScene {
     L.materialCount = slot + 1;
     const ok = {ok: false};
     const rec = rtMaterialRecord(m, ok);
-    if (!ok.ok) this.provisional.push({m, slot});
+    if (!ok.ok) this.provisional.push({m, slot, at: 0, wait: 1});
     this.writeMaterial(slot, rec);
     return slot;
   }
@@ -958,23 +990,25 @@ export class RtScene {
     if (instBase !== 0) for (let k = 0; k < b.nodeCount; k++) { const s = k * BVH_NODE_FLOATS; if (NU[s + 7] !== 0) TU[f0 + s + 3] = NU[s + 3] + instBase; }
   }
 
-  /** Every resting / static entry into a new static TLAS (rested moving entries become static). */
+  /** A whole static TLAS rebuild now (the prepare). */
   private rebuildStatic(now: number): void {
-    this.compactIfWasteful();
-    const rest = RT_SCENE.restSeconds, R = this.recs;
-    let list = this.staticList;
+    this.beginStatic(now);
+    this.staticBuilder.run(Infinity);
+    this.commitStatic(now);
+  }
+
+  /**
+   * Starts a static TLAS rebuild over every static entry and every moving one at rest (their boxes snapshotted now). The current
+   * static tree stays in use (and its slots current) until commitStatic.
+   */
+  private beginStatic(now: number): void {
+    const rest = RT_SCENE.restSeconds, R = this.recs, list = this.staticList;
     list.length = 0;
     for (let i = 0; i < R.length; i++) {
-      const rec = R[i];
-      for (let k = 0; k < rec.entries.length; k++) {
-        const e = rec.entries[k];
-        e.staticSlot = -1;
-        if (e.state === ST_HIDDEN) continue;
-        if (e.state === ST_MOVING) {
-          if (now - e.lastMove < rest) continue;
-          this.dropMoving(e);
-          e.state = ST_STATIC;
-        }
+      const E = R[i].entries;
+      for (let k = 0; k < E.length; k++) {
+        const e = E[k];
+        if (e.state === ST_HIDDEN || (e.state === ST_MOVING && now - e.lastMove < rest)) continue;
         list.push(e);
       }
     }
@@ -986,32 +1020,61 @@ export class RtScene {
       SB[o] = f32Down(b[0]); SB[o + 1] = f32Down(b[1]); SB[o + 2] = f32Down(b[2]);
       SB[o + 3] = f32Up(b[3]); SB[o + 4] = f32Up(b[4]); SB[o + 5] = f32Up(b[5]);
     }
-    const tb = this.staticBuilder;
-    tb.begin(SB, n);
-    tb.run(Infinity);
+    this.staticBuilder.begin(SB, n);
+    this.staticPending = true;
+    this.staticAt = now;
+  }
+
+  /** Continues the pending static build for about `budgetMs` (at least one chunk); commits it when it finishes. */
+  private runStatic(now: number, budgetMs: number): void {
+    const tb = this.staticBuilder, t0 = performance.now();
+    do {
+      if (tb.run(RT_SCENE.staticWork)) { this.commitStatic(now); return; }
+    } while (performance.now() - t0 < budgetMs);
+  }
+
+  /**
+   * The finished static build replaces the static TLAS: a snapshotted entry still unmoved since the snapshot is written (a resting
+   * moving one becomes static); one that moved, hid or went since is written DISABLED (it stays dynamic / gone; counted as garbage
+   * for the next rebuild). Compaction (when wasteful) happens here, as every static record is rewritten.
+   */
+  private commitStatic(now: number): void {
+    this.staticPending = false;
+    this.compactIfWasteful();
+    const tb = this.staticBuilder, list = this.staticList, n = list.length, at = this.staticAt, R = this.recs;
     const B = this.buffers, L = B.layout;
     if (n > L.staticInstanceCap || tb.nodeCount > L.staticNodeCap) {
       const cap = Math.ceil(Math.max(n, 1) * 1.25 / 64) * 64;
       L.staticNodeCount = L.staticInstanceCount = 0; // (nothing to keep: rewritten below)
       this.relayout(cap, 2 * cap, L.materialCap);
     }
+    // (the old tree's slots end here)
+    for (let i = 0; i < R.length; i++) { const E = R[i].entries; for (let k = 0; k < E.length; k++) E[k].staticSlot = -1; }
     this.writeTree(tb, L.staticNodes, 0);
-    const O = tb.order;
+    const O = tb.order, T = B.tlas, TU = B.tlasU32;
+    let garbage = 0;
     for (let k = 0; k < n; k++) {
-      const e = list[O[k]];
-      e.staticSlot = k;
-      this.writeMeshRecord(e, L.instances + RT_INSTANCE_VEC4 * k);
+      const e = list[O[k]], v = L.instances + RT_INSTANCE_VEC4 * k;
+      if (e.state === ST_MOVING && e.lastMove <= at && e.rec.alive) { this.dropMoving(e); e.state = ST_STATIC; }
+      if (e.state === ST_STATIC && e.rec.alive) {
+        e.staticSlot = k;
+        this.writeMeshRecord(e, v);
+      } else {
+        e.staticSlot = -1;
+        const f = v * 4;
+        for (let q = 0; q < RT_INSTANCE_VEC4 * 4; q++) T[f + q] = 0;
+        TU[f + 14] = RT_INST_DISABLED; TU[f + 15] = RT_TYPE_MESH;
+        garbage++;
+      }
     }
     L.staticNodeCount = tb.nodeCount;
     L.staticInstanceCount = n;
     B.dirtyTlas(L.staticNodes, L.staticNodes + 2 * tb.nodeCount);
     B.dirtyTlas(L.instances, L.instances + RT_INSTANCE_VEC4 * n);
-    this.staticGarbage = 0;
+    this.staticGarbage = garbage;
     this.lastStatic = now;
     this.st.staticRebuilds++;
-    // (static instances keep their order in `list` for nothing else: drop the references)
-    list = this.staticList;
-    list.length = 0;
+    list.length = 0; // (drop the references)
   }
 
   /** This frame's dynamic TLAS: the capsules, then the moving entries (up to the cap; the rest counted as omitted). */
@@ -1089,7 +1152,7 @@ export class RtScene {
     for (const p of this.packedOf.values()) if (p.refs > 0) packedBlas++;
     return {
       triangles: B.blasTriCount, blasNodes: B.blasNodeCount, blasCount: packedBlas, deadTriangles: this.deadTris,
-      meshes: this.recs.filter(r => r.packed && !r.empty).length, entries, pendingBuilds: this.jobs.length,
+      meshes: this.recs.filter(r => r.packed && !r.empty).length, entries, pendingBuilds: this.jobs.length, staticBuildPending: this.staticPending,
       instances: {static: L.staticInstanceCount, dynamic: L.dynamicInstanceCount, capsules, moving: this.moving.length, hidden},
       materials: L.materialCount,
       bytes: {blasNodes: B.blasNodeCount * BVH_NODE_FLOATS * 4, blasTris: B.blasTriCount * BLAS_TRI_FLOATS * 4, tlas: L.vec4Count * 16},
