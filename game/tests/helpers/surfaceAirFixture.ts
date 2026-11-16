@@ -114,6 +114,9 @@ export function surfaceAirGame(L: StationLayout, mats: WorldMaterials, o: {activ
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x050607, 0.03);
   const camera = new THREE.PerspectiveCamera();
+  // (follow-up 1) the vehicle controller's seat / enclosure / body / spec interior (the truck's measured cab box, its own frame)
+  const car = {driving: false, enclosed: true as boolean | undefined, body: null as {x: number; y: number; z: number; yaw: number} | null,
+    spec: {interior: {x0: -0.99, x1: 1.09, y0: 0.848, y1: 2.485, z0: -3.61, z1: -2.19}}};
   const h = {
     scene, camera, mats, layout: L, levels, world: {culler: {register: vi.fn()}},
     player: {x: at.x, z: at.z, y: 0, eye: 1.6, yaw: 0, radius: 0.3, alive: true, takeDamage: vi.fn()},
@@ -123,7 +126,9 @@ export function surfaceAirGame(L: StationLayout, mats: WorldMaterials, o: {activ
       active: o.active ?? true, markShadows: vi.fn(),
       setGasLayer: (s: number, f: ArrayLike<number>, r: {x0: number; y0: number; w: number; h: number}) => atmo.setGasLayer(s, f, r),
       setGasFallback: (c: number) => atmo.setGasFallback(c),
+      setCabSource: (src: Parameters<VolumetricAtmosphere['setCabSource']>[0]) => atmo.setCabSource(src),
     },
+    skywaysCar: car,
     sfx: {impact: vi.fn(), breakage: vi.fn()}, fx: {impact: vi.fn()}, damage: {burst: vi.fn(() => 3)}, hud: {toast: vi.fn()}, physics: {propsChanged: vi.fn()},
     propIndex: new PropIndex(levels, L.props),
     run: {laneStore: (k: string) => store.get(k), setLaneStore: (k: string, v: unknown) => { if (v === undefined) store.delete(k); else store.set(k, structuredClone(v)); }},
@@ -156,5 +161,5 @@ export function surfaceAirGame(L: StationLayout, mats: WorldMaterials, o: {activ
     return sys.exposure;
   };
   build();
-  return {h, sys, air, atmo, store, build, teardown, step, eyeAt, place, levels};
+  return {h, sys, air, atmo, store, build, teardown, step, eyeAt, place, levels, car};
 }

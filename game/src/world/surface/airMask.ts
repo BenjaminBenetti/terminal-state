@@ -17,6 +17,10 @@
 // airFog.ts) uses the same weight at the eye. Interiors get gas only through their OPENINGS (world/surface/airField.ts: broken panes /
 // open or smashed doors as breach sources of strength C on the building's own field) — never this term.
 //
+// THE SEALED CAB (follow-up 1): seated in an ENCLOSED vehicle (the truck), the cab's interior volume (the vehicle spec's `interior`, in the
+// body's frame: CabVolume) holds clean air — surfaceAirAt is 0 inside it (the eye's exposure) and the march draws no gas inside it (the
+// surface variant's cab span: render/volumetricShaders.ts); outside the glass the outdoor air is unchanged.
+//
 // STRENGTH: C = GAS.ROOF_OUTDOOR_C (0.6) — the SAME surface atmosphere as the Office roof deck and the Reactor's sky (world/gaslightRules.ts
 // REACTOR_OUTDOOR.c): one outdoor air in one world. Through the unchanged exposure rules: 8 x (0.6 − 0.12) / 0.88 ≈ 4.4 hp/s unprotected;
 // the mask / filter / Airtank protect exactly as on the roof. Breaches carry the same C indoors: a room can never hold more gas than the
@@ -135,4 +139,67 @@ export function surfaceOutdoorGasAt(m: SurfaceOutdoorMap | null, x: number, y: n
 /** Is the column at (x, z) an outdoor column (no indoor top)? */
 export function outdoorColumn(m: SurfaceOutdoorMap, x: number, z: number): boolean {
   return columnTop(m, x, z) <= 0;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Follow-up 1: the sealed vehicle cab
+
+/** A sealed cab's interior (world): centre, heading (the vehicle frame's yaw: world = centre + R(yaw)·local), half extents. */
+export interface CabVolume { x: number; y: number; z: number; yaw: number; hx: number; hy: number; hz: number }
+
+/**
+ * What the vehicle controller offers (world/skywaysCar.ts, structural): the seat taken, the optional `enclosed` (the truck), the body's
+ * pose (footprint centre, floor y, yaw) and its spec's `interior` box (the vehicle frame: x right, y up from the floor, z back).
+ */
+export interface CabVehicle {
+  readonly driving: boolean;
+  readonly enclosed?: boolean;
+  readonly body: {readonly x: number; readonly y: number; readonly z: number; readonly yaw: number} | null;
+  readonly spec: {readonly interior?: {readonly x0: number; readonly x1: number; readonly y0: number; readonly y1: number; readonly z0: number; readonly z1: number}};
+}
+
+/** The sealed cab the player sits in now (null: not seated, not enclosed, no body / interior). */
+export function cabVolumeOf(car: CabVehicle | null | undefined): CabVolume | null {
+  const I = car?.spec?.interior, b = car?.body;
+  if (!car || !car.driving || car.enclosed !== true || !b || !I) return null;
+  const lx = (I.x0 + I.x1) / 2, lz = (I.z0 + I.z1) / 2, c = Math.cos(b.yaw), s = Math.sin(b.yaw);
+  return {x: b.x + lx * c + lz * s, y: b.y + (I.y0 + I.y1) / 2, z: b.z - lx * s + lz * c, yaw: b.yaw,
+    hx: Math.abs(I.x1 - I.x0) / 2, hy: Math.abs(I.y1 - I.y0) / 2, hz: Math.abs(I.z1 - I.z0) / 2};
+}
+
+/** World point -> the cab's own frame (relative to its centre). */
+function cabLocal(v: CabVolume, x: number, y: number, z: number): [number, number, number] {
+  const c = Math.cos(v.yaw), s = Math.sin(v.yaw), dx = x - v.x, dz = z - v.z;
+  return [dx * c - dz * s, y - v.y, dx * s + dz * c];
+}
+
+/** Is world (x, y, z) inside the cab volume? */
+export function inCab(v: CabVolume | null, x: number, y: number, z: number): boolean {
+  if (!v) return false;
+  const [lx, ly, lz] = cabLocal(v, x, y, z);
+  return Math.abs(lx) <= v.hx && Math.abs(ly) <= v.hy && Math.abs(lz) <= v.hz;
+}
+
+/**
+ * The span [tIn, tOut] (m along the unit ray o + t·d, tIn >= 0) inside the cab, or null — the CPU mirror of the march's cab span
+ * (render/volumetricShaders.ts VF_CAB_MARK: the same slab test, a parallel axis as ±1e6).
+ */
+export function cabRaySpan(v: CabVolume | null, o: {x: number; y: number; z: number}, d: {x: number; y: number; z: number}): [number, number] | null {
+  if (!v) return null;
+  const c = Math.cos(v.yaw), s = Math.sin(v.yaw);
+  const [lx, ly, lz] = cabLocal(v, o.x, o.y, o.z);
+  const dl = [d.x * c - d.z * s, d.y, d.x * s + d.z * c], lo = [lx, ly, lz], h = [v.hx, v.hy, v.hz];
+  let tIn = 0, tOut = Infinity;
+  for (let k = 0; k < 3; k++) {
+    const inv = (dl[k] >= 0 ? 1 : -1) / Math.max(Math.abs(dl[k]), 1e-6);
+    const ta = (-h[k] - lo[k]) * inv, tb = (h[k] - lo[k]) * inv;
+    tIn = Math.max(tIn, Math.min(ta, tb));
+    tOut = Math.min(tOut, Math.max(ta, tb));
+  }
+  return tOut > tIn ? [tIn, tOut] : null;
+}
+
+/** THE district's outdoor air with the sealed cab (exposure and render): 0 inside the cab, the outdoor air everywhere else. */
+export function surfaceAirAt(m: SurfaceOutdoorMap | null, cab: CabVolume | null, x: number, y: number, z: number): number {
+  return inCab(cab, x, y, z) ? 0 : surfaceOutdoorGasAt(m, x, y, z);
 }
