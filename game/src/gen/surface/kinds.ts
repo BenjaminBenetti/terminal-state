@@ -67,11 +67,14 @@ export const srStreetSignStreets = (variant: number): {a: number; b: number} => 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Wreck models (existing files only)
 
-/** A wreck kind's lazy library key, its file, cooked size (bytes; the catalogue) and measured runtime bounds (w along X = length, nose +X). */
-export interface SurfaceWreckModel { key: string; url: string; bytes: number; w: number; h: number; d: number; tris: number; source: string }
+/**
+ * A wreck kind's lazy library key, its file, cooked size (bytes; the catalogue) and runtime bounds (w along X = length, nose +X): the
+ * file's measured bounds x `k` (a uniform real-size correction; 1 = drawn as measured).
+ */
+export interface SurfaceWreckModel { key: string; url: string; bytes: number; k: number; w: number; h: number; d: number; tris: number; source: string }
 const sky = (id: keyof typeof SKYWAYS_PROP_MODELS, bytes: number): SurfaceWreckModel => {
   const m = SKYWAYS_PROP_MODELS[id];
-  return {key: m.url.replace(/^assets\/models\//, '').replace(/\.glb$/, ''), url: m.url, bytes, w: m.w, h: m.h, d: m.d, tris: m.tris, source: `assets/skywaysProps.generated.ts ${id}`};
+  return {key: m.url.replace(/^assets\/models\//, '').replace(/\.glb$/, ''), url: m.url, bytes, k: 1, w: m.w, h: m.h, d: m.d, tris: m.tris, source: `assets/skywaysProps.generated.ts ${id}`};
 };
 /**
  * The wreck kinds' models. Skyways rows: SKYWAYS_PROP_MODELS (bytes = the cooked GLB sizes; tests/surface-kinds.test.ts checks them
@@ -84,8 +87,10 @@ export const SURFACE_WRECK_MODEL: Readonly<Record<SurfaceWreckKind, SurfaceWreck
   srWreckSedanBurnt: sky('skyways_wreck_sedan_burnt', 1444400),
   srWreckSuv: sky('skyways_wreck_suv', 1102820),
   srWreckArmyTruck: sky('skyways_wreck_army_truck', 958140),
-  srWreckCar: {key: 'office-car-wreck', url: 'assets/models/office-car-wreck.glb', bytes: 831852, w: 4.6, h: 1.3055, d: 1.7809, tris: 7762, source: 'assets/officeAssets.ts car-wreck'},
-  srWreckBus: {key: 'office-bus-wreck', url: 'assets/models/office-bus-wreck.glb', bytes: 757148, w: 12, h: 4.3417, d: 3.7612, tris: 9565, source: 'assets/officeAssets.ts bus-wreck'},
+  srWreckCar: {key: 'office-car-wreck', url: 'assets/models/office-car-wreck.glb', bytes: 831852, k: 1, w: 4.6, h: 1.3055, d: 1.7809, tris: 7762, source: 'assets/officeAssets.ts car-wreck'},
+  // the Office bus file at its catalogue 12 m stands 4.34 m tall / 3.76 m wide on ~1.4 m wheels (the proportions of a shorter bus scaled up,
+  // 1.3x a real coach): k 0.78 draws it at real size beside the zombie (scale check 2026-11-16) — 9.36 m long, roof ~3.2 m, wheels ~1.1 m
+  srWreckBus: {key: 'office-bus-wreck', url: 'assets/models/office-bus-wreck.glb', bytes: 757148, k: 0.78, w: 9.36, h: 3.3865, d: 2.9337, tris: 9565, source: 'assets/officeAssets.ts bus-wreck [12, 4.3417, 3.7612] x 0.78'},
 };
 /** Lazy library files the Surface kit adds (game.ts propModels catalogue): the Skyways wrecks (the Office wrecks are catalogued already). */
 export const SURFACE_KIT_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = Object.fromEntries(
@@ -224,4 +229,25 @@ export const SURFACE_OPEN_AUDIT: readonly {kind: SurfaceKind; cls: 'exception' |
  * Scale-check records (rule 5: tools/asset-pipeline/props/scale-check.mjs --kind <kind> beside zombie lastshift x 1.0, front + side views
  * looked at; renders in the task's private qa folder): W x H x D as rendered, grounded contact, notes.
  */
-export const SURFACE_SCALE: Readonly<Record<SurfaceKind, string>> = map(() => 'pending scale-check');
+export const SURFACE_SCALE: Readonly<Record<SurfaceKind, string>> = {
+  srSandbagWall: '1.58 x 0.886 x 0.586 m (in the 1.6 x 0.9 x 0.6 box); grounded (47 bag contacts over 1.48 x 0.53, base 0); six staggered courses, top 0.87 m: waist-high cover',
+  srJerseyBarrier: '2.00 x 0.81 x 0.60 m; grounded (full 2.0 x 0.6 base); NJ profile, the 0.81 m standard barrier height',
+  srTrafficCone: '0.36 x 0.70 x 0.36 m; grounded (square base 0.36); knee-high on the zombie',
+  srFireHydrant: '0.40 x 0.785 x 0.33 m; grounded (base flange 0.28 x 0.27); widest flat top 0.58 m',
+  srStreetLamp: '0.40 x 7.46 x 2.55 m (arm + head reach +Z above 7 m); grounded (0.4 base plate); 7.4 m cobra-head lamp',
+  srTrafficSignal: '0.78 x 5.50 x 2.07 m (mast arm +Z above 5 m, pole head +X at 3.2-4.0 m); grounded (0.5 base plate); top 5.5 m',
+  srStreetSign: '0.76 x 3.00 x 0.76 m (two blades); grounded (post 0.1); blades 2.62 / 2.79 m, above head height',
+  srChainFence: '3.00 x 2.20 x 0.20 m; grounded (two 0.6 x 0.2 concrete feet); 2.2 m chain-link panel',
+  srBollard: '0.23 x 1.00 x 0.22 m; grounded (round base 0.22); hip-high',
+  srMapTable: '2.00 x 0.95 x 1.20 m; grounded (two trestle feet, span 1.50 x 1.14); top 0.95 m: a standing map table',
+  srFieldRadio: '0.41 x 0.30 x 0.27 m; grounded (four feet, span 0.38 x 0.25); case top 0.25 m, stowed whip to 0.30 m',
+  srCot: '1.88 x 0.447 x 0.69 m; grounded (six leg feet, span 1.60 x 0.69); canvas 0.43 m: seat height',
+  srMilitaryCrate: '1.20 x 0.55 x 0.60 m (closed); grounded (three battens / skids, span 1.07 x 0.56); lid top 0.535 m',
+  srWreckSedanStripped: '4.60 x 1.367 x 1.825 m; grounded (rims / sills, base 0.002)',
+  srWreckSedanRust: '4.75 x 1.625 x 2.053 m; grounded (tyres, base 0.001)',
+  srWreckSedanBurnt: '4.75 x 1.483 x 1.999 m; grounded (rims, base 0.0001)',
+  srWreckSuv: '4.90 x 1.660 x 2.139 m; grounded (tyres, base 0.001)',
+  srWreckCar: '4.60 x 1.306 x 1.781 m; grounded (rims / sills, base 0)',
+  srWreckArmyTruck: '7.60 x 3.259 x 2.867 m; grounded (tyres, base 0.003); canvas top 3.13 m',
+  srWreckBus: '9.36 x 3.387 x 2.934 m (the 12 m catalogue file x 0.78); grounded (tyres, base 0); ~1 m wheels, roof 3.2 m',
+};

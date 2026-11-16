@@ -659,6 +659,39 @@ destination registry). Their scale-check records (`*_SCALE`, renders beside `las
 - Tests: `tests/skyways-event-expo.test.ts`, `skyways-event-golf-course.test.ts`, `skyways-event-evac.test.ts` (both audits, support,
   fit, loot themes), `skyways-event-golf-play-*.test.ts` and `skyways-event-golf-real.test.ts` (putting, cups, persistence).
 
+### The Surface Run district kit: street, checkpoint and wreck kinds (task studio-surface-run-opus-rebuild-20261116-020827-01, lane KIT)
+The district's own kinds live in `gen/surface/kinds.ts` (`SURFACE_SPECS`: box, physics, damage class, openables row; `SURFACE_SCALE`:
+the scale-check records). They are spread into `PROP_DEFS`, `PROP_DAMAGE`, both audits (physics source `surface`) and, for the crate,
+the loot tables. The drawn kinds are pure-TS geometry (`gen/surface/kitMesh.ts`) in existing shape / purpose materials. The renderer
+(`world/surface/kit.ts`) instances them in 64 m per-storey chunks, named `prop-<kind>[-<variant>]-<material>` for the damage
+RenderIndex. Street-sign names are dynamic text drawn at runtime from the layout's street names. The wrecks are the existing cooked
+Skyways / Office wreck models, loaded lazily under the `surface` family. Nothing new was generated.
+
+| Kind | Openables audit | Physics audit | Scale check W×H×D (contact) |
+|---|---|---|---|
+| `srSandbagWall` | `none` (decor) | static `too heavy` (~36 filled bags, ~600 kg) | 1.58 × 0.886 × 0.586 m, top 0.87 m; 47 bag contacts |
+| `srJerseyBarrier` | `none` (decor) | static `too heavy` (~1.4 t precast concrete) | 2.00 × 0.81 × 0.60 m; full base |
+| `srTrafficCone` | `none` (decor) | **dynamic** 3.2 kg box, `pad` (rubber base) | 0.36 × 0.70 × 0.36 m; square base |
+| `srFireHydrant` | `exception` (equipment) | static `anchored` (on the water main) | 0.40 × 0.785 × 0.33 m; base flange |
+| `srStreetLamp` | `exception` (equipment) | static `anchored` (bolted base plate) | 0.40 × 7.46 × 2.55 m (arm reaches +Z above 7 m); base plate |
+| `srTrafficSignal` | `exception` (equipment) | static `anchored` | 0.78 × 5.50 × 2.07 m (mast arm +Z above 5 m); base plate |
+| `srStreetSign` | `none` (decor) | static `anchored` | 0.76 × 3.00 × 0.76 m, blades 2.62 / 2.79 m; post |
+| `srChainFence` | `none` (decor) | static `anchored` (panel in concrete feet) | 3.00 × 2.20 × 0.20 m; two feet |
+| `srBollard` | `none` (decor) | static `anchored` | 0.23 × 1.00 × 0.22 m; round base |
+| `srMapTable` | `none` (surface; no drawers) | static `too heavy` (plywood top on welded steel trestles, ~70 kg) | 2.00 × 0.95 × 1.20 m, top 0.95 m; two trestles |
+| `srFieldRadio` | `exception` (equipment; sealed set) | **dynamic** 7 kg box, `pad`, `onHost` (its table) | 0.41 × 0.30 × 0.27 m; four feet |
+| `srCot` | `none` (decor; canvas bed) | **dynamic** 9 kg box, `pad` | 1.88 × 0.447 × 0.69 m, canvas 0.43 m; six feet |
+| `srMilitaryCrate` | **`openable`**: lid on a back hinge (`openablesSpec.ts`) | static `holder` | 1.20 × 0.55 × 0.60 m closed; three battens |
+| `srWreckSedanStripped` … `srWreckSuv`, `srWreckArmyTruck`, `srWreckCar` | `exception` (decor; doors rusted shut or gone, nothing stored) | static `too heavy` | the models' measured bounds, 4.6–7.6 m long; grounded on tyres / rims |
+| `srWreckBus` | `exception` (decor) | static `too heavy` | 9.36 × 3.39 × 2.93 m (the 12 m catalogue file × 0.78, real size beside the zombie) |
+
+- The military crate rolls `MILITARY_SUPPLY_ROWS` (`items/lootTables.ts`, an additive named table): gas filters, the odd gas mask,
+  dressings, rations, water, batteries and flares. Ammo comes only through the deliberate `genericAmmo` supply rule. Its contents are
+  finite, seeded once and remembered like every holder. It is themed by the crate (`CONTAINER_THEMED`), whatever the room.
+- Nothing loose is baked into these kinds. The radio, the map table's map (lane LIFE) and any supplies are separate props or loot.
+- Tests: `tests/surface-kinds.test.ts` (names / boxes, both audits, physics class, the crate's lid / cavity / loot theme, geometry
+  inside its box and grounded, wreck dims / catalogue / level family, renderer names / RenderIndex / sign-name atlas).
+
 ## 6. Player-train fixtures (not layout prop kinds)
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
 they sit outside the two audits; their classification is recorded here.
