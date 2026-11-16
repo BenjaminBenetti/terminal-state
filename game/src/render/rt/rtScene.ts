@@ -47,6 +47,8 @@ export const RT_SCENE = {
   staticBudgetMs: 1,
   /** Static TLAS build work per chunk (BvhBuilder work units; ~0.2 ms). */
   staticWork: 4_000,
+  /** Static rebuild listing / record writing per chunk (recs + entries visited / records written). */
+  staticListChunk: 512,
   /** A material whose texture had not decoded is asked again after 1, 2, 4 ... up to this many re-inventories. */
   provisionalMaxWait: 64,
 } as const;
@@ -179,7 +181,13 @@ class Entry {
   readonly w = new Float64Array(12);
   readonly box = new Float64Array(6);
   state = ST_STATIC;
-  staticSlot = -1;
+  /**
+   * Static slots by tree parity (RtScene.slotOf): slot s<p> is valid while g<p> is that tree's generation — the current tree's
+   * slots stay valid while the next one is written, and a commit is O(1) for them.
+   */
+  s0 = -1; g0 = -1; s1 = -1; g1 = -1;
+  /** The pending rebuild (generation) that last noted a change of this entry. */
+  touch = -1;
   movingIndex = -1;
   lastMove = -Infinity;
   tr = 1; tg = 1; tb = 1;
@@ -273,7 +281,22 @@ export class RtScene {
   private lastStatic = -Infinity;
   /** A static rebuild under way (staticBuilder over staticList's boxes snapshotted at staticAt). */
   private staticPending = false;
+  /** Its stage: listing the entries, building the tree, writing the records (staging). */
+  private staticPhase = 0;
   private staticAt = 0;
+  private staticCursor = 0;
+  private readonly staticRecs: Rec[] = [];
+  /** Rested moving entries listed (they become static at the commit) and the entries changed while it is pending. */
+  private readonly staticRested: Entry[] = [];
+  private readonly staticTouched: Entry[] = [];
+  /** The pending tree's records (RT_INSTANCE_VEC4 vec4 each, by slot), copied into the tlas at the commit; disabled ones. */
+  private staticStage = new Float32Array(0);
+  private staticStageU32 = new Uint32Array(0);
+  private stageDisabled = 0;
+  /** Static slot parity / generation of the current tree, and the pending tree's generation. */
+  private slotParity = 0;
+  private slotGen = 0;
+  private pendingGen = 0;
   private seenStamp = 0;
   /** Static slots disabled for entries hidden / removed (a rebuild drops them). */
   private staticGarbage = 0;
@@ -322,6 +345,10 @@ export class RtScene {
     this.prepared = false;
     this.lastInventory = this.lastStatic = -Infinity;
     this.staticPending = false;
+    this.staticPhase = 0;
+    this.staticRecs.length = 0;
+    this.staticRested.length = this.staticTouched.length = 0;
+    this.slotGen = ++this.pendingGen; // (no entry holds a slot of this generation)
     this.staticGarbage = 0;
     this.deadTris = 0;
     this.lastDynamicCount = 0;
@@ -731,7 +758,9 @@ export class RtScene {
           for (let k = 0; k < rec.entries.length; k++) {
             const e = rec.entries[k];
             this.readTint(e);
-            if (e.state === ST_STATIC && e.staticSlot >= 0) this.writeTint(e);
+            const sl = this.slotOf(e);
+            if (e.state === ST_STATIC && sl >= 0) this.writeTint(e, sl);
+            this.touched(e);
           }
         }
       } else if (wc && rec.entries.length) this.moved(rec.entries[0], now);
@@ -757,7 +786,11 @@ export class RtScene {
       rec.material = o.material;
       rec.matBase = this.materialBase(o.material);
       if (groups !== rec.useGroups || count !== rec.matCount) { rec.useGroups = groups; rec.matCount = count; rec.geoDirty = true; }
-      for (const e of rec.entries) if (e.state === ST_STATIC && e.staticSlot >= 0) this.writeStaticInstance(e, e.staticSlot);
+      for (const e of rec.entries) {
+        const sl = this.slotOf(e);
+        if (e.state === ST_STATIC && sl >= 0) this.writeStaticInstance(e, sl);
+        this.touched(e);
+      }
     }
     if (rec.geoDirty && !rec.jobQueued && now >= rec.nextBuildAt) this.requestBlas(rec, now, false);
     if (rec.inst && rec.packed && !rec.empty && rec.inst.count !== rec.count) {
@@ -785,15 +818,19 @@ export class RtScene {
 
   private moved(e: Entry, now: number): void {
     if (!this.compose(e)) { this.hide(e); return; }
-    if (e.state === ST_STATIC && e.staticSlot >= 0) this.disableSlot(e.staticSlot);
+    this.touched(e);
+    const sl = this.slotOf(e);
+    if (e.state === ST_STATIC && sl >= 0) this.disableSlot(sl);
     if (e.state !== ST_MOVING) { e.state = ST_MOVING; this.pushMoving(e); }
     e.lastMove = now;
   }
 
   private hide(e: Entry): void {
     if (e.state === ST_HIDDEN) return;
-    if (e.staticSlot >= 0) {
-      if (e.state === ST_STATIC) this.disableSlot(e.staticSlot);
+    this.touched(e);
+    const sl = this.slotOf(e);
+    if (sl >= 0) {
+      if (e.state === ST_STATIC) this.disableSlot(sl);
       this.staticGarbage++;
     }
     if (e.state === ST_MOVING) this.dropMoving(e);
@@ -860,9 +897,9 @@ export class RtScene {
   }
 
   /** Re-packs only the BLAS still used (when the dead ones waste a quarter and more): every base moves, everything is dirty. */
-  private compactIfWasteful(): void {
+  private compactIfWasteful(): boolean {
     const B = this.buffers;
-    if (this.deadTris < 65536 || this.deadTris < B.blasTriCount * 0.25) return;
+    if (this.deadTris < 65536 || this.deadTris < B.blasTriCount * 0.25) return false;
     const live: Packed[] = [];
     for (const p of this.packedOf.values()) if (p.refs > 0) live.push(p);
     this.packedOf.clear();
@@ -876,6 +913,7 @@ export class RtScene {
     this.deadTris = 0;
     this.st.compactions++;
     this.dynamicStale = true;
+    return true;
   }
 
   // ------------------------------------------------------------------------------------------------------------------------------
@@ -961,15 +999,20 @@ export class RtScene {
     B.dirtyTlas(v, v + 1);
   }
 
-  private writeTint(e: Entry): void {
-    const B = this.buffers, v = B.layout.instances + RT_INSTANCE_VEC4 * e.staticSlot + 4, f = v * 4;
+  private writeTint(e: Entry, slot: number): void {
+    const B = this.buffers, v = B.layout.instances + RT_INSTANCE_VEC4 * slot + 4, f = v * 4;
     B.tlas[f] = e.tr; B.tlas[f + 1] = e.tg; B.tlas[f + 2] = e.tb;
     B.dirtyTlas(v, v + 1);
   }
 
-  /** A mesh instance record at vec4 `v` (see rtFormat.ts). */
+  /** A mesh instance record at vec4 `v` of the tlas (see rtFormat.ts). */
   private writeMeshRecord(e: Entry, v: number): void {
-    const B = this.buffers, T = B.tlas, TU = B.tlasU32, f = v * 4, W = e.w;
+    this.writeRecordTo(e, this.buffers.tlas, this.buffers.tlasU32, v * 4);
+  }
+
+  /** A mesh instance record at float `f` of T / TU (the tlas, or the static staging copy). */
+  private writeRecordTo(e: Entry, T: Float32Array, TU: Uint32Array, f: number): void {
+    const W = e.w;
     for (let k = 0; k < 12; k++) T[f + k] = W[k];
     TU[f + 12] = e.rec.packed!.nodeBase; TU[f + 13] = e.rec.matBase; TU[f + 14] = 0; TU[f + 15] = RT_TYPE_MESH;
     T[f + 16] = e.tr; T[f + 17] = e.tg; T[f + 18] = e.tb; T[f + 19] = 0;
@@ -993,85 +1036,162 @@ export class RtScene {
   /** A whole static TLAS rebuild now (the prepare). */
   private rebuildStatic(now: number): void {
     this.beginStatic(now);
-    this.staticBuilder.run(Infinity);
-    this.commitStatic(now);
+    this.runStatic(now, Infinity);
+  }
+
+  /** The entry's slot in the current static tree (-1: none). */
+  private slotOf(e: Entry): number {
+    return this.slotParity === 0 ? (e.g0 === this.slotGen ? e.s0 : -1) : (e.g1 === this.slotGen ? e.s1 : -1);
+  }
+
+  /** The entry's slot in the pending static tree (-1: none). */
+  private pendingSlotOf(e: Entry): number {
+    return this.slotParity === 0 ? (e.g1 === this.pendingGen ? e.s1 : -1) : (e.g0 === this.pendingGen ? e.s0 : -1);
+  }
+
+  private setPendingSlot(e: Entry, slot: number): void {
+    const g = slot >= 0 ? this.pendingGen : -1;
+    if (this.slotParity === 0) { e.s1 = slot; e.g1 = g; } else { e.s0 = slot; e.g0 = g; }
+  }
+
+  /** Notes a change of `e` while a static rebuild is pending (its record / validity is checked again at the commit). */
+  private touched(e: Entry): void {
+    if (this.staticPending && e.touch !== this.pendingGen) { e.touch = this.pendingGen; this.staticTouched.push(e); }
+  }
+
+  /** Still what the pending tree took: alive, and static or moving without a move since the snapshot. */
+  private stillListed(e: Entry): boolean {
+    return e.rec.alive && (e.state === ST_STATIC || (e.state === ST_MOVING && e.lastMove <= this.staticAt));
   }
 
   /**
-   * Starts a static TLAS rebuild over every static entry and every moving one at rest (their boxes snapshotted now). The current
-   * static tree stays in use (and its slots current) until commitStatic.
+   * Starts a static TLAS rebuild over every entry static, or moving and at rest, now (`now` = the snapshot time). runStatic then,
+   * across frames: lists them (boxes snapshotted as listed; one that moved since `now` is not taken), builds the tree, writes the
+   * records into a staging copy; the commit copies it in. The current static tree stays in use (its slots valid) until then. (The
+   * recs are snapshotted: an entry static at the commit was static at the snapshot, so its rec is listed.)
    */
   private beginStatic(now: number): void {
-    const rest = RT_SCENE.restSeconds, R = this.recs, list = this.staticList;
-    list.length = 0;
-    for (let i = 0; i < R.length; i++) {
-      const E = R[i].entries;
-      for (let k = 0; k < E.length; k++) {
-        const e = E[k];
-        if (e.state === ST_HIDDEN || (e.state === ST_MOVING && now - e.lastMove < rest)) continue;
-        list.push(e);
-      }
-    }
-    const n = list.length;
-    if (this.staticBounds.length < n * 6) this.staticBounds = new Float32Array(Math.max(n * 6, this.staticBounds.length * 2));
-    const SB = this.staticBounds;
-    for (let i = 0; i < n; i++) {
-      const b = list[i].box, o = i * 6;
-      SB[o] = f32Down(b[0]); SB[o + 1] = f32Down(b[1]); SB[o + 2] = f32Down(b[2]);
-      SB[o + 3] = f32Up(b[3]); SB[o + 4] = f32Up(b[4]); SB[o + 5] = f32Up(b[5]);
-    }
-    this.staticBuilder.begin(SB, n);
+    const SR = this.staticRecs, R = this.recs;
+    SR.length = R.length;
+    for (let i = 0; i < R.length; i++) SR[i] = R[i];
+    this.staticList.length = 0;
+    this.staticRested.length = 0;
+    this.staticTouched.length = 0;
+    this.staticCursor = 0;
+    this.staticPhase = 1;
     this.staticPending = true;
     this.staticAt = now;
+    this.pendingGen++;
   }
 
-  /** Continues the pending static build for about `budgetMs` (at least one chunk); commits it when it finishes. */
+  /** Continues the pending static rebuild for about `budgetMs` (at least one chunk); commits it when it finishes. */
   private runStatic(now: number, budgetMs: number): void {
     const tb = this.staticBuilder, t0 = performance.now();
     do {
-      if (tb.run(RT_SCENE.staticWork)) { this.commitStatic(now); return; }
+      if (this.staticPhase === 1) this.listStatic(RT_SCENE.staticListChunk);
+      else if (this.staticPhase === 2) { if (tb.run(RT_SCENE.staticWork)) { this.staticPhase = 3; this.staticCursor = 0; this.stageDisabled = 0; } }
+      else if (this.writeStatic(RT_SCENE.staticListChunk)) { this.commitStatic(now); return; }
     } while (performance.now() - t0 < budgetMs);
   }
 
+  /** Lists about `chunk` more entries (boxes snapshotted, f32 rounded outward); begins the build once every rec is listed. */
+  private listStatic(chunk: number): void {
+    const rest = RT_SCENE.restSeconds, at = this.staticAt, SR = this.staticRecs, list = this.staticList;
+    let done = 0;
+    while (this.staticCursor < SR.length && done < chunk) {
+      const rec = SR[this.staticCursor++], E = rec.entries;
+      done += 1 + E.length;
+      if (!rec.alive) continue;
+      for (let k = 0; k < E.length; k++) {
+        const e = E[k];
+        if (e.state === ST_HIDDEN || (e.state === ST_MOVING && at - e.lastMove < rest)) continue; // (never moved: -Infinity, rested)
+        const n = list.length;
+        if (this.staticBounds.length < (n + 1) * 6) {
+          const a = new Float32Array(Math.max((n + 1) * 6, this.staticBounds.length * 2, 6 * 1024));
+          a.set(this.staticBounds.subarray(0, n * 6));
+          this.staticBounds = a;
+        }
+        const SB = this.staticBounds, b = e.box, o = n * 6;
+        SB[o] = f32Down(b[0]); SB[o + 1] = f32Down(b[1]); SB[o + 2] = f32Down(b[2]);
+        SB[o + 3] = f32Up(b[3]); SB[o + 4] = f32Up(b[4]); SB[o + 5] = f32Up(b[5]);
+        list.push(e);
+        if (e.state === ST_MOVING) this.staticRested.push(e);
+      }
+    }
+    if (this.staticCursor < SR.length) return;
+    SR.length = 0;
+    this.staticPhase = 2;
+    this.staticBuilder.begin(this.staticBounds, list.length);
+  }
+
+  /** Writes about `chunk` more records of the built tree (slot k = its k-th leaf primitive) into the staging copy. True: all. */
+  private writeStatic(chunk: number): boolean {
+    const list = this.staticList, n = list.length, O = this.staticBuilder.order, F = RT_INSTANCE_VEC4 * 4;
+    if (this.staticCursor === 0 && this.staticStage.length < n * F) {
+      this.staticStage = new Float32Array(Math.max(n * F, this.staticStage.length * 2));
+      this.staticStageU32 = new Uint32Array(this.staticStage.buffer);
+    }
+    const S = this.staticStage, SU = this.staticStageU32, end = Math.min(n, this.staticCursor + chunk);
+    for (let k = this.staticCursor; k < end; k++) {
+      const e = list[O[k]];
+      if (this.stillListed(e)) { this.setPendingSlot(e, k); this.writeRecordTo(e, S, SU, k * F); }
+      else this.stageDisabledAt(k);
+    }
+    this.staticCursor = end;
+    return end >= n;
+  }
+
+  private stageDisabledAt(k: number): void {
+    const S = this.staticStage, SU = this.staticStageU32, f = k * RT_INSTANCE_VEC4 * 4;
+    for (let q = 0; q < RT_INSTANCE_VEC4 * 4; q++) S[f + q] = 0;
+    SU[f + 14] = RT_INST_DISABLED; SU[f + 15] = RT_TYPE_MESH;
+    this.stageDisabled++;
+  }
+
   /**
-   * The finished static build replaces the static TLAS: a snapshotted entry still unmoved since the snapshot is written (a resting
-   * moving one becomes static); one that moved, hid or went since is written DISABLED (it stays dynamic / gone; counted as garbage
-   * for the next rebuild). Compaction (when wasteful) happens here, as every static record is rewritten.
+   * The finished rebuild replaces the static TLAS: the entries changed since their record was staged are written again (one that
+   * moved, hid or went: DISABLED, it stays dynamic / gone, counted as garbage for the next rebuild), the staging copy goes in, the
+   * rested moving entries become static and the slot generation flips. A compaction (when wasteful) happens here: every staged
+   * record is written again then (its BLAS root moved).
    */
   private commitStatic(now: number): void {
     this.staticPending = false;
-    this.compactIfWasteful();
-    const tb = this.staticBuilder, list = this.staticList, n = list.length, at = this.staticAt, R = this.recs;
+    this.staticPhase = 0;
+    const compacted = this.compactIfWasteful();
+    const tb = this.staticBuilder, list = this.staticList, n = list.length, F = RT_INSTANCE_VEC4 * 4;
+    const S = this.staticStage, SU = this.staticStageU32;
+    if (compacted) {
+      for (let k = 0; k < n; k++) { const e = list[tb.order[k]]; if (this.pendingSlotOf(e) === k) this.writeRecordTo(e, S, SU, k * F); }
+    }
+    const T = this.staticTouched;
+    for (let i = 0; i < T.length; i++) {
+      const e = T[i], k = this.pendingSlotOf(e);
+      if (k < 0) continue;
+      if (this.stillListed(e)) this.writeRecordTo(e, S, SU, k * F); // (a new tint / material)
+      else { this.setPendingSlot(e, -1); this.stageDisabledAt(k); }
+    }
+    T.length = 0;
     const B = this.buffers, L = B.layout;
     if (n > L.staticInstanceCap || tb.nodeCount > L.staticNodeCap) {
       const cap = Math.ceil(Math.max(n, 1) * 1.25 / 64) * 64;
       L.staticNodeCount = L.staticInstanceCount = 0; // (nothing to keep: rewritten below)
       this.relayout(cap, 2 * cap, L.materialCap);
     }
-    // (the old tree's slots end here)
-    for (let i = 0; i < R.length; i++) { const E = R[i].entries; for (let k = 0; k < E.length; k++) E[k].staticSlot = -1; }
     this.writeTree(tb, L.staticNodes, 0);
-    const O = tb.order, T = B.tlas, TU = B.tlasU32;
-    let garbage = 0;
-    for (let k = 0; k < n; k++) {
-      const e = list[O[k]], v = L.instances + RT_INSTANCE_VEC4 * k;
-      if (e.state === ST_MOVING && e.lastMove <= at && e.rec.alive) { this.dropMoving(e); e.state = ST_STATIC; }
-      if (e.state === ST_STATIC && e.rec.alive) {
-        e.staticSlot = k;
-        this.writeMeshRecord(e, v);
-      } else {
-        e.staticSlot = -1;
-        const f = v * 4;
-        for (let q = 0; q < RT_INSTANCE_VEC4 * 4; q++) T[f + q] = 0;
-        TU[f + 14] = RT_INST_DISABLED; TU[f + 15] = RT_TYPE_MESH;
-        garbage++;
-      }
+    B.tlas.set(S.subarray(0, n * F), L.instances * 4);
+    const R = this.staticRested;
+    for (let i = 0; i < R.length; i++) {
+      const e = R[i];
+      if (e.state === ST_MOVING && this.pendingSlotOf(e) >= 0) { this.dropMoving(e); e.state = ST_STATIC; }
     }
+    R.length = 0;
+    this.slotParity ^= 1;
+    this.slotGen = this.pendingGen;
     L.staticNodeCount = tb.nodeCount;
     L.staticInstanceCount = n;
     B.dirtyTlas(L.staticNodes, L.staticNodes + 2 * tb.nodeCount);
     B.dirtyTlas(L.instances, L.instances + RT_INSTANCE_VEC4 * n);
-    this.staticGarbage = garbage;
+    this.staticGarbage = this.stageDisabled;
     this.lastStatic = now;
     this.st.staticRebuilds++;
     list.length = 0; // (drop the references)
@@ -1171,6 +1291,6 @@ export class RtScene {
   debugEntries(o: THREE.Object3D): {state: 'static' | 'moving' | 'hidden'; staticSlot: number; inst: number}[] | null {
     const r = this.recOf.get(o);
     if (!r) return null;
-    return r.entries.map(e => ({state: e.state === ST_STATIC ? 'static' : e.state === ST_MOVING ? 'moving' : 'hidden', staticSlot: e.staticSlot, inst: e.inst}));
+    return r.entries.map(e => ({state: e.state === ST_STATIC ? 'static' : e.state === ST_MOVING ? 'moving' : 'hidden', staticSlot: this.slotOf(e), inst: e.inst}));
   }
 }
