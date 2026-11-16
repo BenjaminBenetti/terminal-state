@@ -52,6 +52,11 @@ export const LEVEL_ONLY_RULES: readonly LevelOnlyRule[] = [
   // (task studio-skyways-rework-20261107-054512-01: the Skyways stores reuse the mall's furniture / fixtures / textures — user: "unique
   // proper stores remixed from Subway / Mall / Office assets"; still the mall's family, never fetched by any other level)
   {level: 'mall', also: ['skyways'], path: /^(?:\.\/)?assets\/(?:models\/mall-[A-Za-z0-9_-]+\.glb|textures\/mall\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2))$/},
+  // task studio-survivor-market-crevice-20261116-074419 (lane ARCH): the Survivor Market's version 5 (THE CREVICE) draws its cast walls,
+  // rock-cut rooms and steel landings with the Reactor family's EXISTING surface sets (world/marketTextures.ts CREVICE_TEXTURES): exactly
+  // those texture files (pit concrete, mine rock, rusted steel: colour / normal / ORM) — still the Reactor's family, never its models;
+  // matched before the general Reactor rule
+  {level: 'reactor', also: ['bunker', 'market'], path: /^(?:\.\/)?assets\/textures\/reactor\/(?:pit-concrete|mine-rock|rusted-steel)-(?:color|normal|orm)\.jpg$/},
   // task reactor-build-20261101 (lane ARCH): the Reactor's kit (assets/reactorKit.generated.ts: reactor-*.glb, textures/reactor/**).
   // Task studio-bunker-level-20261109-072224-01 (lane LEVEL): THE BUNKER reuses it (still the Reactor's family): the arch textures /
   // finishes (world/builder.ts BunkerArch), the shelter hero props (REACTOR_X_KIT bunk bed, radio console, air filtration unit, blast
