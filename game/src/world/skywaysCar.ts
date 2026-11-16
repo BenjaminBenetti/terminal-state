@@ -72,6 +72,7 @@ import {CAR_SPEC, carToWorld, worldToCar, type CarSpec} from './skywaysCarSpec';
 import {CAR_PHYS, CAR_STAIRS, NO_CONTROLS, carPose, nearestCircle, settlePose, stepCar, wrapAngle, type CarBody, type CarControls, type CarImpact, type CarPhys, type CarPose, type CarStep, type CarWorld} from './skywaysCarPhysics';
 import {SKYWAYS_CAR_LANE, emptyTrunk, skywaysCarProblem, skywaysCarRecord, upgradeCarRecord, type SkywaysCarRecord, type SkywaysCarRecordV1} from './skywaysCarStore';
 import type {StackJSON} from '../items/inventory';
+import type {WorldHit} from '../combat/hitscan';
 import {buildCarView, carModelsGen, loadSkywaysCarModel, refreshCarView, releaseSkywaysCarModel, setWheel, type CarView} from './skywaysCarModel';
 import {attachCarBeam, createCarBeam, setCarLamps, type CarBeam} from './skywaysCarLights';
 import type {VehicleAttachPoint, VehicleDef, VehicleRecordPose, VehicleRt, VehicleText, VehicleTransform} from './skywaysCarVehicle';
@@ -342,6 +343,8 @@ export class SkywaysCar {
   readonly moveListeners: ((t: Readonly<VehicleTransform>) => void)[] = [];
   /** (lane TRUCK, the cargo seam) Whether a cargo owner holds an attachment point (the owner sets it; absent = all free). */
   attachOccupied: ((id: string) => boolean) | null = null;
+  /** (lane TRUCK follow-up) The world hit shotStop last made (bulletHit claims exactly that object; null: none pending). */
+  private stopHit: WorldHit | null = null;
   /** QA / tests. */
   readonly counts = {builds: 0, teardowns: 0, enters: 0, exits: 0, exitRefused: 0, forced: 0, kills: 0, crushed: 0, pushes: 0, propKicks: 0,
     impacts: 0, panes: 0, propGlass: 0, stores: 0, bullets: 0, released: 0, notes: 0};
@@ -1098,9 +1101,48 @@ export class SkywaysCar {
     }
   }
 
+  /**
+   * (lane TRUCK follow-up: bullets vs the truck) Game.fire's shot ray (origin `o`, unit direction `d`) against a vehicle that stops shots
+   * (VehicleDef.stopsShots: the truck): when its body box lies on the ray before the world hit `wh` (or with no world hit in range), the
+   * shot ends THERE — `wh` (the ray's own fresh hit object) is rewritten IN PLACE to a hit at the body (so nothing past it is hit: no
+   * enemy, person, corpse or prop behind the cab / body), which bulletHit below claims (a metal impact on the body). False (wh as it
+   * was): no such vehicle in this world, the ray misses it first, or the shooter stands inside its box. The car (stopsShots unset) is
+   * untouched: its world hits behind it are bulletHit's as before.
+   */
+  shotStop(o: {x: number; y: number; z: number}, d: {x: number; y: number; z: number}, wh: WorldHit): boolean {
+    const b = this.body;
+    if (!this.def.stopsShots || !this.worldLive || !b) return false;
+    const lo = worldToCar(b.x, b.z, b.yaw, o.x, o.z), c = Math.cos(b.yaw), s = Math.sin(b.yaw);
+    const ld = {x: d.x * c - d.z * s, y: d.y, z: d.x * s + d.z * c}, ly = o.y - b.y, B = this.shotBox();
+    if (lo.x > B.min.x && lo.x < B.max.x && ly > B.min.y && ly < B.max.y && lo.z > B.min.z && lo.z < B.max.z) return false;
+    const t = rayBox({x: lo.x, y: ly, z: lo.z}, ld, B, wh.kind === 'none' ? wh.t : wh.t - 0.01);
+    if (t === null) return false;
+    wh.t = t; wh.kind = 'wall'; wh.nx = -d.x; wh.ny = -d.y; wh.nz = -d.z; wh.level = -1; // (no storey band: never a window pane's wall)
+    delete wh.prop;
+    delete wh.cell;
+    this.stopHit = wh;
+    return true;
+  }
+
+  /** The body's bullet box (vehicle frame, the floor at y 0): the spec's footprint and height, a little inside. */
+  private shotBox(): Box3Like {
+    const S = this.spec, B = this.box;
+    B.min.x = -S.width / 2 + 0.06; B.min.y = 0.15; B.min.z = -S.length / 2 + 0.1;
+    B.max.x = S.width / 2 - 0.06; B.max.y = S.height - 0.04; B.max.z = S.length / 2 - 0.1;
+    return B;
+  }
+
   /** A bullet whose world hit lies behind the car stops on its body (a metal impact; no crater behind). */
   bulletHit(wh: {t: number}, point: THREE.Vector3, dir: THREE.Vector3): boolean {
     const b = this.body, S = this.spec;
+    if (wh === this.stopHit) { // (lane TRUCK follow-up) the shot shotStop ended on the body: its impact, nothing behind
+      this.stopHit = null;
+      if (!this.worldLive || !b) return false;
+      this.host.fx?.impact(point, new THREE.Vector3(-dir.x, -dir.y, -dir.z), 'metal', {decal: false, chips: 1});
+      (this.host.sfx as CarSfx | null)?.impact?.(point.x, point.y, point.z, 'metal');
+      this.counts.bullets++;
+      return true;
+    }
     if (!this.worldLive || !b || !(wh.t > 0)) return false;
     const ox = point.x - dir.x * wh.t, oy = point.y - dir.y * wh.t, oz = point.z - dir.z * wh.t;
     const lo = worldToCar(b.x, b.z, b.yaw, ox, oz), c = Math.cos(b.yaw), s = Math.sin(b.yaw);

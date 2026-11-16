@@ -7,7 +7,8 @@
 // handed back through SkywaysCar.storageSource whenever the controller writes the truck's record (teardown, getting out, play pausing):
 // the record (lane SURFACE_TRUCK_LANE, the district's section memory) is the one persistent copy; save/validate.ts checks its stacks
 // with the run-wide uid set (one item, one uid). The inventory's uid counter is reserved above the compartments' uids at load. Nothing is
-// ever refilled, invented or duplicated: an empty truck starts empty.
+// ever refilled, invented or duplicated: an empty truck starts empty (player storage, part of the vehicle: no seeded loot — classified in
+// world/surface/truckAudit.ts).
 // OPEN: [E] with the crosshair on a compartment's door (its measured box) within TRUCK_STORAGE_RT.reach, nothing structural in between,
 // standing OUTSIDE the truck on that side near it, the truck's storey, not seated, playing, alive, not climbing / riding / using an
 // item, no other lane owning the hands, no bag view open — through the controller's own [E] handler and prompt (SkywaysCar.access), so
@@ -15,7 +16,8 @@
 // VIEW: the Lockbox transfer view (ui/lockboxView.ts LockboxView, one per compartment: its name, slots, 6 columns); transfers only through
 // Inventory.storeMove / storeQuick / storeWornBag (atomic, uid-keeping). CLOSE: E / 6 / Esc / Tab / I / Close, walking away
 // (closeRange / closeRise), the truck moving or someone getting in, a hit, any state but playing, death, the truck gone, teardown. The
-// door cue is the vehicle door sound (sfx.carDoor); the cooked body has no separate locker doors, so there is no door animation.
+// door cue is the vehicle door sound (sfx.carDoor). (follow-up) The compartment's DOOR on the truck's side swings out while its view is
+// open and shuts after (world/surface/truckModel.ts TruckLockerDoor: a hinged panel over the measured face, the openables' eased hinge).
 // Inert in every world without the truck (the controller's other vehicle keeps its own trunk: world/skywaysCarTrunk.ts).
 
 import * as THREE from 'three';
@@ -32,6 +34,7 @@ import {TRUCK_ANCHORS} from './truckAnchors.generated';
 import {TRUCK_COMPARTMENTS} from './truckStore';
 import {TRUCK_RT} from './truckSpec';
 import {TRUCK_DEF} from './truckVehicle';
+import {stepLockerDoors, type TruckView} from './truckModel';
 
 export const TRUCK_STORAGE_RT = {
   /** Aim reach (eye -> the compartment's door, m). */
@@ -142,7 +145,7 @@ export class TruckStorageSystem {
     const h = this.host, car = this.car;
     car.access.push(this);
     car.storageSource = () => (this.loaded ? this.stores.map(s => s.toJSON().slots as (StackJSON | null)[]) : car.storageJSON);
-    h.frameHooks.push(() => this.update());
+    h.frameHooks.push(dt => { this.update(); this.stepDoors(dt); });
     h.hitListeners?.push(hit => { if (this.isOpen && hit.amount > 0) this.close('hit'); });
     h.stateListeners?.push(((s: string) => { if (s !== 'playing') this.close('state'); }) as (s: never, p: never) => void);
     // after the controller's section hook (installed earlier): its build has read the record into storageJSON; its teardown has stored
@@ -288,7 +291,14 @@ export class TruckStorageSystem {
     void inp.lock().then(ok => { if (!ok && h.state === 'playing' && !inp.locked) h.gear?.showResume?.(); });
   }
 
-  /** The door cue at the compartment: the vehicle door sound (the model has no separate locker doors). */
+  /** (follow-up) The compartments' doors on the truck's view: the open one swings out, the others shut (eased; world/surface/truckModel.ts). */
+  private stepDoors(dt: number): void {
+    const v = this.car.view as TruckView | null;
+    if (!v?.lockers || this.car.vehicle !== 'truck') return;
+    stepLockerDoors(v, this.openId, dt);
+  }
+
+  /** The door cue at the compartment: the vehicle door sound (a steel door). */
   private door(i: number): void {
     const a = this.anchor(i);
     if (a) (this.host.sfx as {carDoor?(at?: {x: number; y: number; z: number}): void} | null)?.carDoor?.(a);

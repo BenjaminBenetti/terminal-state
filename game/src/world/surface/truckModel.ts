@@ -10,6 +10,8 @@
 //    (axle 2 at its share of the angle's tangent: TRUCK_WHEELS.steer);
 //  - the cab: world/surface/truckCab.ts (handmade: floor, dash + gauges, a steering wheel on its pivot, seats, door cards, back panel,
 //    roof liner; the bed's floor);
+//  - (follow-up) the storage compartments' DOORS: a hinged panel on each measured compartment face that swings out while its storage view
+//    is open (TruckLockerDoor, stepLockerDoors: world/surface/truckStorage.ts drives them);
 //  - the LAMPS: the body's own headlamp triangles drawn again as glowing lenses (world/skywaysCarLights.ts lampTriangles over the
 //    truck's measured outlines; one shared lens material per loaded GLB) + the controller's beam.
 // The model loads through this module's own cache behind the district's loading screen (the controller's section preload) and is
@@ -25,7 +27,7 @@ import type {CarSpec} from '../skywaysCarSpec';
 import type {CarBody} from '../skywaysCarPhysics';
 import type {CarView} from '../skywaysCarModel';
 import {lampTriangles, lensMaterialFrom, type CarBeam} from '../skywaysCarLights';
-import {buildTruckCab} from './truckCab';
+import {buildTruckCab, truckCabMaterials} from './truckCab';
 import {TRUCK_LAMPS, TRUCK_WHEELS, TRUCK_WHEEL_RATIO} from './truckSpec';
 import {TRUCK_ANCHORS} from './truckAnchors.generated';
 
@@ -39,6 +41,73 @@ export interface TruckView extends CarView {
   roll: number;
   /** The front wheel angle shown (rad; > 0 = left). */
   steer: number;
+  /** (follow-up) The storage compartments' doors (index = TRUCK_ANCHORS.storage). */
+  lockers: TruckLockerDoor[];
+}
+
+/**
+ * (follow-up: the compartments open like the openables) A compartment's DOOR on the body's side: a steel panel (+ its pull) on a vertical
+ * hinge at the compartment's front edge, a little proud of the measured outer face, over a dark opening panel; it swings OUT
+ * (TRUCK_LOCKER_DOOR.angle) while that compartment's storage view is open and shuts after (eased, like an openable's hinge part).
+ */
+export interface TruckLockerDoor {
+  id: string;
+  /** -1 = the truck's left side, +1 = its right. */
+  side: number;
+  /** The hinge pivot (truck frame); rotation.y = side x angle x eased(open). */
+  pivot: THREE.Object3D;
+  /** 0 = shut .. 1 = fully open. */
+  open: number;
+}
+
+export const TRUCK_LOCKER_DOOR = {
+  /** Fully open (rad: past square to the body, like a cabinet door). */
+  angle: (100 * Math.PI) / 180,
+  /** Open fraction per second (a full swing in about a third of a second, both ways). */
+  speed: 3,
+  /** The panel's thickness and its gap off the measured face (m). */
+  thick: 0.025,
+  gap: 0.008,
+  /** The panel overlaps the measured box by this on every edge (m). */
+  lap: 0.01,
+} as const;
+
+/** The doors (truck frame), added to the view group (they stay through a model refresh: they are not the body's). */
+function lockerDoors(group: THREE.Group): TruckLockerDoor[] {
+  const M = truckCabMaterials(), S = truckMaterials(), D = TRUCK_LOCKER_DOOR;
+  return TRUCK_ANCHORS.storage.map(c => {
+    const side = c.side, len = c.z1 - c.z0 + 2 * D.lap, h = c.y1 - c.y0 + 2 * D.lap, xc = c.faceX + side * (D.gap + D.thick / 2);
+    const pivot = new THREE.Group();
+    pivot.name = `surface-truck-locker-${c.id}`;
+    pivot.position.set(xc, (c.y0 + c.y1) / 2, c.z0 - D.lap);
+    const part = (m: THREE.Material, name: string, w: number, hh: number, d: number, x: number, y: number, z: number, parent: THREE.Object3D) => {
+      const b = new THREE.Mesh(S.box, m);
+      b.name = name;
+      b.scale.set(w, hh, d);
+      b.position.set(x, y, z);
+      b.userData.carPart = 'paint';
+      b.castShadow = false;
+      parent.add(b);
+      return b;
+    };
+    part(M.panel, `surface-truck-locker-${c.id}-door`, D.thick, h, len, 0, 0, len / 2, pivot);
+    part(M.metal, `surface-truck-locker-${c.id}-pull`, 0.02, Math.min(0.18, h * 0.5), 0.025, side * (D.thick / 2 + 0.01), 0, len - 0.07, pivot);
+    // the dark opening behind it (just off the face: seen only with the door swung out)
+    part(M.floor, `surface-truck-locker-${c.id}-opening`, 0.004, Math.max(0.05, h - 0.06), Math.max(0.05, len - 0.06), c.faceX + side * 0.003, (c.y0 + c.y1) / 2, (c.z0 + c.z1) / 2, group);
+    group.add(pivot);
+    return {id: c.id, side, pivot, open: 0};
+  });
+}
+
+/** Per frame: each door eases toward open (its compartment's view open: `openId`) or shut; the hinge turns by the eased amount. */
+export function stepLockerDoors(v: TruckView, openId: string | null, dt: number): void {
+  const D = TRUCK_LOCKER_DOOR, k = Math.max(0, dt) * D.speed;
+  for (const d of v.lockers) {
+    const to = d.id === openId ? 1 : 0;
+    d.open = d.open < to ? Math.min(to, d.open + k) : Math.max(to, d.open - k);
+    const e = d.open * d.open * (3 - 2 * d.open);
+    d.pivot.rotation.y = e > 0 ? d.side * D.angle * e : 0; // (shut: exactly 0, never -0)
+  }
 }
 
 let cache: Promise<GLTF | null> | null = null;
@@ -300,7 +369,8 @@ export function buildTruckView(spec: CarSpec): TruckView {
   const cab = buildTruckCab();
   group.add(cab.group);
   for (const w of wheels) w.rotation.order = 'YXZ';
-  return {group, body, cockpit: cab.group, wheel: cab.wheel, wheelAngle: 0, lens, gen: truckModelsGen, standIn: !loaded, roadWheels: wheels, roll: 0, steer: 0};
+  const lockers = lockerDoors(group);
+  return {group, body, cockpit: cab.group, wheel: cab.wheel, wheelAngle: 0, lens, gen: truckModelsGen, standIn: !loaded, roadWheels: wheels, roll: 0, steer: 0, lockers};
 }
 
 /** Rebuild the body from the current model (it arrived after the view was built); the cab stays. */

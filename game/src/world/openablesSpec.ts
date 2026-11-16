@@ -1447,6 +1447,8 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
   ...CORPSE_DEN_OPEN_AUDIT, // task studio-corpse-market-shop-20261114-031614-01: the Market den's chute / booth (equipment)
   ...SURFACE_OPEN_AUDIT, // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT): the Surface Run kit (its crate: the openable row above)
 ];
+/** (lane TRUCK follow-up) The vehicle's own storage (not prop kinds, so not rows above): the Surface Run truck's compartments. */
+export {TRUCK_OPEN_AUDIT as VEHICLE_OPEN_AUDIT} from './surface/truckAudit';
 
 function describe(k: OpenableKind): string {
   const s = SPECS[k];

@@ -38,6 +38,8 @@ export interface VehicleDef {
   readonly text: VehicleText;
   /** Seated in it, the player is enclosed (a closed cab with intact glazing: lane AIR's gas protection). */
   readonly enclosed: boolean;
+  /** (follow-up) Its body box stops hitscan shots (SkywaysCar.shotStop, from Game.fire): nothing behind it is hit. Unset: the car's old rule. */
+  readonly stopsShots?: boolean;
   /** The generated pose in a layout (null: this layout has no such vehicle). */
   spawnOf(layout: StationLayout | null): VehicleSpawn | null;
   readonly model: {
