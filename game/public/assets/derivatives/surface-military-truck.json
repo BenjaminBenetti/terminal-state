@@ -1,0 +1,1733 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "surface-military-truck",
+ "role": "Surface Run military truck: the district vehicle model (body, clear cab glass, eight wheel nodes that roll / steer at runtime); the cab interior, the bed floor, the back-face lining and the lamp lenses are added at runtime from the anchors",
+ "task": "surface-run-opus-rebuild-20261116-020827 lane TRUCK",
+ "source": {
+  "file": "reference/resources/user-military-truck/master.glb (private user master, outside Git / CI / runtime; read-only)",
+  "sha256": "44d12d07e54e49530d74f6e528e40864e0e6e373caa8f93fd772d279e08f6b4a",
+  "bytes": 144978172,
+  "triangles": 4680288,
+  "vertices": 2540619,
+  "closedShell": true,
+  "oneMaterial": true,
+  "noseAxis": "-X (source)",
+  "extentSourceUnits": [
+   1.8882,
+   0.8102,
+   0.6458
+  ],
+  "maps": {
+   "baseColor": {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2836313
+   },
+   "metallicRoughness": {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2417381
+   },
+   "normal": {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2258951
+   }
+  },
+  "licence": "user-supplied model: the user supplied this model for the project; its origin, authorship and licence are NOT verified; no licence, authorship or clearance is claimed or implied"
+ },
+ "output": {
+  "file": "game/public/assets/models/surface-military-truck.glb",
+  "url": "assets/models/surface-military-truck.glb",
+  "sha256": "0ab5226b07226aca0a9d0b8264665a0f295df96f0afdc6dda202fea7188aa676",
+  "bytes": 6559388,
+  "dims": [
+   2.577,
+   3.24,
+   7.545
+  ],
+  "triangles": {
+   "body": 149945,
+   "glass": 196,
+   "wheels": [
+    5000,
+    5000,
+    5000,
+    5000,
+    5000,
+    5000,
+    5000,
+    5000
+   ],
+   "total": 190141
+  },
+  "nodes": {
+   "body": "opaque (material `body`: the master maps re-encoded)",
+   "glass": "flat clear panes (material `glass`, BLEND, double-sided; no texture)",
+   "wheels": "wheel-0 … wheel-7: axle 1 left, axle 1 right, axle 2 left, … (front to back); origin at the hub; the same `body` material"
+  },
+  "quantization": "KHR_mesh_quantization (required): normals int8 normalized, UVs uint16 normalized, positions float32",
+  "maps": {
+   "baseColor": {
+    "size": 2048,
+    "mime": "image/jpeg",
+    "quality": 88,
+    "bytes": 670890,
+    "sha256": "fb9ca4efbf5185531639f3259eb466f055b26b27dafa5d4b3b2340f353004f4f"
+   },
+   "metallicRoughness": {
+    "size": 1024,
+    "mime": "image/jpeg",
+    "quality": 88,
+    "bytes": 236136,
+    "sha256": "c59bb255752e905548f731efbd0386cac9b0c87037c882813d9cc78c04efc4e0"
+   },
+   "normal": {
+    "size": 2048,
+    "mime": "image/jpeg",
+    "quality": 90,
+    "bytes": 597396,
+    "sha256": "5e675729f7768e49fb983f37533fe6cf1e2d95df20510a1323f202bd6bcddd37"
+   }
+  }
+ },
+ "transform": {
+  "scale": 4,
+  "rotation": "about +Y by -90 deg (source nose -X -> runtime -Z): x = -z_src, z = x_src",
+  "grounded": true,
+  "centred": "x / z footprint (bounding box)",
+  "baked": "into the vertices (identity nodes except the wheels' hub translations)"
+ },
+ "scale": "uniform x 4.0 from the model's own proportions: the canvas bed's outer width (0.625 source units) -> 2.50 m, a military cargo truck's road width; the same factor gives 1.15 m tyres (14.00 R20-class 1.1-1.25 m), a 3.24 m roof over the canvas, the cab side windows 1.6-2.2 m over the road and the driver's eye at 2.0 m; the chassis (7.55 m) is shorter than a real ten-metre eight-wheeler: the source's own compression, kept",
+ "convention": "metres at real size, +Y up, NOSE toward -Z (runtime forward at yaw 0), grounded (min y = 0), centred on x / z; driver = LEFT seat (-X)",
+ "wheels": {
+  "method": "tyre contact patches (triangles within 3 cm of the ground) -> x / z per wheel, paired into four axles; ONE radius = the median of the eight lower-silhouette estimates; every triangle whose centroid lies inside the wheel cylinder (r + 1.5 cm, axis x) outboard of a plane 3 cm inside the tyre's inner face belongs to that wheel; both sides of the cut capped (fans with the darkest tread texel)",
+  "params": {
+   "contactY": 0.03,
+   "gapZ": 0.2,
+   "ringPad": 0.015,
+   "cutIn": 0.03,
+   "siloY": [
+    0.04,
+    0.3
+   ],
+   "siloZ": 0.75
+  },
+  "measured": [
+   {
+    "side": -1,
+    "z": -2.333,
+    "xin": -0.724,
+    "xout": -1.09,
+    "rSilhouette": 0.568,
+    "r": 0.577,
+    "hub": [
+     -0.907,
+     0.577,
+     -2.333
+    ],
+    "sourceTriangles": 143463
+   },
+   {
+    "side": 1,
+    "z": -2.339,
+    "xin": 0.789,
+    "xout": 1.153,
+    "rSilhouette": 0.568,
+    "r": 0.577,
+    "hub": [
+     0.971,
+     0.577,
+     -2.339
+    ],
+    "sourceTriangles": 145949
+   },
+   {
+    "side": -1,
+    "z": -0.887,
+    "xin": -0.727,
+    "xout": -1.096,
+    "rSilhouette": 0.574,
+    "r": 0.577,
+    "hub": [
+     -0.911,
+     0.577,
+     -0.887
+    ],
+    "sourceTriangles": 138038
+   },
+   {
+    "side": 1,
+    "z": -0.886,
+    "xin": 0.786,
+    "xout": 1.153,
+    "rSilhouette": 0.567,
+    "r": 0.577,
+    "hub": [
+     0.97,
+     0.577,
+     -0.886
+    ],
+    "sourceTriangles": 138437
+   },
+   {
+    "side": -1,
+    "z": 1.452,
+    "xin": -0.733,
+    "xout": -1.099,
+    "rSilhouette": 0.58,
+    "r": 0.577,
+    "hub": [
+     -0.916,
+     0.577,
+     1.452
+    ],
+    "sourceTriangles": 137986
+   },
+   {
+    "side": 1,
+    "z": 1.452,
+    "xin": 0.794,
+    "xout": 1.159,
+    "rSilhouette": 0.587,
+    "r": 0.577,
+    "hub": [
+     0.976,
+     0.577,
+     1.452
+    ],
+    "sourceTriangles": 145542
+   },
+   {
+    "side": -1,
+    "z": 2.635,
+    "xin": -0.722,
+    "xout": -1.08,
+    "rSilhouette": 0.638,
+    "r": 0.577,
+    "hub": [
+     -0.901,
+     0.577,
+     2.635
+    ],
+    "sourceTriangles": 136724
+   },
+   {
+    "side": 1,
+    "z": 2.641,
+    "xin": 0.792,
+    "xout": 1.155,
+    "rSilhouette": 0.601,
+    "r": 0.577,
+    "hub": [
+     0.974,
+     0.577,
+     2.641
+    ],
+    "sourceTriangles": 138520
+   }
+  ]
+ },
+ "glazing": {
+  "method": "flat low-chroma grey islands of the base map on the cab's front / side faces (window band, pane-sized, rectangular) -> rounded rectangles in each face's projection; the shell cut exactly on each outline (straddling triangles split on the zero line) and the inside removed with anything standing on it (wipers); a flat clear pane fitted (least squares) to the removed surface, 1.5 cm oversize, 4 mm inside; the canvas cover's rear face opened the same way",
+  "params": {
+   "WIN": {
+    "CHROMA": 16,
+    "LUM": [
+     72,
+     175
+    ],
+    "FACING": 0.85,
+    "MIN_ISLAND": 0.03,
+    "BAND": [
+     1.5,
+     2.35
+    ],
+    "MIN_H": 0.35,
+    "MIN_W": 0.2,
+    "FILL": 0.7,
+    "CAB_BACK": -2.1,
+    "SHRINK": 0.012,
+    "RADIUS": 0.07,
+    "EXPAND": 0.05,
+    "SLAB": 0.09
+   },
+   "PANE": {
+    "oversize": 0.015,
+    "inset": 0.004,
+    "cornerSegs": 6
+   },
+   "REAR": {
+    "depth": 0.2,
+    "minY": 1.4,
+    "side": 0.12,
+    "top": 0.16,
+    "bottom": 0.06,
+    "radius": 0.08
+   },
+   "GLASS": {
+    "baseColorFactor": [
+     0.55,
+     0.62,
+     0.62,
+     0.16
+    ],
+    "metallicFactor": 0,
+    "roughnessFactor": 0.06
+   }
+  },
+  "panes": [
+   {
+    "name": "windscreen-left",
+    "face": "windscreen",
+    "u": [
+     -0.887,
+     -0.061
+    ],
+    "v": [
+     1.665,
+     2.206
+    ],
+    "depth": -3.607,
+    "area": 0.4627,
+    "fill": 1.036
+   },
+   {
+    "name": "windscreen-right",
+    "face": "windscreen",
+    "u": [
+     0.127,
+     0.953
+    ],
+    "v": [
+     1.662,
+     2.205
+    ],
+    "depth": -3.606,
+    "area": 0.4545,
+    "fill": 1.014
+   },
+   {
+    "name": "left-front",
+    "face": "left",
+    "u": [
+     -3.46,
+     -3.029
+    ],
+    "v": [
+     1.648,
+     2.143
+    ],
+    "depth": -1.002,
+    "area": 0.2261,
+    "fill": 1.058
+   },
+   {
+    "name": "left-middle",
+    "face": "left",
+    "u": [
+     -2.995,
+     -2.746
+    ],
+    "v": [
+     1.654,
+     2.146
+    ],
+    "depth": -0.996,
+    "area": 0.1277,
+    "fill": 1.042
+   },
+   {
+    "name": "left-rear",
+    "face": "left",
+    "u": [
+     -2.6,
+     -2.257
+    ],
+    "v": [
+     1.597,
+     2.152
+    ],
+    "depth": -1.007,
+    "area": 0.1989,
+    "fill": 1.043
+   },
+   {
+    "name": "right-front",
+    "face": "right",
+    "u": [
+     -3.49,
+     -3.085
+    ],
+    "v": [
+     1.658,
+     2.145
+    ],
+    "depth": 1.085,
+    "area": 0.2065,
+    "fill": 1.05
+   },
+   {
+    "name": "right-middle",
+    "face": "right",
+    "u": [
+     -3.025,
+     -2.746
+    ],
+    "v": [
+     1.662,
+     2.144
+    ],
+    "depth": 1.097,
+    "area": 0.1418,
+    "fill": 1.056
+   }
+  ],
+  "rejectedIslands": 8,
+  "rearOpening": {
+   "face": {
+    "u0": -1.052,
+    "u1": 1.113,
+    "v0": 1.475,
+    "v1": 3.152,
+    "d": 3.754
+   },
+   "opening": [
+    -0.932,
+    0.993,
+    1.535,
+    2.992
+   ]
+  },
+  "splitTriangles": 1381,
+  "removed": {
+   "windscreen-left": 5683,
+   "windscreen-right": 5774,
+   "left-front": 64,
+   "left-middle": 56,
+   "left-rear": 43,
+   "right-front": 58,
+   "right-middle": 82,
+   "bed-rear": 21968
+  },
+  "caps": [
+   {
+    "label": "body",
+    "loops": 19,
+    "edges": 1936,
+    "fringe": 101,
+    "stats": [
+     {
+      "edges": 294,
+      "area": 0.0456,
+      "centre": [
+       -0.692,
+       0.523,
+       2.664
+      ]
+     },
+     {
+      "edges": 200,
+      "area": 0.0484,
+      "centre": [
+       0.756,
+       0.524,
+       -0.898
+      ]
+     },
+     {
+      "edges": 188,
+      "area": 0.0497,
+      "centre": [
+       -0.694,
+       0.531,
+       -2.311
+      ]
+     },
+     {
+      "edges": 170,
+      "area": 0.044,
+      "centre": [
+       0.762,
+       0.55,
+       2.662
+      ]
+     },
+     {
+      "edges": 132,
+      "area": 0.0459,
+      "centre": [
+       0.759,
+       0.491,
+       -2.35
+      ]
+     },
+     {
+      "edges": 104,
+      "area": 0.0518,
+      "centre": [
+       -0.703,
+       0.549,
+       1.427
+      ]
+     },
+     {
+      "edges": 100,
+      "area": 0.0875,
+      "centre": [
+       0.924,
+       0.72,
+       0.899
+      ]
+     },
+     {
+      "edges": 97,
+      "area": 0.0092,
+      "centre": [
+       0.991,
+       0.724,
+       0.879
+      ]
+     },
+     {
+      "edges": 96,
+      "area": 0.0238,
+      "centre": [
+       -0.986,
+       0.707,
+       0.877
+      ]
+     },
+     {
+      "edges": 89,
+      "area": 0.0486,
+      "centre": [
+       -0.697,
+       0.54,
+       -0.912
+      ]
+     },
+     {
+      "edges": 79,
+      "area": 0.0325,
+      "centre": [
+       0.764,
+       0.522,
+       1.442
+      ]
+     },
+     {
+      "edges": 71,
+      "area": 0.0053,
+      "centre": [
+       1.049,
+       0.672,
+       -0.302
+      ]
+     }
+    ]
+   },
+   {
+    "label": "wheel-0",
+    "loops": 2,
+    "edges": 209,
+    "fringe": 0,
+    "stats": [
+     {
+      "edges": 188,
+      "area": 0.0497,
+      "centre": [
+       -0.694,
+       0.531,
+       -2.311
+      ]
+     },
+     {
+      "edges": 21,
+      "area": 0.0008,
+      "centre": [
+       -0.804,
+       0.707,
+       -2.911
+      ]
+     }
+    ]
+   },
+   {
+    "label": "wheel-1",
+    "loops": 5,
+    "edges": 245,
+    "fringe": 0,
+    "stats": [
+     {
+      "edges": 132,
+      "area": 0.0459,
+      "centre": [
+       0.759,
+       0.491,
+       -2.35
+      ]
+     },
+     {
+      "edges": 55,
+      "area": 0.0021,
+      "centre": [
+       0.759,
+       0.556,
+       -2.481
+      ]
+     },
+     {
+      "edges": 23,
+      "area": 0.0004,
+      "centre": [
+       0.759,
+       0.642,
+       -2.508
+      ]
+     },
+     {
+      "edges": 22,
+      "area": 0.0008,
+      "centre": [
+       0.871,
+       0.706,
+       -2.916
+      ]
+     },
+     {
+      "edges": 13,
+      "area": 0.0001,
+      "centre": [
+       0.759,
+       0.625,
+       -2.231
+      ]
+     }
+    ]
+   },
+   {
+    "label": "wheel-2",
+    "loops": 2,
+    "edges": 140,
+    "fringe": 0,
+    "stats": [
+     {
+      "edges": 89,
+      "area": 0.0486,
+      "centre": [
+       -0.697,
+       0.54,
+       -0.912
+      ]
+     },
+     {
+      "edges": 51,
+      "area": 0.0055,
+      "centre": [
+       -1.01,
+       0.662,
+       -0.302
+      ]
+     }
+    ]
+   },
+   {
+    "label": "wheel-3",
+    "loops": 2,
+    "edges": 271,
+    "fringe": 0,
+    "stats": [
+     {
+      "edges": 200,
+      "area": 0.0484,
+      "centre": [
+       0.756,
+       0.524,
+       -0.898
+      ]
+     },
+     {
+      "edges": 71,
+      "area": 0.0053,
+      "centre": [
+       1.049,
+       0.672,
+       -0.302
+      ]
+     }
+    ]
+   },
+   {
+    "label": "wheel-4",
+    "loops": 2,
+    "edges": 200,
+    "fringe": 0,
+    "stats": [
+     {
+      "edges": 104,
+      "area": 0.0518,
+      "centre": [
+       -0.703,
+       0.549,
+       1.427
+      ]
+     },
+     {
+      "edges": 96,
+      "area": 0.0238,
+      "centre": [
+       -0.986,
+       0.707,
+       0.877
+      ]
+     }
+    ]
+   },
+   {
+    "label": "wheel-5",
+    "loops": 3,
+    "edges": 276,
+    "fringe": 0,
+    "stats": [
+     {
+      "edges": 100,
+      "area": 0.0875,
+      "centre": [
+       0.924,
+       0.72,
+       0.899
+      ]
+     },
+     {
+      "edges": 97,
+      "area": 0.0092,
+      "centre": [
+       0.991,
+       0.724,
+       0.879
+      ]
+     },
+     {
+      "edges": 79,
+      "area": 0.0325,
+      "centre": [
+       0.764,
+       0.522,
+       1.442
+      ]
+     }
+    ]
+   },
+   {
+    "label": "wheel-6",
+    "loops": 1,
+    "edges": 294,
+    "fringe": 0,
+    "stats": [
+     {
+      "edges": 294,
+      "area": 0.0456,
+      "centre": [
+       -0.692,
+       0.523,
+       2.664
+      ]
+     }
+    ]
+   },
+   {
+    "label": "wheel-7",
+    "loops": 2,
+    "edges": 200,
+    "fringe": 0,
+    "stats": [
+     {
+      "edges": 170,
+      "area": 0.044,
+      "centre": [
+       0.762,
+       0.55,
+       2.662
+      ]
+     },
+     {
+      "edges": 30,
+      "area": 0.0014,
+      "centre": [
+       1.124,
+       0.764,
+       3.202
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "simplify": {
+  "tool": "meshoptimizer 1.3.0 simplifyWithAttributes (normal x 0.5 + UV; the window / opening outlines locked; one pass per part)",
+  "budget": {
+   "body": 150000,
+   "wheel": 5000
+  },
+  "body": {
+   "fromTriangles": 3526498,
+   "triangles": 149945,
+   "errorMeters": 0.0215
+  },
+  "wheels": [
+   {
+    "fromTriangles": 143672,
+    "triangles": 5000,
+    "errorMeters": 0.0187
+   },
+   {
+    "fromTriangles": 146194,
+    "triangles": 5000,
+    "errorMeters": 0.0187
+   },
+   {
+    "fromTriangles": 138178,
+    "triangles": 5000,
+    "errorMeters": 0.0178
+   },
+   {
+    "fromTriangles": 138708,
+    "triangles": 5000,
+    "errorMeters": 0.0183
+   },
+   {
+    "fromTriangles": 138186,
+    "triangles": 5000,
+    "errorMeters": 0.0173
+   },
+   {
+    "fromTriangles": 145818,
+    "triangles": 5000,
+    "errorMeters": 0.0195
+   },
+   {
+    "fromTriangles": 137018,
+    "triangles": 5000,
+    "errorMeters": 0.017
+   },
+   {
+    "fromTriangles": 138720,
+    "triangles": 5000,
+    "errorMeters": 0.0177
+   }
+  ]
+ },
+ "anchors": {
+  "length": 7.545,
+  "width": 2.577,
+  "height": 3.24,
+  "wheelBase": 4.381,
+  "track": 1.882,
+  "wheels": [
+   {
+    "x": -0.907,
+    "y": 0.577,
+    "z": -2.333,
+    "r": 0.577,
+    "axle": 0,
+    "steer": 1
+   },
+   {
+    "x": 0.971,
+    "y": 0.577,
+    "z": -2.339,
+    "r": 0.577,
+    "axle": 0,
+    "steer": 1
+   },
+   {
+    "x": -0.911,
+    "y": 0.577,
+    "z": -0.887,
+    "r": 0.577,
+    "axle": 1,
+    "steer": 0.669
+   },
+   {
+    "x": 0.97,
+    "y": 0.577,
+    "z": -0.886,
+    "r": 0.577,
+    "axle": 1,
+    "steer": 0.669
+   },
+   {
+    "x": -0.916,
+    "y": 0.577,
+    "z": 1.452,
+    "r": 0.577,
+    "axle": 2,
+    "steer": 0
+   },
+   {
+    "x": 0.976,
+    "y": 0.577,
+    "z": 1.452,
+    "r": 0.577,
+    "axle": 2,
+    "steer": 0
+   },
+   {
+    "x": -0.901,
+    "y": 0.577,
+    "z": 2.635,
+    "r": 0.577,
+    "axle": 3,
+    "steer": 0
+   },
+   {
+    "x": 0.974,
+    "y": 0.577,
+    "z": 2.641,
+    "r": 0.577,
+    "axle": 3,
+    "steer": 0
+   }
+  ],
+  "eye": {
+   "x": -0.474,
+   "y": 2.005,
+   "z": -2.921
+  },
+  "seat": {
+   "x": -0.474,
+   "y": 1.265,
+   "z": -2.821
+  },
+  "wheelCentre": {
+   "x": -0.474,
+   "y": 1.545,
+   "z": -3.281
+  },
+  "steering": {
+   "radius": 0.22,
+   "tilt": 0.6
+  },
+  "exits": {
+   "left": {
+    "x": -1.72,
+    "z": -3.27
+   },
+   "right": {
+    "x": 1.81,
+    "z": -3.27
+   }
+  },
+  "doorZ": -3.27,
+  "circles": [
+   {
+    "x": 0.003,
+    "z": -3.485,
+    "r": 0.52
+   },
+   {
+    "x": -0.856,
+    "z": -3.481,
+    "r": 0.52
+   },
+   {
+    "x": 0.862,
+    "z": -3.481,
+    "r": 0.52
+   },
+   {
+    "x": 0.003,
+    "z": -2.905,
+    "r": 0.52
+   },
+   {
+    "x": -0.856,
+    "z": -2.901,
+    "r": 0.52
+   },
+   {
+    "x": 0.862,
+    "z": -2.901,
+    "r": 0.52
+   },
+   {
+    "x": 0.003,
+    "z": -2.325,
+    "r": 0.52
+   },
+   {
+    "x": -0.856,
+    "z": -2.321,
+    "r": 0.52
+   },
+   {
+    "x": 0.862,
+    "z": -2.321,
+    "r": 0.52
+   },
+   {
+    "x": 0.003,
+    "z": -1.744,
+    "r": 0.52
+   },
+   {
+    "x": 0.862,
+    "z": -1.742,
+    "r": 0.52
+   },
+   {
+    "x": -0.856,
+    "z": -1.741,
+    "r": 0.52
+   },
+   {
+    "x": 0.003,
+    "z": -1.164,
+    "r": 0.52
+   },
+   {
+    "x": 0.862,
+    "z": -1.162,
+    "r": 0.52
+   },
+   {
+    "x": -0.856,
+    "z": -1.161,
+    "r": 0.52
+   },
+   {
+    "x": 0.003,
+    "z": -0.584,
+    "r": 0.52
+   },
+   {
+    "x": 0.862,
+    "z": -0.582,
+    "r": 0.52
+   },
+   {
+    "x": -0.856,
+    "z": -0.581,
+    "r": 0.52
+   },
+   {
+    "x": 0.003,
+    "z": -0.004,
+    "r": 0.52
+   },
+   {
+    "x": 0.862,
+    "z": -0.002,
+    "r": 0.52
+   },
+   {
+    "x": -0.856,
+    "z": -0.001,
+    "r": 0.52
+   },
+   {
+    "x": 0.003,
+    "z": 0.577,
+    "r": 0.52
+   },
+   {
+    "x": 0.862,
+    "z": 0.578,
+    "r": 0.52
+   },
+   {
+    "x": -0.856,
+    "z": 0.579,
+    "r": 0.52
+   },
+   {
+    "x": 0.003,
+    "z": 1.157,
+    "r": 0.52
+   },
+   {
+    "x": 0.862,
+    "z": 1.158,
+    "r": 0.52
+   },
+   {
+    "x": -0.856,
+    "z": 1.159,
+    "r": 0.52
+   },
+   {
+    "x": 0.003,
+    "z": 1.737,
+    "r": 0.52
+   },
+   {
+    "x": 0.862,
+    "z": 1.737,
+    "r": 0.52
+   },
+   {
+    "x": -0.856,
+    "z": 1.739,
+    "r": 0.52
+   },
+   {
+    "x": 0.003,
+    "z": 2.317,
+    "r": 0.52
+   },
+   {
+    "x": 0.862,
+    "z": 2.317,
+    "r": 0.52
+   },
+   {
+    "x": -0.856,
+    "z": 2.319,
+    "r": 0.52
+   },
+   {
+    "x": 0.862,
+    "z": 2.897,
+    "r": 0.52
+   },
+   {
+    "x": 0.003,
+    "z": 2.898,
+    "r": 0.52
+   },
+   {
+    "x": -0.856,
+    "z": 2.899,
+    "r": 0.52
+   },
+   {
+    "x": 0.862,
+    "z": 3.477,
+    "r": 0.52
+   },
+   {
+    "x": 0.003,
+    "z": 3.478,
+    "r": 0.52
+   },
+   {
+    "x": -0.856,
+    "z": 3.479,
+    "r": 0.52
+   }
+  ],
+  "interior": {
+   "x0": -0.99,
+   "x1": 1.09,
+   "y0": 0.848,
+   "y1": 2.485,
+   "z0": -3.61,
+   "z1": -2.19
+  },
+  "clear": {
+   "x0": -0.87,
+   "x1": 0.93,
+   "y0": 1.35,
+   "y1": 2.28,
+   "z0": -3.54,
+   "z1": -2.76
+  },
+  "cowl": {
+   "y": 1.66,
+   "z": -3.62
+  },
+  "header": {
+   "y": 2.21,
+   "z": -3.62
+  },
+  "roofAtEye": 2.485,
+  "floorAtEye": 0.848,
+  "lamps": {
+   "zMax": -3.49,
+   "facing": 0.3,
+   "left": [
+    [
+     -0.912,
+     0.981
+    ],
+    [
+     -0.685,
+     0.981
+    ],
+    [
+     -0.685,
+     0.761
+    ],
+    [
+     -0.912,
+     0.761
+    ]
+   ],
+   "right": [
+    [
+     0.752,
+     0.981
+    ],
+    [
+     0.979,
+     0.981
+    ],
+    [
+     0.979,
+     0.761
+    ],
+    [
+     0.752,
+     0.761
+    ]
+   ],
+   "beam": {
+    "at": {
+     "x": 0.03,
+     "y": 0.87,
+     "z": -3.9
+    },
+    "aim": {
+     "x": 0.03,
+     "y": 0.27,
+     "z": -19.78
+    }
+   }
+  },
+  "glass": [
+   {
+    "name": "windscreen-left",
+    "x0": -0.89,
+    "x1": -0.058,
+    "y0": 1.662,
+    "y1": 2.209,
+    "z0": -3.651,
+    "z1": -3.59,
+    "n": [
+     -0.023,
+     0.081,
+     -0.996
+    ]
+   },
+   {
+    "name": "windscreen-right",
+    "x0": 0.124,
+    "x1": 0.956,
+    "y0": 1.659,
+    "y1": 2.208,
+    "z0": -3.638,
+    "z1": -3.591,
+    "n": [
+     0.014,
+     0.068,
+     -0.998
+    ]
+   },
+   {
+    "name": "left-front",
+    "x0": -1.001,
+    "x1": -0.995,
+    "y0": 1.645,
+    "y1": 2.146,
+    "z0": -3.463,
+    "z1": -3.026,
+    "n": [
+     -1,
+     0.002,
+     0.012
+    ]
+   },
+   {
+    "name": "left-middle",
+    "x0": -0.994,
+    "x1": -0.99,
+    "y0": 1.651,
+    "y1": 2.149,
+    "z0": -2.998,
+    "z1": -2.743,
+    "n": [
+     -1,
+     0.002,
+     0.014
+    ]
+   },
+   {
+    "name": "left-rear",
+    "x0": -1.003,
+    "x1": -1.003,
+    "y0": 1.594,
+    "y1": 2.155,
+    "z0": -2.603,
+    "z1": -2.254,
+    "n": [
+     -1,
+     0,
+     0
+    ]
+   },
+   {
+    "name": "right-front",
+    "x0": 1.074,
+    "x1": 1.088,
+    "y0": 1.655,
+    "y1": 2.148,
+    "z0": -3.493,
+    "z1": -3.082,
+    "n": [
+     0.999,
+     0,
+     -0.032
+    ]
+   },
+   {
+    "name": "right-middle",
+    "x0": 1.087,
+    "x1": 1.098,
+    "y0": 1.659,
+    "y1": 2.147,
+    "z0": -3.028,
+    "z1": -2.743,
+    "n": [
+     0.999,
+     -0.001,
+     -0.038
+    ]
+   }
+  ],
+  "bed": {
+   "x0": -1.11,
+   "x1": 1.18,
+   "y0": 1.43,
+   "y1": 3.18,
+   "z0": -0.8,
+   "z1": 3.72,
+   "opening": {
+    "x0": -0.932,
+    "x1": 0.993,
+    "y0": 1.535,
+    "y1": 2.992,
+    "z": 3.754
+   }
+  },
+  "attach": [
+   {
+    "id": "bed-front-left",
+    "x": -0.513,
+    "y": 1.43,
+    "z": -0.013,
+    "yaw": 0,
+    "w": 1.035,
+    "d": 1.413,
+    "h": 1.7
+   },
+   {
+    "id": "bed-front-right",
+    "x": 0.582,
+    "y": 1.43,
+    "z": -0.013,
+    "yaw": 0,
+    "w": 1.035,
+    "d": 1.413,
+    "h": 1.7
+   },
+   {
+    "id": "bed-middle-left",
+    "x": -0.513,
+    "y": 1.43,
+    "z": 1.46,
+    "yaw": 0,
+    "w": 1.035,
+    "d": 1.413,
+    "h": 1.7
+   },
+   {
+    "id": "bed-middle-right",
+    "x": 0.582,
+    "y": 1.43,
+    "z": 1.46,
+    "yaw": 0,
+    "w": 1.035,
+    "d": 1.413,
+    "h": 1.7
+   },
+   {
+    "id": "bed-rear-left",
+    "x": -0.513,
+    "y": 1.43,
+    "z": 2.933,
+    "yaw": 0,
+    "w": 1.035,
+    "d": 1.413,
+    "h": 1.7
+   },
+   {
+    "id": "bed-rear-right",
+    "x": 0.582,
+    "y": 1.43,
+    "z": 2.933,
+    "yaw": 0,
+    "w": 1.035,
+    "d": 1.413,
+    "h": 1.7
+   }
+  ],
+  "storage": [
+   {
+    "id": "left-locker",
+    "name": "Left locker",
+    "side": -1,
+    "slots": 12,
+    "x0": -1.07,
+    "x1": -0.65,
+    "y0": 0.72,
+    "y1": 1.15,
+    "z0": -0.22,
+    "z1": 0.58,
+    "faceX": -1.074
+   },
+   {
+    "id": "right-locker",
+    "name": "Right locker",
+    "side": 1,
+    "slots": 6,
+    "x0": 0.83,
+    "x1": 1.17,
+    "y0": 0.76,
+    "y1": 1.3,
+    "z0": 0.68,
+    "z1": 0.93,
+    "faceX": 1.172
+   }
+  ],
+  "lampsMeasured": {
+   "left": {
+    "area": 0.0085,
+    "tris": 853,
+    "box": [
+     -0.934,
+     -0.629,
+     0.761,
+     0.985
+    ]
+   },
+   "right": {
+    "area": 0.0098,
+    "tris": 1002,
+    "box": [
+     0.752,
+     0.979,
+     0.761,
+     0.981
+    ]
+   },
+   "from": "right"
+  },
+  "lensTriangles": 475,
+  "sightLines": [
+   {
+    "name": "forward",
+    "yaw": 0,
+    "pitch": 0,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.694
+   },
+   {
+    "name": "forward-down-10",
+    "yaw": 0,
+    "pitch": -10,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.715
+   },
+   {
+    "name": "forward-up-8",
+    "yaw": 0,
+    "pitch": 8,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.693
+   },
+   {
+    "name": "forward-left-15",
+    "yaw": 15,
+    "pitch": 0,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.714
+   },
+   {
+    "name": "forward-right-20",
+    "yaw": -20,
+    "pitch": 0,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.745
+   },
+   {
+    "name": "left",
+    "yaw": 90,
+    "pitch": 0,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.519
+   },
+   {
+    "name": "left-down-10",
+    "yaw": 90,
+    "pitch": -10,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.527
+   },
+   {
+    "name": "right",
+    "yaw": -90,
+    "pitch": 0,
+    "required": true,
+    "hit": "glass",
+    "distance": 1.565
+   },
+   {
+    "name": "right-forward-60",
+    "yaw": -60,
+    "pitch": 0,
+    "required": false,
+    "hit": "glass",
+    "distance": 1.372
+   },
+   {
+    "name": "centre-pillar",
+    "yaw": -24,
+    "pitch": 0,
+    "required": false,
+    "hit": "glass",
+    "distance": 0.768
+   },
+   {
+    "name": "back",
+    "yaw": 180,
+    "pitch": 0,
+    "required": false,
+    "hit": "body",
+    "distance": 0.731
+   }
+  ],
+  "lookThroughFromEye": {
+   "raysThroughGlass": 179,
+   "intoShell": 2,
+   "grid": "yaw -120..120, pitch -30..30, 6 deg",
+   "examples": [
+    [
+     -30,
+     0,
+     "body"
+    ],
+    [
+     48,
+     -12,
+     "body"
+    ]
+   ]
+  },
+  "method": {
+   "eye": "left seat: x = the left windscreen pane's centre; y = its centre + 0.07 m; z = 0.7 m behind the fitted pane",
+   "seat": "H-point = eye + (0, -0.74, 0.1) m",
+   "wheelCentre": "steering-wheel hub = eye + (0, -0.46, -0.36) m; rim radius 0.22 m, plane 0.6 rad from horizontal",
+   "interior": "the cab volume: axis rays from the eye to the shell (body + glass): side glass, windscreen, back wall, roof, floor",
+   "clear": "the free box: voxels (0.03 m, dilated one voxel) of body + glass; seeded around the eye (+ 0.12 m) and the steering wheel; grown in depth / height, then width; x-symmetric about the windscreen's middle",
+   "wheelBase": "front axle -> the rear tandem's middle (the turn centre lies on the line through the rear tandem); axle 2 steers at the ratio of tangents (rear-middle - z) / wheelBase",
+   "exits": "0.7 m outside the cab side (max |x| at 0.8-1.6 m) at the door (the front side windows' middle z)",
+   "circles": "3 columns (equal bands across the footprint's width), each band's z extent covered by circles 0.6 m apart (r = hypot(band half-width, spacing / 2), rounded up); every vertex of every part inside a circle; at most 0.23 m past the footprint box",
+   "lamps": "bright, low-chroma, forward-facing master triangles on the nose, low on the bumper: the side with the larger bright area gives the box, mirrored about the cab's middle; the runtime lens = the body's triangles inside it",
+   "bed": "axis rays inside the canvas cover: the floor (median, well inside), the front wall, the side walls and the cover between them; the rear = the opened face",
+   "attach": "2 x 3 secure points on the bed floor, 0.08 m inside the walls, 0.06 m apart; h = the cover's inside over the floor - 0.05 m",
+   "storage": "compartment boxes read off the 0.1 m grid renders of the side views; the outer face x measured by axis rays (a 5 x 5 grid inside the face)"
+  }
+ },
+ "limitations": [
+  "The source is one closed shell: the cab is hollow (no seats, dash or steering wheel; two thin posts and a raised platform behind the seats). The runtime adds a handmade cab (floor, dash with gauges, a steering wheel on its pivot, two seats, a back panel, door cards) and a dark back-face lining of the cab and the bed.",
+  "Inside the canvas cover the shell is the cover block's own inside (seen from behind): the runtime lines it and lays a floor slab at the bed floor.",
+  "2 of 179 first-person sight lines through the glass meet an inner shell face (the windscreen's pillar lips): the runtime's back-face lining covers them.",
+  "The wheels are the source tyres cut at a plane just inside each tyre's inner face; the hubs / axles inboard of it stay with the body; the cut faces are capped with a dark tread texel. All eight share one radius (the median silhouette).",
+  "Real-world markings are in the source texture and were NOT painted over: a manufacturer's lettering on the grille, a registration-style number plate and a unit plate (trade-dress caveat).",
+  "The right side has two side panes (the left three): the source texture paints no grey pane behind the right door.",
+  "No interior lights, mirrors' glass or indicator lenses are separated: the indicators and the rear lamps stay painted texture."
+ ],
+ "tool": {
+  "script": "tools/asset-pipeline/props/build-surface-truck.mjs",
+  "libraries": {
+   "@gltf-transform/core": "4.5.1",
+   "meshoptimizer": "1.3.0",
+   "sharp": "0.35.5"
+  },
+  "parameters": {
+   "SCALE": 4,
+   "BUDGET": {
+    "body": 150000,
+    "wheel": 5000
+   },
+   "TEX": {
+    "baseColor": {
+     "px": 2048,
+     "q": 88
+    },
+    "normal": {
+     "px": 2048,
+     "q": 90
+    },
+    "metallicRoughness": {
+     "px": 1024,
+     "q": 88
+    }
+   },
+   "SIMPLIFY": {
+    "weights": {
+     "normal": 0.5,
+     "uv": 1
+    },
+    "maxError": 0.004
+   },
+   "WHEEL": {
+    "contactY": 0.03,
+    "gapZ": 0.2,
+    "ringPad": 0.015,
+    "cutIn": 0.03,
+    "siloY": [
+     0.04,
+     0.3
+    ],
+    "siloZ": 0.75
+   },
+   "WIN": {
+    "CHROMA": 16,
+    "LUM": [
+     72,
+     175
+    ],
+    "FACING": 0.85,
+    "MIN_ISLAND": 0.03,
+    "BAND": [
+     1.5,
+     2.35
+    ],
+    "MIN_H": 0.35,
+    "MIN_W": 0.2,
+    "FILL": 0.7,
+    "CAB_BACK": -2.1,
+    "SHRINK": 0.012,
+    "RADIUS": 0.07,
+    "EXPAND": 0.05,
+    "SLAB": 0.09
+   },
+   "PANE": {
+    "oversize": 0.015,
+    "inset": 0.004,
+    "cornerSegs": 6
+   },
+   "REAR": {
+    "depth": 0.2,
+    "minY": 1.4,
+    "side": 0.12,
+    "top": 0.16,
+    "bottom": 0.06,
+    "radius": 0.08
+   },
+   "GLASS": {
+    "baseColorFactor": [
+     0.55,
+     0.62,
+     0.62,
+     0.16
+    ],
+    "metallicFactor": 0,
+    "roughnessFactor": 0.06
+   },
+   "ANCH": {
+    "eye": {
+     "behindScreen": 0.7,
+     "overScreenMid": 0.07
+    },
+    "seat": {
+     "dy": -0.74,
+     "dz": 0.1
+    },
+    "steering": {
+     "dy": -0.46,
+     "dz": -0.36,
+     "radius": 0.22,
+     "tilt": 0.6
+    },
+    "exitOut": 0.7,
+    "circles": {
+     "cols": 3,
+     "spacing": 0.6
+    },
+    "vox": 0.03,
+    "headroom": 0.12,
+    "lamp": {
+     "lum": 150,
+     "chroma": 45,
+     "facing": 0.5,
+     "y": [
+      0.6,
+      1.12
+     ],
+     "xMin": 0.4,
+     "depth": 0.5,
+     "pad": 0.01
+    },
+    "bed": {
+     "inset": 0.08,
+     "cols": 2,
+     "rows": 3,
+     "gap": 0.06,
+     "clear": 0.05
+    },
+    "storage": [
+     {
+      "id": "left-locker",
+      "name": "Left locker",
+      "side": -1,
+      "z": [
+       -0.22,
+       0.58
+      ],
+      "y": [
+       0.72,
+       1.15
+      ],
+      "depth": 0.42,
+      "slots": 12
+     },
+     {
+      "id": "right-locker",
+      "name": "Right locker",
+      "side": 1,
+      "z": [
+       0.68,
+       0.93
+      ],
+      "y": [
+       0.76,
+       1.3
+      ],
+      "depth": 0.34,
+      "slots": 6
+     }
+    ]
+   }
+  },
+  "noGeneration": true
+ }
+}

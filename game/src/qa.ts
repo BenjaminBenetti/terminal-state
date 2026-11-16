@@ -53,6 +53,7 @@ import {trainArmorQaApi} from './world/trainArmor'; // task refinement-batch (la
 import {rideQaApi} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): ride(), rideDepart(), rideArrive(), rideDemo(seconds?), rideReset()
 import {lockboxQaApi} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): lockbox(), lockboxOpen(), lockboxType('1337'), lockboxQuick / Move / Stow / Close
 import {trunkQaApi} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): trunk(), trunkOpen(), trunkClose(), trunkQuick / Move / Stow
+import {truckQaApi} from './world/surface/truckStorage'; // task surface-run-opus-rebuild-20261116 (lane TRUCK): truck(), truckOpen(id), truckClose(), truckQuick / Move
 import {scannerQaApi} from './world/itemScanner'; // task train-crafting (lane SCANNER): scanner(), DEBUG scannerSweep()
 import {floorPlanPose, roofLadderPose, roofRewardPose, transitPose} from './gen/office'; // Task office-overhaul-20261030 (lane STRUCT) / office-interactions-layout-20261030: roof ladder / transit / roof cache / floor-plan poses
 import {mallShopPose} from './gen/mall/shopsWeapons'; // Task track3-eaton-centre-20261031 (primary): goShop
@@ -429,6 +430,7 @@ export function installQaHooks(game: Game): void {
     ...rideQaApi(game), // task campaign-foundation-20261102 (lane RIDE): ride(), rideDepart(), rideArrive(), rideDemo(seconds?) (dev: depart + loop + re-arrive at the same station), rideReset()
     ...lockboxQaApi(game), // task train-lockbox-windows-20261101-232156 (lane BOX): lockbox(), lockboxOpen(), lockboxClose(), lockboxType(keys), lockboxQuick(spec), lockboxMove(from, to, n?), lockboxStow()
     ...trunkQaApi(game), // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): trunk(), trunkOpen(), trunkClose(), trunkQuick(spec), trunkMove(from, to, n?), trunkStow()
+    ...truckQaApi(game), // task surface-run-opus-rebuild-20261116 (lane TRUCK): truck() (state, transform, attachment points, compartments), truckOpen(id), truckClose(), truckQuick(spec), truckMove(from, to, n?)
     ...scannerQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane SCANNER): scanner() — active / scope open / seconds to the next sweep / blip counts; DEBUG scannerSweep() — a sweep now
     // Task office-overhaul-20261030 (lane STRUCT): stand at the roof access ladder (then the game's own "[E] Climb ladder") or on a transit-hall lane (0 / 2 escalators, 1 stair)
     goRoofLadder: (end: 'bottom' | 'top' = 'bottom') => {

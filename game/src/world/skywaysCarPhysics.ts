@@ -26,6 +26,12 @@
 // head-on stops the car (a small bounce above bounceMin), a glancing one slides it along. The CLOSING speed into the obstacle (the
 // velocity against the contact normal) is reported as the impact (world/skywaysCar.ts: glass, sound).
 
+// Task surface-run-opus-rebuild-20261116 (lane TRUCK): GENERALIZED PER VEHICLE without changing the car — a geometry may carry its own
+// tuning (`phys`, default CAR_PHYS: every number the car uses is CAR_PHYS exactly as before), `stairs: false` (a vehicle that refuses
+// stair / ramp cells: the flight rule is the car's) and circles OFF the centre line (`x`, default 0: a long, flat-ended body is covered by
+// columns of smaller circles instead of a few big ones bulging past its nose). The axle rule's rear axle is the LAST wheel pair (the
+// car's four wheels: the same pair as before).
+
 import {resolveCircle, type PropIndex} from '../core/physics';
 import {CELL} from '../gen/grid';
 import type {Levels} from '../gen/levels';
@@ -78,8 +84,16 @@ export const CAR_PHYS = {
   alignRate: 4,
 } as const;
 
-/** What the controller needs of the car's anchors (`wheels`: the axles for stairs; absent = axles at ±wheelBase / 2, track 1.6 m). */
-export type CarGeom = Pick<CarSpec, 'circles' | 'wheelBase' | 'height'> & Partial<Pick<CarSpec, 'wheels'>>;
+/** A vehicle's tuning: CAR_PHYS's fields (numbers). */
+export type CarPhys = {readonly [K in keyof typeof CAR_PHYS]: number};
+
+/**
+ * What the controller needs of the car's anchors (`wheels`: the axles for stairs; absent = axles at ±wheelBase / 2, track 1.6 m).
+ * (lane TRUCK) `phys`: the vehicle's tuning (absent = CAR_PHYS); `stairs: false`: stair / ramp cells refuse it (absent = the car's
+ * stairs rule).
+ */
+export type CarGeom = Pick<CarSpec, 'circles' | 'wheelBase' | 'height'> & Partial<Pick<CarSpec, 'wheels'>> & {readonly phys?: CarPhys; readonly stairs?: boolean};
+type CircleGeom = Pick<CarSpec, 'circles'> & {readonly phys?: CarPhys};
 
 /** Stairs (see the header). */
 export const CAR_STAIRS = {
@@ -146,9 +160,9 @@ export function wrapAngle(a: number): number {
   return a - Math.PI;
 }
 
-/** The front-wheel angle limit at |speed| (rad). */
-export function steerMax(speed: number): number {
-  const P = CAR_PHYS, k = Math.min(1, Math.abs(speed) / P.forwardMax);
+/** The front-wheel angle limit at |speed| (rad; (lane TRUCK) the vehicle's tuning, default the car's). */
+export function steerMax(speed: number, P: CarPhys = CAR_PHYS): number {
+  const k = Math.min(1, Math.abs(speed) / P.forwardMax);
   return P.steerLow + (P.steerHigh - P.steerLow) * k;
 }
 
@@ -157,7 +171,7 @@ export function steerMax(speed: number): number {
  * arcade: W while reversing brakes first, S while rolling forward brakes first; nothing held coasts down.
  */
 export function updateControls(b: CarBody, ctl: CarControls, dt: number, g: CarGeom): number {
-  const P = CAR_PHYS;
+  const P = g.phys ?? CAR_PHYS;
   let v = b.v;
   const fwd = ctl.forward && !ctl.back, back = ctl.back && !ctl.forward;
   const drag = P.drag * v * v;
@@ -170,7 +184,7 @@ export function updateControls(b: CarBody, ctl: CarControls, dt: number, g: CarG
   } else v = approach(v, 0, (P.roll + drag) * dt);
   if (ctl.handbrake) v = approach(v, 0, P.handbrake * dt);
   b.v = v = clamp(v, -P.reverseMax, P.forwardMax);
-  const lim = steerMax(v);
+  const lim = steerMax(v, P);
   const want = ((ctl.left ? 1 : 0) - (ctl.right ? 1 : 0)) * lim;
   const toward = want !== 0 && (b.steer === 0 || Math.sign(want) === Math.sign(b.steer));
   b.steer = clamp(approach(b.steer, want, (toward ? P.steerRate : P.steerReturn) * dt), -lim, lim);
@@ -182,8 +196,7 @@ export function updateControls(b: CarBody, ctl: CarControls, dt: number, g: CarG
 const RIM: readonly (readonly [number, number])[] = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7071, 0.7071], [-0.7071, 0.7071], [0.7071, -0.7071], [-0.7071, -0.7071]];
 
 /** The car's floor at one sample: its own storey's grid floor within ±floorTol of y, never a ramp / dynamic volume (null: refused). */
-function sampleFloor(L: Levels, x: number, z: number, y: number, level: number): number | null {
-  const tol = CAR_PHYS.floorTol;
+function sampleFloor(L: Levels, x: number, z: number, y: number, level: number, tol: number = CAR_PHYS.floorTol): number | null {
   const s = L.supportIn(x, z, y, tol);
   if (!s || s.volume || s.level !== level) return null;
   if (Math.abs(s.floor - y) > tol + 1e-6) return null;
@@ -195,14 +208,15 @@ function sampleFloor(L: Levels, x: number, z: number, y: number, level: number):
  * The floor rule at a pose: every circle's centre + 8 rim points (rim x r) on storey `level` within ±floorTol of y, no ramp cell.
  * Returns the floor under the footprint centre, else null.
  */
-export function footprintFloor(L: Levels, x: number, z: number, yaw: number, y: number, level: number, g: Pick<CarSpec, 'circles'>): number | null {
-  const centre = sampleFloor(L, x, z, y, level);
+export function footprintFloor(L: Levels, x: number, z: number, yaw: number, y: number, level: number, g: CircleGeom): number | null {
+  const P = g.phys ?? CAR_PHYS, tol = P.floorTol;
+  const centre = sampleFloor(L, x, z, y, level, tol);
   if (centre === null) return null;
   const s = Math.sin(yaw), c = Math.cos(yaw);
   for (const k of g.circles) {
-    const cx = x + k.z * s, cz = z + k.z * c, rr = k.r * CAR_PHYS.rim;
-    if (sampleFloor(L, cx, cz, y, level) === null) return null;
-    for (const [ux, uz] of RIM) if (sampleFloor(L, cx + ux * rr, cz + uz * rr, y, level) === null) return null;
+    const kx = k.x ?? 0, cx = x + kx * c + k.z * s, cz = z - kx * s + k.z * c, rr = k.r * P.rim;
+    if (sampleFloor(L, cx, cz, y, level, tol) === null) return null;
+    for (const [ux, uz] of RIM) if (sampleFloor(L, cx + ux * rr, cz + uz * rr, y, level, tol) === null) return null;
   }
   return centre;
 }
@@ -240,10 +254,10 @@ function sampleAt(L: Levels, x: number, z: number, hint: number, out: Sample): b
  * A circle's collision feet: the body line's height there (`hint`) — or, when ramp cells lie under it, just under the highest floor
  * beneath it (CAR_STAIRS.rampFeet: the flight's own floor never blocks; walls, rails and the clear height over the pitch line do).
  */
-function circleFeet(L: Levels, x: number, z: number, r: number, hint: number): number {
+function circleFeet(L: Levels, x: number, z: number, r: number, hint: number, rim: number = CAR_PHYS.rim): number {
   if (!nearRamp(L, x, z, r)) return hint;
   let m = -Infinity;
-  const rr = r * CAR_PHYS.rim;
+  const rr = r * rim;
   if (sampleAt(L, x, z, hint, SMP)) m = SMP.f;
   for (const [ux, uz] of RIM) if (sampleAt(L, x + ux * rr, z + uz * rr, hint, SMP) && SMP.f > m) m = SMP.f;
   return m > -Infinity ? Math.max(hint - CAR_STAIRS.climb, m - CAR_STAIRS.rampFeet) : hint;
@@ -257,15 +271,15 @@ const FEET: number[] = [];
  * car's clear height; a circle over a flight: circleFeet). False when it does not come free in a few iterations (wedged).
  */
 export function settlePose(w: CarWorld, g: CarGeom, x: number, z: number, yaw: number, y: number, out: Settled, pitch = 0): boolean {
-  const s = Math.sin(yaw), c = Math.cos(yaw), H = g.height + CAR_PHYS.clearPad, tp = Math.tan(pitch);
-  for (let i = 0; i < g.circles.length; i++) { const k = g.circles[i]; FEET[i] = circleFeet(w.levels, x + k.z * s, z + k.z * c, k.r, y - k.z * tp); }
+  const P = g.phys ?? CAR_PHYS, s = Math.sin(yaw), c = Math.cos(yaw), H = g.height + P.clearPad, tp = Math.tan(pitch);
+  for (let i = 0; i < g.circles.length; i++) { const k = g.circles[i], kx = k.x ?? 0; FEET[i] = circleFeet(w.levels, x + kx * c + k.z * s, z - kx * s + k.z * c, k.r, y - k.z * tp, P.rim); }
   let cx = x, cz = z;
   out.sx = out.sz = 0;
   out.circle = -1;
   for (let it = 0; it < 6; it++) {
     let bx = 0, bz = 0, bd = 0, bi = -1;
     for (let i = 0; i < g.circles.length; i++) {
-      const k = g.circles[i], wx = cx + k.z * s, wz = cz + k.z * c;
+      const k = g.circles[i], kx = k.x ?? 0, wx = cx + kx * c + k.z * s, wz = cz - kx * s + k.z * c;
       const [rx, rz] = resolveCircle(w.levels, w.props, wx, wz, k.r, FEET[i], H);
       const px = rx - wx, pz = rz - wz, d = px * px + pz * pz;
       if (d > bd) { bd = d; bx = px; bz = pz; bi = i; }
@@ -286,12 +300,12 @@ const LZ: number[] = [], SF: number[] = [];
 export const CAR_POSE_DEBUG = {why: ''};
 const AX: Sample = {f: 0, level: 0, ramp: false};
 
-/** The axles (car-frame z: front < rear) and the wheel tracks (x) of a geometry. */
+/** The axles (car-frame z: front < rear) and the wheel tracks (x) of a geometry ((lane TRUCK) the rear = the LAST wheel pair). */
 function axles(g: CarGeom): {zf: number; zr: number; xl: number; xr: number} {
   const W = g.wheels;
   if (W && W.length >= 4) {
-    const zf = (W[0].z + W[1].z) / 2, zr = (W[2].z + W[3].z) / 2;
-    return {zf, zr, xl: Math.min(W[0].x, W[2].x), xr: Math.max(W[1].x, W[3].x)};
+    const n = W.length, zf = (W[0].z + W[1].z) / 2, zr = (W[n - 2].z + W[n - 1].z) / 2;
+    return {zf, zr, xl: Math.min(W[0].x, W[n - 2].x), xr: Math.max(W[1].x, W[n - 1].x)};
   }
   return {zf: -g.wheelBase / 2, zr: g.wheelBase / 2, xl: -0.8, xr: 0.8};
 }
@@ -303,7 +317,7 @@ function axles(g: CarGeom): {zf: number; zr: number; xl: number; xr: number} {
  * header): the body line through the axles' floors, roll / pitch / bump / drop limits, the storey of the floor under the centre.
  */
 export function carPose(L: Levels, x: number, z: number, yaw: number, y: number, pitch: number, _level: number, g: CarGeom, out?: CarPose): CarPose | null {
-  const P = CAR_PHYS, S = CAR_STAIRS, sn = Math.sin(yaw), cs = Math.cos(yaw), tp = Math.tan(pitch);
+  const P = g.phys ?? CAR_PHYS, S = CAR_STAIRS, sn = Math.sin(yaw), cs = Math.cos(yaw), tp = Math.tan(pitch);
   const wx = (lx: number, lz: number) => x + lx * cs + lz * sn, wz = (lx: number, lz: number) => z - lx * sn + lz * cs;
   let n = 0, ramp = false;
   const no = (why: string): null => { CAR_POSE_DEBUG.why = why; return null; };
@@ -315,9 +329,9 @@ export function carPose(L: Levels, x: number, z: number, yaw: number, y: number,
   /** How far a floor may come up toward the body at car-frame z: the overhangs past the axles meet a flight at up to maxPitch. */
   const overOf = (lz: number) => (lz < A.zf ? A.zf - lz : lz > A.zr ? lz - A.zr : 0);
   for (const k of g.circles) {
-    const rr = k.r * P.rim;
+    const rr = k.r * P.rim, kx = k.x ?? 0;
     for (let j = -1; j < RIM.length; j++) {
-      const lx = j < 0 ? 0 : RIM[j][0] * rr, lz = k.z + (j < 0 ? 0 : RIM[j][1] * rr);
+      const lx = kx + (j < 0 ? 0 : RIM[j][0] * rr), lz = k.z + (j < 0 ? 0 : RIM[j][1] * rr);
       // (searched from the highest a floor may be there: the line, or over an overhang the approach / departure allowance)
       if (!sampleAt(L, wx(lx, lz), wz(lx, lz), y - lz * tp + overOf(lz) * tm, SMP)) return no(`no floor under sample lz ${lz.toFixed(2)}`);
       LZ[n] = lz; SF[n] = SMP.f; n++;
@@ -325,6 +339,7 @@ export function carPose(L: Levels, x: number, z: number, yaw: number, y: number,
     }
   }
   const res = out ?? {y: 0, pitch: 0, level: 0, ramp: false};
+  if (ramp && g.stairs === false) return no('stairs: not this vehicle'); // (lane TRUCK: the truck never takes a stair flight)
   if (!ramp && Math.abs(pitch) < 1e-6) {
     // flat floor: as before (every sample ±floorTol of the car). (task skyways-vehicle: a seamless join to another storey's grid at the
     // SAME height — a stair head between its rails — is floor too; the storey follows the footprint centre)
@@ -392,7 +407,7 @@ export function moveCar(b: CarBody, w: CarWorld, g: CarGeom, dx: number, dz: num
   out.blocked = out.refused = false;
   out.sx = out.sz = 0;
   out.circle = -1;
-  const P = CAR_PHYS, dist = Math.hypot(dx, dz);
+  const P = g.phys ?? CAR_PHYS, dist = Math.hypot(dx, dz);
   const n = Math.max(1, Math.ceil(Math.max(dist / P.subStep, Math.abs(dyaw) / P.subYaw)));
   const sx = dx / n, sz = dz / n, sy = dyaw / n;
   for (let k = 0; k < n; k++) {
@@ -424,10 +439,11 @@ export function stepCar(b: CarBody, w: CarWorld, g: CarGeom, ctl: CarControls, d
   out.blocked = out.refused = false;
   out.impact = null;
   if (!(dt > 0)) return out;
-  dt = Math.min(dt, CAR_PHYS.maxDt);
+  const P = g.phys ?? CAR_PHYS;
+  dt = Math.min(dt, P.maxDt);
   const rate = updateControls(b, ctl, dt, g);
   const pitch = b.pitch ?? 0;
-  if (Math.abs(pitch) > 0.01) b.v = clamp(b.v - CAR_STAIRS.slopeAccel * Math.sin(pitch) * dt, -CAR_PHYS.reverseMax, CAR_PHYS.forwardMax); // (stairs: uphill slows, downhill pulls)
+  if (Math.abs(pitch) > 0.01) b.v = clamp(b.v - CAR_STAIRS.slopeAccel * Math.sin(pitch) * dt, -P.reverseMax, P.forwardMax); // (stairs: uphill slows, downhill pulls)
   const v = b.v, cp = Math.cos(pitch);
   if (Math.abs(v) < 1e-5) { b.v = 0; b.yawRate = 0; return out; }
   const mid = b.yaw + (rate * dt) / 2, fx = -Math.sin(mid), fz = -Math.cos(mid);
@@ -439,7 +455,7 @@ export function stepCar(b: CarBody, w: CarWorld, g: CarGeom, ctl: CarControls, d
   if (!MV.blocked) return out;
   out.blocked = true;
   out.refused = MV.refused;
-  const P = CAR_PHYS, sg = v >= 0 ? 1 : -1, dx = fx * sg, dz = fz * sg; // (dx, dz): the travel direction
+  const sg = v >= 0 ? 1 : -1, dx = fx * sg, dz = fz * sg; // (dx, dz): the travel direction
   // glancing: the car slid at a shallow angle to its travel — keep the speed along the slide, turn toward it
   const al = out.moved, tx = al > 1e-5 ? ax / al : 0, tz = al > 1e-5 ? az / al : 0, along = tx * dx + tz * dz;
   let nv: number;
@@ -469,7 +485,7 @@ export function stepCar(b: CarBody, w: CarWorld, g: CarGeom, ctl: CarControls, d
   b.v = nv;
   if (closing > 0.05) {
     const k = g.circles[MV.circle >= 0 ? MV.circle : leadingCircle(g, v)];
-    const p = carToWorld(b.x, b.z, b.yaw, 0, k.z);
+    const p = carToWorld(b.x, b.z, b.yaw, k.x ?? 0, k.z);
     out.impact = {speed: closing, x: p.x - nx * k.r, z: p.z - nz * k.r, nx, nz};
   }
   return out;
@@ -477,8 +493,8 @@ export function stepCar(b: CarBody, w: CarWorld, g: CarGeom, ctl: CarControls, d
 
 /** World centre of circle i of a car at (x, z, yaw). */
 export function circleCentre(g: Pick<CarSpec, 'circles'>, x: number, z: number, yaw: number, i: number): {x: number; z: number} {
-  const k = g.circles[i];
-  return {x: x + k.z * Math.sin(yaw), z: z + k.z * Math.cos(yaw)};
+  const k = g.circles[i], kx = k.x ?? 0;
+  return {x: x + kx * Math.cos(yaw) + k.z * Math.sin(yaw), z: z - kx * Math.sin(yaw) + k.z * Math.cos(yaw)};
 }
 
 /**
@@ -489,7 +505,7 @@ export function nearestCircle(g: Pick<CarSpec, 'circles'>, x: number, z: number,
   const s = Math.sin(yaw), c = Math.cos(yaw);
   let best = {d: Infinity, i: -1, nx: 1, nz: 0, cx: x, cz: z};
   for (let i = 0; i < g.circles.length; i++) {
-    const k = g.circles[i], cx = x + k.z * s, cz = z + k.z * c, dx = px - cx, dz = pz - cz, l = Math.hypot(dx, dz), d = l - k.r;
+    const k = g.circles[i], kx = k.x ?? 0, cx = x + kx * c + k.z * s, cz = z - kx * s + k.z * c, dx = px - cx, dz = pz - cz, l = Math.hypot(dx, dz), d = l - k.r;
     if (d < best.d) best = {d, i, nx: l > 1e-6 ? dx / l : 1, nz: l > 1e-6 ? dz / l : 0, cx, cz};
   }
   return best;
