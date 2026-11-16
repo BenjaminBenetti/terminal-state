@@ -20,8 +20,10 @@ import {ITEMS} from '../src/items/items';
 import {createMemory, pickupPlan, takenLayoutPickups} from '../src/run/memory';
 
 const LOG = '/tmp/skyways-con-snacks.log';
-const gen = (seed: number, layoutVersion?: number): StationLayout =>
-  LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', ...(layoutVersion ? {layoutVersion} : {})} as never);
+// (task studio-skywalk-events-20261115-193624-01) unversioned = layout version 6, the last before the event add-ons: version 7 rolls
+// some convention seeds to a new event, and a convention it keeps regenerates identically (tests/skyways-event-pool.test.ts)
+const gen = (seed: number, layoutVersion = 6): StationLayout =>
+  LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', layoutVersion} as never);
 /** World point -> host-local (x, z). */
 function local(host: {x: number; z: number; rot: number}, x: number, z: number): [number, number] {
   const c = Math.cos(host.rot), s = Math.sin(host.rot), dx = x - host.x, dz = z - host.z;

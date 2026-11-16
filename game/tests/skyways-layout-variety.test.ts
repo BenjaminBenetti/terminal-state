@@ -9,6 +9,7 @@ import {skywaysIssues as legacyIssues} from '../src/gen/skyways/legacy77/validat
 import type {StationLayout} from '../src/gen/stationTypes';
 import {skywaysIssues} from '../src/gen/skyways/validate';
 import {skywaysAddonLevelOf, skywaysAddonOf, skywaysFrame} from '../src/gen/skyways/frame';
+import {skywaysVenueShaped} from '../src/gen/skyways/skywaysTypes';
 import type {SkywaysRect} from '../src/gen/skyways/skywaysTypes';
 import {CELL, FLOOR} from '../src/gen/grid';
 import {levelsOf} from '../src/gen/levels';
@@ -147,7 +148,7 @@ describe('Skyways layout variety: generated layouts stay coherent', () => {
       expect(ad.level).toBe(2);
       const on = (id: number) => { const [x, z] = centre(l, id); return inside(host.rect, x, z); };
       for (const id of ad.areas) expect(on(id), `seed ${s}: add-on area ${l.areas[id].label} on its host`).toBe(true);
-      if (ad.id === 'convention') {
+      if (skywaysVenueShaped(ad.id)) { // (layout version 7: the expo / mini-golf / evacuation centre take the convention's venue too)
         for (const v of ad.venue!) { expect(on(v.area), `seed ${s}: venue ${v.role} on its host`).toBe(true); expect(l.areas[v.area].level).toBe(2); }
         // the bridge leads straight into the venue: its deck's door on the host side opens onto a venue area
         const br = info.bridges.find(b => b.a === host.id || b.b === host.id)!;

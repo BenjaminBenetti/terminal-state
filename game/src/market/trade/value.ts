@@ -46,6 +46,7 @@ import type {ItemKind} from '../../items/items';
 import type {ItemStack} from '../../items/inventory';
 import {itemArmor} from '../../player/armor';
 import {BEERS, isBeer} from '../../items/beers'; // task studio-market-bar-20261108-225231-01: the bar's fixed beer prices
+import {GOLF_BALL_ITEM} from '../../gen/skyways/events/golfContract'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY)
 
 /** Hundredths of a tie per tie. */
 export const CENTS = 100;
@@ -79,9 +80,11 @@ export const VALUE = {
   minUnit: 3,
   /**
    * Task studio-flamethrower-fire-20261114-031614-01: explicit values (ties) of the items the stat rules do not fit — the flamethrower (a
-   * stream weapon) and its fuel tank EMPTY (the fuel in it is priced on top, per unit: stackUnitCents).
+   * stream weapon) and its fuel tank EMPTY (the fuel in it is priced on top, per unit: stackUnitCents). Task
+   * studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): + the mini-golf ball (a passive supply of one: the stack rules would price a
+   * plastic ball like a whole supply stack) — the smallest unit value (minUnit: one ball still sells for a tie at the general store).
    */
-  fixed: {[FLAMETHROWER_ID]: 140, [FUEL_TANK_ID]: 60} as Readonly<Record<string, number>>,
+  fixed: {[FLAMETHROWER_ID]: 140, [FUEL_TANK_ID]: 60, [GOLF_BALL_ITEM]: 3} as Readonly<Record<string, number>>,
 } as const;
 
 const pos = (v: number | undefined) => Math.max(0, v ?? 0);

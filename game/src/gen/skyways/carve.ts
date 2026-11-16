@@ -37,6 +37,8 @@ import {layStairRun, transitSpecs, type StairFlight, type StairSpec} from '../tr
 import {STORE_PURPOSES} from '../purposes';
 import type {Area, Rect, ShopUse, Side, Storefront} from '../stationTypes';
 import {BASES, CLEAR, STOREY, type FrameBuilding, type RunLanes, type SkywaysFrame} from './frame';
+import {isSkywaysEventAddon, skywaysVenueShaped} from './skywaysTypes'; // task studio-skywalk-events-20261115-193624-01 (layout version 7)
+import {relabelEventVenue} from './events/eventVenue';
 import type {SkywaysAddonId, SkywaysAnchorFormat, SkywaysBridgeRoof, SkywaysLandmarkFamily, SkywaysOfficeRole, SkywaysPlan, SkywaysShopFamily, SkywaysVenueRole} from './skywaysTypes';
 import {SKYWAYS_RAMEN_PURPOSE} from './ramenPurposes';
 import {decompose} from '../mall/skeleton';
@@ -265,7 +267,7 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
   const station = byId.get(f.station)!;
   const roofY = r2(BASES[2] + CLEAR.atriumRoof);
   /** (layout version 3) the convention takes its host's whole skyway floor (a VENUE). */
-  const venue = !legacy && f.addon === 'convention';
+  const venue = !legacy && skywaysVenueShaped(f.addon); // (layout version 7: every new event takes the convention's venue carve)
   const carves = new Map<string, BuildingCarve>();
   const runs: RunCarve[] = [];
   const storefronts: Storefront[] = [];
@@ -580,7 +582,11 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
   const hostC = carves.get(f.addonHost)!;
   // (layout version 3) the convention takes its host's whole skyway floor (a VENUE: the bridges lead straight into it); the prize car
   // stands on a public PRIZE DISPLAY in the host's skyway court (no showroom room)
-  const addon = venue ? carveVenue(hostC) : !legacy && f.addon === 'prize-car' ? carvePrizeDisplay(hostC) : carveAddon(hostC, f.addon, f.addonLevel, f.addonApproach);
+  const venueCarve = venue ? carveVenue(hostC) : null;
+  // (layout version 7, task studio-skywalk-events-20261115-193624-01) a new event keeps the convention's venue carve exactly (the same
+  // draws: one hall search for both) under its own id and its own room names (gen/skyways/events/eventVenue.ts; labels only)
+  const addon = venueCarve ? (isSkywaysEventAddon(f.addon) ? relabelEventVenue(k.areas, {...venueCarve, id: f.addon}, f.addon) : venueCarve)
+    : !legacy && f.addon === 'prize-car' ? carvePrizeDisplay(hostC) : carveAddon(hostC, f.addon, f.addonLevel, f.addonApproach);
   if (!addon) return fail(`addon-${f.addon}-${f.addonLevel}`);
   addonAreas.push(...addon.areas, ...(addon.venue ?? []).map(v => v.area));
 

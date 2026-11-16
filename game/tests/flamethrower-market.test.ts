@@ -18,6 +18,7 @@ import {MARKET_STALLS, MARKET_STALLS_ALL, type MarketStallId} from '../src/gen/m
 import {GEAR_SLOTS} from '../src/items/gear';
 import {Inventory, stackToJSON, stacksIn, type ItemStack, type SlotRef} from '../src/items/inventory';
 import {ITEMS} from '../src/items/items';
+import {isGolfEventItem} from '../src/items/golfItems'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY)
 import {MARKET_STOCK_LANE, MarketStock, STOCK_EXTRAS, STOCK_EXTRAS_VERSION, STOCK_MAX, stallDraws, stockRng, type MarketStockJSON} from '../src/market/trade/stock';
 import {TRADE_RATES, betterStall, buyBackPct, buyPrice, sellQuote} from '../src/market/trade/stalls';
 import {CENTS, VALUE, baseCents, conditionText, isTradeable, stackCents, stackUnitCents, tankFuelCents} from '../src/market/trade/value';
@@ -342,7 +343,8 @@ describe('prices: the flamethrower 140 ties; the tank 60 empty + its fuel at the
   const unit = (fuel?: number) => stackUnitCents(tankAt(fuel));
 
   it('the values: explicit, in whole cents; a can of fuel is worth the same in the tank as in the can', () => {
-    expect(VALUE.fixed).toEqual({[FLAMETHROWER_ID]: 140, [FUEL_TANK_ID]: 60});
+    // (task studio-skywalk-events-20261115-193624-01, lane GOLF-PLAY: + the golf ball's one tie — pinned in tests/skyways-event-golf-play-registry.test.ts)
+    expect(Object.fromEntries(Object.entries(VALUE.fixed).filter(([k]) => !isGolfEventItem(k)))).toEqual({[FLAMETHROWER_ID]: 140, [FUEL_TANK_ID]: 60});
     expect([isTradeable(FLAMETHROWER_ID), isTradeable(FUEL_TANK_ID)]).toEqual([true, true]);
     expect([baseCents(FLAMETHROWER_ID), baseCents(FUEL_TANK_ID), baseCents(FLAME_FUEL_CAN)]).toEqual([140 * CENTS, 60 * CENTS, 10 * CENTS]);
     expect([tankFuelCents(0), tankFuelCents(1), tankFuelCents(CAN), tankFuelCents(CAP)]).toEqual([0, 5, baseCents(FLAME_FUEL_CAN), FLAME_FUEL.capacityCans * baseCents(FLAME_FUEL_CAN)]);

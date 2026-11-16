@@ -126,9 +126,11 @@ Every kit model is a Codex concept turned into a Meshy T2.5 model with its PBR m
 - Version 4, the building programmes (task studio-skywalk-variety-20261107-231448-01), came next.
 - Version 5, the encounters pass (task studio-skywalk-encounters-20261108-074144-01: the Siren, the horde, the convention's cosplay
   zombies, the Mall store families), followed (fingerprints pinned as GAME87).
-- **Version 6, the convention's cosplay crowd on both floors of its building** (task studio-cosplay-general-20261108-225231-01,
-  `gen/skyways/cosplayFloors.ts`; see `docs/enemy-spawns.md`), is what every station not yet entered gets now, in new and existing
-  campaigns. Versions 4–6 share the live generator, with every change gated on the version.
+- Version 6, the convention's cosplay crowd on both floors of its building (task studio-cosplay-general-20261108-225231-01,
+  `gen/skyways/cosplayFloors.ts`; see `docs/enemy-spawns.md`), followed (fingerprints pinned as GAME129).
+- **Version 7, the major-event pool** (task studio-skywalk-events-20261115-193624-01; see "The major events" below), is what every
+  station not yet entered gets now, in new and existing campaigns. Versions 4–7 share the live generator, with every change gated on
+  the version. A version-7 station whose draw stays the convention or the prize car is byte-identical to version 6.
 - Versions 1 and 2 regenerate through a FROZEN snapshot of the GAME77 generator (`gen/skyways/legacy77/`), version 3 through a frozen
   snapshot of its core (`gen/skyways/legacy80/`: index / carve / frame / validate). The test pins all three versions' fingerprints, so a
   station a player already entered keeps its holders, pickups, kills and add-on.
@@ -236,6 +238,52 @@ lobby or through a FOYER (`addon.approach`; the foyer is an add-on area of conco
   `addon.car`, and the turntable, stanchions and prize board are placed around it. The car is drivable in first person (see
   `game/src/world/skywaysCar.ts`). By design, its drivability is never advertised outside the close-up Enter / Exit prompt and the
   controls hint shown while driving.
+
+## The major events (layout version 7)
+
+From layout version 7 the one add-on is drawn from five equal-weight events (`frame.ts skywaysAddonFor`, stream `skyways:events`):
+the convention, the prize car, and three new venue-shaped events (`gen/skyways/events/`). The old draw (`skywaysAddonOf`) still
+decides versions 1–6, and a version-7 seed that keeps an old event keeps the same one. The new events are pool additions: one event
+per map, the rest of the map stays ordinary.
+- Each new event takes the convention's venue carve unchanged (`carveVenue`, the same cells, doors and roles on the same seed), under
+  its own room names (`events/eventVenue.ts relabelEventVenue`). It keeps the washrooms and the stage box (`addon.stage`) as the main
+  hall's anchor.
+- Its dresser (`events/expoDress.ts`, `golfDress.ts`, `evacDress.ts`) replaces the convention's venue dressing and reuses the venue
+  circulation kit (`venueDress.ts eventVenueContext`, `group`, `markRoutes`). Its prop kinds live in `events/*Kinds.ts`, spread into the
+  destination registry (both audits), and are drawn by `world/skywaysEventDraw.ts`.
+- Saves: a station entered at versions 1–6 keeps its version and its old event; only stations not yet entered can get a new event.
+- Each new event also puts a small infected crowd on its floor (`events/eventCrowd.ts`, its own fork, right after the hordes and before
+  the annex's spawns; see `docs/enemy-spawns.md` "Version 7"): 3–5 at the expo, 2–4 at the mini-golf, 4–6 at the shelter, kept clear of
+  the doors and passages.
+- **`tech-expo`: a technology expo** (`expoDress.ts`, `expoKinds.ts`, `world/skywaysExpoDraw.ts`):
+  - a KEYNOTE in the main hall: the stage with an LED wall, a lectern, screens and up to 126 audience chairs;
+  - up to 12 exhibitor BOOTHS on the exhibitors' floor (booth walls with the exhibitor's fascia, demo counters and tables, plinths and
+    screen stands with the existing electronics as loose props on top) and demo theatres in the panel rooms; the washrooms, backstage
+    and storage keep the ordinary dressing;
+  - the expo and exhibitor names are fictional (`expoTypes.ts`); the screen and sign faces are drawn locally (`skywaysEventDraw.ts
+    eventFaceMaterial`);
+  - the booth holders roll `mall-electronics`, the back-of-house flight cases `mall-electronics-back`.
+- **`mini-golf`: an indoor mini-golf course** (`golfCourse.ts`, `golfDress.ts`, `golfKinds.ts`, `world/skywaysGolfDraw.ts`):
+  - 6–9 holes in bays across the main hall (nine designs: straight, dogleg, zigzag, gate, obstacle, island, tier, hairpin, plateau),
+    each with procedural turf, rails, a tee mat with its hole sign, a flag and a REAL cup: a gap in the green's collider
+    (`golfContract.ts golfColliderBoxes`) with a drawn liner;
+  - one ball on each tee and the course's ONE putter plus three spare balls on the FRONT DESK, all ordinary layout pickups;
+  - the putter (`weapons/putter.ts`, `items/golfItems.ts`) is a light melee weapon (equips, swings, hits enemies). Hold to charge and
+    release to putt a ball in front of you (`combat/putterStrike.ts`); the ball (`physics/golfBall.ts`) rolls with rolling resistance,
+    rebounds off the rails and drops through the cup's gap. There is no scoring UI. Neither item is ever loot, market stock or a weapon
+    find (`GOLF_EVENT_ONLY`);
+  - a ball keeps its pickup id, position and holed state through saves, unloading and cargo like any other loose pickup; taking it out of
+    a cup moves that same pickup;
+  - golf pieces are `walkOver`: walkers stand on the floor 6 cm below the turf and step over the rails.
+- **`evac-centre`: an emergency shelter** (`evacDress.ts`, `evacKinds.ts`, `world/skywaysEvacDraw.ts`):
+  - the whole venue floor: registration desks, a DORMITORY of cot rows along an aisle (at most 72 cots), a ration line, a medical bay
+    and a barricaded quarantine (a barrier line with one squeeze gap, abandoned cots and stretchers behind it);
+  - ration crates roll the stock room's rows and medical holders the first-aid room's rows; 2–4 ration pickups on the ration line; no
+    jackpot;
+  - 6–10 short notes from an authored pool (`evacNotes.ts`). Read them with the interact key (`world/skywaysNotes.ts`). They tell of the
+    ventilation failing, people turning, and the main reactor overrun. No quest or intel unlock.
+- Tests: `tests/skyways-event-pool.test.ts`, `skyways-event-expo.test.ts`, `skyways-event-golf-course.test.ts`,
+  `skyways-event-golf-play-*.test.ts`, `skyways-event-golf-real.test.ts` (a putt on a generated course), `skyways-event-evac*.test.ts`.
 
 ## Gas
 

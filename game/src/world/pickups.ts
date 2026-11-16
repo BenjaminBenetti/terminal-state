@@ -21,6 +21,8 @@ import {fuelCanModel, fuelCanModelSource} from './fuelCanModel'; // task train-f
 import {grenadeModel, grenadeModelSource} from './grenadeModels'; // task studio-refinement-batch-20261113-035659-01: the crafted acid / lure grenades
 import {isGrenadeItem} from '../items/grenades';
 import {RAIL_TIES_MODEL_SOURCE, railTiesModel} from './railTiesModel'; // task studio-market-rework-20261108-074144-01 (lane TRADE)
+import {GOLF_BALL_MODEL_SOURCE, golfBallModel} from './golfBallModel'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY)
+import {GOLF_BALL_ITEM} from '../gen/skyways/events/golfContract'; // lane GOLF-PLAY
 import {RAIL_TIES_ID} from '../items/railTies';
 import {isBeer} from '../items/beers'; // task studio-market-bar-20261108-225231-01 (lane BEER)
 import {beerModel, beerModelSource} from '../market/beer/beerModel';
@@ -303,6 +305,10 @@ export function itemTemplate(itemId: string): THREE.Object3D {
     // task reactor-build-20261101 (lane RESTART): startup key / fuse cartridge — the Meshy kit GLBs (procedural stand-in if one failed to load)
     t = reactorItemModel(itemId);
     templateSource.set(itemId, reactorItemSource(itemId));
+  } else if (itemId === GOLF_BALL_ITEM) {
+    // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): the mini-golf ball — a code-built white sphere (origin at its bottom)
+    t = golfBallModel();
+    templateSource.set(itemId, GOLF_BALL_MODEL_SOURCE);
   } else if (itemId === RAIL_TIES_ID) {
     // task studio-market-rework-20261108-074144-01 (lane TRADE): Rail Ties — a bundle of tie offcuts code-built from the track sleeper
     t = railTiesModel();

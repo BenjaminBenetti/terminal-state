@@ -33,6 +33,8 @@ import {WorldMaterials} from '../src/world/materials';
 import {buildWorld} from '../src/world/builder';
 import {fakeEnvTextures} from './helpers/openablesFixture';
 import {installCanvasShim} from './helpers/canvas2d';
+import {isSkywaysEventAddon} from '../src/gen/skyways/skywaysTypes';
+import {EVENT_ROOM_NAMES} from '../src/gen/skyways/events/eventVenue';
 
 installCanvasShim(false);
 
@@ -260,11 +262,12 @@ describe('Skyways map boards: the plan matches the layout', () => {
       expect(ev.every(l => l.level === info.addon.level)).toBe(true);
       if (info.addon.id === 'prize-car') expect(ev.map(l => l.text)).toEqual(['Grand Prize Draw']);
       else if (info.addon.venue?.length) {
-        // the venue's public parts by their event names (never its back of house)
-        expect(ev.map(l => l.text)).toContain('Main stage hall');
-        expect(ev.some(l => /^Exhibitors/.test(l.text))).toBe(true);
-        expect(ev.some(l => /^Panel room/.test(l.text))).toBe(true);
-        expect(ev.some(l => /backstage|storage|washroom/i.test(l.text))).toBe(false);
+        // the venue's public parts by their event names (never its back of house); (layout version 7) a new event by its own room names
+        const n = isSkywaysEventAddon(info.addon.id) ? EVENT_ROOM_NAMES[info.addon.id] : {hall: 'Main stage hall', exhibitors: 'Exhibitors', panels: ['Panel room']};
+        expect(ev.map(l => l.text), `seed ${s}`).toContain(n.hall);
+        expect(ev.some(l => l.text.startsWith(n.exhibitors)), `seed ${s}`).toBe(true);
+        expect(ev.some(l => l.text.startsWith(n.panels[0].replace(/ A$/, ''))), `seed ${s}`).toBe(true);
+        expect(ev.some(l => /backstage|storage|washroom|staff room/i.test(l.text))).toBe(false);
       } else expect(ev.length).toBe(1);
     }
     expect(offices, 'office wings in the sample (seeds 3, 5, 6)').toBeGreaterThan(0);

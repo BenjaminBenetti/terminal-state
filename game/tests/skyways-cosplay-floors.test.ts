@@ -37,9 +37,9 @@ const tagged = (l: StationLayout) => l.zombies.flatMap((z, i) => (z.look === COS
 const rectDist = (r: {x0: number; z0: number; x1: number; z1: number}, x: number, z: number) => Math.hypot(Math.max(r.x0 - x, 0, x - r.x1), Math.max(r.z0 - z, 0, z - r.z1));
 
 describe('Skyways cosplay floors: the version gate and the budget', () => {
-  it('version 6 is current, gates the second-floor run and shares the version-5 profile; U{2..4} additive to the venue run', () => {
+  it('version 6 gates the second-floor run (current: 7) and shares the version-5 profile; U{2..4} additive to the venue run', () => {
     expect(SKYWAYS_COSPLAY_FLOORS_MIN_VERSION).toBe(6);
-    expect(SKYWAYS_LAYOUT_VERSION).toBe(SKYWAYS_COSPLAY_FLOORS_MIN_VERSION);
+    expect(SKYWAYS_LAYOUT_VERSION).toBeGreaterThanOrEqual(SKYWAYS_COSPLAY_FLOORS_MIN_VERSION); // (version 7: the event add-ons, task studio-skywalk-events-20261115-193624-01)
     expect(skywaysSpawnProfileFor(6)).toBe(SKYWAYS_SPAWN_PROFILE);
     expect(skywaysSpawnProfileFor(5)).toBe(SKYWAYS_SPAWN_PROFILE);
     expect(COSPLAY_FLOOR_BUDGET).toEqual([2, 4]);
@@ -171,7 +171,7 @@ describe('Skyways cosplay floors: version 6 levels', () => {
 
   it('deterministic (revisit / streaming / Retry regenerate the same crowd); killed second-floor cosplayers stay dead', () => {
     const seed = CONVENTION[0], a = v6(seed);
-    const b = LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol'} as never) as StationLayout; // (current = 6)
+    const b = LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol'} as never) as StationLayout; // (current = 7: a convention seed keeps its version-6 crowd)
     expect(JSON.stringify(b.zombies)).toBe(JSON.stringify(a.zombies));
     const last = a.zombies.length - 1;
     expect(a.zombies[last].look).toBe(COSPLAY_SPAWN_LOOK);
