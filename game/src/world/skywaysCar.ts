@@ -232,6 +232,9 @@ export function carDef(spec: CarSpec): VehicleDef {
 /** The Skyways car's definition (the controller's default vehicle). */
 export const CAR_DEF: VehicleDef = carDef(CAR_SPEC);
 
+/** (lane TRUCK, the cargo seam) Cargo may be secured / taken off only with the vehicle at rest (|v| at most this, m/s). */
+export const CARGO_STILL = 0.3;
+
 interface ZombieLike {
   brain: {x: number; y: number; z: number; hp: number; readonly alive: boolean; readonly climbing?: boolean; stats: {radius: number; height?: number};
     damage(amount: number, fromX: number, fromZ: number, fromY?: number, o?: {stagger?: boolean}): boolean};
@@ -860,9 +863,10 @@ export class SkywaysCar {
   }
 
   /**
-   * (lane TRUCK, the cargo seam) The vehicle's secure attachment points in the world (the body's pose, its pitch included): id, the
-   * point on the load floor, its yaw, size (w across / d along / h clear) and whether a cargo owner holds it (attachOccupied). Empty
-   * without a vehicle or for one without points (the car). A fresh list per call (not per frame: read on demand).
+   * (lane TRUCK, the cargo seam) The vehicle's secure attachment points in the WORLD (the body's pose now, its pitch included): id, the
+   * floor centre a unit stands on, the unit's facing, the storey, the tilt, the free box (w across / d along / h clear) and `occupied`
+   * (something of the vehicle's own takes it: attachOccupied; the cargo owner tracks its units itself). Empty without a vehicle or for
+   * one without points (the car). A fresh list per call.
    */
   attachPoints(): VehicleAttachPoint[] {
     const b = this.body, A = this.def.attach;
@@ -870,13 +874,34 @@ export class SkywaysCar {
     const pt = b.pitch ?? 0, cp = Math.cos(pt), sp = Math.sin(pt), occ = this.attachOccupied;
     return A.map(a => {
       const p = carToWorld(b.x, b.z, b.yaw, a.x, a.y * sp + a.z * cp);
-      return {id: a.id, x: p.x, y: b.y + a.y * cp - a.z * sp, z: p.z, yaw: wrapAngle(b.yaw + a.yaw), w: a.w, d: a.d, h: a.h, occupied: occ ? occ(a.id) : false};
+      return {id: a.id, x: p.x, y: b.y + a.y * cp - a.z * sp, z: p.z, yaw: wrapAngle(b.yaw + a.yaw), level: b.level, pitch: pt, roll: 0,
+        size: {w: a.w, d: a.d, h: a.h}, occupied: occ ? occ(a.id) : false};
     });
   }
 
-  /** (lane TRUCK, for lane CARGO) The truck's attachment points (empty: no truck in this world). */
+  /**
+   * (lane TRUCK, for lane CARGO: world/surface/cargoTypes.ts TruckCargoSource, found on game.skywaysCar) The truck's attachment points
+   * (the bed under the canvas cover; empty: no truck in this world).
+   */
   truckAttachPoints(): VehicleAttachPoint[] {
     return this.vehicle === 'truck' ? this.attachPoints() : [];
+  }
+
+  /** (lane CARGO's TruckCargoSource) The prompt name of the vehicle carrying the points. */
+  get label(): string {
+    return this.def.cargo?.label ?? 'the vehicle';
+  }
+
+  /**
+   * (lane CARGO's TruckCargoSource) Why nothing may be secured on / taken off the truck now: someone in its seat, or it is moving
+   * (|v| > CARGO_STILL m/s); null = it may (also: no truck here — it offers no points then).
+   */
+  cargoBlock(): string | null {
+    const b = this.body, C = this.def.cargo;
+    if (this.vehicle !== 'truck' || !b || !C) return null;
+    if (this.driving) return C.seated;
+    if (Math.abs(b.v) > CARGO_STILL) return C.moving;
+    return null;
   }
 
   /**

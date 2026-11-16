@@ -70,6 +70,8 @@ export interface VehicleDef {
    * relative to the vehicle, w across / d along / h the clear height). Absent: none (the car).
    */
   readonly attach?: readonly VehicleAttach[];
+  /** The cargo seam's texts: the prompt name ('the truck') and why nothing may be secured now (seated / moving). Absent: none (the car). */
+  readonly cargo?: {readonly label: string; readonly seated: string; readonly moving: string};
 }
 
 export interface VehicleAttach { readonly id: string; readonly x: number; readonly y: number; readonly z: number; readonly yaw: number; readonly w: number; readonly d: number; readonly h: number }
@@ -77,5 +79,13 @@ export interface VehicleAttach { readonly id: string; readonly x: number; readon
 /** A vehicle's body in the world (the cargo seam / QA): y = the floor under the footprint, pitch about its lateral axis (0: flat). */
 export interface VehicleTransform { x: number; y: number; z: number; yaw: number; pitch: number; level: number }
 
-/** An attachment point in the world (the vehicle's pose applied; y = the load floor) + whether a cargo owner holds it. */
-export interface VehicleAttachPoint { id: string; x: number; y: number; z: number; yaw: number; w: number; d: number; h: number; occupied: boolean }
+/**
+ * An attachment point in the WORLD (the vehicle's pose now; lane CARGO's TruckAttachPoint, world/surface/cargoTypes.ts, field for field):
+ * (x, y, z) = the floor centre a unit stands on, yaw = the way the unit faces, level = the vehicle's storey, pitch / roll = the body's
+ * tilt, size = the free box (w across, d along the point's forward, h clear height), occupied = something of the VEHICLE's own takes it
+ * (the cargo owner tracks its own units).
+ */
+export interface VehicleAttachPoint {
+  readonly id: string; readonly x: number; readonly y: number; readonly z: number; readonly yaw: number; readonly level: number;
+  readonly pitch: number; readonly roll: number; readonly size: {readonly w: number; readonly d: number; readonly h: number}; readonly occupied: boolean;
+}

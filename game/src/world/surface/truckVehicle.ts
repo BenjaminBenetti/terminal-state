@@ -10,8 +10,9 @@
 import type {StationLayout} from '../../gen/stationTypes';
 import type {StackJSON} from '../../items/inventory';
 import type {SkywaysCar} from '../skywaysCar';
-import type {VehicleDef, VehicleRecordPose} from '../skywaysCarVehicle';
+import type {VehicleAttach, VehicleDef, VehicleRecordPose} from '../skywaysCarVehicle';
 import {TRUCK_GEOM, TRUCK_RT, TRUCK_SPEC, TRUCK_TEXT} from './truckSpec';
+import {TRUCK_BED_FLOOR_Y} from './truckCab';
 import {SURFACE_TRUCK_LANE, emptyTruckStorage, surfaceTruckProblem, surfaceTruckRecord, type SurfaceTruckRecord} from './truckStore';
 import {buildTruckView, createTruckBeam, loadTruckModel, refreshTruckView, releaseTruckModel, setTruckLamps, syncTruckView, truckModelsGen} from './truckModel';
 import {TRUCK_ANCHORS} from './truckAnchors.generated';
@@ -21,6 +22,17 @@ export function truckSpawnOf(layout: StationLayout | null): {x: number; y: numbe
   const t = layout?.surface?.truck;
   return t ? {x: t.x, y: t.y, z: t.z, yaw: t.yaw, level: t.level} : null;
 }
+
+/**
+ * The secure attachment points for bulky cargo (lane CARGO's seam: world/surface/cargoTypes.ts TruckAttachPoint, read through
+ * SkywaysCar.truckAttachPoints): the cook's 2 x 3 grid on the bed under the canvas cover (ids 'bed-<front|middle|rear>-<left|right>',
+ * stable), standing on the handmade bed floor (TRUCK_BED_FLOOR_Y), facing the truck's forward, each 1.03 m across x 1.41 m along with
+ * the clear height under the cover (1.68 m: a chest 0.78 x 0.78 x 0.48 m or a device / kit 0.70 x 0.70 x 1.23 m fits; the cut rear
+ * opening is 1.93 m wide, 1.46 m high).
+ */
+export const TRUCK_ATTACH: readonly VehicleAttach[] = TRUCK_ANCHORS.attach.map(a => ({...a, y: TRUCK_BED_FLOOR_Y, h: Math.round((a.h - (TRUCK_BED_FLOOR_Y - a.y)) * 1000) / 1000}));
+
+export const TRUCK_CARGO_TEXT = {label: 'the truck', seated: 'Get out of the truck first', moving: 'Stop the truck first'} as const;
 
 export const TRUCK_DEF: VehicleDef = {
   id: 'truck',
@@ -53,5 +65,6 @@ export const TRUCK_DEF: VehicleDef = {
       return surfaceTruckRecord(b.x, b.y, b.z, b.yaw, b.level, {lights: car.lights, storage: car.storageJSON as (StackJSON | null)[][]});
     },
   },
-  attach: TRUCK_ANCHORS.attach,
+  attach: TRUCK_ATTACH,
+  cargo: TRUCK_CARGO_TEXT,
 };

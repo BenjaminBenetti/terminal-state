@@ -28,6 +28,9 @@ export interface TruckCabLayout {
 
 const A = TRUCK_ANCHORS;
 
+/** The handmade bed floor's top (truck frame, m): 1.5 cm over the model's own measured load floor — what secured cargo stands on. */
+export const TRUCK_BED_FLOOR_Y = A.bed.y0 + 0.015;
+
 /** The cab's handmade parts (truck frame; deterministic from the anchors). */
 export function truckCabLayout(): TruckCabLayout {
   const I = A.interior, E = A.eye, H = A.seat, W = A.wheelCentre, ws = A.glass.filter(g => g.name.startsWith('windscreen'));
@@ -39,7 +42,7 @@ export function truckCabLayout(): TruckCabLayout {
     {name: 'floor', mat: 'floor', x0, x1, y0: floorY - 0.06, y1: floorY, z0: I.z0 + 0.06, z1: I.z1 - 0.03},
     {name: 'toe-board', mat: 'dash', x0, x1, y0: floorY, y1: dashTop - 0.27, z0: dashFront, z1: dashFront + 0.06},
     {name: 'dash', mat: 'dash', x0, x1, y0: dashTop - 0.27, y1: dashTop, z0: dashFront, z1: dashBack},
-    {name: 'binnacle', mat: 'dash', x0: E.x - 0.2, x1: E.x + 0.2, y0: dashTop, y1: dashTop + 0.09, z0: dashFront, z1: dashBack - 0.03},
+    {name: 'binnacle', mat: 'dash', x0: E.x - 0.2, x1: E.x + 0.2, y0: dashTop, y1: dashTop + 0.09, z0: dashFront + 0.08, z1: dashBack - 0.03},
     {name: 'centre-stack', mat: 'dash', x0: cabCx - 0.16, x1: cabCx + 0.16, y0: floorY, y1: dashTop - 0.27, z0: dashFront + 0.06, z1: dashBack + 0.22},
     {name: 'gear-lever', mat: 'metal', x0: cabCx - 0.012, x1: cabCx + 0.012, y0: dashTop - 0.27, y1: dashTop - 0.03, z0: dashBack + 0.16, z1: dashBack + 0.185},
     {name: 'gear-knob', mat: 'needle', x0: cabCx - 0.025, x1: cabCx + 0.025, y0: dashTop - 0.05, y1: dashTop, z0: dashBack + 0.148, z1: dashBack + 0.198},
@@ -58,7 +61,7 @@ export function truckCabLayout(): TruckCabLayout {
   }
   // the bed's floor under the canvas: the opened rear's sill level, wall to wall
   const B = A.bed;
-  boxes.push({name: 'bed-floor', mat: 'bed', x0: B.x0 + 0.02, x1: B.x1 - 0.02, y0: B.y0 - 0.03, y1: B.y0 + 0.015, z0: B.z0 + 0.02, z1: B.opening.z - 0.03});
+  boxes.push({name: 'bed-floor', mat: 'bed', x0: B.x0 + 0.02, x1: B.x1 - 0.02, y0: B.y0 - 0.03, y1: TRUCK_BED_FLOOR_Y, z0: B.z0 + 0.02, z1: B.opening.z - 0.03});
   // two gauges on the binnacle's face (toward the driver) + their needles
   const gz = dashBack - 0.03 + 0.003, gy = dashTop + 0.045;
   const discs: CabDisc[] = [{name: 'gauge-speed', mat: 'gauge', x: E.x - 0.085, y: gy, z: gz, r: 0.038}, {name: 'gauge-rev', mat: 'gauge', x: E.x + 0.085, y: gy, z: gz, r: 0.038}];
