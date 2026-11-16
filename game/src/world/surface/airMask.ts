@@ -92,6 +92,15 @@ function buildOutdoorMap(s: SurfaceInfo, g: {w: number; h: number; cells: ArrayL
     for (let y = c.y0; y < c.y1; y++) for (let x = c.x0; x < c.x1; x++) { const i = y * W + x; top[i] = Math.max(top[i], v); mark[i] = 1; }
   };
   for (const b of s.buildings) fillRect(b.footprint, byte(Math.max(b.height, 1)));
+  // (v2, lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01) a REACHABLE roof is outdoors from its surface up inside
+  // the parapet (the stair bulkhead stays indoors to its own top): the same outdoor air the street has, on the roof the player walks
+  for (const b of s.buildings) {
+    const ra = b.roofAccess;
+    if (!ra) continue;
+    const walk = cellRect(ra.walk), bulk = cellRect(ra.bulkhead), t = byte(Math.max(ra.y, 1)), tb = byte(ra.y + ra.bulkhead.h);
+    for (let y = walk.y0; y < walk.y1; y++) for (let x = walk.x0; x < walk.x1; x++) top[y * W + x] = t;
+    for (let y = bulk.y0; y < bulk.y1; y++) for (let x = bulk.x0; x < bulk.x1; x++) top[y * W + x] = Math.max(t, tb);
+  }
   fillRect(s.checkpoint.tent.rect, byte(SURFACE_AIR.TENT_TOP));
   const outdoor = new Set(s.outdoorAreas);
   const tentArea = s.checkpoint.tent.area;

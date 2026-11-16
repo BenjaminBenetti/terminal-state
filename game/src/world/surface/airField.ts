@@ -62,6 +62,12 @@ export interface SurfaceGasZoneSpec {
   cells: GasDomain;
   /** Layout level ids holding its interior. */
   levels: number[];
+  /**
+   * (v2, lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01) A reachable roof: on layout level `level` the cells of
+   * `walk` outside `bulkhead` are OPEN SKY — closed to the zone's field there (the analytic outdoor air fills them: world/surface/airMask.ts),
+   * while the same columns stay the building's interior on the storeys below.
+   */
+  sky?: {level: number; walk: GasDomain; bulkhead: GasDomain};
 }
 
 /** The zones of a district (pure; the field and the tests build from it). */
@@ -70,7 +76,9 @@ export function surfaceGasZones(s: SurfaceInfo): SurfaceGasZoneSpec[] {
   const out: SurfaceGasZoneSpec[] = [];
   for (const b of s.buildings) {
     if (!b.levels.length || (!b.entrances.length && !b.windows.length)) continue; // no interior / no opening: can never take gas
-    out.push({id: `b${b.id}`, rect: {...b.footprint}, cells: cellsOf(b.footprint), levels: [...b.levels]});
+    const ra = b.roofAccess;
+    out.push({id: `b${b.id}`, rect: {...b.footprint}, cells: cellsOf(b.footprint), levels: [...b.levels],
+      ...(ra ? {sky: {level: ra.level, walk: cellsOf(ra.walk), bulkhead: cellsOf(ra.bulkhead)}} : {})});
   }
   out.push({id: 'tent', rect: {...s.checkpoint.tent.rect}, cells: cellsOf(s.checkpoint.tent.rect), levels: [0]});
   return out;
@@ -92,7 +100,7 @@ export interface SurfaceGasZone {
   /** Breach ids it holds now (applied or pending). */
   ids: Set<string>;
   levels: {id: number; grid: GasGrid}[];
-  closed: (cx: number, cy: number) => boolean;
+  closed: (cx: number, cy: number, level?: number) => boolean;
 }
 
 /** Field statistics (QA / the cost report). */
@@ -137,7 +145,9 @@ export class SurfaceGasField extends GasField {
         if (this.zoneOf[i] < 0 && map.top[i] > 0) this.zoneOf[i] = index; // first enclosure wins a shared cell; outdoor columns stay -1
       }
       const zl = spec.levels.map(id => byId.get(id)).filter((l): l is {id: number; grid: GasGrid} => !!l);
-      const closed = (cx: number, cy: number) => cx < 0 || cy < 0 || cx >= W || cy >= H || this.zoneOf[cy * W + cx] !== index;
+      const sky = spec.sky, inD = (d: GasDomain, cx: number, cy: number) => cx >= d.x0 && cx < d.x1 && cy >= d.y0 && cy < d.y1;
+      const closed = (cx: number, cy: number, level?: number) => cx < 0 || cy < 0 || cx >= W || cy >= H || this.zoneOf[cy * W + cx] !== index
+        || (!!sky && level === sky.level && inD(sky.walk, cx, cy) && !inD(sky.bulkhead, cx, cy)); // (v2: a roof's open sky)
       this.zones.push({spec, index, field: null, simT: -GAS.AGE_CAP_S, mode: 'frozen', pending: [], queue: [], ids: new Set(), levels: zl, closed});
     });
   }
