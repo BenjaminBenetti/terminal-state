@@ -32,8 +32,9 @@
 //    deck plywood, stair feet / landings / treads rusted steel plate; NO floor on a bridge cell and no ceiling under a bridge deck (the
 //    cooked bridge model draws them: builder hooks hidesFloor / voidCeilKey / ceilKey false), the deck fascias along its edges dropped;
 //    the chasm's bed (storey-0 VOID at the chasm's floor) dark wet rubble instead of the track's ballast (builder hook voidFloorKey);
-//  - the culler's ATRIUM: every column whose open band reaches the walking zones of two storeys or more (the open crevice, the stair
-//    wells), so the culler tests a bounded set of tiles instead of a pair portal per storey pair.
+//  - the culler's ATRIUM: every open crevice column (an open band up to the crevice's top reaching the walking zones of two storeys or
+//    more: ~4,200-4,500 columns, ~140-150 tiles), so the culler tests a bounded set of tiles instead of a pair portal per storey pair;
+//    roofed spaces (the platform hall's vault, rock-cut stairs) keep the culler's pair portals.
 
 import * as THREE from 'three';
 import {CELL, FLOOR, SOLID, VOID} from '../gen/grid';
