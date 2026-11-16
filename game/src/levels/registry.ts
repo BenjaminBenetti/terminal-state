@@ -25,6 +25,9 @@ import {placeSubwayMapKiosks} from '../gen/subwayMapKiosks'; // task studio-ui-s
 import {trainSpawnPose, type TrainPlacement} from '../gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE): start arrivals inside the train
 import {applyEnemyRoster} from '../ai/enemyRoster'; // task studio-screacher-production-20261110-221858-01: the per-level seeded family roster
 import {applyIrradiatedAdditions} from '../gen/reactor/irradiated'; // task studio-reactor-glowing-zombies-20261115-013245-01: + the Reactor's lower-storey irradiated zombies (roster v4)
+import {SURFACE_SECTION, isSurfaceHost} from '../gen/surface/surfaceRun'; // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN
+import {generateSurfaceDistrict} from '../gen/surface/index';
+import {applySurfaceAccess} from '../gen/surface/access';
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
 /** Logical levels in tier order (subway 0, office 1, mall 2 — task track3-eaton-centre-20261031, lane GEN). */
@@ -172,12 +175,19 @@ export const LEVELS: Record<LevelId, LevelDef> = {
 // else (ai/enemyRoster.ts applyEnemyRoster: from the level map's own seed — e.g. 40 % of maps hold 1-3 Screachers in place of ordinary
 // zombie slots, the rest none; the Survivor Market never any). One wrapper for every registered level, so a new level gets it too.
 // `ctx.rosterVersion` absent = 0 = no pass (levels/types.ts); the game passes the station's recorded version.
+// Task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN — a host station's second section 'surface' is its district
+// (gen/surface/index.ts, from its own seed; no roster pass: the district's own interior / outdoor rules), and the host's 'main' layout
+// gets the access to it LAST (gen/surface/access.ts: RNG-neutral, appended) when `ctx.surfaceVersion` and the station's one roll allow it.
+// `ctx.surfaceVersion` absent = 0 = no access (levels/types.ts); the game passes the station's recorded version. LevelDef.sections stays
+// ['main'] (the level-wide gear roll is unchanged).
 for (const id of LEVEL_IDS) {
   const generate = LEVELS[id].generate;
   LEVELS[id].generate = (section, ctx) => {
+    if (section === SURFACE_SECTION && isSurfaceHost(id)) return generateSurfaceDistrict(id, ctx);
     const layout = generate(section, ctx);
     applyEnemyRoster(layout, id, ctx.levelSeed, ctx.rosterVersion ?? 0);
     applyIrradiatedAdditions(layout, id, ctx.levelSeed, ctx.rosterVersion ?? 0); // (roster v4) the Reactor's irradiated zombies, APPENDED after it
+    if (section === 'main' && isSurfaceHost(id)) applySurfaceAccess(layout, id, ctx.levelSeed, ctx.surfaceVersion ?? 0);
     return layout;
   };
 }
@@ -222,11 +232,13 @@ export function levelDisplayName(level: LevelId, levelSeed?: number): string {
 
 /** Short human label of a level's world ("Station", "Station and tower", "Station and mall"). */
 export function sectionLabel(key: SectionKey): string {
+  if (key.section === SURFACE_SECTION) return 'Surface district'; // (task studio-surface-run-opus-rebuild-20261116-020827-01)
   return key.level === 'office' ? 'Station and tower' : key.level === 'mall' ? 'Station and mall' : key.level === 'reactor' ? 'Station and pit' : key.level === 'skyways' ? 'Station and skyways' : key.level === 'market' ? 'Station and settlement' : key.level === 'bunker' ? 'Station and shelter' : 'Station';
 }
 
 /** What the HUD calls clearing the level. */
 export function clearLabel(key: SectionKey): string {
+  if (key.section === SURFACE_SECTION) return 'District clear'; // (task studio-surface-run-opus-rebuild-20261116-020827-01)
   return key.level === 'office' ? 'Tower clear' : key.level === 'mall' ? 'Mall clear' : key.level === 'reactor' ? 'Pit clear' : key.level === 'skyways' ? 'Skyways clear' : key.level === 'market' ? 'Market clear' : key.level === 'bunker' ? 'Shelter clear' : 'Station clear';
 }
 
@@ -243,6 +255,8 @@ export function storeyLabel(layout: StationLayout, level: number): string {
   if (r) return r.label;
   const k = layout.skyways?.storeys.find(t => t.level === level); // Skyways: 'Concourse', 'Street level', 'Skywalk'
   if (k) return skywalkText(k.label); // (task studio-skywalk-variety-20261107-231448-01: no '+15' in player text)
+  const sf = layout.surface?.storeys.find(t => t.level === level); // task studio-surface-run-opus-rebuild-20261116-020827-01: 'Street', 'Upper floor'
+  if (sf) return sf.label;
   if (layout.bunker) return bunkerStoreyLabel(layout, level); // task studio-bunker-level-20261109-072224-01: 'Station', the shelter storeys' labels
   return layout.market ? marketStoreyLabel(level, layout.market.v) : ''; // (+ version 2's storeys: task studio-market-rework-20261108-074144-01) // (task studio-survivor-market-20261108-005807-01: 'Market floor', 'Housing deck')
 }
@@ -262,6 +276,12 @@ export interface ArrivalPose { x: number; z: number; yaw: number; level?: number
  */
 export function arrivalPose(layout: StationLayout, arrival: Arrival, train?: TrainPlacement | null): ArrivalPose {
   if (train && arrival.kind === 'start') return trainSpawnPose(layout, train);
+  // task studio-surface-run-opus-rebuild-20261116-020827-01: crossing to / from the Surface Run district — the district's portal (going up / out),
+  // the host station's access return pose (coming back down / in); never the train
+  if (arrival.kind === 'surface') {
+    const p = layout.surface?.portal.pose ?? layout.surfaceAccess?.returnPose;
+    if (p) return {x: p.x, z: p.z, yaw: p.yaw, level: p.level, y: p.y, source: layout.surface ? 'surface-portal' : 'surface-return'};
+  }
   const start = layout.office?.start ?? layout.mall?.start ?? layout.reactor?.start ?? layout.skyways?.start ?? layout.bunker?.start; // (lane GEN: + the mall's platform start; + the reactor's rim platform start; + Skyways'; + the Bunker's: task studio-bunker-level-20261109-072224-01)
   if (start) return {...start, source: 'start'};
   const sp = layout.playerSpawn as {x: number; z: number; yaw: number; level?: number; y?: number};

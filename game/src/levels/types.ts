@@ -39,8 +39,12 @@ export interface SectionKey {
 /** Memory / lane-store key: `${station}:${section}` for a campaign station, else `${level}:${section}`. */
 export const sectionId = (k: SectionKey): string => `${k.station ?? k.level}:${k.section}`;
 
-/** How the player arrives in a level: its start ('return' = the same start, used when coming back to a level). */
-export type ArrivalKind = 'start' | 'return';
+/**
+ * How the player arrives in a level: its start ('return' = the same start, used when coming back to a level).
+ * Task studio-surface-run-opus-rebuild-20261116-020827-01: 'surface' = crossing between a station and its Surface Run district (the
+ * district's portal pose going up / out; the host's `surfaceAccess.returnPose` coming back) — never a train arrival.
+ */
+export type ArrivalKind = 'start' | 'return' | 'surface';
 
 export interface Arrival {
   kind: ArrivalKind;
@@ -78,6 +82,13 @@ export interface SectionGenContext {
    * output every pinned layout fingerprint and census was taken with — a direct registry caller opts in with ROSTER_VERSION.
    */
   rosterVersion?: number;
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01: the SURFACE RUN version the station is generated with (gen/surface/surfaceRun.ts
+   * surfaceVersionFor: the station's recorded version, 0 for a station entered before the feature, the current one for a station never
+   * entered: Game.sectionGenInputs). Absent = 0 = no access pass (every pinned layout fingerprint / census is untouched). Read only by the
+   * Subway / Office / Mall generators (their `main` section) — the presence roll itself is gen/surface/surfaceRun.ts surfacePresent.
+   */
+  surfaceVersion?: number;
 }
 
 /**

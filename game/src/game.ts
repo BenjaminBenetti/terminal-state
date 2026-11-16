@@ -8,7 +8,9 @@ import {CELL, PathFinder, nearestWalkable} from './gen/grid';
 import {BODY_CLEAR, levelsOf, type Levels} from './gen/levels';
 import type {StationLayout} from './gen/station';
 import {PropModelLibrary, loadAssets, type AssetBundle} from './assets/loader';
-import {foreignTo, levelWorkingSet, selectLevelKeys} from './assets/levelAssets'; // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
+import {foreignTo, levelWorkingSet, selectLevelKeys} from './assets/levelAssets';
+import {SURFACE_LANE, isSurfaceHost, isSurfaceKey, sectionAssetLevel, surfaceVersionFor} from './gen/surface/surfaceRun';
+import {installSurfaceRun} from './world/surface/install'; // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
 import {adoptStationName} from './campaign/stationName';
 import {LevelResources} from './assets/levelResources'; // lane PACKAGE (track3): level textures / GPU resources released with their level
 import {P7_FILES, dropUnloadedP7, p7ModelKeysFor} from './gen/props07';
@@ -942,6 +944,7 @@ export class Game {
     installReactorCpuCulling(this); hookName('reactorCpuCulling'); // task studio-reactor-submit-roof-fog-20261102 (lane CPU): enemies / pickups behind the Reactor's rock decided by the level culler (inert elsewhere)
     installReactorMapBoards(this); hookName('reactorMapBoards'); // task reactor-expansion-20261101 (lane CONTROLS): floor-map boards beside the instruction boards (X marks, storey buttons; inert off the Reactor) // task reactor-build-20261101 (lane RESTART): E / hold-E controls, prompts, screens, the win sequence, section hooks (inert off the Reactor)
     installBunkerObjective(this); hookName('bunkerObjective'); // task studio-bunker-level-20261109-072224-01 (lane OBJECTIVE): fuel + turnkey-start the three auxiliary generators, core map intel once per station (lane 'bunker.state'; inert off the Bunker)
+    installSurfaceRun(this); hookName('surfaceRun'); // task studio-surface-run-opus-rebuild-20261116-020827-01: SURFACE RUN (world/surface/install.ts: access, look, air, life; inert elsewhere)
     // Task player-train-shell-20261101-202805 (lane TRAIN): LAST (its build rebuilds game.propIndex over everything already there, after the
     // stalls; its E handler / prompt come after the others): section hooks (the car at game.trainPlacement, interior volume + colliders, built
     // synchronously before the first update), frame hook (doors), E + prompt, the boot-time head / tail / interior lights, warm pool
@@ -1173,7 +1176,10 @@ export class Game {
     if (layoutVersion !== undefined && versionLane && run.laneStore(versionLane, key) === undefined) run.setLaneStore(versionLane, {v: layoutVersion}, key);
     // (task studio-screacher-production-20261110-221858-01) every level: the enemy-roster version this station was first built with
     // (ai/enemyRoster.ts: a station visited before the roster existed stays at 0 — its enemies and kills exact; an unvisited one gets the current)
-    if (run.laneStore(ROSTER_LANE, key) === undefined) run.setLaneStore(ROSTER_LANE, {v: ctx.rosterVersion ?? 0}, key);
+    if (!isSurfaceKey(key) && run.laneStore(ROSTER_LANE, key) === undefined) run.setLaneStore(ROSTER_LANE, {v: ctx.rosterVersion ?? 0}, key);
+    // (task studio-surface-run-opus-rebuild-20261116-020827-01) a Subway / Office / Mall station: the SURFACE RUN version it was first built
+    // with (gen/surface/surfaceRun.ts: a station visited before the feature stays 0 — no access, its world exact; a new one gets the current)
+    if (ctx.surfaceVersion !== undefined && run.laneStore(SURFACE_LANE, key) === undefined) run.setLaneStore(SURFACE_LANE, {v: ctx.surfaceVersion}, key);
     const node = key.station ? run.node(key.station) : null;
     if (node) adoptStationName(layout, node.name); // campaign: the map's / save's name is the one on the signs and the HUD
     return layout;
@@ -1183,7 +1189,9 @@ export class Game {
   private sectionGenInputs(key: SectionKey, run: RunState): {layoutVersion: number | undefined; ctx: SectionGenContext} {
     const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : key.level === 'market' ? marketLayoutVersionFor(run.peekMemory(key)) : key.level === 'bunker' ? bunkerLayoutVersionFor(run.peekMemory(key)) : undefined;
     return {layoutVersion, ctx: {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {}),
-      rosterVersion: rosterVersionFor(run.peekMemory(key))}}; // (the seeded enemy roster: always explicit — levels/types.ts SectionGenContext.rosterVersion)
+      rosterVersion: rosterVersionFor(run.peekMemory(key)), // (the seeded enemy roster: always explicit — levels/types.ts SectionGenContext.rosterVersion)
+      // (task studio-surface-run-opus-rebuild-20261116-020827-01) a host station's own world: its recorded Surface Run version (explicit)
+      ...(key.section === 'main' && isSurfaceHost(key.level) ? {surfaceVersion: surfaceVersionFor(run.peekMemory(key))} : {})}};
   }
 
   /**
@@ -1221,7 +1229,7 @@ export class Game {
     this.levelResources.beginSection(); // (task train-all-cargo: a carried prop's art, whatever its level, stays with this section)
     const layout = this.generateSection(key, run);
     for (const f of this.sectionLayoutHooks) { try { f(layout, key, run, 'prepare'); } catch (err) { console.warn('train-all-cargo: a layout hook failed', err); } }
-    const lazyKeys = this.modelKeysFor(layout, key.level);
+    const lazyKeys = this.modelKeysFor(layout, sectionAssetLevel(key)); // (Surface Run: the district loads as its own asset family)
     await this.propModels.ensure(lazyKeys, onProgress);
     for (const k of lazyKeys) { const g = this.propModels.get(k); if (g) trackUploads(modelTextures(g)); } // (lane PERF, track3) upload recorder only
     for (const pre of this.sectionPreloads) {
@@ -1278,7 +1286,7 @@ export class Game {
   }
 
   /** Iteration 16: every lazy model key a section uses (p7 props + lane keys, e.g. office models). */
-  private modelKeysFor(layout: StationLayout, level: LevelId): string[] {
+  private modelKeysFor(layout: StationLayout, level: string): string[] {
     // task train-all-cargo: CARRIED props (placement.cargo: the train's, or left in this station) bring their own models whatever their
     // level (a mall cafe chair in the Subway's train): the generated placements under the level rule, the carried ones' keys as well
     const carried = layout.props.filter(p => p.cargo);
@@ -1309,7 +1317,7 @@ export class Game {
   /** Lane PACKAGE (track3): the current level's lazy working set / resident set (QA `__LL.levelAssets()`). */
   levelAssetsQa() {
     if (!this.layout) return null;
-    const level = this.run.current.level;
+    const level = sectionAssetLevel(this.run.current); // (Surface Run: the district's own family)
     return {level, workingSet: levelWorkingSet(level, this.modelKeysFor(this.layout, level), this.propModels.catalogue),
       resident: {models: this.propModels.loadedKeys().length, bytes: this.propModels.residentBytes(),
         foreign: this.propModels.loadedKeys().filter(foreignTo(level, this.propModels.catalogue))}, // another level's own art still resident: should be []
@@ -1420,10 +1428,11 @@ export class Game {
     // task train-all-cargo: the carried props exactly as the installed run has them (Retry / Load installed theirs after the prepare)
     for (const f of this.sectionLayoutHooks) { try { f(layout, key, this.run, 'build'); } catch (err) { console.warn('train-all-cargo: a layout hook failed', err); } }
     // Iteration 07 (Lane P2): the prepared layout (its lazy prop models loaded); placements whose model is missing are dropped.
-    const p7Keys = p7ModelKeysFor(this.layout), keep = new Set(this.modelKeysFor(this.layout, key.level));
+    const assetLevel = sectionAssetLevel(key); // (task studio-surface-run-opus-rebuild-20261116-020827-01: the district is its own asset family)
+    const p7Keys = p7ModelKeysFor(this.layout), keep = new Set(this.modelKeysFor(this.layout, assetLevel));
     dropUnloadedP7(this.layout, new Set(p7Keys.filter(k => this.propModels.has(k))));
-    this.propModels.trim(keep, 16, foreignTo(key.level, this.propModels.catalogue)); // lane PACKAGE (track3): another level's own art never lingers as an extra
-    this.levelResources.retainOnly(key.level, fn => this.retire(fn)); // lane PACKAGE (track3): the previous level's textures now, its owned GPU resources after the warm-up
+    this.propModels.trim(keep, 16, foreignTo(assetLevel, this.propModels.catalogue)); // lane PACKAGE (track3): another level's own art never lingers as an extra
+    this.levelResources.retainOnly(assetLevel, fn => this.retire(fn)); // lane PACKAGE (track3): the previous level's textures now, its owned GPU resources after the warm-up
     // Task track3-eaton-centre-20261031 (lane PERF): the mall's InstancedMeshes share one program per material (render/instancing.ts:
     // three gives every small InstancedMesh its own program; the atrium shows ~740 at once); Subway / Office build as before.
     setAttributeInstancing(!!this.layout.mall || !!this.layout.reactor); // task reactor-build-20261101 (lane ARCH): + the Reactor's open pit (every tier in view)
