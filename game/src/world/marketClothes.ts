@@ -106,6 +106,13 @@ export function garmentDims(g: (typeof LAUNDRY_GARMENTS)[number], geo: THREE.Buf
   return {id: g.id, min: [b.min.x, b.min.y, b.min.z], max: [b.max.x, b.max.y, b.max.z], hang: [cx, y, cz], pegs: [-p, p]};
 }
 
+/**
+ * Task studio-survivor-market-crevice-20261116-074419 (layout version 5, gen/market/v5/art.ts creviceLaundryFloor): a layout's own rule
+ * for where a garment may hang — the lowest its bottom may reach at (x, z) when it hangs from `top` (Infinity: it may not hang there).
+ * Given, it replaces laundryOpenAt + LAUNDRY.minY (versions 2-4 pass none: their rule is unchanged).
+ */
+export type LaundryFloor = (x: number, z: number, top: number) => number;
+
 /** Open from the lane floor to the shed roof at (x, z): a ground-storey lane cell, no catwalk / bridge / rooftop above it. */
 export function laundryOpenAt(layout: StationLayout, x: number, z: number): boolean {
   const g0 = layout.grid, [cx, cy] = g0.cellOf(x, z);
@@ -121,7 +128,7 @@ export function laundryOpenAt(layout: StationLayout, x: number, z: number): bool
  * each fitting the line's open run, hanging no lower than LAUNDRY.minY; deterministic. `dims`: the garment types available (missing ones
  * are simply not hung).
  */
-export function planLaundry(layout: StationLayout, lines: readonly MarketLine[], dims: readonly GarmentDims[]): HungGarment[] {
+export function planLaundry(layout: StationLayout, lines: readonly MarketLine[], dims: readonly GarmentDims[], floor?: LaundryFloor): HungGarment[] {
   const out: HungGarment[] = [];
   if (!dims.length) return out;
   lines.forEach((l, li) => {
@@ -159,12 +166,13 @@ export function planLaundry(layout: StationLayout, lines: readonly MarketLine[],
         const t = sc / run;
         if (sc + o.b > run - 0.3) continue;
         const y = lineY(t);
-        if (y + o.lo < LAUNDRY.minY) continue; // (its lowest point over the catwalk walkers' heads)
+        if (!floor && y + o.lo < LAUNDRY.minY) continue; // (its lowest point over the catwalk walkers' heads)
         // its whole footprint over the open lane
         const cxw = l.x0 + ux * sc, czw = l.z0 + uz * sc;
         let open = true;
         for (const [a, b] of [[o.a, -1], [o.b, -1], [o.b, 1], [o.a, 1], [0, 0]]) {
-          if (!laundryOpenAt(layout, cxw + ux * a + nx * b * depth / 2, czw + uz * a + nz * b * depth / 2)) { open = false; break; }
+          const px = cxw + ux * a + nx * b * depth / 2, pz = czw + uz * a + nz * b * depth / 2;
+          if (floor ? y + o.lo < floor(px, pz, y + o.hi) : !laundryOpenAt(layout, px, pz)) { open = false; break; }
         }
         if (!open) continue;
         const yaw = Math.atan2(-uz, ux) + (flip ? Math.PI : 0);
@@ -235,7 +243,7 @@ export function staticGarment(mesh: THREE.Mesh): THREE.BufferGeometry {
 }
 
 /** Builds the laundry of `lines` from the cast's garments (null: no cast loaded / no laundry line / nothing fits). */
-export function buildLaundry(layout: StationLayout, lines: readonly MarketLine[], gltf: GLTF | null | undefined): LaundryView | null {
+export function buildLaundry(layout: StationLayout, lines: readonly MarketLine[], gltf: GLTF | null | undefined, floor?: LaundryFloor): LaundryView | null {
   if (!gltf || !lines.some(l => l.laundry)) return null;
   const types: {g: (typeof LAUNDRY_GARMENTS)[number]; mesh: THREE.Mesh; geo: THREE.BufferGeometry; dims: GarmentDims}[] = [];
   for (const g of LAUNDRY_GARMENTS) {
@@ -245,7 +253,7 @@ export function buildLaundry(layout: StationLayout, lines: readonly MarketLine[]
     types.push({g, mesh, geo, dims: garmentDims(g, geo)});
   }
   const dims = types.map(t => t.dims);
-  const plan = planLaundry(layout, lines, dims);
+  const plan = planLaundry(layout, lines, dims, floor);
   if (!plan.length) { for (const t of types) t.geo.dispose(); return null; }
   const group = new THREE.Group();
   group.name = 'market-laundry';
