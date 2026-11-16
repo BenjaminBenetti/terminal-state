@@ -9,7 +9,7 @@
 // probes) builds the very same program as the shared glazing on both backends.
 import * as THREE from 'three';
 import {describe, expect, it} from 'vitest';
-import {GLSLNodeBuilder, WGSLNodeBuilder, WebGPURenderer} from 'three/webgpu';
+import {GLSLNodeBuilder, WGSLNodeBuilder, WebGPURenderer, type NodeMaterial} from 'three/webgpu';
 import {installCanvasShim} from './helpers/canvas2d';
 import {fakeEnvTextures} from './helpers/openablesFixture';
 import {WorldMaterials} from '../src/world/materials';
@@ -45,7 +45,7 @@ describe('Surface Run glass: the decorative panes on the window rule (lane FACAD
         .toEqual([S.transparent, S.opacity, S.color.getHex(), S.roughness, S.metalness, S.depthWrite, S.depthTest, S.side, S.blending]);
       expect(P.transparent).toBe(true);
       expect(P.opacity).toBeLessThan(1);
-      expect(nodeHookKeys(P)).toEqual(nodeHookKeys(S));
+      expect(nodeHookKeys(P as unknown as NodeMaterial)).toEqual(nodeHookKeys(S as unknown as NodeMaterial));
       // cached per WorldMaterials, owned (released with the district's resources), a fresh copy after release
       expect(surfaceArchMaterial(m, key)).toBe(P);
       expect(liveSurfaceMaterials.has(P)).toBe(true);
