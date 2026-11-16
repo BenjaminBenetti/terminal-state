@@ -21,11 +21,11 @@ import {
 } from './dress';
 
 type Dress = (b: InteriorBuilder, r: RoomInfo, sales: RoomInfo | null) => void;
-interface Back {
+export interface Back {
   role: string; label: string; type: RoomType; w: number; dress: Dress;
   windows?: WindowStyle; enemies?: number; door?: number; front?: boolean;
 }
-interface StoreSpec {
+export interface StoreSpec {
   /** The sales floor's recipe (a Mall programme; picked per building when several). */
   floor: readonly (readonly [MallProgram | 'convenience' | 'liquor', number])[];
   label: string;
@@ -113,6 +113,8 @@ const SPECS: Readonly<Partial<Record<SurfaceProgrammeId, StoreSpec>>> = {
 
 /** The store programmes the planner implements here. */
 export const STORE_SPEC_IDS = Object.keys(SPECS) as SurfaceProgrammeId[];
+/** (v2, lane INTERIOR) The same programme table, read by the deep store plan (rooms/deepStores.ts). */
+export const STORE_SPECS = SPECS;
 
 export function planStore(b: InteriorBuilder): void {
   const spec = SPECS[b.pid as SurfaceProgrammeId] ?? SPECS.convenience!;

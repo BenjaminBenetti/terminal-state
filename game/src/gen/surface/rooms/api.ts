@@ -47,6 +47,12 @@ export interface InteriorPlot {
   rng: Rng;
   /** Index the planner's first area will take (kit.areas.length at call time) — for stable ids in tests. */
   firstArea: number;
+  /**
+   * (v2 only, lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01: surfaceFeatures(v).deepInteriors) Plan the DEEP
+   * interior: public / back rooms, a dog-leg stair core between the walkable storeys and, when `roof` is set, a stair up to a walkable roof
+   * on layout level `roof.level` at absolute `roof.y` inside a parapet `roof.parapet` m high. Absent = the first release's planner, exactly.
+   */
+  deep?: {roof: {level: number; y: number; parapet: number} | null};
 }
 
 export interface InteriorPlan {
@@ -68,7 +74,8 @@ export interface InteriorPlan {
   recoverables?: SurfaceRecoverable[];
   /**
    * Lane ROOMS: programme data other lanes draw / use (pure data). The depot: `features.depot` = rooms/depot.ts DepotFeatures (the shed's
-   * rail tracks, the inspection pit, the overhead crane, the kept dolly-lane cells, the loading-bay entrance id).
+   * rail tracks, the inspection pit, the overhead crane, the kept dolly-lane cells, the loading-bay entrance id). (v2, lane INTERIOR)
+   * `features.roof` = the building's SurfaceRoofAccess (gen/surface/surfaceTypes.ts) when the plan carved a reachable roof.
    */
   features?: Record<string, unknown>;
 }

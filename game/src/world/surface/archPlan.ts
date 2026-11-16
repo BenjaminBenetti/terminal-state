@@ -556,10 +556,13 @@ function* planSurfaceLook(layout: StationLayout, S: SurfaceInfo): BuildSteps<Sur
     decals.push({kind: 'scorch', x0: Math.min(x0, x1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), z1: Math.max(z0, z1), y: floorAt((x0 + x1) / 2, (z0 + z1) / 2) + LOOK_TUNE.decalY + 0.001});
   }
   // rooftop clutter / water tanks / rubble on the decks
-  const placements: Placement[] = [];
+  const kept: Placement[] = [];
   const pr = stream(seed, 23);
   for (const bl of buildings) {
     if (bl.style.wall === 'canvas') continue;
+    // (v2, lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01) a reachable roof carries its plant as real props
+    // (gen/surface/rooms/deepStores.ts): its look clutter is drawn from the stream as before (the other roofs' picks stay) and dropped
+    const into = bl.b.roofAccess ? [] as Placement[] : kept;
     for (const d of bl.decks) {
       const w = d.x1 - d.x0, dd = d.z1 - d.z0;
       if (w < 4 || dd < 4) continue;
@@ -567,14 +570,15 @@ function* planSurfaceLook(layout: StationLayout, S: SurfaceInfo): BuildSteps<Sur
       const ins = (v: number, a: number, b: number, m: number) => a + m + v * Math.max(0, b - a - 2 * m);
       if (d.burnt) {
         const nr = clamp(Math.round(area / 90), 1, 5);
-        for (let k = 0; k < nr; k++) placements.push({model: 'rubble', x: ins(pr(), d.x0, d.x1, 2.5), z: ins(pr(), d.z0, d.z1, 2.5), y: d.y - 0.5, yaw: pr() * Math.PI * 2, s: 0.6 + pr() * 0.7});
+        for (let k = 0; k < nr; k++) into.push({model: 'rubble', x: ins(pr(), d.x0, d.x1, 2.5), z: ins(pr(), d.z0, d.z1, 2.5), y: d.y - 0.5, yaw: pr() * Math.PI * 2, s: 0.6 + pr() * 0.7});
         continue;
       }
       const nc = clamp(Math.round(area / 100 * bl.style.clutter), 0, 4);
-      for (let k = 0; k < nc; k++) placements.push({model: pr() < 0.7 ? 'hvac' : 'vent', x: ins(pr(), d.x0, d.x1, 2.2), z: ins(pr(), d.z0, d.z1, 2.2), y: d.y, yaw: Math.floor(pr() * 4) * Math.PI / 2, s: 0.9 + pr() * 0.25});
-      if (bl.style.tanks && bl.storeys >= 3 && pr() < 0.7) placements.push({model: 'tank', x: ins(pr(), d.x0, d.x1, 3.5), z: ins(pr(), d.z0, d.z1, 3.5), y: d.y, yaw: pr() * Math.PI, s: 0.85 + pr() * 0.2});
+      for (let k = 0; k < nc; k++) into.push({model: pr() < 0.7 ? 'hvac' : 'vent', x: ins(pr(), d.x0, d.x1, 2.2), z: ins(pr(), d.z0, d.z1, 2.2), y: d.y, yaw: Math.floor(pr() * 4) * Math.PI / 2, s: 0.9 + pr() * 0.25});
+      if (bl.style.tanks && bl.storeys >= 3 && pr() < 0.7) into.push({model: 'tank', x: ins(pr(), d.x0, d.x1, 3.5), z: ins(pr(), d.z0, d.z1, 3.5), y: d.y, yaw: pr() * Math.PI, s: 0.85 + pr() * 0.2});
     }
   }
+  const placements = kept;
 
   yield PLAN_STEP;
   const tent = planTent(S, owner, W, tentB ?? null, floorAt);
