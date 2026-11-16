@@ -22,6 +22,7 @@
 import * as THREE from 'three';
 import {PropIndex, type CollisionWorld} from '../../core/physics';
 import {CELL} from '../../gen/grid';
+import {Levels} from '../../gen/levels';
 import type {PropPlacement} from '../../gen/props';
 import type {StationLayout} from '../../gen/stationTypes';
 import type {SurfaceInfo} from '../../gen/surface/surfaceTypes';
@@ -36,7 +37,8 @@ import {cabVolumeOf, columnTop, outdoorWeight, surfaceAirAt, surfaceAirPressureA
 import {fogPressureDps} from './fogAir';
 import {SurfaceGasField, surfaceGasZones} from './airField';
 import {SURFACE_WINDOWS_LANE, planSurfaceWindows, surfacePrebreached} from './airPanes';
-import {DOOR_RT, SURFACE_DOORS_LANE, doorBoxes, doorBreachId, fitDoorBoxes, inDoorway, planSurfaceDoors, restoredDoor, saveDoors, shutLeafDistance, type SurfaceDoorState} from './airDoors';
+import {DOOR_RT, SURFACE_DOORS_LANE, doorAimHit, doorBoxes, doorBreachId, doorSweeps, fitDoorBoxes, planSurfaceDoors, restoredDoor, saveDoors, shutLeafDistance, type SurfaceDoorState} from './airDoors';
+import {propPhysics} from '../../damage/materials'; // (lane FIXES: a movable prop holds a door like a body)
 import {buildDoorView, disposeDoorView, poseDoor, type SurfaceDoorView} from './airDoorView';
 import {SurfaceAirFog} from './airFog';
 
@@ -51,7 +53,10 @@ export interface SurfaceAirHost {
   camera: THREE.Camera;
   mats: WorldMaterials;
   player: {x: number; y: number; z: number; eye: number; yaw: number; radius: number; alive: boolean};
-  zombies: readonly {brain: {x: number; z: number; y: number; alive: boolean; stats: {radius: number}}; ragdolled?: boolean}[];
+  zombies: readonly {brain: {x: number; z: number; y: number; alive: boolean; climbing?: boolean; stats: {radius: number}}; ragdolled?: boolean; placesRoot?: boolean}[];
+  /** (lane FIXES) Train units / fuel carts standing in the world hold a door like a body (the lift doors' rule). */
+  trainEquipment?: {anyAt?(test: (x: number, y: number, z: number, r: number) => boolean): boolean} | null;
+  fuelCarts?: {anyAt?(test: (x: number, y: number, z: number, r: number) => boolean): boolean} | null;
   gas: {windowSources: (() => GasWindowSource | null)[]; outdoorAir: OutdoorAirSource | null; field: GasField | null};
   propIndex: PropIndex;
   physics?: {propsChanged?(x: number, z: number): void};
@@ -110,6 +115,9 @@ export class SurfaceAirRuntime {
   private glassTex: THREE.Texture | null | undefined = undefined;
   private loading: Promise<void> | null = null;
   private readonly eye = new THREE.Vector3();
+  // (lane FIXES) the crosshair ray; the layout's movable props (re-listed when layout.props changes length)
+  private readonly aimDir = new THREE.Vector3();
+  private movable: {props: readonly unknown[]; n: number; list: PropPlacement[]} | null = null;
   // (follow-up 1) the outdoor air minus the sealed cab the player sits in (surfaceAirAt: the same cab the march leaves clean)
   // (task studio-surface-run-field-followup-20261116-211729-01, lane FOG) + a v2 district's FOG PRESSURE (0 in a v1 district, in the cab)
   private readonly outdoor: OutdoorAirSource = {
@@ -242,6 +250,7 @@ export class SurfaceAirRuntime {
     const a = this.air;
     this.air = null;
     this.target = null;
+    this.movable = null; // (lane FIXES)
     this.fog.restore();
     if (!a) return;
     const h = this.host;
@@ -295,10 +304,10 @@ export class SurfaceAirRuntime {
     return true;
   }
 
-  /** Shuts door d unless a body stands in its doorway (then: refused, false). */
+  /** Shuts door d unless something stands in its leaves' path (then: refused, false). */
   close(d: SurfaceDoorState): boolean {
     if (!d.plan.leaves.length || d.target === 0) return false;
-    if (this.doorwayBlocked(d)) { this.counts.refusals++; return false; }
+    if (this.sweepBlocked(d)) { this.counts.refusals++; return false; }
     d.target = 0;
     d.clear = 0;
     this.counts.closes++;
@@ -310,14 +319,35 @@ export class SurfaceAirRuntime {
     return Math.abs(y - d.plan.floor) < DOOR_RT.storey;
   }
 
-  private doorwayBlocked(d: SurfaceDoorState): boolean {
-    const h = this.host, p = h.player;
-    if (p.alive && this.sameStorey(d, p.y) && inDoorway(d.plan, p.x, p.z, p.radius)) return true;
+  /**
+   * (lane FIXES) Something stands in the path the door's leaves take shutting from where they are now (airDoors.ts doorSweeps, d.t -> 0):
+   * the living player, a living enemy on its feet (a BB on a wall / ceiling is not in a doorway: the train doors' rule), a train unit or
+   * fuel cart standing in the world (the lift doors' rule) or a movable floor prop at its current spot (a dynamic-class kind; its larger
+   * half extent as its circle). Anchored props are the building's own; loose pickups are no bodies (the lift doors' rule too).
+   */
+  private sweepBlocked(d: SurfaceDoorState): boolean {
+    const h = this.host, p = h.player, P = d.plan, from = d.t;
+    const hit = (x: number, y: number, z: number, r: number): boolean => this.sameStorey(d, y) && doorSweeps(P, from, 0, x, z, r);
+    if (p.alive && hit(p.x, p.y, p.z, p.radius)) return true;
     for (const z of h.zombies) {
       const b = z.brain;
-      if (b.alive && !z.ragdolled && this.sameStorey(d, b.y) && inDoorway(d.plan, b.x, b.z, b.stats.radius)) return true;
+      if (b.alive && !z.ragdolled && !(z.placesRoot && b.climbing) && hit(b.x, b.y, b.z, b.stats.radius)) return true;
     }
+    if (h.trainEquipment?.anyAt?.(hit) || h.fuelCarts?.anyAt?.(hit)) return true;
+    for (const q of this.movableProps()) if (!q.cargoGone && q.y < P.floor + 0.3 && hit(q.x, q.y, q.z, Math.max(q.hx, q.hz))) return true;
     return false;
+  }
+
+  /** (lane FIXES) The layout's props of a movable (dynamic-class) kind — ours excluded; their x / z follow a loose one's body. */
+  private movableProps(): readonly PropPlacement[] {
+    const props = this.air?.layout.props;
+    if (!props) return [];
+    const m = this.movable;
+    if (m && m.props === props && m.n === props.length) return m.list;
+    const ours = new Set(this.air!.boxes);
+    const list = props.filter(q => !ours.has(q) && propPhysics(q.kind).dynamic);
+    this.movable = {props, n: props.length, list};
+    return list;
   }
 
   private cue(d: SurfaceDoorState, what: 'open' | 'closing' | 'shut'): void {
@@ -332,7 +362,7 @@ export class SurfaceAirRuntime {
   private doorFrame(d: SurfaceDoorState, i: number, dt: number): void {
     const h = this.host, a = this.air!;
     if (!d.plan.leaves.length) { if (!d.gas) this.startDoorGas(d, 0); return; } // smashed: a permanent opening
-    d.blocked = this.doorwayBlocked(d);
+    d.blocked = d.t > 0 || d.target === 1 ? this.sweepBlocked(d) : false; // (lane FIXES: a shut door has no path to block)
     // a closing door never shuts on a body: it swings open again
     if (d.target === 0 && d.t > 0 && d.blocked) { d.target = 1; this.counts.reopens++; }
     // enemies pressing on a shut leaf push it open
@@ -383,20 +413,30 @@ export class SurfaceAirRuntime {
     this.target = this.aimedDoor();
   }
 
-  /** The leafed door the player can work now: on its storey, within reach of the doorway, looking toward it. */
+  /**
+   * The leafed door the player can work now: on its storey, the crosshair on one of its leaves (at its pose) or its opening within
+   * DOOR_RT.reach of the eye (airDoors.ts doorAimHit), nothing structural (a wall, a lintel, a slab) in between; the nearest such door.
+   * (lane FIXES: was the doorway CENTRE within 2.1 m in a look cone — a wide door's leaf ends were out of reach.)
+   */
   private aimedDoor(): SurfaceDoorState | null {
-    const a = this.air, p = this.host.player;
+    const a = this.air, h = this.host, p = h.player;
     if (!a || !p.alive) return null;
-    let best: SurfaceDoorState | null = null, bestD = Infinity;
-    const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), cone = Math.cos(DOOR_RT.look);
+    const cam = h.camera;
+    cam.updateMatrixWorld();
+    cam.getWorldPosition(this.eye);
+    cam.getWorldDirection(this.aimDir);
+    const o = this.eye, dir = this.aimDir;
+    let best: SurfaceDoorState | null = null, bt: number = DOOR_RT.reach;
     for (const d of a.doors) {
       if (!d.plan.leaves.length || !this.sameStorey(d, p.y)) continue;
-      const dx = d.plan.x - p.x, dz = d.plan.z - p.z, dist = Math.hypot(dx, dz);
-      if (dist > DOOR_RT.reach || dist >= bestD) continue;
-      if (dist > 0.5 && (fx * dx + fz * dz) / dist < cone) continue;
-      best = d; bestD = dist;
+      const dx = d.plan.x - o.x, dz = d.plan.z - o.z, far = DOOR_RT.reach + d.plan.width * 1.15 + DOOR_RT.aimPad + 0.3;
+      if (dx * dx + dz * dz > far * far) continue; // (cheap reject: no leaf tip is further than 1.12 x the width from the centre)
+      const t = doorAimHit(d.plan, d.t, o, dir, bt);
+      if (t !== null && t < bt) { bt = t; best = d; }
     }
-    return best;
+    if (!best || !(h.levels instanceof Levels)) return best;
+    const wall = h.levels.raycast(o, dir, bt + 0.02);
+    return wall.kind !== 'none' && wall.t < bt - 0.01 ? null : best;
   }
 
   interact(): boolean {
