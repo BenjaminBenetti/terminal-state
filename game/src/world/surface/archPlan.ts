@@ -12,7 +12,8 @@
 //  - BUILDINGS: per building its facade style (archStyles.ts), tint, storey height, roof line (a RUIN PROFILE per facade side: damaged =
 //    a collapsed corner notch, gutted = a jagged burnt top, collapsed = a low jagged stump), roof decks, decorative window grid per
 //    storey (glass / broken / boarded / dark / shutter), GEN's live window spans (AIR's panes: cut + framed, never glazed here),
-//    shopfront bays + runtime-text signs, fire escapes, rooftop clutter and rubble.
+//    shopfront bays + runtime-text signs, fire escapes, rooftop clutter and rubble; (lane FACADE) the facade detail pass
+//    (facadeDetail.ts: shed / garage row repair, closed windows, awnings, relief) and the exposed stretches no builder face covers.
 //  - TENT: the checkpoint command tent's frame (walls, pitched roof, flap door seam for AIR, guy lines).
 // Deterministic from the district seed (its own hash streams: never GEN's generator streams). Memoized per layout.
 
@@ -23,6 +24,7 @@ import {mulberry32} from '../../core/rng';
 import {drainSync, type BuildSteps} from '../../core/pacedBuild';
 import {DEFAULT_CEIL} from '../levelGeometry';
 import {FACADE_STYLES, INTERIOR_LOOKS, SHOPFRONT_NAMES, interiorFamilyOf, surfaceStyleOf, type FacadeStyle, type InteriorFamily} from './archStyles';
+import {EMPTY_FACADE_DETAIL, planFacadeDetail, type FacadeDetail} from './facadeDetail';
 
 /**
  * Lane GEN's OPTIONAL shape / ground records (gen/surface/surfaceTypes.ts additive fields): read when present, the skeleton path
@@ -161,6 +163,8 @@ export interface BuildingLook {
   interiors: [number, number][];
   /** Absolute y of the highest interior ceiling (0: none). */
   ceilTop: number;
+  /** (lane FACADE) Closed windows, awnings, relief (facadeDetail.ts; its row repair already applied to `holes`). */
+  detail: FacadeDetail;
 }
 
 export interface TentPlan {
@@ -554,12 +558,14 @@ function* planSurfaceLook(layout: StationLayout, S: SurfaceInfo): BuildSteps<Sur
   const spans = new Map(S.windows.map(w => [w.id, w]));
   const buildings: BuildingLook[] = [];
   for (const b of S.buildings) {
-    buildings.push(planBuilding(layout, b, ground, spans, seed));
+    const bl = planBuilding(layout, b, ground, spans, seed);
+    bl.detail = planFacadeDetail(layout, bl, seed); // (lane FACADE: its own stream; after every draw of the building's)
+    buildings.push(bl);
     if (buildings.length % 4 === 0) yield PLAN_STEP;
   }
   yield PLAN_STEP;
   // the tent is drawn by the tent build (canvas walls via OWNER.tent, the roof, the flap): no facade parts of its own
-  for (const bl of buildings) if (tentIds.has(bl.id)) { bl.sides = []; bl.holes = []; bl.signs = []; bl.escapes = []; bl.decks = []; }
+  for (const bl of buildings) if (tentIds.has(bl.id)) { bl.sides = []; bl.holes = []; bl.signs = []; bl.escapes = []; bl.decks = []; bl.detail = EMPTY_FACADE_DETAIL; }
   // scorch decals on the ground below burnt-out openings (soot fans) — on the sidewalk only
   for (const bl of buildings) for (const h of bl.holes) {
     if (!h.scorch || h.storey !== 0) continue;
@@ -586,6 +592,14 @@ function* planSurfaceLook(layout: StationLayout, S: SurfaceInfo): BuildSteps<Sur
       for (let k = 0; k < nc; k++) placements.push({model: pr() < 0.7 ? 'hvac' : 'vent', x: ins(pr(), d.x0, d.x1, 2.2), z: ins(pr(), d.z0, d.z1, 2.2), y: d.y, yaw: Math.floor(pr() * 4) * Math.PI / 2, s: 0.9 + pr() * 0.25});
       if (bl.style.tanks && bl.storeys >= 3 && pr() < 0.7) placements.push({model: 'tank', x: ins(pr(), d.x0, d.x1, 3.5), z: ins(pr(), d.z0, d.z1, 3.5), y: d.y, yaw: pr() * Math.PI, s: 0.85 + pr() * 0.2});
     }
+  }
+  // (lane FACADE) a reachable roof (v2 roofAccess) stays walkable: no look-only clutter (no bodies) on its walk or bulkhead — dropped
+  // after the draws, so no other building's clutter moves
+  const roofs = buildings.flatMap(bl => (bl.b.roofAccess ? [bl.b.roofAccess.walk, bl.b.roofAccess.bulkhead] : []));
+  if (roofs.length) {
+    const keep = placements.filter(p => !roofs.some(q => p.x > q.x0 - 1.5 && p.x < q.x1 + 1.5 && p.z > q.z0 - 1.5 && p.z < q.z1 + 1.5));
+    placements.length = 0;
+    placements.push(...keep);
   }
 
   yield PLAN_STEP;
@@ -660,7 +674,7 @@ const HOLE_ODDS: Readonly<Record<SurfaceBuilding['condition'], readonly [HoleKin
   gutted: [['glass', 0.04], ['broken', 0.2], ['boarded', 0.14], ['dark', 0.62]],
   collapsed: [['broken', 0.25], ['boarded', 0.1], ['dark', 0.65]],
 };
-const rollHole = (r: () => number, cond: SurfaceBuilding['condition']): HoleKind => {
+export const rollHole = (r: () => number, cond: SurfaceBuilding['condition']): HoleKind => {
   let u = r();
   for (const [k, p] of HOLE_ODDS[cond] ?? HOLE_ODDS.intact) { if ((u -= p) <= 0) return k; }
   return 'dark';
@@ -874,7 +888,7 @@ function planBuilding(layout: StationLayout, b: SurfaceBuilding, ground: Uint8Ar
   }
   const key = `surface-facade-${style.wall}-${tint.toString(16).padStart(6, '0')}`;
   const trimKey = `surface-trim-${style.trim.toString(16).padStart(6, '0')}`;
-  return {id: b.id, b, style, tint, family, key, trimKey, storeyH, storeys, storeyY, storeyHs, top, deck, minTop, sides, holes, signs, escapes, decks, interiors, ceilTop};
+  return {id: b.id, b, style, tint, family, key, trimKey, storeyH, storeys, storeyY, storeyHs, top, deck, minTop, sides, holes, signs, escapes, decks, interiors, ceilTop, detail: EMPTY_FACADE_DETAIL};
 }
 
 function planTent(S: SurfaceInfo, owner: Int16Array, W: number, tb: SurfaceBuilding | null, floorAt: (x: number, z: number) => number): TentPlan | null {
@@ -1020,7 +1034,8 @@ export function bareRuns(layout: StationLayout, owner: Int16Array, buildings: re
       }
     } else if (g0.cells[i] === SOLID) {
       if (own >= 0 && own !== bl.id) y0 = neighbour(own);
-      else if (own === OWNER.cordon) y0 = LOOK_TUNE.cordonH + 0.18;
+      // the cordon wall hides the side below its coping; a fog-boundary district's last-resort ring is never drawn (no wall: exposed from the floor)
+      else if (own === OWNER.cordon) y0 = layout.surface?.boundary ? base0 : LOOK_TUNE.cordonH + 0.18;
       else if (own === OWNER.debris) y0 = LOOK_TUNE.debrisH;
       else if (own === OWNER.tent) y0 = tent ? tent.ridge : LOOK_TUNE.tentRidge;
     }

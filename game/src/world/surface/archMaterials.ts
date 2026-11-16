@@ -9,7 +9,8 @@
 //  - the repo's shared surface sets (world/materials.ts surfaceMaterial: lane paint, cast iron, rails, ties, boards, shutters).
 // Without a loaded map (Node tests, a failed fetch) every key falls back to the shared surface sets, tinted — never a new texture.
 // Materials this module creates are cached per WorldMaterials and handed to the runtime's owner (LevelResources 'surface': released
-// with the district's asset family); a released material leaves the cache. Office-registry / shape materials are shared (not owned).
+// with the district's asset family); a released material leaves the cache. Office-registry / shape materials are shared (not owned);
+// the decorative panes' glass is the district's own owned copy of the shared glazing (lane FACADE: surfacePaneMaterial below).
 
 import * as THREE from 'three';
 import {materialColor, vec4, vertexColor} from 'three/tsl';

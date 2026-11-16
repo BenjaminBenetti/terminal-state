@@ -1,7 +1,9 @@
 // Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): THE DISTRICT'S SKY AND OUTDOOR LOOK — the overcast, toxic-tinged
 // sky dome, the scene fog the district runs under, and the OUTDOOR-LIT materials of everything with no light-field slot behind it:
 // roof decks / copings / parapets (they stand on SOLID building columns), rooftop plant, and everything beyond the grid (the cordon's
-// rubble berms, the collapsed blocks behind it, the far city).
+// rubble berms, the collapsed blocks behind it, the far city). Follow-up (task studio-surface-run-field-followup-20261116-211729-01, lane
+// FACADE): also the party walls standing over a lower neighbour's roof (outdoorFacadeMaterial: the facade's own texture + tint), and
+// every model keeps its authored face mode (the far-city / rooftop GLBs are double-sided: front-only culling showed the sky through them).
 //
 //  - FOG: an ordinary FogExp2 (the scene's) — a neutral warm grey overcast haze, NEVER green (CLAUDE.md: ordinary non-hazard fog is
 //    not green; the toxic gas is AIR's green volumetric term). ~50 % at 100 m, ~95 % at 200 m: the streets read deep, the far city is
