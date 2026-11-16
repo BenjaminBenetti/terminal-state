@@ -151,6 +151,11 @@ export interface FieldSource {
    */
   extraDirect?: (ctx: ExtraDirectContext) => Record<string, number> | void;
   /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the same, as steps (a long term — a Surface Run district's
+   * daylight over ~650k street cells — yields between its rows like the rest of the bake). Used in place of extraDirect when set.
+   */
+  extraDirectSteps?: (ctx: ExtraDirectContext) => BuildSteps<Record<string, number> | void>;
+  /**
    * Task studio-baked-lighting-reflections-20261114-050258-01: the ENHANCED indirect light (world/lightFieldGather.ts: a ray gather over
    * the fixed architecture, coloured by its finishes) in place of the bounce fill below. Absent (Enhanced lighting off, the Reactor,
    * every caller that does not ask for it): the bake is unchanged, byte for byte. The slots keep their format either way: the fog and
@@ -558,7 +563,9 @@ export function* bakeLightFieldSteps(src: FieldSource, p: FieldParams = DEFAULT_
 
   yield 'field.extra';
   // Task track3-eaton-centre-20261031 (lane ARCH): extra direct light (the mall skylight), steady (no flicker circuit share).
-  const extra = src.extraDirect ? src.extraDirect({W, H, levels: levels.slice(0, S), geos, layers: LS, E, D, EL, bands: U ? {start: U.start, f: U.f, c: U.c} : null}) ?? undefined : undefined;
+  const xctx: ExtraDirectContext = {W, H, levels: levels.slice(0, S), geos, layers: LS, E, D, EL, bands: U ? {start: U.start, f: U.f, c: U.c} : null};
+  // (lane LOOK, Surface Run: the paced form when a source gives one)
+  const extra = src.extraDirectSteps ? (yield* src.extraDirectSteps(xctx)) ?? undefined : src.extraDirect ? src.extraDirect(xctx) ?? undefined : undefined;
 
   // --- Bounce fill per slot: half area mean, half local, then a short wall-respecting diffusion ------
   // (Open cells only, typed arrays and precomputed neighbour masks: this runs before the JIT warms up.)

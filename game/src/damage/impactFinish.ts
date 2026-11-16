@@ -13,6 +13,7 @@
 import type {DamageClass} from './materials';
 import {skywaysShopImpact} from '../world/skywaysShopFinish'; // task studio-skywalk-variety-20261107-231448-01 (lane DRESS): pure data
 import {skywaysMallImpact} from '../world/skywaysMallFinish'; // task studio-skywalk-encounters-20261108-074144-01 (lane STORES): pure data
+import {surfaceImpactClass} from '../world/surface/archStyles'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): pure data
 
 const REACTOR: Readonly<Record<string, DamageClass>> = {
   'reactor-wall': 'concrete', 'reactor-roof': 'concrete', 'reactor-floor': 'concrete', 'reactor-ceil': 'concrete',
@@ -50,6 +51,7 @@ export function finishClass(key: string | null | undefined): DamageClass | null 
   if (key in REACTOR) return REACTOR[key];
   if (key in REACTOR_CORE) return REACTOR_CORE[key]; // task reactor-expansion-20261101 (lane CORE)
   if (key === 'annexWall') return 'concrete';
+  if (key.startsWith('surface-')) return surfaceImpactClass(key); // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): world/surface/arch*.ts keys
   if (key in SKYWAYS) return SKYWAYS[key]; // task studio-skyways-level-20261106-054448 (lane VIEW): world/skywaysArch.ts keys
   if (key in MARKET) return MARKET[key]; // task studio-survivor-market-20261108-005807-01 (lane LEVEL): world/marketArch.ts keys
   if (key.startsWith('market-cont-')) return 'steel'; // (task studio-market-rework-20261108-074144-01: version 2's container paints)
