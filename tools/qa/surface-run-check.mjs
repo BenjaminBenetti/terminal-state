@@ -70,10 +70,12 @@ try {
         throw new Error('Timed out waiting for the expected game state'); };
       const gameTime = async seconds => { const start = await ev(() => window.__game.clock); await wait(t => window.__game.clock >= t || window.__game.state === 'error', start + seconds, 180); };
       const play = async () => { if (await ev(() => window.__game.state === 'paused')) await page.click('#btn-resume'); await wait(() => window.__game.state === 'playing'); };
-      const pose = async (at, target) => ev((p, t) => { const g = window.__game; g.player.place(p.x, p.z, p.yaw ?? 0, p.y ?? 0);
+      const pose = async (at, target) => { await ev((p, t) => { const g = window.__game; g.player.place(p.x, p.z, p.yaw ?? 0, p.y ?? 0);
         g.player.eye += g.player.y; // place resets the eye to standing offset; a normal Player.update later adds the floor.
         if (t) { const dx = t.x - p.x, dz = t.z - p.z; g.player.yaw = Math.atan2(-dx, -dz); g.player.pitch = Math.atan2(t.y - g.player.eye, Math.hypot(dx, dz)); }
         g.updateCamera(0); g.surfaceRuntime.beforeRender(); g.render(); }, at, target);
+        await gameTime(0.12); // Let the browser present the new view and update its location HUD before a capture.
+      };
       const shot = async name => { if (Math.max(memory().current, memory().anon) > 9.2 * 2 ** 30) throw new Error('Screenshot soft-stop preserves memory headroom');
         await page.screenshot({path: path.join(out, `${name}.png`)}); };
       const key = async code => { const before = await ev(() => window.__game.clock); await page.keyboard.press(code, {delay: 80});

@@ -58,6 +58,7 @@ export const ZONE_TREATMENT: Record<WallZone, Treatment> = {
 };
 
 export function finishFamily(finish: string): Finish {
+  if (/^surface-/.test(finish)) return 'office'; // Urban finishes retain their mapped detail instead of Subway tile courses.
   if (/^office-/.test(finish)) return 'office'; // task office-overhaul-20261030 (lane ARCH): world/officeArch.ts finish keys
   // Task track3-eaton-centre-20261031 (lane ARCH): world/mallArch.ts keys — back-of-house painted block on the BLOCK grid; front of
   // house plaster-like (no station grid, never cut).
@@ -75,6 +76,8 @@ export function finishFamily(finish: string): Finish {
 }
 
 export function treatmentOf(face: Pick<WallFace, 'zone' | 'finish'>): Treatment {
+  if (/^surface-wall-(masonry|concrete|paint)@/.test(face.finish)) return 'officeRoof';
+  if (/^surface-/.test(face.finish)) return 'officeWall';
   // Task office-overhaul-20261030 (lane ARCH): office finishes never take a station treatment (whatever their zone).
   if (/^office-roof/.test(face.finish)) return 'officeRoof';
   if (/^office-/.test(face.finish)) return 'officeWall';

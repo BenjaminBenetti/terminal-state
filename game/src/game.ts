@@ -1540,7 +1540,7 @@ export class Game {
       // task reactor-expansion-20261101 (lane CONTROLS): bullet impacts on an arch-drawn finish (Reactor pit concrete / steel grating /
       // rusted plate, Office drywall / carpet …) take that finish's class and colour (world/finishAt.ts, damage/impactFinish.ts)
       finishAt: this.world.finishAt ?? null,
-      finishMaterial: k => this.world.officeArch?.material(k) ?? this.world.mallArch?.material(k) ?? this.world.reactorArch?.material(k) ?? this.world.marketArch?.material(k), // (+ the market's: task studio-survivor-market-20261108-005807-01)
+      finishMaterial: k => this.world.officeArch?.material(k) ?? this.world.mallArch?.material(k) ?? this.world.reactorArch?.material(k) ?? this.world.marketArch?.material(k) ?? this.world.surfaceArch?.material(k),
       // Iteration 07 (Lane K): shot items move — rigid items / chunks, loot lots lifted off holders (same item / count, never duplicated)
       physics: this.physics,
       lots: (o, d, maxT) => cm.shotLots(o, d, maxT).map(l => ({holder: l.holder, lotId: l.lotId, t: l.t})),

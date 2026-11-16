@@ -12,6 +12,7 @@ import {ROOF_FOG} from '../roofAir';
 import {syncGlowFog} from '../lights';
 import {drawSurfaceMap, exploreSurface, readSurfaceExploration, surfaceMapState, SURFACE_EXPLORATION_LANE, type SurfaceExploration, type SurfaceMapState} from '../../ui/surfaceMap';
 import {buildSurfaceCity, surfaceCityModelKeysFor, type SurfaceCityView} from './city';
+import {preloadSurfaceArch} from './arch';
 
 export interface SurfaceRunHost {
   scene: THREE.Scene;
@@ -34,6 +35,7 @@ export interface SurfaceRunHost {
   frameHooks: ((dt: number) => void)[];
   sectionHooks: {build?(layout: StationLayout): void; teardown?(): void}[];
   sectionModelKeys?: ((layout: StationLayout) => readonly string[])[];
+  sectionPreloads?: ((layout: StationLayout) => Promise<void>)[];
   promptProviders?: (() => string | null)[];
   interactHandlers: (() => boolean)[];
   inputOwners?: (() => boolean)[];
@@ -115,6 +117,7 @@ export class SurfaceRunRuntime {
     h.sectionHooks.push({build: layout => this.build(layout), teardown: () => this.teardown()});
     h.frameHooks.push(dt => this.frame(dt));
     h.sectionModelKeys?.push(surfaceCityModelKeysFor);
+    h.sectionPreloads?.push(preloadSurfaceArch);
     // Installed after truck cargo: the access door claims E before "put down" while carrying salvage through it.
     h.interactHandlers.unshift(() => this.interact());
     h.promptProviders?.unshift(() => this.prompt());

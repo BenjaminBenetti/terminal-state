@@ -27,6 +27,9 @@ const OFFICE_FLOOR: Readonly<Record<string, DamageClass>> = {
   core: 'concrete', roof: 'concrete',
 };
 const OFFICE_CEIL: Readonly<Record<string, DamageClass>> = {grid: 'plaster', plain: 'plaster', raw: 'concrete', core: 'concrete'};
+const SURFACE_WALL: Readonly<Record<string, DamageClass>> = {masonry: 'concrete', concrete: 'concrete', paint: 'concrete', plaster: 'plaster', wet: 'tile', wood: 'wood'};
+const SURFACE_FLOOR: Readonly<Record<string, DamageClass>> = {asphalt: 'concrete', concrete: 'concrete', carpet: 'fabric', vinyl: 'plastic', tile: 'tile', stone: 'terrazzo', wood: 'wood', server: 'laminate'};
+const SURFACE_CEIL: Readonly<Record<string, DamageClass>> = {grid: 'plaster', plain: 'plaster', raw: 'concrete'};
 /** Task studio-skyways-level-20261106-054448 (lane VIEW): the Skyways finishes (world/skywaysArch.ts; the office materials behind them). */
 const SKYWAYS: Readonly<Record<string, DamageClass>> = {
   'skyways-wall': 'plaster', 'skyways-reveal': 'plaster', 'skyways-wet': 'tile', 'skyways-boh': 'concrete', 'skyways-trim': 'steel',
@@ -47,6 +50,12 @@ const MARKET: Readonly<Record<string, DamageClass>> = {
 /** Damage class of an arch-owned finish key, or null (not an arch finish this table knows: the station rule applies). */
 export function finishClass(key: string | null | undefined): DamageClass | null {
   if (!key) return null;
+  if (key === 'surface-trim-steel') return 'steel';
+  if (key === 'surface-floor-asphalt' || key === 'surface-floor-concrete') return 'concrete';
+  const surface = /^surface-(wall|floor)-([a-z]+)@[0-3]$/.exec(key);
+  if (surface) return (surface[1] === 'wall' ? SURFACE_WALL : SURFACE_FLOOR)[surface[2]] ?? null;
+  const surfaceCeil = /^surface-ceil-([a-z]+)$/.exec(key);
+  if (surfaceCeil) return SURFACE_CEIL[surfaceCeil[1]] ?? null;
   if (key in REACTOR) return REACTOR[key];
   if (key in REACTOR_CORE) return REACTOR_CORE[key]; // task reactor-expansion-20261101 (lane CORE)
   if (key === 'annexWall') return 'concrete';
@@ -73,4 +82,5 @@ export function finishClass(key: string | null | undefined): DamageClass | null 
 }
 
 /** Every finish key the table answers for (tests: coverage of the arches' key sets). */
-export const FINISH_CLASS_KEYS = {reactor: Object.keys(REACTOR), officeFloor: Object.keys(OFFICE_FLOOR), officeCeil: Object.keys(OFFICE_CEIL), skyways: Object.keys(SKYWAYS)} as const;
+export const FINISH_CLASS_KEYS = {reactor: Object.keys(REACTOR), officeFloor: Object.keys(OFFICE_FLOOR), officeCeil: Object.keys(OFFICE_CEIL), skyways: Object.keys(SKYWAYS),
+  surfaceWall: Object.keys(SURFACE_WALL), surfaceFloor: Object.keys(SURFACE_FLOOR), surfaceCeil: Object.keys(SURFACE_CEIL)} as const;
