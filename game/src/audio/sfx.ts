@@ -2610,6 +2610,17 @@ export class Sfx {
   }
 
   /**
+   * Task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): the Surface Run truck's body GROANING under the fog pressure —
+   * the existing steel-structure creak / loose-pipe clank takes (no new audio), pitched down and louder as `strength` 0..1 grows, at the
+   * truck (world/surface/truckConditionRuntime.ts). True = it played.
+   */
+  truckGroan(x: number, y: number, z: number, strength: number): boolean {
+    const k = clamp01(strength);
+    const v = this.voice({at: {x, y, z}, send: 0.3, pri: 1, ref: 4, maxDist: 70, gain: 1.2 + 1.6 * k});
+    return !!this.play(v, Math.random() < 0.75 ? 'creak' : 'clank', {rate: 0.8 - 0.22 * k, jitter: 0.05});
+  }
+
+  /**
    * QA / tests: the car cues' live state — the engine channel, its rpm and current targets (`rate` = the drive loop's rate, `idleRate`,
    * `reverseRate`; gains `idle` / `drive` / `reverse`), the startup hold (0 under the start one-shot .. 1), a start sounding, counters.
    * Plays nothing.
