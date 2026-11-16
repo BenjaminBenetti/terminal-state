@@ -45,7 +45,8 @@ await withBrowserLock(async () => {
     const t0 = Date.now();
     await page.goto(`http://127.0.0.1:${port}/index.html?qa=1&qaPrebuild=0&menuScene=0${q}`);
     let booted = false;
-    for (let i = 0; i < 300 && !booted && !report.guard; i++) { booted = await ev(() => !!window.__game && !!window.__LL).catch(() => false); if (!booted) await sleep(1000); }
+    // the game files are loaded once the pickups manager exists (the menu's New game is enabled then; campaign-loop-check.mjs)
+    for (let i = 0; i < 300 && !booted && !report.guard; i++) { booted = await ev(() => !!window.__game?.pickups && !!window.__LL).catch(() => false); if (!booted) await sleep(1000); }
     step('booted', {booted, seconds: (Date.now() - t0) / 1000});
     if (!booted) throw new Error('game did not boot');
     const waitState = async (want, capS) => { const r0 = Date.now(); while (Date.now() - r0 < capS * 1000 && !report.guard) { if (await ev(w => window.__game.state === w, want).catch(() => false)) return true; await sleep(1000); } return false; };
@@ -61,9 +62,10 @@ await withBrowserLock(async () => {
     const frames = async n => { await ev(k => new Promise(res => { let i = 0; const f = () => (++i >= k ? res(null) : requestAnimationFrame(f)); requestAnimationFrame(f); }), n).catch(() => {}); };
     if (!headroom('new campaign')) return;
     const t1 = Date.now();
-    await ev((seed, host) => { void window.__game.newCampaign(1, {overwrite: true, networkSeed: seed, dev: {level: host}}); }, NETWORK_SEED, HOST);
+    await ev((seed, host) => { window.__srNewGame = null; void window.__game.newCampaign(1, {overwrite: true, networkSeed: seed, dev: {level: host}}).then(r => { window.__srNewGame = r; }, e => { window.__srNewGame = {ok: false, error: String(e)}; }); }, NETWORK_SEED, HOST);
     const playing = await waitState('playing', 900);
-    step('station playing', {playing, seconds: (Date.now() - t1) / 1000, access: await ev(() => window.__LL.surface.access()).catch(e => String(e))});
+    step('station playing', {playing, seconds: (Date.now() - t1) / 1000, state: await ev(() => window.__game.state).catch(e => String(e)), newGame: await ev(() => window.__srNewGame).catch(e => String(e)),
+      station: await ev(() => ({id: window.__game.run.current.station, name: window.__game.layout?.name})).catch(e => String(e)), access: await ev(() => window.__LL.surface.access()).catch(e => String(e))});
     if (!playing) throw new Error('station never reached playing');
     await frames(30);
     if (!headroom('door')) return;

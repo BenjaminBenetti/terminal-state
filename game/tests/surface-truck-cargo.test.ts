@@ -146,8 +146,9 @@ describe('the real truck carrying a real depot unit (district cargo, generated d
     frame(h, car);
     expect(w.cargo.counts.seeded, 'never re-seeded').toBe(1);
     const B = car.body!;
-    // (the record keeps 4 decimals)
-    expect(Math.max(Math.abs(B.x - parked.x), Math.abs(B.z - parked.z), Math.abs(B.yaw - parked.yaw))).toBeLessThan(1e-3);
+    // (the record keeps 4 decimals; the heading is compared as an angle — the record may wrap it by a whole turn)
+    const dYaw = Math.abs(Math.atan2(Math.sin(B.yaw - parked.yaw), Math.cos(B.yaw - parked.yaw)));
+    expect(Math.max(Math.abs(B.x - parked.x), Math.abs(B.z - parked.z), dYaw)).toBeLessThan(1e-3);
     const c2 = eq.unit(uid)!;
     expect([c2.mode, c2.mount]).toEqual(['mount', point]);
     expect(atPoint(w, c2, point)).toBe(0);
