@@ -8,7 +8,8 @@
 //  - DEPOT RECOVERABLES (world/surface/cargoSeed.ts): at the district's FIRST build, before the equipment's build reads the lane, the
 //    depot's recoverables become ordinary records in the district's 'train-equipment.here' lane (fresh run uids, a chest's contents from
 //    the loot-table foundation) and lane 'surface.cargo' gets `seeded: 1` IN THE SAME STEP: never refilled, never seeded twice (save,
-//    reload, Retry, re-entry all read the marker).
+//    reload, Retry, re-entry all read the marker). [Follow-up lane FIXES: a depot seeded from now on gets ONE train upgrade of them
+//    (cargoSeed.ts seedDepot); one seeded before keeps all it got.]
 //  - THE TRUCK'S ATTACHMENT POINTS (world/surface/cargoTypes.ts — lane TRUCK's truckAttachPoints()): TrainEquipmentSystem.mounts, a
 //    provider that offers the points only while a district world is built, refuses while the truck moves / the player sits in it, and
 //    keeps the secured units in lane 'surface.cargo' (`secured`) of the district section: the units go with the truck's memory.
@@ -30,7 +31,7 @@ import type {EquipmentMountPoint, EquipmentMounts, MountedJSON, TrainEquipmentSy
 import {equipmentModelKey} from '../trainEquipmentModel';
 import {surfaceCrossers, type SurfaceCrosser} from './crossing';
 import {kitUse} from './cargoKit';
-import {seedRecoverables} from './cargoSeed';
+import {seedDepot} from './cargoSeed';
 import {SURFACE_CARGO_LANE, SURFACE_CARGO_LIMITS, surfaceCargoOf, surfaceCargoRecord} from './cargoStore';
 import {truckCargoSource, type TruckAttachPoint} from './cargoTypes';
 
@@ -146,7 +147,12 @@ export class SurfaceCargo {
     this.live = false;
   }
 
-  /** The depot recoverables into the district's equipment lane, once (the marker in the same step). */
+  /**
+   * The depot into the district's equipment lane, once (the marker in the same step). Task studio-surface-run-field-followup-20261116-
+   * 211729-01 (lane FIXES): a depot seeded NOW (marker absent, any district version) gets exactly ONE of its recoverables — the train
+   * upgrade cargoSeed.ts depotPick chooses on the district seed — with exactly one uid from the train's counter, and the record lists it
+   * (version 2 `depot`); a depot already seeded (the marker: under either rule) is never touched — its saved units stay as they are.
+   */
   seed(S: SurfaceInfo): number {
     const run = this.host.run, inv = this.host.inv;
     if (!run || !inv?.makeStack) return 0;
@@ -154,10 +160,10 @@ export class SurfaceCargo {
     if (rec.seeded) return 0;
     const here = stationEquipmentOf(run.laneStore(STATION_EQUIPMENT_LANE));
     const E = this.host.playerTrain.equipment;
-    const add = seedRecoverables(S.depot?.recoverables ?? [], {seed: S.seed, nextUid: () => E.nextUid(), makeStack: (id, n) => inv.makeStack!(id, n)},
+    const {units: add, depot} = seedDepot(S.depot?.recoverables ?? [], {seed: S.seed, nextUid: () => E.nextUid(), makeStack: (id, n) => inv.makeStack!(id, n)},
       Math.max(0, EQUIPMENT_LIMITS.station - here.length));
     if (add.length) run.setLaneStore(STATION_EQUIPMENT_LANE, {v: 1, here: [...here, ...add].sort(bySeq)} satisfies StationEquipmentJSON);
-    run.setLaneStore(SURFACE_CARGO_LANE, surfaceCargoRecord(true, rec.secured ?? []));
+    run.setLaneStore(SURFACE_CARGO_LANE, surfaceCargoRecord(true, rec.secured ?? [], depot));
     this.counts.seeded++;
     this.counts.seededUnits += add.length;
     return add.length;
@@ -192,7 +198,7 @@ export class SurfaceCargo {
     const run = this.host.run;
     if (!run) return;
     const rec = surfaceCargoOf(run.laneStore(SURFACE_CARGO_LANE, key));
-    run.setLaneStore(SURFACE_CARGO_LANE, surfaceCargoRecord(rec.seeded === 1, list), key);
+    run.setLaneStore(SURFACE_CARGO_LANE, surfaceCargoRecord(rec.seeded === 1, list, rec.depot), key); // (lane FIXES: + the seeded depot list)
   }
 }
 

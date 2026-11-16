@@ -227,6 +227,12 @@ export interface SurfaceLookPlan {
   placements: Placement[];
   /** The playable rect inside the cordon (world m). */
   inner: SRect;
+  /**
+   * (task studio-surface-run-field-followup-20261116-211729-01, lane FOG) The cordon WALL is drawn (its faces, barricades, coping, its
+   * daylight obstruction): a version-1 district. A version-2 district has no visible perimeter wall — its fog-pressure boundary
+   * (surface.boundary) — and its thin last-resort SOLID ring is never drawn (the surroundings are pulled in to it: lookCity.ts).
+   */
+  wall: boolean;
   stats: Record<string, number>;
 }
 
@@ -625,7 +631,7 @@ function* planSurfaceLook(layout: StationLayout, S: SurfaceInfo): BuildSteps<Sur
   stats.depotTracks = depot?.tracks.length ?? 0;
   stats.depotPits = depot?.pits.length ?? 0;
   stats.depotCrane = depot?.crane ? 1 : 0;
-  return {W, H, seed, ground, owner, outdoorAreas, areaBuilding, tentAreas, doorCells, segments, decals, discs, buildings, spans, tent, rail, depot, placements, inner, stats};
+  return {W, H, seed, ground, owner, outdoorAreas, areaBuilding, tentAreas, doorCells, segments, decals, discs, buildings, spans, tent, rail, depot, placements, inner, wall: !S.boundary, stats};
 }
 
 function axisRect(kind: DecalKind, axis: 'x' | 'z', s0: number, s1: number, c0: number, c1: number, y: number): Decal {

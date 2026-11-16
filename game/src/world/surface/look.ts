@@ -225,7 +225,9 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
   // --- the ground ring beyond the extent (under the cordon band and out past the fog's cull distance) ---
   const far = farCityPlan(S, k => !!models(k));
   {
-    const E = S.extent, R = far.groundR, cx = far.centre.x, cz = far.centre.z, y = -0.03;
+    // (task studio-surface-run-field-followup-20261116-211729-01, lane FOG) a v2 district: round its walkable edge — the apron out there
+    // is the district's own drawn ground (never a second ground 3 cm under it); the ring covers the undrawn last-resort band and beyond
+    const E = S.boundary?.edge ?? S.extent, R = far.groundR, cx = far.centre.x, cz = far.centre.z, y = -0.03;
     const q = new Mesh3();
     const O = {x0: cx - R, z0: cz - R, x1: cx + R, z1: cz + R};
     q.flat(O.x0, O.z0, O.x1, E.z0, y); q.flat(O.x0, E.z1, O.x1, O.z1, y);

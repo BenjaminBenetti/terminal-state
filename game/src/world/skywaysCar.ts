@@ -723,7 +723,8 @@ export class SkywaysCar {
     this.world.levels = h.levels;
     this.world.props = h.propIndex;
     this.kickProps(dt);
-    const r = stepCar(b, this.world, this.def.geom, c, dt, this.step); // (lane TRUCK: the vehicle's geometry + tuning; the car's = its spec)
+    // (lane TRUCK: the vehicle's geometry + tuning; the car's = its spec; (field follow-up) a vehicle's per-step tune: the truck's condition)
+    const r = stepCar(b, this.world, this.def.tune ? this.def.tune(this, c, dt) : this.def.geom, c, dt, this.step);
     if (r.impact) this.onImpact(r.impact);
     this.writePlayer(dt);
     return false;
