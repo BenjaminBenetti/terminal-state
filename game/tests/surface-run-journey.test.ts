@@ -526,9 +526,9 @@ describe('Surface Run: station -> district -> station -> save -> Continue -> dis
   };
   it('version 1: crosses both ways behind the loading screen; both worlds and the train exact; the district persists through a save', async () => {
     FORCE.v1 = true;
-    try { await journey(true); } finally { FORCE.v1 = false; }
+    try { await journey(true); } finally { FORCE.v1 = false; vi.restoreAllMocks(); } // (the run's spies: the next run spies afresh)
   }, 900_000); // (about 5 min on one local worker: headroom for a slower CI shard)
   it('version 2: crosses both ways by the cargo lift ride; both worlds and the train exact; the district persists through a save', async () => {
-    await journey(false);
+    try { await journey(false); } finally { vi.restoreAllMocks(); }
   }, 900_000);
 });

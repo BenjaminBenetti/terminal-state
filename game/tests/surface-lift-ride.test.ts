@@ -28,6 +28,22 @@ function pickNetwork(): {seed: number; station: string; levelSeed: number} {
   throw new Error('no network with a Surface Run subway station');
 }
 
+/** Numbers to 1e-6 and quaternions to one sign (q and -q are one orientation: a rebuilt item re-reads its pose), as the journey test. */
+function canon(v: unknown, key = ''): unknown {
+  if (typeof v === 'number') { const r = Math.round(v * 1e6) / 1e6; return r === 0 ? 0 : r; }
+  if (Array.isArray(v)) {
+    let a = v;
+    if (key === 'q' && a.length === 4 && a.every(x => typeof x === 'number')) {
+      const lead = (a as number[]).find(x => Math.abs(x) > 1e-9) ?? 0;
+      const w = Math.abs(a[3] as number) > 1e-9 ? a[3] as number : lead;
+      if (w < 0) a = (a as number[]).map(x => -x);
+    }
+    return a.map(x => canon(x));
+  }
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, canon(x, k)]));
+  return v;
+}
+
 interface Priv {
   interact(): void;
   saveSectionMemory(): void;
@@ -103,7 +119,7 @@ describe('Surface Run v2: the cargo lift ride (real Game, validating device)', (
       G.saveSectionMemory();
       const snapHost = () => {
         G.saveSectionMemory();
-        const L = game.layout, mem = structuredClone(game.run.peekMemory(hostKey)!) as {pickups: unknown; holders: unknown; killed: unknown; cleared: unknown};
+        const L = game.layout, mem = canon(game.run.peekMemory(hostKey)!) as {pickups: unknown; holders: unknown; killed: unknown; cleared: unknown};
         return {mem: JSON.stringify([mem.pickups, mem.holders, mem.killed, mem.cleared]), cells: Array.from(L.grid.cells).join(''), areas: L.areas.length, access: JSON.stringify(L.surfaceAccess),
           props: L.props.filter(p => !p.cargo).map(p => `${p.kind}@${p.x.toFixed(3)},${p.z.toFixed(3)}:${p.h.toFixed(3)}`).join('|')};
       };
