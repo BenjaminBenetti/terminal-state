@@ -3,6 +3,7 @@
 // through real keyboard/mouse events; nothing here changes health, ammo or enemy behaviour.
 
 import {fuelQaApi} from './fuel/fuelQa'; // task train-fuel-system
+import {surfaceAccessQaApi} from './world/surface/accessQa'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ACCESS)
 import {isP7Kind, p7ModelKeysFor} from './gen/props07';
 import * as THREE from 'three';
 import type {Game} from './game';
@@ -418,6 +419,8 @@ export function installQaHooks(game: Game): void {
     // task reactor-build-20261101 (lane RESTART): reactorRestart(), reactorGoControl(id), reactorControl(id, {give}), reactorWinFinish()
     ...reactorRestartQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     ...fuelQaApi(game), // task train-fuel-system: fuel(), fuelSetTank(units)
+    // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ACCESS): surface.access() / go() / cross('up' | 'down') / refusal() / state() / find(level)
+    surface: surfaceAccessQaApi(game, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     ...trainQaApi(game), // Task player-train-shell-20261101-202805 (lane TRAIN): train(), trainDoor(i, open), trainFaceDoor(i?), trainLights(); train-shell-followup: trainGo('cab' | 'rear' | 'spawn'); train-lockbox: trainGo('lockbox')
     ...chipperQaApi(game), // task studio-corpse-chipper-fuel-20261110-235304-01 (lane CHIPPER): chipper() — state / progress / credit / pools; chipperGo() — stand at the hopper
     ...trainEquipmentQaApi(game), // task studio-train-crafting-v1-20261111-225628-01 (lane EQUIP): equipment() — units / plugs / grab / carry / counters; equipmentCraft(kind) — a unit on the car floor; equipmentToPlug(uid, i) — stand it beside a plug
