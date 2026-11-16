@@ -2,7 +2,7 @@
 // traversal (render/rt/rtTrace.ts) against brute force and against three's own Raycaster.
 import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
-import {BLAS_MAX_LEAF, BLAS_TRI_FLOATS, BVH_MAX_DEPTH, BVH_NODE_FLOATS, BvhBuilder, TLAS_MAX_LEAF, TRI_COLOR_NONE, blasFor, buildBlas, buildBvh, f32Down, f32Up} from '../src/render/rt/bvh';
+import {BLAS_MAX_LEAF, BLAS_TRI_FLOATS, BVH_BIG, BVH_MAX_DEPTH, BVH_NODE_FLOATS, BlasJob, BvhBuilder, TLAS_MAX_LEAF, TRI_COLOR_NONE, blasFor, buildBlas, buildBvh, f32Down, f32Up} from '../src/render/rt/bvh';
 import {RT_INSTANCE_VEC4, RT_INST_DISABLED, RT_INST_PROXY, RT_TYPE_CAPSULE, type RtSceneBuffers} from '../src/render/rt/rtFormat';
 import {RtScene} from '../src/render/rt/rtScene';
 import {newRtHit, rtCapsule, rtTriangle, traceAny, traceClosest} from '../src/render/rt/rtTrace';
@@ -181,6 +181,29 @@ describe('rt bvh builder', () => {
     }
   });
 
+  it('splits big nodes (BVH_BIG primitives and more) in bounded, resumable chunks: the same tree as at once, every invariant', () => {
+    for (const kind of ['uniform', 'clusters', 'same'] as const) {
+      const n = 3 * BVH_BIG + 123, b = boxes(n, kind, 5);
+      const t = buildBvh(b, n, BLAS_MAX_LEAF);
+      const c = checkTree(t.nodes, t.nodeCount, t.order, b, n, BLAS_MAX_LEAF);
+      expect(c.depth).toBeLessThanOrEqual(BVH_MAX_DEPTH);
+      const s = new BvhBuilder(BLAS_MAX_LEAF);
+      s.begin(b, n);
+      expect(s.done).toBe(false); // (begin does no per-primitive work: the centroid pass is run's)
+      let steps = 0;
+      while (!s.run(500)) steps++;
+      // (2 units a primitive for the centroid pass, 2 + 1 for the root's binning and partition: no call took a whole pass)
+      expect(steps).toBeGreaterThan((5 * n) / 500);
+      expect(s.done).toBe(true);
+      expect(s.nodeCount).toBe(t.nodeCount);
+      expect(Buffer.from(s.nodes.buffer, 0, s.nodeCount * 32).equals(Buffer.from(t.nodes.buffer, 0, t.nodeCount * 32))).toBe(true);
+      expect(Buffer.from(s.order.buffer, 0, n * 4).equals(Buffer.from(t.order.buffer, 0, n * 4))).toBe(true);
+    }
+    // the SAH still pays on a big clustered input
+    const n = 2 * BVH_BIG, b = boxes(n, 'clusters', 9), t = buildBvh(b, n, BLAS_MAX_LEAF), med = medianTree(b, n, BLAS_MAX_LEAF);
+    expect(sahCost(t.nodes, t.nodeCount)).toBeLessThan(sahCost(med.nodes, med.nodeCount) * 0.9);
+  });
+
   it('rounds conservatively to f32', () => {
     for (const v of [0.1, -0.1, 1e-40, -1e-40, 123.456789, -98765.4321, 0]) {
       expect(f32Down(v)).toBeLessThanOrEqual(v);
@@ -283,6 +306,23 @@ describe('rt BLAS', () => {
     h.setAttribute('color', new THREE.BufferAttribute(new Uint8Array([255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 0]), 4, true));
     const c2 = new Uint32Array(buildBlas(h, 1).tris.buffer)[7];
     expect(c2 & 255).toBe(255); expect((c2 >>> 8) & 255).toBe(0); expect(c2 >>> 24).toBe(170);
+  });
+
+  it('builds a BLAS job in bounded chunks (extraction, tree, records, nodes) into the same BLAS as at once', () => {
+    const g = new THREE.SphereGeometry(1, 160, 100); // (31.7 k triangles: big nodes)
+    const a = buildBlas(g, 1);
+    const j = new BlasJob(g, 1, false);
+    let calls = 0;
+    while (!j.run(2000)) calls++;
+    const r = j.result!;
+    // (4 units a triangle extracted, 3 a record written, 1 a node copied, the builder's own: every phase took many calls)
+    expect(calls).toBeGreaterThan((8 * a.triCount + a.nodeCount) / 2000);
+    expect(r.triCount).toBe(a.triCount);
+    expect(r.nodeCount).toBe(a.nodeCount);
+    expect(r.depth).toBe(a.depth);
+    expect(Buffer.from(r.nodes.buffer, r.nodes.byteOffset, r.nodeCount * 32).equals(Buffer.from(a.nodes.buffer, a.nodes.byteOffset, a.nodeCount * 32))).toBe(true);
+    expect(Buffer.from(r.tris.buffer, r.tris.byteOffset, r.triCount * 48).equals(Buffer.from(a.tris.buffer, a.tris.byteOffset, a.triCount * 48))).toBe(true);
+    expect(j.run(2000)).toBe(true); // (done stays done)
   });
 
   it('caches per geometry until the positions change', () => {

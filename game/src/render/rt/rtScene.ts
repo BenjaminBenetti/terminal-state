@@ -14,13 +14,25 @@
 // PER FRAME (sync): a cheap change check per traced object (its ancestors' visibility, matrixWorld, instanceMatrix.version, its
 // geometry / material / draw range / attribute versions). A moved entry is DISABLED in the static TLAS and traced from the dynamic
 // TLAS (rebuilt every frame: the moving entries + the capsules); an entry resting RT_SCENE.restSeconds returns to a rebuilt static
-// TLAS (coalesced: at most one rebuild per RT_SCENE.staticInterval; built across frames, RT_SCENE.staticBudgetMs a frame, over a
+// TLAS (coalesced: at most one rebuild per RT_SCENE.staticInterval — disabled slots alone start one only once they are
+// RT_SCENE.staticGarbageShare of the static instances; built across frames, RT_SCENE.staticBudgetMs a frame at most, over a
 // snapshot of the resting entries' boxes while the current static tree stays in use; at the commit an entry that moved or went
 // since the snapshot is written DISABLED and stays dynamic). A full re-inventory runs every RT_SCENE.inventoryInterval: new
 // meshes get their BLAS (cached per geometry for the session: render/rt/bvh.ts) built under the frame's ms budget, never blocking —
 // they trace from the dynamic TLAS until they rest into the static one; meshes gone leave at the next static rebuild (DISABLED
 // meanwhile). A changed geometry keeps its old BLAS until the new one is built (rebuilt at most every RT_SCENE.rebuildInterval).
 // Hard caps (constructor): what does not fit is left out and COUNTED (stats().omitted), never silently.
+//
+// BOUNDED FRAMES: everything per triangle (a BLAS build's extraction / tree / records, copying a BLAS into the packed streams,
+// growing those streams) is chunked work (RT_SCENE.chunkWork / copyChunk) done while the frame's sync is under its ms budget, never
+// in one go; new material textures are read there too, and a new build's scratch is allocated by its first chunk. What sync does
+// in one frame is otherwise bounded by the objects (the change check, the re-inventory walk) and the instances (attaching an
+// object, the dynamic tree, whose scratch is allocated up front). Dead BLAS triangles (geometry no longer used) are compacted only
+// by prepareSteps / settleSteps (loading steps), never by sync.
+//
+// LOADING: prepareSteps(roots) builds the scene; settleSteps() — after everything the station adds once its lighting is made
+// (the arrival, the player train, pickups, ...) — takes all that in (BLAS built, packed, every entry static) so the first frames
+// of play have nothing left to catch up on.
 
 import * as THREE from 'three';
 import {litOpaque} from '../volumetric';
@@ -39,8 +51,11 @@ export const RT_SCENE = {
   inventoryInterval: 0.5,
   /** A changed geometry's BLAS is rebuilt at most this often. */
   rebuildInterval: 0.5,
-  /** BLAS build work per chunk (primitive visits; about 1 ms in V8) — the budget is checked between chunks. */
-  chunkWork: 40_000,
+  /**
+   * BLAS build work per chunk (primitive visits; about 0.2 ms in optimised V8 code, several ms the first time a loop runs before
+   * it is optimised) — the budget is checked between chunks, so this is about the most a frame runs past its budget.
+   */
+  chunkWork: 8_000,
   /** prepareSteps yields after about this much BLAS work (a few ms). */
   prepareWork: 160_000,
   /** Main-thread ms a frame a pending static TLAS rebuild may use (at least one chunk of staticWork a frame). */
@@ -48,9 +63,17 @@ export const RT_SCENE = {
   /** Static TLAS build work per chunk (BvhBuilder work units; ~0.2 ms). */
   staticWork: 4_000,
   /** Static rebuild listing / record writing per chunk (recs + entries visited / records written). */
-  staticListChunk: 512,
+  staticListChunk: 256,
+  /** Disabled static slots (hidden / removed entries) alone start a rebuild once they are this share of the static instances. */
+  staticGarbageShare: 1 / 16,
   /** A material whose texture had not decoded is asked again after 1, 2, 4 ... up to this many re-inventories. */
   provisionalMaxWait: 64,
+  /** Floats copied per chunk when packing a BLAS into the streams or growing them (256 KiB: first writes into new pages cost too). */
+  copyChunk: 65_536,
+  /** prepareSteps / settleSteps yield after about this many ms of work. */
+  stepMs: 4,
+  /** settleSteps leaves this much spare BLAS capacity (share of the used part, at least 16384 nodes / triangles). */
+  headroom: 0.125,
 } as const;
 
 export interface RtSceneOptions {
@@ -88,11 +111,13 @@ export interface RtSceneStats {
   blasNodes: number;
   blasCount: number;
   deadTriangles: number;
-  /** Traced objects (Mesh / InstancedMesh), their entries, BLAS jobs waiting, a static TLAS rebuild under way. */
+  /** Traced objects (Mesh / InstancedMesh), their entries, BLAS work waiting (builds + packings + a stream growth), a static TLAS rebuild under way. */
   meshes: number;
   entries: number;
   pendingBuilds: number;
   staticBuildPending: boolean;
+  /** The last sync's phases (µs): inventory walk, change detection, BLAS / packing work (finish: attaching finished builds), static rebuild, dynamic tree. */
+  lastSyncPhases: {inventory: number; detect: number; work: number; finish: number; static: number; dynamic: number};
   instances: {static: number; dynamic: number; capsules: number; moving: number; hidden: number};
   materials: number;
   /** Used bytes per stream (and the allocated ones). */
@@ -110,9 +135,10 @@ export interface RtSceneStats {
   blasBuildMs: number;
   degenerateTriangles: number;
   blasReused: number;
-  /** prepareSteps main-thread ms (all of it, and the BLAS part). */
+  /** prepareSteps main-thread ms (all of it, and the BLAS part); the last settleSteps' ms. */
   prepareMs: number;
   prepareBlasMs: number;
+  settleMs: number;
   staticRebuilds: number;
   inventories: number;
   /** The last inventory walk: main-thread µs and the objects it reached. */
@@ -199,6 +225,12 @@ class Entry {
 /** A BLAS build in progress and the objects waiting for it. */
 interface Job { geometry: THREE.BufferGeometry; matCount: number; useGroups: boolean; job: BlasJob; waiters: Rec[] }
 
+/** A BLAS being copied into the packed streams (bases reserved when it starts) and the objects waiting for it. */
+interface PackTask { build: BlasBuild; geometry: THREE.BufferGeometry; nodeBase: number; triBase: number; at: number; waiters: {rec: Rec; initial: boolean}[] }
+
+/** The BLAS streams being grown: the new arrays (null: that one keeps its size), copied `at` floats far. */
+interface GrowTask { nodes: Float32Array<ArrayBuffer> | null; tris: Float32Array<ArrayBuffer> | null; nodeAt: number; triAt: number }
+
 const materialsOf = (m: THREE.Material | THREE.Material[]): number => (Array.isArray(m) ? m.length : 1);
 
 /** Why `o` is not traced, or null when it is (the inventory contract; see the file comment). Allocation-free. */
@@ -260,6 +292,16 @@ export class RtScene {
   private readonly packedOf = new Map<BlasBuild, Packed>();
   private readonly moving: Entry[] = [];
   private readonly jobs: Job[] = [];
+  private readonly packs: PackTask[] = [];
+  private readonly packOf = new Map<BlasBuild, PackTask>();
+  /** BLAS nodes / triangles the queued packings will add (cap checks count them). */
+  private reservedNodes = 0;
+  private reservedTris = 0;
+  private grow: GrowTask | null = null;
+  /** Materials whose texture mean is read by the per-frame work (sync defers it: reading a texture can take ms). */
+  private readonly matQueue: {m: THREE.Material; slot: number}[] = [];
+  /** sync's inventory: material texture means are deferred to the budgeted work. */
+  private deferTextures = false;
   private readonly blasBuilder = new BvhBuilder(BLAS_MAX_LEAF);
   private readonly staticBuilder = new BvhBuilder(TLAS_MAX_LEAF);
   private readonly dynBuilder = new BvhBuilder(TLAS_MAX_LEAF);
@@ -278,6 +320,8 @@ export class RtScene {
   // state
   private prepared = false;
   private lastInventory = -Infinity;
+  /** settleSteps has just walked everything: the first sync after it starts the inventory clock instead of walking again. */
+  private settledWalk = false;
   private lastStatic = -Infinity;
   /** A static rebuild under way (staticBuilder over staticList's boxes snapshotted at staticAt). */
   private staticPending = false;
@@ -306,8 +350,10 @@ export class RtScene {
   // stats
   private st = {
     lastSyncUs: 0, peakSyncUs: 0, omitDyn: 0, blasBuilt: 0, blasBuildMs: 0, degenerate: 0, blasReused: 0, prepareMs: 0, prepareBlasMs: 0,
-    staticRebuilds: 0, inventories: 0, compactions: 0, inventoryUs: 0, inventoryObjects: 0,
+    staticRebuilds: 0, inventories: 0, compactions: 0, inventoryUs: 0, inventoryObjects: 0, settleMs: 0,
   };
+  /** The last sync's phases (µs): inventory walk, change detection, BLAS work (and the part attaching finished builds), static, dynamic. */
+  private readonly phase = {inventory: 0, detect: 0, work: 0, finish: 0, static: 0, dynamic: 0};
   private omitMeshes = zeroOmit();
   private omitTris = zeroOmit();
   private excluded = zeroExcluded();
@@ -324,6 +370,7 @@ export class RtScene {
     this.bodyAlbedo[0] = ba[0]; this.bodyAlbedo[1] = ba[1]; this.bodyAlbedo[2] = ba[2];
     this.dynBounds = new Float32Array(this.dynamicInstanceCap * 6);
     this.capsuleSrc = new Int32Array(this.dynamicInstanceCap);
+    this.dynBuilder.reserve(this.dynamicInstanceCap); // (the per-frame dynamic tree never allocates)
     this.resetTables();
   }
 
@@ -334,6 +381,11 @@ export class RtScene {
   clear(): void {
     for (const j of this.jobs) for (const r of j.waiters) r.jobQueued = false;
     this.jobs.length = 0;
+    this.packs.length = 0;
+    this.packOf.clear();
+    this.reservedNodes = this.reservedTris = 0;
+    this.grow = null;
+    this.matQueue.length = 0;
     for (const r of this.recs) r.alive = false;
     this.recs.length = 0;
     this.recOf.clear();
@@ -343,6 +395,7 @@ export class RtScene {
     this.dynList.length = 0;
     this.roots = [];
     this.prepared = false;
+    this.settledWalk = false;
     this.lastInventory = this.lastStatic = -Infinity;
     this.staticPending = false;
     this.staticPhase = 0;
@@ -352,7 +405,7 @@ export class RtScene {
     this.staticGarbage = 0;
     this.deadTris = 0;
     this.lastDynamicCount = 0;
-    this.st = {lastSyncUs: 0, peakSyncUs: 0, omitDyn: 0, blasBuilt: 0, blasBuildMs: 0, degenerate: 0, blasReused: 0, prepareMs: 0, prepareBlasMs: 0, staticRebuilds: 0, inventories: 0, compactions: 0, inventoryUs: 0, inventoryObjects: 0};
+    this.st = {lastSyncUs: 0, peakSyncUs: 0, omitDyn: 0, blasBuilt: 0, blasBuildMs: 0, degenerate: 0, blasReused: 0, prepareMs: 0, prepareBlasMs: 0, staticRebuilds: 0, inventories: 0, compactions: 0, inventoryUs: 0, inventoryObjects: 0, settleMs: 0};
     this.omitMeshes = zeroOmit();
     this.omitTris = zeroOmit();
     this.excluded = zeroExcluded();
@@ -406,13 +459,7 @@ export class RtScene {
     yield* this.inventorySteps(-Infinity, true, pause, resume);
     const built0 = this.st.blasBuildMs;
     pause(); yield 'rt-blas'; resume();
-    while (this.jobs.length) {
-      const j = this.jobs[0];
-      while (!j.job.run(RT_SCENE.prepareWork)) { pause(); yield; resume(); }
-      this.jobs.shift();
-      this.finishJob(j, -Infinity, true);
-      pause(); yield; resume();
-    }
+    yield* this.drainSteps(-Infinity, true, pause, resume);
     pause(); yield 'rt-tlas'; resume();
     this.rebuildStatic(-Infinity);
     this.writeDynamic(null, 0);
@@ -433,29 +480,124 @@ export class RtScene {
   }
 
   /**
+   * After the prepared station is complete (everything it adds once its lighting is made — the arrival, the player train, pickups,
+   * section content): paced steps (labelled 'rt-settle') that re-inventory the roots, take in every mesh added since the prepare
+   * (BLAS built and packed in full) and drop the ones gone, follow what moved, compact the BLAS streams when wasteful, leave spare
+   * capacity, and rebuild the static TLAS over every entry (all of them static: nothing is left dynamic, pending or due for sync).
+   * The first sync after it starts the inventory clock (sync's own) instead of walking again: the next walk is an interval later.
+   * Returns the stats. Does nothing before a prepare.
+   */
+  *settleSteps(): BuildSteps<RtSceneStats> {
+    if (!this.prepared) return this.stats();
+    let seg = performance.now(), total = 0;
+    const pause = (): void => { total += performance.now() - seg; };
+    const resume = (): void => { seg = performance.now(); };
+    for (const r of this.roots) r.updateMatrixWorld();
+    pause(); yield 'rt-settle'; resume();
+    this.abandonStatic();
+    yield* this.inventorySteps(-Infinity, false, pause, resume);
+    // what changed (moves, visibility, a new geometry: rebuilt now, whatever its rebuildInterval), twice: a shape that changed while
+    // its build was queued is asked again once that build is in
+    for (let pass = 0; pass < 2; pass++) {
+      for (const r of this.recs) r.nextBuildAt = -Infinity;
+      this.detect(-Infinity);
+      pause(); yield; resume();
+      yield* this.drainSteps(-Infinity, false, pause, resume);
+    }
+    // spare capacity: what a station adds while it is played rarely has to grow the streams (a growth re-uploads them whole)
+    const B = this.buffers, h = RT_SCENE.headroom;
+    const wantNodes = Math.ceil(B.blasNodeCount * (1 + h)) + 16384, wantTris = Math.ceil(B.blasTriCount * (1 + h)) + 16384;
+    if (B.blasNodes.length < wantNodes * BVH_NODE_FLOATS || B.blasTris.length < wantTris * BLAS_TRI_FLOATS) {
+      this.startGrow(wantNodes, wantTris);
+      yield* this.drainSteps(-Infinity, false, pause, resume);
+    }
+    // every entry static (moving ones count as rested: the snapshot is taken at +Infinity), the commit within these steps
+    this.beginStatic(Infinity);
+    while (this.staticPending) { this.runStatic(-Infinity, RT_SCENE.stepMs, true); pause(); yield; resume(); }
+    this.writeDynamic(null, 0);
+    this.settledWalk = true;
+    pause();
+    this.st.settleMs = total;
+    return this.stats();
+  }
+
+  /** settleSteps to the end now (tests / tools). */
+  settle(): RtSceneStats {
+    const g = this.settleSteps();
+    let r = g.next();
+    while (!r.done) r = g.next();
+    return r.value;
+  }
+
+  /** Runs the pending BLAS work to the end as paced steps (a yield every RT_SCENE.stepMs of work). */
+  private *drainSteps(now: number, initial: boolean, pause: () => void, resume: () => void): Generator<void, void, void> {
+    let t = performance.now();
+    while (this.workStep(now, initial)) {
+      if (performance.now() - t >= RT_SCENE.stepMs) { pause(); yield; resume(); t = performance.now(); }
+    }
+  }
+
+  /**
+   * One chunk of the pending BLAS work, in this order: growing the streams, packing a BLAS into them, a BLAS build, a deferred
+   * material record. False when nothing is pending.
+   */
+  private workStep(now: number, initial: boolean): boolean {
+    if (this.grow) { this.growStep(); return true; }
+    if (this.packs.length) { this.packStep(now); return true; }
+    if (this.jobs.length) {
+      const j = this.jobs[0];
+      if (j.job.run(RT_SCENE.chunkWork)) {
+        const tf = performance.now();
+        this.jobs.shift();
+        this.finishJob(j, now, initial);
+        this.phase.finish += performance.now() - tf;
+      }
+      return true;
+    }
+    if (this.matQueue.length) { this.materialStep(); return true; }
+    return false;
+  }
+
+  /** A deferred material record: read now (its texture mean); a map not decoded yet goes to the provisional retries. */
+  private materialStep(): void {
+    const q = this.matQueue.shift()!, ok = {ok: false};
+    const rec = rtMaterialRecord(q.m, ok);
+    this.writeMaterial(q.slot, rec);
+    if (!ok.ok) this.provisional.push({m: q.m, slot: q.slot, at: this.st.inventories + 1, wait: 1});
+  }
+
+  /**
    * One frame: `now` (seconds, any monotonic clock), this frame's capsules (`bodies`: x, z, radius, y0, y1 each, `bodyCount` of
-   * them: FlashOccluders.bodies), and the main-thread ms BLAS builds may use this frame. Bounded otherwise (see the file comment).
+   * them: FlashOccluders.bodies), and `budgetMs`: the main-thread ms this sync may reach with catch-up work — BLAS work runs while
+   * the frame's sync (its walk and change check included) is under it; a pending static rebuild gets what is left, up to
+   * staticBudgetMs, and at least one chunk. Bounded otherwise (see the file comment).
    */
   sync(now: number, bodies: ArrayLike<number> | null, bodyCount: number, budgetMs: number): void {
     if (!this.prepared) return;
-    const t0 = performance.now();
-    if (now - this.lastInventory >= RT_SCENE.inventoryInterval) {
+    const t0 = performance.now(), P = this.phase;
+    P.inventory = P.finish = 0;
+    if (this.settledWalk) { this.settledWalk = false; this.lastInventory = now; } // (settleSteps walked it all: the next walk one interval on)
+    else if (now - this.lastInventory >= RT_SCENE.inventoryInterval) {
+      this.deferTextures = true;
       const g = this.inventorySteps(now, false, null, null);
       while (!g.next().done) { /* (synchronous) */ }
+      this.deferTextures = false;
       this.lastInventory = now;
     }
+    const t1 = performance.now();
     this.detect(now);
-    // BLAS builds within the budget
+    // BLAS work (growth, packing, builds, deferred materials) while the frame's sync is within the budget
     const tb = performance.now();
-    while (this.jobs.length && performance.now() - tb < budgetMs) {
-      const j = this.jobs[0];
-      if (j.job.run(RT_SCENE.chunkWork)) { this.jobs.shift(); this.finishJob(j, now, false); }
-    }
-    // rested entries back into the static tree (built across frames)
-    if (!this.staticPending && now - this.lastStatic >= RT_SCENE.staticInterval && (this.staticGarbage > 0 || this.anyRested(now))) this.beginStatic(now);
-    if (this.staticPending) this.runStatic(now, this.staticBudgetMs);
+    while (performance.now() - t0 < budgetMs && this.workStep(now, false)) { /* (chunks) */ }
+    const t3 = performance.now();
+    // rested entries back into the static tree (built across frames); disabled slots go with it, or alone once they are many
+    if (!this.staticPending && now - this.lastStatic >= RT_SCENE.staticInterval && (this.garbageDue() || this.anyRested(now))) this.beginStatic(now);
+    if (this.staticPending) this.runStatic(now, Math.min(this.staticBudgetMs, Math.max(0, budgetMs - (t3 - t0))), false);
+    const t4 = performance.now();
     this.writeDynamic(bodies, bodyCount);
-    const us = (performance.now() - t0) * 1000;
+    const t5 = performance.now();
+    P.inventory = (t1 - t0) * 1000; P.detect = (tb - t1) * 1000; P.work = (t3 - tb) * 1000; P.finish *= 1000; P.static = (t4 - t3) * 1000; P.dynamic = (t5 - t4) * 1000;
+    const us = (t5 - t0) * 1000;
     this.st.lastSyncUs = us;
     if (us > this.st.peakSyncUs) this.st.peakSyncUs = us;
   }
@@ -515,9 +657,11 @@ export class RtScene {
     for (let i = this.provisional.length - 1; i >= 0; i--) {
       const p = this.provisional[i];
       if (inv < p.at) continue;
-      const ok = {ok: false};
-      const rec = rtMaterialRecord(p.m, ok);
+      // (a texture mean that can now be read: sync defers the read itself to its budgeted work)
+      const ok: {ok: boolean; deferred?: boolean} = {ok: false};
+      const rec = rtMaterialRecord(p.m, ok, {deferTexture: this.deferTextures});
       if (ok.ok) { this.writeMaterial(p.slot, rec); this.provisional.splice(i, 1); }
+      else if (ok.deferred) { this.provisional.splice(i, 1); this.matQueue.push({m: p.m, slot: p.slot}); }
       else { p.wait = Math.min(p.wait * 2, RT_SCENE.provisionalMaxWait); p.at = inv + p.wait; }
     }
     this.excluded = ex;
@@ -593,21 +737,39 @@ export class RtScene {
   /** Traces `rec` with `build` (packed now; a cap that does not fit leaves it out, counted). */
   private attach(rec: Rec, build: BlasBuild, now: number, initial: boolean): void {
     if (rec.packed && rec.packed.build === build) return;
-    const p = this.pack(build);
-    if (!p.packed) {
-      // a cap: the object is left out (its old BLAS too: what is traced must be what is drawn)
-      const why = p.reason!;
-      if (rec.omitted !== why) { this.omitMeshes[why]++; this.omitTris[why] += build.triCount; }
-      rec.omitted = why;
-      for (const e of rec.entries) this.hide(e);
-      rec.entries.length = 0;
-      this.release(rec);
-      return;
+    const have = this.packedOf.get(build);
+    if (have) { this.attachPacked(rec, have, now, initial); return; }
+    let t = this.packOf.get(build);
+    if (!t) {
+      const why = this.capReason(build);
+      if (why) {
+        // a cap: the object is left out (its old BLAS too: what is traced must be what is drawn)
+        if (rec.omitted !== why) { this.omitMeshes[why]++; this.omitTris[why] += build.triCount; }
+        rec.omitted = why;
+        for (const e of rec.entries) this.hide(e);
+        rec.entries.length = 0;
+        this.release(rec);
+        return;
+      }
+      // (packed by the budgeted work: a copy of the whole BLAS is per-triangle work)
+      t = {build, geometry: rec.geometry, nodeBase: -1, triBase: -1, at: 0, waiters: []};
+      this.packs.push(t);
+      this.packOf.set(build, t);
+      this.reservedNodes += build.nodeCount;
+      this.reservedTris += build.triCount;
     }
+    t.waiters.push({rec, initial});
+    rec.jobQueued = true;
+  }
+
+  /** Traces `rec` with the packed `p` (its entries made, or moved onto the new shape). */
+  private attachPacked(rec: Rec, p: Packed, now: number, initial: boolean): void {
+    const build = p.build;
+    if (rec.packed === p) return;
     this.release(rec);
     rec.omitted = null;
-    rec.packed = p.packed;
-    if (p.packed.refs++ === 0 && p.packed.dead) { p.packed.dead = false; this.deadTris -= build.triCount; } // (used again before a compaction)
+    rec.packed = p;
+    if (p.refs++ === 0 && p.dead) { p.dead = false; this.deadTris -= build.triCount; } // (used again before a compaction)
     rec.empty = build.triCount === 0;
     if (rec.empty) {
       for (const e of rec.entries) this.hide(e);
@@ -837,6 +999,11 @@ export class RtScene {
     e.state = ST_HIDDEN;
   }
 
+  private garbageDue(): boolean {
+    const g = this.staticGarbage;
+    return g > 0 && g >= this.buffers.layout.staticInstanceCount * RT_SCENE.staticGarbageShare;
+  }
+
   private anyRested(now: number): boolean {
     const M = this.moving, rest = RT_SCENE.restSeconds;
     for (let i = 0; i < M.length; i++) if (now - M[i].lastMove >= rest) return true;
@@ -846,59 +1013,125 @@ export class RtScene {
   // ------------------------------------------------------------------------------------------------------------------------------
   // packing
 
-  /** The scene's copy of `build` (appended now), or the cap it does not fit. */
-  private pack(build: BlasBuild): {packed: Packed | null; reason: RtOmitReason | null} {
-    const have = this.packedOf.get(build);
-    if (have) return {packed: have, reason: null};
+  /** The cap `build` would exceed once packed after what is packed and queued (null: it fits). */
+  private capReason(build: BlasBuild): RtOmitReason | null {
     const B = this.buffers;
-    const nodes = B.blasNodeCount + build.nodeCount, tris = B.blasTriCount + build.triCount;
-    if (tris > this.maxTriangles) return {packed: null, reason: 'triangles'};
-    if (nodes * BVH_NODE_FLOATS * 4 > this.maxBlasNodeBytes) return {packed: null, reason: 'blasNodeBytes'};
-    if (tris * BLAS_TRI_FLOATS * 4 > this.maxBlasTriBytes) return {packed: null, reason: 'blasTriBytes'};
-    this.ensureBlas(nodes, tris);
-    const nodeBase = B.blasNodeCount, triBase = B.blasTriCount;
-    this.copyBlas(build, nodeBase, triBase);
-    B.blasNodeCount = nodes;
-    B.blasTriCount = tris;
-    B.dirtyBlas(nodeBase, nodes, triBase, tris);
-    const p: Packed = {build, nodeBase, triBase, refs: 0, dead: false};
-    this.packedOf.set(build, p);
-    return {packed: p, reason: null};
+    const nodes = B.blasNodeCount + this.reservedNodes + build.nodeCount, tris = B.blasTriCount + this.reservedTris + build.triCount;
+    if (tris > this.maxTriangles) return 'triangles';
+    if (nodes * BVH_NODE_FLOATS * 4 > this.maxBlasNodeBytes) return 'blasNodeBytes';
+    if (tris * BLAS_TRI_FLOATS * 4 > this.maxBlasTriBytes) return 'blasTriBytes';
+    return null;
   }
 
-  private copyBlas(build: BlasBuild, nodeBase: number, triBase: number): void {
-    const B = this.buffers, N = B.blasNodes, NU = B.blasNodesU32, src = build.nodes, srcU = new Uint32Array(src.buffer, src.byteOffset, src.length);
-    N.set(src, nodeBase * BVH_NODE_FLOATS);
-    for (let k = 0; k < build.nodeCount; k++) {
+  /**
+   * One chunk of the first queued packing: its bases reserved at the end of the streams (a growth first when they are full), then
+   * RT_SCENE.copyChunk floats of its nodes (rebased) and triangles; once whole, its waiting objects are traced with it.
+   */
+  private packStep(now: number): void {
+    const t = this.packs[0], b = t.build, B = this.buffers;
+    if (t.nodeBase < 0) {
+      const nodes = B.blasNodeCount + b.nodeCount, tris = B.blasTriCount + b.triCount;
+      if (B.blasNodes.length < nodes * BVH_NODE_FLOATS || B.blasTris.length < tris * BLAS_TRI_FLOATS) {
+        this.startGrow(B.blasNodeCount + this.reservedNodes, B.blasTriCount + this.reservedTris);
+        return;
+      }
+      t.nodeBase = B.blasNodeCount; t.triBase = B.blasTriCount;
+      B.blasNodeCount = nodes; B.blasTriCount = tris;
+      t.at = 0;
+    }
+    // nodes [0, nodeCount * 8) then triangles [0, triCount * 12), as one run of floats
+    const nf = b.nodeCount * BVH_NODE_FLOATS, total = nf + b.triCount * BLAS_TRI_FLOATS;
+    const end = Math.min(total, t.at + RT_SCENE.copyChunk);
+    if (t.at < nf) {
+      const e = Math.min(nf, end), k0 = t.at / BVH_NODE_FLOATS, k1 = e / BVH_NODE_FLOATS;
+      this.copyNodes(b, t.nodeBase, t.triBase, k0, k1);
+      B.dirtyBlas(t.nodeBase + k0, t.nodeBase + k1, 0, 0);
+      t.at = e;
+    }
+    if (t.at >= nf && t.at < end) {
+      const f0 = t.at - nf, f1 = end - nf;
+      B.blasTris.set(b.tris.subarray(f0, f1), t.triBase * BLAS_TRI_FLOATS + f0);
+      B.dirtyBlas(0, 0, t.triBase + f0 / BLAS_TRI_FLOATS, t.triBase + f1 / BLAS_TRI_FLOATS);
+      t.at = end;
+    }
+    if (t.at < total) return;
+    this.packs.shift();
+    this.packOf.delete(b);
+    this.reservedNodes -= b.nodeCount;
+    this.reservedTris -= b.triCount;
+    const p: Packed = {build: b, nodeBase: t.nodeBase, triBase: t.triBase, refs: 0, dead: false};
+    this.packedOf.set(b, p);
+    for (const w of t.waiters) {
+      w.rec.jobQueued = false;
+      if (!w.rec.alive || w.rec.geometry !== t.geometry) continue; // (gone, or a newer shape since: detect asks again)
+      this.attachPacked(w.rec, p, now, w.initial);
+    }
+  }
+
+  /** Nodes [k0, k1) of `build` into the packed stream at `nodeBase` (leaf A + triBase, interior A + nodeBase). */
+  private copyNodes(build: BlasBuild, nodeBase: number, triBase: number, k0: number, k1: number): void {
+    const B = this.buffers, NU = B.blasNodesU32, src = build.nodes, srcU = new Uint32Array(src.buffer, src.byteOffset, src.length);
+    B.blasNodes.set(src.subarray(k0 * BVH_NODE_FLOATS, k1 * BVH_NODE_FLOATS), (nodeBase + k0) * BVH_NODE_FLOATS);
+    for (let k = k0; k < k1; k++) {
       const f = (nodeBase + k) * BVH_NODE_FLOATS, s = k * BVH_NODE_FLOATS;
       NU[f + 3] = srcU[s + 3] + (srcU[s + 7] === 0 ? nodeBase : triBase);
     }
-    B.blasTris.set(build.tris, triBase * BLAS_TRI_FLOATS);
   }
 
-  private ensureBlas(nodes: number, tris: number): void {
+  /** Starts growing the BLAS streams to hold `nodes` / `triangles` (×1.5 steps, within the caps): copied by growStep. */
+  private startGrow(nodes: number, tris: number): void {
+    if (this.grow) return;
     const B = this.buffers;
+    let N: Float32Array<ArrayBuffer> | null = null, T: Float32Array<ArrayBuffer> | null = null;
     if (B.blasNodes.length < nodes * BVH_NODE_FLOATS) {
       const cap = Math.min(Math.floor(this.maxBlasNodeBytes / 4 / BVH_NODE_FLOATS), Math.max(nodes, Math.ceil(B.blasNodes.length / BVH_NODE_FLOATS * 1.5), 4096));
-      const a = new Float32Array(cap * BVH_NODE_FLOATS);
-      a.set(B.blasNodes.subarray(0, B.blasNodeCount * BVH_NODE_FLOATS));
-      B.blasNodes = a; B.blasNodesU32 = new Uint32Array(a.buffer);
-      B.blasArrayVersion++;
-      B.dirtyBlas(0, B.blasNodeCount, 0, 0);
+      N = new Float32Array(Math.max(cap, nodes) * BVH_NODE_FLOATS);
     }
     if (B.blasTris.length < tris * BLAS_TRI_FLOATS) {
       const cap = Math.min(Math.floor(this.maxBlasTriBytes / 4 / BLAS_TRI_FLOATS), Math.max(tris, Math.ceil(B.blasTris.length / BLAS_TRI_FLOATS * 1.5), 4096));
-      const a = new Float32Array(cap * BLAS_TRI_FLOATS);
-      a.set(B.blasTris.subarray(0, B.blasTriCount * BLAS_TRI_FLOATS));
-      B.blasTris = a; B.blasTrisU32 = new Uint32Array(a.buffer);
-      B.blasArrayVersion++;
-      B.dirtyBlas(0, 0, 0, B.blasTriCount);
+      T = new Float32Array(Math.max(cap, tris) * BLAS_TRI_FLOATS);
     }
+    if (N || T) this.grow = {nodes: N, tris: T, nodeAt: 0, triAt: 0};
   }
 
-  /** Re-packs only the BLAS still used (when the dead ones waste a quarter and more): every base moves, everything is dirty. */
+  /** One chunk of the growth: RT_SCENE.copyChunk floats of the used streams into the new arrays; swapped in once whole. */
+  private growStep(): void {
+    const g = this.grow!, B = this.buffers;
+    let left = RT_SCENE.copyChunk;
+    const nf = B.blasNodeCount * BVH_NODE_FLOATS, tf = B.blasTriCount * BLAS_TRI_FLOATS;
+    if (g.nodes && g.nodeAt < nf) {
+      const e = Math.min(nf, g.nodeAt + left);
+      g.nodes.set(B.blasNodes.subarray(g.nodeAt, e), g.nodeAt);
+      left -= e - g.nodeAt;
+      g.nodeAt = e;
+    }
+    if (g.tris && g.triAt < tf && left > 0) {
+      const e = Math.min(tf, g.triAt + left);
+      g.tris.set(B.blasTris.subarray(g.triAt, e), g.triAt);
+      g.triAt = e;
+    }
+    if ((g.nodes && g.nodeAt < nf) || (g.tris && g.triAt < tf)) return;
+    // whole: the new arrays replace the old (the consumer reallocates and uploads the used part: blasArrayVersion)
+    if (g.nodes) { B.blasNodes = g.nodes; B.blasNodesU32 = new Uint32Array(g.nodes.buffer); }
+    if (g.tris) { B.blasTris = g.tris; B.blasTrisU32 = new Uint32Array(g.tris.buffer); }
+    B.blasArrayVersion++;
+    B.dirtyBlas(0, B.blasNodeCount, 0, B.blasTriCount);
+    this.grow = null;
+  }
+
+  /** All of `build` into the streams now (compaction only: a loading step). */
+  private copyBlas(build: BlasBuild, nodeBase: number, triBase: number): void {
+    this.copyNodes(build, nodeBase, triBase, 0, build.nodeCount);
+    this.buffers.blasTris.set(build.tris.subarray(0, build.triCount * BLAS_TRI_FLOATS), triBase * BLAS_TRI_FLOATS);
+  }
+
+  /**
+   * Re-packs only the BLAS still used (when the dead ones waste a quarter and more): every base moves, everything is dirty. A
+   * loading step only (prepareSteps / settleSteps' static commit, with no packing queued): it copies every live BLAS at once.
+   */
   private compactIfWasteful(): boolean {
     const B = this.buffers;
+    if (this.packs.length || this.grow) return false;
     if (this.deadTris < 65536 || this.deadTris < B.blasTriCount * 0.25) return false;
     const live: Packed[] = [];
     for (const p of this.packedOf.values()) if (p.refs > 0) live.push(p);
@@ -945,9 +1178,10 @@ export class RtScene {
     const L = this.buffers.layout, slot = L.materialCount;
     if (slot >= L.materialCap) this.relayout(L.staticInstanceCap, L.staticNodeCap, Math.ceil((slot + 1) * 1.5 / 64) * 64);
     L.materialCount = slot + 1;
-    const ok = {ok: false};
-    const rec = rtMaterialRecord(m, ok);
-    if (!ok.ok) this.provisional.push({m, slot, at: 0, wait: 1});
+    const ok: {ok: boolean; deferred?: boolean} = {ok: false};
+    const rec = rtMaterialRecord(m, ok, {deferTexture: this.deferTextures});
+    if (ok.deferred) this.matQueue.push({m, slot});
+    else if (!ok.ok) this.provisional.push({m, slot, at: 0, wait: 1});
     this.writeMaterial(slot, rec);
     return slot;
   }
@@ -1036,7 +1270,16 @@ export class RtScene {
   /** A whole static TLAS rebuild now (the prepare). */
   private rebuildStatic(now: number): void {
     this.beginStatic(now);
-    this.runStatic(now, Infinity);
+    this.runStatic(now, Infinity, true);
+  }
+
+  /** Drops a pending static rebuild (the current tree and its slots stay as they are). */
+  private abandonStatic(): void {
+    this.staticPending = false;
+    this.staticPhase = 0;
+    this.staticRecs.length = 0;
+    this.staticList.length = 0;
+    this.staticRested.length = this.staticTouched.length = 0;
   }
 
   /** The entry's slot in the current static tree (-1: none). */
@@ -1084,13 +1327,16 @@ export class RtScene {
     this.pendingGen++;
   }
 
-  /** Continues the pending static rebuild for about `budgetMs` (at least one chunk); commits it when it finishes. */
-  private runStatic(now: number, budgetMs: number): void {
+  /**
+   * Continues the pending static rebuild for about `budgetMs` (at least one chunk); commits it when it finishes (`compact`: a
+   * loading step, which may compact the BLAS streams at the commit).
+   */
+  private runStatic(now: number, budgetMs: number, compact: boolean): void {
     const tb = this.staticBuilder, t0 = performance.now();
     do {
       if (this.staticPhase === 1) this.listStatic(RT_SCENE.staticListChunk);
       else if (this.staticPhase === 2) { if (tb.run(RT_SCENE.staticWork)) { this.staticPhase = 3; this.staticCursor = 0; this.stageDisabled = 0; } }
-      else if (this.writeStatic(RT_SCENE.staticListChunk)) { this.commitStatic(now); return; }
+      else if (this.writeStatic(RT_SCENE.staticListChunk)) { this.commitStatic(now, compact); return; }
     } while (performance.now() - t0 < budgetMs);
   }
 
@@ -1154,10 +1400,10 @@ export class RtScene {
    * rested moving entries become static and the slot generation flips. A compaction (when wasteful) happens here: every staged
    * record is written again then (its BLAS root moved).
    */
-  private commitStatic(now: number): void {
+  private commitStatic(now: number, compact: boolean): void {
     this.staticPending = false;
     this.staticPhase = 0;
-    const compacted = this.compactIfWasteful();
+    const compacted = compact && this.compactIfWasteful();
     const tb = this.staticBuilder, list = this.staticList, n = list.length, F = RT_INSTANCE_VEC4 * 4;
     const S = this.staticStage, SU = this.staticStageU32;
     if (compacted) {
@@ -1272,7 +1518,7 @@ export class RtScene {
     for (const p of this.packedOf.values()) if (p.refs > 0) packedBlas++;
     return {
       triangles: B.blasTriCount, blasNodes: B.blasNodeCount, blasCount: packedBlas, deadTriangles: this.deadTris,
-      meshes: this.recs.filter(r => r.packed && !r.empty).length, entries, pendingBuilds: this.jobs.length, staticBuildPending: this.staticPending,
+      meshes: this.recs.filter(r => r.packed && !r.empty).length, entries, pendingBuilds: this.jobs.length + this.packs.length + (this.grow ? 1 : 0), staticBuildPending: this.staticPending, lastSyncPhases: {...this.phase},
       instances: {static: L.staticInstanceCount, dynamic: L.dynamicInstanceCount, capsules, moving: this.moving.length, hidden},
       materials: L.materialCount,
       bytes: {blasNodes: B.blasNodeCount * BVH_NODE_FLOATS * 4, blasTris: B.blasTriCount * BLAS_TRI_FLOATS * 4, tlas: L.vec4Count * 16},
@@ -1281,7 +1527,7 @@ export class RtScene {
       omitted: {meshes: {...this.omitMeshes}, triangles: {...this.omitTris}, dynamic: this.st.omitDyn},
       excluded: {...this.excluded},
       blasBuilt: this.st.blasBuilt, blasBuildMs: this.st.blasBuildMs, degenerateTriangles: this.st.degenerate, blasReused: this.st.blasReused,
-      prepareMs: this.st.prepareMs, prepareBlasMs: this.st.prepareBlasMs,
+      prepareMs: this.st.prepareMs, prepareBlasMs: this.st.prepareBlasMs, settleMs: this.st.settleMs,
       staticRebuilds: this.st.staticRebuilds, inventories: this.st.inventories, compactions: this.st.compactions,
       lastInventoryUs: this.st.inventoryUs, lastInventoryObjects: this.st.inventoryObjects,
     };
