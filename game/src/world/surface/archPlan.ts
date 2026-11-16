@@ -159,6 +159,23 @@ export interface TentPlan {
 
 export interface RailSpur { points: {x: number; z: number}[]; y: number; gauge: number; buffer: {x: number; z: number; yaw: number} | null }
 
+/**
+ * Lane ROOMS' depot shed gear as published on `layout.surface.depot.features` (gen/surface/surfaceTypes.ts SurfaceDepotFeatures; read
+ * structurally here: world metres, absolute heights). Optional and additive: absent = nothing drawn.
+ */
+export interface DepotFeaturesIn {
+  tracks?: {x0: number; z0: number; x1: number; z1: number; gauge: number}[];
+  pits?: {x0: number; z0: number; x1: number; z1: number; depth: number}[];
+  crane?: {x0: number; z0: number; x1: number; z1: number; span: number; y: number; at: number; hookY: number; axis: 'x' | 'z'} | null;
+}
+
+/** The depot shed's gear LOOK draws (validated, floors resolved): embedded rails, the grated inspection pit, the overhead crane. */
+export interface DepotGear {
+  tracks: {x0: number; z0: number; x1: number; z1: number; gauge: number; y: number}[];
+  pits: {x0: number; z0: number; x1: number; z1: number; y: number}[];
+  crane: {x0: number; z0: number; x1: number; z1: number; y: number; at: number; hookY: number; axis: 'x' | 'z'; floor: number} | null;
+}
+
 export interface SurfaceLookPlan {
   W: number; H: number;
   seed: number;
@@ -182,6 +199,8 @@ export interface SurfaceLookPlan {
   spans: ReadonlyMap<string, SurfaceWindowSpan>;
   tent: TentPlan | null;
   rail: RailSpur | null;
+  /** The depot shed's tracks / pit / crane (lane ROOMS' features), null when none were published. */
+  depot: DepotGear | null;
   placements: Placement[];
   /** The playable rect inside the cordon (world m). */
   inner: SRect;
@@ -497,7 +516,8 @@ function planSurfaceLook(layout: StationLayout, S: SurfaceInfo): SurfaceLookPlan
   }
 
   const tent = planTent(S, owner, W, tentB ?? null, floorAt);
-  const rail = genRail(GG, floorAt) ?? planRail(S, buildings, segments, floorAt);
+  const depot = depotGear(S, floorAt);
+  const rail = genRail(GG, floorAt) ?? planRail(S, buildings, segments, floorAt, !!depot?.tracks.length);
   stats.buildings = buildings.length;
   stats.holes = buildings.reduce((a, b) => a + b.holes.length, 0);
   stats.airHoles = buildings.reduce((a, b) => a + b.holes.filter(h => h.kind === 'air').length, 0);
@@ -506,7 +526,10 @@ function planSurfaceLook(layout: StationLayout, S: SurfaceInfo): SurfaceLookPlan
   stats.decals = decals.length;
   stats.discs = discs.length;
   stats.placements = placements.length;
-  return {W, H, seed, ground, owner, outdoorAreas, areaBuilding, tentAreas, doorCells, segments, decals, discs, buildings, spans, tent, rail, placements, inner, stats};
+  stats.depotTracks = depot?.tracks.length ?? 0;
+  stats.depotPits = depot?.pits.length ?? 0;
+  stats.depotCrane = depot?.crane ? 1 : 0;
+  return {W, H, seed, ground, owner, outdoorAreas, areaBuilding, tentAreas, doorCells, segments, decals, discs, buildings, spans, tent, rail, depot, placements, inner, stats};
 }
 
 function axisRect(kind: DecalKind, axis: 'x' | 'z', s0: number, s1: number, c0: number, c1: number, y: number): Decal {
@@ -810,8 +833,32 @@ function genRail(S: GenGround, floorAt: (x: number, z: number) => number): RailS
   return {points: pts, y: floorAt(pts[0].x, pts[0].z), gauge: 1.435, buffer: null};
 }
 
-/** The rail spur: from deep in the depot, out through its widest entrance, across the street, along it to the cordon. */
-function planRail(S: SurfaceInfo, buildings: BuildingLook[], segs: StreetSeg[], floorAt: (x: number, z: number) => number): RailSpur | null {
+/**
+ * The depot's gear from lane ROOMS' features (finite numbers only; a track shorter than 1 m, an empty pit, a crane box under 2 m or a
+ * runway under 3 m above the floor is dropped): floors from the grid at each piece's middle.
+ */
+export function depotGear(S: SurfaceInfo, floorAt: (x: number, z: number) => number): DepotGear | null {
+  const F = (S.depot as (typeof S.depot & {features?: DepotFeaturesIn | null}) | undefined)?.features;
+  if (!F) return null;
+  const fin = (...v: number[]) => v.every(Number.isFinite);
+  const tracks = (F.tracks ?? []).filter(t => fin(t.x0, t.z0, t.x1, t.z1, t.gauge) && t.gauge > 0.5 && t.gauge < 3 && Math.hypot(t.x1 - t.x0, t.z1 - t.z0) > 1)
+    .map(t => ({x0: t.x0, z0: t.z0, x1: t.x1, z1: t.z1, gauge: t.gauge, y: floorAt((t.x0 + t.x1) / 2, (t.z0 + t.z1) / 2)}));
+  const pits = (F.pits ?? []).filter(q => fin(q.x0, q.z0, q.x1, q.z1) && q.x1 - q.x0 > 0.2 && q.z1 - q.z0 > 0.2)
+    .map(q => ({x0: q.x0, z0: q.z0, x1: q.x1, z1: q.z1, y: floorAt((q.x0 + q.x1) / 2, (q.z0 + q.z1) / 2)}));
+  const c = F.crane;
+  let crane: DepotGear['crane'] = null;
+  if (c && fin(c.x0, c.z0, c.x1, c.z1, c.y, c.at, c.hookY) && (c.axis === 'x' || c.axis === 'z') && c.x1 - c.x0 > 2 && c.z1 - c.z0 > 2) {
+    const floor = floorAt((c.x0 + c.x1) / 2, (c.z0 + c.z1) / 2);
+    if (c.y - floor > 3) crane = {x0: c.x0, z0: c.z0, x1: c.x1, z1: c.z1, y: c.y, at: clamp(c.at, 0.05, 0.95), hookY: clamp(c.hookY, floor + 2.2, c.y - 1.6), axis: c.axis, floor};
+  }
+  return tracks.length || pits.length || crane ? {tracks, pits, crane} : null;
+}
+
+/**
+ * The rail spur: from deep in the depot, out through its widest entrance, across the street, along it to the cordon. `shedTracks`: lane
+ * ROOMS drew the shed's own tracks (DepotGear), so the spur stops at the doorway.
+ */
+function planRail(S: SurfaceInfo, buildings: BuildingLook[], segs: StreetSeg[], floorAt: (x: number, z: number) => number, shedTracks = false): RailSpur | null {
   const dep = buildings.find(b => b.id === S.depot.building);
   if (!dep) return null;
   const b = dep.b, fp = b.footprint;
@@ -826,7 +873,7 @@ function planRail(S: SurfaceInfo, buildings: BuildingLook[], segs: StreetSeg[], 
   const para = segs.filter(s => (s.axis === 'x') === alongX && (n > 0 ? s.c > plane : s.c < plane) && c >= s.s0 - 20 && c <= s.s1 + 20)
     .sort((p, q) => Math.abs(p.c - plane) - Math.abs(q.c - plane))[0];
   const out = para ? Math.abs(para.c - plane) : 12;
-  const pts: {x: number; z: number}[] = [P(c, -Math.max(3, depthIn - 4)), P(c, out - 6)];
+  const pts: {x: number; z: number}[] = [P(c, shedTracks ? -0.3 : -Math.max(3, depthIn - 4)), P(c, out - 6)];
   // a quarter curve (radius 6 m) onto the street toward the nearer district edge, then along it
   const toLow = para ? (c - para.s0 < para.s1 - c) : true;
   const sgn = toLow ? -1 : 1;

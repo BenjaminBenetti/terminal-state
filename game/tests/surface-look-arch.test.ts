@@ -11,7 +11,7 @@ import {lookFixture, plainLayout} from './helpers/surfaceLookFixture';
 import {WorldMaterials} from '../src/world/materials';
 import {buildWorld, type BuiltWorld} from '../src/world/builder';
 import type {BuiltFace} from '../src/world/levelGeometry';
-import {SurfaceArch, cutFace} from '../src/world/surface/arch';
+import {SurfaceArch, coarsenSurfaceArch, cutFace} from '../src/world/surface/arch';
 import {LOOK_TUNE, SIDE_NORMAL, entranceFloor, surfaceLookPlan, type FacadeSide} from '../src/world/surface/archPlan';
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
@@ -80,6 +80,51 @@ describe('Surface Run look: the district architecture', () => {
     expect(shells).toBeGreaterThan(40);
     const keys = new Set(w.surfaceArch!.meshes.map(m => m.userData.surfaceArch as string | undefined));
     for (const k of ['surface-roof', 'surface-coping']) expect(keys.has(k), k).toBe(true);
+  });
+
+  it("the builder's own district architecture is merged into 96 m cells (draw calls); level tags kept", () => {
+    const {w} = district(), st = w.surfaceArch!.stats;
+    expect(st.builderMeshesBefore).toBeGreaterThan(500);
+    expect(st.builderMeshes).toBeLessThan(st.builderMeshesBefore * 0.75);
+    const arch = w.group.children.filter(o => (o as THREE.Mesh).isMesh && o.name.startsWith('surface-arch-') && o.userData.surfaceArch === undefined) as THREE.Mesh[];
+    expect(arch.length).toBe(st.builderMeshes);
+    for (const m of arch) {
+      expect(typeof m.userData.level, m.name).toBe('number');
+      expect(m.geometry.boundingSphere, m.name).toBeTruthy();
+    }
+  });
+
+  it('coarsenSurfaceArch: same material / level / cell pieces merge, triangles kept, originals released, other meshes untouched', () => {
+    const g = new THREE.Group(), A = new THREE.MeshBasicMaterial(), B = new THREE.MeshBasicMaterial();
+    let released = 0;
+    const piece = (x: number, z: number, mat: THREE.Material, level = 0, name = 'surface-arch-surface-road') => {
+      const geo = new THREE.BoxGeometry(1, 1, 1).translate(x, 0, z);
+      geo.clearGroups();
+      geo.addEventListener('dispose', () => { released++; });
+      const m = new THREE.Mesh(geo, mat);
+      m.name = name; m.userData.level = level; m.matrixAutoUpdate = false;
+      g.add(m);
+      return m;
+    };
+    piece(10, 10, A); piece(60, 10, A); piece(10, 60, A); // one 96 m cell, one material, one level: one mesh
+    piece(20, 20, B); piece(110, 10, A); piece(10, 10, A, 1); // another material / cell / level: each its own
+    const prop = piece(12, 12, A, 0, 'prop-crate');
+    const mine = piece(14, 14, A, 0, 'surface-arch-surface-roof@0,0');
+    mine.userData.surfaceArch = 'surface-roof';
+    const tris = () => g.children.reduce((a, o) => a + ((o as THREE.Mesh).geometry.index!.count / 3), 0);
+    const t0 = tris();
+    expect(coarsenSurfaceArch(g)).toEqual({before: 6, after: 4});
+    expect(g.children).toHaveLength(6);
+    expect(tris()).toBe(t0);
+    expect(released).toBe(3);
+    expect(g.children).toContain(prop);
+    expect(g.children).toContain(mine);
+    const merged = g.children.find(o => (o as THREE.Mesh).geometry.index!.count === 3 * 36) as THREE.Mesh;
+    expect(merged.material).toBe(A);
+    expect(merged.userData.level).toBe(0);
+    merged.geometry.computeBoundingBox();
+    expect(merged.geometry.boundingBox!.min.x).toBeCloseTo(9.5, 5);
+    expect(merged.geometry.boundingBox!.max.z).toBeCloseTo(60.5, 5);
   });
 
   it("AIR's live window spans: cut through both wall planes and framed, never glazed by LOOK", () => {

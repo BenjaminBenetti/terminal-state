@@ -27,7 +27,7 @@ import {fogCullDistance} from '../levelCulling';
 import {modelParts} from '../exterior';
 import {preloadOfficeArch} from '../officeArch';
 import {SURFACE_TEXTURES, SURFACE_TEX_SLOTS, setSurfaceResourceOwner, setSurfaceTexture, surfaceArchMaterial, surfaceTexturesReady, liveSurfaceMaterials} from './archMaterials';
-import {GROUND, SIDE_NORMAL, surfaceLookPlan, type Decal, type SurfaceLookPlan} from './archPlan';
+import {GROUND, SIDE_NORMAL, surfaceLookPlan, type Decal, type DepotGear, type SurfaceLookPlan} from './archPlan';
 import {LOOK_SKY, liveLookMaterials, lookSkyMaterial, lookTune, outdoorFlatMaterial, outdoorModelMaterial, syncLookHorizon} from './lookSky';
 import {FAR_CITY_KEYS, farCityPlan, type FarCityPlan} from './lookCity';
 import {daylightStats} from './lookDaylight';
@@ -43,6 +43,8 @@ export const LOOK_DECOR = {
   chunk: 96, near: 120,
   /** Rooftop plant tile edge and its draw distance. */
   tile: 132, tileNear: 170,
+  /** The depot shed's gear: drawn within this distance of its bounding circle. */
+  depotNear: 70,
   /** Frames between distance checks. */
   every: 8,
 } as const;
@@ -61,6 +63,8 @@ const DECAL_KEY: Readonly<Record<Decal['kind'], string>> = {
 export interface SurfaceLookStats {
   buildMs: number; decorMeshes: number; decorTris: number; clutterMeshes: number; clutterInstances: number; clutterTris: number;
   farMeshes: number; farInstances: number; farTris: number; groundTris: number; decals: number; discs: number; railM: number;
+  /** The depot shed's gear (lane ROOMS' features): merged meshes (one per material) and their triangles. */
+  depotMeshes: number; depotTris: number;
   visibleDecor: number; missingModels: string[];
 }
 
@@ -150,7 +154,7 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
   const geometries: THREE.BufferGeometry[] = [], instanced: THREE.InstancedMesh[] = [], culled: Culled[] = [];
   const missing = new Set<string>();
   const stats: SurfaceLookStats = {buildMs: 0, decorMeshes: 0, decorTris: 0, clutterMeshes: 0, clutterInstances: 0, clutterTris: 0, farMeshes: 0, farInstances: 0, farTris: 0,
-    groundTris: 0, decals: plan.decals.length, discs: plan.discs.length, railM: 0, visibleDecor: 0, missingModels: []};
+    groundTris: 0, decals: plan.decals.length, discs: plan.discs.length, railM: 0, depotMeshes: 0, depotTris: 0, visibleDecor: 0, missingModels: []};
   const level0 = layout.levels?.[0]?.id ?? 0;
   const addMesh = (geo: THREE.BufferGeometry, mat: THREE.Material, name: string, parent: THREE.Object3D = root): THREE.Mesh => {
     const m = new THREE.Mesh(geo, mat);
@@ -242,9 +246,22 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
       }
       for (let s = 0.3; s < len; s += 0.65) {
         const x = a.x + ux * s, z = a.z + uz * s;
-        D('surface-sleeper', x, z).flat(x - 0.13, z - 1.3, x + 0.13, z + 1.3, R.y + 0.004, -yaw);
+        D('surface-sleeper', x, z).flat(x - 1.3, z - 0.13, x + 1.3, z + 0.13, R.y + 0.004, -yaw);
       }
     }
+  }
+  if (plan.depot) {
+    for (const [key, q] of depotGearMeshes(plan.depot)) {
+      const g = q.geometry(), mat = g ? surfaceArchMaterial(mats, key) : undefined;
+      if (!g) continue;
+      if (!mat) { g.dispose(); continue; }
+      const m = addMesh(g, mat, `surface-depot-${key}`);
+      const bs = g.boundingSphere!;
+      culled.push({obj: m, x: bs.center.x, z: bs.center.z, r: bs.radius, near: LOOK_DECOR.depotNear});
+      stats.depotMeshes++;
+      stats.depotTris += triCount(g);
+    }
+    stats.railM += plan.depot.tracks.reduce((a, t) => a + Math.hypot(t.x1 - t.x0, t.z1 - t.z0), 0);
   }
   for (const e of decor.values()) {
     const g = e.q.geometry();
@@ -317,6 +334,83 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
   stats.missingModels = [...missing];
   stats.buildMs = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
   return {root, dome, culled, geometries, instanced, far, stats};
+}
+
+/** The depot gear's materials: crane yellow / rope black are the painted-steel trim tints (the Reactor crane's yellow). */
+export const DEPOT_KEYS = {rail: 'surface-rail', groove: 'surface-gutter', pit: 'surface-void', grate: 'surface-iron', steel: 'surface-steel', yellow: 'surface-trim-b88c26', black: 'surface-trim-1d1c1b'} as const;
+
+/**
+ * The depot shed's gear (lane ROOMS' features, archPlan.ts DepotGear) as mesh data per material key:
+ *  - each track: two rails set flush in the shed floor (a hair proud) with a dark flangeway groove inside each;
+ *  - each inspection pit: the dark pit under a walkable grating (frame, bearing bars, cross bars) flush with the floor;
+ *  - the overhead travelling crane: runway girders (+ flange, crane rail) on wall brackets along both long walls, the box-girder bridge
+ *    on its end trucks at `at`, an underhung hoist mid-span, two ropes down to the hook block and the hook at `hookY` (above reach).
+ * Flush or overhead: no colliders.
+ */
+export function depotGearMeshes(G: DepotGear): Map<string, {geometry(): THREE.BufferGeometry | null}> {
+  const out = new Map<string, Mesh3>();
+  const Q = (key: string) => { let q = out.get(key); if (!q) out.set(key, (q = new Mesh3())); return q; };
+  for (const t of G.tracks) {
+    const dx = t.x1 - t.x0, dz = t.z1 - t.z0, len = Math.hypot(dx, dz), ux = dx / len, uz = dz / len, yaw = Math.atan2(ux, uz);
+    const mx = (t.x0 + t.x1) / 2, mz = (t.z0 + t.z1) / 2, half = t.gauge / 2;
+    for (const o of [-half, half]) {
+      Q(DEPOT_KEYS.rail).yawBox(mx - uz * o, mz + ux * o, 0.036, len / 2, t.y - 0.01, t.y + 0.012, yaw);
+      const g = o - Math.sign(o) * 0.07, gx = mx - uz * g, gz = mz + ux * g;
+      Q(DEPOT_KEYS.groove).flat(gx - 0.025, gz - len / 2, gx + 0.025, gz + len / 2, t.y + 0.003, -yaw);
+    }
+  }
+  for (const p of G.pits) {
+    const y = p.y, alongX = p.x1 - p.x0 >= p.z1 - p.z0;
+    Q(DEPOT_KEYS.pit).flat(p.x0, p.z0, p.x1, p.z1, y + 0.004);
+    const grate = Q(DEPOT_KEYS.grate), f = 0.06;
+    grate.box(p.x0 - f, p.x1 + f, y, y + 0.012, p.z0 - f, p.z0); grate.box(p.x0 - f, p.x1 + f, y, y + 0.012, p.z1, p.z1 + f);
+    grate.box(p.x0 - f, p.x0, y, y + 0.012, p.z0, p.z1); grate.box(p.x1, p.x1 + f, y, y + 0.012, p.z0, p.z1);
+    // bearing bars along the pit every 0.1 m, cross bars every 1 m
+    const w0 = alongX ? p.z0 : p.x0, w1 = alongX ? p.z1 : p.x1, l0 = alongX ? p.x0 : p.z0, l1 = alongX ? p.x1 : p.z1;
+    const nb = Math.max(1, Math.round((w1 - w0) / 0.1));
+    for (let k = 1; k < nb; k++) {
+      const w = w0 + ((w1 - w0) * k) / nb;
+      if (alongX) grate.flat(l0, w - 0.012, l1, w + 0.012, y + 0.008); else grate.flat(w - 0.012, l0, w + 0.012, l1, y + 0.008);
+    }
+    const nc = Math.max(1, Math.round((l1 - l0) / 1));
+    for (let k = 1; k < nc; k++) {
+      const l = l0 + ((l1 - l0) * k) / nc;
+      if (alongX) grate.flat(l - 0.02, w0, l + 0.02, w1, y + 0.01); else grate.flat(w0, l - 0.02, w1, l + 0.02, y + 0.01);
+    }
+  }
+  const c = G.crane;
+  if (c) {
+    const ax = c.axis === 'x';
+    // (a along the runway, b across it) -> world boxes
+    const AB = (key: string, a0: number, a1: number, y0: number, y1: number, b0: number, b1: number) =>
+      (ax ? Q(key).box(a0, a1, y0, y1, b0, b1) : Q(key).box(b0, b1, y0, y1, a0, a1));
+    const a0 = ax ? c.x0 : c.z0, a1 = ax ? c.x1 : c.z1, b0 = ax ? c.z0 : c.x0, b1 = ax ? c.z1 : c.x1, bm = (b0 + b1) / 2, y = c.y;
+    const at = a0 + (a1 - a0) * c.at;
+    for (const b of [b0, b1]) {
+      const out = Math.sign(b - bm) || 1;
+      AB(DEPOT_KEYS.steel, a0, a1, y - 0.62, y - 0.07, b - 0.13, b + 0.13);
+      AB(DEPOT_KEYS.steel, a0, a1, y - 0.07, y - 0.04, b - 0.19, b + 0.19);
+      AB(DEPOT_KEYS.black, a0, a1, y - 0.04, y, b - 0.035, b + 0.035);
+      const nk = Math.max(1, Math.round((a1 - a0) / 6));
+      for (let k = 0; k <= nk; k++) {
+        const a = a0 + 0.15 + ((a1 - a0 - 0.3) * k) / nk;
+        AB(DEPOT_KEYS.steel, a - 0.12, a + 0.12, y - 1.0, y - 0.62, Math.min(b - out * 0.13, b + out * 0.3), Math.max(b - out * 0.13, b + out * 0.3));
+      }
+      // the bridge's end truck riding this runway
+      AB(DEPOT_KEYS.yellow, at - 1.5, at + 1.5, y, y + 0.42, b - 0.2, b + 0.2);
+    }
+    // the box-girder bridge (two girders), the underhung hoist mid-span, ropes, block and hook
+    for (const o of [-0.42, 0.42]) AB(DEPOT_KEYS.yellow, at + o - 0.17, at + o + 0.17, y + 0.08, y + 0.72, b0 - 0.05, b1 + 0.05);
+    AB(DEPOT_KEYS.yellow, at - 0.55, at + 0.55, y - 0.5, y + 0.08, bm - 0.6, bm + 0.6);
+    AB(DEPOT_KEYS.steel, at - 0.32, at + 0.32, y - 0.46, y - 0.12, bm - 0.78, bm + 0.78);
+    const blockTop = c.hookY + 0.95;
+    if (y - 0.5 - blockTop > 0.05) for (const o of [-0.1, 0.1]) AB(DEPOT_KEYS.black, at + o - 0.012, at + o + 0.012, blockTop, y - 0.5, bm - 0.012, bm + 0.012);
+    AB(DEPOT_KEYS.yellow, at - 0.18, at + 0.18, c.hookY + 0.45, blockTop, bm - 0.28, bm + 0.28);
+    AB(DEPOT_KEYS.steel, at - 0.04, at + 0.04, c.hookY, c.hookY + 0.45, bm - 0.04, bm + 0.04);
+    AB(DEPOT_KEYS.steel, at - 0.05, at + 0.05, c.hookY, c.hookY + 0.07, bm - 0.17, bm + 0.04);
+    AB(DEPOT_KEYS.steel, at - 0.05, at + 0.05, c.hookY + 0.07, c.hookY + 0.2, bm - 0.17, bm - 0.1);
+  }
+  return out;
 }
 
 /** Releases what the view owns (model geometries / maps stay with the library; materials stay owned by the level resources). */
@@ -514,6 +608,14 @@ export function surfaceQaPoses(layout: StationLayout): SurfaceQaPose[] {
   if (plan.rail && plan.rail.points.length > 1) {
     const a = plan.rail.points[plan.rail.points.length - 1], b = plan.rail.points[0];
     out.push({name: 'rail', x: a.x + 2, z: a.z + 2, yaw: yawTo(a.x + 2, a.z + 2, b.x, b.z), level: 0, look: {x: b.x, y: 1, z: b.z}});
+  }
+  // 7. the depot shed (lane ROOMS' tracks / pit / crane): beside its first track a few metres in, looking down it
+  const t = plan.depot?.tracks[0];
+  if (t) {
+    const len = Math.hypot(t.x1 - t.x0, t.z1 - t.z0), ux = (t.x1 - t.x0) / len, uz = (t.z1 - t.z0) / len;
+    const x = t.x0 + ux * 3 - uz * (t.gauge / 2 + 1.2), z = t.z0 + uz * 3 + ux * (t.gauge / 2 + 1.2);
+    const lx = t.x0 + ux * len * 0.7, lz = t.z0 + uz * len * 0.7;
+    out.push({name: 'depot', x, z, yaw: yawTo(x, z, lx, lz), level: 0, look: {x: lx, y: t.y + 2.4, z: lz}});
   }
   return out;
 }

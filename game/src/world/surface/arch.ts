@@ -18,6 +18,7 @@
 // SOLID columns (no light-field slot there) and use the outdoor look (lookSky.ts: overcast hemisphere + scene fog).
 
 import * as THREE from 'three';
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {CELL} from '../../gen/grid';
 import type {Level} from '../../gen/levels';
 import type {Area, Side, StationLayout} from '../../gen/stationTypes';
@@ -131,11 +132,13 @@ export interface SurfaceArchStats {
   faces: Record<string, number>;
   holes: number; airHoles: number; signs: number; escapes: number; decks: number;
   meshes: number; triangles: number; buildMs: number;
+  /** The builder's own district architecture meshes before / after coarsenSurfaceArch (its 48 m chunks -> SURFACE_CHUNK cells). */
+  builderMeshesBefore: number; builderMeshes: number;
 }
 
 export class SurfaceArch {
   readonly plan: SurfaceLookPlan;
-  readonly stats: SurfaceArchStats = {faces: {}, holes: 0, airHoles: 0, signs: 0, escapes: 0, decks: 0, meshes: 0, triangles: 0, buildMs: 0};
+  readonly stats: SurfaceArchStats = {faces: {}, holes: 0, airHoles: 0, signs: 0, escapes: 0, decks: 0, meshes: 0, triangles: 0, buildMs: 0, builderMeshesBefore: 0, builderMeshes: 0};
   /** The meshes this arch built (QA / tests). */
   readonly meshes: THREE.Mesh[] = [];
   /** The tent's door flap (AIR's open / closed seam: setTentFlap) and its hinge pivot. */
@@ -353,6 +356,8 @@ export class SurfaceArch {
     yield 'world.surface.tent';
     try { this.buildTent(group); } catch (e) { console.warn('surface arch: tent skipped', e); }
     this.buildCordonCoping(A);
+    yield 'world.surface.coarsen';
+    try { const c = coarsenSurfaceArch(group); this.stats.builderMeshesBefore = c.before; this.stats.builderMeshes = c.after; } catch (e) { console.warn('surface arch: coarsening skipped', e); }
     yield 'world.surface.meshes';
     for (const [name, e] of acc) {
       const geo = e.q.geometry();
@@ -653,6 +658,52 @@ function boards(face: (key: string, s0: number, s1: number, y0: number, y1: numb
   const n = h.y1 - h.y0 > 1.6 ? 3 : 2, gap = 0.05, bh = (h.y1 - h.y0 - gap * (n - 1)) / n;
   for (let i = 0; i < n; i++) face('surface-boards', h.s0 - 0.04, h.s1 + 0.04, h.y0 + i * (bh + gap), h.y0 + i * (bh + gap) + bh, d + 0.002 * i);
 }
+
+/**
+ * The builder's own district architecture (its walls / floors / ceilings per finish key, level and 48 m chunk: CHUNK_M) merged into
+ * SURFACE_CHUNK cells. A district is open ground ~530 m across under a ~300 m fog: the 48 m chunks bought little culling and cost ~3x
+ * the draw calls (every ground finish in ~120 chunks). Only meshes with the same material, level (+ tagged storeys), attribute layout
+ * and 96 m cell merge; the builder's meshes carry world positions (no transform), so the merge is a concatenation. Mesh state
+ * (level tags, shadows, render order, layers) is the first piece's. LOOK's own facade parts (userData.surfaceArch) are not touched.
+ */
+export function coarsenSurfaceArch(group: THREE.Group, chunk = SURFACE_CHUNK): {before: number; after: number} {
+  const lists = new Map<string, THREE.Mesh[]>();
+  const c = new THREE.Vector3();
+  let before = 0;
+  for (const o of group.children) {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || (m as unknown as THREE.InstancedMesh).isInstancedMesh || !m.name.startsWith('surface-arch-') || m.userData.surfaceArch !== undefined) continue;
+    const g = m.geometry;
+    if (Array.isArray(m.material) || g.groups.length || !m.matrix.equals(IDENTITY) || m.morphTargetInfluences) continue;
+    before++;
+    if (!g.boundingBox) g.computeBoundingBox();
+    g.boundingBox!.getCenter(c);
+    const attrs = Object.entries(g.attributes).map(([k, a]) => `${k}:${a.itemSize}:${a.normalized ? 1 : 0}:${(a as THREE.BufferAttribute).array?.constructor.name}`).sort().join(',');
+    const key = `${m.material.uuid}|${m.userData.level}|${JSON.stringify(m.userData.levels ?? null)}|${attrs}|${g.index ? 'i' : 'n'}|${m.renderOrder}|${Math.floor(c.x / chunk)},${Math.floor(c.z / chunk)}`;
+    let l = lists.get(key);
+    if (!l) lists.set(key, (l = []));
+    l.push(m);
+  }
+  let after = 0;
+  for (const list of lists.values()) {
+    after++;
+    if (list.length < 2) continue;
+    const merged = mergeGeometries(list.map(m => m.geometry), false);
+    if (!merged) { after += list.length - 1; continue; }
+    merged.computeBoundingSphere();
+    merged.computeBoundingBox();
+    const first = list[0], mesh = new THREE.Mesh(merged, first.material);
+    mesh.name = first.name;
+    mesh.userData = {...first.userData};
+    mesh.castShadow = first.castShadow; mesh.receiveShadow = first.receiveShadow;
+    mesh.renderOrder = first.renderOrder; mesh.layers.mask = first.layers.mask; mesh.frustumCulled = first.frustumCulled;
+    mesh.matrixAutoUpdate = false;
+    group.add(mesh);
+    for (const m of list) { m.removeFromParent(); m.geometry.dispose(); }
+  }
+  return {before, after};
+}
+const IDENTITY = new THREE.Matrix4();
 
 /** Split [a, b] at multiples of SURFACE_CHUNK. */
 function spans(a: number, b: number): [number, number][] {
