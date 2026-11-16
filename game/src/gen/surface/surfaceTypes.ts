@@ -182,8 +182,11 @@ export interface SurfaceJunction { id: number; rect: SRect; streets: number[]; a
 
 /** The district side of the host station's access: where the player arrives and the way back down / in. */
 export interface SurfacePortal {
-  /** 'stair' = a subway entrance stair down (Subway host); 'door' = a building's street doors (Office tower / Mall entrance). */
-  kind: 'stair' | 'door';
+  /**
+   * 'stair' = a subway entrance stair down (Subway host); 'door' = a building's street doors (Office tower / Mall entrance); 'lift' =
+   * (version 2, lane ACCESS follow-up) the cargo lift inside the command tent (`lift`).
+   */
+  kind: 'stair' | 'door' | 'lift';
   /** Arrival pose (standing just outside the portal, facing the checkpoint). */
   pose: SPose;
   /** The interaction box of the way back (the door / the grille at the stair foot): [E] goes back to the host station. */
@@ -192,6 +195,30 @@ export interface SurfacePortal {
   building: number | null;
   /** What it is called in prompts ("Back down to <Station>", set by ACCESS from the host). */
   label: string;
+  /** (version 2, lane ACCESS follow-up) The cargo lift the crossing rides (kind 'lift'): its car stands at the tent's stop. */
+  lift?: SurfaceLift;
+}
+
+/**
+ * Lane ACCESS follow-up (version 2): ONE END of the Surface Run's cargo lift — the car's room GEN carved (FLOOR cells walled by a one-cell
+ * SOLID ring, its gate a doorway through the ring at the car's front), drawn with the cargo lift kit (world/elevator.ts) by
+ * world/surface/liftSite.ts and ridden by world/surface/liftRide.ts. World metres, absolute y. The station's end is the shaft's LOWER
+ * stop, the district's (the command tent) its UPPER one; both ends share one car shape (gen/surface/accessLift.ts LIFT_CAR).
+ */
+export interface SurfaceLift {
+  /** The car's interior (the room's FLOOR cells) and the shaft (the interior + its ring). */
+  cab: SRect;
+  shaft: SRect;
+  /** The car's front (the wall its gate pierces, as a side of `cab`) and the gate: its centre on the cab's front plane, clear width (m). */
+  doorSide: Side;
+  door: {x: number; z: number; width: number};
+  /** The stop's floor (absolute y) and storey. */
+  y: number;
+  level: number;
+  /** The car room's layout area (the station's appended area / the tent's own area). */
+  area: number;
+  /** Which stop of the shaft this end is. */
+  end: 'lower' | 'upper';
 }
 
 /** The military checkpoint by the portal (tent, sandbags, the map table, the truck). */
@@ -339,8 +366,11 @@ export interface SurfaceRoofAccess {
 export interface SurfaceAccessInfo {
   /** The host station's surface version this access was carved for (gen/surface/surfaceRun.ts surfaceFeatures). */
   v: 1 | 2;
-  /** 'subway-stair' = an extended stairwell up from a street-exit hall; 'office-door' / 'mall-door' = an exterior street exit. */
-  kind: 'subway-stair' | 'office-door' | 'mall-door';
+  /**
+   * 'subway-stair' = an extended stairwell up from a street-exit hall; 'office-door' / 'mall-door' = an exterior street exit; 'lift' =
+   * (version 2, lane ACCESS follow-up) a cargo lift at a closed street-exit hall (`lift`).
+   */
+  kind: 'subway-stair' | 'office-door' | 'mall-door' | 'lift';
   /** The [E] box of the way out (the door at the top of the stairwell / the street door). */
   trigger: SBox;
   /** Where a player coming back down / in stands (inside, facing away from the door). */
@@ -363,4 +393,6 @@ export interface SurfaceAccessInfo {
   hall?: number;
   rise?: number;
   street?: string;
+  /** (version 2, lane ACCESS follow-up) The cargo lift (kind 'lift'): the station's end of the shaft. */
+  lift?: SurfaceLift;
 }
