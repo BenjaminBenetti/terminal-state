@@ -461,9 +461,11 @@ export class SurfaceArch {
     // the sign atlas (runtime text; browser only)
     const atlas = signAtlas(P);
     if (atlas) this.owned.push(atlas.texture);
+    // (lane FACADE) the facade detail's parts join a mesh of their key already standing near them (detailSink): no new draws per cell
+    const has = (key: string, x: number, z: number) => acc.has(`${surfaceTintFamily(key) ?? key}@${Math.floor(x / FACADE_CHUNK)},${Math.floor(z / FACADE_CHUNK)}`);
     let k = 0;
     for (const bl of P.buildings) {
-      try { this.buildBuilding(bl, A, atlas); } catch (e) { console.warn('surface arch: building parts skipped', bl.id, e); }
+      try { this.buildBuilding(bl, A, atlas, has); } catch (e) { console.warn('surface arch: building parts skipped', bl.id, e); }
       if (++k % 4 === 0) yield 'world.surface.facades';
     }
     yield 'world.surface.tent';
@@ -496,9 +498,12 @@ export class SurfaceArch {
     this.stats.buildMs = typeof performance !== 'undefined' ? performance.now() - t0 : 0;
   }
 
-  private buildBuilding(bl: BuildingLook, A: (key: string, x: number, z: number, tint?: readonly number[]) => QuadSink, atlas: SignAtlas | null): void {
+  private buildBuilding(bl: BuildingLook, A0: (key: string, x: number, z: number, tint?: readonly number[]) => QuadSink, atlas: SignAtlas | null, has: (key: string, x: number, z: number) => boolean): void {
     const st = bl.style, trim = bl.trimKey, fac = bl.key;
     const sc = surfaceArchScale(fac) ?? {u: 1, v: 1};
+    // (lane FACADE) the sink the side's helpers draw into: the plain accumulator, or the detail's (detailSink) while the detail draws
+    let A = A0;
+    const detailA = this.detailSink(bl, A0, has);
     for (const sd of bl.sides) {
       const {alongX, n, plane} = sd;
       const nrm = alongX ? [0, 0, n] : [n, 0, 0];
@@ -632,7 +637,8 @@ export class SurfaceArch {
       for (const fe of bl.escapes) if (fe.side === sd.side) this.fireEscape(fe, box);
       // Task studio-surface-run-field-followup-20261116-211729-01 (lane FACADE): the facade detail (facadeDetail.ts) — closed windows of
       // the interior storeys (drawn on the wall, never cut), shop awnings, pilasters / fins and the base course; the side's own finishes
-      this.facadeDetail(bl, sd, {face, box, Q, pt, nrm});
+      A = detailA;
+      try { this.facadeDetail(bl, sd, {face, box, Q, pt, nrm}); } finally { A = A0; }
       // Task studio-surface-run-field-followup-20261116-211729-01 (lane FACADE): the exposed stretches no builder face covers
       // (archPlan.ts bareRuns: party walls over a lower neighbour, a roof line over the outdoor band), from their bottom up to the roof
       // line, the side's windows cut out (their reveals / dark rooms are drawn above). Wound outward (front faces, culled as every
@@ -697,6 +703,23 @@ export class SurfaceArch {
   }
 
   /**
+   * (lane FACADE) Where a facade-detail part goes: the accumulator of its key in its own cell when the building's parts already made one
+   * there, else one standing at the building's centre or a corner, else (an awning: the canvas family, rarely drawn otherwise) the ONE
+   * district-wide awning mesh, else its own cell. The detail so joins the meshes already drawn near it instead of adding a draw per cell.
+   */
+  private detailSink(bl: BuildingLook, A: (key: string, x: number, z: number, tint?: readonly number[]) => QuadSink, has: (key: string, x: number, z: number) => boolean) {
+    const f = bl.b.footprint, I = this.plan.inner;
+    const alts: [number, number][] = [[(f.x0 + f.x1) / 2, (f.z0 + f.z1) / 2], [f.x0, f.z0], [f.x1, f.z0], [f.x0, f.z1], [f.x1, f.z1]];
+    const awning = new Set(bl.detail.awnings.map(a => a.key));
+    return (key: string, x: number, z: number, tint?: readonly number[]): QuadSink => {
+      if (has(key, x, z)) return A(key, x, z, tint);
+      for (const [ax, az] of alts) if (has(key, ax, az)) return A(key, ax, az, tint);
+      if (awning.has(key)) return A(key, (I.x0 + I.x1) / 2, (I.z0 + I.z1) / 2, tint);
+      return A(key, x, z, tint);
+    };
+  }
+
+  /**
    * (lane FACADE) One side's facade detail: closed windows (sill + head in the trim; boards / a shutter / an infill or spandrel panel of
    * the facade's own finish, darker), awnings (the fabric family: a sloped canvas seen from above and below + its valance; a torn one
    * only its steel frame), pilasters / fins (the facade's finish, its UV span) and the base course (a darker band of it; the trim on
@@ -723,11 +746,11 @@ export class SurfaceArch {
         continue;
       }
       if (w.kind === 'door') {
-        // a sealed personnel door: its frame, a steel leaf, two planks nailed across
+        // a sealed personnel door: its frame, a painted steel leaf (the trim's paint), two planks nailed across
         box(trim, w.s0 - 0.1, w.s0, -0.02, 0.07, w.y0, w.y1);
         box(trim, w.s1, w.s1 + 0.1, -0.02, 0.07, w.y0, w.y1);
         box(trim, w.s0 - 0.1, w.s1 + 0.1, -0.02, 0.07, w.y1, w.y1 + 0.1);
-        face('surface-steel', w.s0, w.s1, w.y0, w.y1, 0.012);
+        face(trim, w.s0, w.s1, w.y0, w.y1, 0.012);
         for (const f of [0.3, 0.62]) { const y = w.y0 + (w.y1 - w.y0) * f; face('surface-boards', w.s0 - 0.12, w.s1 + 0.12, y, y + 0.22, 0.03); }
         continue;
       }
@@ -745,10 +768,10 @@ export class SurfaceArch {
       if (a.side !== sd.side) continue;
       const y0 = a.y, y1 = a.y - a.drop, dd = a.depth, c = (a.s0 + a.s1) / 2;
       if (a.torn) {
-        // the bare frame: a wall rail, the two arms, the front rail
-        box('surface-steel', a.s0, a.s1, 0, 0.05, y0 - 0.05, y0);
-        box('surface-steel', a.s0, a.s1, dd - 0.05, dd, y1 - 0.05, y1);
-        const q = Q('surface-steel', c), L = Math.hypot(dd, a.drop), up = [nrm[0] * a.drop / L, dd / L, nrm[2] * a.drop / L];
+        // the bare frame (painted steel: the trim): a wall rail, the two arms, the front rail
+        box(trim, a.s0, a.s1, 0, 0.05, y0 - 0.05, y0);
+        box(trim, a.s0, a.s1, dd - 0.05, dd, y1 - 0.05, y1);
+        const q = Q(trim, c), L = Math.hypot(dd, a.drop), up = [nrm[0] * a.drop / L, dd / L, nrm[2] * a.drop / L];
         for (const s of [a.s0, a.s1 - 0.05]) {
           const p = [pt(s, 0, y0), pt(s + 0.05, 0, y0), pt(s + 0.05, dd, y1), pt(s, dd, y1)], uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
           q.quadFacing(p, up, up, uv);
@@ -770,7 +793,9 @@ export class SurfaceArch {
     }
     for (const rl of D.relief) {
       if (rl.side !== sd.side) continue;
-      if (rl.kind === 'column') box('surface-steel', rl.s0, rl.s1, -0.02, rl.out, rl.y0, rl.y1);
+      // (the steel columns and a stucco front's pilasters in the trim's paint: the trim family stands in every cell — no new draw)
+      if (rl.kind === 'column') box(trim, rl.s0, rl.s1, -0.02, rl.out, rl.y0, rl.y1);
+      else if (rl.kind === 'pier' && bl.style.wall === 'stucco') box(trim, rl.s0, rl.s1, -0.02, rl.out, rl.y0, rl.y1);
       else box(rl.kind === 'pier' ? fac : D.keys.plinth, rl.s0, rl.s1, -0.02, rl.out, rl.y0, rl.y1, sc);
     }
     this.stats.blinds += D.blinds.filter(w => w.side === sd.side).length;

@@ -103,7 +103,7 @@ function audit(layout: StationLayout, plan: SurfaceLookPlan, T: ReturnType<typeo
           const own = plan.owner[oi];
           if (own === bl.id) continue;
           if (own >= 0) { const nb = plan.buildings[own], os = nb.sides.find(q => q.side === OPP[sd.side]); from = os ? topAt(os, s, nb.top) : nb.top; }
-          else if (own === OWNER.cordon) from = LOOK_TUNE.cordonH;
+          else if (own === OWNER.cordon) from = plan.wall ? LOOK_TUNE.cordonH : 0; // (a v2 district's last-resort ring is not drawn)
           else if (own === OWNER.debris) from = LOOK_TUNE.debrisH;
           else if (own === OWNER.tent) from = LOOK_TUNE.tentRidge + 0.6;
           else from = 0;
@@ -142,11 +142,12 @@ function audit(layout: StationLayout, plan: SurfaceLookPlan, T: ReturnType<typeo
 const show = (l: Gap[]) => l.slice(0, 6).map(q => `b${q.b} ${q.side} s=${q.s.toFixed(2)} y=${q.y.toFixed(2)} ${q.why}`).join(' | ');
 
 describe('Surface Run facades: every exposed building wall is covered (lane FACADE)', () => {
-  for (const [host, seed] of [['subway', 93], ['office', 5]] as const) {
-    it(`${host} district ${seed}: walls street -> roof line front-faced from outside (party walls and the tower above the outdoor band too), deck steps closed, roofs drawn`, () => {
-      const layout = (LEVELS as Record<string, {generate(s: string, c: object): StationLayout}>)[host].generate('surface', {levelSeed: seed});
+  for (const [host, seed, v] of [['subway', 93, 1], ['office', 5, 1], ['subway', 93, 2]] as const) {
+    it(`${host} district ${seed} (v${v}): walls street -> roof line front-faced from outside (party walls and the tower above the outdoor band too), deck steps closed, roofs drawn`, () => {
+      const layout = (LEVELS as Record<string, {generate(s: string, c: object): StationLayout}>)[host].generate('surface', {levelSeed: seed, ...(v === 2 ? {surfaceVersion: 2} : {})});
       const w = buildWorld(layout, new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17}), {});
       const plan = surfaceLookPlan(layout)!;
+      expect(plan.wall).toBe(v === 1);
       const a = audit(layout, plan, triangles(w.group));
       expect(a.samples).toBeGreaterThan(60_000);
       expect(a.walls.length, show(a.walls)).toBe(0);

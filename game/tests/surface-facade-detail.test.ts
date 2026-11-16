@@ -32,8 +32,9 @@ import {COMPANY_MODEL_FILES} from '../src/assets/companyAssets';
 
 installCanvasShim(false);
 const mats = () => new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
-const gen = (host: 'subway' | 'office' | 'mall', seed: number): StationLayout => LEVELS[host].generate('surface', {levelSeed: seed});
-const CASES = [['subway', 93], ['office', 5], ['mall', 11]] as const;
+/** A district of `host`: version 1 (the default the tests' hosts record) or the follow-up's version 2 (the fog-pressure boundary). */
+const gen = (host: 'subway' | 'office' | 'mall', seed: number, v: 1 | 2 = 1): StationLayout => LEVELS[host].generate('surface', {levelSeed: seed, ...(v === 2 ? {surfaceVersion: 2} : {})});
+const CASES = [['subway', 93, 1], ['office', 5, 1], ['mall', 11, 1], ['subway', 93, 2], ['mall', 11, 2]] as const;
 const overlap = (a0: number, a1: number, b0: number, b1: number, m = 0) => a1 > b0 - m && a0 < b1 + m;
 
 describe('Surface Run facades: the outdoor-lit finishes (lane FACADE)', () => {
@@ -82,9 +83,10 @@ describe('Surface Run facades: the outdoor-lit finishes (lane FACADE)', () => {
 });
 
 describe('Surface Run facades: the detail plan (lane FACADE)', () => {
-  for (const [host, seed] of CASES) {
-    it(`${host} district ${seed}: no inverted opening; sheds and garages open; closed windows, awnings and relief where they belong`, () => {
-      const layout = gen(host, seed), plan = surfaceLookPlan(layout)!;
+  for (const [host, seed, v] of CASES) {
+    it(`${host} district ${seed} (v${v}): no inverted opening; sheds and garages open; closed windows, awnings and relief where they belong`, () => {
+      const layout = gen(host, seed, v), plan = surfaceLookPlan(layout)!;
+      expect(plan.wall).toBe(v === 1);
       let blinds = 0, awnings = 0, piers = 0, plinths = 0, columns = 0, clerestory = 0, bays = 0;
       for (const bl of plan.buildings) {
         const d = bl.detail;
@@ -142,7 +144,7 @@ describe('Surface Run facades: the detail plan (lane FACADE)', () => {
       expect(awnings).toBeGreaterThan(10);
       expect([piers, plinths, columns].every(v => v > 50)).toBe(true);
       // deterministic: a fresh layout of the same seed plans the same detail
-      const again = surfaceLookPlan(gen(host, seed))!;
+      const again = surfaceLookPlan(gen(host, seed, v))!;
       expect(again.buildings.map(b => [b.holes.length, b.detail.blinds, b.detail.awnings, b.detail.relief])).toEqual(plan.buildings.map(b => [b.holes.length, b.detail.blinds, b.detail.awnings, b.detail.relief]));
     });
   }
@@ -190,19 +192,21 @@ describe('Surface Run facades: built (lane FACADE)', () => {
     return out;
   };
 
-  it('the draw budget: the detail adds at most 3 draws in any QA view and under 4 % of the district\'s triangles; every drawn key has a material and an impact class', () => {
-    const layout = gen('subway', 93), A = buildWorld(layout, mats(), {});
-    const bare = gen('subway', 93), plan = surfaceLookPlan(bare)!;
+  for (const v of [1, 2] as const) it(`the draw budget (subway 93, v${v}): the detail adds at most 3 draws in any QA view and under 4 % of the district's triangles; every drawn key has a material and an impact class`, () => {
+    const layout = gen('subway', 93, v), A = buildWorld(layout, mats(), {});
+    const bare = gen('subway', 93, v), plan = surfaceLookPlan(bare)!;
     for (const bl of plan.buildings) bl.detail = EMPTY_FACADE_DETAIL;
     const B = buildWorld(bare, mats(), {});
     const sa = A.surfaceArch!.stats, sb = B.surfaceArch!.stats;
     expect(sa.blinds + sa.awnings + sa.relief).toBeGreaterThan(1000);
     expect(sb.blinds + sb.awnings + sb.relief).toBe(0);
-    expect(sa.meshes - sb.meshes).toBeLessThanOrEqual(16); // (one family more: the awning canvas, per 192 m cell)
+    // the detail joins the meshes already standing near it (arch.ts detailSink): one mesh more, the district-wide awning canvas
+    expect(sa.meshes - sb.meshes).toBeLessThanOrEqual(2);
     // triangles: under 4 % of the district's built architecture (~0.6 M; the district view budget is ~1.8 M with its models)
     const tris = (w: BuiltWorld) => { let t = 0; w.group.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) t += (m.geometry.index?.count ?? m.geometry.attributes.position.count) / 3; }); return t; };
     const ta = tris(A), tb = tris(B);
     expect(ta - tb).toBeGreaterThan(5_000);
+    console.log(`facade detail v${v}: ${sa.meshes - sb.meshes} meshes, +${ta - tb} tris on ${tb} (${(100 * (ta - tb) / tb).toFixed(2)} %)`);
     expect((ta - tb) / tb).toBeLessThan(0.04);
     const va = inView(A, layout), vb = inView(B, bare);
     expect(va.length).toBeGreaterThan(3);

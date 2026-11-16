@@ -1,7 +1,7 @@
 // Task studio-surface-run-field-followup-20261116-211729-01 (lane FACADE; user: "Improve facades with the existing architectural assets /
 // materials and coherent variety / detail, not blank box fronts"): THE FACADE DETAIL PASS of a district building — decided once per
 // building after its look plan (archPlan.ts planBuilding), PURE data (no three.js), drawn by the surface arch (arch.ts buildBuilding)
-// with the district's existing finishes only (the facade families, trims, boards, shutters, the office fabric as awning canvas, steel).
+// with the district's existing finishes only (the facade families, trims, boards, shutters, the office fabric as awning canvas).
 // Its own hash stream per building (FACADE_DETAIL_TAG): no draw of the plan's streams moves; no layout cell changes (render side only,
 // every district version).
 //
@@ -19,10 +19,11 @@
 //    building from a small palette (the office fabric, tinted: the canvas family).
 //  - RELIEF: pilasters / quoins at the ends of a masonry side, a base course (plinth) along the street, the civic style's pilasters
 //    between window bays, the precast centre's panel fins — the side's own finish (tinted darker for the plinth), never over an opening;
-//    a shed's steel columns at its bays and a sealed personnel door (a steel leaf, planks nailed across: visibly not a way in).
+//    a shed's steel columns at its bays and a sealed personnel door (a steel leaf, planks nailed across: visibly not a way in) — the
+//    steel painted in the building's trim, a stucco front's pilasters too.
 //
-// The arch draws all of it in the facade accumulators it already has (one more family: the awning canvas): a few draws a district and a
-// few percent of its facade triangles (tests/surface-facade-detail.test.ts pins both).
+// The arch draws all of it into the facade meshes already standing near it (arch.ts detailSink; the awnings: ONE district-wide canvas
+// mesh): a few draws a view and a few percent of the district's triangles (tests/surface-facade-detail.test.ts pins both).
 
 import {mulberry32} from '../../core/rng';
 import type {Side, StationLayout} from '../../gen/stationTypes';
