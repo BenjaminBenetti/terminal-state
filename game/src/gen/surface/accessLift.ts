@@ -26,8 +26,11 @@ export const LIFT_CAR = {
   width: 6, depth: 5,
   /** The gate's doorway through the ring (cells, centred) and the kit's gate clear width (m). */
   gateCells: 4, gateW: 1.8,
-  /** The car's interior height and the gate's clear height (m); the room's ceiling stands `ceilGap` m above the car's. */
-  cabH: 2.4, gateH: 2.2, ceilGap: 0.05,
+  /**
+   * The car's interior height and the gate's clear height (m); the room's ceiling stands `ceilGap` m above the car's, its floor `sink` m
+   * below the car's deck (the kit's deck covers it: no two coplanar floors).
+   */
+  cabH: 2.4, gateH: 2.2, ceilGap: 0.05, sink: 0.01,
   /** The distance (m) between the shaft's two stops (the ride's travel). */
   rise: 9,
 } as const;
@@ -105,7 +108,7 @@ export function carveLiftRoom(g: Grid, f: LiftFrame, y: number, area: number, ga
     const gate = u === 0 && v >= g0 && v < g0 + C.gateCells;
     g.blocked[i] = 0; g.sightBlocked[i] = 0;
     if (car || gate) {
-      g.cells[i] = FLOOR; g.area[i] = car ? area : gateArea; g.floor[i] = y; g.ceil[i] = y + (car ? C.cabH + C.ceilGap : C.gateH + C.ceilGap);
+      g.cells[i] = FLOOR; g.area[i] = car ? area : gateArea; g.floor[i] = car ? y - C.sink : y; g.ceil[i] = y + (car ? C.cabH + C.ceilGap : C.gateH + C.ceilGap);
     } else { g.cells[i] = SOLID; g.area[i] = -1; g.floor[i] = 0; g.ceil[i] = 0; }
   }
   const r = liftRect(f, 1, LIFT_FOOT.u, 1, 1 + C.width);

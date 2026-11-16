@@ -9,6 +9,7 @@
 
 import type {Game} from '../../game';
 import {installSurfaceAccess} from './accessRuntime';
+import {installSurfaceLift} from './liftRuntime';
 import {installSurfaceLook} from './look';
 import {installSurfaceAir} from './air';
 import {installSurfaceLife} from './life';
@@ -16,6 +17,7 @@ import {installSurfaceCargo} from './cargo';
 
 export function installSurfaceRun(game: Game): void {
   installSurfaceAccess(game);
+  installSurfaceLift(game); // (lane ACCESS follow-up, version 2: the cargo lift ends + the ride that is the crossing)
   installSurfaceLook(game);
   installSurfaceAir(game);
   installSurfaceLife(game);

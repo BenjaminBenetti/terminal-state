@@ -34,7 +34,7 @@ function expectCarRoom(L: StationLayout, l: SurfaceLift): void {
     const [cx, cy] = g.cellOf(x, z), i = g.idx(cx, cy);
     expect(g.cells[i], `car cell ${cx},${cy}`).toBe(FLOOR);
     expect(g.area[i]).toBe(l.area);
-    expect(g.floor[i]).toBeCloseTo(l.y, 4);
+    expect(g.floor[i]).toBeCloseTo(l.y - LIFT_CAR.sink, 4); // (just under the kit's deck)
     expect(g.ceil[i]).toBeCloseTo(l.y + LIFT_CAR.cabH + LIFT_CAR.ceilGap, 4);
   }
   expect(l.cab.x1 - l.cab.x0 === LIFT_CAR.width * CELL || l.cab.z1 - l.cab.z0 === LIFT_CAR.width * CELL).toBe(true);
@@ -113,7 +113,7 @@ describe('Surface Run v2: the Subway lift at a normal closed street exit', () =>
       expect(validateLayout(L2).filter(x => !base.has(x))).toEqual([]);
       const g = L2.grid, p = a.returnPose;
       expect(p.x > l.cab.x0 && p.x < l.cab.x1 && p.z > l.cab.z0 && p.z < l.cab.z1).toBe(true);
-      expect(g.floorAt(p.x, p.z)).toBeCloseTo(p.y, 4);
+      expect(g.floorAt(p.x, p.z)).toBeCloseTo(p.y - LIFT_CAR.sink, 4);
       expect(g.circleClear(p.x, p.z, 0.4)).toBe(true);
       expect(a.trigger).toMatchObject({x0: l.cab.x0, x1: l.cab.x1, z0: l.cab.z0, z1: l.cab.z1});
       const [sx, sy] = g.cellOf(L2.playerSpawn.x, L2.playerSpawn.z);
