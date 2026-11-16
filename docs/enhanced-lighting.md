@@ -7,6 +7,9 @@ settings:
 
 - **Enhanced lighting**: Off / Auto / On (default **Auto**).
 - **Reflections**: Standard / High / Off (default **Standard**; needs Enhanced lighting).
+- **RT Flashlight**: On / Off (default **On**; needs Enhanced lighting's full shading). It selects how the
+  flashlight's bounce is made: traced on the GPU by compute shaders where the renderer can run them, else the
+  virtual lights below. See [rt-flashlight.md](rt-flashlight.md).
 
 Off is the baseline exactly as before: the same bake, the same shader programs, no extra texture, no mirror draw, and
 the cache is never opened. The Reactor always uses the baseline, whatever the settings say.
@@ -85,6 +88,10 @@ Nothing movable is in the ray scene: no prop, door leaf, character or train. A c
 is open space to the gather. So nothing that can move, break or leave is frozen into the bounced light.
 
 ### 2. The flashlight's bounce, live
+
+This section describes the **virtual-light bounce**. It is used with RT Flashlight Off, on the WebGL 2 fallback and
+wherever the traced bounce cannot run. With RT Flashlight On, on a WebGPU device that passed its probe, the bounce
+is traced instead; the two are never added together. See [rt-flashlight.md](rt-flashlight.md).
 
 Most of a base Subway station is dark and lit by the flashlight alone, so baked light changes nothing there. With
 full shading the beam also lights its surroundings (`world/flashBounce.ts`):
@@ -245,14 +252,15 @@ not because they cannot run them: On enables them there.
 The status is always the truth about the **live** station: the settings form's help lines, the perf overlay's
 **Lighting** row, the performance recorder's environment and `__LL.lighting()` say what it was built with (for
 example `auto: bake standard full · refl standard ×187 + mirror · cache hit`), where the data came from and why
-something asked for is not in use. No setting was added: the cube and the flashlight's bounce belong to Enhanced
-lighting, the mirror to Reflections.
+something asked for is not in use. The cube and the flashlight's bounce belong to Enhanced lighting and the mirror
+to Reflections. RT Flashlight only selects the bounce's method, and the status says which one the station uses
+(`bounce traced` / `bounce standard` and why; [rt-flashlight.md](rt-flashlight.md)).
 
-URL overrides for one session: `?lighting=off|auto|on`, `?reflections=off|standard|high`.
+URL overrides for one session: `?lighting=off|auto|on`, `?reflections=off|standard|high`, `?rt=on|off`.
 
 ## Changing the settings during play
 
-A changed Enhanced lighting or Reflections choice is applied to the station the player is in
+A changed Enhanced lighting, Reflections or RT Flashlight choice is applied to the station the player is in
 (`Game.relightAfterSettings`): at once when it is made in the pause menu, else the next time the game is paused (a
 choice that changes while playing, for example from another tab, waits; the status says "Not applied yet"). No main
 menu, Continue, station load or reroll is involved.
@@ -461,8 +469,10 @@ compiled module).
   Subway: their ceilings and walls gain the most.
 - Auto on a software renderer or the WebGL 2 fallback looks closer to Off than to On: plain shading or no
   reflections (the status says which and why).
-- The flashlight's bounce casts no shadows, treats a prop as its box and a character as a cylinder, and stands
-  for the whole lit patch with fourteen lights (its four limits above).
+- The virtual-light bounce (RT Flashlight Off or unsupported) casts no shadows, treats a prop as its box and a
+  character as a cylinder, and stands for the whole lit patch with fourteen lights (its four limits above). The
+  traced bounce has its own limits ([rt-flashlight.md](rt-flashlight.md)): its receivers are where the camera
+  looks, and characters are capsules.
 - The mirror: one plane at a time; no player body or weapon; no volumetric fog in the reflection; a brightly lit
   interior behind a pane leaves only the hall's lights and signs visible in it face-on.
 - Glass inside a model, curved glass and tower windows reflect the probes, not a live image.
@@ -506,7 +516,8 @@ compiled module).
 - `game/tests/enhanced-lighting-runtime.test.ts`: Off / Reactor, miss / hit / stale / cleared / unavailable, the
   cube's fallbacks with their reasons, the bounce's binding, what the bake may never touch.
 - `game/tests/enhanced-lighting-game.test.ts`: the real Game on a validating WebGPU device: binding limits, death
-  and reload, Off and back.
+  and reload, Off and back. It runs with RT Flashlight Off, as do `lighting-live-apply` and `glass-mirror-game`;
+  the traced bounce's tests are listed in [rt-flashlight.md](rt-flashlight.md).
 - `game/tests/lighting-live-apply.test.ts`: a change applied from the pause menu (only the lighting rebuilt, the
   station and the save conserved, the status, a failed bake, an abandoned bake, the bake on worker threads and a
   choice changed while it waits for them).

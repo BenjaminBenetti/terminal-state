@@ -302,16 +302,20 @@ export const WINDOW_REACH = 1;
  */
 export class LightFieldReflectLight extends LightFieldLight {
   readonly isLightFieldReflectLight = true;
-  constructor(full = false, readonly mirror = false) {
-    super(full);
+  constructor(full = false, readonly mirror = false, rt = false) {
+    super(full, rt);
     (this as {type: string}).type = 'LightFieldReflectLight';
-    this.name = `light-field-reflect${full ? '-full' : ''}${mirror ? '-mirror' : ''}`;
+    this.name = `light-field-reflect${full ? '-full' : ''}${mirror ? '-mirror' : ''}${this.rt ? '-rt' : ''}`;
   }
 }
 
-/** The single session-wide reflecting field light of its kind (stable id => stable light set across stations that use it). */
-export function stationReflectLight(full = false, mirror = false): LightFieldReflectLight {
-  return sharedFieldLight(`reflect${full ? '-full' : ''}${mirror ? '-mirror' : ''}`, () => new LightFieldReflectLight(full, mirror));
+/**
+ * The single session-wide reflecting field light of its kind (stable id => stable light set across stations that use it). `rt`
+ * (task studio-rt-flashlight-compute-20261115-233136-01; with `full` only): the traced flashlight bounce instead of the virtual lights.
+ */
+export function stationReflectLight(full = false, mirror = false, rt = false): LightFieldReflectLight {
+  const traced = full && rt;
+  return sharedFieldLight(`reflect${full ? '-full' : ''}${mirror ? '-mirror' : ''}${traced ? '-rt' : ''}`, () => new LightFieldReflectLight(full, mirror, traced));
 }
 
 interface ReflectBuilder extends NodeBuilder {
@@ -337,7 +341,10 @@ export class LightFieldReflectNode extends LightFieldNode {
     // (FULL_RADIANCE: the flashlight's bounce as a soft sheen) — the probes hold the fixtures' light only
     const live = (w?: N): void => {
       if (!this.light?.full) return;
-      for (const extra of FULL_RADIANCE) rad.addAssign(w ? n(extra(dir, rough)).mul(w) : extra(dir, rough));
+      for (const extra of FULL_RADIANCE) {
+        const x = extra(dir, rough, this.light!);
+        if (x) rad.addAssign(w ? n(x).mul(w) : x);
+      }
     };
     // a pane's reflectance at normal incidence raised to REFL.params.z (GLASS_PANE_F0): the ratio of the two Schlick curves (paneBoost)
     const boost = (): N => {

@@ -216,13 +216,16 @@ interface GameExtras {
  * (Lane SETTINGS) The report's `environment.enhancedLighting`: what was asked, what the live station was really built with at the
  * time of the report (bake tier, reflections, their reasons, cache use, the enhanced work's load-time ms, probe count / bytes), whether
  * a change is pending, the cache backend and the one-line summary the overlay shows. Plain values only; null when the game has no
- * runtime or its status cannot be read.
+ * runtime or its status cannot be read. (Task rt-flashlight-compute-20261115-233136, lane UI: RT Flashlight rides along additively —
+ * requested.rt, active.rt / rtReason / rtScene and, when the status has it, `rtCapability`: the compute path as the renderer offers it.)
  */
 export function lightingEnvironment(rt: {status(): EnhancedLightingStatus} | null | undefined): Record<string, unknown> | null {
   if (!rt) return null;
   try {
     const s = rt.status(), a = s.active;
-    return {line: enhancedLightingLine(s), requested: {...s.requested}, active: a ? {...a} : null, pending: s.pending === true, cacheBackend: s.cacheBackend};
+    const active = a ? {...a, ...(a.rtScene ? {rtScene: {...a.rtScene}} : {})} : null;
+    return {line: enhancedLightingLine(s), requested: {...s.requested}, active, pending: s.pending === true, cacheBackend: s.cacheBackend,
+      ...(s.rtCapability !== undefined ? {rtCapability: s.rtCapability ? {...s.rtCapability} : null} : {})};
   } catch {
     return null;
   }

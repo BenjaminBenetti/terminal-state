@@ -61,9 +61,9 @@ function runtime(settings: EnhancedLightingSettings, idb: FakeIndexedDb | null =
   rt.setCapabilities(caps);
   return {rt, opens: () => opens, cache: () => cache, puts};
 }
-/** The record of a station that is not enhanced, and what its bake hands the station lighting. */
-const BASELINE_ACTIVE = {gi: 'baseline', giReason: null, shading: 'plain', shadingReason: null, mirror: false, reflections: 'off', reflectionsReason: null, cache: 'none', giMs: 0, probeMs: 0, probes: 0, probeBytes: 0};
-const NOT_ENHANCED: EnhancedBake = {baked: undefined, probes: null, shading: 'plain', mirror: false, bounce: null};
+/** The record of a station that is not enhanced, and what its bake hands the station lighting. (task rt-flashlight-compute-20261115-233136, lane UI: + RT Flashlight's fields — no bounce, nothing traced) */
+const BASELINE_ACTIVE = {gi: 'baseline', giReason: null, shading: 'plain', shadingReason: null, mirror: false, reflections: 'off', reflectionsReason: null, cache: 'none', giMs: 0, probeMs: 0, probes: 0, probeBytes: 0, rt: false, rtReason: null, rtScene: null};
+const NOT_ENHANCED: EnhancedBake = {baked: undefined, probes: null, shading: 'plain', mirror: false, bounce: null, rt: false, rtReason: null};
 /** A station of three levels (80 x 50 cells: an upper deck and a crossing below the main level). */
 function threeLevels(): StationBakeInput {
   const {layout, levels} = renderFixture();
@@ -129,15 +129,15 @@ describe('Off and the Reactor: the baseline, untouched', () => {
     for (const s of [{enhancedLighting: 'auto', reflections: 'standard'}, {enhancedLighting: 'on', reflections: 'high'}] as EnhancedLightingSettings[]) {
       const r = runtime(s);
       const out = await load(r, {...rooms(), reactor: true});
-      expect(out).toEqual(NOT_ENHANCED);
+      expect(out).toEqual({...NOT_ENHANCED, rtReason: REACTOR_REASON}); // (lane UI: RT Flashlight was asked for — its default — and there is no bounce here)
       expect(r.opens()).toBe(0);
-      expect(r.rt.status().active).toEqual({...BASELINE_ACTIVE, giReason: REACTOR_REASON, reflectionsReason: REACTOR_REASON});
+      expect(r.rt.status().active).toEqual({...BASELINE_ACTIVE, giReason: REACTOR_REASON, reflectionsReason: REACTOR_REASON, rtReason: REACTOR_REASON});
       expect(r.rt.status().pending).toBe(false);
     }
   });
 
   it('the settings default to Auto + Standard reflections', () => {
-    expect(new EnhancedLightingRuntime({}).request()).toEqual({lighting: 'auto', reflections: 'standard'});
+    expect(new EnhancedLightingRuntime({}).request()).toEqual({lighting: 'auto', reflections: 'standard', rt: true}); // (lane UI: + RT Flashlight, default On)
   });
 });
 
