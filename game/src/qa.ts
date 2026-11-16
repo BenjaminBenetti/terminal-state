@@ -36,6 +36,7 @@ import {reactorArchQaApi} from './world/reactor/archInstall'; // task reactor-bu
 import {reactorSurfaceOf, type ReactorSurface} from './world/reactor/surface'; // task studio-reactor-surface-ending-20261102 (lane SURFACE)
 import {reactorEndingQaApi} from './world/reactor/endingQa'; // task studio-reactor-surface-ending-20261102 (lane ENDING)
 import {reactorCreditsOf, type ReactorCredits} from './world/reactor/credits'; // task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane CREDITS)
+import {surfaceLookQaApi} from './world/surface/look'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the district's look summary / tune / poses
 import {gaslightQaApi} from './world/gaslightQa'; // task reactor-expansion-20261101 (lane GASLIGHT): gas visibility / pit lamps / open sky state, shaft tune
 import {blightbellyQaApi} from './ai/blightbellyQa'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): Blightbelly burst / blast / gas puff spot-check hooks
 import {sirenQaApi} from './ai/sirenQa'; // Task track1-siren-blightbelly-20261031 (lane SIREN): Siren state / wake / veins spot-check hooks
@@ -399,6 +400,8 @@ export function installQaHooks(game: Game): void {
     // task studio-reactor-surface-ending-20261102 (lane SURFACE): reactorSurface({sky, ground, horizon, zenith, clouds, mist}) — the
     // city plan census, eye gate / rain / wet / fog state, draws and triangles; the outdoor look's uniforms (tune)
     reactorSurface: (tune?: Parameters<ReactorSurface['qa']>[0]): object => reactorSurfaceOf(game)?.qa(tune) ?? {installed: false},
+    // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): surfaceLook(), surfaceLookTune({...}), surfaceLookPoses(), surfaceLookPose(name)
+    ...surfaceLookQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     // task studio-reactor-surface-ending-20261102 (lane ENDING): reactorEnding({online, open, skipMessage, go: 'door' | 'stairs' | 'top' |
     // 'exit' | 'hole'}) — the exterior door's phase / seal / the centre message / the objective stage; force the clear-complete state, poses
     ...reactorEndingQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
