@@ -31,8 +31,11 @@ export interface CarSpec {
   wheelCentre: CarPoint;
   /** Stand points 0.7 m outside each door, mid-door (y = the floor). */
   exits: {left: {x: number; z: number}; right: {x: number; z: number}};
-  /** Collision circles along the body's centre line (2-4, covering it). */
-  circles: readonly {z: number; r: number}[];
+  /**
+   * Collision circles along the body's centre line (2-4, covering it). (lane TRUCK, task surface-run-opus-rebuild-20261116) `x`: a
+   * circle off the centre line (absent = 0: the car's) — the truck's long flat-ended body is covered by columns of smaller circles.
+   */
+  circles: readonly {z: number; r: number; x?: number}[];
   /** The free cabin box. */
   interior: {x0: number; x1: number; y0: number; y1: number; z0: number; z1: number};
   /** The windscreen's base / top edge at the eye's x (y, z): a dash top must stay under the line between them. */
