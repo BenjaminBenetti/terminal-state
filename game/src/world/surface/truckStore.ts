@@ -32,8 +32,15 @@ const KEYS_V1: readonly string[] = ['v', 'x', 'y', 'z', 'yaw', 'level', 'lights'
 const KEYS_V2: readonly string[] = [...KEYS_V1, 'condition'];
 const finite = (v: unknown, lim: number): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= lim;
 const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
-/** (v2) A condition as stored: clamped to 0..1, 1e-4 steps (a non-finite value: 1, sound). */
-export const truckConditionValue = (c: number): number => (Number.isFinite(c) ? r4(Math.max(0, Math.min(1, c))) : 1);
+/**
+ * (v2) A condition as stored: clamped to 0..1, 1e-4 steps (a non-finite value: 1, sound) — never across its ends by the rounding: a
+ * running truck never stores as broken down, a damaged one never as sound (no free heal).
+ */
+export const truckConditionValue = (c: number): number => {
+  if (!Number.isFinite(c)) return 1;
+  const k = Math.max(0, Math.min(1, c)), v = r4(k);
+  return k > 0 && v <= 0 ? 1e-4 : k < 1 && v >= 1 ? 0.9999 : v;
+};
 
 /** Why a truck record is malformed (null = fine). v1 or v2; the compartments' stacks themselves are checked by save/validate.ts. */
 export function surfaceTruckProblem(v: unknown): string | null {

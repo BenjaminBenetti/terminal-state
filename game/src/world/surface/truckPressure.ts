@@ -6,10 +6,12 @@
 // out. The truck must lose mobility and break down before reaching the geometry edge, even approaching at speed."
 //  - DAMAGE (truckPressureLoss): STRAIN for every step OUT through the ramp — the cumulative strain pressureStrain(p) = q^shape of the
 //    depth q = (p - warn) / (full - warn): going out from the warning line to FOG_PRESSURE.full costs a whole sound truck (condition 1 -> 0)
-//    whatever the speed, and every step further out past it costs `beyond` per unit of q — so a truck is broken down AT THE LATEST on the
-//    frame it reaches pressure `full`, and then rolls to rest with its brakes on (world/surface/truckCondition.ts). Coming back in strains
-//    nothing. Plus WEAR while someone sits in it in the pressure (wearPerS x q², beyondPerS past full): standing or creaking along deep in
-//    the fog keeps grinding it down. A parked, empty truck takes no wear (its engine is off).
+//    whatever the speed, and every step further out past it costs `beyond` per unit of q; any step OUT at or past `full` breaks it down
+//    outright (whatever it had left: a truck repaired inside the ramp too) — so a truck is broken down AT THE LATEST on the frame it
+//    reaches pressure `full` going out, and then rolls to rest with its brakes on (world/surface/truckCondition.ts). Coming back in strains
+//    nothing (a truck repaired past the line can still be reversed back in). Plus WEAR while someone sits in it in the pressure
+//    (wearPerS x q², beyondPerS past full): standing or creaking along deep in the fog keeps grinding it down. A parked, empty truck takes
+//    no wear (its engine is off).
 //  - STOPPING: the worst case is a truck entering the ramp at its top speed: broken down at pressure 1 at the latest, it stops within
 //    TRUCK_PRESSURE_STOP_M of that line (truckStopBound: braking from TRUCK_PHYS.forwardMax at brake + roll, plus one 0.1 s frame of
 //    travel) — lane FOG puts the geometry edge beyond it with margin (tests/surface-truck-pressure.test.ts measures it on the controller).
@@ -61,6 +63,8 @@ export function pressureStrain(p: number): number {
  */
 export function truckPressureLoss(from: number, to: number, seated: boolean, dt: number): number {
   let loss = Math.max(0, pressureStrain(to) - pressureStrain(from));
+  // a step OUT at or past full breaks it down whatever it had left (a truck repaired inside the ramp included); in, it only wears
+  if (to >= FOG_PRESSURE.full && to > from) loss = Math.max(loss, 1);
   if (seated && dt > 0) {
     const q = pressureDepth(to);
     if (q > 0) loss += dt * (TRUCK_PRESSURE.wearPerS * Math.min(1, q) ** 2 + (q > 1 ? TRUCK_PRESSURE.beyondPerS : 0));

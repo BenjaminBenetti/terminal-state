@@ -21,9 +21,9 @@ export function truckDashLayout() {
   const housing = {x0: x - 0.026, x1: x + 0.026, y0: top, y1: top + 0.032, z0: z - 0.02, z1: z + 0.02};
   const lens = {x, y: top + 0.016, z: z + 0.0215, w: 0.03, h: 0.02};
   const lab = {x: x + 0.026 + 0.012 + 0.07, y: top + 0.004, z, w: 0.14, h: 0.034};
-  // the label plate tilts up toward the eye
-  const tilt = Math.atan2(E.y - lab.y, E.z - lab.z);
-  return {housing, lens, label: {...lab, tilt}, eye: {x: E.x, y: E.y, z: E.z}};
+  // the label plate turns (yaw) and tilts up (tilt) to face the seated eye
+  const dx = E.x - lab.x, dz = E.z - lab.z, yaw = Math.atan2(dx, dz), tilt = Math.atan2(E.y - lab.y, Math.hypot(dx, dz));
+  return {housing, lens, label: {...lab, tilt, yaw}, eye: {x: E.x, y: E.y, z: E.z}};
 }
 
 export interface TruckDashView {
@@ -92,8 +92,11 @@ export function buildTruckDash(): TruckDashView {
   const label = new THREE.Mesh(S.plane, S.label);
   label.name = 'surface-truck-dash-pressure-label';
   label.scale.set(L.label.w, L.label.h, 1);
-  label.rotation.x = -L.label.tilt; // (its normal +Z turned up toward the seated eye; the bottom edge resting on the dash top)
-  label.position.set(L.label.x, L.label.y + (L.label.h / 2) * Math.cos(L.label.tilt), L.label.z - (L.label.h / 2) * Math.sin(L.label.tilt));
+  // its normal +Z turned toward the seated eye (yaw, then tilted up); the bottom edge resting on the dash top
+  const {tilt, yaw} = L.label, up = (L.label.h / 2) * Math.sin(tilt);
+  label.rotation.order = 'YXZ';
+  label.rotation.set(-tilt, yaw, 0);
+  label.position.set(L.label.x - up * Math.sin(yaw), L.label.y + (L.label.h / 2) * Math.cos(tilt), L.label.z - up * Math.cos(yaw));
   for (const m of [housing, lens, label]) { m.userData.carPart = 'cockpit'; m.castShadow = false; g.add(m); }
   return {group: g, lens, label, on: false};
 }
