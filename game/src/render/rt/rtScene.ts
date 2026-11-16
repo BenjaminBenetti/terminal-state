@@ -7,7 +7,9 @@
 // position morph targets, no vertex displacement (a node material's positionNode: the CPU positions are not what is drawn), no
 // InstancedBufferGeometry on a plain Mesh. Visible = it and every ancestor up to a root visible; an InstancedMesh contributes its
 // instances [0, count) whose matrix is not degenerate. Skinned characters are not meshes here: the per-frame bodies (FlashOccluders
-// .bodies: x, z, radius, y0, y1 each) are dynamic capsule instances flagged PROXY.
+// .bodies: x, z, radius, y0, y1 each) are dynamic capsule instances flagged PROXY. The walk never descends into an invisible object,
+// a THREE.Bone (a skeleton and what is attached to it belong to a character) or a subtree the caller's `skip` names, so the whole
+// THREE.Scene can be the root (groups added after the prepare are found by the next re-inventory).
 //
 // PER FRAME (sync): a cheap change check per traced object (its ancestors' visibility, matrixWorld, instanceMatrix.version, its
 // geometry / material / draw range / attribute versions). A moved entry is DISABLED in the static TLAS and traced from the dynamic
@@ -51,10 +53,20 @@ export interface RtSceneOptions {
   dynamicInstanceCap?: number;
   /** Linear albedo of the capsules (default rtBodyAlbedo(): world/flashOccluders.ts bodyAlbedo). */
   bodyAlbedo?: ArrayLike<number>;
+  /**
+   * Subtrees the inventory never walks (true: `o` and everything under it is pruned; counted as excluded 'skipped'): the camera,
+   * the effects group ... Asked of every object an inventory walk reaches (keep it cheap).
+   */
+  skip?: (o: THREE.Object3D) => boolean;
 }
 
-/** Why a candidate mesh is not traced (by the contract). */
-export type RtExcludeReason = 'material' | 'skinned' | 'batched' | 'noPosition' | 'morph' | 'displaced' | 'customInstanced';
+/**
+ * Why a candidate is not traced (by the contract). Per mesh: 'material' (not all lit + opaque), 'skinned', 'batched', 'noPosition',
+ * 'morph', 'displaced', 'customInstanced'. Per pruned SUBTREE (its meshes are not walked, so not counted one by one): 'character'
+ * (a THREE.Bone and all under it — a skeleton belongs to a character, and characters are the capsules) and 'skipped' (the
+ * caller's `skip`).
+ */
+export type RtExcludeReason = 'material' | 'skinned' | 'batched' | 'noPosition' | 'morph' | 'displaced' | 'customInstanced' | 'character' | 'skipped';
 /** Why a mesh that should be traced was left out (a cap). */
 export type RtOmitReason = 'triangles' | 'blasNodeBytes' | 'blasTriBytes';
 
@@ -90,6 +102,9 @@ export interface RtSceneStats {
   prepareBlasMs: number;
   staticRebuilds: number;
   inventories: number;
+  /** The last inventory walk: main-thread µs and the objects it reached. */
+  lastInventoryUs: number;
+  lastInventoryObjects: number;
   compactions: number;
 }
 
@@ -97,7 +112,7 @@ const ST_STATIC = 0, ST_MOVING = 1, ST_HIDDEN = 2;
 /** matrixWorld elements that carry an affine transform (column-major). */
 const AFF = [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14] as const;
 const zeroOmit = (): Record<RtOmitReason, number> => ({triangles: 0, blasNodeBytes: 0, blasTriBytes: 0});
-const zeroExcluded = (): Record<RtExcludeReason, number> => ({material: 0, skinned: 0, batched: 0, noPosition: 0, morph: 0, displaced: 0, customInstanced: 0});
+const zeroExcluded = (): Record<RtExcludeReason, number> => ({material: 0, skinned: 0, batched: 0, noPosition: 0, morph: 0, displaced: 0, customInstanced: 0, character: 0, skipped: 0});
 
 /** A packed BLAS (global bases in the scene's streams) and how many traced objects use it. */
 interface Packed { build: BlasBuild; nodeBase: number; triBase: number; refs: number }
@@ -218,6 +233,7 @@ export class RtScene {
   readonly maxBlasTriBytes: number;
   readonly dynamicInstanceCap: number;
   private readonly bodyAlbedo: Float32Array;
+  private readonly skip: ((o: THREE.Object3D) => boolean) | null;
   private roots: THREE.Object3D[] = [];
   private readonly recs: Rec[] = [];
   private readonly recOf = new Map<THREE.Object3D, Rec>();
@@ -252,7 +268,7 @@ export class RtScene {
   // stats
   private st = {
     lastSyncUs: 0, peakSyncUs: 0, omitDyn: 0, blasBuilt: 0, blasBuildMs: 0, degenerate: 0, blasReused: 0, prepareMs: 0, prepareBlasMs: 0,
-    staticRebuilds: 0, inventories: 0, compactions: 0,
+    staticRebuilds: 0, inventories: 0, compactions: 0, inventoryUs: 0, inventoryObjects: 0,
   };
   private omitMeshes = zeroOmit();
   private omitTris = zeroOmit();
@@ -263,6 +279,7 @@ export class RtScene {
     this.maxBlasNodeBytes = o.maxBlasNodeBytes ?? 128 * 1024 * 1024;
     this.maxBlasTriBytes = o.maxBlasTriBytes ?? 128 * 1024 * 1024;
     this.dynamicInstanceCap = Math.max(1, o.dynamicInstanceCap ?? 1024);
+    this.skip = o.skip ?? null;
     this.bodyAlbedo = new Float32Array(3);
     const ba = o.bodyAlbedo ?? rtBodyAlbedo();
     this.bodyAlbedo[0] = ba[0]; this.bodyAlbedo[1] = ba[1]; this.bodyAlbedo[2] = ba[2];
@@ -291,7 +308,7 @@ export class RtScene {
     this.staticGarbage = 0;
     this.deadTris = 0;
     this.lastDynamicCount = 0;
-    this.st = {lastSyncUs: 0, peakSyncUs: 0, omitDyn: 0, blasBuilt: 0, blasBuildMs: 0, degenerate: 0, blasReused: 0, prepareMs: 0, prepareBlasMs: 0, staticRebuilds: 0, inventories: 0, compactions: 0};
+    this.st = {lastSyncUs: 0, peakSyncUs: 0, omitDyn: 0, blasBuilt: 0, blasBuildMs: 0, degenerate: 0, blasReused: 0, prepareMs: 0, prepareBlasMs: 0, staticRebuilds: 0, inventories: 0, compactions: 0, inventoryUs: 0, inventoryObjects: 0};
     this.omitMeshes = zeroOmit();
     this.omitTris = zeroOmit();
     this.excluded = zeroExcluded();
@@ -304,6 +321,7 @@ export class RtScene {
     const B = this.buffers;
     B.blasNodes = new Float32Array(0); B.blasNodesU32 = new Uint32Array(0);
     B.blasTris = new Float32Array(0); B.blasTrisU32 = new Uint32Array(0);
+    B.blasArrayVersion++;
     this.resetTables();
   }
 
@@ -420,12 +438,16 @@ export class RtScene {
    * leave. `initial`: the prepare's entries are static at once. pause / resume: prepareSteps' timing around its yields.
    */
   private *inventorySteps(now: number, initial: boolean, pause: (() => void) | null, resume: (() => void) | null): Generator<void, void, void> {
-    const stamp = ++this.seenStamp, W = this.walk, ex = zeroExcluded();
+    const stamp = ++this.seenStamp, W = this.walk, ex = zeroExcluded(), skip = this.skip;
+    let t0 = performance.now(), ms = 0, objects = 0;
     W.length = 0;
     for (const r of this.roots) if (r.visible) W.push(r);
     let n = 0;
     while (W.length) {
       const o = W.pop()!;
+      objects++;
+      if ((o as THREE.Bone).isBone) { ex.character++; continue; } // (a skeleton: a character's, and characters are the capsules)
+      if (skip !== null && skip(o)) { ex.skipped++; continue; }
       const ch = o.children;
       for (let i = 0; i < ch.length; i++) if (ch[i].visible) W.push(ch[i]);
       if (!(o as THREE.Mesh).isMesh) continue;
@@ -439,7 +461,7 @@ export class RtScene {
       if (rec) { rec.seen = stamp; continue; }
       const r = this.addRec(o as THREE.Mesh, now, initial);
       r.seen = stamp;
-      if (pause && ++n % 128 === 0) { pause(); yield; resume?.(); }
+      if (pause && ++n % 128 === 0) { ms += performance.now() - t0; pause(); yield; resume?.(); t0 = performance.now(); }
     }
     // gone (not found under a visible root)
     for (let i = this.recs.length - 1; i >= 0; i--) if (this.recs[i].seen !== stamp) this.removeRec(this.recs[i]);
@@ -451,6 +473,8 @@ export class RtScene {
     }
     this.excluded = ex;
     this.st.inventories++;
+    this.st.inventoryUs = (ms + performance.now() - t0) * 1000; // (the walk's own time, without the paused gaps)
+    this.st.inventoryObjects = objects;
   }
 
   private addRec(o: THREE.Mesh, now: number, initial: boolean): Rec {
@@ -790,6 +814,7 @@ export class RtScene {
       const a = new Float32Array(cap * BVH_NODE_FLOATS);
       a.set(B.blasNodes.subarray(0, B.blasNodeCount * BVH_NODE_FLOATS));
       B.blasNodes = a; B.blasNodesU32 = new Uint32Array(a.buffer);
+      B.blasArrayVersion++;
       B.dirtyBlas(0, B.blasNodeCount, 0, 0);
     }
     if (B.blasTris.length < tris * BLAS_TRI_FLOATS) {
@@ -797,6 +822,7 @@ export class RtScene {
       const a = new Float32Array(cap * BLAS_TRI_FLOATS);
       a.set(B.blasTris.subarray(0, B.blasTriCount * BLAS_TRI_FLOATS));
       B.blasTris = a; B.blasTrisU32 = new Uint32Array(a.buffer);
+      B.blasArrayVersion++;
       B.dirtyBlas(0, 0, 0, B.blasTriCount);
     }
   }
@@ -1074,6 +1100,7 @@ export class RtScene {
       blasBuilt: this.st.blasBuilt, blasBuildMs: this.st.blasBuildMs, degenerateTriangles: this.st.degenerate, blasReused: this.st.blasReused,
       prepareMs: this.st.prepareMs, prepareBlasMs: this.st.prepareBlasMs,
       staticRebuilds: this.st.staticRebuilds, inventories: this.st.inventories, compactions: this.st.compactions,
+      lastInventoryUs: this.st.inventoryUs, lastInventoryObjects: this.st.inventoryObjects,
     };
   }
 
