@@ -58,9 +58,9 @@ export const CREVICE = {
   stairRun: 15,
   /** A bridge deck's width (rows: the cooked bridge kit's 2 m deck between its rails). */
   bridgeW: 4,
-  /** How far a bridge's structure hangs below its deck (m: the cooked kit's girder flanges, MARKET_BRIDGE_KIT.girderDepth 0.47): every
-   *  band under a deck ends there. */
-  deckDepth: 0.5,
+  /** How far below a bridge's deck every band under it ends (m): the cooked kit's girder flanges (MARKET_BRIDGE_KIT.girderDepth 0.47;
+   *  their last 2 cm visual only), leaving a stair's top landing or a walk a storey down STAIR.headroom (2.5 m) under it. */
+  deckDepth: 0.45,
 } as const;
 
 /** One stair bay: the side (canonical 'W' / 'E'), the storey it climbs FROM (0..2) and its first row (canonical). */
