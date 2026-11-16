@@ -15,7 +15,7 @@ import {LEVELS} from '../src/levels/registry';
 import {SURFACE_VERSION, surfacePresent, type SurfaceHost} from '../src/gen/surface/surfaceRun';
 import {CELL, FLOOR} from '../src/gen/grid';
 import {GAS} from '../src/world/gas/field';
-import {surfaceAirAt, surfaceOutdoorMap} from '../src/world/surface/airMask';
+import {surfaceAirAt, surfaceAirPressureAt, surfaceOutdoorMap} from '../src/world/surface/airMask';
 import {SurfaceGasField, surfaceGasZones} from '../src/world/surface/airField';
 import {doorBreachId, doorPoint, planSurfaceDoors} from '../src/world/surface/airDoors';
 import type {StationLayout} from '../src/gen/stationTypes';
@@ -73,7 +73,7 @@ describe('Surface Run: the command tent is gas-free with its flap shut (the arri
           if (!inTent(x, z)) continue;
           for (const h of HEIGHTS) {
             const y = g.floor[i] + h;
-            worst = Math.max(worst, f.concentrationAt(x, y, z) + surfaceAirAt(map, null, x, y, z));
+            worst = Math.max(worst, f.concentrationAt(x, y, z) + surfaceAirAt(map, null, x, y, z) + surfaceAirPressureAt(map, null, x, y, z)); // (+ lane FOG's pressure: 0 indoors)
             n++;
           }
         }
