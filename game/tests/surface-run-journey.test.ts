@@ -361,7 +361,8 @@ describe('Surface Run: station -> district -> station -> save -> Continue -> dis
       expect(arrival.grab, `grabbed again on arrival: ${JSON.stringify(arrival)}`).toBe(dolly!.uid);
       expect(game.run.current).toEqual(hostKey);
       const back = game.layout.surfaceAccess!.returnPose;
-      expect(Math.hypot(game.player.x - back.x, game.player.z - back.z), 'at the stairwell door').toBeLessThan(0.75);
+      if (v1) expect(Math.hypot(game.player.x - back.x, game.player.z - back.z), 'at the stairwell door').toBeLessThan(0.75);
+      else { const c = game.layout.surfaceAccess!.lift!.cab; expect(game.player.x > c.x0 && game.player.x < c.x1 && game.player.z > c.z0 && game.player.z < c.z1, 'in the station\'s lift car (where the player stood in the tent\'s)').toBe(true); }
       await h.waitFrames(20);
       expect(snapHost(), 'the station exactly as it was left').toEqual(host0);
       const train1 = trainSave();
