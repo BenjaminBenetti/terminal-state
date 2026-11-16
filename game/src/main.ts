@@ -192,6 +192,9 @@ async function boot(): Promise<void> {
   // choice, never persisted; any other value is ignored
   const urlRt = rtFlashlightParam(params.get('rt'));
   if (urlRt !== null) settings.sessionOverride({rtFlashlight: urlRt});
+  // (task studio-rt-flashlight-toggle-hitch-20261116-052336-01) session-only ?rtstandby=off (QA / comparisons): the torch-off frames
+  // trace nothing, as before the standby (Game.rtStandby)
+  if (params.get('rtstandby') === 'off') game.rtStandby = false;
   copySettingsInto(game.settings, settings.get());
   game.applySettings();
   settings.subscribe((s, changed) => {

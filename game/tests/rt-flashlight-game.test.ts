@@ -8,7 +8,9 @@
 //     drawn program knows it, drawn programs read the traced result; the traced scene holds the station; with the flashlight on every
 //     drawn frame dispatches the kernels; nothing dropped at any angle; nothing compiled while playing; every module inside WebGPU's
 //     default per-stage limits.
-//  2. The flashlight off: nothing dispatched, the gate shut (the materials add zero); on again: traced again.
+//  2. The flashlight off: in play the kernels run in STANDBY (the lit frame's work, the gate shut: the materials add zero) — task
+//     studio-rt-flashlight-toggle-hitch-20261116-052336-01; with standby off (?rtstandby=off) nothing is dispatched; on again: traced.
+//     RT Off and the fallback dispatch nothing with the torch off either.
 //  3. Pause -> RT Flashlight Off: the current bounce, bound to the new lighting, and nothing of RT — the device resources freed, the
 //     zero placeholders back, no drawn program reads them; the station and the run untouched. On again: RT back.
 //  4. death -> Load last save and Main menu -> Continue: RT again, the previous station's resources released first (the menu keeps the
@@ -100,9 +102,9 @@ describe('RT Flashlight in the real Game (WebGPU path, validating device)', () =
     const cpu = new Map<string, {sync: number[]; encode: number[]; bytes: number[]}>();
     const frameFn = rt.frame.bind(rt);
     rt.frame = (...a: Parameters<typeof rt.frame>) => {
-      const up0 = rt.gpu.stats.uploadedBlas + rt.gpu.stats.uploadedTlas;
+      const up0 = rt.gpu.stats.uploadedBlas + rt.gpu.stats.uploadedTlas, d0 = rt.stats.dispatched;
       const ok = frameFn(...a);
-      if (ok) {
+      if (rt.stats.dispatched > d0) { // (shown or standby)
         // (a frame the warm-up draws behind the loading screen — its finish frame, torch lit after a reload — is counted apart)
         const key = (game as unknown as {warming: boolean}).warming || g.state !== 'playing' ? `${phase} (loading / menu)` : phase;
         let c = cpu.get(key);
@@ -116,13 +118,23 @@ describe('RT Flashlight in the real Game (WebGPU path, validating device)', () =
     const sweep = async (name: string) => {
       phase = name;
       h.log.reset();
-      const m0 = modules.length, d0 = rt.stats.dispatched;
+      const m0 = modules.length, d0 = rt.stats.dispatched, s0 = rt.stats.standby;
       await h.waitFrames(12);
       const y0 = g.player.yaw;
       for (let i = 0; i < 16; i++) { g.player.yaw = y0 + (i / 16) * Math.PI * 2; await h.waitFrames(2); }
       g.player.yaw = y0;
       await h.waitFrames(4);
-      return {submits: h.log.submits, dropped: h.log.dropped, issues: h.log.issues.slice(0, 5).map(i => i.detail), built: modules.slice(m0).map(m => m.label), dispatched: rt.stats.dispatched - d0};
+      return {submits: h.log.submits, dropped: h.log.dropped, issues: h.log.issues.slice(0, 5).map(i => i.detail), built: modules.slice(m0).map(m => m.label), dispatched: rt.stats.dispatched - d0, standby: rt.stats.standby - s0};
+    };
+    /** A few frames with the torch off (no sweep): what they dispatch, in standby or at all. */
+    const torchOff = async (frames = 8) => {
+      g.flashlightOn = false;
+      const d0 = rt.stats.dispatched, s0 = rt.stats.standby;
+      await h.waitFrames(frames);
+      const r = {dispatched: rt.stats.dispatched - d0, standby: rt.stats.standby - s0, gate: RTB.cam.value.w};
+      g.flashlightOn = true;
+      await h.waitFrames(3); // (lit again: the spot's intensity follows the battery in play's update)
+      return r;
     };
     const nodes = (game.renderer as unknown as {_nodes: {get(ro: RenderObject): {nodeBuilderState?: {fragmentShader?: string}}}})._nodes;
     const fragmentOf = (ro: RenderObject): string => nodes.get(ro).nodeBuilderState?.fragmentShader ?? '';
@@ -183,15 +195,33 @@ describe('RT Flashlight in the real Game (WebGPU path, validating device)', () =
       `rays/frame light ${stats1.rays.light} primary ${stats1.rays.primary} shadow<=${stats1.rays.shadowMax}; device bytes ${JSON.stringify(stats1.gpu.bytes)}; ` +
       `CPU per traced frame (Node, the real Game's frames): ${cpuLine('play')}; ${rtModules} RT programs, worst per stage ${JSON.stringify(worst)}\n`);
 
-    // 2. the flashlight off: nothing traced, the gate shut; on again: traced
+    // 2. the flashlight off: in play traced in standby (every drawn frame, nothing shown: the gate shut, the history going on);
+    // standby off: nothing traced; on again: traced
     g.flashlightOn = false;
+    const reset2 = rt.stats.historyReset;
     const dark = await sweep('torch-off');
-    expect(dark, 'torch off: nothing dropped').toMatchObject({dropped: 0, issues: [], dispatched: 0});
-    expect([RTB.cam.value.w, rt.stats.historyReset]).toEqual([0, 'flashlight off']);
+    expect(dark, 'torch off: nothing dropped, nothing compiled').toMatchObject({dropped: 0, issues: [], built: []});
+    expect(dark.dispatched, 'torch off in play: every drawn frame traced in standby').toBeGreaterThan(20);
+    expect(dark.standby).toBe(dark.dispatched);
+    expect([RTB.cam.value.w, rt.stats.historyReset], 'the gate shut; the history not restarted').toEqual([0, reset2]);
     g.flashlightOn = true;
     const lit = await sweep('torch-on');
+    expect(lit, 'on again: nothing dropped, nothing compiled').toMatchObject({dropped: 0, issues: [], built: [], standby: 0});
     expect(lit.dispatched).toBeGreaterThan(20);
     expect(RTB.cam.value.w).toBe(1);
+    const game2 = game as unknown as {rtStandby: boolean};
+    game2.rtStandby = false;
+    expect(await torchOff(), 'standby off (?rtstandby=off): nothing traced').toEqual({dispatched: 0, standby: 0, gate: 0});
+    expect(rt.stats.historyReset).toBe('flashlight off');
+    game2.rtStandby = true;
+    g.flashlightOn = false;
+    await h.waitFrames(4);
+    await pause();
+    const menu0 = {dispatched: rt.stats.dispatched, standby: rt.stats.standby, skipped: rt.stats.skipped};
+    expect(await until(() => rt.stats.skipped > menu0.skipped, 600), 'the pause menu redraws its frozen frame').toBe(true);
+    expect({dispatched: rt.stats.dispatched - menu0.dispatched, standby: rt.stats.standby - menu0.standby}, 'the pause menu, the torch off: no standby').toEqual({dispatched: 0, standby: 0});
+    g.flashlightOn = true;
+    await play();
 
     // 3. pause -> RT Flashlight Off: the current bounce, nothing of RT
     await pause();
@@ -210,6 +240,7 @@ describe('RT Flashlight in the real Game (WebGPU path, validating device)', () =
     expect(withBounce('rt-off').length, 'drawn programs hold the standard bounce').toBeGreaterThan(0);
     expect(FLASH_BOUNCE.debug(), 'the standard bounce is live').toMatchObject({bound: true, lit: true});
     expect(stationPrint(), 'Off: the same station').toBe(print1);
+    expect(await torchOff(), 'RT Off, the torch off: nothing traced').toEqual({dispatched: 0, standby: 0, gate: 0});
     // ... On again
     await pause();
     await apply({rtFlashlight: true});
@@ -278,6 +309,7 @@ describe('RT Flashlight in the real Game (WebGPU path, validating device)', () =
     expect(fallback, 'the fallback: nothing dropped at any angle').toMatchObject({dropped: 0, issues: [], dispatched: 0, built: []});
     expect(withBounce('fallback').length).toBeGreaterThan(0);
     expect(withRt('fallback')).toEqual([]);
+    expect(await torchOff(), 'the fallback, the torch off: nothing traced').toEqual({dispatched: 0, standby: 0, gate: 0});
     expect(g.settings.rtFlashlight, 'the choice is the player\'s and stays On').toBe(true);
     expect(stationPrint()).toBe(print1);
 
