@@ -5,7 +5,9 @@
 // census and pinned fingerprint of a station without the access is untouched, and one with it differs only by the appended access.
 //  - Subway: an EXTENDED STAIRWELL up from one of the station's sealed street-exit halls (gen/station.ts 'exit-stair'), with a strong
 //    occlusion boundary (a closed door at its top: nothing of the city is in the station's world) — gen/surface/accessStair.ts;
-//  - Office: a plausible exterior exit from the tower lobby onto the street — gen/surface/accessDoor.ts carveOfficeAccess;
+//  - Office: a plausible exterior exit from the tower lobby onto the street — gen/surface/accessDoor.ts carveOfficeAccess (the one
+//    in-place change: the barricade pieces in front of the door slide aside for a 1.2 m walk-up — same indices / kinds, moved, never
+//    removed; a station without the access is byte-identical to the plain one);
 //  - Mall: a plausible exterior exit from the mall's street-level entrance — gen/surface/accessDoor.ts carveMallAccess.
 // Writes layout.surfaceAccess (gen/surface/surfaceTypes.ts SurfaceAccessInfo).
 //

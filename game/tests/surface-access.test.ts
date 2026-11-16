@@ -3,7 +3,8 @@
 //  - presence <=> access: a station whose one roll is present gets its access at version 1, none at version 0 (a station visited before
 //    the feature); an absent roll never does;
 //  - RNG-neutral / append-only: the access-bearing layout equals the plain one except the appended access and the chosen exit hall's
-//    documented in-place changes (Subway), one appended EXIT plate (Office), nothing (Mall: the usable exit is only named);
+//    documented in-place changes (Subway), one appended EXIT plate and the barricade pieces moved aside for a 1.2 m walk-up to the door
+//    (Office), nothing (Mall: the usable exit is only named); a station without its access is byte-identical to the plain one;
 //  - the Subway climb is a real stair: the station validator finds no new issue (every carved cell reachable, flights walkable, no prop
 //    on the steps), ~9.5 m of STAIR flights to a top landing with the door, its return pose on the floor, clear of the ride tunnel;
 //  - deterministic; the Mall's usable exit is drawn without its lock.
@@ -19,6 +20,8 @@ import {playerTrainPlacement} from '../src/gen/playerTrain';
 import {RIDE_BOX, ridePortals} from '../src/world/ridePortal';
 import {buildStreetExit, streetExitSpecs} from '../src/world/mallStreetExit';
 import {installCanvasShim} from './helpers/canvas2d';
+import {OFFICE_DOOR, OFFICE_PASSAGE} from '../src/gen/surface/accessDoor';
+import {officePassageReport} from './helpers/officePassage';
 
 const seeds = (host: SurfaceHost, present: boolean, n: number): number[] => {
   const out: number[] = [];
@@ -154,23 +157,43 @@ describe('Surface Run access: the Subway stairwell', () => {
 });
 
 describe('Surface Run access: Office / Mall street doors', () => {
-  it('office: the makeshift door in the boarded lobby entrance; one EXIT plate appended, nothing else changes', () => {
-    for (const s of seeds('office', true, 2)) {
+  it('office: the makeshift door in the boarded lobby entrance; one EXIT plate appended; a 1.2 m walk-up through the barricade', () => {
+    // (follow-up 1) the barricade pieces in front of the door are MOVED aside (same index / kind / rotation / height; legal, grounded,
+    // no overlap, no cell cut off, no new validator issue) — tests/helpers/officePassage.ts; 100 present seeds swept while building it
+    let moved = 0;
+    for (const s of seeds('office', true, 4)) {
       const L0 = gen('office', s), L1 = gen('office', s, 1), a = L1.surfaceAccess!;
       expect(a.kind).toBe('office-door');
       const ent = L1.office!.windows.find(w => w.kind === 'entrance')!;
       expect(a.door!.level).toBe(ent.level);
-      expect(a.door!.x).toBeGreaterThan(ent.x0);
-      expect(a.door!.x).toBeLessThan(ent.x1);
+      expect(a.door!.x - OFFICE_DOOR.w / 2).toBeGreaterThan(ent.x0);
+      expect(a.door!.x + OFFICE_DOOR.w / 2).toBeLessThan(ent.x1);
       expect(a.door!.z).toBeCloseTo(ent.z1, 6);
       expect(a.door!.y).toBeCloseTo(ent.baseY, 6);
-      expect(L1.signs.length).toBe(L0.signs.length + 1);
-      expect(plain(L1.signs.slice(0, L0.signs.length))).toEqual(plain(L0.signs));
-      for (const k of ['areas', 'doors', 'props', 'lights', 'pickups', 'zombies'] as const) expect(plain(L1[k]), k).toEqual(plain(L0[k]));
+      const r = officePassageReport(L0, L1);
+      expect(r.problems, `seed ${s}`).toEqual([]);
+      moved += r.moved.length;
+      for (const i of r.moved) expect(OFFICE_PASSAGE.kinds as readonly string[], `seed ${s} prop ${i}`).toContain(L1.props[i].kind);
       const g = L1.levels[a.returnPose.level].grid, p = a.returnPose;
       expect(g.walkable(...g.cellOf(p.x, p.z))).toBe(true);
       expect(g.circleClear(p.x, p.z, 0.45)).toBe(true);
       expect(p.y).toBeCloseTo(ent.baseY, 6);
+    }
+    expect(moved, 'the barricade stood in front of the door: pieces were moved').toBeGreaterThan(0);
+  }, 120_000);
+
+  it('office: a light loose prop in the walk-up is slid aside only when the barricade alone cannot open one (seed 91)', () => {
+    expect(surfacePresent('office', 91, SURFACE_VERSION)).toBe(true);
+    const L0 = gen('office', 91), L1 = gen('office', 91, 1), r = officePassageReport(L0, L1);
+    expect(r.problems).toEqual([]);
+    expect(r.moved.map(i => L1.props[i].kind).filter(k => (OFFICE_PASSAGE.loose as readonly string[]).includes(k))).toEqual(['wetFloorSign']);
+  }, 60_000);
+
+  it('a station without its access is byte-identical to the plain one (absent roll at version 1, present roll at version 0)', () => {
+    const bytes = (L: StationLayout) => JSON.stringify(L, (_k, v) => (ArrayBuffer.isView(v) ? Buffer.from(v.buffer, v.byteOffset, v.byteLength).toString('base64') : v));
+    for (const host of ['subway', 'office', 'mall'] as const) {
+      for (const s of seeds(host, false, 1)) expect(bytes(gen(host, s, 1)) === bytes(gen(host, s)), `${host} ${s} absent`).toBe(true);
+      for (const s of seeds(host, true, 1)) expect(bytes(gen(host, s, 0)) === bytes(gen(host, s)), `${host} ${s} v0`).toBe(true);
     }
   }, 120_000);
 
