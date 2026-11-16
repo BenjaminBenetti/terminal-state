@@ -115,6 +115,15 @@ export function cutFace<F extends BuiltFace>(f: F, holes: readonly Hole2[], tops
   return out;
 }
 
+/** The part [a, b] (world, along the face) of a face; its openings re-based (spans from the piece's start). */
+export function sliceFace<F extends BuiltFace>(f: F, a: number, b: number): F {
+  const alongX = Math.abs(f.z0 - f.z1) < 1e-9;
+  const s0 = alongX ? f.x0 : f.z0;
+  const piece = {...f, x0: alongX ? a : f.x0, x1: alongX ? b : f.x1, z0: alongX ? f.z0 : a, z1: alongX ? f.z1 : b};
+  if (f.openings.length) piece.openings = f.openings.filter(o => s0 + o.s1 > a && s0 + o.s0 < b).map(o => ({...o, s0: Math.max(0, s0 + o.s0 - a), s1: Math.min(b - a, s0 + o.s1 - a)}));
+  return piece;
+}
+
 /** Hole kind -> its parts' keys (null = none). */
 const ROOM = LOOK_TUNE.room, REVEAL = LOOK_TUNE.reveal;
 
@@ -160,6 +169,33 @@ export class SurfaceArch {
   }
 
   private count(k: string): void { this.stats.faces[k] = (this.stats.faces[k] ?? 0) + 1; }
+  /**
+   * A builder face runs on along one plane past where one owner's wall ends (a party wall row of shells, a shell beside the cordon):
+   * split it at every change of the owner behind it, so each building's piece takes its own facade (and its side's extent).
+   */
+  private splitByOwner<F extends BuiltFace>(f: F): F[] {
+    if (f.slope) return [f];
+    const P = this.plan, W = P.W;
+    const alongX = Math.abs(f.z0 - f.z1) < 1e-9;
+    const plane = alongX ? f.z0 : f.x0, sign = Math.sign(alongX ? f.nz : f.nx);
+    const s0 = alongX ? f.x0 : f.z0, s1 = alongX ? f.x1 : f.z1;
+    const back = Math.floor((plane - sign * CELL / 2) / CELL);
+    const ownerAt = (s: number) => {
+      const c = Math.floor(s / CELL), cx = alongX ? c : back, cz = alongX ? back : c;
+      return cx < 0 || cz < 0 || cx >= W || cz >= P.H ? OWNER.cordon : P.owner[cz * W + cx];
+    };
+    const cuts: number[] = [];
+    let prev = ownerAt(s0 + CELL / 2);
+    for (let c = Math.floor(s0 / CELL + 1e-6) + 1; c * CELL < s1 - 1e-6; c++) {
+      const o = ownerAt((c + 0.5) * CELL);
+      if (o !== prev) { cuts.push(c * CELL); prev = o; }
+    }
+    if (!cuts.length) return [f];
+    const at = [s0, ...cuts, s1], out: F[] = [];
+    for (let k = 0; k + 1 < at.length; k++) if (at[k + 1] - at[k] > 1e-4) out.push(sliceFace(f, at[k], at[k + 1]));
+    return out;
+  }
+
   private readonly ends = new Map<string, {s0: number; s1: number}[]>();
   /** The cordon stretches on a plane that face a street end (memoized per plane). */
   private streetEnds(alongX: boolean, plane: number): {s0: number; s1: number}[] {
@@ -219,8 +255,13 @@ export class SurfaceArch {
   remapFaces<F extends BuiltFace>(faces: F[]): F[] {
     const out: F[] = [];
     const P = this.plan, W = P.W;
-    for (const f of faces) {
-      if (f.slope) { out.push(f); continue; }
+    for (const f of faces.flatMap(q => this.splitByOwner(q))) {
+      if (f.slope) {
+        // a stair flight's side walls inside a building (ROOMS' stair cores, the headhouse's stair): its interior wall finish
+        const ib = P.areaBuilding.get(f.area), ibl = ib !== undefined ? P.buildings[ib] : undefined;
+        if (ibl) { const key = interiorKeys(ibl.family).wall; this.count(key); out.push({...f, finish: key}); } else out.push(f);
+        continue;
+      }
       const alongX = Math.abs(f.z0 - f.z1) < 1e-9;
       const plane = alongX ? f.z0 : f.x0, sign = Math.sign(alongX ? f.nz : f.nx);
       const s0 = alongX ? f.x0 : f.z0, s1 = alongX ? f.x1 : f.z1, mid = (s0 + s1) / 2;
@@ -274,16 +315,16 @@ export class SurfaceArch {
           if (b - a < 1e-4) continue;
           const k = this.streetEnds(alongX, plane).some(r => m > r.s0 && m < r.s1) ? 'surface-barricade' : 'surface-cordon';
           this.count(k);
-          const piece = {...f, x0: alongX ? a : f.x0, x1: alongX ? b : f.x1, z0: alongX ? f.z0 : a, z1: alongX ? f.z1 : b, finish: k};
-          if (f.openings.length) piece.openings = f.openings.filter(o => s0 + o.s1 > a && s0 + o.s0 < b).map(o => ({...o, s0: Math.max(0, s0 + o.s0 - a), s1: Math.min(b - a, s0 + o.s1 - a)}));
-          out.push(...cutFace(piece, [], null, y0 + LOOK_TUNE.cordonH));
+          out.push(...cutFace({...sliceFace(f, a, b), finish: k}, [], null, y0 + LOOK_TUNE.cordonH));
         }
         continue;
       }
       if (own === OWNER.tent) { this.count('surface-canvas'); out.push(...cutFace({...f, finish: 'surface-canvas'}, [], null, P.tent ? P.tent.eave : y0 + LOOK_TUNE.tentEave)); continue; }
       if (own === OWNER.debris) { this.count('surface-debris'); out.push(...cutFace({...f, finish: 'surface-debris'}, [], null, y0 + LOOK_TUNE.debrisH)); continue; }
-      if (f.y1 - f.y0 < 0.6) { this.count('surface-kerb'); out.push({...f, finish: 'surface-kerb'}); continue; }
-      out.push(f);
+      // a floor step outdoors: a kerb / a lot's raised grade (low), else a debris mound's flank (GEN's rubble: raised FLOOR)
+      if (f.y1 - f.y0 < 0.35) { this.count('surface-kerb'); out.push({...f, finish: 'surface-kerb'}); continue; }
+      this.count('surface-debris');
+      out.push({...f, finish: 'surface-debris'});
     }
     return out;
   }

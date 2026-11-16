@@ -20,6 +20,7 @@ import {
   LOOK_DECOR, SURFACE_LOOK_MODEL_KEYS, SurfaceLook, buildSurfaceLookView, cullSurfaceDecor, disposeSurfaceLookView, surfaceQaPoses,
 } from '../src/world/surface/look';
 import {FAR_CITY, FAR_CITY_KEYS, farCityPlan} from '../src/world/surface/lookCity';
+import {installSurfaceAir, type SurfaceAirHost} from '../src/world/surface/air';
 import {LOOK_SKY, liveLookMaterials, releaseLookMaterials} from '../src/world/surface/lookSky';
 import {SURFACE_TEXTURES, SURFACE_TEX_SLOTS, liveSurfaceMaterials, setSurfaceResourceOwner, setSurfaceTexture, surfaceTexturesReady} from '../src/world/surface/archMaterials';
 
@@ -217,6 +218,31 @@ describe('Surface Run look: the runtime group', () => {
     expect(plan.items.length).toBeGreaterThan(10);
     host.sectionHooks[0].teardown!();
     setSurfaceResourceOwner(null);
+  });
+
+  it("lane AIR's door runtime drives the arch's own tent flap (wired before the section build; AIR then draws none)", async () => {
+    const air = installSurfaceAir({
+      scene: new THREE.Scene(), gas: {windowSources: [], outdoorAir: null, field: null}, sectionHooks: [], frameHooks: [], interactHandlers: [],
+      promptProviders: [], warmRegistry: {addPool: () => undefined}, sectionPreloads: [],
+    } as unknown as SurfaceAirHost);
+    expect(air.tentFlap).toBeNull();
+    const m = mats(), layout = lookFixture().layout;
+    const w = buildWorld(layout, m, {});
+    const {host, game} = fakeHost({culler: {maxDistance: 0}}, m);
+    (host as {world: unknown}).world = w;
+    new SurfaceLook(game);
+    await host.sectionPreloads[0](layout);
+    expect(air.tentFlap).toBeTypeOf('function');
+    const leaf = w.surfaceArch!.meshes.find(q => q.name === 'surface-tent-flap-leaf')!;
+    const lowest = () => { leaf.updateMatrixWorld(true); return new THREE.Box3().setFromObject(leaf).min.y; };
+    air.tentFlap!(0);
+    const shut = lowest();
+    air.tentFlap!(1);
+    expect(lowest()).toBeGreaterThan(shut + 1);
+    air.tentFlap!(0);
+    expect(lowest()).toBeCloseTo(shut, 5);
+    setSurfaceResourceOwner(null);
+    for (const s of SURFACE_TEX_SLOTS) setSurfaceTexture(s, null);
   });
 
   it('QA poses: an avenue, a facade, an interior, the cordon, the tent, the rail spur', () => {

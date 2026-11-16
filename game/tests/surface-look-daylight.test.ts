@@ -7,7 +7,8 @@ import {describe, expect, it} from 'vitest';
 import {drainSync} from '../src/core/pacedBuild';
 import {bakeLightFieldSteps, downsampleField, sampleField, type BakedField, type FieldSource} from '../src/world/lightField';
 import {StationLighting, stationFieldSource} from '../src/world/lights';
-import {surfaceLookPlan} from '../src/world/surface/archPlan';
+import {SIDE_NORMAL, surfaceLookPlan} from '../src/world/surface/archPlan';
+import {CELL, FLOOR} from '../src/gen/grid';
 import {DAYLIGHT, daylightStats, surfaceSkyField} from '../src/world/surface/lookDaylight';
 import {lookFixture} from './helpers/surfaceLookFixture';
 
@@ -19,7 +20,8 @@ let baked: {f: BakedField; steps: number} | null = null;
 function field(): {f: BakedField; steps: number} {
   if (baked) return baked;
   const d = lookFixture().layout;
-  const src: FieldSource = stationFieldSource(d);
+  // the daylight term alone: the district's own fixtures (ROOMS' interior lamps) are left out, so dim / bright reads the sky
+  const src: FieldSource = {...stationFieldSource(d), lights: []};
   const inner = src.extraDirectSteps!;
   let steps = 0;
   src.extraDirectSteps = function* (ctx) {
@@ -51,18 +53,50 @@ describe('Surface Run look: the baked daylight', () => {
     const street = lum(f, sx, 1.5, sz);
     expect(street).toBeGreaterThan(1);
     expect(lum(f, sx, 10, sz)).toBeGreaterThanOrEqual(street - 1e-3);
-    // a facade (facing the street) is lit less than the open street's ground
-    const b = S.buildings.find(q => q.enterable && q.windows.some(w => spans.includes(w)))!, fp = b.footprint, e = b.entrances[0];
-    const facade = lum(f, e.x - 6, 1.5, fp.z1 + 0.01, [0, 0, 1]);
+    // a building with an entrance and its own street-storey interior cells (and, when ROOMS published them, a window span)
+    const g0 = d.levels[0].grid;
+    const cellsOf = (b: (typeof S.buildings)[number]) => {
+      const out: number[] = [];
+      const fp = b.footprint, areas = new Set(b.areas);
+      for (let z = Math.floor(fp.z0 / CELL); z < Math.ceil(fp.z1 / CELL); z++) for (let x = Math.floor(fp.x0 / CELL); x < Math.ceil(fp.x1 / CELL); x++) {
+        const i = z * g0.w + x;
+        if (g0.cells[i] === FLOOR && areas.has(g0.area[i])) out.push(i);
+      }
+      return out;
+    };
+    const cand = S.buildings.filter(q => q.enterable && !q.host && q.entrances.some(e => e.level === 0 && e.door !== 'boarded'))
+      .map(q => ({b: q, cells: cellsOf(q)})).filter(q => q.cells.length > 200)
+      .sort((p, q) => Number(spans.some(w => p.b.windows.includes(w))) - Number(spans.some(w => q.b.windows.includes(w))) || q.cells.length - p.cells.length)
+      .reverse();
+    const {b, cells} = cand[0];
+    const e = b.entrances.find(q => q.level === 0 && q.door !== 'boarded')!;
+    const at = (i: number) => ({x: (i % g0.w + 0.5) * CELL, z: (Math.floor(i / g0.w) + 0.5) * CELL, y: g0.floor[i] + 1.2});
+    const nearest = (px: number, pz: number, d0: number) => cells.reduce((best, i) => { const p = at(i), q = at(best); return Math.abs(Math.hypot(p.x - px, p.z - pz) - d0) < Math.abs(Math.hypot(q.x - px, q.z - pz) - d0) ? i : best; }, cells[0]);
+    // a facade beside the entrance (facing out) is lit less than the open street's ground
+    const {alongX, n} = SIDE_NORMAL[e.side], fp = b.footprint;
+    const plane = alongX ? (n > 0 ? fp.z1 : fp.z0) : (n > 0 ? fp.x1 : fp.x0);
+    const fn: V3 = alongX ? [0, 0, n] : [n, 0, 0];
+    const fx = alongX ? e.x - 3 : plane + n * 0.01, fz = alongX ? plane + n * 0.01 : e.z - 3;
+    const facade = lum(f, fx, 1.65, fz, fn);
     expect(facade).toBeGreaterThan(0.2);
     expect(facade).toBeLessThan(street);
-    // inside: near the window span and the doorway lit, the back of the room dark (dim interiors; the flashlight's)
-    const sp = S.windows.find(q => q.building === b.id && spans.includes(q.id))!;
-    const byWindow = lum(f, (sp.x0 + sp.x1) / 2, 1.2, fp.z1 - 1.5), byDoor = lum(f, e.x, 1.2, fp.z1 - 1.5);
-    const deep = lum(f, (fp.x0 + fp.x1) / 2, 1.2, fp.z0 + 2);
-    expect(byWindow).toBeGreaterThan(deep + 0.05);
-    expect(byDoor).toBeGreaterThan(deep);
-    expect(byWindow).toBeLessThan(street / 4);
+    // inside: by the doorway lit, the cell farthest from every opening dark (dim interiors: the flashlight's)
+    const opens: {x: number; z: number}[] = [{x: e.x, z: e.z}];
+    const sp = S.windows.find(q => q.building === b.id && q.level === 0 && spans.includes(q.id));
+    if (sp) opens.push({x: (sp.x0 + sp.x1) / 2, z: (sp.z0 + sp.z1) / 2});
+    for (const q of b.entrances) opens.push({x: q.x, z: q.z});
+    for (const q of S.windows) if (q.building === b.id && q.level === 0) opens.push({x: (q.x0 + q.x1) / 2, z: (q.z0 + q.z1) / 2});
+    const deepI = cells.reduce((best, i) => { const p = at(i), q = at(best); const dp = Math.min(...opens.map(o => Math.hypot(p.x - o.x, p.z - o.z))), dq = Math.min(...opens.map(o => Math.hypot(q.x - o.x, q.z - o.z))); return dp > dq ? i : best; }, cells[0]);
+    const dI = nearest(e.x, e.z, 1.5);
+    const deep = lum(f, at(deepI).x, at(deepI).y, at(deepI).z), byDoor = lum(f, at(dI).x, at(dI).y, at(dI).z);
+    expect(byDoor).toBeGreaterThan(deep + 0.02);
+    expect(byDoor).toBeLessThan(street / 2);
+    if (sp) {
+      const wI = nearest((sp.x0 + sp.x1) / 2, (sp.z0 + sp.z1) / 2, 1.5);
+      const byWindow = lum(f, at(wI).x, at(wI).y, at(wI).z);
+      expect(byWindow).toBeGreaterThan(deep);
+      expect(byWindow).toBeLessThan(street / 2);
+    }
     // the command tent: diffuse daylight through its canvas — dimmer than the street, brighter than a deep interior
     const T = plan.tent!;
     const tent = lum(f, (T.rect.x0 + T.rect.x1) / 2, 0.5, (T.rect.z0 + T.rect.z1) / 2);

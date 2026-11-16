@@ -32,6 +32,7 @@ import {LOOK_SKY, liveLookMaterials, lookSkyMaterial, lookTune, outdoorFlatMater
 import {FAR_CITY_KEYS, farCityPlan, type FarCityPlan} from './lookCity';
 import {daylightStats} from './lookDaylight';
 import type {SurfaceArch} from './arch';
+import {surfaceAirRuntime} from './air'; // lane AIR's door runtime: the tent flap seam (wireTentFlap)
 
 /** The district's asset family (gen/surface/surfaceRun.ts sectionAssetLevel). */
 const FAMILY = 'surface';
@@ -362,6 +363,7 @@ export class SurfaceLook {
   async preload(): Promise<void> {
     const lr = this.game.levelResources;
     setSurfaceResourceOwner(r => lr.own(FAMILY, r));
+    this.wireTentFlap();
     await Promise.all([
       ...SURFACE_TEX_SLOTS.map(async slot => {
         const spec = SURFACE_TEXTURES[slot];
@@ -373,9 +375,19 @@ export class SurfaceLook {
     ]);
   }
 
+  /**
+   * Lane AIR's door runtime drives the command tent's flap; the flap drawn is this district arch's (SurfaceArch.setTentFlap), so AIR
+   * draws none of its own. Wired before the section build (AIR reads it there); a world without the arch simply shows no swing.
+   */
+  private wireTentFlap(): void {
+    const air = surfaceAirRuntime();
+    if (air && !air.tentFlap) air.tentFlap = open => { this.game.world?.surfaceArch?.setTentFlap(open); };
+  }
+
   build(layout: StationLayout): void {
     if (!layout.surface) { this.teardown(); return; }
     const g = this.game;
+    this.wireTentFlap();
     setSurfaceResourceOwner(r => g.levelResources.own(FAMILY, r));
     // (the textures a preload resolved stay; a build without one — tests / tools — keeps the flat fallbacks)
     for (const slot of SURFACE_TEX_SLOTS) { const t = g.levelResources.get(FAMILY, SURFACE_TEXTURES[slot].url); if (t) setSurfaceTexture(slot, t); }

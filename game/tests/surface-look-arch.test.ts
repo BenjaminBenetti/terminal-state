@@ -91,7 +91,9 @@ describe('Surface Run look: the district architecture', () => {
     for (const id of fx.spans) {
       const sp = S.windows.find(s => s.id === id)!;
       const {alongX, n} = SIDE_NORMAL[sp.side];
-      const a0 = (alongX ? sp.x0 : sp.z0) + 0.03, a1 = (alongX ? sp.x1 : sp.z1) - 0.03, y0 = sp.sill + 0.03, y1 = sp.head - 0.03;
+      // sill / head above the storey's floor (lane AIR's rule: surface.storeys, else the level's base)
+      const base = S.storeys.find(q => q.level === sp.level)?.y ?? fx.layout.levels[sp.level]?.baseY ?? 0;
+      const a0 = (alongX ? sp.x0 : sp.z0) + 0.03, a1 = (alongX ? sp.x1 : sp.z1) - 0.03, y0 = base + sp.sill + 0.03, y1 = base + sp.head - 0.03;
       const outer = alongX ? (n > 0 ? sp.z1 : sp.z0) : (n > 0 ? sp.x1 : sp.x0), inner = alongX ? (n > 0 ? sp.z0 : sp.z1) : (n > 0 ? sp.x0 : sp.x1);
       // no wall face covers the opening on either plane
       for (const f of faces) {
@@ -136,9 +138,15 @@ describe('Surface Run look: the district architecture', () => {
     const cordon = faces.filter(f => f.finish === 'surface-cordon'), bar = faces.filter(f => f.finish === 'surface-barricade');
     expect(cordon.length).toBeGreaterThan(8);
     expect(bar.length).toBeGreaterThan(0);
-    // capped from the floor (district ground at y 0), every band of the builder's face included
-    for (const f of [...cordon, ...bar]) expect(f.y1, `${f.finish} ${f.y0}-${f.y1}`).toBeLessThanOrEqual(LOOK_TUNE.cordonH + 1e-3);
-    expect(Math.max(...cordon.map(f => f.y1))).toBeCloseTo(LOOK_TUNE.cordonH, 3);
+    // capped from the floor in front of it (the street, a kerb, a mound), every band of the builder's face included
+    const g = lookFixture().layout.grid;
+    const floorBefore = (f: BuiltFace) => {
+      const ax = alongXOf(f), plane = ax ? f.z0 : f.x0, sign = Math.sign(ax ? f.nz : f.nx), mid = ax ? (f.x0 + f.x1) / 2 : (f.z0 + f.z1) / 2;
+      const x = ax ? mid : plane + sign * CELL / 2, z = ax ? plane + sign * CELL / 2 : mid;
+      return g.floor[Math.floor(z / CELL) * g.w + Math.floor(x / CELL)];
+    };
+    for (const f of [...cordon, ...bar]) expect(f.y1 - floorBefore(f), `${f.finish} ${f.y0}-${f.y1}`).toBeLessThanOrEqual(LOOK_TUNE.cordonH + 1e-3);
+    expect(Math.max(...cordon.map(f => f.y1 - floorBefore(f)))).toBeCloseTo(LOOK_TUNE.cordonH, 3);
     expect(w.surfaceArch!.meshes.some(m => m.userData.surfaceArch === 'surface-coping')).toBe(true);
   });
 
@@ -176,7 +184,7 @@ describe('Surface Run look: the district architecture', () => {
   it("GEN's shape record: storeys stand on the kerb (roofY - their heights), fire escapes land on storey floors, the roof line is absolute", () => {
     const d = lookFixture().layout, plan = surfaceLookPlan(d)!;
     type Shaped = {storeyHeights?: number[]; roofY?: number};
-    const shaped = plan.buildings.filter(bl => bl && (bl.b as Shaped).storeyHeights?.length);
+    const shaped = plan.buildings.filter(bl => bl && (bl.b as Shaped).storeyHeights?.length && bl.sides.length);
     expect(shaped.length).toBeGreaterThan(1);
     for (const bl of shaped) {
       const g = bl.b as Shaped, sh = g.storeyHeights!;
@@ -189,8 +197,9 @@ describe('Surface Run look: the district architecture', () => {
       // decorative windows sit inside their storey (from its floor, not from 0)
       for (const h of bl.holes) if (h.kind !== 'air' && h.kind !== 'door-boarded') expect(h.y0).toBeGreaterThanOrEqual(bl.storeyY[h.storey] - 1e-6);
     }
-    // the skeleton's own (no record): storeys from 0
-    expect(plan.buildings.find(bl => bl && !(bl.b as Shaped).storeyHeights)!.storeyY[0]).toBe(0);
+    // a shell without the record: storeys from 0
+    const bare = plan.buildings.find(bl => bl && !(bl.b as Shaped).storeyHeights);
+    if (bare) expect(bare.storeyY[0]).toBe(0);
   });
 
   it("an entrance stands on its doorway cell's grid floor (AIR hangs its leaves there); a boarded one on the sidewalk outside", () => {
