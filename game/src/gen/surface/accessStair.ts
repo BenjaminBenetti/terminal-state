@@ -7,8 +7,8 @@
 //
 // RNG-NEUTRAL and APPEND-ONLY: no station stream is drawn. The climb's cells are rock (SOLID on every storey grid, with a one-cell rock
 // ring) turned to floor; new areas / lights / signs / flights are APPENDED; in place only the chosen hall changes: its far cells carry the
-// first flight, its grille block is retired (cargoGone, no box, no sight block — the "not part of this station any more" every reader
-// honours; the cargo runtime hides its instance at build), its door sign reads "… · EXIT", its grille notice becomes a hanging "TO STREET"
+// first flight, its grille block is retired (cargoGone, no cells, no sight block — the "not part of this station any more" every reader
+// honours; the cargo runtime hides its instances and drops its box at build), its door sign reads "… · EXIT", its grille notice becomes a hanging "TO STREET"
 // sign and its label loses "(closed)". The plan is deterministic: the hall order is rotated by a hash of the level seed, the first plan
 // that fits wins (straight on, then turned legs), so the same station always gets the same stairwell.
 
@@ -232,12 +232,14 @@ function carve(layout: StationLayout, hall: Area, f: Frame, plan: StairPlan, tot
   const g = layout.grid, S = ACCESS_STAIR;
   const base = g.floor[g.idx(f.ox + (S.start - 1) * f.dx, f.oy + (S.start - 1) * f.dy)] || 0;
   const areas: number[] = [hall.id];
-  // the grille block: retired (no box / sight / cells; the cargo runtime hides its instance)
+  // the grille block: retired (no cells / sight; the cargo runtime hides its drawn instances and drops its box at build:
+  // world/trainPropCargo.ts hideOriginal). Its height is KEPT here: the render index (damage/propDamage.ts RenderIndex) finds a prop's
+  // instances by their distance to its box, so a zero-height box would leave the block drawn in the stairwell.
   for (const p of layout.props) {
     if (p.kind !== 'exitStair' || p.area !== hall.id || p.cargoGone) continue;
     const [x0, y0, x1, y1] = cellsOfBox(p.x, p.z, p.hx, p.hz);
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (g.inBounds(x, y)) { const i = g.idx(x, y); g.blocked[i] = 0; g.sightBlocked[i] = 0; }
-    p.cargoGone = true; p.h = 0; p.blocksSight = false;
+    p.cargoGone = true; p.blocksSight = false;
   }
   // (anything else standing on those cells keeps its block)
   for (const p of layout.props) {

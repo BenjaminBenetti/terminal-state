@@ -67,7 +67,7 @@ describe('Surface Run access: the Subway stairwell', () => {
       expect(L1.props.length).toBe(L0.props.length);
       L0.props.forEach((p, i) => {
         const q = L1.props[i];
-        if (p.kind === 'exitStair' && p.area === hall) { expect(q).toMatchObject({cargoGone: true, h: 0, blocksSight: false, x: p.x, z: p.z}); return; }
+        if (p.kind === 'exitStair' && p.area === hall) { expect(q).toMatchObject({cargoGone: true, h: p.h, blocksSight: false, x: p.x, z: p.z}); return; }
         expect(plain(q), `prop ${i}`).toEqual(plain(p));
       });
       // lights / flights: a prefix of the plain list, appended after it
