@@ -872,7 +872,8 @@ export const MALL_FLOOR: MallFloorProgram = {
  * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ROOMS, additive): loose floor finds of ONE carved storey of a Surface Run
  * building interior (gen/surface/rooms/finish.ts planLoose, its own `loose` fork of the building's stream): the mall station storey's
  * scarce odds (`scarce.draws` x med — a `medkit` share a kit, else a dressing — battery, flare) and at most `salvage.n` loose crafting
- * materials in its back of house. No loose ammo: a district's ammo is only in its gun-shop / police holders by those purposes' existing rules.
+ * materials in its back of house. No loose ammo: a building's ammo is only in holders, by their rooms' existing purpose rules (the gun
+ * shop / police armouries, and the generic back-of-house rows such as the workshop / storage supply crate, CACHE_CRATE).
  */
 export const SURFACE_INTERIOR_FLOOR: {scarce: MallStoreyFloor['scarce']; salvage: MallStoreyFloor['salvage']} = {
   scarce: {draws: 1, med: FLOOR_ECONOMY.medKeep * 1.5, medkit: 0.3, battery: 0.3, flare: 0.12},
