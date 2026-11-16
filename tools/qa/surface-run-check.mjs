@@ -151,6 +151,15 @@ await withBrowserLock(async () => {
       const sx = e ? e.x + n[0] * 2.2 : c.x, sz = e ? e.z + n[1] * 2.2 : c.z;
       await ev((x, z, tx, tz) => { window.__LL.teleport(x, z, Math.atan2(-(tx - x), -(tz - z)), 0); }, sx, sz, c.x, c.z);
       await frames(40);
+      // the air the eye breathes there (the gas system's own exposure) and the store's doors: a sealed interior reads 0
+      step('store air', await ev(id => { const g = window.__game, a = window.__LL.surfaceAir?.();
+        const b = g.layout.surface.buildings.find(q => q.id === id), near = [];
+        for (const z of g.zombies) for (const e of b.entrances) {
+          const r = Math.hypot(z.brain.x - e.x, z.brain.z - e.z);
+          if (r < 3) near.push({door: e.id ?? `${e.x},${e.z}`, r: +r.toFixed(2), alive: z.brain.alive, x: +z.brain.x.toFixed(2), z: +z.brain.z.toFixed(2)});
+        }
+        return {exposure: {...g.gas.exposure}, hp: g.player.hp, airAtEye: a?.airAtEye, columnTop: a?.columnTop,
+          doors: (a?.doors ?? []).filter(d => d.id.startsWith(`b${id}-`)), counts: a?.counts, zombiesAtDoors: near, field: a?.field}; }, store.id));
       await shot('store-interior', `${store.name} (${store.programme}) from inside its door`);
     }
     }
