@@ -16,9 +16,11 @@
 // player has entered (holders searched in its footprint, its own layout enemies down), "Broken windows" for an entered-or-explored
 // building whose generated window spans have broken panes (outdoor gas gets in: the normal window rule), the depot's recoverable train
 // units as reported by the layout — and any lane's live reports (MapReportInput: e.g. AIR's gas breaches, CARGO's units at the depot / on
-// the truck; a lane report with key 'windows' / 'recoverables' replaces that default). No objective, no quest step, no reward.
+// the truck; a lane report with key 'windows' / 'recoverables' replaces that default, and so does a LIVE lane source declaring the key in
+// MapState.replace while it has nothing to report there). No objective, no quest step, no reward.
 
 import type {SRect, SurfaceBuildingKind, SurfaceInfo, SurfaceNote} from '../../gen/surface/surfaceTypes';
+import {EQUIPMENT, recoverableKind} from '../../craft/equipment';
 import {isSet, type ExploreGrid} from './mapExplore';
 
 export type MapTone = SurfaceNote['kind'];
@@ -31,11 +33,28 @@ export interface MapReportInput { x: number; z: number; text: string; kind: MapT
 
 export interface MapPose { x: number; z: number; yaw: number }
 
+/** The vehicle controller as the district reads it (game.skywaysCar: lane TRUCK's truck in a district). */
+export interface VehicleLike {
+  truckTransform?(): {x: number; z: number; yaw: number} | null;
+  worldLive?: boolean;
+  driving?: boolean;
+  body?: {x: number; z: number; yaw: number} | null;
+  spec?: {length: number; width: number};
+}
+
+/** Where the district's truck stands (lane TRUCK's truckTransform; else a live vehicle body), or null (no vehicle in this world). */
+export function vehiclePoseOf(car: VehicleLike | null | undefined): MapPose | null {
+  const t = car?.truckTransform ? car.truckTransform() : car?.worldLive ? car.body ?? null : null;
+  return t ? {x: t.x, z: t.z, yaw: t.yaw} : null;
+}
+
 export interface MapState {
   explore: ExploreGrid;
   entered: ReadonlySet<number>;
   stats?: ReadonlyMap<number, BuildingStats>;
   reports?: readonly MapReportInput[];
+  /** Default report families a LIVE lane source covers even when it reports nothing there now (e.g. AIR: 'windows' — no live opening). */
+  replace?: readonly string[];
   player?: MapPose | null;
   truck?: MapPose | null;
 }
@@ -145,8 +164,20 @@ export function refHolds(s: SurfaceInfo, ref: MapRef, x: number, z: number): boo
   }
 }
 
-/** Printed names of the depot's recoverable kinds (craft/equipment.ts units and the upgrade kits). */
-export const RECOVERABLE_NAMES: Readonly<Record<string, string>> = {radar: 'route radar', sentry: 'sentry turret', scanner: 'item scanner', chest: 'storage chest', armor: 'armour kit'};
+/** Printed name of a depot recoverable / train unit kind (craft/equipment.ts: an equipment kind or an upgrade id -> its kit), lower case. */
+export function recoverableName(kind: string): string {
+  const k = recoverableKind(kind);
+  return k ? EQUIPMENT[k].name.toLowerCase() : kind;
+}
+
+/** Is any exploration cell over rect r explored? (a building / place the player has seen) */
+export function rectExplored(g: ExploreGrid, r: SRect): boolean {
+  for (let z = r.z0; z <= r.z1 + 1e-6; z += g.cell / 2) for (let x = r.x0; x <= r.x1 + 1e-6; x += g.cell / 2) {
+    const cx = Math.floor((Math.min(x, r.x1) - g.x0) / g.cell), cz = Math.floor((Math.min(z, r.z1) - g.z0) / g.cell);
+    if (cx >= 0 && cz >= 0 && cx < g.w && cz < g.h && isSet(g, cz * g.w + cx)) return true;
+  }
+  return false;
+}
 
 const TONE_SYMBOL: Record<MapTone, string> = {hazard: 'hazard', supply: 'supply', route: 'route', enemy: 'enemy', info: 'info'};
 
@@ -156,15 +187,8 @@ export function buildPlanningMap(s: SurfaceInfo, st: MapState): PlanningMap {
   const cols = xs.slice(1).map((_, i) => COLS[i] ?? '?'), rows = zs.slice(1).map((_, i) => String(i + 1));
   const ref = (x: number, z: number) => gridRef(xs, zs, x, z);
   const g = st.explore;
-  const exploredRect = (r: SRect): boolean => {
-    for (let z = r.z0; z <= r.z1 + 1e-6; z += g.cell / 2) for (let x = r.x0; x <= r.x1 + 1e-6; x += g.cell / 2) {
-      const cx = Math.floor((Math.min(x, r.x1) - g.x0) / g.cell), cz = Math.floor((Math.min(z, r.z1) - g.z0) / g.cell);
-      if (cx >= 0 && cz >= 0 && cx < g.w && cz < g.h && isSet(g, cz * g.w + cx)) return true;
-    }
-    return false;
-  };
   const buildings: MapBuilding[] = s.buildings.map(b => ({id: b.id, rect: b.footprint, kind: b.kind, name: b.name, destination: b.destination, enterable: b.enterable, condition: b.condition,
-    explored: exploredRect(b.footprint), entered: st.entered.has(b.id)}));
+    explored: rectExplored(g, b.footprint), entered: st.entered.has(b.id)}));
   // street labels: one per name per ~90 m (segments shorter than 30 m carry none)
   const labelled: {name: string; x: number; z: number}[] = [];
   const streets: MapStreet[] = s.streets.map(q => {
@@ -203,7 +227,7 @@ export function buildPlanningMap(s: SurfaceInfo, st: MapState): PlanningMap {
   });
   // derived reports
   const lane = st.reports ?? [];
-  const replaced = new Set(lane.map(r => r.key).filter((k): k is string => !!k));
+  const replaced = new Set([...lane.map(r => r.key).filter((k): k is string => !!k), ...(st.replace ?? [])]);
   const reports: MapReportInput[] = [];
   for (const b of s.buildings) {
     const c = centre(b.footprint), lines: string[] = [];
@@ -223,7 +247,7 @@ export function buildPlanningMap(s: SurfaceInfo, st: MapState): PlanningMap {
   if (!replaced.has('recoverables') && s.depot.recoverables.length) {
     const d = s.buildings.find(b => b.id === s.depot.building);
     if (d) {
-      const names = [...new Set(s.depot.recoverables.map(r => RECOVERABLE_NAMES[r.kind] ?? r.kind))];
+      const names = [...new Set(s.depot.recoverables.map(r => recoverableName(r.kind)))];
       const c = centre(d.footprint);
       reports.push({x: c.x, z: c.z, text: `Train units reported: ${names.join(', ')}`, kind: 'supply', source: 'life', key: 'recoverables'});
     }
