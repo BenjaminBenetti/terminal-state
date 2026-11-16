@@ -194,6 +194,10 @@ export function surfaceImpactClass(key: string): DamageClass | null {
   if (!key.startsWith('surface-')) return null;
   const k = key.slice('surface-'.length);
   if (/^(tent-floor|boards|sleeper)/.test(k)) return 'wood';
+  // (lane FACADE) the outdoor-lit facade parts (party walls over a lower roof): their finish family's class
+  if (/^outfacade-(brick|concrete)$/.test(k)) return 'concrete';
+  if (k === 'outfacade-rusted') return 'sheetMetal';
+  if (k === 'outfacade-flat') return 'plaster';
   if (/^(road|lot|yard|check|patch|kerb|gutter|cordon|debris|roof|coping|walk|verge|pothole|paint|plaza|scorch|rubble|crack|oil|facade-(concrete|stone|brick))/.test(k)) return 'concrete';
   if (/^(facade-metal|shutter|barricade)/.test(k)) return 'sheetMetal';
   if (/^(iron|steel|rail|trim)/.test(k)) return 'steel';

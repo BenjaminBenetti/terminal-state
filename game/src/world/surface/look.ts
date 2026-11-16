@@ -27,7 +27,7 @@ import {CULL_LAYER, fogCullDistance} from '../levelCulling';
 import {modelParts} from '../exterior';
 import {preloadOfficeArch} from '../officeArch';
 import {SURFACE_TEXTURES, SURFACE_TEX_SLOTS, setSurfaceResourceOwner, setSurfaceTexture, surfaceArchMaterial, surfaceTexturesReady, liveSurfaceMaterials} from './archMaterials';
-import {GROUND, SIDE_NORMAL, surfaceLookPlan, type Decal, type DepotGear, type SurfaceLookPlan} from './archPlan';
+import {GROUND, LOOK_TUNE, SIDE_NORMAL, deckSteps, surfaceLookPlan, type BareRun, type Decal, type DepotGear, type SurfaceLookPlan} from './archPlan';
 import {CELL} from '../../gen/grid';
 import {LookOcclusion, closedShell, facadeStrips, streetSide, type FacadeStrip} from './lookOccluders';
 import {LOOK_SKY, liveLookMaterials, lookSkyMaterial, lookTune, outdoorFlatMaterial, outdoorModelMaterial, syncLookHorizon} from './lookSky';
@@ -851,6 +851,54 @@ export function surfaceQaPoses(layout: StationLayout): SurfaceQaPose[] {
     const x = t.x0 + ux * 3 - uz * (t.gauge / 2 + 1.2), z = t.z0 + uz * 3 + ux * (t.gauge / 2 + 1.2);
     const lx = t.x0 + ux * len * 0.7, lz = t.z0 + uz * len * 0.7;
     out.push({name: 'depot', x, z, yaw: yawTo(x, z, lx, lz), level: 0, look: {x: lx, y: t.y + 2.4, z: lz}});
+  }
+  out.push(...facadeQaPoses(plan, open, yawTo));
+  return out;
+}
+
+/**
+ * Task studio-surface-run-field-followup-20261116-211729-01 (lane FACADE): two more QA poses for the face fixes — 'party': from the
+ * street past the end of the widest party wall that rises over a lower neighbour (archPlan.ts bareRuns 'outdoor'), looking up at
+ * it; 'notch': from outside a damaged shell's collapsed corner, looking at the step between its decks (archPlan.ts deckSteps).
+ */
+function facadeQaPoses(plan: SurfaceLookPlan, open: (x: number, z: number) => boolean, yawTo: (fx: number, fz: number, tx: number, tz: number) => number): SurfaceQaPose[] {
+  const out: SurfaceQaPose[] = [];
+  let best: {bl: SurfaceLookPlan['buildings'][number]; sd: SurfaceLookPlan['buildings'][number]['sides'][number]; r: BareRun; area: number} | null = null;
+  for (const bl of plan.buildings) for (const sd of bl.sides) for (const r of sd.bare) {
+    if (r.lit !== 'outdoor') continue;
+    const area = (r.s1 - r.s0) * (bl.top - r.y0);
+    if (!best || area > best.area) best = {bl, sd, r, area};
+  }
+  if (best) {
+    const {sd, r, bl} = best;
+    // past the end of the run that meets open ground, out into the street, a little toward the lower neighbour's side
+    for (const [end, dir] of [[r.s1, 1], [r.s0, -1]] as const) {
+      let pose: SurfaceQaPose | null = null;
+      for (let d = 14; d >= 4 && !pose; d -= 2) {
+        const s = end + dir * d, o = sd.n * 5;
+        const x = sd.alongX ? s : sd.plane + o, z = sd.alongX ? sd.plane + o : s;
+        if (!open(x, z)) continue;
+        const lx = sd.alongX ? (r.s0 + r.s1) / 2 : sd.plane, lz = sd.alongX ? sd.plane : (r.s0 + r.s1) / 2;
+        pose = {name: 'party', x, z, yaw: yawTo(x, z, lx, lz), level: 0, look: {x: lx, y: (r.y0 + bl.top) / 2, z: lz}};
+      }
+      if (pose) { out.push(pose); break; }
+    }
+  }
+  for (const bl of plan.buildings) {
+    const st = deckSteps(bl)[0];
+    if (!st) continue;
+    const f = bl.b.footprint, lo = bl.decks.find(d => Math.abs(d.y - st.y0) < 1e-6) ?? bl.decks[bl.decks.length - 1];
+    // the notch's outer corner (the low deck's corner on the footprint), then out diagonally
+    const cx = Math.abs(lo.x0 - f.x0 - LOOK_TUNE.parapetT) < 0.01 ? f.x0 : f.x1, cz = Math.abs(lo.z0 - f.z0 - LOOK_TUNE.parapetT) < 0.01 ? f.z0 : f.z1;
+    const ox = cx === f.x0 ? -1 : 1, oz = cz === f.z0 ? -1 : 1;
+    let pose: SurfaceQaPose | null = null;
+    for (let d = 16; d >= 5 && !pose; d -= 1) {
+      const x = cx + ox * d, z = cz + oz * d;
+      if (!open(x, z)) continue;
+      const lx = st.alongX ? (st.s0 + st.s1) / 2 : st.plane, lz = st.alongX ? st.plane : (st.s0 + st.s1) / 2;
+      pose = {name: 'notch', x, z, yaw: yawTo(x, z, lx, lz), level: 0, look: {x: lx, y: (st.y0 + st.y1) / 2, z: lz}};
+    }
+    if (pose) { out.push(pose); break; }
   }
   return out;
 }
