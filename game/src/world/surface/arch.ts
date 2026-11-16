@@ -38,6 +38,13 @@ import {outdoorFlatMaterial} from './lookSky';
  * cut the draw count (48 m: ~1120 facade meshes on the 8 x 8 frame).
  */
 export const SURFACE_CHUNK = 96;
+/**
+ * Follow-up 2 (draws): the chunk of LOOK's OWN facade parts — twice SURFACE_CHUNK. In the district's views each facade material was
+ * drawn once per 96 m cell in view (~17 cells: ~330 of the ~860 draws at the portal); the level culler's slab / storey occlusion and
+ * the fog do the culling inside a cell, so the larger cells cost few triangles. The builder's coarsened architecture and the trims
+ * keep SURFACE_CHUNK.
+ */
+export const FACADE_CHUNK = 192;
 
 /** Where a part's polygons go: an accumulator, or a tinted family's accumulator seen with one member's tint (TintView). */
 interface QuadSink {
@@ -390,7 +397,7 @@ export class SurfaceArch {
     // a family member's parts go to its family's accumulator of the cell, carrying the member's tint
     const A = (key: string, x: number, z: number): QuadSink => {
       const fam = surfaceTintFamily(key), ak = fam ?? key;
-      const k = `${ak}@${Math.floor(x / SURFACE_CHUNK)},${Math.floor(z / SURFACE_CHUNK)}`;
+      const k = `${ak}@${Math.floor(x / FACADE_CHUNK)},${Math.floor(z / FACADE_CHUNK)}`;
       let e = acc.get(k);
       if (!e) acc.set(k, (e = {key: ak, q: new Quads(fam !== null)}));
       return fam ? new TintView(e.q, this.tint(key)) : e.q;
@@ -801,10 +808,10 @@ export function* coarsenSurfaceArchSteps(
 }
 const IDENTITY = new THREE.Matrix4();
 
-/** Split [a, b] at multiples of SURFACE_CHUNK. */
+/** Split [a, b] at multiples of FACADE_CHUNK (the facade parts' cells). */
 function spans(a: number, b: number): [number, number][] {
   const out: [number, number][] = [];
-  while (a < b - 1e-6) { const e = Math.min(b, (Math.floor(a / SURFACE_CHUNK + 1e-9) + 1) * SURFACE_CHUNK); out.push([a, e]); a = e; }
+  while (a < b - 1e-6) { const e = Math.min(b, (Math.floor(a / FACADE_CHUNK + 1e-9) + 1) * FACADE_CHUNK); out.push([a, e]); a = e; }
   return out;
 }
 

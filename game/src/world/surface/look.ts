@@ -9,12 +9,12 @@
 //  - MOOD: the scene fog becomes the overcast haze (lookSky.ts LOOK_SKY: FogExp2, never green), the camera far plane and the level
 //    culler's fog distance follow it; teardown restores MOOD and the far plane exactly.
 //  - THE RUNTIME GROUP (outside the world group, which the builder / culler own): the sky dome (follows the eye), the ground ring and
-//    the surroundings beyond the cordon (lookCity.ts: berms, collapsed blocks, the far city; instanced per sector so frustum culling
-//    drops whole sectors), the street decor (lane markings, crosswalks, patches, potholes, cracks, scorch, kerb / gutter strips,
-//    manholes / drains, the rail spur: merged per 96 m chunk and material) and the rooftop plant (HVAC units, water tanks on stands,
-//    vents, roof rubble: instanced per 132 m tile). Small decor is DISTANCE culled per chunk / tile (LOOK_DECOR; the level culler
-//    knows only one global distance). Everything is registered as a warm-up pool, so a chunk hidden by distance still compiles
-//    behind the loading screen.
+//    the surroundings beyond the cordon (lookCity.ts: berms, collapsed blocks, the far city; instanced per model part, culled per
+//    instance), the street decor (lane markings, crosswalks, patches, potholes, cracks, scorch, kerb / gutter strips, manholes /
+//    drains, the rail spur: merged per LOOK_DECOR.chunk and material) and the rooftop plant (HVAC units, water tanks on stands, vents,
+//    roof rubble: instanced per 132 m tile, culled per instance). Small decor is DISTANCE culled per chunk / tile (LOOK_DECOR; the
+//    level culler knows only one global distance) — for the render only (LOOK_HIDDEN_MASK). Everything is registered as a warm-up
+//    pool, so a chunk hidden by distance still compiles behind the loading screen.
 //  - Teardown: the group's own geometries / instanced meshes, the sign atlas (SurfaceArch.dispose) — the materials stay owned.
 // QA (spread into window.__LL by qa.ts): surfaceLook(), surfaceLookTune({...}), surfaceLookPoses(), surfaceLookPose(name).
 
@@ -41,8 +41,12 @@ const FAMILY = 'surface';
 
 /** Decor chunking / distance culling (m). */
 export const LOOK_DECOR = {
-  /** Street decor chunk edge and its draw distance (from the chunk's bounding circle). */
-  chunk: 96, near: 120,
+  /**
+   * Street decor chunk edge and its draw distance (from the chunk's bounding circle). (Follow-up 2: 192 m, was 96 — the decor's draws
+   * per view and its traced flashlight objects (one per key and chunk: ~360 on the journey district) both fell ~4x; frustum culling
+   * per chunk remains and the decor is a few flat quads.)
+   */
+  chunk: 192, near: 120,
   /** Rooftop plant tile edge and its draw distance. */
   tile: 132, tileNear: 170,
   /** The depot shed's gear: drawn within this distance of its bounding circle. */
@@ -92,7 +96,7 @@ export const lookShown = (o: THREE.Object3D): boolean => o.layers.mask !== LOOK_
 export interface RoofWalls { fp: {x0: number; z0: number; x1: number; z1: number}; x0: number; z0: number; x1: number; z1: number; top: [number, number, number, number] }
 
 /**
- * Follow-up 2 (draws): one instanced look piece culled PER INSTANCE (the rooftop plant per tile, the surroundings per sector): its full
+ * Follow-up 2 (draws): one instanced look piece culled PER INSTANCE (the rooftop plant per tile, the surroundings per part): its full
  * instance list in build order (16 floats each), each instance's world sphere (cx cy cz r), its world box (BOX floats: x0 z0 x1 z1
  * yTop yBottom — the AABB of its part's bounds) and its deck's walls (index into SurfaceLookView.walls, -1 none). A roof tile keeps its
  * former draw-distance rule (LOOK_DECOR.tileNear, unchanged). cullSurfaceInstances packs the instances drawn this frame to the front.
@@ -229,7 +233,7 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
     const g = q.geometry();
     if (g) { addMesh(g, outdoorFlatMaterial('ground'), 'surface-ground-ring'); stats.groundTris = triCount(g); }
   }
-  // --- the surroundings: instanced per entry part x sector ---
+  // --- the surroundings: instanced per entry part (culled per instance) ---
   const m4 = new THREE.Matrix4(), qt = new THREE.Quaternion(), sv = new THREE.Vector3(), tv = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const place = (x: number, y: number, z: number, yaw: number, s: number) => m4.compose(tv.set(x, y, z), qt.setFromAxisAngle(up, yaw), sv.set(s, s, s)).clone();
   const addInstanced = (name: string, geometry: THREE.BufferGeometry, material: THREE.Material, list: THREE.Matrix4[], parent: THREE.Object3D = root): THREE.InstancedMesh | null => {
@@ -257,12 +261,11 @@ export function buildSurfaceLookView(layout: StationLayout, mats: Parameters<typ
     const parts = modelParts(gltf);
     for (const [pi, part] of parts.entries()) {
       const mat = outdoorModelMaterial(part.material, true);
-      for (let sct = 0; sct < 8; sct++) {
-        const ps = list.filter(p => p.sector === sct);
-        const ms = ps.map(p => place(p.x, p.y, p.z, p.yaw, p.s).multiply(part.matrix));
-        const im = addInstanced(`surface-far-${key}-${pi}-s${sct}`, part.geometry, mat, ms);
-        if (im) { stats.farMeshes++; stats.farInstances += ps.length; stats.farTris += triCount(part.geometry) * ps.length; track(im, ms, null, null); }
-      }
+      // (follow-up 2: one piece per model part round the whole district — culled per instance, so the eight sectors it was split in
+      // for frustum culling only cost draws)
+      const ms = list.map(p => place(p.x, p.y, p.z, p.yaw, p.s).multiply(part.matrix));
+      const im = addInstanced(`surface-far-${key}-${pi}`, part.geometry, mat, ms);
+      if (im) { stats.farMeshes++; stats.farInstances += list.length; stats.farTris += triCount(part.geometry) * list.length; track(im, ms, null, null); }
     }
   }
   // --- street decor: merged per (material key x chunk), distance culled ---
