@@ -776,6 +776,21 @@ Measured on 6 Mall seeds (11 / 222 / 3333 / 44444 / 5150 / 9090) with 10 station
 `tests/mall-fuel-ammo.test.ts` guards additivity and the small share. If the Mall still reads ammo-poor, the lever is the Mall's ammo,
 not its fuel: its ammo per 100 m² is 0.9x the Office's (table above).
 
+## Skyways event supplies (layout version 8)
+
+The Skyways technology expo, mini-golf and evacuation centre append their own supply holders (`gen/skyways/events/eventLoot.ts`).
+Each holder's `purpose` is a weight-0 `skyways-*` loot key (`gen/skyways/events/eventLootPurposes.ts`) whose entries name each holder
+kind explicitly, so an own-table openable (footlocker, tote, carton, filing cabinet, tool chest) rolls the key's table, not its own.
+The tables are EXACT, with `salvage: false`. Existing items only, no ammo; the medical tables list their own splints and slings,
+because exact tables skip the limb conversion.
+- expo: `EXPO_DEMO_STOCK` (cells, electrical parts), `EXPO_AV_CHEST` (scrap, parts, cells, a flare), `EXPO_FLIGHT_CASE`;
+- mini-golf: `GOLF_RECEPTION` (cells, a dressing, water, a bar), `GOLF_MAINT_CHEST`, `GOLF_MAINT_CABINET`, `GOLF_COOLER` (drinks
+  only), `GOLF_SNACKS` (food and a cell);
+- evacuation centre: `EVAC_MED_STOCK` (medical only), `EVAC_MED_TOTE`, `EVAC_RATION_STOCK` (water, tins, noodles, chocolate),
+  `EVAC_SUPPLY`.
+
+Places, holders and the expected yield per event are in `docs/skyways.md` "The events' supplies". `tests/skyways-event-loot.test.ts`
+pins them.
 
 ## The Reactor (`reactor`)
 

@@ -38,11 +38,12 @@ import type {TrackExtContext} from '../trackExt/types';
 import {BASES, CLEAR, CROP_MARGIN, SKYWAYS_CANVAS, skywaysFrame, skywaysSeed, type SkywaysFrame} from './frame';
 import {RUN_OUT, carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
 import {skywaysIssues} from './validate';
-import {SKYWAYS_COSPLAY_FLOORS_MIN_VERSION, SKYWAYS_ENCOUNTERS_MIN_VERSION, SKYWAYS_EVENTS_MIN_VERSION, SKYWAYS_LAYOUT_VERSION, SKYWAYS_LEGACY77_MAX, SKYWAYS_LEGACY80, markSkywaysGenVersion} from './layoutVersion';
+import {SKYWAYS_COSPLAY_FLOORS_MIN_VERSION, SKYWAYS_ENCOUNTERS_MIN_VERSION, SKYWAYS_EVENT_LOOT_MIN_VERSION, SKYWAYS_EVENTS_MIN_VERSION, SKYWAYS_LAYOUT_VERSION, SKYWAYS_LEGACY77_MAX, SKYWAYS_LEGACY80, markSkywaysGenVersion} from './layoutVersion';
 import {skywaysPatrolGraph} from './patrol'; // task studio-skywalk-encounters-20261108-074144-01: the horde patrol graph (version 5)
 import {placeHordes} from '../../ai/hordePlace'; // (the Mall's horde placement)
 import {placeCosplaySpawns, retagCosplaySpawns} from './cosplaySpawns'; // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY)
 import {placeEventCrowdSpawns} from './events/eventCrowd'; // task studio-skywalk-events-20261115-193624-01 (layout version 7)
+import {dressSkywaysEventLoot} from './events/eventLoot'; // task studio-skywalk-loot-performance-20261116-022934-01 (layout version 8)
 import {placeCosplayFloorSpawns} from './cosplayFloors'; // task studio-cosplay-general-20261108-225231-01 (lane UPPER): version 6
 import {generateSkywaysLevel as generateSkywaysLegacy77} from './legacy77/index';
 import {generateSkywaysLevel as generateSkywaysLegacy80} from './legacy80/index'; // (task studio-skywalk-variety-20261107-231448-01) version 3, frozen
@@ -245,6 +246,10 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   if ((ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_COSPLAY_FLOORS_MIN_VERSION) placeCosplayFloorSpawns(layout, rng.fork('skyways-cosplay-floors'), field.keep, spawns);
   assignEnemyArchetypes(layout, spawns);
   applyFamilySpacing(layout, spawns);
+  // (task studio-skywalk-loot-performance-20261116-022934-01, lane LOOT; layout version 8+) a NEW event's own supply holders
+  // (events/eventLoot.ts): the very last pass, after every spawn has its final place, own fork, drawn from only when the add-on is a new
+  // event. It only APPENDS holders, so every earlier prop / pickup / spawn / holder keeps its index, contents and lot ids.
+  if ((ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_EVENT_LOOT_MIN_VERSION) dressSkywaysEventLoot(layout, rng.fork('skyways-event-loot'));
   return layout;
 }
 

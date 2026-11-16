@@ -20,6 +20,11 @@ import {lookKey, type HitRadii, type MeshSlot, type ZombieAppearance, type Zombi
 export type HitPart = 'head' | 'torso' | 'limb';
 export interface HitVolume { part: HitPart; a: Vec3; b: Vec3 | null; r: number }
 
+/** Fill a pooled hit volume (ZombieActor.updateVolumes). */
+function setVolume(v: HitVolume, part: HitPart, a: Vec3, b: Vec3 | null, r: number): void {
+  v.part = part; v.a = a; v.b = b; v.r = r;
+}
+
 /** Ground speed (m/s) each in-place locomotion clip was authored for at timeScale 1. */
 export const CLIP_GROUND_SPEED: Record<string, number> = {Walk: 0.55, Run: 2.3, Sprint: SPRINT_CLIP.groundSpeed}; // from derivatives/zombie-rigged.json (Sprint: ai/sprintGait.ts)
 
@@ -266,36 +271,52 @@ export class ZombieActor implements RagdollTarget {
     }
   }
 
-  private bonePos(name: string): Vec3 {
+  /** The world position of bone `name` into `out` (a missing bone: the feet column at 1 m). */
+  private bonePos(name: string, out: Vec3): Vec3 {
     const b = this.bones.get(name) ?? this.allBones.get(name);
-    if (!b) return {x: this.brain.x, y: 1, z: this.brain.z};
+    if (!b) { out.x = this.brain.x; out.y = 1; out.z = this.brain.z; return out; }
     // Perf (iteration 09): only called from updateVolumes right after root.updateMatrixWorld(true), so the bone's
     // matrixWorld is fresh; getWorldPosition would re-walk and recompose its whole parent chain per bone (11 per zombie).
     this.tmp.setFromMatrixPosition(b.matrixWorld);
-    return {x: this.tmp.x, y: this.tmp.y, z: this.tmp.z};
+    out.x = this.tmp.x; out.y = this.tmp.y; out.z = this.tmp.z;
+    return out;
   }
+
+  /**
+   * The actor's own hit-volume points, volumes and the two lists updateVolumes hands out (task
+   * studio-skywalk-loot-performance-20261116-022934-01: refreshed in place — no ~17 new objects per enemy a frame; every reader takes
+   * the volumes of the current pose at once: hit tests, melee, fire, the turret).
+   */
+  private readonly volPts = Array.from({length: 14}, (): Vec3 => ({x: 0, y: 0, z: 0}));
+  private readonly vols = Array.from({length: 8}, (): HitVolume => ({part: 'limb', a: {x: 0, y: 0, z: 0}, b: null, r: 0}));
+  private readonly chordVols: HitVolume[] = [0, 1, 2, 3, 6, 7].map(i => this.vols[i]);
+  private readonly sprintVols: HitVolume[] = [...this.vols];
 
   /** Refresh hit volumes from the current pose (call after animate + world matrix update). */
   updateVolumes(): HitVolume[] {
     if (!this.brain.alive) { this.volumes = []; return this.volumes; }
     this.root.updateMatrixWorld(true);
     this.recordPose();
-    const s = this.scale, H = this.hit;
-    const head = this.bonePos('Head'), neck = this.bonePos('Neck'), hips = this.bonePos('Hips');
-    const up = {x: head.x + (head.x - neck.x) * 0.6, y: head.y + 0.09 * s, z: head.z + (head.z - neck.z) * 0.6};
-    this.volumes = [
-      {part: 'head', a: up, b: null, r: H.head * s},
-      {part: 'torso', a: hips, b: neck, r: H.torso * s},
-      {part: 'limb', a: this.bonePos('L_UpperArm'), b: this.bonePos('L_Hand'), r: H.arm * s},
-      {part: 'limb', a: this.bonePos('R_UpperArm'), b: this.bonePos('R_Hand'), r: H.arm * s},
-      {part: 'limb', a: this.bonePos('L_Thigh'), b: this.bonePos('L_Foot'), r: H.leg * s},
-      {part: 'limb', a: this.bonePos('R_Thigh'), b: this.bonePos('R_Foot'), r: H.leg * s},
-    ];
+    const s = this.scale, H = this.hit, P = this.volPts, V = this.vols;
+    const head = this.bonePos('Head', P[0]), neck = this.bonePos('Neck', P[1]), hips = this.bonePos('Hips', P[2]);
+    const up = P[3];
+    up.x = head.x + (head.x - neck.x) * 0.6; up.y = head.y + 0.09 * s; up.z = head.z + (head.z - neck.z) * 0.6;
+    setVolume(V[0], 'head', up, null, H.head * s);
+    setVolume(V[1], 'torso', hips, neck, H.torso * s);
+    setVolume(V[6], 'limb', this.bonePos('L_Thigh', P[8]), this.bonePos('L_Foot', P[9]), H.leg * s);
+    setVolume(V[7], 'limb', this.bonePos('R_Thigh', P[10]), this.bonePos('R_Foot', P[11]), H.leg * s);
+    const lu = this.bonePos('L_UpperArm', P[4]), lh = this.bonePos('L_Hand', P[5]), ru = this.bonePos('R_UpperArm', P[6]), rh = this.bonePos('R_Hand', P[7]);
     if (this.current === 'Sprint') {
       // task studio-sprinter-gait-20261112-063646-01: the Sprint's pumping arms bend ~55-100 deg at the elbow, far off the shoulder-hand
       // chord: while it plays, one capsule per arm segment so shots land on the arm the player sees (every other clip: the chord as before)
-      const L = this.volumes[2], R = this.volumes[3], le = this.bonePos('L_Forearm'), re = this.bonePos('R_Forearm');
-      this.volumes.splice(2, 2, {...L, b: le}, {...L, a: le}, {...R, b: re}, {...R, a: re});
+      const le = this.bonePos('L_Forearm', P[12]), re = this.bonePos('R_Forearm', P[13]);
+      setVolume(V[2], 'limb', lu, le, H.arm * s); setVolume(V[3], 'limb', le, lh, H.arm * s);
+      setVolume(V[4], 'limb', ru, re, H.arm * s); setVolume(V[5], 'limb', re, rh, H.arm * s);
+      this.volumes = this.sprintVols;
+    } else {
+      setVolume(V[2], 'limb', lu, lh, H.arm * s);
+      setVolume(V[3], 'limb', ru, rh, H.arm * s);
+      this.volumes = this.chordVols;
     }
     return this.volumes;
   }

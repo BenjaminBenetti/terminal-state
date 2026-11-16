@@ -63,7 +63,7 @@ import type {WardrobeLibrary} from './ai/wardrobe';
 import {alertListeners, type BrainWorld} from './ai/brain';
 import {lureWorld} from './ai/lightLure'; // Iteration 12 (AI): light attracts enemies
 import {ScentLures} from './ai/scentLure'; // task studio-refinement-batch-20261113-035659-01 (lane LURE): the lure grenade's scent
-import {moveZombie, sameLevel, settleZombie} from './ai/motor';
+import {moveZombie, sameLevel, settleZombie, shoveApart} from './ai/motor';
 import {ladderTarget, type Ladder} from './gen/traversal';
 import {raycastWorld, type Vec3, type WorldHit} from './combat/hitscan';
 import {raycastShot} from './physics/merchOnHost'; // task studio-skywalk-variety-20261107-231448-01 (lane MERCH): bullets into open shelves
@@ -4652,11 +4652,7 @@ export class Game {
         // (BB comes to the floor wherever a leap or a climb ends, also right at somebody's feet: it is eased out at a bounded pace,
         // so one frame's push can never carry its small body through the wall beside it)
         const ease = b instanceof BbBrain ? bbShoveStep(dt) : Infinity;
-        for (const o of this.zombies) {
-          if (o === z || !o.brain.alive || !sameLevel(b.y, o.brain.y) || (o.placesRoot && o.brain.climbing)) continue; // (a BB on a wall / ceiling / in the air shoves nobody)
-          const dx = b.x - o.brain.x, dz = b.z - o.brain.z, d = Math.hypot(dx, dz), min = b.stats.radius + o.brain.stats.radius;
-          if (d > 1e-4 && d < min) { const push = Math.min((min - d) * 0.5, ease); b.x += dx / d * push; b.z += dz / d * push; }
-        }
+        shoveApart(z, b, this.zombies, ease); // (a BB on a wall / ceiling / in the air shoves nobody; ai/motor.ts: far pairs leave at once)
         const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz), min = b.stats.radius + p.radius + 0.22;
         if (d > 1e-4 && d < min && sameLevel(b.y, p.y)) { const push = Math.min(min - d, ease); b.x += dx / d * push; b.z += dz / d * push; }
         settleZombie(b, this.levels, this.propIndex);

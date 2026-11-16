@@ -5,7 +5,8 @@
 //  - versions 1-6 draw from the old two-event pool exactly (skywaysAddonOf), version 7 from five equal-weight events (convention / prize
 //    car / tech expo / mini-golf / evacuation centre), one per level seed, never moved by a frame retry;
 //  - a version-7 station that keeps its convention / prize-car draw regenerates byte-identical to version 6 (props, enemies, loot, grid);
-//  - a visited station keeps the version recorded in its memory (an old convention stays a convention), an unvisited one takes version 7;
+//  - a visited station keeps the version recorded in its memory (an old convention stays a convention), an unvisited one takes the current
+//    version (7; 8 since task studio-skywalk-loot-performance-20261116-022934-01, the same draw);
 //  - a new event takes the convention's venue carve unchanged (same cells / roles on a seed whose version-6 draw was the convention) under
 //    its own room names, keeps its washrooms, stays on its host's bridge storey, validates, and leaves the rest of the map ordinary;
 //  - its crowd (gen/skyways/events/eventCrowd.ts): ordinary floor enemies after the hordes (before the annex) on the public event floor, deterministic.
@@ -45,7 +46,7 @@ function fingerprint(l: StationLayout): string {
 
 describe('Skyways event pool: the draw', () => {
   it('versions 1-6 draw the two-event pool exactly; version 7 five events at equal weights; one per seed, retry-proof', () => {
-    expect(SKYWAYS_LAYOUT_VERSION).toBe(7);
+    expect(SKYWAYS_LAYOUT_VERSION).toBe(8); // (task studio-skywalk-loot-performance-20261116-022934-01: version 8 adds the new events' supplies; the draw is version 7's)
     expect(SKYWAYS_EVENTS_MIN_VERSION).toBe(7);
     expect([...SKYWAYS_ADDONS]).toEqual(['convention', 'prize-car']); // (the frozen frames read it)
     expect([...SKYWAYS_ADDON_POOL_V7].sort()).toEqual(['convention', 'evac-centre', 'mini-golf', 'prize-car', 'tech-expo']);
@@ -64,12 +65,13 @@ describe('Skyways event pool: the draw', () => {
     for (const id of SKYWAYS_ADDON_POOL_V7) expect(skywaysVenueShaped(id)).toBe(id !== 'prize-car');
   });
 
-  it('a visited station keeps its recorded version (and event); an unvisited one takes version 7 and its new event', () => {
+  it('a visited station keeps its recorded version (and event); an unvisited one takes the current version and its new event', () => {
     const lanes = (v: number) => ({[SKYWAYS_LAYOUT_LANE]: {v}});
-    expect(skywaysLayoutVersionFor(undefined)).toBe(7);
-    expect(skywaysLayoutVersionFor({visits: 0, lanes: {}})).toBe(7);
+    expect(skywaysLayoutVersionFor(undefined)).toBe(8);
+    expect(skywaysLayoutVersionFor({visits: 0, lanes: {}})).toBe(8);
     expect(skywaysLayoutVersionFor({visits: 2, lanes: lanes(6)})).toBe(6);
     expect(skywaysLayoutVersionFor({visits: 2, lanes: lanes(7)})).toBe(7);
+    expect(skywaysLayoutVersionFor({visits: 2, lanes: lanes(8)})).toBe(8);
     // seed 5: a convention entered at version 6 stays the convention; the same seed never entered becomes the mini-golf
     expect(gen(5, skywaysLayoutVersionFor({visits: 1, lanes: lanes(6)})).skyways!.addon.id).toBe('convention');
     expect(gen(5, skywaysLayoutVersionFor({visits: 0, lanes: {}})).skyways!.addon.id).toBe('mini-golf');

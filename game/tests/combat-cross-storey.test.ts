@@ -518,10 +518,13 @@ describe('render culling never removes a hit target', () => {
       expect(before?.enemy, kind).toBe(z);
       expect(after?.enemy, kind).toBe(z);
       expect(after!.t).toBe(before!.t);
-      // hidden, it keeps animating and its volumes keep following the pose (Game.updateZombies never asks about visibility)
-      const vols = z.hitVolumes;
+      // hidden, it keeps animating and its volumes keep following the pose (Game.updateZombies never asks about visibility): spoilt
+      // volumes are rewritten from the pose (a new list, or the zombie's own volumes refreshed in place — task
+      // studio-skywalk-loot-performance-20261116-022934-01)
+      for (const v of z.hitVolumes) v.a = {x: NaN, y: NaN, z: NaN};
       pose(z);
-      expect(z.hitVolumes).not.toBe(vols);
+      expect(z.hitVolumes.length, kind).toBeGreaterThan(0);
+      for (const v of z.hitVolumes) expect([v.a.x, v.a.y, v.a.z].every(Number.isFinite), kind).toBe(true);
       expect(shot(w, eye, dirTo(eye, aimPoint(z, 'torso')), WEAPONS.pistol.range, [z]).hit?.enemy, kind).toBe(z);
       z.dispose();
     }
