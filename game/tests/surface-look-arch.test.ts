@@ -12,7 +12,9 @@ import {WorldMaterials} from '../src/world/materials';
 import {buildWorld, type BuiltWorld} from '../src/world/builder';
 import type {BuiltFace} from '../src/world/levelGeometry';
 import {SurfaceArch, cutFace} from '../src/world/surface/arch';
-import {LOOK_TUNE, SIDE_NORMAL, surfaceLookPlan, type FacadeSide} from '../src/world/surface/archPlan';
+import {LOOK_TUNE, SIDE_NORMAL, entranceFloor, surfaceLookPlan, type FacadeSide} from '../src/world/surface/archPlan';
+import {CELL, FLOOR, SOLID} from '../src/gen/grid';
+import type {StationLayout} from '../src/gen/stationTypes';
 import {FACADE_STYLES, LOOK_FACADE_IDS, surfaceImpactClass} from '../src/world/surface/archStyles';
 import {surfaceArchMaterial} from '../src/world/surface/archMaterials';
 import {lookSkyMaterial, outdoorFlatMaterial, outdoorModelMaterial} from '../src/world/surface/lookSky';
@@ -169,6 +171,42 @@ describe('Surface Run look: the district architecture', () => {
       expect(finishClass(k), k).not.toBeNull();
       expect(surfaceImpactClass(k), k).toBe(finishClass(k));
     }
+  });
+
+  it("GEN's shape record: storeys stand on the kerb (roofY - their heights), fire escapes land on storey floors, the roof line is absolute", () => {
+    const d = lookFixture().layout, plan = surfaceLookPlan(d)!;
+    type Shaped = {storeyHeights?: number[]; roofY?: number};
+    const shaped = plan.buildings.filter(bl => bl && (bl.b as Shaped).storeyHeights?.length);
+    expect(shaped.length).toBeGreaterThan(1);
+    for (const bl of shaped) {
+      const g = bl.b as Shaped, sh = g.storeyHeights!;
+      expect(bl.storeyY[0]).toBeCloseTo(0.15, 6);
+      let y = 0.15;
+      sh.forEach((h, k) => { expect(bl.storeyY[k]).toBeCloseTo(y, 6); y += h; });
+      expect(bl.deck).toBeCloseTo(g.roofY!, 6);
+      expect(bl.top).toBeCloseTo(bl.b.height, 6);
+      for (const fe of bl.escapes) fe.levels.forEach((k, i) => expect(fe.ys[i]).toBeCloseTo(bl.storeyY[k], 6));
+      // decorative windows sit inside their storey (from its floor, not from 0)
+      for (const h of bl.holes) if (h.kind !== 'air' && h.kind !== 'door-boarded') expect(h.y0).toBeGreaterThanOrEqual(bl.storeyY[h.storey] - 1e-6);
+    }
+    // the skeleton's own (no record): storeys from 0
+    expect(plan.buildings.find(bl => bl && !(bl.b as Shaped).storeyHeights)!.storeyY[0]).toBe(0);
+  });
+
+  it("an entrance stands on its doorway cell's grid floor (AIR hangs its leaves there); a boarded one on the sidewalk outside", () => {
+    // a 6 x 6-cell patch: the doorway cell (2, 2) at the kerb 0.15, a SOLID wall row z = 2 elsewhere, the sidewalk (z > 2) at 0.15
+    const w = 6, cells = new Uint8Array(w * w).fill(FLOOR), floor = new Float32Array(w * w);
+    for (let x = 0; x < w; x++) { cells[2 * w + x] = SOLID; for (let z = 3; z < w; z++) floor[z * w + x] = 0.15; }
+    cells[2 * w + 2] = FLOOR; floor[2 * w + 2] = 0.15;
+    const grid = {w, h: w, cells, floor} as unknown as StationLayout['grid'];
+    const layout = {grid, levels: [{id: 0, grid, baseY: 0}]} as unknown as StationLayout;
+    expect(entranceFloor(layout, {level: 0, side: 'S', x: 2.5 * CELL, z: 2.5 * CELL})).toBeCloseTo(0.15, 6);
+    // boarded: the doorway cell stays SOLID -> the sidewalk outside (S of it)
+    cells[2 * w + 2] = SOLID;
+    expect(entranceFloor(layout, {level: 0, side: 'S', x: 2.5 * CELL, z: 2.5 * CELL})).toBeCloseTo(0.15, 6);
+    // nothing open round it: the level's base
+    cells.fill(SOLID);
+    expect(entranceFloor(layout, {level: 0, side: 'S', x: 2.5 * CELL, z: 2.5 * CELL})).toBe(0);
   });
 
   it('cutFace splits a face round holes and a stepped roof line, and passes an uncut face through unchanged', () => {

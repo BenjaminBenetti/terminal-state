@@ -24,7 +24,7 @@ import type {Area, Side, StationLayout} from '../../gen/stationTypes';
 import type {BuiltFace} from '../levelGeometry';
 import type {WorldMaterials} from '../materials';
 import type {BuildSteps} from '../../core/pacedBuild';
-import {GROUND, GROUND_KEYS, LOOK_TUNE, OWNER, SIDE_NORMAL, sideOfPlane, streetEndSpans, surfaceLookPlan, topAt, type BuildingLook, type FacadeHole, type SurfaceLookPlan, type TopSeg} from './archPlan';
+import {GROUND, GROUND_KEYS, LOOK_TUNE, OWNER, SIDE_NORMAL, entranceFloor, sideOfPlane, streetEndSpans, surfaceLookPlan, topAt, type BuildingLook, type FacadeHole, type SurfaceLookPlan, type TopSeg} from './archPlan';
 import {interiorKeys, surfaceArchMaterial, surfaceArchScale, surfaceSignMaterial, isSurfaceKey} from './archMaterials';
 import {outdoorFlatMaterial} from './lookSky';
 
@@ -239,7 +239,7 @@ export class SurfaceArch {
       if (P.tentAreas.has(f.area) && !doorway) {
         // the tent's canvas walls, seen from inside, up to the eave (the pitched roof above is the tent build's)
         this.count('surface-canvas');
-        out.push(...cutFace({...f, finish: 'surface-canvas'}, [], null, base + (P.tent?.eave ?? LOOK_TUNE.tentEave)));
+        out.push(...cutFace({...f, finish: 'surface-canvas'}, [], null, P.tent ? P.tent.eave : base + LOOK_TUNE.tentEave));
         continue;
       }
       if (inside !== undefined && !doorway) {
@@ -280,7 +280,7 @@ export class SurfaceArch {
         }
         continue;
       }
-      if (own === OWNER.tent) { this.count('surface-canvas'); out.push(...cutFace({...f, finish: 'surface-canvas'}, [], null, y0 + (P.tent?.eave ?? LOOK_TUNE.tentEave))); continue; }
+      if (own === OWNER.tent) { this.count('surface-canvas'); out.push(...cutFace({...f, finish: 'surface-canvas'}, [], null, P.tent ? P.tent.eave : y0 + LOOK_TUNE.tentEave)); continue; }
       if (own === OWNER.debris) { this.count('surface-debris'); out.push(...cutFace({...f, finish: 'surface-debris'}, [], null, y0 + LOOK_TUNE.debrisH)); continue; }
       if (f.y1 - f.y0 < 0.6) { this.count('surface-kerb'); out.push({...f, finish: 'surface-kerb'}); continue; }
       out.push(f);
@@ -412,7 +412,7 @@ export class SurfaceArch {
       // entrances: frames (and the name canopy of a destination); boarded ones are handled as holes above
       for (const e of bl.b.entrances) {
         if (e.side !== sd.side || e.door === 'boarded') continue;
-        const c = alongX ? e.x : e.z, base = this.layout.levels?.[e.level]?.baseY ?? 0, hw = e.width / 2;
+        const c = alongX ? e.x : e.z, base = entranceFloor(this.layout, e), hw = e.width / 2;
         box(trim, c - hw - 0.12, c - hw, -0.02, 0.08, base, base + e.height);
         box(trim, c + hw, c + hw + 0.12, -0.02, 0.08, base, base + e.height);
         box(trim, c - hw - 0.12, c + hw + 0.12, -0.02, 0.08, base + e.height, base + e.height + 0.14);
@@ -437,7 +437,7 @@ export class SurfaceArch {
       for (const seg of sd.tops) {
         const intact = Math.abs(seg.top - bl.top) < 1e-3;
         if (intact && st.cornice.h > 0) box(trim, seg.s0, seg.s1, 0, st.cornice.out, seg.top - st.cornice.h - 0.08, seg.top - 0.08);
-        if (st.courses) for (let k = 1; k < bl.storeys; k++) { const y = k * bl.storeyH; if (y + 0.4 < seg.top) box(fac, seg.s0, seg.s1, 0, 0.05, y - 0.09, y + 0.09); }
+        if (st.courses) for (let k = 1; k < bl.storeys; k++) { const y = bl.storeyY[k]; if (y + 0.4 < seg.top) box(fac, seg.s0, seg.s1, 0, 0.05, y - 0.09, y + 0.09); }
         if (st.wall === 'canvas') continue;
         // coping (cap of the wall thickness) and the inner face of the parapet above the deck
         const yTop = seg.top, deckY = Math.min(...bl.decks.map(d => d.y), bl.deck);
@@ -473,27 +473,27 @@ export class SurfaceArch {
   /** A steel fire escape: a landing per storey (deck, rails), flights between them, a drop ladder from the first landing. */
   private fireEscape(fe: BuildingLook['escapes'][number], box: (key: string, s0: number, s1: number, d0: number, d1: number, y0: number, y1: number) => void): void {
     const w = 1.6, dep = 1.15, k = 'surface-steel';
-    for (const lv of fe.levels) {
-      const y = lv * fe.storeyH;
+    fe.levels.forEach((lv, li) => {
+      const y = fe.ys[li];
       box(k, fe.s - w, fe.s + w, 0.02, dep, y - 0.06, y);
       box(k, fe.s - w, fe.s + w, dep - 0.04, dep, y + 0.95, y + 1.0);
       box(k, fe.s - w, fe.s - w + 0.04, 0.02, dep, y + 0.95, y + 1.0);
       box(k, fe.s + w - 0.04, fe.s + w, 0.02, dep, y + 0.95, y + 1.0);
       for (let s = fe.s - w; s <= fe.s + w + 1e-6; s += 0.8) box(k, s - 0.02, s + 0.02, dep - 0.04, dep, y, y + 0.95);
       // the flight up to the next landing: a stepped stringer (treads as thin boxes along the slope)
-      if (fe.levels.includes(lv + 1)) {
-        const rise = fe.storeyH, run = w * 1.6, nT = Math.max(6, Math.round(rise / 0.2));
+      if (fe.levels[li + 1] === lv + 1) {
+        const rise = fe.ys[li + 1] - y, run = w * 1.6, nT = Math.max(6, Math.round(rise / 0.2));
         for (let i = 0; i < nT; i++) {
           const s = fe.s - run / 2 + (i / nT) * run, yy = y + (i + 1) / nT * rise;
           box(k, s, s + run / nT, dep * 0.45, dep - 0.08, yy - 0.04, yy);
         }
       }
-    }
+    });
     // drop ladder from the lowest landing, ending above head height
-    const y0 = fe.levels[0] * fe.storeyH;
-    box(k, fe.s + w - 0.55, fe.s + w - 0.5, dep - 0.1, dep - 0.05, 2.3, y0);
-    box(k, fe.s + w - 0.1, fe.s + w - 0.05, dep - 0.1, dep - 0.05, 2.3, y0);
-    for (let y = 2.5; y < y0 - 0.1; y += 0.3) box(k, fe.s + w - 0.55, fe.s + w - 0.05, dep - 0.09, dep - 0.06, y - 0.02, y + 0.02);
+    const y0 = fe.ys[0], foot = fe.base + 2.3;
+    box(k, fe.s + w - 0.55, fe.s + w - 0.5, dep - 0.1, dep - 0.05, foot, y0);
+    box(k, fe.s + w - 0.1, fe.s + w - 0.05, dep - 0.1, dep - 0.05, foot, y0);
+    for (let y = foot + 0.2; y < y0 - 0.1; y += 0.3) box(k, fe.s + w - 0.55, fe.s + w - 0.05, dep - 0.09, dep - 0.06, y - 0.02, y + 0.02);
   }
 
   /** The cordon wall's coping and a top rail of the wall (the SOLID ring's inner edge). */
@@ -528,7 +528,7 @@ export class SurfaceArch {
         const P3 = (s: number, y: number) => (alongX ? [s, y, plane] : [plane, y, s]);
         const nrm = alongX ? [0, 0, side === 'S' ? 1 : -1] : [side === 'E' ? 1 : -1, 0, 0];
         const door = T.door.side === side ? (alongX ? T.door.x : T.door.z) : null;
-        const pieces: [number, number, number][] = door === null ? [[a0, a1, 0]] : [[a0, door - dw, 0], [door + dw, a1, 0], [door - dw, door + dw, dh]];
+        const pieces: [number, number, number][] = door === null ? [[a0, a1, T.base]] : [[a0, door - dw, T.base], [door + dw, a1, T.base], [door - dw, door + dw, T.base + dh]];
         for (const [s0, s1, yb] of pieces) if (s1 - s0 > 0.01) two([P3(s0, yb), P3(s1, yb), P3(s1, eave), P3(s0, eave)], nrm);
       }
     }
@@ -545,8 +545,8 @@ export class SurfaceArch {
       for (const z of [r.z0, r.z1]) { q.tri([[r.x0, eave, z], [r.x1, eave, z], [xm, ridge, z]], [0, 0, z === r.z0 ? -1 : 1], [[0, 0], [1, 0], [0.5, 1]]); q.tri([[r.x1, eave, z], [r.x0, eave, z], [xm, ridge, z]], [0, 0, z === r.z0 ? 1 : -1], [[0, 0], [1, 0], [0.5, 1]]); }
     }
     // guy lines (thin ropes from the eaves to stakes) and frame poles at the corners
-    for (const g of T.guys) orientedBar(ropes, [g.ex, g.ey, g.ez], [g.ax, 0.05, g.az], 0.02);
-    for (const [x, z] of [[r.x0, r.z0], [r.x1, r.z0], [r.x0, r.z1], [r.x1, r.z1]]) boxQuads(ropes, x - 0.04, x + 0.04, 0, eave, z - 0.04, z + 0.04);
+    for (const g of T.guys) orientedBar(ropes, [g.ex, g.ey, g.ez], [g.ax, T.base + 0.05, g.az], 0.02);
+    for (const [x, z] of [[r.x0, r.z0], [r.x1, r.z0], [r.x0, r.z1], [r.x1, r.z1]]) boxQuads(ropes, x - 0.04, x + 0.04, T.base, eave, z - 0.04, z + 0.04);
     for (const [geo, mat, name] of [[q.geometry(), canvas, 'surface-tent'], [ropes.geometry(), rope, 'surface-tent-ropes']] as const) {
       if (!geo) continue;
       const m = new THREE.Mesh(geo, mat);
@@ -570,7 +570,7 @@ export class SurfaceArch {
       const pivot = new THREE.Group();
       pivot.name = 'surface-tent-flap';
       const plane = alongX ? (T.door.side === 'S' ? r.z1 : r.z0) : (T.door.side === 'E' ? r.x1 : r.x0);
-      pivot.position.set(alongX ? T.door.x : plane, dh, alongX ? plane : T.door.z);
+      pivot.position.set(alongX ? T.door.x : plane, T.base + dh, alongX ? plane : T.door.z);
       pivot.userData.flapAxis = alongX ? 'x' : 'z';
       pivot.userData.flapSign = ns;
       const fm = new THREE.Mesh(fg, canvas);

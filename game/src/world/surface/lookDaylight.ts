@@ -18,7 +18,7 @@ import {CELL, FLOOR} from '../../gen/grid';
 import type {StationLayout} from '../../gen/stationTypes';
 import type {BuildSteps} from '../../core/pacedBuild';
 import type {ExtraDirectContext} from '../lightField';
-import {GROUND, LOOK_TUNE, OWNER, SIDE_NORMAL, surfaceLookPlan, topAt, type SurfaceLookPlan} from './archPlan';
+import {GROUND, LOOK_TUNE, OWNER, SIDE_NORMAL, entranceFloor, surfaceLookPlan, topAt, type SurfaceLookPlan} from './archPlan';
 
 /** Daylight tunables (field units: FIELD_EMAX 12 = the encode ceiling; a fixture pool is ~2-4). */
 export const DAYLIGHT = {
@@ -78,7 +78,7 @@ export function obstructionTops(layout: StationLayout, plan: SurfaceLookPlan): F
       const sd = b.sides.find(s => s.side === side)!;
       out[i] = topAt(sd, SIDE_NORMAL[side].alongX ? x : z, b.top);
     } else if (o === OWNER.cordon) out[i] = LOOK_TUNE.cordonH + 0.2;
-    else if (o === OWNER.tent) out[i] = tent?.eave ?? LOOK_TUNE.tentEave;
+    else if (o === OWNER.tent) out[i] = tent ? tent.eave : LOOK_TUNE.tentEave;
     else if (o === OWNER.debris) out[i] = LOOK_TUNE.debrisH;
     else if (tent && plan.ground[i] === GROUND.tent) out[i] = tent.ridge;
     else out[i] = g.cells[i] === FLOOR ? g.floor[i] : 0;
@@ -190,7 +190,7 @@ function* bakeDaylight(layout: StationLayout, plan: SurfaceLookPlan, ctx: Ctx): 
       const trans = e.door === 'boarded' ? 0 : e.door === 'closed' ? DAYLIGHT.closedDoor : 1;
       if (trans <= 0) continue;
       const {alongX, n} = SIDE_NORMAL[e.side];
-      const base = baseOf(e.level);
+      const base = entranceFloor(layout, e);
       // the opening's inner face: half a cell inside the facade line, facing into the building (-n)
       openings.push({slot: slotOf(e.level), x: alongX ? e.x : e.x - n * CELL, z: alongX ? e.z - n * CELL : e.z, y0: base, y1: base + e.height, nx: alongX ? 0 : -n, nz: alongX ? -n : 0, w: e.width, trans});
     }

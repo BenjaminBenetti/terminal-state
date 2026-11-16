@@ -107,7 +107,11 @@ export interface FacadeSide {
   tops: TopSeg[];
 }
 export interface ShopSign { side: Side; s0: number; s1: number; y0: number; y1: number; text: string; plane: number; n: 1 | -1; alongX: boolean }
-export interface FireEscape { side: Side; s: number; plane: number; n: 1 | -1; alongX: boolean; levels: number[]; storeyH: number }
+export interface FireEscape {
+  side: Side; s: number; plane: number; n: 1 | -1; alongX: boolean; levels: number[];
+  /** Each landing's y (its storey's floor) and the ground it rises from. */
+  ys: number[]; base: number;
+}
 export interface Placement { model: 'hvac' | 'tank' | 'rubble' | 'vent'; x: number; y: number; z: number; yaw: number; s: number }
 export interface DeckRect { x0: number; z0: number; x1: number; z1: number; y: number; burnt: boolean }
 
@@ -143,7 +147,8 @@ export interface BuildingLook {
 export interface TentPlan {
   rect: SRect;
   door: {x: number; z: number; side: Side; width: number; height: number};
-  eave: number; ridge: number;
+  /** The tent's floor and its eave / ridge (absolute y). */
+  base: number; eave: number; ridge: number;
   /** The ridge runs along X (the tent is wider in X) or along Z. */
   ridgeX: boolean;
   /** Guy-line anchor points (ground) and their eave attach points. */
@@ -229,6 +234,24 @@ export function streetEndSpans(plan: Pick<SurfaceLookPlan, 'segments'>, alongX: 
   const m: {s0: number; s1: number}[] = [];
   for (const r of out) { const l = m[m.length - 1]; if (l && r.s0 <= l.s1) l.s1 = Math.max(l.s1, r.s1); else m.push({...r}); }
   return m;
+}
+
+/**
+ * The floor an entrance stands on: its doorway cell's grid floor (GEN's kerb, 0.15 m; lane AIR hangs its leaves from it), else the
+ * open cell just outside (a boarded doorway stays SOLID: the sidewalk), else the level's base.
+ */
+export function entranceFloor(layout: StationLayout, e: {level: number; side: Side; x: number; z: number}): number {
+  const lv = layout.levels?.[e.level];
+  const g = lv?.grid ?? layout.grid;
+  const {alongX, n} = SIDE_NORMAL[e.side];
+  for (const off of [0, CELL, -CELL / 2, CELL / 2]) {
+    const x = alongX ? e.x : e.x + n * off, z = alongX ? e.z + n * off : e.z;
+    const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
+    if (cx < 0 || cz < 0 || cx >= g.w || cz >= g.h) continue;
+    const i = cz * g.w + cx;
+    if (g.cells[i] === FLOOR) return g.floor[i];
+  }
+  return lv?.baseY ?? 0;
 }
 
 /** Roof line height at world s on a side (the segment containing s; the side's nominal top outside). */
@@ -473,7 +496,7 @@ function planSurfaceLook(layout: StationLayout, S: SurfaceInfo): SurfaceLookPlan
     }
   }
 
-  const tent = planTent(S, owner, W, tentB ?? null);
+  const tent = planTent(S, owner, W, tentB ?? null, floorAt);
   const rail = genRail(GG, floorAt) ?? planRail(S, buildings, segments, floorAt);
   stats.buildings = buildings.length;
   stats.holes = buildings.reduce((a, b) => a + b.holes.length, 0);
@@ -549,11 +572,13 @@ function planBuilding(layout: StationLayout, b: SurfaceBuilding, ground: Uint8Ar
   const parapet = gs.parapet ?? style.parapet;
   const gh = gs.storeyHeights?.length ? gs.storeyHeights : null;
   const storeys = gh ? gh.length : Math.max(1, Math.round(b.storeys || 1));
-  const top = Math.max(2.4, b.height || (gh ? gh.reduce((a, c) => a + c, 0) : storeys * style.storey) + parapet);
-  const storeyH = clamp((top - parapet) / storeys, 2.6, 9);
+  // the ground storey's floor: GEN's storeys stand on the kerb (roofY - their heights); the skeleton's on 0
+  const base0 = gh && gs.roofY !== undefined ? clamp(gs.roofY - gh.reduce((a, c) => a + c, 0), 0, 1) : 0;
+  const top = Math.max(base0 + 2.4, b.height || base0 + (gh ? gh.reduce((a, c) => a + c, 0) : storeys * style.storey) + parapet);
+  const storeyH = clamp((top - base0 - parapet) / storeys, 2.6, 9);
   const storeyHs = gh ? gh.map(h => Math.max(2.2, h)) : Array.from({length: storeys}, () => storeyH);
   const storeyY: number[] = [];
-  for (let k = 0, y = 0; k < storeys; k++) { storeyY.push(y); y += storeyHs[k]; }
+  for (let k = 0, y = base0; k < storeys; k++) { storeyY.push(y); y += storeyHs[k]; }
   const deck = Math.max(2.2, gs.roofY ?? top - parapet);
   // interiors: each of the building's levels' storey floor .. its carved ceiling
   const interiors: [number, number][] = [];
@@ -566,8 +591,8 @@ function planBuilding(layout: StationLayout, b: SurfaceBuilding, ground: Uint8Ar
     ceilTop = Math.max(ceilTop, ceil);
   }
   const minAllowed = (s: number, side: Side) => {
-    let m = Math.max(storeyHs[0] + 0.8, ceilTop > 0 ? ceilTop + LOOK_TUNE.overCeil : 0);
-    for (const e of b.entrances) if (e.side === side && Math.abs((SIDE_NORMAL[side].alongX ? e.x : e.z) - s) < e.width / 2 + 1) m = Math.max(m, e.height + 0.8);
+    let m = Math.max(base0 + storeyHs[0] + 0.8, ceilTop > 0 ? ceilTop + LOOK_TUNE.overCeil : 0);
+    for (const e of b.entrances) if (e.side === side && Math.abs((SIDE_NORMAL[side].alongX ? e.x : e.z) - s) < e.width / 2 + 1) m = Math.max(m, entranceFloor(layout, e) + e.height + 0.8);
     return Math.min(m, top);
   };
   // which sides face open ground (sample a cell 1.5 m out at a few points)
@@ -601,12 +626,12 @@ function planBuilding(layout: StationLayout, b: SurfaceBuilding, ground: Uint8Ar
   const rc = Math.floor(r() * 4);
   const corner = gc ? Math.max(0, ['NW', 'NE', 'SW', 'SE'].indexOf(gc.corner)) : rc; // NW NE SW SE
   const notch = {wx: (fp.x1 - fp.x0) * (0.25 + r() * 0.2), wz: (fp.z1 - fp.z0) * (0.25 + r() * 0.2)};
-  const notchTop = Math.max(storeyH * Math.max(1, storeys - 1 - Math.floor(r() * 2)), storeyH + 1);
+  const notchTop = base0 + Math.max(storeyH * Math.max(1, storeys - 1 - Math.floor(r() * 2)), storeyH + 1);
   const notchRect: SRect = gc ? {...gc.rect} : {
     x0: corner % 2 ? fp.x1 - notch.wx : fp.x0, x1: corner % 2 ? fp.x1 : fp.x0 + notch.wx,
     z0: corner >= 2 ? fp.z1 - notch.wz : fp.z0, z1: corner >= 2 ? fp.z1 : fp.z0 + notch.wz,
   };
-  const stumpTop = Math.max(storeyH + 1.2, top * (0.35 + r() * 0.22));
+  const stumpTop = base0 + Math.max(storeyH + 1.2, (top - base0) * (0.35 + r() * 0.22));
   for (const sd of sides) {
     const tops: TopSeg[] = [];
     const L = sd.s1 - sd.s0;
@@ -659,7 +684,7 @@ function planBuilding(layout: StationLayout, b: SurfaceBuilding, ground: Uint8Ar
     for (const h of holes) if (h.side === side && s1 > h.s0 - 0.35 && s0 < h.s1 + 0.35 && y1 > h.y0 - 0.2 && y0 < h.y1 + 0.2) return true;
     for (const e of b.entrances) {
       if (e.side !== side) continue;
-      const c = SIDE_NORMAL[side].alongX ? e.x : e.z, base = layout.levels?.[e.level]?.baseY ?? 0;
+      const c = SIDE_NORMAL[side].alongX ? e.x : e.z, base = entranceFloor(layout, e);
       if (s1 > c - e.width / 2 - 0.5 && s0 < c + e.width / 2 + 0.5 && y0 < base + e.height + 0.4 && y1 > base) return true;
     }
     return false;
@@ -667,7 +692,7 @@ function planBuilding(layout: StationLayout, b: SurfaceBuilding, ground: Uint8Ar
   const inInterior = (y0: number, y1: number) => interiors.some(([a, c]) => y1 > a + 0.05 && y0 < c - 0.05);
   // boarded-up entrances (the doorway cells stay SOLID: boards over where the door was)
   for (const e of b.entrances) if (e.door === 'boarded') {
-    const c = SIDE_NORMAL[e.side].alongX ? e.x : e.z, base = layout.levels?.[e.level]?.baseY ?? 0;
+    const c = SIDE_NORMAL[e.side].alongX ? e.x : e.z, base = entranceFloor(layout, e);
     holes.push({side: e.side, s0: c - e.width / 2, s1: c + e.width / 2, y0: base, y1: base + e.height, kind: 'door-boarded', storey: 0});
   }
   // --- decorative windows (storeys without an interior), shopfront bays, signs ---
@@ -685,28 +710,28 @@ function planBuilding(layout: StationLayout, b: SurfaceBuilding, ground: Uint8Ar
     };
     // ground storey
     const h0 = storeyHs[0];
-    const groundFree = !inInterior(0.3, h0 - 0.6);
+    const groundFree = !inInterior(base0 + 0.3, base0 + h0 - 0.6);
     if (style.ground === 'shopfront' || style.ground === 'canopy') {
       if (sd.frontage || (sd.open && style.ground === 'canopy' && L > 12)) {
         const nb = clamp(Math.round(L / 8.5), 1, 5), bw = L / nb;
         for (let k = 0; k < nb; k++) {
           const a = sd.s0 + k * bw + 0.55, e = sd.s0 + (k + 1) * bw - 0.55;
-          if (groundFree) add(a, e, 0.45, Math.min(2.7, h0 - 0.7), r() < 0.42 ? 'shutter' : 'shop', 0);
-          const sy0 = Math.min(h0 - 0.65, 2.95), sy1 = Math.min(h0 - 0.1, sy0 + 0.6);
+          if (groundFree) add(a, e, base0 + 0.45, base0 + Math.min(2.7, h0 - 0.7), r() < 0.42 ? 'shutter' : 'shop', 0);
+          const sy0 = base0 + Math.min(h0 - 0.65, 2.95), sy1 = Math.min(base0 + h0 - 0.1, sy0 + 0.6);
           if (sy1 - sy0 > 0.3 && sy1 < topHere(a, e) - 0.2 && (sd.frontage || k % 2 === 0) && (style.ground === 'canopy' || b.kind !== 'ruin' || r() < 0.6))
             signs.push({side: sd.side, s0: a + 0.2, s1: e - 0.2, y0: sy0, y1: sy1, text: signName(signs.length), plane: sd.plane, n: sd.n, alongX: sd.alongX});
         }
       }
     } else if (style.ground === 'dock' && sd.frontage) {
-      for (let s = sd.s0 + 3; s + 4 < sd.s1 - 2; s += 10) add(s, s + 4, 0, Math.min(4.4, h0 - 1), 'shutter', 0);
+      for (let s = sd.s0 + 3; s + 4 < sd.s1 - 2; s += 10) add(s, s + 4, base0, base0 + Math.min(4.4, h0 - 1), 'shutter', 0);
     } else if (style.ground === 'lobby' && sd.frontage && groundFree) {
       const c = (sd.s0 + sd.s1) / 2, hwid = Math.min(5, L / 4);
-      add(c - hwid, c + hwid, 0.15, Math.min(3.1, h0 - 0.4), rollHole(r, cond) === 'glass' ? 'shop' : 'boarded', 0);
+      add(c - hwid, c + hwid, base0 + 0.15, base0 + Math.min(3.1, h0 - 0.4), rollHole(r, cond) === 'glass' ? 'shop' : 'boarded', 0);
     }
     if (b.destination && b.name && !signs.some(s => s.side === sd.side) && sd.frontage) {
       const c = b.entrances.find(e => e.side === sd.side), cs = c ? (sd.alongX ? c.x : c.z) : (sd.s0 + sd.s1) / 2;
       const hw = Math.min(L / 2 - 1, Math.max(2.2, b.name.length * 0.19));
-      const y0 = (c?.height ?? 2.6) + 0.35;
+      const y0 = (c ? entranceFloor(layout, c) + c.height : base0 + 2.6) + 0.35;
       if (y0 + 0.6 < topHere(cs - hw, cs + hw) - 0.2) signs.push({side: sd.side, s0: cs - hw, s1: cs + hw, y0, y1: y0 + 0.6, text: b.name.toUpperCase(), plane: sd.plane, n: sd.n, alongX: sd.alongX});
     }
     // window grid per storey
@@ -738,8 +763,8 @@ function planBuilding(layout: StationLayout, b: SurfaceBuilding, ground: Uint8Ar
       const sd = pick(r, cand);
       const s = (sd.s0 + sd.s1) / 2 + (r() * 2 - 1) * ((sd.s1 - sd.s0) / 2 - 3.5);
       const lv: number[] = [];
-      for (let k = 1; k < storeys; k++) if (k * storeyH + 1.2 < topAt(sd, s, top)) lv.push(k);
-      if (lv.length) escapes.push({side: sd.side, s, plane: sd.plane, n: sd.n, alongX: sd.alongX, levels: lv, storeyH});
+      for (let k = 1; k < storeys; k++) if (storeyY[k] + 1.2 < topAt(sd, s, top)) lv.push(k);
+      if (lv.length) escapes.push({side: sd.side, s, plane: sd.plane, n: sd.n, alongX: sd.alongX, levels: lv, ys: lv.map(k => storeyY[k]), base: base0});
     }
   }
   const key = `surface-facade-${style.wall}-${tint.toString(16).padStart(6, '0')}`;
@@ -747,13 +772,15 @@ function planBuilding(layout: StationLayout, b: SurfaceBuilding, ground: Uint8Ar
   return {id: b.id, b, style, tint, family, key, trimKey, storeyH, storeys, storeyY, storeyHs, top, deck, minTop, sides, holes, signs, escapes, decks, interiors, ceilTop};
 }
 
-function planTent(S: SurfaceInfo, owner: Int16Array, W: number, tb: SurfaceBuilding | null): TentPlan | null {
+function planTent(S: SurfaceInfo, owner: Int16Array, W: number, tb: SurfaceBuilding | null, floorAt: (x: number, z: number) => number): TentPlan | null {
   const t = S.checkpoint.tent;
   const r = tb ? tb.footprint : t.rect;
   if (!(r.x1 - r.x0 > 1.5 && r.z1 - r.z0 > 1.5)) return null;
-  // GEN's tent building: its canvas walls are carved (SOLID ring), its ridge its height, its door its entrance
+  // its floor (the compound's grade), the eave above it; GEN's tent building: its canvas walls are carved (SOLID ring), its height
+  // (absolute) the ridge, its door its entrance
+  const base = floorAt((r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2);
   const te = tb?.entrances.find(e => e.side === t.door.side) ?? tb?.entrances[0];
-  const ridge = tb ? Math.max(LOOK_TUNE.tentEave + 0.6, tb.height || LOOK_TUNE.tentRidge) : LOOK_TUNE.tentRidge;
+  const ridge = Math.max(base + LOOK_TUNE.tentEave + 0.6, tb ? tb.height || base + LOOK_TUNE.tentRidge : base + LOOK_TUNE.tentRidge);
   let carved = !!tb;
   for (let x = Math.floor(r.x0 / CELL); x < Math.ceil(r.x1 / CELL) && !carved; x++) {
     const i = Math.floor(r.z0 / CELL) * W + x;
@@ -761,14 +788,14 @@ function planTent(S: SurfaceInfo, owner: Int16Array, W: number, tb: SurfaceBuild
   }
   const ridgeX = r.x1 - r.x0 >= r.z1 - r.z0;
   const guys: TentPlan['guys'] = [];
-  const g = LOOK_TUNE.tentGuy, eave = LOOK_TUNE.tentEave;
+  const g = LOOK_TUNE.tentGuy, eave = base + LOOK_TUNE.tentEave;
   const along = ridgeX ? [r.x0 + 0.4, (r.x0 + r.x1) / 2, r.x1 - 0.4] : [r.z0 + 0.4, (r.z0 + r.z1) / 2, r.z1 - 0.4];
   for (const a of along) {
     if (ridgeX) { guys.push({ax: a, az: r.z0 - g, ex: a, ey: eave, ez: r.z0}); guys.push({ax: a, az: r.z1 + g, ex: a, ey: eave, ez: r.z1}); }
     else { guys.push({ax: r.x0 - g, az: a, ex: r.x0, ey: eave, ez: a}); guys.push({ax: r.x1 + g, az: a, ex: r.x1, ey: eave, ez: a}); }
   }
-  const door = te ? {x: te.x, z: te.z, side: te.side, width: te.width, height: Math.min(te.height, eave - 0.05)} : {...t.door, width: 1.4, height: 2.0};
-  return {rect: {...r}, door, eave, ridge, ridgeX, guys, carved};
+  const door = te ? {x: te.x, z: te.z, side: te.side, width: te.width, height: Math.min(te.height, LOOK_TUNE.tentEave - 0.05)} : {...t.door, width: 1.4, height: 2.0};
+  return {rect: {...r}, door, base, eave, ridge, ridgeX, guys, carved};
 }
 
 /** GEN's rail spur (when published): the track's centre line along its corridor rects, from the cordon to the shed. */

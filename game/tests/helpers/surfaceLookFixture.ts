@@ -51,6 +51,15 @@ export function lookFixture(seed = 93): LookFixture {
     b.condition = b.enterable ? (k % 3 === 0 ? 'damaged' : 'intact') : CONDITIONS[k % CONDITIONS.length];
     b.storeys = b.enterable ? 2 + (k % 3) : 1 + (k % 6);
     b.height = Math.max(b.storeys * st.storey + st.parapet, 4);
+    // every 5th closed shell carries GEN's shape record: uneven storeys standing on the kerb (0.15 m), the roof / top absolute
+    if (!b.enterable && k % 5 === 0 && b.storeys >= 3) {
+      const sh = Array.from({length: b.storeys}, (_, j) => (j === 0 ? st.storey + 0.9 : st.storey));
+      const g = b as typeof b & {storeyHeights?: number[]; parapet?: number; roofY?: number};
+      g.storeyHeights = sh;
+      g.parapet = st.parapet;
+      g.roofY = Math.round((0.15 + sh.reduce((a, c) => a + c, 0)) * 100) / 100;
+      b.height = g.roofY + st.parapet;
+    }
     if (b.destination && !b.name) b.name = `Calder ${programme}`;
   });
   // AIR spans on every interior's street wall (the skeleton's walls are one cell thick), every pane state
