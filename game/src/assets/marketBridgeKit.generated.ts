@@ -25,14 +25,14 @@ export interface MarketBridgePiece {
   height?: number;
 }
 export const MARKET_BRIDGE_KIT = {
-  key: 'market-bridge-kit', url: 'assets/models/market-bridge-kit.glb', bytes: 2853136, sha256: 'bf5b1c0dbadf533057281201e51e2c9c191bd7b606a2f169d99d151a74fa8ab1',
+  key: 'market-bridge-kit', url: 'assets/models/market-bridge-kit.glb', bytes: 2495764, sha256: '145db42d8a134cbbe07abd1c6a4113417808759e7ec8b6e7bbf132775ddfe5ce',
   pieces: {
-    End: {node: 'End', tris: 13998, min: [-1.3855, -0.4981, -1.0795], max: [0, 1.0554, 1.0513], length: 1.3855},
-    Mid: {node: 'Mid', tris: 10000, min: [0, -1.1641, -1.0778], max: [1.2956, 1.0485, 1.0667], length: 1.2956},
-    MidPlain: {node: 'MidPlain', tris: 6000, min: [0, -0.4737, -1.0651], max: [1.2956, 1.0485, 1.0667], length: 1.2956},
+    End: {node: 'End', tris: 7999, min: [-1.3832, -0.4981, -1.0767], max: [0, 1.0554, 1.0513], length: 1.3832},
+    Mid: {node: 'Mid', tris: 7499, min: [0, -1.1641, -1.0778], max: [1.2956, 1.0474, 1.0669], length: 1.2956},
+    MidPlain: {node: 'MidPlain', tris: 3499, min: [0, -0.4737, -1.0633], max: [1.2956, 1.0474, 1.0669], length: 1.2956},
     Trestle: {node: 'Trestle', tris: 5999, min: [-0.2395, -2.743, -1.1429], max: [0.2402, 0, 1.0835], height: 2.743},
   },
-  deckY: 0, railZ: 1, railH: 1.0453, girderDepth: 0.4737, legCutDepth: 0.4981, cableDrop: 1.1641, endTrestleX: -1.1831,
+  deckY: 0, railZ: 1, railH: 1.043, girderDepth: 0.4737, legCutDepth: 0.4981, cableDrop: 1.1641, endTrestleX: -1.1831,
   stretch: {min: 0.85, max: 1.2},
 } as const satisfies {key: string; url: string; bytes: number; sha256: string; pieces: Readonly<Record<'End' | 'Mid' | 'MidPlain' | 'Trestle', MarketBridgePiece>>;
   deckY: number; railZ: number; railH: number; girderDepth: number; legCutDepth: number; cableDrop: number; endTrestleX: number; stretch: {min: number; max: number}};

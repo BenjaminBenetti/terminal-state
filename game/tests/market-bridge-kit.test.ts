@@ -204,8 +204,10 @@ describe('market bridge kit: the pieces match the catalog', () => {
       }
       expect(piece[n].I.length / 3, n).toBe(K.pieces[n].tris);
     }
-    expect(K.pieces.End.tris).toBeLessThanOrEqual(14000);
-    expect(K.pieces.MidPlain.tris).toBeLessThanOrEqual(6000);
+    // the lighter cook's budgets (the crevice shows five bridges at once)
+    expect(K.pieces.End.tris).toBeLessThanOrEqual(8000);
+    expect(K.pieces.MidPlain.tris).toBeLessThanOrEqual(3500);
+    expect(K.pieces.Mid.tris).toBeLessThanOrEqual(8000);
     expect(K.pieces.Trestle.tris).toBeLessThanOrEqual(6000);
     expect(K.bytes).toBeLessThan(5 * 1024 * 1024);
   });

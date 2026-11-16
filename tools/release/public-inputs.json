@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 94983,
-      "sha256": "64966dab9b9ee9f9e112690a741284c1fc586d63edbbb7695675abd553ee70af"
+      "bytes": 94986,
+      "sha256": "6ad376dd195eff7d49c24407f498c2f245fd4a8b9c0193097e6aa21c138cb026"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -2420,8 +2420,8 @@
     },
     {
       "path": "assets/derivatives/market-bridge-kit.json",
-      "bytes": 19925,
-      "sha256": "8bce170d86393087b505d3ecd608f2b22d6582f2e4810f3957b68a74663f045b"
+      "bytes": 20734,
+      "sha256": "66b9057e52b0bcf48a7e9d0d735b377af079beaa01bcf6f3795ef0bd2a5204f5"
     },
     {
       "path": "assets/derivatives/market-corpse-buyer.json",
@@ -3775,8 +3775,8 @@
     },
     {
       "path": "assets/models/market-bridge-kit.glb",
-      "bytes": 2853136,
-      "sha256": "bf5b1c0dbadf533057281201e51e2c9c191bd7b606a2f169d99d151a74fa8ab1"
+      "bytes": 2495764,
+      "sha256": "145db42d8a134cbbe07abd1c6a4113417808759e7ec8b6e7bbf132775ddfe5ce"
     },
     {
       "path": "assets/models/market-corpse-booth.glb",

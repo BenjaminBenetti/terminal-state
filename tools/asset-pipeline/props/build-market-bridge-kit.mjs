@@ -2,7 +2,7 @@
 // layout — cooked from the USER'S OWN textured walkway-bridge model (supplied for this task; its upload file name mentions Meshy, but the
 // generator, account, settings and licence are NOT verified). The user permits cutting / trimming its legs and adapting pieces for
 // different spans, decks and landings; the original stays unchanged. Nothing is generated, re-textured or replaced here: every piece is
-// the model's own geometry (exact plane clips, one recorded x-remap, seam-preserving decimation) with the model's own PBR maps
+// the model's own geometry (exact plane clips, one recorded x-remap, attribute-weighted decimation) with the model's own PBR maps
 // (downsized / re-encoded only; its all-but-black emissive map dropped, measured and recorded).
 //
 // Reads (never modifies) the PRIVATE master outside Git (--master <glb>; default: the task's input under TS_REFERENCE_ROOT, else under
@@ -29,8 +29,9 @@
 //            half-clamps sit exactly on the joint planes and tiled copies hang one continuous festoon.
 //   Trestle  the -X end's leg frame (the two legs, their X-bracing and the conduit) from the girder underside down to the feet: local
 //            top y = 0, feet y = -H, centred on x (z on the deck's rail mid-line); its transverse cable swag carved out between the legs.
-// Geometry: an exact-attribute weld (lossless), exact plane clips (lib weapon-cook clipBox), meshoptimizer seam-preserving decimation per
-// piece (simplifyWithAttributes: UV seams + normals kept; open clip borders stay on their planes). Maps: base colour 2048 px, metallic-
+// Geometry: an exact-attribute weld (lossless), exact plane clips (lib weapon-cook clipBox), meshoptimizer decimation per piece
+// (simplifyWithAttributes: UV seams + normals kept; open clip borders stay on their planes; MidPlain, whose UV islands stall that at
+// ~5.1 k, in Permissive mode under a heavy UV weight with its joint planes protected — see SIMPLIFY_OPTS). Maps: base colour 2048 px, metallic-
 // roughness / normal 1024 px (sharp lanczos3, JPEG); the emissive map (all but black) is dropped, its stats recorded.
 //
 // Writes deterministically:
@@ -40,7 +41,7 @@
 //   game/public/assets/CREDITS.md                            its marked section
 //   tools/release/public-inputs.json                         ONLY this script's two entries + CREDITS.md added / updated
 //
-//   node --max-old-space-size=12000 tools/asset-pipeline/props/build-market-bridge-kit.mjs [--master <glb>] [--dry-run <scratch dir>] [--measure]
+//   node --max-old-space-size=4096 tools/asset-pipeline/props/build-market-bridge-kit.mjs [--master <glb>] [--dry-run <scratch dir>] [--measure]
 //   (--dry-run writes the GLB + provenance + a registry preview only into the scratch dir; --measure prints the source measurements and
 //   the per-piece clip counts, then stops)
 import fs from 'node:fs';
@@ -80,7 +81,7 @@ const TASK = {
   id: 'studio-survivor-market-crevice-20261116-074419-01',
   /** The private master's delivery record (size / sha256 checked on every run). */
   master: {sha256: '729afb41d59d3bed61aa6d545f33a84acea878cbb0f9f66ec1f52d0945cf9f0f', bytes: 43177692},
-  route: "the user's own textured walkway-bridge model (its upload file name mentions Meshy), supplied by the user for the Survivor Market's crevice layout with explicit permission to cut / trim its legs and adapt pieces for different spans, decks and landings (the original unchanged); cooked into a modular kit: rotation-free uniform scale, a lossless weld, exact plane clips, one recorded x-remap of a cable swag, seam-preserving decimation, and the model's own maps downsized / re-encoded (no generation, re-texture, projection or replacement)",
+  route: "the user's own textured walkway-bridge model (its upload file name mentions Meshy), supplied by the user for the Survivor Market's crevice layout with explicit permission to cut / trim its legs and adapt pieces for different spans, decks and landings (the original unchanged); cooked into a modular kit: rotation-free uniform scale, a lossless weld, exact plane clips, one recorded x-remap of a cable swag, attribute-weighted decimation, and the model's own maps downsized / re-encoded (no generation, re-texture, projection or replacement)",
   licence: 'supplied by the user for this project (its upload file name mentions Meshy; the generator, account, settings and licence are not verified and the provider\'s terms may apply); unapproved prototype asset, no blanket licence or commercial clearance implied',
 };
 
@@ -127,11 +128,13 @@ const SPEC = {
 };
 
 /**
- * Per-piece triangle budgets (the brief's targets: End <= 14 k, Mid <= 9 k, MidPlain <= 6 k, Trestle <= 6 k). Mid = MidPlain + its cable
- * festoon: the festoon gets 4 k (Mid 10 k, over the 9 k target) — at 3 k the cable bundles collapse into flat jagged ribbons (relative
- * error ~0.14), at 4 k they read as separate round cables again (compared on renders at 3 / 4 / 6 / 9 k).
+ * Per-piece triangle budgets. The lighter round (the integrated crevice shows ~0.46 M bridge triangles): End <= 8 k (was 14 k),
+ * MidPlain <= 3.5 k (was 6 k), Mid <= 8 k only with clean cables, Trestle 6 k (unchanged). Mid = MidPlain + its cable festoon: the
+ * festoon keeps 4 k (Mid 7.5 k) — at 3 k the cable bundles collapse into flat jagged ribbons (relative error ~0.14), at 4 k they read as
+ * separate round cables (compared on renders at 3 / 4 / 6 / 9 k). Each reduction was kept only after old-vs-new renders of assembled
+ * 17 / 24 m spans and close views at ~450 px / m (about a 1080p view from 3 m) looked equivalent.
  */
-const BUDGET = {End: 14000, MidPlain: 6000, Cables: 4000, Trestle: 6000};
+const BUDGET = {End: 8000, MidPlain: 3500, Cables: 4000, Trestle: 6000};
 
 const fail = m => { throw new Error(`${ID}: ${m}`); };
 
@@ -347,29 +350,74 @@ ops.push({piece: 'Mid', op: 'remapX', what: 'the cable festoon onto the bay', fa
   rule: `x' = (x - ${C0}) * ${r6(KX)} (source units, then the game scale): the swag's two hanger-clamp centres land exactly on the bay's joint planes, so tiled copies hang one continuous festoon from a clamp at every heavy post; normals by the inverse transpose. Cable cross-sections are in y / z and keep their size; the clamps and the diagonal cable runs near them narrow along x`});
 if (MEASURE) process.exit(0);
 
-// ---------- seam-preserving decimation ----------
+// ---------- decimation ----------
 await MeshoptSimplifier.ready;
-/** meshoptimizer simplifyWithAttributes toward `budget` triangles (asks for less while the UV seams stall the collapse); source attributes kept. */
-function simplify(m, budget) {
+/**
+ * meshoptimizer simplifyWithAttributes toward `budget` triangles (asks for less while the UV seams stall the collapse); source attributes
+ * kept. With `permissive` ({uvWeight, planes}), a piece whose seam-preserving collapse stalls above its budget reruns in meshoptimizer's
+ * Permissive mode: collapses may cross UV seams, but the UV attribute weight is raised so a seam crossing costs far more than a
+ * geometric collapse, and the vertices on the joint planes are protected (they only move along the planes' open borders). The result
+ * records how many output triangles straddle two UV islands (connected components of the attribute-welded source: the texture smear
+ * risk) and their share of the surface area.
+ */
+function simplify(m, budget, {permissive = null} = {}) {
   const tris0 = m.I.length / 3;
   if (tris0 <= budget) return {m, info: {applied: false, reason: `already within the ${budget} budget`, triangles: tris0, budget}};
-  const nv = m.P.length / 3, P32 = Float32Array.from(m.P), attrs = new Float32Array(nv * 5);
-  for (let v = 0; v < nv; v++) {
-    for (let k = 0; k < 3; k++) attrs[5 * v + k] = m.N[3 * v + k] * SIMPLIFY.normalWeight;
-    attrs[5 * v + 3] = m.UV[2 * v] * SIMPLIFY.uvWeight; attrs[5 * v + 4] = m.UV[2 * v + 1] * SIMPLIFY.uvWeight;
+  const nv = m.P.length / 3, P32 = Float32Array.from(m.P), scale = MeshoptSimplifier.getScale(P32, 3);
+  const attrsFor = uvW => {
+    const a = new Float32Array(nv * 5);
+    for (let v = 0; v < nv; v++) {
+      for (let k = 0; k < 3; k++) a[5 * v + k] = m.N[3 * v + k] * SIMPLIFY.normalWeight;
+      a[5 * v + 3] = m.UV[2 * v] * uvW; a[5 * v + 4] = m.UV[2 * v + 1] * uvW;
+    }
+    return a;
+  };
+  const run = (attrs, lock, flags) => {
+    let out, err, ask = budget, passes = 0, prev = Infinity;
+    for (; passes < 12; passes++) {
+      [out, err] = MeshoptSimplifier.simplifyWithAttributes(m.I, P32, 3, attrs, 5, [1, 1, 1, 1, 1], lock, ask * 3, 1, flags);
+      if (out.length / 3 <= budget || out.length / 3 >= prev) break;
+      prev = out.length / 3;
+      ask = Math.floor(ask * Math.min(0.97, budget / (out.length / 3)));
+    }
+    return {out, err, ask, passes: passes + 1};
+  };
+  let r = run(attrsFor(SIMPLIFY.uvWeight), null, []), extra = {mode: 'seam-preserving', uvWeight: SIMPLIFY.uvWeight};
+  if (r.out.length / 3 > budget && permissive) {
+    const stall = {triangles: r.out.length / 3, errorM: r4(r.err * scale)};
+    const lock = new Uint8Array(nv);
+    for (let v = 0; v < nv; v++) if (permissive.planes.some(x => Math.abs(m.P[3 * v] - x) < 1e-6)) lock[v] = 2; // meshopt: protect
+    r = run(attrsFor(permissive.uvWeight), lock, ['Permissive']);
+    // UV islands of the source piece (union-find over its triangles) -> output triangles straddling two islands
+    const par = Int32Array.from({length: nv}, (_, i) => i);
+    const find = a => { while (par[a] !== a) { par[a] = par[par[a]]; a = par[a]; } return a; };
+    for (let t = 0; t < m.I.length; t += 3) { const a = find(m.I[t]); par[find(m.I[t + 1])] = a; par[find(m.I[t + 2])] = a; }
+    let cross = 0, crossArea = 0, allArea = 0;
+    for (let t = 0; t < r.out.length; t += 3) {
+      const [a, b, c] = [r.out[t], r.out[t + 1], r.out[t + 2]], A = triArea(m.P, a, b, c);
+      allArea += A;
+      if (find(a) !== find(b) || find(a) !== find(c)) { cross++; crossArea += A; }
+    }
+    extra = {mode: 'permissive (the seam-preserving collapse stalled above the budget)', seamPreservingStall: stall, uvWeight: permissive.uvWeight,
+      protectedPlanesX: permissive.planes.map(r4), islandStraddlingTriangles: cross, islandStraddlingAreaShare: r4(crossArea / allArea), why: permissive.why};
   }
-  let out, err, ask = budget, passes = 0, prev = Infinity;
-  for (; passes < 12; passes++) {
-    [out, err] = MeshoptSimplifier.simplifyWithAttributes(m.I, P32, 3, attrs, 5, [1, 1, 1, 1, 1], null, ask * 3, 1, []);
-    if (out.length / 3 <= budget || out.length / 3 >= prev) break;
-    prev = out.length / 3;
-    ask = Math.floor(ask * Math.min(0.97, budget / (out.length / 3)));
-  }
-  const kept = reindex(m, out);
-  return {m: kept, info: {applied: true, tool: SIMPLIFY.tool, normalWeight: SIMPLIFY.normalWeight, uvWeight: SIMPLIFY.uvWeight, fromTriangles: tris0,
-    triangles: kept.I.length / 3, budget, askedTriangles: ask, passes: passes + 1, errorRelative: r6(err), errorM: r4(err * MeshoptSimplifier.getScale(P32, 3))}};
+  const kept = reindex(m, r.out);
+  return {m: kept, info: {applied: true, tool: SIMPLIFY.tool, ...extra, normalWeight: SIMPLIFY.normalWeight, fromTriangles: tris0, triangles: kept.I.length / 3,
+    budget, askedTriangles: r.ask, passes: r.passes, errorRelative: r6(r.err), errorM: r4(r.err * scale)}};
 }
-const simp = Object.fromEntries(['End', 'MidPlain', 'Cables', 'Trestle'].map(k => [k, simplify(pieces0[k], BUDGET[k])]));
+function triArea(P, a, b, c) {
+  const ux = P[3 * b] - P[3 * a], uy = P[3 * b + 1] - P[3 * a + 1], uz = P[3 * b + 2] - P[3 * a + 2];
+  const vx = P[3 * c] - P[3 * a], vy = P[3 * c + 1] - P[3 * a + 1], vz = P[3 * c + 2] - P[3 * a + 2];
+  return Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) / 2;
+}
+/**
+ * Per-piece decimation options. MidPlain's seam-preserving collapse stalls at ~5.1 k triangles (its 488 UV islands' borders), so it may
+ * fall back to the permissive collapse at UV weight 64 (sampled 1 / 4 / 16 / 64 / 256 / 1024: at 64 about 0.3 % of its area straddles
+ * two islands, at 1 about 20 % (visible texture wedges); higher weights trade that for geometric error).
+ */
+const SIMPLIFY_OPTS = {End: {}, MidPlain: {permissive: {uvWeight: 64, planes: [0, G.x(J1, J0)],
+  why: 'the bay\'s 488 UV islands stall the seam-preserving collapse at ~5.1 k triangles; a heavily weighted UV error keeps seam crossings rare'}}, Cables: {}, Trestle: {}};
+const simp = Object.fromEntries(['End', 'MidPlain', 'Cables', 'Trestle'].map(k => [k, simplify(pieces0[k], BUDGET[k], SIMPLIFY_OPTS[k])]));
 for (const [k, v] of Object.entries(simp)) if (v.info.triangles > BUDGET[k]) fail(`${k}: decimation stalled at ${v.info.triangles} triangles (> its ${BUDGET[k]} budget): ${JSON.stringify(v.info)}`);
 const mesh = {
   End: simp.End.m,
@@ -571,10 +619,11 @@ const prov = {
     'the End has no legs of its own below the girders (the Trestle supplies them); the abutment end\'s end posts and the end frame are the source\'s',
     'the festoon ends at both joint planes on a clamp\'s centre: where a Mid meets a MidPlain or an End, the half clamp and the cable ends stop open at that plane',
     'the Trestle\'s X-brace, rust and dents are the source\'s own (one diagonal is broken in the source)',
+    `MidPlain (and so Mid's bay) is decimated in meshoptimizer's Permissive mode under a heavy UV weight: ${simp.MidPlain.info.islandStraddlingTriangles ?? 0} of its triangles (${r4(100 * (simp.MidPlain.info.islandStraddlingAreaShare ?? 0))} % of its area) straddle two UV islands and may show a small texture stretch up close; its board edges read a little softer than the 6 k bay's`,
     `with the End unstretched and the bays stretched ${STRETCH.min} .. ${STRETCH.max}, spans of ${r4(2 * endLength)} m (two Ends) and up have gaps at ${spanGaps.map(([a, b]) => `${a} .. ${b} m`).join(', ')} (n bays reach 2 * endLength + n * midLength * k): a runtime stretches the bays a little further (renders at 1.25 read fine) or the Ends too`,
   ],
   convention: 'metres, +Y up, the deck along +X, rails along z = +-1, the deck\'s walking surface at y = 0; four mesh nodes with identity transforms and one shared material; geometry in each piece\'s own local frame (see output.frames)',
-  licence: TASK.licence, rebuild: `node --max-old-space-size=12000 ${SELF} [--master <the private master glb>]`,
+  licence: TASK.licence, rebuild: `node --max-old-space-size=4096 ${SELF} [--master <the private master glb>]`,
 };
 const provBytes = Buffer.from(JSON.stringify(prov, null, 1) + '\n');
 {
@@ -627,7 +676,7 @@ ${pieceTs('Trestle', `, height: ${trestleH}`)}
 `;
 
 const credSection = [CREDITS_BEGIN, '## The Survivor Market bridge kit', '',
-  `A user-uploaded textured model of a rusty industrial walkway bridge (the user supplied and authorized it for the Survivor Market's crevice layout, with permission to cut its legs and adapt pieces; the upload file name mentions Meshy, but the generator, account, settings and licence are NOT verified and no clearance is implied). The game ships modular runtime derivatives cut from it (End / Mid / MidPlain / Trestle: exact plane clips, the middle cable swag remapped onto one bay, seam-preserving decimation) with the model's own PBR maps downsized and re-encoded (base colour 2048 px, metallic-roughness / normal 1024 px; its all-but-black emissive map dropped). Task ${TASK.id}. No generation. The original stays outside the repository.`, '',
+  `A user-uploaded textured model of a rusty industrial walkway bridge (the user supplied and authorized it for the Survivor Market's crevice layout, with permission to cut its legs and adapt pieces; the upload file name mentions Meshy, but the generator, account, settings and licence are NOT verified and no clearance is implied). The game ships modular runtime derivatives cut from it (End / Mid / MidPlain / Trestle: exact plane clips, the middle cable swag remapped onto one bay, attribute-weighted decimation) with the model's own PBR maps downsized and re-encoded (base colour 2048 px, metallic-roughness / normal 1024 px; its all-but-black emissive map dropped). Task ${TASK.id}. No generation. The original stays outside the repository.`, '',
   `- \`${url}\` — the Survivor Market's modular walkway-bridge kit (an abutment end, a tileable bay with and without its cable festoon, a leg frame); runtime derivative by \`${SELF}\` (provenance: \`${provRel}\`).`,
   CREDITS_END].join('\n');
 

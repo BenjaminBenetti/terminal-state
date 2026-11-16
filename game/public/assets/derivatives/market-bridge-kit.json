@@ -4,7 +4,7 @@
  "level": "market",
  "role": "the Survivor Market crevice layout's modular walkway-bridge kit: End (an abutment end), Mid (a tileable bay with a cable festoon), MidPlain (the same bay without cables, for over walkways) and Trestle (a leg frame for a deck standing over a lower floor)",
  "task": "studio-survivor-market-crevice-20261116-074419-01",
- "route": "the user's own textured walkway-bridge model (its upload file name mentions Meshy), supplied by the user for the Survivor Market's crevice layout with explicit permission to cut / trim its legs and adapt pieces for different spans, decks and landings (the original unchanged); cooked into a modular kit: rotation-free uniform scale, a lossless weld, exact plane clips, one recorded x-remap of a cable swag, seam-preserving decimation, and the model's own maps downsized / re-encoded (no generation, re-texture, projection or replacement)",
+ "route": "the user's own textured walkway-bridge model (its upload file name mentions Meshy), supplied by the user for the Survivor Market's crevice layout with explicit permission to cut / trim its legs and adapt pieces for different spans, decks and landings (the original unchanged); cooked into a modular kit: rotation-free uniform scale, a lossless weld, exact plane clips, one recorded x-remap of a cable swag, attribute-weighted decimation, and the model's own maps downsized / re-encoded (no generation, re-texture, projection or replacement)",
  "source": {
   "kind": "user-supplied textured GLB: the private master stays outside Git, read-only and never shipped (an independent backup is kept by the lead)",
   "sha256": "729afb41d59d3bed61aa6d545f33a84acea878cbb0f9f66ec1f52d0945cf9f0f",
@@ -296,34 +296,48 @@
    "End": {
     "applied": true,
     "tool": "meshoptimizer 1.3 simplifyWithAttributes (normals x0.5 + UV x1 attribute weights; UV seams preserved; source UVs / normals kept; open clip borders collapse only along themselves, so they stay on their planes)",
-    "normalWeight": 0.5,
+    "mode": "seam-preserving",
     "uvWeight": 1,
+    "normalWeight": 0.5,
     "fromTriangles": 103329,
-    "triangles": 13998,
-    "budget": 14000,
-    "askedTriangles": 14000,
+    "triangles": 7999,
+    "budget": 8000,
+    "askedTriangles": 8000,
     "passes": 1,
-    "errorRelative": 0.006616,
-    "errorM": 0.0141
+    "errorRelative": 0.018674,
+    "errorM": 0.0398
    },
    "MidPlain": {
     "applied": true,
     "tool": "meshoptimizer 1.3 simplifyWithAttributes (normals x0.5 + UV x1 attribute weights; UV seams preserved; source UVs / normals kept; open clip borders collapse only along themselves, so they stay on their planes)",
+    "mode": "permissive (the seam-preserving collapse stalled above the budget)",
+    "seamPreservingStall": {
+     "triangles": 5132,
+     "errorM": 0.8783
+    },
+    "uvWeight": 64,
+    "protectedPlanesX": [
+     0,
+     1.2956
+    ],
+    "islandStraddlingTriangles": 34,
+    "islandStraddlingAreaShare": 0.0027,
+    "why": "the bay's 488 UV islands stall the seam-preserving collapse at ~5.1 k triangles; a heavily weighted UV error keeps seam crossings rare",
     "normalWeight": 0.5,
-    "uvWeight": 1,
     "fromTriangles": 87484,
-    "triangles": 6000,
-    "budget": 6000,
-    "askedTriangles": 6000,
+    "triangles": 3499,
+    "budget": 3500,
+    "askedTriangles": 3500,
     "passes": 1,
-    "errorRelative": 0.028735,
-    "errorM": 0.0615
+    "errorRelative": 0.032108,
+    "errorM": 0.0687
    },
    "Mid cable festoon": {
     "applied": true,
     "tool": "meshoptimizer 1.3 simplifyWithAttributes (normals x0.5 + UV x1 attribute weights; UV seams preserved; source UVs / normals kept; open clip borders collapse only along themselves, so they stay on their planes)",
-    "normalWeight": 0.5,
+    "mode": "seam-preserving",
     "uvWeight": 1,
+    "normalWeight": 0.5,
     "fromTriangles": 57090,
     "triangles": 4000,
     "budget": 4000,
@@ -335,8 +349,9 @@
    "Trestle": {
     "applied": true,
     "tool": "meshoptimizer 1.3 simplifyWithAttributes (normals x0.5 + UV x1 attribute weights; UV seams preserved; source UVs / normals kept; open clip borders collapse only along themselves, so they stay on their planes)",
-    "normalWeight": 0.5,
+    "mode": "seam-preserving",
     "uvWeight": 1,
+    "normalWeight": 0.5,
     "fromTriangles": 60981,
     "triangles": 5999,
     "budget": 6000,
@@ -356,9 +371,9 @@
  "output": {
   "url": "assets/models/market-bridge-kit.glb",
   "file": "game/public/assets/models/market-bridge-kit.glb",
-  "bytes": 2853136,
-  "sha256": "bf5b1c0dbadf533057281201e51e2c9c191bd7b606a2f169d99d151a74fa8ab1",
-  "triangles": 35997,
+  "bytes": 2495764,
+  "sha256": "145db42d8a134cbbe07abd1c6a4113417808759e7ec8b6e7bbf132775ddfe5ce",
+  "triangles": 24996,
   "nodes": [
    "End",
    "Mid",
@@ -368,12 +383,12 @@
   "pieces": {
    "End": {
     "node": "End",
-    "tris": 13998,
-    "vertices": 12420,
+    "tris": 7999,
+    "vertices": 8059,
     "min": [
-     -1.3855,
+     -1.3832,
      -0.4981,
-     -1.0795
+     -1.0767
     ],
     "max": [
      0,
@@ -381,15 +396,15 @@
      1.0513
     ],
     "dims": [
-     1.3855,
+     1.3832,
      1.5536,
-     2.1307
+     2.128
     ]
    },
    "Mid": {
     "node": "Mid",
-    "tris": 10000,
-    "vertices": 10196,
+    "tris": 7499,
+    "vertices": 7824,
     "min": [
      0,
      -1.1641,
@@ -397,33 +412,33 @@
     ],
     "max": [
      1.2956,
-     1.0485,
-     1.0667
+     1.0474,
+     1.0669
     ],
     "dims": [
      1.2956,
-     2.2126,
-     2.1446
+     2.2115,
+     2.1447
     ]
    },
    "MidPlain": {
     "node": "MidPlain",
-    "tris": 6000,
-    "vertices": 6355,
+    "tris": 3499,
+    "vertices": 3983,
     "min": [
      0,
      -0.4737,
-     -1.0651
+     -1.0633
     ],
     "max": [
      1.2956,
-     1.0485,
-     1.0667
+     1.0474,
+     1.0669
     ],
     "dims": [
      1.2956,
-     1.5223,
-     2.1319
+     1.5212,
+     2.1301
     ]
    },
    "Trestle": {
@@ -449,57 +464,57 @@
   },
   "deckY": 0,
   "railZ": 1,
-  "railH": 1.0453,
+  "railH": 1.043,
   "girderDepth": 0.4737,
   "legCutDepth": 0.4981,
   "cableDrop": 1.1641,
   "trestleHeight": 2.743,
   "midLength": 1.2956,
-  "endLength": 1.3855,
+  "endLength": 1.3832,
   "endTrestleX": -1.1831,
   "spanGaps": [
    [
-    2.771,
-    3.8723
+    2.7664,
+    3.8677
    ],
    [
-    4.3257,
-    4.9735
+    4.3211,
+    4.9689
    ],
    [
-    5.8804,
-    6.0748
+    5.8758,
+    6.0702
    ]
   ],
   "deckSurface": {
    "End": {
-    "y": -0.00018,
-    "areaM2": 1.2039
+    "y": -0.00097,
+    "areaM2": 1.1659
    },
    "Mid": {
-    "y": -0.00092,
-    "areaM2": 1.263
+    "y": -0.00133,
+    "areaM2": 1.2157
    },
    "MidPlain": {
-    "y": -0.00092,
-    "areaM2": 1.263
+    "y": -0.00133,
+    "areaM2": 1.2157
    }
   },
   "deckRule": "area-weighted median height of the up-facing (normal y > 0.9) triangles within |z| < 0.6 and |y| < 0.06 (the board tops between the rails)",
   "railTops": {
    "End": [
-    1.0457,
+    1.0454,
     1.0468
    ],
    "Mid": [
-    1.0385,
-    1.0448
+    1.038,
+    1.0406
    ]
   },
   "joints": {
    "End": {
     "x0": {
-     "vertices": 309,
+     "vertices": 266,
      "y": [
       -0.4707,
       1.0474
@@ -512,7 +527,7 @@
    },
    "Mid": {
     "x0": {
-     "vertices": 291,
+     "vertices": 261,
      "y": [
       -0.7715,
       1.0474
@@ -523,22 +538,22 @@
      ]
     },
     "xL": {
-     "vertices": 293,
+     "vertices": 282,
      "y": [
       -0.7708,
       1.0419
      ],
      "z": [
       -1.0766,
-      1.0667
+      1.0669
      ]
     }
    },
    "MidPlain": {
     "x0": {
-     "vertices": 251,
+     "vertices": 221,
      "y": [
-      -0.4707,
+      -0.4701,
       1.0474
      ],
      "z": [
@@ -547,14 +562,14 @@
      ]
     },
     "xL": {
-     "vertices": 249,
+     "vertices": 238,
      "y": [
-      -0.4712,
+      -0.4696,
       1.0419
      ],
      "z": [
       -1.0633,
-      1.0667
+      1.0669
      ]
     }
    }
@@ -640,9 +655,10 @@
   "the End has no legs of its own below the girders (the Trestle supplies them); the abutment end's end posts and the end frame are the source's",
   "the festoon ends at both joint planes on a clamp's centre: where a Mid meets a MidPlain or an End, the half clamp and the cable ends stop open at that plane",
   "the Trestle's X-brace, rust and dents are the source's own (one diagonal is broken in the source)",
-  "with the End unstretched and the bays stretched 0.85 .. 1.2, spans of 2.771 m (two Ends) and up have gaps at 2.771 .. 3.8723 m, 4.3257 .. 4.9735 m, 5.8804 .. 6.0748 m (n bays reach 2 * endLength + n * midLength * k): a runtime stretches the bays a little further (renders at 1.25 read fine) or the Ends too"
+  "MidPlain (and so Mid's bay) is decimated in meshoptimizer's Permissive mode under a heavy UV weight: 34 of its triangles (0.27 % of its area) straddle two UV islands and may show a small texture stretch up close; its board edges read a little softer than the 6 k bay's",
+  "with the End unstretched and the bays stretched 0.85 .. 1.2, spans of 2.7664 m (two Ends) and up have gaps at 2.7664 .. 3.8677 m, 4.3211 .. 4.9689 m, 5.8758 .. 6.0702 m (n bays reach 2 * endLength + n * midLength * k): a runtime stretches the bays a little further (renders at 1.25 read fine) or the Ends too"
  ],
  "convention": "metres, +Y up, the deck along +X, rails along z = +-1, the deck's walking surface at y = 0; four mesh nodes with identity transforms and one shared material; geometry in each piece's own local frame (see output.frames)",
  "licence": "supplied by the user for this project (its upload file name mentions Meshy; the generator, account, settings and licence are not verified and the provider's terms may apply); unapproved prototype asset, no blanket licence or commercial clearance implied",
- "rebuild": "node --max-old-space-size=12000 tools/asset-pipeline/props/build-market-bridge-kit.mjs [--master <the private master glb>]"
+ "rebuild": "node --max-old-space-size=4096 tools/asset-pipeline/props/build-market-bridge-kit.mjs [--master <the private master glb>]"
 }
