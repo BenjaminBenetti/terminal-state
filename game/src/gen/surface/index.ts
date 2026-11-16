@@ -26,7 +26,7 @@ import type {Level, LevelLink} from '../levels';
 import {deriveRails, registerApertures} from '../levelGen';
 import type {StairFlight} from '../traversal';
 import type {SectionGenContext} from '../../levels/types';
-import {surfaceSeed, type SurfaceHost} from './surfaceRun';
+import {districtVersionOf, surfaceSeed, type SurfaceHost} from './surfaceRun';
 import type {SRect, SurfaceBlock, SurfaceBuilding, SurfaceInfo, SurfaceRecoverable} from './surfaceTypes';
 import type {InteriorPlanner} from './rooms/api';
 import {planInterior} from './rooms/index';
@@ -152,6 +152,9 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const seed = surfaceSeed(ctx.levelSeed);
   const rng = new Rng(seed);
+  // (task studio-surface-run-field-followup-20261116-211729-01) the district's version = its host's record (1 when absent): every v2 stage
+  // is gated on surfaceFeatures(version) and a v1 district stays byte-identical (tests/surface-v1-compat.test.ts)
+  const version = districtVersionOf(ctx.surfaceVersion);
 
   // --- 1-2. frame and block plans ---------------------------------------------------------------------------------------------
   const f = planFrame(rng.fork('frame'));
@@ -248,7 +251,7 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
     roadblock: dress.roadblock?.rect ?? null, enemies: inner.enemies, checkpoint: {x: (tentM.x0 + tentM.x1) / 2, z: (tentM.z0 + tentM.z1) / 2}});
   const storeys = levels.map(L => ({level: L.id, label: L.id === 0 ? 'Street' : L.id === 1 ? 'Upper floor' : 'Top floor', y: L.baseY}));
   const surface: SurfaceInfo = {
-    v: 1, name: dn.name, host, seed, extent: toM(f.ext), core, cols: BLOCKS, rows: BLOCKS, blocks, streets, buildings: rec, windows, outdoorAreas: [...gm.outdoor],
+    v: version as SurfaceInfo['v'], name: dn.name, host, seed, extent: toM(f.ext), core, cols: BLOCKS, rows: BLOCKS, blocks, streets, buildings: rec, windows, outdoorAreas: [...gm.outdoor],
     portal: pc.portal, checkpoint: cd.checkpoint, truck: cd.truck,
     depot: {building: depotPlan.id, recoverables, ...(inner.depotFeatures ? {features: inner.depotFeatures} : {})}, // (+ features: lane ROOMS, for LOOK)
     outdoor: {areas: [...gm.outdoor], spawnZones: spawnZones(f, plans, cd.safe), safe: cd.safe}, notes, storeys,

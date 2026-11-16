@@ -143,6 +143,8 @@ export interface SurfaceBuilding {
   collapse?: {corner: 'NW' | 'NE' | 'SW' | 'SE'; rect: SRect};
   /** The host's own building (the portal: subway headhouse / host tower / host mall) or the checkpoint's command tent. */
   host?: 'subway' | 'office' | 'mall' | 'tent' | 'headhouse';
+  /** (v2, lane INTERIOR) Its reachable roof, when it has one (world/surface/arch*.ts draws the bulkhead and keeps the roof walkable). */
+  roofAccess?: SurfaceRoofAccess;
 }
 
 /** (lane GEN) A street-level debris mound: its cells are FLOOR raised above their own ground (ring +edge, crown +crown, m). */
@@ -260,7 +262,8 @@ export interface SurfaceOutdoor {
 // The record
 
 export interface SurfaceInfo {
-  v: 1;
+  /** The district's surface version (its host's record: gen/surface/surfaceRun.ts surfaceFeatures says what each builds). */
+  v: 1 | 2;
   /** The district's display name ("Calder Heights"). */
   name: string;
   /** The host archetype (portal kind, the far skyline the look shows behind the tower / mall). */
@@ -299,13 +302,43 @@ export interface SurfaceInfo {
   roadblock?: SRect;
   /** The cordon: the quarantine wall band around the playable extent (outer rect; extent = its inner edge). */
   cordon?: SRect;
+  /**
+   * (v2, task studio-surface-run-field-followup-20261116-211729-01, lane FOG writes) The natural fog-pressure boundary that replaces the
+   * visible cordon wall: world/surface/fogPressure.ts fogPressureAt reads it (hazard AND visual: one source of truth). Absent = v1.
+   */
+  boundary?: SurfaceBoundary;
+}
+
+/**
+ * (v2) The fog-pressure boundary (world metres, concentric axis-aligned rects): pressure 0 inside `clear` (the meaningful district), rising
+ * outward over `ramp` metres to 1 (the truck is broken down / an unprotected-or-protected walker is overwhelmed), and on beyond it to the
+ * finite geometry `edge` (filler blocks hide it; a last-resort collider stands there, far past the point nothing survives).
+ */
+export interface SurfaceBoundary {
+  clear: SRect;
+  /** Metres from the `clear` rect's edge to pressure 1 (the same on every side). */
+  ramp: number;
+  edge: SRect;
+}
+
+/**
+ * (v2, lane INTERIOR writes, lane FACADE / LOOK draws) A building's REACHABLE roof: the walkable roof surface on layout level `level`
+ * (absolute `y`; inside the parapet) and the stair bulkhead / hatch housing the way up (its footprint on the roof, the side its door opens
+ * onto the roof, its height above the roof).
+ */
+export interface SurfaceRoofAccess {
+  level: number;
+  y: number;
+  walk: SRect;
+  bulkhead: SRect & {side: Side; h: number};
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // The host station's side (ACCESS lane: gen/surface/access.ts)
 
 export interface SurfaceAccessInfo {
-  v: 1;
+  /** The host station's surface version this access was carved for (gen/surface/surfaceRun.ts surfaceFeatures). */
+  v: 1 | 2;
   /** 'subway-stair' = an extended stairwell up from a street-exit hall; 'office-door' / 'mall-door' = an exterior street exit. */
   kind: 'subway-stair' | 'office-door' | 'mall-door';
   /** The [E] box of the way out (the door at the top of the stairwell / the street door). */

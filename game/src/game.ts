@@ -1317,7 +1317,8 @@ export class Game {
     if (!isSurfaceKey(key) && run.laneStore(ROSTER_LANE, key) === undefined) run.setLaneStore(ROSTER_LANE, {v: ctx.rosterVersion ?? 0}, key);
     // (task studio-surface-run-opus-rebuild-20261116-020827-01) a Subway / Office / Mall station: the SURFACE RUN version it was first built
     // with (gen/surface/surfaceRun.ts: a station visited before the feature stays 0 — no access, its world exact; a new one gets the current)
-    if (ctx.surfaceVersion !== undefined && run.laneStore(SURFACE_LANE, key) === undefined) run.setLaneStore(SURFACE_LANE, {v: ctx.surfaceVersion}, key);
+    // (task studio-surface-run-field-followup-20261116-211729-01: stamped on the host's 'main' memory only — a district reads its host's record)
+    if (key.section === 'main' && ctx.surfaceVersion !== undefined && run.laneStore(SURFACE_LANE, key) === undefined) run.setLaneStore(SURFACE_LANE, {v: ctx.surfaceVersion}, key);
     const node = key.station ? run.node(key.station) : null;
     if (node) adoptStationName(layout, node.name); // campaign: the map's / save's name is the one on the signs and the HUD
     return layout;
@@ -1329,7 +1330,9 @@ export class Game {
     return {layoutVersion, ctx: {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {}),
       rosterVersion: rosterVersionFor(run.peekMemory(key)), // (the seeded enemy roster: always explicit — levels/types.ts SectionGenContext.rosterVersion)
       // (task studio-surface-run-opus-rebuild-20261116-020827-01) a host station's own world: its recorded Surface Run version (explicit)
-      ...(key.section === 'main' && isSurfaceHost(key.level) ? {surfaceVersion: surfaceVersionFor(run.peekMemory(key))} : {})}};
+      ...(key.section === 'main' && isSurfaceHost(key.level) ? {surfaceVersion: surfaceVersionFor(run.peekMemory(key))} : {}),
+      // (task studio-surface-run-field-followup-20261116-211729-01) a district: its HOST station's recorded version (a v1 world stays v1)
+      ...(isSurfaceKey(key) && isSurfaceHost(key.level) ? {surfaceVersion: surfaceVersionFor(run.peekMemory(hostKeyOf(key)))} : {})}};
   }
 
   /**

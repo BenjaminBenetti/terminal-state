@@ -87,6 +87,8 @@ export interface SectionGenContext {
    * surfaceVersionFor: the station's recorded version, 0 for a station entered before the feature, the current one for a station never
    * entered: Game.sectionGenInputs). Absent = 0 = no access pass (every pinned layout fingerprint / census is untouched). Read only by the
    * Subway / Office / Mall generators (their `main` section) — the presence roll itself is gen/surface/surfaceRun.ts surfacePresent.
+   * (task studio-surface-run-field-followup-20261116-211729-01) The 'surface' section (the district) gets its HOST station's recorded
+   * version too (gen/surface/surfaceRun.ts districtVersionOf: absent = 1, the first release's district).
    */
   surfaceVersion?: number;
 }
