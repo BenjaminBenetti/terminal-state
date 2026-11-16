@@ -26,7 +26,7 @@ import type {Level, LevelLink} from '../levels';
 import {deriveRails, registerApertures} from '../levelGen';
 import type {StairFlight} from '../traversal';
 import type {SectionGenContext} from '../../levels/types';
-import {districtVersionOf, surfaceSeed, type SurfaceHost} from './surfaceRun';
+import {districtVersionOf, surfaceFeatures, surfaceSeed, type SurfaceHost} from './surfaceRun';
 import type {SRect, SurfaceBlock, SurfaceBuilding, SurfaceInfo, SurfaceRecoverable} from './surfaceTypes';
 import type {InteriorPlanner} from './rooms/api';
 import {planInterior} from './rooms/index';
@@ -39,6 +39,7 @@ import {exposedSides, floorsOf, heightOf, planInteriors, roofOf, type DepotDoors
 import {OutdoorProps, type PlannedProp} from './outdoorKinds';
 import {dressOutdoors, reserveFronts} from './outdoorDress';
 import {districtNotes, junctionRecords, lotRecords, spawnZones, streetRecords} from './cityData';
+import {carveFogApron, fogBoundaryRecord, padFrame, planFogBoundary, type FogApron} from './fogFiller';
 
 /**
  * The district frame's numbers (metres unless noted). The original contract keys keep their meaning as NOMINAL values (the real frame is
@@ -157,7 +158,11 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
   const version = districtVersionOf(ctx.surfaceVersion);
 
   // --- 1-2. frame and block plans ---------------------------------------------------------------------------------------------
-  const f = planFrame(rng.fork('frame'));
+  // (task studio-surface-run-field-followup-20261116-211729-01, lane FOG) v2: the fog-pressure boundary instead of the cordon wall — the
+  // same frame (no draw), moved onto a grid padded where the edge needs room (gen/surface/fogFiller.ts); v1: exactly the first release's
+  const f0 = planFrame(rng.fork('frame'));
+  const fog = surfaceFeatures(version).fogBoundary ? planFogBoundary(f0) : null;
+  const f = fog ? padFrame(f0, fog) : f0;
   const dn = districtName(rng.fork('district-name'));
   const plans = planBlocks(rng.fork('blocks'), f, host, dn.root);
   repairGuarantees(rng.fork('repair'), f, plans, dn.root);
@@ -216,6 +221,9 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
     rec[id].collapse = {corner: c.corner, rect: toM({x0, y0, x1: x0 + c.w, y1: y0 + c.d})};
   }
 
+  // (lane FOG) v2: the open rubble apron out to the edge (after the dressing: nothing is placed on it)
+  const apron: FogApron | null = fog ? carveFogApron(kit, f, fog, gm, plans.lots.length) : null;
+
   // --- 7. levels, apertures, rails, stairs, links -------------------------------------------------------------------------------
   const grids = kit.levelGrids;
   let nLevels = grids.length;
@@ -255,8 +263,10 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
     portal: pc.portal, checkpoint: cd.checkpoint, truck: cd.truck,
     depot: {building: depotPlan.id, recoverables, ...(inner.depotFeatures ? {features: inner.depotFeatures} : {})}, // (+ features: lane ROOMS, for LOOK)
     outdoor: {areas: [...gm.outdoor], spawnZones: spawnZones(f, plans, cd.safe), safe: cd.safe}, notes, storeys,
-    lots: lotRecords(plans, gm), junctions: junctionRecords(f, gm), rubble: dress.rubble, rail: {rects: gm.rail.map(toM), dir: plans.spur.dir, centre: (plans.spur.v + 0.5) * CELL},
-    ...(dress.roadblock ? {roadblock: dress.roadblock.rect} : {}), cordon: {x0: 0, z0: 0, x1: f.W * CELL, z1: f.H * CELL},
+    lots: [...lotRecords(plans, gm), ...(apron?.lots ?? [])], junctions: junctionRecords(f, gm), rubble: dress.rubble, rail: {rects: gm.rail.map(toM), dir: plans.spur.dir, centre: (plans.spur.v + 0.5) * CELL},
+    ...(dress.roadblock ? {roadblock: dress.roadblock.rect} : {}),
+    // (lane FOG) v1: the cordon wall band; v2: no wall — the fog-pressure boundary (world/surface/fogPressure.ts reads it: hazard + visual)
+    ...(fog ? {boundary: fogBoundaryRecord(fog)} : {cordon: {x0: 0, z0: 0, x1: f.W * CELL, z1: f.H * CELL}}),
   };
 
   const g0 = kit.g;
