@@ -659,6 +659,39 @@ destination registry). Their scale-check records (`*_SCALE`, renders beside `las
 - Tests: `tests/skyways-event-expo.test.ts`, `skyways-event-golf-course.test.ts`, `skyways-event-evac.test.ts` (both audits, support,
   fit, loot themes), `skyways-event-golf-play-*.test.ts` and `skyways-event-golf-real.test.ts` (putting, cups, persistence).
 
+### The Surface Run district kit: street, checkpoint and wreck kinds (task studio-surface-run-opus-rebuild-20261116-020827-01, lane KIT)
+The district's own kinds live in `gen/surface/kinds.ts` (`SURFACE_SPECS`: box, physics, damage class, openables row; `SURFACE_SCALE`:
+the scale-check records). They are spread into `PROP_DEFS`, `PROP_DAMAGE`, both audits (physics source `surface`) and, for the crate,
+the loot tables. The drawn kinds are pure-TS geometry (`gen/surface/kitMesh.ts`) in existing shape / purpose materials. The renderer
+(`world/surface/kit.ts`) instances them in 64 m per-storey chunks, named `prop-<kind>[-<variant>]-<material>` for the damage
+RenderIndex. Street-sign names are dynamic text drawn at runtime from the layout's street names. The wrecks are the existing cooked
+Skyways / Office wreck models, loaded lazily under the `surface` family. Nothing new was generated.
+
+| Kind | Openables audit | Physics audit | Scale check W×H×D (contact) |
+|---|---|---|---|
+| `srSandbagWall` | `none` (decor) | static `too heavy` (~36 filled bags, ~600 kg) | 1.58 × 0.886 × 0.586 m, top 0.87 m; 47 bag contacts |
+| `srJerseyBarrier` | `none` (decor) | static `too heavy` (~1.4 t precast concrete) | 2.00 × 0.81 × 0.60 m; full base |
+| `srTrafficCone` | `none` (decor) | **dynamic** 3.2 kg box, `pad` (rubber base) | 0.36 × 0.70 × 0.36 m; square base |
+| `srFireHydrant` | `exception` (equipment) | static `anchored` (on the water main) | 0.40 × 0.785 × 0.33 m; base flange |
+| `srStreetLamp` | `exception` (equipment) | static `anchored` (bolted base plate) | 0.40 × 7.46 × 2.55 m (arm reaches +Z above 7 m); base plate |
+| `srTrafficSignal` | `exception` (equipment) | static `anchored` | 0.78 × 5.50 × 2.07 m (mast arm +Z above 5 m); base plate |
+| `srStreetSign` | `none` (decor) | static `anchored` | 0.76 × 3.00 × 0.76 m, blades 2.62 / 2.79 m; post |
+| `srChainFence` | `none` (decor) | static `anchored` (panel in concrete feet) | 3.00 × 2.20 × 0.20 m; two feet |
+| `srBollard` | `none` (decor) | static `anchored` | 0.23 × 1.00 × 0.22 m; round base |
+| `srMapTable` | `none` (surface; no drawers) | static `too heavy` (plywood top on welded steel trestles, ~70 kg) | 2.00 × 0.95 × 1.20 m, top 0.95 m; two trestles |
+| `srFieldRadio` | `exception` (equipment; sealed set) | **dynamic** 7 kg box, `pad`, `onHost` (its table) | 0.41 × 0.30 × 0.27 m; four feet |
+| `srCot` | `none` (decor; canvas bed) | **dynamic** 9 kg box, `pad` | 1.88 × 0.447 × 0.69 m, canvas 0.43 m; six feet |
+| `srMilitaryCrate` | **`openable`**: lid on a back hinge (`openablesSpec.ts`) | static `holder` | 1.20 × 0.55 × 0.60 m closed; three battens |
+| `srWreckSedanStripped` … `srWreckSuv`, `srWreckArmyTruck`, `srWreckCar` | `exception` (decor; doors rusted shut or gone, nothing stored) | static `too heavy` | the models' measured bounds, 4.6–7.6 m long; grounded on tyres / rims |
+| `srWreckBus` | `exception` (decor) | static `too heavy` | 9.36 × 3.39 × 2.93 m (the 12 m catalogue file × 0.78, real size beside the zombie) |
+
+- The military crate rolls `MILITARY_SUPPLY_ROWS` (`items/lootTables.ts`, an additive named table): gas filters, the odd gas mask,
+  dressings, rations, water, batteries and flares. Ammo comes only through the deliberate `genericAmmo` supply rule. Its contents are
+  finite, seeded once and remembered like every holder. It is themed by the crate (`CONTAINER_THEMED`), whatever the room.
+- Nothing loose is baked into these kinds. The radio, the map table's map (lane LIFE) and any supplies are separate props or loot.
+- Tests: `tests/surface-kinds.test.ts` (names / boxes, both audits, physics class, the crate's lid / cavity / loot theme, geometry
+  inside its box and grounded, wreck dims / catalogue / level family, renderer names / RenderIndex / sign-name atlas).
+
 ## 6. Player-train fixtures (not layout prop kinds)
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
 they sit outside the two audits; their classification is recorded here.
@@ -788,6 +821,33 @@ they sit outside the two audits; their classification is recorded here.
     proportions (pinned by `tests/train-armor.test.ts`); depth is free (a plate's thickness).
   - Tests: `tests/train-armor.test.ts`, `tests/train-armor-makeover.test.ts`, `tests/train-armor-save.test.ts`,
     `tests/train-armor-clearance.test.ts`, `tests/train-armor-palette.test.ts`.
+- **Surface Run depot recoverables** (task studio-surface-run-opus-rebuild-20261116-020827-01, lane CARGO; `world/surface/cargo.ts`,
+  `world/surface/cargoSeed.ts`): the rail depot's recoverables become ordinary train units of the kinds above, lying in the district.
+  Each gets a fresh run uid from the train's one unit counter and is moved, carried, plugged, saved and melted like a crafted one.
+  - Seeded once on the first build of the district, with a seeded marker written in the same step, and never refilled.
+  - A recovered storage chest is the one seeded holder. Its contents are finite and themed to a depot workshop: `DEPOT_CHEST`, built
+    from the named tables `BASE_WORKSHOP_SALVAGE` and `TENANT_SUPPLY` (3 to 5 lots, never empty, stack sizes from `BOX_COUNT` small,
+    rolled on the district seed). Devices and kits are recovered empty; a recovered sentry's feed holds no rounds.
+  - A unit secured to the truck (E near a free attachment point) follows the truck rigidly and is saved in the district's
+    `surface.cargo` lane. It has no body there: shots and bumps don't shove it. E releases it to the hands or into a drag.
+- **Train armour kit** (found, never crafted; `craft/equipment.ts` kind `armor-kit`; look `world/trainEquipmentModel.ts KIT_LOOKS`;
+  use `world/surface/cargoKit.ts`): the train armour's materials as one dolly unit. It is the fuel dolly's hand truck loaded with a 2 × 2
+  stack of the cooked `train-armor-plate.glb` at 0.45 scale. No new model or texture: both models are the existing cooked ones with
+  their own maps.
+  - Not storage: no slots, nothing to open, no loot table. Tapping [E] inside the parked car fits the train armour through the one
+    upgrades seam (`run/trainUpgrades.ts`). The kit is used up only when that fit succeeds. Otherwise it is kept with the seam's reason:
+    already fitted, no parked train, or moving. Outside the car the line asks for it to be wheeled in. There is no second material
+    charge, and the effect is the bench upgrade's own.
+  - Physics: movable, exactly like the devices. Hold [E] to grab and drag it ([R] turns it), walk into it to push it, and it rides
+    lifts. A bullet stops on it with a shove by its 104 kg. One sleeping kinematic body on the fuel cart's controller.
+  - No baked clutter: the plates are the kit itself (its load, fitted and used up together), separate plate meshes on the nose plate.
+    They are not loose pickups.
+  - Scale (rule 5): `node tools/asset-pipeline/props/scale-check-armor-kit.mjs <repo> <out.png>` composes the truck and the plates at
+    the runtime transform through `scale-check.mjs`. Viewed beside zombie lastshift (1.78 m, runtime scale 1): 0.54 × 1.20 × 0.50 m
+    (W × H × D). The truck's handle is the 1.20 m. The plates measure 0.54 × 0.84 × 0.12 m, each plate 0.54 × 0.42 × 0.056 m, and
+    stack from the nose plate (0.07 m) to 0.92 m, at the zombie's hip. It stands grounded on the truck's two wheels (2 contacts, span
+    0.49 m), as the devices do. The drag footprint is the dolly's (radius 0.36 m, height 1.25 m).
+  - Tests: `tests/surface-cargo-kit.test.ts`; the recoverables and the truck: `tests/surface-cargo-{seed,mount,crossing,save}.test.ts`.
 - **Limits:** at most 24 crafted units in the car and 48 left in one station (`craft/equipment.ts EQUIPMENT_LIMITS`); a craft or a
   departure beyond them is refused. Enemies walk through units on the floor, as they do through fuel carts.
 - **Tests:** `tests/train-equipment-*.test.ts`, `tests/equipment-chest-store.test.ts`, `tests/sentry-ammo.test.ts`,

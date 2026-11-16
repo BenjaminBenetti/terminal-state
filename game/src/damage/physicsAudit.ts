@@ -26,6 +26,7 @@ import {SKYWAYS_MAPBOARD_PHYS, isSkywaysMapBoardKind} from '../gen/skyways/mapBo
 import {SUBWAY_MAP_KIOSK_STATIC} from '../gen/subwayMapKioskKind'; // task studio-ui-subway-maps-20261108-074144-01
 import {BUNKER_MODEL_STATIC, BUNKER_OBJECTIVE_STATIC} from '../gen/bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01
 import {CORPSE_DEN_STATIC} from '../gen/market/v4/denKinds'; // task studio-corpse-market-shop-20261114-031614-01
+import {SURFACE_PHYS, isSurfaceKind} from '../gen/surface/kinds'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT)
 
 export interface PhysAuditRow {
   kind: string;
@@ -46,7 +47,7 @@ export interface PhysAuditRow {
    * office = classified in gen/office/physics.ts; subway = the kind's iteration-07 / 08 class (+ its contact overlay); skyways = the
    * Skyways ramen restaurant's kinds (gen/skyways/kitchenKinds.ts SKYWAYS_KITCHEN_PHYS; task studio-skyways-level-20261106-054448, lane FOOD).
    */
-  src: 'office' | 'subway' | 'skyways';
+  src: 'office' | 'subway' | 'skyways' | 'surface'; // (+ 'surface': the Surface Run kit, gen/surface/kinds.ts SURFACE_PHYS — lane KIT)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -170,9 +171,22 @@ function skywaysRow(kind: string): PhysAuditRow {
   return {kind, cls: 'dynamic', mass: ph.mass, shape: ph.shape ?? 'box', mat: ph.mat ?? 'metal', contact: !!ph.contact && dynamicKind(kind), ...(ph.onHost ? {onHost: true} : {}), how: r.how, src: 'skyways'};
 }
 
+/**
+ * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT): a Surface Run kind's row — class / body from the live physics
+ * (PROP_DEFS.physics; loot holders stay put), the reason from gen/surface/kinds.ts SURFACE_PHYS. Its own `src` keeps the pinned Subway
+ * dynamic-mass census (tests/office-physics.test.ts, tests/contact-physics.test.ts) untouched.
+ */
+function surfaceRow(kind: string): PhysAuditRow {
+  const r = SURFACE_PHYS[kind as keyof typeof SURFACE_PHYS], ph = propPhysics(kind);
+  if (isLootHolderKind(kind)) return {kind, cls: 'static', why: 'holder', how: r.how, src: 'surface'};
+  if (!r.dynamic) return {kind, cls: 'static', why: r.why, how: r.how, src: 'surface'};
+  return {kind, cls: 'dynamic', mass: ph.mass, shape: ph.shape ?? 'box', mat: ph.mat ?? 'metal', contact: !!ph.contact && dynamicKind(kind), ...(ph.onHost ? {onHost: true} : {}), how: r.how, src: 'surface'};
+}
+
 /** kind -> its physics-affordance row; a kind with no row here is UNCLASSIFIED (tests fail). */
 export const PROP_PHYSICS_AUDIT: Readonly<Record<string, PhysAuditRow>> = Object.fromEntries(ALL_PROP_KINDS.flatMap(k => {
-  const row = isOfficeKind(k) ? officeRow(k, (OFFICE_PHYS as Record<string, OfficePhys>)[k]) : isSkywaysKitchenKind(k) || isSkywaysAddonKind(k) || isSkywaysDestKind(k) || isSkywaysMapBoardKind(k) ? skywaysRow(k) : subwayRow(k); // (lane ADDON: + the add-on kinds)
+  const row = isOfficeKind(k) ? officeRow(k, (OFFICE_PHYS as Record<string, OfficePhys>)[k]) : isSkywaysKitchenKind(k) || isSkywaysAddonKind(k) || isSkywaysDestKind(k) || isSkywaysMapBoardKind(k) ? skywaysRow(k)
+    : isSurfaceKind(k) ? surfaceRow(k) : subwayRow(k); // (lane ADDON: + the add-on kinds) (lane KIT: + the Surface Run kit)
   return row ? [[k, row]] : [];
 }));
 

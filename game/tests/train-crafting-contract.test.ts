@@ -39,7 +39,9 @@ describe('train crafting: recipes', () => {
       expect(recipeFor(r.kind)).toBe(r);
     }
     // every equipment kind has exactly one recipe; the materials are real items
-    expect(RECIPES.map(r => r.kind).sort()).toEqual([...EQUIPMENT_KINDS].sort());
+    // (re-pin, task studio-surface-run-opus-rebuild-20261116-020827-01, lane CARGO: except an upgrade kit — kind 'armor-kit' is found in a
+    // Surface Run depot, never crafted: the upgrade itself keeps its own bench recipe, 'armor', and a kit never adds a second way to pay)
+    expect(RECIPES.map(r => r.kind).sort()).toEqual(EQUIPMENT_KINDS.filter(k => !EQUIPMENT[k].upgrade).sort());
     for (const m of RECIPE_MATERIALS) expect(ITEMS[m]?.kind).toBe(m === 'fuel_can' ? 'supply' : 'material'); // (re-pin, flamethrower-fire: the fuel can is an ordinary supply item, not a salvage material)
   });
 });

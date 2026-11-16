@@ -51,6 +51,12 @@ export interface WindowPlan {
   panes: PanePlan[];
   /** Collision box (x/z rect) the runtime keeps bodies out of (pushed toward the interior). */
   collider: Rect2;
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): the wall's EXTERIOR face coordinate on the cross axis — set where the
+   * player can stand outside the span (the Surface Run streets): a street-side bullet meeting that face is attributed to the pane
+   * (world/windowBreach.ts). Absent (the tower / Skyways): room-side hits only, as before.
+   */
+  outer?: number;
 }
 
 /**
@@ -292,8 +298,14 @@ function mergeAll(parts: readonly Part[], ranges?: Map<string, [number, number]>
   return m;
 }
 
+/**
+ * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane AIR): what buildWindows draws besides the panes (default all): `frames` =
+ * the frame / mullions / transom and the interior sill (false where the level's architecture draws them: the Surface Run facades).
+ */
+export interface WindowBuildOptions { frames?: boolean }
+
 /** Builds glass, frames, sills and boards for every planned span (merged per material). */
-export function buildWindows(plans: readonly WindowPlan[], mats: WorldMaterials, glassTex: THREE.Texture | null): WindowView {
+export function buildWindows(plans: readonly WindowPlan[], mats: WorldMaterials, glassTex: THREE.Texture | null, opts: WindowBuildOptions = {}): WindowView {
   const root = new THREE.Group(); root.name = 'tower-windows';
   const geometries: THREE.BufferGeometry[] = [];
   const glass: THREE.Mesh[] = [], meshes: THREE.Mesh[] = [];
@@ -302,13 +314,13 @@ export function buildWindows(plans: readonly WindowPlan[], mats: WorldMaterials,
   // merged per storey (culling) and material
   const byLevel = new Map<number, WindowPlan[]>();
   for (const p of plans) { let l = byLevel.get(p.level); if (!l) byLevel.set(p.level, (l = [])); l.push(p); }
-  for (const [level, list] of byLevel) cracked = buildStorey(list, mats, glassTex, level, geometries, glass, meshes, panes) ?? cracked;
+  for (const [level, list] of byLevel) cracked = buildStorey(list, mats, glassTex, level, geometries, glass, meshes, panes, opts.frames !== false) ?? cracked;
   for (const m of meshes) root.add(m);
   return {root, glass, geometries, cracked, panes};
 }
 
 /** One storey's windows, merged per material (meshes tagged with the storey). Returns the cracked-glass material if used. */
-function buildStorey(plans: readonly WindowPlan[], mats: WorldMaterials, glassTex: THREE.Texture | null, level: number, geometries: THREE.BufferGeometry[], glass: THREE.Mesh[], meshes: THREE.Mesh[], panes: Map<string, PaneView>): SurfaceNodeMaterial | null {
+function buildStorey(plans: readonly WindowPlan[], mats: WorldMaterials, glassTex: THREE.Texture | null, level: number, geometries: THREE.BufferGeometry[], glass: THREE.Mesh[], meshes: THREE.Mesh[], panes: Map<string, PaneView>, withFrames = true): SurfaceNodeMaterial | null {
   const intact: Part[] = [], crackedParts: Part[] = [], frames: Part[] = [], sills: Part[] = [], boards: Part[] = [];
   for (const p of plans) {
     const facing: [number, number] = [-p.n[0], -p.n[1]]; // glass faces the room
@@ -391,8 +403,10 @@ function buildStorey(plans: readonly WindowPlan[], mats: WorldMaterials, glassTe
     meshes.push(m);
   };
   const cracked = crackedParts.length ? crackedGlassMaterial(glassTex) : null;
-  mk(frames, shapeMaterial(mats, 'shopFrame'), 'tower-window-frames');
-  mk(sills, shapeMaterial(mats, 'laminate'), 'tower-window-sills');
+  if (withFrames) { // (lane AIR, Surface Run: the facade architecture draws its own frames / sills)
+    mk(frames, shapeMaterial(mats, 'shopFrame'), 'tower-window-frames');
+    mk(sills, shapeMaterial(mats, 'laminate'), 'tower-window-sills');
+  } else for (const q of [...frames, ...sills]) q.g.dispose();
   mk(boards, shapeMaterial(mats, 'wood'), 'tower-window-boards');
   mk(intact, officeGlassMaterial(mats), 'tower-window-glass', true);
   if (cracked) mk(crackedParts, cracked, 'tower-window-glass-cracked', true);

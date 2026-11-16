@@ -128,6 +128,7 @@ export const HOLDER_SLOTS: Readonly<Record<string, SlotCategory>> = {
   // general closed storage
   cabinetTall: 'container', cabinetLow: 'container', crate: 'container', staffLockers: 'container', filingCabinet: 'container', safe: 'container',
   footlocker: 'container', // lane HIDEOUT (round 3): the survivor hideout's footlocker
+  srMilitaryCrate: 'container', // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT): the Surface Run checkpoint's lidded supply crate
   rollingToolChest: 'container',
   // specialist fixtures (HOLDER_ALLOW keeps their finds plausible)
   grillLine: 'foodPrep', espressoBar: 'foodPrep', wokLine: 'foodPrep', deliLine: 'foodPrep', blenderBar: 'foodPrep', hotdogCart: 'foodPrep', busCart: 'foodPrep',
@@ -406,7 +407,8 @@ export const CONTAINER_THEMED: ReadonlySet<string> = new Set(['officeFiling', 'e
   'bakeryCase', // lane FURN (office-props-physics-scale-20261030): a bakery case holds bread whatever the room
   'pharmacyDispensaryCounter', // lane SHOPS (track3): a dispensary counter holds medicine whatever shop it stands in
   'medicineDrawerCabinet', // lane SHOPS (track3, batch 2 M29): so does the medicine drawer cabinet
-  'gunSafeTall']); // lane SHOPS (track3, 12c): a gun safe holds ammo / gun-care whatever back room it stands in (the deliberate ammo rule)
+  'gunSafeTall', // lane SHOPS (track3, 12c): a gun safe holds ammo / gun-care whatever back room it stands in (the deliberate ammo rule)
+  'srMilitaryCrate']); // (lane KIT, Surface Run) a military supply crate holds checkpoint supplies whatever compound / room it stands in
 /** Junk holders: whatever the room, their few finds are random (a bin in a security office is still a bin). */
 export const RANDOM_HOLDERS: ReadonlySet<string> = new Set(['bin', 'wheelieBin']);
 
@@ -531,6 +533,15 @@ export const MEDICINE_CABINET_ROWS: ItemRows = [['bandage', 3], ['medkit', 0.6],
 export const TOTE_ROWS: ItemRows = [['water', 1], ['beans', 0.8], ['noodles', 0.6], ['bandage', 0.5], ['battery', 0.5], ['chips', 0.4]];
 /** Lane SHOPS (track3, 12c M35): a tall gun safe — generic ammo (all calibres equal), flares, cells for the weapon lights; never a gun. */
 export const GUN_SAFE_ROWS: ItemRows = [...genericAmmo(2.6), ['flare', 0.5], ['battery', 0.4]];
+/**
+ * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane KIT): the Surface Run checkpoint's MILITARY SUPPLY crate (srMilitaryCrate,
+ * container-themed) — gas filters (and rarely a spare mask: found with an empty filter housing, fitted from the player's spares), field
+ * dressings / first-aid kits, rations (tins, noodles, chocolate bars), bottled water, cells and flares for the lights, and spare rounds by
+ * the deliberate supply-crate rule (generic ammo, all calibres equal, a modest share like the footlocker's). An ADDITIVE named table: no
+ * existing row is re-weighted. Filters / masks have no economy category: kept exactly as rolled (so the weights stay small).
+ */
+export const MILITARY_SUPPLY_ROWS: ItemRows = [['gas_filter', 0.9], ['gas_mask', 0.12], ['bandage', 1.2], ['medkit', 0.3], ['beans', 1], ['noodles', 0.4], ['chocolate', 0.6],
+  ['water', 1.3], ['battery', 0.5], ['flare', 0.35], ...genericAmmo(0.6)];
 /** Lane SHOPS (track3, 12c M45): a dresser's drawers — household odds and ends (narrowed to the room purpose's rows). */
 export const DRESSER_ROWS: ItemRows = [['bandage', 0.7], ['battery', 0.6], ['chocolate', 0.6], ['water', 0.6], ['cola', 0.4], ['flare', 0.15]];
 /** Lane SHOPS (track3, 12c M47): a stock-room carton (narrowed to the room purpose's rows). */
@@ -614,6 +625,7 @@ export const OPENABLE_TABLES = {
   gunSafeTall: {lots: [1, 3], empty: 0.3, items: GUN_SAFE_ROWS},
   dresserDrawers: {lots: [1, 2], empty: 0.45, items: DRESSER_ROWS},
   cardboardBoxFlaps: {lots: [1, 2], empty: 0.55, items: CARTON_ROWS},
+  srMilitaryCrate: {lots: [1, 3], empty: 0.25, items: MILITARY_SUPPLY_ROWS}, // (lane KIT, Surface Run: a few per checkpoint — finite, seeded once)
 } as const satisfies Readonly<Record<string, OwnTable>>;
 
 // ---------------------------------------------------------------------------------------
