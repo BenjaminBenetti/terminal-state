@@ -92,9 +92,14 @@ interface Shelter {
   roleOf: (id: number) => string | undefined;
 }
 
-const RESULTS = new WeakMap<StationLayout, {pickups: number[]; sites: Partial<Record<EvacNoteSlot, number>>}>();
+const RESULTS = new WeakMap<StationLayout, {pickups: number[]; sites: Partial<Record<EvacNoteSlot, number>>; tables: number[]}>();
 /** QA / tests: the layout.pickups indices of the shelter's ration pickups. */
 export const evacPickupsOf = (layout: StationLayout): readonly number[] => RESULTS.get(layout)?.pickups ?? [];
+/**
+ * (layout version 8, task studio-skywalk-loot-performance-20261116-022934-01) The layout.props indices of the ration line's tables as
+ * dressed (read by gen/skyways/events/eventLoot.ts to keep the ration stock by the line; a record only, nothing generated differs).
+ */
+export const evacRationTablesOf = (layout: StationLayout): readonly number[] => RESULTS.get(layout)?.tables ?? [];
 /** QA: how many note spots each kind of place offered (before 6-10 of them got a note). */
 export const evacNoteSitesOf = (layout: StationLayout): Partial<Record<EvacNoteSlot, number>> => RESULTS.get(layout)?.sites ?? {};
 
@@ -173,7 +178,7 @@ export function dressEvacCentre(layout: StationLayout, rng: Rng): EventDressResu
   const pickups = placeRations(S);
   const sites: Partial<Record<EvacNoteSlot, number>> = {};
   for (const s of S.sites) sites[s.slot] = (sites[s.slot] ?? 0) + 1;
-  RESULTS.set(layout, {pickups, sites});
+  RESULTS.set(layout, {pickups, sites, tables: S.rationTables.map(t => layout.props.indexOf(t))});
   addon.evac = rec;
 
   res.props = layout.props.slice(p0);

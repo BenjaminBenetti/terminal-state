@@ -559,6 +559,30 @@ export const RAMEN_LOOSE_ROWS: ItemRows = [[RAMEN, 1.2], [RAMEN_CHASHU, 0.8], [S
  */
 export const CON_TABLE_SNACK_ROWS: ItemRows = [[BUBBLE_TEA, 3], ['cola', 1], ['water', 1], ['juice', 0.5], ['chips', 0.8], ['chocolate', 0.7]];
 export const CON_PANEL_DRINK_ROWS: ItemRows = [['water', 2.2], [BUBBLE_TEA, 1], ['cola', 0.6]];
+/**
+ * Task studio-skywalk-loot-performance-20261116-022934-01 (lane LOOT; Skyways layout version 8): the NEW EVENTS' OWN SUPPLIES. These
+ * are the holders gen/skyways/events/eventLoot.ts appends to a technology expo, mini-golf or evacuation centre venue. Their loot keys
+ * are the 'skyways-*' purposes of gen/skyways/events/eventLootPurposes.ts, one entry per holder kind. Existing items only and no ammo.
+ * The tables are EXACT: no scarcity cut, re-theme or limb conversion, so the rows are the odds and the medical tables list their own
+ * splints and slings. They take no salvage rows. Each holder is finite and seeded like every other one: rolled once on its own stream,
+ * remembered and never refilled. The measured yields per event are pinned in tests/skyways-event-loot.test.ts.
+ */
+// the expo: demo stock (cells, parts), the AV crew's tool chest, the presenters' flight cases
+export const EXPO_DEMO_STOCK: LootSpec = {items: [['battery', 1.6], [ELECTRICAL_PARTS, 1.4], [SCRAP_METAL, 0.3], ['water', 0.3]], lots: [1, 2], empty: 0.25, exact: true, salvage: false};
+export const EXPO_AV_CHEST: LootSpec = {items: [[SCRAP_METAL, 1.3], [ELECTRICAL_PARTS, 1.3], ['battery', 0.9], ['flare', 0.25]], lots: [1, 3], empty: 0.15, exact: true, salvage: false};
+export const EXPO_FLIGHT_CASE: LootSpec = {items: [[ELECTRICAL_PARTS, 1.4], ['battery', 1.2], [SCRAP_METAL, 0.6], ['flare', 0.3], ['bandage', 0.25], ['water', 0.3]], lots: [1, 2], empty: 0.2, exact: true, salvage: false};
+// mini-golf: the front desk's filing drawers (cells, a dressing, a bottle, a bar), the course maintenance chest and cupboard, the
+// concession cooler and snack rack
+export const GOLF_RECEPTION: LootSpec = {items: [['battery', 1.1], ['bandage', 0.9], ['water', 0.8], ['chocolate', 0.6], ['flare', 0.25], [LEG_SPLINT, 0.08], [ARM_SLING, 0.08]], lots: [1, 3], empty: 0.2, exact: true, salvage: false};
+export const GOLF_MAINT_CHEST: LootSpec = {items: [[SCRAP_METAL, 1.4], [ELECTRICAL_PARTS, 0.9], ['battery', 0.8], ['flare', 0.3]], lots: [1, 2], empty: 0.2, exact: true, salvage: false};
+export const GOLF_MAINT_CABINET: LootSpec = {items: [['battery', 0.9], [SCRAP_METAL, 0.8], ['water', 0.7], ['bandage', 0.5], ['flare', 0.4], [ELECTRICAL_PARTS, 0.4]], lots: [1, 3], empty: 0.15, exact: true, salvage: false};
+export const GOLF_COOLER: LootSpec = {items: [['water', 1.2], ['cola', 1.0], ['juice', 0.6]], lots: [1, 3], empty: 0.15, exact: true, salvage: false};
+export const GOLF_SNACKS: LootSpec = {items: [['chips', 1.2], ['chocolate', 1.2], ['battery', 0.15]], lots: [1, 3], empty: 0.2, exact: true, salvage: false};
+// the evacuation centre: the medical bay's stock, the ration line's stock, the supply store
+export const EVAC_MED_STOCK: LootSpec = {items: [['bandage', 2.0], ['medkit', 0.5], [LEG_SPLINT, 0.3], [ARM_SLING, 0.3]], lots: [1, 3], empty: 0.1, exact: true, salvage: false};
+export const EVAC_MED_TOTE: LootSpec = {items: [['bandage', 1.5], ['medkit', 0.25], [LEG_SPLINT, 0.25], [ARM_SLING, 0.25], ['water', 0.6]], lots: [1, 2], empty: 0.2, exact: true, salvage: false};
+export const EVAC_RATION_STOCK: LootSpec = {items: [['water', 1.3], ['beans', 1.1], ['noodles', 0.6], ['chocolate', 0.4]], lots: [1, 3], empty: 0.1, exact: true, salvage: false};
+export const EVAC_SUPPLY: LootSpec = {items: [['battery', 1.0], ['water', 0.8], ['flare', 0.6], ['bandage', 0.6], ['beans', 0.5]], lots: [1, 3], empty: 0.15, exact: true, salvage: false};
 
 /**
  * OWN tables of the openable kinds (world/openablesSpec.ts `loot` references these): NEW container kinds roll theirs over every
