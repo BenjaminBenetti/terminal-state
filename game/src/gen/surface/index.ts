@@ -32,7 +32,7 @@ import type {InteriorPlanner} from './rooms/api';
 import {planInterior} from './rooms/index';
 import {BLOCKS, CORE_FROM, CORE_TO, FRAME_CELLS, planFrame, type CR, type CityFrame} from './cityFrame';
 import {districtName} from './cityNames';
-import {KERB, SLAB, SURFACE_LEVELS, guaranteeCounts, planBlocks, repairGuarantees, type BlockPlans, type BuildingPlan} from './cityBlocks';
+import {KERB, SLAB, SURFACE_LEVELS, deepStoreyPlans, guaranteeCounts, planBlocks, repairGuarantees, type BlockPlans, type BuildingPlan} from './cityBlocks';
 import {SKY_CEIL, carveGround, type GroundMap} from './cityCarve';
 import {PORTAL, carvePortal, dressCheckpoint, reserveCheckpoint} from './checkpoint';
 import {exposedSides, floorsOf, heightOf, planInteriors, roofOf, type DepotDoors} from './cityInteriors';
@@ -166,6 +166,9 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
   const dn = districtName(rng.fork('district-name'));
   const plans = planBlocks(rng.fork('blocks'), f, host, dn.root);
   repairGuarantees(rng.fork('repair'), f, plans, dn.root);
+  // (v2, lane INTERIOR) the deep interiors' storey plans: upper floors / roofs of the destinations (no draws)
+  const deep = surfaceFeatures(version).deepInteriors;
+  if (deep) deepStoreyPlans(plans);
 
   // --- 3-4. the ground, the portal and the tent -------------------------------------------------------------------------------
   const kit = new Kit(rng.fork('kit'), {w: f.W, h: f.H, levels: SURFACE_LEVELS});
@@ -187,7 +190,7 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
   const loadSide: Side = L.y0 >= s.y1 ? 'S' : L.y1 <= s.y0 ? 'N' : L.x0 >= s.x1 ? 'E' : 'W';
   const depotDoors: DepotDoors = {id: depotPlan.id, trackSide: plans.spur.dir, trackV: plans.spur.v, loadSide};
   const props: PropPlacement[] = [];
-  const inner = planInteriors(kit, gm, outdoor, plans.buildings, rec, rng.fork('interiors'), planner, depotDoors, props);
+  const inner = planInteriors(kit, gm, outdoor, plans.buildings, rec, rng.fork('interiors'), planner, depotDoors, props, deep);
   // the command tent and the headhouse: GEN's own small interiors
   const tentRec = rec[pc.tent.plan.id];
   const tentDoor = kit.doors[portalDoor[portalDoor.length - 1]];
@@ -236,6 +239,15 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
     return Number.isFinite(m) ? m : Math.round((KERB + 4.6 * k) * 100) / 100;
   };
   const levels: Level[] = grids.slice(0, nLevels).map((grid, id) => ({id, role: id === 0 ? 'main' : 'office', grid, baseY: baseY(id)}));
+  // (v2, lane INTERIOR) every reader of an upper-storey window span adds its LEVEL's base (the median storey floor) to the sill / head the
+  // planner gave relative to the building's OWN storey floor: re-based here so the opening is cut where the room is (v1 keeps its numbers)
+  if (deep) for (const w of inner.windows) {
+    const fl = w.level > 0 && w.level < nLevels ? floorsOf(plans.buildings[w.building])[w.level] : undefined;
+    if (!fl) continue;
+    const d = fl.y - levels[w.level].baseY;
+    w.sill = Math.round((w.sill + d) * 1000) / 1000;
+    w.head = Math.round((w.head + d) * 1000) / 1000;
+  }
   registerApertures(levels);
   const rails = deriveRails(levels);
   const flights = flightsOf(kit, grids.slice(0, nLevels));

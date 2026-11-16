@@ -55,6 +55,30 @@ export interface BuildingPlan {
   frontage: Side;
   /** The host's own building (the portal), the checkpoint's command tent or the subway headhouse. */
   host?: SurfaceHost | 'tent' | 'headhouse';
+  /** (v2, lane INTERIOR: deepStoreyPlans) A one-storey destination whose interior plan climbs to its walkable roof. */
+  roof?: boolean;
+}
+
+/**
+ * (v2 only, lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01: surfaceFeatures(v).deepInteriors) The destinations'
+ * STOREY PLANS for the deep interiors, after the block plans and their repair (no draws: RNG-neutral): every store with two or more drawn
+ * storeys walks its second one (the first release: 28 % of them); a one-storey INTACT store climbs to its roof instead (`roof`: a damaged
+ * shell's roof line is drawn broken); a one-storey shopping centre gains an upper level (its office suites / upper arcade: 3.9 m);
+ * offices and civic buildings walk min(levels, storeys) as before. The walkable storeys never exceed SURFACE_LEVELS: a roof stands on the
+ * level above its top walkable storey. The host buildings, the depot and the closed shells are untouched.
+ */
+export function deepStoreyPlans(plans: {buildings: BuildingPlan[]}): void {
+  for (const b of plans.buildings) {
+    if (!b.destination || b.host || b.walk <= 0 || b.kind === 'depot') continue;
+    const n = b.storeys.length;
+    if (b.kind === 'store') {
+      if (n >= 2) b.walk = Math.min(SURFACE_LEVELS, 2);
+      else if (b.condition === 'intact' && SURFACE_LEVELS >= 2) b.roof = true;
+    } else if (b.kind === 'centre') {
+      if (n === 1) b.storeys = [...b.storeys, 3.9];
+      b.walk = Math.min(SURFACE_LEVELS, 2);
+    } else if (b.kind === 'office' || b.kind === 'civic') b.walk = Math.min(SURFACE_LEVELS, n);
+  }
 }
 
 /** Kerb / sidewalk height above the carriageway (m). */

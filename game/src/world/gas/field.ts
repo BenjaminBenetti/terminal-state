@@ -111,8 +111,11 @@ export interface GasDomain { x0: number; y0: number; x1: number; y1: number }
 export interface GasFieldOptions {
   /** Covered cells (default: the whole grid). Fields, loops and uploads stay inside it. */
   domain?: GasDomain;
-  /** Extra closed cells (grid column / row): e.g. the elevator shaft. */
-  closed?: (cx: number, cy: number) => boolean;
+  /**
+   * Extra closed cells (grid column / row): e.g. the elevator shaft. `level` = the storey's level id (task
+   * studio-surface-run-field-followup-20261116-211729-01, lane INTERIOR: a district roof's open sky is closed on its own level only).
+   */
+  closed?: (cx: number, cy: number, level: number) => boolean;
 }
 
 /**
@@ -164,7 +167,7 @@ export class StoreyGas {
   /** Changed since the last drainChanged() (render upload). */
   dirty = false;
 
-  constructor(readonly level: number, readonly grid: GasGrid, readonly dw: number, readonly dh: number, readonly ox: number, readonly oy: number, closed?: (cx: number, cy: number) => boolean) {
+  constructor(readonly level: number, readonly grid: GasGrid, readonly dw: number, readonly dh: number, readonly ox: number, readonly oy: number, closed?: (cx: number, cy: number, level: number) => boolean) {
     const n = dw * dh;
     this.c = new Float32Array(n);
     this.next = new Float32Array(n);
@@ -175,7 +178,7 @@ export class StoreyGas {
     for (let y = 1; y < dh - 1; y++) for (let x = 1; x < dw - 1; x++) {
       const cx = x + ox, cy = y + oy;
       if (cx < 0 || cy < 0 || cx >= grid.w || cy >= grid.h) continue;
-      if (grid.cells[cy * grid.w + cx] === SOLID || closed?.(cx, cy)) continue;
+      if (grid.cells[cy * grid.w + cx] === SOLID || closed?.(cx, cy, level)) continue;
       this.open[y * dw + x] = 1;
     }
   }

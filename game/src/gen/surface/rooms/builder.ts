@@ -17,6 +17,7 @@ import type {Area, AreaKind, Door, LightProfile, Rect, RoomType, Side, StationLa
 import type {SurfaceBuilding, SurfaceRecoverable, SurfaceWindowSpan} from '../surfaceTypes';
 import type {InteriorFloor, InteriorPlot, PlannedEntrance} from './api';
 import {resolveProgramme, type SurfaceProgrammeId} from './programmes';
+import {DOGLEG, carveDogLeg, dogLegLength} from './deepCore';
 
 export type LSide = 'F' | 'B' | 'L' | 'R';
 export interface LRect { u: number; v: number; du: number; dv: number }
@@ -81,10 +82,16 @@ export class InteriorBuilder {
   readonly stub: StationLayout;
   /** Highest storey index actually carved (upper storeys need a stair core: see carveCore). */
   carvedStoreys = 1;
+  /**
+   * (v2 only, lane INTERIOR: InteriorPlot.deep) The DEEP plan: a two-storey core is the compact dog-leg (rooms/deepCore.ts) instead of the
+   * first release's straight core — coreLength / coreWidth / carveCore below answer for it. Null on a v1 plot (every method as before).
+   */
+  readonly deep: NonNullable<InteriorPlot['deep']> | null;
   private ctxs = new Map<number, PlaceCtx>();
 
   constructor(plot: InteriorPlot) {
     this.plot = plot;
+    this.deep = plot.deep ?? null;
     this.kit = plot.kit;
     this.rng = plot.rng;
     this.b = plot.building;
@@ -360,12 +367,14 @@ export class InteriorBuilder {
 
   /** Core length (cells along its axis) for the building's storeys. */
   coreLength(n = this.storeys.length): number {
+    if (this.deep && n === 2 && this.storeys.length >= 2) return dogLegLength(this.storeys[0].y, this.storeys[1].y); // (v2: the dog-leg)
     let run = 0;
     for (let k = 0; k + 1 < Math.min(n, this.storeys.length); k++) run = Math.max(run, stairRunCells(this.storeys[k + 1].y - this.storeys[k].y, STAIR));
     return 2 * CORE.landing + run;
   }
   /** Core width (cells across): one lane for two storeys, two lanes + a divider for more. */
   coreWidth(n = this.storeys.length): number {
+    if (this.deep && n === 2) return DOGLEG.width; // (v2: the dog-leg)
     return n > 2 ? 2 * CORE.lane + CORE.divider : CORE.lane;
   }
 
@@ -375,6 +384,8 @@ export class InteriorBuilder {
    * Registers the flights in kit.flights and one LevelLink per storey pair.
    */
   carveCore(L: LRect, along: 'u' | 'v', start: 'lo' | 'hi', n = this.storeys.length): RoomInfo[] {
+    // (v2: the dog-leg — both landings at the `start` end, lane A on the low side of the cross axis)
+    if (this.deep && n === 2) return carveDogLeg(this, L, along, start, this.storeys[1].ceil, `Stairs · ${this.storeys[1].level === this.deep.roof?.level && this.storeys[1].y === this.deep.roof?.y ? 'Roof' : 'Floor 2'}`)?.landings ?? [];
     const landings: RoomInfo[] = [];
     const len = along === 'u' ? L.du : L.dv, wid = along === 'u' ? L.dv : L.du;
     const end = (k: number): 'lo' | 'hi' => ((k % 2 === 0) === (start === 'lo') ? 'lo' : 'hi');

@@ -123,7 +123,7 @@ export function planLights(b: InteriorBuilder): void {
   const rng = b.rng.fork('lights');
   const gutted = b.b.condition === 'gutted' || b.b.condition === 'collapsed';
   for (const ri of b.rooms) {
-    if (ri.role === 'stair-run') continue;
+    if (ri.role === 'stair-run' || ri.role === 'roof') continue; // (v2, lane INTERIOR: a roof is open sky — no ceiling fixtures)
     const a = ri.area, f = b.storeys[ri.storey];
     // the darker mood: public rooms mostly dim, back of house mostly dark, a gutted building dark throughout
     a.lighting = gutted ? 'dark' : ri.front ? (rng.chance(0.72) ? 'dim' : 'dark') : (rng.chance(0.3) ? 'dim' : 'dark');
@@ -198,7 +198,7 @@ function weightedRoom(pool: readonly RoomInfo[], rng: Rng): RoomInfo {
 }
 
 /** A free floor cell of the room: walkable with a clear ring, off its doorways / entrances (2 cells), 3 m from the others. */
-function spawnIn(b: InteriorBuilder, r: RoomInfo, placed: readonly ZombieSpawn[], rng: Rng, doors: readonly Door[]): ZombieSpawn | null {
+export function spawnIn(b: InteriorBuilder, r: RoomInfo, placed: readonly ZombieSpawn[], rng: Rng, doors: readonly Door[]): ZombieSpawn | null {
   const a = r.area, f = b.storeys[r.storey], g = b.kit.grid(f.level);
   const near = (x: number, y: number): boolean => {
     for (const d of doors) if (x >= d.x - 2 && x < d.x + d.w + 2 && y >= d.y - 2 && y < d.y + d.h + 2) return true;

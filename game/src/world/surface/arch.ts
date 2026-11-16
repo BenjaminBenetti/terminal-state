@@ -21,8 +21,7 @@
 // LOOK's own parts and the builder's walls (coarsenSurfaceArch) alike — instead of one per building tint.
 // Field follow-up (task studio-surface-run-field-followup-20261116-211729-01, lane FACADE): the exposed wall stretches no builder face
 // covers (party walls over lower neighbours, the tower's top storeys: archPlan.ts bareRuns), the steps of a collapsed corner's decks,
-// the facade detail (facadeDetail.ts: closed windows, awnings, pilasters / columns, the base course) and a reachable roof's walk kept
-// open (v2 roofAccess: no deck over it, its parapet / bulkhead walls up to their tops, a cap on the bulkhead).
+// and the facade detail (facadeDetail.ts: closed windows, awnings, pilasters / columns, the base course).
 
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -35,6 +34,7 @@ import {drainSync, type BuildSteps} from '../../core/pacedBuild';
 import {GROUND, GROUND_KEYS, LOOK_TUNE, OWNER, SIDE_NORMAL, deckSteps, entranceFloor, sideOfPlane, streetEndSpans, surfaceLookPlan, topAt, type BuildingLook, type SurfaceLookPlan, type TopSeg} from './archPlan';
 import {interiorKeys, surfaceArchMaterial, surfaceArchScale, surfaceOutdoorFacade, surfaceSignMaterial, surfaceTexture, surfaceTintFamily, surfaceTintOf, isSurfaceKey, type SurfaceTexSlot} from './archMaterials';
 import {outdoorFacadeMaterial, outdoorFlatMaterial, type OutdoorFacadeKind} from './lookSky';
+import {buildRoofAccess} from './roofAccessView';
 
 /** (lane FACADE) Key prefix of the outdoor-lit facade accumulators ('surface-outfacade-<kind>': lookSky.ts outdoorFacadeMaterial). */
 export const OUTFACADE = 'surface-outfacade-';
@@ -184,8 +184,6 @@ export function sliceFace<F extends BuiltFace>(f: F, a: number, b: number): F {
 
 /** Hole kind -> its parts' keys (null = none). */
 const ROOM = LOOK_TUNE.room, REVEAL = LOOK_TUNE.reveal;
-/** (lane FACADE) A reachable roof's walk floor (the builder's FLOOR cells up there: field-lit, the lots' weathered concrete). */
-export const ROOF_WALK_KEY = 'surface-lot';
 
 export interface SurfaceArchStats {
   faces: Record<string, number>;
@@ -199,13 +197,13 @@ export interface SurfaceArchStats {
   trimMeshesBefore: number; trimMeshes: number;
   /** (lane FACADE) Exposed wall pieces drawn where no builder face stood (archPlan.ts bareRuns), their area (m²), deck steps closed. */
   bare: number; bareM2: number; steps: number;
-  /** (lane FACADE) Facade detail drawn (facadeDetail.ts): closed windows, awnings, relief strips; roof-walk deck pieces left open. */
-  blinds: number; awnings: number; relief: number; roofWalks: number;
+  /** (lane FACADE) Facade detail drawn (facadeDetail.ts): closed windows, awnings, relief strips. */
+  blinds: number; awnings: number; relief: number;
 }
 
 export class SurfaceArch {
   readonly plan: SurfaceLookPlan;
-  readonly stats: SurfaceArchStats = {faces: {}, holes: 0, airHoles: 0, signs: 0, escapes: 0, decks: 0, meshes: 0, triangles: 0, buildMs: 0, builderMeshesBefore: 0, builderMeshes: 0, builderTinted: 0, trimMeshesBefore: 0, trimMeshes: 0, bare: 0, bareM2: 0, steps: 0, blinds: 0, awnings: 0, relief: 0, roofWalks: 0};
+  readonly stats: SurfaceArchStats = {faces: {}, holes: 0, airHoles: 0, signs: 0, escapes: 0, decks: 0, meshes: 0, triangles: 0, buildMs: 0, builderMeshesBefore: 0, builderMeshes: 0, builderTinted: 0, trimMeshesBefore: 0, trimMeshes: 0, bare: 0, bareM2: 0, steps: 0, blinds: 0, awnings: 0, relief: 0};
   /** The meshes this arch built (QA / tests). */
   readonly meshes: THREE.Mesh[] = [];
   /** The tent's door flap (AIR's open / closed seam: setTentFlap) and its hinge pivot. */
@@ -215,6 +213,8 @@ export class SurfaceArch {
   private readonly levelIdx = new Map<number, number>();
   /** AIR's span cuts by wall plane ('z<cm>' / 'x<cm>'): both planes of each span, with the face normal sign that takes them. */
   private readonly airCuts = new Map<string, (Hole2 & {sign: number})[]>();
+  /** (v2, lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01) A reachable roof's areas -> its building id (roofAccessView.ts). */
+  private readonly roofs = new Map<number, number>();
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): SurfaceArch | null {
     const plan = layout.surface && levels.length ? surfaceLookPlan(layout) : null;
@@ -224,7 +224,6 @@ export class SurfaceArch {
   private constructor(readonly layout: StationLayout, readonly mats: WorldMaterials, readonly levels: readonly Level[], plan: SurfaceLookPlan) {
     this.plan = plan;
     levels.forEach((l, i) => this.levelIdx.set(l.id, i));
-    for (const bl of plan.buildings) if (bl.b.roofAccess && bl.sides.length) this.roofs.push({bl, ra: bl.b.roofAccess});
     for (const sp of plan.spans.values()) {
       const {alongX, n} = SIDE_NORMAL[sp.side];
       const base = layout.levels?.[sp.level]?.baseY ?? 0;
@@ -237,6 +236,7 @@ export class SurfaceArch {
         l.push({...h, sign});
       }
     }
+    for (const b of layout.surface?.buildings ?? []) for (const a of b.roofAccess?.areas ?? []) this.roofs.set(a, b.id);
   }
 
   private count(k: string): void { this.stats.faces[k] = (this.stats.faces[k] ?? 0) + 1; }
@@ -276,19 +276,6 @@ export class SurfaceArch {
     return r;
   }
   private building(id: number): BuildingLook | undefined { return id >= 0 ? this.plan.buildings[id] : undefined; }
-  /** (lane FACADE) The reachable roofs (v2 roofAccess) of the district's buildings. */
-  private readonly roofs: {bl: BuildingLook; ra: NonNullable<BuildingLook['b']['roofAccess']>}[] = [];
-  /** Whether open cell `i` of level `lvl` is a reachable roof's walk (inside its walk rect, at its walk height). */
-  private roofWalk(lvl: Level, i: number): boolean {
-    if (!this.roofs.length) return false;
-    const g = lvl.grid, x = (i % g.w + 0.5) * CELL, z = (Math.floor(i / g.w) + 0.5) * CELL, f = g.floor[i];
-    return this.roofs.some(({ra}) => x > ra.walk.x0 && x < ra.walk.x1 && z > ra.walk.z0 && z < ra.walk.z1 && Math.abs(f - ra.y) < 0.35);
-  }
-  /** (lane FACADE) The roof bulkhead whose footprint holds the SOLID cell at (x, z) above `y` (its walls stand above the parapet). */
-  private bulkheadAt(x: number, z: number, y: number): {bl: BuildingLook; ra: NonNullable<BuildingLook['b']['roofAccess']>} | undefined {
-    for (const r of this.roofs) { const k = r.ra.bulkhead; if (x > k.x0 && x < k.x1 && z > k.z0 && z < k.z1 && y > r.ra.y - 0.35) return r; }
-    return undefined;
-  }
   private isOutdoorArea(a: number): boolean { return this.plan.outdoorAreas.has(a) || (a >= 0 && this.layout.areas[a]?.type === 'street' && !this.plan.areaBuilding.has(a)); }
 
   // --- the builder's finish hooks ------------------------------------------------------------------------------------------------
@@ -298,8 +285,8 @@ export class SurfaceArch {
     const lvl = this.levels[L];
     if (!lvl) return null;
     const a = lvl.grid.area[i];
+    if (this.roofs.has(a)) return 'surface-roof'; // (v2: a reachable roof's walking surface, the outdoor flat look)
     if (this.plan.tentAreas.has(a)) return GROUND_KEYS[GROUND.tent];
-    if (L !== 0 && this.roofWalk(lvl, i)) return ROOF_WALK_KEY;
     const b = this.plan.areaBuilding.get(a);
     if (b !== undefined) return interiorKeys(this.plan.buildings[b].family).floor;
     if (L !== 0) return null;
@@ -308,7 +295,7 @@ export class SurfaceArch {
 
   /** Ceiling key of a run: none outdoors / over the tent (false), the programme's indoors, else the builder's rule. */
   ceilKey(_L: number, areaId: number, i?: number): string | false | null {
-    if (this.isOutdoorArea(areaId) || this.plan.tentAreas.has(areaId)) return false;
+    if (this.isOutdoorArea(areaId) || this.plan.tentAreas.has(areaId) || this.roofs.has(areaId)) return false; // (v2 roof: open sky)
     if (i !== undefined && _L === 0 && this.plan.ground[i] === GROUND.tent) return false;
     const b = this.plan.areaBuilding.get(areaId);
     return b !== undefined ? interiorKeys(this.plan.buildings[b].family).ceil : null;
@@ -323,7 +310,7 @@ export class SurfaceArch {
 
   /** Door frame trim: the building's trim colour. */
   doorTrimKey(_level: number, a: Area | undefined): string | null {
-    const id = a ? this.plan.areaBuilding.get(a.id) : undefined;
+    const id = a ? this.plan.areaBuilding.get(a.id) ?? this.roofs.get(a.id) : undefined;
     return id !== undefined ? this.plan.buildings[id].trimKey : 'surface-trim-2f3133';
   }
 
@@ -372,6 +359,9 @@ export class SurfaceArch {
       const ci = (x: number, z: number) => { const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL); return cx < 0 || cz < 0 || cx >= W || cz >= P.H ? -1 : cz * W + cx; };
       const bi = ci(bx, bz), fi = ci(fx, fz);
       const own = bi >= 0 ? P.owner[bi] : OWNER.cordon;
+      // (v2, lane INTERIOR) a reachable roof's cell faces drop: against the parapet ring stands LOOK's parapet inner face, against the
+      // stair bulkhead its level-0 walls (roofAccessView.ts: seen from the street like the facade they stand on)
+      if (this.roofs.has(f.area)) continue;
       // the floor in front of the face: low walls (cordon, tent canvas, debris) cap at base + their height (the builder splits a
       // tall face into bands, so a band's own y0 is not the floor)
       const lv = this.levels.find(l => l.id === f.level) ?? this.levels[0];
@@ -379,16 +369,6 @@ export class SurfaceArch {
       const air = this.airCuts.get(`${alongX ? 'z' : 'x'}${Math.round(plane * 100)}`)?.filter(c => c.sign === sign) ?? [];
       const inside = P.areaBuilding.get(f.area);
       const doorway = fi >= 0 && P.doorCells.has(fi);
-      // (lane FACADE) a reachable roof's walls seen from its walk (v2 roofAccess): the parapet's inner face up to the roof line, the
-      // bulkhead's walls up to its cap — the building's facade finish, never the interior's, never a band higher than the walls
-      if (fi >= 0 && lv !== this.levels[0] && this.roofWalk(lv, fi)) {
-        const bh = this.bulkheadAt(bx, bz, f.y0), rb = bh ?? this.roofs.find(r => r.bl.id === own) ?? this.roofs.find(r => fx > r.ra.walk.x0 && fx < r.ra.walk.x1 && fz > r.ra.walk.z0 && fz < r.ra.walk.z1);
-        if (rb) {
-          this.count(rb.bl.key);
-          for (const p of cutFace({...f, finish: rb.bl.key}, air, null, bh ? bh.ra.y + bh.ra.bulkhead.h : rb.bl.top)) out.push(p);
-          continue;
-        }
-      }
       if (P.tentAreas.has(f.area) && !doorway) {
         // the tent's canvas walls, seen from inside, up to the eave (the pitched roof above is the tent build's)
         this.count('surface-canvas');
@@ -608,9 +588,6 @@ export class SurfaceArch {
       }
       // roof line parts: cornice (intact runs at the nominal top), string courses, the coping, the parapet's inner face, the ruin steps
       const t = LOOK_TUNE.parapetT;
-      // (lane FACADE) a reachable roof's coping caps the whole parapet, out to its walk (the builder draws no top on the SOLID ring)
-      const walk = bl.b.roofAccess?.walk;
-      const tc = walk ? Math.min(2, Math.max(t, alongX ? (n < 0 ? walk.z0 - plane : plane - walk.z1) : (n < 0 ? walk.x0 - plane : plane - walk.x1))) : t;
       for (const seg of sd.tops) {
         const intact = Math.abs(seg.top - bl.top) < 1e-3;
         if (intact && st.cornice.h > 0) box(trim, seg.s0, seg.s1, 0, st.cornice.out, seg.top - st.cornice.h - 0.08, seg.top - 0.08);
@@ -619,7 +596,7 @@ export class SurfaceArch {
         // coping (cap of the wall thickness) and the inner face of the parapet above the deck
         const yTop = seg.top, deckY = Math.min(...bl.decks.map(d => d.y), bl.deck);
         const qc = Q('surface-coping', (seg.s0 + seg.s1) / 2);
-        const c0 = pt(seg.s0, 0.04, yTop), c1 = pt(seg.s1, 0.04, yTop), c2 = pt(seg.s1, -tc, yTop), c3 = pt(seg.s0, -tc, yTop);
+        const c0 = pt(seg.s0, 0.04, yTop), c1 = pt(seg.s1, 0.04, yTop), c2 = pt(seg.s1, -t, yTop), c3 = pt(seg.s0, -t, yTop);
         qc.quadFacing([c0, c1, c2, c3], [0, 1, 0], [0, 1, 0], [[0, 0], [1, 0], [1, 1], [0, 1]]);
         if (yTop > deckY + 0.05) face('surface-coping', seg.s0, seg.s1, deckY, yTop, -t, {u: 1, v: 1}, -1);
       }
@@ -680,24 +657,17 @@ export class SurfaceArch {
         }
       }
     }
-    // roof decks (the outdoor flat look: SOLID columns have no light-field slot). (lane FACADE) A reachable roof (v2 roofAccess) keeps
-    // its walk open: its FLOOR cells are the builder's (floorKey below), so no deck caps / z-fights over the walk; its bulkhead gets a cap
+    // (v2, lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01) a reachable roof: the builder draws its walking
+    // surface; the deck's rim, the stair bulkhead and the roof door's frame are roofAccessView.ts's
     const ra = bl.b.roofAccess;
-    for (const d0 of bl.decks) {
-      if (d0.x1 - d0.x0 < 0.2 || d0.z1 - d0.z0 < 0.2) continue;
+    if (ra && bl.decks.length === 1) { this.stats.decks++; buildRoofAccess(bl, ra, bl.decks[0], A); return; }
+    // roof decks (the outdoor flat look: SOLID columns have no light-field slot)
+    for (const d of bl.decks) {
+      if (d.x1 - d.x0 < 0.2 || d.z1 - d.z0 < 0.2) continue;
       this.stats.decks++;
-      const pieces = ra ? rectMinus(d0, ra.walk) : [d0];
-      if (ra) this.stats.roofWalks++;
-      for (const d of pieces) for (const [xa, xb] of spans(d.x0, d.x1)) for (const [za, zb] of spans(d.z0, d.z1)) {
-        A(d0.burnt ? 'surface-coping' : 'surface-roof', (xa + xb) / 2, (za + zb) / 2)
-          .quad([[xa, d0.y, za], [xa, d0.y, zb], [xb, d0.y, zb], [xb, d0.y, za]], [0, 1, 0], [[xa / 2, -za / 2], [xa / 2, -zb / 2], [xb / 2, -zb / 2], [xb / 2, -za / 2]]);
-      }
-    }
-    if (ra && ra.bulkhead.h > 0) {
-      const k = ra.bulkhead, y = ra.y + k.h;
-      for (const [xa, xb] of spans(k.x0, k.x1)) for (const [za, zb] of spans(k.z0, k.z1)) {
-        A('surface-roof', (xa + xb) / 2, (za + zb) / 2)
-          .quad([[xa, y, za], [xa, y, zb], [xb, y, zb], [xb, y, za]], [0, 1, 0], [[xa / 2, -za / 2], [xa / 2, -zb / 2], [xb / 2, -zb / 2], [xb / 2, -za / 2]]);
+      for (const [xa, xb] of spans(d.x0, d.x1)) for (const [za, zb] of spans(d.z0, d.z1)) {
+        A(d.burnt ? 'surface-coping' : 'surface-roof', (xa + xb) / 2, (za + zb) / 2)
+          .quad([[xa, d.y, za], [xa, d.y, zb], [xb, d.y, zb], [xb, d.y, za]], [0, 1, 0], [[xa / 2, -za / 2], [xa / 2, -zb / 2], [xb / 2, -zb / 2], [xb / 2, -za / 2]]);
       }
     }
   }
@@ -1036,19 +1006,6 @@ const IDENTITY = new THREE.Matrix4();
 function spans(a: number, b: number): [number, number][] {
   const out: [number, number][] = [];
   while (a < b - 1e-6) { const e = Math.min(b, (Math.floor(a / FACADE_CHUNK + 1e-9) + 1) * FACADE_CHUNK); out.push([a, e]); a = e; }
-  return out;
-}
-
-/** (lane FACADE) Rect `a` minus rect `b` (x / z): up to four rects (a whole when they do not overlap). */
-export function rectMinus<R extends {x0: number; x1: number; z0: number; z1: number}>(a: R, b: {x0: number; x1: number; z0: number; z1: number}): R[] {
-  const x0 = Math.max(a.x0, b.x0), x1 = Math.min(a.x1, b.x1), z0 = Math.max(a.z0, b.z0), z1 = Math.min(a.z1, b.z1);
-  if (x1 <= x0 + 1e-6 || z1 <= z0 + 1e-6) return [a];
-  const out: R[] = [];
-  const add = (p: Partial<R>) => { const r = {...a, ...p}; if (r.x1 - r.x0 > 1e-6 && r.z1 - r.z0 > 1e-6) out.push(r); };
-  add({z1: z0} as Partial<R>);
-  add({z0: z1} as Partial<R>);
-  add({x1: x0, z0, z1} as Partial<R>);
-  add({x0: x1, z0, z1} as Partial<R>);
   return out;
 }
 

@@ -161,8 +161,17 @@ export function refHolds(s: SurfaceInfo, ref: MapRef, x: number, z: number): boo
     case 'block': { const bl = s.blocks.find(q => q.id === ref.id); return !!bl && inRect(bl.rect, x, z); }
     case 'checkpoint': return inRect(s.checkpoint.rect, x, z, 1);
     case 'portal': return Math.hypot(x - s.portal.pose.x, z - s.portal.pose.z) < 0.01;
-    case 'truck': case 'player': return inRect(s.extent, x, z, 2);
+    case 'truck': case 'player': return inRect(markerBounds(s), x, z, 2);
   }
+}
+
+/**
+ * Where the live truck / player markers are shown: the playable extent, or (a v2 district: task studio-surface-run-field-followup-
+ * 20261116-211729-01) out to the fog-pressure boundary's walkable edge — a truck broken down in the outer fog stays on the map.
+ */
+export function markerBounds(s: SurfaceInfo): SRect {
+  const e = s.boundary?.edge;
+  return e ? {x0: Math.min(e.x0, s.extent.x0), z0: Math.min(e.z0, s.extent.z0), x1: Math.max(e.x1, s.extent.x1), z1: Math.max(e.z1, s.extent.z1)} : s.extent;
 }
 
 /** Printed name of a depot recoverable / train unit kind (craft/equipment.ts: an equipment kind or an upgrade id -> its kit), lower case. */
@@ -262,7 +271,7 @@ export function buildPlanningMap(s: SurfaceInfo, st: MapState): PlanningMap {
     markers.push({id: `r${k}`, kind: 'report', x: r.x, z: r.z, label: r.text, symbol: TONE_SYMBOL[r.kind] ?? 'info', grid: ref(r.x, r.z), ref: at, tone: r.kind});
   });
   // the live truck and the player
-  const inside = (p: MapPose | null | undefined): p is MapPose => !!p && Number.isFinite(p.x) && Number.isFinite(p.z) && inRect(s.extent, p.x, p.z, 2);
+  const inside = (p: MapPose | null | undefined): p is MapPose => !!p && Number.isFinite(p.x) && Number.isFinite(p.z) && inRect(markerBounds(s), p.x, p.z, 2);
   if (inside(st.truck)) markers.push({id: 'truck', kind: 'truck', x: st.truck.x, z: st.truck.z, yaw: st.truck.yaw, label: 'Truck', symbol: 'truck', grid: ref(st.truck.x, st.truck.z), ref: {type: 'truck'}});
   if (inside(st.player)) markers.push({id: 'player', kind: 'player', x: st.player.x, z: st.player.z, yaw: st.player.yaw, label: 'You', symbol: 'player', grid: ref(st.player.x, st.player.z), ref: {type: 'player'}});
 
