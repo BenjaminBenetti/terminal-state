@@ -40,7 +40,7 @@ const KIT = 'armor-kit' as const;
 /** A generated station with the train, the ride, the equipment, the armour (Game.trainUpgrades) and the district cargo's kit use. */
 function world(o: {aboard?: ReturnType<typeof aboardRec>[]; platform?: [number, number][]} = {}) {
   const s = equipStation(SUBWAY(), {build: false});
-  const {h, eq, rt} = s;
+  const {h, rt} = s;
   Object.assign(h, {blastKill: () => {}, fx: {impact: () => {}}});
   const armor = new TrainArmorSystem(h as never, {model: () => null, refreshIcons: () => {}, rendererReady: () => true}).install();
   Object.assign(h, {trainUpgrades: armor});
