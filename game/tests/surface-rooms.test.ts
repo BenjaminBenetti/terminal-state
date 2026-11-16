@@ -20,8 +20,11 @@ import {BUNKER_MODEL_KINDS, BUNKER_OBJECTIVE_KINDS} from '../src/gen/bunker/bunk
 import {CORPSE_DEN_KINDS} from '../src/gen/market/v4/denKinds';
 import {createHolderState, isContainerKind, isLootHolderKind, type HolderKind} from '../src/items/loot';
 import {holderSurfaces} from '../src/items/lootLayout';
-import {HOLDER_SLOTS, econCat, type EconCat} from '../src/items/lootTables';
+import {HOLDER_SLOTS, econCat, type EconCat, type LootSpec} from '../src/items/lootTables';
+import {purposeById, type RoomPurpose} from '../src/gen/purposes';
 import {SURFACE_PROGRAMME_IDS, resolveProgramme} from '../src/gen/surface/rooms/programmes';
+import {SURFACE_LOOT_KEY} from '../src/gen/surface/rooms/lootPurposes';
+import {surfaceLootKey} from '../src/gen/surface/rooms/lootKeys';
 import type {InteriorPlan} from '../src/gen/surface/rooms/api';
 import {areaCells, makePlot, planFixture, programmeCases, reach, type Fixture} from './helpers/surfaceRoomsFixture';
 
@@ -241,7 +244,14 @@ describe('Surface Run interiors: props, holders, enemies, finds, lights, windows
       for (const c of cases(programme)) { const m = cats(c, p => pred(p, c)); n += m.get(cat) ?? 0; all += total(m); }
       return all ? n / all : 0;
     };
-    const workshop = (p: PropPlacement, c: Case) => (p.purpose ?? c.f.kit.areas[p.area].purpose) === 'workshop';
+    const workshop = (p: PropPlacement, c: Case) => (p.purpose ?? c.f.kit.areas[p.area].purpose) === SURFACE_LOOT_KEY.workshop;
+    // follow-up 1 (lead): no holder of a district building rolls a station back-of-house table (their ammo-cache rows): each carries the
+    // Surface Run key that fits its building (gen/surface/rooms/lootKeys.ts)
+    for (const c of ALL()) for (const p of c.plan.props) {
+      if (!isLootHolderKind(p.kind)) continue;
+      const a = c.f.kit.areas[p.area];
+      expect(surfaceLootKey(c.f.plot.building.programme, p.purpose ?? a.purpose ?? a.type), `${c.tag}: ${p.kind} keeps a station key`).toBeNull();
+    }
     expect(share('pharmacy', 'med'), 'pharmacy medicine').toBeGreaterThan(0.35);
     expect(share('clinic', 'med'), 'clinic medicine').toBeGreaterThan(0.35);
     for (const p of ['grocery', 'convenience', 'diner', 'cafe']) expect(share(p, 'food') + share(p, 'drink'), `${p}: food & drink`).toBeGreaterThan(0.45);
@@ -263,7 +273,28 @@ describe('Surface Run interiors: props, holders, enemies, finds, lights, windows
       expect(share(programme, 'ammo'), `${programme}: ammo share`).toBeLessThan(Math.min(0.35, share('gunstore', 'ammo') / 2));
     }
     expect(share('gunstore', 'ammo'), 'the gun store is the ammo shop').toBeGreaterThan(0.5);
+    // follow-up 1 (lead): a rail depot / fire station is no ammo cache (≲ 10-15 % of its finds), and the depot is the parts place
+    for (const p of ['rail-depot', 'fire-station']) expect(share(p, 'ammo'), `${p}: ammo share`).toBeLessThan(0.15);
+    expect(share('rail-depot', 'material'), 'depot salvage').toBeGreaterThan(0.3);
   }, 120_000);
+
+  it('the Surface Run back-of-house loot keys are preset-only purposes whose tables fit them (no ammo but the police duty office)', () => {
+    for (const id of Object.values(SURFACE_LOOT_KEY)) {
+      const p = purposeById(id) as RoomPurpose | undefined;
+      expect(p, id).toBeDefined();
+      expect([p!.weight, p!.max], `${id}: never drawn by the station dresser`).toEqual([0, 0]);
+      const rows = Object.values(p!.loot as Record<string, LootSpec>).flatMap(s => s.items);
+      expect(rows.length, id).toBeGreaterThan(0);
+      const ammo = rows.filter(([item]) => econCat(item) === 'ammo');
+      if (id === SURFACE_LOOT_KEY.policeOffice) expect(ammo.length, id).toBeGreaterThan(0); else expect(ammo, `${id}: ammo rows`).toEqual([]);
+    }
+    // the remap: the station back-of-house keys only, by programme (the fire station's own workshop / hose store)
+    expect(surfaceLootKey('rail-depot', 'workshop')).toBe(SURFACE_LOOT_KEY.workshop);
+    expect(surfaceLootKey('fire-station', 'workshop')).toBe(SURFACE_LOOT_KEY.fireWorkshop);
+    expect(surfaceLootKey('fire-station', 'storage')).toBe(SURFACE_LOOT_KEY.fireStore);
+    expect(surfaceLootKey('police', 'security-office')).toBe(SURFACE_LOOT_KEY.policeOffice);
+    for (const keep of ['mall-security', 'mall-guns-back', 'office-security', 'staff-room', 'mall-food-back']) expect(surfaceLootKey('police', keep), keep).toBeNull();
+  });
 
   it('interior enemies and loose finds stand on free floor of the plan, off doorways and stairs', () => {
     for (const {f, plan, tag} of ALL()) {

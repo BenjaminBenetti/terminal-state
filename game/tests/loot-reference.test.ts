@@ -255,7 +255,8 @@ describe('loot reference: coverage (unknown registrations fail)', () => {
     expect(sub.filter(f => f.stage === 'kept').map(f => [f.itemId, f.copies, f.chance])).toEqual(SUBWAY_FLOOR.kept.map(k => [k.itemId, k.n, k.keep]));
     expect(sub.filter(f => f.stage === 'light').map(f => [f.itemId, f.chance])).toEqual(SUBWAY_FLOOR.light.map(c => [c.itemId, c.chance]));
     const off = level('office').floor;
-    expect(off.variants.map(v => v.id)).toEqual(['street', ...Object.keys(OFFICE_FLOOR.tilt).map(t => `tower:${t}`), 'annex']);
+    // (task studio-surface-run-opus-rebuild-20261116-020827-01, lane ROOMS: + the Surface Run district's variants, the Office being a host)
+    expect(off.variants.map(v => v.id)).toEqual(['street', ...Object.keys(OFFICE_FLOOR.tilt).map(t => `tower:${t}`), 'annex', 'surface-interior', 'surface-checkpoint']);
     for (const c of Object.values(COMPANIES)) expect(Object.keys(OFFICE_FLOOR.tilt), `company tilt ${c.loot}`).toContain(c.loot);
     // Track 2 (lane CONTENT): every annex-bearing level shows the per-annex program (items/lootTables.ts ANNEX_FLOOR) as its 'annex'
     // variant, outside the exact per-level totals
@@ -546,9 +547,10 @@ describe('loot reference: probability maths and override / empty-table paths', (
 
   it('an override that zeroes every category gives empty tables: nothing drawn anywhere, still well-formed', () => {
     // (round 2, lane CACHE: + the gas-mask filter canister of the annex survivor caches' kit — a supply item with no economy category,
-    // so its item weight is the dial that zeroes it)
+    // so its item weight is the dial that zeroes it; task studio-surface-run-opus-rebuild-20261116-020827-01, lane ROOMS: + the spare gas
+    // mask of the Surface Run checkpoint's military supply crate, likewise without a category, now that the census samples the district)
     const nothing: LootProfile = {id: 'nothing', label: 'Nothing (test only)', tables: BASE_TABLES,
-      overrides: {categoryWeight: {food: 0, drink: 0, med: 0, ammo: 0, battery: 0, flare: 0, material: 0}, itemWeight: {gas_filter: 0}}}; // + material: lane RACK (office-props-physics-scale-20261030)
+      overrides: {categoryWeight: {food: 0, drink: 0, med: 0, ammo: 0, battery: 0, flare: 0, material: 0}, itemWeight: {gas_filter: 0, gas_mask: 0}}}; // + material: lane RACK (office-props-physics-scale-20261030)
     const r = buildLootReference({profileFor: () => nothing, censusSeeds: [11]});
     for (const l of r.levels) for (const h of l.holders) {
       if (!h.expected) continue;

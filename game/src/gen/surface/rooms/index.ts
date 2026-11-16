@@ -20,6 +20,7 @@ import {planCivic} from './civic';
 import {planDepot} from './depot';
 import {deskDecor, finishProps} from './dress';
 import {planEnemies, planEntrances, planLights, planLoose, planWindows} from './finish';
+import {assignLootKeys} from './lootKeys';
 import {planOffice} from './office';
 import {surfaceProgramme} from './programmes';
 import {planStore} from './stores';
@@ -42,6 +43,7 @@ export function planInterior(plot: InteriorPlot): InteriorPlan {
   if (!b.rooms.length) plainRoom(b);
   deskDecor(b);
   finishProps(b);
+  assignLootKeys(b); // the back of house's loot keys (rooms/lootKeys.ts): no station ammo-cache rows in a depot / fire station / shop
   planWindows(b);
   planLights(b);
   planEnemies(b);

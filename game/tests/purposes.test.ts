@@ -322,7 +322,8 @@ describe('purposes in generated levels', () => {
     // task reactor-expansion-20261101 (lane BUNKER): nor do the Reactor side complexes' own purposes ('reactor-*', preset; weight 0).
     // task studio-skyways-level-20261106-054448 (lane FOOD): nor the Skyways ramen restaurant's ('skyways-*', preset; weight 0).
     // task studio-base-salvage-20261108-073314-01: nor the Survivor Market workshop storage's prop-level loot key ('market-workshop'; weight 0).
-    expect(seenBack.size).toBe(Object.values(ROOM_PURPOSES).filter(p => (!p.requires || p.requires.some(isP7Kind)) && !p.id.startsWith('office-') && !p.id.startsWith('mall-') && !p.id.startsWith('annex-') && !p.id.startsWith('reactor-') && !p.id.startsWith('skyways-') && !p.id.startsWith('market-')).length - 2);
+    // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ROOMS): nor the Surface Run buildings' prop-level back-of-house loot keys ('surface-*', preset; weight 0).
+    expect(seenBack.size).toBe(Object.values(ROOM_PURPOSES).filter(p => (!p.requires || p.requires.some(isP7Kind)) && !p.id.startsWith('office-') && !p.id.startsWith('mall-') && !p.id.startsWith('annex-') && !p.id.startsWith('reactor-') && !p.id.startsWith('skyways-') && !p.id.startsWith('market-') && !p.id.startsWith('surface-')).length - 2);
   });
 
   it('coolers / display cases: loot sits on the measured open-front shelves (Lane A), never in front of the glass', () => {

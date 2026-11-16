@@ -19,7 +19,7 @@ import {CELL} from '../../grid';
 import {PROP_DEFS, type PropPlacement} from '../../props';
 import {stockVariant} from '../../purposeShapes';
 import type {Side} from '../../stationTypes';
-import type {SurfaceRecoverable} from '../surfaceTypes';
+import type {SurfaceDepotFeatures, SurfaceRecoverable} from '../surfaceTypes';
 import type {EntranceInfo, InteriorBuilder, LRect, RoomInfo} from './builder';
 import {along, anyWall, backOffice, copyRoom, crewRoom, lockerRoom, mountAbove, privateOffice, stockRoom, washroom, wallRow} from './dress';
 
@@ -27,21 +27,12 @@ const r3 = (v: number) => Math.round(v * 1000) / 1000;
 export const DEPOT_RECOVERABLES = ['radar', 'sentry', 'scanner', 'chest', 'armor'] as const;
 /** Dolly lane half-width (cells: the lane is 2 * HALF + 1 cells = 3.5 m) and a recoverable's clear square (cells). */
 export const DEPOT_LANE = {half: 3, square: 4} as const;
+/** The inspection pit's width across the track (m): between the rails (standard gauge 1.435 m). */
+export const DEPOT_PIT_WIDTH = 1.0;
 
-export interface DepotFeatures {
-  /** The maintenance shed (area id). */
-  shed: number;
-  /** Rail tracks: centre line (world m) from the roller-door wall to the back wall; standard gauge. */
-  tracks: {x0: number; z0: number; x1: number; z1: number; gauge: number}[];
-  /** Inspection pits (world rect between the rails of the first track; grated, walkable). */
-  pits: {x0: number; z0: number; x1: number; z1: number; depth: number}[];
-  /** Overhead travelling crane: the runway's box (world m), bridge span, rail height (abs), bridge position (0..1 along `axis`), hook height. */
-  crane: {x0: number; z0: number; x1: number; z1: number; span: number; y: number; at: number; hookY: number; axis: 'x' | 'z'} | null;
-  /** The dolly lanes (level-0 grid indices): the track corridor and the loading-door lane. */
-  lane: number[];
-  /** The loading-bay entrance id when there is one (the truck's door), else the roller door's. */
-  exit: string | null;
-}
+/** InteriorPlan.features.depot: the shed's working gear (the shape is surfaceTypes.ts SurfaceDepotFeatures; GEN copies it onto
+ *  layout.surface.depot.features for LOOK). */
+export type DepotFeatures = SurfaceDepotFeatures;
 
 export function planDepot(b: InteriorBuilder): void {
   const {W, D} = b;
@@ -254,7 +245,9 @@ function depotGeometry(b: InteriorBuilder, shed: RoomInfo, tracks: number[]): Pi
     return {x0: r3(p.x), z0: r3(p.z), x1: r3(q.x), z1: r3(q.z)};
   };
   const tr = tracks.map(c => ({...line(c, 0, b.D), gauge: 1.435}));
-  const c = tracks[0], p = b.world(c - 1, 8), q = b.world(c + 2, Math.max(12, b.D - 8));
+  // the pit: 1.0 m across, centred on the first track's centre line (cell c's centre, u = c + 0.5), so it sits BETWEEN the rails (gauge
+  // 1.435 m); grated and walkable like the floor round it (no grid / collider change: the track corridor's cells stay free)
+  const c = tracks[0], p = b.world(c + 0.5 - DEPOT_PIT_WIDTH / CELL / 2, 8), q = b.world(c + 0.5 + DEPOT_PIT_WIDTH / CELL / 2, Math.max(12, b.D - 8));
   const pit = {x0: r3(Math.min(p.x, q.x)), z0: r3(Math.min(p.z, q.z)), x1: r3(Math.max(p.x, q.x)), z1: r3(Math.max(p.z, q.z)), depth: 1.4};
   const runway: 'x' | 'z' = b.front === 'N' || b.front === 'S' ? 'z' : 'x';
   const sx0 = a.x * CELL, sz0 = a.y * CELL, sx1 = (a.x + a.w) * CELL, sz1 = (a.y + a.h) * CELL;
