@@ -22,6 +22,7 @@
 import type {SRect, SurfaceBuildingKind, SurfaceInfo, SurfaceNote} from '../../gen/surface/surfaceTypes';
 import {EQUIPMENT, recoverableKind} from '../../craft/equipment';
 import {isSet, type ExploreGrid} from './mapExplore';
+import {depotRecoverables} from './cargoSeed'; // (lane FIXES: the one train upgrade a depot is seeded with)
 
 export type MapTone = SurfaceNote['kind'];
 
@@ -244,10 +245,13 @@ export function buildPlanningMap(s: SurfaceInfo, st: MapState): PlanningMap {
       if (broken > 0) reports.push({x: c.x, z: c.z, text: `Broken windows (${broken}) — gas gets in`, kind: 'hazard', source: 'life', key: 'windows'});
     }
   }
-  if (!replaced.has('recoverables') && s.depot.recoverables.length) {
+  // (task studio-surface-run-field-followup-20261116-211729-01, lane FIXES: the depot reports the ONE train upgrade a first entry seeds —
+  // a live cargo source, which knows a depot seeded before that rule, replaces this)
+  const held = depotRecoverables(s, false);
+  if (!replaced.has('recoverables') && held.length) {
     const d = s.buildings.find(b => b.id === s.depot.building);
     if (d) {
-      const names = [...new Set(s.depot.recoverables.map(r => recoverableName(r.kind)))];
+      const names = [...new Set(held.map(r => recoverableName(r.kind)))];
       const c = centre(d.footprint);
       reports.push({x: c.x, z: c.z, text: `Train units reported: ${names.join(', ')}`, kind: 'supply', source: 'life', key: 'recoverables'});
     }

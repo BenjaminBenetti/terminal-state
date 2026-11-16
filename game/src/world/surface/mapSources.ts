@@ -11,8 +11,8 @@
 
 import type {StationLayout} from '../../gen/stationTypes';
 import type {SRect, SurfaceInfo} from '../../gen/surface/surfaceTypes';
-import {recoverableKind} from '../../craft/equipment';
 import {recoverableName, vehiclePoseOf, type MapReportInput, type VehicleLike} from './mapModel';
+import {depotRecoverables} from './cargoSeed'; // (lane FIXES)
 import {surfaceMapSources, type MapReportContext, type SurfaceMapReportSource} from './mapRuntime';
 import {SURFACE_CARGO_LANE, surfaceCargoOf} from './cargoStore';
 import {surfaceAirRuntime, type SurfaceAirRuntime} from './air';
@@ -31,6 +31,11 @@ export interface CargoUnitView { kind: string; mode: string; owner: string; x: n
 export interface CargoView {
   /** The depot recoverables were seeded into this district (lane 'surface.cargo' `seeded`). */
   seeded: boolean;
+  /**
+   * (task studio-surface-run-field-followup-20261116-211729-01, lane FIXES) The recoverables' indices the depot was seeded with under the
+   * one-upgrade rule (the record's `depot`); absent / null on a depot seeded before it (it got the whole collection).
+   */
+  depot?: readonly number[] | null;
   /** Every live unit of the district world (null: no live equipment world here). */
   units: readonly CargoUnitView[] | null;
   /** Kinds of the units secured on the truck (the live mounts, else the district record). */
@@ -42,7 +47,7 @@ export interface CargoView {
 /** The cargo reports: the depot (key 'recoverables') and the truck's secured units (key 'truck-cargo'). */
 export function cargoReports(s: SurfaceInfo, v: CargoView): MapReportInput[] {
   const out: MapReportInput[] = [];
-  const reported = s.depot.recoverables.filter(r => recoverableKind(r.kind));
+  const reported = depotRecoverables(s, v.seeded, v.depot); // (lane FIXES: what this depot holds — one upgrade, or a legacy whole set)
   const depot = s.buildings.find(b => b.id === s.depot.building);
   if (depot && reported.length) {
     const c = centre(depot.footprint), n = reported.length;
@@ -115,7 +120,7 @@ export function cargoViewOf(h: MapSourceHost): CargoView | null {
   const eq = h.trainEquipment, units = eq?.worldLive ? eq.all() : null;
   const secured = units ? units.filter(u => u.owner === 'mount').map(u => u.kind) : (rec.secured ?? []).map(m => m.unit.kind);
   const t = vehiclePoseOf(h.skywaysCar); // (lane TRUCK's truck: its transform)
-  return {seeded: rec.seeded === 1, units, secured, truck: t ? {x: t.x, z: t.z} : null};
+  return {seeded: rec.seeded === 1, depot: rec.depot ?? null, units, secured, truck: t ? {x: t.x, z: t.z} : null};
 }
 
 /** The live openings of the district (null while AIR has no built district world for this layout). */
