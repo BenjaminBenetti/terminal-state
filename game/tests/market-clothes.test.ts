@@ -31,7 +31,9 @@ async function loadStripped(rel: string): Promise<GLTF> {
 
 const SEEDS = [1, 42, 77, 4242, 9001];
 const layouts = new Map<number, StationLayout>();
-const L = (seed: number) => { let x = layouts.get(seed); if (!x) layouts.set(seed, (x = generateMarketLevel({levelSeed: seed}))); return x; };
+// (the settlement's laundry: pinned to layout version 4, the default these were written against — version 5's crevice laundry is
+//  tests/market-crevice-view.test.ts)
+const L = (seed: number) => { let x = layouts.get(seed); if (!x) layouts.set(seed, (x = generateMarketLevel({levelSeed: seed, layoutVersion: 4}))); return x; };
 let gltf: GLTF;
 let dims: GarmentDims[];
 beforeAll(async () => {
@@ -197,7 +199,7 @@ describe('market laundry: the build', () => {
   });
 
   it('layout version 3 (the settlement + the bar) hangs laundry too; no cast loaded: bare lines, no laundry (never squares)', () => {
-    const lay = generateMarketLevel({levelSeed: 42}); // (a fresh copy: marked version 3 below)
+    const lay = generateMarketLevel({levelSeed: 42, layoutVersion: 4}); // (a fresh copy: marked version 3 below)
     lay.market!.v = 3;
     const v3 = buildMarketView(lay, {garments: gltf})!;
     expect(v3.lines).toBeGreaterThan(0);

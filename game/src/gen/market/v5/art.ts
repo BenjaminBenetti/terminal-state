@@ -40,9 +40,10 @@ export const CREV_ART = {
   shutter: {h: 0.24, proud: 0.24, over: 0.12},
   awning: {depth: 0.95, drop: 0.28, wall: 2.68, over: 0.22},
   /** Lines: clearance over any walk, sag, end heights over the terrace edge (across) / the railing (along), the along-line's offset out
-   *  over the drop, the spacing down the chasm, the gap kept from a bridge deck's band, the laundry lines (across first, then all) —
-   *  bounded: the hung garments are real models (~6k triangles each; versions 2-4 hang 8-18). */
-  line: {clear: 2.3, sag: [0.18, 0.38] as const, cross: [2.45, 2.75] as const, terrace: 1.15, out: 0.35, step: 2.7, bridgeGap: 1.25, laundry: [2, 4] as const, laundryRun: 11.5},
+   *  over the drop, the spacing down the chasm, the gap kept from a bridge deck's band, the laundry lines (across first, then all) and
+   *  the market's garment budget (world/marketClothes.ts planLaundry `max`) — bounded: the hung garments are real models (~6k triangles
+   *  each; versions 2-4 hang up to ~18). */
+  line: {clear: 2.3, sag: [0.18, 0.38] as const, cross: [2.45, 2.75] as const, terrace: 1.15, out: 0.35, step: 2.7, bridgeGap: 1.25, laundry: [1, 3] as const, laundryRun: 11.5, garments: 18},
   fan: {r: 0.62, hubDrop: 0.32, spin: [0.9, 1.4] as const, minArea: 20},
 } as const;
 
