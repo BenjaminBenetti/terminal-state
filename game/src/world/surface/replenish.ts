@@ -368,6 +368,8 @@ export class OutdoorReplenisher<A extends ReplenishActor> {
       alive: this.live.length, corpses: this.dead.length, cap: REPLENISH.cap, corpseHard: REPLENISH.corpseHard, counts: {...this.counts, rejected: {...this.counts.rejected}},
       nearest: this.live.map(t => Math.round(Math.hypot(t.actor.brain.x - v.x, t.actor.brain.z - v.z))).sort((a, b) => a - b).slice(0, 6),
       pool: this.pool.filter(([, w]) => w > 0).map(([f, w]) => `${f} ${w}`),
+      // (GEN's spawn zones in use; `anywhereOutdoors` = the layout listed none, so any standable outdoor cell qualifies)
+      zones: this.rules.zones.length, anywhereOutdoors: this.rules.zones.length === 0, safe: !!this.rules.safe,
     };
   }
 }

@@ -139,7 +139,10 @@ describe('Surface Run outdoor replenisher: a long simulated run', () => {
     expect(world.length).toBe(rep.alive + rep.corpses);
     // every spawn, checked independently
     const rules = outdoorRulesOf(s);
+    expect(rules.zones.length).toBeGreaterThan(0); // GEN's real spawn zones: never the anywhere-outdoors fallback
+    expect(rep.qa()).toMatchObject({anywhereOutdoors: false, safe: true});
     for (const {spawn, v} of spawned) {
+      expect(rules.zones.some(r => spawn.x >= r.x0 && spawn.x <= r.x1 && spawn.z >= r.z0 && spawn.z <= r.z1)).toBe(true); // inside a spawn zone
       const d = Math.hypot(spawn.x - v.x, spawn.z - v.z);
       expect(d).toBeGreaterThanOrEqual(REPLENISH.spawnMin - 1e-6);
       expect(d).toBeLessThanOrEqual(REPLENISH.spawnMax + 1e-6);
@@ -160,6 +163,23 @@ describe('Surface Run outdoor replenisher: a long simulated run', () => {
     }
     // indices are look indices far beyond any layout index (never a kill-memory identity)
     expect(Math.min(...spawned.map(x => x.index))).toBeGreaterThanOrEqual(REPLENISH.indexBase);
+  }, 120000);
+
+  it('every host district: GEN\'s spawn zones and safe box are used (no anywhere-outdoors fallback); the initial population stands in them', () => {
+    for (const host of ['subway', 'office', 'mall'] as const) for (const seed of [3, 7]) {
+      const t = sim(host, seed);
+      const rules = outdoorRulesOf(t.s);
+      expect(rules.zones.length, `${host} ${seed}`).toBeGreaterThan(0);
+      expect(rules.safe).not.toBeNull();
+      const sf = t.s.outdoor.safe;
+      expect(sf.x1 - sf.x0).toBeGreaterThan(0);
+      expect(t.rep.seed(), `${host} ${seed}`).toBeGreaterThan(0);
+      expect(t.rep.qa()).toMatchObject({anywhereOutdoors: false});
+      for (const {spawn} of t.spawned) {
+        expect(rules.zones.some(r => spawn.x >= r.x0 && spawn.x <= r.x1 && spawn.z >= r.z0 && spawn.z <= r.z1)).toBe(true);
+        expect(spawn.x >= sf.x0 && spawn.x <= sf.x1 && spawn.z >= sf.z0 && spawn.z <= sf.z1).toBe(false);
+      }
+    }
   }, 120000);
 
   it('far unseen actors despawn after the unseen delay; seen ones are kept up to the hard distance; a see-everything view spawns none', () => {
