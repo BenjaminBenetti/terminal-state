@@ -174,7 +174,7 @@ describe('the truck on generated Surface Run districts', () => {
     expect(Math.hypot(left.x - D.S.truck.x, left.z - D.S.truck.z)).toBeGreaterThan(20);
     teardown(h);
     const rec = h.store.get(SURFACE_TRUCK_LANE) as SurfaceTruckRecord;
-    expect(rec).toMatchObject({v: 1, level: 0});
+    expect(rec).toMatchObject({v: 2, level: 0}); // (re-pin: record v2 carries the condition)
     expect(rec.x).toBeCloseTo(left.x, 3);
     expect(rec.z).toBeCloseTo(left.z, 3);
     build(h);

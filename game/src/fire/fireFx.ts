@@ -619,6 +619,40 @@ export class FireFx implements FireView {
     for (let i = 0; i < 3; i++) this.puff(x + rnd(-0.2, 0.2), y + rnd(0.3, 0.6), z + rnd(-0.2, 0.2), 1, 1);
   }
 
+  /**
+   * Task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): a standing NON-DAMAGING fire / smoke source drawn for `dt` s
+   * (a damaged vehicle's engine: world/surface/truckConditionRuntime.ts) — nothing here burns or hurts anything (the rules never learn of
+   * it). `key` keeps its spawn accumulators; `flames` 0..1 the tongues' strength (0: none) spread over `r` m about (x, y, z); `smoke`
+   * 0..1 the billows rising off it, `dark` 0..1 their colour (a smoking engine's grey .. a fire's soot; lit warm while flames burn).
+   * The pooled rings only (bounded, nothing allocates); visible with the fog pass off.
+   */
+  standing(key: object, x: number, y: number, z: number, r: number, flames: number, smoke: number, dark: number, dt: number): void {
+    const step = Math.max(0, Math.min(0.1, Number.isFinite(dt) ? dt : 0));
+    if (step <= 0) return;
+    const o = this.share(key), f = Math.max(0, Math.min(1, flames)), k = Math.max(0, Math.min(1, smoke)), d = Math.max(0, Math.min(1, dark));
+    if (f > 0.02) {
+      o.f += step * (4 + 10 * f);
+      while (o.f >= 1) {
+        o.f -= 1;
+        const a = Math.random() * Math.PI * 2, q = Math.sqrt(Math.random()) * r;
+        this.tongue(x + Math.cos(a) * q, y, z + Math.sin(a) * q, (0.35 + 0.6 * f) * rnd(0.8, 1.2), rnd(0.5, 0.9), rnd(0.85, 1.1), 0.85, rnd(0.12, 0.3));
+      }
+      o.e += step * 1.5 * f;
+      while (o.e >= 1) { o.e -= 1; this.spark(x + rnd(-r, r) * 0.6, y + 0.1, z + rnd(-r, r) * 0.6, 1.3); }
+    }
+    if (k > 0.02) {
+      o.s += step * (0.7 + 2.6 * k);
+      while (o.s >= 1) {
+        o.s -= 1;
+        if (f > 0.02) { this.puff(x + rnd(-r, r) * 0.5, y + rnd(0.3, 0.6), z + rnd(-r, r) * 0.5, k, 1); continue; }
+        const w = rnd(0.85, 1.15), g = 0.34 - 0.27 * d; // (grey -> soot)
+        this.puffs.spawn(x + rnd(-r, r) * 0.5, y + rnd(0.05, 0.25), z + rnd(-r, r) * 0.5, rnd(-0.12, 0.12), rnd(0.55, 0.95), rnd(-0.12, 0.12), rnd(0.45, 0.75), rnd(3.0, 4.4),
+          g * w, g * 0.97 * w, g * 0.93 * w, rnd(0.3, 0.45) * (0.45 + 0.55 * k), rnd(0.3, 0.5), 0.1, 0.45, rnd(-0.35, 0.35), 0.2);
+        this.counts.smoke++;
+      }
+    }
+  }
+
   // ---------------------------------------------------------------------------------------------------------------------
   // Spawners
 
