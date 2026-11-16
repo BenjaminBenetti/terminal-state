@@ -1,5 +1,6 @@
 // Task studio-skyways-level-20261106-054448-01: SKYWAYS (gen/skyways) — the generated level as the game builds it
-// (LEVELS.skyways.generate): valid on a seed sample, deterministic, ONE localized add-on (convention / prize car, equal weights), the
+// (LEVELS.skyways.generate): valid on a seed sample, deterministic, ONE localized add-on (convention / prize car, equal weights; layout
+// version 7 adds the tech expo / mini-golf / evacuation centre to the pool: tests/skyways-event-pool.test.ts), the
 // lower arrival (train in the station under the station building) and the climb (concourse -> street level -> "+15" skyway level) by
 // real stairs / escalators, the bridge network (branches + loops), glazing in solid walls with pre-breached spans, the ramen restaurant
 // with its edible food, the campaign share (10 % from the Subway's) and the fuel placement contract.
@@ -7,7 +8,9 @@ import {describe, expect, it} from 'vitest';
 import {LEVELS, LEVEL_IDS, arrivalPose, storeyLabel} from '../src/levels/registry';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {skywaysIssues} from '../src/gen/skyways/validate';
-import {skywaysAddonOf, skywaysFrame} from '../src/gen/skyways/frame';
+import {skywaysAddonFor, skywaysAddonOf, skywaysFrame} from '../src/gen/skyways/frame';
+import {SKYWAYS_ADDON_POOL_V7} from '../src/gen/skyways/skywaysTypes'; // (task studio-skywalk-events-20261115-193624-01: the version-7 pool)
+import {SKYWAYS_LAYOUT_VERSION} from '../src/gen/skyways/layoutVersion';
 import {levelDistance} from '../src/gen/levelGen';
 import {playerTrainPlacement} from '../src/gen/playerTrain';
 import {placeStationFuel} from '../src/gen/fuelPlacement';
@@ -18,6 +21,7 @@ import {SKYWAYS_RAMEN_PURPOSE} from '../src/gen/skyways/ramenPurposes';
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
 import {outfitterDressOf} from '../src/gen/skyways/stores/outfitterDress'; // (task studio-alpha-skyways-shops-20261107-054512-01, lane STORE-OUTFITTER)
 import {skywaysConSnacksOf} from '../src/gen/skyways/skywaysConSnacks'; // (task studio-skywalk-variety-20261107-231448-01, lane DRESS)
+import {evacPickupsOf} from '../src/gen/skyways/events/evacDress'; // (task studio-skywalk-events-20261115-193624-01)
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const cache = new Map<number, StationLayout>();
@@ -52,15 +56,15 @@ describe('Skyways: registration and the campaign share', () => {
 });
 
 describe('Skyways: generated layouts', () => {
-  it('validate on a seed sample, regenerate identically, and hold exactly one add-on each (both kinds occur)', () => {
+  it('validate on a seed sample, regenerate identically, and hold exactly one add-on each (every kind occurs)', () => {
     const kinds = new Set<string>();
     for (const s of SEEDS) {
       const l = gen(s);
       expect(skywaysIssues(l), `seed ${s}`).toEqual([]);
-      expect(l.skyways!.addon.id).toBe(skywaysAddonOf(s));
+      expect(l.skyways!.addon.id).toBe(skywaysAddonFor(s, SKYWAYS_LAYOUT_VERSION));
       kinds.add(l.skyways!.addon.id);
     }
-    expect([...kinds].sort()).toEqual(['convention', 'prize-car']);
+    expect([...kinds].sort()).toEqual([...SKYWAYS_ADDON_POOL_V7].sort()); // (seeds 1-10 hold all five at version 7)
     const a = LEVELS.skyways.generate('main', {levelSeed: 3, startWeapon: 'pistol'});
     expect(JSON.stringify(a.skyways)).toBe(JSON.stringify(gen(3).skyways));
     expect(a.areas.length).toBe(gen(3).areas.length);
@@ -167,6 +171,11 @@ describe('Skyways: generated layouts', () => {
         if (snacks.has(p)) { expect(p.y - l.levels[p.level ?? 0].baseY, `seed ${s}: ${p.itemId} on a table`).toBeGreaterThan(0.7); continue; }
         // (lane STORE-OUTFITTER: the outfitter's ONE real backpack, a gear find standing on its pack-wall shelf — not a floor pile)
         if (outfitterDressOf(l).some(r => r.backpack && l.pickups[r.backpack.pickup] === p)) continue;
+        // task studio-skywalk-events-20261115-193624-01 (lane GOLF-COURSE): the mini-golf course's balls on its tees / at the front desk and its one putter on the desk
+        const golf = l.skyways!.addon.golf;
+        if (golf && [...golf.holes.map(h => h.ball), golf.desk?.putter, ...(golf.desk?.balls ?? [])].some(i => i !== undefined && l.pickups[i] === p)) continue;
+        // (lead) the evacuation centre's few ration packs stand on its distribution tables (gen/skyways/events/evacDress.ts), never the floor
+        if (evacPickupsOf(l).some(i => l.pickups[i] === p)) { expect(p.y - l.levels[p.level ?? 0].baseY, `seed ${s}: ${p.itemId} on a table`).toBeGreaterThan(0.5); continue; }
         expect(/^(rifle|shotgun|pistol|ammo_|gas_mask|gas_filter)/.test(p.itemId) || p.reward !== undefined, `seed ${s}: ${p.itemId}`).toBe(true);
       }
       void r;

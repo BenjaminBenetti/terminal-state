@@ -72,7 +72,7 @@ export interface VenueResult {
 export interface Portal { x: number; z: number; nx: number; nz: number; half: number; to: number; door: Door | null; side: Side }
 const SIDES: Side[] = ['N', 'S', 'W', 'E'];
 
-interface VenueCtx {
+export interface VenueCtx {
   v: AddonDresser;
   res: VenueResult;
   portals: ReadonlyMap<number, Portal[]>;
@@ -157,6 +157,38 @@ export function dressSkywaysVenue(layout: StationLayout, rng: Rng): VenueResult 
   return res;
 }
 
+/**
+ * (layout version 7, task studio-skywalk-events-20261115-193624-01) The venue's circulation context for a NEW event's dresser
+ * (gen/skyways/events/): the same openings / reach keys / whole-walk check as the convention's (so every group an event places keeps every
+ * bridge / stair entry reaching every room door), over the venue areas of the given roles (`hall` = also the main hall; the washrooms /
+ * backstage / storage keep the station's ordinary dressing). Builds the context only (no draw, no placement): call it on the event's fork.
+ */
+export function eventVenueContext(layout: StationLayout, rng: Rng, roles: readonly SkywaysVenueRole[]): VenueCtx | null {
+  const addon = layout.skyways?.addon;
+  const venue = addon?.venue;
+  if (!addon || !venue?.length) return null;
+  const pub = venue.filter(q => roles.includes(q.role));
+  const areas = pub.map(q => layout.areas[q.area]).filter(Boolean);
+  if (!areas.length) return null;
+  const v = new AddonDresser(layout, rng, {...addon, areas: pub.map(q => q.area)} as SkywaysAddon, areas[0]);
+  const res: VenueResult = {byArea: {}, roles: Object.fromEntries(pub.map(q => [q.area, q.role] as const)), desks: [], queues: [], welcome: [], tables: [], merch: [], exhibits: [],
+    panels: [], photo: null, regSigns: [], banners: [], statues: [], signs: [], lanes: [], skipped: v.skipped};
+  const roleOf = (id: number) => venue.find(q => q.area === id)?.role;
+  const bridges = new Set((layout.skyways?.bridges ?? []).map(b => b.area));
+  const portals = new Map(areas.map(a => [a.id, portalsOf(layout, v.g, a)] as const));
+  const hub = new Map(areas.map(a => [a.id, hubPortal(portals.get(a.id)!, bridges, roleOf)] as const));
+  const hallArea = layout.areas[venue.find(q => q.role === 'main-hall')?.area ?? -1];
+  const walkAreas = hallArea && !areas.includes(hallArea) ? [...areas, hallArea] : areas;
+  const wx0 = Math.min(...walkAreas.map(a => a.x)) - 1, wy0 = Math.min(...walkAreas.map(a => a.y)) - 1;
+  const walk = {ids: new Set(walkAreas.map(a => a.id)), x0: wx0, y0: wy0, w: Math.max(...walkAreas.map(a => a.x + a.w)) + 1 - wx0, h: Math.max(...walkAreas.map(a => a.y + a.h)) + 1 - wy0,
+    sources: areas.flatMap(a => portals.get(a.id)!.filter(p => bridges.has(p.to)).flatMap(p => bandCells(v.g, a, p))), key0: '', pub: areas};
+  const vc: VenueCtx = {v, res, portals, hub, reach0: new Map(), roleOf, bridges, walk};
+  for (const a of areas) for (const p of portals.get(a.id)!) if (p.door) v.keepDoor(p.door, a, VENUE_DOOR_CLEAR, 0.3);
+  for (const a of areas) vc.reach0.set(a.id, reachKey(vc, a));
+  walk.key0 = walkKey(vc);
+  return vc;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Openings and routes
 
@@ -204,7 +236,7 @@ export function portalsOf(layout: StationLayout, g: AddonDresser['g'], a: Area):
 /** A point `d` m into the area from an opening. */
 const inside = (p: Portal, d: number): [number, number] => [p.x + p.nx * d, p.z + p.nz * d];
 /** The opening the area's routes radiate from: a bridge mouth, else the way toward registration, else the widest. */
-function hubPortal(ps: readonly Portal[], bridges: ReadonlySet<number>, roleOf: (id: number) => SkywaysVenueRole | undefined): Portal | null {
+export function hubPortal(ps: readonly Portal[], bridges: ReadonlySet<number>, roleOf: (id: number) => SkywaysVenueRole | undefined): Portal | null {
   if (!ps.length) return null;
   return ps.find(p => bridges.has(p.to)) ?? ps.find(p => roleOf(p.to) === 'registration') ?? ps.slice().sort((p, q) => q.half - p.half)[0];
 }
@@ -244,7 +276,7 @@ function routeField(vc: VenueCtx, a: Area): Int32Array | null {
 /** The local (area-rect) index of a grid cell index. */
 const locOf = (g: AddonDresser['g'], a: Area, i: number) => (Math.floor(i / g.w) - a.y) * a.w + (i % g.w - a.x);
 /** Which openings of `a` the hub reaches by a 1.2 m path (their indices). */
-function reachKey(vc: VenueCtx, a: Area): string {
+export function reachKey(vc: VenueCtx, a: Area): string {
   const f = routeField(vc, a), g = vc.v.g;
   if (!f) return '';
   const ps = vc.portals.get(a.id)!;
@@ -280,12 +312,12 @@ function walkField(vc: VenueCtx): Int32Array {
 }
 const walkLoc = (vc: VenueCtx, i: number) => (Math.floor(i / vc.v.g.w) - vc.walk.y0) * vc.walk.w + (i % vc.v.g.w - vc.walk.x0);
 /** Which openings of the public venue areas a bridge mouth reaches by a 1.2 m path. */
-function walkKey(vc: VenueCtx): string {
+export function walkKey(vc: VenueCtx): string {
   const f = walkField(vc), g = vc.v.g;
   return vc.walk.pub.map(a => vc.portals.get(a.id)!.map((p, k) => (bandCells(g, a, p).some(i => f[walkLoc(vc, i)] !== -2) ? k : '')).join('.')).join('|');
 }
 /** The whole walk's routes from the bridge mouths to every opening of the public areas become reserved lanes too. */
-function markWalkRoutes(vc: VenueCtx): void {
+export function markWalkRoutes(vc: VenueCtx): void {
   const f = walkField(vc), g = vc.v.g, W = vc.walk;
   const at = (l: number): [number, number] => [(W.x0 + l % W.w + 0.5) * CELL, (W.y0 + Math.floor(l / W.w) + 0.5) * CELL];
   for (const a of W.pub) for (const p of vc.portals.get(a.id)!) {
@@ -307,7 +339,7 @@ function markWalkRoutes(vc: VenueCtx): void {
   }
 }
 /** Places a group of props; keeps it only if every opening of the given areas the hub reached before is still reached. */
-function group<T>(vc: VenueCtx, check: readonly Area[], place: () => T | null): T | null {
+export function group<T>(vc: VenueCtx, check: readonly Area[], place: () => T | null): T | null {
   const v = vc.v;
   begin(v.ctx);
   const np = v.placed.length;
@@ -318,7 +350,7 @@ function group<T>(vc: VenueCtx, check: readonly Area[], place: () => T | null): 
   return null;
 }
 /** The routes from the hub to each opening become reserved lanes (recorded as straight runs). */
-function markRoutes(vc: VenueCtx, a: Area): void {
+export function markRoutes(vc: VenueCtx, a: Area): void {
   const f = routeField(vc, a), g = vc.v.g, hub = vc.hub.get(a.id);
   if (!f || !hub) return;
   const at = (l: number): [number, number] => [(a.x + l % a.w + 0.5) * CELL, (a.y + Math.floor(l / a.w) + 0.5) * CELL];
@@ -347,7 +379,7 @@ function markRoutes(vc: VenueCtx, a: Area): void {
  * The areas along the way in from a registration corridor (itself first, then the registration / exhibitors' pieces one and two
  * openings on), each with the opening it is entered by: a corridor too narrow for the desks or the greeter hands them on.
  */
-function entryAreas(vc: VenueCtx, a: Area): {area: Area; at: Portal}[] {
+export function entryAreas(vc: VenueCtx, a: Area): {area: Area; at: Portal}[] {
   const mouth = vc.portals.get(a.id)!.find(p => vc.bridges.has(p.to)) ?? vc.hub.get(a.id);
   if (!mouth) return [];
   const out: {area: Area; at: Portal; d: number}[] = [{area: a, at: mouth, d: 0}], seen = new Set([a.id]);
@@ -369,7 +401,7 @@ function entryAreas(vc: VenueCtx, a: Area): {area: Area; at: Portal}[] {
 // ---------------------------------------------------------------------------------------------
 // Areas
 
-const frameOf = (a: Area, p: Portal | null): HallFrame => hallFrame(a, p?.side ?? 'S');
+export const frameOf = (a: Area, p: Portal | null): HallFrame => hallFrame(a, p?.side ?? 'S');
 /** A panel room's letter index (0 = A): from the carve's label ("Panel room B"), else its order. */
 const panelLetter = (a: Area, k: number): number => { const m = / ([A-Z])$/.exec(a.label ?? ''); return m ? m[1].charCodeAt(0) - 65 : k; };
 const snapC = (x: number) => Math.floor(x / CELL) * CELL + CELL / 2;
@@ -641,7 +673,7 @@ function exhibitorRows(vc: VenueCtx, a: Area, rank: number): void {
 }
 
 /** A row of `kind` against some solid wall of `a` (a route-checked group), or null. */
-function wallRow(vc: VenueCtx, a: Area, kind: PropKind, o: Parameters<typeof rowAlongWall>[4], least: number): PropPlacement[] | null {
+export function wallRow(vc: VenueCtx, a: Area, kind: PropKind, o: Parameters<typeof rowAlongWall>[4], least: number): PropPlacement[] | null {
   const v = vc.v;
   for (const side of v.rng.shuffle(SIDES.slice())) {
     const got = group(vc, [a], () => { const n = v.layout.props.length; return rowAlongWall(v.ctx, a, side, kind, o).length >= least ? propsSince(v, n) : null; });
@@ -686,9 +718,9 @@ function boards(vc: VenueCtx, a: Area, n: number): void {
   }
 }
 
-interface WallSlot { side: Side; t: number; x: number; z: number; hx: number; hz: number }
+export interface WallSlot { side: Side; t: number; x: number; z: number; hx: number; hz: number }
 /** Solid-wall poster slots of an area (never over glazing / openings / signs, nothing standing in front), spread out. */
-function posterSlots(v: AddonDresser, a: Area): WallSlot[] {
+export function posterSlots(v: AddonDresser, a: Area): WallSlot[] {
   const {layout} = v, def = PROP_DEFS.skywaysConPoster, y0 = SKYWAYS_POSTER_Y, y1 = y0 + def.h;
   const wins = (layout.skyways?.windows ?? []).filter(w => w.level === v.level);
   const props = layout.props.filter(p => (p.level ?? 0) === v.level);
@@ -807,7 +839,7 @@ export function arrowDir(rot: number, arrow: 'up' | 'left' | 'right' | 'down'): 
 }
 
 /** For an area and a target area: the opening of the area its route leaves by (BFS over the venue's openings). */
-function routeTable(portals: ReadonlyMap<number, Portal[]>): (from: number, target: number) => Portal | null {
+export function routeTable(portals: ReadonlyMap<number, Portal[]>): (from: number, target: number) => Portal | null {
   return (from: number, target: number): Portal | null => {
     const prev = new Map<number, {area: number; via: Portal}>();
     const q = [from], seen = new Set([from]);
@@ -829,7 +861,7 @@ function routeTable(portals: ReadonlyMap<number, Portal[]>): (from: number, targ
 }
 
 /** A plate over (or beside) a door on `a`'s side of the wall. */
-function doorPlate(v: AddonDresser, a: Area, p: Portal, text: string): SignPlacement | null {
+export function doorPlate(v: AddonDresser, a: Area, p: Portal, text: string, style: SignPlacement['style'] = VENUE_SIGN_STYLE): SignPlacement | null {
   const d = p.door!;
   const room = a.ceil - v.base - d.height;
   const w = Math.min(2.6, Math.max(1.2, text.length * 0.085 + 0.4));
@@ -841,7 +873,7 @@ function doorPlate(v: AddonDresser, a: Area, p: Portal, text: string): SignPlace
   if (room < 0.5 && !backed(v.ctx, a, p.side, t - w / 2, t + w / 2, v.base + y - 0.1)) return null;
   const ax0 = a.x * CELL, az0 = a.y * CELL, ax1 = (a.x + a.w) * CELL, az1 = (a.y + a.h) * CELL;
   const pos = p.side === 'N' ? {x: t, z: az0 + 0.02, rot: 0} : p.side === 'S' ? {x: t, z: az1 - 0.02, rot: Math.PI} : p.side === 'W' ? {x: ax0 + 0.02, z: t, rot: Math.PI / 2} : {x: ax1 - 0.02, z: t, rot: -Math.PI / 2};
-  const s: SignPlacement = {x: r3(pos.x), y: r3(v.base + y), z: r3(pos.z), rot: r3(pos.rot), kind: 'info', text, area: a.id, w: r3(w), level: v.level, style: VENUE_SIGN_STYLE};
+  const s: SignPlacement = {x: r3(pos.x), y: r3(v.base + y), z: r3(pos.z), rot: r3(pos.rot), kind: 'info', text, area: a.id, w: r3(w), level: v.level, style};
   v.layout.signs.push(s);
   return s;
 }

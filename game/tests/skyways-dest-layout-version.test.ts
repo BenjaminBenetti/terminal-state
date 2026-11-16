@@ -13,6 +13,9 @@
 // Task studio-cosplay-general-20261108-225231-01 (lane UPPER): version 6 adds the convention's second-floor cosplay crowd; version 5's
 // fingerprints (GAME85-87: the same full record as version 4's, every enemy record in full) were computed on main
 // c1ded2f5d61b9b343d12ae39e3a59e39b89296ed before any version-6 change and must stay identical.
+// Task studio-skywalk-events-20261115-193624-01: version 7 draws the add-on from the five-event pool (the technology expo, mini-golf and
+// the evacuation centre beside the convention and the prize car); version 6's fingerprints (GAME88-129: the same full record) were
+// computed on main 8e5bf0ec146288ec568efd1b81cb0c5d190300ae (GAME129) before any version-7 change and must stay identical.
 import {describe, expect, it} from 'vitest';
 import * as crypto from 'node:crypto';
 import {LEVELS} from '../src/levels/registry';
@@ -43,6 +46,12 @@ const GAME84: Record<number, string> = {
 const GAME87: Record<number, string> = {
   1: '8111a2ba5c2f9d17', 2: '9557a6f7321cc7eb', 3: '66f9e6a63c5b5a6a', 4: 'ede5bbe80df3aef3', 5: '408584268556631f',
   6: '2c2119605b53ca71', 7: '303fc925b03af63c', 8: '6c70ce42c68f04b5', 707: '70bf54d399e0684e', 4242: '054c538f93ab5dd1',
+  103855126: '2537e7d45437f344',
+};
+
+const GAME129: Record<number, string> = {
+  1: '8111a2ba5c2f9d17', 2: '9557a6f7321cc7eb', 3: '66f9e6a63c5b5a6a', 4: '6677ba457e72d2e6', 5: '84715a193ea5b5b9',
+  6: '2c2119605b53ca71', 7: '40820b23c5d25047', 8: '6c70ce42c68f04b5', 707: '70bf54d399e0684e', 4242: 'cfc9425c6d7d420c',
   103855126: '2537e7d45437f344',
 };
 
@@ -85,9 +94,9 @@ function fingerprint(seed: number, layoutVersion?: number): string {
 
 describe('Skyways layout version (save compatibility)', () => {
   it('the policy: a station entered under GAME76 (visits, no record) keeps version 1; a recorded version is kept; a new station gets the current one', () => {
-    expect(SKYWAYS_LAYOUT_VERSION).toBe(6); // (task studio-cosplay-general-20261108-225231-01: the second-floor cosplay crowd)
-    expect(skywaysLayoutVersionFor(undefined)).toBe(6);
-    expect(skywaysLayoutVersionFor({visits: 0, lanes: {}})).toBe(6);
+    expect(SKYWAYS_LAYOUT_VERSION).toBe(7); // (task studio-skywalk-events-20261115-193624-01: the five-event pool)
+    expect(skywaysLayoutVersionFor(undefined)).toBe(7);
+    expect(skywaysLayoutVersionFor({visits: 0, lanes: {}})).toBe(7);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {}})).toBe(1);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 2}}})).toBe(2);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 3}}})).toBe(3);
@@ -95,6 +104,8 @@ describe('Skyways layout version (save compatibility)', () => {
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 5}}})).toBe(5); // (task studio-skywalk-encounters-20261108-074144-01)
     expect(skywaysLayoutVersionFor({visits: 0, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 5}}})).toBe(5); // (a station first BUILT at 5 keeps 5)
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 6}}})).toBe(6); // (task studio-cosplay-general-20261108-225231-01)
+    expect(skywaysLayoutVersionFor({visits: 0, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 6}}})).toBe(6); // (a station first BUILT at 6 keeps 6: never re-drawn)
+    expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 7}}})).toBe(7); // (task studio-skywalk-events-20261115-193624-01)
     expect(skywaysLayoutVersionFor({visits: 0, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 1}}})).toBe(1);
     // a malformed record falls back to the visit rule
     expect(skywaysLayoutVersionFor({visits: 1, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 9}}})).toBe(1);
@@ -118,6 +129,10 @@ describe('Skyways layout version (save compatibility)', () => {
 
   it('version 5 regenerates GAME85-87 exactly (the full version-4 record; fingerprints pinned on main c1ded2f, before version 6)', () => {
     for (const [s, want] of Object.entries(GAME87)) expect(fingerprint84(Number(s), 5), `seed ${s}`).toBe(want);
+  });
+
+  it('version 6 regenerates GAME88-129 exactly (the full version-4 record; fingerprints pinned on main 8e5bf0e, before version 7)', () => {
+    for (const [s, want] of Object.entries(GAME129)) expect(fingerprint84(Number(s), 6), `seed ${s}`).toBe(want);
   });
 
   it('version 2 adds the destinations: anchors and landmark courts', () => {

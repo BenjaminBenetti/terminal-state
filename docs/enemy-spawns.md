@@ -380,6 +380,28 @@ street floor).
 - **Census.** 30 convention seeds: venue 5.13 and street floor 2.93 per level, never fewer than 2 on either. The 10-seed test set:
   5.0 / 3.0. Test: `game/tests/skyways-cosplay-floors.test.ts`.
 
+### Version 7: the major events' crowds
+
+<!-- Task studio-skywalk-events-20261115-193624-01. -->
+
+From layout version 7 the add-on can be a tech expo, a mini-golf course or an evacuation centre (`docs/skyways.md`, "The major
+events"). `game/src/gen/skyways/events/eventCrowd.ts` `placeEventCrowdSpawns` (gated on `SKYWAYS_EVENTS_MIN_VERSION` = 7) gives such
+an event one crowd run.
+- **Fork.** Its own fork, `skyways-event-crowd`, drawn from only when the add-on is a new event. A convention or prize-car layout is
+  byte-identical to version 6.
+- **How many.** U{3..5} at the expo, U{2..4} at the mini-golf, U{4..6} at the shelter (`EVENT_CROWD_RULES.count`).
+- **Where.** The venue's public floor: main hall, exhibitors' floor, photo lounge and panel rooms, the main hall first.
+- **Fairness.** The cosplay run's rules, using the `floor` context's placement (start distance, clear cells, landing keep-off, spacing),
+  ≥ 3 m from every door of those areas and from the add-on's entry, and a 0.5 m disc never splitting the storey.
+- **Tags and order.**
+  - Ordinary enemies of the `floor` context: the one `assignEnemyArchetypes` rolls their family from the floor pool. No look and no
+    costume.
+  - They are APPENDED right after the hordes and BEFORE the annex `service` spawns, the hordes' rule. Every ambient and horde index is
+    unchanged.
+  - The crowd's own indices, and so the family rolls hashed from them, do not depend on whether the level has an annex (the core-view
+    invariance of `game/tests/bts-area.test.ts`).
+- **Tests:** `game/tests/skyways-event-pool.test.ts` and `game/tests/skyways-encounters.test.ts`.
+
 ## The Survivor Market (`market`)
 
 <!-- Task studio-survivor-market-20261108-005807-01 (lane LEVEL): a calm survivor settlement, no enemies. -->

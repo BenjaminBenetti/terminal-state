@@ -16,6 +16,8 @@ import {
 } from '../src/ai/spawnTables';
 import {SKYWAYS_ENCOUNTERS_MIN_VERSION, SKYWAYS_LAYOUT_VERSION} from '../src/gen/skyways/layoutVersion';
 import {SKYWAYS_PATROL_STOREYS} from '../src/gen/skyways/patrol';
+import {EVENT_CROWD_RULES, eventCrowdOf} from '../src/gen/skyways/events/eventCrowd';
+import type {SkywaysEventAddonId} from '../src/gen/skyways/skywaysTypes';
 import {levelDistance} from '../src/gen/levelGen';
 import {CELL} from '../src/gen/grid';
 
@@ -133,7 +135,17 @@ describe('version 5 levels: Sirens in enclosed street / skyway rooms only; at le
   it('the ambient enemies keep their counts: hordes are ADDITIVE (appended after every ambient spawn)', () => {
     for (const seed of SEEDS.slice(0, 4)) {
       const l = gen(seed), P = SKYWAYS_SPAWN_PROFILE;
-      const ctx = l.zombies.map((_z, i) => spawnContextOf(l, P, i));
+      const all = l.zombies.map((_z, i) => spawnContextOf(l, P, i));
+      // (layout version 7) a new event's crowd (gen/skyways/events/eventCrowd.ts) is appended right after the hordes, before the annex
+      // 'service' spawns, tagged 'floor': the ambient passes below are everything else
+      const crowd = eventCrowdOf(l), inCrowd = (i: number) => !!crowd && i >= crowd.first && i < crowd.first + crowd.n;
+      if (crowd) {
+        expect(all.slice(crowd.first, crowd.first + crowd.n).every(c => c === 'floor')).toBe(true);
+        expect(all.slice(0, crowd.first).lastIndexOf('horde'), `seed ${seed}: the hordes come first`).toBe(all.lastIndexOf('horde'));
+        expect(all.slice(crowd.first + crowd.n).every(c => c === 'service' || c === 'cosplay' || c === undefined), `seed ${seed}: only annex / venue spawns follow`).toBe(true);
+        expect(crowd.n, `seed ${seed} event crowd`).toBeLessThanOrEqual(EVENT_CROWD_RULES.count[l.skyways!.addon.id as SkywaysEventAddonId][1]);
+      }
+      const ctx = all.filter((_c, i) => !inCrowd(i));
       const first = ctx.indexOf('horde');
       expect(first).toBeGreaterThan(0);
       // every horde member follows every ambient (station / street / floor) spawn

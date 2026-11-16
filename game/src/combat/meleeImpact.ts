@@ -8,6 +8,7 @@
 import type {MeleeSpec, WeaponDef} from '../weapons/weapons';
 import {meleeDamage, type MeleePart} from './melee';
 import {isVarietyWeapon} from '../weapons/varietyIds';
+import {PUTTER_ITEM} from '../gen/skyways/events/golfContract'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY)
 
 /**
  * Target mass relative to an ordinary (shambler) zombie: a push of `knockback` m on mass 1 moves a body of mass m by knockback / m.
@@ -176,6 +177,8 @@ export class MeleeShoves<K> {
  * charge while the wound-up pose is held, in 10 % steps (the small HUD charge cue); the others the hold / release prompt.
  */
 export function meleeHint(def: Pick<WeaponDef, 'id' | 'melee'>, winding: boolean, charge: number): string | null {
+  // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): the putter's hold sets the putt's power (weapons/putter.ts PUTT_POWER)
+  if (def.melee && def.id === PUTTER_ITEM) return winding ? `Putt power ${Math.floor(clamp01(charge) * 10) * 10} % · release to putt` : 'Hold to set the putt power · release to putt';
   if (!def.melee || !isVarietyWeapon(def.id)) return null;
   if (!def.melee.charge) return winding ? 'Release to swing' : 'Hold · release to swing';
   if (!winding) return 'Hold to charge · release to swing';

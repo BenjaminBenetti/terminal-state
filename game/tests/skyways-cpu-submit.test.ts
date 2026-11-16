@@ -41,6 +41,9 @@ if (OUT) writeFileSync(OUT, '');
 const SEED = 103855126;
 const TRACE = [{x: 33.62, z: 78.26}, {x: 40, z: 77}] as const;
 const VERSIONS = [3, SKYWAYS_LAYOUT_VERSION] as const;
+/** (task studio-skywalk-events-20261115-193624-01) the budget sweep also keeps the last pre-event version 6: version 7 gives this seed a
+ *  NEW EVENT (the tech expo, with its crowd in view of the trace), so the earlier stations' budget is pinned on version 6 itself. */
+const SWEEP_VERSIONS = [3, 6, SKYWAYS_LAYOUT_VERSION] as const;
 
 /**
  * The budget: scene + flashlight-shadow draws over the trace sweep (2 positions x 12 yaws, every 30 deg) on real open floor (openNear).
@@ -51,10 +54,16 @@ const VERSIONS = [3, SKYWAYS_LAYOUT_VERSION] as const;
  * worst 1,283 / 998 at those poses (15 deg sweeps: 14,356 / 11,312 -> 6,276 / 5,405). A failure means the Skyways' submitted work
  * grew: measure again (LL_SKYWAYS_CPU_OUT) and decide consciously before raising a cap. Version 4 is the live generator: its east-facing
  * cut is checked over those views together.
+ * Layout v6 (GAME129, the same poses): measured worst 465, total 6,285 (rules off 13,350).
+ * Layout v7 (task studio-skywalk-events-20261115-193624-01): this seed's add-on is now the TECH EXPO, on the trace's storey, and its event
+ * crowd (gen/skyways/events/eventCrowd.ts) stands in the open keynote hall in view of both poses — measured worst 606 (yaw 300 at
+ * (30.75, 75.25): enemies 73 + 4 shadow draws, v6 13 + 3; architecture 110 / 72, props 106 / 76 vs v6 105 / 67, 88 / 60), total 6,192
+ * (rules off 12,189). The growth is the visible crowd (real enemies the culler correctly keeps), not hidden work: its own cap below.
  */
 const BUDGET = {
   3: {worst: 560, total: 7200, eastCut: 0.25},
   4: {worst: 480, total: 6400, eastCut: 0.25},
+  7: {worst: 640, total: 6600, eastCut: 0.25},
 } as const;
 
 /**
@@ -137,9 +146,9 @@ describe('the REAL Skyways: render objects per view (scene + flashlight shadow p
     expect(c.windowRule).toBe(true);
   }, 600_000);
 
-  for (const v of VERSIONS) it(`layout v${v}: the trace sweep (storey 2 open floor, 2 positions x 12 yaws) within budget; the rules cut the east-facing views`, async () => {
+  for (const v of SWEEP_VERSIONS) it(`layout v${v}: the trace sweep (storey 2 open floor, 2 positions x 12 yaws) within budget; the rules cut the east-facing views`, async () => {
     const S = await skywaysPerfScene(SEED, v);
-    const B = BUDGET[v === 3 ? 3 : 4];
+    const B = BUDGET[v === 3 ? 3 : v >= 7 ? 7 : 4];
     let worst = 0, total = 0, offTotal = 0, eastOn = 0, eastOff = 0;
     for (const t of TRACE) {
       const p0 = openNear(S, 2, t.x, t.z);

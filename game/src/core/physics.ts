@@ -124,6 +124,7 @@ export function resolveCircle(world: CollisionWorld, props: PropIndex | null, x:
     if (props) {
       for (const i of props.near(x - r, z - r, x + r, z + r, scratch)) {
         const pr = props.props[i];
+        if (pr.walkOver) continue; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-COURSE): a walker crosses the mini-golf deck / rails
         if (feet !== undefined && (pr.y + pr.h <= feet + 0.02 || pr.y >= feet + BODY_H)) continue;
         const p = pushOutOfProp(x, z, r, pr); // lane FIX (U04): round props collide as their cylinder
         if (p) { x += p[0]; z += p[1]; moved = true; }
@@ -167,6 +168,7 @@ function resolveLevels(L: Levels, props: PropIndex | null, x: number, z: number,
     if (props) {
       for (const i of props.near(x - r, z - r, x + r, z + r, scratch)) {
         const pr = props.props[i];
+        if (pr.walkOver) continue; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-COURSE): a walker crosses the mini-golf deck / rails
         if (pr.y + pr.h <= feet + 0.02 || pr.y >= feet + BODY_H) continue;
         const p = pushOutOfProp(x, z, r, pr); // lane FIX (U04): round props collide as their cylinder
         if (p) { x += p[0]; z += p[1]; moved = true; }

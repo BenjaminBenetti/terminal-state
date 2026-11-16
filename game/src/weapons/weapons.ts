@@ -10,6 +10,7 @@ import {RECOIL_SCALE, firingRecoil} from './recoil';
 import {VARIETY_GUN_DEFS} from './varietyGuns'; // task studio-weapon-variety-production-20261109-224355-01: the six new guns
 import {VARIETY_MELEE_DEFS} from './varietyMelee'; // task studio-weapon-variety-production-20261109-224355-01: the six new melee weapons
 import {FLAMETHROWER_DEF} from './flamethrower'; // task studio-flamethrower-fire-20261114-031614-01: the flamethrower (a STREAM weapon)
+import {PUTTER_DEF} from './putter'; // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): the mini-golf putter (a light melee club)
 import {FLAME_FUEL_CAN} from '../fire/flamethrowerSpec';
 import {burnUnit, canPourCan, pourCan, tankFuel, wornFuelTank} from '../fire/fuelTank';
 
@@ -297,6 +298,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   ...VARIETY_GUN_DEFS,
   ...VARIETY_MELEE_DEFS,
   [FLAMETHROWER_DEF.id]: FLAMETHROWER_DEF, // task studio-flamethrower-fire-20261114-031614-01 (bench / Market only: never a find)
+  [PUTTER_DEF.id]: PUTTER_DEF, // task studio-skywalk-events-20261115-193624-01 (lane GOLF-PLAY): the mini-golf putter (placed on its course only: never a find)
 };
 
 /** Lane KNIFE: the weapon def of an item id when it is a melee weapon (knife), else null. */

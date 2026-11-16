@@ -166,7 +166,9 @@ export function skywaysMapPlan(layout: StationLayout): SkywaysMapPlan | null {
   const label = (kind: MapLabelKind, text: string, level: number, x: number, z: number) => labels.push({kind, text: skywalkText(text), level, x: r2(x), z: r2(z), building: buildingAt(x, z)});
   {
     const a = info.addon, c = centre(a.hall);
-    if (a.id === 'convention' && a.venue?.length) {
+    // (layout version 7, task studio-skywalk-events-20261115-193624-01: every venue-shaped event — the expo / mini-golf / evacuation
+    // centre — labels its venue the same way, by its own room names)
+    if (a.venue?.length) {
       // (layout v3) the venue floor: its public parts by their event names (the stage hall, the exhibitors' floor, registration, the
       // panel rooms, the photo lounge) — one label per name, at its largest piece
       const best = new Map<string, Area>();
@@ -178,7 +180,8 @@ export function skywaysMapPlan(layout: StationLayout): SkywaysMapPlan | null {
         const cur = best.get(name);
         if (!cur || q.w * q.h > cur.w * cur.h) best.set(name, q);
       }
-      for (const [name, q] of best) { const qc = centre(rectOf(q)); label('event', SKYWAYS_MAP_FORBIDDEN.test(name) ? 'Convention' : name, levelOf(q), qc.x, qc.z); }
+      const fallback = a.id === 'tech-expo' ? 'Tech expo' : a.id === 'mini-golf' ? 'Mini-golf' : a.id === 'evac-centre' ? 'Evacuation centre' : 'Convention';
+      for (const [name, q] of best) { const qc = centre(rectOf(q)); label('event', SKYWAYS_MAP_FORBIDDEN.test(name) ? fallback : name, levelOf(q), qc.x, qc.z); }
     } else if (a.id === 'convention') {
       const hall = a.areas.map(i => layout.areas[i]).find(q => q && inside(rectOf(q), c.x, c.z)) ?? layout.areas[a.areas[0]];
       label('event', hall?.label && !SKYWAYS_MAP_FORBIDDEN.test(hall.label) ? hall.label : 'Convention hall', a.level, c.x, c.z);

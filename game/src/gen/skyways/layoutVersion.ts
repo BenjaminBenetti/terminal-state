@@ -31,6 +31,14 @@
 // 5 regenerates through the SAME live generator with that run gated on `layoutVersion >= SKYWAYS_COSPLAY_FLOORS_MIN_VERSION` (fingerprints
 // pinned: GAME87 in tests/skyways-dest-layout-version.test.ts); versions 5 and 6 share SKYWAYS_SPAWN_PROFILE. Every station not yet
 // entered gets version 6; a station entered at 1-5 keeps its enemies, kills, loot and layout exactly.
+//
+// Task studio-skywalk-events-20261115-193624-01 (version 7, the EVENTS pass; user: three more localized major-event add-ons — a technology
+// expo, a mini-golf course and an evacuation centre — as POOL ADDITIONS beside the anime convention and the prize car): the add-on is
+// drawn from the version-7 pool (gen/skyways/frame.ts skywaysAddonFor; versions 1-6 keep skywaysAddonOf's two-way draw) and each new
+// event dresses the convention's venue carve (gen/skyways/events/). Version 6 regenerates through the SAME live generator with every
+// version-7 change gated on `>= SKYWAYS_EVENTS_MIN_VERSION` (fingerprints pinned: GAME129 in tests/skyways-dest-layout-version.test.ts);
+// every station not yet entered gets version 7 (and with it, once, its event draw). A station entered at 1-6 keeps its add-on, enemies,
+// kills, loot and layout exactly.
 
 export const SKYWAYS_LAYOUT_LANE = 'skyways.layout';
 /**
@@ -38,13 +46,16 @@ export const SKYWAYS_LAYOUT_LANE = 'skyways.layout';
  * studio-skyways-rework-20261107-054512: the ten major stores, gen/skyways/stores/, with their outward storefronts, Skyways-scoped loot
  * purposes and dressers — and the parent's architecture); 4 = the building programmes (task studio-skywalk-variety-20261107-231448-01);
  * 5 = the encounters pass (task studio-skywalk-encounters-20261108-074144-01); 6 = the convention's second-floor cosplay crowd (task
- * studio-cosplay-general-20261108-225231-01). Stations entered at 1 / 2 / 3 / 4 / 5 keep regenerating exactly that layout.
+ * studio-cosplay-general-20261108-225231-01); 7 = the new localized events (task studio-skywalk-events-20261115-193624-01). Stations
+ * entered at 1 / 2 / 3 / 4 / 5 / 6 keep regenerating exactly that layout.
  */
-export const SKYWAYS_LAYOUT_VERSION = 6;
+export const SKYWAYS_LAYOUT_VERSION = 7;
 /** The first version of the encounters pass (Siren / horde / cosplay zombies / Mall store families): gate every change on it. */
 export const SKYWAYS_ENCOUNTERS_MIN_VERSION = 5;
 /** The first version whose convention crowd also stands on the host building's other public floor (gen/skyways/cosplayFloors.ts). */
 export const SKYWAYS_COSPLAY_FLOORS_MIN_VERSION = 6;
+/** The first version whose add-on is drawn from the five-event pool (the expo / mini-golf / evacuation centre: gen/skyways/events/). */
+export const SKYWAYS_EVENTS_MIN_VERSION = 7;
 /** The newest version the frozen GAME77 generator (gen/skyways/legacy77/) serves. */
 export const SKYWAYS_LEGACY77_MAX = 2;
 /** The version the frozen version-3 core (gen/skyways/legacy80/) serves. */

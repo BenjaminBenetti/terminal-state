@@ -269,7 +269,9 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
       w.group.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh && /^skyways-/.test((m.material as THREE.Material).name ?? '')) { skyMeshes++; skyTris += tris(m); } });
       log(`seed ${seed}: station group ${JSON.stringify(w.stats)}; skyways-material meshes ${skyMeshes} (${skyTris} tris); arch ${JSON.stringify(w.skywaysArch!.summary())}`);
       expect(w.stats.archMeshes).toBeLessThan(400);
-      expect(skyMeshes).toBeLessThan(260);
+      // (task studio-skywalk-events-20261115-193624-01) layout version 7 gives seed 2 the evacuation centre on the convention's venue carve:
+      // 276 architecture meshes (version 6, its prize display: 242; venue seeds 4 / 5 / 6 at version 7: 221 / 226 / 225)
+      expect(skyMeshes).toBeLessThan(300);
     }
   });
 });
