@@ -13,11 +13,13 @@ import {installSurfaceLook} from './look';
 import {installSurfaceAir} from './air';
 import {installSurfaceLife} from './life';
 import {installSurfaceCargo} from './cargo';
+import {installSurfaceFog} from './fogRuntime';
 
 export function installSurfaceRun(game: Game): void {
   installSurfaceAccess(game);
   installSurfaceLook(game);
   installSurfaceAir(game);
+  installSurfaceFog(game); // (task studio-surface-run-field-followup-20261116-211729-01, lane FOG) a v2 district's pressure sound + QA (inert elsewhere)
   installSurfaceLife(game);
   // (lane CARGO) the depot recoverables, the truck's attachment points, the upgrade kit, the crossing participant 'cargo' — BEFORE the
   // train equipment's install (Game order): its build seeds the lane the equipment's build reads

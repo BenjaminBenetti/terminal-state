@@ -6,10 +6,21 @@
 //  - THE FAR CITY: tall ruined towers / apartments fading into the fog (fewer, bigger silhouettes: no LODs exist).
 // Reuses only delivered, approved models (world/reactor/surfaceKit.ts SURFACE_KIT entries: Meshy maps kept; no new art). PURE (no
 // three.js): placements + a triangle budget; the runtime (look.ts) instances them per sector. Deterministic from the district seed.
+//
+// Task studio-surface-run-field-followup-20261116-211729-01 (lane FOG): a VERSION-2 district has no cordon wall — its fog-pressure
+// boundary (surface.boundary) ends the walkable ground at `edge` inside a thin undrawn last-resort ring. These surroundings are the
+// FILLER that hides that finite edge: the same bands and budgets, measured from the ring's outside instead of the extent (pulled in
+// over the old cordon band and the padding), the berms' near foot at the ring (never poking into the walkable apron), the collapsed
+// blocks and the far city behind — all deep inside the thick outer fog (pressure > 1: nothing survives that long out there).
 
 import type {SRect, SurfaceInfo} from '../../gen/surface/surfaceTypes';
 import {mulberry32} from '../../core/rng';
 import {SURFACE_KIT, type SurfaceKitEntry} from '../reactor/surfaceKit';
+import {CELL} from '../../gen/grid';
+import {FOG_BOUNDARY} from '../../gen/surface/fogFiller';
+
+/** (lane FOG) A v2 district's last-resort SOLID ring beyond the walkable edge (m). */
+const FOG_RING_M = FOG_BOUNDARY.band * CELL;
 
 export type FarBand = 'berm' | 'collapsed' | 'far';
 
@@ -56,6 +67,17 @@ export const sectorOf = (cx: number, cz: number, x: number, z: number, n: number
   return Math.min(n - 1, Math.max(0, Math.floor(((a + Math.PI) / (Math.PI * 2)) * n)));
 };
 
+/**
+ * (lane FOG) The rect the surroundings stand round: the extent inside the cordon wall (v1), or a v2 district's whole grid — the walkable
+ * edge plus its last-resort ring (gen/surface/fogFiller.ts FOG_BOUNDARY.band) — so nothing of it stands on the walkable ground.
+ */
+export function farCityRect(S: SurfaceInfo): SRect {
+  const b = S.boundary;
+  if (!b) return S.extent;
+  const r = FOG_RING_M;
+  return {x0: b.edge.x0 - r, z0: b.edge.z0 - r, x1: b.edge.x1 + r, z1: b.edge.z1 + r};
+}
+
 /** Distance from (x, z) to the rect (0 inside). */
 const outside = (r: SRect, x: number, z: number) => Math.hypot(Math.max(r.x0 - x, 0, x - r.x1), Math.max(r.z0 - z, 0, z - r.z1));
 
@@ -64,7 +86,8 @@ const outside = (r: SRect, x: number, z: number) => Math.hypot(Math.max(r.x0 - x
  * keeps its ground).
  */
 export function farCityPlan(S: SurfaceInfo, available: (key: string) => boolean = () => true, kit: readonly SurfaceKitEntry[] = SURFACE_KIT): FarCityPlan {
-  const E = S.extent, cx = (E.x0 + E.x1) / 2, cz = (E.z0 + E.z1) / 2;
+  const E = farCityRect(S), cx = (E.x0 + E.x1) / 2, cz = (E.z0 + E.z1) / 2;
+  const v2 = !!S.boundary;
   const rng = mulberry32(((S.seed >>> 0) ^ 0x5f3759df) >>> 0 || 1);
   const byId = new Map(kit.map(e => [e.id, e]));
   const ok = (ids: readonly string[]) => ids.map(id => byId.get(id)).filter((e): e is SurfaceKitEntry => !!e && available(e.key));
@@ -92,7 +115,9 @@ export function farCityPlan(S: SurfaceInfo, available: (key: string) => boolean 
       const step = Math.max(B.step, (len / Math.max(1, Math.floor(bb.left / avg))) * 1.1);
       for (let s = step * 0.5; s < len; s += step * (0.8 + rng() * 0.4)) {
         const e = berm[Math.floor(rng() * berm.length)];
-        const d = B.from + rng() * (B.to - B.from), sc = B.scale[0] + rng() * (B.scale[1] - B.scale[0]);
+        const d0 = B.from + rng() * (B.to - B.from), sc = B.scale[0] + rng() * (B.scale[1] - B.scale[0]);
+        // (lane FOG) v2: the pile's near foot at the last-resort ring (no wall hides a pile poking into the walkable apron)
+        const d = v2 ? d0 - B.from + 0.5 * Math.max(e.dims[0], e.dims[2]) * sc : d0;
         add(e, 'berm', sx + dx * s + ox * d, -B.sink * e.dims[1] * sc, sz + dz * s + oz * d, rng() * Math.PI * 2, sc, bb);
       }
     }
