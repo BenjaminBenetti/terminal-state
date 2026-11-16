@@ -265,6 +265,8 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       carSkid: () => { ctx.currentTime += 1; sfx.carSkid(at); }, carDoor: () => sfx.carDoor(at),
       // (+ round 2, task skyways-vehicle-20261107 lane AUDIO: the brake-to-stop, the car's own contacts)
       carBrake: () => { ctx.currentTime += 2; sfx.carBrake(at, 0.5); }, carImpact: () => { ctx.currentTime += 1; sfx.carImpact(2, 0.6, 2, 6, 'car'); sfx.carImpact(2, 0.8, 2, 5, 'flesh'); },
+      // task studio-surface-run-field-followup-20261116-211729-01 (lane TRUCK): the truck's groan in the fog pressure (the creak / clank takes)
+      truckGroan: () => { sfx.truckGroan(2, 1.5, 3, 0.2); sfx.truckGroan(2, 1.5, 3, 1); },
       // task skyways-destinations-20261106 (lane AUDIO): a location emitter's loop channel starts at the next emitter tick
       // task studio-market-bar-20261108-225231-01 (lane AUDIO): the register, a person's scream / grunt (followed, then faded), the retch, the crowd murmur
       marketCash: () => sfx.marketCash(),

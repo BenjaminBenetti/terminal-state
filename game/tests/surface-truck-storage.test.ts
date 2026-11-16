@@ -153,7 +153,7 @@ describe('surface truck record: validator and saves', () => {
     const bad = (mut: (r: Any) => void) => { const r = structuredClone(ok) as Any; mut(r); return surfaceTruckProblem(r); };
     expect(bad(r => { r.extra = 1; })).toMatch(/unexpected truck field/);
     expect(bad(r => { delete r.lights; })).toMatch(/missing truck field/);
-    expect(bad(r => { r.v = 2; })).toMatch(/version/);
+    expect(bad(r => { r.v = 3; })).toMatch(/version/); // (re-pin, field follow-up: v2 is the current record, v1 still read)
     expect(bad(r => { r.x = Infinity; })).toMatch(/position/);
     expect(bad(r => { r.x = TRUCK_RECORD_LIMITS.pos * 2; })).toMatch(/position/);
     expect(bad(r => { r.level = 1.5; })).toMatch(/storey/);
@@ -186,7 +186,7 @@ describe('surface truck record: validator and saves', () => {
     expect(parsed.ok, parsed.ok ? '' : parsed.error).toBe(true);
     if (!parsed.ok) return;
     const saved = (parsed.value.run as Any).memories[memId].lanes[SURFACE_TRUCK_LANE] as SurfaceTruckRecord;
-    expect(saved).toMatchObject({v: 1, x: 40.5, z: 22.25, yaw: 1.5, lights: true});
+    expect(saved).toMatchObject({v: 2, x: 40.5, z: 22.25, yaw: 1.5, lights: true, condition: 1}); // (re-pin: record v2 carries the condition)
     expect(saved.storage[0][4]).toEqual({uid: a.uid, itemId: 'water', count: 2});
     expect(saved.storage[1][0]).toEqual({uid: b.uid, itemId: 'bandage', count: 1});
     const back = new Harness();
