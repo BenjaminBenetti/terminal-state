@@ -62,9 +62,9 @@ function stream(seed: number): () => number {
   return () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 
-/** The crevice record of a version-5 market layout (null: not one). */
+/** The crevice record of a version-5 / 6 market layout (null: not one). */
 export function crevOf(layout: StationLayout): MarketCrevice | null {
-  return layout.market?.v === 5 && layout.market.crevice ? layout.market.crevice : null;
+  return (layout.market?.v ?? 1) >= 5 && layout.market!.crevice ? layout.market!.crevice : null;
 }
 
 // --- Containers --------------------------------------------------------------------------------------------------------------------

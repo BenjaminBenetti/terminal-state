@@ -7,6 +7,7 @@ import type {Door, Rect, StationLayout} from '../../stationTypes';
 import type {MarketCrevContainer, MarketCrevice} from '../marketTypes';
 import {CREVICE} from './frame';
 import type {CreviceCarve} from './carve';
+import {ENVELOPE} from '../v6/envelope';
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const box = (r: Rect) => ({x0: r3(r.x * CELL), z0: r3(r.y * CELL), x1: r3((r.x + r.w) * CELL), z1: r3((r.y + r.h) * CELL)});
@@ -21,10 +22,22 @@ export function creviceShape(layout: StationLayout, cc: CreviceCarve): MarketCre
     const openings = doors.map(d => ({s0: r3((along ? d.y : d.x) * CELL), s1: r3((along ? d.y + d.h : d.x + d.w) * CELL), h: r3(d.height), wide: c.wide}));
     return {...box(c.box), y: cc.bases[c.level], level: c.level, face: c.face, paint: c.paint, use: c.use, area: c.area, openings, backroom: c.back !== undefined || c.backDoor === null};
   });
-  return {
+  const out: MarketCrevice = {
     topY: CREVICE.topY, hallY: CREVICE.hallY, chasmY: CREVICE.chasmY, bases: [...cc.bases], cont: CREVICE.cont,
     chasm: box(cc.chasm),
     containers,
     bridges: cc.bridges.map(b => ({...box(b.rect), y: cc.bases[b.level], level: b.level, area: b.area})),
   };
+  // (layout version 6, task studio-market-irregular-envelope-20261116-210503-01: the irregular envelope — gen/market/v6/envelope.ts)
+  const env = cc.envelope;
+  if (env) {
+    out.topY = r3(env.stamp.high);
+    out.chasmY = r3(env.stamp.deepest);
+    out.envelope = {
+      sky: r3(env.stamp.low), rock: ENVELOPE.rock,
+      clefts: env.plan.clefts.map(p => ({...box(cc.M({x: p.x, y: p.y, w: p.w, h: p.h})), y: r3(p.floor)})),
+      alcoves: cc.pockets.filter(p => p.deep).length,
+    };
+  }
+  return out;
 }

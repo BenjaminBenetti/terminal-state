@@ -16,6 +16,8 @@
 //     square under the bar's deck (storey 1).
 // So the crevice is open from the chasm to the top everywhere but under the bridges, the bar's deck and the catwalks beside the stairs,
 // and every container is a separate box on its own ledge (the stacks step back, storey by storey, into the rock).
+// Layout version 6 (task studio-market-irregular-envelope-20261116-210503-01) carves the same settlement and then breaks the box around
+// it (gen/market/v6/envelope.ts: the overhead, the top terrace's alcoves, the end clefts, the chasm's bed); version 5 never reaches it.
 
 import {CELL, FLOOR, SOLID, VOID, type Grid} from '../../grid';
 import {Kit, TUN, type TrenchCells} from '../../stationKit';
@@ -24,6 +26,7 @@ import {SINGLE_BED_CELLS, TRENCH_DEPTH, type Area, type Rect, type Side} from '.
 import type {Rng} from '../../../core/rng';
 import type {MarketShopId} from '../marketTypes';
 import {fillRun} from '../v2/carve';
+import {stampEnvelope, type AlcovePlan, type CreviceEnvelope, type EnvelopeStamp} from '../v6/envelope';
 import {CREVICE, creviceRows, type CreviceFrame} from './frame';
 
 /** Open stairs / the crevice: headroom capped by the cell ceiling (the crevice's top: Ramp.capCeil). */
@@ -62,8 +65,9 @@ export interface CrevContainer {
 export interface CrevStair { side: 'W' | 'E'; from: number; area: number; rect: Rect; foot: number; flights: number[] }
 /** A bridge (world cells): its area, rect (the deck strip from walk edge to walk edge), storey. */
 export interface CrevBridge { area: number; rect: Rect; level: number }
-/** A pocket (world cells): its area, rect, storey (a terrace nook in a band, covered by the walk above). */
-export interface CrevPocket { area: number; rect: Rect; level: number; side: 'W' | 'E' }
+/** A pocket (world cells): its area, rect, storey (a terrace nook in a band, covered by the walk above). (Layout version 6: `deep` cells
+ *  past the band into the rock — a top-terrace alcove, gen/market/v6/envelope.ts.) */
+export interface CrevPocket { area: number; rect: Rect; level: number; side: 'W' | 'E'; deep?: number }
 
 export interface CreviceCarve {
   f: CreviceFrame;
@@ -92,6 +96,8 @@ export interface CreviceCarve {
   /** Canonical column -> world column, a canonical rect -> world. */
   mx: (x: number) => number;
   M: (r: Rect) => Rect;
+  /** (layout version 6, task studio-market-irregular-envelope-20261116-210503-01) The irregular envelope stamped on this carve. */
+  envelope?: {plan: CreviceEnvelope; stamp: EnvelopeStamp};
 }
 
 /** Why the last attempts failed (QA / tests). */
@@ -101,8 +107,13 @@ const fail = (why: string): null => { CREVICE_CARVE_FAILS[why] = (CREVICE_CARVE_
 /** The container paints (world/marketArch.ts MARKET_PAINTS indices) a container may take. */
 export const CREVICE_PAINTS = 8;
 
-/** Carves the whole crevice into a fresh 4-storey kit; null when the program does not fit (the caller re-rolls). */
-export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng): CreviceCarve | null {
+/**
+ * Carves the whole crevice into a fresh 4-storey kit; null when the program does not fit (the caller re-rolls). `env` (layout version
+ * 6, task studio-market-irregular-envelope-20261116-210503-01): the irregular envelope (gen/market/v6/envelope.ts) — the top terrace's
+ * alcoves reserved before the container fill, every top-storey nook under its soffit, the envelope stamped last. Absent: version 5,
+ * exactly as shipped.
+ */
+export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng, env?: CreviceEnvelope): CreviceCarve | null {
   const W = k.g.w, H = k.g.h;
   const M = (r: Rect): Rect => (f.mirror ? {x: W - r.x - r.w, y: r.y, w: r.w, h: r.h} : {...r});
   const mx = (x: number) => (f.mirror ? W - 1 - x : x);
@@ -280,6 +291,21 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng): CreviceCarve | 
     special.push({s: ws, L: 0, y0: y1 - 14, y1, make: () => container(ws, 0, y1 - 14, y1, 'workshop', {back: 'room', width: 6, wide: true, label: 'Workshop'})});
   }
   for (const sp of special) reserved[sp.s][sp.L].push([sp.y0, sp.y1, 'special']);
+  // (layout version 6) the top terrace's alcoves: the container row gives way to a deep rock-cut setback (the first candidate row clear
+  // of everything reserved, of the stair runs in front of the band and of the top bridges' mouths)
+  const alcoveAt = new Map<string, AlcovePlan>();
+  if (env) for (const al of env.alcoves) {
+    const L = S.bands - 1, s = al.side;
+    for (const y0 of al.rows) {
+      const y1 = y0 + al.len;
+      if (reserved[s][L].some(([a, b]) => y0 < b + 3 && y1 > a - 3)) continue;
+      if (runRows(s, L).some(([a, b]) => y0 < b + 2 && y1 > a - 2)) continue;
+      if (f.bridges.some(br => br.level === L && y0 < R.z0 + br.y + S.bridgeW + 3 && y1 > R.z0 + br.y - 3)) continue;
+      reserved[s][L].push([y0, y1, 'alcove']);
+      alcoveAt.set(`${s}:${y0}`, al);
+      break;
+    }
+  }
   // a seeded pocket per side on storeys 0..2 (a terrace nook), clear of everything reserved, 6-8 rows
   for (const s of ['W', 'E'] as const) for (let L = 0; L < 3; L++) {
     const n = rng.int(6, 8);
@@ -340,11 +366,15 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng): CreviceCarve | 
   }
 
   // --- 8. Pockets: the storey-L walk widened into the band (its floor; covered by the walk above unless the top storey) ---------------
+  // (layout version 6: a top-storey nook is a sheltered alcove under its own soffit; an alcove runs `deep` cells on into the rock)
+  let topNook = 0;
   for (const s of ['W', 'E'] as const) for (let L = 0; L < S.bands; L++) for (const [a, b, why] of reserved[s][L]) {
-    if (why !== 'pocket') continue;
-    const r = M({...span(s, xb(L) + 1, xb(L) + S.pitch + 1), y: a, h: b - a});
-    const ar = k.addArea(r, 'concourse', 'concourse', L < S.bands - 1 ? cont(L) : top, walkOf(s, L, a).id, {...lvl(L, 'Terrace nook'), publicSpace: true});
-    pockets.push({area: ar.id, rect: r, level: L, side: s});
+    if (why !== 'pocket' && why !== 'alcove') continue;
+    const al = why === 'alcove' ? alcoveAt.get(`${s}:${a}`) : undefined, deep = al?.deep ?? 0;
+    const r = M({...span(s, xb(L) + 1 - deep, xb(L) + S.pitch + 1), y: a, h: b - a});
+    const ceil = L < S.bands - 1 ? cont(L) : env ? al?.soffit ?? env.nooks[topNook++ % env.nooks.length] : top;
+    const ar = k.addArea(r, 'concourse', 'concourse', ceil, walkOf(s, L, a).id, {...lvl(L, 'Terrace nook'), publicSpace: true});
+    pockets.push({area: ar.id, rect: r, level: L, side: s, ...(deep ? {deep} : {})});
   }
 
   // --- 9. The stair bays (storeys L + L+1): the run against the rock (3 cells), the foot / catwalk strip beside it ---------------------
@@ -388,10 +418,13 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng): CreviceCarve | 
   // --- 11. Openings ---------------------------------------------------------------------------------------------------------------
   for (const d of pendingDoors) d();
 
+  // --- 12. (layout version 6) The irregular envelope: the overhead, the chasm's bed, the end clefts (gen/market/v6/envelope.ts) -----
+  const envelope = env ? {plan: env, stamp: stampEnvelope(env, g, top, f.mirror, chasm)} : undefined;
+
   const denSlot = containers.findIndex(c => c.use === 'den');
   return {
     f, rows: R, bases: B, bed, trench, platform, gates, square, weir, low, walks, bar, chasm, containers, stairs, bridges, pockets, denSlot,
-    eastSign: f.mirror ? -1 : 1, mx, M,
+    eastSign: f.mirror ? -1 : 1, mx, M, ...(envelope ? {envelope} : {}),
   };
 }
 

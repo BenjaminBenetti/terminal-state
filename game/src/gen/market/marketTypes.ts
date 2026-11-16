@@ -73,8 +73,10 @@ export interface MarketLayout {
    * 4 (task studio-corpse-market-shop-20261114-031614-01): version 3 plus the corpse buyer's den (`den`; the same stalls / spots).
    * 5 (task studio-survivor-market-crevice-20261116-074419): THE CREVICE — a new settlement (gen/market/v5/) with the same six stalls, the
    * bar's bartender and the den; its geometry for the look in `crevice`.
+   * 6 (task studio-market-irregular-envelope-20261116-210503-01): version 5's crevice in an IRREGULAR ENVELOPE (gen/market/v6/envelope.ts:
+   * the stepped overhead, the top terrace's alcoves, the end clefts, the chasm's shelves); `crevice.envelope` says so.
    */
-  v: 1 | 2 | 3 | 4 | 5;
+  v: 1 | 2 | 3 | 4 | 5 | 6;
   /** Exactly one stall per MARKET_STALLS id (version 3: + the bar, BAR_STALL, last). */
   stalls: MarketStall[];
   /** Resident spots (wander targets / idle posts), at least a dozen, spread over the market's storeys. */
@@ -94,7 +96,8 @@ export interface MarketLayout {
  * (the cooked bridge kit draws them), the chasm (the dark depth below).
  */
 export interface MarketCrevice {
-  /** The crevice's top (every open band ends there), the platform hall's vault, the chasm's floor (m, absolute). */
+  /** The crevice's top (every open band ends there; version 6: the highest overhead), the platform hall's vault, the chasm's floor (m,
+   *  absolute; version 6: its deepest). */
   topY: number;
   hallY: number;
   chasmY: number;
@@ -106,6 +109,13 @@ export interface MarketCrevice {
   containers: MarketCrevContainer[];
   /** The bridge decks (storey `level`, deck at y): from walk edge to walk edge along x, `area` their storey area. */
   bridges: {x0: number; z0: number; x1: number; z1: number; y: number; level: number; area: number}[];
+  /**
+   * (version 6, task studio-market-irregular-envelope-20261116-210503-01) The irregular envelope (absent on version 5: its flat top at
+   * topY). `sky`: the lowest overhead (every open crevice column's top is at least this; anything lower is a deck, a slab or a box);
+   * `rock`: overhead surfaces at or above it are the raw rock, below it the concrete ledges / ribs / soffits; the end clefts (storey-3
+   * voids into the end walls, world metres, their floor y); the top terrace's alcoves (count).
+   */
+  envelope?: {sky: number; rock: number; clefts: {x0: number; z0: number; x1: number; z1: number; y: number}[]; alcoves: number};
 }
 
 /** One shipping-container box of the crevice (world metres, incl. its walls: the frame / paint / windows go on its outside). */

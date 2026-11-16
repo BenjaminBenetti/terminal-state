@@ -91,8 +91,8 @@ export function setCreviceTexture(slot: CreviceSlot, map: CreviceMap, t: THREE.T
 }
 /** A loaded crevice map (null: not delivered — the arch's stand-in finish). */
 export const creviceTexture = (slot: CreviceSlot, map: CreviceMap): THREE.Texture | null => CREV_TEX.get(`${slot}:${map}`) ?? null;
-/** Does a layout draw the crevice look (a version-5 market with its shape record)? */
-export const usesCreviceTextures = (layout: Pick<StationLayout, 'market'>): boolean => layout.market?.v === 5 && !!layout.market.crevice;
+/** Does a layout draw the crevice look (a version-5 / 6 market with its shape record)? */
+export const usesCreviceTextures = (layout: Pick<StationLayout, 'market'>): boolean => (layout.market?.v ?? 1) >= 5 && !!layout.market!.crevice;
 
 /** How a crevice finish uses its set: a LINEAR tint (multiplies the map), metal / roughness scale, normal strength, world tone variation. */
 export interface CreviceLook {

@@ -35,6 +35,12 @@
 //  - the culler's ATRIUM: every open crevice column (an open band up to the crevice's top reaching the walking zones of two storeys or
 //    more: ~4,200-4,500 columns, ~140-150 tiles), so the culler tests a bounded set of tiles instead of a pair portal per storey pair;
 //    roofed spaces (the platform hall's vault, rock-cut stairs) keep the culler's pair portals.
+// Task studio-market-irregular-envelope-20261116-210503-01: layout version 6 (the same crevice inside an IRREGULAR ENVELOPE,
+// gen/market/v6/envelope.ts: a stepped / zig-zag overhead, ledges and ribs, alcoves, end clefts, a shelved chasm bed) keeps every key
+// above and adds no texture. The overhead (any ceiling at or above the envelope's lowest overhead, layout.market.crevice.envelope.sky):
+// the mine rock (the 'top' key) from the envelope's rock line up, the darker vault concrete below it (the ledges, ribs and soffits); the
+// end clefts (storey-3 VOID cells outside the chasm): mine rock floor and roof; the atrium's sky line is the envelope's lowest overhead.
+// Version 5 reads exactly as before.
 
 import * as THREE from 'three';
 import {CELL, FLOOR, SOLID, VOID} from '../gen/grid';
@@ -120,15 +126,15 @@ export class MarketArch {
    */
   readonly atrium: Uint8Array;
 
-  /** Task studio-survivor-market-crevice-20261116-074419 (lane ARCH): layout version 5's finish mapper (null on versions 1-4). */
+  /** Task studio-survivor-market-crevice-20261116-074419 (lane ARCH): layout version 5's finish mapper (null on versions 1-4; + 6). */
   readonly crevice: CreviceArch | null;
-  /** Version 5 (THE CREVICE). */
+  /** Version 5 or 6 (THE CREVICE; 6: its irregular envelope). */
   readonly v5: boolean;
 
   private constructor(readonly layout: StationLayout, readonly mats: WorldMaterials, readonly levels: readonly Level[]) {
     const g = layout.grid, top = (levels[1]?.baseY ?? 0) + 2.4;
     this.atrium = new Uint8Array(g.w * g.h);
-    const rec = layout.market?.v === 5 ? layout.market.crevice : undefined;
+    const rec = (layout.market?.v ?? 1) >= 5 ? layout.market!.crevice : undefined; // (+ version 6: the irregular envelope)
     this.crevice = rec ? new CreviceArch(layout, mats, levels, rec, this.atrium) : null;
     this.v5 = !!this.crevice;
     if (!this.crevice) for (let i = 0; i < g.cells.length; i++) if (g.cells[i] !== SOLID && g.hasCeil(i) && g.ceil[i] >= top) this.atrium[i] = 1;
@@ -466,7 +472,25 @@ export class CreviceArch {
       const y0 = Math.max(0, Math.round(c.z0 / CELL)), y1 = Math.min(g.h, Math.round(c.z1 / CELL));
       for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = y * g.w + x; if (m[i] < 0) m[i] = k; }
     });
+    this.sky = rec.envelope ? rec.envelope.sky : rec.topY;
     this.markAtrium(atrium);
+  }
+
+  /** The lowest overhead (version 5: the crevice's flat top; 6: the envelope's lowest ledge / rib / soffit). */
+  private readonly sky: number;
+
+  /** The overhead's key at height y (an open band's ceiling at or above the sky line; null below it). */
+  private overhead(y: number): CreviceKey | null {
+    if (y < this.sky - 0.02) return null;
+    const env = this.rec.envelope;
+    return !env || y >= env.rock - 0.02 ? CREVICE_KEYS.top : CREVICE_KEYS.vault;
+  }
+
+  /** Version 6: an end cleft's cell (a storey-1+ VOID cell outside the chasm: the fissures cut into the crevice's end rock). */
+  private cleft(L: number, i: number): boolean {
+    if (!this.rec.envelope || L < 1) return false;
+    const [x, z] = this.centre(i);
+    return !this.inChasm(x, z);
   }
 
   /**
@@ -477,7 +501,7 @@ export class CreviceArch {
    * crevice's terraces behind the hall's back wall), container rooms, rock-cut stairs — the culler's pair portals cover them.
    */
   private markAtrium(atrium: Uint8Array): void {
-    const n = this.W * this.H, bases = this.levels.map(l => l.baseY), sky = this.rec.topY - 0.05;
+    const n = this.W * this.H, bases = this.levels.map(l => l.baseY), sky = this.sky - 0.05;
     for (let i = 0; i < n; i++) {
       for (const lv of this.levels) {
         const g = lv.grid, c = g.cells[i];
@@ -650,8 +674,9 @@ export class CreviceArch {
     return !!g && g.cells[i] === FLOOR && this.classOf(g.area[i]) === 'bridge';
   }
 
-  /** The chasm's bed (VOID cells inside the chasm); null elsewhere (the track bed keeps its ballast). */
-  voidFloorKey(_L: number, i: number): string | null {
+  /** The chasm's bed (VOID cells inside the chasm); version 6's end clefts: rock; null elsewhere (the track bed keeps its ballast). */
+  voidFloorKey(L: number, i: number): string | null {
+    if (this.cleft(L, i)) return CREVICE_KEYS.top;
     const [x, z] = this.centre(i);
     return this.inChasm(x, z) ? CREVICE_KEYS.chasm : null;
   }
@@ -665,16 +690,16 @@ export class CreviceArch {
     if (cls === 'container') return MARKET_KEYS.roof;
     if (cls === 'back') return CREVICE_KEYS.cut;
     if (cls === 'platform') return CREVICE_KEYS.vault;
-    if (y >= this.rec.topY - 0.02) return CREVICE_KEYS.top;
-    return CREVICE_KEYS.steel; // a deck over it: the catwalk over a stair foot, the walk over a nook, the bar over the square
+    return this.overhead(y) ?? CREVICE_KEYS.steel; // (the crevice's top; else a deck over it: the catwalk over a stair foot, the walk over a nook, the bar over the square)
   }
 
-  /** Ceiling over a VOID run: none under a bridge deck, the crevice's top over the chasm, the hall's vault over the track bed. */
-  voidCeilKey(_L: number, i: number, y: number): string | false {
+  /** Ceiling over a VOID run: none under a bridge deck, the crevice's top over the chasm, the hall's vault over the track bed (version 6: the clefts' rock). */
+  voidCeilKey(L: number, i: number, y: number): string | false {
     if (this.underBridge(i, y)) return false;
+    if (this.cleft(L, i)) return CREVICE_KEYS.top;
     const [x, z] = this.centre(i);
     if (!this.inChasm(x, z)) return CREVICE_KEYS.vault;
-    return y >= this.rec.topY - 0.02 ? CREVICE_KEYS.top : CREVICE_KEYS.steel;
+    return this.overhead(y) ?? CREVICE_KEYS.steel;
   }
 
   /** Door soffits: the container's roof sheet at a container's opening; concrete through the rock (the gates). */
