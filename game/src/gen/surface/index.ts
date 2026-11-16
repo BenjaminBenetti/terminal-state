@@ -249,7 +249,8 @@ export function generateSurfaceDistrict(host: SurfaceHost, ctx: SectionGenContex
   const storeys = levels.map(L => ({level: L.id, label: L.id === 0 ? 'Street' : L.id === 1 ? 'Upper floor' : 'Top floor', y: L.baseY}));
   const surface: SurfaceInfo = {
     v: 1, name: dn.name, host, seed, extent: toM(f.ext), core, cols: BLOCKS, rows: BLOCKS, blocks, streets, buildings: rec, windows, outdoorAreas: [...gm.outdoor],
-    portal: pc.portal, checkpoint: cd.checkpoint, truck: cd.truck, depot: {building: depotPlan.id, recoverables},
+    portal: pc.portal, checkpoint: cd.checkpoint, truck: cd.truck,
+    depot: {building: depotPlan.id, recoverables, ...(inner.depotFeatures ? {features: inner.depotFeatures} : {})}, // (+ features: lane ROOMS, for LOOK)
     outdoor: {areas: [...gm.outdoor], spawnZones: spawnZones(f, plans, cd.safe), safe: cd.safe}, notes, storeys,
     lots: lotRecords(plans, gm), junctions: junctionRecords(f, gm), rubble: dress.rubble, rail: {rects: gm.rail.map(toM), dir: plans.spur.dir, centre: (plans.spur.v + 0.5) * CELL},
     ...(dress.roadblock ? {roadblock: dress.roadblock.rect} : {}), cordon: {x0: 0, z0: 0, x1: f.W * CELL, z1: f.H * CELL},
