@@ -258,6 +258,10 @@ import {collectGlassPlanes} from './world/glassPanes';
 import {installShadowAlphaTwin} from './render/shadowOverride'; // (lane RENDER-CPU)
 import {installUploadDedupe} from './render/uploadDedupe'; // task mall-horde-performance-20261105
 import {installBindingRefresh} from './render/bindingRefresh'; // task studio-death-retry-render-fix-20261114-044607-01
+// task studio-rt-flashlight-compute-20261115-233136-01: RT Flashlight — the flashlight's bounce traced by WebGPU compute (render/rt/)
+import {probeRtComputeBounded, type RtProbe} from './render/rt/rtGpu';
+import {RtFlashlight} from './render/rt/rtFlashlightRuntime';
+import {RtScene, rtTracedRoots} from './render/rt/rtScene';
 import {shareShaderText} from './render/shaderTextShare'; // task studio-graphics-gpu-materials-toggle-20261114-212239-01
 import {JourneyCompile, type JourneyCompileOptions} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
@@ -719,6 +723,17 @@ export class Game {
    * architecture (world/flashOccluders.ts): the live station's prop boxes, its glass, this frame's enemies. Null with no station.
    */
   private beamOccluders: StationFlashOccluders | null = null;
+  /**
+   * Task studio-rt-flashlight-compute-20261115-233136-01: RT Flashlight (render/rt/). The renderer's compute probe (null until
+   * initRenderer has run it), the session's runtime (only after a passed probe: WebGPU), and the live station's traced scene — made
+   * exactly while the station is lit with the RT light variant (StationLighting.rt), released with the station or the choice.
+   */
+  rtProbe: RtProbe | null = null;
+  rtFlashlight: RtFlashlight | null = null;
+  private rtScene: RtScene | null = null;
+  /** Set by render() for the frame it draws (the warm-up's hidden frames trace nothing). */
+  private rtTraceFrame = false;
+  private readonly rtDrawSize = new THREE.Vector2();
   private readonly mirrorPassInfo: MirrorScenePass = {target: null as unknown as THREE.RenderTarget, depth: 0};
   private readonly mirrorSightA = {x: 0, y: 0, z: 0};
   private readonly mirrorSightB = {x: 0, y: 0, z: 0};
@@ -1064,7 +1079,7 @@ export class Game {
    * anisotropy cap. Idempotent: every caller gets the same promise; rejects only when neither backend starts.
    */
   initRenderer(): Promise<GpuInfo> {
-    this.gpuInit ??= this.renderer.init().then(() => {
+    this.gpuInit ??= this.renderer.init().then(async () => {
       const gpu = describeBackend(this.renderer.backend as never, this.gpuBoot.request, this.gpuBoot.fallbackError());
       this.gpu = gpu;
       watchDevice(this.renderer, gpu, {onLost: text => { this.lastError = text; this.journeyCompile?.cancel(); this.onDeviceLost?.(text); }});
@@ -1082,10 +1097,106 @@ export class Game {
       installSharedInstancing(this.renderer);
       setSharedInstancing(true);
       this.overlay.target.samples = this.renderer.samples; // 0 in WebGPU compatibility mode
+      await this.probeRtFlashlight();
       console.info(`Terminal State: ${gpu.label}${gpu.adapter ? ` · ${[gpu.adapter.vendor, gpu.adapter.architecture, gpu.adapter.description].filter(Boolean).join(' ')}` : gpu.glRenderer ? ` · ${gpu.glRenderer}` : ''}`);
       return gpu;
     });
     return this.gpuInit;
+  }
+
+  /**
+   * Task studio-rt-flashlight-compute-20261115-233136-01: can this renderer trace the flashlight's bounce? render/rt/rtGpu.ts
+   * probeRtCompute: the WebGPU backend, the device's real limits, every compute kernel compiled (bounded; never a guess from the GPU's
+   * name or memory). The answer is Enhanced lighting's RT capability (what RT Flashlight's On can use); a passed probe makes the
+   * session's runtime (its device resources only while a station is traced). WebGL 2: unsupported, the standard bounce.
+   */
+  private async probeRtFlashlight(): Promise<void> {
+    const probe = await probeRtComputeBounded(this.renderer as never);
+    this.rtProbe = probe;
+    if (probe.ok) {
+      try {
+        const rt = new RtFlashlight(this.renderer as never, probe);
+        rt.onFailure = reason => this.rtFailed(reason);
+        this.rtFlashlight = rt;
+      } catch (err) {
+        probe.ok = false;
+        probe.reason = `its compute work could not be set up (${String((err as Error)?.message ?? err).slice(0, 160)})`;
+      }
+    }
+    this.enhancedLighting.setRtCapability({ok: !!this.rtFlashlight, reason: this.rtFlashlight ? null : probe.reason});
+  }
+
+  /**
+   * The traced bounce failed on this device during play (a device error in its own work): the session's RT capability is withdrawn,
+   * so the next lighting rebuild (the pause menu's relight, the next station) uses the standard bounce; until then this station has
+   * no flashlight bounce (never a wrong one). Reported in the status.
+   */
+  private rtFailed(reason: string): void {
+    console.warn(`RT Flashlight: ${reason}; the standard bounce is used from the next lighting change`);
+    if (this.gpu) recordGpuError(this.gpu, `RT Flashlight: ${reason}`);
+    this.enhancedLighting.setRtCapability({ok: false, reason});
+    this.enhancedLighting.rtInstalled(false, reason, null);
+  }
+
+  /**
+   * The station's traced scene for the lighting about to be made (`want`: the bake's plan uses RT — EnhancedBake.rt): its BVH built
+   * from the live station's geometry in paced steps (render/rt/rtScene.ts) and handed to the runtime. Returns whether the station is
+   * lit with the RT light variant; a scene that cannot be prepared (nothing to trace, over the device's limits, a failure) leaves the
+   * station on the standard bounce, with the reason in the status. `want` false releases any traced scene and every device resource.
+   */
+  private *rtStationSteps(want: boolean): BuildSteps<boolean> {
+    const rt = this.rtFlashlight;
+    if (!want || !rt || rt.failure) { this.releaseRtScene(); return false; }
+    yield 'lighting:rt';
+    try {
+      const scene = this.rtScene ??= new RtScene({maxStorageBinding: this.rtProbe?.maxStorageBinding});
+      yield* scene.prepareSteps(() => rtTracedRoots(this.scene));
+      const st = scene.stats();
+      if (!(st.triangles > 0)) throw new Error('nothing in this station could be traced');
+      rt.setScene(scene);
+      if (rt.failure) throw new Error(rt.failure);
+      return true;
+    } catch (err) {
+      this.releaseRtScene();
+      this.rtSceneError = String((err as Error)?.message ?? err).slice(0, 200);
+      console.warn(`RT Flashlight: this station keeps the standard bounce (${this.rtSceneError})`);
+      return false;
+    }
+  }
+  /** Why the last station's traced scene could not be prepared (null: it was, or none was asked for). */
+  private rtSceneError: string | null = null;
+
+  /** Report the traced scene (after the lighting's applied(): the status reads it). */
+  private reportRtScene(want: boolean, lit: boolean): void {
+    if (!want) return;
+    const st = lit ? this.rtScene?.stats() : null;
+    if (lit && st) this.enhancedLighting.rtInstalled(true, null, {triangles: st.triangles, instances: st.instances, omitted: st.omittedTriangles || undefined});
+    else this.enhancedLighting.rtInstalled(false, this.rtFlashlight?.failure ?? this.rtSceneError, null);
+    this.rtSceneError = null;
+  }
+
+  /** No traced scene: the runtime dispatches nothing and holds no device resources. */
+  private releaseRtScene(): void {
+    this.rtFlashlight?.setScene(null);
+    this.rtScene?.clear();
+    this.rtScene = null;
+  }
+
+  /**
+   * This frame's traced bounce (inside the frame's scene-matrix scope, before the glass mirror and the scene pass): only for a frame
+   * render() draws, with the station lit by the RT light variant; otherwise the gate stays shut (the materials add nothing).
+   */
+  private traceFlashBounce(): void {
+    const rt = this.rtFlashlight;
+    if (!rt) return;
+    if (!this.lightPool?.rt || this.transitGap || !rt.hasScene) { rt.skip(this.transitGap ? 'transit' : 'not traced'); return; }
+    this.renderer.getDrawingBufferSize(this.rtDrawSize);
+    const occ = this.beamOccluders;
+    try {
+      rt.frame(this.time, this.flashlight, this.camera, this.rtDrawSize.x, this.rtDrawSize.y, occ?.bodies ?? null, occ?.bodyCount ?? 0);
+    } catch (err) {
+      rt.failWith(`its frame failed (${String((err as Error)?.message ?? err).slice(0, 160)})`); // (-> rtFailed)
+    }
   }
 
   /** First-person consume animation (weapons/consumeView.ts); visual only, `use` stays authoritative. */
@@ -1347,6 +1458,7 @@ export class Game {
       this.glassMirror?.setPlanes(null); // the planes belong to the torn-down station
     }
     FLASH_BOUNCE.occlude((this.beamOccluders = null)); // the beam's bounce: the torn-down station's props stop nothing any more
+    this.releaseRtScene(); // (RT Flashlight: the torn-down station's traced scene and its device resources)
     for (const z of this.zombies) { this.scene.remove(z.root); const old = z; this.retire(() => old.dispose()); }
     this.zombies = [];
     this.screacherBrains.length = 0;
@@ -1531,9 +1643,14 @@ export class Game {
     // the bake's workers (world/lightBakePool.ts) while this build is parked — the same bytes, and the build goes on only with the
     // complete result (nothing below starts early); without workers, or when they give up, they are made here as before.
     const enhanced = yield* this.enhancedLighting.bakeSteps(stationBakeInput(this.layout), this.world.drawn, {max3DTextureSize: max3D, offThread});
-    this.lightPool = yield* StationLighting.steps(this.scene, this.layout, this.world.fixtures, this.world.tubes, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes, shading: enhanced.shading, mirror: enhanced.mirror, bounce: enhanced.bounce});
+    // task studio-rt-flashlight-compute-20261115-233136-01: RT Flashlight — the station's traced scene first, so a station that cannot
+    // be traced is lit with the standard bounce (its light variant) instead
+    const rt = yield* this.rtStationSteps(enhanced.rt);
+    this.lightPool = yield* StationLighting.steps(this.scene, this.layout, this.world.fixtures, this.world.tubes, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes, shading: enhanced.shading, mirror: enhanced.mirror, bounce: enhanced.bounce, rt});
     this.syncGlassMirror();
     this.enhancedLighting.applied(this.lightPool.reflectionsSkipped, this.lightPool.shadingSkipped);
+    this.reportRtScene(enhanced.rt, this.lightPool.rt);
+    if (!this.lightPool.rt) this.releaseRtScene(); // (the lighting fell back without the bounce: nothing to trace)
     // Iteration 06 (Lane F): haze density map + light-field rebind; station structure/containers cast the flashlight shadow.
     yield* this.atmosphere.setStationSteps(this.layout, this.lightPool.volume);
     this.atmosphere.markShadows(this.world.group, true);
@@ -2628,11 +2745,13 @@ export class Game {
     const max3D = maxTexture3DSize(this.renderer.backend as never);
     // (its one caller drains these steps in time slices and can wait: the bake may run on its workers — lane WORKERS, see buildSectionSteps)
     const enhanced = yield* this.enhancedLighting.bakeSteps(input, this.world.drawn, {max3DTextureSize: max3D, offThread: true});
-    const r = yield* StationLighting.replaceSteps(this.lightPool, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes, shading: enhanced.shading, mirror: enhanced.mirror, bounce: enhanced.bounce}, fn => this.retire(fn));
+    const rt = yield* this.rtStationSteps(enhanced.rt); // (RT Flashlight: the traced scene for the new lighting, or none)
+    const r = yield* StationLighting.replaceSteps(this.lightPool, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer, baked: enhanced.baked, probes: enhanced.probes, shading: enhanced.shading, mirror: enhanced.mirror, bounce: enhanced.bounce, rt}, fn => this.retire(fn));
     this.lightPool = r.lighting;
     this.syncGlassMirror(); // made / released with the lighting; the warm-up that follows draws it once
     if (r.error) this.enhancedLighting.installedBaseline('the enhanced lighting could not be installed');
-    else this.enhancedLighting.applied(r.lighting.reflectionsSkipped, r.lighting.shadingSkipped);
+    else { this.enhancedLighting.applied(r.lighting.reflectionsSkipped, r.lighting.shadingSkipped); this.reportRtScene(enhanced.rt, r.lighting.rt); }
+    if (!r.lighting.rt) this.releaseRtScene();
     this.atmosphere.setLightField(r.lighting.volume); // (the station's fog maps, gas, smoke and fog clock stay)
     return {error: r.error};
   }
@@ -3096,12 +3215,15 @@ export class Game {
     this.prof.lap(SPAN.cull); // lane MEASURE
     if (!this.transitGap) this.world?.culler.update(this.camera); // Iteration 08 (Lane G): level / fog culling (cheap; skipped while still); (lane BUILD) never in the transit gap: no station is live (a paced build is in progress)
     this.prof.lap(SPAN.draw); // lane MEASURE
+    this.rtTraceFrame = true; // (RT Flashlight: this frame traces the bounce; the warm-up's hidden frames do not)
     this.drawFrame();
     return true;
   }
 
   /** Iteration 14: the frame itself (station + atmosphere, then the viewmodel overlay); the warm-up's hidden frames call it without the culler. */
   private drawFrame(): void {
+    const trace = this.rtTraceFrame && !!this.rtFlashlight;
+    this.rtTraceFrame = false;
     if (this.gpu?.deviceLost || !this.renderer.initialized) return;
     this.renderer.info.reset();
     // Iteration 06 (Lane F): station scene + volumetric haze composited onto the canvas (direct r5 path when
@@ -3113,6 +3235,9 @@ export class Game {
         // (task studio-perf-ao-train-continuity-20261110-022206-01, lane PLAY: the station's world matrices once for the frame, not
         // again in the shadow pass / every pass drawing the scene — render/sceneMatrices.ts)
         drawWithSceneMatricesOnce(this.scene, () => {
+          // task studio-rt-flashlight-compute-20261115-233136-01: the traced flashlight bounce of this frame, submitted before every
+          // pass that reads it (the glass mirror's and the scene pass's lit materials)
+          if (trace) this.traceFlashBounce();
           // task studio-baked-gi-visual-uplift-20261115-004324-01: the glass plane in view, drawn right before the scene pass
           // that shows it (never on the direct path: mirrorPass() is null there, and glass keeps the probes)
           const gm = this.glassMirror;
@@ -3148,7 +3273,8 @@ export class Game {
         Object.assign(this.scene, sceneState, {overrideMaterial: null});
         this.renderDirect();
       }
-    } else this.renderDirect();
+    } else if (trace && this.lightPool?.rt) drawWithSceneMatricesOnce(this.scene, () => { this.traceFlashBounce(); this.renderDirect(); }); // (RT Flashlight on the direct path)
+    else this.renderDirect();
     // Iteration 13 (CORE): the viewmodel renders into its own target and is composited over the frame (render/overlay.ts),
     // replacing clearDepth() + a second canvas render (WebGPURenderer tone-maps in a separate output pass).
     if (OverlayPass.hasVisible(this.viewmodel.scene)) this.overlay.render(this.renderer, this.viewmodel.scene, this.viewmodel.camera);
