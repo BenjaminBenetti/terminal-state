@@ -41,6 +41,7 @@ import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from '../../pro
 import {isLootHolderKind} from '../../../items/loot';
 import {MARKET_WORKSHOP_KEY} from '../../../items/lootTables';
 import {makePlaceCtx, markCell, mountProp, tryPlaceProp, type PlaceCtx, type PlaceOpts} from '../../placeKit';
+import {DOOR_CLEAR} from '../../doorways';
 import type {Area, LightPlacement, Rect, Side, SignPlacement, StationLayout} from '../../stationTypes';
 import {MARKET_EMPTY_KEY} from '../dress';
 import {STALL_SIGNS} from '../names';
@@ -678,9 +679,10 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
   }
   function dressTea(F: Frame, c: CrevContainer): void {
     F.a.label = 'Tea counter';
-    // the counter just inside the wide opening (the brewer's way in at one end), the camp stove's table on the far end wall
+    // the counter just inside the wide opening, past its approach strip (gen/doorways.ts DOOR_CLEAR: nothing in a doorway), the brewer's
+    // way in at one end; the camp stove's table on the far end wall
     const gapLeft = rng.chance(0.5);
-    const run = counterRun(F, D.wallGap + PROP_DEFS.shopCounter.d / 2, F.U >= 4.6 ? 2 : 1, gapLeft);
+    const run = counterRun(F, DOOR_CLEAR.approach + 0.02 + PROP_DEFS.shopCounter.d / 2, F.U >= 4.6 ? 2 : 1, gapLeft);
     const t = sideProp(F, 'campTable', gapLeft ? 'R' : 'L', 1.6);
     if (t) { onHost(t, 'campStove', -0.3, 0); onHost(t, 'riceCooker', 0.32, 0); }
     if (run) {
