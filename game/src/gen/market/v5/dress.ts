@@ -159,6 +159,9 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
     anchors.uses.push({kind, x: r3(x), z: r3(z), level: a.level ?? 0, yaw: r3(Math.atan2(-(lx - x), -(lz - z))), area: a.id, ...(home ? {home: true} : {})});
   };
   const light = (a: Area, L: number, x: number, z: number, y: number, power: number, o: Partial<LightPlacement> = {}) => {
+    // (never over a stair cell: finishTraversal would hang it under the flight's ceiling — the crevice's open top)
+    const g = ctxs[L].g, [cx, cy] = g.cellOf(x, z);
+    if (!g.inBounds(cx, cy) || g.rampIdx[g.idx(cx, cy)] >= 0) { CREVICE_PUT_FAILS.lampOverStair = (CREVICE_PUT_FAILS.lampOverStair ?? 0) + 1; return; }
     const l: LightPlacement = {x: r3(x), y: r3(y), z: r3(z), rot: 0, area: a.id, broken: false, flicker: false, warm: true, power, dying: false, ...o};
     if (L) l.level = L;
     layout.lights.push(l);
@@ -366,7 +369,7 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
     if (c.door) {
       const dir = c.face === 'E' ? 1 : -1, d = c.door;
       const zb = rng.chance(0.5) ? d.y * CELL - 0.8 : (d.y + d.h) * CELL + 0.8;
-      const xb = (dir > 0 ? (d.x + 1) * CELL : d.x * CELL) + dir * 0.7;
+      const xb = (dir > 0 ? (d.x + 1) * CELL : d.x * CELL) + dir * 0.62; // (its 1.2 m plate touching the wall)
       const onto = layout.doors.find(q => q.b === c.area)?.a ?? c.area;
       for (const flip of [0, Math.PI]) sign({kind: 'info', text: short, area: onto, x: xb, z: zb + (flip ? 0.012 : -0.012), y: B[c.level] + 2.22, rot: flip, w: 1.2, style: STALL_SIGNS[c.stall].style, ...(c.level ? {level: c.level} : {})});
     }
@@ -859,9 +862,14 @@ export function dressCrevice(layout: StationLayout, cc: CreviceCarve, rng: Rng, 
     const f = area(st.foot);
     light(f, st.from, (f.x + f.w / 2) * CELL, (f.y + 1.5) * CELL, B[st.from] + D.wallLampY + 0.05, 0.65);
     // and over its head (the storey above, just past the run's top: the walk there, its rod a canopy bracket)
-    const up = st.from + 1, zTop = (st.rect.y + st.rect.h + 1) * CELL, xTop = (st.rect.x + st.rect.w / 2) * CELL;
-    const canopy = canopyOf(up, {s: st.side, y: st.rect.y + st.rect.h});
-    if (canopy) light(canopy, up, xTop, zTop, B[up] + D.wallLampY, 0.6);
+    // (on the wall beside the run's head: the first clear row past its top whose outer column (either side) is solid)
+    const up = st.from + 1, gu = gridOf(up), canopy = canopyOf(up, {s: st.side, y: st.rect.y + st.rect.h});
+    for (let k = 0; k < 8 && canopy; k++) {
+      const y = st.rect.y + st.rect.h + k;
+      const xs: [number, number, number][] = [[st.rect.x, st.rect.x - 1, st.rect.x * CELL + D.wallLampOff], [st.rect.x + st.rect.w - 1, st.rect.x + st.rect.w, (st.rect.x + st.rect.w) * CELL - D.wallLampOff]];
+      const hit = xs.find(([fx, wx]) => gu.inBounds(wx, y) && gu.cells[gu.idx(fx, y)] === FLOOR && gu.rampIdx[gu.idx(fx, y)] < 0 && gu.cells[gu.idx(wx, y)] === SOLID);
+      if (hit) { light(canopy, up, hit[2], (y + 0.5) * CELL, B[up] + D.wallLampY, 0.6); break; }
+    }
   }
   for (const b of cc.bridges) {
     // under the deck: over the walk / low walk below its two ends (the deck lowers their ceiling)

@@ -5,10 +5,12 @@
 // residents' spots: the furniture's posts (version 2's rule: clear, flat floor of their own area, nudged to the nearest clear cell within
 // 1.5 m, else dropped; never within 0.9 m of another), over ALL FOUR storeys (the crevice's stairs join them: no ladders), the homes'
 // posts only a few (SETTLE_HOME_SPOTS: homes are private), and the bar patrons' 'drink' posts beside their stools / chairs (version 3's
-// rule, gen/market/v3/barRecord.ts). Never a spot on the platform's train side. Pure and deterministic.
+// rule, gen/market/v3/barRecord.ts). Never a spot on the platform's train side, nor one the walks cannot reach on foot (the stairs only).
+// Pure and deterministic.
 
 import type {Rng} from '../../../core/rng';
-import {CELL, type Grid} from '../../grid';
+import {CELL, FLOOR, type Grid} from '../../grid';
+import {levelDistance} from '../../levelGen';
 import type {StationLayout} from '../../stationTypes';
 import {BAR_STALL, MARKET_STALLS, type MarketDisplaySlot, type MarketLayout, type MarketSpot, type MarketStall, type MarketStallId} from '../marketTypes';
 import {MARKET_POPULATION, marketStandOk} from '../spots';
@@ -63,6 +65,12 @@ export function creviceRecord(layout: StationLayout, cc: CreviceCarve, anchors: 
   // --- the residents' posts (all four storeys; a few of the homes'), never on the platform's train side ----------------------------
   const spots: MarketSpot[] = [];
   const P = cc.platform, edgeZ = P.edge === 'N' ? P.y * CELL : (P.y + P.h) * CELL;
+  // on foot from the platform (the stairs only): a post in a room the walks cannot reach is never kept
+  const g0 = layout.levels[0].grid;
+  let start: [number, number] | null = null;
+  for (let y = P.y; y < P.y + P.h && !start; y++) for (let x = P.x + (P.w >> 1); x < P.x + P.w; x++) if (g0.cells[g0.idx(x, y)] === FLOOR && !g0.blocked[g0.idx(x, y)] && g0.area[g0.idx(x, y)] === P.id) { start = [x, y]; break; }
+  const walk = start ? levelDistance(layout.levels, start[0], start[1], 0, layout.levelLinks.filter(k => k.kind === 'stairs')) : null;
+  const onFoot = (lv: number, x: number, z: number) => !walk || walk[lv][g0.idx(...g0.cellOf(x, z))] >= 0;
   const trainSide = (lv: number, area: number, z: number) => lv === 0 && area === P.id && Math.abs(z - edgeZ) < CREVICE_DRESS.trainSide;
   const free = (lv: number, x: number, z: number) => !spots.some(s => s.level === lv && Math.hypot(s.x - x, s.z - z) < 0.9)
     && !stalls.some(st => st.trader.level === lv && (Math.hypot(st.trader.x - x, st.trader.z - z) < 0.9 || Math.hypot(st.front.x - x, st.front.z - z) < 0.9));
@@ -72,7 +80,7 @@ export function creviceRecord(layout: StationLayout, cc: CreviceCarve, anchors: 
     if (u.home && !keepHome.has(u)) continue;
     const g = layout.levels[u.level]?.grid;
     if (!g) continue;
-    const p = standNear(g, u.x, u.z, u.area, (x, z) => free(u.level, x, z) && !trainSide(u.level, u.area, z));
+    const p = standNear(g, u.x, u.z, u.area, (x, z) => free(u.level, x, z) && !trainSide(u.level, u.area, z) && onFoot(u.level, x, z));
     if (!p) continue;
     spots.push({kind: u.kind, x: r3(p.x), z: r3(p.z), y: base(u.level), level: u.level, yaw: u.yaw, area: u.area});
   }
@@ -82,7 +90,7 @@ export function creviceRecord(layout: StationLayout, cc: CreviceCarve, anchors: 
     let n = 0;
     for (const seat of rng.shuffle(anchors.bar.seats.slice())) {
       if (n >= BAR_SPOTS.max) break;
-      const p = standNear(g, seat.x, seat.z, anchors.bar.area, (x, z) => free(1, x, z));
+      const p = standNear(g, seat.x, seat.z, anchors.bar.area, (x, z) => free(1, x, z) && onFoot(1, x, z));
       if (!p) continue;
       spots.push({kind: 'drink', x: r3(p.x), z: r3(p.z), y, level: 1, yaw: r3(Math.atan2(-(seat.faceX - p.x), -(seat.faceZ - p.z))), area: anchors.bar.area, seat: seat.prop});
       n++;
