@@ -133,9 +133,9 @@ function fingerprint(seed: number, layoutVersion?: number): string {
 
 describe('Skyways layout version (save compatibility)', () => {
   it('the policy: a station entered under GAME76 (visits, no record) keeps version 1; a recorded version is kept; a new station gets the current one', () => {
-    expect(SKYWAYS_LAYOUT_VERSION).toBe(7); // (task studio-skywalk-events-20261115-193624-01: the five-event pool)
-    expect(skywaysLayoutVersionFor(undefined)).toBe(7);
-    expect(skywaysLayoutVersionFor({visits: 0, lanes: {}})).toBe(7);
+    expect(SKYWAYS_LAYOUT_VERSION).toBe(8); // (task studio-skywalk-loot-performance-20261116-022934-01: the new events' own supplies; 7 was the five-event pool)
+    expect(skywaysLayoutVersionFor(undefined)).toBe(8);
+    expect(skywaysLayoutVersionFor({visits: 0, lanes: {}})).toBe(8);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {}})).toBe(1);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 2}}})).toBe(2);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 3}}})).toBe(3);
@@ -145,6 +145,8 @@ describe('Skyways layout version (save compatibility)', () => {
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 6}}})).toBe(6); // (task studio-cosplay-general-20261108-225231-01)
     expect(skywaysLayoutVersionFor({visits: 0, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 6}}})).toBe(6); // (a station first BUILT at 6 keeps 6: never re-drawn)
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 7}}})).toBe(7); // (task studio-skywalk-events-20261115-193624-01)
+    expect(skywaysLayoutVersionFor({visits: 0, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 7}}})).toBe(7); // (a station first BUILT at 7 keeps 7: no supplies added later)
+    expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 8}}})).toBe(8); // (task studio-skywalk-loot-performance-20261116-022934-01)
     expect(skywaysLayoutVersionFor({visits: 0, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 1}}})).toBe(1);
     // a malformed record falls back to the visit rule
     expect(skywaysLayoutVersionFor({visits: 1, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 9}}})).toBe(1);
