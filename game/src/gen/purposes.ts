@@ -639,10 +639,11 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
   ...REACTOR_BUNKER_PURPOSES(),
   // task studio-skyways-level-20261106-054448 (lane FOOD): the Skyways ramen restaurant's dining room / kitchen ('skyways-ramen*', preset; weight 0, appended last)
   ...SKYWAYS_RAMEN_PURPOSES(),
+  // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ROOMS): the Surface Run buildings' back-of-house loot keys ('surface-*', preset; weight 0;
+  // before the Skyways event keys, which tests/skyways-event-loot.test.ts pins as the last entries)
+  ...SURFACE_ROOM_PURPOSES(),
   // task studio-skywalk-loot-performance-20261116-022934-01 (lane LOOT): the new Skyways events' supply holders ('skyways-expo-* / golf-* / evac-*', prop-level keys; weight 0, appended last)
   ...SKYWAYS_EVENT_LOOT_PURPOSES(),
-  // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane ROOMS): the Surface Run buildings' back-of-house loot keys ('surface-*', preset; weight 0, appended last)
-  ...SURFACE_ROOM_PURPOSES(),
 };
 
 export const ALL_PURPOSES: readonly Purpose[] = [...Object.values(STORE_PURPOSES), ...Object.values(ROOM_PURPOSES)];
