@@ -580,7 +580,7 @@ export const GOLF_COOLER: LootSpec = {items: [['water', 1.2], ['cola', 1.0], ['j
 export const GOLF_SNACKS: LootSpec = {items: [['chips', 1.2], ['chocolate', 1.2], ['battery', 0.15]], lots: [1, 3], empty: 0.2, exact: true, salvage: false};
 // the evacuation centre: the medical bay's stock, the ration line's stock, the supply store
 export const EVAC_MED_STOCK: LootSpec = {items: [['bandage', 2.0], ['medkit', 0.5], [LEG_SPLINT, 0.3], [ARM_SLING, 0.3]], lots: [1, 3], empty: 0.1, exact: true, salvage: false};
-export const EVAC_MED_TOTE: LootSpec = {items: [['bandage', 1.5], ['medkit', 0.25], [LEG_SPLINT, 0.25], [ARM_SLING, 0.25], ['water', 0.6]], lots: [1, 3], empty: 0.2, exact: true, salvage: false};
+export const EVAC_MED_TOTE: LootSpec = {items: [['bandage', 1.5], ['medkit', 0.25], [LEG_SPLINT, 0.25], [ARM_SLING, 0.25], ['water', 0.6]], lots: [1, 2], empty: 0.2, exact: true, salvage: false};
 export const EVAC_RATION_STOCK: LootSpec = {items: [['water', 1.3], ['beans', 1.1], ['noodles', 0.6], ['chocolate', 0.4]], lots: [1, 3], empty: 0.1, exact: true, salvage: false};
 export const EVAC_SUPPLY: LootSpec = {items: [['battery', 1.0], ['water', 0.8], ['flare', 0.6], ['bandage', 0.6], ['beans', 0.5]], lots: [1, 3], empty: 0.15, exact: true, salvage: false};
 
