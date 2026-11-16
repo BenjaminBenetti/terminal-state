@@ -44,7 +44,7 @@ export function kitUse(d: KitDeps): EquipmentUse {
       const up = u.def.upgrade, eq = d.equipment();
       if (!up || !eq) return null;
       if (!eq.inParkedCar(u.uid)) return KIT_TEXT.outside(u.def.the);
-      const why = d.upgrades()?.block(up.id) ?? KIT_TEXT.noTrain;
+      const api = d.upgrades(), why = api ? api.block(up.id) : KIT_TEXT.noTrain;
       return why ? KIT_TEXT.refused(u.def.the, why) : KIT_TEXT.fit(up.the);
     },
     tap(u: EquipmentUnit): boolean {
