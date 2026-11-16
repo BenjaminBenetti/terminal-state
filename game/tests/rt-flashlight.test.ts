@@ -11,7 +11,8 @@ import {GpuLog, validatingDevice} from './helpers/validatingWebgpu';
 import {coneCosAt, makeRtCone} from '../src/render/rt/rtCone';
 import {RT_GRID_MAX, RT_PROBE_REASONS, RT_REQUIRED_LIMITS, RtGpu, probeRtCompute, rtGridSize, type RtProbe} from '../src/render/rt/rtGpu';
 import {FRAME_FLOATS, KERNEL_STORAGE_BUFFERS, RT_KERNELS, VPL_COUNT, VPL_GRID, kernelSource} from '../src/render/rt/rtKernels';
-import {RT_ALPHA, RT_CAMERA_JUMP, RtFlashlight, rtStratum, type RtSceneLike} from '../src/render/rt/rtFlashlightRuntime';
+import {RT_ALPHA, RT_CAMERA_JUMP, RtFlashlight, rtStratum} from '../src/render/rt/rtFlashlightRuntime';
+import {RtScene} from '../src/render/rt/rtScene';
 import {spotConeSolidAngle} from '../src/world/flashBounce';
 import {LightFieldLight, installLightFieldNode, stationFieldLight} from '../src/world/lightFieldNode';
 import {installReflectNode, stationReflectLight} from '../src/world/reflectionNode';
@@ -169,15 +170,18 @@ describe('the probe: the backend, the real limits, every kernel compiled', () =>
   });
 });
 
-/** A tiny traced scene: one root node, nothing in it (the kernels' inputs only have to exist). */
-function stubScene(): RtSceneLike & {syncs: number} {
-  const tlas = new Float32Array(64);
-  return {
-    syncs: 0,
-    sync() { this.syncs++; },
-    gpu: {blasNodes: new Float32Array(8), blasTris: new Float32Array(12), tlas, blasVersion: 1, tlasDirty: null},
-    roots: {staticNodes: 0, staticNodeCount: 1, dynamicNodes: 2, dynamicNodeCount: 0, instances: 4, materials: 10},
-  };
+/** A tiny traced scene: a lit box room (a real RtScene: the kernels' inputs exist and are packed as on a station). */
+function stubScene(): RtScene & {syncs: number} {
+  const room = new THREE.Mesh(new THREE.BoxGeometry(8, 3, 8), new THREE.MeshStandardMaterial({color: 0x808080, side: THREE.BackSide}));
+  room.position.set(3, 1.5, 4);
+  const root = new THREE.Group();
+  root.add(room);
+  const scene = new RtScene() as RtScene & {syncs: number};
+  scene.prepare([root]);
+  scene.syncs = 0;
+  const sync = scene.sync.bind(scene);
+  scene.sync = (...a) => { scene.syncs++; sync(...a); };
+  return scene;
 }
 
 function flashlightRig(): {camera: THREE.PerspectiveCamera; spot: THREE.SpotLight} {

@@ -16,7 +16,8 @@ import * as THREE from 'three';
 import {FB} from '../../world/flashBounce';
 import {RT_TOLERANCE, RTB} from '../../world/rtBounceNode';
 import {makeRtCone, type RtCone} from './rtCone';
-import {RtGpu, rtFrameBlock, rtGridSize, type RtGpuScene, type RtGpuStats, type RtProbe, type RtFrameBlock} from './rtGpu';
+import {RtGpu, rtFrameBlock, rtGridSize, type RtGpuStats, type RtProbe, type RtFrameBlock} from './rtGpu';
+import type {RtScene} from './rtScene';
 import {VPL_COUNT, VPL_GRID} from './rtKernels';
 
 /** The temporal blend: the floor, its rise per radian the beam turned and per metre the light moved in one frame. */
@@ -33,13 +34,10 @@ export const RT_RAY_EPS = 0.02;
 export const RT_PLANE_TOL = 0.05;
 
 /** The traced scene as the runtime drives it (render/rt/rtScene.ts RtScene). */
-export interface RtSceneLike {
-  /** Bring the dynamic part up to date: moved props, this frame's character capsules (x, z, radius, y0, y1 each). */
-  sync(nowSeconds: number, bodies: Float32Array | null, bodyCount: number): void;
-  /** The packed buffers (formats: rtKernels.ts / rtScene.ts) and their regions (vec4 offsets). */
-  readonly gpu: RtGpuScene;
-  readonly roots: {staticNodes: number; staticNodeCount: number; dynamicNodes: number; dynamicNodeCount: number; instances: number; materials: number};
-}
+export type RtSceneLike = Pick<RtScene, 'sync' | 'buffers'>;
+
+/** Main-thread ms a frame's scene sync may spend building the BLAS of meshes that appeared (render/rt/rtScene.ts). */
+export const RT_SYNC_BUDGET_MS = 2;
 
 export interface RtFlashlightStats {
   /** Frames dispatched this session / skipped (torch off, no scene). */
@@ -133,11 +131,11 @@ export class RtFlashlight {
     const scene = this.scene;
     if (!scene || !this.gpu.allocated || !(spot.intensity > 0) || !spot.visible) { this.skip(!scene ? 'no scene' : 'flashlight off'); return false; }
     const t0 = performance.now();
-    scene.sync(nowSeconds, bodies, bodyCount);
+    scene.sync(nowSeconds, bodies, bodyCount, RT_SYNC_BUDGET_MS);
     const t1 = performance.now();
     const checked = this.checks > 0;
     if (checked) { this.checks--; this.gpu.device.pushErrorScope('validation'); this.gpu.device.pushErrorScope('out-of-memory'); }
-    this.gpu.upload(scene.gpu);
+    this.gpu.upload(scene.buffers);
     if (!this.cone || this.cone.angle !== spot.angle || this.cone.penumbra !== spot.penumbra) {
       this.cone = makeRtCone(spot.angle, spot.penumbra);
       this.gpu.writeCone(this.cone.dirs);
@@ -204,7 +202,7 @@ export class RtFlashlight {
     const prev = this.prevValid ? this.prevViewProj : this.viewProj;
     f.set(prev.elements, 16);
 
-    const r = scene.roots;
+    const r = scene.buffers.layout;
     u[60] = r.staticNodes; u[61] = r.staticNodeCount; u[62] = r.dynamicNodes; u[63] = r.dynamicNodeCount;
     u[64] = r.instances; u[65] = r.materials; u[66] = 1; u[67] = VPL_COUNT;
     u[68] = grid.w; u[69] = grid.h; u[70] = this.prevValid ? this.prevGrid.w : grid.w; u[71] = this.prevValid ? this.prevGrid.h : grid.h;

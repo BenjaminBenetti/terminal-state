@@ -17,6 +17,8 @@ import * as THREE from 'three';
 import type {StorageTexture} from 'three/webgpu';
 import {refreshTextureBindings} from '../bindingRefresh';
 import {RTB, rtTexture} from '../../world/rtBounceNode';
+import {RT_FALLBACK_REASON, RT_NOT_READY_REASON, rtBuildFailedReason, rtLimitsReason} from '../../world/rtFlashlight';
+import {BLAS_TRI_FLOATS, BVH_NODE_FLOATS, type RtSceneBuffers} from './rtFormat';
 import {FRAME_FLOATS, KERNEL_STORAGE_BUFFERS, KERNEL_STORAGE_TEXTURES, RECEIVER_VEC4, RT_KERNELS, VPL_COUNT, VPL_VEC4, WG, kernelSource, type RtKernel} from './rtKernels';
 
 // (WebGPU's usage flags by value: the DOM typings declare the types but not these constants, and Node has neither)
@@ -57,11 +59,12 @@ export interface RtProbe {
   timestamps: boolean;
 }
 
+/** Why the probe failed (world/rtFlashlight.ts' reason strings: the settings' help line shows them). */
 export const RT_PROBE_REASONS = {
-  webgl: 'needs the WebGPU renderer (the WebGL 2 fallback has no compute shaders)',
-  noDevice: 'the renderer is not ready',
-  limits: (what: string) => `this GPU's WebGPU limits are too small (${what})`,
-  compile: (msg: string) => `its compute shaders failed to build (${msg})`,
+  webgl: RT_FALLBACK_REASON,
+  noDevice: RT_NOT_READY_REASON,
+  limits: (what: string) => rtLimitsReason(what),
+  compile: (msg: string) => rtBuildFailedReason(msg),
 } as const;
 
 interface BackendLike { isWebGPUBackend?: boolean; device?: GPUDevice | null; get?(o: object): {texture?: GPUTexture} }
@@ -112,16 +115,6 @@ export function probeRtComputeBounded(renderer: RendererLike, ms = RT_PROBE_TIME
     .finally(() => { if (timer) clearTimeout(timer); });
 }
 
-/** The scene as the kernels read it (render/rt/rtScene.ts RtSceneBuffers; formats in rtKernels.ts / rtScene.ts). */
-export interface RtGpuScene {
-  blasNodes: Float32Array;
-  blasTris: Float32Array;
-  tlas: Float32Array;
-  blasVersion: number;
-  /** vec4 ranges of `tlas` changed since the last upload ([start, end) pairs); null = all of it. */
-  tlasDirty: readonly number[] | null;
-}
-
 /** One frame's inputs, already in the frame block's layout (rtKernels.ts FRAME_FLOATS). */
 export interface RtFrameBlock { f32: Float32Array; u32: Uint32Array }
 export function rtFrameBlock(): RtFrameBlock {
@@ -169,7 +162,9 @@ export class RtGpu {
   // bind groups by ping-pong side (the receivers written this frame: rc[side]); rebuilt when a scene buffer is replaced
   private groups: [Record<RtKernel, GPUBindGroup> | null, Record<RtKernel, GPUBindGroup> | null] = [null, null];
   private side = 0;
-  private blasVersion = -1;
+  // what the device holds: the scene's arrays and layout version last uploaded (null = nothing: upload everything)
+  private readonly uploaded: {nodes: Float32Array | null; tris: Float32Array | null; tlas: Float32Array | null; layout: number} = {nodes: null, tris: null, tlas: null, layout: -1};
+  private readonly maxBinding: number;
   private readonly timestamps: boolean;
   private timing: {set: GPUQuerySet; resolve: GPUBuffer; read: GPUBuffer; busy: boolean} | null = null;
   /** Measure the GPU time per kernel (QA: one readback in flight at most; needs the device's timestamp-query feature). */
@@ -183,6 +178,7 @@ export class RtGpu {
     this.device = probe.device;
     this.pipes = probe.pipelines;
     this.timestamps = probe.timestamps;
+    this.maxBinding = Math.max(16, probe.maxStorageBinding || 128 * 1024 * 1024);
   }
 
   get allocated(): boolean { return this.buf !== null; }
@@ -205,15 +201,15 @@ export class RtGpu {
     this.buf = {
       frame: mk('frame', FRAME_FLOATS * 4, BUF.UNIFORM | BUF.COPY_DST),
       cone: mk('cone', VPL_COUNT * 16, BUF.UNIFORM | BUF.COPY_DST),
-      vpl: mk('vpl', VPL_COUNT * VPL_VEC4 * 16, BUF.STORAGE),
-      rc: [mk('receivers', cells * RECEIVER_VEC4 * 16, BUF.STORAGE), mk('receivers', cells * RECEIVER_VEC4 * 16, BUF.STORAGE)],
+      vpl: mk('vpl', VPL_COUNT * VPL_VEC4 * 16, BUF.STORAGE | BUF.COPY_SRC),
+      rc: [mk('receivers', cells * RECEIVER_VEC4 * 16, BUF.STORAGE | BUF.COPY_SRC), mk('receivers', cells * RECEIVER_VEC4 * 16, BUF.STORAGE | BUF.COPY_SRC)],
       vTmp: mk('vTmp', cells * 4, BUF.STORAGE),
       bn: null, bt: null, tl: null,
       texE, texN, viewE: gE.createView(), viewN: gN.createView(),
     };
     this.stats.bytes = bytes;
     this.groups = [null, null];
-    this.blasVersion = -1;
+    this.uploaded.nodes = this.uploaded.tris = this.uploaded.tlas = null;
     if (this.timestamps) {
       try {
         this.timing = {
@@ -236,40 +232,41 @@ export class RtGpu {
     this.device.queue.writeBuffer(this.buf.cone, 0, dirs.buffer, dirs.byteOffset, dirs.byteLength);
   }
 
-  /** Bring the scene buffers up to date (whole BLAS buffers when their version moved, the TLAS by its dirty ranges). */
-  upload(scene: RtGpuScene): void {
+  /**
+   * Bring the scene buffers up to date (render/rt/rtFormat.ts protocol): a buffer that grows, an array the scene replaced, a moved
+   * layout or a fresh allocation is uploaded whole; otherwise only the BLAS spans and the TLAS ranges marked dirty. Then markUploaded().
+   */
+  upload(S: RtSceneBuffers): void {
     const B = this.buf;
     if (!B) return;
-    const d = this.device, q = d.queue;
+    const d = this.device, q = d.queue, cap = this.maxBinding;
     const ensure = (key: 'bn' | 'bt' | 'tl', bytes: number): boolean => {
       const need = Math.max(16, Math.ceil(bytes / 16) * 16), cur = B[key];
       if (cur && cur.size >= need) return false;
-      const size = cur ? Math.max(need, Math.ceil(cur.size * 1.25 / 16) * 16) : need;
+      if (need > cap) throw new Error(`the traced scene's ${key} buffer (${need} bytes) is larger than this device's storage binding limit (${cap})`);
+      const size = Math.min(cap, cur ? Math.max(need, Math.ceil(cur.size * 1.25 / 16) * 16) : need);
       cur?.destroy();
       B[key] = d.createBuffer({label: `rt-${key}`, size, usage: BUF.STORAGE | BUF.COPY_DST});
       this.stats.bytes[key] = size;
       this.groups = [null, null];
       return true;
     };
-    const grewN = ensure('bn', scene.blasNodes.byteLength), grewT = ensure('bt', scene.blasTris.byteLength);
-    if (grewN || grewT || scene.blasVersion !== this.blasVersion) {
-      const a = scene.blasNodes, b = scene.blasTris;
-      if (a.byteLength) q.writeBuffer(B.bn!, 0, a.buffer, a.byteOffset, a.byteLength);
-      if (b.byteLength) q.writeBuffer(B.bt!, 0, b.buffer, b.byteOffset, b.byteLength);
-      this.stats.uploadedBlas += a.byteLength + b.byteLength;
-      this.blasVersion = scene.blasVersion;
-    }
-    const t = scene.tlas;
-    if (ensure('tl', t.byteLength) || !scene.tlasDirty) {
-      if (t.byteLength) q.writeBuffer(B.tl!, 0, t.buffer, t.byteOffset, t.byteLength);
-      this.stats.uploadedTlas += t.byteLength;
-    } else {
-      const r = scene.tlasDirty;
-      for (let i = 0; i + 1 < r.length; i += 2) {
-        const s = Math.max(0, r[i]) * 16, e = Math.min(t.byteLength, r[i + 1] * 16);
-        if (e > s) { q.writeBuffer(B.tl!, s, t.buffer, t.byteOffset + s, e - s); this.stats.uploadedTlas += e - s; }
-      }
-    }
+    const L = S.layout, nodeBytes = S.blasNodeCount * BVH_NODE_FLOATS * 4, triBytes = S.blasTriCount * BLAS_TRI_FLOATS * 4, tlBytes = L.vec4Count * 16;
+    const write = (dst: GPUBuffer, src: Float32Array, start: number, end: number): number => {
+      const e = Math.min(end, src.byteLength);
+      if (!(e > start)) return 0;
+      q.writeBuffer(dst, start, src.buffer, src.byteOffset + start, e - start);
+      return e - start;
+    };
+    const U = this.uploaded;
+    if (ensure('bn', nodeBytes) || U.nodes !== S.blasNodes) this.stats.uploadedBlas += write(B.bn!, S.blasNodes, 0, nodeBytes);
+    else if (S.blasDirtyNodeEnd > S.blasDirtyNodeStart) this.stats.uploadedBlas += write(B.bn!, S.blasNodes, S.blasDirtyNodeStart * BVH_NODE_FLOATS * 4, Math.min(S.blasDirtyNodeEnd * BVH_NODE_FLOATS * 4, nodeBytes));
+    if (ensure('bt', triBytes) || U.tris !== S.blasTris) this.stats.uploadedBlas += write(B.bt!, S.blasTris, 0, triBytes);
+    else if (S.blasDirtyTriEnd > S.blasDirtyTriStart) this.stats.uploadedBlas += write(B.bt!, S.blasTris, S.blasDirtyTriStart * BLAS_TRI_FLOATS * 4, Math.min(S.blasDirtyTriEnd * BLAS_TRI_FLOATS * 4, triBytes));
+    if (ensure('tl', tlBytes) || U.tlas !== S.tlas || U.layout !== S.layoutVersion) this.stats.uploadedTlas += write(B.tl!, S.tlas, 0, tlBytes);
+    else for (let i = 0; i < S.tlasDirtyCount; i++) this.stats.uploadedTlas += write(B.tl!, S.tlas, S.tlasDirty[2 * i] * 16, Math.min(S.tlasDirty[2 * i + 1] * 16, tlBytes));
+    U.nodes = S.blasNodes; U.tris = S.blasTris; U.tlas = S.tlas; U.layout = S.layoutVersion;
+    S.markUploaded();
   }
 
   private makeGroups(B: Buffers, side: number): Record<RtKernel, GPUBindGroup> {

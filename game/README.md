@@ -379,6 +379,10 @@ build's last step. The screen stays up until the first play frame is drawn.
   station load, nothing of the run changes); each help line says what the live station really uses, a rebuild in progress or
   why a change failed. The baked data is a derived cache in this browser (the form shows its size and a **Clear lighting
   cache** button): it is rebuilt when missing and is never part of a save or of the settings record.
+- **RT Flashlight** (`rtFlashlight`, On / Off, default On; needs Enhanced lighting): the flashlight's bounce traced on the GPU
+  by WebGPU compute shaders through the station's real geometry, instead of its virtual lights. Off, the WebGL 2 fallback
+  and a device that fails the compute probe use the virtual lights unchanged, and the help line says why. Applied from the
+  pause menu like the lighting choices; `docs/rt-flashlight.md`.
 
 Dev deep links (`?level=`, `?seed=` …) never start a game: they pre-fill the menu's **Dev start** picker,
 which starts a normal new game at that level.
@@ -395,6 +399,7 @@ settings, slots) with the QA hooks (`window.__menu`); there `#btn-start` builds 
   512 px flashlight shadow, no MSAA; no light is removed). Session-only: it overrides the stored setting without changing it.
 - `?lighting=off|auto|on` — the Enhanced lighting setting for this session (`docs/enhanced-lighting.md`); never persisted.
 - `?reflections=off|standard|high` — the Reflections setting for this session; never persisted. Other values of either are ignored.
+- `?rt=on|off` — the RT Flashlight setting for this session (`docs/rt-flashlight.md`); never persisted.
 - `?warmup=off|view|full` — loading-screen graphics warm-up scope (iteration 14; default `full`, `view` on software GL).
 - `?renderer=webgl2` — force WebGPURenderer's WebGL 2 fallback backend (iteration 13; default: WebGPU when available).
 - `?fog=off|low|high` — override the volumetric haze (iteration 06, `src/render/volumetric.ts`):

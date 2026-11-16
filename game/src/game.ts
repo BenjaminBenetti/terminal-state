@@ -261,7 +261,7 @@ import {installBindingRefresh} from './render/bindingRefresh'; // task studio-de
 // task studio-rt-flashlight-compute-20261115-233136-01: RT Flashlight — the flashlight's bounce traced by WebGPU compute (render/rt/)
 import {probeRtComputeBounded, type RtProbe} from './render/rt/rtGpu';
 import {RtFlashlight} from './render/rt/rtFlashlightRuntime';
-import {RtScene, rtTracedRoots} from './render/rt/rtScene';
+import {RtScene} from './render/rt/rtScene';
 import {shareShaderText} from './render/shaderTextShare'; // task studio-graphics-gpu-materials-toggle-20261114-212239-01
 import {JourneyCompile, type JourneyCompileOptions} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
@@ -326,6 +326,9 @@ function* stageLabels<T>(steps: BuildSteps<T>, on: (stage: string) => void): Bui
     if (!done) steps.return(undefined as never); // (an abandoned paced build closes the inner build too)
   }
 }
+
+/** RT Flashlight: the most bytes each of the traced scene's two BLAS streams may use (WebGPU's default storage binding limit). */
+const RT_BLAS_BYTES = 128 * 1024 * 1024;
 
 export function warmupMode(search: string, software: boolean): WarmupMode {
   const v = new URLSearchParams(search).get('warmup');
@@ -1127,15 +1130,16 @@ export class Game {
   }
 
   /**
-   * The traced bounce failed on this device during play (a device error in its own work): the session's RT capability is withdrawn,
-   * so the next lighting rebuild (the pause menu's relight, the next station) uses the standard bounce; until then this station has
-   * no flashlight bounce (never a wrong one). Reported in the status.
+   * The traced bounce failed on this device during play (a device error in its own work): the session's RT capability is withdrawn.
+   * That makes the live station's lighting a pending change (its plan no longer traces), so the next pause rebuilds it with the
+   * standard bounce, as it applies any changed choice (relightAfterSettings), and every later station has it; until then this station
+   * has no flashlight bounce (never a wrong one). The status says why. (Not rtInstalled(false): that would record the live station as
+   * already lit without RT, and nothing would be rebuilt.)
    */
   private rtFailed(reason: string): void {
-    console.warn(`RT Flashlight: ${reason}; the standard bounce is used from the next lighting change`);
+    console.warn(`RT Flashlight: ${reason}; the standard bounce is used from the next pause or station`);
     if (this.gpu) recordGpuError(this.gpu, `RT Flashlight: ${reason}`);
     this.enhancedLighting.setRtCapability({ok: false, reason});
-    this.enhancedLighting.rtInstalled(false, reason, null);
   }
 
   /**
@@ -1149,8 +1153,11 @@ export class Game {
     if (!want || !rt || rt.failure) { this.releaseRtScene(); return false; }
     yield 'lighting:rt';
     try {
-      const scene = this.rtScene ??= new RtScene({maxStorageBinding: this.rtProbe?.maxStorageBinding});
-      yield* scene.prepareSteps(() => rtTracedRoots(this.scene));
+      // (the whole scene: what a station adds after its lighting — the player train, pickups — is found by the scene's re-inventory;
+      // the camera's rig and the effects are not station geometry; characters are their capsules — rtScene.ts' contract)
+      const cap = Math.min(RT_BLAS_BYTES, this.rtProbe?.maxStorageBinding || RT_BLAS_BYTES);
+      const scene = this.rtScene ??= new RtScene({maxBlasNodeBytes: cap, maxBlasTriBytes: cap, skip: o => o === this.camera || o === this.fx.group});
+      yield* scene.prepareSteps([this.scene]);
       const st = scene.stats();
       if (!(st.triangles > 0)) throw new Error('nothing in this station could be traced');
       rt.setScene(scene);
@@ -1164,13 +1171,15 @@ export class Game {
     }
   }
   /** Why the last station's traced scene could not be prepared (null: it was, or none was asked for). */
+  // (RT_BLAS_BYTES: each BLAS stream's cap — WebGPU's default storage binding limit — below the device's own when that is smaller)
   private rtSceneError: string | null = null;
 
   /** Report the traced scene (after the lighting's applied(): the status reads it). */
   private reportRtScene(want: boolean, lit: boolean): void {
     if (!want) return;
     const st = lit ? this.rtScene?.stats() : null;
-    if (lit && st) this.enhancedLighting.rtInstalled(true, null, {triangles: st.triangles, instances: st.instances, omitted: st.omittedTriangles || undefined});
+    const omitted = st ? st.omitted.triangles.triangles + st.omitted.triangles.blasNodeBytes + st.omitted.triangles.blasTriBytes : 0;
+    if (lit && st) this.enhancedLighting.rtInstalled(true, null, {triangles: st.triangles, instances: st.entries, ...(omitted ? {omitted} : {})});
     else this.enhancedLighting.rtInstalled(false, this.rtFlashlight?.failure ?? this.rtSceneError, null);
     this.rtSceneError = null;
   }
