@@ -123,9 +123,12 @@ await withBrowserLock(async () => {
     const seated = await ev(() => window.__game.skywaysCar.driving);
     step('truck seat', {seated, truck: await ev(() => window.__LL.truck()?.state).catch(e => String(e))});
     if (seated) {
+      // face the road: getting in keeps the look yaw relative to the body (the approach was side-on), so turn the head to the heading
+      await ev(() => { const g = window.__game; g.player.yaw = g.skywaysCar.body.yaw; g.player.pitch = -0.05; });
+      await frames(20);
       await shot('truck-cab', 'first-person from the truck seat (dash, wheel, glazing, road view)');
       await page.keyboard.down('KeyW'); await sleep(2500); await page.keyboard.up('KeyW');
-      await page.keyboard.down('Space'); await sleep(1500); await page.keyboard.up('Space');
+      await page.keyboard.down(' '); await sleep(1500); await page.keyboard.up(' '); // (the handbrake: BiDi's key name for the space bar is ' ')
       await frames(20);
       await shot('truck-rolling', 'after a short forward roll (wheels, lamps, the street ahead)');
       await page.keyboard.press('KeyE');
