@@ -167,6 +167,13 @@ export interface FieldSource {
    * after the slots: BakedField.gi) for the light node that shades by the surface normal. Default true; false = the slots alone.
    */
   cube?: boolean;
+  /**
+   * Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK, follow-up 2): the least X/Z texel scale the station's field is
+   * drawn at on the GPU (world/lights.ts StationLighting downsamples to at least it; the enhanced runtime bounds the uploaded field
+   * with it). Absent = 1. Only a Surface Run district sets it (world/surface/lookDaylight.ts SURFACE_FIELD_SCALE). The bake itself
+   * does not read it (the field is baked at the grid's 0.5 m cells, as ever).
+   */
+  fieldScale?: number;
 }
 
 /** Task track3 (lane ARCH): what FieldSource.extraDirect may add into (the bake's own arrays, slot-major as the fixtures write). */

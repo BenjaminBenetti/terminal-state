@@ -38,7 +38,7 @@ import {rtBounceIrradiance} from './rtBounceNode'; // task studio-rt-flashlight-
 import {addNodeHook} from '../render/nodeHooks';
 import {stationLevels} from './levelGeometry';
 import {mallSkyField} from './mallSkylight'; // Task track3-eaton-centre-20261031 (lane ARCH): daylight through the mall's glass roof
-import {surfaceDaylightDigest, surfaceSkyField} from './surface/lookDaylight'; // Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the district's overcast daylight
+import {surfaceDaylightDigest, surfaceFieldScale, surfaceSkyField} from './surface/lookDaylight'; // Task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the district's overcast daylight
 // Task studio-baked-lighting-reflections-20261114-050258-01: cached reflection probes on metal and glass (a station built with them)
 import {ReflectionProbeVolume, activeReflectionProbes, bindReflectionProbes, installReflectNode, stationReflectLight} from './reflectionNode';
 import type {BakedProbes} from './reflectionProbes';
@@ -396,7 +396,9 @@ export class StationLighting {
     const budget = opts.maxFieldBytes ?? 32e6;
     // (the byte cap is the slots': the cube has its own bound, world/enhancedLighting.ts FIELD_CUBE_BYTES)
     const slotBytes = (full.gi ?? full.depth) * full.w * full.h * 4;
-    const k = Math.max(1, Math.ceil(Math.max(full.w, full.h) / max), Math.ceil(Math.sqrt(slotBytes / budget)));
+    // (+ lane LOOK follow-up 2: never finer than the field source's declared scale — a Surface Run district's 2, the scale the enhanced
+    // runtime bounded its field + cube at; 1 for every other layout)
+    const k = Math.max(1, Math.ceil(Math.max(full.w, full.h) / max), Math.ceil(Math.sqrt(slotBytes / budget)), full.cellScale ? 1 : surfaceFieldScale(layout));
     this.field = k > 1 ? downsampleField(full, k) : full;
     this.groups = this.field.groups;
     this.volume = new LightFieldVolume(this.field);

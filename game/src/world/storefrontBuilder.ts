@@ -199,7 +199,7 @@ function* buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: Sto
   const tmp = new THREE.Color(), paintCol = new THREE.Color();
   // task mall-round2 (lane PERF): storey-split chunks, mall only (task studio-reactor-submit, lane CPU: + the Reactor's stacked tiers)
   // (task studio-skywalk-variety-20261107-231448-01, lane PERF: + the Skyways — fine chunks are what its occlusion culls with)
-  const byStorey = !!(layout as {mall?: unknown}).mall || !!(layout as {reactor?: unknown}).reactor || !!(layout as {skyways?: unknown}).skyways;
+  const byStorey = !!(layout as {mall?: unknown}).mall || !!(layout as {reactor?: unknown}).reactor || !!(layout as {skyways?: unknown}).skyways || !!(layout as {surface?: unknown}).surface; // (+ a Surface Run district: lane LOOK follow-up 2)
   for (const kind of PURPOSE_PROP_KINDS) {
     yield;
     if (rendersOwnBody(kind, deps.models)) continue; // iteration 08 (Lane I): openable (lockers, safe) drawn by world/openables.ts

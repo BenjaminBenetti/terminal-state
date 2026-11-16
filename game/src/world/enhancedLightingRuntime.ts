@@ -358,7 +358,10 @@ export class EnhancedLightingRuntime {
    */
   private shadingFor(plan: EnhancedLightingPlan, src: FieldSource, max3D: number): {shading: FieldShading; reason: string | null} {
     if (plan.shading !== 'full') return {shading: 'plain', reason: plan.shadingReason};
-    const S = Math.min(MAX_SLOTS, src.levels?.length || 1), depth = fieldDepth(S) + MAX_GROUPS + giDepth(S), bytes = src.grid.w * src.grid.h * depth * 4;
+    // (task studio-surface-run-opus-rebuild-20261116-020827-01, lane LOOK follow-up 2: at the X/Z scale the field is uploaded at —
+    // FieldSource.fieldScale, a Surface Run district's 2; absent everywhere else: the full grid, as before)
+    const k = Math.max(1, Math.floor(src.fieldScale ?? 1));
+    const S = Math.min(MAX_SLOTS, src.levels?.length || 1), depth = fieldDepth(S) + MAX_GROUPS + giDepth(S), bytes = Math.ceil(src.grid.w / k) * Math.ceil(src.grid.h / k) * depth * 4;
     if (depth > max3D) return {shading: 'plain', reason: `this station's field with its cube (${depth} slices) is deeper than this renderer's 3D textures (${max3D})`};
     if (bytes > FIELD_CUBE_BYTES) return {shading: 'plain', reason: `this station's field with its cube (${Math.round(bytes / 1e6)} MB) is past the ${Math.round(FIELD_CUBE_BYTES / 1e6)} MB bound`};
     return {shading: 'full', reason: null};

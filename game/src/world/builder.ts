@@ -70,6 +70,7 @@ import {SkywaysArch} from './skywaysArch'; // task studio-skyways-level-20261106
 import {MarketArch} from './marketArch'; // task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market's corrugated / salvaged finishes
 import {SurfaceArch} from './surface/arch'; // task studio-surface-run-opus-rebuild-20261116-020827-01 (lane LOOK): the Surface Run district's streets, facades and interiors
 import {surfaceLookPlanSteps} from './surface/archPlan';
+import {surfaceOcclusionSee} from './surface/lookOcclusion'; // (lane LOOK, follow-up 2: the district culler's see-through structure)
 import {BunkerArch} from './bunkerArch'; // task studio-bunker-level-20261109-072224-01: the Bunker's finishes (the Reactor's arch materials) + the shelter hero models
 import {CORPSE_DEN_MODEL_FOR} from '../gen/market/v4/denKinds'; // task studio-corpse-market-shop-20261114-031614-01: the Market den's chute / booth instanced through MODEL_FOR
 import {BUNKER_MODEL_FOR, isBunkerObjectiveKind} from '../gen/bunker/bunkerKinds'; // task studio-bunker-level-20261109-072224-01: objective kinds drawn by world/bunker; the model-backed flavour kinds instanced through MODEL_FOR
@@ -287,7 +288,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   // task static-batching-warmup-20261105 (world/staticCohorts.ts): coarse cohorts for cheap models where the culler has no atrium / slab
   // occlusion (the mall / Reactor keep fine chunks: their per-box occlusion is what removes draws there; task studio-skywalk-variety-
   // 20261107-231448-01, lane PERF: + the Skyways, occlusion-culled now)
-  const coarseCohorts = !layout.mall && !(layout as {reactor?: unknown}).reactor && !layout.skyways;
+  const coarseCohorts = !layout.mall && !(layout as {reactor?: unknown}).reactor && !layout.skyways && !layout.surface; // (+ a Surface Run district, lane LOOK follow-up 2: occlusion-culled)
   const instanceModel = (gr: THREE.Group, gltf: GLTF, placements: THREE.Matrix4[], fit: {w: number; h: number; d: number; anchor: 'bottom' | 'top'}, name: string) =>
     addInstancedModel(gr, gltf, placements, fit, name, levelAt, coarseCohorts);
   const group = new THREE.Group();
@@ -900,6 +901,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   const culler = yield* LevelCuller.steps(levels, cols, levelAt, mall ? {atrium: mall.atrium, slabs: {see: (layout.mall?.elevators ?? []).map(e => e.shaft)}}
     : reactor ? {atrium: reactor.pitMask, slabs: {see: reactor.occlusionSee(), glass: []}}
     : layout.skyways ? {slabs: {see: skywaysOcclusionSee(layout), windows: skywaysWindowSpans(layout)}}
+    : layout.surface ? {slabs: {see: surfaceOcclusionSee(layout)}} // (lane LOOK follow-up 2: a Surface Run district — interiors behind its facades; world/surface/lookOcclusion.ts)
     : mkt ? {atrium: mkt.atrium} : undefined); // (task studio-survivor-market-20261108-005807-01: the open shed as atrium tiles, no slabs)
   culler.register(group);
   return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler,

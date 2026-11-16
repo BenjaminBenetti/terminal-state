@@ -578,7 +578,7 @@ export class ContainerManager {
     // Task studio-reactor-submit-roof-fog-20261102 (lane CPU): + the Reactor (six tiers stacked round / behind the pit; its culler has
     // the same slab / storey occlusion, so the per-storey loot display batches are decided like the mall's)
     // (task studio-skywalk-variety-20261107-231448-01, lane PERF: + the Skyways — its culler has the same occlusion now)
-    const byStorey = !!(layout as {mall?: unknown}).mall || !!(layout as {reactor?: unknown}).reactor || !!(layout as {skyways?: unknown}).skyways;
+    const byStorey = !!(layout as {mall?: unknown}).mall || !!(layout as {reactor?: unknown}).reactor || !!(layout as {skyways?: unknown}).skyways || !!(layout as {surface?: unknown}).surface; // (+ a Surface Run district: lane LOOK follow-up 2)
     yield 'holders.openables';
     this.openables.finish(byStorey);
     // Bodies: instanced per kind in ~12 m chunks (frustum culling), like builder props. Task static-batching-warmup-20261105
@@ -619,7 +619,7 @@ export class ContainerManager {
     // Task mall-round2-20261031 (lane PERF, M05): in the mall the loot display batches per (item, storey) + one all-storey batch,
     // frustum-bounded and registered with the level culler (world/lootDisplay.ts); elsewhere one unbounded batch per item as before
     // (task studio-skywalk-variety-20261107-231448-01, lane PERF: + the Skyways)
-    const byStorey = !!(layout as {mall?: unknown}).mall || !!(layout as {reactor?: unknown}).reactor || !!(layout as {skyways?: unknown}).skyways;
+    const byStorey = !!(layout as {mall?: unknown}).mall || !!(layout as {reactor?: unknown}).reactor || !!(layout as {skyways?: unknown}).skyways || !!(layout as {surface?: unknown}).surface; // (+ a Surface Run district: lane LOOK follow-up 2)
     if (byStorey) {
       const perStorey = new Map<string, Set<number>>();
       for (const h of this.all) for (const l of h.state.lots) {
