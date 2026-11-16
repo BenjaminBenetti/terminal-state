@@ -468,8 +468,9 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
       if (covered[L][i] || g.rampIdx[i] >= 0 || !cols.has(i, L)) return null;
       if (ext?.ownsCell(L, i)) return null; // Track 2 (VIS): the tunnel shell's ballast floor
       const c = g.cells[i];
-      if (c === VOID) return 'ballast';
+      if (c === VOID) return mkt?.voidFloorKey(L, i) ?? 'ballast'; // (task studio-survivor-market-crevice-20261116-074419, lane ARCH: the market crevice's chasm bed)
       if (c !== FLOOR) return null;
+      if (mkt?.hidesFloor(L, i)) return null; // (lane ARCH: a market crevice bridge — the cooked bridge model is its deck)
       // The space continues downward (another band ends right at this floor): no floor surface.
       const f = g.floorOf(i);
       for (let k = 0; k < cols.count(i); k++) { const M = cols.level(i, k); if (M !== L && Math.abs(cellCeilAt(levels[M].grid, i) - f) < 0.02) return null; }
@@ -510,7 +511,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     // The opening head d.height above a door standing at its storey's base (iteration 08: level 0 at y 0; task
     // office-seamless-20261029: any storey's baseY in a tower world), else the carved cell ceiling.
     const atBase = L === 0 ? df === 0 : storeyDoors && Math.abs(df - levels[L].baseY) < 1e-4;
-    const dk = office?.doorCeilKey(L, a, b) ?? mall?.doorCeilKey(L, a, b) ?? reactor?.doorCeilKey(L, a, b) ?? sky?.doorCeilKey(L, a, b) ?? mkt?.doorCeilKey(L) ?? bunk?.doorCeilKey(L, a, b) ?? surf?.doorCeilKey(L, a, b) ?? (b.publicSpace ? 'ceiling' : 'ceilingService'), dy = atBase ? df + d.height : g.ceil[i]; // (+ reactor: lane ARCH; + sky: lane VIEW)
+    const dk = office?.doorCeilKey(L, a, b) ?? mall?.doorCeilKey(L, a, b) ?? reactor?.doorCeilKey(L, a, b) ?? sky?.doorCeilKey(L, a, b) ?? mkt?.doorCeilKey(L, a, b) ?? bunk?.doorCeilKey(L, a, b) ?? surf?.doorCeilKey(L, a, b) ?? (b.publicSpace ? 'ceiling' : 'ceilingService'), dy = atBase ? df + d.height : g.ceil[i]; // (+ reactor: lane ARCH; + sky: lane VIEW)
     // Track 2 (VIS): a tunnel door's cells inside the shell take the shell ceiling; the rest keep the door head.
     let owned = false;
     if (ext) for (let y = d.y; y < d.y + d.h && !owned; y++) for (let x = d.x; x < d.x + d.w; x++) if (ext.ownsCell(L, y * g0.w + x)) { owned = true; break; }
@@ -523,7 +524,9 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
     const a = r.voidCell ? undefined : layout.areas[r.area];
     // Task office-overhaul-20261030 (lane ARCH): office ceilings (T-bar grid, plaster, exposed slab, core); none on the open roof.
     // Task track3-eaton-centre-20261031 (lane ARCH): the mall's ceilings; none over the void (the glass vault), track bed included.
-    const oc = r.voidCell ? (mall?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? null) : office?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? mall?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? sky?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? mkt?.ceilKey(r.level, r.area) ?? bunk?.ceilKey(r.level, r.area) ?? surf?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? null; // (+ reactor: lane ARCH; + sky: lane VIEW, none inside an atrium opening)
+    // (task studio-survivor-market-crevice-20261116-074419, lane ARCH: + the market crevice's chasm / track-bed ceilings and the run's cell /
+    // height for its rooms and bridge decks — versions 1-4 answer exactly as before)
+    const oc = r.voidCell ? (mall?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? mkt?.voidCeilKey(r.level, r.row * g0.w + r.x0, r.y) ?? null) : office?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? mall?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? reactor?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? sky?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? mkt?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? bunk?.ceilKey(r.level, r.area) ?? surf?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? null; // (+ reactor: lane ARCH; + sky: lane VIEW, none inside an atrium opening)
     if (oc === false) { drawnCeils.push(levels[r.level].id, r.x0 * CELL, r.row * CELL, r.x1 * CELL, (r.row + 1) * CELL, r.y, -1); continue; }
     ceilRect(oc ?? (r.voidCell || !a || a.publicSpace ? 'ceiling' : 'ceilingService'), levels[r.level].id, r.x0 * CELL, r.row * CELL, r.x1 * CELL, (r.row + 1) * CELL, r.y);
     if (++step % 128 === 0) yield;
@@ -532,7 +535,7 @@ export function* buildWorldSteps(layout: StationLayout, mats: WorldMaterials, mo
   // Lane T (iteration 05): stair flights (treads, risers, nosings, ceilings, handrails), rescue
   // ladders, underpass track-structure beams, tunnel-mouth barricades. Iteration 08: every level's
   // flights once (a flight shared by two levels is built once); side walls come from the faces above.
-  instancesFromTraversal = buildTraversal(group, layout, mats, (k, x, z, level) => A(reactor ? reactor.stairKey(k, x, z, level) : k, stairChunk(x, z, flightLevels(x, z, level))), {levels, cols}); // (reactor-build, lane ARCH: steel flights in the pit)
+  instancesFromTraversal = buildTraversal(group, layout, mats, (k, x, z, level) => A(reactor ? reactor.stairKey(k, x, z, level) : mkt?.stairKey(k) ?? k, stairChunk(x, z, flightLevels(x, z, level))), {levels, cols}); // (reactor-build, lane ARCH: steel flights in the pit; + the market crevice's steel flights: task studio-survivor-market-crevice-20261116-074419)
 
   yield 'world.meshes';
   let archMeshes = 0;

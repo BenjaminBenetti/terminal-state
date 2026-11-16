@@ -15,6 +15,11 @@ export interface MarketAwning {
   x0: number; x1: number; z: number; depth: number; yWall: number; yEdge: number; stall: string;
   /** Task studio-market-rework-20261108-074144-01: the direction (z) the canvas reaches out from the wall (layout version 2); absent = +1. */
   dir?: 1 | -1;
+  /**
+   * Task studio-survivor-market-crevice-20261116-074419 (layout version 5): 'z' = the wall runs along world z (an E / W front): x0 / x1
+   * are then its z span, `z` the wall's x and `dir` the x direction the canvas reaches out along. Absent = along x (versions 1-4).
+   */
+  axis?: 'z';
 }
 
 /** Fan / awning dimensions (m). */

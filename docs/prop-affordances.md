@@ -177,6 +177,18 @@ Meshy maps kept, one uniform scale, level-only `market-*`. Nothing loose is part
 - Scale-check renders (2026-11-14) are in the task's private QA folder (`qa/scale/corpse-chute.png`, `corpse-booth.png`,
   `corpse-buyer.png`, `corpse-den-all.png`).
 
+#### The crevice (layout version 5, task studio-survivor-market-crevice-20261116-074419)
+`gen/market/v5/dress.ts` furnishes the crevice with EXISTING kinds only, so there is no new kind, audit row or scale check. Five kinds are
+new to the Market but already classified station / office kinds: `firstAidWallKit`, `mopSink`, `pedestalFan`, `pottedPlantSmall`,
+`stepLadder`. The Market rule holds: every holder is empty except version 2's community stores (the workshop's storage and the first
+store room). Loose things stand on real support surfaces as separate props.
+- **Structure, not props (explicit exceptions):** the shipping containers (grid rooms with their handmade frames, doors, windows and
+  vents: `world/marketCrevice.ts`) and the **bridges** (the cooked bridge kit, `assets/marketBridgeKit.generated.ts`: anchored
+  structures drawn by the view, collision from the layout grid). Neither is storage, and neither moves.
+- The bridge kit was checked at runtime scale beside the `lastshift` zombie: rail top 1.05 m above the deck, deck 2.0 m between the rail
+  centre-lines. The girders and leg stubs hang 0.47–0.50 m below the deck, so the check reports it as "sunk". Every band under a deck
+  ends 0.45 m below it, leaving 2.5 m of headroom a storey down.
+
 ## 3. Movable things move
 Standing user rule (2026-10-30): **every physics object reacts to the player walking into it — no shot needed first** (task
 office-props-physics-scale-20261030, lane PHYS; `tests/contact-physics.test.ts`).

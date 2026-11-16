@@ -69,6 +69,12 @@ Carry one in, aim at his floor chute and press **E**: the body goes down the sha
 slot onto the floor for you to pick up. He sells nothing and is closed while the Market is hostile. Visited Markets keep their old
 layout.
 
+Survivor Market crevice (task studio-survivor-market-crevice-20261116-074419, `docs/survivor-market-crevice.md`): newly built Survivor
+Markets (layout version 5) are an underground concrete crevice. Converted shipping-container homes and shops are terraced up both sides
+over four storeys, joined by bridges, above a dark chasm. The same shops, bar and corpse buyer are there: the heavy shops and the den on
+the Arrival Square right by the train, medical and gear on the lower terrace by the bar, and the kitchen and workshop at the Weir. Visited
+Markets keep their recorded layout.
+
 Train crafting (task studio-train-crafting-v1-20261111-225628-01, `docs/train-crafting.md`): the bench in the train's rear
 compartment, opposite the Lockbox, turns **Scrap metal / Electrical parts** into four physical things. Aim + **E** opens the recipe
 list (a 3D picture of each thing, and each material's icon with have / need: green when enough, red when short; no key shortcuts); materials come from your pockets, worn backpack, the Lockbox and crafted chests in the
