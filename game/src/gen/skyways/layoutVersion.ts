@@ -39,6 +39,17 @@
 // version-7 change gated on `>= SKYWAYS_EVENTS_MIN_VERSION` (fingerprints pinned: GAME129 in tests/skyways-dest-layout-version.test.ts);
 // every station not yet entered gets version 7 (and with it, once, its event draw). A station entered at 1-6 keeps its add-on, enemies,
 // kills, loot and layout exactly.
+//
+// Task studio-skywalk-loot-performance-20261116-022934-01 (version 8, lane LOOT; user: the technology expo, the mini-golf and the
+// evacuation centre should feel properly supplied with useful, plausible existing loot, not just decorative furniture): each new event
+// gets its own supply holders (gen/skyways/events/eventLoot.ts). The expo gets electronics and materials in its demo and storage areas,
+// the mini-golf its reception, maintenance and concessions, and the evacuation centre its medical, ration and supply stock. The holders
+// are existing audited kinds with the exact EXPO_* / GOLF_* / EVAC_* tables of items/lootTables.ts. The pass runs LAST in generation on
+// its own fork, after every enemy is placed, and only APPENDS holders: every earlier prop, pickup, spawn and holder keeps its index,
+// serial, contents and lot ids, and the event draw does not change. Version 7 regenerates through the SAME live generator with the pass
+// gated on `>= SKYWAYS_EVENT_LOOT_MIN_VERSION` (fingerprints pinned: GAME130 in tests/skyways-dest-layout-version.test.ts). Every station
+// not yet entered gets version 8. A station entered at 1-7 keeps its add-on, enemies, kills, loot and layout exactly: nothing is
+// refilled, rerolled or duplicated.
 
 export const SKYWAYS_LAYOUT_LANE = 'skyways.layout';
 /**
@@ -46,16 +57,19 @@ export const SKYWAYS_LAYOUT_LANE = 'skyways.layout';
  * studio-skyways-rework-20261107-054512: the ten major stores, gen/skyways/stores/, with their outward storefronts, Skyways-scoped loot
  * purposes and dressers — and the parent's architecture); 4 = the building programmes (task studio-skywalk-variety-20261107-231448-01);
  * 5 = the encounters pass (task studio-skywalk-encounters-20261108-074144-01); 6 = the convention's second-floor cosplay crowd (task
- * studio-cosplay-general-20261108-225231-01); 7 = the new localized events (task studio-skywalk-events-20261115-193624-01). Stations
- * entered at 1 / 2 / 3 / 4 / 5 / 6 keep regenerating exactly that layout.
+ * studio-cosplay-general-20261108-225231-01); 7 = the new localized events (task studio-skywalk-events-20261115-193624-01); 8 = the
+ * new events' own supplies (task studio-skywalk-loot-performance-20261116-022934-01). Stations entered at 1 / 2 / 3 / 4 / 5 / 6 / 7
+ * keep regenerating exactly that layout.
  */
-export const SKYWAYS_LAYOUT_VERSION = 7;
+export const SKYWAYS_LAYOUT_VERSION = 8;
 /** The first version of the encounters pass (Siren / horde / cosplay zombies / Mall store families): gate every change on it. */
 export const SKYWAYS_ENCOUNTERS_MIN_VERSION = 5;
 /** The first version whose convention crowd also stands on the host building's other public floor (gen/skyways/cosplayFloors.ts). */
 export const SKYWAYS_COSPLAY_FLOORS_MIN_VERSION = 6;
 /** The first version whose add-on is drawn from the five-event pool (the expo / mini-golf / evacuation centre: gen/skyways/events/). */
 export const SKYWAYS_EVENTS_MIN_VERSION = 7;
+/** The first version whose new events (expo / mini-golf / evacuation centre) carry their own supply holders (gen/skyways/events/eventLoot.ts). */
+export const SKYWAYS_EVENT_LOOT_MIN_VERSION = 8;
 /** The newest version the frozen GAME77 generator (gen/skyways/legacy77/) serves. */
 export const SKYWAYS_LEGACY77_MAX = 2;
 /** The version the frozen version-3 core (gen/skyways/legacy80/) serves. */

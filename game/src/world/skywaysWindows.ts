@@ -295,18 +295,24 @@ export class SkywaysWindowRuntime {
   frame(): void {
     const g = this.glazing;
     if (!g) return;
-    const h = this.host, plans = g.plans;
-    const fix = (b: {x: number; z: number; y: number}, r: number): void => {
-      for (const p of plans) {
-        if (Math.abs(b.y - p.baseY) > 2.6) continue; // that span's own storey only
-        const c = p.collider;
-        if (b.x < c.x0 - r - 0.5 || b.x > c.x1 + r + 0.5 || b.z < c.z0 - r - 0.5 || b.z > c.z1 + r + 0.5) continue;
-        const q = pushOutRect(b.x, b.z, r, c, [-p.n[0], -p.n[1]]);
-        if (q) { b.x = q[0]; b.z = q[1]; this.counts.pushes++; }
-      }
-    };
-    if (h.player.alive) fix(h.player, h.player.radius);
-    for (const z of h.zombies) if (z.brain.alive && !z.ragdolled) fix(z.brain, z.brain.stats.radius);
+    const h = this.host, plans = g.plans, zs = h.zombies;
+    if (h.player.alive) this.keepIn(plans, h.player, h.player.radius);
+    for (let i = 0; i < zs.length; i++) { const z = zs[i]; if (z.brain.alive && !z.ragdolled) this.keepIn(plans, z.brain, z.brain.stats.radius); }
+  }
+
+  /**
+   * One body back to the room side of the spans on its own storey. (Task studio-skywalk-loot-performance-20261116-022934-01: a
+   * method with index loops instead of a per-frame closure over a for-of — every body x every span, every frame.)
+   */
+  private keepIn(plans: readonly WindowPlan[], b: {x: number; z: number; y: number}, r: number): void {
+    for (let i = 0; i < plans.length; i++) {
+      const p = plans[i];
+      if (Math.abs(b.y - p.baseY) > 2.6) continue; // that span's own storey only
+      const c = p.collider;
+      if (b.x < c.x0 - r - 0.5 || b.x > c.x1 + r + 0.5 || b.z < c.z0 - r - 0.5 || b.z > c.z1 + r + 0.5) continue;
+      const q = pushOutRect(b.x, b.z, r, c, [-p.n[0], -p.n[1]]);
+      if (q) { b.x = q[0]; b.z = q[1]; this.counts.pushes++; }
+    }
   }
 }
 

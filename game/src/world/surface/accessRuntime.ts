@@ -15,6 +15,7 @@ import type {StationLayout} from '../../gen/stationTypes';
 import type {SBox} from '../../gen/surface/surfaceTypes';
 import {hostKeyOf} from '../../gen/surface/surfaceRun';
 import {buildAccessDoor} from './accessView';
+import {setSurfaceWayAimed} from './crossing';
 
 /** How the player must stand at a way: inside its box (feet within y0..y1), looking within `look` rad of its focus (or right at it). */
 export const ACCESS_AIM = {look: 1.0, near: 0.8};
@@ -51,6 +52,7 @@ export class SurfaceAccessRuntime {
     g.frameHooks.push(() => this.frame());
     g.interactHandlers.push(() => this.interact());
     g.promptProviders.push(() => this.prompt());
+    setSurfaceWayAimed(g, () => this.aimed && !!this.way); // (a grabbed / carried train unit's own [E] yields here: the crossing takes it along)
     return this;
   }
 

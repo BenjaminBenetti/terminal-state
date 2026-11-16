@@ -34,6 +34,7 @@ import {
 import type {BuildSteps} from '../core/pacedBuild'; // task studio-perf-ao-train-continuity-20261110-022206-01 (lane BUILD)
 import {FULL_IRRADIANCE, FULL_RADIANCE, LF, activeLightField, bindLightField, installLightFieldNode, setLightFieldLevels, stationFieldLight, stationLights, type LightFieldLight} from './lightFieldNode';
 import {FlashBounce, flashBounceIrradiance} from './flashBounce';
+import {rtBounceIrradiance} from './rtBounceNode'; // task studio-rt-flashlight-compute-20261115-233136-01
 import {addNodeHook} from '../render/nodeHooks';
 import {stationLevels} from './levelGeometry';
 import {mallSkyField} from './mallSkylight'; // Task track3-eaton-centre-20261031 (lane ARCH): daylight through the mall's glass roof
@@ -133,6 +134,11 @@ export interface StationLightingOptions {
   shading?: FieldShading;
   mirror?: boolean;
   bounce?: EnhancedBake['bounce'];
+  /**
+   * Task studio-rt-flashlight-compute-20261115-233136-01: light the bounce by the traced RT path (the RT variant of the full field
+   * light; FLASH_BOUNCE unbound). Ignored without `bounce`.
+   */
+  rt?: boolean;
 }
 
 /** The light field source of a station (StationLighting's bake input). */
@@ -310,18 +316,29 @@ const tmpColor = new THREE.Color();
  * (Enhanced lighting Off, plain shading, the Reactor, the transit gap). The game calls FLASH_BOUNCE.update every frame.
  */
 export const FLASH_BOUNCE = new FlashBounce();
-FULL_IRRADIANCE.push(() => flashBounceIrradiance(positionWorld, normalWorld));
+// (task studio-rt-flashlight-compute-20261115-233136-01: the virtual lights' term is in every FULL light's programs but the RT one's)
+FULL_IRRADIANCE.push(light => light.rt ? null : flashBounceIrradiance(positionWorld, normalWorld));
 /**
  * On metal, glass and glazed tile the bounce also shows as a soft sheen: the radiance of the lit patches round the mirror direction,
  * estimated as their irradiance on a plane facing that direction / pi (a wide lobe), up to FLASH_BOUNCE_SHEEN times that on a smooth
  * surface (its lobe is narrower than the patch is wide). three's own Fresnel / roughness response weighs it, as it does the probes.
  */
 export const FLASH_BOUNCE_SHEEN = 3;
-FULL_RADIANCE.push((dir, rough) => n(flashBounceIrradiance(positionWorld, dir)).mul(n(mix(float(FLASH_BOUNCE_SHEEN), float(1), n(rough))).mul(1 / Math.PI)));
+const sheen = (rough: unknown): N => n(mix(float(FLASH_BOUNCE_SHEEN), float(1), n(rough))).mul(1 / Math.PI);
+FULL_RADIANCE.push((dir, rough, light) => light.rt ? null : n(flashBounceIrradiance(positionWorld, dir)).mul(sheen(rough)));
+/**
+ * Task studio-rt-flashlight-compute-20261115-233136-01: the TRACED bounce (render/rt/, world/rtBounceNode.ts) in the RT variant of
+ * the full field light instead — replacing the virtual lights' term, never added to it. Its sheen on metal, glass and glazed tile is
+ * the same response on the traced irradiance at the surface (the receivers hold the irradiance for their own normal, not for the
+ * mirror direction: a stated approximation).
+ */
+FULL_IRRADIANCE.push(light => light.rt ? rtBounceIrradiance(positionWorld, normalWorld) : null);
+FULL_RADIANCE.push((_dir, rough, light) => light.rt ? n(rtBounceIrradiance(positionWorld, normalWorld)).mul(sheen(rough)) : null);
 let bounceOwner: StationLighting | null = null;
 function bindBounce(owner: StationLighting | null): void {
   bounceOwner = owner;
-  FLASH_BOUNCE.bind(owner?.bounce ?? null);
+  // (a station lit by the RT light traces its bounce on the GPU: the virtual lights stay unbound = exactly zero)
+  FLASH_BOUNCE.bind(owner && !owner.rt ? owner.bounce : null);
 }
 
 export class StationLighting {
@@ -341,6 +358,11 @@ export class StationLighting {
   readonly mirror: boolean;
   /** What the flashlight's bounce traces in this station (null: no bounce here). */
   readonly bounce: NonNullable<EnhancedBake['bounce']> | null;
+  /**
+   * Task studio-rt-flashlight-compute-20261115-233136-01: the bounce is the one traced by WebGPU compute (render/rt/), read by the RT
+   * variant of the full field light; the virtual lights (FLASH_BOUNCE) are unbound. Only with a bounce (full shading) and `opts.rt`.
+   */
+  readonly rt: boolean;
   /** Soft glow cards, one per working fixture (camera-facing, additive). */
   readonly glow: THREE.InstancedMesh | null;
   /** Kept for API compatibility: no pooled lights exist any more. */
@@ -390,8 +412,9 @@ export class StationLighting {
         : !installReflectNode(opts.renderer) ? 'the renderer has no node library' : null;
     this.reflections = p && p.count > 0 && !this.reflectionsSkipped ? new ReflectionProbeVolume(p) : null;
     this.mirror = !!this.reflections && !!opts.mirror;
-    this.fieldLight = this.reflections ? stationReflectLight(this.full, this.mirror) : stationFieldLight(this.full);
     this.bounce = this.full ? opts.bounce ?? null : null;
+    this.rt = !!this.bounce && opts.rt === true;
+    this.fieldLight = this.reflections ? stationReflectLight(this.full, this.mirror, this.rt) : stationFieldLight(this.full, this.rt);
     scene.add(this.fieldLight);
     bindLightField(this.volume);
     bindReflectionProbes(this.reflections);
@@ -475,7 +498,7 @@ export class StationLighting {
       error = err ?? new Error('the lighting could not be installed');
       prev.reinstate(); // (whatever the failed constructor had already put in the scene or bound)
       const base: StationLightingOptions = {...opts};
-      delete base.baked; delete base.probes; delete base.shading; delete base.mirror; delete base.bounce;
+      delete base.baked; delete base.probes; delete base.shading; delete base.mirror; delete base.bounce; delete base.rt;
       try {
         lighting = new StationLighting(scene, layout, fixtures, tubes, base);
       } catch {

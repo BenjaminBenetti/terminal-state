@@ -14,6 +14,7 @@ import {milestoneBadge, readMilestones} from './run/milestones'; // task reactor
 import {MainMenuController, MainMenuView, bootLine, mountControlsForm, mountSettingsForm, mountTutorialReset, type DevStart, type MenuHost, type SlotView} from './ui/mainMenu';
 import {SettingsStore, browserSettingsStorage, copySettingsInto} from './ui/settingsStore';
 import {isEnhancedLightingMode, isReflectionQuality} from './world/enhancedLighting'; // task studio-baked-lighting-reflections-20261114-050258-01 (lane SETTINGS): ?lighting= / ?reflections=
+import {rtFlashlightParam} from './world/rtFlashlight'; // task rt-flashlight-compute-20261115-233136 (lane UI): ?rt=on|off
 import {bakeWorkerCount} from './world/lightBakePool'; // task studio-gi-mood-bounce-loading-20261115-081523-01 (lane WORKERS): the lighting bake's workers
 import LightBakeWorker from './world/lightBakeWorker?worker&inline'; // (the worker's script, inlined in this bundle and started from a Blob)
 import {MENU_TRAIN_KEYS, MenuScene, type MenuRenderer, type MenuSceneAssets} from './world/menuScene';
@@ -187,6 +188,13 @@ async function boot(): Promise<void> {
   const urlLighting = params.get('lighting'), urlReflections = params.get('reflections');
   if (isEnhancedLightingMode(urlLighting)) settings.sessionOverride({enhancedLighting: urlLighting});
   if (isReflectionQuality(urlReflections)) settings.sessionOverride({reflections: urlReflections});
+  // (task rt-flashlight-compute-20261115-233136, lane UI) session-only ?rt=on|off (QA / comparisons): RT Flashlight on top of the stored
+  // choice, never persisted; any other value is ignored
+  const urlRt = rtFlashlightParam(params.get('rt'));
+  if (urlRt !== null) settings.sessionOverride({rtFlashlight: urlRt});
+  // (task studio-rt-flashlight-toggle-hitch-20261116-052336-01) session-only ?rtstandby=off (QA / comparisons): the torch-off frames
+  // trace nothing, as before the standby (Game.rtStandby)
+  if (params.get('rtstandby') === 'off') game.rtStandby = false;
   copySettingsInto(game.settings, settings.get());
   game.applySettings();
   settings.subscribe((s, changed) => {
@@ -197,8 +205,9 @@ async function boot(): Promise<void> {
     else if (changed.some(k => k === 'volume' || k === 'muted')) { game.sfx.setVolume(s.volume); game.sfx.setMuted(s.muted); }
     if (qualityChanged) void game.rewarmAfterSettings(); // Iteration 14: new render targets -> prepare their pipelines before Resume
     // task studio-graphics-gpu-materials-toggle-20261114-212239-01: Enhanced lighting / Reflections apply to the LIVE station (pause menu:
-    // the lighting is rebuilt and re-warmed before Resume; elsewhere the change waits for the next pause or station — Game.relightAfterSettings)
-    if (changed.some(k => k === 'enhancedLighting' || k === 'reflections')) void game.relightAfterSettings();
+    // the lighting is rebuilt and re-warmed before Resume; elsewhere the change waits for the next pause or station — Game.relightAfterSettings;
+    // task rt-flashlight-compute-20261115-233136, lane UI: RT Flashlight likewise — it selects the bounce's light variant)
+    if (changed.some(k => k === 'enhancedLighting' || k === 'reflections' || k === 'rtFlashlight')) void game.relightAfterSettings();
   });
   game.onSettingsChanged = key => { if (key === 'muted') settings.set({muted: game.settings.muted}); }; // the M key
   window.addEventListener('storage', e => { if (e.key === settings.key) settings.reload(); }); // another tab changed them

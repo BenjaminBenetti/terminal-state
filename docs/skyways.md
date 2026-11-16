@@ -128,9 +128,12 @@ Every kit model is a Codex concept turned into a Meshy T2.5 model with its PBR m
   zombies, the Mall store families), followed (fingerprints pinned as GAME87).
 - Version 6, the convention's cosplay crowd on both floors of its building (task studio-cosplay-general-20261108-225231-01,
   `gen/skyways/cosplayFloors.ts`; see `docs/enemy-spawns.md`), followed (fingerprints pinned as GAME129).
-- **Version 7, the major-event pool** (task studio-skywalk-events-20261115-193624-01; see "The major events" below), is what every
-  station not yet entered gets now, in new and existing campaigns. Versions 4–7 share the live generator, with every change gated on
-  the version. A version-7 station whose draw stays the convention or the prize car is byte-identical to version 6.
+- Version 7, the major-event pool (task studio-skywalk-events-20261115-193624-01; see "The major events" below), followed. A version-7
+  station whose draw stays the convention or the prize car is byte-identical to version 6 (fingerprints pinned as GAME130).
+- **Version 8, the events' own supplies** (task studio-skywalk-loot-performance-20261116-022934-01; see "The events' supplies" below),
+  is what every station not yet entered gets now, in new and existing campaigns. It has the same event draw as version 7. Versions 4–8
+  share the live generator, with every change gated on the version. A version-8 station is its version-7 layout plus the appended
+  supply holders; a convention or prize-car station is byte-identical to version 7.
 - Versions 1 and 2 regenerate through a FROZEN snapshot of the GAME77 generator (`gen/skyways/legacy77/`), version 3 through a frozen
   snapshot of its core (`gen/skyways/legacy80/`: index / carve / frame / validate). The test pins all three versions' fingerprints, so a
   station a player already entered keeps its holders, pickups, kills and add-on.
@@ -285,6 +288,57 @@ per map, the rest of the map stays ordinary.
 - Tests: `tests/skyways-event-pool.test.ts`, `skyways-event-expo.test.ts`, `skyways-event-golf-course.test.ts`,
   `skyways-event-golf-play-*.test.ts`, `skyways-event-golf-real.test.ts` (a putt on a generated course), `skyways-event-evac*.test.ts`.
 
+## The events' supplies (layout version 8)
+
+From layout version 8 each new event also carries its own useful, plausible loot (`gen/skyways/events/eventLoot.ts`,
+`SKYWAYS_EVENT_SUPPLIES`). The pass appends a few existing, audited holder kinds to the event's rooms. Each holder is keyed to its
+place's EXACT named table (`items/lootTables.ts` `EXPO_*` / `GOLF_*` / `EVAC_*`, through the weight-0 `skyways-*` loot keys of
+`events/eventLootPurposes.ts`). The tables use existing items only and hold no ammo. Each holder is finite and seeded like every other:
+rolled once on its own stream, remembered, never refilled. No new models, textures or prop kinds.
+
+| Event | Place (rooms, in order of preference) | Holders (fallback) | Table | Expected units |
+| --- | --- | --- | --- | --- |
+| Technology expo | storage: the storage room, the staff room, a demo theatre | AV tool chest (`rollingToolChest`) | `EXPO_AV_CHEST` | 2.26 |
+| | | demo-stock carton (`cardboardBoxFlaps`, else `storageTote`) | `EXPO_DEMO_STOCK` | 1.39 |
+| | demo: each demo theatre | flight case (`footlocker`) | `EXPO_FLIGHT_CASE` | 1.48 |
+| | expo floor (largest piece first) | carton, tote | `EXPO_DEMO_STOCK` | 1.39, 1.41 |
+| Mini-golf | reception: the front desk | `filingCabinet` | `GOLF_RECEPTION` | 1.58 |
+| | maintenance: the storage room, the staff room | `rollingToolChest`; `cabinetTall` (else `storageTote`) | `GOLF_MAINT_CHEST`, `GOLF_MAINT_CABINET` | 1.60, 1.99 |
+| | concessions: the clubhouse (largest piece first), a party room | `shopCooler`, `snackRack` | `GOLF_COOLER`, `GOLF_SNACKS` | 1.66, 1.59 |
+| Evacuation centre | medical: the medical bay, the triage corner | `medCabinet`, tote of dressings (`storageTote`) | `EVAC_MED_STOCK`, `EVAC_MED_TOTE` | 1.82, 1.17 |
+| | rations: by the ration line | `crate`, `cardboardBoxFlaps` | `EVAC_RATION_STOCK` | 1.75, 1.83 |
+| | supplies: the supply store, the shelter office | `cabinetTall` (else `crate`); `crate` (else `storageTote`) | `EVAC_SUPPLY` | 1.71, 1.65 |
+
+Expected units are the mean of 2000 seeded rolls of one holder (`tests/skyways-event-loot.test.ts` pins them). A full set adds:
+- **expo:** about 7.9 units (with one demo theatre; +1.5 per extra theatre): about 5.0 crafting materials (electrical parts, scrap),
+  2.3 batteries, 0.4 water, 0.2 flares, 0.1 dressings;
+- **mini-golf:** about 8.4 units: 2.3 drinks, 2.0 materials, 1.7 food, 1.3 batteries, 0.7 medical, 0.4 flares;
+- **evacuation centre:** about 9.9 units: 3.3 medical (dressings, kits, splints, slings), 2.7 food, 2.4 drinks, 1.0 batteries,
+  0.6 flares.
+
+For scale, a version-7 Skyways level holds about 38–60 food, 68–102 drinks, 10–26 medical, 2–9 batteries and 0–5 flares (nine event
+seeds). The supplies are a local top-up of the event's theme, not a new economy.
+
+Placement (the venue's route-checked kit: `venueDress.ts eventVenueContext` / `group`, `placeKit.ts tryPlaceProp`):
+- every holder stands on the venue floor in one of its place's rooms, with its back to a solid wall. There is no glazing or
+  storefront opening behind it;
+- it is never in a door zone, a door strip or a door's clear volume, and its lid / door / drawer strip stays open floor;
+- it keeps off every earlier prop and the strip in front of it, pickups (0.9 m), enemy spawns (1.2 m) and low signs;
+- every 1.2 m route from the bridges to each opening (and each room's own) is kept;
+- a set's later holders stand by its first one. Nothing goes in the golf course hall. A full room hands the set to the next room or the
+  smaller fallback kind; a place with no fitting spot is skipped and recorded (`skywaysEventLootOf(layout).skipped`).
+
+Saves and RNG:
+- the pass runs LAST in generation (after every spawn, the annex and the merchandise split), on its own fork (`skyways-event-loot`),
+  and draws only when the add-on is a new event;
+- it only APPENDS holders, so every earlier prop, pickup, spawn and holder keeps its index, per-kind holder index, serial, contents
+  and lot ids, and the putter, balls and golf record are untouched;
+- versions 1–7 never run it (`SKYWAYS_EVENT_LOOT_MIN_VERSION`). A station entered (or first built) at 1–7 keeps its layout, enemies,
+  kills and loot exactly: nothing is refilled, rerolled or duplicated.
+
+Tests: `tests/skyways-event-loot.test.ts` (tables, keys, yields, placement, version 8 = version 7 + the holders) and
+`skyways-dest-layout-version.test.ts` (GAME130: version 7's whole record and grids).
+
 ## Gas
 
 Every `SkywaysWindow` is a glazed span in a solid wall run (the Office window rule):
@@ -312,3 +366,5 @@ Developer access without a campaign: `?qa=1&level=skyways&skywaysSeed=<code>`.
   finds such as weapon finds.
 - **Restaurant food:** the restaurant's edible food is finite seeded loot (2–4 plates on its tables / counter plus its holders'
   `RAMEN_*` tables).
+- **Event supplies (layout version 8):** the technology expo, the mini-golf and the evacuation centre carry their own supply holders
+  with the exact `EXPO_*` / `GOLF_*` / `EVAC_*` tables; see "The events' supplies" above.

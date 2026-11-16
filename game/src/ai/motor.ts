@@ -50,3 +50,35 @@ export function settleZombie(b: ZombieBrain, world: Grid | Levels, props: PropIn
 export function sameLevel(ay: number, by: number): boolean {
   return Math.abs(ay - by) < SAME_LEVEL;
 }
+
+/** What the body separation reads of an enemy: its brain, and whether it places its own root (BB on a wall / ceiling / leap). */
+export interface ShoveBody {
+  readonly brain: {x: number; y: number; z: number; readonly alive: boolean; readonly climbing: boolean; readonly stats: {readonly radius: number}};
+  readonly placesRoot?: boolean;
+}
+
+/**
+ * Keeps bodies apart (zombie-zombie, same level only: platform vs track bed do not shove): the brain `b` of `self` is pushed out of
+ * every other living body of `bodies` on its level by half the overlap, at most `ease` per contact. A BB on a wall / ceiling / in
+ * the air (placesRoot while climbing) shoves nobody.
+ * Task studio-skywalk-loot-performance-20261116-022934-01: a small function of its own with an index loop and an early exit. It
+ * runs once per PAIR of enemies a frame (~1 800 with 43 of them); inside Game.updateZombies it made an iterator result per pair and
+ * boxed every intermediate whenever that function ran deoptimised (the enemy families' changing object shapes deoptimise it again
+ * and again) — the largest per-frame garbage source of the game's own code at the user's Skyways station. A pair at least `min`
+ * apart along x or z is skipped after one subtraction: hypot(dx, dz) >= |dx|, |dz|, so the loop it replaces never pushed such a
+ * pair either; every other pair takes the same arithmetic in the same order (tests/hot-path-garbage.test.ts: bit for bit).
+ */
+export function shoveApart(self: ShoveBody, b: ShoveBody['brain'], bodies: readonly ShoveBody[], ease: number): void {
+  for (let i = 0; i < bodies.length; i++) {
+    const o = bodies[i];
+    if (o === self) continue;
+    const ob = o.brain, min = b.stats.radius + ob.stats.radius;
+    const dx = b.x - ob.x;
+    if (dx >= min || -dx >= min) continue;
+    const dz = b.z - ob.z;
+    if (dz >= min || -dz >= min) continue;
+    if (!ob.alive || !sameLevel(b.y, ob.y) || (o.placesRoot && ob.climbing)) continue;
+    const d = Math.hypot(dx, dz);
+    if (d > 1e-4 && d < min) { const push = Math.min((min - d) * 0.5, ease); b.x += dx / d * push; b.z += dz / d * push; }
+  }
+}

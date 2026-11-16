@@ -147,7 +147,7 @@ export function configureFlashlightShadow(light: THREE.SpotLight, q: AtmosphereQ
   light.shadow.radius = 1;
 }
 
-function litOpaque(m: THREE.Material | null | undefined): boolean {
+export function litOpaque(m: THREE.Material | null | undefined): boolean {
   if (!m || m.transparent || !m.visible || m.colorWrite === false || m.depthWrite === false) return false;
   const t = m as THREE.Material & {isMeshStandardMaterial?: boolean; isMeshLambertMaterial?: boolean; isMeshPhongMaterial?: boolean; isMeshToonMaterial?: boolean};
   return !!(t.isMeshStandardMaterial || t.isMeshLambertMaterial || t.isMeshPhongMaterial || t.isMeshToonMaterial);

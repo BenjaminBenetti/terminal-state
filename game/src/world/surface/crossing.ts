@@ -2,12 +2,13 @@
 // something of the player's across a station <-> district crossing (Game.crossSurface, lane ACCESS): e.g. the train equipment unit in
 // the player's hands / on the dolly (lane CARGO). One registry per game (no Game field: a WeakMap keyed by the game object).
 //
-// Order inside Game.crossSurface (ACCESS): the destination is prepared (generated + its models fetched) → `depart(from, to)` on every
-// participant while the OLD world is still intact (it takes what it carries out of the old section — never leaving a copy behind) →
-// the old section is left (memory saved) and torn down → the new section is built → `arrive(to)` on every participant (it puts what it
-// carries into the new section, next to the arrival pose) → warm-up → play. A crossing that fails after `depart` calls `abort(from)`
-// (the participant restores what it took into the old section, exactly). Every participant must keep SOLE ownership of what it
-// carries at every point (never in two sections, never lost).
+// Order inside Game.crossSurface (ACCESS): `depart(from, to)` on every participant while the OLD world is still intact and still in
+// play (it takes what it carries out of the old section — never leaving a copy behind; lane ACCESS follow-up 1: BEFORE the loading
+// screen, whose state change would make a lane let go of what is in the hands) → the loading screen; the destination is prepared
+// (generated + its models fetched) → the old section is left (memory saved) and torn down → the new section is built → `arrive(to)` on
+// every participant (it puts what it carries into the new section, next to the arrival pose) → warm-up → play. A crossing that fails
+// after `depart` calls `abort(from)` (the participant restores what it took into the old section, exactly). Every participant must
+// keep SOLE ownership of what it carries at every point (never in two sections, never lost).
 
 //
 // Lane ACCESS (this file's owner) — the details Game.crossSurface guarantees:
@@ -38,6 +39,16 @@ export function surfaceCrossers(game: object): SurfaceCrosser[] {
   if (!list) registry.set(game, (list = []));
   return list;
 }
+
+const ways = new WeakMap<object, () => boolean>();
+
+/**
+ * (lane ACCESS, follow-up 1) Whether the player stands at a way up / down looking at it now (the [E] there crosses). The access runtime
+ * registers it. A grabbed / carried train unit's own [E] (let go / put down / secure) YIELDS while it is true, so [E] at the way crosses
+ * WITH the unit (participant 'cargo') instead of dropping it at the door.
+ */
+export function setSurfaceWayAimed(game: object, aimed: () => boolean): void { ways.set(game, aimed); }
+export const surfaceWayAimed = (game: object): boolean => ways.get(game)?.() ?? false;
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Lane ACCESS: the crossing gate (pure) and the participant runners (Game.crossSurface)
