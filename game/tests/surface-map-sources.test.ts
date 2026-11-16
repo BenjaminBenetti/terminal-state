@@ -27,6 +27,7 @@ import {buildPlanningMap, placeAt, recoverableName, refHolds} from '../src/world
 import {exploreGridFor, markDisc} from '../src/world/surface/mapExplore';
 import {SurfaceMapRuntime, surfaceMapSources} from '../src/world/surface/mapRuntime';
 import {airMapSource, airReports, airViewOf, cargoMapSource, cargoReports, cargoViewOf, installSurfaceMapSources, type MapSourceHost} from '../src/world/surface/mapSources';
+import {depotRecoverables} from '../src/world/surface/cargoSeed';
 
 installCanvasShim(false);
 let mats: WorldMaterials;
@@ -45,8 +46,9 @@ describe('Surface Run planning map sources: the report rules on a real district'
     expect(reported.length).toBeGreaterThanOrEqual(3);
     const N = reported.length, depot = s.buildings.find(b => b.id === s.depot.building)!, dc = centre(depot);
     const names = (k: string[]) => [...new Set(k.map(recoverableName))].join(', ');
-    // before the first seeding (or with no live equipment world): the layout's report, as the default says it
-    expect(cargoReports(s, {seeded: false, units: null, secured: [], truck: null}).map(r => r.text)).toEqual([`Train units reported: ${names(reported)}`]);
+    // before the first seeding (or with no live equipment world): the layout's report, as the default says it (re-pin, follow-up lane
+    // FIXES: the ONE train upgrade a first entry seeds; the seeded views below carry no `depot` list: a depot seeded before that rule)
+    expect(cargoReports(s, {seeded: false, units: null, secured: [], truck: null}).map(r => r.text)).toEqual([`Train units reported: ${names(depotRecoverables(s, false).map(r => r.kind))}`]);
     // seeded: two still at the depot, one on the truck, the rest gone from the district
     const units = [
       {kind: 'radar', mode: 'world', owner: 'station', ...dc},
@@ -136,7 +138,8 @@ describe('Surface Run planning map sources: the live lanes', () => {
   });
 
   it("CARGO's real equipment system: a unit secured to the truck moves from the depot line to the truck line; offline the record is read", () => {
-    const w = districtRoom({here: [stationRec('radar', 1, 2.9, 0, 3.2, Math.PI / 2), stationRec('chest', 2, 1.6, 0, 1.4, 0)]});
+    // (re-pin, follow-up lane FIXES: a depot seeded under the whole-collection rule before it — the version-1 marker)
+    const w = districtRoom({here: [stationRec('radar', 1, 2.9, 0, 3.2, Math.PI / 2), stationRec('chest', 2, 1.6, 0, 1.4, 0)], cargo: {v: 1, seeded: 1}});
     const {h, eq} = w;
     // the room as a district: the depot shed round both units, the layout reporting three (a scanner never recovered: gone)
     const S = {...w.S, buildings: [{id: 0, footprint: {x0: 1, z0: 0.8, x1: 3.4, z1: 3.8}}],

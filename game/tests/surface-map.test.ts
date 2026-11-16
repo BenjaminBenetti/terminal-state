@@ -25,6 +25,7 @@ import {
   EXPLORE, SURFACE_LIFE_LANE, cellIndex, decodeBits, encodeBits, exploreGridFor, exploredCount, isExplored, markDisc, readLifeRecord, writeLifeRecord,
 } from '../src/world/surface/mapExplore';
 import {buildPlanningMap, gridRef, placeAt, recoverableName, refHolds, streetRect, type MapReportInput} from '../src/world/surface/mapModel';
+import {depotRecoverables} from '../src/world/surface/cargoSeed';
 import {drawPlanningCanvas, headingDeg, renderPlanningSvg, type MapCtx} from '../src/world/surface/mapDraw';
 import {planningKeyAction} from '../src/world/surface/mapView';
 import {MAP_TABLE_KIND, SurfaceMapRuntime, mapTablePlacement, rayBox} from '../src/world/surface/mapRuntime';
@@ -97,7 +98,7 @@ describe('Surface Run planning map: markers on real places', () => {
     const at = (m: ReturnType<typeof buildPlanningMap>, id: number) => m.markers.filter(k => k.kind === 'report' && k.ref.type === 'building' && k.ref.id === id).map(k => k.label);
     const none = buildPlanningMap(s, {explore: g, entered: new Set()});
     expect(at(none, shop.id)).toEqual([]); // not entered, not explored: nothing
-    const reported = s.depot.recoverables.map(r => recoverableName(r.kind));
+    const reported = depotRecoverables(s, false).map(r => recoverableName(r.kind)); // (re-pin, follow-up lane FIXES: the ONE upgrade a first entry seeds)
     if (reported.length) expect(none.markers.some(k => k.kind === 'report' && k.label === `Train units reported: ${[...new Set(reported)].join(', ')}`)).toBe(true);
     const stats = new Map([[shop.id, {holders: 5, searched: 2, hostiles: 3, down: 3}]]);
     const m = buildPlanningMap(s, {explore: g, entered: new Set([shop.id]), stats});

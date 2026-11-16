@@ -78,9 +78,10 @@ function behindTruck(w: TruckCargoWorld): void {
 
 describe('the real truck carrying a real depot unit (district cargo, generated district)', () => {
   it('a depot chest secured on a bed point at the loading lot rides rigidly to the checkpoint, survives re-entry and is taken off there', () => {
-    const D = district(3, 'subway'), w = truckCargoWorld(D), {h, eq, car} = w;
-    // the depot's recoverables, seeded once into the district at the first entry (fresh run uids; the chest with its salvage)
-    expect(w.cargo.counts).toMatchObject({seeded: 1, seededUnits: D.S.depot.recoverables.length});
+    // (re-pin, follow-up lane FIXES: a new depot seeds one train upgrade, never a chest — a depot seeded under the whole-collection rule)
+    const D = district(3, 'subway'), w = truckCargoWorld(D, {legacyDepot: true}), {h, eq, car} = w;
+    // the depot's recoverables, seeded once into the district before this entry (fresh run uids; the chest with its salvage): none more
+    expect(w.cargo.counts).toMatchObject({seeded: 0, seededUnits: 0});
     const seeded = eq.all().map(u => u.uid);
     expect(seeded.length).toBe(D.S.depot.recoverables.length);
     const chest = eq.all().map(u => eq.unit(u.uid)!).find(u => u.kind === 'chest')!;
@@ -144,7 +145,7 @@ describe('the real truck carrying a real depot unit (district cargo, generated d
     leave(w);
     enterDistrict(w);
     frame(h, car);
-    expect(w.cargo.counts.seeded, 'never re-seeded').toBe(1);
+    expect(w.cargo.counts.seeded, 'never re-seeded').toBe(0);
     const B = car.body!;
     // (the record keeps 4 decimals; the heading is compared as an angle — the record may wrap it by a whole turn)
     const dYaw = Math.abs(Math.atan2(Math.sin(B.yaw - parked.yaw), Math.cos(B.yaw - parked.yaw)));
@@ -179,7 +180,7 @@ describe('the real truck carrying a real depot unit (district cargo, generated d
   }, 240000);
 
   it('another district: the parked truck takes a depot chest at its checkpoint pose; refused (the reason in the prompt) while it rolls', () => {
-    const D = district(8, 'office'), w = truckCargoWorld(D), {eq, car} = w;
+    const D = district(8, 'office'), w = truckCargoWorld(D, {legacyDepot: true}), {eq, car} = w; // (re-pin, lane FIXES: as above)
     const chest = eq.all().map(u => eq.unit(u.uid)!).find(u => u.kind === 'chest')!;
     carryChest(w, chest);
     behindTruck(w);

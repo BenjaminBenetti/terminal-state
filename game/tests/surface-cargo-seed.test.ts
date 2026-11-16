@@ -91,17 +91,18 @@ describe('depot recoverables -> train unit records (pure)', () => {
     r.current = {...DISTRICT};
     const {inv, train} = deps();
     const c = new SurfaceCargo({sectionHooks: [], run: r, inv, playerTrain: train, hud: {toast: () => {}}});
-    expect(c.seed(fakeSurface(DEPOT))).toBe(4);
+    // (re-pin, follow-up lane FIXES: a newly seeded depot gets ONE train upgrade of its recoverables — tests/surface-depot-one.test.ts)
+    expect(c.seed(fakeSurface(DEPOT))).toBe(1);
     const lane = r.laneStore<StationEquipmentJSON>(STATION_EQUIPMENT_LANE)!;
-    expect(lane.here.map(u => u.uid)).toEqual(['eq-1', 'eq-2', 'eq-3', 'eq-4']);
+    expect(lane.here.map(u => u.uid)).toEqual(['eq-1']);
     expect(surfaceCargoOf(r.laneStore(SURFACE_CARGO_LANE)).seeded).toBe(1);
     expect(c.seed(fakeSurface(DEPOT))).toBe(0);
-    expect(r.laneStore<StationEquipmentJSON>(STATION_EQUIPMENT_LANE)!.here.length).toBe(4);
+    expect(r.laneStore<StationEquipmentJSON>(STATION_EQUIPMENT_LANE)!.here.length).toBe(1);
     // the player took everything away: still never refilled
     r.setLaneStore(STATION_EQUIPMENT_LANE, undefined);
     expect(c.seed(fakeSurface(DEPOT))).toBe(0);
     expect(r.laneStore(STATION_EQUIPMENT_LANE)).toBeUndefined();
-    expect(train.equipment.seq).toBe(4);
+    expect(train.equipment.seq).toBe(1);
     // (the station's own section is a different memory: untouched)
     expect(r.laneStore(STATION_EQUIPMENT_LANE, STATION)).toBeUndefined();
     // a full lane keeps its bound (the rest stay unrecovered)
@@ -116,29 +117,29 @@ describe('depot recoverables -> train unit records (pure)', () => {
 
 describe('depot recoverables through the build order (the flat room as the district)', () => {
   it('they stand in the district at their poses from the first build, as station units; a revisit never adds any', () => {
+    // (re-pin, follow-up lane FIXES: ONE train upgrade of them — on this district seed the armour kit — its chest-content continuity
+    // for a depot seeded under the whole-collection rule is tests/surface-depot-one.test.ts's legacy case)
     const w = districtRoom({recoverables: DEPOT});
     const {eq, h} = w;
-    expect(eq.all().map(u => [u.uid, u.kind, u.mode, u.owner])).toEqual([
-      ['eq-1', 'chest', 'world', 'station'], ['eq-2', 'radar', 'world', 'station'], ['eq-3', 'armor-kit', 'world', 'station'], ['eq-4', 'chest', 'world', 'station']]);
-    const kit = eq.unit('eq-3')!;
+    expect(eq.all().map(u => [u.uid, u.kind, u.mode, u.owner])).toEqual([['eq-1', 'armor-kit', 'world', 'station']]);
+    const kit = eq.unit('eq-1')!;
     expect([kit.body.x, kit.body.z, kit.body.yaw]).toEqual([4, 4.6, 1.2]);
-    const before = eq.unit('eq-1')!.slots!.map(s => s && [s.uid, s.itemId, s.count]);
-    expect(w.cargo.counts).toMatchObject({seeded: 1, seededUnits: 4});
-    // go to the station and come back twice: the same four units, the same contents, never a second seeding
+    expect(w.cargo.counts).toMatchObject({seeded: 1, seededUnits: 1});
+    // go to the station and come back twice: the same unit, never a second seeding
     for (let i = 0; i < 2; i++) {
       cross(w, STATION, false);
       expect(eq.all()).toEqual([]);
       cross(w, DISTRICT, true);
     }
-    expect(eq.all().map(u => u.uid)).toEqual(['eq-1', 'eq-2', 'eq-3', 'eq-4']);
-    expect(eq.unit('eq-1')!.slots!.map(s => s && [s.uid, s.itemId, s.count])).toEqual(before);
+    expect(eq.all().map(u => u.uid)).toEqual(['eq-1']);
     expect(w.cargo.counts.seeded).toBe(1);
-    expect(h.playerTrain.equipment.seq).toBe(4);
-    expect(recordUids(w)).toEqual(['eq-1', 'eq-2', 'eq-3', 'eq-4']);
+    expect(h.playerTrain.equipment.seq).toBe(1);
+    expect(recordUids(w)).toEqual(['eq-1']);
   });
 
   it('a seeded unit is an ordinary unit: dragged off and left elsewhere, it stays where it was left; a taken one is never replaced', () => {
-    const w = districtRoom({recoverables: DEPOT});
+    // (re-pin, follow-up lane FIXES: a depot seeded under the whole-collection rule before it — its four units and the version-1 marker)
+    const w = districtRoom({recoverables: DEPOT, here: seedRecoverables(DEPOT, deps().d, 48), cargo: {v: 1, seeded: 1}});
     const {eq, h} = w;
     const radar = eq.unit('eq-2')!, b = radar.body;
     // behind its handle, E HELD (the hold gesture, as for a crafted unit): grabbed; walked back, let go

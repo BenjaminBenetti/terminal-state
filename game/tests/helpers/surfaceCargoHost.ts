@@ -57,7 +57,7 @@ export class FakeTruck implements TruckCargoSource {
  * front of the equipment's: Game order), the fake truck registered, then torn down and entered as the district — the cargo seeds the
  * depot (`recoverables`) into the lane the equipment's build reads. `here`: the district's equipment lane before the entry.
  */
-export function districtRoom(o: {recoverables?: SurfaceRecoverable[]; here?: EquipmentJSON[]; truck?: boolean; seed?: number} = {}) {
+export function districtRoom(o: {recoverables?: SurfaceRecoverable[]; here?: EquipmentJSON[]; truck?: boolean; seed?: number; cargo?: unknown} = {}) {
   const s = equipRoom(flatRoom());
   const {h, eq} = s;
   const cargo = new SurfaceCargo(h as never).install();
@@ -71,6 +71,9 @@ export function districtRoom(o: {recoverables?: SurfaceRecoverable[]; here?: Equ
   stand(h, 1.5, 3.2, -Math.PI / 2, 0); // (west of the room, facing +X: toward the truck's bed)
   teardown(h);
   if (o.here) h.run.setLaneStore('train-equipment.here', {v: 1, here: o.here}, DISTRICT);
+  // (task studio-surface-run-field-followup-20261116-211729-01, lane FIXES: the district's cargo record before the entry — a depot seeded
+  // earlier, e.g. under the whole-collection rule)
+  if (o.cargo !== undefined) h.run.setLaneStore('surface.cargo', o.cargo, DISTRICT);
   const w = {...s, cargo, truck, S, hook, enter: (key: SectionKey, surface: boolean) => enter(w.h, key, surface ? S : null, hook)};
   w.enter(DISTRICT, true);
   return w;
