@@ -140,6 +140,7 @@ import {
 } from './fuelCartPhysics';
 import {CART_LOOK, loadCartModels} from './fuelCartModel';
 import {FUEL_CART, rideCargoColumn, type CartBodyRef} from './fuelCarts';
+import {surfaceWayAimed} from './surface/crossing'; // (lane ACCESS: [E] at a Surface Run way crosses with the unit)
 import {
   EQUIPMENT_LID_TIME, EquipmentLook, buildPlugFixtures, equipmentBox, equipmentMaterials, poseEquipmentLid, setPlugLamp, shapePlugCable,
   type EquipmentView, type PlugFixtures,
@@ -2030,6 +2031,8 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
 
   /** E while a unit is grabbed / carried: always that unit's (let go / put down) — except the driving console with a chest in the hands. */
   private onBusyInteract(): boolean {
+    // (lane ACCESS, Surface Run) at a way up / down looking at it: E crosses WITH the grabbed / carried unit (world/surface/crossing.ts)
+    if ((this.grab || this.held) && surfaceWayAimed(this.host)) return false;
     // (lane CARGO) near a free mount point it fits (the truck's): E secures the grabbed device / the carried chest there instead
     const busy = this.grab?.unit ?? this.held;
     if (busy && this.host.state === 'playing' && this.host.player.alive && !this.riding && !(this.held && (this.rt?.consoleAimed || this.rt?.saveAimed))) {
@@ -2049,6 +2052,7 @@ export class TrainEquipmentSystem implements EquipmentSystemLike {
   private busyPrompt(): string | null {
     const h = this.host;
     if (h.state !== 'playing' || !h.player.alive) return null;
+    if (surfaceWayAimed(h)) return null; // (lane ACCESS: the way's own prompt — its [E] crosses with the unit)
     if (this.grab) {
       const u = this.grab.unit, m = this.mountChoice(u);
       if (m && 'point' in m) return EQUIPMENT_TEXT.secure(u.def.the, this.mounts!.label);

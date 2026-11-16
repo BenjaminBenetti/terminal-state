@@ -2569,21 +2569,30 @@ export class Game {
       this.surfaceCrossCounts.started++;
       const up = !isSurfaceKey(from), station = this.surfaceStationName(up ? from : hostKeyOf(from));
       const crossers = surfaceCrossers(this).slice();
-      this.surfaceCrossing = {from, to, phase: 'prepare'};
+      this.surfaceCrossing = {from, to, phase: 'depart'};
+      // the participants depart FIRST, still in play (the old world intact, the player as they stood): each takes what it carries out
+      // of it — before the loading screen, whose state change would make a lane let go of what is in the hands (the train equipment's
+      // grabbed dolly). A failure here aborts the ones already departed (departCrossers) and the player simply stays.
+      let departed: SurfaceCrosser[] = [], left: BuiltWorld | null = null;
+      try { departed = departCrossers(crossers, from, to); } catch (err) {
+        console.error('Surface Run: a participant could not depart', err);
+        this.lastError = String((err as Error)?.stack ?? err);
+        this.surfaceCrossCounts.failed++;
+        this.surfaceCrossing = null;
+        return {ok: false, reason: 'failed', error: 'Something you carry cannot come along right now.'};
+      }
+      this.surfaceCrossing.phase = 'prepare';
       this.cancelUse('surface');
       this.cancelFlareHold();
       this.aiming = false;
       this.holdPointerLock = true; // (setState('loading') would release it: the crossing came from a key press in play, not a menu click)
       const ui = this.showLoading(up ? `${station} · the street` : station, up ? 'Going up to the street…' : `Back down to ${station}…`);
       this.holdPointerLock = false;
-      let departed: SurfaceCrosser[] = [], left: BuiltWorld | null = null;
       try {
         await nextPaint();
         const layout = await this.prepareSection(to, this.run, this.progressTo(ui, up ? 'Going up to the street' : `Back down to ${station}`));
         if (layout.surface) $('#station-intro').textContent = layout.surface.name; // (the district's own name, once generated)
         await this.warmRun; // never rebuild under a running warm-up
-        this.surfaceCrossing.phase = 'depart';
-        departed = departCrossers(crossers, from, to); // (the old world intact: each takes what it carries out of it)
         this.surfaceCrossing.phase = 'build';
         left = this.world; // (the world being left: a recovery tears down only a NEW, half-built one)
         this.leaveSection(true); // the old world's every delta into its memory; its frame work / audio / lights / resources go with it

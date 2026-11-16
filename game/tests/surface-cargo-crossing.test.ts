@@ -12,10 +12,10 @@ import {describe, expect, it} from 'vitest';
 import {installCanvasShim} from './helpers/canvas2d';
 import {EQUIPMENT_LIMITS, STATION_EQUIPMENT_LANE, stationEquipmentOf, trainEquipmentProblem} from '../src/craft/equipment';
 import {EQUIPMENT_TEXT, type LiveUnit} from '../src/world/trainEquipment';
-import {surfaceCrossers} from '../src/world/surface/crossing';
+import {setSurfaceWayAimed, surfaceCrossers, surfaceWayAimed} from '../src/world/surface/crossing';
 import {CART_LOOK} from '../src/world/fuelCartModel';
 import {equipmentBox} from '../src/world/trainEquipmentModel';
-import {frame, run, teardown} from './helpers/fuelCartsHost';
+import {frame, run, tapE, teardown} from './helpers/fuelCartsHost';
 import {holdE, lookAtUnit, stand, stationRec} from './helpers/trainEquipmentHost';
 import {DISTRICT, STATION, districtRoom, recordUids, type District} from './helpers/surfaceCargoHost';
 
@@ -151,6 +151,40 @@ describe('a grabbed device crosses with the player', () => {
     expect(eq.held?.uid).toBe('eq-2');
     expect(recordUids(w)).toEqual(['eq-1', 'eq-2']);
     expect(cargo.counts.builds).toBe(1); // (one district build: the entry)
+  });
+
+  it('(lane ACCESS) at an aimed way [E] yields: neither the grabbed device nor the carried chest is let go / put down there', () => {
+    const w = world(), {eq, h, sentry} = w;
+    let aimed = true, crossed = 0;
+    setSurfaceWayAimed(h, () => aimed);
+    // the access runtime's [E] stands in as a handler right after the busy one (in Game it comes before the aimed unit's own [E]): it
+    // takes every [E] that reaches it, so the unit surviving an aimed [E] and going at an un-aimed one proves the busy [E] runs first
+    const way = () => (crossed++, true);
+    const atWay = (on: boolean) => { const i = h.interactHandlers.indexOf(way); if (i >= 0) h.interactHandlers.splice(i, 1); if (on) h.interactHandlers.splice(1, 0, way); };
+    h.promptProviders.push(() => (surfaceWayAimed(h) ? 'way' : null));
+    grab(w, sentry);
+    atWay(true);
+    tapE(h);
+    expect([eq.grab?.unit.uid, crossed]).toEqual(['eq-1', 1]);
+    expect(h.promptProviders.map(f => f()).find(p => p), 'the way\'s prompt, not "let go"').toBe('way');
+    aimed = false;
+    tapE(h);
+    expect([eq.grab, crossed]).toEqual([null, 1]); // (away from the way: [E] lets go as always)
+    atWay(false);
+    const chest = eq.unit('eq-2')!, K = equipmentBox(chest.def).body;
+    stand(h, chest.body.x, chest.body.z + 1.1, 0, 0);
+    frame(h);
+    lookAtUnit(h, chest, 0, K.y1 - 0.05, 0);
+    frame(h);
+    holdE(h);
+    expect(eq.held).toBe(chest);
+    atWay(true);
+    aimed = true;
+    tapE(h);
+    expect([eq.held?.uid, crossed]).toEqual(['eq-2', 2]);
+    aimed = false;
+    tapE(h);
+    expect([eq.held, crossed]).toEqual([null, 2]);
   });
 
   it('a transit nobody arrived by the first played frame: put down in front of the player, grabbed', () => {
