@@ -98,7 +98,7 @@ export function creviceFrame(levelSeed: number, salt = 0): CreviceFrame {
   const r = new Rng(hashString(`market-v5-frame:${salt}`, levelSeed >>> 0));
   const mirror = r.chance(0.5);
   const Lp = r.int(60, 64), Pd = r.int(10, 12);
-  const chasmW = r.int(10, 12), Lc = r.int(98, 104), square = r.int(16, 18), weir = r.int(10, 12), barD = r.int(9, 10);
+  const chasmW = r.int(10, 12), Lc = r.int(98, 104), square = r.int(16, 18), weir = r.int(10, 12), barD = r.int(10, 11);
   const S = CREVICE;
   // the chasm's rows (canonical, relative to the crevice's first row): [square, Lc - weir)
   const c0 = square, c1 = Lc - weir;

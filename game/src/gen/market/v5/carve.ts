@@ -321,14 +321,16 @@ export function carveCrevice(k: Kit, f: CreviceFrame, rng: Rng): CreviceCarve | 
     }
   }
   // uses of the fill: the ground boxes along the low walks are the services (in priority order over a seeded slot order: every station
-  // gets the essentials), then homes; the lower terrace holds the bunk room, a store and a tea counter; the terraces are homes, about a
-  // third of them closed (boxes nobody opens), more of them up top
+  // gets the essentials), then homes; the lower terrace holds the bunk room, the services left over and a second store; the terraces are
+  // homes, about a third of them closed (boxes nobody opens), more of them up top
   const uses = new Map<typeof fillers[number], CrevUse>();
   const canOpen = (q: typeof fillers[number]) => doorFit(q.s, q.L, q.y0, q.y1, 2, 0) !== null;
   const ground = rng.shuffle(fillers.filter(q => q.L === 0));
-  (['water', 'storage', 'latrine', 'tea', 'repair', 'generator', 'laundry'] as CrevUse[]).forEach((u, i) => { if (ground[i]) uses.set(ground[i], u); });
+  const services: CrevUse[] = ['water', 'latrine', 'storage', 'generator', 'tea', 'repair', 'laundry'];
+  services.forEach((u, i) => { if (ground[i]) uses.set(ground[i], u); });
+  // the lower terrace: the bunk room, the services the ground had no box for, a second store
   const lower = rng.shuffle(fillers.filter(q => q.L === 1 && canOpen(q)));
-  (['bunks', 'storage', 'tea'] as CrevUse[]).forEach((u, i) => { if (lower[i]) uses.set(lower[i], u); });
+  (['bunks', ...services.slice(ground.length), 'storage'] as CrevUse[]).forEach((u, i) => { if (lower[i]) uses.set(lower[i], u); });
   for (const fl of fillers) {
     const len = fl.y1 - fl.y0, use = uses.get(fl) ?? 'home';
     const open = use !== 'home' || fl.L === 0 || rng.chance(fl.L === 3 ? 0.62 : 0.72);
