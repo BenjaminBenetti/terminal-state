@@ -21,8 +21,8 @@ export const ENEMY_MODEL_FILES: Readonly<Record<string, {url: string; bytes: num
   // (tests/screacher-contract.test.ts checks it). A model that failed to load -> the counted zombie stand-in.
   enemy_screacher_sc01: {url: 'assets/models/enemy-screacher-sc01.glb', bytes: 1_861_136},
   enemy_screacher_sc02: {url: 'assets/models/enemy-screacher-sc02.glb', bytes: 1_976_432},
-  enemy_screacher_sc03: {url: 'assets/models/enemy-screacher-sc03.glb', bytes: 1_941_068},
-  enemy_screacher_sc04: {url: 'assets/models/enemy-screacher-sc04.glb', bytes: 2_125_488},
+  enemy_screacher_sc03: {url: 'assets/models/enemy-screacher-sc03.glb', bytes: 1_941_072},
+  enemy_screacher_sc04: {url: 'assets/models/enemy-screacher-sc04.glb', bytes: 2_125_492},
   // Task studio-bb-production-20261112-234540-01: BB's four approved looks (one enemy type; a layout loads exactly the looks its roster
   // placed: 1-3 of them, on the 40 % of combat levels that hold BBs at all). `bytes` = each GLB's size (tests/bb-contract.test.ts
   // checks it). A model that failed to load -> the counted zombie stand-in.

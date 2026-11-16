@@ -13,8 +13,10 @@
 //           hanging, wrists / hands twitching;
 //   Walk    a slow, long-legged stalking walk (double support, knees never locked), arms dangling behind the stride;
 //   Run     a fast loping run with a flight phase, torso pitched forward, the long arms reaching / trailing;
-//   Attack  a fast long-arm rake, the right arm leading: coil -> lunge on the left foot, the right arm whips round to full
-//           reach at chest height (the hit frame) -> rakes down across the front -> recover;
+//   Attack  a fast long-arm rake, the right arm leading: a wide coil (the arm drawn out and back) -> the arm whips round nearly
+//           straight at the side while the left foot steps into a lunge -> full length in front at chest height (the hit
+//           frame) -> follows through across the front to the left, dragging down -> recover (task
+//           studio-screacher-reach-swing-20261116-053933-01: the long arms used, contract reach 1.2 -> 1.45 m);
 //   Hit     a flinch;
 //   Death   knees buckle, the body topples onto its back and settles (floor-solved final pose; no head term);
 //   Scream  the echolocation scream of a body without a head: a short gathering crouch, then by the cue the chest is thrust
@@ -49,7 +51,7 @@ export const CLIP_SPECS = {
   Scream: {duration: 1.6, loop: false, cueTime: 0.5},
 };
 /** Attack targets (the reach solve in the builder moves the lunge until the measured hand tip is `reachM` out at the hit frame). */
-export const ATTACK = {reachM: 1.2, tipHeightM: 1.42, tipX: -0.04, lunge: [0.02, 0.75], hold: [0.4, 0.43334]};
+export const ATTACK = {reachM: 1.45, tipHeightM: 1.5, tipX: -0.04, lunge: [0.02, 0.75], hold: [0.4, 0.46667]};
 
 // ---------------------------------------------------------------- arms
 // An arm is {rel: {fwd, out}} (bind upper-arm direction abducted `out` deg away from the body, then swung `fwd` deg forward) or
@@ -214,42 +216,50 @@ function run(rig, t, T, S) {
 /**
  * Attack keys. `lunge` (m) = how far the pelvis drives forward at the hit (solved per variant by the builder so the measured
  * right hand tip is ATTACK.reachM in front of the root at the hit frame). The hit pose is HELD from ATTACK.hold[0] to
- * ATTACK.hold[1] (two consecutive 30 fps frames around impactTime 0.42 s), so the sampled track shows the full reach at the
- * hit frame; the rake carries on afterwards.
+ * ATTACK.hold[1] (three consecutive 30 fps frames from just before impactTime 0.42 s: the game lands the claw on the first frame
+ * whose swing clock reaches the impact time and animates after it, so at 30-60 fps the frame that hurts shows clip time
+ * 0.45-0.467 s — still the full reach), so the sampled track shows the full reach at the hit frame; the rake carries on afterwards.
  */
 export function attackKeys(rig, lunge = 0.3) {
   const B = basePose(), R = bindArm(rig, 'R');
   const back = clamp(lunge, 0, 0.6);
-  // coil: the weight rocks back, the chest winds to the right, the right arm is cocked out to the side and back, the elbow
-  // bent and the claw hand raised beside the shoulder (a human wind-up: the upper arm never points up behind the body)
-  const coil = {...B, hips: [0.0, -0.07, -0.07], hipsRot: [1, -14, 0], spine: [-2, -9, 0], chest: [-5, -18, 0], neck: [-6, 10, 0],
-    armL: arm(14, 8, 18, {wrist: -8}),
-    armR: {dir: [-0.78, -0.25, -0.57], roll: -60, flex: 82, wrist: -25, twist: 0, wristSide: 0},
+  // the bind elbow opened up: the long arm nearly straight
+  const straight = -0.9 * R.elbowDeg;
+  // coil: the weight rocks back, the chest winds far to the right, the long right arm is drawn out WIDE to the side and back at
+  // about shoulder height, the elbow only half bent, the claw cocked back (a big, readable wind-up: the upper arm never points up
+  // behind the body); the left hand reaches forward a little
+  const coil = {...B, hips: [0.0, -0.07, -0.08], hipsRot: [1, -16, 0], spine: [-2, -11, 0], chest: [-5, -22, 0], neck: [-6, 12, 0],
+    armL: arm(22, 10, 16, {wrist: -8}),
+    armR: {dir: [-0.8, -0.12, -0.58], roll: -50, flex: 40, wrist: -30, twist: 0, wristSide: 0},
     legL: {mode: 'ik', z: 0.05, x: 0, lift: 0.015, pitch: 3, yaw: 4}, legR: {mode: 'ik', z: -0.1, x: 0, lift: 0, pitch: 0, yaw: -6}};
-  const coiled = {...coil, hips: [0.0, -0.085, -0.09], chest: [-6, -22, 0], armR: {...coil.armR, dir: [-0.74, -0.18, -0.65], flex: 88}};
-  // the hit: a lunge onto the left foot, low and forward; the chest swings round and the right arm whips out straight in
-  // front at chest height (aimed at the target height, slightly across the centre line)
-  const hitBody = {...B, hips: [0.0, -0.1 - 0.12 * back, lunge], hipsRot: [15 + 10 * back, 11, 0], spine: [6 + 6 * back, 7, 0], chest: [6 + 6 * back, 13, 0], neck: [-22 - 10 * back, -6, 0],
-    legL: {mode: 'ik', z: lunge + 0.26, x: 0, lift: 0, pitch: -4, yaw: 4}, legR: {mode: 'ik', z: -0.12, x: 0, lift: 0, pitch: 16 + 22 * back, yaw: -6}};
+  const coiled = {...coil, hips: [0.0, -0.085, -0.1], chest: [-6, -26, 0], armR: {...coil.armR, dir: [-0.76, -0.06, -0.65], flex: 34}};
+  // the hit: a long lunging step onto the left foot, low and forward; the hips and chest swing round further (the right shoulder
+  // is driven forward) and the right arm is out at full length in front at chest height (aimed at the target height, slightly
+  // across the centre line); the left arm is flung back and out as the counterweight
+  const hitBody = {...B, hips: [0.0, -0.1 - 0.12 * back, lunge], hipsRot: [15 + 10 * back, 14, 0], spine: [6 + 6 * back, 10, 0], chest: [6 + 6 * back, 17, 0], neck: [-22 - 10 * back, -8, 0],
+    legL: {mode: 'ik', z: lunge + 0.3, x: 0, lift: 0, pitch: -4, yaw: 4}, legR: {mode: 'ik', z: -0.12, x: 0, lift: 0, pitch: 16 + 22 * back, yaw: -6}};
   const hit = {...hitBody,
-    armL: arm(-28, 16, 22, {wrist: -14}),
-    armR: {dir: aimArmAt(rig, hitBody, 'R', ATTACK.tipHeightM, ATTACK.tipX), roll: -30, flex: -0.9 * R.elbowDeg, wrist: -10, twist: 0, wristSide: 0}};
-  // held one frame: the rake has just started to drag down (the reach stays)
-  const hit2 = {...hit, hips: V.add(hit.hips, [0, -0.008, 0.006]), chest: V.add(hit.chest, [1, 2, 0]),
-    armR: {...hit.armR, dir: aimArmAt(rig, hitBody, 'R', ATTACK.tipHeightM - 0.04, ATTACK.tipX + 0.03), wrist: -2}};
-  // the rake: the claw hand drags down and across to the left, the body folds over it
-  const rake = {...hitBody, hips: [0.0, hitBody.hips[1] - 0.03, lunge * 0.96], hipsRot: V.add(hitBody.hipsRot, [4, 5, 0]), chest: V.add(hitBody.chest, [5, 7, 0]),
-    armL: arm(-34, 18, 28, {wrist: -16}),
-    armR: {dir: aimArmAt(rig, hitBody, 'R', 0.82, 0.16), roll: -30, flex: 12, wrist: 24, twist: 0, wristSide: 0}};
-  // recovery: rise, drag the front foot back under the body
-  const recover = {...B, hips: [0.0, -0.07, lunge * 0.4], hipsRot: [9, 4, 0], chest: [6, 4, 0],
-    armL: arm(-8, 6, 12), armR: arm(16, 4, 26, {wrist: 10}),
-    legL: {mode: 'ik', z: lunge * 0.45 + 0.06, x: 0, lift: 0.03, pitch: 0, yaw: 4}, legR: {mode: 'ik', z: -0.07, x: 0, lift: 0.015, pitch: 5, yaw: -5}};
-  // the swing: half way from the coil to the hit the arm is flung out to the side, still bent (a round-house rake, not a poke)
-  const swing = {...mixParams(resolveArms(rig, coiled), resolveArms(rig, hit), 0.45), armR: {dir: [-0.9, 0.06, 0.42], roll: -40, flex: 42, wrist: -28, twist: 0, wristSide: 0}};
+    armL: arm(-38, 22, 16, {wrist: -14}),
+    armR: {dir: aimArmAt(rig, hitBody, 'R', ATTACK.tipHeightM, ATTACK.tipX), roll: -30, flex: straight, wrist: -4, twist: 0, wristSide: 0}};
+  // held one frame: the rake has just started to drag across (the reach stays)
+  const hit2 = {...hit, hips: V.add(hit.hips, [0, -0.008, 0.006]), chest: V.add(hit.chest, [1, 3, 0]),
+    armR: {...hit.armR, dir: aimArmAt(rig, hitBody, 'R', ATTACK.tipHeightM - 0.04, ATTACK.tipX + 0.06), wrist: 2}};
+  // the follow-through: the claw keeps sweeping across the front to the left at nearly full length while it drags down; the body
+  // turns and folds after it
+  const rake = {...hitBody, hips: [0.0, hitBody.hips[1] - 0.03, lunge * 0.96], hipsRot: V.add(hitBody.hipsRot, [4, 9, 0]), chest: V.add(hitBody.chest, [5, 12, 0]),
+    armL: arm(-42, 24, 24, {wrist: -16}),
+    armR: {dir: aimArmAt(rig, hitBody, 'R', 0.95, 0.5), roll: -30, flex: 8, wrist: 22, twist: 0, wristSide: 0}};
+  // recovery: rise, step the front foot back under the body
+  const recover = {...B, hips: [0.0, -0.07, lunge * 0.4], hipsRot: [9, 5, 0], chest: [6, 5, 0],
+    armL: arm(-8, 8, 12), armR: arm(18, 6, 22, {wrist: 10}),
+    legL: {mode: 'ik', z: lunge * 0.45 + 0.06, x: 0, lift: 0.045, pitch: 0, yaw: 4}, legR: {mode: 'ik', z: -0.07, x: 0, lift: 0.015, pitch: 5, yaw: -5}};
+  // the sweep: half way from the coil to the hit the long arm whips round nearly straight, out at the right side level with the
+  // shoulder (a wide round-house rake, not a poke); the left foot is off the floor, stepping into the lunge
+  const sw = mixParams(resolveArms(rig, coiled), resolveArms(rig, hit), 0.45);
+  const swing = {...sw, armR: {dir: [-0.94, 0.04, 0.34], roll: -40, flex: 0.6 * straight, wrist: -24, twist: 0, wristSide: 0}, legL: {...sw.legL, lift: 0.07}};
   return [
     {t: 0, p: B}, {t: 0.17, p: coil, ease: 'out'}, {t: 0.27, p: coiled, ease: 'inOut'}, {t: 0.345, p: swing, ease: 'in'}, {t: ATTACK.hold[0], p: hit, ease: 'linear'}, {t: ATTACK.hold[1], p: hit2, ease: 'linear'},
-    {t: 0.58, p: rake, ease: 'out'}, {t: 0.8, p: recover, ease: 'inOut'}, {t: CLIP_SPECS.Attack.duration, p: B, ease: 'inOut'},
+    {t: 0.6, p: rake, ease: 'out'}, {t: 0.8, p: recover, ease: 'inOut'}, {t: CLIP_SPECS.Attack.duration, p: B, ease: 'inOut'},
   ];
 }
 
