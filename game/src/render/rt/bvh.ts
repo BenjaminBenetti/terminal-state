@@ -39,6 +39,11 @@ export const TLAS_MAX_LEAF = 2;
 export const BVH_BINS = 12;
 /** Nodes of at most this many primitives use an exact SAH sweep along their widest centroid axis instead of the bins. */
 export const BVH_SMALL = 12;
+/**
+ * Nodes of at least this many primitives are binned and partitioned in chunks across run() calls (a node's passes are O(n)); a
+ * smaller node is split in one go (at most about 2 x BVH_BIG work units).
+ */
+export const BVH_BIG = 2048;
 /** The deepest a leaf may lie (root = depth 0): a traversal stack of this many entries never overflows. */
 export const BVH_MAX_DEPTH = 48;
 /** The colour word of a triangle whose geometry has no vertex colours (opaque white). */
@@ -109,6 +114,22 @@ export class BvhBuilder {
   private readonly rArea: Float64Array;
   private readonly rCount: Int32Array;
   private readonly smallArea = new Float64Array(BVH_SMALL + 1);
+  /** The centroid pass (begin's per-primitive work, resumable): next primitive; root box + centroid box so far. */
+  private prepAt = 0;
+  private readonly prepBox = new Float64Array(12);
+  /**
+   * The big node in progress (BVH_BIG primitives and more): phase 1 binning, 2 the partition (0: none); its range, depth, centroid
+   * box (bC: min xyz, max xyz), the pass cursor (and the partition's far end), the chosen axis / split, and the children's
+   * centroid boxes so far (bLR: left min xyz, max xyz, then right).
+   */
+  private bigPhase = 0;
+  private bNode = 0; private bStart = 0; private bEnd = 0; private bDepth = 0;
+  private bCur = 0; private bJ = 0; private bAxis = 0; private bSplit = 0; private bL = 0;
+  private readonly bC = new Float64Array(6);
+  private readonly bK = new Float64Array(3);
+  private readonly bLR = new Float64Array(12);
+  // the sweep's result (sweepBins)
+  private sAxis = -1; private sSplit = 0; private sCost = Infinity; private sNL = 0;
 
   constructor(readonly maxLeaf: number, readonly bins = BVH_BINS, readonly depthLimit = BVH_MAX_DEPTH) {
     if (!(maxLeaf >= 1) || !(bins >= 2) || !(depthLimit >= 1)) throw new Error('BvhBuilder: bad parameters');
@@ -121,7 +142,18 @@ export class BvhBuilder {
   }
 
   /** True when the build begun last has finished. */
-  get done(): boolean { return this.sp === 0; }
+  get done(): boolean { return this.sp === 0 && this.prepAt >= this.count && this.bigPhase === 0; }
+
+  /** Grows the scratch to build `count` primitives without allocating (begin grows it as needed otherwise). */
+  reserve(count: number): void {
+    if (this.order.length < count) this.order = new Uint32Array(Math.max(count, this.order.length * 2));
+    if (this.cent.length < count * 3) this.cent = new Float32Array(Math.max(count * 3, this.cent.length * 2));
+    const nodeCap = Math.max(1, 2 * count - 1) * BVH_NODE_FLOATS;
+    if (this.nodes.length < nodeCap) {
+      this.nodes = new Float32Array(Math.max(nodeCap, this.nodes.length * 2));
+      this.nodesU32 = new Uint32Array(this.nodes.buffer);
+    }
+  }
 
   /** Starts a build over `count` boxes of `bounds` (min xyz, max xyz each; finite, min <= max). */
   begin(bounds: Float32Array, count: number): void {
@@ -132,18 +164,20 @@ export class BvhBuilder {
     this.sp = 0;
     this.depth = 0;
     this.forcedMedians = 0;
-    if (this.order.length < count) this.order = new Uint32Array(Math.max(count, this.order.length * 2));
-    if (this.cent.length < count * 3) this.cent = new Float32Array(Math.max(count * 3, this.cent.length * 2));
-    const nodeCap = Math.max(1, 2 * count - 1) * BVH_NODE_FLOATS;
-    if (this.nodes.length < nodeCap) {
-      this.nodes = new Float32Array(Math.max(nodeCap, this.nodes.length * 2));
-      this.nodesU32 = new Uint32Array(this.nodes.buffer);
-    }
-    if (count === 0) return;
-    const O = this.order, C = this.cent, Bd = bounds;
-    let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
-    let cx0 = Infinity, cy0 = Infinity, cz0 = Infinity, cx1 = -Infinity, cy1 = -Infinity, cz1 = -Infinity;
-    for (let p = 0; p < count; p++) {
+    this.reserve(count);
+    this.prepAt = 0;
+    this.bigPhase = 0;
+    const P = this.prepBox;
+    for (let k = 0; k < 12; k++) P[k] = (k % 6) < 3 ? Infinity : -Infinity;
+  }
+
+  /** The centroid pass for about `work` units (2 a primitive); pushes the root once every primitive is in. Returns the work left. */
+  private prep(work: number): number {
+    const O = this.order, C = this.cent, Bd = this.bounds, count = this.count, P = this.prepBox;
+    let x0 = P[0], y0 = P[1], z0 = P[2], x1 = P[3], y1 = P[4], z1 = P[5];
+    let cx0 = P[6], cy0 = P[7], cz0 = P[8], cx1 = P[9], cy1 = P[10], cz1 = P[11];
+    let p = this.prepAt;
+    for (; p < count && work > 0; p++, work -= 2) {
       O[p] = p;
       const b = p * 6;
       const ax = Bd[b], ay = Bd[b + 1], az = Bd[b + 2], bx = Bd[b + 3], by = Bd[b + 4], bz = Bd[b + 5];
@@ -154,11 +188,16 @@ export class BvhBuilder {
       if (fx < cx0) cx0 = fx; if (fy < cy0) cy0 = fy; if (fz < cz0) cz0 = fz;
       if (fx > cx1) cx1 = fx; if (fy > cy1) cy1 = fy; if (fz > cz1) cz1 = fz;
     }
+    this.prepAt = p;
+    P[0] = x0; P[1] = y0; P[2] = z0; P[3] = x1; P[4] = y1; P[5] = z1;
+    P[6] = cx0; P[7] = cy0; P[8] = cz0; P[9] = cx1; P[10] = cy1; P[11] = cz1;
+    if (p < count) return work;
     const N = this.nodes, NU = this.nodesU32;
     N[0] = x0; N[1] = y0; N[2] = z0; N[4] = x1; N[5] = y1; N[6] = z1;
     NU[3] = 0; NU[7] = 0;
     this.nodeCount = 1;
     this.push(0, 0, count, 0, cx0, cy0, cz0, cx1, cy1, cz1);
+    return work;
   }
 
   private push(node: number, start: number, end: number, depth: number, cx0: number, cy0: number, cz0: number, cx1: number, cy1: number, cz1: number): void {
@@ -169,18 +208,24 @@ export class BvhBuilder {
 
   /** Runs the build for about `work` primitive visits (Infinity: to the end). True when it has finished. */
   run(work = Infinity): boolean {
+    if (this.prepAt < this.count) {
+      work = this.prep(work);
+      if (this.prepAt < this.count) return false;
+    }
     const ML = this.maxLeaf, NB = this.bins, O = this.order, C = this.cent, Bd = this.bounds;
     const binN = this.binN, binB = this.binB, rArea = this.rArea, rCount = this.rCount;
     const I = this.stackI, Cs = this.stackC;
-    while (this.sp > 0) {
+    while (this.sp > 0 || this.bigPhase !== 0) {
       if (work <= 0) return false;
+      if (this.bigPhase !== 0) { work = this.bigStep(work); continue; }
       const s = --this.sp;
       const node = I[s * 4], start = I[s * 4 + 1], end = I[s * 4 + 2], depth = I[s * 4 + 3];
       const cmin0 = Cs[s * 6], cmin1 = Cs[s * 6 + 1], cmin2 = Cs[s * 6 + 2];
       const cmax0 = Cs[s * 6 + 3], cmax1 = Cs[s * 6 + 4], cmax2 = Cs[s * 6 + 5];
       const n = end - start;
-      work -= 2 * n + 8;
       if (depth > this.depth) this.depth = depth;
+      if (n >= BVH_BIG) { this.bigBegin(node, start, end, depth, cmin0, cmin1, cmin2, cmax0, cmax1, cmax2); continue; }
+      work -= 2 * n + 8;
       const N = this.nodes, NU = this.nodesU32, no = node * BVH_NODE_FLOATS;
       if (n === 1) { NU[no + 3] = start; NU[no + 7] = 1; continue; }
       if (n <= BVH_SMALL) { this.small(node, start, end, depth, cmax0 - cmin0, cmax1 - cmin1, cmax2 - cmin2); continue; }
@@ -312,6 +357,163 @@ export class BvhBuilder {
       this.push(L, start, mid, depth + 1, lc0, lc1, lc2, lc3, lc4, lc5);
     }
     return true;
+  }
+
+  /** Starts a big node: its bins reset (the same rule as a binned node of BVH_BINS bins), binned by bigStep in chunks. */
+  private bigBegin(node: number, start: number, end: number, depth: number, c0: number, c1: number, c2: number, c3: number, c4: number, c5: number): void {
+    const NB = this.bins, C = this.bC, K = this.bK;
+    this.bNode = node; this.bStart = start; this.bEnd = end; this.bDepth = depth;
+    C[0] = c0; C[1] = c1; C[2] = c2; C[3] = c3; C[4] = c4; C[5] = c5;
+    for (let k = 0; k < 3; k++) { const e = C[3 + k] - C[k]; K[k] = e > 0 ? (NB * (1 - 1e-6)) / e : 0; }
+    const binN = this.binN, binB = this.binB;
+    for (let q = 0; q < 3 * NB; q++) {
+      const o = q * 6;
+      binN[q] = 0;
+      binB[o] = binB[o + 1] = binB[o + 2] = Infinity;
+      binB[o + 3] = binB[o + 4] = binB[o + 5] = -Infinity;
+    }
+    this.bCur = start;
+    this.bigPhase = 1;
+  }
+
+  /** One chunk of the big node in progress (about `work` units: 2 a primitive binned, 1 a primitive partitioned). */
+  private bigStep(work: number): number {
+    const NB = this.bins, O = this.order, C = this.cent, Bd = this.bounds, binN = this.binN, binB = this.binB;
+    const BC = this.bC, K = this.bK, k0 = K[0], k1 = K[1], k2 = K[2];
+    const start = this.bStart, end = this.bEnd, n = end - start;
+    if (this.bigPhase === 1) {
+      const cmin0 = BC[0], cmin1 = BC[1], cmin2 = BC[2];
+      let i = this.bCur;
+      for (; i < end && work > 0; i++, work -= 2) {
+        const p = O[i], c = p * 3, b = p * 6;
+        const ax = Bd[b], ay = Bd[b + 1], az = Bd[b + 2], bx = Bd[b + 3], by = Bd[b + 4], bz = Bd[b + 5];
+        if (k0 !== 0) {
+          let bin = ((C[c] - cmin0) * k0) | 0;
+          if (bin < 0) bin = 0; else if (bin >= NB) bin = NB - 1;
+          const o = bin * 6;
+          binN[bin]++;
+          if (ax < binB[o]) binB[o] = ax; if (ay < binB[o + 1]) binB[o + 1] = ay; if (az < binB[o + 2]) binB[o + 2] = az;
+          if (bx > binB[o + 3]) binB[o + 3] = bx; if (by > binB[o + 4]) binB[o + 4] = by; if (bz > binB[o + 5]) binB[o + 5] = bz;
+        }
+        if (k1 !== 0) {
+          let bin = ((C[c + 1] - cmin1) * k1) | 0;
+          if (bin < 0) bin = 0; else if (bin >= NB) bin = NB - 1;
+          const q = NB + bin, o = q * 6;
+          binN[q]++;
+          if (ax < binB[o]) binB[o] = ax; if (ay < binB[o + 1]) binB[o + 1] = ay; if (az < binB[o + 2]) binB[o + 2] = az;
+          if (bx > binB[o + 3]) binB[o + 3] = bx; if (by > binB[o + 4]) binB[o + 4] = by; if (bz > binB[o + 5]) binB[o + 5] = bz;
+        }
+        if (k2 !== 0) {
+          let bin = ((C[c + 2] - cmin2) * k2) | 0;
+          if (bin < 0) bin = 0; else if (bin >= NB) bin = NB - 1;
+          const q = 2 * NB + bin, o = q * 6;
+          binN[q]++;
+          if (ax < binB[o]) binB[o] = ax; if (ay < binB[o + 1]) binB[o + 1] = ay; if (az < binB[o + 2]) binB[o + 2] = az;
+          if (bx > binB[o + 3]) binB[o + 3] = bx; if (by > binB[o + 4]) binB[o + 4] = by; if (bz > binB[o + 5]) binB[o + 5] = bz;
+        }
+      }
+      this.bCur = i;
+      if (i < end) return work;
+      // ---- the sweep and the split (O(bins))
+      const node = this.bNode, depth = this.bDepth, N = this.nodes, NU = this.nodesU32, no = node * BVH_NODE_FLOATS;
+      this.sweepBins(NB, k0, k1, k2);
+      const sahOk = this.sAxis >= 0 && depth + 1 + medianDepth(Math.max(this.sNL, n - this.sNL), this.maxLeaf) <= this.depthLimit;
+      if (!sahOk) {
+        // (rare: identical centroids or the depth limit) the balanced split, at once
+        this.bigPhase = 0;
+        this.forcedMedians++;
+        const e0 = BC[3] - BC[0], e1 = BC[4] - BC[1], e2 = BC[5] - BC[2];
+        const k = e0 >= e1 && e0 >= e2 ? 0 : e1 >= e2 ? 1 : 2;
+        if (k === 0 ? e0 > 0 : k === 1 ? e1 > 0 : e2 > 0) O.subarray(start, end).sort((a, b) => C[a * 3 + k] - C[b * 3 + k]);
+        this.split(node, start, start + (n >> 1), end, depth);
+        return work;
+      }
+      const L = this.nodeCount, R = L + 1, lo = L * BVH_NODE_FLOATS, ro = R * BVH_NODE_FLOATS;
+      this.nodeCount += 2;
+      NU[no + 3] = L; NU[no + 7] = 0;
+      NU[lo + 3] = 0; NU[lo + 7] = 0; NU[ro + 3] = 0; NU[ro + 7] = 0;
+      const k = this.sAxis, split = this.sSplit;
+      for (let side = 0; side < 2; side++) {
+        let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+        const b0 = side === 0 ? 0 : split, b1 = side === 0 ? split : NB;
+        for (let b = b0; b < b1; b++) {
+          const q = k * NB + b, o = q * 6;
+          if (binN[q] === 0) continue;
+          if (binB[o] < x0) x0 = binB[o]; if (binB[o + 1] < y0) y0 = binB[o + 1]; if (binB[o + 2] < z0) z0 = binB[o + 2];
+          if (binB[o + 3] > x1) x1 = binB[o + 3]; if (binB[o + 4] > y1) y1 = binB[o + 4]; if (binB[o + 5] > z1) z1 = binB[o + 5];
+        }
+        const co = side === 0 ? lo : ro;
+        N[co] = x0; N[co + 1] = y0; N[co + 2] = z0; N[co + 4] = x1; N[co + 5] = y1; N[co + 6] = z1;
+      }
+      const LR = this.bLR;
+      for (let q = 0; q < 12; q++) LR[q] = (q % 6) < 3 ? Infinity : -Infinity;
+      this.bAxis = k; this.bSplit = split; this.bL = L;
+      this.bCur = start; this.bJ = end - 1;
+      this.bigPhase = 2;
+      return work;
+    }
+    // ---- phase 2: the in-place partition by the same bin rule, resumable (tracking each side's centroid box)
+    const k = this.bAxis, split = this.bSplit, sc = K[k], cm = BC[k], LR = this.bLR;
+    let i = this.bCur, j = this.bJ;
+    let lc0 = LR[0], lc1 = LR[1], lc2 = LR[2], lc3 = LR[3], lc4 = LR[4], lc5 = LR[5];
+    let rc0 = LR[6], rc1 = LR[7], rc2 = LR[8], rc3 = LR[9], rc4 = LR[10], rc5 = LR[11];
+    while (i <= j && work > 0) {
+      work--;
+      const p = O[i], c = p * 3;
+      let bin = ((C[c + k] - cm) * sc) | 0;
+      if (bin < 0) bin = 0; else if (bin >= NB) bin = NB - 1;
+      const x = C[c], y = C[c + 1], z = C[c + 2];
+      if (bin < split) {
+        if (x < lc0) lc0 = x; if (y < lc1) lc1 = y; if (z < lc2) lc2 = z; if (x > lc3) lc3 = x; if (y > lc4) lc4 = y; if (z > lc5) lc5 = z;
+        i++;
+      } else {
+        if (x < rc0) rc0 = x; if (y < rc1) rc1 = y; if (z < rc2) rc2 = z; if (x > rc3) rc3 = x; if (y > rc4) rc4 = y; if (z > rc5) rc5 = z;
+        O[i] = O[j]; O[j] = p; j--;
+      }
+    }
+    this.bCur = i; this.bJ = j;
+    LR[0] = lc0; LR[1] = lc1; LR[2] = lc2; LR[3] = lc3; LR[4] = lc4; LR[5] = lc5;
+    LR[6] = rc0; LR[7] = rc1; LR[8] = rc2; LR[9] = rc3; LR[10] = rc4; LR[11] = rc5;
+    if (i <= j) return work;
+    this.bigPhase = 0;
+    const L = this.bL, mid = i, d = this.bDepth + 1;
+    // right first, so the left child is built next (depth-first)
+    this.push(L + 1, mid, end, d, rc0, rc1, rc2, rc3, rc4, rc5);
+    this.push(L, start, mid, d, lc0, lc1, lc2, lc3, lc4, lc5);
+    return work;
+  }
+
+  /** The SAH sweep over the bins of every axis with an extent (nb bins): the best split into sAxis / sSplit / sCost / sNL. */
+  private sweepBins(nb: number, k0: number, k1: number, k2: number): void {
+    const NB = this.bins, binN = this.binN, binB = this.binB, rArea = this.rArea, rCount = this.rCount;
+    this.sAxis = -1; this.sSplit = 0; this.sCost = Infinity; this.sNL = 0;
+    for (let k = 0; k < 3; k++) {
+      if ((k === 0 ? k0 : k === 1 ? k1 : k2) === 0) continue;
+      let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity, cnt = 0;
+      for (let b = nb - 1; b >= 1; b--) {
+        const q = k * NB + b, o = q * 6;
+        if (binN[q] > 0) {
+          if (binB[o] < x0) x0 = binB[o]; if (binB[o + 1] < y0) y0 = binB[o + 1]; if (binB[o + 2] < z0) z0 = binB[o + 2];
+          if (binB[o + 3] > x1) x1 = binB[o + 3]; if (binB[o + 4] > y1) y1 = binB[o + 4]; if (binB[o + 5] > z1) z1 = binB[o + 5];
+          cnt += binN[q];
+        }
+        rCount[b] = cnt;
+        rArea[b] = cnt > 0 ? halfArea(x0, y0, z0, x1, y1, z1) : 0;
+      }
+      x0 = y0 = z0 = Infinity; x1 = y1 = z1 = -Infinity; cnt = 0;
+      for (let b = 1; b < nb; b++) {
+        const q = k * NB + b - 1, o = q * 6;
+        if (binN[q] > 0) {
+          if (binB[o] < x0) x0 = binB[o]; if (binB[o + 1] < y0) y0 = binB[o + 1]; if (binB[o + 2] < z0) z0 = binB[o + 2];
+          if (binB[o + 3] > x1) x1 = binB[o + 3]; if (binB[o + 4] > y1) y1 = binB[o + 4]; if (binB[o + 5] > z1) z1 = binB[o + 5];
+          cnt += binN[q];
+        }
+        const nr = rCount[b];
+        if (cnt === 0 || nr === 0) continue;
+        const cost = halfArea(x0, y0, z0, x1, y1, z1) * cnt + rArea[b] * nr;
+        if (cost < this.sCost) { this.sCost = cost; this.sAxis = k; this.sSplit = b; this.sNL = cnt; }
+      }
+    }
   }
 
   /**
@@ -483,6 +685,10 @@ export class BlasJob {
   private kept = 0;
   private dropped = 0;
   private ms = 0;
+  /** The output (phase 2: the records in leaf order, phase 3: the nodes), written `finAt` far. */
+  private outTris: Float32Array | null = null;
+  private outNodes: Float32Array | null = null;
+  private finAt = 0;
   private readonly builder: BvhBuilder;
   // position access
   private readonly pArr: ArrayLike<number> | null;
@@ -518,9 +724,9 @@ export class BlasJob {
     let n = 0;
     for (let r = 0; r < this.ranges.length; r += 3) n += this.ranges[r + 1];
     this.candidates = n;
-    this.verts = new Float32Array(n * 9);
-    this.meta = new Uint32Array(n * 2);
-    this.bounds = new Float32Array(n * 6);
+    // (the per-triangle scratch is allocated by the first run: making a job is O(1) in its triangles)
+    this.verts = this.bounds = new Float32Array(0);
+    this.meta = new Uint32Array(0);
     // fast paths: plain or interleaved f32 data, not normalized; anything else goes through getX/Y/Z
     const fast = (a: PosAttr): {arr: ArrayLike<number>; stride: number; off: number} | null => {
       if (a.normalized) return null;
@@ -541,20 +747,41 @@ export class BlasJob {
     this.idxArr = idx ? idx.array : null;
   }
 
-  /** Runs about `work` units (Infinity: to the end). True when `result` is ready. */
+  /**
+   * Runs about `work` units (Infinity: to the end; 4 a triangle extracted, the builder's own, 3 a record written, 1 a node copied).
+   * True when `result` is ready. Every phase is resumable: no call does more than about `work` of per-triangle work.
+   */
   run(work = Infinity): boolean {
     if (this.result) return true;
     const t0 = performance.now();
-    if (this.phase === 0) { work = this.extract(work); if (this.phase === 0) { this.ms += performance.now() - t0; return false; } }
+    if (this.phase === 0) work = this.extract(work);
     if (this.phase === 1) {
-      if (!this.builder.run(work)) { this.ms += performance.now() - t0; return false; }
+      if (work <= 0 || !this.builder.run(work)) { this.ms += performance.now() - t0; return false; }
       this.phase = 2;
+      this.finAt = 0;
+      if (work !== Infinity) { this.ms += performance.now() - t0; return false; } // (the builder used this call's work)
     }
-    this.finish(t0);
-    return true;
+    if (this.phase >= 2) this.finish(work);
+    this.ms += performance.now() - t0;
+    if (this.phase === 4) {
+      const B = this.builder;
+      this.result = {nodes: this.outNodes!, nodeCount: B.nodeCount, tris: this.outTris!, triCount: this.kept, dropped: this.dropped, depth: B.depth, buildMs: this.ms, key: this.key};
+      // (drop the scratch)
+      this.verts = this.bounds = new Float32Array(0);
+      this.meta = new Uint32Array(0);
+      this.outTris = this.outNodes = null;
+      return true;
+    }
+    return false;
   }
 
   private extract(work: number): number {
+    if (this.verts.length < this.candidates * 9) {
+      const n = this.candidates;
+      this.verts = new Float32Array(n * 9);
+      this.meta = new Uint32Array(n * 2);
+      this.bounds = new Float32Array(n * 6);
+    }
     const pos = this.key.position, P = this.pArr, ps = this.pStride, po = this.pOff, IX = this.idxArr;
     const V = this.verts, M = this.meta, Bd = this.bounds;
     const col = this.colorAttr, CA = this.cArr, cs = this.cStride, co = this.cOff, csz = this.cSize;
@@ -613,21 +840,33 @@ export class BlasJob {
     return work;
   }
 
-  private finish(t0: number): void {
-    const B = this.builder, n = this.kept, O = B.order, V = this.verts, M = this.meta;
-    const tris = new Float32Array(n * BLAS_TRI_FLOATS), TU = new Uint32Array(tris.buffer);
-    for (let k = 0; k < n; k++) {
-      const p = O[k], s = p * 9, d = k * BLAS_TRI_FLOATS;
-      tris[d] = V[s]; tris[d + 1] = V[s + 1]; tris[d + 2] = V[s + 2]; TU[d + 3] = M[p * 2];
-      tris[d + 4] = V[s + 3]; tris[d + 5] = V[s + 4]; tris[d + 6] = V[s + 5]; TU[d + 7] = M[p * 2 + 1];
-      tris[d + 8] = V[s + 6]; tris[d + 9] = V[s + 7]; tris[d + 10] = V[s + 8]; TU[d + 11] = 0;
+  /** Phase 2: the records in leaf order; phase 3: the nodes copied out of the shared builder; then phase 4 (done). */
+  private finish(work: number): void {
+    const B = this.builder, n = this.kept;
+    if (this.phase === 2) {
+      const O = B.order, V = this.verts, M = this.meta;
+      if (!this.outTris) this.outTris = new Float32Array(n * BLAS_TRI_FLOATS);
+      const tris = this.outTris, TU = new Uint32Array(tris.buffer);
+      let k = this.finAt;
+      for (; k < n && work > 0; k++, work -= 3) {
+        const p = O[k], s = p * 9, d = k * BLAS_TRI_FLOATS;
+        tris[d] = V[s]; tris[d + 1] = V[s + 1]; tris[d + 2] = V[s + 2]; TU[d + 3] = M[p * 2];
+        tris[d + 4] = V[s + 3]; tris[d + 5] = V[s + 4]; tris[d + 6] = V[s + 5]; TU[d + 7] = M[p * 2 + 1];
+        tris[d + 8] = V[s + 6]; tris[d + 9] = V[s + 7]; tris[d + 10] = V[s + 8]; TU[d + 11] = 0;
+      }
+      this.finAt = k;
+      if (k < n) return;
+      this.phase = 3;
+      this.finAt = 0;
     }
-    const nodes = B.nodes.slice(0, B.nodeCount * BVH_NODE_FLOATS);
-    this.ms += performance.now() - t0;
-    this.result = {nodes, nodeCount: B.nodeCount, tris, triCount: n, dropped: this.dropped, depth: B.depth, buildMs: this.ms, key: this.key};
-    // (drop the scratch)
-    this.verts = this.bounds = new Float32Array(0);
-    this.meta = new Uint32Array(0);
+    if (this.phase === 3) {
+      const total = B.nodeCount;
+      if (!this.outNodes) this.outNodes = new Float32Array(total * BVH_NODE_FLOATS);
+      const end = work === Infinity ? total : Math.min(total, this.finAt + Math.max(1, Math.floor(work)));
+      this.outNodes.set(B.nodes.subarray(this.finAt * BVH_NODE_FLOATS, end * BVH_NODE_FLOATS), this.finAt * BVH_NODE_FLOATS);
+      this.finAt = end;
+      if (end >= total) this.phase = 4;
+    }
   }
 
   /** Candidate triangles (drawn, before degenerate ones are dropped). */
