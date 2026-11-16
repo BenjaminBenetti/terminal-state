@@ -163,12 +163,12 @@ export function planSurfaceDoors(info: SurfaceInfo, g: DoorGrid, levels?: readon
   const out: SurfaceDoorPlan[] = [];
   // a street doorway's threshold is its own cells' floor (the kerb-height slab); other storeys: the storey floor
   const doorFloor = (e: Pick<SurfaceEntrance, 'level' | 'cells'>): number => (e.level === 0 && g.floor && e.cells.length ? g.floor[e.cells[0]] : storeyFloor(info, e.level, levels));
-  const mk = (e: Pick<SurfaceEntrance, 'id' | 'building' | 'level' | 'x' | 'z' | 'side' | 'width' | 'height' | 'cells' | 'inner'>, gen: SurfaceDoorPlan['gen'], tent: boolean, c: number) => {
+  const mk = (e: Pick<SurfaceEntrance, 'id' | 'building' | 'level' | 'x' | 'z' | 'side' | 'width' | 'height' | 'cells' | 'inner'>, gen: SurfaceDoorPlan['gen'], tent: boolean, c: number, floor?: number) => {
     const n = sideNormal(e.side), along: 'x' | 'z' = n[0] === 0 ? 'x' : 'z';
     const a = along === 'x' ? e.x : e.z;
     const x = along === 'x' ? e.x : c, z = along === 'x' ? c : e.z;
     out.push({id: e.id, building: e.building, tent, level: e.level, x, z, side: e.side, n, along, a, c, width: e.width, height: e.height,
-      floor: doorFloor(e), gen, area: e.inner, cells: [...e.cells], leaves: gen === 'smashed' ? [] : leavesFor(e.id, a, e.width)});
+      floor: floor ?? doorFloor(e), gen, area: e.inner, cells: [...e.cells], leaves: gen === 'smashed' ? [] : leavesFor(e.id, a, e.width)});
   };
   for (const b of info.buildings) for (const e of b.entrances) {
     if (e.door === 'boarded') continue;
@@ -179,6 +179,14 @@ export function planSurfaceDoors(info: SurfaceInfo, g: DoorGrid, levels?: readon
     // the leaf sits in the building's own facade wall (its outer face), whatever point along the doorway's depth the record names
     const alongX = sideNormal(e.side)[0] === 0;
     mk(e, e.door, false, b.footprint ? facadeLine(b.footprint, e.side) : alongX ? e.z : e.x);
+  }
+  // (v2, lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01) a reachable roof's door: a leaf in the stair BULKHEAD's
+  // wall (its outer face on the roof side), on the roof's level and floor — the same door runtime / breach rule as a street door (the
+  // roof's outdoor air comes in while it is not shut)
+  for (const b of info.buildings) {
+    const ra = b.roofAccess, e = ra?.door;
+    if (!ra || !e || e.door === 'boarded') continue;
+    mk(e, e.door, false, facadeLine(ra.bulkhead, e.side), ra.y);
   }
   const t = info.checkpoint.tent, dw = tentDoorway(info, g), alongX = sideNormal(t.door.side)[0] === 0;
   mk({id: 'tent', building: -1, level: 0, x: alongX ? dw.a : t.door.x, z: alongX ? t.door.z : dw.a, side: t.door.side, width: dw.width, height: DOOR_RT.flapHeight, inner: t.area, cells: dw.cells},

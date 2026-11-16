@@ -358,6 +358,14 @@ export interface SurfaceRoofAccess {
   y: number;
   walk: SRect;
   bulkhead: SRect & {side: Side; h: number};
+  /**
+   * (lane INTERIOR, task studio-surface-run-field-followup-20261116-211729-01) The roof door in the bulkhead wall on `bulkhead.side`: an
+   * entrance record (level `level`, leaf on the bulkhead's outer face, `inner` = the stair landing, `outer` = the roof area it opens onto,
+   * `cells` = its doorway cells on that level's grid). Kept OUT of `entrances` (those are the street doorways on level 0). The walkable roof
+   * is `walk` minus the bulkhead; `areas` = the roof's own (outdoor) layout areas on `level`.
+   */
+  door?: SurfaceEntrance;
+  areas?: number[];
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
