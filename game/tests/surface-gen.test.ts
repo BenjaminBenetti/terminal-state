@@ -91,7 +91,8 @@ describe('Surface district frame', () => {
 
 describe('Surface district guarantees over 30 seeds', () => {
   const runs: {seed: number; L: StationLayout}[] = [];
-  beforeAll(() => { for (let seed = 1; seed <= 30; seed++) runs.push({seed, L: gen(seed)}); });
+  // (lane ROOMS: with the real interior planner a district takes ~0.3-0.55 s here, so 30 of them outgrow the 10 s default hook timeout)
+  beforeAll(() => { for (let seed = 1; seed <= 30; seed++) runs.push({seed, L: gen(seed)}); }, 120000);
 
   it('every district has its depot, >= 2 centres, >= 3 offices, >= 8 stores of >= 6 kinds, <= 2 civic (all enterable, all in the core)', () => {
     for (const {seed, L} of runs) {
