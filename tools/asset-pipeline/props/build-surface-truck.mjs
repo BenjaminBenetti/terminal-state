@@ -533,8 +533,8 @@ const ANCH = {
   steering: {dy: -0.46, dz: -0.36, radius: 0.22, tilt: 0.6},
   /** stand points this far outside the cab side at the door (m) */
   exitOut: 0.7,
-  /** collision circles on the centreline (the body is long and narrow: more circles = less bulge at the sides) */
-  circles: 7,
+  /** collision circles: columns across the width, circles `spacing` apart along each (a flat-ended body: small circles bulge little) */
+  circles: {cols: 3, spacing: 0.6},
   /** voxel size (m) for the free cab box; headroom over the eye the box must hold */
   vox: 0.03, headroom: 0.12,
   /** headlamps: bright, low-chroma, forward-facing master triangles on the nose, low on the bumper, off the centre line */
@@ -695,28 +695,27 @@ const doorZ = r2((paneBy('left-front').centre[2] + paneBy('right-front').centre[
 const halfAt = (side, z) => { let m = 0; const P = body.P; for (let i = 0; i < P.length; i += 3) if (Math.sign(P[i]) === side && Math.abs(P[i + 2] - z) < 0.12 && P[i + 1] > 0.8 && P[i + 1] < 1.6) m = Math.max(m, Math.abs(P[i])); return m; };
 const exits = {left: {x: r2(-(halfAt(-1, doorZ) + ANCH.exitOut)), z: doorZ}, right: {x: r2(halfAt(1, doorZ) + ANCH.exitOut), z: doorZ}};
 
-// collision circles: the footprint (every part) per 2 cm slice, greedy cover minimising the common radius
-const slices = new Map();
-for (let i = 0; i < TRI.V.length; i += 3) { const k = Math.round(TRI.V[i + 2] * 50); slices.set(k, Math.max(slices.get(k) ?? 0, Math.abs(TRI.V[i]))); }
-const sl = [...slices].sort((a, b) => a[0] - b[0]).map(([k, hw]) => ({z: k / 50, hw}));
-function cover(R) {
-  const out = []; let i = 0;
-  while (i < sl.length) {
-    let lo = -Infinity, hi = Infinity, j = i;
-    for (; j < sl.length; j++) { if (sl[j].hw > R) return null; const d = Math.sqrt(R * R - sl[j].hw * sl[j].hw); const nlo = Math.max(lo, sl[j].z - d), nhi = Math.min(hi, sl[j].z + d); if (nlo > nhi) break; lo = nlo; hi = nhi; }
-    out.push({from: i, to: j, z: (lo + hi) / 2}); i = j;
+// collision circles: COLUMNS (the body is long, narrow and flat-ended: centre-line circles wide enough for it bulge a metre past the
+// nose); `cols` equal bands across the footprint's width, each band's z extent covered by circles `spacing` apart (each circle covers its
+// band's rectangle exactly: r = hypot(band half-width, spacing / 2), rounded up to the cm)
+const circles = (() => {
+  const C = ANCH.circles, hw = (bmax[0] - bmin[0]) / (2 * C.cols), out = [];
+  for (let c = 0; c < C.cols; c++) {
+    const x0 = bmin[0] + 2 * hw * c, x1 = x0 + 2 * hw;
+    let z0 = Infinity, z1 = -Infinity;
+    for (let i = 0; i < TRI.V.length; i += 3) if (TRI.V[i] >= x0 - 1e-6 && TRI.V[i] <= x1 + 1e-6) { z0 = Math.min(z0, TRI.V[i + 2]); z1 = Math.max(z1, TRI.V[i + 2]); }
+    const n = Math.max(1, Math.ceil((z1 - z0) / C.spacing)), s = (z1 - z0) / n, r = Math.ceil(Math.hypot(hw, s / 2) * 100) / 100;
+    for (let k = 0; k < n; k++) out.push({x: r3((x0 + x1) / 2), z: r3(z0 + s * (k + 0.5)), r});
   }
-  return out;
-}
-let Rlo = Math.max(...sl.map(s => s.hw)), Rhi = 4;
-for (let k = 0; k < 40; k++) { const m = (Rlo + Rhi) / 2, c = cover(m); if (c && c.length <= ANCH.circles) Rhi = m; else Rlo = m; }
-const circles = cover(Rhi).map(c => {
-  const z = r2(c.z), za = sl[c.from].z - 0.011, zb = sl[c.to - 1].z + 0.011;
-  let r = 0;
-  for (let i = 0; i < TRI.V.length; i += 3) if (TRI.V[i + 2] >= za && TRI.V[i + 2] <= zb) r = Math.max(r, Math.hypot(TRI.V[i], TRI.V[i + 2] - z));
-  return {z, r: Math.ceil(r * 100) / 100};
-});
-for (let i = 0; i < TRI.V.length; i += 3) if (!circles.some(c => Math.hypot(TRI.V[i], TRI.V[i + 2] - c.z) <= c.r)) throw new Error('circles do not cover the footprint');
+  return out.sort((a, b) => a.z - b.z || a.x - b.x);
+})();
+for (let i = 0; i < TRI.V.length; i += 3) if (!circles.some(c => Math.hypot(TRI.V[i] - c.x, TRI.V[i + 2] - c.z) <= c.r)) throw new Error('circles do not cover the footprint');
+const circleBulge = (() => { // the most a circle reaches past the footprint's box (nose / tail / sides), m
+  let m = 0;
+  for (const c of circles) m = Math.max(m, bmin[2] - (c.z - c.r), c.z + c.r - bmax[2], bmin[0] - (c.x - c.r), c.x + c.r - bmax[0]);
+  return r3(m);
+})();
+log(`collision circles: ${circles.length} (${ANCH.circles.cols} columns), r ${circles[0].r}, the most past the footprint box ${circleBulge} m`);
 
 // headlamps: from the master's base map (bright, low-chroma, forward-facing, on the nose, low, off the centre line)
 const lamps = (() => {
@@ -914,7 +913,7 @@ const prov = {
       clear: `the free box: voxels (${ANCH.vox} m, dilated one voxel) of body + glass; seeded around the eye (+ ${ANCH.headroom} m) and the steering wheel; grown in depth / height, then width; x-symmetric about the windscreen's middle`,
       wheelBase: 'front axle -> the rear tandem\'s middle (the turn centre lies on the line through the rear tandem); axle 2 steers at the ratio of tangents (rear-middle - z) / wheelBase',
       exits: `${ANCH.exitOut} m outside the cab side (max |x| at 0.8-1.6 m) at the door (the front side windows' middle z)`,
-      circles: `${ANCH.circles} circles on the centreline covering every part's footprint with the smallest common radius`,
+      circles: `${ANCH.circles.cols} columns (equal bands across the footprint's width), each band's z extent covered by circles ${ANCH.circles.spacing} m apart (r = hypot(band half-width, spacing / 2), rounded up); every vertex of every part inside a circle; at most ${circleBulge} m past the footprint box`,
       lamps: 'bright, low-chroma, forward-facing master triangles on the nose, low on the bumper: the side with the larger bright area gives the box, mirrored about the cab\'s middle; the runtime lens = the body\'s triangles inside it',
       bed: 'axis rays inside the canvas cover: the floor (median, well inside), the front wall, the side walls and the cover between them; the rear = the opened face',
       attach: `${ANCH.bed.cols} x ${ANCH.bed.rows} secure points on the bed floor, ${ANCH.bed.inset} m inside the walls, ${ANCH.bed.gap} m apart; h = the cover's inside over the floor - ${ANCH.bed.clear} m`,
@@ -943,7 +942,7 @@ const ts = `// GENERATED by tools/asset-pipeline/props/build-surface-truck.mjs â
 // wheels: axle 1 left, axle 1 right, axle 2 left, â€¦ {x, y = hub height, z, r, axle, steer = the share of the front wheel angle's
 // tangent}; wheelBase = front axle -> the rear tandem's middle; eye = seated driver eye; seat = its H-point; wheelCentre / steering =
 // the steering wheel's hub, rim radius and plane tilt (rad from horizontal); exits = stand points outside each door (doorZ); circles =
-// collision circles on the centreline; interior = the cab's volume (its walls from the eye); clear = the free box inside it; cowl /
+// collision circles {x, z, r} in columns; interior = the cab's volume (its walls from the eye); clear = the free box inside it; cowl /
 // header = the windscreen's base / top; lamps = headlamp outlines in the front projection (lens triangles: every vertex inside,
 // facing forward, z < zMax) + the beam; glass = pane boxes + normals; bed = the space under the canvas (opening = the opened rear
 // face); attach = secure points on the bed floor (w across, d along, h clear); storage = compartment boxes (faceX = the outer face).

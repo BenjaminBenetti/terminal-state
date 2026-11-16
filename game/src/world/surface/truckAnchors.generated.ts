@@ -5,7 +5,7 @@
 // wheels: axle 1 left, axle 1 right, axle 2 left, … {x, y = hub height, z, r, axle, steer = the share of the front wheel angle's
 // tangent}; wheelBase = front axle -> the rear tandem's middle; eye = seated driver eye; seat = its H-point; wheelCentre / steering =
 // the steering wheel's hub, rim radius and plane tilt (rad from horizontal); exits = stand points outside each door (doorZ); circles =
-// collision circles on the centreline; interior = the cab's volume (its walls from the eye); clear = the free box inside it; cowl /
+// collision circles {x, z, r} in columns; interior = the cab's volume (its walls from the eye); clear = the free box inside it; cowl /
 // header = the windscreen's base / top; lamps = headlamp outlines in the front projection (lens triangles: every vertex inside,
 // facing forward, z < zMax) + the beam; glass = pane boxes + normals; bed = the space under the canvas (opening = the opened rear
 // face); attach = secure points on the bed floor (w across, d along, h clear); storage = compartment boxes (faceX = the outer face).
@@ -26,7 +26,7 @@ export const TRUCK_ANCHORS = {
   steering: {radius: 0.22, tilt: 0.6},
   exits: {left: {x: -1.72, z: -3.27}, right: {x: 1.81, z: -3.27}},
   doorZ: -3.27,
-  circles: [{z: -3.52, r: 1.32}, {z: -2.22, r: 1.32}, {z: -0.9, r: 1.33}, {z: 0.17, r: 1.32}, {z: 1.19, r: 1.32}, {z: 2.17, r: 1.31}, {z: 3.11, r: 1.32}],
+  circles: [{x: 0.003, z: -3.485, r: 0.52}, {x: -0.856, z: -3.481, r: 0.52}, {x: 0.862, z: -3.481, r: 0.52}, {x: 0.003, z: -2.905, r: 0.52}, {x: -0.856, z: -2.901, r: 0.52}, {x: 0.862, z: -2.901, r: 0.52}, {x: 0.003, z: -2.325, r: 0.52}, {x: -0.856, z: -2.321, r: 0.52}, {x: 0.862, z: -2.321, r: 0.52}, {x: 0.003, z: -1.744, r: 0.52}, {x: 0.862, z: -1.742, r: 0.52}, {x: -0.856, z: -1.741, r: 0.52}, {x: 0.003, z: -1.164, r: 0.52}, {x: 0.862, z: -1.162, r: 0.52}, {x: -0.856, z: -1.161, r: 0.52}, {x: 0.003, z: -0.584, r: 0.52}, {x: 0.862, z: -0.582, r: 0.52}, {x: -0.856, z: -0.581, r: 0.52}, {x: 0.003, z: -0.004, r: 0.52}, {x: 0.862, z: -0.002, r: 0.52}, {x: -0.856, z: -0.001, r: 0.52}, {x: 0.003, z: 0.577, r: 0.52}, {x: 0.862, z: 0.578, r: 0.52}, {x: -0.856, z: 0.579, r: 0.52}, {x: 0.003, z: 1.157, r: 0.52}, {x: 0.862, z: 1.158, r: 0.52}, {x: -0.856, z: 1.159, r: 0.52}, {x: 0.003, z: 1.737, r: 0.52}, {x: 0.862, z: 1.737, r: 0.52}, {x: -0.856, z: 1.739, r: 0.52}, {x: 0.003, z: 2.317, r: 0.52}, {x: 0.862, z: 2.317, r: 0.52}, {x: -0.856, z: 2.319, r: 0.52}, {x: 0.862, z: 2.897, r: 0.52}, {x: 0.003, z: 2.898, r: 0.52}, {x: -0.856, z: 2.899, r: 0.52}, {x: 0.862, z: 3.477, r: 0.52}, {x: 0.003, z: 3.478, r: 0.52}, {x: -0.856, z: 3.479, r: 0.52}],
   interior: {x0: -0.99, x1: 1.09, y0: 0.848, y1: 2.485, z0: -3.61, z1: -2.19},
   clear: {x0: -0.87, x1: 0.93, y0: 1.35, y1: 2.28, z0: -3.54, z1: -2.76},
   cowl: {y: 1.66, z: -3.62},

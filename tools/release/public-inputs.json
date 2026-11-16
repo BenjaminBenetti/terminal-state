@@ -3050,8 +3050,8 @@
     },
     {
       "path": "assets/derivatives/surface-military-truck.json",
-      "bytes": 28016,
-      "sha256": "42383bf4a984faae142eb6e6be55ed5fd57b0f910aa526ed3f294afc59626a1a"
+      "bytes": 30184,
+      "sha256": "7a368e16e106fc732340aa5ed0804105ffdb9ed4386d49430435eae4a61fcbcd"
     },
     {
       "path": "assets/derivatives/train-armor-makeover-20261113.json",
