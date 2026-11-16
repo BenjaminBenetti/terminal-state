@@ -33,6 +33,7 @@ import {CORPSE_SHOP_LANE, corpseShopProblem, type CorpseShopJSON} from '../marke
 import {CORPSE_CARRY_PARTICIPANT, STATION_BODIES_LANE, carryProblem, stationBodiesProblem} from '../corpse/bodyLanes'; // (lane CORPSE) the carried body, a station's bodies
 import {STATION_PROPS_LANE, cargoProblem, stationPropsProblem, type CargoPropJSON} from '../run/trainCargo'; // task train-loose-cargo: the train's loose items (+ train-all-cargo: props)
 import {EQUIPMENT, STATION_EQUIPMENT_LANE, equipmentSeqOf, stationEquipmentProblem, trainEquipmentProblem, type EquipmentJSON} from '../craft/equipment'; // task train-crafting: the crafted chests / devices aboard and left in stations
+import {SURFACE_CARGO_LANE, surfaceCargoProblem} from '../world/surface/cargoStore'; // task surface-run (lane CARGO): a district's cargo record (pure)
 import {PROP_DEFS} from '../gen/props'; // task train-all-cargo: carried props are of real kinds
 import {trainUpgradesProblem} from '../run/trainUpgrades'; // task studio-refinement-batch-20261113-035659-01 (lane ARMOR): the train's fitted upgrades
 import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
@@ -657,6 +658,12 @@ function lanes(v: unknown, path: string): void {
     const ep = stationEquipmentProblem(o[STATION_EQUIPMENT_LANE]);
     if (ep) bad(`${path}.${STATION_EQUIPMENT_LANE}`, ep);
     equipmentUnits((o[STATION_EQUIPMENT_LANE] as {here: EquipmentJSON[]}).here, `${path}.${STATION_EQUIPMENT_LANE}.here`, uidScope);
+  }
+  if (has(o, SURFACE_CARGO_LANE)) { // task surface-run (lane CARGO): a district's seeded marker + the train units secured to the truck (one unit, one place run-wide)
+    const cp = surfaceCargoProblem(o[SURFACE_CARGO_LANE]);
+    if (cp) bad(`${path}.${SURFACE_CARGO_LANE}`, cp);
+    const sec = (o[SURFACE_CARGO_LANE] as {secured?: {unit: EquipmentJSON}[]}).secured ?? [];
+    equipmentUnits(sec.map(m => m.unit), `${path}.${SURFACE_CARGO_LANE}.secured`, uidScope);
   }
   if (has(o, ACID_MELT_LANE)) { // task studio-refinement-batch-20261113-035659-01 (lane MELT): the generated props acid dissolved here
     const mp = acidMeltedProblem(o[ACID_MELT_LANE]);

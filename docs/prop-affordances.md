@@ -821,6 +821,33 @@ they sit outside the two audits; their classification is recorded here.
     proportions (pinned by `tests/train-armor.test.ts`); depth is free (a plate's thickness).
   - Tests: `tests/train-armor.test.ts`, `tests/train-armor-makeover.test.ts`, `tests/train-armor-save.test.ts`,
     `tests/train-armor-clearance.test.ts`, `tests/train-armor-palette.test.ts`.
+- **Surface Run depot recoverables** (task studio-surface-run-opus-rebuild-20261116-020827-01, lane CARGO; `world/surface/cargo.ts`,
+  `world/surface/cargoSeed.ts`): the rail depot's recoverables become ordinary train units of the kinds above, lying in the district.
+  Each gets a fresh run uid from the train's one unit counter and is moved, carried, plugged, saved and melted like a crafted one.
+  - Seeded once on the first build of the district, with a seeded marker written in the same step, and never refilled.
+  - A recovered storage chest is the one seeded holder. Its contents are finite and themed to a depot workshop: `DEPOT_CHEST`, built
+    from the named tables `BASE_WORKSHOP_SALVAGE` and `TENANT_SUPPLY` (3 to 5 lots, never empty, stack sizes from `BOX_COUNT` small,
+    rolled on the district seed). Devices and kits are recovered empty; a recovered sentry's feed holds no rounds.
+  - A unit secured to the truck (E near a free attachment point) follows the truck rigidly and is saved in the district's
+    `surface.cargo` lane. It has no body there: shots and bumps don't shove it. E releases it to the hands or into a drag.
+- **Train armour kit** (found, never crafted; `craft/equipment.ts` kind `armor-kit`; look `world/trainEquipmentModel.ts KIT_LOOKS`;
+  use `world/surface/cargoKit.ts`): the train armour's materials as one dolly unit. It is the fuel dolly's hand truck loaded with a 2 × 2
+  stack of the cooked `train-armor-plate.glb` at 0.45 scale. No new model or texture: both models are the existing cooked ones with
+  their own maps.
+  - Not storage: no slots, nothing to open, no loot table. Tapping [E] inside the parked car fits the train armour through the one
+    upgrades seam (`run/trainUpgrades.ts`). The kit is used up only when that fit succeeds. Otherwise it is kept with the seam's reason:
+    already fitted, no parked train, or moving. Outside the car the line asks for it to be wheeled in. There is no second material
+    charge, and the effect is the bench upgrade's own.
+  - Physics: movable, exactly like the devices. Hold [E] to grab and drag it ([R] turns it), walk into it to push it, and it rides
+    lifts. A bullet stops on it with a shove by its 104 kg. One sleeping kinematic body on the fuel cart's controller.
+  - No baked clutter: the plates are the kit itself (its load, fitted and used up together), separate plate meshes on the nose plate.
+    They are not loose pickups.
+  - Scale (rule 5): `node tools/asset-pipeline/props/scale-check-armor-kit.mjs <repo> <out.png>` composes the truck and the plates at
+    the runtime transform through `scale-check.mjs`. Viewed beside zombie lastshift (1.78 m, runtime scale 1): 0.54 × 1.20 × 0.50 m
+    (W × H × D). The truck's handle is the 1.20 m. The plates measure 0.54 × 0.84 × 0.12 m, each plate 0.54 × 0.42 × 0.056 m, and
+    stack from the nose plate (0.07 m) to 0.92 m, at the zombie's hip. It stands grounded on the truck's two wheels (2 contacts, span
+    0.49 m), as the devices do. The drag footprint is the dolly's (radius 0.36 m, height 1.25 m).
+  - Tests: `tests/surface-cargo-kit.test.ts`; the recoverables and the truck: `tests/surface-cargo-{seed,mount,crossing,save}.test.ts`.
 - **Limits:** at most 24 crafted units in the car and 48 left in one station (`craft/equipment.ts EQUIPMENT_LIMITS`); a craft or a
   departure beyond them is refused. Enemies walk through units on the floor, as they do through fuel carts.
 - **Tests:** `tests/train-equipment-*.test.ts`, `tests/equipment-chest-store.test.ts`, `tests/sentry-ammo.test.ts`,
